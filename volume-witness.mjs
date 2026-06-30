@@ -557,7 +557,7 @@ const requestedWindDrift = routeParams.get('volume_expected_wind_drift') || '';
 const expectedWindDrift = ['left', 'right', 'none'].includes(requestedWindDrift) ? requestedWindDrift : '';
 const requestedRenderScale = Number(routeParams.get('volume_render_scale'));
 let expectedRenderScale = routeParams.has('volume_render_scale') && Number.isFinite(requestedRenderScale)
-  ? Math.max(0.6, Math.min(1, requestedRenderScale))
+  ? Math.max(0.1, Math.min(1, requestedRenderScale))
   : canonicalMacroPreset.renderScale ?? scenePreset.renderScale ?? 0.85;
 const requestedInputRadius = Number(routeParams.get('volume_input_radius'));
 const expectedInputRadius = routeParams.has('volume_input_radius') && Number.isFinite(requestedInputRadius)

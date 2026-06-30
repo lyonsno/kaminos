@@ -102,8 +102,13 @@ assert.match(index, /windStrength/, 'Volume controls carry explicit wind strengt
 assert.match(index, /windAngle/, 'Volume controls carry explicit wind direction into the renderer');
 assert.match(index, /windHeight/, 'Volume controls carry explicit wind height/ramp into the renderer');
 assert.match(index, /id="volume-render-scale"/, 'Volume tab exposes internal render-scale control');
+assert.match(index, /id="volume-render-scale" min="0\.1" max="1"/, 'Volume tab lets operator range-find aggressive low render-scale raymarch regimes');
 assert.match(index, /volume_render_scale/, 'URL route can override internal render scale');
 assert.match(index, /renderScale/, 'Volume controls carry internal render scale into the renderer');
+assert.match(index, /data-volume-control-section="visual-tuning"[\s\S]*id="volume-fire-licks"[\s\S]*id="volume-projection"[\s\S]*id="volume-input-radius"[\s\S]*id="volume-flow-rate"[\s\S]*data-volume-control-section="render-budget"/, 'Volume tab groups visual tuning knobs with hidden cost consequences before the obvious render budget controls');
+assert.match(index, /data-volume-visual-cost-knob="branch-threshold"[\s\S]*id="volume-fire-licks"/, 'Fire Licks is marked as a visual knob that can enable extra sim shader work');
+assert.match(index, /data-volume-visual-cost-knob="projection-pass-gate"[\s\S]*id="volume-projection"/, 'Projection is marked as a visual knob that can gate pressure projection work');
+assert.match(index, /data-volume-visual-cost-knob="occupied-volume"[\s\S]*id="volume-flow-rate"/, 'Flow Rate is marked as a visual knob that can expand occupied sim/raymarch volume');
 assert.match(index, /id="volume-majorant-grid"/, 'Volume tab exposes coarse majorant grid resolution control');
 assert.match(index, /volume_majorant_grid/, 'URL route can override coarse majorant grid resolution');
 assert.match(index, /volume_majorant_cadence/, 'URL route can override coarse majorant rebuild cadence for sim-throughput probes');
@@ -511,6 +516,7 @@ assert.match(core, /fireScale/, 'debug state exposes apparent fire/world scale')
 assert.match(core, /detailScale/, 'debug state exposes fine-detail scale');
 assert.match(core, /plumeHeight/, 'debug state exposes plume height/world-rise scale');
 assert.match(core, /normalizeRenderScale/, 'renderer normalizes internal render scale explicitly');
+assert.match(core, /Math\.max\(0\.1,\s*Math\.min\(1,\s*requested\)\)/, 'core render-scale normalization preserves the 0.1 operator exploration floor');
 assert.match(core, /displayWidth/, 'debug state preserves displayed canvas width separately from internal render width');
 assert.match(core, /renderWidth/, 'debug state exposes internal render width');
 assert.match(core, /renderPixelRatio/, 'debug state exposes render-to-display pixel ratio');

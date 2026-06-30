@@ -46,7 +46,7 @@ function normalizeMajorantGridSize(value) {
 function normalizeRenderScale(value) {
   const requested = Number(value);
   if (!Number.isFinite(requested)) return 0.85;
-  return Math.max(0.6, Math.min(1, requested));
+  return Math.max(0.1, Math.min(1, requested));
 }
 
 function normalizeVolumeScene(value) {
