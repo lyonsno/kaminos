@@ -595,6 +595,7 @@ assert.match(core, /pyro-dynamic-detail-authority-live-fields-v0/, 'renderer nam
 assert.match(core, /pyro-dynamic-detail-reset-policy-v0/, 'renderer names reset policy for subordinate Pyro detail state');
 assert.match(core, /pyroDynamicDetail/, 'debug state exposes Pyro dynamic detail state for witness and UI');
 assert.match(core, /visualRole:\s*'debug-atlas-only-not-main-fire'/, 'Pyro dynamic detail state is explicitly not main fire authority');
+assert.match(core, /pyroDynamicDetailLastInputMs/, 'Pyro dynamic detail tracks live input freshness separately from optional readback cadence');
 assert.match(core, /reactionFuelScale/, 'fluid uniforms carry a route-visible tall-plume fuel/reaction scale');
 assert.match(core, /quenchVaporStrength/, 'fluid uniforms carry the cheap route-visible quench-vapor render strength');
 assert.match(core, /snuffVisualModel/, 'debug state names the active failure-snuff visual model');

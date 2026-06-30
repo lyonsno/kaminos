@@ -3494,6 +3494,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let pyroDynamicDetailEnergy = 0;
   let pyroDynamicDetailConfidence = 0;
   let pyroDynamicDetailPhase = 0;
+  let pyroDynamicDetailLastInputMs = -Infinity;
   let pyroDynamicDetailLastReadbackFrame = -1;
   let pyroDynamicDetailLastReadbackMs = -Infinity;
 
@@ -3507,9 +3508,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   }
 
   function updatePyroDynamicDetailState({ simReadback = null, inputKind = 'control-proxy' } = {}) {
+    const now = performance.now();
     if (simReadback) {
       pyroDynamicDetailLastReadbackFrame = state.frameCount;
-      pyroDynamicDetailLastReadbackMs = performance.now();
+      pyroDynamicDetailLastReadbackMs = now;
+    }
+    if (simReadback || (inputKind === 'control-proxy' && state.active)) {
+      pyroDynamicDetailLastInputMs = now;
     }
     const enabled = normalizePyroDynamicDetailEnabled(controlsSnapshot.pyroDynamicDetail);
     const scene = normalizeVolumeScene(controlsSnapshot.volumeScene);
@@ -3549,8 +3554,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     if (reactionFuel <= 0.0005 && scene === 'tall_plume') resetReasons.push('fuel-off');
     if (quench > 0.01 || normalizeLifecycleEffect(controlsSnapshot.lifecycleEffect) === 'snuff') resetReasons.push('snuff-quench');
     if (rawLiveFireAuthority <= 0.015) resetReasons.push('no-live-fire-authority');
-    if (!simReadback && state.frameCount > 20 && performance.now() - pyroDynamicDetailLastReadbackMs > 3000) resetReasons.push('stale-input');
-    const resetGate = resetReasons.includes('disabled') || resetReasons.includes('fuel-off') || resetReasons.includes('snuff-quench');
+    if (state.frameCount > 20 && now - pyroDynamicDetailLastInputMs > 3000) resetReasons.push('stale-input');
+    const resetGate = resetReasons.includes('disabled')
+      || resetReasons.includes('fuel-off')
+      || resetReasons.includes('snuff-quench')
+      || resetReasons.includes('stale-input');
     const liveFireAuthority = resetGate ? 0 : rawLiveFireAuthority;
     if (resetGate) {
       pyroDynamicDetailEnergy = 0;
@@ -3585,6 +3593,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       resetGate,
       resetReasons,
       lastUpdateFrame: state.frameCount,
+      lastInputAgeMs: Number.isFinite(pyroDynamicDetailLastInputMs) ? Math.max(0, now - pyroDynamicDetailLastInputMs) : null,
+      lastReadbackFrame: pyroDynamicDetailLastReadbackFrame,
+      lastReadbackAgeMs: Number.isFinite(pyroDynamicDetailLastReadbackMs) ? Math.max(0, now - pyroDynamicDetailLastReadbackMs) : null,
       lastInputKind: inputKind,
       atlasCells,
     };
