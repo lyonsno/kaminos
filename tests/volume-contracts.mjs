@@ -1351,3 +1351,18 @@ assert.match(greenroomBenchmark, /gitCommit/, 'greenroom benchmark records the g
 assert.match(greenroomBenchmark, /baseUrl/, 'greenroom benchmark records the target server route');
 assert.match(greenroomBenchmark, /uncontendedEvidenceClaim/, 'greenroom benchmark must distinguish requested greenroom conditions from proven uncontended timing evidence');
 assert.match(greenroomBenchmark, /dryRun/, 'greenroom benchmark supports writing the packet without spending a browser/GPU sweep');
+
+const renderPairDatasetPath = join(root, 'volume-render-pair-dataset.mjs');
+assert.ok(existsSync(renderPairDatasetPath), 'volume render-scale pair dataset extractor exists');
+const renderPairDataset = existsSync(renderPairDatasetPath) ? readFileSync(renderPairDatasetPath, 'utf8') : '';
+assert.match(renderPairDataset, /kaminos\.volume\.render-pair-dataset\.v0/, 'render-pair dataset writes a stable dataset schema identity');
+assert.match(renderPairDataset, /volume-witness\.mjs/, 'render-pair dataset captures frames through the witness instead of bypassing route validation');
+assert.match(renderPairDataset, /lowRenderScale/, 'render-pair dataset records requested low render scale');
+assert.match(renderPairDataset, /highRenderScale/, 'render-pair dataset records requested high render scale');
+assert.match(renderPairDataset, /volume_render_scale/, 'render-pair dataset varies render scale through the public route parameter');
+assert.match(renderPairDataset, /volumeReconstructionStyle/, 'render-pair dataset preserves effective reconstruction/upscale identity');
+assert.match(renderPairDataset, /effectiveRoute/, 'render-pair dataset records effective route identity from each witness');
+assert.match(renderPairDataset, /prototypeIdentity/, 'render-pair dataset records effective prototype identity from each witness');
+assert.match(renderPairDataset, /renderPixelRatio/, 'render-pair dataset records low/high internal-to-display pixel ratio');
+assert.match(renderPairDataset, /dryRun/, 'render-pair dataset supports a dry run manifest without spending browser/GPU time');
+assert.match(renderPairDataset, /failurePhase/, 'render-pair dataset records the phase when capture or validation fails');
