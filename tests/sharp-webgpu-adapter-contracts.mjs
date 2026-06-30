@@ -42,6 +42,7 @@ assert.match(wrapperSource, /KAMINOS_SHARP_WEBGPU_SCHEDULER/, 'wrapper must acce
 assert.match(wrapperSource, /sharpScheduler/, 'wrapper must pass scheduler config into the SHARP-WebGPU browser route');
 assert.match(wrapperSource, /schedulerTelemetry/, 'wrapper must capture browser-reported scheduler telemetry');
 assert.match(wrapperSource, /scheduler-unverified/, 'wrapper must fail loud when requested scheduler telemetry is absent');
+assert.match(wrapperSource, /pipelineScheduler/, 'wrapper must expose route-neutral pipeline scheduler evidence alongside raw breathingRoom');
 
 const witnessSource = readFileSync(witnessPath, 'utf8');
 assert.match(witnessSource, /recordAdapterSideArtifacts/, 'pipeline witness must ingest adapter side artifacts');
@@ -89,6 +90,17 @@ try {
   assert.equal(failureReport.breathingRoom.requestedScheduler.spnPatchChunkSize, 1);
   assert.equal(failureReport.breathingRoom.requestedScheduler.vitBlockChunkSize, 2);
   assert.equal(failureReport.breathingRoom.effectiveScheduler, null);
+  assert.equal(failureReport.pipelineScheduler.schema, 'kaminos.pipeline-scheduler-composition.v0');
+  assert.equal(failureReport.pipelineScheduler.source, 'pipeline-adapter-report');
+  assert.equal(failureReport.pipelineScheduler.verificationState, 'scheduler-unverified');
+  assert.equal(failureReport.pipelineScheduler.requestedScheduler.vitBlockChunkSize, 2);
+  assert.equal(failureReport.pipelineScheduler.effectiveScheduler, null);
+  assert.equal(failureReport.pipelineScheduler.scheduler.schema, 'kaminos.webgpu-route-scheduler.v0');
+  assert.equal(failureReport.pipelineScheduler.scheduler.requestedScheduler.vitBlockChunkSize, 2);
+  assert.equal(failureReport.pipelineScheduler.scheduler.effectiveScheduler, null);
+  assert.equal(failureReport.pipelineScheduler.backpressure.schema, 'kaminos.webgpu-route-backpressure.v0');
+  assert.equal(failureReport.pipelineScheduler.raw.breathingRoom.status, 'scheduler-unverified');
+  assert.deepEqual(failureReport.pipelineScheduler.failureDowngrades, ['effective-scheduler-missing']);
   assert.match(failureReport.phase, /validating|initializing|starting/, 'failure report must preserve failure phase');
   assert.match(failureReport.error, /SHARP-WebGPU repo|weights|package/, 'failure must name the missing native substrate');
 } finally {
