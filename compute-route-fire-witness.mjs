@@ -17,6 +17,9 @@ import {
   computeRouteFirePayloadFromReport,
   computeRouteFireSmokeUrl,
 } from './compute-route-fire-bench.mjs';
+import {
+  buildComputeRouteContentionWitnessFromReport,
+} from './compute-route-contention-witness.mjs';
 
 export const COMPUTE_ROUTE_FIRE_WITNESS_SCHEMA = 'kaminos.compute-route-fire-witness.v0';
 export const COMPUTE_ROUTE_FIRE_VISUAL_REPORT_SCHEMA = 'kaminos.compute-route-fire-visual-report.v0';
@@ -218,11 +221,14 @@ function parseArgs(argv) {
     outDir: '/tmp/kaminos-compute-route-fire/pipeline-out',
     pipelineReport: null,
     report: '/tmp/kaminos-compute-route-fire/report.json',
+    contentionReport: null,
     out: '/tmp/kaminos-compute-route-fire/fire.png',
     serverPort: 18118,
     debugPort: 9441,
     settleMs: 2500,
     windowSize: '1280,960',
+    requestedBudgetId: 'operator-live-fire',
+    requestedRayBudgetPreset: null,
     runPipeline: false,
   };
   for (let index = 0; index < argv.length; index += 1) {
@@ -237,11 +243,14 @@ function parseArgs(argv) {
     else if (arg === '--out-dir') args.outDir = argv[++index] || args.outDir;
     else if (arg === '--pipeline-report') args.pipelineReport = argv[++index] || args.pipelineReport;
     else if (arg === '--report') args.report = argv[++index] || args.report;
+    else if (arg === '--contention-report') args.contentionReport = argv[++index] || args.contentionReport;
     else if (arg === '--out') args.out = argv[++index] || args.out;
     else if (arg === '--server-port') args.serverPort = Number(argv[++index] || args.serverPort);
     else if (arg === '--debug-port') args.debugPort = Number(argv[++index] || args.debugPort);
     else if (arg === '--settle-ms') args.settleMs = Number(argv[++index] || args.settleMs);
     else if (arg === '--window-size') args.windowSize = argv[++index] || args.windowSize;
+    else if (arg === '--requested-budget-id') args.requestedBudgetId = argv[++index] || args.requestedBudgetId;
+    else if (arg === '--requested-ray-budget-preset') args.requestedRayBudgetPreset = argv[++index] || args.requestedRayBudgetPreset;
   }
   return args;
 }
@@ -316,6 +325,7 @@ async function main() {
   const reportPath = resolve(args.report);
   const fireOut = resolve(args.out);
   const volumeReportPath = reportPath.replace(/\.json$/i, '.volume-witness.json');
+  const contentionReportPath = resolve(args.contentionReport || reportPath.replace(/\.json$/i, '.contention-witness.json'));
   const pipelineReportPath = resolve(args.pipelineReport || `${args.outDir.replace(/\/$/, '')}/pipeline-witness.json`);
   let pipelineProcess = null;
   let server = null;
@@ -334,10 +344,12 @@ async function main() {
     outputPath: reportPath,
     screenshot: fireOut,
     volumeWitnessReportPath: volumeReportPath,
+    contentionWitnessReportPath: contentionReportPath,
     activeWitness: null,
     finalWitness: null,
     smokePayload: null,
     smokeUrl: null,
+    contentionWitness: null,
     pipelineExit: null,
     pipelineReport: null,
     visualWitnessReport: null,
@@ -442,6 +454,19 @@ async function main() {
         baseUrl: `http://127.0.0.1:${args.serverPort}/`,
         volumeWitnessUrl: report.activeWitness.volumeWitnessUrl,
       });
+    }
+    if (report.visualWitnessReport) {
+      report.contentionWitness = buildComputeRouteContentionWitnessFromReport(report, {
+        witnessId: `${args.pipelineId}-contention`,
+        requestedVisualBudget: {
+          budgetId: args.requestedBudgetId,
+          rayBudgetPreset: args.requestedRayBudgetPreset,
+          liveSimulation: true,
+          prerecorded: false,
+        },
+        visualWitnessReportPath: volumeReportPath,
+      });
+      writeJson(contentionReportPath, report.contentionWitness);
     }
     writeJson(reportPath, report);
     console.log(reportPath);

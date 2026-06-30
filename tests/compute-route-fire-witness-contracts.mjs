@@ -94,6 +94,8 @@ const baseReport = {
   },
 };
 
+const witnessSource = readFileSync(fileURLToPath(new URL('../compute-route-fire-witness.mjs', import.meta.url)), 'utf8');
+
 const activeRun = buildActiveComputeRouteRun({
   pipelineId: 'sharp-image-to-splat-live-v0',
   routeId: 'adapter.sharp-image-to-splat-live.v0',
@@ -224,3 +226,8 @@ assert.equal(dryRunReport.smokePayload.active.visualPhase, 'burn');
 assert.equal(dryRunReport.smokePayload.active.allowsFullBurn, true);
 assert.match(dryRunReport.smokeUrl, /kaminos_compute_route_fire=1/);
 assert.match(dryRunReport.smokeUrl, /compute_route_fire_payload=/);
+assert.match(witnessSource, /buildComputeRouteContentionWitnessFromReport/, 'compute route fire witness emits Wake contention reports from the same run report');
+assert.match(witnessSource, /--contention-report/, 'compute route fire witness accepts an explicit contention report path');
+assert.match(witnessSource, /contentionWitnessReportPath/, 'primary visual report records the contention report path');
+assert.match(witnessSource, /contentionWitness/, 'primary visual report embeds a compact contention witness summary');
+assert.match(witnessSource, /requestedVisualBudget/, 'contention emission preserves requested visual budget identity');
