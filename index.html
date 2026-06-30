@@ -5000,11 +5000,13 @@ function makeForgeHostStationVisual(station) {
   return visual;
 }
 
-function setForgeHostSelectedActor(actorId) {
+function setForgeHostSelectedActor(actorId, { scrollToOffers = false } = {}) {
   if (!forgeHostState?.active) return null;
   const exists = forgeHostState.visuals.some(visual => visual.station.actorId === actorId);
   forgeHostState.selectedActorId = exists ? actorId : forgeHostState.visuals[0]?.station.actorId || null;
   renderForgeHostStationList();
+  renderForgeHostOfferList();
+  if (scrollToOffers) scrollForgeHostSmokeOffersIntoView();
   updateForgeHostReadout();
   updateForgeHostStationFrame(performance.now() / 1000);
   window._kaminosDirty?.();
@@ -5032,7 +5034,7 @@ function renderForgeHostStationList() {
       </span>
       <span class="forge-chip">${escapeHtml(station.smokeOffers.length)} smoke</span>
     `;
-    button.addEventListener('click', () => setForgeHostSelectedActor(station.actorId));
+    button.addEventListener('click', () => setForgeHostSelectedActor(station.actorId, { scrollToOffers: true }));
     list.appendChild(button);
   }
 }
@@ -5103,6 +5105,14 @@ function scrollForgeHostSmokeChamberIntoView() {
   if (!chamberEl) return;
   requestAnimationFrame(() => {
     chamberEl.scrollIntoView({ block: 'start', inline: 'nearest' });
+  });
+}
+
+function scrollForgeHostSmokeOffersIntoView() {
+  const offersEl = document.getElementById('forge-host-offer-list');
+  if (!offersEl) return;
+  requestAnimationFrame(() => {
+    offersEl.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   });
 }
 
@@ -5228,8 +5238,6 @@ function updateForgeHostReadout() {
   setForgeHostText('forge-attention-mode', attention?.mode || '-');
   setForgeHostText('forge-attention-target', attention?.primaryLookTarget || '-');
   setForgeHostText('forge-attention-proximity', attention ? Number(attention.operatorProximity).toFixed(2) : '-');
-  renderForgeHostOfferList();
-  if (!forgeHostState?.smokeChamber) renderForgeHostSmokeChamber();
 }
 
 async function loadForgeHostRegistrySnapshot() {
@@ -5314,6 +5322,8 @@ async function createForgeHostStationScene({ force = false, source = 'fixture' }
   };
   setActiveTab('forge');
   renderForgeHostStationList();
+  renderForgeHostOfferList();
+  renderForgeHostSmokeChamber();
   updateForgeHostStationFrame(performance.now() / 1000);
   updateForgeHostReadout();
   frameForgeHostCamera();
