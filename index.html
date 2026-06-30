@@ -513,6 +513,19 @@ input[type="range"]:disabled::-webkit-slider-thumb { background: #555; cursor: n
         <div id="motion-panel-temporal-status" style="font-size: 10px; color: #555; margin-top: 6px;"></div>
       </section>
 
+      <section id="motion-panel-path-world-section">
+        <div class="motion-panel-section-title">Path World</div>
+        <div class="motion-panel-section-subtitle">route -> wall trigger -> reaction cliplet</div>
+        <div class="field"><span class="field-key">Source</span><span class="field-val" id="motion-panel-path-world-active-source">inactive</span></div>
+        <div class="field"><span class="field-key">Trigger</span><span class="field-val" id="motion-panel-path-world-trigger-state">no world</span></div>
+        <div class="field"><span class="field-key">Obstacle</span><span class="field-val" id="motion-panel-path-world-obstacle">none</span></div>
+        <div class="field"><span class="field-key">Reason</span><span class="field-val" id="motion-panel-path-world-reason">waiting</span></div>
+        <div class="motion-panel-secondary-actions">
+          <button class="btn" id="motion-panel-preview-path-world">Preview World</button>
+          <button class="btn" id="motion-panel-frame-path-world">Frame World</button>
+        </div>
+      </section>
+
       <section id="motion-panel-phrase-section">
         <div class="motion-panel-section-title">Phrases</div>
         <div class="slider-row">
@@ -3951,6 +3964,85 @@ function frameMotionAgencyCamera() {
   window._kaminosDirty?.();
 }
 
+function frameMotionPanelPathWorld() {
+  if (!camera || !controls) return {
+    schema: 'kaminos.motion-panel-path-world-frame.v0',
+    ok: false,
+    reason: 'camera-unavailable',
+  };
+  camera.position.set(1.45, 0.92, 2.05);
+  controls.target.set(0.05, 0.08, 0.22);
+  controls.update();
+  window._kaminosDirty?.();
+  setInfo('Framed Path World route, wall trigger, and goal');
+  return {
+    schema: 'kaminos.motion-panel-path-world-frame.v0',
+    ok: true,
+    camera: motionPanelCurrentViewCameraEvidence?.() || null,
+  };
+}
+
+async function previewMotionPanelPathWorld() {
+  const state = await createGeneratedPoseTemporalScene({ force: true });
+  const frame = frameMotionPanelPathWorld();
+  updateMotionPanelPathWorldReadout();
+  setMotionPanelTemporalStatus('Path World preview: route, wall trigger, reaction cliplet', '#66bb6a');
+  return {
+    schema: 'kaminos.motion-panel-path-world-preview.v0',
+    state: state?.schema || null,
+    frame,
+    pathWorldPanel: window.kaminosMotionPanelPathWorldDebugState?.() || null,
+  };
+}
+
+function motionPanelPathWorldReadout() {
+  const actor = motionTemporalState?.lastActors?.[0] || null;
+  const pathWorld = actor?.pathWorld || motionTemporalState?.lastPathWorld || null;
+  const interrupt = actor?.pathWorldInterrupt || motionTemporalState?.lastPathWorldInterrupt || null;
+  const activeSource = actor?.pathWorldActiveSource || interrupt?.activeSource || (pathWorld ? 'world-path' : 'inactive');
+  const trigger = pathWorld?.trigger || interrupt?.trigger || null;
+  return {
+    schema: 'kaminos.motion-panel-path-world-readout.v0',
+    active: !!pathWorld,
+    activeSource,
+    triggerState: interrupt?.state || (trigger?.fired ? 'armed-contact' : pathWorld ? 'armed' : 'inactive'),
+    obstacleId: trigger?.obstacleId || interrupt?.obstacleId || 'none',
+    reason: interrupt?.reason || pathWorld?.reason || 'waiting',
+    triggerDistance: Number.isFinite(Number(trigger?.distance)) ? Number(Number(trigger.distance).toFixed(5)) : null,
+    triggerRadius: Number.isFinite(Number(trigger?.radius)) ? Number(Number(trigger.radius).toFixed(5)) : null,
+    fired: !!interrupt?.fired || !!trigger?.fired,
+    worldId: pathWorld?.pathWorldId || interrupt?.pathWorldId || motionTemporalState?.pathWorld?.id || null,
+    sectionVisible: !!document.getElementById('motion-panel-path-world-section'),
+    controls: {
+      previewButton: !!document.getElementById('motion-panel-preview-path-world'),
+      frameButton: !!document.getElementById('motion-panel-frame-path-world'),
+    },
+  };
+}
+
+function updateMotionPanelPathWorldReadout() {
+  const readout = motionPanelPathWorldReadout();
+  const setField = (id, value, present = false) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = String(value);
+    el.classList.toggle('present', !!present);
+    el.classList.toggle('missing', !present && value === 'inactive');
+  };
+  setField('motion-panel-path-world-active-source', readout.activeSource, readout.active);
+  const triggerLabel = readout.triggerDistance == null
+    ? readout.triggerState
+    : `${readout.triggerState} ${readout.triggerDistance.toFixed(2)}/${readout.triggerRadius?.toFixed(2) ?? '?'}`;
+  setField('motion-panel-path-world-trigger-state', triggerLabel, readout.active);
+  setField('motion-panel-path-world-obstacle', readout.obstacleId, readout.active);
+  setField('motion-panel-path-world-reason', readout.reason, readout.active);
+  return readout;
+}
+
+window.kaminosMotionPanelPathWorldDebugState = function() {
+  return updateMotionPanelPathWorldReadout();
+};
+
 function updateMotionAgencyReadout() {
   const temporalDebug = window.kaminosGeneratedPoseTemporalDebugState?.();
   const outputMapDebug = window.kaminosGeneratedPoseOutputMapDebugState?.();
@@ -3974,6 +4066,7 @@ function updateMotionAgencyReadout() {
   setText('motion-fallback-count', debug?.fallbackCount ?? 0);
   setText('motion-frame-count', debug?.frameCount ?? 0);
   setText('motion-max-effort', Number(debug?.maxEffort ?? debug?.maxOutputValue ?? 0).toFixed(2));
+  updateMotionPanelPathWorldReadout();
 }
 
 function createMotionAgencyFixtureScene({ force = false } = {}) {
@@ -7160,6 +7253,8 @@ function initKaminosMotionAgencyRoute() {
   document.getElementById('motion-gen-btn')?.addEventListener('click', () => void generateMotionPanelTemporalPreview());
   document.getElementById('motion-panel-generate-preview')?.addEventListener('click', () => void generateMotionPanelTemporalPreview());
   document.getElementById('motion-panel-fixture-preview')?.addEventListener('click', () => void previewMotionPanelTemporalFixture());
+  document.getElementById('motion-panel-preview-path-world')?.addEventListener('click', () => void previewMotionPanelPathWorld());
+  document.getElementById('motion-panel-frame-path-world')?.addEventListener('click', frameMotionPanelPathWorld);
   document.getElementById('motion-panel-promote-take')?.addEventListener('click', () => void promoteMotionPanelSelectedTake());
   document.getElementById('motion-panel-load-durable-takes')?.addEventListener('click', () => void loadDurableMotionPanelTakes());
   document.getElementById('motion-panel-export-view')?.addEventListener('click', () => void exportMotionPanelCurrentViewFilmstrip());

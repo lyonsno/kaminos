@@ -388,6 +388,7 @@ async function configureClipletPlayback(ws) {
       pathWorld: state?.pathWorld || null,
       pathWorldInterrupt: state?.pathWorldInterrupt || null,
       pathWorldActiveSource: state?.pathWorldActiveSource || null,
+      pathWorldPanel: window.kaminosMotionPanelPathWorldDebugState?.() || null,
     };
   })()`, { timeoutMs: 20000 });
 }
@@ -477,6 +478,7 @@ async function captureFrame(ws, index) {
       pathWorld: actor?.pathWorld || state?.pathWorld || null,
       pathWorldInterrupt: actor?.pathWorldInterrupt || state?.pathWorldInterrupt || null,
       pathWorldActiveSource: actor?.pathWorldActiveSource || state?.pathWorldActiveSource || null,
+      pathWorldPanel: window.kaminosMotionPanelPathWorldDebugState?.() || null,
       generatedMotionCliplets: state?.generatedMotionCliplets || state?.generatedPoseTemporalHarness?.generatedMotionCliplets || null,
       attentionTargetEvidence: actor?.attentionTargetEvidence || state?.attentionTargetEvidence || null,
       sourceFrame: actor?.sourceFrame ?? null,
