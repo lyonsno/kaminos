@@ -5,6 +5,7 @@ export const ORB_SHELL_MACRO_TORSION_MODE = 'macro-torsion-field-v0';
 export const ORB_SHELL_MACRO_FAMILY_SUBSTRIP_MODE = 'parent-owned-lamellar-substrip-decomposition-v0';
 export const ORB_SHELL_APERTURE_TERMINATION_MODE = 'aperture-relative-lamellar-termination-v0';
 export const ORB_SHELL_APERTURE_TANGENCY_WITNESS_MODE = 'aperture-tangency-witness-v0';
+export const ORB_SHELL_APERTURE_ORBIT_CAPTURE_MODE = 'macro-aperture-orbit-capture-v0';
 export const ORB_SHELL_LOWER_SOCKET_RENDER_INVENTORY_MODE = 'lower-socket-semantic-render-inventory-v0';
 export const ORB_SHELL_MACRO_MORPHOLOGY_INVENTORY_MODE = 'macro-curve-vs-promoted-body-diagnostic-v0';
 
@@ -2138,6 +2139,318 @@ function visibleApertureOrbitRecord(apertureField) {
   };
 }
 
+function apertureOrbitLanePoint(lane, angle) {
+  const [cx, cy, cz] = lane.center;
+  const [rx, ry] = lane.radius;
+  const x = cx + Math.cos(angle) * rx;
+  const y = cy + Math.sin(angle) * ry;
+  const z = Math.max(cz * 0.76, Math.sqrt(Math.max(0.01, 1 - x * x - y * y))) + (lane.zLift ?? 0.05);
+  return [x, y, z];
+}
+
+function apertureOrbitLanePointAndTangent(lane, angle) {
+  const point = apertureOrbitLanePoint(lane, angle);
+  const next = apertureOrbitLanePoint(lane, angle + 0.01);
+  const prev = apertureOrbitLanePoint(lane, angle - 0.01);
+  return {
+    point,
+    tangent: normalizePoint(subtractPoints(next, prev)),
+  };
+}
+
+function nearestApertureOrbitLaneSample(lane, point, steps = 180) {
+  let nearest = null;
+  for (let index = 0; index < steps; index++) {
+    const angle = (index / steps) * TAU;
+    const ring = apertureOrbitLanePointAndTangent(lane, angle);
+    const distance = pointDistance(point, ring.point);
+    if (!nearest || distance < nearest.distance) nearest = { ...ring, angle, distance };
+  }
+  return nearest;
+}
+
+function createApertureOrbitLanes(composition) {
+  const primaryVoid = composition.AperturePressure?.primaryVoids?.[0] || {};
+  const center = primaryVoid.center || [0.02, -0.02, 0.98];
+  const radius = primaryVoid.radius || [0.34, 0.55];
+  const sourceApertureId = primaryVoid.id || 'primary-front-teardrop-void';
+  const laneSpecs = [
+    {
+      id: 'front-primary-orbit',
+      captureRole: 'visible-aperture-reference-orbit',
+      radiusScale: [1, 1],
+      zLift: 0.05,
+    },
+    {
+      id: 'outer-capture-lane',
+      captureRole: 'macro-terminal-outer-orbit-capture',
+      radiusScale: [1.16, 1.08],
+      zLift: 0.065,
+    },
+    {
+      id: 'inner-return-lane',
+      captureRole: 'macro-terminal-underpass-return',
+      radiusScale: [0.78, 0.82],
+      zLift: 0.025,
+    },
+  ];
+  return laneSpecs.map(spec => ({
+    schema: 'ApertureOrbitLane',
+    mode: ORB_SHELL_APERTURE_ORBIT_CAPTURE_MODE,
+    id: spec.id,
+    sourceApertureId,
+    center,
+    radius: [radius[0] * spec.radiusScale[0], radius[1] * spec.radiusScale[1]],
+    zLift: spec.zLift,
+    captureRole: spec.captureRole,
+    overlayGeometryId: `${spec.id}-orbit-lane`,
+    semanticRole: 'positive-terminal-destination-not-negative-space-mask',
+  }));
+}
+
+function defaultApertureOrbitRoleSpec(assemblage) {
+  const specs = {
+    'north-west-dominant-thrust': {
+      terminalRole: 'orbit-tangent',
+      targetLaneId: 'outer-capture-lane',
+      targetPhase: 0.74 * TAU,
+      terminalSpan: [0.64, 1],
+      pointBlend: 0.44,
+      tangentBlend: 0.72,
+      radialDelta: 0.018,
+    },
+    'north-east-counter-thrust': {
+      terminalRole: 'counter-curve',
+      targetLaneId: 'front-primary-orbit',
+      targetPhase: 0.15 * TAU,
+      terminalSpan: [0.62, 1],
+      pointBlend: 0.2,
+      tangentBlend: 0.34,
+      counterCurveOffset: 0.08,
+    },
+    'equatorial-cupping-whorl': {
+      terminalRole: 'underpass-return',
+      targetLaneId: 'inner-return-lane',
+      targetPhase: 0.56 * TAU,
+      terminalSpan: [0.58, 1],
+      pointBlend: 0.4,
+      tangentBlend: 0.48,
+      radialDelta: -0.055,
+    },
+    'polar-crown-lock': {
+      terminalRole: 'rim-segment',
+      targetLaneId: 'outer-capture-lane',
+      targetPhase: 0.98 * TAU,
+      terminalSpan: [0.7, 1],
+      pointBlend: 0.32,
+      tangentBlend: 0.42,
+      radialDelta: 0.01,
+    },
+    'lower-socket-keel': {
+      terminalRole: 'socket-latch',
+      targetLaneId: 'inner-return-lane',
+      targetPhase: 0.68 * TAU,
+      terminalSpan: [0.6, 1],
+      pointBlend: 0.36,
+      tangentBlend: 0.46,
+      radialDelta: -0.035,
+    },
+  };
+  return specs[assemblage.id] || {
+    terminalRole: 'orbit-tangent',
+    targetLaneId: 'front-primary-orbit',
+    targetPhase: 0.5 * TAU,
+    terminalSpan: [0.64, 1],
+    pointBlend: 0.28,
+    tangentBlend: 0.4,
+  };
+}
+
+function createApertureOrbitCaptureLaw(composition) {
+  const sourceApertureId = composition.AperturePressure?.primaryVoids?.[0]?.id || 'primary-front-teardrop-void';
+  const orbitLanes = createApertureOrbitLanes(composition);
+  const laneById = new Map(orbitLanes.map(lane => [lane.id, lane]));
+  const terminalRoles = composition.macroAssemblages.map(assemblage => {
+    const spec = defaultApertureOrbitRoleSpec(assemblage);
+    const lane = laneById.get(spec.targetLaneId) || orbitLanes[0];
+    const target = apertureOrbitLanePointAndTangent(lane, spec.targetPhase);
+    const id = `${assemblage.id}-aperture-terminal-role`;
+    return {
+      schema: 'MacroApertureTerminalRole',
+      mode: ORB_SHELL_APERTURE_ORBIT_CAPTURE_MODE,
+      id,
+      parentAssemblage: assemblage.id,
+      macroRole: assemblage.role,
+      terminalRole: spec.terminalRole,
+      sourceApertureId,
+      targetLaneId: lane.id,
+      targetPhase: spec.targetPhase,
+      terminalSpan: spec.terminalSpan,
+      targetPoint: target.point,
+      targetTangent: target.tangent,
+      targetNormal: normalizePoint(target.point),
+      pointBlend: spec.pointBlend,
+      tangentBlend: spec.tangentBlend,
+      radialDelta: spec.radialDelta || 0,
+      counterCurveOffset: spec.counterCurveOffset || 0,
+      overlayGeometryIds: [
+        `${id}-target-point`,
+        `${id}-target-tangent`,
+        lane.overlayGeometryId,
+      ],
+      semanticIntent: `${spec.terminalRole}-relative-to-primary-aperture`,
+    };
+  });
+  return {
+    schema: 'ApertureOrbitCaptureLaw',
+    mode: ORB_SHELL_APERTURE_ORBIT_CAPTURE_MODE,
+    id: 'primary-front-aperture-orbit-capture-law',
+    sourceApertureId,
+    orbitLanes,
+    terminalRoles,
+    terminalRoleCount: terminalRoles.length,
+    semanticPrimitive: 'macro-terminal-destiny-around-aperture',
+    captureContract: 'each-live-macro-declares-a-positive-aperture-relative-terminal-role',
+    failureModes: [
+      'floating-strip-without-aperture-destination',
+      'constraint-only-avoidance-without-designed-terminal-intent',
+      'orbit-looking-curve-without-target-lane-or-tangent-witness',
+    ],
+  };
+}
+
+function attachApertureOrbitCaptureLaw(composition) {
+  const law = composition.apertureOrbitCaptureLaw;
+  if (!law) return;
+  const roleByParent = new Map(law.terminalRoles.map(role => [role.parentAssemblage, role]));
+  for (const assemblage of composition.macroAssemblages) {
+    const role = roleByParent.get(assemblage.id);
+    if (!role) continue;
+    assemblage.apertureOrbitCapture = role;
+    if (assemblage.macroPromotedBody) assemblage.macroPromotedBody.apertureOrbitCapture = role;
+  }
+}
+
+function apertureOrbitCaptureBlendAt(role, t) {
+  if (!role) return 0;
+  const [start, end] = role.terminalSpan || [1, 1];
+  if (end <= start) return t >= start ? 1 : 0;
+  return smoothStep(start, end, t);
+}
+
+function apertureOrbitCaptureLinearT(role, t) {
+  if (!role) return 0;
+  const [start, end] = role.terminalSpan || [1, 1];
+  if (end <= start) return t >= start ? 1 : 0;
+  return clamp((t - start) / (end - start), 0, 1);
+}
+
+function applyApertureOrbitCapturePoint(assemblage, t, point) {
+  const role = assemblage.apertureOrbitCapture || assemblage.macroPromotedBody?.apertureOrbitCapture;
+  const blend = apertureOrbitCaptureBlendAt(role, t);
+  if (blend <= 0) return point;
+  const linearT = apertureOrbitCaptureLinearT(role, t);
+  const targetTangent = normalizePoint(role.targetTangent || [1, 0, 0]);
+  const tangentLead = (role.tangentBlend ?? 0.42) * 0.42;
+  const landingTarget = addScaledPoint(role.targetPoint, targetTangent, -tangentLead * (1 - linearT));
+  const pointBlend = clamp((role.pointBlend ?? 0.34) * blend, 0, 0.78);
+  let next = lerpPoint(point, landingTarget, pointBlend);
+  if (role.terminalRole === 'counter-curve') {
+    const localNormal = normalizePoint(point);
+    let refusal = normalizePoint(crossPoints(localNormal, role.targetTangent));
+    if (Math.hypot(...refusal) < 1e-8) refusal = normalizePoint(crossPoints(localNormal, [0, 1, 0]));
+    if (dotPoints(refusal, subtractPoints(point, role.targetPoint)) < 0) refusal = scalePoint(refusal, -1);
+    next = addScaledPoint(next, refusal, (role.counterCurveOffset || 0.06) * blend);
+  }
+  const radialDelta = (role.radialDelta || 0) * blend;
+  if (Math.abs(radialDelta) > 1e-6) {
+    const radius = Math.max(0.2, Math.hypot(...next) + radialDelta);
+    next = scalePoint(normalizePoint(next), radius);
+  }
+  return next;
+}
+
+function createApertureOrbitCaptureWitnessPlan(composition) {
+  const law = composition.apertureOrbitCaptureLaw;
+  if (!law) {
+    return {
+      schema: 'ApertureOrbitCaptureWitnessPlan',
+      mode: ORB_SHELL_APERTURE_ORBIT_CAPTURE_MODE,
+      id: 'primary-front-aperture-orbit-capture-witness-plan',
+      measuredLawId: null,
+      sampleCount: 0,
+      samples: [],
+      overlayGeometryIds: [],
+      failureModes: ['missing-aperture-orbit-capture-law'],
+    };
+  }
+  const laneById = new Map(law.orbitLanes.map(lane => [lane.id, lane]));
+  const samples = law.terminalRoles.map(role => {
+    const assemblage = composition.macroAssemblages.find(item => item.id === role.parentAssemblage);
+    const centerline = assemblage ? macroPromotedBodyCenterlinePoints(assemblage, 48, 1.045) : [];
+    const terminalPoint = centerline.at(-1) || role.targetPoint;
+    const previousPoint = centerline.at(-2) || terminalPoint;
+    const terminalTangent = normalizePoint(subtractPoints(terminalPoint, previousPoint));
+    const lane = laneById.get(role.targetLaneId) || law.orbitLanes[0];
+    const nearest = nearestApertureOrbitLaneSample(lane, terminalPoint);
+    const tangentOrbitAlignment = Math.abs(dotPoints(terminalTangent, nearest.tangent));
+    const captureRadiusError = nearest.distance;
+    const roleVerdict = role.terminalRole === 'orbit-tangent'
+      ? (
+        tangentOrbitAlignment >= 0.6 && captureRadiusError <= 0.42
+          ? 'macro-orbit-tangent-coupling-visible'
+          : 'macro-orbit-tangent-not-yet-proven'
+      )
+      : role.terminalRole === 'counter-curve'
+        ? (
+          tangentOrbitAlignment <= 0.86 || role.counterCurveOffset > 0
+            ? 'macro-counter-curve-intent-visible'
+            : 'macro-counter-curve-not-yet-proven'
+        )
+        : 'macro-aperture-destination-assigned';
+    const id = `${role.parentAssemblage}-aperture-orbit-capture-sample`;
+    return {
+      schema: 'MacroApertureTerminalCaptureSample',
+      mode: ORB_SHELL_APERTURE_ORBIT_CAPTURE_MODE,
+      id,
+      parentAssemblage: role.parentAssemblage,
+      terminalRole: role.terminalRole,
+      targetLaneId: role.targetLaneId,
+      terminalPoint,
+      terminalTangent,
+      nearestLanePoint: nearest.point,
+      nearestLaneAngleRadians: nearest.angle,
+      nearestLaneTangent: nearest.tangent,
+      targetPoint: role.targetPoint,
+      targetTangent: role.targetTangent,
+      tangentOrbitAlignment,
+      captureRadiusError,
+      roleVerdict,
+      overlayGeometryIds: role.overlayGeometryIds,
+    };
+  });
+  const verdictCounts = samples.reduce((counts, sample) => {
+    counts[sample.roleVerdict] = (counts[sample.roleVerdict] || 0) + 1;
+    return counts;
+  }, {});
+  return {
+    schema: 'ApertureOrbitCaptureWitnessPlan',
+    mode: ORB_SHELL_APERTURE_ORBIT_CAPTURE_MODE,
+    id: 'primary-front-aperture-orbit-capture-witness-plan',
+    measuredLawId: law.id,
+    measuredApertureSourceId: law.sourceApertureId,
+    visualOverlayMode: 'macro-target-lanes-and-terminal-tangent-rays',
+    sampleCount: samples.length,
+    samples,
+    verdictCounts,
+    overlayGeometryIds: [
+      ...law.orbitLanes.map(lane => lane.overlayGeometryId),
+      ...samples.flatMap(sample => sample.overlayGeometryIds),
+    ],
+    failureModes: law.failureModes,
+  };
+}
+
 function orbitCaptureTerminalPhase(spec) {
   const offsets = {
     lead: -0.04,
@@ -4176,6 +4489,9 @@ export function applyControlledOrbShellVariation(composition, descriptor) {
     assemblage.spine.control.surfaceRoll = field.surfaceRoll;
     assemblage.spine.control.phaseLag = field.phaseLag;
   }
+  attachCurvatureWidthCapLaws(next);
+  next.apertureOrbitCaptureLaw = createApertureOrbitCaptureLaw(next);
+  attachApertureOrbitCaptureLaw(next);
   next.macroInterlockGraph = createMacroInterlockGraph(next);
   attachMacroInterlockEffects(next);
   next.lowerSocketEquatorialSocketJointLaw = createLowerSocketEquatorialSocketJointLaw(next);
@@ -4225,6 +4541,7 @@ export function applyControlledOrbShellVariation(composition, descriptor) {
   next.lamellarPlateBoundaryPlan = createLamellarPlateBoundaryPlan(next);
   next.lamellarInnerReturnPlan = createLamellarInnerReturnPlan(next);
   next.lowerSocketRenderInventoryPlan = createLowerSocketRenderInventoryPlan(next);
+  next.apertureOrbitCaptureWitnessPlan = createApertureOrbitCaptureWitnessPlan(next);
   next.macroMorphologyInventory = createMacroMorphologyInventory(next);
   next.frontApertureOwnership.effectiveVariation = frontParameters;
   for (const owner of next.frontApertureOwnership.owners) {
@@ -4515,7 +4832,8 @@ function sampleSpinePoint(assemblage, bandMember, t, radius = 1.04) {
   const interlock = macroInterlockEffectAt(assemblage, t);
   const lowerSocket = lowerSocketAnatomyEffectAt(assemblage, t);
   const sharedSeam = sharedSocketSeamEffectAt(assemblage, t);
-  return spherePoint(lat, lon, radius + layerBias - interlock.depthInset - lowerSocket.radialInset + sharedSeam.radialDelta + roleEffect.radialDelta);
+  const point = spherePoint(lat, lon, radius + layerBias - interlock.depthInset - lowerSocket.radialInset + sharedSeam.radialDelta + roleEffect.radialDelta);
+  return applyApertureOrbitCapturePoint(assemblage, t, point);
 }
 
 function sampleSpine(THREE, assemblage, bandMember, t, radius = 1.04) {
@@ -4816,6 +5134,15 @@ function makeAperturePressureRing(THREE, voidRecord) {
     points.push(new THREE.Vector3(...aperturePressureRingPoint(voidRecord, a)));
   }
   return new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points, true), 120, 0.006, 8, true);
+}
+
+function makeApertureOrbitLaneGeometry(THREE, lane, radius = 0.0055) {
+  const points = [];
+  for (let i = 0; i <= 144; i++) {
+    const a = (i / 144) * TAU;
+    points.push(new THREE.Vector3(...apertureOrbitLanePoint(lane, a)));
+  }
+  return new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points, true), 144, radius, 8, true);
 }
 
 function makeApertureTangencyVectorGeometry(THREE, startPoint, direction, length = 0.18, radius = 0.005) {
@@ -5444,6 +5771,9 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
   const apertureTerminalTangentMaterial = new THREE.MeshBasicMaterial({ color: 0xffd166, transparent: true, opacity: 0.94, depthWrite: false, depthTest: false });
   const apertureOrbitTangentMaterial = new THREE.MeshBasicMaterial({ color: 0x63d7ff, transparent: true, opacity: 0.94, depthWrite: false, depthTest: false });
   const apertureTangencyPointMaterial = new THREE.MeshBasicMaterial({ color: 0xff4f7a, transparent: true, opacity: 0.96, depthWrite: false, depthTest: false });
+  const apertureOrbitLaneMaterial = new THREE.MeshBasicMaterial({ color: 0x4fd3ff, transparent: true, opacity: 0.74, depthWrite: false, depthTest: false });
+  const apertureOrbitTargetPointMaterial = new THREE.MeshBasicMaterial({ color: 0xfde74c, transparent: true, opacity: 0.98, depthWrite: false, depthTest: false });
+  const apertureOrbitTargetTangentMaterial = new THREE.MeshBasicMaterial({ color: 0xff7a25, transparent: true, opacity: 0.98, depthWrite: false, depthTest: false });
   const macroContactIntersectMaterial = new THREE.MeshBasicMaterial({ color: 0xff3f5f, transparent: true, opacity: 0.96, depthWrite: false, depthTest: false });
   const macroContactNearMaterial = new THREE.MeshBasicMaterial({ color: 0xffd166, transparent: true, opacity: 0.9, depthWrite: false, depthTest: false });
   const macroContactClearMaterial = new THREE.MeshBasicMaterial({ color: 0x63d7ff, transparent: true, opacity: 0.62, depthWrite: false, depthTest: false });
@@ -5544,6 +5874,9 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
     apertureTerminalTangentMaterial,
     apertureOrbitTangentMaterial,
     apertureTangencyPointMaterial,
+    apertureOrbitLaneMaterial,
+    apertureOrbitTargetPointMaterial,
+    apertureOrbitTargetTangentMaterial,
     macroContactIntersectMaterial,
     macroContactNearMaterial,
     macroContactClearMaterial,
@@ -6024,6 +6357,36 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
       ring.userData.AperturePressure = voidRecord;
       group.add(ring);
     }
+    for (const lane of composition.apertureOrbitCaptureLaw?.orbitLanes || []) {
+      const laneMesh = new THREE.Mesh(makeApertureOrbitLaneGeometry(THREE, lane), apertureOrbitLaneMaterial);
+      laneMesh.name = lane.overlayGeometryId;
+      laneMesh.visible = false;
+      laneMesh.userData.ApertureOrbitCaptureLaw = composition.apertureOrbitCaptureLaw;
+      laneMesh.userData.ApertureOrbitLane = lane;
+      laneMesh.userData.apertureOrbitCaptureOverlayRole = 'orbit-lane';
+      group.add(laneMesh);
+    }
+    for (const role of composition.apertureOrbitCaptureLaw?.terminalRoles || []) {
+      const targetPoint = new THREE.Mesh(new THREE.SphereGeometry(0.018, 16, 8), apertureOrbitTargetPointMaterial);
+      targetPoint.name = `${role.id}-target-point`;
+      targetPoint.position.set(...role.targetPoint);
+      targetPoint.visible = false;
+      targetPoint.userData.ApertureOrbitCaptureLaw = composition.apertureOrbitCaptureLaw;
+      targetPoint.userData.MacroApertureTerminalRole = role;
+      targetPoint.userData.apertureOrbitCaptureOverlayRole = 'target-point';
+      group.add(targetPoint);
+
+      const targetTangent = new THREE.Mesh(
+        makeApertureTangencyVectorGeometry(THREE, role.targetPoint, role.targetTangent, 0.22, 0.006),
+        apertureOrbitTargetTangentMaterial,
+      );
+      targetTangent.name = `${role.id}-target-tangent`;
+      targetTangent.visible = false;
+      targetTangent.userData.ApertureOrbitCaptureLaw = composition.apertureOrbitCaptureLaw;
+      targetTangent.userData.MacroApertureTerminalRole = role;
+      targetTangent.userData.apertureOrbitCaptureOverlayRole = 'target-tangent';
+      group.add(targetTangent);
+    }
     for (const sample of composition.macroFamilySubstripPlan?.apertureTangencyWitnessPlan?.samples || []) {
       const terminalRay = new THREE.Mesh(
         makeApertureTangencyVectorGeometry(THREE, sample.terminalPoint, sample.terminalTangent, 0.2, 0.006),
@@ -6288,6 +6651,12 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
       controls.update();
       onDirty?.();
     },
+    frameApertureOrbitCaptureWitness() {
+      camera.position.set(0.28, 0.06, 3.28);
+      controls.target.set(0.02, -0.05, 0.64);
+      controls.update();
+      onDirty?.();
+    },
     frameMacroContactMap() {
       camera.position.set(-0.28, 0.34, 3.1);
       controls.target.set(-0.16, -0.05, 0.48);
@@ -6536,6 +6905,55 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
         sampleCount: composition.macroFamilySubstripPlan?.apertureTangencyWitnessPlan?.sampleCount || 0,
       };
     },
+    enableApertureOrbitCaptureWitness() {
+      scene.children.forEach(child => {
+        if (child !== group) {
+          child.userData.apertureOrbitCaptureWitnessHidden = true;
+          child.visible = false;
+        }
+      });
+      let visibleCount = 0;
+      let hiddenCount = 0;
+      const visibleOverlayIds = [];
+      const visibleMacroIds = [];
+      group?.traverse(child => {
+        if (!child.isMesh) return;
+        const isOverlay = !!child.userData?.ApertureOrbitLane || !!child.userData?.MacroApertureTerminalRole;
+        const isAperture = !!child.userData?.AperturePressure;
+        const promotedBody = child.userData?.MacroPromotedBody;
+        const isMeasuredMacro = !!promotedBody && composition.apertureOrbitCaptureLaw?.terminalRoles?.some(role => (
+          role.parentAssemblage === promotedBody.parentAssemblage
+        ));
+        child.visible = isOverlay || isAperture || isMeasuredMacro;
+        if (child.visible) {
+          visibleCount += 1;
+          if (isOverlay) visibleOverlayIds.push(child.name);
+          if (isMeasuredMacro) visibleMacroIds.push(child.name);
+        } else {
+          hiddenCount += 1;
+        }
+      });
+      this.frameApertureOrbitCaptureWitness();
+      return {
+        schema: 'ApertureOrbitCaptureWitnessState',
+        mode: 'macro-aperture-orbit-capture-overlay-v0',
+        witnessPlanId: composition.apertureOrbitCaptureWitnessPlan?.id,
+        measuredLawId: composition.apertureOrbitCaptureWitnessPlan?.measuredLawId,
+        measuredApertureSourceId: composition.apertureOrbitCaptureWitnessPlan?.measuredApertureSourceId,
+        visualOverlayMode: composition.apertureOrbitCaptureWitnessPlan?.visualOverlayMode,
+        visibleCount,
+        hiddenCount,
+        visibleOverlayIds,
+        visibleMacroIds,
+        sampleCount: composition.apertureOrbitCaptureWitnessPlan?.sampleCount || 0,
+        verdictCounts: composition.apertureOrbitCaptureWitnessPlan?.verdictCounts || {},
+        colorLegend: [
+          { role: 'orbit-lane', color: '#4fd3ff' },
+          { role: 'target-point', color: '#fde74c' },
+          { role: 'target-tangent', color: '#ff7a25' },
+        ],
+      };
+    },
     enableLiveTerminalCapWitness() {
       scene.children.forEach(child => {
         if (child !== group) {
@@ -6736,6 +7154,18 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
         apertureTangencyVerdictCounts: composition.macroFamilySubstripPlan?.apertureTangencyWitnessPlan?.verdictCounts || {},
         apertureTangencyMeasuredApertureSourceId: composition.macroFamilySubstripPlan?.apertureTangencyWitnessPlan?.measuredApertureSourceId,
         apertureTangencyOverlayGeometryIds: composition.macroFamilySubstripPlan?.apertureTangencyWitnessPlan?.overlayGeometryIds || [],
+        ApertureOrbitCaptureLaw: composition.apertureOrbitCaptureLaw,
+        apertureOrbitCaptureLaw: composition.apertureOrbitCaptureLaw,
+        ApertureOrbitLane: composition.apertureOrbitCaptureLaw?.orbitLanes || [],
+        MacroApertureTerminalRole: composition.apertureOrbitCaptureLaw?.terminalRoles || [],
+        apertureOrbitCaptureRoleCount: composition.apertureOrbitCaptureLaw?.terminalRoles?.length || 0,
+        apertureOrbitLaneCount: composition.apertureOrbitCaptureLaw?.orbitLanes?.length || 0,
+        ApertureOrbitCaptureWitnessPlan: composition.apertureOrbitCaptureWitnessPlan,
+        apertureOrbitCaptureWitnessPlan: composition.apertureOrbitCaptureWitnessPlan,
+        MacroApertureTerminalCaptureSample: composition.apertureOrbitCaptureWitnessPlan?.samples || [],
+        apertureOrbitCaptureSampleCount: composition.apertureOrbitCaptureWitnessPlan?.sampleCount || 0,
+        apertureOrbitCaptureVerdictCounts: composition.apertureOrbitCaptureWitnessPlan?.verdictCounts || {},
+        apertureOrbitCaptureOverlayGeometryIds: composition.apertureOrbitCaptureWitnessPlan?.overlayGeometryIds || [],
         selectedParentPromotedBodyMeshCount: selectedParentPromotedBodyMeshIds().length,
         selectedParentPromotedBodyMeshIds: selectedParentPromotedBodyMeshIds(),
         selectedParentSideWallMeshCount: selectedParentSideWallMeshIds().length,

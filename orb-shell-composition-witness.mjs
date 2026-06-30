@@ -33,6 +33,7 @@ const browserEvents = [];
 let cleanSidewallTopologyWitness = null;
 let liveTerminalCapWitness = null;
 let apertureTangencyWitness = null;
+let apertureOrbitCaptureWitness = null;
 let macroContactMapWitness = null;
 let macroMorphologyInventoryWitness = null;
 let lowerSocketSemanticRenderInventoryWitness = null;
@@ -279,6 +280,11 @@ async function main() {
       apertureTangencyWitness = await evaluate(ws, 'window.__kaminosOrbShellCompositionWitness?.enableApertureTangencyWitness?.()');
       await delay(500);
     }
+    if (focus === 'aperture-orbit-capture') {
+      await evaluate(ws, 'window.__kaminosOrbShellCompositionWitness?.frameApertureOrbitCaptureWitness?.()');
+      apertureOrbitCaptureWitness = await evaluate(ws, 'window.__kaminosOrbShellCompositionWitness?.enableApertureOrbitCaptureWitness?.()');
+      await delay(500);
+    }
     if (focus === 'macro-contact-map') {
       await evaluate(ws, 'window.__kaminosOrbShellCompositionWitness?.frameMacroContactMap?.()');
       macroContactMapWitness = await evaluate(ws, 'window.__kaminosOrbShellCompositionWitness?.enableMacroContactMapWitness?.()');
@@ -409,6 +415,21 @@ async function main() {
       assert.equal(apertureTangencyWitness?.visualOverlayMode, 'terminal-and-orbit-tangent-rays', 'aperture tangency witness did not enable vector overlay');
       assert.ok(apertureTangencyWitness?.visibleOverlayIds?.length >= state.apertureTangencySampleCount * 2, 'aperture tangency overlay meshes not visible');
     }
+    assert.equal(state?.apertureOrbitCaptureLaw?.schema, 'ApertureOrbitCaptureLaw', 'aperture orbit capture law missing from debug state');
+    assert.equal(state?.apertureOrbitCaptureWitnessPlan?.schema, 'ApertureOrbitCaptureWitnessPlan', 'aperture orbit capture witness plan missing from debug state');
+    assert.equal(state?.apertureOrbitCaptureRoleCount, state.macroAssemblageCount, 'aperture orbit capture role count must match macro count');
+    assert.ok(state?.apertureOrbitLaneCount >= 3, 'aperture orbit capture lanes missing from debug state');
+    assert.equal(state?.apertureOrbitCaptureSampleCount, state.apertureOrbitCaptureRoleCount, 'capture sample count must match role count');
+    assert.ok(state?.ApertureOrbitLane?.every(lane => lane?.schema === 'ApertureOrbitLane'), 'ApertureOrbitLane records missing from debug state');
+    assert.ok(state?.MacroApertureTerminalRole?.every(role => role?.schema === 'MacroApertureTerminalRole'), 'MacroApertureTerminalRole records missing from debug state');
+    assert.ok(state?.MacroApertureTerminalCaptureSample?.every(sample => sample?.schema === 'MacroApertureTerminalCaptureSample'), 'MacroApertureTerminalCaptureSample records missing from debug state');
+    assert.ok(state?.apertureOrbitCaptureOverlayGeometryIds?.some(id => id.includes('orbit-lane')), 'aperture orbit lane overlay ids missing');
+    assert.ok(state?.apertureOrbitCaptureOverlayGeometryIds?.some(id => id.includes('target-tangent')), 'aperture orbit capture target tangent overlay ids missing');
+    if (focus === 'aperture-orbit-capture') {
+      assert.equal(apertureOrbitCaptureWitness?.schema, 'ApertureOrbitCaptureWitnessState', 'aperture orbit capture witness did not activate');
+      assert.equal(apertureOrbitCaptureWitness?.visualOverlayMode, 'macro-target-lanes-and-terminal-tangent-rays', 'aperture orbit capture witness did not enable target vector overlay');
+      assert.ok(apertureOrbitCaptureWitness?.visibleOverlayIds?.length >= state.apertureOrbitLaneCount + state.apertureOrbitCaptureRoleCount, 'aperture orbit capture overlay meshes not visible');
+    }
     assert.equal(state?.selectedParentPromotedBodyMeshCount, 0, 'selected parent promoted body slabs must be absent from normal render');
     assert.equal(state?.selectedParentSideWallMeshCount, 0, 'selected parent sidewalls must be absent from normal render');
     assert.equal(state?.selectedParentTerminalCapMeshCount, 0, 'selected parent terminal caps must be absent from normal render');
@@ -526,6 +547,7 @@ async function main() {
       || focus === 'side-rim-clean-topology'
       || focus === 'live-terminal-caps'
       || focus === 'aperture-tangency'
+      || focus === 'aperture-orbit-capture'
       || focus === 'lower-socket-semantic-render-inventory'
     ) {
       const canvasRect = await evaluate(ws, `
@@ -617,6 +639,19 @@ async function main() {
       apertureTangencyMeasuredApertureSourceId: state.apertureTangencyMeasuredApertureSourceId,
       apertureTangencyOverlayGeometryIds: state.apertureTangencyOverlayGeometryIds,
       apertureTangencyWitness,
+      ApertureOrbitCaptureLaw: state.ApertureOrbitCaptureLaw,
+      apertureOrbitCaptureLaw: state.apertureOrbitCaptureLaw,
+      ApertureOrbitLane: state.ApertureOrbitLane,
+      MacroApertureTerminalRole: state.MacroApertureTerminalRole,
+      apertureOrbitCaptureRoleCount: state.apertureOrbitCaptureRoleCount,
+      apertureOrbitLaneCount: state.apertureOrbitLaneCount,
+      ApertureOrbitCaptureWitnessPlan: state.ApertureOrbitCaptureWitnessPlan,
+      apertureOrbitCaptureWitnessPlan: state.apertureOrbitCaptureWitnessPlan,
+      MacroApertureTerminalCaptureSample: state.MacroApertureTerminalCaptureSample,
+      apertureOrbitCaptureSampleCount: state.apertureOrbitCaptureSampleCount,
+      apertureOrbitCaptureVerdictCounts: state.apertureOrbitCaptureVerdictCounts,
+      apertureOrbitCaptureOverlayGeometryIds: state.apertureOrbitCaptureOverlayGeometryIds,
+      apertureOrbitCaptureWitness,
       selectedParentPromotedBodyMeshCount: state.selectedParentPromotedBodyMeshCount,
       selectedParentPromotedBodyMeshIds: state.selectedParentPromotedBodyMeshIds,
       selectedParentSideWallMeshCount: state.selectedParentSideWallMeshCount,
