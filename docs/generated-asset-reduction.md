@@ -59,6 +59,22 @@ V0 still does not claim:
 
 Baked ambient occlusion is intentionally demoted rather than merely missing. Kaminos already pays for screen-space GTAO; baked AO risks double-occlusion and does not respond to nearby scene geometry. Normal baking is still a likely later target, but it should follow texture padding and projection-route cleanup.
 
+## Generated asset bake LOD probe v0
+
+`tools/generated-asset-bake-lod-probe.py` assays a high-detail source GLB and a set of candidate target GLBs, skips targets that violate the existing-UV0 contract, bakes the UV-bearing targets through `tools/generated-asset-bake.py`, and writes `generated-asset-bake-lod-probe-manifest.json`.
+
+The probe records:
+
+- target label and path
+- actual triangle/vertex count
+- UV0 and normal availability
+- material texture availability and material flags
+- bake route, texture size, padding, candidate count, and normal threshold
+- bake command/result and emitted bake manifest
+- direct Kaminos inspection URL for emitted baked GLBs
+
+Use this route to answer whether baking buys a lower runtime topology path. If no lower target preserves UV0/normals, the next problem is target generation or UV-preserving decimation, not texture transfer. Arbitrary cube/sphere projection is a later hostility test, not the first runtime-LOD question.
+
 ## 2026-06-29 molten cube smoke
 
 Source:
