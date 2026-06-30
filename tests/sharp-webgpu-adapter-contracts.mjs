@@ -38,6 +38,10 @@ assert.match(wrapperSource, /depth-canvas/, 'wrapper must preserve the depth sid
 assert.match(wrapperSource, /computePlyBounds/, 'wrapper must derive autocrop evidence from the generated PLY, not from a blind default crop');
 assert.match(wrapperSource, /KAMINOS_PIPELINE_AUTOCROP_EVIDENCE/, 'wrapper must accept a caller-owned autocrop evidence path');
 assert.match(wrapperSource, /Browser\.setDownloadBehavior|setDownloadBehavior/, 'wrapper must write PLY through browser download behavior instead of stdout copy-paste');
+assert.match(wrapperSource, /KAMINOS_SHARP_WEBGPU_SCHEDULER/, 'wrapper must accept explicit SHARP-WebGPU scheduler config');
+assert.match(wrapperSource, /sharpScheduler/, 'wrapper must pass scheduler config into the SHARP-WebGPU browser route');
+assert.match(wrapperSource, /schedulerTelemetry/, 'wrapper must capture browser-reported scheduler telemetry');
+assert.match(wrapperSource, /scheduler-unverified/, 'wrapper must fail loud when requested scheduler telemetry is absent');
 
 const witnessSource = readFileSync(witnessPath, 'utf8');
 assert.match(witnessSource, /recordAdapterSideArtifacts/, 'pipeline witness must ingest adapter side artifacts');
@@ -61,6 +65,14 @@ try {
       ...process.env,
       KAMINOS_SHARP_WEBGPU_REPO: join(tempRoot, 'missing-sharp-webgpu'),
       KAMINOS_SHARP_WEBGPU_TIMEOUT_MS: '1000',
+      KAMINOS_SHARP_WEBGPU_SCHEDULER: JSON.stringify({
+        mode: 'cooperative',
+        spnPatchChunkSize: 1,
+        yieldMs: 3,
+        waitForSubmittedWorkDone: true,
+        gaussianPhaseYieldMs: 4,
+        vitBlockChunkSize: 2,
+      }),
     },
   });
 
@@ -72,6 +84,11 @@ try {
   assert.equal(failureReport.ok, false);
   assert.equal(failureReport.backend.modelFamily, 'SHARP-WebGPU');
   assert.equal(failureReport.backend.runtime, 'browser-webgpu');
+  assert.equal(failureReport.breathingRoom.schema, 'kaminos.sharp-webgpu-scheduler-evidence.v0');
+  assert.equal(failureReport.breathingRoom.status, 'scheduler-unverified');
+  assert.equal(failureReport.breathingRoom.requestedScheduler.spnPatchChunkSize, 1);
+  assert.equal(failureReport.breathingRoom.requestedScheduler.vitBlockChunkSize, 2);
+  assert.equal(failureReport.breathingRoom.effectiveScheduler, null);
   assert.match(failureReport.phase, /validating|initializing|starting/, 'failure report must preserve failure phase');
   assert.match(failureReport.error, /SHARP-WebGPU repo|weights|package/, 'failure must name the missing native substrate');
 } finally {

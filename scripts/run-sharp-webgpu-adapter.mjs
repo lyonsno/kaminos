@@ -37,6 +37,7 @@ const chromePath = process.env.KAMINOS_SHARP_WEBGPU_CHROME || '/Applications/Goo
 const requestedPort = Number(process.env.KAMINOS_SHARP_WEBGPU_PORT || 0);
 const port = requestedPort || (54000 + Math.floor(Math.random() * 1000));
 const timeoutMs = Number(process.env.KAMINOS_SHARP_WEBGPU_TIMEOUT_MS || 420000);
+const requestedScheduler = parseRequestedScheduler();
 const outputDir = output ? dirname(output) : null;
 const depthPath = outputDir ? join(outputDir, 'sharp-webgpu-depth.png') : null;
 const metadataPath = outputDir ? join(outputDir, 'sharp-webgpu-metadata.json') : null;
@@ -64,6 +65,60 @@ function parseArtifactPaths(value) {
   } catch {
     return {};
   }
+}
+
+function parseJsonObject(value) {
+  if (!value) return {};
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function maybeNumber(value) {
+  if (value === undefined || value === null || value === '') return undefined;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : undefined;
+}
+
+function maybeBool(value) {
+  if (value === undefined || value === null || value === '') return undefined;
+  return /^(1|true|yes|on)$/i.test(String(value));
+}
+
+function parseRequestedScheduler() {
+  const scheduler = {
+    ...parseJsonObject(process.env.KAMINOS_SHARP_WEBGPU_SCHEDULER),
+  };
+  const discrete = {
+    spnPatchChunkSize: maybeNumber(process.env.KAMINOS_SHARP_WEBGPU_SPN_PATCH_CHUNK_SIZE),
+    yieldMs: maybeNumber(process.env.KAMINOS_SHARP_WEBGPU_YIELD_MS),
+    waitForSubmittedWorkDone: maybeBool(process.env.KAMINOS_SHARP_WEBGPU_WAIT_FOR_SUBMITTED_WORK_DONE),
+    gaussianPhaseYieldMs: maybeNumber(process.env.KAMINOS_SHARP_WEBGPU_GAUSSIAN_PHASE_YIELD_MS),
+    vitBlockChunkSize: maybeNumber(process.env.KAMINOS_SHARP_WEBGPU_VIT_BLOCK_CHUNK_SIZE),
+  };
+  for (const [key, value] of Object.entries(discrete)) {
+    if (value !== undefined) scheduler[key] = value;
+  }
+  return {
+    mode: scheduler.mode || (Object.keys(scheduler).length ? 'cooperative' : 'default'),
+    ...scheduler,
+  };
+}
+
+function schedulerEvidence(telemetry = null, statusOverride = null) {
+  const effectiveScheduler = telemetry?.effectiveScheduler || null;
+  const status = statusOverride || (effectiveScheduler ? (telemetry?.status || 'verified') : 'scheduler-unverified');
+  return {
+    schema: 'kaminos.sharp-webgpu-scheduler-evidence.v0',
+    status,
+    requestedScheduler,
+    effectiveScheduler,
+    unsupportedFields: telemetry?.unsupportedFields || [],
+    telemetry: telemetry || null,
+  };
 }
 
 function resolveArtifactPath(value) {
@@ -106,7 +161,9 @@ function reportBase(extra = {}) {
       appUrl: url,
       chromePath,
       weightsPath: join(sharpRepo, 'public', 'weights.bin'),
+      requestedScheduler,
     },
+    breathingRoom: schedulerEvidence(extra.schedulerTelemetry || null, extra.schedulerStatus),
     lastTrustworthyEvidence,
     serverLogs: {
       stdoutTail: serverLogs.stdout.slice(-4000),
@@ -396,6 +453,7 @@ function writeAutoCropEvidence(outputPath, context) {
       },
       metadata: fileEvidence(metadataPath),
       inference: context.result || null,
+      scheduler: schedulerEvidence(context.result?.schedulerTelemetry || null),
     },
     cropSignal: {
       provenance: 'generated PLY vertex bounds plus SHARP depth output captured in the same adapter run',
@@ -444,7 +502,9 @@ async function runBrowserInference() {
     });
 
     phase = 'loading-sharp-webgpu-page';
-    await page.goto(url, { waitUntil: 'networkidle0', timeout: 30000 });
+    const browserUrl = new URL(url);
+    browserUrl.searchParams.set('sharpScheduler', JSON.stringify(requestedScheduler));
+    await page.goto(browserUrl.href, { waitUntil: 'networkidle0', timeout: 30000 });
     await page.$eval('#use-spn', element => {
       element.checked = true;
       element.dispatchEvent(new Event('change', { bubbles: true }));
@@ -473,6 +533,7 @@ async function runBrowserInference() {
           time: document.getElementById('r-time')?.textContent || null,
           valid: validEl.textContent,
           downloadText: link.textContent || null,
+          schedulerTelemetry: window.__SHARP_LAST_RUN_TELEMETRY__ || null,
         });
       }
       return false;
@@ -498,6 +559,7 @@ async function runBrowserInference() {
         repo: sharpRepo,
         appUrl: url,
       },
+      scheduler: schedulerEvidence(result.schedulerTelemetry || null),
       result,
       input: fileEvidence(input),
       output: fileEvidence(output),
@@ -549,6 +611,8 @@ try {
       autoCropEvidence: sideArtifacts[2],
     },
     inference: browserResult.result,
+    schedulerTelemetry: browserResult.result.schedulerTelemetry || null,
+    schedulerStatus: browserResult.result.schedulerTelemetry ? null : 'scheduler-unverified',
     metadataPath,
     depthPath,
     autoCropEvidencePath,
