@@ -228,6 +228,8 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 .forge-meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 9px 'SF Mono', monospace; color: #666; margin-top: 3px; }
 .forge-chip { font: 9px 'SF Mono', monospace; color: #8fc7d6; border: 1px solid #28414a; background: #102025; border-radius: 4px; padding: 2px 5px; white-space: nowrap; }
 .forge-offer-row .forge-chip { color: #f0d28a; border-color: #4c3c1b; background: #211b0e; }
+.forge-offer-row.result { border-color: #4c3c1b; background: #211b0e; }
+.forge-offer-row.result:hover { border-color: #6c5727; background: #2a2110; }
 .forge-empty { font-size: 11px; color: #555; }
 .forge-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
 .forge-readout { display: grid; grid-template-columns: 1fr; gap: 3px; }
@@ -244,6 +246,10 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 .forge-chamber-note:focus { border-color: #5e8267; }
 .forge-chamber-return { width: 100%; min-height: 54px; margin-top: 7px; padding: 6px 8px; background: #121412; border: 1px solid #2a332b; border-radius: 5px; color: #9fb8a4; font: 10px 'SF Mono', monospace; resize: vertical; }
 .forge-chamber-status { color: #7f9a86; font: 9px 'SF Mono', monospace; margin-top: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.forge-chamber-result-preview { margin: 8px 0; padding: 8px; background: #161711; border: 1px solid #3c321a; border-radius: 6px; }
+.forge-chamber-result-summary { color: #cfc9ae; font-size: 11px; line-height: 1.35; margin-bottom: 6px; }
+.forge-chamber-result-image { width: 100%; max-height: 180px; object-fit: contain; background: #0d0e0c; border: 1px solid #2d2615; border-radius: 4px; margin-top: 6px; }
+.forge-chamber-result-link { display: block; color: #f0d28a; font: 9px 'SF Mono', monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 </style>
 </head>
 <body>
@@ -1163,6 +1169,7 @@ import {
   FORGE_HOST_REGISTRY_SNAPSHOT_SCHEMA,
   FORGE_HOST_STATION_ATTENTION_SCHEMA,
   FORGE_HOST_SMOKE_DISPOSITIONS,
+  FORGE_HOST_SMOKE_RESULT_OFFER_SCHEMA,
   buildForgeHostSmokeDispositionReceipt,
   buildForgeHostManifestFromRegistrySnapshot,
   buildForgeHostFixture,
@@ -3600,7 +3607,9 @@ function handleViewportSelectionClick(event) {
     event.stopPropagation?.();
     setForgeHostSelectedActor(forgeHit.station.actorId);
     if (forgeHit.type === 'smoke-offer' && forgeHit.station.smokeOffers[0]) {
-      openForgeHostSmokeOffer(forgeHit.station.smokeOffers[0].id);
+      const primaryOffer = forgeHit.station.smokeOffers.find(offerRecord => offerRecord.schema === FORGE_HOST_SMOKE_RESULT_OFFER_SCHEMA)
+        || forgeHit.station.smokeOffers[0];
+      openForgeHostSmokeOffer(primaryOffer.id);
     } else {
       setInfo(`Forge station: ${forgeHit.station.callSign}`);
     }
@@ -4117,20 +4126,33 @@ function renderForgeHostOfferList() {
   }
   summary.textContent = `${station.callSign} / ${station.role}`;
   list.innerHTML = '';
+  let resultOfferCount = 0;
   for (const offerRecord of station.smokeOffers) {
+    const isResultOffer = offerRecord.schema === FORGE_HOST_SMOKE_RESULT_OFFER_SCHEMA;
+    if (isResultOffer) resultOfferCount++;
+    const offerKind = isResultOffer ? 'Smoke Result' : 'Endpoint';
+    const offerStatus = isResultOffer ? (offerRecord.resultStatus || offerRecord.displayState) : offerRecord.displayState;
     const button = document.createElement('button');
     button.type = 'button';
-    button.className = 'forge-offer-row';
+    button.className = isResultOffer ? 'forge-offer-row result' : 'forge-offer-row';
     button.dataset.forgeSmokeOfferId = offerRecord.id;
+    button.dataset.forgeSmokeOfferSchema = offerRecord.schema;
     button.innerHTML = `
       <span>
         <span class="forge-title">${escapeHtml(offerRecord.title)}</span>
-        <span class="forge-meta">${escapeHtml(offerRecord.targetSurface)} / ${escapeHtml(offerRecord.sourceRef)}</span>
+        <span class="forge-meta">${escapeHtml(offerKind)} / ${escapeHtml(offerRecord.targetSurface)} / ${escapeHtml(offerRecord.sourceRef)}</span>
       </span>
-      <span class="forge-chip">${escapeHtml(offerRecord.displayState)}</span>
+      <span class="forge-chip">${escapeHtml(offerStatus)}</span>
     `;
     button.addEventListener('click', () => openForgeHostSmokeOffer(offerRecord.id));
     list.appendChild(button);
+  }
+  if (!resultOfferCount) {
+    const emptyResult = document.createElement('div');
+    emptyResult.className = 'forge-empty';
+    emptyResult.dataset.forgeSmokeResultEmpty = 'true';
+    emptyResult.textContent = 'No Smoke Result offer for this station';
+    list.appendChild(emptyResult);
   }
 }
 
@@ -4238,6 +4260,14 @@ function renderForgeHostSmokeChamber() {
   const receipt = forgeHostState.smokeDispositionReceipt || null;
   const note = forgeHostState.smokeOperatorNote || '';
   const previewReceipt = receipt || buildForgeHostSmokeDispositionReceipt(chamber, { disposition, operatorNote: note });
+  const isResultChamber = chamber.routeIdentity === 'forge-host-smoke-result-route';
+  const resultPreview = isResultChamber ? `
+    <div class="forge-chamber-result-preview" data-forge-smoke-result-status="${escapeHtml(chamber.resultStatus || 'unknown')}">
+      <div class="forge-chamber-result-summary">${escapeHtml(chamber.summary || 'Smoke Result offer has no summary payload.')}</div>
+      ${chamber.reportSource ? `<a class="forge-chamber-result-link" href="${escapeHtml(chamber.reportSource)}" target="_blank" rel="noopener">Report: ${escapeHtml(chamber.reportSource)}</a>` : ''}
+      ${chamber.screenshotSource ? `<img class="forge-chamber-result-image" src="${escapeHtml(chamber.screenshotSource)}" alt="">` : ''}
+    </div>
+  ` : '';
   const dispositionOptions = FORGE_HOST_SMOKE_DISPOSITIONS.map(item => (
     `<option value="${escapeHtml(item)}"${item === disposition ? ' selected' : ''}>${escapeHtml(item)}</option>`
   )).join('');
@@ -4257,6 +4287,7 @@ function renderForgeHostSmokeChamber() {
       <div class="field"><span class="field-key">Source</span><span class="field-val">${escapeHtml(chamber.sourceRef)}</span></div>
       <div class="field"><span class="field-key">Warnings</span><span class="field-val">${escapeHtml((chamber.routeWarnings || []).join(', '))}</span></div>
     </div>
+    ${resultPreview}
     <div class="slider-row">
       <span class="slider-label">Disposition</span>
       <select id="forge-host-chamber-disposition" class="select-input" data-forge-chamber-disposition>

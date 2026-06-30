@@ -33,6 +33,7 @@ assert.match(witness, /forge-host-live-registry/, 'witness supports Forge Host l
 assert.match(witness, /forge-host-smoke-chamber-routing/, 'witness supports opening a live Smoke Offer into a chamber');
 assert.match(witness, /forge-host-viewport-smoke-offer-click/, 'witness supports opening a live Smoke Offer by clicking its 3D viewport marker');
 assert.match(witness, /forge-host-side-panel-smoke-offer-click/, 'witness supports opening a live Smoke Offer by clicking its side-panel row');
+assert.match(witness, /forge-host-smoke-result-offer/, 'witness supports opening a typed Smoke Result offer into a result chamber');
 assert.match(witness, /forge-host-smoke-chamber-receipt/, 'witness supports capturing a Smoke Chamber disposition receipt');
 assert.match(indexHtml, /data-forge-host-smoke-chamber-schema="kaminos\.forge-host\.smoke-chamber\.v0"/, 'Forge Host smoke chamber exposes schema identity for browser witnesses');
 assert.match(witness, /kaminosForgeHostDebugState/, 'Forge Host witness reads the explicit browser debug state');
@@ -44,6 +45,7 @@ assert.match(witness, /live registry scene used fallback authority/, 'Forge Host
 assert.match(witness, /smoke chamber routed fallback as live/, 'Forge Host chamber witness fails loud on fallback/live false authority');
 assert.match(witness, /viewport smoke-offer click did not open chamber/, 'Forge Host viewport witness fails when the visible 3D smoke-offer marker is not actionable');
 assert.match(witness, /side-panel smoke-offer row was re-rendered under hover/, 'Forge Host side-panel witness fails when frame updates churn the hover target');
+assert.match(witness, /Smoke Result offer did not open result chamber/, 'Forge Host result witness fails when result offers route to endpoint shells');
 assert.match(witness, /smoke chamber receipt lost screenshot path/, 'Forge Host receipt witness fails loud on missing screenshot evidence');
 assert.match(witness, /requestedUrl:\s*url/, 'witness report records requested URL');
 assert.match(witness, /effectiveUrl:/, 'witness report records effective browser URL');

@@ -2,6 +2,7 @@ export const FORGE_HOST_STATION_MANIFEST_SCHEMA = 'kaminos.forge-host.station-ma
 export const FORGE_HOST_STATION_ANCHOR_SCHEMA = 'kaminos.forge-host.station-anchor.v0';
 export const FORGE_HOST_STATION_VISUAL_SCHEMA = 'kaminos.forge-host.station-visual.v0';
 export const FORGE_HOST_SMOKE_OFFER_SCHEMA = 'kaminos.forge-host.smoke-offer.v0';
+export const FORGE_HOST_SMOKE_RESULT_OFFER_SCHEMA = 'kaminos.forge-host.smoke-result-offer.v0';
 export const FORGE_HOST_SMOKE_CHAMBER_SCHEMA = 'kaminos.forge-host.smoke-chamber.v0';
 export const FORGE_HOST_SMOKE_DISPOSITION_RECEIPT_SCHEMA = 'kaminos.forge-host.smoke-disposition-receipt.v0';
 export const FORGE_HOST_STATION_ATTENTION_SCHEMA = 'kaminos.forge-host.station-attention.v0';
@@ -58,11 +59,48 @@ function offer({
   };
 }
 
+function smokeResultOffer({
+  id,
+  producerDiaulos,
+  title,
+  targetSurface = 'smoke-result',
+  sourceRef,
+  targetUrl,
+  reportSource = null,
+  screenshotSource = null,
+  summary = '',
+  authority = 'fixture',
+  freshness = 'fresh_fixture',
+  displayState = 'fixture',
+  resultStatus = 'available',
+  downgrades = ['fixture_result_payload'],
+}) {
+  return {
+    schema: FORGE_HOST_SMOKE_RESULT_OFFER_SCHEMA,
+    id,
+    producerDiaulos,
+    title,
+    targetSurface,
+    sourceRef,
+    targetUrl,
+    reportSource,
+    screenshotSource,
+    summary,
+    authority,
+    freshness,
+    displayState,
+    resultStatus,
+    downgrades,
+  };
+}
+
 export function routeForgeHostSmokeOfferToChamber(offerRecord, station = {}, {
   openedAt = new Date().toISOString(),
 } = {}) {
-  if (!offerRecord || offerRecord.schema !== FORGE_HOST_SMOKE_OFFER_SCHEMA) {
-    throw new Error(`Forge Host smoke chamber route expected ${FORGE_HOST_SMOKE_OFFER_SCHEMA}`);
+  const isEndpointOffer = offerRecord?.schema === FORGE_HOST_SMOKE_OFFER_SCHEMA;
+  const isResultOffer = offerRecord?.schema === FORGE_HOST_SMOKE_RESULT_OFFER_SCHEMA;
+  if (!offerRecord || (!isEndpointOffer && !isResultOffer)) {
+    throw new Error(`Forge Host smoke chamber route expected ${FORGE_HOST_SMOKE_OFFER_SCHEMA} or ${FORGE_HOST_SMOKE_RESULT_OFFER_SCHEMA}`);
   }
   if (!offerRecord.sourceRef || !offerRecord.targetSurface) {
     throw new Error(`${offerRecord.id || station.actorId || 'unknown'}: smoke chamber route missing source or target surface`);
@@ -70,10 +108,13 @@ export function routeForgeHostSmokeOfferToChamber(offerRecord, station = {}, {
   if (['fixture', 'fallback', 'seeded', 'stale'].includes(offerRecord.authority) && offerRecord.displayState === 'live') {
     throw new Error(`${offerRecord.authority} smoke offer claimed live chamber routing for ${offerRecord.id || station.actorId || 'unknown offer'}`);
   }
+  const routeWarnings = isResultOffer
+    ? ['not_chat_bridge', 'not_command_execution', 'not_source_thread_delivery']
+    : ['not_chat_bridge', 'not_command_execution'];
   return {
     schema: FORGE_HOST_SMOKE_CHAMBER_SCHEMA,
     id: `smoke-chamber:${offerRecord.id}`,
-    routeIdentity: 'forge-host-smoke-offer-route',
+    routeIdentity: isResultOffer ? 'forge-host-smoke-result-route' : 'forge-host-smoke-offer-route',
     openedAt,
     stationActorId: station.actorId || null,
     producerDiaulos: offerRecord.producerDiaulos || station.diaulos || null,
@@ -85,13 +126,17 @@ export function routeForgeHostSmokeOfferToChamber(offerRecord, station = {}, {
     sourceRef: offerRecord.sourceRef,
     targetUrl: offerRecord.targetUrl || null,
     sourceOffer: cloneJson(offerRecord),
+    reportSource: offerRecord.reportSource || null,
+    screenshotSource: offerRecord.screenshotSource || null,
+    summary: offerRecord.summary || '',
+    resultStatus: offerRecord.resultStatus || null,
     downgrades: cloneJson(offerRecord.downgrades || []),
     captureAffordances: [
       { id: 'screenshot', label: 'Screenshot', status: 'placeholder' },
       { id: 'filmstrip', label: 'Filmstrip', status: 'placeholder' },
       { id: 'reply', label: 'Reply', status: 'placeholder' },
     ],
-    routeWarnings: ['not_chat_bridge', 'not_command_execution'],
+    routeWarnings,
   };
 }
 
@@ -247,6 +292,16 @@ export function buildForgeHostFixture() {
           jitter: 0.08,
         },
         smokeOffers: [
+          smokeResultOffer({
+            id: 'result:minion-spawnfucker:smoke-chamber-receipts',
+            producerDiaulos: 'minion-spawnfucker',
+            title: 'Smoke Chamber Receipt Slice',
+            sourceRef: 'fixtures/forge-host-smoke-results/minion-smoke-chamber-receipts.json',
+            targetUrl: 'fixtures/forge-host-smoke-results/minion-smoke-chamber-receipts.json',
+            reportSource: 'projects/kaminos/topoi/codex-minion-spawnfucker-0623.md#2026-06-30--Smoke-Result-Offer-Viewer-Slice-Opened',
+            summary: 'Fixture result describing the current smoke chamber receipt branch until live smoke-result indexing is promoted.',
+            freshness: builtAt,
+          }),
           offer({
             id: 'offer:minion:kiln-docs',
             producerDiaulos: 'minion-spawnfucker',
@@ -417,6 +472,9 @@ export function buildForgeHostManifestFromRegistrySnapshot(snapshot, {
           color: STATUS_COLORS[status] || '#9fe6bd',
         };
     const callSign = endpointRow.callSign || titleFromDiaulos(diaulos);
+    const resultOffers = (snapshot.smokeResults || [])
+      .filter(result => result.producerDiaulos === diaulos)
+      .map(result => cloneJson(result));
     stations.push({
       actorId: `forge-station:${diaulos}`,
       diaulos,
@@ -457,6 +515,7 @@ export function buildForgeHostManifestFromRegistrySnapshot(snapshot, {
             ? ['endpoint_registry_presence_only', 'not_chat_bridge', 'not_domain_truth']
             : ['registry_not_live', 'not_chat_bridge', 'not_domain_truth'],
         }),
+        ...resultOffers,
       ],
     });
   }
@@ -550,10 +609,10 @@ export function validateForgeHostStationManifest(manifest) {
       falseAuthorityViolations.push(`${station.actorId}: ${station.sourceAuthority} station claimed live display authority`);
     }
     for (const offerRecord of station.smokeOffers || []) {
-      if (offerRecord.schema !== FORGE_HOST_SMOKE_OFFER_SCHEMA) {
+      if (![FORGE_HOST_SMOKE_OFFER_SCHEMA, FORGE_HOST_SMOKE_RESULT_OFFER_SCHEMA].includes(offerRecord.schema)) {
         falseAuthorityViolations.push(`${offerRecord.id || station.actorId}: smoke offer schema mismatch`);
       }
-      if (['fixture', 'fallback', 'seeded'].includes(offerRecord.authority) && offerRecord.displayState === 'live') {
+      if (['fixture', 'fallback', 'seeded', 'stale'].includes(offerRecord.authority) && offerRecord.displayState === 'live') {
         falseAuthorityViolations.push(`${offerRecord.id}: ${offerRecord.authority} offer claimed live display authority`);
       }
       if (!offerRecord.sourceRef || !offerRecord.targetSurface) {

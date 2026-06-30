@@ -51,9 +51,12 @@ SPLAT_CORRECTION_SCHEMA = "kaminos.splat-correction.v0"
 HYBRID_SPLAT_OVERLAY_MODULE_URL_ENV = "KAMINOS_HYBRID_SPLAT_OVERLAY_MODULE_URL"
 HYBRID_SPLAT_OVERLAY_MODULE_URL_ENV_LEGACY = "KAMINOS_HYBRID_SPLAT_MODULE_URL"
 FORGE_HOST_REGISTRY_SNAPSHOT_SCHEMA = "kaminos.forge-host.registry-snapshot.v0"
+FORGE_HOST_SMOKE_RESULT_OFFER_SCHEMA = "kaminos.forge-host.smoke-result-offer.v0"
+FORGE_HOST_SMOKE_RESULT_SNAPSHOT_SCHEMA = "kaminos.forge-host.smoke-result-snapshot.v0"
 FORGE_HOST_SMOKE_DISPOSITION_RECEIPT_SCHEMA = "kaminos.forge-host.smoke-disposition-receipt.v0"
 FORGE_HOST_SMOKE_DISPOSITION_SAVE_SCHEMA = "kaminos.forge-host.smoke-disposition-save.v0"
 FORGE_HOST_SMOKE_RECEIPTS_DIR = BROWSE_ROOTS["scratch"] / "smoke-chamber-receipts"
+FORGE_HOST_SMOKE_RESULT_FIXTURE_DIR = ROOT / "fixtures" / "forge-host-smoke-results"
 FORGE_HOST_ENDPOINT_REGISTRY_PATH = Path(os.environ.get(
     "KAMINOS_FORGE_HOST_ENDPOINT_REGISTRY",
     os.path.expanduser("~/.local/state/epistaxis/directive-alert-endpoints.json"),
@@ -133,6 +136,98 @@ def _diaulos_registry_index(diaulos_registry):
     return index
 
 
+def _validate_forge_host_smoke_result_offer(row):
+    if not isinstance(row, dict):
+        raise ValueError("smoke result offer must be a JSON object")
+    if row.get("schema") != FORGE_HOST_SMOKE_RESULT_OFFER_SCHEMA:
+        raise ValueError("smoke result offer schema mismatch")
+    required = ["id", "producerDiaulos", "title", "targetSurface", "sourceRef", "targetUrl", "authority", "displayState", "resultStatus"]
+    missing = [key for key in required if not row.get(key)]
+    if missing:
+        raise ValueError(f"smoke result offer missing fields: {', '.join(missing)}")
+    if row.get("authority") in {"fixture", "fallback", "seeded", "stale"} and row.get("displayState") == "live":
+        raise ValueError(f"{row.get('authority')} smoke result claimed live display authority")
+    return row
+
+
+def _fixture_smoke_result_offers(fixture_dir):
+    results = []
+    root = Path(fixture_dir).expanduser()
+    if not root.exists():
+        return results
+    for path in sorted(root.glob("*.json")):
+        row = _read_json_file(path)
+        row.setdefault("sourceRef", str(path))
+        _validate_forge_host_smoke_result_offer(row)
+        results.append(row)
+    return results
+
+
+def _receipt_smoke_result_offer(receipt_path, receipt_root):
+    receipt = _read_json_file(receipt_path)
+    if receipt.get("schema") != FORGE_HOST_SMOKE_DISPOSITION_RECEIPT_SCHEMA:
+        raise ValueError(f"receipt smoke result schema mismatch: {receipt_path}")
+    if receipt.get("sourceAuthority") in {"fixture", "fallback", "seeded", "stale"} and receipt.get("displayState") == "live":
+        raise ValueError(f"{receipt.get('sourceAuthority')} receipt smoke result claimed live display authority")
+    receipt_id = _safe_receipt_id(receipt.get("receiptId") or receipt_path.parent.name)
+    producer = receipt.get("producerDiaulos") or "unknown-diaulos"
+    rel_base = f"smoke-chamber-receipts/{receipt_id}"
+    screenshot = receipt.get("screenshot") if isinstance(receipt.get("screenshot"), dict) else {}
+    screenshot_source = screenshot.get("source") or "/api/read?" + urlencode({"root": "scratch", "path": f"{rel_base}/screenshot.png"})
+    report_source = "/api/read?" + urlencode({"root": "scratch", "path": f"{rel_base}/receipt.json"})
+    summary = receipt.get("operatorNote") or receipt.get("returnLine") or f"Smoke disposition receipt {receipt_id}."
+    row = {
+        "schema": FORGE_HOST_SMOKE_RESULT_OFFER_SCHEMA,
+        "id": f"result:{producer}:{receipt_id}",
+        "producerDiaulos": producer,
+        "title": f"Receipt {receipt_id}",
+        "targetSurface": "smoke-result",
+        "sourceRef": str(receipt_path),
+        "targetUrl": report_source,
+        "reportSource": report_source,
+        "screenshotSource": screenshot_source,
+        "summary": summary,
+        "authority": "local_artifact",
+        "freshness": receipt.get("savedAt") or receipt.get("freshness") or "unknown",
+        "displayState": "artifact",
+        "resultStatus": "available",
+        "downgrades": ["operator_disposition_receipt", "not_source_thread_delivery"],
+    }
+    return _validate_forge_host_smoke_result_offer(row)
+
+
+def build_forge_host_smoke_result_snapshot(
+    fixture_dir=FORGE_HOST_SMOKE_RESULT_FIXTURE_DIR,
+    receipt_dir=FORGE_HOST_SMOKE_RECEIPTS_DIR,
+):
+    warnings = []
+    results = []
+    fixture_root = Path(fixture_dir).expanduser()
+    receipt_root = Path(receipt_dir).expanduser()
+    if fixture_root.exists():
+        results.extend(_fixture_smoke_result_offers(fixture_root))
+    else:
+        warnings.append(f"smoke result fixture dir missing: {fixture_root}")
+    if receipt_root.exists():
+        for receipt_path in sorted(receipt_root.glob("*/receipt.json")):
+            results.append(_receipt_smoke_result_offer(receipt_path, receipt_root))
+    else:
+        warnings.append(f"smoke receipt result dir missing: {receipt_root}")
+    source_authority = "missing"
+    if any(row.get("authority") == "local_artifact" for row in results):
+        source_authority = "local_artifact"
+    elif results:
+        source_authority = "fixture"
+    return {
+        "schema": FORGE_HOST_SMOKE_RESULT_SNAPSHOT_SCHEMA,
+        "sourceAuthority": source_authority,
+        "fixtureDir": str(fixture_root),
+        "receiptDir": str(receipt_root),
+        "results": results,
+        "warnings": warnings,
+    }
+
+
 def build_forge_host_registry_snapshot(
     endpoint_registry_path=FORGE_HOST_ENDPOINT_REGISTRY_PATH,
     diaulos_registry_path=FORGE_HOST_DIAULOS_REGISTRY_PATH,
@@ -183,6 +278,7 @@ def build_forge_host_registry_snapshot(
             "sourceTopoi": registry_row.get("source_topoi") or [],
         })
 
+    smoke_result_snapshot = build_forge_host_smoke_result_snapshot()
     source_authority = "live_registry" if endpoint_status["loaded"] else "fallback"
     return {
         "schema": FORGE_HOST_REGISTRY_SNAPSHOT_SCHEMA,
@@ -191,6 +287,14 @@ def build_forge_host_registry_snapshot(
         "endpointRegistry": endpoint_status,
         "diaulosRegistry": diaulos_status,
         "endpoints": endpoints,
+        "smokeResultRegistry": {
+            "schema": smoke_result_snapshot["schema"],
+            "sourceAuthority": smoke_result_snapshot["sourceAuthority"],
+            "fixtureDir": smoke_result_snapshot["fixtureDir"],
+            "receiptDir": smoke_result_snapshot["receiptDir"],
+            "warnings": smoke_result_snapshot["warnings"],
+        },
+        "smokeResults": smoke_result_snapshot["results"],
         "warnings": warnings,
     }
 
