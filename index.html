@@ -4450,8 +4450,21 @@ function updateForgeHostStationFrame(timeSeconds = performance.now() / 1000) {
 }
 
 window.selectForgeHostStation = setForgeHostSelectedActor;
+window.kaminosCreateForgeHostStationScene = createForgeHostStationScene;
 window.kaminosOpenForgeHostSmokeOffer = openForgeHostSmokeOffer;
 window.kaminosRouteForgeHostSmokeOfferToChamber = routeForgeHostSmokeOfferToChamber;
+window.kaminosPublishForgeHostSmokeResultOffer = async function(payload) {
+  const response = await fetch('/api/forge-host/smoke-result-offer', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  const saved = await response.json();
+  if (!response.ok || saved.error) {
+    throw new Error(`Forge Host smoke result publication failed: ${saved.error || response.status}`);
+  }
+  return saved;
+};
 window.captureForgeHostSmokeChamberScreenshot = captureForgeHostSmokeChamberScreenshot;
 window.copyForgeHostSmokeChamberReturnLine = copyForgeHostSmokeChamberReturnLine;
 window.kaminosForgeHostViewportPointForOffer = function(diaulos = 'minion-spawnfucker') {

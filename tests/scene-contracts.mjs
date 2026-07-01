@@ -50,6 +50,7 @@ assert.match(index, /id="forge-host-chamber-return-line"/, 'Forge Host smoke cha
 assert.match(index, /function createForgeHostStationScene\(/, 'Forge Host stations render through an explicit scene creation path');
 assert.match(index, /\/api\/forge-host\/registry/, 'Forge Host can request the live Epistaxis registry snapshot through the Kaminos server');
 assert.match(index, /\/api\/forge-host\/smoke-chamber-receipt/, 'Forge Host can persist smoke chamber disposition receipts through the Kaminos server');
+assert.match(index, /\/api\/forge-host\/smoke-result-offer/, 'Forge Host exposes a lane-usable route for publishing Smoke Result offers');
 assert.match(index, /buildForgeHostManifestFromRegistrySnapshot/, 'Forge Host browser route can build station manifests from live registry snapshots');
 assert.match(index, /routeForgeHostSmokeOfferToChamber/, 'Forge Host browser route materializes smoke offers into chamber state');
 assert.match(index, /buildForgeHostSmokeDispositionReceipt/, 'Forge Host browser route builds structured disposition receipts');

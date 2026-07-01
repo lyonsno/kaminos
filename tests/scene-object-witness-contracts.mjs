@@ -34,6 +34,7 @@ assert.match(witness, /forge-host-smoke-chamber-routing/, 'witness supports open
 assert.match(witness, /forge-host-viewport-smoke-offer-click/, 'witness supports opening a live Smoke Offer by clicking its 3D viewport marker');
 assert.match(witness, /forge-host-side-panel-smoke-offer-click/, 'witness supports opening a live Smoke Offer by clicking its side-panel row');
 assert.match(witness, /forge-host-smoke-result-offer/, 'witness supports opening a typed Smoke Result offer into a result chamber');
+assert.match(witness, /forge-host-published-smoke-result-offer/, 'witness supports publishing and opening a non-Minion Smoke Result offer');
 assert.match(witness, /forge-host-smoke-chamber-receipt/, 'witness supports capturing a Smoke Chamber disposition receipt');
 assert.match(indexHtml, /data-forge-host-smoke-chamber-schema="kaminos\.forge-host\.smoke-chamber\.v0"/, 'Forge Host smoke chamber exposes schema identity for browser witnesses');
 assert.match(witness, /kaminosForgeHostDebugState/, 'Forge Host witness reads the explicit browser debug state');
@@ -46,6 +47,7 @@ assert.match(witness, /smoke chamber routed fallback as live/, 'Forge Host chamb
 assert.match(witness, /viewport smoke-offer click did not open chamber/, 'Forge Host viewport witness fails when the visible 3D smoke-offer marker is not actionable');
 assert.match(witness, /side-panel smoke-offer row was re-rendered under hover/, 'Forge Host side-panel witness fails when frame updates churn the hover target');
 assert.match(witness, /Smoke Result offer did not open result chamber/, 'Forge Host result witness fails when result offers route to endpoint shells');
+assert.match(witness, /published Smoke Result did not attach to Wake/, 'Forge Host publication witness fails when a published result does not become a lane-owned offer');
 assert.match(witness, /smoke chamber receipt lost screenshot path/, 'Forge Host receipt witness fails loud on missing screenshot evidence');
 assert.match(witness, /requestedUrl:\s*url/, 'witness report records requested URL');
 assert.match(witness, /effectiveUrl:/, 'witness report records effective browser URL');
