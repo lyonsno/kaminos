@@ -1406,6 +1406,15 @@ import {
   worldChamberDebugState,
 } from './world-chambers-core.js';
 import {
+  KAMINOS_HOST_SURFACE_ROUTE,
+  KAMINOS_HOST_SURFACE_STATE_SCHEMA,
+} from './host-surface-core.js';
+import {
+  KAMINOS_LERMS_MOVING_TIMELINE_HOST_ROUTE,
+  KAMINOS_LERMS_MOVING_TIMELINE_HOST_STATE_SCHEMA,
+  createLermsMovingTimelineHostState,
+} from './lerms-timeline-host-core.js';
+import {
   BIG_PAPA_FINGER_JUICE_HOST_PACKET_SCHEMA,
   BIG_PAPA_FINGER_JUICE_HOST_PACKET_ROUTE,
   KAMINOS_FINGER_JUICE_HOST_ROUTE,
@@ -1470,10 +1479,26 @@ let lermsActorMotionTimelineSource = null;
 let previewBenchPayloadReports = [];
 let previewBenchPayloadSources = [];
 const previewBenchPayloadStateSchema = KAMINOS_PREVIEW_BENCH_PAYLOAD_STATE_SCHEMA || 'kaminos.preview-bench.payload-state.v0';
+const LERMS_MOVING_TIMELINE_HOST_QUERY = 'kaminos_lerms_moving_timeline_host=1';
 let lermsPreviewTimelinePlaybackStartMs = 0;
 let lermsPreviewBenchState = createLermsPreviewBenchState(worldChambersRegistry, lermsPreviewRouteState);
 window.__kaminosLermsPreviewState = lermsPreviewBenchState;
 window.__kaminosPreviewBenchPayloads = [];
+let kaminosHostSurfaceState = {
+  schema: KAMINOS_HOST_SURFACE_STATE_SCHEMA,
+  route: KAMINOS_HOST_SURFACE_ROUTE,
+  status: 'idle',
+  hostId: null,
+  hostRoute: null,
+  hostStateSchema: null,
+  packetSchema: null,
+  packetRoute: null,
+  sourceAuthority: 'none',
+  sourceTruthAuthority: 'none',
+  downgrades: [],
+  rejectedDebugSurfaces: [],
+};
+window.__kaminosHostSurfaceDebugState = kaminosHostSurfaceState;
 const VOLUME_PRIMITIVE_SCHEMA = 'kaminos.volume-primitives.v0';
 const LAMELLAR_PLACEHOLDER_CONTRACT = 'temporary-aesthetic-composition-primitive-not-final-lamellar-topology';
 const RENDER_HANDOFF_SCHEMA = 'kaminos.render-handoff.v0';
@@ -7931,6 +7956,19 @@ function currentWorldChambersDebugState() {
 
 window.kaminosWorldChambersDebugState = currentWorldChambersDebugState;
 
+function publishKaminosHostSurfaceState(state, status = 'loaded') {
+  const next = state?.hostSurface || state;
+  if (!next) return kaminosHostSurfaceState;
+  kaminosHostSurfaceState = {
+    ...next,
+    status,
+  };
+  window.__kaminosHostSurfaceDebugState = kaminosHostSurfaceState;
+  return kaminosHostSurfaceState;
+}
+
+window.kaminosHostSurfaceDebugState = () => kaminosHostSurfaceState;
+
 function updateLermsPreviewBenchState(options = {}) {
   lermsPreviewRouteState = { ...lermsPreviewRouteState, ...options };
   lermsPreviewBenchState = createLermsPreviewBenchState(worldChambersRegistry, {
@@ -7948,6 +7986,14 @@ function updateLermsPreviewBenchState(options = {}) {
     previewPayloads: lermsPreviewBenchState.previewPayloads || [],
   };
   window.__kaminosPreviewBenchPayloads = lermsPreviewBenchState.previewPayloads || [];
+  if (lermsActorMotionTimelineReport) {
+    const timelineHostState = createLermsMovingTimelineHostState(lermsActorMotionTimelineReport, {
+      effectiveUrl: lermsActorMotionTimelineSource?.requestedUrl || lermsActorMotionTimelineSource?.effectiveUrl || null,
+      payloadSource: lermsActorMotionTimelineSource,
+    });
+    window.__kaminosLermsMovingTimelineHostState = timelineHostState;
+    publishKaminosHostSurfaceState(timelineHostState, 'loaded');
+  }
   return lermsPreviewBenchState;
 }
 
@@ -8231,6 +8277,7 @@ async function loadFingerJuiceHostPacket(route = fingerJuiceHostRouteFromParams(
       routeMode: route.mode,
       error: null,
     };
+    publishKaminosHostSurfaceState(fingerJuiceHostState, 'loaded');
     updateFingerJuiceHostReadout();
     drawFingerJuiceHostPreview();
     setInfo(`Finger Juice host packet loaded: ${fingerJuiceHostState.sourceAuthority} · ${fingerJuiceHostState.previewParticleCount} preview particles`);
@@ -8575,7 +8622,8 @@ async function initWorldChambersRoute() {
   const previewPayloadRoute = previewBenchPayloadUrlFromRoute(params);
   const actorMotionRoute = lermsActorMotionPayloadUrlFromRoute(params);
   const actorTimelineRoute = lermsActorMotionTimelineUrlFromRoute(params);
-  if (requestedChamber === LERMS_UNDERHILL_CHAMBER_ID || receiptRoute || previewPayloadRoute || actorMotionRoute || actorTimelineRoute || requestedBench) {
+  const requestedLermsMovingTimelineHost = params.get('kaminos_lerms_moving_timeline_host') === '1';
+  if (requestedChamber === LERMS_UNDERHILL_CHAMBER_ID || receiptRoute || previewPayloadRoute || actorMotionRoute || actorTimelineRoute || requestedBench || requestedLermsMovingTimelineHost) {
     worldChambersRegistry.activeChamberId = LERMS_UNDERHILL_CHAMBER_ID;
     renderWorldChambersPanel();
     setActiveTab('worlds');
@@ -8589,6 +8637,8 @@ async function initWorldChambersRoute() {
           ? `LERMS Preview Bench: loading actor motion ${actorMotionRoute.url}`
           : actorTimelineRoute
             ? `LERMS Preview Bench: loading actor timeline ${actorTimelineRoute.url}`
+            : requestedLermsMovingTimelineHost
+              ? `${KAMINOS_LERMS_MOVING_TIMELINE_HOST_ROUTE}: awaiting ${KAMINOS_LERMS_MOVING_TIMELINE_HOST_STATE_SCHEMA}`
             : `LERMS Preview Bench: ${previewState?.benchId || debug.activeChamber.title} - ${debug.authorityNote}`;
     setInfo(loadingLabel);
   }

@@ -1,8 +1,33 @@
+import {
+  KAMINOS_HOST_SURFACE_STATE_SCHEMA,
+  createHostSurfaceState,
+} from './host-surface-core.js';
+
 export const KAMINOS_FINGER_JUICE_HOST_STATE_SCHEMA = 'kaminos.finger-juice-host.state.v0';
 export const KAMINOS_FINGER_JUICE_HOST_ROUTE = 'kaminos/finger-juice-host';
 export const BIG_PAPA_FINGER_JUICE_HOST_PACKET_SCHEMA = 'big-papa-finger-juice.host-packet.v0';
 export const BIG_PAPA_FINGER_JUICE_HOST_PACKET_ROUTE = 'big-papa/finger-juice/host-packet';
 export const BIG_PAPA_FINGER_JUICE_RENDER_PAYLOAD_PREVIEW_SCHEMA = 'big-papa-finger-juice.render-payload.preview.v0';
+
+export const FINGER_JUICE_HOST_ADAPTER = {
+  hostId: 'finger-juice',
+  hostLabel: 'Finger Juice Host',
+  hostRoute: KAMINOS_FINGER_JUICE_HOST_ROUTE,
+  hostStateSchema: KAMINOS_FINGER_JUICE_HOST_STATE_SCHEMA,
+  packetSchema: BIG_PAPA_FINGER_JUICE_HOST_PACKET_SCHEMA,
+  packetRoute: BIG_PAPA_FINGER_JUICE_HOST_PACKET_ROUTE,
+  defaultProducerDiaulos: 'big-papa-finger-juice-fucker',
+  defaultSourceAuthority: 'unknown',
+  defaultSourceTruthAuthority: 'unknown',
+  defaultDowngrades: ['host_packet_preview_payload_not_native_render_buffer'],
+  defaultRejectedDebugSurfaces: [
+    {
+      surface: 'direct_lerms_finger_juice_debug_route',
+      acceptanceSurface: false,
+      reason: 'direct debug route remains an escape hatch, not the native host acceptance surface',
+    },
+  ],
+};
 
 function objectOrEmpty(value) {
   return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
@@ -189,11 +214,34 @@ export function normalizeFingerJuiceHostPacket(packet) {
 export function createFingerJuiceHostState(packet, options = {}) {
   const normalized = normalizeFingerJuiceHostPacket(packet);
   const renderPayload = normalized.render.payload;
+  const hostSurface = createHostSurfaceState({
+    adapter: FINGER_JUICE_HOST_ADAPTER,
+    packetSchema: normalized.schema,
+    packetRoute: normalized.route,
+    packetUrl: normalized.packetUrl || null,
+    source: normalized.source,
+    freshness: normalized.freshness,
+    downgrades: normalized.custody.downgrades,
+    rejectedDebugSurfaces: normalized.custody.rejectedDebugSurfaces,
+    custody: normalized.custody,
+    visual: normalized.visual,
+    hostSpecific: {
+      renderPayloadSchema: renderPayload.schema,
+      renderDowngraded: renderPayload.downgraded,
+      previewParticleCount: renderPayload.particles.length,
+      previewTrailCount: renderPayload.trails.length,
+      hitEventCount: normalized.hitRefs.events.length,
+    },
+  }, options);
   return {
     schema: KAMINOS_FINGER_JUICE_HOST_STATE_SCHEMA,
+    hostSurfaceSchema: KAMINOS_HOST_SURFACE_STATE_SCHEMA,
     route: KAMINOS_FINGER_JUICE_HOST_ROUTE,
-    effectiveUrl: options.effectiveUrl || normalized.packetUrl || null,
-    loadedAt: options.loadedAt || new Date().toISOString(),
+    hostId: hostSurface.hostId,
+    hostLabel: hostSurface.hostLabel,
+    hostRoute: hostSurface.hostRoute,
+    effectiveUrl: hostSurface.effectiveUrl || normalized.packetUrl || null,
+    loadedAt: hostSurface.loadedAt,
     packetSchema: normalized.schema,
     packetRoute: normalized.route,
     packetUrl: normalized.packetUrl || null,
@@ -216,5 +264,6 @@ export function createFingerJuiceHostState(packet, options = {}) {
     downgrades: normalized.custody.downgrades,
     rejectedDebugSurfaces: normalized.custody.rejectedDebugSurfaces,
     custody: normalized.custody,
+    hostSurface,
   };
 }

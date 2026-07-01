@@ -1,0 +1,92 @@
+{
+  "schema": "lerms.preview-bench-actor-motion-timeline-report.v0",
+  "route": "lerms/preview-bench/actor-motion-timeline-file",
+  "reportPath": "tests/fixtures/lerms-moving-timeline-host-smoke.json",
+  "timeline": {
+    "schema": "lerms.preview-bench-actor-motion-timeline.v0",
+    "route": "lerms/preview-bench/actor-motion-timeline-file",
+    "acceptanceSurface": {
+      "kind": "kaminos_preview_bench_timeline",
+      "worldChamberId": "lerms-underhill",
+      "posture": "inspect",
+      "bench": "terrain-preview",
+      "routeQuery": "world_chamber=lerms-underhill&posture=inspect&bench=terrain-preview"
+    },
+    "durationMs": 1200,
+    "timeline": [
+      {
+        "schema": "lerms.preview-bench-actor-motion-timeline-frame.v0",
+        "frameIndex": 0,
+        "label": "loose goin acquired",
+        "timeMs": 0,
+        "events": ["carrier-acquires-loose-goin"],
+        "actorMotion": [
+          { "actorId": "loose-goin-carrier", "state": "carrying_goin", "world": [-0.58, 0.42, 0.18], "heading": [1, 0, 0.1], "radius": 0.19, "color": "#e65c45" },
+          { "actorId": "reroute-lure", "state": "watching", "world": [0.58, 0.36, -0.18], "heading": [-1, 0, 0.1], "radius": 0.15, "color": "#b58cff" }
+        ]
+      },
+      {
+        "schema": "lerms.preview-bench-actor-motion-timeline-frame.v0",
+        "frameIndex": 1,
+        "label": "reroute pressure",
+        "timeMs": 400,
+        "events": ["nearby-lerm-desire-reroute"],
+        "actorMotion": [
+          { "actorId": "loose-goin-carrier", "state": "rerouting", "world": [-0.05, 0.45, 0.31], "heading": [0.2, 0, -1], "radius": 0.19, "color": "#e65c45" },
+          { "actorId": "reroute-lure", "state": "launching", "world": [0.35, 0.39, -0.05], "heading": [-1, 0, 0.3], "radius": 0.16, "color": "#b58cff" }
+        ]
+      },
+      {
+        "schema": "lerms.preview-bench-actor-motion-timeline-frame.v0",
+        "frameIndex": 2,
+        "label": "contact",
+        "timeMs": 800,
+        "events": ["glove-well-contact"],
+        "actorMotion": [
+          { "actorId": "loose-goin-carrier", "state": "hit_reacting", "world": [0.2, 0.5, -0.26], "heading": [-0.4, 0, -1], "radius": 0.17, "color": "#e65c45" },
+          { "actorId": "reroute-lure", "state": "carrier_drop", "world": [0.03, 0.44, -0.22], "heading": [0.1, 0, -1], "radius": 0.15, "color": "#b58cff" }
+        ],
+        "hitFlash": { "world": [0.16, 0.62, -0.24], "radius": 0.32 }
+      },
+      {
+        "schema": "lerms.preview-bench-actor-motion-timeline-frame.v0",
+        "frameIndex": 3,
+        "label": "recovery",
+        "timeMs": 1200,
+        "events": ["goin-released"],
+        "actorMotion": [
+          { "actorId": "loose-goin-carrier", "state": "recovering", "world": [-0.35, 0.43, -0.38], "heading": [-1, 0, 0], "radius": 0.18, "color": "#e65c45" },
+          { "actorId": "reroute-lure", "state": "watching", "world": [0.42, 0.38, 0.22], "heading": [-1, 0, -0.2], "radius": 0.15, "color": "#b58cff" }
+        ]
+      }
+    ],
+    "playback": {
+      "schema": "lerms.preview-bench-actor-motion-playback.v0",
+      "loop": true,
+      "interpolation": "linear-between-frames",
+      "timeUnit": "ms",
+      "minimumMovementActors": 1,
+      "minimumStateTransitions": 2
+    },
+    "witnessState": {
+      "schema": "lerms.preview-bench-actor-motion-timeline-state.v0",
+      "chamberId": "lerms-underhill",
+      "posture": "inspect",
+      "bench": "terrain-preview",
+      "routeReady": true,
+      "requiresMotionWitness": true,
+      "staticActorPayloadAcceptedAsLoop": false,
+      "frameCount": 4,
+      "actorIds": ["loose-goin-carrier", "reroute-lure"],
+      "states": ["carrying_goin", "rerouting", "hit_reacting", "recovering", "watching", "launching", "carrier_drop"]
+    },
+    "downgrades": [
+      "timevarying_payload_not_live_socket_stream",
+      "timeline_playback_not_behavior_engine"
+    ],
+    "custody": {
+      "lermsOwns": ["timelineBehaviorTruth", "contestedLooseGoinSemantics"],
+      "kaminosOwns": ["host display", "camera witness mechanics"]
+    }
+  }
+}
