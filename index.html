@@ -16070,6 +16070,20 @@ function initOrbShellCompositionRoute() {
       orbShellCompositionWitness.frameApertureOrbitCaptureWitness();
       setOrbShellSemanticLegend(null);
       setInfo(`Aperture Orbit Capture: ${witnessState.sampleCount} terminal roles / ${witnessState.visibleOverlayIds.length} overlays visible`);
+    } else if (orbShellFocus === 'material-truth') {
+      const view = params.get('orb_shell_spatial_view') || 'front';
+      const viewState = orbShellCompositionWitness.frameSpatialTruthView(view);
+      setOrbShellSemanticLegend(null);
+      window.__kaminosOrbShellMaterialTruthRoutePolicy = {
+        schema: 'MaterialTruthRoutePolicy',
+        mode: 'route-coupled-material-form-truth-witness-v0',
+        focus: 'material-truth',
+        view,
+        effectiveViewId: viewState.effectiveViewId,
+        materialDisposition: 'preserve-current-pbr-and-amber-form-cues-no-neutral-clay-override',
+        companionFocus: 'spatial-truth',
+      };
+      setInfo(`Material Truth: ${viewState.effectiveViewId} / current PBR form cues preserved`);
     } else if (orbShellFocus === 'spatial-truth') {
       const spatialTruthRoutePolicy = applyOrbShellSpatialTruthRenderPolicy(params);
       const witnessState = orbShellCompositionWitness.enableSpatialTruthWitness({

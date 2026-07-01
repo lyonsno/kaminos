@@ -9,12 +9,14 @@ const witness = readFileSync(join(root, 'orb-shell-composition-witness.mjs'), 'u
 const index = readFileSync(join(root, 'index.html'), 'utf8');
 
 assert.match(index, /orbShellFocus === 'spatial-truth'/, 'browser route must recognize spatial-truth focus');
+assert.match(index, /orbShellFocus === 'material-truth'/, 'browser route must expose stable material-truth focus for the pre-clay material read');
 assert.match(index, /enableSpatialTruthWitness/, 'browser route must activate spatial-truth material witness');
 assert.match(index, /frameSpatialTruthView/, 'browser route must frame named spatial-truth views');
 assert.match(index, /orb_shell_spatial_env_intensity/, 'spatial-truth route must expose environment intensity');
 assert.match(index, /orb_shell_spatial_exposure/, 'spatial-truth route must expose exposure');
 assert.match(index, /orb_shell_spatial_pass/, 'spatial-truth route must expose diagnostic pass identity');
 assert.match(index, /if \(!params\.has\(name\)\) return defaultValue;/, 'route number parser must use defaults when optional spatial-truth params are omitted');
+assert.match(index, /MaterialTruthRoutePolicy/, 'material-truth route must preserve its effective route identity');
 
 assert.match(core, /SpatialTruthMaterialPolicy/, 'composition core must expose a spatial-truth material policy');
 assert.match(core, /SpatialTruthWitnessState/, 'composition core must return a spatial-truth witness state');
@@ -31,6 +33,7 @@ assert.match(core, /exposure: 0\.9/, 'spatial-truth clay default exposure must p
 assert.match(core, /color: '#737d80'/, 'spatial-truth clay default color must be neutral gray rather than near-white');
 
 assert.match(witness, /spatial-truth/, 'headless witness must know spatial-truth focus');
+assert.match(witness, /material-truth/, 'headless witness must know material-truth focus');
 assert.match(witness, /--diagnostic-pass/, 'headless witness must accept diagnostic pass selection');
 assert.match(witness, /--view-set/, 'headless witness must accept reusable view-set selection');
 assert.match(witness, /--contact-sheet-out/, 'headless witness must write a contact sheet artifact');

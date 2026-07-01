@@ -50,6 +50,7 @@ let lowerSocketSemanticRenderInventoryWitness = null;
 let spatialTruthWitness = null;
 let spatialTruthViewFrame = null;
 let spatialTruthContactSheet = null;
+let materialTruthRoutePolicy = null;
 let visualCaptureCompleted = false;
 let visualCaptureFailure = null;
 let primaryCapture = null;
@@ -421,6 +422,13 @@ async function main() {
       `);
       await delay(500);
     }
+    if (focus === 'material-truth') {
+      spatialTruthViewFrame = await evaluate(ws, `
+        window.__kaminosOrbShellCompositionWitness?.frameSpatialTruthView?.(${JSON.stringify(spatialTruthView)})
+      `);
+      await delay(500);
+    }
+    materialTruthRoutePolicy = await evaluate(ws, 'window.__kaminosOrbShellMaterialTruthRoutePolicy || null');
 
     phase = 'state';
     const renderEffectPolicy = await readRenderEffectPolicy(ws, forcedAoState);
@@ -456,6 +464,7 @@ async function main() {
       || focus === 'aperture-tangency'
       || focus === 'aperture-orbit-capture'
       || focus === 'lower-socket-semantic-render-inventory'
+      || focus === 'material-truth'
       || focus === 'spatial-truth'
     ) {
       captureOptions = await canvasCaptureOptions(ws, focus);
@@ -840,6 +849,7 @@ async function main() {
       spatialTruthWitness,
       spatialTruthViewFrame,
       spatialTruthContactSheet,
+      materialTruthRoutePolicy,
       renderEffectPolicy,
       liveRenderMaterialPolicy: state.liveRenderMaterialPolicy,
       suppressedLegacyRoundBandIds: state.suppressedLegacyRoundBandIds,
@@ -925,6 +935,7 @@ async function main() {
       spatialTruthWitness,
       spatialTruthViewFrame,
       spatialTruthContactSheet,
+      materialTruthRoutePolicy,
       browserEvents,
       stderrTail: stderr.slice(-2000),
     });
