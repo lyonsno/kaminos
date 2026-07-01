@@ -1221,6 +1221,7 @@ let greenroomPreviewState = null;
 let greenroomPreviewGeneration = 0;
 let directGlbLoadState = null;
 let clayMaterialDebugState = null;
+let geometryWitnessMaterialDebugState = null;
 let sceneMutationToken = 0;
 let viewportPointerDown = null;
 let viewportSuppressedClick = null;
@@ -9204,48 +9205,92 @@ function directGlbDeepLinkFromParams(params) {
   };
 }
 
-function kaminosApplyClayGeometryMaterial(object, options = {}) {
-  if (!object) throw new Error('clay material override requires a scene object');
-  const color = options.color ?? 0xb8b2a7;
+function geometryWitnessMaterialModeOptions(mode, options = {}) {
+  const materialMode = mode || options.materialMode || 'clay';
+  if (materialMode === 'normal') {
+    return {
+      materialMode,
+      side: options.side ?? THREE.DoubleSide,
+      material: new THREE.MeshNormalMaterial({
+        name: 'kaminos-normal-geometry-witness-material',
+        side: options.side ?? THREE.DoubleSide,
+        flatShading: true,
+      }),
+    };
+  }
+  if (!['clay', 'clay-front', 'clay-back'].includes(materialMode)) {
+    throw new Error(`unsupported geometry witness material mode: ${materialMode}`);
+  }
+  const side = options.side
+    ?? (materialMode === 'clay-front' ? THREE.FrontSide : materialMode === 'clay-back' ? THREE.BackSide : THREE.DoubleSide);
+  const color = options.color
+    ?? (materialMode === 'clay-back' ? 0xdc6b42 : materialMode === 'clay-front' ? 0xd8d2c6 : 0xb8b2a7);
   const roughness = options.roughness ?? 0.86;
   const metalness = options.metalness ?? 0.0;
-  const side = options.side ?? THREE.DoubleSide;
-  let meshCount = 0;
-  let materialCount = 0;
-  const material = new THREE.MeshStandardMaterial({
-    name: 'kaminos-clay-geometry-witness-material',
+  return {
+    materialMode,
     color,
     roughness,
     metalness,
     side,
-    envMapIntensity: parseFloat(document.getElementById('env-intensity-slider').value || '1'),
-  });
+    material: new THREE.MeshStandardMaterial({
+      name: `kaminos-${materialMode}-geometry-witness-material`,
+      color,
+      roughness,
+      metalness,
+      side,
+      envMapIntensity: parseFloat(document.getElementById('env-intensity-slider').value || '1'),
+    }),
+  };
+}
+
+function materialSideName(side) {
+  if (side === THREE.DoubleSide) return 'DoubleSide';
+  if (side === THREE.BackSide) return 'BackSide';
+  return 'FrontSide';
+}
+
+function kaminosApplyGeometryWitnessMaterial(object, options = {}) {
+  if (!object) throw new Error('geometry witness material override requires a scene object');
+  const materialOptions = geometryWitnessMaterialModeOptions(options.materialMode || 'clay', options);
+  let meshCount = 0;
+  let materialCount = 0;
   object.traverse(child => {
     if (!child.isMesh) return;
     meshCount++;
     if (Array.isArray(child.material)) materialCount += child.material.length;
     else if (child.material) materialCount++;
-    child.material = material.clone();
+    child.material = materialOptions.material.clone();
     child.material.needsUpdate = true;
     child.castShadow = true;
     child.receiveShadow = true;
   });
-  clayMaterialDebugState = {
-    schema: 'kaminos.clay-geometry-material.v0',
+  geometryWitnessMaterialDebugState = {
+    schema: 'kaminos.geometry-witness-material.v0',
     status: meshCount > 0 ? 'applied' : 'empty',
-    materialMode: 'clay',
+    materialMode: materialOptions.materialMode,
     meshCount,
     replacedMaterialCount: materialCount,
-    color,
-    roughness,
-    metalness,
-    side: side === THREE.DoubleSide ? 'DoubleSide' : side === THREE.BackSide ? 'BackSide' : 'FrontSide',
+    color: materialOptions.color ?? null,
+    roughness: materialOptions.roughness ?? null,
+    metalness: materialOptions.metalness ?? null,
+    side: materialSideName(materialOptions.side),
     appliedAt: new Date().toISOString(),
   };
+  clayMaterialDebugState = geometryWitnessMaterialDebugState;
+  return geometryWitnessMaterialDebugState;
+}
+
+function kaminosApplyClayGeometryMaterial(object, options = {}) {
+  clayMaterialDebugState = kaminosApplyGeometryWitnessMaterial(object, { ...options, materialMode: 'clay' });
   return clayMaterialDebugState;
 }
 
+window.kaminosApplyGeometryWitnessMaterial = kaminosApplyGeometryWitnessMaterial;
 window.kaminosApplyClayGeometryMaterial = kaminosApplyClayGeometryMaterial;
+window.kaminosGeometryWitnessMaterialDebugState = function() {
+  return geometryWitnessMaterialDebugState;
+};
 window.kaminosClayMaterialDebugState = function() {
   return clayMaterialDebugState;
 };
@@ -9254,6 +9299,7 @@ async function loadDirectGlbDeepLink(params = new URLSearchParams(window.locatio
   const route = directGlbDeepLinkFromParams(params);
   if (!route) return null;
   clayMaterialDebugState = null;
+  geometryWitnessMaterialDebugState = null;
   directGlbLoadState = {
     ...route,
     status: 'loading',
@@ -9272,16 +9318,15 @@ async function loadDirectGlbDeepLink(params = new URLSearchParams(window.locatio
         directGlbRoute: route,
       },
     });
-    if (route.materialMode === 'clay') {
-      kaminosApplyClayGeometryMaterial(model, { route });
-    } else if (route.materialMode !== 'source') {
-      throw new Error(`unsupported direct GLB material mode: ${route.materialMode}`);
+    if (route.materialMode !== 'source') {
+      kaminosApplyGeometryWitnessMaterial(model, { route, materialMode: route.materialMode });
     }
     directGlbLoadState = {
       ...directGlbLoadState,
       status: 'loaded',
       loadedAt: new Date().toISOString(),
       clayMaterial: clayMaterialDebugState,
+      geometryWitnessMaterial: geometryWitnessMaterialDebugState,
     };
     setInfo(`Direct GLB loaded: ${route.label}`);
     return directGlbLoadState;

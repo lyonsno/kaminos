@@ -167,7 +167,18 @@ This route proves a lower-poly, whole-object, UV-bearing target can receive bake
 - Target winding repair flipped `103 / 43,671` faces (`0.0023585` ratio), with `9,677` components, `37,674` boundary edges, `36` non-manifold edges, and `42` conflict edges.
 - Visual witness remained materially similar to the material-bound/normals smoke: the correction is real GLB hygiene, but it is not the visual fix for the raw43k target. Keep the next investigation pointed at target topology quality, projection/material pickup, or component/segmentation routes rather than blaming the whole screenshot on mixed winding.
 
-2026-07-01 clay geometry discriminator:
+2026-07-01 clay/front/back/normal geometry discriminator:
+
+- Witness manifest:
+  `/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-generated-asset-geometry-witness-20260701Tsource-winding/generated-asset-geometry-witness-manifest.json`
+- Contact sheet:
+  `/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-generated-asset-geometry-witness-20260701Tsource-winding/generated-asset-geometry-contact-sheet.png`
+- Report:
+  `/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-generated-asset-geometry-witness-20260701Tsource-winding/generated-asset-geometry-witness-report.json`
+- Topology assay:
+  `/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-generated-asset-geometry-witness-20260701Tsource-winding/generated-asset-topology-assay.json`
+
+Earlier clay-only discriminator:
 
 - Witness manifest:
   `/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-generated-asset-clay-witness-20260701Tmolten-discriminator/generated-asset-clay-witness-manifest.json`
@@ -176,24 +187,51 @@ This route proves a lower-poly, whole-object, UV-bearing target can receive bake
 - Report:
   `/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-generated-asset-clay-witness-20260701Tmolten-discriminator/generated-asset-clay-witness-report.json`
 
-The clay witness renders GLBs through the normal Kaminos direct-GLB route with
-`glb_material=clay`, replacing source textures/materials with a neutral,
-double-sided clay material and recording `kaminosClayMaterialDebugState`.
+The geometry witness renders GLBs through the normal Kaminos direct-GLB route
+with `glb_material=clay`, `clay-front`, `clay-back`, or `normal`, replacing
+source textures/materials with a textureless diagnostic material and recording
+`kaminosGeometryWitnessMaterialDebugState`. The contact sheet script sizes the
+headless screenshot to include every asset/mode row; a partial viewport capture
+is not acceptable evidence for multi-row matrices.
 
 Inspected comparison:
 
-- Source 350k Trellis GLB: coherent clay geometry.
-- glTF Transform floor output around 110k: coherent clay geometry and visually
-  close to the source under this view.
+- Source 350k Trellis GLB: distance-coherent, but not clean. Front-only and
+  back-only modes both render substantial exterior/object structure, so the
+  source itself carries mixed-winding/inside-out surface defects plus large
+  open-boundary topology.
+- glTF Transform floor output around 110k: visually close to the source under
+  this view and carries the same general defect class; it does not produce a
+  true 40k/15k runtime LOD.
 - raw43k xatlas target before bake: shredded under clay before texture transfer.
 - raw43k baked winding-repair output: materially the same shredded silhouette as
-  the raw43k target under clay.
+  the raw43k target under clay/front/back/normal diagnostics.
+
+Topology assay summary:
+
+- Source 350k: `328,987` faces, `254,045` boundary edges, `28` non-manifold
+  edges, `113` same-direction shared edges, `196` winding-repair flips across
+  `34,636` components.
+- glTF 110k: `110,159` faces, `156,824` boundary edges, `122` non-manifold
+  edges, `107` same-direction shared edges, `189` winding-repair flips across
+  `27,555` components.
+- raw43k xatlas: `43,671` faces, `37,674` boundary edges, `36` non-manifold
+  edges, `64` same-direction shared edges, `103` winding-repair flips across
+  `9,677` components.
+- baked raw43k repaired: `43,671` faces, `37,674` boundary edges, `36`
+  non-manifold edges, `18` same-direction shared edges, `0` additional
+  winding-repair flips across `9,677` components.
 
 Verdict:
 
-The raw43k route's current visible failure is primarily target topology quality,
-not bake projection, material binding, double-sided rendering, or generated
-normal export. Projection/material debugging can wait until there is a lower
-target whose clay geometry reads coherently. The next reduction route should be
-an intermediate topology ladder, component/segmentation route, or different
-target-generation method rather than more bake tuning on this raw43k mesh.
+The raw43k route's current visible failure is target topology amplification,
+not a clean-source bake problem and not merely material binding, double-sided
+rendering, generated normals, or local winding repair. The source already has
+mixed winding and open surfaces, but raw43k concentrates the inherited defect
+field into shredded structural sheets. Bake-time winding repair is still valid
+GLB hygiene, but it cannot reconstruct missing or collapsed topology.
+Projection/material debugging can wait until there is a lower target whose
+textureless front/back/normal geometry reads coherently. The next reduction
+route should be an intermediate topology ladder, component/segmentation route,
+or different target-generation method rather than more bake tuning on this
+raw43k mesh.

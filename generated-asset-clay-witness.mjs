@@ -19,6 +19,17 @@ const reportPath = resolve(args.get('--report') || `${outDir}/generated-asset-cl
 const contactSheetPath = resolve(args.get('--contact-sheet') || `${outDir}/generated-asset-clay-contact-sheet.png`);
 const contactSheetHtmlPath = contactSheetPath.replace(/\.png$/i, '.html');
 const routeIdentity = 'kaminos.generated-asset-clay-geometry-witness.v0';
+const materialModes = String(args.get('--material-modes') || args.get('--material-mode') || 'clay')
+  .split(',')
+  .map(mode => mode.trim())
+  .filter(Boolean);
+const supportedMaterialModes = new Set(['clay', 'clay-front', 'clay-back', 'normal']);
+
+for (const mode of materialModes) {
+  if (!supportedMaterialModes.has(mode)) {
+    fail(`unsupported --material-modes entry: ${mode}`);
+  }
+}
 
 function nowIso() {
   return new Date().toISOString();
@@ -76,23 +87,24 @@ function loadManifest(path) {
   };
 }
 
-function kaminosUrlFor(asset) {
+function kaminosUrlFor(asset, materialMode) {
   const url = new URL(baseUrl);
   url.searchParams.set('glb_path', asset.path);
-  url.searchParams.set('glb_label', asset.label);
-  url.searchParams.set('glb_material', 'clay');
+  url.searchParams.set('glb_label', `${asset.label} / ${materialMode}`);
+  url.searchParams.set('glb_material', materialMode);
   return url.href;
 }
 
-function runSceneObjectWitness(asset, index) {
-  const safeId = asset.id.replace(/[^a-zA-Z0-9_.-]+/g, '-').replace(/^-+|-+$/g, '') || `asset-${index}`;
+function runSceneObjectWitness(asset, index, materialMode) {
+  const safeId = `${asset.id}-${materialMode}`.replace(/[^a-zA-Z0-9_.-]+/g, '-').replace(/^-+|-+$/g, '') || `asset-${index}`;
   const screenshot = resolve(outDir, `${String(index + 1).padStart(2, '0')}-${safeId}.png`);
   const report = resolve(outDir, `${String(index + 1).padStart(2, '0')}-${safeId}.json`);
-  const kaminosUrl = kaminosUrlFor(asset);
+  const kaminosUrl = kaminosUrlFor(asset, materialMode);
+  const scenario = materialMode === 'clay' ? 'direct-glb-clay-load' : 'direct-glb-geometry-material-load';
   const childArgs = [
     'scene-object-witness.mjs',
     '--url', kaminosUrl,
-    '--scenario', 'direct-glb-clay-load',
+    '--scenario', scenario,
     '--out', screenshot,
     '--report', report,
     '--debug-port', String(debugPortStart + index),
@@ -114,7 +126,9 @@ function runSceneObjectWitness(asset, index) {
   return {
     ...asset,
     routeIdentity,
-    materialMode: 'clay',
+    id: safeId,
+    label: `${asset.label} / ${materialMode}`,
+    materialMode,
     kaminosUrl,
     screenshot,
     witnessReport: report,
@@ -124,6 +138,7 @@ function runSceneObjectWitness(asset, index) {
     signal: result.signal,
     stdoutTail: (result.stdout || '').slice(-2000),
     stderrTail: (result.stderr || '').slice(-2000),
+    geometryWitnessMaterial: witnessReport?.evidence?.directGlbLoad?.geometryWitnessMaterial || witnessReport?.evidence?.directGlbLoad?.state?.geometryWitnessMaterial || null,
     clayMaterial: witnessReport?.evidence?.directGlbLoad?.clayMaterial || witnessReport?.evidence?.directGlbLoad?.state?.clayMaterial || null,
     directGlbState: witnessReport?.evidence?.directGlbLoad?.state || null,
   };
@@ -159,7 +174,7 @@ function renderContactSheetHtml(assets) {
         ${img ? `<img src="${img}" alt="${escapeHtml(asset.label)}">` : '<div class="missing">missing screenshot</div>'}
         <footer>
           <div>${escapeHtml(asset.path)}</div>
-          <div>${escapeHtml(asset.clayMaterial?.status || 'no clay receipt')} · meshes ${escapeHtml(asset.clayMaterial?.meshCount ?? '?')}</div>
+          <div>${escapeHtml(asset.geometryWitnessMaterial?.status || asset.clayMaterial?.status || 'no material receipt')} · ${escapeHtml(asset.materialMode)} · ${escapeHtml(asset.geometryWitnessMaterial?.side || asset.clayMaterial?.side || '?')} · meshes ${escapeHtml(asset.geometryWitnessMaterial?.meshCount ?? asset.clayMaterial?.meshCount ?? '?')}</div>
         </footer>
       </article>`;
   }).join('\n');
@@ -186,7 +201,7 @@ function renderContactSheetHtml(assets) {
 <body>
 <main class="sheet">
   <h1>Generated Asset Clay Geometry Witness</h1>
-  <div class="sub">${escapeHtml(routeIdentity)} · ${escapeHtml(nowIso())} · textureless clay material via glb_material=clay</div>
+  <div class="sub">${escapeHtml(routeIdentity)} · ${escapeHtml(nowIso())} · textureless geometry material via glb_material=clay/front/back/normal · modes ${escapeHtml(materialModes.join(','))}</div>
   <section class="grid">${cards}</section>
 </main>
 </body>
@@ -195,6 +210,7 @@ function renderContactSheetHtml(assets) {
 
 function createContactSheet(assets) {
   const html = renderContactSheetHtml(assets);
+  const contactSheetHeight = Math.max(900, 120 + Math.ceil(assets.length / 2) * 430);
   mkdirSync(dirname(contactSheetHtmlPath), { recursive: true });
   writeFileSync(contactSheetHtmlPath, html);
   const result = spawnSync(chrome, [
@@ -202,7 +218,7 @@ function createContactSheet(assets) {
     '--disable-gpu',
     '--hide-scrollbars',
     '--allow-file-access-from-files',
-    '--window-size=1600,900',
+    `--window-size=1600,${contactSheetHeight}`,
     `--screenshot=${contactSheetPath}`,
     `file://${contactSheetHtmlPath}`,
   ], {
@@ -212,6 +228,7 @@ function createContactSheet(assets) {
   return {
     path: contactSheetPath,
     html: contactSheetHtmlPath,
+    contactSheetHeight,
     status: result.status === 0 ? 'emitted' : 'failed',
     exitStatus: result.status,
     signal: result.signal,
@@ -224,8 +241,12 @@ const startedAt = Date.now();
 mkdirSync(outDir, { recursive: true });
 const manifest = loadManifest(manifestPath);
 const assets = [];
-for (let index = 0; index < manifest.assets.length; index++) {
-  assets.push(runSceneObjectWitness(manifest.assets[index], index));
+let itemIndex = 0;
+for (const asset of manifest.assets) {
+  for (const materialMode of materialModes) {
+    assets.push(runSceneObjectWitness(asset, itemIndex, materialMode));
+    itemIndex++;
+  }
 }
 const contactSheet = createContactSheet(assets);
 const status = assets.every(asset => asset.status === 'emitted') && contactSheet.status === 'emitted'
@@ -239,6 +260,7 @@ const finalReport = {
   durationMs: Date.now() - startedAt,
   manifestPath,
   manifestSchema: manifest.schema,
+  materialModes,
   outDir,
   baseUrl,
   expectedServerRoot,

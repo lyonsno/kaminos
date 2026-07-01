@@ -1706,12 +1706,14 @@ async function runDirectGlbLoadScenario(ws) {
       }));
       const sceneDebug = window.kaminosSceneObjectDebugState?.() || [];
       const clayMaterial = window.kaminosClayMaterialDebugState?.() || null;
+      const geometryWitnessMaterial = window.kaminosGeometryWitnessMaterialDebugState?.() || null;
       const canvas = document.querySelector('canvas');
       return {
         state,
         rows,
         sceneDebug,
         clayMaterial,
+        geometryWitnessMaterial,
         info: document.getElementById('info-bar')?.textContent?.trim() || '',
         canvas: canvas ? { width: canvas.width, height: canvas.height } : null,
         transformBarVisible: document.getElementById('transform-bar')?.classList.contains('visible') || false,
@@ -1747,6 +1749,20 @@ async function runDirectGlbLoadScenario(ws) {
     }
     if (!lastEvidence.directGlbLoad.clayMaterial.meshCount) {
       throw new Error(`direct GLB clay material override saw no meshes: ${JSON.stringify(lastEvidence.directGlbLoad)}`);
+    }
+  }
+  if (scenario === 'direct-glb-geometry-material-load') {
+    if (state.materialMode === 'source') {
+      throw new Error(`direct GLB geometry material route did not request an override: ${JSON.stringify(lastEvidence.directGlbLoad)}`);
+    }
+    if (state.geometryWitnessMaterial?.status !== 'applied' || lastEvidence.directGlbLoad.geometryWitnessMaterial?.status !== 'applied') {
+      throw new Error(`direct GLB geometry material override did not apply: ${JSON.stringify(lastEvidence.directGlbLoad)}`);
+    }
+    if (lastEvidence.directGlbLoad.geometryWitnessMaterial.materialMode !== state.materialMode) {
+      throw new Error(`direct GLB geometry material override reported the wrong mode: ${JSON.stringify(lastEvidence.directGlbLoad)}`);
+    }
+    if (!lastEvidence.directGlbLoad.geometryWitnessMaterial.meshCount) {
+      throw new Error(`direct GLB geometry material override saw no meshes: ${JSON.stringify(lastEvidence.directGlbLoad)}`);
     }
   }
 }
@@ -4373,7 +4389,7 @@ try {
 
   if (scenario === 'startup-empty') {
     await runStartupEmptyScenario(ws);
-  } else if (scenario === 'direct-glb-load' || scenario === 'direct-glb-clay-load') {
+  } else if (scenario === 'direct-glb-load' || scenario === 'direct-glb-clay-load' || scenario === 'direct-glb-geometry-material-load') {
     await runDirectGlbLoadScenario(ws);
   } else if (scenario === 'append-select-remove-keyboard') {
     await runAppendSelectRemoveKeyboardScenario(ws);
@@ -4462,5 +4478,7 @@ try {
   throw error;
 } finally {
   try { ws?.close?.(); } catch {}
-  chromeProcess?.kill('SIGTERM');
+  try { chromeProcess?.stderr?.destroy?.(); } catch {}
+  try { chromeProcess?.kill('SIGTERM'); } catch {}
+  chromeProcess?.unref?.();
 }

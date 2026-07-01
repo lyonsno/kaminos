@@ -16,6 +16,7 @@ assert.match(witness, /const scenario\s*=\s*args\.get\('--scenario'\) \|\| 'appe
 assert.match(witness, /startup-empty/, 'witness supports an empty-startup scenario');
 assert.match(witness, /direct-glb-load/, 'witness supports direct GLB deep-link visual smoke');
 assert.match(witness, /direct-glb-clay-load/, 'witness supports direct GLB clay material visual smoke');
+assert.match(witness, /direct-glb-geometry-material-load/, 'witness supports direct GLB geometry material visual smoke');
 assert.match(witness, /selected-delete-shortcut/, 'witness supports selected-object Delete shortcut removal');
 assert.match(witness, /save-load-roundtrip/, 'witness supports a browser scene save/load roundtrip scenario');
 assert.match(witness, /transform-inspector/, 'witness supports a selected-object transform inspector scenario');
@@ -56,6 +57,7 @@ assert.match(witness, /checking-debug-port/, 'witness checks for stale CDP endpo
 assert.match(witness, /CDP debug port already in use before launch/, 'witness fails instead of attaching to stale CDP endpoints');
 assert.match(witness, /chromeProcess\.once\('error'/, 'witness converts Chrome launch errors into caught failures');
 assert.match(witness, /Chrome launch failed/, 'witness names Chrome launch failures in reports');
+assert.match(witness, /chromeProcess\?\.unref/, 'witness releases Chrome child handles after cleanup so successful evidence does not linger until parent timeout');
 assert.match(witness, /effective URL mismatch/, 'witness fails when the loaded route differs from the requested route');
 assert.match(witness, /CDP request timed out/, 'witness times out nonresponsive CDP requests');
 assert.match(witness, /Page\.captureScreenshot/, 'witness captures a screenshot artifact');
@@ -70,7 +72,9 @@ assert.match(witness, /startup empty scene did not show object-list empty state/
 assert.match(witness, /startup empty scene lost manual demo affordance/, 'witness proves empty startup still exposes manual demo import');
 assert.match(witness, /kaminosDirectGlbLoadState/, 'direct GLB witness reads explicit route load state');
 assert.match(witness, /kaminosClayMaterialDebugState/, 'direct GLB clay witness reads explicit material override state');
+assert.match(witness, /kaminosGeometryWitnessMaterialDebugState/, 'direct GLB geometry material witness reads explicit material override state');
 assert.match(witness, /direct GLB clay material override did not apply/, 'direct GLB clay witness fails when clay override is absent');
+assert.match(witness, /direct GLB geometry material override did not apply/, 'direct GLB geometry material witness fails when material override is absent');
 assert.match(witness, /direct GLB deep-link did not load/, 'direct GLB witness fails when the route does not report loaded');
 assert.match(witness, /direct GLB deep-link did not register exactly one scene object row/, 'direct GLB witness proves the loaded GLB entered the object list');
 assert.match(witness, /direct GLB deep-link did not preserve label identity/, 'direct GLB witness proves the loaded GLB keeps route label identity');
