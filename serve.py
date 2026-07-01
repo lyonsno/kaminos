@@ -170,8 +170,70 @@ def _compute_route_fire_artifact_from_report(report, artifact_id):
     return artifact if isinstance(artifact, dict) else None
 
 
+def _compute_route_fire_progress_event_from_line(line, stream_name):
+    text = str(line or "").strip()
+    if not text:
+        return None
+    try:
+        event = json.loads(text)
+    except json.JSONDecodeError:
+        return None
+    if event.get("schema") != "kaminos.pipeline-progress.v0":
+        return None
+    return {
+        **event,
+        "schema": "kaminos.pipeline-progress.v0",
+        "kind": event.get("kind") or "pipeline-progress",
+        "stream": stream_name,
+    }
+
+
+def _record_compute_route_fire_progress(run, event):
+    if not event:
+        return
+    lock = run.get("progress_lock")
+    if lock:
+        with lock:
+            run.setdefault("progress_events", []).append(event)
+            run["latest_progress"] = event
+        return
+    run.setdefault("progress_events", []).append(event)
+    run["latest_progress"] = event
+
+
+def _capture_compute_route_fire_stream(run, pipe, stream_name, log_handle):
+    try:
+        for raw in iter(pipe.readline, b""):
+            if not raw:
+                break
+            try:
+                log_handle.write(raw)
+                log_handle.flush()
+            except Exception:
+                pass
+            try:
+                text = raw.decode("utf-8", errors="replace")
+            except AttributeError:
+                text = str(raw)
+            event = _compute_route_fire_progress_event_from_line(text, stream_name)
+            _record_compute_route_fire_progress(run, event)
+    finally:
+        try:
+            pipe.close()
+        except Exception:
+            pass
+
+
 def _compute_route_fire_snapshot(run):
     report = run.get("pipeline_report")
+    progress_lock = run.get("progress_lock")
+    if progress_lock:
+        with progress_lock:
+            progress_events = list(run.get("progress_events") or [])
+            latest_progress = run.get("latest_progress")
+    else:
+        progress_events = list(run.get("progress_events") or [])
+        latest_progress = run.get("latest_progress")
     return {
         "schema": COMPUTE_ROUTE_FIRE_RUN_SCHEMA,
         "runId": run["run_id"],
@@ -190,6 +252,8 @@ def _compute_route_fire_snapshot(run):
         "finishedAt": run.get("finished_at"),
         "exitCode": run.get("exit_code"),
         "error": run.get("error"),
+        "latestProgress": latest_progress,
+        "progressEvents": progress_events,
         "pipelineReport": report,
         "artifacts": _compute_route_fire_artifacts_from_report(report),
     }
@@ -215,6 +279,11 @@ def _refresh_compute_route_fire_run(run):
         return run
     run["exit_code"] = exit_code
     run["finished_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    for thread in run.get("stream_threads") or []:
+        try:
+            thread.join(timeout=0.2)
+        except RuntimeError:
+            pass
     _close_compute_route_fire_logs(run)
     report_path = Path(run["report_path"])
     if report_path.is_file():
@@ -279,16 +348,38 @@ def start_compute_route_fire_run(input_path=None, config=None):
         "finished_at": None,
         "exit_code": None,
         "pipeline_report": None,
+        "progress_events": [],
+        "latest_progress": None,
+        "progress_lock": threading.Lock(),
+        "stream_threads": [],
         "error": None,
     }
     try:
+        child_env = {
+            **os.environ,
+            "KAMINOS_PIPELINE_PROGRESS_STREAM": "1",
+        }
         run["process"] = subprocess.Popen(
             command,
             cwd=str(pipeline_worktree.resolve()),
             stdin=subprocess.DEVNULL,
-            stdout=stdout_handle,
-            stderr=stderr_handle,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=child_env,
         )
+        for stream_name, pipe, log_handle in (
+            ("stdout", run["process"].stdout, stdout_handle),
+            ("stderr", run["process"].stderr, stderr_handle),
+        ):
+            if not pipe:
+                continue
+            thread = threading.Thread(
+                target=_capture_compute_route_fire_stream,
+                args=(run, pipe, stream_name, log_handle),
+                daemon=True,
+            )
+            thread.start()
+            run["stream_threads"].append(thread)
     except Exception as error:
         _close_compute_route_fire_logs(run)
         run["process"] = None

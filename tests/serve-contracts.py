@@ -294,6 +294,72 @@ def test_compute_route_fire_run_failure_never_keeps_fire_burning():
         assert current["pipelineReport"] is None
 
 
+def test_compute_route_fire_run_exposes_native_pipeline_progress_before_completion():
+    with TemporaryDirectory(dir="/tmp") as tmp:
+        root = Path(tmp)
+        pipeline = root / "pipeline"
+        pipeline.mkdir()
+        input_path = root / "source.png"
+        input_path.write_bytes(b"fake image")
+        (pipeline / "pipeline-witness.mjs").write_text(
+            """
+import { mkdirSync, writeFileSync } from 'node:fs';
+const arg = name => process.argv[process.argv.indexOf(name) + 1];
+const outDir = arg('--out-dir');
+const report = arg('--report');
+if (process.env.KAMINOS_PIPELINE_PROGRESS_STREAM !== '1') {
+  throw new Error('progress stream env was not enabled');
+}
+console.log(JSON.stringify({
+  schema: 'kaminos.pipeline-progress.v0',
+  kind: 'adapter-progress',
+  phase: 'stage:run-sharp-image-to-splat:image-encoder',
+  message: 'Running image encoder',
+  status: 'running',
+  progress: 0.42
+}));
+await new Promise(resolve => setTimeout(resolve, 220));
+mkdirSync(`${outDir}/artifacts`, { recursive: true });
+writeFileSync(`${outDir}/artifacts/sharp-output.ply`, 'ply\\n');
+writeFileSync(report, JSON.stringify({
+  schema: 'kaminos.pipeline-witness.v0',
+  ok: true,
+  requestedPipelineId: 'sharp-image-to-splat-live-v0',
+  effectivePipelineId: 'sharp-image-to-splat-live-v0',
+  phase: 'complete',
+  effectiveRouteConfig: { routeId: 'adapter.sharp-image-to-splat-live.v0', outputRoot: outDir },
+  artifacts: {
+    input: { role: 'source-image', status: 'requested', path: process.argv[process.argv.indexOf('--input') + 1] },
+    splat: { role: 'splat-candidate', status: 'real', path: `${outDir}/artifacts/sharp-output.ply`, bytes: 4 }
+  },
+  stages: [{ id: 'run-sharp-image-to-splat', status: 'real', effectiveRoute: { effectiveBackend: 'browser-webgpu' } }]
+}, null, 2));
+""".strip()
+        )
+
+        run = serve.start_compute_route_fire_run(
+            input_path=str(input_path),
+            config={
+                "pipeline_worktree": pipeline,
+                "output_root": root / "runs",
+            },
+        )
+        deadline = time.time() + 3
+        current = run
+        while time.time() < deadline:
+            current = serve.compute_route_fire_status(run["runId"])
+            if current.get("latestProgress"):
+                break
+            time.sleep(0.05)
+
+        assert current["status"] == "running"
+        assert current["progressEvents"][0]["schema"] == "kaminos.pipeline-progress.v0"
+        assert current["latestProgress"]["phase"] == "stage:run-sharp-image-to-splat:image-encoder"
+        assert current["latestProgress"]["message"] == "Running image encoder"
+        assert current["latestProgress"]["progress"] == 0.42
+        assert current["latestProgress"]["stream"] == "stdout"
+
+
 def test_compute_route_fire_promotes_completed_splat_to_asset_inbox_with_source_truth():
     with TemporaryDirectory(dir="/tmp") as tmp:
         root = Path(tmp)

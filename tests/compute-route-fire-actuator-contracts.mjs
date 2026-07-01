@@ -11,6 +11,7 @@ assert.match(index, /id="compute-route-fire-start"/, 'operator has an explicit c
 assert.match(index, /id="compute-route-fire-run-summary"/, 'operator sees a plain-language run summary before evidence fields');
 assert.match(index, /id="compute-route-fire-input-path"/, 'operator can see or edit the route input path');
 assert.match(index, /id="compute-route-fire-run-status"/, 'operator sees running/completed/failed status');
+assert.match(index, /id="compute-route-fire-run-progress"/, 'operator sees native adapter progress before completion');
 assert.match(index, /id="compute-route-fire-run-report"/, 'operator sees the report path after completion');
 assert.match(index, /id="compute-route-fire-run-artifacts"/, 'operator sees output artifacts after completion');
 assert.match(index, /id="compute-route-fire-output-asset"/, 'operator sees the promoted output asset identity after completion');
@@ -20,6 +21,7 @@ assert.match(index, /pollComputeRouteFireRun/, 'browser polls live route status 
 assert.match(index, /promoteComputeRouteFireOutput/, 'browser promotes completed route output before import');
 assert.match(index, /loadComputeRouteFireOutput/, 'browser can load the promoted route output into the scene');
 assert.match(index, /SHARP started on this image, but the model adapter failed before producing a splat\./, 'failed live adapter runs say no splat was produced in operator-facing language');
+assert.match(index, /SHARP is working on this image: \$\{progress\.message\}/, 'running live adapter summary can lead with native progress message');
 assert.match(index, /\/api\/compute-route-fire\/start/, 'browser starts the route through the Kaminos server API');
 assert.match(index, /\/api\/compute-route-fire\/status/, 'browser polls route state through the Kaminos server API');
 assert.match(index, /\/api\/compute-route-fire\/promote-splat/, 'browser asks the server to promote the completed splat into the asset index');

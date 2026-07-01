@@ -698,6 +698,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
       <div class="field"><span class="field-key">Compute route</span><span class="route-chip" id="compute-route-fire-actuator-route">sharp-image-to-splat-live-v0</span></div>
       <div class="compute-route-fire-run-summary" id="compute-route-fire-run-summary" data-compute-route-fire-summary-state="idle">Choose an image and start SHARP when you want a new splat.</div>
       <div class="field"><span class="field-key">Status</span><span class="field-val" id="compute-route-fire-run-status">idle</span></div>
+      <div class="field"><span class="field-key">Progress</span><span class="field-val route-fire-field-long" id="compute-route-fire-run-progress">--</span></div>
       <div class="field"><span class="field-key">Input</span></div>
       <input class="compute-route-fire-input" id="compute-route-fire-input-path" value="">
       <div class="volume-actions">
@@ -8056,12 +8057,33 @@ function computeRouteFireOutputCanLoad(run) {
   return run?.status === 'completed' && !!computeRouteFireArtifact(run, 'splat');
 }
 
+function computeRouteFireProgressText(progress = null) {
+  if (!progress) return '--';
+  const pieces = [];
+  if (Number.isFinite(progress.progress)) {
+    pieces.push(`${Math.round(progress.progress * 100)}%`);
+  }
+  if (progress.message) {
+    pieces.push(progress.message);
+  } else if (progress.phase) {
+    pieces.push(progress.phase);
+  }
+  if (progress.stream) {
+    pieces.push(progress.stream);
+  }
+  return pieces.length ? pieces.join(' · ') : '--';
+}
+
 function computeRouteFireRunSummary(run = null, promoted = null) {
   const status = run?.status || 'idle';
+  const progress = run?.latestProgress || null;
   if (status === 'starting') {
     return 'SHARP is starting on this image; the furnace will burn only while the live route is running.';
   }
   if (status === 'running') {
+    if (progress?.message) {
+      return `SHARP is working on this image: ${progress.message}.`;
+    }
     return 'SHARP is working on this image; the furnace is burning while the live route runs.';
   }
   if (status === 'completed' && computeRouteFireOutputCanLoad(run)) {
@@ -8099,6 +8121,12 @@ function renderComputeRouteFireRun(run = null) {
   }
   document.getElementById('compute-route-fire-run-status').textContent = status;
   setComputeRouteFireStatusClass(status);
+  const progressEl = document.getElementById('compute-route-fire-run-progress');
+  if (progressEl) {
+    const progressText = computeRouteFireProgressText(run?.latestProgress || null);
+    progressEl.textContent = progressText;
+    progressEl.title = run?.latestProgress ? JSON.stringify(run.latestProgress) : '';
+  }
   const button = document.getElementById('compute-route-fire-start');
   if (button) {
     const active = status === 'starting' || status === 'running';
