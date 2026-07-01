@@ -58,6 +58,9 @@ function buildJobType(cwd) {
       '--window-size', '{window_size}',
       '--debug-port', '{debug_port}',
       '--scenarios', '{scenarios}',
+      '--repeat-count', '{repeat_count}',
+      '--stability-frame-p95-pct', '{stability_frame_p95_pct}',
+      '--stability-queue-p95-pct', '{stability_queue_p95_pct}',
       '{benchmark_dry_run_flag}',
     ],
     cwd,
@@ -68,6 +71,9 @@ function buildJobType(cwd) {
       settle_ms: '8000',
       window_size: '1280,960',
       debug_port: '9500',
+      repeat_count: '2',
+      stability_frame_p95_pct: '0.15',
+      stability_queue_p95_pct: '0.20',
       benchmark_dry_run_flag: '',
     },
     timeout: null,
@@ -89,6 +95,9 @@ const scenarios = String(args.get('--scenarios') || 'all');
 const settleMs = String(args.get('--settle-ms') || '8000');
 const windowSize = String(args.get('--window-size') || '1280,960');
 const debugPort = String(args.get('--debug-port') || '9500');
+const repeatCount = String(args.get('--repeat-count') || (args.has('--benchmark-dry-run') ? '1' : '2'));
+const stabilityFrameP95Pct = String(args.get('--stability-frame-p95-pct') || '0.15');
+const stabilityQueueP95Pct = String(args.get('--stability-queue-p95-pct') || '0.20');
 const outputDir = args.get('--output-dir') ? resolve(args.get('--output-dir')) : '';
 const benchmarkDryRunFlag = args.has('--benchmark-dry-run') ? '--dry-run' : '';
 const registerOnly = args.has('--register-only');
@@ -117,6 +126,9 @@ const request = {
   settleMs,
   windowSize,
   debugPort,
+  repeatCount,
+  stabilityFrameP95Pct,
+  stabilityQueueP95Pct,
   outputDir: outputDir || null,
   benchmarkDryRun: Boolean(benchmarkDryRunFlag),
 };
@@ -136,6 +148,9 @@ submitArgs.push(
   `settle_ms=${settleMs}`,
   `window_size=${windowSize}`,
   `debug_port=${debugPort}`,
+  `repeat_count=${repeatCount}`,
+  `stability_frame_p95_pct=${stabilityFrameP95Pct}`,
+  `stability_queue_p95_pct=${stabilityQueueP95Pct}`,
   `benchmark_dry_run_flag=${benchmarkDryRunFlag}`,
 );
 
