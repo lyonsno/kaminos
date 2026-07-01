@@ -186,6 +186,7 @@ async function sampleLermsMovingTimelineMotion(ws) {
       blend: window.__kaminosLermsPreviewTimelinePlaybackFrame.blend
     } : null,
     timer: window.__kaminosLermsPreviewTimelinePlaybackTimer || null,
+    trace: window.__kaminosLermsPreviewActorVisuals?.trace || null,
     objects: [...(window.__kaminosLermsPreviewActorsGroup?.children || [])].map(child => ({
       name: child.name,
       x: Number(child.position.x.toFixed(3)),
@@ -315,6 +316,7 @@ async function main() {
         actorObjectCount: actorObjects.length,
         actorObjects,
         actorVisualCount: window.__kaminosLermsPreviewActorVisuals?.actorVisualCount || 0,
+        timelineTrace: window.__kaminosLermsPreviewActorVisuals?.trace || null,
       };
     })()`);
     if (visualActivity.kind === 'canvas' && visualActivity.activePixels < 120) {

@@ -31,6 +31,7 @@ assert.match(hostSurfaceWitnessSource, /kaminosOwnsSourceAlias/, 'generic witnes
 assert.match(hostSurfaceWitnessSource, /motionSamples/, 'generic witness records LERMS moving-timeline motion samples');
 assert.match(hostSurfaceWitnessSource, /movedObjectCount/, 'generic witness proves LERMS moving-timeline objects change position');
 assert.match(hostSurfaceWitnessSource, /goinObjectCount/, 'generic witness proves LERMS moving-timeline goin objects are present');
+assert.match(hostSurfaceWitnessSource, /timelineTrace/, 'generic witness records LERMS timeline trace summary');
 assert.match(hostSurfaceWitnessSource, /primary_output_written/, 'generic witness writes durable reports even before screenshot success');
 assert.match(indexSource, /kaminosHostSurfaceDebugState/, 'browser exposes generic host-surface debug state');
 assert.match(indexSource, /kaminos_lerms_moving_timeline_host=1/, 'browser exposes a direct LERMS moving timeline host route');
@@ -41,6 +42,14 @@ assert.match(indexSource, /goinVisualCount/, 'browser exposes rendered goin coun
 assert.match(indexSource, /updateLermsPreviewActorVisualMesh/, 'browser advances LERMS actors with in-place transform updates');
 assert.match(indexSource, /updateLermsPreviewGoinVisualMesh/, 'browser advances LERMS goins with in-place transform updates');
 assert.match(indexSource, /kaminos\.lerms-preview-timeline-playback-timer\.v1/, 'browser exposes low-churn LERMS playback timer evidence');
+assert.match(indexSource, /makeLermsPreviewTimelineTrace/, 'browser renders timeline trace paths for LERMS behavior reading');
+assert.match(indexSource, /kaminosLermsTimelineTrace/, 'browser exposes timeline trace debug identity');
+assert.match(indexSource, /kaminosLermsTimelineTraceDot/, 'browser exposes per-beat actor and goin trace dot identity');
+assert.match(indexSource, /lerms-preview-actor-path-dot/, 'browser names LERMS actor path dots for witness inspection');
+assert.match(indexSource, /lerms-preview-goin-path-dot/, 'browser names LERMS goin path dots for witness inspection');
+assert.match(indexSource, /actorPathCount/, 'browser reports actor trace path count');
+assert.match(indexSource, /goinPathCount/, 'browser reports goin trace path count');
+assert.match(indexSource, /dotCount/, 'browser reports trace dot count');
 assert.match(indexSource, /frameLermsPreviewActorVisualsCamera/, 'browser frames the LERMS moving timeline route from rendered actor bounds');
 assert.match(indexSource, /kaminosLermsActivityReadout/, 'browser exposes activity readout debug identity');
 assert.match(indexSource, /__kaminosLermsPreviewCameraFrame/, 'browser exposes LERMS actor-bounds camera framing evidence');

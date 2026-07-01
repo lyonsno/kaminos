@@ -8213,6 +8213,95 @@ function makeLermsPreviewGoinVisualMesh(primitive) {
   return goinGroup;
 }
 
+function makeLermsPreviewPathDot(name, position, color, radius = 0.022) {
+  const dot = new THREE.Mesh(
+    new THREE.SphereGeometry(radius, 10, 8),
+    new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.72, depthWrite: false }),
+  );
+  dot.name = name;
+  dot.position.set(position[0], position[1] - 0.85 + 0.018, position[2]);
+  dot.renderOrder = 6;
+  markKaminosOverlayCue(dot);
+  return dot;
+}
+
+function makeLermsPreviewPathLine(name, points, color) {
+  if (!points.length) return null;
+  const geometry = new THREE.BufferGeometry().setFromPoints(points.map(point => (
+    new THREE.Vector3(point[0], point[1] - 0.85 + 0.012, point[2])
+  )));
+  const line = new THREE.Line(
+    geometry,
+    new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.38, depthWrite: false }),
+  );
+  line.name = name;
+  line.renderOrder = 5;
+  markKaminosOverlayCue(line);
+  return line;
+}
+
+function makeLermsPreviewTimelineTrace(timelineState) {
+  const frames = timelineState?.frames || [];
+  const traceGroup = new THREE.Group();
+  traceGroup.name = 'lerms-preview-timeline-trace';
+  traceGroup.userData.kaminosLermsTimelineTrace = {
+    schema: 'kaminos.lerms-preview-timeline-trace.v0',
+    frameCount: frames.length,
+    actorPathCount: 0,
+    goinPathCount: 0,
+    dotCount: 0,
+  };
+
+  const actorPaths = new Map();
+  const goinPaths = new Map();
+  for (const frame of frames) {
+    for (const primitive of frame.visualPrimitives || []) {
+      if (!actorPaths.has(primitive.actorId)) actorPaths.set(primitive.actorId, []);
+      actorPaths.get(primitive.actorId).push({
+        frameLabel: frame.label,
+        timeMs: frame.timeMs,
+        position: primitive.position,
+      });
+    }
+    for (const primitive of frame.goinVisualPrimitives || []) {
+      if (!goinPaths.has(primitive.goinId)) goinPaths.set(primitive.goinId, []);
+      goinPaths.get(primitive.goinId).push({
+        frameLabel: frame.label,
+        timeMs: frame.timeMs,
+        state: primitive.state,
+        position: primitive.position,
+      });
+    }
+  }
+
+  for (const [actorId, path] of actorPaths.entries()) {
+    const line = makeLermsPreviewPathLine(`lerms-preview-actor-path-${actorId}`, path.map(point => point.position), 0x9a6cff);
+    if (line) traceGroup.add(line);
+    traceGroup.userData.kaminosLermsTimelineTrace.actorPathCount += 1;
+    path.forEach((point, index) => {
+      const dot = makeLermsPreviewPathDot(`lerms-preview-actor-path-dot-${actorId}-${index}-${point.frameLabel}`, point.position, 0xc6b0ff, 0.018);
+      dot.userData.kaminosLermsTimelineTraceDot = { actorId, frameLabel: point.frameLabel, timeMs: point.timeMs };
+      traceGroup.userData.kaminosLermsTimelineTrace.dotCount += 1;
+      traceGroup.add(dot);
+    });
+  }
+
+  for (const [goinId, path] of goinPaths.entries()) {
+    const line = makeLermsPreviewPathLine(`lerms-preview-goin-path-${goinId}`, path.map(point => point.position), 0xffe07a);
+    if (line) traceGroup.add(line);
+    traceGroup.userData.kaminosLermsTimelineTrace.goinPathCount += 1;
+    path.forEach((point, index) => {
+      const color = point.state === 'carried' ? 0x7ae7ff : point.state === 'rolling' || point.state === 'dropped' ? 0xffd05a : 0xb5ff78;
+      const dot = makeLermsPreviewPathDot(`lerms-preview-goin-path-dot-${goinId}-${index}-${point.frameLabel}`, point.position, color, 0.026);
+      dot.userData.kaminosLermsTimelineTraceDot = { goinId, frameLabel: point.frameLabel, timeMs: point.timeMs, state: point.state };
+      traceGroup.userData.kaminosLermsTimelineTrace.dotCount += 1;
+      traceGroup.add(dot);
+    });
+  }
+
+  return markKaminosOverlayCue(traceGroup);
+}
+
 function updateLermsPreviewActorVisualMesh(actorGroup, primitive) {
   if (!actorGroup || !primitive) return;
   const radius = primitive.radius || 0.18;
@@ -8310,6 +8399,9 @@ function renderLermsPreviewActorVisuals(previewState, visualPrimitivesOverride =
   clearLermsPreviewActorVisuals();
   const primitives = visualPrimitivesOverride || previewState?.actorMotion?.visualPrimitives || [];
   const goinPrimitives = goinPrimitivesOverride || previewState?.actorMotionTimeline?.frames?.[0]?.goinVisualPrimitives || [];
+  if (previewState?.actorMotionTimeline?.frames?.length) {
+    group.add(makeLermsPreviewTimelineTrace(previewState.actorMotionTimeline));
+  }
   for (const primitive of primitives) {
     group.add(makeLermsPreviewActorVisualMesh(primitive));
   }
@@ -8317,10 +8409,12 @@ function renderLermsPreviewActorVisuals(previewState, visualPrimitivesOverride =
     group.add(makeLermsPreviewGoinVisualMesh(primitive));
   }
   const cameraFrame = frameLermsPreviewActorVisualsCamera(group, [...primitives, ...goinPrimitives]);
+  const trace = group.getObjectByName('lerms-preview-timeline-trace')?.userData?.kaminosLermsTimelineTrace || null;
   const state = {
     schema: 'kaminos.lerms-preview-actor-visual-layer.v0',
     actorVisualCount: primitives.length,
     goinVisualCount: goinPrimitives.length,
+    trace,
     actorIds: primitives.map(primitive => primitive.actorId),
     goinIds: goinPrimitives.map(primitive => primitive.goinId),
     kinds: [...new Set(primitives.map(primitive => primitive.kind))],
