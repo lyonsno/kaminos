@@ -16,11 +16,13 @@ const HOLD_LAST_BASELINE_ID = 'hold-last-rgba-v0';
 const HOLD_NEXT_BASELINE_ID = 'hold-next-rgba-v0';
 const MIDPOINT_BASELINE_ID = 'pixel-midpoint-rgba-v0';
 const BLOCK_MATCH_BASELINE_ID = 'block-match-bidirectional-warp-rgba-v0';
+const HORN_SCHUNCK_BASELINE_ID = 'horn-schunck-bidirectional-warp-rgba-v0';
 const BASELINE_IDS = [
   HOLD_LAST_BASELINE_ID,
   HOLD_NEXT_BASELINE_ID,
   MIDPOINT_BASELINE_ID,
   BLOCK_MATCH_BASELINE_ID,
+  HORN_SCHUNCK_BASELINE_ID,
 ];
 const FAILURE_MODE_BUCKETS = [
   'ghosting',
@@ -309,6 +311,214 @@ function cloneRgba(source) {
 function lumaAt(rgba, width, x, y) {
   const i = (y * width + x) * 4;
   return 0.2126 * rgba[i] + 0.7152 * rgba[i + 1] + 0.0722 * rgba[i + 2];
+}
+
+function rgbaToLumaFloat(rgba, width, height) {
+  const out = new Float64Array(width * height);
+  for (let i = 0, p = 0; i < out.length; i += 1, p += 4) {
+    out[i] = (0.2126 * rgba[p] + 0.7152 * rgba[p + 1] + 0.0722 * rgba[p + 2]) / 255;
+  }
+  return out;
+}
+
+function sampleFloatBilinear(source, width, height, x, y) {
+  const clampedX = Math.max(0, Math.min(width - 1, x));
+  const clampedY = Math.max(0, Math.min(height - 1, y));
+  const x0 = Math.floor(clampedX);
+  const y0 = Math.floor(clampedY);
+  const x1 = Math.min(width - 1, x0 + 1);
+  const y1 = Math.min(height - 1, y0 + 1);
+  const tx = clampedX - x0;
+  const ty = clampedY - y0;
+  const a = source[y0 * width + x0];
+  const b = source[y0 * width + x1];
+  const c = source[y1 * width + x0];
+  const d = source[y1 * width + x1];
+  return a * (1 - tx) * (1 - ty) + b * tx * (1 - ty) + c * (1 - tx) * ty + d * tx * ty;
+}
+
+function resizeFloatImage(source, width, height, nextWidth, nextHeight) {
+  const out = new Float64Array(nextWidth * nextHeight);
+  const sx = width / nextWidth;
+  const sy = height / nextHeight;
+  for (let y = 0; y < nextHeight; y += 1) {
+    for (let x = 0; x < nextWidth; x += 1) {
+      out[y * nextWidth + x] = sampleFloatBilinear(source, width, height, (x + 0.5) * sx - 0.5, (y + 0.5) * sy - 0.5);
+    }
+  }
+  return out;
+}
+
+function smoothFloatImage(source, width, height) {
+  const out = new Float64Array(source.length);
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      let sum = 0;
+      let count = 0;
+      for (let yy = -1; yy <= 1; yy += 1) {
+        const sy = y + yy;
+        if (sy < 0 || sy >= height) continue;
+        for (let xx = -1; xx <= 1; xx += 1) {
+          const sx = x + xx;
+          if (sx < 0 || sx >= width) continue;
+          sum += source[sy * width + sx];
+          count += 1;
+        }
+      }
+      out[y * width + x] = sum / count;
+    }
+  }
+  return out;
+}
+
+function resizeFlow(previous, prevWidth, prevHeight, nextWidth, nextHeight) {
+  const outU = new Float64Array(nextWidth * nextHeight);
+  const outV = new Float64Array(nextWidth * nextHeight);
+  const sx = prevWidth / nextWidth;
+  const sy = prevHeight / nextHeight;
+  const flowScaleX = nextWidth / prevWidth;
+  const flowScaleY = nextHeight / prevHeight;
+  for (let y = 0; y < nextHeight; y += 1) {
+    for (let x = 0; x < nextWidth; x += 1) {
+      const sampleX = (x + 0.5) * sx - 0.5;
+      const sampleY = (y + 0.5) * sy - 0.5;
+      const dst = y * nextWidth + x;
+      outU[dst] = sampleFloatBilinear(previous.u, prevWidth, prevHeight, sampleX, sampleY) * flowScaleX;
+      outV[dst] = sampleFloatBilinear(previous.v, prevWidth, prevHeight, sampleX, sampleY) * flowScaleY;
+    }
+  }
+  return { u: outU, v: outV, width: nextWidth, height: nextHeight };
+}
+
+function hornSchunckSingleLevel(firstLuma, secondLuma, width, height, initialFlow, options = {}) {
+  const alpha = Number(options.alpha ?? 0.18);
+  const iterations = Number(options.iterations ?? 90);
+  let u = initialFlow?.u ? Float64Array.from(initialFlow.u) : new Float64Array(width * height);
+  let v = initialFlow?.v ? Float64Array.from(initialFlow.v) : new Float64Array(width * height);
+  const ix = new Float64Array(width * height);
+  const iy = new Float64Array(width * height);
+  const it = new Float64Array(width * height);
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const xm = Math.max(0, x - 1);
+      const xp = Math.min(width - 1, x + 1);
+      const ym = Math.max(0, y - 1);
+      const yp = Math.min(height - 1, y + 1);
+      const i = y * width + x;
+      ix[i] = (
+        firstLuma[y * width + xp] - firstLuma[y * width + xm] +
+        secondLuma[y * width + xp] - secondLuma[y * width + xm]
+      ) * 0.25;
+      iy[i] = (
+        firstLuma[yp * width + x] - firstLuma[ym * width + x] +
+        secondLuma[yp * width + x] - secondLuma[ym * width + x]
+      ) * 0.25;
+      it[i] = secondLuma[i] - firstLuma[i];
+    }
+  }
+  const alphaSquared = alpha * alpha;
+  for (let iter = 0; iter < iterations; iter += 1) {
+    const nextU = new Float64Array(u.length);
+    const nextV = new Float64Array(v.length);
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const i = y * width + x;
+        let sumU = 0;
+        let sumV = 0;
+        let count = 0;
+        if (x > 0) {
+          sumU += u[i - 1];
+          sumV += v[i - 1];
+          count += 1;
+        }
+        if (x + 1 < width) {
+          sumU += u[i + 1];
+          sumV += v[i + 1];
+          count += 1;
+        }
+        if (y > 0) {
+          sumU += u[i - width];
+          sumV += v[i - width];
+          count += 1;
+        }
+        if (y + 1 < height) {
+          sumU += u[i + width];
+          sumV += v[i + width];
+          count += 1;
+        }
+        const avgU = count ? sumU / count : u[i];
+        const avgV = count ? sumV / count : v[i];
+        const numerator = ix[i] * avgU + iy[i] * avgV + it[i];
+        const denominator = alphaSquared + ix[i] * ix[i] + iy[i] * iy[i];
+        nextU[i] = avgU - ix[i] * numerator / denominator;
+        nextV[i] = avgV - iy[i] * numerator / denominator;
+      }
+    }
+    u = nextU;
+    v = nextV;
+  }
+  return { u, v, width, height };
+}
+
+function hornSchunckPyramidFlow(first, second, width, height) {
+  const firstBase = smoothFloatImage(rgbaToLumaFloat(first, width, height), width, height);
+  const secondBase = smoothFloatImage(rgbaToLumaFloat(second, width, height), width, height);
+  const levels = [
+    { width: Math.max(16, Math.round(width / 4)), height: Math.max(16, Math.round(height / 4)), alpha: 0.22, iterations: 120 },
+    { width: Math.max(24, Math.round(width / 2)), height: Math.max(24, Math.round(height / 2)), alpha: 0.18, iterations: 100 },
+    { width, height, alpha: 0.14, iterations: 80 },
+  ].filter((level, index, all) => index === 0 || level.width !== all[index - 1].width || level.height !== all[index - 1].height);
+  let flow = null;
+  for (const level of levels) {
+    const firstLevel = level.width === width && level.height === height
+      ? firstBase
+      : smoothFloatImage(resizeFloatImage(firstBase, width, height, level.width, level.height), level.width, level.height);
+    const secondLevel = level.width === width && level.height === height
+      ? secondBase
+      : smoothFloatImage(resizeFloatImage(secondBase, width, height, level.width, level.height), level.width, level.height);
+    const initial = flow ? resizeFlow(flow, flow.width, flow.height, level.width, level.height) : null;
+    flow = hornSchunckSingleLevel(firstLevel, secondLevel, level.width, level.height, initial, level);
+  }
+  return flow;
+}
+
+function sampleRgbaBilinear(source, width, height, x, y) {
+  const clampedX = Math.max(0, Math.min(width - 1, x));
+  const clampedY = Math.max(0, Math.min(height - 1, y));
+  const x0 = Math.floor(clampedX);
+  const y0 = Math.floor(clampedY);
+  const x1 = Math.min(width - 1, x0 + 1);
+  const y1 = Math.min(height - 1, y0 + 1);
+  const tx = clampedX - x0;
+  const ty = clampedY - y0;
+  const out = [0, 0, 0, 0];
+  for (let c = 0; c < 4; c += 1) {
+    const a = source[(y0 * width + x0) * 4 + c];
+    const b = source[(y0 * width + x1) * 4 + c];
+    const d = source[(y1 * width + x1) * 4 + c];
+    const e = source[(y1 * width + x0) * 4 + c];
+    out[c] = a * (1 - tx) * (1 - ty) + b * tx * (1 - ty) + e * (1 - tx) * ty + d * tx * ty;
+  }
+  return out;
+}
+
+function hornSchunckBidirectionalWarpRgba(first, third, width, height) {
+  const forward = hornSchunckPyramidFlow(first, third, width, height);
+  const backward = hornSchunckPyramidFlow(third, first, width, height);
+  const out = new Uint8Array(first.length);
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const i = y * width + x;
+      const dst = i * 4;
+      const a = sampleRgbaBilinear(first, width, height, x - forward.u[i] * 0.5, y - forward.v[i] * 0.5);
+      const b = sampleRgbaBilinear(third, width, height, x - backward.u[i] * 0.5, y - backward.v[i] * 0.5);
+      out[dst] = Math.round((a[0] + b[0]) * 0.5);
+      out[dst + 1] = Math.round((a[1] + b[1]) * 0.5);
+      out[dst + 2] = Math.round((a[2] + b[2]) * 0.5);
+      out[dst + 3] = 255;
+    }
+  }
+  return out;
 }
 
 function blockMatchCost(first, third, width, height, x, y, dx, dy, blockSize) {
@@ -862,6 +1072,7 @@ function baselineRgba(id, first, third, width, height) {
   if (id === HOLD_NEXT_BASELINE_ID) return cloneRgba(third);
   if (id === MIDPOINT_BASELINE_ID) return midpointRgba(first, third);
   if (id === BLOCK_MATCH_BASELINE_ID) return blockMatchBidirectionalWarpRgba(first, third, width, height);
+  if (id === HORN_SCHUNCK_BASELINE_ID) return hornSchunckBidirectionalWarpRgba(first, third, width, height);
   throw new Error(`Unknown baseline id ${id}`);
 }
 

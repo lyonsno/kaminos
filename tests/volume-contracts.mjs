@@ -1378,6 +1378,7 @@ assert.match(interframeBaseline, /pixel-midpoint-rgba-v0/, 'interframe baseline 
 assert.match(interframeBaseline, /hold-last-rgba-v0/, 'interframe baseline includes a hold-last baseline for freeze/holdover comparison');
 assert.match(interframeBaseline, /hold-next-rgba-v0/, 'interframe baseline includes a hold-next baseline for reverse holdover comparison');
 assert.match(interframeBaseline, /block-match-bidirectional-warp-rgba-v0/, 'interframe baseline includes a deterministic local block-match warp baseline before external interpolators');
+assert.match(interframeBaseline, /horn-schunck-bidirectional-warp-rgba-v0/, 'interframe baseline includes a deterministic optical-flow baseline stronger than toy block matching');
 assert.match(interframeBaseline, /actualMiddle/, 'interframe baseline preserves the actual middle frame as the comparison target');
 assert.match(interframeBaseline, /syntheticMiddle/, 'interframe baseline writes a synthesized middle-frame artifact');
 assert.match(interframeBaseline, /contactSheet/, 'interframe baseline writes an inspectable contact sheet for operator smoke');
