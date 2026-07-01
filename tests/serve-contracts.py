@@ -178,6 +178,7 @@ def browser_webgpu_route_result(*, status="real", output_status="real"):
                     "label": "bunnycake.png",
                 },
                 "inputSourceKind": "row",
+                "sourceSelectionMode": "row",
             },
             "model": {"id": "Ruicheng/moge-2-vitl-normal", "revision": "local-vitl-normal", "dtype": "fp16"},
             "kernel": runtime_profile["kernel"],
@@ -651,6 +652,7 @@ def test_browser_webgpu_route_provider_ingests_authoritative_kit_result():
     assert row["route_job"]["metadata"]["sourceImage"]["url"] == "/api/read?root=scratch&path=bunnycake.png"
     assert row["route_job"]["metadata"]["sourceImage"]["label"] == "bunnycake.png"
     assert row["route_job"]["metadata"]["inputSourceKind"] == "row"
+    assert row["route_job"]["metadata"]["sourceSelectionMode"] == "row"
     assert row["route_job"]["metadata"]["evidenceClassification"]["classification"] == "authoritative-live-webgpu"
     assert row["route_job"]["metadata"]["evidenceClassification"]["authoritative"] is True
     assert row["route_job"]["metadata"]["evidenceClassification"]["schedulerVerificationState"] == "verified"

@@ -175,6 +175,17 @@ assert.match(indexHtml, /mogeRouteSourceImageCandidates/, 'Browser WebGPU produc
 assert.match(indexHtml, /sourceImageIdentity/, 'Browser WebGPU producer records source image identity in the route request');
 assert.match(indexHtml, /inputSourceKind/, 'Browser WebGPU producer records whether input came from row, scene, fixture, or synthetic fallback');
 assert.match(indexHtml, /selectedSceneObjectEntry\(\)/, 'Browser WebGPU producer can fall back to selected Kaminos scene object metadata');
+assert.match(indexHtml, /renderMogeRouteSourceSelector/, 'Browser WebGPU route rows render a source selector near Run Preview');
+assert.match(indexHtml, /browserWebGpuRouteSourceSelectionByJobId/, 'Browser WebGPU route source selection is keyed by route job identity');
+assert.match(indexHtml, /mogeRouteSourceSelectionMode/, 'Browser WebGPU source resolver records the requested selector mode');
+assert.match(indexHtml, /mogeRouteEffectiveSourceSentence/, 'Browser WebGPU route rows expose Wake-style human-primary source sentences');
+assert.match(indexHtml, /MoGE will use the selected scene image\./, 'Source selector primary text can name selected scene input in human language');
+assert.match(indexHtml, /MoGE will use the source already attached to this row\./, 'Source selector primary text can name row-attached input in human language');
+assert.match(indexHtml, /MoGE will use a generated test image because no real source is available\./, 'Source selector primary text can name synthetic fallback without implying specimen truth');
+assert.match(indexHtml, /data-greenroom-route-source-selection-mode/, 'Route tray preserves requested source selector mode as inspectable row identity');
+assert.match(indexHtml, /data-greenroom-route-effective-source-kind/, 'Route tray preserves effective source kind as inspectable row identity');
+assert.match(indexHtml, /data-greenroom-route-source-selector/, 'Browser WebGPU source selector has a stable DOM hook for visual/operator smoke');
+assert.match(indexHtml, /sourceImageLoadFailures/, 'Browser WebGPU source selector keeps load failures as secondary evidence');
 assert.match(indexHtml, /data-greenroom-route-input-source-kind/, 'Route tray preserves browser route input source kind as inspectable row identity');
 assert.match(indexHtml, /previewDataUrl/, 'Browser WebGPU preview producer includes an inspectable output artifact');
 assert.match(indexHtml, /data-greenroom-route-output-kind/, 'Route tray preserves output artifact kind on browser route output links');
