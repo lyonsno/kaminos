@@ -41,7 +41,7 @@ The UV policy is deliberately narrow: `required-existing-uv0`. Trellis 2, Pixel 
 
 The manifest records the effective projection route, nearest-surface candidate count when used, UV island padding radius, atlas coverage, projection distance statistics, emitted texture paths, and the failure phase/code when it cannot proceed. Atlas uncovered pixels are empty UV atlas space, not automatically object projection failures.
 
-The baked GLB writer preserves the target GLB and injects replacement PNG payloads for the PBR textures. It must not re-export the mesh through raw Trimesh, because that route dropped `NORMAL` attributes and changed material `doubleSided` state on the generated asset smoke. The manifest includes a post-export assay so closeouts can verify that UV0, normals, triangle count, and material records survived the bake.
+The baked GLB writer preserves the target GLB and injects replacement PNG payloads for the PBR textures. It must not re-export the mesh through raw Trimesh, because that route dropped `NORMAL` attributes and changed material `doubleSided` state on the generated asset smoke. Materialless target primitives receive the injected material, the injected material defaults `doubleSided: true`, and indexed target triangles are rewound to consistent shared-edge orientation before generated normals are appended. The manifest includes target-winding stats plus a post-export assay so closeouts can verify that UV0, normals, triangle count, and material records survived the bake.
 
 The default V0.1 route is `nearest-source-surface`: a KDTree over source triangle centroids proposes nearby source triangles, the baker finds the closest point on those candidates, and source UVs are sampled barycentrically. The older `nearest-source-vertex` route remains available as a faster/cruder diagnostic path.
 
@@ -156,3 +156,13 @@ Observed result:
 Interpretation:
 
 This route proves a lower-poly, whole-object, UV-bearing target can receive baked PBR textures and load through Kaminos' direct GLB route. It does not yet prove acceptable visual LOD quality. The current screenshot remains dark and shredded-looking after material binding and normals, so the remaining blocker is likely target geometry/projection/material-content quality rather than basic GLB export validity.
+
+2026-07-01 winding-repair follow-up:
+
+- Repaired output: `/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-generated-asset-raw43k-unwrap-bake-smoke-20260701Twinding-repair/raw43k-unwrapped/asset-baked.glb`
+- Manifest: `/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-generated-asset-raw43k-unwrap-bake-smoke-20260701Twinding-repair/generated-asset-bake-lod-probe-manifest.json`
+- Direct witness:
+  - `/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-generated-asset-raw43k-unwrap-bake-smoke-20260701Twinding-repair/direct-glb-witness.json`
+  - `/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-generated-asset-raw43k-unwrap-bake-smoke-20260701Twinding-repair/direct-glb-witness.png`
+- Target winding repair flipped `103 / 43,671` faces (`0.0023585` ratio), with `9,677` components, `37,674` boundary edges, `36` non-manifold edges, and `42` conflict edges.
+- Visual witness remained materially similar to the material-bound/normals smoke: the correction is real GLB hygiene, but it is not the visual fix for the raw43k target. Keep the next investigation pointed at target topology quality, projection/material pickup, or component/segmentation routes rather than blaming the whole screenshot on mixed winding.

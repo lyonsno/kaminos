@@ -13,6 +13,7 @@ V0 is intentionally narrow and honest:
 from __future__ import annotations
 
 import argparse
+from collections import defaultdict, deque
 import hashlib
 import json
 import math
@@ -52,10 +53,11 @@ class BakeFailure(Exception):
 
 
 class TargetGeometry:
-    def __init__(self, vertices, faces, uv):
+    def __init__(self, vertices, faces, uv, winding_stats: dict[str, Any] | None = None):
         self.vertices = vertices
         self.faces = faces
         self.uv = uv
+        self.winding_stats = winding_stats or {}
         self._face_normals = None
         self._vertex_normals = None
 
@@ -88,6 +90,76 @@ class TargetGeometry:
             normals[~valid] = 0
             self._vertex_normals = normals
         return self._vertex_normals
+
+
+def consistent_winding_faces(faces):
+    import numpy as np
+
+    faces = np.asarray(faces, dtype=np.int64)
+    repaired = faces.copy()
+    face_count = int(len(repaired))
+    stats = {
+        "faceCount": face_count,
+        "flippedFaces": 0,
+        "flippedRatio": 0.0,
+        "components": 0,
+        "edgeCount": 0,
+        "boundaryEdges": 0,
+        "manifoldEdges": 0,
+        "nonManifoldEdges": 0,
+        "conflictEdges": 0,
+    }
+    if face_count == 0:
+        return repaired, stats
+
+    edges_by_key = defaultdict(list)
+    for face_index, (a, b, c) in enumerate(repaired):
+        for start, end in ((a, b), (b, c), (c, a)):
+            if int(start) == int(end):
+                continue
+            key = (int(start), int(end)) if int(start) < int(end) else (int(end), int(start))
+            direction = 1 if (int(start), int(end)) == key else -1
+            edges_by_key[key].append((face_index, direction))
+
+    adjacency = [[] for _ in range(face_count)]
+    stats["edgeCount"] = len(edges_by_key)
+    for entries in edges_by_key.values():
+        if len(entries) == 1:
+            stats["boundaryEdges"] += 1
+            continue
+        if len(entries) == 2:
+            stats["manifoldEdges"] += 1
+        else:
+            stats["nonManifoldEdges"] += 1
+        base_face, base_direction = entries[0]
+        for other_face, other_direction in entries[1:]:
+            needs_opposite_flip = base_direction == other_direction
+            adjacency[base_face].append((other_face, needs_opposite_flip))
+            adjacency[other_face].append((base_face, needs_opposite_flip))
+
+    flips = [None] * face_count
+    for seed in range(face_count):
+        if flips[seed] is not None:
+            continue
+        stats["components"] += 1
+        flips[seed] = False
+        queue = deque([seed])
+        while queue:
+            face_index = queue.popleft()
+            for neighbor, needs_opposite_flip in adjacency[face_index]:
+                expected = bool(flips[face_index]) ^ bool(needs_opposite_flip)
+                if flips[neighbor] is None:
+                    flips[neighbor] = expected
+                    queue.append(neighbor)
+                elif flips[neighbor] != expected:
+                    stats["conflictEdges"] += 1
+
+    flip_mask = np.asarray(flips, dtype=bool)
+    if np.any(flip_mask):
+        repaired[flip_mask] = repaired[flip_mask][:, [0, 2, 1]]
+    stats["flippedFaces"] = int(np.count_nonzero(flip_mask))
+    stats["flippedRatio"] = float(stats["flippedFaces"] / face_count)
+    return repaired, stats
 
 
 def utc_now() -> str:
@@ -217,6 +289,56 @@ def accessor_array(doc: dict[str, Any], bin_chunk: bytes, accessor_index: int, r
     return array
 
 
+def write_accessor_array(doc: dict[str, Any], bin_chunk: bytes, accessor_index: int, values, role: str) -> bytes:
+    import numpy as np
+
+    accessors = doc.get("accessors") or []
+    buffer_views = doc.get("bufferViews") or []
+    if accessor_index < 0 or accessor_index >= len(accessors):
+        raise BakeFailure("export", f"{role}-bad-accessor", f"{role} accessor index {accessor_index} is invalid")
+    accessor = accessors[accessor_index]
+    buffer_view_index = accessor.get("bufferView")
+    if buffer_view_index is None or buffer_view_index < 0 or buffer_view_index >= len(buffer_views):
+        raise BakeFailure("export", f"{role}-bad-buffer-view", f"{role} accessor has no valid bufferView")
+    buffer_view = buffer_views[buffer_view_index]
+    if buffer_view.get("buffer", 0) != 0:
+        raise BakeFailure("export", f"{role}-external-buffer", f"{role} accessor uses a nonzero/external buffer")
+
+    component_type = accessor.get("componentType")
+    accessor_type = accessor.get("type")
+    dtype = COMPONENT_DTYPES.get(component_type)
+    width = ACCESSOR_WIDTHS.get(accessor_type)
+    if dtype is None or width is None:
+        raise BakeFailure("export", f"{role}-unsupported-accessor-type", f"{role} accessor type is unsupported")
+
+    count = int(accessor.get("count") or 0)
+    np_dtype = np.dtype(dtype)
+    values = np.asarray(values, dtype=np_dtype)
+    if width == 1:
+        values = values.reshape((count,))
+    else:
+        values = values.reshape((count, width))
+    byte_offset = int(buffer_view.get("byteOffset") or 0) + int(accessor.get("byteOffset") or 0)
+    byte_stride = int(buffer_view.get("byteStride") or (np_dtype.itemsize * width))
+    packed_stride = np_dtype.itemsize * width
+    mutable = bytearray(bin_chunk)
+    if byte_stride == packed_stride:
+        payload = values.astype(np_dtype, copy=False).tobytes()
+        mutable[byte_offset: byte_offset + len(payload)] = payload
+    else:
+        rows = values.reshape((count, width))
+        for index, row in enumerate(rows):
+            payload = np.asarray(row, dtype=np_dtype).tobytes()
+            start = byte_offset + index * byte_stride
+            mutable[start: start + packed_stride] = payload
+
+    if count:
+        flat = values.reshape((count, width)) if width > 1 else values.reshape((count, 1))
+        accessor["min"] = [int(v) if np.issubdtype(np_dtype, np.integer) else float(v) for v in np.min(flat, axis=0)]
+        accessor["max"] = [int(v) if np.issubdtype(np_dtype, np.integer) else float(v) for v in np.max(flat, axis=0)]
+    return bytes(mutable)
+
+
 def append_bin_payload(doc: dict[str, Any], bin_chunk: bytes, payload: bytes) -> tuple[bytes, int]:
     aligned_bin = pad4(bin_chunk, b"\0")
     byte_offset = len(aligned_bin)
@@ -253,6 +375,7 @@ def replace_or_create_pbr_image(
     materials = doc.setdefault("materials", [{}])
     material = materials[0]
     material.setdefault("name", "kaminos-baked-pbr")
+    material.setdefault("doubleSided", True)
     pbr = material.setdefault("pbrMetallicRoughness", {})
     texture_info = pbr.get(texture_slot)
     image_index = texture_image_index(doc, texture_info)
@@ -338,18 +461,76 @@ def ensure_vertex_normals(doc: dict[str, Any], bin_chunk: bytes) -> bytes:
     return bin_chunk
 
 
-def write_baked_glb_from_target(target_path: Path, output_path: Path, base_path: Path, mr_path: Path) -> None:
+def repair_target_winding(doc: dict[str, Any], bin_chunk: bytes) -> tuple[bytes, dict[str, Any]]:
+    stats = {
+        "status": "emitted",
+        "policy": "consistent-indexed-triangle-edge-orientation",
+        "primitiveCount": 0,
+        "repairedPrimitives": 0,
+        "skippedUnindexedPrimitives": 0,
+        "faceCount": 0,
+        "flippedFaces": 0,
+        "flippedRatio": 0.0,
+        "components": 0,
+        "edgeCount": 0,
+        "boundaryEdges": 0,
+        "manifoldEdges": 0,
+        "nonManifoldEdges": 0,
+        "conflictEdges": 0,
+    }
+    for mesh in doc.get("meshes") or []:
+        for primitive in mesh.get("primitives") or []:
+            if int(primitive.get("mode", TRIANGLES)) != TRIANGLES:
+                continue
+            stats["primitiveCount"] += 1
+            index_accessor = primitive.get("indices")
+            if index_accessor is None:
+                stats["skippedUnindexedPrimitives"] += 1
+                continue
+            indices = accessor_array(doc, bin_chunk, int(index_accessor), "target-winding-index")
+            if len(indices) % 3 != 0:
+                raise BakeFailure("export", "target-winding-index-count", "target index count is not divisible by 3")
+            faces = indices.astype("int64", copy=False).reshape((-1, 3))
+            repaired, primitive_stats = consistent_winding_faces(faces)
+            if primitive_stats["flippedFaces"]:
+                bin_chunk = write_accessor_array(
+                    doc,
+                    bin_chunk,
+                    int(index_accessor),
+                    repaired.reshape((-1,)).astype(indices.dtype, copy=False),
+                    "target-winding-index",
+                )
+                stats["repairedPrimitives"] += 1
+            for key in (
+                "faceCount",
+                "flippedFaces",
+                "components",
+                "edgeCount",
+                "boundaryEdges",
+                "manifoldEdges",
+                "nonManifoldEdges",
+                "conflictEdges",
+            ):
+                stats[key] += primitive_stats[key]
+    if stats["faceCount"]:
+        stats["flippedRatio"] = float(stats["flippedFaces"] / stats["faceCount"])
+    return bin_chunk, stats
+
+
+def write_baked_glb_from_target(target_path: Path, output_path: Path, base_path: Path, mr_path: Path) -> dict[str, Any]:
     doc, bin_chunk = read_glb(target_path)
     asset = doc.setdefault("asset", {"version": "2.0"})
     previous_generator = asset.get("generator")
     asset["generator"] = "kaminos generated-asset-bake.py texture-injection"
     if previous_generator:
         asset["extras"] = {**(asset.get("extras") or {}), "sourceGenerator": previous_generator}
+    bin_chunk, winding_stats = repair_target_winding(doc, bin_chunk)
     bin_chunk = replace_or_create_pbr_image(doc, bin_chunk, "baseColorTexture", base_path, "kaminos-baked-baseColor")
     bin_chunk = replace_or_create_pbr_image(doc, bin_chunk, "metallicRoughnessTexture", mr_path, "kaminos-baked-metallicRoughness")
     bind_missing_primitive_materials(doc, 0)
     bin_chunk = ensure_vertex_normals(doc, bin_chunk)
     write_glb(output_path, doc, bin_chunk)
+    return winding_stats
 
 
 def accessor_count(doc: dict[str, Any], accessor_index: int | None) -> int:
@@ -498,6 +679,11 @@ def manifest_base(
             "mode": "nearest-covered-atlas-pixel",
             "description": "Dilate covered target UV island pixels into nearby uncovered atlas pixels to reduce bilinear/mip seam pull.",
         },
+        "targetWinding": {
+            "status": "pending",
+            "policy": "consistent-indexed-triangle-edge-orientation",
+            "description": "Indexed target triangles are rewound to consistent shared-edge orientation before generated normals and material injection.",
+        },
         "products": pending_products(),
         "diagnostics": pending_diagnostics(),
         "outputDirectory": str(out_dir),
@@ -588,7 +774,8 @@ def load_target_geometry(path: Path, role: str) -> TargetGeometry:
         if len(indices) % 3 != 0:
             raise BakeFailure("load", f"{role}-index-count", f"{role} index count is not divisible by 3")
         faces = indices.reshape((-1, 3))
-    return TargetGeometry(vertices, faces, uv)
+    repaired_faces, winding_stats = consistent_winding_faces(faces)
+    return TargetGeometry(vertices, repaired_faces, uv, winding_stats)
 
 
 def image_array(image, mode: str):
@@ -949,7 +1136,7 @@ def bake(
     Image.fromarray((padding_mask.astype(np.uint8) * 255), mode="L").save(padding_path)
 
     baked_glb = out_dir / "asset-baked.glb"
-    write_baked_glb_from_target(target_path, baked_glb, base_path, mr_path)
+    target_winding = write_baked_glb_from_target(target_path, baked_glb, base_path, mr_path)
     post_export_assay = assay_glb(baked_glb)
 
     total_pixels = size * size
@@ -966,6 +1153,7 @@ def bake(
         "remainingUncoveredRatio": float(np.count_nonzero(remaining_unresolved) / total_pixels),
         "normalMinDot": float(normal_min_dot) if projection_route == "nearest-source-surface-normal-aware" else None,
         "normalRejectedCandidates": int(normal_rejected_total),
+        "targetWinding": target_winding,
         "distance": {
             "min": min_dist,
             "mean": mean_dist,
@@ -1060,6 +1248,7 @@ def main(argv: list[str] | None = None) -> int:
             if stats["normalMinDot"] is not None:
                 manifest["projection"]["normalMinDot"] = stats["normalMinDot"]
                 manifest["projection"]["normalRejectedCandidates"] = stats["normalRejectedCandidates"]
+            manifest["targetWinding"].update(stats["targetWinding"])
             manifest["padding"].update({
                 "status": "emitted",
                 "paddedPixels": stats["paddedPixels"],

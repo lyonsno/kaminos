@@ -27,6 +27,39 @@ function readGlbJson(path) {
   throw new Error(`no JSON chunk in ${path}`);
 }
 
+function readGlb(path) {
+  const data = readFileSync(path);
+  assert.equal(data.readUInt32LE(0), 0x46546c67, 'fixture output is not a GLB');
+  let offset = 12;
+  let doc = null;
+  let bin = Buffer.alloc(0);
+  while (offset + 8 <= data.length) {
+    const chunkLength = data.readUInt32LE(offset);
+    const chunkType = data.readUInt32LE(offset + 4);
+    offset += 8;
+    const chunk = data.subarray(offset, offset + chunkLength);
+    offset += chunkLength;
+    if (chunkType === 0x4e4f534a) doc = JSON.parse(chunk.toString('utf8').trim());
+    if (chunkType === 0x004e4942) bin = chunk;
+  }
+  assert.ok(doc, `no JSON chunk in ${path}`);
+  return { doc, bin };
+}
+
+function readU16Accessor(path, accessorIndex) {
+  const { doc, bin } = readGlb(path);
+  const accessor = doc.accessors[accessorIndex];
+  const view = doc.bufferViews[accessor.bufferView];
+  assert.equal(accessor.componentType, 5123, 'test fixture index accessor is u16');
+  const start = (view.byteOffset || 0) + (accessor.byteOffset || 0);
+  return Array.from({ length: accessor.count }, (_, index) => bin.readUInt16LE(start + index * 2));
+}
+
+function firstPrimitiveIndexAccessor(path) {
+  const { doc } = readGlb(path);
+  return doc.meshes[0].primitives[0].indices;
+}
+
 function f32(values) {
   const buffer = Buffer.alloc(values.length * 4);
   values.forEach((value, index) => buffer.writeFloatLE(value, index * 4));
@@ -137,10 +170,10 @@ function writeFixtureGlb(path, { uv0 = true } = {}) {
   writeFileSync(path, Buffer.concat([header, jsonHeader, json, binHeader, bin]));
 }
 
-function writeMateriallessUvGlb(path) {
+function writeMateriallessUvGlb(path, { mixedWinding = false } = {}) {
   const positionBytes = f32([-1, -1, 0, 1, -1, 0, 1, 1, 0, -1, 1, 0]);
   const uvBytes = f32([0, 0, 1, 0, 1, 1, 0, 1]);
-  const indexBytes = u16([0, 1, 2, 0, 2, 3]);
+  const indexBytes = u16(mixedWinding ? [0, 1, 2, 0, 3, 2] : [0, 1, 2, 0, 2, 3]);
   const uvOffset = positionBytes.length;
   const indexOffset = uvOffset + uvBytes.length;
   const bin = pad4(Buffer.concat([positionBytes, uvBytes, indexBytes]), 0);
@@ -188,16 +221,20 @@ const root = mkdtempSync(join(tmpdir(), 'kaminos-generated-asset-bake-contract-'
 const source = join(root, 'source.glb');
 const target = join(root, 'target.glb');
 const targetMaterialless = join(root, 'target-materialless.glb');
+const targetMateriallessMixed = join(root, 'target-materialless-mixed-winding.glb');
 const targetNoUv = join(root, 'target-no-uv.glb');
 const outDir = join(root, 'bake');
 const materiallessDir = join(root, 'bake-materialless');
+const mixedWindingDir = join(root, 'bake-materialless-mixed-winding');
 const failDir = join(root, 'bake-fail');
 mkdirSync(outDir, { recursive: true });
 mkdirSync(materiallessDir, { recursive: true });
+mkdirSync(mixedWindingDir, { recursive: true });
 mkdirSync(failDir, { recursive: true });
 writeFixtureGlb(source, { uv0: true });
 writeFixtureGlb(target, { uv0: true });
 writeMateriallessUvGlb(targetMaterialless);
+writeMateriallessUvGlb(targetMateriallessMixed, { mixedWinding: true });
 writeFixtureGlb(targetNoUv, { uv0: false });
 
 const ok = spawnSync('python3', [
@@ -268,6 +305,41 @@ assert.equal(
   materiallessBakedDoc.meshes[0].primitives[0].material,
   0,
   'baked materialless target primitive references the injected PBR material',
+);
+assert.equal(
+  materiallessBakedDoc.materials[0].doubleSided,
+  true,
+  'baked materialless target material renders mixed-winding generated geometry double-sided',
+);
+
+const mixedWinding = spawnSync('uv', [
+  'run',
+  '--with', 'numpy',
+  '--with', 'pillow',
+  '--with', 'scipy',
+  '--with', 'trimesh',
+  'python',
+  resolve('tools/generated-asset-bake.py'),
+  '--source', source,
+  '--target', targetMateriallessMixed,
+  '--out-dir', mixedWindingDir,
+  '--name', 'fixture-materialless-mixed-winding-bake',
+  '--texture-size', '8',
+  '--projection-route', 'nearest-source-surface',
+  '--padding-pixels', '1',
+], {
+  cwd: resolve('.'),
+  encoding: 'utf8',
+});
+
+assert.equal(mixedWinding.status, 0, mixedWinding.stderr || mixedWinding.stdout);
+const mixedWindingManifest = JSON.parse(readFileSync(join(mixedWindingDir, 'generated-asset-bake-manifest.json'), 'utf8'));
+assert.equal(mixedWindingManifest.targetWinding.status, 'emitted', 'target winding repair records emitted status');
+assert.equal(mixedWindingManifest.targetWinding.flippedFaces, 1, 'target winding repair records the single backward face');
+assert.deepEqual(
+  readU16Accessor(join(mixedWindingDir, 'asset-baked.glb'), firstPrimitiveIndexAccessor(join(mixedWindingDir, 'asset-baked.glb'))),
+  [0, 1, 2, 0, 2, 3],
+  'baked target index order is rewritten to consistent winding before normals are emitted',
 );
 
 const fail = spawnSync('python3', [
