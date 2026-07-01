@@ -695,10 +695,17 @@ async function runForgeHostPublishedSmokeResultOfferScenario(ws) {
       if (!/Wake published this non-Minion Smoke Result/.test(panel?.textContent || '')) {
         throw new Error('published Smoke Result chamber did not render Wake summary: ' + (panel?.textContent || ''));
       }
-      const targetViewer = window.kaminosOpenForgeHostSmokeTarget?.();
       await wait(650);
       const iframe = document.querySelector('#forge-smoke-target-frame');
       const viewer = document.querySelector('#forge-smoke-target-viewer');
+      const targetViewer = window.kaminosForgeHostDebugState?.()?.smokeTargetViewer || null;
+      if (!targetViewer || viewer?.dataset.forgeSmokeTargetActive !== 'true') {
+        throw new Error('Smoke Result row click did not auto-open target viewer: ' + JSON.stringify({
+          targetViewer,
+          viewerActive: viewer?.dataset.forgeSmokeTargetActive,
+          iframeSrc: iframe?.getAttribute('src'),
+        }));
+      }
       let frameText = '';
       try {
         frameText = iframe?.contentDocument?.body?.textContent || '';

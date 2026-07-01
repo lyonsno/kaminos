@@ -5077,6 +5077,12 @@ function openForgeHostSmokeOffer(offerId) {
   setInfo(`Smoke chamber: ${offerRecord.title}`);
   renderForgeHostStationList();
   renderForgeHostSmokeChamber();
+  if (forgeHostState.smokeChamber.routeIdentity === 'forge-host-smoke-result-route'
+      && normalizedForgeHostSmokeTargetUrl(forgeHostState.smokeChamber.targetUrl)) {
+    openForgeHostSmokeTarget(forgeHostState.smokeChamber);
+  } else {
+    closeForgeHostSmokeTarget();
+  }
   scrollForgeHostSmokeChamberIntoView();
   updateForgeHostReadout();
   window._kaminosDirty?.();
