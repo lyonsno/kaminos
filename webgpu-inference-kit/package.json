@@ -1,9 +1,9 @@
 {
   "name": "@kaminos/webgpu-inference-kit",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": false,
   "type": "module",
-  "description": "Native WebGPU inference route substrate for Kaminos.",
+  "description": "Composable browser WebGPU inference route contracts, runtime profiles, and scheduler envelopes.",
   "license": "UNLICENSED",
   "repository": {
     "type": "git",

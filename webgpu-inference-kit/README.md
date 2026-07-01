@@ -1,6 +1,10 @@
 # @kaminos/webgpu-inference-kit
 
-Native WebGPU inference route substrate for Kaminos.
+Composable browser WebGPU inference route contracts, runtime profiles, and scheduler envelopes.
+
+This package is the shared substrate we are extracting from several browser-native model ports: MoGE depth/normal, SHARP image-to-splat, Kimodo text-to-motion, and Stable Fast 3D image-to-mesh. The bet is that these ports become more valuable when they can run as routes in the same browser GPU process, report the device and scheduling conditions they actually received, and hand outputs to each other without every repo inventing its own adapter grammar.
+
+Receipts and evidence checks matter here, but they are not the point of the package. They are the guardrail that lets higher-level systems compose WebGPU routes without treating a fixture, fallback, stale cache, or half-profiled run as if it were live model output.
 
 Install:
 
@@ -12,145 +16,72 @@ Import:
 
 ```js
 import {
-  createWebGpuRouteSchemaContract,
-  createWebGpuLocalRouteReceipt,
-  classifyWebGpuRouteReceiptEvidence,
+  createWebGpuRouteRegistry,
+  createRouteInvocationRequest,
+  createMogeDepthNormalRouteDefinition,
+  requestBrowserWebGpuDevice,
+  createWebGpuRouteSchedulerProfile,
 } from "@kaminos/webgpu-inference-kit";
 ```
 
-This package starts with contracts, not kernels. Its first job is to make
-browser-local model routes prove what they actually ran before Kaminos treats
-their outputs as asset evidence.
+## What This Is
 
-Current surface:
+`@kaminos/webgpu-inference-kit` is a small, route-facing contract library for browser-local WebGPU inference. It gives model ports a common way to describe:
 
-- `createWebGpuLocalRouteReceipt(input)`: creates a
-  `kaminos.webgpu-route-receipt.v0` receipt for a `webgpu-local` route.
-- `createWebGpuRouteSchemaContract(input)`: exposes the kit-owned route
-  definition/request/result/receipt/runtime-profile/evidence-classification
-  schema strings as a compact contract object so route repos can run conformance
-  checks instead of manually mirroring hidden constants.
-- `createWebGpuRouteReceiptFromArtifacts(input)` plus
-  `createRouteReceiptArtifacts`, `createRouteReceiptInputArtifact`,
-  `finishAndValidateRouteProfile`, and validation helpers: shared route receipt
-  substrate used by MoGE, SHARP, Kimodo, and SF3D factories to preserve artifact
-  identity, backend identity, and staged profile requirements without duplicating
-  false-closure-prone boilerplate.
-- `validateRouteReceipt(receipt)`: validates requested/effective route identity,
-  backend/model/kernel identity, input/output artifact ids, timings, and
-  fallback status.
-- `assertAuthoritativeRouteReceipt(receipt)`: rejects fallback, cached,
-  partial, missing, or non-real outputs before they can masquerade as
-  authoritative Kaminos evidence.
-- `defineTensorManifest(input)` and `validateTensorManifest(manifest)`: normalize
-  and validate model tensor metadata, including dtype sizes and byte lengths.
-- `createWebGpuDeviceRequest(adapter, options)`: derives requested WebGPU
-  features and max adapter limits for model inference without silently capping
-  below the adapter's own reported capacity.
-- `requestBrowserWebGpuDevice(gpu, options)`: requests a browser WebGPU adapter
-  and device, then returns the effective device request and backend identity
-  that route receipts should preserve.
-- `createWebGpuBackendIdentity(input)` and
-  `validateWebGpuBackendIdentity(identity)`: preserve effective browser,
-  adapter, feature, limit, and timestamp-query identity for route receipts.
-- `createStagedSubmitProfile(input)`, `addStagedSubmitStage(profile, stage)`,
-  `finishStagedSubmitProfile(profile)`, and
-  `validateStagedSubmitProfile(profile)`: record staged-submit timing evidence
-  and reject timestamp-query timing unless it is validated against staged waits.
-- `createKernelProfileMetadata(input)` and
-  `createRouteKernelProfileMetadata(input)`: normalize shared kit version,
-  kernel profile, commit, required stage, and timing-source metadata for route
-  definitions and receipts while keeping route-specific semantics local.
-- `createWebGpuRuntimeProfileInput(input)`,
-  `createWebGpuRuntimeProfile(input)`, and
-  `validateWebGpuRuntimeProfile(profile)`: combine effective WebGPU backend
-  identity, kernel metadata, staged profile evidence, and evidence mode into a
-  single producer-side runtime profile object.
-- `createWebGpuRouteSchedulerProfile(input)` and
-  `validateWebGpuRouteSchedulerProfile(profile)`: preserve requested versus
-  effective WebGPU route scheduling, including throughput/cooperative mode,
-  route-specific phase chunk sizes, submitted-work waits, yield cadence, and
-  unsupported scheduler fields so a route cannot claim cooperative behavior
-  without effective telemetry.
-- `createWebGpuRouteBackpressureProfile(input)` and
-  `validateWebGpuRouteBackpressureProfile(profile)`: record route pressure
-  classification, warm/cache and memory-sharing posture, and frame-tail
-  evidence for visible-wait/furnace classification without turning internal
-  scheduler knobs into operator-facing controls.
-- `classifyWebGpuRouteReceiptEvidence(receipt)` and
-  `classifyWebGpuRouteWorkerResultEvidence(result)`: commoner-side receipt
-  classification helpers that distinguish authoritative live WebGPU evidence
-  from fallback, partial, cache/demo, stale, route-mismatch, and invalid
-  receipts, while surfacing scheduler verification and frame-tail fields when a
-  route provides them.
-- `createMogeDepthNormalRouteReceipt(input)`: first concrete `webgpu-local`
-  route receipt factory for `moge.depth-normal.webgpu-local.v0`.
-- `defineWebGpuRoute(input)`, `createWebGpuRouteRegistry(routes)`,
-  `createRouteInvocationRequest(route, input)`, `createRouteWorkerResult(route,
-  input)`, and their validators: define worker-executable routes, create
-  invocation envelopes, and validate route results before Wake/Pipeline consume
-  them as Kaminos evidence.
-- `createMogeDepthNormalRouteDefinition(input)`: first concrete route
-  definition for MoGE source-image to depth/normal/pointmap truth-layer output.
-- `createSharpImageToSplatRouteReceipt(input)`: concrete receipt factory for
-  `sharp.image-to-splat.webgpu-local.v0`, preserving source image, browser
-  WebGPU backend identity, PLY splat candidate, depth map, SHARP metadata, and
-  optional splat autocrop evidence.
-- `createSharpImageToSplatRouteDefinition(input)`: route definition aligned to
-  the native SHARP-WebGPU browser adapter surface used by Kaminos Pipeline:
-  source image in, splat candidate/depth/metadata out, with optional
-  `kaminos.splat-autocrop-evidence.v0` side evidence.
-- `createKimodoTextToMotionRouteReceipt(input)` and
-  `createKimodoTextToMotionRouteDefinition(input)`: browser WebGPU
-  text-to-motion route contract for Kimodo SOMA-RP-v1.1, preserving prompt
-  identity, SOMA77 joint output, motion sidecar output, optional filmstrip, and
-  staged text-embedding/DDIM/FK/output-capture timing.
-- `createSf3dImageToMeshRouteReceipt(input)` and
-  `createSf3dImageToMeshRouteDefinition(input)`: browser WebGPU image-to-mesh
-  route contract for Stable Fast 3D, preserving source image, GLB mesh, albedo
-  texture, normal map, optional OBJ, and DINOv2/two-stream/triplane/marching-tet
-  stage identity.
+- What route is being invoked, such as MoGE depth/normal or SHARP image-to-splat.
+- Which browser WebGPU adapter, device features, limits, and timestamp capabilities were actually available.
+- Which kernel/profile variant ran, and which stages are required for a useful runtime profile.
+- How a route was scheduled: throughput mode, cooperative/yield posture, phase chunk sizes, submitted-work waits, and unsupported scheduler fields.
+- Which artifacts went in and out, so downstream consumers can join routes without losing identity.
 
-Near-term extraction order:
+The immediate goal is practical composition inside Kaminos: MoGE can become a local geometry/depth route, SHARP can emit splat candidates, Kimodo can emit motion clips, SF3D can emit meshes, and pipeline/commoner code can consume those outputs through one route grammar. The longer-term opportunity is a browser-native inference runtime kit that makes future image generators, 3D generators, and possibly language-model routes easier to seat without rebuilding the same WebGPU plumbing from scratch.
 
-1. Route receipt and tensor manifest contracts. Done in the scaffold slice.
-2. WebGPU device/feature/profiling identity helpers. First pure contract helpers
-   are in place; browser adapters should wire into these next.
-3. MoGE depth/normal route receipt. First factory is in place and the MoGE
-   runtime emits this receipt from live inference.
-4. Browser route boundary. Route registry, invocation request, worker result,
-   browser device request, and MoGE route definition contracts are in place.
-5. SHARP image-to-splat route contract. First factory and route definition are
-   in place for the browser-native SHARP-WebGPU path; runtime emission remains
-   owned by SHARP/Pipeline adapter surfaces.
-6. Kimodo and SF3D route contracts. First factories and route definitions are
-   in place for browser-native text-to-motion and image-to-mesh routes; runtime
-   emission remains owned by those route repos and Kaminos motion/pipeline
-   consumers.
-7. MoGE schema mirror drift reduction. The kit exposes a schema contract object;
-   MoGE has a dev conformance test against that contract while the runtime still
-   avoids a brittle temporary worktree dependency.
-8. Shared route receipt helper. Artifact normalization, backend identity
-   validation, staged profile validation, and receipt construction now live in
-   one helper consumed by all four concrete route factories.
-9. Shared kernel/profile metadata helper. Kit version, kernel profile, commit,
-   required stage, and timing-source normalization now live in one helper
-   consumed by all four concrete route factories.
-10. Runtime profile and commoner receipt classification helpers. Producers can
-   normalize effective WebGPU runtime evidence, and downstream commoners can
-   classify receipts before treating outputs as live route evidence.
-11. Scheduler/backpressure contracts. Routes can now report throughput versus
-   cooperative scheduling, requested/effective phase chunking, unsupported
-   fields, visible-wait/furnace pressure, and frame-tail evidence without
-   implying browser GPU preemption that WebGPU does not provide.
-12. Pipeline, bind-group, uniform, and buffer caches from MoGE/SHARP.
-13. Shared kernels only when at least two real routes need them or a measured
-   kernel slice proves the extraction useful.
+## Why Not Just Evidence?
 
-Non-goals:
+Evidence is the accountability layer. The product center is route composition and runtime control.
+
+WebGPU model ports have awkward failure modes: the browser may give a different adapter than expected, timestamp queries may be absent or misleading, a route may silently fall back to fixtures or stubs, and long GPU phases can monopolize the device unless the route reports how it yields. The kit keeps those facts attached to the route envelope so schedulers and downstream consumers can make sane choices.
+
+So the intended stack is:
+
+1. **Route boundary:** define callable browser-local inference routes with stable input/output roles.
+2. **Runtime profile:** preserve adapter/device/kernel/stage identity for the run that actually happened.
+3. **Scheduler/backpressure profile:** expose whether the route is throughput-oriented, cooperative, furnace-class, warm, cached, or frame-tail-sensitive.
+4. **Receipt and classification:** reject stale, fallback, partial, mismatched, or invalid route output before another system treats it as authoritative.
+
+The fourth layer protects the first three. It should not swallow the whole story.
+
+## Current Surface
+
+- `defineWebGpuRoute(input)`, `createWebGpuRouteRegistry(routes)`, `createRouteInvocationRequest(route, input)`, `createRouteWorkerResult(route, input)`, and validators: define worker-executable browser routes, create invocation envelopes, and validate route results before downstream consumers compose them.
+- `createMogeDepthNormalRouteDefinition(input)` and `createMogeDepthNormalRouteReceipt(input)`: MoGE source-image to depth/normal/pointmap route contract.
+- `createSharpImageToSplatRouteDefinition(input)` and `createSharpImageToSplatRouteReceipt(input)`: SHARP source-image to splat candidate/depth/metadata route contract, including optional splat autocrop side output.
+- `createKimodoTextToMotionRouteDefinition(input)` and `createKimodoTextToMotionRouteReceipt(input)`: Kimodo text-prompt to SOMA77 joints/motion-clip route contract, with optional filmstrip output and diffusion/FK/output timing stages.
+- `createSf3dImageToMeshRouteDefinition(input)` and `createSf3dImageToMeshRouteReceipt(input)`: Stable Fast 3D source-image to GLB/albedo/normal/OBJ route contract with DINOv2, two-stream, triplane, and marching-tet stage identity.
+- `createWebGpuDeviceRequest(adapter, options)` and `requestBrowserWebGpuDevice(gpu, options)`: request browser WebGPU devices using adapter-reported limits without imposing hidden caps, and return the effective request/backend identity for the route.
+- `createWebGpuBackendIdentity(input)` and `validateWebGpuBackendIdentity(identity)`: preserve browser, adapter, feature, limit, and timestamp-query identity.
+- `createStagedSubmitProfile(input)`, `addStagedSubmitStage(profile, stage)`, `finishStagedSubmitProfile(profile)`, and `validateStagedSubmitProfile(profile)`: describe staged queue-submit timing in a way that can be compared across routes.
+- `createKernelProfileMetadata(input)` and `createRouteKernelProfileMetadata(input)`: normalize kit version, kernel profile, commit, required stages, and timing-source metadata for route definitions and receipts.
+- `createWebGpuRuntimeProfileInput(input)`, `createWebGpuRuntimeProfile(input)`, and `validateWebGpuRuntimeProfile(profile)`: combine effective backend identity, kernel metadata, staged profile, and route mode into one producer-side runtime profile object.
+- `createWebGpuRouteSchedulerProfile(input)` and `validateWebGpuRouteSchedulerProfile(profile)`: preserve requested versus effective scheduling, including throughput/cooperative mode, route-specific phase chunk sizes, submitted-work waits, yield cadence, and unsupported fields.
+- `createWebGpuRouteBackpressureProfile(input)` and `validateWebGpuRouteBackpressureProfile(profile)`: record visible-wait/furnace pressure, warm/cache posture, memory-sharing posture, and frame-tail impact.
+- `defineTensorManifest(input)` and `validateTensorManifest(manifest)`: normalize tensor metadata including dtype sizes and byte lengths.
+- `createWebGpuLocalRouteReceipt(input)`, `createWebGpuRouteReceiptFromArtifacts(input)`, `createRouteReceiptArtifacts(input)`, `finishAndValidateRouteProfile(input)`, `validateRouteReceipt(receipt)`, and `assertAuthoritativeRouteReceipt(receipt)`: shared receipt construction and validation helpers.
+- `classifyWebGpuRouteReceiptEvidence(receipt)` and `classifyWebGpuRouteWorkerResultEvidence(result)`: consumer-side classification helpers for authoritative, fallback, partial, cached, stale, route-mismatch, and invalid route outputs.
+- `createWebGpuRouteSchemaContract(input)`: compact schema/version contract for route repos that need conformance tests against this package.
+
+## Near-Term Direction
+
+1. Keep the route boundary stable enough for MoGE, SHARP, Kimodo, SF3D, and Pipeline/commoners to consume one package.
+2. Move browser device acquisition, feature profiling, staged timing, scheduler/backpressure reporting, and route receipts out of individual model repos as shared utilities.
+3. Extract bind-group, pipeline, uniform, buffer-cache, and kernel helpers only when at least two real routes need the same machinery or a measured slice proves the extraction useful.
+4. Preserve enough runtime posture for long routes to become breathable: a route should be able to state where it can yield, what that costs, and whether the browser actually honored the requested scheduling shape.
+5. Avoid becoming a generic ONNX, LLM, or universal tensor runtime until a concrete WebGPU route exposes an advantage we can actually own.
+
+## Non-Goals
 
 - Generic ONNX import parity.
-- General LLM runtime competition.
+- Competing with mature general-purpose browser LLM runtimes without a concrete route-level advantage.
 - Kaminos graph, scene, library, or promotion ownership.
-- Any route that hides fallback, stale output, fixture data, partial output, or
-  effective backend identity.
+- Hidden caps below adapter/device capacity without measured justification.
+- Treating fallback, stale output, fixture data, partial output, or missing backend identity as successful live inference.
