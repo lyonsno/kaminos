@@ -577,6 +577,7 @@ struct Uniforms {
   primitive_source: vec4<f32>,
   pyro_detail_controls: vec4<f32>,
   pyro_detail_cells: array<vec4<f32>, 24>,
+  pyro_carrier_controls: vec4<f32>,
   previousViewProj: mat4x4<f32>,
 };
 
@@ -3085,6 +3086,10 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
   let pyroMaterialEnergy = clamp(u.pyro_detail_controls.y, 0.0, 1.0);
   let pyroLiveAuthority = clamp(u.pyro_detail_controls.z, 0.0, 1.0);
   let pyroSmokeAuthority = clamp(u.pyro_detail_controls.w, 0.0, 1.0);
+  let pyroInterfaceFocus = clamp(u.pyro_carrier_controls.x, 0.0, 1.0);
+  let pyroEdgeBite = clamp(u.pyro_carrier_controls.y, 0.0, 1.0);
+  let pyroSmokeFold = clamp(u.pyro_carrier_controls.z, 0.0, 1.0);
+  let pyroDebugTint = clamp(u.pyro_carrier_controls.w, 0.0, 1.0);
   let canonicalSmokeContent = 1.0 - minimalPlumeRenderScene * step(0.5, canonicalContentMode) * (1.0 - step(1.5, canonicalContentMode));
   let canonicalFireContent = minimalPlumeRenderScene * step(0.5, canonicalContentMode);
   let canonicalFireRenderContent = mix(1.0, canonicalFireContent, minimalPlumeRenderScene);
@@ -3317,12 +3322,20 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     let fireFilament = smoothstep(0.008, 0.34, max(flameDetail * 0.72, fireLick * 2.25 + emberFleck * 0.44)) * fireNoise * visibleDetailOverlayGain;
     let pyroMemoryCell = samplePyroMaterialMemoryCell(p);
     let pyroSpatialEnergy = clamp(pyroMemoryCell.x * pyroMemoryCell.y * pyroMemoryCell.z, 0.0, 1.0);
-    let pyroLiveCarrier = pyroMaterialGain
+    let pyroBaseCarrier = pyroMaterialGain
       * pyroMaterialEnergy
       * pyroLiveAuthority
       * (0.22 + pyroSpatialEnergy * 0.78)
       * smoothstep(0.018, 0.36, temp + flameDetail * 0.75 + fireLick * 0.42 + heat * 0.16)
       * smoothstep(0.012, 0.34, density + smoke * 0.18 + microTextureSignal * 0.20);
+    let pyroInterfaceSignal = clamp(
+      smoothstep(0.025, 0.42, temp + flameDetail * 0.85 + fireLick * 0.55 + heat * 0.18)
+        * smoothstep(0.016, 0.46, smoke + rawExtinction + microSmoke * 0.40)
+        * (0.55 + interfaceShred * 0.24 + fireLick * 0.14),
+      0.0,
+      1.0
+    );
+    let pyroLiveCarrier = pyroBaseCarrier * mix(1.0, pyroInterfaceSignal, pyroInterfaceFocus);
     let pyroMemoryPattern = 0.5 + 0.5 * sin(
       p.y * 31.0
         + p.x * 17.0
@@ -3349,9 +3362,26 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     let radianceEmission = fireRadianceEmission(renderTemp, quenchedFlameDetail, quenchedFireLick, quenchedEmberFleck, radianceGain, glowGain) * mix(1.0, bonfireFireRenderBreakup * bonfireTransportedFireLumaShaper, bonfireRenderScene) * flameBodyAuthority;
     let smokeBacklight = fireColor(renderTemp * 0.72) * smokeAlpha * glowGain * smoothstep(0.16, 1.25, renderTemp) * (0.13 + fireFilament * 0.10 * flameBodyAuthority);
     let fireMix = smoothstep(0.005, 0.052, fireAlpha) * smoothstep(0.08, 0.70, renderTemp);
+    let pyroEdgeBreakup = pyroLiveCarrier
+      * pyroEdgeBite
+      * (0.40 + pyroMemoryPattern * 0.60)
+      * smoothstep(0.03, 0.62, fireMix + fireAlpha * 8.0);
+    let pyroSmokeFoldSignal = pyroLiveCarrier
+      * pyroSmokeFold
+      * (0.34 + pyroSpatialEnergy * 0.66)
+      * smoothstep(0.02, 0.62, smoke + rawExtinction + microSmoke * 0.24);
     var local = mix(smokeCol, flameCol * 0.30 + radianceEmission * 0.70, fireMix);
-    local = mix(local, pyroGhostColor, clamp(pyroMemoryDetail * (0.18 + fireMix * 0.34), 0.0, 0.62));
-    local = local + pyroGhostColor * pyroMemoryDetail * (0.22 + fireMix * 0.28);
+    let pyroFoldColor = vec3<f32>(0.18, 0.28, 0.31);
+    local = mix(
+      local,
+      local * (0.82 - pyroSmokeFoldSignal * 0.22) + pyroFoldColor * pyroSmokeFoldSignal * 0.35,
+      clamp(pyroSmokeFoldSignal, 0.0, 0.45)
+    );
+    local = local * (1.0 - pyroEdgeBreakup * 0.18)
+      + vec3<f32>(1.0, 0.58, 0.16) * pyroEdgeBreakup * (0.16 + fireMix * 0.28);
+    let pyroTintDetail = pyroMemoryDetail * pyroDebugTint * (0.18 + fireMix * 0.34);
+    local = mix(local, pyroGhostColor, clamp(pyroTintDetail, 0.0, 0.56));
+    local = local + pyroGhostColor * pyroTintDetail * (0.10 + fireMix * 0.18);
     let vaporCol = vec3<f32>(0.78, 0.88, 0.92) * (0.76 + filament * 0.18 + shredFilament * 0.12);
     local = mix(local, vaporCol, clamp(max(vaporCarrier * 0.92, quenchCoreCollapse * 0.62), 0.0, 0.96));
     let diagnosticColor = mix(vec3<f32>(0.08, 0.72, 0.95), vec3<f32>(1.0, 0.18, 0.08), smoothstep(0.010, 0.085, divDebug)) * (0.35 + smoothstep(0.012, 0.18, curlDebug));
@@ -3390,7 +3420,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   const invViewProj = new THREE.Matrix4();
   const viewProj = new THREE.Matrix4();
   const previousViewProj = new THREE.Matrix4();
-  const uniforms = new Float32Array(200);
+  const uniforms = new Float32Array(204);
   let controlsSnapshot = applyRuntimeQualityControls(getControls());
   let gridSize = normalizeGridSize(controlsSnapshot.resolution);
   let majorantGridSize = normalizeMajorantGridSize(controlsSnapshot.majorantGrid);
@@ -4834,7 +4864,15 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       uniforms[91 + memoryIndex * 4] = sample[3] ?? 0;
       if (pyroMaterialSampleable) uploadedPyroMaterialCells += 1;
     }
-    uniforms.set(previousViewProj.elements, 184);
+    const pyroInterfaceFocus = Math.max(0, Math.min(1, controlsSnapshot.pyroInterfaceFocus ?? 0.75));
+    const pyroEdgeBite = Math.max(0, Math.min(1, controlsSnapshot.pyroEdgeBite ?? 0.35));
+    const pyroSmokeFold = Math.max(0, Math.min(1, controlsSnapshot.pyroSmokeFold ?? 0.25));
+    const pyroDebugTint = Math.max(0, Math.min(1, controlsSnapshot.pyroDebugTint ?? 0.30));
+    uniforms[184] = pyroInterfaceFocus;
+    uniforms[185] = pyroEdgeBite;
+    uniforms[186] = pyroSmokeFold;
+    uniforms[187] = pyroDebugTint;
+    uniforms.set(previousViewProj.elements, 188);
     device.queue.writeBuffer(uniformBuffer, 0, uniforms);
     state.gridOverlay = controlsSnapshot.gridOverlay || 0;
     state.volumeScene = normalizeVolumeScene(controlsSnapshot.volumeScene);
@@ -4870,6 +4908,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       energy: pyroMaterialEnergy,
       liveFireAuthority: pyroMaterialLiveAuthority,
       smokeAuthority: pyroMaterialSmokeAuthority,
+      carrierControls: {
+        interfaceFocus: pyroInterfaceFocus,
+        edgeBite: pyroEdgeBite,
+        smokeFold: pyroSmokeFold,
+        debugTint: pyroDebugTint,
+      },
       spatialMemory: {
         identity: 'pyro-material-memory-spatial-coupling-v0',
         textureLayout: { ...(materialMemory.textureLayout || PYRO_DYNAMIC_DETAIL_TEXTURE_LAYOUT) },

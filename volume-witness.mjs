@@ -274,6 +274,45 @@ const TALL_PLUME_OPERATOR_PRESETS = {
     windHeight: -0.80,
     renderScale: 0.95,
   },
+  operator_memory_fire_0701: {
+    volumeScene: 'tall_plume',
+    density: 5.20,
+    fire: 0.00,
+    radiance: 3.00,
+    absorption: 2.00,
+    glow: 2.50,
+    smoke: 2.80,
+    curl: 2.70,
+    microdetail: 2.50,
+    interfaceShred: 5.00,
+    fireLicks: 1.70,
+    projection: 1.50,
+    speed: 5.00,
+    raySteps: 160,
+    adaptiveRays: 0.00,
+    occupancySkip: 0.00,
+    majorantSkip: 1.00,
+    majorantSmooth: 0.85,
+    majorantGuard: 0.50,
+    temporalAccum: 0.00,
+    temporalJitter: 0.00,
+    historyClamp: 0.70,
+    fireScale: 0.35,
+    detailScale: 0.50,
+    plumeHeight: 1.20,
+    windStrength: 0.80,
+    windAngle: 0,
+    windHeight: -0.35,
+    renderScale: 0.35,
+    inputRadius: 0.12,
+    flowRate: 0.35,
+    resolution: 128,
+    majorantGrid: 48,
+    pressureMode: 'global-p3',
+    pressureTierLowerMax: 0.64,
+    pressureTierHeroMin: 0.18,
+    pressureTierHeroMax: 0.53,
+  },
 };
 const CANONICAL_VOLUME_MACRO_PRESETS = {
   macro_foothold_0621: {
@@ -432,9 +471,13 @@ const expectedCanonicalBuoyancy = routeParams.has('volume_canonical_buoyancy') &
 const canonicalPassiveBottomNonRiseProof = expectsCanonicalPlumeProof && expectedCanonicalSourceMode === 'passive_bottom';
 const expectsCanonicalSmokeRise = expectsCanonicalPlumeProof && !canonicalPassiveBottomNonRiseProof;
 const requestedGrid = Number(routeParams.get('volume_resolution'));
-const expectedGrid = [32, 48, 64, 96, 128, 160].includes(requestedGrid) ? requestedGrid : canonicalMacroPreset.resolution ?? 96;
+const expectedGrid = [32, 48, 64, 96, 128, 160].includes(requestedGrid)
+  ? requestedGrid
+  : canonicalMacroPreset.resolution ?? scenePreset.resolution ?? 96;
 const requestedMajorantGrid = Number(routeParams.get('volume_majorant_grid'));
-const expectedMajorantGrid = [24, 32, 48].includes(requestedMajorantGrid) ? requestedMajorantGrid : canonicalMacroPreset.majorantGrid ?? 48;
+const expectedMajorantGrid = [24, 32, 48].includes(requestedMajorantGrid)
+  ? requestedMajorantGrid
+  : canonicalMacroPreset.majorantGrid ?? scenePreset.majorantGrid ?? 48;
 const requestedMajorantCadence = Number(routeParams.get('volume_majorant_cadence'));
 let expectedMajorantCadence = routeParams.has('volume_majorant_cadence') && Number.isFinite(requestedMajorantCadence)
   ? Math.max(1, Math.min(8, Math.round(requestedMajorantCadence)))
