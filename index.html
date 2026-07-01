@@ -9122,6 +9122,24 @@ async function grPostApi(endpoint, params = {}) {
   }
 }
 
+async function grPostJsonApi(endpoint, payload = {}) {
+  try {
+    const resp = await fetch(`/api/${endpoint}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok || data?.error) {
+      throw new Error(data?.error || `POST /api/${endpoint} failed with ${resp.status}`);
+    }
+    return data;
+  } catch (error) {
+    if (error instanceof Error) throw error;
+    throw new Error('Server not reachable. Use serve.py instead of python3 -m http.server');
+  }
+}
+
 const GR_OUTPUT_ROOTS = ['pixal3d', 'trellis2mlx'];
 const ROUTE_EXECUTOR_BROWSER_WEBGPU = 'browser-webgpu';
 const ROUTE_BACKEND_WEBGPU_LOCAL = 'webgpu-local';
@@ -10112,6 +10130,19 @@ async function grBrowseRouteJobs() {
   }
 }
 
+async function submitBrowserWebGpuRouteResult(result) {
+  const writeResult = await grPostJsonApi('route-results/browser-webgpu', result);
+  if (writeResult.route_provider_index) {
+    greenroomRouteJobState = {
+      ...writeResult.route_provider_index,
+      loadedAt: new Date().toISOString(),
+      error: null,
+    };
+  }
+  await grBrowseRouteJobs();
+  return writeResult;
+}
+
 async function grBrowseSplatAssets() {
   const listEl = document.getElementById('splat-assets-list');
   if (!listEl) return;
@@ -10456,6 +10487,7 @@ async function ingestDroppedSplatFile(file, options = {}) {
 window.grBrowseSplatAssets = grBrowseSplatAssets;
 window.grBrowseRouteJobs = grBrowseRouteJobs;
 window.grBrowse = grBrowse;
+window.kaminosSubmitBrowserWebGpuRouteResult = submitBrowserWebGpuRouteResult;
 window.kaminosIngestDroppedSplatFile = ingestDroppedSplatFile;
 
 async function grOpenJobDir(path) {

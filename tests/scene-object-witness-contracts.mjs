@@ -145,6 +145,10 @@ assert.match(indexHtml, /route-jobs\/checkpoint-pause/, 'Native Greenroom route 
 assert.match(indexHtml, /pause requested/, 'Native Greenroom route tray distinguishes requested pause from achieved checkpoint pause');
 assert.match(indexHtml, /resume unverified/, 'Native Greenroom route tray can warn when resume is advertised but not proven in Kaminos');
 assert.match(indexHtml, /browser-webgpu/, 'Route tray recognizes browser WebGPU route rows');
+assert.match(indexHtml, /window\.kaminosSubmitBrowserWebGpuRouteResult/, 'Browser WebGPU producers can submit kit route results through a Kaminos helper');
+assert.match(indexHtml, /route-results\/browser-webgpu/, 'Browser WebGPU producer helper posts route results to the Kaminos writer endpoint');
+assert.match(indexHtml, /writeResult\.route_provider_index/, 'Browser WebGPU producer helper consumes the refreshed provider index returned by the server');
+assert.match(indexHtml, /await grBrowseRouteJobs\(\)/, 'Browser WebGPU producer helper refreshes the route tray after a successful write');
 assert.match(indexHtml, /fixture route identity only/, 'Route tray can warn when a browser WebGPU row is identity-only fixture evidence');
 assert.match(indexHtml, /scheduler unverified/, 'Route tray can warn when browser WebGPU scheduler evidence is unverified');
 assert.match(indexHtml, /kaminos\.webgpu-route-scheduler\.v0/, 'Route tray source preserves WebGPU scheduler schema identity');
