@@ -442,6 +442,12 @@ assert.match(core, /shouldRunSimForFrame/, 'volume core has a named per-frame si
 assert.match(core, /state\.continuationFrameCount/, 'debug state records render frames that reused the most recent live field');
 assert.match(core, /state\.liveSimFrameCount/, 'debug state records frames that actually advanced live simulation');
 assert.match(core, /state\.lastLiveSimFrameId/, 'debug state records the latest render frame that advanced simulation');
+assert.match(core, /cadence_controls/, 'volume uniforms carry cadence phase for cadence-native render continuation');
+assert.match(core, /state\.cadencePhase/, 'debug state records the current cadence phase between live simulation steps');
+assert.match(core, /state\.framesSinceLiveSim/, 'debug state records held render frames since the last live simulation step');
+assert.match(core, /CADENCE_NATIVE_CONTINUATION_IDENTITY/, 'volume core names the cadence-native field continuation identity');
+assert.match(core, /cadenceNativeContinuationPoint/, 'fragment raymarch computes a field-aware continuation sample point');
+assert.match(core, /sampleWorldVelocity\(continuedP\)/, 'fragment raymarch samples held fields through the cadence continuation point');
 assert.match(core, /effectiveVisualAuthority:\s*state\.effectiveVisualAuthority/, 'sampleFrame preserves effective visual authority in witness readback');
 assert.match(core, /simCostLedger[\s\S]*simCadence/, 'sim cost ledger records requested/effective simulation cadence identity');
 assert.match(core, /gridOverlay/, 'fluid renderer exposes grid overlay state');
@@ -1193,6 +1199,9 @@ assert.match(witness, /pressureDivergencePasses/, 'witness reports pressure dive
 assert.match(witness, /pressureJacobiPasses/, 'witness reports pressure Jacobi pass cost');
 assert.match(witness, /pressureJacobiInlineDivergencePasses/, 'witness reports Jacobi inline-divergence pressure cost');
 assert.match(witness, /fullGridPassBreakdown/, 'witness reports pass-level full-grid breakdown');
+assert.match(witness, /cadencePhase/, 'witness reports cadence phase for cadence-native continuation authority');
+assert.match(witness, /framesSinceLiveSim/, 'witness reports held render frames since the most recent live sim step');
+assert.match(witness, /cadenceNativeContinuationIdentity/, 'witness reports the stable cadence-native continuation identity');
 assert.match(witness, /performance-volume-signal/, 'witness has a performance visual-evidence mode that does not confuse low-fire measurement frames with missing output');
 assert.match(witness, /low-fire-performance-evidence/, 'performance witness preserves low-fire visual frames as warnings instead of failing before primary cost reports');
 assert.match(witness, /rayBudgetPreset/, 'witness records named ray-budget preset/config identity when present');

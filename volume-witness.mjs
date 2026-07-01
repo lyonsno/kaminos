@@ -1092,6 +1092,9 @@ async function main() {
       assert.ok(state.frameCount > state.simStepCount, 'low-cadence continuation did not create a frame/sim-step cadence gap');
       assert.ok(state.continuationFrameCount > 0, 'low-cadence continuation did not record continued render frames');
       assert.equal(state.continuationAuthority, 'continuation-from-latest-live-field-v0', 'continuation authority label is missing');
+      assert.ok(Number.isFinite(state.cadencePhase), 'cadence-native continuation phase did not reach debug state');
+      assert.ok(Number.isFinite(state.framesSinceLiveSim), 'cadence-native held-frame count did not reach debug state');
+      assert.equal(state.cadenceNativeContinuationIdentity, 'cadence-native-field-continuation-v0', 'cadence-native continuation identity is missing');
     }
     assert.equal(state.majorantBuilt, true, 'coarse majorant field was not built before witness');
     const effectiveFireLicks = state.controls?.fireLicks ?? expectedFireLicks;
@@ -1881,6 +1884,9 @@ async function main() {
       continuationFrameCount: sample.continuationFrameCount,
       lastLiveSimFrameId: sample.lastLiveSimFrameId,
       lastSimFrameSkipped: sample.lastSimFrameSkipped,
+      cadencePhase: sample.cadencePhase,
+      framesSinceLiveSim: sample.framesSinceLiveSim,
+      cadenceNativeContinuationIdentity: sample.cadenceNativeContinuationIdentity,
       tallPlumeReactionCadenceDebug: sample.tallPlumeReactionCadenceDebug,
       tallPlumeFlameCutoffContract: sample.tallPlumeFlameCutoffContract,
       tallPlumeFlowShelfContract: sample.tallPlumeFlowShelfContract,

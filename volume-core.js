@@ -5,6 +5,7 @@ const DEFAULT_GRID_SIZE = 96;
 const SUPPORTED_GRID_SIZES = [32, 48, 64, 96, 128, 160];
 const FLUID_SLOTS_PER_CELL = 4;
 const FLUID_COMPONENTS = FLUID_SLOTS_PER_CELL * 4;
+const CADENCE_NATIVE_CONTINUATION_IDENTITY = 'cadence-native-field-continuation-v0';
 const DEFAULT_MAJORANT_GRID_SIZE = 48;
 const SUPPORTED_MAJORANT_GRID_SIZES = [24, 32, 48];
 const MAX_EXTERNAL_EMITTERS = 32;
@@ -563,6 +564,7 @@ struct Uniforms {
   canonical_render_motion_controls: vec4<f32>,
   pressure_tier_controls: vec4<f32>,
   primitive_source: vec4<f32>,
+  cadence_controls: vec4<f32>,
   previousViewProj: mat4x4<f32>,
 };
 
@@ -877,6 +879,18 @@ fn sampleWorldMicrodetail(p: vec3<f32>) -> vec4<f32> {
 fn sampleWorldFrontField(p: vec3<f32>) -> f32 {
   let cell = (p * 0.5 + vec3<f32>(0.5)) * f32(GRID);
   return sampleFrontField(cell);
+}
+
+fn cadenceNativeContinuationPoint(p: vec3<f32>, velocity: vec3<f32>, sceneMask: f32) -> vec3<f32> {
+  let cadencePhase = clamp(u.cadence_controls.x, 0.0, 1.0);
+  let framesSinceLiveSim = max(0.0, u.cadence_controls.y);
+  let simCadence = max(1.0, u.cadence_controls.z);
+  let continuationActive = step(1.5, simCadence) * step(0.001, cadencePhase) * sceneMask;
+  let speed = clamp(u.fire_smoke_curl_speed.w, 0.1, 5.0);
+  let continuationDt = cadencePhase * (0.14 + speed * 0.030) * (1.0 + min(framesSinceLiveSim, simCadence) * 0.055);
+  let thermalRise = vec3<f32>(0.0, 0.030 + speed * 0.006, 0.0) * cadencePhase;
+  let continuedP = p - (velocity + thermalRise) * continuationDt * continuationActive;
+  return clamp(continuedP, vec3<f32>(-0.999), vec3<f32>(0.999));
 }
 
 fn majorantIndex(c: vec3<u32>) -> u32 {
@@ -3077,6 +3091,8 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
   for (var i = 0; i < 192; i = i + 1) {
     if (f32(i) >= steps || raymarchEarlyTermination(trans) || t > endT) { break; }
     let p = ro + rd * t;
+    let initialState = sampleWorldVelocity(p);
+    let continuedP = cadenceNativeContinuationPoint(p, initialState.xyz, tallPlumeRenderScene);
     let majorantNearest = sampleWorldMajorant(p);
     let majorantLinear = sampleWorldMajorantLinear(p);
     let majorantDilated = sampleWorldMajorantDilated(p);
@@ -3097,11 +3113,11 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
       t = t + min(skipDt, max(0.0001, endT - t));
       continue;
     }
-    let state = sampleWorldVelocity(p);
-    let material = sampleWorldMaterial(p);
-    let fireLayer = sampleWorldFireLayer(p);
-    let microLayer = sampleWorldMicrodetail(p);
-    let combustionFrontTopology = sampleWorldFrontField(p);
+    let state = sampleWorldVelocity(continuedP);
+    let material = sampleWorldMaterial(continuedP);
+    let fireLayer = sampleWorldFireLayer(continuedP);
+    let microLayer = sampleWorldMicrodetail(continuedP);
+    let combustionFrontTopology = sampleWorldFrontField(continuedP);
     let velMag = length(state.xyz);
     let smokeDensity = material.x;
     let heat = material.y;
@@ -3121,7 +3137,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     let glowGain = max(0.0, u.radiance_controls.z);
     let adaptiveRays = clamp(u.radiance_controls.w, 0.0, 1.0);
     let occupancySkipStrength = clamp(u.occupancy_controls.x, 0.0, 1.0);
-    let sampleCell = vec3<i32>(floor(clamp((p * 0.5 + vec3<f32>(0.5)) * f32(GRID), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.0))));
+    let sampleCell = vec3<i32>(floor(clamp((continuedP * 0.5 + vec3<f32>(0.5)) * f32(GRID), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.0))));
     let curlDebug = curlMagnitudeAtCell(sampleCell);
     let divDebug = abs(divergenceAtCell(sampleCell));
     let microTextureSignal = clamp(microSmoke * 1.55 + interfaceShred * 2.45 + fireLick * 1.30 + emberFleck * 0.55, 0.0, 2.4);
@@ -3170,7 +3186,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
       t = t + min(dtBase * emptySpanScale, max(0.0001, endT - t));
       continue;
     }
-    let detailP = p * scaleDomain;
+    let detailP = continuedP * scaleDomain;
     let microWarp = microDetailDomainWarp(detailP, microLayer, fireLayer, material, state.xyz, u.cameraPos_time.w, tallPlumeRenderScene);
     let detailCarrier = clamp(microTextureSignal + materialDetail * 0.22 + flameDetail * 0.18 + velMag * 0.36, 0.0, 2.8);
     let filamentNoise = microFilamentNoise(detailP, microWarp, detailCarrier, state.xyz, u.cameraPos_time.w);
@@ -3328,7 +3344,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   const invViewProj = new THREE.Matrix4();
   const viewProj = new THREE.Matrix4();
   const previousViewProj = new THREE.Matrix4();
-  const uniforms = new Float32Array(100);
+  const uniforms = new Float32Array(104);
   let controlsSnapshot = applyRuntimeQualityControls(getControls());
   let gridSize = normalizeGridSize(controlsSnapshot.resolution);
   let majorantGridSize = normalizeMajorantGridSize(controlsSnapshot.majorantGrid);
@@ -3358,6 +3374,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     continuationFrameCount: 0,
     lastLiveSimFrameId: -1,
     lastSimFrameSkipped: false,
+    cadencePhase: 0,
+    framesSinceLiveSim: 0,
+    cadenceNativeContinuationIdentity: CADENCE_NATIVE_CONTINUATION_IDENTITY,
     simGrid: gridSize,
     simGridLabel: `${gridSize}^3 velocity-material-fire-microdetail-storage-buffer+${FRONT_FIELD_IDENTITY}`,
     gridOverlay: 0,
@@ -4188,6 +4207,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.continuationFrameCount = 0;
     state.lastLiveSimFrameId = -1;
     state.lastSimFrameSkipped = false;
+    state.cadencePhase = 0;
+    state.framesSinceLiveSim = 0;
     state.simGrid = gridSize;
     state.simGridLabel = `${gridSize}^3 velocity-material-fire-microdetail-storage-buffer+${FRONT_FIELD_IDENTITY}`;
     state.frontFieldIdentity = FRONT_FIELD_IDENTITY;
@@ -4542,7 +4563,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     uniforms[81] = sourcePrimitive.position[1];
     uniforms[82] = sourcePrimitive.position[2];
     uniforms[83] = volumePrimitives.length > 0 ? 1 : 0;
-    uniforms.set(previousViewProj.elements, 84);
+    const simCadence = normalizeSimCadence(controlsSnapshot.simCadence);
+    const framesSinceLiveSim = state.lastLiveSimFrameId >= 0 ? Math.max(0, state.frameCount - state.lastLiveSimFrameId) : 0;
+    const cadencePhase = simCadence > 1 ? Math.max(0, Math.min(1, framesSinceLiveSim / simCadence)) : 0;
+    uniforms[84] = cadencePhase;
+    uniforms[85] = framesSinceLiveSim;
+    uniforms[86] = simCadence;
+    uniforms[87] = state.lastSimFrameSkipped ? 1 : 0;
+    uniforms.set(previousViewProj.elements, 88);
     device.queue.writeBuffer(uniformBuffer, 0, uniforms);
     state.gridOverlay = controlsSnapshot.gridOverlay || 0;
     state.volumeScene = normalizeVolumeScene(controlsSnapshot.volumeScene);
@@ -4568,9 +4596,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.quenchVaporStrength = quenchVaporStrength;
     state.snuffVisualModel = quenchVaporStrength > 0 ? 'quench-vapor-v0' : 'inactive';
     state.flameQuenchModel = quenchVaporStrength > 0 ? 'quench-flame-body-v0' : 'inactive';
-    state.simCadence = normalizeSimCadence(controlsSnapshot.simCadence);
+    state.simCadence = simCadence;
     state.effectiveVisualAuthority = state.simCadence > 1 ? 'continuation' : 'live-sim';
     state.continuationAuthority = state.simCadence > 1 ? 'continuation-from-latest-live-field-v0' : 'live-sim-v0';
+    state.cadencePhase = cadencePhase;
+    state.framesSinceLiveSim = framesSinceLiveSim;
+    state.cadenceNativeContinuationIdentity = CADENCE_NATIVE_CONTINUATION_IDENTITY;
     state.runtimeQualityRequested = normalizeRuntimeQuality(controlsSnapshot.runtimeQualityRequested);
     state.runtimeQualityEffective = normalizeRuntimeQuality(controlsSnapshot.runtimeQualityEffective || controlsSnapshot.runtimeQualityRequested);
     state.gpuPressure = clampFinite(controlsSnapshot.gpuPressure, 0, 1, 0);
@@ -4798,6 +4829,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       continuationFrameCount: state.continuationFrameCount,
       lastLiveSimFrameId: state.lastLiveSimFrameId,
       lastSimFrameSkipped: state.lastSimFrameSkipped,
+      cadencePhase: state.cadencePhase,
+      framesSinceLiveSim: state.framesSinceLiveSim,
+      cadenceNativeContinuationIdentity: state.cadenceNativeContinuationIdentity,
       pressureSourceStrategy,
       tallPlumePressureIterationStrategy: tallPlumePressureStrategy,
       tallPlumePressureIterationTarget,
@@ -6049,6 +6083,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         continuationFrameCount: state.continuationFrameCount,
         lastLiveSimFrameId: state.lastLiveSimFrameId,
         lastSimFrameSkipped: state.lastSimFrameSkipped,
+        cadencePhase: state.cadencePhase,
+        framesSinceLiveSim: state.framesSinceLiveSim,
+        cadenceNativeContinuationIdentity: state.cadenceNativeContinuationIdentity,
         runtimeQualityRequested: state.runtimeQualityRequested,
         runtimeQualityEffective: state.runtimeQualityEffective,
         gpuPressure: state.gpuPressure,
@@ -6366,6 +6403,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       continuationFrameCount: state.continuationFrameCount,
       lastLiveSimFrameId: state.lastLiveSimFrameId,
       lastSimFrameSkipped: state.lastSimFrameSkipped,
+      cadencePhase: state.cadencePhase,
+      framesSinceLiveSim: state.framesSinceLiveSim,
+      cadenceNativeContinuationIdentity: state.cadenceNativeContinuationIdentity,
       runtimeQualityRequested: state.runtimeQualityRequested,
       runtimeQualityEffective: state.runtimeQualityEffective,
       gpuPressure: state.gpuPressure,
