@@ -634,8 +634,7 @@ function normalizeRequestedVisualBudget(requestedVisualBudget = {}) {
 
 function visualSourceTruthBlocksPrimary(visualSourceTruth = null) {
   const source = visualSourceTruth?.source || 'unwitnessed';
-  return source === 'unwitnessed'
-    || ['cached-volume', 'prerender', 'fixture', 'failed', 'fallback'].includes(source)
+  return source !== 'live-webgpu-volume'
     || Boolean(visualSourceTruth?.fallbackReason)
     || visualSourceTruth?.mayClaimLiveNovelty !== true;
 }

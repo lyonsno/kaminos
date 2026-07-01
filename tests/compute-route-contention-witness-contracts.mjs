@@ -603,6 +603,35 @@ const missingVisualSourceTruthReport = structuredClone(baseVisualReport);
 delete missingVisualSourceTruthReport.visualWitnessReport.visualSourceTruth;
 assert.throws(() => buildComputeRouteContentionWitnessFromReport(missingVisualSourceTruthReport), /non-live visual source truth cannot be primary contention evidence/);
 
+assert.throws(() => buildComputeRouteContentionWitnessFromReport({
+  ...baseVisualReport,
+  visualWitnessReport: {
+    ...baseVisualReport.visualWitnessReport,
+    visualSourceTruth: {
+      source: 'cached',
+      fallbackReason: null,
+      mayClaimLiveNovelty: true,
+    },
+  },
+}), /non-live visual source truth cannot be primary contention evidence/);
+
+assert.throws(() => buildComputeRouteContentionWitness({
+  routeIdentity: witness.routeIdentity,
+  routePhase: witness.routePhase,
+  visualBudget: witness.visualBudget,
+  visualSourceTruth: {
+    source: 'unknown-source',
+    fallbackReason: null,
+    mayClaimLiveNovelty: true,
+  },
+  timing: {
+    evidenceSource: 'raf-and-queue-proxy',
+    disclaimer: 'not-gpu-exclusive-or-present-latency',
+    frameP95Ms: 72,
+    queueDoneP95Ms: 140,
+  },
+}), /non-live visual source truth cannot be primary contention evidence/);
+
 const tmp = mkdtempSync(join(tmpdir(), 'kaminos-contention-witness-contract-'));
 const inputReport = join(tmp, 'compute-route-fire-report.json');
 const outputReport = join(tmp, 'contention-report.json');
