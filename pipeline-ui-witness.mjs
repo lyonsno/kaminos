@@ -453,6 +453,9 @@ try {
       const outputContainer = document.querySelector(\`[data-pipeline-output-container-route-id="${routeNode.routeNodeId}"]\`);
       const statusNode = pendingRecord ? document.querySelector(\`[data-pipeline-generated-output-node-id="\${pendingRecord.id}"][data-pipeline-generated-output-status]\`) : null;
       const statusPill = pendingRecord ? document.querySelector(\`[data-pipeline-route-output-id="\${pendingRecord.id}"][data-pipeline-generated-output-status]\`) : null;
+      const routeStatusNode = document.querySelector(\`[data-pipeline-graph-node-id="${routeNode.routeNodeId}"][data-pipeline-route-live-status]\`);
+      const routeLiveStatus = routeStatusNode?.dataset?.pipelineRouteLiveStatus || null;
+      const routeLivePhase = routeStatusNode?.dataset?.pipelineRouteLivePhase || null;
       return {
         ok: Boolean(
           pendingRecord
@@ -463,9 +466,14 @@ try {
           && outputContainer
           && statusNode
           && statusPill
+          && routeLiveStatus
+          && routeLivePhase
         ),
         pendingRecord,
         generatedOutputNodes,
+        routeLiveStatus,
+        routeLivePhase,
+        routeLiveText: routeStatusNode?.innerText || '',
         outputContainerText: outputContainer?.innerText || '',
         statusNodeText: statusNode?.innerText || '',
         statusPillText: statusPill?.innerText || '',
@@ -492,6 +500,10 @@ try {
       const schedulerEvidence = outputRecord?.schedulerEvidence || null;
       const schedulerStateNode = outputRecord ? document.querySelector(\`[data-pipeline-generated-output-node-id="\${outputRecord.id}"] [data-pipeline-scheduler-state]\`) : null;
       const schedulerState = outputNode?.dataset?.pipelineSchedulerState || schedulerStateNode?.dataset?.pipelineSchedulerState || null;
+      const routeStatusNode = document.querySelector(\`[data-pipeline-graph-node-id="${routeNode.routeNodeId}"][data-pipeline-route-live-status]\`);
+      const routeLiveStatus = routeStatusNode?.dataset?.pipelineRouteLiveStatus || null;
+      const routeLivePhase = routeStatusNode?.dataset?.pipelineRouteLivePhase || null;
+      const routeSchedulerState = routeStatusNode?.dataset?.pipelineRouteSchedulerState || null;
       const adapterFixture = Boolean(
         run?.report?.document?.stages?.some(stage => stage.effectiveRoute?.fixtureMode === 'mock-adapter')
         || primaryArtifact?.fixtureSource?.mode === 'mock-adapter'
@@ -509,7 +521,7 @@ try {
               : (${JSON.stringify(expectsFixture)} ? primaryArtifact?.fixtureSource : primaryArtifact?.status === 'real' && !primaryArtifact?.fixtureSource))
           : Boolean(primaryArtifact?.path && primaryArtifact?.status));
       return {
-        ok: Boolean(run?.ok && run?.pipelineId === ${JSON.stringify(pipelineId)} && run?.graphExecution?.nodeId === ${JSON.stringify(routeNode.routeNodeId)} && run?.graphExecution?.sourceGraphNodeId === ${JSON.stringify(imageHook.graphImageNodeId)} && run?.source?.graphNodeId === ${JSON.stringify(imageHook.graphImageNodeId)} && state?.selectedGraphNodeId === outputRecord?.id && primaryArtifact?.path && outputNode && outputNode.innerText.includes(expectedTruth) && outputActionButton && outputContainer && outputStatus === 'complete' && outputRecord?.status === 'complete' && outputRecord?.artifactRole === expectedRole && outputRecord?.runTimeline?.length >= 3 && outputRecord?.routeSnapshot?.schema === 'kaminos.pipeline-route-snapshot.v0' && outputRecord?.graphSnapshot?.schema === 'kaminos.pipeline-graph-run-snapshot.v0' && schedulerEvidence?.schema === 'kaminos.pipeline-scheduler-composition.v0' && Boolean(schedulerState) && artifactTruthOk),
+        ok: Boolean(run?.ok && run?.pipelineId === ${JSON.stringify(pipelineId)} && run?.graphExecution?.nodeId === ${JSON.stringify(routeNode.routeNodeId)} && run?.graphExecution?.sourceGraphNodeId === ${JSON.stringify(imageHook.graphImageNodeId)} && run?.source?.graphNodeId === ${JSON.stringify(imageHook.graphImageNodeId)} && state?.selectedGraphNodeId === outputRecord?.id && primaryArtifact?.path && outputNode && outputNode.innerText.includes(expectedTruth) && outputActionButton && outputContainer && outputStatus === 'complete' && outputRecord?.status === 'complete' && outputRecord?.artifactRole === expectedRole && outputRecord?.runTimeline?.length >= 3 && outputRecord?.routeSnapshot?.schema === 'kaminos.pipeline-route-snapshot.v0' && outputRecord?.graphSnapshot?.schema === 'kaminos.pipeline-graph-run-snapshot.v0' && schedulerEvidence?.schema === 'kaminos.pipeline-scheduler-composition.v0' && Boolean(schedulerState) && routeLiveStatus === 'complete' && routeLivePhase === 'complete' && Boolean(routeSchedulerState) && artifactTruthOk),
         selectedGraphNodeId: state?.selectedGraphNodeId || null,
         runId: run?.runId || null,
         pipelineId: run?.pipelineId || null,
@@ -525,6 +537,10 @@ try {
         schedulerEvidence,
         schedulerState,
         schedulerStateText: schedulerStateNode?.innerText || '',
+        routeLiveStatus,
+        routeLivePhase,
+        routeSchedulerState,
+        routeLiveText: routeStatusNode?.innerText || '',
         runTimeline: outputRecord?.runTimeline || [],
         outputContainerText: outputContainer?.innerText || '',
         generatedOutputNodeText: outputNode?.innerText || '',
