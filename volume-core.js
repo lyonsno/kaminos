@@ -2,6 +2,7 @@ const ROUTE_IDENTITY = 'native-3d-compute-fluid-raymarch-v0';
 const PROTOTYPE_IDENTITY = 'kaminos-volume-prototype-v0';
 const FRONT_FIELD_IDENTITY = 'combustion-front-topology-sidecar-v0';
 const DETERMINISTIC_REPLAY_IDENTITY = 'deterministic-replay-same-route-controls-fixed-step-v0';
+const FIELD_TILE_EXPORT_IDENTITY = 'kaminos.volume.field-tile-export.v0';
 const DEFAULT_GRID_SIZE = 96;
 const SUPPORTED_GRID_SIZES = [32, 48, 64, 96, 128, 160];
 const FLUID_SLOTS_PER_CELL = 4;
@@ -5033,7 +5034,168 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     }
   }
 
-  async function sampleSimReadback() {
+  function normalizeFieldTileExportOptions(options = null) {
+    if (!options || options.enabled === false) return null;
+    const tileSize = Math.max(4, Math.min(24, Math.floor(Number(options.tileSize ?? 8))));
+    const maxTiles = Math.max(1, Math.min(128, Math.floor(Number(options.maxTiles ?? options.maxTileCount ?? 8))));
+    const minCellEnergy = Math.max(0, Number(options.minCellEnergy ?? 0.015));
+    return {
+      enabled: true,
+      tileSize,
+      maxTiles,
+      minCellEnergy,
+      selectionPolicy: 'selected-occupied-fluid-front-tiles',
+    };
+  }
+
+  function buildFieldTileExport(data, frontData, options = null) {
+    const config = normalizeFieldTileExportOptions(options);
+    if (!config) return null;
+    const channels = [
+      'velocityX',
+      'velocityY',
+      'velocityZ',
+      'densityCarrier',
+      'smokeDensity',
+      'heat',
+      'fuel',
+      'detail',
+      'flame',
+      'ember',
+      'visibleFireCarrier',
+      'combustionFront',
+      'microdetail',
+      'interfaceShred',
+      'fireLick',
+      'emberFleck',
+      'frontTopology',
+    ];
+    const tileSize = config.tileSize;
+    const tileOrigins = [];
+    let emptyTiles = 0;
+    for (let originZ = 0; originZ < gridSize; originZ += tileSize) {
+      for (let originY = 0; originY < gridSize; originY += tileSize) {
+        for (let originX = 0; originX < gridSize; originX += tileSize) {
+          const sizeX = Math.min(tileSize, gridSize - originX);
+          const sizeY = Math.min(tileSize, gridSize - originY);
+          const sizeZ = Math.min(tileSize, gridSize - originZ);
+          let liveCells = 0;
+          let energySum = 0;
+          let densityMax = 0;
+          let fireMax = 0;
+          let detailMax = 0;
+          for (let z = 0; z < sizeZ; z += 1) {
+            for (let y = 0; y < sizeY; y += 1) {
+              for (let x = 0; x < sizeX; x += 1) {
+                const cell = (originX + x) + (originY + y) * gridSize + (originZ + z) * gridSize * gridSize;
+                const i = cell * FLUID_COMPONENTS;
+                const density = Math.max(0, data[i + 4]);
+                const heat = Math.max(0, data[i + 5]);
+                const detail = Math.max(0, data[i + 7] + data[i + 12] + data[i + 13]);
+                const fire = Math.max(0, data[i + 8] + data[i + 9] + data[i + 10] + data[i + 11] + data[i + 14] + data[i + 15]);
+                const front = Math.max(0, frontData[cell]);
+                const energy = density * 0.90 + heat * 0.34 + detail * 0.42 + fire * 0.74 + front * 0.60;
+                energySum += energy;
+                densityMax = Math.max(densityMax, density);
+                fireMax = Math.max(fireMax, fire);
+                detailMax = Math.max(detailMax, detail);
+                if (energy > config.minCellEnergy) liveCells += 1;
+              }
+            }
+          }
+          if (liveCells > 0) {
+            tileOrigins.push({
+              origin: [originX, originY, originZ],
+              size: [sizeX, sizeY, sizeZ],
+              liveCells,
+              energySum,
+              densityMax,
+              fireMax,
+              detailMax,
+            });
+          } else {
+            emptyTiles += 1;
+          }
+        }
+      }
+    }
+    tileOrigins.sort((a, b) => {
+      if (b.energySum !== a.energySum) return b.energySum - a.energySum;
+      if (b.liveCells !== a.liveCells) return b.liveCells - a.liveCells;
+      return a.origin.join(',').localeCompare(b.origin.join(','));
+    });
+    const selected = tileOrigins.slice(0, config.maxTiles);
+    const tiles = selected.map((tile, index) => {
+      const [originX, originY, originZ] = tile.origin;
+      const [sizeX, sizeY, sizeZ] = tile.size;
+      const values = new Float32Array(sizeX * sizeY * sizeZ * channels.length);
+      let dst = 0;
+      for (let z = 0; z < sizeZ; z += 1) {
+        for (let y = 0; y < sizeY; y += 1) {
+          for (let x = 0; x < sizeX; x += 1) {
+            const cell = (originX + x) + (originY + y) * gridSize + (originZ + z) * gridSize * gridSize;
+            const i = cell * FLUID_COMPONENTS;
+            values[dst++] = data[i];
+            values[dst++] = data[i + 1];
+            values[dst++] = data[i + 2];
+            values[dst++] = data[i + 3];
+            values[dst++] = data[i + 4];
+            values[dst++] = data[i + 5];
+            values[dst++] = data[i + 6];
+            values[dst++] = data[i + 7];
+            values[dst++] = data[i + 8];
+            values[dst++] = data[i + 9];
+            values[dst++] = data[i + 10];
+            values[dst++] = data[i + 11];
+            values[dst++] = data[i + 12];
+            values[dst++] = data[i + 13];
+            values[dst++] = data[i + 14];
+            values[dst++] = data[i + 15];
+            values[dst++] = frontData[cell];
+          }
+        }
+      }
+      return {
+        tileId: `tile-${String(index + 1).padStart(3, '0')}-x${originX}-y${originY}-z${originZ}`,
+        origin: tile.origin,
+        size: tile.size,
+        shape: [sizeZ, sizeY, sizeX, channels.length],
+        channels,
+        dtype: 'float32-json-number-array',
+        payloadEncoding: 'float32-json-array-for-dataset-binary-sidecar',
+        liveCells: tile.liveCells,
+        energySum: tile.energySum,
+        densityMax: tile.densityMax,
+        fireMax: tile.fireMax,
+        detailMax: tile.detailMax,
+        data: Array.from(values),
+      };
+    });
+    const totalTiles = tileOrigins.length + emptyTiles;
+    return {
+      schema: FIELD_TILE_EXPORT_IDENTITY,
+      identity: 'selected-occupied-fluid-front-tiles-v0',
+      authority: 'cpu-fluid-front-readback-selected-tiles',
+      coordinateSpace: 'simulation-grid',
+      selectionPolicy: config.selectionPolicy,
+      fullCoverage: tiles.length === totalTiles,
+      coverageLimitation: 'selected occupied tiles only unless exportedTiles equals totalTiles',
+      grid: gridSize,
+      tileSize,
+      requestedMaxTiles: config.maxTiles,
+      minCellEnergy: config.minCellEnergy,
+      channels,
+      channelCount: channels.length,
+      totalTiles,
+      candidateTiles: tileOrigins.length,
+      exportedTiles: tiles.length,
+      droppedCandidateTiles: Math.max(0, tileOrigins.length - tiles.length),
+      emptyTiles,
+      tiles,
+    };
+  }
+
+  async function sampleSimReadback(fieldTileExportOptions = null) {
     const readback = device.createBuffer({
       label: 'kaminos fluid simReadback',
       size: fluidBufferBytes(gridSize),
@@ -5481,6 +5643,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       samples += 1;
     }
     const canonicalSmokeFieldSlice = isCanonicalReadbackScene ? buildCanonicalSmokeFieldSlice() : null;
+    const fieldTileExport = buildFieldTileExport(data, frontData, fieldTileExportOptions);
     readback.unmap();
     readback.destroy();
     frontReadback.unmap();
@@ -5769,6 +5932,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       plumeFieldColumnCoherence,
       plumeFieldBinCenterSpread: coherentBinCenterSpread,
       canonicalSmokeFieldSlice,
+      fieldTileExport,
       emissionDetailCurlContact,
       emissionDetailVerticalCoherence,
       emissionDetailBodyBreadth,
@@ -6268,7 +6432,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     }
     buffer.unmap();
     buffer.destroy();
-    const simReadback = await sampleSimReadback();
+    const simReadback = await sampleSimReadback(sampleOptions.fieldTileExport);
     const majorantReadback = await sampleMajorantReadback();
     const fireLumaMean = fireLumaSum / Math.max(1, fireEdgeSamples);
     const fireRoughnessMean = Math.sqrt(Math.max(0, fireLumaSqSum / Math.max(1, fireEdgeSamples) - fireLumaMean * fireLumaMean)) / 255;
@@ -6493,6 +6657,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       advanceSim: false,
       nowMs: replay.finalTimeMs,
       deterministicReplay: state.deterministicReplay,
+      fieldTileExport: options.fieldTileExport || null,
     });
     state.deterministicReplay = {
       ...state.deterministicReplay,

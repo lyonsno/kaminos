@@ -1397,3 +1397,12 @@ assert.match(witness, /sampleDeterministicReplayFrame/, 'volume witness routes d
 assert.match(fieldPairDataset, /deterministic-replay-same-route-controls-fixed-step-not-state-transfer/, 'field-pair dataset can mark low/high pairs as deterministic replay instead of sequential frame readbacks');
 assert.match(fieldPairDataset, /deterministicReplay/, 'field-pair dataset records deterministic replay controls/effective identity per capture');
 assert.match(fieldPairDataset, /same-state-buffer-transfer-unsupported-deterministic-replay-used/, 'field-pair dataset distinguishes deterministic replay from literal cross-grid state transfer');
+assert.match(core, /FIELD_TILE_EXPORT_IDENTITY\s*=\s*'kaminos\.volume\.field-tile-export\.v0'/, 'volume core names a stable tiled field export schema');
+assert.match(core, /buildFieldTileExport/, 'volume core can export spatial field tiles from the CPU fluid/front readback');
+assert.match(core, /selected-occupied-fluid-front-tiles/, 'field tile export records the tile selection policy instead of implying full dense coverage');
+assert.match(witness, /--field-tile-export/, 'volume witness can request tiled field export from the simulator readback');
+assert.match(witness, /fieldTileExport/, 'volume witness reports tiled field export metadata separately from screenshots');
+assert.match(fieldPairDataset, /fieldTileExport/, 'field-pair dataset records field tile export artifacts per capture');
+assert.match(fieldPairDataset, /\.field-tile-export\.json/, 'field-pair dataset writes tiled field export JSON sidecars');
+assert.match(fieldPairDataset, /\.field-tile-[^`'"]+\.f32/, 'field-pair dataset writes binary float32 tile payload artifacts');
+assert.match(fieldPairDataset, /droppedCandidateTiles/, 'field-pair dataset preserves partial-coverage accounting for selected tile exports');

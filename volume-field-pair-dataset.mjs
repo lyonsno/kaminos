@@ -5,6 +5,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 
 const DATASET_SCHEMA = 'kaminos.volume.field-pair-dataset.v0';
 const FIELD_PROJECTION_TENSOR_SCHEMA = 'kaminos.volume.field-projection-tensor.v0';
+const FIELD_TILE_EXPORT_SCHEMA = 'kaminos.volume.field-tile-export.v0';
 const SAME_STATE_FREEZE_PREFLIGHT_SCHEMA = 'kaminos.volume.same-state-freeze-preflight.v0';
 const EXPECTED_VOLUME_ROUTE_ID = 'native-3d-compute-fluid-raymarch-v0';
 const EXPECTED_PROTOTYPE_ID = 'kaminos-volume-prototype-v0';
@@ -245,6 +246,97 @@ function buildFieldProjectionTensor({ witness, plan, fieldShape, simReadback, ma
   };
 }
 
+function writeFloat32Payload(path, values) {
+  mkdirSync(dirname(path), { recursive: true });
+  const array = new Float32Array(values.map(finiteNumber));
+  writeFileSync(path, Buffer.from(array.buffer));
+  return array.byteLength;
+}
+
+function buildFieldTileExportArtifacts({ witness, plan, fieldShape }) {
+  if (!plan.fieldTileExport?.enabled) return null;
+  const source = witness.simReadback?.fieldTileExport || null;
+  if (
+    source?.schema !== FIELD_TILE_EXPORT_SCHEMA ||
+    source.selectionPolicy !== 'selected-occupied-fluid-front-tiles' ||
+    !Array.isArray(source.tiles) ||
+    source.tiles.length < 1
+  ) {
+    const error = new Error('missing-primary-report: witness did not preserve selected field tile export data');
+    error.code = 'missing-primary-report';
+    error.failurePhase = 'validation';
+    error.details = { requested: plan.fieldTileExport, effective: source, report: plan.report };
+    throw error;
+  }
+  const tilePayloads = source.tiles.map((tile) => {
+    const payloadPath = resolve(dirname(plan.fieldTileExportArtifact), `${plan.slug}.field-tile-${tile.tileId}.f32`);
+    const byteLength = writeFloat32Payload(payloadPath, Array.isArray(tile.data) ? tile.data : []);
+    const { data, ...metadata } = tile;
+    return {
+      ...metadata,
+      path: payloadPath,
+      dtype: 'float32',
+      byteOrder: 'little-endian-native',
+      byteLength,
+      valueCount: Array.isArray(data) ? data.length : 0,
+    };
+  });
+  const fieldTileExport = {
+    schema: FIELD_TILE_EXPORT_SCHEMA,
+    identity: source.identity,
+    fieldAuthority: FIELD_AUTHORITY,
+    sourceReport: plan.report,
+    requestedRoute: plan.route,
+    effectiveRoute: witness.effectiveRoute,
+    prototypeIdentity: witness.prototypeIdentity,
+    backend: witness.backend,
+    captureBackend: witness.captureBackend,
+    role: plan.role,
+    requestedGrid: plan.requestedGrid,
+    simGrid: source.grid,
+    requestedMajorantGrid: plan.requestedMajorantGrid,
+    deterministicReplay: witness.deterministicReplay || null,
+    frameCount: witness.frameCount,
+    simStepCount: witness.simStepCount,
+    fieldShape,
+    authority: source.authority,
+    coordinateSpace: source.coordinateSpace,
+    selectionPolicy: source.selectionPolicy,
+    fullCoverage: source.fullCoverage,
+    coverageLimitation: source.coverageLimitation,
+    tileSize: source.tileSize,
+    requestedMaxTiles: source.requestedMaxTiles,
+    minCellEnergy: source.minCellEnergy,
+    channels: source.channels,
+    channelCount: source.channelCount,
+    totalTiles: source.totalTiles,
+    candidateTiles: source.candidateTiles,
+    exportedTiles: source.exportedTiles,
+    droppedCandidateTiles: source.droppedCandidateTiles,
+    emptyTiles: source.emptyTiles,
+    tilePayloads,
+  };
+  writeJson(plan.fieldTileExportArtifact, { fieldTileExport });
+  return {
+    schema: FIELD_TILE_EXPORT_SCHEMA,
+    identity: fieldTileExport.identity,
+    path: plan.fieldTileExportArtifact,
+    dtype: 'float32-binary-sidecar',
+    selectionPolicy: fieldTileExport.selectionPolicy,
+    fullCoverage: fieldTileExport.fullCoverage,
+    coverageLimitation: fieldTileExport.coverageLimitation,
+    tileSize: fieldTileExport.tileSize,
+    channels: fieldTileExport.channels,
+    channelCount: fieldTileExport.channelCount,
+    totalTiles: fieldTileExport.totalTiles,
+    candidateTiles: fieldTileExport.candidateTiles,
+    exportedTiles: fieldTileExport.exportedTiles,
+    droppedCandidateTiles: fieldTileExport.droppedCandidateTiles,
+    emptyTiles: fieldTileExport.emptyTiles,
+    tilePayloads: tilePayloads.map(({ data, ...tile }) => tile),
+  };
+}
+
 function buildSameStateFreezeAttempt({ pairAuthority, deterministicReplay }) {
   if (deterministicReplay?.enabled) {
     return {
@@ -343,6 +435,11 @@ function summarizeFieldEvidence(witness, plan) {
     }
   }
   const fieldShape = fieldShapeFromReadback(simReadback, majorantReadback, simCostLedger);
+  const fieldTileExport = buildFieldTileExportArtifacts({
+    witness,
+    plan,
+    fieldShape,
+  });
   const fieldProjectionTensor = buildFieldProjectionTensor({
     witness,
     plan,
@@ -369,6 +466,7 @@ function summarizeFieldEvidence(witness, plan) {
     volumeScene: witness.volumeScene,
     fieldShape,
     fieldProjectionTensor,
+    fieldTileExport,
     simReadback: {
       grid: simReadback.grid,
       samples: simReadback.samples,
@@ -431,7 +529,7 @@ function summarizeFieldEvidence(witness, plan) {
   };
 }
 
-function makeCapturePlan({ pairId, role, grid, majorantGrid, route, pairDir, debugPort, settleMs, windowSize, evidenceMode, deterministicReplay }) {
+function makeCapturePlan({ pairId, role, grid, majorantGrid, route, pairDir, debugPort, settleMs, windowSize, evidenceMode, deterministicReplay, fieldTileExport }) {
   const slug = `${pairId}-${role}-${gridSlug(grid)}`;
   const out = resolve(pairDir, `${slug}.png`);
   const report = resolve(pairDir, `${slug}.json`);
@@ -439,6 +537,7 @@ function makeCapturePlan({ pairId, role, grid, majorantGrid, route, pairDir, deb
   const stdout = resolve(pairDir, `${slug}.stdout.log`);
   const stderr = resolve(pairDir, `${slug}.stderr.log`);
   const fieldProjectionTensor = resolve(pairDir, `${slug}.field-projection-tensor.json`);
+  const fieldTileExportArtifact = resolve(pairDir, `${slug}.field-tile-export.json`);
   const command = [
     process.execPath,
     'volume-witness.mjs',
@@ -458,7 +557,16 @@ function makeCapturePlan({ pairId, role, grid, majorantGrid, route, pairDir, deb
       '--deterministic-replay-start-ms', String(deterministicReplay.startTimeMs)
     );
   }
+  if (fieldTileExport?.enabled) {
+    command.push(
+      '--field-tile-export', '1',
+      '--field-tile-size', String(fieldTileExport.tileSize),
+      '--field-tile-max-count', String(fieldTileExport.maxTiles),
+      '--field-tile-min-cell-energy', String(fieldTileExport.minCellEnergy)
+    );
+  }
   return {
+    slug,
     role,
     requestedGrid: nearestSupported(grid, SUPPORTED_GRIDS, 96),
     requestedMajorantGrid: nearestSupported(majorantGrid, SUPPORTED_MAJORANT_GRIDS, 48),
@@ -467,7 +575,9 @@ function makeCapturePlan({ pairId, role, grid, majorantGrid, route, pairDir, deb
     report,
     fullScreenshot,
     fieldProjectionTensor,
+    fieldTileExportArtifact,
     deterministicReplay: deterministicReplay?.enabled ? { ...deterministicReplay } : null,
+    fieldTileExport: fieldTileExport?.enabled ? { ...fieldTileExport } : null,
     stdout,
     stderr,
     command,
@@ -528,6 +638,14 @@ const deterministicReplay = deterministicReplaySteps > 0 ? {
   stateTransfer: false,
 } : { enabled: false };
 const pairAuthority = deterministicReplay.enabled ? DETERMINISTIC_REPLAY_PAIR_AUTHORITY : SEQUENTIAL_PAIR_AUTHORITY;
+const fieldTileExport = args.has('--field-tile-export') ? {
+  enabled: true,
+  schema: FIELD_TILE_EXPORT_SCHEMA,
+  selectionPolicy: 'selected-occupied-fluid-front-tiles',
+  tileSize: Math.max(4, Math.min(24, Math.floor(Number(args.get('--field-tile-size') || 8)))),
+  maxTiles: Math.max(1, Math.min(128, Math.floor(Number(args.get('--field-tile-max-count') || 8)))),
+  minCellEnergy: Math.max(0, Number(args.get('--field-tile-min-cell-energy') || 0.015)),
+} : { enabled: false };
 const dryRun = args.has('--dry-run');
 const createdAt = new Date().toISOString();
 const gitCommit = gitValue(['rev-parse', 'HEAD']);
@@ -559,6 +677,7 @@ const pairs = lowGrids.map((lowGrid, index) => {
       windowSize,
       evidenceMode,
       deterministicReplay,
+      fieldTileExport,
     }),
     high: makeCapturePlan({
       pairId,
@@ -572,6 +691,7 @@ const pairs = lowGrids.map((lowGrid, index) => {
       windowSize,
       evidenceMode,
       deterministicReplay,
+      fieldTileExport,
     }),
   };
 });
@@ -592,6 +712,7 @@ const manifest = {
   pairAuthority,
   fieldAuthority: FIELD_AUTHORITY,
   deterministicReplay,
+  fieldTileExport,
   sameStateFreezeAttempt: buildSameStateFreezeAttempt({ pairAuthority, deterministicReplay }),
   limitation: deterministicReplay.enabled
     ? 'Pairs are fixed-step deterministic replays from the same route/control family; they preserve field authority and logical pairing but are not literal cross-grid GPU snapshot transfers.'

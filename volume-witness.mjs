@@ -22,6 +22,10 @@ const deterministicReplaySteps = Number(args.get('--deterministic-replay-steps')
 const deterministicReplayRequested = Number.isFinite(deterministicReplaySteps) && deterministicReplaySteps > 0;
 const deterministicReplayTimeStepMs = Number(args.get('--deterministic-replay-time-step-ms') || (1000 / 60));
 const deterministicReplayStartTimeMs = Number(args.get('--deterministic-replay-start-ms') || 1000);
+const fieldTileExportRequested = args.has('--field-tile-export');
+const fieldTileSize = Number(args.get('--field-tile-size') || 8);
+const fieldTileMaxCount = Number(args.get('--field-tile-max-count') || 8);
+const fieldTileMinCellEnergy = Number(args.get('--field-tile-min-cell-energy') || 0.015);
 const fullScreenshot = args.has('--full-screenshot')
   ? resolve(args.get('--full-screenshot') || out.replace(/\.png$/i, '.full.png'))
   : '';
@@ -1159,13 +1163,23 @@ async function main() {
 
     phase = 'gpu-readback';
     const fullScreenshotPath = await captureViewportScreenshot(ws, fullScreenshot);
-    const sampleExpression = deterministicReplayRequested
-      ? `window.__kaminosVolumePrototype.sampleDeterministicReplayFrame(${JSON.stringify({
+    const fieldTileExport = fieldTileExportRequested ? {
+      enabled: true,
+      tileSize: fieldTileSize,
+      maxTiles: fieldTileMaxCount,
+      minCellEnergy: fieldTileMinCellEnergy,
+    } : null;
+    const sampleOptions = {
+      ...(deterministicReplayRequested ? {
         steps: deterministicReplaySteps,
         timeStepMs: deterministicReplayTimeStepMs,
         startTimeMs: deterministicReplayStartTimeMs,
-      })})`
-      : 'window.__kaminosVolumePrototype.sampleFrame()';
+      } : {}),
+      ...(fieldTileExport ? { fieldTileExport } : {}),
+    };
+    const sampleExpression = deterministicReplayRequested
+      ? `window.__kaminosVolumePrototype.sampleDeterministicReplayFrame(${JSON.stringify(sampleOptions)})`
+      : `window.__kaminosVolumePrototype.sampleFrame(${JSON.stringify(sampleOptions)})`;
     const sampleEval = await wsRequest(ws, 'Runtime.evaluate', {
       expression: sampleExpression,
       awaitPromise: true,
@@ -1183,6 +1197,19 @@ async function main() {
         Number(sample.simStepCount) !== deterministicReplaySteps
       ) {
         throw new Error(`deterministic replay did not report exact fixed-step authority: ${JSON.stringify(sample.deterministicReplay)}`);
+      }
+    }
+    if (fieldTileExportRequested) {
+      const tileExport = sample.simReadback?.fieldTileExport || null;
+      if (
+        tileExport?.schema !== 'kaminos.volume.field-tile-export.v0' ||
+        tileExport?.selectionPolicy !== 'selected-occupied-fluid-front-tiles' ||
+        !Array.isArray(tileExport.tiles) ||
+        tileExport.tiles.length < 1 ||
+        Number(tileExport.exportedTiles) !== tileExport.tiles.length ||
+        !Number.isFinite(Number(tileExport.droppedCandidateTiles))
+      ) {
+        throw new Error(`field tile export missing selected-tile authority: ${JSON.stringify(tileExport)}`);
       }
     }
     const samplePressureSourceStrategy = sample.pressureProjectionEnabled ? 'jacobi-inline-divergence-v0' : 'disabled';
