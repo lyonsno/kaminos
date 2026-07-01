@@ -201,6 +201,10 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 .compute-route-fire-artifact-role { color: #8fc7d6; font: 9px 'SF Mono', monospace; overflow-wrap: anywhere; }
 .compute-route-fire-artifact-path { color: #777; font: 9px 'SF Mono', monospace; line-height: 1.35; overflow-wrap: anywhere; text-align: right; }
 .compute-route-fire-actuator[hidden] { display: none; }
+.compute-route-fire-run-summary { color: #e6edf0; font-size: 12px; line-height: 1.4; margin: 3px 0 8px; }
+.compute-route-fire-run-summary[data-compute-route-fire-summary-state="running"] { color: #ffe0a6; }
+.compute-route-fire-run-summary[data-compute-route-fire-summary-state="completed"] { color: #d7f5dd; }
+.compute-route-fire-run-summary[data-compute-route-fire-summary-state="failed"] { color: #f0b0b0; }
 .compute-route-fire-input { width: 100%; min-width: 0; height: 26px; background: #181818; border: 1px solid #333; border-radius: 4px; color: #aaa; font: 9px 'SF Mono', monospace; padding: 2px 6px; outline: none; }
 .compute-route-fire-input:focus { border-color: #1976d2; color: #fff; background: #151b22; }
 .compute-route-fire-status-running { color: #f0b85a; }
@@ -692,6 +696,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
       hidden
     >
       <div class="field"><span class="field-key">Compute route</span><span class="route-chip" id="compute-route-fire-actuator-route">sharp-image-to-splat-live-v0</span></div>
+      <div class="compute-route-fire-run-summary" id="compute-route-fire-run-summary" data-compute-route-fire-summary-state="idle">Choose an image and start SHARP when you want a new splat.</div>
       <div class="field"><span class="field-key">Status</span><span class="field-val" id="compute-route-fire-run-status">idle</span></div>
       <div class="field"><span class="field-key">Input</span></div>
       <input class="compute-route-fire-input" id="compute-route-fire-input-path" value="">
@@ -8051,12 +8056,47 @@ function computeRouteFireOutputCanLoad(run) {
   return run?.status === 'completed' && !!computeRouteFireArtifact(run, 'splat');
 }
 
+function computeRouteFireRunSummary(run = null, promoted = null) {
+  const status = run?.status || 'idle';
+  if (status === 'starting') {
+    return 'SHARP is starting on this image; the furnace will burn only while the live route is running.';
+  }
+  if (status === 'running') {
+    return 'SHARP is working on this image; the furnace is burning while the live route runs.';
+  }
+  if (status === 'completed' && computeRouteFireOutputCanLoad(run)) {
+    if (computeRouteFireActuatorState.loadedByRunId[run?.runId]) {
+      return 'SHARP produced a splat from this image and Kaminos loaded it into the scene.';
+    }
+    if (promoted) {
+      return 'SHARP produced a splat from this image and Kaminos promoted it into the asset tray.';
+    }
+    return 'SHARP produced a splat from this image; load it when you want it in the scene.';
+  }
+  if (status === 'completed') {
+    return 'SHARP finished, but Kaminos did not receive a splat output from the route.';
+  }
+  if (status === 'failed') {
+    if (!computeRouteFireArtifact(run, 'splat')) {
+      return 'SHARP started on this image, but the model adapter failed before producing a splat.';
+    }
+    return 'SHARP failed after producing partial route evidence; inspect the report before using any output.';
+  }
+  return 'Choose an image and start SHARP when you want a new splat.';
+}
+
 function renderComputeRouteFireRun(run = null) {
   const root = document.getElementById('compute-route-fire-actuator');
   if (!root) return null;
   const status = run?.status || 'idle';
   const promoted = computeRouteFirePromotedOutput(run);
   root.dataset.computeRouteFireRunStatus = status;
+  const summaryEl = document.getElementById('compute-route-fire-run-summary');
+  if (summaryEl) {
+    const summaryState = status === 'starting' ? 'running' : status;
+    summaryEl.textContent = computeRouteFireRunSummary(run, promoted);
+    summaryEl.dataset.computeRouteFireSummaryState = summaryState;
+  }
   document.getElementById('compute-route-fire-run-status').textContent = status;
   setComputeRouteFireStatusClass(status);
   const button = document.getElementById('compute-route-fire-start');
