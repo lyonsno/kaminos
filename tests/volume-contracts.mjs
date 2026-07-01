@@ -1814,6 +1814,7 @@ assert.match(greenroomBenchmark, /gitCommit/, 'greenroom benchmark records the g
 assert.match(greenroomBenchmark, /baseUrl/, 'greenroom benchmark records the target server route');
 assert.match(greenroomBenchmark, /uncontendedEvidenceClaim/, 'greenroom benchmark must distinguish requested greenroom conditions from proven uncontended timing evidence');
 assert.match(greenroomBenchmark, /dryRun/, 'greenroom benchmark supports writing the packet without spending a browser/GPU sweep');
+assert.match(greenroomBenchmark, /jobInputPath/, 'greenroom benchmark preserves the queue input packet path in receipts');
 
 const renderPairDatasetPath = join(root, 'volume-render-pair-dataset.mjs');
 assert.ok(existsSync(renderPairDatasetPath), 'volume render-scale pair dataset extractor exists');
@@ -1842,3 +1843,14 @@ for (const control of ['fuel-off-decay', 'snuff-quench-reset', 'broad-smoke-no-f
 }
 assert.match(dynamicTextureProof, /confidenceFloor/, 'dynamic texture proof records confidence gating for the hidden detail state');
 assert.match(dynamicTextureProof, /failurePhase/, 'dynamic texture proof records the failure phase before pretending to produce evidence');
+
+const greenroomSubmitPath = join(root, 'volume-greenroom-submit.mjs');
+assert.ok(existsSync(greenroomSubmitPath), 'volume greenroom submit adapter exists');
+const greenroomSubmit = existsSync(greenroomSubmitPath) ? readFileSync(greenroomSubmitPath, 'utf8') : '';
+assert.match(greenroomSubmit, /kaminos\.volume\.greenroom-submit\.v0/, 'greenroom submit adapter writes a stable request schema identity');
+assert.match(greenroomSubmit, /kaminos_volume_benchmark/, 'greenroom submit adapter registers a Kaminos volume benchmark job type');
+assert.match(greenroomSubmit, /job_types\.json/, 'greenroom submit adapter writes the queue job_types config');
+assert.match(greenroomSubmit, /gpu-greenroom/, 'greenroom submit adapter submits through the Greenroom CLI');
+assert.match(greenroomSubmit, /--queue-dir/, 'greenroom submit adapter makes the effective queue dir explicit');
+assert.match(greenroomSubmit, /--job-input/, 'greenroom submit adapter routes the Greenroom input packet into benchmark receipts');
+assert.match(greenroomSubmit, /benchmark_dry_run_flag/, 'greenroom submit adapter can submit dry-run benchmark jobs without a second job type');

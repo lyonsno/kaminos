@@ -52,6 +52,7 @@ const jobPath = resolve(args.get('--job') || `${outDir}/greenroom-job.json`);
 const runPath = resolve(args.get('--run') || `${outDir}/greenroom-run.json`);
 const stdoutPath = resolve(args.get('--stdout') || `${outDir}/sweep-stdout.log`);
 const stderrPath = resolve(args.get('--stderr') || `${outDir}/sweep-stderr.log`);
+const jobInputPath = args.get('--job-input') ? resolve(args.get('--job-input')) : null;
 const settleMs = String(args.get('--settle-ms') || 8000);
 const windowSize = String(args.get('--window-size') || '1280,960');
 const debugPort = String(args.get('--debug-port') || 9500);
@@ -94,6 +95,7 @@ const job = {
   runPath,
   stdoutPath,
   stderrPath,
+  jobInputPath,
   dryRun,
   matrixMode: 'performance',
   performanceMatrixId: 'tall-plume-performance-matrix-v0',
@@ -141,6 +143,7 @@ const run = {
   jobPath,
   stdoutPath,
   stderrPath,
+  jobInputPath,
   dryRun,
   matrixMode: 'performance',
   performanceMatrixId: 'tall-plume-performance-matrix-v0',
