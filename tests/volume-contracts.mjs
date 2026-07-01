@@ -389,6 +389,7 @@ assert.match(core, /kaminos\.volume\.dense-frame-capture\.v0/, 'dense frame capt
 assert.match(core, /denseCaptureFrameDeltas/, 'dense frame capture records render-frame deltas for cadence authority');
 assert.match(core, /copyTextureToBuffer/, 'dense frame capture copies rendered textures rather than using canvas media capture');
 assert.match(core, /rgbaBase64/, 'dense frame capture returns compact base64 image bytes instead of oversized CDP JSON RGBA arrays');
+assert.match(core, /pngBase64/, 'dense frame capture can return PNG-compressed image bytes for long sequence CDP transport');
 assert.match(core, /externalEmitterCoordinateSpace/, 'debug state records external emitter coordinate space');
 assert.match(core, /externalEmitterCount/, 'debug state records effective external emitter count');
 assert.match(core, /externalEmitterAgeMs/, 'debug state records external emitter age for stale-input diagnosis');
@@ -1494,5 +1495,6 @@ assert.match(interframeSequenceWitness, /maxFrameDelta/, 'interframe sequence wi
 assert.match(interframeSequenceWitness, /--dense-preview-width/, 'interframe sequence witness exposes dense capture transport resolution instead of hiding a payload cap');
 assert.match(interframeSequenceWitness, /denseCaptureFrameDeltas/, 'interframe sequence witness preserves dense capture frame delta authority in reports');
 assert.match(interframeSequenceWitness, /Buffer\.from\(sample\.preview\.rgbaBase64, 'base64'\)/, 'interframe sequence witness materializes compact dense-capture image bytes locally');
+assert.match(interframeSequenceWitness, /Buffer\.from\(sample\.preview\.pngBase64, 'base64'\)/, 'interframe sequence witness materializes PNG-compressed dense-capture image bytes locally');
 assert.match(interframeSequenceWitness, /synthetic-comparison-not-live-simulator-output/, 'interframe sequence witness labels synthetic frames as comparison evidence');
 assert.match(interframeSequenceWitness, /candidate-context-/, 'interframe sequence witness writes per-gap route/timing candidate contexts');

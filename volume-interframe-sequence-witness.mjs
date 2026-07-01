@@ -280,11 +280,13 @@ function assertSamplePreview(sample, label) {
   const expectedBytes = sample?.preview?.width * sample?.preview?.height * 4;
   const hasRgbaArray = Array.isArray(sample?.preview?.rgba) && sample.preview.rgba.length === expectedBytes;
   const hasRgbaBase64 = typeof sample?.preview?.rgbaBase64 === 'string' && Buffer.from(sample.preview.rgbaBase64, 'base64').length === expectedBytes;
+  const pngBytes = typeof sample?.preview?.pngBase64 === 'string' ? Buffer.from(sample.preview.pngBase64, 'base64') : null;
+  const hasPngBase64 = pngBytes?.length > 8 && pngBytes.readUInt32BE(0) === 0x89504e47;
   if (
     sample?.ok !== true ||
     !Number.isFinite(sample.preview?.width) ||
     !Number.isFinite(sample.preview?.height) ||
-    (!hasRgbaArray && !hasRgbaBase64)
+    (!hasRgbaArray && !hasRgbaBase64 && !hasPngBase64)
   ) {
     const error = new Error(`${label} sample missing complete preview RGBA`);
     error.code = 'missing-primary-output';
@@ -297,6 +299,17 @@ function assertSamplePreview(sample, label) {
 function previewRgbaBytes(sample) {
   if (Array.isArray(sample.preview?.rgba)) return Uint8Array.from(sample.preview.rgba);
   if (typeof sample.preview?.rgbaBase64 === 'string') return Uint8Array.from(Buffer.from(sample.preview.rgbaBase64, 'base64'));
+  if (typeof sample.preview?.pngBase64 === 'string') {
+    const parsed = parsePngRgba(Buffer.from(sample.preview.pngBase64, 'base64'));
+    if (parsed.width !== sample.preview.width || parsed.height !== sample.preview.height) {
+      const error = new Error(`PNG preview dimensions ${parsed.width}x${parsed.height} did not match declared ${sample.preview.width}x${sample.preview.height}`);
+      error.code = 'dimension-drift';
+      error.failurePhase = 'sample';
+      error.details = { frameCount: sample?.frameCount, sequenceIndex: sample?.sequenceIndex };
+      throw error;
+    }
+    return parsed.rgba;
+  }
   const error = new Error('sample missing materialized preview RGBA bytes');
   error.code = 'missing-primary-output';
   error.failurePhase = 'sample';

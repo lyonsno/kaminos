@@ -5032,7 +5032,41 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     return btoa(binary);
   }
 
-  function denseCapturePreviewFromReadback(mapped, bytesPerRow, sourceWidth, sourceHeight, previewWidth) {
+  function blobToBase64(blob) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const dataUrl = String(reader.result || '');
+        resolve(dataUrl.includes(',') ? dataUrl.split(',').pop() : dataUrl);
+      };
+      reader.onerror = () => reject(reader.error || new Error('failed to encode dense capture PNG'));
+      reader.readAsDataURL(blob);
+    });
+  }
+
+  async function pngBase64FromRgba(width, height, rgba) {
+    if (typeof ImageData === 'undefined') return null;
+    const imageData = new ImageData(new Uint8ClampedArray(rgba), width, height);
+    if (typeof OffscreenCanvas !== 'undefined') {
+      const canvas = new OffscreenCanvas(width, height);
+      canvas.getContext('2d').putImageData(imageData, 0, 0);
+      if (typeof canvas.convertToBlob === 'function') {
+        const blob = await canvas.convertToBlob({ type: 'image/png' });
+        return blobToBase64(blob);
+      }
+    }
+    if (typeof document !== 'undefined') {
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      canvas.getContext('2d').putImageData(imageData, 0, 0);
+      const dataUrl = canvas.toDataURL('image/png');
+      return dataUrl.includes(',') ? dataUrl.split(',').pop() : dataUrl;
+    }
+    return null;
+  }
+
+  async function denseCapturePreviewFromReadback(mapped, bytesPerRow, sourceWidth, sourceHeight, previewWidth) {
     const width = Math.max(1, Math.min(sourceWidth, Math.floor(previewWidth || 256)));
     const height = Math.max(1, Math.round(width * sourceHeight / Math.max(1, sourceWidth)));
     const preview = new Uint8Array(width * height * 4);
@@ -5049,6 +5083,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         preview[dst + 3] = 255;
       }
     }
+    const pngBase64 = await pngBase64FromRgba(width, height, preview);
+    if (pngBase64) return { width, height, pngBase64 };
     return { width, height, rgbaBase64: uint8ToBase64(preview) };
   }
 
@@ -5123,9 +5159,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
 
   function drainDenseCaptureFrame(record) {
     const active = record.capture;
-    record.buffer.mapAsync(GPUMapMode.READ).then(() => {
+    record.buffer.mapAsync(GPUMapMode.READ).then(async () => {
       const mapped = new Uint8Array(record.buffer.getMappedRange());
-      const preview = denseCapturePreviewFromReadback(mapped, record.bytesPerRow, record.width, record.height, active.previewWidth);
+      const preview = await denseCapturePreviewFromReadback(mapped, record.bytesPerRow, record.width, record.height, active.previewWidth);
       record.buffer.unmap();
       record.buffer.destroy();
       active.pending -= 1;
