@@ -34,6 +34,18 @@ export const LERMS_MOVING_TIMELINE_HOST_ADAPTER = {
   ],
 };
 
+function normalizeSourceCustody(custody) {
+  const sourceCustody = objectOrEmpty(custody);
+  if (Array.isArray(sourceCustody.kaminosOwns) || !Array.isArray(sourceCustody.gutterglassOwns)) {
+    return sourceCustody;
+  }
+  return {
+    ...sourceCustody,
+    kaminosOwns: sourceCustody.gutterglassOwns,
+    kaminosOwnsSourceAlias: 'gutterglassOwns',
+  };
+}
+
 export function createLermsMovingTimelineHostState(report, options = {}) {
   const timelineState = normalizeLermsPreviewActorMotionTimelineReport(report, options.payloadSource || options.actorMotionTimelineSource || null);
   const timeline = objectOrEmpty(report?.timeline || report);
@@ -49,7 +61,7 @@ export function createLermsMovingTimelineHostState(report, options = {}) {
     kaminosOwns: ['host display', 'camera witness mechanics'],
     ...objectOrEmpty(timelineState.custody),
   };
-  const sourceCustody = objectOrEmpty(timelineState.custody);
+  const sourceCustody = normalizeSourceCustody(timelineState.custody);
   const sourceDowngrades = uniqueStrings(timelineState.downgrades);
   const downgrades = uniqueStrings(
     LERMS_MOVING_TIMELINE_HOST_ADAPTER.defaultDowngrades,

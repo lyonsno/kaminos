@@ -1481,6 +1481,8 @@ let previewBenchPayloadSources = [];
 const previewBenchPayloadStateSchema = KAMINOS_PREVIEW_BENCH_PAYLOAD_STATE_SCHEMA || 'kaminos.preview-bench.payload-state.v0';
 const LERMS_MOVING_TIMELINE_HOST_QUERY = 'kaminos_lerms_moving_timeline_host=1';
 let lermsPreviewTimelinePlaybackStartMs = 0;
+let lermsPreviewActorCameraFrameKey = null;
+let lermsPreviewTimelinePlaybackTimer = null;
 let lermsPreviewBenchState = createLermsPreviewBenchState(worldChambersRegistry, lermsPreviewRouteState);
 window.__kaminosLermsPreviewState = lermsPreviewBenchState;
 window.__kaminosPreviewBenchPayloads = [];
@@ -7993,6 +7995,7 @@ function updateLermsPreviewBenchState(options = {}) {
     });
     window.__kaminosLermsMovingTimelineHostState = timelineHostState;
     publishKaminosHostSurfaceState(timelineHostState, 'loaded');
+    ensureLermsPreviewTimelinePlaybackTimer();
   }
   return lermsPreviewBenchState;
 }
@@ -8031,6 +8034,83 @@ function ensureLermsPreviewActorsGroup() {
   return lermsPreviewActorsGroup;
 }
 
+function markKaminosOverlayCue(object) {
+  object.userData.kaminosExcludeFromAODepth = true;
+  object.traverse?.(child => {
+    child.userData.kaminosExcludeFromAODepth = true;
+  });
+  return object;
+}
+
+function makeLermsPreviewActivityReadout(primitive, radius) {
+  const group = new THREE.Group();
+  group.name = `lerms-preview-activity-readout-${primitive.actorId || 'unknown'}`;
+  group.userData.kaminosLermsActivityReadout = {
+    style: primitive.activityReadoutStyle || 'partial-ground-ring',
+    actorId: primitive.actorId || null,
+    state: primitive.state || null,
+    statusLabel: primitive.statusLabel || primitive.state || null,
+    motionLabel: primitive.motionLabel || null,
+  };
+
+  const ringColor = primitive.state === 'rerouting_to_goin' ? 0xbe77ff
+    : primitive.state === 'carrying_goin' || primitive.state === 'fleeing_with_goin' ? 0x6ad9f0
+      : primitive.state === 'hit_reacting' || primitive.state === 'tumbling' ? 0xffd65a
+        : 0xe8e0ba;
+  const ring = new THREE.Mesh(
+    new THREE.TorusGeometry(Math.max(0.27, radius * 1.55), 0.012, 8, 72),
+    new THREE.MeshBasicMaterial({ color: ringColor, transparent: true, opacity: 0.72, depthWrite: false })
+  );
+  ring.name = `${group.name}-partial-ground-ring`;
+  ring.rotation.x = Math.PI / 2;
+  ring.position.y = -radius * 1.04;
+  ring.renderOrder = 8;
+  markKaminosOverlayCue(ring);
+  group.add(ring);
+
+  const canvas = document.createElement('canvas');
+  canvas.width = 512;
+  canvas.height = 128;
+  const context = canvas.getContext('2d');
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.generateMipmaps = false;
+  texture.minFilter = THREE.LinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+
+  const label = String(primitive.statusLabel || primitive.state || 'observing').replace(/_/g, ' ').toUpperCase();
+  const sublabel = String(primitive.motionLabel || '').replace(/\s*\/\s*/g, ' / ').toUpperCase();
+  context.clearRect(0, 0, canvas.width, canvas.height);
+  context.fillStyle = 'rgba(0, 0, 0, 0.42)';
+  context.fillRect(22, 18, 468, 92);
+  context.strokeStyle = `#${ringColor.toString(16).padStart(6, '0')}`;
+  context.lineWidth = 4;
+  context.strokeRect(24, 20, 464, 88);
+  context.textAlign = 'center';
+  context.textBaseline = 'middle';
+  context.font = '700 28px ui-monospace, SFMono-Regular, Menlo, monospace';
+  context.fillStyle = 'rgba(255, 239, 196, 0.96)';
+  context.fillText(label, 256, 50);
+  context.font = '600 16px ui-monospace, SFMono-Regular, Menlo, monospace';
+  context.fillStyle = 'rgba(240, 210, 138, 0.82)';
+  context.fillText(sublabel, 256, 80);
+  texture.needsUpdate = true;
+
+  const labelMesh = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.94, 0.235, 1, 1),
+    new THREE.MeshBasicMaterial({ map: texture, transparent: true, opacity: 0.94, depthWrite: false, side: THREE.DoubleSide })
+  );
+  labelMesh.name = `${group.name}-ground-label`;
+  labelMesh.position.set(0, -radius * 1.02 + 0.006, radius * 2.15);
+  labelMesh.rotation.x = -Math.PI / 2;
+  labelMesh.renderOrder = 9;
+  markKaminosOverlayCue(labelMesh);
+  group.add(labelMesh);
+
+  markKaminosOverlayCue(group);
+  return group;
+}
+
 function makeLermsPreviewActorVisualMesh(primitive) {
   const actorGroup = new THREE.Group();
   actorGroup.name = `lerms-preview-actor-${primitive.actorId || 'unknown'}`;
@@ -8040,6 +8120,9 @@ function makeLermsPreviewActorVisualMesh(primitive) {
     state: primitive.state,
     kind: primitive.kind,
     downgrade: primitive.downgrade,
+    activityReadoutStyle: primitive.activityReadoutStyle || null,
+    statusLabel: primitive.statusLabel || null,
+    motionLabel: primitive.motionLabel || null,
   };
   const radius = primitive.radius || 0.18;
   const color = new THREE.Color(primitive.color || '#d83d37');
@@ -8075,25 +8158,174 @@ function makeLermsPreviewActorVisualMesh(primitive) {
   nose.castShadow = true;
   actorGroup.add(nose);
 
+  if (primitive.activityReadoutStyle === 'partial-ground-ring') {
+    actorGroup.add(makeLermsPreviewActivityReadout(primitive, radius));
+  }
+
   const position = Array.isArray(primitive.position) ? primitive.position : [0, 0.35, 0];
   actorGroup.position.set(position[0], position[1] - 0.85, position[2]);
   return actorGroup;
 }
 
-function renderLermsPreviewActorVisuals(previewState, visualPrimitivesOverride = null) {
+function makeLermsPreviewGoinVisualMesh(primitive) {
+  const goinGroup = new THREE.Group();
+  goinGroup.name = `lerms-preview-goin-${primitive.goinId || 'unknown'}`;
+  goinGroup.userData.kaminosLermsPreviewGoin = {
+    schema: primitive.schema,
+    goinId: primitive.goinId,
+    state: primitive.state,
+    custodyRole: primitive.custodyRole || null,
+    carrierLermId: primitive.carrierLermId || null,
+    kind: primitive.kind,
+    downgrade: primitive.downgrade,
+  };
+  const radius = primitive.radius || 0.11;
+  const color = new THREE.Color(primitive.color || '#f3d463');
+  const body = new THREE.Mesh(
+    new THREE.SphereGeometry(1, 24, 16),
+    new THREE.MeshStandardMaterial({
+      color,
+      roughness: 0.32,
+      metalness: 0.08,
+      emissive: color,
+      emissiveIntensity: primitive.state === 'loose' ? 0.28 : 0.16,
+    }),
+  );
+  body.name = `${goinGroup.name}-body`;
+  body.scale.setScalar(radius);
+  body.castShadow = true;
+  body.receiveShadow = true;
+  goinGroup.add(body);
+
+  const ring = new THREE.Mesh(
+    new THREE.TorusGeometry(radius * 1.45, radius * 0.1, 8, 48),
+    new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.72, depthWrite: false }),
+  );
+  ring.name = `${goinGroup.name}-custody-ring`;
+  ring.rotation.x = Math.PI / 2;
+  ring.position.y = -radius * 0.72;
+  ring.renderOrder = 7;
+  markKaminosOverlayCue(ring);
+  goinGroup.add(ring);
+
+  const position = Array.isArray(primitive.position) ? primitive.position : [0, 0.5, 0];
+  goinGroup.position.set(position[0], position[1] - 0.85, position[2]);
+  return goinGroup;
+}
+
+function updateLermsPreviewActorVisualMesh(actorGroup, primitive) {
+  if (!actorGroup || !primitive) return;
+  const radius = primitive.radius || 0.18;
+  const color = new THREE.Color(primitive.color || '#d83d37');
+  actorGroup.userData.kaminosLermsPreviewActor = {
+    ...actorGroup.userData.kaminosLermsPreviewActor,
+    state: primitive.state,
+    radius,
+  };
+  const body = actorGroup.getObjectByName(`${actorGroup.name}-body`);
+  if (body) {
+    body.scale.set(radius * (primitive.stretch || 1), radius * (primitive.squash || 1), radius);
+    body.material?.color?.copy?.(color);
+    body.material?.emissive?.copy?.(color);
+    if (body.material) body.material.emissiveIntensity = primitive.state === 'hit_reacting' ? 0.24 : 0.12;
+  }
+  const heading = Array.isArray(primitive.heading) ? primitive.heading : [1, 0, 0];
+  const nose = actorGroup.getObjectByName(`${actorGroup.name}-schnoz`);
+  if (nose) nose.position.set(heading[0] * radius * 1.45, 0, heading[2] * radius * 1.45);
+  const position = Array.isArray(primitive.position) ? primitive.position : [0, 0.35, 0];
+  actorGroup.position.set(position[0], position[1] - 0.85, position[2]);
+}
+
+function updateLermsPreviewGoinVisualMesh(goinGroup, primitive) {
+  if (!goinGroup || !primitive) return;
+  const radius = primitive.radius || 0.11;
+  const color = new THREE.Color(primitive.color || '#f3d463');
+  goinGroup.userData.kaminosLermsPreviewGoin = {
+    ...goinGroup.userData.kaminosLermsPreviewGoin,
+    state: primitive.state,
+    custodyRole: primitive.custodyRole || null,
+    carrierLermId: primitive.carrierLermId || null,
+    radius,
+  };
+  const body = goinGroup.getObjectByName(`${goinGroup.name}-body`);
+  if (body) {
+    body.scale.setScalar(radius);
+    body.material?.color?.copy?.(color);
+    body.material?.emissive?.copy?.(color);
+    if (body.material) body.material.emissiveIntensity = primitive.state === 'loose' ? 0.28 : 0.16;
+  }
+  const ring = goinGroup.getObjectByName(`${goinGroup.name}-custody-ring`);
+  if (ring) {
+    ring.material?.color?.copy?.(color);
+    ring.position.y = -radius * 0.72;
+  }
+  const position = Array.isArray(primitive.position) ? primitive.position : [0, 0.5, 0];
+  goinGroup.position.set(position[0], position[1] - 0.85, position[2]);
+}
+
+function frameLermsPreviewActorVisualsCamera(group, primitives, options = {}) {
+  if (!camera || !controls || !group || !primitives?.length) return null;
+  const frameKey = primitives.map(primitive => primitive.actorId || primitive.goinId || 'unknown').join('|');
+  if (!options.force && lermsPreviewActorCameraFrameKey === frameKey) {
+    return window.__kaminosLermsPreviewCameraFrame || null;
+  }
+
+  const bounds = new THREE.Box3().setFromObject(group);
+  if (bounds.isEmpty()) return null;
+  const center = bounds.getCenter(new THREE.Vector3());
+  const size = bounds.getSize(new THREE.Vector3());
+  const span = Math.max(size.x, size.y, size.z, 1);
+  const target = center.clone();
+  target.y += Math.max(0.08, size.y * 0.18);
+  const position = target.clone().add(new THREE.Vector3(
+    Math.max(0.48, span * 0.28),
+    Math.max(1.45, span * 0.72),
+    Math.max(2.8, span * 1.65),
+  ));
+
+  camera.position.copy(position);
+  controls.target.copy(target);
+  controls.update();
+  lermsPreviewActorCameraFrameKey = frameKey;
+  const state = {
+    schema: 'kaminos.lerms-preview-actor-camera-frame.v0',
+    source: 'lerms-preview-actor-bounds',
+    frameKey,
+    visualCount: primitives.length,
+    actorCount: primitives.filter(primitive => primitive.actorId).length,
+    goinCount: primitives.filter(primitive => primitive.goinId).length,
+    center: center.toArray().map(value => Number(value.toFixed(4))),
+    size: size.toArray().map(value => Number(value.toFixed(4))),
+    target: target.toArray().map(value => Number(value.toFixed(4))),
+    position: position.toArray().map(value => Number(value.toFixed(4))),
+  };
+  window.__kaminosLermsPreviewCameraFrame = state;
+  window._kaminosDirty?.();
+  return state;
+}
+
+function renderLermsPreviewActorVisuals(previewState, visualPrimitivesOverride = null, goinPrimitivesOverride = null) {
   if (!scene) return null;
   const group = ensureLermsPreviewActorsGroup();
   clearLermsPreviewActorVisuals();
   const primitives = visualPrimitivesOverride || previewState?.actorMotion?.visualPrimitives || [];
+  const goinPrimitives = goinPrimitivesOverride || previewState?.actorMotionTimeline?.frames?.[0]?.goinVisualPrimitives || [];
   for (const primitive of primitives) {
     group.add(makeLermsPreviewActorVisualMesh(primitive));
   }
+  for (const primitive of goinPrimitives) {
+    group.add(makeLermsPreviewGoinVisualMesh(primitive));
+  }
+  const cameraFrame = frameLermsPreviewActorVisualsCamera(group, [...primitives, ...goinPrimitives]);
   const state = {
     schema: 'kaminos.lerms-preview-actor-visual-layer.v0',
     actorVisualCount: primitives.length,
+    goinVisualCount: goinPrimitives.length,
     actorIds: primitives.map(primitive => primitive.actorId),
+    goinIds: goinPrimitives.map(primitive => primitive.goinId),
     kinds: [...new Set(primitives.map(primitive => primitive.kind))],
-    downgrades: [...new Set(primitives.map(primitive => primitive.downgrade))],
+    downgrades: [...new Set([...primitives, ...goinPrimitives].map(primitive => primitive.downgrade))],
+    cameraFrame,
   };
   group.userData.kaminosLermsPreviewActorVisuals = state;
   window.__kaminosLermsPreviewActorVisuals = state;
@@ -8108,9 +8340,34 @@ function updateLermsPreviewTimelinePlaybackFrame(nowMs = performance.now()) {
   }
   if (!lermsPreviewTimelinePlaybackStartMs) lermsPreviewTimelinePlaybackStartMs = nowMs;
   const playbackFrame = selectLermsPreviewTimelineFrame(timeline, nowMs - lermsPreviewTimelinePlaybackStartMs);
-  renderLermsPreviewActorVisuals(lermsPreviewBenchState, playbackFrame.visualPrimitives);
+  const group = ensureLermsPreviewActorsGroup();
+  if (!group.children.length) {
+    renderLermsPreviewActorVisuals(lermsPreviewBenchState, playbackFrame.visualPrimitives, playbackFrame.goinVisualPrimitives);
+  } else {
+    for (const primitive of playbackFrame.visualPrimitives || []) {
+      const actorGroup = group.getObjectByName(`lerms-preview-actor-${primitive.actorId || 'unknown'}`);
+      updateLermsPreviewActorVisualMesh(actorGroup, primitive);
+    }
+    for (const primitive of playbackFrame.goinVisualPrimitives || []) {
+      const goinGroup = group.getObjectByName(`lerms-preview-goin-${primitive.goinId || 'unknown'}`);
+      updateLermsPreviewGoinVisualMesh(goinGroup, primitive);
+    }
+  }
   window.__kaminosLermsPreviewTimelinePlaybackFrame = playbackFrame;
+  window._kaminosDirty?.();
   return true;
+}
+
+function ensureLermsPreviewTimelinePlaybackTimer() {
+  if (lermsPreviewTimelinePlaybackTimer || !lermsPreviewBenchState?.actorMotionTimeline?.frames?.length) return;
+  const intervalMs = 250;
+  lermsPreviewTimelinePlaybackTimer = window.setInterval(() => updateLermsPreviewTimelinePlaybackFrame(performance.now()), intervalMs);
+  window.__kaminosLermsPreviewTimelinePlaybackTimer = {
+    schema: 'kaminos.lerms-preview-timeline-playback-timer.v1',
+    mode: 'in_place_transform_updates',
+    active: true,
+    intervalMs,
+  };
 }
 
 function fingerJuiceHostRouteFromParams(params = new URLSearchParams(window.location.search)) {
@@ -8693,6 +8950,10 @@ async function initWorldChambersRoute() {
         path: actorTimelineRoute.path,
       };
       lermsPreviewTimelinePlaybackStartMs = performance.now();
+      if (lermsPreviewTimelinePlaybackTimer) {
+        window.clearInterval(lermsPreviewTimelinePlaybackTimer);
+        lermsPreviewTimelinePlaybackTimer = null;
+      }
       renderWorldChambersPanel();
       const previewState = window.__kaminosLermsPreviewState;
       setInfo(`LERMS Preview Bench actor timeline loaded: ${previewState.actorMotionTimeline?.frameCount || 0} frames`);

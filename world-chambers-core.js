@@ -13,6 +13,7 @@ export const LERMS_PREVIEW_ACTOR_MOTION_TIMELINE_STATE_SCHEMA = 'lerms.preview-b
 export const LERMS_PREVIEW_ACTOR_MOTION_TIMELINE_ROUTE = 'lerms/preview-bench/actor-motion-timeline-file';
 export const LERMS_PREVIEW_WITNESS_SCHEMA = 'kaminos.lerms-preview-witness.v0';
 export const LERMS_PREVIEW_ACTOR_VISUAL_SCHEMA = 'kaminos.lerms-preview-actor-visual.v0';
+export const LERMS_PREVIEW_GOIN_VISUAL_SCHEMA = 'kaminos.lerms-preview-goin-visual.v0';
 export const LERMS_UNDERHILL_CHAMBER_ID = 'lerms-underhill';
 export const LERMS_TERRAIN_PREVIEW_BENCH_ID = 'terrain-preview';
 
@@ -528,6 +529,9 @@ export function createLermsPreviewActorVisualPrimitives(actorMotionState) {
       squash: roundBenchNumber(clampNumber(channels.bodySquash || 1, 0.55, 1.35)),
       stretch: roundBenchNumber(clampNumber(channels.bodyStretch || 1, 0.75, 1.55)),
       color: stateColor(actor),
+      activityReadoutStyle: actor?.statusCue?.visibleAboveActor || actor?.selectedCliplet ? 'partial-ground-ring' : null,
+      statusLabel: actor?.statusCue?.label || actor?.state || 'observing',
+      motionLabel: actor?.selectedCliplet?.clipletLabel || actor?.motionAdapter?.source?.clipletLabel || null,
       nosePosition: [
         roundBenchNumber(position[0] + heading[0] * noseReach),
         position[1],
@@ -544,6 +548,37 @@ export function createLermsPreviewActorVisualPrimitives(actorMotionState) {
 
 function actorVisualMapById(frame) {
   return new Map((frame?.visualPrimitives || []).map(primitive => [primitive.actorId, primitive]));
+}
+
+export function createLermsPreviewGoinVisualPrimitives(goins = []) {
+  return (Array.isArray(goins) ? goins : []).map((goin, index) => {
+    const position = vector3(goin?.world, [index * 0.28, 0.5, 0]);
+    const state = goin?.state || 'unknown';
+    const custodyRole = goin?.custodyRole || null;
+    return {
+      schema: LERMS_PREVIEW_GOIN_VISUAL_SCHEMA,
+      goinId: goin?.id || `goin-${String(index + 1).padStart(2, '0')}`,
+      state,
+      custodyRole,
+      carrierLermId: goin?.carrierLermId || null,
+      kind: 'proxy_goin_orb',
+      downgrade: 'proxy_goin_visual_only',
+      position: [
+        roundBenchNumber(position[0]),
+        roundBenchNumber(position[1]),
+        roundBenchNumber(position[2]),
+      ],
+      radius: state === 'loose' || custodyRole === 'loose_field' ? 0.13 : 0.105,
+      color: state === 'carried' ? '#7ae7ff'
+        : state === 'loose' || custodyRole === 'loose_field' ? '#b5ff78'
+          : '#f3d463',
+      label: state === 'carried' && goin?.carrierLermId ? `CARRY ${goin.carrierLermId}` : state.toUpperCase(),
+    };
+  });
+}
+
+function goinVisualMapById(frame) {
+  return new Map((frame?.goinVisualPrimitives || []).map(primitive => [primitive.goinId, primitive]));
 }
 
 function interpolateNumber(a, b, blend) {
@@ -574,6 +609,27 @@ function interpolateActorVisualPrimitives(currentFrame, nextFrame, blend) {
       squash: interpolateNumber(primitive.squash, next.squash, blend),
       stretch: interpolateNumber(primitive.stretch, next.stretch, blend),
       nosePosition: interpolateVec3(primitive.nosePosition, next.nosePosition, blend),
+      activityReadoutStyle: primitive.activityReadoutStyle || next.activityReadoutStyle || null,
+      statusLabel: blend >= 0.5 ? next.statusLabel : primitive.statusLabel,
+      motionLabel: blend >= 0.5 ? next.motionLabel : primitive.motionLabel,
+    };
+  });
+}
+
+function interpolateGoinVisualPrimitives(currentFrame, nextFrame, blend) {
+  const nextById = goinVisualMapById(nextFrame);
+  return (currentFrame?.goinVisualPrimitives || []).map((primitive) => {
+    const next = nextById.get(primitive.goinId);
+    if (!next) return clone(primitive);
+    return {
+      ...clone(primitive),
+      state: blend >= 0.5 ? next.state : primitive.state,
+      custodyRole: blend >= 0.5 ? next.custodyRole : primitive.custodyRole,
+      carrierLermId: blend >= 0.5 ? next.carrierLermId : primitive.carrierLermId,
+      position: interpolateVec3(primitive.position, next.position, blend),
+      radius: interpolateNumber(primitive.radius, next.radius, blend),
+      color: blend >= 0.5 ? next.color : primitive.color,
+      label: blend >= 0.5 ? next.label : primitive.label,
     };
   });
 }
@@ -652,6 +708,7 @@ export function normalizeLermsPreviewActorMotionTimelineReport(report, payloadSo
       hitFlash: frame.hitFlash ? clone(frame.hitFlash) : null,
       reroute: frame.reroute ? clone(frame.reroute) : null,
       visualPrimitives: createLermsPreviewActorVisualPrimitives(actorState),
+      goinVisualPrimitives: createLermsPreviewGoinVisualPrimitives(frame.goins || []),
     };
   });
   const proof = movementProof(frames);
@@ -706,6 +763,7 @@ export function selectLermsPreviewTimelineFrame(timelineState, elapsedMs) {
     current: clone(current),
     next: clone(next),
     visualPrimitives: interpolateActorVisualPrimitives(current, next, blend),
+    goinVisualPrimitives: interpolateGoinVisualPrimitives(current, next, blend),
   };
 }
 

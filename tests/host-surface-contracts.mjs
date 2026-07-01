@@ -7,16 +7,19 @@ const hostSurfaceCorePath = join(root, 'host-surface-core.js');
 const hostSurfaceWitnessPath = join(root, 'host-surface-witness.mjs');
 const fingerJuiceCorePath = join(root, 'finger-juice-host-core.js');
 const lermsHostCorePath = join(root, 'lerms-timeline-host-core.js');
+const worldChambersCorePath = join(root, 'world-chambers-core.js');
 const indexPath = join(root, 'index.html');
 
 assert.ok(existsSync(hostSurfaceCorePath), 'generic Kaminos host-surface core exists');
 assert.ok(existsSync(hostSurfaceWitnessPath), 'generic Kaminos host-surface browser witness exists');
 assert.ok(existsSync(fingerJuiceCorePath), 'Finger Juice host adapter still exists');
 assert.ok(existsSync(lermsHostCorePath), 'LERMS moving timeline host adapter exists');
+assert.ok(existsSync(worldChambersCorePath), 'World Chambers visual normalization exists');
 assert.ok(existsSync(indexPath), 'Kaminos app shell exists');
 
 const hostSurfaceWitnessSource = readFileSync(hostSurfaceWitnessPath, 'utf8');
 const indexSource = readFileSync(indexPath, 'utf8');
+const worldChambersSource = readFileSync(worldChambersCorePath, 'utf8');
 
 assert.match(hostSurfaceWitnessSource, /kaminosHostSurfaceDebugState/, 'generic witness reads host-surface debug state');
 assert.match(hostSurfaceWitnessSource, /--expected-host-id/, 'generic witness can assert host adapter identity');
@@ -24,9 +27,30 @@ assert.match(hostSurfaceWitnessSource, /--expected-packet-schema/, 'generic witn
 assert.match(hostSurfaceWitnessSource, /--expected-packet-route/, 'generic witness can assert producer packet route');
 assert.match(hostSurfaceWitnessSource, /sourceDowngrades/, 'generic witness asserts source-provided downgrade rows');
 assert.match(hostSurfaceWitnessSource, /sourceCustody/, 'generic witness asserts source-provided custody rows');
+assert.match(hostSurfaceWitnessSource, /kaminosOwnsSourceAlias/, 'generic witness accepts source-owned display custody aliases');
+assert.match(hostSurfaceWitnessSource, /motionSamples/, 'generic witness records LERMS moving-timeline motion samples');
+assert.match(hostSurfaceWitnessSource, /movedObjectCount/, 'generic witness proves LERMS moving-timeline objects change position');
+assert.match(hostSurfaceWitnessSource, /goinObjectCount/, 'generic witness proves LERMS moving-timeline goin objects are present');
 assert.match(hostSurfaceWitnessSource, /primary_output_written/, 'generic witness writes durable reports even before screenshot success');
 assert.match(indexSource, /kaminosHostSurfaceDebugState/, 'browser exposes generic host-surface debug state');
 assert.match(indexSource, /kaminos_lerms_moving_timeline_host=1/, 'browser exposes a direct LERMS moving timeline host route');
+assert.match(indexSource, /makeLermsPreviewActivityReadout/, 'browser renders LERMS actor activity readouts');
+assert.match(indexSource, /makeLermsPreviewGoinVisualMesh/, 'browser renders LERMS goin visuals from timeline goin state');
+assert.match(indexSource, /kaminosLermsPreviewGoin/, 'browser exposes goin visual debug identity');
+assert.match(indexSource, /goinVisualCount/, 'browser exposes rendered goin count in LERMS visual state');
+assert.match(indexSource, /updateLermsPreviewActorVisualMesh/, 'browser advances LERMS actors with in-place transform updates');
+assert.match(indexSource, /updateLermsPreviewGoinVisualMesh/, 'browser advances LERMS goins with in-place transform updates');
+assert.match(indexSource, /kaminos\.lerms-preview-timeline-playback-timer\.v1/, 'browser exposes low-churn LERMS playback timer evidence');
+assert.match(indexSource, /frameLermsPreviewActorVisualsCamera/, 'browser frames the LERMS moving timeline route from rendered actor bounds');
+assert.match(indexSource, /kaminosLermsActivityReadout/, 'browser exposes activity readout debug identity');
+assert.match(indexSource, /__kaminosLermsPreviewCameraFrame/, 'browser exposes LERMS actor-bounds camera framing evidence');
+assert.match(indexSource, /kaminosExcludeFromAODepth/, 'browser excludes overlay cues from AO depth');
+assert.match(indexSource, /partial-ground-ring/, 'browser keeps the Mushfinger-style partial ground ring cue');
+assert.match(worldChambersSource, /activityReadoutStyle/, 'timeline visual primitives carry activity readout style');
+assert.match(worldChambersSource, /statusLabel/, 'timeline visual primitives carry actor status labels');
+assert.match(worldChambersSource, /motionLabel/, 'timeline visual primitives carry motion clip labels');
+assert.match(worldChambersSource, /createLermsPreviewGoinVisualPrimitives/, 'timeline visual primitives carry goin visual state');
+assert.match(worldChambersSource, /goinVisualPrimitives/, 'timeline playback interpolates goin visuals');
 
 const hostSurface = await import(hostSurfaceCorePath);
 const fingerJuice = await import(fingerJuiceCorePath);
@@ -193,6 +217,17 @@ assert.ok(timelineHostState.custody.lermsOwns.includes('timelineBehaviorTruth'))
 assert.ok(timelineHostState.custody.kaminosOwns.includes('host display'));
 assert.ok(timelineHostState.sourceCustody.lermsOwns.includes('timelineBehaviorTruth'));
 assert.ok(timelineHostState.sourceCustody.kaminosOwns.includes('host display'));
+
+const gutterglassCustodyReport = structuredClone(timelineReport);
+delete gutterglassCustodyReport.timeline.custody.kaminosOwns;
+gutterglassCustodyReport.timeline.custody.gutterglassOwns = ['Preview Bench playback and camera witness mechanics'];
+const gutterglassCustodyState = lermsHost.createLermsMovingTimelineHostState(gutterglassCustodyReport, {
+  effectiveUrl: '/api/read?root=lerms-preview&path=gutterglass-owned-source-rows.json',
+  loadedAt: '2026-07-01T00:00:01.500Z',
+});
+assert.ok(gutterglassCustodyState.sourceCustody.gutterglassOwns.includes('Preview Bench playback and camera witness mechanics'));
+assert.ok(gutterglassCustodyState.sourceCustody.kaminosOwns.includes('Preview Bench playback and camera witness mechanics'));
+assert.equal(gutterglassCustodyState.sourceCustody.kaminosOwnsSourceAlias, 'gutterglassOwns');
 
 const missingSourceRowsReport = structuredClone(timelineReport);
 delete missingSourceRowsReport.timeline.custody;

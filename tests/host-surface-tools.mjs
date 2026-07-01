@@ -23,6 +23,11 @@ assert.equal(typeof tools.buildHostSurfaceSmokeUrl, 'function');
 assert.equal(typeof tools.buildHostSurfaceWitnessCommand, 'function');
 
 const lermsPacket = JSON.parse(readFileSync(lermsFixturePath, 'utf8'));
+assert.equal(lermsPacket.timeline.timeline.length, 8, 'fixture should carry the current LERMS contested timeline, not the old tiny host stub');
+assert.equal(lermsPacket.timeline.durationMs, 8200, 'fixture should preserve LERMS source timeline pacing');
+assert.ok(lermsPacket.timeline.timeline.some(frame => frame.label === 'contest'), 'fixture should include contested loose-goin behavior');
+assert.ok(lermsPacket.timeline.timeline.some(frame => frame.actorMotion?.some(actor => actor.actorId === 'red-lerm-006')), 'fixture should include the contest loser identity');
+assert.ok(lermsPacket.timeline.behaviorLedger?.beats?.some(beat => beat.visibleActivityCue?.style === 'partial-ground-ring'), 'fixture should carry source activity readout hints');
 const lermsReport = tools.lintHostSurfacePacket(lermsPacket, {
   adapter: 'lerms-moving-timeline',
   sourceUrl: '/tests/fixtures/lerms-moving-timeline-host-smoke.json',
@@ -41,6 +46,11 @@ assert.equal(lermsReport.packetRoute, 'lerms/preview-bench/actor-motion-timeline
 assert.equal(lermsReport.sourceAuthority, 'source-owned-timeline-packet');
 assert.equal(lermsReport.sourceTruthAuthority, 'lerms.timelineBehaviorTruth');
 assert.ok(lermsReport.downgrades.includes('timeline_playback_not_behavior_engine'));
+assert.ok(lermsReport.sourceDowngrades.includes('timeline_playback_not_behavior_engine'));
+assert.ok(lermsReport.sourceCustody.lermsOwns.includes('timelineBehaviorTruth'));
+assert.ok(lermsReport.sourceCustody.gutterglassOwns.includes('Preview Bench playback and camera witness mechanics'));
+assert.ok(lermsReport.sourceCustody.kaminosOwns.includes('Preview Bench playback and camera witness mechanics'), 'generic host-surface custody aliases Gutterglass display ownership into kaminosOwns');
+assert.equal(lermsReport.sourceCustody.kaminosOwnsSourceAlias, 'gutterglassOwns');
 assert.ok(lermsReport.rejectedDebugSurfaces.some(surface => surface.surface === 'old_8790_actor_timeline_debug_route' && surface.acceptanceSurface === false));
 assert.equal(lermsReport.errorCount, 0);
 assert.equal(lermsReport.smokeUrl, 'http://127.0.0.1:18142/index.html?kaminos_lerms_moving_timeline_host=1&world_chamber=lerms-underhill&posture=inspect&bench=terrain-preview&lerms_actor_motion_timeline_url=%2Ftests%2Ffixtures%2Flerms-moving-timeline-host-smoke.json');

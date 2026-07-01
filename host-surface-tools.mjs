@@ -147,7 +147,7 @@ function sourceDowngradesFor(adapterId, packet) {
 }
 
 function sourceCustodyFor(adapterId, packet, state) {
-  if (adapterId === 'lerms-moving-timeline') return packet?.timeline?.custody || packet?.custody || {};
+  if (adapterId === 'lerms-moving-timeline') return state?.sourceCustody || packet?.timeline?.custody || packet?.custody || {};
   return packet?.custody || {};
 }
 
@@ -265,9 +265,11 @@ export function lintHostSurfacePacket(packet, options = {}) {
     sourceTruthAuthority: state?.sourceTruthAuthority || adapter.defaultSourceTruthAuthority,
     freshness: state?.freshness || null,
     downgrades,
+    sourceDowngrades,
     primaryDowngrade: config.requiredDowngrades[0] || downgrades[0] || null,
     rejectedDebugSurfaces: state?.rejectedDebugSurfaces || adapter.defaultRejectedDebugSurfaces || [],
     custody: state?.custody || sourceCustody,
+    sourceCustody,
     errors,
     warnings: [],
     errorCount: errors.length,

@@ -29,6 +29,7 @@ let browserVersion = null;
 let primaryOutputWritten = false;
 let lastDebugState = null;
 let visualActivity = null;
+let motionSamples = null;
 const consoleEvents = [];
 
 function delay(ms) {
@@ -59,6 +60,7 @@ function writeReport(report = {}) {
     consoleEvents,
     lastDebugState,
     visualActivity,
+    motionSamples,
     ...report,
   }, null, 2));
 }
@@ -144,6 +146,61 @@ async function evaluate(ws, expression) {
   return result.result.value;
 }
 
+function objectMoved(first, current) {
+  if (!first || !current) return false;
+  return Math.abs(first.x - current.x) > 0.01
+    || Math.abs(first.y - current.y) > 0.01
+    || Math.abs(first.z - current.z) > 0.01;
+}
+
+function summarizeMotionSamples(samples) {
+  const firstByName = new Map((samples[0]?.objects || []).map(object => [object.name, object]));
+  const movedNames = new Set();
+  let goinObjectCount = 0;
+  let actorObjectCount = 0;
+  for (const sample of samples) {
+    for (const object of sample.objects || []) {
+      if (object.name?.startsWith('lerms-preview-goin-')) goinObjectCount += 1;
+      if (object.name?.startsWith('lerms-preview-actor-')) actorObjectCount += 1;
+      if (objectMoved(firstByName.get(object.name), object)) movedNames.add(object.name);
+    }
+  }
+  return {
+    schema: 'kaminos.lerms-moving-timeline-motion-witness.v0',
+    sampleCount: samples.length,
+    frameLabels: samples.map(sample => sample.frame?.current || null),
+    movedObjectCount: movedNames.size,
+    movedObjectNames: [...movedNames],
+    goinObjectCount,
+    actorObjectCount,
+    samples,
+  };
+}
+
+async function sampleLermsMovingTimelineMotion(ws) {
+  const sampleExpression = `(() => ({
+    frame: window.__kaminosLermsPreviewTimelinePlaybackFrame ? {
+      elapsedMs: window.__kaminosLermsPreviewTimelinePlaybackFrame.elapsedMs,
+      current: window.__kaminosLermsPreviewTimelinePlaybackFrame.current?.label || null,
+      next: window.__kaminosLermsPreviewTimelinePlaybackFrame.next?.label || null,
+      blend: window.__kaminosLermsPreviewTimelinePlaybackFrame.blend
+    } : null,
+    timer: window.__kaminosLermsPreviewTimelinePlaybackTimer || null,
+    objects: [...(window.__kaminosLermsPreviewActorsGroup?.children || [])].map(child => ({
+      name: child.name,
+      x: Number(child.position.x.toFixed(3)),
+      y: Number(child.position.y.toFixed(3)),
+      z: Number(child.position.z.toFixed(3))
+    }))
+  }))()`;
+  const samples = [];
+  for (const waitMs of [0, 850, 850, 850]) {
+    if (waitMs) await delay(waitMs);
+    samples.push(await evaluate(ws, sampleExpression));
+  }
+  return summarizeMotionSamples(samples);
+}
+
 async function main() {
   const chromeProcess = spawn(chrome, [
     `--remote-debugging-port=${port}`,
@@ -211,7 +268,13 @@ async function main() {
     if (expectedHostId === 'lerms-moving-timeline') {
       const sourceCustody = lastDebugState.sourceCustody || {};
       if (!sourceCustody.lermsOwns?.includes('timelineBehaviorTruth')) throw new Error('missing source custody lermsOwns: timelineBehaviorTruth');
-      if (!sourceCustody.kaminosOwns?.includes('host display')) throw new Error('missing source custody kaminosOwns: host display');
+      const kaminosOwns = sourceCustody.kaminosOwns || [];
+      const hasLiteralHostDisplay = kaminosOwns.includes('host display');
+      const hasGutterglassHostDisplayAlias = sourceCustody.kaminosOwnsSourceAlias === 'gutterglassOwns'
+        && kaminosOwns.includes('Preview Bench playback and camera witness mechanics');
+      if (!hasLiteralHostDisplay && !hasGutterglassHostDisplayAlias) {
+        throw new Error('missing source custody kaminosOwns host display row or Gutterglass host display alias');
+      }
     }
     if (expectedHostId === 'finger-juice') {
       const sourceCustody = lastDebugState.sourceCustody || {};
@@ -259,6 +322,16 @@ async function main() {
     }
     if (visualActivity.kind === 'three-scene' && visualActivity.actorObjectCount <= 0 && visualActivity.actorVisualCount <= 0) {
       throw new Error(`host-surface scene visual layer missing: ${JSON.stringify(visualActivity)}`);
+    }
+    if (expectedHostId === 'lerms-moving-timeline') {
+      phase = 'sample_lerms_motion';
+      motionSamples = await sampleLermsMovingTimelineMotion(ws);
+      if (motionSamples.goinObjectCount <= 0) {
+        throw new Error(`LERMS moving-timeline goin objects missing: ${JSON.stringify(motionSamples)}`);
+      }
+      if (motionSamples.movedObjectCount <= 0) {
+        throw new Error(`LERMS moving-timeline objects did not move: ${JSON.stringify(motionSamples)}`);
+      }
     }
 
     phase = 'capture_screenshot';
