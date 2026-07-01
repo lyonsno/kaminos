@@ -617,6 +617,95 @@ async function runForgeHostSmokeResultOfferScenario(ws) {
   `, { timeoutMs: 25000 });
 }
 
+async function runForgeHostPublishedSmokeResultOfferScenario(ws) {
+  phase = 'scenario-forge-host-published-smoke-result-offer';
+  lastEvidence.forgeHostPublishedSmokeResultOffer = await evaluate(ws, `
+    (async () => {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      for (let i = 0; i < 80; i++) {
+        if (window.kaminosPublishForgeHostSmokeResultOffer && window.kaminosCreateForgeHostStationScene) break;
+        await wait(125);
+      }
+      if (!window.kaminosPublishForgeHostSmokeResultOffer || !window.kaminosCreateForgeHostStationScene) {
+        throw new Error('Forge Host browser did not finish smoke-result publication bootstrap: ' + JSON.stringify({
+          hasPublishHelper: !!window.kaminosPublishForgeHostSmokeResultOffer,
+          hasSceneHelper: !!window.kaminosCreateForgeHostStationScene,
+          hasDebugState: !!window.kaminosForgeHostDebugState,
+          infoText: document.querySelector('#info-bar')?.textContent || null,
+        }));
+      }
+      for (let i = 0; i < 80; i++) {
+        const state = window.kaminosForgeHostDebugState?.();
+        if (state?.active && state?.registrySource?.schema === 'kaminos.forge-host.registry-snapshot.v0') break;
+        await wait(125);
+      }
+      if (!window.kaminosForgeHostDebugState?.()?.active) {
+        throw new Error('Forge Host live registry scene did not activate before publication');
+      }
+      const saved = await window.kaminosPublishForgeHostSmokeResultOffer({
+        schema: 'kaminos.forge-host.smoke-result-offer.v0',
+        id: 'result:wake-and-bake-pit-boss:published-witness',
+        producerDiaulos: 'wake-and-bake-pit-boss',
+        title: 'Wake Published Witness',
+        targetSurface: 'smoke-result',
+        sourceRef: 'scene-object-witness.mjs#forge-host-published-smoke-result-offer',
+        targetUrl: '/api/read?root=scratch&path=forge-host-smoke-results%2Fresult-wake-and-bake-pit-boss-published-witness.json',
+        reportSource: 'scene-object-witness.mjs#forge-host-published-smoke-result-offer',
+        screenshotSource: null,
+        summary: 'Wake published this non-Minion Smoke Result through the Kaminos publication endpoint.',
+        authority: 'published_artifact',
+        freshness: '2026-07-01T03:45:00Z',
+        displayState: 'artifact',
+        resultStatus: 'available',
+        downgrades: ['not_source_thread_delivery'],
+      });
+      if (saved.schema !== 'kaminos.forge-host.smoke-result-publication.v0') {
+        throw new Error('Forge Host smoke result publication save schema mismatch: ' + JSON.stringify(saved));
+      }
+      await window.kaminosCreateForgeHostStationScene({ force: true, source: 'live_registry' });
+      await wait(350);
+      const refreshed = window.kaminosForgeHostDebugState?.();
+      const wake = refreshed?.stations?.find(station => station.diaulos === 'wake-and-bake-pit-boss');
+      if (!wake) throw new Error('published Smoke Result did not have a Wake station to attach to: ' + JSON.stringify(refreshed?.stations?.map(station => station.diaulos)));
+      window.selectForgeHostStation?.(wake.actorId, { scrollToOffers: true });
+      await wait(250);
+      const selected = window.kaminosForgeHostDebugState?.();
+      const offer = selected?.selectedStation?.smokeOffers?.find(item => item.id === 'result:wake-and-bake-pit-boss:published-witness');
+      if (!offer) {
+        throw new Error('published Smoke Result did not attach to Wake: ' + JSON.stringify(selected?.selectedStation?.smokeOffers));
+      }
+      if (offer.authority !== 'published_artifact' || offer.displayState !== 'artifact') {
+        throw new Error('published Smoke Result overclaimed or lost publication authority: ' + JSON.stringify(offer));
+      }
+      const row = [...document.querySelectorAll('[data-forge-smoke-offer-id]')]
+        .find(item => item.dataset.forgeSmokeOfferId === offer.id);
+      if (!row) throw new Error('published Smoke Result row missing from Wake side panel');
+      row.scrollIntoView({ block: 'center', inline: 'nearest' });
+      await wait(120);
+      row.click();
+      await wait(250);
+      const finalState = window.kaminosForgeHostDebugState?.();
+      const panel = document.querySelector('#forge-host-smoke-chamber');
+      if (finalState?.smokeChamber?.routeIdentity !== 'forge-host-smoke-result-route') {
+        throw new Error('published Smoke Result did not open result chamber: ' + JSON.stringify(finalState?.smokeChamber));
+      }
+      if (finalState.smokeChamber.producerDiaulos !== 'wake-and-bake-pit-boss') {
+        throw new Error('published Smoke Result chamber lost Wake producer identity: ' + JSON.stringify(finalState.smokeChamber));
+      }
+      if (!/Wake published this non-Minion Smoke Result/.test(panel?.textContent || '')) {
+        throw new Error('published Smoke Result chamber did not render Wake summary: ' + (panel?.textContent || ''));
+      }
+      return {
+        saved,
+        selectedActorId: finalState.selectedActorId,
+        openedOffer: finalState.lastOpenedOffer,
+        chamber: finalState.smokeChamber,
+        panelText: panel.textContent.trim(),
+      };
+    })()
+  `, { timeoutMs: 30000 });
+}
+
 async function runForgeHostSmokeChamberReceiptScenario(ws) {
   phase = 'scenario-forge-host-smoke-chamber-receipt';
   lastEvidence.forgeHostSmokeChamberReceipt = await evaluate(ws, `
@@ -5074,6 +5163,8 @@ try {
     await runForgeHostSidePanelSmokeOfferClickScenario(ws);
   } else if (scenario === 'forge-host-smoke-result-offer') {
     await runForgeHostSmokeResultOfferScenario(ws);
+  } else if (scenario === 'forge-host-published-smoke-result-offer') {
+    await runForgeHostPublishedSmokeResultOfferScenario(ws);
   } else if (scenario === 'forge-host-smoke-chamber-receipt') {
     await runForgeHostSmokeChamberReceiptScenario(ws);
   } else if (scenario === 'viewport-click-select-deselect') {

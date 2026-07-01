@@ -136,6 +136,7 @@ def test_forge_host_smoke_result_snapshot_ingests_fixture_and_local_receipt():
         snapshot = serve.build_forge_host_smoke_result_snapshot(
             fixture_dir=fixture_dir,
             receipt_dir=receipt_root,
+            published_dir=root / "missing-published",
         )
 
     assert snapshot["schema"] == "kaminos.forge-host.smoke-result-snapshot.v0"
@@ -175,6 +176,67 @@ def test_forge_host_smoke_result_snapshot_rejects_fixture_claiming_live():
             assert "fixture" in str(error) and "live" in str(error)
         else:
             raise AssertionError("fixture smoke result claiming live display must fail loud")
+
+
+def test_forge_host_smoke_result_publication_persists_and_indexes_non_minion():
+    with TemporaryDirectory(dir="/tmp") as tmp:
+        publish_dir = Path(tmp) / "published"
+        saved = serve.publish_forge_host_smoke_result_offer({
+            "schema": "kaminos.forge-host.smoke-result-offer.v0",
+            "id": "result:wake-and-bake-pit-boss:operator-preview",
+            "producerDiaulos": "wake-and-bake-pit-boss",
+            "title": "Wake Operator Preview",
+            "targetSurface": "smoke-result",
+            "sourceRef": "projects/kaminos/topoi/codex-wake-and-bake-pit-boss-0627.md#operator-preview",
+            "targetUrl": "/api/read?root=scratch&path=forge-host-smoke-results%2Fresult-wake-and-bake-pit-boss-operator-preview.json",
+            "reportSource": "projects/kaminos/topoi/codex-wake-and-bake-pit-boss-0627.md#operator-preview",
+            "screenshotSource": None,
+            "summary": "Wake has a published non-Minion smoke result.",
+            "authority": "published_artifact",
+            "freshness": "2026-07-01T03:40:00Z",
+            "displayState": "artifact",
+            "resultStatus": "available",
+            "downgrades": ["not_source_thread_delivery"],
+        }, publish_dir=publish_dir)
+
+        snapshot = serve.build_forge_host_smoke_result_snapshot(
+            fixture_dir=Path(tmp) / "missing-fixtures",
+            receipt_dir=Path(tmp) / "missing-receipts",
+            published_dir=publish_dir,
+        )
+        saved_path = Path(saved["offerPath"])
+        saved_json = json.loads(saved_path.read_text())
+
+    assert saved["schema"] == "kaminos.forge-host.smoke-result-publication.v0"
+    assert saved["offer"]["producerDiaulos"] == "wake-and-bake-pit-boss"
+    assert saved["offer"]["authority"] == "published_artifact"
+    assert saved_path.name == "result-wake-and-bake-pit-boss-operator-preview.json"
+    assert saved_json["summary"] == "Wake has a published non-Minion smoke result."
+    assert snapshot["sourceAuthority"] == "published_artifact"
+    assert snapshot["publishedDir"] == str(publish_dir)
+    assert len(snapshot["results"]) == 1
+    assert snapshot["results"][0]["id"] == "result:wake-and-bake-pit-boss:operator-preview"
+
+
+def test_forge_host_smoke_result_publication_rejects_false_live():
+    with TemporaryDirectory(dir="/tmp") as tmp:
+        try:
+            serve.publish_forge_host_smoke_result_offer({
+                "schema": "kaminos.forge-host.smoke-result-offer.v0",
+                "id": "result:wake-and-bake-pit-boss:lying",
+                "producerDiaulos": "wake-and-bake-pit-boss",
+                "title": "Lying Published Result",
+                "targetSurface": "smoke-result",
+                "sourceRef": "published#lying",
+                "targetUrl": "published#lying",
+                "authority": "fallback",
+                "displayState": "live",
+                "resultStatus": "available",
+            }, publish_dir=Path(tmp))
+        except ValueError as error:
+            assert "fallback" in str(error) and "live" in str(error)
+        else:
+            raise AssertionError("published fallback smoke result claiming live display must fail loud")
 
 
 def test_forge_host_registry_snapshot_fallback_is_not_live():
@@ -777,6 +839,8 @@ if __name__ == "__main__":
     test_forge_host_registry_snapshot_preserves_endpoint_identity()
     test_forge_host_smoke_result_snapshot_ingests_fixture_and_local_receipt()
     test_forge_host_smoke_result_snapshot_rejects_fixture_claiming_live()
+    test_forge_host_smoke_result_publication_persists_and_indexes_non_minion()
+    test_forge_host_smoke_result_publication_rejects_false_live()
     test_forge_host_registry_snapshot_fallback_is_not_live()
     test_forge_host_smoke_chamber_receipt_persists_png_and_json()
     test_forge_host_smoke_chamber_receipt_rejects_false_live_and_bad_png()
