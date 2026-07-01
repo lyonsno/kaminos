@@ -1443,3 +1443,8 @@ assert.match(fieldResidualProbe, /--context-radius/, 'field residual probe expos
 assert.match(fieldResidualProbe, /contextWindow/, 'field residual probe reports the effective spatial context window');
 assert.match(fieldResidualProbe, /contextFeatureCount/, 'field residual probe reports context feature dimensionality');
 assert.match(fieldResidualProbe, /affineComparison/, 'field residual probe compares spatial-context performance against the affine probe baseline');
+assert.match(fieldResidualProbe, /spatial-context-mlp-residual-v0/, 'field residual probe can run a nonlinear local residual MLP model');
+assert.match(fieldResidualProbe, /--hidden-width/, 'field residual probe exposes nonlinear hidden width as an explicit run control');
+assert.match(fieldResidualProbe, /--epochs/, 'field residual probe exposes nonlinear training epochs as an explicit run control');
+assert.match(fieldResidualProbe, /--learning-rate/, 'field residual probe exposes nonlinear learning rate as an explicit run control');
+assert.match(fieldResidualProbe, /linearContextComparison/, 'field residual probe compares nonlinear performance against the linear context model');

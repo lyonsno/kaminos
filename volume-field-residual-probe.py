@@ -20,6 +20,7 @@ import numpy as np
 REPORT_SCHEMA = "kaminos.volume.field-residual-probe.v0"
 AFFINE_MODEL_IDENTITY = "same-bin-per-channel-affine-ridge-v0"
 SPATIAL_CONTEXT_MODEL_IDENTITY = "spatial-context-linear-ridge-v0"
+SPATIAL_CONTEXT_MLP_MODEL_IDENTITY = "spatial-context-mlp-residual-v0"
 MODEL_IDENTITY = AFFINE_MODEL_IDENTITY
 BACKEND = "numpy"
 
@@ -40,7 +41,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--seed", type=int, default=7, help="Deterministic tile-pair split seed.")
     parser.add_argument(
         "--model",
-        choices=[AFFINE_MODEL_IDENTITY, SPATIAL_CONTEXT_MODEL_IDENTITY],
+        choices=[AFFINE_MODEL_IDENTITY, SPATIAL_CONTEXT_MODEL_IDENTITY, SPATIAL_CONTEXT_MLP_MODEL_IDENTITY],
         default=AFFINE_MODEL_IDENTITY,
         help="Residual probe model identity to train.",
     )
@@ -50,6 +51,10 @@ def parse_args() -> argparse.Namespace:
         default=1,
         help="Spatial-context radius for spatial-context-linear-ridge-v0; radius 1 means a 3x3x3 voxel neighborhood.",
     )
+    parser.add_argument("--hidden-width", type=int, default=32, help="Hidden width for spatial-context-mlp-residual-v0.")
+    parser.add_argument("--epochs", type=int, default=180, help="Training epochs for spatial-context-mlp-residual-v0.")
+    parser.add_argument("--learning-rate", type=float, default=0.003, help="Adam learning rate for spatial-context-mlp-residual-v0.")
+    parser.add_argument("--batch-size", type=int, default=512, help="Minibatch size for spatial-context-mlp-residual-v0.")
     parser.add_argument(
         "--allow-different-spatial-bin",
         action="store_true",
@@ -124,6 +129,10 @@ def base_report(args: argparse.Namespace) -> dict[str, Any]:
             "seed": args.seed,
             "model": model_identity(args),
             "contextRadius": args.context_radius,
+            "hiddenWidth": args.hidden_width,
+            "epochs": args.epochs,
+            "learningRate": args.learning_rate,
+            "batchSize": args.batch_size,
             "requireSameSpatialBin": not args.allow_different_spatial_bin,
             "maxNormalizedSeparation": args.max_normalized_separation,
         },
@@ -135,7 +144,7 @@ def base_report(args: argparse.Namespace) -> dict[str, Any]:
         },
         "limitations": [
             "This is a same-bin tile ingestion and learnability probe, not a product residual model.",
-            "The affine model has no spatial context; the spatial-context model is still a tiny linear probe with no temporal memory.",
+            "The affine model has no spatial context; spatial-context models remain local probes with no temporal memory.",
             "Pairs inherit deterministic replay field authority from the dataset and do not prove literal cross-grid GPU snapshot transfer.",
         ],
     }
@@ -382,6 +391,136 @@ def predict_linear(features: np.ndarray, weights: np.ndarray, bias: np.ndarray) 
     return features.astype(np.float64) @ weights.astype(np.float64) + bias.reshape(1, -1)
 
 
+def standardize_train_test(train: np.ndarray, test: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    mean = np.mean(train.astype(np.float64), axis=0)
+    std = np.std(train.astype(np.float64), axis=0)
+    std = np.where(std < 1.0e-6, 1.0, std)
+    return (train - mean) / std, (test - mean) / std, mean, std
+
+
+def tanh_forward(features: np.ndarray, weights1: np.ndarray, bias1: np.ndarray, weights2: np.ndarray, bias2: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    hidden = np.tanh(features @ weights1 + bias1.reshape(1, -1))
+    output = hidden @ weights2 + bias2.reshape(1, -1)
+    return hidden, output
+
+
+def train_mlp_residual(
+    train_features: np.ndarray,
+    train_low: np.ndarray,
+    train_high: np.ndarray,
+    test_features: np.ndarray,
+    test_low: np.ndarray,
+    args: argparse.Namespace,
+) -> dict[str, Any]:
+    hidden_width = max(1, int(args.hidden_width))
+    epochs = max(1, int(args.epochs))
+    batch_size = max(1, int(args.batch_size))
+    learning_rate = max(1.0e-6, float(args.learning_rate))
+    l2 = max(0.0, float(args.ridge))
+    seed = int(args.seed)
+    train_x, test_x, feature_mean, feature_std = standardize_train_test(train_features.astype(np.float64), test_features.astype(np.float64))
+    residual = train_high.astype(np.float64) - train_low.astype(np.float64)
+    residual_mean = np.mean(residual, axis=0)
+    residual_std = np.std(residual, axis=0)
+    residual_std = np.where(residual_std < 1.0e-6, 1.0, residual_std)
+    target = (residual - residual_mean.reshape(1, -1)) / residual_std.reshape(1, -1)
+    rng = np.random.default_rng(seed)
+    input_width = train_x.shape[1]
+    output_width = train_high.shape[1]
+    weights1 = rng.normal(0.0, np.sqrt(1.0 / max(1, input_width)), size=(input_width, hidden_width))
+    bias1 = np.zeros(hidden_width, dtype=np.float64)
+    weights2 = rng.normal(0.0, np.sqrt(1.0 / max(1, hidden_width)), size=(hidden_width, output_width))
+    bias2 = np.zeros(output_width, dtype=np.float64)
+    adam_state = {
+        "mW1": np.zeros_like(weights1),
+        "vW1": np.zeros_like(weights1),
+        "mb1": np.zeros_like(bias1),
+        "vb1": np.zeros_like(bias1),
+        "mW2": np.zeros_like(weights2),
+        "vW2": np.zeros_like(weights2),
+        "mb2": np.zeros_like(bias2),
+        "vb2": np.zeros_like(bias2),
+    }
+    beta1 = 0.9
+    beta2 = 0.999
+    epsilon = 1.0e-8
+    first_loss = None
+    final_loss = None
+    step = 0
+    for epoch in range(epochs):
+        order = rng.permutation(train_x.shape[0])
+        for start in range(0, train_x.shape[0], batch_size):
+            step += 1
+            batch_index = order[start:start + batch_size]
+            x = train_x[batch_index]
+            y = target[batch_index]
+            hidden, output = tanh_forward(x, weights1, bias1, weights2, bias2)
+            error = output - y
+            loss = float(np.mean(error * error))
+            if first_loss is None:
+                first_loss = loss
+            final_loss = loss
+            grad_output = (2.0 / max(1, error.size)) * error
+            grad_w2 = hidden.T @ grad_output + l2 * weights2
+            grad_b2 = np.sum(grad_output, axis=0)
+            grad_hidden = (grad_output @ weights2.T) * (1.0 - hidden * hidden)
+            grad_w1 = x.T @ grad_hidden + l2 * weights1
+            grad_b1 = np.sum(grad_hidden, axis=0)
+            gradients = {
+                "W1": grad_w1,
+                "b1": grad_b1,
+                "W2": grad_w2,
+                "b2": grad_b2,
+            }
+            params = {
+                "W1": weights1,
+                "b1": bias1,
+                "W2": weights2,
+                "b2": bias2,
+            }
+            for name, grad in gradients.items():
+                adam_state[f"m{name}"] = beta1 * adam_state[f"m{name}"] + (1.0 - beta1) * grad
+                adam_state[f"v{name}"] = beta2 * adam_state[f"v{name}"] + (1.0 - beta2) * (grad * grad)
+                m_hat = adam_state[f"m{name}"] / (1.0 - beta1 ** step)
+                v_hat = adam_state[f"v{name}"] / (1.0 - beta2 ** step)
+                params[name] -= learning_rate * m_hat / (np.sqrt(v_hat) + epsilon)
+    train_hidden, train_output = tanh_forward(train_x, weights1, bias1, weights2, bias2)
+    _test_hidden, test_output = tanh_forward(test_x, weights1, bias1, weights2, bias2)
+    train_residual_prediction = train_output * residual_std.reshape(1, -1) + residual_mean.reshape(1, -1)
+    test_residual_prediction = test_output * residual_std.reshape(1, -1) + residual_mean.reshape(1, -1)
+    return {
+        "trainPrediction": train_low.astype(np.float64) + train_residual_prediction,
+        "testPrediction": test_low.astype(np.float64) + test_residual_prediction,
+        "payload": {
+            "identity": SPATIAL_CONTEXT_MLP_MODEL_IDENTITY,
+            "backend": BACKEND,
+            "optimizer": "adam-full-local-minibatch-v0",
+            "activation": "tanh",
+            "residualTarget": "high-minus-low-center-voxel",
+            "hiddenWidth": hidden_width,
+            "epochs": epochs,
+            "batchSize": batch_size,
+            "learningRate": learning_rate,
+            "l2": l2,
+            "firstBatchLoss": first_loss,
+            "finalBatchLoss": final_loss,
+            "trainableParameters": int(weights1.size + bias1.size + weights2.size + bias2.size),
+            "featureMean": feature_mean,
+            "featureStd": feature_std,
+            "residualMean": residual_mean,
+            "residualStd": residual_std,
+            "weights1Shape": list(weights1.shape),
+            "bias1Shape": list(bias1.shape),
+            "weights2Shape": list(weights2.shape),
+            "bias2Shape": list(bias2.shape),
+            "weights1": weights1,
+            "bias1": bias1,
+            "weights2": weights2,
+            "bias2": bias2,
+        },
+    }
+
+
 def metrics(prediction: np.ndarray, target: np.ndarray) -> dict[str, Any]:
     error = prediction.astype(np.float64) - target.astype(np.float64)
     squared = error * error
@@ -409,7 +548,7 @@ def split_report(
     model_prediction: np.ndarray,
     mean_high: np.ndarray,
     mean_residual: np.ndarray,
-    affine_prediction: np.ndarray | None = None,
+    comparisons: dict[str, np.ndarray] | None = None,
 ) -> dict[str, Any]:
     identity = metrics(low, high)
     mean_high_prediction = np.broadcast_to(mean_high.reshape(1, -1), high.shape)
@@ -427,15 +566,23 @@ def split_report(
         "improvementVsIdentity": improvement_vs_identity(model_metrics, identity),
         "meanResidualImprovementVsIdentity": improvement_vs_identity(mean_residual_metrics, identity),
     }
-    if affine_prediction is not None:
-        affine_metrics = metrics(affine_prediction, high)
-        affine_mse = float(affine_metrics["mse"])
+    for comparison_name, comparison_prediction in (comparisons or {}).items():
+        comparison_metrics = metrics(comparison_prediction, high)
+        comparison_mse = float(comparison_metrics["mse"])
         model_mse = float(model_metrics["mse"])
-        report["affineComparison"] = {
-            "affineBaseline": affine_metrics,
-            "modelMseDeltaVsAffine": model_mse - affine_mse,
-            "improvementVsAffine": None if affine_mse <= 0 else float((affine_mse - model_mse) / affine_mse),
+        report[comparison_name] = {
+            "baseline": comparison_metrics,
+            "modelMseDelta": model_mse - comparison_mse,
+            "improvement": None if comparison_mse <= 0 else float((comparison_mse - model_mse) / comparison_mse),
         }
+        if comparison_name == "affineComparison":
+            report[comparison_name]["affineBaseline"] = comparison_metrics
+            report[comparison_name]["modelMseDeltaVsAffine"] = model_mse - comparison_mse
+            report[comparison_name]["improvementVsAffine"] = report[comparison_name]["improvement"]
+        if comparison_name == "linearContextComparison":
+            report[comparison_name]["linearContextBaseline"] = comparison_metrics
+            report[comparison_name]["modelMseDeltaVsLinearContext"] = model_mse - comparison_mse
+            report[comparison_name]["improvementVsLinearContext"] = report[comparison_name]["improvement"]
     return report
 
 
@@ -479,6 +626,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     model = model_identity(args)
     context_radius_value = max(0, int(args.context_radius))
     context = None
+    train_linear_context_prediction = None
+    test_linear_context_prediction = None
     if model == AFFINE_MODEL_IDENTITY:
         model_prediction_train = train_affine_prediction
         model_prediction_test = test_affine_prediction
@@ -492,36 +641,60 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             "meanHigh": mean_high,
             "meanResidual": mean_residual,
         }
-    elif model == SPATIAL_CONTEXT_MODEL_IDENTITY:
+    elif model in (SPATIAL_CONTEXT_MODEL_IDENTITY, SPATIAL_CONTEXT_MLP_MODEL_IDENTITY):
         train_features = context_feature_matrix(train_low_tiles, context_radius_value)
         test_features = context_feature_matrix(test_low_tiles, context_radius_value)
         weights, bias = fit_linear_ridge(train_features, train_high, args.ridge)
-        model_prediction_train = predict_linear(train_features, weights, bias)
-        model_prediction_test = predict_linear(test_features, weights, bias)
+        train_linear_context_prediction = predict_linear(train_features, weights, bias)
+        test_linear_context_prediction = predict_linear(test_features, weights, bias)
         context = {
             "contextRadius": context_radius_value,
             "contextWindow": [context_window(context_radius_value)] * 3,
             "contextFeatureCount": context_feature_count(train_low.shape[1], context_radius_value),
             "contextFeatureOrder": "dx-major,dy,dz over edge-padded low tile, channels preserved per offset",
         }
-        model_payload = {
-            "identity": model,
-            "backend": BACKEND,
-            "ridge": args.ridge,
-            "trainableParameters": int(weights.size + bias.size),
-            "context": context,
-            "weightsShape": list(weights.shape),
-            "biasShape": list(bias.shape),
-            "weights": weights,
-            "bias": bias,
-            "affineBaseline": {
-                "identity": AFFINE_MODEL_IDENTITY,
-                "scale": affine_scales,
-                "bias": affine_biases,
-            },
-            "meanHigh": mean_high,
-            "meanResidual": mean_residual,
-        }
+        if model == SPATIAL_CONTEXT_MODEL_IDENTITY:
+            model_prediction_train = train_linear_context_prediction
+            model_prediction_test = test_linear_context_prediction
+            model_payload = {
+                "identity": model,
+                "backend": BACKEND,
+                "ridge": args.ridge,
+                "trainableParameters": int(weights.size + bias.size),
+                "context": context,
+                "weightsShape": list(weights.shape),
+                "biasShape": list(bias.shape),
+                "weights": weights,
+                "bias": bias,
+                "affineBaseline": {
+                    "identity": AFFINE_MODEL_IDENTITY,
+                    "scale": affine_scales,
+                    "bias": affine_biases,
+                },
+                "meanHigh": mean_high,
+                "meanResidual": mean_residual,
+            }
+        else:
+            mlp = train_mlp_residual(train_features, train_low, train_high, test_features, test_low, args)
+            model_prediction_train = mlp["trainPrediction"]
+            model_prediction_test = mlp["testPrediction"]
+            model_payload = mlp["payload"]
+            model_payload.update({
+                "context": context,
+                "linearContextBaseline": {
+                    "identity": SPATIAL_CONTEXT_MODEL_IDENTITY,
+                    "ridge": args.ridge,
+                    "weightsShape": list(weights.shape),
+                    "biasShape": list(bias.shape),
+                },
+                "affineBaseline": {
+                    "identity": AFFINE_MODEL_IDENTITY,
+                    "scale": affine_scales,
+                    "bias": affine_biases,
+                },
+                "meanHigh": mean_high,
+                "meanResidual": mean_residual,
+            })
     else:
         raise ProbeFailure("model-config", f"unsupported model identity: {model}", {"model": model})
     report = base_report(args)
@@ -566,7 +739,12 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                 model_prediction_train,
                 mean_high,
                 mean_residual,
-                affine_prediction=None if model == AFFINE_MODEL_IDENTITY else train_affine_prediction,
+                comparisons={
+                    key: value for key, value in {
+                        "affineComparison": None if model == AFFINE_MODEL_IDENTITY else train_affine_prediction,
+                        "linearContextComparison": train_linear_context_prediction if model == SPATIAL_CONTEXT_MLP_MODEL_IDENTITY else None,
+                    }.items() if value is not None
+                },
             ),
             "test": split_report(
                 "test",
@@ -575,7 +753,12 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                 model_prediction_test,
                 mean_high,
                 mean_residual,
-                affine_prediction=None if model == AFFINE_MODEL_IDENTITY else test_affine_prediction,
+                comparisons={
+                    key: value for key, value in {
+                        "affineComparison": None if model == AFFINE_MODEL_IDENTITY else test_affine_prediction,
+                        "linearContextComparison": test_linear_context_prediction if model == SPATIAL_CONTEXT_MLP_MODEL_IDENTITY else None,
+                    }.items() if value is not None
+                },
             ),
         },
     })
