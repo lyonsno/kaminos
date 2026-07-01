@@ -1422,6 +1422,10 @@ assert.match(witness, /--field-tile-selection-policy/, 'volume witness can reque
 assert.match(witness, /--field-tile-spatial-bin-ids/, 'volume witness can request concrete spatial bin ids for paired high-grid extraction');
 assert.match(fieldPairDataset, /withFieldTileSpatialBinIds/, 'field-pair dataset can drive high-grid tile extraction from low-grid selected spatial bins');
 assert.match(fieldPairDataset, /sameSpatialBinPairs/, 'field-pair dataset reports how many matched tiles share the same spatial bin');
+assert.match(fieldPairDataset, /--field-tile-pairing-policy/, 'field-pair dataset exposes field tile pairing policy as an explicit corpus authority control');
+assert.match(fieldPairDataset, /common-spatial-bin-nearest-neighbor-v0/, 'field-pair dataset can pair only tiles with common spatial-bin identity');
+assert.match(fieldPairDataset, /excludedByPairingPolicy/, 'field-pair dataset reports tiles/candidates excluded from common-bin pairing instead of hiding backfill drift');
+assert.match(fieldPairDataset, /minCommonSpatialBinPairs/, 'field-pair dataset can fail loudly when common-bin pairing is too sparse for a clean corpus proof');
 
 const fieldResidualProbePath = join(root, 'volume-field-residual-probe.py');
 assert.ok(existsSync(fieldResidualProbePath), 'volume field residual probe exists');

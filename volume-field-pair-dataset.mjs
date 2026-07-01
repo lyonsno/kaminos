@@ -8,6 +8,8 @@ const FIELD_PROJECTION_TENSOR_SCHEMA = 'kaminos.volume.field-projection-tensor.v
 const FIELD_TILE_EXPORT_SCHEMA = 'kaminos.volume.field-tile-export.v0';
 const FIELD_TILE_COVERAGE_PAIRING_SCHEMA = 'kaminos.volume.field-tile-coverage-pairing.v0';
 const SAME_STATE_FREEZE_PREFLIGHT_SCHEMA = 'kaminos.volume.same-state-freeze-preflight.v0';
+const NORMALIZED_TILE_PAIRING_IDENTITY = 'normalized-tile-center-nearest-neighbor-v0';
+const COMMON_SPATIAL_BIN_PAIRING_IDENTITY = 'common-spatial-bin-nearest-neighbor-v0';
 const EXPECTED_VOLUME_ROUTE_ID = 'native-3d-compute-fluid-raymarch-v0';
 const EXPECTED_PROTOTYPE_ID = 'kaminos-volume-prototype-v0';
 const SEQUENTIAL_PAIR_AUTHORITY = 'route-paired-sequential-field-readbacks-not-frame-locked';
@@ -193,23 +195,47 @@ function summarizeTileCoverage(exportSummary) {
   };
 }
 
-function buildFieldTileCoveragePairing(pair) {
+function spatialBinSet(tiles) {
+  return new Set((Array.isArray(tiles) ? tiles : [])
+    .map((tile) => tile?.spatialBinId)
+    .filter(Boolean));
+}
+
+function setDifference(left, right) {
+  return Array.from(left).filter((value) => !right.has(value)).sort();
+}
+
+function resolveFieldTilePairingPolicy(value) {
+  const requested = String(value || NORMALIZED_TILE_PAIRING_IDENTITY);
+  return requested.includes('common-spatial-bin')
+    ? COMMON_SPATIAL_BIN_PAIRING_IDENTITY
+    : NORMALIZED_TILE_PAIRING_IDENTITY;
+}
+
+function buildFieldTileCoveragePairing(pair, { fieldTilePairingPolicy = NORMALIZED_TILE_PAIRING_IDENTITY } = {}) {
   const lowExport = pair.low?.effective?.fieldTileExport || null;
   const highExport = pair.high?.effective?.fieldTileExport || null;
   if (!lowExport || !highExport) return null;
   const lowTiles = Array.isArray(lowExport.tilePayloads) ? lowExport.tilePayloads : [];
   const highTiles = Array.isArray(highExport.tilePayloads) ? highExport.tilePayloads : [];
+  const lowSpatialBins = spatialBinSet(lowTiles);
+  const highSpatialBins = spatialBinSet(highTiles);
+  const commonSpatialBins = new Set(Array.from(lowSpatialBins).filter((binId) => highSpatialBins.has(binId)));
+  const commonSpatialBinOnly = fieldTilePairingPolicy === COMMON_SPATIAL_BIN_PAIRING_IDENTITY;
   const matchedLowIndexes = new Set();
   const matchedHighIndexes = new Set();
   const matchedTilePairs = [];
-  const candidatePairs = lowTiles
+  const rawCandidatePairs = lowTiles
     .flatMap((lowTile, lowIndex) => highTiles.map((highTile, highIndex) => ({
       lowTile,
       highTile,
       lowIndex,
       highIndex,
       distance: normalizedTileDistance(lowTile, highTile),
-    })))
+      sameSpatialBin: Boolean(lowTile.spatialBinId && lowTile.spatialBinId === highTile.spatialBinId),
+    })));
+  const candidatePairs = rawCandidatePairs
+    .filter((candidate) => !commonSpatialBinOnly || candidate.sameSpatialBin)
     .sort((a, b) => {
       if (a.distance !== b.distance) return a.distance - b.distance;
       const energyDelta = Math.abs(finiteNumber(b.highTile.energySum) - finiteNumber(b.lowTile.energySum))
@@ -242,7 +268,7 @@ function buildFieldTileCoveragePairing(pair) {
       normalizedTileSeparation: normalizedTileSeparation(candidate.lowTile, candidate.highTile),
       lowSpatialBinId: candidate.lowTile.spatialBinId || null,
       highSpatialBinId: candidate.highTile.spatialBinId || null,
-      sameSpatialBin: Boolean(candidate.lowTile.spatialBinId && candidate.lowTile.spatialBinId === candidate.highTile.spatialBinId),
+      sameSpatialBin: candidate.sameSpatialBin,
       lowShape: candidate.lowTile.shape,
       highShape: candidate.highTile.shape,
       lowEnergySum: candidate.lowTile.energySum,
@@ -273,7 +299,7 @@ function buildFieldTileCoveragePairing(pair) {
   const sameSpatialBinPairs = matchedTilePairs.filter((match) => match.sameSpatialBin).length;
   return {
     schema: FIELD_TILE_COVERAGE_PAIRING_SCHEMA,
-    identity: 'normalized-tile-center-nearest-neighbor-v0',
+    identity: fieldTilePairingPolicy,
     authority: 'post-capture-selected-tile-metadata-match-not-resampling',
     pairId: pair.pairId,
     pairAuthority: pair.pairAuthority,
@@ -287,7 +313,11 @@ function buildFieldTileCoveragePairing(pair) {
       unmatchedHighTiles: unmatchedHighTiles.length,
       sameSpatialBinPairs,
       selectionPolicy: lowExport.selectionPolicy === highExport.selectionPolicy ? lowExport.selectionPolicy : 'mixed-selection-policy',
-      relationship: 'selected low/high occupied tiles greedily paired by nearest normalized tile center',
+      fieldTilePairingPolicy,
+      commonSpatialBinOnly,
+      relationship: commonSpatialBinOnly
+        ? 'selected low/high occupied tiles greedily paired by nearest normalized tile center only inside common spatial-bin ids'
+        : 'selected low/high occupied tiles greedily paired by nearest normalized tile center',
     },
     matchedTilePairs,
     unmatchedLowTiles,
@@ -315,9 +345,37 @@ function buildFieldTileCoveragePairing(pair) {
       highRequestedSpatialBins: Array.isArray(highExport.requestedSpatialBinIds) ? highExport.requestedSpatialBinIds : [],
       highMissingRequestedSpatialBins: Array.isArray(highExport.missingRequestedSpatialBinIds) ? highExport.missingRequestedSpatialBinIds : [],
       highSpatialBackfillTiles: Number(highExport.spatialBackfillTiles || 0),
+      commonSpatialBins: Array.from(commonSpatialBins).sort(),
+      lowOnlySpatialBins: setDifference(lowSpatialBins, highSpatialBins),
+      highOnlySpatialBins: setDifference(highSpatialBins, lowSpatialBins),
+    },
+    excludedByPairingPolicy: {
+      policy: fieldTilePairingPolicy,
+      candidateTilePairs: rawCandidatePairs.length - candidatePairs.length,
+      lowTilesWithoutCommonSpatialBin: lowTiles.filter((tile) => !commonSpatialBins.has(tile.spatialBinId)).length,
+      highTilesWithoutCommonSpatialBin: highTiles.filter((tile) => !commonSpatialBins.has(tile.spatialBinId)).length,
     },
     limitation: 'Coverage pairing aligns exported selected tiles by normalized centers only; it does not resample low/high tensors or prove literal same-state GPU snapshot transfer.',
   };
+}
+
+function validateFieldTileCoveragePairing(pairing, { fieldTilePairingPolicy, minCommonSpatialBinPairs }) {
+  if (!pairing || fieldTilePairingPolicy !== COMMON_SPATIAL_BIN_PAIRING_IDENTITY) return;
+  const minimum = Math.max(0, Math.floor(Number(minCommonSpatialBinPairs || 0)));
+  const actual = Number(pairing.spatialBinSummary?.sameSpatialBinPairs || 0);
+  if (minimum > 0 && actual < minimum) {
+    const error = new Error(`insufficient common-spatial-bin pairs: required ${minimum}, got ${actual}`);
+    error.code = 'insufficient-common-spatial-bin-pairs';
+    error.failurePhase = 'pairing-preflight';
+    error.details = {
+      fieldTilePairingPolicy,
+      minCommonSpatialBinPairs: minimum,
+      sameSpatialBinPairs: actual,
+      excludedByPairingPolicy: pairing.excludedByPairingPolicy,
+      spatialBinSummary: pairing.spatialBinSummary,
+    };
+    throw error;
+  }
 }
 
 function makeBinTensor(name, bins, channels) {
@@ -901,6 +959,8 @@ const fieldTileExport = args.has('--field-tile-export') ? {
   spatialBinCount: Math.max(2, Math.min(8, Math.floor(Number(args.get('--field-tile-spatial-bins') || 4)))),
   spatialBinIds: stringList(args.get('--field-tile-spatial-bin-ids')),
 } : { enabled: false };
+const fieldTilePairingPolicy = resolveFieldTilePairingPolicy(args.get('--field-tile-pairing-policy'));
+const minCommonSpatialBinPairs = Math.max(0, Math.floor(Number(args.get('--field-tile-min-common-bin-pairs') || 0)));
 const dryRun = args.has('--dry-run');
 const createdAt = new Date().toISOString();
 const gitCommit = gitValue(['rev-parse', 'HEAD']);
@@ -970,11 +1030,15 @@ const manifest = {
   fieldTileExport,
   coverageExpansion: fieldTileExport.enabled ? {
     schema: FIELD_TILE_COVERAGE_PAIRING_SCHEMA,
-    identity: 'selected-tile-count-plus-normalized-pairing-v0',
+    identity: fieldTilePairingPolicy === COMMON_SPATIAL_BIN_PAIRING_IDENTITY
+      ? COMMON_SPATIAL_BIN_PAIRING_IDENTITY
+      : 'selected-tile-count-plus-normalized-pairing-v0',
     requestedMaxTiles: fieldTileExport.maxTiles,
     tileSize: fieldTileExport.tileSize,
     selectionPolicy: fieldTileExport.selectionPolicy,
     spatialBinCount: fieldTileExport.spatialBinCount,
+    fieldTilePairingPolicy,
+    minCommonSpatialBinPairs,
     pairingAuthority: 'post-capture-selected-tile-metadata-match-not-resampling',
   } : null,
   sameStateFreezeAttempt: buildSameStateFreezeAttempt({ pairAuthority, deterministicReplay }),
@@ -1007,7 +1071,11 @@ if (!dryRun) {
         pair.high.effective = runCapture(pair.high, cwd);
         pair.low.effective = runCapture(pair.low, cwd);
       }
-      pair.fieldTileCoveragePairing = buildFieldTileCoveragePairing(pair);
+      pair.fieldTileCoveragePairing = buildFieldTileCoveragePairing(pair, { fieldTilePairingPolicy });
+      validateFieldTileCoveragePairing(pair.fieldTileCoveragePairing, {
+        fieldTilePairingPolicy,
+        minCommonSpatialBinPairs,
+      });
       pair.status = 'captured';
     } catch (error) {
       pair.status = 'failed';
