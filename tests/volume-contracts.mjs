@@ -1385,6 +1385,25 @@ assert.match(core, /advanceSim:\s*false/, 'same-state render-scale capture rende
 assert.match(core, /render-only-frozen-sim-state/, 'same-state render-scale capture labels render-only frozen simulator authority');
 assert.match(core, /cdp-canvas-clip-capture-after-render-only-frozen-sim-state/, 'volume core labels canvas-clip screenshot authority for frozen-state scale images');
 
+const renderPairCorpusPath = join(root, 'volume-render-pair-corpus.mjs');
+assert.ok(existsSync(renderPairCorpusPath), 'frame-locked render-pair corpus sweep harness exists');
+const renderPairCorpus = existsSync(renderPairCorpusPath) ? readFileSync(renderPairCorpusPath, 'utf8') : '';
+assert.match(renderPairCorpus, /kaminos\.volume\.frame-locked-pair-corpus\.v0/, 'corpus sweep writes the MLX-consumable corpus schema identity');
+assert.match(renderPairCorpus, /volume-render-pair-dataset\.mjs/, 'corpus sweep reuses the validated single-route dataset extractor');
+assert.match(renderPairCorpus, /--variant-file/, 'corpus sweep accepts caller-owned variant files instead of hardcoded-only state lists');
+assert.match(renderPairCorpus, /--variant-preset/, 'corpus sweep exposes built-in hard-state presets for quick local corpus generation');
+assert.match(renderPairCorpus, /hard-low-scale-v0/, 'corpus sweep includes a named hard low-scale preset');
+assert.match(renderPairCorpus, /volume_curl/, 'hard low-scale preset includes curl-heavy states');
+assert.match(renderPairCorpus, /volume_fire_licks/, 'hard low-scale preset includes thin/lick-heavy states');
+assert.match(renderPairCorpus, /volume_lifecycle_effect/, 'hard low-scale preset includes snuff/quench lifecycle states');
+assert.match(renderPairCorpus, /volume_quench_vapor/, 'hard low-scale preset includes quench vapor controls');
+assert.match(renderPairCorpus, /variantId/, 'corpus sweep records variant identity on every pair for held-out evaluation');
+assert.match(renderPairCorpus, /variantTags/, 'corpus sweep records variant tags for state-class filtering');
+assert.match(renderPairCorpus, /lowRenderScales/, 'corpus sweep records all low render-scale rungs used by the corpus');
+assert.match(renderPairCorpus, /pairCount/, 'corpus sweep reports aggregated pair count for training sanity');
+assert.match(renderPairCorpus, /failurePhase/, 'corpus sweep preserves capture/validation failure phase for failed variants');
+assert.match(renderPairCorpus, /--keep-going/, 'corpus sweep can keep useful variants when one hard state fails witness gates');
+
 const residualMlxPath = join(root, 'volume-residual-upscale-mlx.py');
 assert.ok(existsSync(residualMlxPath), 'tiny MLX residual-upscale smoke harness exists');
 const residualMlx = existsSync(residualMlxPath) ? readFileSync(residualMlxPath, 'utf8') : '';
@@ -1399,3 +1418,11 @@ assert.match(residualMlx, /sleepMs/, 'MLX residual harness exposes per-step slee
 assert.match(residualMlx, /zeros_like/, 'MLX residual harness zero-initializes the residual head so step zero preserves the renderer baseline');
 assert.match(residualMlx, /foregroundThreshold/, 'MLX residual harness supports foreground-biased patches so training does not mostly see black canvas');
 assert.match(residualMlx, /foregroundPixels/, 'MLX residual harness reports selected foreground pixels for corpus sanity');
+assert.match(residualMlx, /--loss-mode/, 'MLX residual harness exposes explicit loss mode for repeatable experiments');
+assert.match(residualMlx, /foregroundLossWeight/, 'MLX residual harness can upweight active fire/smoke pixels in the loss');
+assert.match(residualMlx, /differenceLossWeight/, 'MLX residual harness can upweight low/high residual-difference pixels in the loss');
+assert.match(residualMlx, /weightedBaselinePsnr/, 'MLX residual harness reports weighted baseline PSNR for active-region truth');
+assert.match(residualMlx, /weightedModelPsnr/, 'MLX residual harness reports weighted model PSNR for active-region truth');
+assert.match(residualMlx, /conditionRenderScale/, 'MLX residual harness can condition one model across multiple low render scales');
+assert.match(residualMlx, /scaleChannel/, 'MLX residual harness implements render-scale conditioning as an explicit input channel');
+assert.match(residualMlx, /improvedPatchFraction/, 'MLX residual harness reports whether gains are broad or a mean-metric fluke');

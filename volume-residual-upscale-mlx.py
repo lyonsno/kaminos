@@ -18,9 +18,9 @@ IMAGE_AUTHORITY = "cdp-canvas-clip-capture-after-render-only-frozen-sim-state"
 
 
 class TinyResidualUpscaler(nn.Module):
-    def __init__(self, hidden_channels):
+    def __init__(self, hidden_channels, input_channels):
         super().__init__()
-        self.input = nn.Conv2d(3, hidden_channels, kernel_size=3, padding=1)
+        self.input = nn.Conv2d(input_channels, hidden_channels, kernel_size=3, padding=1)
         self.mid_a = nn.Conv2d(hidden_channels, hidden_channels, kernel_size=3, padding=1)
         self.mid_b = nn.Conv2d(hidden_channels, hidden_channels, kernel_size=3, padding=1)
         self.output = nn.Conv2d(hidden_channels, 3, kernel_size=3, padding=1)
@@ -28,11 +28,12 @@ class TinyResidualUpscaler(nn.Module):
         self.output.bias = mx.zeros_like(self.output.bias)
 
     def __call__(self, image):
+        base_image = image[..., :3]
         hidden = nn.relu(self.input(image))
         hidden = nn.relu(self.mid_a(hidden))
         hidden = nn.relu(self.mid_b(hidden))
         residual = self.output(hidden)
-        return mx.clip(image + residual * 0.25, 0.0, 1.0)
+        return mx.clip(base_image + residual * 0.25, 0.0, 1.0)
 
 
 def parse_args():
@@ -51,6 +52,10 @@ def parse_args():
     parser.add_argument("--sleep-ms", dest="sleepMs", type=float, default=0.0, help="Optional per-step sleep throttle for contention control.")
     parser.add_argument("--foreground-threshold", dest="foregroundThreshold", type=float, default=0.025)
     parser.add_argument("--foreground-probability", dest="foregroundProbability", type=float, default=0.85)
+    parser.add_argument("--loss-mode", choices=["mse", "weighted"], default="mse")
+    parser.add_argument("--foreground-loss-weight", dest="foregroundLossWeight", type=float, default=0.0)
+    parser.add_argument("--difference-loss-weight", dest="differenceLossWeight", type=float, default=0.0)
+    parser.add_argument("--condition-render-scale", dest="conditionRenderScale", action="store_true")
     return parser.parse_args()
 
 
@@ -125,7 +130,7 @@ def load_pair_arrays(pairs, foregroundThreshold):
             "foregroundPixels": int(foreground.shape[0]),
             "lowPath": str(low_path),
             "highPath": str(high_path),
-            "lowRenderScale": pair.get("lowRenderScale"),
+            "lowRenderScale": float(pair.get("lowRenderScale")),
             "sameStateCaptureId": pair.get("sameStateCaptureId"),
         })
     return loaded
@@ -138,7 +143,14 @@ def split_pairs(loaded):
     return loaded[:-eval_count], loaded[-eval_count:]
 
 
-def sample_patch_batch(items, rng, batch_size, patch_size, foregroundProbability):
+def model_input_from_rgb(low_patch, low_render_scale, conditionRenderScale):
+    if not conditionRenderScale:
+        return low_patch
+    scaleChannel = np.full((*low_patch.shape[:2], 1), float(low_render_scale), dtype=np.float32)
+    return np.concatenate([low_patch, scaleChannel], axis=2)
+
+
+def sample_patch_batch(items, rng, batch_size, patch_size, foregroundProbability, conditionRenderScale):
     lows = []
     highs = []
     for _ in range(batch_size):
@@ -154,7 +166,8 @@ def sample_patch_batch(items, rng, batch_size, patch_size, foregroundProbability
         else:
             top = int(rng.integers(0, max(1, height - crop_height + 1)))
             left = int(rng.integers(0, max(1, width - crop_width + 1)))
-        lows.append(item["low"][top:top + crop_height, left:left + crop_width, :])
+        low_patch = item["low"][top:top + crop_height, left:left + crop_width, :]
+        lows.append(model_input_from_rgb(low_patch, item["lowRenderScale"], conditionRenderScale))
         highs.append(item["high"][top:top + crop_height, left:left + crop_width, :])
     return mx.array(np.stack(lows, axis=0)), mx.array(np.stack(highs, axis=0))
 
@@ -163,30 +176,79 @@ def mse_value(prediction, target):
     return mx.mean(mx.square(prediction - target))
 
 
-def evaluate_model(model, items, rng, batch_size, patch_size, eval_patches, foregroundProbability):
+def rgb_channels(batch):
+    return batch[..., :3]
+
+
+def loss_weight_map(low_batch, high_batch, foregroundThreshold, foregroundLossWeight, differenceLossWeight):
+    low_rgb = rgb_channels(low_batch)
+    threshold = max(float(foregroundThreshold), 1e-6)
+    luma_low = mx.max(low_rgb, axis=3, keepdims=True)
+    luma_high = mx.max(high_batch, axis=3, keepdims=True)
+    difference = mx.max(mx.abs(high_batch - low_rgb), axis=3, keepdims=True)
+    foreground_mask = (luma_low > threshold) | (luma_high > threshold)
+    foreground = mx.where(foreground_mask, 1.0, 0.0)
+    difference_signal = mx.minimum(difference / threshold, 1.0)
+    return 1.0 + max(0.0, float(foregroundLossWeight)) * foreground + max(0.0, float(differenceLossWeight)) * difference_signal
+
+
+def weighted_mse_value(prediction, target, low_batch, foregroundThreshold, foregroundLossWeight, differenceLossWeight):
+    weights = loss_weight_map(low_batch, target, foregroundThreshold, foregroundLossWeight, differenceLossWeight)
+    weighted = mx.mean(mx.square(prediction - target) * weights)
+    normalizer = mx.maximum(mx.mean(weights), 1e-6)
+    return weighted / normalizer
+
+
+def per_sample_mse(prediction, target):
+    error = mx.square(prediction - target)
+    return mx.mean(mx.mean(mx.mean(error, axis=3), axis=2), axis=1)
+
+
+def evaluate_model(model, items, rng, batch_size, patch_size, eval_patches, foregroundProbability, conditionRenderScale, foregroundThreshold, foregroundLossWeight, differenceLossWeight):
     baseline_losses = []
     model_losses = []
+    weighted_baseline_losses = []
+    weighted_model_losses = []
+    improved_patches = 0
+    compared_patches = 0
     batches = max(1, math.ceil(eval_patches / batch_size))
     for _ in range(batches):
-        low_batch, high_batch = sample_patch_batch(items, rng, batch_size, patch_size, foregroundProbability)
+        low_batch, high_batch = sample_patch_batch(items, rng, batch_size, patch_size, foregroundProbability, conditionRenderScale)
+        low_rgb = rgb_channels(low_batch)
         prediction = model(low_batch)
-        baseline_loss = mse_value(low_batch, high_batch)
+        baseline_loss = mse_value(low_rgb, high_batch)
         model_loss = mse_value(prediction, high_batch)
-        mx.eval(baseline_loss, model_loss)
+        weighted_baseline_loss = weighted_mse_value(low_rgb, high_batch, low_batch, foregroundThreshold, foregroundLossWeight, differenceLossWeight)
+        weighted_model_loss = weighted_mse_value(prediction, high_batch, low_batch, foregroundThreshold, foregroundLossWeight, differenceLossWeight)
+        baseline_sample_mse = per_sample_mse(low_rgb, high_batch)
+        model_sample_mse = per_sample_mse(prediction, high_batch)
+        mx.eval(baseline_loss, model_loss, weighted_baseline_loss, weighted_model_loss, baseline_sample_mse, model_sample_mse)
         baseline_losses.append(float(baseline_loss))
         model_losses.append(float(model_loss))
+        weighted_baseline_losses.append(float(weighted_baseline_loss))
+        weighted_model_losses.append(float(weighted_model_loss))
+        improved_patches += int(np.sum(np.array(model_sample_mse) < np.array(baseline_sample_mse)))
+        compared_patches += int(np.array(model_sample_mse).shape[0])
     baseline_mse = float(np.mean(baseline_losses))
     model_mse = float(np.mean(model_losses))
+    weighted_baseline_mse = float(np.mean(weighted_baseline_losses))
+    weighted_model_mse = float(np.mean(weighted_model_losses))
     return {
         "baselineMse": baseline_mse,
         "modelMse": model_mse,
         "baselinePsnr": psnr_from_mse(baseline_mse),
         "modelPsnr": psnr_from_mse(model_mse),
         "deltaPsnr": psnr_from_mse(model_mse) - psnr_from_mse(baseline_mse),
+        "weightedBaselineMse": weighted_baseline_mse,
+        "weightedModelMse": weighted_model_mse,
+        "weightedBaselinePsnr": psnr_from_mse(weighted_baseline_mse),
+        "weightedModelPsnr": psnr_from_mse(weighted_model_mse),
+        "weightedDeltaPsnr": psnr_from_mse(weighted_model_mse) - psnr_from_mse(weighted_baseline_mse),
+        "improvedPatchFraction": improved_patches / max(1, compared_patches),
     }
 
 
-def make_preview(model, eval_item, out_path, preview_size):
+def make_preview(model, eval_item, out_path, preview_size, conditionRenderScale):
     low = eval_item["low"]
     high = eval_item["high"]
     height, width, _channels = low.shape
@@ -196,7 +258,8 @@ def make_preview(model, eval_item, out_path, preview_size):
     left = max(0, (width - crop_width) // 2)
     low_patch = low[top:top + crop_height, left:left + crop_width, :]
     high_patch = high[top:top + crop_height, left:left + crop_width, :]
-    prediction = model(mx.array(low_patch[None, ...]))
+    model_input = model_input_from_rgb(low_patch, eval_item["lowRenderScale"], conditionRenderScale)
+    prediction = model(mx.array(model_input[None, ...]))
     mx.eval(prediction)
     pred_patch = np.array(prediction[0])
     diff_patch = np.clip(np.abs(pred_patch - high_patch) * 4.0, 0.0, 1.0)
@@ -212,18 +275,29 @@ def main():
     loaded = load_pair_arrays(pairs, args.foregroundThreshold)
     train_items, eval_items = split_pairs(loaded)
     rng = np.random.default_rng(args.seed)
-    model = TinyResidualUpscaler(args.hidden_channels)
+    input_channels = 4 if args.conditionRenderScale else 3
+    scaleChannel = "lowRenderScale" if args.conditionRenderScale else None
+    model = TinyResidualUpscaler(args.hidden_channels, input_channels)
     optimizer = optim.Adam(learning_rate=args.learning_rate)
 
     def loss_fn(model_instance, low_batch, high_batch):
         prediction = model_instance(low_batch)
+        if args.loss_mode == "weighted":
+            return weighted_mse_value(
+                prediction,
+                high_batch,
+                low_batch,
+                args.foregroundThreshold,
+                args.foregroundLossWeight,
+                args.differenceLossWeight,
+            )
         return mse_value(prediction, high_batch)
 
     loss_and_grad = nn.value_and_grad(model, loss_fn)
     training_losses = []
     started = time.time()
     for step in range(max(0, args.maxSteps)):
-        low_batch, high_batch = sample_patch_batch(train_items, rng, args.batch_size, args.patch_size, args.foregroundProbability)
+        low_batch, high_batch = sample_patch_batch(train_items, rng, args.batch_size, args.patch_size, args.foregroundProbability, args.conditionRenderScale)
         loss, grads = loss_and_grad(model, low_batch, high_batch)
         optimizer.update(model, grads)
         mx.eval(model.parameters(), optimizer.state, loss)
@@ -235,9 +309,21 @@ def main():
             time.sleep(args.sleepMs / 1000.0)
     duration_seconds = time.time() - started
     eval_rng = np.random.default_rng(args.seed + 1000)
-    metrics = evaluate_model(model, eval_items, eval_rng, args.batch_size, args.patch_size, args.eval_patches, args.foregroundProbability)
+    metrics = evaluate_model(
+        model,
+        eval_items,
+        eval_rng,
+        args.batch_size,
+        args.patch_size,
+        args.eval_patches,
+        args.foregroundProbability,
+        args.conditionRenderScale,
+        args.foregroundThreshold,
+        args.foregroundLossWeight,
+        args.differenceLossWeight,
+    )
     preview_path = out_dir / "residual-preview-low-model-target-diff.png"
-    make_preview(model, eval_items[0], preview_path, args.preview_size)
+    make_preview(model, eval_items[0], preview_path, args.preview_size, args.conditionRenderScale)
     report = {
         "schema": SCHEMA,
         "createdAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
@@ -253,8 +339,14 @@ def main():
         "evalPairs": [item["id"] for item in eval_items],
         "maxSteps": args.maxSteps,
         "sleepMs": args.sleepMs,
+        "lossMode": args.loss_mode,
         "foregroundThreshold": args.foregroundThreshold,
         "foregroundProbability": args.foregroundProbability,
+        "foregroundLossWeight": args.foregroundLossWeight,
+        "differenceLossWeight": args.differenceLossWeight,
+        "conditionRenderScale": args.conditionRenderScale,
+        "inputChannels": input_channels,
+        "scaleChannel": scaleChannel,
         "foregroundPixels": {
             item["id"]: item["foregroundPixels"]
             for item in loaded
