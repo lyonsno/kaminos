@@ -118,6 +118,11 @@ assert.match(index, /realSplatRendering:\s*false/, 'hybrid splat route stub must
 assert.match(index, /id="splat-hybrid-renderer-panel"/, 'selected splats expose a visible Hybrid Renderer control surface, not only a URL flag');
 assert.match(index, /id="splat-hybrid-renderer-start-button"/, 'Hybrid Renderer UI has an explicit start control');
 assert.match(index, /id="splat-hybrid-renderer-status"/, 'Hybrid Renderer UI surfaces live route/status evidence');
+assert.match(index, /id="hybrid-splat-viewport-controls"/, 'Hybrid Renderer exposes viewport controls instead of hiding the primary action in the side panel');
+assert.match(index, /id="hybrid-splat-viewport-start-button"/, 'Hybrid Renderer viewport controls include a Start Hybrid action');
+assert.match(index, /id="hybrid-splat-renderer-controls-popover"/, 'Hybrid Renderer material/AO/normal controls are available from a viewport popover');
+assert.match(index, /function publishHybridSplatRendererControls\(/, 'Kaminos publishes renderer-control slider state through the overlay setRendererControls API');
+assert.match(index, /rendererControlsTelemetry/, 'Hybrid Renderer debug state exposes renderer-control telemetry for smoke evidence');
 assert.match(index, /id="hybrid-splat-overlay-host"/, 'Hybrid Renderer overlay has a named viewport host for dual-canvas composition');
 assert.match(index, /const DEFAULT_HYBRID_SPLAT_OVERLAY_MODULE_URL/, 'Hybrid Renderer overlay route has an inspectable default module URL');
 assert.match(index, /async function initializeHybridSplatOverlayModuleUrl\(/, 'Hybrid Renderer module URL initializes from runtime config before operator smoke');
