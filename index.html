@@ -15951,6 +15951,49 @@ function parseBooleanRouteFlag(value, defaultValue = false) {
   return ['1', 'true', 'on', 'yes'].includes(String(value).toLowerCase());
 }
 
+function parseNumberRouteParam(params, name, defaultValue, minValue, maxValue) {
+  const raw = params.get(name);
+  const value = Number(raw);
+  if (!Number.isFinite(value)) return defaultValue;
+  return Math.max(minValue, Math.min(maxValue, value));
+}
+
+function applyOrbShellSpatialTruthRenderPolicy(params) {
+  const envMapIntensity = parseNumberRouteParam(params, 'orb_shell_spatial_env_intensity', 0.9, 0, 3);
+  const exposure = parseNumberRouteParam(params, 'orb_shell_spatial_exposure', 1.15, 0.2, 2.5);
+  const pass = params.get('orb_shell_spatial_pass') || 'clay';
+  const view = params.get('orb_shell_spatial_view') || 'front';
+  const includeOverlays = parseBooleanRouteFlag(params.get('orb_shell_spatial_overlays'), false);
+  const envIntensitySlider = document.getElementById('env-intensity-slider');
+  const envIntensityVal = document.getElementById('env-intensity-val');
+  const exposureSlider = document.getElementById('exposure-slider');
+  const exposureVal = document.getElementById('exposure-val');
+  if (envIntensitySlider) envIntensitySlider.value = String(envMapIntensity);
+  if (envIntensityVal) envIntensityVal.textContent = envMapIntensity.toFixed(1);
+  if (exposureSlider) exposureSlider.value = String(exposure);
+  if (exposureVal) exposureVal.textContent = exposure.toFixed(1);
+  scene.environmentIntensity = envMapIntensity;
+  renderer.toneMappingExposure = exposure;
+  window.__kaminosOrbShellSpatialTruthRoutePolicy = {
+    schema: 'OrbShellSpatialTruthRoutePolicy',
+    mode: 'route-coupled-spatial-truth-witness-v0',
+    focus: 'spatial-truth',
+    pass,
+    view,
+    includeOverlays,
+    envMapIntensity,
+    exposure,
+    params: {
+      pass: 'orb_shell_spatial_pass',
+      view: 'orb_shell_spatial_view',
+      envMapIntensity: 'orb_shell_spatial_env_intensity',
+      exposure: 'orb_shell_spatial_exposure',
+      includeOverlays: 'orb_shell_spatial_overlays',
+    },
+  };
+  return window.__kaminosOrbShellSpatialTruthRoutePolicy;
+}
+
 function applyOrbShellCompositionRenderEffectPolicy(params) {
   const ambientOcclusionEnabled = parseBooleanRouteFlag(params.get('orb_shell_ao'), false);
   const aoToggle = document.getElementById('ao-toggle');
@@ -16026,6 +16069,17 @@ function initOrbShellCompositionRoute() {
       orbShellCompositionWitness.frameApertureOrbitCaptureWitness();
       setOrbShellSemanticLegend(null);
       setInfo(`Aperture Orbit Capture: ${witnessState.sampleCount} terminal roles / ${witnessState.visibleOverlayIds.length} overlays visible`);
+    } else if (orbShellFocus === 'spatial-truth') {
+      const spatialTruthRoutePolicy = applyOrbShellSpatialTruthRenderPolicy(params);
+      const witnessState = orbShellCompositionWitness.enableSpatialTruthWitness({
+        diagnosticPass: spatialTruthRoutePolicy.pass,
+        envMapIntensity: spatialTruthRoutePolicy.envMapIntensity,
+        exposure: spatialTruthRoutePolicy.exposure,
+        includeOverlays: spatialTruthRoutePolicy.includeOverlays,
+      });
+      const viewState = orbShellCompositionWitness.frameSpatialTruthView(spatialTruthRoutePolicy.view);
+      setOrbShellSemanticLegend(null);
+      setInfo(`Spatial Truth ${witnessState.diagnosticPass}: ${witnessState.visibleMeshCount} meshes / ${viewState.effectiveViewId} / env ${spatialTruthRoutePolicy.envMapIntensity.toFixed(2)} exp ${spatialTruthRoutePolicy.exposure.toFixed(2)}`);
     } else {
       setOrbShellSemanticLegend(null);
       frameOrbShellCompositionCamera();

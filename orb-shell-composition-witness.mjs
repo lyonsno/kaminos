@@ -14,6 +14,16 @@ const chrome = process.env.KAMINOS_CHROME || '/Applications/Google Chrome.app/Co
 const userDataDir = args.get('--user-data-dir') || `/tmp/kaminos-orb-shell-composition-witness-profile-${port}`;
 const settleMs = Number(args.get('--settle-ms') || 2500);
 const focus = args.get('--focus') || 'wide';
+const diagnosticPass = args.get('--diagnostic-pass') || 'clay';
+const viewSet = args.get('--view-set') || 'spatial-truth-default-v0';
+const spatialTruthView = args.get('--spatial-view') || args.get('--view') || 'front';
+const contactSheetOut = args.has('--contact-sheet-out') ? resolve(args.get('--contact-sheet-out')) : null;
+const spatialTruthEnvMapIntensity = Number(args.get('--spatial-env-intensity') || 0.9);
+const spatialTruthExposure = Number(args.get('--spatial-exposure') || 1.15);
+const spatialTruthContactSheetViews = (args.get('--contact-sheet-views') || 'front,front-left,front-right,left,right,high-front,lower-socket-close')
+  .split(',')
+  .map(item => item.trim())
+  .filter(Boolean);
 const clipCanvas = args.has('--clip-canvas');
 const forceAoRaw = args.get('--force-ao');
 const forceAo = forceAoRaw === undefined ? null : !['0', 'false', 'off', 'no'].includes(String(forceAoRaw).toLowerCase());
@@ -37,6 +47,9 @@ let apertureOrbitCaptureWitness = null;
 let macroContactMapWitness = null;
 let macroMorphologyInventoryWitness = null;
 let lowerSocketSemanticRenderInventoryWitness = null;
+let spatialTruthWitness = null;
+let spatialTruthViewFrame = null;
+let spatialTruthContactSheet = null;
 
 function writeReport(report) {
   mkdirSync(dirname(reportPath), { recursive: true });
@@ -65,6 +78,92 @@ function pngStats(path) {
   const width = data.readUInt32BE(16);
   const height = data.readUInt32BE(20);
   return { width, height, bytes: data.length };
+}
+
+function contactSheetViewPath(basePath, viewId) {
+  const safeViewId = String(viewId || 'view').replace(/[^a-z0-9_-]+/gi, '-');
+  if (/\.png$/i.test(basePath)) return basePath.replace(/\.png$/i, `-${safeViewId}.png`);
+  return `${basePath}-${safeViewId}.png`;
+}
+
+async function canvasCaptureOptions(ws, label = 'witness') {
+  const canvasRect = await evaluate(ws, `
+    (() => {
+      const canvas = document.querySelector('canvas');
+      if (!canvas) return null;
+      const rect = canvas.getBoundingClientRect();
+      return { x: rect.x, y: rect.y, width: rect.width, height: rect.height, scale: 1 };
+    })()
+  `);
+  assert.ok(canvasRect?.width > 300 && canvasRect?.height > 300, `${label} could not find a captureable canvas`);
+  return { format: 'png', captureBeyondViewport: false, clip: canvasRect };
+}
+
+async function capturePng(ws, path, captureOptions) {
+  const shot = await send(ws, 'Page.captureScreenshot', captureOptions);
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, Buffer.from(shot.data, 'base64'));
+  const stats = pngStats(path);
+  assert.ok(stats.bytes > 15000, 'blank frame or tiny screenshot');
+  assert.ok(stats.width > 300 && stats.height > 300, 'blank frame dimensions');
+  return { path, stats, data: shot.data };
+}
+
+async function captureSpatialTruthContactSheet(ws, captureOptions) {
+  if (!contactSheetOut) return null;
+  assert.equal(focus, 'spatial-truth', '--contact-sheet-out is currently scoped to spatial-truth focus');
+  const captures = [];
+  for (const viewId of spatialTruthContactSheetViews) {
+    const frame = await evaluate(ws, `
+      window.__kaminosOrbShellCompositionWitness?.frameSpatialTruthView?.(${JSON.stringify(viewId)})
+    `);
+    await delay(360);
+    const viewPath = contactSheetViewPath(contactSheetOut, frame?.effectiveViewId || viewId);
+    const capture = await capturePng(ws, viewPath, captureOptions);
+    captures.push({
+      schema: 'SpatialTruthContactSheetViewCapture',
+      requestedViewId: viewId,
+      effectiveViewId: frame?.effectiveViewId || viewId,
+      label: frame?.label || viewId,
+      path: capture.path,
+      stats: capture.stats,
+      data: capture.data,
+    });
+  }
+  const html = `<!doctype html>
+    <meta charset="utf-8">
+    <style>
+      body { margin: 0; background: #111; color: #dfe8ea; font: 14px system-ui, sans-serif; }
+      .sheet { width: 1800px; padding: 24px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; box-sizing: border-box; }
+      figure { margin: 0; background: #050607; border: 1px solid #273238; }
+      img { display: block; width: 100%; aspect-ratio: 16 / 11; object-fit: cover; background: #000; }
+      figcaption { padding: 8px 10px; font: 13px 'SF Mono', ui-monospace, monospace; color: #9fb4bb; }
+      .meta { grid-column: 1 / -1; font: 13px 'SF Mono', ui-monospace, monospace; color: #8ea3aa; }
+    </style>
+    <div class="sheet">
+      <div class="meta">SpatialTruthContactSheet | pass=${diagnosticPass} | viewSet=${viewSet} | env=${spatialTruthEnvMapIntensity} | exposure=${spatialTruthExposure}</div>
+      ${captures.map(capture => `
+        <figure>
+          <img src="data:image/png;base64,${capture.data}">
+          <figcaption>${capture.effectiveViewId}</figcaption>
+        </figure>
+      `).join('')}
+    </div>`;
+  await send(ws, 'Page.navigate', { url: `data:text/html;charset=utf-8,${encodeURIComponent(html)}` });
+  await delay(800);
+  const sheetCapture = await capturePng(ws, contactSheetOut, { format: 'png', captureBeyondViewport: true });
+  return {
+    schema: 'SpatialTruthContactSheet',
+    mode: 'browser-composed-multiview-contact-sheet-v0',
+    contactSheetOut,
+    viewSet,
+    diagnosticPass,
+    envMapIntensity: spatialTruthEnvMapIntensity,
+    exposure: spatialTruthExposure,
+    viewCount: captures.length,
+    captures: captures.map(({ data, ...capture }) => capture),
+    screenshot: { path: sheetCapture.path, stats: sheetCapture.stats },
+  };
 }
 
 async function send(ws, method, params = {}) {
@@ -201,6 +300,12 @@ async function main() {
     routeGate: 'kaminos_orb_shell_grounding=1',
     expectedIdentity: 'orb-shell-macro-grammar-grounding-v0',
     focus,
+    diagnosticPass,
+    viewSet,
+    spatialTruthView,
+    contactSheetOut,
+    spatialTruthEnvMapIntensity,
+    spatialTruthExposure,
     phase,
   };
   try {
@@ -298,6 +403,19 @@ async function main() {
     if (focus === 'lower-socket-semantic-render-inventory') {
       await evaluate(ws, 'window.__kaminosOrbShellCompositionWitness?.frameLowerSocketAnatomy?.()');
       lowerSocketSemanticRenderInventoryWitness = await evaluate(ws, 'window.__kaminosOrbShellCompositionWitness?.enableLowerSocketSemanticRenderInventoryWitness?.()');
+      await delay(500);
+    }
+    if (focus === 'spatial-truth') {
+      spatialTruthWitness = await evaluate(ws, `
+        window.__kaminosOrbShellCompositionWitness?.enableSpatialTruthWitness?.({
+          diagnosticPass: ${JSON.stringify(diagnosticPass)},
+          envMapIntensity: ${JSON.stringify(spatialTruthEnvMapIntensity)},
+          exposure: ${JSON.stringify(spatialTruthExposure)}
+        })
+      `);
+      spatialTruthViewFrame = await evaluate(ws, `
+        window.__kaminosOrbShellCompositionWitness?.frameSpatialTruthView?.(${JSON.stringify(spatialTruthView)})
+      `);
       await delay(500);
     }
 
@@ -430,6 +548,17 @@ async function main() {
       assert.equal(apertureOrbitCaptureWitness?.visualOverlayMode, 'macro-target-lanes-and-terminal-tangent-rays', 'aperture orbit capture witness did not enable target vector overlay');
       assert.ok(apertureOrbitCaptureWitness?.visibleOverlayIds?.length >= state.apertureOrbitLaneCount + state.apertureOrbitCaptureRoleCount, 'aperture orbit capture overlay meshes not visible');
     }
+    if (focus === 'spatial-truth') {
+      assert.equal(spatialTruthWitness?.schema, 'SpatialTruthWitnessState', 'spatial-truth witness did not activate');
+      assert.equal(spatialTruthWitness?.mode, 'spatial-truth-env-lit-diagnostic-v0', 'spatial-truth witness used wrong mode');
+      assert.equal(spatialTruthWitness?.diagnosticPass, diagnosticPass, 'spatial-truth diagnostic pass did not retain requested identity');
+      assert.equal(spatialTruthWitness?.materialPolicy?.environmentLit, true, 'spatial-truth material policy must preserve environment lighting');
+      assert.equal(spatialTruthWitness?.materialPolicy?.materialClass, 'MeshStandardMaterial', 'spatial-truth clay policy must be MeshStandardMaterial-based');
+      assert.ok(spatialTruthWitness?.visibleMeshCount >= state.macroAssemblageCount, 'spatial-truth witness exposed too little geometry');
+      assert.equal(spatialTruthViewFrame?.schema, 'SpatialTruthViewFrame', 'spatial-truth view frame did not activate');
+      assert.equal(state?.SpatialTruthViewSet?.schema, 'SpatialTruthViewSet', 'spatial-truth view set missing from debug state');
+      assert.equal(state?.SpatialTruthMaterialPolicy?.schema, 'SpatialTruthMaterialPolicy', 'spatial-truth material policy missing from debug state');
+    }
     assert.equal(state?.selectedParentPromotedBodyMeshCount, 0, 'selected parent promoted body slabs must be absent from normal render');
     assert.equal(state?.selectedParentSideWallMeshCount, 0, 'selected parent sidewalls must be absent from normal render');
     assert.equal(state?.selectedParentTerminalCapMeshCount, 0, 'selected parent terminal caps must be absent from normal render');
@@ -549,24 +678,17 @@ async function main() {
       || focus === 'aperture-tangency'
       || focus === 'aperture-orbit-capture'
       || focus === 'lower-socket-semantic-render-inventory'
+      || focus === 'spatial-truth'
     ) {
-      const canvasRect = await evaluate(ws, `
-        (() => {
-          const canvas = document.querySelector('canvas');
-          if (!canvas) return null;
-          const rect = canvas.getBoundingClientRect();
-          return { x: rect.x, y: rect.y, width: rect.width, height: rect.height, scale: 1 };
-        })()
-      `);
-      assert.ok(canvasRect?.width > 300 && canvasRect?.height > 300, 'clean topology witness could not find a captureable canvas');
-      captureOptions = { ...captureOptions, clip: canvasRect };
+      captureOptions = await canvasCaptureOptions(ws, focus);
     }
-    const shot = await send(ws, 'Page.captureScreenshot', captureOptions);
-    mkdirSync(dirname(out), { recursive: true });
-    writeFileSync(out, Buffer.from(shot.data, 'base64'));
-    const stats = pngStats(out);
-    assert.ok(stats.bytes > 15000, 'blank frame or tiny screenshot');
-    assert.ok(stats.width > 300 && stats.height > 300, 'blank frame dimensions');
+    const primaryCapture = await capturePng(ws, out, captureOptions);
+    const stats = primaryCapture.stats;
+    if (focus === 'spatial-truth' && contactSheetOut) {
+      phase = 'contact-sheet';
+      spatialTruthContactSheet = await captureSpatialTruthContactSheet(ws, captureOptions);
+      phase = 'screenshot';
+    }
     ws.close();
 
     writeReport({
@@ -694,6 +816,12 @@ async function main() {
       terminalCapClosureVerdict: state.terminalCapClosureVerdict,
       liveTerminalCapWitness,
       normalWitnessMaterialPolicy: state.normalWitnessMaterialPolicy,
+      SpatialTruthMaterialPolicy: state.SpatialTruthMaterialPolicy,
+      spatialTruthMaterialPolicy: state.spatialTruthMaterialPolicy,
+      SpatialTruthViewSet: state.SpatialTruthViewSet,
+      spatialTruthWitness,
+      spatialTruthViewFrame,
+      spatialTruthContactSheet,
       renderEffectPolicy,
       liveRenderMaterialPolicy: state.liveRenderMaterialPolicy,
       suppressedLegacyRoundBandIds: state.suppressedLegacyRoundBandIds,

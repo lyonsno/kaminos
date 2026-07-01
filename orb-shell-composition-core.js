@@ -5782,6 +5782,52 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
   const macroMorphologyRiskCurveMaterial = new THREE.MeshBasicMaterial({ color: 0xffd166, transparent: true, opacity: 0.98, depthWrite: false, depthTest: false });
   const macroMorphologyOffenderCurveMaterial = new THREE.MeshBasicMaterial({ color: 0xff4f7a, transparent: true, opacity: 1, depthWrite: false, depthTest: false });
   const macroMorphologySubstripCurveMaterial = new THREE.MeshBasicMaterial({ color: 0x9bc53d, transparent: true, opacity: 0.95, depthWrite: false, depthTest: false });
+  const spatialTruthMaterialPolicy = {
+    schema: 'SpatialTruthMaterialPolicy',
+    mode: 'env-lit-neutral-clay-spatial-truth-v0',
+    materialClass: 'MeshStandardMaterial',
+    diagnosticPasses: ['clay', 'normal', 'depth', 'object-id'],
+    defaultDiagnosticPass: 'clay',
+    environmentLit: true,
+    ambientOcclusionDefault: false,
+    roughness: 0.58,
+    metalness: 0.0,
+    envMapIntensity: 0.9,
+    exposure: 1.15,
+    color: '#9aa4a6',
+    witnessIntent: 'make-geometry-curvature-sidewalls-and-object-placement-legible-without-aesthetic-material-noise',
+  };
+  const spatialTruthViewSet = {
+    schema: 'SpatialTruthViewSet',
+    id: 'spatial-truth-default-v0',
+    defaultViewId: 'front',
+    views: [
+      { id: 'front', label: 'Front', position: [0.28, 0.06, 3.28], target: [0.02, -0.05, 0.64] },
+      { id: 'front-left', label: 'Front Left', position: [-1.18, 0.18, 2.78], target: [-0.18, -0.04, 0.46] },
+      { id: 'front-right', label: 'Front Right', position: [1.32, 0.14, 2.66], target: [0.18, -0.04, 0.48] },
+      { id: 'left', label: 'Left Profile', position: [-2.35, 0.22, 1.1], target: [-0.48, -0.08, 0.32] },
+      { id: 'right', label: 'Right Profile', position: [2.28, 0.16, 1.02], target: [0.48, -0.08, 0.34] },
+      { id: 'high-front', label: 'High Front', position: [0.12, 1.45, 2.55], target: [0, 0.02, 0.34] },
+      { id: 'lower-socket-close', label: 'Lower Socket Close', position: [-1.72, 0.18, 1.56], target: [-0.66, -0.42, 0.32] },
+    ],
+  };
+  let spatialTruthLastState = null;
+  const spatialTruthClayMaterial = neutralPbrMaterial({
+    color: 0x9aa4a6,
+    roughness: spatialTruthMaterialPolicy.roughness,
+    metalness: spatialTruthMaterialPolicy.metalness,
+    envMapIntensity: spatialTruthMaterialPolicy.envMapIntensity,
+    side: THREE.DoubleSide,
+  });
+  const spatialTruthNormalMaterial = new THREE.MeshNormalMaterial({
+    side: THREE.DoubleSide,
+    flatShading: false,
+  });
+  const spatialTruthDepthMaterial = new THREE.MeshDepthMaterial({
+    side: THREE.DoubleSide,
+  });
+  const spatialTruthObjectIdMaterials = new Map();
+  const spatialTruthCameraDepthMaterials = new Map();
   const apertureOwnerBodyMaterial = neutralPbrMaterial({ color: 0x1a2427, side: THREE.DoubleSide });
   const apertureOwnerRailMaterial = neutralPbrMaterial({ color: 0x46565b, roughness: 0.4, metalness: 0.05 });
   const crossingSubSurgeRailMaterial = neutralPbrMaterial({ color: 0x1d2a2f, roughness: 0.52, metalness: 0.04 });
@@ -5885,6 +5931,9 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
     macroMorphologyRiskCurveMaterial,
     macroMorphologyOffenderCurveMaterial,
     macroMorphologySubstripCurveMaterial,
+    spatialTruthClayMaterial,
+    spatialTruthNormalMaterial,
+    spatialTruthDepthMaterial,
     apertureOwnerBodyMaterial,
     apertureOwnerRailMaterial,
     promotedBodyMaterial,
@@ -5905,6 +5954,24 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
     cleanInnerEdgeMaterial,
     ...lowerSocketInventoryMaterials.values(),
   ]) sharedMaterials.add(material);
+
+  const SPATIAL_TRUTH_OBJECT_ID_COLORS = {
+    MacroPromotedBody: 0x6ac8ff,
+    LiveMacroSideWall: 0xc6d2d6,
+    LiveMacroTerminalCap: 0xff9f66,
+    MacroFamilySubstrip: 0x9ee493,
+    MacroFamilySubstripSideWall: 0x4fb286,
+    MacroFamilySubstripTerminalCap: 0xffd166,
+    LamellarChannelStripMesh: 0xb8c7d9,
+    LamellarPlateLip: 0xf2f7f8,
+    LamellarPlateBoundaryMesh: 0xd06c6c,
+    LamellarInnerReturnSidePlaneMesh: 0x8395a7,
+    BandMember: 0xa37acc,
+    TerminationSocketGraph: 0xff6a1c,
+    AperturePressure: 0x4fd3ff,
+    MacroTerritoryBody: 0x394449,
+    UnknownShellMesh: 0x858d90,
+  };
 
   function materialForBand(bandMember) {
     if (bandMember.role === 'body') return bodyMaterial;
@@ -6160,6 +6227,122 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
       visibleRuntimeRecords: records.filter(record => record.visibleBeforeIsolation),
       suspectVisibleRecords: records.filter(record => record.visibleBeforeIsolation && record.suspiciousIfVisible),
       inventoryCompletenessVerdict: composition.lowerSocketRenderInventoryPlan?.inventoryCompletenessVerdict,
+    };
+  }
+
+  function spatialTruthRenderClassForMesh(mesh) {
+    if (mesh.userData?.LiveMacroSideWall) return 'LiveMacroSideWall';
+    if (mesh.userData?.LiveMacroTerminalCap) return 'LiveMacroTerminalCap';
+    if (mesh.userData?.MacroFamilySubstripTerminalCap) return 'MacroFamilySubstripTerminalCap';
+    if (mesh.userData?.MacroFamilySubstripSideWall) return 'MacroFamilySubstripSideWall';
+    if (mesh.userData?.MacroFamilySubstrip) return 'MacroFamilySubstrip';
+    if (mesh.userData?.LamellarChannelStripMesh) return 'LamellarChannelStripMesh';
+    if (mesh.userData?.LamellarPlateLip) return 'LamellarPlateLip';
+    if (mesh.userData?.LamellarPlateBoundaryMesh) return 'LamellarPlateBoundaryMesh';
+    if (mesh.userData?.LamellarInnerReturnSidePlaneMesh) return 'LamellarInnerReturnSidePlaneMesh';
+    if (mesh.userData?.BandMember) return 'BandMember';
+    if (mesh.userData?.TerminationSocketGraph) return 'TerminationSocketGraph';
+    if (mesh.userData?.AperturePressure) return 'AperturePressure';
+    if (mesh.userData?.MacroTerritoryBody) return 'MacroTerritoryBody';
+    if (mesh.userData?.MacroPromotedBody) return 'MacroPromotedBody';
+    return 'UnknownShellMesh';
+  }
+
+  function spatialTruthIsOverlayMesh(mesh) {
+    return !!(
+      mesh.userData?.ApertureOrbitLane
+      || mesh.userData?.MacroApertureTerminalRole
+      || mesh.userData?.ApertureTangencySample
+      || mesh.userData?.MacroContactSample
+      || mesh.userData?.MacroMorphologyReferenceSphere
+      || mesh.userData?.MacroSphereCurveDecomposition
+    );
+  }
+
+  function spatialTruthObjectIdMaterial(renderClass) {
+    if (!spatialTruthObjectIdMaterials.has(renderClass)) {
+      const material = new THREE.MeshBasicMaterial({
+        color: SPATIAL_TRUTH_OBJECT_ID_COLORS[renderClass] || SPATIAL_TRUTH_OBJECT_ID_COLORS.UnknownShellMesh,
+        side: THREE.DoubleSide,
+      });
+      spatialTruthObjectIdMaterials.set(renderClass, material);
+      sharedMaterials.add(material);
+    }
+    return spatialTruthObjectIdMaterials.get(renderClass);
+  }
+
+  function spatialTruthDiagnosticMaterial(pass, mesh) {
+    if (pass === 'normal') return spatialTruthNormalMaterial;
+    if (pass === 'depth') return spatialTruthDepthMaterial;
+    if (pass === 'object-id') return spatialTruthObjectIdMaterial(spatialTruthRenderClassForMesh(mesh));
+    return spatialTruthClayMaterial;
+  }
+
+  function spatialTruthCameraDepthMaterial(mesh, normalizedDepth) {
+    const key = mesh.uuid || mesh.name;
+    if (!spatialTruthCameraDepthMaterials.has(key)) {
+      const material = new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide });
+      spatialTruthCameraDepthMaterials.set(key, material);
+      sharedMaterials.add(material);
+    }
+    const material = spatialTruthCameraDepthMaterials.get(key);
+    const contrastDepth = Math.pow(Math.max(0, Math.min(1, normalizedDepth)), 0.72);
+    const gray = Math.round(245 - contrastDepth * 215);
+    material.color.setRGB(gray / 255, gray / 255, gray / 255);
+    material.needsUpdate = true;
+    return material;
+  }
+
+  function refreshSpatialTruthDepthMaterials() {
+    if (spatialTruthLastState?.diagnosticPass !== 'depth' || !group) return null;
+    const meshes = [];
+    group.traverse(child => {
+      if (child.isMesh && child.visible && !spatialTruthIsOverlayMesh(child)) meshes.push(child);
+    });
+    if (!meshes.length) return null;
+    const distances = meshes.map(mesh => {
+      const center = new THREE.Box3().setFromObject(mesh).getCenter(new THREE.Vector3());
+      return center.distanceTo(camera.position);
+    });
+    const minDistance = Math.min(...distances);
+    const maxDistance = Math.max(...distances);
+    const span = Math.max(0.001, maxDistance - minDistance);
+    meshes.forEach((mesh, index) => {
+      const normalizedDepth = (distances[index] - minDistance) / span;
+      mesh.material = spatialTruthCameraDepthMaterial(mesh, normalizedDepth);
+      mesh.userData.SpatialTruthDiagnosticPass = {
+        ...(mesh.userData.SpatialTruthDiagnosticPass || {}),
+        readableDepthMode: 'camera-normalized-grayscale-depth-v0',
+        normalizedDepth,
+      };
+    });
+    spatialTruthLastState.depthRange = {
+      schema: 'SpatialTruthDepthRange',
+      mode: 'camera-normalized-grayscale-depth-v0',
+      minDistance,
+      maxDistance,
+      meshCount: meshes.length,
+    };
+    return spatialTruthLastState.depthRange;
+  }
+
+  function setSpatialTruthMaterialPolicy(options = {}) {
+    const envMapIntensity = Number.isFinite(Number(options.envMapIntensity))
+      ? Math.max(0, Math.min(3, Number(options.envMapIntensity)))
+      : spatialTruthMaterialPolicy.envMapIntensity;
+    spatialTruthClayMaterial.roughness = Number.isFinite(Number(options.roughness))
+      ? Math.max(0, Math.min(1, Number(options.roughness)))
+      : spatialTruthMaterialPolicy.roughness;
+    spatialTruthClayMaterial.metalness = spatialTruthMaterialPolicy.metalness;
+    spatialTruthClayMaterial.envMapIntensity = envMapIntensity;
+    spatialTruthClayMaterial.needsUpdate = true;
+    return {
+      ...spatialTruthMaterialPolicy,
+      roughness: spatialTruthClayMaterial.roughness,
+      envMapIntensity,
+      exposure: Number.isFinite(Number(options.exposure))
+        ? Math.max(0.2, Math.min(2.5, Number(options.exposure)))
+        : spatialTruthMaterialPolicy.exposure,
     };
   }
 
@@ -6574,6 +6757,10 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
       liveMacroTerminalCapCount: composition.liveMacroSideWallPlan?.terminalCapCount || 0,
       terminalCapClosureVerdict: composition.liveMacroSideWallPlan?.terminalCapClosureVerdict,
       normalWitnessMaterialPolicy: composition.liveMacroSideWallPlan?.normalWitnessMaterialPolicy,
+      SpatialTruthMaterialPolicy: spatialTruthMaterialPolicy,
+      spatialTruthMaterialPolicy,
+      SpatialTruthViewSet: spatialTruthViewSet,
+      spatialTruthLastState,
       liveRenderMaterialPolicy: composition.liveMacroSideWallPlan?.liveRenderMaterialPolicy,
       suppressedLegacyRoundBandIds: composition.liveMacroSideWallPlan?.suppressedLegacyRoundBandIds || [],
       suppressedLegacyTerminationSocketIds: composition.liveMacroSideWallPlan?.suppressedLegacyTerminationSocketIds || [],
@@ -6669,11 +6856,104 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
       controls.update();
       onDirty?.();
     },
+    frameSpatialTruthView(viewId = spatialTruthViewSet.defaultViewId) {
+      const view = spatialTruthViewSet.views.find(item => item.id === viewId)
+        || spatialTruthViewSet.views.find(item => item.id === spatialTruthViewSet.defaultViewId)
+        || spatialTruthViewSet.views[0];
+      camera.position.set(...view.position);
+      controls.target.set(...view.target);
+      controls.update();
+      const depthRange = refreshSpatialTruthDepthMaterials();
+      onDirty?.();
+      return {
+        schema: 'SpatialTruthViewFrame',
+        viewSetId: spatialTruthViewSet.id,
+        requestedViewId: viewId,
+        effectiveViewId: view.id,
+        label: view.label,
+        cameraPosition: view.position,
+        cameraTarget: view.target,
+        depthRange,
+      };
+    },
     frameLowerSocketAnatomy() {
       camera.position.set(-1.72, 0.18, 1.56);
       controls.target.set(-0.66, -0.42, 0.32);
       controls.update();
       onDirty?.();
+    },
+    enableSpatialTruthWitness(options = {}) {
+      const requestedPass = String(options.diagnosticPass || options.pass || spatialTruthMaterialPolicy.defaultDiagnosticPass);
+      const diagnosticPass = spatialTruthMaterialPolicy.diagnosticPasses.includes(requestedPass)
+        ? requestedPass
+        : spatialTruthMaterialPolicy.defaultDiagnosticPass;
+      const includeOverlays = !!options.includeOverlays;
+      const effectiveMaterialPolicy = setSpatialTruthMaterialPolicy(options);
+      scene.children.forEach(child => {
+        if (child !== group) {
+          child.userData.spatialTruthWitnessHidden = true;
+          child.visible = false;
+        }
+      });
+      let visibleMeshCount = 0;
+      let hiddenMeshCount = 0;
+      let materialOverrideCount = 0;
+      let hiddenOverlayCount = 0;
+      const visibleRoleCounts = {};
+      group?.traverse(child => {
+        if (child.isLight) {
+          child.visible = true;
+          return;
+        }
+        if (!child.isMesh) return;
+        const isOverlay = spatialTruthIsOverlayMesh(child);
+        child.visible = includeOverlays || !isOverlay;
+        if (!child.visible) {
+          hiddenMeshCount += 1;
+          if (isOverlay) hiddenOverlayCount += 1;
+          return;
+        }
+        const renderClass = spatialTruthRenderClassForMesh(child);
+        child.material = spatialTruthDiagnosticMaterial(diagnosticPass, child);
+        child.userData.SpatialTruthDiagnosticPass = {
+          schema: 'SpatialTruthDiagnosticPass',
+          diagnosticPass,
+          renderClass,
+          materialPolicyMode: effectiveMaterialPolicy.mode,
+        };
+        child.material.needsUpdate = true;
+        visibleMeshCount += 1;
+        materialOverrideCount += 1;
+        visibleRoleCounts[renderClass] = (visibleRoleCounts[renderClass] || 0) + 1;
+      });
+      spatialTruthLastState = {
+        schema: 'SpatialTruthWitnessState',
+        mode: 'spatial-truth-env-lit-diagnostic-v0',
+        diagnosticPass,
+        requestedPass,
+        includeOverlays,
+        materialPolicy: effectiveMaterialPolicy,
+        SpatialTruthMaterialPolicy: effectiveMaterialPolicy,
+        SpatialTruthViewSet: spatialTruthViewSet,
+        visibleMeshCount,
+        hiddenMeshCount,
+        materialOverrideCount,
+        hiddenOverlayCount,
+        visibleRoleCounts,
+        diagnosticPassRecord: {
+          schema: 'SpatialTruthDiagnosticPass',
+          diagnosticPass,
+          materialClass: diagnosticPass === 'normal'
+            ? 'MeshNormalMaterial'
+            : diagnosticPass === 'depth'
+              ? 'MeshDepthMaterial plus camera-normalized MeshBasicMaterial grayscale'
+              : diagnosticPass === 'object-id'
+                ? 'MeshBasicMaterial'
+                : 'MeshStandardMaterial',
+        },
+      };
+      onDirty?.();
+      return spatialTruthLastState;
     },
     lowerSocketSemanticRenderInventory,
     enableLowerSocketSemanticRenderInventoryWitness() {
@@ -7205,6 +7485,10 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
         liveMacroTerminalCapCount: composition.liveMacroSideWallPlan?.terminalCapCount || 0,
         terminalCapClosureVerdict: composition.liveMacroSideWallPlan?.terminalCapClosureVerdict,
         normalWitnessMaterialPolicy: composition.liveMacroSideWallPlan?.normalWitnessMaterialPolicy,
+        SpatialTruthMaterialPolicy: spatialTruthMaterialPolicy,
+        spatialTruthMaterialPolicy,
+        SpatialTruthViewSet: spatialTruthViewSet,
+        spatialTruthLastState,
         liveRenderMaterialPolicy: composition.liveMacroSideWallPlan?.liveRenderMaterialPolicy,
         suppressedLegacyRoundBandIds: composition.liveMacroSideWallPlan?.suppressedLegacyRoundBandIds || [],
         suppressedLegacyTerminationSocketIds: composition.liveMacroSideWallPlan?.suppressedLegacyTerminationSocketIds || [],
