@@ -502,6 +502,7 @@ async function captureFrame(ws, index) {
       pathWorld: actor?.pathWorld || state?.pathWorld || null,
       pathWorldInterrupt: actor?.pathWorldInterrupt || state?.pathWorldInterrupt || null,
       pathWorldEpisode: actor?.pathWorldEpisode || state?.pathWorldEpisode || state?.pathWorldInterrupt?.pathWorldEpisode || null,
+      pathWorldEncounterTrajectory: actor?.pathWorldEncounterTrajectory || state?.pathWorldEncounterTrajectory || null,
       pathWorldRootConstraint: actor?.pathWorldRootConstraint || state?.pathWorldRootConstraint || null,
       pathWorldActiveSource: actor?.pathWorldActiveSource || state?.pathWorldActiveSource || null,
       pathWorldPanel: window.kaminosMotionPanelPathWorldDebugState?.() || null,
@@ -573,7 +574,9 @@ async function composeFilmstrip(ws, frames) {
     const clipletInterrupt = frame.debug?.clipletInterrupt || null;
     const pathWorldInterrupt = frame.debug?.pathWorldInterrupt || null;
     const pathWorldEpisode = frame.debug?.pathWorldEpisode || null;
+    const pathWorldEncounterTrajectory = frame.debug?.pathWorldEncounterTrajectory || null;
     const episodePhase = pathWorldEpisode?.phase || pathWorldInterrupt?.phase || null;
+    const trajectoryPhase = pathWorldEncounterTrajectory?.trajectoryPhase || pathWorldEncounterTrajectory?.activeSample?.trajectoryPhase || null;
     const pathWorldActiveSource = frame.debug?.pathWorldActiveSource || null;
     const interruptState = clipletInterrupt?.state
       ? `interrupt ${clipletInterrupt.state}`
@@ -586,6 +589,7 @@ async function composeFilmstrip(ws, frames) {
     const state = [
       clipletLabel || behaviorState,
       interruptState || behaviorPhase,
+      trajectoryPhase ? `traj ${trajectoryPhase}` : null,
       episodeId,
     ].filter(Boolean).join(' / ') || 'generated motion';
     return {

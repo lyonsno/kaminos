@@ -5159,6 +5159,23 @@ function normalizeMotionPanelPathWorldXZ(vector, fallback = [0, 0, 1]) {
   ];
 }
 
+function motionPanelPathWorldPointFromArray(point, fallback = [0, 0, 0]) {
+  return new THREE.Vector3(
+    Number(point?.[0] ?? fallback?.[0] ?? 0),
+    Number(point?.[1] ?? fallback?.[1] ?? 0),
+    Number(point?.[2] ?? fallback?.[2] ?? 0),
+  );
+}
+
+function motionPanelPathWorldArrayFromPoint(point) {
+  return point.toArray().map(value => Number(value.toFixed(5)));
+}
+
+function smoothMotionPanelPathWorldUnit(value) {
+  const u = Math.max(0, Math.min(1, Number(value) || 0));
+  return u * u * (3 - 2 * u);
+}
+
 function createMotionPanelPathWorldContactFrame(pathWorldSample, { actorRadius = 0.17 } = {}) {
   const trigger = pathWorldSample?.trigger || {};
   const center = trigger.center || [0, 0, 0];
@@ -5197,10 +5214,52 @@ function createMotionPanelPathWorldContactFrame(pathWorldSample, { actorRadius =
   };
 }
 
+function createMotionPanelPathWorldEncounterTrajectory({ episodeId, pathWorldSample, contactFrame }) {
+  const contactPoint = motionPanelPathWorldPointFromArray(contactFrame?.contactPoint, pathWorldSample?.root || [0, 0, 0]);
+  const normal = motionPanelPathWorldPointFromArray(contactFrame?.obstacleNormal, [0, 0, -1]).setY(0);
+  if (normal.lengthSq() < 1e-6) normal.set(0, 0, -1);
+  normal.normalize();
+  const incoming = motionPanelPathWorldPointFromArray(contactFrame?.incomingHeading || pathWorldSample?.facing, [0, 0, 1]).setY(0);
+  if (incoming.lengthSq() < 1e-6) incoming.set(0, 0, 1);
+  incoming.normalize();
+  const baseTangent = motionPanelPathWorldPointFromArray(contactFrame?.tangent, [1, 0, 0]).setY(0);
+  if (baseTangent.lengthSq() < 1e-6) baseTangent.set(1, 0, 0);
+  baseTangent.normalize();
+  const tangentSign = baseTangent.dot(incoming) >= 0 ? 1 : -1;
+  const exitTangent = baseTangent.clone().multiplyScalar(tangentSign);
+  const exitSide = tangentSign >= 0 ? 'tangent-positive' : 'tangent-negative';
+  const entryPoint = motionPanelPathWorldPointFromArray(pathWorldSample?.root, contactFrame?.contactPoint || [0, 0, 0]);
+  const retreatPoint = contactPoint.clone()
+    .add(normal.clone().multiplyScalar(0.3))
+    .add(incoming.clone().multiplyScalar(-0.08));
+  const releasePoint = contactPoint.clone()
+    .add(normal.clone().multiplyScalar(0.24))
+    .add(exitTangent.clone().multiplyScalar(0.28));
+  const resumePoint = contactPoint.clone()
+    .add(normal.clone().multiplyScalar(0.18))
+    .add(exitTangent.clone().multiplyScalar(0.66));
+  return {
+    schema: 'kaminos.generated-motion-path-world-encounter-trajectory.v0',
+    trajectoryId: `${episodeId}-trajectory`,
+    pathWorldId: pathWorldSample?.pathWorldId || null,
+    obstacleId: contactFrame?.obstacleId || pathWorldSample?.trigger?.obstacleId || null,
+    exitSide,
+    contactPoint: motionPanelPathWorldArrayFromPoint(contactPoint),
+    entryPoint: motionPanelPathWorldArrayFromPoint(entryPoint),
+    retreatPoint: motionPanelPathWorldArrayFromPoint(retreatPoint),
+    releasePoint: motionPanelPathWorldArrayFromPoint(releasePoint),
+    resumePoint: motionPanelPathWorldArrayFromPoint(resumePoint),
+    obstacleNormal: motionPanelPathWorldArrayFromPoint(normal),
+    incomingHeading: motionPanelPathWorldArrayFromPoint(incoming),
+    exitTangent: motionPanelPathWorldArrayFromPoint(exitTangent),
+  };
+}
+
 function createMotionPanelPathWorldInterruptEpisode({ state, pathWorldSample, selected, elapsedTime = 0 }) {
   const runtime = state.pathWorldInterruptRuntime;
   const sequence = Number(runtime.episodeSequence || 0) + 1;
   runtime.episodeSequence = sequence;
+  const episodeId = `path-world-episode-${sequence}`;
   const playback = buildGeneratedPoseClipletPlayback({
     cliplets: state.generatedMotionCliplets,
     segmentIds: [selected.id],
@@ -5210,9 +5269,15 @@ function createMotionPanelPathWorldInterruptEpisode({ state, pathWorldSample, se
   const playbackDuration = Math.max(1e-6, Number(playback?.duration) || 0);
   const cooldownDuration = 0.48;
   const firedAt = Number(elapsedTime) || 0;
+  const contactFrame = createMotionPanelPathWorldContactFrame(pathWorldSample);
+  const encounterTrajectory = createMotionPanelPathWorldEncounterTrajectory({
+    episodeId,
+    pathWorldSample,
+    contactFrame,
+  });
   return {
     schema: 'kaminos.generated-motion-path-world-interrupt-episode.v0',
-    episodeId: `path-world-episode-${sequence}`,
+    episodeId,
     pathWorldId: pathWorldSample?.pathWorldId || null,
     obstacleId: pathWorldSample?.trigger?.obstacleId || null,
     selectedSegmentId: selected.id,
@@ -5224,7 +5289,8 @@ function createMotionPanelPathWorldInterruptEpisode({ state, pathWorldSample, se
     cooldownDuration: Number(cooldownDuration.toFixed(5)),
     cooldownUntil: Number((firedAt + playbackDuration + cooldownDuration).toFixed(5)),
     suppressedUntilClear: true,
-    contactFrame: createMotionPanelPathWorldContactFrame(pathWorldSample),
+    contactFrame,
+    encounterTrajectory,
     trigger: pathWorldSample?.trigger || null,
   };
 }
@@ -5334,8 +5400,86 @@ function motionPanelPathWorldInterruptFromSample(state, pathWorldSample, elapsed
   };
 }
 
+function sampleMotionPanelPathWorldEncounterTrajectory({ episode, displayGrounding, fallbackRoot }) {
+  const trajectory = episode?.encounterTrajectory || null;
+  if (!trajectory || !displayGrounding) return null;
+  const local = displayGrounding.root || [0, 0, 0];
+  const contactPoint = motionPanelPathWorldPointFromArray(trajectory.contactPoint);
+  const retreatPoint = motionPanelPathWorldPointFromArray(trajectory.retreatPoint, trajectory.contactPoint);
+  const releasePoint = motionPanelPathWorldPointFromArray(trajectory.releasePoint, trajectory.retreatPoint);
+  const resumePoint = motionPanelPathWorldPointFromArray(trajectory.resumePoint, trajectory.releasePoint);
+  const normal = motionPanelPathWorldPointFromArray(trajectory.obstacleNormal, [0, 0, -1]).setY(0);
+  if (normal.lengthSq() < 1e-6) normal.set(0, 0, -1);
+  normal.normalize();
+  const tangent = motionPanelPathWorldPointFromArray(trajectory.exitTangent, [1, 0, 0]).setY(0);
+  if (tangent.lengthSq() < 1e-6) tangent.set(1, 0, 0);
+  tangent.normalize();
+  const episodeTime = Number(episode.episodeTime) || 0;
+  const playbackDuration = Math.max(1e-6, Number(episode.playbackDuration) || 0);
+  const cooldownDuration = Math.max(0.05, Number(episode.cooldownDuration) || 0.48);
+  let trajectoryPhase = episode.phase || 'approach';
+  let root = fallbackRoot.clone();
+  if (episode.phase === 'triggered' || episode.phase === 'reaction') {
+    const u = smoothMotionPanelPathWorldUnit(episodeTime / playbackDuration);
+    trajectoryPhase = u < 0.58 ? 'retreat' : 'carry';
+    const retreatU = Math.min(1, u / 0.58);
+    const carryU = Math.max(0, (u - 0.58) / 0.42);
+    root = u < 0.58
+      ? contactPoint.clone().lerp(retreatPoint, smoothMotionPanelPathWorldUnit(retreatU))
+      : retreatPoint.clone().lerp(releasePoint, smoothMotionPanelPathWorldUnit(carryU));
+    root
+      .add(tangent.clone().multiplyScalar(Number(local[0] || 0) * 0.18))
+      .add(normal.clone().multiplyScalar(Math.max(0, Number(local[2] || 0)) * 0.1))
+      .setY(Number(local[1] || 0));
+  } else if (episode.phase === 'cooldown') {
+    const u = smoothMotionPanelPathWorldUnit((episodeTime - playbackDuration) / cooldownDuration);
+    trajectoryPhase = 'resume';
+    root = releasePoint.clone()
+      .lerp(resumePoint, u)
+      .add(tangent.clone().multiplyScalar(Number(local[0] || 0) * 0.06 * (1 - u)))
+      .setY(Number(fallbackRoot?.y || local[1] || 0));
+  } else if (episode.phase === 'resume') {
+    trajectoryPhase = 'handoff';
+    root = resumePoint.clone().setY(Number(fallbackRoot?.y || local[1] || 0));
+  }
+  return {
+    schema: 'kaminos.generated-motion-path-world-encounter-trajectory-sample.v0',
+    trajectoryId: trajectory.trajectoryId || null,
+    trajectoryPhase,
+    exitSide: trajectory.exitSide || null,
+    root,
+    rootArray: motionPanelPathWorldArrayFromPoint(root),
+  };
+}
+
+function motionPanelPathWorldEncounterTrajectoryRootPosition({ pathWorldSample, pathWorldInterrupt, displayGrounding, fallbackRoot }) {
+  const episode = pathWorldInterrupt?.pathWorldEpisode || null;
+  if (!episode?.encounterTrajectory || !displayGrounding) return {
+    root: fallbackRoot.clone(),
+    sample: null,
+  };
+  const trajectorySample = sampleMotionPanelPathWorldEncounterTrajectory({
+    episode,
+    displayGrounding,
+    fallbackRoot,
+  });
+  return {
+    root: trajectorySample?.root?.clone?.() || fallbackRoot.clone(),
+    sample: trajectorySample,
+  };
+}
+
 function motionPanelPathWorldEpisodeRootPosition({ pathWorldSample, pathWorldInterrupt, displayGrounding, fallbackRoot }) {
   const episode = pathWorldInterrupt?.pathWorldEpisode || null;
+  if (episode?.encounterTrajectory) {
+    const trajectoryResult = motionPanelPathWorldEncounterTrajectoryRootPosition({
+      pathWorldSample,
+      pathWorldInterrupt,
+      displayGrounding,
+      fallbackRoot,
+    });
+    return trajectoryResult.root;
+  }
   if (!episode?.contactFrame || !displayGrounding) return fallbackRoot.clone();
   const frame = episode.contactFrame;
   const normal = new THREE.Vector3(frame.obstacleNormal?.[0] || 0, 0, frame.obstacleNormal?.[2] || 1).normalize();
@@ -5351,11 +5495,10 @@ function motionPanelPathWorldEpisodeRootPosition({ pathWorldSample, pathWorldInt
       .setY(Number(local[1] || 0));
   }
   if (episode.phase === 'cooldown') {
-    const episodeTime = Number(episode.episodeTime) || 0;
-    const playbackDuration = Math.max(1e-6, Number(episode.playbackDuration) || 0);
-    const cooldownDuration = Math.max(0.05, Number(episode.cooldownDuration) || 0.48);
-    const u = Math.max(0, Math.min(1, (episodeTime - playbackDuration) / cooldownDuration));
-    return contactPoint.lerp(fallbackRoot.clone(), u).setY(fallbackRoot.y);
+    const releasePoint = contactPoint
+      .add(normal.clone().multiplyScalar(0.18))
+      .add(tangent.clone().multiplyScalar(0.28));
+    return releasePoint.setY(fallbackRoot.y);
   }
   return fallbackRoot.clone();
 }
@@ -6282,13 +6425,36 @@ function updateGeneratedPoseTemporalFrame(nowSeconds = performance.now() / 1000)
   const fallbackRootPosition = new THREE.Vector3(...displayGrounding.root).add(pathWorldOffset);
   let rootPosition = fallbackRootPosition.clone();
   let pathWorldRootConstraint = null;
+  let pathWorldEncounterTrajectory = null;
   if (pathWorldSample) {
-    rootPosition = motionPanelPathWorldEpisodeRootPosition({
-      pathWorldSample,
-      pathWorldInterrupt: pathWorldInterruptEnvelope?.interrupt || null,
-      displayGrounding,
-      fallbackRoot: fallbackRootPosition,
-    });
+    const activePathWorldEpisode = pathWorldInterruptEnvelope?.interrupt?.pathWorldEpisode || null;
+    if (activePathWorldEpisode?.encounterTrajectory) {
+      const trajectoryResult = motionPanelPathWorldEncounterTrajectoryRootPosition({
+        pathWorldSample,
+        pathWorldInterrupt: pathWorldInterruptEnvelope?.interrupt || null,
+        displayGrounding,
+        fallbackRoot: fallbackRootPosition,
+      });
+      rootPosition = trajectoryResult.root;
+      pathWorldEncounterTrajectory = trajectoryResult.sample
+        ? {
+          ...activePathWorldEpisode.encounterTrajectory,
+          activeSample: {
+            ...trajectoryResult.sample,
+            root: undefined,
+          },
+          trajectoryPhase: trajectoryResult.sample.trajectoryPhase,
+          activeRoot: trajectoryResult.sample.rootArray,
+        }
+        : activePathWorldEpisode.encounterTrajectory;
+    } else {
+      rootPosition = motionPanelPathWorldEpisodeRootPosition({
+        pathWorldSample,
+        pathWorldInterrupt: pathWorldInterruptEnvelope?.interrupt || null,
+        displayGrounding,
+        fallbackRoot: fallbackRootPosition,
+      });
+    }
     pathWorldRootConstraint = constrainMotionPanelPathWorldRootPosition(
       rootPosition,
       pathWorldSample,
@@ -6369,6 +6535,7 @@ function updateGeneratedPoseTemporalFrame(nowSeconds = performance.now() / 1000)
   state.lastPathWorld = pathWorldSample;
   state.lastPathWorldInterrupt = pathWorldInterruptEnvelope?.interrupt || null;
   state.lastPathWorldEpisode = pathWorldInterruptEnvelope?.interrupt?.pathWorldEpisode || null;
+  state.lastPathWorldEncounterTrajectory = pathWorldEncounterTrajectory;
   state.lastPathWorldRootConstraint = pathWorldRootConstraint;
   state.lastDisplayGrounding = displayGrounding;
   const behaviorState = buildGeneratedPoseTemporalBehaviorState({
@@ -6446,6 +6613,7 @@ function updateGeneratedPoseTemporalFrame(nowSeconds = performance.now() / 1000)
     pathWorld: pathWorldSample,
     pathWorldInterrupt: pathWorldInterruptEnvelope?.interrupt || null,
     pathWorldEpisode: pathWorldInterruptEnvelope?.interrupt?.pathWorldEpisode || null,
+    pathWorldEncounterTrajectory,
     pathWorldRootConstraint,
     pathWorldActiveSource: pathWorldInterruptEnvelope?.interrupt?.activeSource || (pathWorldSample ? 'world-path' : null),
     sourceFrame: temporalSample?.sourceFrame ?? null,
@@ -7805,6 +7973,7 @@ window.kaminosGeneratedPoseTemporalDebugState = function() {
     pathWorld: state?.lastPathWorld || null,
     pathWorldInterrupt: state?.lastPathWorldInterrupt || null,
     pathWorldEpisode: state?.lastPathWorldEpisode || null,
+    pathWorldEncounterTrajectory: state?.lastPathWorldEncounterTrajectory || null,
     pathWorldRootConstraint: state?.lastPathWorldRootConstraint || null,
     pathWorldActiveSource: state?.lastPathWorldInterrupt?.activeSource || (state?.lastPathWorld ? 'world-path' : null),
     attentionTargetMode: motionAttentionTargetModeFromInputs(),
