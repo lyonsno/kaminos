@@ -368,10 +368,13 @@ async function configureClipletPlayback(ws) {
       select.value = match.value;
     }
     select.dispatchEvent(new Event('change', { bubbles: true }));
-    const interruptSelect = document.getElementById('motion-panel-cliplet-interrupt');
-    if (!interruptSelect) throw new Error('missing motion panel cliplet interrupt selector');
-    interruptSelect.value = requestedInterrupt === 'path-trigger' ? 'path-trigger' : 'off';
-    interruptSelect.dispatchEvent(new Event('change', { bubbles: true }));
+    const interruptInputs = Array.from(document.querySelectorAll('input[name="motion-panel-cliplet-interrupt"]'));
+    if (!interruptInputs.length) throw new Error('missing motion panel cliplet interrupt radio group');
+    const selectedInterrupt = requestedInterrupt === 'path-trigger' ? 'path-trigger' : 'off';
+    const interruptInput = interruptInputs.find(input => input.value === selectedInterrupt);
+    if (!interruptInput) throw new Error('cliplet interrupt radio option not found for ' + selectedInterrupt);
+    for (const input of interruptInputs) input.checked = input === interruptInput;
+    interruptInput.dispatchEvent(new Event('change', { bubbles: true }));
     const state = window.kaminosGeneratedPoseTemporalDebugState?.();
     return {
       schema: 'kaminos.motion-panel-live-cliplet-playback-config.v0',
@@ -379,8 +382,9 @@ async function configureClipletPlayback(ws) {
       requestedInterrupt,
       selected: select.value,
       selectedLabel: options.find(option => option.value === select.value)?.label || null,
-      selectedInterrupt: interruptSelect.value,
+      selectedInterrupt,
       options,
+      interruptOptions: interruptInputs.map(input => ({ value: input.value, checked: !!input.checked })),
       clipletPlayback: state?.clipletPlayback || null,
       clipletPlaybackTimeline: state?.clipletPlaybackTimeline || null,
       clipletInterrupt: state?.clipletInterrupt || null,

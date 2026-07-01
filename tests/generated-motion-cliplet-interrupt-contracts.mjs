@@ -107,7 +107,8 @@ assert.ok(fired.playbackSample.playback.sourceFrame >= brake.startSourceFrame);
 assert.ok(fired.playbackSample.playback.sourceFrame <= brake.endSourceFrame);
 assert.equal(fired.motionSample.temporalSample.sourceFrame, fired.playbackSample.playback.sourceFrame);
 
-assert.match(index, /id="motion-panel-cliplet-interrupt"/, 'Motion panel exposes a cliplet interrupt mode selector');
+assert.match(index, /id="motion-panel-interrupt-radio"/, 'Motion panel exposes a visible cliplet interrupt mode control');
+assert.match(index, /name="motion-panel-cliplet-interrupt"[^>]+value="path-trigger"/, 'Motion panel exposes path-trigger interrupt mode');
 assert.match(index, /motionPanelClipletInterruptFromInputs/, 'browser builds path-trigger interrupts from Motion panel inputs');
 assert.match(index, /buildGeneratedPoseClipletPathInterrupt/, 'browser imports the path-trigger interrupt builder');
 assert.match(index, /sampleGeneratedPoseClipletPathInterrupt/, 'browser samples through path-trigger interrupt state');

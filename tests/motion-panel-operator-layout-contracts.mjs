@@ -13,13 +13,13 @@ assert.match(index, /id="motion-panel-export-options"/, 'Motion panel places exp
 assert.match(index, /id="motion-panel-source-options"/, 'Motion panel places source ghost/orientation knobs behind a collapsible details group');
 assert.match(index, /id="motion-panel-debug-routes"/, 'Motion panel places route/debug controls behind a collapsible details group');
 assert.match(index, /id="motion-panel-phrase-controls-details"/, 'Motion panel places phrase-control sliders behind a collapsible details group');
-assert.match(index, /id="motion-panel-procedural-clips-details"/, 'Motion panel places procedural clip presets behind a collapsible details group');
+assert.doesNotMatch(index, /id="motion-panel-procedural-clips-details"/, 'Motion panel does not expose opaque procedural clip presets');
 
 assert.match(index, /<details[^>]+id="motion-panel-source-options"/, 'source controls use native collapsed details');
 assert.match(index, /<details[^>]+id="motion-panel-debug-routes"/, 'debug routes use native collapsed details');
 assert.match(index, /<details[^>]+id="motion-panel-export-options"/, 'export options use native collapsed details');
 assert.match(index, /<details[^>]+id="motion-panel-phrase-controls-details"/, 'phrase controls use native collapsed details');
-assert.match(index, /<details[^>]+id="motion-panel-procedural-clips-details"/, 'procedural clips use native collapsed details');
+assert.doesNotMatch(index, />Procedural Clips</, 'Motion panel has no dead Procedural Clips drawer label');
 
 assert.match(index, /function renderMotionPanelCurrentTake/, 'Motion panel renders current take separately from saved takes');
 assert.match(index, /function renderMotionPanelSavedTakes/, 'Motion panel renders saved takes separately from current takes');

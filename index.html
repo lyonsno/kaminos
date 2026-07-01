@@ -125,6 +125,12 @@ input[type="range"]:disabled::-webkit-slider-thumb { background: #555; cursor: n
 .motion-panel-secondary-actions .btn { margin: 0; }
 .motion-panel-phrase-preview { display: grid; gap: 6px; margin: 7px 0 8px; }
 .motion-panel-phrase-preview-empty { font: 10px 'SF Mono', monospace; color: #555; }
+.motion-panel-inline-radio { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 6px; margin: 7px 0 2px; }
+.motion-panel-radio-option { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 6px 8px; background: #202020; border: 1px solid #333; border-radius: 6px; color: #aaa; font-size: 11px; cursor: pointer; }
+.motion-panel-radio-option:hover { border-color: #4a4a4a; color: #ddd; }
+.motion-panel-radio-option:has(input:checked) { border-color: #6f5b2a; background: #25231c; color: #fff2cc; }
+.motion-panel-radio-option input { flex: 0 0 auto; accent-color: #1976d2; }
+.motion-panel-radio-option span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .motion-panel-phrase-chip { display: grid; grid-template-columns: 1fr auto; gap: 4px 8px; align-items: center; width: 100%; text-align: left; padding: 7px 8px; background: #202020; border: 1px solid #333; border-radius: 6px; color: #cfcfcf; cursor: pointer; }
 .motion-panel-phrase-chip:hover, .motion-panel-phrase-chip.active { border-color: #6f5b2a; background: #25231c; color: #fff2cc; }
 .motion-panel-phrase-title { font-size: 11px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -229,11 +235,6 @@ input[type="range"]:disabled::-webkit-slider-thumb { background: #555; cursor: n
 /* Motion agency */
 .motion-readout { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 8px; }
 .motion-readout .field { margin: 0; padding: 0; }
-.motion-clip-list { display: flex; flex-direction: column; gap: 6px; }
-.motion-clip-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 7px 8px; background: #202020; border: 1px solid #303030; border-radius: 6px; }
-.motion-clip-title { color: #ddd; font-size: 11px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.motion-clip-meta { color: #666; font: 9px 'SF Mono', monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 2px; }
-.motion-clip-intent { color: #a9b8d8; font: 9px 'SF Mono', monospace; border: 1px solid #2d3852; border-radius: 4px; padding: 2px 5px; background: #141a28; white-space: nowrap; }
 </style>
 </head>
 <body>
@@ -534,19 +535,18 @@ input[type="range"]:disabled::-webkit-slider-thumb { background: #555; cursor: n
             <option value="full" selected>Full source</option>
           </select>
         </div>
+        <div class="field"><span class="field-key">Interrupt</span><span class="field-val">cliplet playback</span></div>
+        <div class="motion-panel-inline-radio" id="motion-panel-interrupt-radio" role="radiogroup" aria-label="Interrupt mode">
+          <label class="motion-panel-radio-option">
+            <input type="radio" name="motion-panel-cliplet-interrupt" value="off" checked>
+            <span>Off</span>
+          </label>
+          <label class="motion-panel-radio-option">
+            <input type="radio" name="motion-panel-cliplet-interrupt" value="path-trigger">
+            <span>Path trigger</span>
+          </label>
+        </div>
         <div id="motion-panel-phrase-preview" class="motion-panel-phrase-preview" aria-live="polite"></div>
-        <details class="motion-panel-compact-details" id="motion-panel-interrupt-options">
-          <summary>Interrupt</summary>
-          <div class="motion-panel-compact-body">
-            <div class="slider-row">
-              <span class="slider-label">Mode</span>
-              <select id="motion-panel-cliplet-interrupt" class="select-input">
-                <option value="off" selected>Off</option>
-                <option value="path-trigger">Path trigger</option>
-              </select>
-            </div>
-          </div>
-        </details>
       </section>
 
       <section id="motion-panel-take-shelf">
@@ -765,12 +765,6 @@ input[type="range"]:disabled::-webkit-slider-thumb { background: #555; cursor: n
       <div class="field"><span class="field-key">Frame</span><span class="field-val" id="motion-frame-count">0</span></div>
       <div class="field"><span class="field-key">Max effort</span><span class="field-val" id="motion-max-effort">0.00</span></div>
     </div>
-    <details class="motion-panel-compact-details" id="motion-panel-procedural-clips-details">
-      <summary>Procedural Clips</summary>
-      <div class="motion-panel-compact-body">
-        <div class="motion-clip-list" id="motion-clip-list"></div>
-      </div>
-    </details>
   </div>
 
   <!-- Volume Tab -->
@@ -1030,7 +1024,6 @@ import {
   DEFAULT_DECISION_MOTION_PLAN,
   DEFAULT_MOTION_PHRASE_CONTROLS,
   DEFAULT_MOTION_PHRASE_CONTROL_PRESETS,
-  DEFAULT_MOTION_CLIPS,
   DEFAULT_MOTION_TRACK_FIXTURE,
   DEFAULT_DIP_WAVE_GENERATED_MOTION_FIXTURE,
   DEFAULT_GENERATED_POSE_OUTPUT_MAP_FIXTURE,
@@ -3854,24 +3847,6 @@ window.kaminosSetSplatCorrectionDebug = function(id, correction = {}) {
   return window.kaminosSceneObjectDebugState().find(record => record.id === id);
 };
 
-function renderMotionClipList() {
-  const list = document.getElementById('motion-clip-list');
-  if (!list) return;
-  list.innerHTML = '';
-  for (const clip of DEFAULT_MOTION_CLIPS) {
-    const row = document.createElement('div');
-    row.className = 'motion-clip-row';
-    row.innerHTML = `
-      <div>
-        <div class="motion-clip-title">${escapeHtml(clip.label || clip.id)}</div>
-        <div class="motion-clip-meta">${escapeHtml(clip.id)} · ${Number(clip.duration).toFixed(1)}s · ${clip.source || 'procedural'}</div>
-      </div>
-      <div class="motion-clip-intent">${escapeHtml(clip.intent || 'unspecified')}</div>
-    `;
-    list.appendChild(row);
-  }
-}
-
 function disposeMotionAgencyScene() {
   if (!motionAgencyState?.root) return;
   scene.remove(motionAgencyState.root);
@@ -4146,7 +4121,6 @@ function createMotionAgencyFixtureScene({ force = false } = {}) {
     maxEffort: 0,
     lastActors: [],
   };
-  renderMotionClipList();
   updateMotionAgencyFrame(performance.now() / 1000);
   updateMotionAgencyReadout();
   frameMotionAgencyCamera();
@@ -4251,7 +4225,6 @@ function createMotionDecisionComparisonScene({ force = false } = {}) {
     maxEffort: 0,
     lastActors: [],
   };
-  renderMotionClipList();
   updateMotionDecisionFrame(performance.now() / 1000);
   updateMotionAgencyReadout();
   frameMotionAgencyCamera();
@@ -4497,7 +4470,6 @@ function createMotionTrackHarnessScene({ force = false } = {}) {
     maxEffort: 0,
     lastActors: [],
   };
-  renderMotionClipList();
   updateMotionTrackFrame(performance.now() / 1000);
   updateMotionAgencyReadout();
   frameMotionAgencyCamera();
@@ -4566,7 +4538,6 @@ function createGeneratedMotionTrackHarnessScene({ force = false } = {}) {
     maxEffort: 0,
     lastActors: [],
   };
-  renderMotionClipList();
   updateMotionTrackFrame(performance.now() / 1000);
   updateMotionAgencyReadout();
   frameMotionAgencyCamera();
@@ -4963,8 +4934,19 @@ function motionPanelClipletPlaybackFromInputs(cliplets) {
   });
 }
 
+function setMotionPanelClipletInterruptModeInput(mode, { dispatch = false } = {}) {
+  const value = mode === 'path-trigger' ? 'path-trigger' : 'off';
+  let checkedInput = null;
+  document.querySelectorAll('input[name="motion-panel-cliplet-interrupt"]').forEach(input => {
+    input.checked = input.value === value;
+    if (input.checked) checkedInput = input;
+  });
+  if (dispatch && checkedInput) checkedInput.dispatchEvent(new Event('change', { bubbles: true }));
+  return value;
+}
+
 function motionPanelClipletInterruptModeFromInputs() {
-  const mode = String(document.getElementById('motion-panel-cliplet-interrupt')?.value || 'off');
+  const mode = String(document.querySelector('input[name="motion-panel-cliplet-interrupt"]:checked')?.value || 'off');
   return mode === 'path-trigger' ? 'path-trigger' : 'off';
 }
 
@@ -6787,7 +6769,6 @@ window.kaminosMotionPanelTakeShelfDebugState = function() {
       exportOptionsOpen: detailsOpen('motion-panel-export-options'),
       debugRoutesOpen: detailsOpen('motion-panel-debug-routes'),
       phraseControlsOpen: detailsOpen('motion-panel-phrase-controls-details'),
-      proceduralClipsOpen: detailsOpen('motion-panel-procedural-clips-details'),
     },
   };
 };
@@ -7098,16 +7079,15 @@ async function exportMotionPanelSelectedClipletFilmstrip() {
   const referenceRestore = applyMotionPanelExportReferenceOverride();
   const selectedTake = motionPanelSelectedTakeEvidence();
   const playbackSelect = document.getElementById('motion-panel-cliplet-playback');
-  const interruptSelect = document.getElementById('motion-panel-cliplet-interrupt');
   const previousClipletValue = playbackSelect?.value || 'full';
-  const previousInterruptValue = interruptSelect?.value || 'off';
+  const previousInterruptValue = motionPanelClipletInterruptModeFromInputs();
   const previousStartedAt = motionTemporalState.startedAt;
   const previousTimeScale = motionTemporalState.timeScale;
   if (button) button.disabled = true;
   setMotionPanelTemporalStatus(`Exporting cliplet ${selectedCliplet.index}: ${selectedCliplet.labelGuess}`, '#42a5f5');
   try {
     if (playbackSelect) playbackSelect.value = selectedCliplet.id;
-    if (interruptSelect) interruptSelect.value = 'off';
+    setMotionPanelClipletInterruptModeInput('off');
     const frameCount = Math.max(1, settings.frames);
     const frames = [];
     const sourceGhostAtExportStart = motionPanelSourceGhostExportEvidence();
@@ -7224,7 +7204,7 @@ async function exportMotionPanelSelectedClipletFilmstrip() {
     throw error;
   } finally {
     if (playbackSelect) playbackSelect.value = previousClipletValue;
-    if (interruptSelect) interruptSelect.value = previousInterruptValue;
+    setMotionPanelClipletInterruptModeInput(previousInterruptValue);
     motionTemporalState.startedAt = previousStartedAt;
     motionTemporalState.timeScale = previousTimeScale;
     updateGeneratedPoseTemporalFrame(performance.now() / 1000);
@@ -7235,7 +7215,6 @@ async function exportMotionPanelSelectedClipletFilmstrip() {
 window.exportMotionPanelSelectedClipletFilmstrip = exportMotionPanelSelectedClipletFilmstrip;
 
 function initKaminosMotionAgencyRoute() {
-  renderMotionClipList();
   renderMotionPhraseControlPresets();
   wireMotionPanelSlider('motion-panel-duration', 's');
   wireMotionPanelSlider('motion-panel-steps');
@@ -7270,7 +7249,9 @@ function initKaminosMotionAgencyRoute() {
     renderMotionPanelPhrasePreview(motionTemporalState.generatedMotionCliplets);
   };
   document.getElementById('motion-panel-cliplet-playback')?.addEventListener('change', resetMotionClipletSelection);
-  document.getElementById('motion-panel-cliplet-interrupt')?.addEventListener('change', resetMotionClipletSelection);
+  document.querySelectorAll('input[name="motion-panel-cliplet-interrupt"]').forEach(input => {
+    input.addEventListener('change', resetMotionClipletSelection);
+  });
   document.querySelectorAll('[data-motion-temporal-clip]').forEach(button => {
     button.addEventListener('click', () => void createGeneratedPoseTemporalScene({
       force: true,
