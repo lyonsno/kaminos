@@ -6,6 +6,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 const DATASET_SCHEMA = 'kaminos.volume.field-pair-dataset.v0';
 const FIELD_PROJECTION_TENSOR_SCHEMA = 'kaminos.volume.field-projection-tensor.v0';
 const FIELD_TILE_EXPORT_SCHEMA = 'kaminos.volume.field-tile-export.v0';
+const FIELD_TILE_COVERAGE_PAIRING_SCHEMA = 'kaminos.volume.field-tile-coverage-pairing.v0';
 const SAME_STATE_FREEZE_PREFLIGHT_SCHEMA = 'kaminos.volume.same-state-freeze-preflight.v0';
 const EXPECTED_VOLUME_ROUTE_ID = 'native-3d-compute-fluid-raymarch-v0';
 const EXPECTED_PROTOTYPE_ID = 'kaminos-volume-prototype-v0';
@@ -107,6 +108,188 @@ function fieldShapeFromReadback(simReadback, majorantReadback, simCostLedger) {
 function finiteNumber(value) {
   const number = Number(value);
   return Number.isFinite(number) ? number : 0;
+}
+
+function finiteVector(values, length, fallback = 0) {
+  const source = Array.isArray(values) ? values : [];
+  return Array.from({ length }, (_, index) => {
+    const value = Number(source[index]);
+    return Number.isFinite(value) ? value : fallback;
+  });
+}
+
+function normalizedTileOrigin(tile) {
+  if (Array.isArray(tile?.normalizedOrigin) && tile.normalizedOrigin.length === 3) {
+    return finiteVector(tile.normalizedOrigin, 3);
+  }
+  const gridSpan = Math.max(1, Number(tile?.simGrid || tile?.grid || 1) - 1);
+  return finiteVector(tile?.origin, 3).map((value) => value / gridSpan);
+}
+
+function normalizedTileSize(tile) {
+  if (Array.isArray(tile?.normalizedSize) && tile.normalizedSize.length === 3) {
+    return finiteVector(tile.normalizedSize, 3);
+  }
+  const grid = Math.max(1, Number(tile?.simGrid || tile?.grid || 1));
+  return finiteVector(tile?.size, 3).map((value) => value / grid);
+}
+
+function normalizedTileCenter(tile) {
+  if (Array.isArray(tile?.normalizedCenter) && tile.normalizedCenter.length === 3) {
+    return finiteVector(tile.normalizedCenter, 3);
+  }
+  const origin = normalizedTileOrigin(tile);
+  const size = normalizedTileSize(tile);
+  return origin.map((value, index) => value + size[index] * 0.5);
+}
+
+function normalizedTileDistance(lowTile, highTile) {
+  const lowCenter = normalizedTileCenter(lowTile);
+  const highCenter = normalizedTileCenter(highTile);
+  return Math.hypot(
+    lowCenter[0] - highCenter[0],
+    lowCenter[1] - highCenter[1],
+    lowCenter[2] - highCenter[2],
+  );
+}
+
+function normalizedTileRadius(tile) {
+  const size = normalizedTileSize(tile);
+  return Math.hypot(size[0], size[1], size[2]) * 0.5;
+}
+
+function normalizedTileSeparation(lowTile, highTile) {
+  return Math.max(0, normalizedTileDistance(lowTile, highTile) - normalizedTileRadius(lowTile) - normalizedTileRadius(highTile));
+}
+
+function summarizeTileCoverage(exportSummary) {
+  if (!exportSummary) return null;
+  return {
+    path: exportSummary.path,
+    simGrid: exportSummary.simGrid,
+    tileSize: exportSummary.tileSize,
+    requestedMaxTiles: exportSummary.requestedMaxTiles,
+    minCellEnergy: exportSummary.minCellEnergy,
+    totalTiles: exportSummary.totalTiles,
+    candidateTiles: exportSummary.candidateTiles,
+    exportedTiles: exportSummary.exportedTiles,
+    droppedCandidateTiles: exportSummary.droppedCandidateTiles,
+    emptyTiles: exportSummary.emptyTiles,
+    fullCoverage: exportSummary.fullCoverage,
+    coverageLimitation: exportSummary.coverageLimitation,
+  };
+}
+
+function buildFieldTileCoveragePairing(pair) {
+  const lowExport = pair.low?.effective?.fieldTileExport || null;
+  const highExport = pair.high?.effective?.fieldTileExport || null;
+  if (!lowExport || !highExport) return null;
+  const lowTiles = Array.isArray(lowExport.tilePayloads) ? lowExport.tilePayloads : [];
+  const highTiles = Array.isArray(highExport.tilePayloads) ? highExport.tilePayloads : [];
+  const matchedLowIndexes = new Set();
+  const matchedHighIndexes = new Set();
+  const matchedTilePairs = [];
+  const candidatePairs = lowTiles
+    .flatMap((lowTile, lowIndex) => highTiles.map((highTile, highIndex) => ({
+      lowTile,
+      highTile,
+      lowIndex,
+      highIndex,
+      distance: normalizedTileDistance(lowTile, highTile),
+    })))
+    .sort((a, b) => {
+      if (a.distance !== b.distance) return a.distance - b.distance;
+      const energyDelta = Math.abs(finiteNumber(b.highTile.energySum) - finiteNumber(b.lowTile.energySum))
+        - Math.abs(finiteNumber(a.highTile.energySum) - finiteNumber(a.lowTile.energySum));
+      if (energyDelta !== 0) return energyDelta;
+      const lowIdCompare = String(a.lowTile.tileId).localeCompare(String(b.lowTile.tileId));
+      if (lowIdCompare !== 0) return lowIdCompare;
+      return String(a.highTile.tileId).localeCompare(String(b.highTile.tileId));
+    });
+
+  for (const candidate of candidatePairs) {
+    if (matchedLowIndexes.has(candidate.lowIndex) || matchedHighIndexes.has(candidate.highIndex)) continue;
+    matchedLowIndexes.add(candidate.lowIndex);
+    matchedHighIndexes.add(candidate.highIndex);
+    matchedTilePairs.push({
+      matchId: `match-${String(matchedTilePairs.length + 1).padStart(3, '0')}`,
+      lowTileId: candidate.lowTile.tileId,
+      highTileId: candidate.highTile.tileId,
+      lowPath: candidate.lowTile.path,
+      highPath: candidate.highTile.path,
+      lowOrigin: candidate.lowTile.origin,
+      highOrigin: candidate.highTile.origin,
+      lowNormalizedOrigin: normalizedTileOrigin(candidate.lowTile),
+      highNormalizedOrigin: normalizedTileOrigin(candidate.highTile),
+      lowNormalizedSize: normalizedTileSize(candidate.lowTile),
+      highNormalizedSize: normalizedTileSize(candidate.highTile),
+      lowNormalizedCenter: normalizedTileCenter(candidate.lowTile),
+      highNormalizedCenter: normalizedTileCenter(candidate.highTile),
+      normalizedTileDistance: candidate.distance,
+      normalizedTileSeparation: normalizedTileSeparation(candidate.lowTile, candidate.highTile),
+      lowShape: candidate.lowTile.shape,
+      highShape: candidate.highTile.shape,
+      lowEnergySum: candidate.lowTile.energySum,
+      highEnergySum: candidate.highTile.energySum,
+    });
+  }
+
+  const unmatchedLowTiles = lowTiles
+    .map((tile, index) => ({ tile, index }))
+    .filter(({ index }) => !matchedLowIndexes.has(index))
+    .map(({ tile }) => ({
+      lowTileId: tile.tileId,
+      lowPath: tile.path,
+      lowNormalizedCenter: normalizedTileCenter(tile),
+      reason: 'no-unused-high-tile-remaining',
+    }));
+  const unmatchedHighTiles = highTiles
+    .map((tile, index) => ({ tile, index }))
+    .filter(({ index }) => !matchedHighIndexes.has(index))
+    .map(({ tile }) => ({
+      highTileId: tile.tileId,
+      highPath: tile.path,
+      highNormalizedCenter: normalizedTileCenter(tile),
+      reason: 'no-unmatched-low-tile-remaining',
+  }));
+  const distances = matchedTilePairs.map((match) => finiteNumber(match.normalizedTileDistance));
+  const separations = matchedTilePairs.map((match) => finiteNumber(match.normalizedTileSeparation));
+  return {
+    schema: FIELD_TILE_COVERAGE_PAIRING_SCHEMA,
+    identity: 'normalized-tile-center-nearest-neighbor-v0',
+    authority: 'post-capture-selected-tile-metadata-match-not-resampling',
+    pairId: pair.pairId,
+    pairAuthority: pair.pairAuthority,
+    gridScaleRatio: pair.gridScaleRatio,
+    voxelCountRatio: pair.voxelCountRatio,
+    coverageExpansion: {
+      low: summarizeTileCoverage(lowExport),
+      high: summarizeTileCoverage(highExport),
+      matchedTilePairs: matchedTilePairs.length,
+      unmatchedLowTiles: unmatchedLowTiles.length,
+      unmatchedHighTiles: unmatchedHighTiles.length,
+      selectionPolicy: lowExport.selectionPolicy === highExport.selectionPolicy ? lowExport.selectionPolicy : 'mixed-selection-policy',
+      relationship: 'selected low/high occupied tiles greedily paired by nearest normalized tile center',
+    },
+    matchedTilePairs,
+    unmatchedLowTiles,
+    unmatchedHighTiles,
+    distanceSummary: {
+      count: distances.length,
+      min: distances.length ? Math.min(...distances) : null,
+      max: distances.length ? Math.max(...distances) : null,
+      mean: distances.length ? distances.reduce((sum, value) => sum + value, 0) / distances.length : null,
+    },
+    separationSummary: {
+      count: separations.length,
+      overlappingOrAdjacent: separations.filter((value) => value === 0).length,
+      separated: separations.filter((value) => value > 0).length,
+      min: separations.length ? Math.min(...separations) : null,
+      max: separations.length ? Math.max(...separations) : null,
+      mean: separations.length ? separations.reduce((sum, value) => sum + value, 0) / separations.length : null,
+    },
+    limitation: 'Coverage pairing aligns exported selected tiles by normalized centers only; it does not resample low/high tensors or prove literal same-state GPU snapshot transfer.',
+  };
 }
 
 function makeBinTensor(name, bins, channels) {
@@ -713,6 +896,13 @@ const manifest = {
   fieldAuthority: FIELD_AUTHORITY,
   deterministicReplay,
   fieldTileExport,
+  coverageExpansion: fieldTileExport.enabled ? {
+    schema: FIELD_TILE_COVERAGE_PAIRING_SCHEMA,
+    identity: 'selected-tile-count-plus-normalized-pairing-v0',
+    requestedMaxTiles: fieldTileExport.maxTiles,
+    tileSize: fieldTileExport.tileSize,
+    pairingAuthority: 'post-capture-selected-tile-metadata-match-not-resampling',
+  } : null,
   sameStateFreezeAttempt: buildSameStateFreezeAttempt({ pairAuthority, deterministicReplay }),
   limitation: deterministicReplay.enabled
     ? 'Pairs are fixed-step deterministic replays from the same route/control family; they preserve field authority and logical pairing but are not literal cross-grid GPU snapshot transfers.'
@@ -737,6 +927,7 @@ if (!dryRun) {
     try {
       pair.high.effective = runCapture(pair.high, cwd);
       pair.low.effective = runCapture(pair.low, cwd);
+      pair.fieldTileCoveragePairing = buildFieldTileCoveragePairing(pair);
       pair.status = 'captured';
     } catch (error) {
       pair.status = 'failed';

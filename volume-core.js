@@ -5128,6 +5128,22 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const tiles = selected.map((tile, index) => {
       const [originX, originY, originZ] = tile.origin;
       const [sizeX, sizeY, sizeZ] = tile.size;
+      const gridSpan = Math.max(1, gridSize - 1);
+      const normalizedOrigin = [
+        originX / gridSpan,
+        originY / gridSpan,
+        originZ / gridSpan,
+      ];
+      const normalizedSize = [
+        sizeX / gridSize,
+        sizeY / gridSize,
+        sizeZ / gridSize,
+      ];
+      const normalizedCenter = [
+        (originX + (sizeX - 1) * 0.5) / gridSpan,
+        (originY + (sizeY - 1) * 0.5) / gridSpan,
+        (originZ + (sizeZ - 1) * 0.5) / gridSpan,
+      ];
       const values = new Float32Array(sizeX * sizeY * sizeZ * channels.length);
       let dst = 0;
       for (let z = 0; z < sizeZ; z += 1) {
@@ -5159,6 +5175,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         tileId: `tile-${String(index + 1).padStart(3, '0')}-x${originX}-y${originY}-z${originZ}`,
         origin: tile.origin,
         size: tile.size,
+        normalizedOrigin,
+        normalizedSize,
+        normalizedCenter,
         shape: [sizeZ, sizeY, sizeX, channels.length],
         channels,
         dtype: 'float32-json-number-array',

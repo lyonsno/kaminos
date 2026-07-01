@@ -1406,3 +1406,12 @@ assert.match(fieldPairDataset, /fieldTileExport/, 'field-pair dataset records fi
 assert.match(fieldPairDataset, /\.field-tile-export\.json/, 'field-pair dataset writes tiled field export JSON sidecars');
 assert.match(fieldPairDataset, /\.field-tile-[^`'"]+\.f32/, 'field-pair dataset writes binary float32 tile payload artifacts');
 assert.match(fieldPairDataset, /droppedCandidateTiles/, 'field-pair dataset preserves partial-coverage accounting for selected tile exports');
+assert.match(core, /normalizedOrigin/, 'field tile export records normalized tile origins for cross-grid low/high comparison');
+assert.match(core, /normalizedCenter/, 'field tile export records normalized tile centers for cross-grid low/high comparison');
+assert.match(core, /normalizedSize/, 'field tile export records normalized tile extents for cross-grid low/high comparison');
+assert.match(fieldPairDataset, /FIELD_TILE_COVERAGE_PAIRING_SCHEMA/, 'field-pair dataset names a stable schema for normalized tile coverage matching');
+assert.match(fieldPairDataset, /fieldTileCoveragePairing/, 'field-pair dataset records low/high field tile coverage pairing receipts');
+assert.match(fieldPairDataset, /matchedTilePairs/, 'field-pair dataset records concrete matched tile pairs instead of only independent tile lists');
+assert.match(fieldPairDataset, /normalizedTileDistance/, 'field-pair dataset records normalized low/high tile distance for each match');
+assert.match(fieldPairDataset, /normalizedTileSeparation/, 'field-pair dataset records whether matched low/high tiles are actually adjacent in normalized field space');
+assert.match(fieldPairDataset, /coverageExpansion/, 'field-pair dataset records coverage expansion counts and limits for selected tiles');
