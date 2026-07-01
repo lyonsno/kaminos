@@ -213,6 +213,11 @@ async function main() {
       if (!sourceCustody.lermsOwns?.includes('timelineBehaviorTruth')) throw new Error('missing source custody lermsOwns: timelineBehaviorTruth');
       if (!sourceCustody.kaminosOwns?.includes('host display')) throw new Error('missing source custody kaminosOwns: host display');
     }
+    if (expectedHostId === 'finger-juice') {
+      const sourceCustody = lastDebugState.sourceCustody || {};
+      if (!Array.isArray(sourceCustody.bigPapaOwns) || sourceCustody.bigPapaOwns.length === 0) throw new Error('missing source custody bigPapaOwns');
+      if (!Array.isArray(sourceCustody.kaminosOwns) || sourceCustody.kaminosOwns.length === 0) throw new Error('missing source custody kaminosOwns');
+    }
 
     phase = 'measure_visual_activity';
     visualActivity = await evaluate(ws, `(() => {

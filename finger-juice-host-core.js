@@ -131,6 +131,16 @@ function normalizeRejectedDebugSurface(surface, index = 0) {
   };
 }
 
+function sourceCustodyRows(custody) {
+  const source = objectOrEmpty(custody);
+  const rows = {};
+  for (const [key, value] of Object.entries(source)) {
+    if (key === 'downgrades' || key === 'rejectedDebugSurfaces') continue;
+    if (Array.isArray(value) && value.length > 0) rows[key] = [...value];
+  }
+  return rows;
+}
+
 export function normalizeFingerJuiceHostPacket(packet) {
   const source = objectOrEmpty(packet);
   if (source.schema !== BIG_PAPA_FINGER_JUICE_HOST_PACKET_SCHEMA) {
@@ -142,6 +152,13 @@ export function normalizeFingerJuiceHostPacket(packet) {
 
   const renderPayload = normalizeRenderPayload(source.render);
   const custody = objectOrEmpty(source.custody);
+  const sourceDowngrades = uniqueStrings(
+    custody.downgrades,
+    source.downgrades,
+    source.render?.downgrades,
+    source.render?.payload?.downgrades,
+  );
+  const sourceCustody = sourceCustodyRows(custody);
   const downgrades = uniqueStrings(
     custody.downgrades,
     source.downgrades,
@@ -208,6 +225,8 @@ export function normalizeFingerJuiceHostPacket(packet) {
       downgrades,
       rejectedDebugSurfaces,
     },
+    sourceDowngrades,
+    sourceCustody,
   };
 }
 
@@ -222,8 +241,10 @@ export function createFingerJuiceHostState(packet, options = {}) {
     source: normalized.source,
     freshness: normalized.freshness,
     downgrades: normalized.custody.downgrades,
+    sourceDowngrades: normalized.sourceDowngrades,
     rejectedDebugSurfaces: normalized.custody.rejectedDebugSurfaces,
     custody: normalized.custody,
+    sourceCustody: normalized.sourceCustody,
     visual: normalized.visual,
     hostSpecific: {
       renderPayloadSchema: renderPayload.schema,
@@ -262,8 +283,10 @@ export function createFingerJuiceHostState(packet, options = {}) {
     previewTrails: renderPayload.trails,
     visual: normalized.visual,
     downgrades: normalized.custody.downgrades,
+    sourceDowngrades: hostSurface.sourceDowngrades,
     rejectedDebugSurfaces: normalized.custody.rejectedDebugSurfaces,
     custody: normalized.custody,
+    sourceCustody: hostSurface.sourceCustody,
     hostSurface,
   };
 }

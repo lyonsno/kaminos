@@ -140,4 +140,19 @@ assert.equal(state.previewParticleCount, 3, 'host state reports native preview p
 assert.equal(state.hitEventCount, 1, 'host state reports hit refs');
 assert.equal(state.terrain.sampleChecksum, 'hill-live-sample', 'host state preserves terrain sample checksum');
 assert.ok(state.downgrades.includes('host_packet_preview_payload_not_native_render_buffer'), 'host state surfaces native render-buffer downgrade');
+assert.ok(state.sourceDowngrades.includes('host_packet_preview_payload_not_native_render_buffer'), 'host state proves native render-buffer downgrade came from the source packet');
 assert.ok(state.rejectedDebugSurfaces.some(surface => surface.surface === 'direct_lerms_finger_juice_debug_route'), 'host state surfaces rejected debug route');
+assert.ok(state.sourceCustody.bigPapaOwns.includes('fluid law'), 'host state proves Big Papa custody came from the source packet');
+assert.ok(state.sourceCustody.kaminosOwns.includes('native host display'), 'host state proves Kaminos custody came from the source packet');
+
+const defaultsOnlyPacket = structuredClone(packet);
+delete defaultsOnlyPacket.custody.bigPapaOwns;
+delete defaultsOnlyPacket.custody.kaminosOwns;
+delete defaultsOnlyPacket.custody.downgrades;
+delete defaultsOnlyPacket.render.payload.downgrades;
+const defaultsOnlyState = mod.createFingerJuiceHostState(defaultsOnlyPacket, {
+  effectiveUrl: '/api/read?root=lerms-preview&path=finger-juice-defaults-only.json',
+});
+assert.ok(defaultsOnlyState.downgrades.includes('host_packet_preview_payload_not_native_render_buffer'), 'display defaults can still show the adapter downgrade for downgraded preview payloads');
+assert.deepEqual(defaultsOnlyState.sourceDowngrades, [], 'source downgrade evidence must not be fabricated from adapter/render defaults');
+assert.deepEqual(defaultsOnlyState.sourceCustody, {}, 'source custody evidence must not be fabricated from display defaults');
