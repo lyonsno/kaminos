@@ -147,8 +147,25 @@ function sourceDowngradesFor(adapterId, packet) {
 }
 
 function sourceCustodyFor(adapterId, packet, state) {
-  if (adapterId === 'lerms-moving-timeline') return packet?.timeline?.custody || packet?.custody || state?.custody || {};
-  return packet?.custody || state?.custody || {};
+  if (adapterId === 'lerms-moving-timeline') return packet?.timeline?.custody || packet?.custody || {};
+  return packet?.custody || {};
+}
+
+function sourceRouteError(options = {}) {
+  const hasSourceUrl = Boolean(options.sourceUrl);
+  const hasRoot = Boolean(options.root);
+  const hasPath = Boolean(options.path);
+  const hasRootPath = hasRoot && hasPath;
+  if (hasSourceUrl && (hasRoot || hasPath)) {
+    return 'source route must use either source-url or root/path, not both';
+  }
+  if (!hasSourceUrl && !hasRootPath) {
+    return 'missing source route: provide --source-url or both --root and --path';
+  }
+  if (!hasSourceUrl && (hasRoot || hasPath) && !hasRootPath) {
+    return 'missing source route: root/path routes require both --root and --path';
+  }
+  return null;
 }
 
 function normalizeServerOrigin(serverOrigin = 'http://127.0.0.1:8100') {
@@ -229,8 +246,10 @@ export function lintHostSurfacePacket(packet, options = {}) {
       errors.push(message);
     }
   }
+  const routeError = sourceRouteError(options);
+  if (routeError) errors.push(routeError);
 
-  const smokeUrl = buildHostSurfaceSmokeUrl(options);
+  const smokeUrl = routeError ? null : buildHostSurfaceSmokeUrl(options);
   const downgrades = state?.downgrades || sourceDowngrades;
   const report = {
     ok: errors.length === 0,
@@ -255,7 +274,7 @@ export function lintHostSurfacePacket(packet, options = {}) {
     warningCount: 0,
     smokeUrl,
   };
-  report.witnessCommand = buildHostSurfaceWitnessCommand(report, options);
+  report.witnessCommand = smokeUrl ? buildHostSurfaceWitnessCommand(report, options) : null;
   return report;
 }
 

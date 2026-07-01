@@ -67,6 +67,49 @@ assert.ok(badReport.errors.some(error => error.includes('custody missing kaminos
 assert.ok(badReport.smokeUrl, 'bad reports still emit a route for local repro');
 assert.ok(badReport.witnessCommand, 'bad reports still emit witness command text for local repro');
 
+const missingCustodyPacket = structuredClone(lermsPacket);
+delete missingCustodyPacket.timeline.custody;
+const missingCustodyReport = tools.lintHostSurfacePacket(missingCustodyPacket, {
+  adapter: 'lerms-moving-timeline',
+  sourceUrl: '/tests/fixtures/missing-custody.json',
+});
+assert.equal(missingCustodyReport.ok, false);
+assert.ok(missingCustodyReport.errors.some(error => error.includes('custody missing lermsOwns')), 'absent producer custody must not be filled by host defaults');
+assert.ok(missingCustodyReport.errors.some(error => error.includes('custody missing kaminosOwns')), 'absent producer custody must fail all required custody fields');
+
+const nullCustodyPacket = structuredClone(lermsPacket);
+nullCustodyPacket.timeline.custody = null;
+const nullCustodyReport = tools.lintHostSurfacePacket(nullCustodyPacket, {
+  adapter: 'lerms-moving-timeline',
+  sourceUrl: '/tests/fixtures/null-custody.json',
+});
+assert.equal(nullCustodyReport.ok, false);
+assert.ok(nullCustodyReport.errors.some(error => error.includes('custody missing lermsOwns')), 'null producer custody must not be filled by host defaults');
+
+const emptyCustodyArraysPacket = structuredClone(lermsPacket);
+emptyCustodyArraysPacket.timeline.custody = { lermsOwns: [], kaminosOwns: [] };
+const emptyCustodyArraysReport = tools.lintHostSurfacePacket(emptyCustodyArraysPacket, {
+  adapter: 'lerms-moving-timeline',
+  sourceUrl: '/tests/fixtures/empty-custody-arrays.json',
+});
+assert.equal(emptyCustodyArraysReport.ok, false);
+assert.ok(emptyCustodyArraysReport.errors.some(error => error.includes('custody missing lermsOwns')), 'empty producer custody arrays must fail');
+
+const missingRouteReport = tools.lintHostSurfacePacket(lermsPacket, {
+  adapter: 'lerms-moving-timeline',
+});
+assert.equal(missingRouteReport.ok, false);
+assert.ok(missingRouteReport.errors.some(error => error.includes('missing source route')), 'producer reports must fail without source URL or root/path route');
+assert.equal(missingRouteReport.smokeUrl, null, 'reports without a source route must not emit an acceptance-looking smoke URL');
+assert.equal(missingRouteReport.witnessCommand, null, 'reports without a source route must not emit an acceptance-looking witness command');
+
+const partialRouteReport = tools.lintHostSurfacePacket(lermsPacket, {
+  adapter: 'lerms-moving-timeline',
+  root: 'scratch',
+});
+assert.equal(partialRouteReport.ok, false);
+assert.ok(partialRouteReport.errors.some(error => error.includes('missing source route')), 'partial root/path source routes must fail');
+
 const fingerPacket = {
   schema: 'big-papa-finger-juice.host-packet.v0',
   route: 'big-papa/finger-juice/host-packet',
