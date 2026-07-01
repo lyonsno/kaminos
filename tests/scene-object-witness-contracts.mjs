@@ -152,6 +152,16 @@ assert.match(indexHtml, /await grBrowseRouteJobs\(\)/, 'Browser WebGPU producer 
 assert.match(indexHtml, /run-browser-webgpu-preview/, 'Browser WebGPU fixture routes expose an operator launch action');
 assert.match(indexHtml, /runBrowserWebGpuPreviewRoute/, 'Browser route tray can launch the browser WebGPU preview producer');
 assert.match(indexHtml, /buildBrowserWebGpuPreviewRouteResult/, 'Browser WebGPU preview producer builds a kit route result');
+assert.match(indexHtml, /loadKaminosWebGpuInferenceKit/, 'Browser WebGPU producer loads the package-backed inference kit ESM surface');
+assert.match(indexHtml, /\/vendor\/@kaminos\/webgpu-inference-kit\/src\/index\.js/, 'Browser WebGPU producer imports the served package-backed inference kit module');
+assert.match(indexHtml, /createMogeDepthNormalRouteDefinition/, 'Browser WebGPU producer uses the kit MoGE route definition');
+assert.match(indexHtml, /createMogeDepthNormalRouteReceipt/, 'Browser WebGPU producer builds receipts through the kit MoGE helper');
+assert.match(indexHtml, /createRouteInvocationRequest/, 'Browser WebGPU producer builds invocation requests through the kit route helper');
+assert.match(indexHtml, /createRouteWorkerResult/, 'Browser WebGPU producer builds worker results through the kit route helper');
+assert.match(indexHtml, /validateRouteWorkerResult/, 'Browser WebGPU producer validates route results through the kit route helper');
+assert.match(indexHtml, /classifyWebGpuRouteWorkerResultEvidence/, 'Browser WebGPU producer classifies evidence through the kit consumer helper');
+assert.match(indexHtml, /createWebGpuRouteSchedulerProfile/, 'Browser WebGPU producer builds scheduler profile through the kit helper');
+assert.match(indexHtml, /createWebGpuRouteBackpressureProfile/, 'Browser WebGPU producer builds backpressure profile through the kit helper');
 assert.match(indexHtml, /previewDataUrl/, 'Browser WebGPU preview producer includes an inspectable output artifact');
 assert.match(indexHtml, /data-greenroom-route-output-kind/, 'Route tray preserves output artifact kind on browser route output links');
 assert.match(indexHtml, /fixture route identity only/, 'Route tray can warn when a browser WebGPU row is identity-only fixture evidence');

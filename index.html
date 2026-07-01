@@ -9147,6 +9147,8 @@ const WEBGPU_RUNTIME_PROFILE_SCHEMA = 'kaminos.webgpu-runtime-profile.v0';
 const WEBGPU_ROUTE_EVIDENCE_CLASSIFICATION_SCHEMA = 'kaminos.webgpu-route-evidence-classification.v0';
 const WEBGPU_ROUTE_SCHEDULER_SCHEMA = 'kaminos.webgpu-route-scheduler.v0';
 const WEBGPU_ROUTE_BACKPRESSURE_SCHEMA = 'kaminos.webgpu-route-backpressure.v0';
+const WEBGPU_INFERENCE_KIT_MODULE_URL = '/vendor/@kaminos/webgpu-inference-kit/src/index.js';
+let kaminosWebGpuInferenceKitPromise = null;
 let greenroomRouteJobState = {
   schema: 'kaminos.route-provider-index.v0',
   provider: { kind: 'native-greenroom' },
@@ -10200,44 +10202,47 @@ async function sha256Hex(text) {
   return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
 }
 
-async function probeBrowserWebGpuRouteRuntime() {
+async function loadKaminosWebGpuInferenceKit() {
+  if (!kaminosWebGpuInferenceKitPromise) {
+    kaminosWebGpuInferenceKitPromise = import(WEBGPU_INFERENCE_KIT_MODULE_URL);
+  }
+  return kaminosWebGpuInferenceKitPromise;
+}
+
+async function probeBrowserWebGpuRouteRuntime(kit) {
   const browser = navigator.userAgent || 'unknown-browser';
-  const backend = {
-    kind: ROUTE_BACKEND_WEBGPU_LOCAL,
-    runtime: 'browser',
-    adapterName: 'not-probed',
+  const fallbackBackend = kit.createWebGpuBackendIdentity({
+    adapterName: 'webgpu-unavailable',
     browser,
-    features: [],
-    requestedFeatures: [],
-    limits: {},
-    timestampQuery: 'not-requested',
-  };
+    effectiveFeatures: ['webgpu-unavailable'],
+    limits: { maxBufferSize: 0 },
+    timestampQuery: 'unavailable',
+  });
   if (!navigator.gpu?.requestAdapter) {
-    return { available: false, backend, reason: 'navigator.gpu unavailable' };
+    return { available: false, backend: fallbackBackend, reason: 'navigator.gpu unavailable' };
   }
   try {
     const adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
-    if (!adapter) return { available: false, backend, reason: 'requestAdapter returned null' };
+    if (!adapter) return { available: false, backend: fallbackBackend, reason: 'requestAdapter returned null' };
     const features = Array.from(adapter.features || []);
-    const requestedFeatures = features.includes('timestamp-query') ? ['timestamp-query'] : [];
     const info = adapter.info || {};
-    backend.adapterName = info.description || info.architecture || info.device || info.vendor || 'browser-webgpu-adapter';
-    backend.features = features;
-    backend.requestedFeatures = requestedFeatures;
-    backend.timestampQuery = requestedFeatures.includes('timestamp-query') ? 'requested' : 'not-requested';
-    backend.limits = {};
+    const limits = {};
     for (const key of ['maxBufferSize', 'maxStorageBufferBindingSize', 'maxComputeWorkgroupStorageSize']) {
-      if (adapter.limits?.[key] != null) backend.limits[key] = adapter.limits[key];
+      if (Number.isFinite(adapter.limits?.[key])) limits[key] = adapter.limits[key];
     }
-    let device = null;
-    try {
-      device = await adapter.requestDevice({ requiredFeatures: requestedFeatures });
-    } finally {
-      device?.destroy?.();
-    }
+    if (!Object.keys(limits).length) limits.maxBufferSize = 0;
+    const deviceRequest = kit.createWebGpuDeviceRequest(adapter, { timestampQuery: 'prefer' });
+    const backend = kit.createWebGpuBackendIdentity({
+      adapterName: info.description || info.architecture || info.device || info.vendor || 'browser-webgpu-adapter',
+      browser,
+      requestedFeatures: deviceRequest.requiredFeatures,
+      effectiveFeatures: features.length ? features : ['webgpu'],
+      limits,
+      timestampQuery: deviceRequest.timestampQuery,
+    });
     return { available: true, backend, reason: null };
   } catch (error) {
-    return { available: false, backend, reason: error.message || String(error) };
+    return { available: false, backend: fallbackBackend, reason: error.message || String(error) };
   }
 }
 
@@ -10283,49 +10288,49 @@ function browserWebGpuPreviewDataUrl(role, routeJob, probe) {
 }
 
 async function buildBrowserWebGpuPreviewRouteResult(row = {}) {
+  const kit = await loadKaminosWebGpuInferenceKit();
   const routeJob = row.route_job || {};
-  const routeId = routeJob.routeId || 'moge.depth-normal.webgpu-local.v0';
+  const route = kit.createMogeDepthNormalRouteDefinition();
+  const routeId = routeJob.routeId || kit.MOGE_DEPTH_NORMAL_ROUTE_ID;
   const requestId = `req:moge-preview-${Date.now()}`;
   const startedAt = performance.now();
-  const probe = await probeBrowserWebGpuRouteRuntime();
-  const outputRoles = ['depth', 'normal', 'pointmap'];
-  const outputs = [];
+  const probe = await probeBrowserWebGpuRouteRuntime(kit);
+  const outputRoles = ['depth', 'normal', 'pointMap'];
+  const outputArtifacts = {};
   for (const role of outputRoles) {
-    const previewDataUrl = browserWebGpuPreviewDataUrl(role, routeJob, probe);
-    outputs.push({
-      role,
-      artifactId: `${role}:${requestId}`,
+    const outputRole = role === 'pointMap' ? 'pointmap' : role;
+    const previewDataUrl = browserWebGpuPreviewDataUrl(outputRole, routeJob, probe);
+    outputArtifacts[role] = {
+      artifactId: `${outputRole}:${requestId}`,
       sha256: `sha256:${await sha256Hex(previewDataUrl)}`,
-      shape: role === 'normal' || role === 'pointmap' ? [3, 160, 160] : [160, 160],
+      shape: role === 'normal' || role === 'pointMap' ? [3, 160, 160] : [160, 160],
       status: 'real',
       previewDataUrl,
       mediaType: 'image/png',
-    });
+    };
   }
-  const totalMs = Number((performance.now() - startedAt).toFixed(2));
-  const scheduler = {
-    schema: WEBGPU_ROUTE_SCHEDULER_SCHEMA,
+  const totalMs = Number((performance.now() - startedAt).toFixed(1));
+  const scheduler = kit.createWebGpuRouteSchedulerProfile({
     requestedScheduler: {
-      mode: 'single-preview-producer',
-      yieldMs: 0,
+      mode: 'cooperative',
+      yieldMs: 5,
       waitForSubmittedWorkDone: false,
       phaseChunkSize: {},
     },
     effectiveScheduler: {
-      mode: 'single-preview-producer',
+      mode: 'throughput',
       yieldMs: 0,
       waitForSubmittedWorkDone: false,
       phaseChunkSize: {},
-      unsupportedFields: [],
+      unsupportedFields: ['cooperative-browser-model-run', 'yieldMs'],
     },
-    verificationState: 'demo-producer',
-  };
-  const backpressure = {
-    schema: WEBGPU_ROUTE_BACKPRESSURE_SCHEMA,
+    verificationState: 'scheduler-unverified',
+  });
+  const backpressure = kit.createWebGpuRouteBackpressureProfile({
     requestedBudget: 'visible-wait',
     effectiveBudget: 'visible-wait',
     memoryExclusivity: 'shared',
-    warmCacheState: probe.available ? 'adapter-probed' : 'not-loaded',
+    warmCacheState: probe.available ? 'cold' : 'unknown',
     frameTail: {
       sampleWindowMs: Math.ceil(totalMs),
       longFrameCount: totalMs > 50 ? 1 : 0,
@@ -10333,96 +10338,104 @@ async function buildBrowserWebGpuPreviewRouteResult(row = {}) {
       p95FrameGapMs: totalMs,
       p99FrameGapMs: totalMs,
     },
-  };
-  const runtimeProfile = {
-    schema: WEBGPU_RUNTIME_PROFILE_SCHEMA,
+  });
+  const profile = kit.createStagedSubmitProfile({
+    route: 'browser-preview-producer',
+    timingSource: 'performance.now',
+    requiredStages: ['adapter-probe', 'artifact-render', 'result-submit'],
+  });
+  kit.addStagedSubmitStage(profile, { name: 'adapter-probe', ms: Number(Math.min(totalMs, 8).toFixed(1)) });
+  kit.addStagedSubmitStage(profile, { name: 'artifact-render', ms: Number(Math.max(totalMs - 8, 0).toFixed(1)) });
+  kit.addStagedSubmitStage(profile, { name: 'result-submit', ms: 0 });
+  const runtimeProfile = kit.createWebGpuRuntimeProfile({
     routeId,
     runtimeLabel: probe.available ? 'browser-webgpu-preview-adapter-probed' : 'browser-webgpu-preview-demo-producer',
     backend: probe.backend,
     kernel: {
-      kitVersion: 'kaminos-demo-producer',
       profile: 'deterministic-canvas-preview-v0',
       commit: 'local-browser',
     },
-    profile: {
-      schema: 'kaminos.webgpu-staged-profile.v0',
-      route: 'browser-preview-producer',
-      timingSource: 'performance.now',
-      timestampQueryValidatedAgainstStaged: false,
-      requiredStages: ['adapter-probe', 'artifact-render', 'result-submit'],
-      stages: [
-        { name: 'adapter-probe', ms: Number(Math.min(totalMs, 8).toFixed(2)) },
-        { name: 'artifact-render', ms: Number(Math.max(totalMs - 8, 0).toFixed(2)) },
-        { name: 'result-submit', ms: 0 },
-      ],
-      stageNames: ['adapter-probe', 'artifact-render', 'result-submit'],
-      totalMs,
-    },
+    profile,
     evidence: {
-      mode: 'live-demo',
+      mode: 'fallback',
       source: 'kaminos-browser-webgpu-preview-demo-producer',
-      classification: 'browser-route-demo-output',
-      fallbackReason: probe.reason,
+      fallbackReason: probe.reason || 'preview producer rendered deterministic canvas artifacts without MoGE model weights',
     },
     requiredStages: ['adapter-probe', 'artifact-render', 'result-submit'],
     timingSource: 'performance.now',
-    createdAt: new Date().toISOString(),
+  });
+  const inputArtifact = {
+    artifactId: `image:${requestId}`,
+    sha256: `sha256:${await sha256Hex(routeId + requestId)}`,
+    shape: [160, 160, 3],
   };
-  const receipt = {
-    schema: 'kaminos.webgpu-route-receipt.v0',
-    requestedRouteId: routeId,
+  const request = kit.createRouteInvocationRequest(route, {
+    requestId,
+    inputs: { 'source-image': inputArtifact },
+    outputs: {
+      depth: outputArtifacts.depth,
+      normal: outputArtifacts.normal,
+      pointmap: outputArtifacts.pointMap,
+    },
+    routeConfig: {
+      source: 'kaminos.greenroom.route-tray-run-preview',
+      producer: 'browser-preview-demo',
+      evidenceMode: 'fallback',
+    },
+    createdAt: runtimeProfile.createdAt,
+  });
+  request.workerModule = routeJob.executor?.workerModule || 'webgpu-inference-kit/routes/moge-worker.js';
+  const receipt = kit.createMogeDepthNormalRouteReceipt({
     effectiveRouteId: routeId,
-    status: 'real',
-    fallbackReason: null,
+    status: 'fallback',
+    fallbackReason: runtimeProfile.evidence.fallbackReason,
     backend: probe.backend,
     model: {
-      id: 'Ruicheng/moge-2-vitl-normal',
       revision: 'kaminos-demo-producer-no-model-weights',
-      weightsHash: `sha256:${await sha256Hex(outputs.map(output => output.sha256).join('|'))}`,
+      weightsHash: `sha256:${await sha256Hex(Object.values(outputArtifacts).map(output => output.sha256).join('|'))}`,
       dtype: 'fp16',
     },
     kernel: runtimeProfile.kernel,
-    inputs: [{
-      role: 'source-image',
-      artifactId: `image:${requestId}`,
-      sha256: `sha256:${await sha256Hex(routeId + requestId)}`,
-      shape: [160, 160, 3],
-    }],
-    outputs,
-    timings: {
-      source: 'performance.now',
-      totalMs,
-      stages: runtimeProfile.profile.stages,
-    },
-    runtime: {
-      runtimeProfile,
-      scheduler,
-      backpressure,
-    },
-    createdAt: runtimeProfile.createdAt,
+    input: inputArtifact,
+    outputs: outputArtifacts,
+    profile,
+  });
+  const previewByRole = {
+    depth: outputArtifacts.depth,
+    normal: outputArtifacts.normal,
+    pointmap: outputArtifacts.pointMap,
   };
-  return {
-    schema: 'kaminos.webgpu-route-result.v0',
-    requestId,
-    routeId,
-    status: 'real',
-    request: {
-      schema: 'kaminos.webgpu-route-request.v0',
-      requestId,
-      routeId,
-      backendKind: ROUTE_BACKEND_WEBGPU_LOCAL,
-      workerModule: routeJob.executor?.workerModule || 'kaminos/browser-webgpu-preview-demo',
-      routeConfig: {
-        source: 'kaminos.greenroom.route-tray-run-preview',
-        producer: 'browser-preview-demo',
-      },
-      createdAt: receipt.createdAt,
-    },
+  receipt.outputs = receipt.outputs.map(output => ({
+    ...output,
+    previewDataUrl: previewByRole[output.role]?.previewDataUrl,
+    mediaType: previewByRole[output.role]?.mediaType,
+  }));
+  receipt.timings = {
+    source: 'performance.now',
+    totalMs,
+    stages: runtimeProfile.profile.stages,
+  };
+  receipt.runtime = {
+    runtimeProfile,
+    scheduler,
+    backpressure,
+  };
+  let result = kit.createRouteWorkerResult(route, {
+    request,
     receipt,
-    backend: probe.backend,
-    outputs,
     createdAt: receipt.createdAt,
+  });
+  const classification = kit.classifyWebGpuRouteWorkerResultEvidence(result, { expectedRouteId: routeId });
+  result.receipt.runtime.runtimeProfile.evidence = {
+    ...result.receipt.runtime.runtimeProfile.evidence,
+    classification: classification.classification,
+    authoritative: classification.authoritative,
   };
+  const validation = kit.validateRouteWorkerResult(result, route);
+  if (!validation.ok) {
+    throw new Error(`Kit route result validation failed: ${validation.errors.join('; ')}`);
+  }
+  return result;
 }
 
 async function runBrowserWebGpuPreviewRoute(row = {}) {

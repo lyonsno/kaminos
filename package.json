@@ -1,0 +1,10 @@
+{
+  "name": "kaminos",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Local Kaminos browser workbench.",
+  "dependencies": {
+    "@kaminos/webgpu-inference-kit": "0.1.1"
+  }
+}

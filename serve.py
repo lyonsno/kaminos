@@ -57,6 +57,8 @@ WEBGPU_ROUTE_SCHEDULER_SCHEMA = "kaminos.webgpu-route-scheduler.v0"
 WEBGPU_ROUTE_BACKPRESSURE_SCHEMA = "kaminos.webgpu-route-backpressure.v0"
 WEBGPU_ROUTE_RESULT_SCHEMA = "kaminos.webgpu-route-result.v0"
 WEBGPU_ROUTE_RECEIPT_SCHEMA = "kaminos.webgpu-route-receipt.v0"
+WEBGPU_INFERENCE_KIT_VENDOR_PREFIX = "/vendor/@kaminos/webgpu-inference-kit/"
+WEBGPU_INFERENCE_KIT_ROOT = ROOT / "node_modules" / "@kaminos" / "webgpu-inference-kit"
 BROWSER_WEBGPU_ROUTE_RESULTS_DIR = (
     Path(os.environ["KAMINOS_BROWSER_WEBGPU_ROUTE_RESULTS_DIR"]).expanduser()
     if os.environ.get("KAMINOS_BROWSER_WEBGPU_ROUTE_RESULTS_DIR")
@@ -601,6 +603,22 @@ def _browser_webgpu_result_read_link(path):
         "root": "browser-webgpu-route-results",
         "path": str(resolved.relative_to(root)),
     })
+
+
+def resolve_webgpu_inference_kit_asset(request_path):
+    """Resolve package ESM assets through a confined local node_modules root."""
+    if not request_path.startswith(WEBGPU_INFERENCE_KIT_VENDOR_PREFIX):
+        raise ValueError("not a WebGPU inference kit asset path")
+    rel = request_path[len(WEBGPU_INFERENCE_KIT_VENDOR_PREFIX):]
+    if not rel:
+        raise FileNotFoundError("missing WebGPU inference kit asset path")
+    package_root = WEBGPU_INFERENCE_KIT_ROOT.resolve()
+    asset_path = (package_root / rel).resolve()
+    if not asset_path.is_relative_to(package_root):
+        raise PermissionError("WebGPU inference kit asset path escapes package root")
+    if not asset_path.is_file():
+        raise FileNotFoundError("WebGPU inference kit asset is not installed")
+    return asset_path
 
 
 def _greenroom_checkpoint_pause_capable(job_type):
@@ -1236,10 +1254,17 @@ def _browser_webgpu_result_errors(result):
         errors.append("receipt.requestedRouteId must match result.routeId")
     if receipt.get("effectiveRouteId") != result.get("routeId"):
         errors.append("receipt.effectiveRouteId must match result.routeId")
-    if result.get("status") != "real" or receipt.get("status") != "real":
-        errors.append("result and receipt status must be real")
-    if receipt.get("fallbackReason"):
+    allowed_statuses = {"real", "fallback"}
+    result_status = result.get("status")
+    receipt_status = receipt.get("status")
+    if result_status not in allowed_statuses or receipt_status not in allowed_statuses:
+        errors.append("result and receipt status must be real or fallback")
+    if result_status != receipt_status:
+        errors.append("result.status must match receipt.status")
+    if receipt_status == "real" and receipt.get("fallbackReason"):
         errors.append("fallbackReason must be absent for authoritative evidence")
+    if receipt_status == "fallback" and not _is_nonempty_string(receipt.get("fallbackReason")):
+        errors.append("fallback receipts must include fallbackReason")
 
     backend = receipt.get("backend")
     if not isinstance(backend, dict):
@@ -1635,6 +1660,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_job_output(parse_qs(parsed.query))
         elif parsed.path == "/api/delete-scene":
             self.handle_delete_scene(parse_qs(parsed.query))
+        elif parsed.path.startswith(WEBGPU_INFERENCE_KIT_VENDOR_PREFIX):
+            self.handle_webgpu_inference_kit_asset(parsed.path)
         else:
             super().do_GET()
 
@@ -1994,6 +2021,31 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.send_json({"error": str(error)}, 400)
             return
         self.send_json(result, 201)
+
+    def handle_webgpu_inference_kit_asset(self, request_path):
+        """Serve the installed package ESM files without introducing a build step."""
+        try:
+            asset_path = resolve_webgpu_inference_kit_asset(request_path)
+        except PermissionError as error:
+            self.send_json({"error": str(error)}, 403)
+            return
+        except (FileNotFoundError, ValueError) as error:
+            self.send_json({"error": str(error)}, 404)
+            return
+
+        body = asset_path.read_bytes()
+        content_types = {
+            ".js": "text/javascript; charset=utf-8",
+            ".mjs": "text/javascript; charset=utf-8",
+            ".json": "application/json; charset=utf-8",
+            ".md": "text/markdown; charset=utf-8",
+        }
+        self.send_response(200)
+        self.send_header("Content-Type", content_types.get(asset_path.suffix.lower(), "application/octet-stream"))
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(body)
 
     def handle_read(self, params):
         """Read a file's content. ?root=scratch&path=file.json"""

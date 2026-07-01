@@ -84,7 +84,12 @@ def browser_webgpu_route_result(*, status="real", output_status="real"):
             "stageNames": ["backbone", "decoder-heads", "output-readback"],
             "totalMs": 1853.8,
         },
-        "evidence": {"mode": "live", "source": "moge-webgpu-route-worker", "fallbackReason": None},
+        "evidence": {
+            "mode": "fallback" if status == "fallback" else "live",
+            "source": "moge-webgpu-route-worker",
+            "fallbackReason": "WebGPU unavailable" if status == "fallback" else None,
+            "classification": "fallback" if status == "fallback" else "authoritative-live-webgpu",
+        },
         "requiredStages": ["backbone", "decoder-heads", "output-readback"],
         "timingSource": "queue-submit-wait",
         "createdAt": "2026-07-01T01:00:00Z",
@@ -651,11 +656,33 @@ def test_browser_webgpu_route_provider_ingests_authoritative_kit_result():
     assert row["output_links"][0]["media_type"] == "image/png"
 
 
-def test_browser_webgpu_route_provider_rejects_non_authoritative_kit_results_as_row_owners():
+def test_browser_webgpu_route_provider_projects_fallback_kit_results_without_authority():
     with TemporaryDirectory(dir="/tmp") as tmp:
         results_dir = Path(tmp) / "browser-webgpu-results"
         results_dir.mkdir()
         (results_dir / "fallback.json").write_text(json.dumps(browser_webgpu_route_result(status="fallback")), encoding="utf-8")
+        previous = getattr(serve, "BROWSER_WEBGPU_ROUTE_RESULTS_DIR", None)
+        serve.BROWSER_WEBGPU_ROUTE_RESULTS_DIR = results_dir
+        try:
+            index = build_browser_webgpu_route_provider_index()
+        finally:
+            serve.BROWSER_WEBGPU_ROUTE_RESULTS_DIR = previous
+
+    assert index["provider"]["source"] == "route-result-files"
+    assert index["provider"]["result_dir"] == str(results_dir)
+    assert index["invalid_result_count"] == 0
+    assert index["summary"] == {"done": 1}
+    [row] = index["rows"]
+    assert row["job_id"] == "browser-webgpu-req:moge-bunnycake"
+    assert row["route_job"]["metadata"]["evidenceClassification"]["classification"] == "fallback"
+    assert row["route_job"]["metadata"]["evidenceClassification"]["authoritative"] is False
+    assert any(warning["kind"] == "browser_webgpu_demo_evidence" for warning in row["warnings"])
+
+
+def test_browser_webgpu_route_provider_rejects_partial_or_incomplete_kit_results_as_row_owners():
+    with TemporaryDirectory(dir="/tmp") as tmp:
+        results_dir = Path(tmp) / "browser-webgpu-results"
+        results_dir.mkdir()
         (results_dir / "partial.json").write_text(json.dumps(browser_webgpu_route_result(output_status="partial")), encoding="utf-8")
         (results_dir / "missing-hash.json").write_text(json.dumps(browser_webgpu_route_result(output_status="missing-hash")), encoding="utf-8")
         previous = getattr(serve, "BROWSER_WEBGPU_ROUTE_RESULTS_DIR", None)
@@ -667,12 +694,11 @@ def test_browser_webgpu_route_provider_rejects_non_authoritative_kit_results_as_
 
     assert index["provider"]["source"] == "fixture"
     assert index["provider"]["result_dir"] == str(results_dir)
-    assert index["invalid_result_count"] == 3
+    assert index["invalid_result_count"] == 2
     assert index["summary"] == {"reserved": 1}
     [row] = index["rows"]
     assert row["job_id"] == "browser-webgpu-moge-fixture"
     assert row["route_job"]["metadata"]["evidenceClassification"]["classification"] == "demo"
-    assert row["route_job"]["metadata"]["evidenceClassification"]["authoritative"] is False
 
 
 def test_browser_webgpu_route_result_writer_persists_authoritative_payload():
@@ -703,7 +729,7 @@ def test_browser_webgpu_route_result_writer_persists_authoritative_payload():
         assert row["route_job"]["metadata"]["evidenceClassification"]["authoritative"] is True
 
 
-def test_browser_webgpu_route_result_writer_rejects_unconfigured_or_non_authoritative_payloads():
+def test_browser_webgpu_route_result_writer_rejects_unconfigured_or_incomplete_payloads():
     previous = getattr(serve, "BROWSER_WEBGPU_ROUTE_RESULTS_DIR", None)
     serve.BROWSER_WEBGPU_ROUTE_RESULTS_DIR = None
     try:
@@ -720,11 +746,8 @@ def test_browser_webgpu_route_result_writer_rejects_unconfigured_or_non_authorit
         previous = getattr(serve, "BROWSER_WEBGPU_ROUTE_RESULTS_DIR", None)
         serve.BROWSER_WEBGPU_ROUTE_RESULTS_DIR = results_dir
         try:
-            try:
-                serve.write_browser_webgpu_route_result(browser_webgpu_route_result(status="fallback"))
-                assert False, "fallback writer should fail"
-            except ValueError as error:
-                assert "status must be real" in str(error)
+            fallback_result = serve.write_browser_webgpu_route_result(browser_webgpu_route_result(status="fallback"))
+            assert Path(fallback_result["result_path"]).is_file()
             try:
                 serve.write_browser_webgpu_route_result(browser_webgpu_route_result(output_status="missing-hash"))
                 assert False, "missing-hash writer should fail"
@@ -733,7 +756,22 @@ def test_browser_webgpu_route_result_writer_rejects_unconfigured_or_non_authorit
         finally:
             serve.BROWSER_WEBGPU_ROUTE_RESULTS_DIR = previous
 
-        assert not list(results_dir.glob("*.json"))
+        assert [path.name for path in results_dir.glob("*.json")] == ["moge.depth-normal.webgpu-local.v0__req-moge-bunnycake.json"]
+
+
+def test_webgpu_inference_kit_static_asset_resolves_to_local_package_only():
+    package_root = Path(__file__).resolve().parents[1] / "node_modules" / "@kaminos" / "webgpu-inference-kit"
+    index_js = package_root / "src" / "index.js"
+    assert index_js.is_file(), "@kaminos/webgpu-inference-kit must be installed for browser route producer smoke"
+
+    resolved = serve.resolve_webgpu_inference_kit_asset("/vendor/@kaminos/webgpu-inference-kit/src/index.js")
+    assert resolved == index_js.resolve()
+
+    try:
+        serve.resolve_webgpu_inference_kit_asset("/vendor/@kaminos/webgpu-inference-kit/../package.json")
+        assert False, "path escape should fail"
+    except PermissionError as error:
+        assert "escapes" in str(error)
 
 
 def test_route_provider_all_combines_native_greenroom_and_browser_webgpu_rows():
@@ -1014,9 +1052,11 @@ if __name__ == "__main__":
     test_native_greenroom_checkpoint_pause_request_refuses_non_trellis_rows()
     test_browser_webgpu_route_provider_projects_fixture_route_identity()
     test_browser_webgpu_route_provider_ingests_authoritative_kit_result()
-    test_browser_webgpu_route_provider_rejects_non_authoritative_kit_results_as_row_owners()
+    test_browser_webgpu_route_provider_projects_fallback_kit_results_without_authority()
+    test_browser_webgpu_route_provider_rejects_partial_or_incomplete_kit_results_as_row_owners()
     test_browser_webgpu_route_result_writer_persists_authoritative_payload()
-    test_browser_webgpu_route_result_writer_rejects_unconfigured_or_non_authoritative_payloads()
+    test_browser_webgpu_route_result_writer_rejects_unconfigured_or_incomplete_payloads()
+    test_webgpu_inference_kit_static_asset_resolves_to_local_package_only()
     test_route_provider_all_combines_native_greenroom_and_browser_webgpu_rows()
     test_native_greenroom_route_provider_preserves_degraded_legacy_rows()
     test_splat_asset_index_separates_experimental_and_production_roots()
