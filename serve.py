@@ -1347,14 +1347,21 @@ def _browser_webgpu_route_row_from_result(path, result):
     scheduler = runtime.get("scheduler") if isinstance(runtime.get("scheduler"), dict) else None
     backpressure = runtime.get("backpressure") if isinstance(runtime.get("backpressure"), dict) else None
     runtime_profile = runtime.get("runtimeProfile") if isinstance(runtime.get("runtimeProfile"), dict) else None
+    runtime_evidence = runtime_profile.get("evidence") if isinstance(runtime_profile, dict) and isinstance(runtime_profile.get("evidence"), dict) else {}
     backend = receipt.get("backend") if isinstance(receipt.get("backend"), dict) else {}
     model = receipt.get("model") if isinstance(receipt.get("model"), dict) else {}
     cache_state = backpressure.get("warmCacheState") if isinstance(backpressure, dict) else "unknown"
+    authoritative_evidence = runtime_evidence.get("mode") == "live"
+    evidence_reasons = [] if authoritative_evidence else [
+        runtime_evidence.get("source") or "browser WebGPU result did not identify a live model route source"
+    ]
     evidence_classification = _browser_webgpu_evidence_classification(
         receipt,
-        authoritative=True,
-        classification="authoritative-live-webgpu",
-        reasons=[],
+        authoritative=authoritative_evidence,
+        classification=runtime_evidence.get("classification") or (
+            "authoritative-live-webgpu" if authoritative_evidence else "live-browser-route-demo"
+        ),
+        reasons=evidence_reasons,
     )
     cooperative_verified = (
         isinstance(scheduler, dict)
@@ -1403,10 +1410,16 @@ def _browser_webgpu_route_row_from_result(path, result):
             "yieldSupported": cooperative_verified,
             "schedulerVerificationState": scheduler.get("verificationState") if isinstance(scheduler, dict) else None,
         },
-        "warnings": [] if cooperative_verified else [{
-            "kind": "scheduler_unverified",
-            "message": "Browser WebGPU result did not prove effective cooperative scheduler telemetry.",
-        }],
+        "warnings": [
+            *([] if authoritative_evidence else [{
+                "kind": "browser_webgpu_demo_evidence",
+                "message": "Browser route produced an inspectable demo artifact; full model execution was not claimed.",
+            }]),
+            *([] if cooperative_verified else [{
+                "kind": "scheduler_unverified",
+                "message": "Browser WebGPU result did not prove effective cooperative scheduler telemetry.",
+            }]),
+        ],
         "metadata": {
             "effectiveBackend": {
                 "kind": backend.get("kind"),
@@ -1435,6 +1448,21 @@ def _browser_webgpu_route_row_from_result(path, result):
         },
     }
     display_title = "MoGE WebGPU Live" if route_id == "moge.depth-normal.webgpu-local.v0" else _clean_label(route_id, "Browser WebGPU")
+    output_links = []
+    for artifact in receipt.get("outputs") or []:
+        if not isinstance(artifact, dict):
+            continue
+        output_url = artifact.get("previewDataUrl") or artifact.get("url") or artifact.get("uri")
+        if not _is_nonempty_string(output_url):
+            continue
+        output_links.append({
+            "kind": artifact.get("role") or "output",
+            "name": artifact.get("artifactId") or artifact.get("role") or "browser-webgpu-output",
+            "path": output_url,
+            "media_type": artifact.get("mediaType") or artifact.get("mimeType") or None,
+            "sha256": artifact.get("sha256"),
+        })
+
     row = {
         "schema": "kaminos.route-provider-row.v0",
         "provider": "browser-webgpu",
@@ -1462,7 +1490,7 @@ def _browser_webgpu_route_row_from_result(path, result):
         },
         "receipt_link": _browser_webgpu_result_read_link(path),
         "checkpoint_receipt_link": None,
-        "output_links": [],
+        "output_links": output_links,
         "controls": [],
         "warnings": route_job["warnings"],
         "parse_error": None,

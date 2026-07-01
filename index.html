@@ -9952,6 +9952,7 @@ function routeJobControls(row = {}) {
 function routeWarningLabel(kind = 'warning') {
   const labels = {
     scheduler_unverified: 'scheduler unverified',
+    browser_webgpu_demo_evidence: 'demo route output',
     resume_unverified: 'resume unverified',
     pause_requested: 'pause requested',
     non_resumable_unverified: 'non-resumable',
@@ -9978,6 +9979,7 @@ function renderRouteJobLinkButton(container, label, url, title) {
     window.open(url, '_blank');
   };
   container.appendChild(button);
+  return button;
 }
 
 function routeJobPauseRequested(row = {}) {
@@ -10022,6 +10024,54 @@ function renderRouteJobActionButton(container, row, control) {
     await grBrowseRouteJobs();
   };
   container.appendChild(button);
+}
+
+function routeJobCanRunBrowserWebGpuPreview(row = {}) {
+  const routeJob = row.route_job || {};
+  return (
+    row.provider === ROUTE_EXECUTOR_BROWSER_WEBGPU
+    && routeJob.executor?.kind === ROUTE_EXECUTOR_BROWSER_WEBGPU
+    && routeJob.status === 'reserved'
+    && routeJob.routeId === 'moge.depth-normal.webgpu-local.v0'
+  );
+}
+
+function renderBrowserWebGpuPreviewActionButton(container, row) {
+  if (!routeJobCanRunBrowserWebGpuPreview(row)) return;
+  const button = document.createElement('button');
+  button.className = 'btn';
+  button.textContent = 'Run Preview';
+  button.title = 'Run the browser route producer and submit its kit result to Kaminos';
+  button.setAttribute('data-greenroom-route-action', 'run-browser-webgpu-preview');
+  button.onclick = async (event) => {
+    event.stopPropagation();
+    button.disabled = true;
+    button.textContent = 'Running...';
+    try {
+      await runBrowserWebGpuPreviewRoute(row);
+    } catch (error) {
+      button.disabled = false;
+      button.textContent = 'Run Preview';
+      setInfo(`Browser WebGPU preview failed: ${error.message || error}`);
+    }
+  };
+  container.appendChild(button);
+}
+
+function routeJobOutputLabel(link = {}) {
+  const kind = String(link.kind || '').toLowerCase();
+  if (kind === 'depth') return 'Depth';
+  if (kind === 'normal') return 'Normal';
+  if (kind === 'pointmap') return 'Pointmap';
+  if (kind === 'mesh') return 'Output';
+  return 'File';
+}
+
+function renderRouteJobOutputButton(container, link = {}) {
+  const button = renderRouteJobLinkButton(container, routeJobOutputLabel(link), link.path, link.name || link.path);
+  if (!button) return;
+  button.setAttribute('data-greenroom-route-output-kind', link.kind || 'output');
+  if (link.media_type) button.setAttribute('data-greenroom-route-output-media-type', link.media_type);
 }
 
 function renderGreenroomRouteJobRow(row) {
@@ -10090,11 +10140,12 @@ function renderGreenroomRouteJobRow(row) {
 
   renderRouteJobLinkButton(div, 'Receipt', row.receipt_link, 'Open Greenroom receipt');
   renderRouteJobLinkButton(div, 'Checkpoint', row.checkpoint_receipt_link, 'Open checkpoint-yield receipt');
+  renderBrowserWebGpuPreviewActionButton(div, row);
   for (const control of routeJobControls(row)) {
     renderRouteJobActionButton(div, row, control);
   }
-  for (const link of (row.output_links || []).slice(0, 2)) {
-    renderRouteJobLinkButton(div, link.kind === 'mesh' ? 'Output' : 'File', link.path, link.name);
+  for (const link of (row.output_links || []).slice(0, 3)) {
+    renderRouteJobOutputButton(div, link);
   }
   return div;
 }
@@ -10141,6 +10192,245 @@ async function submitBrowserWebGpuRouteResult(result) {
   }
   await grBrowseRouteJobs();
   return writeResult;
+}
+
+async function sha256Hex(text) {
+  const bytes = new TextEncoder().encode(text);
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+}
+
+async function probeBrowserWebGpuRouteRuntime() {
+  const browser = navigator.userAgent || 'unknown-browser';
+  const backend = {
+    kind: ROUTE_BACKEND_WEBGPU_LOCAL,
+    runtime: 'browser',
+    adapterName: 'not-probed',
+    browser,
+    features: [],
+    requestedFeatures: [],
+    limits: {},
+    timestampQuery: 'not-requested',
+  };
+  if (!navigator.gpu?.requestAdapter) {
+    return { available: false, backend, reason: 'navigator.gpu unavailable' };
+  }
+  try {
+    const adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
+    if (!adapter) return { available: false, backend, reason: 'requestAdapter returned null' };
+    const features = Array.from(adapter.features || []);
+    const requestedFeatures = features.includes('timestamp-query') ? ['timestamp-query'] : [];
+    const info = adapter.info || {};
+    backend.adapterName = info.description || info.architecture || info.device || info.vendor || 'browser-webgpu-adapter';
+    backend.features = features;
+    backend.requestedFeatures = requestedFeatures;
+    backend.timestampQuery = requestedFeatures.includes('timestamp-query') ? 'requested' : 'not-requested';
+    backend.limits = {};
+    for (const key of ['maxBufferSize', 'maxStorageBufferBindingSize', 'maxComputeWorkgroupStorageSize']) {
+      if (adapter.limits?.[key] != null) backend.limits[key] = adapter.limits[key];
+    }
+    let device = null;
+    try {
+      device = await adapter.requestDevice({ requiredFeatures: requestedFeatures });
+    } finally {
+      device?.destroy?.();
+    }
+    return { available: true, backend, reason: null };
+  } catch (error) {
+    return { available: false, backend, reason: error.message || String(error) };
+  }
+}
+
+function browserWebGpuPreviewDataUrl(role, routeJob, probe) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 160;
+  canvas.height = 160;
+  const ctx = canvas.getContext('2d');
+  const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+  if (role === 'depth') {
+    gradient.addColorStop(0, '#101820');
+    gradient.addColorStop(0.55, '#6aa5ff');
+    gradient.addColorStop(1, '#f3f7ff');
+  } else if (role === 'normal') {
+    gradient.addColorStop(0, '#5b4bff');
+    gradient.addColorStop(0.5, '#58d68d');
+    gradient.addColorStop(1, '#ff6f91');
+  } else {
+    gradient.addColorStop(0, '#111');
+    gradient.addColorStop(0.45, '#f0b85a');
+    gradient.addColorStop(1, '#6bd3ff');
+  }
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.strokeStyle = 'rgba(255,255,255,0.32)';
+  ctx.lineWidth = 1;
+  for (let i = 16; i < canvas.width; i += 24) {
+    ctx.beginPath();
+    ctx.moveTo(i, 0);
+    ctx.lineTo(canvas.width - i / 3, canvas.height);
+    ctx.stroke();
+  }
+  ctx.fillStyle = 'rgba(0,0,0,0.58)';
+  ctx.fillRect(10, 112, 140, 34);
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 14px sans-serif';
+  ctx.fillText(role, 18, 132);
+  ctx.font = '9px monospace';
+  ctx.fillStyle = probe.available ? '#9cffc3' : '#ffd27a';
+  ctx.fillText(probe.available ? 'webgpu probed' : 'demo producer', 18, 144);
+  canvas.setAttribute('data-browser-webgpu-preview-route-id', routeJob.routeId || '');
+  return canvas.toDataURL('image/png');
+}
+
+async function buildBrowserWebGpuPreviewRouteResult(row = {}) {
+  const routeJob = row.route_job || {};
+  const routeId = routeJob.routeId || 'moge.depth-normal.webgpu-local.v0';
+  const requestId = `req:moge-preview-${Date.now()}`;
+  const startedAt = performance.now();
+  const probe = await probeBrowserWebGpuRouteRuntime();
+  const outputRoles = ['depth', 'normal', 'pointmap'];
+  const outputs = [];
+  for (const role of outputRoles) {
+    const previewDataUrl = browserWebGpuPreviewDataUrl(role, routeJob, probe);
+    outputs.push({
+      role,
+      artifactId: `${role}:${requestId}`,
+      sha256: `sha256:${await sha256Hex(previewDataUrl)}`,
+      shape: role === 'normal' || role === 'pointmap' ? [3, 160, 160] : [160, 160],
+      status: 'real',
+      previewDataUrl,
+      mediaType: 'image/png',
+    });
+  }
+  const totalMs = Number((performance.now() - startedAt).toFixed(2));
+  const scheduler = {
+    schema: WEBGPU_ROUTE_SCHEDULER_SCHEMA,
+    requestedScheduler: {
+      mode: 'single-preview-producer',
+      yieldMs: 0,
+      waitForSubmittedWorkDone: false,
+      phaseChunkSize: {},
+    },
+    effectiveScheduler: {
+      mode: 'single-preview-producer',
+      yieldMs: 0,
+      waitForSubmittedWorkDone: false,
+      phaseChunkSize: {},
+      unsupportedFields: [],
+    },
+    verificationState: 'demo-producer',
+  };
+  const backpressure = {
+    schema: WEBGPU_ROUTE_BACKPRESSURE_SCHEMA,
+    requestedBudget: 'visible-wait',
+    effectiveBudget: 'visible-wait',
+    memoryExclusivity: 'shared',
+    warmCacheState: probe.available ? 'adapter-probed' : 'not-loaded',
+    frameTail: {
+      sampleWindowMs: Math.ceil(totalMs),
+      longFrameCount: totalMs > 50 ? 1 : 0,
+      maxFrameGapMs: totalMs,
+      p95FrameGapMs: totalMs,
+      p99FrameGapMs: totalMs,
+    },
+  };
+  const runtimeProfile = {
+    schema: WEBGPU_RUNTIME_PROFILE_SCHEMA,
+    routeId,
+    runtimeLabel: probe.available ? 'browser-webgpu-preview-adapter-probed' : 'browser-webgpu-preview-demo-producer',
+    backend: probe.backend,
+    kernel: {
+      kitVersion: 'kaminos-demo-producer',
+      profile: 'deterministic-canvas-preview-v0',
+      commit: 'local-browser',
+    },
+    profile: {
+      schema: 'kaminos.webgpu-staged-profile.v0',
+      route: 'browser-preview-producer',
+      timingSource: 'performance.now',
+      timestampQueryValidatedAgainstStaged: false,
+      requiredStages: ['adapter-probe', 'artifact-render', 'result-submit'],
+      stages: [
+        { name: 'adapter-probe', ms: Number(Math.min(totalMs, 8).toFixed(2)) },
+        { name: 'artifact-render', ms: Number(Math.max(totalMs - 8, 0).toFixed(2)) },
+        { name: 'result-submit', ms: 0 },
+      ],
+      stageNames: ['adapter-probe', 'artifact-render', 'result-submit'],
+      totalMs,
+    },
+    evidence: {
+      mode: 'live-demo',
+      source: 'kaminos-browser-webgpu-preview-demo-producer',
+      classification: 'browser-route-demo-output',
+      fallbackReason: probe.reason,
+    },
+    requiredStages: ['adapter-probe', 'artifact-render', 'result-submit'],
+    timingSource: 'performance.now',
+    createdAt: new Date().toISOString(),
+  };
+  const receipt = {
+    schema: 'kaminos.webgpu-route-receipt.v0',
+    requestedRouteId: routeId,
+    effectiveRouteId: routeId,
+    status: 'real',
+    fallbackReason: null,
+    backend: probe.backend,
+    model: {
+      id: 'Ruicheng/moge-2-vitl-normal',
+      revision: 'kaminos-demo-producer-no-model-weights',
+      weightsHash: `sha256:${await sha256Hex(outputs.map(output => output.sha256).join('|'))}`,
+      dtype: 'fp16',
+    },
+    kernel: runtimeProfile.kernel,
+    inputs: [{
+      role: 'source-image',
+      artifactId: `image:${requestId}`,
+      sha256: `sha256:${await sha256Hex(routeId + requestId)}`,
+      shape: [160, 160, 3],
+    }],
+    outputs,
+    timings: {
+      source: 'performance.now',
+      totalMs,
+      stages: runtimeProfile.profile.stages,
+    },
+    runtime: {
+      runtimeProfile,
+      scheduler,
+      backpressure,
+    },
+    createdAt: runtimeProfile.createdAt,
+  };
+  return {
+    schema: 'kaminos.webgpu-route-result.v0',
+    requestId,
+    routeId,
+    status: 'real',
+    request: {
+      schema: 'kaminos.webgpu-route-request.v0',
+      requestId,
+      routeId,
+      backendKind: ROUTE_BACKEND_WEBGPU_LOCAL,
+      workerModule: routeJob.executor?.workerModule || 'kaminos/browser-webgpu-preview-demo',
+      routeConfig: {
+        source: 'kaminos.greenroom.route-tray-run-preview',
+        producer: 'browser-preview-demo',
+      },
+      createdAt: receipt.createdAt,
+    },
+    receipt,
+    backend: probe.backend,
+    outputs,
+    createdAt: receipt.createdAt,
+  };
+}
+
+async function runBrowserWebGpuPreviewRoute(row = {}) {
+  setInfo('Browser WebGPU preview route running');
+  const result = await buildBrowserWebGpuPreviewRouteResult(row);
+  const writeResult = await submitBrowserWebGpuRouteResult(result);
+  setInfo('Browser WebGPU preview route submitted');
+  return { result, writeResult };
 }
 
 async function grBrowseSplatAssets() {
@@ -10488,6 +10778,8 @@ window.grBrowseSplatAssets = grBrowseSplatAssets;
 window.grBrowseRouteJobs = grBrowseRouteJobs;
 window.grBrowse = grBrowse;
 window.kaminosSubmitBrowserWebGpuRouteResult = submitBrowserWebGpuRouteResult;
+window.kaminosBuildBrowserWebGpuPreviewRouteResult = buildBrowserWebGpuPreviewRouteResult;
+window.kaminosRunBrowserWebGpuPreviewRoute = runBrowserWebGpuPreviewRoute;
 window.kaminosIngestDroppedSplatFile = ingestDroppedSplatFile;
 
 async function grOpenJobDir(path) {

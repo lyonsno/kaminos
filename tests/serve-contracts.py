@@ -90,9 +90,33 @@ def browser_webgpu_route_result(*, status="real", output_status="real"):
         "createdAt": "2026-07-01T01:00:00Z",
     }
     outputs = [
-        {"role": "depth", "artifactId": "depth:bunnycake", "sha256": "sha256:depth", "shape": [592, 592], "status": output_status},
-        {"role": "normal", "artifactId": "normal:bunnycake", "sha256": "sha256:normal", "shape": [3, 592, 592], "status": output_status},
-        {"role": "pointmap", "artifactId": "pointmap:bunnycake", "sha256": "sha256:pointmap", "shape": [3, 592, 592], "status": output_status},
+        {
+            "role": "depth",
+            "artifactId": "depth:bunnycake",
+            "sha256": "sha256:depth",
+            "shape": [592, 592],
+            "status": output_status,
+            "previewDataUrl": "data:image/png;base64,ZGVwdGg=",
+            "mediaType": "image/png",
+        },
+        {
+            "role": "normal",
+            "artifactId": "normal:bunnycake",
+            "sha256": "sha256:normal",
+            "shape": [3, 592, 592],
+            "status": output_status,
+            "previewDataUrl": "data:image/png;base64,bm9ybWFs",
+            "mediaType": "image/png",
+        },
+        {
+            "role": "pointmap",
+            "artifactId": "pointmap:bunnycake",
+            "sha256": "sha256:pointmap",
+            "shape": [3, 592, 592],
+            "status": output_status,
+            "previewDataUrl": "data:image/png;base64,cG9pbnRtYXA=",
+            "mediaType": "image/png",
+        },
     ]
     if output_status == "missing-hash":
         outputs[0]["status"] = "real"
@@ -621,6 +645,10 @@ def test_browser_webgpu_route_provider_ingests_authoritative_kit_result():
     assert row["route_job"]["controls"] == []
     assert row["warnings"] == []
     assert row["receipt_link"] == "/api/read?root=browser-webgpu-route-results&path=moge-live.json"
+    assert [link["kind"] for link in row["output_links"]] == ["depth", "normal", "pointmap"]
+    assert row["output_links"][0]["path"] == "data:image/png;base64,ZGVwdGg="
+    assert row["output_links"][0]["name"] == "depth:bunnycake"
+    assert row["output_links"][0]["media_type"] == "image/png"
 
 
 def test_browser_webgpu_route_provider_rejects_non_authoritative_kit_results_as_row_owners():

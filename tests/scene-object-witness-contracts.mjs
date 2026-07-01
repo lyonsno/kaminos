@@ -149,6 +149,11 @@ assert.match(indexHtml, /window\.kaminosSubmitBrowserWebGpuRouteResult/, 'Browse
 assert.match(indexHtml, /route-results\/browser-webgpu/, 'Browser WebGPU producer helper posts route results to the Kaminos writer endpoint');
 assert.match(indexHtml, /writeResult\.route_provider_index/, 'Browser WebGPU producer helper consumes the refreshed provider index returned by the server');
 assert.match(indexHtml, /await grBrowseRouteJobs\(\)/, 'Browser WebGPU producer helper refreshes the route tray after a successful write');
+assert.match(indexHtml, /run-browser-webgpu-preview/, 'Browser WebGPU fixture routes expose an operator launch action');
+assert.match(indexHtml, /runBrowserWebGpuPreviewRoute/, 'Browser route tray can launch the browser WebGPU preview producer');
+assert.match(indexHtml, /buildBrowserWebGpuPreviewRouteResult/, 'Browser WebGPU preview producer builds a kit route result');
+assert.match(indexHtml, /previewDataUrl/, 'Browser WebGPU preview producer includes an inspectable output artifact');
+assert.match(indexHtml, /data-greenroom-route-output-kind/, 'Route tray preserves output artifact kind on browser route output links');
 assert.match(indexHtml, /fixture route identity only/, 'Route tray can warn when a browser WebGPU row is identity-only fixture evidence');
 assert.match(indexHtml, /scheduler unverified/, 'Route tray can warn when browser WebGPU scheduler evidence is unverified');
 assert.match(indexHtml, /kaminos\.webgpu-route-scheduler\.v0/, 'Route tray source preserves WebGPU scheduler schema identity');
