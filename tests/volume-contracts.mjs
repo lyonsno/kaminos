@@ -1559,6 +1559,13 @@ assert.match(greenroomBenchmark, /baseUrl/, 'greenroom benchmark records the tar
 assert.match(greenroomBenchmark, /uncontendedEvidenceClaim/, 'greenroom benchmark must distinguish requested greenroom conditions from proven uncontended timing evidence');
 assert.match(greenroomBenchmark, /dryRun/, 'greenroom benchmark supports writing the packet without spending a browser/GPU sweep');
 assert.match(greenroomBenchmark, /jobInputPath/, 'greenroom benchmark preserves the queue input packet path in receipts');
+assert.match(greenroomBenchmark, /repeatCount/, 'greenroom benchmark records repeated sweep pass count for contention stability');
+assert.match(greenroomBenchmark, /stabilitySummary/, 'greenroom benchmark emits per-scenario repeatability evidence');
+assert.match(greenroomBenchmark, /stabilitySuspect/, 'greenroom benchmark marks rows suspect when timing divergence exceeds tolerance');
+assert.match(greenroomBenchmark, /retryDivergent/, 'greenroom benchmark can run a targeted third pass for divergent scenarios');
+assert.match(greenroomBenchmark, /divergentScenarioIds/, 'greenroom benchmark records the scenario ids selected for divergent retry');
+assert.match(greenroomBenchmark, /frameP95RelativeTolerance/, 'greenroom benchmark records frame p95 repeatability tolerance');
+assert.match(greenroomBenchmark, /queueDoneP95RelativeTolerance/, 'greenroom benchmark records GPU queue p95 repeatability tolerance');
 
 const renderPairDatasetPath = join(root, 'volume-render-pair-dataset.mjs');
 assert.ok(existsSync(renderPairDatasetPath), 'volume render-scale pair dataset extractor exists');
@@ -1598,3 +1605,6 @@ assert.match(greenroomSubmit, /gpu-greenroom/, 'greenroom submit adapter submits
 assert.match(greenroomSubmit, /--queue-dir/, 'greenroom submit adapter makes the effective queue dir explicit');
 assert.match(greenroomSubmit, /--job-input/, 'greenroom submit adapter routes the Greenroom input packet into benchmark receipts');
 assert.match(greenroomSubmit, /benchmark_dry_run_flag/, 'greenroom submit adapter can submit dry-run benchmark jobs without a second job type');
+assert.match(greenroomSubmit, /repeat_count/, 'greenroom submit adapter forwards benchmark repeat count');
+assert.match(greenroomSubmit, /stability_frame_p95_pct/, 'greenroom submit adapter forwards frame p95 stability tolerance');
+assert.match(greenroomSubmit, /stability_queue_p95_pct/, 'greenroom submit adapter forwards queue p95 stability tolerance');
