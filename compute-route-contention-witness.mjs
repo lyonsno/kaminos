@@ -125,6 +125,7 @@ function timingFromVolumeWitness(volumeWitnessReport) {
 
 function effectiveVisualBudgetFromVolumeWitness(volumeWitnessReport = {}) {
   const controls = volumeWitnessReport.controls || {};
+  const runtimeQuality = runtimeQualityFromVolumeWitness(volumeWitnessReport);
   return {
     budgetId: controls.rayBudgetPreset || volumeWitnessReport.rayBudgetPreset || 'custom',
     evidenceMode: volumeWitnessReport.evidenceMode || null,
@@ -139,6 +140,49 @@ function effectiveVisualBudgetFromVolumeWitness(volumeWitnessReport = {}) {
     simCostEvidenceSource: volumeWitnessReport.simCostLedger?.simCostEvidenceSource || null,
     fullGridPassesPerFrame: finiteOrNull(volumeWitnessReport.simCostLedger?.fullGridPassesPerFrame),
     fullGridCellVisitsPerFrame: finiteOrNull(volumeWitnessReport.simCostLedger?.fullGridCellVisitsPerFrame),
+    runtimeQuality,
+  };
+}
+
+function runtimeQualityFromVolumeWitness(volumeWitnessReport = {}) {
+  const receipt = volumeWitnessReport.runtimeQualityReceipt || volumeWitnessReport.runtimeQuality || null;
+  if (!receipt) return null;
+  return {
+    schema: receipt.schema || receipt.source || 'volume-runtime-quality-ladder-v0',
+    requested: receipt.requested || receipt.requestedRuntimeQuality || null,
+    effective: receipt.effective || receipt.effectiveRuntimeQuality || null,
+    reason: receipt.reason || null,
+    source: receipt.source || receipt.schema || 'volume-runtime-quality-ladder-v0',
+    changedControls: asArray(receipt.changedControls),
+    knobs: cloneObject(receipt.knobs) || {},
+  };
+}
+
+function visualSourceTruthFromVolumeWitness(volumeWitnessReport = {}) {
+  const sourceTruth = cloneObject(volumeWitnessReport.visualSourceTruth) || {};
+  const source = sourceTruth.source || (
+    volumeWitnessReport.evidenceMode === 'fixture' ? 'fixture' : 'live-webgpu-volume'
+  );
+  return {
+    source,
+    fallbackReason: sourceTruth.fallbackReason || null,
+    mayClaimLiveNovelty: sourceTruth.mayClaimLiveNovelty ?? source === 'live-webgpu-volume',
+  };
+}
+
+function effectiveVolumeParamsFromVolumeWitness(volumeWitnessReport = {}) {
+  const controls = volumeWitnessReport.controls || {};
+  const runtimeKnobs = volumeWitnessReport.runtimeQualityReceipt?.knobs || volumeWitnessReport.runtimeQuality?.knobs || {};
+  return {
+    renderScale: finiteOrNull(controls.renderScale ?? runtimeKnobs.renderScale ?? volumeWitnessReport.renderScale),
+    reconstructionStyle: controls.reconstructionStyle || runtimeKnobs.reconstructionStyle || volumeWitnessReport.reconstructionStyle || null,
+    raySteps: finiteOrNull(controls.raySteps ?? runtimeKnobs.raySteps ?? volumeWitnessReport.raySteps),
+    adaptiveRays: finiteOrNull(controls.adaptiveRays ?? runtimeKnobs.adaptiveRays ?? volumeWitnessReport.adaptiveRays),
+    grid: controls.grid || runtimeKnobs.grid || volumeWitnessReport.grid || null,
+    pressureStrategy: controls.pressureStrategy || runtimeKnobs.pressureStrategy || volumeWitnessReport.pressureStrategy || null,
+    pressureIterations: finiteOrNull(controls.pressureIterations ?? runtimeKnobs.pressureIterations ?? volumeWitnessReport.pressureIterations),
+    majorantSkip: finiteOrNull(controls.majorantSkip ?? runtimeKnobs.majorantSkip ?? volumeWitnessReport.majorantSkip),
+    majorantCadence: finiteOrNull(controls.majorantCadence ?? runtimeKnobs.majorantCadence ?? volumeWitnessReport.majorantCadence),
   };
 }
 
@@ -391,6 +435,17 @@ function effectiveRouteEvidence(report = {}) {
   };
 }
 
+function pipelineSchedulerFromReport(report = {}) {
+  const routeEvidence = effectiveRouteEvidence(report);
+  const pipelineScheduler = cloneObject(
+    routeEvidence.pipelineScheduler || routeEvidence.adapterReport?.pipelineScheduler,
+  );
+  if (pipelineScheduler?.schema === 'kaminos.pipeline-scheduler-composition.v0') {
+    return pipelineScheduler;
+  }
+  return null;
+}
+
 function schedulerVerificationState(scheduler, adapterEvidence) {
   if (scheduler && !scheduler.effectiveScheduler) {
     return 'scheduler-unverified';
@@ -408,6 +463,13 @@ function schedulerVerificationState(scheduler, adapterEvidence) {
 
 function schedulerFromReport(report = {}) {
   const routeEvidence = effectiveRouteEvidence(report);
+  const pipelineScheduler = pipelineSchedulerFromReport(report);
+  if (pipelineScheduler?.scheduler) {
+    return {
+      ...cloneObject(pipelineScheduler.scheduler),
+      adapterEvidence: pipelineScheduler.scheduler.adapterEvidence || pipelineScheduler.raw?.breathingRoom || null,
+    };
+  }
   const scheduler = cloneObject(routeEvidence.scheduler);
   const adapterEvidence = cloneObject(routeEvidence.breathingRoom || routeEvidence.schedulerEvidence);
   if (scheduler) {
@@ -492,6 +554,8 @@ function normalizeScheduler(scheduler = null, adapterEvidence = null) {
 
 function backpressureFromReport(report = {}) {
   const routeEvidence = effectiveRouteEvidence(report);
+  const pipelineScheduler = pipelineSchedulerFromReport(report);
+  if (pipelineScheduler?.backpressure) return pipelineScheduler.backpressure;
   const backpressure = cloneObject(routeEvidence.backpressure);
   return backpressure || {
     schema: 'kaminos.webgpu-route-backpressure.v0',
@@ -511,6 +575,17 @@ function backpressureFromReport(report = {}) {
 
 function optimizationFromReport(report = {}) {
   const routeEvidence = effectiveRouteEvidence(report);
+  const pipelineScheduler = pipelineSchedulerFromReport(report);
+  if (pipelineScheduler?.optimizationIdentity) {
+    const optimizationIdentity = cloneObject(pipelineScheduler.optimizationIdentity);
+    const mode = optimizationIdentity.vitEncoderMode || null;
+    return {
+      profile: pipelineScheduler.scheduler?.effectiveScheduler?.mode || 'unknown',
+      kernelProfile: mode ? `sharp-vit-${mode}` : null,
+      fusionBoundary: mode === 'split' ? 'bounded-phase' : mode === 'fused' ? 'cross-phase' : 'unknown',
+      ...optimizationIdentity,
+    };
+  }
   const optimization = cloneObject(routeEvidence.optimization);
   return optimization || {
     profile: 'unknown',
@@ -519,11 +594,12 @@ function optimizationFromReport(report = {}) {
   };
 }
 
-function witnessWarningsFor({ scheduler, routeTelemetry = null }) {
+function witnessWarningsFor({ scheduler, routeTelemetry = null, pipelineScheduler = null }) {
   const warnings = [];
   warnings.push(...asArray(scheduler?.validationWarnings));
   warnings.push(...asArray(scheduler?.falseAuthorityViolations));
   warnings.push(...asArray(routeTelemetry?.telemetryWarnings));
+  warnings.push(...asArray(pipelineScheduler?.failureDowngrades).map(downgrade => `pipeline_scheduler_downgrade:${downgrade}`));
   if (scheduler?.verificationState === 'scheduler-unverified') warnings.push('scheduler_unverified');
   const requested = scheduler?.requestedScheduler;
   const effective = scheduler?.effectiveScheduler;
@@ -585,6 +661,9 @@ export function buildComputeRouteContentionWitness({
   routeTelemetry = null,
   backpressure = null,
   optimization = null,
+  pipelineScheduler = null,
+  visualSourceTruth = null,
+  effectiveVolumeParams = null,
   outputHandoff = null,
   sourceTruthWarnings = [],
   pipelineReportPath = null,
@@ -605,6 +684,7 @@ export function buildComputeRouteContentionWitness({
     || !(Number.isFinite(timing.queueDoneP99Ms) || Number.isFinite(timing.queueDoneP95Ms));
   const frameTailDamage = classifyFrameTailDamage(timing);
   const normalizedScheduler = normalizeScheduler(scheduler);
+  const normalizedPipelineScheduler = cloneObject(pipelineScheduler);
   const normalizedRouteTelemetry = routeTelemetry || {
     schema: 'kaminos.compute-route-telemetry.v0',
     evidenceSource: 'unreported',
@@ -617,7 +697,11 @@ export function buildComputeRouteContentionWitness({
     artifactBytes: artifactByteTelemetry({}),
     telemetryWarnings: ['route_telemetry_missing'],
   };
-  const witnessWarnings = witnessWarningsFor({ scheduler: normalizedScheduler, routeTelemetry: normalizedRouteTelemetry });
+  const witnessWarnings = witnessWarningsFor({
+    scheduler: normalizedScheduler,
+    routeTelemetry: normalizedRouteTelemetry,
+    pipelineScheduler: normalizedPipelineScheduler,
+  });
   return {
     schema: COMPUTE_ROUTE_CONTENTION_WITNESS_SCHEMA,
     witnessId,
@@ -628,6 +712,23 @@ export function buildComputeRouteContentionWitness({
     visualBudget: visualBudget || {},
     timing,
     frameTailDamage,
+    visualSourceTruth: visualSourceTruth || {
+      source: 'unwitnessed',
+      fallbackReason: null,
+      mayClaimLiveNovelty: false,
+    },
+    effectiveVolumeParams: effectiveVolumeParams || {
+      renderScale: null,
+      reconstructionStyle: null,
+      raySteps: null,
+      adaptiveRays: null,
+      grid: null,
+      pressureStrategy: null,
+      pressureIterations: null,
+      majorantSkip: null,
+      majorantCadence: null,
+    },
+    pipelineScheduler: normalizedPipelineScheduler,
     scheduler: normalizedScheduler,
     routeTelemetry: normalizedRouteTelemetry,
     backpressure: backpressure || {
@@ -707,6 +808,9 @@ export function buildComputeRouteContentionWitnessFromReport(report, {
     },
     visualBudget,
     timing,
+    visualSourceTruth: visualSourceTruthFromVolumeWitness(report.visualWitnessReport || {}),
+    effectiveVolumeParams: effectiveVolumeParamsFromVolumeWitness(report.visualWitnessReport || {}),
+    pipelineScheduler: pipelineSchedulerFromReport(report),
     scheduler: schedulerFromReport(report),
     routeTelemetry: routeTelemetryFromReport(report),
     backpressure: backpressureFromReport(report),

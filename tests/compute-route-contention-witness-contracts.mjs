@@ -265,11 +265,168 @@ assert.equal(witness.backpressure.requestedBudget, 'visible-wait');
 assert.equal(witness.backpressure.frameTail.sampleWindowMs, 30000);
 assert.equal(witness.optimization.profile, 'cooperative');
 assert.equal(witness.optimization.fusionBoundary, 'bounded-phase');
+assert.equal(witness.visualSourceTruth.source, 'live-webgpu-volume');
+assert.equal(witness.visualSourceTruth.mayClaimLiveNovelty, true);
+assert.equal(witness.effectiveVolumeParams.renderScale, 0.75);
+assert.equal(witness.effectiveVolumeParams.raySteps, 72);
 assert.ok(witness.sourceTruthWarnings.includes('pipeline_route_completed_not_active_compute'));
 assert.deepEqual(witness.falseClosureChecks.missingTiming, false);
 assert.deepEqual(witness.falseClosureChecks.prerecordedMainPath, false);
 assert.deepEqual(witness.falseClosureChecks.fixtureOrCachedRoute, false);
 assert.deepEqual(witness.falseClosureChecks.schedulerUnverified, false);
+
+const pipelineSchedulerReport = structuredClone(baseVisualReport);
+delete pipelineSchedulerReport.pipelineReport.stages[0].effectiveRoute.scheduler;
+delete pipelineSchedulerReport.pipelineReport.stages[0].effectiveRoute.backpressure;
+delete pipelineSchedulerReport.pipelineReport.stages[0].effectiveRoute.optimization;
+delete pipelineSchedulerReport.pipelineReport.stages[0].effectiveRoute.breathingRoom;
+pipelineSchedulerReport.visualWitnessReport.runtimeQualityReceipt = {
+  schema: 'volume-runtime-quality-ladder-v0',
+  requested: 'live_high',
+  effective: 'holdover',
+  reason: 'visible-wait-contention',
+  source: 'volume-runtime-quality-ladder-v0',
+  changedControls: ['renderScale', 'raySteps', 'majorantCadence'],
+  knobs: {
+    renderScale: 0.6,
+    raySteps: 48,
+    adaptiveRays: 0.8,
+    majorantCadence: 8,
+  },
+};
+pipelineSchedulerReport.visualWitnessReport.controls = {
+  ...pipelineSchedulerReport.visualWitnessReport.controls,
+  renderScale: 0.6,
+  raySteps: 48,
+  adaptiveRays: 0.8,
+  reconstructionStyle: 'crisp',
+  pressureStrategy: 'global',
+  pressureIterations: 0,
+  majorantSkip: 0.25,
+  majorantCadence: 8,
+};
+pipelineSchedulerReport.visualWitnessReport.visualSourceTruth = {
+  source: 'live-webgpu-volume',
+  fallbackReason: null,
+  mayClaimLiveNovelty: true,
+};
+pipelineSchedulerReport.pipelineReport.stages[0].effectiveRoute.pipelineScheduler = {
+  schema: 'kaminos.pipeline-scheduler-composition.v0',
+  source: 'pipeline-adapter-report',
+  verificationState: 'verified',
+  requestedScheduler: {
+    mode: 'cooperative',
+    yieldMs: 2,
+    waitForSubmittedWorkDone: true,
+    phaseChunkSize: {
+      spnPatch: 4,
+      vitBlock: 6,
+    },
+  },
+  effectiveScheduler: {
+    mode: 'cooperative',
+    yieldMs: 2,
+    waitForSubmittedWorkDone: true,
+    phaseChunkSize: {
+      spnPatch: 4,
+      vitBlock: 6,
+    },
+    unsupportedFields: [],
+  },
+  unsupportedFields: [],
+  scheduler: {
+    schema: 'kaminos.webgpu-route-scheduler.v0',
+    requestedScheduler: {
+      mode: 'cooperative',
+      yieldMs: 2,
+      waitForSubmittedWorkDone: true,
+      phaseChunkSize: {
+        spnPatch: 4,
+        vitBlock: 6,
+      },
+    },
+    effectiveScheduler: {
+      mode: 'cooperative',
+      yieldMs: 2,
+      waitForSubmittedWorkDone: true,
+      phaseChunkSize: {
+        spnPatch: 4,
+        vitBlock: 6,
+      },
+      unsupportedFields: [],
+    },
+    unsupportedFields: [],
+    verificationState: 'verified',
+  },
+  backpressure: {
+    schema: 'kaminos.webgpu-route-backpressure.v0',
+    requestedBudget: 'visible-wait',
+    effectiveBudget: 'furnace',
+    memoryExclusivity: 'shared',
+    warmCacheState: 'warm',
+    frameTail: {
+      sampleWindowMs: 30000,
+      longFrameCount: 11,
+      maxFrameGapMs: 182,
+      p95FrameGapMs: 98,
+      p99FrameGapMs: 171,
+    },
+  },
+  phaseBoundaries: ['spn-patch-chunk', 'vit-block-segment', 'gaussian-phase'],
+  backendIdentity: {
+    modelFamily: 'SHARP',
+    runtime: 'browser-webgpu',
+    sharpWebgpuBranch: 'cc/pipeline-sharp-vit-unfuse-measure-0630',
+    sharpWebgpuCommit: '8af0ef4',
+  },
+  optimizationIdentity: {
+    vitEncoderMode: 'split',
+    vitBlockChunkSize: 6,
+    spnPatchChunkSize: 4,
+    waitForSubmittedWorkDone: true,
+    yieldMs: 2,
+    gaussianPhaseYieldMs: 2,
+  },
+  raw: {
+    breathingRoom: {
+      schema: 'kaminos.sharp-webgpu-scheduler-evidence.v0',
+      status: 'verified',
+      eventCount: 492,
+    },
+  },
+  failureDowngrades: [],
+};
+const pipelineSchedulerWitness = buildComputeRouteContentionWitnessFromReport(pipelineSchedulerReport, {
+  witnessId: 'contention-pipeline-scheduler-contract',
+  requestedVisualBudget: {
+    budgetId: 'live_high',
+    rayBudgetPreset: 'live',
+    liveSimulation: true,
+    prerecorded: false,
+  },
+});
+assert.equal(pipelineSchedulerWitness.pipelineScheduler.schema, 'kaminos.pipeline-scheduler-composition.v0');
+assert.equal(pipelineSchedulerWitness.pipelineScheduler.source, 'pipeline-adapter-report');
+assert.equal(pipelineSchedulerWitness.pipelineScheduler.scheduler.schema, 'kaminos.webgpu-route-scheduler.v0');
+assert.equal(pipelineSchedulerWitness.pipelineScheduler.backpressure.schema, 'kaminos.webgpu-route-backpressure.v0');
+assert.equal(pipelineSchedulerWitness.pipelineScheduler.raw.breathingRoom.eventCount, 492);
+assert.equal(pipelineSchedulerWitness.scheduler.verificationState, 'verified');
+assert.equal(pipelineSchedulerWitness.scheduler.requestedScheduler.phaseChunkSize.spnPatch, 4);
+assert.equal(pipelineSchedulerWitness.scheduler.effectiveScheduler.phaseChunkSize.vitBlock, 6);
+assert.equal(pipelineSchedulerWitness.backpressure.effectiveBudget, 'furnace');
+assert.equal(pipelineSchedulerWitness.backpressure.frameTail.p99FrameGapMs, 171);
+assert.equal(pipelineSchedulerWitness.optimization.profile, 'cooperative');
+assert.equal(pipelineSchedulerWitness.optimization.fusionBoundary, 'bounded-phase');
+assert.equal(pipelineSchedulerWitness.optimization.vitEncoderMode, 'split');
+assert.equal(pipelineSchedulerWitness.optimization.vitBlockChunkSize, 6);
+assert.equal(pipelineSchedulerWitness.visualBudget.effective.runtimeQuality.requested, 'live_high');
+assert.equal(pipelineSchedulerWitness.visualBudget.effective.runtimeQuality.effective, 'holdover');
+assert.equal(pipelineSchedulerWitness.visualBudget.effective.runtimeQuality.source, 'volume-runtime-quality-ladder-v0');
+assert.equal(pipelineSchedulerWitness.visualSourceTruth.source, 'live-webgpu-volume');
+assert.equal(pipelineSchedulerWitness.visualSourceTruth.mayClaimLiveNovelty, true);
+assert.equal(pipelineSchedulerWitness.effectiveVolumeParams.reconstructionStyle, 'crisp');
+assert.equal(pipelineSchedulerWitness.effectiveVolumeParams.majorantCadence, 8);
+assert.equal(pipelineSchedulerWitness.falseClosureChecks.schedulerUnverified, false);
 
 assert.throws(() => buildComputeRouteContentionWitness({
   routeIdentity: witness.routeIdentity,
