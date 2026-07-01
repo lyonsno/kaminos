@@ -11,6 +11,12 @@ import {
   buildComputeRouteContentionWitnessFromReport,
   classifyFrameTailDamage,
 } from '../compute-route-contention-witness.mjs';
+import {
+  COMPUTE_ROUTE_VISIBLE_BENCH_SCHEMA,
+  buildComputeRouteVisibleBenchModel,
+} from '../compute-route-visible-bench.mjs';
+
+const index = readFileSync(fileURLToPath(new URL('../index.html', import.meta.url)), 'utf8');
 
 const baseVisualReport = {
   schema: 'kaminos.compute-route-fire-visual-report.v0',
@@ -433,6 +439,41 @@ assert.equal(pipelineSchedulerWitness.effectiveVolumeParams.reconstructionStyle,
 assert.equal(pipelineSchedulerWitness.effectiveVolumeParams.majorantCadence, 8);
 assert.equal(pipelineSchedulerWitness.falseClosureChecks.schedulerUnverified, false);
 
+const visibleBench = buildComputeRouteVisibleBenchModel({
+  witness: pipelineSchedulerWitness,
+});
+assert.equal(COMPUTE_ROUTE_VISIBLE_BENCH_SCHEMA, 'kaminos.compute-route-visible-bench.v0');
+assert.equal(visibleBench.schema, COMPUTE_ROUTE_VISIBLE_BENCH_SCHEMA);
+assert.equal(visibleBench.routeId, 'sharp-image-to-splat-live-v0');
+assert.match(visibleBench.primaryText, /^SHARP made a splat from this image while the furnace stayed live/);
+assert.match(visibleBench.primaryText, /\.$/);
+assert.doesNotMatch(visibleBench.primaryText, /kaminos\.|pipelineScheduler|schema|falseClosure|visualSource/i);
+assert.equal(visibleBench.trustState, 'usable-with-warnings');
+assert.equal(visibleBench.evidence.route.pipelineId, 'sharp-image-to-splat-live-v0');
+assert.equal(visibleBench.evidence.route.activePhase, 'running');
+assert.equal(visibleBench.evidence.scheduler.schema, 'kaminos.pipeline-scheduler-composition.v0');
+assert.equal(visibleBench.evidence.scheduler.verificationState, 'verified');
+assert.equal(visibleBench.evidence.scheduler.requestedMode, 'cooperative');
+assert.equal(visibleBench.evidence.scheduler.effectiveMode, 'cooperative');
+assert.equal(visibleBench.evidence.backpressure.schema, 'kaminos.webgpu-route-backpressure.v0');
+assert.equal(visibleBench.evidence.backpressure.effectiveBudget, 'furnace');
+assert.equal(visibleBench.evidence.visualSource.source, 'live-webgpu-volume');
+assert.equal(visibleBench.evidence.visualBudget.requested, 'live_high');
+assert.equal(visibleBench.evidence.visualBudget.effective, 'live');
+assert.equal(visibleBench.evidence.visualBudget.runtimeQualityEffective, 'holdover');
+assert.equal(visibleBench.evidence.output.status, 'real-output-produced');
+assert.equal(visibleBench.evidence.output.realArtifactCount, 1);
+assert.equal(visibleBench.evidence.frameTail.bucket, 'hot');
+assert.ok(visibleBench.evidence.warnings.includes('pipeline_route_completed_not_active_compute'));
+assert.equal(visibleBench.evidence.falseClosure.visualSourceNotLive, false);
+assert.equal(visibleBench.evidence.falseClosure.schedulerUnverified, false);
+assert.match(index, /id="compute-route-visible-bench"/, 'Volume tab hosts the human-readable route bench');
+assert.match(index, /data-compute-route-visible-bench-schema="kaminos\.compute-route-visible-bench\.v0"/, 'DOM preserves visible bench schema');
+assert.match(index, /id="compute-route-visible-primary"/, 'visible bench has a human-primary sentence host');
+assert.match(index, /id="compute-route-visible-evidence"/, 'visible bench has an evidence drawer');
+assert.match(index, /renderComputeRouteVisibleBench/, 'Volume tab renders the route-aware contention witness explicitly');
+assert.doesNotMatch(index, /Root request/, 'operator-facing route bench must not expose internal root-request wording');
+
 const liveVisualSourceTruth = {
   source: 'live-webgpu-volume',
   fallbackReason: null,
@@ -526,6 +567,14 @@ const schedulerUnverifiedWitness = buildComputeRouteContentionWitnessFromReport(
 assert.equal(schedulerUnverifiedWitness.scheduler.verificationState, 'scheduler-unverified');
 assert.equal(schedulerUnverifiedWitness.falseClosureChecks.schedulerUnverified, true);
 assert.ok(schedulerUnverifiedWitness.witnessWarnings.includes('scheduler_unverified'));
+
+const weakVisibleBench = buildComputeRouteVisibleBenchModel({
+  witness: schedulerUnverifiedWitness,
+});
+assert.match(weakVisibleBench.primaryText, /^SHARP made a splat from this image, but Kaminos could not prove the route scheduler stayed cooperative/);
+assert.equal(weakVisibleBench.trustState, 'needs-review');
+assert.equal(weakVisibleBench.evidence.scheduler.verificationState, 'scheduler-unverified');
+assert.ok(weakVisibleBench.evidence.warnings.includes('scheduler_unverified'));
 
 const optimisticSchedulerWithoutEffective = buildComputeRouteContentionWitness({
   routeIdentity: witness.routeIdentity,

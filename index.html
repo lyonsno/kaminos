@@ -206,6 +206,16 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 .compute-route-fire-status-running { color: #f0b85a; }
 .compute-route-fire-status-completed { color: #66bb6a; }
 .compute-route-fire-status-failed { color: #ef8f8f; }
+.compute-route-visible-panel[hidden] { display: none; }
+.compute-route-visible-primary { color: #e6edf0; font-size: 12px; line-height: 1.4; margin: 2px 0 8px; }
+.compute-route-visible-primary.usable { color: #d7f5dd; }
+.compute-route-visible-primary.usable-with-warnings { color: #ffe0a6; }
+.compute-route-visible-primary.needs-review { color: #f0b0b0; }
+.compute-route-visible-drawer { border-top: 1px solid #2a2a2a; margin-top: 8px; padding-top: 8px; }
+.compute-route-visible-drawer summary { cursor: pointer; color: #8fc7d6; font-size: 10px; margin-bottom: 6px; }
+.compute-route-visible-evidence-row { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 8px; padding: 3px 0; font-size: 10px; }
+.compute-route-visible-evidence-key { color: #666; }
+.compute-route-visible-evidence-value { color: #999; font-family: 'SF Mono', monospace; overflow-wrap: anywhere; text-align: right; }
 .volume-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
 .ray-budget-wrap { margin: 8px 0 10px; }
 .ray-budget-grid { display: grid; grid-template-columns: 34px 1fr; grid-template-rows: 1fr 18px; gap: 4px 6px; align-items: center; }
@@ -716,6 +726,20 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
       <div id="route-fire-route-rows" data-route-fire-field="routeRows"></div>
     </div>
     <div
+      class="panel compute-route-visible-panel"
+      id="compute-route-visible-bench"
+      data-compute-route-visible-bench-schema="kaminos.compute-route-visible-bench.v0"
+      data-compute-route-visible-active="0"
+      hidden
+    >
+      <div class="compute-route-visible-primary" id="compute-route-visible-primary">--</div>
+      <div class="field"><span class="field-key">Trust</span><span class="field-val" id="compute-route-visible-trust">--</span></div>
+      <details class="compute-route-visible-drawer" id="compute-route-visible-evidence" open>
+        <summary>Evidence</summary>
+        <div id="compute-route-visible-evidence-rows"></div>
+      </details>
+    </div>
+    <div
       class="panel compute-route-fire-panel"
       id="compute-route-fire-evidence"
       data-compute-route-fire-bench-schema="kaminos.compute-route-fire-bench.v0"
@@ -1139,6 +1163,10 @@ import {
   buildComputeRouteFireBenchModel,
   computeRouteFirePayloadFromSearch,
 } from './compute-route-fire-bench.mjs';
+import {
+  buildComputeRouteVisibleBenchModel,
+  computeRouteVisibleBenchWitnessFromSearch,
+} from './compute-route-visible-bench.mjs';
 import {
   DEFAULT_DECISION_MOTION_PLAN,
   DEFAULT_MOTION_PHRASE_CONTROLS,
@@ -7761,6 +7789,7 @@ function updateVolumeControlLabels() {
 
 let routeFireBenchModel = null;
 let computeRouteFireBenchModel = null;
+let computeRouteVisibleBenchModel = null;
 let computeRouteFireActuatorState = {
   enabled: false,
   run: null,
@@ -7783,6 +7812,27 @@ function compactPathTail(path) {
   const parts = String(path).split('/');
   if (parts.length <= 3) return String(path);
   return `.../${parts.slice(-3).join('/')}`;
+}
+
+function computeRouteVisibleValue(value) {
+  if (value === null || value === undefined || value === '') return '--';
+  if (Array.isArray(value)) return value.length ? value.join(', ') : '--';
+  if (typeof value === 'object') return JSON.stringify(value);
+  return String(value);
+}
+
+function addComputeRouteVisibleEvidenceRow(parent, keyText, value) {
+  const row = document.createElement('div');
+  row.className = 'compute-route-visible-evidence-row';
+  const key = document.createElement('span');
+  key.className = 'compute-route-visible-evidence-key';
+  key.textContent = keyText;
+  const val = document.createElement('span');
+  val.className = 'compute-route-visible-evidence-value';
+  val.textContent = computeRouteVisibleValue(value);
+  val.title = val.textContent;
+  row.append(key, val);
+  parent.append(row);
 }
 
 function renderRouteFireBench() {
@@ -7926,8 +7976,54 @@ function renderComputeRouteFireBench() {
   return bench;
 }
 
+function renderComputeRouteVisibleBench() {
+  const root = document.getElementById('compute-route-visible-bench');
+  if (!root) return null;
+  const witness = computeRouteVisibleBenchWitnessFromSearch(window.location.search);
+  if (!witness) {
+    root.hidden = true;
+    root.dataset.computeRouteVisibleActive = '0';
+    computeRouteVisibleBenchModel = null;
+    return null;
+  }
+
+  computeRouteVisibleBenchModel = buildComputeRouteVisibleBenchModel({ witness });
+  const bench = computeRouteVisibleBenchModel;
+  root.hidden = false;
+  root.dataset.computeRouteVisibleActive = '1';
+  root.dataset.computeRouteVisibleRoute = bench.routeId;
+  root.dataset.computeRouteVisibleTrustState = bench.trustState;
+  root.dataset.computeRouteVisibleSchedulerState = bench.evidence.scheduler.verificationState || '';
+  root.dataset.computeRouteVisibleVisualSource = bench.evidence.visualSource.source || '';
+  root.dataset.computeRouteVisibleOutputStatus = bench.evidence.output.status || '';
+
+  const primary = document.getElementById('compute-route-visible-primary');
+  primary.classList.remove('usable', 'usable-with-warnings', 'needs-review');
+  primary.classList.add(bench.trustState);
+  primary.textContent = bench.primaryText;
+  document.getElementById('compute-route-visible-trust').textContent = bench.trustState;
+
+  const rows = document.getElementById('compute-route-visible-evidence-rows');
+  rows.replaceChildren();
+  addComputeRouteVisibleEvidenceRow(rows, 'Route', bench.evidence.route.pipelineId || bench.routeId);
+  addComputeRouteVisibleEvidenceRow(rows, 'Status', `${bench.evidence.route.activePhase || 'unknown'} -> ${bench.evidence.route.finalPhase || 'unknown'}`);
+  addComputeRouteVisibleEvidenceRow(rows, 'Scheduler', `${bench.evidence.scheduler.verificationState || 'unknown'} / ${bench.evidence.scheduler.effectiveMode || 'unknown'}`);
+  addComputeRouteVisibleEvidenceRow(rows, 'Scheduler schema', bench.evidence.scheduler.schema);
+  addComputeRouteVisibleEvidenceRow(rows, 'Backpressure', `${bench.evidence.backpressure.requestedBudget || 'unknown'} -> ${bench.evidence.backpressure.effectiveBudget || 'unknown'}`);
+  addComputeRouteVisibleEvidenceRow(rows, 'Fire budget', `${bench.evidence.visualBudget.requested || 'unknown'} -> ${bench.evidence.visualBudget.effective || 'unknown'}`);
+  addComputeRouteVisibleEvidenceRow(rows, 'Runtime quality', `${bench.evidence.visualBudget.runtimeQualityRequested || 'unknown'} -> ${bench.evidence.visualBudget.runtimeQualityEffective || 'unknown'}`);
+  addComputeRouteVisibleEvidenceRow(rows, 'Visual source', `${bench.evidence.visualSource.source || 'unknown'} / novelty ${bench.evidence.visualSource.mayClaimLiveNovelty === true ? 'yes' : 'no'}`);
+  addComputeRouteVisibleEvidenceRow(rows, 'Frame tail', `${bench.evidence.frameTail.bucket || 'unknown'} / ${bench.evidence.frameTail.frameP95Ms ?? bench.evidence.frameTail.frameP99Ms ?? '--'} ms`);
+  addComputeRouteVisibleEvidenceRow(rows, 'Output', `${bench.evidence.output.status || 'unknown'} / ${bench.evidence.output.realArtifactCount} real`);
+  addComputeRouteVisibleEvidenceRow(rows, 'Warnings', bench.evidence.warnings);
+  addComputeRouteVisibleEvidenceRow(rows, 'Reports', Object.values(bench.evidence.reportRefs || {}).filter(Boolean));
+
+  return bench;
+}
+
 window.kaminosRouteFireBenchDebugState = () => routeFireBenchModel || renderRouteFireBench();
 window.kaminosComputeRouteFireBenchDebugState = () => computeRouteFireBenchModel || renderComputeRouteFireBench();
+window.kaminosComputeRouteVisibleBenchDebugState = () => computeRouteVisibleBenchModel || renderComputeRouteVisibleBench();
 
 function computeRouteFireActuatorIsEnabled() {
   const params = new URLSearchParams(window.location.search);
@@ -8322,6 +8418,7 @@ async function initKaminosVolumeRoute() {
   const params = new URLSearchParams(window.location.search);
   renderRouteFireBench();
   renderComputeRouteFireBench();
+  renderComputeRouteVisibleBench();
   routedBonfireAblationControls = normalizeBonfireAblationControls({
     bonfireRecenter: routeBonfireAblationControl(params, 'volume_bonfire_recenter', 'bonfireRecenter'),
     bonfireLateralDamping: routeBonfireAblationControl(params, 'volume_bonfire_lateral_damping', 'bonfireLateralDamping'),
