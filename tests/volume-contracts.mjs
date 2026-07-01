@@ -1426,3 +1426,13 @@ assert.match(residualMlx, /weightedModelPsnr/, 'MLX residual harness reports wei
 assert.match(residualMlx, /conditionRenderScale/, 'MLX residual harness can condition one model across multiple low render scales');
 assert.match(residualMlx, /scaleChannel/, 'MLX residual harness implements render-scale conditioning as an explicit input channel');
 assert.match(residualMlx, /improvedPatchFraction/, 'MLX residual harness reports whether gains are broad or a mean-metric fluke');
+assert.match(residualMlx, /--preview-mode/, 'MLX residual harness can choose foreground-centered previews instead of dark center crops');
+assert.match(residualMlx, /previewFocus/, 'MLX residual harness reports where the preview crop was focused');
+assert.match(residualMlx, /--temporal-eval/, 'MLX residual harness can run temporal stability diagnostics after still-frame training');
+assert.match(residualMlx, /temporalEvalScope/, 'MLX residual harness reports whether temporal metrics use selected, train, or eval pairs');
+assert.match(residualMlx, /temporalPairCount/, 'MLX residual harness reports how many adjacent frame pairs fed temporal metrics');
+assert.match(residualMlx, /temporalBaselineDeltaPsnr/, 'MLX residual harness reports baseline temporal-delta PSNR against high-scale motion');
+assert.match(residualMlx, /temporalModelDeltaPsnr/, 'MLX residual harness reports model temporal-delta PSNR against high-scale motion');
+assert.match(residualMlx, /temporalDeltaPsnr/, 'MLX residual harness reports temporal PSNR delta over baseline');
+assert.match(residualMlx, /temporalFlickerAmplification/, 'MLX residual harness reports whether residuals amplify low-frame temporal change');
+assert.match(residualMlx, /temporalPreview/, 'MLX residual harness writes a temporal low/model/target/diff contact strip for visual inspection');

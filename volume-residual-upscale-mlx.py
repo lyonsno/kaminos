@@ -48,6 +48,7 @@ def parse_args():
     parser.add_argument("--learning-rate", type=float, default=1e-3)
     parser.add_argument("--eval-patches", type=int, default=64)
     parser.add_argument("--preview-size", type=int, default=384)
+    parser.add_argument("--preview-mode", choices=["center", "foreground"], default="center")
     parser.add_argument("--seed", type=int, default=630)
     parser.add_argument("--sleep-ms", dest="sleepMs", type=float, default=0.0, help="Optional per-step sleep throttle for contention control.")
     parser.add_argument("--foreground-threshold", dest="foregroundThreshold", type=float, default=0.025)
@@ -56,6 +57,9 @@ def parse_args():
     parser.add_argument("--foreground-loss-weight", dest="foregroundLossWeight", type=float, default=0.0)
     parser.add_argument("--difference-loss-weight", dest="differenceLossWeight", type=float, default=0.0)
     parser.add_argument("--condition-render-scale", dest="conditionRenderScale", action="store_true")
+    parser.add_argument("--temporal-eval", dest="temporalEval", action="store_true")
+    parser.add_argument("--temporal-eval-scope", dest="temporalEvalScope", choices=["selected", "train", "eval"], default="selected")
+    parser.add_argument("--temporal-crop-size", dest="temporalCropSize", type=int, default=None)
     return parser.parse_args()
 
 
@@ -204,6 +208,148 @@ def per_sample_mse(prediction, target):
     return mx.mean(mx.mean(mx.mean(error, axis=3), axis=2), axis=1)
 
 
+def crop_region(item, crop_size, previewMode):
+    low = item["low"]
+    height, width, _channels = low.shape
+    crop_height = min(crop_size, height)
+    crop_width = min(crop_size, width)
+    focus = {
+        "mode": "center",
+        "centerY": height / 2,
+        "centerX": width / 2,
+        "foregroundPixels": item.get("foregroundPixels", 0),
+    }
+    if previewMode == "foreground" and item.get("foreground") is not None and item["foreground"].shape[0]:
+        center_y, center_x = np.mean(item["foreground"], axis=0)
+        focus = {
+            "mode": "foreground",
+            "centerY": float(center_y),
+            "centerX": float(center_x),
+            "foregroundPixels": item.get("foregroundPixels", 0),
+        }
+    top = int(np.clip(focus["centerY"] - crop_height // 2, 0, max(0, height - crop_height)))
+    left = int(np.clip(focus["centerX"] - crop_width // 2, 0, max(0, width - crop_width)))
+    focus.update({"top": top, "left": left, "height": crop_height, "width": crop_width})
+    return top, left, crop_height, crop_width, focus
+
+
+def crop_item_arrays(item, region, conditionRenderScale):
+    top, left, crop_height, crop_width = region
+    low_patch = item["low"][top:top + crop_height, left:left + crop_width, :]
+    high_patch = item["high"][top:top + crop_height, left:left + crop_width, :]
+    model_input = model_input_from_rgb(low_patch, item["lowRenderScale"], conditionRenderScale)
+    return low_patch, high_patch, model_input
+
+
+def predict_patch(model, model_input):
+    prediction = model(mx.array(model_input[None, ...]))
+    mx.eval(prediction)
+    return np.array(prediction[0])
+
+
+def temporal_scope_items(scope, loaded, train_items, eval_items):
+    if scope == "train":
+        return train_items
+    if scope == "eval":
+        return eval_items
+    return loaded
+
+
+def temporal_groups(items):
+    groups = {}
+    for item in items:
+        key = f"{item['lowRenderScale']:.3f}"
+        groups.setdefault(key, []).append(item)
+    return [
+        sorted(group, key=lambda entry: entry["id"])
+        for _key, group in sorted(groups.items())
+        if len(group) >= 2
+    ]
+
+
+def temporal_sequence_metrics(model, loaded, train_items, eval_items, out_dir, crop_size, previewMode, conditionRenderScale, temporalEvalScope):
+    scoped_items = temporal_scope_items(temporalEvalScope, loaded, train_items, eval_items)
+    groups = temporal_groups(scoped_items)
+    if not groups:
+        return {
+            "temporalEvalScope": temporalEvalScope,
+            "temporalPairCount": 0,
+            "temporalBaselineDeltaPsnr": None,
+            "temporalModelDeltaPsnr": None,
+            "temporalDeltaPsnr": None,
+            "temporalFlickerAmplification": None,
+            "temporalPreview": None,
+            "temporalPreviewFocus": None,
+        }
+    baseline_losses = []
+    model_losses = []
+    flicker_ratios = []
+    temporal_pairs = []
+    temporal_preview_path = out_dir / "temporal-preview-low0-low1-model0-model1-target0-target1-delta-diff.png"
+    temporal_preview_written = False
+    temporal_focus = None
+    for group in groups:
+        top, left, crop_height, crop_width, focus = crop_region(group[0], crop_size, previewMode)
+        region = (top, left, crop_height, crop_width)
+        rendered = []
+        for item in group:
+            low_patch, high_patch, model_input = crop_item_arrays(item, region, conditionRenderScale)
+            pred_patch = predict_patch(model, model_input)
+            rendered.append((item, low_patch, high_patch, pred_patch))
+        for index in range(1, len(rendered)):
+            previous_item, previous_low, previous_high, previous_prediction = rendered[index - 1]
+            current_item, current_low, current_high, current_prediction = rendered[index]
+            target_delta = current_high - previous_high
+            baseline_delta = current_low - previous_low
+            model_delta = current_prediction - previous_prediction
+            baseline_loss = float(np.mean(np.square(baseline_delta - target_delta)))
+            model_loss = float(np.mean(np.square(model_delta - target_delta)))
+            baseline_losses.append(baseline_loss)
+            model_losses.append(model_loss)
+            baseline_energy = float(np.mean(np.abs(baseline_delta)))
+            model_energy = float(np.mean(np.abs(model_delta)))
+            flicker_ratio = model_energy / max(baseline_energy, 1e-8)
+            flicker_ratios.append(flicker_ratio)
+            temporal_pairs.append({
+                "previous": previous_item["id"],
+                "current": current_item["id"],
+                "lowRenderScale": current_item["lowRenderScale"],
+                "baselineDeltaMse": baseline_loss,
+                "modelDeltaMse": model_loss,
+                "temporalDeltaPsnr": psnr_from_mse(model_loss) - psnr_from_mse(baseline_loss),
+                "temporalFlickerAmplification": flicker_ratio,
+            })
+            if not temporal_preview_written:
+                delta_diff = np.clip(np.abs(model_delta - target_delta) * 4.0, 0.0, 1.0)
+                strip = np.concatenate([
+                    previous_low,
+                    current_low,
+                    previous_prediction,
+                    current_prediction,
+                    previous_high,
+                    current_high,
+                    delta_diff,
+                ], axis=1)
+                Image.fromarray(np.clip(strip * 255.0, 0, 255).astype(np.uint8), "RGB").save(temporal_preview_path)
+                temporal_focus = focus
+                temporal_preview_written = True
+    baseline_mse = float(np.mean(baseline_losses))
+    model_mse = float(np.mean(model_losses))
+    return {
+        "temporalEvalScope": temporalEvalScope,
+        "temporalPairCount": len(temporal_pairs),
+        "temporalBaselineDeltaMse": baseline_mse,
+        "temporalModelDeltaMse": model_mse,
+        "temporalBaselineDeltaPsnr": psnr_from_mse(baseline_mse),
+        "temporalModelDeltaPsnr": psnr_from_mse(model_mse),
+        "temporalDeltaPsnr": psnr_from_mse(model_mse) - psnr_from_mse(baseline_mse),
+        "temporalFlickerAmplification": float(np.mean(flicker_ratios)),
+        "temporalPairs": temporal_pairs,
+        "temporalPreview": str(temporal_preview_path) if temporal_preview_written else None,
+        "temporalPreviewFocus": temporal_focus,
+    }
+
+
 def evaluate_model(model, items, rng, batch_size, patch_size, eval_patches, foregroundProbability, conditionRenderScale, foregroundThreshold, foregroundLossWeight, differenceLossWeight):
     baseline_losses = []
     model_losses = []
@@ -248,23 +394,18 @@ def evaluate_model(model, items, rng, batch_size, patch_size, eval_patches, fore
     }
 
 
-def make_preview(model, eval_item, out_path, preview_size, conditionRenderScale):
+def make_preview(model, eval_item, out_path, preview_size, previewMode, conditionRenderScale):
     low = eval_item["low"]
     high = eval_item["high"]
-    height, width, _channels = low.shape
-    crop_height = min(preview_size, height)
-    crop_width = min(preview_size, width)
-    top = max(0, (height - crop_height) // 2)
-    left = max(0, (width - crop_width) // 2)
+    top, left, crop_height, crop_width, previewFocus = crop_region(eval_item, preview_size, previewMode)
     low_patch = low[top:top + crop_height, left:left + crop_width, :]
     high_patch = high[top:top + crop_height, left:left + crop_width, :]
     model_input = model_input_from_rgb(low_patch, eval_item["lowRenderScale"], conditionRenderScale)
-    prediction = model(mx.array(model_input[None, ...]))
-    mx.eval(prediction)
-    pred_patch = np.array(prediction[0])
+    pred_patch = predict_patch(model, model_input)
     diff_patch = np.clip(np.abs(pred_patch - high_patch) * 4.0, 0.0, 1.0)
     strip = np.concatenate([low_patch, pred_patch, high_patch, diff_patch], axis=1)
     Image.fromarray(np.clip(strip * 255.0, 0, 255).astype(np.uint8), "RGB").save(out_path)
+    return previewFocus
 
 
 def main():
@@ -323,7 +464,20 @@ def main():
         args.differenceLossWeight,
     )
     preview_path = out_dir / "residual-preview-low-model-target-diff.png"
-    make_preview(model, eval_items[0], preview_path, args.preview_size, args.conditionRenderScale)
+    previewFocus = make_preview(model, eval_items[0], preview_path, args.preview_size, args.preview_mode, args.conditionRenderScale)
+    temporalMetrics = {}
+    if args.temporalEval:
+        temporalMetrics = temporal_sequence_metrics(
+            model,
+            loaded,
+            train_items,
+            eval_items,
+            out_dir,
+            args.temporalCropSize or args.preview_size,
+            args.preview_mode,
+            args.conditionRenderScale,
+            args.temporalEvalScope,
+        )
     report = {
         "schema": SCHEMA,
         "createdAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
@@ -345,6 +499,10 @@ def main():
         "foregroundLossWeight": args.foregroundLossWeight,
         "differenceLossWeight": args.differenceLossWeight,
         "conditionRenderScale": args.conditionRenderScale,
+        "previewMode": args.preview_mode,
+        "previewFocus": previewFocus,
+        "temporalEval": args.temporalEval,
+        "temporalEvalScope": args.temporalEvalScope,
         "inputChannels": input_channels,
         "scaleChannel": scaleChannel,
         "foregroundPixels": {
@@ -360,6 +518,7 @@ def main():
         "device": str(mx.default_device()),
         "trainingLosses": training_losses,
         **metrics,
+        **temporalMetrics,
         "preview": str(preview_path),
     }
     report_path = out_dir / "residual-report.json"
