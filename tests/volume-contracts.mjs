@@ -1403,6 +1403,14 @@ assert.match(renderPairCorpus, /lowRenderScales/, 'corpus sweep records all low 
 assert.match(renderPairCorpus, /pairCount/, 'corpus sweep reports aggregated pair count for training sanity');
 assert.match(renderPairCorpus, /failurePhase/, 'corpus sweep preserves capture/validation failure phase for failed variants');
 assert.match(renderPairCorpus, /--keep-going/, 'corpus sweep can keep useful variants when one hard state fails witness gates');
+assert.match(renderPairCorpus, /--frames-per-sequence/, 'corpus sweep can capture multiple ordered frames per lifecycle region');
+assert.match(renderPairCorpus, /--frame-stride-ms/, 'corpus sweep exposes the temporal stride between sequence frames');
+assert.match(renderPairCorpus, /temporalSequenceId/, 'corpus sweep labels every sequence pair with a stable temporal sequence id');
+assert.match(renderPairCorpus, /temporalFrameIndex/, 'corpus sweep labels every sequence pair with an ordered frame index');
+assert.match(renderPairCorpus, /sequenceSettleMs/, 'corpus sweep records the settle time used for each sequence frame');
+assert.match(renderPairCorpus, /temporalAdjacentPairCount/, 'corpus sweep reports same-scale adjacent pair counts for temporal-loss sanity');
+assert.match(renderPairCorpus, /sequenceFrames/, 'corpus sweep records per-sequence frame capture receipts');
+assert.match(renderPairCorpus, /ordered-settle-time-sequence-v0/, 'corpus sweep labels ordered settle-time sequence authority honestly');
 
 const residualMlxPath = join(root, 'volume-residual-upscale-mlx.py');
 assert.ok(existsSync(residualMlxPath), 'tiny MLX residual-upscale smoke harness exists');
@@ -1443,3 +1451,9 @@ assert.match(residualMlx, /sample_temporal_pair_batch/, 'MLX residual harness sa
 assert.match(residualMlx, /temporal_loss_value/, 'MLX residual harness computes high-scale frame-delta supervision as a training loss');
 assert.match(residualMlx, /temporalTrainingLosses/, 'MLX residual harness records temporal loss samples during training');
 assert.match(residualMlx, /temporalLossFallback/, 'MLX residual harness reports when temporal loss is requested but no adjacent pair exists');
+assert.match(residualMlx, /temporalSequenceId/, 'MLX residual harness consumes temporal sequence identity from sequence corpora');
+assert.match(residualMlx, /temporalFrameIndex/, 'MLX residual harness consumes temporal frame order from sequence corpora');
+assert.match(residualMlx, /temporal_group_key/, 'MLX residual harness groups adjacent temporal pairs by sequence id before render scale');
+assert.match(residualMlx, /temporalTrainPairCount/, 'MLX residual harness reports train-split adjacent temporal pair count');
+assert.match(residualMlx, /temporalEvalPairCount/, 'MLX residual harness reports eval-split adjacent temporal pair count');
+assert.match(residualMlx, /temporalSelectedPairCount/, 'MLX residual harness reports selected/all adjacent temporal pair count');

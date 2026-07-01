@@ -137,11 +137,41 @@ def load_pair_arrays(pairs, foregroundThreshold):
             "highPath": str(high_path),
             "lowRenderScale": float(pair.get("lowRenderScale")),
             "sameStateCaptureId": pair.get("sameStateCaptureId"),
+            "temporalSequenceId": pair.get("temporalSequenceId"),
+            "temporalFrameIndex": int(pair["temporalFrameIndex"]) if pair.get("temporalFrameIndex") is not None else None,
+            "sequenceAuthority": pair.get("sequenceAuthority"),
+            "sequenceSettleMs": pair.get("sequenceSettleMs"),
+            "sequenceFrameId": pair.get("sequenceFrameId"),
         })
     return loaded
 
 
+def has_temporal_sequence_metadata(items):
+    return any(item.get("temporalSequenceId") and item.get("temporalFrameIndex") is not None for item in items)
+
+
 def split_pairs(loaded):
+    if has_temporal_sequence_metadata(loaded):
+        train_items = []
+        eval_items = []
+        for group in temporal_groups(loaded):
+            group = sorted(group, key=temporal_sort_key)
+            if len(group) == 1:
+                train_items.extend(group)
+                eval_items.extend(group)
+                continue
+            if len(group) == 2:
+                train_items.extend(group[:1])
+                eval_items.extend(group[1:])
+                continue
+            if len(group) == 3:
+                train_items.extend(group[:2])
+                eval_items.extend(group[2:])
+                continue
+            eval_count = max(2, min(len(group) - 2, len(group) // 4))
+            train_items.extend(group[:-eval_count])
+            eval_items.extend(group[-eval_count:])
+        return train_items, eval_items
     if len(loaded) == 1:
         return loaded, loaded
     eval_count = max(1, min(2, len(loaded) // 4))
@@ -299,13 +329,29 @@ def temporal_scope_items(scope, loaded, train_items, eval_items):
     return loaded
 
 
+def temporal_group_key(item):
+    sequence_id = item.get("temporalSequenceId")
+    frame_index = item.get("temporalFrameIndex")
+    scale_key = f"{item['lowRenderScale']:.3f}"
+    if sequence_id and frame_index is not None:
+        return f"sequence::{sequence_id}::scale::{scale_key}"
+    return f"scale::{scale_key}"
+
+
+def temporal_sort_key(item):
+    frame_index = item.get("temporalFrameIndex")
+    if frame_index is None:
+        frame_index = 1_000_000_000
+    return (int(frame_index), item["id"])
+
+
 def temporal_groups(items):
     groups = {}
     for item in items:
-        key = f"{item['lowRenderScale']:.3f}"
+        key = temporal_group_key(item)
         groups.setdefault(key, []).append(item)
     return [
-        sorted(group, key=lambda entry: entry["id"])
+        sorted(group, key=temporal_sort_key)
         for _key, group in sorted(groups.items())
         if len(group) >= 2
     ]
@@ -366,6 +412,9 @@ def temporal_sequence_metrics(model, loaded, train_items, eval_items, out_dir, c
                 "previous": previous_item["id"],
                 "current": current_item["id"],
                 "lowRenderScale": current_item["lowRenderScale"],
+                "temporalSequenceId": current_item.get("temporalSequenceId"),
+                "previousTemporalFrameIndex": previous_item.get("temporalFrameIndex"),
+                "currentTemporalFrameIndex": current_item.get("temporalFrameIndex"),
                 "baselineDeltaMse": baseline_loss,
                 "modelDeltaMse": model_loss,
                 "temporalDeltaPsnr": psnr_from_mse(model_loss) - psnr_from_mse(baseline_loss),
@@ -474,6 +523,9 @@ def main():
     scaleChannel = "lowRenderScale" if args.conditionRenderScale else None
     model = TinyResidualUpscaler(args.hidden_channels, input_channels)
     optimizer = optim.Adam(learning_rate=args.learning_rate)
+    temporalTrainPairCount = len(temporal_pair_candidates(train_items))
+    temporalEvalPairCount = len(temporal_pair_candidates(eval_items))
+    temporalSelectedPairCount = len(temporal_pair_candidates(loaded))
     temporal_loss_pairs = temporal_pair_candidates(train_items)
     temporalLossFallback = None
     if args.temporalLossWeight > 0 and not temporal_loss_pairs:
@@ -584,6 +636,14 @@ def main():
         "evalPairCount": len(eval_items),
         "trainPairs": [item["id"] for item in train_items],
         "evalPairs": [item["id"] for item in eval_items],
+        "temporalSequenceCount": len({
+            item.get("temporalSequenceId")
+            for item in loaded
+            if item.get("temporalSequenceId")
+        }),
+        "temporalTrainPairCount": temporalTrainPairCount,
+        "temporalEvalPairCount": temporalEvalPairCount,
+        "temporalSelectedPairCount": temporalSelectedPairCount,
         "maxSteps": args.maxSteps,
         "sleepMs": args.sleepMs,
         "lossMode": args.loss_mode,
