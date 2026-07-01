@@ -449,6 +449,9 @@ assert.match(core, /willRunLiveSimForUniforms/, 'cadence uniforms know when the 
 assert.match(core, /willRunLiveSimForUniforms\s*\?\s*0\s*:/, 'live simulation frames reset cadence phase instead of rendering with full continuation warp');
 assert.match(core, /CADENCE_NATIVE_CONTINUATION_IDENTITY/, 'volume core names the cadence-native field continuation identity');
 assert.match(core, /cadenceNativeContinuationPoint/, 'fragment raymarch computes a field-aware continuation sample point');
+assert.match(core, /cadenceContinuationDampedStep/, 'cadence continuation warp uses a damped held-frame step instead of a large phase shove');
+assert.match(core, /CADENCE_NATIVE_CONTINUATION_MAX_WARP/, 'cadence continuation warp has an explicit shader-local maximum');
+assert.match(core, /CADENCE_NATIVE_CONTINUATION_STEP_PER_HELD_FRAME/, 'cadence continuation warp advances by held render frame instead of plateauing inside a cadence cycle');
 assert.match(core, /sampleWorldVelocity\(continuedP\)/, 'fragment raymarch samples held fields through the cadence continuation point');
 assert.match(core, /effectiveVisualAuthority:\s*state\.effectiveVisualAuthority/, 'sampleFrame preserves effective visual authority in witness readback');
 assert.match(core, /simCostLedger[\s\S]*simCadence/, 'sim cost ledger records requested/effective simulation cadence identity');

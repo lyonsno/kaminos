@@ -544,6 +544,8 @@ override GRID: u32 = 64u;
 override MAJORANT_GRID: u32 = 24u;
 const SLOTS_PER_CELL: u32 = 4u;
 const MAX_EXTERNAL_EMITTERS_WGSL: u32 = 32u;
+const CADENCE_NATIVE_CONTINUATION_STEP_PER_HELD_FRAME: f32 = 0.027;
+const CADENCE_NATIVE_CONTINUATION_MAX_WARP: f32 = 0.110;
 
 struct Uniforms {
   invViewProj: mat4x4<f32>,
@@ -887,9 +889,10 @@ fn cadenceNativeContinuationPoint(p: vec3<f32>, velocity: vec3<f32>, sceneMask: 
   let simCadence = max(1.0, u.cadence_controls.z);
   let continuationActive = step(1.5, simCadence) * step(0.001, cadencePhase) * sceneMask;
   let speed = clamp(u.fire_smoke_curl_speed.w, 0.1, 5.0);
-  let continuationDt = cadencePhase * (0.14 + speed * 0.030) * (1.0 + min(framesSinceLiveSim, simCadence) * 0.055);
-  let thermalRise = vec3<f32>(0.0, 0.030 + speed * 0.006, 0.0) * cadencePhase;
-  let continuedP = p - (velocity + thermalRise) * continuationDt * continuationActive;
+  let heldFrames = min(framesSinceLiveSim, max(1.0, simCadence - 1.0));
+  let cadenceContinuationDampedStep = min(CADENCE_NATIVE_CONTINUATION_MAX_WARP, heldFrames * CADENCE_NATIVE_CONTINUATION_STEP_PER_HELD_FRAME);
+  let thermalRise = vec3<f32>(0.0, 0.012 + speed * 0.002, 0.0);
+  let continuedP = p - (velocity + thermalRise) * cadenceContinuationDampedStep * continuationActive;
   return clamp(continuedP, vec3<f32>(-0.999), vec3<f32>(0.999));
 }
 
