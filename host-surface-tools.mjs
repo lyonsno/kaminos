@@ -9,6 +9,10 @@ import {
   LERMS_MOVING_TIMELINE_HOST_ADAPTER,
   createLermsMovingTimelineHostState,
 } from './lerms-timeline-host-core.js';
+import {
+  GLOVE_WELL_HOST_ADAPTER,
+  createGloveWellHostState,
+} from './glove-well-host-core.js';
 
 export const KAMINOS_HOST_SURFACE_TOOLS_REPORT_SCHEMA = 'kaminos.host-surface.tools-report.v0';
 
@@ -44,6 +48,21 @@ const ADAPTERS = {
       ['kaminosOwns', 'custody missing kaminosOwns'],
     ],
   },
+  'glove-well': {
+    adapter: GLOVE_WELL_HOST_ADAPTER,
+    createState: createGloveWellHostState,
+    queryFlag: 'kaminos_glove_well_host',
+    rootParam: 'glove_well_host_root',
+    pathParam: 'glove_well_host_path',
+    urlParam: 'glove_well_host_url',
+    requiredDowngrades: ['local_browser_smoke_not_native_kaminos_host', 'visual_capture_not_source_truth'],
+    requiredCustody: [
+      ['greedyOwns', 'custody missing greedyOwns'],
+      ['kaminosOwns', 'custody missing kaminosOwns'],
+      ['palmDaddyOwns', 'custody missing palmDaddyOwns'],
+    ],
+    requiredPrimitiveRoles: ['wealth_source', 'rolling_goin', 'hand_skeleton_bone', 'aim_arc_sample', 'lerm_desire_link'],
+  },
 };
 
 function usage() {
@@ -52,6 +71,7 @@ function usage() {
     '',
     'Adapters:',
     '  finger-juice',
+    '  glove-well',
     '  lerms-moving-timeline',
     '',
     'Source options:',
@@ -143,11 +163,18 @@ function sourceDowngradesFor(adapterId, packet) {
       ...(Array.isArray(packet?.render?.payload?.downgrades) ? packet.render.payload.downgrades : []),
     ];
   }
+  if (adapterId === 'glove-well') {
+    return [
+      ...(Array.isArray(packet?.downgrades) ? packet.downgrades : []),
+      ...(Array.isArray(packet?.custody?.downgrades) ? packet.custody.downgrades : []),
+    ];
+  }
   return [];
 }
 
 function sourceCustodyFor(adapterId, packet, state) {
   if (adapterId === 'lerms-moving-timeline') return packet?.timeline?.custody || packet?.custody || {};
+  if (adapterId === 'glove-well') return packet?.custody || {};
   return packet?.custody || {};
 }
 
@@ -244,6 +271,11 @@ export function lintHostSurfacePacket(packet, options = {}) {
   for (const [field, message] of config.requiredCustody) {
     if (!Array.isArray(sourceCustody[field]) || sourceCustody[field].length === 0) {
       errors.push(message);
+    }
+  }
+  for (const role of config.requiredPrimitiveRoles || []) {
+    if (!state?.surface?.primitiveRoles?.includes(role)) {
+      errors.push(`missing required primitive role: ${role}`);
     }
   }
   const routeError = sourceRouteError(options);

@@ -22,6 +22,11 @@ const viewportHeight = Number(args.get('--viewport-height') || 1120);
 const settleMs = Number(args.get('--settle-ms') || 2500);
 const hookWaitMs = Number(args.get('--hook-wait-ms') || Math.max(settleMs, 15000));
 const cdpTimeoutMs = Number(args.get('--cdp-timeout-ms') || Math.max(15000, hookWaitMs));
+const preferredCanvasId = expectedHostId === 'glove-well'
+  ? 'glove-well-host-canvas'
+  : expectedHostId === 'finger-juice'
+    ? 'finger-juice-host-canvas'
+    : null;
 
 let phase = 'initializing';
 let stderr = '';
@@ -218,6 +223,16 @@ async function main() {
       if (!Array.isArray(sourceCustody.bigPapaOwns) || sourceCustody.bigPapaOwns.length === 0) throw new Error('missing source custody bigPapaOwns');
       if (!Array.isArray(sourceCustody.kaminosOwns) || sourceCustody.kaminosOwns.length === 0) throw new Error('missing source custody kaminosOwns');
     }
+    if (expectedHostId === 'glove-well') {
+      const sourceCustody = lastDebugState.sourceCustody || {};
+      if (!Array.isArray(sourceCustody.greedyOwns) || sourceCustody.greedyOwns.length === 0) throw new Error('missing source custody greedyOwns');
+      if (!Array.isArray(sourceCustody.kaminosOwns) || sourceCustody.kaminosOwns.length === 0) throw new Error('missing source custody kaminosOwns');
+      if (!Array.isArray(sourceCustody.palmDaddyOwns) || sourceCustody.palmDaddyOwns.length === 0) throw new Error('missing source custody palmDaddyOwns');
+      const roles = lastDebugState.surface?.primitiveRoles || lastDebugState.hostSpecific?.primitiveRoles || [];
+      for (const role of ['wealth_source', 'rolling_goin', 'hand_skeleton_bone', 'aim_arc_sample', 'lerm_desire_link']) {
+        if (!roles.includes(role)) throw new Error(`missing source primitive role: ${role}`);
+      }
+    }
 
     phase = 'measure_visual_activity';
     visualActivity = await evaluate(ws, `(() => {
@@ -233,7 +248,8 @@ async function main() {
           actorVisualCount: window.__kaminosLermsPreviewActorVisuals?.actorVisualCount || 0,
         };
       }
-      const canvas = document.getElementById('finger-juice-host-canvas') || document.querySelector('canvas');
+      const preferredCanvas = ${JSON.stringify(preferredCanvasId)} ? document.getElementById(${JSON.stringify(preferredCanvasId)}) : null;
+      const canvas = preferredCanvas || document.getElementById('finger-juice-host-canvas') || document.getElementById('glove-well-host-canvas') || document.querySelector('canvas');
       if (canvas && canvas.width && canvas.height) {
         const ctx = canvas.getContext('2d');
         if (ctx) {

@@ -7,6 +7,59 @@ const root = new URL('..', import.meta.url).pathname;
 const toolsPath = join(root, 'host-surface-tools.mjs');
 const lermsFixturePath = join(root, 'tests/fixtures/lerms-moving-timeline-host-smoke.json');
 
+function makeGloveWellPacket() {
+  return {
+    schema: 'lerms.glove-well-host-packet.v0',
+    route: 'lerms/glove-well/host-packet',
+    source: {
+      producerDiaulos: 'greedy-glove-fucker',
+      authority: 'live_simulation',
+      sourceTruthAuthority: 'lerms.gloveWellBrowserSmokeState',
+      effectiveRoute: 'native_wilor_mini_mlx_detector_sidecar_live',
+      backend: 'native_wilor_mini_mlx_detector_sidecar_live',
+    },
+    freshness: { status: 'fresh', ageMs: 54, cameraAgeMs: 54, budgetMs: 180 },
+    surface: {
+      schema: 'lerms.glove-well-host-surface.v0',
+      surfaceId: 'glove-well-native-smoke',
+      hostRouteExpectation: 'kaminos/glove-well-host',
+      layers: [
+        { id: 'glove-well', label: 'Glove Well', sourceOwned: true },
+        { id: 'hand-tracking', label: 'Hand Tracking', sourceOwned: true },
+        { id: 'goins', label: 'Goins', sourceOwned: true },
+        { id: 'lerm-desire', label: 'Lerm Desire', sourceOwned: true },
+      ],
+      primitives: [
+        { id: 'glove-well-core', layerId: 'glove-well', kind: 'ellipse', role: 'wealth_source', center: { x: 0.18, y: 0.65 }, radiusX: 0.12, radiusY: 0.09, color: '#f4c64f' },
+        { id: 'hand-bone-0', layerId: 'hand-tracking', kind: 'line', role: 'hand_skeleton_bone', start: { x: 0.57, y: 0.86 }, end: { x: 0.545, y: 0.72 }, color: '#82e2be' },
+        { id: 'aim-arc-01', layerId: 'hand-tracking', kind: 'point', role: 'aim_arc_sample', center: { x: 0.299, y: 0.559 }, radius: 0.006, color: '#dfe7ff' },
+        { id: 'goin-launched-goin-001', layerId: 'goins', kind: 'ellipse', role: 'rolling_goin', center: { x: 0.316, y: 0.579 }, radiusX: 0.026, radiusY: 0.022, color: '#f4c64f' },
+        { id: 'lerm-desire-link-001', layerId: 'lerm-desire', kind: 'line', role: 'lerm_desire_link', start: { x: 0.68, y: 0.68 }, end: { x: 0.316, y: 0.579 }, color: '#ffe789', alpha: 0.84 },
+      ],
+      witnessExpectations: {
+        requiredDowngrades: ['local_browser_smoke_not_native_kaminos_host', 'visual_capture_not_source_truth'],
+        requiredPrimitiveRoles: ['wealth_source', 'rolling_goin', 'hand_skeleton_bone', 'aim_arc_sample', 'lerm_desire_link'],
+      },
+    },
+    goins: [
+      { id: 'launched-goin-001', state: 'rolling', position: { x: 0.316, y: 0.579 }, desireRadius: 0.179 },
+    ],
+    lermDesireHints: [
+      { lermId: 'nearby-red-lerm-001', targetGoinId: 'launched-goin-001', target: { x: 0.316, y: 0.579 }, pull: 0.84 },
+    ],
+    downgrades: ['local_browser_smoke_not_native_kaminos_host', 'visual_capture_not_source_truth'],
+    rejectedDebugSurfaces: [
+      { surface: 'local_lerms_browser_smoke', acceptanceSurface: false },
+      { surface: 'preview_bench_smoke_offer_card', acceptanceSurface: false },
+    ],
+    custody: {
+      greedyOwns: ['gloveWellCommandTruth', 'goinThrowRollDesireLaw'],
+      kaminosOwns: ['native host display', 'host-surface adapter validation'],
+      palmDaddyOwns: ['firstVerticalSourceTruthAcceptance'],
+    },
+  };
+}
+
 assert.ok(existsSync(toolsPath), 'producer-side host-surface validator tool exists');
 
 const toolsSource = readFileSync(toolsPath, 'utf8');
@@ -147,6 +200,61 @@ assert.equal(fingerReport.packetRoute, 'big-papa/finger-juice/host-packet');
 assert.equal(fingerReport.smokeUrl, 'http://127.0.0.1:18142/index.html?kaminos_finger_juice_host=1&finger_juice_host_root=scratch&finger_juice_host_path=big-papa-finger-juice-host-packet.json');
 assert.match(fingerReport.witnessCommand, /--expected-host-id finger-juice/);
 assert.match(fingerReport.witnessCommand, /--expected-packet-route big-papa\/finger-juice\/host-packet/);
+
+const gloveWellPacket = makeGloveWellPacket();
+const gloveWellReport = tools.lintHostSurfacePacket(gloveWellPacket, {
+  adapter: 'glove-well',
+  root: 'scratch',
+  path: 'greedy-glove-well-host-packet-0701.json',
+  serverOrigin: 'http://127.0.0.1:18142',
+  debugPort: 9601,
+  settleMs: 3000,
+  hookWaitMs: 25000,
+});
+assert.equal(gloveWellReport.ok, true);
+assert.equal(gloveWellReport.hostId, 'glove-well');
+assert.equal(gloveWellReport.hostRoute, 'kaminos/glove-well-host');
+assert.equal(gloveWellReport.packetSchema, 'lerms.glove-well-host-packet.v0');
+assert.equal(gloveWellReport.packetRoute, 'lerms/glove-well/host-packet');
+assert.equal(gloveWellReport.sourceAuthority, 'live_simulation');
+assert.equal(gloveWellReport.sourceTruthAuthority, 'lerms.gloveWellBrowserSmokeState');
+assert.ok(gloveWellReport.downgrades.includes('local_browser_smoke_not_native_kaminos_host'));
+assert.ok(gloveWellReport.rejectedDebugSurfaces.some(surface => surface.surface === 'preview_bench_smoke_offer_card' && surface.acceptanceSurface === false));
+assert.equal(gloveWellReport.errorCount, 0);
+assert.equal(gloveWellReport.smokeUrl, 'http://127.0.0.1:18142/index.html?kaminos_glove_well_host=1&glove_well_host_root=scratch&glove_well_host_path=greedy-glove-well-host-packet-0701.json');
+assert.match(gloveWellReport.witnessCommand, /--expected-host-id glove-well/);
+assert.match(gloveWellReport.witnessCommand, /--expected-packet-schema lerms\.glove-well-host-packet\.v0/);
+assert.match(gloveWellReport.witnessCommand, /--expected-packet-route lerms\/glove-well\/host-packet/);
+assert.match(gloveWellReport.witnessCommand, /--expected-downgrade local_browser_smoke_not_native_kaminos_host/);
+
+const missingSurfaceGloveWellPacket = structuredClone(gloveWellPacket);
+delete missingSurfaceGloveWellPacket.surface;
+const missingSurfaceGloveWellReport = tools.lintHostSurfacePacket(missingSurfaceGloveWellPacket, {
+  adapter: 'glove-well',
+  sourceUrl: '/scratch/greedy-glove-well-host-packet-missing-surface.json',
+});
+assert.equal(missingSurfaceGloveWellReport.ok, false);
+assert.ok(missingSurfaceGloveWellReport.errors.some(error => error.includes('missing source-owned surface')), 'Glove Well adapter must not rederive visual primitives from raw state');
+
+const missingRoleGloveWellPacket = structuredClone(gloveWellPacket);
+missingRoleGloveWellPacket.surface.primitives = missingRoleGloveWellPacket.surface.primitives.filter(primitive => primitive.role !== 'rolling_goin');
+const missingRoleGloveWellReport = tools.lintHostSurfacePacket(missingRoleGloveWellPacket, {
+  adapter: 'glove-well',
+  sourceUrl: '/scratch/greedy-glove-well-host-packet-missing-role.json',
+});
+assert.equal(missingRoleGloveWellReport.ok, false);
+assert.ok(missingRoleGloveWellReport.errors.some(error => error.includes('missing required primitive role: rolling_goin')));
+
+const missingSourceRowsGloveWellPacket = structuredClone(gloveWellPacket);
+delete missingSourceRowsGloveWellPacket.downgrades;
+delete missingSourceRowsGloveWellPacket.custody.greedyOwns;
+const missingSourceRowsGloveWellReport = tools.lintHostSurfacePacket(missingSourceRowsGloveWellPacket, {
+  adapter: 'glove-well',
+  sourceUrl: '/scratch/greedy-glove-well-host-packet-missing-source-rows.json',
+});
+assert.equal(missingSourceRowsGloveWellReport.ok, false);
+assert.ok(missingSourceRowsGloveWellReport.errors.some(error => error.includes('missing required downgrade: local_browser_smoke_not_native_kaminos_host')));
+assert.ok(missingSourceRowsGloveWellReport.errors.some(error => error.includes('custody missing greedyOwns')));
 
 const cliOutput = execFileSync('node', [
   toolsPath,
