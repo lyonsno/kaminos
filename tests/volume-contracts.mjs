@@ -23,7 +23,7 @@ assert.match(index, /VOLUME_PRIMITIVE_SCHEMA/, 'scene data names the volume prim
 assert.match(index, /volumePrimitives/, 'scene data persists authored volume primitives');
 assert.match(index, /setVolumePrimitivesState/, 'scene loading can restore authored volume primitives');
 assert.match(index, /volume-core\.js/, 'index imports the volume prototype module');
-assert.match(index, /volume-core\.js\?v=pyro-spatial-material-memory-0701/, 'volume prototype import carries a cache key when Pyro spatial material-memory semantics change');
+assert.match(index, /volume-core\.js\?v=pyro-spatial-material-memory-stable-0701/, 'volume prototype import carries a cache key when Pyro spatial material-memory stability semantics change');
 assert.match(index, /id="volume-render-source-orientation"/, 'Volume tab exposes render/source orientation identity for operator smoke');
 assert.match(index, /id="volume-canonical-render-mode-state"/, 'Volume tab exposes effective canonical render diagnostic mode for operator smoke');
 assert.match(index, /id="volume-canonical-motion-mode-state"/, 'Volume tab exposes effective canonical motion diagnostic mode for operator smoke');
@@ -604,6 +604,8 @@ assert.match(core, /resetReasons\.includes\('snuff-quench'\)[\s\S]*resetReasons\
 assert.match(core, /pyro-dynamic-detail-material-contract-v0/, 'Pyro dynamic detail exposes a stable renderer-adjacent material contract identity');
 assert.match(core, /materialMemory:\s*\{/, 'Pyro dynamic detail state carries material-memory payload for future shader sampling');
 assert.match(core, /PYRO_DYNAMIC_DETAIL_TEXTURE_LAYOUT\s*=\s*\{[\s\S]*width:\s*8[\s\S]*height:\s*3[\s\S]*channels:\s*4/, 'Pyro material memory declares a compact 8x3x4 texture layout');
+assert.match(core, /PYRO_DYNAMIC_DETAIL_PHASE_BASE_STEP\s*=\s*0\.004/, 'Pyro material memory phase advances slowly enough to avoid frame-to-frame strobing');
+assert.match(core, /PYRO_DYNAMIC_DETAIL_CELL_BLEND\s*=\s*0\.14/, 'Pyro material memory atlas cells are temporally damped before shader upload');
 assert.match(core, /sampleVector4/, 'Pyro material memory exposes normalized RGBA-like sample vectors instead of UI-only scalar cells');
 assert.match(core, /shaderReadiness:\s*resetGate\s*\?\s*'blocked-reset'/, 'Pyro material memory blocks shader consumption while reset gates are active');
 assert.match(core, /pyro_detail_controls:\s*vec4<f32>/, 'WGSL uniforms expose Pyro material-memory controls to the renderer');

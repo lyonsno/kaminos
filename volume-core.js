@@ -324,6 +324,10 @@ const PYRO_DYNAMIC_DETAIL_ATLAS_IDENTITY = 'pyro-dynamic-detail-atlas-v0';
 const PYRO_DYNAMIC_DETAIL_AUTHORITY_SOURCE = 'pyro-dynamic-detail-authority-live-fields-v0';
 const PYRO_DYNAMIC_DETAIL_RESET_POLICY = 'pyro-dynamic-detail-reset-policy-v0';
 const PYRO_DYNAMIC_DETAIL_MATERIAL_CONTRACT = 'pyro-dynamic-detail-material-contract-v0';
+const PYRO_DYNAMIC_DETAIL_PHASE_BASE_STEP = 0.004;
+const PYRO_DYNAMIC_DETAIL_PHASE_FIRE_STEP = 0.018;
+const PYRO_DYNAMIC_DETAIL_PHASE_SMOKE_STEP = 0.004;
+const PYRO_DYNAMIC_DETAIL_CELL_BLEND = 0.14;
 const PYRO_DYNAMIC_DETAIL_TEXTURE_LAYOUT = {
   width: 8,
   height: 3,
@@ -3323,11 +3327,11 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
       p.y * 31.0
         + p.x * 17.0
         - p.z * 13.0
-        + pyroMemoryCell.x * 5.2
-        + pyroMemoryCell.w * 2.1
-        + u.cameraPos_time.w * (1.9 + pyroSmokeAuthority * 0.8)
-        + filamentNoise * 2.4
-        + fireNoise * 1.6
+        + pyroMemoryCell.x * 1.4
+        + pyroMemoryCell.w * 0.7
+        + u.cameraPos_time.w * (0.38 + pyroSmokeAuthority * 0.18)
+        + filamentNoise * 1.2
+        + fireNoise * 0.8
     );
     let pyroMemoryDetail = pyroLiveCarrier * (0.16 + pyroMemoryPattern * 0.54 + pyroSpatialEnergy * 0.68);
     let pyroGhostColor = mix(
@@ -3577,6 +3581,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let pyroDynamicDetailEnergy = 0;
   let pyroDynamicDetailConfidence = 0;
   let pyroDynamicDetailPhase = 0;
+  let pyroDynamicDetailAtlasCells = new Array(24).fill(0);
   let pyroDynamicDetailLastInputMs = -Infinity;
   let pyroDynamicDetailLastReadbackFrame = -1;
   let pyroDynamicDetailLastReadbackMs = -Infinity;
@@ -3688,6 +3693,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     if (resetGate) {
       pyroDynamicDetailEnergy = 0;
       pyroDynamicDetailConfidence = 0;
+      pyroDynamicDetailAtlasCells = pyroDynamicDetailAtlasCells.map(cell => cell * (1 - PYRO_DYNAMIC_DETAIL_CELL_BLEND));
     } else if (liveFireAuthority > 0.015) {
       pyroDynamicDetailEnergy = clampFinite(pyroDynamicDetailEnergy * 0.84 + liveFireAuthority * 0.22 + smokeAuthority * 0.04, 0, 1, 0);
       pyroDynamicDetailConfidence = clampFinite(pyroDynamicDetailConfidence * 0.78 + liveFireAuthority * 0.24, 0, 1, 0);
@@ -3695,14 +3701,24 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       pyroDynamicDetailEnergy = clampFinite(pyroDynamicDetailEnergy * 0.68, 0, 1, 0);
       pyroDynamicDetailConfidence = clampFinite(pyroDynamicDetailConfidence * 0.62, 0, 1, 0);
     }
-    pyroDynamicDetailPhase = (pyroDynamicDetailPhase + 0.031 + liveFireAuthority * 0.113 + smokeAuthority * 0.017) % 1024;
-    const atlasCells = new Array(24).fill(0).map((_, index) => {
+    pyroDynamicDetailPhase = (
+      pyroDynamicDetailPhase
+      + PYRO_DYNAMIC_DETAIL_PHASE_BASE_STEP
+      + liveFireAuthority * PYRO_DYNAMIC_DETAIL_PHASE_FIRE_STEP
+      + smokeAuthority * PYRO_DYNAMIC_DETAIL_PHASE_SMOKE_STEP
+    ) % 1024;
+    const targetAtlasCells = new Array(24).fill(0).map((_, index) => {
       const x = index % 8;
       const y = Math.floor(index / 8);
       const wave = 0.5 + 0.5 * Math.sin(pyroDynamicDetailPhase * 6.283 + x * 1.73 + y * 2.11);
       const neighbor = 0.5 + 0.5 * Math.sin(pyroDynamicDetailPhase * 3.71 + x * 0.79 - y * 1.39);
       return clampFinite(pyroDynamicDetailEnergy * (0.28 + wave * 0.54 + neighbor * 0.18), 0, 1, 0);
     });
+    pyroDynamicDetailAtlasCells = targetAtlasCells.map((target, index) => {
+      const previous = resetGate ? 0 : clampFinite(pyroDynamicDetailAtlasCells[index], 0, 1, 0);
+      return clampFinite(previous * (1 - PYRO_DYNAMIC_DETAIL_CELL_BLEND) + target * PYRO_DYNAMIC_DETAIL_CELL_BLEND, 0, 1, 0);
+    });
+    const atlasCells = resetGate ? new Array(24).fill(0) : [...pyroDynamicDetailAtlasCells];
     state.pyroDynamicDetail = {
       identity: PYRO_DYNAMIC_DETAIL_ATLAS_IDENTITY,
       authoritySource: PYRO_DYNAMIC_DETAIL_AUTHORITY_SOURCE,
