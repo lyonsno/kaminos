@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
-import { mkdirSync, writeFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { basename, dirname, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { spawn } from 'node:child_process';
 
 const args = new Map();
@@ -59,6 +60,7 @@ let chromeProcess = null;
 let effectiveUrl = null;
 let browserVersion = null;
 let consoleEvents = [];
+let runtimeIdentity = null;
 
 function positiveInt(value, fallback, name) {
   if (value == null || value === '') return fallback;
@@ -130,6 +132,7 @@ function writeReport(report) {
     filmstripPath,
     phase,
     browserVersion,
+    runtimeIdentity,
     consoleEvents,
     stderrTail: stderr.slice(-3000),
     ...report,
@@ -254,6 +257,23 @@ async function closeBrowser(ws) {
 function assertPng(buffer, label) {
   assert.ok(buffer.length > 1024, `${label} PNG is too small to be credible visual evidence`);
   assert.equal(buffer.readUInt32BE(0), 0x89504e47, `${label} is not a PNG`);
+}
+
+function pngDimensions(buffer) {
+  assertPng(buffer, 'PNG dimensions source');
+  return {
+    width: buffer.readUInt32BE(16),
+    height: buffer.readUInt32BE(20),
+  };
+}
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
 }
 
 async function configureMotionPanel(ws) {
@@ -481,6 +501,8 @@ async function captureFrame(ws, index) {
       clipletInterruptTimeline: state?.clipletInterruptTimeline || null,
       pathWorld: actor?.pathWorld || state?.pathWorld || null,
       pathWorldInterrupt: actor?.pathWorldInterrupt || state?.pathWorldInterrupt || null,
+      pathWorldEpisode: actor?.pathWorldEpisode || state?.pathWorldEpisode || state?.pathWorldInterrupt?.pathWorldEpisode || null,
+      pathWorldRootConstraint: actor?.pathWorldRootConstraint || state?.pathWorldRootConstraint || null,
       pathWorldActiveSource: actor?.pathWorldActiveSource || state?.pathWorldActiveSource || null,
       pathWorldPanel: window.kaminosMotionPanelPathWorldDebugState?.() || null,
       generatedMotionCliplets: state?.generatedMotionCliplets || state?.generatedPoseTemporalHarness?.generatedMotionCliplets || null,
@@ -515,117 +537,133 @@ async function captureFrame(ws, index) {
 }
 
 async function composeFilmstrip(ws, frames) {
-  const payload = {
-    schema: 'kaminos.motion-panel-live-filmstrip.v0',
-    prompt,
-    tileWidth,
-    columns,
-    frames: frames.map(frame => ({
-      index: frame.index,
-      screenshotDataUrl: frame.screenshotDataUrl,
-      behaviorState: frame.debug?.behaviorState?.state || null,
-      behaviorPhase: frame.debug?.behaviorState?.phase || null,
-      clipletLabel: frame.debug?.clipletLabel || frame.debug?.cliplet?.labelGuess || null,
-      clipletId: frame.debug?.clipletId || frame.debug?.cliplet?.id || null,
-      clipletInterrupt: frame.debug?.clipletInterrupt || null,
-      pathWorldInterrupt: frame.debug?.pathWorldInterrupt || null,
-      pathWorldActiveSource: frame.debug?.pathWorldActiveSource || null,
-      sourceFrame: frame.debug?.sourceFrame ?? null,
-      sourceFrameTotal: frame.debug?.sourceFrameTotal ?? null,
-      sheetFrameLabel: frame.sheetFrameLabel,
-      sourceFrameLabel: frame.sourceFrameLabel,
-      canvasRect: frame.debug?.canvasRect || null,
-      viewport: frame.debug?.viewport || null,
-    })),
+  if (!frames.length) throw new Error('no frames for filmstrip');
+  const firstPng = readFileSync(frames[0].path);
+  const firstImage = pngDimensions(firstPng);
+  const firstFrame = frames[0];
+  const viewport = firstFrame.debug?.viewport || { width: firstImage.width, height: firstImage.height };
+  const scaleX = firstImage.width / Math.max(1, viewport.width || firstImage.width);
+  const scaleY = firstImage.height / Math.max(1, viewport.height || firstImage.height);
+  const cssRect = firstFrame.debug?.canvasRect || {
+    x: 0,
+    y: 0,
+    width: viewport.width || firstImage.width,
+    height: viewport.height || firstImage.height,
   };
-  const result = await evaluate(ws, `(async () => {
-    const payload = ${JSON.stringify(payload)};
-    const images = await Promise.all(payload.frames.map(frame => new Promise((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => resolve(img);
-      img.onerror = () => reject(new Error('failed to load screenshot for filmstrip frame ' + frame.index));
-      img.src = frame.screenshotDataUrl;
-    })));
-    if (!images.length) throw new Error('no frames for filmstrip');
-    const firstFrame = payload.frames[0];
-    const firstImage = images[0];
-    const viewport = firstFrame.viewport || { width: firstImage.naturalWidth, height: firstImage.naturalHeight };
-    const scaleX = firstImage.naturalWidth / Math.max(1, viewport.width || firstImage.naturalWidth);
-    const scaleY = firstImage.naturalHeight / Math.max(1, viewport.height || firstImage.naturalHeight);
-    const cssRect = firstFrame.canvasRect || { x: 0, y: 0, width: viewport.width || firstImage.naturalWidth, height: viewport.height || firstImage.naturalHeight };
-    const crop = {
-      x: Math.max(0, Math.round(cssRect.x * scaleX)),
-      y: Math.max(0, Math.round(cssRect.y * scaleY)),
-      width: Math.max(1, Math.round(cssRect.width * scaleX)),
-      height: Math.max(1, Math.round(cssRect.height * scaleY)),
-    };
-    crop.width = Math.min(crop.width, firstImage.naturalWidth - crop.x);
-    crop.height = Math.min(crop.height, firstImage.naturalHeight - crop.y);
-    const labelHeight = 46;
-    const tileWidth = payload.tileWidth;
-    const tileHeight = Math.max(1, Math.round(tileWidth * crop.height / crop.width));
-    const columnCount = payload.columns;
-    const rowCount = Math.ceil(images.length / columnCount);
-    const canvas = document.createElement('canvas');
-    canvas.width = tileWidth * columnCount;
-    canvas.height = (tileHeight + labelHeight) * rowCount;
-    const ctx = canvas.getContext('2d');
-    ctx.fillStyle = '#050505';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.font = '600 14px ui-monospace, SFMono-Regular, Menlo, monospace';
-    ctx.textBaseline = 'top';
-    for (let i = 0; i < images.length; i++) {
-      const column = i % columnCount;
-      const row = Math.floor(i / columnCount);
-      const x = column * tileWidth;
-      const y = row * (tileHeight + labelHeight);
-      ctx.drawImage(images[i], crop.x, crop.y, crop.width, crop.height, x, y + labelHeight, tileWidth, tileHeight);
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.78)';
-      ctx.fillRect(x, y, tileWidth, labelHeight);
-      ctx.fillStyle = 'rgba(240, 210, 138, 0.96)';
-      const frame = payload.frames[i];
-      const sourceFrame = Number.isFinite(Number(frame.sourceFrame)) ? Number(frame.sourceFrame).toFixed(1) : 'n/a';
-      const sourceFrameTotal = Number.isFinite(Number(frame.sourceFrameTotal)) ? String(Math.max(1, Math.round(Number(frame.sourceFrameTotal)))) : '?';
-      const sheetFrameLabel = frame.sheetFrameLabel || ('sheet ' + String(frame.index + 1).padStart(2, '0') + '/' + payload.frames.length);
-      const sourceFrameLabel = frame.sourceFrameLabel || ('source ' + sourceFrame + '/' + sourceFrameTotal);
-      ctx.fillText(sheetFrameLabel + ' · ' + sourceFrameLabel, x + 10, y + 7);
-      ctx.fillStyle = 'rgba(255, 239, 196, 0.86)';
-      const interruptState = frame.clipletInterrupt?.state
-        ? ('interrupt ' + frame.clipletInterrupt.state)
-        : frame.pathWorldInterrupt?.state
-          ? ('world ' + frame.pathWorldInterrupt.state)
-          : frame.pathWorldActiveSource;
-      const state = [frame.clipletLabel || frame.behaviorState, interruptState || frame.behaviorPhase].filter(Boolean).join(' / ') || 'generated motion';
-      ctx.fillText(state.slice(0, 42), x + 10, y + 25);
-    }
+  const crop = {
+    x: Math.max(0, Math.round(cssRect.x * scaleX)),
+    y: Math.max(0, Math.round(cssRect.y * scaleY)),
+    width: Math.max(1, Math.round(cssRect.width * scaleX)),
+    height: Math.max(1, Math.round(cssRect.height * scaleY)),
+  };
+  crop.width = Math.min(crop.width, firstImage.width - crop.x);
+  crop.height = Math.min(crop.height, firstImage.height - crop.y);
+  const labelHeight = 46;
+  const tileHeight = Math.max(1, Math.round(tileWidth * crop.height / crop.width));
+  const columnCount = columns;
+  const rowCount = Math.ceil(frames.length / columnCount);
+  const sheetWidth = tileWidth * columnCount;
+  const sheetHeight = (tileHeight + labelHeight) * rowCount;
+  const imageScale = tileWidth / crop.width;
+  const htmlPath = resolve(outDir, 'contact-sheet.html');
+  const tiles = frames.map(frame => {
+    const behaviorState = frame.debug?.behaviorState?.state || null;
+    const behaviorPhase = frame.debug?.behaviorState?.phase || null;
+    const clipletLabel = frame.debug?.clipletLabel || frame.debug?.cliplet?.labelGuess || null;
+    const clipletInterrupt = frame.debug?.clipletInterrupt || null;
+    const pathWorldInterrupt = frame.debug?.pathWorldInterrupt || null;
+    const pathWorldEpisode = frame.debug?.pathWorldEpisode || null;
+    const episodePhase = pathWorldEpisode?.phase || pathWorldInterrupt?.phase || null;
+    const pathWorldActiveSource = frame.debug?.pathWorldActiveSource || null;
+    const interruptState = clipletInterrupt?.state
+      ? `interrupt ${clipletInterrupt.state}`
+      : episodePhase
+        ? `episode ${episodePhase}`
+      : pathWorldInterrupt?.state
+        ? `world ${pathWorldInterrupt.state}`
+        : pathWorldActiveSource;
+    const episodeId = pathWorldEpisode?.episodeId ? pathWorldEpisode.episodeId.replace(/^path-world-/, '') : null;
+    const state = [
+      clipletLabel || behaviorState,
+      interruptState || behaviorPhase,
+      episodeId,
+    ].filter(Boolean).join(' / ') || 'generated motion';
     return {
-      schema: 'kaminos.motion-panel-live-filmstrip.v0',
-      width: canvas.width,
-      height: canvas.height,
-      crop,
-      tileWidth,
-      tileHeight,
-      columns: columnCount,
-      rows: rowCount,
-      imageDataUrl: canvas.toDataURL('image/png'),
+      src: basename(frame.path),
+      top: frame.sheetFrameLabel + ' · ' + frame.sourceFrameLabel,
+      bottom: state.slice(0, 58),
     };
-  })()`, { timeoutMs: 120000 });
-  const base64 = String(result.imageDataUrl || '').replace(/^data:image\/png;base64,/, '');
-  const png = Buffer.from(base64, 'base64');
+  });
+  mkdirSync(dirname(htmlPath), { recursive: true });
+  writeFileSync(htmlPath, `<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+html, body { margin: 0; padding: 0; width: ${sheetWidth}px; min-height: ${sheetHeight}px; background: #050505; overflow: hidden; }
+.sheet { display: grid; grid-template-columns: repeat(${columnCount}, ${tileWidth}px); width: ${sheetWidth}px; }
+.tile { position: relative; width: ${tileWidth}px; height: ${tileHeight + labelHeight}px; overflow: hidden; background: #050505; }
+.label { position: absolute; left: 0; top: 0; width: 100%; height: ${labelHeight}px; box-sizing: border-box; padding: 7px 10px 0; background: rgba(0, 0, 0, 0.78); font: 600 14px ui-monospace, SFMono-Regular, Menlo, monospace; line-height: 18px; color: rgba(240, 210, 138, 0.96); white-space: nowrap; overflow: hidden; }
+.label .bottom { color: rgba(255, 239, 196, 0.86); }
+.tile img { position: absolute; left: ${-crop.x * imageScale}px; top: ${labelHeight - crop.y * imageScale}px; width: ${firstImage.width * imageScale}px; height: ${firstImage.height * imageScale}px; }
+</style>
+</head>
+<body>
+<div class="sheet">
+${tiles.map(tile => `<div class="tile"><img src="${escapeHtml(tile.src)}"><div class="label"><div>${escapeHtml(tile.top)}</div><div class="bottom">${escapeHtml(tile.bottom)}</div></div></div>`).join('\n')}
+</div>
+</body>
+</html>`);
+  await wsRequest(ws, 'Emulation.setDeviceMetricsOverride', {
+    width: sheetWidth,
+    height: sheetHeight,
+    deviceScaleFactor: 1,
+    mobile: false,
+  }, { timeoutMs: 20000 });
+  const contactSheetUrl = pathToFileURL(htmlPath).href;
+  await wsRequest(ws, 'Page.navigate', { url: contactSheetUrl }, { timeoutMs: 20000 });
+  const navigationDeadline = Date.now() + 20000;
+  for (;;) {
+    const state = await evaluate(ws, `(() => ({
+      href: window.location.href,
+      readyState: document.readyState,
+      tileImages: document.querySelectorAll('.sheet .tile img').length,
+    }))()`, { timeoutMs: 3000 }).catch(error => ({ error: String(error?.message || error) }));
+    if (state.href === contactSheetUrl && state.readyState !== 'loading' && state.tileImages === frames.length) break;
+    if (Date.now() > navigationDeadline) {
+      throw new Error(`contact sheet navigation did not settle: ${JSON.stringify(state)}`);
+    }
+    await delay(80);
+  }
+  await evaluate(ws, `new Promise((resolve, reject) => {
+    const finish = () => {
+      const images = Array.from(document.querySelectorAll('.sheet .tile img'));
+      if (images.length !== ${frames.length}) reject(new Error('contact sheet image count mismatch'));
+      else if (images.every(image => image.complete && image.naturalWidth > 0)) resolve(true);
+      else setTimeout(finish, 50);
+    };
+    finish();
+  })`, { timeoutMs: 20000 });
+  const shot = await wsRequest(ws, 'Page.captureScreenshot', {
+    format: 'png',
+    fromSurface: true,
+  }, { timeoutMs: 240000 });
+  const png = Buffer.from(shot.data, 'base64');
   assertPng(png, 'filmstrip');
   mkdirSync(dirname(filmstripPath), { recursive: true });
   writeFileSync(filmstripPath, png);
   return {
-    schema: result.schema,
+    schema: 'kaminos.motion-panel-live-filmstrip.v0',
     path: filmstripPath,
     bytes: png.length,
-    width: result.width,
-    height: result.height,
-    crop: result.crop,
-    tileWidth: result.tileWidth,
-    tileHeight: result.tileHeight,
-    columns: result.columns,
-    rows: result.rows,
+    width: sheetWidth,
+    height: sheetHeight,
+    crop,
+    tileWidth,
+    tileHeight,
+    columns: columnCount,
+    rows: rowCount,
+    htmlPath,
   };
 }
 
@@ -800,6 +838,10 @@ try {
   await delay(settleMs);
   effectiveUrl = await evaluate(ws, 'window.location.href');
   if (!effectiveUrl.includes('kaminos_motion_agency=1')) throw new Error(`effective URL lost motion route: ${effectiveUrl}`);
+  runtimeIdentity = await evaluate(ws, `fetch('/api/runtime-identity')
+    .then(response => response.ok ? response.json() : { error: 'runtime identity http ' + response.status })
+    .catch(error => ({ error: error.message }))`);
+  if (!runtimeIdentity?.root) throw new Error(`runtime identity missing effective root: ${JSON.stringify(runtimeIdentity)}`);
   const preflight = await evaluate(ws, `(() => ({
     href: location.href,
     hasGenerateMotion: typeof window.generateMotion === 'function',

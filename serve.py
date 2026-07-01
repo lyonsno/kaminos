@@ -5,6 +5,7 @@ import http.server
 import json
 import os
 import re
+import subprocess
 import sys
 import threading
 import time
@@ -13,6 +14,7 @@ from urllib.parse import urlparse, parse_qs, urlencode
 
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8090
 ROOT = Path(__file__).parent.resolve()
+SERVER_STARTED_AT = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
 # Directories the browse API can access
 SCENES_DIR = ROOT / "scenes"
@@ -96,6 +98,33 @@ def runtime_config():
     return {
         "schema": "kaminos.runtime-config.v0",
         "hybridSplatOverlayModuleUrl": module_url or None,
+    }
+
+
+def _git_value(*args):
+    try:
+        return subprocess.check_output(
+            ["git", *args],
+            cwd=ROOT,
+            stderr=subprocess.DEVNULL,
+            text=True,
+            timeout=1.5,
+        ).strip() or None
+    except (subprocess.SubprocessError, OSError):
+        return None
+
+
+def runtime_identity():
+    """Return source/root identity for smoke links served by this process."""
+    return {
+        "schema": "kaminos.runtime-identity.v0",
+        "root": str(ROOT),
+        "port": PORT,
+        "pid": os.getpid(),
+        "gitBranch": _git_value("rev-parse", "--abbrev-ref", "HEAD"),
+        "gitCommit": _git_value("rev-parse", "--short=12", "HEAD"),
+        "gitStatusShort": _git_value("status", "--short"),
+        "startedAt": SERVER_STARTED_AT,
     }
 
 
@@ -660,6 +689,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
         parsed = urlparse(self.path)
         if parsed.path == "/api/runtime-config":
             self.handle_runtime_config()
+        elif parsed.path == "/api/runtime-identity":
+            self.handle_runtime_identity()
         elif parsed.path == "/api/browse":
             self.handle_browse(parse_qs(parsed.query))
         elif parsed.path == "/api/assets":
@@ -698,6 +729,9 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
 
     def handle_runtime_config(self):
         self.send_json(runtime_config())
+
+    def handle_runtime_identity(self):
+        self.send_json(runtime_identity())
 
     def handle_save_scene(self):
         """Save a scene JSON to the scenes directory.

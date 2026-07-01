@@ -5147,60 +5147,264 @@ function sampleMotionPanelPathWorld(pathWorld, elapsedTime = 0, duration = 6) {
   };
 }
 
+function normalizeMotionPanelPathWorldXZ(vector, fallback = [0, 0, 1]) {
+  const x = Number(vector?.[0] || 0);
+  const z = Number(vector?.[2] || 0);
+  const length = Math.hypot(x, z);
+  if (length > 1e-6) return [Number((x / length).toFixed(5)), 0, Number((z / length).toFixed(5))];
+  return [
+    Number(fallback?.[0] || 0),
+    0,
+    Number(fallback?.[2] || 1),
+  ];
+}
+
+function createMotionPanelPathWorldContactFrame(pathWorldSample, { actorRadius = 0.17 } = {}) {
+  const trigger = pathWorldSample?.trigger || {};
+  const center = trigger.center || [0, 0, 0];
+  const root = pathWorldSample?.root || [0, 0, 0];
+  const incomingHeading = normalizeMotionPanelPathWorldXZ(pathWorldSample?.facing, [0, 0, 1]);
+  let obstacleNormal = normalizeMotionPanelPathWorldXZ([
+    Number(root[0] || 0) - Number(center[0] || 0),
+    0,
+    Number(root[2] || 0) - Number(center[2] || 0),
+  ], [-incomingHeading[0], 0, -incomingHeading[2]]);
+  if (Math.hypot(
+    Number(root[0] || 0) - Number(center[0] || 0),
+    Number(root[2] || 0) - Number(center[2] || 0),
+  ) < 0.02) {
+    obstacleNormal = normalizeMotionPanelPathWorldXZ([-incomingHeading[0], 0, -incomingHeading[2]], [0, 0, -1]);
+  }
+  const tangent = normalizeMotionPanelPathWorldXZ([-obstacleNormal[2], 0, obstacleNormal[0]], [1, 0, 0]);
+  const obstacleRadius = Math.max(0.001, Number(trigger.radius) || 0.24);
+  const clearanceRadius = obstacleRadius + Math.max(0.03, Number(actorRadius) || 0.17);
+  const contactPoint = [
+    Number((Number(center[0] || 0) + obstacleNormal[0] * clearanceRadius).toFixed(5)),
+    Number(root[1] || 0),
+    Number((Number(center[2] || 0) + obstacleNormal[2] * clearanceRadius).toFixed(5)),
+  ];
+  return {
+    schema: 'kaminos.generated-motion-path-world-contact-frame.v0',
+    obstacleId: trigger.obstacleId || null,
+    center: center.map(value => Number(Number(value || 0).toFixed(5))),
+    obstacleRadius: Number(obstacleRadius.toFixed(5)),
+    actorRadius: Number(Math.max(0.03, Number(actorRadius) || 0.17).toFixed(5)),
+    clearanceRadius: Number(clearanceRadius.toFixed(5)),
+    contactPoint,
+    incomingHeading,
+    obstacleNormal,
+    tangent,
+  };
+}
+
+function createMotionPanelPathWorldInterruptEpisode({ state, pathWorldSample, selected, elapsedTime = 0 }) {
+  const runtime = state.pathWorldInterruptRuntime;
+  const sequence = Number(runtime.episodeSequence || 0) + 1;
+  runtime.episodeSequence = sequence;
+  const playback = buildGeneratedPoseClipletPlayback({
+    cliplets: state.generatedMotionCliplets,
+    segmentIds: [selected.id],
+    mode: 'path-world-interrupt-episode',
+    id: `${state.generatedMotionCliplets.sourceClipId || state.track?.id || 'generated'}_${selected.index}_path_world_episode_playback_v0`,
+  });
+  const playbackDuration = Math.max(1e-6, Number(playback?.duration) || 0);
+  const cooldownDuration = 0.48;
+  const firedAt = Number(elapsedTime) || 0;
+  return {
+    schema: 'kaminos.generated-motion-path-world-interrupt-episode.v0',
+    episodeId: `path-world-episode-${sequence}`,
+    pathWorldId: pathWorldSample?.pathWorldId || null,
+    obstacleId: pathWorldSample?.trigger?.obstacleId || null,
+    selectedSegmentId: selected.id,
+    selectedLabel: selected.labelGuess || selected.id,
+    playbackId: playback.id,
+    playback,
+    firedAt: Number(firedAt.toFixed(5)),
+    playbackDuration: Number(playbackDuration.toFixed(5)),
+    cooldownDuration: Number(cooldownDuration.toFixed(5)),
+    cooldownUntil: Number((firedAt + playbackDuration + cooldownDuration).toFixed(5)),
+    suppressedUntilClear: true,
+    contactFrame: createMotionPanelPathWorldContactFrame(pathWorldSample),
+    trigger: pathWorldSample?.trigger || null,
+  };
+}
+
+function motionPanelPathWorldEpisodePhase(episode, elapsedTime = 0) {
+  if (!episode) return 'approach';
+  const now = Number(elapsedTime) || 0;
+  const firedAt = Number(episode.firedAt) || 0;
+  const episodeTime = Math.max(0, now - firedAt);
+  const playbackDuration = Math.max(1e-6, Number(episode.playbackDuration) || 0);
+  const cooldownDuration = Math.max(0.05, Number(episode.cooldownDuration) || 0.48);
+  if (episodeTime < 0.12) return 'triggered';
+  if (episodeTime <= playbackDuration) return 'reaction';
+  if (episodeTime <= playbackDuration + cooldownDuration) return 'cooldown';
+  return 'resume';
+}
+
 function motionPanelPathWorldInterruptFromSample(state, pathWorldSample, elapsedTime = 0) {
   const runtime = state.pathWorldInterruptRuntime || {
     active: false,
     insideLastFrame: false,
     lastFiredAt: -Infinity,
+    episodeSequence: 0,
+    activeEpisode: null,
+    lastEpisode: null,
+    suppressedUntilClear: false,
   };
   const selected = motionPanelFallbackClipletSegment(state.generatedMotionCliplets);
   const inside = !!pathWorldSample?.trigger?.fired;
   const now = Number(elapsedTime) || 0;
-  const canFire = inside && !runtime.insideLastFrame && selected && (now - Number(runtime.lastFiredAt || -Infinity) > 0.35);
+  const triggerDistance = Number(pathWorldSample?.trigger?.distance ?? Infinity);
+  const triggerRadius = Math.max(0.001, Number(pathWorldSample?.trigger?.radius) || 0.24);
+  const cleared = triggerDistance > triggerRadius + 0.12;
+  if (cleared) runtime.suppressedUntilClear = false;
+  const canFire = inside
+    && !runtime.activeEpisode
+    && !runtime.suppressedUntilClear
+    && selected
+    && (now - Number(runtime.lastFiredAt || -Infinity) > 0.35);
   if (canFire) {
     runtime.active = true;
-    runtime.firedAt = now;
     runtime.lastFiredAt = now;
-    runtime.selectedSegmentId = selected.id;
-    runtime.selectedLabel = selected.labelGuess;
-    runtime.trigger = pathWorldSample.trigger;
-    runtime.playback = buildGeneratedPoseClipletPlayback({
-      cliplets: state.generatedMotionCliplets,
-      segmentIds: [selected.id],
-      mode: 'path-world-interrupt',
-      id: `${state.generatedMotionCliplets.sourceClipId || state.track?.id || 'generated'}_${selected.index}_path_world_interrupt_playback_v0`,
+    runtime.activeEpisode = createMotionPanelPathWorldInterruptEpisode({
+      state,
+      pathWorldSample,
+      selected,
+      elapsedTime: now,
     });
+    runtime.lastEpisode = runtime.activeEpisode;
+    runtime.suppressedUntilClear = true;
   }
-  const playbackDuration = Math.max(1e-6, Number(runtime.playback?.duration) || 0);
-  const playbackTime = now - Number(runtime.firedAt || 0);
-  const active = !!runtime.active && playbackTime >= 0 && playbackTime <= Math.max(0.55, playbackDuration * 1.1);
-  const playbackSample = active && runtime.playback
-    ? sampleGeneratedPoseClipletPlayback(state.generatedInput || state.track, runtime.playback, playbackTime)
+  let episode = runtime.activeEpisode;
+  let episodePhase = motionPanelPathWorldEpisodePhase(episode, now);
+  if (episode && episodePhase === 'resume') {
+    runtime.lastEpisode = {
+      ...episode,
+      phase: 'resume',
+      active: false,
+      suppressedUntilClear: runtime.suppressedUntilClear,
+    };
+    runtime.activeEpisode = null;
+    runtime.active = false;
+    episode = runtime.lastEpisode;
+  }
+  const playbackTime = episode ? Math.max(0, now - Number(episode.firedAt || 0)) : null;
+  const playbackActive = !!episode && (episodePhase === 'triggered' || episodePhase === 'reaction');
+  const playbackSample = playbackActive && episode.playback
+    ? sampleGeneratedPoseClipletPlayback(state.generatedInput || state.track, episode.playback, playbackTime)
     : null;
-  if (!active && runtime.active) runtime.active = false;
   runtime.insideLastFrame = inside;
   state.pathWorldInterruptRuntime = runtime;
+  const episodeEvidence = episode
+    ? {
+      ...episode,
+      playback: undefined,
+      phase: episodePhase,
+      active: !!runtime.activeEpisode,
+      episodeTime: playbackTime == null ? null : Number(playbackTime.toFixed(5)),
+      suppressedUntilClear: !!runtime.suppressedUntilClear,
+    }
+    : null;
   return {
     schema: 'kaminos.generated-motion-path-world-interrupt-envelope.v0',
     interrupt: {
       schema: 'kaminos.generated-motion-path-world-interrupt.v0',
       pathWorldId: pathWorldSample?.pathWorldId || null,
       obstacleId: pathWorldSample?.trigger?.obstacleId || null,
-      state: active ? 'fired' : inside ? 'armed-contact' : 'armed',
-      fired: active,
-      activeSource: active ? 'cliplet-playback' : 'world-path',
-      reason: active ? 'wall-trigger-interrupt' : pathWorldSample?.reason || 'world-path',
-      selectedSegmentId: runtime.selectedSegmentId || selected?.id || null,
-      selectedLabel: runtime.selectedLabel || selected?.labelGuess || null,
-      firedAt: Number.isFinite(runtime.firedAt) ? Number(Number(runtime.firedAt).toFixed(5)) : null,
+      state: episodePhase,
+      phase: episodePhase,
+      fired: playbackActive,
+      activeSource: playbackActive ? 'cliplet-playback' : 'world-path',
+      reason: playbackActive ? 'wall-trigger-episode' : pathWorldSample?.reason || 'world-path',
+      selectedSegmentId: episode?.selectedSegmentId || selected?.id || null,
+      selectedLabel: episode?.selectedLabel || selected?.labelGuess || null,
+      episodeId: episode?.episodeId || null,
+      pathWorldEpisode: episodeEvidence,
+      firedAt: Number.isFinite(Number(episode?.firedAt)) ? Number(Number(episode.firedAt).toFixed(5)) : null,
       elapsedTime: Number(now.toFixed(5)),
-      playbackTime: active ? Number(playbackTime.toFixed(5)) : null,
-      playbackId: runtime.playback?.id || null,
+      playbackTime: playbackActive ? Number(playbackTime.toFixed(5)) : null,
+      playbackId: episode?.playbackId || null,
       playbackSample: playbackSample?.playback || null,
       trigger: pathWorldSample?.trigger || null,
+      suppressedUntilClear: !!runtime.suppressedUntilClear,
     },
     motionSample: playbackSample?.motionSample || null,
     playbackSample,
+  };
+}
+
+function motionPanelPathWorldEpisodeRootPosition({ pathWorldSample, pathWorldInterrupt, displayGrounding, fallbackRoot }) {
+  const episode = pathWorldInterrupt?.pathWorldEpisode || null;
+  if (!episode?.contactFrame || !displayGrounding) return fallbackRoot.clone();
+  const frame = episode.contactFrame;
+  const normal = new THREE.Vector3(frame.obstacleNormal?.[0] || 0, 0, frame.obstacleNormal?.[2] || 1).normalize();
+  const tangent = new THREE.Vector3(frame.tangent?.[0] || 1, 0, frame.tangent?.[2] || 0).normalize();
+  const contactPoint = new THREE.Vector3(frame.contactPoint?.[0] || 0, 0, frame.contactPoint?.[2] || 0);
+  const local = displayGrounding.root || [0, 0, 0];
+  if (episode.phase === 'triggered' || episode.phase === 'reaction') {
+    const tangentOffset = tangent.multiplyScalar(Number(local[0] || 0) * 0.45);
+    const normalOffset = normal.clone().multiplyScalar(Math.max(0, Number(local[2] || 0)) * 0.55);
+    return contactPoint
+      .add(tangentOffset)
+      .add(normalOffset)
+      .setY(Number(local[1] || 0));
+  }
+  if (episode.phase === 'cooldown') {
+    const episodeTime = Number(episode.episodeTime) || 0;
+    const playbackDuration = Math.max(1e-6, Number(episode.playbackDuration) || 0);
+    const cooldownDuration = Math.max(0.05, Number(episode.cooldownDuration) || 0.48);
+    const u = Math.max(0, Math.min(1, (episodeTime - playbackDuration) / cooldownDuration));
+    return contactPoint.lerp(fallbackRoot.clone(), u).setY(fallbackRoot.y);
+  }
+  return fallbackRoot.clone();
+}
+
+function constrainMotionPanelPathWorldRootPosition(rootPosition, pathWorldSample, pathWorldInterrupt) {
+  if (!pathWorldSample?.trigger) {
+    return {
+      schema: 'kaminos.generated-motion-path-world-root-constraint.v0',
+      constrained: false,
+      root: rootPosition.clone(),
+    };
+  }
+  const trigger = pathWorldSample.trigger;
+  const frame = pathWorldInterrupt?.pathWorldEpisode?.contactFrame || null;
+  const center = new THREE.Vector3(trigger.center?.[0] || 0, 0, trigger.center?.[2] || 0);
+  const clearanceRadius = Math.max(
+    0.001,
+    Number(frame?.clearanceRadius) || (Number(trigger.radius) || 0.24) + 0.17,
+  );
+  const root = rootPosition.clone();
+  const offset = new THREE.Vector3(root.x - center.x, 0, root.z - center.z);
+  let distance = Math.hypot(offset.x, offset.z);
+  if (distance >= clearanceRadius) {
+    return {
+      schema: 'kaminos.generated-motion-path-world-root-constraint.v0',
+      constrained: false,
+      clearanceRadius: Number(clearanceRadius.toFixed(5)),
+      distance: Number(distance.toFixed(5)),
+      root,
+    };
+  }
+  if (distance < 1e-6) {
+    const normal = frame?.obstacleNormal || pathWorldSample.facing || [0, 0, -1];
+    offset.set(Number(normal[0] || 0), 0, Number(normal[2] || -1));
+    if (offset.lengthSq() < 1e-6) offset.set(0, 0, -1);
+    offset.normalize();
+    distance = 0;
+  } else {
+    offset.normalize();
+  }
+  root.x = center.x + offset.x * clearanceRadius;
+  root.z = center.z + offset.z * clearanceRadius;
+  return {
+    schema: 'kaminos.generated-motion-path-world-root-constraint.v0',
+    constrained: true,
+    clearanceRadius: Number(clearanceRadius.toFixed(5)),
+    distance: Number(distance.toFixed(5)),
+    penetrationDepth: Number(Math.max(0, clearanceRadius - distance).toFixed(5)),
+    root,
   };
 }
 
@@ -6026,14 +6230,17 @@ function updateGeneratedPoseTemporalFrame(nowSeconds = performance.now() / 1000)
   state.timeScale = motionPanelSpeedFromInputs();
   const elapsedTime = (nowSeconds - state.startedAt) * state.timeScale;
   const interruptSourceInput = state.generatedInput || state.track;
-  const clipletInterruptTimeline = motionPanelClipletInterruptFromInputs(interruptSourceInput, state.generatedMotionCliplets);
+  const pathTriggerMode = motionPanelClipletInterruptModeFromInputs() === 'path-trigger';
+  const pathWorldSample = state.pathWorld
+    ? sampleMotionPanelPathWorld(state.pathWorld, elapsedTime, state.duration)
+    : null;
+  const clipletInterruptTimeline = !pathWorldSample && pathTriggerMode
+    ? motionPanelClipletInterruptFromInputs(interruptSourceInput, state.generatedMotionCliplets)
+    : null;
   const clipletInterruptEnvelope = clipletInterruptTimeline
     ? sampleGeneratedPoseClipletPathInterrupt(interruptSourceInput, clipletInterruptTimeline, elapsedTime)
     : null;
-  const pathWorldSample = !clipletInterruptTimeline && state.pathWorld
-    ? sampleMotionPanelPathWorld(state.pathWorld, elapsedTime, state.duration)
-    : null;
-  const pathWorldInterruptEnvelope = pathWorldSample
+  const pathWorldInterruptEnvelope = pathWorldSample && pathTriggerMode
     ? motionPanelPathWorldInterruptFromSample(state, pathWorldSample, elapsedTime)
     : null;
   const clipletPlaybackTimeline = clipletInterruptTimeline ? null : motionPanelClipletPlaybackFromInputs(state.generatedMotionCliplets);
@@ -6072,7 +6279,23 @@ function updateGeneratedPoseTemporalFrame(nowSeconds = performance.now() / 1000)
   const pathWorldOffset = pathWorldSample
     ? new THREE.Vector3(...pathWorldSample.root)
     : new THREE.Vector3(0, 0, 0);
-  const rootPosition = new THREE.Vector3(...displayGrounding.root).add(pathWorldOffset);
+  const fallbackRootPosition = new THREE.Vector3(...displayGrounding.root).add(pathWorldOffset);
+  let rootPosition = fallbackRootPosition.clone();
+  let pathWorldRootConstraint = null;
+  if (pathWorldSample) {
+    rootPosition = motionPanelPathWorldEpisodeRootPosition({
+      pathWorldSample,
+      pathWorldInterrupt: pathWorldInterruptEnvelope?.interrupt || null,
+      displayGrounding,
+      fallbackRoot: fallbackRootPosition,
+    });
+    pathWorldRootConstraint = constrainMotionPanelPathWorldRootPosition(
+      rootPosition,
+      pathWorldSample,
+      pathWorldInterruptEnvelope?.interrupt || null,
+    );
+    rootPosition.copy(pathWorldRootConstraint.root);
+  }
   updateGeneratedPoseTemporalPathWorldVisual(state.pathWorld, pathWorldSample, pathWorldInterruptEnvelope?.interrupt || null);
   if (visual.interruptTrigger) {
     if (clipletInterruptTimeline?.trigger?.root) {
@@ -6145,6 +6368,8 @@ function updateGeneratedPoseTemporalFrame(nowSeconds = performance.now() / 1000)
   state.lastClipletInterruptTimeline = clipletInterruptTimeline;
   state.lastPathWorld = pathWorldSample;
   state.lastPathWorldInterrupt = pathWorldInterruptEnvelope?.interrupt || null;
+  state.lastPathWorldEpisode = pathWorldInterruptEnvelope?.interrupt?.pathWorldEpisode || null;
+  state.lastPathWorldRootConstraint = pathWorldRootConstraint;
   state.lastDisplayGrounding = displayGrounding;
   const behaviorState = buildGeneratedPoseTemporalBehaviorState({
     track: state.track,
@@ -6220,6 +6445,8 @@ function updateGeneratedPoseTemporalFrame(nowSeconds = performance.now() / 1000)
     clipletInterruptTimeline,
     pathWorld: pathWorldSample,
     pathWorldInterrupt: pathWorldInterruptEnvelope?.interrupt || null,
+    pathWorldEpisode: pathWorldInterruptEnvelope?.interrupt?.pathWorldEpisode || null,
+    pathWorldRootConstraint,
     pathWorldActiveSource: pathWorldInterruptEnvelope?.interrupt?.activeSource || (pathWorldSample ? 'world-path' : null),
     sourceFrame: temporalSample?.sourceFrame ?? null,
     sourceTime: temporalSample?.time ?? null,
@@ -7577,6 +7804,8 @@ window.kaminosGeneratedPoseTemporalDebugState = function() {
     clipletInterruptTimeline: state?.lastClipletInterruptTimeline || null,
     pathWorld: state?.lastPathWorld || null,
     pathWorldInterrupt: state?.lastPathWorldInterrupt || null,
+    pathWorldEpisode: state?.lastPathWorldEpisode || null,
+    pathWorldRootConstraint: state?.lastPathWorldRootConstraint || null,
     pathWorldActiveSource: state?.lastPathWorldInterrupt?.activeSource || (state?.lastPathWorld ? 'world-path' : null),
     attentionTargetMode: motionAttentionTargetModeFromInputs(),
     attentionTargetEvidence: state?.lastAttentionTargetEvidence || selectedSceneObjectMotionAttentionTarget(),
