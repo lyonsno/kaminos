@@ -8,6 +8,7 @@ const FIELD_PROJECTION_TENSOR_SCHEMA = 'kaminos.volume.field-projection-tensor.v
 const FIELD_TILE_EXPORT_SCHEMA = 'kaminos.volume.field-tile-export.v0';
 const FIELD_TILE_COVERAGE_PAIRING_SCHEMA = 'kaminos.volume.field-tile-coverage-pairing.v0';
 const SAME_STATE_FREEZE_PREFLIGHT_SCHEMA = 'kaminos.volume.same-state-freeze-preflight.v0';
+const ROUTE_VARIANT_PREFLIGHT_SCHEMA = 'kaminos.volume.route-variant-preflight.v0';
 const NORMALIZED_TILE_PAIRING_IDENTITY = 'normalized-tile-center-nearest-neighbor-v0';
 const COMMON_SPATIAL_BIN_PAIRING_IDENTITY = 'common-spatial-bin-nearest-neighbor-v0';
 const EXPECTED_VOLUME_ROUTE_ID = 'native-3d-compute-fluid-raymarch-v0';
@@ -61,6 +62,11 @@ function nearestSupported(value, supported, fallback) {
 
 function gridSlug(value) {
   return `g${nearestSupported(value, SUPPORTED_GRIDS, 96)}`;
+}
+
+function replayStartSlug(value) {
+  const text = String(Number(value)).replace(/[^0-9a-z]+/gi, 'p');
+  return `replay-start-${text}ms`;
 }
 
 function slugify(value, fallback = 'variant') {
@@ -139,6 +145,31 @@ function loadRouteVariants(path) {
     seen.add(variant.routeVariantIdentity);
   }
   return variants.map((variant) => ({ ...variant, sourcePath: resolvedPath }));
+}
+
+function buildDeterministicReplayStates({ steps, timeStepMs, startTimeMs, startTimeList }) {
+  if (steps <= 0) {
+    return [{
+      replayStateIdentity: 'sequential-live-state-v0',
+      deterministicReplay: { enabled: false },
+    }];
+  }
+  const starts = Array.from(new Set(
+    (Array.isArray(startTimeList) && startTimeList.length ? startTimeList : [startTimeMs])
+      .map(Number)
+      .filter(Number.isFinite)
+  ));
+  return starts.map((start) => ({
+    replayStateIdentity: replayStartSlug(start),
+    deterministicReplay: {
+      enabled: true,
+      identity: DETERMINISTIC_REPLAY_IDENTITY,
+      steps,
+      timeStepMs,
+      startTimeMs: start,
+      stateTransfer: false,
+    },
+  }));
 }
 
 function applyRouteVariant(baseUrl, routeVariant) {
@@ -985,6 +1016,112 @@ function runCapture(plan, cwd) {
   return summarizeFieldEvidence(witness, plan);
 }
 
+function summarizeRouteVariantPreflight(effective) {
+  return {
+    path: effective.path,
+    report: effective.report,
+    fullScreenshot: effective.fullScreenshot,
+    fieldAuthority: effective.fieldAuthority,
+    requestedGrid: effective.requestedGrid,
+    simGrid: effective.simGrid,
+    requestedMajorantGrid: effective.requestedMajorantGrid,
+    effectiveRoute: effective.effectiveRoute,
+    prototypeIdentity: effective.prototypeIdentity,
+    backend: effective.backend,
+    captureBackend: effective.captureBackend,
+    deterministicReplay: effective.deterministicReplay,
+    frameCount: effective.frameCount,
+    simStepCount: effective.simStepCount,
+    fieldShape: effective.fieldShape,
+    simReadback: effective.simReadback,
+    majorantReadback: effective.majorantReadback,
+    controls: effective.controls,
+    occupancyCues: effective.occupancyCues,
+    pressureCues: effective.pressureCues,
+    timingEvidenceSource: effective.timingEvidenceSource,
+    timingDisclaimer: effective.timingDisclaimer,
+    performanceVisualWarnings: effective.performanceVisualWarnings,
+  };
+}
+
+function runRouteVariantPreflights({ enabled, routeVariants, deterministicReplayStates, lowGrids, majorantGrid, baseUrl, outDir, debugPort, settleMs, windowSize, evidenceMode, cwd }) {
+  if (!enabled) {
+    return {
+      schema: ROUTE_VARIANT_PREFLIGHT_SCHEMA,
+      enabled: false,
+      status: 'skipped',
+      receipts: [],
+      limitation: 'Route variants were not preflighted before low/high field export; downstream captures still validate effective route and field evidence.',
+    };
+  }
+  const receipts = [];
+  let preflightIndex = 0;
+  for (const routeVariant of routeVariants) {
+    for (const replayState of deterministicReplayStates) {
+      const preflightId = `preflight-${String(preflightIndex + 1).padStart(3, '0')}-${routeVariant.routeVariantIdentity}-${replayState.replayStateIdentity}`;
+      const pairDir = resolve(outDir, '_route-variant-preflight', preflightId);
+      const route = routeWithGrid(applyRouteVariant(baseUrl, routeVariant), lowGrids[0], majorantGrid);
+      const plan = makeCapturePlan({
+        pairId: preflightId,
+        role: 'route-variant-preflight',
+        grid: lowGrids[0],
+        majorantGrid,
+        route,
+        pairDir,
+        debugPort: debugPort + 10000 + preflightIndex,
+        settleMs,
+        windowSize,
+        evidenceMode,
+        deterministicReplay: replayState.deterministicReplay,
+        fieldTileExport: { enabled: false },
+      });
+      try {
+        const effective = runCapture(plan, cwd);
+        receipts.push({
+          schema: ROUTE_VARIANT_PREFLIGHT_SCHEMA,
+          status: 'passed',
+          routeVariantIdentity: routeVariant.routeVariantIdentity,
+          routeVariant,
+          replayStateIdentity: replayState.replayStateIdentity,
+          replayState,
+          requestedRoute: route,
+          plan,
+          effective: summarizeRouteVariantPreflight(effective),
+        });
+      } catch (error) {
+        const wrapped = new Error(`route variant preflight failed for ${routeVariant.routeVariantIdentity} / ${replayState.replayStateIdentity}: ${error.message}`);
+        wrapped.code = error.code || 'route-variant-preflight-failed';
+        wrapped.failurePhase = 'route-variant-preflight';
+        wrapped.details = {
+          routeVariantIdentity: routeVariant.routeVariantIdentity,
+          routeVariant,
+          replayStateIdentity: replayState.replayStateIdentity,
+          replayState,
+          requestedRoute: route,
+          plan,
+          partialReceipts: receipts,
+          sourceFailure: {
+            code: error.code || 'unknown',
+            failurePhase: error.failurePhase || 'unknown',
+            message: error.message,
+            details: error.details || {},
+          },
+        };
+        wrapped.partialReceipts = receipts;
+        throw wrapped;
+      }
+      preflightIndex += 1;
+    }
+  }
+  return {
+    schema: ROUTE_VARIANT_PREFLIGHT_SCHEMA,
+    enabled: true,
+    status: 'passed',
+    receipts,
+    limitation: 'Preflight validates route/effective identity, field readback shape, occupancy, and visual witness viability before expensive field-tile export; it does not replace low/high capture validation.',
+  };
+}
+
 const args = parseArgs(process.argv.slice(2));
 const cwd = new URL('.', import.meta.url).pathname;
 const outDir = resolve(args.get('--out-dir') || '/tmp/kaminos-field-pair-dataset');
@@ -1000,14 +1137,18 @@ const windowSize = String(args.get('--window-size') || '1280,960');
 const debugPort = Number(args.get('--debug-port') || 9700);
 const evidenceMode = String(args.get('--evidence-mode') || 'performance');
 const deterministicReplaySteps = Math.max(0, Math.floor(Number(args.get('--deterministic-replay-steps') || 0)));
-const deterministicReplay = deterministicReplaySteps > 0 ? {
-  enabled: true,
-  identity: DETERMINISTIC_REPLAY_IDENTITY,
+const deterministicReplayTimeStepMs = Number(args.get('--deterministic-replay-time-step-ms') || (1000 / 60));
+const deterministicReplayStartMs = Number(args.get('--deterministic-replay-start-ms') || 1000);
+const deterministicReplayStartMsList = args.has('--deterministic-replay-start-ms-list')
+  ? numberList(args.get('--deterministic-replay-start-ms-list'), String(deterministicReplayStartMs))
+  : [deterministicReplayStartMs];
+const deterministicReplayStates = buildDeterministicReplayStates({
   steps: deterministicReplaySteps,
-  timeStepMs: Number(args.get('--deterministic-replay-time-step-ms') || (1000 / 60)),
-  startTimeMs: Number(args.get('--deterministic-replay-start-ms') || 1000),
-  stateTransfer: false,
-} : { enabled: false };
+  timeStepMs: deterministicReplayTimeStepMs,
+  startTimeMs: deterministicReplayStartMs,
+  startTimeList: deterministicReplayStartMsList,
+});
+const deterministicReplay = deterministicReplayStates[0].deterministicReplay;
 const pairAuthority = deterministicReplay.enabled ? DETERMINISTIC_REPLAY_PAIR_AUTHORITY : SEQUENTIAL_PAIR_AUTHORITY;
 const fieldTileExport = args.has('--field-tile-export') ? {
   enabled: true,
@@ -1023,18 +1164,20 @@ const fieldTileExport = args.has('--field-tile-export') ? {
 } : { enabled: false };
 const fieldTilePairingPolicy = resolveFieldTilePairingPolicy(args.get('--field-tile-pairing-policy'));
 const minCommonSpatialBinPairs = Math.max(0, Math.floor(Number(args.get('--field-tile-min-common-bin-pairs') || 0)));
+const routeVariantPreflightEnabled = args.has('--route-variant-preflight');
 const dryRun = args.has('--dry-run');
 const createdAt = new Date().toISOString();
 const gitCommit = gitValue(['rev-parse', 'HEAD']);
 const gitBranch = gitValue(['branch', '--show-current']);
 const gitStatusShort = gitValue(['status', '--short'], '');
-const pairs = routeVariants.flatMap((routeVariant, variantIndex) => lowGrids.map((lowGrid, lowIndex) => {
-  const pairIndex = variantIndex * lowGrids.length + lowIndex;
+const pairs = routeVariants.flatMap((routeVariant, variantIndex) => deterministicReplayStates.flatMap((replayState, replayIndex) => lowGrids.map((lowGrid, lowIndex) => {
+  const pairIndex = ((variantIndex * deterministicReplayStates.length) + replayIndex) * lowGrids.length + lowIndex;
   const variantBaseUrl = applyRouteVariant(baseUrl, routeVariant);
   const variantPrefix = routeVariants.length > 1 || routeVariant.routeVariantIdentity !== 'base-route-v0'
     ? `${routeVariant.routeVariantIdentity}-`
     : '';
-  const pairId = `pair-${String(pairIndex + 1).padStart(3, '0')}-${variantPrefix}${gridSlug(lowGrid)}-to-${gridSlug(highGrid)}`;
+  const replayPrefix = deterministicReplayStates.length > 1 ? `${replayState.replayStateIdentity}-` : '';
+  const pairId = `pair-${String(pairIndex + 1).padStart(3, '0')}-${variantPrefix}${replayPrefix}${gridSlug(lowGrid)}-to-${gridSlug(highGrid)}`;
   const pairDir = resolve(outDir, pairId);
   const lowRoute = routeWithGrid(variantBaseUrl, lowGrid, majorantGrid);
   const highRoute = routeWithGrid(variantBaseUrl, highGrid, majorantGrid);
@@ -1042,6 +1185,8 @@ const pairs = routeVariants.flatMap((routeVariant, variantIndex) => lowGrids.map
     pairId,
     routeVariantIdentity: routeVariant.routeVariantIdentity,
     routeVariant,
+    replayStateIdentity: replayState.replayStateIdentity,
+    replayState,
     pairAuthority,
     fieldAuthority: FIELD_AUTHORITY,
     lowGrid,
@@ -1060,7 +1205,7 @@ const pairs = routeVariants.flatMap((routeVariant, variantIndex) => lowGrids.map
       settleMs,
       windowSize,
       evidenceMode,
-      deterministicReplay,
+      deterministicReplay: replayState.deterministicReplay,
       fieldTileExport,
     }),
     high: makeCapturePlan({
@@ -1074,11 +1219,11 @@ const pairs = routeVariants.flatMap((routeVariant, variantIndex) => lowGrids.map
       settleMs,
       windowSize,
       evidenceMode,
-      deterministicReplay,
+      deterministicReplay: replayState.deterministicReplay,
       fieldTileExport,
     }),
   };
-}));
+})));
 
 const manifest = {
   schema: DATASET_SCHEMA,
@@ -1092,12 +1237,19 @@ const manifest = {
   baseUrl,
   routeVariantsPath,
   routeVariants,
+  deterministicReplayStates,
   outDir,
   manifestPath,
   dryRun,
   pairAuthority,
   fieldAuthority: FIELD_AUTHORITY,
   deterministicReplay,
+  routeVariantPreflight: {
+    schema: ROUTE_VARIANT_PREFLIGHT_SCHEMA,
+    enabled: routeVariantPreflightEnabled,
+    status: dryRun ? 'not-run-dry-run' : 'pending',
+    receipts: [],
+  },
   fieldTileExport,
   coverageExpansion: fieldTileExport.enabled ? {
     schema: FIELD_TILE_COVERAGE_PAIRING_SCHEMA,
@@ -1132,6 +1284,45 @@ const manifest = {
 writeJson(manifestPath, { dataset: manifest });
 
 if (!dryRun) {
+  try {
+    manifest.routeVariantPreflight = runRouteVariantPreflights({
+      enabled: routeVariantPreflightEnabled,
+      routeVariants,
+      deterministicReplayStates,
+      lowGrids,
+      majorantGrid,
+      baseUrl,
+      outDir,
+      debugPort,
+      settleMs,
+      windowSize,
+      evidenceMode,
+      cwd,
+    });
+    manifest.updatedAt = new Date().toISOString();
+    writeJson(manifestPath, { dataset: manifest });
+  } catch (error) {
+    manifest.status = 'failed';
+    const failure = {
+      code: error.code || 'route-variant-preflight-failed',
+      failurePhase: error.failurePhase || 'route-variant-preflight',
+      message: error.message,
+      details: error.details || {},
+    };
+    manifest.failures.push(failure);
+    manifest.routeVariantPreflight = {
+      schema: ROUTE_VARIANT_PREFLIGHT_SCHEMA,
+      enabled: routeVariantPreflightEnabled,
+      status: 'failed',
+      failure,
+      receipts: Array.isArray(error.partialReceipts) ? error.partialReceipts : [],
+    };
+    manifest.updatedAt = new Date().toISOString();
+    writeJson(manifestPath, { dataset: manifest });
+  }
+}
+
+if (!dryRun && !manifest.failures.length) {
   for (const pair of manifest.pairs) {
     try {
       if (fieldTileExport.selectionPolicy === 'spatial-binned-occupied-fluid-front-tiles') {

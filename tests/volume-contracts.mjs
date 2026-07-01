@@ -1430,6 +1430,12 @@ assert.match(fieldPairDataset, /--route-variants/, 'field-pair dataset can read 
 assert.match(fieldPairDataset, /routeVariantIdentity/, 'field-pair dataset records the active route variant identity per low/high pair');
 assert.match(fieldPairDataset, /applyRouteVariant/, 'field-pair dataset applies explicit query-param route variant controls before low/high grid routing');
 assert.match(fieldPairDataset, /routeVariants/, 'field-pair dataset preserves the requested route variant set in the manifest');
+assert.match(fieldPairDataset, /--route-variant-preflight/, 'field-pair dataset can preflight route variants before spending low/high field tile exports');
+assert.match(fieldPairDataset, /routeVariantPreflight/, 'field-pair dataset records route-variant preflight receipts in the manifest');
+assert.match(fieldPairDataset, /route-variant-preflight/, 'field-pair dataset names route-variant preflight as a distinct failure phase');
+assert.match(fieldPairDataset, /--deterministic-replay-start-ms-list/, 'field-pair dataset can expand deterministic replay over multiple start states');
+assert.match(fieldPairDataset, /deterministicReplayStates/, 'field-pair dataset records the deterministic replay state axis in the manifest');
+assert.match(fieldPairDataset, /replayStateIdentity/, 'field-pair dataset records the active replay state identity per low/high pair');
 
 const fieldResidualProbePath = join(root, 'volume-field-residual-probe.py');
 assert.ok(existsSync(fieldResidualProbePath), 'volume field residual probe exists');
@@ -1456,3 +1462,6 @@ assert.match(fieldResidualProbe, /--hidden-width/, 'field residual probe exposes
 assert.match(fieldResidualProbe, /--epochs/, 'field residual probe exposes nonlinear training epochs as an explicit run control');
 assert.match(fieldResidualProbe, /--learning-rate/, 'field residual probe exposes nonlinear learning rate as an explicit run control');
 assert.match(fieldResidualProbe, /linearContextComparison/, 'field residual probe compares nonlinear performance against the linear context model');
+assert.match(fieldResidualProbe, /--holdout-route-variant/, 'field residual probe can hold out a named route variant instead of only random tile pairs');
+assert.match(fieldResidualProbe, /--holdout-replay-state/, 'field residual probe can hold out a named deterministic replay state instead of only random tile pairs');
+assert.match(fieldResidualProbe, /splitStrategy/, 'field residual probe reports whether the train/test split was random, route-held-out, or replay-held-out');

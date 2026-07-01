@@ -66,6 +66,16 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Optional maximum normalized tile separation for usable pairs.",
     )
+    parser.add_argument(
+        "--holdout-route-variant",
+        default=None,
+        help="Train on all other route variants and test on this routeVariantIdentity.",
+    )
+    parser.add_argument(
+        "--holdout-replay-state",
+        default=None,
+        help="Train on all other deterministic replay states and test on this replayStateIdentity.",
+    )
     return parser.parse_args()
 
 
@@ -135,6 +145,8 @@ def base_report(args: argparse.Namespace) -> dict[str, Any]:
             "batchSize": args.batch_size,
             "requireSameSpatialBin": not args.allow_different_spatial_bin,
             "maxNormalizedSeparation": args.max_normalized_separation,
+            "holdoutRouteVariant": args.holdout_route_variant,
+            "holdoutReplayState": args.holdout_replay_state,
         },
         "route": {
             "cwd": str(Path.cwd()),
@@ -259,6 +271,8 @@ def candidate_matches(dataset: dict[str, Any], manifest_path: Path, args: argpar
                 continue
             usable.append({
                 "pairId": pair.get("pairId"),
+                "routeVariantIdentity": pair.get("routeVariantIdentity"),
+                "replayStateIdentity": pair.get("replayStateIdentity"),
                 "matchId": match.get("matchId"),
                 "lowTileId": match.get("lowTileId"),
                 "highTileId": match.get("highTileId"),
@@ -276,15 +290,73 @@ def candidate_matches(dataset: dict[str, Any], manifest_path: Path, args: argpar
     return usable, discarded
 
 
-def split_matches(matches: list[dict[str, Any]], train_fraction: float, seed: int) -> tuple[list[int], list[int]]:
+def split_matches(matches: list[dict[str, Any]], args: argparse.Namespace) -> tuple[list[int], list[int], dict[str, Any]]:
     if len(matches) < 2:
         raise ProbeFailure("split", "at least two usable tile pairs are required for a held-out split", {"usableTilePairs": len(matches)})
-    fraction = min(0.95, max(0.05, float(train_fraction)))
+    if args.holdout_route_variant and args.holdout_replay_state:
+        raise ProbeFailure(
+            "split",
+            "choose only one held-out axis per probe run",
+            {"holdoutRouteVariant": args.holdout_route_variant, "holdoutReplayState": args.holdout_replay_state},
+        )
+    if args.holdout_route_variant:
+        holdout = str(args.holdout_route_variant)
+        test = [index for index, match in enumerate(matches) if match.get("routeVariantIdentity") == holdout]
+        train = [index for index, match in enumerate(matches) if match.get("routeVariantIdentity") != holdout]
+        if not train or not test:
+            raise ProbeFailure(
+                "split",
+                "route-variant holdout requires at least one train and one test tile pair",
+                {
+                    "holdoutRouteVariant": holdout,
+                    "usableTilePairs": len(matches),
+                    "availableRouteVariants": sorted({str(match.get("routeVariantIdentity")) for match in matches}),
+                    "trainTilePairs": len(train),
+                    "testTilePairs": len(test),
+                },
+            )
+        return train, test, {
+            "splitStrategy": "holdout-route-variant-v0",
+            "holdoutAxis": "routeVariantIdentity",
+            "holdoutValue": holdout,
+            "trainFraction": None,
+            "seed": None,
+        }
+    if args.holdout_replay_state:
+        holdout = str(args.holdout_replay_state)
+        test = [index for index, match in enumerate(matches) if match.get("replayStateIdentity") == holdout]
+        train = [index for index, match in enumerate(matches) if match.get("replayStateIdentity") != holdout]
+        if not train or not test:
+            raise ProbeFailure(
+                "split",
+                "replay-state holdout requires at least one train and one test tile pair",
+                {
+                    "holdoutReplayState": holdout,
+                    "usableTilePairs": len(matches),
+                    "availableReplayStates": sorted({str(match.get("replayStateIdentity")) for match in matches}),
+                    "trainTilePairs": len(train),
+                    "testTilePairs": len(test),
+                },
+            )
+        return train, test, {
+            "splitStrategy": "holdout-replay-state-v0",
+            "holdoutAxis": "replayStateIdentity",
+            "holdoutValue": holdout,
+            "trainFraction": None,
+            "seed": None,
+        }
+    fraction = min(0.95, max(0.05, float(args.train_fraction)))
     train_count = int(math.floor(len(matches) * fraction))
     train_count = min(max(1, train_count), len(matches) - 1)
-    rng = np.random.default_rng(seed)
+    rng = np.random.default_rng(args.seed)
     permutation = list(map(int, rng.permutation(len(matches))))
-    return sorted(permutation[:train_count]), sorted(permutation[train_count:])
+    return sorted(permutation[:train_count]), sorted(permutation[train_count:]), {
+        "splitStrategy": "random-tile-pair-v0",
+        "holdoutAxis": None,
+        "holdoutValue": None,
+        "trainFraction": fraction,
+        "seed": args.seed,
+    }
 
 
 def load_split(matches: list[dict[str, Any]], indexes: list[int]) -> tuple[np.ndarray, np.ndarray]:
@@ -590,6 +662,8 @@ def summarize_matches(matches: list[dict[str, Any]], indexes: list[int]) -> list
     return [
         {
             "pairId": matches[index]["pairId"],
+            "routeVariantIdentity": matches[index].get("routeVariantIdentity"),
+            "replayStateIdentity": matches[index].get("replayStateIdentity"),
             "matchId": matches[index]["matchId"],
             "lowTileId": matches[index]["lowTileId"],
             "highTileId": matches[index]["highTileId"],
@@ -609,7 +683,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     if dataset.get("status") != "captured":
         raise ProbeFailure("manifest-validate", "source dataset is not captured", {"status": dataset.get("status")})
     usable_matches, discarded_matches = candidate_matches(dataset, manifest_path, args)
-    train_indexes, test_indexes = split_matches(usable_matches, args.train_fraction, args.seed)
+    train_indexes, test_indexes, split_strategy = split_matches(usable_matches, args)
     train_low_tiles, train_high_tiles = load_split_tiles(usable_matches, train_indexes)
     test_low_tiles, test_high_tiles = load_split_tiles(usable_matches, test_indexes)
     train_low = flatten_tiles(train_low_tiles)
@@ -712,11 +786,13 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             "pairAuthority": dataset.get("pairAuthority"),
             "fieldAuthority": dataset.get("fieldAuthority"),
             "deterministicReplay": dataset.get("deterministicReplay"),
+            "deterministicReplayStates": dataset.get("deterministicReplayStates"),
             "fieldTileExport": dataset.get("fieldTileExport"),
             "coverageExpansion": dataset.get("coverageExpansion"),
             "baseUrl": dataset.get("baseUrl"),
         },
         "data": {
+            **split_strategy,
             "candidateMatchedTilePairs": len(usable_matches) + len(discarded_matches),
             "usableTilePairs": len(usable_matches),
             "discardedTilePairs": len(discarded_matches),
