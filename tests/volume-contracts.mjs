@@ -1446,3 +1446,24 @@ assert.match(routeAwareCompositeBaseline, /--rife/, 'route-aware composite runne
 assert.match(routeAwareCompositeBaseline, /--flow/, 'route-aware composite runner accepts stronger-flow parent synthetic path');
 assert.match(routeAwareCompositeBaseline, /--report/, 'route-aware composite runner accepts triplet report metadata path');
 assert.match(routeAwareCompositeBaseline, /effectiveRoute/, 'route-aware composite runner records route identity from the report');
+
+const sidecarConditionedBaselinePath = join(root, 'volume-sidecar-conditioned-baseline.py');
+assert.ok(existsSync(sidecarConditionedBaselinePath), 'volume sidecar-conditioned baseline runner exists');
+const sidecarConditionedBaseline = existsSync(sidecarConditionedBaselinePath) ? readFileSync(sidecarConditionedBaselinePath, 'utf8') : '';
+assert.match(sidecarConditionedBaseline, /sidecar-conditioned-rife-dis-rgba-v0/, 'sidecar-conditioned runner preserves a stable baseline identity');
+assert.match(sidecarConditionedBaseline, /synthetic-comparison-not-live-simulator-output/, 'sidecar-conditioned runner labels output as synthetic comparison evidence');
+assert.match(sidecarConditionedBaseline, /actualMiddleUsed[^\\n]+False|actualMiddleUsed[^\\n]+false/, 'sidecar-conditioned runner records that actual middle was not used as input');
+assert.match(sidecarConditionedBaseline, /simReadback/, 'sidecar-conditioned runner consumes simulator readback sidecars from candidate context');
+assert.match(sidecarConditionedBaseline, /fireBounds/, 'sidecar-conditioned runner consumes fire bounds sidecars from candidate context');
+assert.match(sidecarConditionedBaseline, /smokeBounds/, 'sidecar-conditioned runner consumes smoke bounds sidecars from candidate context');
+assert.match(sidecarConditionedBaseline, /--report/, 'sidecar-conditioned runner accepts candidate context metadata path');
+assert.match(sidecarConditionedBaseline, /--practical/, 'sidecar-conditioned runner can consume the Practical-RIFE parent synthetic path');
+
+const interframePlaybackWitnessPath = join(root, 'volume-interframe-playback-witness.mjs');
+assert.ok(existsSync(interframePlaybackWitnessPath), 'volume interframe playback witness generator exists');
+const interframePlaybackWitness = existsSync(interframePlaybackWitnessPath) ? readFileSync(interframePlaybackWitnessPath, 'utf8') : '';
+assert.match(interframePlaybackWitness, /kaminos\.volume\.interframe-playback-witness\.v0/, 'interframe playback witness writes a stable schema identity');
+assert.match(interframePlaybackWitness, /Ground truth cadence/, 'interframe playback witness labels the real T0/T1/T2 cadence');
+assert.match(interframePlaybackWitness, /Synthetic cadence/, 'interframe playback witness labels synthetic middle-frame cadence');
+assert.match(interframePlaybackWitness, /actualMiddleUsed/, 'interframe playback witness preserves actual-middle input/use authority');
+assert.match(interframePlaybackWitness, /synthetic-comparison-not-live-simulator-output/, 'interframe playback witness labels synthetic frames as comparison evidence');
