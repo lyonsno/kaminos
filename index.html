@@ -11058,6 +11058,8 @@ function normalizePipelineGeneratedOutputNode(value) {
     routeSnapshot: value.routeSnapshot && typeof value.routeSnapshot === 'object' ? value.routeSnapshot : null,
     graphSnapshot: value.graphSnapshot && typeof value.graphSnapshot === 'object' ? value.graphSnapshot : null,
     schedulerEvidence: value.schedulerEvidence && typeof value.schedulerEvidence === 'object' ? value.schedulerEvidence : null,
+    progress: Number.isFinite(value.progress) ? value.progress : null,
+    progressEvent: value.progressEvent && typeof value.progressEvent === 'object' ? value.progressEvent : null,
     runTimeline: Array.isArray(value.runTimeline) ? value.runTimeline : [],
     createdAt: value.createdAt || null,
     updatedAt: value.updatedAt || null,
@@ -11465,12 +11467,13 @@ function pipelineArtifactLoadedRecord(artifact) {
   return pipelineDockState.loadedPipelineArtifactPaths?.[path] || null;
 }
 
-function pipelineRunTimelineEvent(phase, message, kind = 'running') {
+function pipelineRunTimelineEvent(phase, message, kind = 'running', extra = {}) {
   return {
     phase,
     message,
     kind,
     at: new Date().toISOString(),
+    ...extra,
   };
 }
 
@@ -11516,6 +11519,7 @@ function pipelineRouteLiveStatusRecord(nodeOrRouteId) {
     status: record.status || 'pending',
     phase: record.phase || record.status || 'pending',
     message: record.statusMessage || pipelineGeneratedOutputStatusLabel(record),
+    progress: Number.isFinite(record.progress) ? record.progress : null,
     schedulerState: pipelineGraphSchedulerEvidenceState(schedulerEvidence),
     schedulerEvidence,
     outputId: record.id || null,
@@ -11526,8 +11530,9 @@ function pipelineRouteLiveStatusRecord(nodeOrRouteId) {
 function pipelineRouteLiveStatusLabel(record) {
   if (!record || record.status === 'idle') return 'idle';
   const phase = record.phase || record.status;
+  const progress = Number.isFinite(record.progress) ? ` ${Math.round(record.progress * 100)}%` : '';
   const scheduler = record.schedulerState && record.schedulerState !== 'missing' ? ` / ${record.schedulerState}` : '';
-  return `${phase}${scheduler}`;
+  return `${phase}${progress}${scheduler}`;
 }
 
 function pipelineSetSelectedRouteOutput(routeNodeId, outputId) {
@@ -12149,6 +12154,7 @@ function pipelineGraphInspectorRows(node, selectedRun) {
     rows.push({ key: 'input status', value: inputCheck.ok ? 'accepted' : inputCheck.message });
     rows.push({ key: 'route status', value: pipelineRouteLiveStatusLabel(routeLiveStatus) });
     rows.push({ key: 'route phase', value: routeLiveStatus.phase || 'idle' });
+    rows.push({ key: 'route progress', value: Number.isFinite(routeLiveStatus.progress) ? `${Math.round(routeLiveStatus.progress * 100)}%` : 'not reported' });
     rows.push({ key: 'route message', value: routeLiveStatus.message || 'No route execution yet' });
     rows.push({ key: 'route scheduler', value: pipelineGraphSchedulerEvidenceLabel(routeLiveStatus.schedulerEvidence) });
     if (pipelineRouteUsesFixture(node)) rows.push({ key: 'truth', value: pipelineFixtureInputBoundaryText(node) });
@@ -12430,6 +12436,7 @@ async function pipelineExecuteGraphRouteNode(node) {
       generator,
       clientRunId: pendingRecord.runId,
       graphExecution,
+      onProgress: event => pipelineUpdateGeneratedOutputProgress(pendingRecord.id, event),
     });
     if (!run?.ok) {
       pipelineFailGeneratedOutputNode(pendingRecord.id, run?.error || `Pipeline graph execution failed: ${requestedPipelineId}`, run);
@@ -12508,6 +12515,8 @@ function pipelineCreatePendingGeneratedOutputNode({ routeNode, source, requested
     routeSnapshot,
     graphSnapshot,
     schedulerEvidence: null,
+    progress: null,
+    progressEvent: null,
     graphExecution,
     runTimeline: [
       pipelineRunTimelineEvent('queued', 'Run record created before backend execution', 'pending'),
@@ -12567,6 +12576,52 @@ function pipelineUpdateGeneratedOutputStatus(outputNodeId, status, phase, messag
       routeNodeId: updated.routeNodeId || null,
       nodeId: outputNodeId,
       status,
+    });
+  }
+  savePipelineGraphLocalState();
+  renderPipelineGraphWorkbench();
+  return updated;
+}
+
+function pipelineUpdateGeneratedOutputProgress(outputNodeId, event = {}) {
+  if (!outputNodeId || !event || event.schema !== 'kaminos.pipeline-progress.v0') return null;
+  const phase = event.status === 'complete' ? 'finalizing evidence' : (event.phase || 'running inference');
+  const message = event.message || phase;
+  const status = event.status === 'failed' ? 'failed' : event.status === 'complete' ? 'complete' : 'running';
+  const progress = Number.isFinite(event.progress) ? Math.max(0, Math.min(1, event.progress)) : null;
+  const now = new Date().toISOString();
+  let updated = null;
+  pipelineDockState.generatedOutputNodes = pipelineGeneratedOutputNodes().map(record => {
+    if (record.id !== outputNodeId) return record;
+    updated = {
+      ...record,
+      status: status === 'complete' ? record.status : status,
+      phase,
+      statusMessage: message,
+      progress,
+      progressEvent: event,
+      updatedAt: now,
+      runTimeline: [
+        ...(record.runTimeline || []),
+        pipelineRunTimelineEvent(phase, message, status, {
+          progress,
+          source: event.source || event.stream || null,
+          progressSchema: event.schema,
+        }),
+      ],
+    };
+    return updated;
+  });
+  if (updated) {
+    window.kaminosPipelineLastNativeProgress = event;
+    pipelineRecordGraphWorkspaceEvent('route-execution', message || phase, {
+      groupId: updated.runId || outputNodeId,
+      runId: updated.runId || null,
+      routeNodeId: updated.routeNodeId || null,
+      nodeId: outputNodeId,
+      status,
+      phase,
+      progress,
     });
   }
   savePipelineGraphLocalState();
@@ -12880,6 +12935,7 @@ function pipelineGraphNodeActionsMarkup(node) {
         data-pipeline-route-status-node-id="${escapeHtml(node.id)}"
         data-pipeline-route-live-status="${escapeHtml(liveStatus.status || 'idle')}"
         data-pipeline-route-live-phase="${escapeHtml(liveStatus.phase || 'idle')}"
+        data-pipeline-route-progress="${Number.isFinite(liveStatus.progress) ? escapeHtml(String(liveStatus.progress)) : ''}"
         data-pipeline-route-scheduler-state="${escapeHtml(liveStatus.schedulerState || 'missing')}"
         title="${escapeHtml(liveStatus.message || latestStatus)}"
       >${escapeHtml(latestStatus)}</span>
@@ -13023,6 +13079,7 @@ function renderPipelineGraphWorkbench() {
       ${node.kind === 'generated-output' ? `data-pipeline-scheduler-state="${escapeHtml(pipelineGraphSchedulerEvidenceState(node.schedulerEvidence))}"` : ''}
       ${node.kind === 'route' ? `data-pipeline-route-live-status="${escapeHtml(pipelineRouteLiveStatusRecord(node).status || 'idle')}"` : ''}
       ${node.kind === 'route' ? `data-pipeline-route-live-phase="${escapeHtml(pipelineRouteLiveStatusRecord(node).phase || 'idle')}"` : ''}
+      ${node.kind === 'route' ? `data-pipeline-route-progress="${Number.isFinite(pipelineRouteLiveStatusRecord(node).progress) ? escapeHtml(String(pipelineRouteLiveStatusRecord(node).progress)) : ''}"` : ''}
       ${node.kind === 'route' ? `data-pipeline-route-scheduler-state="${escapeHtml(pipelineRouteLiveStatusRecord(node).schedulerState || 'missing')}"` : ''}
       aria-pressed="${node.id === pipelineDockState.selectedGraphNodeId ? 'true' : 'false'}"
       style="left: ${position.x}px; top: ${position.y}px;"
@@ -13890,6 +13947,40 @@ async function pipelineLoadSelectedSource() {
   return pipelineLoadSourceRecord(pipelineSelectedSource());
 }
 
+async function readPipelineRunStream(response, onProgress) {
+  const contentType = response.headers.get('Content-Type') || '';
+  if (!contentType.includes('application/x-ndjson') || !response.body) {
+    return response.json();
+  }
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let finalResult = null;
+  while (true) {
+    const { value, done } = await reader.read();
+    if (value) buffer += decoder.decode(value, { stream: !done });
+    const lines = buffer.split(/\r?\n/);
+    buffer = lines.pop() || '';
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      const event = JSON.parse(line);
+      if (event.schema === 'kaminos.pipeline-progress.v0') {
+        onProgress?.(event);
+      } else if (event.schema === 'kaminos.pipeline-run-result.v0') {
+        finalResult = event;
+      }
+    }
+    if (done) break;
+  }
+  if (buffer.trim()) {
+    const event = JSON.parse(buffer);
+    if (event.schema === 'kaminos.pipeline-progress.v0') onProgress?.(event);
+    else if (event.schema === 'kaminos.pipeline-run-result.v0') finalResult = event;
+  }
+  if (!finalResult) throw new Error('Pipeline stream ended without a run result');
+  return finalResult;
+}
+
 async function runSelectedPipeline(options = {}) {
   const source = options.sourceOverride || pipelineSelectedSource();
   if (!source?.source) {
@@ -13903,14 +13994,15 @@ async function runSelectedPipeline(options = {}) {
   const generator = options.generator || pipelineGeneratorForPipelineId(requestedPipelineId) || selectedPipelineGeneratorRecord();
   const response = await fetch('/api/run-pipeline', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'Accept': 'application/x-ndjson' },
     body: JSON.stringify({
       pipelineId: requestedPipelineId,
       source: source.source,
       clientRunId: options.clientRunId || null,
+      streamProgress: true,
     }),
   });
-  const result = await response.json();
+  const result = await readPipelineRunStream(response, options.onProgress);
   const remembered = pipelineRememberRun({
     ...result,
     clientRunId: options.clientRunId || result.clientRunId || null,
