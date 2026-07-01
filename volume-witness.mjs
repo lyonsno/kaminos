@@ -1305,7 +1305,7 @@ async function main() {
     if (!expectsCanonicalPlumeProof && !expectsFuelStarvedTallPlume && (!Number.isFinite(sample.simReadback.fireLayerMean) || sample.simReadback.fireLayerMean <= 0.0005)) {
       throw new Error(`GPU sim readback does not show a transported fire layer: ${JSON.stringify(sample.simReadback)}`);
     }
-    if (!expectsCanonicalPlumeProof && !expectsFuelStarvedTallPlume && (!Number.isFinite(sample.simReadback.radianceMean) || sample.simReadback.radianceMean <= 0.0005)) {
+    if (!expectsCanonicalPlumeProof && !expectsFuelStarvedTallPlume && !expectsNoFireVolumeEvidence && (!Number.isFinite(sample.simReadback.radianceMean) || sample.simReadback.radianceMean <= 0.0005)) {
       throw new Error(`GPU sim readback does not show fire radiance evidence: ${JSON.stringify(sample.simReadback)}`);
     }
     if (expectedVolumeScene === 'tall_plume') {
@@ -1810,11 +1810,13 @@ async function main() {
         Number(metrics.fireLikePixels || 0) +
         Number(metrics.emissiveLikePixels || 0);
       if (
-        coupling.identity !== 'pyro-material-memory-render-coupling-v0' ||
+        coupling.identity !== 'pyro-material-memory-spatial-coupling-v0' ||
+        coupling.spatialMemory?.identity !== 'pyro-material-memory-spatial-coupling-v0' ||
+        !(coupling.spatialMemory?.uploadedCells > 0) ||
         !(coupling.effectiveGain > 0) ||
         coupling.materialShaderReadiness !== 'sampleable-debug-only'
       ) {
-        throw new Error(`Pyro material evidence mode missing effective live coupling: ${JSON.stringify(coupling)}`);
+        throw new Error(`Pyro material evidence mode missing effective live spatial coupling: ${JSON.stringify(coupling)}`);
       }
       if (metrics.litPixels < 1000 || pyroVolumeSignalPixels < 1500 || metrics.meanLuma < 1.5) {
         throw new Error(`blank frame or missing Pyro material volume signal: ${JSON.stringify({
