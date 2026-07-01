@@ -31,7 +31,7 @@ import {
 - What route is being invoked, such as MoGE depth/normal or SHARP image-to-splat.
 - Which browser WebGPU adapter, device features, limits, and timestamp capabilities were actually available.
 - Which kernel/profile variant ran, and which stages are required for a useful runtime profile.
-- How a route was scheduled: throughput mode, cooperative/yield posture, phase chunk sizes, submitted-work waits, and unsupported scheduler fields.
+- How a route was scheduled: throughput mode, cooperative/yield posture, breathability spans, yield checkpoints, phase chunk sizes, submitted-work waits, and unsupported scheduler fields.
 - Which artifacts went in and out, so downstream consumers can join routes without losing identity.
 
 The immediate goal is practical composition inside Kaminos: MoGE can become a local geometry/depth route, SHARP can emit splat candidates, Kimodo can emit motion clips, SF3D can emit meshes, and pipeline/commoner code can consume those outputs through one route grammar. The longer-term opportunity is a browser-native inference runtime kit that makes future image generators, 3D generators, and possibly language-model routes easier to seat without rebuilding the same WebGPU plumbing from scratch.
@@ -46,7 +46,7 @@ So the intended stack is:
 
 1. **Route boundary:** define callable browser-local inference routes with stable input/output roles.
 2. **Runtime profile:** preserve adapter/device/kernel/stage identity for the run that actually happened.
-3. **Scheduler/backpressure profile:** expose whether the route is throughput-oriented, cooperative, furnace-class, warm, cached, or frame-tail-sensitive.
+3. **Scheduler/backpressure profile:** expose whether the route is throughput-oriented, cooperative, furnace-class, warm, cached, frame-tail-sensitive, and where it can honestly yield.
 4. **Receipt and classification:** reject stale, fallback, partial, mismatched, or invalid route output before another system treats it as authoritative.
 
 The fourth layer protects the first three. It should not swallow the whole story.
@@ -63,7 +63,7 @@ The fourth layer protects the first three. It should not swallow the whole story
 - `createStagedSubmitProfile(input)`, `addStagedSubmitStage(profile, stage)`, `finishStagedSubmitProfile(profile)`, and `validateStagedSubmitProfile(profile)`: describe staged queue-submit timing in a way that can be compared across routes.
 - `createKernelProfileMetadata(input)` and `createRouteKernelProfileMetadata(input)`: normalize kit version, kernel profile, commit, required stages, and timing-source metadata for route definitions and receipts.
 - `createWebGpuRuntimeProfileInput(input)`, `createWebGpuRuntimeProfile(input)`, and `validateWebGpuRuntimeProfile(profile)`: combine effective backend identity, kernel metadata, staged profile, and route mode into one producer-side runtime profile object.
-- `createWebGpuRouteSchedulerProfile(input)` and `validateWebGpuRouteSchedulerProfile(profile)`: preserve requested versus effective scheduling, including throughput/cooperative mode, route-specific phase chunk sizes, submitted-work waits, yield cadence, and unsupported fields.
+- `createWebGpuRouteSchedulerProfile(input)` and `validateWebGpuRouteSchedulerProfile(profile)`: preserve requested versus effective scheduling, including throughput/cooperative mode, route-specific phase chunk sizes, submitted-work waits, yield cadence, breathability spans, yieldable checkpoints, non-preemptible GPU-submit spans, and unsupported fields.
 - `createWebGpuRouteBackpressureProfile(input)` and `validateWebGpuRouteBackpressureProfile(profile)`: record visible-wait/furnace pressure, warm/cache posture, memory-sharing posture, and frame-tail impact.
 - `defineTensorManifest(input)` and `validateTensorManifest(manifest)`: normalize tensor metadata including dtype sizes and byte lengths.
 - `createWebGpuLocalRouteReceipt(input)`, `createWebGpuRouteReceiptFromArtifacts(input)`, `createRouteReceiptArtifacts(input)`, `finishAndValidateRouteProfile(input)`, `validateRouteReceipt(receipt)`, and `assertAuthoritativeRouteReceipt(receipt)`: shared receipt construction and validation helpers.

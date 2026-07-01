@@ -25,6 +25,13 @@ assert.equal(mogeRoute.routeId, MOGE_DEPTH_NORMAL_ROUTE_ID);
 assert.equal(mogeRoute.backendKind, 'webgpu-local');
 assert.deepEqual(mogeRoute.requiredOutputRoles, ['depth', 'normal']);
 assert.deepEqual(mogeRoute.optionalOutputRoles, ['pointmap', 'mask']);
+assert.equal(mogeRoute.scheduler.requestedScheduler.mode, 'cooperative');
+assert.equal(mogeRoute.scheduler.breathability.spans[0].kind, 'gpu-submit-bound');
+assert.deepEqual(
+  mogeRoute.scheduler.breathability.checkpoints.map(checkpoint => checkpoint.afterStage),
+  ['backbone', 'decoder-heads', 'output-readback'],
+);
+assert.equal(mogeRoute.backpressure.effectiveBudget, 'visible-wait');
 assert.equal(validateRouteDefinition(mogeRoute).ok, true);
 
 const registry = createWebGpuRouteRegistry([mogeRoute]);
@@ -66,6 +73,30 @@ const missingInputHash = {
 const missingInputHashResult = validateRouteInvocationRequest(missingInputHash, mogeRoute);
 assert.equal(missingInputHashResult.ok, false);
 assert.match(missingInputHashResult.errors.join('\n'), /sha256/);
+
+const invalidRequestScheduler = structuredClone(request);
+invalidRequestScheduler.scheduler.breathability.spans[0].interruptible = true;
+const invalidRequestSchedulerResult = validateRouteInvocationRequest(invalidRequestScheduler, mogeRoute);
+assert.equal(invalidRequestSchedulerResult.ok, false);
+assert.match(
+  invalidRequestSchedulerResult.errors.join('\n'),
+  /scheduler.*gpu-submit-bound cannot be interruptible|scheduler must match route definition/,
+);
+
+const invalidRequestBackpressure = structuredClone(request);
+invalidRequestBackpressure.backpressure.effectiveBudget = 'magic';
+const invalidRequestBackpressureResult = validateRouteInvocationRequest(invalidRequestBackpressure, mogeRoute);
+assert.equal(invalidRequestBackpressureResult.ok, false);
+assert.match(
+  invalidRequestBackpressureResult.errors.join('\n'),
+  /backpressure.*effectiveBudget has unsupported value|backpressure must match route definition/,
+);
+
+const mismatchedRequestScheduler = structuredClone(request);
+mismatchedRequestScheduler.scheduler.requestedScheduler.yieldMs += 1;
+const mismatchedRequestSchedulerResult = validateRouteInvocationRequest(mismatchedRequestScheduler, mogeRoute);
+assert.equal(mismatchedRequestSchedulerResult.ok, false);
+assert.match(mismatchedRequestSchedulerResult.errors.join('\n'), /scheduler must match route definition/);
 
 const backend = {
   kind: 'webgpu-local',

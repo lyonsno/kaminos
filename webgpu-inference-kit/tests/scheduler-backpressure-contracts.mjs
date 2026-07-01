@@ -29,6 +29,36 @@ const scheduler = createWebGpuRouteSchedulerProfile({
     unsupportedFields: ['phaseChunkSize.vitBlock'],
   },
   verificationState: 'scheduler-unverified',
+  breathability: {
+    spans: [
+      {
+        name: 'vit-block-submit',
+        stage: 'vitBlock',
+        kind: 'gpu-submit-bound',
+        interruptible: false,
+        canYieldBefore: true,
+        canYieldAfter: true,
+        nonInterruptibleReason: 'GPU command buffers cannot be preempted after submit',
+      },
+      {
+        name: 'readback',
+        stage: 'output-readback',
+        kind: 'readback-bound',
+        interruptible: false,
+        canYieldBefore: true,
+        canYieldAfter: true,
+      },
+    ],
+    checkpoints: [
+      {
+        name: 'between-vit-blocks',
+        kind: 'stage-boundary',
+        afterStage: 'vitBlock',
+        yieldable: true,
+        waitsForSubmittedWorkDone: true,
+      },
+    ],
+  },
 });
 
 assert.equal(WEBGPU_ROUTE_SCHEDULER_SCHEMA, 'kaminos.webgpu-route-scheduler.v0');
@@ -37,6 +67,9 @@ assert.equal(scheduler.requestedScheduler.mode, 'cooperative');
 assert.equal(scheduler.effectiveScheduler.mode, 'cooperative');
 assert.deepEqual(scheduler.effectiveScheduler.unsupportedFields, ['phaseChunkSize.vitBlock']);
 assert.equal(scheduler.verificationState, 'scheduler-unverified');
+assert.equal(scheduler.breathability.spans[0].kind, 'gpu-submit-bound');
+assert.equal(scheduler.breathability.spans[0].interruptible, false);
+assert.equal(scheduler.breathability.checkpoints[0].yieldable, true);
 assert.deepEqual(validateWebGpuRouteSchedulerProfile(scheduler), { ok: true, errors: [] });
 
 const requestedPhaseChunks = { gaussianPhase: 1 };
@@ -72,6 +105,21 @@ const invalidMode = validateWebGpuRouteSchedulerProfile({
 });
 assert.equal(invalidMode.ok, false);
 assert.match(invalidMode.errors.join('\n'), /requestedScheduler.mode/);
+
+const invalidGpuPreemptionClaim = validateWebGpuRouteSchedulerProfile({
+  ...scheduler,
+  breathability: {
+    ...scheduler.breathability,
+    spans: [
+      {
+        ...scheduler.breathability.spans[0],
+        interruptible: true,
+      },
+    ],
+  },
+});
+assert.equal(invalidGpuPreemptionClaim.ok, false);
+assert.match(invalidGpuPreemptionClaim.errors.join('\n'), /gpu-submit-bound.*interruptible/);
 
 const backpressure = createWebGpuRouteBackpressureProfile({
   requestedBudget: 'visible-wait',

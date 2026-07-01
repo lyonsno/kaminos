@@ -53,6 +53,10 @@ assert.equal(route.routeId, SF3D_IMAGE_TO_MESH_ROUTE_ID);
 assert.deepEqual(route.requiredInputRoles, ['source-image']);
 assert.deepEqual(route.requiredOutputRoles, ['mesh-glb', 'albedo-texture', 'normal-map']);
 assert.deepEqual(route.optionalOutputRoles, ['mesh-obj']);
+assert.equal(route.scheduler.requestedScheduler.mode, 'throughput');
+assert.equal(route.scheduler.breathability.spans.find(span => span.stage === 'two-stream-backbone').kind, 'gpu-submit-bound');
+assert.equal(route.scheduler.breathability.spans.find(span => span.stage === 'triplane-decode').interruptible, false);
+assert.equal(route.backpressure.effectiveBudget, 'furnace');
 assert.equal(validateRouteDefinition(route).ok, true);
 
 const request = createRouteInvocationRequest(route, {

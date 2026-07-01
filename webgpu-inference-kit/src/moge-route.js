@@ -8,6 +8,10 @@ import {
   createRouteReceiptInputArtifact,
   createWebGpuRouteReceiptFromArtifacts,
 } from './route-receipt-helper.js';
+import {
+  createWebGpuRouteBackpressureProfile,
+  createWebGpuRouteSchedulerProfile,
+} from './scheduler-backpressure.js';
 
 export const MOGE_DEPTH_NORMAL_ROUTE_ID = 'moge.depth-normal.webgpu-local.v0';
 const MOGE_MODEL_ID = 'Ruicheng/moge-2-vitl-normal';
@@ -19,6 +23,80 @@ const OUTPUT_ROLES = [
   { key: 'pointMap', role: 'pointmap', required: false },
   { key: 'mask', role: 'mask', required: false },
 ];
+
+function createDefaultMogeScheduler() {
+  return createWebGpuRouteSchedulerProfile({
+    requestedScheduler: {
+      mode: 'cooperative',
+      yieldMs: 4,
+      waitForSubmittedWorkDone: true,
+      phaseChunkSize: {
+        backbone: 1,
+        'decoder-heads': 1,
+        'output-readback': 1,
+      },
+    },
+    effectiveScheduler: {
+      mode: 'cooperative',
+      yieldMs: 4,
+      waitForSubmittedWorkDone: true,
+      phaseChunkSize: {
+        backbone: 1,
+        'decoder-heads': 1,
+        'output-readback': 1,
+      },
+      unsupportedFields: [],
+    },
+    verificationState: 'scheduler-unverified',
+    breathability: {
+      spans: [
+        {
+          name: 'backbone-submit',
+          stage: 'backbone',
+          kind: 'gpu-submit-bound',
+          interruptible: false,
+          canYieldBefore: true,
+          canYieldAfter: true,
+          nonInterruptibleReason: 'GPU command buffers cannot be preempted after submit',
+        },
+        {
+          name: 'decoder-heads-submit',
+          stage: 'decoder-heads',
+          kind: 'gpu-submit-bound',
+          interruptible: false,
+          canYieldBefore: true,
+          canYieldAfter: true,
+          nonInterruptibleReason: 'GPU command buffers cannot be preempted after submit',
+        },
+        {
+          name: 'output-readback',
+          stage: 'output-readback',
+          kind: 'readback-bound',
+          interruptible: false,
+          canYieldBefore: true,
+          canYieldAfter: true,
+        },
+      ],
+      checkpoints: REQUIRED_STAGES.map(stage => ({
+        name: `after-${stage}`,
+        kind: stage === 'output-readback' ? 'readback' : 'stage-boundary',
+        afterStage: stage,
+        yieldable: true,
+        waitsForSubmittedWorkDone: true,
+      })),
+      notes: 'MoGE can cooperate between staged submits and readback, not inside a submitted GPU pass.',
+    },
+  });
+}
+
+function createDefaultMogeBackpressure() {
+  return createWebGpuRouteBackpressureProfile({
+    requestedBudget: 'visible-wait',
+    effectiveBudget: 'visible-wait',
+    memoryExclusivity: 'shared',
+    warmCacheState: 'unknown',
+  });
+}
 
 export function createMogeDepthNormalRouteReceipt(input) {
   if (!input || typeof input !== 'object') throw new Error('input must be an object');
@@ -77,6 +155,8 @@ export function createMogeDepthNormalRouteDefinition(input = {}) {
     requiredFeatures: input.requiredFeatures || [],
     requiredStages: routeMetadata.requiredStages,
     timingSource: routeMetadata.timingSource,
+    scheduler: input.scheduler || createDefaultMogeScheduler(),
+    backpressure: input.backpressure || createDefaultMogeBackpressure(),
     worker: input.worker || {
       exportName: 'runMogeDepthNormalRoute',
     },

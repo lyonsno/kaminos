@@ -3,6 +3,10 @@ import {
   assertAuthoritativeRouteReceipt,
   validateRouteReceipt,
 } from './route-receipt.js';
+import {
+  validateWebGpuRouteBackpressureProfile,
+  validateWebGpuRouteSchedulerProfile,
+} from './scheduler-backpressure.js';
 
 export const WEBGPU_ROUTE_DEFINITION_SCHEMA = 'kaminos.webgpu-route-definition.v0';
 export const WEBGPU_ROUTE_REQUEST_SCHEMA = 'kaminos.webgpu-route-request.v0';
@@ -10,6 +14,18 @@ export const WEBGPU_ROUTE_RESULT_SCHEMA = 'kaminos.webgpu-route-result.v0';
 
 function clone(value) {
   return value == null ? value : JSON.parse(JSON.stringify(value));
+}
+
+function stableJson(value) {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
+  if (value && typeof value === 'object') {
+    return `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${stableJson(value[key])}`).join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function deepEqual(a, b) {
+  return stableJson(a) === stableJson(b);
 }
 
 function isNonEmptyString(value) {
@@ -190,6 +206,8 @@ export function defineWebGpuRoute(input) {
     requiredFeatures: Array.isArray(input.requiredFeatures) ? [...input.requiredFeatures].map(String).sort() : [],
     requiredStages: Array.isArray(input.requiredStages) ? [...input.requiredStages] : [],
     timingSource: input.timingSource || 'queue-submit-wait',
+    scheduler: clone(input.scheduler || null),
+    backpressure: clone(input.backpressure || null),
     worker: clone(input.worker || null),
   };
 }
@@ -236,6 +254,16 @@ export function validateRouteDefinition(route) {
     errors.push('requiredOutputRoles must be a non-empty array');
   }
   if (!isNonEmptyString(route.timingSource)) errors.push('timingSource must be a non-empty string');
+
+  if (route.scheduler != null) {
+    const schedulerResult = validateWebGpuRouteSchedulerProfile(route.scheduler);
+    if (!schedulerResult.ok) errors.push(...schedulerResult.errors.map(error => `scheduler.${error}`));
+  }
+
+  if (route.backpressure != null) {
+    const backpressureResult = validateWebGpuRouteBackpressureProfile(route.backpressure);
+    if (!backpressureResult.ok) errors.push(...backpressureResult.errors.map(error => `backpressure.${error}`));
+  }
 
   return { ok: errors.length === 0, errors };
 }
@@ -293,6 +321,8 @@ export function createRouteInvocationRequest(route, input) {
     routeConfig: clone(input.routeConfig || {}),
     model: clone(route.model),
     kernel: clone(route.kernel),
+    scheduler: clone(route.scheduler || null),
+    backpressure: clone(route.backpressure || null),
     createdAt: input.createdAt || new Date().toISOString(),
   };
 }
@@ -313,6 +343,30 @@ export function validateRouteInvocationRequest(request, route) {
   if (routeResult.ok) {
     validateArtifacts(errors, request.inputs, route.inputRoles, 'inputs', { requireHash: true });
     validateArtifacts(errors, request.outputs, route.outputRoles, 'outputs', { requireHash: false });
+  }
+
+  if (request.scheduler != null) {
+    const schedulerResult = validateWebGpuRouteSchedulerProfile(request.scheduler);
+    if (!schedulerResult.ok) errors.push(...schedulerResult.errors.map(error => `scheduler.${error}`));
+  }
+  if (route?.scheduler != null) {
+    if (request.scheduler == null) {
+      errors.push('scheduler must match route definition');
+    } else if (!deepEqual(request.scheduler, route.scheduler)) {
+      errors.push('scheduler must match route definition');
+    }
+  }
+
+  if (request.backpressure != null) {
+    const backpressureResult = validateWebGpuRouteBackpressureProfile(request.backpressure);
+    if (!backpressureResult.ok) errors.push(...backpressureResult.errors.map(error => `backpressure.${error}`));
+  }
+  if (route?.backpressure != null) {
+    if (request.backpressure == null) {
+      errors.push('backpressure must match route definition');
+    } else if (!deepEqual(request.backpressure, route.backpressure)) {
+      errors.push('backpressure must match route definition');
+    }
   }
 
   return { ok: errors.length === 0, errors };

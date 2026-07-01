@@ -50,6 +50,11 @@ assert.equal(route.routeId, KIMODO_TEXT_TO_MOTION_ROUTE_ID);
 assert.deepEqual(route.requiredInputRoles, ['text-prompt']);
 assert.deepEqual(route.requiredOutputRoles, ['soma77-joints', 'motion-clip']);
 assert.deepEqual(route.optionalOutputRoles, ['filmstrip']);
+assert.equal(route.scheduler.requestedScheduler.mode, 'cooperative');
+assert.equal(route.scheduler.requestedScheduler.phaseChunkSize['ddim-sampling'], 1);
+assert.equal(route.scheduler.breathability.spans.find(span => span.stage === 'ddim-sampling').kind, 'gpu-submit-loop');
+assert.equal(route.scheduler.breathability.checkpoints.find(checkpoint => checkpoint.kind === 'diffusion-step').yieldable, true);
+assert.equal(route.backpressure.effectiveBudget, 'visible-wait');
 assert.equal(validateRouteDefinition(route).ok, true);
 
 const request = createRouteInvocationRequest(route, {

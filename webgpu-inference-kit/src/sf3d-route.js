@@ -8,6 +8,10 @@ import {
   createRouteReceiptInputArtifact,
   createWebGpuRouteReceiptFromArtifacts,
 } from './route-receipt-helper.js';
+import {
+  createWebGpuRouteBackpressureProfile,
+  createWebGpuRouteSchedulerProfile,
+} from './scheduler-backpressure.js';
 
 export const SF3D_IMAGE_TO_MESH_ROUTE_ID = 'sf3d.image-to-mesh.webgpu-local.v0';
 const SF3D_MODEL_ID = 'stabilityai/stable-fast-3d';
@@ -27,6 +31,55 @@ const OUTPUT_ROLES = [
   { key: 'normalMap', role: 'normal-map', required: true },
   { key: 'meshObj', role: 'mesh-obj', required: false },
 ];
+
+function createDefaultSf3dScheduler() {
+  return createWebGpuRouteSchedulerProfile({
+    requestedScheduler: {
+      mode: 'throughput',
+      yieldMs: 0,
+      waitForSubmittedWorkDone: true,
+      phaseChunkSize: {},
+    },
+    effectiveScheduler: {
+      mode: 'throughput',
+      yieldMs: 0,
+      waitForSubmittedWorkDone: true,
+      phaseChunkSize: {},
+      unsupportedFields: [],
+    },
+    verificationState: 'scheduler-unverified',
+    breathability: {
+      spans: REQUIRED_STAGES.map(stage => ({
+        name: `${stage}-phase`,
+        stage,
+        kind: stage === 'glb-export' ? 'cpu-bound' : 'gpu-submit-bound',
+        interruptible: false,
+        canYieldBefore: true,
+        canYieldAfter: true,
+        nonInterruptibleReason: stage === 'glb-export'
+          ? null
+          : 'SF3D browser phases are treated as non-preemptible GPU work until finer receipts prove step boundaries.',
+      })),
+      checkpoints: REQUIRED_STAGES.map(stage => ({
+        name: `after-${stage}`,
+        kind: 'stage-boundary',
+        afterStage: stage,
+        yieldable: true,
+        waitsForSubmittedWorkDone: stage !== 'glb-export',
+      })),
+      notes: 'SF3D remains furnace-class until attention/triplane/marching phases expose finer cooperative boundaries.',
+    },
+  });
+}
+
+function createDefaultSf3dBackpressure() {
+  return createWebGpuRouteBackpressureProfile({
+    requestedBudget: 'visible-wait',
+    effectiveBudget: 'furnace',
+    memoryExclusivity: 'exclusive',
+    warmCacheState: 'unknown',
+  });
+}
 
 export function createSf3dImageToMeshRouteReceipt(input) {
   if (!input || typeof input !== 'object') throw new Error('input must be an object');
@@ -86,6 +139,8 @@ export function createSf3dImageToMeshRouteDefinition(input = {}) {
     requiredFeatures: input.requiredFeatures || [],
     requiredStages: routeMetadata.requiredStages,
     timingSource: routeMetadata.timingSource,
+    scheduler: input.scheduler || createDefaultSf3dScheduler(),
+    backpressure: input.backpressure || createDefaultSf3dBackpressure(),
     worker: input.worker || {
       exportName: 'runSf3dImageToMeshRoute',
       meshFormat: 'glb',

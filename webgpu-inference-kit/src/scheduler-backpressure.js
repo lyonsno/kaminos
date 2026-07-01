@@ -6,6 +6,24 @@ const VERIFICATION_STATES = new Set(['verified', 'scheduler-unverified', 'unsupp
 const BUDGETS = new Set(['interactive', 'visible-wait', 'furnace', 'batch', 'unknown']);
 const MEMORY_EXCLUSIVITY = new Set(['shared', 'exclusive', 'unknown']);
 const WARM_CACHE_STATES = new Set(['cold', 'warm', 'hot', 'unknown']);
+const BREATHABILITY_SPAN_KINDS = new Set([
+  'gpu-submit-bound',
+  'gpu-submit-loop',
+  'readback-bound',
+  'js-yieldable',
+  'cpu-bound',
+  'external-bound',
+  'unknown',
+]);
+const BREATHABILITY_CHECKPOINT_KINDS = new Set([
+  'pre-submit',
+  'post-submit',
+  'stage-boundary',
+  'diffusion-step',
+  'readback',
+  'external-callback',
+  'unknown',
+]);
 
 function clone(value) {
   return value == null ? value : JSON.parse(JSON.stringify(value));
@@ -53,6 +71,41 @@ function normalizeEffectiveScheduler(input = {}, requestedScheduler) {
   };
 }
 
+function normalizeBreathabilitySpan(input = {}) {
+  return {
+    name: input.name,
+    stage: input.stage || null,
+    kind: input.kind || 'unknown',
+    interruptible: Boolean(input.interruptible),
+    canYieldBefore: Boolean(input.canYieldBefore),
+    canYieldAfter: Boolean(input.canYieldAfter),
+    nonInterruptibleReason: input.nonInterruptibleReason || null,
+    metadata: isPlainObject(input.metadata) ? clone(input.metadata) : {},
+  };
+}
+
+function normalizeBreathabilityCheckpoint(input = {}) {
+  return {
+    name: input.name,
+    kind: input.kind || 'unknown',
+    beforeStage: input.beforeStage || null,
+    afterStage: input.afterStage || null,
+    yieldable: Boolean(input.yieldable),
+    waitsForSubmittedWorkDone: Boolean(input.waitsForSubmittedWorkDone),
+    metadata: isPlainObject(input.metadata) ? clone(input.metadata) : {},
+  };
+}
+
+function normalizeBreathability(input = {}) {
+  return {
+    spans: Array.isArray(input.spans) ? input.spans.map(normalizeBreathabilitySpan) : [],
+    checkpoints: Array.isArray(input.checkpoints)
+      ? input.checkpoints.map(normalizeBreathabilityCheckpoint)
+      : [],
+    notes: input.notes || null,
+  };
+}
+
 function validateSchedulerShape(errors, scheduler, label) {
   if (!isPlainObject(scheduler)) {
     errors.push(`${label} must be an object`);
@@ -79,6 +132,59 @@ function validateSchedulerShape(errors, scheduler, label) {
   }
 }
 
+function validateBreathability(errors, breathability) {
+  if (breathability == null) return;
+  if (!isPlainObject(breathability)) {
+    errors.push('breathability must be an object');
+    return;
+  }
+  if (!Array.isArray(breathability.spans)) {
+    errors.push('breathability.spans must be an array');
+  } else {
+    breathability.spans.forEach((span, index) => {
+      const path = `breathability.spans[${index}]`;
+      if (!isNonEmptyString(span?.name)) errors.push(`${path}.name must be a non-empty string`);
+      if (span?.stage != null && !isNonEmptyString(span.stage)) errors.push(`${path}.stage must be null or a non-empty string`);
+      if (!BREATHABILITY_SPAN_KINDS.has(span?.kind)) errors.push(`${path}.kind has unsupported value`);
+      if (typeof span?.interruptible !== 'boolean') errors.push(`${path}.interruptible must be a boolean`);
+      if (typeof span?.canYieldBefore !== 'boolean') errors.push(`${path}.canYieldBefore must be a boolean`);
+      if (typeof span?.canYieldAfter !== 'boolean') errors.push(`${path}.canYieldAfter must be a boolean`);
+      if (span?.nonInterruptibleReason != null && !isNonEmptyString(span.nonInterruptibleReason)) {
+        errors.push(`${path}.nonInterruptibleReason must be null or a non-empty string`);
+      }
+      if (!isPlainObject(span?.metadata)) errors.push(`${path}.metadata must be an object`);
+      if ((span?.kind === 'gpu-submit-bound' || span?.kind === 'gpu-submit-loop') && span.interruptible) {
+        errors.push(`${path}.${span.kind} cannot be interruptible after GPU submit`);
+      }
+    });
+  }
+
+  if (!Array.isArray(breathability.checkpoints)) {
+    errors.push('breathability.checkpoints must be an array');
+  } else {
+    breathability.checkpoints.forEach((checkpoint, index) => {
+      const path = `breathability.checkpoints[${index}]`;
+      if (!isNonEmptyString(checkpoint?.name)) errors.push(`${path}.name must be a non-empty string`);
+      if (!BREATHABILITY_CHECKPOINT_KINDS.has(checkpoint?.kind)) errors.push(`${path}.kind has unsupported value`);
+      if (checkpoint?.beforeStage != null && !isNonEmptyString(checkpoint.beforeStage)) {
+        errors.push(`${path}.beforeStage must be null or a non-empty string`);
+      }
+      if (checkpoint?.afterStage != null && !isNonEmptyString(checkpoint.afterStage)) {
+        errors.push(`${path}.afterStage must be null or a non-empty string`);
+      }
+      if (typeof checkpoint?.yieldable !== 'boolean') errors.push(`${path}.yieldable must be a boolean`);
+      if (typeof checkpoint?.waitsForSubmittedWorkDone !== 'boolean') {
+        errors.push(`${path}.waitsForSubmittedWorkDone must be a boolean`);
+      }
+      if (!isPlainObject(checkpoint?.metadata)) errors.push(`${path}.metadata must be an object`);
+    });
+  }
+
+  if (breathability.notes != null && !isNonEmptyString(breathability.notes)) {
+    errors.push('breathability.notes must be null or a non-empty string');
+  }
+}
+
 function missingUnsupportedField(effectiveScheduler, field) {
   return !effectiveScheduler.unsupportedFields.includes(field)
     && !effectiveScheduler.unsupportedFields.includes('phaseChunkSize');
@@ -98,6 +204,7 @@ export function createWebGpuRouteSchedulerProfile(input = {}) {
     requestedScheduler,
     effectiveScheduler,
     verificationState,
+    breathability: normalizeBreathability(input.breathability),
   };
 
   const result = validateWebGpuRouteSchedulerProfile(profile);
@@ -115,6 +222,7 @@ export function validateWebGpuRouteSchedulerProfile(profile) {
   }
   validateSchedulerShape(errors, profile.requestedScheduler, 'requestedScheduler');
   validateSchedulerShape(errors, profile.effectiveScheduler, 'effectiveScheduler');
+  validateBreathability(errors, profile.breathability);
 
   if (!Array.isArray(profile.effectiveScheduler?.unsupportedFields)) {
     errors.push('effectiveScheduler.unsupportedFields must be an array');

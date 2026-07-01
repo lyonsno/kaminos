@@ -8,6 +8,10 @@ import {
   createRouteReceiptInputArtifact,
   createWebGpuRouteReceiptFromArtifacts,
 } from './route-receipt-helper.js';
+import {
+  createWebGpuRouteBackpressureProfile,
+  createWebGpuRouteSchedulerProfile,
+} from './scheduler-backpressure.js';
 
 export const SHARP_IMAGE_TO_SPLAT_ROUTE_ID = 'sharp.image-to-splat.webgpu-local.v0';
 const SHARP_MODEL_ID = 'apple/ml-sharp';
@@ -19,6 +23,55 @@ const OUTPUT_ROLES = [
   { key: 'metadata', role: 'sharp-webgpu-metadata', required: true },
   { key: 'autoCropEvidence', role: 'splat-autocrop-evidence', required: false },
 ];
+
+function createDefaultSharpScheduler() {
+  return createWebGpuRouteSchedulerProfile({
+    requestedScheduler: {
+      mode: 'throughput',
+      yieldMs: 0,
+      waitForSubmittedWorkDone: true,
+      phaseChunkSize: {},
+    },
+    effectiveScheduler: {
+      mode: 'throughput',
+      yieldMs: 0,
+      waitForSubmittedWorkDone: true,
+      phaseChunkSize: {},
+      unsupportedFields: [],
+    },
+    verificationState: 'scheduler-unverified',
+    breathability: {
+      spans: REQUIRED_STAGES.map(stage => ({
+        name: `${stage}-phase`,
+        stage,
+        kind: stage === 'output-capture' ? 'readback-bound' : 'gpu-submit-bound',
+        interruptible: false,
+        canYieldBefore: true,
+        canYieldAfter: true,
+        nonInterruptibleReason: stage === 'output-capture'
+          ? null
+          : 'Browser WebGPU cannot preempt a submitted SHARP adapter phase.',
+      })),
+      checkpoints: REQUIRED_STAGES.map(stage => ({
+        name: `after-${stage}`,
+        kind: stage === 'output-capture' ? 'readback' : 'stage-boundary',
+        afterStage: stage,
+        yieldable: true,
+        waitsForSubmittedWorkDone: true,
+      })),
+      notes: 'SHARP is furnace-class until finer adapter receipts prove smaller cooperative boundaries.',
+    },
+  });
+}
+
+function createDefaultSharpBackpressure() {
+  return createWebGpuRouteBackpressureProfile({
+    requestedBudget: 'visible-wait',
+    effectiveBudget: 'furnace',
+    memoryExclusivity: 'exclusive',
+    warmCacheState: 'unknown',
+  });
+}
 
 export function createSharpImageToSplatRouteReceipt(input) {
   if (!input || typeof input !== 'object') throw new Error('input must be an object');
@@ -78,6 +131,8 @@ export function createSharpImageToSplatRouteDefinition(input = {}) {
     requiredFeatures: input.requiredFeatures || [],
     requiredStages: routeMetadata.requiredStages,
     timingSource: routeMetadata.timingSource,
+    scheduler: input.scheduler || createDefaultSharpScheduler(),
+    backpressure: input.backpressure || createDefaultSharpBackpressure(),
     worker: input.worker || {
       exportName: 'runSharpImageToSplatRoute',
       adapterReportSchema: 'kaminos.sharp-webgpu-adapter-report.v0',

@@ -55,6 +55,10 @@ assert.equal(route.routeId, SHARP_IMAGE_TO_SPLAT_ROUTE_ID);
 assert.equal(route.backendKind, 'webgpu-local');
 assert.deepEqual(route.requiredOutputRoles, ['splat-candidate', 'depth-map', 'sharp-webgpu-metadata']);
 assert.deepEqual(route.optionalOutputRoles, ['splat-autocrop-evidence']);
+assert.equal(route.scheduler.requestedScheduler.mode, 'throughput');
+assert.equal(route.scheduler.breathability.spans.find(span => span.stage === 'spn').kind, 'gpu-submit-bound');
+assert.equal(route.scheduler.breathability.spans.find(span => span.stage === 'spn').interruptible, false);
+assert.equal(route.backpressure.effectiveBudget, 'furnace');
 assert.equal(validateRouteDefinition(route).ok, true);
 
 const registry = createWebGpuRouteRegistry([route]);

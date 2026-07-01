@@ -8,6 +8,10 @@ import {
   createRouteReceiptInputArtifact,
   createWebGpuRouteReceiptFromArtifacts,
 } from './route-receipt-helper.js';
+import {
+  createWebGpuRouteBackpressureProfile,
+  createWebGpuRouteSchedulerProfile,
+} from './scheduler-backpressure.js';
 
 export const KIMODO_TEXT_TO_MOTION_ROUTE_ID = 'kimodo.text-to-motion.webgpu-local.v0';
 const KIMODO_MODEL_ID = 'NVIDIA/Kimodo-SOMA-RP-v1.1';
@@ -18,6 +22,100 @@ const OUTPUT_ROLES = [
   { key: 'motionClip', role: 'motion-clip', required: true },
   { key: 'filmstrip', role: 'filmstrip', required: false },
 ];
+
+function createDefaultKimodoScheduler() {
+  return createWebGpuRouteSchedulerProfile({
+    requestedScheduler: {
+      mode: 'cooperative',
+      yieldMs: 4,
+      waitForSubmittedWorkDone: true,
+      phaseChunkSize: {
+        'text-embedding': 1,
+        'ddim-sampling': 1,
+        'fk-decode': 1,
+        'output-capture': 1,
+      },
+    },
+    effectiveScheduler: {
+      mode: 'cooperative',
+      yieldMs: 4,
+      waitForSubmittedWorkDone: true,
+      phaseChunkSize: {
+        'text-embedding': 1,
+        'ddim-sampling': 1,
+        'fk-decode': 1,
+        'output-capture': 1,
+      },
+      unsupportedFields: [],
+    },
+    verificationState: 'scheduler-unverified',
+    breathability: {
+      spans: [
+        {
+          name: 'text-embedding',
+          stage: 'text-embedding',
+          kind: 'external-bound',
+          interruptible: false,
+          canYieldBefore: true,
+          canYieldAfter: true,
+        },
+        {
+          name: 'ddim-sampling-loop',
+          stage: 'ddim-sampling',
+          kind: 'gpu-submit-loop',
+          interruptible: false,
+          canYieldBefore: true,
+          canYieldAfter: true,
+          nonInterruptibleReason: 'Each diffusion step submit is non-preemptible; cooperative yielding occurs between steps.',
+          metadata: { checkpointCadence: 'per-diffusion-step' },
+        },
+        {
+          name: 'fk-decode',
+          stage: 'fk-decode',
+          kind: 'cpu-bound',
+          interruptible: true,
+          canYieldBefore: true,
+          canYieldAfter: true,
+        },
+        {
+          name: 'output-capture',
+          stage: 'output-capture',
+          kind: 'readback-bound',
+          interruptible: false,
+          canYieldBefore: true,
+          canYieldAfter: true,
+        },
+      ],
+      checkpoints: [
+        {
+          name: 'between-diffusion-steps',
+          kind: 'diffusion-step',
+          afterStage: 'ddim-sampling',
+          yieldable: true,
+          waitsForSubmittedWorkDone: true,
+          metadata: { cadence: 'per-step' },
+        },
+        {
+          name: 'after-output-capture',
+          kind: 'readback',
+          afterStage: 'output-capture',
+          yieldable: true,
+          waitsForSubmittedWorkDone: true,
+        },
+      ],
+      notes: 'Kimodo can expose useful cooperative pressure between diffusion steps; each submitted step remains non-preemptible.',
+    },
+  });
+}
+
+function createDefaultKimodoBackpressure() {
+  return createWebGpuRouteBackpressureProfile({
+    requestedBudget: 'visible-wait',
+    effectiveBudget: 'visible-wait',
+    memoryExclusivity: 'shared',
+    warmCacheState: 'unknown',
+  });
+}
 
 export function createKimodoTextToMotionRouteReceipt(input) {
   if (!input || typeof input !== 'object') throw new Error('input must be an object');
@@ -75,6 +173,8 @@ export function createKimodoTextToMotionRouteDefinition(input = {}) {
     requiredFeatures: input.requiredFeatures || [],
     requiredStages: routeMetadata.requiredStages,
     timingSource: routeMetadata.timingSource,
+    scheduler: input.scheduler || createDefaultKimodoScheduler(),
+    backpressure: input.backpressure || createDefaultKimodoBackpressure(),
     worker: input.worker || {
       exportName: 'runKimodoTextToMotionRoute',
       textEmbedding: 'external-llama3-8b',
