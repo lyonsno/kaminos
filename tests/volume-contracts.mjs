@@ -445,6 +445,8 @@ assert.match(core, /state\.lastLiveSimFrameId/, 'debug state records the latest 
 assert.match(core, /cadence_controls/, 'volume uniforms carry cadence phase for cadence-native render continuation');
 assert.match(core, /state\.cadencePhase/, 'debug state records the current cadence phase between live simulation steps');
 assert.match(core, /state\.framesSinceLiveSim/, 'debug state records held render frames since the last live simulation step');
+assert.match(core, /willRunLiveSimForUniforms/, 'cadence uniforms know when the current frame will advance live simulation');
+assert.match(core, /willRunLiveSimForUniforms\s*\?\s*0\s*:/, 'live simulation frames reset cadence phase instead of rendering with full continuation warp');
 assert.match(core, /CADENCE_NATIVE_CONTINUATION_IDENTITY/, 'volume core names the cadence-native field continuation identity');
 assert.match(core, /cadenceNativeContinuationPoint/, 'fragment raymarch computes a field-aware continuation sample point');
 assert.match(core, /sampleWorldVelocity\(continuedP\)/, 'fragment raymarch samples held fields through the cadence continuation point');
@@ -1211,6 +1213,21 @@ assert.match(witness, /timingEvidenceSource/, 'witness records timing evidence p
 assert.match(witness, /not-gpu-exclusive-or-present-latency/, 'witness preserves timing proxy disclaimer');
 assert.match(witness, /windowSize/, 'witness accepts an explicit browser window size for fullscreen-ish sweeps');
 assert.match(witness, /simStepCount/, 'witness records simulation step count');
+
+const filmstripWitnessPath = join(root, 'volume-filmstrip-witness.mjs');
+assert.ok(existsSync(filmstripWitnessPath), 'volume-filmstrip-witness.mjs exists');
+const filmstripWitness = existsSync(filmstripWitnessPath) ? readFileSync(filmstripWitnessPath, 'utf8') : '';
+assert.match(filmstripWitness, /FILMSTRIP_WITNESS_IDENTITY/, 'filmstrip witness names a stable evidence identity');
+assert.match(filmstripWitness, /consecutive-requestAnimationFrame-no-intentional-skip/, 'filmstrip witness captures consecutive RAF frames without intentional skips');
+assert.match(filmstripWitness, /writeFailureReport/, 'filmstrip witness writes a durable report before failing');
+assert.match(filmstripWitness, /captureFailurePhase/, 'filmstrip failure reports name the failure phase');
+assert.match(filmstripWitness, /effectiveRoute/, 'filmstrip witness records effective route identity');
+assert.match(filmstripWitness, /backend/, 'filmstrip witness records effective backend identity');
+assert.match(filmstripWitness, /cadenceNativeContinuationIdentity/, 'filmstrip witness preserves cadence-native continuation identity');
+assert.match(filmstripWitness, /frameDeltas/, 'filmstrip witness reports render frame deltas between captured frames');
+assert.match(filmstripWitness, /blankFrameCount/, 'filmstrip witness reports blank or missing frame counts');
+assert.match(filmstripWitness, /volume_sim_cadence/, 'filmstrip witness records the routed simulation cadence');
+
 assert.match(witness, /simReadback/, 'witness records simulation readback evidence');
 assert.match(witness, /detailMean/, 'witness records transported material detail evidence');
 assert.match(witness, /simGridLabel/, 'witness records human-readable sim grid identity');

@@ -4564,8 +4564,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     uniforms[82] = sourcePrimitive.position[2];
     uniforms[83] = volumePrimitives.length > 0 ? 1 : 0;
     const simCadence = normalizeSimCadence(controlsSnapshot.simCadence);
-    const framesSinceLiveSim = state.lastLiveSimFrameId >= 0 ? Math.max(0, state.frameCount - state.lastLiveSimFrameId) : 0;
-    const cadencePhase = simCadence > 1 ? Math.max(0, Math.min(1, framesSinceLiveSim / simCadence)) : 0;
+    const willRunLiveSimForUniforms = shouldRunSimForFrame(state.frameCount, simCadence);
+    const framesSinceLiveSim = willRunLiveSimForUniforms || state.lastLiveSimFrameId < 0
+      ? 0
+      : Math.max(0, state.frameCount - state.lastLiveSimFrameId);
+    const cadencePhase = simCadence > 1
+      ? (willRunLiveSimForUniforms ? 0 : Math.max(0, Math.min(1, framesSinceLiveSim / simCadence)))
+      : 0;
     uniforms[84] = cadencePhase;
     uniforms[85] = framesSinceLiveSim;
     uniforms[86] = simCadence;
