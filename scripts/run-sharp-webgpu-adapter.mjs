@@ -15,6 +15,12 @@ import {
 } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import {
+  createWebGpuRouteBackpressureProfile,
+  createWebGpuRouteSchedulerProfile,
+  validateWebGpuRouteBackpressureProfile,
+  validateWebGpuRouteSchedulerProfile,
+} from '@kaminos/webgpu-inference-kit';
 
 const args = new Map();
 for (let i = 2; i < process.argv.length; i++) {
@@ -130,45 +136,95 @@ function uniqueTelemetryPhases(telemetry) {
   return phases;
 }
 
+function phaseChunkSizeFromScheduler(scheduler = {}) {
+  const phaseChunkSize = {};
+  if (Number.isInteger(scheduler.spnPatchChunkSize) && scheduler.spnPatchChunkSize > 0) {
+    phaseChunkSize.spnPatch = scheduler.spnPatchChunkSize;
+  }
+  if (Number.isInteger(scheduler.vitBlockChunkSize) && scheduler.vitBlockChunkSize > 0) {
+    phaseChunkSize.vitBlock = scheduler.vitBlockChunkSize;
+  }
+  return phaseChunkSize;
+}
+
+function routeSchedulerInputFromBreathingRoom(breathingRoom = {}) {
+  const requested = breathingRoom?.requestedScheduler || requestedScheduler;
+  const effective = breathingRoom?.effectiveScheduler || {};
+  const hasEffectiveScheduler = Boolean(breathingRoom?.effectiveScheduler);
+  const unsupportedFields = Array.isArray(breathingRoom?.unsupportedFields)
+    ? breathingRoom.unsupportedFields
+    : [];
+  const verificationState = unsupportedFields.length
+    ? 'unsupported'
+    : (breathingRoom?.status || (breathingRoom?.effectiveScheduler ? 'verified' : 'scheduler-unverified'));
+  return {
+    requestedScheduler: {
+      mode: requested.mode === 'cooperative' ? 'cooperative' : 'throughput',
+      yieldMs: requested.yieldMs ?? 0,
+      waitForSubmittedWorkDone: Boolean(requested.waitForSubmittedWorkDone),
+      phaseChunkSize: phaseChunkSizeFromScheduler(requested),
+    },
+    effectiveScheduler: {
+      mode: effective.mode || (requested.mode === 'cooperative' ? 'cooperative' : 'throughput'),
+      yieldMs: effective.yieldMs ?? requested.yieldMs ?? 0,
+      waitForSubmittedWorkDone: Boolean(effective.waitForSubmittedWorkDone ?? requested.waitForSubmittedWorkDone),
+      phaseChunkSize: phaseChunkSizeFromScheduler(effective),
+      unsupportedFields: unsupportedFields.length
+        ? ['phaseChunkSize', ...unsupportedFields.filter(field => field.startsWith('phaseChunkSize.'))]
+        : (hasEffectiveScheduler ? [] : ['phaseChunkSize']),
+    },
+    verificationState,
+  };
+}
+
+function createValidatedSchedulerProfile(breathingRoom = {}) {
+  const profile = createWebGpuRouteSchedulerProfile(routeSchedulerInputFromBreathingRoom(breathingRoom));
+  const validation = validateWebGpuRouteSchedulerProfile(profile);
+  if (!validation.ok) throw new Error(`kit scheduler profile invalid: ${validation.errors.join('; ')}`);
+  return profile;
+}
+
+function createValidatedBackpressureProfile() {
+  const profile = createWebGpuRouteBackpressureProfile({
+    requestedBudget: 'unknown',
+    effectiveBudget: 'unknown',
+    memoryExclusivity: 'unknown',
+    warmCacheState: 'unknown',
+    frameTail: {
+      sampleWindowMs: 0,
+      longFrameCount: 0,
+      maxFrameGapMs: 0,
+      p95FrameGapMs: null,
+      p99FrameGapMs: null,
+    },
+  });
+  const validation = validateWebGpuRouteBackpressureProfile(profile);
+  if (!validation.ok) throw new Error(`kit backpressure profile invalid: ${validation.errors.join('; ')}`);
+  return profile;
+}
+
 function pipelineSchedulerEvidence(breathingRoom) {
   const effectiveScheduler = breathingRoom?.effectiveScheduler || null;
   const unsupportedFields = Array.isArray(breathingRoom?.unsupportedFields)
     ? breathingRoom.unsupportedFields
     : [];
-  const schedulerEffective = effectiveScheduler
-    ? { ...effectiveScheduler, ...(unsupportedFields.length ? { unsupportedFields } : {}) }
-    : null;
+  const schedulerProfile = createValidatedSchedulerProfile(breathingRoom);
+  const backpressureProfile = createValidatedBackpressureProfile();
+  const verificationState = unsupportedFields.length
+    ? 'unsupported'
+    : (breathingRoom?.status || (effectiveScheduler ? 'verified' : 'scheduler-unverified'));
   const failureDowngrades = [];
   if (!effectiveScheduler) failureDowngrades.push('effective-scheduler-missing');
   if (unsupportedFields.length) failureDowngrades.push('unsupported-fields-present');
   return {
     schema: 'kaminos.pipeline-scheduler-composition.v0',
     source: 'pipeline-adapter-report',
-    verificationState: breathingRoom?.status || (effectiveScheduler ? 'verified' : 'scheduler-unverified'),
+    verificationState,
     requestedScheduler: breathingRoom?.requestedScheduler || requestedScheduler,
     effectiveScheduler,
     unsupportedFields,
-    scheduler: {
-      schema: 'kaminos.webgpu-route-scheduler.v0',
-      requestedScheduler: breathingRoom?.requestedScheduler || requestedScheduler,
-      effectiveScheduler: schedulerEffective,
-      unsupportedFields,
-      verificationState: breathingRoom?.status || (effectiveScheduler ? 'verified' : 'scheduler-unverified'),
-    },
-    backpressure: {
-      schema: 'kaminos.webgpu-route-backpressure.v0',
-      requestedBudget: 'unknown',
-      effectiveBudget: 'unknown',
-      memoryExclusivity: 'unknown',
-      warmCacheState: 'unknown',
-      frameTail: {
-        sampleWindowMs: 0,
-        longFrameCount: 0,
-        maxFrameGapMs: 0,
-        p95FrameGapMs: null,
-        p99FrameGapMs: null,
-      },
-    },
+    scheduler: schedulerProfile,
+    backpressure: backpressureProfile,
     phaseBoundaries: uniqueTelemetryPhases(breathingRoom?.telemetry),
     backendIdentity: {
       modelFamily: 'SHARP-WebGPU',
