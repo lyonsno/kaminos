@@ -277,12 +277,14 @@ function parsePngRgba(buffer) {
 }
 
 function assertSamplePreview(sample, label) {
+  const expectedBytes = sample?.preview?.width * sample?.preview?.height * 4;
+  const hasRgbaArray = Array.isArray(sample?.preview?.rgba) && sample.preview.rgba.length === expectedBytes;
+  const hasRgbaBase64 = typeof sample?.preview?.rgbaBase64 === 'string' && Buffer.from(sample.preview.rgbaBase64, 'base64').length === expectedBytes;
   if (
     sample?.ok !== true ||
     !Number.isFinite(sample.preview?.width) ||
     !Number.isFinite(sample.preview?.height) ||
-    !Array.isArray(sample.preview?.rgba) ||
-    sample.preview.rgba.length !== sample.preview.width * sample.preview.height * 4
+    (!hasRgbaArray && !hasRgbaBase64)
   ) {
     const error = new Error(`${label} sample missing complete preview RGBA`);
     error.code = 'missing-primary-output';
@@ -290,6 +292,16 @@ function assertSamplePreview(sample, label) {
     error.details = { label, sample };
     throw error;
   }
+}
+
+function previewRgbaBytes(sample) {
+  if (Array.isArray(sample.preview?.rgba)) return Uint8Array.from(sample.preview.rgba);
+  if (typeof sample.preview?.rgbaBase64 === 'string') return Uint8Array.from(Buffer.from(sample.preview.rgbaBase64, 'base64'));
+  const error = new Error('sample missing materialized preview RGBA bytes');
+  error.code = 'missing-primary-output';
+  error.failurePhase = 'sample';
+  error.details = { frameCount: sample?.frameCount, sequenceIndex: sample?.sequenceIndex };
+  throw error;
 }
 
 function summarizeSample(sample, role, path, sequenceIndex) {
@@ -486,6 +498,24 @@ async function captureSample(ws, label, minimumFrameCount) {
   return sample;
 }
 
+async function captureDenseSequence(ws, options) {
+  const result = await wsRequest(ws, 'Runtime.evaluate', {
+    expression: `window.__kaminosVolumePrototype.captureDenseFrames(${JSON.stringify(options)})`,
+    awaitPromise: true,
+    returnByValue: true,
+  });
+  const payload = result.result.value;
+  if (!payload?.ok || !Array.isArray(payload.frames)) {
+    const error = new Error(`dense capture failed: ${payload?.reason || 'missing frames'}`);
+    error.code = 'dense-capture-failed';
+    error.failurePhase = 'capture';
+    error.details = payload || null;
+    throw error;
+  }
+  for (const sample of payload.frames) assertSamplePreview(sample, `dense-frame-${sample.sequenceIndex}`);
+  return payload;
+}
+
 function validateSequence(samples) {
   const dimensions = samples.map(sample => `${sample.preview.width}x${sample.preview.height}`);
   if (new Set(dimensions).size !== 1) {
@@ -510,6 +540,23 @@ function validateSequence(samples) {
       error.details = { simStepCounts: samples.map(sample => sample.simStepCount) };
       throw error;
     }
+  }
+}
+
+function validateDenseCaptureDeltas(payload, maxFrameDelta) {
+  const denseCaptureFrameDeltas = payload.denseCaptureFrameDeltas || [];
+  const largestFrameDelta = denseCaptureFrameDeltas.reduce((max, delta) => Math.max(max, delta), 0);
+  if (largestFrameDelta > maxFrameDelta) {
+    const error = new Error(`dense capture exceeded maxFrameDelta=${maxFrameDelta}; largest delta was ${largestFrameDelta}`);
+    error.code = 'dense-capture-sparse';
+    error.failurePhase = 'validation';
+    error.details = {
+      maxFrameDelta,
+      largestFrameDelta,
+      denseCaptureFrameDeltas,
+      denseCaptureSimStepDeltas: payload.denseCaptureSimStepDeltas || [],
+    };
+    throw error;
   }
 }
 
@@ -747,6 +794,12 @@ const realAnchorParity = args.get('--real-anchor-parity') || DEFAULT_REAL_ANCHOR
 const windowSize = args.get('--window-size') || '1280,960';
 const dryRun = args.has('--dry-run');
 const reuseDebugPort = args.has('--reuse-debug-port');
+const denseCapture = args.has('--dense-capture');
+const maxFrameDelta = args.has('--max-frame-delta')
+  ? Number(args.get('--max-frame-delta'))
+  : denseCapture ? 2 : Number.POSITIVE_INFINITY;
+const denseCaptureTimeoutMs = Number(args.get('--dense-capture-timeout-ms') || Math.max(10000, totalFrameCount * frameStep * 500));
+const densePreviewWidth = Number(args.get('--dense-preview-width') || 128);
 const createdAt = new Date().toISOString();
 const gitCommit = gitValue(['rev-parse', 'HEAD']);
 const gitBranch = gitValue(['branch', '--show-current']);
@@ -755,6 +808,8 @@ const gitStatusShort = gitValue(['status', '--short'], '');
 if (realAnchorParity !== 'even') throw new Error('only realAnchorParity=even is implemented for this witness');
 if (!Number.isInteger(totalFrameCount) || totalFrameCount < 5 || totalFrameCount % 2 !== 1) throw new Error('--total-frames must be an odd integer >= 5');
 if (!Number.isInteger(frameStep) || frameStep < 1) throw new Error('--frame-step must be an integer >= 1');
+if (args.has('--max-frame-delta') && (!Number.isFinite(maxFrameDelta) || maxFrameDelta < 1)) throw new Error('--max-frame-delta must be >= 1 when set');
+if (!Number.isInteger(densePreviewWidth) || densePreviewWidth < 16) throw new Error('--dense-preview-width must be an integer >= 16');
 
 if (renderReportPath) {
   const report = readJson(renderReportPath);
@@ -794,6 +849,10 @@ const baseReport = {
   playbackPath,
   dryRun,
   reuseDebugPort,
+  denseCapture,
+  maxFrameDelta: Number.isFinite(maxFrameDelta) ? maxFrameDelta : null,
+  denseCaptureTimeoutMs,
+  densePreviewWidth: denseCapture ? densePreviewWidth : null,
   settleMs,
   windowSize,
   debugPort: port,
@@ -881,12 +940,24 @@ try {
   }
 
   phase = 'capture';
-  const samples = [];
-  let minimumFrameCount = state.frameCount;
-  for (let index = 0; index < totalFrameCount; index += 1) {
-    const sample = await captureSample(ws, `sequence-frame-${index}`, minimumFrameCount);
-    samples.push(sample);
-    minimumFrameCount = sample.frameCount + frameStep;
+  let denseCapturePayload = null;
+  let samples = [];
+  if (denseCapture) {
+    denseCapturePayload = await captureDenseSequence(ws, {
+      frameCount: totalFrameCount,
+      everyNthFrame: frameStep,
+      previewWidth: densePreviewWidth,
+      timeoutMs: denseCaptureTimeoutMs,
+    });
+    validateDenseCaptureDeltas(denseCapturePayload, maxFrameDelta);
+    samples = denseCapturePayload.frames;
+  } else {
+    let minimumFrameCount = state.frameCount;
+    for (let index = 0; index < totalFrameCount; index += 1) {
+      const sample = await captureSample(ws, `sequence-frame-${index}`, minimumFrameCount);
+      samples.push(sample);
+      minimumFrameCount = sample.frameCount + frameStep;
+    }
   }
   validateSequence(samples);
 
@@ -897,7 +968,7 @@ try {
   for (let index = 0; index < samples.length; index += 1) {
     const role = index % 2 === 0 ? 'realAnchor' : 'withheldRealOdd';
     const framePath = resolve(outDir, 'real-frames', `real-frame-${String(index).padStart(3, '0')}.png`);
-    const rgba = Uint8Array.from(samples[index].preview.rgba);
+    const rgba = previewRgbaBytes(samples[index]);
     writeRgbaPng(framePath, width, height, rgba);
     frameRgba.push(rgba);
     frameSummaries.push(summarizeSample(samples[index], role, framePath, index));
@@ -915,6 +986,10 @@ try {
     realFrameCount: totalFrameCount,
     realAnchorParity,
     frameStep,
+    captureMode: denseCapture ? 'render-loop-dense-capture' : 'sampleFrame-polling',
+    maxFrameDelta: Number.isFinite(maxFrameDelta) ? maxFrameDelta : null,
+    denseCaptureFrameDeltas: denseCapturePayload?.denseCaptureFrameDeltas || null,
+    denseCaptureSimStepDeltas: denseCapturePayload?.denseCaptureSimStepDeltas || null,
     frames: frameSummaries,
     frameCountDeltas: frameSummaries.slice(1).map((frame, index) => frame.frameCount - frameSummaries[index].frameCount),
     simStepCountDeltas: frameSummaries.slice(1).map((frame, index) => frame.simStepCount - frameSummaries[index].simStepCount),

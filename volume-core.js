@@ -1,6 +1,7 @@
 const ROUTE_IDENTITY = 'native-3d-compute-fluid-raymarch-v0';
 const PROTOTYPE_IDENTITY = 'kaminos-volume-prototype-v0';
 const FRONT_FIELD_IDENTITY = 'combustion-front-topology-sidecar-v0';
+const DENSE_FRAME_CAPTURE_SCHEMA = 'kaminos.volume.dense-frame-capture.v0';
 const DEFAULT_GRID_SIZE = 96;
 const SUPPORTED_GRID_SIZES = [32, 48, 64, 96, 128, 160];
 const FLUID_SLOTS_PER_CELL = 4;
@@ -3416,6 +3417,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     majorantSkippedFrameCount: 0,
     simProfile: normalizeSimProfileFlag(controlsSnapshot.simProfile),
     simCostLedger: null,
+    denseCaptureFrameDeltas: [],
+    denseCaptureStatus: 'idle',
     pressureSourceStrategy: PRESSURE_SOURCE_STRATEGY_DISABLED,
     tallPlumePressureIterationStrategy: TALL_PLUME_PRESSURE_ITERATION_STRATEGY_INACTIVE,
     tallPlumePressureIterationTarget: 0,
@@ -3512,6 +3515,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let currentFront = 0;
   let frameTexture = null;
   let frameTextureSize = '';
+  let historySourceTexture = null;
+  let historySourceTextureSize = '';
+  let denseCapture = null;
   let historyTexture = null;
   let historyTextureSize = '';
   let historySampler = null;
@@ -4215,7 +4221,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       device,
       format,
       alphaMode: 'opaque',
-      usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
+      usage: GPUTextureUsage.RENDER_ATTACHMENT,
     });
     device.addEventListener('uncapturederror', event => {
       state.error = event.error?.message || String(event.error || 'WebGPU uncaptured error');
@@ -4422,6 +4428,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       state.volumeReconstructionStyle = renderScale < 0.999 ? 'linear-css-upscale' : 'native-resolution';
       canvas.style.imageRendering = 'auto';
       frameTextureSize = '';
+      historySourceTextureSize = '';
     }
   }
 
@@ -4436,6 +4443,19 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
     });
     frameTextureSize = key;
+  }
+
+  function ensureHistorySourceTexture() {
+    const key = `${state.width}x${state.height}:${format}`;
+    if (historySourceTexture && historySourceTextureSize === key) return;
+    historySourceTexture?.destroy();
+    historySourceTexture = device.createTexture({
+      label: 'kaminos volume copyable history source texture',
+      size: { width: state.width, height: state.height, depthOrArrayLayers: 1 },
+      format,
+      usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
+    });
+    historySourceTextureSize = key;
   }
 
   function updateUniforms(now) {
@@ -5003,6 +5023,162 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.temporalHistoryFrames += 1;
   }
 
+  function uint8ToBase64(bytes) {
+    let binary = '';
+    const chunkSize = 0x8000;
+    for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+      binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize));
+    }
+    return btoa(binary);
+  }
+
+  function denseCapturePreviewFromReadback(mapped, bytesPerRow, sourceWidth, sourceHeight, previewWidth) {
+    const width = Math.max(1, Math.min(sourceWidth, Math.floor(previewWidth || 256)));
+    const height = Math.max(1, Math.round(width * sourceHeight / Math.max(1, sourceWidth)));
+    const preview = new Uint8Array(width * height * 4);
+    for (let py = 0; py < height; py += 1) {
+      const srcY = Math.min(sourceHeight - 1, Math.floor(py / height * sourceHeight));
+      const row = srcY * bytesPerRow;
+      for (let px = 0; px < width; px += 1) {
+        const srcX = Math.min(sourceWidth - 1, Math.floor(px / width * sourceWidth));
+        const src = row + srcX * 4;
+        const dst = (py * width + px) * 4;
+        preview[dst] = mapped[src];
+        preview[dst + 1] = mapped[src + 1];
+        preview[dst + 2] = mapped[src + 2];
+        preview[dst + 3] = 255;
+      }
+    }
+    return { width, height, rgbaBase64: uint8ToBase64(preview) };
+  }
+
+  function denseCaptureMetadata(sequenceIndex) {
+    return {
+      sequenceIndex,
+      frameCount: state.frameCount + 1,
+      simStepCount: state.simStepCount,
+      width: state.width,
+      height: state.height,
+      renderWidth: state.renderWidth,
+      renderHeight: state.renderHeight,
+      displayWidth: state.displayWidth,
+      displayHeight: state.displayHeight,
+      renderScale: state.renderScale,
+      renderPixelRatio: state.renderPixelRatio,
+      volumeReconstructionStyle: state.volumeReconstructionStyle,
+      effectiveRoute: state.effectiveRoute,
+      prototypeIdentity: state.prototypeIdentity,
+      backend: state.backend,
+      volumeScene: state.volumeScene,
+      lifecycleEffect: state.lifecycleEffect,
+      lifecycleT: state.lifecycleT,
+      quenchVaporStrength: state.quenchVaporStrength,
+      snuffVisualModel: state.snuffVisualModel,
+      flameQuenchModel: state.flameQuenchModel,
+      simGrid: state.simGrid,
+      pressureStrategy: state.pressureStrategy,
+      pressureProjectionIterations: state.pressureProjectionIterations,
+      timing: { ...state.timing },
+      simCostLedger: state.simCostLedger ? { ...state.simCostLedger } : null,
+    };
+  }
+
+  function rejectDenseCapture(error) {
+    if (!denseCapture) return;
+    const active = denseCapture;
+    clearTimeout(active.timeout);
+    denseCapture = null;
+    state.denseCaptureStatus = 'failed';
+    active.reject(error);
+  }
+
+  function maybeResolveDenseCapture() {
+    if (!denseCapture) return;
+    const active = denseCapture;
+    if (active.samples.length < active.requestedFrameCount || active.pending > 0) return;
+    clearTimeout(active.timeout);
+    const samples = active.samples
+      .toSorted((a, b) => a.sequenceIndex - b.sequenceIndex)
+      .slice(0, active.requestedFrameCount);
+    const denseCaptureFrameDeltas = samples.slice(1).map((sample, index) => sample.frameCount - samples[index].frameCount);
+    const denseCaptureSimStepDeltas = samples.slice(1).map((sample, index) => sample.simStepCount - samples[index].simStepCount);
+    state.denseCaptureFrameDeltas = denseCaptureFrameDeltas;
+    state.denseCaptureStatus = 'completed';
+    denseCapture = null;
+    active.resolve({
+      ok: true,
+      schema: DENSE_FRAME_CAPTURE_SCHEMA,
+      requestedFrameCount: active.requestedFrameCount,
+      capturedFrameCount: samples.length,
+      everyNthFrame: active.everyNthFrame,
+      previewWidth: active.previewWidth,
+      effectiveRoute: state.effectiveRoute,
+      prototypeIdentity: state.prototypeIdentity,
+      backend: state.backend,
+      denseCaptureFrameDeltas,
+      denseCaptureSimStepDeltas,
+      frames: samples,
+    });
+  }
+
+  function drainDenseCaptureFrame(record) {
+    const active = record.capture;
+    record.buffer.mapAsync(GPUMapMode.READ).then(() => {
+      const mapped = new Uint8Array(record.buffer.getMappedRange());
+      const preview = denseCapturePreviewFromReadback(mapped, record.bytesPerRow, record.width, record.height, active.previewWidth);
+      record.buffer.unmap();
+      record.buffer.destroy();
+      active.pending -= 1;
+      active.samples.push({
+        ok: true,
+        schema: DENSE_FRAME_CAPTURE_SCHEMA,
+        ...record.metadata,
+        preview,
+      });
+      maybeResolveDenseCapture();
+    }).catch(error => {
+      record.buffer.destroy();
+      active.pending -= 1;
+      error.failurePhase = 'dense-capture';
+      rejectDenseCapture(error);
+    });
+  }
+
+  function encodeDenseCaptureFrame(encoder) {
+    if (!denseCapture || state.width < 1 || state.height < 1) return null;
+    const active = denseCapture;
+    active.observedFrames += 1;
+    if ((active.observedFrames - 1) % active.everyNthFrame !== 0) return null;
+    if (active.copiedFrameCount >= active.requestedFrameCount) return null;
+    ensureFrameTexture();
+    const bytesPerPixel = 4;
+    const unpaddedBytesPerRow = state.width * bytesPerPixel;
+    const bytesPerRow = Math.ceil(unpaddedBytesPerRow / 256) * 256;
+    const buffer = device.createBuffer({
+      label: 'kaminos dense frame capture readback',
+      size: bytesPerRow * state.height,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+    });
+    const sequenceIndex = active.copiedFrameCount;
+    encodeDraw(encoder, frameTexture.createView(), 'kaminos dense frame capture readback pass', readbackPipeline);
+    encoder.copyTextureToBuffer(
+      { texture: frameTexture },
+      { buffer, bytesPerRow, rowsPerImage: state.height },
+      { width: state.width, height: state.height, depthOrArrayLayers: 1 }
+    );
+    active.copiedFrameCount += 1;
+    active.pending += 1;
+    state.denseCaptureStatus = 'capturing';
+    return {
+      capture: active,
+      buffer,
+      bytesPerRow,
+      width: state.width,
+      height: state.height,
+      metadata: denseCaptureMetadata(sequenceIndex),
+    };
+  }
+
   function render(now) {
     if (!state.active) return;
     raf = requestAnimationFrame(render);
@@ -5013,14 +5189,18 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       const encoder = device.createCommandEncoder({ label: 'kaminos compute fluid frame' });
       encodeSim(encoder);
       encodeMajorant(encoder);
+      ensureHistorySourceTexture();
       const currentTexture = context.getCurrentTexture();
+      encodeDraw(encoder, historySourceTexture.createView(), 'kaminos volume copyable history source pass');
       encodeDraw(encoder, currentTexture.createView(), 'kaminos volume canvas pass');
-      encodeHistoryCopy(encoder, currentTexture);
+      const denseCaptureRecord = encodeDenseCaptureFrame(encoder);
+      encodeHistoryCopy(encoder, historySourceTexture);
       device.queue.submit([encoder.finish()]);
       commitPreviousViewProjection();
       state.frameCount += 1;
       state.lastFrameEnergy = Math.min(9.999, state.simStepCount * 0.001 + 0.55 * controlsSnapshot.density + 0.35 * controlsSnapshot.fire + 0.18 * (controlsSnapshot.radiance ?? 1.65));
       recordVolumeFrameTiming(now, performance.now() - cpuStart);
+      if (denseCaptureRecord) drainDenseCaptureFrame(denseCaptureRecord);
       if (state.frameCount % 12 === 0) probeVolumeQueueTiming();
     } catch (err) {
       state.active = false;
@@ -6412,6 +6592,43 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     };
   }
 
+  function captureDenseFrames(options = {}) {
+    if (!state.active || !device) return Promise.resolve({ ok: false, schema: DENSE_FRAME_CAPTURE_SCHEMA, reason: 'inactive', ...state });
+    if (denseCapture) return Promise.reject(new Error('dense frame capture already in progress'));
+    const requestedFrameCount = Math.max(1, Math.floor(Number(options.frameCount ?? 29)));
+    const everyNthFrame = Math.max(1, Math.floor(Number(options.everyNthFrame ?? 1)));
+    const previewWidth = Math.max(1, Math.floor(Number(options.previewWidth ?? 256)));
+    const timeoutMs = Math.max(1000, Math.floor(Number(options.timeoutMs ?? Math.max(5000, requestedFrameCount * everyNthFrame * 250))));
+    state.denseCaptureStatus = 'capturing';
+    state.denseCaptureFrameDeltas = [];
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        if (!denseCapture) return;
+        const error = new Error(`dense frame capture timed out after ${timeoutMs}ms`);
+        error.code = 'dense-capture-timeout';
+        error.details = {
+          requestedFrameCount,
+          copiedFrameCount: denseCapture.copiedFrameCount,
+          completedFrameCount: denseCapture.samples.length,
+          pendingFrameCount: denseCapture.pending,
+        };
+        rejectDenseCapture(error);
+      }, timeoutMs);
+      denseCapture = {
+        requestedFrameCount,
+        everyNthFrame,
+        previewWidth,
+        timeout,
+        resolve,
+        reject,
+        observedFrames: 0,
+        copiedFrameCount: 0,
+        pending: 0,
+        samples: [],
+      };
+    });
+  }
+
   return {
     setControls(next) {
       const previousGrid = gridSize;
@@ -6548,9 +6765,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       return canvas;
     },
     sampleFrame,
+    captureDenseFrames,
     dispose() {
       this.setActive(false);
       frameTexture?.destroy();
+      historySourceTexture?.destroy();
       externalEmitterBuffer?.destroy();
       destroyTemporalHistory();
       destroyFluidState();

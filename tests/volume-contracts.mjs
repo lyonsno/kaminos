@@ -384,6 +384,11 @@ assert.match(core, /applyExternalEmitterInjection/, 'fluid compute shader inject
 assert.match(core, /setExternalEmitters/, 'volume prototype exposes a public external emitter API');
 assert.match(core, /normalizeExternalEmitters/, 'external emitter API normalizes and bounds caller-provided emitter payloads');
 assert.match(core, /syntheticHandTrailEmitters/, 'volume prototype can generate synthetic hand-trail emitters for witness smoke');
+assert.match(core, /captureDenseFrames/, 'volume prototype exposes a render-loop-owned dense frame capture API');
+assert.match(core, /kaminos\.volume\.dense-frame-capture\.v0/, 'dense frame capture reports a stable schema identity');
+assert.match(core, /denseCaptureFrameDeltas/, 'dense frame capture records render-frame deltas for cadence authority');
+assert.match(core, /copyTextureToBuffer/, 'dense frame capture copies rendered textures rather than using canvas media capture');
+assert.match(core, /rgbaBase64/, 'dense frame capture returns compact base64 image bytes instead of oversized CDP JSON RGBA arrays');
 assert.match(core, /externalEmitterCoordinateSpace/, 'debug state records external emitter coordinate space');
 assert.match(core, /externalEmitterCount/, 'debug state records effective external emitter count');
 assert.match(core, /externalEmitterAgeMs/, 'debug state records external emitter age for stale-input diagnosis');
@@ -1484,5 +1489,10 @@ assert.match(interframeSequenceWitness, /Ground truth sequence/, 'interframe seq
 assert.match(interframeSequenceWitness, /Synthetic odd-frame sequence/, 'interframe sequence playback labels candidate timelines as synthetic odd-frame comparisons');
 assert.match(interframeSequenceWitness, /jsonForScript/, 'interframe sequence playback embeds JSON without breaking script-tag parsing');
 assert.match(interframeSequenceWitness, /--render-report/, 'interframe sequence witness can regenerate playback from a completed durable report');
+assert.match(interframeSequenceWitness, /--dense-capture/, 'interframe sequence witness can use render-loop-owned dense capture instead of heavy sampleFrame polling');
+assert.match(interframeSequenceWitness, /maxFrameDelta/, 'interframe sequence witness records and guards dense capture frame deltas');
+assert.match(interframeSequenceWitness, /--dense-preview-width/, 'interframe sequence witness exposes dense capture transport resolution instead of hiding a payload cap');
+assert.match(interframeSequenceWitness, /denseCaptureFrameDeltas/, 'interframe sequence witness preserves dense capture frame delta authority in reports');
+assert.match(interframeSequenceWitness, /Buffer\.from\(sample\.preview\.rgbaBase64, 'base64'\)/, 'interframe sequence witness materializes compact dense-capture image bytes locally');
 assert.match(interframeSequenceWitness, /synthetic-comparison-not-live-simulator-output/, 'interframe sequence witness labels synthetic frames as comparison evidence');
 assert.match(interframeSequenceWitness, /candidate-context-/, 'interframe sequence witness writes per-gap route/timing candidate contexts');
