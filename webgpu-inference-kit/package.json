@@ -1,9 +1,22 @@
 {
   "name": "@kaminos/webgpu-inference-kit",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0",
+  "private": false,
   "type": "module",
   "description": "Native WebGPU inference route substrate for Kaminos.",
+  "license": "UNLICENSED",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lyonsno/kaminos.git",
+    "directory": "webgpu-inference-kit"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "README.md",
+    "src"
+  ],
   "exports": {
     ".": "./src/index.js"
   },

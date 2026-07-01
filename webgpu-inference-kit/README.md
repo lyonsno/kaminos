@@ -2,6 +2,22 @@
 
 Native WebGPU inference route substrate for Kaminos.
 
+Install:
+
+```sh
+npm install @kaminos/webgpu-inference-kit
+```
+
+Import:
+
+```js
+import {
+  createWebGpuRouteSchemaContract,
+  createWebGpuLocalRouteReceipt,
+  classifyWebGpuRouteReceiptEvidence,
+} from "@kaminos/webgpu-inference-kit";
+```
+
 This package starts with contracts, not kernels. Its first job is to make
 browser-local model routes prove what they actually ran before Kaminos treats
 their outputs as asset evidence.
