@@ -955,7 +955,20 @@ try {
   process.exitCode = 1;
 } finally {
   cdp?.close();
-  chromeProcess.kill('SIGTERM');
-  setTimeout(() => chromeProcess.kill('SIGKILL'), 1000).unref();
+  if (chromeProcess.exitCode === null && chromeProcess.signalCode === null) chromeProcess.kill('SIGTERM');
+  await new Promise(resolve => {
+    if (chromeProcess.exitCode !== null || chromeProcess.signalCode !== null) {
+      resolve();
+      return;
+    }
+    const timer = setTimeout(() => {
+      if (chromeProcess.exitCode === null && chromeProcess.signalCode === null) chromeProcess.kill('SIGKILL');
+      resolve();
+    }, 1000);
+    chromeProcess.once('exit', () => {
+      clearTimeout(timer);
+      resolve();
+    });
+  });
   if (stderr) console.error(stderr.split('\n').slice(0, 8).join('\n'));
 }
