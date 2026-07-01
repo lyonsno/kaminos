@@ -1467,3 +1467,22 @@ assert.match(interframePlaybackWitness, /Ground truth cadence/, 'interframe play
 assert.match(interframePlaybackWitness, /Synthetic cadence/, 'interframe playback witness labels synthetic middle-frame cadence');
 assert.match(interframePlaybackWitness, /actualMiddleUsed/, 'interframe playback witness preserves actual-middle input/use authority');
 assert.match(interframePlaybackWitness, /synthetic-comparison-not-live-simulator-output/, 'interframe playback witness labels synthetic frames as comparison evidence');
+
+const interframeSequenceWitnessPath = join(root, 'volume-interframe-sequence-witness.mjs');
+assert.ok(existsSync(interframeSequenceWitnessPath), 'volume interframe sequence witness generator exists');
+const interframeSequenceWitness = existsSync(interframeSequenceWitnessPath) ? readFileSync(interframeSequenceWitnessPath, 'utf8') : '';
+assert.match(interframeSequenceWitness, /kaminos\.volume\.interframe-sequence-witness\.v0/, 'interframe sequence witness writes a stable schema identity');
+assert.match(interframeSequenceWitness, /DEFAULT_TOTAL_FRAME_COUNT\s*=\s*29/, 'interframe sequence witness defaults to the requested 20-30 total frame range');
+assert.match(interframeSequenceWitness, /realAnchorParity[^\\n]+even/, 'interframe sequence witness uses even live frames as real anchors by default');
+assert.match(interframeSequenceWitness, /syntheticOddFrameCount/, 'interframe sequence witness records how many odd frames are synthesized per candidate');
+assert.match(interframeSequenceWitness, /withheldRealOddFrames/, 'interframe sequence witness preserves withheld real odd frames as comparison targets');
+assert.match(interframeSequenceWitness, /actualMiddleUsed[^\\n]+false/, 'interframe sequence candidate contexts record that withheld odd frames were not used as inputs');
+assert.match(interframeSequenceWitness, /framesAvailableToCandidate/, 'interframe sequence candidate contexts record the exposed anchor frames');
+assert.match(interframeSequenceWitness, /framesWithheldFromCandidate/, 'interframe sequence candidate contexts record the withheld real target frames');
+assert.match(interframeSequenceWitness, /interframe-sequence-playback/, 'interframe sequence witness writes an operator playback artifact');
+assert.match(interframeSequenceWitness, /Ground truth sequence/, 'interframe sequence playback labels the full real simulator sequence');
+assert.match(interframeSequenceWitness, /Synthetic odd-frame sequence/, 'interframe sequence playback labels candidate timelines as synthetic odd-frame comparisons');
+assert.match(interframeSequenceWitness, /jsonForScript/, 'interframe sequence playback embeds JSON without breaking script-tag parsing');
+assert.match(interframeSequenceWitness, /--render-report/, 'interframe sequence witness can regenerate playback from a completed durable report');
+assert.match(interframeSequenceWitness, /synthetic-comparison-not-live-simulator-output/, 'interframe sequence witness labels synthetic frames as comparison evidence');
+assert.match(interframeSequenceWitness, /candidate-context-/, 'interframe sequence witness writes per-gap route/timing candidate contexts');
