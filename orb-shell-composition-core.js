@@ -5784,17 +5784,17 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
   const macroMorphologySubstripCurveMaterial = new THREE.MeshBasicMaterial({ color: 0x9bc53d, transparent: true, opacity: 0.95, depthWrite: false, depthTest: false });
   const spatialTruthMaterialPolicy = {
     schema: 'SpatialTruthMaterialPolicy',
-    mode: 'env-lit-neutral-clay-spatial-truth-v0',
+    mode: 'env-lit-neutral-clay-spatial-truth-v1',
     materialClass: 'MeshStandardMaterial',
     diagnosticPasses: ['clay', 'normal', 'depth', 'object-id'],
     defaultDiagnosticPass: 'clay',
     environmentLit: true,
     ambientOcclusionDefault: false,
-    roughness: 0.58,
+    roughness: 0.66,
     metalness: 0.0,
-    envMapIntensity: 0.9,
-    exposure: 1.15,
-    color: '#9aa4a6',
+    envMapIntensity: 0.45,
+    exposure: 0.9,
+    color: '#737d80',
     witnessIntent: 'make-geometry-curvature-sidewalls-and-object-placement-legible-without-aesthetic-material-noise',
   };
   const spatialTruthViewSet = {
@@ -5813,7 +5813,7 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
   };
   let spatialTruthLastState = null;
   const spatialTruthClayMaterial = neutralPbrMaterial({
-    color: 0x9aa4a6,
+    color: 0x737d80,
     roughness: spatialTruthMaterialPolicy.roughness,
     metalness: spatialTruthMaterialPolicy.metalness,
     envMapIntensity: spatialTruthMaterialPolicy.envMapIntensity,

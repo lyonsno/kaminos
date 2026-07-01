@@ -14,6 +14,7 @@ assert.match(index, /frameSpatialTruthView/, 'browser route must frame named spa
 assert.match(index, /orb_shell_spatial_env_intensity/, 'spatial-truth route must expose environment intensity');
 assert.match(index, /orb_shell_spatial_exposure/, 'spatial-truth route must expose exposure');
 assert.match(index, /orb_shell_spatial_pass/, 'spatial-truth route must expose diagnostic pass identity');
+assert.match(index, /if \(!params\.has\(name\)\) return defaultValue;/, 'route number parser must use defaults when optional spatial-truth params are omitted');
 
 assert.match(core, /SpatialTruthMaterialPolicy/, 'composition core must expose a spatial-truth material policy');
 assert.match(core, /SpatialTruthWitnessState/, 'composition core must return a spatial-truth witness state');
@@ -24,9 +25,15 @@ assert.match(core, /frameSpatialTruthView/, 'composition witness must expose nam
 assert.match(core, /MeshStandardMaterial/, 'spatial-truth clay must be based on env-lit MeshStandardMaterial');
 assert.match(core, /MeshNormalMaterial/, 'spatial-truth normal pass must use a real normal diagnostic material');
 assert.match(core, /MeshDepthMaterial/, 'spatial-truth depth pass must use a real depth diagnostic material');
+assert.match(core, /mode: 'env-lit-neutral-clay-spatial-truth-v1'/, 'spatial-truth clay policy must name the non-white settled-frame tuning');
+assert.match(core, /envMapIntensity: 0\.45/, 'spatial-truth clay default environment intensity must not wash the settled frame white');
+assert.match(core, /exposure: 0\.9/, 'spatial-truth clay default exposure must preserve gray clay sidewall legibility');
+assert.match(core, /color: '#737d80'/, 'spatial-truth clay default color must be neutral gray rather than near-white');
 
 assert.match(witness, /spatial-truth/, 'headless witness must know spatial-truth focus');
 assert.match(witness, /--diagnostic-pass/, 'headless witness must accept diagnostic pass selection');
 assert.match(witness, /--view-set/, 'headless witness must accept reusable view-set selection');
 assert.match(witness, /--contact-sheet-out/, 'headless witness must write a contact sheet artifact');
 assert.match(witness, /SpatialTruthContactSheet/, 'headless report must name spatial-truth contact sheets');
+assert.match(witness, /assertCompositionStructuralInvariants/, 'headless witness must isolate structural invariants from primary visual capture');
+assert.match(witness, /visualCaptureCompleted/, 'headless witness must report whether primary visual capture completed before optional assertions');

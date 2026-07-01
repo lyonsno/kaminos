@@ -18,8 +18,8 @@ const diagnosticPass = args.get('--diagnostic-pass') || 'clay';
 const viewSet = args.get('--view-set') || 'spatial-truth-default-v0';
 const spatialTruthView = args.get('--spatial-view') || args.get('--view') || 'front';
 const contactSheetOut = args.has('--contact-sheet-out') ? resolve(args.get('--contact-sheet-out')) : null;
-const spatialTruthEnvMapIntensity = Number(args.get('--spatial-env-intensity') || 0.9);
-const spatialTruthExposure = Number(args.get('--spatial-exposure') || 1.15);
+const spatialTruthEnvMapIntensity = Number(args.get('--spatial-env-intensity') || 0.45);
+const spatialTruthExposure = Number(args.get('--spatial-exposure') || 0.9);
 const spatialTruthContactSheetViews = (args.get('--contact-sheet-views') || 'front,front-left,front-right,left,right,high-front,lower-socket-close')
   .split(',')
   .map(item => item.trim())
@@ -50,6 +50,9 @@ let lowerSocketSemanticRenderInventoryWitness = null;
 let spatialTruthWitness = null;
 let spatialTruthViewFrame = null;
 let spatialTruthContactSheet = null;
+let visualCaptureCompleted = false;
+let visualCaptureFailure = null;
+let primaryCapture = null;
 
 function writeReport(report) {
   mkdirSync(dirname(reportPath), { recursive: true });
@@ -444,6 +447,37 @@ async function main() {
         return state;
       })()
     `);
+    phase = 'screenshot';
+    let captureOptions = { format: 'png', captureBeyondViewport: false };
+    if (
+      clipCanvas
+      || focus === 'side-rim-clean-topology'
+      || focus === 'live-terminal-caps'
+      || focus === 'aperture-tangency'
+      || focus === 'aperture-orbit-capture'
+      || focus === 'lower-socket-semantic-render-inventory'
+      || focus === 'spatial-truth'
+    ) {
+      captureOptions = await canvasCaptureOptions(ws, focus);
+    }
+    try {
+      primaryCapture = await capturePng(ws, out, captureOptions);
+      visualCaptureCompleted = true;
+      if (focus === 'spatial-truth' && contactSheetOut) {
+        phase = 'contact-sheet';
+        spatialTruthContactSheet = await captureSpatialTruthContactSheet(ws, captureOptions);
+      }
+    } catch (error) {
+      visualCaptureFailure = {
+        schema: 'VisualCaptureFailure',
+        phase,
+        message: error.message,
+      };
+      throw error;
+    }
+
+    phase = 'structural-assertions';
+    async function assertCompositionStructuralInvariants() {
     assert.equal(state?.identity, 'orb-shell-macro-grammar-grounding-v0', 'wrong composition witness identity');
     assert.equal(state?.active, true, 'composition witness inactive');
     assert.equal(state?.baselineDisposition, 'coherent-but-wrong-model-baseline', 'v0 baseline disposition missing');
@@ -668,27 +702,9 @@ async function main() {
     assert.ok(state?.sphericalClosureAnchors?.some(anchor => anchor.id === 'crown-closure-anchor'), 'crown closure anchor missing');
     assert.ok(state?.inverseProceduralHypotheses, 'inverseProceduralHypotheses missing from debug state');
     assert.ok(state?.forbiddenFailureClasses?.includes('strip-soup'), 'failure class evidence missing');
-
-    phase = 'screenshot';
-    let captureOptions = { format: 'png', captureBeyondViewport: false };
-    if (
-      clipCanvas
-      || focus === 'side-rim-clean-topology'
-      || focus === 'live-terminal-caps'
-      || focus === 'aperture-tangency'
-      || focus === 'aperture-orbit-capture'
-      || focus === 'lower-socket-semantic-render-inventory'
-      || focus === 'spatial-truth'
-    ) {
-      captureOptions = await canvasCaptureOptions(ws, focus);
     }
-    const primaryCapture = await capturePng(ws, out, captureOptions);
+    await assertCompositionStructuralInvariants();
     const stats = primaryCapture.stats;
-    if (focus === 'spatial-truth' && contactSheetOut) {
-      phase = 'contact-sheet';
-      spatialTruthContactSheet = await captureSpatialTruthContactSheet(ws, captureOptions);
-      phase = 'screenshot';
-    }
     ws.close();
 
     writeReport({
@@ -698,6 +714,8 @@ async function main() {
       requestedUiControls: shouldApplyUiControls ? requestedUiControls : null,
       appliedUiControls,
       phase,
+      visualCaptureCompleted,
+      visualCaptureFailure,
       screenshot: { path: out, bytes: stats.bytes },
       visualStats: stats,
       macroAssemblageCount: state.macroAssemblageCount,
@@ -900,6 +918,13 @@ async function main() {
       ...report,
       phase,
       error: error.message,
+      visualCaptureCompleted,
+      visualCaptureFailure,
+      screenshot: primaryCapture ? { path: out, bytes: primaryCapture.stats.bytes } : null,
+      visualStats: primaryCapture?.stats ?? null,
+      spatialTruthWitness,
+      spatialTruthViewFrame,
+      spatialTruthContactSheet,
       browserEvents,
       stderrTail: stderr.slice(-2000),
     });

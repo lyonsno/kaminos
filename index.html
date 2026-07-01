@@ -15952,6 +15952,7 @@ function parseBooleanRouteFlag(value, defaultValue = false) {
 }
 
 function parseNumberRouteParam(params, name, defaultValue, minValue, maxValue) {
+  if (!params.has(name)) return defaultValue;
   const raw = params.get(name);
   const value = Number(raw);
   if (!Number.isFinite(value)) return defaultValue;
@@ -15959,8 +15960,8 @@ function parseNumberRouteParam(params, name, defaultValue, minValue, maxValue) {
 }
 
 function applyOrbShellSpatialTruthRenderPolicy(params) {
-  const envMapIntensity = parseNumberRouteParam(params, 'orb_shell_spatial_env_intensity', 0.9, 0, 3);
-  const exposure = parseNumberRouteParam(params, 'orb_shell_spatial_exposure', 1.15, 0.2, 2.5);
+  const envMapIntensity = parseNumberRouteParam(params, 'orb_shell_spatial_env_intensity', 0.45, 0, 3);
+  const exposure = parseNumberRouteParam(params, 'orb_shell_spatial_exposure', 0.9, 0.2, 2.5);
   const pass = params.get('orb_shell_spatial_pass') || 'clay';
   const view = params.get('orb_shell_spatial_view') || 'front';
   const includeOverlays = parseBooleanRouteFlag(params.get('orb_shell_spatial_overlays'), false);
@@ -15976,7 +15977,7 @@ function applyOrbShellSpatialTruthRenderPolicy(params) {
   renderer.toneMappingExposure = exposure;
   window.__kaminosOrbShellSpatialTruthRoutePolicy = {
     schema: 'OrbShellSpatialTruthRoutePolicy',
-    mode: 'route-coupled-spatial-truth-witness-v0',
+    mode: 'route-coupled-spatial-truth-witness-v1',
     focus: 'spatial-truth',
     pass,
     view,
