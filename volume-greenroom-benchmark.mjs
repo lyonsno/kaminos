@@ -257,7 +257,8 @@ writeJson(jobPath, { job });
 const startedAt = new Date().toISOString();
 const startMs = Date.now();
 const passRuns = [];
-let failedChild = null;
+let blockingFailure = null;
+let divergentRetryFailure = null;
 
 function runSweepPass(pass) {
   const paths = sweepArgsForPass(pass);
@@ -312,7 +313,7 @@ for (const pass of plannedPasses) {
   const result = runSweepPass(pass);
   if (result.aggregate) passAggregates.push(result.aggregate);
   if (result.child.status !== 0) {
-    failedChild = result.child;
+    blockingFailure = result.child;
     break;
   }
 }
@@ -327,7 +328,7 @@ let stabilitySummary = buildStabilitySummary(passAggregates, {
 });
 
 let divergentRetry = null;
-if (!failedChild && retryDivergent && !dryRun && passAggregates.length >= 2 && stabilitySummary.divergentScenarioIds.length > 0) {
+if (!blockingFailure && retryDivergent && !dryRun && passAggregates.length >= 2 && stabilitySummary.divergentScenarioIds.length > 0) {
   divergentRetry = {
     index: passRuns.length,
     slug: 'pass-3-divergent',
@@ -335,7 +336,23 @@ if (!failedChild && retryDivergent && !dryRun && passAggregates.length >= 2 && s
   };
   const result = runSweepPass(divergentRetry);
   if (result.aggregate) passAggregates.push(result.aggregate);
-  if (result.child.status !== 0) failedChild = result.child;
+  if (result.child.status !== 0) {
+    divergentRetryFailure = {
+      status: 'diagnostic-retry-failed',
+      exitStatus: result.child.status,
+      signal: result.child.signal,
+      aggregatePresent: Boolean(result.aggregate),
+      aggregatePath: result.passRun.aggregatePath,
+      failureCount: result.aggregate?.aggregate?.failures?.length || 0,
+      failureScenarioIds: (result.aggregate?.aggregate?.failures || []).map((failure) => failure.scenarioId).filter(Boolean),
+      spawnError: result.child.error ? {
+        name: result.child.error.name,
+        message: result.child.error.message,
+        code: result.child.error.code,
+      } : null,
+    };
+    if (!result.aggregate) blockingFailure = result.child;
+  }
   stabilitySummary = buildStabilitySummary(passAggregates, {
     repeatCount: passRuns.length,
     retryDivergent,
@@ -396,10 +413,16 @@ const combinedAggregate = {
 };
 writeJson(aggregatePath, combinedAggregate);
 
+const runStatus = blockingFailure
+  ? 'failed'
+  : (dryRun
+    ? 'dry-run'
+    : (divergentRetryFailure ? 'passed-with-diagnostic-retry-failures' : 'passed'));
+
 const run = {
   schema: GREENROOM_BENCHMARK_SCHEMA,
   jobId: GREENROOM_BENCHMARK_JOB_ID,
-  status: failedChild ? 'failed' : (dryRun ? 'dry-run' : 'passed'),
+  status: runStatus,
   startedAt,
   finishedAt,
   durationMs: Date.now() - startMs,
@@ -416,6 +439,7 @@ const run = {
   repeatCount,
   retryDivergent,
   divergentRetry,
+  divergentRetryFailure,
   divergentScenarioIds: stabilitySummary.divergentScenarioIds,
   stabilitySummary,
   passRuns,
@@ -424,12 +448,12 @@ const run = {
   uncontendedEvidenceClaim: false,
   effectiveCommand: requestedCommand,
   requestedCommand,
-  exitStatus: failedChild ? failedChild.status : 0,
-  signal: failedChild?.signal || null,
-  spawnError: failedChild?.error ? {
-    name: failedChild.error.name,
-    message: failedChild.error.message,
-    code: failedChild.error.code,
+  exitStatus: blockingFailure ? blockingFailure.status : 0,
+  signal: blockingFailure?.signal || null,
+  spawnError: blockingFailure?.error ? {
+    name: blockingFailure.error.name,
+    message: blockingFailure.error.message,
+    code: blockingFailure.error.code,
   } : null,
   aggregateSummary: combinedAggregate.aggregate ? {
     generatedAt: combinedAggregate.aggregate.generatedAt,
@@ -439,11 +463,13 @@ const run = {
     stabilitySummary: {
       stableCount: stabilitySummary.stableCount,
       suspectCount: stabilitySummary.suspectCount,
+      unmeasuredCount: stabilitySummary.unmeasuredCount,
       divergentScenarioIds: stabilitySummary.divergentScenarioIds,
     },
+    divergentRetryFailure,
   } : null,
 };
 
 writeJson(runPath, { job, run });
 console.log(JSON.stringify({ job, run }, null, 2));
-if (failedChild) process.exit(failedChild.status || 1);
+if (blockingFailure) process.exit(blockingFailure.status || 1);

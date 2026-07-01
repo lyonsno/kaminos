@@ -1820,6 +1820,7 @@ assert.match(greenroomBenchmark, /stabilitySummary/, 'greenroom benchmark emits 
 assert.match(greenroomBenchmark, /stabilitySuspect/, 'greenroom benchmark marks rows suspect when timing divergence exceeds tolerance');
 assert.match(greenroomBenchmark, /retryDivergent/, 'greenroom benchmark can run a targeted third pass for divergent scenarios');
 assert.match(greenroomBenchmark, /divergentScenarioIds/, 'greenroom benchmark records the scenario ids selected for divergent retry');
+assert.match(greenroomBenchmark, /divergentRetryFailure/, 'greenroom benchmark preserves optional divergent retry failures as diagnostic evidence');
 assert.match(greenroomBenchmark, /frameP95RelativeTolerance/, 'greenroom benchmark records frame p95 repeatability tolerance');
 assert.match(greenroomBenchmark, /queueDoneP95RelativeTolerance/, 'greenroom benchmark records GPU queue p95 repeatability tolerance');
 
