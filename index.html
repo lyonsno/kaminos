@@ -3742,7 +3742,7 @@ function pickSceneObjectFromViewportPointer(event) {
 }
 
 function viewportEventHitsInteractiveOverlay(event) {
-  return !!event.target.closest?.('#transform-bar, #greenroom-preview-controls, #info-bar');
+  return !!event.target.closest?.('#transform-bar, #greenroom-preview-controls, #info-bar, #hybrid-splat-viewport-controls');
 }
 
 function viewportEventIsInsideCanvas(event) {

@@ -121,6 +121,7 @@ assert.match(index, /id="splat-hybrid-renderer-status"/, 'Hybrid Renderer UI sur
 assert.match(index, /id="hybrid-splat-viewport-controls"/, 'Hybrid Renderer exposes viewport controls instead of hiding the primary action in the side panel');
 assert.match(index, /id="hybrid-splat-viewport-start-button"/, 'Hybrid Renderer viewport controls include a Start Hybrid action');
 assert.match(index, /id="hybrid-splat-renderer-controls-popover"/, 'Hybrid Renderer material/AO/normal controls are available from a viewport popover');
+assert.match(index, /viewportEventHitsInteractiveOverlay[\s\S]*#hybrid-splat-viewport-controls/, 'Hybrid Renderer viewport controls must not bubble into empty-viewport selection clearing');
 assert.match(index, /function publishHybridSplatRendererControls\(/, 'Kaminos publishes renderer-control slider state through the overlay setRendererControls API');
 assert.match(index, /rendererControlsTelemetry/, 'Hybrid Renderer debug state exposes renderer-control telemetry for smoke evidence');
 assert.match(index, /id="hybrid-splat-overlay-host"/, 'Hybrid Renderer overlay has a named viewport host for dual-canvas composition');
