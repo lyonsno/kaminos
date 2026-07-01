@@ -8,6 +8,7 @@ import re
 import sys
 import threading
 import time
+import uuid
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs, urlencode
 
@@ -1297,6 +1298,49 @@ def _browser_webgpu_result_errors(result):
     return errors
 
 
+def _browser_webgpu_result_filename(result):
+    route_id = str(result.get("routeId") or "browser-webgpu-route")
+    request_id = str(result.get("requestId") or uuid.uuid4().hex)
+    raw_name = f"{route_id}__{request_id}"
+    safe_name = "".join(
+        char if char.isalnum() or char in ".-_" else "-"
+        for char in raw_name
+    ).strip(".-_")
+    return f"{safe_name or uuid.uuid4().hex}.json"
+
+
+def write_browser_webgpu_route_result(result):
+    """Validate and persist one authoritative browser WebGPU route result."""
+    if not BROWSER_WEBGPU_ROUTE_RESULTS_DIR:
+        raise RuntimeError("KAMINOS_BROWSER_WEBGPU_ROUTE_RESULTS_DIR is required")
+
+    errors = _browser_webgpu_result_errors(result)
+    if errors:
+        raise ValueError("; ".join(errors))
+
+    result_root = Path(BROWSER_WEBGPU_ROUTE_RESULTS_DIR).expanduser()
+    result_root.mkdir(parents=True, exist_ok=True)
+    BROWSE_ROOTS["browser-webgpu-route-results"] = result_root
+    filename = _browser_webgpu_result_filename(result)
+    result_path = (result_root / filename).resolve()
+    root = result_root.resolve()
+    if not result_path.is_relative_to(root):
+        raise PermissionError("route result path escapes browser WebGPU result root")
+
+    body = json.dumps(result, indent=2, sort_keys=True) + "\n"
+    tmp_path = result_path.with_name(f".{result_path.name}.{uuid.uuid4().hex}.tmp")
+    tmp_path.write_text(body, encoding="utf-8")
+    os.replace(tmp_path, result_path)
+
+    return {
+        "schema": "kaminos.browser-webgpu-route-result-write.v0",
+        "provider": "browser-webgpu",
+        "result_path": str(result_path),
+        "receipt_link": _browser_webgpu_result_read_link(result_path),
+        "route_provider_index": build_browser_webgpu_route_provider_index(),
+    }
+
+
 def _browser_webgpu_route_row_from_result(path, result):
     receipt = result["receipt"]
     runtime = receipt.get("runtime") if isinstance(receipt.get("runtime"), dict) else {}
@@ -1574,6 +1618,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_ingest_splat(parse_qs(parsed.query))
         elif parsed.path == "/api/splat-correction":
             self.handle_splat_correction_post(parse_qs(parsed.query))
+        elif parsed.path == "/api/route-results/browser-webgpu":
+            self.handle_browser_webgpu_route_result_post()
         elif parsed.path == "/api/route-jobs/checkpoint-pause":
             self.handle_route_job_checkpoint_pause(parse_qs(parsed.query))
         else:
@@ -1895,6 +1941,31 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             "receipt": receipt,
             "route_provider_index": build_greenroom_route_provider_index(),
         })
+
+    def handle_browser_webgpu_route_result_post(self):
+        """Persist a browser WebGPU kit route result for route-tray ingestion."""
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+        except ValueError:
+            self.send_json({"error": "Invalid Content-Length"}, 400)
+            return
+        try:
+            payload = json.loads(self.rfile.read(length) or b"{}")
+        except Exception:
+            self.send_json({"error": "Invalid JSON"}, 400)
+            return
+        try:
+            result = write_browser_webgpu_route_result(payload)
+        except RuntimeError as error:
+            self.send_json({"error": str(error)}, 503)
+            return
+        except PermissionError as error:
+            self.send_json({"error": str(error)}, 403)
+            return
+        except ValueError as error:
+            self.send_json({"error": str(error)}, 400)
+            return
+        self.send_json(result, 201)
 
     def handle_read(self, params):
         """Read a file's content. ?root=scratch&path=file.json"""

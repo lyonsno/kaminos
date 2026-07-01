@@ -647,6 +647,67 @@ def test_browser_webgpu_route_provider_rejects_non_authoritative_kit_results_as_
     assert row["route_job"]["metadata"]["evidenceClassification"]["authoritative"] is False
 
 
+def test_browser_webgpu_route_result_writer_persists_authoritative_payload():
+    with TemporaryDirectory(dir="/tmp") as tmp:
+        results_dir = Path(tmp) / "browser-webgpu-results"
+        previous = getattr(serve, "BROWSER_WEBGPU_ROUTE_RESULTS_DIR", None)
+        serve.BROWSER_WEBGPU_ROUTE_RESULTS_DIR = results_dir
+        try:
+            result = serve.write_browser_webgpu_route_result(browser_webgpu_route_result())
+        finally:
+            serve.BROWSER_WEBGPU_ROUTE_RESULTS_DIR = previous
+
+        result_path = Path(result["result_path"])
+        assert result["schema"] == "kaminos.browser-webgpu-route-result-write.v0"
+        assert result["provider"] == "browser-webgpu"
+        assert result_path.parent == results_dir.resolve()
+        assert result_path.name == "moge.depth-normal.webgpu-local.v0__req-moge-bunnycake.json"
+        assert result["receipt_link"] == "/api/read?root=browser-webgpu-route-results&path=moge.depth-normal.webgpu-local.v0__req-moge-bunnycake.json"
+        assert result_path.exists()
+        assert not list(results_dir.glob("*.tmp"))
+        written = json.loads(result_path.read_text(encoding="utf-8"))
+        assert written["schema"] == "kaminos.webgpu-route-result.v0"
+        assert written["requestId"] == "req:moge-bunnycake"
+        assert written["receipt"]["effectiveRouteId"] == MOGE_WEBGPU_ROUTE_ID
+        assert result["route_provider_index"]["provider"]["source"] == "route-result-files"
+        [row] = result["route_provider_index"]["rows"]
+        assert row["job_id"] == "browser-webgpu-req:moge-bunnycake"
+        assert row["route_job"]["metadata"]["evidenceClassification"]["authoritative"] is True
+
+
+def test_browser_webgpu_route_result_writer_rejects_unconfigured_or_non_authoritative_payloads():
+    previous = getattr(serve, "BROWSER_WEBGPU_ROUTE_RESULTS_DIR", None)
+    serve.BROWSER_WEBGPU_ROUTE_RESULTS_DIR = None
+    try:
+        try:
+            serve.write_browser_webgpu_route_result(browser_webgpu_route_result())
+            assert False, "unconfigured writer should fail"
+        except RuntimeError as error:
+            assert "KAMINOS_BROWSER_WEBGPU_ROUTE_RESULTS_DIR" in str(error)
+    finally:
+        serve.BROWSER_WEBGPU_ROUTE_RESULTS_DIR = previous
+
+    with TemporaryDirectory(dir="/tmp") as tmp:
+        results_dir = Path(tmp) / "browser-webgpu-results"
+        previous = getattr(serve, "BROWSER_WEBGPU_ROUTE_RESULTS_DIR", None)
+        serve.BROWSER_WEBGPU_ROUTE_RESULTS_DIR = results_dir
+        try:
+            try:
+                serve.write_browser_webgpu_route_result(browser_webgpu_route_result(status="fallback"))
+                assert False, "fallback writer should fail"
+            except ValueError as error:
+                assert "status must be real" in str(error)
+            try:
+                serve.write_browser_webgpu_route_result(browser_webgpu_route_result(output_status="missing-hash"))
+                assert False, "missing-hash writer should fail"
+            except ValueError as error:
+                assert "sha256" in str(error)
+        finally:
+            serve.BROWSER_WEBGPU_ROUTE_RESULTS_DIR = previous
+
+        assert not list(results_dir.glob("*.json"))
+
+
 def test_route_provider_all_combines_native_greenroom_and_browser_webgpu_rows():
     with TemporaryDirectory(dir="/tmp") as tmp:
         greenroom = Path(tmp) / "greenroom"
@@ -926,6 +987,8 @@ if __name__ == "__main__":
     test_browser_webgpu_route_provider_projects_fixture_route_identity()
     test_browser_webgpu_route_provider_ingests_authoritative_kit_result()
     test_browser_webgpu_route_provider_rejects_non_authoritative_kit_results_as_row_owners()
+    test_browser_webgpu_route_result_writer_persists_authoritative_payload()
+    test_browser_webgpu_route_result_writer_rejects_unconfigured_or_non_authoritative_payloads()
     test_route_provider_all_combines_native_greenroom_and_browser_webgpu_rows()
     test_native_greenroom_route_provider_preserves_degraded_legacy_rows()
     test_splat_asset_index_separates_experimental_and_production_roots()
