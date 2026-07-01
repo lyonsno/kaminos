@@ -340,3 +340,35 @@ assert.ok(failedStatusWithoutExit.routeTelemetry.telemetryWarnings.includes('pip
 assert.ok(failedStatusWithoutExit.routeTelemetry.telemetryWarnings.includes('pipeline_stage_status_failed:run-sharp-image-to-splat'));
 assert.ok(failedStatusWithoutExit.witnessWarnings.includes('pipeline_report_failed'));
 assert.ok(failedStatusWithoutExit.witnessWarnings.includes('pipeline_stage_status_failed:run-sharp-image-to-splat'));
+
+const partialStatus = buildComputeRouteContentionWitnessFromReport({
+  ...telemetryReport,
+  pipelineReport: {
+    ...telemetryReport.pipelineReport,
+    artifacts: {
+      ...telemetryReport.pipelineReport.artifacts,
+      splat: {
+        ...telemetryReport.pipelineReport.artifacts.splat,
+        status: 'partial',
+      },
+    },
+    stages: [
+      {
+        ...telemetryReport.pipelineReport.stages[0],
+        status: 'partial',
+      },
+      telemetryReport.pipelineReport.stages[1],
+    ],
+  },
+}, {
+  requestedVisualBudget: {
+    budgetId: 'live',
+    liveSimulation: true,
+    prerecorded: false,
+  },
+});
+assert.ok(partialStatus.routeTelemetry.telemetryWarnings.includes('pipeline_stage_status_partial:run-sharp-image-to-splat'));
+assert.ok(partialStatus.routeTelemetry.telemetryWarnings.includes('pipeline_artifact_status_partial:splat'));
+assert.ok(partialStatus.witnessWarnings.includes('pipeline_stage_status_partial:run-sharp-image-to-splat'));
+assert.ok(partialStatus.witnessWarnings.includes('pipeline_artifact_status_partial:splat'));
+assert.equal(partialStatus.falseClosureChecks.missingRouteTelemetry, false);

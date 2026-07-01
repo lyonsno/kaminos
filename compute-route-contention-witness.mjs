@@ -243,9 +243,14 @@ function routeTelemetryFromReport(report = {}) {
   for (const stage of stages) {
     const stageId = stage?.id || 'unknown-stage';
     if (stage?.status === 'failed') telemetryWarnings.push(`pipeline_stage_status_failed:${stageId}`);
+    if (stage?.status === 'partial') telemetryWarnings.push(`pipeline_stage_status_partial:${stageId}`);
     const exitCode = finiteOrNull(stage?.effectiveRoute?.exitCode);
     if (exitCode !== null && exitCode !== 0) telemetryWarnings.push(`pipeline_stage_exit_nonzero:${stageId}`);
     if (stage?.effectiveRoute?.signal) telemetryWarnings.push(`pipeline_stage_signal:${stageId}`);
+  }
+  for (const [artifactId, artifact] of Object.entries(pipelineReport?.artifacts || {})) {
+    if (artifactId === 'input') continue;
+    if (artifact?.status === 'partial') telemetryWarnings.push(`pipeline_artifact_status_partial:${artifactId}`);
   }
   if (report.runPipeline === true && !report.pipelineExit) telemetryWarnings.push('pipeline_exit_missing');
   const pipelineExit = normalizePipelineExit(report.pipelineExit);
