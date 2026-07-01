@@ -1437,3 +1437,9 @@ assert.match(fieldResidualProbe, /identityBaseline/, 'field residual probe repor
 assert.match(fieldResidualProbe, /meanResidualBaseline/, 'field residual probe reports a train-mean residual baseline');
 assert.match(fieldResidualProbe, /improvementVsIdentity/, 'field residual probe reports model improvement against identity baseline');
 assert.match(fieldResidualProbe, /failurePhase/, 'field residual probe records failure phase when data ingestion or training fails');
+assert.match(fieldResidualProbe, /spatial-context-linear-ridge-v0/, 'field residual probe can run a spatial-context ridge residual model');
+assert.match(fieldResidualProbe, /--model/, 'field residual probe exposes model selection instead of silently changing probe identity');
+assert.match(fieldResidualProbe, /--context-radius/, 'field residual probe exposes local spatial context radius as an explicit run control');
+assert.match(fieldResidualProbe, /contextWindow/, 'field residual probe reports the effective spatial context window');
+assert.match(fieldResidualProbe, /contextFeatureCount/, 'field residual probe reports context feature dimensionality');
+assert.match(fieldResidualProbe, /affineComparison/, 'field residual probe compares spatial-context performance against the affine probe baseline');
