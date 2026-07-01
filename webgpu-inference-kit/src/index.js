@@ -25,6 +25,7 @@ export {
 } from './staged-profile.js';
 
 export {
+  WEBGPU_INFERENCE_KIT_VERSION,
   createKernelProfileMetadata,
   createRouteKernelProfileMetadata,
   createRouteTimingMetadata,

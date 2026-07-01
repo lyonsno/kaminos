@@ -1,4 +1,5 @@
-const DEFAULT_KIT_VERSION = '0.0.0';
+export const WEBGPU_INFERENCE_KIT_VERSION = '0.1.1';
+const DEFAULT_KIT_VERSION = WEBGPU_INFERENCE_KIT_VERSION;
 const DEFAULT_TIMING_SOURCE = 'queue-submit-wait';
 
 function isNonEmptyString(value) {

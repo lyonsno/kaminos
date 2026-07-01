@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 
 import {
+  WEBGPU_INFERENCE_KIT_VERSION,
   createKernelProfileMetadata,
   createRouteKernelProfileMetadata,
   createRouteTimingMetadata,
@@ -8,12 +9,14 @@ import {
   validateRouteTimingMetadata,
 } from '../src/index.js';
 
+assert.equal(WEBGPU_INFERENCE_KIT_VERSION, '0.1.1');
+
 const kernel = createKernelProfileMetadata({
   profile: 'conv-transpose2d-stride2',
   commit: 'a1bf4d3',
 });
 assert.deepEqual(kernel, {
-  kitVersion: '0.0.0',
+  kitVersion: WEBGPU_INFERENCE_KIT_VERSION,
   profile: 'conv-transpose2d-stride2',
   commit: 'a1bf4d3',
 });
@@ -21,7 +24,7 @@ assert.deepEqual(kernel, {
 assert.deepEqual(
   createKernelProfileMetadata({}, { defaultProfile: 'twostage-denoiser-ddim50-fk' }),
   {
-    kitVersion: '0.0.0',
+    kitVersion: WEBGPU_INFERENCE_KIT_VERSION,
     profile: 'twostage-denoiser-ddim50-fk',
     commit: null,
   },
@@ -29,6 +32,10 @@ assert.deepEqual(
 
 assert.deepEqual(validateKernelProfileMetadata(kernel), { ok: true, errors: [] });
 assert.equal(validateKernelProfileMetadata({ kitVersion: '0.0.0', profile: '', commit: null }).ok, false);
+assert.equal(
+  createKernelProfileMetadata({ kitVersion: 'consumer-override', profile: 'custom-profile' }).kitVersion,
+  'consumer-override',
+);
 assert.throws(
   () => createKernelProfileMetadata({}, { requireProfile: true }),
   /kernel.profile must be a non-empty string/,
@@ -54,7 +61,7 @@ const routeMetadata = createRouteKernelProfileMetadata({
 });
 assert.deepEqual(routeMetadata, {
   kernel: {
-    kitVersion: '0.0.0',
+    kitVersion: WEBGPU_INFERENCE_KIT_VERSION,
     profile: 'dinov2-two-stream-triplane-marching-tet-texture-bake',
     commit: null,
   },
