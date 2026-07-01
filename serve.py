@@ -4,6 +4,7 @@
 import http.server
 import json
 import os
+import queue
 import re
 import subprocess
 import sys
@@ -233,6 +234,121 @@ def run_pipeline_witness(payload):
             "document": bundle,
         },
     }
+
+
+def _pipeline_progress_event_from_line(line, stream_name):
+    text = str(line or "").strip()
+    if not text:
+        return None
+    try:
+        event = json.loads(text)
+    except json.JSONDecodeError:
+        return None
+    if event.get("schema") != "kaminos.pipeline-progress.v0":
+        return None
+    return {
+        **event,
+        "schema": "kaminos.pipeline-progress.v0",
+        "kind": event.get("kind") or "pipeline-progress",
+        "stream": stream_name,
+    }
+
+
+def _write_pipeline_stream_event(handler, event):
+    body = (json.dumps(event, separators=(",", ":")) + "\n").encode()
+    handler.wfile.write(body)
+    handler.wfile.flush()
+
+
+def run_pipeline_witness_stream(handler, payload):
+    pipeline_id = str(payload.get("pipelineId") or payload.get("pipeline_id") or "").strip()
+    if not pipeline_id:
+        raise ValueError("pipelineId required")
+    source = resolve_pipeline_source(payload)
+    out_dir_raw = str(payload.get("outDir") or payload.get("out_dir") or "").strip()
+    out_dir = Path(out_dir_raw).expanduser() if out_dir_raw else _default_pipeline_out_dir(pipeline_id)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    report_path = out_dir / "pipeline-witness.json"
+    command = [
+        os.environ.get("KAMINOS_NODE", "node"),
+        str(PIPELINE_WITNESS_PATH),
+        "--manifest", str(PIPELINE_MANIFEST_PATH),
+        "--pipeline-id", pipeline_id,
+        "--input", source["path"],
+        "--out-dir", str(out_dir),
+        "--report", str(report_path),
+    ]
+    timeout = int(os.environ.get("KAMINOS_PIPELINE_WITNESS_TIMEOUT", "360"))
+    proc = subprocess.Popen(
+        command,
+        cwd=ROOT,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        bufsize=1,
+        env={**os.environ, "KAMINOS_PIPELINE_PROGRESS_STREAM": "1"},
+    )
+    events = queue.Queue()
+    stdout_chunks = []
+    stderr_chunks = []
+
+    def reader(pipe, stream_name, chunks):
+        try:
+            for line in iter(pipe.readline, ""):
+                chunks.append(line)
+                event = _pipeline_progress_event_from_line(line, stream_name)
+                if event:
+                    events.put(event)
+        finally:
+            pipe.close()
+
+    threads = [
+        threading.Thread(target=reader, args=(proc.stdout, "stdout", stdout_chunks), daemon=True),
+        threading.Thread(target=reader, args=(proc.stderr, "stderr", stderr_chunks), daemon=True),
+    ]
+    for thread in threads:
+        thread.start()
+    started = time.monotonic()
+    while proc.poll() is None:
+        if time.monotonic() - started > timeout:
+            proc.kill()
+            raise subprocess.TimeoutExpired(command, timeout)
+        try:
+            _write_pipeline_stream_event(handler, events.get(timeout=0.05))
+        except queue.Empty:
+            pass
+    for thread in threads:
+        thread.join(timeout=1)
+    while True:
+        try:
+            _write_pipeline_stream_event(handler, events.get_nowait())
+        except queue.Empty:
+            break
+
+    report = json.loads(report_path.read_text()) if report_path.exists() else None
+    bundle_path = Path(report["bundleIndex"]["path"]) if report and report.get("bundleIndex") else None
+    bundle = json.loads(bundle_path.read_text()) if bundle_path and bundle_path.exists() else None
+    result = {
+        "schema": "kaminos.pipeline-run-result.v0",
+        "kind": "pipeline-result",
+        "ok": proc.returncode == 0 and bool(report and report.get("ok")),
+        "pipelineId": pipeline_id,
+        "source": source,
+        "command": command,
+        "exitCode": proc.returncode,
+        "stdoutTail": "".join(stdout_chunks)[-4000:],
+        "stderrTail": "".join(stderr_chunks)[-4000:],
+        "report": {
+            "path": str(report_path),
+            "document": report,
+        },
+        "bundle": {
+            "path": str(bundle_path) if bundle_path else None,
+            "document": bundle,
+        },
+    }
+    _write_pipeline_stream_event(handler, result)
+    return result
 
 
 def _clean_label(value, fallback="Untitled"):
@@ -752,6 +868,25 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             payload = json.loads(self.rfile.read(length) or b"{}")
         except json.JSONDecodeError:
             self.send_json({"error": "Invalid JSON"}, 400)
+            return
+        wants_stream = bool(payload.get("streamProgress")) or "application/x-ndjson" in self.headers.get("Accept", "")
+        if wants_stream:
+            self.send_response(200)
+            self.send_header("Content-Type", "application/x-ndjson")
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            try:
+                run_pipeline_witness_stream(self, payload)
+            except ValueError as error:
+                _write_pipeline_stream_event(self, {"schema": "kaminos.pipeline-run-result.v0", "kind": "pipeline-result", "ok": False, "error": str(error)})
+            except PermissionError as error:
+                _write_pipeline_stream_event(self, {"schema": "kaminos.pipeline-run-result.v0", "kind": "pipeline-result", "ok": False, "error": str(error)})
+            except FileNotFoundError as error:
+                _write_pipeline_stream_event(self, {"schema": "kaminos.pipeline-run-result.v0", "kind": "pipeline-result", "ok": False, "error": str(error)})
+            except subprocess.TimeoutExpired:
+                _write_pipeline_stream_event(self, {"schema": "kaminos.pipeline-run-result.v0", "kind": "pipeline-result", "ok": False, "error": "pipeline witness timed out"})
+            except Exception as error:
+                _write_pipeline_stream_event(self, {"schema": "kaminos.pipeline-run-result.v0", "kind": "pipeline-result", "ok": False, "error": str(error)})
             return
         try:
             result = run_pipeline_witness(payload)

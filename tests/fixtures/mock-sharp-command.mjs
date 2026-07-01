@@ -21,8 +21,35 @@ if (!depthPath || !metadataPath || !autoCropEvidencePath) {
 }
 
 const delayMs = Number(process.env.KAMINOS_MOCK_SHARP_DELAY_MS || 0);
+const progressEnabled = process.env.KAMINOS_MOCK_SHARP_PROGRESS === '1' || process.env.KAMINOS_PIPELINE_PROGRESS_STREAM === '1';
+
+function emitMockSharpProgress(phase, message, progress) {
+  if (!progressEnabled) return;
+  process.stdout.write(`${JSON.stringify({
+    schema: 'kaminos.pipeline-progress.v0',
+    kind: 'adapter-progress',
+    source: 'mock-sharp-command',
+    phase,
+    message,
+    progress,
+    at: new Date().toISOString(),
+  })}\n`);
+}
+
+async function waitWithProgress(ms) {
+  const slice = Math.max(25, Math.floor(ms / 3));
+  emitMockSharpProgress('mock-sharp:loading', 'Mock SHARP loading source image', 0.18);
+  await new Promise(resolve => setTimeout(resolve, slice));
+  emitMockSharpProgress('mock-sharp:depth', 'Mock SHARP deriving depth/projection evidence', 0.42);
+  await new Promise(resolve => setTimeout(resolve, slice));
+  emitMockSharpProgress('mock-sharp:splatting', 'Mock SHARP writing splat candidates', 0.72);
+  await new Promise(resolve => setTimeout(resolve, Math.max(0, ms - slice * 2)));
+}
+
 if (Number.isFinite(delayMs) && delayMs > 0) {
-  await new Promise(resolve => setTimeout(resolve, delayMs));
+  await waitWithProgress(delayMs);
+} else {
+  emitMockSharpProgress('mock-sharp:splatting', 'Mock SHARP writing splat candidates', 0.72);
 }
 
 const inputBytes = readFileSync(input);

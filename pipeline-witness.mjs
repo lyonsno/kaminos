@@ -2,7 +2,7 @@
 import { createHash } from 'node:crypto';
 import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { delimiter, dirname, extname, isAbsolute, join, resolve } from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import {
   createWebGpuRouteBackpressureProfile,
   createWebGpuRouteSchedulerProfile,
@@ -38,11 +38,55 @@ let pipeline = null;
 let lastTrustworthyEvidence = {};
 const stages = [];
 const artifacts = {};
+const progressStreamEnabled = process.env.KAMINOS_PIPELINE_PROGRESS_STREAM === '1';
 const sharpFixtureSplatCandidates = [
   '/Users/noahlyons/.local/state/kaminos-smoke/splats/inbox/evil_orb_trimmed_050.ply',
   '/Users/noahlyons/.local/state/kaminos-smoke/splats/inbox/evil_orb_full_pbr_2k.ply',
   '/Users/noahlyons/.local/state/kaminos-smoke/splats/inbox/evil_orb.ply',
 ].map(path => ({ path, mode: 'local-candidate' }));
+
+function emitPipelineProgress(event = {}) {
+  if (!progressStreamEnabled) return;
+  const payload = {
+    schema: 'kaminos.pipeline-progress.v0',
+    kind: 'pipeline-progress',
+    requestedPipelineId,
+    effectivePipelineId: pipeline?.id || null,
+    phase,
+    at: new Date().toISOString(),
+    ...event,
+  };
+  process.stdout.write(`${JSON.stringify(payload)}\n`);
+}
+
+function forwardAdapterProgressLine(line, effectiveRoute = {}) {
+  const text = String(line || '').trim();
+  if (!text) return null;
+  let parsed = null;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  if (parsed?.schema !== 'kaminos.pipeline-progress.v0') return null;
+  const forwarded = {
+    ...parsed,
+    schema: 'kaminos.pipeline-progress.v0',
+    kind: parsed.kind || 'adapter-progress',
+    source: parsed.source || 'adapter-stdout',
+    adapterRouteId: effectiveRoute.id || null,
+    adapterTool: effectiveRoute.tool || null,
+    requestedPipelineId,
+    effectivePipelineId: pipeline?.id || null,
+    at: parsed.at || new Date().toISOString(),
+  };
+  emitPipelineProgress(forwarded);
+  return forwarded;
+}
+
+function collectTail(chunks, maxChars = 4000) {
+  return chunks.join('').slice(-maxChars);
+}
 
 function sha256Bytes(bytes) {
   return createHash('sha256').update(bytes).digest('hex');
@@ -743,7 +787,7 @@ function recordFailedStage(stage, outputPath, effectiveRoute, error) {
   });
 }
 
-function runLiveModelAdapter(outputPath, stage) {
+async function runLiveModelAdapter(outputPath, stage) {
   const availability = adapterAvailability(stage);
   const adapterReportPath = liveAdapterReportPath(outputPath, stage);
   const effectiveRoute = {
@@ -773,7 +817,18 @@ function runLiveModelAdapter(outputPath, stage) {
   ];
   const paths = artifactPathMap();
   effectiveRoute.executedCommand = [command, ...commandArgs];
-  const proc = spawnSync(command, commandArgs, {
+  emitPipelineProgress({
+    kind: 'adapter-progress',
+    phase: `stage:${stage.id}:starting-adapter`,
+    message: `Starting ${effectiveRoute.tool} adapter`,
+    status: 'running',
+    stageId: stage.id,
+    progress: 0,
+  });
+  const stdoutChunks = [];
+  const stderrChunks = [];
+  const adapterProgressEvents = [];
+  const proc = spawn(command, commandArgs, {
     cwd: process.cwd(),
     encoding: 'utf8',
     env: {
@@ -788,17 +843,47 @@ function runLiveModelAdapter(outputPath, stage) {
       KAMINOS_PIPELINE_ARTIFACT_PATHS: JSON.stringify(paths),
       KAMINOS_PIPELINE_SIDECAR: paths.sidecar || '',
       KAMINOS_PIPELINE_AUTOCROP_EVIDENCE: paths.autoCropEvidence || '',
+      KAMINOS_PIPELINE_PROGRESS_STREAM: progressStreamEnabled ? '1' : '',
     },
   });
-  effectiveRoute.exitCode = proc.status;
-  effectiveRoute.signal = proc.signal || null;
-  effectiveRoute.stdoutTail = (proc.stdout || '').slice(-4000);
-  effectiveRoute.stderrTail = (proc.stderr || '').slice(-4000);
+  proc.stdout?.setEncoding('utf8');
+  proc.stderr?.setEncoding('utf8');
+  let stdoutCarry = '';
+  let stderrCarry = '';
+  const consumeLine = line => {
+    const forwarded = forwardAdapterProgressLine(line, effectiveRoute);
+    if (forwarded) adapterProgressEvents.push(forwarded);
+  };
+  proc.stdout?.on('data', chunk => {
+    const text = String(chunk);
+    stdoutChunks.push(text);
+    const parts = `${stdoutCarry}${text}`.split(/\r?\n/);
+    stdoutCarry = parts.pop() || '';
+    parts.forEach(consumeLine);
+  });
+  proc.stderr?.on('data', chunk => {
+    const text = String(chunk);
+    stderrChunks.push(text);
+    const parts = `${stderrCarry}${text}`.split(/\r?\n/);
+    stderrCarry = parts.pop() || '';
+    parts.forEach(consumeLine);
+  });
+  const procResult = await new Promise(resolve => {
+    proc.on('error', error => resolve({ error, status: null, signal: null }));
+    proc.on('close', (status, signal) => resolve({ error: null, status, signal }));
+  });
+  if (stdoutCarry) consumeLine(stdoutCarry);
+  if (stderrCarry) consumeLine(stderrCarry);
+  effectiveRoute.exitCode = procResult.status;
+  effectiveRoute.signal = procResult.signal || null;
+  effectiveRoute.stdoutTail = collectTail(stdoutChunks);
+  effectiveRoute.stderrTail = collectTail(stderrChunks);
+  effectiveRoute.progressEvents = adapterProgressEvents;
   const adapterReport = readJsonIfExists(adapterReportPath);
   effectiveRoute.adapterReport = adapterReportSummary(adapterReport, effectiveRoute);
   effectiveRoute.pipelineScheduler = pipelineSchedulerEvidence(adapterReport, effectiveRoute);
-  if (proc.error || proc.status !== 0) {
-    const message = proc.error?.message || `live model adapter exited ${proc.status}`;
+  if (procResult.error || procResult.status !== 0) {
+    const message = procResult.error?.message || `live model adapter exited ${procResult.status}`;
     const error = new Error(message);
     effectiveRoute.truthBoundary = 'requested live SHARP adapter failed; no fixture fallback was used';
     recordFailedStage(stage, outputPath, effectiveRoute, error);
@@ -811,6 +896,14 @@ function runLiveModelAdapter(outputPath, stage) {
     throw error;
   }
   const outputEvidence = fileEvidence(outputPath);
+  emitPipelineProgress({
+    kind: 'adapter-progress',
+    phase: `stage:${stage.id}:output-written`,
+    message: `${effectiveRoute.tool} adapter wrote ${stage.outputArtifact || 'output'}`,
+    status: 'running',
+    stageId: stage.id,
+    progress: 0.92,
+  });
   effectiveRoute.outputSha256 = outputEvidence.sha256;
   effectiveRoute.outputBytes = outputEvidence.bytes;
   const classification = classifyLiveAdapterOutput(effectiveRoute, stage, stage.outputArtifact);
@@ -820,11 +913,19 @@ function runLiveModelAdapter(outputPath, stage) {
   return effectiveRoute;
 }
 
-function runStage(stage) {
+async function runStage(stage) {
   phase = `stage:${stage.id}`;
   const outputPath = artifactPathFor(stage.outputArtifact);
   if (!outputPath) throw new Error(`stage ${stage.id} has no caller-rooted output artifact`);
   const requestedRoute = stage.route?.id || stage.id;
+  emitPipelineProgress({
+    kind: 'stage-progress',
+    phase,
+    message: `Running stage ${stage.label || stage.id}`,
+    status: 'running',
+    stageId: stage.id,
+    progress: null,
+  });
   const effectiveRoute = {
     id: requestedRoute,
     tool: stage.route?.tool || 'pipeline-witness.mjs',
@@ -843,7 +944,7 @@ function runStage(stage) {
   } else if (existsSync(outputPath)) {
     status = 'cached';
   } else if (stage.statusMode === 'model-adapter' && stage.route?.executesModel === true) {
-    Object.assign(effectiveRoute, runLiveModelAdapter(outputPath, stage));
+    Object.assign(effectiveRoute, await runLiveModelAdapter(outputPath, stage));
     status = effectiveRoute.stageStatus || 'real';
     fixtureSource = effectiveRoute.fixtureSource || null;
   } else if (stage.statusMode === 'model-adapter' && stage.outputArtifact === 'sidecar') {
@@ -894,10 +995,19 @@ function runStage(stage) {
     outputBytes: evidence.bytes,
   };
   stages.push(record);
+  emitPipelineProgress({
+    kind: 'stage-progress',
+    phase: `stage:${stage.id}:complete`,
+    message: `Stage ${stage.label || stage.id} recorded ${status} ${stage.outputArtifact || 'output'}`,
+    status,
+    stageId: stage.id,
+    progress: 1,
+  });
 }
 
 try {
   phase = 'loading-manifest';
+  emitPipelineProgress({ phase, message: 'Loading pipeline manifest', status: 'running', progress: 0 });
   if (!existsSync(manifestPath)) throw new Error(`manifest does not exist: ${manifestPath}`);
   const manifestBytes = readFileSync(manifestPath);
   manifestSha256 = sha256Bytes(manifestBytes);
@@ -913,10 +1023,12 @@ try {
   }
 
   phase = 'selecting-pipeline';
+  emitPipelineProgress({ phase, message: `Selecting pipeline ${requestedPipelineId}`, status: 'running', progress: 0.05 });
   pipeline = manifest.pipelines.find(candidate => candidate.id === requestedPipelineId);
   if (!pipeline) throw new Error(`pipeline id not found: ${requestedPipelineId}`);
 
   phase = 'validating-inputs';
+  emitPipelineProgress({ phase, message: 'Validating pipeline inputs', status: 'running', progress: 0.1 });
   requireInputs();
   artifacts.input = {
     role: pipeline.artifacts?.input?.role || 'input',
@@ -925,20 +1037,29 @@ try {
   };
 
   phase = 'running-stages';
+  emitPipelineProgress({ phase, message: 'Running pipeline stages', status: 'running', progress: 0.15 });
   mkdirSync(outDir, { recursive: true });
   for (const stage of pipeline.stages || []) {
-    runStage(stage);
+    await runStage(stage);
   }
 
   phase = 'complete';
+  emitPipelineProgress({ phase, message: 'Writing pipeline bundle evidence', status: 'running', progress: 0.97 });
   const bundleIndex = writeBundleIndex();
   writeReport({ ok: true, bundleIndex });
+  emitPipelineProgress({ phase, message: 'Pipeline witness complete', status: 'complete', progress: 1 });
 } catch (error) {
   const failingStage = stages.at(-1);
   if (failingStage && failingStage.status !== 'failed') failingStage.status = 'failed';
   writeReport({
     ok: false,
     error: error?.message || String(error),
+  });
+  emitPipelineProgress({
+    phase: 'failed',
+    message: error?.message || String(error),
+    status: 'failed',
+    progress: null,
   });
   console.error(error?.stack || error);
   process.exitCode = 1;

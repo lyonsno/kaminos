@@ -25,6 +25,7 @@ const expectedArtifactRole = args.get('artifact-role') || (pipelineId === 'sharp
 const expectsLoadableArtifact = expectedArtifactRole.includes('splat');
 const expectsFixture = args.get('expect-fixture') === '1' || pipelineId.includes('fixture');
 const graphExecuteTimeoutMs = Number(args.get('graph-execute-timeout-ms') || (pipelineId === 'sharp-image-to-splat-live-v0' ? 240000 : 90000));
+const mockSharpProgressEnv = 'KAMINOS_MOCK_SHARP_PROGRESS';
 const beforePath = args.get('before') || '/tmp/kaminos-pipeline-ui-witness-before.png';
 const afterPath = args.get('after') || '/tmp/kaminos-pipeline-ui-witness-after.png';
 const historyPath = args.get('history') || '/tmp/kaminos-pipeline-ui-witness-history.png';
@@ -453,9 +454,10 @@ try {
       const outputContainer = document.querySelector(\`[data-pipeline-output-container-route-id="${routeNode.routeNodeId}"]\`);
       const statusNode = pendingRecord ? document.querySelector(\`[data-pipeline-generated-output-node-id="\${pendingRecord.id}"][data-pipeline-generated-output-status]\`) : null;
       const statusPill = pendingRecord ? document.querySelector(\`[data-pipeline-route-output-id="\${pendingRecord.id}"][data-pipeline-generated-output-status]\`) : null;
-      const routeStatusNode = document.querySelector(\`[data-pipeline-graph-node-id="${routeNode.routeNodeId}"][data-pipeline-route-live-status]\`);
+      const routeStatusNode = document.querySelector(\`[data-pipeline-graph-node-id="${routeNode.routeNodeId}"][data-pipeline-route-live-status][data-pipeline-route-progress]\`);
       const routeLiveStatus = routeStatusNode?.dataset?.pipelineRouteLiveStatus || null;
       const routeLivePhase = routeStatusNode?.dataset?.pipelineRouteLivePhase || null;
+      const routeLiveProgress = routeStatusNode?.dataset?.pipelineRouteProgress || '';
       return {
         ok: Boolean(
           pendingRecord
@@ -473,12 +475,29 @@ try {
         generatedOutputNodes,
         routeLiveStatus,
         routeLivePhase,
+        routeLiveProgress,
         routeLiveText: routeStatusNode?.innerText || '',
         outputContainerText: outputContainer?.innerText || '',
         statusNodeText: statusNode?.innerText || '',
         statusPillText: statusPill?.innerText || '',
       };
     })()`, 'Graph Execute pending generated output', 12000);
+    const nativeProgressObserved = await waitFor(cdp, `(() => {
+      const state = window.kaminosPipelineDockDebugState?.();
+      const record = state?.generatedOutputNodes?.find(item => item.id === ${JSON.stringify(pendingGeneratedOutput.pendingRecord.id)}) || null;
+      const routeStatusNode = document.querySelector(\`[data-pipeline-graph-node-id="${routeNode.routeNodeId}"][data-pipeline-route-live-status][data-pipeline-route-progress]\`);
+      const routeProgress = routeStatusNode?.dataset?.pipelineRouteProgress || '';
+      const timelineProgress = record?.runTimeline?.find(event => event.progressSchema === 'kaminos.pipeline-progress.v0') || null;
+      const lastNativeProgress = window.kaminosPipelineLastNativeProgress || null;
+      return {
+        ok: Boolean(record && timelineProgress && routeProgress !== '' && lastNativeProgress?.schema === 'kaminos.pipeline-progress.v0'),
+        mockSharpProgressEnv: ${JSON.stringify(mockSharpProgressEnv)},
+        routeProgress,
+        routeText: routeStatusNode?.innerText || '',
+        timelineProgress,
+        lastNativeProgress,
+      };
+    })()`, 'Native adapter progress reached route node', Math.min(graphExecuteTimeoutMs, 45000));
     const executed = await waitFor(cdp, `(() => {
       const state = window.kaminosPipelineDockDebugState?.();
       const run = state?.lastRun;
@@ -500,7 +519,7 @@ try {
       const schedulerEvidence = outputRecord?.schedulerEvidence || null;
       const schedulerStateNode = outputRecord ? document.querySelector(\`[data-pipeline-generated-output-node-id="\${outputRecord.id}"] [data-pipeline-scheduler-state]\`) : null;
       const schedulerState = outputNode?.dataset?.pipelineSchedulerState || schedulerStateNode?.dataset?.pipelineSchedulerState || null;
-      const routeStatusNode = document.querySelector(\`[data-pipeline-graph-node-id="${routeNode.routeNodeId}"][data-pipeline-route-live-status]\`);
+      const routeStatusNode = document.querySelector(\`[data-pipeline-graph-node-id="${routeNode.routeNodeId}"][data-pipeline-route-live-status][data-pipeline-route-progress]\`);
       const routeLiveStatus = routeStatusNode?.dataset?.pipelineRouteLiveStatus || null;
       const routeLivePhase = routeStatusNode?.dataset?.pipelineRouteLivePhase || null;
       const routeSchedulerState = routeStatusNode?.dataset?.pipelineRouteSchedulerState || null;
@@ -839,6 +858,7 @@ try {
       routeNode: hookedRouteNode,
       executeButton,
       pendingGeneratedOutput,
+      nativeProgressObserved,
       executed,
       loadOutputButton,
       after,
