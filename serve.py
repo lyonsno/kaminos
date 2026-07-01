@@ -81,6 +81,7 @@ ROUTE_JOB_STATUSES = {
 ROUTE_JOB_INTENTS = {"preview", "hero", "checkpoint", "unknown"}
 HYBRID_SPLAT_OVERLAY_MODULE_URL_ENV = "KAMINOS_HYBRID_SPLAT_OVERLAY_MODULE_URL"
 HYBRID_SPLAT_OVERLAY_MODULE_URL_ENV_LEGACY = "KAMINOS_HYBRID_SPLAT_MODULE_URL"
+MOGE_WEBGPU_MODULE_BASE_URL_ENV = "KAMINOS_MOGE_WEBGPU_MODULE_BASE_URL"
 ASSET_ROOTS = [
     {
         "id": "splat-inbox",
@@ -119,9 +120,11 @@ def runtime_config():
         or os.environ.get(HYBRID_SPLAT_OVERLAY_MODULE_URL_ENV_LEGACY)
         or ""
     ).strip()
+    moge_webgpu_module_base_url = (os.environ.get(MOGE_WEBGPU_MODULE_BASE_URL_ENV) or "").strip()
     return {
         "schema": "kaminos.runtime-config.v0",
         "hybridSplatOverlayModuleUrl": module_url or None,
+        "mogeWebGpuModuleBaseUrl": moge_webgpu_module_base_url or None,
     }
 
 

@@ -162,6 +162,13 @@ assert.match(indexHtml, /validateRouteWorkerResult/, 'Browser WebGPU producer va
 assert.match(indexHtml, /classifyWebGpuRouteWorkerResultEvidence/, 'Browser WebGPU producer classifies evidence through the kit consumer helper');
 assert.match(indexHtml, /createWebGpuRouteSchedulerProfile/, 'Browser WebGPU producer builds scheduler profile through the kit helper');
 assert.match(indexHtml, /createWebGpuRouteBackpressureProfile/, 'Browser WebGPU producer builds backpressure profile through the kit helper');
+assert.match(indexHtml, /mogeWebGpuModuleBaseUrl/, 'Browser WebGPU producer consumes a runtime-configured MoGE module base URL');
+assert.match(indexHtml, /KAMINOS_MOGE_WEBGPU_MODULE_BASE_URL/, 'Browser WebGPU producer source documents the server-side MoGE module base env');
+assert.match(indexHtml, /loadMogeWebGpuRouteAdapter/, 'Browser WebGPU producer can load the real MoGE route adapter');
+assert.match(indexHtml, /runMogeWebGpuRouteAdapter/, 'Browser WebGPU producer tries the real MoGE route adapter before fallback output');
+assert.match(indexHtml, /withMogeWebGpuAssetFetch/, 'Browser WebGPU producer routes MoGE root asset fetches to the configured module base');
+assert.match(indexHtml, /normalizeMogeRouteAdapterOutput/, 'Browser WebGPU producer normalizes real MoGE depth and normal outputs before kit receipt creation');
+assert.match(indexHtml, /adapterResult\.status === 'real'/, 'Browser WebGPU producer only emits real receipts from a real adapter result');
 assert.match(indexHtml, /previewDataUrl/, 'Browser WebGPU preview producer includes an inspectable output artifact');
 assert.match(indexHtml, /data-greenroom-route-output-kind/, 'Route tray preserves output artifact kind on browser route output links');
 assert.match(indexHtml, /fixture route identity only/, 'Route tray can warn when a browser WebGPU row is identity-only fixture evidence');

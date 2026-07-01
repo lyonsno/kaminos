@@ -1039,6 +1039,21 @@ def test_runtime_config_exposes_hybrid_overlay_module_url_env():
     assert config["hybridSplatOverlayModuleUrl"] == "http://127.0.0.1:5174/src/splatOverlay.ts"
 
 
+def test_runtime_config_exposes_moge_webgpu_module_base_url_env():
+    previous = os.environ.get("KAMINOS_MOGE_WEBGPU_MODULE_BASE_URL")
+    os.environ["KAMINOS_MOGE_WEBGPU_MODULE_BASE_URL"] = "http://127.0.0.1:5175/"
+    try:
+        config = serve.runtime_config()
+    finally:
+        if previous is None:
+            os.environ.pop("KAMINOS_MOGE_WEBGPU_MODULE_BASE_URL", None)
+        else:
+            os.environ["KAMINOS_MOGE_WEBGPU_MODULE_BASE_URL"] = previous
+
+    assert config["schema"] == "kaminos.runtime-config.v0"
+    assert config["mogeWebGpuModuleBaseUrl"] == "http://127.0.0.1:5175/"
+
+
 if __name__ == "__main__":
     test_http_status_404_log_does_not_crash()
     test_volume_only_scene_save_name_uses_scene_fallback()
@@ -1064,3 +1079,4 @@ if __name__ == "__main__":
     test_splat_asset_ingest_writes_only_to_experimental_inbox()
     test_splat_asset_correction_roundtrips_as_sidecar_metadata()
     test_runtime_config_exposes_hybrid_overlay_module_url_env()
+    test_runtime_config_exposes_moge_webgpu_module_base_url_env()

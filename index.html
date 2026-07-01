@@ -9148,7 +9148,21 @@ const WEBGPU_ROUTE_EVIDENCE_CLASSIFICATION_SCHEMA = 'kaminos.webgpu-route-eviden
 const WEBGPU_ROUTE_SCHEDULER_SCHEMA = 'kaminos.webgpu-route-scheduler.v0';
 const WEBGPU_ROUTE_BACKPRESSURE_SCHEMA = 'kaminos.webgpu-route-backpressure.v0';
 const WEBGPU_INFERENCE_KIT_MODULE_URL = '/vendor/@kaminos/webgpu-inference-kit/src/index.js';
+const MOGE_WEBGPU_MODULE_BASE_URL_ENV = 'KAMINOS_MOGE_WEBGPU_MODULE_BASE_URL';
+const MOGE_WEBGPU_MODULE_BASE_URL_PARAMS = [
+  'moge_webgpu_module_base_url',
+  'mogeWebGpuModuleBaseUrl',
+  'moge_module_base_url',
+];
 let kaminosWebGpuInferenceKitPromise = null;
+let mogeWebGpuRouteAdapterState = {
+  moduleBaseUrl: initialMogeWebGpuModuleBaseUrl(),
+  runtimeConfigLoaded: false,
+  loadedModuleBaseUrl: null,
+  adapter: null,
+  adapterPromise: null,
+  runtime: null,
+};
 let greenroomRouteJobState = {
   schema: 'kaminos.route-provider-index.v0',
   provider: { kind: 'native-greenroom' },
@@ -10209,6 +10223,388 @@ async function loadKaminosWebGpuInferenceKit() {
   return kaminosWebGpuInferenceKitPromise;
 }
 
+function mogeWebGpuModuleBaseUrlFromSearch() {
+  const params = new URLSearchParams(window.location.search);
+  for (const name of MOGE_WEBGPU_MODULE_BASE_URL_PARAMS) {
+    const value = params.get(name);
+    if (value && value.trim()) return value.trim();
+  }
+  return null;
+}
+
+function normalizeMogeWebGpuModuleBaseUrl(url) {
+  const raw = String(url || '').trim();
+  if (!raw) return '';
+  try {
+    const parsed = new URL(raw, window.location.href);
+    if (!parsed.pathname.endsWith('/')) parsed.pathname = `${parsed.pathname}/`;
+    return parsed.href;
+  } catch (error) {
+    return raw.endsWith('/') ? raw : `${raw}/`;
+  }
+}
+
+function initialMogeWebGpuModuleBaseUrl() {
+  return normalizeMogeWebGpuModuleBaseUrl(
+    mogeWebGpuModuleBaseUrlFromSearch()
+      || localStorage.getItem('kaminosMogeWebGpuModuleBaseUrl')
+      || ''
+  );
+}
+
+function mogeWebGpuModuleBaseUrl() {
+  return mogeWebGpuRouteAdapterState.moduleBaseUrl || '';
+}
+
+function setMogeWebGpuModuleBaseUrl(url, options = {}) {
+  const { persist = true } = options;
+  const nextUrl = normalizeMogeWebGpuModuleBaseUrl(url);
+  if (nextUrl !== mogeWebGpuRouteAdapterState.moduleBaseUrl) {
+    mogeWebGpuRouteAdapterState.moduleBaseUrl = nextUrl;
+    mogeWebGpuRouteAdapterState.loadedModuleBaseUrl = null;
+    mogeWebGpuRouteAdapterState.adapter = null;
+    mogeWebGpuRouteAdapterState.adapterPromise = null;
+    mogeWebGpuRouteAdapterState.runtime = null;
+  }
+  if (persist) {
+    if (nextUrl) localStorage.setItem('kaminosMogeWebGpuModuleBaseUrl', nextUrl);
+    else localStorage.removeItem('kaminosMogeWebGpuModuleBaseUrl');
+  }
+  return nextUrl;
+}
+
+async function initializeMogeWebGpuModuleBaseUrl() {
+  const queryUrl = mogeWebGpuModuleBaseUrlFromSearch();
+  if (queryUrl) {
+    setMogeWebGpuModuleBaseUrl(queryUrl, { persist: false });
+    mogeWebGpuRouteAdapterState.runtimeConfigLoaded = true;
+    return mogeWebGpuModuleBaseUrl();
+  }
+  if (mogeWebGpuRouteAdapterState.runtimeConfigLoaded) return mogeWebGpuModuleBaseUrl();
+  mogeWebGpuRouteAdapterState.runtimeConfigLoaded = true;
+  try {
+    const response = await fetch('/api/runtime-config', { cache: 'no-store' });
+    if (!response.ok) throw new Error(`runtime config ${response.status}`);
+    const config = await response.json();
+    if (config?.mogeWebGpuModuleBaseUrl) {
+      setMogeWebGpuModuleBaseUrl(config.mogeWebGpuModuleBaseUrl, { persist: false });
+    }
+  } catch (error) {
+    console.warn(`MoGE WebGPU runtime config unavailable; set ${MOGE_WEBGPU_MODULE_BASE_URL_ENV} to enable the real adapter`, error);
+  }
+  return mogeWebGpuModuleBaseUrl();
+}
+
+function mogeWebGpuModuleUrl(path, baseUrl = mogeWebGpuModuleBaseUrl()) {
+  if (!baseUrl) return '';
+  return new URL(String(path || '').replace(/^\/+/, ''), baseUrl).toString();
+}
+
+function rewriteMogeWebGpuAssetUrl(input, baseUrl) {
+  if (!baseUrl) return null;
+  const assetPrefixes = ['/weights.bin', '/weights_fp32.bin', '/test_fixtures/', '/layer_dumps/'];
+  const sourceUrl = typeof input === 'string'
+    ? input
+    : (input instanceof URL ? input.href : (input instanceof Request ? input.url : null));
+  if (!sourceUrl) return null;
+  let parsed;
+  try {
+    parsed = new URL(sourceUrl, window.location.href);
+  } catch (error) {
+    return null;
+  }
+  if (!assetPrefixes.some(prefix => parsed.pathname === prefix || parsed.pathname.startsWith(prefix))) {
+    return null;
+  }
+  return new URL(`${parsed.pathname}${parsed.search}`, baseUrl).toString();
+}
+
+async function withMogeWebGpuAssetFetch(baseUrl, callback) {
+  const originalFetch = window.fetch.bind(window);
+  window.fetch = (input, init) => {
+    const rewrittenUrl = rewriteMogeWebGpuAssetUrl(input, baseUrl);
+    if (!rewrittenUrl) return originalFetch(input, init);
+    if (input instanceof Request) return originalFetch(new Request(rewrittenUrl, input), init);
+    return originalFetch(rewrittenUrl, init);
+  };
+  try {
+    return await callback();
+  } finally {
+    window.fetch = originalFetch;
+  }
+}
+
+async function createDefaultMogeWebGpuRouteAdapter(moduleBaseUrl) {
+  return {
+    async runMogeDepthNormalRoute(options = {}) {
+      const baseUrl = normalizeMogeWebGpuModuleBaseUrl(moduleBaseUrl);
+      if (!baseUrl) throw new Error('MoGE WebGPU module base URL is not configured');
+      const runStarted = performance.now();
+      if (!mogeWebGpuRouteAdapterState.runtime || mogeWebGpuRouteAdapterState.runtime.moduleBaseUrl !== baseUrl) {
+        mogeWebGpuRouteAdapterState.runtime = {
+          moduleBaseUrl: baseUrl,
+          initPromise: null,
+          gpu: null,
+          inference: null,
+        };
+      }
+      const runtime = mogeWebGpuRouteAdapterState.runtime;
+      if (!runtime.initPromise) {
+        runtime.initPromise = (async () => {
+          const [gpuModule, inferenceModule] = await Promise.all([
+            import(mogeWebGpuModuleUrl('src/lib/gpu.js', baseUrl)),
+            import(mogeWebGpuModuleUrl('src/lib/inference.js', baseUrl)),
+          ]);
+          if (typeof gpuModule.initGPU !== 'function') throw new Error('MoGE GPU module does not export initGPU');
+          if (typeof inferenceModule.MoGeInference !== 'function') throw new Error('MoGE inference module does not export MoGeInference');
+          const gpu = await gpuModule.initGPU();
+          const inference = new inferenceModule.MoGeInference(gpu);
+          await withMogeWebGpuAssetFetch(baseUrl, () => inference.init());
+          runtime.gpu = gpu;
+          runtime.inference = inference;
+          return runtime;
+        })();
+      }
+      await runtime.initPromise;
+      const modelResult = await withMogeWebGpuAssetFetch(baseUrl, () => runtime.inference.run(options.imageData));
+      const totalMs = Number((performance.now() - runStarted).toFixed(1));
+      return {
+        status: 'real',
+        source: 'moge-webgpu-route-adapter',
+        moduleBaseUrl: baseUrl,
+        width: modelResult?.width,
+        height: modelResult?.height,
+        depth: modelResult?.depth,
+        normals: modelResult?.normals,
+        points: modelResult?.points,
+        colors: modelResult?.colors,
+        metricScale: modelResult?.metricScale,
+        model: {
+          revision: 'moge-webgpu-local-vitl-normal',
+          dtype: 'fp16',
+        },
+        kernel: {
+          profile: 'moge-webgpu-browser-route-adapter-v0',
+          commit: 'local-moge-webgpu',
+        },
+        timings: {
+          source: 'performance.now',
+          totalMs,
+          stages: [{ name: 'moge-init-run', ms: totalMs }],
+        },
+      };
+    },
+  };
+}
+
+async function loadMogeWebGpuRouteAdapter() {
+  const override = window.kaminosMogeWebGpuRouteAdapter;
+  if (override?.runMogeDepthNormalRoute) return override;
+  await initializeMogeWebGpuModuleBaseUrl();
+  const moduleBaseUrl = mogeWebGpuModuleBaseUrl();
+  if (!moduleBaseUrl) return null;
+  if (mogeWebGpuRouteAdapterState.adapter && mogeWebGpuRouteAdapterState.loadedModuleBaseUrl === moduleBaseUrl) {
+    return mogeWebGpuRouteAdapterState.adapter;
+  }
+  if (!mogeWebGpuRouteAdapterState.adapterPromise || mogeWebGpuRouteAdapterState.loadedModuleBaseUrl !== moduleBaseUrl) {
+    mogeWebGpuRouteAdapterState.loadedModuleBaseUrl = moduleBaseUrl;
+    mogeWebGpuRouteAdapterState.adapterPromise = createDefaultMogeWebGpuRouteAdapter(moduleBaseUrl).then(adapter => {
+      mogeWebGpuRouteAdapterState.adapter = adapter;
+      return adapter;
+    });
+  }
+  return mogeWebGpuRouteAdapterState.adapterPromise;
+}
+
+function createImageDataForMogeRoute(row = {}) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 160;
+  canvas.height = 160;
+  const ctx = canvas.getContext('2d');
+  const routeJob = row.route_job || {};
+  const token = String(routeJob.id || row.job_id || 'moge-preview');
+  const hueSeed = Array.from(token).reduce((sum, char) => sum + char.charCodeAt(0), 0) % 360;
+  const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+  gradient.addColorStop(0, `hsl(${hueSeed}, 68%, 34%)`);
+  gradient.addColorStop(0.5, `hsl(${(hueSeed + 74) % 360}, 72%, 56%)`);
+  gradient.addColorStop(1, `hsl(${(hueSeed + 168) % 360}, 78%, 72%)`);
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = 'rgba(255,255,255,0.18)';
+  for (let y = 10; y < canvas.height; y += 22) {
+    ctx.fillRect(0, y, canvas.width, 4);
+  }
+  ctx.fillStyle = 'rgba(0,0,0,0.22)';
+  ctx.beginPath();
+  ctx.arc(86, 76, 42, 0, Math.PI * 2);
+  ctx.fill();
+  return {
+    width: canvas.width,
+    height: canvas.height,
+    imageData: ctx.getImageData(0, 0, canvas.width, canvas.height),
+    previewDataUrl: canvas.toDataURL('image/png'),
+  };
+}
+
+function flattenRouteAdapterNumericArray(value) {
+  if (value == null) return [];
+  if (ArrayBuffer.isView(value)) return Array.from(value);
+  if (!Array.isArray(value)) return [];
+  const out = [];
+  const visit = item => {
+    if (Array.isArray(item) || ArrayBuffer.isView(item)) {
+      for (const child of item) visit(child);
+    } else {
+      const number = Number(item);
+      if (Number.isFinite(number)) out.push(number);
+    }
+  };
+  visit(value);
+  return out;
+}
+
+function finiteRange(values, stride = 1, offset = 0) {
+  let min = Infinity;
+  let max = -Infinity;
+  for (let index = offset; index < values.length; index += stride) {
+    const value = values[index];
+    if (!Number.isFinite(value)) continue;
+    if (value < min) min = value;
+    if (value > max) max = value;
+  }
+  if (!Number.isFinite(min) || !Number.isFinite(max) || min === max) return { min: 0, max: 1 };
+  return { min, max };
+}
+
+function tensorPreviewDataUrl(role, values, width, height) {
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  const image = ctx.createImageData(width, height);
+  const pixelCount = width * height;
+  if (role === 'depth') {
+    const range = finiteRange(values);
+    for (let index = 0; index < pixelCount; index += 1) {
+      const value = Number.isFinite(values[index]) ? values[index] : range.min;
+      const t = Math.max(0, Math.min(1, (value - range.min) / (range.max - range.min || 1)));
+      const out = index * 4;
+      image.data[out] = Math.round(28 + t * 215);
+      image.data[out + 1] = Math.round(48 + t * 190);
+      image.data[out + 2] = Math.round(72 + t * 160);
+      image.data[out + 3] = 255;
+    }
+  } else if (role === 'normal') {
+    for (let index = 0; index < pixelCount; index += 1) {
+      const source = index * 3;
+      const out = index * 4;
+      image.data[out] = Math.round(Math.max(0, Math.min(255, ((values[source] ?? 0) * 0.5 + 0.5) * 255)));
+      image.data[out + 1] = Math.round(Math.max(0, Math.min(255, ((values[source + 1] ?? 0) * 0.5 + 0.5) * 255)));
+      image.data[out + 2] = Math.round(Math.max(0, Math.min(255, ((values[source + 2] ?? 0) * 0.5 + 0.5) * 255)));
+      image.data[out + 3] = 255;
+    }
+  } else {
+    const xr = finiteRange(values, 3, 0);
+    const yr = finiteRange(values, 3, 1);
+    const zr = finiteRange(values, 3, 2);
+    for (let index = 0; index < pixelCount; index += 1) {
+      const source = index * 3;
+      const out = index * 4;
+      const x = (values[source] - xr.min) / (xr.max - xr.min || 1);
+      const y = (values[source + 1] - yr.min) / (yr.max - yr.min || 1);
+      const z = (values[source + 2] - zr.min) / (zr.max - zr.min || 1);
+      image.data[out] = Math.round(Math.max(0, Math.min(1, x)) * 255);
+      image.data[out + 1] = Math.round(Math.max(0, Math.min(1, y)) * 255);
+      image.data[out + 2] = Math.round(Math.max(0, Math.min(1, z)) * 255);
+      image.data[out + 3] = 255;
+    }
+  }
+  ctx.putImageData(image, 0, 0);
+  ctx.fillStyle = 'rgba(0,0,0,0.58)';
+  ctx.fillRect(10, Math.max(12, height - 48), Math.min(140, width - 20), 34);
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 14px sans-serif';
+  ctx.fillText(role, 18, Math.max(32, height - 28));
+  ctx.font = '9px monospace';
+  ctx.fillStyle = '#9cffc3';
+  ctx.fillText('moge webgpu', 18, Math.max(44, height - 16));
+  return canvas.toDataURL('image/png');
+}
+
+async function sha256Bytes(bytes) {
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+}
+
+async function sha256Tensor(values) {
+  const tensor = values instanceof Float32Array ? values : Float32Array.from(values);
+  return `sha256:${await sha256Bytes(new Uint8Array(tensor.buffer, tensor.byteOffset, tensor.byteLength))}`;
+}
+
+async function normalizeMogeRouteAdapterOutput(adapterResult, context = {}) {
+  if (adapterResult?.status !== 'real') return null;
+  const width = Number.parseInt(adapterResult.width || adapterResult.outputWidth || context.input?.width || 0, 10);
+  const height = Number.parseInt(adapterResult.height || adapterResult.outputHeight || context.input?.height || 0, 10);
+  if (!Number.isInteger(width) || !Number.isInteger(height) || width <= 0 || height <= 0) {
+    throw new Error('MoGE adapter result is missing finite output dimensions');
+  }
+  const pixelCount = width * height;
+  const depth = flattenRouteAdapterNumericArray(adapterResult.depth || adapterResult.outputs?.depth?.data);
+  const normal = flattenRouteAdapterNumericArray(adapterResult.normals || adapterResult.normal || adapterResult.outputs?.normal?.data);
+  const pointMap = flattenRouteAdapterNumericArray(adapterResult.points || adapterResult.pointMap || adapterResult.outputs?.pointMap?.data || adapterResult.outputs?.pointmap?.data);
+  if (depth.length < pixelCount) throw new Error('MoGE adapter depth output is incomplete');
+  if (normal.length < pixelCount * 3) throw new Error('MoGE adapter normal output is incomplete');
+
+  const requestId = context.requestId || `req:moge-preview-${Date.now()}`;
+  const outputArtifacts = {};
+  const depthPreviewDataUrl = tensorPreviewDataUrl('depth', depth, width, height);
+  outputArtifacts.depth = {
+    artifactId: `depth:${requestId}`,
+    sha256: await sha256Tensor(depth.slice(0, pixelCount)),
+    shape: [height, width],
+    status: 'real',
+    previewDataUrl: depthPreviewDataUrl,
+    mediaType: 'image/png',
+  };
+  const normalPreviewDataUrl = tensorPreviewDataUrl('normal', normal, width, height);
+  outputArtifacts.normal = {
+    artifactId: `normal:${requestId}`,
+    sha256: await sha256Tensor(normal.slice(0, pixelCount * 3)),
+    shape: [3, height, width],
+    status: 'real',
+    previewDataUrl: normalPreviewDataUrl,
+    mediaType: 'image/png',
+  };
+  if (pointMap.length >= pixelCount * 3) {
+    const pointMapPreviewDataUrl = tensorPreviewDataUrl('pointmap', pointMap, width, height);
+    outputArtifacts.pointMap = {
+      artifactId: `pointmap:${requestId}`,
+      sha256: await sha256Tensor(pointMap.slice(0, pixelCount * 3)),
+      shape: [3, height, width],
+      status: 'real',
+      previewDataUrl: pointMapPreviewDataUrl,
+      mediaType: 'image/png',
+    };
+  }
+  return {
+    outputArtifacts,
+    model: adapterResult.model || {},
+    kernel: adapterResult.kernel || {},
+    timings: adapterResult.timings || null,
+    source: adapterResult.source || 'moge-webgpu-route-adapter',
+    moduleBaseUrl: adapterResult.moduleBaseUrl || mogeWebGpuModuleBaseUrl(),
+  };
+}
+
+async function runMogeWebGpuRouteAdapter(context = {}) {
+  const adapter = await loadMogeWebGpuRouteAdapter();
+  if (!adapter) return null;
+  return adapter.runMogeDepthNormalRoute({
+    ...context,
+    moduleBaseUrl: mogeWebGpuModuleBaseUrl(),
+  });
+}
+
 async function probeBrowserWebGpuRouteRuntime(kit) {
   const browser = navigator.userAgent || 'unknown-browser';
   const fallbackBackend = kit.createWebGpuBackendIdentity({
@@ -10295,20 +10691,56 @@ async function buildBrowserWebGpuPreviewRouteResult(row = {}) {
   const requestId = `req:moge-preview-${Date.now()}`;
   const startedAt = performance.now();
   const probe = await probeBrowserWebGpuRouteRuntime(kit);
-  const outputRoles = ['depth', 'normal', 'pointMap'];
-  const outputArtifacts = {};
-  for (const role of outputRoles) {
-    const outputRole = role === 'pointMap' ? 'pointmap' : role;
-    const previewDataUrl = browserWebGpuPreviewDataUrl(outputRole, routeJob, probe);
-    outputArtifacts[role] = {
-      artifactId: `${outputRole}:${requestId}`,
-      sha256: `sha256:${await sha256Hex(previewDataUrl)}`,
-      shape: role === 'normal' || role === 'pointMap' ? [3, 160, 160] : [160, 160],
-      status: 'real',
-      previewDataUrl,
-      mediaType: 'image/png',
-    };
+  const inputPreview = createImageDataForMogeRoute(row);
+  let adapterError = null;
+  let realAdapterOutput = null;
+  try {
+    const adapterResult = await runMogeWebGpuRouteAdapter({
+      row,
+      routeJob,
+      route,
+      requestId,
+      probe,
+      imageData: inputPreview.imageData,
+      inputPreviewDataUrl: inputPreview.previewDataUrl,
+      startedAt,
+    });
+    if (adapterResult && adapterResult.status === 'real') {
+      realAdapterOutput = await normalizeMogeRouteAdapterOutput(adapterResult, {
+        row,
+        routeJob,
+        requestId,
+        input: inputPreview,
+      });
+    }
+  } catch (error) {
+    adapterError = error;
+    console.warn('MoGE WebGPU route adapter failed; preserving fallback receipt path', error);
   }
+  const outputArtifacts = realAdapterOutput?.outputArtifacts || {};
+  if (!realAdapterOutput) {
+    const outputRoles = ['depth', 'normal', 'pointMap'];
+    for (const role of outputRoles) {
+      const outputRole = role === 'pointMap' ? 'pointmap' : role;
+      const previewDataUrl = browserWebGpuPreviewDataUrl(outputRole, routeJob, probe);
+      outputArtifacts[role] = {
+        artifactId: `${outputRole}:${requestId}`,
+        sha256: `sha256:${await sha256Hex(previewDataUrl)}`,
+        shape: role === 'normal' || role === 'pointMap' ? [3, 160, 160] : [160, 160],
+        status: 'real',
+        previewDataUrl,
+        mediaType: 'image/png',
+      };
+    }
+  }
+  const routeIsReal = Boolean(realAdapterOutput);
+  const fallbackReason = routeIsReal
+    ? null
+    : (
+      adapterError
+        ? `MoGE WebGPU route adapter failed: ${adapterError.message || String(adapterError)}`
+        : (probe.reason || `MoGE WebGPU route adapter unavailable; set ${MOGE_WEBGPU_MODULE_BASE_URL_ENV} to a MoGE dev-server base URL`)
+    );
   const totalMs = Number((performance.now() - startedAt).toFixed(1));
   const scheduler = kit.createWebGpuRouteSchedulerProfile({
     requestedScheduler: {
@@ -10340,60 +10772,79 @@ async function buildBrowserWebGpuPreviewRouteResult(row = {}) {
     },
   });
   const profile = kit.createStagedSubmitProfile({
-    route: 'browser-preview-producer',
+    route: routeIsReal ? 'moge-webgpu-browser-route-adapter' : 'browser-preview-producer',
     timingSource: 'performance.now',
-    requiredStages: ['adapter-probe', 'artifact-render', 'result-submit'],
+    requiredStages: routeIsReal ? ['adapter-probe', 'moge-init-run', 'artifact-render', 'result-submit'] : ['adapter-probe', 'artifact-render', 'result-submit'],
   });
   kit.addStagedSubmitStage(profile, { name: 'adapter-probe', ms: Number(Math.min(totalMs, 8).toFixed(1)) });
+  if (routeIsReal) {
+    const adapterMs = Number(Math.max((realAdapterOutput.timings?.totalMs ?? totalMs) - 4, 0).toFixed(1));
+    kit.addStagedSubmitStage(profile, { name: 'moge-init-run', ms: adapterMs });
+  }
   kit.addStagedSubmitStage(profile, { name: 'artifact-render', ms: Number(Math.max(totalMs - 8, 0).toFixed(1)) });
   kit.addStagedSubmitStage(profile, { name: 'result-submit', ms: 0 });
   const runtimeProfile = kit.createWebGpuRuntimeProfile({
     routeId,
-    runtimeLabel: probe.available ? 'browser-webgpu-preview-adapter-probed' : 'browser-webgpu-preview-demo-producer',
+    runtimeLabel: routeIsReal ? 'moge-webgpu-browser-route-adapter' : (probe.available ? 'browser-webgpu-preview-adapter-probed' : 'browser-webgpu-preview-demo-producer'),
     backend: probe.backend,
     kernel: {
-      profile: 'deterministic-canvas-preview-v0',
-      commit: 'local-browser',
+      profile: realAdapterOutput?.kernel?.profile || 'deterministic-canvas-preview-v0',
+      commit: realAdapterOutput?.kernel?.commit || 'local-browser',
     },
     profile,
     evidence: {
-      mode: 'fallback',
-      source: 'kaminos-browser-webgpu-preview-demo-producer',
-      fallbackReason: probe.reason || 'preview producer rendered deterministic canvas artifacts without MoGE model weights',
+      mode: routeIsReal ? 'live' : 'fallback',
+      source: realAdapterOutput?.source || 'kaminos-browser-webgpu-preview-demo-producer',
+      fallbackReason,
+      moduleBaseUrl: realAdapterOutput?.moduleBaseUrl || mogeWebGpuModuleBaseUrl() || null,
     },
-    requiredStages: ['adapter-probe', 'artifact-render', 'result-submit'],
+    requiredStages: routeIsReal ? ['adapter-probe', 'moge-init-run', 'artifact-render', 'result-submit'] : ['adapter-probe', 'artifact-render', 'result-submit'],
     timingSource: 'performance.now',
   });
+  runtimeProfile.evidence = {
+    ...runtimeProfile.evidence,
+    moduleBaseUrl: realAdapterOutput?.moduleBaseUrl || mogeWebGpuModuleBaseUrl() || null,
+    weightsHashVerified: Boolean(realAdapterOutput?.model?.weightsHash),
+  };
   const inputArtifact = {
     artifactId: `image:${requestId}`,
-    sha256: `sha256:${await sha256Hex(routeId + requestId)}`,
-    shape: [160, 160, 3],
+    sha256: `sha256:${await sha256Bytes(inputPreview.imageData.data)}`,
+    shape: [inputPreview.height, inputPreview.width, 3],
   };
+  const requestOutputs = {
+    depth: outputArtifacts.depth,
+    normal: outputArtifacts.normal,
+  };
+  if (outputArtifacts.pointMap) requestOutputs.pointmap = outputArtifacts.pointMap;
   const request = kit.createRouteInvocationRequest(route, {
     requestId,
     inputs: { 'source-image': inputArtifact },
-    outputs: {
-      depth: outputArtifacts.depth,
-      normal: outputArtifacts.normal,
-      pointmap: outputArtifacts.pointMap,
-    },
+    outputs: requestOutputs,
     routeConfig: {
       source: 'kaminos.greenroom.route-tray-run-preview',
-      producer: 'browser-preview-demo',
-      evidenceMode: 'fallback',
+      producer: routeIsReal ? 'moge-webgpu-browser-route-adapter' : 'browser-preview-demo',
+      evidenceMode: routeIsReal ? 'live' : 'fallback',
+      moduleBaseUrl: realAdapterOutput?.moduleBaseUrl || mogeWebGpuModuleBaseUrl() || null,
     },
     createdAt: runtimeProfile.createdAt,
   });
   request.workerModule = routeJob.executor?.workerModule || 'webgpu-inference-kit/routes/moge-worker.js';
+  const outputHashFingerprint = Object.values(outputArtifacts).map(output => output.sha256).join('|');
+  const modelWeightsHash = routeIsReal
+    ? (
+      realAdapterOutput?.model?.weightsHash
+        || `unverified:${await sha256Hex(`${realAdapterOutput?.moduleBaseUrl || 'inline-adapter'}|moge-webgpu-local-vitl-normal`)}`
+    )
+    : `sha256:${await sha256Hex(outputHashFingerprint)}`;
   const receipt = kit.createMogeDepthNormalRouteReceipt({
     effectiveRouteId: routeId,
-    status: 'fallback',
-    fallbackReason: runtimeProfile.evidence.fallbackReason,
+    status: routeIsReal ? 'real' : 'fallback',
+    fallbackReason,
     backend: probe.backend,
     model: {
-      revision: 'kaminos-demo-producer-no-model-weights',
-      weightsHash: `sha256:${await sha256Hex(Object.values(outputArtifacts).map(output => output.sha256).join('|'))}`,
-      dtype: 'fp16',
+      revision: realAdapterOutput?.model?.revision || 'kaminos-demo-producer-no-model-weights',
+      weightsHash: modelWeightsHash,
+      dtype: realAdapterOutput?.model?.dtype || 'fp16',
     },
     kernel: runtimeProfile.kernel,
     input: inputArtifact,
