@@ -73,10 +73,12 @@ HYBRID_SPLAT_OVERLAY_MODULE_URL_ENV_LEGACY = "KAMINOS_HYBRID_SPLAT_MODULE_URL"
 FORGE_HOST_REGISTRY_SNAPSHOT_SCHEMA = "kaminos.forge-host.registry-snapshot.v0"
 FORGE_HOST_SMOKE_RESULT_OFFER_SCHEMA = "kaminos.forge-host.smoke-result-offer.v0"
 FORGE_HOST_SMOKE_RESULT_SNAPSHOT_SCHEMA = "kaminos.forge-host.smoke-result-snapshot.v0"
+FORGE_HOST_SMOKE_RESULT_PUBLICATION_SCHEMA = "kaminos.forge-host.smoke-result-publication.v0"
 FORGE_HOST_SMOKE_DISPOSITION_RECEIPT_SCHEMA = "kaminos.forge-host.smoke-disposition-receipt.v0"
 FORGE_HOST_SMOKE_DISPOSITION_SAVE_SCHEMA = "kaminos.forge-host.smoke-disposition-save.v0"
 FORGE_HOST_SMOKE_RECEIPTS_DIR = BROWSE_ROOTS["scratch"] / "smoke-chamber-receipts"
 FORGE_HOST_SMOKE_RESULT_FIXTURE_DIR = ROOT / "fixtures" / "forge-host-smoke-results"
+FORGE_HOST_SMOKE_RESULT_PUBLISHED_DIR = BROWSE_ROOTS["scratch"] / "forge-host-smoke-results"
 FORGE_HOST_ENDPOINT_REGISTRY_PATH = Path(os.environ.get(
     "KAMINOS_FORGE_HOST_ENDPOINT_REGISTRY",
     os.path.expanduser("~/.local/state/epistaxis/directive-alert-endpoints.json"),
@@ -179,9 +181,27 @@ def _validate_forge_host_smoke_result_offer(row):
     return row
 
 
+def _safe_smoke_result_filename(value):
+    safe = re.sub(r"[^A-Za-z0-9._-]+", "-", str(value or "smoke-result")).strip(".-")
+    return (safe[:140] or "smoke-result") + ".json"
+
+
 def _fixture_smoke_result_offers(fixture_dir):
     results = []
     root = Path(fixture_dir).expanduser()
+    if not root.exists():
+        return results
+    for path in sorted(root.glob("*.json")):
+        row = _read_json_file(path)
+        row.setdefault("sourceRef", str(path))
+        _validate_forge_host_smoke_result_offer(row)
+        results.append(row)
+    return results
+
+
+def _published_smoke_result_offers(published_dir):
+    results = []
+    root = Path(published_dir).expanduser()
     if not root.exists():
         return results
     for path in sorted(root.glob("*.json")):
@@ -228,22 +248,30 @@ def _receipt_smoke_result_offer(receipt_path, receipt_root):
 def build_forge_host_smoke_result_snapshot(
     fixture_dir=FORGE_HOST_SMOKE_RESULT_FIXTURE_DIR,
     receipt_dir=FORGE_HOST_SMOKE_RECEIPTS_DIR,
+    published_dir=FORGE_HOST_SMOKE_RESULT_PUBLISHED_DIR,
 ):
     warnings = []
     results = []
     fixture_root = Path(fixture_dir).expanduser()
     receipt_root = Path(receipt_dir).expanduser()
+    published_root = Path(published_dir).expanduser()
     if fixture_root.exists():
         results.extend(_fixture_smoke_result_offers(fixture_root))
     else:
         warnings.append(f"smoke result fixture dir missing: {fixture_root}")
+    if published_root.exists():
+        results.extend(_published_smoke_result_offers(published_root))
+    else:
+        warnings.append(f"published smoke result dir missing: {published_root}")
     if receipt_root.exists():
         for receipt_path in sorted(receipt_root.glob("*/receipt.json")):
             results.append(_receipt_smoke_result_offer(receipt_path, receipt_root))
     else:
         warnings.append(f"smoke receipt result dir missing: {receipt_root}")
     source_authority = "missing"
-    if any(row.get("authority") == "local_artifact" for row in results):
+    if any(row.get("authority") == "published_artifact" for row in results):
+        source_authority = "published_artifact"
+    elif any(row.get("authority") == "local_artifact" for row in results):
         source_authority = "local_artifact"
     elif results:
         source_authority = "fixture"
@@ -251,6 +279,7 @@ def build_forge_host_smoke_result_snapshot(
         "schema": FORGE_HOST_SMOKE_RESULT_SNAPSHOT_SCHEMA,
         "sourceAuthority": source_authority,
         "fixtureDir": str(fixture_root),
+        "publishedDir": str(published_root),
         "receiptDir": str(receipt_root),
         "results": results,
         "warnings": warnings,
@@ -320,6 +349,7 @@ def build_forge_host_registry_snapshot(
             "schema": smoke_result_snapshot["schema"],
             "sourceAuthority": smoke_result_snapshot["sourceAuthority"],
             "fixtureDir": smoke_result_snapshot["fixtureDir"],
+            "publishedDir": smoke_result_snapshot["publishedDir"],
             "receiptDir": smoke_result_snapshot["receiptDir"],
             "warnings": smoke_result_snapshot["warnings"],
         },
@@ -331,6 +361,50 @@ def build_forge_host_registry_snapshot(
 def _safe_receipt_id(value):
     safe = re.sub(r"[^A-Za-z0-9._-]+", "-", str(value or "receipt")).strip(".-")
     return safe[:120] or "receipt"
+
+
+def publish_forge_host_smoke_result_offer(payload, publish_dir=FORGE_HOST_SMOKE_RESULT_PUBLISHED_DIR):
+    if not isinstance(payload, dict):
+        raise ValueError("smoke result publication payload must be a JSON object")
+    offer = dict(payload)
+    if offer.get("schema") != FORGE_HOST_SMOKE_RESULT_OFFER_SCHEMA:
+        raise ValueError("smoke result offer schema mismatch")
+    producer = str(offer.get("producerDiaulos") or "").strip()
+    if not producer:
+        raise ValueError("smoke result offer missing fields: producerDiaulos")
+    if not offer.get("id"):
+        result_key = _safe_receipt_id(offer.get("title") or "smoke-result")
+        offer["id"] = f"result:{producer}:{result_key}"
+    filename = _safe_smoke_result_filename(offer["id"])
+    root = Path(publish_dir).expanduser().resolve()
+    path = (root / filename).resolve()
+    if not path.is_relative_to(root):
+        raise PermissionError("Path traversal")
+    rel_path = f"forge-host-smoke-results/{filename}"
+    offer_source = "/api/read?" + urlencode({"root": "scratch", "path": rel_path})
+    offer.setdefault("targetSurface", "smoke-result")
+    offer.setdefault("targetUrl", offer_source)
+    offer.setdefault("reportSource", offer_source)
+    offer.setdefault("sourceRef", offer_source)
+    offer.setdefault("summary", "")
+    offer.setdefault("authority", "published_artifact")
+    offer.setdefault("freshness", time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()))
+    offer.setdefault("displayState", "artifact")
+    offer.setdefault("resultStatus", "available")
+    downgrades = list(offer.get("downgrades") or [])
+    if "not_source_thread_delivery" not in downgrades:
+        downgrades.append("not_source_thread_delivery")
+    offer["downgrades"] = downgrades
+    _validate_forge_host_smoke_result_offer(offer)
+    root.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(offer, indent=2))
+    return {
+        "schema": FORGE_HOST_SMOKE_RESULT_PUBLICATION_SCHEMA,
+        "offerId": offer["id"],
+        "offerPath": str(path),
+        "offerSource": offer_source,
+        "offer": offer,
+    }
 
 
 def _decode_png_data_url(data_url):
@@ -1156,6 +1230,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_splat_correction_post(parse_qs(parsed.query))
         elif parsed.path == "/api/forge-host/smoke-chamber-receipt":
             self.handle_forge_host_smoke_chamber_receipt()
+        elif parsed.path == "/api/forge-host/smoke-result-offer":
+            self.handle_forge_host_smoke_result_offer()
         else:
             self.send_json({"error": "Not found"}, 404)
 
@@ -1235,6 +1311,27 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             return
         try:
             saved = save_forge_host_smoke_chamber_receipt(payload)
+        except ValueError as error:
+            self.send_json({"error": str(error)}, 400)
+            return
+        except PermissionError:
+            self.send_json({"error": "Path traversal"}, 403)
+            return
+        self.send_json(saved)
+
+    def handle_forge_host_smoke_result_offer(self):
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+        except ValueError:
+            self.send_json({"error": "Invalid Content-Length"}, 400)
+            return
+        try:
+            payload = json.loads(self.rfile.read(length) or b"{}")
+        except json.JSONDecodeError:
+            self.send_json({"error": "Invalid JSON"}, 400)
+            return
+        try:
+            saved = publish_forge_host_smoke_result_offer(payload)
         except ValueError as error:
             self.send_json({"error": str(error)}, 400)
             return
