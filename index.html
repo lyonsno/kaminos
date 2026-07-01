@@ -9831,7 +9831,7 @@ function normalizeVolumeFlameLife(value) {
 
 function normalizeVolumeLifecycleEffect(value) {
   const normalized = String(value || 'none').toLowerCase();
-  return ['none', 'snuff'].includes(normalized) ? normalized : 'none';
+  return ['none', 'snuff', 'preheat'].includes(normalized) ? normalized : 'none';
 }
 
 function normalizeVolumeReconstructionStyle(value) {

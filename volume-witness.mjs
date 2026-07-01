@@ -59,7 +59,7 @@ const FIRE_LICK_BREAKUP_BYPASS_THRESHOLD = 0.0005;
 
 function normalizeLifecycleEffect(value) {
   const normalized = String(value || 'none').toLowerCase();
-  return normalized === 'snuff' ? 'snuff' : 'none';
+  return ['none', 'snuff', 'preheat'].includes(normalized) ? normalized : 'none';
 }
 
 function normalizeRuntimeQuality(value) {
@@ -810,8 +810,12 @@ const expectedQuenchEnvelope = expectedLifecycleT * expectedLifecycleT * (3 - 2 
 const expectedQuenchVaporStrength = expectedLifecycleEffect === 'snuff'
   ? expectedQuenchVapor * expectedQuenchEnvelope
   : 0;
+const expectedPreheatStrength = expectedLifecycleEffect === 'preheat'
+  ? expectedQuenchEnvelope
+  : 0;
 const expectedFlameQuenchModel = expectedQuenchVaporStrength > 0 ? 'quench-flame-body-v0' : 'inactive';
 const expectsSnuffVisualEvidence = expectedLifecycleEffect === 'snuff' && expectedQuenchVaporStrength > 0;
+const expectsPreheatVisualEvidence = expectedLifecycleEffect === 'preheat' && expectedPreheatStrength > 0;
 const expectsFuelStarvedTallPlume = expectedVolumeScene === 'tall_plume' && expectedReactionFuelScale <= 0.001;
 function expectedBonfireAblationParam(name, fallback = 1, max = 1.5) {
   const requested = Number(routeParams.get(name));
@@ -986,6 +990,7 @@ function measureScreenshot(buffer) {
   let lit = 0;
   let fireLike = 0;
   let smokeLike = 0;
+  let warmLike = 0;
   let totalLum = 0;
   let samples = 0;
   for (let y = Math.floor(png.height * 0.08); y < Math.floor(png.height * 0.92); y += 2) {
@@ -1000,6 +1005,7 @@ function measureScreenshot(buffer) {
       samples++;
       if (lum > 20) lit++;
       if (r > 120 && g > 70 && b < 80) fireLike++;
+      if (r > 95 && g > 45 && b < 110 && r >= g && lum > 35) warmLike++;
       if (b > 28 && g > 28 && r < 95 && Math.abs(g - b) < 55) smokeLike++;
     }
   }
@@ -1009,6 +1015,7 @@ function measureScreenshot(buffer) {
     meanLuma: totalLum / Math.max(1, samples),
     litPixels: lit,
     fireLikePixels: fireLike,
+    warmLikePixels: warmLike,
     smokeLikePixels: smokeLike,
   };
 }
@@ -1210,6 +1217,8 @@ async function main() {
     assert.ok(Math.abs((state.quenchVaporStrength ?? 0) - expectedQuenchVaporStrength) < 0.001, 'effective quench-vapor strength did not match route phase');
     assert.equal(state.snuffVisualModel ?? 'inactive', expectedQuenchVaporStrength > 0 ? 'quench-vapor-v0' : 'inactive', 'snuff visual model identity did not match effective quench-vapor state');
     assert.equal(state.flameQuenchModel ?? 'inactive', expectedFlameQuenchModel, 'flame body quench model identity did not match effective snuff state');
+    assert.ok(Math.abs((state.preheatStrength ?? 0) - expectedPreheatStrength) < 0.001, 'effective preheat strength did not match route phase');
+    assert.equal(state.preheatVisualModel ?? 'inactive', expectedPreheatStrength > 0 ? 'preheat-ember-rim-v0' : 'inactive', 'preheat visual model identity did not match effective preheat state');
     assert.equal(state.controls?.runtimeQualityRequested ?? 'live_high', expectedRuntimeQualityRequested, 'runtime quality request route/control did not apply');
     assert.equal(state.runtimeQualityRequested ?? 'live_high', expectedRuntimeQualityRequested, 'runtime quality request did not reach debug state');
     assert.equal(state.controls?.runtimeQualityEffective ?? 'live_high', expectedRuntimeQualityEffective, 'effective runtime quality control did not match pressure ladder');
@@ -1738,7 +1747,8 @@ async function main() {
       }
     }
     const expectsBonfireZeroDrift = expectsBonfireVerticalTransport && Math.abs(expectedWindStrength) <= 0.001;
-    const expectsBonfireConvectionProof = expectsBonfireZeroDrift;
+    const expectsLifecycleVisualEvidence = expectsSnuffVisualEvidence || expectsPreheatVisualEvidence;
+    const expectsBonfireConvectionProof = expectsBonfireZeroDrift && !expectsLifecycleVisualEvidence;
     if (expectsBonfireConvectionProof) {
       if (
         !Number.isFinite(sample.simReadback.plumeScalarCurlContact) ||
@@ -1831,6 +1841,7 @@ async function main() {
     }
     if (
       expectsBonfireVerticalTransport &&
+      !expectsLifecycleVisualEvidence &&
       Number.isFinite(expectedMaxSmokeStripeRatio) &&
       (
         !Number.isFinite(sample.smokeVerticalStripeRatio) ||
@@ -1844,7 +1855,7 @@ async function main() {
         smokeVerticalEnergy: sample.smokeVerticalEnergy,
       })}`);
     }
-    if (expectsBonfireZeroDrift) {
+    if (expectsBonfireZeroDrift && !expectsLifecycleVisualEvidence) {
       const activeBins = (sample.simReadback.sourceRelativeVisualHeightBins || []).filter(bin =>
         bin.visualCenter > -0.08 &&
         bin.smokeWeight > 1.0
@@ -1985,6 +1996,10 @@ async function main() {
       if (mainRendererMetrics.litPixels < 1500 || mainRendererMetrics.meanLuma < 8) {
         throw new Error(`main renderer screenshot missing bridged Pyro material volume: ${JSON.stringify(mainRendererMetrics)}`);
       }
+    } else if (expectsPreheatVisualEvidence) {
+      if (mainRendererMetrics.litPixels < 900 || ((mainRendererMetrics.warmLikePixels ?? 0) + mainRendererMetrics.fireLikePixels) < 40 || mainRendererMetrics.meanLuma < 3.5) {
+        throw new Error(`main renderer screenshot missing bridged preheat volume: ${JSON.stringify(mainRendererMetrics)}`);
+      }
     } else if (expectsPerformanceVolumeEvidence) {
       if (mainRendererMetrics.litPixels < 1500 || mainRendererMetrics.smokeLikePixels < 1500 || mainRendererMetrics.meanLuma < 8) {
         throw new Error(`main renderer screenshot missing bridged performance volume signal: ${JSON.stringify(mainRendererMetrics)}`);
@@ -2062,6 +2077,10 @@ async function main() {
           ...metrics,
           pyroVolumeSignalPixels,
         })}`);
+      }
+    } else if (expectsPreheatVisualEvidence) {
+      if (metrics.litPixels < 220 || metrics.smokeLikePixels < 120 || metrics.meanLuma < 1.0) {
+        throw new Error(`preheat route did not preserve warm ember/smoke volume evidence: ${JSON.stringify(metrics)}`);
       }
     } else if (expectsPerformanceVolumeEvidence) {
       const volumeSignalPixels =
@@ -2156,6 +2175,8 @@ async function main() {
       flameQuenchModel: sample.flameQuenchModel,
       pyroDynamicDetail: sample.pyroDynamicDetail || state.pyroDynamicDetail || null,
       pyroMaterialRendererCoupling: sample.pyroMaterialRendererCoupling || state.pyroMaterialRendererCoupling || null,
+      preheatStrength: sample.preheatStrength,
+      preheatVisualModel: sample.preheatVisualModel,
       runtimeQualityRequested: sample.runtimeQualityRequested,
       runtimeQualityEffective: sample.runtimeQualityEffective,
       gpuPressure: sample.gpuPressure,
@@ -2190,6 +2211,7 @@ async function main() {
       expectedLifecycleT,
       expectedQuenchVapor,
       expectedQuenchVaporStrength,
+      expectedPreheatStrength,
       expectedRuntimeQualityRequested,
       expectedRuntimeQualityEffective,
       expectedGpuPressure,
