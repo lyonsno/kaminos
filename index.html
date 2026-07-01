@@ -16021,6 +16021,11 @@ function initOrbShellCompositionRoute() {
       const witnessState = orbShellCompositionWitness.enableMacroMorphologyInventoryWitness();
       setOrbShellSemanticLegend(null);
       setInfo(`Orb Shell Macro Morphology Inventory: ${witnessState.visibleCurveCount} early sphere curves visible`);
+    } else if (orbShellFocus === 'aperture-orbit-capture') {
+      const witnessState = orbShellCompositionWitness.enableApertureOrbitCaptureWitness();
+      orbShellCompositionWitness.frameApertureOrbitCaptureWitness();
+      setOrbShellSemanticLegend(null);
+      setInfo(`Aperture Orbit Capture: ${witnessState.sampleCount} terminal roles / ${witnessState.visibleOverlayIds.length} overlays visible`);
     } else {
       setOrbShellSemanticLegend(null);
       frameOrbShellCompositionCamera();
