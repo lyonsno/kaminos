@@ -2210,6 +2210,7 @@ let receipt = null;
 let currentEnvName = 'studio';
 let showEnvBg = false;
 let currentEnvMap = null;
+let materialTruthPhaseLock = null;
 let glbSourceScene = null; // raw loaded gltf scene for export
 let glbFileName = 'model.glb';
 let modelSourceUrl = null; // URL or path used to load the current model
@@ -8290,6 +8291,56 @@ function createProceduralEnv() {
   return pmremGenerator.fromScene(envScene, 0.04).texture;
 }
 
+function enforceMaterialTruthPhaseLock(reason = 'unspecified') {
+  if (!materialTruthPhaseLock) return null;
+  if (materialTruthPhaseLock.phase !== 'pre-hdr-warm') return materialTruthPhaseLock;
+
+  scene.environment = null;
+  scene.environmentIntensity = materialTruthPhaseLock.envMapIntensity;
+  currentEnvMap = null;
+  renderer.toneMappingExposure = materialTruthPhaseLock.exposure;
+  if (document.getElementById('env-intensity-slider')) {
+    document.getElementById('env-intensity-slider').value = materialTruthPhaseLock.envMapIntensity;
+    document.getElementById('env-intensity-val').textContent = materialTruthPhaseLock.envMapIntensity.toFixed(1);
+  }
+  if (document.getElementById('exposure-slider')) {
+    document.getElementById('exposure-slider').value = materialTruthPhaseLock.exposure;
+    document.getElementById('exposure-val').textContent = materialTruthPhaseLock.exposure.toFixed(1);
+  }
+  materialTruthPhaseLock.lastEnforcedBy = reason;
+  materialTruthPhaseLock.lastEnforcedAt = performance.now();
+  window.__kaminosOrbShellMaterialTruthPhasePolicy = { ...materialTruthPhaseLock };
+  updateBackground();
+  window._kaminosDirty?.();
+  return window.__kaminosOrbShellMaterialTruthPhasePolicy;
+}
+
+function applyOrbShellMaterialTruthPhasePolicy(params) {
+  const requestedPhase = params.get('orb_shell_material_phase') || 'pre-hdr-warm';
+  if (requestedPhase === 'settled-pbr') {
+    materialTruthPhaseLock = null;
+    window.__kaminosOrbShellMaterialTruthPhasePolicy = {
+      schema: 'MaterialTruthPhasePolicy',
+      mode: 'settled-current-pbr-material-truth-v0',
+      phase: 'settled-pbr',
+      environmentDisposition: 'allow-current-environment-and-exposure',
+      reason: 'comparison-route-for-the-settled-studio-hdr-material-read',
+    };
+    return window.__kaminosOrbShellMaterialTruthPhasePolicy;
+  }
+
+  materialTruthPhaseLock = {
+    schema: 'MaterialTruthPhasePolicy',
+    mode: 'pre-hdr-warm-material-truth-v1',
+    phase: 'pre-hdr-warm',
+    environmentDisposition: 'suppress-async-hdr-env-map-and-preserve-scene-lit-pbr',
+    envMapIntensity: 0,
+    exposure: 1.5,
+    reason: 'operator-observed-first-frame-material-read-before-studio-hdr-washout',
+  };
+  return enforceMaterialTruthPhaseLock('material-truth-route');
+}
+
 async function loadEnvironment(name) {
   const env = HDR_ENVS[name];
   if (!env) return;
@@ -8343,6 +8394,10 @@ async function loadEnvironment(name) {
 }
 
 function applyEnvMap(envMap, intensity) {
+  if (materialTruthPhaseLock?.phase === 'pre-hdr-warm') {
+    enforceMaterialTruthPhaseLock('async-environment-load-guard');
+    return;
+  }
   scene.environment = envMap;
   scene.environmentIntensity = intensity;
   currentEnvMap = envMap;
@@ -16072,18 +16127,22 @@ function initOrbShellCompositionRoute() {
       setInfo(`Aperture Orbit Capture: ${witnessState.sampleCount} terminal roles / ${witnessState.visibleOverlayIds.length} overlays visible`);
     } else if (orbShellFocus === 'material-truth') {
       const view = params.get('orb_shell_spatial_view') || 'front';
+      const materialTruthPhasePolicy = applyOrbShellMaterialTruthPhasePolicy(params);
       const viewState = orbShellCompositionWitness.frameSpatialTruthView(view);
       setOrbShellSemanticLegend(null);
       window.__kaminosOrbShellMaterialTruthRoutePolicy = {
         schema: 'MaterialTruthRoutePolicy',
-        mode: 'route-coupled-material-form-truth-witness-v0',
+        mode: 'route-coupled-material-form-truth-witness-v1',
         focus: 'material-truth',
         view,
         effectiveViewId: viewState.effectiveViewId,
-        materialDisposition: 'preserve-current-pbr-and-amber-form-cues-no-neutral-clay-override',
+        materialPhasePolicy: materialTruthPhasePolicy,
+        materialDisposition: materialTruthPhasePolicy.phase === 'pre-hdr-warm'
+          ? 'preserve-pre-hdr-scene-lit-pbr-and-amber-form-cues-no-neutral-clay-override'
+          : 'preserve-current-pbr-and-amber-form-cues-no-neutral-clay-override',
         companionFocus: 'spatial-truth',
       };
-      setInfo(`Material Truth: ${viewState.effectiveViewId} / current PBR form cues preserved`);
+      setInfo(`Material Truth: ${viewState.effectiveViewId} / ${materialTruthPhasePolicy.phase} form cues preserved`);
     } else if (orbShellFocus === 'spatial-truth') {
       const spatialTruthRoutePolicy = applyOrbShellSpatialTruthRenderPolicy(params);
       const witnessState = orbShellCompositionWitness.enableSpatialTruthWitness({

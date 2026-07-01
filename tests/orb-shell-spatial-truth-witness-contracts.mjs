@@ -17,6 +17,9 @@ assert.match(index, /orb_shell_spatial_exposure/, 'spatial-truth route must expo
 assert.match(index, /orb_shell_spatial_pass/, 'spatial-truth route must expose diagnostic pass identity');
 assert.match(index, /if \(!params\.has\(name\)\) return defaultValue;/, 'route number parser must use defaults when optional spatial-truth params are omitted');
 assert.match(index, /MaterialTruthRoutePolicy/, 'material-truth route must preserve its effective route identity');
+assert.match(index, /MaterialTruthPhasePolicy/, 'material-truth route must expose the material phase it is preserving');
+assert.match(index, /pre-hdr-warm/, 'material-truth must preserve the operator-observed pre-HDR warm material phase by default');
+assert.match(index, /materialTruthPhaseLock/, 'material-truth must guard against async studio HDR load overwriting the preserved phase');
 
 assert.match(core, /SpatialTruthMaterialPolicy/, 'composition core must expose a spatial-truth material policy');
 assert.match(core, /SpatialTruthWitnessState/, 'composition core must return a spatial-truth witness state');

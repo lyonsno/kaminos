@@ -51,6 +51,7 @@ let spatialTruthWitness = null;
 let spatialTruthViewFrame = null;
 let spatialTruthContactSheet = null;
 let materialTruthRoutePolicy = null;
+let materialTruthPhasePolicy = null;
 let visualCaptureCompleted = false;
 let visualCaptureFailure = null;
 let primaryCapture = null;
@@ -429,6 +430,7 @@ async function main() {
       await delay(500);
     }
     materialTruthRoutePolicy = await evaluate(ws, 'window.__kaminosOrbShellMaterialTruthRoutePolicy || null');
+    materialTruthPhasePolicy = await evaluate(ws, 'window.__kaminosOrbShellMaterialTruthPhasePolicy || null');
 
     phase = 'state';
     const renderEffectPolicy = await readRenderEffectPolicy(ws, forcedAoState);
@@ -850,6 +852,7 @@ async function main() {
       spatialTruthViewFrame,
       spatialTruthContactSheet,
       materialTruthRoutePolicy,
+      materialTruthPhasePolicy,
       renderEffectPolicy,
       liveRenderMaterialPolicy: state.liveRenderMaterialPolicy,
       suppressedLegacyRoundBandIds: state.suppressedLegacyRoundBandIds,
@@ -936,6 +939,7 @@ async function main() {
       spatialTruthViewFrame,
       spatialTruthContactSheet,
       materialTruthRoutePolicy,
+      materialTruthPhasePolicy,
       browserEvents,
       stderrTail: stderr.slice(-2000),
     });
