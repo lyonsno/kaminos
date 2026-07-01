@@ -1685,6 +1685,59 @@ async function runStartupEmptyScenario(ws) {
   }
 }
 
+async function runDirectGlbLoadScenario(ws) {
+  phase = 'scenario-direct-glb-load';
+  lastEvidence.directGlbLoad = await evaluate(ws, `
+    (async () => {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      for (let i = 0; i < 160; i++) {
+        const state = window.kaminosDirectGlbLoadState?.();
+        const rows = [...document.querySelectorAll('[data-scene-object-id]')];
+        if (state?.status === 'loaded' && rows.length === 1) break;
+        if (state?.status === 'failed') break;
+        await wait(125);
+      }
+      const state = window.kaminosDirectGlbLoadState?.();
+      const rows = [...document.querySelectorAll('[data-scene-object-id]')].map(row => ({
+        id: row.dataset.sceneObjectId,
+        label: row.querySelector('.scene-object-title')?.textContent?.trim() || row.textContent.trim(),
+        active: row.classList.contains('active'),
+        pressed: row.getAttribute('aria-pressed'),
+      }));
+      const sceneDebug = window.kaminosSceneObjectDebugState?.() || [];
+      const canvas = document.querySelector('canvas');
+      return {
+        state,
+        rows,
+        sceneDebug,
+        info: document.getElementById('info-bar')?.textContent?.trim() || '',
+        canvas: canvas ? { width: canvas.width, height: canvas.height } : null,
+        transformBarVisible: document.getElementById('transform-bar')?.classList.contains('visible') || false,
+      };
+    })()
+  `, { timeoutMs: 30000 });
+  const state = lastEvidence.directGlbLoad.state;
+  if (!state || state.status !== 'loaded') {
+    throw new Error(`direct GLB deep-link did not load: ${JSON.stringify(lastEvidence.directGlbLoad)}`);
+  }
+  if (!['glb_path', 'glb_url'].includes(state.route)) {
+    throw new Error(`direct GLB deep-link did not record route identity: ${JSON.stringify(lastEvidence.directGlbLoad)}`);
+  }
+  if (lastEvidence.directGlbLoad.rows.length !== 1) {
+    throw new Error(`direct GLB deep-link did not register exactly one scene object row: ${JSON.stringify(lastEvidence.directGlbLoad)}`);
+  }
+  const directObject = lastEvidence.directGlbLoad.sceneDebug.find(record => record.type === 'glb') || null;
+  if (!directObject) {
+    throw new Error(`direct GLB deep-link did not register a type=glb scene object: ${JSON.stringify(lastEvidence.directGlbLoad)}`);
+  }
+  if (directObject.label !== state.label) {
+    throw new Error(`direct GLB deep-link did not preserve label identity: ${JSON.stringify(lastEvidence.directGlbLoad)}`);
+  }
+  if (!lastEvidence.directGlbLoad.transformBarVisible) {
+    throw new Error(`direct GLB deep-link did not expose transform controls: ${JSON.stringify(lastEvidence.directGlbLoad)}`);
+  }
+}
+
 async function runSelectedDeleteShortcutScenario(ws) {
   phase = 'scenario-selected-delete-shortcut';
   lastEvidence.selectedDeleteSetup = await evaluate(ws, `
@@ -4307,6 +4360,8 @@ try {
 
   if (scenario === 'startup-empty') {
     await runStartupEmptyScenario(ws);
+  } else if (scenario === 'direct-glb-load') {
+    await runDirectGlbLoadScenario(ws);
   } else if (scenario === 'append-select-remove-keyboard') {
     await runAppendSelectRemoveKeyboardScenario(ws);
   } else if (scenario === 'selected-delete-shortcut') {

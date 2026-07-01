@@ -14,6 +14,7 @@ const indexHtml = readFileSync(indexPath, 'utf8');
 
 assert.match(witness, /const scenario\s*=\s*args\.get\('--scenario'\) \|\| 'append-select-remove-keyboard'/, 'witness records an explicit default scenario');
 assert.match(witness, /startup-empty/, 'witness supports an empty-startup scenario');
+assert.match(witness, /direct-glb-load/, 'witness supports direct GLB deep-link visual smoke');
 assert.match(witness, /selected-delete-shortcut/, 'witness supports selected-object Delete shortcut removal');
 assert.match(witness, /save-load-roundtrip/, 'witness supports a browser scene save/load roundtrip scenario');
 assert.match(witness, /transform-inspector/, 'witness supports a selected-object transform inspector scenario');
@@ -66,6 +67,10 @@ assert.match(witness, /default replace did not complete with a new row/, 'witnes
 assert.match(witness, /startup did not remain empty before explicit import/, 'witness proves startup does not silently load the demo asset');
 assert.match(witness, /startup empty scene did not show object-list empty state/, 'witness proves empty startup exposes the empty object list state');
 assert.match(witness, /startup empty scene lost manual demo affordance/, 'witness proves empty startup still exposes manual demo import');
+assert.match(witness, /kaminosDirectGlbLoadState/, 'direct GLB witness reads explicit route load state');
+assert.match(witness, /direct GLB deep-link did not load/, 'direct GLB witness fails when the route does not report loaded');
+assert.match(witness, /direct GLB deep-link did not register exactly one scene object row/, 'direct GLB witness proves the loaded GLB entered the object list');
+assert.match(witness, /direct GLB deep-link did not preserve label identity/, 'direct GLB witness proves the loaded GLB keeps route label identity');
 assert.match(witness, /append import did not produce two unique rows/, 'witness proves checked Append creates two unique object rows');
 assert.match(witness, /selection not exclusive/, 'witness proves row selection is exclusive');
 assert.match(witness, /selection did not activate the clicked row/, 'witness proves the clicked row becomes active');

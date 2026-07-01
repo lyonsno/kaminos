@@ -121,3 +121,38 @@ The glTF Transform route is a valid material-preserving compression and honest a
 ## Dead route: raw Trimesh simplification
 
 Direct Trimesh simplification hit lower face counts but stripped UVs, normals, materials, and textures on this asset. Treat it as geometry-debug only unless a future route proves material preservation through post-export assay and visual witness.
+
+## 2026-06-30 raw decimation + xatlas bake route
+
+The first credible sub-110k target for the molten cube came from raw geometry reduction followed by a fresh xatlas unwrap, not from glTF Transform `simplify`.
+
+Target:
+
+`/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-generated-asset-raw43k-unwrap-bake-smoke-20260630Troute/raw43k-unwrapped.glb`
+
+Fixed baked output:
+
+`/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-generated-asset-raw43k-unwrap-bake-smoke-20260630Tmaterial-bound-normals/raw43k-unwrapped/asset-baked.glb`
+
+Manifest:
+
+`/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-generated-asset-raw43k-unwrap-bake-smoke-20260630Tmaterial-bound-normals/generated-asset-bake-lod-probe-manifest.json`
+
+Kaminos inspection URL:
+
+`http://127.0.0.1:18138/?glb_path=%2FUsers%2Fnoahlyons%2F.local%2Fstate%2Fgpu-greenroom%2Foutputs%2Fkaminos-generated-asset-raw43k-unwrap-bake-smoke-20260630Tmaterial-bound-normals%2Fraw43k-unwrapped%2Fasset-baked.glb&glb_label=raw43k-unwrap-baked-material-bound-normals`
+
+Observed result:
+
+- Target geometry: `43,671` triangles, `50,254` vertices.
+- Validity gate: `reference-like`; dilated source voxel coverage `0.990072`.
+- Bake route: nearest source surface, 512 texture, 12px padding.
+- Bake duration in current smoke: about `28s`.
+- Output GLB now binds the injected baked material to materialless target primitives and injects computed vertex normals when absent.
+- Direct GLB visual witness passed and wrote:
+  - `/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-generated-asset-raw43k-unwrap-bake-smoke-20260630Tmaterial-bound-normals/direct-glb-witness.json`
+  - `/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-generated-asset-raw43k-unwrap-bake-smoke-20260630Tmaterial-bound-normals/direct-glb-witness.png`
+
+Interpretation:
+
+This route proves a lower-poly, whole-object, UV-bearing target can receive baked PBR textures and load through Kaminos' direct GLB route. It does not yet prove acceptable visual LOD quality. The current screenshot remains dark and shredded-looking after material binding and normals, so the remaining blocker is likely target geometry/projection/material-content quality rather than basic GLB export validity.

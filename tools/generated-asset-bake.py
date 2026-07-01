@@ -27,6 +27,20 @@ JSON_CHUNK = 0x4E4F534A
 BIN_CHUNK = 0x004E4942
 TRIANGLES = 4
 BAKE_SCHEMA = "kaminos.generated-asset-bake.v0"
+COMPONENT_DTYPES = {
+    5120: "i1",
+    5121: "u1",
+    5122: "<i2",
+    5123: "<u2",
+    5125: "<u4",
+    5126: "<f4",
+}
+ACCESSOR_WIDTHS = {
+    "SCALAR": 1,
+    "VEC2": 2,
+    "VEC3": 3,
+    "VEC4": 4,
+}
 
 
 class BakeFailure(Exception):
@@ -35,6 +49,45 @@ class BakeFailure(Exception):
         self.phase = phase
         self.code = code
         self.message = message
+
+
+class TargetGeometry:
+    def __init__(self, vertices, faces, uv):
+        self.vertices = vertices
+        self.faces = faces
+        self.uv = uv
+        self._face_normals = None
+        self._vertex_normals = None
+
+    @property
+    def face_normals(self):
+        import numpy as np
+
+        if self._face_normals is None:
+            tri = self.vertices[self.faces]
+            normals = np.cross(tri[:, 1] - tri[:, 0], tri[:, 2] - tri[:, 0])
+            lengths = np.linalg.norm(normals, axis=1)
+            valid = lengths > 1e-12
+            normals[valid] /= lengths[valid, None]
+            normals[~valid] = 0
+            self._face_normals = normals.astype(np.float32)
+        return self._face_normals
+
+    @property
+    def vertex_normals(self):
+        import numpy as np
+
+        if self._vertex_normals is None:
+            normals = np.zeros_like(self.vertices, dtype=np.float32)
+            face_normals = self.face_normals
+            for corner in range(3):
+                np.add.at(normals, self.faces[:, corner], face_normals)
+            lengths = np.linalg.norm(normals, axis=1)
+            valid = lengths > 1e-12
+            normals[valid] /= lengths[valid, None]
+            normals[~valid] = 0
+            self._vertex_normals = normals
+        return self._vertex_normals
 
 
 def utc_now() -> str:
@@ -119,6 +172,51 @@ def write_glb(path: Path, doc: dict[str, Any], bin_chunk: bytes) -> None:
     path.write_bytes(b"".join(chunks))
 
 
+def accessor_array(doc: dict[str, Any], bin_chunk: bytes, accessor_index: int, role: str):
+    import numpy as np
+
+    accessors = doc.get("accessors") or []
+    buffer_views = doc.get("bufferViews") or []
+    if accessor_index < 0 or accessor_index >= len(accessors):
+        raise BakeFailure("load", f"{role}-bad-accessor", f"{role} accessor index {accessor_index} is invalid")
+    accessor = accessors[accessor_index]
+    buffer_view_index = accessor.get("bufferView")
+    if buffer_view_index is None or buffer_view_index < 0 or buffer_view_index >= len(buffer_views):
+        raise BakeFailure("load", f"{role}-bad-buffer-view", f"{role} accessor has no valid bufferView")
+    buffer_view = buffer_views[buffer_view_index]
+    if buffer_view.get("buffer", 0) != 0:
+        raise BakeFailure("load", f"{role}-external-buffer", f"{role} accessor uses a nonzero/external buffer")
+
+    component_type = accessor.get("componentType")
+    accessor_type = accessor.get("type")
+    dtype = COMPONENT_DTYPES.get(component_type)
+    width = ACCESSOR_WIDTHS.get(accessor_type)
+    if dtype is None or width is None:
+        raise BakeFailure("load", f"{role}-unsupported-accessor-type", f"{role} accessor type is unsupported")
+
+    count = int(accessor.get("count") or 0)
+    if count <= 0:
+        raise BakeFailure("load", f"{role}-empty-accessor", f"{role} accessor is empty")
+    np_dtype = np.dtype(dtype)
+    byte_offset = int(buffer_view.get("byteOffset") or 0) + int(accessor.get("byteOffset") or 0)
+    byte_stride = int(buffer_view.get("byteStride") or (np_dtype.itemsize * width))
+    packed_stride = np_dtype.itemsize * width
+    if byte_stride == packed_stride:
+        array = np.frombuffer(bin_chunk, dtype=np_dtype, count=count * width, offset=byte_offset).reshape((count, width)).copy()
+    else:
+        array = np.empty((count, width), dtype=np_dtype)
+        for index in range(count):
+            array[index] = np.frombuffer(
+                bin_chunk,
+                dtype=np_dtype,
+                count=width,
+                offset=byte_offset + index * byte_stride,
+            )
+    if width == 1:
+        return array[:, 0]
+    return array
+
+
 def append_bin_payload(doc: dict[str, Any], bin_chunk: bytes, payload: bytes) -> tuple[bytes, int]:
     aligned_bin = pad4(bin_chunk, b"\0")
     byte_offset = len(aligned_bin)
@@ -154,6 +252,7 @@ def replace_or_create_pbr_image(
 ) -> bytes:
     materials = doc.setdefault("materials", [{}])
     material = materials[0]
+    material.setdefault("name", "kaminos-baked-pbr")
     pbr = material.setdefault("pbrMetallicRoughness", {})
     texture_info = pbr.get(texture_slot)
     image_index = texture_image_index(doc, texture_info)
@@ -177,6 +276,68 @@ def replace_or_create_pbr_image(
     return bin_chunk
 
 
+def bind_missing_primitive_materials(doc: dict[str, Any], material_index: int = 0) -> None:
+    materials = doc.setdefault("materials", [{}])
+    if not materials:
+        materials.append({})
+    for mesh in doc.get("meshes") or []:
+        for primitive in mesh.get("primitives") or []:
+            if "material" not in primitive:
+                primitive["material"] = material_index
+
+
+def ensure_vertex_normals(doc: dict[str, Any], bin_chunk: bytes) -> bytes:
+    import numpy as np
+
+    for mesh in doc.get("meshes") or []:
+        for primitive in mesh.get("primitives") or []:
+            if int(primitive.get("mode", TRIANGLES)) != TRIANGLES:
+                continue
+            attrs = primitive.setdefault("attributes", {})
+            if "NORMAL" in attrs:
+                continue
+            position_index = attrs.get("POSITION")
+            if position_index is None:
+                continue
+            vertices = accessor_array(doc, bin_chunk, int(position_index), "target-normal-position").astype(np.float32)
+            if vertices.ndim != 2 or vertices.shape[1] != 3:
+                continue
+            index_accessor = primitive.get("indices")
+            if index_accessor is None:
+                if len(vertices) % 3 != 0:
+                    continue
+                faces = np.arange(len(vertices), dtype=np.int64).reshape((-1, 3))
+            else:
+                indices = accessor_array(doc, bin_chunk, int(index_accessor), "target-normal-index").astype(np.int64)
+                if len(indices) % 3 != 0:
+                    continue
+                faces = indices.reshape((-1, 3))
+
+            tri = vertices[faces]
+            face_normals = np.cross(tri[:, 1] - tri[:, 0], tri[:, 2] - tri[:, 0])
+            normals = np.zeros_like(vertices, dtype=np.float32)
+            for corner in range(3):
+                np.add.at(normals, faces[:, corner], face_normals)
+            lengths = np.linalg.norm(normals, axis=1)
+            valid = lengths > 1e-12
+            normals[valid] /= lengths[valid, None]
+            normals[~valid] = np.array([0.0, 0.0, 1.0], dtype=np.float32)
+            payload = normals.astype("<f4", copy=False).tobytes()
+            bin_chunk, buffer_view_index = append_bin_payload(doc, bin_chunk, payload)
+            accessors = doc.setdefault("accessors", [])
+            accessor_index = len(accessors)
+            accessors.append({
+                "bufferView": buffer_view_index,
+                "componentType": 5126,
+                "count": int(len(normals)),
+                "type": "VEC3",
+                "min": [float(v) for v in np.min(normals, axis=0)],
+                "max": [float(v) for v in np.max(normals, axis=0)],
+            })
+            attrs["NORMAL"] = accessor_index
+    return bin_chunk
+
+
 def write_baked_glb_from_target(target_path: Path, output_path: Path, base_path: Path, mr_path: Path) -> None:
     doc, bin_chunk = read_glb(target_path)
     asset = doc.setdefault("asset", {"version": "2.0"})
@@ -186,6 +347,8 @@ def write_baked_glb_from_target(target_path: Path, output_path: Path, base_path:
         asset["extras"] = {**(asset.get("extras") or {}), "sourceGenerator": previous_generator}
     bin_chunk = replace_or_create_pbr_image(doc, bin_chunk, "baseColorTexture", base_path, "kaminos-baked-baseColor")
     bin_chunk = replace_or_create_pbr_image(doc, bin_chunk, "metallicRoughnessTexture", mr_path, "kaminos-baked-metallicRoughness")
+    bind_missing_primitive_materials(doc, 0)
+    bin_chunk = ensure_vertex_normals(doc, bin_chunk)
     write_glb(output_path, doc, bin_chunk)
 
 
@@ -382,6 +545,50 @@ def load_single_mesh(path: Path, role: str):
     if material is None:
         raise BakeFailure("load", f"{role}-missing-material", f"{role} mesh has no material")
     return mesh
+
+
+def load_target_geometry(path: Path, role: str) -> TargetGeometry:
+    import numpy as np
+
+    doc, bin_chunk = read_glb(path)
+    primitive = None
+    for mesh in doc.get("meshes") or []:
+        for candidate in mesh.get("primitives") or []:
+            if int(candidate.get("mode", TRIANGLES)) == TRIANGLES:
+                primitive = candidate
+                break
+        if primitive is not None:
+            break
+    if primitive is None:
+        raise BakeFailure("load", f"{role}-missing-triangle-primitive", f"{role} GLB has no TRIANGLES primitive")
+    attrs = primitive.get("attributes") or {}
+    position_index = attrs.get("POSITION")
+    uv_index = attrs.get("TEXCOORD_0")
+    if position_index is None:
+        raise BakeFailure("load", f"{role}-missing-position", f"{role} GLB has no POSITION attribute")
+    if uv_index is None:
+        raise BakeFailure("load", f"{role}-missing-uv0", f"{role} GLB has no TEXCOORD_0 attribute")
+
+    vertices = accessor_array(doc, bin_chunk, int(position_index), role).astype(np.float32)
+    uv = accessor_array(doc, bin_chunk, int(uv_index), role).astype(np.float32)
+    if vertices.ndim != 2 or vertices.shape[1] != 3:
+        raise BakeFailure("load", f"{role}-bad-position-shape", f"{role} POSITION is not VEC3")
+    if uv.ndim != 2 or uv.shape[1] != 2:
+        raise BakeFailure("load", f"{role}-bad-uv-shape", f"{role} TEXCOORD_0 is not VEC2")
+    if len(vertices) != len(uv):
+        raise BakeFailure("load", f"{role}-position-uv-count-mismatch", f"{role} POSITION and TEXCOORD_0 counts differ")
+
+    index_accessor = primitive.get("indices")
+    if index_accessor is None:
+        if len(vertices) % 3 != 0:
+            raise BakeFailure("load", f"{role}-unindexed-triangle-count", f"{role} unindexed vertex count is not divisible by 3")
+        faces = np.arange(len(vertices), dtype=np.int64).reshape((-1, 3))
+    else:
+        indices = accessor_array(doc, bin_chunk, int(index_accessor), role).astype(np.int64)
+        if len(indices) % 3 != 0:
+            raise BakeFailure("load", f"{role}-index-count", f"{role} index count is not divisible by 3")
+        faces = indices.reshape((-1, 3))
+    return TargetGeometry(vertices, faces, uv)
 
 
 def image_array(image, mode: str):
@@ -600,7 +807,7 @@ def bake(
     from scipy.spatial import cKDTree
 
     source_mesh = load_single_mesh(source_path, "source")
-    target_mesh = load_single_mesh(target_path, "target")
+    target_mesh = load_target_geometry(target_path, "target")
 
     source_material = source_mesh.visual.material
     source_base = getattr(source_material, "baseColorTexture", None)
@@ -623,7 +830,7 @@ def bake(
     source_uv = np.asarray(source_mesh.visual.uv, dtype=np.float32)
     source_faces = np.asarray(source_mesh.faces, dtype=np.int64)
     target_vertices = np.asarray(target_mesh.vertices, dtype=np.float32)
-    target_uv = np.asarray(target_mesh.visual.uv, dtype=np.float32)
+    target_uv = np.asarray(target_mesh.uv, dtype=np.float32)
     target_faces = np.asarray(target_mesh.faces, dtype=np.int64)
 
     base_img = image_array(source_base, "RGBA")
