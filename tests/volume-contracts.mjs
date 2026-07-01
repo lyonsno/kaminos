@@ -1422,3 +1422,18 @@ assert.match(witness, /--field-tile-selection-policy/, 'volume witness can reque
 assert.match(witness, /--field-tile-spatial-bin-ids/, 'volume witness can request concrete spatial bin ids for paired high-grid extraction');
 assert.match(fieldPairDataset, /withFieldTileSpatialBinIds/, 'field-pair dataset can drive high-grid tile extraction from low-grid selected spatial bins');
 assert.match(fieldPairDataset, /sameSpatialBinPairs/, 'field-pair dataset reports how many matched tiles share the same spatial bin');
+
+const fieldResidualProbePath = join(root, 'volume-field-residual-probe.py');
+assert.ok(existsSync(fieldResidualProbePath), 'volume field residual probe exists');
+const fieldResidualProbe = existsSync(fieldResidualProbePath) ? readFileSync(fieldResidualProbePath, 'utf8') : '';
+assert.match(fieldResidualProbe, /kaminos\.volume\.field-residual-probe\.v0/, 'field residual probe writes a stable report schema identity');
+assert.match(fieldResidualProbe, /same-bin-per-channel-affine-ridge-v0/, 'field residual probe names its tiny residual model identity');
+assert.match(fieldResidualProbe, /requireSameSpatialBin/, 'field residual probe can require same spatial-bin low/high tile pairs');
+assert.match(fieldResidualProbe, /sourceManifest/, 'field residual probe records the source field-pair manifest');
+assert.match(fieldResidualProbe, /fieldAuthority/, 'field residual probe preserves field-readback authority from the dataset');
+assert.match(fieldResidualProbe, /trainTilePairs/, 'field residual probe splits training by tile pair instead of random voxel leakage');
+assert.match(fieldResidualProbe, /testTilePairs/, 'field residual probe records held-out tile pairs');
+assert.match(fieldResidualProbe, /identityBaseline/, 'field residual probe reports the low-as-high identity baseline');
+assert.match(fieldResidualProbe, /meanResidualBaseline/, 'field residual probe reports a train-mean residual baseline');
+assert.match(fieldResidualProbe, /improvementVsIdentity/, 'field residual probe reports model improvement against identity baseline');
+assert.match(fieldResidualProbe, /failurePhase/, 'field residual probe records failure phase when data ingestion or training fails');
