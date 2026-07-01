@@ -21,8 +21,74 @@ REPORT_SCHEMA = "kaminos.volume.field-residual-probe.v0"
 AFFINE_MODEL_IDENTITY = "same-bin-per-channel-affine-ridge-v0"
 SPATIAL_CONTEXT_MODEL_IDENTITY = "spatial-context-linear-ridge-v0"
 SPATIAL_CONTEXT_MLP_MODEL_IDENTITY = "spatial-context-mlp-residual-v0"
+NO_ROUTE_CONDITIONING_IDENTITY = "none"
+ROUTE_CONTROLS_CONDITIONING_IDENTITY = "route-controls-v0"
+ROUTE_CONTROLS_REPLAY_CONDITIONING_IDENTITY = "route-controls-replay-v0"
 MODEL_IDENTITY = AFFINE_MODEL_IDENTITY
 BACKEND = "numpy"
+ROUTE_CONTROL_CHANNELS = [
+    "density",
+    "fire",
+    "radiance",
+    "absorption",
+    "glow",
+    "smoke",
+    "curl",
+    "microdetail",
+    "interfaceShred",
+    "fireLicks",
+    "projection",
+    "speed",
+    "fireScale",
+    "detailScale",
+    "plumeHeight",
+    "windStrength",
+    "windAngle",
+    "windHeight",
+    "inputRadius",
+    "flowRate",
+    "reactionFuelScale",
+    "majorantCadence",
+    "pressureIterations",
+    "occupancySkip",
+    "majorantSkip",
+    "majorantSmooth",
+    "majorantGuard",
+]
+ROUTE_QUERY_PARAM_BY_CONTROL = {
+    "density": "volume_density",
+    "fire": "volume_fire",
+    "radiance": "volume_radiance",
+    "absorption": "volume_absorption",
+    "glow": "volume_glow",
+    "smoke": "volume_smoke",
+    "curl": "volume_curl",
+    "microdetail": "volume_microdetail",
+    "interfaceShred": "volume_interface_shred",
+    "fireLicks": "volume_fire_licks",
+    "projection": "volume_projection",
+    "speed": "volume_speed",
+    "fireScale": "volume_fire_scale",
+    "detailScale": "volume_detail_scale",
+    "plumeHeight": "volume_plume_height",
+    "windStrength": "volume_wind_strength",
+    "windAngle": "volume_wind_angle",
+    "windHeight": "volume_wind_height",
+    "inputRadius": "volume_input_radius",
+    "flowRate": "volume_flow_rate",
+    "reactionFuelScale": "volume_reaction_fuel",
+    "majorantCadence": "volume_majorant_cadence",
+    "pressureIterations": "volume_pressure_iterations",
+    "occupancySkip": "volume_occupancy_skip",
+    "majorantSkip": "volume_majorant_skip",
+    "majorantSmooth": "volume_majorant_smooth",
+    "majorantGuard": "volume_majorant_guard",
+}
+REPLAY_CONDITIONING_CHANNELS = [
+    "replayStartTimeMs",
+    "replayTimeStepMs",
+    "replaySteps",
+]
 
 
 class ProbeFailure(RuntimeError):
@@ -75,6 +141,12 @@ def parse_args() -> argparse.Namespace:
         "--holdout-replay-state",
         default=None,
         help="Train on all other deterministic replay states and test on this replayStateIdentity.",
+    )
+    parser.add_argument(
+        "--route-conditioning",
+        choices=[NO_ROUTE_CONDITIONING_IDENTITY, ROUTE_CONTROLS_CONDITIONING_IDENTITY, ROUTE_CONTROLS_REPLAY_CONDITIONING_IDENTITY],
+        default=NO_ROUTE_CONDITIONING_IDENTITY,
+        help="Append effective route-control and optional replay scalar features to spatial-context probe inputs.",
     )
     return parser.parse_args()
 
@@ -147,6 +219,7 @@ def base_report(args: argparse.Namespace) -> dict[str, Any]:
             "maxNormalizedSeparation": args.max_normalized_separation,
             "holdoutRouteVariant": args.holdout_route_variant,
             "holdoutReplayState": args.holdout_replay_state,
+            "routeConditioning": args.route_conditioning,
         },
         "route": {
             "cwd": str(Path.cwd()),
@@ -226,6 +299,73 @@ def load_tile(path: Path, shape: list[Any]) -> np.ndarray:
     return array.reshape(tuple(int(value) for value in shape))
 
 
+def finite_float(value: Any, fallback: float = 0.0) -> float:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return fallback
+    return number if math.isfinite(number) else fallback
+
+
+def route_conditioning_channels(mode: str) -> list[str]:
+    if mode == ROUTE_CONTROLS_CONDITIONING_IDENTITY:
+        return list(ROUTE_CONTROL_CHANNELS)
+    if mode == ROUTE_CONTROLS_REPLAY_CONDITIONING_IDENTITY:
+        return [*ROUTE_CONTROL_CHANNELS, *REPLAY_CONDITIONING_CHANNELS]
+    return []
+
+
+def effective_controls_for_pair(pair: dict[str, Any]) -> dict[str, Any]:
+    low_controls = pair.get("low", {}).get("effective", {}).get("controls")
+    high_controls = pair.get("high", {}).get("effective", {}).get("controls")
+    if isinstance(low_controls, dict):
+        return low_controls
+    if isinstance(high_controls, dict):
+        return high_controls
+    return {}
+
+
+def route_query_params_for_pair(pair: dict[str, Any]) -> dict[str, Any]:
+    query = pair.get("routeVariant", {}).get("queryParams")
+    return query if isinstance(query, dict) else {}
+
+
+def replay_for_pair(pair: dict[str, Any]) -> dict[str, Any]:
+    replay = pair.get("replayState", {}).get("deterministicReplay")
+    if isinstance(replay, dict):
+        return replay
+    low_replay = pair.get("low", {}).get("effective", {}).get("deterministicReplay")
+    if isinstance(low_replay, dict):
+        return low_replay
+    high_replay = pair.get("high", {}).get("effective", {}).get("deterministicReplay")
+    return high_replay if isinstance(high_replay, dict) else {}
+
+
+def route_conditioning_for_pair(pair: dict[str, Any], mode: str) -> dict[str, Any]:
+    channels = route_conditioning_channels(mode)
+    controls = effective_controls_for_pair(pair)
+    query = route_query_params_for_pair(pair)
+    replay = replay_for_pair(pair)
+    values: list[float] = []
+    for channel in channels:
+        if channel in ROUTE_CONTROL_CHANNELS:
+            values.append(finite_float(controls.get(channel, query.get(ROUTE_QUERY_PARAM_BY_CONTROL.get(channel, "")))))
+        elif channel == "replayStartTimeMs":
+            values.append(finite_float(replay.get("startTimeMs")))
+        elif channel == "replayTimeStepMs":
+            values.append(finite_float(replay.get("timeStepMs")))
+        elif channel == "replaySteps":
+            values.append(finite_float(replay.get("steps")))
+        else:
+            values.append(0.0)
+    return {
+        "identity": mode,
+        "channels": channels,
+        "values": values,
+        "source": "effective-witness-controls-with-route-query-fallback-and-deterministic-replay-scalars",
+    }
+
+
 def candidate_matches(dataset: dict[str, Any], manifest_path: Path, args: argparse.Namespace) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     pairs = dataset.get("pairs")
     if not isinstance(pairs, list) or not pairs:
@@ -273,6 +413,7 @@ def candidate_matches(dataset: dict[str, Any], manifest_path: Path, args: argpar
                 "pairId": pair.get("pairId"),
                 "routeVariantIdentity": pair.get("routeVariantIdentity"),
                 "replayStateIdentity": pair.get("replayStateIdentity"),
+                "routeConditioning": route_conditioning_for_pair(pair, args.route_conditioning),
                 "matchId": match.get("matchId"),
                 "lowTileId": match.get("lowTileId"),
                 "highTileId": match.get("highTileId"),
@@ -443,6 +584,42 @@ def context_features_for_tile(tile: np.ndarray, radius: int) -> np.ndarray:
 
 def context_feature_matrix(tiles: list[np.ndarray], radius: int) -> np.ndarray:
     return np.concatenate([context_features_for_tile(tile, radius) for tile in tiles], axis=0)
+
+
+def route_conditioning_feature_matrix(matches: list[dict[str, Any]], indexes: list[int], tiles: list[np.ndarray]) -> np.ndarray:
+    if not indexes:
+        return np.zeros((0, 0), dtype=np.float64)
+    channel_count = len(matches[indexes[0]].get("routeConditioning", {}).get("channels", []))
+    rows = []
+    for match_index, tile in zip(indexes, tiles):
+        sample_count = int(np.prod(tile.shape[:-1]))
+        values = np.asarray(matches[match_index].get("routeConditioning", {}).get("values", []), dtype=np.float64)
+        if values.size != channel_count:
+            raise ProbeFailure(
+                "route-conditioning",
+                "route conditioning vector width changed across tile pairs",
+                {
+                    "matchIndex": match_index,
+                    "expectedChannels": channel_count,
+                    "actualChannels": int(values.size),
+                },
+            )
+        rows.append(np.broadcast_to(values.reshape(1, -1), (sample_count, channel_count)))
+    if not rows:
+        return np.zeros((0, channel_count), dtype=np.float64)
+    return np.concatenate(rows, axis=0)
+
+
+def append_route_conditioning(features: np.ndarray, conditioning: np.ndarray) -> np.ndarray:
+    if conditioning.shape[1] == 0:
+        return features
+    if conditioning.shape[0] != features.shape[0]:
+        raise ProbeFailure(
+            "route-conditioning",
+            "route conditioning row count does not match spatial feature rows",
+            {"featureRows": int(features.shape[0]), "conditioningRows": int(conditioning.shape[0])},
+        )
+    return np.concatenate([features.astype(np.float64), conditioning.astype(np.float64)], axis=1)
 
 
 def fit_linear_ridge(features: np.ndarray, high: np.ndarray, ridge: float) -> tuple[np.ndarray, np.ndarray]:
@@ -664,6 +841,7 @@ def summarize_matches(matches: list[dict[str, Any]], indexes: list[int]) -> list
             "pairId": matches[index]["pairId"],
             "routeVariantIdentity": matches[index].get("routeVariantIdentity"),
             "replayStateIdentity": matches[index].get("replayStateIdentity"),
+            "routeConditioningValues": matches[index].get("routeConditioning", {}).get("values", []),
             "matchId": matches[index]["matchId"],
             "lowTileId": matches[index]["lowTileId"],
             "highTileId": matches[index]["highTileId"],
@@ -716,8 +894,12 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             "meanResidual": mean_residual,
         }
     elif model in (SPATIAL_CONTEXT_MODEL_IDENTITY, SPATIAL_CONTEXT_MLP_MODEL_IDENTITY):
-        train_features = context_feature_matrix(train_low_tiles, context_radius_value)
-        test_features = context_feature_matrix(test_low_tiles, context_radius_value)
+        train_local_features = context_feature_matrix(train_low_tiles, context_radius_value)
+        test_local_features = context_feature_matrix(test_low_tiles, context_radius_value)
+        train_route_conditioning = route_conditioning_feature_matrix(usable_matches, train_indexes, train_low_tiles)
+        test_route_conditioning = route_conditioning_feature_matrix(usable_matches, test_indexes, test_low_tiles)
+        train_features = append_route_conditioning(train_local_features, train_route_conditioning)
+        test_features = append_route_conditioning(test_local_features, test_route_conditioning)
         weights, bias = fit_linear_ridge(train_features, train_high, args.ridge)
         train_linear_context_prediction = predict_linear(train_features, weights, bias)
         test_linear_context_prediction = predict_linear(test_features, weights, bias)
@@ -725,6 +907,14 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             "contextRadius": context_radius_value,
             "contextWindow": [context_window(context_radius_value)] * 3,
             "contextFeatureCount": context_feature_count(train_low.shape[1], context_radius_value),
+            "localContextFeatureCount": int(train_local_features.shape[1]),
+            "conditionedFeatureCount": int(train_features.shape[1]),
+            "routeConditioning": {
+                "identity": args.route_conditioning,
+                "routeConditioningChannels": route_conditioning_channels(args.route_conditioning),
+                "routeConditioningFeatureCount": int(train_route_conditioning.shape[1]),
+                "source": "effective witness controls with query fallback; replay scalars included only for route-controls-replay-v0",
+            },
             "contextFeatureOrder": "dx-major,dy,dz over edge-padded low tile, channels preserved per offset",
         }
         if model == SPATIAL_CONTEXT_MODEL_IDENTITY:
@@ -787,6 +977,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             "fieldAuthority": dataset.get("fieldAuthority"),
             "deterministicReplay": dataset.get("deterministicReplay"),
             "deterministicReplayStates": dataset.get("deterministicReplayStates"),
+            "routeVariants": dataset.get("routeVariants"),
             "fieldTileExport": dataset.get("fieldTileExport"),
             "coverageExpansion": dataset.get("coverageExpansion"),
             "baseUrl": dataset.get("baseUrl"),
@@ -841,6 +1032,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     if context is not None:
         report["data"]["contextWindow"] = context["contextWindow"]
         report["data"]["contextFeatureCount"] = context["contextFeatureCount"]
+        report["data"]["conditionedFeatureCount"] = context["conditionedFeatureCount"]
+        report["data"]["routeConditioning"] = context["routeConditioning"]
     return report
 
 
