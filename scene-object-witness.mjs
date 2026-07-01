@@ -649,7 +649,7 @@ async function runForgeHostPublishedSmokeResultOfferScenario(ws) {
         title: 'Wake Published Witness',
         targetSurface: 'smoke-result',
         sourceRef: 'scene-object-witness.mjs#forge-host-published-smoke-result-offer',
-        targetUrl: '/api/read?root=scratch&path=forge-host-smoke-results%2Fresult-wake-and-bake-pit-boss-published-witness.json',
+        targetUrl: '/fixtures/forge-host-smoke-targets/wake-published-witness.html',
         reportSource: 'scene-object-witness.mjs#forge-host-published-smoke-result-offer',
         screenshotSource: null,
         summary: 'Wake published this non-Minion Smoke Result through the Kaminos publication endpoint.',
@@ -695,11 +695,31 @@ async function runForgeHostPublishedSmokeResultOfferScenario(ws) {
       if (!/Wake published this non-Minion Smoke Result/.test(panel?.textContent || '')) {
         throw new Error('published Smoke Result chamber did not render Wake summary: ' + (panel?.textContent || ''));
       }
+      const targetViewer = window.kaminosOpenForgeHostSmokeTarget?.();
+      await wait(650);
+      const iframe = document.querySelector('#forge-smoke-target-frame');
+      const viewer = document.querySelector('#forge-smoke-target-viewer');
+      let frameText = '';
+      try {
+        frameText = iframe?.contentDocument?.body?.textContent || '';
+      } catch {
+        frameText = '';
+      }
+      if (!targetViewer || viewer?.dataset.forgeSmokeTargetActive !== 'true' || !/Wake Target Smoke Fixture/.test(frameText)) {
+        throw new Error('Smoke target viewer did not load Wake target: ' + JSON.stringify({
+          targetViewer,
+          viewerActive: viewer?.dataset.forgeSmokeTargetActive,
+          iframeSrc: iframe?.getAttribute('src'),
+          frameText,
+        }));
+      }
       return {
         saved,
         selectedActorId: finalState.selectedActorId,
         openedOffer: finalState.lastOpenedOffer,
         chamber: finalState.smokeChamber,
+        targetViewer,
+        smokeTargetText: frameText.trim(),
         panelText: panel.textContent.trim(),
       };
     })()
