@@ -139,6 +139,29 @@ assert.throws(
   /not authoritative.*fallback/i,
 );
 
+const wallClockOnlyTiming = createRouteWorkerResult(mogeRoute, {
+  request,
+  receipt: {
+    ...receipt,
+    timings: {
+      source: 'wall-clock',
+      totalMs: 1,
+      stages: [{ name: 'total', ms: 1 }],
+      profile: null,
+    },
+  },
+});
+const wallClockOnlyTimingResult = validateRouteWorkerResult(wallClockOnlyTiming, mogeRoute);
+assert.equal(wallClockOnlyTimingResult.ok, false);
+assert.match(
+  wallClockOnlyTimingResult.errors.join('\n'),
+  /timings\.source.*queue-submit-wait|required stage backbone|required stage decoder-heads|required stage output-readback/,
+);
+assert.throws(
+  () => assertAuthoritativeRouteWorkerResult(wallClockOnlyTiming, mogeRoute),
+  /timings\.source.*queue-submit-wait|required stage backbone|required stage decoder-heads|required stage output-readback/,
+);
+
 const missingOutputHash = createRouteWorkerResult(mogeRoute, {
   request,
   receipt: {

@@ -95,6 +95,49 @@ function optionalRoleNames(roles) {
   return roles.filter(role => role.required === false).map(role => role.role);
 }
 
+function routeTimingStageNames(timings = {}) {
+  const names = new Set();
+  const addStageName = stage => {
+    if (isNonEmptyString(stage)) names.add(stage);
+    if (isNonEmptyString(stage?.name)) names.add(stage.name);
+  };
+
+  if (Array.isArray(timings.stages)) {
+    timings.stages.forEach(addStageName);
+  }
+
+  const profile = timings.profile;
+  if (profile && typeof profile === 'object') {
+    if (Array.isArray(profile.stageNames)) {
+      profile.stageNames.forEach(addStageName);
+    }
+    if (Array.isArray(profile.stages)) {
+      profile.stages.forEach(addStageName);
+    }
+  }
+
+  return names;
+}
+
+function validateRouteTiming(errors, receipt, route) {
+  const timings = receipt?.timings;
+  if (!timings || !route) return;
+
+  if (isNonEmptyString(route.timingSource) && timings.source !== route.timingSource) {
+    errors.push(`receipt.timings.source must be ${route.timingSource}`);
+  }
+
+  const requiredStages = Array.isArray(route.requiredStages) ? route.requiredStages : [];
+  if (requiredStages.length === 0) return;
+
+  const stageNames = routeTimingStageNames(timings);
+  for (const stageName of requiredStages) {
+    if (!stageNames.has(stageName)) {
+      errors.push(`receipt.timings missing required stage ${stageName}`);
+    }
+  }
+}
+
 function validateArtifacts(errors, artifacts, roles, path, { requireHash }) {
   const knownRoles = roleSet(roles);
   const artifactsByRole = new Map();
@@ -322,6 +365,7 @@ export function validateRouteWorkerResult(result, route) {
     if (result.receipt.effectiveRouteId !== route.routeId) {
       errors.push('receipt.effectiveRouteId must match route definition');
     }
+    if (routeResult.ok) validateRouteTiming(errors, result.receipt, route);
   }
 
   const backendResult = validateWebGpuBackendIdentity(result.backend);
