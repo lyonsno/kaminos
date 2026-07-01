@@ -3,6 +3,12 @@ import { createHash } from 'node:crypto';
 import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { delimiter, dirname, extname, isAbsolute, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import {
+  createWebGpuRouteBackpressureProfile,
+  createWebGpuRouteSchedulerProfile,
+  validateWebGpuRouteBackpressureProfile,
+  validateWebGpuRouteSchedulerProfile,
+} from '@kaminos/webgpu-inference-kit';
 
 const args = new Map();
 for (let i = 2; i < process.argv.length; i++) {
@@ -419,6 +425,55 @@ function uniqueAdapterPhases(telemetry) {
   return phases;
 }
 
+function phaseChunkSizeFromScheduler(scheduler = {}) {
+  const phaseChunkSize = {};
+  if (Number.isInteger(scheduler.spnPatchChunkSize) && scheduler.spnPatchChunkSize > 0) {
+    phaseChunkSize.spnPatch = scheduler.spnPatchChunkSize;
+  }
+  if (Number.isInteger(scheduler.vitBlockChunkSize) && scheduler.vitBlockChunkSize > 0) {
+    phaseChunkSize.vitBlock = scheduler.vitBlockChunkSize;
+  }
+  return phaseChunkSize;
+}
+
+function routeSchedulerInputFromEvidence({
+  requestedScheduler = {},
+  effectiveScheduler = null,
+  unsupportedFields = [],
+  verificationState = 'scheduler-unverified',
+} = {}) {
+  const requestedMode = requestedScheduler.mode === 'cooperative' ? 'cooperative' : 'throughput';
+  const hasEffectiveScheduler = Boolean(effectiveScheduler);
+  const profileVerificationState = unsupportedFields.length
+    ? 'unsupported'
+    : verificationState;
+  return {
+    requestedScheduler: {
+      mode: requestedMode,
+      yieldMs: requestedScheduler.yieldMs ?? 0,
+      waitForSubmittedWorkDone: Boolean(requestedScheduler.waitForSubmittedWorkDone),
+      phaseChunkSize: phaseChunkSizeFromScheduler(requestedScheduler),
+    },
+    effectiveScheduler: {
+      mode: effectiveScheduler?.mode || requestedMode,
+      yieldMs: effectiveScheduler?.yieldMs ?? requestedScheduler.yieldMs ?? 0,
+      waitForSubmittedWorkDone: Boolean(effectiveScheduler?.waitForSubmittedWorkDone ?? requestedScheduler.waitForSubmittedWorkDone),
+      phaseChunkSize: phaseChunkSizeFromScheduler(effectiveScheduler || {}),
+      unsupportedFields: unsupportedFields.length
+        ? ['phaseChunkSize', ...unsupportedFields.filter(field => field.startsWith('phaseChunkSize.'))]
+        : (hasEffectiveScheduler ? [] : ['phaseChunkSize']),
+    },
+    verificationState: profileVerificationState,
+  };
+}
+
+function createValidatedSchedulerProfile(input = {}) {
+  const profile = createWebGpuRouteSchedulerProfile(routeSchedulerInputFromEvidence(input));
+  const validation = validateWebGpuRouteSchedulerProfile(profile);
+  if (!validation.ok) throw new Error(`kit scheduler profile invalid: ${validation.errors.join('; ')}`);
+  return profile;
+}
+
 function adapterBackendIdentity(report, effectiveRoute = null) {
   const schema = String(report?.schema || '').toLowerCase();
   const backend = report?.backend || {};
@@ -443,8 +498,7 @@ function emptyOptimizationIdentity() {
 }
 
 function backpressurePlaceholder() {
-  return {
-    schema: 'kaminos.webgpu-route-backpressure.v0',
+  const profile = createWebGpuRouteBackpressureProfile({
     requestedBudget: 'unknown',
     effectiveBudget: 'unknown',
     memoryExclusivity: 'unknown',
@@ -456,6 +510,32 @@ function backpressurePlaceholder() {
       p95FrameGapMs: null,
       p99FrameGapMs: null,
     },
+  });
+  const validation = validateWebGpuRouteBackpressureProfile(profile);
+  if (!validation.ok) throw new Error(`kit backpressure profile invalid: ${validation.errors.join('; ')}`);
+  return profile;
+}
+
+function validateOrNormalizePipelineSchedulerEvidence(evidence) {
+  const schedulerValidation = validateWebGpuRouteSchedulerProfile(evidence?.scheduler);
+  const backpressureValidation = validateWebGpuRouteBackpressureProfile(evidence?.backpressure);
+  if (schedulerValidation.ok && backpressureValidation.ok) return evidence;
+  const unsupportedFields = Array.isArray(evidence?.unsupportedFields) ? evidence.unsupportedFields : [];
+  return {
+    ...evidence,
+    verificationState: unsupportedFields.length ? 'unsupported' : evidence?.verificationState,
+    scheduler: createValidatedSchedulerProfile({
+      requestedScheduler: evidence?.requestedScheduler || {},
+      effectiveScheduler: evidence?.effectiveScheduler || null,
+      unsupportedFields,
+      verificationState: evidence?.verificationState === 'verified' ? 'verified' : 'scheduler-unverified',
+    }),
+    backpressure: backpressureValidation.ok ? evidence.backpressure : backpressurePlaceholder(),
+    failureDowngrades: [
+      ...(Array.isArray(evidence?.failureDowngrades) ? evidence.failureDowngrades : []),
+      ...(schedulerValidation.ok ? [] : ['scheduler-profile-normalized-by-kit']),
+      ...(backpressureValidation.ok ? [] : ['backpressure-profile-normalized-by-kit']),
+    ],
   };
 }
 
@@ -468,13 +548,12 @@ function pipelineSchedulerEvidence(report, effectiveRoute = null) {
       requestedScheduler: null,
       effectiveScheduler: null,
       unsupportedFields: [],
-      scheduler: {
-        schema: 'kaminos.webgpu-route-scheduler.v0',
-        requestedScheduler: null,
+      scheduler: createValidatedSchedulerProfile({
+        requestedScheduler: {},
         effectiveScheduler: null,
         unsupportedFields: [],
-        verificationState: 'scheduler-evidence-missing',
-      },
+        verificationState: 'scheduler-unverified',
+      }),
       backpressure: backpressurePlaceholder(),
       phaseBoundaries: [],
       backendIdentity: adapterBackendIdentity(null, effectiveRoute),
@@ -486,16 +565,22 @@ function pipelineSchedulerEvidence(report, effectiveRoute = null) {
     };
   }
   if (report.pipelineScheduler?.schema === 'kaminos.pipeline-scheduler-composition.v0') {
-    return report.pipelineScheduler;
+    return validateOrNormalizePipelineSchedulerEvidence(report.pipelineScheduler);
   }
   const breathingRoom = report.breathingRoom || null;
   const effectiveScheduler = breathingRoom?.effectiveScheduler || null;
   const unsupportedFields = Array.isArray(breathingRoom?.unsupportedFields)
     ? breathingRoom.unsupportedFields
     : [];
-  const schedulerEffective = effectiveScheduler
-    ? { ...effectiveScheduler, ...(unsupportedFields.length ? { unsupportedFields } : {}) }
-    : null;
+  const verificationState = unsupportedFields.length
+    ? 'unsupported'
+    : (breathingRoom?.status || (effectiveScheduler ? 'verified' : 'scheduler-unverified'));
+  const schedulerProfile = createValidatedSchedulerProfile({
+    requestedScheduler: breathingRoom?.requestedScheduler || report.backend?.requestedScheduler || {},
+    effectiveScheduler,
+    unsupportedFields,
+    verificationState,
+  });
   const failureDowngrades = [];
   if (report.schema === 'unparseable-json') failureDowngrades.push('unparseable-adapter-report');
   if (!breathingRoom) failureDowngrades.push('breathing-room-missing');
@@ -504,17 +589,11 @@ function pipelineSchedulerEvidence(report, effectiveRoute = null) {
   return {
     schema: 'kaminos.pipeline-scheduler-composition.v0',
     source: 'pipeline-adapter-report',
-    verificationState: breathingRoom?.status || (effectiveScheduler ? 'verified' : 'scheduler-unverified'),
+    verificationState,
     requestedScheduler: breathingRoom?.requestedScheduler || report.backend?.requestedScheduler || null,
     effectiveScheduler,
     unsupportedFields,
-    scheduler: {
-      schema: 'kaminos.webgpu-route-scheduler.v0',
-      requestedScheduler: breathingRoom?.requestedScheduler || report.backend?.requestedScheduler || null,
-      effectiveScheduler: schedulerEffective,
-      unsupportedFields,
-      verificationState: breathingRoom?.status || (effectiveScheduler ? 'verified' : 'scheduler-unverified'),
-    },
+    scheduler: schedulerProfile,
     backpressure: backpressurePlaceholder(),
     phaseBoundaries: uniqueAdapterPhases(breathingRoom?.telemetry),
     backendIdentity: adapterBackendIdentity(report, effectiveRoute),

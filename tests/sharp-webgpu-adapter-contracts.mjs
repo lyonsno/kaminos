@@ -96,8 +96,8 @@ try {
   assert.equal(failureReport.pipelineScheduler.requestedScheduler.vitBlockChunkSize, 2);
   assert.equal(failureReport.pipelineScheduler.effectiveScheduler, null);
   assert.equal(failureReport.pipelineScheduler.scheduler.schema, 'kaminos.webgpu-route-scheduler.v0');
-  assert.equal(failureReport.pipelineScheduler.scheduler.requestedScheduler.vitBlockChunkSize, 2);
-  assert.equal(failureReport.pipelineScheduler.scheduler.effectiveScheduler, null);
+  assert.equal(failureReport.pipelineScheduler.scheduler.requestedScheduler.phaseChunkSize.vitBlock, 2);
+  assert.equal(failureReport.pipelineScheduler.scheduler.effectiveScheduler.unsupportedFields.includes('phaseChunkSize'), true);
   assert.equal(failureReport.pipelineScheduler.backpressure.schema, 'kaminos.webgpu-route-backpressure.v0');
   assert.equal(failureReport.pipelineScheduler.raw.breathingRoom.status, 'scheduler-unverified');
   assert.deepEqual(failureReport.pipelineScheduler.failureDowngrades, ['effective-scheduler-missing']);
