@@ -1379,6 +1379,11 @@ assert.match(interframeBaseline, /hold-last-rgba-v0/, 'interframe baseline inclu
 assert.match(interframeBaseline, /hold-next-rgba-v0/, 'interframe baseline includes a hold-next baseline for reverse holdover comparison');
 assert.match(interframeBaseline, /block-match-bidirectional-warp-rgba-v0/, 'interframe baseline includes a deterministic local block-match warp baseline before external interpolators');
 assert.match(interframeBaseline, /horn-schunck-bidirectional-warp-rgba-v0/, 'interframe baseline includes a deterministic optical-flow baseline stronger than toy block matching');
+assert.match(interframeBaseline, /parseExternalBaselineSpecs/, 'interframe baseline can register acquired external learned or flow candidates');
+assert.match(interframeBaseline, /runExternalBaseline/, 'interframe baseline can run external candidate commands through the same actual-middle evidence contract');
+assert.match(interframeBaseline, /externalBaselineCommand/, 'interframe baseline records the external command used to synthesize comparison frames');
+assert.match(interframeBaseline, /externalBaselineStdout/, 'interframe baseline records external runner stdout artifacts for successful commands');
+assert.match(interframeBaseline, /externalBaselineStderr/, 'interframe baseline records external runner stderr artifacts for successful commands');
 assert.match(interframeBaseline, /actualMiddle/, 'interframe baseline preserves the actual middle frame as the comparison target');
 assert.match(interframeBaseline, /syntheticMiddle/, 'interframe baseline writes a synthesized middle-frame artifact');
 assert.match(interframeBaseline, /contactSheet/, 'interframe baseline writes an inspectable contact sheet for operator smoke');
@@ -1396,3 +1401,25 @@ assert.match(interframeBaseline, /simStepCount/, 'interframe triplet preserves s
 assert.match(interframeBaseline, /effectiveRoute/, 'interframe triplet preserves effective route identity');
 assert.match(interframeBaseline, /prototypeIdentity/, 'interframe triplet preserves prototype identity');
 assert.match(interframeBaseline, /failurePhase/, 'interframe baseline writes phase-tagged failure reports');
+
+const opencvFlowBaselinePath = join(root, 'volume-opencv-flow-baseline.py');
+assert.ok(existsSync(opencvFlowBaselinePath), 'volume OpenCV flow baseline runner exists');
+const opencvFlowBaseline = existsSync(opencvFlowBaselinePath) ? readFileSync(opencvFlowBaselinePath, 'utf8') : '';
+assert.match(opencvFlowBaseline, /opencv-dis-bidirectional-warp-rgba-v0/, 'OpenCV flow runner preserves the DIS baseline identity');
+assert.match(opencvFlowBaseline, /cv2\.DISOpticalFlow_create|calcOpticalFlowFarneback/, 'OpenCV flow runner uses acquired dense-flow primitives instead of in-harness toy block matching');
+assert.match(opencvFlowBaseline, /synthetic-comparison-not-live-simulator-output/, 'OpenCV flow runner labels output as synthetic comparison evidence');
+assert.match(opencvFlowBaseline, /--first/, 'OpenCV flow runner accepts first input frame path');
+assert.match(opencvFlowBaseline, /--third/, 'OpenCV flow runner accepts third input frame path');
+assert.match(opencvFlowBaseline, /--out/, 'OpenCV flow runner writes the synthesized middle frame to a caller-owned path');
+
+const rifeBaselinePath = join(root, 'volume-rife-baseline.py');
+assert.ok(existsSync(rifeBaselinePath), 'volume RIFE learned baseline runner exists');
+const rifeBaseline = existsSync(rifeBaselinePath) ? readFileSync(rifeBaselinePath, 'utf8') : '';
+assert.match(rifeBaseline, /learned-rife-hdv3-rgba-v0/, 'RIFE runner preserves a stable learned baseline identity');
+assert.match(rifeBaseline, /inference_img\.py/, 'RIFE runner delegates to the acquired RIFE image interpolation entrypoint');
+assert.match(rifeBaseline, /synthetic-comparison-not-live-simulator-output/, 'RIFE runner labels output as synthetic comparison evidence');
+assert.match(rifeBaseline, /--rife-root/, 'RIFE runner accepts caller-owned RIFE checkout path');
+assert.match(rifeBaseline, /--model-dir/, 'RIFE runner accepts caller-owned RIFE model directory');
+assert.match(rifeBaseline, /--out/, 'RIFE runner writes the synthesized middle frame to a caller-owned path');
+assert.match(rifeBaseline, /inferenceStdout/, 'RIFE runner sidecar records acquired model stdout');
+assert.match(rifeBaseline, /inferenceStderr/, 'RIFE runner sidecar records acquired model stderr');

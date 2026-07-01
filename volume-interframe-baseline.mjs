@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
-import { closeSync, mkdirSync, openSync, readFileSync, writeFileSync } from 'node:fs';
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, dirname, resolve } from 'node:path';
-import { spawn, execFileSync } from 'node:child_process';
+import { spawn, spawnSync, execFileSync } from 'node:child_process';
 import { deflateSync, inflateSync } from 'node:zlib';
 import { createHash } from 'node:crypto';
 
@@ -50,6 +50,24 @@ function parseArgs(argv) {
   return parsed;
 }
 
+function parseExternalBaselineSpecs(argv) {
+  const specs = [];
+  for (let index = 0; index < argv.length; index += 1) {
+    if (argv[index] !== '--external-baseline') continue;
+    const raw = argv[index + 1];
+    if (!raw || raw.startsWith('--')) throw new Error('--external-baseline requires id::command');
+    index += 1;
+    const separator = raw.indexOf('::');
+    if (separator <= 0) throw new Error(`external baseline spec must be id::command, got ${raw}`);
+    const id = raw.slice(0, separator).trim();
+    const command = raw.slice(separator + 2).trim();
+    if (!/^[a-z0-9][a-z0-9-]*-v[0-9]+$/.test(id)) throw new Error(`external baseline id must be stable kebab schema id ending in -vN, got ${id}`);
+    if (!command.includes('{out}')) throw new Error(`external baseline ${id} command must include {out}`);
+    specs.push({ id, command });
+  }
+  return specs;
+}
+
 function delay(ms) {
   return new Promise(resolveDelay => setTimeout(resolveDelay, ms));
 }
@@ -65,6 +83,10 @@ function readJson(path) {
 
 function sha256Buffer(buffer) {
   return createHash('sha256').update(buffer).digest('hex');
+}
+
+function shellQuote(value) {
+  return `'${String(value).replaceAll("'", "'\\''")}'`;
 }
 
 function gitValue(args, fallback = null) {
@@ -1067,6 +1089,74 @@ function writeOperatorEvidenceHtml(path, report) {
   };
 }
 
+function renderExternalBaselineCommand(spec, context) {
+  return spec.command
+    .replaceAll('{first}', shellQuote(context.firstPath))
+    .replaceAll('{third}', shellQuote(context.thirdPath))
+    .replaceAll('{out}', shellQuote(context.outPath))
+    .replaceAll('{outDir}', shellQuote(context.outDir))
+    .replaceAll('{report}', shellQuote(context.reportPath));
+}
+
+function runExternalBaseline(spec, context) {
+  mkdirSync(dirname(context.outPath), { recursive: true });
+  const externalBaselineCommand = renderExternalBaselineCommand(spec, context);
+  const stdoutPath = `${context.outPath}.stdout.txt`;
+  const stderrPath = `${context.outPath}.stderr.txt`;
+  const stdoutFd = openSync(stdoutPath, 'w');
+  const stderrFd = openSync(stderrPath, 'w');
+  let result;
+  try {
+    result = spawnSync(externalBaselineCommand, {
+      cwd,
+      shell: true,
+      stdio: ['ignore', stdoutFd, stderrFd],
+    });
+  } finally {
+    closeSync(stdoutFd);
+    closeSync(stderrFd);
+  }
+  const stdout = readFileSync(stdoutPath, 'utf8');
+  const stderr = readFileSync(stderrPath, 'utf8');
+  if (result.status !== 0) {
+    const error = new Error(`external baseline ${spec.id} failed with status ${result.status}`);
+    error.code = 'external-baseline-failed';
+    error.failurePhase = 'external-baseline';
+    error.details = {
+      baselineId: spec.id,
+      externalBaselineCommand,
+      stdoutPath,
+      stderrPath,
+      stdout,
+      stderr,
+      signal: result.signal,
+    };
+    throw error;
+  }
+  if (!existsSync(context.outPath)) {
+    const error = new Error(`external baseline ${spec.id} did not write ${context.outPath}`);
+    error.code = 'external-baseline-missing-output';
+    error.failurePhase = 'external-baseline';
+    error.details = {
+      baselineId: spec.id,
+      externalBaselineCommand,
+      stdoutPath,
+      stderrPath,
+      stdout,
+      stderr,
+    };
+    throw error;
+  }
+  return {
+    id: spec.id,
+    externalBaselineCommand,
+    stdoutPath,
+    stderrPath,
+    stdout,
+    stderr,
+  };
+}
+
 function baselineRgba(id, first, third, width, height) {
   if (id === HOLD_LAST_BASELINE_ID) return cloneRgba(first);
   if (id === HOLD_NEXT_BASELINE_ID) return cloneRgba(third);
@@ -1155,6 +1245,9 @@ function validateTriplet(samples) {
 }
 
 const args = parseArgs(process.argv.slice(2));
+const externalBaselineSpecs = parseExternalBaselineSpecs(process.argv.slice(2));
+const externalBaselineById = new Map(externalBaselineSpecs.map(spec => [spec.id, spec]));
+const baselineIds = [...BASELINE_IDS, ...externalBaselineSpecs.map(spec => spec.id)];
 const cwd = new URL('.', import.meta.url).pathname;
 const outDir = resolve(args.get('--out-dir') || '/tmp/kaminos-interframe-baseline');
 const reportPath = resolve(args.get('--report') || `${outDir}/interframe-baseline-report.json`);
@@ -1176,7 +1269,7 @@ const artifactPaths = {
   t2: resolve(outDir, 'triplet-t2.png'),
   contactSheet: resolve(outDir, 'interframe-baseline-contact-sheet.png'),
   operatorEvidenceHtml: resolve(outDir, 'interframe-baseline-evidence.html'),
-  baselines: Object.fromEntries(BASELINE_IDS.map(id => [id, {
+  baselines: Object.fromEntries(baselineIds.map(id => [id, {
     syntheticMiddle: resolve(outDir, `${id}-synthetic-middle.png`),
     difference: resolve(outDir, `${id}-error.png`),
   }])),
@@ -1211,9 +1304,13 @@ const baseReport = {
     inputFrames: ['t0', 't2'],
     targetFrame: 'actualMiddle',
     syntheticMiddle: null,
-    baselineIds: BASELINE_IDS,
+    baselineIds,
     failureModeBuckets: FAILURE_MODE_BUCKETS,
   },
+  externalBaselines: externalBaselineSpecs.map(spec => ({
+    id: spec.id,
+    commandTemplate: spec.command,
+  })),
   baselines: [],
   contactSheet: null,
   operatorEvidenceHtml: null,
@@ -1321,26 +1418,41 @@ try {
       t0ToT2: t2.simStepCount - t0.simStepCount,
     },
   };
-  const baselineReports = BASELINE_IDS.map(id => {
+  const baselineReports = baselineIds.map(id => {
     const paths = artifactPaths.baselines[id];
-    const syntheticMiddleRgba = baselineRgba(id, t0Rgba, t2Rgba, width, height);
-    const differenceRgbaImage = differenceRgba(actualMiddleRgba, syntheticMiddleRgba);
-    writeRgbaPng(paths.syntheticMiddle, width, height, syntheticMiddleRgba);
+    const externalSpec = externalBaselineById.get(id);
+    const externalRun = externalSpec ? runExternalBaseline(externalSpec, {
+      firstPath: artifactPaths.t0,
+      thirdPath: artifactPaths.t2,
+      outPath: paths.syntheticMiddle,
+      outDir,
+      reportPath,
+    }) : null;
+    if (!externalSpec) {
+      const syntheticMiddleRgba = baselineRgba(id, t0Rgba, t2Rgba, width, height);
+      writeRgbaPng(paths.syntheticMiddle, width, height, syntheticMiddleRgba);
+    }
+    const finalSyntheticBuffer = readFileSync(paths.syntheticMiddle);
+    const finalSyntheticPng = parsePngRgba(finalSyntheticBuffer);
+    assert.equal(finalSyntheticPng.width, width, `${id} synthetic PNG width drifted after final write`);
+    assert.equal(finalSyntheticPng.height, height, `${id} synthetic PNG height drifted after final write`);
+    const finalSyntheticRgba = finalSyntheticPng.rgba;
+    const differenceRgbaImage = differenceRgba(actualMiddleRgba, finalSyntheticRgba);
     writeRgbaPng(paths.difference, width, height, differenceRgbaImage);
-    const syntheticBuffer = readFileSync(paths.syntheticMiddle);
-    const syntheticPng = parsePngRgba(syntheticBuffer);
-    assert.equal(syntheticPng.width, width, `${id} synthetic PNG width drifted after write`);
-    assert.equal(syntheticPng.height, height, `${id} synthetic PNG height drifted after write`);
-    const metrics = compareRgba(actualMiddleRgba, syntheticMiddleRgba, width, height);
+    const metrics = compareRgba(actualMiddleRgba, finalSyntheticRgba, width, height);
     return {
       id,
       syntheticAuthority: SYNTHETIC_AUTHORITY,
+      sourceKind: externalSpec ? 'external-command' : 'in-process-baseline',
+      externalBaselineCommand: externalRun?.externalBaselineCommand || null,
+      externalBaselineStdout: externalRun?.stdoutPath || null,
+      externalBaselineStderr: externalRun?.stderrPath || null,
       inputFrames: ['t0', 't2'],
       targetFrame: 'actualMiddle',
       syntheticMiddle: {
         path: paths.syntheticMiddle,
         authority: SYNTHETIC_AUTHORITY,
-        imageSha256: sha256Buffer(syntheticBuffer),
+        imageSha256: sha256Buffer(finalSyntheticBuffer),
       },
       actualMiddle: {
         path: artifactPaths.actualMiddle,
