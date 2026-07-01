@@ -944,6 +944,11 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
       <span class="slider-val" id="volume-pressure-mode-val">Default</span>
     </div>
     <div class="slider-row">
+      <span class="slider-label">P Cadence</span>
+      <input type="range" id="volume-pressure-cadence" min="1" max="8" step="1" value="1">
+      <span class="slider-val" id="volume-pressure-cadence-val">1</span>
+    </div>
+    <div class="slider-row">
       <span class="slider-label">Tier Overlay</span>
       <input type="range" id="volume-pressure-tier-overlay" min="0" max="1" step="0.05" value="0">
       <span class="slider-val" id="volume-pressure-tier-overlay-val">0.00</span>
@@ -7788,6 +7793,7 @@ let routedCanonicalInjection = canonicalVolumeSourceDefaults('current').injectio
 let routedCanonicalBuoyancy = canonicalVolumeSourceDefaults('current').buoyancy;
 let routedVolumeReactionFuelScale = 1;
 let routedVolumeMajorantCadence = 1;
+let routedVolumePressureCadence = 1;
 let routedVolumePressureIterations = undefined;
 let routedVolumePressureStrategy = 'global';
 let routedVolumePressureMode = 'auto';
@@ -8239,6 +8245,7 @@ function readVolumeControls() {
     gpuPressure: routedVolumeGpuPressure,
     runtimeQualityReason: routedVolumeQualityReason,
     majorantCadence: routedVolumeMajorantCadence,
+    pressureCadence: parseFloat(document.getElementById('volume-pressure-cadence').value) || routedVolumePressureCadence,
     pressureIterations: pressureConfig.pressureIterations,
     pressureStrategy: pressureConfig.pressureStrategy,
     simProfile: routedVolumeSimProfile,
@@ -8292,6 +8299,7 @@ function updateVolumeControlLabels() {
   if (pressureTierControls.heroMin !== c.pressureTierHeroMin) setVolumeControlValue('volume-pressure-tier-hero-min', pressureTierControls.heroMin.toFixed(2));
   if (pressureTierControls.heroMax !== c.pressureTierHeroMax) setVolumeControlValue('volume-pressure-tier-hero-max', pressureTierControls.heroMax.toFixed(2));
   if (pressureTierControls.overlay !== c.pressureTierOverlay) setVolumeControlValue('volume-pressure-tier-overlay', pressureTierControls.overlay.toFixed(2));
+  document.getElementById('volume-pressure-cadence-val').textContent = String(Math.round(c.pressureCadence ?? 1));
   document.getElementById('volume-pressure-tier-overlay-val').textContent = pressureTierControls.overlay.toFixed(2);
   document.getElementById('volume-pressure-tier-lower-max-val').textContent = pressureTierControls.lowerMax.toFixed(2);
   document.getElementById('volume-pressure-tier-hero-min-val').textContent = pressureTierControls.heroMin.toFixed(2);
@@ -8494,6 +8502,10 @@ async function initKaminosVolumeRoute() {
   const routeMajorantCadence = Number(params.get('volume_majorant_cadence'));
   if (params.has('volume_majorant_cadence') && Number.isFinite(routeMajorantCadence)) {
     routedVolumeMajorantCadence = Math.max(1, Math.min(8, Math.round(routeMajorantCadence)));
+  }
+  const routePressureCadence = Number(params.get('volume_pressure_cadence'));
+  if (params.has('volume_pressure_cadence') && Number.isFinite(routePressureCadence)) {
+    routedVolumePressureCadence = Math.max(1, Math.min(8, Math.round(routePressureCadence)));
   }
   const routePressureIterations = Number(params.get('volume_pressure_iterations'));
   if (params.has('volume_pressure_iterations') && Number.isFinite(routePressureIterations)) {
@@ -8711,7 +8723,7 @@ async function initKaminosVolumeRoute() {
     volumePrototype.setControls(readVolumeControls());
     refreshVolumeReadout();
   };
-  for (const id of ['volume-scene', 'volume-density', 'volume-fire', 'volume-radiance', 'volume-absorption', 'volume-glow', 'volume-smoke', 'volume-curl', 'volume-microdetail', 'volume-interface-shred', 'volume-fire-licks', 'volume-projection', 'volume-speed', 'volume-steps', 'volume-adaptive-rays', 'volume-occupancy-skip', 'volume-majorant-skip', 'volume-majorant-smooth', 'volume-majorant-guard', 'volume-temporal-accum', 'volume-temporal-jitter', 'volume-history-clamp', 'volume-fire-scale', 'volume-detail-scale', 'volume-plume-height', 'volume-wind-strength', 'volume-wind-angle', 'volume-wind-height', 'volume-render-scale', 'volume-input-radius', 'volume-flow-rate', 'volume-resolution', 'volume-majorant-grid', 'volume-grid-overlay', 'volume-flow-debug', 'volume-pressure-mode', 'volume-pressure-tier-overlay', 'volume-pressure-tier-lower-max', 'volume-pressure-tier-hero-min', 'volume-pressure-tier-hero-max', 'volume-canonical-spread', 'volume-canonical-centerline', 'volume-canonical-body-balance']) {
+  for (const id of ['volume-scene', 'volume-density', 'volume-fire', 'volume-radiance', 'volume-absorption', 'volume-glow', 'volume-smoke', 'volume-curl', 'volume-microdetail', 'volume-interface-shred', 'volume-fire-licks', 'volume-projection', 'volume-speed', 'volume-steps', 'volume-adaptive-rays', 'volume-occupancy-skip', 'volume-majorant-skip', 'volume-majorant-smooth', 'volume-majorant-guard', 'volume-temporal-accum', 'volume-temporal-jitter', 'volume-history-clamp', 'volume-fire-scale', 'volume-detail-scale', 'volume-plume-height', 'volume-wind-strength', 'volume-wind-angle', 'volume-wind-height', 'volume-render-scale', 'volume-input-radius', 'volume-flow-rate', 'volume-resolution', 'volume-majorant-grid', 'volume-grid-overlay', 'volume-flow-debug', 'volume-pressure-mode', 'volume-pressure-cadence', 'volume-pressure-tier-overlay', 'volume-pressure-tier-lower-max', 'volume-pressure-tier-hero-min', 'volume-pressure-tier-hero-max', 'volume-canonical-spread', 'volume-canonical-centerline', 'volume-canonical-body-balance']) {
     document.getElementById(id).addEventListener('input', syncControls);
     document.getElementById(id).addEventListener('change', syncControls);
   }

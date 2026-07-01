@@ -117,6 +117,11 @@ assert.match(index, /volume_pressure_iterations/, 'URL route can override staged
 assert.match(index, /pressureIterations/, 'Volume controls carry staged pressure iteration override into the renderer');
 assert.match(index, /volume_pressure_strategy/, 'URL route can select staged pressure strategy for spatial-quality probes');
 assert.match(index, /routedVolumePressureStrategy/, 'Volume controls carry routed pressure strategy identity into the renderer');
+assert.match(index, /volume_pressure_cadence/, 'URL route can override pressure rebuild cadence for budget-experiment probes');
+assert.match(index, /pressureCadence/, 'Volume controls carry pressure rebuild cadence into the renderer');
+assert.match(index, /id="volume-pressure-cadence"/, 'Volume cockpit exposes a pressure cadence slider for live budget tuning');
+assert.match(index, /routedVolumePressureCadence/, 'pressure cadence route variable mirrors majorant cadence pattern');
+assert.match(index, /volume-pressure-cadence-val/, 'pressure cadence cockpit label updates live alongside the slider');
 assert.match(index, /pressureStrategy/, 'Volume controls expose effective pressure strategy to the renderer');
 assert.match(index, /volume-pressure-mode/, 'Volume cockpit exposes a live pressure mode selector for tier/global comparison');
 assert.match(index, /global-p3/, 'Volume pressure mode selector can switch to full global pressure3');
