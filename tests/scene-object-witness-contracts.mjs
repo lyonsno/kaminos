@@ -48,6 +48,7 @@ assert.match(witness, /viewport smoke-offer click did not open chamber/, 'Forge 
 assert.match(witness, /side-panel smoke-offer row was re-rendered under hover/, 'Forge Host side-panel witness fails when frame updates churn the hover target');
 assert.match(witness, /Smoke Result offer did not open result chamber/, 'Forge Host result witness fails when result offers route to endpoint shells');
 assert.match(witness, /published Smoke Result did not attach to Wake/, 'Forge Host publication witness fails when a published result does not become a lane-owned offer');
+assert.match(witness, /Smoke target viewer did not load Wake target/, 'Forge Host publication witness fails when the chamber does not open the actual smoke target');
 assert.match(witness, /smoke chamber receipt lost screenshot path/, 'Forge Host receipt witness fails loud on missing screenshot evidence');
 assert.match(witness, /requestedUrl:\s*url/, 'witness report records requested URL');
 assert.match(witness, /effectiveUrl:/, 'witness report records effective browser URL');

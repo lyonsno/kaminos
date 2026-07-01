@@ -60,6 +60,9 @@ assert.match(index, /forge-host-smoke-result-route/, 'Forge Host UI can render a
 assert.match(index, /forgeSmokeOfferSchema/, 'Forge Host offer rows expose whether they are endpoint offers or smoke-result offers');
 assert.match(index, /forgeSmokeResultEmpty/, 'Forge Host selected station surface distinguishes missing current smoke results from inert clicks');
 assert.match(index, /forge-chamber-result-preview/, 'Forge Host Smoke Result chamber can render a result preview or payload text');
+assert.match(index, /id="forge-smoke-target-viewer"/, 'Forge Host exposes an in-interface smoke target viewer instead of only report text');
+assert.match(index, /data-forge-chamber-open-smoke/, 'Forge Host Smoke Result chambers expose an explicit action to open the smoke target');
+assert.match(index, /kaminosOpenForgeHostSmokeTarget/, 'browser witnesses can open Smoke Result target URLs without DOM inference');
 assert.match(index, /const primaryOffer = forgeHit\.station\.smokeOffers\.find/, 'clicking a 3D Forge Host smoke-offer marker prefers an available Smoke Result before falling back to an endpoint offer');
 assert.match(index, /scrollForgeHostSmokeChamberIntoView\(\)/, 'opened Smoke Chambers scroll into view instead of looking like a no-op below the fold');
 assert.match(index, /kaminos\.forge-host\.smoke-offer\.v0/, 'Forge Host UI preserves smoke-offer schema identity');
