@@ -26,6 +26,12 @@ const fieldTileExportRequested = args.has('--field-tile-export');
 const fieldTileSize = Number(args.get('--field-tile-size') || 8);
 const fieldTileMaxCount = Number(args.get('--field-tile-max-count') || 8);
 const fieldTileMinCellEnergy = Number(args.get('--field-tile-min-cell-energy') || 0.015);
+const fieldTileSelectionPolicy = args.get('--field-tile-selection-policy') || 'selected-occupied-fluid-front-tiles';
+const fieldTileSpatialBins = Number(args.get('--field-tile-spatial-bins') || 4);
+const fieldTileSpatialBinIds = String(args.get('--field-tile-spatial-bin-ids') || '')
+  .split(',')
+  .map((entry) => entry.trim())
+  .filter(Boolean);
 const fullScreenshot = args.has('--full-screenshot')
   ? resolve(args.get('--full-screenshot') || out.replace(/\.png$/i, '.full.png'))
   : '';
@@ -1168,6 +1174,9 @@ async function main() {
       tileSize: fieldTileSize,
       maxTiles: fieldTileMaxCount,
       minCellEnergy: fieldTileMinCellEnergy,
+      selectionPolicy: fieldTileSelectionPolicy,
+      spatialBinCount: fieldTileSpatialBins,
+      spatialBinIds: fieldTileSpatialBinIds,
     } : null;
     const sampleOptions = {
       ...(deterministicReplayRequested ? {
@@ -1201,15 +1210,28 @@ async function main() {
     }
     if (fieldTileExportRequested) {
       const tileExport = sample.simReadback?.fieldTileExport || null;
+      const expectedSelectionPolicy = fieldTileSelectionPolicy.includes('spatial')
+        ? 'spatial-binned-occupied-fluid-front-tiles'
+        : 'selected-occupied-fluid-front-tiles';
       if (
         tileExport?.schema !== 'kaminos.volume.field-tile-export.v0' ||
-        tileExport?.selectionPolicy !== 'selected-occupied-fluid-front-tiles' ||
+        tileExport?.selectionPolicy !== expectedSelectionPolicy ||
         !Array.isArray(tileExport.tiles) ||
         tileExport.tiles.length < 1 ||
         Number(tileExport.exportedTiles) !== tileExport.tiles.length ||
         !Number.isFinite(Number(tileExport.droppedCandidateTiles))
       ) {
         throw new Error(`field tile export missing selected-tile authority: ${JSON.stringify(tileExport)}`);
+      }
+      if (expectedSelectionPolicy === 'spatial-binned-occupied-fluid-front-tiles') {
+        if (
+          Number(tileExport.spatialBinCount) !== Math.max(2, Math.min(8, Math.floor(fieldTileSpatialBins))) ||
+          !Array.isArray(tileExport.selectedSpatialBins) ||
+          tileExport.selectedSpatialBins.length !== tileExport.tiles.length ||
+          tileExport.tiles.some((tile) => !tile.spatialBinId)
+        ) {
+          throw new Error(`field tile export missing spatial-bin authority: ${JSON.stringify(tileExport)}`);
+        }
       }
     }
     const samplePressureSourceStrategy = sample.pressureProjectionEnabled ? 'jacobi-inline-divergence-v0' : 'disabled';

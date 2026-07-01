@@ -5039,12 +5039,25 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const tileSize = Math.max(4, Math.min(24, Math.floor(Number(options.tileSize ?? 8))));
     const maxTiles = Math.max(1, Math.min(128, Math.floor(Number(options.maxTiles ?? options.maxTileCount ?? 8))));
     const minCellEnergy = Math.max(0, Number(options.minCellEnergy ?? 0.015));
+    const requestedPolicy = String(options.selectionPolicy || options.fieldTileSelectionPolicy || 'selected-occupied-fluid-front-tiles');
+    const selectionPolicy = requestedPolicy.includes('spatial')
+      ? 'spatial-binned-occupied-fluid-front-tiles'
+      : 'selected-occupied-fluid-front-tiles';
+    const spatialBinCount = Math.max(2, Math.min(8, Math.floor(Number(options.spatialBinCount ?? options.fieldTileSpatialBins ?? 4))));
+    const requestedSpatialBinIds = Array.isArray(options.spatialBinIds)
+      ? options.spatialBinIds
+      : String(options.spatialBinIds || options.requestedSpatialBinIds || '')
+        .split(',')
+        .map((entry) => entry.trim())
+        .filter(Boolean);
     return {
       enabled: true,
       tileSize,
       maxTiles,
       minCellEnergy,
-      selectionPolicy: 'selected-occupied-fluid-front-tiles',
+      selectionPolicy,
+      spatialBinCount,
+      requestedSpatialBinIds: Array.from(new Set(requestedSpatialBinIds)),
     };
   }
 
@@ -5073,12 +5086,32 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const tileSize = config.tileSize;
     const tileOrigins = [];
     let emptyTiles = 0;
+    const gridSpan = Math.max(1, gridSize - 1);
+    const spatialBinIdFromCoord = (coord) => `b${coord[0]}-${coord[1]}-${coord[2]}`;
+    const spatialCoordForCenter = (center) => center.map((value) => Math.max(0, Math.min(config.spatialBinCount - 1, Math.floor(value * config.spatialBinCount))));
     for (let originZ = 0; originZ < gridSize; originZ += tileSize) {
       for (let originY = 0; originY < gridSize; originY += tileSize) {
         for (let originX = 0; originX < gridSize; originX += tileSize) {
           const sizeX = Math.min(tileSize, gridSize - originX);
           const sizeY = Math.min(tileSize, gridSize - originY);
           const sizeZ = Math.min(tileSize, gridSize - originZ);
+          const normalizedOrigin = [
+            originX / gridSpan,
+            originY / gridSpan,
+            originZ / gridSpan,
+          ];
+          const normalizedSize = [
+            sizeX / gridSize,
+            sizeY / gridSize,
+            sizeZ / gridSize,
+          ];
+          const normalizedCenter = [
+            (originX + (sizeX - 1) * 0.5) / gridSpan,
+            (originY + (sizeY - 1) * 0.5) / gridSpan,
+            (originZ + (sizeZ - 1) * 0.5) / gridSpan,
+          ];
+          const spatialBinCoord = spatialCoordForCenter(normalizedCenter);
+          const spatialBinId = spatialBinIdFromCoord(spatialBinCoord);
           let liveCells = 0;
           let energySum = 0;
           let densityMax = 0;
@@ -5107,6 +5140,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
             tileOrigins.push({
               origin: [originX, originY, originZ],
               size: [sizeX, sizeY, sizeZ],
+              normalizedOrigin,
+              normalizedSize,
+              normalizedCenter,
+              spatialBinCoord,
+              spatialBinId,
               liveCells,
               energySum,
               densityMax,
@@ -5124,26 +5162,38 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       if (b.liveCells !== a.liveCells) return b.liveCells - a.liveCells;
       return a.origin.join(',').localeCompare(b.origin.join(','));
     });
-    const selected = tileOrigins.slice(0, config.maxTiles);
+    const bestTileBySpatialBin = new Map();
+    for (const tile of tileOrigins) {
+      if (!bestTileBySpatialBin.has(tile.spatialBinId)) bestTileBySpatialBin.set(tile.spatialBinId, tile);
+    }
+    let missingRequestedSpatialBinIds = [];
+    let selected;
+    if (config.selectionPolicy === 'spatial-binned-occupied-fluid-front-tiles') {
+      const picked = [];
+      const pickedBins = new Set();
+      for (const spatialBinId of config.requestedSpatialBinIds) {
+        if (picked.length >= config.maxTiles) break;
+        const tile = bestTileBySpatialBin.get(spatialBinId);
+        if (tile) {
+          picked.push(tile);
+          pickedBins.add(spatialBinId);
+        } else {
+          missingRequestedSpatialBinIds.push(spatialBinId);
+        }
+      }
+      for (const tile of bestTileBySpatialBin.values()) {
+        if (picked.length >= config.maxTiles) break;
+        if (pickedBins.has(tile.spatialBinId)) continue;
+        picked.push(tile);
+        pickedBins.add(tile.spatialBinId);
+      }
+      selected = picked;
+    } else {
+      selected = tileOrigins.slice(0, config.maxTiles);
+    }
     const tiles = selected.map((tile, index) => {
       const [originX, originY, originZ] = tile.origin;
       const [sizeX, sizeY, sizeZ] = tile.size;
-      const gridSpan = Math.max(1, gridSize - 1);
-      const normalizedOrigin = [
-        originX / gridSpan,
-        originY / gridSpan,
-        originZ / gridSpan,
-      ];
-      const normalizedSize = [
-        sizeX / gridSize,
-        sizeY / gridSize,
-        sizeZ / gridSize,
-      ];
-      const normalizedCenter = [
-        (originX + (sizeX - 1) * 0.5) / gridSpan,
-        (originY + (sizeY - 1) * 0.5) / gridSpan,
-        (originZ + (sizeZ - 1) * 0.5) / gridSpan,
-      ];
       const values = new Float32Array(sizeX * sizeY * sizeZ * channels.length);
       let dst = 0;
       for (let z = 0; z < sizeZ; z += 1) {
@@ -5175,9 +5225,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         tileId: `tile-${String(index + 1).padStart(3, '0')}-x${originX}-y${originY}-z${originZ}`,
         origin: tile.origin,
         size: tile.size,
-        normalizedOrigin,
-        normalizedSize,
-        normalizedCenter,
+        normalizedOrigin: tile.normalizedOrigin,
+        normalizedSize: tile.normalizedSize,
+        normalizedCenter: tile.normalizedCenter,
+        spatialBinCoord: tile.spatialBinCoord,
+        spatialBinId: tile.spatialBinId,
         shape: [sizeZ, sizeY, sizeX, channels.length],
         channels,
         dtype: 'float32-json-number-array',
@@ -5203,6 +5255,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       tileSize,
       requestedMaxTiles: config.maxTiles,
       minCellEnergy: config.minCellEnergy,
+      spatialBinCount: config.selectionPolicy === 'spatial-binned-occupied-fluid-front-tiles' ? config.spatialBinCount : null,
+      requestedSpatialBinIds: config.selectionPolicy === 'spatial-binned-occupied-fluid-front-tiles' ? config.requestedSpatialBinIds : [],
+      missingRequestedSpatialBinIds,
+      candidateSpatialBins: bestTileBySpatialBin.size,
+      selectedSpatialBins: tiles.map((tile) => tile.spatialBinId),
+      spatialBackfillTiles: config.selectionPolicy === 'spatial-binned-occupied-fluid-front-tiles' && config.requestedSpatialBinIds.length > 0
+        ? tiles.filter((tile) => !config.requestedSpatialBinIds.includes(tile.spatialBinId)).length
+        : 0,
       channels,
       channelCount: channels.length,
       totalTiles,

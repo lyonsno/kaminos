@@ -42,6 +42,13 @@ function numberList(value, fallback) {
   return numbers.length ? numbers : String(fallback).split(',').map(Number);
 }
 
+function stringList(value) {
+  return String(value || '')
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
 function nearestSupported(value, supported, fallback) {
   const requested = Number(value);
   if (!Number.isFinite(requested)) return fallback;
@@ -168,6 +175,12 @@ function summarizeTileCoverage(exportSummary) {
     path: exportSummary.path,
     simGrid: exportSummary.simGrid,
     tileSize: exportSummary.tileSize,
+    spatialBinCount: exportSummary.spatialBinCount,
+    requestedSpatialBinIds: exportSummary.requestedSpatialBinIds || [],
+    missingRequestedSpatialBinIds: exportSummary.missingRequestedSpatialBinIds || [],
+    candidateSpatialBins: exportSummary.candidateSpatialBins,
+    selectedSpatialBins: exportSummary.selectedSpatialBins || [],
+    spatialBackfillTiles: exportSummary.spatialBackfillTiles,
     requestedMaxTiles: exportSummary.requestedMaxTiles,
     minCellEnergy: exportSummary.minCellEnergy,
     totalTiles: exportSummary.totalTiles,
@@ -227,6 +240,9 @@ function buildFieldTileCoveragePairing(pair) {
       highNormalizedCenter: normalizedTileCenter(candidate.highTile),
       normalizedTileDistance: candidate.distance,
       normalizedTileSeparation: normalizedTileSeparation(candidate.lowTile, candidate.highTile),
+      lowSpatialBinId: candidate.lowTile.spatialBinId || null,
+      highSpatialBinId: candidate.highTile.spatialBinId || null,
+      sameSpatialBin: Boolean(candidate.lowTile.spatialBinId && candidate.lowTile.spatialBinId === candidate.highTile.spatialBinId),
       lowShape: candidate.lowTile.shape,
       highShape: candidate.highTile.shape,
       lowEnergySum: candidate.lowTile.energySum,
@@ -254,6 +270,7 @@ function buildFieldTileCoveragePairing(pair) {
   }));
   const distances = matchedTilePairs.map((match) => finiteNumber(match.normalizedTileDistance));
   const separations = matchedTilePairs.map((match) => finiteNumber(match.normalizedTileSeparation));
+  const sameSpatialBinPairs = matchedTilePairs.filter((match) => match.sameSpatialBin).length;
   return {
     schema: FIELD_TILE_COVERAGE_PAIRING_SCHEMA,
     identity: 'normalized-tile-center-nearest-neighbor-v0',
@@ -268,6 +285,7 @@ function buildFieldTileCoveragePairing(pair) {
       matchedTilePairs: matchedTilePairs.length,
       unmatchedLowTiles: unmatchedLowTiles.length,
       unmatchedHighTiles: unmatchedHighTiles.length,
+      sameSpatialBinPairs,
       selectionPolicy: lowExport.selectionPolicy === highExport.selectionPolicy ? lowExport.selectionPolicy : 'mixed-selection-policy',
       relationship: 'selected low/high occupied tiles greedily paired by nearest normalized tile center',
     },
@@ -287,6 +305,16 @@ function buildFieldTileCoveragePairing(pair) {
       min: separations.length ? Math.min(...separations) : null,
       max: separations.length ? Math.max(...separations) : null,
       mean: separations.length ? separations.reduce((sum, value) => sum + value, 0) / separations.length : null,
+    },
+    spatialBinSummary: {
+      count: matchedTilePairs.length,
+      sameSpatialBinPairs,
+      differentSpatialBinPairs: matchedTilePairs.length - sameSpatialBinPairs,
+      lowSelectedSpatialBins: Array.isArray(lowExport.selectedSpatialBins) ? lowExport.selectedSpatialBins : [],
+      highSelectedSpatialBins: Array.isArray(highExport.selectedSpatialBins) ? highExport.selectedSpatialBins : [],
+      highRequestedSpatialBins: Array.isArray(highExport.requestedSpatialBinIds) ? highExport.requestedSpatialBinIds : [],
+      highMissingRequestedSpatialBins: Array.isArray(highExport.missingRequestedSpatialBinIds) ? highExport.missingRequestedSpatialBinIds : [],
+      highSpatialBackfillTiles: Number(highExport.spatialBackfillTiles || 0),
     },
     limitation: 'Coverage pairing aligns exported selected tiles by normalized centers only; it does not resample low/high tensors or prove literal same-state GPU snapshot transfer.',
   };
@@ -439,9 +467,10 @@ function writeFloat32Payload(path, values) {
 function buildFieldTileExportArtifacts({ witness, plan, fieldShape }) {
   if (!plan.fieldTileExport?.enabled) return null;
   const source = witness.simReadback?.fieldTileExport || null;
+  const expectedSelectionPolicy = plan.fieldTileExport.selectionPolicy || 'selected-occupied-fluid-front-tiles';
   if (
     source?.schema !== FIELD_TILE_EXPORT_SCHEMA ||
-    source.selectionPolicy !== 'selected-occupied-fluid-front-tiles' ||
+    source.selectionPolicy !== expectedSelectionPolicy ||
     !Array.isArray(source.tiles) ||
     source.tiles.length < 1
   ) {
@@ -490,6 +519,12 @@ function buildFieldTileExportArtifacts({ witness, plan, fieldShape }) {
     tileSize: source.tileSize,
     requestedMaxTiles: source.requestedMaxTiles,
     minCellEnergy: source.minCellEnergy,
+    spatialBinCount: source.spatialBinCount,
+    requestedSpatialBinIds: source.requestedSpatialBinIds || [],
+    missingRequestedSpatialBinIds: source.missingRequestedSpatialBinIds || [],
+    candidateSpatialBins: source.candidateSpatialBins,
+    selectedSpatialBins: source.selectedSpatialBins || [],
+    spatialBackfillTiles: source.spatialBackfillTiles,
     channels: source.channels,
     channelCount: source.channelCount,
     totalTiles: source.totalTiles,
@@ -509,6 +544,12 @@ function buildFieldTileExportArtifacts({ witness, plan, fieldShape }) {
     fullCoverage: fieldTileExport.fullCoverage,
     coverageLimitation: fieldTileExport.coverageLimitation,
     tileSize: fieldTileExport.tileSize,
+    spatialBinCount: fieldTileExport.spatialBinCount,
+    requestedSpatialBinIds: fieldTileExport.requestedSpatialBinIds,
+    missingRequestedSpatialBinIds: fieldTileExport.missingRequestedSpatialBinIds,
+    candidateSpatialBins: fieldTileExport.candidateSpatialBins,
+    selectedSpatialBins: fieldTileExport.selectedSpatialBins,
+    spatialBackfillTiles: fieldTileExport.spatialBackfillTiles,
     channels: fieldTileExport.channels,
     channelCount: fieldTileExport.channelCount,
     totalTiles: fieldTileExport.totalTiles,
@@ -745,8 +786,13 @@ function makeCapturePlan({ pairId, role, grid, majorantGrid, route, pairDir, deb
       '--field-tile-export', '1',
       '--field-tile-size', String(fieldTileExport.tileSize),
       '--field-tile-max-count', String(fieldTileExport.maxTiles),
-      '--field-tile-min-cell-energy', String(fieldTileExport.minCellEnergy)
+      '--field-tile-min-cell-energy', String(fieldTileExport.minCellEnergy),
+      '--field-tile-selection-policy', fieldTileExport.selectionPolicy,
+      '--field-tile-spatial-bins', String(fieldTileExport.spatialBinCount)
     );
+    if (Array.isArray(fieldTileExport.spatialBinIds) && fieldTileExport.spatialBinIds.length) {
+      command.push('--field-tile-spatial-bin-ids', fieldTileExport.spatialBinIds.join(','));
+    }
   }
   return {
     slug,
@@ -764,6 +810,28 @@ function makeCapturePlan({ pairId, role, grid, majorantGrid, route, pairDir, deb
     stdout,
     stderr,
     command,
+  };
+}
+
+function withFieldTileSpatialBinIds(plan, spatialBinIds) {
+  const requestedIds = Array.from(new Set(Array.isArray(spatialBinIds) ? spatialBinIds.filter(Boolean) : []));
+  if (!plan.fieldTileExport?.enabled || !requestedIds.length) return plan;
+  const command = [];
+  for (let index = 0; index < plan.command.length; index += 1) {
+    if (plan.command[index] === '--field-tile-spatial-bin-ids') {
+      index += 1;
+      continue;
+    }
+    command.push(plan.command[index]);
+  }
+  command.push('--field-tile-spatial-bin-ids', requestedIds.join(','));
+  return {
+    ...plan,
+    command,
+    fieldTileExport: {
+      ...plan.fieldTileExport,
+      spatialBinIds: requestedIds,
+    },
   };
 }
 
@@ -824,10 +892,14 @@ const pairAuthority = deterministicReplay.enabled ? DETERMINISTIC_REPLAY_PAIR_AU
 const fieldTileExport = args.has('--field-tile-export') ? {
   enabled: true,
   schema: FIELD_TILE_EXPORT_SCHEMA,
-  selectionPolicy: 'selected-occupied-fluid-front-tiles',
+  selectionPolicy: String(args.get('--field-tile-selection-policy') || 'selected-occupied-fluid-front-tiles').includes('spatial')
+    ? 'spatial-binned-occupied-fluid-front-tiles'
+    : 'selected-occupied-fluid-front-tiles',
   tileSize: Math.max(4, Math.min(24, Math.floor(Number(args.get('--field-tile-size') || 8)))),
   maxTiles: Math.max(1, Math.min(128, Math.floor(Number(args.get('--field-tile-max-count') || 8)))),
   minCellEnergy: Math.max(0, Number(args.get('--field-tile-min-cell-energy') || 0.015)),
+  spatialBinCount: Math.max(2, Math.min(8, Math.floor(Number(args.get('--field-tile-spatial-bins') || 4)))),
+  spatialBinIds: stringList(args.get('--field-tile-spatial-bin-ids')),
 } : { enabled: false };
 const dryRun = args.has('--dry-run');
 const createdAt = new Date().toISOString();
@@ -901,6 +973,8 @@ const manifest = {
     identity: 'selected-tile-count-plus-normalized-pairing-v0',
     requestedMaxTiles: fieldTileExport.maxTiles,
     tileSize: fieldTileExport.tileSize,
+    selectionPolicy: fieldTileExport.selectionPolicy,
+    spatialBinCount: fieldTileExport.spatialBinCount,
     pairingAuthority: 'post-capture-selected-tile-metadata-match-not-resampling',
   } : null,
   sameStateFreezeAttempt: buildSameStateFreezeAttempt({ pairAuthority, deterministicReplay }),
@@ -925,8 +999,14 @@ writeJson(manifestPath, { dataset: manifest });
 if (!dryRun) {
   for (const pair of manifest.pairs) {
     try {
-      pair.high.effective = runCapture(pair.high, cwd);
-      pair.low.effective = runCapture(pair.low, cwd);
+      if (fieldTileExport.selectionPolicy === 'spatial-binned-occupied-fluid-front-tiles') {
+        pair.low.effective = runCapture(pair.low, cwd);
+        pair.high = withFieldTileSpatialBinIds(pair.high, pair.low.effective.fieldTileExport?.selectedSpatialBins);
+        pair.high.effective = runCapture(pair.high, cwd);
+      } else {
+        pair.high.effective = runCapture(pair.high, cwd);
+        pair.low.effective = runCapture(pair.low, cwd);
+      }
       pair.fieldTileCoveragePairing = buildFieldTileCoveragePairing(pair);
       pair.status = 'captured';
     } catch (error) {

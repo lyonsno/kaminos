@@ -1415,3 +1415,10 @@ assert.match(fieldPairDataset, /matchedTilePairs/, 'field-pair dataset records c
 assert.match(fieldPairDataset, /normalizedTileDistance/, 'field-pair dataset records normalized low/high tile distance for each match');
 assert.match(fieldPairDataset, /normalizedTileSeparation/, 'field-pair dataset records whether matched low/high tiles are actually adjacent in normalized field space');
 assert.match(fieldPairDataset, /coverageExpansion/, 'field-pair dataset records coverage expansion counts and limits for selected tiles');
+assert.match(core, /spatial-binned-occupied-fluid-front-tiles/, 'field tile export supports spatially binned selection rather than only top-energy selection');
+assert.match(core, /spatialBinId/, 'field tile export records each tile spatial bin identity for low/high comparability');
+assert.match(core, /requestedSpatialBinIds/, 'field tile export records requested spatial bin ids when a paired capture drives selection');
+assert.match(witness, /--field-tile-selection-policy/, 'volume witness can request spatial tile selection policy explicitly');
+assert.match(witness, /--field-tile-spatial-bin-ids/, 'volume witness can request concrete spatial bin ids for paired high-grid extraction');
+assert.match(fieldPairDataset, /withFieldTileSpatialBinIds/, 'field-pair dataset can drive high-grid tile extraction from low-grid selected spatial bins');
+assert.match(fieldPairDataset, /sameSpatialBinPairs/, 'field-pair dataset reports how many matched tiles share the same spatial bin');
