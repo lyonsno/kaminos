@@ -129,8 +129,10 @@ export function createHostSurfaceState(input, options = {}) {
     },
     visual: objectOrEmpty(source.visual),
     downgrades,
+    sourceDowngrades: uniqueStrings(source.sourceDowngrades),
     rejectedDebugSurfaces: uniqueRejected,
     custody: objectOrEmpty(source.custody),
+    sourceCustody: objectOrEmpty(source.sourceCustody),
     hostSpecific: objectOrEmpty(source.hostSpecific),
   };
 }

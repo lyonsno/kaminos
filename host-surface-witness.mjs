@@ -21,6 +21,7 @@ const viewportWidth = Number(args.get('--viewport-width') || 1800);
 const viewportHeight = Number(args.get('--viewport-height') || 1120);
 const settleMs = Number(args.get('--settle-ms') || 2500);
 const hookWaitMs = Number(args.get('--hook-wait-ms') || Math.max(settleMs, 15000));
+const cdpTimeoutMs = Number(args.get('--cdp-timeout-ms') || Math.max(15000, hookWaitMs));
 
 let phase = 'initializing';
 let stderr = '';
@@ -50,6 +51,7 @@ function writeReport(report = {}) {
     viewport: { width: viewportWidth, height: viewportHeight },
     settleMs,
     hookWaitMs,
+    cdpTimeoutMs,
     failure_phase: phase,
     primary_output_written: primaryOutputWritten,
     browserVersion,
@@ -103,7 +105,7 @@ function wsRequest(ws, method, params = {}) {
     const timer = setTimeout(() => {
       ws.removeEventListener('message', onMessage);
       rejectReq(new Error(`${method}: CDP request timed out`));
-    }, 15000);
+    }, cdpTimeoutMs);
     const onMessage = event => {
       const msg = JSON.parse(String(event.data));
       if (msg.method === 'Runtime.consoleAPICalled') {
@@ -202,9 +204,15 @@ async function main() {
     if (expectedPacketSchema && lastDebugState.packetSchema !== expectedPacketSchema) throw new Error(`packet schema mismatch: ${lastDebugState.packetSchema}`);
     if (expectedPacketRoute && lastDebugState.packetRoute !== expectedPacketRoute) throw new Error(`packet route mismatch: ${lastDebugState.packetRoute}`);
     if (expectedDowngrade && !lastDebugState.downgrades?.includes(expectedDowngrade)) throw new Error(`missing downgrade: ${expectedDowngrade}`);
+    if (expectedDowngrade && !lastDebugState.sourceDowngrades?.includes(expectedDowngrade)) throw new Error(`missing source downgrade: ${expectedDowngrade}`);
     if (!lastDebugState.sourceAuthority || lastDebugState.sourceAuthority === 'none') throw new Error('host-surface source authority missing');
     if (!lastDebugState.sourceTruthAuthority || lastDebugState.sourceTruthAuthority === 'none') throw new Error('host-surface source-truth authority missing');
     if (!Array.isArray(lastDebugState.rejectedDebugSurfaces)) throw new Error('host-surface rejected debug surfaces missing');
+    if (expectedHostId === 'lerms-moving-timeline') {
+      const sourceCustody = lastDebugState.sourceCustody || {};
+      if (!sourceCustody.lermsOwns?.includes('timelineBehaviorTruth')) throw new Error('missing source custody lermsOwns: timelineBehaviorTruth');
+      if (!sourceCustody.kaminosOwns?.includes('host display')) throw new Error('missing source custody kaminosOwns: host display');
+    }
 
     phase = 'measure_visual_activity';
     visualActivity = await evaluate(ws, `(() => {

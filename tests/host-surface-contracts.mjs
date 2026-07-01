@@ -22,6 +22,8 @@ assert.match(hostSurfaceWitnessSource, /kaminosHostSurfaceDebugState/, 'generic 
 assert.match(hostSurfaceWitnessSource, /--expected-host-id/, 'generic witness can assert host adapter identity');
 assert.match(hostSurfaceWitnessSource, /--expected-packet-schema/, 'generic witness can assert producer packet schema');
 assert.match(hostSurfaceWitnessSource, /--expected-packet-route/, 'generic witness can assert producer packet route');
+assert.match(hostSurfaceWitnessSource, /sourceDowngrades/, 'generic witness asserts source-provided downgrade rows');
+assert.match(hostSurfaceWitnessSource, /sourceCustody/, 'generic witness asserts source-provided custody rows');
 assert.match(hostSurfaceWitnessSource, /primary_output_written/, 'generic witness writes durable reports even before screenshot success');
 assert.match(indexSource, /kaminosHostSurfaceDebugState/, 'browser exposes generic host-surface debug state');
 assert.match(indexSource, /kaminos_lerms_moving_timeline_host=1/, 'browser exposes a direct LERMS moving timeline host route');
@@ -184,9 +186,25 @@ assert.ok(timelineHostState.movingActorIds.includes('loose-goin-carrier'));
 assert.ok(timelineHostState.stateTransitions.some(transition => transition.to === 'rerouting'));
 assert.ok(timelineHostState.downgrades.includes('timeline_playback_not_behavior_engine'));
 assert.ok(timelineHostState.downgrades.includes('timevarying_payload_not_live_socket_stream'));
+assert.ok(timelineHostState.sourceDowngrades.includes('timeline_playback_not_behavior_engine'));
+assert.ok(timelineHostState.sourceDowngrades.includes('timevarying_payload_not_live_socket_stream'));
 assert.ok(timelineHostState.rejectedDebugSurfaces.some(surface => surface.surface === 'old_8790_actor_timeline_debug_route' && surface.acceptanceSurface === false));
 assert.ok(timelineHostState.custody.lermsOwns.includes('timelineBehaviorTruth'));
 assert.ok(timelineHostState.custody.kaminosOwns.includes('host display'));
+assert.ok(timelineHostState.sourceCustody.lermsOwns.includes('timelineBehaviorTruth'));
+assert.ok(timelineHostState.sourceCustody.kaminosOwns.includes('host display'));
+
+const missingSourceRowsReport = structuredClone(timelineReport);
+delete missingSourceRowsReport.timeline.custody;
+delete missingSourceRowsReport.timeline.downgrades;
+const missingSourceRowsState = lermsHost.createLermsMovingTimelineHostState(missingSourceRowsReport, {
+  effectiveUrl: '/api/read?root=lerms-preview&path=missing-source-rows.json',
+  loadedAt: '2026-07-01T00:00:02.000Z',
+});
+assert.ok(missingSourceRowsState.downgrades.includes('timeline_playback_not_behavior_engine'), 'display defaults can still show the adapter downgrade');
+assert.ok(missingSourceRowsState.custody.lermsOwns.includes('timelineBehaviorTruth'), 'display defaults can still show adapter custody');
+assert.deepEqual(missingSourceRowsState.sourceDowngrades, [], 'source downgrade evidence must not be fabricated from adapter defaults');
+assert.deepEqual(missingSourceRowsState.sourceCustody, {}, 'source custody evidence must not be fabricated from adapter defaults');
 
 const genericState = hostSurface.createHostSurfaceState({
   adapter: lermsHost.LERMS_MOVING_TIMELINE_HOST_ADAPTER,
@@ -197,6 +215,8 @@ const genericState = hostSurface.createHostSurfaceState({
   downgrades: timelineHostState.downgrades,
   rejectedDebugSurfaces: timelineHostState.rejectedDebugSurfaces,
   custody: timelineHostState.custody,
+  sourceDowngrades: timelineHostState.sourceDowngrades,
+  sourceCustody: timelineHostState.sourceCustody,
   hostSpecific: {
     frameCount: timelineHostState.frameCount,
     movingActorIds: timelineHostState.movingActorIds,
@@ -209,4 +229,6 @@ assert.equal(genericState.packetSchema, 'lerms.preview-bench-actor-motion-timeli
 assert.equal(genericState.sourceAuthority, 'source-owned-timeline-packet');
 assert.equal(genericState.sourceTruthAuthority, 'lerms.timelineBehaviorTruth');
 assert.ok(genericState.downgrades.includes('timeline_playback_not_behavior_engine'));
+assert.ok(genericState.sourceDowngrades.includes('timeline_playback_not_behavior_engine'));
+assert.ok(genericState.sourceCustody.lermsOwns.includes('timelineBehaviorTruth'));
 assert.ok(genericState.rejectedDebugSurfaces.every(surface => surface.acceptanceSurface === false));

@@ -49,6 +49,8 @@ export function createLermsMovingTimelineHostState(report, options = {}) {
     kaminosOwns: ['host display', 'camera witness mechanics'],
     ...objectOrEmpty(timelineState.custody),
   };
+  const sourceCustody = objectOrEmpty(timelineState.custody);
+  const sourceDowngrades = uniqueStrings(timelineState.downgrades);
   const downgrades = uniqueStrings(
     LERMS_MOVING_TIMELINE_HOST_ADAPTER.defaultDowngrades,
     timelineState.downgrades,
@@ -61,8 +63,10 @@ export function createLermsMovingTimelineHostState(report, options = {}) {
     source,
     freshness: timeline.freshness,
     downgrades,
+    sourceDowngrades,
     rejectedDebugSurfaces: timeline.rejectedDebugSurfaces || timeline.rejectedSurfaces,
     custody,
+    sourceCustody,
     hostSpecific: {
       frameCount: timelineState.frameCount,
       durationMs: timelineState.durationMs,
@@ -90,8 +94,10 @@ export function createLermsMovingTimelineHostState(report, options = {}) {
     sourceTruthAuthority: hostSurface.sourceTruthAuthority,
     freshness: hostSurface.freshness,
     downgrades: hostSurface.downgrades,
+    sourceDowngrades: hostSurface.sourceDowngrades,
     rejectedDebugSurfaces: hostSurface.rejectedDebugSurfaces,
     custody: hostSurface.custody,
+    sourceCustody: hostSurface.sourceCustody,
     hostSurface,
   };
 }
