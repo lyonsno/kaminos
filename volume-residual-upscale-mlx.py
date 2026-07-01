@@ -60,6 +60,7 @@ def parse_args():
     parser.add_argument("--temporal-eval", dest="temporalEval", action="store_true")
     parser.add_argument("--temporal-eval-scope", dest="temporalEvalScope", choices=["selected", "train", "eval"], default="selected")
     parser.add_argument("--temporal-crop-size", dest="temporalCropSize", type=int, default=None)
+    parser.add_argument("--temporal-loss-weight", dest="temporalLossWeight", type=float, default=0.0, help="Optional paired-frame high-scale delta loss weight.")
     return parser.parse_args()
 
 
@@ -176,6 +177,41 @@ def sample_patch_batch(items, rng, batch_size, patch_size, foregroundProbability
     return mx.array(np.stack(lows, axis=0)), mx.array(np.stack(highs, axis=0))
 
 
+def sample_temporal_pair_batch(temporal_pairs, rng, batch_size, patch_size, foregroundProbability, conditionRenderScale):
+    previous_lows = []
+    current_lows = []
+    previous_highs = []
+    current_highs = []
+    for _ in range(batch_size):
+        previous_item, current_item = temporal_pairs[int(rng.integers(0, len(temporal_pairs)))]
+        height, width, _channels = current_item["low"].shape
+        crop_height = min(patch_size, height)
+        crop_width = min(patch_size, width)
+        foreground = current_item.get("foreground")
+        if (foreground is None or not foreground.shape[0]) and previous_item.get("foreground") is not None:
+            foreground = previous_item.get("foreground")
+        if foreground is not None and foreground.shape[0] and rng.random() < foregroundProbability:
+            center_y, center_x = foreground[int(rng.integers(0, foreground.shape[0]))]
+            top = int(np.clip(center_y - crop_height // 2, 0, max(0, height - crop_height)))
+            left = int(np.clip(center_x - crop_width // 2, 0, max(0, width - crop_width)))
+        else:
+            top = int(rng.integers(0, max(1, height - crop_height + 1)))
+            left = int(rng.integers(0, max(1, width - crop_width + 1)))
+        region = (top, left, crop_height, crop_width)
+        _previous_low_rgb, previous_high, previous_model_input = crop_item_arrays(previous_item, region, conditionRenderScale)
+        _current_low_rgb, current_high, current_model_input = crop_item_arrays(current_item, region, conditionRenderScale)
+        previous_lows.append(previous_model_input)
+        current_lows.append(current_model_input)
+        previous_highs.append(previous_high)
+        current_highs.append(current_high)
+    return (
+        mx.array(np.stack(previous_lows, axis=0)),
+        mx.array(np.stack(current_lows, axis=0)),
+        mx.array(np.stack(previous_highs, axis=0)),
+        mx.array(np.stack(current_highs, axis=0)),
+    )
+
+
 def mse_value(prediction, target):
     return mx.mean(mx.square(prediction - target))
 
@@ -201,6 +237,14 @@ def weighted_mse_value(prediction, target, low_batch, foregroundThreshold, foreg
     weighted = mx.mean(mx.square(prediction - target) * weights)
     normalizer = mx.maximum(mx.mean(weights), 1e-6)
     return weighted / normalizer
+
+
+def temporal_loss_value(model_instance, previous_low_batch, current_low_batch, previous_high_batch, current_high_batch):
+    previous_prediction = model_instance(previous_low_batch)
+    current_prediction = model_instance(current_low_batch)
+    prediction_delta = current_prediction - previous_prediction
+    target_delta = current_high_batch - previous_high_batch
+    return mse_value(prediction_delta, target_delta)
 
 
 def per_sample_mse(prediction, target):
@@ -265,6 +309,14 @@ def temporal_groups(items):
         for _key, group in sorted(groups.items())
         if len(group) >= 2
     ]
+
+
+def temporal_pair_candidates(items):
+    pairs = []
+    for group in temporal_groups(items):
+        for index in range(1, len(group)):
+            pairs.append((group[index - 1], group[index]))
+    return pairs
 
 
 def temporal_sequence_metrics(model, loaded, train_items, eval_items, out_dir, crop_size, previewMode, conditionRenderScale, temporalEvalScope):
@@ -410,6 +462,8 @@ def make_preview(model, eval_item, out_path, preview_size, previewMode, conditio
 
 def main():
     args = parse_args()
+    if args.temporalLossWeight < 0:
+        raise ValueError("--temporal-loss-weight must be non-negative")
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     corpus, pairs = load_pairs(args.corpus_manifest, args.low_render_scale)
@@ -420,11 +474,18 @@ def main():
     scaleChannel = "lowRenderScale" if args.conditionRenderScale else None
     model = TinyResidualUpscaler(args.hidden_channels, input_channels)
     optimizer = optim.Adam(learning_rate=args.learning_rate)
+    temporal_loss_pairs = temporal_pair_candidates(train_items)
+    temporalLossFallback = None
+    if args.temporalLossWeight > 0 and not temporal_loss_pairs:
+        temporal_loss_pairs = temporal_pair_candidates(loaded)
+        temporalLossFallback = "selected-pairs-no-train-adjacent" if temporal_loss_pairs else "no-adjacent-same-scale-pairs"
+    temporalLossPairCount = len(temporal_loss_pairs)
+    activeTemporalLossWeight = args.temporalLossWeight if temporalLossPairCount else 0.0
 
-    def loss_fn(model_instance, low_batch, high_batch):
+    def loss_fn(model_instance, low_batch, high_batch, previous_low_batch, current_low_batch, previous_high_batch, current_high_batch):
         prediction = model_instance(low_batch)
         if args.loss_mode == "weighted":
-            return weighted_mse_value(
+            still_loss = weighted_mse_value(
                 prediction,
                 high_batch,
                 low_batch,
@@ -432,20 +493,52 @@ def main():
                 args.foregroundLossWeight,
                 args.differenceLossWeight,
             )
-        return mse_value(prediction, high_batch)
+        else:
+            still_loss = mse_value(prediction, high_batch)
+        if activeTemporalLossWeight > 0:
+            return still_loss + activeTemporalLossWeight * temporal_loss_value(
+                model_instance,
+                previous_low_batch,
+                current_low_batch,
+                previous_high_batch,
+                current_high_batch,
+            )
+        return still_loss
 
     loss_and_grad = nn.value_and_grad(model, loss_fn)
     training_losses = []
+    temporalTrainingLosses = []
     started = time.time()
     for step in range(max(0, args.maxSteps)):
         low_batch, high_batch = sample_patch_batch(train_items, rng, args.batch_size, args.patch_size, args.foregroundProbability, args.conditionRenderScale)
-        loss, grads = loss_and_grad(model, low_batch, high_batch)
+        if activeTemporalLossWeight > 0:
+            previous_low_batch, current_low_batch, previous_high_batch, current_high_batch = sample_temporal_pair_batch(
+                temporal_loss_pairs,
+                rng,
+                args.batch_size,
+                args.patch_size,
+                args.foregroundProbability,
+                args.conditionRenderScale,
+            )
+        else:
+            previous_low_batch = low_batch
+            current_low_batch = low_batch
+            previous_high_batch = high_batch
+            current_high_batch = high_batch
+        loss, grads = loss_and_grad(model, low_batch, high_batch, previous_low_batch, current_low_batch, previous_high_batch, current_high_batch)
         optimizer.update(model, grads)
         mx.eval(model.parameters(), optimizer.state, loss)
         loss_float = float(loss)
         if step == 0 or step == args.maxSteps - 1 or (step + 1) % max(1, args.maxSteps // 10) == 0:
-            training_losses.append({"step": step + 1, "loss": loss_float})
-            print(json.dumps({"step": step + 1, "loss": loss_float}))
+            entry = {"step": step + 1, "loss": loss_float}
+            if activeTemporalLossWeight > 0:
+                temporal_loss = temporal_loss_value(model, previous_low_batch, current_low_batch, previous_high_batch, current_high_batch)
+                mx.eval(temporal_loss)
+                temporal_loss_float = float(temporal_loss)
+                entry["temporalLoss"] = temporal_loss_float
+                temporalTrainingLosses.append({"step": step + 1, "temporalLoss": temporal_loss_float})
+            training_losses.append(entry)
+            print(json.dumps(entry))
         if args.sleepMs > 0:
             time.sleep(args.sleepMs / 1000.0)
     duration_seconds = time.time() - started
@@ -499,6 +592,18 @@ def main():
         "foregroundLossWeight": args.foregroundLossWeight,
         "differenceLossWeight": args.differenceLossWeight,
         "conditionRenderScale": args.conditionRenderScale,
+        "temporalLossWeight": args.temporalLossWeight,
+        "activeTemporalLossWeight": activeTemporalLossWeight,
+        "temporalLossPairCount": temporalLossPairCount,
+        "temporalLossPairs": [
+            {
+                "previous": previous_item["id"],
+                "current": current_item["id"],
+                "lowRenderScale": current_item["lowRenderScale"],
+            }
+            for previous_item, current_item in temporal_loss_pairs
+        ],
+        "temporalLossFallback": temporalLossFallback,
         "previewMode": args.preview_mode,
         "previewFocus": previewFocus,
         "temporalEval": args.temporalEval,
@@ -517,6 +622,7 @@ def main():
         "durationSeconds": duration_seconds,
         "device": str(mx.default_device()),
         "trainingLosses": training_losses,
+        "temporalTrainingLosses": temporalTrainingLosses,
         **metrics,
         **temporalMetrics,
         "preview": str(preview_path),
