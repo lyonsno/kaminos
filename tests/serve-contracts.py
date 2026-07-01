@@ -170,7 +170,15 @@ def browser_webgpu_route_result(*, status="real", output_status="real"):
             "backendKind": "webgpu-local",
             "inputs": receipt["inputs"],
             "outputs": [{"role": output["role"], "artifactId": output["artifactId"], "shape": output["shape"]} for output in outputs],
-            "routeConfig": {"source": "kaminos.greenroom.route-tray-smoke"},
+            "routeConfig": {
+                "source": "kaminos.greenroom.route-tray-smoke",
+                "sourceImageIdentity": {
+                    "kind": "row",
+                    "url": "/api/read?root=scratch&path=bunnycake.png",
+                    "label": "bunnycake.png",
+                },
+                "inputSourceKind": "row",
+            },
             "model": {"id": "Ruicheng/moge-2-vitl-normal", "revision": "local-vitl-normal", "dtype": "fp16"},
             "kernel": runtime_profile["kernel"],
             "createdAt": "2026-07-01T01:00:00Z",
@@ -639,6 +647,10 @@ def test_browser_webgpu_route_provider_ingests_authoritative_kit_result():
     assert row["route_job"]["routeId"] == MOGE_WEBGPU_ROUTE_ID
     assert row["route_job"]["executor"]["kind"] == "browser-webgpu"
     assert row["route_job"]["metadata"]["sourceResultPath"] == str(result_path)
+    assert row["route_job"]["metadata"]["sourceImage"]["kind"] == "row"
+    assert row["route_job"]["metadata"]["sourceImage"]["url"] == "/api/read?root=scratch&path=bunnycake.png"
+    assert row["route_job"]["metadata"]["sourceImage"]["label"] == "bunnycake.png"
+    assert row["route_job"]["metadata"]["inputSourceKind"] == "row"
     assert row["route_job"]["metadata"]["evidenceClassification"]["classification"] == "authoritative-live-webgpu"
     assert row["route_job"]["metadata"]["evidenceClassification"]["authoritative"] is True
     assert row["route_job"]["metadata"]["evidenceClassification"]["schedulerVerificationState"] == "verified"

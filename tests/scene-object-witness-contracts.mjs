@@ -169,6 +169,13 @@ assert.match(indexHtml, /runMogeWebGpuRouteAdapter/, 'Browser WebGPU producer tr
 assert.match(indexHtml, /withMogeWebGpuAssetFetch/, 'Browser WebGPU producer routes MoGE root asset fetches to the configured module base');
 assert.match(indexHtml, /normalizeMogeRouteAdapterOutput/, 'Browser WebGPU producer normalizes real MoGE depth and normal outputs before kit receipt creation');
 assert.match(indexHtml, /adapterResult\.status === 'real'/, 'Browser WebGPU producer only emits real receipts from a real adapter result');
+assert.match(indexHtml, /resolveMogeRouteSourceImage/, 'Browser WebGPU producer resolves a source image before invoking MoGE');
+assert.match(indexHtml, /loadMogeRouteImageDataFromUrl/, 'Browser WebGPU producer can load source ImageData from a row or scene URL');
+assert.match(indexHtml, /mogeRouteSourceImageCandidates/, 'Browser WebGPU producer has explicit source-image candidate precedence');
+assert.match(indexHtml, /sourceImageIdentity/, 'Browser WebGPU producer records source image identity in the route request');
+assert.match(indexHtml, /inputSourceKind/, 'Browser WebGPU producer records whether input came from row, scene, fixture, or synthetic fallback');
+assert.match(indexHtml, /selectedSceneObjectEntry\(\)/, 'Browser WebGPU producer can fall back to selected Kaminos scene object metadata');
+assert.match(indexHtml, /data-greenroom-route-input-source-kind/, 'Route tray preserves browser route input source kind as inspectable row identity');
 assert.match(indexHtml, /previewDataUrl/, 'Browser WebGPU preview producer includes an inspectable output artifact');
 assert.match(indexHtml, /data-greenroom-route-output-kind/, 'Route tray preserves output artifact kind on browser route output links');
 assert.match(indexHtml, /fixture route identity only/, 'Route tray can warn when a browser WebGPU row is identity-only fixture evidence');

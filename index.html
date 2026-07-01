@@ -10108,6 +10108,8 @@ function renderGreenroomRouteJobRow(row) {
   div.setAttribute('data-greenroom-route-completed-stage', resumability.completedStage || '');
   div.setAttribute('data-greenroom-route-resume-supported', String(!!resumability.resumeSupported));
   div.setAttribute('data-greenroom-route-pause-requested', String(pauseRequested));
+  div.setAttribute('data-greenroom-route-input-source-kind', routeJob.metadata?.inputSourceKind || '');
+  div.setAttribute('data-greenroom-route-source-image-kind', routeJob.metadata?.sourceImage?.kind || '');
 
   const icon = document.createElement('span');
   icon.className = 'gr-icon';
@@ -10416,7 +10418,127 @@ async function loadMogeWebGpuRouteAdapter() {
   return mogeWebGpuRouteAdapterState.adapterPromise;
 }
 
-function createImageDataForMogeRoute(row = {}) {
+function normalizeMogeRouteSourceImageCandidate(candidate, fallback = {}) {
+  if (!candidate) return null;
+  const value = typeof candidate === 'string' ? { url: candidate } : candidate;
+  const url = value.url || value.uri || value.href || value.path || value.previewDataUrl || value.dataUrl || value.dataURL || value.source;
+  if (!url || typeof url !== 'string') return null;
+  const label = value.label || value.name || value.fileName || value.title || fallback.label || 'source image';
+  return {
+    kind: value.kind || fallback.kind || 'row',
+    url: url.trim(),
+    label: String(label || 'source image'),
+    objectId: value.objectId || fallback.objectId || null,
+    role: value.role || fallback.role || 'source-image',
+  };
+}
+
+function mogeRouteImageUrlLooksLoadable(url) {
+  const raw = String(url || '').trim();
+  if (!raw) return false;
+  if (/^data:image\//i.test(raw)) return true;
+  try {
+    const parsed = new URL(raw, window.location.href);
+    const pathname = parsed.pathname.toLowerCase();
+    const queryPath = parsed.searchParams.get('path') || '';
+    return (
+      /\.(png|jpe?g|webp|bmp)$/i.test(pathname)
+      || /\.(png|jpe?g|webp|bmp)$/i.test(queryPath)
+      || parsed.pathname === '/api/read'
+    );
+  } catch (error) {
+    return /\.(png|jpe?g|webp|bmp)$/i.test(raw);
+  }
+}
+
+function mogeRouteSourceImageCandidates(row = {}) {
+  const routeJob = row.route_job || {};
+  const metadata = routeJob.metadata || {};
+  const routeConfig = metadata.routeConfig || row.routeConfig || {};
+  const candidates = [
+    normalizeMogeRouteSourceImageCandidate(row.sourceImage, { kind: 'row' }),
+    normalizeMogeRouteSourceImageCandidate(row.source_image, { kind: 'row' }),
+    normalizeMogeRouteSourceImageCandidate(routeJob.sourceImage, { kind: 'row' }),
+    normalizeMogeRouteSourceImageCandidate(routeJob.source_image, { kind: 'row' }),
+    normalizeMogeRouteSourceImageCandidate(metadata.sourceImage, { kind: 'row' }),
+    normalizeMogeRouteSourceImageCandidate(row.sourceImageUrl, { kind: 'row', label: row.job_id || routeJob.id }),
+    normalizeMogeRouteSourceImageCandidate(row.sourceImageDataUrl, { kind: 'row', label: row.job_id || routeJob.id }),
+    normalizeMogeRouteSourceImageCandidate(routeJob.sourceImageUrl, { kind: 'row', label: routeJob.id }),
+    normalizeMogeRouteSourceImageCandidate(routeJob.sourceImageDataUrl, { kind: 'row', label: routeJob.id }),
+    normalizeMogeRouteSourceImageCandidate(metadata.sourceImageUrl, { kind: 'row', label: routeJob.id }),
+    normalizeMogeRouteSourceImageCandidate(routeConfig.sourceImageIdentity, { kind: routeConfig.inputSourceKind || 'row' }),
+  ].filter(Boolean);
+  for (const artifact of routeJob.inputArtifacts || row.inputArtifacts || []) {
+    if (artifact?.role === 'source-image') {
+      candidates.push(normalizeMogeRouteSourceImageCandidate(artifact, { kind: 'row', label: artifact.artifactId }));
+    }
+  }
+  const selected = selectedSceneObjectEntry();
+  const selectedMetadata = selected ? (sceneObjectMetadataFor(selected.object) || selected) : null;
+  if (selectedMetadata) {
+    candidates.push(normalizeMogeRouteSourceImageCandidate({
+      url: selectedMetadata.source || selectedMetadata.previewDataUrl || selectedMetadata.dataUrl,
+      label: selectedMetadata.label || selectedMetadata.fileName || selectedMetadata.id,
+      objectId: selectedMetadata.id || selected.id,
+      kind: 'scene',
+    }, { kind: 'scene', objectId: selected.id }));
+    candidates.push(normalizeMogeRouteSourceImageCandidate(selectedMetadata.sourceImage, { kind: 'scene', objectId: selected.id }));
+  }
+  return candidates.filter(candidate => mogeRouteImageUrlLooksLoadable(candidate.url));
+}
+
+function sourceImageIdentity(candidate, extra = {}) {
+  const rawUrl = candidate?.url || extra.url || null;
+  const inlineMatch = typeof rawUrl === 'string' ? rawUrl.match(/^data:(image\/[^;,]+)[^,]*,/i) : null;
+  return {
+    kind: candidate?.kind || extra.kind || 'synthetic',
+    url: inlineMatch ? `data:${inlineMatch[1].toLowerCase()};base64,<inline>` : rawUrl,
+    label: candidate?.label || extra.label || 'synthetic MoGE preview input',
+    objectId: candidate?.objectId || extra.objectId || null,
+    role: candidate?.role || extra.role || 'source-image',
+    inline: Boolean(inlineMatch),
+  };
+}
+
+async function loadMogeRouteImageDataFromUrl(candidate) {
+  const identity = sourceImageIdentity(candidate);
+  const url = candidate?.url;
+  if (!url) throw new Error('source image URL is missing');
+  const image = new Image();
+  image.decoding = 'async';
+  if (!/^data:/i.test(url)) image.crossOrigin = 'anonymous';
+  const loaded = new Promise((resolve, reject) => {
+    image.onload = () => resolve();
+    image.onerror = () => reject(new Error(`source image failed to load: ${identity.label || url}`));
+  });
+  image.src = url;
+  await loaded;
+  const width = image.naturalWidth || image.width;
+  const height = image.naturalHeight || image.height;
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+    throw new Error(`source image has invalid dimensions: ${identity.label || url}`);
+  }
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(image, 0, 0, width, height);
+  const imageData = ctx.getImageData(0, 0, width, height);
+  return {
+    width,
+    height,
+    imageData,
+    previewDataUrl: canvas.toDataURL('image/png'),
+    sourceImageIdentity: {
+      ...identity,
+      pixelSha256: `sha256:${await sha256Bytes(imageData.data)}`,
+    },
+    inputSourceKind: identity.kind,
+    syntheticFallback: false,
+  };
+}
+
+async function createSyntheticImageDataForMogeRoute(row = {}) {
   const canvas = document.createElement('canvas');
   canvas.width = 160;
   canvas.height = 160;
@@ -10443,7 +10565,28 @@ function createImageDataForMogeRoute(row = {}) {
     height: canvas.height,
     imageData: ctx.getImageData(0, 0, canvas.width, canvas.height),
     previewDataUrl: canvas.toDataURL('image/png'),
+    sourceImageIdentity: sourceImageIdentity(null, {
+      kind: 'synthetic',
+      label: routeJob.id || row.job_id || 'synthetic MoGE preview input',
+    }),
+    inputSourceKind: 'synthetic',
+    syntheticFallback: true,
   };
+}
+
+async function resolveMogeRouteSourceImage(row = {}) {
+  const candidates = mogeRouteSourceImageCandidates(row);
+  const failures = [];
+  for (const candidate of candidates) {
+    try {
+      return await loadMogeRouteImageDataFromUrl(candidate);
+    } catch (error) {
+      failures.push(`${candidate.label || candidate.url}: ${error.message || error}`);
+    }
+  }
+  const synthetic = await createSyntheticImageDataForMogeRoute(row);
+  if (failures.length) synthetic.sourceImageLoadFailures = failures;
+  return synthetic;
 }
 
 function flattenRouteAdapterNumericArray(value) {
@@ -10691,7 +10834,7 @@ async function buildBrowserWebGpuPreviewRouteResult(row = {}) {
   const requestId = `req:moge-preview-${Date.now()}`;
   const startedAt = performance.now();
   const probe = await probeBrowserWebGpuRouteRuntime(kit);
-  const inputPreview = createImageDataForMogeRoute(row);
+  const inputPreview = await resolveMogeRouteSourceImage(row);
   let adapterError = null;
   let realAdapterOutput = null;
   try {
@@ -10703,6 +10846,8 @@ async function buildBrowserWebGpuPreviewRouteResult(row = {}) {
       probe,
       imageData: inputPreview.imageData,
       inputPreviewDataUrl: inputPreview.previewDataUrl,
+      sourceImageIdentity: inputPreview.sourceImageIdentity,
+      inputSourceKind: inputPreview.inputSourceKind,
       startedAt,
     });
     if (adapterResult && adapterResult.status === 'real') {
@@ -10809,7 +10954,7 @@ async function buildBrowserWebGpuPreviewRouteResult(row = {}) {
   const inputArtifact = {
     artifactId: `image:${requestId}`,
     sha256: `sha256:${await sha256Bytes(inputPreview.imageData.data)}`,
-    shape: [inputPreview.height, inputPreview.width, 3],
+    shape: [inputPreview.height, inputPreview.width, 4],
   };
   const requestOutputs = {
     depth: outputArtifacts.depth,
@@ -10825,6 +10970,10 @@ async function buildBrowserWebGpuPreviewRouteResult(row = {}) {
       producer: routeIsReal ? 'moge-webgpu-browser-route-adapter' : 'browser-preview-demo',
       evidenceMode: routeIsReal ? 'live' : 'fallback',
       moduleBaseUrl: realAdapterOutput?.moduleBaseUrl || mogeWebGpuModuleBaseUrl() || null,
+      sourceImageIdentity: inputPreview.sourceImageIdentity,
+      inputSourceKind: inputPreview.inputSourceKind,
+      sourceImageSyntheticFallback: inputPreview.syntheticFallback === true,
+      sourceImageLoadFailures: inputPreview.sourceImageLoadFailures || [],
     },
     createdAt: runtimeProfile.createdAt,
   });

@@ -1376,6 +1376,9 @@ def _browser_webgpu_route_row_from_result(path, result):
     backpressure = runtime.get("backpressure") if isinstance(runtime.get("backpressure"), dict) else None
     runtime_profile = runtime.get("runtimeProfile") if isinstance(runtime.get("runtimeProfile"), dict) else None
     runtime_evidence = runtime_profile.get("evidence") if isinstance(runtime_profile, dict) and isinstance(runtime_profile.get("evidence"), dict) else {}
+    request = result.get("request") if isinstance(result.get("request"), dict) else {}
+    route_config = request.get("routeConfig") if isinstance(request.get("routeConfig"), dict) else {}
+    source_image = route_config.get("sourceImageIdentity") if isinstance(route_config.get("sourceImageIdentity"), dict) else None
     backend = receipt.get("backend") if isinstance(receipt.get("backend"), dict) else {}
     model = receipt.get("model") if isinstance(receipt.get("model"), dict) else {}
     cache_state = backpressure.get("warmCacheState") if isinstance(backpressure, dict) else "unknown"
@@ -1471,6 +1474,8 @@ def _browser_webgpu_route_row_from_result(path, result):
             "scheduler": scheduler,
             "backpressure": backpressure,
             "evidenceClassification": evidence_classification,
+            "sourceImage": source_image,
+            "inputSourceKind": route_config.get("inputSourceKind"),
             "sourceResultPath": str(path),
             "routeResult": result,
         },
