@@ -4834,6 +4834,41 @@ function pipelineRunUsesAdapterFixture(result) {
   );
 }
 
+function pipelineRunSchedulerEvidence(result) {
+  if (!result || typeof result !== 'object') return null;
+  if (result.schedulerEvidence?.schema === 'kaminos.pipeline-scheduler-composition.v0') return result.schedulerEvidence;
+  if (result.pipelineScheduler?.schema === 'kaminos.pipeline-scheduler-composition.v0') return result.pipelineScheduler;
+  const stages = result.report?.document?.stages || [];
+  for (const stage of stages) {
+    const routeEvidence = stage?.effectiveRoute?.pipelineScheduler;
+    if (routeEvidence?.schema === 'kaminos.pipeline-scheduler-composition.v0') return routeEvidence;
+    const adapterEvidence = stage?.effectiveRoute?.adapterReport?.pipelineScheduler;
+    if (adapterEvidence?.schema === 'kaminos.pipeline-scheduler-composition.v0') return adapterEvidence;
+  }
+  const reportEvidence = result.report?.document?.pipelineScheduler;
+  if (reportEvidence?.schema === 'kaminos.pipeline-scheduler-composition.v0') return reportEvidence;
+  return null;
+}
+
+function pipelineGraphSchedulerEvidenceState(evidence) {
+  if (!evidence) return 'missing';
+  return evidence.verificationState || evidence.status || 'unknown';
+}
+
+function pipelineGraphSchedulerEvidenceLabel(evidence) {
+  const state = pipelineGraphSchedulerEvidenceState(evidence);
+  if (state === 'verified') return 'verified scheduler evidence';
+  if (state === 'unsupported') {
+    const unsupported = evidence?.unsupportedFields?.length ? `: ${evidence.unsupportedFields.join(', ')}` : '';
+    return `unsupported scheduler fields${unsupported}`;
+  }
+  if (state === 'scheduler-unverified') return 'scheduler-unverified; effective telemetry missing or unverified';
+  if (state === 'scheduler-evidence-missing') return 'scheduler evidence missing';
+  if (state === 'failed') return 'scheduler evidence failed';
+  if (state === 'missing') return 'no scheduler evidence';
+  return state;
+}
+
 function pipelineRouteUsesFixture(routeOrNode = null) {
   if (routeOrNode?.fixtureBacked) return true;
   const pipeline = routeOrNode?.pipeline || routeOrNode || selectedPipelineRecord();
@@ -5045,6 +5080,7 @@ function normalizePipelineGeneratedOutputNode(value) {
     previewTruth: value.previewTruth || null,
     routeSnapshot: value.routeSnapshot && typeof value.routeSnapshot === 'object' ? value.routeSnapshot : null,
     graphSnapshot: value.graphSnapshot && typeof value.graphSnapshot === 'object' ? value.graphSnapshot : null,
+    schedulerEvidence: value.schedulerEvidence && typeof value.schedulerEvidence === 'object' ? value.schedulerEvidence : null,
     runTimeline: Array.isArray(value.runTimeline) ? value.runTimeline : [],
     createdAt: value.createdAt || null,
     updatedAt: value.updatedAt || null,
@@ -5597,6 +5633,7 @@ function pipelineGeneratedOutputRunRecord(node) {
       document: {
         artifacts: node.artifacts?.length ? node.artifacts : [node.artifact, node.sidecar].filter(Boolean),
         stages: node.fixtureBacked ? [{ status: 'fixture' }] : [],
+        pipelineScheduler: node.schedulerEvidence || null,
       },
     },
     bundle: {
@@ -5606,6 +5643,7 @@ function pipelineGeneratedOutputRunRecord(node) {
         artifacts: node.artifacts?.length ? node.artifacts : [node.artifact, node.sidecar].filter(Boolean),
       },
     },
+    schedulerEvidence: node.schedulerEvidence || null,
     error: node.error || null,
   };
 }
@@ -5622,6 +5660,7 @@ function pipelineGeneratedOutputGraphNode(record) {
   const previewTruth = pipelineRunUsesAdapterFixture(run) ? computedPreviewTruth : (record.previewTruth || computedPreviewTruth);
   const artifactRole = pipelineArtifactRoleLabel(artifact);
   const artifactTitle = artifact ? pipelineArtifactTitle(artifact) : 'Generated artifact';
+  const schedulerEvidence = record.schedulerEvidence || pipelineRunSchedulerEvidence(run);
   return {
     id: record.id,
     kind: 'generated-output',
@@ -5646,6 +5685,7 @@ function pipelineGeneratedOutputGraphNode(record) {
     loadedSceneObjectId: loadedArtifact?.sceneObjectId || null,
     routeSnapshot: record.routeSnapshot || null,
     graphSnapshot: record.graphSnapshot || null,
+    schedulerEvidence,
     runTimeline: record.runTimeline || [],
     createdAt: record.createdAt || null,
     updatedAt: record.updatedAt || null,
@@ -6106,6 +6146,9 @@ function pipelineGraphInspectorRows(node, selectedRun) {
   if (node.kind === 'generated-output') rows.push({ key: 'timeline', value: `${node.runTimeline?.length || 0} event${node.runTimeline?.length === 1 ? '' : 's'}` });
   if (node.kind === 'generated-output') rows.push({ key: 'route snapshot', value: node.routeSnapshot?.schema || 'missing' });
   if (node.kind === 'generated-output') rows.push({ key: 'graph snapshot', value: node.graphSnapshot?.schema || 'missing' });
+  if (node.kind === 'generated-output') rows.push({ key: 'scheduler', value: pipelineGraphSchedulerEvidenceLabel(node.schedulerEvidence) });
+  if (node.kind === 'generated-output') rows.push({ key: 'scheduler profile', value: node.schedulerEvidence?.scheduler?.schema || 'missing' });
+  if (node.kind === 'generated-output') rows.push({ key: 'backpressure profile', value: node.schedulerEvidence?.backpressure?.schema || 'missing' });
   if (node.kind === 'generated-output') rows.push({ key: 'graph relation', value: pipelineGeneratedOutputGraphRelation(node) });
   if (node.kind === 'generated-output') rows.push({ key: 'preview', value: node.previewTruth || 'point-cloud preview' });
   if (node.kind === 'generated-output') rows.push({ key: 'loadable', value: node.loadable ? 'yes' : 'no; open artifact evidence instead' });
@@ -6445,6 +6488,7 @@ function pipelineCreatePendingGeneratedOutputNode({ routeNode, source, requested
     previewTruth: 'pending model output',
     routeSnapshot,
     graphSnapshot,
+    schedulerEvidence: null,
     graphExecution,
     runTimeline: [
       pipelineRunTimelineEvent('queued', 'Run record created before backend execution', 'pending'),
@@ -6518,6 +6562,7 @@ function pipelineCompleteGeneratedOutputNode(outputNodeId, run, routeNode) {
   const sidecar = pipelineRunArtifact(run, 'sidecar');
   const artifactRole = pipelineArtifactRoleLabel(artifact);
   const loadable = pipelineArtifactIsLoadableSplat(artifact);
+  const schedulerEvidence = pipelineRunSchedulerEvidence(run);
   const now = new Date().toISOString();
   let completed = null;
   pipelineDockState.generatedOutputNodes = pipelineGeneratedOutputNodes().map(record => {
@@ -6544,6 +6589,7 @@ function pipelineCompleteGeneratedOutputNode(outputNodeId, run, routeNode) {
       generatorLabel: run.generatorLabel || record.generatorLabel || routeNode.generator?.title || null,
       fixtureBacked: pipelineRunUsesFixture(run),
       previewTruth: pipelineRunPreviewTruthLabel(run, artifact),
+      schedulerEvidence,
       updatedAt: now,
       completedAt: now,
       error: null,
@@ -6590,6 +6636,7 @@ function pipelineFailGeneratedOutputNode(outputNodeId, errorMessage, run = null)
       reportPath: run?.report?.path || record.reportPath || null,
       bundlePath: run?.bundle?.path || record.bundlePath || null,
       outputRoot: run?.bundle?.document?.outputRoot || record.outputRoot || null,
+      schedulerEvidence: pipelineRunSchedulerEvidence(run) || record.schedulerEvidence || null,
       updatedAt: now,
       failedAt: now,
       error: errorMessage || run?.error || 'Pipeline execution failed',
@@ -6840,8 +6887,10 @@ function pipelineGraphNodeActionsMarkup(node) {
     const status = node.status || 'complete';
     const artifactRole = node.artifactRole || pipelineArtifactRoleLabel(node.artifact);
     const loadable = pipelineArtifactIsLoadableSplat(node.artifact);
+    const schedulerState = pipelineGraphSchedulerEvidenceState(node.schedulerEvidence);
     return `
       <span class="pipeline-graph-node-status ${escapeHtml(status)}" data-pipeline-generated-output-status="${escapeHtml(status)}" data-pipeline-artifact-role="${escapeHtml(artifactRole)}">${escapeHtml(pipelineGeneratedOutputStatusLabel(node))}</span>
+      <span class="pipeline-graph-node-status ${escapeHtml(schedulerState)}" data-pipeline-scheduler-state="${escapeHtml(schedulerState)}">${escapeHtml(pipelineGraphSchedulerEvidenceLabel(node.schedulerEvidence))}</span>
       <span class="pipeline-graph-node-actions">
         <button
           type="button"
@@ -6944,6 +6993,7 @@ function renderPipelineGraphWorkbench() {
       ${node.kind === 'image' ? `data-pipeline-graph-image-node-id="${escapeHtml(node.id)}"` : ''}
       ${node.kind === 'generated-output' ? `data-pipeline-generated-output-node-id="${escapeHtml(node.id)}"` : ''}
       ${node.kind === 'generated-output' ? `data-pipeline-generated-output-status="${escapeHtml(node.status || 'complete')}"` : ''}
+      ${node.kind === 'generated-output' ? `data-pipeline-scheduler-state="${escapeHtml(pipelineGraphSchedulerEvidenceState(node.schedulerEvidence))}"` : ''}
       aria-pressed="${node.id === pipelineDockState.selectedGraphNodeId ? 'true' : 'false'}"
       style="left: ${position.x}px; top: ${position.y}px;"
     >
@@ -7110,11 +7160,15 @@ function pipelineRunResultRows(result) {
   const loadable = pipelineArtifactIsLoadableSplat(primaryArtifact);
   const fixtureBacked = pipelineRunUsesFixture(result);
   const adapterFixture = pipelineRunUsesAdapterFixture(result);
+  const schedulerEvidence = pipelineRunSchedulerEvidence(result);
   return [
     { key: 'generator', value: result.generatorLabel || 'unknown' },
     { key: 'backend', value: result.backendPipelineId || result.pipelineId || 'unknown' },
     { key: 'effect', value: primaryArtifact ? `${artifactRole || 'output'} artifact written${loadable ? '; preview still must be loaded explicitly.' : '; open artifact evidence or route into a later preview/baking node.'}` : 'Run evidence written without a primary output artifact.' },
     ...(adapterFixture ? [{ key: 'truth', value: 'mock adapter fixture output; not real model inference' }] : fixtureBacked ? [{ key: 'truth', value: 'input provenance only; output fixed fixture' }] : []),
+    { key: 'scheduler', value: pipelineGraphSchedulerEvidenceLabel(schedulerEvidence) },
+    { key: 'scheduler profile', value: schedulerEvidence?.scheduler?.schema || 'missing' },
+    { key: 'backpressure profile', value: schedulerEvidence?.backpressure?.schema || 'missing' },
     { key: 'report', value: result.report?.path || 'missing' },
     { key: 'bundle', value: result.bundle?.path || 'missing' },
     { key: 'artifact role', value: artifactRole || 'none' },

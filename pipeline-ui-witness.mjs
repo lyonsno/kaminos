@@ -489,6 +489,9 @@ try {
       const outputActionButton = outputRecord ? document.querySelector(\`[data-pipeline-graph-node-action="\${outputActionName}"][data-pipeline-graph-node-action-node-id="\${outputRecord.id}"]\`) : null;
       const outputContainer = document.querySelector(\`[data-pipeline-output-container-route-id="${routeNode.routeNodeId}"]\`);
       const outputStatus = outputRecord ? outputNode?.dataset?.pipelineGeneratedOutputStatus || null : null;
+      const schedulerEvidence = outputRecord?.schedulerEvidence || null;
+      const schedulerStateNode = outputRecord ? document.querySelector(\`[data-pipeline-generated-output-node-id="\${outputRecord.id}"] [data-pipeline-scheduler-state]\`) : null;
+      const schedulerState = outputNode?.dataset?.pipelineSchedulerState || schedulerStateNode?.dataset?.pipelineSchedulerState || null;
       const adapterFixture = Boolean(
         run?.report?.document?.stages?.some(stage => stage.effectiveRoute?.fixtureMode === 'mock-adapter')
         || primaryArtifact?.fixtureSource?.mode === 'mock-adapter'
@@ -506,7 +509,7 @@ try {
               : (${JSON.stringify(expectsFixture)} ? primaryArtifact?.fixtureSource : primaryArtifact?.status === 'real' && !primaryArtifact?.fixtureSource))
           : Boolean(primaryArtifact?.path && primaryArtifact?.status));
       return {
-        ok: Boolean(run?.ok && run?.pipelineId === ${JSON.stringify(pipelineId)} && run?.graphExecution?.nodeId === ${JSON.stringify(routeNode.routeNodeId)} && run?.graphExecution?.sourceGraphNodeId === ${JSON.stringify(imageHook.graphImageNodeId)} && run?.source?.graphNodeId === ${JSON.stringify(imageHook.graphImageNodeId)} && state?.selectedGraphNodeId === outputRecord?.id && primaryArtifact?.path && outputNode && outputNode.innerText.includes(expectedTruth) && outputActionButton && outputContainer && outputStatus === 'complete' && outputRecord?.status === 'complete' && outputRecord?.artifactRole === expectedRole && outputRecord?.runTimeline?.length >= 3 && outputRecord?.routeSnapshot?.schema === 'kaminos.pipeline-route-snapshot.v0' && outputRecord?.graphSnapshot?.schema === 'kaminos.pipeline-graph-run-snapshot.v0' && artifactTruthOk),
+        ok: Boolean(run?.ok && run?.pipelineId === ${JSON.stringify(pipelineId)} && run?.graphExecution?.nodeId === ${JSON.stringify(routeNode.routeNodeId)} && run?.graphExecution?.sourceGraphNodeId === ${JSON.stringify(imageHook.graphImageNodeId)} && run?.source?.graphNodeId === ${JSON.stringify(imageHook.graphImageNodeId)} && state?.selectedGraphNodeId === outputRecord?.id && primaryArtifact?.path && outputNode && outputNode.innerText.includes(expectedTruth) && outputActionButton && outputContainer && outputStatus === 'complete' && outputRecord?.status === 'complete' && outputRecord?.artifactRole === expectedRole && outputRecord?.runTimeline?.length >= 3 && outputRecord?.routeSnapshot?.schema === 'kaminos.pipeline-route-snapshot.v0' && outputRecord?.graphSnapshot?.schema === 'kaminos.pipeline-graph-run-snapshot.v0' && schedulerEvidence?.schema === 'kaminos.pipeline-scheduler-composition.v0' && Boolean(schedulerState) && artifactTruthOk),
         selectedGraphNodeId: state?.selectedGraphNodeId || null,
         runId: run?.runId || null,
         pipelineId: run?.pipelineId || null,
@@ -519,6 +522,9 @@ try {
         generatedOutputNodes: state?.generatedOutputNodes || [],
         routeSnapshot: outputRecord?.routeSnapshot || null,
         graphSnapshot: outputRecord?.graphSnapshot || null,
+        schedulerEvidence,
+        schedulerState,
+        schedulerStateText: schedulerStateNode?.innerText || '',
         runTimeline: outputRecord?.runTimeline || [],
         outputContainerText: outputContainer?.innerText || '',
         generatedOutputNodeText: outputNode?.innerText || '',
@@ -717,7 +723,7 @@ try {
             && distinctGeneratedOutputs >= 2
             && distinctArtifactPaths >= 2
             && routeOutputs.some(item => item.runId === ${JSON.stringify(executed.runId)})
-            && routeOutputs.every(item => item.status === 'complete' && item.runTimeline?.length >= 3 && item.routeSnapshot?.schema && item.graphSnapshot?.schema)
+            && routeOutputs.every(item => item.status === 'complete' && item.runTimeline?.length >= 3 && item.routeSnapshot?.schema && item.graphSnapshot?.schema && item.schedulerEvidence?.schema === 'kaminos.pipeline-scheduler-composition.v0')
             && latestOutput?.status === 'complete'
             && latestRun?.graphExecution?.sourceGraphNodeId === ${JSON.stringify(secondImageHook.graphImageNodeId)}
             && latestRun?.graphExecution?.source?.includes(${JSON.stringify(secondAssetNeedle)})
