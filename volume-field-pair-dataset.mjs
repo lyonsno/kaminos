@@ -63,6 +63,15 @@ function gridSlug(value) {
   return `g${nearestSupported(value, SUPPORTED_GRIDS, 96)}`;
 }
 
+function slugify(value, fallback = 'variant') {
+  const slug = String(value || fallback)
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return slug || fallback;
+}
+
 function writeJson(path, payload) {
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, `${JSON.stringify(payload, null, 2)}\n`);
@@ -86,6 +95,57 @@ function routeWithGrid(baseUrl, grid, majorantGrid) {
   url.searchParams.set('volume_resolution', String(nearestSupported(grid, SUPPORTED_GRIDS, 96)));
   url.searchParams.set('volume_majorant_grid', String(nearestSupported(majorantGrid, SUPPORTED_MAJORANT_GRIDS, 48)));
   url.searchParams.set('volume_sim_profile', '1');
+  return url.toString();
+}
+
+function normalizeRouteVariant(entry, index) {
+  const source = entry && typeof entry === 'object' ? entry : {};
+  const identity = slugify(source.id || source.identity || source.name || `variant-${index + 1}`, `variant-${index + 1}`);
+  const query = source.query || source.queryParams || source.params || {};
+  const queryParams = {};
+  for (const [key, value] of Object.entries(query)) {
+    if (value === undefined || value === null) continue;
+    queryParams[key] = String(value);
+  }
+  return {
+    routeVariantIdentity: identity,
+    label: source.label || source.name || identity,
+    queryParams,
+    note: source.note || null,
+  };
+}
+
+function loadRouteVariants(path) {
+  if (!path) {
+    return [{
+      routeVariantIdentity: 'base-route-v0',
+      label: 'base route',
+      queryParams: {},
+      note: null,
+    }];
+  }
+  const resolvedPath = resolve(String(path));
+  const payload = readJson(resolvedPath);
+  const rows = Array.isArray(payload) ? payload : payload.routeVariants;
+  if (!Array.isArray(rows) || rows.length < 1) {
+    throw new Error(`route variants file must contain a non-empty array or { "routeVariants": [...] }: ${resolvedPath}`);
+  }
+  const variants = rows.map(normalizeRouteVariant);
+  const seen = new Set();
+  for (const variant of variants) {
+    if (seen.has(variant.routeVariantIdentity)) {
+      throw new Error(`duplicate routeVariantIdentity in ${resolvedPath}: ${variant.routeVariantIdentity}`);
+    }
+    seen.add(variant.routeVariantIdentity);
+  }
+  return variants.map((variant) => ({ ...variant, sourcePath: resolvedPath }));
+}
+
+function applyRouteVariant(baseUrl, routeVariant) {
+  const url = new URL(baseUrl);
+  for (const [key, value] of Object.entries(routeVariant?.queryParams || {})) {
+    url.searchParams.set(key, value);
+  }
   return url.toString();
 }
 
@@ -930,6 +990,8 @@ const cwd = new URL('.', import.meta.url).pathname;
 const outDir = resolve(args.get('--out-dir') || '/tmp/kaminos-field-pair-dataset');
 const manifestPath = resolve(args.get('--manifest') || `${outDir}/manifest.json`);
 const baseUrl = args.get('--base-url') || DEFAULT_BASE_URL;
+const routeVariantsPath = args.get('--route-variants') ? resolve(String(args.get('--route-variants'))) : null;
+const routeVariants = loadRouteVariants(routeVariantsPath);
 const lowGrids = numberList(args.get('--low-grids') || args.get('--low-grid'), '96').map((grid) => nearestSupported(grid, SUPPORTED_GRIDS, 96));
 const highGrid = nearestSupported(args.get('--high-grid') || 128, SUPPORTED_GRIDS, 128);
 const majorantGrid = nearestSupported(args.get('--majorant-grid') || 48, SUPPORTED_MAJORANT_GRIDS, 48);
@@ -966,13 +1028,20 @@ const createdAt = new Date().toISOString();
 const gitCommit = gitValue(['rev-parse', 'HEAD']);
 const gitBranch = gitValue(['branch', '--show-current']);
 const gitStatusShort = gitValue(['status', '--short'], '');
-const pairs = lowGrids.map((lowGrid, index) => {
-  const pairId = `pair-${String(index + 1).padStart(3, '0')}-${gridSlug(lowGrid)}-to-${gridSlug(highGrid)}`;
+const pairs = routeVariants.flatMap((routeVariant, variantIndex) => lowGrids.map((lowGrid, lowIndex) => {
+  const pairIndex = variantIndex * lowGrids.length + lowIndex;
+  const variantBaseUrl = applyRouteVariant(baseUrl, routeVariant);
+  const variantPrefix = routeVariants.length > 1 || routeVariant.routeVariantIdentity !== 'base-route-v0'
+    ? `${routeVariant.routeVariantIdentity}-`
+    : '';
+  const pairId = `pair-${String(pairIndex + 1).padStart(3, '0')}-${variantPrefix}${gridSlug(lowGrid)}-to-${gridSlug(highGrid)}`;
   const pairDir = resolve(outDir, pairId);
-  const lowRoute = routeWithGrid(baseUrl, lowGrid, majorantGrid);
-  const highRoute = routeWithGrid(baseUrl, highGrid, majorantGrid);
+  const lowRoute = routeWithGrid(variantBaseUrl, lowGrid, majorantGrid);
+  const highRoute = routeWithGrid(variantBaseUrl, highGrid, majorantGrid);
   return {
     pairId,
+    routeVariantIdentity: routeVariant.routeVariantIdentity,
+    routeVariant,
     pairAuthority,
     fieldAuthority: FIELD_AUTHORITY,
     lowGrid,
@@ -987,7 +1056,7 @@ const pairs = lowGrids.map((lowGrid, index) => {
       majorantGrid,
       route: lowRoute,
       pairDir,
-      debugPort: debugPort + index * 2,
+      debugPort: debugPort + pairIndex * 2,
       settleMs,
       windowSize,
       evidenceMode,
@@ -1001,7 +1070,7 @@ const pairs = lowGrids.map((lowGrid, index) => {
       majorantGrid,
       route: highRoute,
       pairDir,
-      debugPort: debugPort + index * 2 + 1,
+      debugPort: debugPort + pairIndex * 2 + 1,
       settleMs,
       windowSize,
       evidenceMode,
@@ -1009,7 +1078,7 @@ const pairs = lowGrids.map((lowGrid, index) => {
       fieldTileExport,
     }),
   };
-});
+}));
 
 const manifest = {
   schema: DATASET_SCHEMA,
@@ -1021,6 +1090,8 @@ const manifest = {
   gitBranch,
   gitStatusShort,
   baseUrl,
+  routeVariantsPath,
+  routeVariants,
   outDir,
   manifestPath,
   dryRun,

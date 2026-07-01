@@ -1426,6 +1426,10 @@ assert.match(fieldPairDataset, /--field-tile-pairing-policy/, 'field-pair datase
 assert.match(fieldPairDataset, /common-spatial-bin-nearest-neighbor-v0/, 'field-pair dataset can pair only tiles with common spatial-bin identity');
 assert.match(fieldPairDataset, /excludedByPairingPolicy/, 'field-pair dataset reports tiles/candidates excluded from common-bin pairing instead of hiding backfill drift');
 assert.match(fieldPairDataset, /minCommonSpatialBinPairs/, 'field-pair dataset can fail loudly when common-bin pairing is too sparse for a clean corpus proof');
+assert.match(fieldPairDataset, /--route-variants/, 'field-pair dataset can read named route variants from a file instead of requiring hand-spliced one-route corpora');
+assert.match(fieldPairDataset, /routeVariantIdentity/, 'field-pair dataset records the active route variant identity per low/high pair');
+assert.match(fieldPairDataset, /applyRouteVariant/, 'field-pair dataset applies explicit query-param route variant controls before low/high grid routing');
+assert.match(fieldPairDataset, /routeVariants/, 'field-pair dataset preserves the requested route variant set in the manifest');
 
 const fieldResidualProbePath = join(root, 'volume-field-residual-probe.py');
 assert.ok(existsSync(fieldResidualProbePath), 'volume field residual probe exists');
