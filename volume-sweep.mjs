@@ -216,6 +216,7 @@ const TALL_PLUME_PERFORMANCE_BASE = {
   majorantSmooth: 0.1,
   majorantGuard: 0.3,
   majorantCadence: 1,
+  simCadence: 1,
   pressureIterations: 2,
   pressureStrategy: 'global',
   simProfile: true,
@@ -252,6 +253,24 @@ const PERFORMANCE_MATRIX_SCENARIOS = [
     label: 'Perf 128 Majorant Cadence 3',
     simGrid: 128,
     majorantCadence: 3,
+  },
+  {
+    id: 'perf-128-sim-cadence2',
+    label: 'Perf 128 Sim Cadence 2',
+    simGrid: 128,
+    simCadence: 2,
+  },
+  {
+    id: 'perf-128-sim-cadence4',
+    label: 'Perf 128 Sim Cadence 4',
+    simGrid: 128,
+    simCadence: 4,
+  },
+  {
+    id: 'perf-128-sim-cadence8',
+    label: 'Perf 128 Sim Cadence 8',
+    simGrid: 128,
+    simCadence: 8,
   },
   {
     id: 'perf-128-pressure4',
@@ -408,6 +427,7 @@ function routeFor(run) {
   applyNumberParam(url, 'volume_wind_height', run.windHeight);
   applyNumberParam(url, 'volume_input_radius', run.inputRadius);
   applyNumberParam(url, 'volume_majorant_cadence', run.majorantCadence);
+  applyNumberParam(url, 'volume_sim_cadence', run.simCadence);
   applyNumberParam(url, 'volume_pressure_iterations', run.pressureIterations);
   applyStringParam(url, 'volume_pressure_strategy', run.pressureStrategy);
   applyBooleanParam(url, 'volume_sim_profile', run.simProfile);
@@ -460,6 +480,7 @@ function requestedConfig(run) {
     inputRadius: run.inputRadius,
     flowRate: run.flowRate,
     majorantCadence: run.majorantCadence,
+    simCadence: run.simCadence,
     pressureIterations: run.pressureIterations,
     pressureStrategy: run.pressureStrategy,
     simProfile: run.simProfile,
@@ -528,6 +549,13 @@ function effectiveConfig(witness) {
     majorantBuiltThisFrame: witness.majorantBuiltThisFrame || witness.simCostLedger?.majorantBuiltThisFrame,
     majorantLastBuiltFrame: witness.majorantLastBuiltFrame || witness.simCostLedger?.majorantLastBuiltFrame,
     majorantSkippedFrameCount: witness.majorantSkippedFrameCount || witness.simCostLedger?.majorantSkippedFrameCount,
+    simCadence: witness.simCadence ?? controls.simCadence,
+    effectiveVisualAuthority: witness.effectiveVisualAuthority ?? controls.effectiveVisualAuthority,
+    continuationAuthority: witness.continuationAuthority,
+    liveSimFrameCount: witness.liveSimFrameCount,
+    continuationFrameCount: witness.continuationFrameCount,
+    lastLiveSimFrameId: witness.lastLiveSimFrameId,
+    lastSimFrameSkipped: witness.lastSimFrameSkipped,
     pressureProjectionEnabled: witness.pressureProjectionEnabled ?? controls.pressureProjectionEnabled,
     pressureEffectiveLabel: witness.pressureEffectiveLabel ?? controls.pressureEffectiveLabel,
     pressureProjectionIterations: witness.pressureProjectionIterations ?? controls.pressureProjectionIterations ?? controls.pressureIterations,
@@ -681,6 +709,15 @@ function validateWitness(run, witness, effective) {
   checkNumber(checks, run, effective, 'inputRadius');
   checkNumber(checks, run, effective, 'flowRate');
   checkNumber(checks, run, effective, 'majorantCadence', 'majorantBuildCadence', 0.5);
+  checkNumber(checks, run, effective, 'simCadence', 'simCadence', 0.5);
+  if (Number(run.simCadence) > 1 && effective.effectiveVisualAuthority !== 'continuation') {
+    throwSweepFailure('stale-default-config', 'validation', 'simulation cadence requested held-frame continuation but effective visual authority did not report continuation', {
+      scenarioId: run.id,
+      requested: run.simCadence,
+      effective: effective.effectiveVisualAuthority,
+      continuationAuthority: effective.continuationAuthority,
+    });
+  }
   if (run.pressureStrategy !== 'spatial_tiers') {
     checkNumber(checks, run, effective, 'pressureIterations', 'pressureProjectionIterations', 0.5);
   }
@@ -1069,6 +1106,8 @@ function rankRecommendations(aggregate) {
     renderScale: run.effectiveConfig?.renderScale,
     raySteps: run.effectiveConfig?.raySteps,
     adaptiveRaymarch: run.effectiveConfig?.adaptiveRaymarch,
+    simCadence: run.effectiveConfig?.simCadence,
+    effectiveVisualAuthority: run.effectiveConfig?.effectiveVisualAuthority,
     report: run.report,
     screenshot: run.screenshot,
   }));
@@ -1191,6 +1230,13 @@ for (let i = 0; i < runs.length; i += 1) {
       majorantSkip: witness.majorantSkip,
       majorantSmooth: witness.majorantSmooth,
       majorantGuard: witness.majorantGuard,
+      simCadence: effective.simCadence,
+      effectiveVisualAuthority: effective.effectiveVisualAuthority,
+      continuationAuthority: effective.continuationAuthority,
+      liveSimFrameCount: effective.liveSimFrameCount,
+      continuationFrameCount: effective.continuationFrameCount,
+      lastLiveSimFrameId: effective.lastLiveSimFrameId,
+      lastSimFrameSkipped: effective.lastSimFrameSkipped,
       simGrid: witness.simGrid,
       majorantGrid: witness.majorantGrid,
       majorantBuilt: witness.majorantBuilt,

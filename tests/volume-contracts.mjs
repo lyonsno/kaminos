@@ -1787,6 +1787,9 @@ assert.match(sweep, /timingEvidenceSource/, 'sweep aggregate preserves timing ev
 assert.match(sweep, /timingDisclaimer/, 'sweep aggregate preserves timing proxy disclaimer labels');
 assert.match(sweep, /temporalEvidenceSource/, 'sweep aggregate preserves temporal evidence-source labels');
 assert.match(sweep, /performanceVisualWarnings/, 'performance sweep preserves witness visual warnings in aggregate evidence');
+assert.match(sweep, /perf-128-sim-cadence4/, 'performance sweep includes a low-cadence sim continuation scenario');
+assert.match(sweep, /volume_sim_cadence/, 'performance sweep routes requested simulation cadence into the witness URL');
+assert.match(sweep, /simCadence:\s*witness\.simCadence\s*\?\?\s*controls\.simCadence/, 'performance sweep records effective simulation cadence from witness state');
 assert.match(sweep, /density:\s*witness\.density\s*\?\?\s*controls\.density/, 'performance sweep validates requested controls against effective witness controls instead of treating nested control echoes as stale defaults');
 assert.match(sweep, /scoreSweepRun/, 'sweep harness computes a compact recommendation score from visual and timing evidence');
 assert.match(sweep, /recommendationRank/, 'sweep aggregate emits a ranked scenario surface for operator triage');
