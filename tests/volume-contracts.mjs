@@ -1411,6 +1411,18 @@ assert.match(renderPairCorpus, /sequenceSettleMs/, 'corpus sweep records the set
 assert.match(renderPairCorpus, /temporalAdjacentPairCount/, 'corpus sweep reports same-scale adjacent pair counts for temporal-loss sanity');
 assert.match(renderPairCorpus, /sequenceFrames/, 'corpus sweep records per-sequence frame capture receipts');
 assert.match(renderPairCorpus, /ordered-settle-time-sequence-v0/, 'corpus sweep labels ordered settle-time sequence authority honestly');
+assert.match(renderPairCorpus, /controlled-step-sequence-v0/, 'corpus sweep labels true same-browser controlled-step sequence authority distinctly');
+assert.match(renderPairCorpus, /--sequence-mode/, 'corpus sweep exposes explicit sequence mode selection instead of overloading settle-time sequences');
+assert.match(renderPairCorpus, /sameBrowserSessionId/, 'controlled-step corpus records the browser session identity shared by sequence frames');
+assert.match(renderPairCorpus, /controlledStepFrameIndex/, 'controlled-step corpus records frame ordering produced by explicit browser stepping');
+assert.match(renderPairCorpus, /controlledStepDeltaMs/, 'controlled-step corpus records the requested simulator time delta between controlled frames');
+assert.match(renderPairCorpus, /controlledStepCapture/, 'controlled-step corpus uses a same-browser capture path instead of relaunching one witness per frame');
+assert.match(fieldSliceWitness, /--controlled-step-sequence/, 'volume witness exposes a controlled-step sequence capture mode');
+assert.match(fieldSliceWitness, /controlled-step-sequence-v0/, 'volume witness labels same-browser controlled-step sequence authority');
+assert.match(fieldSliceWitness, /controlledStepSequence/, 'volume witness invokes the browser-side controlled-step sequence API');
+assert.match(fieldSliceWitness, /sameBrowserSessionId/, 'volume witness records same-browser identity for controlled-step frames');
+assert.match(core, /controlledStepSequence/, 'volume core exposes a same-browser controlled-step sequence API');
+assert.match(core, /controlled-step-sim-advance/, 'volume core labels explicit controlled simulator advancement');
 
 const residualMlxPath = join(root, 'volume-residual-upscale-mlx.py');
 assert.ok(existsSync(residualMlxPath), 'tiny MLX residual-upscale smoke harness exists');

@@ -7,6 +7,7 @@ const CORPUS_SCHEMA = 'kaminos.volume.frame-locked-pair-corpus.v0';
 const PAIR_AUTHORITY = 'frame-locked-render-scale-set-v0';
 const IMAGE_AUTHORITY = 'cdp-canvas-clip-capture-after-render-only-frozen-sim-state';
 const SEQUENCE_AUTHORITY = 'ordered-settle-time-sequence-v0';
+const CONTROLLED_STEP_SEQUENCE_AUTHORITY = 'controlled-step-sequence-v0';
 const HARD_LOW_SCALE_PRESET = 'hard-low-scale-v0';
 const DEFAULT_BASE_URL = 'http://127.0.0.1:8097/?kaminos_volume_smoke=1&volume_scene=tall_plume&volume_tall_preset=operator_fire_0622&volume_resolution=128&volume_majorant_grid=48&volume_steps=148&volume_adaptive_rays=0.75&volume_density=3.05&volume_fire=0.50&volume_radiance=3&volume_absorption=0&volume_glow=2.5&volume_smoke=2.8&volume_curl=3.5&volume_microdetail=2.5&volume_interface_shred=0&volume_fire_licks=0&volume_projection=1.5&volume_speed=5&volume_fire_scale=0.59&volume_detail_scale=0.45&volume_plume_height=2.2&volume_wind_strength=0&volume_wind_angle=180&volume_wind_height=-0.8&volume_input_radius=0.11&volume_flow_rate=0.35&volume_reaction_fuel=1&volume_majorant_cadence=1&volume_pressure_iterations=2&volume_pressure_strategy=global&volume_sim_profile=1&volume_temporal_accum=0&volume_temporal_jitter=0&volume_history_clamp=1&volume_occupancy_skip=0.1&volume_majorant_skip=0&volume_majorant_smooth=0.1&volume_majorant_guard=0.3';
 
@@ -41,6 +42,10 @@ function clampRenderScale(value) {
   const requested = Number(value);
   if (!Number.isFinite(requested)) return 0.1;
   return Math.max(0.1, Math.min(1, requested));
+}
+
+function scaleSlug(value) {
+  return `rs${String(Math.round(clampRenderScale(value) * 100)).padStart(3, '0')}`;
 }
 
 function positiveInteger(value, fallback) {
@@ -275,7 +280,287 @@ function variantFailureFromDataset(variant, dataset, fallback) {
   };
 }
 
+function renderScaleSetForCorpus(corpus) {
+  const seen = new Set();
+  return [...corpus.lowRenderScales, corpus.highRenderScale].filter(renderScale => {
+    const key = renderScale.toFixed(3);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function captureToPairEndpoint(capture) {
+  return {
+    path: capture.image,
+    report: capture.report,
+    requestedRenderScale: capture.requestedRenderScale,
+    renderScale: capture.renderScale,
+    renderPixelRatio: capture.renderPixelRatio,
+    renderWidth: capture.renderWidth,
+    renderHeight: capture.renderHeight,
+    displayWidth: capture.displayWidth,
+    displayHeight: capture.displayHeight,
+    volumeReconstructionStyle: capture.volumeReconstructionStyle,
+    sampleAuthority: capture.sampleAuthority,
+    imageAuthority: capture.imageAuthority,
+    imageWidth: capture.imageWidth,
+    imageHeight: capture.imageHeight,
+    canvasCssRect: capture.canvasCssRect,
+    screenshotClip: capture.screenshotClip,
+    devicePixelRatio: capture.devicePixelRatio,
+    hudSuppression: capture.hudSuppression,
+    sameStateCaptureId: capture.sameStateCaptureId,
+    baseFrameCount: capture.baseFrameCount,
+    baseSimStepCount: capture.baseSimStepCount,
+    frameCount: capture.frameCount,
+    simStepCount: capture.simStepCount,
+    sameBrowserSessionId: capture.sameBrowserSessionId,
+    sequenceAuthority: capture.sequenceAuthority,
+    controlledStepFrameIndex: capture.controlledStepFrameIndex,
+    controlledStepDeltaMs: capture.controlledStepDeltaMs,
+    controlledStepNowMs: capture.controlledStepNowMs,
+    controlledStepCapture: capture.controlledStepCapture,
+  };
+}
+
+function runControlledStepVariant({ variant, index, corpus, cwd }) {
+  const variantDir = resolve(corpus.outRoot, variant.id);
+  const route = routeWithOverrides(corpus.baseUrl, variant.overrides);
+  const manifestPath = resolve(variantDir, 'controlled-step-witness.json');
+  const stdout = resolve(variantDir, 'controlled-step-witness.stdout.log');
+  const stderr = resolve(variantDir, 'controlled-step-witness.stderr.log');
+  const previewPath = resolve(variantDir, 'controlled-step-witness-preview.png');
+  const fullScreenshot = resolve(variantDir, 'controlled-step-witness.full.png');
+  const controlledStepDir = resolve(variantDir, 'controlled-step-frames');
+  const debugPort = corpus.debugPort + index * 32;
+  const command = [
+    process.execPath,
+    'volume-witness.mjs',
+    '--url', route,
+    '--out', previewPath,
+    '--report', manifestPath,
+    '--full-screenshot', fullScreenshot,
+    '--debug-port', String(debugPort),
+    '--settle-ms', String(variant.settleMs),
+    '--window-size', corpus.windowSize,
+    '--evidence-mode', corpus.evidenceMode,
+    '--render-scale-set', renderScaleSetForCorpus(corpus).join(','),
+    '--render-scale-set-dir', controlledStepDir,
+    '--render-scale-set-prefix', `${variant.id}-initial-scale-set`,
+    '--controlled-step-sequence', '1',
+    '--controlled-step-frames', String(corpus.framesPerSequence),
+    '--controlled-step-delta-ms', String(corpus.controlledStepDeltaMs),
+    '--controlled-step-dir', controlledStepDir,
+    '--controlled-step-prefix', variant.id,
+  ];
+  const summary = {
+    id: variant.id,
+    label: variant.label,
+    tags: variant.tags,
+    status: 'running',
+    settleMs: variant.settleMs,
+    overrides: variant.overrides,
+    debugPort,
+    route,
+    manifestPath,
+    stdout,
+    stderr,
+    command,
+    pairCount: 0,
+    sequenceAuthority: CONTROLLED_STEP_SEQUENCE_AUTHORITY,
+    sequenceFrameCount: corpus.framesPerSequence,
+    controlledStepDeltaMs: corpus.controlledStepDeltaMs,
+    sameBrowserSessionId: null,
+    sequenceFrames: [],
+  };
+  corpus.variants.push(summary);
+  writeJson(corpus.manifestPath, corpus);
+  mkdirSync(variantDir, { recursive: true });
+  if (corpus.dryRun) {
+    summary.status = 'dry-run';
+    summary.sameBrowserSessionId = `${variant.id}-dry-run-same-browser-session`;
+    for (let frameIndex = 0; frameIndex < corpus.framesPerSequence; frameIndex += 1) {
+      const frameId = `${variant.id}-frame-${padIndex(frameIndex)}`;
+      summary.sequenceFrames.push({
+        frameId,
+        temporalFrameIndex: frameIndex,
+        controlledStepFrameIndex: frameIndex,
+        controlledStepDeltaMs: corpus.controlledStepDeltaMs,
+        sameBrowserSessionId: summary.sameBrowserSessionId,
+        status: 'dry-run',
+        pairCount: corpus.lowRenderScales.length,
+      });
+      for (let lowIndex = 0; lowIndex < corpus.lowRenderScales.length; lowIndex += 1) {
+        const lowRenderScale = corpus.lowRenderScales[lowIndex];
+        corpus.pairs.push({
+          pairId: `${frameId}-pair-${padIndex(lowIndex)}-${scaleSlug(lowRenderScale)}-to-${scaleSlug(corpus.highRenderScale)}`,
+          pairAuthority: PAIR_AUTHORITY,
+          supervisedResidualTrainingSuitable: false,
+          lowRenderScale,
+          highRenderScale: corpus.highRenderScale,
+          variantId: variant.id,
+          variantLabel: variant.label,
+          variantTags: variant.tags,
+          variantOverrides: variant.overrides,
+          sequenceAuthority: CONTROLLED_STEP_SEQUENCE_AUTHORITY,
+          sequenceId: variant.id,
+          sequenceLabel: variant.label,
+          sequenceTags: variant.tags,
+          sequenceFrameId: frameId,
+          sequenceFrameCount: corpus.framesPerSequence,
+          frameStrideMs: corpus.controlledStepDeltaMs,
+          temporalSequenceId: variant.id,
+          temporalFrameIndex: frameIndex,
+          controlledStepFrameIndex: frameIndex,
+          controlledStepDeltaMs: corpus.controlledStepDeltaMs,
+          sameBrowserSessionId: summary.sameBrowserSessionId,
+          controlledStepCapture: { ok: true, sampleAuthority: 'dry-run-controlled-step-capture' },
+          status: 'dry-run',
+        });
+      }
+    }
+    summary.pairCount = corpus.lowRenderScales.length * corpus.framesPerSequence;
+    return summary;
+  }
+  const started = Date.now();
+  const stdoutFd = openSync(stdout, 'w');
+  const stderrFd = openSync(stderr, 'w');
+  let child;
+  try {
+    child = spawnSync(command[0], command.slice(1), {
+      cwd,
+      stdio: ['ignore', stdoutFd, stderrFd],
+    });
+  } finally {
+    closeSync(stdoutFd);
+    closeSync(stderrFd);
+  }
+  summary.durationMs = Date.now() - started;
+  const witness = readDatasetManifest(manifestPath);
+  const controlledStepCapture = witness?.controlledStepSequence || null;
+  if (child.status !== 0 || !controlledStepCapture || controlledStepCapture.sequenceAuthority !== CONTROLLED_STEP_SEQUENCE_AUTHORITY || controlledStepCapture.sameBrowserSequenceSuitable !== true) {
+    summary.status = 'failed';
+    summary.failure = variantFailureFromDataset(variant, null, {
+      code: 'controlled-step-witness-failed',
+      failurePhase: witness ? 'controlled-step-validation' : 'controlled-step-spawn',
+      message: `controlled-step witness failed for ${variant.id}`,
+      details: {
+        status: child.status,
+        signal: child.signal,
+        spawnError: child.error ? { name: child.error.name, message: child.error.message, code: child.error.code } : null,
+        manifestPath,
+        stdout,
+        stderr,
+      },
+    });
+    corpus.failures.push({
+      ...summary.failure,
+      temporalSequenceId: variant.id,
+      sequenceAuthority: CONTROLLED_STEP_SEQUENCE_AUTHORITY,
+    });
+    return summary;
+  }
+  summary.status = 'captured';
+  summary.sameBrowserSessionId = controlledStepCapture.sameBrowserSessionId;
+  for (const frame of controlledStepCapture.frames || []) {
+    const frameIndex = Number(frame.controlledStepFrameIndex);
+    const frameId = `${variant.id}-frame-${padIndex(frameIndex)}`;
+    summary.sequenceFrames.push({
+      frameId,
+      temporalFrameIndex: frameIndex,
+      controlledStepFrameIndex: frameIndex,
+      controlledStepDeltaMs: frame.controlledStepDeltaMs,
+      controlledStepNowMs: frame.controlledStepNowMs,
+      sameBrowserSessionId: frame.sameBrowserSessionId,
+      sameStateCaptureId: frame.sameStateCaptureId,
+      baseFrameCount: frame.baseFrameCount,
+      baseSimStepCount: frame.baseSimStepCount,
+      controlledStepCapture: frame.controlledStepCapture,
+      status: 'captured',
+      pairCount: 0,
+    });
+    const highCapture = (frame.captures || []).find(capture => Number(capture.requestedRenderScale).toFixed(3) === corpus.highRenderScale.toFixed(3));
+    const lowCaptures = (frame.captures || []).filter(capture => Number(capture.requestedRenderScale).toFixed(3) !== corpus.highRenderScale.toFixed(3));
+    for (let lowIndex = 0; lowIndex < lowCaptures.length; lowIndex += 1) {
+      const lowCapture = lowCaptures[lowIndex];
+      if (!highCapture) continue;
+      const lowRenderScale = clampRenderScale(lowCapture.requestedRenderScale ?? lowCapture.renderScale);
+      const pairId = `${frameId}-pair-${padIndex(lowIndex)}-${scaleSlug(lowRenderScale)}-to-${scaleSlug(corpus.highRenderScale)}`;
+      const low = captureToPairEndpoint(lowCapture);
+      const high = captureToPairEndpoint(highCapture);
+      corpus.pairs.push({
+        pairId,
+        pairAuthority: PAIR_AUTHORITY,
+        supervisedResidualTrainingSuitable: true,
+        lowRenderScale,
+        highRenderScale: corpus.highRenderScale,
+        capture: {
+          role: 'controlled-step-sequence',
+          route,
+          report: manifestPath,
+          stdout,
+          stderr,
+          command,
+          sequenceAuthority: CONTROLLED_STEP_SEQUENCE_AUTHORITY,
+          sameBrowserSessionId: frame.sameBrowserSessionId,
+          controlledStepFrameIndex: frameIndex,
+          controlledStepDeltaMs: frame.controlledStepDeltaMs,
+          controlledStepCapture: frame.controlledStepCapture,
+        },
+        sameStateCaptureId: frame.sameStateCaptureId,
+        sameBrowserSessionId: frame.sameBrowserSessionId,
+        controlledStepFrameIndex: frameIndex,
+        controlledStepDeltaMs: frame.controlledStepDeltaMs,
+        controlledStepNowMs: frame.controlledStepNowMs,
+        controlledStepCapture: frame.controlledStepCapture,
+        low,
+        high,
+        witness: {
+          preview: previewPath,
+          report: manifestPath,
+          fullScreenshot,
+        },
+        effective: {
+          pairAuthority: PAIR_AUTHORITY,
+          sequenceAuthority: CONTROLLED_STEP_SEQUENCE_AUTHORITY,
+          sameBrowserSessionId: frame.sameBrowserSessionId,
+          sameStateCaptureId: frame.sameStateCaptureId,
+          controlledStepFrameIndex: frameIndex,
+          controlledStepDeltaMs: frame.controlledStepDeltaMs,
+          controlledStepCapture: frame.controlledStepCapture,
+          supervisedResidualTrainingSuitable: true,
+          low,
+          high,
+        },
+        variantId: variant.id,
+        variantLabel: variant.label,
+        variantTags: variant.tags,
+        variantOverrides: variant.overrides,
+        variantManifestPath: manifestPath,
+        sequenceAuthority: CONTROLLED_STEP_SEQUENCE_AUTHORITY,
+        sequenceId: variant.id,
+        sequenceLabel: variant.label,
+        sequenceTags: variant.tags,
+        sequenceFrameId: frameId,
+        sequenceFrameCount: corpus.framesPerSequence,
+        frameStrideMs: frame.controlledStepDeltaMs,
+        temporalSequenceId: variant.id,
+        temporalFrameIndex: frameIndex,
+        sequenceManifestPath: manifestPath,
+      });
+      summary.pairCount += 1;
+      const frameSummary = summary.sequenceFrames[summary.sequenceFrames.length - 1];
+      frameSummary.pairCount += 1;
+    }
+  }
+  return summary;
+}
+
 function runVariant({ variant, index, args, corpus, cwd }) {
+  if (corpus.sequenceMode === 'controlled-step') {
+    return runControlledStepVariant({ variant, index, corpus, cwd });
+  }
   const variantDir = resolve(corpus.outRoot, variant.id);
   const route = routeWithOverrides(corpus.baseUrl, variant.overrides);
 
@@ -435,7 +720,16 @@ const highRenderScale = clampRenderScale(args.get('--high-render-scale') || 1);
 const settleMs = Number(args.get('--settle-ms') || 5200);
 const framesPerSequence = positiveInteger(args.get('--frames-per-sequence'), 1);
 const frameStrideMs = nonNegativeNumber(args.get('--frame-stride-ms'), 320);
-const temporalSequenceMode = framesPerSequence > 1 || args.has('--frames-per-sequence') || args.has('--frame-stride-ms');
+const requestedSequenceMode = String(args.get('--sequence-mode') || '').trim().toLowerCase();
+const sequenceMode = requestedSequenceMode || ((framesPerSequence > 1 || args.has('--frames-per-sequence') || args.has('--frame-stride-ms')) ? 'ordered-settle' : 'single');
+if (!['single', 'ordered-settle', 'controlled-step'].includes(sequenceMode)) {
+  throw new Error(`unknown sequence mode: ${sequenceMode}`);
+}
+const temporalSequenceMode = sequenceMode !== 'single';
+const activeSequenceAuthority = sequenceMode === 'controlled-step'
+  ? CONTROLLED_STEP_SEQUENCE_AUTHORITY
+  : (temporalSequenceMode ? SEQUENCE_AUTHORITY : null);
+const controlledStepDeltaMs = nonNegativeNumber(args.get('--controlled-step-delta-ms'), frameStrideMs);
 const variants = loadVariants(args, settleMs);
 const createdAt = new Date().toISOString();
 const corpus = {
@@ -457,7 +751,8 @@ const corpus = {
   keepGoing: args.has('--keep-going'),
   pairAuthority: PAIR_AUTHORITY,
   imageAuthority: IMAGE_AUTHORITY,
-  sequenceAuthority: temporalSequenceMode ? SEQUENCE_AUTHORITY : null,
+  sequenceAuthority: activeSequenceAuthority,
+  sequenceMode,
   temporalSequenceMode,
   supervisedResidualTrainingSuitable: !args.has('--dry-run'),
   lowRenderScales,
@@ -466,6 +761,7 @@ const corpus = {
   settleMs,
   framesPerSequence,
   frameStrideMs,
+  controlledStepDeltaMs,
   windowSize: String(args.get('--window-size') || '1280,960'),
   evidenceMode: String(args.get('--evidence-mode') || 'performance'),
   requestedVariantCount: variants.length,

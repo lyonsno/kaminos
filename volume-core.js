@@ -6502,6 +6502,140 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     };
   }
 
+  async function controlledStepFrame(options = {}) {
+    if (!state.active || !device) return { ok: false, reason: 'inactive', ...state };
+    const requestedScales = Array.isArray(options.renderScales) ? options.renderScales : [];
+    const renderScales = requestedScales
+      .map(scale => normalizeRenderScale(scale))
+      .filter(scale => Number.isFinite(scale));
+    if (!renderScales.length) return { ok: false, reason: 'missing-render-scales', ...state };
+    cancelAnimationFrame(raf);
+    if (device.queue?.onSubmittedWorkDone) {
+      await device.queue.onSubmittedWorkDone();
+    }
+    const controlledStepFrameIndex = Math.max(0, Math.floor(Number(options.controlledStepFrameIndex) || 0));
+    const sequenceStartNowMs = options.startNow !== null && options.startNow !== undefined && Number.isFinite(Number(options.startNow))
+      ? Number(options.startNow)
+      : performance.now();
+    const controlledStepDeltaMs = Math.max(0, Number.isFinite(Number(options.stepDeltaMs)) ? Number(options.stepDeltaMs) : 220);
+    const controlledStepNowMs = sequenceStartNowMs + controlledStepFrameIndex * controlledStepDeltaMs;
+    const sameBrowserSessionId = options.sameBrowserSessionId
+      ? String(options.sameBrowserSessionId)
+      : `same-browser-f${state.frameCount}-s${state.simStepCount}-${Math.round(sequenceStartNowMs)}`;
+    let controlledStepCapture = null;
+    if (options.advanceSim === true) {
+      const beforeFrameCount = state.frameCount;
+      const beforeSimStepCount = state.simStepCount;
+      const stepSample = await sampleFrame({
+        advanceSim: true,
+        includeRgba: false,
+        now: controlledStepNowMs,
+        sameStateCaptureId: `${sameBrowserSessionId}-advance-${controlledStepFrameIndex}`,
+        baseFrameCount: beforeFrameCount,
+        baseSimStepCount: beforeSimStepCount,
+      });
+      controlledStepCapture = {
+        ok: stepSample.ok,
+        sampleAuthority: 'controlled-step-sim-advance',
+        sourceSampleAuthority: stepSample.sampleAuthority,
+        beforeFrameCount,
+        beforeSimStepCount,
+        afterFrameCount: state.frameCount,
+        afterSimStepCount: state.simStepCount,
+        controlledStepNowMs,
+      };
+    } else {
+      controlledStepCapture = {
+        ok: true,
+        sampleAuthority: 'controlled-step-initial-state',
+        beforeFrameCount: state.frameCount,
+        beforeSimStepCount: state.simStepCount,
+        afterFrameCount: state.frameCount,
+        afterSimStepCount: state.simStepCount,
+        controlledStepNowMs,
+      };
+    }
+    const sameStateCaptureId = `${sameBrowserSessionId}-frame-${String(controlledStepFrameIndex + 1).padStart(3, '0')}-s${state.simStepCount}`;
+    const scaleSet = await sampleRenderScaleSet({
+      renderScales,
+      includeRgba: options.includeRgba === true,
+      now: controlledStepNowMs,
+      sameStateCaptureId,
+      resumeRenderLoop: false,
+    });
+    return {
+      ok: scaleSet.ok === true && controlledStepCapture.ok !== false,
+      sequenceAuthority: 'controlled-step-sequence-v0',
+      controlledStepFrameIndex,
+      controlledStepDeltaMs,
+      controlledStepNowMs,
+      sequenceStartNowMs,
+      sameBrowserSessionId,
+      controlledStepCapture,
+      scaleSet,
+    };
+  }
+
+  async function controlledStepSequence(options = {}) {
+    if (!state.active || !device) return { ok: false, reason: 'inactive', ...state };
+    const requestedFrameCount = Math.max(1, Math.floor(Number(options.frameCount) || 1));
+    const requestedScales = Array.isArray(options.renderScales) ? options.renderScales : [];
+    const renderScales = requestedScales
+      .map(scale => normalizeRenderScale(scale))
+      .filter(scale => Number.isFinite(scale));
+    if (!renderScales.length) return { ok: false, reason: 'missing-render-scales', ...state };
+    const startNow = options.startNow !== null && options.startNow !== undefined && Number.isFinite(Number(options.startNow))
+      ? Number(options.startNow)
+      : performance.now();
+    const controlledStepDeltaMs = Math.max(0, Number.isFinite(Number(options.stepDeltaMs)) ? Number(options.stepDeltaMs) : 220);
+    const startFrameCount = state.frameCount;
+    const startSimStepCount = state.simStepCount;
+    const sameBrowserSessionId = options.sameBrowserSessionId
+      ? String(options.sameBrowserSessionId)
+      : `same-browser-f${startFrameCount}-s${startSimStepCount}-${Math.round(startNow)}`;
+    const frames = [];
+    const controlsBefore = { ...controlsSnapshot };
+    try {
+      for (let frameIndex = 0; frameIndex < requestedFrameCount; frameIndex += 1) {
+        const frame = await controlledStepFrame({
+          controlledStepFrameIndex: frameIndex,
+          frameCount: requestedFrameCount,
+          advanceSim: frameIndex > 0,
+          sameBrowserSessionId,
+          startNow,
+          stepDeltaMs: controlledStepDeltaMs,
+          renderScales,
+          includeRgba: options.includeRgba === true,
+          resumeRenderLoop: false,
+        });
+        frames.push(frame);
+      }
+    } finally {
+      controlsSnapshot = controlsBefore;
+      resetTemporalHistory('controlled-step-sequence-restore');
+      if (options.resumeRenderLoop !== false && state.active) {
+        cancelAnimationFrame(raf);
+        raf = requestAnimationFrame(render);
+      }
+    }
+    return {
+      ok: frames.every(frame => frame.ok === true),
+      sequenceAuthority: 'controlled-step-sequence-v0',
+      sampleAuthority: 'controlled-step-sim-advance',
+      sameBrowserSessionId,
+      controlledStepDeltaMs,
+      requestedFrameCount,
+      startFrameCount,
+      startSimStepCount,
+      startNowMs: startNow,
+      renderScales,
+      frames,
+      effectiveRoute: state.effectiveRoute,
+      prototypeIdentity: state.prototypeIdentity,
+      backend: state.backend,
+    };
+  }
+
   async function renderFrozenScaleToCanvas(options = {}) {
     if (!state.active || !device) return { ok: false, reason: 'inactive', ...state };
     cancelAnimationFrame(raf);
@@ -6705,6 +6839,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     },
     sampleFrame,
     sampleRenderScaleSet,
+    controlledStepFrame,
+    controlledStepSequence,
     renderFrozenScaleToCanvas,
     dispose() {
       this.setActive(false);
