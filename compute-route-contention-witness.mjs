@@ -160,13 +160,11 @@ function runtimeQualityFromVolumeWitness(volumeWitnessReport = {}) {
 
 function visualSourceTruthFromVolumeWitness(volumeWitnessReport = {}) {
   const sourceTruth = cloneObject(volumeWitnessReport.visualSourceTruth) || {};
-  const source = sourceTruth.source || (
-    volumeWitnessReport.evidenceMode === 'fixture' ? 'fixture' : 'live-webgpu-volume'
-  );
+  const source = sourceTruth.source || 'unwitnessed';
   return {
     source,
     fallbackReason: sourceTruth.fallbackReason || null,
-    mayClaimLiveNovelty: sourceTruth.mayClaimLiveNovelty ?? source === 'live-webgpu-volume',
+    mayClaimLiveNovelty: sourceTruth.mayClaimLiveNovelty ?? false,
   };
 }
 
@@ -634,7 +632,21 @@ function normalizeRequestedVisualBudget(requestedVisualBudget = {}) {
   };
 }
 
-function assertPrimaryEvidenceAllowed({ visualBudget, timing, sourceTruthWarnings, fixtureOrCachedRoute }) {
+function visualSourceTruthBlocksPrimary(visualSourceTruth = null) {
+  const source = visualSourceTruth?.source || 'unwitnessed';
+  return source === 'unwitnessed'
+    || ['cached-volume', 'prerender', 'fixture', 'failed', 'fallback'].includes(source)
+    || Boolean(visualSourceTruth?.fallbackReason)
+    || visualSourceTruth?.mayClaimLiveNovelty !== true;
+}
+
+function assertPrimaryEvidenceAllowed({
+  visualBudget,
+  visualSourceTruth,
+  timing,
+  sourceTruthWarnings,
+  fixtureOrCachedRoute,
+}) {
   if (!timing?.evidenceSource || !timing?.disclaimer) {
     throw new Error('timing evidenceSource and disclaimer are required');
   }
@@ -645,6 +657,9 @@ function assertPrimaryEvidenceAllowed({ visualBudget, timing, sourceTruthWarning
   }
   if (visualBudget?.requested?.prerecorded === true || visualBudget?.requested?.liveSimulation === false) {
     throw new Error('pre-recorded visual budget cannot be primary contention evidence');
+  }
+  if (visualSourceTruthBlocksPrimary(visualSourceTruth)) {
+    throw new Error('non-live visual source truth cannot be primary contention evidence');
   }
   if (fixtureOrCachedRoute) {
     throw new Error(`fixture or cached route cannot be primary contention evidence: ${sourceTruthWarnings.join(', ')}`);
@@ -671,11 +686,17 @@ export function buildComputeRouteContentionWitness({
   generatedAt = new Date().toISOString(),
 } = {}) {
   const normalizedWarnings = unique(sourceTruthWarnings);
+  const normalizedVisualSourceTruth = visualSourceTruth || {
+    source: 'unwitnessed',
+    fallbackReason: null,
+    mayClaimLiveNovelty: false,
+  };
   const fixtureOrCachedRoute = normalizedWarnings.some(warning => /fixture|cached|fallback/i.test(warning))
     || ['fixture', 'cached', 'fallback', 'missing-backend'].includes(routePhase?.active?.statusBadge)
     || ['fixture', 'cached', 'fallback', 'missing-backend'].includes(routePhase?.final?.statusBadge);
   assertPrimaryEvidenceAllowed({
     visualBudget,
+    visualSourceTruth: normalizedVisualSourceTruth,
     timing,
     sourceTruthWarnings: normalizedWarnings,
     fixtureOrCachedRoute,
@@ -712,11 +733,7 @@ export function buildComputeRouteContentionWitness({
     visualBudget: visualBudget || {},
     timing,
     frameTailDamage,
-    visualSourceTruth: visualSourceTruth || {
-      source: 'unwitnessed',
-      fallbackReason: null,
-      mayClaimLiveNovelty: false,
-    },
+    visualSourceTruth: normalizedVisualSourceTruth,
     effectiveVolumeParams: effectiveVolumeParams || {
       renderScale: null,
       reconstructionStyle: null,
@@ -762,6 +779,7 @@ export function buildComputeRouteContentionWitness({
       missingTiming,
       prerecordedMainPath: visualBudget?.requested?.prerecorded === true || visualBudget?.requested?.liveSimulation === false,
       fixtureOrCachedRoute,
+      visualSourceNotLive: visualSourceTruthBlocksPrimary(normalizedVisualSourceTruth),
       missingRouteTelemetry: asArray(normalizedRouteTelemetry.telemetryWarnings).some(warning => (
         warning === 'route_telemetry_missing'
           || warning === 'pipeline_report_missing'
@@ -792,9 +810,11 @@ export function buildComputeRouteContentionWitnessFromReport(report, {
     requested: normalizeRequestedVisualBudget(requestedVisualBudget),
     effective: effectiveVisualBudgetFromVolumeWitness(report.visualWitnessReport || {}),
   };
+  const visualSourceTruth = visualSourceTruthFromVolumeWitness(report.visualWitnessReport || {});
   const timing = timingFromVolumeWitness(report.visualWitnessReport || {});
   assertPrimaryEvidenceAllowed({
     visualBudget,
+    visualSourceTruth,
     timing,
     sourceTruthWarnings,
     fixtureOrCachedRoute,
@@ -808,7 +828,7 @@ export function buildComputeRouteContentionWitnessFromReport(report, {
     },
     visualBudget,
     timing,
-    visualSourceTruth: visualSourceTruthFromVolumeWitness(report.visualWitnessReport || {}),
+    visualSourceTruth,
     effectiveVolumeParams: effectiveVolumeParamsFromVolumeWitness(report.visualWitnessReport || {}),
     pipelineScheduler: pipelineSchedulerFromReport(report),
     scheduler: schedulerFromReport(report),

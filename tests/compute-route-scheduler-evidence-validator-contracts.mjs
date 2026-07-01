@@ -52,11 +52,18 @@ const timing = {
   queueDoneP95Ms: 140,
 };
 
+const visualSourceTruth = {
+  source: 'live-webgpu-volume',
+  fallbackReason: null,
+  mayClaimLiveNovelty: true,
+};
+
 function witnessForScheduler(scheduler, extra = {}) {
   return buildComputeRouteContentionWitness({
     routeIdentity,
     routePhase,
     visualBudget,
+    visualSourceTruth,
     timing,
     scheduler,
     ...extra,
@@ -449,6 +456,11 @@ const adapterOnlyReport = {
     timingEvidenceSource: 'raf-and-queue-proxy',
     timingDisclaimer: 'not-gpu-exclusive-or-present-latency',
     frameCount: 120,
+    visualSourceTruth: {
+      source: 'live-webgpu-volume',
+      fallbackReason: null,
+      mayClaimLiveNovelty: true,
+    },
     timing: {
       timingEvidenceSource: 'raf-and-queue-proxy',
       timingDisclaimer: 'not-gpu-exclusive-or-present-latency',

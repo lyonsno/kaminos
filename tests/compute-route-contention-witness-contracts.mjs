@@ -116,6 +116,11 @@ const baseVisualReport = {
       adaptiveRays: 0.65,
       renderScale: 0.75,
     },
+    visualSourceTruth: {
+      source: 'live-webgpu-volume',
+      fallbackReason: null,
+      mayClaimLiveNovelty: true,
+    },
     simCostLedger: {
       simCostEvidenceSource: 'cpu-structural-pass-ledger-plus-raf-queue-proxy',
       fullGridPassesPerFrame: 5,
@@ -428,10 +433,17 @@ assert.equal(pipelineSchedulerWitness.effectiveVolumeParams.reconstructionStyle,
 assert.equal(pipelineSchedulerWitness.effectiveVolumeParams.majorantCadence, 8);
 assert.equal(pipelineSchedulerWitness.falseClosureChecks.schedulerUnverified, false);
 
+const liveVisualSourceTruth = {
+  source: 'live-webgpu-volume',
+  fallbackReason: null,
+  mayClaimLiveNovelty: true,
+};
+
 assert.throws(() => buildComputeRouteContentionWitness({
   routeIdentity: witness.routeIdentity,
   routePhase: witness.routePhase,
   visualBudget: witness.visualBudget,
+  visualSourceTruth: liveVisualSourceTruth,
   timing: { frameP95Ms: 33 },
 }), /timing evidenceSource and disclaimer are required/);
 
@@ -439,6 +451,7 @@ assert.throws(() => buildComputeRouteContentionWitness({
   routeIdentity: witness.routeIdentity,
   routePhase: witness.routePhase,
   visualBudget: witness.visualBudget,
+  visualSourceTruth: liveVisualSourceTruth,
   timing: {
     evidenceSource: 'raf-and-queue-proxy',
     disclaimer: 'not-gpu-exclusive-or-present-latency',
@@ -518,6 +531,7 @@ const optimisticSchedulerWithoutEffective = buildComputeRouteContentionWitness({
   routeIdentity: witness.routeIdentity,
   routePhase: witness.routePhase,
   visualBudget: witness.visualBudget,
+  visualSourceTruth: liveVisualSourceTruth,
   timing: {
     evidenceSource: 'raf-and-queue-proxy',
     disclaimer: 'not-gpu-exclusive-or-present-latency',
@@ -540,6 +554,7 @@ const partialVerifiedSchedulerWithoutEffective = buildComputeRouteContentionWitn
   routeIdentity: witness.routeIdentity,
   routePhase: witness.routePhase,
   visualBudget: witness.visualBudget,
+  visualSourceTruth: liveVisualSourceTruth,
   timing: {
     evidenceSource: 'raf-and-queue-proxy',
     disclaimer: 'not-gpu-exclusive-or-present-latency',
@@ -559,6 +574,7 @@ const p99OnlyWitness = buildComputeRouteContentionWitness({
   routeIdentity: witness.routeIdentity,
   routePhase: witness.routePhase,
   visualBudget: witness.visualBudget,
+  visualSourceTruth: liveVisualSourceTruth,
   timing: {
     evidenceSource: 'raf-and-queue-proxy',
     disclaimer: 'not-gpu-exclusive-or-present-latency',
@@ -570,6 +586,22 @@ assert.equal(p99OnlyWitness.falseClosureChecks.missingTiming, false);
 assert.equal(p99OnlyWitness.frameTailDamage.bucket, 'clean');
 assert.ok(p99OnlyWitness.frameTailDamage.reasons.includes('frame_p99_clean'));
 assert.ok(p99OnlyWitness.frameTailDamage.reasons.includes('queue_p99_clean'));
+
+assert.throws(() => buildComputeRouteContentionWitnessFromReport({
+  ...baseVisualReport,
+  visualWitnessReport: {
+    ...baseVisualReport.visualWitnessReport,
+    visualSourceTruth: {
+      source: 'cached-volume',
+      fallbackReason: 'cache-hit',
+      mayClaimLiveNovelty: false,
+    },
+  },
+}), /non-live visual source truth cannot be primary contention evidence/);
+
+const missingVisualSourceTruthReport = structuredClone(baseVisualReport);
+delete missingVisualSourceTruthReport.visualWitnessReport.visualSourceTruth;
+assert.throws(() => buildComputeRouteContentionWitnessFromReport(missingVisualSourceTruthReport), /non-live visual source truth cannot be primary contention evidence/);
 
 const tmp = mkdtempSync(join(tmpdir(), 'kaminos-contention-witness-contract-'));
 const inputReport = join(tmp, 'compute-route-fire-report.json');

@@ -99,6 +99,11 @@ const telemetryReport = {
     timingEvidenceSource: 'raf-and-queue-proxy',
     timingDisclaimer: 'not-gpu-exclusive-or-present-latency',
     frameCount: 144,
+    visualSourceTruth: {
+      source: 'live-webgpu-volume',
+      fallbackReason: null,
+      mayClaimLiveNovelty: true,
+    },
     timing: {
       timingEvidenceSource: 'raf-and-queue-proxy',
       timingDisclaimer: 'not-gpu-exclusive-or-present-latency',
