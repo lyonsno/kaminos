@@ -166,3 +166,34 @@ This route proves a lower-poly, whole-object, UV-bearing target can receive bake
   - `/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-generated-asset-raw43k-unwrap-bake-smoke-20260701Twinding-repair/direct-glb-witness.png`
 - Target winding repair flipped `103 / 43,671` faces (`0.0023585` ratio), with `9,677` components, `37,674` boundary edges, `36` non-manifold edges, and `42` conflict edges.
 - Visual witness remained materially similar to the material-bound/normals smoke: the correction is real GLB hygiene, but it is not the visual fix for the raw43k target. Keep the next investigation pointed at target topology quality, projection/material pickup, or component/segmentation routes rather than blaming the whole screenshot on mixed winding.
+
+2026-07-01 clay geometry discriminator:
+
+- Witness manifest:
+  `/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-generated-asset-clay-witness-20260701Tmolten-discriminator/generated-asset-clay-witness-manifest.json`
+- Contact sheet:
+  `/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-generated-asset-clay-witness-20260701Tmolten-discriminator/generated-asset-clay-contact-sheet.png`
+- Report:
+  `/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-generated-asset-clay-witness-20260701Tmolten-discriminator/generated-asset-clay-witness-report.json`
+
+The clay witness renders GLBs through the normal Kaminos direct-GLB route with
+`glb_material=clay`, replacing source textures/materials with a neutral,
+double-sided clay material and recording `kaminosClayMaterialDebugState`.
+
+Inspected comparison:
+
+- Source 350k Trellis GLB: coherent clay geometry.
+- glTF Transform floor output around 110k: coherent clay geometry and visually
+  close to the source under this view.
+- raw43k xatlas target before bake: shredded under clay before texture transfer.
+- raw43k baked winding-repair output: materially the same shredded silhouette as
+  the raw43k target under clay.
+
+Verdict:
+
+The raw43k route's current visible failure is primarily target topology quality,
+not bake projection, material binding, double-sided rendering, or generated
+normal export. Projection/material debugging can wait until there is a lower
+target whose clay geometry reads coherently. The next reduction route should be
+an intermediate topology ladder, component/segmentation route, or different
+target-generation method rather than more bake tuning on this raw43k mesh.

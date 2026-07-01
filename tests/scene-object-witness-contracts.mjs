@@ -15,6 +15,7 @@ const indexHtml = readFileSync(indexPath, 'utf8');
 assert.match(witness, /const scenario\s*=\s*args\.get\('--scenario'\) \|\| 'append-select-remove-keyboard'/, 'witness records an explicit default scenario');
 assert.match(witness, /startup-empty/, 'witness supports an empty-startup scenario');
 assert.match(witness, /direct-glb-load/, 'witness supports direct GLB deep-link visual smoke');
+assert.match(witness, /direct-glb-clay-load/, 'witness supports direct GLB clay material visual smoke');
 assert.match(witness, /selected-delete-shortcut/, 'witness supports selected-object Delete shortcut removal');
 assert.match(witness, /save-load-roundtrip/, 'witness supports a browser scene save/load roundtrip scenario');
 assert.match(witness, /transform-inspector/, 'witness supports a selected-object transform inspector scenario');
@@ -68,6 +69,8 @@ assert.match(witness, /startup did not remain empty before explicit import/, 'wi
 assert.match(witness, /startup empty scene did not show object-list empty state/, 'witness proves empty startup exposes the empty object list state');
 assert.match(witness, /startup empty scene lost manual demo affordance/, 'witness proves empty startup still exposes manual demo import');
 assert.match(witness, /kaminosDirectGlbLoadState/, 'direct GLB witness reads explicit route load state');
+assert.match(witness, /kaminosClayMaterialDebugState/, 'direct GLB clay witness reads explicit material override state');
+assert.match(witness, /direct GLB clay material override did not apply/, 'direct GLB clay witness fails when clay override is absent');
 assert.match(witness, /direct GLB deep-link did not load/, 'direct GLB witness fails when the route does not report loaded');
 assert.match(witness, /direct GLB deep-link did not register exactly one scene object row/, 'direct GLB witness proves the loaded GLB entered the object list');
 assert.match(witness, /direct GLB deep-link did not preserve label identity/, 'direct GLB witness proves the loaded GLB keeps route label identity');

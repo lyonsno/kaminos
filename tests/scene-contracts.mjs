@@ -202,6 +202,9 @@ assert.match(index, /glb_path/, 'URL route can deep-link a local GLB path for di
 assert.match(index, /glb_url/, 'URL route can deep-link an already served GLB URL for direct operator inspection');
 assert.match(index, /\/api\/local-artifact\?path=/, 'local GLB path deep links route through the guarded local artifact endpoint');
 assert.match(index, /kaminosDirectGlbLoadState/, 'direct GLB deep-link route exposes load state for visual-smoke witnesses');
+assert.match(index, /glb_material/, 'direct GLB deep-link route accepts an explicit material override parameter');
+assert.match(index, /kaminosApplyClayGeometryMaterial/, 'Kaminos exposes a clay geometry material override for generated-asset topology witnesses');
+assert.match(index, /kaminosClayMaterialDebugState/, 'Kaminos exposes clay material override debug state for visual witnesses');
 assert.match(index, /showGLB\(url,[\s\S]*source:\s*url,[\s\S]*type:\s*'glb'/, 'direct GLB deep-link route loads through the same source-preserving GLB inspector path');
 assert.match(index, /greenroomImportMesh\([\s\S]*clear:\s*false/, 'Greenroom Import appends explicitly without relying on the Assets tab Append checkbox');
 assert.match(index, /greenroomImportSplat\([\s\S]*clear:\s*false/, 'Greenroom Import Splat appends explicitly without relying on the Assets tab Append checkbox');

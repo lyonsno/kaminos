@@ -1705,11 +1705,13 @@ async function runDirectGlbLoadScenario(ws) {
         pressed: row.getAttribute('aria-pressed'),
       }));
       const sceneDebug = window.kaminosSceneObjectDebugState?.() || [];
+      const clayMaterial = window.kaminosClayMaterialDebugState?.() || null;
       const canvas = document.querySelector('canvas');
       return {
         state,
         rows,
         sceneDebug,
+        clayMaterial,
         info: document.getElementById('info-bar')?.textContent?.trim() || '',
         canvas: canvas ? { width: canvas.width, height: canvas.height } : null,
         transformBarVisible: document.getElementById('transform-bar')?.classList.contains('visible') || false,
@@ -1735,6 +1737,17 @@ async function runDirectGlbLoadScenario(ws) {
   }
   if (!lastEvidence.directGlbLoad.transformBarVisible) {
     throw new Error(`direct GLB deep-link did not expose transform controls: ${JSON.stringify(lastEvidence.directGlbLoad)}`);
+  }
+  if (scenario === 'direct-glb-clay-load') {
+    if (state.materialMode !== 'clay') {
+      throw new Error(`direct GLB clay material route did not preserve requested mode: ${JSON.stringify(lastEvidence.directGlbLoad)}`);
+    }
+    if (state.clayMaterial?.status !== 'applied' || lastEvidence.directGlbLoad.clayMaterial?.status !== 'applied') {
+      throw new Error(`direct GLB clay material override did not apply: ${JSON.stringify(lastEvidence.directGlbLoad)}`);
+    }
+    if (!lastEvidence.directGlbLoad.clayMaterial.meshCount) {
+      throw new Error(`direct GLB clay material override saw no meshes: ${JSON.stringify(lastEvidence.directGlbLoad)}`);
+    }
   }
 }
 
@@ -4360,7 +4373,7 @@ try {
 
   if (scenario === 'startup-empty') {
     await runStartupEmptyScenario(ws);
-  } else if (scenario === 'direct-glb-load') {
+  } else if (scenario === 'direct-glb-load' || scenario === 'direct-glb-clay-load') {
     await runDirectGlbLoadScenario(ws);
   } else if (scenario === 'append-select-remove-keyboard') {
     await runAppendSelectRemoveKeyboardScenario(ws);

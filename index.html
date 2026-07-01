@@ -1220,6 +1220,7 @@ let sceneSaveBlockedByFailedRestore = false;
 let greenroomPreviewState = null;
 let greenroomPreviewGeneration = 0;
 let directGlbLoadState = null;
+let clayMaterialDebugState = null;
 let sceneMutationToken = 0;
 let viewportPointerDown = null;
 let viewportSuppressedClick = null;
@@ -9191,6 +9192,7 @@ function directGlbDeepLinkFromParams(params) {
   const fallbackName = (requested || 'model.glb').split(/[\\/]/).pop() || 'model.glb';
   const fileName = params.get('glb_file') || fallbackName;
   const label = params.get('glb_label') || fileName;
+  const materialMode = params.get('glb_material') || 'source';
   return {
     schema: 'kaminos.direct-glb-deep-link.v0',
     route: localPath ? 'glb_path' : 'glb_url',
@@ -9198,12 +9200,60 @@ function directGlbDeepLinkFromParams(params) {
     url,
     fileName,
     label,
+    materialMode,
   };
 }
+
+function kaminosApplyClayGeometryMaterial(object, options = {}) {
+  if (!object) throw new Error('clay material override requires a scene object');
+  const color = options.color ?? 0xb8b2a7;
+  const roughness = options.roughness ?? 0.86;
+  const metalness = options.metalness ?? 0.0;
+  const side = options.side ?? THREE.DoubleSide;
+  let meshCount = 0;
+  let materialCount = 0;
+  const material = new THREE.MeshStandardMaterial({
+    name: 'kaminos-clay-geometry-witness-material',
+    color,
+    roughness,
+    metalness,
+    side,
+    envMapIntensity: parseFloat(document.getElementById('env-intensity-slider').value || '1'),
+  });
+  object.traverse(child => {
+    if (!child.isMesh) return;
+    meshCount++;
+    if (Array.isArray(child.material)) materialCount += child.material.length;
+    else if (child.material) materialCount++;
+    child.material = material.clone();
+    child.material.needsUpdate = true;
+    child.castShadow = true;
+    child.receiveShadow = true;
+  });
+  clayMaterialDebugState = {
+    schema: 'kaminos.clay-geometry-material.v0',
+    status: meshCount > 0 ? 'applied' : 'empty',
+    materialMode: 'clay',
+    meshCount,
+    replacedMaterialCount: materialCount,
+    color,
+    roughness,
+    metalness,
+    side: side === THREE.DoubleSide ? 'DoubleSide' : side === THREE.BackSide ? 'BackSide' : 'FrontSide',
+    appliedAt: new Date().toISOString(),
+  };
+  return clayMaterialDebugState;
+}
+
+window.kaminosApplyClayGeometryMaterial = kaminosApplyClayGeometryMaterial;
+window.kaminosClayMaterialDebugState = function() {
+  return clayMaterialDebugState;
+};
 
 async function loadDirectGlbDeepLink(params = new URLSearchParams(window.location.search)) {
   const route = directGlbDeepLinkFromParams(params);
   if (!route) return null;
+  clayMaterialDebugState = null;
   directGlbLoadState = {
     ...route,
     status: 'loading',
@@ -9212,7 +9262,7 @@ async function loadDirectGlbDeepLink(params = new URLSearchParams(window.locatio
   };
   try {
     const url = route.url;
-    await showGLB(url, {
+    const model = await showGLB(url, {
       clear: true,
       metadata: {
         source: url,
@@ -9222,10 +9272,16 @@ async function loadDirectGlbDeepLink(params = new URLSearchParams(window.locatio
         directGlbRoute: route,
       },
     });
+    if (route.materialMode === 'clay') {
+      kaminosApplyClayGeometryMaterial(model, { route });
+    } else if (route.materialMode !== 'source') {
+      throw new Error(`unsupported direct GLB material mode: ${route.materialMode}`);
+    }
     directGlbLoadState = {
       ...directGlbLoadState,
       status: 'loaded',
       loadedAt: new Date().toISOString(),
+      clayMaterial: clayMaterialDebugState,
     };
     setInfo(`Direct GLB loaded: ${route.label}`);
     return directGlbLoadState;
