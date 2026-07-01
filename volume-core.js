@@ -323,6 +323,13 @@ const FIRE_LICK_BREAKUP_BYPASS_THRESHOLD = 0.0005;
 const PYRO_DYNAMIC_DETAIL_ATLAS_IDENTITY = 'pyro-dynamic-detail-atlas-v0';
 const PYRO_DYNAMIC_DETAIL_AUTHORITY_SOURCE = 'pyro-dynamic-detail-authority-live-fields-v0';
 const PYRO_DYNAMIC_DETAIL_RESET_POLICY = 'pyro-dynamic-detail-reset-policy-v0';
+const PYRO_DYNAMIC_DETAIL_MATERIAL_CONTRACT = 'pyro-dynamic-detail-material-contract-v0';
+const PYRO_DYNAMIC_DETAIL_TEXTURE_LAYOUT = {
+  width: 8,
+  height: 3,
+  channels: 4,
+  channelOrder: ['energy', 'confidence', 'liveFireAuthority', 'smokeAuthority'],
+};
 
 function externalEmitterBufferBytes() {
   return MAX_EXTERNAL_EMITTERS * EXTERNAL_EMITTER_COMPONENTS * Float32Array.BYTES_PER_ELEMENT;
@@ -3472,6 +3479,16 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       lastUpdateFrame: 0,
       lastInputKind: 'initial',
       atlasCells: new Array(24).fill(0),
+      materialMemory: {
+        identity: PYRO_DYNAMIC_DETAIL_MATERIAL_CONTRACT,
+        authoritySource: PYRO_DYNAMIC_DETAIL_AUTHORITY_SOURCE,
+        resetPolicy: PYRO_DYNAMIC_DETAIL_RESET_POLICY,
+        visualRole: 'renderer-adjacent-detail-memory-not-main-fire',
+        textureLayout: { ...PYRO_DYNAMIC_DETAIL_TEXTURE_LAYOUT },
+        shaderReadiness: 'blocked-reset',
+        sampleVector4: new Array(24).fill(0).map(() => [0, 0, 0, 0]),
+        energyMean: 0,
+      },
     },
     lastFrameEnergy: 0,
     timing: {
@@ -3504,6 +3521,47 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       ...detail,
       resetReasons: Array.isArray(detail.resetReasons) ? [...detail.resetReasons] : [],
       atlasCells: Array.isArray(detail.atlasCells) ? [...detail.atlasCells] : [],
+      materialMemory: detail.materialMemory
+        ? {
+            ...detail.materialMemory,
+            textureLayout: detail.materialMemory.textureLayout ? { ...detail.materialMemory.textureLayout } : null,
+            sampleVector4: Array.isArray(detail.materialMemory.sampleVector4)
+              ? detail.materialMemory.sampleVector4.map(sample => Array.isArray(sample) ? [...sample] : sample)
+              : [],
+          }
+        : null,
+    };
+  }
+
+  function buildPyroDynamicDetailMaterialMemory({
+    atlasCells,
+    resetGate,
+    confidence,
+    liveFireAuthority,
+    smokeAuthority,
+    stateEnergy,
+  }) {
+    const usable = !resetGate;
+    const sampleVector4 = new Array(PYRO_DYNAMIC_DETAIL_TEXTURE_LAYOUT.width * PYRO_DYNAMIC_DETAIL_TEXTURE_LAYOUT.height)
+      .fill(0)
+      .map((_, index) => {
+        const energy = usable ? clampFinite(atlasCells[index], 0, 1, 0) : 0;
+        return [
+          energy,
+          usable ? clampFinite(confidence, 0, 1, 0) : 0,
+          usable ? clampFinite(liveFireAuthority, 0, 1, 0) : 0,
+          usable ? clampFinite(smokeAuthority, 0, 1, 0) : 0,
+        ];
+      });
+    return {
+      identity: PYRO_DYNAMIC_DETAIL_MATERIAL_CONTRACT,
+      authoritySource: PYRO_DYNAMIC_DETAIL_AUTHORITY_SOURCE,
+      resetPolicy: PYRO_DYNAMIC_DETAIL_RESET_POLICY,
+      visualRole: 'renderer-adjacent-detail-memory-not-main-fire',
+      textureLayout: { ...PYRO_DYNAMIC_DETAIL_TEXTURE_LAYOUT },
+      shaderReadiness: resetGate ? 'blocked-reset' : 'sampleable-debug-only',
+      sampleVector4,
+      energyMean: usable ? clampFinite(stateEnergy, 0, 1, 0) : 0,
     };
   }
 
@@ -3598,6 +3656,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       lastReadbackAgeMs: Number.isFinite(pyroDynamicDetailLastReadbackMs) ? Math.max(0, now - pyroDynamicDetailLastReadbackMs) : null,
       lastInputKind: inputKind,
       atlasCells,
+      materialMemory: buildPyroDynamicDetailMaterialMemory({
+        atlasCells,
+        resetGate,
+        confidence: pyroDynamicDetailConfidence,
+        liveFireAuthority,
+        smokeAuthority,
+        stateEnergy: pyroDynamicDetailEnergy,
+      }),
     };
     return state.pyroDynamicDetail;
   }

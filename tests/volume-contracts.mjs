@@ -596,6 +596,11 @@ assert.match(core, /pyro-dynamic-detail-reset-policy-v0/, 'renderer names reset 
 assert.match(core, /pyroDynamicDetail/, 'debug state exposes Pyro dynamic detail state for witness and UI');
 assert.match(core, /visualRole:\s*'debug-atlas-only-not-main-fire'/, 'Pyro dynamic detail state is explicitly not main fire authority');
 assert.match(core, /pyroDynamicDetailLastInputMs/, 'Pyro dynamic detail tracks live input freshness separately from optional readback cadence');
+assert.match(core, /pyro-dynamic-detail-material-contract-v0/, 'Pyro dynamic detail exposes a stable renderer-adjacent material contract identity');
+assert.match(core, /materialMemory:\s*\{/, 'Pyro dynamic detail state carries material-memory payload for future shader sampling');
+assert.match(core, /PYRO_DYNAMIC_DETAIL_TEXTURE_LAYOUT\s*=\s*\{[\s\S]*width:\s*8[\s\S]*height:\s*3[\s\S]*channels:\s*4/, 'Pyro material memory declares a compact 8x3x4 texture layout');
+assert.match(core, /sampleVector4/, 'Pyro material memory exposes normalized RGBA-like sample vectors instead of UI-only scalar cells');
+assert.match(core, /shaderReadiness:\s*resetGate\s*\?\s*'blocked-reset'/, 'Pyro material memory blocks shader consumption while reset gates are active');
 assert.match(core, /reactionFuelScale/, 'fluid uniforms carry a route-visible tall-plume fuel/reaction scale');
 assert.match(core, /quenchVaporStrength/, 'fluid uniforms carry the cheap route-visible quench-vapor render strength');
 assert.match(core, /snuffVisualModel/, 'debug state names the active failure-snuff visual model');
