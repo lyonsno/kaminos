@@ -1384,6 +1384,7 @@ assert.match(interframeBaseline, /runExternalBaseline/, 'interframe baseline can
 assert.match(interframeBaseline, /externalBaselineCommand/, 'interframe baseline records the external command used to synthesize comparison frames');
 assert.match(interframeBaseline, /externalBaselineStdout/, 'interframe baseline records external runner stdout artifacts for successful commands');
 assert.match(interframeBaseline, /externalBaselineStderr/, 'interframe baseline records external runner stderr artifacts for successful commands');
+assert.match(interframeBaseline, /triplet-captured/, 'interframe baseline writes an interim triplet report before external candidate synthesis');
 assert.match(interframeBaseline, /actualMiddle/, 'interframe baseline preserves the actual middle frame as the comparison target');
 assert.match(interframeBaseline, /syntheticMiddle/, 'interframe baseline writes a synthesized middle-frame artifact');
 assert.match(interframeBaseline, /contactSheet/, 'interframe baseline writes an inspectable contact sheet for operator smoke');
@@ -1423,3 +1424,25 @@ assert.match(rifeBaseline, /--model-dir/, 'RIFE runner accepts caller-owned RIFE
 assert.match(rifeBaseline, /--out/, 'RIFE runner writes the synthesized middle frame to a caller-owned path');
 assert.match(rifeBaseline, /inferenceStdout/, 'RIFE runner sidecar records acquired model stdout');
 assert.match(rifeBaseline, /inferenceStderr/, 'RIFE runner sidecar records acquired model stderr');
+
+const practicalRifeBaselinePath = join(root, 'volume-practical-rife-baseline.py');
+assert.ok(existsSync(practicalRifeBaselinePath), 'volume Practical-RIFE learned baseline runner exists');
+const practicalRifeBaseline = existsSync(practicalRifeBaselinePath) ? readFileSync(practicalRifeBaselinePath, 'utf8') : '';
+assert.match(practicalRifeBaseline, /learned-practical-rife-425-lite-rgba-v0/, 'Practical-RIFE runner preserves a stable learned baseline identity');
+assert.match(practicalRifeBaseline, /RIFE_HDv3/, 'Practical-RIFE runner imports the acquired HDv3 model directly instead of relying on hard-resize inference_img.py');
+assert.match(practicalRifeBaseline, /synthetic-comparison-not-live-simulator-output/, 'Practical-RIFE runner labels output as synthetic comparison evidence');
+assert.match(practicalRifeBaseline, /--practical-rife-root/, 'Practical-RIFE runner accepts caller-owned Practical-RIFE checkout path');
+assert.match(practicalRifeBaseline, /--model-dir/, 'Practical-RIFE runner accepts caller-owned Practical-RIFE model directory');
+assert.match(practicalRifeBaseline, /--out/, 'Practical-RIFE runner writes the synthesized middle frame to a caller-owned path');
+assert.match(practicalRifeBaseline, /paddingMultiple/, 'Practical-RIFE runner sidecar records the model padding geometry');
+
+const routeAwareCompositeBaselinePath = join(root, 'volume-route-aware-composite-baseline.py');
+assert.ok(existsSync(routeAwareCompositeBaselinePath), 'volume route-aware composite baseline runner exists');
+const routeAwareCompositeBaseline = existsSync(routeAwareCompositeBaselinePath) ? readFileSync(routeAwareCompositeBaselinePath, 'utf8') : '';
+assert.match(routeAwareCompositeBaseline, /route-aware-rife-dis-mask-composite-rgba-v0/, 'route-aware composite runner preserves a stable baseline identity');
+assert.match(routeAwareCompositeBaseline, /synthetic-comparison-not-live-simulator-output/, 'route-aware composite runner labels output as synthetic comparison evidence');
+assert.match(routeAwareCompositeBaseline, /actualMiddleUsed[^\\n]+False|actualMiddleUsed[^\\n]+false/, 'route-aware composite runner records that actual middle was not used as input');
+assert.match(routeAwareCompositeBaseline, /--rife/, 'route-aware composite runner accepts learned parent synthetic path');
+assert.match(routeAwareCompositeBaseline, /--flow/, 'route-aware composite runner accepts stronger-flow parent synthetic path');
+assert.match(routeAwareCompositeBaseline, /--report/, 'route-aware composite runner accepts triplet report metadata path');
+assert.match(routeAwareCompositeBaseline, /effectiveRoute/, 'route-aware composite runner records route identity from the report');

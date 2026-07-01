@@ -1095,7 +1095,8 @@ function renderExternalBaselineCommand(spec, context) {
     .replaceAll('{third}', shellQuote(context.thirdPath))
     .replaceAll('{out}', shellQuote(context.outPath))
     .replaceAll('{outDir}', shellQuote(context.outDir))
-    .replaceAll('{report}', shellQuote(context.reportPath));
+    .replaceAll('{report}', shellQuote(context.reportPath))
+    .replaceAll('{candidateContext}', shellQuote(context.candidateContextPath));
 }
 
 function runExternalBaseline(spec, context) {
@@ -1267,6 +1268,7 @@ const artifactPaths = {
   t0: resolve(outDir, 'triplet-t0.png'),
   actualMiddle: resolve(outDir, 'triplet-t1-actual-middle.png'),
   t2: resolve(outDir, 'triplet-t2.png'),
+  candidateContext: resolve(outDir, 'candidate-context.json'),
   contactSheet: resolve(outDir, 'interframe-baseline-contact-sheet.png'),
   operatorEvidenceHtml: resolve(outDir, 'interframe-baseline-evidence.html'),
   baselines: Object.fromEntries(baselineIds.map(id => [id, {
@@ -1418,6 +1420,41 @@ try {
       t0ToT2: t2.simStepCount - t0.simStepCount,
     },
   };
+  const candidateContext = {
+    schema: 'kaminos.volume.interframe-candidate-context.v0',
+    status: 'triplet-captured',
+    authority: TRIPLET_AUTHORITY,
+    syntheticAuthority: SYNTHETIC_AUTHORITY,
+    requestedRoute: baseUrl,
+    effectiveRoute: tripletSummary.effectiveRoute,
+    prototypeIdentity: tripletSummary.prototypeIdentity,
+    backend: tripletSummary.backend,
+    width,
+    height,
+    frameStride,
+    framesAvailableToCandidate: ['t0', 't2'],
+    framesWithheldFromCandidate: ['actualMiddle'],
+    actualMiddleUsed: false,
+    t0: tripletSummary.t0,
+    t2: tripletSummary.t2,
+    frameCountDelta: {
+      t0ToT2: tripletSummary.frameCountDelta.t0ToT2,
+    },
+    simStepCountDelta: {
+      t0ToT2: tripletSummary.simStepCountDelta.t0ToT2,
+    },
+  };
+  writeJson(artifactPaths.candidateContext, candidateContext);
+  writeJson(reportPath, {
+    ...baseReport,
+    status: 'triplet-captured',
+    updatedAt: new Date().toISOString(),
+    triplet: tripletSummary,
+    candidateContext: {
+      path: artifactPaths.candidateContext,
+      actualMiddleUsed: false,
+    },
+  });
   const baselineReports = baselineIds.map(id => {
     const paths = artifactPaths.baselines[id];
     const externalSpec = externalBaselineById.get(id);
@@ -1427,6 +1464,7 @@ try {
       outPath: paths.syntheticMiddle,
       outDir,
       reportPath,
+      candidateContextPath: artifactPaths.candidateContext,
     }) : null;
     if (!externalSpec) {
       const syntheticMiddleRgba = baselineRgba(id, t0Rgba, t2Rgba, width, height);
@@ -1506,6 +1544,10 @@ try {
     status: 'captured',
     updatedAt: new Date().toISOString(),
     triplet: tripletSummary,
+    candidateContext: {
+      path: artifactPaths.candidateContext,
+      actualMiddleUsed: false,
+    },
     baseline: {
       ...baseReport.baseline,
       ...baselineReports.find(entry => entry.id === MIDPOINT_BASELINE_ID),
