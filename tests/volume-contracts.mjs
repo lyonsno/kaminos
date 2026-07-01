@@ -1015,6 +1015,10 @@ assert.match(core, /quench-vapor-v0/, 'failure snuff visual has a stable cheap q
 assert.match(core, /flameQuenchModel/, 'debug state names the active flame-body quench model separately from vapor');
 assert.match(core, /quench-flame-body-v0/, 'failure snuff damps the flame body instead of only painting vapor over it');
 assert.match(core, /quenchCoreCollapse/, 'render path computes a high-temperature flame-core collapse signal for snuff');
+assert.match(core, /preheatStrength/, 'debug state reports cheap preheat lifecycle strength');
+assert.match(core, /preheatVisualModel/, 'debug state names the active preheat lifecycle visual model');
+assert.match(core, /preheat-ember-rim-v0/, 'preheat lifecycle visual has a stable ember-rim identity');
+assert.match(core, /lifecycle_controls/, 'shader uniforms carry lifecycle mode separately from quench strength');
 assert.match(core, /normalizeRuntimeQuality/, 'volume core normalizes host-requested runtime quality');
 assert.match(core, /runtimeQualityRequested/, 'debug state records requested runtime quality separately from effective mode');
 assert.match(core, /runtimeQualityEffective/, 'debug state records the effective runtime quality mode');
@@ -1550,6 +1554,11 @@ assert.match(witness, /flameQuenchModel/, 'witness records the active flame-body
 assert.match(witness, /quench-flame-body-v0/, 'witness recognizes the snuff flame-body quench model');
 assert.match(witness, /expectsSnuffVisualEvidence/, 'witness accepts late snuff by vapor/smoke evidence instead of requiring active fire pixels');
 assert.match(witness, /bridged snuff vapor volume/, 'main-renderer witness names snuff vapor evidence separately from live fire');
+assert.match(witness, /expectedPreheatStrength/, 'witness verifies effective preheat lifecycle strength');
+assert.match(witness, /preheatVisualModel/, 'witness records the active preheat visual model identity');
+assert.match(witness, /preheat-ember-rim-v0/, 'witness recognizes the cheap preheat ember-rim model');
+assert.match(witness, /expectsPreheatVisualEvidence/, 'witness accepts preheat by warm ember/smoke evidence instead of requiring active fire');
+assert.match(witness, /bridged preheat volume/, 'main-renderer witness names preheat evidence separately from live fire');
 assert.match(witness, /fireFuelOverlapRatio/, 'witness records fire/fuel overlap evidence');
 assert.match(witness, /expectedTallPlumePreset/, 'witness reports effective tall-plume operator preset identity');
 assert.match(witness, /volume_expected_wind_drift/, 'witness can assert expected wind drift direction for tall-plume wind probes');
