@@ -354,10 +354,48 @@ writeFileSync(report, JSON.stringify({
 
         assert current["status"] == "running"
         assert current["progressEvents"][0]["schema"] == "kaminos.pipeline-progress.v0"
+        assert current["elapsedMs"] >= 0
+        assert current["progressQuietMs"] >= 0
+        assert current["latestProgress"]["receivedAt"]
+        assert current["latestProgress"]["receivedAtMs"] > 0
         assert current["latestProgress"]["phase"] == "stage:run-sharp-image-to-splat:image-encoder"
         assert current["latestProgress"]["message"] == "Running image encoder"
         assert current["latestProgress"]["progress"] == 0.42
         assert current["latestProgress"]["stream"] == "stdout"
+
+
+def test_image_asset_inbox_and_upload_are_first_class_source_inputs():
+    with TemporaryDirectory(dir="/tmp") as tmp:
+        root = Path(tmp)
+        image_inbox = root / "images" / "inbox"
+        image_inbox.mkdir(parents=True)
+        previous_roots = list(serve.ASSET_ROOTS)
+        previous_browse = dict(BROWSE_ROOTS)
+        serve.ASSET_ROOTS[:] = [
+            {
+                "id": "image-inbox",
+                "label": "Source Images",
+                "kind": "image",
+                "stage": "experimental",
+                "path": image_inbox,
+            },
+        ]
+        BROWSE_ROOTS["image-inbox"] = image_inbox
+        try:
+            entry = serve.ingest_compute_route_fire_image("../Sun Flower.PNG", b"not really a png")
+            entries = serve.list_asset_entries(kind="image")
+        finally:
+            serve.ASSET_ROOTS[:] = previous_roots
+            BROWSE_ROOTS.clear()
+            BROWSE_ROOTS.update(previous_browse)
+
+        assert entry["kind"] == "image"
+        assert entry["root_id"] == "image-inbox"
+        assert entry["name"] == "sun-flower.png"
+        assert entry["source"].startswith("/api/read?root=image-inbox&path=")
+        assert Path(entry["serverPath"]).read_bytes() == b"not really a png"
+        assert entries[0]["id"] == entry["id"]
+        assert entries[0]["display"]["load_label"] == "Use Image"
 
 
 def test_compute_route_fire_promotes_completed_splat_to_asset_inbox_with_source_truth():

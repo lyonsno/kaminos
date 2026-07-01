@@ -6,6 +6,7 @@
 <title>Kaminos</title>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
+[hidden] { display: none !important; }
 body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #111; color: #e0e0e0; display: flex; height: 100vh; overflow: hidden; }
 
 /* Sidebar */
@@ -207,6 +208,9 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 .compute-route-fire-run-summary[data-compute-route-fire-summary-state="failed"] { color: #f0b0b0; }
 .compute-route-fire-input { width: 100%; min-width: 0; height: 26px; background: #181818; border: 1px solid #333; border-radius: 4px; color: #aaa; font: 9px 'SF Mono', monospace; padding: 2px 6px; outline: none; }
 .compute-route-fire-input:focus { border-color: #1976d2; color: #fff; background: #151b22; }
+.compute-route-fire-source-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 6px; align-items: center; margin: 4px 0 6px; }
+.compute-route-fire-source-picker { min-width: 0; height: 26px; background: #181818; border: 1px solid #333; border-radius: 4px; color: #ccc; font-size: 11px; padding: 2px 6px; outline: none; }
+.compute-route-fire-source-picker:focus { border-color: #1976d2; color: #fff; background: #151b22; }
 .compute-route-fire-status-running { color: #f0b85a; }
 .compute-route-fire-status-completed { color: #66bb6a; }
 .compute-route-fire-status-failed { color: #ef8f8f; }
@@ -699,7 +703,16 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
       <div class="compute-route-fire-run-summary" id="compute-route-fire-run-summary" data-compute-route-fire-summary-state="idle">Choose an image and start SHARP when you want a new splat.</div>
       <div class="field"><span class="field-key">Status</span><span class="field-val" id="compute-route-fire-run-status">idle</span></div>
       <div class="field"><span class="field-key">Progress</span><span class="field-val route-fire-field-long" id="compute-route-fire-run-progress">--</span></div>
-      <div class="field"><span class="field-key">Input</span></div>
+      <div class="field"><span class="field-key">Image</span></div>
+      <div class="compute-route-fire-source-row">
+        <select class="compute-route-fire-source-picker" id="compute-route-fire-image-picker" aria-label="Source image">
+          <option value="">Loading images...</option>
+        </select>
+        <button class="btn" id="compute-route-fire-refresh-images">Refresh</button>
+        <button class="btn" id="compute-route-fire-choose-image">Choose File</button>
+        <input type="file" id="compute-route-fire-image-file" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp" hidden>
+      </div>
+      <div class="field"><span class="field-key">Path</span></div>
       <input class="compute-route-fire-input" id="compute-route-fire-input-path" value="">
       <div class="volume-actions">
         <button class="btn" id="compute-route-fire-start">Start SHARP</button>
@@ -7803,6 +7816,7 @@ let computeRouteFireActuatorState = {
   promotedByRunId: {},
   loadedByRunId: {},
   loadingRunId: null,
+  sourceImages: [],
 };
 
 function volumeRouteFireBaseUrl() {
@@ -8057,11 +8071,24 @@ function computeRouteFireOutputCanLoad(run) {
   return run?.status === 'completed' && !!computeRouteFireArtifact(run, 'splat');
 }
 
-function computeRouteFireProgressText(progress = null) {
+function computeRouteFireDurationText(ms) {
+  const value = Number(ms);
+  if (!Number.isFinite(value) || value < 0) return '';
+  const seconds = Math.round(value / 1000);
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  const rest = seconds % 60;
+  return rest ? `${minutes}m ${rest}s` : `${minutes}m`;
+}
+
+function computeRouteFireProgressText(progress = null, run = null) {
   if (!progress) return '--';
   const pieces = [];
   if (Number.isFinite(progress.progress)) {
     pieces.push(`${Math.round(progress.progress * 100)}%`);
+  }
+  if (run?.status === 'running' && Number.isFinite(run.progressQuietMs) && run.progressQuietMs > 15000) {
+    pieces.push(`still working; last update ${computeRouteFireDurationText(run.progressQuietMs)} ago`);
   }
   if (progress.message) {
     pieces.push(progress.message);
@@ -8081,6 +8108,9 @@ function computeRouteFireRunSummary(run = null, promoted = null) {
     return 'SHARP is starting on this image; the furnace will burn only while the live route is running.';
   }
   if (status === 'running') {
+    if (progress && Number.isFinite(run?.progressQuietMs) && run.progressQuietMs > 15000) {
+      return `SHARP is still working inside the browser adapter; no new milestone has arrived for ${computeRouteFireDurationText(run.progressQuietMs)}.`;
+    }
     if (progress?.message) {
       return `SHARP is working on this image: ${progress.message}.`;
     }
@@ -8123,7 +8153,7 @@ function renderComputeRouteFireRun(run = null) {
   setComputeRouteFireStatusClass(status);
   const progressEl = document.getElementById('compute-route-fire-run-progress');
   if (progressEl) {
-    const progressText = computeRouteFireProgressText(run?.latestProgress || null);
+    const progressText = computeRouteFireProgressText(run?.latestProgress || null, run);
     progressEl.textContent = progressText;
     progressEl.title = run?.latestProgress ? JSON.stringify(run.latestProgress) : '';
   }
@@ -8189,6 +8219,81 @@ function renderComputeRouteFireRun(run = null) {
   }
   computeRouteFireActuatorState.run = run;
   return run;
+}
+
+function computeRouteFireImageOptionLabel(entry) {
+  const title = entry?.display?.title || entry?.name || entry?.path || 'Source image';
+  const size = entry?.display?.subtitle || '';
+  return size ? `${title} · ${size}` : title;
+}
+
+function setComputeRouteFireInputPath(inputPath) {
+  const input = document.getElementById('compute-route-fire-input-path');
+  if (!input) return;
+  input.value = inputPath || '';
+  input.title = inputPath || '';
+}
+
+async function refreshComputeRouteFireImages(selectedPath = null) {
+  const picker = document.getElementById('compute-route-fire-image-picker');
+  if (!picker) return [];
+  const currentPath = selectedPath || document.getElementById('compute-route-fire-input-path')?.value || '';
+  picker.disabled = true;
+  picker.replaceChildren(new Option('Refreshing images...', ''));
+  const response = await fetch('/api/assets?kind=image', { cache: 'no-store' });
+  const index = await response.json();
+  if (!response.ok || index.error) {
+    picker.replaceChildren(new Option(index.error || `Image list failed ${response.status}`, ''));
+    picker.disabled = false;
+    return [];
+  }
+  const entries = Array.isArray(index.entries) ? index.entries : [];
+  computeRouteFireActuatorState.sourceImages = entries;
+  picker.replaceChildren();
+  if (!entries.length) {
+    picker.append(new Option('No local source images yet', ''));
+  } else {
+    for (const entry of entries) {
+      const option = new Option(computeRouteFireImageOptionLabel(entry), entry.serverPath || '');
+      option.title = entry.serverPath || entry.source || '';
+      picker.append(option);
+    }
+  }
+  const selectedEntry = entries.find(entry => entry.serverPath === currentPath) || null;
+  if (selectedEntry?.serverPath) {
+    picker.value = selectedEntry.serverPath;
+    setComputeRouteFireInputPath(selectedEntry.serverPath);
+  } else if (currentPath) {
+    const option = new Option(`Current path · ${compactPathTail(currentPath)}`, currentPath);
+    option.title = currentPath;
+    picker.prepend(option);
+    picker.value = currentPath;
+    setComputeRouteFireInputPath(currentPath);
+  } else if (entries[0]?.serverPath) {
+    picker.value = entries[0].serverPath;
+    setComputeRouteFireInputPath(entries[0].serverPath);
+  } else {
+    picker.value = '';
+  }
+  picker.disabled = false;
+  return entries;
+}
+
+async function uploadComputeRouteFireInputImage(file) {
+  if (!file) return null;
+  const response = await fetch(`/api/compute-route-fire/upload-image?${new URLSearchParams({ name: file.name })}`, {
+    method: 'POST',
+    headers: { 'Content-Type': file.type || 'application/octet-stream' },
+    body: await file.arrayBuffer(),
+  });
+  const uploaded = await response.json().catch(() => ({}));
+  if (!response.ok || uploaded.error || !uploaded.inputPath) {
+    throw new Error(uploaded.error || `Image upload failed ${response.status}`);
+  }
+  setComputeRouteFireInputPath(uploaded.inputPath);
+  await refreshComputeRouteFireImages(uploaded.inputPath);
+  setInfo(`Using source image: ${uploaded.entry?.display?.title || uploaded.entry?.name || file.name}`);
+  return uploaded;
 }
 
 async function promoteComputeRouteFireOutput(run = computeRouteFireActuatorState.run) {
@@ -8347,7 +8452,32 @@ async function initComputeRouteFireActuator() {
     .then(response => response.json())
     .catch(error => ({ error: String(error), defaultInputPath: '' }));
   document.getElementById('compute-route-fire-actuator-route').textContent = config.pipelineId || 'sharp-image-to-splat-live-v0';
-  document.getElementById('compute-route-fire-input-path').value = config.defaultInputPath || '';
+  setComputeRouteFireInputPath(config.defaultInputPath || '');
+  const picker = document.getElementById('compute-route-fire-image-picker');
+  if (picker) {
+    picker.addEventListener('change', () => setComputeRouteFireInputPath(picker.value));
+  }
+  document.getElementById('compute-route-fire-refresh-images')?.addEventListener('click', () => {
+    refreshComputeRouteFireImages().catch(error => {
+      setInfo(`Image refresh failed: ${error.message || error}`);
+    });
+  });
+  const fileInput = document.getElementById('compute-route-fire-image-file');
+  document.getElementById('compute-route-fire-choose-image')?.addEventListener('click', () => {
+    fileInput?.click();
+  });
+  fileInput?.addEventListener('change', () => {
+    const file = fileInput.files?.[0] || null;
+    uploadComputeRouteFireInputImage(file).catch(error => {
+      setInfo(`Image upload failed: ${error.message || error}`);
+    }).finally(() => {
+      fileInput.value = '';
+    });
+  });
+  await refreshComputeRouteFireImages(config.defaultInputPath || '').catch(error => {
+    const picker = document.getElementById('compute-route-fire-image-picker');
+    if (picker) picker.replaceChildren(new Option(`Image list failed: ${error.message || error}`, ''));
+  });
   const startButton = document.getElementById('compute-route-fire-start');
   startButton.addEventListener('click', () => startComputeRouteFireRun().catch(error => {
     renderComputeRouteFireRun({ status: 'failed', error: String(error), artifacts: [] });

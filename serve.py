@@ -32,12 +32,17 @@ KAMINOS_SPLAT_PRODUCTION_DIR = Path(os.environ.get(
     "KAMINOS_SPLAT_PRODUCTION_DIR",
     str(KAMINOS_ASSETS_DIR / "splats" / "production"),
 )).expanduser()
+KAMINOS_IMAGE_INBOX_DIR = Path(os.environ.get(
+    "KAMINOS_IMAGE_INBOX_DIR",
+    str(KAMINOS_ASSETS_DIR / "images" / "inbox"),
+)).expanduser()
 
 BROWSE_ROOTS = {
     "scratch": ROOT / "scratch",
     "scenes": SCENES_DIR,
     "splat-inbox": KAMINOS_SPLAT_INBOX_DIR,
     "splat-production": KAMINOS_SPLAT_PRODUCTION_DIR,
+    "image-inbox": KAMINOS_IMAGE_INBOX_DIR,
     "greenroom": Path(os.environ.get(
         "GPU_GREENROOM_DIR",
         os.path.expanduser("~/.local/state/gpu-greenroom"),
@@ -49,6 +54,7 @@ BROWSE_ROOTS = {
 GREENROOM_STATUS_DIRS = ("done", "failed", "running", "pending", "cancelled")
 MESH_EXTENSIONS = {".glb", ".gltf", ".obj", ".ply", ".spz"}
 SPLAT_EXTENSIONS = {".ply", ".spz"}
+IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp"}
 SPLAT_CORRECTION_SCHEMA = "kaminos.splat-correction.v0"
 COMPUTE_ROUTE_FIRE_PROMOTED_SPLAT_SCHEMA = "kaminos.compute-route-fire-promoted-splat.v0"
 HYBRID_SPLAT_OVERLAY_MODULE_URL_ENV = "KAMINOS_HYBRID_SPLAT_OVERLAY_MODULE_URL"
@@ -67,6 +73,13 @@ ASSET_ROOTS = [
         "kind": "splat",
         "stage": "production",
         "path": KAMINOS_SPLAT_PRODUCTION_DIR,
+    },
+    {
+        "id": "image-inbox",
+        "label": "Source Images",
+        "kind": "image",
+        "stage": "experimental",
+        "path": KAMINOS_IMAGE_INBOX_DIR,
     },
 ]
 for index, extra_root in enumerate(filter(None, os.environ.get("KAMINOS_SPLAT_ASSET_ROOTS", "").split(os.pathsep)), 1):
@@ -141,6 +154,8 @@ def compute_route_fire_config_public(config=None):
         "pipelineWorktreeExists": pipeline_worktree.exists(),
         "defaultInputPath": str(default_input),
         "defaultInputExists": default_input.exists(),
+        "imageInputRoot": str(KAMINOS_IMAGE_INBOX_DIR.expanduser()),
+        "imageInputRootExists": KAMINOS_IMAGE_INBOX_DIR.expanduser().exists(),
         "outputRoot": str(output_root),
     }
 
@@ -191,6 +206,12 @@ def _compute_route_fire_progress_event_from_line(line, stream_name):
 def _record_compute_route_fire_progress(run, event):
     if not event:
         return
+    now_ms = int(time.time() * 1000)
+    event = {
+        **event,
+        "receivedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now_ms / 1000)),
+        "receivedAtMs": now_ms,
+    }
     lock = run.get("progress_lock")
     if lock:
         with lock:
@@ -225,6 +246,7 @@ def _capture_compute_route_fire_stream(run, pipe, stream_name, log_handle):
 
 
 def _compute_route_fire_snapshot(run):
+    now_ms = int(time.time() * 1000)
     report = run.get("pipeline_report")
     progress_lock = run.get("progress_lock")
     if progress_lock:
@@ -234,6 +256,15 @@ def _compute_route_fire_snapshot(run):
     else:
         progress_events = list(run.get("progress_events") or [])
         latest_progress = run.get("latest_progress")
+    started_at_ms = run.get("started_at_ms") or now_ms
+    finished_at_ms = run.get("finished_at_ms")
+    elapsed_end_ms = finished_at_ms or now_ms
+    latest_progress_ms = latest_progress.get("receivedAtMs") if isinstance(latest_progress, dict) else None
+    progress_quiet_ms = (
+        max(0, now_ms - int(latest_progress_ms))
+        if latest_progress_ms is not None
+        else max(0, now_ms - int(started_at_ms))
+    )
     return {
         "schema": COMPUTE_ROUTE_FIRE_RUN_SCHEMA,
         "runId": run["run_id"],
@@ -249,7 +280,11 @@ def _compute_route_fire_snapshot(run):
         "stdoutLogPath": str(run["stdout_log_path"]),
         "stderrLogPath": str(run["stderr_log_path"]),
         "startedAt": run.get("started_at"),
+        "startedAtMs": started_at_ms,
         "finishedAt": run.get("finished_at"),
+        "finishedAtMs": finished_at_ms,
+        "elapsedMs": max(0, int(elapsed_end_ms) - int(started_at_ms)),
+        "progressQuietMs": progress_quiet_ms,
         "exitCode": run.get("exit_code"),
         "error": run.get("error"),
         "latestProgress": latest_progress,
@@ -279,6 +314,7 @@ def _refresh_compute_route_fire_run(run):
         return run
     run["exit_code"] = exit_code
     run["finished_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    run["finished_at_ms"] = int(time.time() * 1000)
     for thread in run.get("stream_threads") or []:
         try:
             thread.join(timeout=0.2)
@@ -321,6 +357,7 @@ def start_compute_route_fire_run(input_path=None, config=None):
     stderr_log_path = run_root / "pipeline.stderr.log"
     stdout_handle = stdout_log_path.open("wb")
     stderr_handle = stderr_log_path.open("wb")
+    started_at_ms = int(time.time() * 1000)
     command = [
         config["node_bin"],
         "pipeline-witness.mjs",
@@ -345,7 +382,9 @@ def start_compute_route_fire_run(input_path=None, config=None):
         "stdout_handle": stdout_handle,
         "stderr_handle": stderr_handle,
         "started_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "started_at_ms": started_at_ms,
         "finished_at": None,
+        "finished_at_ms": None,
         "exit_code": None,
         "pipeline_report": None,
         "progress_events": [],
@@ -387,6 +426,7 @@ def start_compute_route_fire_run(input_path=None, config=None):
         run["visual_phase"] = "failed"
         run["allows_full_burn"] = False
         run["finished_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        run["finished_at_ms"] = int(time.time() * 1000)
         run["error"] = str(error)
     with COMPUTE_ROUTE_FIRE_RUNS_LOCK:
         COMPUTE_ROUTE_FIRE_RUNS[run_id] = run
@@ -615,15 +655,24 @@ def build_asset_display_metadata(path, *, root_label, stage, size=None):
     size_label = _format_size(size)
     if size_label:
         subtitle_parts.append(size_label)
+    load_label = "Use Image" if path.suffix.lower() in IMAGE_EXTENSIONS else "Import Splat"
     return {
-        "title": _clean_label(path.name, "Untitled Splat"),
+        "title": _clean_label(path.name, "Untitled Image" if load_label == "Use Image" else "Untitled Splat"),
         "subtitle": " / ".join(subtitle_parts),
         "meta": f"raw {path.name}",
         "raw_name": path.name,
-        "load_label": "Import Splat",
+        "load_label": load_label,
         "stage": stage,
         "root_label": root_label,
     }
+
+
+def asset_kind_extensions(kind):
+    if kind == "splat":
+        return SPLAT_EXTENSIONS
+    if kind == "image":
+        return IMAGE_EXTENSIONS
+    return MESH_EXTENSIONS
 
 
 def _format_size(size):
@@ -648,7 +697,7 @@ def list_asset_entries(kind="splat"):
         root_path = Path(root["path"]).expanduser()
         if not root_path.is_dir():
             continue
-        suffixes = SPLAT_EXTENSIONS if root.get("kind") == "splat" else MESH_EXTENSIONS
+        suffixes = asset_kind_extensions(root.get("kind"))
         for path in sorted(root_path.rglob("*")):
             if any(part.startswith(".") for part in path.relative_to(root_path).parts):
                 continue
@@ -680,6 +729,7 @@ def build_asset_entry(root, path):
         "size": size,
         "mtime": path.stat().st_mtime,
         "source": "/api/read?" + urlencode({"root": root_id, "path": rel_path}),
+        "serverPath": str(path.resolve()),
         "correction": correction_document.get("correction") if correction_document else None,
         "routeOutput": route_output_document,
         "display": build_asset_display_metadata(
@@ -828,6 +878,41 @@ def ingest_splat_asset(filename, content):
     return build_asset_entry(root, target)
 
 
+def image_inbox_root():
+    for root in ASSET_ROOTS:
+        if root.get("id") == "image-inbox" and root.get("kind") == "image":
+            return root
+    return None
+
+
+def sanitize_image_filename(filename):
+    raw_name = Path(str(filename or "source-image.png")).name
+    ext = Path(raw_name).suffix.lower()
+    if ext not in IMAGE_EXTENSIONS:
+        raise ValueError(f"Unsupported image extension: {ext or 'missing'}")
+    stem = Path(raw_name).stem.strip() or "source-image"
+    stem = re.sub(r"[^A-Za-z0-9._-]+", "-", stem).strip(".-_") or "source-image"
+    return f"{stem.lower()}{ext}"
+
+
+def ingest_compute_route_fire_image(filename, content):
+    root = image_inbox_root()
+    if not root:
+        raise FileNotFoundError("image-inbox root is not configured")
+    root_path = Path(root["path"]).expanduser()
+    root_path.mkdir(parents=True, exist_ok=True)
+    safe_name = sanitize_image_filename(filename)
+    target = (root_path / safe_name).resolve()
+    if not target.is_relative_to(root_path.resolve()):
+        raise PermissionError("Path traversal")
+    if target.exists():
+        stem = target.stem
+        suffix = target.suffix
+        target = (root_path / f"{stem}-{int(time.time() * 1000)}{suffix}").resolve()
+    target.write_bytes(content)
+    return build_asset_entry(root, target)
+
+
 def greenroom_output_roots():
     """Roots that can lawfully serve receipt output_dir files."""
     roots = [Path.home().resolve()]
@@ -933,6 +1018,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_save_scene()
         elif parsed.path == "/api/compute-route-fire/start":
             self.handle_compute_route_fire_start()
+        elif parsed.path == "/api/compute-route-fire/upload-image":
+            self.handle_compute_route_fire_upload_image(parse_qs(parsed.query))
         elif parsed.path == "/api/compute-route-fire/promote-splat":
             self.handle_compute_route_fire_promote_splat()
         elif parsed.path == "/api/ingest-splat":
@@ -970,6 +1057,34 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
                 "allowsFullBurn": False,
                 "error": str(error),
             }, 400)
+
+    def handle_compute_route_fire_upload_image(self, params):
+        filename = params.get("name", [""])[0]
+        if not filename:
+            self.send_json({"error": "name required"}, 400)
+            return
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+        except ValueError:
+            self.send_json({"error": "Invalid Content-Length"}, 400)
+            return
+        try:
+            entry = ingest_compute_route_fire_image(filename, self.rfile.read(length))
+        except ValueError as error:
+            self.send_json({"error": str(error)}, 400)
+            return
+        except PermissionError:
+            self.send_json({"error": "Path traversal"}, 403)
+            return
+        except FileNotFoundError as error:
+            self.send_json({"error": str(error)}, 404)
+            return
+        self.send_json({
+            "schema": "kaminos.compute-route-fire-source-image.v0",
+            "kind": "image",
+            "inputPath": entry["serverPath"],
+            "entry": entry,
+        })
 
     def handle_compute_route_fire_status(self, params):
         run_id = params.get("runId", [""])[0]
@@ -1259,9 +1374,9 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
         })
 
     def handle_assets(self, params):
-        """List declared asset roots. v0 supports splat assets."""
+        """List declared asset roots."""
         kind = params.get("kind", ["splat"])[0]
-        if kind not in {"splat", "all"}:
+        if kind not in {"splat", "image", "all"}:
             self.send_json({"error": f"Unsupported asset kind: {kind}"}, 400)
             return
         roots = [
@@ -1308,10 +1423,11 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
 
         # For images, serve directly
         ext = target.suffix.lower()
-        if ext in (".png", ".jpg", ".jpeg", ".exr", ".glb", ".gltf", ".ply", ".spz"):
+        if ext in (".png", ".jpg", ".jpeg", ".webp", ".exr", ".glb", ".gltf", ".ply", ".spz"):
             self.send_response(200)
             content_types = {
                 ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+                ".webp": "image/webp",
                 ".glb": "model/gltf-binary", ".gltf": "model/gltf+json",
                 ".exr": "application/octet-stream", ".ply": "application/octet-stream", ".spz": "application/octet-stream",
             }
