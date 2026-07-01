@@ -112,7 +112,11 @@ assert.match(index, /async function greenroomViewMesh\(/, 'Greenroom mesh rows e
 assert.match(index, /async function greenroomImportMesh\(/, 'Greenroom mesh rows expose an explicit Import action for adding to the current scene');
 assert.match(index, /const RENDER_HANDOFF_SCHEMA\s*=\s*'kaminos\.render-handoff\.v0'/, 'splat route handoff declares a compact schema identity for downstream renderers');
 assert.match(index, /class HybridMeshSplatRoute/, 'Kaminos exposes a named hybrid mesh/splat route stub before real renderer integration');
-assert.match(index, /meshDepthOcclusion:\s*false/, 'hybrid splat route stub must explicitly say mesh depth occlusion is not implemented yet');
+assert.match(index, /meshDepthOcclusion:\s*'proxy-geometry'/, 'Hybrid Renderer route reports proxy-geometry mesh depth occlusion when the overlay supports it');
+assert.match(index, /function buildHybridSplatDepthProxyPlanes\(/, 'Hybrid Renderer scene context publishes explicit proxy depth planes instead of pretending shared depth exists');
+assert.match(index, /window\.kaminosSetHybridSplatDepthProxyDebugEnabled/, 'Hybrid Renderer witness can toggle proxy depth composition for A-B visual smoke');
+assert.match(index, /depthSource:\s*'proxy-geometry'/, 'Hybrid Renderer scene context requests proxy-geometry depth composition');
+assert.match(index, /depthProxies:\s*buildHybridSplatDepthProxyPlanes\(/, 'Hybrid Renderer scene context carries concrete depth proxy geometry');
 assert.match(index, /sharedCanvasComposite:\s*false/, 'hybrid splat route stub must explicitly say shared canvas compositing is not implemented yet');
 assert.match(index, /realSplatRendering:\s*false/, 'hybrid splat route stub must not imply real splat rendering is active');
 assert.match(index, /id="splat-hybrid-renderer-panel"/, 'selected splats expose a visible Hybrid Renderer control surface, not only a URL flag');
@@ -130,6 +134,8 @@ assert.match(index, /async function initializeHybridSplatOverlayModuleUrl\(/, 'H
 assert.match(index, /\/api\/runtime-config/, 'Hybrid Renderer module URL can be populated by the Kaminos dev server');
 assert.match(index, /hybrid_splat_overlay_module_url/, 'Hybrid Renderer module URL can be carried by a smoke URL parameter instead of manual paste');
 assert.match(index, /async function startSelectedSplatHybridRenderer\(/, 'selected splats can start the Hybrid Mesh Splat Renderer overlay from the UI');
+assert.match(index, /function hybridSplatOverlaySourceUrl\(/, 'Hybrid Renderer remote modules receive absolute Kaminos asset URLs, not renderer-relative /api paths');
+assert.match(index, /handle\.loadPly\(overlaySource/, 'Hybrid Renderer start path loads the absolutized selected splat source');
 assert.match(index, /function updateHybridSplatOverlayFrame\(/, 'Hybrid Renderer overlay receives per-frame camera/object matrices from Kaminos');
 assert.match(index, /function prepareHybridSplatOverlayHost\(/, 'Hybrid Renderer overlay host layout is stamped inline before external modules can mutate it');
 assert.match(index, /function splatRawAssetToPreviewMatrix\(/, 'Hybrid Renderer overlay maps raw PLY coordinates into Kaminos normalized point-cloud preview coordinates');

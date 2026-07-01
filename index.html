@@ -1348,6 +1348,7 @@ let hybridSplatOverlayState = {
   rendererControlsTelemetry: null,
   frameCount: 0,
 };
+let hybridSplatDepthProxyDebugEnabled = true;
 
 class HybridMeshSplatRoute {
   constructor() {
@@ -1374,7 +1375,7 @@ class HybridMeshSplatRoute {
     }
     const overlayCapabilities = hybridSplatOverlayState.handle?.capabilities || {};
     return {
-      meshDepthOcclusion: overlayCapabilities.meshDepthOcclusion === false ? false : false,
+      meshDepthOcclusion: overlayCapabilities.meshDepthOcclusion === 'proxy-geometry' ? 'proxy-geometry' : false,
       sharedCanvasComposite: overlayCapabilities.sharedCanvasComposite === false ? false : false,
       sharedCommandEncoder: overlayCapabilities.sharedCommandEncoder === false ? false : false,
       activeAO: false,
@@ -1472,11 +1473,51 @@ function hybridSplatOverlayDebugState() {
     correctionApplication: handle?.correctionApplication || null,
     sceneContextAccepted: hybridSplatOverlayState.sceneContextAccepted,
     sceneContextTelemetry: hybridSplatOverlayState.sceneContextTelemetry,
+    depthCompositionTelemetry: handle?.depthCompositionTelemetry || null,
     rendererControlsTelemetry: hybridSplatOverlayState.rendererControlsTelemetry,
     lastSceneContext: hybridSplatOverlayState.lastSceneContext,
     lastFrame: hybridSplatOverlayState.lastFrame,
   };
 }
+
+function buildHybridSplatDepthProxyPlanes() {
+  const proxies = [];
+  if (!hybridSplatDepthProxyDebugEnabled) return proxies;
+  if (groundPlane) {
+    groundPlane.updateMatrixWorld?.(true);
+    const center = groundPlane.getWorldPosition(new THREE.Vector3());
+    const normal = new THREE.Vector3(0, 0, 1)
+      .transformDirection(groundPlane.matrixWorld)
+      .normalize();
+    const scale = groundPlane.getWorldScale(new THREE.Vector3());
+    const radius = Math.max(
+      0.01,
+      (groundPlane.geometry?.parameters?.radius || 5) * Math.max(Math.abs(scale.x), Math.abs(scale.y), Math.abs(scale.z), 1)
+    );
+    proxies.push({
+      id: 'kaminos-ground-plane',
+      kind: 'plane',
+      centerWorld: center.toArray(),
+      normalWorld: normal.toArray(),
+      radius,
+      depthBias: 0.0005,
+      source: 'kaminos.groundPlane',
+    });
+  }
+  return proxies;
+}
+
+window.kaminosSetHybridSplatDepthProxyDebugEnabled = function(enabled) {
+  hybridSplatDepthProxyDebugEnabled = enabled !== false;
+  updateHybridSplatOverlayFrame();
+  return {
+    schema: 'kaminos.hybrid-splat.depth-proxy-debug.v0',
+    enabled: hybridSplatDepthProxyDebugEnabled,
+    proxyCount: buildHybridSplatDepthProxyPlanes().length,
+    sceneContextTelemetry: hybridSplatOverlayState.sceneContextTelemetry,
+    depthCompositionTelemetry: hybridSplatOverlayState.handle?.depthCompositionTelemetry || null,
+  };
+};
 
 function hybridSplatOverlayProjectionMatrixForPbrnext(projectionMatrix) {
   const compensated = new THREE.Matrix4().copy(projectionMatrix);
@@ -1655,10 +1696,12 @@ function buildHybridSplatOverlaySceneContextV0(frame = hybridSplatOverlayState.l
       toneMapping: environment.toneMapping,
     },
     composition: {
-      mode: 'dual-canvas-overlay',
+      mode: 'depth-aware-overlay',
       background: 'transparent',
+      depthSource: 'proxy-geometry',
+      depthProxies: buildHybridSplatDepthProxyPlanes(frame),
       capabilities: {
-        meshDepthOcclusion: false,
+        meshDepthOcclusion: 'proxy-geometry',
         sharedCanvasComposite: false,
         sharedCommandEncoder: false,
       },
@@ -1673,7 +1716,7 @@ function buildHybridSplatOverlaySceneContextV0(frame = hybridSplatOverlayState.l
 function hybridSplatOverlaySceneContextCapability(handle = hybridSplatOverlayState.handle) {
   const overlayCapabilities = handle?.capabilities || {};
   return {
-    meshDepthOcclusion: false,
+    meshDepthOcclusion: overlayCapabilities.meshDepthOcclusion === 'proxy-geometry' ? 'proxy-geometry' : false,
     sharedCanvasComposite: false,
     sharedCommandEncoder: false,
     realSplatRendering: !!handle,
@@ -2039,6 +2082,10 @@ async function ensureHybridSplatOverlayHandle() {
   return hybridSplatOverlayState.handle;
 }
 
+function hybridSplatOverlaySourceUrl(source) {
+  return new URL(String(source || ''), window.location.href).href;
+}
+
 function updateHybridSplatOverlayFrame() {
   const handle = hybridSplatOverlayState.handle;
   const record = selectedSplatRecord(hybridSplatOverlayState.objectId);
@@ -2115,8 +2162,9 @@ async function startSelectedSplatHybridRenderer() {
     if (hybridSplatOverlayState.handle && hybridSplatOverlayState.objectId && hybridSplatOverlayState.objectId !== entry.id) {
       stopHybridSplatOverlay({ silent: true });
     }
+    const overlaySource = hybridSplatOverlaySourceUrl(entry.source);
     hybridSplatOverlayState.objectId = entry.id;
-    hybridSplatOverlayState.loadedSource = entry.source;
+    hybridSplatOverlayState.loadedSource = overlaySource;
     hybridSplatOverlayState.loadedFileName = entry.fileName || entry.label || null;
     const handle = await ensureHybridSplatOverlayHandle();
     if (splatRecordRequiresRendererCrop(entry) && !hybridSplatOverlayHandleSupportsCrop(handle)) {
@@ -2128,12 +2176,12 @@ async function startSelectedSplatHybridRenderer() {
       setInfo(error.message);
       return hybridSplatOverlayDebugState();
     }
-    await handle.loadPly(entry.source, entry.fileName || entry.label || 'splat.ply');
+    await handle.loadPly(overlaySource, entry.fileName || entry.label || 'splat.ply');
     applyHybridSplatOverlayCorrectionIdentity(handle, entry, splatRawAssetToPreviewMatrix(entry));
     publishHybridSplatRendererControls(handle);
     updateHybridSplatOverlayFrame();
     handle.start();
-    hybridSplatOverlayState.loadedSource = entry.source;
+    hybridSplatOverlayState.loadedSource = overlaySource;
     hybridSplatOverlayState.loadedFileName = entry.fileName || entry.label || null;
     hybridSplatOverlayState.loadedAt = new Date().toISOString();
     setHybridSplatOverlayStatus('rendering');
