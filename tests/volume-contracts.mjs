@@ -23,7 +23,7 @@ assert.match(index, /VOLUME_PRIMITIVE_SCHEMA/, 'scene data names the volume prim
 assert.match(index, /volumePrimitives/, 'scene data persists authored volume primitives');
 assert.match(index, /setVolumePrimitivesState/, 'scene loading can restore authored volume primitives');
 assert.match(index, /volume-core\.js/, 'index imports the volume prototype module');
-assert.match(index, /volume-core\.js\?v=routed-pressure-label-0628/, 'volume prototype import carries a cache key when pressure-label semantics change');
+assert.match(index, /volume-core\.js\?v=pyro-material-coupling-0701/, 'volume prototype import carries a cache key when Pyro material coupling semantics change');
 assert.match(index, /id="volume-render-source-orientation"/, 'Volume tab exposes render/source orientation identity for operator smoke');
 assert.match(index, /id="volume-canonical-render-mode-state"/, 'Volume tab exposes effective canonical render diagnostic mode for operator smoke');
 assert.match(index, /id="volume-canonical-motion-mode-state"/, 'Volume tab exposes effective canonical motion diagnostic mode for operator smoke');
@@ -196,6 +196,7 @@ assert.match(index, /id="volume-flow-rate"[^>]+value="0\.15"/, 'smoke route defa
 assert.match(index, /id="volume-projection"/, 'Volume tab exposes a pressure/projection control');
 assert.match(index, /id="volume-flow-debug"/, 'Volume tab exposes a flow diagnostic overlay control');
 assert.match(index, /id="volume-pyro-detail"/, 'Volume tab exposes the Pyro dynamic detail debug toggle');
+assert.match(index, /id="volume-pyro-material-gain"/, 'Volume tab exposes an opt-in Pyro material-memory renderer gain');
 assert.match(index, /id="volume-pyro-dynamic-atlas"/, 'Volume tab exposes an inspectable Pyro dynamic detail atlas canvas');
 assert.match(index, /id="volume-pyro-detail-state"/, 'Volume readout exposes Pyro dynamic detail reset/live state');
 assert.match(index, /id="volume-pyro-detail-confidence"/, 'Volume readout exposes Pyro dynamic detail confidence');
@@ -249,6 +250,7 @@ assert.match(index, /volume_smoke/, 'URL route can override smoke visibility for
 assert.match(index, /volume_projection/, 'URL route can override pressure/projection strength');
 assert.match(index, /volume_flow_debug/, 'URL route can override flow diagnostic overlay');
 assert.match(index, /volume_pyro_detail/, 'URL route can enable the Pyro dynamic detail debug atlas');
+assert.match(index, /volume_pyro_material_gain/, 'URL route can enable visible Pyro material-memory renderer coupling');
 assert.match(index, /volume_canonical_spread/, 'URL route can override canonical plume scalar-spread cockpit gain');
 assert.match(index, /volume_canonical_centerline/, 'URL route can override canonical plume centerline-relief cockpit gain');
 assert.match(index, /volume_canonical_body_balance/, 'URL route can override canonical plume body/chimney cockpit gain');
@@ -601,6 +603,11 @@ assert.match(core, /materialMemory:\s*\{/, 'Pyro dynamic detail state carries ma
 assert.match(core, /PYRO_DYNAMIC_DETAIL_TEXTURE_LAYOUT\s*=\s*\{[\s\S]*width:\s*8[\s\S]*height:\s*3[\s\S]*channels:\s*4/, 'Pyro material memory declares a compact 8x3x4 texture layout');
 assert.match(core, /sampleVector4/, 'Pyro material memory exposes normalized RGBA-like sample vectors instead of UI-only scalar cells');
 assert.match(core, /shaderReadiness:\s*resetGate\s*\?\s*'blocked-reset'/, 'Pyro material memory blocks shader consumption while reset gates are active');
+assert.match(core, /pyro_detail_controls:\s*vec4<f32>/, 'WGSL uniforms expose Pyro material-memory controls to the renderer');
+assert.match(core, /pyro-material-memory-render-coupling-v0/, 'debug state names the visible Pyro material-memory renderer coupling identity');
+assert.match(core, /uniforms\[84\]\s*=\s*pyroMaterialGain/, 'CPU uploads Pyro material-memory gain into the WGSL uniform block');
+assert.match(core, /uniforms\[85\]\s*=\s*pyroMaterialEnergy/, 'CPU uploads reset-gated Pyro material-memory energy into the WGSL uniform block');
+assert.match(core, /pyroMaterialRequestedGain\s*>\s*0[\s\S]*materialMemory\.shaderReadiness\s*===\s*'sampleable-debug-only'/, 'visible Pyro renderer coupling is gated by material-memory shader readiness');
 assert.match(core, /reactionFuelScale/, 'fluid uniforms carry a route-visible tall-plume fuel/reaction scale');
 assert.match(core, /quenchVaporStrength/, 'fluid uniforms carry the cheap route-visible quench-vapor render strength');
 assert.match(core, /snuffVisualModel/, 'debug state names the active failure-snuff visual model');
@@ -1196,6 +1203,9 @@ assert.match(witness, /pressureJacobiInlineDivergencePasses/, 'witness reports J
 assert.match(witness, /fullGridPassBreakdown/, 'witness reports pass-level full-grid breakdown');
 assert.match(witness, /performance-volume-signal/, 'witness has a performance visual-evidence mode that does not confuse low-fire measurement frames with missing output');
 assert.match(witness, /low-fire-performance-evidence/, 'performance witness preserves low-fire visual frames as warnings instead of failing before primary cost reports');
+assert.match(witness, /pyro-material/, 'witness accepts a visible Pyro material-memory evidence mode');
+assert.match(witness, /pyro-material-coupled-volume-signal/, 'witness reports Pyro material-memory visual evidence identity');
+assert.match(witness, /expectsPyroMaterialEvidence/, 'witness separates Pyro material-memory visual evidence from ordinary orange-fire gates');
 assert.match(witness, /no-fire-volume/, 'witness accepts a deliberate no-fire volume evidence mode');
 assert.match(witness, /no-fire-volume-signal/, 'witness reports no-fire volume visual evidence identity');
 assert.match(witness, /expectsNoFireVolumeEvidence/, 'witness separates deliberate no-fire evidence from missing fire failures');

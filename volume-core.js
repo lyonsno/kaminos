@@ -571,6 +571,7 @@ struct Uniforms {
   canonical_render_motion_controls: vec4<f32>,
   pressure_tier_controls: vec4<f32>,
   primitive_source: vec4<f32>,
+  pyro_detail_controls: vec4<f32>,
   previousViewProj: mat4x4<f32>,
 };
 
@@ -3057,6 +3058,10 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
   let canonicalRenderMode = clamp(u.canonical_render_motion_controls.x, 0.0, 1.0);
   let canonicalContentMode = clamp(u.canonical_render_motion_controls.z, 0.0, 2.0);
   let quenchVaporStrength = clamp(u.canonical_render_motion_controls.w, 0.0, 2.0);
+  let pyroMaterialGain = clamp(u.pyro_detail_controls.x, 0.0, 1.5);
+  let pyroMaterialEnergy = clamp(u.pyro_detail_controls.y, 0.0, 1.0);
+  let pyroLiveAuthority = clamp(u.pyro_detail_controls.z, 0.0, 1.0);
+  let pyroSmokeAuthority = clamp(u.pyro_detail_controls.w, 0.0, 1.0);
   let canonicalSmokeContent = 1.0 - minimalPlumeRenderScene * step(0.5, canonicalContentMode) * (1.0 - step(1.5, canonicalContentMode));
   let canonicalFireContent = minimalPlumeRenderScene * step(0.5, canonicalContentMode);
   let canonicalFireRenderContent = mix(1.0, canonicalFireContent, minimalPlumeRenderScene);
@@ -3287,6 +3292,21 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     let filament = smoothstep(0.014, 0.34, max(materialDetail * 0.66, microTextureSignal)) * filamentNoise * visibleDetailOverlayGain;
     let shredFilament = smoothstep(0.004, 0.22, interfaceShred * 3.10 + fireLick * 0.50 + microSmoke * 0.12) * shredNoise * visibleDetailOverlayGain;
     let fireFilament = smoothstep(0.008, 0.34, max(flameDetail * 0.72, fireLick * 2.25 + emberFleck * 0.44)) * fireNoise * visibleDetailOverlayGain;
+    let pyroLiveCarrier = pyroMaterialGain
+      * pyroMaterialEnergy
+      * pyroLiveAuthority
+      * smoothstep(0.018, 0.36, temp + flameDetail * 0.75 + fireLick * 0.42 + heat * 0.16)
+      * smoothstep(0.012, 0.34, density + smoke * 0.18 + microTextureSignal * 0.20);
+    let pyroMemoryPattern = 0.5 + 0.5 * sin(
+      p.y * 31.0
+        + p.x * 17.0
+        - p.z * 13.0
+        + u.cameraPos_time.w * (1.9 + pyroSmokeAuthority * 0.8)
+        + filamentNoise * 2.4
+        + fireNoise * 1.6
+    );
+    let pyroMemoryDetail = pyroLiveCarrier * (0.30 + pyroMemoryPattern * 0.70);
+    let pyroGhostColor = mix(vec3<f32>(0.05, 0.62, 0.92), vec3<f32>(0.18, 0.92, 1.18), pyroLiveAuthority) * (0.45 + pyroSmokeAuthority * 0.60);
     let fineShadow = 0.48 + 0.64 * filament - 0.20 * shredFilament;
     let smokeCol = mix(
       vec3<f32>(0.28, 0.38, 0.42) * fineShadow * (0.88 + bonfireRenderScene * (bonfireCurtainBreakup - 1.0) * 0.58) * (0.42 + min(0.78, velMag * 6.0) + shredFilament * 0.26),
@@ -3298,6 +3318,8 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     let smokeBacklight = fireColor(renderTemp * 0.72) * smokeAlpha * glowGain * smoothstep(0.16, 1.25, renderTemp) * (0.13 + fireFilament * 0.10 * flameBodyAuthority);
     let fireMix = smoothstep(0.005, 0.052, fireAlpha) * smoothstep(0.08, 0.70, renderTemp);
     var local = mix(smokeCol, flameCol * 0.30 + radianceEmission * 0.70, fireMix);
+    local = mix(local, pyroGhostColor, clamp(pyroMemoryDetail * (0.18 + fireMix * 0.34), 0.0, 0.62));
+    local = local + pyroGhostColor * pyroMemoryDetail * (0.22 + fireMix * 0.28);
     let vaporCol = vec3<f32>(0.78, 0.88, 0.92) * (0.76 + filament * 0.18 + shredFilament * 0.12);
     local = mix(local, vaporCol, clamp(max(vaporCarrier * 0.92, quenchCoreCollapse * 0.62), 0.0, 0.96));
     let diagnosticColor = mix(vec3<f32>(0.08, 0.72, 0.95), vec3<f32>(1.0, 0.18, 0.08), smoothstep(0.010, 0.085, divDebug)) * (0.35 + smoothstep(0.012, 0.18, curlDebug));
@@ -3336,7 +3358,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   const invViewProj = new THREE.Matrix4();
   const viewProj = new THREE.Matrix4();
   const previousViewProj = new THREE.Matrix4();
-  const uniforms = new Float32Array(100);
+  const uniforms = new Float32Array(104);
   let controlsSnapshot = applyRuntimeQualityControls(getControls());
   let gridSize = normalizeGridSize(controlsSnapshot.resolution);
   let majorantGridSize = normalizeMajorantGridSize(controlsSnapshot.majorantGrid);
@@ -3442,6 +3464,16 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     pressureTierRequestedBounds: null,
     pressureTierEffectiveBounds: null,
     pressureTierOverlayOpacity: DEFAULT_PRESSURE_TIER_OVERLAY,
+    pyroMaterialRendererCoupling: {
+      identity: 'pyro-material-memory-render-coupling-v0',
+      visualRole: 'opt-in-renderer-diagnostic-not-main-fire-authority',
+      requestedGain: 0,
+      effectiveGain: 0,
+      materialShaderReadiness: 'blocked-reset',
+      energy: 0,
+      liveFireAuthority: 0,
+      smokeAuthority: 0,
+    },
     pressureTierDispatches: [],
     pressureTierBounds: null,
     pressureTierBufferOwnership: null,
@@ -4727,7 +4759,19 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     uniforms[81] = sourcePrimitive.position[1];
     uniforms[82] = sourcePrimitive.position[2];
     uniforms[83] = volumePrimitives.length > 0 ? 1 : 0;
-    uniforms.set(previousViewProj.elements, 84);
+    const pyroDetailForRender = updatePyroDynamicDetailState({ inputKind: 'control-proxy' });
+    const materialMemory = pyroDetailForRender.materialMemory || {};
+    const pyroMaterialRequestedGain = Math.max(0, Math.min(1.5, controlsSnapshot.pyroMaterialGain ?? 0));
+    const pyroMaterialSampleable = pyroMaterialRequestedGain > 0 && materialMemory.shaderReadiness === 'sampleable-debug-only';
+    const pyroMaterialGain = pyroMaterialSampleable ? pyroMaterialRequestedGain : 0;
+    const pyroMaterialEnergy = pyroMaterialSampleable ? Math.max(0, Math.min(1, materialMemory.energyMean ?? pyroDetailForRender.stateEnergy ?? 0)) : 0;
+    const pyroMaterialLiveAuthority = pyroMaterialSampleable ? Math.max(0, Math.min(1, pyroDetailForRender.liveFireAuthority ?? 0)) : 0;
+    const pyroMaterialSmokeAuthority = pyroMaterialSampleable ? Math.max(0, Math.min(1, pyroDetailForRender.smokeAuthority ?? 0)) : 0;
+    uniforms[84] = pyroMaterialGain;
+    uniforms[85] = pyroMaterialEnergy;
+    uniforms[86] = pyroMaterialLiveAuthority;
+    uniforms[87] = pyroMaterialSmokeAuthority;
+    uniforms.set(previousViewProj.elements, 88);
     device.queue.writeBuffer(uniformBuffer, 0, uniforms);
     state.gridOverlay = controlsSnapshot.gridOverlay || 0;
     state.volumeScene = normalizeVolumeScene(controlsSnapshot.volumeScene);
@@ -4753,7 +4797,16 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.quenchVaporStrength = quenchVaporStrength;
     state.snuffVisualModel = quenchVaporStrength > 0 ? 'quench-vapor-v0' : 'inactive';
     state.flameQuenchModel = quenchVaporStrength > 0 ? 'quench-flame-body-v0' : 'inactive';
-    updatePyroDynamicDetailState({ inputKind: 'control-proxy' });
+    state.pyroMaterialRendererCoupling = {
+      identity: 'pyro-material-memory-render-coupling-v0',
+      visualRole: 'opt-in-renderer-diagnostic-not-main-fire-authority',
+      requestedGain: pyroMaterialRequestedGain,
+      effectiveGain: pyroMaterialGain,
+      materialShaderReadiness: materialMemory.shaderReadiness || 'blocked-reset',
+      energy: pyroMaterialEnergy,
+      liveFireAuthority: pyroMaterialLiveAuthority,
+      smokeAuthority: pyroMaterialSmokeAuthority,
+    };
     state.runtimeQualityRequested = normalizeRuntimeQuality(controlsSnapshot.runtimeQualityRequested);
     state.runtimeQualityEffective = normalizeRuntimeQuality(controlsSnapshot.runtimeQualityEffective || controlsSnapshot.runtimeQualityRequested);
     state.gpuPressure = clampFinite(controlsSnapshot.gpuPressure, 0, 1, 0);
@@ -6197,6 +6250,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         snuffVisualModel: state.snuffVisualModel,
         flameQuenchModel: state.flameQuenchModel,
         pyroDynamicDetail: clonePyroDynamicDetail(),
+        pyroMaterialRendererCoupling: state.pyroMaterialRendererCoupling ? { ...state.pyroMaterialRendererCoupling } : null,
         runtimeQualityRequested: state.runtimeQualityRequested,
         runtimeQualityEffective: state.runtimeQualityEffective,
         gpuPressure: state.gpuPressure,
@@ -6509,6 +6563,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       snuffVisualModel: state.snuffVisualModel,
       flameQuenchModel: state.flameQuenchModel,
       pyroDynamicDetail: clonePyroDynamicDetail(),
+      pyroMaterialRendererCoupling: state.pyroMaterialRendererCoupling ? { ...state.pyroMaterialRendererCoupling } : null,
       runtimeQualityRequested: state.runtimeQualityRequested,
       runtimeQualityEffective: state.runtimeQualityEffective,
       gpuPressure: state.gpuPressure,
@@ -6749,7 +6804,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       }
     },
     debugState() {
-      return { ...state, controls: { ...controlsSnapshot }, pyroDynamicDetail: clonePyroDynamicDetail() };
+      return {
+        ...state,
+        controls: { ...controlsSnapshot },
+        pyroDynamicDetail: clonePyroDynamicDetail(),
+        pyroMaterialRendererCoupling: state.pyroMaterialRendererCoupling ? { ...state.pyroMaterialRendererCoupling } : null,
+      };
     },
     canvasElement() {
       return canvas;
