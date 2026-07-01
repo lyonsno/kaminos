@@ -11493,6 +11493,43 @@ function pipelineSelectedRouteOutputRecord(routeNodeId) {
   return outputs.find(record => record.id === selectedId) || outputs[0];
 }
 
+function pipelineRouteLiveStatusSchedulerEvidence(record) {
+  return record?.schedulerEvidence || null;
+}
+
+function pipelineRouteLiveStatusRecord(nodeOrRouteId) {
+  const routeNodeId = typeof nodeOrRouteId === 'string' ? nodeOrRouteId : nodeOrRouteId?.id;
+  const record = pipelineSelectedRouteOutputRecord(routeNodeId) || pipelineRouteGeneratedOutputRecords(routeNodeId)[0] || null;
+  const schedulerEvidence = pipelineRouteLiveStatusSchedulerEvidence(record);
+  if (!record) {
+    return {
+      status: 'idle',
+      phase: 'idle',
+      message: 'No route execution yet',
+      schedulerState: 'missing',
+      schedulerEvidence: null,
+      outputId: null,
+      runId: null,
+    };
+  }
+  return {
+    status: record.status || 'pending',
+    phase: record.phase || record.status || 'pending',
+    message: record.statusMessage || pipelineGeneratedOutputStatusLabel(record),
+    schedulerState: pipelineGraphSchedulerEvidenceState(schedulerEvidence),
+    schedulerEvidence,
+    outputId: record.id || null,
+    runId: record.runId || null,
+  };
+}
+
+function pipelineRouteLiveStatusLabel(record) {
+  if (!record || record.status === 'idle') return 'idle';
+  const phase = record.phase || record.status;
+  const scheduler = record.schedulerState && record.schedulerState !== 'missing' ? ` / ${record.schedulerState}` : '';
+  return `${phase}${scheduler}`;
+}
+
 function pipelineSetSelectedRouteOutput(routeNodeId, outputId) {
   if (!routeNodeId || !outputId) return null;
   const record = pipelineRouteGeneratedOutputRecords(routeNodeId).find(item => item.id === outputId) || null;
@@ -12104,11 +12141,16 @@ function pipelineGraphInspectorRows(node, selectedRun) {
     const inputSource = pipelineGraphRouteInputSource(node.id);
     const inputRequirement = pipelineRouteInputRequirement(node.pipeline);
     const inputCheck = pipelineSourceSatisfiesRouteInput(inputSource, inputRequirement);
+    const routeLiveStatus = pipelineRouteLiveStatusRecord(node);
     rows.push({ key: 'generator', value: node.generator?.title || node.title || 'unknown' });
     rows.push({ key: 'backend', value: node.backendPipelineId || node.pipeline?.id || 'unrouted' });
     rows.push({ key: 'input', value: inputSource?.label || inputSource?.source || 'not connected' });
     rows.push({ key: 'input contract', value: inputRequirement.role || 'artifact' });
     rows.push({ key: 'input status', value: inputCheck.ok ? 'accepted' : inputCheck.message });
+    rows.push({ key: 'route status', value: pipelineRouteLiveStatusLabel(routeLiveStatus) });
+    rows.push({ key: 'route phase', value: routeLiveStatus.phase || 'idle' });
+    rows.push({ key: 'route message', value: routeLiveStatus.message || 'No route execution yet' });
+    rows.push({ key: 'route scheduler', value: pipelineGraphSchedulerEvidenceLabel(routeLiveStatus.schedulerEvidence) });
     if (pipelineRouteUsesFixture(node)) rows.push({ key: 'truth', value: pipelineFixtureInputBoundaryText(node) });
     if (selectedRun) {
       rows.push({ key: 'fixture', value: pipelineRunUsesFixture(selectedRun) ? 'yes' : 'no' });
@@ -12830,9 +12872,17 @@ function pipelineGraphNodeActionsMarkup(node) {
   if (node.kind === 'route') {
     const outputs = pipelineRouteGeneratedOutputRecords(node.id);
     const selectedOutput = pipelineSelectedRouteOutputRecord(node.id);
-    const latestStatus = node.runStatus ? pipelineGeneratedOutputStatusLabel(node.runStatus) : 'idle';
+    const liveStatus = pipelineRouteLiveStatusRecord(node);
+    const latestStatus = pipelineRouteLiveStatusLabel(liveStatus);
     return `
-      <span class="pipeline-graph-node-status ${escapeHtml(node.runStatus?.status || 'idle')}" data-pipeline-route-status-node-id="${escapeHtml(node.id)}">${escapeHtml(latestStatus)}</span>
+      <span
+        class="pipeline-graph-node-status ${escapeHtml(liveStatus.status || 'idle')}"
+        data-pipeline-route-status-node-id="${escapeHtml(node.id)}"
+        data-pipeline-route-live-status="${escapeHtml(liveStatus.status || 'idle')}"
+        data-pipeline-route-live-phase="${escapeHtml(liveStatus.phase || 'idle')}"
+        data-pipeline-route-scheduler-state="${escapeHtml(liveStatus.schedulerState || 'missing')}"
+        title="${escapeHtml(liveStatus.message || latestStatus)}"
+      >${escapeHtml(latestStatus)}</span>
       <span class="pipeline-graph-node-actions">
         <button
           type="button"
@@ -12971,6 +13021,9 @@ function renderPipelineGraphWorkbench() {
       ${node.kind === 'generated-output' ? `data-pipeline-generated-output-node-id="${escapeHtml(node.id)}"` : ''}
       ${node.kind === 'generated-output' ? `data-pipeline-generated-output-status="${escapeHtml(node.status || 'complete')}"` : ''}
       ${node.kind === 'generated-output' ? `data-pipeline-scheduler-state="${escapeHtml(pipelineGraphSchedulerEvidenceState(node.schedulerEvidence))}"` : ''}
+      ${node.kind === 'route' ? `data-pipeline-route-live-status="${escapeHtml(pipelineRouteLiveStatusRecord(node).status || 'idle')}"` : ''}
+      ${node.kind === 'route' ? `data-pipeline-route-live-phase="${escapeHtml(pipelineRouteLiveStatusRecord(node).phase || 'idle')}"` : ''}
+      ${node.kind === 'route' ? `data-pipeline-route-scheduler-state="${escapeHtml(pipelineRouteLiveStatusRecord(node).schedulerState || 'missing')}"` : ''}
       aria-pressed="${node.id === pipelineDockState.selectedGraphNodeId ? 'true' : 'false'}"
       style="left: ${position.x}px; top: ${position.y}px;"
     >
