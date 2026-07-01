@@ -17,6 +17,143 @@ from serve import list_greenroom_output_files, resolve_greenroom_output_dir
 from serve import request_greenroom_checkpoint_pause
 
 
+MOGE_WEBGPU_ROUTE_ID = "moge.depth-normal.webgpu-local.v0"
+
+
+def browser_webgpu_route_result(*, status="real", output_status="real"):
+    scheduler = {
+        "schema": "kaminos.webgpu-route-scheduler.v0",
+        "requestedScheduler": {
+            "mode": "cooperative",
+            "yieldMs": 5,
+            "waitForSubmittedWorkDone": True,
+            "phaseChunkSize": {"decoder-heads": 1},
+        },
+        "effectiveScheduler": {
+            "mode": "cooperative",
+            "yieldMs": 5,
+            "waitForSubmittedWorkDone": True,
+            "phaseChunkSize": {"decoder-heads": 1},
+            "unsupportedFields": [],
+        },
+        "verificationState": "verified",
+    }
+    backpressure = {
+        "schema": "kaminos.webgpu-route-backpressure.v0",
+        "requestedBudget": "visible-wait",
+        "effectiveBudget": "visible-wait",
+        "memoryExclusivity": "shared",
+        "warmCacheState": "warm",
+        "frameTail": {
+            "sampleWindowMs": 5000,
+            "longFrameCount": 1,
+            "maxFrameGapMs": 37.5,
+            "p95FrameGapMs": 18.2,
+            "p99FrameGapMs": 37.5,
+        },
+    }
+    runtime_profile = {
+        "schema": "kaminos.webgpu-runtime-profile.v0",
+        "routeId": MOGE_WEBGPU_ROUTE_ID,
+        "runtimeLabel": "chrome-webgpu-apple-metal",
+        "backend": {
+            "kind": "webgpu-local",
+            "runtime": "browser",
+            "adapterName": "apple metal-3",
+            "browser": "Chrome Headless",
+            "features": ["timestamp-query"],
+            "requestedFeatures": ["timestamp-query"],
+            "limits": {"maxBufferSize": 4294967296},
+            "timestampQuery": "requested",
+        },
+        "kernel": {
+            "kitVersion": "0.0.0",
+            "profile": "conv-transpose2d-stride2",
+            "commit": "00ec8d7",
+        },
+        "profile": {
+            "schema": "kaminos.webgpu-staged-profile.v0",
+            "route": "staged-submits",
+            "timingSource": "queue-submit-wait",
+            "requiredStages": ["backbone", "decoder-heads", "output-readback"],
+            "stages": [
+                {"name": "backbone", "ms": 997.6},
+                {"name": "decoder-heads", "ms": 854.3},
+                {"name": "output-readback", "ms": 1.9},
+            ],
+            "stageNames": ["backbone", "decoder-heads", "output-readback"],
+            "totalMs": 1853.8,
+        },
+        "evidence": {"mode": "live", "source": "moge-webgpu-route-worker", "fallbackReason": None},
+        "requiredStages": ["backbone", "decoder-heads", "output-readback"],
+        "timingSource": "queue-submit-wait",
+        "createdAt": "2026-07-01T01:00:00Z",
+    }
+    outputs = [
+        {"role": "depth", "artifactId": "depth:bunnycake", "sha256": "sha256:depth", "shape": [592, 592], "status": output_status},
+        {"role": "normal", "artifactId": "normal:bunnycake", "sha256": "sha256:normal", "shape": [3, 592, 592], "status": output_status},
+        {"role": "pointmap", "artifactId": "pointmap:bunnycake", "sha256": "sha256:pointmap", "shape": [3, 592, 592], "status": output_status},
+    ]
+    if output_status == "missing-hash":
+        outputs[0]["status"] = "real"
+        outputs[0]["sha256"] = ""
+    receipt_status = status
+    fallback_reason = "WebGPU unavailable" if status == "fallback" else None
+    receipt = {
+        "schema": "kaminos.webgpu-route-receipt.v0",
+        "requestedRouteId": MOGE_WEBGPU_ROUTE_ID,
+        "effectiveRouteId": MOGE_WEBGPU_ROUTE_ID,
+        "status": receipt_status,
+        "fallbackReason": fallback_reason,
+        "backend": runtime_profile["backend"],
+        "model": {
+            "id": "Ruicheng/moge-2-vitl-normal",
+            "revision": "local-vitl-normal",
+            "weightsHash": "sha256:weights",
+            "dtype": "fp16",
+        },
+        "kernel": runtime_profile["kernel"],
+        "inputs": [
+            {"role": "source-image", "artifactId": "image:bunnycake", "sha256": "sha256:input", "shape": [518, 518, 3]},
+        ],
+        "outputs": outputs,
+        "timings": {
+            "source": "queue-submit-wait",
+            "totalMs": 1853.8,
+            "stages": runtime_profile["profile"]["stages"],
+        },
+        "runtime": {
+            "runtimeProfile": runtime_profile,
+            "scheduler": scheduler,
+            "backpressure": backpressure,
+        },
+        "createdAt": "2026-07-01T01:00:00Z",
+    }
+    return {
+        "schema": "kaminos.webgpu-route-result.v0",
+        "requestId": "req:moge-bunnycake",
+        "routeId": MOGE_WEBGPU_ROUTE_ID,
+        "status": status,
+        "request": {
+            "schema": "kaminos.webgpu-route-request.v0",
+            "requestId": "req:moge-bunnycake",
+            "routeId": MOGE_WEBGPU_ROUTE_ID,
+            "backendKind": "webgpu-local",
+            "inputs": receipt["inputs"],
+            "outputs": [{"role": output["role"], "artifactId": output["artifactId"], "shape": output["shape"]} for output in outputs],
+            "routeConfig": {"source": "kaminos.greenroom.route-tray-smoke"},
+            "model": {"id": "Ruicheng/moge-2-vitl-normal", "revision": "local-vitl-normal", "dtype": "fp16"},
+            "kernel": runtime_profile["kernel"],
+            "createdAt": "2026-07-01T01:00:00Z",
+        },
+        "receipt": receipt,
+        "backend": runtime_profile["backend"],
+        "outputs": outputs,
+        "timings": receipt["timings"],
+        "createdAt": "2026-07-01T01:00:01Z",
+    }
+
+
 def test_http_status_404_log_does_not_crash():
     handler = KaminosHandler.__new__(KaminosHandler)
     handler.requestline = "GET /favicon.ico HTTP/1.1"
@@ -446,6 +583,70 @@ def test_browser_webgpu_route_provider_projects_fixture_route_identity():
     assert any(warning["kind"] == "fixture_route_identity_only" for warning in row["warnings"])
 
 
+def test_browser_webgpu_route_provider_ingests_authoritative_kit_result():
+    with TemporaryDirectory(dir="/tmp") as tmp:
+        results_dir = Path(tmp) / "browser-webgpu-results"
+        results_dir.mkdir()
+        result_path = results_dir / "moge-live.json"
+        result_path.write_text(json.dumps(browser_webgpu_route_result()), encoding="utf-8")
+        previous = getattr(serve, "BROWSER_WEBGPU_ROUTE_RESULTS_DIR", None)
+        serve.BROWSER_WEBGPU_ROUTE_RESULTS_DIR = results_dir
+        try:
+            index = build_browser_webgpu_route_provider_index()
+        finally:
+            serve.BROWSER_WEBGPU_ROUTE_RESULTS_DIR = previous
+
+    assert index["provider"]["kind"] == "browser-webgpu"
+    assert index["provider"]["source"] == "route-result-files"
+    assert index["provider"]["result_dir"] == str(results_dir)
+    assert index["summary"] == {"done": 1}
+    assert index["invalid_result_count"] == 0
+    [row] = index["rows"]
+    assert row["provider"] == "browser-webgpu"
+    assert row["status_dir"] == "route-result"
+    assert row["job_id"] == "browser-webgpu-req:moge-bunnycake"
+    assert row["route_job"]["id"] == "browser-webgpu-req:moge-bunnycake"
+    assert row["route_job"]["status"] == "done"
+    assert row["route_job"]["routeId"] == MOGE_WEBGPU_ROUTE_ID
+    assert row["route_job"]["executor"]["kind"] == "browser-webgpu"
+    assert row["route_job"]["metadata"]["sourceResultPath"] == str(result_path)
+    assert row["route_job"]["metadata"]["evidenceClassification"]["classification"] == "authoritative-live-webgpu"
+    assert row["route_job"]["metadata"]["evidenceClassification"]["authoritative"] is True
+    assert row["route_job"]["metadata"]["evidenceClassification"]["schedulerVerificationState"] == "verified"
+    assert row["route_job"]["metadata"]["evidenceClassification"]["schedulerMode"] == "cooperative"
+    assert row["route_job"]["metadata"]["evidenceClassification"]["longFrameCount"] == 1
+    assert row["route_job"]["metadata"]["runtimeProfile"]["backend"]["adapterName"] == "apple metal-3"
+    assert row["route_job"]["metadata"]["scheduler"]["verificationState"] == "verified"
+    assert row["route_job"]["metadata"]["backpressure"]["warmCacheState"] == "warm"
+    assert row["route_job"]["controls"] == []
+    assert row["warnings"] == []
+    assert row["receipt_link"] == "/api/read?root=browser-webgpu-route-results&path=moge-live.json"
+
+
+def test_browser_webgpu_route_provider_rejects_non_authoritative_kit_results_as_row_owners():
+    with TemporaryDirectory(dir="/tmp") as tmp:
+        results_dir = Path(tmp) / "browser-webgpu-results"
+        results_dir.mkdir()
+        (results_dir / "fallback.json").write_text(json.dumps(browser_webgpu_route_result(status="fallback")), encoding="utf-8")
+        (results_dir / "partial.json").write_text(json.dumps(browser_webgpu_route_result(output_status="partial")), encoding="utf-8")
+        (results_dir / "missing-hash.json").write_text(json.dumps(browser_webgpu_route_result(output_status="missing-hash")), encoding="utf-8")
+        previous = getattr(serve, "BROWSER_WEBGPU_ROUTE_RESULTS_DIR", None)
+        serve.BROWSER_WEBGPU_ROUTE_RESULTS_DIR = results_dir
+        try:
+            index = build_browser_webgpu_route_provider_index()
+        finally:
+            serve.BROWSER_WEBGPU_ROUTE_RESULTS_DIR = previous
+
+    assert index["provider"]["source"] == "fixture"
+    assert index["provider"]["result_dir"] == str(results_dir)
+    assert index["invalid_result_count"] == 3
+    assert index["summary"] == {"reserved": 1}
+    [row] = index["rows"]
+    assert row["job_id"] == "browser-webgpu-moge-fixture"
+    assert row["route_job"]["metadata"]["evidenceClassification"]["classification"] == "demo"
+    assert row["route_job"]["metadata"]["evidenceClassification"]["authoritative"] is False
+
+
 def test_route_provider_all_combines_native_greenroom_and_browser_webgpu_rows():
     with TemporaryDirectory(dir="/tmp") as tmp:
         greenroom = Path(tmp) / "greenroom"
@@ -723,6 +924,8 @@ if __name__ == "__main__":
     test_native_greenroom_route_provider_projects_pause_request_controls()
     test_native_greenroom_checkpoint_pause_request_refuses_non_trellis_rows()
     test_browser_webgpu_route_provider_projects_fixture_route_identity()
+    test_browser_webgpu_route_provider_ingests_authoritative_kit_result()
+    test_browser_webgpu_route_provider_rejects_non_authoritative_kit_results_as_row_owners()
     test_route_provider_all_combines_native_greenroom_and_browser_webgpu_rows()
     test_native_greenroom_route_provider_preserves_degraded_legacy_rows()
     test_splat_asset_index_separates_experimental_and_production_roots()

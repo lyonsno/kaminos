@@ -54,6 +54,15 @@ WEBGPU_RUNTIME_PROFILE_SCHEMA = "kaminos.webgpu-runtime-profile.v0"
 WEBGPU_ROUTE_EVIDENCE_CLASSIFICATION_SCHEMA = "kaminos.webgpu-route-evidence-classification.v0"
 WEBGPU_ROUTE_SCHEDULER_SCHEMA = "kaminos.webgpu-route-scheduler.v0"
 WEBGPU_ROUTE_BACKPRESSURE_SCHEMA = "kaminos.webgpu-route-backpressure.v0"
+WEBGPU_ROUTE_RESULT_SCHEMA = "kaminos.webgpu-route-result.v0"
+WEBGPU_ROUTE_RECEIPT_SCHEMA = "kaminos.webgpu-route-receipt.v0"
+BROWSER_WEBGPU_ROUTE_RESULTS_DIR = (
+    Path(os.environ["KAMINOS_BROWSER_WEBGPU_ROUTE_RESULTS_DIR"]).expanduser()
+    if os.environ.get("KAMINOS_BROWSER_WEBGPU_ROUTE_RESULTS_DIR")
+    else None
+)
+if BROWSER_WEBGPU_ROUTE_RESULTS_DIR:
+    BROWSE_ROOTS["browser-webgpu-route-results"] = BROWSER_WEBGPU_ROUTE_RESULTS_DIR
 ROUTE_JOB_STATUSES = {
     "pending",
     "reserved",
@@ -575,6 +584,24 @@ def _greenroom_read_link_for_path(path):
     })
 
 
+def _browser_webgpu_result_read_link(path):
+    result_root = BROWSER_WEBGPU_ROUTE_RESULTS_DIR
+    if not result_root or not path:
+        return None
+    try:
+        root = Path(result_root).expanduser().resolve()
+        resolved = Path(path).expanduser().resolve()
+    except OSError:
+        return None
+    if not resolved.is_file() or not resolved.is_relative_to(root):
+        return None
+    BROWSE_ROOTS["browser-webgpu-route-results"] = root
+    return "/api/read?" + urlencode({
+        "root": "browser-webgpu-route-results",
+        "path": str(resolved.relative_to(root)),
+    })
+
+
 def _greenroom_checkpoint_pause_capable(job_type):
     return job_type == "trellis2mlx" or str(job_type or "").startswith("trellis2mlx.")
 
@@ -941,7 +968,53 @@ def build_greenroom_route_provider_index():
     }
 
 
-def build_browser_webgpu_route_provider_index():
+def _browser_webgpu_evidence_classification(receipt, *, authoritative=False, classification="demo", reasons=None):
+    runtime = receipt.get("runtime") if isinstance(receipt, dict) else {}
+    runtime = runtime if isinstance(runtime, dict) else {}
+    scheduler = runtime.get("scheduler") if isinstance(runtime.get("scheduler"), dict) else {}
+    backpressure = runtime.get("backpressure") if isinstance(runtime.get("backpressure"), dict) else {}
+    backend = receipt.get("backend") if isinstance(receipt, dict) and isinstance(receipt.get("backend"), dict) else {}
+    timings = receipt.get("timings") if isinstance(receipt, dict) and isinstance(receipt.get("timings"), dict) else {}
+    outputs = receipt.get("outputs") if isinstance(receipt, dict) and isinstance(receipt.get("outputs"), list) else []
+    frame_tail = backpressure.get("frameTail") if isinstance(backpressure.get("frameTail"), dict) else {}
+    return {
+        "schema": WEBGPU_ROUTE_EVIDENCE_CLASSIFICATION_SCHEMA,
+        "classification": classification,
+        "authoritative": bool(authoritative),
+        "reasons": list(reasons or []),
+        "routeId": receipt.get("effectiveRouteId") or receipt.get("requestedRouteId") if isinstance(receipt, dict) else None,
+        "requestedRouteId": receipt.get("requestedRouteId") if isinstance(receipt, dict) else None,
+        "effectiveRouteId": receipt.get("effectiveRouteId") if isinstance(receipt, dict) else None,
+        "backendKind": backend.get("kind"),
+        "adapterName": backend.get("adapterName"),
+        "timingSource": timings.get("source"),
+        "totalMs": timings.get("totalMs") if isinstance(timings.get("totalMs"), (int, float)) else None,
+        "schedulerVerificationState": scheduler.get("verificationState"),
+        "schedulerMode": (
+            scheduler.get("effectiveScheduler", {}).get("mode")
+            if isinstance(scheduler.get("effectiveScheduler"), dict)
+            else None
+        ) or (
+            scheduler.get("requestedScheduler", {}).get("mode")
+            if isinstance(scheduler.get("requestedScheduler"), dict)
+            else None
+        ),
+        "schedulerUnsupportedFields": (
+            list(scheduler.get("effectiveScheduler", {}).get("unsupportedFields", []))
+            if isinstance(scheduler.get("effectiveScheduler"), dict)
+            and isinstance(scheduler.get("effectiveScheduler", {}).get("unsupportedFields"), list)
+            else []
+        ),
+        "requestedBudget": backpressure.get("requestedBudget"),
+        "effectiveBudget": backpressure.get("effectiveBudget"),
+        "longFrameCount": frame_tail.get("longFrameCount") if isinstance(frame_tail.get("longFrameCount"), int) else None,
+        "maxFrameGapMs": frame_tail.get("maxFrameGapMs") if isinstance(frame_tail.get("maxFrameGapMs"), (int, float)) else None,
+        "outputRoles": [output.get("role") for output in outputs if isinstance(output, dict) and output.get("role")],
+        "createdAt": receipt.get("createdAt") if isinstance(receipt, dict) else None,
+    }
+
+
+def _browser_webgpu_fixture_row():
     route_id = "moge.depth-normal.webgpu-local.v0"
     backend_identity = {
         "kind": "webgpu-local",
@@ -1014,26 +1087,22 @@ def build_browser_webgpu_route_provider_index():
         "createdAt": None,
     }
     evidence_classification = {
-        "schema": WEBGPU_ROUTE_EVIDENCE_CLASSIFICATION_SCHEMA,
-        "classification": "demo",
-        "authoritative": False,
-        "reasons": ["fixture route identity only; no live WebGPU receipt has been produced"],
-        "routeId": route_id,
-        "requestedRouteId": route_id,
-        "effectiveRouteId": route_id,
-        "backendKind": "webgpu-local",
-        "adapterName": "not-probed",
-        "timingSource": "fixture-not-run",
-        "totalMs": 0,
-        "schedulerVerificationState": scheduler_profile["verificationState"],
-        "schedulerMode": scheduler_profile["effectiveScheduler"]["mode"],
-        "schedulerUnsupportedFields": [],
-        "requestedBudget": backpressure_profile["requestedBudget"],
-        "effectiveBudget": backpressure_profile["effectiveBudget"],
-        "longFrameCount": backpressure_profile["frameTail"]["longFrameCount"],
-        "maxFrameGapMs": backpressure_profile["frameTail"]["maxFrameGapMs"],
-        "outputRoles": ["depth", "normal", "pointmap"],
-        "createdAt": None,
+        **_browser_webgpu_evidence_classification({
+            "requestedRouteId": route_id,
+            "effectiveRouteId": route_id,
+            "backend": backend_identity,
+            "timings": {"source": "fixture-not-run", "totalMs": 0},
+            "outputs": [
+                {"role": "depth"},
+                {"role": "normal"},
+                {"role": "pointmap"},
+            ],
+            "runtime": {
+                "scheduler": scheduler_profile,
+                "backpressure": backpressure_profile,
+            },
+            "createdAt": None,
+        }, authoritative=False, classification="demo", reasons=["fixture route identity only; no live WebGPU receipt has been produced"]),
     }
     route_job = {
         "schema": ROUTE_JOB_SCHEMA,
@@ -1139,15 +1208,264 @@ def build_browser_webgpu_route_provider_index():
         "warnings": route_job["warnings"],
         "parse_error": None,
     }
+    return row
+
+
+def _is_nonempty_string(value):
+    return isinstance(value, str) and bool(value.strip())
+
+
+def _browser_webgpu_result_errors(result):
+    errors = []
+    if not isinstance(result, dict):
+        return ["result must be an object"]
+    if result.get("schema") != WEBGPU_ROUTE_RESULT_SCHEMA:
+        errors.append(f"schema must be {WEBGPU_ROUTE_RESULT_SCHEMA}")
+    if not _is_nonempty_string(result.get("requestId")):
+        errors.append("requestId must be a non-empty string")
+    if not _is_nonempty_string(result.get("routeId")):
+        errors.append("routeId must be a non-empty string")
+    receipt = result.get("receipt")
+    if not isinstance(receipt, dict):
+        errors.append("receipt must be an object")
+        return errors
+    if receipt.get("schema") != WEBGPU_ROUTE_RECEIPT_SCHEMA:
+        errors.append(f"receipt.schema must be {WEBGPU_ROUTE_RECEIPT_SCHEMA}")
+    if receipt.get("requestedRouteId") != result.get("routeId"):
+        errors.append("receipt.requestedRouteId must match result.routeId")
+    if receipt.get("effectiveRouteId") != result.get("routeId"):
+        errors.append("receipt.effectiveRouteId must match result.routeId")
+    if result.get("status") != "real" or receipt.get("status") != "real":
+        errors.append("result and receipt status must be real")
+    if receipt.get("fallbackReason"):
+        errors.append("fallbackReason must be absent for authoritative evidence")
+
+    backend = receipt.get("backend")
+    if not isinstance(backend, dict):
+        errors.append("receipt.backend must be an object")
+    else:
+        if backend.get("kind") != "webgpu-local":
+            errors.append("receipt.backend.kind must be webgpu-local")
+        if backend.get("runtime") != "browser":
+            errors.append("receipt.backend.runtime must be browser")
+
+    model = receipt.get("model")
+    if not isinstance(model, dict):
+        errors.append("receipt.model must be an object")
+    else:
+        for field in ("id", "revision", "weightsHash", "dtype"):
+            if not _is_nonempty_string(model.get(field)):
+                errors.append(f"receipt.model.{field} must be a non-empty string")
+
+    kernel = receipt.get("kernel")
+    if not isinstance(kernel, dict):
+        errors.append("receipt.kernel must be an object")
+    else:
+        for field in ("kitVersion", "profile"):
+            if not _is_nonempty_string(kernel.get(field)):
+                errors.append(f"receipt.kernel.{field} must be a non-empty string")
+
+    inputs = receipt.get("inputs")
+    if not isinstance(inputs, list) or not inputs:
+        errors.append("receipt.inputs must be a non-empty array")
+    else:
+        for index, artifact in enumerate(inputs):
+            for field in ("role", "artifactId", "sha256"):
+                if not _is_nonempty_string((artifact or {}).get(field)):
+                    errors.append(f"receipt.inputs[{index}].{field} must be a non-empty string")
+
+    outputs = receipt.get("outputs")
+    if not isinstance(outputs, list) or not outputs:
+        errors.append("receipt.outputs must be a non-empty array")
+    else:
+        for index, artifact in enumerate(outputs):
+            artifact = artifact if isinstance(artifact, dict) else {}
+            for field in ("role", "artifactId", "sha256"):
+                if not _is_nonempty_string(artifact.get(field)):
+                    errors.append(f"receipt.outputs[{index}].{field} must be a non-empty string")
+            if artifact.get("status") != "real":
+                errors.append(f"receipt.outputs[{index}].status must be real")
+
+    timings = receipt.get("timings")
+    if not isinstance(timings, dict):
+        errors.append("receipt.timings must be an object")
+    else:
+        if not _is_nonempty_string(timings.get("source")):
+            errors.append("receipt.timings.source must be a non-empty string")
+        if not isinstance(timings.get("totalMs"), (int, float)) or timings.get("totalMs") < 0:
+            errors.append("receipt.timings.totalMs must be a finite non-negative number")
+    return errors
+
+
+def _browser_webgpu_route_row_from_result(path, result):
+    receipt = result["receipt"]
+    runtime = receipt.get("runtime") if isinstance(receipt.get("runtime"), dict) else {}
+    scheduler = runtime.get("scheduler") if isinstance(runtime.get("scheduler"), dict) else None
+    backpressure = runtime.get("backpressure") if isinstance(runtime.get("backpressure"), dict) else None
+    runtime_profile = runtime.get("runtimeProfile") if isinstance(runtime.get("runtimeProfile"), dict) else None
+    backend = receipt.get("backend") if isinstance(receipt.get("backend"), dict) else {}
+    model = receipt.get("model") if isinstance(receipt.get("model"), dict) else {}
+    cache_state = backpressure.get("warmCacheState") if isinstance(backpressure, dict) else "unknown"
+    evidence_classification = _browser_webgpu_evidence_classification(
+        receipt,
+        authoritative=True,
+        classification="authoritative-live-webgpu",
+        reasons=[],
+    )
+    cooperative_verified = (
+        isinstance(scheduler, dict)
+        and scheduler.get("verificationState") == "verified"
+        and isinstance(scheduler.get("effectiveScheduler"), dict)
+        and scheduler["effectiveScheduler"].get("mode") == "cooperative"
+    )
+    route_id = receipt.get("effectiveRouteId") or result.get("routeId")
+    job_id = f"browser-webgpu-{result.get('requestId')}"
+    route_job = {
+        "schema": ROUTE_JOB_SCHEMA,
+        "id": job_id,
+        "routeId": route_id,
+        "executor": {
+            "kind": "browser-webgpu",
+            "id": "webgpu-inference-kit-result",
+            "backendKind": "webgpu-local",
+            "workerModule": result.get("request", {}).get("workerModule") if isinstance(result.get("request"), dict) else None,
+        },
+        "intent": "preview",
+        "priorityClass": "preview",
+        "status": "done",
+        "inputArtifacts": receipt.get("inputs") or [],
+        "outputPolicy": {"mode": "kit-route-result"},
+        "capabilities": {
+            "deferable": False,
+            "abortable": False,
+            "chunkYieldable": cooperative_verified,
+            "deferBeforeStart": False,
+            "abortBeforeCommit": False,
+            "cooperativeYieldable": cooperative_verified,
+            "schedulerConfigurable": False,
+            "checkpointable": False,
+            "checkpointPauseRequestable": False,
+            "resumable": False,
+            "resumeAdvertised": False,
+            "warmCacheSensitive": True,
+            "memoryExclusive": backpressure.get("memoryExclusivity") == "exclusive" if isinstance(backpressure, dict) else False,
+            "memoryPressureSensitive": True,
+            "frameBudgetSensitive": True,
+        },
+        "controls": [],
+        "resumability": {
+            "kind": "cooperative-yield" if cooperative_verified else "unproven",
+            "resumeSupported": False,
+            "yieldSupported": cooperative_verified,
+            "schedulerVerificationState": scheduler.get("verificationState") if isinstance(scheduler, dict) else None,
+        },
+        "warnings": [] if cooperative_verified else [{
+            "kind": "scheduler_unverified",
+            "message": "Browser WebGPU result did not prove effective cooperative scheduler telemetry.",
+        }],
+        "metadata": {
+            "effectiveBackend": {
+                "kind": backend.get("kind"),
+                "execution": backend.get("runtime"),
+            },
+            "model": {
+                "id": model.get("id"),
+                "revision": model.get("revision"),
+                "role": "depth-normal-pointmap" if model.get("id") == "Ruicheng/moge-2-vitl-normal" else None,
+            },
+            "cache": {
+                "state": cache_state,
+                "warmCacheSensitive": True,
+            },
+            "device": {
+                "adapter": backend.get("adapterName"),
+                "features": backend.get("features") if isinstance(backend.get("features"), list) else [],
+                "identitySource": "route-result",
+            },
+            "runtimeProfile": runtime_profile,
+            "scheduler": scheduler,
+            "backpressure": backpressure,
+            "evidenceClassification": evidence_classification,
+            "sourceResultPath": str(path),
+            "routeResult": result,
+        },
+    }
+    display_title = "MoGE WebGPU Live" if route_id == "moge.depth-normal.webgpu-local.v0" else _clean_label(route_id, "Browser WebGPU")
+    row = {
+        "schema": "kaminos.route-provider-row.v0",
+        "provider": "browser-webgpu",
+        "job_id": job_id,
+        "status_dir": "route-result",
+        "route_job": route_job,
+        "display": {
+            "title": display_title,
+            "subtitle": "browser-webgpu / webgpu-local / live receipt",
+            "meta": f"kit route result {Path(path).name}",
+            "raw_name": job_id,
+            "job_type_label": "Browser WebGPU",
+            "load_label": "Open",
+        },
+        "schedule": {
+            "schema": "kaminos.browser-webgpu.schedule.v0",
+            "priority_class": "preview",
+            "submitted_at": result.get("createdAt") or receipt.get("createdAt"),
+        },
+        "process": {
+            "pid": None,
+            "worker_pid": None,
+            "child_pid": None,
+            "process_group_id": None,
+        },
+        "receipt_link": _browser_webgpu_result_read_link(path),
+        "checkpoint_receipt_link": None,
+        "output_links": [],
+        "controls": [],
+        "warnings": route_job["warnings"],
+        "parse_error": None,
+    }
+    return row
+
+
+def _load_browser_webgpu_result_rows(result_dir):
+    if not result_dir:
+        return [], 0
+    result_root = Path(result_dir).expanduser()
+    if not result_root.is_dir():
+        return [], 0
+    rows = []
+    invalid_count = 0
+    for path in sorted(result_root.glob("*.json")):
+        try:
+            result = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            invalid_count += 1
+            continue
+        errors = _browser_webgpu_result_errors(result)
+        if errors:
+            invalid_count += 1
+            continue
+        rows.append(_browser_webgpu_route_row_from_result(path, result))
+    return rows, invalid_count
+
+
+def build_browser_webgpu_route_provider_index():
+    live_rows, invalid_count = _load_browser_webgpu_result_rows(BROWSER_WEBGPU_ROUTE_RESULTS_DIR)
+    rows = live_rows if live_rows else [_browser_webgpu_fixture_row()]
     return {
         "schema": ROUTE_PROVIDER_INDEX_SCHEMA,
         "provider": {
             "kind": "browser-webgpu",
             "id": "local-browser-webgpu",
-            "source": "fixture",
+            "source": "route-result-files" if live_rows else "fixture",
+            "result_dir": str(BROWSER_WEBGPU_ROUTE_RESULTS_DIR) if BROWSER_WEBGPU_ROUTE_RESULTS_DIR else None,
         },
-        "summary": {"reserved": 1},
-        "rows": [row],
+        "summary": {
+            status: sum(1 for row in rows if row.get("route_job", {}).get("status") == status)
+            for status in sorted({row.get("route_job", {}).get("status") for row in rows})
+            if status
+        },
+        "invalid_result_count": invalid_count,
+        "rows": rows,
     }
 
 
