@@ -912,6 +912,7 @@ export function createFingerJuiceHostPacket(debugState = {}, options = {}) {
       },
     },
     custody: {
+      bigPapaOwns: ['fluid law', 'solver/source truth', 'terrain coupling checksums', 'hit event semantics'],
       sourceOwns: ['fluid law', 'solver/source truth', 'terrain coupling checksums', 'hit event semantics'],
       kaminosOwns: ['native host camera', 'viewport composition', 'operator display', 'interaction controls'],
       downgrades,

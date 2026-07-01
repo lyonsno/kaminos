@@ -835,6 +835,8 @@ assert.equal(hostPacket.render.payload.schema, 'big-papa-finger-juice.render-pay
 assert.equal(hostPacket.render.payload.downgraded, true, 'host packet marks preview payload as downgraded');
 assert.ok(hostPacket.render.payload.downgrades.includes('preview_particle_samples_not_full_render_buffer'), 'host packet names preview particle sample downgrade');
 assert.ok(hostPacket.visual.cameraHints.presets.some(preset => preset.id === 'operator-oblique'), 'host packet carries operator camera hint preset');
+assert.ok(hostPacket.custody.bigPapaOwns.includes('fluid law'), 'host packet exposes Big Papa custody for host-surface validators');
+assert.ok(hostPacket.custody.sourceOwns.includes('fluid law'), 'host packet preserves generic source custody alias');
 assert.ok(hostPacket.custody.rejectedDebugSurfaces.some(surface => surface.surface === 'direct_lerms_finger_juice_debug_route'), 'host packet rejects direct debug route as acceptance surface');
 assert.ok(hostPacket.custody.downgrades.includes('host_packet_preview_payload_not_native_render_buffer'), 'host packet names native-render-buffer downgrade');
 assert.ok(Array.isArray(hostPacket.hitRefs.events), 'host packet exposes hit event refs array');
