@@ -230,9 +230,19 @@ function artifactByteTelemetry(artifacts = {}) {
 function routeTelemetryFromReport(report = {}) {
   const pipelineReport = report.pipelineReport || null;
   const stages = asArray(pipelineReport?.stages);
+  const declaredStageCount = finiteOrNull(pipelineReport?.effectiveRouteConfig?.stageCount);
   const telemetryWarnings = [];
   if (!pipelineReport) telemetryWarnings.push('pipeline_report_missing');
   if (pipelineReport && stages.length === 0) telemetryWarnings.push('pipeline_report_stages_missing');
+  if (declaredStageCount !== null && declaredStageCount !== stages.length) {
+    telemetryWarnings.push('pipeline_report_stage_count_mismatch');
+  }
+  for (const stage of stages) {
+    const stageId = stage?.id || 'unknown-stage';
+    const exitCode = finiteOrNull(stage?.effectiveRoute?.exitCode);
+    if (exitCode !== null && exitCode !== 0) telemetryWarnings.push(`pipeline_stage_exit_nonzero:${stageId}`);
+    if (stage?.effectiveRoute?.signal) telemetryWarnings.push(`pipeline_stage_signal:${stageId}`);
+  }
   if (report.runPipeline === true && !report.pipelineExit) telemetryWarnings.push('pipeline_exit_missing');
   const pipelineExit = normalizePipelineExit(report.pipelineExit);
   if (pipelineExit && pipelineExit.status !== 0) telemetryWarnings.push('pipeline_exit_nonzero');
@@ -248,7 +258,7 @@ function routeTelemetryFromReport(report = {}) {
       effectivePipelineId: pipelineReport.effectivePipelineId || null,
       routeId: pipelineReport.effectiveRouteConfig?.routeId || null,
       outputRoot: pipelineReport.effectiveRouteConfig?.outputRoot || null,
-      declaredStageCount: finiteOrNull(pipelineReport.effectiveRouteConfig?.stageCount),
+      declaredStageCount,
     } : null,
     pipelineExit,
     stageCount: stages.length,
@@ -646,6 +656,7 @@ export function buildComputeRouteContentionWitness({
         warning === 'route_telemetry_missing'
           || warning === 'pipeline_report_missing'
           || warning === 'pipeline_report_stages_missing'
+          || warning === 'pipeline_report_stage_count_mismatch'
       )),
       schedulerUnverified: normalizedScheduler.verificationState === 'scheduler-unverified',
       timingProxyOnly: timing.disclaimer === 'not-gpu-exclusive-or-present-latency',

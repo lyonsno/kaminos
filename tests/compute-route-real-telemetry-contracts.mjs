@@ -231,3 +231,74 @@ const missingStages = buildComputeRouteContentionWitnessFromReport({
 assert.ok(missingStages.routeTelemetry.telemetryWarnings.includes('pipeline_report_stages_missing'));
 assert.ok(missingStages.witnessWarnings.includes('pipeline_report_stages_missing'));
 assert.equal(missingStages.falseClosureChecks.missingRouteTelemetry, true);
+
+const nonzeroStageExit = buildComputeRouteContentionWitnessFromReport({
+  ...telemetryReport,
+  pipelineReport: {
+    ...telemetryReport.pipelineReport,
+    stages: [
+      {
+        ...telemetryReport.pipelineReport.stages[0],
+        effectiveRoute: {
+          ...telemetryReport.pipelineReport.stages[0].effectiveRoute,
+          exitCode: 1,
+        },
+      },
+      telemetryReport.pipelineReport.stages[1],
+    ],
+  },
+}, {
+  requestedVisualBudget: {
+    budgetId: 'live',
+    liveSimulation: true,
+    prerecorded: false,
+  },
+});
+assert.ok(nonzeroStageExit.routeTelemetry.telemetryWarnings.includes('pipeline_stage_exit_nonzero:run-sharp-image-to-splat'));
+assert.ok(nonzeroStageExit.witnessWarnings.includes('pipeline_stage_exit_nonzero:run-sharp-image-to-splat'));
+
+const signaledStage = buildComputeRouteContentionWitnessFromReport({
+  ...telemetryReport,
+  pipelineReport: {
+    ...telemetryReport.pipelineReport,
+    stages: [
+      {
+        ...telemetryReport.pipelineReport.stages[0],
+        effectiveRoute: {
+          ...telemetryReport.pipelineReport.stages[0].effectiveRoute,
+          signal: 'SIGTERM',
+        },
+      },
+      telemetryReport.pipelineReport.stages[1],
+    ],
+  },
+}, {
+  requestedVisualBudget: {
+    budgetId: 'live',
+    liveSimulation: true,
+    prerecorded: false,
+  },
+});
+assert.ok(signaledStage.routeTelemetry.telemetryWarnings.includes('pipeline_stage_signal:run-sharp-image-to-splat'));
+assert.ok(signaledStage.witnessWarnings.includes('pipeline_stage_signal:run-sharp-image-to-splat'));
+
+const stageCountMismatch = buildComputeRouteContentionWitnessFromReport({
+  ...telemetryReport,
+  pipelineReport: {
+    ...telemetryReport.pipelineReport,
+    effectiveRouteConfig: {
+      ...telemetryReport.pipelineReport.effectiveRouteConfig,
+      stageCount: 2,
+    },
+    stages: [telemetryReport.pipelineReport.stages[0]],
+  },
+}, {
+  requestedVisualBudget: {
+    budgetId: 'live',
+    liveSimulation: true,
+    prerecorded: false,
+  },
+});
+assert.ok(stageCountMismatch.routeTelemetry.telemetryWarnings.includes('pipeline_report_stage_count_mismatch'));
+assert.ok(stageCountMismatch.witnessWarnings.includes('pipeline_report_stage_count_mismatch'));
+assert.equal(stageCountMismatch.falseClosureChecks.missingRouteTelemetry, true);
