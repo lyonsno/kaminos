@@ -328,6 +328,7 @@ async function main() {
   const contentionReportPath = resolve(args.contentionReport || reportPath.replace(/\.json$/i, '.contention-witness.json'));
   const pipelineReportPath = resolve(args.pipelineReport || `${args.outDir.replace(/\/$/, '')}/pipeline-witness.json`);
   let pipelineProcess = null;
+  let pipelineStartedAtMs = null;
   let server = null;
   let activeWitness = null;
   let finalWitness = null;
@@ -372,9 +373,18 @@ async function main() {
       });
       report.activeWitness = activeWitness;
       if (!args.dryRun) {
+        pipelineStartedAtMs = Date.now();
         pipelineProcess = runPipelineWitness(args, pipelineReportPath);
         pipelineProcess.outputCapture = captureChildOutput(pipelineProcess);
         report.phase = 'pipeline-running';
+        report.pipelineExit = {
+          status: null,
+          startedAt: new Date(pipelineStartedAtMs).toISOString(),
+          finishedAt: null,
+          durationMs: null,
+          stdoutTail: '',
+          stderrTail: '',
+        };
       } else {
         report.phase = 'pipeline-planned';
       }
@@ -425,9 +435,13 @@ async function main() {
 
     if (pipelineProcess) {
       const exitCode = await new Promise(resolve => pipelineProcess.on('close', resolve));
+      const pipelineFinishedAtMs = Date.now();
       const outputCapture = pipelineProcess.outputCapture || { stdout: [], stderr: [] };
       report.pipelineExit = {
         status: exitCode,
+        startedAt: pipelineStartedAtMs ? new Date(pipelineStartedAtMs).toISOString() : null,
+        finishedAt: new Date(pipelineFinishedAtMs).toISOString(),
+        durationMs: pipelineStartedAtMs ? pipelineFinishedAtMs - pipelineStartedAtMs : null,
         stdoutTail: outputCapture.stdout.join('').slice(-4000),
         stderrTail: outputCapture.stderr.join('').slice(-4000),
       };

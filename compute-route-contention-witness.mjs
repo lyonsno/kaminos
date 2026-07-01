@@ -162,6 +162,102 @@ function outputHandoffFromReport(report = {}) {
   };
 }
 
+function stringByteLength(value) {
+  if (value === null || value === undefined) return 0;
+  return Buffer.byteLength(String(value), 'utf8');
+}
+
+function normalizePipelineExit(pipelineExit = null) {
+  if (!pipelineExit || typeof pipelineExit !== 'object') return null;
+  return {
+    status: finiteOrNull(pipelineExit.status),
+    startedAt: pipelineExit.startedAt || null,
+    finishedAt: pipelineExit.finishedAt || null,
+    durationMs: finiteOrNull(pipelineExit.durationMs),
+    stdoutTailBytes: stringByteLength(pipelineExit.stdoutTail),
+    stderrTailBytes: stringByteLength(pipelineExit.stderrTail),
+    hasStdoutTail: stringByteLength(pipelineExit.stdoutTail) > 0,
+    hasStderrTail: stringByteLength(pipelineExit.stderrTail) > 0,
+  };
+}
+
+function routeStageTelemetry(stage = {}) {
+  const effectiveRoute = stage.effectiveRoute || {};
+  return {
+    id: stage.id || null,
+    label: stage.label || null,
+    status: stage.status || null,
+    requestedRoute: stage.requestedRoute || null,
+    effectiveRoute: effectiveRoute.id || null,
+    effectiveBackend: effectiveRoute.effectiveBackend || effectiveRoute.backendClass || null,
+    realModel: effectiveRoute.realModel === true,
+    requestedRealModel: effectiveRoute.requestedRealModel === true,
+    executesModel: effectiveRoute.executesModel === true,
+    commandEnv: effectiveRoute.commandEnv || null,
+    adapterReportPath: effectiveRoute.adapterReportPath || null,
+    exitCode: finiteOrNull(effectiveRoute.exitCode),
+    signal: effectiveRoute.signal || null,
+    stdoutTailBytes: stringByteLength(effectiveRoute.stdoutTail),
+    stderrTailBytes: stringByteLength(effectiveRoute.stderrTail),
+    outputArtifact: stage.outputArtifact || null,
+    outputPath: stage.outputPath || null,
+    outputBytes: finiteOrNull(stage.outputBytes ?? effectiveRoute.outputBytes),
+    outputSha256: stage.outputSha256 || effectiveRoute.outputSha256 || null,
+    truthBoundary: effectiveRoute.truthBoundary || null,
+  };
+}
+
+function artifactByteTelemetry(artifacts = {}) {
+  const entries = Object.entries(artifacts)
+    .filter(([id]) => id !== 'input')
+    .map(([id, artifact]) => ({
+      id,
+      role: artifact?.role || id,
+      status: artifact?.status || null,
+      bytes: finiteOrNull(artifact?.bytes),
+      path: artifact?.path || null,
+    }));
+  return {
+    artifactCount: entries.length,
+    realArtifactCount: entries.filter(entry => entry.status === 'real').length,
+    realOutputBytes: entries
+      .filter(entry => entry.status === 'real')
+      .reduce((total, entry) => total + (entry.bytes || 0), 0),
+    entries,
+  };
+}
+
+function routeTelemetryFromReport(report = {}) {
+  const pipelineReport = report.pipelineReport || null;
+  const stages = asArray(pipelineReport?.stages);
+  const telemetryWarnings = [];
+  if (!pipelineReport) telemetryWarnings.push('pipeline_report_missing');
+  if (pipelineReport && stages.length === 0) telemetryWarnings.push('pipeline_report_stages_missing');
+  if (report.runPipeline === true && !report.pipelineExit) telemetryWarnings.push('pipeline_exit_missing');
+  const pipelineExit = normalizePipelineExit(report.pipelineExit);
+  if (pipelineExit && pipelineExit.status !== 0) telemetryWarnings.push('pipeline_exit_nonzero');
+  return {
+    schema: 'kaminos.compute-route-telemetry.v0',
+    evidenceSource: 'compute-route-fire-visual-report.pipeline-report',
+    reportPhase: report.phase || null,
+    pipelineReportPath: report.pipelineReportPath || null,
+    pipeline: pipelineReport ? {
+      ok: pipelineReport.ok === true,
+      phase: pipelineReport.phase || null,
+      requestedPipelineId: pipelineReport.requestedPipelineId || null,
+      effectivePipelineId: pipelineReport.effectivePipelineId || null,
+      routeId: pipelineReport.effectiveRouteConfig?.routeId || null,
+      outputRoot: pipelineReport.effectiveRouteConfig?.outputRoot || null,
+      declaredStageCount: finiteOrNull(pipelineReport.effectiveRouteConfig?.stageCount),
+    } : null,
+    pipelineExit,
+    stageCount: stages.length,
+    stages: stages.map(routeStageTelemetry),
+    artifactBytes: artifactByteTelemetry(pipelineReport?.artifacts || {}),
+    telemetryWarnings: unique(telemetryWarnings),
+  };
+}
+
 function sourceTruthWarningsFromReport(report = {}) {
   return unique([
     ...asArray(report.activeWitness?.routeRun?.sourceTruthWarnings),
@@ -404,10 +500,11 @@ function optimizationFromReport(report = {}) {
   };
 }
 
-function witnessWarningsFor({ scheduler }) {
+function witnessWarningsFor({ scheduler, routeTelemetry = null }) {
   const warnings = [];
   warnings.push(...asArray(scheduler?.validationWarnings));
   warnings.push(...asArray(scheduler?.falseAuthorityViolations));
+  warnings.push(...asArray(routeTelemetry?.telemetryWarnings));
   if (scheduler?.verificationState === 'scheduler-unverified') warnings.push('scheduler_unverified');
   const requested = scheduler?.requestedScheduler;
   const effective = scheduler?.effectiveScheduler;
@@ -466,6 +563,7 @@ export function buildComputeRouteContentionWitness({
   visualBudget,
   timing,
   scheduler = null,
+  routeTelemetry = null,
   backpressure = null,
   optimization = null,
   outputHandoff = null,
@@ -488,7 +586,19 @@ export function buildComputeRouteContentionWitness({
     || !(Number.isFinite(timing.queueDoneP99Ms) || Number.isFinite(timing.queueDoneP95Ms));
   const frameTailDamage = classifyFrameTailDamage(timing);
   const normalizedScheduler = normalizeScheduler(scheduler);
-  const witnessWarnings = witnessWarningsFor({ scheduler: normalizedScheduler });
+  const normalizedRouteTelemetry = routeTelemetry || {
+    schema: 'kaminos.compute-route-telemetry.v0',
+    evidenceSource: 'unreported',
+    reportPhase: null,
+    pipelineReportPath: null,
+    pipeline: null,
+    pipelineExit: null,
+    stageCount: 0,
+    stages: [],
+    artifactBytes: artifactByteTelemetry({}),
+    telemetryWarnings: ['route_telemetry_missing'],
+  };
+  const witnessWarnings = witnessWarningsFor({ scheduler: normalizedScheduler, routeTelemetry: normalizedRouteTelemetry });
   return {
     schema: COMPUTE_ROUTE_CONTENTION_WITNESS_SCHEMA,
     witnessId,
@@ -500,6 +610,7 @@ export function buildComputeRouteContentionWitness({
     timing,
     frameTailDamage,
     scheduler: normalizedScheduler,
+    routeTelemetry: normalizedRouteTelemetry,
     backpressure: backpressure || {
       schema: 'kaminos.webgpu-route-backpressure.v0',
       requestedBudget: null,
@@ -531,6 +642,11 @@ export function buildComputeRouteContentionWitness({
       missingTiming,
       prerecordedMainPath: visualBudget?.requested?.prerecorded === true || visualBudget?.requested?.liveSimulation === false,
       fixtureOrCachedRoute,
+      missingRouteTelemetry: asArray(normalizedRouteTelemetry.telemetryWarnings).some(warning => (
+        warning === 'route_telemetry_missing'
+          || warning === 'pipeline_report_missing'
+          || warning === 'pipeline_report_stages_missing'
+      )),
       schedulerUnverified: normalizedScheduler.verificationState === 'scheduler-unverified',
       timingProxyOnly: timing.disclaimer === 'not-gpu-exclusive-or-present-latency',
     },
@@ -572,6 +688,7 @@ export function buildComputeRouteContentionWitnessFromReport(report, {
     visualBudget,
     timing,
     scheduler: schedulerFromReport(report),
+    routeTelemetry: routeTelemetryFromReport(report),
     backpressure: backpressureFromReport(report),
     optimization: optimizationFromReport(report),
     outputHandoff: outputHandoffFromReport(report),
