@@ -37,6 +37,9 @@ assert.match(docs, /source authority/i, 'architecture doc requires source author
 assert.match(docs, /freshness/i, 'architecture doc requires freshness to stay visible');
 assert.match(docs, /downgrade/i, 'architecture doc requires downgrades to stay visible');
 assert.match(docs, /does not certify domain truth/i, 'architecture doc keeps Kaminos from impersonating source truth');
+assert.match(docs, /Human-Primary Interface Text/i, 'architecture doc defines the human-primary interface text rule');
+assert.match(docs, /primary text[\s\S]*make\s+sense to someone who is not the operator and not an agent/i, 'architecture doc requires primary text to be human-legible');
+assert.match(docs, /receipts[\s\S]*schemas[\s\S]*warnings[\s\S]*evidence drawer/i, 'architecture doc keeps evidence machinery in subordinate detail surfaces');
 assert.match(docs, /Inhabited Agent Forge/i, 'architecture doc states the internal/future agent-forge relationship');
 assert.match(docs, /not the public headline/i, 'architecture doc keeps the internal agent-forge layer out of the public headline');
 assert.match(docs, /docs\/splat-assets\.md/, 'architecture doc links the splat asset correction doc');

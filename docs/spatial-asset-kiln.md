@@ -78,6 +78,30 @@ can show whether a specimen is live, cached, fixture, fallback, stale, failed,
 or promoted. Those states should be visible beside the specimen rather than
 buried in logs.
 
+## Human-Primary Interface Text
+
+Every new visible bench, route, activity, offer, status row, card, alert, or
+button must lead with human-readable meaning. The primary text should make
+sense to someone who is not the operator and not an agent.
+
+The evidence machinery still has to exist, but it belongs underneath the human
+sentence. Receipts, schemas, warnings, false-closure checks, requested/effective
+route ids, backend ids, source truth, freshness, scheduler state, and visual
+source truth should live in secondary lines, tooltips, detail panels, or an
+evidence drawer. They support the primary text; they are not the primary text.
+
+For example, the main row should say something like "SHARP made a splat from
+this image while the furnace dropped to a lower live burn." The supporting
+detail can then say which route ran, whether the scheduler evidence was
+verified, what fire budget was requested, what budget actually ran, whether the
+visual source was live, and where the report lives.
+
+When evidence is weak, the same rule applies. A row should say "The route
+finished, but Kaminos could not prove the furnace stayed live during the wait"
+before exposing `scheduler-unverified`, `visualSourceNotLive`, report paths, or
+schema names. Plain language is not permission to weaken evidence; it is the
+translation layer that keeps evidence from becoming interface jargon.
+
 ## Promotion Membrane
 
 Promotion is a membrane, not a mood. The promotion ladder is scratch output ->
