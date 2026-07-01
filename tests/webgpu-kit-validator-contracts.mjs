@@ -14,16 +14,16 @@ assert.ok(existsSync(packageLockPath), 'Kaminos pipeline tooling must lock npm d
 const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8'));
 assert.equal(
   packageJson.dependencies?.['@kaminos/webgpu-inference-kit'],
-  '^0.1.0',
+  '^0.1.1',
   'Pipeline scheduler evidence must use the runtime WebGPU inference kit package',
 );
 
 const packageLock = JSON.parse(readFileSync(packageLockPath, 'utf8'));
 const lockedKit = packageLock.packages?.['node_modules/@kaminos/webgpu-inference-kit'];
-assert.equal(lockedKit?.version, '0.1.0', 'WebGPU inference kit lockfile must pin the adopted package version');
+assert.equal(lockedKit?.version, '0.1.1', 'WebGPU inference kit lockfile must pin the adopted package version');
 assert.equal(
   lockedKit?.integrity,
-  'sha512-vbQzTBsPwnl/7ViAcT9asQFXP665hq2WQcuzh7oDhFIf8raowxav57np9z3kbTnChEteglCenN4Rr98Q3sqXmA==',
+  'sha512-OQ6Jxqb22RKuxKsa7BVz6LM7HWu0tXDteEc+6tZX/7t907PnZngGC8UNpbItM9HHb4xac6T9FpYF+mcHaFtSQg==',
   'WebGPU inference kit lockfile must preserve the published package integrity Cranial handed off',
 );
 
