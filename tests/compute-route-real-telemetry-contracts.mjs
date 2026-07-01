@@ -302,3 +302,41 @@ const stageCountMismatch = buildComputeRouteContentionWitnessFromReport({
 assert.ok(stageCountMismatch.routeTelemetry.telemetryWarnings.includes('pipeline_report_stage_count_mismatch'));
 assert.ok(stageCountMismatch.witnessWarnings.includes('pipeline_report_stage_count_mismatch'));
 assert.equal(stageCountMismatch.falseClosureChecks.missingRouteTelemetry, true);
+
+const failedStatusWithoutExit = buildComputeRouteContentionWitnessFromReport({
+  ...telemetryReport,
+  phase: 'failed:adapter',
+  pipelineReport: {
+    ...telemetryReport.pipelineReport,
+    ok: false,
+    phase: 'failed:adapter',
+    effectiveRouteConfig: {
+      ...telemetryReport.pipelineReport.effectiveRouteConfig,
+      stageCount: 1,
+    },
+    artifacts: {
+      input: telemetryReport.pipelineReport.artifacts.input,
+    },
+    stages: [
+      {
+        ...telemetryReport.pipelineReport.stages[0],
+        status: 'failed',
+        effectiveRoute: {
+          ...telemetryReport.pipelineReport.stages[0].effectiveRoute,
+          exitCode: undefined,
+          signal: null,
+        },
+      },
+    ],
+  },
+}, {
+  requestedVisualBudget: {
+    budgetId: 'live',
+    liveSimulation: true,
+    prerecorded: false,
+  },
+});
+assert.ok(failedStatusWithoutExit.routeTelemetry.telemetryWarnings.includes('pipeline_report_failed'));
+assert.ok(failedStatusWithoutExit.routeTelemetry.telemetryWarnings.includes('pipeline_stage_status_failed:run-sharp-image-to-splat'));
+assert.ok(failedStatusWithoutExit.witnessWarnings.includes('pipeline_report_failed'));
+assert.ok(failedStatusWithoutExit.witnessWarnings.includes('pipeline_stage_status_failed:run-sharp-image-to-splat'));

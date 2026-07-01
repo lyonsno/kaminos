@@ -233,12 +233,16 @@ function routeTelemetryFromReport(report = {}) {
   const declaredStageCount = finiteOrNull(pipelineReport?.effectiveRouteConfig?.stageCount);
   const telemetryWarnings = [];
   if (!pipelineReport) telemetryWarnings.push('pipeline_report_missing');
+  if (pipelineReport?.ok === false || String(pipelineReport?.phase || '').startsWith('failed')) {
+    telemetryWarnings.push('pipeline_report_failed');
+  }
   if (pipelineReport && stages.length === 0) telemetryWarnings.push('pipeline_report_stages_missing');
   if (declaredStageCount !== null && declaredStageCount !== stages.length) {
     telemetryWarnings.push('pipeline_report_stage_count_mismatch');
   }
   for (const stage of stages) {
     const stageId = stage?.id || 'unknown-stage';
+    if (stage?.status === 'failed') telemetryWarnings.push(`pipeline_stage_status_failed:${stageId}`);
     const exitCode = finiteOrNull(stage?.effectiveRoute?.exitCode);
     if (exitCode !== null && exitCode !== 0) telemetryWarnings.push(`pipeline_stage_exit_nonzero:${stageId}`);
     if (stage?.effectiveRoute?.signal) telemetryWarnings.push(`pipeline_stage_signal:${stageId}`);
