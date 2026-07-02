@@ -1510,6 +1510,7 @@ const cadenceGapInterframeWitness = existsSync(cadenceGapInterframeWitnessPath) 
 assert.match(cadenceGapInterframeWitness, /kaminos\.volume\.cadence-gap-interframe-witness\.v0/, 'cadence-gap interframe witness writes a stable schema identity');
 assert.match(cadenceGapInterframeWitness, /kaminos-volume-cadence-gap-manifest-v0/, 'cadence-gap interframe witness consumes Hellmouth gap manifests by stable identity');
 assert.match(cadenceGapInterframeWitness, /--gap-manifest/, 'cadence-gap interframe witness takes the manifest path from the caller');
+assert.match(cadenceGapInterframeWitness, /--render-report/, 'cadence-gap interframe witness can regenerate playback from a completed durable report');
 assert.match(cadenceGapInterframeWitness, /cadence-continuation-baseline/, 'cadence-gap interframe witness preserves the current continuation timeline as a baseline');
 assert.match(cadenceGapInterframeWitness, /continuation-target-from-latest-live-field/, 'cadence-gap interframe witness labels the comparison target authority');
 assert.match(cadenceGapInterframeWitness, /synthetic-comparison-not-live-simulator-output/, 'cadence-gap interframe witness labels replacement frames as synthetic comparison evidence');
@@ -1521,3 +1522,9 @@ assert.match(cadenceGapInterframeWitness, /cadencePhase/, 'cadence-gap interfram
 assert.match(cadenceGapInterframeWitness, /ratio/, 'cadence-gap interframe witness passes ratio to phase-aware candidates');
 assert.match(cadenceGapInterframeWitness, /externalBaselineCommand/, 'cadence-gap interframe witness records the external command used for candidates');
 assert.match(cadenceGapInterframeWitness, /failurePhase/, 'cadence-gap interframe witness writes phase-tagged failure reports');
+assert.match(cadenceGapInterframeWitness, /data-candidate-select/, 'cadence-gap playback uses one selected candidate instead of animating every candidate card');
+assert.match(cadenceGapInterframeWitness, /data-baseline-stage/, 'cadence-gap playback keeps a fixed baseline stage for stable visual comparison');
+assert.match(cadenceGapInterframeWitness, /data-candidate-stage/, 'cadence-gap playback keeps a fixed candidate stage for stable visual comparison');
+assert.match(cadenceGapInterframeWitness, /data-frame-scrubber/, 'cadence-gap playback exposes a frame scrubber for controlled motion inspection');
+assert.match(cadenceGapInterframeWitness, /stepFrame/, 'cadence-gap playback exposes deterministic frame stepping controls');
+assert.doesNotMatch(cadenceGapInterframeWitness, /id="candidate-grid"/, 'cadence-gap playback must not render an all-candidate animated grid');

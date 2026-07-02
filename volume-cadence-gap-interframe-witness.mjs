@@ -494,6 +494,7 @@ function writePlaybackHtml(path, report) {
     fps: 24,
     baseline,
     candidates,
+    defaultCandidateId: report.summary?.lowestTemporalMaxConsecutiveDelta?.id || candidates[0]?.id || null,
   });
   const html = `<!doctype html>
 <html lang="en">
@@ -516,20 +517,25 @@ function writePlaybackHtml(path, report) {
   .chip span { display: block; font-size: 12px; overflow-wrap: anywhere; }
   main { display: grid; gap: 12px; }
   .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: start; }
-  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(390px, 1fr)); gap: 12px; }
-  .panel { border: 1px solid #1b2830; background: #0c1014; padding: 10px; }
+  .panel { border: 1px solid #1b2830; background: #0c1014; padding: 10px; min-width: 0; }
   .panel p { color: #b7c5ce; font-size: 12px; margin-bottom: 8px; }
   .stage { width: 100%; aspect-ratio: ${width} / ${height}; background: #000; overflow: hidden; }
   .stage img { width: 100%; height: 100%; object-fit: contain; display: block; }
-  .readout { display: grid; grid-template-columns: 128px minmax(0, 1fr); gap: 8px; align-items: center; margin-top: 8px; color: #d2dde3; font-size: 12px; }
+  .readout { min-height: 54px; display: grid; grid-template-columns: 152px minmax(0, 1fr); gap: 8px; align-items: center; margin-top: 8px; color: #d2dde3; font-size: 12px; }
   .bar { height: 9px; background: #16232b; position: relative; overflow: hidden; }
   .bar span { position: absolute; top: 0; bottom: 0; left: 0; width: 0%; background: #f0b85a; }
   .authority { color: #f0b85a; }
-  .controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-  button, select { min-height: 30px; border: 1px solid #315062; background: #111c24; color: #eef3f6; }
+  .transport { display: grid; grid-template-columns: repeat(3, 34px) minmax(160px, 1fr) 76px minmax(260px, 380px); gap: 8px; align-items: center; }
+  button, select, input[type="range"] { min-height: 30px; border: 1px solid #315062; background: #111c24; color: #eef3f6; }
   button { width: 34px; cursor: pointer; }
-  .stats { color: #b7c5ce; font-size: 12px; overflow-wrap: anywhere; }
-  @media (max-width: 860px) { body { padding: 10px; } .meta, .grid { grid-template-columns: 1fr; } .cards { grid-template-columns: 1fr; } }
+  select { min-width: 0; width: 100%; padding: 0 8px; }
+  input[type="range"] { width: 100%; accent-color: #f0b85a; }
+  .stats { min-height: 32px; color: #b7c5ce; font-size: 12px; overflow-wrap: anywhere; }
+  .stats-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 8px; }
+  .stat { border: 1px solid #20303a; background: #101820; padding: 7px 8px; min-height: 42px; }
+  .stat b { display: block; font-size: 10px; color: #85a7ba; text-transform: uppercase; }
+  .stat span { display: block; font-size: 12px; overflow-wrap: anywhere; }
+  @media (max-width: 860px) { body { padding: 10px; } .meta, .grid, .stats-grid, .transport { grid-template-columns: 1fr; } button { width: 100%; } }
 </style>
 </head>
 <body>
@@ -542,36 +548,52 @@ function writePlaybackHtml(path, report) {
     <div class="chip"><b>Comparison</b><span>${CONTINUATION_TARGET_AUTHORITY}; actualMiddleUsed=false</span></div>
     <div class="chip"><b>Synthetic</b><span class="authority">${SYNTHETIC_AUTHORITY}</span></div>
   </div>
-  <div class="controls"><button id="toggle" aria-label="Pause playback">||</button><select id="fps"><option>12</option><option selected>24</option><option>60</option></select><span id="global-label">F00</span></div>
+  <div class="transport">
+    <button data-step-back aria-label="Previous frame">&lt;</button>
+    <button data-play-toggle aria-label="Pause playback">||</button>
+    <button data-step-forward aria-label="Next frame">&gt;</button>
+    <input data-frame-scrubber type="range" min="0" max="${Math.max(0, baseline.frames.length - 1)}" value="0" step="1" aria-label="Frame scrubber">
+    <select data-fps aria-label="Playback frame rate"><option>12</option><option selected>24</option><option>60</option></select>
+    <select data-candidate-select aria-label="Comparison candidate"></select>
+  </div>
+  <div class="stats" id="global-label">F00</div>
 </header>
 <main>
   <section class="grid">
     <article class="panel" data-baseline-panel>
       <h2>Cadence continuation baseline</h2>
       <p>Original Hellmouth bundle frames: live anchors plus current continuation targets.</p>
-      <div class="stage"><img alt="Cadence continuation baseline frame"></div>
+      <div class="stage" data-baseline-stage><img alt="Cadence continuation baseline frame"></div>
       <div class="readout"><span data-label>F00</span><div class="bar"><span data-bar></span></div></div>
       <div class="stats" data-stats></div>
     </article>
-    <article class="panel">
-      <h2>Authority boundary</h2>
-      <p class="authority">Candidate panels replace only continuation targets. Live anchors are copied from the bundle. Continuation targets are comparison targets, not real hidden middle simulator truth.</p>
-      <p>Each replacement frame uses the previous and next live anchor for its gap and the recorded cadence phase ratio.</p>
+    <article class="panel" data-candidate-panel>
+      <h2 data-candidate-title>Candidate</h2>
+      <p class="authority" data-candidate-authority></p>
+      <div class="stage" data-candidate-stage><img alt="Selected synthetic comparison timeline frame"></div>
+      <div class="readout"><span data-label>F00</span><div class="bar"><span data-bar></span></div></div>
+      <div class="stats" data-candidate-stats></div>
     </article>
   </section>
-  <section class="cards" id="candidate-grid"></section>
+  <section class="panel">
+    <h2>Selected Candidate Metrics</h2>
+    <p class="authority">Candidate frames are synthetic comparison evidence, not live simulator output. Continuation targets remain comparison targets, not actual hidden middle truth.</p>
+    <div class="stats-grid" data-metric-grid></div>
+  </section>
 </main>
 <script type="application/json" id="sequence-data">${payload}</script>
 <script>
 const data = JSON.parse(document.getElementById('sequence-data').textContent);
-const panels = [];
 let index = 0;
 let playing = true;
 let fps = data.fps;
 let lastTime = performance.now();
 const baselinePanel = document.querySelector('[data-baseline-panel]');
-panels.push({ root: baselinePanel, frames: data.baseline.frames, stats: data.baseline.temporalStats });
-const grid = document.getElementById('candidate-grid');
+const candidatePanel = document.querySelector('[data-candidate-panel]');
+const candidateSelect = document.querySelector('[data-candidate-select]');
+const frameScrubber = document.querySelector('[data-frame-scrubber]');
+const metricGrid = document.querySelector('[data-metric-grid]');
+let selectedCandidate = data.candidates.find(candidate => candidate.id === data.defaultCandidateId) || data.candidates[0] || null;
 function fmt(value) { return Number.isFinite(value) ? value.toFixed(3) : 'n/a'; }
 function statsText(candidate) {
   const temporal = candidate.temporalStats || {};
@@ -579,43 +601,92 @@ function statsText(candidate) {
   const mae = candidate.summaryMetrics || {};
   return 'target MAE ' + fmt(mae.meanAbsoluteError) + '; max step ' + fmt(temporal.maxConsecutiveDelta) + '; max-step delta vs baseline ' + fmt(pulse.maxConsecutiveDeltaReduction) + '; failures ' + (candidate.failures || []).length;
 }
-baselinePanel.querySelector('[data-stats]').textContent = 'max step ' + fmt(data.baseline.temporalStats.maxConsecutiveDelta) + '; step stddev ' + fmt(data.baseline.temporalStats.consecutiveDeltaStdDev);
+function metricCell(label, value) {
+  return '<div class="stat"><b>' + label + '</b><span>' + value + '</span></div>';
+}
 for (const candidate of data.candidates) {
-  const article = document.createElement('article');
-  article.className = 'panel';
-  article.innerHTML = '<h2>' + candidate.id + '</h2>' +
-    '<p class="authority">' + candidate.syntheticAuthority + '; actualMiddleUsed=' + candidate.actualMiddleUsed + '</p>' +
-    '<div class="stage"><img alt="' + candidate.id + ' timeline frame"></div>' +
-    '<div class="readout"><span data-label>F00</span><div class="bar"><span data-bar></span></div></div>' +
-    '<div class="stats">' + statsText(candidate) + '</div>';
-  grid.appendChild(article);
-  panels.push({ root: article, frames: candidate.frames, stats: candidate.temporalStats });
+  const option = document.createElement('option');
+  option.value = candidate.id;
+  option.textContent = candidate.id + ' | max step ' + fmt(candidate.temporalStats?.maxConsecutiveDelta);
+  candidateSelect.appendChild(option);
+}
+candidateSelect.value = selectedCandidate ? selectedCandidate.id : '';
+baselinePanel.querySelector('[data-stats]').textContent = 'max step ' + fmt(data.baseline.temporalStats.maxConsecutiveDelta) + '; step stddev ' + fmt(data.baseline.temporalStats.consecutiveDeltaStdDev);
+function paintPanel(root, frame, frameCount) {
+  if (!frame || !frameCount) return;
+  root.querySelector('img').src = frame.src;
+  root.querySelector('[data-label]').textContent = frame.label + ' / route frame ' + frame.frameCount + ' sim ' + frame.simStepCount;
+  root.querySelector('[data-bar]').style.width = ((index + 1) / frameCount * 100).toFixed(2) + '%';
+}
+function paintCandidateMeta() {
+  if (!selectedCandidate) return;
+  const temporal = selectedCandidate.temporalStats || {};
+  const pulse = selectedCandidate.temporalPulseVsCadenceBaseline || {};
+  const summary = selectedCandidate.summaryMetrics || {};
+  candidatePanel.querySelector('[data-candidate-title]').textContent = selectedCandidate.id;
+  candidatePanel.querySelector('[data-candidate-authority]').textContent = selectedCandidate.syntheticAuthority + '; actualMiddleUsed=' + selectedCandidate.actualMiddleUsed + '; sourceKind=' + selectedCandidate.sourceKind;
+  candidatePanel.querySelector('[data-candidate-stats]').textContent = statsText(selectedCandidate);
+  metricGrid.innerHTML = [
+    metricCell('Mean absolute error', fmt(summary.meanAbsoluteError)),
+    metricCell('Max absolute error', fmt(summary.maxAbsoluteError)),
+    metricCell('Temporal max step', fmt(temporal.maxConsecutiveDelta)),
+    metricCell('Step stddev', fmt(temporal.consecutiveDeltaStdDev)),
+    metricCell('Delta vs baseline', fmt(pulse.maxConsecutiveDeltaReduction)),
+    metricCell('Failure modes', (selectedCandidate.failureModes || []).join(', ') || 'none'),
+    metricCell('Failures', String((selectedCandidate.failures || []).length)),
+    metricCell('Video', selectedCandidate.videoFps24 || 'not written'),
+  ].join('');
 }
 function paint() {
-  for (const panel of panels) {
-    const frame = panel.frames[index % panel.frames.length];
-    panel.root.querySelector('img').src = frame.src;
-    panel.root.querySelector('[data-label]').textContent = frame.label + ' / route frame ' + frame.frameCount + ' sim ' + frame.simStepCount;
-    panel.root.querySelector('[data-bar]').style.width = ((index + 1) / panel.frames.length * 100).toFixed(2) + '%';
-  }
+  const baselineFrames = data.baseline.frames;
+  const candidateFrames = selectedCandidate ? selectedCandidate.frames : [];
+  const frameIndex = index % baselineFrames.length;
+  paintPanel(baselinePanel, baselineFrames[frameIndex], baselineFrames.length);
+  paintPanel(candidatePanel, candidateFrames[index % candidateFrames.length], candidateFrames.length);
+  frameScrubber.value = String(frameIndex);
   document.getElementById('global-label').textContent = 'F' + String(index).padStart(2, '0');
+}
+function stepFrame(delta) {
+  index = (index + delta + data.baseline.frames.length) % data.baseline.frames.length;
+  paint();
 }
 function tick(now) {
   if (playing && now - lastTime >= 1000 / fps) {
-    index = (index + 1) % data.baseline.frames.length;
     lastTime = now;
-    paint();
+    stepFrame(1);
   }
   requestAnimationFrame(tick);
 }
+paintCandidateMeta();
 paint();
 requestAnimationFrame(tick);
-document.getElementById('toggle').addEventListener('click', () => {
+document.querySelector('[data-play-toggle]').addEventListener('click', event => {
   playing = !playing;
-  document.getElementById('toggle').textContent = playing ? '||' : '>';
+  event.currentTarget.textContent = playing ? '||' : '>';
 });
-document.getElementById('fps').addEventListener('change', event => {
+document.querySelector('[data-step-back]').addEventListener('click', () => {
+  playing = false;
+  document.querySelector('[data-play-toggle]').textContent = '>';
+  stepFrame(-1);
+});
+document.querySelector('[data-step-forward]').addEventListener('click', () => {
+  playing = false;
+  document.querySelector('[data-play-toggle]').textContent = '>';
+  stepFrame(1);
+});
+document.querySelector('[data-fps]').addEventListener('change', event => {
   fps = Number(event.target.value);
+});
+frameScrubber.addEventListener('input', event => {
+  playing = false;
+  document.querySelector('[data-play-toggle]').textContent = '>';
+  index = Number(event.target.value);
+  paint();
+});
+candidateSelect.addEventListener('change', event => {
+  selectedCandidate = data.candidates.find(candidate => candidate.id === event.target.value) || selectedCandidate;
+  paintCandidateMeta();
+  paint();
 });
 </script>
 </body>
@@ -628,14 +699,36 @@ const args = parseArgs(process.argv.slice(2));
 const externalBaselineSpecs = parseExternalBaselineSpecs(process.argv.slice(2));
 const externalBaselineById = new Map(externalBaselineSpecs.map(spec => [spec.id, spec]));
 const candidateIds = [...BUILTIN_CANDIDATES, ...externalBaselineSpecs.map(spec => spec.id)];
-const gapManifestPath = args.get('--gap-manifest') ? resolve(args.get('--gap-manifest')) : null;
-if (!gapManifestPath) throw new Error('--gap-manifest is required');
-const outDir = resolve(args.get('--out-dir') || '/tmp/kaminos-cadence-gap-interframe-witness');
-const reportPath = resolve(args.get('--report') || `${outDir}/cadence-gap-interframe-report.json`);
+const renderReportPath = args.get('--render-report') ? resolve(args.get('--render-report')) : null;
+const outDir = resolve(args.get('--out-dir') || (renderReportPath ? dirname(renderReportPath) : '/tmp/kaminos-cadence-gap-interframe-witness'));
+const reportPath = resolve(args.get('--report') || renderReportPath || `${outDir}/cadence-gap-interframe-report.json`);
 const playbackPath = resolve(args.get('--playback') || `${outDir}/cadence-gap-interframe-playback.html`);
 const dryRun = args.has('--dry-run');
 const skipVideos = args.has('--skip-videos');
 const createdAt = new Date().toISOString();
+
+if (renderReportPath) {
+  const report = readJson(renderReportPath);
+  if (report.schema !== SCHEMA) throw new Error(`wrong cadence-gap interframe report schema: ${report.schema || 'missing'}`);
+  writePlaybackHtml(playbackPath, report);
+  const playbackReceiptPath = playbackPath.replace(/\.html$/i, '.receipt.json');
+  writeJson(playbackReceiptPath, {
+    schema: `${SCHEMA}.playback-render-receipt.v0`,
+    status: 'playback-rendered',
+    createdAt,
+    renderReportPath,
+    playbackPath,
+    sourceReportStatus: report.status || null,
+    sourceManifestIdentity: report.source?.manifestIdentity || null,
+    candidateCount: Array.isArray(report.candidates) ? report.candidates.length : 0,
+    defaultCandidateId: report.summary?.lowestTemporalMaxConsecutiveDelta?.id || report.candidates?.[0]?.id || null,
+  });
+  console.log(JSON.stringify({ status: 'playback-rendered', renderReportPath, playbackPath, playbackReceiptPath }, null, 2));
+  process.exit(0);
+}
+
+const gapManifestPath = args.get('--gap-manifest') ? resolve(args.get('--gap-manifest')) : null;
+if (!gapManifestPath) throw new Error('--gap-manifest is required');
 
 const baseReport = {
   schema: SCHEMA,
