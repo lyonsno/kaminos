@@ -5,6 +5,7 @@ import { join } from 'node:path';
 const root = new URL('..', import.meta.url).pathname;
 const hostCorePath = join(root, 'glove-well-host-core.js');
 const indexPath = join(root, 'index.html');
+const kaminosMainPath = join(root, 'kaminos-main.js');
 const nativeHostLitePath = join(root, 'native-host-lite.js');
 
 function makeGloveWellPacket() {
@@ -157,15 +158,18 @@ function makeGloveWellPacket() {
 
 assert.ok(existsSync(hostCorePath), 'Kaminos native Glove Well host core exists');
 assert.ok(existsSync(indexPath), 'Kaminos app shell exists');
+assert.ok(existsSync(kaminosMainPath), 'Kaminos main module exists');
 assert.ok(existsSync(nativeHostLitePath), 'Kaminos has a lightweight native-host boot module');
 
 const hostCoreSource = readFileSync(hostCorePath, 'utf8');
 const indexSource = readFileSync(indexPath, 'utf8');
+const kaminosMainSource = readFileSync(kaminosMainPath, 'utf8');
 const nativeHostLiteSource = readFileSync(nativeHostLitePath, 'utf8');
 const gloveWellHostMarkup = indexSource.slice(
   indexSource.indexOf('id="tab-glove-well-host"'),
   indexSource.indexOf('id="tab-finger-juice-host"'),
 );
+const fingerJuiceFrameMarkup = indexSource.match(/<iframe[^>]+id="finger-juice-viewport-frame"[^>]*><\/iframe>/s)?.[0] || '';
 
 assert.match(hostCoreSource, /KAMINOS_GLOVE_WELL_HOST_STATE_SCHEMA\s*=\s*'kaminos\.glove-well-host\.state\.v0'/, 'native host state schema is explicit');
 assert.match(hostCoreSource, /KAMINOS_GLOVE_WELL_HOST_ROUTE\s*=\s*'kaminos\/glove-well-host'/, 'native host route identity is explicit');
@@ -187,6 +191,9 @@ assert.doesNotMatch(gloveWellHostMarkup, />Load Packet<|>Start Packet Polling<|>
 assert.match(indexSource, /nativeHostOnly/, 'canvas native-host routes have a fast path that skips full editor/WebGPU bootstrap');
 assert.match(indexSource, /native-host-lite\.js/, 'Glove Well native host route can load the lightweight host module');
 assert.match(indexSource, /kaminos-main\.js/, 'full editor bootstrap is loaded only when the route is not a native host smoke');
+assert.match(indexSource, /data-src="lerms-finger-juice\.html\?lerms_world_finger_juice=1"/, 'unrelated Finger Juice iframe keeps its route as lazy data');
+assert.doesNotMatch(fingerJuiceFrameMarkup, /\ssrc=/, 'Glove Well native host routes must not eager-load the Finger Juice iframe');
+assert.match(kaminosMainSource, /ensureFingerJuiceTabFrameLoaded/, 'Finger Juice tab still loads its iframe when selected');
 assert.match(nativeHostLiteSource, /glove-well-host-core\.js/, 'lightweight host imports only the Glove Well host core contract');
 assert.doesNotMatch(nativeHostLiteSource, /from 'three'|from "three"|three\/addons|three\/tsl/, 'lightweight Glove Well host must not import the Three/editor stack');
 assert.match(nativeHostLiteSource, /glove_well_host_root/, 'native host supports file-root packet loading');

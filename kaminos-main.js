@@ -6654,6 +6654,7 @@ function setActiveTab(tabName) {
   const fingerJuicePanel = document.getElementById('finger-juice-operator-panel');
   if (fingerJuicePanel) {
     fingerJuicePanel.hidden = tabName !== 'finger-juice';
+    if (tabName === 'finger-juice') ensureFingerJuiceTabFrameLoaded();
   }
 }
 
@@ -7427,9 +7428,19 @@ function updateFingerJuiceTabReadout() {
   return state;
 }
 
+function ensureFingerJuiceTabFrameLoaded() {
+  const fingerJuiceFrame = document.getElementById('finger-juice-viewport-frame');
+  if (!fingerJuiceFrame) return null;
+  const route = fingerJuiceFrame.dataset.src || FINGER_JUICE_STANDALONE_ROUTE;
+  if (!fingerJuiceFrame.getAttribute('src')) {
+    fingerJuiceFrame.src = route;
+  }
+  return fingerJuiceFrame.src;
+}
+
 function reloadFingerJuiceTabFrame() {
   const fingerJuiceFrame = document.getElementById('finger-juice-viewport-frame');
-  fingerJuiceFrame.src = FINGER_JUICE_STANDALONE_ROUTE;
+  fingerJuiceFrame.src = fingerJuiceFrame.dataset.src || FINGER_JUICE_STANDALONE_ROUTE;
   setInfo('Finger Juice primitive reloaded');
 }
 
