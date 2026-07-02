@@ -1857,6 +1857,12 @@ async function main() {
       mainRendererCaptureBackend: 'cdp-page-capture',
       fullScreenshot: fullScreenshotPath || null,
       fieldSliceScreenshot: fieldSliceOut || null,
+      visualSourceTruth: {
+        source: 'live-webgpu-volume',
+        fallbackReason: null,
+        mayClaimLiveNovelty: true,
+        evidenceSource: 'volume-witness-gpu-readback',
+      },
       metrics,
       mainRendererMetrics,
     };

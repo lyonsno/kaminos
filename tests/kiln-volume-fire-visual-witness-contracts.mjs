@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
 const root = new URL('..', import.meta.url).pathname;
+const volumeWitnessSource = readFileSync(join(root, 'volume-witness.mjs'), 'utf8');
 const dir = mkdtempSync(join(tmpdir(), 'kaminos-kiln-volume-fire-visual-witness-'));
 const out = join(dir, 'route-fire.png');
 const reportPath = join(dir, 'route-fire.json');
@@ -64,3 +65,7 @@ assert.equal(url.searchParams.get('volume_steps'), '160');
 assert.equal(url.searchParams.get('volume_fire_scale'), '0.42');
 assert.equal(url.searchParams.get('volume_plume_height'), '0.7');
 assert.equal(url.searchParams.get('volume_render_scale'), '0.95');
+
+assert.match(volumeWitnessSource, /visualSourceTruth:\s*\{/, 'live volume witness report names visual source truth');
+assert.match(volumeWitnessSource, /source:\s*'live-webgpu-volume'/, 'live volume witness report identifies live WebGPU volume as source');
+assert.match(volumeWitnessSource, /mayClaimLiveNovelty:\s*true/, 'live volume witness may claim novelty only after GPU readback succeeds');
