@@ -23,7 +23,7 @@ assert.match(index, /VOLUME_PRIMITIVE_SCHEMA/, 'scene data names the volume prim
 assert.match(index, /volumePrimitives/, 'scene data persists authored volume primitives');
 assert.match(index, /setVolumePrimitivesState/, 'scene loading can restore authored volume primitives');
 assert.match(index, /volume-core\.js/, 'index imports the volume prototype module');
-assert.match(index, /volume-core\.js\?v=cadence-live-anchor-bridge-0702/, 'volume prototype import carries a cache key when cadence bridge semantics change');
+assert.match(index, /volume-core\.js\?v=continuation-tempo-0702/, 'volume prototype import carries a cache key when cadence tempo semantics change');
 assert.match(index, /id="volume-render-source-orientation"/, 'Volume tab exposes render/source orientation identity for operator smoke');
 assert.match(index, /id="volume-canonical-render-mode-state"/, 'Volume tab exposes effective canonical render diagnostic mode for operator smoke');
 assert.match(index, /id="volume-canonical-motion-mode-state"/, 'Volume tab exposes effective canonical motion diagnostic mode for operator smoke');
@@ -153,11 +153,14 @@ assert.match(index, /id="volume-sim-cadence" min="1" max="8" step="1"/, 'Volume 
 assert.match(index, /id="volume-sim-cadence-val"/, 'Volume cockpit exposes the effective sim-hold cadence value');
 assert.match(index, /id="volume-continuation-warp" min="0" max="1\.5" step="0\.05"/, 'Volume cockpit exposes a visible held-frame continuation warp slider');
 assert.match(index, /volume_continuation_warp/, 'URL route can override held-frame continuation warp strength');
+assert.match(index, /id="volume-continuation-tempo" min="0" max="2" step="0\.05"/, 'Volume cockpit exposes a visible held-frame continuation tempo slider');
+assert.match(index, /volume_continuation_tempo/, 'URL route can override held-frame render-side continuation tempo');
 assert.match(index, /volume-sim-cadence-state/, 'Volume readout exposes the effective sim cadence');
 assert.match(index, /volume-cadence-gap/, 'Volume readout exposes the frame/sim-step cadence gap');
 assert.match(index, /volume-continuation-frames/, 'Volume readout exposes live versus continued frame counts');
 assert.match(index, /simCadence/, 'Volume controls carry requested sim cadence into renderer debug state');
 assert.match(index, /continuationWarp/, 'Volume controls carry requested held-frame continuation warp into renderer debug state');
+assert.match(index, /continuationTempo/, 'Volume controls carry requested held-frame continuation tempo into renderer debug state');
 assert.match(index, /effectiveVisualAuthority/, 'Volume controls expose whether the current visual stream is live compute or continuation');
 assert.match(index, /<option value="128">128\^3<\/option>/, 'Volume grid selector can test a 128^3 simulation volume');
 assert.match(index, /<option value="160">160\^3<\/option>/, 'Volume grid selector can test a 160^3 simulation volume');
@@ -462,6 +465,10 @@ assert.match(core, /cadenceContinuationDampedStep/, 'cadence continuation warp u
 assert.match(core, /continuationWarpGain/, 'cadence continuation warp has a route-controlled gain');
 assert.match(core, /u\.cadence_controls\.w/, 'cadence continuation warp gain is carried in cadence_controls.w');
 assert.match(core, /state\.continuationWarp/, 'debug state records the effective continuation warp gain');
+assert.match(core, /continuation_controls/, 'volume uniforms carry render-side continuation tempo controls separately from cadence phase');
+assert.match(core, /cadenceContinuationTempoPhase/, 'fragment shader names the cadence continuation tempo phase');
+assert.match(core, /u\.continuation_controls\.x/, 'continuation tempo gain is carried in continuation_controls.x');
+assert.match(core, /state\.continuationTempo/, 'debug state records the effective continuation tempo gain');
 assert.match(core, /CADENCE_NATIVE_CONTINUATION_MAX_WARP/, 'cadence continuation warp has an explicit shader-local maximum');
 assert.match(core, /CADENCE_NATIVE_CONTINUATION_STEP_PER_HELD_FRAME/, 'cadence continuation warp advances by held render frame instead of plateauing inside a cadence cycle');
 assert.match(core, /cadenceNativeContinuationPoint\(p,\s*initialState\.xyz,\s*cadenceRenderContinuationMask\)/, 'compact plume render continuation must use the cadence continuation mask rather than a tall-plume-only gate');
@@ -1229,6 +1236,7 @@ assert.match(witness, /framesSinceLiveSim/, 'witness reports held render frames 
 assert.match(witness, /cadenceNativeContinuationIdentity/, 'witness reports the stable cadence-native continuation identity');
 assert.match(witness, /cadenceLiveAnchorHistoryBridgeIdentity/, 'witness reports the cadence live-anchor history bridge identity');
 assert.match(witness, /expectedContinuationWarp/, 'witness verifies held-frame continuation warp route/control identity');
+assert.match(witness, /expectedContinuationTempo/, 'witness verifies held-frame continuation tempo route/control identity');
 assert.match(witness, /performance-volume-signal/, 'witness has a performance visual-evidence mode that does not confuse low-fire measurement frames with missing output');
 assert.match(witness, /low-fire-performance-evidence/, 'performance witness preserves low-fire visual frames as warnings instead of failing before primary cost reports');
 assert.match(witness, /rayBudgetPreset/, 'witness records named ray-budget preset/config identity when present');
@@ -1253,6 +1261,7 @@ assert.match(filmstripWitness, /cadenceNativeContinuationIdentity/, 'filmstrip w
 assert.match(filmstripWitness, /cadenceLiveAnchorHistoryBridgeIdentity/, 'filmstrip witness preserves cadence live-anchor bridge identity');
 assert.match(filmstripWitness, /temporalPolicy/, 'filmstrip witness preserves temporal/history policy identity');
 assert.match(filmstripWitness, /temporalAccum:\s*state\.temporalAccum/, 'filmstrip witness records per-frame effective temporal accumulation');
+assert.match(filmstripWitness, /continuationTempo:\s*state\.continuationTempo/, 'filmstrip witness records per-frame effective continuation tempo');
 assert.match(filmstripWitness, /frameDeltas/, 'filmstrip witness reports render frame deltas between captured frames');
 assert.match(filmstripWitness, /blankFrameCount/, 'filmstrip witness reports blank or missing frame counts');
 assert.match(filmstripWitness, /volume_sim_cadence/, 'filmstrip witness records the routed simulation cadence');

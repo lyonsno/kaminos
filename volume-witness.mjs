@@ -458,6 +458,10 @@ const requestedContinuationWarp = Number(routeParams.get('volume_continuation_wa
 const expectedContinuationWarp = routeParams.has('volume_continuation_warp') && Number.isFinite(requestedContinuationWarp)
   ? Math.max(0, Math.min(1.5, requestedContinuationWarp))
   : 1.00;
+const requestedContinuationTempo = Number(routeParams.get('volume_continuation_tempo'));
+const expectedContinuationTempo = routeParams.has('volume_continuation_tempo') && Number.isFinite(requestedContinuationTempo)
+  ? Math.max(0, Math.min(2, requestedContinuationTempo))
+  : 1.00;
 const expectedVisualAuthority = expectedSimCadence > 1 ? 'continuation' : 'live-sim';
 const requestedGridOverlay = Number(routeParams.get('volume_grid'));
 const expectedGridOverlay = Number.isFinite(requestedGridOverlay)
@@ -1115,6 +1119,8 @@ async function main() {
     assert.equal(state.simCadence, expectedSimCadence, 'effective sim cadence did not reach debug state');
     assert.ok(Math.abs((state.controls?.continuationWarp ?? 0) - expectedContinuationWarp) < 0.001, 'continuation warp route/control did not apply');
     assert.ok(Math.abs((state.continuationWarp ?? 0) - expectedContinuationWarp) < 0.001, 'effective continuation warp did not reach debug state');
+    assert.ok(Math.abs((state.controls?.continuationTempo ?? 0) - expectedContinuationTempo) < 0.001, 'continuation tempo route/control did not apply');
+    assert.ok(Math.abs((state.continuationTempo ?? 0) - expectedContinuationTempo) < 0.001, 'effective continuation tempo did not reach debug state');
     assert.equal(state.effectiveVisualAuthority, expectedVisualAuthority, 'effective visual authority did not match sim cadence');
     if (expectedSimCadence > 1) {
       assert.ok(state.frameCount > state.simStepCount, 'low-cadence continuation did not create a frame/sim-step cadence gap');
@@ -1160,9 +1166,15 @@ async function main() {
     assert.equal(stateLedger.tallPlumePressureTierStrategy, expectedTallPlumePressureTierStrategyValue, 'sim cost ledger spatial pressure tier strategy does not match effective route');
     assert.equal(stateLedger.pressureProjectionReadStrategy, expectedPressureProjectionReadStrategy, 'sim cost ledger pressure projection read strategy does not match effective route');
     if (expectedSpatialPressureTiers) {
-      assert.equal(Number(stateLedger.pressureJacobiFullGridPasses), 1, 'spatial pressure tiers should keep only one full-grid Jacobi pass');
-      assert.equal(Number(stateLedger.pressureJacobiPartialSlabPasses), 2, 'spatial pressure tiers should report two partial slab Jacobi passes');
-      assert.ok(Number(stateLedger.pressureJacobiFullGridEquivalentPasses) > 1 && Number(stateLedger.pressureJacobiFullGridEquivalentPasses) < 3, 'spatial pressure tiers did not report bounded equivalent full-grid work');
+      if (stateLedgerSimSkipped || !state.pressureProjectionEnabled) {
+        assert.equal(Number(stateLedger.pressureJacobiFullGridPasses), 0, 'held-frame spatial pressure ledger should not report full-grid Jacobi work');
+        assert.equal(Number(stateLedger.pressureJacobiPartialSlabPasses), 0, 'held-frame spatial pressure ledger should not report partial slab Jacobi work');
+        assert.equal(Number(stateLedger.pressureJacobiFullGridEquivalentPasses), 0, 'held-frame spatial pressure ledger should not report equivalent full-grid work');
+      } else {
+        assert.equal(Number(stateLedger.pressureJacobiFullGridPasses), 1, 'spatial pressure tiers should keep only one full-grid Jacobi pass');
+        assert.equal(Number(stateLedger.pressureJacobiPartialSlabPasses), 2, 'spatial pressure tiers should report two partial slab Jacobi passes');
+        assert.ok(Number(stateLedger.pressureJacobiFullGridEquivalentPasses) > 1 && Number(stateLedger.pressureJacobiFullGridEquivalentPasses) < 3, 'spatial pressure tiers did not report bounded equivalent full-grid work');
+      }
       assert.ok(Array.isArray(stateLedger.pressureTierDispatches) && stateLedger.pressureTierDispatches.length === 3, 'spatial pressure tiers did not report three tier dispatches');
       assert.equal(stateLedger.pressureTierBufferOwnership?.pressure3, 'B', 'spatial pressure tier buffer ownership did not preserve pressure3 in B');
       assert.equal(stateLedger.pressureTierBufferOwnership?.pressure2, 'A', 'spatial pressure tier buffer ownership did not preserve pressure2 in A');
@@ -1919,8 +1931,11 @@ async function main() {
       framesSinceLiveSim: sample.framesSinceLiveSim,
       continuationWarp: sample.continuationWarp,
       expectedContinuationWarp,
+      continuationTempo: sample.continuationTempo,
+      expectedContinuationTempo,
       cadenceNativeContinuationIdentity: sample.cadenceNativeContinuationIdentity,
       cadenceLiveAnchorHistoryBridgeIdentity: sample.cadenceLiveAnchorHistoryBridgeIdentity,
+      cadenceRenderContinuationTempoIdentity: sample.cadenceRenderContinuationTempoIdentity,
       tallPlumeReactionCadenceDebug: sample.tallPlumeReactionCadenceDebug,
       tallPlumeFlameCutoffContract: sample.tallPlumeFlameCutoffContract,
       tallPlumeFlowShelfContract: sample.tallPlumeFlowShelfContract,

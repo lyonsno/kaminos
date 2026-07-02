@@ -7,6 +7,7 @@ const FLUID_SLOTS_PER_CELL = 4;
 const FLUID_COMPONENTS = FLUID_SLOTS_PER_CELL * 4;
 const CADENCE_NATIVE_CONTINUATION_IDENTITY = 'cadence-native-field-continuation-v0';
 const CADENCE_LIVE_ANCHOR_HISTORY_BRIDGE_IDENTITY = 'cadence-live-anchor-history-bridge-v0';
+const CADENCE_RENDER_CONTINUATION_TEMPO_IDENTITY = 'cadence-render-continuation-tempo-v0';
 const DEFAULT_MAJORANT_GRID_SIZE = 48;
 const SUPPORTED_MAJORANT_GRID_SIZES = [24, 32, 48];
 const MAX_EXTERNAL_EMITTERS = 32;
@@ -359,6 +360,10 @@ function normalizeContinuationWarp(value) {
   return clampFinite(value, 0, 1.5, 1.00);
 }
 
+function normalizeContinuationTempo(value) {
+  return clampFinite(value, 0, 2.0, 1.00);
+}
+
 function defaultPressureIterationsForScene(value) {
   return normalizeVolumeScene(value) === 'tall_plume' ? 2 : (normalizeVolumeScene(value) === 'bonfire_plume' ? 8 : 4);
 }
@@ -577,6 +582,7 @@ struct Uniforms {
   pressure_tier_controls: vec4<f32>,
   primitive_source: vec4<f32>,
   cadence_controls: vec4<f32>,
+  continuation_controls: vec4<f32>,
   previousViewProj: mat4x4<f32>,
 };
 
@@ -924,6 +930,14 @@ fn cadenceNativeContinuationPoint(p: vec3<f32>, velocity: vec3<f32>, sceneMask: 
   let thermalRise = vec3<f32>(0.0, 0.012 + speed * 0.002, 0.0);
   let continuedP = p - (velocity + thermalRise) * cadenceContinuationDampedStep * continuationActive;
   return clamp(continuedP, vec3<f32>(-0.999), vec3<f32>(0.999));
+}
+
+fn cadenceContinuationTempoPhase(sceneMask: f32) -> f32 {
+  let cadencePhase = clamp(u.cadence_controls.x, 0.0, 1.0);
+  let simCadence = max(1.0, u.cadence_controls.z);
+  let tempoGain = clamp(u.continuation_controls.x, 0.0, 2.0);
+  let heldFrame = step(1.5, simCadence) * step(0.001, cadencePhase) * sceneMask;
+  return cadencePhase * tempoGain * heldFrame;
 }
 
 fn majorantIndex(c: vec3<u32>) -> u32 {
@@ -3107,6 +3121,8 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
   let endT = hit.y;
   let dtBase = (endT - startT) / steps;
   let jitter = temporalJitterOffset(in.uv, dtBase);
+  let continuationTempoPhase = cadenceContinuationTempoPhase(cadenceRenderContinuationMask);
+  let continuationTempoTime = u.cameraPos_time.w + continuationTempoPhase * (0.10 + 0.08 * tallPlumeRenderScene);
   let bonfireSpatialRayDephase = (hash31(vec3<f32>(floor(in.uv * u.viewport_steps_density.xy), 37.0)) - 0.5) * dtBase * 0.90 * bonfireRenderScene;
   var t = startT + jitter + bonfireSpatialRayDephase;
   var trans = 1.0;
@@ -3223,11 +3239,11 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
       continue;
     }
     let detailP = continuedP * scaleDomain;
-    let microWarp = microDetailDomainWarp(detailP, microLayer, fireLayer, material, state.xyz, u.cameraPos_time.w, tallPlumeRenderScene);
+    let microWarp = microDetailDomainWarp(detailP, microLayer, fireLayer, material, state.xyz, continuationTempoTime, tallPlumeRenderScene);
     let detailCarrier = clamp(microTextureSignal + materialDetail * 0.22 + flameDetail * 0.18 + velMag * 0.36, 0.0, 2.8);
-    let filamentNoise = microFilamentNoise(detailP, microWarp, detailCarrier, state.xyz, u.cameraPos_time.w);
-    let shredNoise = microFilamentNoise(detailP.zxy + vec3<f32>(0.13, -0.21, 0.09), microWarp.yzx * 1.21, detailCarrier + interfaceShred * 1.7, state.zxy, u.cameraPos_time.w * 1.17 + 1.3);
-    let fireNoise = microFilamentNoise(detailP.yzx + vec3<f32>(-0.18, 0.07, 0.24), microWarp.zxy * 1.38, detailCarrier + fireLick * 2.1, state.yzx, u.cameraPos_time.w * 1.31 + 2.1);
+    let filamentNoise = microFilamentNoise(detailP, microWarp, detailCarrier, state.xyz, continuationTempoTime);
+    let shredNoise = microFilamentNoise(detailP.zxy + vec3<f32>(0.13, -0.21, 0.09), microWarp.yzx * 1.21, detailCarrier + interfaceShred * 1.7, state.zxy, continuationTempoTime * 1.17 + 1.3);
+    let fireNoise = microFilamentNoise(detailP.yzx + vec3<f32>(-0.18, 0.07, 0.24), microWarp.zxy * 1.38, detailCarrier + fireLick * 2.1, state.yzx, continuationTempoTime * 1.31 + 2.1);
     let interest = raymarchInterest(density, smoke, heat, temp, max(flame, combustionFrontTopology * 0.10), flameDetail, microTextureSignal, velMag, fireLick, interfaceShred);
     let localDt = min(dtBase * adaptiveRayStepScale(interest, adaptiveRays), max(0.0001, endT - t));
     let rayStepOpacity = localDt * 3.65;
@@ -3236,10 +3252,10 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
       microWarp.zxy + state.yzx * 0.38,
       detailCarrier + smoke * 0.12,
       state.yzx,
-      u.cameraPos_time.w * 0.73 + 2.9
+      continuationTempoTime * 0.73 + 2.9
     );
-    let verticalPhaseBreak = sin(p.y * 43.0 + (p.x * p.x - p.z * p.z) * 19.0 + u.cameraPos_time.w * 1.4);
-    let verticalPuffBreak = cos(p.y * 27.0 + length(p.xz) * 23.0 - p.x * p.z * 31.0 - u.cameraPos_time.w * 0.92);
+    let verticalPhaseBreak = sin(p.y * 43.0 + (p.x * p.x - p.z * p.z) * 19.0 + continuationTempoTime * 1.4);
+    let verticalPuffBreak = cos(p.y * 27.0 + length(p.xz) * 23.0 - p.x * p.z * 31.0 - continuationTempoTime * 0.92);
     let bonfireCurtainBreakup = mix(
       1.0,
       clamp(0.91 + curtainNoise * 0.10 + verticalPhaseBreak * 0.15 + verticalPuffBreak * 0.17, 0.64, 1.18),
@@ -3267,11 +3283,12 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
       + combustionFrontTopology * 0.08
       + interfaceShred * 0.08;
     let bonfireVisibleEmission = bonfireRenderedFireEdgeCarrier + flameDetail * 1.44 + ember * 0.48 + flame * 0.16;
+    let continuationTempoFlameLift = 1.0 + tallPlumeRenderScene * continuationTempoPhase * smoothstep(0.02, 0.42, flameDetail + fireLick) * 0.08;
     let visibleFlameAlphaCarrier = mix(
       flame * 2.15 + ember * 0.86 + flameDetail * 0.82 + fireLick * 2.60 + emberFleck * 0.76 + interfaceShred * 0.26,
       bonfireVisibleEmission + interfaceShred * 0.16,
       bonfireRenderScene
-    );
+    ) * continuationTempoFlameLift;
     let tallPlumeTransitionAlphaStagger = mix(
       1.0,
       clamp(0.70 + tallPlumeRenderTransitionStagger * 0.36, 0.58, 1.18),
@@ -3380,7 +3397,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   const invViewProj = new THREE.Matrix4();
   const viewProj = new THREE.Matrix4();
   const previousViewProj = new THREE.Matrix4();
-  const uniforms = new Float32Array(104);
+  const uniforms = new Float32Array(108);
   let controlsSnapshot = applyRuntimeQualityControls(getControls());
   let gridSize = normalizeGridSize(controlsSnapshot.resolution);
   let majorantGridSize = normalizeMajorantGridSize(controlsSnapshot.majorantGrid);
@@ -3405,6 +3422,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     simStepCount: 0,
     simCadence: normalizeSimCadence(controlsSnapshot.simCadence),
     continuationWarp: normalizeContinuationWarp(controlsSnapshot.continuationWarp),
+    continuationTempo: normalizeContinuationTempo(controlsSnapshot.continuationTempo),
     effectiveVisualAuthority: normalizeSimCadence(controlsSnapshot.simCadence) > 1 ? 'continuation' : 'live-sim',
     continuationAuthority: normalizeSimCadence(controlsSnapshot.simCadence) > 1 ? 'continuation-from-latest-live-field-v0' : 'live-sim-v0',
     liveSimFrameCount: 0,
@@ -3415,6 +3433,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     framesSinceLiveSim: 0,
     cadenceNativeContinuationIdentity: CADENCE_NATIVE_CONTINUATION_IDENTITY,
     cadenceLiveAnchorHistoryBridgeIdentity: CADENCE_LIVE_ANCHOR_HISTORY_BRIDGE_IDENTITY,
+    cadenceRenderContinuationTempoIdentity: CADENCE_RENDER_CONTINUATION_TEMPO_IDENTITY,
     simGrid: gridSize,
     simGridLabel: `${gridSize}^3 velocity-material-fire-microdetail-storage-buffer+${FRONT_FIELD_IDENTITY}`,
     gridOverlay: 0,
@@ -4004,6 +4023,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       snapshot.resolution,
       snapshot.majorantGrid,
       snapshot.continuationWarp,
+      snapshot.continuationTempo,
       snapshot.gridOverlay,
       snapshot.flowDebug,
       snapshot.pressureStrategy,
@@ -4614,7 +4634,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     uniforms[85] = framesSinceLiveSim;
     uniforms[86] = simCadence;
     uniforms[87] = normalizeContinuationWarp(controlsSnapshot.continuationWarp);
-    uniforms.set(previousViewProj.elements, 88);
+    uniforms[88] = normalizeContinuationTempo(controlsSnapshot.continuationTempo);
+    uniforms[89] = 0;
+    uniforms[90] = 0;
+    uniforms[91] = 0;
+    uniforms.set(previousViewProj.elements, 92);
     device.queue.writeBuffer(uniformBuffer, 0, uniforms);
     state.gridOverlay = controlsSnapshot.gridOverlay || 0;
     state.volumeScene = normalizeVolumeScene(controlsSnapshot.volumeScene);
@@ -4647,8 +4671,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.cadencePhase = cadencePhase;
     state.framesSinceLiveSim = framesSinceLiveSim;
     state.continuationWarp = uniforms[87];
+    state.continuationTempo = uniforms[88];
     state.cadenceNativeContinuationIdentity = CADENCE_NATIVE_CONTINUATION_IDENTITY;
     state.cadenceLiveAnchorHistoryBridgeIdentity = CADENCE_LIVE_ANCHOR_HISTORY_BRIDGE_IDENTITY;
+    state.cadenceRenderContinuationTempoIdentity = CADENCE_RENDER_CONTINUATION_TEMPO_IDENTITY;
     state.runtimeQualityRequested = normalizeRuntimeQuality(controlsSnapshot.runtimeQualityRequested);
     state.runtimeQualityEffective = normalizeRuntimeQuality(controlsSnapshot.runtimeQualityEffective || controlsSnapshot.runtimeQualityRequested);
     state.gpuPressure = clampFinite(controlsSnapshot.gpuPressure, 0, 1, 0);
@@ -4734,13 +4760,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const tierPlan = pressureTierDispatchPlan(gridSize, pressureStrategy, scene, pressureTierControls);
     const pressureEnabled = !state.lastSimFrameSkipped && state.pressureProjectionEnabled && pressureIterationRequested > 0;
     const pressureIterations = pressureEnabled ? state.pressureProjectionIterations : 0;
-    const spatialPressureEnabled = pressureEnabled && tierPlan.strategy === TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY;
-    const tallPlumePressureStrategy = spatialPressureEnabled
+    const spatialPressureRequested = tierPlan.strategy === TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY;
+    const spatialPressureEnabled = pressureEnabled && spatialPressureRequested;
+    const tallPlumePressureStrategy = spatialPressureRequested
       ? TALL_PLUME_PRESSURE_ITERATION_STRATEGY_INACTIVE
       : tallPlumePressureIterationStrategy(scene, pressureIterationRequested);
-    const tallPlumePressureIterationTarget = scene === 'tall_plume' && !spatialPressureEnabled ? 2 : 0;
-    const tallPlumePressureTierStrategyValue = spatialPressureEnabled ? tierPlan.strategy : TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY_INACTIVE;
-    const pressureProjectionReadStrategy = spatialPressureEnabled ? PRESSURE_PROJECTION_READ_STRATEGY_COMPOSITE : PRESSURE_PROJECTION_READ_STRATEGY_SINGLE_BUFFER;
+    const tallPlumePressureIterationTarget = scene === 'tall_plume' && !spatialPressureRequested ? 2 : 0;
+    const tallPlumePressureTierStrategyValue = spatialPressureRequested ? tierPlan.strategy : TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY_INACTIVE;
+    const pressureProjectionReadStrategy = spatialPressureRequested ? PRESSURE_PROJECTION_READ_STRATEGY_COMPOSITE : PRESSURE_PROJECTION_READ_STRATEGY_SINGLE_BUFFER;
     const simCadence = normalizeSimCadence(controlsSnapshot.simCadence);
     state.simCadence = simCadence;
     state.effectiveVisualAuthority = simCadence > 1 ? 'continuation' : 'live-sim';
@@ -4826,12 +4853,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.pressureJacobiFullGridPasses = pressureJacobiFullGridPasses;
     state.pressureJacobiPartialSlabPasses = pressureJacobiPartialSlabPasses;
     state.pressureJacobiFullGridEquivalentPasses = pressureJacobiFullGridEquivalentPasses;
-    state.pressureTierRequestedBounds = spatialPressureEnabled ? { ...tierPlan.requestedBounds } : null;
-    state.pressureTierEffectiveBounds = spatialPressureEnabled ? { ...tierPlan.effectiveBounds } : null;
+    state.pressureTierRequestedBounds = spatialPressureRequested ? { ...tierPlan.requestedBounds } : null;
+    state.pressureTierEffectiveBounds = spatialPressureRequested ? { ...tierPlan.effectiveBounds } : null;
     state.pressureTierOverlayOpacity = pressureTierControls.overlay;
-    state.pressureTierDispatches = spatialPressureEnabled ? tierPlan.dispatches.map(dispatch => ({ ...dispatch })) : [];
-    state.pressureTierBounds = spatialPressureEnabled ? { ...tierPlan.bounds } : null;
-    state.pressureTierBufferOwnership = spatialPressureEnabled ? { ...tierPlan.bufferOwnership } : null;
+    state.pressureTierDispatches = spatialPressureRequested ? tierPlan.dispatches.map(dispatch => ({ ...dispatch })) : [];
+    state.pressureTierBounds = spatialPressureRequested ? { ...tierPlan.bounds } : null;
+    state.pressureTierBufferOwnership = spatialPressureRequested ? { ...tierPlan.bufferOwnership } : null;
     state.mainFluidKernelStrategy = mainFluidKernelStrategy;
     state.mainFluidLocalProjectionStrategy = mainFluidLocalProjectionStrategy;
     state.mainFluidLocalProjectionDivergenceEvaluationsPerCell = mainFluidLocalProjectionDivergenceEvaluationsPerCell;
@@ -4879,8 +4906,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       cadencePhase: state.cadencePhase,
       framesSinceLiveSim: state.framesSinceLiveSim,
       continuationWarp: state.continuationWarp,
+      continuationTempo: state.continuationTempo,
       cadenceNativeContinuationIdentity: state.cadenceNativeContinuationIdentity,
       cadenceLiveAnchorHistoryBridgeIdentity: state.cadenceLiveAnchorHistoryBridgeIdentity,
+      cadenceRenderContinuationTempoIdentity: state.cadenceRenderContinuationTempoIdentity,
       pressureSourceStrategy,
       tallPlumePressureIterationStrategy: tallPlumePressureStrategy,
       tallPlumePressureIterationTarget,
@@ -4890,12 +4919,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       pressureJacobiFullGridPasses,
       pressureJacobiPartialSlabPasses,
       pressureJacobiFullGridEquivalentPasses,
-      pressureTierRequestedBounds: spatialPressureEnabled ? { ...tierPlan.requestedBounds } : null,
-      pressureTierEffectiveBounds: spatialPressureEnabled ? { ...tierPlan.effectiveBounds } : null,
+      pressureTierRequestedBounds: spatialPressureRequested ? { ...tierPlan.requestedBounds } : null,
+      pressureTierEffectiveBounds: spatialPressureRequested ? { ...tierPlan.effectiveBounds } : null,
       pressureTierOverlayOpacity: pressureTierControls.overlay,
-      pressureTierDispatches: spatialPressureEnabled ? tierPlan.dispatches.map(dispatch => ({ ...dispatch })) : [],
-      pressureTierBounds: spatialPressureEnabled ? { ...tierPlan.bounds } : null,
-      pressureTierBufferOwnership: spatialPressureEnabled ? { ...tierPlan.bufferOwnership } : null,
+      pressureTierDispatches: spatialPressureRequested ? tierPlan.dispatches.map(dispatch => ({ ...dispatch })) : [],
+      pressureTierBounds: spatialPressureRequested ? { ...tierPlan.bounds } : null,
+      pressureTierBufferOwnership: spatialPressureRequested ? { ...tierPlan.bufferOwnership } : null,
       mainFluidKernelStrategy,
       mainFluidLocalProjectionStrategy,
       mainFluidLocalProjectionDivergenceEvaluationsPerCell,
@@ -6459,8 +6488,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       cadencePhase: state.cadencePhase,
       framesSinceLiveSim: state.framesSinceLiveSim,
       continuationWarp: state.continuationWarp,
+      continuationTempo: state.continuationTempo,
       cadenceNativeContinuationIdentity: state.cadenceNativeContinuationIdentity,
       cadenceLiveAnchorHistoryBridgeIdentity: state.cadenceLiveAnchorHistoryBridgeIdentity,
+      cadenceRenderContinuationTempoIdentity: state.cadenceRenderContinuationTempoIdentity,
       runtimeQualityRequested: state.runtimeQualityRequested,
       runtimeQualityEffective: state.runtimeQualityEffective,
       gpuPressure: state.gpuPressure,
@@ -6633,6 +6664,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       state.effectiveVisualAuthority = state.simCadence > 1 ? 'continuation' : 'live-sim';
       state.continuationAuthority = state.simCadence > 1 ? 'continuation-from-latest-live-field-v0' : 'live-sim-v0';
       state.continuationWarp = normalizeContinuationWarp(controlsSnapshot.continuationWarp);
+      state.continuationTempo = normalizeContinuationTempo(controlsSnapshot.continuationTempo);
+      state.cadenceRenderContinuationTempoIdentity = CADENCE_RENDER_CONTINUATION_TEMPO_IDENTITY;
       state.runtimeQualityRequested = normalizeRuntimeQuality(controlsSnapshot.runtimeQualityRequested);
       state.runtimeQualityEffective = normalizeRuntimeQuality(controlsSnapshot.runtimeQualityEffective || controlsSnapshot.runtimeQualityRequested);
       state.gpuPressure = clampFinite(controlsSnapshot.gpuPressure, 0, 1, 0);

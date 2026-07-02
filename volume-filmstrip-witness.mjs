@@ -252,12 +252,14 @@ function browserCaptureExpression(options) {
         cadencePhase: state.cadencePhase,
         framesSinceLiveSim: state.framesSinceLiveSim,
         continuationWarp: state.continuationWarp,
+        continuationTempo: state.continuationTempo,
         lastLiveSimFrameId: state.lastLiveSimFrameId,
         lastSimFrameSkipped: state.lastSimFrameSkipped,
         liveSimFrameCount: state.liveSimFrameCount,
         continuationFrameCount: state.continuationFrameCount,
         cadenceNativeContinuationIdentity: state.cadenceNativeContinuationIdentity,
         cadenceLiveAnchorHistoryBridgeIdentity: state.cadenceLiveAnchorHistoryBridgeIdentity,
+        cadenceRenderContinuationTempoIdentity: state.cadenceRenderContinuationTempoIdentity,
         metrics,
       });
       previousFrameCount = state.frameCount;
@@ -637,6 +639,8 @@ async function main() {
       temporalPolicy: capture.finalState?.temporalPolicy,
       temporalAccum: capture.finalState?.temporalAccum,
       continuationWarp: capture.finalState?.continuationWarp,
+      continuationTempo: capture.finalState?.continuationTempo,
+      cadenceRenderContinuationTempoIdentity: capture.finalState?.cadenceRenderContinuationTempoIdentity,
       phaseBucketSummary,
       phasePulseSummary,
       frames,
