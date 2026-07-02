@@ -184,6 +184,11 @@ def parse_args() -> argparse.Namespace:
         help="Train on all other deterministic replay states and test on this replayStateIdentity.",
     )
     parser.add_argument(
+        "--include-replay-state-list",
+        default=None,
+        help="Comma-separated replayStateIdentity list to include before train/test splitting; excluded replay states remain reported.",
+    )
+    parser.add_argument(
         "--route-conditioning",
         choices=[NO_ROUTE_CONDITIONING_IDENTITY, ROUTE_CONTROLS_CONDITIONING_IDENTITY, ROUTE_CONTROLS_REPLAY_CONDITIONING_IDENTITY],
         default=NO_ROUTE_CONDITIONING_IDENTITY,
@@ -273,6 +278,7 @@ def base_report(args: argparse.Namespace) -> dict[str, Any]:
             "holdoutRouteVariant": args.holdout_route_variant,
             "holdoutRouteVariantList": args.holdout_route_variant_list,
             "holdoutReplayState": args.holdout_replay_state,
+            "includeReplayStateList": args.include_replay_state_list,
             "routeConditioning": args.route_conditioning,
             "targetChannelList": args.target_channel_list,
             "targetChannelGroup": args.target_channel_group,
@@ -398,6 +404,10 @@ def replay_for_pair(pair: dict[str, Any]) -> dict[str, Any]:
 
 
 def parse_holdout_route_variant_list(raw_value: str | None) -> list[str]:
+    return parse_csv_unique(raw_value)
+
+
+def parse_include_replay_state_list(raw_value: str | None) -> list[str]:
     return parse_csv_unique(raw_value)
 
 
@@ -587,6 +597,70 @@ def candidate_matches(dataset: dict[str, Any], manifest_path: Path, args: argpar
                 "highEnergySum": match.get("highEnergySum"),
             })
     return usable, discarded
+
+
+def filter_matches_by_replay_state(matches: list[dict[str, Any]], args: argparse.Namespace) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    include_replay_states = parse_include_replay_state_list(args.include_replay_state_list)
+    available_counts: dict[str, int] = {}
+    for match in matches:
+        replay_state = str(match.get("replayStateIdentity") or "unknown-replay-state")
+        available_counts[replay_state] = available_counts.get(replay_state, 0) + 1
+    if not include_replay_states:
+        return matches, {
+            "identity": "none",
+            "requestedReplayStateIdentities": [],
+            "includedReplayStateIdentities": sorted(available_counts.keys()),
+            "excludedReplayStateIdentities": [],
+            "availableReplayCounts": dict(sorted(available_counts.items())),
+            "includedReplayCounts": dict(sorted(available_counts.items())),
+            "excludedReplayCounts": {},
+            "limitation": "No replay-state include filter was requested.",
+        }
+    include_set = set(include_replay_states)
+    unknown = [value for value in include_replay_states if value not in available_counts]
+    if unknown:
+        raise ProbeFailure(
+            "replay-state-filter",
+            "requested replay-state include filter names states that are absent from usable matches",
+            {
+                "requestedReplayStateIdentities": include_replay_states,
+                "missingReplayStateIdentities": unknown,
+                "availableReplayStateIdentities": sorted(available_counts.keys()),
+                "availableReplayCounts": dict(sorted(available_counts.items())),
+            },
+        )
+    filtered = [match for match in matches if str(match.get("replayStateIdentity") or "unknown-replay-state") in include_set]
+    if len(filtered) < 2:
+        raise ProbeFailure(
+            "replay-state-filter",
+            "replay-state include filter left fewer than two usable tile pairs",
+            {
+                "requestedReplayStateIdentities": include_replay_states,
+                "usableTilePairsBeforeReplayStateFilter": len(matches),
+                "usableTilePairsAfterReplayStateFilter": len(filtered),
+                "availableReplayCounts": dict(sorted(available_counts.items())),
+            },
+        )
+    included_counts: dict[str, int] = {}
+    excluded_counts: dict[str, int] = {}
+    for replay_state, count in available_counts.items():
+        if replay_state in include_set:
+            included_counts[replay_state] = count
+        else:
+            excluded_counts[replay_state] = count
+    excluded_states = sorted(excluded_counts.keys())
+    return filtered, {
+        "identity": "include-replay-state-list-v0",
+        "requestedReplayStateIdentities": include_replay_states,
+        "includedReplayStateIdentities": [value for value in include_replay_states if value in included_counts],
+        "excludedReplayStateIdentities": excluded_states,
+        "availableReplayCounts": dict(sorted(available_counts.items())),
+        "includedReplayCounts": dict(sorted(included_counts.items())),
+        "excludedReplayCounts": dict(sorted(excluded_counts.items())),
+        "usableTilePairsBeforeReplayStateFilter": len(matches),
+        "usableTilePairsAfterReplayStateFilter": len(filtered),
+        "limitation": "This narrows a diagnostic probe over existing field-pair payloads; it does not mutate the source corpus or claim excluded replay states are physically irrelevant.",
+    }
 
 
 def split_matches(matches: list[dict[str, Any]], args: argparse.Namespace) -> tuple[list[int], list[int], dict[str, Any]]:
@@ -1114,6 +1188,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     if dataset.get("status") != "captured":
         raise ProbeFailure("manifest-validate", "source dataset is not captured", {"status": dataset.get("status")})
     usable_matches, discarded_matches = candidate_matches(dataset, manifest_path, args)
+    usable_matches_before_replay_state_filter = len(usable_matches)
+    usable_matches, replay_state_filter = filter_matches_by_replay_state(usable_matches, args)
     train_indexes, test_indexes, split_strategy = split_matches(usable_matches, args)
     train_low_tiles, train_high_tiles = load_split_tiles(usable_matches, train_indexes)
     test_low_tiles, test_high_tiles = load_split_tiles(usable_matches, test_indexes)
@@ -1247,7 +1323,9 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         },
         "data": {
             **split_strategy,
-            "candidateMatchedTilePairs": len(usable_matches) + len(discarded_matches),
+            "replayStateFilter": replay_state_filter,
+            "candidateMatchedTilePairs": usable_matches_before_replay_state_filter + len(discarded_matches),
+            "usableTilePairsBeforeReplayStateFilter": usable_matches_before_replay_state_filter,
             "usableTilePairs": len(usable_matches),
             "discardedTilePairs": len(discarded_matches),
             "discarded": discarded_matches,

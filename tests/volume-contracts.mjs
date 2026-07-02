@@ -1484,6 +1484,9 @@ assert.match(fieldResidualProbe, /splitStrategy/, 'field residual probe reports 
 assert.match(fieldResidualProbe, /--split-strategy/, 'field residual probe exposes train/test split strategy as an explicit run control');
 assert.match(fieldResidualProbe, /replay-balanced-tile-pair-v0/, 'field residual probe can balance random-style splits across replay states');
 assert.match(fieldResidualProbe, /replayBalancedPolicy/, 'field residual probe reports replay-balanced sampling counts instead of hiding replay skew');
+assert.match(fieldResidualProbe, /--include-replay-state-list/, 'field residual probe can select comparable-support replay states without mutating the source corpus');
+assert.match(fieldResidualProbe, /replayStateFilter/, 'field residual probe reports replay-state filtering instead of silently dropping under-supported states');
+assert.match(fieldResidualProbe, /excludedReplayStateIdentities/, 'field residual probe reports which replay states were excluded from comparable-support diagnostics');
 assert.match(fieldResidualProbe, /--route-conditioning/, 'field residual probe can append route/replay conditioning features without changing model capacity');
 assert.match(fieldResidualProbe, /route-controls-replay-v0/, 'field residual probe names the route-control plus replay conditioning identity');
 assert.match(fieldResidualProbe, /routeConditioningChannels/, 'field residual probe reports the route conditioning channel order');
