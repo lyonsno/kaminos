@@ -12,6 +12,8 @@ const expectedHostRoute = args.get('--expected-host-route') || null;
 const expectedPacketSchema = args.get('--expected-packet-schema') || null;
 const expectedPacketRoute = args.get('--expected-packet-route') || null;
 const expectedDowngrade = args.get('--expected-downgrade') || null;
+const expectedLivePolling = args.get('--expected-live-polling') === 'true';
+const expectedMinLoadCount = Number(args.get('--expected-min-load-count') || (expectedLivePolling ? 2 : 0));
 const out = resolve(args.get('--out') || '/tmp/kaminos-host-surface.png');
 const reportPath = resolve(args.get('--report') || out.replace(/\.png$/i, '.json'));
 const port = Number(args.get('--debug-port') || 9493);
@@ -50,6 +52,8 @@ function writeReport(report = {}) {
     expectedPacketSchema,
     expectedPacketRoute,
     expectedDowngrade,
+    expectedLivePolling,
+    expectedMinLoadCount,
     debugPort: port,
     chrome,
     userDataDir,
@@ -196,7 +200,9 @@ async function main() {
         };
       })()`);
       const matchesHost = !expectedHostId || lastDebugState?.hostId === expectedHostId;
-      if (lastDebugState?.schema === 'kaminos.host-surface.state.v0' && lastDebugState.status !== 'loading' && matchesHost) break;
+      const loadCountOk = !expectedMinLoadCount || Number(lastDebugState?.packetLoadCount || 0) >= expectedMinLoadCount;
+      const liveOk = !expectedLivePolling || lastDebugState?.liveBridge?.active === true;
+      if (lastDebugState?.schema === 'kaminos.host-surface.state.v0' && lastDebugState.status !== 'loading' && matchesHost && loadCountOk && liveOk) break;
       await delay(250);
     }
 
@@ -213,6 +219,10 @@ async function main() {
     if (!lastDebugState.sourceAuthority || lastDebugState.sourceAuthority === 'none') throw new Error('host-surface source authority missing');
     if (!lastDebugState.sourceTruthAuthority || lastDebugState.sourceTruthAuthority === 'none') throw new Error('host-surface source-truth authority missing');
     if (!Array.isArray(lastDebugState.rejectedDebugSurfaces)) throw new Error('host-surface rejected debug surfaces missing');
+    if (expectedLivePolling && lastDebugState.liveBridge?.active !== true) throw new Error('host-surface live polling inactive');
+    if (expectedMinLoadCount && Number(lastDebugState.packetLoadCount || 0) < expectedMinLoadCount) {
+      throw new Error(`host-surface packet load count ${lastDebugState.packetLoadCount || 0} below expected ${expectedMinLoadCount}`);
+    }
     if (expectedHostId === 'lerms-moving-timeline') {
       const sourceCustody = lastDebugState.sourceCustody || {};
       if (!sourceCustody.lermsOwns?.includes('timelineBehaviorTruth')) throw new Error('missing source custody lermsOwns: timelineBehaviorTruth');

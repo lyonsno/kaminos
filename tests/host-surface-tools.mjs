@@ -227,6 +227,22 @@ assert.match(gloveWellReport.witnessCommand, /--expected-packet-schema lerms\.gl
 assert.match(gloveWellReport.witnessCommand, /--expected-packet-route lerms\/glove-well\/host-packet/);
 assert.match(gloveWellReport.witnessCommand, /--expected-downgrade local_browser_smoke_not_native_kaminos_host/);
 
+const liveGloveWellReport = tools.lintHostSurfacePacket(gloveWellPacket, {
+  adapter: 'glove-well',
+  root: 'scratch',
+  path: 'greedy-glove-well-host-packet-0701.json',
+  serverOrigin: 'http://127.0.0.1:18142',
+  live: true,
+  pollMs: 750,
+});
+assert.equal(liveGloveWellReport.ok, true);
+assert.equal(liveGloveWellReport.smokeUrl, 'http://127.0.0.1:18142/index.html?kaminos_glove_well_host=1&glove_well_host_root=scratch&glove_well_host_path=greedy-glove-well-host-packet-0701.json&glove_well_host_live=1&glove_well_host_poll_ms=750');
+assert.equal(liveGloveWellReport.liveMode.enabled, true);
+assert.equal(liveGloveWellReport.liveMode.pollMs, 750);
+assert.match(liveGloveWellReport.witnessCommand, /glove_well_host_live=1/);
+assert.match(liveGloveWellReport.witnessCommand, /--expected-live-polling true/);
+assert.match(liveGloveWellReport.witnessCommand, /--expected-min-load-count 2/);
+
 const missingSurfaceGloveWellPacket = structuredClone(gloveWellPacket);
 delete missingSurfaceGloveWellPacket.surface;
 const missingSurfaceGloveWellReport = tools.lintHostSurfacePacket(missingSurfaceGloveWellPacket, {

@@ -173,8 +173,16 @@ assert.match(indexSource, /kaminos_glove_well_host=1/, 'Kaminos route can open d
 assert.match(indexSource, /glove_well_host_root/, 'native host supports file-root packet loading');
 assert.match(indexSource, /glove_well_host_path/, 'native host supports file-path packet loading');
 assert.match(indexSource, /glove_well_host_url/, 'native host supports direct packet URL loading');
+assert.match(indexSource, /glove_well_host_live/, 'native host supports explicit live polling route mode');
+assert.match(indexSource, /glove_well_host_poll_ms/, 'native host supports caller-selected live poll cadence');
+assert.match(indexSource, /id="glove-well-host-live-start"/, 'native host exposes a start-live control');
+assert.match(indexSource, /id="glove-well-host-live-stop"/, 'native host exposes a stop-live control');
+assert.match(indexSource, /id="glove-well-host-live-status"/, 'native host shows effective live/polling state');
 assert.match(indexSource, /id="glove-well-host-canvas"/, 'native host owns a canvas instead of accepting a LERMS debug page as host surface');
 assert.match(indexSource, /window\.kaminosGloveWellHostDebugState/, 'native host exposes state for browser witnesses');
+assert.match(indexSource, /window\.kaminosStartGloveWellHostLive/, 'native host exposes live polling start for witnesses/producers');
+assert.match(indexSource, /window\.kaminosStopGloveWellHostLive/, 'native host exposes live polling stop for witnesses/producers');
+assert.match(indexSource, /packetLoadCount/, 'native host debug state records load count for live/polling evidence');
 assert.match(indexSource, /local_browser_smoke_not_native_kaminos_host/, 'native host displays local-browser downgrade');
 assert.match(indexSource, /visual_capture_not_source_truth/, 'native host displays visual-capture downgrade');
 

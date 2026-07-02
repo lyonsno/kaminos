@@ -55,6 +55,8 @@ const ADAPTERS = {
     rootParam: 'glove_well_host_root',
     pathParam: 'glove_well_host_path',
     urlParam: 'glove_well_host_url',
+    liveParam: 'glove_well_host_live',
+    pollMsParam: 'glove_well_host_poll_ms',
     requiredDowngrades: ['local_browser_smoke_not_native_kaminos_host', 'visual_capture_not_source_truth'],
     requiredCustody: [
       ['greedyOwns', 'custody missing greedyOwns'],
@@ -82,6 +84,8 @@ function usage() {
     '  --debug-port <port>      Chrome DevTools port for the emitted witness command',
     '  --settle-ms <ms>         Visual settle window for the emitted witness command',
     '  --hook-wait-ms <ms>      Host debug-hook wait window for the emitted witness command',
+    '  --live <true|false>      Emit adapter live/poll route params when supported',
+    '  --poll-ms <ms>           Poll cadence for supported live host adapters',
   ].join('\n');
 }
 
@@ -96,6 +100,8 @@ function parseArgs(argv) {
     debugPort: null,
     settleMs: null,
     hookWaitMs: null,
+    live: false,
+    pollMs: null,
   };
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -130,6 +136,12 @@ function parseArgs(argv) {
       index += 1;
     } else if (arg === '--hook-wait-ms') {
       options.hookWaitMs = Number(next);
+      index += 1;
+    } else if (arg === '--live') {
+      options.live = next === undefined || next === 'true' || next === '1';
+      if (next !== undefined && !next.startsWith('--')) index += 1;
+    } else if (arg === '--poll-ms') {
+      options.pollMs = Number(next);
       index += 1;
     } else {
       throw new Error(`Unknown argument: ${arg}`);
@@ -212,6 +224,10 @@ export function buildHostSurfaceSmokeUrl(options = {}) {
     url.searchParams.set(config.rootParam, options.root);
     url.searchParams.set(config.pathParam, options.path);
   }
+  if (config.liveParam && options.live) url.searchParams.set(config.liveParam, '1');
+  if (config.pollMsParam && Number.isFinite(Number(options.pollMs)) && Number(options.pollMs) > 0) {
+    url.searchParams.set(config.pollMsParam, String(Number(options.pollMs)));
+  }
   return url.href;
 }
 
@@ -239,6 +255,10 @@ export function buildHostSurfaceWitnessCommand(report, options = {}) {
   if (Number.isFinite(options.debugPort)) args.push('--debug-port', String(options.debugPort));
   if (Number.isFinite(options.settleMs)) args.push('--settle-ms', String(options.settleMs));
   if (Number.isFinite(options.hookWaitMs)) args.push('--hook-wait-ms', String(options.hookWaitMs));
+  if (report.liveMode?.enabled) {
+    args.push('--expected-live-polling', 'true');
+    args.push('--expected-min-load-count', '2');
+  }
   return args.map(quoteShell).join(' ');
 }
 
@@ -305,6 +325,12 @@ export function lintHostSurfacePacket(packet, options = {}) {
     errorCount: errors.length,
     warningCount: 0,
     smokeUrl,
+    liveMode: config.liveParam ? {
+      enabled: options.live === true,
+      pollMs: Number.isFinite(Number(options.pollMs)) && Number(options.pollMs) > 0 ? Number(options.pollMs) : null,
+      liveParam: config.liveParam,
+      pollMsParam: config.pollMsParam || null,
+    } : null,
   };
   report.witnessCommand = smokeUrl ? buildHostSurfaceWitnessCommand(report, options) : null;
   return report;
