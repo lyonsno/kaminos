@@ -1436,6 +1436,11 @@ assert.match(fieldPairDataset, /route-variant-preflight/, 'field-pair dataset na
 assert.match(fieldPairDataset, /--deterministic-replay-start-ms-list/, 'field-pair dataset can expand deterministic replay over multiple start states');
 assert.match(fieldPairDataset, /deterministicReplayStates/, 'field-pair dataset records the deterministic replay state axis in the manifest');
 assert.match(fieldPairDataset, /replayStateIdentity/, 'field-pair dataset records the active replay state identity per low/high pair');
+assert.match(fieldPairDataset, /--capture-retries/, 'field-pair dataset exposes capture retries as an explicit corpus reliability control');
+assert.match(fieldPairDataset, /captureRetryPolicy/, 'field-pair dataset records the effective capture retry policy in the manifest');
+assert.match(fieldPairDataset, /captureAttempts/, 'field-pair dataset records every witness capture attempt instead of hiding retry history');
+assert.match(fieldPairDataset, /attemptIndex/, 'field-pair dataset records capture attempt indexes for retry provenance');
+assert.match(fieldPairDataset, /capture-attempts-exhausted/, 'field-pair dataset fails loudly when all capture attempts are exhausted');
 
 const fieldResidualProbePath = join(root, 'volume-field-residual-probe.py');
 assert.ok(existsSync(fieldResidualProbePath), 'volume field residual probe exists');

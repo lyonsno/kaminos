@@ -984,7 +984,72 @@ function withFieldTileSpatialBinIds(plan, spatialBinIds) {
   };
 }
 
-function runCapture(plan, cwd) {
+function replaceCommandArg(command, flag, value) {
+  const next = command.slice();
+  const index = next.indexOf(flag);
+  if (index >= 0 && index + 1 < next.length) {
+    next[index + 1] = value;
+  }
+  return next;
+}
+
+function pathWithAttempt(path, attemptIndex) {
+  if (attemptIndex <= 1) return path;
+  const suffix = `.attempt-${String(attemptIndex).padStart(3, '0')}`;
+  const dot = path.lastIndexOf('.');
+  if (dot <= path.lastIndexOf('/')) return `${path}${suffix}`;
+  return `${path.slice(0, dot)}${suffix}${path.slice(dot)}`;
+}
+
+function planForCaptureAttempt(plan, attemptIndex) {
+  if (attemptIndex <= 1) {
+    return {
+      ...plan,
+      attemptIndex,
+      attemptIdentity: `${plan.slug}:attempt-001`,
+    };
+  }
+  const attemptPlan = {
+    ...plan,
+    attemptIndex,
+    attemptIdentity: `${plan.slug}:attempt-${String(attemptIndex).padStart(3, '0')}`,
+    out: pathWithAttempt(plan.out, attemptIndex),
+    report: pathWithAttempt(plan.report, attemptIndex),
+    fullScreenshot: pathWithAttempt(plan.fullScreenshot, attemptIndex),
+    fieldProjectionTensor: pathWithAttempt(plan.fieldProjectionTensor, attemptIndex),
+    fieldTileExportArtifact: pathWithAttempt(plan.fieldTileExportArtifact, attemptIndex),
+    stdout: pathWithAttempt(plan.stdout, attemptIndex),
+    stderr: pathWithAttempt(plan.stderr, attemptIndex),
+  };
+  let command = plan.command.slice();
+  command = replaceCommandArg(command, '--out', attemptPlan.out);
+  command = replaceCommandArg(command, '--report', attemptPlan.report);
+  command = replaceCommandArg(command, '--full-screenshot', attemptPlan.fullScreenshot);
+  command = replaceCommandArg(command, '--field-projection-tensor', attemptPlan.fieldProjectionTensor);
+  command = replaceCommandArg(command, '--field-tile-export-artifact', attemptPlan.fieldTileExportArtifact);
+  attemptPlan.command = command;
+  return attemptPlan;
+}
+
+function captureAttemptReceipt(attemptPlan, child, status) {
+  return {
+    attemptIndex: attemptPlan.attemptIndex,
+    attemptIdentity: attemptPlan.attemptIdentity,
+    status,
+    out: attemptPlan.out,
+    report: attemptPlan.report,
+    fullScreenshot: attemptPlan.fullScreenshot,
+    fieldProjectionTensor: attemptPlan.fieldProjectionTensor,
+    fieldTileExportArtifact: attemptPlan.fieldTileExportArtifact,
+    stdout: attemptPlan.stdout,
+    stderr: attemptPlan.stderr,
+    exitStatus: child.status,
+    signal: child.signal,
+    spawnError: child.error ? { name: child.error.name, message: child.error.message, code: child.error.code } : null,
+  };
+}
+
+function runCaptureOnce(plan, cwd) {
   mkdirSync(dirname(plan.out), { recursive: true });
   const stdoutFd = openSync(plan.stdout, 'w');
   const stderrFd = openSync(plan.stderr, 'w');
@@ -1002,6 +1067,7 @@ function runCapture(plan, cwd) {
     const error = new Error(`capture failed for ${plan.role} sim grid ${plan.requestedGrid}`);
     error.code = 'capture-failed';
     error.failurePhase = 'capture';
+    error.attemptReceipt = captureAttemptReceipt(plan, child, 'failed');
     error.details = {
       status: child.status,
       signal: child.signal,
@@ -1013,7 +1079,61 @@ function runCapture(plan, cwd) {
     throw error;
   }
   const witness = readJson(plan.report);
-  return summarizeFieldEvidence(witness, plan);
+  return {
+    effective: summarizeFieldEvidence(witness, plan),
+    attemptReceipt: captureAttemptReceipt(plan, child, 'passed'),
+  };
+}
+
+function runCapture(plan, cwd, captureRetryPolicy = { maxRetries: 0 }) {
+  const maxRetries = Math.max(0, Math.floor(Number(captureRetryPolicy?.maxRetries || 0)));
+  const maxAttempts = maxRetries + 1;
+  const attempts = [];
+  let lastError = null;
+  for (let attemptIndex = 1; attemptIndex <= maxAttempts; attemptIndex += 1) {
+    const attemptPlan = planForCaptureAttempt(plan, attemptIndex);
+    try {
+      const { effective, attemptReceipt } = runCaptureOnce(attemptPlan, cwd);
+      attempts.push(attemptReceipt);
+      return {
+        ...effective,
+        captureAttempts: attempts,
+        captureRetryPolicy: {
+          identity: 'capture-retry-same-witness-route-v0',
+          maxRetries,
+          attemptsUsed: attemptIndex,
+        },
+      };
+    } catch (error) {
+      lastError = error;
+      attempts.push(error.attemptReceipt || {
+        attemptIndex,
+        attemptIdentity: attemptPlan.attemptIdentity,
+        status: 'failed-before-receipt',
+        out: attemptPlan.out,
+        report: attemptPlan.report,
+        fullScreenshot: attemptPlan.fullScreenshot,
+        fieldProjectionTensor: attemptPlan.fieldProjectionTensor,
+        fieldTileExportArtifact: attemptPlan.fieldTileExportArtifact,
+        stdout: attemptPlan.stdout,
+        stderr: attemptPlan.stderr,
+      });
+    }
+  }
+  const error = new Error(`capture attempts exhausted for ${plan.role} sim grid ${plan.requestedGrid}: ${lastError?.message || 'unknown capture failure'}`);
+  error.code = 'capture-attempts-exhausted';
+  error.failurePhase = lastError?.failurePhase || 'capture';
+  error.details = {
+    maxRetries,
+    attempts,
+    terminalFailure: {
+      code: lastError?.code || 'unknown',
+      failurePhase: lastError?.failurePhase || 'unknown',
+      message: lastError?.message || 'unknown capture failure',
+      details: lastError?.details || {},
+    },
+  };
+  throw error;
 }
 
 function summarizeRouteVariantPreflight(effective) {
@@ -1044,7 +1164,7 @@ function summarizeRouteVariantPreflight(effective) {
   };
 }
 
-function runRouteVariantPreflights({ enabled, routeVariants, deterministicReplayStates, lowGrids, majorantGrid, baseUrl, outDir, debugPort, settleMs, windowSize, evidenceMode, cwd }) {
+function runRouteVariantPreflights({ enabled, routeVariants, deterministicReplayStates, lowGrids, majorantGrid, baseUrl, outDir, debugPort, settleMs, windowSize, evidenceMode, cwd, captureRetryPolicy }) {
   if (!enabled) {
     return {
       schema: ROUTE_VARIANT_PREFLIGHT_SCHEMA,
@@ -1076,7 +1196,7 @@ function runRouteVariantPreflights({ enabled, routeVariants, deterministicReplay
         fieldTileExport: { enabled: false },
       });
       try {
-        const effective = runCapture(plan, cwd);
+        const effective = runCapture(plan, cwd, captureRetryPolicy);
         receipts.push({
           schema: ROUTE_VARIANT_PREFLIGHT_SCHEMA,
           status: 'passed',
@@ -1165,6 +1285,14 @@ const fieldTileExport = args.has('--field-tile-export') ? {
 const fieldTilePairingPolicy = resolveFieldTilePairingPolicy(args.get('--field-tile-pairing-policy'));
 const minCommonSpatialBinPairs = Math.max(0, Math.floor(Number(args.get('--field-tile-min-common-bin-pairs') || 0)));
 const routeVariantPreflightEnabled = args.has('--route-variant-preflight');
+const captureRetries = Math.max(0, Math.min(5, Math.floor(Number(args.get('--capture-retries') || 0))));
+const captureRetryPolicy = {
+  identity: 'capture-retry-same-witness-route-v0',
+  maxRetries: captureRetries,
+  maxAttempts: captureRetries + 1,
+  retryScope: 'per-witness-capture',
+  artifactPolicy: 'attempt-specific-out-report-screenshot-stdout-stderr',
+};
 const dryRun = args.has('--dry-run');
 const createdAt = new Date().toISOString();
 const gitCommit = gitValue(['rev-parse', 'HEAD']);
@@ -1244,6 +1372,7 @@ const manifest = {
   pairAuthority,
   fieldAuthority: FIELD_AUTHORITY,
   deterministicReplay,
+  captureRetryPolicy,
   routeVariantPreflight: {
     schema: ROUTE_VARIANT_PREFLIGHT_SCHEMA,
     enabled: routeVariantPreflightEnabled,
@@ -1298,6 +1427,7 @@ if (!dryRun) {
       windowSize,
       evidenceMode,
       cwd,
+      captureRetryPolicy,
     });
     manifest.updatedAt = new Date().toISOString();
     writeJson(manifestPath, { dataset: manifest });
@@ -1326,12 +1456,12 @@ if (!dryRun && !manifest.failures.length) {
   for (const pair of manifest.pairs) {
     try {
       if (fieldTileExport.selectionPolicy === 'spatial-binned-occupied-fluid-front-tiles') {
-        pair.low.effective = runCapture(pair.low, cwd);
+        pair.low.effective = runCapture(pair.low, cwd, captureRetryPolicy);
         pair.high = withFieldTileSpatialBinIds(pair.high, pair.low.effective.fieldTileExport?.selectedSpatialBins);
-        pair.high.effective = runCapture(pair.high, cwd);
+        pair.high.effective = runCapture(pair.high, cwd, captureRetryPolicy);
       } else {
-        pair.high.effective = runCapture(pair.high, cwd);
-        pair.low.effective = runCapture(pair.low, cwd);
+        pair.high.effective = runCapture(pair.high, cwd, captureRetryPolicy);
+        pair.low.effective = runCapture(pair.low, cwd, captureRetryPolicy);
       }
       pair.fieldTileCoveragePairing = buildFieldTileCoveragePairing(pair, { fieldTilePairingPolicy });
       validateFieldTileCoveragePairing(pair.fieldTileCoveragePairing, {
