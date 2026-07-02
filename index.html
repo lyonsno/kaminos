@@ -207,6 +207,15 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 .volume-readout .field-key { white-space: nowrap; }
 .volume-readout .field-val { max-width: 220px; text-align: right; }
 .volume-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.lerms-goin-transition-readout { margin-top: 8px; border-top: 1px solid #2a2a2a; padding-top: 8px; }
+.lerms-goin-transition-readout .field { gap: 10px; min-width: 0; }
+.lerms-goin-transition-readout .field-val { max-width: 225px; text-align: right; }
+.lerms-goin-transition-list { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
+.lerms-goin-transition-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; align-items: center; padding: 5px 6px; border: 1px solid #303030; border-radius: 5px; background: #202020; color: #aaa; font: 9px 'SF Mono', monospace; cursor: pointer; }
+.lerms-goin-transition-row.active { border-color: #5d4822; background: #211b0e; color: #f0d28a; }
+.lerms-goin-transition-row span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lerms-goin-transition-row .distance { color: #f0b85a; }
+.lerms-goin-transition-sequence { margin-top: 5px; color: #777; font: 9px 'SF Mono', monospace; line-height: 1.35; overflow-wrap: anywhere; }
 .ray-budget-wrap { margin: 8px 0 10px; }
 .ray-budget-grid { display: grid; grid-template-columns: 34px 1fr; grid-template-rows: 1fr 18px; gap: 4px 6px; align-items: center; }
 .ray-budget-axis-y { writing-mode: vertical-rl; transform: rotate(180deg); color: #666; font: 9px 'SF Mono', monospace; letter-spacing: 0; justify-self: center; }
@@ -1077,6 +1086,13 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
           <div class="field"><span class="field-key">Motion Src</span><span class="field-val" id="lerms-preview-motion-source">none</span></div>
           <div class="field"><span class="field-key">Downgrade</span><span class="field-val" id="lerms-preview-motion-downgrade">none</span></div>
         </div>
+        <div class="world-chamber-readout lerms-goin-transition-readout" id="lerms-preview-goin-transition-inspector">
+          <div class="field"><span class="field-key">Goin Inspect</span><span class="field-val" id="lerms-preview-selected-goin">none</span></div>
+          <div class="field"><span class="field-key">Largest Move</span><span class="field-val" id="lerms-preview-goin-largest-move">none</span></div>
+          <div class="field"><span class="field-key">Interpretation</span><span class="field-val" id="lerms-preview-goin-transition-why">none</span></div>
+          <div class="lerms-goin-transition-list" id="lerms-preview-goin-transition-list"></div>
+          <div class="lerms-goin-transition-sequence" id="lerms-preview-goin-transition-sequence">none</div>
+        </div>
         <div class="lerms-preview-camera-list" id="lerms-preview-camera-list"></div>
       </div>
       <div class="volume-actions">
@@ -1483,6 +1499,7 @@ const LERMS_MOVING_TIMELINE_HOST_QUERY = 'kaminos_lerms_moving_timeline_host=1';
 let lermsPreviewTimelinePlaybackStartMs = 0;
 let lermsPreviewActorCameraFrameKey = null;
 let lermsPreviewTimelinePlaybackTimer = null;
+let lermsPreviewSelectedGoinId = null;
 let lermsPreviewBenchState = createLermsPreviewBenchState(worldChambersRegistry, lermsPreviewRouteState);
 window.__kaminosLermsPreviewState = lermsPreviewBenchState;
 window.__kaminosPreviewBenchPayloads = [];
@@ -8111,6 +8128,29 @@ function makeLermsPreviewActivityReadout(primitive, radius) {
   return group;
 }
 
+function makeLermsPreviewActorPossessionGlow(primitive, radius) {
+  const glow = new THREE.Mesh(
+    new THREE.SphereGeometry(1, 24, 16),
+    new THREE.MeshBasicMaterial({
+      color: primitive.possessionGlow?.color || 0xffd45f,
+      transparent: true,
+      opacity: primitive.possessionGlow ? 0.2 : 0,
+      depthWrite: false,
+    }),
+  );
+  glow.name = `lerms-preview-possession-glow-${primitive.actorId || 'unknown'}`;
+  glow.scale.setScalar(radius * 1.32);
+  glow.visible = !!primitive.possessionGlow;
+  glow.renderOrder = 4;
+  glow.userData.kaminosLermsPossessionGlow = {
+    schema: primitive.possessionGlow?.schema || 'kaminos.lerms-preview-possession-glow.v0',
+    actorId: primitive.actorId,
+    carryingGoinIds: primitive.carryingGoinIds || [],
+  };
+  markKaminosOverlayCue(glow);
+  return glow;
+}
+
 function makeLermsPreviewActorVisualMesh(primitive) {
   const actorGroup = new THREE.Group();
   actorGroup.name = `lerms-preview-actor-${primitive.actorId || 'unknown'}`;
@@ -8141,6 +8181,7 @@ function makeLermsPreviewActorVisualMesh(primitive) {
   body.castShadow = true;
   body.receiveShadow = true;
   actorGroup.add(body);
+  actorGroup.add(makeLermsPreviewActorPossessionGlow(primitive, radius));
 
   const heading = Array.isArray(primitive.heading) ? primitive.heading : [1, 0, 0];
   const noseDistance = radius * 1.45;
@@ -8310,6 +8351,8 @@ function updateLermsPreviewActorVisualMesh(actorGroup, primitive) {
     ...actorGroup.userData.kaminosLermsPreviewActor,
     state: primitive.state,
     radius,
+    carryingGoinIds: primitive.carryingGoinIds || [],
+    possessionGlow: primitive.possessionGlow || null,
   };
   const body = actorGroup.getObjectByName(`${actorGroup.name}-body`);
   if (body) {
@@ -8317,6 +8360,18 @@ function updateLermsPreviewActorVisualMesh(actorGroup, primitive) {
     body.material?.color?.copy?.(color);
     body.material?.emissive?.copy?.(color);
     if (body.material) body.material.emissiveIntensity = primitive.state === 'hit_reacting' ? 0.24 : 0.12;
+  }
+  const glow = actorGroup.getObjectByName(`lerms-preview-possession-glow-${primitive.actorId || 'unknown'}`);
+  if (glow) {
+    glow.visible = !!primitive.possessionGlow;
+    glow.scale.setScalar(radius * 1.32);
+    glow.material?.color?.set?.(primitive.possessionGlow?.color || 0xffd45f);
+    if (glow.material) glow.material.opacity = primitive.possessionGlow ? 0.2 : 0;
+    glow.userData.kaminosLermsPossessionGlow = {
+      schema: primitive.possessionGlow?.schema || 'kaminos.lerms-preview-possession-glow.v0',
+      actorId: primitive.actorId,
+      carryingGoinIds: primitive.carryingGoinIds || [],
+    };
   }
   const heading = Array.isArray(primitive.heading) ? primitive.heading : [1, 0, 0];
   const nose = actorGroup.getObjectByName(`${actorGroup.name}-schnoz`);
@@ -8812,6 +8867,71 @@ function sourceFromRoute(route) {
   };
 }
 
+function transitionLabel(transition) {
+  if (!transition) return 'none';
+  return `${transition.fromFrame}->${transition.toFrame} ${transition.distance.toFixed(2)}m`;
+}
+
+function renderLermsPreviewGoinTransitionInspector(actorTimeline) {
+  const diagnostics = actorTimeline?.goinTransitionDiagnostics || null;
+  const selectedEl = document.getElementById('lerms-preview-selected-goin');
+  const largestEl = document.getElementById('lerms-preview-goin-largest-move');
+  const whyEl = document.getElementById('lerms-preview-goin-transition-why');
+  const listEl = document.getElementById('lerms-preview-goin-transition-list');
+  const sequenceEl = document.getElementById('lerms-preview-goin-transition-sequence');
+  if (!selectedEl || !largestEl || !whyEl || !listEl || !sequenceEl) return null;
+
+  const goins = diagnostics?.goins || [];
+  const selectedId = lermsPreviewSelectedGoinId && goins.some(goin => goin.goinId === lermsPreviewSelectedGoinId)
+    ? lermsPreviewSelectedGoinId
+    : diagnostics?.selectedGoinId || goins[0]?.goinId || null;
+  lermsPreviewSelectedGoinId = selectedId;
+  const selected = goins.find(goin => goin.goinId === selectedId) || null;
+  const largest = selected?.largestTransition || null;
+
+  selectedEl.textContent = selected?.goinId || 'none';
+  largestEl.textContent = transitionLabel(largest);
+  whyEl.textContent = largest?.interpretation || 'none';
+  listEl.innerHTML = '';
+  for (const goin of goins) {
+    const row = document.createElement('button');
+    row.type = 'button';
+    row.className = `lerms-goin-transition-row${goin.goinId === selectedId ? ' active' : ''}`;
+    row.dataset.goinId = goin.goinId;
+    row.dataset.transitionCount = String(goin.transitions.length);
+    row.dataset.largestTransitionDistance = String(goin.largestTransition?.distance || 0);
+    row.onclick = () => {
+      lermsPreviewSelectedGoinId = goin.goinId;
+      renderLermsPreviewGoinTransitionInspector(actorTimeline);
+      window._kaminosDirty?.();
+    };
+    const name = document.createElement('span');
+    name.textContent = `${goin.goinId} ${goin.states.join('/')}`;
+    const distance = document.createElement('span');
+    distance.className = 'distance';
+    distance.textContent = goin.largestTransition ? `${goin.largestTransition.distance.toFixed(2)}m` : '0m';
+    row.append(name, distance);
+    listEl.append(row);
+  }
+
+  sequenceEl.textContent = selected
+    ? selected.entries.map(entry => {
+      const carrier = entry.carrierLermId ? `@${entry.carrierLermId}` : '';
+      return `${entry.frameLabel}:${entry.state}${carrier}`;
+    }).join(' -> ')
+    : 'none';
+  const state = {
+    schema: 'kaminos.lerms-preview-goin-transition-inspector.v0',
+    selectedGoinId: selected?.goinId || null,
+    goinCount: diagnostics?.goinCount || 0,
+    transitionCount: diagnostics?.transitionCount || 0,
+    largeAuthoredMoveCount: diagnostics?.largeAuthoredMoveCount || 0,
+    largestTransition: largest,
+  };
+  window.__kaminosLermsPreviewGoinTransitionInspector = state;
+  return state;
+}
+
 function renderWorldChambersPanel() {
   const debug = currentWorldChambersDebugState();
   const previewState = updateLermsPreviewBenchState();
@@ -8882,6 +9002,7 @@ function renderWorldChambersPanel() {
       ? 'timeline / lerms-owned behavior truth'
       : 'none';
   document.getElementById('lerms-preview-motion-downgrade').textContent = actorMotion?.downgrades?.[0] || actorTimeline?.downgrades?.[0] || 'none';
+  renderLermsPreviewGoinTransitionInspector(actorTimeline);
   document.getElementById('lerms-preview-adapter-count').textContent = String(previewState.previewPayloads?.length || 0);
   const adapterList = document.getElementById('preview-bench-adapter-list');
   adapterList.innerHTML = '';

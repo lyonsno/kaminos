@@ -14,6 +14,7 @@ export const LERMS_PREVIEW_ACTOR_MOTION_TIMELINE_ROUTE = 'lerms/preview-bench/ac
 export const LERMS_PREVIEW_WITNESS_SCHEMA = 'kaminos.lerms-preview-witness.v0';
 export const LERMS_PREVIEW_ACTOR_VISUAL_SCHEMA = 'kaminos.lerms-preview-actor-visual.v0';
 export const LERMS_PREVIEW_GOIN_VISUAL_SCHEMA = 'kaminos.lerms-preview-goin-visual.v0';
+export const LERMS_PREVIEW_GOIN_TRANSITION_DIAGNOSTIC_SCHEMA = 'kaminos.lerms-preview-goin-transition-diagnostics.v0';
 export const LERMS_UNDERHILL_CHAMBER_ID = 'lerms-underhill';
 export const LERMS_TERRAIN_PREVIEW_BENCH_ID = 'terrain-preview';
 
@@ -505,6 +506,8 @@ export function createLermsPreviewActorVisualPrimitives(actorMotionState) {
       : [];
   return actors.map((actor, index) => {
     const channels = actor?.benchChannels || actor?.motionAdapter?.channels || {};
+    const actorId = actor?.actorId || actor?.id || `lerms-preview-actor-${index}`;
+    const carryingGoinIds = actorMotionState?.carryingGoinIdsByActor?.[actorId] || [];
     const world = vector3(actor?.world, [index * 0.35, 0.35, 0]);
     const rootOffset = vector3(channels.rootOffset, [0, 0, 0]);
     const position = [
@@ -518,7 +521,7 @@ export function createLermsPreviewActorVisualPrimitives(actorMotionState) {
     const noseReach = roundBenchNumber(radius * 1.45);
     return {
       schema: LERMS_PREVIEW_ACTOR_VISUAL_SCHEMA,
-      actorId: actor?.actorId || actor?.id || `lerms-preview-actor-${index}`,
+      actorId,
       state: actor?.state || 'unknown',
       species: actor?.species || 'red',
       kind: 'proxy_schnoz_sphere',
@@ -529,6 +532,13 @@ export function createLermsPreviewActorVisualPrimitives(actorMotionState) {
       squash: roundBenchNumber(clampNumber(channels.bodySquash || 1, 0.55, 1.35)),
       stretch: roundBenchNumber(clampNumber(channels.bodyStretch || 1, 0.75, 1.55)),
       color: stateColor(actor),
+      carryingGoinIds,
+      possessionGlow: carryingGoinIds.length ? {
+        schema: 'kaminos.lerms-preview-possession-glow.v0',
+        color: '#ffd45f',
+        intensity: 0.78,
+        label: `CARRY ${carryingGoinIds.join(',')}`,
+      } : null,
       activityReadoutStyle: actor?.statusCue?.visibleAboveActor || actor?.selectedCliplet ? 'partial-ground-ring' : null,
       statusLabel: actor?.statusCue?.label || actor?.state || 'observing',
       motionLabel: actor?.selectedCliplet?.clipletLabel || actor?.motionAdapter?.source?.clipletLabel || null,
@@ -609,6 +619,8 @@ function interpolateActorVisualPrimitives(currentFrame, nextFrame, blend) {
       squash: interpolateNumber(primitive.squash, next.squash, blend),
       stretch: interpolateNumber(primitive.stretch, next.stretch, blend),
       nosePosition: interpolateVec3(primitive.nosePosition, next.nosePosition, blend),
+      carryingGoinIds: blend >= 0.5 ? next.carryingGoinIds || [] : primitive.carryingGoinIds || [],
+      possessionGlow: blend >= 0.5 ? next.possessionGlow || null : primitive.possessionGlow || null,
       activityReadoutStyle: primitive.activityReadoutStyle || next.activityReadoutStyle || null,
       statusLabel: blend >= 0.5 ? next.statusLabel : primitive.statusLabel,
       motionLabel: blend >= 0.5 ? next.motionLabel : primitive.motionLabel,
@@ -632,6 +644,94 @@ function interpolateGoinVisualPrimitives(currentFrame, nextFrame, blend) {
       label: blend >= 0.5 ? next.label : primitive.label,
     };
   });
+}
+
+function goinTransitionDistance(from, to) {
+  const a = vector3(from);
+  const b = vector3(to);
+  return roundBenchNumber(Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]));
+}
+
+export function createLermsPreviewGoinTransitionDiagnostics(frames = []) {
+  const entriesByGoin = new Map();
+  for (const frame of frames) {
+    for (const goin of frame.goins || []) {
+      const goinId = goin.id || goin.goinId;
+      if (!goinId) continue;
+      if (!entriesByGoin.has(goinId)) entriesByGoin.set(goinId, []);
+      entriesByGoin.get(goinId).push({
+        frameIndex: frame.frameIndex,
+        frameLabel: frame.label,
+        timeMs: frame.timeMs,
+        state: goin.state || 'unknown',
+        custodyRole: goin.custodyRole || null,
+        carrierLermId: goin.carrierLermId || null,
+        position: vector3(goin.world),
+      });
+    }
+  }
+
+  const goins = [...entriesByGoin.entries()].map(([goinId, entries]) => {
+    const transitions = [];
+    for (let index = 1; index < entries.length; index += 1) {
+      const from = entries[index - 1];
+      const to = entries[index];
+      const distance = goinTransitionDistance(from.position, to.position);
+      const stateChanged = from.state !== to.state;
+      const carrierChanged = from.carrierLermId !== to.carrierLermId;
+      const custodyChanged = from.custodyRole !== to.custodyRole || stateChanged || carrierChanged;
+      transitions.push({
+        fromFrame: from.frameLabel,
+        toFrame: to.frameLabel,
+        fromTimeMs: from.timeMs,
+        toTimeMs: to.timeMs,
+        durationMs: roundBenchNumber(to.timeMs - from.timeMs),
+        fromState: from.state,
+        toState: to.state,
+        fromCustodyRole: from.custodyRole,
+        toCustodyRole: to.custodyRole,
+        fromCarrierLermId: from.carrierLermId,
+        toCarrierLermId: to.carrierLermId,
+        distance,
+        custodyChanged,
+        largeAuthoredMove: distance >= 0.45,
+        interpretation: custodyChanged
+          ? 'authored_custody_transition_interpolation'
+          : distance >= 0.45
+            ? 'authored_world_position_interpolation'
+            : 'continuous_source_position_interpolation',
+      });
+    }
+    const largestTransition = transitions.reduce((largest, transition) => (
+      !largest || transition.distance > largest.distance ? transition : largest
+    ), null);
+    return {
+      goinId,
+      frameCount: entries.length,
+      states: [...new Set(entries.map(entry => entry.state))],
+      carrierLermIds: [...new Set(entries.map(entry => entry.carrierLermId).filter(Boolean))],
+      entries,
+      transitions,
+      largestTransition,
+    };
+  });
+
+  const selected = goins.reduce((best, goin) => {
+    const candidate = goin.transitions.find(transition => transition.custodyChanged && transition.largeAuthoredMove)
+      || goin.largestTransition;
+    if (!candidate) return best;
+    if (!best) return { goin, transition: candidate };
+    return candidate.distance > best.transition.distance ? { goin, transition: candidate } : best;
+  }, null);
+
+  return {
+    schema: LERMS_PREVIEW_GOIN_TRANSITION_DIAGNOSTIC_SCHEMA,
+    selectedGoinId: selected?.goin.goinId || goins[0]?.goinId || null,
+    goinCount: goins.length,
+    transitionCount: goins.reduce((count, goin) => count + goin.transitions.length, 0),
+    largeAuthoredMoveCount: goins.reduce((count, goin) => count + goin.transitions.filter(transition => transition.largeAuthoredMove).length, 0),
+    goins,
+  };
 }
 
 function movementProof(frames) {
@@ -696,6 +796,13 @@ export function normalizeLermsPreviewActorMotionTimelineReport(report, payloadSo
       payloadSchema: LERMS_PREVIEW_ACTOR_MOTION_TIMELINE_SCHEMA,
       motionAdapterSchema: 'lerms.schnoz-motion-adapter.v0',
       actors: clone(frame.actorMotion),
+      carryingGoinIdsByActor: (frame.goins || []).reduce((byActor, goin) => {
+        if (goin?.state === 'carried' && goin?.carrierLermId) {
+          if (!byActor[goin.carrierLermId]) byActor[goin.carrierLermId] = [];
+          byActor[goin.carrierLermId].push(goin.id || goin.goinId || 'unknown-goin');
+        }
+        return byActor;
+      }, {}),
     };
     return {
       schema: frame.schema || 'lerms.preview-bench-actor-motion-timeline-frame.v0',
@@ -712,6 +819,7 @@ export function normalizeLermsPreviewActorMotionTimelineReport(report, payloadSo
     };
   });
   const proof = movementProof(frames);
+  const goinTransitionDiagnostics = createLermsPreviewGoinTransitionDiagnostics(frames);
   const states = [...new Set(frames.flatMap(frame => frame.actors.map(actor => actor.state).filter(Boolean)))];
   const actorIds = [...new Set(frames.flatMap(frame => frame.actors.map(actor => actor.actorId).filter(Boolean)))];
   return {
@@ -730,6 +838,7 @@ export function normalizeLermsPreviewActorMotionTimelineReport(report, payloadSo
     actorIds,
     movingActorIds: proof.movingActorIds,
     stateTransitions: proof.stateTransitions,
+    goinTransitionDiagnostics,
     frames,
     downgrades: clone(timeline.downgrades || []),
     custody: timeline.custody ? clone(timeline.custody) : null,

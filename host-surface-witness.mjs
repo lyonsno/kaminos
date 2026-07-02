@@ -158,7 +158,9 @@ function summarizeMotionSamples(samples) {
   const movedNames = new Set();
   let goinObjectCount = 0;
   let actorObjectCount = 0;
+  let possessionGlowVisibleCount = 0;
   for (const sample of samples) {
+    possessionGlowVisibleCount += sample.possessionGlowVisibleCount || 0;
     for (const object of sample.objects || []) {
       if (object.name?.startsWith('lerms-preview-goin-')) goinObjectCount += 1;
       if (object.name?.startsWith('lerms-preview-actor-')) actorObjectCount += 1;
@@ -173,27 +175,37 @@ function summarizeMotionSamples(samples) {
     movedObjectNames: [...movedNames],
     goinObjectCount,
     actorObjectCount,
+    possessionGlowVisibleCount,
+    transitionInspector: samples.find(sample => sample.transitionInspector)?.transitionInspector || null,
     samples,
   };
 }
 
 async function sampleLermsMovingTimelineMotion(ws) {
-  const sampleExpression = `(() => ({
-    frame: window.__kaminosLermsPreviewTimelinePlaybackFrame ? {
-      elapsedMs: window.__kaminosLermsPreviewTimelinePlaybackFrame.elapsedMs,
-      current: window.__kaminosLermsPreviewTimelinePlaybackFrame.current?.label || null,
-      next: window.__kaminosLermsPreviewTimelinePlaybackFrame.next?.label || null,
-      blend: window.__kaminosLermsPreviewTimelinePlaybackFrame.blend
-    } : null,
-    timer: window.__kaminosLermsPreviewTimelinePlaybackTimer || null,
-    trace: window.__kaminosLermsPreviewActorVisuals?.trace || null,
-    objects: [...(window.__kaminosLermsPreviewActorsGroup?.children || [])].map(child => ({
-      name: child.name,
-      x: Number(child.position.x.toFixed(3)),
-      y: Number(child.position.y.toFixed(3)),
-      z: Number(child.position.z.toFixed(3))
-    }))
-  }))()`;
+  const sampleExpression = `(() => {
+    let possessionGlowVisibleCount = 0;
+    window.__kaminosLermsPreviewActorsGroup?.traverse?.(child => {
+      if (child.userData?.kaminosLermsPossessionGlow && child.visible) possessionGlowVisibleCount += 1;
+    });
+    return {
+      frame: window.__kaminosLermsPreviewTimelinePlaybackFrame ? {
+        elapsedMs: window.__kaminosLermsPreviewTimelinePlaybackFrame.elapsedMs,
+        current: window.__kaminosLermsPreviewTimelinePlaybackFrame.current?.label || null,
+        next: window.__kaminosLermsPreviewTimelinePlaybackFrame.next?.label || null,
+        blend: window.__kaminosLermsPreviewTimelinePlaybackFrame.blend
+      } : null,
+      timer: window.__kaminosLermsPreviewTimelinePlaybackTimer || null,
+      trace: window.__kaminosLermsPreviewActorVisuals?.trace || null,
+      transitionInspector: window.__kaminosLermsPreviewGoinTransitionInspector || null,
+      possessionGlowVisibleCount,
+      objects: [...(window.__kaminosLermsPreviewActorsGroup?.children || [])].map(child => ({
+        name: child.name,
+        x: Number(child.position.x.toFixed(3)),
+        y: Number(child.position.y.toFixed(3)),
+        z: Number(child.position.z.toFixed(3))
+      }))
+    };
+  })()`;
   const samples = [];
   for (const waitMs of [0, 850, 850, 850]) {
     if (waitMs) await delay(waitMs);
@@ -295,6 +307,8 @@ async function main() {
           actorObjectCount: actorObjects.length,
           actorObjects,
           actorVisualCount: window.__kaminosLermsPreviewActorVisuals?.actorVisualCount || 0,
+          timelineTrace: window.__kaminosLermsPreviewActorVisuals?.trace || null,
+          transitionInspector: window.__kaminosLermsPreviewGoinTransitionInspector || null,
         };
       }
       const canvas = document.getElementById('finger-juice-host-canvas') || document.querySelector('canvas');
@@ -333,6 +347,12 @@ async function main() {
       }
       if (motionSamples.movedObjectCount <= 0) {
         throw new Error(`LERMS moving-timeline objects did not move: ${JSON.stringify(motionSamples)}`);
+      }
+      if (!motionSamples.transitionInspector?.selectedGoinId) {
+        throw new Error(`LERMS moving-timeline goin transition inspector missing: ${JSON.stringify(motionSamples)}`);
+      }
+      if (motionSamples.possessionGlowVisibleCount <= 0) {
+        throw new Error(`LERMS moving-timeline possession glow was never visible: ${JSON.stringify(motionSamples)}`);
       }
     }
 

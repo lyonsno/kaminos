@@ -32,6 +32,8 @@ assert.match(hostSurfaceWitnessSource, /motionSamples/, 'generic witness records
 assert.match(hostSurfaceWitnessSource, /movedObjectCount/, 'generic witness proves LERMS moving-timeline objects change position');
 assert.match(hostSurfaceWitnessSource, /goinObjectCount/, 'generic witness proves LERMS moving-timeline goin objects are present');
 assert.match(hostSurfaceWitnessSource, /timelineTrace/, 'generic witness records LERMS timeline trace summary');
+assert.match(hostSurfaceWitnessSource, /transitionInspector/, 'generic witness records LERMS selected goin transition inspector state');
+assert.match(hostSurfaceWitnessSource, /possessionGlowVisibleCount/, 'generic witness proves carrying-lerm possession glow appears during playback');
 assert.match(hostSurfaceWitnessSource, /primary_output_written/, 'generic witness writes durable reports even before screenshot success');
 assert.match(indexSource, /kaminosHostSurfaceDebugState/, 'browser exposes generic host-surface debug state');
 assert.match(indexSource, /kaminos_lerms_moving_timeline_host=1/, 'browser exposes a direct LERMS moving timeline host route');
@@ -45,6 +47,11 @@ assert.match(indexSource, /kaminos\.lerms-preview-timeline-playback-timer\.v1/, 
 assert.match(indexSource, /makeLermsPreviewTimelineTrace/, 'browser renders timeline trace paths for LERMS behavior reading');
 assert.match(indexSource, /kaminosLermsTimelineTrace/, 'browser exposes timeline trace debug identity');
 assert.match(indexSource, /kaminosLermsTimelineTraceDot/, 'browser exposes per-beat actor and goin trace dot identity');
+assert.match(indexSource, /renderLermsPreviewGoinTransitionInspector/, 'browser renders selected-goin transition diagnostics');
+assert.match(indexSource, /lerms-preview-goin-transition-list/, 'browser has a goin transition list surface');
+assert.match(indexSource, /kaminosLermsPreviewGoinTransitionInspector/, 'browser exposes goin transition inspector debug identity');
+assert.match(indexSource, /makeLermsPreviewActorPossessionGlow/, 'browser renders a carrying-lerm possession glow');
+assert.match(indexSource, /kaminosLermsPossessionGlow/, 'browser exposes carrying-lerm possession glow debug identity');
 assert.match(indexSource, /lerms-preview-actor-path-dot/, 'browser names LERMS actor path dots for witness inspection');
 assert.match(indexSource, /lerms-preview-goin-path-dot/, 'browser names LERMS goin path dots for witness inspection');
 assert.match(indexSource, /actorPathCount/, 'browser reports actor trace path count');
@@ -59,6 +66,9 @@ assert.match(worldChambersSource, /activityReadoutStyle/, 'timeline visual primi
 assert.match(worldChambersSource, /statusLabel/, 'timeline visual primitives carry actor status labels');
 assert.match(worldChambersSource, /motionLabel/, 'timeline visual primitives carry motion clip labels');
 assert.match(worldChambersSource, /createLermsPreviewGoinVisualPrimitives/, 'timeline visual primitives carry goin visual state');
+assert.match(worldChambersSource, /createLermsPreviewGoinTransitionDiagnostics/, 'timeline state carries goin transition diagnostics');
+assert.match(worldChambersSource, /selectedGoinId/, 'timeline state identifies a selected goin for diagnostic readout');
+assert.match(worldChambersSource, /possessionGlow/, 'timeline actor visual primitives carry possession glow state');
 assert.match(worldChambersSource, /goinVisualPrimitives/, 'timeline playback interpolates goin visuals');
 
 const hostSurface = await import(hostSurfaceCorePath);
