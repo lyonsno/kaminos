@@ -1042,6 +1042,24 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
     </div>
     <span class="slider-help">Pyro radiance: live-field contrast illumination; warms interesting smoke tissue, not the whole column.</span>
     <div class="slider-row">
+      <span class="slider-label">Rad Gate</span>
+      <input type="range" id="volume-pyro-radiance-gate" min="0" max="1" step="0.05" value="0.62">
+      <span class="slider-val" id="volume-pyro-radiance-gate-val">0.62</span>
+    </div>
+    <span class="slider-help">Radiance gate: broad wash at 0, sparse hot seams at 1.</span>
+    <div class="slider-row">
+      <span class="slider-label">Rad Spill</span>
+      <input type="range" id="volume-pyro-radiance-spill" min="0" max="1" step="0.05" value="0.30">
+      <span class="slider-val" id="volume-pyro-radiance-spill-val">0.30</span>
+    </div>
+    <span class="slider-help">Radiance spill: pinprick seam at 0, smoke-cap wash at 1.</span>
+    <div class="slider-row">
+      <span class="slider-label">Rad Warmth</span>
+      <input type="range" id="volume-pyro-radiance-warmth" min="0" max="1" step="0.05" value="0.45">
+      <span class="slider-val" id="volume-pyro-radiance-warmth-val">0.45</span>
+    </div>
+    <span class="slider-help">Radiance warmth: cool contrast at 0, golden glow at 1.</span>
+    <div class="slider-row">
       <span class="slider-label">Diag Paint</span>
       <input type="range" id="volume-pyro-diagnostic-paint" min="0" max="1" step="0.05" value="0">
       <span class="slider-val" id="volume-pyro-diagnostic-paint-val">0.00</span>
@@ -1460,7 +1478,7 @@ import * as THREE from 'three';
 import { pass, mrt, normalView, vec3, vec4, mix, float, uniform, texture, packNormalToRGB, unpackRGBToNormal, sample, positionView, convertToTexture } from 'three/tsl';
 import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
-import { createKaminosVolumePrototype } from './volume-core.js?v=pyro-radiance-isolate-boost-0702';
+import { createKaminosVolumePrototype } from './volume-core.js?v=pyro-radiance-control-0702';
 import {
   DEFAULT_DECISION_MOTION_PLAN,
   DEFAULT_MOTION_PHRASE_CONTROLS,
@@ -9127,6 +9145,9 @@ const TALL_PLUME_OPERATOR_PRESETS = {
     pyroFoldBorder: 0.85,
     pyroFoldWake: 1.00,
     pyroRadiance: 0.65,
+    pyroRadianceGate: 0.62,
+    pyroRadianceSpill: 0.30,
+    pyroRadianceWarmth: 0.45,
     pyroDiagnosticPaint: 0.00,
     pyroCarrierView: 'normal',
     pyroOverdrive: 8.00,
@@ -9658,6 +9679,9 @@ const VOLUME_BASIN_ROUTE_FIELDS = [
   ['pyroFoldBorder', 'volume_pyro_fold_border'],
   ['pyroFoldWake', 'volume_pyro_fold_wake'],
   ['pyroRadiance', 'volume_pyro_radiance'],
+  ['pyroRadianceGate', 'volume_pyro_radiance_gate'],
+  ['pyroRadianceSpill', 'volume_pyro_radiance_spill'],
+  ['pyroRadianceWarmth', 'volume_pyro_radiance_warmth'],
   ['pyroDiagnosticPaint', 'volume_pyro_diagnostic_paint'],
   ['pyroCarrierView', 'volume_pyro_carrier_view'],
   ['pyroOverdrive', 'volume_pyro_overdrive'],
@@ -9854,6 +9878,9 @@ function readVolumeControls() {
     pyroFoldBorder: parseFloat(document.getElementById('volume-pyro-fold-border').value),
     pyroFoldWake: parseFloat(document.getElementById('volume-pyro-fold-wake').value),
     pyroRadiance: parseFloat(document.getElementById('volume-pyro-radiance').value),
+    pyroRadianceGate: parseFloat(document.getElementById('volume-pyro-radiance-gate').value),
+    pyroRadianceSpill: parseFloat(document.getElementById('volume-pyro-radiance-spill').value),
+    pyroRadianceWarmth: parseFloat(document.getElementById('volume-pyro-radiance-warmth').value),
     pyroDiagnosticPaint: parseFloat(document.getElementById('volume-pyro-diagnostic-paint').value),
     pyroCarrierView: document.getElementById('volume-pyro-carrier-view').value,
     pyroOverdrive: parseFloat(document.getElementById('volume-pyro-overdrive').value),
@@ -9942,6 +9969,9 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-pyro-fold-border-val').textContent = c.pyroFoldBorder.toFixed(2);
   document.getElementById('volume-pyro-fold-wake-val').textContent = c.pyroFoldWake.toFixed(2);
   document.getElementById('volume-pyro-radiance-val').textContent = c.pyroRadiance.toFixed(2);
+  document.getElementById('volume-pyro-radiance-gate-val').textContent = c.pyroRadianceGate.toFixed(2);
+  document.getElementById('volume-pyro-radiance-spill-val').textContent = c.pyroRadianceSpill.toFixed(2);
+  document.getElementById('volume-pyro-radiance-warmth-val').textContent = c.pyroRadianceWarmth.toFixed(2);
   document.getElementById('volume-pyro-diagnostic-paint-val').textContent = c.pyroDiagnosticPaint.toFixed(2);
   document.getElementById('volume-pyro-carrier-view-val').textContent = c.pyroCarrierView;
   document.getElementById('volume-pyro-overdrive-val').textContent = c.pyroOverdrive.toFixed(2);
@@ -10327,6 +10357,18 @@ async function initKaminosVolumeRoute() {
   if (params.has('volume_pyro_radiance') && Number.isFinite(routePyroRadiance)) {
     document.getElementById('volume-pyro-radiance').value = String(Math.max(0, Math.min(10, routePyroRadiance)));
   }
+  const routePyroRadianceGate = Number(params.get('volume_pyro_radiance_gate'));
+  if (params.has('volume_pyro_radiance_gate') && Number.isFinite(routePyroRadianceGate)) {
+    document.getElementById('volume-pyro-radiance-gate').value = String(Math.max(0, Math.min(1, routePyroRadianceGate)));
+  }
+  const routePyroRadianceSpill = Number(params.get('volume_pyro_radiance_spill'));
+  if (params.has('volume_pyro_radiance_spill') && Number.isFinite(routePyroRadianceSpill)) {
+    document.getElementById('volume-pyro-radiance-spill').value = String(Math.max(0, Math.min(1, routePyroRadianceSpill)));
+  }
+  const routePyroRadianceWarmth = Number(params.get('volume_pyro_radiance_warmth'));
+  if (params.has('volume_pyro_radiance_warmth') && Number.isFinite(routePyroRadianceWarmth)) {
+    document.getElementById('volume-pyro-radiance-warmth').value = String(Math.max(0, Math.min(1, routePyroRadianceWarmth)));
+  }
   const routePyroDiagnosticPaint = Number(params.get('volume_pyro_diagnostic_paint'));
   const routePyroDebugTint = Number(params.get('volume_pyro_debug_tint'));
   if (params.has('volume_pyro_diagnostic_paint') && Number.isFinite(routePyroDiagnosticPaint)) {
@@ -10483,7 +10525,7 @@ async function initKaminosVolumeRoute() {
     refreshVolumeReadout();
     saveVolumeBasinSnapshot(event?.target?.id || 'control-change');
   };
-  for (const id of ['volume-scene', 'volume-density', 'volume-fire', 'volume-radiance', 'volume-absorption', 'volume-glow', 'volume-smoke', 'volume-curl', 'volume-microdetail', 'volume-interface-shred', 'volume-fire-licks', 'volume-projection', 'volume-speed', 'volume-steps', 'volume-adaptive-rays', 'volume-occupancy-skip', 'volume-majorant-skip', 'volume-majorant-smooth', 'volume-majorant-guard', 'volume-temporal-accum', 'volume-temporal-jitter', 'volume-history-clamp', 'volume-fire-scale', 'volume-detail-scale', 'volume-plume-height', 'volume-wind-strength', 'volume-wind-angle', 'volume-wind-height', 'volume-render-scale', 'volume-input-radius', 'volume-flow-rate', 'volume-resolution', 'volume-majorant-grid', 'volume-grid-overlay', 'volume-flow-debug', 'volume-pyro-detail', 'volume-pyro-material-gain', 'volume-pyro-interface-focus', 'volume-pyro-edge-bite', 'volume-pyro-bite-border', 'volume-pyro-bite-teeth', 'volume-pyro-bite-wake', 'volume-pyro-smoke-fold', 'volume-pyro-fold-border', 'volume-pyro-fold-wake', 'volume-pyro-radiance', 'volume-pyro-diagnostic-paint', 'volume-pyro-carrier-view', 'volume-pyro-overdrive', 'volume-pressure-mode', 'volume-pressure-tier-overlay', 'volume-pressure-tier-lower-max', 'volume-pressure-tier-hero-min', 'volume-pressure-tier-hero-max', 'volume-canonical-spread', 'volume-canonical-centerline', 'volume-canonical-body-balance']) {
+  for (const id of ['volume-scene', 'volume-density', 'volume-fire', 'volume-radiance', 'volume-absorption', 'volume-glow', 'volume-smoke', 'volume-curl', 'volume-microdetail', 'volume-interface-shred', 'volume-fire-licks', 'volume-projection', 'volume-speed', 'volume-steps', 'volume-adaptive-rays', 'volume-occupancy-skip', 'volume-majorant-skip', 'volume-majorant-smooth', 'volume-majorant-guard', 'volume-temporal-accum', 'volume-temporal-jitter', 'volume-history-clamp', 'volume-fire-scale', 'volume-detail-scale', 'volume-plume-height', 'volume-wind-strength', 'volume-wind-angle', 'volume-wind-height', 'volume-render-scale', 'volume-input-radius', 'volume-flow-rate', 'volume-resolution', 'volume-majorant-grid', 'volume-grid-overlay', 'volume-flow-debug', 'volume-pyro-detail', 'volume-pyro-material-gain', 'volume-pyro-interface-focus', 'volume-pyro-edge-bite', 'volume-pyro-bite-border', 'volume-pyro-bite-teeth', 'volume-pyro-bite-wake', 'volume-pyro-smoke-fold', 'volume-pyro-fold-border', 'volume-pyro-fold-wake', 'volume-pyro-radiance', 'volume-pyro-radiance-gate', 'volume-pyro-radiance-spill', 'volume-pyro-radiance-warmth', 'volume-pyro-diagnostic-paint', 'volume-pyro-carrier-view', 'volume-pyro-overdrive', 'volume-pressure-mode', 'volume-pressure-tier-overlay', 'volume-pressure-tier-lower-max', 'volume-pressure-tier-hero-min', 'volume-pressure-tier-hero-max', 'volume-canonical-spread', 'volume-canonical-centerline', 'volume-canonical-body-balance']) {
     document.getElementById(id).addEventListener('input', syncControls);
     document.getElementById(id).addEventListener('change', syncControls);
   }
