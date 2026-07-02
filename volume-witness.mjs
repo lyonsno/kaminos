@@ -591,7 +591,7 @@ function normalizeCanonicalContentMode(value) {
 }
 function normalizeVolumeSceneContext(value) {
   const normalized = String(value || 'none').trim().toLowerCase().replace(/-/g, '_');
-  return normalized === 'stone_test' ? 'stone_test' : 'none';
+  return ['stone_test', 'brick_wall'].includes(normalized) ? normalized : 'none';
 }
 function canonicalSourceDefaults(mode) {
   const normalized = normalizeCanonicalSourceMode(mode);
@@ -611,6 +611,7 @@ const expectedVolumeScene = Object.hasOwn(VOLUME_SCENE_PRESETS, requestedVolumeS
   : 'compact_plume';
 const expectedVolumeSceneContext = normalizeVolumeSceneContext(routeParams.get('volume_scene_context'));
 const expectsVolumeStoneSceneContext = expectedVolumeSceneContext === 'stone_test';
+const expectsVolumeBrickWallSceneContext = expectedVolumeSceneContext === 'brick_wall';
 const expectsCanonicalPlumeProof = expectedVolumeScene === 'canonical_plume';
 const fieldSliceOut = args.has('--field-slice')
   ? resolve(args.get('--field-slice') || out.replace(/\.png$/i, '.field-slice.png'))
@@ -1176,11 +1177,16 @@ async function main() {
     const bridge = bridgeEval.result.value;
     assert.equal(bridge?.identity, 'volume-main-renderer-bridge-v0', 'wrong volume main-renderer bridge identity');
     assert.equal(bridge?.textureSource, 'kaminos-volume-canvas', 'volume bridge is not sourcing the native volume canvas');
-    const sceneContextEval = await wsRequest(ws, 'Runtime.evaluate', {
-      expression: 'window.__kaminosVolumeSceneContext?.debugState?.()',
-      returnByValue: true,
-    });
-    const volumeSceneContext = sceneContextEval.result.value;
+    let volumeSceneContext = null;
+    for (let i = 0; i < (expectsVolumeBrickWallSceneContext ? 60 : 1); i++) {
+      const sceneContextEval = await wsRequest(ws, 'Runtime.evaluate', {
+        expression: 'window.__kaminosVolumeSceneContext?.debugState?.()',
+        returnByValue: true,
+      });
+      volumeSceneContext = sceneContextEval.result.value;
+      if (!expectsVolumeBrickWallSceneContext || volumeSceneContext?.loadState === 'loaded' || volumeSceneContext?.loadState === 'failed') break;
+      await delay(250);
+    }
     if (expectsVolumeStoneSceneContext) {
       assert.equal(volumeSceneContext?.identity, 'volume-scene-context-stone-test-v0', 'wrong volume scene-context identity');
       assert.equal(volumeSceneContext?.effectiveContext, expectedVolumeSceneContext, 'volume scene context route/debug identity did not apply');
@@ -1189,6 +1195,20 @@ async function main() {
       assert.equal(volumeSceneContext?.backgroundTruth, 'three-procedural-meshes-not-image-plate-v0', 'volume scene context did not preserve mesh-backed background truth identity');
       assert.ok((volumeSceneContext?.objectCount ?? 0) >= 5, 'volume scene context did not expose enough live backdrop objects');
       assert.equal(bridge?.sceneContext?.effectiveContext, expectedVolumeSceneContext, 'volume bridge did not report the active scene context');
+    }
+    if (expectsVolumeBrickWallSceneContext) {
+      assert.equal(volumeSceneContext?.identity, 'volume-scene-context-brick-wall-v0', 'wrong brick-wall volume scene-context identity');
+      assert.equal(volumeSceneContext?.effectiveContext, expectedVolumeSceneContext, 'brick-wall volume scene context route/debug identity did not apply');
+      assert.equal(volumeSceneContext?.visible, true, 'brick-wall volume scene context did not become visible');
+      assert.equal(volumeSceneContext?.assetIdentity, 'trellis-fast8-350k-4k-brick-wall-glb-v0', 'brick-wall volume scene context did not preserve GLB asset identity');
+      assert.equal(volumeSceneContext?.backgroundTruth, 'greenroom-glb-three-meshes-not-image-plate-v0', 'brick-wall volume scene context did not preserve GLB background truth identity');
+      assert.equal(volumeSceneContext?.ambientOcclusion, false, 'brick-wall volume scene context did not record AO-off composition truth');
+      assert.ok(Math.abs((volumeSceneContext?.lightingExposure ?? 0) - 0.8) < 0.001, 'brick-wall volume scene context did not record dim exposure');
+      assert.ok(Math.abs((volumeSceneContext?.environmentIntensity ?? 0) - 0.45) < 0.001, 'brick-wall volume scene context did not record dim environment intensity');
+      assert.equal(volumeSceneContext?.globalGroundPlaneSuppressed, true, 'brick-wall volume scene context did not suppress the bright global app ground plane');
+      assert.equal(volumeSceneContext?.loadState, 'loaded', `brick-wall GLB did not load: ${volumeSceneContext?.loadError || volumeSceneContext?.loadState}`);
+      assert.ok((volumeSceneContext?.meshCount ?? 0) >= 2, 'brick-wall scene context did not expose live GLB/ground meshes');
+      assert.equal(bridge?.sceneContext?.effectiveContext, expectedVolumeSceneContext, 'volume bridge did not report the active brick-wall scene context');
     }
     assert.ok(
       state.frameCount > 5,
@@ -2034,8 +2054,8 @@ async function main() {
     const expectsNoFireMainRendererVolume = expectsNoFireVolumeEvidence ||
       expectsFuelStarvedTallPlume ||
       (expectsCanonicalPlumeProof && !expectsCanonicalFireEvidence);
-    if (expectsVolumeStoneSceneContext && mainRendererMetrics.backdropMidtonePixels < 1200) {
-      throw new Error(`main renderer screenshot missing stone scene-context backdrop signal: ${JSON.stringify(mainRendererMetrics)}`);
+    if ((expectsVolumeStoneSceneContext || expectsVolumeBrickWallSceneContext) && mainRendererMetrics.backdropMidtonePixels < 1200) {
+      throw new Error(`main renderer screenshot missing ${expectedVolumeSceneContext} scene-context backdrop signal: ${JSON.stringify(mainRendererMetrics)}`);
     }
     if (expectsSnuffVisualEvidence) {
       if (mainRendererMetrics.litPixels < 1500 || mainRendererMetrics.smokeLikePixels < 1500 || mainRendererMetrics.meanLuma < 8) {

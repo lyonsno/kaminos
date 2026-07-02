@@ -14454,7 +14454,24 @@ function frameVolumeCamera() {
   window._kaminosDirty?.();
 }
 
-const VOLUME_SCENE_CONTEXTS = new Set(['none', 'stone_test']);
+const VOLUME_SCENE_CONTEXTS = new Set(['none', 'stone_test', 'brick_wall']);
+const VOLUME_BRICK_WALL_ASSET = Object.freeze({
+  identity: 'trellis-fast8-350k-4k-brick-wall-glb-v0',
+  sourcePath: '/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-trellis-crumbled-brick-wall-fast8-350k-4k-20260701Tasset-probe/output.glb',
+  servedUrl: '/api/read?root=greenroom&path=outputs%2Fkaminos-trellis-crumbled-brick-wall-fast8-350k-4k-20260701Tasset-probe%2Foutput.glb',
+  sourceRoot: 'greenroom',
+  generationRoute: 'trellis2mlx_fast',
+  generationSeed: 42,
+  generationSteps: 8,
+  targetFaces: 350000,
+  textureSize: 4096,
+});
+const VOLUME_BRICK_WALL_LIGHTING = Object.freeze({
+  ambientOcclusion: false,
+  lightingExposure: 0.8,
+  environmentIntensity: 0.45,
+  materialSide: 'double-sided-opaque-if-needed',
+});
 
 function normalizeVolumeSceneContext(value) {
   const normalized = String(value || 'none').trim().toLowerCase().replace(/-/g, '_');
@@ -14585,6 +14602,247 @@ function createVolumeStoneTestContext() {
       stoneTexture.dispose();
       stoneMaterial.dispose();
       floorMaterial.dispose();
+    },
+  };
+}
+
+function createVolumeBrickWallContext() {
+  const group = new THREE.Group();
+  group.name = 'volume-scene-context-brick-wall-v0';
+  group.visible = false;
+  group.userData.kaminosVolumeSceneContext = {
+    identity: 'volume-scene-context-brick-wall-v0',
+    routeParam: 'volume_scene_context',
+    materialIdentity: 'trellis-fast8-350k-4k-brick-wall-pbr-v0',
+    backgroundTruth: 'greenroom-glb-three-meshes-not-image-plate-v0',
+    topology: 'ground-snapped-ruin-terrain-v0',
+    asset: VOLUME_BRICK_WALL_ASSET,
+    composition: {
+      terrainRole: 'ruin-terrain-for-fire-licking-rolling-occlusion',
+      snap: 'rubble-base-on-ground-plane',
+      ambientOcclusion: false,
+      lightingExposure: 0.8,
+      environmentIntensity: 0.45,
+    },
+    effectiveContext: 'none',
+    loadState: 'idle',
+    loadError: null,
+    objectCount: 0,
+    loadedBounds: null,
+  };
+
+  const groundMaterial = new THREE.MeshBasicMaterial({
+    color: new THREE.Color(0x0c0907),
+    transparent: true,
+    opacity: 0.42,
+    toneMapped: false,
+  });
+  groundMaterial.name = 'brick-wall-dim-ground-contact-plane-v0';
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(5.8, 3.5), groundMaterial);
+  ground.name = 'volume-scene-context-brick-wall-ground-contact-plane-v0';
+  ground.rotation.x = -Math.PI / 2;
+  ground.position.set(0, -0.92, -0.42);
+  group.add(ground);
+
+  const fill = new THREE.DirectionalLight(0xffd0a0, 0.42);
+  fill.name = 'volume-scene-context-brick-wall-dim-key-v0';
+  fill.position.set(-2.6, 2.2, 2.1);
+  group.add(fill);
+
+  const side = new THREE.DirectionalLight(0x90a8b8, 0.18);
+  side.name = 'volume-scene-context-brick-wall-cool-side-v0';
+  side.position.set(2.3, 1.4, 0.8);
+  group.add(side);
+
+  let loadedModel = null;
+  let loadPromise = null;
+  let previousGroundPlaneVisible = null;
+
+  const applyDimLightingControls = () => {
+    if (renderer) renderer.toneMappingExposure = VOLUME_BRICK_WALL_LIGHTING.lightingExposure;
+    const exposureSlider = document.getElementById('exposure-slider');
+    const exposureVal = document.getElementById('exposure-val');
+    if (exposureSlider) exposureSlider.value = String(VOLUME_BRICK_WALL_LIGHTING.lightingExposure);
+    if (exposureVal) exposureVal.textContent = VOLUME_BRICK_WALL_LIGHTING.lightingExposure.toFixed(1);
+    scene.environmentIntensity = VOLUME_BRICK_WALL_LIGHTING.environmentIntensity;
+    const intensitySlider = document.getElementById('env-intensity-slider');
+    const intensityVal = document.getElementById('env-intensity-val');
+    if (intensitySlider) intensitySlider.value = String(VOLUME_BRICK_WALL_LIGHTING.environmentIntensity);
+    if (intensityVal) intensityVal.textContent = VOLUME_BRICK_WALL_LIGHTING.environmentIntensity.toFixed(1);
+  };
+
+  const prepareLoadedModel = model => {
+    model.name = 'volume-scene-context-brick-wall-asset-v0';
+    model.traverse(child => {
+      if (!child.isMesh) return;
+      child.castShadow = false;
+      child.receiveShadow = true;
+      child.name = child.name || 'volume-scene-context-brick-wall-mesh-v0';
+      const mats = Array.isArray(child.material) ? child.material : [child.material];
+      for (const mat of mats) {
+        if (!mat) continue;
+        mat.name = mat.name || 'trellis-fast8-350k-4k-brick-wall-pbr-v0';
+        mat.side = THREE.DoubleSide;
+        mat.transparent = false;
+        mat.depthWrite = true;
+        mat.aoMap = null;
+        mat.aoMapIntensity = 0;
+        mat.envMapIntensity = VOLUME_BRICK_WALL_LIGHTING.environmentIntensity;
+        mat.needsUpdate = true;
+      }
+    });
+
+    const initialBox = new THREE.Box3().setFromObject(model);
+    const initialSize = initialBox.getSize(new THREE.Vector3());
+    const maxAxis = Math.max(initialSize.x, initialSize.y, initialSize.z, 0.001);
+    const scale = 2.8 / maxAxis;
+    model.scale.multiplyScalar(scale);
+
+    const scaledBox = new THREE.Box3().setFromObject(model);
+    const center = scaledBox.getCenter(new THREE.Vector3());
+    model.position.x -= center.x;
+    model.position.z -= center.z + 0.78;
+    model.position.y += -0.92 - scaledBox.min.y;
+    model.rotation.y = -0.18;
+
+    const finalBox = new THREE.Box3().setFromObject(model);
+    group.userData.kaminosVolumeSceneContext.loadedBounds = {
+      min: finalBox.min.toArray(),
+      max: finalBox.max.toArray(),
+      size: finalBox.getSize(new THREE.Vector3()).toArray(),
+    };
+  };
+
+  const beginLoad = () => {
+    if (loadPromise) return loadPromise;
+    group.userData.kaminosVolumeSceneContext.loadState = 'loading';
+    const loader = new GLTFLoader();
+    loadPromise = new Promise(resolve => {
+      loader.load(VOLUME_BRICK_WALL_ASSET.servedUrl, gltf => {
+        loadedModel = gltf.scene;
+        prepareLoadedModel(loadedModel);
+        group.add(loadedModel);
+        group.userData.kaminosVolumeSceneContext.loadState = 'loaded';
+        group.userData.kaminosVolumeSceneContext.objectCount = group.children.length;
+        window._kaminosDirty?.();
+        resolve(loadedModel);
+      }, undefined, err => {
+        group.userData.kaminosVolumeSceneContext.loadState = 'failed';
+        group.userData.kaminosVolumeSceneContext.loadError = err?.message || 'brick wall GLB load failed';
+        console.warn('Failed to load brick wall volume scene context', err);
+        resolve(null);
+      });
+    });
+    return loadPromise;
+  };
+
+  scene.add(group);
+
+  return {
+    identity: 'volume-scene-context-brick-wall-v0',
+    setMode(mode) {
+      const effectiveContext = normalizeVolumeSceneContext(mode);
+      group.visible = effectiveContext === 'brick_wall';
+      group.userData.kaminosVolumeSceneContext.effectiveContext = effectiveContext;
+      if (group.visible) {
+        if (groundPlane && previousGroundPlaneVisible === null) {
+          previousGroundPlaneVisible = groundPlane.visible;
+          groundPlane.visible = false;
+        }
+        applyDimLightingControls();
+        beginLoad();
+      } else if (groundPlane && previousGroundPlaneVisible !== null) {
+        groundPlane.visible = previousGroundPlaneVisible;
+        previousGroundPlaneVisible = null;
+      }
+      window._kaminosDirty?.();
+      return group.visible ? 'brick_wall' : effectiveContext;
+    },
+    debugState() {
+      const metadata = group.userData.kaminosVolumeSceneContext;
+      const childMeshes = [];
+      group.traverse(child => {
+        if (child.isMesh) childMeshes.push(child.name);
+      });
+      return {
+        identity: metadata.identity,
+        routeParam: metadata.routeParam,
+        requestedContext: metadata.effectiveContext || 'none',
+        effectiveContext: group.visible ? 'brick_wall' : 'none',
+        visible: group.visible,
+        objectCount: group.children.length,
+        meshCount: childMeshes.length,
+        meshNames: childMeshes.slice(0, 24),
+        materialIdentity: metadata.materialIdentity,
+        backgroundTruth: metadata.backgroundTruth,
+        topology: metadata.topology,
+        assetIdentity: metadata.asset.identity,
+        assetSourcePath: metadata.asset.sourcePath,
+        assetServedUrl: metadata.asset.servedUrl,
+        sourceRoot: metadata.asset.sourceRoot,
+        ambientOcclusion: metadata.composition.ambientOcclusion,
+        lightingExposure: metadata.composition.lightingExposure,
+        environmentIntensity: metadata.composition.environmentIntensity,
+        globalGroundPlaneSuppressed: group.visible && groundPlane ? groundPlane.visible === false : false,
+        terrainRole: metadata.composition.terrainRole,
+        snap: metadata.composition.snap,
+        loadState: metadata.loadState,
+        loadError: metadata.loadError,
+        loadedBounds: metadata.loadedBounds,
+      };
+    },
+    dispose() {
+      if (groundPlane && previousGroundPlaneVisible !== null) {
+        groundPlane.visible = previousGroundPlaneVisible;
+        previousGroundPlaneVisible = null;
+      }
+      scene.remove(group);
+      if (loadedModel) disposeObjectTree(loadedModel);
+      group.remove(ground, fill, side);
+      ground.geometry.dispose();
+      groundMaterial.dispose();
+    },
+  };
+}
+
+function createVolumeSceneContextRouter() {
+  const contexts = {
+    stone_test: createVolumeStoneTestContext(),
+    brick_wall: createVolumeBrickWallContext(),
+  };
+  let activeContext = 'none';
+
+  return {
+    identity: 'volume-scene-context-router-v0',
+    setMode(mode) {
+      const requested = normalizeVolumeSceneContext(mode);
+      activeContext = requested;
+      for (const [name, context] of Object.entries(contexts)) {
+        context.setMode(name === requested ? requested : 'none');
+      }
+      viewport.classList.toggle('volume-scene-context-active', requested !== 'none');
+      return requested;
+    },
+    debugState() {
+      if (activeContext !== 'none') {
+        return contexts[activeContext]?.debugState?.() || {
+          identity: 'volume-scene-context-router-v0',
+          effectiveContext: 'none',
+          visible: false,
+        };
+      }
+      return {
+        identity: 'volume-scene-context-router-v0',
+        routeParam: 'volume_scene_context',
+        requestedContext: 'none',
+        effectiveContext: 'none',
+        visible: false,
+        contexts: Object.keys(contexts),
+      };
+    },
+    dispose() {
+      viewport.classList.remove('volume-scene-context-active');
+      for (const context of Object.values(contexts)) context.dispose?.();
     },
   };
 }
@@ -15039,7 +15297,7 @@ async function initKaminosVolumeRoute() {
   window.__kaminosVolumeBridge = volumeBridge;
   window.__kaminosVolumeMainRendererBridge = volumeBridge;
   volumeSceneContext?.dispose?.();
-  volumeSceneContext = createVolumeStoneTestContext();
+  volumeSceneContext = createVolumeSceneContextRouter();
   volumeSceneContext.setMode(routedVolumeSceneContext);
   window.__kaminosVolumeSceneContext = volumeSceneContext;
   volumePrototype.setVolumePrimitives(volumePrimitives);

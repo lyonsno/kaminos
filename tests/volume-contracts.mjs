@@ -17,6 +17,12 @@ assert.match(index, /volume_scene_context/, 'URL route can request a truthful Th
 assert.match(index, /createVolumeStoneTestContext/, 'volume scene context has a named procedural stone/kiln backdrop constructor');
 assert.match(index, /volume-scene-context-stone-test-v0/, 'stone scene context carries a stable debug identity');
 assert.match(index, /procedural-stone-visible-test-v0/, 'stone scene context exposes material/procedural truth identity');
+assert.match(index, /createVolumeBrickWallContext/, 'volume scene context has a named GLB brick-wall backdrop constructor');
+assert.match(index, /volume-scene-context-brick-wall-v0/, 'brick-wall scene context carries a stable debug identity');
+assert.match(index, /kaminos-trellis-crumbled-brick-wall-fast8-350k-4k-20260701Tasset-probe/, 'brick-wall scene context preserves the Molten/Trellis asset identity');
+assert.match(index, /ambientOcclusion:\s*false/, 'brick-wall scene context records AO-off composition truth');
+assert.match(index, /lightingExposure:\s*0\.8/, 'brick-wall scene context records the requested dim lighting exposure');
+assert.match(index, /globalGroundPlaneSuppressed/, 'brick-wall scene context reports suppression of the bright global app floor');
 assert.match(index, /window\.__kaminosVolumeSceneContext/, 'stone scene context is exposed for witness/debug truth');
 assert.doesNotMatch(index, /#kaminos-volume-canvas\.active \{ display: block; \}/, 'volume canvas active route must not rely on the stale display-block overlay rule');
 assert.match(index, /#kaminos-volume-canvas\.active \{[^}]*opacity:\s*1;[^}]*z-index:\s*3;[^}]*\}/, 'volume route must make the native WebGPU canvas visible for landing smoke');
@@ -1223,6 +1229,8 @@ assert.match(witness, /kaminos_volume_smoke=1/, 'witness captures the explicit v
 assert.match(witness, /expectedPrimitiveFixture/, 'witness derives expected volume primitive fixture identity from the route');
 assert.match(witness, /expectedVolumeSceneContext/, 'witness derives expected volume scene context identity from the route');
 assert.match(witness, /__kaminosVolumeSceneContext/, 'witness reads the live volume scene-context debug surface');
+assert.match(witness, /volume-scene-context-brick-wall-v0/, 'witness knows the brick-wall scene-context identity');
+assert.match(witness, /trellis-fast8-350k-4k-brick-wall-glb-v0/, 'witness verifies the brick-wall asset identity');
 assert.match(witness, /backdropMidtonePixels/, 'witness records a screenshot metric that can catch missing scene-context backdrop pixels');
 assert.match(index, /volume-scene-context-active #kaminos-volume-canvas\.active[\s\S]*mix-blend-mode:\s*screen/, 'scene-context routes screen-blend the direct black volume canvas so warm volume can composite over backdrop geometry');
 assert.match(index, /viewport\.classList\.toggle\('volume-scene-context-active'/, 'scene-context visibility toggles a viewport class used by the composition path');
