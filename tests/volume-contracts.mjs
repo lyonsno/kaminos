@@ -1551,6 +1551,10 @@ assert.match(interframeSequenceWitness, /withheldCadenceFrames/, 'interframe cad
 assert.match(interframeSequenceWitness, /data-candidate-select/, 'interframe cadence ablation playback uses one selected candidate instead of animating every candidate card');
 assert.match(interframeSequenceWitness, /data-truth-stage/, 'interframe cadence ablation playback keeps a fixed full-rate truth stage for stable visual comparison');
 assert.match(interframeSequenceWitness, /data-candidate-stage/, 'interframe cadence ablation playback keeps a fixed candidate stage for stable visual comparison');
+assert.match(interframeSequenceWitness, /Top smoke crop/, 'interframe cadence ablation playback exposes the operator-observed top-smoke squirm region');
+assert.match(interframeSequenceWitness, /data-truth-crop-stage/, 'interframe cadence ablation playback keeps a fixed full-rate truth crop stage');
+assert.match(interframeSequenceWitness, /data-candidate-crop-stage/, 'interframe cadence ablation playback keeps a fixed selected-candidate crop stage');
+assert.match(interframeSequenceWitness, /paintCropPanel/, 'interframe cadence ablation playback synchronizes crop panes with the full-frame panes');
 assert.match(interframeSequenceWitness, /data-frame-scrubber/, 'interframe cadence ablation playback exposes a frame scrubber for controlled motion inspection');
 assert.doesNotMatch(interframeSequenceWitness, /id="candidate-grid"/, 'interframe cadence ablation playback must not render an all-candidate animated grid');
 

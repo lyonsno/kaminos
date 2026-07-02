@@ -798,6 +798,8 @@ function writePlaybackHtml(path, report) {
   .panel p { color: #b7c5ce; font-size: 12px; margin-bottom: 8px; }
   .stage { position: relative; width: 100%; aspect-ratio: ${width} / ${height}; background: #000; overflow: hidden; }
   .stage img { width: 100%; height: 100%; object-fit: contain; display: block; }
+  .crop-stage { position: relative; width: 100%; aspect-ratio: ${width} / ${Math.max(1, Math.round(height / 3))}; background: #000; overflow: hidden; }
+  .crop-stage img { width: 100%; height: 300%; object-fit: fill; object-position: top left; display: block; }
   .readout { min-height: 54px; display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 8px; align-items: center; margin-top: 8px; color: #d2dde3; font-size: 12px; }
   .bar { height: 9px; background: #16232b; position: relative; overflow: hidden; }
   .bar span { position: absolute; top: 0; bottom: 0; left: 0; width: 0%; background: #f0b85a; }
@@ -852,6 +854,20 @@ function writePlaybackHtml(path, report) {
       <div class="stats" data-candidate-stats></div>
     </article>
   </section>
+  <section class="grid">
+    <article class="panel" data-truth-crop-panel>
+      <h2>Top smoke crop</h2>
+      <p>Upper third of the full-rate truth frame; use this strip to judge smoke-cap crawl without losing the full-frame context above.</p>
+      <div class="crop-stage" data-truth-crop-stage><img alt="Full-rate live simulator truth top smoke crop"></div>
+      <div class="readout"><span data-label>F00</span><div class="bar"><span data-bar></span></div></div>
+    </article>
+    <article class="panel" data-candidate-crop-panel>
+      <h2>Top smoke crop: selected candidate</h2>
+      <p class="authority">Same upper-third crop from the selected synthetic cadence-fill timeline.</p>
+      <div class="crop-stage" data-candidate-crop-stage><img alt="Selected synthetic cadence comparison top smoke crop"></div>
+      <div class="readout"><span data-label>F00</span><div class="bar"><span data-bar></span></div></div>
+    </article>
+  </section>
   <section class="panel">
     <h2>Selected candidate metrics</h2>
     <p class="authority">Synthetic cadence-fill frames are comparison evidence, never normal live simulator output. In cadence-2 compatibility mode this is the old Synthetic odd-frame sequence.</p>
@@ -870,6 +886,8 @@ const candidatePanel = document.querySelector('[data-candidate-panel]');
 const candidateSelect = document.querySelector('[data-candidate-select]');
 const frameScrubber = document.querySelector('[data-frame-scrubber]');
 const metricGrid = document.querySelector('[data-metric-grid]');
+const truthCropPanel = document.querySelector('[data-truth-crop-panel]');
+const candidateCropPanel = document.querySelector('[data-candidate-crop-panel]');
 let selectedCandidate = data.candidates.find(candidate => candidate.id === data.defaultCandidateId) || data.candidates[0] || null;
 function fmt(value) { return Number.isFinite(value) ? value.toFixed(3) : 'n/a'; }
 function metricCell(label, value) {
@@ -890,6 +908,12 @@ function paintPanel(root, frame, frameCount) {
   if (!frame || !frameCount) return;
   root.querySelector('img').src = frame.src;
   root.querySelector('[data-label]').textContent = frame.label + ' / route frame ' + frame.frameCount + ' sim ' + frame.simStepCount;
+  root.querySelector('[data-bar]').style.width = ((index + 1) / frameCount * 100).toFixed(2) + '%';
+}
+function paintCropPanel(root, frame, frameCount) {
+  if (!frame || !frameCount) return;
+  root.querySelector('img').src = frame.src;
+  root.querySelector('[data-label]').textContent = frame.label + ' / top-third smoke crop';
   root.querySelector('[data-bar]').style.width = ((index + 1) / frameCount * 100).toFixed(2) + '%';
 }
 function paintCandidateMeta() {
@@ -914,6 +938,8 @@ function paint() {
   const candidateFrame = selectedCandidate?.frames[index % selectedCandidate.frames.length];
   paintPanel(truthPanel, truthFrame, data.truthFrames.length);
   paintPanel(candidatePanel, candidateFrame, selectedCandidate?.frames.length || 0);
+  paintCropPanel(truthCropPanel, truthFrame, data.truthFrames.length);
+  paintCropPanel(candidateCropPanel, candidateFrame, selectedCandidate?.frames.length || 0);
   frameScrubber.value = String(index % data.truthFrames.length);
   document.getElementById('global-label').textContent = 'F' + String(index).padStart(2, '0');
 }
