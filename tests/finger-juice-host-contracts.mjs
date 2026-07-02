@@ -6,14 +6,17 @@ const root = new URL('..', import.meta.url).pathname;
 const hostCorePath = join(root, 'finger-juice-host-core.js');
 const hostWitnessPath = join(root, 'finger-juice-host-witness.mjs');
 const indexPath = join(root, 'index.html');
+const mainPath = join(root, 'kaminos-main.js');
 
 assert.ok(existsSync(hostCorePath), 'Kaminos native finger-juice host core exists');
 assert.ok(existsSync(hostWitnessPath), 'Kaminos native finger-juice host witness exists');
 assert.ok(existsSync(indexPath), 'Kaminos app shell exists');
+assert.ok(existsSync(mainPath), 'Kaminos full editor module exists');
 
 const hostCoreSource = readFileSync(hostCorePath, 'utf8');
 const hostWitnessSource = readFileSync(hostWitnessPath, 'utf8');
 const indexSource = readFileSync(indexPath, 'utf8');
+const mainSource = readFileSync(mainPath, 'utf8');
 
 assert.match(hostCoreSource, /KAMINOS_FINGER_JUICE_HOST_STATE_SCHEMA\s*=\s*'kaminos\.finger-juice-host\.state\.v0'/, 'native host state schema is explicit');
 assert.match(hostCoreSource, /KAMINOS_FINGER_JUICE_HOST_ROUTE\s*=\s*'kaminos\/finger-juice-host'/, 'native host route identity is explicit');
@@ -28,14 +31,13 @@ assert.match(hostCoreSource, /direct_lerms_finger_juice_debug_route/, 'host core
 assert.match(indexSource, /data-tab="finger-juice-host"/, 'Kaminos sidebar exposes a native Finger Juice host tab');
 assert.match(indexSource, /id="tab-finger-juice-host"/, 'Kaminos app shell contains native Finger Juice host content');
 assert.match(indexSource, /kaminos_finger_juice_host=1/, 'Kaminos route can open directly into the native host');
-assert.match(indexSource, /finger_juice_host_root/, 'native host supports file-root packet loading');
-assert.match(indexSource, /finger_juice_host_path/, 'native host supports file-path packet loading');
-assert.match(indexSource, /finger_juice_host_url/, 'native host supports direct packet URL loading');
+assert.match(mainSource, /finger_juice_host_root/, 'native host supports file-root packet loading');
+assert.match(mainSource, /finger_juice_host_path/, 'native host supports file-path packet loading');
+assert.match(mainSource, /finger_juice_host_url/, 'native host supports direct packet URL loading');
 assert.match(indexSource, /id="finger-juice-host-canvas"/, 'native host owns a canvas instead of accepting an iframe as the host surface');
-assert.match(indexSource, /window\.kaminosFingerJuiceHostDebugState/, 'native host exposes state for browser witnesses');
-assert.match(indexSource, /kaminos\/finger-juice-host/, 'native host displays its route identity');
+assert.match(mainSource, /window\.kaminosFingerJuiceHostDebugState/, 'native host exposes state for browser witnesses');
 assert.match(indexSource, /big-papa-finger-juice\.host-packet\.v0/, 'native host displays Big Papa packet schema identity');
-assert.match(indexSource, /host_packet_preview_payload_not_native_render_buffer/, 'native host displays render-buffer downgrade');
+assert.match(mainSource, /host_packet_preview_payload_not_native_render_buffer/, 'native host displays render-buffer downgrade');
 assert.match(indexSource, /finger-juice-host-open-direct/, 'native host keeps direct debug route as an explicit escape hatch');
 
 assert.match(hostWitnessSource, /kaminos_finger_juice_host=1/, 'host witness opens the native host route');

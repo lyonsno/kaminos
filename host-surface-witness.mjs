@@ -184,6 +184,18 @@ async function main() {
     phase = 'navigate';
     await wsRequest(ws, 'Page.navigate', { url });
 
+    phase = 'wait_document_ready';
+    const readyDeadline = Date.now() + Math.min(hookWaitMs, 5000);
+    while (Date.now() < readyDeadline) {
+      const readiness = await evaluate(ws, `(() => ({
+        readyState: document.readyState,
+        href: window.location.href,
+        hasDebugHook: Boolean(window.kaminosHostSurfaceDebugState || window.__kaminosHostSurfaceDebugState)
+      }))()`);
+      if ((readiness.readyState === 'interactive' || readiness.readyState === 'complete') && readiness.hasDebugHook) break;
+      await delay(100);
+    }
+
     phase = 'wait_debug_state';
     const hookDeadline = Date.now() + hookWaitMs;
     while (Date.now() < hookDeadline) {

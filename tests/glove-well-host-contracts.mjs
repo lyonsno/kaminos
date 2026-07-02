@@ -5,6 +5,7 @@ import { join } from 'node:path';
 const root = new URL('..', import.meta.url).pathname;
 const hostCorePath = join(root, 'glove-well-host-core.js');
 const indexPath = join(root, 'index.html');
+const nativeHostLitePath = join(root, 'native-host-lite.js');
 
 function makeGloveWellPacket() {
   return {
@@ -156,9 +157,11 @@ function makeGloveWellPacket() {
 
 assert.ok(existsSync(hostCorePath), 'Kaminos native Glove Well host core exists');
 assert.ok(existsSync(indexPath), 'Kaminos app shell exists');
+assert.ok(existsSync(nativeHostLitePath), 'Kaminos has a lightweight native-host boot module');
 
 const hostCoreSource = readFileSync(hostCorePath, 'utf8');
 const indexSource = readFileSync(indexPath, 'utf8');
+const nativeHostLiteSource = readFileSync(nativeHostLitePath, 'utf8');
 
 assert.match(hostCoreSource, /KAMINOS_GLOVE_WELL_HOST_STATE_SCHEMA\s*=\s*'kaminos\.glove-well-host\.state\.v0'/, 'native host state schema is explicit');
 assert.match(hostCoreSource, /KAMINOS_GLOVE_WELL_HOST_ROUTE\s*=\s*'kaminos\/glove-well-host'/, 'native host route identity is explicit');
@@ -170,21 +173,29 @@ assert.match(hostCoreSource, /createGloveWellHostState/, 'host core exports Kami
 assert.match(indexSource, /data-tab="glove-well-host"/, 'Kaminos sidebar exposes a native Glove Well host tab');
 assert.match(indexSource, /id="tab-glove-well-host"/, 'Kaminos app shell contains native Glove Well host content');
 assert.match(indexSource, /kaminos_glove_well_host=1/, 'Kaminos route can open directly into the native host');
-assert.match(indexSource, /glove_well_host_root/, 'native host supports file-root packet loading');
-assert.match(indexSource, /glove_well_host_path/, 'native host supports file-path packet loading');
-assert.match(indexSource, /glove_well_host_url/, 'native host supports direct packet URL loading');
-assert.match(indexSource, /glove_well_host_live/, 'native host supports explicit live polling route mode');
-assert.match(indexSource, /glove_well_host_poll_ms/, 'native host supports caller-selected live poll cadence');
 assert.match(indexSource, /id="glove-well-host-live-start"/, 'native host exposes a start-live control');
 assert.match(indexSource, /id="glove-well-host-live-stop"/, 'native host exposes a stop-live control');
 assert.match(indexSource, /id="glove-well-host-live-status"/, 'native host shows effective live/polling state');
+assert.match(indexSource, />Start Packet Polling</, 'operator-facing Glove Well control names packet polling rather than claiming producer-live mode');
+assert.match(indexSource, />Stop Packet Polling</, 'operator-facing Glove Well stop control names packet polling rather than producer-live mode');
+assert.match(indexSource, /nativeHostOnly/, 'canvas native-host routes have a fast path that skips full editor/WebGPU bootstrap');
+assert.match(indexSource, /native-host-lite\.js/, 'Glove Well native host route can load the lightweight host module');
+assert.match(indexSource, /kaminos-main\.js/, 'full editor bootstrap is loaded only when the route is not a native host smoke');
+assert.match(nativeHostLiteSource, /glove-well-host-core\.js/, 'lightweight host imports only the Glove Well host core contract');
+assert.doesNotMatch(nativeHostLiteSource, /from 'three'|from "three"|three\/addons|three\/tsl/, 'lightweight Glove Well host must not import the Three/editor stack');
+assert.match(nativeHostLiteSource, /glove_well_host_root/, 'native host supports file-root packet loading');
+assert.match(nativeHostLiteSource, /glove_well_host_path/, 'native host supports file-path packet loading');
+assert.match(nativeHostLiteSource, /glove_well_host_url/, 'native host supports direct packet URL loading');
+assert.match(nativeHostLiteSource, /glove_well_host_live/, 'native host supports explicit live polling route mode');
+assert.match(nativeHostLiteSource, /glove_well_host_poll_ms/, 'native host supports caller-selected live poll cadence');
+assert.match(nativeHostLiteSource, /Start Packet Polling|packet polling/, 'lightweight host preserves product-facing packet polling language');
 assert.match(indexSource, /id="glove-well-host-canvas"/, 'native host owns a canvas instead of accepting a LERMS debug page as host surface');
-assert.match(indexSource, /window\.kaminosGloveWellHostDebugState/, 'native host exposes state for browser witnesses');
-assert.match(indexSource, /window\.kaminosStartGloveWellHostLive/, 'native host exposes live polling start for witnesses/producers');
-assert.match(indexSource, /window\.kaminosStopGloveWellHostLive/, 'native host exposes live polling stop for witnesses/producers');
-assert.match(indexSource, /packetLoadCount/, 'native host debug state records load count for live/polling evidence');
-assert.match(indexSource, /local_browser_smoke_not_native_kaminos_host/, 'native host displays local-browser downgrade');
-assert.match(indexSource, /visual_capture_not_source_truth/, 'native host displays visual-capture downgrade');
+assert.match(nativeHostLiteSource, /window\.kaminosGloveWellHostDebugState/, 'native host exposes state for browser witnesses');
+assert.match(nativeHostLiteSource, /window\.kaminosStartGloveWellHostLive/, 'native host exposes live polling start for witnesses/producers');
+assert.match(nativeHostLiteSource, /window\.kaminosStopGloveWellHostLive/, 'native host exposes live polling stop for witnesses/producers');
+assert.match(nativeHostLiteSource, /packetLoadCount/, 'native host debug state records load count for live/polling evidence');
+assert.match(nativeHostLiteSource, /local_browser_smoke_not_native_kaminos_host/, 'native host displays local-browser downgrade');
+assert.match(nativeHostLiteSource, /visual_capture_not_source_truth/, 'native host displays visual-capture downgrade');
 
 const mod = await import(hostCorePath);
 assert.equal(mod.KAMINOS_GLOVE_WELL_HOST_STATE_SCHEMA, 'kaminos.glove-well-host.state.v0');

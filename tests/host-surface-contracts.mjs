@@ -8,15 +8,18 @@ const hostSurfaceWitnessPath = join(root, 'host-surface-witness.mjs');
 const fingerJuiceCorePath = join(root, 'finger-juice-host-core.js');
 const lermsHostCorePath = join(root, 'lerms-timeline-host-core.js');
 const indexPath = join(root, 'index.html');
+const mainPath = join(root, 'kaminos-main.js');
 
 assert.ok(existsSync(hostSurfaceCorePath), 'generic Kaminos host-surface core exists');
 assert.ok(existsSync(hostSurfaceWitnessPath), 'generic Kaminos host-surface browser witness exists');
 assert.ok(existsSync(fingerJuiceCorePath), 'Finger Juice host adapter still exists');
 assert.ok(existsSync(lermsHostCorePath), 'LERMS moving timeline host adapter exists');
 assert.ok(existsSync(indexPath), 'Kaminos app shell exists');
+assert.ok(existsSync(mainPath), 'Kaminos full editor module exists');
 
 const hostSurfaceWitnessSource = readFileSync(hostSurfaceWitnessPath, 'utf8');
 const indexSource = readFileSync(indexPath, 'utf8');
+const mainSource = readFileSync(mainPath, 'utf8');
 
 assert.match(hostSurfaceWitnessSource, /kaminosHostSurfaceDebugState/, 'generic witness reads host-surface debug state');
 assert.match(hostSurfaceWitnessSource, /--expected-host-id/, 'generic witness can assert host adapter identity');
@@ -25,8 +28,9 @@ assert.match(hostSurfaceWitnessSource, /--expected-packet-route/, 'generic witne
 assert.match(hostSurfaceWitnessSource, /sourceDowngrades/, 'generic witness asserts source-provided downgrade rows');
 assert.match(hostSurfaceWitnessSource, /sourceCustody/, 'generic witness asserts source-provided custody rows');
 assert.match(hostSurfaceWitnessSource, /primary_output_written/, 'generic witness writes durable reports even before screenshot success');
-assert.match(indexSource, /kaminosHostSurfaceDebugState/, 'browser exposes generic host-surface debug state');
-assert.match(indexSource, /kaminos_lerms_moving_timeline_host=1/, 'browser exposes a direct LERMS moving timeline host route');
+assert.match(hostSurfaceWitnessSource, /wait_document_ready/, 'generic witness waits for the loaded document/debug hook before sampling host state');
+assert.match(mainSource, /kaminosHostSurfaceDebugState/, 'browser exposes generic host-surface debug state');
+assert.match(mainSource, /kaminos_lerms_moving_timeline_host=1/, 'browser exposes a direct LERMS moving timeline host route');
 
 const hostSurface = await import(hostSurfaceCorePath);
 const fingerJuice = await import(fingerJuiceCorePath);
