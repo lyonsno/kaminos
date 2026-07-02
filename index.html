@@ -149,6 +149,14 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 .moge-route-source-selector select:focus { border-color: #1976d2; color: #fff; }
 .moge-route-source-primary { color: #cfcfcf; font-size: 10px; line-height: 1.25; overflow-wrap: anywhere; }
 .moge-route-source-evidence { color: #666; font: 9px 'SF Mono', monospace; line-height: 1.25; overflow-wrap: anywhere; }
+.greenroom-cockpit { border: 1px solid #2e3c35; background: #151a17; border-radius: 7px; padding: 10px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 8px; }
+.greenroom-cockpit-summary { color: #9ab5a6; font: 10px 'SF Mono', monospace; line-height: 1.35; overflow-wrap: anywhere; }
+.greenroom-cockpit-row { border-top: 1px solid #263229; padding-top: 8px; display: flex; flex-direction: column; gap: 5px; }
+.greenroom-cockpit-row[hidden] { display: none; }
+.greenroom-cockpit-label { color: #73887a; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.7px; }
+.greenroom-cockpit-title { color: #e5f4ea; font-size: 12px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.greenroom-cockpit-meta { color: #76877d; font: 9px 'SF Mono', monospace; line-height: 1.3; overflow-wrap: anywhere; }
+.greenroom-cockpit-actions { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
 .moge-route-operator-panel { border: 1px solid #28414a; background: #151d20; border-radius: 7px; padding: 10px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 8px; }
 .moge-route-operator-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .moge-route-operator-title { color: #e8f6fb; font-size: 13px; font-weight: 700; }
@@ -952,9 +960,20 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 
   <!-- Greenroom Tab -->
   <div class="tab-content" id="tab-greenroom">
-    <h2 style="display:flex; align-items:center; gap:8px;">MoGE Preview Source <button class="btn" onclick="grBrowseRouteJobs()" style="font-size:9px; padding:2px 8px;">Refresh</button></h2>
-    <div id="moge-route-operator-panel" class="moge-route-operator-panel" data-greenroom-moge-operator-panel>
-      <div class="moge-route-operator-empty">MoGE route state has not loaded yet.</div>
+    <h2 style="display:flex; align-items:center; gap:8px;">Greenroom Cockpit <button class="btn" onclick="grBrowseRouteJobs()" style="font-size:9px; padding:2px 8px;">Refresh</button></h2>
+    <div id="greenroom-cockpit" class="greenroom-cockpit" data-greenroom-cockpit>
+      <div class="greenroom-cockpit-summary" data-greenroom-cockpit-summary>Route state has not loaded yet.</div>
+      <div class="greenroom-cockpit-row" data-greenroom-cockpit-active-job>
+        <div class="greenroom-cockpit-label">Active GPU Job</div>
+        <div class="greenroom-cockpit-meta">No queue state loaded.</div>
+      </div>
+      <div id="moge-route-operator-panel" class="moge-route-operator-panel" data-greenroom-moge-operator-panel>
+        <div class="moge-route-operator-empty">MoGE route state has not loaded yet.</div>
+      </div>
+      <div class="greenroom-cockpit-row" data-greenroom-cockpit-degraded-history hidden>
+        <div class="greenroom-cockpit-label">Malformed history</div>
+        <div class="greenroom-cockpit-meta">No malformed Greenroom history rows reported.</div>
+      </div>
     </div>
     <details id="native-greenroom-route-archive" class="route-archive-shell" data-greenroom-route-archive>
       <summary>Route archive</summary>
@@ -10227,6 +10246,134 @@ function renderMogeRouteSourceSelector(container, row) {
   refresh();
 }
 
+function routeJobStatus(row = {}) {
+  return row.route_job?.status || row.status_dir || row.status || 'unknown';
+}
+
+function routeJobPriorityRank(status) {
+  if (status === 'running') return 0;
+  if (status === 'pending') return 1;
+  if (status === 'reserved') return 2;
+  if (status === 'done') return 3;
+  if (status === 'failed') return 4;
+  if (status === 'degraded' || status === 'malformed') return 5;
+  return 6;
+}
+
+function routeJobOperatorLabel(row = {}) {
+  const routeJob = row.route_job || {};
+  const display = routeJobDisplay(row);
+  return display.title || routeJob.routeId || routeJob.id || row.job_id || 'Unknown route';
+}
+
+function routeJobWorkClass(row = {}) {
+  const routeJob = row.route_job || {};
+  const intent = String(routeJob.intent || '').toLowerCase();
+  const routeId = String(routeJob.routeId || '').toLowerCase();
+  if (intent.includes('preview') || routeId.includes('fast') || routeId.includes('preview')) return 'Preview';
+  if (intent.includes('checkpoint') || intent.includes('hero') || routeId.includes('checkpoint')) return 'Hero';
+  if (row.provider === ROUTE_EXECUTOR_BROWSER_WEBGPU) return 'Preview';
+  return intent && intent !== 'unknown' ? routeJob.intent : 'Normal';
+}
+
+function routeJobHasDegradedTruth(row = {}) {
+  const status = routeJobStatus(row);
+  const warnings = row.route_job?.warnings || row.warnings || [];
+  return status === 'degraded'
+    || status === 'malformed'
+    || !!row.parse_error
+    || warnings.some(warning => {
+      const kind = String(warning?.kind || '');
+      return kind.includes('degraded') || kind.includes('malformed');
+    });
+}
+
+function selectGreenroomCockpitRows(rows = []) {
+  const nativeRows = rows.filter(row => row.provider === 'native-greenroom');
+  const activeJob = [...nativeRows].sort((a, b) => {
+    const rankDelta = routeJobPriorityRank(routeJobStatus(a)) - routeJobPriorityRank(routeJobStatus(b));
+    if (rankDelta) return rankDelta;
+    return String(b.route_job?.metadata?.submittedAt || b.submitted_at || b.job_id || '')
+      .localeCompare(String(a.route_job?.metadata?.submittedAt || a.submitted_at || a.job_id || ''));
+  })[0] || null;
+  return {
+    activeJob,
+    degradedRows: rows.filter(routeJobHasDegradedTruth),
+    outputRow: rows.find(row => (row.output_links || []).length > 0) || null,
+    mogeRow: selectMogeOperatorRouteRow(rows),
+  };
+}
+
+function renderGreenroomCockpit(data = {}) {
+  const cockpit = document.getElementById('greenroom-cockpit');
+  if (!cockpit) return;
+  const rows = data.rows || [];
+  const summary = data.summary || {};
+  const selected = selectGreenroomCockpitRows(rows);
+  const summaryEl = cockpit.querySelector('[data-greenroom-cockpit-summary]');
+  if (summaryEl) {
+    const summaryText = Object.keys(summary).length
+      ? Object.entries(summary).map(([status, count]) => `${status}:${count}`).join('  ')
+      : '0 route jobs';
+    summaryEl.textContent = `${data.provider?.kind || 'greenroom'} / ${summaryText}`;
+    summaryEl.setAttribute('data-greenroom-cockpit-status', summaryText);
+  }
+
+  const activeEl = cockpit.querySelector('[data-greenroom-cockpit-active-job]');
+  if (activeEl) {
+    activeEl.innerHTML = '<div class="greenroom-cockpit-label">Active GPU Job</div>';
+    const row = selected.activeJob;
+    if (!row) {
+      const empty = document.createElement('div');
+      empty.className = 'greenroom-cockpit-meta';
+      empty.textContent = 'No native Greenroom jobs indexed.';
+      activeEl.appendChild(empty);
+    } else {
+      const routeJob = row.route_job || {};
+      activeEl.setAttribute('data-greenroom-cockpit-status', routeJobStatus(row));
+      activeEl.setAttribute('data-greenroom-cockpit-route-id', routeJob.routeId || '');
+      activeEl.setAttribute('data-greenroom-cockpit-job-id', routeJob.id || row.job_id || '');
+      const title = document.createElement('div');
+      title.className = 'greenroom-cockpit-title';
+      title.textContent = routeJobOperatorLabel(row);
+      activeEl.appendChild(title);
+      const meta = document.createElement('div');
+      meta.className = 'greenroom-cockpit-meta';
+      meta.textContent = [
+        routeJobStatus(row),
+        routeJobWorkClass(row),
+        `priority ${routeJob.priorityClass || row.schedule?.priority_class || 'normal'}`,
+        routeJob.id || row.job_id || null,
+      ].filter(Boolean).join(' / ');
+      activeEl.appendChild(meta);
+      const actions = document.createElement('div');
+      actions.className = 'greenroom-cockpit-actions';
+      renderRouteJobLinkButton(actions, 'Receipt', row.receipt_link, 'Open Greenroom receipt');
+      for (const link of (row.output_links || []).slice(0, 2)) {
+        renderRouteJobOutputButton(actions, link);
+      }
+      if (actions.childElementCount) activeEl.appendChild(actions);
+    }
+  }
+
+  renderMogeRouteOperatorPanel(rows);
+
+  const degradedEl = cockpit.querySelector('[data-greenroom-cockpit-degraded-history]');
+  if (degradedEl) {
+    if (!selected.degradedRows.length) {
+      degradedEl.hidden = true;
+    } else {
+      degradedEl.hidden = false;
+      degradedEl.innerHTML = '<div class="greenroom-cockpit-label">Malformed history</div>';
+      const meta = document.createElement('div');
+      meta.className = 'greenroom-cockpit-meta';
+      const first = selected.degradedRows[0];
+      meta.textContent = `${selected.degradedRows.length} malformed history row${selected.degradedRows.length === 1 ? '' : 's'} / ${first.route_job?.id || first.job_id || 'unknown'} / ${first.parse_error || first.route_job?.warnings?.[0]?.message || 'schema mismatch'}`;
+      degradedEl.appendChild(meta);
+    }
+  }
+}
+
 function selectMogeOperatorRouteRow(rows = []) {
   const mogeRows = rows.filter(row => {
     const routeJob = row.route_job || {};
@@ -10425,7 +10572,7 @@ async function grBrowseRouteJobs() {
     return;
   }
   const rows = data.rows || [];
-  renderMogeRouteOperatorPanel(rows);
+  renderGreenroomCockpit(data);
   const summary = data.summary || {};
   const summaryText = Object.keys(summary).length
     ? Object.entries(summary).map(([status, count]) => `${status}:${count}`).join('  ')

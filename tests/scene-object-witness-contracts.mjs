@@ -186,6 +186,14 @@ assert.match(indexHtml, /data-greenroom-route-source-selection-mode/, 'Route tra
 assert.match(indexHtml, /data-greenroom-route-effective-source-kind/, 'Route tray preserves effective source kind as inspectable row identity');
 assert.match(indexHtml, /data-greenroom-route-source-selector/, 'Browser WebGPU source selector has a stable DOM hook for visual/operator smoke');
 assert.match(indexHtml, /sourceImageLoadFailures/, 'Browser WebGPU source selector keeps load failures as secondary evidence');
+assert.match(indexHtml, /data-greenroom-cockpit/, 'Greenroom tab exposes a top-level cockpit instead of isolated widgets');
+assert.match(indexHtml, /Greenroom Cockpit/, 'Greenroom cockpit has a human-visible title');
+assert.match(indexHtml, /renderGreenroomCockpit/, 'Route refresh renders current queue and route state into the top-level cockpit');
+assert.match(indexHtml, /selectGreenroomCockpitRows/, 'Greenroom cockpit selects active and degraded queue rows without archive expansion');
+assert.match(indexHtml, /data-greenroom-cockpit-summary/, 'Greenroom cockpit exposes a stable summary hook for operator smoke');
+assert.match(indexHtml, /data-greenroom-cockpit-active-job/, 'Greenroom cockpit exposes the active GPU job at top level');
+assert.match(indexHtml, /data-greenroom-cockpit-degraded-history/, 'Greenroom cockpit surfaces malformed or degraded history without opening archives');
+assert.match(indexHtml, /Malformed history/, 'Greenroom cockpit names malformed history in operator language');
 assert.match(indexHtml, /moge-route-operator-panel/, 'Greenroom tab exposes a top-level MoGE route operator panel instead of burying it in the route list');
 assert.match(indexHtml, /MoGE Preview Source/, 'MoGE operator panel has a human-visible title');
 assert.match(indexHtml, /renderMogeRouteOperatorPanel/, 'Greenroom route refresh renders the current MoGE route into the top-level operator panel');
