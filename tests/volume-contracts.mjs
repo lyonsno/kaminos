@@ -1499,10 +1499,25 @@ assert.match(interframeSequenceWitness, /--dense-capture/, 'interframe sequence 
 assert.match(interframeSequenceWitness, /maxFrameDelta/, 'interframe sequence witness records and guards dense capture frame deltas');
 assert.match(interframeSequenceWitness, /--dense-preview-width/, 'interframe sequence witness exposes dense capture transport resolution instead of hiding a payload cap');
 assert.match(interframeSequenceWitness, /denseCaptureFrameDeltas/, 'interframe sequence witness preserves dense capture frame delta authority in reports');
+assert.match(interframeSequenceWitness, /timeoutMs = 15000/, 'interframe sequence CDP helper makes request timeout an explicit caller-controlled parameter');
+assert.match(interframeSequenceWitness, /options\.timeoutMs \+ 5000/, 'interframe sequence dense capture does not hide the caller-requested dense capture timeout behind a shorter CDP cap');
+assert.match(interframeSequenceWitness, /--dense-capture-chunk-frames/, 'interframe sequence witness can split long dense captures into explicit recorded chunks');
+assert.match(interframeSequenceWitness, /captureDenseSequenceChunked/, 'interframe sequence witness has a named chunked dense capture path instead of silently truncating long runs');
+assert.match(interframeSequenceWitness, /denseCaptureChunks/, 'interframe sequence witness records dense capture chunk boundaries for long-run evidence');
 assert.match(interframeSequenceWitness, /Buffer\.from\(sample\.preview\.rgbaBase64, 'base64'\)/, 'interframe sequence witness materializes compact dense-capture image bytes locally');
 assert.match(interframeSequenceWitness, /Buffer\.from\(sample\.preview\.pngBase64, 'base64'\)/, 'interframe sequence witness materializes PNG-compressed dense-capture image bytes locally');
 assert.match(interframeSequenceWitness, /synthetic-comparison-not-live-simulator-output/, 'interframe sequence witness labels synthetic frames as comparison evidence');
 assert.match(interframeSequenceWitness, /candidate-context-/, 'interframe sequence witness writes per-gap route/timing candidate contexts');
+assert.match(interframeSequenceWitness, /--cadence/, 'interframe sequence witness can derive a cadence-gap ablation from one full-rate capture');
+assert.match(interframeSequenceWitness, /full-rate-live-sim-truth/, 'interframe cadence ablation labels the left/control timeline as exact full-rate simulator truth');
+assert.match(interframeSequenceWitness, /cadence-ablation-gapped-baseline/, 'interframe cadence ablation includes the current gapped holdover symptom as a baseline candidate');
+assert.match(interframeSequenceWitness, /cadencePhase/, 'interframe cadence ablation records the withheld target phase inside each cadence gap');
+assert.match(interframeSequenceWitness, /withheldCadenceFrames/, 'interframe cadence ablation preserves all hidden full-rate frames as comparison targets');
+assert.match(interframeSequenceWitness, /data-candidate-select/, 'interframe cadence ablation playback uses one selected candidate instead of animating every candidate card');
+assert.match(interframeSequenceWitness, /data-truth-stage/, 'interframe cadence ablation playback keeps a fixed full-rate truth stage for stable visual comparison');
+assert.match(interframeSequenceWitness, /data-candidate-stage/, 'interframe cadence ablation playback keeps a fixed candidate stage for stable visual comparison');
+assert.match(interframeSequenceWitness, /data-frame-scrubber/, 'interframe cadence ablation playback exposes a frame scrubber for controlled motion inspection');
+assert.doesNotMatch(interframeSequenceWitness, /id="candidate-grid"/, 'interframe cadence ablation playback must not render an all-candidate animated grid');
 
 const cadenceGapInterframeWitnessPath = join(root, 'volume-cadence-gap-interframe-witness.mjs');
 assert.ok(existsSync(cadenceGapInterframeWitnessPath), 'volume cadence-gap interframe witness generator exists');

@@ -7,17 +7,22 @@ import { deflateSync, inflateSync } from 'node:zlib';
 
 const SCHEMA = 'kaminos.volume.interframe-sequence-witness.v0';
 const SEQUENCE_CONTEXT_SCHEMA = 'kaminos.volume.interframe-sequence-candidate-context.v0';
+const DENSE_CAPTURE_CHUNKED_SCHEMA = 'kaminos.volume.dense-frame-capture.chunked.v0';
 const EXPECTED_VOLUME_ROUTE_ID = 'native-3d-compute-fluid-raymarch-v0';
 const EXPECTED_PROTOTYPE_ID = 'kaminos-volume-prototype-v0';
-const SEQUENCE_AUTHORITY = 'same-route-live-sequence';
+const SEQUENCE_AUTHORITY = 'full-rate-live-sim-truth';
 const SYNTHETIC_AUTHORITY = 'synthetic-comparison-not-live-simulator-output';
+const CADENCE_ABLATION_GAPPED_BASELINE = 'cadence-ablation-gapped-baseline';
 const DEFAULT_TOTAL_FRAME_COUNT = 29;
 const DEFAULT_FRAME_STEP = 1;
+const DEFAULT_CADENCE = 2;
 const DEFAULT_REAL_ANCHOR_PARITY = 'even';
 const BUILTIN_CANDIDATES = [
+  CADENCE_ABLATION_GAPPED_BASELINE,
   'hold-last-rgba-v0',
   'hold-next-rgba-v0',
   'pixel-midpoint-rgba-v0',
+  'pixel-linear-ratio-rgba-v0',
 ];
 const FAILURE_MODE_BUCKETS = [
   'ghosting',
@@ -27,7 +32,7 @@ const FAILURE_MODE_BUCKETS = [
   'low-fire-shimmer',
   'broad-smoke-mush',
 ];
-const DEFAULT_BASE_URL = 'http://127.0.0.1:8097/?kaminos_volume_smoke=1&volume_scene=tall_plume&volume_tall_preset=operator_fire_0622&volume_resolution=128&volume_majorant_grid=48&volume_steps=148&volume_adaptive_rays=0.75&volume_density=3.05&volume_fire=0.50&volume_radiance=3&volume_absorption=0&volume_glow=2.5&volume_smoke=2.8&volume_curl=3.5&volume_microdetail=2.5&volume_interface_shred=0&volume_fire_licks=0&volume_projection=1.5&volume_speed=5&volume_fire_scale=0.59&volume_detail_scale=0.45&volume_plume_height=2.2&volume_wind_strength=0&volume_wind_angle=180&volume_wind_height=-0.8&volume_input_radius=0.11&volume_flow_rate=0.35&volume_reaction_fuel=1&volume_majorant_cadence=1&volume_pressure_iterations=2&volume_pressure_strategy=global&volume_sim_profile=1&volume_temporal_accum=0&volume_temporal_jitter=0&volume_history_clamp=1&volume_occupancy_skip=0.1&volume_majorant_skip=0&volume_majorant_smooth=0.1&volume_majorant_guard=0.3';
+const DEFAULT_BASE_URL = 'http://127.0.0.1:8097/?kaminos_volume_smoke=1&volume_scene=tall_plume&volume_tall_preset=operator_fire_0622&volume_resolution=128&volume_majorant_grid=48&volume_steps=148&volume_adaptive_rays=0.75&volume_density=3.05&volume_fire=0.50&volume_radiance=3&volume_absorption=0&volume_glow=2.5&volume_smoke=2.8&volume_curl=3.5&volume_microdetail=2.5&volume_interface_shred=0&volume_fire_licks=0&volume_projection=1.5&volume_speed=5&volume_fire_scale=0.59&volume_detail_scale=0.45&volume_plume_height=2.2&volume_wind_strength=0&volume_wind_angle=180&volume_wind_height=-0.8&volume_input_radius=0.11&volume_flow_rate=0.35&volume_reaction_fuel=1&volume_majorant_cadence=1&volume_pressure_iterations=2&volume_pressure_strategy=global&volume_sim_profile=1&volume_sim_cadence=1&volume_temporal_accum=0&volume_temporal_jitter=0&volume_history_clamp=1&volume_occupancy_skip=0.1&volume_majorant_skip=0&volume_majorant_smooth=0.1&volume_majorant_guard=0.3';
 
 function parseArgs(argv) {
   const parsed = new Map();
@@ -107,7 +112,7 @@ async function waitForCdp(cdpFetch) {
   throw new Error('Chrome DevTools endpoint did not open');
 }
 
-function wsRequest(ws, method, params = {}) {
+function wsRequest(ws, method, params = {}, timeoutMs = 15000) {
   const id = ws._nextId = (ws._nextId || 0) + 1;
   ws.send(JSON.stringify({ id, method, params }));
   return new Promise((resolveReq, rejectReq) => {
@@ -156,7 +161,7 @@ function wsRequest(ws, method, params = {}) {
       error.failurePhase = 'capture';
       error.details = { method, id };
       rejectReq(error);
-    }, 15000);
+    }, timeoutMs);
     ws.addEventListener('message', onMessage);
     ws.addEventListener('close', onClose);
     ws.addEventListener('error', onError);
@@ -453,12 +458,18 @@ function classifyFailureModes(metrics) {
   return modes.length ? modes : ['no-obvious-bucket-from-cheap-metrics'];
 }
 
-function builtinCandidateRgba(id, first, third) {
-  if (id === 'hold-last-rgba-v0') return Uint8Array.from(first);
+function builtinCandidateRgba(id, first, third, ratio = 0.5) {
+  if (id === CADENCE_ABLATION_GAPPED_BASELINE || id === 'hold-last-rgba-v0') return Uint8Array.from(first);
   if (id === 'hold-next-rgba-v0') return Uint8Array.from(third);
   if (id === 'pixel-midpoint-rgba-v0') {
     const out = new Uint8Array(first.length);
     for (let i = 0; i < first.length; i += 1) out[i] = Math.round((first[i] + third[i]) / 2);
+    return out;
+  }
+  if (id === 'pixel-linear-ratio-rgba-v0') {
+    const t = Math.min(1, Math.max(0, Number(ratio)));
+    const out = new Uint8Array(first.length);
+    for (let i = 0; i < first.length; i += 1) out[i] = Math.round(first[i] * (1 - t) + third[i] * t);
     return out;
   }
   throw new Error(`unknown built-in candidate ${id}`);
@@ -516,7 +527,7 @@ async function captureDenseSequence(ws, options) {
     expression: `window.__kaminosVolumePrototype.captureDenseFrames(${JSON.stringify(options)})`,
     awaitPromise: true,
     returnByValue: true,
-  });
+  }, Math.max(15000, options.timeoutMs + 5000));
   const payload = result.result.value;
   if (!payload?.ok || !Array.isArray(payload.frames)) {
     const error = new Error(`dense capture failed: ${payload?.reason || 'missing frames'}`);
@@ -527,6 +538,52 @@ async function captureDenseSequence(ws, options) {
   }
   for (const sample of payload.frames) assertSamplePreview(sample, `dense-frame-${sample.sequenceIndex}`);
   return payload;
+}
+
+async function captureDenseSequenceChunked(ws, options) {
+  const requestedFrameCount = Math.max(1, Math.floor(Number(options.frameCount)));
+  const chunkFrameCount = Math.max(1, Math.floor(Number(options.chunkFrameCount)));
+  const frames = [];
+  const denseCaptureChunks = [];
+  let chunkIndex = 0;
+  while (frames.length < requestedFrameCount) {
+    const remainingFrameCount = requestedFrameCount - frames.length;
+    const requestedChunkFrameCount = Math.min(chunkFrameCount, remainingFrameCount);
+    const chunkPayload = await captureDenseSequence(ws, {
+      frameCount: requestedChunkFrameCount,
+      everyNthFrame: options.everyNthFrame,
+      previewWidth: options.previewWidth,
+      timeoutMs: options.timeoutMs,
+    });
+    const firstOutputIndex = frames.length;
+    for (const sample of chunkPayload.frames) {
+      sample.sequenceIndex = frames.length;
+      frames.push(sample);
+    }
+    denseCaptureChunks.push({
+      chunkIndex,
+      requestedFrameCount: requestedChunkFrameCount,
+      copiedFrameCount: chunkPayload.capturedFrameCount,
+      completedFrameCount: chunkPayload.frames.length,
+      firstOutputIndex,
+      lastOutputIndex: frames.length - 1,
+      firstFrameCount: chunkPayload.frames[0]?.frameCount ?? null,
+      lastFrameCount: chunkPayload.frames.at(-1)?.frameCount ?? null,
+      denseCaptureFrameDeltas: chunkPayload.denseCaptureFrameDeltas || [],
+      denseCaptureSimStepDeltas: chunkPayload.denseCaptureSimStepDeltas || [],
+    });
+    chunkIndex += 1;
+  }
+  return {
+    ok: true,
+    schema: DENSE_CAPTURE_CHUNKED_SCHEMA,
+    requestedFrameCount,
+    chunkFrameCount,
+    frames,
+    denseCaptureChunks,
+    denseCaptureFrameDeltas: frames.slice(1).map((frame, index) => frame.frameCount - frames[index].frameCount),
+    denseCaptureSimStepDeltas: frames.slice(1).map((frame, index) => frame.simStepCount - frames[index].simStepCount),
+  };
 }
 
 function validateSequence(samples) {
@@ -580,9 +637,13 @@ function renderExternalBaselineCommand(spec, context) {
     .replaceAll('{out}', shellQuote(context.outPath))
     .replaceAll('{outDir}', shellQuote(context.outDir))
     .replaceAll('{gapDir}', shellQuote(context.gapDir))
+    .replaceAll('{target}', shellQuote(context.targetPath))
     .replaceAll('{report}', shellQuote(context.candidateContextPath))
     .replaceAll('{candidateContext}', shellQuote(context.candidateContextPath))
     .replaceAll('{gapIndex}', shellQuote(context.gapIndexLabel))
+    .replaceAll('{cadence}', shellQuote(context.cadence))
+    .replaceAll('{phase}', shellQuote(context.cadencePhase))
+    .replaceAll('{ratio}', shellQuote(context.ratio))
     .replaceAll('{candidateId}', shellQuote(spec.id));
 }
 
@@ -662,24 +723,56 @@ function jsonForScript(value) {
 function writePlaybackHtml(path, report) {
   const width = report.sequence.width;
   const height = report.sequence.height;
-  const fps = 8;
-  const realFrames = report.sequence.frames.map(frame => ({
-    label: `F${String(frame.sequenceIndex).padStart(2, '0')} real`,
+  const fps = 24;
+  const truthFrames = report.sequence.frames.map(frame => ({
+    label: `F${String(frame.sequenceIndex).padStart(2, '0')} ${frame.role || 'real'}`,
     src: pathForHtml(path, frame.path),
     frameCount: frame.frameCount,
+    simStepCount: frame.simStepCount,
+    role: frame.role,
+    cadencePhase: frame.cadencePhase ?? 0,
   }));
-  const candidates = report.candidates.map(candidate => ({
-    id: candidate.id,
-    summaryMetrics: candidate.summaryMetrics,
-    failureModes: candidate.failureModes,
-    frames: report.sequence.frames.map(frame => {
-      const odd = candidate.syntheticOddFrames.find(item => item.sequenceIndex === frame.sequenceIndex);
-      return odd
-        ? { label: `F${String(frame.sequenceIndex).padStart(2, '0')} synthetic`, src: pathForHtml(path, odd.path), frameCount: frame.frameCount }
-        : { label: `F${String(frame.sequenceIndex).padStart(2, '0')} real anchor`, src: pathForHtml(path, frame.path), frameCount: frame.frameCount };
-    }),
-  }));
-  const payload = jsonForScript({ realFrames, candidates, fps });
+  const candidates = (report.candidates || []).map(candidate => {
+    const syntheticFrames = candidate.syntheticCadenceFrames || candidate.syntheticOddFrames || [];
+    const syntheticByIndex = new Map(syntheticFrames.map(item => [item.sequenceIndex, item]));
+    return {
+      id: candidate.id,
+      sourceKind: candidate.sourceKind,
+      syntheticAuthority: candidate.syntheticAuthority,
+      actualMiddleUsed: candidate.actualMiddleUsed,
+      summaryMetrics: candidate.summaryMetrics,
+      failureModes: candidate.failureModes,
+      failures: candidate.failures,
+      frames: report.sequence.frames.map(frame => {
+        const synthetic = syntheticByIndex.get(frame.sequenceIndex);
+        return synthetic
+          ? {
+            label: `F${String(frame.sequenceIndex).padStart(2, '0')} synthetic p${synthetic.cadencePhase}`,
+            src: pathForHtml(path, synthetic.path),
+            frameCount: frame.frameCount,
+            simStepCount: frame.simStepCount,
+            role: 'syntheticCadenceFill',
+            cadencePhase: synthetic.cadencePhase,
+            metrics: synthetic.metrics,
+          }
+          : {
+            label: `F${String(frame.sequenceIndex).padStart(2, '0')} full-rate truth anchor`,
+            src: pathForHtml(path, frame.path),
+            frameCount: frame.frameCount,
+            simStepCount: frame.simStepCount,
+            role: frame.role,
+            cadencePhase: frame.cadencePhase ?? 0,
+          };
+      }),
+    };
+  });
+  const payload = jsonForScript({
+    truthFrames,
+    candidates,
+    fps,
+    cadence: report.cadence,
+    defaultCandidateId: report.summary?.bestByMeanAbsoluteError?.id || candidates[0]?.id || null,
+  });
   const html = `<!doctype html>
 <html lang="en">
 <head>
@@ -693,25 +786,33 @@ function writePlaybackHtml(path, report) {
   header, main { max-width: 1280px; margin: 0 auto; }
   header { display: grid; gap: 10px; margin-bottom: 14px; }
   h1 { margin: 0; font-size: 20px; letter-spacing: 0; }
+  h2 { margin: 0 0 5px; font-size: 14px; letter-spacing: 0; }
+  p { margin: 0; }
   .meta { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
   .chip { min-height: 50px; border: 1px solid #20303a; background: #101820; padding: 8px 10px; }
   .chip b { display: block; font-size: 10px; color: #85a7ba; text-transform: uppercase; }
   .chip span { display: block; font-size: 12px; overflow-wrap: anywhere; }
   main { display: grid; gap: 12px; }
   .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: start; }
-  .panel { border: 1px solid #1b2830; background: #0c1014; padding: 10px; }
-  .panel h2 { margin: 0 0 4px; font-size: 14px; letter-spacing: 0; }
-  .panel p { margin: 0 0 8px; color: #b7c5ce; font-size: 12px; }
+  .panel { border: 1px solid #1b2830; background: #0c1014; padding: 10px; min-width: 0; }
+  .panel p { color: #b7c5ce; font-size: 12px; margin-bottom: 8px; }
   .stage { position: relative; width: 100%; aspect-ratio: ${width} / ${height}; background: #000; overflow: hidden; }
   .stage img { width: 100%; height: 100%; object-fit: contain; display: block; }
-  .readout { display: grid; grid-template-columns: 88px minmax(0, 1fr); gap: 8px; align-items: center; margin-top: 8px; color: #d2dde3; font-size: 12px; }
+  .readout { min-height: 54px; display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 8px; align-items: center; margin-top: 8px; color: #d2dde3; font-size: 12px; }
   .bar { height: 9px; background: #16232b; position: relative; overflow: hidden; }
   .bar span { position: absolute; top: 0; bottom: 0; left: 0; width: 0%; background: #f0b85a; }
   .authority { color: #f0b85a; }
-  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 12px; }
-  button { width: 34px; height: 30px; border: 1px solid #315062; background: #111c24; color: #eef3f6; cursor: pointer; }
-  .controls { display: flex; gap: 8px; align-items: center; }
-  @media (max-width: 820px) { body { padding: 10px; } .meta, .grid { grid-template-columns: 1fr; } .cards { grid-template-columns: 1fr; } }
+  .transport { display: grid; grid-template-columns: repeat(3, 34px) minmax(160px, 1fr) 76px minmax(260px, 380px); gap: 8px; align-items: center; }
+  button, select, input[type="range"] { min-height: 30px; border: 1px solid #315062; background: #111c24; color: #eef3f6; }
+  button { width: 34px; cursor: pointer; }
+  select { min-width: 0; width: 100%; padding: 0 8px; }
+  input[type="range"] { width: 100%; accent-color: #f0b85a; }
+  .stats { min-height: 32px; color: #b7c5ce; font-size: 12px; overflow-wrap: anywhere; }
+  .stats-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 8px; }
+  .stat { border: 1px solid #20303a; background: #101820; padding: 7px 8px; min-height: 42px; }
+  .stat b { display: block; font-size: 10px; color: #85a7ba; text-transform: uppercase; }
+  .stat span { display: block; font-size: 12px; overflow-wrap: anywhere; }
+  @media (max-width: 860px) { body { padding: 10px; } .meta, .grid, .stats-grid, .transport { grid-template-columns: 1fr; } button { width: 100%; } }
 </style>
 </head>
 <body>
@@ -720,65 +821,143 @@ function writePlaybackHtml(path, report) {
   <div class="meta">
     <div class="chip"><b>Schema</b><span>${SCHEMA}</span></div>
     <div class="chip"><b>Route</b><span>${escapeHtml(report.sequence.effectiveRoute)}</span></div>
-    <div class="chip"><b>Total frames</b><span>${report.totalFrameCount}</span></div>
-    <div class="chip"><b>Anchors</b><span>real even frames; odd frames withheld</span></div>
-    <div class="chip"><b>Authority</b><span class="authority">${SYNTHETIC_AUTHORITY}</span></div>
+    <div class="chip"><b>Total frames</b><span>${report.totalFrameCount}; cadence ${report.cadence}</span></div>
+    <div class="chip"><b>Truth</b><span>${SEQUENCE_AUTHORITY}</span></div>
+    <div class="chip"><b>Synthetic</b><span class="authority">${SYNTHETIC_AUTHORITY}; actualMiddleUsed=false</span></div>
   </div>
-  <div class="controls"><button id="toggle" aria-label="Pause playback">||</button><span id="global-label">F00</span></div>
+  <div class="transport">
+    <button data-step-back aria-label="Previous frame">&lt;</button>
+    <button data-play-toggle aria-label="Pause playback">||</button>
+    <button data-step-forward aria-label="Next frame">&gt;</button>
+    <input data-frame-scrubber type="range" min="0" max="${Math.max(0, truthFrames.length - 1)}" value="0" step="1" aria-label="Frame scrubber">
+    <select data-fps aria-label="Playback frame rate"><option>12</option><option selected>24</option><option>60</option></select>
+    <select data-candidate-select aria-label="Comparison candidate"></select>
+  </div>
+  <div class="stats" id="global-label">F00</div>
 </header>
 <main>
   <section class="grid">
-    <article class="panel" data-sequence-panel>
+    <article class="panel" data-truth-panel>
       <h2>Ground truth sequence</h2>
-      <p>All frames are real simulator captures from the same route; candidate odd frames are judged against these withheld odds.</p>
-      <div class="stage"><img alt="Ground truth sequence frame"></div>
+      <p>All frames are exact full-rate simulator captures from this route. Cadence candidates do not receive withheld phase frames.</p>
+      <div class="stage" data-truth-stage><img alt="Full-rate live simulator truth frame"></div>
       <div class="readout"><span data-label>F00</span><div class="bar"><span data-bar></span></div></div>
+      <div class="stats" data-truth-stats>${SEQUENCE_AUTHORITY}</div>
     </article>
-    <article class="panel">
-      <h2>Reading order</h2>
-      <p>Each candidate panel is a 29-frame timeline: even positions are live anchors, odd positions are synthetic comparison frames. It is deliberately not normal live simulator output.</p>
-      <p class="authority">Synthetic odd-frame sequence = ${SYNTHETIC_AUTHORITY}; actualMiddleUsed=false per gap.</p>
+    <article class="panel" data-candidate-panel>
+      <h2 data-candidate-title>Synthetic cadence-fill sequence</h2>
+      <p class="authority" data-candidate-authority></p>
+      <div class="stage" data-candidate-stage><img alt="Selected synthetic cadence comparison frame"></div>
+      <div class="readout"><span data-label>F00</span><div class="bar"><span data-bar></span></div></div>
+      <div class="stats" data-candidate-stats></div>
     </article>
   </section>
-  <section class="cards" id="candidate-grid"></section>
+  <section class="panel">
+    <h2>Selected candidate metrics</h2>
+    <p class="authority">Synthetic cadence-fill frames are comparison evidence, never normal live simulator output. In cadence-2 compatibility mode this is the old Synthetic odd-frame sequence.</p>
+    <div class="stats-grid" data-metric-grid></div>
+  </section>
 </main>
 <script type="application/json" id="sequence-data">${payload}</script>
 <script>
 const data = JSON.parse(document.getElementById('sequence-data').textContent);
-const panels = [];
 let index = 0;
 let playing = true;
-const truthPanel = document.querySelector('[data-sequence-panel]');
-panels.push({ root: truthPanel, frames: data.realFrames });
-const grid = document.getElementById('candidate-grid');
+let fps = data.fps;
+let lastTime = performance.now();
+const truthPanel = document.querySelector('[data-truth-panel]');
+const candidatePanel = document.querySelector('[data-candidate-panel]');
+const candidateSelect = document.querySelector('[data-candidate-select]');
+const frameScrubber = document.querySelector('[data-frame-scrubber]');
+const metricGrid = document.querySelector('[data-metric-grid]');
+let selectedCandidate = data.candidates.find(candidate => candidate.id === data.defaultCandidateId) || data.candidates[0] || null;
+function fmt(value) { return Number.isFinite(value) ? value.toFixed(3) : 'n/a'; }
+function metricCell(label, value) {
+  return '<div class="stat"><b>' + label + '</b><span>' + value + '</span></div>';
+}
+function candidateStats(candidate) {
+  const summary = candidate.summaryMetrics || {};
+  return 'target MAE ' + fmt(summary.meanAbsoluteError) + '; RMSE ' + fmt(summary.rootMeanSquaredError) + '; max channel ' + fmt(summary.maxChannelError) + '; failures ' + (candidate.failures || []).length;
+}
 for (const candidate of data.candidates) {
-  const article = document.createElement('article');
-  article.className = 'panel';
-  article.innerHTML = '<h2>Synthetic odd-frame sequence: ' + candidate.id + '</h2>' +
-    '<p class="authority">synthetic-comparison-not-live-simulator-output; failure modes: ' + candidate.failureModes.join(', ') + '</p>' +
-    '<div class="stage"><img alt="' + candidate.id + ' sequence frame"></div>' +
-    '<div class="readout"><span data-label>F00</span><div class="bar"><span data-bar></span></div></div>';
-  grid.appendChild(article);
-  panels.push({ root: article, frames: candidate.frames });
+  const option = document.createElement('option');
+  option.value = candidate.id;
+  option.textContent = candidate.id + ' | MAE ' + fmt(candidate.summaryMetrics?.meanAbsoluteError);
+  candidateSelect.appendChild(option);
+}
+candidateSelect.value = selectedCandidate ? selectedCandidate.id : '';
+function paintPanel(root, frame, frameCount) {
+  if (!frame || !frameCount) return;
+  root.querySelector('img').src = frame.src;
+  root.querySelector('[data-label]').textContent = frame.label + ' / route frame ' + frame.frameCount + ' sim ' + frame.simStepCount;
+  root.querySelector('[data-bar]').style.width = ((index + 1) / frameCount * 100).toFixed(2) + '%';
+}
+function paintCandidateMeta() {
+  if (!selectedCandidate) return;
+  const summary = selectedCandidate.summaryMetrics || {};
+  candidatePanel.querySelector('[data-candidate-title]').textContent = 'Synthetic cadence-fill sequence: ' + selectedCandidate.id;
+  candidatePanel.querySelector('[data-candidate-authority]').textContent = selectedCandidate.syntheticAuthority + '; actualMiddleUsed=' + selectedCandidate.actualMiddleUsed + '; sourceKind=' + selectedCandidate.sourceKind;
+  candidatePanel.querySelector('[data-candidate-stats]').textContent = candidateStats(selectedCandidate);
+  metricGrid.innerHTML = [
+    metricCell('Mean absolute error', fmt(summary.meanAbsoluteError)),
+    metricCell('RMSE', fmt(summary.rootMeanSquaredError)),
+    metricCell('Max channel error', fmt(summary.maxChannelError)),
+    metricCell('High error pixels', fmt(summary.highErrorPixelRatio)),
+    metricCell('Fire MAE', fmt(summary.fireRegionMeanAbsoluteError)),
+    metricCell('Smoke MAE', fmt(summary.smokeRegionMeanAbsoluteError)),
+    metricCell('Failure modes', (selectedCandidate.failureModes || []).join(', ') || 'none'),
+    metricCell('Failures', String((selectedCandidate.failures || []).length)),
+  ].join('');
 }
 function paint() {
-  for (const panel of panels) {
-    const frame = panel.frames[index % panel.frames.length];
-    panel.root.querySelector('img').src = frame.src;
-    panel.root.querySelector('[data-label]').textContent = frame.label + ' / route frame ' + frame.frameCount;
-    panel.root.querySelector('[data-bar]').style.width = ((index + 1) / panel.frames.length * 100).toFixed(2) + '%';
-  }
+  const truthFrame = data.truthFrames[index % data.truthFrames.length];
+  const candidateFrame = selectedCandidate?.frames[index % selectedCandidate.frames.length];
+  paintPanel(truthPanel, truthFrame, data.truthFrames.length);
+  paintPanel(candidatePanel, candidateFrame, selectedCandidate?.frames.length || 0);
+  frameScrubber.value = String(index % data.truthFrames.length);
   document.getElementById('global-label').textContent = 'F' + String(index).padStart(2, '0');
 }
-paint();
-setInterval(() => {
-  if (!playing) return;
-  index = (index + 1) % data.realFrames.length;
+function stepFrame(delta) {
+  index = (index + delta + data.truthFrames.length) % data.truthFrames.length;
   paint();
-}, 1000 / data.fps);
-document.getElementById('toggle').addEventListener('click', () => {
+}
+function tick(now) {
+  if (playing && now - lastTime >= 1000 / fps) {
+    lastTime = now;
+    stepFrame(1);
+  }
+  requestAnimationFrame(tick);
+}
+paintCandidateMeta();
+paint();
+requestAnimationFrame(tick);
+document.querySelector('[data-play-toggle]').addEventListener('click', event => {
   playing = !playing;
-  document.getElementById('toggle').textContent = playing ? '||' : '>';
+  event.currentTarget.textContent = playing ? '||' : '>';
+});
+document.querySelector('[data-step-back]').addEventListener('click', () => {
+  playing = false;
+  document.querySelector('[data-play-toggle]').textContent = '>';
+  stepFrame(-1);
+});
+document.querySelector('[data-step-forward]').addEventListener('click', () => {
+  playing = false;
+  document.querySelector('[data-play-toggle]').textContent = '>';
+  stepFrame(1);
+});
+document.querySelector('[data-fps]').addEventListener('change', event => {
+  fps = Number(event.target.value);
+});
+frameScrubber.addEventListener('input', event => {
+  playing = false;
+  document.querySelector('[data-play-toggle]').textContent = '>';
+  index = Number(event.target.value);
+  paint();
+});
+candidateSelect.addEventListener('change', event => {
+  selectedCandidate = data.candidates.find(candidate => candidate.id === event.target.value) || selectedCandidate;
+  paintCandidateMeta();
+  paint();
 });
 </script>
 </body>
@@ -803,6 +982,7 @@ const userDataDir = args.get('--user-data-dir') || `/tmp/kaminos-interframe-sequ
 const settleMs = Number(args.get('--settle-ms') || 5000);
 const totalFrameCount = Number(args.get('--total-frames') || DEFAULT_TOTAL_FRAME_COUNT);
 const frameStep = Number(args.get('--frame-step') || DEFAULT_FRAME_STEP);
+const cadence = Number(args.get('--cadence') || DEFAULT_CADENCE);
 const realAnchorParity = args.get('--real-anchor-parity') || DEFAULT_REAL_ANCHOR_PARITY;
 const windowSize = args.get('--window-size') || '1280,960';
 const dryRun = args.has('--dry-run');
@@ -813,16 +993,23 @@ const maxFrameDelta = args.has('--max-frame-delta')
   : denseCapture ? 2 : Number.POSITIVE_INFINITY;
 const denseCaptureTimeoutMs = Number(args.get('--dense-capture-timeout-ms') || Math.max(10000, totalFrameCount * frameStep * 500));
 const densePreviewWidth = Number(args.get('--dense-preview-width') || 128);
+const denseCaptureChunkFrames = args.has('--dense-capture-chunk-frames')
+  ? Number(args.get('--dense-capture-chunk-frames'))
+  : null;
 const createdAt = new Date().toISOString();
 const gitCommit = gitValue(['rev-parse', 'HEAD']);
 const gitBranch = gitValue(['branch', '--show-current']);
 const gitStatusShort = gitValue(['status', '--short'], '');
 
 if (realAnchorParity !== 'even') throw new Error('only realAnchorParity=even is implemented for this witness');
-if (!Number.isInteger(totalFrameCount) || totalFrameCount < 5 || totalFrameCount % 2 !== 1) throw new Error('--total-frames must be an odd integer >= 5');
+if (!Number.isInteger(cadence) || cadence < 2) throw new Error('--cadence must be an integer >= 2');
+if (!Number.isInteger(totalFrameCount) || totalFrameCount < cadence + 1 || (totalFrameCount - 1) % cadence !== 0) {
+  throw new Error('--total-frames must be >= cadence + 1 and satisfy (totalFrames - 1) % cadence === 0 so every gap has a closing anchor');
+}
 if (!Number.isInteger(frameStep) || frameStep < 1) throw new Error('--frame-step must be an integer >= 1');
 if (args.has('--max-frame-delta') && (!Number.isFinite(maxFrameDelta) || maxFrameDelta < 1)) throw new Error('--max-frame-delta must be >= 1 when set');
 if (!Number.isInteger(densePreviewWidth) || densePreviewWidth < 16) throw new Error('--dense-preview-width must be an integer >= 16');
+if (denseCaptureChunkFrames !== null && (!Number.isInteger(denseCaptureChunkFrames) || denseCaptureChunkFrames < 1)) throw new Error('--dense-capture-chunk-frames must be an integer >= 1 when set');
 
 if (renderReportPath) {
   const report = readJson(renderReportPath);
@@ -835,7 +1022,9 @@ if (renderReportPath) {
     playbackPath: targetPlaybackPath,
     renderedAt: new Date().toISOString(),
     totalFrameCount: report.totalFrameCount,
+    cadence: report.cadence,
     syntheticOddFrameCount: report.syntheticOddFrameCount,
+    syntheticCadenceFrameCount: report.syntheticCadenceFrameCount,
     candidates: (report.candidates || []).map(candidate => candidate.id),
   });
   console.log(JSON.stringify({
@@ -866,21 +1055,27 @@ const baseReport = {
   maxFrameDelta: Number.isFinite(maxFrameDelta) ? maxFrameDelta : null,
   denseCaptureTimeoutMs,
   densePreviewWidth: denseCapture ? densePreviewWidth : null,
+  denseCaptureChunkFrames,
   settleMs,
   windowSize,
   debugPort: port,
   totalFrameCount,
+  cadence,
   realAnchorParity: 'even',
   frameStep,
   realFrameCount: totalFrameCount,
-  anchorFrameCount: Math.ceil(totalFrameCount / 2),
-  syntheticOddFrameCount: Math.floor(totalFrameCount / 2),
+  anchorFrameCount: Math.floor((totalFrameCount - 1) / cadence) + 1,
+  cadenceGapCount: Math.floor((totalFrameCount - 1) / cadence),
+  syntheticOddFrameCount: totalFrameCount - (Math.floor((totalFrameCount - 1) / cadence) + 1),
+  syntheticCadenceFrameCount: totalFrameCount - (Math.floor((totalFrameCount - 1) / cadence) + 1),
   sequenceAuthority: SEQUENCE_AUTHORITY,
   syntheticAuthority: SYNTHETIC_AUTHORITY,
+  cadenceAblationBaseline: CADENCE_ABLATION_GAPPED_BASELINE,
   failureModeBuckets: FAILURE_MODE_BUCKETS,
   externalBaselines: externalBaselineSpecs.map(spec => ({ id: spec.id, commandTemplate: spec.command })),
   sequence: null,
   withheldRealOddFrames: [],
+  withheldCadenceFrames: [],
   candidates: [],
   summary: {},
   artifacts: {
@@ -956,12 +1151,15 @@ try {
   let denseCapturePayload = null;
   let samples = [];
   if (denseCapture) {
-    denseCapturePayload = await captureDenseSequence(ws, {
+    const denseCaptureOptions = {
       frameCount: totalFrameCount,
       everyNthFrame: frameStep,
       previewWidth: densePreviewWidth,
       timeoutMs: denseCaptureTimeoutMs,
-    });
+    };
+    denseCapturePayload = denseCaptureChunkFrames && denseCaptureChunkFrames < totalFrameCount
+      ? await captureDenseSequenceChunked(ws, { ...denseCaptureOptions, chunkFrameCount: denseCaptureChunkFrames })
+      : await captureDenseSequence(ws, denseCaptureOptions);
     validateDenseCaptureDeltas(denseCapturePayload, maxFrameDelta);
     samples = denseCapturePayload.frames;
   } else {
@@ -979,12 +1177,19 @@ try {
   const frameSummaries = [];
   const frameRgba = [];
   for (let index = 0; index < samples.length; index += 1) {
-    const role = index % 2 === 0 ? 'realAnchor' : 'withheldRealOdd';
+    const cadencePhaseOffset = index % cadence;
+    const role = cadencePhaseOffset === 0 ? 'cadenceAnchor' : 'withheldCadenceFrame';
     const framePath = resolve(outDir, 'real-frames', `real-frame-${String(index).padStart(3, '0')}.png`);
     const rgba = previewRgbaBytes(samples[index]);
     writeRgbaPng(framePath, width, height, rgba);
     frameRgba.push(rgba);
-    frameSummaries.push(summarizeSample(samples[index], role, framePath, index));
+    frameSummaries.push({
+      ...summarizeSample(samples[index], role, framePath, index),
+      cadence,
+      cadencePhaseOffset,
+      cadencePhase: cadencePhaseOffset / cadence,
+      fullRateTruthAuthority: SEQUENCE_AUTHORITY,
+    });
   }
 
   const sequenceSummary = {
@@ -996,129 +1201,171 @@ try {
     width,
     height,
     totalFrameCount,
+    cadence,
     realFrameCount: totalFrameCount,
     realAnchorParity,
+    fullRateTruthAuthority: SEQUENCE_AUTHORITY,
     frameStep,
     captureMode: denseCapture ? 'render-loop-dense-capture' : 'sampleFrame-polling',
     maxFrameDelta: Number.isFinite(maxFrameDelta) ? maxFrameDelta : null,
     denseCaptureFrameDeltas: denseCapturePayload?.denseCaptureFrameDeltas || null,
     denseCaptureSimStepDeltas: denseCapturePayload?.denseCaptureSimStepDeltas || null,
+    denseCaptureChunks: denseCapturePayload?.denseCaptureChunks || null,
     frames: frameSummaries,
     frameCountDeltas: frameSummaries.slice(1).map((frame, index) => frame.frameCount - frameSummaries[index].frameCount),
     simStepCountDeltas: frameSummaries.slice(1).map((frame, index) => frame.simStepCount - frameSummaries[index].simStepCount),
   };
-  const withheldRealOddFrames = frameSummaries.filter(frame => frame.sequenceIndex % 2 === 1);
+  const withheldCadenceFrames = frameSummaries.filter(frame => frame.sequenceIndex % cadence !== 0);
+  const withheldRealOddFrames = withheldCadenceFrames;
   const runningReport = {
     ...baseReport,
     status: 'sequence-captured',
     updatedAt: new Date().toISOString(),
     sequence: sequenceSummary,
     withheldRealOddFrames,
+    withheldCadenceFrames,
   };
   writeJson(reportPath, runningReport);
 
   phase = 'candidate-synthesis';
+  const expectedSyntheticFrameCount = withheldCadenceFrames.length;
   const candidateReportsById = new Map(candidateIds.map(id => [id, {
     id,
     sourceKind: externalBaselineById.has(id) ? 'external-command' : 'in-process-baseline',
     syntheticAuthority: SYNTHETIC_AUTHORITY,
     actualMiddleUsed: false,
     syntheticOddFrames: [],
+    syntheticCadenceFrames: [],
     perGapMetrics: [],
     failureModes: [],
     failures: [],
   }]));
 
-  for (let oddIndex = 1; oddIndex < totalFrameCount; oddIndex += 2) {
-    const gapIndexLabel = String(oddIndex).padStart(3, '0');
-    const gapDir = resolve(outDir, 'gaps', `gap-${gapIndexLabel}`);
-    mkdirSync(gapDir, { recursive: true });
-    const firstFrame = frameSummaries[oddIndex - 1];
-    const thirdFrame = frameSummaries[oddIndex + 1];
-    const targetFrame = frameSummaries[oddIndex];
-    const candidateContextPath = resolve(gapDir, `candidate-context-${gapIndexLabel}.json`);
-    const candidateContext = {
-      schema: SEQUENCE_CONTEXT_SCHEMA,
-      status: 'gap-captured',
-      authority: SEQUENCE_AUTHORITY,
-      syntheticAuthority: SYNTHETIC_AUTHORITY,
-      requestedRoute: baseUrl,
-      effectiveRoute: sequenceSummary.effectiveRoute,
-      prototypeIdentity: sequenceSummary.prototypeIdentity,
-      backend: sequenceSummary.backend,
-      width,
-      height,
-      totalFrameCount,
-      realAnchorParity: 'even',
-      sequenceIndex: oddIndex,
-      framesAvailableToCandidate: [firstFrame, thirdFrame],
-      framesWithheldFromCandidate: [targetFrame],
-      actualMiddleUsed: false,
-      frameCountDelta: {
-        firstToWithheld: targetFrame.frameCount - firstFrame.frameCount,
-        withheldToThird: thirdFrame.frameCount - targetFrame.frameCount,
-        firstToThird: thirdFrame.frameCount - firstFrame.frameCount,
-      },
-      simStepCountDelta: {
-        firstToWithheld: targetFrame.simStepCount - firstFrame.simStepCount,
-        withheldToThird: thirdFrame.simStepCount - targetFrame.simStepCount,
-        firstToThird: thirdFrame.simStepCount - firstFrame.simStepCount,
-      },
-    };
-    writeJson(candidateContextPath, candidateContext);
+  for (let anchorIndex = 0; anchorIndex + cadence < totalFrameCount; anchorIndex += cadence) {
+    const nextAnchorIndex = anchorIndex + cadence;
+    for (let phaseOffset = 1; phaseOffset < cadence; phaseOffset += 1) {
+      const targetIndex = anchorIndex + phaseOffset;
+      const ratio = phaseOffset / cadence;
+      const cadencePhase = ratio;
+      const gapIndexLabel = `${String(anchorIndex).padStart(3, '0')}-${String(targetIndex).padStart(3, '0')}-${String(nextAnchorIndex).padStart(3, '0')}`;
+      const gapDir = resolve(outDir, 'gaps', `gap-${gapIndexLabel}`);
+      mkdirSync(gapDir, { recursive: true });
+      const firstFrame = frameSummaries[anchorIndex];
+      const thirdFrame = frameSummaries[nextAnchorIndex];
+      const targetFrame = frameSummaries[targetIndex];
+      const candidateContextPath = resolve(gapDir, `candidate-context-${gapIndexLabel}.json`);
+      const candidateContext = {
+        schema: SEQUENCE_CONTEXT_SCHEMA,
+        status: 'gap-captured',
+        authority: SEQUENCE_AUTHORITY,
+        fullRateTruthAuthority: SEQUENCE_AUTHORITY,
+        syntheticAuthority: SYNTHETIC_AUTHORITY,
+        requestedRoute: baseUrl,
+        effectiveRoute: sequenceSummary.effectiveRoute,
+        prototypeIdentity: sequenceSummary.prototypeIdentity,
+        backend: sequenceSummary.backend,
+        width,
+        height,
+        totalFrameCount,
+        cadence,
+        cadencePhase,
+        ratio,
+        phaseOffset,
+        realAnchorParity: 'even',
+        sequenceIndex: targetIndex,
+        gapAnchorIndex: anchorIndex,
+        nextAnchorIndex,
+        t0: firstFrame,
+        t1: targetFrame,
+        t2: thirdFrame,
+        framesAvailableToCandidate: [firstFrame, thirdFrame],
+        framesWithheldFromCandidate: [targetFrame],
+        actualMiddleUsed: false,
+        frameStride: thirdFrame.frameCount - firstFrame.frameCount,
+        frameCountDelta: {
+          t0ToT1: targetFrame.frameCount - firstFrame.frameCount,
+          t1ToT2: thirdFrame.frameCount - targetFrame.frameCount,
+          t0ToT2: thirdFrame.frameCount - firstFrame.frameCount,
+          firstToWithheld: targetFrame.frameCount - firstFrame.frameCount,
+          withheldToThird: thirdFrame.frameCount - targetFrame.frameCount,
+          firstToThird: thirdFrame.frameCount - firstFrame.frameCount,
+        },
+        simStepCountDelta: {
+          t0ToT1: targetFrame.simStepCount - firstFrame.simStepCount,
+          t1ToT2: thirdFrame.simStepCount - targetFrame.simStepCount,
+          t0ToT2: thirdFrame.simStepCount - firstFrame.simStepCount,
+          firstToWithheld: targetFrame.simStepCount - firstFrame.simStepCount,
+          withheldToThird: thirdFrame.simStepCount - targetFrame.simStepCount,
+          firstToThird: thirdFrame.simStepCount - firstFrame.simStepCount,
+        },
+      };
+      writeJson(candidateContextPath, candidateContext);
 
-    for (const id of candidateIds) {
-      const candidateReport = candidateReportsById.get(id);
-      const outPath = resolve(gapDir, `${id}.png`);
-      let commandReceipt = null;
-      try {
-        if (externalBaselineById.has(id)) {
-          commandReceipt = runExternalBaseline(externalBaselineById.get(id), {
-            firstPath: firstFrame.path,
-            thirdPath: thirdFrame.path,
-            outPath,
-            outDir,
-            gapDir,
-            gapIndexLabel,
+      for (const id of candidateIds) {
+        const candidateReport = candidateReportsById.get(id);
+        const outPath = resolve(gapDir, `${id}.png`);
+        let commandReceipt = null;
+        try {
+          if (externalBaselineById.has(id)) {
+            commandReceipt = runExternalBaseline(externalBaselineById.get(id), {
+              firstPath: firstFrame.path,
+              thirdPath: thirdFrame.path,
+              targetPath: targetFrame.path,
+              outPath,
+              outDir,
+              gapDir,
+              cadence,
+              cadencePhase,
+              ratio,
+              gapIndexLabel,
+              candidateContextPath,
+            });
+          } else {
+            const synthetic = builtinCandidateRgba(id, frameRgba[anchorIndex], frameRgba[nextAnchorIndex], ratio);
+            writeRgbaPng(outPath, width, height, synthetic);
+          }
+          const parsed = parsePngRgba(readFileSync(outPath));
+          if (parsed.width !== width || parsed.height !== height) throw new Error(`candidate ${id} wrote ${parsed.width}x${parsed.height}, expected ${width}x${height}`);
+          const metrics = compareRgba(frameRgba[targetIndex], parsed.rgba, width, height);
+          const failureModes = classifyFailureModes(metrics);
+          const syntheticFrame = {
+            sequenceIndex: targetIndex,
+            cadence,
+            cadencePhase,
+            ratio,
+            phaseOffset,
+            path: outPath,
             candidateContextPath,
+            targetPath: targetFrame.path,
+            actualMiddleUsed: false,
+            syntheticAuthority: SYNTHETIC_AUTHORITY,
+            metrics,
+            failureModes,
+            commandReceipt,
+          };
+          candidateReport.syntheticOddFrames.push(syntheticFrame);
+          candidateReport.syntheticCadenceFrames.push(syntheticFrame);
+          candidateReport.perGapMetrics.push({ sequenceIndex: targetIndex, cadencePhase, ratio, metrics, failureModes });
+        } catch (error) {
+          candidateReport.failures.push({
+            sequenceIndex: targetIndex,
+            cadencePhase,
+            ratio,
+            code: error.code || 'candidate-gap-failed',
+            message: error.message,
+            failurePhase: error.failurePhase || 'candidate-synthesis',
+            details: error.details || null,
           });
-        } else {
-          const synthetic = builtinCandidateRgba(id, frameRgba[oddIndex - 1], frameRgba[oddIndex + 1]);
-          writeRgbaPng(outPath, width, height, synthetic);
         }
-        const parsed = parsePngRgba(readFileSync(outPath));
-        if (parsed.width !== width || parsed.height !== height) throw new Error(`candidate ${id} wrote ${parsed.width}x${parsed.height}, expected ${width}x${height}`);
-        const metrics = compareRgba(frameRgba[oddIndex], parsed.rgba, width, height);
-        const failureModes = classifyFailureModes(metrics);
-        candidateReport.syntheticOddFrames.push({
-          sequenceIndex: oddIndex,
-          path: outPath,
-          candidateContextPath,
-          targetPath: targetFrame.path,
-          actualMiddleUsed: false,
-          syntheticAuthority: SYNTHETIC_AUTHORITY,
-          metrics,
-          failureModes,
-          commandReceipt,
-        });
-        candidateReport.perGapMetrics.push({ sequenceIndex: oddIndex, metrics, failureModes });
-      } catch (error) {
-        candidateReport.failures.push({
-          sequenceIndex: oddIndex,
-          code: error.code || 'candidate-gap-failed',
-          message: error.message,
-          failurePhase: error.failurePhase || 'candidate-synthesis',
-          details: error.details || null,
-        });
       }
-    }
 
-    writeJson(reportPath, {
-      ...runningReport,
-      status: 'candidate-synthesis-in-progress',
-      updatedAt: new Date().toISOString(),
-      candidates: [...candidateReportsById.values()],
-    });
+      writeJson(reportPath, {
+        ...runningReport,
+        status: 'candidate-synthesis-in-progress',
+        updatedAt: new Date().toISOString(),
+        candidates: [...candidateReportsById.values()],
+      });
+    }
   }
 
   const candidates = [...candidateReportsById.values()].map(candidate => {
@@ -1131,7 +1378,7 @@ try {
       failureModes: failureModes.length ? failureModes : ['no-completed-gaps'],
     };
   });
-  const successfulCandidates = candidates.filter(candidate => candidate.syntheticOddFrames.length === Math.floor(totalFrameCount / 2));
+  const successfulCandidates = candidates.filter(candidate => candidate.syntheticCadenceFrames.length === expectedSyntheticFrameCount);
   const bestByMeanAbsoluteError = successfulCandidates
     .toSorted((a, b) => a.summaryMetrics.meanAbsoluteError - b.summaryMetrics.meanAbsoluteError)[0] || null;
   const finalReport = {
@@ -1161,10 +1408,13 @@ try {
     reportPath,
     playbackPath,
     totalFrameCount,
-    syntheticOddFrameCount: Math.floor(totalFrameCount / 2),
+    cadence,
+    syntheticOddFrameCount: expectedSyntheticFrameCount,
+    syntheticCadenceFrameCount: expectedSyntheticFrameCount,
     candidates: candidates.map(candidate => ({
       id: candidate.id,
       completedSyntheticOddFrames: candidate.syntheticOddFrames.length,
+      completedSyntheticCadenceFrames: candidate.syntheticCadenceFrames.length,
       failures: candidate.failures.length,
       summaryMetrics: candidate.summaryMetrics,
       failureModes: candidate.failureModes,
