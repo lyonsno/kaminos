@@ -1,15 +1,25 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
-import { mkdirSync, writeFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { existsSync, mkdirSync, readdirSync, unlinkSync, writeFileSync } from 'node:fs';
+import { dirname, join, relative, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
 
 const FILMSTRIP_WITNESS_IDENTITY = 'kaminos-volume-filmstrip-witness-v0';
+const GAP_BUNDLE_MANIFEST_IDENTITY = 'kaminos-volume-cadence-gap-manifest-v0';
 const CAPTURE_CADENCE = 'consecutive-requestAnimationFrame-no-intentional-skip';
+const SYNTHETIC_COMPARISON_AUTHORITY = 'synthetic-comparison-not-live-simulator-output';
 
 const args = new Map();
-for (let i = 2; i < process.argv.length; i += 2) {
-  args.set(process.argv[i], process.argv[i + 1]);
+for (let i = 2; i < process.argv.length; i += 1) {
+  const key = process.argv[i];
+  if (!key.startsWith('--')) continue;
+  const next = process.argv[i + 1];
+  if (next && !next.startsWith('--')) {
+    args.set(key, next);
+    i += 1;
+  } else {
+    args.set(key, '1');
+  }
 }
 
 const url = args.get('--url') || 'http://127.0.0.1:8095/?kaminos_volume_smoke=1&volume_sim_cadence=4';
@@ -24,6 +34,8 @@ const frameCountRequested = positiveIntegerArg('--frames', 50);
 const frameWidth = positiveIntegerArg('--frame-width', 160);
 const frameHeight = positiveIntegerArg('--frame-height', 120);
 const columns = positiveIntegerArg('--columns', 10);
+const gapBundleDir = args.has('--gap-bundle-dir') ? resolve(args.get('--gap-bundle-dir')) : null;
+const alignLiveAnchor = args.has('--align-live-anchor');
 const mohelAlerts = [];
 if (frameCountRequested * frameWidth * frameHeight > 4_000_000) {
   mohelAlerts.push({
@@ -96,6 +108,7 @@ function writeFailureReport({ captureFailurePhase, error, state = null, partialC
     requestedSimCadence: expectedSimCadence,
     mohelAlerts,
     stripImage: out,
+    gapBundleDir,
     captureCadence: CAPTURE_CADENCE,
     captureFailurePhase,
     error: error?.message || String(error),
@@ -130,8 +143,10 @@ function browserCaptureExpression(options) {
     frameCanvas.height = frameHeight;
     const frameCtx = frameCanvas.getContext('2d', { willReadFrequently: true });
     const frames = [];
+    const frameImages = [];
     let previousFrameCount = prototype.debugState().frameCount;
     let previousPixels = null;
+    let alignedLiveAnchor = !opts.alignLiveAnchor;
 
     function metricsForFrame(image) {
       let litPixels = 0;
@@ -185,13 +200,30 @@ function browserCaptureExpression(options) {
       throw new Error('timed out waiting for next volume render frame');
     }
 
+    function isStateLiveAnchor(state) {
+      return state.simCadence <= 1 || state.framesSinceLiveSim === 0 || state.cadencePhase === 0;
+    }
+
     for (let i = 0; i < frameCount; i += 1) {
-      const state = await waitForNextVolumeFrame();
+      let state = await waitForNextVolumeFrame();
+      while (!alignedLiveAnchor && !isStateLiveAnchor(state)) {
+        previousFrameCount = state.frameCount;
+        state = await waitForNextVolumeFrame();
+      }
+      alignedLiveAnchor = true;
       frameCtx.fillStyle = 'black';
       frameCtx.fillRect(0, 0, frameWidth, frameHeight);
       frameCtx.drawImage(source, 0, 0, frameWidth, frameHeight);
       const image = frameCtx.getImageData(0, 0, frameWidth, frameHeight);
       const metrics = metricsForFrame(image);
+      if (opts.includeFramePngs) {
+        frameImages.push({
+          index: i,
+          frameCount: state.frameCount,
+          simStepCount: state.simStepCount,
+          pngBase64: frameCanvas.toDataURL('image/png').replace(/^data:image\/png;base64,/, ''),
+        });
+      }
       previousPixels = new Uint8ClampedArray(image.data);
       const renderFrameDelta = state.frameCount - previousFrameCount;
       const col = i % columns;
@@ -214,6 +246,10 @@ function browserCaptureExpression(options) {
         continuationAuthority: state.continuationAuthority,
         cadencePhase: state.cadencePhase,
         framesSinceLiveSim: state.framesSinceLiveSim,
+        lastLiveSimFrameId: state.lastLiveSimFrameId,
+        lastSimFrameSkipped: state.lastSimFrameSkipped,
+        liveSimFrameCount: state.liveSimFrameCount,
+        continuationFrameCount: state.continuationFrameCount,
         cadenceNativeContinuationIdentity: state.cadenceNativeContinuationIdentity,
         metrics,
       });
@@ -230,8 +266,185 @@ function browserCaptureExpression(options) {
       sourceCanvas: { width: source.width, height: source.height },
       finalState,
       frames,
+      frameImages,
     };
   }})(${JSON.stringify(options)})`;
+}
+
+function isLiveAnchor(frame) {
+  return frame.simCadence <= 1 || frame.framesSinceLiveSim === 0 || frame.cadencePhase === 0;
+}
+
+function liveSimAnchorFrameId(frame) {
+  return Number.isFinite(frame.lastLiveSimFrameId) && frame.lastLiveSimFrameId >= 0
+    ? frame.lastLiveSimFrameId
+    : frame.frameCount;
+}
+
+function annotateGapFrames(frames) {
+  const liveAnchors = frames.filter(isLiveAnchor).map(frame => ({
+    index: frame.index,
+    liveSimFrameId: liveSimAnchorFrameId(frame),
+    capturedFrameCount: frame.frameCount,
+    simStepCount: frame.simStepCount,
+    frameImage: frame.frameImage || null,
+    authority: 'live-sim-anchor',
+  }));
+
+  return frames.map((frame, index) => {
+    const previousCapturedAnchor = [...liveAnchors].reverse().find(anchor => anchor.index < frame.index) || null;
+    const nextCapturedAnchor = liveAnchors.find(anchor => anchor.index > frame.index) || null;
+    const isAnchor = isLiveAnchor(frame);
+    const previousLiveSimFrame = isAnchor
+      ? liveSimAnchorFrameId(frame)
+      : previousCapturedAnchor?.liveSimFrameId ?? frame.lastLiveSimFrameId ?? null;
+    const nextLiveSimFrame = isAnchor
+      ? liveSimAnchorFrameId(frame)
+      : nextCapturedAnchor?.liveSimFrameId ?? null;
+    return {
+      ...frame,
+      gapFrameRole: isAnchor ? 'live-sim-anchor' : 'continuation-target',
+      liveSimAnchorFrameId: isAnchor ? liveSimAnchorFrameId(frame) : null,
+      previousLiveSimFrame,
+      previousCapturedAnchorIndex: previousCapturedAnchor?.index ?? null,
+      nextLiveSimFrame,
+      nextCapturedAnchorIndex: nextCapturedAnchor?.index ?? null,
+      cadenceGapIndex: isAnchor ? null : `${previousLiveSimFrame ?? 'pre'}..${nextLiveSimFrame ?? 'post'}`,
+      bundleFrameIndex: index,
+    };
+  });
+}
+
+function groupContinuationGaps(annotatedFrames) {
+  const groups = new Map();
+  for (const frame of annotatedFrames) {
+    if (frame.gapFrameRole !== 'continuation-target') continue;
+    const key = frame.cadenceGapIndex;
+    if (!groups.has(key)) {
+      groups.set(key, {
+        cadenceGapIndex: key,
+        previousLiveSimFrame: frame.previousLiveSimFrame,
+        previousCapturedAnchorIndex: frame.previousCapturedAnchorIndex,
+        nextLiveSimFrame: frame.nextLiveSimFrame,
+        nextCapturedAnchorIndex: frame.nextCapturedAnchorIndex,
+        continuationTargets: [],
+      });
+    }
+    groups.get(key).continuationTargets.push({
+      index: frame.index,
+      frameCount: frame.frameCount,
+      simStepCount: frame.simStepCount,
+      frameImage: frame.frameImage || null,
+      cadencePhase: frame.cadencePhase,
+      framesSinceLiveSim: frame.framesSinceLiveSim,
+      effectiveVisualAuthority: frame.effectiveVisualAuthority,
+      continuationAuthority: frame.continuationAuthority,
+    });
+  }
+  return [...groups.values()];
+}
+
+function writeGapBundle({ capture, report }) {
+  if (!gapBundleDir) return null;
+  const framesDir = join(gapBundleDir, 'frames');
+  mkdirSync(framesDir, { recursive: true });
+  if (existsSync(framesDir)) {
+    for (const fileName of readdirSync(framesDir)) {
+      if (/^frame-\d{3}-f\d+-s\d+\.png$/.test(fileName)) {
+        unlinkSync(join(framesDir, fileName));
+      }
+    }
+  }
+
+  const frameImageByIndex = new Map();
+  for (const image of capture.frameImages || []) {
+    const fileName = `frame-${String(image.index).padStart(3, '0')}-f${image.frameCount}-s${image.simStepCount}.png`;
+    const imagePath = join(framesDir, fileName);
+    writeFileSync(imagePath, Buffer.from(image.pngBase64, 'base64'));
+    frameImageByIndex.set(image.index, relative(gapBundleDir, imagePath));
+  }
+
+  const framesWithImages = report.frames.map(frame => ({
+    ...frame,
+    frameImage: frameImageByIndex.get(frame.index) || null,
+  }));
+  const annotatedFrames = annotateGapFrames(framesWithImages);
+  const continuationGaps = groupContinuationGaps(annotatedFrames);
+  const manifest = {
+    identity: GAP_BUNDLE_MANIFEST_IDENTITY,
+    sourceWitnessIdentity: FILMSTRIP_WITNESS_IDENTITY,
+    sourceWitnessReport: reportPath,
+    sourceStripImage: out,
+    requestedRoute: report.requestedRoute,
+    effectiveRoute: report.effectiveRoute,
+    backend: report.backend,
+    captureCadence: report.captureCadence,
+    requestedSimCadence: report.requestedSimCadence,
+    effectiveFinalVisualAuthority: report.effectiveVisualAuthority,
+    continuationAuthority: report.continuationAuthority,
+    cadenceNativeContinuationIdentity: report.cadenceNativeContinuationIdentity,
+    authorityBoundary: {
+      liveSimAnchorAuthority: 'live-sim-anchor',
+      continuationTargetAuthority: 'continuation-target-from-latest-live-field',
+      syntheticComparisonAuthority: SYNTHETIC_COMPARISON_AUTHORITY,
+      note: 'This bundle is live-route cadence evidence. Any filled frames generated from it are comparison artifacts, not live simulator output.',
+    },
+    frameWidth: report.frameWidth,
+    frameHeight: report.frameHeight,
+    frameCountRequested: report.frameCountRequested,
+    alignLiveAnchor: report.alignLiveAnchor,
+    sourceCanvas: report.sourceCanvas,
+    frameImageDirectory: 'frames',
+    liveAnchors: annotatedFrames
+      .filter(frame => frame.gapFrameRole === 'live-sim-anchor')
+      .map(frame => ({
+        index: frame.index,
+        liveSimAnchorFrameId: frame.liveSimAnchorFrameId,
+        capturedFrameCount: frame.frameCount,
+        simStepCount: frame.simStepCount,
+        frameImage: frame.frameImage,
+        cadencePhase: frame.cadencePhase,
+        framesSinceLiveSim: frame.framesSinceLiveSim,
+      })),
+    continuationGaps,
+    frames: annotatedFrames.map(frame => ({
+      index: frame.index,
+      frameImage: frame.frameImage,
+      frameCount: frame.frameCount,
+      simStepCount: frame.simStepCount,
+      simCadence: frame.simCadence,
+      gapFrameRole: frame.gapFrameRole,
+      liveSimAnchorFrameId: frame.liveSimAnchorFrameId,
+      previousLiveSimFrame: frame.previousLiveSimFrame,
+      nextLiveSimFrame: frame.nextLiveSimFrame,
+      cadenceGapIndex: frame.cadenceGapIndex,
+      effectiveVisualAuthority: frame.effectiveVisualAuthority,
+      continuationAuthority: frame.continuationAuthority,
+      cadencePhase: frame.cadencePhase,
+      framesSinceLiveSim: frame.framesSinceLiveSim,
+      cadenceNativeContinuationIdentity: frame.cadenceNativeContinuationIdentity,
+      metrics: frame.metrics,
+    })),
+    diagnostics: {
+      missingPreviousAnchorCount: annotatedFrames.filter(frame => frame.gapFrameRole === 'continuation-target' && frame.previousLiveSimFrame == null).length,
+      missingNextAnchorCount: annotatedFrames.filter(frame => frame.gapFrameRole === 'continuation-target' && frame.nextLiveSimFrame == null).length,
+      continuationTargetCount: annotatedFrames.filter(frame => frame.gapFrameRole === 'continuation-target').length,
+      liveAnchorCount: annotatedFrames.filter(frame => frame.gapFrameRole === 'live-sim-anchor').length,
+    },
+  };
+
+  const manifestPath = join(gapBundleDir, 'gap-manifest.json');
+  writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+  return {
+    dir: gapBundleDir,
+    manifest: manifestPath,
+    frameDirectory: framesDir,
+    frameImageCount: frameImageByIndex.size,
+    continuationGapCount: continuationGaps.length,
+    continuationTargetCount: manifest.diagnostics.continuationTargetCount,
+    liveAnchorCount: manifest.diagnostics.liveAnchorCount,
+    syntheticComparisonAuthority: SYNTHETIC_COMPARISON_AUTHORITY,
+  };
 }
 
 async function main() {
@@ -280,7 +493,14 @@ async function main() {
 
     phase = 'filmstrip-capture';
     const captureEval = await wsRequest(ws, 'Runtime.evaluate', {
-      expression: browserCaptureExpression({ frameCountRequested, frameWidth, frameHeight, columns }),
+      expression: browserCaptureExpression({
+        frameCountRequested,
+        frameWidth,
+        frameHeight,
+        columns,
+        includeFramePngs: Boolean(gapBundleDir),
+        alignLiveAnchor,
+      }),
       awaitPromise: true,
       returnByValue: true,
     });
@@ -307,6 +527,9 @@ async function main() {
     if (expectedSimCadence > 1) {
       assert.ok(frames.some(frame => frame.cadencePhase > 0), 'filmstrip never captured a held continuation phase');
       assert.ok(frames.some(frame => frame.renderFrameDelta === 1 && frame.framesSinceLiveSim > 0), 'filmstrip never captured a frame since live sim');
+      if (alignLiveAnchor) {
+        assert.equal(frames[0]?.framesSinceLiveSim, 0, 'aligned filmstrip did not begin on a live-sim anchor');
+      }
     }
 
     const report = {
@@ -320,6 +543,7 @@ async function main() {
       frameWidth,
       frameHeight,
       columns,
+      alignLiveAnchor,
       mohelAlerts,
       sourceCanvas: capture.sourceCanvas,
       stripImage: out,
@@ -333,6 +557,8 @@ async function main() {
       continuationAuthority: capture.finalState?.continuationAuthority,
       frames,
     };
+    const gapBundle = writeGapBundle({ capture, report });
+    if (gapBundle) report.gapBundle = gapBundle;
     writeFileSync(reportPath, JSON.stringify(report, null, 2));
     ws.close();
     proc.kill('SIGTERM');

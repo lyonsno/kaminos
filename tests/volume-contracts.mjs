@@ -1221,6 +1221,7 @@ const filmstripWitnessPath = join(root, 'volume-filmstrip-witness.mjs');
 assert.ok(existsSync(filmstripWitnessPath), 'volume-filmstrip-witness.mjs exists');
 const filmstripWitness = existsSync(filmstripWitnessPath) ? readFileSync(filmstripWitnessPath, 'utf8') : '';
 assert.match(filmstripWitness, /FILMSTRIP_WITNESS_IDENTITY/, 'filmstrip witness names a stable evidence identity');
+assert.match(filmstripWitness, /next\.startsWith\('--'\)/, 'filmstrip witness CLI parser supports bare boolean flags without shifting later options');
 assert.match(filmstripWitness, /consecutive-requestAnimationFrame-no-intentional-skip/, 'filmstrip witness captures consecutive RAF frames without intentional skips');
 assert.match(filmstripWitness, /writeFailureReport/, 'filmstrip witness writes a durable report before failing');
 assert.match(filmstripWitness, /captureFailurePhase/, 'filmstrip failure reports name the failure phase');
@@ -1230,6 +1231,16 @@ assert.match(filmstripWitness, /cadenceNativeContinuationIdentity/, 'filmstrip w
 assert.match(filmstripWitness, /frameDeltas/, 'filmstrip witness reports render frame deltas between captured frames');
 assert.match(filmstripWitness, /blankFrameCount/, 'filmstrip witness reports blank or missing frame counts');
 assert.match(filmstripWitness, /volume_sim_cadence/, 'filmstrip witness records the routed simulation cadence');
+assert.match(filmstripWitness, /GAP_BUNDLE_MANIFEST_IDENTITY/, 'filmstrip witness names a stable cadence-gap manifest identity');
+assert.match(filmstripWitness, /--gap-bundle-dir/, 'filmstrip witness can export an Interframe-ready gap bundle directory');
+assert.match(filmstripWitness, /--align-live-anchor/, 'filmstrip witness can align cadence-gap bundles to a live-sim anchor');
+assert.match(filmstripWitness, /writeGapBundle/, 'filmstrip witness writes the cadence-gap bundle instead of requiring terminal transcription');
+assert.match(filmstripWitness, /unlinkSync/, 'gap bundle writer removes stale managed frame PNGs before reruns');
+assert.match(filmstripWitness, /liveSimAnchorFrameId/, 'gap manifest uses explicit live-sim anchor frame ids instead of only captured render frame ids');
+assert.match(filmstripWitness, /previousLiveSimFrame/, 'gap manifest names previous live-sim anchors for continuation targets');
+assert.match(filmstripWitness, /nextLiveSimFrame/, 'gap manifest names next live-sim anchors for continuation targets');
+assert.match(filmstripWitness, /continuationTargets/, 'gap manifest lists held/continuation targets per cadence gap');
+assert.match(filmstripWitness, /synthetic-comparison-not-live-simulator-output/, 'gap manifest preserves synthetic comparison authority boundaries');
 
 assert.match(witness, /simReadback/, 'witness records simulation readback evidence');
 assert.match(witness, /detailMean/, 'witness records transported material detail evidence');
