@@ -22,6 +22,7 @@ import {
   validateWebGpuRouteBackpressureProfile,
   validateWebGpuRouteSchedulerProfile,
 } from '@kaminos/webgpu-inference-kit';
+import { createSchedulerVerificationReceipt } from '../lib/scheduler-verification-receipt.mjs';
 
 const args = new Map();
 for (let i = 2; i < process.argv.length; i++) {
@@ -226,6 +227,57 @@ function createValidatedBackpressureProfile() {
   return profile;
 }
 
+function adapterReportEvidenceForRoute() {
+  if (!report) return null;
+  return {
+    path: report,
+    bytes: null,
+    sha256: null,
+  };
+}
+
+function schedulerVerificationEventTrace(breathingRoom = null) {
+  const telemetry = breathingRoom?.telemetry || null;
+  if (telemetry?.eventTrace) return telemetry.eventTrace;
+  return {
+    schema: 'kaminos.webgpu-scheduler-event-trace.v0',
+    clock: telemetry?.clock || 'performance.now',
+    timingAuthority: telemetry?.timingAuthority || (Array.isArray(telemetry?.events) && telemetry.events.length ? 'browser-wall-clock' : 'not-observed'),
+    events: Array.isArray(telemetry?.events) ? telemetry.events : [],
+  };
+}
+
+function schedulerVerificationFrameTail(breathingRoom = null) {
+  const telemetry = breathingRoom?.telemetry || {};
+  const frameTail = telemetry.frameTail || breathingRoom?.frameTail || {};
+  return {
+    evidenceSource: frameTail.evidenceSource || telemetry.timingAuthority || 'not-observed',
+    disclaimer: frameTail.disclaimer || 'not-gpu-exclusive-or-present-latency',
+    rafFps: frameTail.rafFps ?? telemetry.rafFps ?? null,
+    frameP95Ms: frameTail.frameP95Ms ?? telemetry.frameP95Ms ?? null,
+    queueDoneP95Ms: frameTail.queueDoneP95Ms ?? telemetry.queueDoneP95Ms ?? null,
+  };
+}
+
+function schedulerVerificationReceipt(evidence, breathingRoom = null) {
+  return createSchedulerVerificationReceipt({
+    route: {
+      pipelineId: process.env.KAMINOS_PIPELINE_ID || 'sharp-image-to-splat-live-v0',
+      requestedRouteId: process.env.KAMINOS_PIPELINE_ROUTE_ID || 'adapter.sharp-image-to-splat-live.v0',
+      effectiveRouteId: process.env.KAMINOS_PIPELINE_STAGE_ID || process.env.KAMINOS_PIPELINE_ROUTE_ID || 'adapter.sharp-image-to-splat-live.v0',
+      backendClass: 'browser-webgpu',
+      adapterReport: adapterReportEvidenceForRoute(),
+    },
+    scheduler: evidence.scheduler,
+    backpressure: evidence.backpressure,
+    eventTrace: schedulerVerificationEventTrace(breathingRoom),
+    boundaryAssertions: breathingRoom?.boundaryAssertions || breathingRoom?.telemetry?.boundaryAssertions || [],
+    frameTail: schedulerVerificationFrameTail(breathingRoom),
+    unsupportedFields: evidence.unsupportedFields || breathingRoom?.unsupportedFields || [],
+    downgrades: evidence.failureDowngrades || [],
+  });
+}
+
 function pipelineSchedulerEvidence(breathingRoom) {
   const effectiveScheduler = breathingRoom?.effectiveScheduler || null;
   const unsupportedFields = Array.isArray(breathingRoom?.unsupportedFields)
@@ -239,7 +291,7 @@ function pipelineSchedulerEvidence(breathingRoom) {
   const failureDowngrades = [];
   if (!effectiveScheduler) failureDowngrades.push('effective-scheduler-missing');
   if (unsupportedFields.length) failureDowngrades.push('unsupported-fields-present');
-  return {
+  const evidence = {
     schema: 'kaminos.pipeline-scheduler-composition.v0',
     source: 'pipeline-adapter-report',
     verificationState,
@@ -269,6 +321,10 @@ function pipelineSchedulerEvidence(breathingRoom) {
       breathingRoom,
     },
     failureDowngrades,
+  };
+  return {
+    ...evidence,
+    schedulerVerification: schedulerVerificationReceipt(evidence, breathingRoom),
   };
 }
 
@@ -360,6 +416,7 @@ function writeJson(path, value) {
 
 function reportBase(extra = {}) {
   const breathingRoom = schedulerEvidence(extra.schedulerTelemetry || null, extra.schedulerStatus);
+  const pipelineScheduler = pipelineSchedulerEvidence(breathingRoom);
   return {
     schema: 'kaminos.sharp-webgpu-adapter-report.v0',
     ok: extra.ok ?? false,
@@ -384,7 +441,8 @@ function reportBase(extra = {}) {
       requestedScheduler,
     },
     breathingRoom,
-    pipelineScheduler: pipelineSchedulerEvidence(breathingRoom),
+    schedulerVerification: pipelineScheduler.schedulerVerification,
+    pipelineScheduler,
     lastTrustworthyEvidence,
     serverLogs: {
       stdoutTail: serverLogs.stdout.slice(-4000),

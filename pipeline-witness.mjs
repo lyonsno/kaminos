@@ -10,6 +10,7 @@ import {
   validateWebGpuRouteBackpressureProfile,
   validateWebGpuRouteSchedulerProfile,
 } from '@kaminos/webgpu-inference-kit';
+import { createSchedulerVerificationReceipt } from './lib/scheduler-verification-receipt.mjs';
 
 const args = new Map();
 for (let i = 2; i < process.argv.length; i++) {
@@ -610,9 +611,14 @@ function schedulerProfileHasBreathability(profile) {
 function validateOrNormalizePipelineSchedulerEvidence(evidence, report = null, effectiveRoute = null) {
   const schedulerValidation = validateWebGpuRouteSchedulerProfile(evidence?.scheduler);
   const backpressureValidation = validateWebGpuRouteBackpressureProfile(evidence?.backpressure);
-  if (schedulerValidation.ok && backpressureValidation.ok && schedulerProfileHasBreathability(evidence?.scheduler)) return evidence;
+  if (schedulerValidation.ok && backpressureValidation.ok && schedulerProfileHasBreathability(evidence?.scheduler)) {
+    return {
+      ...evidence,
+      schedulerVerification: evidence.schedulerVerification || schedulerVerificationReceipt(evidence, report, effectiveRoute),
+    };
+  }
   const unsupportedFields = Array.isArray(evidence?.unsupportedFields) ? evidence.unsupportedFields : [];
-  return {
+  const normalized = {
     ...evidence,
     verificationState: unsupportedFields.length ? 'unsupported' : evidence?.verificationState,
     scheduler: createValidatedSchedulerProfile({
@@ -630,11 +636,81 @@ function validateOrNormalizePipelineSchedulerEvidence(evidence, report = null, e
       ...(schedulerProfileHasBreathability(evidence?.scheduler) ? [] : ['breathability-profile-added-from-kit-route']),
     ],
   };
+  return {
+    ...normalized,
+    schedulerVerification: evidence?.schedulerVerification || schedulerVerificationReceipt(normalized, report, effectiveRoute),
+  };
+}
+
+function adapterReportEvidence(report, effectiveRoute = null) {
+  const path = effectiveRoute?.adapterReportPath || report?.path || null;
+  if (!path) return null;
+  if (!existsSync(path)) return { path, bytes: null, sha256: null };
+  return fileEvidence(path);
+}
+
+function schedulerVerificationRoute(report = null, effectiveRoute = null) {
+  return {
+    pipelineId: pipeline?.id || requestedPipelineId,
+    requestedRouteId: pipeline?.routeId || effectiveRoute?.id || null,
+    effectiveRouteId: effectiveRoute?.id || pipeline?.routeId || null,
+    backendClass: effectiveRoute?.effectiveBackend || report?.backend?.runtime || null,
+    adapterReport: adapterReportEvidence(report, effectiveRoute),
+  };
+}
+
+function schedulerVerificationEventTrace(breathingRoom = null) {
+  const telemetry = breathingRoom?.telemetry || null;
+  if (telemetry?.eventTrace) return telemetry.eventTrace;
+  return {
+    schema: 'kaminos.webgpu-scheduler-event-trace.v0',
+    clock: telemetry?.clock || 'performance.now',
+    timingAuthority: telemetry?.timingAuthority || (Array.isArray(telemetry?.events) && telemetry.events.length ? 'browser-wall-clock' : 'not-observed'),
+    events: Array.isArray(telemetry?.events) ? telemetry.events : [],
+  };
+}
+
+function schedulerVerificationBoundaryAssertions(breathingRoom = null) {
+  if (Array.isArray(breathingRoom?.boundaryAssertions)) return breathingRoom.boundaryAssertions;
+  if (Array.isArray(breathingRoom?.telemetry?.boundaryAssertions)) return breathingRoom.telemetry.boundaryAssertions;
+  return [];
+}
+
+function schedulerVerificationFrameTail(breathingRoom = null) {
+  const telemetry = breathingRoom?.telemetry || {};
+  const frameTail = telemetry.frameTail || breathingRoom?.frameTail || {};
+  return {
+    evidenceSource: frameTail.evidenceSource || telemetry.timingAuthority || 'not-observed',
+    disclaimer: frameTail.disclaimer || 'not-gpu-exclusive-or-present-latency',
+    rafFps: frameTail.rafFps ?? telemetry.rafFps ?? null,
+    frameP95Ms: frameTail.frameP95Ms ?? telemetry.frameP95Ms ?? null,
+    queueDoneP95Ms: frameTail.queueDoneP95Ms ?? telemetry.queueDoneP95Ms ?? null,
+  };
+}
+
+function schedulerVerificationReceipt(evidence, report = null, effectiveRoute = null) {
+  const breathingRoom = evidence?.raw?.breathingRoom || report?.breathingRoom || null;
+  return createSchedulerVerificationReceipt({
+    route: schedulerVerificationRoute(report, effectiveRoute),
+    scheduler: evidence?.scheduler || {
+      schema: 'kaminos.webgpu-route-scheduler.v0',
+      requestedScheduler: evidence?.requestedScheduler || breathingRoom?.requestedScheduler || {},
+      effectiveScheduler: evidence?.effectiveScheduler || breathingRoom?.effectiveScheduler || null,
+      verificationState: evidence?.verificationState || breathingRoom?.status || 'scheduler-unverified',
+      unsupportedFields: evidence?.unsupportedFields || breathingRoom?.unsupportedFields || [],
+    },
+    backpressure: evidence?.backpressure || backpressurePlaceholder(report, effectiveRoute),
+    eventTrace: schedulerVerificationEventTrace(breathingRoom),
+    boundaryAssertions: schedulerVerificationBoundaryAssertions(breathingRoom),
+    frameTail: schedulerVerificationFrameTail(breathingRoom),
+    unsupportedFields: evidence?.unsupportedFields || breathingRoom?.unsupportedFields || [],
+    downgrades: evidence?.failureDowngrades || [],
+  });
 }
 
 function pipelineSchedulerEvidence(report, effectiveRoute = null) {
   if (!report) {
-    return {
+    const evidence = {
       schema: 'kaminos.pipeline-scheduler-composition.v0',
       source: 'missing',
       verificationState: 'scheduler-evidence-missing',
@@ -655,6 +731,10 @@ function pipelineSchedulerEvidence(report, effectiveRoute = null) {
         breathingRoom: null,
       },
       failureDowngrades: ['scheduler-evidence-missing'],
+    };
+    return {
+      ...evidence,
+      schedulerVerification: schedulerVerificationReceipt(evidence, report, effectiveRoute),
     };
   }
   if (report.pipelineScheduler?.schema === 'kaminos.pipeline-scheduler-composition.v0') {
@@ -680,7 +760,7 @@ function pipelineSchedulerEvidence(report, effectiveRoute = null) {
   if (!breathingRoom) failureDowngrades.push('breathing-room-missing');
   if (!effectiveScheduler) failureDowngrades.push('effective-scheduler-missing');
   if (unsupportedFields.length) failureDowngrades.push('unsupported-fields-present');
-  return {
+  const evidence = {
     schema: 'kaminos.pipeline-scheduler-composition.v0',
     source: 'pipeline-adapter-report',
     verificationState,
@@ -703,6 +783,10 @@ function pipelineSchedulerEvidence(report, effectiveRoute = null) {
       breathingRoom,
     },
     failureDowngrades,
+  };
+  return {
+    ...evidence,
+    schedulerVerification: schedulerVerificationReceipt(evidence, report, effectiveRoute),
   };
 }
 
