@@ -110,7 +110,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 .select-input:focus { border-color: #1976d2; }
 
 /* Tabs */
-.tab-bar { display: flex; gap: 0; margin-bottom: 12px; border-bottom: 1px solid #2a2a2a; }
+.tab-bar { display: flex; flex-wrap: wrap; gap: 0; row-gap: 2px; margin-bottom: 12px; border-bottom: 1px solid #2a2a2a; }
 .tab { padding: 8px 14px; font-size: 11px; color: #555; cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.15s; }
 .tab:hover { color: #999; }
 .tab.active { color: #fff; border-bottom-color: #1976d2; }
@@ -693,39 +693,6 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
       </div>
     </div>
     <div
-      class="panel compute-route-fire-actuator"
-      id="compute-route-fire-actuator"
-      data-compute-route-fire-actuator-schema="kaminos.compute-route-fire-actuator.v0"
-      data-compute-route-fire-run-status="idle"
-      hidden
-    >
-      <div class="field"><span class="field-key">Compute route</span><span class="route-chip" id="compute-route-fire-actuator-route">sharp-image-to-splat-live-v0</span></div>
-      <div class="compute-route-fire-run-summary" id="compute-route-fire-run-summary" data-compute-route-fire-summary-state="idle">Choose an image and start SHARP when you want a new splat.</div>
-      <div class="field"><span class="field-key">Status</span><span class="field-val" id="compute-route-fire-run-status">idle</span></div>
-      <div class="field"><span class="field-key">Progress</span><span class="field-val route-fire-field-long" id="compute-route-fire-run-progress">--</span></div>
-      <div class="field"><span class="field-key">Image</span></div>
-      <div class="compute-route-fire-source-row">
-        <select class="compute-route-fire-source-picker" id="compute-route-fire-image-picker" aria-label="Source image">
-          <option value="">Loading images...</option>
-        </select>
-        <button class="btn" id="compute-route-fire-refresh-images">Refresh</button>
-        <button class="btn" id="compute-route-fire-choose-image">Choose File</button>
-        <input type="file" id="compute-route-fire-image-file" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp" hidden>
-      </div>
-      <div class="field"><span class="field-key">Path</span></div>
-      <input class="compute-route-fire-input" id="compute-route-fire-input-path" value="">
-      <div class="volume-actions">
-        <button class="btn" id="compute-route-fire-start">Start SHARP</button>
-      </div>
-      <div class="field"><span class="field-key">Report</span><span class="field-val route-fire-field-long" id="compute-route-fire-run-report">--</span></div>
-      <div class="field"><span class="field-key">Error</span><span class="field-val route-fire-field-long" id="compute-route-fire-run-error">--</span></div>
-      <div class="field"><span class="field-key">Asset</span><span class="field-val route-fire-field-long" id="compute-route-fire-output-asset">--</span></div>
-      <div class="volume-actions">
-        <button class="btn" id="compute-route-fire-load-output" hidden>Load Output Splat</button>
-      </div>
-      <div class="compute-route-fire-artifacts" id="compute-route-fire-run-artifacts"></div>
-    </div>
-    <div
       class="panel"
       id="route-fire-bench"
       data-route-fire-bench-schema="beaming.volume-fire.route-activity-bench.v0"
@@ -1087,6 +1054,40 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 
   <!-- Generate Tab -->
   <div class="tab-content" id="tab-generate">
+    <h2>Route Image To Splat</h2>
+    <div
+      class="panel compute-route-fire-actuator"
+      id="compute-route-fire-actuator"
+      data-compute-route-fire-actuator-schema="kaminos.compute-route-fire-actuator.v0"
+      data-compute-route-fire-run-status="idle"
+      hidden
+    >
+      <div class="field"><span class="field-key">Compute route</span><span class="route-chip" id="compute-route-fire-actuator-route">sharp-image-to-splat-live-v0</span></div>
+      <div class="compute-route-fire-run-summary" id="compute-route-fire-run-summary" data-compute-route-fire-summary-state="idle">Choose an image and start SHARP when you want a new splat.</div>
+      <div class="field"><span class="field-key">Status</span><span class="field-val" id="compute-route-fire-run-status">idle</span></div>
+      <div class="field"><span class="field-key">Progress</span><span class="field-val route-fire-field-long" id="compute-route-fire-run-progress">--</span></div>
+      <div class="field"><span class="field-key">Image</span></div>
+      <div class="compute-route-fire-source-row">
+        <select class="compute-route-fire-source-picker" id="compute-route-fire-image-picker" aria-label="Source image">
+          <option value="">Loading images...</option>
+        </select>
+        <button class="btn" id="compute-route-fire-refresh-images">Refresh</button>
+        <button class="btn" id="compute-route-fire-choose-image">Choose File</button>
+        <input type="file" id="compute-route-fire-image-file" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp" hidden>
+      </div>
+      <div class="field"><span class="field-key">Path</span></div>
+      <input class="compute-route-fire-input" id="compute-route-fire-input-path" value="">
+      <div class="volume-actions">
+        <button class="btn" id="compute-route-fire-start">Start SHARP</button>
+      </div>
+      <div class="field"><span class="field-key">Report</span><span class="field-val route-fire-field-long" id="compute-route-fire-run-report">--</span></div>
+      <div class="field"><span class="field-key">Error</span><span class="field-val route-fire-field-long" id="compute-route-fire-run-error">--</span></div>
+      <div class="field"><span class="field-key">Asset</span><span class="field-val route-fire-field-long" id="compute-route-fire-output-asset">--</span></div>
+      <div class="volume-actions">
+        <button class="btn" id="compute-route-fire-load-output" hidden>Load Output Splat</button>
+      </div>
+      <div class="compute-route-fire-artifacts" id="compute-route-fire-run-artifacts"></div>
+    </div>
     <h2>Image Generation</h2>
     <p style="font-size: 11px; color: #666; margin-bottom: 12px;">Generate test images to feed through the MoGe + SuperMat pipeline.</p>
     <div class="panel">
@@ -8961,7 +8962,7 @@ async function initKaminosVolumeRoute() {
   };
 
   if (params.get('kaminos_volume_smoke') === '1') {
-    setActiveTab('volume');
+    setActiveTab(computeRouteFireActuatorIsEnabled() ? 'generate' : 'volume');
     frameVolumeCamera();
     if (!computeRouteFireActuatorIsEnabled()) {
       await volumePrototype.setActive(true);

@@ -6,7 +6,18 @@ const root = new URL('..', import.meta.url).pathname;
 const index = readFileSync(join(root, 'index.html'), 'utf8');
 
 assert.match(index, /\[hidden\]\s*\{\s*display:\s*none\s*!important;\s*\}/, 'hidden actuator actions stay hidden even when button classes set display');
-assert.match(index, /id="compute-route-fire-actuator"/, 'Volume tab hosts the actuated compute route panel');
+const volumeTabIndex = index.indexOf('id="tab-volume"');
+const generateTabIndex = index.indexOf('id="tab-generate"');
+const viewportIndex = index.indexOf('<div id="viewport">');
+const routeFireBenchIndex = index.indexOf('id="route-fire-bench"');
+const actuatorIndex = index.indexOf('id="compute-route-fire-actuator"');
+
+assert.ok(volumeTabIndex >= 0, 'Volume tab content is present');
+assert.ok(generateTabIndex > volumeTabIndex, 'Generate tab follows the Volume tab');
+assert.ok(viewportIndex > generateTabIndex, 'Viewport follows the tab panels');
+assert.ok(routeFireBenchIndex > volumeTabIndex && routeFireBenchIndex < generateTabIndex, 'Volume tab keeps the fire visualization diagnostics');
+assert.ok(actuatorIndex > generateTabIndex && actuatorIndex < viewportIndex, 'Generate tab hosts the live SHARP actuator');
+assert.match(index, /\.tab-bar\s*\{[^}]*flex-wrap:\s*wrap/, 'sidebar tabs wrap so Generate remains visibly reachable');
 assert.match(index, /data-compute-route-fire-actuator-schema="kaminos\.compute-route-fire-actuator\.v0"/, 'actuator panel preserves schema identity');
 assert.match(index, /id="compute-route-fire-start"/, 'operator has an explicit control to start SHARP');
 assert.match(index, /id="compute-route-fire-run-summary"/, 'operator sees a plain-language run summary before evidence fields');
@@ -36,5 +47,6 @@ assert.match(index, /\/api\/compute-route-fire\/upload-image/, 'browser uploads 
 assert.match(index, /\/api\/compute-route-fire\/promote-splat/, 'browser asks the server to promote the completed splat into the asset index');
 assert.match(index, /volumePrototype\.setActive\(true\)/, 'browser starts fire while the route is running');
 assert.match(index, /volumePrototype\.setActive\(false\)/, 'browser stops fire after completion or failure');
+assert.match(index, /setActiveTab\(computeRouteFireActuatorIsEnabled\(\) \? 'generate' : 'volume'\)/, 'actuator smoke URL opens Generate instead of the fire diagnostics tab');
 assert.match(index, /setActiveTab\('assets'\)/, 'completed output load returns the operator to the scene object selection surface');
 assert.doesNotMatch(index, /Start SHARP[\s\S]{0,120}smokePayload/, 'actuator control must not be wired to smoke-payload replay');
