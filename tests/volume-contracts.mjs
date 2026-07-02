@@ -23,7 +23,7 @@ assert.match(index, /VOLUME_PRIMITIVE_SCHEMA/, 'scene data names the volume prim
 assert.match(index, /volumePrimitives/, 'scene data persists authored volume primitives');
 assert.match(index, /setVolumePrimitivesState/, 'scene loading can restore authored volume primitives');
 assert.match(index, /volume-core\.js/, 'index imports the volume prototype module');
-assert.match(index, /volume-core\.js\?v=pyro-contrast-basin-radiance-0702/, 'volume prototype import carries a cache key when Pyro contrast basin durability and radiance land');
+assert.match(index, /volume-core\.js\?v=pyro-radiance-isolate-boost-0702/, 'volume prototype import carries a cache key when Pyro radiance isolate and boost range land');
 assert.match(index, /id="volume-render-source-orientation"/, 'Volume tab exposes render/source orientation identity for operator smoke');
 assert.match(index, /id="volume-canonical-render-mode-state"/, 'Volume tab exposes effective canonical render diagnostic mode for operator smoke');
 assert.match(index, /id="volume-canonical-motion-mode-state"/, 'Volume tab exposes effective canonical motion diagnostic mode for operator smoke');
@@ -52,13 +52,17 @@ assert.match(index, /Fold border focus/i, 'Pyro fold-border slider describes smo
 assert.match(index, /id="volume-pyro-fold-wake"/, 'Pyro cockpit exposes a fold wake-length slider');
 assert.match(index, /Fold wake/i, 'Pyro fold-wake slider describes downstream smoke memory');
 assert.match(index, /id="volume-pyro-radiance"/, 'Pyro cockpit exposes a radiance contrast slider');
+assert.match(index, /id="volume-pyro-radiance"[^>]+max="10"/, 'Pyro radiance slider reaches loud basin-search range');
 assert.match(index, /Pyro radiance/i, 'Pyro radiance slider describes live-field contrast illumination');
 assert.match(index, /id="volume-pyro-diagnostic-paint"/, 'Pyro cockpit exposes diagnostic paint separately from carrier strength');
 assert.match(index, /false-color carrier paint/i, 'Pyro diagnostic-paint slider describes that color is inspection paint');
 assert.match(index, /id="volume-pyro-carrier-view"/, 'Pyro cockpit exposes a carrier isolate selector');
 assert.match(index, /Bite only/i, 'Pyro carrier isolate selector can show Bite alone');
 assert.match(index, /Fold only/i, 'Pyro carrier isolate selector can show Fold alone');
+assert.match(index, /Radiance only/i, 'Pyro carrier isolate selector can show Radiance alone');
 assert.match(index, /All carriers/i, 'Pyro carrier selector can expose all carriers without implying forced loud paint');
+assert.match(index, /\['normal', 'border', 'bite', 'fold', 'radiance', 'all'\]\.includes\(routePyroCarrierView\)/, 'Pyro carrier-view URL route accepts the Radiance isolate mode');
+assert.match(index, /Math\.min\(10,\s*routePyroRadiance\)/, 'Pyro radiance URL route accepts the same loud range as the cockpit slider');
 assert.match(index, /id="volume-pyro-overdrive"/, 'Pyro cockpit exposes a diagnostic overdrive slider');
 assert.match(index, /Continuous carrier gain/i, 'Pyro overdrive slider describes a reachable normal-mode gain, not a fake diagnostic mode');
 assert.match(index, /id="volume-pyro-carrier-state"/, 'Volume readout exposes Pyro carrier diagnostic state');
@@ -669,6 +673,10 @@ assert.match(core, /pyroContrastRadiance/, 'Pyro material memory exposes reset-g
 assert.match(core, /pyroBiteEdgeEvent/, 'shader derives a named Bite edge-event predicate');
 assert.match(core, /pyroFoldWakeSignal/, 'shader derives a named Fold wake-memory predicate');
 assert.match(core, /pyroRadianceContrastSignal/, 'shader derives a named Pyro radiance contrast predicate');
+assert.match(core, /pyroRadianceView/, 'shader can isolate the Pyro radiance carrier for diagnosis');
+assert.match(core, /pyroRadianceMask/, 'shader routes Radiance through the carrier-view mask');
+assert.match(core, /pyroContrastRadiance\s*=\s*clamp\(u\.pyro_light_controls\.x,\s*0\.0,\s*10\.0\)/, 'WGSL accepts loud Pyro radiance contrast range');
+assert.match(core, /Math\.min\(10,\s*controlsSnapshot\.pyroRadiance/, 'CPU upload accepts loud Pyro radiance contrast range');
 assert.match(core, /pyroBiteAlphaBoost/, 'Bite carrier affects load-bearing flame alpha instead of final color only');
 assert.match(core, /pyroFoldExtinctionBoost/, 'Fold carrier affects load-bearing smoke extinction instead of final color only');
 assert.match(core, /pyroRadianceBoost/, 'Radiance carrier affects load-bearing emissive contribution instead of diagnostic paint only');

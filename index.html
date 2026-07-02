@@ -1037,7 +1037,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
     <span class="slider-help">Fold wake: short seam bruise at 0, downstream smoke memory at 1.</span>
     <div class="slider-row">
       <span class="slider-label">Pyro Radiance</span>
-      <input type="range" id="volume-pyro-radiance" min="0" max="1.5" step="0.05" value="0">
+      <input type="range" id="volume-pyro-radiance" min="0" max="10" step="0.05" value="0">
       <span class="slider-val" id="volume-pyro-radiance-val">0.00</span>
     </div>
     <span class="slider-help">Pyro radiance: live-field contrast illumination; warms interesting smoke tissue, not the whole column.</span>
@@ -1054,6 +1054,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
         <option value="border">Border only</option>
         <option value="bite">Bite only</option>
         <option value="fold">Fold only</option>
+        <option value="radiance">Radiance only</option>
         <option value="all">All carriers</option>
       </select>
       <span class="slider-val" id="volume-pyro-carrier-view-val">normal</span>
@@ -1459,7 +1460,7 @@ import * as THREE from 'three';
 import { pass, mrt, normalView, vec3, vec4, mix, float, uniform, texture, packNormalToRGB, unpackRGBToNormal, sample, positionView, convertToTexture } from 'three/tsl';
 import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
-import { createKaminosVolumePrototype } from './volume-core.js?v=pyro-contrast-basin-radiance-0702';
+import { createKaminosVolumePrototype } from './volume-core.js?v=pyro-radiance-isolate-boost-0702';
 import {
   DEFAULT_DECISION_MOTION_PLAN,
   DEFAULT_MOTION_PHRASE_CONTROLS,
@@ -10324,7 +10325,7 @@ async function initKaminosVolumeRoute() {
   }
   const routePyroRadiance = Number(params.get('volume_pyro_radiance'));
   if (params.has('volume_pyro_radiance') && Number.isFinite(routePyroRadiance)) {
-    document.getElementById('volume-pyro-radiance').value = String(Math.max(0, Math.min(1.5, routePyroRadiance)));
+    document.getElementById('volume-pyro-radiance').value = String(Math.max(0, Math.min(10, routePyroRadiance)));
   }
   const routePyroDiagnosticPaint = Number(params.get('volume_pyro_diagnostic_paint'));
   const routePyroDebugTint = Number(params.get('volume_pyro_debug_tint'));
@@ -10334,7 +10335,7 @@ async function initKaminosVolumeRoute() {
     document.getElementById('volume-pyro-diagnostic-paint').value = String(Math.max(0, Math.min(1, routePyroDebugTint)));
   }
   const routePyroCarrierView = params.get('volume_pyro_carrier_view');
-  if (['normal', 'border', 'bite', 'fold', 'all'].includes(routePyroCarrierView)) {
+  if (['normal', 'border', 'bite', 'fold', 'radiance', 'all'].includes(routePyroCarrierView)) {
     document.getElementById('volume-pyro-carrier-view').value = routePyroCarrierView;
   }
   const routePyroOverdrive = Number(params.get('volume_pyro_overdrive'));

@@ -354,7 +354,8 @@ function pyroCarrierViewModeValue(value) {
   if (mode === 'border') return 1;
   if (mode === 'bite') return 2;
   if (mode === 'fold') return 3;
-  if (mode === 'all') return 4;
+  if (mode === 'radiance') return 4;
+  if (mode === 'all') return 5;
   return 0;
 }
 
@@ -3102,14 +3103,14 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
   let pyroEdgeBite = clamp(u.pyro_carrier_controls.y, 0.0, 1.0);
   let pyroSmokeFold = clamp(u.pyro_carrier_controls.z, 0.0, 1.0);
   let pyroDiagnosticPaint = clamp(u.pyro_carrier_controls.w, 0.0, 1.0);
-  let pyroCarrierViewMode = clamp(u.pyro_diagnostic_controls.x, 0.0, 4.0);
+  let pyroCarrierViewMode = clamp(u.pyro_diagnostic_controls.x, 0.0, 5.0);
   let pyroCarrierOverdrive = clamp(u.pyro_diagnostic_controls.y, 1.0, 8.0);
   let pyroBiteBorderFocus = clamp(u.pyro_diagnostic_controls.z, 0.0, 1.0);
   let pyroFoldBorderFocus = clamp(u.pyro_diagnostic_controls.w, 0.0, 1.0);
   let pyroBiteTeeth = clamp(u.pyro_shape_controls.x, 0.0, 1.0);
   let pyroBiteWake = clamp(u.pyro_shape_controls.y, 0.0, 1.0);
   let pyroFoldWake = clamp(u.pyro_shape_controls.z, 0.0, 1.0);
-  let pyroContrastRadiance = clamp(u.pyro_light_controls.x, 0.0, 1.5);
+  let pyroContrastRadiance = clamp(u.pyro_light_controls.x, 0.0, 10.0);
   let canonicalSmokeContent = 1.0 - minimalPlumeRenderScene * step(0.5, canonicalContentMode) * (1.0 - step(1.5, canonicalContentMode));
   let canonicalFireContent = minimalPlumeRenderScene * step(0.5, canonicalContentMode);
   let canonicalFireRenderContent = mix(1.0, canonicalFireContent, minimalPlumeRenderScene);
@@ -3362,10 +3363,12 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     let pyroBorderView = 1.0 - step(0.5, abs(pyroCarrierViewMode - 1.0));
     let pyroBiteView = 1.0 - step(0.5, abs(pyroCarrierViewMode - 2.0));
     let pyroFoldView = 1.0 - step(0.5, abs(pyroCarrierViewMode - 3.0));
-    let pyroAllView = 1.0 - step(0.5, abs(pyroCarrierViewMode - 4.0));
+    let pyroRadianceView = 1.0 - step(0.5, abs(pyroCarrierViewMode - 4.0));
+    let pyroAllView = 1.0 - step(0.5, abs(pyroCarrierViewMode - 5.0));
     let pyroBorderMask = clamp(pyroNormalView + pyroBorderView + pyroAllView, 0.0, 1.0);
     let pyroBiteMask = clamp(pyroNormalView + pyroBiteView + pyroAllView, 0.0, 1.0);
     let pyroFoldMask = clamp(pyroNormalView + pyroFoldView + pyroAllView, 0.0, 1.0);
+    let pyroRadianceMask = clamp(pyroNormalView + pyroRadianceView + pyroAllView, 0.0, 1.0);
     let pyroMemoryPattern = 0.5 + 0.5 * sin(
       p.y * 31.0
         + p.x * 17.0
@@ -3432,15 +3435,16 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     let pyroRadianceContrastSignal = clamp(
       pyroBaseCarrier
         * pyroContrastRadiance
+        * pyroRadianceMask
         * pyroCarrierOverdrive
         * (0.36 + pyroSpatialEnergy * 0.64)
         * max(pyroBiteEvent * 0.50, pyroFoldWakeSignal)
         * smoothstep(0.012, 0.62, smoke + rawExtinction + microSmoke * 0.32)
         * (0.30 + fireMix * 0.54 + flameDetail * 0.18 + quenchedFireLick * 0.16),
       0.0,
-      2.6
+      12.0
     );
-    let pyroRadianceBoost = clamp(pyroRadianceContrastSignal * (0.22 + smoke * 0.50 + renderTemp * 0.16 + pyroMemoryPattern * 0.10), 0.0, 2.1);
+    let pyroRadianceBoost = clamp(pyroRadianceContrastSignal * (0.22 + smoke * 0.50 + renderTemp * 0.16 + pyroMemoryPattern * 0.10), 0.0, 9.0);
     let pyroBiteAlphaBoost = clamp(pyroEdgeBreakup * (0.40 + fireMix * 0.80), 0.0, 2.4);
     let pyroFoldExtinctionBoost = clamp(pyroSmokeFoldSignal * (0.34 + smoke * 0.85 + rawExtinction * 0.55), 0.0, 2.8);
     alpha = clamp(alpha + pyroBiteAlphaBoost * rayStepOpacity * 0.080 + pyroFoldExtinctionBoost * rayStepOpacity * 0.060, 0.0, 0.28);
@@ -3460,8 +3464,9 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     let pyroDiagnosticColor =
       vec3<f32>(0.10, 0.78, 1.0) * clamp(pyroBorderDiagnostic, 0.0, 1.0)
       + vec3<f32>(1.0, 0.12, 0.03) * clamp(pyroBiteAlphaBoost, 0.0, 1.0)
-      + vec3<f32>(0.28, 0.72, 1.05) * clamp(pyroFoldExtinctionBoost, 0.0, 1.0);
-    let pyroDiagnosticSignal = clamp(max(pyroBorderDiagnostic, max(pyroBiteAlphaBoost, pyroFoldExtinctionBoost)), 0.0, 1.0);
+      + vec3<f32>(0.28, 0.72, 1.05) * clamp(pyroFoldExtinctionBoost, 0.0, 1.0)
+      + vec3<f32>(1.0, 0.72, 0.18) * clamp(pyroRadianceBoost, 0.0, 1.0);
+    let pyroDiagnosticSignal = clamp(max(max(pyroBorderDiagnostic, pyroRadianceBoost), max(pyroBiteAlphaBoost, pyroFoldExtinctionBoost)), 0.0, 1.0);
     let pyroDiagnosticPaintAlpha = clamp(pyroDiagnosticPaint * pyroDiagnosticSignal * (0.72 + pyroCarrierOverdrive * 0.055), 0.0, 1.0);
     alpha = clamp(alpha + pyroDiagnosticPaintAlpha * rayStepOpacity * 0.16, 0.0, 0.42);
     local = mix(local, pyroDiagnosticColor * (0.96 + pyroCarrierOverdrive * 0.045), clamp(pyroDiagnosticPaintAlpha * 1.28, 0.0, 1.0));
@@ -4955,7 +4960,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const pyroSmokeFold = Math.max(0, Math.min(1, controlsSnapshot.pyroSmokeFold ?? 0.25));
     const pyroFoldBorderFocus = Math.max(0, Math.min(1, controlsSnapshot.pyroFoldBorder ?? 0.35));
     const pyroFoldWake = Math.max(0, Math.min(1, controlsSnapshot.pyroFoldWake ?? 0.35));
-    const pyroContrastRadiance = Math.max(0, Math.min(1.5, controlsSnapshot.pyroRadiance ?? 0));
+    const pyroContrastRadiance = Math.max(0, Math.min(10, controlsSnapshot.pyroRadiance ?? 0));
     const pyroDiagnosticPaint = Math.max(0, Math.min(1, controlsSnapshot.pyroDiagnosticPaint ?? 0));
     uniforms[184] = pyroInterfaceFocus;
     uniforms[185] = pyroEdgeBite;
