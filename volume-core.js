@@ -10,7 +10,7 @@ const SUPPORTED_MAJORANT_GRID_SIZES = [24, 32, 48];
 const MAX_EXTERNAL_EMITTERS = 32;
 const EXTERNAL_EMITTER_COMPONENTS = 20;
 const DEFAULT_VOLUME_SCENE = 'compact_plume';
-const SUPPORTED_VOLUME_SCENES = new Set([DEFAULT_VOLUME_SCENE, 'canonical_plume', 'tall_plume', 'bonfire_plume']);
+const SUPPORTED_VOLUME_SCENES = new Set([DEFAULT_VOLUME_SCENE, 'canonical_plume', 'tall_plume', 'preheat_plume', 'bonfire_plume']);
 const CANONICAL_SOURCE_MODE_VALUES = {
   current: 0,
   passive_bottom: 1,
@@ -264,12 +264,14 @@ function volumeSceneMode(value) {
   const scene = normalizeVolumeScene(value);
   if (scene === 'canonical_plume') return 3;
   if (scene === 'tall_plume') return 1;
+  if (scene === 'preheat_plume') return 1;
   if (scene === 'bonfire_plume') return 2;
   return 0;
 }
 
 function detailScaleArtifactQuarantine(value) {
-  return normalizeVolumeScene(value) === 'tall_plume' ? 1 : 0;
+  const scene = normalizeVolumeScene(value);
+  return scene === 'tall_plume' || scene === 'preheat_plume' ? 1 : 0;
 }
 
 function bonfireReferenceConfinementDebug(value) {
@@ -406,7 +408,8 @@ function normalizeSimCadence(value) {
 }
 
 function defaultPressureIterationsForScene(value) {
-  return normalizeVolumeScene(value) === 'tall_plume' ? 2 : (normalizeVolumeScene(value) === 'bonfire_plume' ? 8 : 4);
+  const scene = normalizeVolumeScene(value);
+  return normalizeVolumeScene(value) === 'tall_plume' ? 2 : (scene === 'preheat_plume' ? 2 : (scene === 'bonfire_plume' ? 8 : 4));
 }
 
 function normalizePressureIterationCount(value, scene) {
@@ -417,20 +420,23 @@ function normalizePressureIterationCount(value, scene) {
 
 function normalizePressureStrategy(value, scene) {
   const requested = String(value ?? PRESSURE_STRATEGY_GLOBAL).toLowerCase();
-  if (normalizeVolumeScene(scene) === 'tall_plume' && requested === PRESSURE_STRATEGY_SPATIAL_TIERS) {
+  const volumeScene = normalizeVolumeScene(scene);
+  if ((volumeScene === 'tall_plume' || volumeScene === 'preheat_plume') && requested === PRESSURE_STRATEGY_SPATIAL_TIERS) {
     return PRESSURE_STRATEGY_SPATIAL_TIERS;
   }
   return PRESSURE_STRATEGY_GLOBAL;
 }
 
 function tallPlumePressureIterationStrategy(scene, pressureIterations) {
-  return normalizeVolumeScene(scene) === 'tall_plume' && Number(pressureIterations) === 2
+  const volumeScene = normalizeVolumeScene(scene);
+  return (volumeScene === 'tall_plume' || volumeScene === 'preheat_plume') && Number(pressureIterations) === 2
     ? TALL_PLUME_PRESSURE_ITERATION_STRATEGY_PRESSURE2
     : TALL_PLUME_PRESSURE_ITERATION_STRATEGY_INACTIVE;
 }
 
 function tallPlumePressureTierStrategy(scene, pressureStrategy) {
-  return normalizeVolumeScene(scene) === 'tall_plume' && pressureStrategy === PRESSURE_STRATEGY_SPATIAL_TIERS
+  const volumeScene = normalizeVolumeScene(scene);
+  return (volumeScene === 'tall_plume' || volumeScene === 'preheat_plume') && pressureStrategy === PRESSURE_STRATEGY_SPATIAL_TIERS
     ? TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY
     : TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY_INACTIVE;
 }
@@ -450,7 +456,8 @@ function pressureTierDispatchMaxY(gridSize, tierWorkgroupsY) {
 }
 
 function pressureTierDispatchPlan(gridSize, pressureStrategy, scene, pressureTierControls = {}) {
-  const spatial = normalizeVolumeScene(scene) === 'tall_plume' && pressureStrategy === PRESSURE_STRATEGY_SPATIAL_TIERS;
+  const volumeScene = normalizeVolumeScene(scene);
+  const spatial = (volumeScene === 'tall_plume' || volumeScene === 'preheat_plume') && pressureStrategy === PRESSURE_STRATEGY_SPATIAL_TIERS;
   const tierControls = normalizePressureTierControls(pressureTierControls);
   const workgroups = Math.ceil(gridSize / 4);
   const fullCells = gridCellCount(gridSize);
@@ -3380,6 +3387,17 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
       0.0,
       1.0
     );
+    let preheatVisibleHazeFloor = clamp(
+      preheatLifecycle
+        * preheatStrength
+        * tallPlumeRenderScene
+        * smoothstep(0.0, 0.44, y)
+        * (1.0 - smoothstep(0.74, 0.98, y))
+        * exp(-dot(p.xz, p.xz) / max(0.018, pow(max(u.source_controls.x * 3.4, 0.20), 2.0)))
+        * clamp(0.78 + curtainNoise * 0.12 + fireNoise * 0.10 + verticalPuffBreak * 0.08, 0.56, 1.24),
+      0.0,
+      1.0
+    );
     let preheatEmberCore = clamp(
       preheatLifecycle
         * preheatStrength
@@ -3390,15 +3408,16 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
       1.0
     );
     let preheatSmokeAlpha = clamp(preheatCarrier * rayStepOpacity * (0.040 + absorptionGain * 0.018), 0.0, 0.050);
-    smokeAlpha = clamp(smokeAlpha + vaporAlpha + preheatSmokeAlpha, 0.0, 0.28);
+    let preheatVisibleHazeAlpha = clamp(preheatVisibleHazeFloor * rayStepOpacity * (0.22 + absorptionGain * 0.055), 0.0, 0.140);
+    smokeAlpha = clamp(smokeAlpha + vaporAlpha + preheatSmokeAlpha + preheatVisibleHazeAlpha * 0.62, 0.0, 0.28);
     let fireSnuffDamping = 1.0 - clamp(max(vaporCarrier * 1.18, quenchCoreCollapse * 0.92), 0.0, 0.985);
     let fireAlpha = mix(
       clamp(visibleFlameAlphaCarrier * tallPlumeTransitionAlphaStagger * canonicalFireRenderContent * rayStepOpacity * fireGain * (0.58 + radianceGain * 0.18) * bonfireFireRenderBreakup * bonfireTransportedFireLumaShaper * fireSnuffDamping * flameBodyAuthority * preheatFlameDamping * (1.0 - preheatFlameSuppression * 0.46), 0.0, fireAlphaMax),
       0.0,
       canonicalSmokeOnlyRender
     );
-    let preheatAlpha = clamp((preheatCarrier * 0.24 + preheatEmberCore * 0.58) * rayStepOpacity * (0.12 + radianceGain * 0.044), 0.0, 0.052);
-    var alpha = clamp(smokeAlpha + fireAlpha + preheatAlpha * 0.55, 0.0, 0.18);
+    let preheatAlpha = clamp((preheatCarrier * 0.24 + preheatEmberCore * 0.58 + preheatVisibleHazeFloor * 0.90) * rayStepOpacity * (0.12 + radianceGain * 0.044), 0.0, 0.110);
+    var alpha = clamp(smokeAlpha + fireAlpha + preheatAlpha * 0.90, 0.0, 0.18);
     let materialSignals = materialTemporalSignals(alpha, smokeAlpha, fireAlpha, temp, microTextureSignal, interfaceShred, fireLick, majorantEdge, interest, trans);
     let materialTemporal = materialTemporalClassificationFromSignals(materialSignals);
     let temporalSampleWeight = materialAwareImportanceWeightFromSignals(materialSignals);
@@ -3581,13 +3600,15 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     local = mix(local, pyroDiagnosticColor * (0.96 + pyroCarrierOverdrive * 0.045), clamp(pyroDiagnosticPaintAlpha * 1.28, 0.0, 1.0));
     let vaporCol = vec3<f32>(0.78, 0.88, 0.92) * (0.76 + filament * 0.18 + shredFilament * 0.12);
     local = mix(local, vaporCol, clamp(max(vaporCarrier * 0.92, quenchCoreCollapse * 0.62), 0.0, 0.96));
-    let preheatCol = vec3<f32>(1.0, 0.43, 0.12) * (0.16 + preheatStrength * 0.24 + preheatEmberCore * 0.34 + fireFilament * 0.08);
-    local = mix(local, preheatCol, clamp(preheatCarrier * 0.14 + preheatAlpha * 5.8, 0.0, 0.42));
+    let preheatCol = vec3<f32>(1.0, 0.43, 0.12) * (0.20 + preheatStrength * 0.28 + preheatEmberCore * 0.34 + preheatVisibleHazeFloor * 0.42 + fireFilament * 0.08);
+    let preheatVisibleHazeCol = mix(vec3<f32>(0.46, 0.52, 0.48), vec3<f32>(1.0, 0.50, 0.18), 0.60 + preheatVisibleHazeFloor * 0.25) * (0.45 + preheatStrength * 0.32 + preheatVisibleHazeFloor * 0.55);
+    local = mix(local, preheatVisibleHazeCol, clamp(preheatVisibleHazeFloor * 0.42 + preheatVisibleHazeAlpha * 5.4, 0.0, 0.58));
+    local = mix(local, preheatCol, clamp(preheatCarrier * 0.14 + preheatAlpha * 5.8, 0.0, 0.46));
     let diagnosticColor = mix(vec3<f32>(0.08, 0.72, 0.95), vec3<f32>(1.0, 0.18, 0.08), smoothstep(0.010, 0.085, divDebug)) * (0.35 + smoothstep(0.012, 0.18, curlDebug));
     local = mix(local, diagnosticColor, flowDebug * smoothstep(0.015, 0.12, curlDebug + divDebug));
     let pressureTierOverlay = pressureTierDebugOverlayColor(y);
     local = mix(local, pressureTierOverlay.rgb, pressureTierOverlay.a);
-    color = color + trans * (alpha * local + fireAlpha * radianceEmission * mix(0.82, 0.62, bonfireRenderScene) + preheatAlpha * preheatCol * 0.72 + smokeBacklight + pyroRadianceColor * pyroRadianceBoost * rayStepOpacity * mix(0.012, 0.030, pyroRadianceSpill));
+    color = color + trans * (alpha * local + fireAlpha * radianceEmission * mix(0.82, 0.62, bonfireRenderScene) + preheatAlpha * preheatCol * 1.30 + preheatVisibleHazeAlpha * preheatVisibleHazeCol * 2.20 + smokeBacklight + pyroRadianceColor * pyroRadianceBoost * rayStepOpacity * mix(0.012, 0.030, pyroRadianceSpill));
     let extinctionStep = clamp(alpha * (0.46 + extinction * 0.16) + fireAlpha * 0.08, 0.0, 0.34);
     trans = trans * exp(-extinctionStep);
     t = t + localDt;
@@ -3679,10 +3700,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     gpuPressure: clampFinite(controlsSnapshot.gpuPressure, 0, 1, 0),
     runtimeQualityReason: String(controlsSnapshot.runtimeQualityReason || 'unspecified').slice(0, 96) || 'unspecified',
     runtimeQualityReceipt: runtimeQualityReceipt(controlsSnapshot),
-    tallPlumeReactionCadenceDebug: normalizeVolumeScene(controlsSnapshot.volumeScene) === 'tall_plume' ? 'source-reaction-cadence-v0' : 'inactive',
-    tallPlumeFlameCutoffContract: normalizeVolumeScene(controlsSnapshot.volumeScene) === 'tall_plume' ? 'tall-plume-speed-cutoff-decoupled-v0' : 'inactive',
-    tallPlumeFlowShelfContract: normalizeVolumeScene(controlsSnapshot.volumeScene) === 'tall_plume' ? 'tall-plume-flow-shelf-mitigated-v0' : 'inactive',
-    tallPlumeFlameHeightLawContract: normalizeVolumeScene(controlsSnapshot.volumeScene) === 'tall_plume' ? 'tall-plume-flame-height-law-v2' : 'inactive',
+    tallPlumeReactionCadenceDebug: ['tall_plume', 'preheat_plume'].includes(normalizeVolumeScene(controlsSnapshot.volumeScene)) ? 'source-reaction-cadence-v0' : 'inactive',
+    tallPlumeFlameCutoffContract: ['tall_plume', 'preheat_plume'].includes(normalizeVolumeScene(controlsSnapshot.volumeScene)) ? 'tall-plume-speed-cutoff-decoupled-v0' : 'inactive',
+    tallPlumeFlowShelfContract: ['tall_plume', 'preheat_plume'].includes(normalizeVolumeScene(controlsSnapshot.volumeScene)) ? 'tall-plume-flow-shelf-mitigated-v0' : 'inactive',
+    tallPlumeFlameHeightLawContract: ['tall_plume', 'preheat_plume'].includes(normalizeVolumeScene(controlsSnapshot.volumeScene)) ? 'tall-plume-flame-height-law-v2' : 'inactive',
     plumeHeight: 1.45,
     windStrength: normalizeWindStrength(controlsSnapshot.windStrength),
     windAngle: normalizeWindAngle(controlsSnapshot.windAngle),
@@ -4241,7 +4262,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const initialScene = normalizeVolumeScene(controlsSnapshot.volumeScene);
     const isBonfireInitialScene = initialScene === 'bonfire_plume';
     const isCanonicalInitialScene = initialScene === 'canonical_plume';
-    const isTallInitialScene = initialScene === 'tall_plume';
+    const isTallInitialScene = initialScene === 'tall_plume' || initialScene === 'preheat_plume';
     const seedLateralVelocity = isBonfireInitialScene ? 0 : 0.11;
     const sourcePrimitive = getPrimitiveSource();
     for (let z = 0; z < nextGridSize; z += 1) {
@@ -5141,7 +5162,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.fireScale = Math.max(0.35, Math.min(1.3, uniforms[48]));
     state.detailScale = Math.max(0.45, Math.min(3.2, uniforms[49]));
     state.detailScaleArtifactQuarantine = detailScaleArtifactQuarantine(controlsSnapshot.volumeScene);
-    state.tallPlumeDetailFrequencySource = state.volumeScene === 'tall_plume' ? 'fire-scale-decoupled-v0' : 'scale-controls';
+    state.tallPlumeDetailFrequencySource = state.volumeScene === 'tall_plume' || state.volumeScene === 'preheat_plume' ? 'fire-scale-decoupled-v0' : 'scale-controls';
     state.visibleDetailOverlayGain = state.detailScaleArtifactQuarantine ? 0.35 : 1;
     state.reactionFuelScale = uniforms[71];
     state.lifecycleEffect = normalizeLifecycleEffect(controlsSnapshot.lifecycleEffect);
@@ -5209,10 +5230,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.gpuPressure = clampFinite(controlsSnapshot.gpuPressure, 0, 1, 0);
     state.runtimeQualityReason = String(controlsSnapshot.runtimeQualityReason || 'unspecified').slice(0, 96) || 'unspecified';
     state.runtimeQualityReceipt = runtimeQualityReceipt(controlsSnapshot);
-    state.tallPlumeReactionCadenceDebug = state.volumeScene === 'tall_plume' ? 'source-reaction-cadence-v0' : 'inactive';
-    state.tallPlumeFlameCutoffContract = state.volumeScene === 'tall_plume' ? 'tall-plume-speed-cutoff-decoupled-v0' : 'inactive';
-    state.tallPlumeFlowShelfContract = state.volumeScene === 'tall_plume' ? 'tall-plume-flow-shelf-mitigated-v0' : 'inactive';
-    state.tallPlumeFlameHeightLawContract = state.volumeScene === 'tall_plume' ? 'tall-plume-flame-height-law-v2' : 'inactive';
+    state.tallPlumeReactionCadenceDebug = state.volumeScene === 'tall_plume' || state.volumeScene === 'preheat_plume' ? 'source-reaction-cadence-v0' : 'inactive';
+    state.tallPlumeFlameCutoffContract = state.volumeScene === 'tall_plume' || state.volumeScene === 'preheat_plume' ? 'tall-plume-speed-cutoff-decoupled-v0' : 'inactive';
+    state.tallPlumeFlowShelfContract = state.volumeScene === 'tall_plume' || state.volumeScene === 'preheat_plume' ? 'tall-plume-flow-shelf-mitigated-v0' : 'inactive';
+    state.tallPlumeFlameHeightLawContract = state.volumeScene === 'tall_plume' || state.volumeScene === 'preheat_plume' ? 'tall-plume-flame-height-law-v2' : 'inactive';
     state.plumeHeight = Math.max(0.7, Math.min(2.2, uniforms[50]));
     state.pressureEffectiveLabel = controlsSnapshot.pressureEffectiveLabel || '';
     state.windStrength = uniforms[53];
@@ -5293,7 +5314,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const tallPlumePressureStrategy = spatialPressureEnabled
       ? TALL_PLUME_PRESSURE_ITERATION_STRATEGY_INACTIVE
       : tallPlumePressureIterationStrategy(scene, pressureIterationRequested);
-    const tallPlumePressureIterationTarget = scene === 'tall_plume' && !spatialPressureEnabled ? 2 : 0;
+    const tallPlumePressureIterationTarget = (scene === 'tall_plume' || scene === 'preheat_plume') && !spatialPressureEnabled ? 2 : 0;
     const tallPlumePressureTierStrategyValue = spatialPressureEnabled ? tierPlan.strategy : TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY_INACTIVE;
     const pressureProjectionReadStrategy = spatialPressureEnabled ? PRESSURE_PROJECTION_READ_STRATEGY_COMPOSITE : PRESSURE_PROJECTION_READ_STRATEGY_SINGLE_BUFFER;
     const simCadence = normalizeSimCadence(controlsSnapshot.simCadence);
@@ -5330,11 +5351,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       ? MAIN_FLUID_BONFIRE_SCALAR_NEIGHBORHOOD_STRATEGY_ACTIVE
       : MAIN_FLUID_BONFIRE_SCALAR_NEIGHBORHOOD_STRATEGY_NON_BONFIRE_BYPASS;
     const bonfireScalarNeighborhoodReadsPerCell = bonfireCombustionFieldActive ? 36 : 0;
-    const tallPlumeDetailCoherenceStrategy = scene === 'tall_plume'
+    const tallPlumeDetailCoherenceStrategy = (scene === 'tall_plume' || scene === 'preheat_plume')
       ? TALL_PLUME_DETAIL_COHERENCE_STRATEGY_TRANSPORTED_PHASE_ANCHOR
       : TALL_PLUME_DETAIL_COHERENCE_STRATEGY_INACTIVE;
     const tallPlumeDetailCoherenceExtraReadsPerCell = 0;
-    const tallPlumeTransitionBandStrategy = scene === 'tall_plume'
+    const tallPlumeTransitionBandStrategy = (scene === 'tall_plume' || scene === 'preheat_plume')
       ? TALL_PLUME_TRANSITION_BAND_STRATEGY_STAGGERED_RETIREMENT
       : TALL_PLUME_TRANSITION_BAND_STRATEGY_INACTIVE;
     const tallPlumeTransitionBandExtraReadsPerCell = 0;
@@ -7189,10 +7210,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       state.gpuPressure = clampFinite(controlsSnapshot.gpuPressure, 0, 1, 0);
       state.runtimeQualityReason = String(controlsSnapshot.runtimeQualityReason || 'unspecified').slice(0, 96) || 'unspecified';
       state.runtimeQualityReceipt = runtimeQualityReceipt(controlsSnapshot);
-      state.tallPlumeReactionCadenceDebug = state.volumeScene === 'tall_plume' ? 'source-reaction-cadence-v0' : 'inactive';
-      state.tallPlumeFlameCutoffContract = state.volumeScene === 'tall_plume' ? 'tall-plume-speed-cutoff-decoupled-v0' : 'inactive';
-      state.tallPlumeFlowShelfContract = state.volumeScene === 'tall_plume' ? 'tall-plume-flow-shelf-mitigated-v0' : 'inactive';
-      state.tallPlumeFlameHeightLawContract = state.volumeScene === 'tall_plume' ? 'tall-plume-flame-height-law-v2' : 'inactive';
+      state.tallPlumeReactionCadenceDebug = state.volumeScene === 'tall_plume' || state.volumeScene === 'preheat_plume' ? 'source-reaction-cadence-v0' : 'inactive';
+      state.tallPlumeFlameCutoffContract = state.volumeScene === 'tall_plume' || state.volumeScene === 'preheat_plume' ? 'tall-plume-speed-cutoff-decoupled-v0' : 'inactive';
+      state.tallPlumeFlowShelfContract = state.volumeScene === 'tall_plume' || state.volumeScene === 'preheat_plume' ? 'tall-plume-flow-shelf-mitigated-v0' : 'inactive';
+      state.tallPlumeFlameHeightLawContract = state.volumeScene === 'tall_plume' || state.volumeScene === 'preheat_plume' ? 'tall-plume-flame-height-law-v2' : 'inactive';
       state.plumeHeight = Math.max(0.7, Math.min(2.2, controlsSnapshot.plumeHeight ?? 1.45));
       state.pressureEffectiveLabel = controlsSnapshot.pressureEffectiveLabel || '';
       state.windStrength = normalizeWindStrength(controlsSnapshot.windStrength);

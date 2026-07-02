@@ -161,7 +161,7 @@ function expectedBonfireScalarNeighborhoodReadsPerCell(volumeScene) {
 }
 
 function expectedTallPlumeDetailCoherenceStrategy(volumeScene) {
-  return volumeScene === 'tall_plume'
+  return volumeScene === 'tall_plume' || volumeScene === 'preheat_plume'
     ? TALL_PLUME_DETAIL_COHERENCE_STRATEGY_TRANSPORTED_PHASE_ANCHOR
     : TALL_PLUME_DETAIL_COHERENCE_STRATEGY_INACTIVE;
 }
@@ -171,7 +171,7 @@ function expectedTallPlumeDetailCoherenceExtraReadsPerCell() {
 }
 
 function expectedTallPlumeTransitionBandStrategy(volumeScene) {
-  return volumeScene === 'tall_plume'
+  return volumeScene === 'tall_plume' || volumeScene === 'preheat_plume'
     ? TALL_PLUME_TRANSITION_BAND_STRATEGY_STAGGERED_RETIREMENT
     : TALL_PLUME_TRANSITION_BAND_STRATEGY_INACTIVE;
 }
@@ -181,19 +181,19 @@ function expectedTallPlumeTransitionBandExtraReadsPerCell() {
 }
 
 function defaultPressureIterationsForScene(volumeScene) {
-  if (volumeScene === 'tall_plume') return 2;
+  if (volumeScene === 'tall_plume' || volumeScene === 'preheat_plume') return 2;
   return volumeScene === 'bonfire_plume' ? 8 : 4;
 }
 
 function expectedTallPlumePressureIterationStrategy(volumeScene, pressureIterations) {
-  return volumeScene === 'tall_plume' && Number(pressureIterations) === 2
+  return (volumeScene === 'tall_plume' || volumeScene === 'preheat_plume') && Number(pressureIterations) === 2
     ? TALL_PLUME_PRESSURE_ITERATION_STRATEGY_PRESSURE2
     : TALL_PLUME_PRESSURE_ITERATION_STRATEGY_INACTIVE;
 }
 
 function normalizePressureStrategy(value, volumeScene) {
   const requested = String(value || 'global').toLowerCase();
-  return volumeScene === 'tall_plume' && requested === 'spatial_tiers' ? 'spatial_tiers' : 'global';
+  return (volumeScene === 'tall_plume' || volumeScene === 'preheat_plume') && requested === 'spatial_tiers' ? 'spatial_tiers' : 'global';
 }
 
 function normalizeVolumePressureMode(value) {
@@ -218,7 +218,7 @@ function pressureConfigForMode(mode, volumeScene, fallbackStrategy, fallbackIter
 }
 
 function expectedTallPlumePressureTierStrategy(volumeScene, pressureStrategy) {
-  return volumeScene === 'tall_plume' && pressureStrategy === 'spatial_tiers'
+  return (volumeScene === 'tall_plume' || volumeScene === 'preheat_plume') && pressureStrategy === 'spatial_tiers'
     ? TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY
     : TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY_INACTIVE;
 }
@@ -249,6 +249,33 @@ const VOLUME_SCENE_PRESETS = {
     windStrength: 0,
     windAngle: 0,
     windHeight: 0.15,
+  },
+  preheat_plume: {
+    density: 3.20,
+    fire: 0.05,
+    smoke: 0.55,
+    raySteps: 128,
+    adaptiveRays: 0,
+    occupancySkip: 0,
+    majorantSkip: 0,
+    majorantSmooth: 0.10,
+    majorantGuard: 0.30,
+    temporalAccum: 0,
+    temporalJitter: 0,
+    historyClamp: 1.00,
+    inputRadius: 0.08,
+    flowRate: 0.14,
+    renderScale: 0.95,
+    fireScale: 0.42,
+    detailScale: 1.00,
+    plumeHeight: 0.70,
+    curl: 2.30,
+    microdetail: 0,
+    interfaceShred: 1.20,
+    fireLicks: 1.25,
+    windStrength: 0,
+    windAngle: 180,
+    windHeight: -0.80,
   },
   bonfire_plume: {
     fireScale: 0.78,
@@ -654,7 +681,7 @@ let expectedPressureProjectionIterations = expectedSpatialPressureTiers ? 3 : ex
 let expectedTallPlumePressureStrategy = expectedSpatialPressureTiers
   ? TALL_PLUME_PRESSURE_ITERATION_STRATEGY_INACTIVE
   : expectedTallPlumePressureIterationStrategy(expectedVolumeScene, expectedPressureIterations);
-let expectedTallPlumePressureTarget = expectedVolumeScene === 'tall_plume' && !expectedSpatialPressureTiers ? 2 : 0;
+let expectedTallPlumePressureTarget = (expectedVolumeScene === 'tall_plume' || expectedVolumeScene === 'preheat_plume') && !expectedSpatialPressureTiers ? 2 : 0;
 let expectedTallPlumePressureTierStrategyValue = expectedTallPlumePressureTierStrategy(expectedVolumeScene, expectedPressureStrategy);
 let expectedPressureProjectionReadStrategy = expectedSpatialPressureTiers
   ? PRESSURE_PROJECTION_READ_STRATEGY_COMPOSITE
@@ -822,7 +849,7 @@ const expectedPreheatStrength = expectedLifecycleEffect === 'preheat'
 const expectedFlameQuenchModel = expectedQuenchVaporStrength > 0 ? 'quench-flame-body-v0' : 'inactive';
 const expectsSnuffVisualEvidence = expectedLifecycleEffect === 'snuff' && expectedQuenchVaporStrength > 0;
 const expectsPreheatVisualEvidence = expectedLifecycleEffect === 'preheat' && expectedPreheatStrength > 0;
-const expectsFuelStarvedTallPlume = expectedVolumeScene === 'tall_plume' && expectedReactionFuelScale <= 0.001;
+const expectsFuelStarvedTallPlume = (expectedVolumeScene === 'tall_plume' || expectedVolumeScene === 'preheat_plume') && expectedReactionFuelScale <= 0.001;
 function expectedBonfireAblationParam(name, fallback = 1, max = 1.5) {
   const requested = Number(routeParams.get(name));
   return routeParams.has(name) && Number.isFinite(requested)
@@ -879,7 +906,7 @@ expectedPressureProjectionIterations = expectedSpatialPressureTiers ? 3 : expect
 expectedTallPlumePressureStrategy = expectedSpatialPressureTiers
   ? TALL_PLUME_PRESSURE_ITERATION_STRATEGY_INACTIVE
   : expectedTallPlumePressureIterationStrategy(expectedVolumeScene, expectedPressureIterations);
-expectedTallPlumePressureTarget = expectedVolumeScene === 'tall_plume' && !expectedSpatialPressureTiers ? 2 : 0;
+expectedTallPlumePressureTarget = (expectedVolumeScene === 'tall_plume' || expectedVolumeScene === 'preheat_plume') && !expectedSpatialPressureTiers ? 2 : 0;
 expectedTallPlumePressureTierStrategyValue = expectedTallPlumePressureTierStrategy(expectedVolumeScene, expectedPressureStrategy);
 expectedPressureProjectionReadStrategy = expectedSpatialPressureTiers
   ? PRESSURE_PROJECTION_READ_STRATEGY_COMPOSITE
@@ -887,7 +914,7 @@ expectedPressureProjectionReadStrategy = expectedSpatialPressureTiers
 const expectedEffectiveTemporalAccum = expectedVolumeScene === 'bonfire_plume'
   ? Math.max(0, Math.min(0.85, expectedTemporalAccum * expectedBonfireTemporal))
   : expectedTemporalAccum;
-const expectedDetailScaleArtifactQuarantine = expectedVolumeScene === 'tall_plume' ? 1 : 0;
+const expectedDetailScaleArtifactQuarantine = expectedVolumeScene === 'tall_plume' || expectedVolumeScene === 'preheat_plume' ? 1 : 0;
 const expectedVisibleDetailOverlayGain = expectedDetailScaleArtifactQuarantine ? 0.35 : 1;
 const expectedExternalEmitterMode = routeParams.get('volume_external_emitters') || '';
 
@@ -1216,7 +1243,7 @@ async function main() {
     assert.ok(Math.abs((state.detailScale ?? 0) - expectedDetailScale) < 0.001, 'effective detail scale state did not match route/control');
     assert.ok(Math.abs((state.detailScaleArtifactQuarantine ?? 0) - expectedDetailScaleArtifactQuarantine) < 0.001, 'detail-scale artifact quarantine state did not match volume scene');
     assert.ok(Math.abs((state.visibleDetailOverlayGain ?? 0) - expectedVisibleDetailOverlayGain) < 0.001, 'visible detail overlay gain did not match detail quarantine policy');
-    if (expectedVolumeScene === 'tall_plume') {
+    if (expectedVolumeScene === 'tall_plume' || expectedVolumeScene === 'preheat_plume') {
       assert.equal(state.tallPlumeDetailFrequencySource, 'fire-scale-decoupled-v0', 'tall-plume detail frequency was not decoupled from Fire Scale');
       assert.equal(state.tallPlumeFlameCutoffContract, 'tall-plume-speed-cutoff-decoupled-v0', 'tall-plume flame cutoff/speed contract was not active');
       assert.equal(state.tallPlumeFlowShelfContract, 'tall-plume-flow-shelf-mitigated-v0', 'tall-plume flow-rate shelf mitigation contract was not active');
@@ -1575,7 +1602,7 @@ async function main() {
     if (!expectsCanonicalPlumeProof && !expectsFuelStarvedTallPlume && !expectsNoFireVolumeEvidence && (!Number.isFinite(sample.simReadback.radianceMean) || sample.simReadback.radianceMean <= 0.0005)) {
       throw new Error(`GPU sim readback does not show fire radiance evidence: ${JSON.stringify(sample.simReadback)}`);
     }
-    if (expectedVolumeScene === 'tall_plume') {
+    if (expectedVolumeScene === 'tall_plume' || expectedVolumeScene === 'preheat_plume') {
       if (
         !Number.isFinite(sample.simReadback.fuelMean) ||
         !Number.isFinite(sample.simReadback.reactionMean) ||

@@ -431,6 +431,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 .ray-budget-presets .btn { margin: 0; padding: 5px 0; text-align: center; }
 #kaminos-volume-canvas { position: absolute; left: -10000px; top: -10000px; width: 1px; height: 1px; opacity: 0; pointer-events: none; background: #050607; }
 #kaminos-volume-canvas.active { left: 0; top: 0; width: 100%; height: 100%; opacity: 1; z-index: 3; }
+#viewport.volume-scene-context-active #kaminos-volume-canvas.active { opacity: 1; mix-blend-mode: screen; }
 
 /* Motion agency */
 .motion-readout { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 8px; }
@@ -974,6 +975,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
         <option value="compact_plume" selected>Compact plume</option>
         <option value="canonical_plume">Canonical plume</option>
         <option value="tall_plume">Tall plume</option>
+        <option value="preheat_plume">Preheat plume</option>
         <option value="bonfire_plume">Bonfire plume</option>
       </select>
       <span class="slider-val" id="volume-scene-val">compact</span>
@@ -9417,6 +9419,42 @@ const VOLUME_SCENE_PRESETS = {
     canonicalCenterline: 1.00,
     canonicalBodyBalance: 0.00,
   },
+  preheat_plume: {
+    label: 'preheat',
+    density: 3.20,
+    fire: 0.05,
+    radiance: 0.60,
+    absorption: 1.15,
+    glow: 0.80,
+    smoke: 0.55,
+    curl: 2.30,
+    microdetail: 0.00,
+    interfaceShred: 1.20,
+    fireLicks: 1.25,
+    projection: 0.25,
+    speed: 4.20,
+    raySteps: 128,
+    adaptiveRays: 0.00,
+    occupancySkip: 0.00,
+    majorantSkip: 0.00,
+    majorantSmooth: 0.10,
+    majorantGuard: 0.30,
+    temporalAccum: 0.00,
+    temporalJitter: 0.00,
+    historyClamp: 1.00,
+    inputRadius: 0.08,
+    flowRate: 0.14,
+    fireScale: 0.42,
+    detailScale: 1.00,
+    plumeHeight: 0.70,
+    windStrength: 0.00,
+    windAngle: 180,
+    windHeight: -0.80,
+    renderScale: 0.95,
+    canonicalSpread: 1.00,
+    canonicalCenterline: 1.00,
+    canonicalBodyBalance: 0.00,
+  },
   bonfire_plume: {
     label: 'bonfire',
     density: 4.80,
@@ -14428,16 +14466,16 @@ function createVolumeProceduralStoneTexture() {
   canvas.width = 512;
   canvas.height = 512;
   const ctx = canvas.getContext('2d');
-  ctx.fillStyle = '#252422';
+  ctx.fillStyle = '#3f3b35';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
   for (let y = 0; y < canvas.height; y += 64) {
     const stagger = (Math.floor(y / 64) % 2) * 52;
     for (let x = -stagger; x < canvas.width; x += 104) {
-      const shade = 32 + ((x * 17 + y * 11) & 31);
-      ctx.fillStyle = `rgb(${shade + 10}, ${shade + 8}, ${shade + 5})`;
+      const shade = 52 + ((x * 17 + y * 11) & 39);
+      ctx.fillStyle = `rgb(${shade + 16}, ${shade + 13}, ${shade + 8})`;
       ctx.fillRect(x + 2, y + 2, 100, 60);
-      ctx.strokeStyle = 'rgba(130,122,105,0.18)';
+      ctx.strokeStyle = 'rgba(210,198,165,0.24)';
       ctx.lineWidth = 2;
       ctx.strokeRect(x + 2, y + 2, 100, 60);
     }
@@ -14447,7 +14485,7 @@ function createVolumeProceduralStoneTexture() {
     const x = (i * 73) % canvas.width;
     const y = (i * 151) % canvas.height;
     const a = 0.04 + ((i * 19) % 40) / 1000;
-    ctx.fillStyle = i % 3 === 0 ? `rgba(230,210,170,${a})` : `rgba(0,0,0,${a})`;
+    ctx.fillStyle = i % 3 === 0 ? `rgba(235,218,178,${a})` : `rgba(10,9,8,${a})`;
     ctx.fillRect(x, y, 1 + (i % 3), 1 + ((i * 7) % 3));
   }
 
@@ -14475,21 +14513,21 @@ function createVolumeStoneTestContext() {
   const stoneTexture = createVolumeProceduralStoneTexture();
   const stoneMaterial = new THREE.MeshBasicMaterial({
     map: stoneTexture,
-    color: new THREE.Color(0xb0a68f),
+    color: new THREE.Color(0xffffff),
     toneMapped: false,
   });
   stoneMaterial.name = 'procedural-stone-visible-test-v0';
 
   const floorMaterial = stoneMaterial.clone();
   floorMaterial.name = 'procedural-stone-visible-test-v0-floor';
-  floorMaterial.color = new THREE.Color(0x9b7d50);
+  floorMaterial.color = new THREE.Color(0x8f6736);
 
-  const backWall = new THREE.Mesh(new THREE.BoxGeometry(7.2, 5.4, 0.08), stoneMaterial);
+  const backWall = new THREE.Mesh(new THREE.BoxGeometry(9.0, 6.8, 0.08), stoneMaterial);
   backWall.name = 'volume-scene-context-stone-test-back-wall-v0';
-  backWall.position.set(0, 0.65, -1.55);
+  backWall.position.set(0, 0.50, -1.10);
   group.add(backWall);
 
-  const floor = new THREE.Mesh(new THREE.BoxGeometry(4.8, 0.08, 2.6), floorMaterial);
+  const floor = new THREE.Mesh(new THREE.BoxGeometry(6.2, 0.08, 3.2), floorMaterial);
   floor.name = 'volume-scene-context-stone-test-floor-v0';
   floor.position.set(0, -0.85, -0.45);
   group.add(floor);
@@ -14518,6 +14556,7 @@ function createVolumeStoneTestContext() {
     setMode(mode) {
       const effectiveContext = normalizeVolumeSceneContext(mode);
       group.visible = effectiveContext === 'stone_test';
+      viewport.classList.toggle('volume-scene-context-active', group.visible);
       group.userData.kaminosVolumeSceneContext.effectiveContext = effectiveContext;
       window._kaminosDirty?.();
       return effectiveContext;
@@ -14538,6 +14577,7 @@ function createVolumeStoneTestContext() {
       };
     },
     dispose() {
+      viewport.classList.remove('volume-scene-context-active');
       scene.remove(group);
       group.traverse(child => {
         if (child.geometry) child.geometry.dispose();
@@ -14585,8 +14625,10 @@ function createVolumeMainRendererBridge() {
     update() {
       const state = volumePrototype.debugState();
       const active = !!state.active;
-      mesh.visible = active;
+      const sceneContextActive = volumeSceneContext?.debugState?.()?.visible === true;
+      mesh.visible = active && !sceneContextActive;
       if (!active) return false;
+      if (sceneContextActive) return true;
       const requestedFilter = state.volumeReconstructionStyle === 'nearest-css-upscale' ? THREE.NearestFilter : THREE.LinearFilter;
       if (sourceTexture.magFilter !== requestedFilter || sourceTexture.minFilter !== requestedFilter) {
         sourceTexture.magFilter = requestedFilter;
@@ -14610,6 +14652,7 @@ function createVolumeMainRendererBridge() {
         meshName: mesh.name,
         renderOrder: mesh.renderOrder,
         composition: mesh.userData.kaminosVolumeBridge.composition,
+        sceneContextBridgeBypass: volumeSceneContext?.debugState?.()?.visible === true,
         sceneContext: volumeSceneContext?.debugState?.() || null,
         volumeReconstructionStyle: volumePrototype?.debugState?.()?.volumeReconstructionStyle || null,
         textureFilter: sourceTexture.magFilter === THREE.NearestFilter ? 'nearest' : 'linear',
