@@ -280,7 +280,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 #finger-juice-host-overlay-body { margin-top: 5px; font: 10px 'SF Mono', monospace; color: #d4ecf3; overflow-wrap: anywhere; }
 
 /* Native Glove Well host */
-.glove-well-host-readout { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 8px; margin-top: 8px; }
+.glove-well-host-readout { display: grid; grid-template-columns: 1fr; gap: 4px 8px; margin-top: 8px; }
 .glove-well-host-readout .field { margin: 0; padding: 0; }
 .glove-well-host-downgrades { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
 .glove-well-host-chip { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border: 1px solid #3f4630; color: #f0d279; background: #1f210e; border-radius: 5px; padding: 3px 6px; font: 9px 'SF Mono', monospace; }
@@ -1108,10 +1108,12 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
       <div class="field"><span class="field-key">Host</span><span class="field-val">kaminos/glove-well-host</span></div>
       <div class="field"><span class="field-key">Packet</span><span class="field-val" id="glove-well-host-packet-schema">lerms.glove-well-host-packet.v0</span></div>
       <div class="field"><span class="field-key">Source</span><span class="field-val" id="glove-well-host-packet-url">pending</span></div>
-      <div class="field"><span class="field-key">Mode</span><span class="field-val present">packet snapshot</span></div>
+      <div class="field"><span class="field-key">Mode</span><span class="field-val present" id="glove-well-host-mode">packet snapshot</span></div>
       <div class="field"><span class="field-key">Status</span><span class="field-val" id="glove-well-host-load-status">waiting for packet</span></div>
       <div class="volume-actions">
         <button class="btn" id="glove-well-host-load">Reload Packet</button>
+        <button class="btn" id="glove-well-host-live-start">Start Live</button>
+        <button class="btn" id="glove-well-host-live-stop" disabled>Stop Live</button>
       </div>
     </div>
     <div class="panel glove-well-host-readout">
@@ -1590,6 +1592,8 @@ let fingerJuiceHostState = {
 let fingerJuiceHostRouteInitialized = false;
 const GLOVE_WELL_HOST_DEFAULT_ROOT = 'scratch';
 const GLOVE_WELL_HOST_DEFAULT_PATH = 'greedy-glove-well-host-packet-0701.json';
+const GLOVE_WELL_HOST_DEFAULT_LIVE_URL = 'http://127.0.0.1:5176/__lerms/glove-well-host-packet/live';
+const GLOVE_WELL_HOST_DEFAULT_POLL_MS = 140;
 const GLOVE_WELL_HOST_DEFAULT_URL = `/api/read?${new URLSearchParams({
   root: GLOVE_WELL_HOST_DEFAULT_ROOT,
   path: GLOVE_WELL_HOST_DEFAULT_PATH,
@@ -1611,9 +1615,18 @@ let gloveWellHostState = {
   lermDesireHints: [],
   downgrades: ['local_browser_smoke_not_native_kaminos_host', 'visual_capture_not_source_truth'],
   rejectedDebugSurfaces: [],
+  routeMode: 'default_root_path',
+  live: {
+    enabled: false,
+    url: GLOVE_WELL_HOST_DEFAULT_LIVE_URL,
+    pollMs: GLOVE_WELL_HOST_DEFAULT_POLL_MS,
+    sampleCount: 0,
+    lastError: null,
+  },
   error: null,
 };
 let gloveWellHostRouteInitialized = false;
+let gloveWellHostLiveTimer = null;
 let volumePrimitives = [];
 let sceneObjects = [];
 let sceneGroups = [];
@@ -8211,6 +8224,16 @@ function gloveWellHostRouteFromParams(params = new URLSearchParams(window.locati
   };
 }
 
+function gloveWellHostLiveRouteFromParams(params = new URLSearchParams(window.location.search)) {
+  const liveUrl = params.get('glove_well_host_live_url') || GLOVE_WELL_HOST_DEFAULT_LIVE_URL;
+  const pollMs = Math.max(60, Number(params.get('glove_well_host_poll_ms') || GLOVE_WELL_HOST_DEFAULT_POLL_MS));
+  return {
+    url: liveUrl,
+    mode: 'live_url',
+    pollMs: Number.isFinite(pollMs) ? pollMs : GLOVE_WELL_HOST_DEFAULT_POLL_MS,
+  };
+}
+
 async function loadGloveWellHostPacketFromUrl(url) {
   const response = await fetch(url, { cache: 'no-store' });
   if (!response.ok) throw new Error(`Glove Well host packet fetch failed ${response.status}: ${url}`);
@@ -8223,12 +8246,25 @@ function updateGloveWellHostReadout() {
   if (!sourceAuthorityEl) return;
   document.getElementById('glove-well-host-packet-schema').textContent = state.packetSchema || LERMS_GLOVE_WELL_HOST_PACKET_SCHEMA;
   document.getElementById('glove-well-host-packet-url').textContent = state.effectiveUrl || 'pending';
+  const liveActive = state.live?.enabled === true || state.status === 'live' || state.status === 'live-loading';
+  const modeEl = document.getElementById('glove-well-host-mode');
   const loadButton = document.getElementById('glove-well-host-load');
+  const liveStartButton = document.getElementById('glove-well-host-live-start');
+  const liveStopButton = document.getElementById('glove-well-host-live-stop');
   const loadStatus = document.getElementById('glove-well-host-load-status');
-  if (loadButton) loadButton.disabled = state.status === 'loading';
+  if (modeEl) modeEl.textContent = liveActive ? 'live packet stream' : 'packet snapshot';
+  if (loadButton) loadButton.disabled = state.status === 'loading' || state.status === 'live-loading' || liveActive;
+  if (liveStartButton) liveStartButton.disabled = liveActive;
+  if (liveStopButton) liveStopButton.disabled = !liveActive;
   if (loadStatus) {
-    if (state.status === 'loading') {
+    if (state.status === 'loading' || state.status === 'live-loading') {
       loadStatus.textContent = 'Loading packet';
+      loadStatus.classList.add('present');
+      loadStatus.classList.remove('missing');
+    } else if (state.status === 'live') {
+      const primitiveCount = state.surface?.primitiveCount ?? state.surface?.primitives?.length ?? 0;
+      const sequence = state.source?.sequence ?? 'none';
+      loadStatus.textContent = `Live polling · ${primitiveCount} primitives · seq ${sequence}`;
       loadStatus.classList.add('present');
       loadStatus.classList.remove('missing');
     } else if (state.status === 'loaded') {
@@ -8384,32 +8420,99 @@ function kaminosGloveWellHostDebugState() {
   return gloveWellHostState;
 }
 
-async function loadGloveWellHostPacket(route = gloveWellHostRouteFromParams()) {
+function stopGloveWellHostLivePolling() {
+  if (gloveWellHostLiveTimer) {
+    window.clearInterval(gloveWellHostLiveTimer);
+    gloveWellHostLiveTimer = null;
+  }
   gloveWellHostState = {
     ...gloveWellHostState,
-    status: 'loading',
+    status: gloveWellHostState.status === 'live' || gloveWellHostState.status === 'live-loading' ? 'loaded' : gloveWellHostState.status,
+    live: {
+      ...(gloveWellHostState.live || {}),
+      enabled: false,
+    },
+  };
+  updateGloveWellHostReadout();
+  drawGloveWellHostPreview();
+  return gloveWellHostState;
+}
+
+async function startGloveWellHostLivePolling(route = gloveWellHostLiveRouteFromParams()) {
+  if (gloveWellHostLiveTimer) window.clearInterval(gloveWellHostLiveTimer);
+  const pollMs = Math.max(60, Number(route.pollMs || GLOVE_WELL_HOST_DEFAULT_POLL_MS));
+  gloveWellHostState = {
+    ...gloveWellHostState,
+    status: 'live-loading',
     effectiveUrl: route.url,
+    routeMode: 'live_url',
+    live: {
+      enabled: true,
+      url: route.url,
+      pollMs,
+      sampleCount: gloveWellHostState.live?.sampleCount || 0,
+      lastError: null,
+    },
+    error: null,
+  };
+  updateGloveWellHostReadout();
+  const poll = () => {
+    loadGloveWellHostPacket({ ...route, pollMs, mode: 'live_url' }, { livePoll: true })
+      .catch(error => console.error('Glove Well host live poll failed:', error));
+  };
+  await loadGloveWellHostPacket({ ...route, pollMs, mode: 'live_url' }, { livePoll: true });
+  gloveWellHostLiveTimer = window.setInterval(poll, pollMs);
+  return gloveWellHostState;
+}
+
+async function loadGloveWellHostPacket(route = gloveWellHostRouteFromParams(), options = {}) {
+  if (!options.livePoll && gloveWellHostLiveTimer) stopGloveWellHostLivePolling();
+  gloveWellHostState = {
+    ...gloveWellHostState,
+    status: options.livePoll ? 'live-loading' : 'loading',
+    effectiveUrl: route.url,
+    routeMode: route.mode,
+    live: {
+      ...(gloveWellHostState.live || {}),
+      enabled: options.livePoll === true,
+      url: options.livePoll ? route.url : gloveWellHostState.live?.url || GLOVE_WELL_HOST_DEFAULT_LIVE_URL,
+      pollMs: options.livePoll ? route.pollMs || GLOVE_WELL_HOST_DEFAULT_POLL_MS : gloveWellHostState.live?.pollMs || GLOVE_WELL_HOST_DEFAULT_POLL_MS,
+      lastError: null,
+    },
     error: null,
   };
   updateGloveWellHostReadout();
   try {
     const packet = await loadGloveWellHostPacketFromUrl(route.url);
     gloveWellHostPacket = packet;
+    const sampleCount = options.livePoll ? (gloveWellHostState.live?.sampleCount || 0) + 1 : gloveWellHostState.live?.sampleCount || 0;
     gloveWellHostState = {
       ...createGloveWellHostState(packet, { effectiveUrl: route.url }),
-      status: 'loaded',
+      status: options.livePoll ? 'live' : 'loaded',
       routeMode: route.mode,
+      live: {
+        enabled: options.livePoll === true,
+        url: options.livePoll ? route.url : gloveWellHostState.live?.url || GLOVE_WELL_HOST_DEFAULT_LIVE_URL,
+        pollMs: options.livePoll ? route.pollMs || GLOVE_WELL_HOST_DEFAULT_POLL_MS : gloveWellHostState.live?.pollMs || GLOVE_WELL_HOST_DEFAULT_POLL_MS,
+        sampleCount,
+        lastError: null,
+      },
       error: null,
     };
-    publishKaminosHostSurfaceState(gloveWellHostState, 'loaded');
+    publishKaminosHostSurfaceState(gloveWellHostState, options.livePoll ? 'live' : 'loaded');
     updateGloveWellHostReadout();
     drawGloveWellHostPreview();
-    setInfo(`Glove Well host packet loaded: ${gloveWellHostState.sourceAuthority} · ${gloveWellHostState.surface?.primitiveCount || 0} primitives`);
+    setInfo(`Glove Well host packet ${options.livePoll ? 'live' : 'loaded'}: ${gloveWellHostState.sourceAuthority} · ${gloveWellHostState.surface?.primitiveCount || 0} primitives`);
     return gloveWellHostState;
   } catch (error) {
     gloveWellHostState = {
       ...gloveWellHostState,
       status: 'error',
+      live: {
+        ...(gloveWellHostState.live || {}),
+        enabled: options.livePoll === true,
+        lastError: String(error?.message || error),
+      },
       error: String(error?.message || error),
     };
     publishKaminosHostSurfaceState(gloveWellHostState, 'error');
@@ -8719,15 +8822,27 @@ function initKaminosGloveWellHostRoute() {
   document.getElementById('glove-well-host-load').addEventListener('click', () => {
     loadGloveWellHostPacket(gloveWellHostRouteFromParams()).catch(error => console.error('Glove Well host load failed:', error));
   });
+  document.getElementById('glove-well-host-live-start').addEventListener('click', () => {
+    startGloveWellHostLivePolling(gloveWellHostLiveRouteFromParams()).catch(error => console.error('Glove Well host live start failed:', error));
+  });
+  document.getElementById('glove-well-host-live-stop').addEventListener('click', () => {
+    stopGloveWellHostLivePolling();
+  });
   window.kaminosGloveWellHostDebugState = kaminosGloveWellHostDebugState;
   window.__kaminosGloveWellHostDebugState = kaminosGloveWellHostDebugState;
   window.kaminosLoadGloveWellHostPacket = loadGloveWellHostPacket;
+  window.kaminosStartGloveWellHostLivePolling = startGloveWellHostLivePolling;
+  window.kaminosStopGloveWellHostLivePolling = stopGloveWellHostLivePolling;
   window.addEventListener('resize', drawGloveWellHostPreview);
   updateGloveWellHostReadout();
   drawGloveWellHostPreview();
   if (params.get('kaminos_glove_well_host') === '1') {
     setActiveTab('glove-well-host');
-    loadGloveWellHostPacket(gloveWellHostRouteFromParams(params)).catch(error => console.error('Glove Well host route load failed:', error));
+    if (params.get('glove_well_host_live_url')) {
+      startGloveWellHostLivePolling(gloveWellHostLiveRouteFromParams(params)).catch(error => console.error('Glove Well host live route failed:', error));
+    } else {
+      loadGloveWellHostPacket(gloveWellHostRouteFromParams(params)).catch(error => console.error('Glove Well host route load failed:', error));
+    }
   }
 }
 
