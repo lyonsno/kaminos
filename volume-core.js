@@ -6,6 +6,7 @@ const SUPPORTED_GRID_SIZES = [32, 48, 64, 96, 128, 160];
 const FLUID_SLOTS_PER_CELL = 4;
 const FLUID_COMPONENTS = FLUID_SLOTS_PER_CELL * 4;
 const CADENCE_NATIVE_CONTINUATION_IDENTITY = 'cadence-native-field-continuation-v0';
+const CADENCE_LIVE_ANCHOR_HISTORY_BRIDGE_IDENTITY = 'cadence-live-anchor-history-bridge-v0';
 const DEFAULT_MAJORANT_GRID_SIZE = 48;
 const SUPPORTED_MAJORANT_GRID_SIZES = [24, 32, 48];
 const MAX_EXTERNAL_EMITTERS = 32;
@@ -789,6 +790,23 @@ fn temporalHistoryWeight(current: vec3<f32>, history: vec3<f32>, confidence: f32
   return temporalAccum * confidence * currentSupport * smokeHistoryGain * fadingTrailReject * (1.0 - reactiveMask) * materialProtection * (1.0 - hotMismatch * 0.82) * (1.0 - colorMismatch * 0.70);
 }
 
+fn cadenceLiveAnchorHistoryBridge(current: vec3<f32>, history: vec3<f32>, clampedHistory: vec3<f32>, historyUvValid: f32, materialTemporalWeights: vec4<f32>) -> f32 {
+  let cadencePhase = clamp(u.cadence_controls.x, 0.0, 1.0);
+  let simCadence = max(1.0, u.cadence_controls.z);
+  let liveAnchor = step(1.5, simCadence) * (1.0 - step(0.001, cadencePhase)) * historyUvValid;
+  let currentLuma = dot(current, vec3<f32>(0.2126, 0.7152, 0.0722));
+  let historyLuma = dot(clampedHistory, vec3<f32>(0.2126, 0.7152, 0.0722));
+  let historyBrightLift = smoothstep(0.006, 0.075, historyLuma - currentLuma);
+  let currentHot = max(current.r, current.g);
+  let historyHot = max(history.r, history.g);
+  let hotOvershootGuard = 1.0 - smoothstep(0.12, 0.48, max(0.0, historyHot - currentHot));
+  let colorGuard = 1.0 - smoothstep(0.080, 0.280, length(history - current));
+  let smokeTrust = materialTemporalWeights.x;
+  let fireProtect = materialTemporalWeights.y;
+  let bridgeGain = clamp(u.temporal_controls.x, 0.0, 0.90) * (0.10 + smokeTrust * 0.13) * (1.0 - fireProtect * 0.36);
+  return liveAnchor * historyBrightLift * colorGuard * hotOvershootGuard * bridgeGain;
+}
+
 fn temporalResolveColor(current: vec3<f32>, sameScreenUv: vec2<f32>, reprojectedUv: vec2<f32>, reprojectionConfidence: f32, reactiveSignal: f32, majorantEdge: f32, historyUvValid: f32, materialTemporalWeights: vec4<f32>) -> vec3<f32> {
   let historyClampStrength = clamp(u.temporal_controls.z, 0.0, 1.0);
   let uv = mix(sameScreenUv, reprojectedUv, smoothstep(0.04, 0.30, reprojectionConfidence) * historyUvValid);
@@ -796,7 +814,9 @@ fn temporalResolveColor(current: vec3<f32>, sameScreenUv: vec2<f32>, reprojected
   let clampedHistory = temporalHistoryClamp(history, current, historyClampStrength);
   let reactiveMask = temporalReactiveMask(current, history, reprojectionConfidence, reactiveSignal, majorantEdge, historyUvValid, materialTemporalWeights);
   let historyWeight = temporalHistoryWeight(current, history, reprojectionConfidence, reactiveMask, materialTemporalWeights);
-  return mix(current, clampedHistory, historyWeight);
+  let anchorBridgeWeight = cadenceLiveAnchorHistoryBridge(current, history, clampedHistory, historyUvValid, materialTemporalWeights);
+  let resolved = mix(current, clampedHistory, historyWeight);
+  return mix(resolved, clampedHistory, anchorBridgeWeight);
 }
 
 fn rotate2(p: vec2<f32>, a: f32) -> vec2<f32> {
@@ -3394,6 +3414,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     cadencePhase: 0,
     framesSinceLiveSim: 0,
     cadenceNativeContinuationIdentity: CADENCE_NATIVE_CONTINUATION_IDENTITY,
+    cadenceLiveAnchorHistoryBridgeIdentity: CADENCE_LIVE_ANCHOR_HISTORY_BRIDGE_IDENTITY,
     simGrid: gridSize,
     simGridLabel: `${gridSize}^3 velocity-material-fire-microdetail-storage-buffer+${FRONT_FIELD_IDENTITY}`,
     gridOverlay: 0,
@@ -4627,6 +4648,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.framesSinceLiveSim = framesSinceLiveSim;
     state.continuationWarp = uniforms[87];
     state.cadenceNativeContinuationIdentity = CADENCE_NATIVE_CONTINUATION_IDENTITY;
+    state.cadenceLiveAnchorHistoryBridgeIdentity = CADENCE_LIVE_ANCHOR_HISTORY_BRIDGE_IDENTITY;
     state.runtimeQualityRequested = normalizeRuntimeQuality(controlsSnapshot.runtimeQualityRequested);
     state.runtimeQualityEffective = normalizeRuntimeQuality(controlsSnapshot.runtimeQualityEffective || controlsSnapshot.runtimeQualityRequested);
     state.gpuPressure = clampFinite(controlsSnapshot.gpuPressure, 0, 1, 0);
@@ -4858,6 +4880,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       framesSinceLiveSim: state.framesSinceLiveSim,
       continuationWarp: state.continuationWarp,
       cadenceNativeContinuationIdentity: state.cadenceNativeContinuationIdentity,
+      cadenceLiveAnchorHistoryBridgeIdentity: state.cadenceLiveAnchorHistoryBridgeIdentity,
       pressureSourceStrategy,
       tallPlumePressureIterationStrategy: tallPlumePressureStrategy,
       tallPlumePressureIterationTarget,
@@ -6114,6 +6137,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         framesSinceLiveSim: state.framesSinceLiveSim,
         continuationWarp: state.continuationWarp,
         cadenceNativeContinuationIdentity: state.cadenceNativeContinuationIdentity,
+        cadenceLiveAnchorHistoryBridgeIdentity: state.cadenceLiveAnchorHistoryBridgeIdentity,
         runtimeQualityRequested: state.runtimeQualityRequested,
         runtimeQualityEffective: state.runtimeQualityEffective,
         gpuPressure: state.gpuPressure,
@@ -6436,6 +6460,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       framesSinceLiveSim: state.framesSinceLiveSim,
       continuationWarp: state.continuationWarp,
       cadenceNativeContinuationIdentity: state.cadenceNativeContinuationIdentity,
+      cadenceLiveAnchorHistoryBridgeIdentity: state.cadenceLiveAnchorHistoryBridgeIdentity,
       runtimeQualityRequested: state.runtimeQualityRequested,
       runtimeQualityEffective: state.runtimeQualityEffective,
       gpuPressure: state.gpuPressure,

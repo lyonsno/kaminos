@@ -257,6 +257,7 @@ function browserCaptureExpression(options) {
         liveSimFrameCount: state.liveSimFrameCount,
         continuationFrameCount: state.continuationFrameCount,
         cadenceNativeContinuationIdentity: state.cadenceNativeContinuationIdentity,
+        cadenceLiveAnchorHistoryBridgeIdentity: state.cadenceLiveAnchorHistoryBridgeIdentity,
         metrics,
       });
       previousFrameCount = state.frameCount;
@@ -455,6 +456,7 @@ function writeGapBundle({ capture, report }) {
     effectiveFinalVisualAuthority: report.effectiveVisualAuthority,
     continuationAuthority: report.continuationAuthority,
     cadenceNativeContinuationIdentity: report.cadenceNativeContinuationIdentity,
+    cadenceLiveAnchorHistoryBridgeIdentity: report.cadenceLiveAnchorHistoryBridgeIdentity,
     authorityBoundary: {
       liveSimAnchorAuthority: 'live-sim-anchor',
       continuationTargetAuthority: 'continuation-target-from-latest-live-field',
@@ -495,6 +497,7 @@ function writeGapBundle({ capture, report }) {
       cadencePhase: frame.cadencePhase,
       framesSinceLiveSim: frame.framesSinceLiveSim,
       cadenceNativeContinuationIdentity: frame.cadenceNativeContinuationIdentity,
+      cadenceLiveAnchorHistoryBridgeIdentity: frame.cadenceLiveAnchorHistoryBridgeIdentity,
       metrics: frame.metrics,
     })),
     diagnostics: {
@@ -562,6 +565,7 @@ async function main() {
     if (expectedSimCadence > 1) {
       assert.equal(state.effectiveVisualAuthority, 'continuation', 'low-cadence route must expose continuation authority');
       assert.equal(state.cadenceNativeContinuationIdentity, 'cadence-native-field-continuation-v0', 'cadence-native continuation identity is missing');
+      assert.equal(state.cadenceLiveAnchorHistoryBridgeIdentity, 'cadence-live-anchor-history-bridge-v0', 'cadence live-anchor bridge identity is missing');
     }
 
     phase = 'filmstrip-capture';
@@ -627,6 +631,7 @@ async function main() {
       blankFrameCount,
       duplicatePixelFrameCount,
       cadenceNativeContinuationIdentity: capture.finalState?.cadenceNativeContinuationIdentity,
+      cadenceLiveAnchorHistoryBridgeIdentity: capture.finalState?.cadenceLiveAnchorHistoryBridgeIdentity,
       effectiveVisualAuthority: capture.finalState?.effectiveVisualAuthority,
       continuationAuthority: capture.finalState?.continuationAuthority,
       temporalPolicy: capture.finalState?.temporalPolicy,

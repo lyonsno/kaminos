@@ -23,7 +23,7 @@ assert.match(index, /VOLUME_PRIMITIVE_SCHEMA/, 'scene data names the volume prim
 assert.match(index, /volumePrimitives/, 'scene data persists authored volume primitives');
 assert.match(index, /setVolumePrimitivesState/, 'scene loading can restore authored volume primitives');
 assert.match(index, /volume-core\.js/, 'index imports the volume prototype module');
-assert.match(index, /volume-core\.js\?v=routed-pressure-label-0628/, 'volume prototype import carries a cache key when pressure-label semantics change');
+assert.match(index, /volume-core\.js\?v=cadence-live-anchor-bridge-0702/, 'volume prototype import carries a cache key when cadence bridge semantics change');
 assert.match(index, /id="volume-render-source-orientation"/, 'Volume tab exposes render/source orientation identity for operator smoke');
 assert.match(index, /id="volume-canonical-render-mode-state"/, 'Volume tab exposes effective canonical render diagnostic mode for operator smoke');
 assert.match(index, /id="volume-canonical-motion-mode-state"/, 'Volume tab exposes effective canonical motion diagnostic mode for operator smoke');
@@ -466,6 +466,10 @@ assert.match(core, /CADENCE_NATIVE_CONTINUATION_MAX_WARP/, 'cadence continuation
 assert.match(core, /CADENCE_NATIVE_CONTINUATION_STEP_PER_HELD_FRAME/, 'cadence continuation warp advances by held render frame instead of plateauing inside a cadence cycle');
 assert.match(core, /cadenceNativeContinuationPoint\(p,\s*initialState\.xyz,\s*cadenceRenderContinuationMask\)/, 'compact plume render continuation must use the cadence continuation mask rather than a tall-plume-only gate');
 assert.match(core, /sampleWorldVelocity\(continuedP\)/, 'fragment raymarch samples held fields through the cadence continuation point');
+assert.match(core, /CADENCE_LIVE_ANCHOR_HISTORY_BRIDGE_IDENTITY/, 'cadence live-anchor history bridge has a stable identity');
+assert.match(core, /cadenceLiveAnchorHistoryBridge/, 'fragment shader names the cadence live-anchor history bridge');
+assert.match(core, /u\.cadence_controls\.x[\s\S]{0,360}historyBrightLift/, 'live-anchor bridge is gated by cadence phase and brighter recent history');
+assert.match(core, /state\.cadenceLiveAnchorHistoryBridgeIdentity/, 'debug state records cadence live-anchor bridge identity');
 assert.match(core, /effectiveVisualAuthority:\s*state\.effectiveVisualAuthority/, 'sampleFrame preserves effective visual authority in witness readback');
 assert.match(core, /simCostLedger[\s\S]*simCadence/, 'sim cost ledger records requested/effective simulation cadence identity');
 assert.match(core, /gridOverlay/, 'fluid renderer exposes grid overlay state');
@@ -1223,6 +1227,7 @@ assert.match(witness, /fullGridPassBreakdown/, 'witness reports pass-level full-
 assert.match(witness, /cadencePhase/, 'witness reports cadence phase for cadence-native continuation authority');
 assert.match(witness, /framesSinceLiveSim/, 'witness reports held render frames since the most recent live sim step');
 assert.match(witness, /cadenceNativeContinuationIdentity/, 'witness reports the stable cadence-native continuation identity');
+assert.match(witness, /cadenceLiveAnchorHistoryBridgeIdentity/, 'witness reports the cadence live-anchor history bridge identity');
 assert.match(witness, /expectedContinuationWarp/, 'witness verifies held-frame continuation warp route/control identity');
 assert.match(witness, /performance-volume-signal/, 'witness has a performance visual-evidence mode that does not confuse low-fire measurement frames with missing output');
 assert.match(witness, /low-fire-performance-evidence/, 'performance witness preserves low-fire visual frames as warnings instead of failing before primary cost reports');
@@ -1245,6 +1250,7 @@ assert.match(filmstripWitness, /captureFailurePhase/, 'filmstrip failure reports
 assert.match(filmstripWitness, /effectiveRoute/, 'filmstrip witness records effective route identity');
 assert.match(filmstripWitness, /backend/, 'filmstrip witness records effective backend identity');
 assert.match(filmstripWitness, /cadenceNativeContinuationIdentity/, 'filmstrip witness preserves cadence-native continuation identity');
+assert.match(filmstripWitness, /cadenceLiveAnchorHistoryBridgeIdentity/, 'filmstrip witness preserves cadence live-anchor bridge identity');
 assert.match(filmstripWitness, /temporalPolicy/, 'filmstrip witness preserves temporal/history policy identity');
 assert.match(filmstripWitness, /temporalAccum:\s*state\.temporalAccum/, 'filmstrip witness records per-frame effective temporal accumulation');
 assert.match(filmstripWitness, /frameDeltas/, 'filmstrip witness reports render frame deltas between captured frames');

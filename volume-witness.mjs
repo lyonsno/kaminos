@@ -1123,6 +1123,7 @@ async function main() {
       assert.ok(Number.isFinite(state.cadencePhase), 'cadence-native continuation phase did not reach debug state');
       assert.ok(Number.isFinite(state.framesSinceLiveSim), 'cadence-native held-frame count did not reach debug state');
       assert.equal(state.cadenceNativeContinuationIdentity, 'cadence-native-field-continuation-v0', 'cadence-native continuation identity is missing');
+      assert.equal(state.cadenceLiveAnchorHistoryBridgeIdentity, 'cadence-live-anchor-history-bridge-v0', 'cadence live-anchor bridge identity is missing');
     }
     assert.equal(state.majorantBuilt, true, 'coarse majorant field was not built before witness');
     const effectiveFireLicks = state.controls?.fireLicks ?? expectedFireLicks;
@@ -1919,6 +1920,7 @@ async function main() {
       continuationWarp: sample.continuationWarp,
       expectedContinuationWarp,
       cadenceNativeContinuationIdentity: sample.cadenceNativeContinuationIdentity,
+      cadenceLiveAnchorHistoryBridgeIdentity: sample.cadenceLiveAnchorHistoryBridgeIdentity,
       tallPlumeReactionCadenceDebug: sample.tallPlumeReactionCadenceDebug,
       tallPlumeFlameCutoffContract: sample.tallPlumeFlameCutoffContract,
       tallPlumeFlowShelfContract: sample.tallPlumeFlowShelfContract,
