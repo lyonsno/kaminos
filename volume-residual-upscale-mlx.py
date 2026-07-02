@@ -72,6 +72,30 @@ class HybridResidualUpscaler(nn.Module):
         return mx.clip(base_image + (direct_residual + detail_residual) * 0.25, 0.0, 1.0)
 
 
+class GatedDetailResidualUpscaler(nn.Module):
+    def __init__(self, hidden_channels, input_channels, detail_gate):
+        super().__init__()
+        self.detailGate = float(detail_gate)
+        self.direct_output = nn.Conv2d(input_channels, 3, kernel_size=3, padding=1)
+        self.detail_input = nn.Conv2d(input_channels, hidden_channels, kernel_size=3, padding=1)
+        self.detail_mid_a = nn.Conv2d(hidden_channels, hidden_channels, kernel_size=3, padding=1)
+        self.detail_mid_b = nn.Conv2d(hidden_channels, hidden_channels, kernel_size=3, padding=1)
+        self.detail_output = nn.Conv2d(hidden_channels, 3, kernel_size=3, padding=1)
+        self.direct_output.weight = mx.zeros_like(self.direct_output.weight)
+        self.direct_output.bias = mx.zeros_like(self.direct_output.bias)
+        self.detail_output.weight = mx.zeros_like(self.detail_output.weight)
+        self.detail_output.bias = mx.zeros_like(self.detail_output.bias)
+
+    def __call__(self, image):
+        base_image = image[..., :3]
+        direct_residual = self.direct_output(image)
+        detail = nn.relu(self.detail_input(image))
+        detail = nn.relu(self.detail_mid_a(detail))
+        detail = nn.relu(self.detail_mid_b(detail))
+        detail_residual = self.detail_output(detail) * self.detailGate
+        return mx.clip(base_image + (direct_residual + detail_residual) * 0.25, 0.0, 1.0)
+
+
 def parse_args():
     parser = argparse.ArgumentParser(description="Tiny MLX residual-upscale smoke for Kaminos frame-locked render pairs.")
     parser.add_argument("--corpus-manifest", required=True, help="Path to corpus-manifest.json from frame-locked render-pair captures.")
@@ -80,8 +104,9 @@ def parse_args():
     parser.add_argument("--max-steps", dest="maxSteps", type=int, default=120, help="Bounded training steps for contention control.")
     parser.add_argument("--batch-size", type=int, default=4)
     parser.add_argument("--patch-size", type=int, default=96)
-    parser.add_argument("--model-arch", dest="modelArch", choices=["tiny-conv", "direct-residual", "hybrid-residual"], default="tiny-conv")
+    parser.add_argument("--model-arch", dest="modelArch", choices=["tiny-conv", "direct-residual", "hybrid-residual", "gated-detail-residual"], default="tiny-conv")
     parser.add_argument("--hidden-channels", type=int, default=16)
+    parser.add_argument("--detail-residual-gate", dest="detailResidualGate", type=float, default=2.0, help="Fixed multiplier for the hidden detail residual in gated-detail-residual probes.")
     parser.add_argument("--learning-rate", type=float, default=1e-3)
     parser.add_argument("--eval-patches", type=int, default=64)
     parser.add_argument("--preview-size", type=int, default=384)
@@ -689,6 +714,8 @@ def main():
         raise ValueError("--temporal-loss-weight must be non-negative")
     if args.residualTemporalLossWeight < 0:
         raise ValueError("--residual-temporal-loss-weight must be non-negative")
+    if args.detailResidualGate < 0:
+        raise ValueError("--detail-residual-gate must be non-negative")
     if args.residualContinuationAlpha < 0 or args.residualContinuationAlpha > 1:
         raise ValueError("--residual-continuation-alpha must be between 0 and 1")
     out_dir = Path(args.out_dir)
@@ -704,8 +731,10 @@ def main():
         model = TinyResidualUpscaler(args.hidden_channels, input_channels)
     elif args.modelArch == "direct-residual":
         model = DirectResidualUpscaler(input_channels)
-    else:
+    elif args.modelArch == "hybrid-residual":
         model = HybridResidualUpscaler(args.hidden_channels, input_channels)
+    else:
+        model = GatedDetailResidualUpscaler(args.hidden_channels, input_channels, args.detailResidualGate)
     optimizer = optim.Adam(learning_rate=args.learning_rate)
     temporalTrainPairCount = len(temporal_pair_candidates(train_items))
     temporalEvalPairCount = len(temporal_pair_candidates(eval_items))
@@ -891,6 +920,7 @@ def main():
         "batchSize": args.batch_size,
         "patchSize": args.patch_size,
         "hiddenChannels": args.hidden_channels,
+        "detailGate": args.detailResidualGate if args.modelArch == "gated-detail-residual" else None,
         "learningRate": args.learning_rate,
         "evalPatches": args.eval_patches,
         "durationSeconds": duration_seconds,
