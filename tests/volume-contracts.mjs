@@ -23,7 +23,7 @@ assert.match(index, /VOLUME_PRIMITIVE_SCHEMA/, 'scene data names the volume prim
 assert.match(index, /volumePrimitives/, 'scene data persists authored volume primitives');
 assert.match(index, /setVolumePrimitivesState/, 'scene loading can restore authored volume primitives');
 assert.match(index, /volume-core\.js/, 'index imports the volume prototype module');
-assert.match(index, /volume-core\.js\?v=pyro-carrier-cockpit-0701/, 'volume prototype import carries a cache key when Pyro material carrier cockpit semantics change');
+assert.match(index, /volume-core\.js\?v=pyro-carrier-loud-diagnostic-0701/, 'volume prototype import carries a cache key when Pyro carrier diagnostics become loudly visible');
 assert.match(index, /id="volume-render-source-orientation"/, 'Volume tab exposes render/source orientation identity for operator smoke');
 assert.match(index, /id="volume-canonical-render-mode-state"/, 'Volume tab exposes effective canonical render diagnostic mode for operator smoke');
 assert.match(index, /id="volume-canonical-motion-mode-state"/, 'Volume tab exposes effective canonical motion diagnostic mode for operator smoke');
@@ -36,6 +36,12 @@ assert.match(index, /id="volume-pyro-smoke-fold"/, 'Pyro cockpit exposes a smoke
 assert.match(index, /darken and fold smoke/i, 'Pyro smoke-fold slider describes the smoke/absorption carrier');
 assert.match(index, /id="volume-pyro-debug-tint"/, 'Pyro cockpit exposes a debug-tint slider');
 assert.match(index, /cyan inspection paint/i, 'Pyro debug-tint slider describes that cyan is an inspection carrier');
+assert.match(index, /id="volume-pyro-carrier-view"/, 'Pyro cockpit exposes a carrier isolate selector');
+assert.match(index, /Bite only/i, 'Pyro carrier isolate selector can show Bite alone');
+assert.match(index, /Fold only/i, 'Pyro carrier isolate selector can show Fold alone');
+assert.match(index, /id="volume-pyro-overdrive"/, 'Pyro cockpit exposes a diagnostic overdrive slider');
+assert.match(index, /make subtle carriers yell/i, 'Pyro overdrive slider describes loud diagnostic purpose');
+assert.match(index, /id="volume-pyro-carrier-state"/, 'Volume readout exposes Pyro carrier diagnostic state');
 assert.match(index, /id="volume-canonical-content-mode-state"/, 'Volume tab exposes effective canonical content mode for smoke/fire separation');
 assert.match(index, /initKaminosVolumeRoute/, 'index initializes the volume route explicitly');
 assert.match(index, /volume_external_emitters/, 'URL route can enable synthetic external volume emitters');
@@ -619,6 +625,7 @@ assert.match(core, /sampleVector4/, 'Pyro material memory exposes normalized RGB
 assert.match(core, /shaderReadiness:\s*resetGate\s*\?\s*'blocked-reset'/, 'Pyro material memory blocks shader consumption while reset gates are active');
 assert.match(core, /pyro_detail_controls:\s*vec4<f32>/, 'WGSL uniforms expose Pyro material-memory controls to the renderer');
 assert.match(core, /pyro_carrier_controls:\s*vec4<f32>/, 'WGSL uniforms expose Pyro material carrier cockpit controls to the renderer');
+assert.match(core, /pyro_diagnostic_controls:\s*vec4<f32>/, 'WGSL uniforms expose Pyro carrier isolate/overdrive diagnostics to the renderer');
 assert.match(core, /pyro_detail_cells:\s*array<vec4<f32>,\s*24>/, 'WGSL uniforms expose the full 8x3 Pyro material-memory cell atlas to the renderer');
 assert.match(core, /pyro-material-memory-render-coupling-v0/, 'debug state names the visible Pyro material-memory renderer coupling identity');
 assert.match(core, /uniforms\[84\]\s*=\s*pyroMaterialGain/, 'CPU uploads Pyro material-memory gain into the WGSL uniform block');
@@ -629,6 +636,11 @@ assert.match(core, /pyroInterfaceFocus/, 'shader gates Pyro memory toward the fl
 assert.match(core, /pyroEdgeBite/, 'shader lets Pyro memory perturb flame edge detail');
 assert.match(core, /pyroSmokeFold/, 'shader lets Pyro memory perturb smoke/absorption carriers');
 assert.match(core, /pyroDebugTint/, 'shader separates cyan debug tint from production-ish carrier effects');
+assert.match(core, /pyroCarrierViewMode/, 'shader can isolate Pyro carrier channels for diagnosis');
+assert.match(core, /pyroCarrierOverdrive/, 'shader can intentionally overdrive subtle Pyro carriers');
+assert.match(core, /pyroBiteAlphaBoost/, 'Bite carrier affects load-bearing flame alpha instead of final color only');
+assert.match(core, /pyroFoldExtinctionBoost/, 'Fold carrier affects load-bearing smoke extinction instead of final color only');
+assert.match(core, /carrierDebug/, 'debug state exposes Pyro carrier diagnostic readout');
 assert.match(core, /pyro-material-memory-spatial-coupling-v0/, 'debug state names the spatial Pyro material-memory renderer coupling identity');
 assert.match(core, /pyroMaterialRequestedGain\s*>\s*0[\s\S]*materialMemory\.shaderReadiness\s*===\s*'sampleable-debug-only'/, 'visible Pyro renderer coupling is gated by material-memory shader readiness');
 assert.match(core, /reactionFuelScale/, 'fluid uniforms carry a route-visible tall-plume fuel/reaction scale');
