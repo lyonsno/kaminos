@@ -1531,6 +1531,8 @@ assert.match(interframeSequenceWitness, /Synthetic odd-frame sequence/, 'interfr
 assert.match(interframeSequenceWitness, /jsonForScript/, 'interframe sequence playback embeds JSON without breaking script-tag parsing');
 assert.match(interframeSequenceWitness, /--render-report/, 'interframe sequence witness can regenerate playback from a completed durable report');
 assert.match(interframeSequenceWitness, /--dense-capture/, 'interframe sequence witness can use render-loop-owned dense capture instead of heavy sampleFrame polling');
+assert.match(interframeSequenceWitness, /--headless/, 'interframe sequence witness can request headless Chrome when non-headless WebGPU route advancement stalls');
+assert.match(interframeSequenceWitness, /headless=new/, 'interframe sequence witness uses Chrome headless-new mode without disabling WebGPU');
 assert.match(interframeSequenceWitness, /maxFrameDelta/, 'interframe sequence witness records and guards dense capture frame deltas');
 assert.match(interframeSequenceWitness, /--dense-preview-width/, 'interframe sequence witness exposes dense capture transport resolution instead of hiding a payload cap');
 assert.match(interframeSequenceWitness, /denseCaptureFrameDeltas/, 'interframe sequence witness preserves dense capture frame delta authority in reports');

@@ -1046,6 +1046,7 @@ const realAnchorParity = args.get('--real-anchor-parity') || DEFAULT_REAL_ANCHOR
 const windowSize = args.get('--window-size') || '1280,960';
 const dryRun = args.has('--dry-run');
 const reuseDebugPort = args.has('--reuse-debug-port');
+const headless = args.has('--headless');
 const denseCapture = args.has('--dense-capture');
 const maxFrameDelta = args.has('--max-frame-delta')
   ? Number(args.get('--max-frame-delta'))
@@ -1117,6 +1118,7 @@ const baseReport = {
   requestedDefaultCandidateId: defaultCandidateId,
   dryRun,
   reuseDebugPort,
+  headless,
   denseCapture,
   maxFrameDelta: Number.isFinite(maxFrameDelta) ? maxFrameDelta : null,
   denseCaptureTimeoutMs,
@@ -1168,7 +1170,7 @@ try {
     const stderrPath = resolve(outDir, 'chrome.stderr.log');
     const stdoutFd = openSync(stdoutPath, 'w');
     const stderrFd = openSync(stderrPath, 'w');
-    proc = spawn(chrome, [
+    const chromeArgs = [
       `--remote-debugging-port=${port}`,
       `--user-data-dir=${userDataDir}`,
       '--no-first-run',
@@ -1177,7 +1179,9 @@ try {
       '--disable-renderer-backgrounding',
       `--window-size=${windowSize}`,
       baseUrl,
-    ], { stdio: ['ignore', stdoutFd, stderrFd] });
+    ];
+    if (headless) chromeArgs.splice(3, 0, '--headless=new');
+    proc = spawn(chrome, chromeArgs, { stdio: ['ignore', stdoutFd, stderrFd] });
     proc.on('exit', () => {
       closeSync(stdoutFd);
       closeSync(stderrFd);
