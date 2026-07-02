@@ -767,6 +767,10 @@ function normalizeCanonicalMotionMode(value) {
 function normalizeCanonicalContentMode(value) {
   return Object.hasOwn(CANONICAL_VOLUME_CONTENT_MODE_VALUES, value) ? value : 'smoke';
 }
+function normalizeVolumeSceneContext(value) {
+  const normalized = String(value || 'none').trim().toLowerCase().replace(/-/g, '_');
+  return normalized === 'stone_test' ? 'stone_test' : 'none';
+}
 function canonicalSourceDefaults(mode) {
   const normalized = normalizeCanonicalSourceMode(mode);
   if (normalized === 'passive_bottom') return { sourceY: -0.82, injection: 0.00, buoyancy: 0.00 };
@@ -788,6 +792,8 @@ const requestedVolumeScene = routeParams.get('volume_scene') || tallPlumePreset.
 const expectedVolumeScene = Object.hasOwn(VOLUME_SCENE_PRESETS, requestedVolumeScene)
   ? requestedVolumeScene
   : 'compact_plume';
+const expectedVolumeSceneContext = normalizeVolumeSceneContext(routeParams.get('volume_scene_context'));
+const expectsVolumeStoneSceneContext = expectedVolumeSceneContext === 'stone_test';
 const expectsCanonicalPlumeProof = expectedVolumeScene === 'canonical_plume';
 const fieldSliceOut = args.has('--field-slice')
   ? resolve(args.get('--field-slice') || out.replace(/\.png$/i, '.field-slice.png'))
@@ -1201,6 +1207,7 @@ function measureScreenshot(buffer) {
   let fireLike = 0;
   let smokeLike = 0;
   let warmLike = 0;
+  let backdropMidtone = 0;
   let totalLum = 0;
   let samples = 0;
   for (let y = Math.floor(png.height * 0.08); y < Math.floor(png.height * 0.92); y += 2) {
@@ -1217,6 +1224,7 @@ function measureScreenshot(buffer) {
       if (r > 120 && g > 70 && b < 80) fireLike++;
       if (r > 95 && g > 45 && b < 110 && r >= g && lum > 35) warmLike++;
       if (b > 28 && g > 28 && r < 95 && Math.abs(g - b) < 55) smokeLike++;
+      if (lum > 28 && lum < 125 && Math.max(r, g, b) - Math.min(r, g, b) < 55) backdropMidtone++;
     }
   }
   return {
@@ -1227,6 +1235,7 @@ function measureScreenshot(buffer) {
     fireLikePixels: fireLike,
     warmLikePixels: warmLike,
     smokeLikePixels: smokeLike,
+    backdropMidtonePixels: backdropMidtone,
   };
 }
 
@@ -1350,6 +1359,20 @@ async function main() {
     const bridge = bridgeEval.result.value;
     assert.equal(bridge?.identity, 'volume-main-renderer-bridge-v0', 'wrong volume main-renderer bridge identity');
     assert.equal(bridge?.textureSource, 'kaminos-volume-canvas', 'volume bridge is not sourcing the native volume canvas');
+    const sceneContextEval = await wsRequest(ws, 'Runtime.evaluate', {
+      expression: 'window.__kaminosVolumeSceneContext?.debugState?.()',
+      returnByValue: true,
+    });
+    const volumeSceneContext = sceneContextEval.result.value;
+    if (expectsVolumeStoneSceneContext) {
+      assert.equal(volumeSceneContext?.identity, 'volume-scene-context-stone-test-v0', 'wrong volume scene-context identity');
+      assert.equal(volumeSceneContext?.effectiveContext, expectedVolumeSceneContext, 'volume scene context route/debug identity did not apply');
+      assert.equal(volumeSceneContext?.visible, true, 'volume scene context did not become visible');
+      assert.equal(volumeSceneContext?.materialIdentity, 'procedural-stone-visible-test-v0', 'volume scene context did not preserve procedural stone material identity');
+      assert.equal(volumeSceneContext?.backgroundTruth, 'three-procedural-meshes-not-image-plate-v0', 'volume scene context did not preserve mesh-backed background truth identity');
+      assert.ok((volumeSceneContext?.objectCount ?? 0) >= 5, 'volume scene context did not expose enough live backdrop objects');
+      assert.equal(bridge?.sceneContext?.effectiveContext, expectedVolumeSceneContext, 'volume bridge did not report the active scene context');
+    }
     assert.ok(
       state.frameCount > 5,
       `volume route did not render enough frames (${state.frameCount || 0} frames at ${state.displayWidth || 0}x${state.displayHeight || 0})`,
@@ -2201,6 +2224,9 @@ async function main() {
     const expectsNoFireMainRendererVolume = expectsNoFireVolumeEvidence ||
       expectsFuelStarvedTallPlume ||
       (expectsCanonicalPlumeProof && !expectsCanonicalFireEvidence);
+    if (expectsVolumeStoneSceneContext && mainRendererMetrics.backdropMidtonePixels < 1200) {
+      throw new Error(`main renderer screenshot missing stone scene-context backdrop signal: ${JSON.stringify(mainRendererMetrics)}`);
+    }
     if (expectsSnuffVisualEvidence) {
       if (mainRendererMetrics.litPixels < 1500 || mainRendererMetrics.smokeLikePixels < 1500 || mainRendererMetrics.meanLuma < 8) {
         throw new Error(`main renderer screenshot missing bridged snuff vapor volume: ${JSON.stringify(mainRendererMetrics)}`);
@@ -2350,6 +2376,8 @@ async function main() {
       effectiveRoute: state.effectiveRoute,
       prototypeIdentity: state.prototypeIdentity,
       volumeBridge: bridge,
+      expectedVolumeSceneContext,
+      volumeSceneContext,
       backend: state.backend,
       captureBackend,
       frameCount: sample.frameCount,

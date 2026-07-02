@@ -2150,6 +2150,7 @@ let modelSourceType = null; // 'glb', 'obj', 'pbr', 'demo'
 let currentSceneFile = null; // filename of last saved/loaded scene (for overwrite)
 let volumePrototype = null;
 let volumeBridge = null;
+let volumeSceneContext = null;
 let motionAgencyState = null;
 let motionDecisionState = null;
 let motionPhraseControlState = null;
@@ -15182,6 +15183,139 @@ function frameVolumeCamera() {
   window._kaminosDirty?.();
 }
 
+const VOLUME_SCENE_CONTEXTS = new Set(['none', 'stone_test']);
+
+function normalizeVolumeSceneContext(value) {
+  const normalized = String(value || 'none').trim().toLowerCase().replace(/-/g, '_');
+  return VOLUME_SCENE_CONTEXTS.has(normalized) ? normalized : 'none';
+}
+
+function createVolumeProceduralStoneTexture() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 512;
+  canvas.height = 512;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#252422';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  for (let y = 0; y < canvas.height; y += 64) {
+    const stagger = (Math.floor(y / 64) % 2) * 52;
+    for (let x = -stagger; x < canvas.width; x += 104) {
+      const shade = 32 + ((x * 17 + y * 11) & 31);
+      ctx.fillStyle = `rgb(${shade + 10}, ${shade + 8}, ${shade + 5})`;
+      ctx.fillRect(x + 2, y + 2, 100, 60);
+      ctx.strokeStyle = 'rgba(130,122,105,0.18)';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(x + 2, y + 2, 100, 60);
+    }
+  }
+
+  for (let i = 0; i < 1800; i++) {
+    const x = (i * 73) % canvas.width;
+    const y = (i * 151) % canvas.height;
+    const a = 0.04 + ((i * 19) % 40) / 1000;
+    ctx.fillStyle = i % 3 === 0 ? `rgba(230,210,170,${a})` : `rgba(0,0,0,${a})`;
+    ctx.fillRect(x, y, 1 + (i % 3), 1 + ((i * 7) % 3));
+  }
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
+  texture.repeat.set(2.8, 2.2);
+  texture.userData.kaminosIdentity = 'procedural-stone-visible-test-v0';
+  return texture;
+}
+
+function createVolumeStoneTestContext() {
+  const group = new THREE.Group();
+  group.name = 'volume-scene-context-stone-test-v0';
+  group.visible = false;
+  group.userData.kaminosVolumeSceneContext = {
+    identity: 'volume-scene-context-stone-test-v0',
+    routeParam: 'volume_scene_context',
+    materialIdentity: 'procedural-stone-visible-test-v0',
+    backgroundTruth: 'three-procedural-meshes-not-image-plate-v0',
+    topology: 'procedural-kiln-stone-chamber-v0',
+  };
+
+  const stoneTexture = createVolumeProceduralStoneTexture();
+  const stoneMaterial = new THREE.MeshBasicMaterial({
+    map: stoneTexture,
+    color: new THREE.Color(0xb0a68f),
+    toneMapped: false,
+  });
+  stoneMaterial.name = 'procedural-stone-visible-test-v0';
+
+  const floorMaterial = stoneMaterial.clone();
+  floorMaterial.name = 'procedural-stone-visible-test-v0-floor';
+  floorMaterial.color = new THREE.Color(0x9b7d50);
+
+  const backWall = new THREE.Mesh(new THREE.BoxGeometry(7.2, 5.4, 0.08), stoneMaterial);
+  backWall.name = 'volume-scene-context-stone-test-back-wall-v0';
+  backWall.position.set(0, 0.65, -1.55);
+  group.add(backWall);
+
+  const floor = new THREE.Mesh(new THREE.BoxGeometry(4.8, 0.08, 2.6), floorMaterial);
+  floor.name = 'volume-scene-context-stone-test-floor-v0';
+  floor.position.set(0, -0.85, -0.45);
+  group.add(floor);
+
+  const leftWall = new THREE.Mesh(new THREE.BoxGeometry(0.08, 3.7, 2.6), stoneMaterial);
+  leftWall.name = 'volume-scene-context-stone-test-left-cheek-v0';
+  leftWall.position.set(-2.15, 0.95, -0.35);
+  leftWall.rotation.y = 0.22;
+  group.add(leftWall);
+
+  const rightWall = new THREE.Mesh(new THREE.BoxGeometry(0.08, 3.7, 2.6), stoneMaterial);
+  rightWall.name = 'volume-scene-context-stone-test-right-cheek-v0';
+  rightWall.position.set(2.15, 0.95, -0.35);
+  rightWall.rotation.y = -0.22;
+  group.add(rightWall);
+
+  const lintel = new THREE.Mesh(new THREE.BoxGeometry(7.2, 0.18, 0.18), stoneMaterial);
+  lintel.name = 'volume-scene-context-stone-test-top-lintel-v0';
+  lintel.position.set(0, 3.12, -1.05);
+  group.add(lintel);
+
+  scene.add(group);
+
+  return {
+    identity: 'volume-scene-context-stone-test-v0',
+    setMode(mode) {
+      const effectiveContext = normalizeVolumeSceneContext(mode);
+      group.visible = effectiveContext === 'stone_test';
+      group.userData.kaminosVolumeSceneContext.effectiveContext = effectiveContext;
+      window._kaminosDirty?.();
+      return effectiveContext;
+    },
+    debugState() {
+      const metadata = group.userData.kaminosVolumeSceneContext;
+      return {
+        identity: metadata.identity,
+        routeParam: metadata.routeParam,
+        requestedContext: metadata.effectiveContext || 'none',
+        effectiveContext: group.visible ? 'stone_test' : 'none',
+        visible: group.visible,
+        objectCount: group.children.length,
+        meshNames: group.children.map(child => child.name),
+        materialIdentity: metadata.materialIdentity,
+        backgroundTruth: metadata.backgroundTruth,
+        topology: metadata.topology,
+      };
+    },
+    dispose() {
+      scene.remove(group);
+      group.traverse(child => {
+        if (child.geometry) child.geometry.dispose();
+      });
+      stoneTexture.dispose();
+      stoneMaterial.dispose();
+      floorMaterial.dispose();
+    },
+  };
+}
+
 function createVolumeMainRendererBridge() {
   const sourceTexture = new THREE.CanvasTexture(volumePrototype.canvasElement());
   sourceTexture.colorSpace = THREE.SRGBColorSpace;
@@ -15243,6 +15377,7 @@ function createVolumeMainRendererBridge() {
         meshName: mesh.name,
         renderOrder: mesh.renderOrder,
         composition: mesh.userData.kaminosVolumeBridge.composition,
+        sceneContext: volumeSceneContext?.debugState?.() || null,
         volumeReconstructionStyle: volumePrototype?.debugState?.()?.volumeReconstructionStyle || null,
         textureFilter: sourceTexture.magFilter === THREE.NearestFilter ? 'nearest' : 'linear',
       };
@@ -15258,6 +15393,7 @@ function createVolumeMainRendererBridge() {
 
 async function initKaminosVolumeRoute() {
   const params = new URLSearchParams(window.location.search);
+  const routedVolumeSceneContext = normalizeVolumeSceneContext(params.get('volume_scene_context'));
   routedBonfireAblationControls = normalizeBonfireAblationControls({
     bonfireRecenter: routeBonfireAblationControl(params, 'volume_bonfire_recenter', 'bonfireRecenter'),
     bonfireLateralDamping: routeBonfireAblationControl(params, 'volume_bonfire_lateral_damping', 'bonfireLateralDamping'),
@@ -15750,6 +15886,10 @@ async function initKaminosVolumeRoute() {
   volumeBridge = createVolumeMainRendererBridge();
   window.__kaminosVolumeBridge = volumeBridge;
   window.__kaminosVolumeMainRendererBridge = volumeBridge;
+  volumeSceneContext?.dispose?.();
+  volumeSceneContext = createVolumeStoneTestContext();
+  volumeSceneContext.setMode(routedVolumeSceneContext);
+  window.__kaminosVolumeSceneContext = volumeSceneContext;
   volumePrototype.setVolumePrimitives(volumePrimitives);
   if (params.has('volume_primitive_fixture')) {
     seedVolumePrimitiveFixture(params.get('volume_primitive_fixture'));
