@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const root = new URL('..', import.meta.url).pathname;
@@ -1478,6 +1480,39 @@ assert.match(interframePlaybackWitness, /Ground truth cadence/, 'interframe play
 assert.match(interframePlaybackWitness, /Synthetic cadence/, 'interframe playback witness labels synthetic middle-frame cadence');
 assert.match(interframePlaybackWitness, /actualMiddleUsed/, 'interframe playback witness preserves actual-middle input/use authority');
 assert.match(interframePlaybackWitness, /synthetic-comparison-not-live-simulator-output/, 'interframe playback witness labels synthetic frames as comparison evidence');
+const interframePlaybackFixtureDir = mkdtempSync(join(tmpdir(), 'kaminos-interframe-playback-contract-'));
+const interframePlaybackReportPath = join(interframePlaybackFixtureDir, 'report.json');
+const interframePlaybackOutPath = join(interframePlaybackFixtureDir, 'interframe-playback-witness.html');
+writeFileSync(interframePlaybackReportPath, `${JSON.stringify({
+  requestedRoute: 'contract-route',
+  triplet: {
+    effectiveRoute: 'contract-route',
+    width: 2,
+    height: 2,
+    t0: { frameCount: 10 },
+    actualMiddle: { frameCount: 11 },
+    t2: { frameCount: 12 },
+  },
+  artifacts: {
+    t0: join(interframePlaybackFixtureDir, 't0.png'),
+    actualMiddle: join(interframePlaybackFixtureDir, 'actual.png'),
+    t2: join(interframePlaybackFixtureDir, 't2.png'),
+  },
+  baselines: [{
+    id: 'contract-synthetic',
+    syntheticMiddle: { path: join(interframePlaybackFixtureDir, 'synthetic.png') },
+  }],
+}, null, 2)}\n`);
+execFileSync(process.execPath, [
+  interframePlaybackWitnessPath,
+  '--report',
+  interframePlaybackReportPath,
+  '--out',
+  interframePlaybackOutPath,
+], { stdio: 'pipe' });
+const interframePlaybackPayload = JSON.parse(readFileSync(join(interframePlaybackFixtureDir, 'interframe-playback-witness.json'), 'utf8'));
+assert.equal(interframePlaybackPayload.actualMiddleUsed, false, 'interframe playback witness root payload says the actual middle was not used as candidate input');
+assert.equal(interframePlaybackPayload.candidates[0].actualMiddleUsed, false, 'interframe playback witness candidate payload says the actual middle was not used as candidate input');
 
 const interframeSequenceWitnessPath = join(root, 'volume-interframe-sequence-witness.mjs');
 assert.ok(existsSync(interframeSequenceWitnessPath), 'volume interframe sequence witness generator exists');

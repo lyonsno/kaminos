@@ -183,7 +183,7 @@ const payload = {
   schema: SCHEMA,
   route: report.triplet?.effectiveRoute || report.requestedRoute || 'unknown',
   frameLabel: `${frames.t0Label} / ${frames.actualLabel} / ${frames.t2Label}`,
-  actualMiddleUsed: true,
+  actualMiddleUsed: false,
   syntheticAuthority: SYNTHETIC_AUTHORITY,
   frames,
   candidates: [...reportCandidates, ...extraCandidates],
