@@ -9,7 +9,8 @@ const witness = readFileSync(join(root, 'orb-shell-composition-witness.mjs'), 'u
 const index = readFileSync(join(root, 'index.html'), 'utf8');
 
 assert.match(index, /orbShellFocus === 'spatial-truth'/, 'browser route must recognize spatial-truth focus');
-assert.match(index, /orbShellFocus === 'material-truth'/, 'browser route must expose stable material-truth focus for the pre-clay material read');
+assert.match(index, /orbShellFocus === 'pre-hdr-warm'/, 'browser route must expose the pre-HDR warm flash as its own diagnostic focus');
+assert.match(index, /orbShellFocus === 'material-truth'/, 'browser route must expose stable material-truth focus for env-coupled material inspection');
 assert.match(index, /enableSpatialTruthWitness/, 'browser route must activate spatial-truth material witness');
 assert.match(index, /frameSpatialTruthView/, 'browser route must frame named spatial-truth views');
 assert.match(index, /orb_shell_spatial_env_intensity/, 'spatial-truth route must expose environment intensity');
@@ -17,9 +18,17 @@ assert.match(index, /orb_shell_spatial_exposure/, 'spatial-truth route must expo
 assert.match(index, /orb_shell_spatial_pass/, 'spatial-truth route must expose diagnostic pass identity');
 assert.match(index, /if \(!params\.has\(name\)\) return defaultValue;/, 'route number parser must use defaults when optional spatial-truth params are omitted');
 assert.match(index, /MaterialTruthRoutePolicy/, 'material-truth route must preserve its effective route identity');
-assert.match(index, /MaterialTruthPhasePolicy/, 'material-truth route must expose the material phase it is preserving');
-assert.match(index, /pre-hdr-warm/, 'material-truth must preserve the operator-observed pre-HDR warm material phase by default');
-assert.match(index, /materialTruthPhaseLock/, 'material-truth must guard against async studio HDR load overwriting the preserved phase');
+assert.match(index, /PreHdrWarmPhasePolicy/, 'pre-HDR warm route must expose the phase it is preserving without calling it material truth');
+assert.match(index, /MaterialTruthEnvPolicy/, 'material-truth route must expose its env-map-coupled material policy');
+assert.match(index, /environmentDisposition: 'env-map-coupled'/, 'material-truth route must keep environment-map coupling enabled');
+assert.match(index, /applyMaterialTruthStandardMaterialTuning/, 'material-truth route must tune real MeshStandardMaterial instances, not only declare material params');
+assert.match(index, /materialOverrideCount/, 'material-truth route must report how many materials it actually tuned');
+assert.match(index, /preHdrWarmPhaseLock/, 'pre-HDR warm route must guard against async studio HDR load overwriting the preserved flash');
+assert.doesNotMatch(
+  index,
+  /orbShellFocus === 'material-truth'[\s\S]{0,1200}applyOrbShellMaterialTruthPhasePolicy/,
+  'material-truth must not default to the pre-HDR phase-lock route',
+);
 
 assert.match(core, /SpatialTruthMaterialPolicy/, 'composition core must expose a spatial-truth material policy');
 assert.match(core, /SpatialTruthWitnessState/, 'composition core must return a spatial-truth witness state');
@@ -37,6 +46,9 @@ assert.match(core, /color: '#737d80'/, 'spatial-truth clay default color must be
 
 assert.match(witness, /spatial-truth/, 'headless witness must know spatial-truth focus');
 assert.match(witness, /material-truth/, 'headless witness must know material-truth focus');
+assert.match(witness, /pre-hdr-warm/, 'headless witness must know pre-HDR warm focus');
+assert.match(witness, /materialTruthEnvPolicy/, 'headless witness must report material-truth env policy');
+assert.match(witness, /preHdrWarmPhasePolicy/, 'headless witness must report pre-HDR warm phase policy');
 assert.match(witness, /--diagnostic-pass/, 'headless witness must accept diagnostic pass selection');
 assert.match(witness, /--view-set/, 'headless witness must accept reusable view-set selection');
 assert.match(witness, /--contact-sheet-out/, 'headless witness must write a contact sheet artifact');

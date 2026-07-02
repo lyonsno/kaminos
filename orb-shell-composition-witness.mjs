@@ -51,7 +51,9 @@ let spatialTruthWitness = null;
 let spatialTruthViewFrame = null;
 let spatialTruthContactSheet = null;
 let materialTruthRoutePolicy = null;
-let materialTruthPhasePolicy = null;
+let materialTruthEnvPolicy = null;
+let preHdrWarmRoutePolicy = null;
+let preHdrWarmPhasePolicy = null;
 let visualCaptureCompleted = false;
 let visualCaptureFailure = null;
 let primaryCapture = null;
@@ -423,14 +425,16 @@ async function main() {
       `);
       await delay(500);
     }
-    if (focus === 'material-truth') {
+    if (focus === 'material-truth' || focus === 'pre-hdr-warm') {
       spatialTruthViewFrame = await evaluate(ws, `
         window.__kaminosOrbShellCompositionWitness?.frameSpatialTruthView?.(${JSON.stringify(spatialTruthView)})
       `);
       await delay(500);
     }
     materialTruthRoutePolicy = await evaluate(ws, 'window.__kaminosOrbShellMaterialTruthRoutePolicy || null');
-    materialTruthPhasePolicy = await evaluate(ws, 'window.__kaminosOrbShellMaterialTruthPhasePolicy || null');
+    materialTruthEnvPolicy = await evaluate(ws, 'window.__kaminosOrbShellMaterialTruthEnvPolicy || null');
+    preHdrWarmRoutePolicy = await evaluate(ws, 'window.__kaminosOrbShellPreHdrWarmRoutePolicy || null');
+    preHdrWarmPhasePolicy = await evaluate(ws, 'window.__kaminosOrbShellPreHdrWarmPhasePolicy || null');
 
     phase = 'state';
     const renderEffectPolicy = await readRenderEffectPolicy(ws, forcedAoState);
@@ -467,6 +471,7 @@ async function main() {
       || focus === 'aperture-orbit-capture'
       || focus === 'lower-socket-semantic-render-inventory'
       || focus === 'material-truth'
+      || focus === 'pre-hdr-warm'
       || focus === 'spatial-truth'
     ) {
       captureOptions = await canvasCaptureOptions(ws, focus);
@@ -603,6 +608,20 @@ async function main() {
       assert.equal(spatialTruthViewFrame?.schema, 'SpatialTruthViewFrame', 'spatial-truth view frame did not activate');
       assert.equal(state?.SpatialTruthViewSet?.schema, 'SpatialTruthViewSet', 'spatial-truth view set missing from debug state');
       assert.equal(state?.SpatialTruthMaterialPolicy?.schema, 'SpatialTruthMaterialPolicy', 'spatial-truth material policy missing from debug state');
+    }
+    if (focus === 'material-truth') {
+      assert.equal(materialTruthRoutePolicy?.schema, 'MaterialTruthRoutePolicy', 'material-truth route policy missing from witness');
+      assert.equal(materialTruthEnvPolicy?.schema, 'MaterialTruthEnvPolicy', 'material-truth env policy missing from witness');
+      assert.equal(materialTruthEnvPolicy?.environmentDisposition, 'env-map-coupled', 'material-truth must keep environment-map coupling enabled');
+      assert.equal(preHdrWarmPhasePolicy, null, 'material-truth must not activate the pre-HDR phase lock');
+      assert.equal(spatialTruthViewFrame?.schema, 'SpatialTruthViewFrame', 'material-truth view frame did not activate');
+    }
+    if (focus === 'pre-hdr-warm') {
+      assert.equal(preHdrWarmRoutePolicy?.schema, 'PreHdrWarmRoutePolicy', 'pre-HDR warm route policy missing from witness');
+      assert.equal(preHdrWarmPhasePolicy?.schema, 'PreHdrWarmPhasePolicy', 'pre-HDR warm phase policy missing from witness');
+      assert.equal(preHdrWarmPhasePolicy?.environmentDisposition, 'suppress-async-hdr-env-map-and-preserve-scene-lit-pbr', 'pre-HDR warm route must declare env-map suppression');
+      assert.equal(materialTruthEnvPolicy, null, 'pre-HDR warm route must not masquerade as env-coupled material truth');
+      assert.equal(spatialTruthViewFrame?.schema, 'SpatialTruthViewFrame', 'pre-HDR warm view frame did not activate');
     }
     assert.equal(state?.selectedParentPromotedBodyMeshCount, 0, 'selected parent promoted body slabs must be absent from normal render');
     assert.equal(state?.selectedParentSideWallMeshCount, 0, 'selected parent sidewalls must be absent from normal render');
@@ -852,7 +871,9 @@ async function main() {
       spatialTruthViewFrame,
       spatialTruthContactSheet,
       materialTruthRoutePolicy,
-      materialTruthPhasePolicy,
+      materialTruthEnvPolicy,
+      preHdrWarmRoutePolicy,
+      preHdrWarmPhasePolicy,
       renderEffectPolicy,
       liveRenderMaterialPolicy: state.liveRenderMaterialPolicy,
       suppressedLegacyRoundBandIds: state.suppressedLegacyRoundBandIds,
@@ -939,7 +960,9 @@ async function main() {
       spatialTruthViewFrame,
       spatialTruthContactSheet,
       materialTruthRoutePolicy,
-      materialTruthPhasePolicy,
+      materialTruthEnvPolicy,
+      preHdrWarmRoutePolicy,
+      preHdrWarmPhasePolicy,
       browserEvents,
       stderrTail: stderr.slice(-2000),
     });
