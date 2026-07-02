@@ -36,6 +36,19 @@ class TinyResidualUpscaler(nn.Module):
         return mx.clip(base_image + residual * 0.25, 0.0, 1.0)
 
 
+class DirectResidualUpscaler(nn.Module):
+    def __init__(self, input_channels):
+        super().__init__()
+        self.output = nn.Conv2d(input_channels, 3, kernel_size=3, padding=1)
+        self.output.weight = mx.zeros_like(self.output.weight)
+        self.output.bias = mx.zeros_like(self.output.bias)
+
+    def __call__(self, image):
+        base_image = image[..., :3]
+        residual = self.output(image)
+        return mx.clip(base_image + residual * 0.25, 0.0, 1.0)
+
+
 def parse_args():
     parser = argparse.ArgumentParser(description="Tiny MLX residual-upscale smoke for Kaminos frame-locked render pairs.")
     parser.add_argument("--corpus-manifest", required=True, help="Path to corpus-manifest.json from frame-locked render-pair captures.")
@@ -44,6 +57,7 @@ def parse_args():
     parser.add_argument("--max-steps", dest="maxSteps", type=int, default=120, help="Bounded training steps for contention control.")
     parser.add_argument("--batch-size", type=int, default=4)
     parser.add_argument("--patch-size", type=int, default=96)
+    parser.add_argument("--model-arch", dest="modelArch", choices=["tiny-conv", "direct-residual"], default="tiny-conv")
     parser.add_argument("--hidden-channels", type=int, default=16)
     parser.add_argument("--learning-rate", type=float, default=1e-3)
     parser.add_argument("--eval-patches", type=int, default=64)
@@ -522,7 +536,10 @@ def main():
     mx.random.seed(args.seed)
     input_channels = 4 if args.conditionRenderScale else 3
     scaleChannel = "lowRenderScale" if args.conditionRenderScale else None
-    model = TinyResidualUpscaler(args.hidden_channels, input_channels)
+    if args.modelArch == "tiny-conv":
+        model = TinyResidualUpscaler(args.hidden_channels, input_channels)
+    else:
+        model = DirectResidualUpscaler(input_channels)
     optimizer = optim.Adam(learning_rate=args.learning_rate)
     temporalTrainPairCount = len(temporal_pair_candidates(train_items))
     temporalEvalPairCount = len(temporal_pair_candidates(eval_items))
@@ -632,6 +649,7 @@ def main():
         "pairAuthority": corpus.get("pairAuthority"),
         "imageAuthority": corpus.get("imageAuthority"),
         "lowRenderScale": args.low_render_scale,
+        "modelArch": args.modelArch,
         "seed": args.seed,
         "seededRandomGenerators": ["numpy.default_rng", "mlx.core.random"],
         "selectedPairCount": len(loaded),
