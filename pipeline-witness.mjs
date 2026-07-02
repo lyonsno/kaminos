@@ -4,6 +4,7 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileS
 import { delimiter, dirname, extname, isAbsolute, join, resolve } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import {
+  createSharpImageToSplatRouteDefinition,
   createWebGpuRouteBackpressureProfile,
   createWebGpuRouteSchedulerProfile,
   validateWebGpuRouteBackpressureProfile,
@@ -485,6 +486,7 @@ function routeSchedulerInputFromEvidence({
   effectiveScheduler = null,
   unsupportedFields = [],
   verificationState = 'scheduler-unverified',
+  breathability = null,
 } = {}) {
   const requestedMode = requestedScheduler.mode === 'cooperative' ? 'cooperative' : 'throughput';
   const hasEffectiveScheduler = Boolean(effectiveScheduler);
@@ -508,6 +510,7 @@ function routeSchedulerInputFromEvidence({
         : (hasEffectiveScheduler ? [] : ['phaseChunkSize']),
     },
     verificationState: profileVerificationState,
+    breathability: breathability || undefined,
   };
 }
 
@@ -516,6 +519,41 @@ function createValidatedSchedulerProfile(input = {}) {
   const validation = validateWebGpuRouteSchedulerProfile(profile);
   if (!validation.ok) throw new Error(`kit scheduler profile invalid: ${validation.errors.join('; ')}`);
   return profile;
+}
+
+function cloneJson(value) {
+  return value == null ? value : JSON.parse(JSON.stringify(value));
+}
+
+function pipelineKitDefaultRouteDefinition(report = null, effectiveRoute = null) {
+  const tokens = [
+    report?.schema,
+    report?.backend?.modelFamily,
+    report?.backend?.runtime,
+    effectiveRoute?.id,
+    effectiveRoute?.tool,
+    effectiveRoute?.modelFamily,
+    effectiveRoute?.effectiveBackend,
+    pipeline?.id,
+    pipeline?.routeId,
+  ].filter(Boolean).join(' ').toLowerCase();
+  if (!tokens.includes('sharp')) return null;
+  return createSharpImageToSplatRouteDefinition();
+}
+
+function pipelineKitDefaultBreathability(report = null, effectiveRoute = null) {
+  return cloneJson(pipelineKitDefaultRouteDefinition(report, effectiveRoute)?.scheduler?.breathability) || {
+    spans: [],
+    checkpoints: [],
+    notes: 'No kit breathability metadata was available for this route.',
+  };
+}
+
+function pipelineKitDefaultBackpressure(report = null, effectiveRoute = null) {
+  const profile = cloneJson(pipelineKitDefaultRouteDefinition(report, effectiveRoute)?.backpressure);
+  const validation = validateWebGpuRouteBackpressureProfile(profile);
+  if (validation.ok) return profile;
+  return null;
 }
 
 function adapterBackendIdentity(report, effectiveRoute = null) {
@@ -541,7 +579,9 @@ function emptyOptimizationIdentity() {
   };
 }
 
-function backpressurePlaceholder() {
+function backpressurePlaceholder(report = null, effectiveRoute = null) {
+  const routeProfile = pipelineKitDefaultBackpressure(report, effectiveRoute);
+  if (routeProfile) return routeProfile;
   const profile = createWebGpuRouteBackpressureProfile({
     requestedBudget: 'unknown',
     effectiveBudget: 'unknown',
@@ -560,25 +600,34 @@ function backpressurePlaceholder() {
   return profile;
 }
 
-function validateOrNormalizePipelineSchedulerEvidence(evidence) {
+function schedulerProfileHasBreathability(profile) {
+  return Array.isArray(profile?.breathability?.spans)
+    && profile.breathability.spans.length > 0
+    && Array.isArray(profile?.breathability?.checkpoints)
+    && profile.breathability.checkpoints.length > 0;
+}
+
+function validateOrNormalizePipelineSchedulerEvidence(evidence, report = null, effectiveRoute = null) {
   const schedulerValidation = validateWebGpuRouteSchedulerProfile(evidence?.scheduler);
   const backpressureValidation = validateWebGpuRouteBackpressureProfile(evidence?.backpressure);
-  if (schedulerValidation.ok && backpressureValidation.ok) return evidence;
+  if (schedulerValidation.ok && backpressureValidation.ok && schedulerProfileHasBreathability(evidence?.scheduler)) return evidence;
   const unsupportedFields = Array.isArray(evidence?.unsupportedFields) ? evidence.unsupportedFields : [];
   return {
     ...evidence,
     verificationState: unsupportedFields.length ? 'unsupported' : evidence?.verificationState,
     scheduler: createValidatedSchedulerProfile({
-      requestedScheduler: evidence?.requestedScheduler || {},
-      effectiveScheduler: evidence?.effectiveScheduler || null,
+      requestedScheduler: evidence?.requestedScheduler || evidence?.scheduler?.requestedScheduler || {},
+      effectiveScheduler: evidence?.effectiveScheduler || evidence?.scheduler?.effectiveScheduler || null,
       unsupportedFields,
       verificationState: evidence?.verificationState === 'verified' ? 'verified' : 'scheduler-unverified',
+      breathability: evidence?.scheduler?.breathability || pipelineKitDefaultBreathability(report, effectiveRoute),
     }),
-    backpressure: backpressureValidation.ok ? evidence.backpressure : backpressurePlaceholder(),
+    backpressure: backpressureValidation.ok ? evidence.backpressure : backpressurePlaceholder(report, effectiveRoute),
     failureDowngrades: [
       ...(Array.isArray(evidence?.failureDowngrades) ? evidence.failureDowngrades : []),
       ...(schedulerValidation.ok ? [] : ['scheduler-profile-normalized-by-kit']),
       ...(backpressureValidation.ok ? [] : ['backpressure-profile-normalized-by-kit']),
+      ...(schedulerProfileHasBreathability(evidence?.scheduler) ? [] : ['breathability-profile-added-from-kit-route']),
     ],
   };
 }
@@ -598,7 +647,7 @@ function pipelineSchedulerEvidence(report, effectiveRoute = null) {
         unsupportedFields: [],
         verificationState: 'scheduler-unverified',
       }),
-      backpressure: backpressurePlaceholder(),
+      backpressure: backpressurePlaceholder(report, effectiveRoute),
       phaseBoundaries: [],
       backendIdentity: adapterBackendIdentity(null, effectiveRoute),
       optimizationIdentity: emptyOptimizationIdentity(),
@@ -609,7 +658,7 @@ function pipelineSchedulerEvidence(report, effectiveRoute = null) {
     };
   }
   if (report.pipelineScheduler?.schema === 'kaminos.pipeline-scheduler-composition.v0') {
-    return validateOrNormalizePipelineSchedulerEvidence(report.pipelineScheduler);
+    return validateOrNormalizePipelineSchedulerEvidence(report.pipelineScheduler, report, effectiveRoute);
   }
   const breathingRoom = report.breathingRoom || null;
   const effectiveScheduler = breathingRoom?.effectiveScheduler || null;
@@ -624,6 +673,7 @@ function pipelineSchedulerEvidence(report, effectiveRoute = null) {
     effectiveScheduler,
     unsupportedFields,
     verificationState,
+    breathability: pipelineKitDefaultBreathability(report, effectiveRoute),
   });
   const failureDowngrades = [];
   if (report.schema === 'unparseable-json') failureDowngrades.push('unparseable-adapter-report');
@@ -638,7 +688,7 @@ function pipelineSchedulerEvidence(report, effectiveRoute = null) {
     effectiveScheduler,
     unsupportedFields,
     scheduler: schedulerProfile,
-    backpressure: backpressurePlaceholder(),
+    backpressure: backpressurePlaceholder(report, effectiveRoute),
     phaseBoundaries: uniqueAdapterPhases(breathingRoom?.telemetry),
     backendIdentity: adapterBackendIdentity(report, effectiveRoute),
     optimizationIdentity: effectiveScheduler ? {

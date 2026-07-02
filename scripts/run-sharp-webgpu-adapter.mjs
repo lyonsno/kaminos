@@ -16,6 +16,7 @@ import {
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
+  createSharpImageToSplatRouteDefinition,
   createWebGpuRouteBackpressureProfile,
   createWebGpuRouteSchedulerProfile,
   validateWebGpuRouteBackpressureProfile,
@@ -149,6 +150,22 @@ function phaseChunkSizeFromScheduler(scheduler = {}) {
   return phaseChunkSize;
 }
 
+function cloneJson(value) {
+  return value == null ? value : JSON.parse(JSON.stringify(value));
+}
+
+function sharpRouteDefinition() {
+  return createSharpImageToSplatRouteDefinition();
+}
+
+function sharpRouteBreathability() {
+  return cloneJson(sharpRouteDefinition().scheduler?.breathability);
+}
+
+function sharpRouteBackpressure() {
+  return cloneJson(sharpRouteDefinition().backpressure);
+}
+
 function routeSchedulerInputFromBreathingRoom(breathingRoom = {}) {
   const requested = breathingRoom?.requestedScheduler || requestedScheduler;
   const effective = breathingRoom?.effectiveScheduler || {};
@@ -176,6 +193,7 @@ function routeSchedulerInputFromBreathingRoom(breathingRoom = {}) {
         : (hasEffectiveScheduler ? [] : ['phaseChunkSize']),
     },
     verificationState,
+    breathability: sharpRouteBreathability(),
   };
 }
 
@@ -187,6 +205,9 @@ function createValidatedSchedulerProfile(breathingRoom = {}) {
 }
 
 function createValidatedBackpressureProfile() {
+  const sharpProfile = sharpRouteBackpressure();
+  const sharpValidation = validateWebGpuRouteBackpressureProfile(sharpProfile);
+  if (sharpValidation.ok) return sharpProfile;
   const profile = createWebGpuRouteBackpressureProfile({
     requestedBudget: 'unknown',
     effectiveBudget: 'unknown',

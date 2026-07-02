@@ -3,6 +3,6 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "@kaminos/webgpu-inference-kit": "^0.1.0"
+    "@kaminos/webgpu-inference-kit": "^0.1.4"
   }
 }

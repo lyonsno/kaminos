@@ -12,6 +12,10 @@ assert.match(index, /data-pipeline-scheduler-state/, 'Generated-output DOM must 
 assert.match(index, /key:\s*'scheduler'/, 'Generated-output inspector rows must show scheduler state');
 assert.match(index, /key:\s*'scheduler profile'/, 'Generated-output inspector rows must show the nested kit scheduler profile schema');
 assert.match(index, /key:\s*'backpressure profile'/, 'Generated-output inspector rows must show the nested kit backpressure profile schema');
+assert.match(index, /function pipelineGraphSchedulerBreathabilityState\(/, 'Pipeline graph runtime must distinguish kit-backed breathability from scheduler-only evidence');
+assert.match(index, /data-pipeline-breathability-state/, 'Generated-output DOM must expose kit breathability state for browser and human smoke');
+assert.match(index, /key:\s*'breathability'/, 'Generated-output inspector rows must show kit breathability state');
+assert.match(index, /key:\s*'breathability checkpoints'/, 'Generated-output inspector rows must show kit breathability checkpoint count');
 assert.match(index, /scheduler-unverified/, 'Graph scheduler labels must distinguish missing effective telemetry from cooperative execution');
 assert.match(index, /unsupported scheduler fields/, 'Graph scheduler labels must fail loud when requested scheduler fields were unsupported');
 assert.match(index, /pipelineRunResultRows[\s\S]*scheduler/, 'Run result rows must surface scheduler evidence alongside artifact evidence');
@@ -19,3 +23,5 @@ assert.doesNotMatch(index, /breathingRoom\.status[\s\S]{0,160}data-pipeline-sche
 
 assert.match(witness, /schedulerEvidence/, 'Pipeline UI witness must assert generated-output scheduler evidence, not only run reports');
 assert.match(witness, /data-pipeline-scheduler-state/, 'Pipeline UI witness must inspect visible scheduler state in the graph DOM');
+assert.match(witness, /data-pipeline-breathability-state/, 'Pipeline UI witness must inspect visible breathability state in the graph DOM');
+assert.match(witness, /kit-backed-breathability/, 'Pipeline UI witness must require kit-backed breathability for generated SHARP outputs');

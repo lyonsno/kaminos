@@ -14,16 +14,16 @@ assert.ok(existsSync(packageLockPath), 'Kaminos pipeline tooling must lock npm d
 const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8'));
 assert.equal(
   packageJson.dependencies?.['@kaminos/webgpu-inference-kit'],
-  '^0.1.0',
+  '^0.1.4',
   'Pipeline scheduler evidence must use the runtime WebGPU inference kit package',
 );
 
 const packageLock = JSON.parse(readFileSync(packageLockPath, 'utf8'));
 const lockedKit = packageLock.packages?.['node_modules/@kaminos/webgpu-inference-kit'];
-assert.equal(lockedKit?.version, '0.1.0', 'WebGPU inference kit lockfile must pin the adopted package version');
+assert.equal(lockedKit?.version, '0.1.4', 'WebGPU inference kit lockfile must pin the adopted package version');
 assert.equal(
   lockedKit?.integrity,
-  'sha512-vbQzTBsPwnl/7ViAcT9asQFXP665hq2WQcuzh7oDhFIf8raowxav57np9z3kbTnChEteglCenN4Rr98Q3sqXmA==',
+  'sha512-/Ewab+9sM/anhr2+V66hp5+EMmeUFhUdBHRyMUnF2GOYzbYCsU31Ejye7I7m/1nkK94i/NQrD7NSrxmKHdx29g==',
   'WebGPU inference kit lockfile must preserve the published package integrity Cranial handed off',
 );
 
@@ -43,6 +43,11 @@ for (const sourcePath of [witnessPath, wrapperPath]) {
     source,
     /validateWebGpuRouteBackpressureProfile/,
     `${sourcePath} must validate the nested backpressure profile through the shared WebGPU kit`,
+  );
+  assert.match(
+    source,
+    /breathability/,
+    `${sourcePath} must preserve kit breathability metadata inside Pipeline scheduler evidence`,
   );
   assert.doesNotMatch(
     source,
