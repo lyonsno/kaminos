@@ -23,7 +23,7 @@ assert.match(index, /VOLUME_PRIMITIVE_SCHEMA/, 'scene data names the volume prim
 assert.match(index, /volumePrimitives/, 'scene data persists authored volume primitives');
 assert.match(index, /setVolumePrimitivesState/, 'scene loading can restore authored volume primitives');
 assert.match(index, /volume-core\.js/, 'index imports the volume prototype module');
-assert.match(index, /volume-core\.js\?v=pyro-carrier-continuous-controls-0701/, 'volume prototype import carries a cache key when Pyro carrier controls become continuous and inspectable');
+assert.match(index, /volume-core\.js\?v=pyro-bite-fold-shaping-0702/, 'volume prototype import carries a cache key when Pyro Bite/Fold shaping controls land');
 assert.match(index, /id="volume-render-source-orientation"/, 'Volume tab exposes render/source orientation identity for operator smoke');
 assert.match(index, /id="volume-canonical-render-mode-state"/, 'Volume tab exposes effective canonical render diagnostic mode for operator smoke');
 assert.match(index, /id="volume-canonical-motion-mode-state"/, 'Volume tab exposes effective canonical motion diagnostic mode for operator smoke');
@@ -34,10 +34,16 @@ assert.match(index, /id="volume-pyro-edge-bite"/, 'Pyro cockpit exposes an edge-
 assert.match(index, /roughen flame edges/i, 'Pyro edge-bite slider describes the flame-edge carrier');
 assert.match(index, /id="volume-pyro-bite-border"/, 'Pyro cockpit exposes a bite-specific border focus slider');
 assert.match(index, /Bite border focus/i, 'Pyro bite-border slider describes broad body versus seam focus');
+assert.match(index, /id="volume-pyro-bite-teeth"/, 'Pyro cockpit exposes a bite teeth/sharpness slider');
+assert.match(index, /Bite teeth/i, 'Pyro bite-teeth slider describes torn flame-edge bite');
+assert.match(index, /id="volume-pyro-bite-wake"/, 'Pyro cockpit exposes a bite wake/lift slider');
+assert.match(index, /Bite wake/i, 'Pyro bite-wake slider describes lower rising boundary influence');
 assert.match(index, /id="volume-pyro-smoke-fold"/, 'Pyro cockpit exposes a smoke-fold slider');
 assert.match(index, /darken and fold smoke/i, 'Pyro smoke-fold slider describes the smoke/absorption carrier');
 assert.match(index, /id="volume-pyro-fold-border"/, 'Pyro cockpit exposes a fold-specific border focus slider');
 assert.match(index, /Fold border focus/i, 'Pyro fold-border slider describes smoke body versus seam wake');
+assert.match(index, /id="volume-pyro-fold-wake"/, 'Pyro cockpit exposes a fold wake-length slider');
+assert.match(index, /Fold wake/i, 'Pyro fold-wake slider describes downstream smoke memory');
 assert.match(index, /id="volume-pyro-diagnostic-paint"/, 'Pyro cockpit exposes diagnostic paint separately from carrier strength');
 assert.match(index, /false-color carrier paint/i, 'Pyro diagnostic-paint slider describes that color is inspection paint');
 assert.match(index, /id="volume-pyro-carrier-view"/, 'Pyro cockpit exposes a carrier isolate selector');
@@ -631,6 +637,7 @@ assert.match(core, /shaderReadiness:\s*resetGate\s*\?\s*'blocked-reset'/, 'Pyro 
 assert.match(core, /pyro_detail_controls:\s*vec4<f32>/, 'WGSL uniforms expose Pyro material-memory controls to the renderer');
 assert.match(core, /pyro_carrier_controls:\s*vec4<f32>/, 'WGSL uniforms expose Pyro material carrier cockpit controls to the renderer');
 assert.match(core, /pyro_diagnostic_controls:\s*vec4<f32>/, 'WGSL uniforms expose Pyro carrier isolate/overdrive diagnostics to the renderer');
+assert.match(core, /pyro_shape_controls:\s*vec4<f32>/, 'WGSL uniforms expose Pyro Bite/Fold shaping controls to the renderer');
 assert.match(core, /pyro_detail_cells:\s*array<vec4<f32>,\s*24>/, 'WGSL uniforms expose the full 8x3 Pyro material-memory cell atlas to the renderer');
 assert.match(core, /pyro-material-memory-render-coupling-v0/, 'debug state names the visible Pyro material-memory renderer coupling identity');
 assert.match(core, /uniforms\[84\]\s*=\s*pyroMaterialGain/, 'CPU uploads Pyro material-memory gain into the WGSL uniform block');
@@ -645,6 +652,11 @@ assert.match(core, /pyroCarrierViewMode/, 'shader can isolate Pyro carrier chann
 assert.match(core, /pyroCarrierOverdrive/, 'shader can intentionally overdrive subtle Pyro carriers');
 assert.match(core, /pyroBiteBorderFocus/, 'Bite carrier has its own border/interface focus without a new texture fetch');
 assert.match(core, /pyroFoldBorderFocus/, 'Fold carrier has its own border/interface focus without a new texture fetch');
+assert.match(core, /pyroBiteTeeth/, 'Bite carrier exposes high-gradient edge teeth shaping');
+assert.match(core, /pyroBiteWake/, 'Bite carrier exposes lower rising-boundary wake shaping');
+assert.match(core, /pyroFoldWake/, 'Fold carrier exposes downstream smoke wake length shaping');
+assert.match(core, /pyroBiteEdgeEvent/, 'shader derives a named Bite edge-event predicate');
+assert.match(core, /pyroFoldWakeSignal/, 'shader derives a named Fold wake-memory predicate');
 assert.match(core, /pyroBiteAlphaBoost/, 'Bite carrier affects load-bearing flame alpha instead of final color only');
 assert.match(core, /pyroFoldExtinctionBoost/, 'Fold carrier affects load-bearing smoke extinction instead of final color only');
 assert.match(core, /pyroDiagnosticPaintAlpha/, 'diagnostic paint has a bounded continuous alpha path instead of being forced by isolate mode');

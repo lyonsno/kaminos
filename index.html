@@ -1003,6 +1003,18 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
     </div>
     <span class="slider-help">Bite border focus: broad flame body at 0, seam teeth at 1.</span>
     <div class="slider-row">
+      <span class="slider-label">Bite Teeth</span>
+      <input type="range" id="volume-pyro-bite-teeth" min="0" max="1" step="0.05" value="0.55">
+      <span class="slider-val" id="volume-pyro-bite-teeth-val">0.55</span>
+    </div>
+    <span class="slider-help">Bite teeth: smooth edge at 0, torn flame-edge bite at 1.</span>
+    <div class="slider-row">
+      <span class="slider-label">Bite Wake</span>
+      <input type="range" id="volume-pyro-bite-wake" min="0" max="1" step="0.05" value="0.25">
+      <span class="slider-val" id="volume-pyro-bite-wake-val">0.25</span>
+    </div>
+    <span class="slider-help">Bite wake: lets the bite climb into the lower rising boundary.</span>
+    <div class="slider-row">
       <span class="slider-label">Pyro Fold</span>
       <input type="range" id="volume-pyro-smoke-fold" min="0" max="1" step="0.05" value="0.25">
       <span class="slider-val" id="volume-pyro-smoke-fold-val">0.25</span>
@@ -1014,6 +1026,12 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
       <span class="slider-val" id="volume-pyro-fold-border-val">0.35</span>
     </div>
     <span class="slider-help">Fold border focus: broad smoke body at 0, seam wake at 1.</span>
+    <div class="slider-row">
+      <span class="slider-label">Fold Wake</span>
+      <input type="range" id="volume-pyro-fold-wake" min="0" max="1" step="0.05" value="0.35">
+      <span class="slider-val" id="volume-pyro-fold-wake-val">0.35</span>
+    </div>
+    <span class="slider-help">Fold wake: short seam bruise at 0, downstream smoke memory at 1.</span>
     <div class="slider-row">
       <span class="slider-label">Diag Paint</span>
       <input type="range" id="volume-pyro-diagnostic-paint" min="0" max="1" step="0.05" value="0">
@@ -1432,7 +1450,7 @@ import * as THREE from 'three';
 import { pass, mrt, normalView, vec3, vec4, mix, float, uniform, texture, packNormalToRGB, unpackRGBToNormal, sample, positionView, convertToTexture } from 'three/tsl';
 import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
-import { createKaminosVolumePrototype } from './volume-core.js?v=pyro-carrier-continuous-controls-0701';
+import { createKaminosVolumePrototype } from './volume-core.js?v=pyro-bite-fold-shaping-0702';
 import {
   DEFAULT_DECISION_MOTION_PLAN,
   DEFAULT_MOTION_PHRASE_CONTROLS,
@@ -9634,8 +9652,11 @@ function readVolumeControls() {
     pyroInterfaceFocus: parseFloat(document.getElementById('volume-pyro-interface-focus').value),
     pyroEdgeBite: parseFloat(document.getElementById('volume-pyro-edge-bite').value),
     pyroBiteBorder: parseFloat(document.getElementById('volume-pyro-bite-border').value),
+    pyroBiteTeeth: parseFloat(document.getElementById('volume-pyro-bite-teeth').value),
+    pyroBiteWake: parseFloat(document.getElementById('volume-pyro-bite-wake').value),
     pyroSmokeFold: parseFloat(document.getElementById('volume-pyro-smoke-fold').value),
     pyroFoldBorder: parseFloat(document.getElementById('volume-pyro-fold-border').value),
+    pyroFoldWake: parseFloat(document.getElementById('volume-pyro-fold-wake').value),
     pyroDiagnosticPaint: parseFloat(document.getElementById('volume-pyro-diagnostic-paint').value),
     pyroCarrierView: document.getElementById('volume-pyro-carrier-view').value,
     pyroOverdrive: parseFloat(document.getElementById('volume-pyro-overdrive').value),
@@ -9718,8 +9739,11 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-pyro-interface-focus-val').textContent = c.pyroInterfaceFocus.toFixed(2);
   document.getElementById('volume-pyro-edge-bite-val').textContent = c.pyroEdgeBite.toFixed(2);
   document.getElementById('volume-pyro-bite-border-val').textContent = c.pyroBiteBorder.toFixed(2);
+  document.getElementById('volume-pyro-bite-teeth-val').textContent = c.pyroBiteTeeth.toFixed(2);
+  document.getElementById('volume-pyro-bite-wake-val').textContent = c.pyroBiteWake.toFixed(2);
   document.getElementById('volume-pyro-smoke-fold-val').textContent = c.pyroSmokeFold.toFixed(2);
   document.getElementById('volume-pyro-fold-border-val').textContent = c.pyroFoldBorder.toFixed(2);
+  document.getElementById('volume-pyro-fold-wake-val').textContent = c.pyroFoldWake.toFixed(2);
   document.getElementById('volume-pyro-diagnostic-paint-val').textContent = c.pyroDiagnosticPaint.toFixed(2);
   document.getElementById('volume-pyro-carrier-view-val').textContent = c.pyroCarrierView;
   document.getElementById('volume-pyro-overdrive-val').textContent = c.pyroOverdrive.toFixed(2);
@@ -9824,7 +9848,8 @@ function refreshVolumeReadout() {
     Number.isFinite(pyroCarrierDebug.biteSignalMax) ? pyroCarrierDebug.biteSignalMax.toFixed(2) : '0.00',
     Number.isFinite(pyroCarrierDebug.foldSignalMax) ? pyroCarrierDebug.foldSignalMax.toFixed(2) : '0.00',
   ].join('/');
-  document.getElementById('volume-pyro-carrier-state').textContent = `${pyroCarrierDebug.view || 'normal'} / ${pyroCarrierDrive}x / ${pyroCarrierLevels}`;
+  const pyroCarrierShape = [pyroCarrierDebug.biteShape, pyroCarrierDebug.foldShape].filter(Boolean).join(' / ');
+  document.getElementById('volume-pyro-carrier-state').textContent = `${pyroCarrierDebug.view || 'normal'} / ${pyroCarrierDrive}x / ${pyroCarrierLevels}${pyroCarrierShape ? ` / ${pyroCarrierShape}` : ''}`;
   paintVolumePyroDynamicAtlas(pyroDetail);
   document.getElementById('volume-toggle').textContent = s.active ? 'Disable' : 'Enable';
   document.getElementById('volume-toggle').classList.toggle('active', !!s.active);
@@ -10079,6 +10104,14 @@ async function initKaminosVolumeRoute() {
   if (params.has('volume_pyro_bite_border') && Number.isFinite(routePyroBiteBorder)) {
     document.getElementById('volume-pyro-bite-border').value = String(Math.max(0, Math.min(1, routePyroBiteBorder)));
   }
+  const routePyroBiteTeeth = Number(params.get('volume_pyro_bite_teeth'));
+  if (params.has('volume_pyro_bite_teeth') && Number.isFinite(routePyroBiteTeeth)) {
+    document.getElementById('volume-pyro-bite-teeth').value = String(Math.max(0, Math.min(1, routePyroBiteTeeth)));
+  }
+  const routePyroBiteWake = Number(params.get('volume_pyro_bite_wake'));
+  if (params.has('volume_pyro_bite_wake') && Number.isFinite(routePyroBiteWake)) {
+    document.getElementById('volume-pyro-bite-wake').value = String(Math.max(0, Math.min(1, routePyroBiteWake)));
+  }
   const routePyroSmokeFold = Number(params.get('volume_pyro_smoke_fold'));
   if (params.has('volume_pyro_smoke_fold') && Number.isFinite(routePyroSmokeFold)) {
     document.getElementById('volume-pyro-smoke-fold').value = String(Math.max(0, Math.min(1, routePyroSmokeFold)));
@@ -10086,6 +10119,10 @@ async function initKaminosVolumeRoute() {
   const routePyroFoldBorder = Number(params.get('volume_pyro_fold_border'));
   if (params.has('volume_pyro_fold_border') && Number.isFinite(routePyroFoldBorder)) {
     document.getElementById('volume-pyro-fold-border').value = String(Math.max(0, Math.min(1, routePyroFoldBorder)));
+  }
+  const routePyroFoldWake = Number(params.get('volume_pyro_fold_wake'));
+  if (params.has('volume_pyro_fold_wake') && Number.isFinite(routePyroFoldWake)) {
+    document.getElementById('volume-pyro-fold-wake').value = String(Math.max(0, Math.min(1, routePyroFoldWake)));
   }
   const routePyroDiagnosticPaint = Number(params.get('volume_pyro_diagnostic_paint'));
   const routePyroDebugTint = Number(params.get('volume_pyro_debug_tint'));
@@ -10242,7 +10279,7 @@ async function initKaminosVolumeRoute() {
     volumePrototype.setControls(readVolumeControls());
     refreshVolumeReadout();
   };
-  for (const id of ['volume-scene', 'volume-density', 'volume-fire', 'volume-radiance', 'volume-absorption', 'volume-glow', 'volume-smoke', 'volume-curl', 'volume-microdetail', 'volume-interface-shred', 'volume-fire-licks', 'volume-projection', 'volume-speed', 'volume-steps', 'volume-adaptive-rays', 'volume-occupancy-skip', 'volume-majorant-skip', 'volume-majorant-smooth', 'volume-majorant-guard', 'volume-temporal-accum', 'volume-temporal-jitter', 'volume-history-clamp', 'volume-fire-scale', 'volume-detail-scale', 'volume-plume-height', 'volume-wind-strength', 'volume-wind-angle', 'volume-wind-height', 'volume-render-scale', 'volume-input-radius', 'volume-flow-rate', 'volume-resolution', 'volume-majorant-grid', 'volume-grid-overlay', 'volume-flow-debug', 'volume-pyro-detail', 'volume-pyro-material-gain', 'volume-pyro-interface-focus', 'volume-pyro-edge-bite', 'volume-pyro-bite-border', 'volume-pyro-smoke-fold', 'volume-pyro-fold-border', 'volume-pyro-diagnostic-paint', 'volume-pyro-carrier-view', 'volume-pyro-overdrive', 'volume-pressure-mode', 'volume-pressure-tier-overlay', 'volume-pressure-tier-lower-max', 'volume-pressure-tier-hero-min', 'volume-pressure-tier-hero-max', 'volume-canonical-spread', 'volume-canonical-centerline', 'volume-canonical-body-balance']) {
+  for (const id of ['volume-scene', 'volume-density', 'volume-fire', 'volume-radiance', 'volume-absorption', 'volume-glow', 'volume-smoke', 'volume-curl', 'volume-microdetail', 'volume-interface-shred', 'volume-fire-licks', 'volume-projection', 'volume-speed', 'volume-steps', 'volume-adaptive-rays', 'volume-occupancy-skip', 'volume-majorant-skip', 'volume-majorant-smooth', 'volume-majorant-guard', 'volume-temporal-accum', 'volume-temporal-jitter', 'volume-history-clamp', 'volume-fire-scale', 'volume-detail-scale', 'volume-plume-height', 'volume-wind-strength', 'volume-wind-angle', 'volume-wind-height', 'volume-render-scale', 'volume-input-radius', 'volume-flow-rate', 'volume-resolution', 'volume-majorant-grid', 'volume-grid-overlay', 'volume-flow-debug', 'volume-pyro-detail', 'volume-pyro-material-gain', 'volume-pyro-interface-focus', 'volume-pyro-edge-bite', 'volume-pyro-bite-border', 'volume-pyro-bite-teeth', 'volume-pyro-bite-wake', 'volume-pyro-smoke-fold', 'volume-pyro-fold-border', 'volume-pyro-fold-wake', 'volume-pyro-diagnostic-paint', 'volume-pyro-carrier-view', 'volume-pyro-overdrive', 'volume-pressure-mode', 'volume-pressure-tier-overlay', 'volume-pressure-tier-lower-max', 'volume-pressure-tier-hero-min', 'volume-pressure-tier-hero-max', 'volume-canonical-spread', 'volume-canonical-centerline', 'volume-canonical-body-balance']) {
     document.getElementById(id).addEventListener('input', syncControls);
     document.getElementById(id).addEventListener('change', syncControls);
   }
