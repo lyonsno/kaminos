@@ -265,6 +265,9 @@ try {
   assert.equal(liveMissingReport.stages[0].effectiveRoute.pipelineScheduler.scheduler.requestedScheduler.mode, 'throughput');
   assert.equal(liveMissingReport.stages[0].effectiveRoute.pipelineScheduler.scheduler.verificationState, 'scheduler-unverified');
   assert.equal(liveMissingReport.stages[0].effectiveRoute.pipelineScheduler.scheduler.effectiveScheduler.unsupportedFields.includes('phaseChunkSize'), true);
+  assert.equal(liveMissingReport.stages[0].effectiveRoute.pipelineScheduler.scheduler.breathability.spans.length, 5);
+  assert.equal(liveMissingReport.stages[0].effectiveRoute.pipelineScheduler.scheduler.breathability.checkpoints.length, 5);
+  assert.equal(liveMissingReport.stages[0].effectiveRoute.pipelineScheduler.scheduler.breathability.spans[0].kind, 'gpu-submit-bound');
   assert.equal(liveMissingReport.stages[0].effectiveRoute.pipelineScheduler.backpressure.schema, 'kaminos.webgpu-route-backpressure.v0');
   assert.equal(liveMissingReport.stages[0].effectiveRoute.pipelineScheduler.raw.breathingRoom.status, 'scheduler-unverified');
   assert.deepEqual(liveMissingReport.stages[0].effectiveRoute.pipelineScheduler.failureDowngrades, ['effective-scheduler-missing']);
@@ -444,6 +447,9 @@ writeFileSync(report, JSON.stringify({
   assert.equal(liveReport.stages[0].effectiveRoute.adapterReport.pipelineScheduler.scheduler.requestedScheduler.phaseChunkSize.spnPatch, 1);
   assert.equal(liveReport.stages[0].effectiveRoute.adapterReport.pipelineScheduler.scheduler.effectiveScheduler.phaseChunkSize.spnPatch, 1);
   assert.equal(liveReport.stages[0].effectiveRoute.adapterReport.pipelineScheduler.scheduler.effectiveScheduler.unsupportedFields.includes('phaseChunkSize'), true);
+  assert.equal(liveReport.stages[0].effectiveRoute.adapterReport.pipelineScheduler.scheduler.breathability.spans.length, 5);
+  assert.equal(liveReport.stages[0].effectiveRoute.adapterReport.pipelineScheduler.scheduler.breathability.checkpoints.length, 5);
+  assert.match(liveReport.stages[0].effectiveRoute.adapterReport.pipelineScheduler.scheduler.breathability.notes, /SHARP is furnace-class/);
   assert.equal(liveReport.stages[0].effectiveRoute.adapterReport.pipelineScheduler.backpressure.schema, 'kaminos.webgpu-route-backpressure.v0');
   assert.equal(liveReport.stages[0].effectiveRoute.adapterReport.pipelineScheduler.raw.breathingRoom.status, 'verified');
   assert.deepEqual(liveReport.stages[0].effectiveRoute.adapterReport.pipelineScheduler.phaseBoundaries, ['spn-patch-chunk']);

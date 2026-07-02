@@ -4869,6 +4869,30 @@ function pipelineGraphSchedulerEvidenceLabel(evidence) {
   return state;
 }
 
+function pipelineGraphSchedulerBreathability(evidence) {
+  return evidence?.scheduler?.breathability || null;
+}
+
+function pipelineGraphSchedulerBreathabilityState(evidence) {
+  if (!evidence) return 'missing';
+  const breathability = pipelineGraphSchedulerBreathability(evidence);
+  const spans = Array.isArray(breathability?.spans) ? breathability.spans : [];
+  const checkpoints = Array.isArray(breathability?.checkpoints) ? breathability.checkpoints : [];
+  if (spans.length && checkpoints.length) return 'kit-backed-breathability';
+  if (evidence?.scheduler?.schema === 'kaminos.webgpu-route-scheduler.v0') return 'scheduler-without-breathability';
+  return 'missing';
+}
+
+function pipelineGraphSchedulerBreathabilityLabel(evidence) {
+  const breathability = pipelineGraphSchedulerBreathability(evidence);
+  const spans = Array.isArray(breathability?.spans) ? breathability.spans.length : 0;
+  const checkpoints = Array.isArray(breathability?.checkpoints) ? breathability.checkpoints.length : 0;
+  const state = pipelineGraphSchedulerBreathabilityState(evidence);
+  if (state === 'kit-backed-breathability') return `kit-backed breathability: ${spans} span${spans === 1 ? '' : 's'}, ${checkpoints} checkpoint${checkpoints === 1 ? '' : 's'}`;
+  if (state === 'scheduler-without-breathability') return 'scheduler profile lacks kit breathability metadata';
+  return 'no breathability evidence';
+}
+
 function pipelineRouteUsesFixture(routeOrNode = null) {
   if (routeOrNode?.fixtureBacked) return true;
   const pipeline = routeOrNode?.pipeline || routeOrNode || selectedPipelineRecord();
@@ -5533,6 +5557,7 @@ function pipelineRouteLiveStatusRecord(nodeOrRouteId) {
       phase: 'idle',
       message: 'No route execution yet',
       schedulerState: 'missing',
+      breathabilityState: 'missing',
       schedulerEvidence: null,
       outputId: null,
       runId: null,
@@ -5544,6 +5569,7 @@ function pipelineRouteLiveStatusRecord(nodeOrRouteId) {
     message: record.statusMessage || pipelineGeneratedOutputStatusLabel(record),
     progress: Number.isFinite(record.progress) ? record.progress : null,
     schedulerState: pipelineGraphSchedulerEvidenceState(schedulerEvidence),
+    breathabilityState: pipelineGraphSchedulerBreathabilityState(schedulerEvidence),
     schedulerEvidence,
     outputId: record.id || null,
     runId: record.runId || null,
@@ -6180,6 +6206,7 @@ function pipelineGraphInspectorRows(node, selectedRun) {
     rows.push({ key: 'route progress', value: Number.isFinite(routeLiveStatus.progress) ? `${Math.round(routeLiveStatus.progress * 100)}%` : 'not reported' });
     rows.push({ key: 'route message', value: routeLiveStatus.message || 'No route execution yet' });
     rows.push({ key: 'route scheduler', value: pipelineGraphSchedulerEvidenceLabel(routeLiveStatus.schedulerEvidence) });
+    rows.push({ key: 'route breathability', value: pipelineGraphSchedulerBreathabilityLabel(routeLiveStatus.schedulerEvidence) });
     if (pipelineRouteUsesFixture(node)) rows.push({ key: 'truth', value: pipelineFixtureInputBoundaryText(node) });
     if (selectedRun) {
       rows.push({ key: 'fixture', value: pipelineRunUsesFixture(selectedRun) ? 'yes' : 'no' });
@@ -6197,6 +6224,8 @@ function pipelineGraphInspectorRows(node, selectedRun) {
   if (node.kind === 'generated-output') rows.push({ key: 'scheduler', value: pipelineGraphSchedulerEvidenceLabel(node.schedulerEvidence) });
   if (node.kind === 'generated-output') rows.push({ key: 'scheduler profile', value: node.schedulerEvidence?.scheduler?.schema || 'missing' });
   if (node.kind === 'generated-output') rows.push({ key: 'backpressure profile', value: node.schedulerEvidence?.backpressure?.schema || 'missing' });
+  if (node.kind === 'generated-output') rows.push({ key: 'breathability', value: pipelineGraphSchedulerBreathabilityLabel(node.schedulerEvidence) });
+  if (node.kind === 'generated-output') rows.push({ key: 'breathability checkpoints', value: String(node.schedulerEvidence?.scheduler?.breathability?.checkpoints?.length || 0) });
   if (node.kind === 'generated-output') rows.push({ key: 'graph relation', value: pipelineGeneratedOutputGraphRelation(node) });
   if (node.kind === 'generated-output') rows.push({ key: 'preview', value: node.previewTruth || 'point-cloud preview' });
   if (node.kind === 'generated-output') rows.push({ key: 'loadable', value: node.loadable ? 'yes' : 'no; open artifact evidence instead' });
@@ -6960,6 +6989,7 @@ function pipelineGraphNodeActionsMarkup(node) {
         data-pipeline-route-live-phase="${escapeHtml(liveStatus.phase || 'idle')}"
         data-pipeline-route-progress="${Number.isFinite(liveStatus.progress) ? escapeHtml(String(liveStatus.progress)) : ''}"
         data-pipeline-route-scheduler-state="${escapeHtml(liveStatus.schedulerState || 'missing')}"
+        data-pipeline-breathability-state="${escapeHtml(liveStatus.breathabilityState || 'missing')}"
         title="${escapeHtml(liveStatus.message || latestStatus)}"
       >${escapeHtml(latestStatus)}</span>
       <span class="pipeline-graph-node-actions">
@@ -6994,9 +7024,11 @@ function pipelineGraphNodeActionsMarkup(node) {
     const artifactRole = node.artifactRole || pipelineArtifactRoleLabel(node.artifact);
     const loadable = pipelineArtifactIsLoadableSplat(node.artifact);
     const schedulerState = pipelineGraphSchedulerEvidenceState(node.schedulerEvidence);
+    const breathabilityState = pipelineGraphSchedulerBreathabilityState(node.schedulerEvidence);
     return `
       <span class="pipeline-graph-node-status ${escapeHtml(status)}" data-pipeline-generated-output-status="${escapeHtml(status)}" data-pipeline-artifact-role="${escapeHtml(artifactRole)}">${escapeHtml(pipelineGeneratedOutputStatusLabel(node))}</span>
       <span class="pipeline-graph-node-status ${escapeHtml(schedulerState)}" data-pipeline-scheduler-state="${escapeHtml(schedulerState)}">${escapeHtml(pipelineGraphSchedulerEvidenceLabel(node.schedulerEvidence))}</span>
+      <span class="pipeline-graph-node-status ${escapeHtml(breathabilityState)}" data-pipeline-breathability-state="${escapeHtml(breathabilityState)}">${escapeHtml(pipelineGraphSchedulerBreathabilityLabel(node.schedulerEvidence))}</span>
       <span class="pipeline-graph-node-actions">
         <button
           type="button"
@@ -7100,10 +7132,12 @@ function renderPipelineGraphWorkbench() {
       ${node.kind === 'generated-output' ? `data-pipeline-generated-output-node-id="${escapeHtml(node.id)}"` : ''}
       ${node.kind === 'generated-output' ? `data-pipeline-generated-output-status="${escapeHtml(node.status || 'complete')}"` : ''}
       ${node.kind === 'generated-output' ? `data-pipeline-scheduler-state="${escapeHtml(pipelineGraphSchedulerEvidenceState(node.schedulerEvidence))}"` : ''}
+      ${node.kind === 'generated-output' ? `data-pipeline-breathability-state="${escapeHtml(pipelineGraphSchedulerBreathabilityState(node.schedulerEvidence))}"` : ''}
       ${node.kind === 'route' ? `data-pipeline-route-live-status="${escapeHtml(pipelineRouteLiveStatusRecord(node).status || 'idle')}"` : ''}
       ${node.kind === 'route' ? `data-pipeline-route-live-phase="${escapeHtml(pipelineRouteLiveStatusRecord(node).phase || 'idle')}"` : ''}
       ${node.kind === 'route' ? `data-pipeline-route-progress="${Number.isFinite(pipelineRouteLiveStatusRecord(node).progress) ? escapeHtml(String(pipelineRouteLiveStatusRecord(node).progress)) : ''}"` : ''}
       ${node.kind === 'route' ? `data-pipeline-route-scheduler-state="${escapeHtml(pipelineRouteLiveStatusRecord(node).schedulerState || 'missing')}"` : ''}
+      ${node.kind === 'route' ? `data-pipeline-breathability-state="${escapeHtml(pipelineRouteLiveStatusRecord(node).breathabilityState || 'missing')}"` : ''}
       aria-pressed="${node.id === pipelineDockState.selectedGraphNodeId ? 'true' : 'false'}"
       style="left: ${position.x}px; top: ${position.y}px;"
     >
@@ -7279,6 +7313,8 @@ function pipelineRunResultRows(result) {
     { key: 'scheduler', value: pipelineGraphSchedulerEvidenceLabel(schedulerEvidence) },
     { key: 'scheduler profile', value: schedulerEvidence?.scheduler?.schema || 'missing' },
     { key: 'backpressure profile', value: schedulerEvidence?.backpressure?.schema || 'missing' },
+    { key: 'breathability', value: pipelineGraphSchedulerBreathabilityLabel(schedulerEvidence) },
+    { key: 'breathability checkpoints', value: String(schedulerEvidence?.scheduler?.breathability?.checkpoints?.length || 0) },
     { key: 'report', value: result.report?.path || 'missing' },
     { key: 'bundle', value: result.bundle?.path || 'missing' },
     { key: 'artifact role', value: artifactRole || 'none' },
