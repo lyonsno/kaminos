@@ -1494,3 +1494,6 @@ assert.match(fieldResidualProbe, /conditionedFeatureCount/, 'field residual prob
 assert.match(fieldResidualProbe, /--target-channel-list/, 'field residual probe can train against an explicit decomposed target channel list');
 assert.match(fieldResidualProbe, /--target-channel-group/, 'field residual probe exposes named target channel groups for decomposition probes');
 assert.match(fieldResidualProbe, /targetChannelIndexes/, 'field residual probe reports selected target channel indexes');
+assert.match(fieldResidualProbe, /--artifact-dir/, 'field residual probe can write offline residual application artifacts without touching rendering');
+assert.match(fieldResidualProbe, /kaminos.volume.field-residual-application-artifact.v0/, 'field residual application artifacts carry a stable schema identity');
+assert.match(fieldResidualProbe, /residualApplicationArtifact/, 'field residual probe reports the residual application artifact manifest path and authority');

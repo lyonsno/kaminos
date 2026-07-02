@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import os
@@ -18,6 +19,8 @@ import numpy as np
 
 
 REPORT_SCHEMA = "kaminos.volume.field-residual-probe.v0"
+RESIDUAL_APPLICATION_ARTIFACT_SCHEMA = "kaminos.volume.field-residual-application-artifact.v0"
+RESIDUAL_APPLICATION_ARTIFACT_IDENTITY = "offline-test-tile-target-residual-application-v0"
 AFFINE_MODEL_IDENTITY = "same-bin-per-channel-affine-ridge-v0"
 SPATIAL_CONTEXT_MODEL_IDENTITY = "spatial-context-linear-ridge-v0"
 SPATIAL_CONTEXT_MLP_MODEL_IDENTITY = "spatial-context-mlp-residual-v0"
@@ -205,6 +208,11 @@ def parse_args() -> argparse.Namespace:
         default="all",
         help="Named target channel group for decomposition probes.",
     )
+    parser.add_argument(
+        "--artifact-dir",
+        default=None,
+        help="Optional directory for offline residual application artifacts over the held-out test tiles.",
+    )
     return parser.parse_args()
 
 
@@ -227,6 +235,25 @@ def git_value(args: list[str], fallback: str | None = None) -> str | None:
 def write_json(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(to_jsonable(payload), indent=2) + "\n", encoding="utf-8")
+
+
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def write_float32_payload(path: Path, values: np.ndarray) -> dict[str, Any]:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    np.asarray(values, dtype=np.float32).tofile(path)
+    return {
+        "path": str(path),
+        "dtype": "float32",
+        "byteLength": int(path.stat().st_size),
+        "sha256": sha256_file(path),
+    }
 
 
 def to_jsonable(value: Any) -> Any:
@@ -282,6 +309,7 @@ def base_report(args: argparse.Namespace) -> dict[str, Any]:
             "routeConditioning": args.route_conditioning,
             "targetChannelList": args.target_channel_list,
             "targetChannelGroup": args.target_channel_group,
+            "artifactDir": args.artifact_dir,
         },
         "route": {
             "cwd": str(Path.cwd()),
@@ -1182,6 +1210,138 @@ def summarize_matches(matches: list[dict[str, Any]], indexes: list[int]) -> list
     ]
 
 
+def safe_slug(value: Any) -> str:
+    chars = []
+    for char in str(value):
+        chars.append(char if char.isalnum() or char in ("-", "_") else "-")
+    slug = "".join(chars).strip("-")
+    return slug or "unknown"
+
+
+def artifact_tile_metrics(prediction: np.ndarray, truth: np.ndarray) -> dict[str, float]:
+    error = prediction.astype(np.float64) - truth.astype(np.float64)
+    absolute = np.abs(error)
+    return {
+        "mse": float(np.mean(error ** 2)),
+        "mae": float(np.mean(absolute)),
+        "maxAbsError": float(np.max(absolute)),
+    }
+
+
+def write_residual_application_artifact(
+    args: argparse.Namespace,
+    manifest_path: Path,
+    dataset: dict[str, Any],
+    report: dict[str, Any],
+    matches: list[dict[str, Any]],
+    test_indexes: list[int],
+    test_low_tiles: list[np.ndarray],
+    test_high_tiles: list[np.ndarray],
+    model_prediction_test: np.ndarray,
+    target_indexes: list[int],
+    target_channels: dict[str, Any],
+) -> dict[str, Any] | None:
+    if not args.artifact_dir:
+        return None
+    artifact_dir = Path(args.artifact_dir).resolve()
+    tile_dir = artifact_dir / "tiles"
+    target_channel_count = int(target_channels["targetChannelCount"])
+    if target_channel_count <= 0:
+        raise ProbeFailure("artifact-write", "artifact target channel count must be positive", {"targetChannels": target_channels})
+
+    offset = 0
+    tiles: list[dict[str, Any]] = []
+    for order, match_index in enumerate(test_indexes):
+        match = matches[match_index]
+        low_tile = test_low_tiles[order]
+        high_tile = test_high_tiles[order]
+        spatial_shape = [int(value) for value in low_tile.shape[:-1]]
+        voxel_count = product(spatial_shape)
+        target_shape = [*spatial_shape, target_channel_count]
+        low_target = select_channels(low_tile.reshape(-1, low_tile.shape[-1]), target_indexes).reshape(target_shape)
+        truth_target = select_channels(high_tile.reshape(-1, high_tile.shape[-1]), target_indexes).reshape(target_shape)
+        prediction_target = model_prediction_test[offset:offset + voxel_count].reshape(target_shape)
+        offset += voxel_count
+        residual_target = prediction_target - low_target
+        error_target = prediction_target - truth_target
+        stem = f"{order + 1:04d}-{safe_slug(match.get('pairId'))}-{safe_slug(match.get('matchId'))}"
+        tiles.append({
+            "order": order,
+            "pairId": match.get("pairId"),
+            "matchId": match.get("matchId"),
+            "routeVariantIdentity": match.get("routeVariantIdentity"),
+            "replayStateIdentity": match.get("replayStateIdentity"),
+            "shape": target_shape,
+            "targetChannels": target_channels["targetChannels"],
+            "sourceLowPath": match.get("lowPath"),
+            "sourceHighPath": match.get("highPath"),
+            "lowTarget": write_float32_payload(tile_dir / f"{stem}-low-target.f32", low_target),
+            "predictedHighTarget": write_float32_payload(tile_dir / f"{stem}-predicted-high-target.f32", prediction_target),
+            "residualTarget": write_float32_payload(tile_dir / f"{stem}-residual-target.f32", residual_target),
+            "truthHighTarget": write_float32_payload(tile_dir / f"{stem}-truth-high-target.f32", truth_target),
+            "errorTarget": write_float32_payload(tile_dir / f"{stem}-error-target.f32", error_target),
+            "metrics": artifact_tile_metrics(prediction_target, truth_target),
+        })
+
+    if offset != int(model_prediction_test.shape[0]):
+        raise ProbeFailure(
+            "artifact-write",
+            "artifact prediction/test tile sample counts diverged",
+            {"predictionSamples": int(model_prediction_test.shape[0]), "writtenSamples": offset},
+        )
+
+    manifest = {
+        "schema": RESIDUAL_APPLICATION_ARTIFACT_SCHEMA,
+        "identity": RESIDUAL_APPLICATION_ARTIFACT_IDENTITY,
+        "status": "written",
+        "createdAt": utc_now(),
+        "artifactAuthority": "offline-residual-application-on-heldout-field-tiles-not-renderer-integration",
+        "sourceManifest": str(manifest_path),
+        "sourceDataset": {
+            "schema": dataset.get("schema"),
+            "status": dataset.get("status"),
+            "gitCommit": dataset.get("gitCommit"),
+            "pairAuthority": dataset.get("pairAuthority"),
+            "fieldAuthority": dataset.get("fieldAuthority"),
+            "fieldTileExport": dataset.get("fieldTileExport"),
+        },
+        "probeReport": str(Path(args.out).resolve()),
+        "model": {
+            "identity": report.get("identity"),
+            "backend": report.get("backend"),
+            "targetChannels": target_channels,
+        },
+        "split": {
+            "splitStrategy": report.get("data", {}).get("splitStrategy"),
+            "holdoutAxis": report.get("data", {}).get("holdoutAxis"),
+            "holdoutValue": report.get("data", {}).get("holdoutValue"),
+            "replayStateFilter": report.get("data", {}).get("replayStateFilter"),
+        },
+        "metrics": {
+            "test": report.get("metrics", {}).get("test"),
+        },
+        "tileCount": len(tiles),
+        "sampleCount": int(model_prediction_test.shape[0]),
+        "tiles": tiles,
+        "limitation": "Offline field-target application artifact only; does not mutate simulator state, rendering, or product paths.",
+    }
+    artifact_manifest_path = artifact_dir / "manifest.json"
+    write_json(artifact_manifest_path, manifest)
+    return {
+        "schema": RESIDUAL_APPLICATION_ARTIFACT_SCHEMA,
+        "identity": RESIDUAL_APPLICATION_ARTIFACT_IDENTITY,
+        "status": "written",
+        "artifactDir": str(artifact_dir),
+        "manifestPath": str(artifact_manifest_path),
+        "manifestSha256": sha256_file(artifact_manifest_path),
+        "artifactAuthority": manifest["artifactAuthority"],
+        "tileCount": len(tiles),
+        "sampleCount": int(model_prediction_test.shape[0]),
+        "targetChannels": target_channels["targetChannels"],
+        "limitation": manifest["limitation"],
+    }
+
+
 def run(args: argparse.Namespace) -> dict[str, Any]:
     manifest_path = Path(args.manifest).resolve()
     dataset = read_manifest(manifest_path)
@@ -1380,6 +1540,21 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         report["data"]["contextFeatureCount"] = context["contextFeatureCount"]
         report["data"]["conditionedFeatureCount"] = context["conditionedFeatureCount"]
         report["data"]["routeConditioning"] = context["routeConditioning"]
+    residual_application_artifact = write_residual_application_artifact(
+        args,
+        manifest_path,
+        dataset,
+        report,
+        usable_matches,
+        test_indexes,
+        test_low_tiles,
+        test_high_tiles,
+        model_prediction_test,
+        target_indexes,
+        target_channels,
+    )
+    if residual_application_artifact is not None:
+        report["residualApplicationArtifact"] = residual_application_artifact
     return report
 
 
