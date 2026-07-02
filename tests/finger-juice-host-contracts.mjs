@@ -17,6 +17,10 @@ const hostCoreSource = readFileSync(hostCorePath, 'utf8');
 const hostWitnessSource = readFileSync(hostWitnessPath, 'utf8');
 const indexSource = readFileSync(indexPath, 'utf8');
 const mainSource = readFileSync(mainPath, 'utf8');
+const fingerJuiceHostMarkup = indexSource.slice(
+  indexSource.indexOf('id="tab-finger-juice-host"'),
+  indexSource.indexOf('id="tab-greenroom"'),
+);
 
 assert.match(hostCoreSource, /KAMINOS_FINGER_JUICE_HOST_STATE_SCHEMA\s*=\s*'kaminos\.finger-juice-host\.state\.v0'/, 'native host state schema is explicit');
 assert.match(hostCoreSource, /KAMINOS_FINGER_JUICE_HOST_ROUTE\s*=\s*'kaminos\/finger-juice-host'/, 'native host route identity is explicit');
@@ -30,7 +34,13 @@ assert.match(hostCoreSource, /direct_lerms_finger_juice_debug_route/, 'host core
 
 assert.match(indexSource, /data-tab="finger-juice-host"/, 'Kaminos sidebar exposes a native Finger Juice host tab');
 assert.match(indexSource, /id="tab-finger-juice-host"/, 'Kaminos app shell contains native Finger Juice host content');
-assert.match(indexSource, /kaminos_finger_juice_host=1/, 'Kaminos route can open directly into the native host');
+assert.match(mainSource, /kaminos_finger_juice_host/, 'Kaminos route can open directly into the native host');
+assert.match(fingerJuiceHostMarkup, /Finger Juice Preview/, 'operator-facing Finger Juice host panel names the preview surface');
+assert.match(hostCoreSource, /hostLabel:\s*'Finger Juice Preview'/, 'native Finger Juice host state uses the product-facing preview label');
+assert.match(indexSource, /id="finger-juice-host-overlay-title">Finger Juice Preview</, 'viewport Finger Juice host badge uses the product-facing preview label');
+assert.match(fingerJuiceHostMarkup, />Update now</, 'operator-facing Finger Juice host control exposes a one-shot preview update');
+assert.match(fingerJuiceHostMarkup, />View source</, 'operator-facing Finger Juice host keeps source view as an explicit escape hatch');
+assert.doesNotMatch(fingerJuiceHostMarkup, />Load Packet<|>Open Direct<|<span class="field-key">Route<\/span>|<span class="field-key">Host<\/span>|<span class="field-key">Packet<\/span>/, 'first-read Finger Juice host controls must not expose packet/route substrate labels');
 assert.match(mainSource, /finger_juice_host_root/, 'native host supports file-root packet loading');
 assert.match(mainSource, /finger_juice_host_path/, 'native host supports file-path packet loading');
 assert.match(mainSource, /finger_juice_host_url/, 'native host supports direct packet URL loading');

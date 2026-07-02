@@ -7342,7 +7342,7 @@ async function loadFingerJuiceHostPacket(route = fingerJuiceHostRouteFromParams(
     publishKaminosHostSurfaceState(fingerJuiceHostState, 'loaded');
     updateFingerJuiceHostReadout();
     drawFingerJuiceHostPreview();
-    setInfo(`Finger Juice host packet loaded: ${fingerJuiceHostState.sourceAuthority} · ${fingerJuiceHostState.previewParticleCount} preview particles`);
+    setInfo(`Finger Juice preview updated: ${fingerJuiceHostState.sourceAuthority} · ${fingerJuiceHostState.previewParticleCount} preview particles`);
     return fingerJuiceHostState;
   } catch (error) {
     fingerJuiceHostState = {
@@ -7352,7 +7352,7 @@ async function loadFingerJuiceHostPacket(route = fingerJuiceHostRouteFromParams(
     };
     updateFingerJuiceHostReadout();
     drawFingerJuiceHostPreview();
-    setInfo(`Finger Juice host packet failed: ${error.message || error}`);
+    setInfo(`Finger Juice update failed: ${error.message || error}`);
     throw error;
   }
 }

@@ -11,7 +11,7 @@ export const BIG_PAPA_FINGER_JUICE_RENDER_PAYLOAD_PREVIEW_SCHEMA = 'big-papa-fin
 
 export const FINGER_JUICE_HOST_ADAPTER = {
   hostId: 'finger-juice',
-  hostLabel: 'Finger Juice Host',
+  hostLabel: 'Finger Juice Preview',
   hostRoute: KAMINOS_FINGER_JUICE_HOST_ROUTE,
   hostStateSchema: KAMINOS_FINGER_JUICE_HOST_STATE_SCHEMA,
   packetSchema: BIG_PAPA_FINGER_JUICE_HOST_PACKET_SCHEMA,
