@@ -162,6 +162,10 @@ assert.ok(existsSync(nativeHostLitePath), 'Kaminos has a lightweight native-host
 const hostCoreSource = readFileSync(hostCorePath, 'utf8');
 const indexSource = readFileSync(indexPath, 'utf8');
 const nativeHostLiteSource = readFileSync(nativeHostLitePath, 'utf8');
+const gloveWellHostMarkup = indexSource.slice(
+  indexSource.indexOf('id="tab-glove-well-host"'),
+  indexSource.indexOf('id="tab-finger-juice-host"'),
+);
 
 assert.match(hostCoreSource, /KAMINOS_GLOVE_WELL_HOST_STATE_SCHEMA\s*=\s*'kaminos\.glove-well-host\.state\.v0'/, 'native host state schema is explicit');
 assert.match(hostCoreSource, /KAMINOS_GLOVE_WELL_HOST_ROUTE\s*=\s*'kaminos\/glove-well-host'/, 'native host route identity is explicit');
@@ -172,12 +176,14 @@ assert.match(hostCoreSource, /createGloveWellHostState/, 'host core exports Kami
 
 assert.match(indexSource, /data-tab="glove-well-host"/, 'Kaminos sidebar exposes a native Glove Well host tab');
 assert.match(indexSource, /id="tab-glove-well-host"/, 'Kaminos app shell contains native Glove Well host content');
-assert.match(indexSource, /kaminos_glove_well_host=1/, 'Kaminos route can open directly into the native host');
-assert.match(indexSource, /id="glove-well-host-live-start"/, 'native host exposes a start-live control');
-assert.match(indexSource, /id="glove-well-host-live-stop"/, 'native host exposes a stop-live control');
-assert.match(indexSource, /id="glove-well-host-live-status"/, 'native host shows effective live/polling state');
-assert.match(indexSource, />Start Packet Polling</, 'operator-facing Glove Well control names packet polling rather than claiming producer-live mode');
-assert.match(indexSource, />Stop Packet Polling</, 'operator-facing Glove Well stop control names packet polling rather than producer-live mode');
+assert.match(indexSource, /params\.get\('kaminos_glove_well_host'\) === '1'/, 'Kaminos route can open directly into the native host');
+assert.match(indexSource, />Update now</, 'operator-facing Glove Well control exposes a one-shot preview update');
+assert.match(indexSource, />Resume updates</, 'operator-facing Glove Well control resumes following the source');
+assert.match(indexSource, />Pause updates</, 'operator-facing Glove Well control pauses source updates');
+assert.match(indexSource, /id="glove-well-host-live-start"/, 'native host exposes a resume-updates control');
+assert.match(indexSource, /id="glove-well-host-live-stop"/, 'native host exposes a pause-updates control');
+assert.match(indexSource, /id="glove-well-host-live-status"/, 'native host shows effective update state');
+assert.doesNotMatch(gloveWellHostMarkup, />Load Packet<|>Start Packet Polling<|>Stop Packet Polling</, 'first-read Glove Well controls must not expose packet/polling substrate labels');
 assert.match(indexSource, /nativeHostOnly/, 'canvas native-host routes have a fast path that skips full editor/WebGPU bootstrap');
 assert.match(indexSource, /native-host-lite\.js/, 'Glove Well native host route can load the lightweight host module');
 assert.match(indexSource, /kaminos-main\.js/, 'full editor bootstrap is loaded only when the route is not a native host smoke');
@@ -188,7 +194,12 @@ assert.match(nativeHostLiteSource, /glove_well_host_path/, 'native host supports
 assert.match(nativeHostLiteSource, /glove_well_host_url/, 'native host supports direct packet URL loading');
 assert.match(nativeHostLiteSource, /glove_well_host_live/, 'native host supports explicit live polling route mode');
 assert.match(nativeHostLiteSource, /glove_well_host_poll_ms/, 'native host supports caller-selected live poll cadence');
-assert.match(nativeHostLiteSource, /Start Packet Polling|packet polling/, 'lightweight host preserves product-facing packet polling language');
+assert.match(nativeHostLiteSource, /No preview loaded|Updating|Paused|Update failed/, 'lightweight host preserves product-facing update status language');
+assert.match(nativeHostLiteSource, /startButton\.hidden = updating/, 'lightweight host hides resume while following source updates');
+assert.match(nativeHostLiteSource, /startButton\.style\.display = updating \? 'none' : ''/, 'lightweight host display state cannot be overridden by button CSS');
+assert.match(nativeHostLiteSource, /stopButton\.hidden = !updating/, 'lightweight host hides pause while source updates are paused');
+assert.match(nativeHostLiteSource, /stopButton\.style\.display = updating \? '' : 'none'/, 'lightweight host display state cannot expose both live controls');
+assert.doesNotMatch(nativeHostLiteSource, /packet idle|packet loading|packet loaded|packet polling|packet polling stopped|packet polling error/, 'lightweight host status must not expose packet/polling substrate labels');
 assert.match(indexSource, /id="glove-well-host-canvas"/, 'native host owns a canvas instead of accepting a LERMS debug page as host surface');
 assert.match(nativeHostLiteSource, /window\.kaminosGloveWellHostDebugState/, 'native host exposes state for browser witnesses');
 assert.match(nativeHostLiteSource, /window\.kaminosStartGloveWellHostLive/, 'native host exposes live polling start for witnesses/producers');

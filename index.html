@@ -1100,23 +1100,23 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 
   <!-- Glove Well Host Tab -->
   <div class="tab-content" id="tab-glove-well-host">
-    <h2>Glove Well Host</h2>
+    <h2>Glove Well Preview</h2>
     <div class="panel">
-      <div class="field"><span class="field-key">Route</span><span class="route-chip">kaminos_glove_well_host=1</span></div>
-      <div class="field"><span class="field-key">Host</span><span class="field-val">kaminos/glove-well-host</span></div>
-      <div class="field"><span class="field-key">Packet</span><span class="field-val" id="glove-well-host-packet-schema">lerms.glove-well-host-packet.v0</span></div>
+      <div class="field"><span class="field-key">Mode</span><span class="route-chip">Glove Well preview</span></div>
+      <div class="field"><span class="field-key">Surface</span><span class="field-val">Kaminos Glove Well</span></div>
+      <div class="field"><span class="field-key">Data</span><span class="field-val" id="glove-well-host-packet-schema">lerms.glove-well-host-packet.v0</span></div>
       <div class="field"><span class="field-key">Source</span><span class="field-val" id="glove-well-host-packet-url">pending</span></div>
       <div class="volume-actions">
-        <button class="btn" id="glove-well-host-load">Load Packet</button>
-        <button class="btn" id="glove-well-host-live-start">Start Packet Polling</button>
-        <button class="btn" id="glove-well-host-live-stop">Stop Packet Polling</button>
+        <button class="btn" id="glove-well-host-load">Update now</button>
+        <button class="btn" id="glove-well-host-live-start">Resume updates</button>
+        <button class="btn" id="glove-well-host-live-stop">Pause updates</button>
       </div>
     </div>
     <div class="panel glove-well-host-readout">
       <div class="field"><span class="field-key">Authority</span><span class="field-val" id="glove-well-host-source-authority">pending</span></div>
       <div class="field"><span class="field-key">Truth</span><span class="field-val" id="glove-well-host-source-truth">pending</span></div>
       <div class="field"><span class="field-key">Freshness</span><span class="field-val" id="glove-well-host-freshness">pending</span></div>
-      <div class="field"><span class="field-key">Packet</span><span class="field-val" id="glove-well-host-live-status">idle</span></div>
+      <div class="field"><span class="field-key">Updates</span><span class="field-val" id="glove-well-host-live-status">Paused</span></div>
       <div class="field"><span class="field-key">Frame</span><span class="field-val" id="glove-well-host-frame">pending</span></div>
       <div class="field"><span class="field-key">Phase</span><span class="field-val" id="glove-well-host-phase">pending</span></div>
       <div class="field"><span class="field-key">Primitives</span><span class="field-val" id="glove-well-host-primitives">0</span></div>

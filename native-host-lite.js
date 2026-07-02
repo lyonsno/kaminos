@@ -111,17 +111,17 @@ function gloveWellHostLiveStatusLabel(state = gloveWellHostState) {
   const bridge = state.liveBridge || {};
   const status = bridge.status || (bridge.active ? 'polling' : 'idle');
   const statusLabel = {
-    idle: 'packet idle',
-    loading: 'packet loading',
-    loaded: 'packet loaded',
-    polling: 'packet polling',
-    stopped: 'packet polling stopped',
-    error: 'packet error',
-    'polling-error': 'packet polling error',
-  }[status] || `packet ${status}`;
-  const cadence = Number.isFinite(Number(bridge.pollMs)) && Number(bridge.pollMs) > 0 ? `${Number(bridge.pollMs)}ms` : 'manual';
+    idle: 'No preview loaded',
+    loading: 'Updating',
+    loaded: 'Loaded',
+    polling: 'Updating',
+    stopped: 'Paused',
+    error: 'Update failed',
+    'polling-error': 'Update failed',
+  }[status] || status;
+  const cadence = bridge.active && Number.isFinite(Number(bridge.pollMs)) && Number(bridge.pollMs) > 0 ? `every ${Number(bridge.pollMs)}ms` : null;
   const count = Number.isFinite(Number(state.packetLoadCount)) ? Number(state.packetLoadCount) : 0;
-  return `${statusLabel} · ${cadence} · ${count} loads`;
+  return [statusLabel, cadence, `${count} updates`].filter(Boolean).join(' · ');
 }
 
 function updateGloveWellHostReadout() {
@@ -141,6 +141,15 @@ function updateGloveWellHostReadout() {
   document.getElementById('glove-well-host-custody').textContent = state.sourceCustody?.greedyOwns?.length && state.sourceCustody?.kaminosOwns?.length
     ? 'split'
     : 'pending';
+  const startButton = document.getElementById('glove-well-host-live-start');
+  const stopButton = document.getElementById('glove-well-host-live-stop');
+  if (startButton && stopButton) {
+    const updating = state.liveBridge?.active === true;
+    startButton.hidden = updating;
+    startButton.style.display = updating ? 'none' : '';
+    stopButton.hidden = !updating;
+    stopButton.style.display = updating ? '' : 'none';
+  }
   sourceAuthorityEl.classList.toggle('present', state.sourceAuthority === 'synthetic_fixture' || state.sourceAuthority === 'live_simulation');
   sourceAuthorityEl.classList.toggle('missing', state.status === 'error' || state.sourceAuthority === 'pending');
   const downgradeList = document.getElementById('glove-well-host-downgrades');
@@ -318,7 +327,7 @@ async function loadGloveWellHostPacket(route = gloveWellHostRouteFromParams()) {
   publishKaminosHostSurfaceState(gloveWellHostState, 'loaded');
   updateGloveWellHostReadout();
   drawGloveWellHostPreview();
-  setInfo(`Glove Well host packet loaded: ${gloveWellHostState.sourceAuthority} - ${gloveWellHostState.surface?.primitiveCount || 0} primitives`);
+  setInfo(`Glove Well preview updated: ${gloveWellHostState.sourceAuthority} - ${gloveWellHostState.surface?.primitiveCount || 0} primitives`);
   return gloveWellHostState;
 }
 
@@ -368,7 +377,7 @@ function schedulePoll(route) {
         };
         publishKaminosHostSurfaceState(gloveWellHostState, 'error');
         updateGloveWellHostReadout();
-        setInfo(`Glove Well packet polling failed: ${error.message || error}`);
+        setInfo(`Glove Well updates failed: ${error.message || error}`);
       })
       .finally(() => schedulePoll(route));
   }, pollMs);
@@ -400,8 +409,8 @@ function startGloveWellHostLive(route = gloveWellHostRouteFromParams()) {
   updateGloveWellHostReadout();
   loadGloveWellHostPacket(liveRoute)
     .catch(error => {
-      console.error('Glove Well packet polling load failed:', error);
-      setInfo(`Glove Well packet polling failed: ${error.message || error}`);
+      console.error('Glove Well preview update failed:', error);
+      setInfo(`Glove Well updates failed: ${error.message || error}`);
     })
     .finally(() => schedulePoll(liveRoute));
   return gloveWellHostState;
