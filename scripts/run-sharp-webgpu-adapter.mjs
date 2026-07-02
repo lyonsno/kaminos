@@ -51,11 +51,13 @@ const artifactPaths = parseArtifactPaths(process.env.KAMINOS_PIPELINE_ARTIFACT_P
 const autoCropEvidencePath = resolveArtifactPath(args.get('--autocrop-evidence') || process.env.KAMINOS_PIPELINE_AUTOCROP_EVIDENCE || artifactPaths.autoCropEvidence || (outputDir ? join(outputDir, 'sharp-output.splat-autocrop-evidence.json') : null));
 const downloadDir = outputDir ? join(outputDir, '.sharp-webgpu-download') : null;
 const url = `http://127.0.0.1:${port}/`;
+const progressStreamEnabled = process.env.KAMINOS_PIPELINE_PROGRESS_STREAM === '1';
 
 let phase = 'initializing';
 let server = null;
 const serverLogs = { stdout: '', stderr: '' };
 const browserLogs = [];
+const emittedBrowserProgressKeys = new Set();
 const lastTrustworthyEvidence = {};
 
 function sha256File(path) {
@@ -260,6 +262,74 @@ function fileEvidence(path) {
     bytes: stat.size,
     sha256: sha256File(path),
   };
+}
+
+function emitAdapterProgress(event = {}) {
+  if (!progressStreamEnabled) return;
+  const payload = {
+    schema: 'kaminos.pipeline-progress.v0',
+    kind: 'adapter-progress',
+    source: 'sharp-webgpu-browser-console',
+    status: 'running',
+    at: new Date().toISOString(),
+    adapterPhase: phase,
+    ...event,
+  };
+  process.stdout.write(`${JSON.stringify(payload)}\n`);
+}
+
+function sharpBrowserProgressFromConsole(text) {
+  const line = String(text || '').trim();
+  if (!line) return null;
+  const patchMatch = line.match(/\[SPN\]\s+Patch\s+(\d+)\/35 done/);
+  if (patchMatch) {
+    const patchDone = Number(patchMatch[1]);
+    const ratio = Number.isFinite(patchDone) ? Math.max(0, Math.min(35, patchDone)) / 35 : 0;
+    return {
+      phase: 'sharp-webgpu:spn-patch-encoder',
+      message: `[SPN] Patch ${patchDone}/35 done`,
+      progress: 0.24 + ratio * 0.28,
+      browserConsoleText: line,
+    };
+  }
+  const milestones = [
+    [/Loaded \d+ tensors from SHARP weight file/, 'sharp-webgpu:weights-loaded', 'SHARP weights loaded', 0.14],
+    [/\[SPN\] Creating image pyramid/, 'sharp-webgpu:spn-image-pyramid', '[SPN] Creating image pyramid', 0.18],
+    [/\[SPN\] Extracting patches/, 'sharp-webgpu:spn-extracting-patches', '[SPN] Extracting patches', 0.21],
+    [/\[SPN\] Running patch encoder/, 'sharp-webgpu:spn-patch-encoder', '[SPN] Running patch encoder', 0.24],
+    [/\[SPN\] Merging features/, 'sharp-webgpu:spn-merge-features', '[SPN] Merging features', 0.54],
+    [/\[SPN\] Running image encoder/, 'sharp-webgpu:spn-image-encoder', '[SPN] Running image encoder', 0.58],
+    [/\[SPN\] Running upsample fusion/, 'sharp-webgpu:spn-upsampling-fusion', '[SPN] Running upsample fusion', 0.64],
+    [/\[Monodepth\] Running decoder/, 'sharp-webgpu:monodepth-decoder', '[Monodepth] Running decoder', 0.68],
+    [/\[Monodepth\] Running disparity head/, 'sharp-webgpu:monodepth-disparity-head', '[Monodepth] Running disparity head', 0.72],
+    [/\[Gaussian\] Running initializer/, 'sharp-webgpu:gaussian-initializer', '[Gaussian] Running initializer', 0.76],
+    [/\[Gaussian\] Running decoder/, 'sharp-webgpu:gaussian-decoder', '[Gaussian] Running decoder', 0.80],
+    [/\[Gaussian\] Running texture\/geometry heads/, 'sharp-webgpu:gaussian-heads', '[Gaussian] Running texture/geometry heads', 0.84],
+    [/\[Gaussian\] Output:/, 'sharp-webgpu:gaussian-output', '[Gaussian] Gaussian output produced', 0.86],
+    [/\[Compose\] Building base Gaussians/, 'sharp-webgpu:compose-base-gaussians', '[Compose] Building base Gaussians', 0.88],
+    [/\[Compose\] Composing Gaussians/, 'sharp-webgpu:compose-gaussians', '[Compose] Composing Gaussians', 0.89],
+    [/\[Compose\] Writing PLY/, 'sharp-webgpu:write-ply', '[Compose] Writing PLY', 0.90],
+  ];
+  for (const [pattern, phaseId, message, progress] of milestones) {
+    if (!pattern.test(line)) continue;
+    return {
+      phase: phaseId,
+      message,
+      progress,
+      browserConsoleText: line,
+    };
+  }
+  return null;
+}
+
+function emitSharpBrowserProgress(text) {
+  const event = sharpBrowserProgressFromConsole(text);
+  if (!event) return null;
+  const key = `${event.phase}:${event.message}`;
+  if (emittedBrowserProgressKeys.has(key)) return null;
+  emittedBrowserProgressKeys.add(key);
+  emitAdapterProgress(event);
+  return event;
 }
 
 function writeJson(path, value) {
@@ -622,7 +692,11 @@ async function runBrowserInference() {
 
   try {
     const page = await browser.newPage();
-    page.on('console', msg => browserLogs.push({ type: msg.type(), text: msg.text() }));
+    page.on('console', msg => {
+      const text = msg.text();
+      browserLogs.push({ type: msg.type(), text });
+      emitSharpBrowserProgress(text);
+    });
     page.on('pageerror', error => browserLogs.push({ type: 'pageerror', text: error?.message || String(error) }));
 
     const session = await page.target().createCDPSession();
