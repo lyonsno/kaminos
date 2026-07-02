@@ -631,6 +631,7 @@ def main():
         "pairAuthority": corpus.get("pairAuthority"),
         "imageAuthority": corpus.get("imageAuthority"),
         "lowRenderScale": args.low_render_scale,
+        "seed": args.seed,
         "selectedPairCount": len(loaded),
         "trainPairCount": len(train_items),
         "evalPairCount": len(eval_items),

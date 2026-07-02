@@ -1435,6 +1435,7 @@ assert.match(residualMlx, /baselinePsnr/, 'MLX residual harness reports linear-c
 assert.match(residualMlx, /modelPsnr/, 'MLX residual harness reports residual model PSNR');
 assert.match(residualMlx, /maxSteps/, 'MLX residual harness exposes bounded max steps for contention control');
 assert.match(residualMlx, /sleepMs/, 'MLX residual harness exposes per-step sleep throttling for contention control');
+assert.match(residualMlx, /"seed": args\.seed/, 'MLX residual harness records the effective RNG seed in reports');
 assert.match(residualMlx, /zeros_like/, 'MLX residual harness zero-initializes the residual head so step zero preserves the renderer baseline');
 assert.match(residualMlx, /foregroundThreshold/, 'MLX residual harness supports foreground-biased patches so training does not mostly see black canvas');
 assert.match(residualMlx, /foregroundPixels/, 'MLX residual harness reports selected foreground pixels for corpus sanity');
