@@ -28,6 +28,8 @@ h2 { font-size: 11px; font-weight: 600; margin: 18px 0 8px; color: #666; text-tr
 .btn { display: inline-block; padding: 6px 14px; background: #252525; border: 1px solid #333; border-radius: 6px; color: #bbb; font-size: 11px; cursor: pointer; margin: 2px; transition: all 0.15s; }
 .btn:hover { background: #333; color: #fff; border-color: #444; }
 .btn.active { background: #1565c0; border-color: #1976d2; color: #fff; }
+.btn:disabled { opacity: 0.55; cursor: default; }
+.btn:disabled:hover { background: #252525; color: #bbb; border-color: #333; }
 
 #drop-zone { border: 2px dashed #333; border-radius: 10px; padding: 20px; text-align: center; color: #555; font-size: 12px; margin-bottom: 14px; cursor: pointer; transition: all 0.2s; }
 #drop-zone:hover, #drop-zone.dragover { border-color: #1976d2; color: #aaa; background: rgba(25,118,210,0.05); }
@@ -285,7 +287,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 #glove-well-host-operator-panel { position: absolute; inset: 0; z-index: 4; background: #070a09; }
 #glove-well-host-operator-panel[hidden] { display: none; }
 #glove-well-host-canvas { width: 100%; height: 100%; display: block; background: radial-gradient(circle at 48% 58%, #182722 0%, #0a1110 56%, #030505 100%); }
-#glove-well-host-overlay { position: absolute; top: 16px; left: 16px; min-width: 360px; max-width: min(620px, calc(100% - 32px)); background: rgba(4,9,8,0.8); border: 1px solid #3f5a4e; border-radius: 8px; padding: 10px 12px; color: #c2e2d2; box-shadow: 0 10px 30px rgba(0,0,0,0.35); }
+#glove-well-host-overlay { position: absolute; top: 16px; right: 16px; min-width: 360px; max-width: min(620px, calc(100% - 32px)); background: rgba(4,9,8,0.8); border: 1px solid #3f5a4e; border-radius: 8px; padding: 10px 12px; color: #c2e2d2; box-shadow: 0 10px 30px rgba(0,0,0,0.35); pointer-events: none; }
 #glove-well-host-overlay-title { font: 11px 'SF Mono', monospace; color: #9ed8bd; text-transform: uppercase; letter-spacing: 0.8px; }
 #glove-well-host-overlay-body { margin-top: 5px; font: 10px 'SF Mono', monospace; color: #e0f2e8; overflow-wrap: anywhere; }
 </style>
@@ -1106,8 +1108,10 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
       <div class="field"><span class="field-key">Host</span><span class="field-val">kaminos/glove-well-host</span></div>
       <div class="field"><span class="field-key">Packet</span><span class="field-val" id="glove-well-host-packet-schema">lerms.glove-well-host-packet.v0</span></div>
       <div class="field"><span class="field-key">Source</span><span class="field-val" id="glove-well-host-packet-url">pending</span></div>
+      <div class="field"><span class="field-key">Mode</span><span class="field-val present">packet snapshot</span></div>
+      <div class="field"><span class="field-key">Status</span><span class="field-val" id="glove-well-host-load-status">waiting for packet</span></div>
       <div class="volume-actions">
-        <button class="btn" id="glove-well-host-load">Load Packet</button>
+        <button class="btn" id="glove-well-host-load">Reload Packet</button>
       </div>
     </div>
     <div class="panel glove-well-host-readout">
@@ -8219,6 +8223,28 @@ function updateGloveWellHostReadout() {
   if (!sourceAuthorityEl) return;
   document.getElementById('glove-well-host-packet-schema').textContent = state.packetSchema || LERMS_GLOVE_WELL_HOST_PACKET_SCHEMA;
   document.getElementById('glove-well-host-packet-url').textContent = state.effectiveUrl || 'pending';
+  const loadButton = document.getElementById('glove-well-host-load');
+  const loadStatus = document.getElementById('glove-well-host-load-status');
+  if (loadButton) loadButton.disabled = state.status === 'loading';
+  if (loadStatus) {
+    if (state.status === 'loading') {
+      loadStatus.textContent = 'Loading packet';
+      loadStatus.classList.add('present');
+      loadStatus.classList.remove('missing');
+    } else if (state.status === 'loaded') {
+      const primitiveCount = state.surface?.primitiveCount ?? state.surface?.primitives?.length ?? 0;
+      loadStatus.textContent = `Loaded packet snapshot · ${primitiveCount} primitives`;
+      loadStatus.classList.add('present');
+      loadStatus.classList.remove('missing');
+    } else if (state.status === 'error') {
+      loadStatus.textContent = state.error || 'packet load failed';
+      loadStatus.classList.add('missing');
+      loadStatus.classList.remove('present');
+    } else {
+      loadStatus.textContent = 'waiting for packet';
+      loadStatus.classList.remove('present', 'missing');
+    }
+  }
   sourceAuthorityEl.textContent = state.sourceAuthority || 'pending';
   document.getElementById('glove-well-host-source-truth').textContent = state.sourceTruthAuthority || 'pending';
   document.getElementById('glove-well-host-freshness').textContent = state.freshness?.status || 'pending';

@@ -177,6 +177,14 @@ assert.match(indexSource, /id="glove-well-host-canvas"/, 'native host owns a can
 assert.match(indexSource, /window\.kaminosGloveWellHostDebugState/, 'native host exposes state for browser witnesses');
 assert.match(indexSource, /local_browser_smoke_not_native_kaminos_host/, 'native host displays local-browser downgrade');
 assert.match(indexSource, /visual_capture_not_source_truth/, 'native host displays visual-capture downgrade');
+assert.match(indexSource, /id="glove-well-host-load-status"/, 'native host displays load/reload status next to the packet control');
+assert.match(indexSource, />Reload Packet</, 'packet control is labelled as a reload after auto-route load');
+assert.match(indexSource, /packet snapshot/, 'native host states that this surface hosts a packet snapshot rather than starting live capture');
+assert.match(indexSource, /getElementById\('glove-well-host-load'\)/, 'packet reload control is addressed by the load lifecycle');
+assert.match(indexSource, /loadButton\.disabled = state\.status === 'loading'/, 'packet reload control disables while loading');
+assert.match(indexSource, /Loading packet/, 'packet reload control visibly enters a loading state');
+assert.match(indexSource, /#glove-well-host-overlay \{[^}]*right: 16px/s, 'canvas overlay avoids the upper-left operator control/readout area');
+assert.doesNotMatch(indexSource, /#glove-well-host-overlay \{[^}]*left: 16px/s, 'canvas overlay is not pinned over the upper-left host view');
 
 const mod = await import(hostCorePath);
 assert.equal(mod.KAMINOS_GLOVE_WELL_HOST_STATE_SCHEMA, 'kaminos.glove-well-host.state.v0');
