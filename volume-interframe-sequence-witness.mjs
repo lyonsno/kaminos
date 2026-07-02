@@ -720,7 +720,33 @@ function jsonForScript(value) {
     .replaceAll('\u2029', '\\u2029');
 }
 
-function writePlaybackHtml(path, report) {
+function chooseDefaultCandidate(candidates, report, requestedDefaultCandidateId) {
+  const metricBestCandidateId = report.summary?.bestByMeanAbsoluteError?.id || null;
+  if (requestedDefaultCandidateId) {
+    if (!candidates.some(candidate => candidate.id === requestedDefaultCandidateId)) {
+      const error = new Error(`requested playback default candidate ${requestedDefaultCandidateId} was not found in report`);
+      error.code = 'requested-default-candidate-not-found';
+      error.failurePhase = 'playback-render';
+      error.details = {
+        requestedDefaultCandidateId,
+        candidateIds: candidates.map(candidate => candidate.id),
+      };
+      throw error;
+    }
+    return {
+      defaultCandidateId: requestedDefaultCandidateId,
+      defaultCandidateSource: 'caller-override',
+      metricBestCandidateId,
+    };
+  }
+  return {
+    defaultCandidateId: metricBestCandidateId || candidates[0]?.id || null,
+    defaultCandidateSource: metricBestCandidateId ? 'metric-best-mean-absolute-error' : 'first-candidate-fallback',
+    metricBestCandidateId,
+  };
+}
+
+function writePlaybackHtml(path, report, options = {}) {
   const width = report.sequence.width;
   const height = report.sequence.height;
   const fps = 24;
@@ -766,12 +792,16 @@ function writePlaybackHtml(path, report) {
       }),
     };
   });
+  const defaultCandidate = chooseDefaultCandidate(candidates, report, options.defaultCandidateId || null);
   const payload = jsonForScript({
     truthFrames,
     candidates,
     fps,
     cadence: report.cadence,
-    defaultCandidateId: report.summary?.bestByMeanAbsoluteError?.id || candidates[0]?.id || null,
+    defaultCandidateId: defaultCandidate.defaultCandidateId,
+    defaultCandidateSource: defaultCandidate.defaultCandidateSource,
+    metricBestCandidateId: defaultCandidate.metricBestCandidateId,
+    requestedDefaultCandidateId: options.defaultCandidateId || null,
   });
   const html = `<!doctype html>
 <html lang="en">
@@ -788,7 +818,7 @@ function writePlaybackHtml(path, report) {
   h1 { margin: 0; font-size: 20px; letter-spacing: 0; }
   h2 { margin: 0 0 5px; font-size: 14px; letter-spacing: 0; }
   p { margin: 0; }
-  .meta { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+  .meta { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
   .chip { min-height: 50px; border: 1px solid #20303a; background: #101820; padding: 8px 10px; }
   .chip b { display: block; font-size: 10px; color: #85a7ba; text-transform: uppercase; }
   .chip span { display: block; font-size: 12px; overflow-wrap: anywhere; }
@@ -826,6 +856,7 @@ function writePlaybackHtml(path, report) {
     <div class="chip"><b>Total frames</b><span>${report.totalFrameCount}; cadence ${report.cadence}</span></div>
     <div class="chip"><b>Truth</b><span>${SEQUENCE_AUTHORITY}</span></div>
     <div class="chip"><b>Synthetic</b><span class="authority">${SYNTHETIC_AUTHORITY}; actualMiddleUsed=false</span></div>
+    <div class="chip"><b>Default</b><span>${escapeHtml(defaultCandidate.defaultCandidateId || 'none')} (${escapeHtml(defaultCandidate.defaultCandidateSource)})</span></div>
   </div>
   <div class="transport">
     <button data-step-back aria-label="Previous frame">&lt;</button>
@@ -990,6 +1021,7 @@ candidateSelect.addEventListener('change', event => {
 </html>`;
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, html);
+  return defaultCandidate;
 }
 
 const args = parseArgs(process.argv.slice(2));
@@ -1001,6 +1033,7 @@ const outDir = resolve(args.get('--out-dir') || '/tmp/kaminos-interframe-sequenc
 const renderReportPath = args.get('--render-report') ? resolve(args.get('--render-report')) : null;
 const reportPath = resolve(args.get('--report') || renderReportPath || `${outDir}/interframe-sequence-report.json`);
 const playbackPath = resolve(args.get('--playback') || `${outDir}/interframe-sequence-playback.html`);
+const defaultCandidateId = args.get('--default-candidate-id') || null;
 const baseUrl = args.get('--base-url') || DEFAULT_BASE_URL;
 const port = Number(args.get('--debug-port') || 9631);
 const chrome = process.env.KAMINOS_CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
@@ -1040,12 +1073,16 @@ if (denseCaptureChunkFrames !== null && (!Number.isInteger(denseCaptureChunkFram
 if (renderReportPath) {
   const report = readJson(renderReportPath);
   const targetPlaybackPath = resolve(args.get('--playback') || report.playbackPath || report.artifacts?.playbackHtml || `${dirname(renderReportPath)}/interframe-sequence-playback.html`);
-  writePlaybackHtml(targetPlaybackPath, report);
+  const playbackDefault = writePlaybackHtml(targetPlaybackPath, report, { defaultCandidateId });
   const sidecarPath = targetPlaybackPath.replace(/\.html$/i, '.json');
   writeJson(sidecarPath, {
     schema: `${SCHEMA}.playback-render.v0`,
     sourceReportPath: renderReportPath,
     playbackPath: targetPlaybackPath,
+    requestedDefaultCandidateId: defaultCandidateId,
+    defaultCandidateId: playbackDefault.defaultCandidateId,
+    defaultCandidateSource: playbackDefault.defaultCandidateSource,
+    metricBestCandidateId: playbackDefault.metricBestCandidateId,
     renderedAt: new Date().toISOString(),
     totalFrameCount: report.totalFrameCount,
     cadence: report.cadence,
@@ -1058,6 +1095,8 @@ if (renderReportPath) {
     sourceReportPath: renderReportPath,
     playbackPath: targetPlaybackPath,
     sidecarPath,
+    defaultCandidateId: playbackDefault.defaultCandidateId,
+    defaultCandidateSource: playbackDefault.defaultCandidateSource,
   }, null, 2));
   process.exit(0);
 }
@@ -1075,6 +1114,7 @@ const baseReport = {
   outDir,
   reportPath,
   playbackPath,
+  requestedDefaultCandidateId: defaultCandidateId,
   dryRun,
   reuseDebugPort,
   denseCapture,
@@ -1420,12 +1460,16 @@ try {
       candidateOrder: candidates.map(candidate => candidate.id),
     },
   };
-  writePlaybackHtml(playbackPath, finalReport);
+  const playbackDefault = writePlaybackHtml(playbackPath, finalReport, { defaultCandidateId });
   writeJson(reportPath, {
     ...finalReport,
     artifacts: {
       ...finalReport.artifacts,
       playbackHtml: playbackPath,
+      requestedDefaultCandidateId: defaultCandidateId,
+      defaultCandidateId: playbackDefault.defaultCandidateId,
+      defaultCandidateSource: playbackDefault.defaultCandidateSource,
+      metricBestCandidateId: playbackDefault.metricBestCandidateId,
     },
   });
   console.log(JSON.stringify({

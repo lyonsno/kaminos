@@ -1549,6 +1549,9 @@ assert.match(interframeSequenceWitness, /cadence-ablation-gapped-baseline/, 'int
 assert.match(interframeSequenceWitness, /cadencePhase/, 'interframe cadence ablation records the withheld target phase inside each cadence gap');
 assert.match(interframeSequenceWitness, /withheldCadenceFrames/, 'interframe cadence ablation preserves all hidden full-rate frames as comparison targets');
 assert.match(interframeSequenceWitness, /data-candidate-select/, 'interframe cadence ablation playback uses one selected candidate instead of animating every candidate card');
+assert.match(interframeSequenceWitness, /--default-candidate-id/, 'interframe cadence ablation playback can open on an operator-selected visual incumbent instead of only metric-best MAE');
+assert.match(interframeSequenceWitness, /defaultCandidateSource/, 'interframe cadence ablation playback labels whether the default candidate came from a caller override or metric ranking');
+assert.match(interframeSequenceWitness, /requested-default-candidate-not-found/, 'interframe cadence ablation playback fails loud if a requested visual incumbent is missing from the report');
 assert.match(interframeSequenceWitness, /data-truth-stage/, 'interframe cadence ablation playback keeps a fixed full-rate truth stage for stable visual comparison');
 assert.match(interframeSequenceWitness, /data-candidate-stage/, 'interframe cadence ablation playback keeps a fixed candidate stage for stable visual comparison');
 assert.match(interframeSequenceWitness, /Top smoke crop/, 'interframe cadence ablation playback exposes the operator-observed top-smoke squirm region');
