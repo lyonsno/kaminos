@@ -56,11 +56,11 @@ def dense_flow(first_gray, third_gray, method):
     raise RuntimeError(f"unknown method: {method}")
 
 
-def remap_halfway(image, flow):
+def remap_at_ratio(image, flow, ratio):
     height, width = flow.shape[:2]
     grid_x, grid_y = np.meshgrid(np.arange(width, dtype=np.float32), np.arange(height, dtype=np.float32))
-    map_x = grid_x - flow[:, :, 0] * 0.5
-    map_y = grid_y - flow[:, :, 1] * 0.5
+    map_x = grid_x - flow[:, :, 0] * ratio
+    map_y = grid_y - flow[:, :, 1] * ratio
     return cv2.remap(
         image,
         map_x,
@@ -83,7 +83,10 @@ def main():
     parser.add_argument("--third", required=True)
     parser.add_argument("--out", required=True)
     parser.add_argument("--method", default="dis", choices=["dis", "farneback"])
+    parser.add_argument("--ratio", type=float, default=0.5)
     args = parser.parse_args()
+    if not 0.0 < args.ratio < 1.0:
+        raise RuntimeError(f"--ratio must be between 0 and 1, got {args.ratio}")
 
     first_path = Path(args.first)
     third_path = Path(args.third)
@@ -97,9 +100,13 @@ def main():
     third_gray = rgba_to_gray_u8(third)
     forward = dense_flow(first_gray, third_gray, args.method)
     backward = dense_flow(third_gray, first_gray, args.method)
-    first_mid = remap_halfway(first, forward)
-    third_mid = remap_halfway(third, backward)
-    synthetic = np.clip((first_mid.astype(np.float32) + third_mid.astype(np.float32)) * 0.5, 0, 255).astype(np.uint8)
+    first_mid = remap_at_ratio(first, forward, args.ratio)
+    third_mid = remap_at_ratio(third, backward, 1.0 - args.ratio)
+    synthetic = np.clip(
+        first_mid.astype(np.float32) * (1.0 - args.ratio) + third_mid.astype(np.float32) * args.ratio,
+        0,
+        255,
+    ).astype(np.uint8)
     synthetic[:, :, 3] = 255
     write_rgba(out_path, synthetic)
     sidecar = {
@@ -107,6 +114,7 @@ def main():
         "baselineId": BASELINE_ID if args.method == "dis" else f"opencv-farneback-bidirectional-warp-rgba-v0",
         "syntheticAuthority": SYNTHETIC_AUTHORITY,
         "method": args.method,
+        "ratio": args.ratio,
         "first": str(first_path),
         "third": str(third_path),
         "out": str(out_path),

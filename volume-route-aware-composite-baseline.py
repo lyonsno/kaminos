@@ -98,12 +98,24 @@ def route_profile(context):
     }
 
 
+def target_ratio(context):
+    raw = context.get("ratio", context.get("cadencePhase", 0.5))
+    try:
+        ratio = float(raw)
+    except (TypeError, ValueError) as exc:
+        raise RuntimeError(f"invalid target ratio in context: {raw}") from exc
+    if not 0.0 < ratio < 1.0:
+        raise RuntimeError(f"target ratio must be between 0 and 1, got {ratio}")
+    return ratio
+
+
 def composite(first, third, rife, flow, context):
     first_f = first.astype(np.float32)
     third_f = third.astype(np.float32)
     rife_f = rife.astype(np.float32)
     flow_f = flow.astype(np.float32)
-    midpoint = (first_f + third_f) * 0.5
+    ratio = target_ratio(context)
+    midpoint = first_f * (1.0 - ratio) + third_f * ratio
     endpoint_min = np.minimum(first_f, third_f)
     profile = route_profile(context)
 
@@ -146,6 +158,8 @@ def composite(first, third, rife, flow, context):
         "meanVolatilitySuppression": float(np.mean(volatility_suppression)),
         "maxVolatilitySuppression": float(np.max(volatility_suppression)),
         "routeProfile": profile["identity"],
+        "ratio": ratio,
+        "cadencePhase": context.get("cadencePhase", ratio),
     }
     return blended, masks
 

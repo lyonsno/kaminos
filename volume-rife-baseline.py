@@ -64,7 +64,10 @@ def main():
     parser.add_argument("--out", required=True)
     parser.add_argument("--rife-root", required=True)
     parser.add_argument("--model-dir", required=True)
+    parser.add_argument("--ratio", type=float, default=0.5)
     args = parser.parse_args()
+    if not 0.0 < args.ratio < 1.0:
+        raise RuntimeError(f"--ratio must be between 0 and 1, got {args.ratio}")
 
     first_path = Path(args.first)
     third_path = Path(args.third)
@@ -102,7 +105,7 @@ def main():
             str(first_temp),
             str(third_temp),
             "--ratio",
-            "0.5",
+            str(args.ratio),
             "--model",
             str(model_dir),
         ]
@@ -132,6 +135,7 @@ def main():
         "out": str(out_path),
         "rifeRoot": str(rife_root),
         "modelDir": str(model_dir),
+        "ratio": args.ratio,
         "entrypoint": str(inference_path),
         "command": command,
         "inferenceStdout": result.stdout,

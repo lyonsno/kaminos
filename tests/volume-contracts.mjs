@@ -1417,6 +1417,7 @@ assert.match(opencvFlowBaseline, /cv2\.DISOpticalFlow_create|calcOpticalFlowFarn
 assert.match(opencvFlowBaseline, /synthetic-comparison-not-live-simulator-output/, 'OpenCV flow runner labels output as synthetic comparison evidence');
 assert.match(opencvFlowBaseline, /--first/, 'OpenCV flow runner accepts first input frame path');
 assert.match(opencvFlowBaseline, /--third/, 'OpenCV flow runner accepts third input frame path');
+assert.match(opencvFlowBaseline, /parser\.add_argument\("--ratio"/, 'OpenCV flow runner accepts a caller-owned target phase ratio');
 assert.match(opencvFlowBaseline, /--out/, 'OpenCV flow runner writes the synthesized middle frame to a caller-owned path');
 
 const rifeBaselinePath = join(root, 'volume-rife-baseline.py');
@@ -1427,6 +1428,7 @@ assert.match(rifeBaseline, /inference_img\.py/, 'RIFE runner delegates to the ac
 assert.match(rifeBaseline, /synthetic-comparison-not-live-simulator-output/, 'RIFE runner labels output as synthetic comparison evidence');
 assert.match(rifeBaseline, /--rife-root/, 'RIFE runner accepts caller-owned RIFE checkout path');
 assert.match(rifeBaseline, /--model-dir/, 'RIFE runner accepts caller-owned RIFE model directory');
+assert.match(rifeBaseline, /parser\.add_argument\("--ratio"/, 'RIFE runner accepts a caller-owned target phase ratio');
 assert.match(rifeBaseline, /--out/, 'RIFE runner writes the synthesized middle frame to a caller-owned path');
 assert.match(rifeBaseline, /inferenceStdout/, 'RIFE runner sidecar records acquired model stdout');
 assert.match(rifeBaseline, /inferenceStderr/, 'RIFE runner sidecar records acquired model stderr');
@@ -1439,6 +1441,7 @@ assert.match(practicalRifeBaseline, /RIFE_HDv3/, 'Practical-RIFE runner imports 
 assert.match(practicalRifeBaseline, /synthetic-comparison-not-live-simulator-output/, 'Practical-RIFE runner labels output as synthetic comparison evidence');
 assert.match(practicalRifeBaseline, /--practical-rife-root/, 'Practical-RIFE runner accepts caller-owned Practical-RIFE checkout path');
 assert.match(practicalRifeBaseline, /--model-dir/, 'Practical-RIFE runner accepts caller-owned Practical-RIFE model directory');
+assert.match(practicalRifeBaseline, /parser\.add_argument\("--ratio"/, 'Practical-RIFE runner accepts a caller-owned target phase ratio');
 assert.match(practicalRifeBaseline, /--out/, 'Practical-RIFE runner writes the synthesized middle frame to a caller-owned path');
 assert.match(practicalRifeBaseline, /paddingMultiple/, 'Practical-RIFE runner sidecar records the model padding geometry');
 
@@ -1452,6 +1455,7 @@ assert.match(routeAwareCompositeBaseline, /--rife/, 'route-aware composite runne
 assert.match(routeAwareCompositeBaseline, /--flow/, 'route-aware composite runner accepts stronger-flow parent synthetic path');
 assert.match(routeAwareCompositeBaseline, /--report/, 'route-aware composite runner accepts triplet report metadata path');
 assert.match(routeAwareCompositeBaseline, /effectiveRoute/, 'route-aware composite runner records route identity from the report');
+assert.match(routeAwareCompositeBaseline, /cadencePhase|ratio/, 'route-aware composite runner respects non-midpoint cadence target phase');
 
 const sidecarConditionedBaselinePath = join(root, 'volume-sidecar-conditioned-baseline.py');
 assert.ok(existsSync(sidecarConditionedBaselinePath), 'volume sidecar-conditioned baseline runner exists');
@@ -1464,6 +1468,7 @@ assert.match(sidecarConditionedBaseline, /fireBounds/, 'sidecar-conditioned runn
 assert.match(sidecarConditionedBaseline, /smokeBounds/, 'sidecar-conditioned runner consumes smoke bounds sidecars from candidate context');
 assert.match(sidecarConditionedBaseline, /--report/, 'sidecar-conditioned runner accepts candidate context metadata path');
 assert.match(sidecarConditionedBaseline, /--practical/, 'sidecar-conditioned runner can consume the Practical-RIFE parent synthetic path');
+assert.match(sidecarConditionedBaseline, /cadencePhase|ratio/, 'sidecar-conditioned runner respects non-midpoint cadence target phase');
 
 const interframePlaybackWitnessPath = join(root, 'volume-interframe-playback-witness.mjs');
 assert.ok(existsSync(interframePlaybackWitnessPath), 'volume interframe playback witness generator exists');
@@ -1498,3 +1503,21 @@ assert.match(interframeSequenceWitness, /Buffer\.from\(sample\.preview\.rgbaBase
 assert.match(interframeSequenceWitness, /Buffer\.from\(sample\.preview\.pngBase64, 'base64'\)/, 'interframe sequence witness materializes PNG-compressed dense-capture image bytes locally');
 assert.match(interframeSequenceWitness, /synthetic-comparison-not-live-simulator-output/, 'interframe sequence witness labels synthetic frames as comparison evidence');
 assert.match(interframeSequenceWitness, /candidate-context-/, 'interframe sequence witness writes per-gap route/timing candidate contexts');
+
+const cadenceGapInterframeWitnessPath = join(root, 'volume-cadence-gap-interframe-witness.mjs');
+assert.ok(existsSync(cadenceGapInterframeWitnessPath), 'volume cadence-gap interframe witness generator exists');
+const cadenceGapInterframeWitness = existsSync(cadenceGapInterframeWitnessPath) ? readFileSync(cadenceGapInterframeWitnessPath, 'utf8') : '';
+assert.match(cadenceGapInterframeWitness, /kaminos\.volume\.cadence-gap-interframe-witness\.v0/, 'cadence-gap interframe witness writes a stable schema identity');
+assert.match(cadenceGapInterframeWitness, /kaminos-volume-cadence-gap-manifest-v0/, 'cadence-gap interframe witness consumes Hellmouth gap manifests by stable identity');
+assert.match(cadenceGapInterframeWitness, /--gap-manifest/, 'cadence-gap interframe witness takes the manifest path from the caller');
+assert.match(cadenceGapInterframeWitness, /cadence-continuation-baseline/, 'cadence-gap interframe witness preserves the current continuation timeline as a baseline');
+assert.match(cadenceGapInterframeWitness, /continuation-target-from-latest-live-field/, 'cadence-gap interframe witness labels the comparison target authority');
+assert.match(cadenceGapInterframeWitness, /synthetic-comparison-not-live-simulator-output/, 'cadence-gap interframe witness labels replacement frames as synthetic comparison evidence');
+assert.match(cadenceGapInterframeWitness, /continuationTargetUsedAsComparison/, 'cadence-gap interframe witness states that continuation targets are comparison targets, not live middle truth');
+assert.match(cadenceGapInterframeWitness, /actualMiddleUsed[^\\n]+false/, 'cadence-gap interframe candidate contexts record that actual middle truth was not used');
+assert.match(cadenceGapInterframeWitness, /framesAvailableToCandidate/, 'cadence-gap interframe candidate contexts record exposed live anchors');
+assert.match(cadenceGapInterframeWitness, /framesWithheldFromCandidate/, 'cadence-gap interframe candidate contexts record hidden continuation target frames');
+assert.match(cadenceGapInterframeWitness, /cadencePhase/, 'cadence-gap interframe witness preserves per-target cadence phase');
+assert.match(cadenceGapInterframeWitness, /ratio/, 'cadence-gap interframe witness passes ratio to phase-aware candidates');
+assert.match(cadenceGapInterframeWitness, /externalBaselineCommand/, 'cadence-gap interframe witness records the external command used for candidates');
+assert.match(cadenceGapInterframeWitness, /failurePhase/, 'cadence-gap interframe witness writes phase-tagged failure reports');

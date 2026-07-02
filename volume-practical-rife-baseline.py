@@ -55,7 +55,10 @@ def main():
     parser.add_argument("--out", required=True)
     parser.add_argument("--practical-rife-root", required=True)
     parser.add_argument("--model-dir", required=True)
+    parser.add_argument("--ratio", type=float, default=0.5)
     args = parser.parse_args()
+    if not 0.0 < args.ratio < 1.0:
+        raise RuntimeError(f"--ratio must be between 0 and 1, got {args.ratio}")
 
     first_path = Path(args.first)
     third_path = Path(args.third)
@@ -86,7 +89,7 @@ def main():
     with torch.no_grad():
       first_tensor = tensor_from_rgba(first, padding)
       third_tensor = tensor_from_rgba(third, padding)
-      middle = model.inference(first_tensor, third_tensor, 0.5)[0].cpu().numpy()
+      middle = model.inference(first_tensor, third_tensor, args.ratio)[0].cpu().numpy()
     write_rgba(out_path, middle, height, width)
 
     sidecar = {
@@ -98,6 +101,7 @@ def main():
         "out": str(out_path),
         "practicalRifeRoot": str(practical_root),
         "modelDir": str(model_dir),
+        "ratio": args.ratio,
         "modelClass": "RIFE_HDv3",
         "modelVariant": "4.25.lite",
         "paddingMultiple": PADDING_MULTIPLE,

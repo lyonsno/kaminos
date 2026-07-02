@@ -92,7 +92,19 @@ def lerp(a, b, t=0.5):
     return a * (1.0 - t) + b * t
 
 
-def bounds_corridor(context, width, height, name, shrink=1.0):
+def target_ratio(context):
+    raw = context.get("ratio", context.get("cadencePhase", 0.5))
+    try:
+        ratio = float(raw)
+    except (TypeError, ValueError) as exc:
+        raise RuntimeError(f"invalid target ratio in context: {raw}") from exc
+    if not 0.0 < ratio < 1.0:
+        raise RuntimeError(f"target ratio must be between 0 and 1, got {ratio}")
+    return ratio
+
+
+def bounds_corridor(context, width, height, name, shrink=1.0, ratio=None):
+    ratio = target_ratio(context) if ratio is None else ratio
     a = sidecar_bounds(context, "t0", name)
     b = sidecar_bounds(context, "t2", name)
     if not a and not b:
@@ -101,10 +113,10 @@ def bounds_corridor(context, width, height, name, shrink=1.0):
         a = b
     if not b:
         b = a
-    cx = lerp(float(a.get("centerX", width * 0.5)), float(b.get("centerX", width * 0.5)))
-    cy = lerp(float(a.get("centerY", height * 0.5)), float(b.get("centerY", height * 0.5)))
-    bw = max(8.0, lerp(float(a.get("width", 16)), float(b.get("width", 16))) * shrink)
-    bh = max(18.0, lerp(float(a.get("height", 32)), float(b.get("height", 32))) * shrink)
+    cx = lerp(float(a.get("centerX", width * 0.5)), float(b.get("centerX", width * 0.5)), ratio)
+    cy = lerp(float(a.get("centerY", height * 0.5)), float(b.get("centerY", height * 0.5)), ratio)
+    bw = max(8.0, lerp(float(a.get("width", 16)), float(b.get("width", 16)), ratio) * shrink)
+    bh = max(18.0, lerp(float(a.get("height", 32)), float(b.get("height", 32)), ratio) * shrink)
     yy, xx = np.mgrid[0:height, 0:width].astype(np.float32)
     distance = ((xx - cx) / max(1.0, bw * 0.50)) ** 2 + ((yy - cy) / max(1.0, bh * 0.50)) ** 2
     mask = np.exp(-0.5 * distance).astype(np.float32)
@@ -118,6 +130,7 @@ def bounds_corridor(context, width, height, name, shrink=1.0):
 
 
 def sidecar_profile(context):
+    ratio = target_ratio(context)
     t0_fire = sidecar_value(context, "t0", ["simReadback", "fireLayerMean"])
     t2_fire = sidecar_value(context, "t2", ["simReadback", "fireLayerMean"])
     t0_radiance = sidecar_value(context, "t0", ["simReadback", "radianceMean"])
@@ -128,9 +141,9 @@ def sidecar_profile(context):
     t2_fire_pixels = sidecar_value(context, "t2", ["metrics", "fireLikePixels"])
     t0_smoke_pixels = sidecar_value(context, "t0", ["metrics", "smokeLikePixels"])
     t2_smoke_pixels = sidecar_value(context, "t2", ["metrics", "smokeLikePixels"])
-    avg_fire_layer = (t0_fire + t2_fire) * 0.5
-    avg_radiance = (t0_radiance + t2_radiance) * 0.5
-    avg_density = (t0_density + t2_density) * 0.5
+    avg_fire_layer = lerp(t0_fire, t2_fire, ratio)
+    avg_radiance = lerp(t0_radiance, t2_radiance, ratio)
+    avg_density = lerp(t0_density, t2_density, ratio)
     fire_pixel_trend = (t2_fire_pixels + 1.0) / (t0_fire_pixels + 1.0)
     smoke_pixel_trend = (t2_smoke_pixels + 1.0) / (t0_smoke_pixels + 1.0)
     low_fire_suppression = np.clip((0.010 - avg_fire_layer) / 0.010, 0.0, 0.72)
@@ -147,13 +160,16 @@ def sidecar_profile(context):
         "radianceSuppression": float(radiance_suppression),
         "intervalUncertainty": float(interval_uncertainty),
         "frameInterval": interval_frames,
+        "ratio": ratio,
+        "cadencePhase": context.get("cadencePhase", ratio),
     }
 
 
 def composite(first, third, rife, flow, practical, context):
     first_f = first.astype(np.float32)
     third_f = third.astype(np.float32)
-    midpoint = (first_f + third_f) * 0.5
+    ratio = target_ratio(context)
+    midpoint = first_f * (1.0 - ratio) + third_f * ratio
     learned = practical.astype(np.float32) if practical is not None else rife.astype(np.float32)
     rife_f = rife.astype(np.float32)
     flow_f = flow.astype(np.float32)
@@ -161,8 +177,8 @@ def composite(first, third, rife, flow, practical, context):
     profile = sidecar_profile(context)
 
     height, width = first.shape[:2]
-    fire_corridor, fire_corridor_meta = bounds_corridor(context, width, height, "fireBounds", shrink=0.72)
-    smoke_corridor, smoke_corridor_meta = bounds_corridor(context, width, height, "smokeBounds", shrink=1.15)
+    fire_corridor, fire_corridor_meta = bounds_corridor(context, width, height, "fireBounds", shrink=0.72, ratio=ratio)
+    smoke_corridor, smoke_corridor_meta = bounds_corridor(context, width, height, "smokeBounds", shrink=1.15, ratio=ratio)
     input_fire = np.maximum(fire_probability(first), fire_probability(third))
     parent_fire = np.maximum.reduce([fire_probability(rife), fire_probability(flow), fire_probability(practical) if practical is not None else np.zeros_like(input_fire)])
     input_smoke = np.maximum(smoke_probability(first), smoke_probability(third))
