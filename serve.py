@@ -1559,7 +1559,7 @@ def _load_browser_webgpu_result_rows(result_dir):
 
 def build_browser_webgpu_route_provider_index():
     live_rows, invalid_count = _load_browser_webgpu_result_rows(BROWSER_WEBGPU_ROUTE_RESULTS_DIR)
-    rows = live_rows if live_rows else [_browser_webgpu_fixture_row()]
+    rows = [_browser_webgpu_fixture_row(), *live_rows]
     return {
         "schema": ROUTE_PROVIDER_INDEX_SCHEMA,
         "provider": {

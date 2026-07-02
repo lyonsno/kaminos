@@ -163,6 +163,9 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 .moge-route-operator-state { color: #8fc7d6; font: 9px 'SF Mono', monospace; text-transform: uppercase; letter-spacing: 0.5px; }
 .moge-route-operator-card { display: flex; align-items: flex-start; gap: 8px; flex-wrap: wrap; border-top: 1px solid #23343a; padding-top: 8px; }
 .moge-route-operator-empty { color: #777; font-size: 11px; line-height: 1.35; }
+.moge-route-result-card { border-top: 1px solid #23343a; padding-top: 8px; display: flex; flex-direction: column; gap: 5px; }
+.moge-route-result-head { color: #8fc7d6; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.7px; }
+.moge-route-result-actions { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
 .route-archive-shell { margin-top: 12px; border-top: 1px solid #2a2a2a; padding-top: 8px; }
 .route-archive-shell > summary { cursor: pointer; color: #777; font-size: 10px; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 8px; }
 
@@ -10395,10 +10398,29 @@ function selectMogeOperatorRouteRow(rows = []) {
   })[0] || null;
 }
 
+function selectMogePreviewActionRow(rows = []) {
+  return rows.find(routeJobCanRunBrowserWebGpuPreview) || null;
+}
+
+function selectMogeLatestResultRow(rows = []) {
+  return rows.filter(row => {
+    const routeJob = row.route_job || {};
+    return row.provider === ROUTE_EXECUTOR_BROWSER_WEBGPU
+      && routeJob.executor?.kind === ROUTE_EXECUTOR_BROWSER_WEBGPU
+      && routeJob.routeId === 'moge.depth-normal.webgpu-local.v0'
+      && (routeJob.status === 'done' || row.status_dir === 'route-result');
+  }).sort((a, b) => {
+    return String(b.route_job?.metadata?.routeResult?.createdAt || b.created_at || '')
+      .localeCompare(String(a.route_job?.metadata?.routeResult?.createdAt || a.created_at || ''));
+  })[0] || null;
+}
+
 function renderMogeRouteOperatorPanel(rows = []) {
   const panel = document.getElementById('moge-route-operator-panel');
   if (!panel) return;
-  const row = selectMogeOperatorRouteRow(rows);
+  const previewRow = selectMogePreviewActionRow(rows);
+  const latestResult = selectMogeLatestResultRow(rows);
+  const row = previewRow || latestResult || selectMogeOperatorRouteRow(rows);
   panel.innerHTML = '';
   const head = document.createElement('div');
   head.className = 'moge-route-operator-head';
@@ -10407,7 +10429,7 @@ function renderMogeRouteOperatorPanel(rows = []) {
   title.textContent = 'MoGE Preview Source';
   const state = document.createElement('div');
   state.className = 'moge-route-operator-state';
-  state.textContent = row ? (row.route_job?.status || row.status_dir || 'available') : 'not available';
+  state.textContent = previewRow ? 'preview' : (row ? (row.route_job?.status || row.status_dir || 'available') : 'not available');
   head.appendChild(title);
   head.appendChild(state);
   panel.appendChild(head);
@@ -10418,23 +10440,47 @@ function renderMogeRouteOperatorPanel(rows = []) {
     panel.appendChild(empty);
     return;
   }
-  const card = document.createElement('div');
-  card.className = 'moge-route-operator-card';
-  card.setAttribute('data-greenroom-route-provider', row.provider || '');
-  card.setAttribute('data-greenroom-route-job-id', row.route_job?.id || row.job_id || '');
-  card.setAttribute('data-greenroom-route-status', row.route_job?.status || row.status_dir || '');
-  card.setAttribute('data-greenroom-route-id', row.route_job?.routeId || '');
-  card.setAttribute('data-greenroom-route-source-selection-mode', mogeRouteSourceSelectionMode(row));
-  card.setAttribute('data-greenroom-route-effective-source-kind', mogeRouteEffectiveSourceKind(row));
-  card.setAttribute('data-greenroom-route-input-source-kind', row.route_job?.metadata?.inputSourceKind || '');
-  card.setAttribute('data-greenroom-route-source-image-kind', row.route_job?.metadata?.sourceImage?.kind || '');
-  renderMogeRouteSourceSelector(card, row);
-  renderBrowserWebGpuPreviewActionButton(card, row);
-  renderRouteJobLinkButton(card, 'Receipt', row.receipt_link, 'Open browser WebGPU receipt');
-  for (const link of (row.output_links || []).slice(0, 3)) {
-    renderRouteJobOutputButton(card, link);
+  if (previewRow) {
+    const card = document.createElement('div');
+    card.className = 'moge-route-operator-card';
+    card.setAttribute('data-greenroom-moge-preview-action', 'new-preview');
+    card.setAttribute('data-greenroom-route-provider', previewRow.provider || '');
+    card.setAttribute('data-greenroom-route-job-id', previewRow.route_job?.id || previewRow.job_id || '');
+    card.setAttribute('data-greenroom-route-status', previewRow.route_job?.status || previewRow.status_dir || '');
+    card.setAttribute('data-greenroom-route-id', previewRow.route_job?.routeId || '');
+    card.setAttribute('data-greenroom-route-source-selection-mode', mogeRouteSourceSelectionMode(previewRow));
+    card.setAttribute('data-greenroom-route-effective-source-kind', mogeRouteEffectiveSourceKind(previewRow));
+    card.setAttribute('data-greenroom-route-input-source-kind', previewRow.route_job?.metadata?.inputSourceKind || '');
+    card.setAttribute('data-greenroom-route-source-image-kind', previewRow.route_job?.metadata?.sourceImage?.kind || '');
+    renderMogeRouteSourceSelector(card, previewRow);
+    renderBrowserWebGpuPreviewActionButton(card, previewRow);
+    panel.appendChild(card);
   }
-  panel.appendChild(card);
+  if (latestResult) {
+    const resultCard = document.createElement('div');
+    resultCard.className = 'moge-route-result-card';
+    resultCard.setAttribute('data-greenroom-moge-latest-result', latestResult.route_job?.id || latestResult.job_id || '');
+    const resultHead = document.createElement('div');
+    resultHead.className = 'moge-route-result-head';
+    resultHead.textContent = 'Latest result';
+    resultCard.appendChild(resultHead);
+    const resultSummary = document.createElement('div');
+    resultSummary.className = 'moge-route-source-primary';
+    resultSummary.textContent = mogeRouteEffectiveSourceSentence(latestResult);
+    resultCard.appendChild(resultSummary);
+    const resultEvidence = document.createElement('div');
+    resultEvidence.className = 'moge-route-source-evidence';
+    resultEvidence.textContent = mogeRouteSourceEvidenceText(latestResult);
+    resultCard.appendChild(resultEvidence);
+    const resultActions = document.createElement('div');
+    resultActions.className = 'moge-route-result-actions';
+    renderRouteJobLinkButton(resultActions, 'Receipt', latestResult.receipt_link, 'Open browser WebGPU receipt');
+    for (const link of (latestResult.output_links || []).slice(0, 3)) {
+      renderRouteJobOutputButton(resultActions, link);
+    }
+    if (resultActions.childElementCount) resultCard.appendChild(resultActions);
+    panel.appendChild(resultCard);
+  }
 }
 
 function renderBrowserWebGpuPreviewActionButton(container, row) {

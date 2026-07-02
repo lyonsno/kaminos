@@ -637,9 +637,11 @@ def test_browser_webgpu_route_provider_ingests_authoritative_kit_result():
     assert index["provider"]["kind"] == "browser-webgpu"
     assert index["provider"]["source"] == "route-result-files"
     assert index["provider"]["result_dir"] == str(results_dir)
-    assert index["summary"] == {"done": 1}
+    assert index["summary"] == {"reserved": 1, "done": 1}
     assert index["invalid_result_count"] == 0
-    [row] = index["rows"]
+    fixture_row, row = index["rows"]
+    assert fixture_row["job_id"] == "browser-webgpu-moge-fixture"
+    assert fixture_row["route_job"]["status"] == "reserved"
     assert row["provider"] == "browser-webgpu"
     assert row["status_dir"] == "route-result"
     assert row["job_id"] == "browser-webgpu-req:moge-bunnycake"
@@ -685,8 +687,10 @@ def test_browser_webgpu_route_provider_projects_fallback_kit_results_without_aut
     assert index["provider"]["source"] == "route-result-files"
     assert index["provider"]["result_dir"] == str(results_dir)
     assert index["invalid_result_count"] == 0
-    assert index["summary"] == {"done": 1}
-    [row] = index["rows"]
+    assert index["summary"] == {"reserved": 1, "done": 1}
+    fixture_row, row = index["rows"]
+    assert fixture_row["job_id"] == "browser-webgpu-moge-fixture"
+    assert fixture_row["route_job"]["status"] == "reserved"
     assert row["job_id"] == "browser-webgpu-req:moge-bunnycake"
     assert row["route_job"]["metadata"]["evidenceClassification"]["classification"] == "fallback"
     assert row["route_job"]["metadata"]["evidenceClassification"]["authoritative"] is False
@@ -738,7 +742,9 @@ def test_browser_webgpu_route_result_writer_persists_authoritative_payload():
         assert written["requestId"] == "req:moge-bunnycake"
         assert written["receipt"]["effectiveRouteId"] == MOGE_WEBGPU_ROUTE_ID
         assert result["route_provider_index"]["provider"]["source"] == "route-result-files"
-        [row] = result["route_provider_index"]["rows"]
+        fixture_row, row = result["route_provider_index"]["rows"]
+        assert fixture_row["job_id"] == "browser-webgpu-moge-fixture"
+        assert fixture_row["route_job"]["status"] == "reserved"
         assert row["job_id"] == "browser-webgpu-req:moge-bunnycake"
         assert row["route_job"]["metadata"]["evidenceClassification"]["authoritative"] is True
 

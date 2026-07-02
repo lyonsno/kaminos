@@ -5,12 +5,15 @@ import { join } from 'node:path';
 const root = new URL('..', import.meta.url).pathname;
 const witnessPath = join(root, 'scene-object-witness.mjs');
 const indexPath = join(root, 'index.html');
+const servePath = join(root, 'serve.py');
 
 assert.ok(existsSync(witnessPath), 'scene-object-witness.mjs must provide a reusable browser witness for scene object UI');
 assert.ok(existsSync(indexPath), 'index.html must provide the browser debug surface consumed by the witness');
+assert.ok(existsSync(servePath), 'serve.py must provide Kaminos local route APIs');
 
 const witness = readFileSync(witnessPath, 'utf8');
 const indexHtml = readFileSync(indexPath, 'utf8');
+const servePy = readFileSync(servePath, 'utf8');
 
 assert.match(witness, /const scenario\s*=\s*args\.get\('--scenario'\) \|\| 'append-select-remove-keyboard'/, 'witness records an explicit default scenario');
 assert.match(witness, /startup-empty/, 'witness supports an empty-startup scenario');
@@ -199,6 +202,10 @@ assert.match(indexHtml, /MoGE Preview Source/, 'MoGE operator panel has a human-
 assert.match(indexHtml, /renderMogeRouteOperatorPanel/, 'Greenroom route refresh renders the current MoGE route into the top-level operator panel');
 assert.match(indexHtml, /selectMogeOperatorRouteRow/, 'MoGE operator panel selects the active browser route row without requiring graveyard scrolling');
 assert.match(indexHtml, /data-greenroom-moge-operator-panel/, 'MoGE operator panel has a stable DOM hook for visual/operator smoke');
+assert.match(indexHtml, /data-greenroom-moge-preview-action/, 'MoGE cockpit keeps a new-preview action visible separately from completed results');
+assert.match(indexHtml, /data-greenroom-moge-latest-result/, 'MoGE cockpit exposes the latest completed result separately from the new-preview action');
+assert.match(indexHtml, /Latest result/, 'MoGE cockpit names completed browser output as a latest result instead of replacing the preview source control');
+assert.match(servePy, /rows\s*=\s*\[\s*_browser_webgpu_fixture_row\(\),\s*\*live_rows\s*\]/, 'Browser WebGPU provider keeps the reserved preview route available even after live result rows exist');
 assert.match(indexHtml, /data-greenroom-route-archive/, 'Native Greenroom route archive is addressable separately from the operator panel');
 assert.match(indexHtml, /<details[^>]+id="native-greenroom-route-archive"/, 'Native Greenroom route graveyard is collapsed behind a details archive by default');
 assert.doesNotMatch(indexHtml, /<details[^>]+id="native-greenroom-route-archive"[^>]+open/, 'Native Greenroom route graveyard must not be open by default');
