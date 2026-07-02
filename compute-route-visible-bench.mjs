@@ -166,7 +166,7 @@ export function buildComputeRouteVisibleBenchModel({ witness } = {}) {
       },
       scheduler: {
         schema: schedulerEvidence.schema || witness.scheduler?.schema || null,
-        verificationState: schedulerEvidence.verificationState || witness.scheduler?.verificationState || null,
+        verificationState: schedulerVerification?.status || schedulerEvidence.verificationState || witness.scheduler?.verificationState || null,
         requestedMode: schedulerEvidence.requestedScheduler?.mode || witness.scheduler?.requestedScheduler?.mode || null,
         effectiveMode: schedulerEvidence.effectiveScheduler?.mode || witness.scheduler?.effectiveScheduler?.mode || null,
         nestedSchedulerSchema: schedulerEvidence.scheduler?.schema || witness.scheduler?.schema || null,

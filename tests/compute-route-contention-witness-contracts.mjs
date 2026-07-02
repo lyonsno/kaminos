@@ -371,6 +371,38 @@ pipelineSchedulerReport.pipelineReport.stages[0].effectiveRoute.pipelineSchedule
     unsupportedFields: [],
     verificationState: 'verified',
   },
+  schedulerVerification: {
+    schema: 'kaminos.webgpu-scheduler-verification-receipt.v0',
+    status: 'verified',
+    classification: 'observed-boundaries',
+    downgrades: [],
+    route: {
+      pipelineId: 'sharp-image-to-splat-live-v0',
+      requestedRouteId: 'adapter.sharp-image-to-splat-live.v0',
+      effectiveRouteId: 'adapter.sharp-image-to-splat-live.v0',
+      backendClass: 'browser-webgpu',
+    },
+    eventTrace: {
+      schema: 'kaminos.webgpu-scheduler-event-trace.v0',
+      events: [{ kind: 'js-yield-end', boundary: 'spn-patch-chunk' }],
+    },
+    boundaryAssertions: [
+      {
+        field: 'phaseChunkSize.spnPatch',
+        status: 'verified',
+        observedBoundary: 'spn-patch-chunk',
+        observedCount: 35,
+      },
+    ],
+    frameTail: {
+      evidenceSource: 'browser-wall-clock',
+      disclaimer: 'route-level-cooperative-boundary-timing',
+    },
+    falseAuthorityChecks: {
+      timingProxyOnly: false,
+      eventTraceMissing: false,
+    },
+  },
   backpressure: {
     schema: 'kaminos.webgpu-route-backpressure.v0',
     requestedBudget: 'visible-wait',
@@ -423,6 +455,7 @@ assert.equal(pipelineSchedulerWitness.pipelineScheduler.source, 'pipeline-adapte
 assert.equal(pipelineSchedulerWitness.pipelineScheduler.scheduler.schema, 'kaminos.webgpu-route-scheduler.v0');
 assert.equal(pipelineSchedulerWitness.pipelineScheduler.backpressure.schema, 'kaminos.webgpu-route-backpressure.v0');
 assert.equal(pipelineSchedulerWitness.pipelineScheduler.raw.breathingRoom.eventCount, 492);
+assert.equal(pipelineSchedulerWitness.pipelineScheduler.schedulerVerification.status, 'verified');
 assert.equal(pipelineSchedulerWitness.scheduler.verificationState, 'verified');
 assert.equal(pipelineSchedulerWitness.scheduler.requestedScheduler.phaseChunkSize.spnPatch, 4);
 assert.equal(pipelineSchedulerWitness.scheduler.effectiveScheduler.phaseChunkSize.vitBlock, 6);
@@ -455,6 +488,8 @@ assert.equal(visibleBench.evidence.route.pipelineId, 'sharp-image-to-splat-live-
 assert.equal(visibleBench.evidence.route.activePhase, 'running');
 assert.equal(visibleBench.evidence.scheduler.schema, 'kaminos.pipeline-scheduler-composition.v0');
 assert.equal(visibleBench.evidence.scheduler.verificationState, 'verified');
+assert.equal(visibleBench.evidence.schedulerVerification.status, 'verified');
+assert.equal(visibleBench.evidence.schedulerVerification.classification, 'observed-boundaries');
 assert.equal(visibleBench.evidence.scheduler.requestedMode, 'cooperative');
 assert.equal(visibleBench.evidence.scheduler.effectiveMode, 'cooperative');
 assert.equal(visibleBench.evidence.backpressure.schema, 'kaminos.webgpu-route-backpressure.v0');
@@ -469,6 +504,49 @@ assert.equal(visibleBench.evidence.frameTail.bucket, 'hot');
 assert.ok(visibleBench.evidence.warnings.includes('pipeline_route_completed_not_active_compute'));
 assert.equal(visibleBench.evidence.falseClosure.visualSourceNotLive, false);
 assert.equal(visibleBench.evidence.falseClosure.schedulerUnverified, false);
+
+const misleadingLegacySchedulerReport = structuredClone(pipelineSchedulerReport);
+misleadingLegacySchedulerReport.pipelineReport.stages[0].effectiveRoute.pipelineScheduler.verificationState = 'verified';
+misleadingLegacySchedulerReport.pipelineReport.stages[0].effectiveRoute.pipelineScheduler.scheduler.verificationState = 'verified';
+misleadingLegacySchedulerReport.pipelineReport.stages[0].effectiveRoute.pipelineScheduler.schedulerVerification = {
+  schema: 'kaminos.webgpu-scheduler-verification-receipt.v0',
+  status: 'scheduler-unverified',
+  classification: 'config-only',
+  downgrades: ['effective-scheduler-missing'],
+  route: {
+    pipelineId: 'sharp-image-to-splat-live-v0',
+    requestedRouteId: 'adapter.sharp-image-to-splat-live.v0',
+    effectiveRouteId: 'adapter.sharp-image-to-splat-live.v0',
+    backendClass: 'browser-webgpu',
+  },
+  frameTail: {
+    evidenceSource: 'raf-and-queue-proxy',
+    disclaimer: 'not-gpu-exclusive-or-present-latency',
+  },
+  falseAuthorityChecks: {
+    timingProxyOnly: true,
+    eventTraceMissing: true,
+  },
+};
+const misleadingLegacySchedulerWitness = buildComputeRouteContentionWitnessFromReport(misleadingLegacySchedulerReport, {
+  witnessId: 'contention-nested-scheduler-receipt-authority',
+  requestedVisualBudget: {
+    budgetId: 'live_high',
+    rayBudgetPreset: 'live',
+    liveSimulation: true,
+    prerecorded: false,
+  },
+});
+assert.equal(misleadingLegacySchedulerWitness.pipelineScheduler.schedulerVerification.status, 'scheduler-unverified');
+assert.equal(misleadingLegacySchedulerWitness.scheduler.verificationState, 'scheduler-unverified');
+assert.equal(misleadingLegacySchedulerWitness.falseClosureChecks.schedulerUnverified, true);
+assert.ok(misleadingLegacySchedulerWitness.witnessWarnings.includes('scheduler_unverified'));
+const misleadingLegacyVisibleBench = buildComputeRouteVisibleBenchModel({
+  witness: misleadingLegacySchedulerWitness,
+});
+assert.equal(misleadingLegacyVisibleBench.evidence.scheduler.verificationState, 'scheduler-unverified');
+assert.equal(misleadingLegacyVisibleBench.evidence.schedulerVerification.status, 'scheduler-unverified');
+assert.match(misleadingLegacyVisibleBench.primaryText, /could not prove the route scheduler stayed cooperative/);
 
 const schedulerReceiptWitness = {
   ...pipelineSchedulerWitness,

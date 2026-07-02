@@ -463,9 +463,13 @@ function schedulerFromReport(report = {}) {
   const routeEvidence = effectiveRouteEvidence(report);
   const pipelineScheduler = pipelineSchedulerFromReport(report);
   if (pipelineScheduler?.scheduler) {
+    const schedulerVerification = cloneObject(pipelineScheduler.schedulerVerification);
+    const scheduler = cloneObject(pipelineScheduler.scheduler);
     return {
-      ...cloneObject(pipelineScheduler.scheduler),
-      adapterEvidence: pipelineScheduler.scheduler.adapterEvidence || pipelineScheduler.raw?.breathingRoom || null,
+      ...scheduler,
+      verificationState: schedulerVerification?.status || scheduler.verificationState,
+      schedulerVerification,
+      adapterEvidence: scheduler.adapterEvidence || pipelineScheduler.raw?.breathingRoom || null,
     };
   }
   const scheduler = cloneObject(routeEvidence.scheduler);
