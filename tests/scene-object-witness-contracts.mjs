@@ -215,6 +215,7 @@ assert.match(witness, /hybrid splat overlay accepted malformed scene-context tel
 assert.match(witness, /hybrid splat overlay did not expose renderer source identity/, 'Hybrid Renderer witness proves Kaminos reads renderer-reported source identity');
 assert.match(witness, /hybrid splat overlay lost sharedCommandEncoder=false/, 'Hybrid Renderer witness preserves P0 no-shared-command-encoder truth');
 assert.match(witness, /real hybrid splat overlay canvas has no visible geometry/, 'Real Hybrid Renderer witness fails when Start Hybrid renders into a zero-sized overlay surface');
+assert.match(witness, /real hybrid splat overlay screenshot has no visible splat-region geometry/, 'Real Hybrid Renderer witness validates captured screenshot pixels when WebGPU canvas alpha readback is not authoritative');
 assert.match(witness, /real-hybrid-cropped-unsupported-guard/, 'Real Hybrid Renderer witness covers cropped assets when renderer crop is unsupported');
 assert.match(witness, /uncropped expensive renderer start/, 'Real Hybrid Renderer witness rejects starting an uncropped full renderer for cropped splats');
 assert.match(witness, /real-hybrid-cropped-supported-overlay/, 'Real Hybrid Renderer witness covers cropped assets when renderer advertises crop support');

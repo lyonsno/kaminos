@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
+import { inflateSync } from 'node:zlib';
 
 const args = new Map();
 for (let i = 2; i < process.argv.length; i += 2) {
@@ -60,6 +61,15 @@ function siblingPngPath(suffix) {
   return out.replace(/\.png$/i, `${suffix}.png`);
 }
 
+function normalizeBrowserUrlIdentity(value) {
+  if (!value) return value;
+  try {
+    return new URL(value, effectiveUrl || url).href;
+  } catch {
+    return value;
+  }
+}
+
 async function capturePngScreenshot(ws, screenshotPath) {
   const shot = await wsRequest(ws, 'Page.captureScreenshot', { format: 'png', fromSurface: true });
   const png = Buffer.from(shot.data, 'base64');
@@ -67,6 +77,139 @@ async function capturePngScreenshot(ws, screenshotPath) {
   mkdirSync(dirname(screenshotPath), { recursive: true });
   writeFileSync(screenshotPath, png);
   return { path: screenshotPath, bytes: png.length };
+}
+
+function decodePng8(buffer) {
+  assert.equal(buffer.readUInt32BE(0), 0x89504e47, 'screenshot is not a PNG');
+  let offset = 8;
+  let width = 0;
+  let height = 0;
+  let bitDepth = 0;
+  let colorType = 0;
+  let interlace = 0;
+  const idat = [];
+  while (offset < buffer.length) {
+    const length = buffer.readUInt32BE(offset);
+    const type = buffer.toString('ascii', offset + 4, offset + 8);
+    const dataStart = offset + 8;
+    const dataEnd = dataStart + length;
+    const data = buffer.subarray(dataStart, dataEnd);
+    if (type === 'IHDR') {
+      width = data.readUInt32BE(0);
+      height = data.readUInt32BE(4);
+      bitDepth = data[8];
+      colorType = data[9];
+      interlace = data[12];
+    } else if (type === 'IDAT') {
+      idat.push(data);
+    } else if (type === 'IEND') {
+      break;
+    }
+    offset = dataEnd + 4;
+  }
+  if (bitDepth !== 8 || interlace !== 0 || (colorType !== 2 && colorType !== 6)) {
+    throw new Error(`unsupported PNG format for visual sample: bitDepth=${bitDepth} colorType=${colorType} interlace=${interlace}`);
+  }
+  const channels = colorType === 6 ? 4 : 3;
+  const stride = width * channels;
+  const raw = inflateSync(Buffer.concat(idat));
+  const pixels = Buffer.alloc(width * height * channels);
+  let src = 0;
+  for (let y = 0; y < height; y += 1) {
+    const filter = raw[src++];
+    const rowStart = y * stride;
+    const prevStart = (y - 1) * stride;
+    for (let x = 0; x < stride; x += 1) {
+      const left = x >= channels ? pixels[rowStart + x - channels] : 0;
+      const up = y > 0 ? pixels[prevStart + x] : 0;
+      const upLeft = y > 0 && x >= channels ? pixels[prevStart + x - channels] : 0;
+      const p = left + up - upLeft;
+      const pa = Math.abs(p - left);
+      const pb = Math.abs(p - up);
+      const pc = Math.abs(p - upLeft);
+      const predictor = pa <= pb && pa <= pc ? left : (pb <= pc ? up : upLeft);
+      const encoded = raw[src++];
+      let value = encoded;
+      if (filter === 1) value = encoded + left;
+      else if (filter === 2) value = encoded + up;
+      else if (filter === 3) value = encoded + Math.floor((left + up) / 2);
+      else if (filter === 4) value = encoded + predictor;
+      else if (filter !== 0) throw new Error(`unsupported PNG filter ${filter}`);
+      pixels[rowStart + x] = value & 0xff;
+    }
+  }
+  return { width, height, channels, pixels };
+}
+
+function sampleRealHybridScreenshot(buffer, evidence) {
+  const image = decodePng8(buffer);
+  const hostRect = evidence?.overlayHost?.rect || { x: 0, y: 0, width: image.width, height: image.height };
+  const probe = evidence?.cameraCoherence?.projectionProbeB?.pbrnextOverlayScreen
+    || evidence?.cameraCoherence?.projectionProbeA?.pbrnextOverlayScreen
+    || { x: hostRect.width / 2, y: hostRect.height / 2 };
+  const hostRight = Math.max(1, hostRect.x + hostRect.width);
+  const hostBottom = Math.max(1, hostRect.y + hostRect.height);
+  const scaleX = image.width / hostRight;
+  const scaleY = image.height / hostBottom;
+  const cx = Math.round((hostRect.x + probe.x) * scaleX);
+  const cy = Math.round((hostRect.y + probe.y) * scaleY);
+  const radius = 140;
+  const minX = Math.max(0, cx - radius);
+  const maxX = Math.min(image.width - 1, cx + radius);
+  const minY = Math.max(0, cy - radius);
+  const maxY = Math.min(image.height - 1, cy + radius);
+  let sampledPixels = 0;
+  let edgePixels = 0;
+  let emissivePixels = 0;
+  let brightPixels = 0;
+  const lumaAt = (x, y) => {
+    const index = (y * image.width + x) * image.channels;
+    const r = image.pixels[index];
+    const g = image.pixels[index + 1];
+    const b = image.pixels[index + 2];
+    return { r, g, b, y: 0.2126 * r + 0.7152 * g + 0.0722 * b };
+  };
+  for (let y = minY; y <= maxY; y += 1) {
+    for (let x = minX; x <= maxX; x += 1) {
+      const p = lumaAt(x, y);
+      sampledPixels += 1;
+      if (p.r > 120 && p.g > 35 && p.g < 190 && p.b < 110 && p.r > p.g * 1.12) emissivePixels += 1;
+      if (p.r + p.g + p.b > 420) brightPixels += 1;
+      if (x < maxX) {
+        const r = lumaAt(x + 1, y);
+        if (Math.abs(p.y - r.y) > 18) edgePixels += 1;
+      }
+      if (y < maxY) {
+        const d = lumaAt(x, y + 1);
+        if (Math.abs(p.y - d.y) > 18) edgePixels += 1;
+      }
+    }
+  }
+  return {
+    sampled: true,
+    image: { width: image.width, height: image.height, channels: image.channels },
+    center: { x: cx, y: cy },
+    rect: { x: minX, y: minY, width: maxX - minX + 1, height: maxY - minY + 1 },
+    sampledPixels,
+    edgePixels,
+    emissivePixels,
+    brightPixels,
+    visible: edgePixels > 500 || emissivePixels > 8 || brightPixels > 100,
+  };
+}
+
+function assertRealHybridScreenshotVisible(screenshotPath) {
+  const evidence = lastEvidence.realHybridSplatOverlay;
+  if (!evidence) return;
+  const sample = sampleRealHybridScreenshot(readFileSync(screenshotPath), evidence);
+  evidence.screenshotSample = sample;
+  if ((evidence.afterSample?.visiblePixels || 0) <= 0 && !sample.visible) {
+    throw new Error(`real hybrid splat overlay screenshot has no visible splat-region geometry: ${JSON.stringify({
+      afterSample: evidence.afterSample,
+      screenshotSample: sample,
+      overlayDebug: evidence.overlayDebug,
+    })}`);
+  }
 }
 
 async function cdpFetch(path, options) {
@@ -3105,7 +3248,7 @@ async function runRealHybridSplatOverlayScenario(ws) {
   if (evidence.overlayDebug?.status !== 'rendering' || !evidence.overlayDebug?.canvasConnected) {
     throw new Error(`real hybrid splat overlay did not reach connected rendering state: ${JSON.stringify(evidence)}`);
   }
-  if (evidence.overlayDebug?.sourceIdentity?.source !== evidence.splatObject.source) {
+  if (normalizeBrowserUrlIdentity(evidence.overlayDebug?.sourceIdentity?.source) !== normalizeBrowserUrlIdentity(evidence.splatObject.source)) {
     throw new Error(`real hybrid splat overlay did not preserve renderer source identity: ${JSON.stringify(evidence)}`);
   }
   const correctionApplication = evidence.overlayDebug?.correctionApplication || {};
@@ -4363,6 +4506,10 @@ try {
 
   phase = 'capturing-screenshot';
   const finalShot = await capturePngScreenshot(ws, out);
+  phase = 'validating-screenshot';
+  if (scenario === 'real-hybrid-splat-overlay') {
+    assertRealHybridScreenshotVisible(out);
+  }
 
   phase = 'writing-report';
   const report = {
