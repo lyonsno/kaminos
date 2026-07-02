@@ -589,6 +589,7 @@ struct Uniforms {
   pyro_carrier_controls: vec4<f32>,
   pyro_diagnostic_controls: vec4<f32>,
   pyro_shape_controls: vec4<f32>,
+  pyro_light_controls: vec4<f32>,
   previousViewProj: mat4x4<f32>,
 };
 
@@ -3108,6 +3109,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
   let pyroBiteTeeth = clamp(u.pyro_shape_controls.x, 0.0, 1.0);
   let pyroBiteWake = clamp(u.pyro_shape_controls.y, 0.0, 1.0);
   let pyroFoldWake = clamp(u.pyro_shape_controls.z, 0.0, 1.0);
+  let pyroContrastRadiance = clamp(u.pyro_light_controls.x, 0.0, 1.5);
   let canonicalSmokeContent = 1.0 - minimalPlumeRenderScene * step(0.5, canonicalContentMode) * (1.0 - step(1.5, canonicalContentMode));
   let canonicalFireContent = minimalPlumeRenderScene * step(0.5, canonicalContentMode);
   let canonicalFireRenderContent = mix(1.0, canonicalFireContent, minimalPlumeRenderScene);
@@ -3427,6 +3429,18 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
       * pyroCarrierOverdrive
       * (0.34 + pyroSpatialEnergy * 0.66)
       * pyroFoldWakeSignal;
+    let pyroRadianceContrastSignal = clamp(
+      pyroBaseCarrier
+        * pyroContrastRadiance
+        * pyroCarrierOverdrive
+        * (0.36 + pyroSpatialEnergy * 0.64)
+        * max(pyroBiteEvent * 0.50, pyroFoldWakeSignal)
+        * smoothstep(0.012, 0.62, smoke + rawExtinction + microSmoke * 0.32)
+        * (0.30 + fireMix * 0.54 + flameDetail * 0.18 + quenchedFireLick * 0.16),
+      0.0,
+      2.6
+    );
+    let pyroRadianceBoost = clamp(pyroRadianceContrastSignal * (0.22 + smoke * 0.50 + renderTemp * 0.16 + pyroMemoryPattern * 0.10), 0.0, 2.1);
     let pyroBiteAlphaBoost = clamp(pyroEdgeBreakup * (0.40 + fireMix * 0.80), 0.0, 2.4);
     let pyroFoldExtinctionBoost = clamp(pyroSmokeFoldSignal * (0.34 + smoke * 0.85 + rawExtinction * 0.55), 0.0, 2.8);
     alpha = clamp(alpha + pyroBiteAlphaBoost * rayStepOpacity * 0.080 + pyroFoldExtinctionBoost * rayStepOpacity * 0.060, 0.0, 0.28);
@@ -3439,6 +3453,9 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     );
     local = local * (1.0 - pyroBiteAlphaBoost * 0.36)
       + vec3<f32>(1.18, 0.42, 0.08) * pyroBiteAlphaBoost * (0.34 + fireMix * 0.70);
+    let pyroRadianceColor = fireColor(renderTemp * 0.58 + 0.24) * (0.48 + smoke * 0.26)
+      + vec3<f32>(0.72, 0.48, 0.24) * pyroFoldWakeSignal * 0.22;
+    local = local + pyroRadianceColor * pyroRadianceBoost * 0.16;
     let pyroBorderDiagnostic = pyroLiveCarrier * pyroInterfaceSignal * pyroBorderMask * pyroCarrierOverdrive;
     let pyroDiagnosticColor =
       vec3<f32>(0.10, 0.78, 1.0) * clamp(pyroBorderDiagnostic, 0.0, 1.0)
@@ -3454,7 +3471,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     local = mix(local, diagnosticColor, flowDebug * smoothstep(0.015, 0.12, curlDebug + divDebug));
     let pressureTierOverlay = pressureTierDebugOverlayColor(y);
     local = mix(local, pressureTierOverlay.rgb, pressureTierOverlay.a);
-    color = color + trans * (alpha * local + fireAlpha * radianceEmission * mix(0.82, 0.62, bonfireRenderScene) + smokeBacklight);
+    color = color + trans * (alpha * local + fireAlpha * radianceEmission * mix(0.82, 0.62, bonfireRenderScene) + smokeBacklight + pyroRadianceColor * pyroRadianceBoost * rayStepOpacity * 0.030);
     let extinctionStep = clamp(alpha * (0.46 + extinction * 0.16) + fireAlpha * 0.08, 0.0, 0.34);
     trans = trans * exp(-extinctionStep);
     t = t + localDt;
@@ -3486,7 +3503,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   const invViewProj = new THREE.Matrix4();
   const viewProj = new THREE.Matrix4();
   const previousViewProj = new THREE.Matrix4();
-  const uniforms = new Float32Array(212);
+  const uniforms = new Float32Array(216);
   let controlsSnapshot = applyRuntimeQualityControls(getControls());
   let gridSize = normalizeGridSize(controlsSnapshot.resolution);
   let majorantGridSize = normalizeMajorantGridSize(controlsSnapshot.majorantGrid);
@@ -4938,6 +4955,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const pyroSmokeFold = Math.max(0, Math.min(1, controlsSnapshot.pyroSmokeFold ?? 0.25));
     const pyroFoldBorderFocus = Math.max(0, Math.min(1, controlsSnapshot.pyroFoldBorder ?? 0.35));
     const pyroFoldWake = Math.max(0, Math.min(1, controlsSnapshot.pyroFoldWake ?? 0.35));
+    const pyroContrastRadiance = Math.max(0, Math.min(1.5, controlsSnapshot.pyroRadiance ?? 0));
     const pyroDiagnosticPaint = Math.max(0, Math.min(1, controlsSnapshot.pyroDiagnosticPaint ?? 0));
     uniforms[184] = pyroInterfaceFocus;
     uniforms[185] = pyroEdgeBite;
@@ -4953,7 +4971,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     uniforms[193] = pyroBiteWake;
     uniforms[194] = pyroFoldWake;
     uniforms[195] = 0;
-    uniforms.set(previousViewProj.elements, 196);
+    uniforms[196] = pyroContrastRadiance;
+    uniforms[197] = 0;
+    uniforms[198] = 0;
+    uniforms[199] = 0;
+    uniforms.set(previousViewProj.elements, 200);
     device.queue.writeBuffer(uniformBuffer, 0, uniforms);
     state.gridOverlay = controlsSnapshot.gridOverlay || 0;
     state.volumeScene = normalizeVolumeScene(controlsSnapshot.volumeScene);
@@ -4998,6 +5020,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         smokeFold: pyroSmokeFold,
         foldBorderFocus: pyroFoldBorderFocus,
         foldWake: pyroFoldWake,
+        radiance: pyroContrastRadiance,
         diagnosticPaint: pyroDiagnosticPaint,
       },
       carrierDebug: {
@@ -5008,6 +5031,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         borderSignalMax: pyroMaterialGain * pyroMaterialLiveAuthority * pyroInterfaceFocus * pyroCarrierOverdrive,
         biteSignalMax: pyroMaterialGain * pyroMaterialLiveAuthority * pyroEdgeBite * pyroCarrierOverdrive,
         foldSignalMax: pyroMaterialGain * pyroMaterialSmokeAuthority * pyroSmokeFold * pyroCarrierOverdrive,
+        radianceSignalMax: pyroMaterialGain * pyroMaterialLiveAuthority * pyroMaterialSmokeAuthority * pyroContrastRadiance * pyroCarrierOverdrive,
         biteShape: `${pyroBiteTeeth.toFixed(2)}t/${pyroBiteWake.toFixed(2)}w`,
         foldShape: `${pyroFoldWake.toFixed(2)}w`,
       },
