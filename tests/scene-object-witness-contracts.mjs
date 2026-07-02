@@ -216,6 +216,10 @@ assert.match(witness, /hybrid splat overlay did not expose renderer source ident
 assert.match(witness, /hybrid splat overlay lost sharedCommandEncoder=false/, 'Hybrid Renderer witness preserves P0 no-shared-command-encoder truth');
 assert.match(witness, /real hybrid splat overlay canvas has no visible geometry/, 'Real Hybrid Renderer witness fails when Start Hybrid renders into a zero-sized overlay surface');
 assert.match(witness, /real hybrid splat overlay screenshot has no visible splat-region geometry/, 'Real Hybrid Renderer witness validates captured screenshot pixels when WebGPU canvas alpha readback is not authoritative');
+assert.match(witness, /hybrid-host-depth-occluder/, 'Host-depth compositor witness runs a deterministic real-mesh occluder scenario');
+assert.match(witness, /host-depth occluder witness could not disable host depth for A\/B baseline/, 'Host-depth compositor witness proves the disabled baseline route identity before comparing pixels');
+assert.match(witness, /host-depth occluder witness did not activate the shared host-depth route cleanly/, 'Host-depth compositor witness proves shared-device native host-depth route identity');
+assert.match(witness, /host-depth occluder witness did not change the projected occluder region/, 'Host-depth compositor witness fails unless the host occluder changes pixels over the splat');
 assert.match(witness, /real-hybrid-cropped-unsupported-guard/, 'Real Hybrid Renderer witness covers cropped assets when renderer crop is unsupported');
 assert.match(witness, /uncropped expensive renderer start/, 'Real Hybrid Renderer witness rejects starting an uncropped full renderer for cropped splats');
 assert.match(witness, /real-hybrid-cropped-supported-overlay/, 'Real Hybrid Renderer witness covers cropped assets when renderer advertises crop support');

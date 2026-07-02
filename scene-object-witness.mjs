@@ -212,6 +212,57 @@ function assertRealHybridScreenshotVisible(screenshotPath) {
   }
 }
 
+function screenshotPointForHostScreen(image, hostRect, screen) {
+  const hostRight = Math.max(1, hostRect.x + hostRect.width);
+  const hostBottom = Math.max(1, hostRect.y + hostRect.height);
+  return {
+    x: Math.round((hostRect.x + screen.x) * (image.width / hostRight)),
+    y: Math.round((hostRect.y + screen.y) * (image.height / hostBottom)),
+  };
+}
+
+function comparePngRegion(pathA, pathB, evidence, radius = 90) {
+  const a = decodePng8(readFileSync(pathA));
+  const b = decodePng8(readFileSync(pathB));
+  if (a.width !== b.width || a.height !== b.height || a.channels !== b.channels) {
+    throw new Error(`cannot compare screenshots with different formats: ${pathA} vs ${pathB}`);
+  }
+  const hostRect = evidence?.overlayHost?.rect || { x: 0, y: 0, width: a.width, height: a.height };
+  const screen = evidence?.occluder?.screen;
+  const center = screenshotPointForHostScreen(a, hostRect, screen || { x: hostRect.width / 2, y: hostRect.height / 2 });
+  const minX = Math.max(0, center.x - radius);
+  const maxX = Math.min(a.width - 1, center.x + radius);
+  const minY = Math.max(0, center.y - radius);
+  const maxY = Math.min(a.height - 1, center.y + radius);
+  let sampledPixels = 0;
+  let changedPixels = 0;
+  let absDiffSum = 0;
+  let maxDiff = 0;
+  for (let y = minY; y <= maxY; y += 1) {
+    for (let x = minX; x <= maxX; x += 1) {
+      const index = (y * a.width + x) * a.channels;
+      const dr = Math.abs(a.pixels[index] - b.pixels[index]);
+      const dg = Math.abs(a.pixels[index + 1] - b.pixels[index + 1]);
+      const db = Math.abs(a.pixels[index + 2] - b.pixels[index + 2]);
+      const diff = dr + dg + db;
+      sampledPixels += 1;
+      absDiffSum += diff;
+      maxDiff = Math.max(maxDiff, diff);
+      if (diff > 40) changedPixels += 1;
+    }
+  }
+  return {
+    sampled: true,
+    center,
+    rect: { x: minX, y: minY, width: maxX - minX + 1, height: maxY - minY + 1 },
+    sampledPixels,
+    changedPixels,
+    changedRatio: sampledPixels > 0 ? changedPixels / sampledPixels : 0,
+    meanAbsDiff: sampledPixels > 0 ? absDiffSum / sampledPixels : 0,
+    maxDiff,
+  };
+}
+
 async function cdpFetch(path, options) {
   const { timeoutMs = 5000, ...fetchOptions } = options || {};
   if (!fetchOptions.signal) fetchOptions.signal = AbortSignal.timeout(timeoutMs);
@@ -3289,6 +3340,87 @@ async function runRealHybridSplatOverlayScenario(ws) {
   }
 }
 
+async function runHybridHostDepthOccluderScenario(ws) {
+  await runRealHybridSplatOverlayScenario(ws);
+  phase = 'scenario-hybrid-host-depth-occluder';
+
+  const setup = await evaluate(ws, `
+    (async () => {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      const occluder = window.kaminosPlaceHybridSplatDepthOccluderDebugMesh?.({
+        x: 0,
+        y: 0.06,
+        z: 0.48,
+        width: 0.72,
+        height: 0.72,
+        depth: 0.08,
+      }) || null;
+      await wait(500);
+      const offToggle = window.kaminosSetHybridSplatHostDepthDebugEnabled?.(false) || null;
+      await wait(700);
+      const offDebug = window.kaminosHybridSplatOverlayDebugState?.() || null;
+      const host = document.getElementById('hybrid-splat-overlay-host');
+      const hostRect = host ? (() => {
+        const r = host.getBoundingClientRect();
+        return { x: r.x, y: r.y, width: r.width, height: r.height };
+      })() : null;
+      return {
+        occluder,
+        offToggle,
+        offDebug,
+        overlayHost: { rect: hostRect },
+      };
+    })()
+  `, { timeoutMs: 30000 });
+
+  const offShot = await capturePngScreenshot(ws, siblingPngPath('-host-depth-off'));
+
+  const enable = await evaluate(ws, `
+    (async () => {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      const onToggle = window.kaminosSetHybridSplatHostDepthDebugEnabled?.(true) || null;
+      await wait(900);
+      const onDebug = window.kaminosHybridSplatOverlayDebugState?.() || null;
+      const occluder = window.kaminosHybridSplatDepthOccluderDebugState?.() || null;
+      return { onToggle, onDebug, occluder };
+    })()
+  `, { timeoutMs: 30000 });
+
+  const onShot = await capturePngScreenshot(ws, siblingPngPath('-host-depth-on'));
+  const evidence = {
+    schema: 'kaminos.hybrid-splat.host-depth-occluder-witness.v0',
+    setup,
+    enable,
+    overlayHost: setup.overlayHost,
+    occluder: enable.occluder || setup.occluder,
+    offScreenshot: offShot,
+    onScreenshot: onShot,
+  };
+  evidence.regionDiff = comparePngRegion(offShot.path, onShot.path, evidence, 95);
+  lastEvidence.hybridHostDepthOccluder = evidence;
+
+  if (setup.offDebug?.capabilities?.hostDepthTexture !== false
+    || setup.offDebug?.depthCompositionTelemetry?.source === 'host-depth-texture') {
+    throw new Error(`host-depth occluder witness could not disable host depth for A/B baseline: ${JSON.stringify(evidence)}`);
+  }
+  const onTelemetry = enable.onDebug?.depthCompositionTelemetry || null;
+  if (enable.onDebug?.capabilities?.hostDepthTexture !== true
+    || enable.onDebug?.capabilities?.sharedDevice !== true
+    || onTelemetry?.source !== 'host-depth-texture'
+    || enable.onDebug?.renderError) {
+    throw new Error(`host-depth occluder witness did not activate the shared host-depth route cleanly: ${JSON.stringify(evidence)}`);
+  }
+  if (!evidence.occluder?.active
+    || !Number.isFinite(evidence.occluder?.screen?.x)
+    || !Number.isFinite(evidence.occluder?.screen?.y)
+    || !evidence.overlayHost?.rect) {
+    throw new Error(`host-depth occluder witness did not project a deterministic host occluder: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.regionDiff.changedRatio < 0.025 || evidence.regionDiff.meanAbsDiff < 3.0) {
+    throw new Error(`host-depth occluder witness did not change the projected occluder region when host depth was enabled: ${JSON.stringify(evidence)}`);
+  }
+}
+
 async function runRealHybridCroppedUnsupportedGuardScenario(ws) {
   phase = 'scenario-real-hybrid-cropped-unsupported-guard';
   lastEvidence.realHybridCroppedUnsupportedGuard = await evaluate(ws, `
@@ -4472,6 +4604,8 @@ try {
     await runHybridSplatOverlayScenario(ws);
   } else if (scenario === 'real-hybrid-splat-overlay') {
     await runRealHybridSplatOverlayScenario(ws);
+  } else if (scenario === 'hybrid-host-depth-occluder') {
+    await runHybridHostDepthOccluderScenario(ws);
   } else if (scenario === 'real-hybrid-cropped-unsupported-guard') {
     await runRealHybridCroppedUnsupportedGuardScenario(ws);
   } else if (scenario === 'real-hybrid-cropped-supported-overlay') {
@@ -4507,7 +4641,7 @@ try {
   phase = 'capturing-screenshot';
   const finalShot = await capturePngScreenshot(ws, out);
   phase = 'validating-screenshot';
-  if (scenario === 'real-hybrid-splat-overlay') {
+  if (scenario === 'real-hybrid-splat-overlay' || scenario === 'hybrid-host-depth-occluder') {
     assertRealHybridScreenshotVisible(out);
   }
 

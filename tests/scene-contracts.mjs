@@ -129,6 +129,9 @@ assert.match(index, /function buildHybridSplatDepthProxyPlanes\(/, 'Hybrid Rende
 assert.match(index, /window\.kaminosSetHybridSplatDepthProxyDebugEnabled/, 'Hybrid Renderer witness can toggle proxy depth composition for A-B visual smoke');
 assert.match(index, /depthSource:\s*'host-depth-texture'/, 'Hybrid Renderer scene context requests host-depth texture composition');
 assert.match(index, /hostDepth:\s*hybridSplatHostDepthContext\(/, 'Hybrid Renderer scene context carries host depth identity and dimensions');
+assert.match(index, /window\.kaminosSetHybridSplatHostDepthDebugEnabled/, 'Hybrid Renderer host-depth witness can A-B toggle native host-depth publication');
+assert.match(index, /window\.kaminosPlaceHybridSplatDepthOccluderDebugMesh/, 'Hybrid Renderer host-depth witness can place a deterministic real mesh occluder');
+assert.match(index, /window\.kaminosHybridSplatDepthOccluderDebugState/, 'Hybrid Renderer host-depth witness exposes projected occluder-region evidence');
 assert.match(index, /sharedCanvasComposite:\s*false/, 'hybrid splat route stub must explicitly say shared canvas compositing is not implemented yet');
 assert.match(index, /realSplatRendering:\s*false/, 'hybrid splat route stub must not imply real splat rendering is active');
 assert.match(index, /id="splat-hybrid-renderer-panel"/, 'selected splats expose a visible Hybrid Renderer control surface, not only a URL flag');

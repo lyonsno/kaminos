@@ -1272,6 +1272,8 @@ let hybridSplatHostDepthRT = null;
 let hybridSplatHostDepthMaterial = null;
 let hybridSplatHostDepthFrameId = 0;
 let hybridSplatHostDepthStatus = null;
+let hybridSplatHostDepthDebugEnabled = true;
+let hybridSplatDepthOccluderDebugMesh = null;
 let backdropMesh = null;
 let currentMesh = null;
 let groundPlane = null;
@@ -1594,18 +1596,16 @@ function withHybridSplatPreviewDepthHidden(callback) {
 }
 
 function renderHybridSplatHostDepthTarget() {
-  if (!hybridSplatOverlayIsRendering() || !scene || !camera || !renderer || !hybridSplatHostDepthMaterial) return null;
+  if (!hybridSplatOverlayIsRendering() || !scene || !camera || !renderer) return null;
   const target = ensureHybridSplatHostDepthTarget();
   if (!target) return null;
   const previousTarget = typeof renderer.getRenderTarget === 'function' ? renderer.getRenderTarget() : null;
-  const previousOverride = scene.overrideMaterial;
   const previousBackground = scene.background;
   const previousClearColor = new THREE.Color();
   const hadClearColor = typeof renderer.getClearColor === 'function';
   if (hadClearColor) renderer.getClearColor(previousClearColor);
   const previousClearAlpha = typeof renderer.getClearAlpha === 'function' ? renderer.getClearAlpha() : 1;
   try {
-    scene.overrideMaterial = hybridSplatHostDepthMaterial;
     scene.background = null;
     renderer.setRenderTarget(target);
     renderer.setClearColor?.(0x000000, 0);
@@ -1630,7 +1630,6 @@ function renderHybridSplatHostDepthTarget() {
       updatedAt: new Date().toISOString(),
     };
   } finally {
-    scene.overrideMaterial = previousOverride;
     scene.background = previousBackground;
     if (hadClearColor) renderer.setClearColor(previousClearColor, previousClearAlpha);
     renderer.setRenderTarget(previousTarget);
@@ -1673,6 +1672,16 @@ function hybridSplatHostDepthContext() {
 
 function publishHybridSplatHostDepthTexture(handle = hybridSplatOverlayState.handle) {
   if (!handle || typeof handle.setHostDepthTexture !== 'function') return null;
+  if (!hybridSplatHostDepthDebugEnabled) {
+    handle.setHostDepthTexture(null, { depthBias: 0.01 });
+    return {
+      schema: 'kaminos.hybrid-splat.host-depth-publish.v0',
+      status: 'disabled',
+      hostDepth: null,
+      depthStatus: hybridSplatHostDepthStatus,
+      rendererTelemetry: handle.depthCompositionTelemetry || null,
+    };
+  }
   const view = hybridSplatHostDepthTextureView();
   const context = hybridSplatHostDepthContext();
   handle.setHostDepthTexture(view, context || { depthBias: 0.01 });
@@ -1695,6 +1704,82 @@ window.kaminosHybridSplatHostDepthDebugState = () => ({
   } : null,
   rendererTelemetry: hybridSplatOverlayState.handle?.depthCompositionTelemetry || null,
 });
+
+window.kaminosSetHybridSplatHostDepthDebugEnabled = function(enabled) {
+  hybridSplatHostDepthDebugEnabled = enabled !== false;
+  const publish = publishHybridSplatHostDepthTexture();
+  return {
+    schema: 'kaminos.hybrid-splat.host-depth-toggle.v0',
+    enabled: hybridSplatHostDepthDebugEnabled,
+    publish,
+    debug: window.kaminosHybridSplatHostDepthDebugState?.() || null,
+  };
+};
+
+window.kaminosPlaceHybridSplatDepthOccluderDebugMesh = function(options = {}) {
+  hybridSplatDepthOccluderDebugMesh?.parent?.remove?.(hybridSplatDepthOccluderDebugMesh);
+  hybridSplatDepthOccluderDebugMesh?.geometry?.dispose?.();
+  hybridSplatDepthOccluderDebugMesh?.material?.dispose?.();
+  const mesh = new THREE.Mesh(
+    new THREE.BoxGeometry(
+      Number(options.width) || 0.72,
+      Number(options.height) || 0.72,
+      Number(options.depth) || 0.08,
+    ),
+    new THREE.MeshStandardMaterial({
+      color: options.color ?? 0xf6f1e6,
+      roughness: 0.38,
+      metalness: 0.0,
+      envMapIntensity: parseFloat(document.getElementById('env-intensity-slider')?.value || '1'),
+    })
+  );
+  mesh.name = 'hybrid-splat-depth-occluder-debug-mesh';
+  mesh.position.set(
+    Number.isFinite(options.x) ? Number(options.x) : 0,
+    Number.isFinite(options.y) ? Number(options.y) : 0.06,
+    Number.isFinite(options.z) ? Number(options.z) : 0.48,
+  );
+  mesh.renderOrder = 2;
+  mesh.userData.kaminosHybridSplatDepthOccluderDebug = true;
+  scene.add(mesh);
+  hybridSplatDepthOccluderDebugMesh = mesh;
+  window._kaminosDirty?.();
+  return window.kaminosHybridSplatDepthOccluderDebugState();
+};
+
+window.kaminosClearHybridSplatDepthOccluderDebugMesh = function() {
+  if (hybridSplatDepthOccluderDebugMesh) {
+    scene.remove(hybridSplatDepthOccluderDebugMesh);
+    hybridSplatDepthOccluderDebugMesh.geometry?.dispose?.();
+    hybridSplatDepthOccluderDebugMesh.material?.dispose?.();
+    hybridSplatDepthOccluderDebugMesh = null;
+    window._kaminosDirty?.();
+  }
+  return window.kaminosHybridSplatDepthOccluderDebugState();
+};
+
+window.kaminosHybridSplatDepthOccluderDebugState = function() {
+  if (!hybridSplatDepthOccluderDebugMesh || !camera) {
+    return { schema: 'kaminos.hybrid-splat.depth-occluder-debug.v0', active: false };
+  }
+  hybridSplatDepthOccluderDebugMesh.updateMatrixWorld?.(true);
+  const center = hybridSplatDepthOccluderDebugMesh.getWorldPosition(new THREE.Vector3());
+  const ndc = center.clone().project(camera);
+  const size = renderer?.getDrawingBufferSize ? renderer.getDrawingBufferSize(new THREE.Vector2()) : new THREE.Vector2(window.innerWidth, window.innerHeight);
+  const screen = {
+    x: (ndc.x * 0.5 + 0.5) * size.x,
+    y: (-ndc.y * 0.5 + 0.5) * size.y,
+    ndc: ndc.toArray(),
+  };
+  return {
+    schema: 'kaminos.hybrid-splat.depth-occluder-debug.v0',
+    active: true,
+    name: hybridSplatDepthOccluderDebugMesh.name,
+    position: center.toArray(),
+    screen,
+    hostDepthEnabled: hybridSplatHostDepthDebugEnabled,
+  };
+};
 
 function hybridSplatOverlayProjectionMatrixForPbrnext(projectionMatrix) {
   const compensated = new THREE.Matrix4().copy(projectionMatrix);
