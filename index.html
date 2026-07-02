@@ -10361,6 +10361,11 @@ async function initKaminosVolumeRoute() {
     routedVolumeMajorantCadence = Math.max(1, Math.min(8, Math.round(routeMajorantCadence)));
   }
   const routePressureIterations = Number(params.get('volume_pressure_iterations'));
+  const routePressureMode = normalizeVolumePressureMode(params.get('volume_pressure_mode'));
+  const hasExplicitPressureRoute =
+    params.has('volume_pressure_mode') ||
+    params.has('volume_pressure_iterations') ||
+    params.has('volume_pressure_strategy');
   if (params.has('volume_pressure_iterations') && Number.isFinite(routePressureIterations)) {
     routedVolumePressureIterations = Math.max(0, Math.min(12, Math.round(routePressureIterations)));
   }
@@ -10368,8 +10373,13 @@ async function initKaminosVolumeRoute() {
   if (routePressureStrategy === 'spatial_tiers' || routePressureStrategy === 'global') {
     routedVolumePressureStrategy = routePressureStrategy;
   }
-  routedVolumePressureMode = volumePressureModeFromRoute(routedVolumePressureStrategy, routedVolumePressureIterations);
-  setVolumeControlValue('volume-pressure-mode', routedVolumePressureMode);
+  if (params.has('volume_pressure_mode')) {
+    routedVolumePressureMode = routePressureMode;
+    setVolumeControlValue('volume-pressure-mode', routedVolumePressureMode);
+  } else if (hasExplicitPressureRoute) {
+    routedVolumePressureMode = volumePressureModeFromRoute(routedVolumePressureStrategy, routedVolumePressureIterations);
+    setVolumeControlValue('volume-pressure-mode', routedVolumePressureMode);
+  }
   const routeSimProfile = (params.get('volume_sim_profile') || '').toLowerCase();
   routedVolumeSimProfile = routeSimProfile === '1' || routeSimProfile === 'true' || routeSimProfile === 'yes' || routeSimProfile === 'on';
   const routeGrid = Number(params.get('volume_grid'));

@@ -191,6 +191,8 @@ assert.match(index, /volume-pressure-mode/, 'Volume cockpit exposes a live press
 assert.match(index, /global-p3/, 'Volume pressure mode selector can switch to full global pressure3');
 assert.match(index, /routed-global/, 'Volume pressure mode preserves non-selector routed global counts such as pressure4');
 assert.match(index, /pressureMode/, 'Volume controls derive pressure strategy and iterations from the live pressure mode selector');
+assert.match(index, /params\.get\('volume_pressure_mode'\)/, 'URL route replays the visible pressure mode selector instead of dropping saved P3/Tiered state');
+assert.match(index, /hasExplicitPressureRoute/, 'named tall-plume presets keep their pressure mode unless the URL explicitly overrides pressure');
 assert.match(index, /effectivePressureModeLabel/, 'Pressure selector has an effective label path that exposes resolved default pressure count');
 assert.match(index, /pressureEffectiveLabel/, 'Volume controls carry the visible effective pressure label into renderer debug state');
 assert.match(index, /Default P\$\{effectiveIterations\}/, 'Default pressure mode label prints the resolved pressure iteration count');

@@ -196,6 +196,27 @@ function normalizePressureStrategy(value, volumeScene) {
   return volumeScene === 'tall_plume' && requested === 'spatial_tiers' ? 'spatial_tiers' : 'global';
 }
 
+function normalizeVolumePressureMode(value) {
+  const mode = String(value || 'auto').toLowerCase();
+  return ['auto', 'spatial-tiers', 'global-p3', 'global-p2', 'global-p1', 'routed-global'].includes(mode) ? mode : 'auto';
+}
+
+function pressureConfigForMode(mode, volumeScene, fallbackStrategy, fallbackIterations) {
+  const normalized = normalizeVolumePressureMode(mode);
+  switch (normalized) {
+    case 'spatial-tiers':
+      return { pressureStrategy: volumeScene === 'tall_plume' ? 'spatial_tiers' : 'global', pressureIterations: volumeScene === 'tall_plume' ? 3 : fallbackIterations };
+    case 'global-p3':
+      return { pressureStrategy: 'global', pressureIterations: 3 };
+    case 'global-p2':
+      return { pressureStrategy: 'global', pressureIterations: 2 };
+    case 'global-p1':
+      return { pressureStrategy: 'global', pressureIterations: 1 };
+    default:
+      return { pressureStrategy: fallbackStrategy, pressureIterations: fallbackIterations };
+  }
+}
+
 function expectedTallPlumePressureTierStrategy(volumeScene, pressureStrategy) {
   return volumeScene === 'tall_plume' && pressureStrategy === 'spatial_tiers'
     ? TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY
@@ -605,13 +626,24 @@ let expectedMajorantCadence = routeParams.has('volume_majorant_cadence') && Numb
   ? Math.max(1, Math.min(8, Math.round(requestedMajorantCadence)))
   : 1;
 const requestedPressureIterations = Number(routeParams.get('volume_pressure_iterations'));
-let expectedPressureStrategy = normalizePressureStrategy(routeParams.get('volume_pressure_strategy'), expectedVolumeScene);
+const requestedPressureMode = routeParams.get('volume_pressure_mode');
+const hasExplicitPressureRoute =
+  routeParams.has('volume_pressure_mode') ||
+  routeParams.has('volume_pressure_iterations') ||
+  routeParams.has('volume_pressure_strategy');
+let expectedPressureStrategy = normalizePressureStrategy(routeParams.get('volume_pressure_strategy') || scenePreset.pressureStrategy, expectedVolumeScene);
 let expectedSpatialPressureTiers = expectedPressureStrategy === 'spatial_tiers';
 let expectedPressureIterations = expectedSpatialPressureTiers
   ? 3
   : routeParams.has('volume_pressure_iterations') && Number.isFinite(requestedPressureIterations)
     ? Math.max(0, Math.min(12, Math.round(requestedPressureIterations)))
     : defaultPressureIterationsForScene(expectedVolumeScene);
+if (routeParams.has('volume_pressure_mode') || (!hasExplicitPressureRoute && scenePreset.pressureMode)) {
+  const pressureModeConfig = pressureConfigForMode(requestedPressureMode || scenePreset.pressureMode, expectedVolumeScene, expectedPressureStrategy, expectedPressureIterations);
+  expectedPressureStrategy = pressureModeConfig.pressureStrategy;
+  expectedPressureIterations = pressureModeConfig.pressureIterations;
+  expectedSpatialPressureTiers = expectedPressureStrategy === 'spatial_tiers';
+}
 let expectedPressureProjectionIterations = expectedSpatialPressureTiers ? 3 : expectedPressureIterations;
 let expectedTallPlumePressureStrategy = expectedSpatialPressureTiers
   ? TALL_PLUME_PRESSURE_ITERATION_STRATEGY_INACTIVE
