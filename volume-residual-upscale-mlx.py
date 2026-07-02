@@ -519,6 +519,7 @@ def main():
     loaded = load_pair_arrays(pairs, args.foregroundThreshold)
     train_items, eval_items = split_pairs(loaded)
     rng = np.random.default_rng(args.seed)
+    mx.random.seed(args.seed)
     input_channels = 4 if args.conditionRenderScale else 3
     scaleChannel = "lowRenderScale" if args.conditionRenderScale else None
     model = TinyResidualUpscaler(args.hidden_channels, input_channels)
@@ -632,6 +633,7 @@ def main():
         "imageAuthority": corpus.get("imageAuthority"),
         "lowRenderScale": args.low_render_scale,
         "seed": args.seed,
+        "seededRandomGenerators": ["numpy.default_rng", "mlx.core.random"],
         "selectedPairCount": len(loaded),
         "trainPairCount": len(train_items),
         "evalPairCount": len(eval_items),
