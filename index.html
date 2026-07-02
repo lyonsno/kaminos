@@ -5255,6 +5255,79 @@ function createMotionPanelPathWorldEncounterTrajectory({ episodeId, pathWorldSam
   };
 }
 
+function clampMotionPanelPathWorldProgress(value) {
+  return Number(Math.max(0, Math.min(1, Number(value) || 0)).toFixed(5));
+}
+
+function createMotionPanelPathWorldResumeHandoff({
+  episodeId,
+  pathWorld,
+  pathWorldSample,
+  encounterTrajectory,
+  firedAt = 0,
+  playbackDuration = 0,
+  cooldownDuration = 0,
+  handoffDuration = 0,
+  duration = 6,
+}) {
+  const direction = pathWorldSample?.direction === 'return' ? 'return' : 'forward';
+  const preEncounterRouteProgress = clampMotionPanelPathWorldProgress(pathWorldSample?.progress);
+  const handoffEndTime = Number(firedAt || 0)
+    + Math.max(0, Number(playbackDuration) || 0)
+    + Math.max(0, Number(cooldownDuration) || 0)
+    + Math.max(0, Number(handoffDuration) || 0);
+  let targetSample = sampleMotionPanelPathWorld(pathWorld, handoffEndTime, duration);
+  const obstacleCenter = pathWorldSample?.trigger?.center || pathWorld?.obstacle?.center || [0, 0, 0];
+  const obstacleRadius = Math.max(0.001, Number(pathWorldSample?.trigger?.radius) || Number(pathWorld?.obstacle?.radius) || 0.24);
+  const clearanceRadius = obstacleRadius + 0.17;
+  let handoffTargetProgress = clampMotionPanelPathWorldProgress(targetSample?.progress);
+  let routeSample = interpolateMotionPanelPathWorldRoute(pathWorld?.routePoints, handoffTargetProgress);
+  for (let i = 0; i < 8; i++) {
+    const dx = Number(routeSample.point[0] || 0) - Number(obstacleCenter[0] || 0);
+    const dz = Number(routeSample.point[2] || 0) - Number(obstacleCenter[2] || 0);
+    if (Math.hypot(dx, dz) >= clearanceRadius + 0.04) break;
+    targetSample = sampleMotionPanelPathWorld(pathWorld, handoffEndTime + (i + 1) * 0.18, duration);
+    handoffTargetProgress = clampMotionPanelPathWorldProgress(targetSample?.progress);
+    routeSample = interpolateMotionPanelPathWorldRoute(pathWorld?.routePoints, handoffTargetProgress);
+  }
+  const directionSign = targetSample?.direction === 'return' ? -1 : 1;
+  const routeTangent = routeSample.tangent.map(value => Number((value * directionSign).toFixed(5)));
+  const handoffStartPoint = (encounterTrajectory?.resumePoint || pathWorldSample?.root || [0, 0, 0])
+    .map(value => Number(Number(value || 0).toFixed(5)));
+  const handoffReleasePoint = (encounterTrajectory?.releasePoint || handoffStartPoint)
+    .map(value => Number(Number(value || 0).toFixed(5)));
+  const handoffTargetPoint = routeSample.point.map(value => Number(Number(value || 0).toFixed(5)));
+  const start = motionPanelPathWorldPointFromArray(handoffStartPoint);
+  const target = motionPanelPathWorldPointFromArray(handoffTargetPoint);
+  const normal = motionPanelPathWorldPointFromArray(encounterTrajectory?.obstacleNormal, [0, 0, -1]).setY(0);
+  if (normal.lengthSq() < 1e-6) normal.set(0, 0, -1);
+  normal.normalize();
+  const tangent = motionPanelPathWorldPointFromArray(encounterTrajectory?.exitTangent || routeTangent, [1, 0, 0]).setY(0);
+  if (tangent.lengthSq() < 1e-6) tangent.set(routeTangent[0], 0, routeTangent[2] || 1);
+  tangent.normalize();
+  const handoffMidPoint = start.clone()
+    .lerp(target, 0.58)
+    .add(normal.multiplyScalar(0.08))
+    .add(tangent.multiplyScalar(0.08));
+  return {
+    schema: 'kaminos.generated-motion-path-world-resume-handoff.v0',
+    handoffId: `${episodeId}-resume-handoff`,
+    pathWorldId: pathWorldSample?.pathWorldId || pathWorld?.id || null,
+    obstacleId: pathWorldSample?.trigger?.obstacleId || encounterTrajectory?.obstacleId || null,
+    routeAuthority: 'handoff',
+    preEncounterRouteProgress,
+    handoffTargetProgress,
+    handoffEndTime: Number(handoffEndTime.toFixed(5)),
+    routeSegmentIndex: routeSample.segmentIndex,
+    direction: targetSample?.direction || direction,
+    handoffReleasePoint,
+    handoffStartPoint,
+    handoffMidPoint: motionPanelPathWorldArrayFromPoint(handoffMidPoint),
+    handoffTargetPoint,
+    routeTangent,
+  };
+}
+
 function createMotionPanelPathWorldInterruptEpisode({ state, pathWorldSample, selected, elapsedTime = 0 }) {
   const runtime = state.pathWorldInterruptRuntime;
   const sequence = Number(runtime.episodeSequence || 0) + 1;
@@ -5267,13 +5340,25 @@ function createMotionPanelPathWorldInterruptEpisode({ state, pathWorldSample, se
     id: `${state.generatedMotionCliplets.sourceClipId || state.track?.id || 'generated'}_${selected.index}_path_world_episode_playback_v0`,
   });
   const playbackDuration = Math.max(1e-6, Number(playback?.duration) || 0);
-  const cooldownDuration = 0.48;
+  const cooldownDuration = 0.28;
+  const handoffDuration = 0.82;
   const firedAt = Number(elapsedTime) || 0;
   const contactFrame = createMotionPanelPathWorldContactFrame(pathWorldSample);
   const encounterTrajectory = createMotionPanelPathWorldEncounterTrajectory({
     episodeId,
     pathWorldSample,
     contactFrame,
+  });
+  const resumeHandoff = createMotionPanelPathWorldResumeHandoff({
+    episodeId,
+    pathWorld: state.pathWorld,
+    pathWorldSample,
+    encounterTrajectory,
+    firedAt,
+    playbackDuration,
+    cooldownDuration,
+    handoffDuration,
+    duration: state.duration,
   });
   return {
     schema: 'kaminos.generated-motion-path-world-interrupt-episode.v0',
@@ -5287,10 +5372,13 @@ function createMotionPanelPathWorldInterruptEpisode({ state, pathWorldSample, se
     firedAt: Number(firedAt.toFixed(5)),
     playbackDuration: Number(playbackDuration.toFixed(5)),
     cooldownDuration: Number(cooldownDuration.toFixed(5)),
+    handoffDuration: Number(handoffDuration.toFixed(5)),
     cooldownUntil: Number((firedAt + playbackDuration + cooldownDuration).toFixed(5)),
+    handoffUntil: Number((firedAt + playbackDuration + cooldownDuration + handoffDuration).toFixed(5)),
     suppressedUntilClear: true,
     contactFrame,
     encounterTrajectory,
+    resumeHandoff,
     trigger: pathWorldSample?.trigger || null,
   };
 }
@@ -5302,9 +5390,11 @@ function motionPanelPathWorldEpisodePhase(episode, elapsedTime = 0) {
   const episodeTime = Math.max(0, now - firedAt);
   const playbackDuration = Math.max(1e-6, Number(episode.playbackDuration) || 0);
   const cooldownDuration = Math.max(0.05, Number(episode.cooldownDuration) || 0.48);
+  const handoffDuration = Math.max(0.05, Number(episode.handoffDuration) || 0);
   if (episodeTime < 0.12) return 'triggered';
   if (episodeTime <= playbackDuration) return 'reaction';
   if (episodeTime <= playbackDuration + cooldownDuration) return 'cooldown';
+  if (episodeTime <= playbackDuration + cooldownDuration + handoffDuration) return 'handoff';
   return 'resume';
 }
 
@@ -5400,6 +5490,40 @@ function motionPanelPathWorldInterruptFromSample(state, pathWorldSample, elapsed
   };
 }
 
+function sampleMotionPanelPathWorldResumeHandoff({ handoff, episode, displayGrounding, fallbackRoot }) {
+  if (!handoff || !episode || !displayGrounding) return null;
+  const episodeTime = Number(episode.episodeTime) || 0;
+  const playbackDuration = Math.max(1e-6, Number(episode.playbackDuration) || 0);
+  const cooldownDuration = Math.max(0.05, Number(episode.cooldownDuration) || 0.48);
+  const handoffDuration = Math.max(0.05, Number(episode.handoffDuration) || 0.82);
+  const startPoint = motionPanelPathWorldPointFromArray(handoff.handoffStartPoint, handoff.handoffReleasePoint);
+  const midPoint = motionPanelPathWorldPointFromArray(handoff.handoffMidPoint, handoff.handoffTargetPoint);
+  const targetPoint = motionPanelPathWorldPointFromArray(handoff.handoffTargetPoint, handoff.handoffStartPoint);
+  const handoffU = smoothMotionPanelPathWorldUnit(
+    Math.max(0, Math.min(1, (episodeTime - playbackDuration - cooldownDuration) / handoffDuration)),
+  );
+  const handoffPhase = handoffU < 0.72 ? 'blend-to-route' : 'route-capture';
+  const routeAuthority = 'handoff';
+  const firstLeg = Math.min(1, handoffU / 0.58);
+  const secondLeg = Math.max(0, (handoffU - 0.58) / 0.42);
+  const root = handoffU < 0.58
+    ? startPoint.clone().lerp(midPoint, smoothMotionPanelPathWorldUnit(firstLeg))
+    : midPoint.clone().lerp(targetPoint, smoothMotionPanelPathWorldUnit(secondLeg));
+  const local = displayGrounding.root || [0, 0, 0];
+  root.setY(Number(fallbackRoot?.y || local[1] || 0));
+  return {
+    schema: 'kaminos.generated-motion-path-world-resume-handoff-sample.v0',
+    handoffId: handoff.handoffId || null,
+    routeAuthority,
+    handoffPhase,
+    handoffTargetProgress: handoff.handoffTargetProgress,
+    preEncounterRouteProgress: handoff.preEncounterRouteProgress,
+    handoffRoot: motionPanelPathWorldArrayFromPoint(root),
+    root,
+    rootArray: motionPanelPathWorldArrayFromPoint(root),
+  };
+}
+
 function sampleMotionPanelPathWorldEncounterTrajectory({ episode, displayGrounding, fallbackRoot }) {
   const trajectory = episode?.encounterTrajectory || null;
   if (!trajectory || !displayGrounding) return null;
@@ -5419,6 +5543,8 @@ function sampleMotionPanelPathWorldEncounterTrajectory({ episode, displayGroundi
   const cooldownDuration = Math.max(0.05, Number(episode.cooldownDuration) || 0.48);
   let trajectoryPhase = episode.phase || 'approach';
   let root = fallbackRoot.clone();
+  let routeAuthority = 'encounter';
+  let resumeHandoffSample = null;
   if (episode.phase === 'triggered' || episode.phase === 'reaction') {
     const u = smoothMotionPanelPathWorldUnit(episodeTime / playbackDuration);
     trajectoryPhase = u < 0.58 ? 'retreat' : 'carry';
@@ -5438,14 +5564,48 @@ function sampleMotionPanelPathWorldEncounterTrajectory({ episode, displayGroundi
       .lerp(resumePoint, u)
       .add(tangent.clone().multiplyScalar(Number(local[0] || 0) * 0.06 * (1 - u)))
       .setY(Number(fallbackRoot?.y || local[1] || 0));
+  } else if (episode.phase === 'handoff') {
+    resumeHandoffSample = sampleMotionPanelPathWorldResumeHandoff({
+      handoff: episode.resumeHandoff,
+      episode,
+      displayGrounding,
+      fallbackRoot,
+    });
+    if (resumeHandoffSample) {
+      trajectoryPhase = 'handoff';
+      routeAuthority = resumeHandoffSample.routeAuthority;
+      root = resumeHandoffSample.root.clone()
+        .add(tangent.clone().multiplyScalar(Number(local[0] || 0) * 0.025 * (1 - Math.min(1, (episodeTime - playbackDuration - cooldownDuration) / Math.max(0.05, Number(episode.handoffDuration) || 0.82)))));
+    } else {
+      trajectoryPhase = 'handoff';
+      routeAuthority = 'handoff';
+      root = resumePoint.clone().setY(Number(fallbackRoot?.y || local[1] || 0));
+    }
   } else if (episode.phase === 'resume') {
     trajectoryPhase = 'handoff';
+    routeAuthority = 'world-path';
     root = resumePoint.clone().setY(Number(fallbackRoot?.y || local[1] || 0));
   }
   return {
     schema: 'kaminos.generated-motion-path-world-encounter-trajectory-sample.v0',
     trajectoryId: trajectory.trajectoryId || null,
     trajectoryPhase,
+    routeAuthority,
+    resumeHandoff: resumeHandoffSample
+      ? {
+        ...episode.resumeHandoff,
+        activeSample: {
+          ...resumeHandoffSample,
+          root: undefined,
+        },
+        handoffPhase: resumeHandoffSample.handoffPhase,
+        routeAuthority: resumeHandoffSample.routeAuthority,
+        handoffRoot: resumeHandoffSample.handoffRoot,
+      }
+      : episode.resumeHandoff || null,
+    handoffPhase: resumeHandoffSample?.handoffPhase || null,
+    handoffTargetProgress: episode.resumeHandoff?.handoffTargetProgress ?? null,
+    handoffRoot: resumeHandoffSample?.handoffRoot || null,
     exitSide: trajectory.exitSide || null,
     root,
     rootArray: motionPanelPathWorldArrayFromPoint(root),
@@ -6426,6 +6586,8 @@ function updateGeneratedPoseTemporalFrame(nowSeconds = performance.now() / 1000)
   let rootPosition = fallbackRootPosition.clone();
   let pathWorldRootConstraint = null;
   let pathWorldEncounterTrajectory = null;
+  let pathWorldResumeHandoff = null;
+  let pathWorldRouteAuthority = pathWorldSample ? 'world-path' : null;
   if (pathWorldSample) {
     const activePathWorldEpisode = pathWorldInterruptEnvelope?.interrupt?.pathWorldEpisode || null;
     if (activePathWorldEpisode?.encounterTrajectory) {
@@ -6444,9 +6606,15 @@ function updateGeneratedPoseTemporalFrame(nowSeconds = performance.now() / 1000)
             root: undefined,
           },
           trajectoryPhase: trajectoryResult.sample.trajectoryPhase,
+          routeAuthority: trajectoryResult.sample.routeAuthority,
+          handoffPhase: trajectoryResult.sample.handoffPhase,
+          handoffTargetProgress: trajectoryResult.sample.handoffTargetProgress,
+          handoffRoot: trajectoryResult.sample.handoffRoot,
           activeRoot: trajectoryResult.sample.rootArray,
         }
         : activePathWorldEpisode.encounterTrajectory;
+      pathWorldResumeHandoff = trajectoryResult.sample?.resumeHandoff || activePathWorldEpisode.resumeHandoff || null;
+      pathWorldRouteAuthority = trajectoryResult.sample?.routeAuthority || 'encounter';
     } else {
       rootPosition = motionPanelPathWorldEpisodeRootPosition({
         pathWorldSample,
@@ -6461,6 +6629,9 @@ function updateGeneratedPoseTemporalFrame(nowSeconds = performance.now() / 1000)
       pathWorldInterruptEnvelope?.interrupt || null,
     );
     rootPosition.copy(pathWorldRootConstraint.root);
+    if (pathWorldRootConstraint?.constrained && pathWorldRouteAuthority === 'world-path') {
+      pathWorldRouteAuthority = 'constraint';
+    }
   }
   updateGeneratedPoseTemporalPathWorldVisual(state.pathWorld, pathWorldSample, pathWorldInterruptEnvelope?.interrupt || null);
   if (visual.interruptTrigger) {
@@ -6536,6 +6707,8 @@ function updateGeneratedPoseTemporalFrame(nowSeconds = performance.now() / 1000)
   state.lastPathWorldInterrupt = pathWorldInterruptEnvelope?.interrupt || null;
   state.lastPathWorldEpisode = pathWorldInterruptEnvelope?.interrupt?.pathWorldEpisode || null;
   state.lastPathWorldEncounterTrajectory = pathWorldEncounterTrajectory;
+  state.lastPathWorldResumeHandoff = pathWorldResumeHandoff;
+  state.lastPathWorldRouteAuthority = pathWorldRouteAuthority;
   state.lastPathWorldRootConstraint = pathWorldRootConstraint;
   state.lastDisplayGrounding = displayGrounding;
   const behaviorState = buildGeneratedPoseTemporalBehaviorState({
@@ -6614,8 +6787,10 @@ function updateGeneratedPoseTemporalFrame(nowSeconds = performance.now() / 1000)
     pathWorldInterrupt: pathWorldInterruptEnvelope?.interrupt || null,
     pathWorldEpisode: pathWorldInterruptEnvelope?.interrupt?.pathWorldEpisode || null,
     pathWorldEncounterTrajectory,
+    pathWorldResumeHandoff,
     pathWorldRootConstraint,
-    pathWorldActiveSource: pathWorldInterruptEnvelope?.interrupt?.activeSource || (pathWorldSample ? 'world-path' : null),
+    pathWorldRouteAuthority,
+    pathWorldActiveSource: pathWorldInterruptEnvelope?.interrupt?.activeSource || pathWorldRouteAuthority || (pathWorldSample ? 'world-path' : null),
     sourceFrame: temporalSample?.sourceFrame ?? null,
     sourceTime: temporalSample?.time ?? null,
     sourceBracket: temporalSample?.bracket ?? null,
@@ -7974,8 +8149,10 @@ window.kaminosGeneratedPoseTemporalDebugState = function() {
     pathWorldInterrupt: state?.lastPathWorldInterrupt || null,
     pathWorldEpisode: state?.lastPathWorldEpisode || null,
     pathWorldEncounterTrajectory: state?.lastPathWorldEncounterTrajectory || null,
+    pathWorldResumeHandoff: state?.lastPathWorldResumeHandoff || null,
     pathWorldRootConstraint: state?.lastPathWorldRootConstraint || null,
-    pathWorldActiveSource: state?.lastPathWorldInterrupt?.activeSource || (state?.lastPathWorld ? 'world-path' : null),
+    pathWorldRouteAuthority: state?.lastPathWorldRouteAuthority || (state?.lastPathWorld ? 'world-path' : null),
+    pathWorldActiveSource: state?.lastPathWorldInterrupt?.activeSource || state?.lastPathWorldRouteAuthority || (state?.lastPathWorld ? 'world-path' : null),
     attentionTargetMode: motionAttentionTargetModeFromInputs(),
     attentionTargetEvidence: state?.lastAttentionTargetEvidence || selectedSceneObjectMotionAttentionTarget(),
     behaviorState: state?.lastBehaviorState || null,

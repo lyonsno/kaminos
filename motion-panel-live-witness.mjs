@@ -503,7 +503,9 @@ async function captureFrame(ws, index) {
       pathWorldInterrupt: actor?.pathWorldInterrupt || state?.pathWorldInterrupt || null,
       pathWorldEpisode: actor?.pathWorldEpisode || state?.pathWorldEpisode || state?.pathWorldInterrupt?.pathWorldEpisode || null,
       pathWorldEncounterTrajectory: actor?.pathWorldEncounterTrajectory || state?.pathWorldEncounterTrajectory || null,
+      pathWorldResumeHandoff: actor?.pathWorldResumeHandoff || state?.pathWorldResumeHandoff || null,
       pathWorldRootConstraint: actor?.pathWorldRootConstraint || state?.pathWorldRootConstraint || null,
+      pathWorldRouteAuthority: actor?.pathWorldRouteAuthority || state?.pathWorldRouteAuthority || null,
       pathWorldActiveSource: actor?.pathWorldActiveSource || state?.pathWorldActiveSource || null,
       pathWorldPanel: window.kaminosMotionPanelPathWorldDebugState?.() || null,
       generatedMotionCliplets: state?.generatedMotionCliplets || state?.generatedPoseTemporalHarness?.generatedMotionCliplets || null,
@@ -575,8 +577,15 @@ async function composeFilmstrip(ws, frames) {
     const pathWorldInterrupt = frame.debug?.pathWorldInterrupt || null;
     const pathWorldEpisode = frame.debug?.pathWorldEpisode || null;
     const pathWorldEncounterTrajectory = frame.debug?.pathWorldEncounterTrajectory || null;
+    const pathWorldResumeHandoff = frame.debug?.pathWorldResumeHandoff || pathWorldEncounterTrajectory?.resumeHandoff || null;
     const episodePhase = pathWorldEpisode?.phase || pathWorldInterrupt?.phase || null;
     const trajectoryPhase = pathWorldEncounterTrajectory?.trajectoryPhase || pathWorldEncounterTrajectory?.activeSample?.trajectoryPhase || null;
+    const handoffPhase = pathWorldResumeHandoff?.handoffPhase || pathWorldResumeHandoff?.activeSample?.handoffPhase || null;
+    const routeAuthority = frame.debug?.pathWorldRouteAuthority
+      || pathWorldEncounterTrajectory?.routeAuthority
+      || pathWorldResumeHandoff?.routeAuthority
+      || pathWorldResumeHandoff?.activeSample?.routeAuthority
+      || null;
     const pathWorldActiveSource = frame.debug?.pathWorldActiveSource || null;
     const interruptState = clipletInterrupt?.state
       ? `interrupt ${clipletInterrupt.state}`
@@ -590,6 +599,8 @@ async function composeFilmstrip(ws, frames) {
       clipletLabel || behaviorState,
       interruptState || behaviorPhase,
       trajectoryPhase ? `traj ${trajectoryPhase}` : null,
+      handoffPhase ? `handoff ${handoffPhase}` : null,
+      routeAuthority ? `route ${routeAuthority}` : null,
       episodeId,
     ].filter(Boolean).join(' / ') || 'generated motion';
     return {
