@@ -8467,9 +8467,10 @@ async function startGloveWellHostLivePolling(route = gloveWellHostLiveRouteFromP
 
 async function loadGloveWellHostPacket(route = gloveWellHostRouteFromParams(), options = {}) {
   if (!options.livePoll && gloveWellHostLiveTimer) stopGloveWellHostLivePolling();
+  const liveStatus = options.livePoll && gloveWellHostState.status === 'live' ? 'live' : 'live-loading';
   gloveWellHostState = {
     ...gloveWellHostState,
-    status: options.livePoll ? 'live-loading' : 'loading',
+    status: options.livePoll ? liveStatus : 'loading',
     effectiveUrl: route.url,
     routeMode: route.mode,
     live: {
