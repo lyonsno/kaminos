@@ -196,9 +196,34 @@ export function computeRouteVisibleBenchWitnessFromSearch(search = '') {
   return witness;
 }
 
+function normalizeComputeRouteVisibleBenchModel(model) {
+  if (!model || model.schema !== COMPUTE_ROUTE_VISIBLE_BENCH_SCHEMA) return null;
+  return {
+    schema: COMPUTE_ROUTE_VISIBLE_BENCH_SCHEMA,
+    witnessSchema: model.witnessSchema || COMPUTE_ROUTE_CONTENTION_WITNESS_SCHEMA,
+    witnessId: model.witnessId || null,
+    routeId: model.routeId || 'compute-route',
+    primaryText: model.primaryText || 'The route recorded evidence for this image.',
+    trustState: model.trustState || 'needs-review',
+    evidence: cloneObject(model.evidence) || {},
+  };
+}
+
+export function computeRouteVisibleBenchModelFromSearch(search = '') {
+  const params = new URLSearchParams(search.startsWith('?') ? search.slice(1) : search);
+  if (params.get('kaminos_compute_route_visible_bench') !== '1') return null;
+  const model = normalizeComputeRouteVisibleBenchModel(
+    decodeBase64Url(params.get('compute_route_visible_bench_model')),
+  );
+  if (model) return model;
+  const witness = computeRouteVisibleBenchWitnessFromSearch(search);
+  return witness ? buildComputeRouteVisibleBenchModel({ witness }) : null;
+}
+
 export function computeRouteVisibleBenchUrl(witness, {
   baseUrl = 'http://127.0.0.1:18121/',
   volumeWitnessUrl = null,
+  payload = 'model',
 } = {}) {
   if (!witness || witness.schema !== COMPUTE_ROUTE_CONTENTION_WITNESS_SCHEMA) {
     throw new Error(`witness with schema ${COMPUTE_ROUTE_CONTENTION_WITNESS_SCHEMA} is required`);
@@ -206,6 +231,12 @@ export function computeRouteVisibleBenchUrl(witness, {
   const url = new URL(volumeWitnessUrl || baseUrl);
   url.searchParams.set('kaminos_volume_smoke', '1');
   url.searchParams.set('kaminos_compute_route_visible_bench', '1');
-  url.searchParams.set('compute_route_contention_witness', encodeBase64Url(witness));
+  if (payload === 'witness') {
+    url.searchParams.set('compute_route_contention_witness', encodeBase64Url(witness));
+    url.searchParams.delete('compute_route_visible_bench_model');
+  } else {
+    url.searchParams.set('compute_route_visible_bench_model', encodeBase64Url(buildComputeRouteVisibleBenchModel({ witness })));
+    url.searchParams.delete('compute_route_contention_witness');
+  }
   return url.toString();
 }

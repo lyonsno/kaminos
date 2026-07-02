@@ -9,6 +9,7 @@ import {
   buildActiveComputeRouteRun,
   buildRouteRunFromPipelineReport,
   buildComputeRouteFireWitness,
+  buildOperatorSmokeUrlFromContentionWitness,
 } from '../compute-route-fire-witness.mjs';
 
 const baseReport = {
@@ -226,6 +227,66 @@ assert.equal(dryRunReport.smokePayload.active.visualPhase, 'burn');
 assert.equal(dryRunReport.smokePayload.active.allowsFullBurn, true);
 assert.match(dryRunReport.smokeUrl, /kaminos_compute_route_fire=1/);
 assert.match(dryRunReport.smokeUrl, /compute_route_fire_payload=/);
+const operatorSmokeUrl = buildOperatorSmokeUrlFromContentionWitness({
+  schema: 'kaminos.compute-route-contention-witness.v0',
+  witnessId: 'operator-visible-contract',
+  routeIdentity: {
+    pipelineId: 'sharp-image-to-splat-live-v0',
+    requestedRoute: 'adapter.sharp-image-to-splat-live.v0',
+    effectiveRoute: 'adapter.sharp-image-to-splat-live.v0',
+    backendClass: 'browser-webgpu',
+  },
+  routePhase: {
+    active: { routePhase: 'running', visualPhase: 'burn', allowsFullBurn: true, statusBadge: 'real' },
+    final: { routePhase: 'completed', visualPhase: 'cooled', allowsFullBurn: false, statusBadge: 'real' },
+  },
+  visualBudget: {
+    requested: { budgetId: 'operator-live-fire', liveSimulation: true, prerecorded: false },
+    effective: { budgetId: 'custom', liveSimulation: true, prerecorded: false },
+  },
+  visualSourceTruth: {
+    source: 'live-webgpu-volume',
+    fallbackReason: null,
+    mayClaimLiveNovelty: true,
+  },
+  timing: {
+    evidenceSource: 'raf-and-queue-proxy',
+    disclaimer: 'not-gpu-exclusive-or-present-latency',
+    frameP95Ms: 124.1,
+    queueDoneP95Ms: 473.6,
+  },
+  frameTailDamage: {
+    bucket: 'deranged',
+    reasons: ['frame_p95_deranged', 'queue_p95_deranged'],
+  },
+  outputHandoff: {
+    status: 'real-output-produced',
+    artifactCount: 1,
+    realArtifactCount: 1,
+    artifacts: [
+      {
+        id: 'splat',
+        role: 'splat-candidate',
+        status: 'real',
+        path: '/tmp/kaminos-real-route/out/artifacts/sharp-output.ply',
+        bytes: 66060836,
+      },
+    ],
+  },
+  falseClosureChecks: {
+    visualSourceNotLive: false,
+    schedulerUnverified: true,
+  },
+  witnessWarnings: ['scheduler_unverified'],
+}, {
+  baseUrl: 'http://127.0.0.1:18121/',
+  volumeWitnessUrl: 'http://127.0.0.1:18121/?kaminos_volume_smoke=1&volume_scene=tall_plume',
+});
+const operatorSmokeParams = new URL(operatorSmokeUrl).searchParams;
+assert.equal(operatorSmokeParams.get('kaminos_compute_route_visible_bench'), '1');
+assert.ok(operatorSmokeParams.get('compute_route_visible_bench_model')?.length > 100);
+assert.equal(operatorSmokeParams.has('compute_route_fire_payload'), false, 'operator smoke URL is the accepted evidence bench, not stale active-burn replay');
+assert.equal(operatorSmokeParams.has('compute_route_contention_witness'), false, 'operator smoke URL avoids full witness payload bloat');
 assert.match(witnessSource, /buildComputeRouteContentionWitnessFromReport/, 'compute route fire witness emits Wake contention reports from the same run report');
 assert.match(witnessSource, /--contention-report/, 'compute route fire witness accepts an explicit contention report path');
 assert.match(witnessSource, /startedAt/, 'compute route fire witness records pipeline process start time as route telemetry');
@@ -234,3 +295,4 @@ assert.match(witnessSource, /durationMs/, 'compute route fire witness records pi
 assert.match(witnessSource, /contentionWitnessReportPath/, 'primary visual report records the contention report path');
 assert.match(witnessSource, /contentionWitness/, 'primary visual report embeds a compact contention witness summary');
 assert.match(witnessSource, /requestedVisualBudget/, 'contention emission preserves requested visual budget identity');
+assert.match(witnessSource, /operatorSmokeUrl/, 'primary visual report exposes the accepted visible bench smoke URL');

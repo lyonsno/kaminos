@@ -18,6 +18,9 @@ import {
   computeRouteFireSmokeUrl,
 } from './compute-route-fire-bench.mjs';
 import {
+  computeRouteVisibleBenchUrl,
+} from './compute-route-visible-bench.mjs';
+import {
   buildComputeRouteContentionWitnessFromReport,
 } from './compute-route-contention-witness.mjs';
 
@@ -279,6 +282,17 @@ function writeJson(path, value) {
   writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`);
 }
 
+export function buildOperatorSmokeUrlFromContentionWitness(witness, {
+  baseUrl = 'http://127.0.0.1:18121/',
+  volumeWitnessUrl = null,
+} = {}) {
+  return computeRouteVisibleBenchUrl(witness, {
+    baseUrl,
+    volumeWitnessUrl,
+    payload: 'model',
+  });
+}
+
 function runPipelineWitness(args, reportPath) {
   if (!args.input) throw new Error('--input is required with --run-pipeline');
   mkdirSync(args.outDir, { recursive: true });
@@ -350,6 +364,7 @@ async function main() {
     finalWitness: null,
     smokePayload: null,
     smokeUrl: null,
+    operatorSmokeUrl: null,
     contentionWitness: null,
     pipelineExit: null,
     pipelineReport: null,
@@ -481,6 +496,10 @@ async function main() {
         visualWitnessReportPath: volumeReportPath,
       });
       writeJson(contentionReportPath, report.contentionWitness);
+      report.operatorSmokeUrl = buildOperatorSmokeUrlFromContentionWitness(report.contentionWitness, {
+        baseUrl: `http://127.0.0.1:${args.serverPort}/`,
+        volumeWitnessUrl: report.smokeUrl || report.activeWitness?.volumeWitnessUrl || null,
+      });
     }
     writeJson(reportPath, report);
     console.log(reportPath);

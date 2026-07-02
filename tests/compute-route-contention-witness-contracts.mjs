@@ -14,6 +14,8 @@ import {
 import {
   COMPUTE_ROUTE_VISIBLE_BENCH_SCHEMA,
   buildComputeRouteVisibleBenchModel,
+  computeRouteVisibleBenchModelFromSearch,
+  computeRouteVisibleBenchUrl,
 } from '../compute-route-visible-bench.mjs';
 
 const index = readFileSync(fileURLToPath(new URL('../index.html', import.meta.url)), 'utf8');
@@ -467,11 +469,28 @@ assert.equal(visibleBench.evidence.frameTail.bucket, 'hot');
 assert.ok(visibleBench.evidence.warnings.includes('pipeline_route_completed_not_active_compute'));
 assert.equal(visibleBench.evidence.falseClosure.visualSourceNotLive, false);
 assert.equal(visibleBench.evidence.falseClosure.schedulerUnverified, false);
+
+const visibleBenchUrl = computeRouteVisibleBenchUrl(pipelineSchedulerWitness, {
+  baseUrl: 'http://127.0.0.1:18121/',
+});
+const visibleBenchParams = new URL(visibleBenchUrl).searchParams;
+assert.equal(visibleBenchParams.get('kaminos_compute_route_visible_bench'), '1');
+assert.ok(visibleBenchParams.get('compute_route_visible_bench_model')?.length > 100, 'visible smoke URL carries compact bench model payload');
+assert.equal(visibleBenchParams.has('compute_route_contention_witness'), false, 'visible smoke URL does not embed the full contention witness');
+const visibleBenchFromSearch = computeRouteVisibleBenchModelFromSearch(new URL(visibleBenchUrl).search);
+assert.equal(visibleBenchFromSearch.schema, COMPUTE_ROUTE_VISIBLE_BENCH_SCHEMA);
+assert.equal(visibleBenchFromSearch.routeId, 'sharp-image-to-splat-live-v0');
+assert.match(visibleBenchFromSearch.primaryText, /^SHARP made a splat from this image while the furnace stayed live/);
+assert.equal(visibleBenchFromSearch.evidence.frameTail.bucket, 'hot');
+assert.equal(visibleBenchFromSearch.evidence.visualSource.source, 'live-webgpu-volume');
+assert.equal(visibleBenchFromSearch.evidence.output.status, 'real-output-produced');
 assert.match(index, /id="compute-route-visible-bench"/, 'Volume tab hosts the human-readable route bench');
 assert.match(index, /data-compute-route-visible-bench-schema="kaminos\.compute-route-visible-bench\.v0"/, 'DOM preserves visible bench schema');
 assert.match(index, /id="compute-route-visible-primary"/, 'visible bench has a human-primary sentence host');
 assert.match(index, /id="compute-route-visible-evidence"/, 'visible bench has an evidence drawer');
 assert.match(index, /renderComputeRouteVisibleBench/, 'Volume tab renders the route-aware contention witness explicitly');
+assert.match(index, /clearRouteFireBenchForAcceptedVisibleBench/, 'accepted visible bench clears stale generic route-fire content');
+assert.match(index, /routeFireSuppressedBy/, 'suppressed generic route-fire bench records why its old content was cleared');
 assert.doesNotMatch(index, /Root request/, 'operator-facing route bench must not expose internal root-request wording');
 
 const liveVisualSourceTruth = {

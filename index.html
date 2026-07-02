@@ -1184,8 +1184,7 @@ import {
   computeRouteFirePayloadFromSearch,
 } from './compute-route-fire-bench.mjs';
 import {
-  buildComputeRouteVisibleBenchModel,
-  computeRouteVisibleBenchWitnessFromSearch,
+  computeRouteVisibleBenchModelFromSearch,
 } from './compute-route-visible-bench.mjs';
 import {
   DEFAULT_DECISION_MOTION_PLAN,
@@ -7856,6 +7855,36 @@ function addComputeRouteVisibleEvidenceRow(parent, keyText, value) {
   parent.append(row);
 }
 
+function clearRouteFireBenchForAcceptedVisibleBench(bench) {
+  const root = document.getElementById('route-fire-bench');
+  if (!root) return;
+  root.hidden = true;
+  root.dataset.routeFireSuppressedBy = 'compute-route-visible-bench';
+  root.dataset.routeFireRouteActivitySchema = bench?.witnessSchema || 'kaminos.compute-route-contention-witness.v0';
+  root.dataset.routeFireVisualBackend = bench?.evidence?.visualSource?.source || 'accepted-visible-bench';
+  root.dataset.routeFireFullBurnCount = '0';
+  root.dataset.routeFireFalseAuthorityCount = '0';
+
+  const visualBackend = document.getElementById('route-fire-visual-backend');
+  const activity = document.getElementById('route-fire-activity-schema');
+  const primary = document.getElementById('route-fire-primary');
+  const authority = document.getElementById('route-fire-authority');
+  const warnings = document.getElementById('route-fire-warnings');
+  const launch = document.getElementById('route-fire-launch');
+  const rows = document.getElementById('route-fire-route-rows');
+
+  if (visualBackend) visualBackend.textContent = bench?.evidence?.visualSource?.source || '--';
+  if (activity) activity.textContent = bench?.witnessSchema || 'kaminos.compute-route-contention-witness.v0';
+  if (primary) primary.textContent = `accepted evidence bench / ${bench?.routeId || 'compute-route'}`;
+  if (authority) authority.textContent = `${bench?.trustState || 'needs-review'} / accepted evidence`;
+  if (warnings) {
+    warnings.textContent = 'generic route-fire rows suppressed by accepted evidence bench';
+    warnings.title = warnings.textContent;
+  }
+  if (launch) launch.removeAttribute('href');
+  if (rows) rows.replaceChildren();
+}
+
 function renderRouteFireBench() {
   routeFireBenchModel = buildKilnVolumeFireBenchModel({
     baseUrl: volumeRouteFireBaseUrl(),
@@ -8000,15 +8029,15 @@ function renderComputeRouteFireBench() {
 function renderComputeRouteVisibleBench() {
   const root = document.getElementById('compute-route-visible-bench');
   if (!root) return null;
-  const witness = computeRouteVisibleBenchWitnessFromSearch(window.location.search);
-  if (!witness) {
+  const benchFromSearch = computeRouteVisibleBenchModelFromSearch(window.location.search);
+  if (!benchFromSearch) {
     root.hidden = true;
     root.dataset.computeRouteVisibleActive = '0';
     computeRouteVisibleBenchModel = null;
     return null;
   }
 
-  computeRouteVisibleBenchModel = buildComputeRouteVisibleBenchModel({ witness });
+  computeRouteVisibleBenchModel = benchFromSearch;
   const bench = computeRouteVisibleBenchModel;
   root.hidden = false;
   root.dataset.computeRouteVisibleActive = '1';
@@ -8038,6 +8067,8 @@ function renderComputeRouteVisibleBench() {
   addComputeRouteVisibleEvidenceRow(rows, 'Output', `${bench.evidence.output.status || 'unknown'} / ${bench.evidence.output.realArtifactCount} real`);
   addComputeRouteVisibleEvidenceRow(rows, 'Warnings', bench.evidence.warnings);
   addComputeRouteVisibleEvidenceRow(rows, 'Reports', Object.values(bench.evidence.reportRefs || {}).filter(Boolean));
+
+  clearRouteFireBenchForAcceptedVisibleBench(bench);
 
   return bench;
 }
