@@ -296,3 +296,5 @@ assert.match(witnessSource, /contentionWitnessReportPath/, 'primary visual repor
 assert.match(witnessSource, /contentionWitness/, 'primary visual report embeds a compact contention witness summary');
 assert.match(witnessSource, /requestedVisualBudget/, 'contention emission preserves requested visual budget identity');
 assert.match(witnessSource, /operatorSmokeUrl/, 'primary visual report exposes the accepted visible bench smoke URL');
+assert.match(witnessSource, /routeFireSmokeUrl/, 'primary visual report preserves the active-burn replay URL as secondary evidence');
+assert.match(witnessSource, /report\.smokeUrl = report\.operatorSmokeUrl/, 'after accepted contention evidence exists, the primary smoke URL opens the accepted visible bench');

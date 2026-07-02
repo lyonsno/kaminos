@@ -470,6 +470,79 @@ assert.ok(visibleBench.evidence.warnings.includes('pipeline_route_completed_not_
 assert.equal(visibleBench.evidence.falseClosure.visualSourceNotLive, false);
 assert.equal(visibleBench.evidence.falseClosure.schedulerUnverified, false);
 
+const schedulerReceiptWitness = {
+  ...pipelineSchedulerWitness,
+  pipelineScheduler: {
+    ...pipelineSchedulerWitness.pipelineScheduler,
+    schedulerVerification: {
+      schema: 'kaminos.webgpu-scheduler-verification-receipt.v0',
+      status: 'scheduler-unverified',
+      classification: 'config-only',
+      downgrades: ['effective-scheduler-missing'],
+      route: {
+        pipelineId: 'sharp-image-to-splat-live-v0',
+        requestedRouteId: 'adapter.sharp-image-to-splat-live.v0',
+        effectiveRouteId: 'adapter.sharp-image-to-splat-live.v0',
+        backendClass: 'browser-webgpu',
+      },
+      frameTail: {
+        evidenceSource: 'raf-and-queue-proxy',
+        disclaimer: 'not-gpu-exclusive-or-present-latency',
+        rafFps: 8.06,
+        frameP95Ms: 124.1,
+        queueDoneP95Ms: 473.6,
+      },
+      falseAuthorityChecks: {
+        timingProxyOnly: true,
+        eventTraceMissing: true,
+      },
+    },
+  },
+  schedulerVerification: {
+    schema: 'kaminos.webgpu-scheduler-verification-receipt.v0',
+    status: 'scheduler-unverified',
+    classification: 'config-only',
+    downgrades: ['effective-scheduler-missing'],
+    frameTail: {
+      evidenceSource: 'raf-and-queue-proxy',
+      disclaimer: 'not-gpu-exclusive-or-present-latency',
+    },
+    falseAuthorityChecks: {
+      timingProxyOnly: true,
+      eventTraceMissing: true,
+    },
+  },
+  falseClosureChecks: {
+    ...pipelineSchedulerWitness.falseClosureChecks,
+    schedulerUnverified: true,
+  },
+  frameTailDamage: {
+    bucket: 'deranged',
+    reasons: ['frame_p95_deranged', 'queue_p95_deranged'],
+  },
+  timing: {
+    ...pipelineSchedulerWitness.timing,
+    evidenceSource: 'raf-and-queue-proxy',
+    disclaimer: 'not-gpu-exclusive-or-present-latency',
+    rafFps: 8.06,
+    frameP95Ms: 124.1,
+    queueDoneP95Ms: 473.6,
+  },
+};
+const schedulerReceiptVisibleBench = buildComputeRouteVisibleBenchModel({
+  witness: schedulerReceiptWitness,
+});
+assert.equal(schedulerReceiptVisibleBench.evidence.schedulerVerification.schema, 'kaminos.webgpu-scheduler-verification-receipt.v0');
+assert.equal(schedulerReceiptVisibleBench.evidence.schedulerVerification.status, 'scheduler-unverified');
+assert.equal(schedulerReceiptVisibleBench.evidence.schedulerVerification.classification, 'config-only');
+assert.deepEqual(schedulerReceiptVisibleBench.evidence.schedulerVerification.downgrades, ['effective-scheduler-missing']);
+assert.equal(schedulerReceiptVisibleBench.evidence.schedulerVerification.timingEvidenceSource, 'raf-and-queue-proxy');
+assert.equal(schedulerReceiptVisibleBench.evidence.schedulerVerification.timingDisclaimer, 'not-gpu-exclusive-or-present-latency');
+assert.equal(schedulerReceiptVisibleBench.evidence.schedulerVerification.timingProxyOnly, true);
+assert.equal(schedulerReceiptVisibleBench.evidence.schedulerVerification.eventTraceMissing, true);
+assert.equal(schedulerReceiptVisibleBench.evidence.route.effectiveRoute, 'adapter.sharp-image-to-splat-live.v0');
+assert.match(schedulerReceiptVisibleBench.primaryText, /could not prove the route scheduler stayed cooperative/);
+
 const visibleBenchUrl = computeRouteVisibleBenchUrl(pipelineSchedulerWitness, {
   baseUrl: 'http://127.0.0.1:18121/',
 });
@@ -491,6 +564,11 @@ assert.match(index, /id="compute-route-visible-evidence"/, 'visible bench has an
 assert.match(index, /renderComputeRouteVisibleBench/, 'Volume tab renders the route-aware contention witness explicitly');
 assert.match(index, /clearRouteFireBenchForAcceptedVisibleBench/, 'accepted visible bench clears stale generic route-fire content');
 assert.match(index, /routeFireSuppressedBy/, 'suppressed generic route-fire bench records why its old content was cleared');
+assert.match(index, /setActiveTab\('volume'\)/, 'accepted visible bench opens on the Volume evidence tab even if later WebGPU init fails');
+assert.match(index, /computeRouteVisibleTabClaim/, 'accepted visible bench records that it claimed the Volume tab for visible evidence');
+assert.match(index, /bootstrapComputeRouteVisibleBenchRoute\(\)/, 'accepted visible bench bootstraps before renderer-heavy initialization can fail');
+assert.match(index, /Scheduler verification/, 'visible bench names scheduler verification separately from scheduler config');
+assert.match(index, /Timing authority/, 'visible bench shows timing authority for scheduler/frame-tail evidence');
 assert.doesNotMatch(index, /Root request/, 'operator-facing route bench must not expose internal root-request wording');
 
 const liveVisualSourceTruth = {

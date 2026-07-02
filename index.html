@@ -8044,8 +8044,12 @@ function renderComputeRouteVisibleBench() {
   root.dataset.computeRouteVisibleRoute = bench.routeId;
   root.dataset.computeRouteVisibleTrustState = bench.trustState;
   root.dataset.computeRouteVisibleSchedulerState = bench.evidence.scheduler.verificationState || '';
+  root.dataset.computeRouteVisibleSchedulerVerificationStatus = bench.evidence.schedulerVerification?.status || '';
+  root.dataset.computeRouteVisibleSchedulerVerificationClassification = bench.evidence.schedulerVerification?.classification || '';
   root.dataset.computeRouteVisibleVisualSource = bench.evidence.visualSource.source || '';
   root.dataset.computeRouteVisibleOutputStatus = bench.evidence.output.status || '';
+  root.dataset.computeRouteVisibleTabClaim = 'volume';
+  setActiveTab('volume');
 
   const primary = document.getElementById('compute-route-visible-primary');
   primary.classList.remove('usable', 'usable-with-warnings', 'needs-review');
@@ -8055,10 +8059,13 @@ function renderComputeRouteVisibleBench() {
 
   const rows = document.getElementById('compute-route-visible-evidence-rows');
   rows.replaceChildren();
-  addComputeRouteVisibleEvidenceRow(rows, 'Route', bench.evidence.route.pipelineId || bench.routeId);
+  addComputeRouteVisibleEvidenceRow(rows, 'Route', bench.evidence.route.effectiveRoute || bench.evidence.route.requestedRoute || bench.evidence.route.pipelineId || bench.routeId);
   addComputeRouteVisibleEvidenceRow(rows, 'Status', `${bench.evidence.route.activePhase || 'unknown'} -> ${bench.evidence.route.finalPhase || 'unknown'}`);
   addComputeRouteVisibleEvidenceRow(rows, 'Scheduler', `${bench.evidence.scheduler.verificationState || 'unknown'} / ${bench.evidence.scheduler.effectiveMode || 'unknown'}`);
+  addComputeRouteVisibleEvidenceRow(rows, 'Scheduler verification', `${bench.evidence.schedulerVerification?.status || bench.evidence.scheduler.verificationState || 'unknown'} / ${bench.evidence.schedulerVerification?.classification || 'config unknown'}`);
+  addComputeRouteVisibleEvidenceRow(rows, 'Scheduler downgrades', bench.evidence.schedulerVerification?.downgrades || []);
   addComputeRouteVisibleEvidenceRow(rows, 'Scheduler schema', bench.evidence.scheduler.schema);
+  addComputeRouteVisibleEvidenceRow(rows, 'Timing authority', `${bench.evidence.schedulerVerification?.timingEvidenceSource || bench.evidence.frameTail.timingEvidenceSource || 'unknown'} / ${bench.evidence.schedulerVerification?.timingDisclaimer || bench.evidence.frameTail.timingDisclaimer || 'no disclaimer recorded'}`);
   addComputeRouteVisibleEvidenceRow(rows, 'Backpressure', `${bench.evidence.backpressure.requestedBudget || 'unknown'} -> ${bench.evidence.backpressure.effectiveBudget || 'unknown'}`);
   addComputeRouteVisibleEvidenceRow(rows, 'Fire budget', `${bench.evidence.visualBudget.requested || 'unknown'} -> ${bench.evidence.visualBudget.effective || 'unknown'}`);
   addComputeRouteVisibleEvidenceRow(rows, 'Runtime quality', `${bench.evidence.visualBudget.runtimeQualityRequested || 'unknown'} -> ${bench.evidence.visualBudget.runtimeQualityEffective || 'unknown'}`);
@@ -8076,6 +8083,15 @@ function renderComputeRouteVisibleBench() {
 window.kaminosRouteFireBenchDebugState = () => routeFireBenchModel || renderRouteFireBench();
 window.kaminosComputeRouteFireBenchDebugState = () => computeRouteFireBenchModel || renderComputeRouteFireBench();
 window.kaminosComputeRouteVisibleBenchDebugState = () => computeRouteVisibleBenchModel || renderComputeRouteVisibleBench();
+
+function bootstrapComputeRouteVisibleBenchRoute() {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('kaminos_compute_route_visible_bench') === '1') {
+    renderComputeRouteVisibleBench();
+  }
+}
+
+bootstrapComputeRouteVisibleBenchRoute();
 
 function computeRouteFireActuatorIsEnabled() {
   const params = new URLSearchParams(window.location.search);

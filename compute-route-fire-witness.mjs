@@ -364,6 +364,7 @@ async function main() {
     finalWitness: null,
     smokePayload: null,
     smokeUrl: null,
+    routeFireSmokeUrl: null,
     operatorSmokeUrl: null,
     contentionWitness: null,
     pipelineExit: null,
@@ -421,10 +422,11 @@ async function main() {
     if (args.dryRun) {
       report.phase = 'dry-run';
       report.smokePayload = computeRouteFirePayloadFromReport(report);
-      report.smokeUrl = computeRouteFireSmokeUrl(report.smokePayload, {
+      report.routeFireSmokeUrl = computeRouteFireSmokeUrl(report.smokePayload, {
         baseUrl: `http://127.0.0.1:${args.serverPort}/`,
         volumeWitnessUrl: report.activeWitness.volumeWitnessUrl,
       });
+      report.smokeUrl = report.routeFireSmokeUrl;
       writeJson(reportPath, report);
       console.log(reportPath);
       return;
@@ -479,10 +481,11 @@ async function main() {
     }
     if (report.activeWitness) {
       report.smokePayload = computeRouteFirePayloadFromReport(report);
-      report.smokeUrl = computeRouteFireSmokeUrl(report.smokePayload, {
+      report.routeFireSmokeUrl = computeRouteFireSmokeUrl(report.smokePayload, {
         baseUrl: `http://127.0.0.1:${args.serverPort}/`,
         volumeWitnessUrl: report.activeWitness.volumeWitnessUrl,
       });
+      report.smokeUrl = report.routeFireSmokeUrl;
     }
     if (report.visualWitnessReport) {
       report.contentionWitness = buildComputeRouteContentionWitnessFromReport(report, {
@@ -498,8 +501,9 @@ async function main() {
       writeJson(contentionReportPath, report.contentionWitness);
       report.operatorSmokeUrl = buildOperatorSmokeUrlFromContentionWitness(report.contentionWitness, {
         baseUrl: `http://127.0.0.1:${args.serverPort}/`,
-        volumeWitnessUrl: report.smokeUrl || report.activeWitness?.volumeWitnessUrl || null,
+        volumeWitnessUrl: report.activeWitness?.volumeWitnessUrl || null,
       });
+      report.smokeUrl = report.operatorSmokeUrl;
     }
     writeJson(reportPath, report);
     console.log(reportPath);

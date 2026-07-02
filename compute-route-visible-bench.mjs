@@ -106,6 +106,33 @@ function computeVisibleBenchPrimaryText(witness = {}) {
   return `${routeLabel} made ${noun} from this image and recorded the route evidence.`;
 }
 
+function schedulerVerificationFromWitness(witness = {}) {
+  const receipt = witness.schedulerVerification
+    || witness.pipelineScheduler?.schedulerVerification
+    || witness.pipelineScheduler?.scheduler?.schedulerVerification
+    || witness.scheduler?.schedulerVerification
+    || null;
+  if (!receipt || typeof receipt !== 'object') return null;
+  const frameTail = receipt.frameTail || {};
+  const falseAuthorityChecks = receipt.falseAuthorityChecks || {};
+  return {
+    schema: receipt.schema || 'kaminos.webgpu-scheduler-verification-receipt.v0',
+    status: receipt.status || receipt.schedulerStatus || receipt.verificationState || 'scheduler-unverified',
+    classification: receipt.classification || null,
+    downgrades: unique(receipt.downgrades || receipt.failureDowngrades || []),
+    timingEvidenceSource: frameTail.evidenceSource || receipt.timingEvidenceSource || null,
+    timingDisclaimer: frameTail.disclaimer || receipt.timingDisclaimer || null,
+    timingProxyOnly: falseAuthorityChecks.timingProxyOnly === true,
+    eventTraceMissing: falseAuthorityChecks.eventTraceMissing === true,
+    route: {
+      pipelineId: receipt.route?.pipelineId || witness.routeIdentity?.pipelineId || null,
+      requestedRoute: receipt.route?.requestedRouteId || witness.routeIdentity?.requestedRoute || null,
+      effectiveRoute: receipt.route?.effectiveRouteId || witness.routeIdentity?.effectiveRoute || null,
+      backendClass: receipt.route?.backendClass || witness.routeIdentity?.backendClass || null,
+    },
+  };
+}
+
 export function buildComputeRouteVisibleBenchModel({ witness } = {}) {
   if (!witness || witness.schema !== COMPUTE_ROUTE_CONTENTION_WITNESS_SCHEMA) {
     throw new Error(`witness with schema ${COMPUTE_ROUTE_CONTENTION_WITNESS_SCHEMA} is required`);
@@ -115,6 +142,7 @@ export function buildComputeRouteVisibleBenchModel({ witness } = {}) {
     || witness.routeIdentity?.requestedRoute
     || 'compute-route';
   const schedulerEvidence = witness.pipelineScheduler || witness.scheduler || {};
+  const schedulerVerification = schedulerVerificationFromWitness(witness);
   const warnings = unique([
     ...asArray(witness.sourceTruthWarnings),
     ...asArray(witness.witnessWarnings),
@@ -144,6 +172,7 @@ export function buildComputeRouteVisibleBenchModel({ witness } = {}) {
         nestedSchedulerSchema: schedulerEvidence.scheduler?.schema || witness.scheduler?.schema || null,
         rawAdapterSchema: schedulerEvidence.raw?.breathingRoom?.schema || witness.scheduler?.adapterEvidence?.schema || null,
       },
+      schedulerVerification,
       backpressure: {
         schema: witness.backpressure?.schema || null,
         requestedBudget: witness.backpressure?.requestedBudget || null,
