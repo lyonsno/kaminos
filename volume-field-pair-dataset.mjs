@@ -1171,12 +1171,83 @@ function summarizeRouteVariantPreflightViability(receipts) {
     totalCells: receipts.length,
     passedCells: passedReceipts.length,
     failedCells: failedReceipts.length,
-    viableRouteReplayIdentities: passedReceipts.map((receipt) => `${receipt.routeVariantIdentity}/${receipt.replayStateIdentity}`),
-    failedRouteReplayIdentities: failedReceipts.map((receipt) => `${receipt.routeVariantIdentity}/${receipt.replayStateIdentity}`),
+    viableRouteReplayIdentities: passedReceipts.map((receipt) => routeReplayIdentity(receipt.routeVariantIdentity, receipt.replayStateIdentity)),
+    failedRouteReplayIdentities: failedReceipts.map((receipt) => routeReplayIdentity(receipt.routeVariantIdentity, receipt.replayStateIdentity)),
   };
 }
 
-function runRouteVariantPreflights({ enabled, continueOnFailure, routeVariants, deterministicReplayStates, lowGrids, majorantGrid, baseUrl, outDir, debugPort, settleMs, windowSize, evidenceMode, cwd, captureRetryPolicy }) {
+function routeReplayIdentity(routeVariantIdentity, replayStateIdentity) {
+  return `${routeVariantIdentity}/${replayStateIdentity}`;
+}
+
+function routeReplayCellIdentities(routeVariants, deterministicReplayStates) {
+  return routeVariants.flatMap((routeVariant) => deterministicReplayStates.map((replayState) => (
+    routeReplayIdentity(routeVariant.routeVariantIdentity, replayState.replayStateIdentity)
+  )));
+}
+
+function loadRouteReplayViabilityFilter(path, routeVariants, deterministicReplayStates) {
+  const requestedRouteReplayIdentities = routeReplayCellIdentities(routeVariants, deterministicReplayStates);
+  if (!path) {
+    return {
+      identity: 'none',
+      enabled: false,
+      sourceManifest: null,
+      requestedRouteReplayIdentities,
+      allowedRouteReplayIdentities: requestedRouteReplayIdentities,
+      excludedRouteReplayIdentities: [],
+      classifierFailedRouteReplayIdentities: [],
+      classifierMissingRouteReplayIdentities: [],
+      limitation: 'No classifier manifest was supplied; all requested route/replay cells remain eligible for capture.',
+    };
+  }
+  const resolvedPath = resolve(String(path));
+  const payload = readJson(resolvedPath);
+  const dataset = payload.dataset || payload;
+  const receipts = dataset?.routeVariantPreflight?.receipts;
+  if (!Array.isArray(receipts) || receipts.length < 1) {
+    throw new Error(`route/replay viability manifest has no routeVariantPreflight receipts: ${resolvedPath}`);
+  }
+  const classifierStatusByIdentity = new Map();
+  for (const receipt of receipts) {
+    const identity = routeReplayIdentity(receipt.routeVariantIdentity, receipt.replayStateIdentity);
+    classifierStatusByIdentity.set(identity, receipt.status || 'unknown');
+  }
+  const allowedRouteReplayIdentities = requestedRouteReplayIdentities
+    .filter((identity) => classifierStatusByIdentity.get(identity) === 'passed');
+  const excludedRouteReplayIdentities = requestedRouteReplayIdentities
+    .filter((identity) => classifierStatusByIdentity.get(identity) !== 'passed');
+  if (allowedRouteReplayIdentities.length < 1) {
+    throw new Error(`route/replay viability manifest allowed zero requested cells: ${resolvedPath}`);
+  }
+  return {
+    identity: 'classifier-passed-cells-only-v0',
+    enabled: true,
+    sourceManifest: resolvedPath,
+    sourceDatasetStatus: dataset.status || null,
+    sourceGitCommit: dataset.gitCommit || null,
+    sourceRoutePreflightStatus: dataset.routeVariantPreflight?.status || null,
+    requestedRouteReplayIdentities,
+    allowedRouteReplayIdentities,
+    excludedRouteReplayIdentities,
+    classifierFailedRouteReplayIdentities: requestedRouteReplayIdentities
+      .filter((identity) => classifierStatusByIdentity.get(identity) === 'failed'),
+    classifierMissingRouteReplayIdentities: requestedRouteReplayIdentities
+      .filter((identity) => !classifierStatusByIdentity.has(identity)),
+    requestedCellCount: requestedRouteReplayIdentities.length,
+    allowedCellCount: allowedRouteReplayIdentities.length,
+    excludedCellCount: excludedRouteReplayIdentities.length,
+    limitation: 'Only cells with passed route/replay classifier receipts are eligible for capture; excluded cells are not corpus failures and are not trainable evidence.',
+  };
+}
+
+function routeReplayCellAllowed(routeReplayViabilityFilter, routeVariantIdentity, replayStateIdentity) {
+  if (!routeReplayViabilityFilter?.enabled) return true;
+  return routeReplayViabilityFilter.allowedRouteReplayIdentities
+    .includes(routeReplayIdentity(routeVariantIdentity, replayStateIdentity));
+}
+
+function runRouteVariantPreflights({ enabled, continueOnFailure, routeReplayViabilityFilter, routeVariants, deterministicReplayStates, lowGrids, majorantGrid, baseUrl, outDir, debugPort, settleMs, windowSize, evidenceMode, cwd, captureRetryPolicy }) {
   if (!enabled) {
     const receipts = [];
     return {
@@ -1193,6 +1264,9 @@ function runRouteVariantPreflights({ enabled, continueOnFailure, routeVariants, 
   let preflightIndex = 0;
   for (const routeVariant of routeVariants) {
     for (const replayState of deterministicReplayStates) {
+      if (!routeReplayCellAllowed(routeReplayViabilityFilter, routeVariant.routeVariantIdentity, replayState.replayStateIdentity)) {
+        continue;
+      }
       const preflightId = `preflight-${String(preflightIndex + 1).padStart(3, '0')}-${routeVariant.routeVariantIdentity}-${replayState.replayStateIdentity}`;
       const pairDir = resolve(outDir, '_route-variant-preflight', preflightId);
       const route = routeWithGrid(applyRouteVariant(baseUrl, routeVariant), lowGrids[0], majorantGrid);
@@ -1302,6 +1376,11 @@ const deterministicReplayStates = buildDeterministicReplayStates({
   startTimeMs: deterministicReplayStartMs,
   startTimeList: deterministicReplayStartMsList,
 });
+const routeReplayViabilityFilter = loadRouteReplayViabilityFilter(
+  args.get('--route-replay-viability-manifest'),
+  routeVariants,
+  deterministicReplayStates
+);
 const deterministicReplay = deterministicReplayStates[0].deterministicReplay;
 const pairAuthority = deterministicReplay.enabled ? DETERMINISTIC_REPLAY_PAIR_AUTHORITY : SEQUENTIAL_PAIR_AUTHORITY;
 const fieldTileExport = args.has('--field-tile-export') ? {
@@ -1334,7 +1413,7 @@ const createdAt = new Date().toISOString();
 const gitCommit = gitValue(['rev-parse', 'HEAD']);
 const gitBranch = gitValue(['branch', '--show-current']);
 const gitStatusShort = gitValue(['status', '--short'], '');
-const pairs = routeVariants.flatMap((routeVariant, variantIndex) => deterministicReplayStates.flatMap((replayState, replayIndex) => lowGrids.map((lowGrid, lowIndex) => {
+const allPairs = routeVariants.flatMap((routeVariant, variantIndex) => deterministicReplayStates.flatMap((replayState, replayIndex) => lowGrids.map((lowGrid, lowIndex) => {
   const pairIndex = ((variantIndex * deterministicReplayStates.length) + replayIndex) * lowGrids.length + lowIndex;
   const variantBaseUrl = applyRouteVariant(baseUrl, routeVariant);
   const variantPrefix = routeVariants.length > 1 || routeVariant.routeVariantIdentity !== 'base-route-v0'
@@ -1347,6 +1426,7 @@ const pairs = routeVariants.flatMap((routeVariant, variantIndex) => deterministi
   const highRoute = routeWithGrid(variantBaseUrl, highGrid, majorantGrid);
   return {
     pairId,
+    routeReplayIdentity: routeReplayIdentity(routeVariant.routeVariantIdentity, replayState.replayStateIdentity),
     routeVariantIdentity: routeVariant.routeVariantIdentity,
     routeVariant,
     replayStateIdentity: replayState.replayStateIdentity,
@@ -1388,6 +1468,11 @@ const pairs = routeVariants.flatMap((routeVariant, variantIndex) => deterministi
     }),
   };
 })));
+const pairs = allPairs.filter((pair) => routeReplayCellAllowed(
+  routeReplayViabilityFilter,
+  pair.routeVariantIdentity,
+  pair.replayStateIdentity
+));
 
 const manifest = {
   schema: DATASET_SCHEMA,
@@ -1402,6 +1487,11 @@ const manifest = {
   routeVariantsPath,
   routeVariants,
   deterministicReplayStates,
+  routeReplayViabilityFilter: {
+    ...routeReplayViabilityFilter,
+    unfilteredPairCount: allPairs.length,
+    selectedPairCount: pairs.length,
+  },
   outDir,
   manifestPath,
   dryRun,
@@ -1458,6 +1548,7 @@ if (!dryRun) {
     manifest.routeVariantPreflight = runRouteVariantPreflights({
       enabled: routeVariantPreflightEnabled,
       continueOnFailure: routeVariantPreflightContinueOnFailure,
+      routeReplayViabilityFilter,
       routeVariants,
       deterministicReplayStates,
       lowGrids,

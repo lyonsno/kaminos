@@ -1446,6 +1446,11 @@ assert.match(fieldPairDataset, /--route-variant-preflight-continue-on-failure/, 
 assert.match(fieldPairDataset, /viabilitySummary/, 'field-pair dataset summarizes route/replay preflight viability counts in the manifest');
 assert.match(fieldPairDataset, /preflighted-with-failures/, 'field-pair dataset marks failed classifier matrices separately from captured corpora');
 assert.match(fieldPairDataset, /not-trainable-preflight-classification/, 'field-pair dataset labels preflight-only manifests as non-trainable evidence');
+assert.match(fieldPairDataset, /--route-replay-viability-manifest/, 'field-pair dataset can consume a prior classifier manifest as a route/replay cell filter');
+assert.match(fieldPairDataset, /routeReplayViabilityFilter/, 'field-pair dataset records classifier-backed route/replay filtering in the manifest');
+assert.match(fieldPairDataset, /allowedRouteReplayIdentities/, 'field-pair dataset records which route/replay cells were allowed into the corpus');
+assert.match(fieldPairDataset, /excludedRouteReplayIdentities/, 'field-pair dataset records which route/replay cells were excluded instead of counting them as corpus failures');
+assert.match(fieldPairDataset, /classifier-passed-cells-only-v0/, 'field-pair dataset names the classifier-backed viable-cell filter identity');
 
 const fieldResidualProbePath = join(root, 'volume-field-residual-probe.py');
 assert.ok(existsSync(fieldResidualProbePath), 'volume field residual probe exists');
