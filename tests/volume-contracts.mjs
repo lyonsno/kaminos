@@ -151,10 +151,13 @@ assert.match(index, /simProfile/, 'Volume controls carry sim profile request ide
 assert.match(index, /volume_sim_cadence/, 'URL route can request low-cadence simulation without hiding render continuation');
 assert.match(index, /id="volume-sim-cadence" min="1" max="8" step="1"/, 'Volume cockpit exposes a visible sim-hold cadence slider');
 assert.match(index, /id="volume-sim-cadence-val"/, 'Volume cockpit exposes the effective sim-hold cadence value');
+assert.match(index, /id="volume-continuation-warp" min="0" max="1\.5" step="0\.05"/, 'Volume cockpit exposes a visible held-frame continuation warp slider');
+assert.match(index, /volume_continuation_warp/, 'URL route can override held-frame continuation warp strength');
 assert.match(index, /volume-sim-cadence-state/, 'Volume readout exposes the effective sim cadence');
 assert.match(index, /volume-cadence-gap/, 'Volume readout exposes the frame/sim-step cadence gap');
 assert.match(index, /volume-continuation-frames/, 'Volume readout exposes live versus continued frame counts');
 assert.match(index, /simCadence/, 'Volume controls carry requested sim cadence into renderer debug state');
+assert.match(index, /continuationWarp/, 'Volume controls carry requested held-frame continuation warp into renderer debug state');
 assert.match(index, /effectiveVisualAuthority/, 'Volume controls expose whether the current visual stream is live compute or continuation');
 assert.match(index, /<option value="128">128\^3<\/option>/, 'Volume grid selector can test a 128^3 simulation volume');
 assert.match(index, /<option value="160">160\^3<\/option>/, 'Volume grid selector can test a 160^3 simulation volume');
@@ -454,9 +457,14 @@ assert.match(core, /willRunLiveSimForUniforms/, 'cadence uniforms know when the 
 assert.match(core, /willRunLiveSimForUniforms\s*\?\s*0\s*:/, 'live simulation frames reset cadence phase instead of rendering with full continuation warp');
 assert.match(core, /CADENCE_NATIVE_CONTINUATION_IDENTITY/, 'volume core names the cadence-native field continuation identity');
 assert.match(core, /cadenceNativeContinuationPoint/, 'fragment raymarch computes a field-aware continuation sample point');
+assert.match(core, /cadenceRenderContinuationMask/, 'fragment raymarch uses an explicit scene-aware continuation mask instead of a tall-plume-only gate');
 assert.match(core, /cadenceContinuationDampedStep/, 'cadence continuation warp uses a damped held-frame step instead of a large phase shove');
+assert.match(core, /continuationWarpGain/, 'cadence continuation warp has a route-controlled gain');
+assert.match(core, /u\.cadence_controls\.w/, 'cadence continuation warp gain is carried in cadence_controls.w');
+assert.match(core, /state\.continuationWarp/, 'debug state records the effective continuation warp gain');
 assert.match(core, /CADENCE_NATIVE_CONTINUATION_MAX_WARP/, 'cadence continuation warp has an explicit shader-local maximum');
 assert.match(core, /CADENCE_NATIVE_CONTINUATION_STEP_PER_HELD_FRAME/, 'cadence continuation warp advances by held render frame instead of plateauing inside a cadence cycle');
+assert.match(core, /cadenceNativeContinuationPoint\(p,\s*initialState\.xyz,\s*cadenceRenderContinuationMask\)/, 'compact plume render continuation must use the cadence continuation mask rather than a tall-plume-only gate');
 assert.match(core, /sampleWorldVelocity\(continuedP\)/, 'fragment raymarch samples held fields through the cadence continuation point');
 assert.match(core, /effectiveVisualAuthority:\s*state\.effectiveVisualAuthority/, 'sampleFrame preserves effective visual authority in witness readback');
 assert.match(core, /simCostLedger[\s\S]*simCadence/, 'sim cost ledger records requested/effective simulation cadence identity');
@@ -1215,6 +1223,7 @@ assert.match(witness, /fullGridPassBreakdown/, 'witness reports pass-level full-
 assert.match(witness, /cadencePhase/, 'witness reports cadence phase for cadence-native continuation authority');
 assert.match(witness, /framesSinceLiveSim/, 'witness reports held render frames since the most recent live sim step');
 assert.match(witness, /cadenceNativeContinuationIdentity/, 'witness reports the stable cadence-native continuation identity');
+assert.match(witness, /expectedContinuationWarp/, 'witness verifies held-frame continuation warp route/control identity');
 assert.match(witness, /performance-volume-signal/, 'witness has a performance visual-evidence mode that does not confuse low-fire measurement frames with missing output');
 assert.match(witness, /low-fire-performance-evidence/, 'performance witness preserves low-fire visual frames as warnings instead of failing before primary cost reports');
 assert.match(witness, /rayBudgetPreset/, 'witness records named ray-budget preset/config identity when present');
@@ -1237,6 +1246,7 @@ assert.match(filmstripWitness, /effectiveRoute/, 'filmstrip witness records effe
 assert.match(filmstripWitness, /backend/, 'filmstrip witness records effective backend identity');
 assert.match(filmstripWitness, /cadenceNativeContinuationIdentity/, 'filmstrip witness preserves cadence-native continuation identity');
 assert.match(filmstripWitness, /temporalPolicy/, 'filmstrip witness preserves temporal/history policy identity');
+assert.match(filmstripWitness, /temporalAccum:\s*state\.temporalAccum/, 'filmstrip witness records per-frame effective temporal accumulation');
 assert.match(filmstripWitness, /frameDeltas/, 'filmstrip witness reports render frame deltas between captured frames');
 assert.match(filmstripWitness, /blankFrameCount/, 'filmstrip witness reports blank or missing frame counts');
 assert.match(filmstripWitness, /volume_sim_cadence/, 'filmstrip witness records the routed simulation cadence');

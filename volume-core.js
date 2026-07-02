@@ -354,6 +354,10 @@ function normalizeSimCadence(value) {
   return Math.max(1, Math.min(8, requested));
 }
 
+function normalizeContinuationWarp(value) {
+  return clampFinite(value, 0, 1.5, 1.00);
+}
+
 function defaultPressureIterationsForScene(value) {
   return normalizeVolumeScene(value) === 'tall_plume' ? 2 : (normalizeVolumeScene(value) === 'bonfire_plume' ? 8 : 4);
 }
@@ -893,9 +897,10 @@ fn cadenceNativeContinuationPoint(p: vec3<f32>, velocity: vec3<f32>, sceneMask: 
   let framesSinceLiveSim = max(0.0, u.cadence_controls.y);
   let simCadence = max(1.0, u.cadence_controls.z);
   let continuationActive = step(1.5, simCadence) * step(0.001, cadencePhase) * sceneMask;
+  let continuationWarpGain = clamp(u.cadence_controls.w, 0.0, 1.5);
   let speed = clamp(u.fire_smoke_curl_speed.w, 0.1, 5.0);
   let heldFrames = min(framesSinceLiveSim, max(1.0, simCadence - 1.0));
-  let cadenceContinuationDampedStep = min(CADENCE_NATIVE_CONTINUATION_MAX_WARP, heldFrames * CADENCE_NATIVE_CONTINUATION_STEP_PER_HELD_FRAME);
+  let cadenceContinuationDampedStep = min(CADENCE_NATIVE_CONTINUATION_MAX_WARP, heldFrames * CADENCE_NATIVE_CONTINUATION_STEP_PER_HELD_FRAME * continuationWarpGain);
   let thermalRise = vec3<f32>(0.0, 0.012 + speed * 0.002, 0.0);
   let continuedP = p - (velocity + thermalRise) * cadenceContinuationDampedStep * continuationActive;
   return clamp(continuedP, vec3<f32>(-0.999), vec3<f32>(0.999));
@@ -3069,8 +3074,11 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
   let tallPlumeRenderDetailFrequency = mix(scaledDetailFrequency, 1.0, tallPlumeRenderScene);
   let scaleDomain = vec3<f32>(tallPlumeRenderDetailFrequency, mix(1.0, 1.24, smoothstep(0.70, 2.20, plumeHeight)), tallPlumeRenderDetailFrequency);
   let canonicalRenderMode = clamp(u.canonical_render_motion_controls.x, 0.0, 1.0);
+  let canonicalMotionMode = clamp(u.canonical_render_motion_controls.y, 0.0, 1.0);
   let canonicalContentMode = clamp(u.canonical_render_motion_controls.z, 0.0, 2.0);
   let quenchVaporStrength = clamp(u.canonical_render_motion_controls.w, 0.0, 2.0);
+  let canonicalFrozenMotion = minimalPlumeRenderScene * step(0.5, canonicalMotionMode);
+  let cadenceRenderContinuationMask = 1.0 - canonicalFrozenMotion;
   let canonicalSmokeContent = 1.0 - minimalPlumeRenderScene * step(0.5, canonicalContentMode) * (1.0 - step(1.5, canonicalContentMode));
   let canonicalFireContent = minimalPlumeRenderScene * step(0.5, canonicalContentMode);
   let canonicalFireRenderContent = mix(1.0, canonicalFireContent, minimalPlumeRenderScene);
@@ -3100,7 +3108,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     if (f32(i) >= steps || raymarchEarlyTermination(trans) || t > endT) { break; }
     let p = ro + rd * t;
     let initialState = sampleWorldVelocity(p);
-    let continuedP = cadenceNativeContinuationPoint(p, initialState.xyz, tallPlumeRenderScene);
+    let continuedP = cadenceNativeContinuationPoint(p, initialState.xyz, cadenceRenderContinuationMask);
     let majorantNearest = sampleWorldMajorant(p);
     let majorantLinear = sampleWorldMajorantLinear(p);
     let majorantDilated = sampleWorldMajorantDilated(p);
@@ -3376,6 +3384,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     frameCount: 0,
     simStepCount: 0,
     simCadence: normalizeSimCadence(controlsSnapshot.simCadence),
+    continuationWarp: normalizeContinuationWarp(controlsSnapshot.continuationWarp),
     effectiveVisualAuthority: normalizeSimCadence(controlsSnapshot.simCadence) > 1 ? 'continuation' : 'live-sim',
     continuationAuthority: normalizeSimCadence(controlsSnapshot.simCadence) > 1 ? 'continuation-from-latest-live-field-v0' : 'live-sim-v0',
     liveSimFrameCount: 0,
@@ -3973,6 +3982,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       snapshot.flowRate,
       snapshot.resolution,
       snapshot.majorantGrid,
+      snapshot.continuationWarp,
       snapshot.gridOverlay,
       snapshot.flowDebug,
       snapshot.pressureStrategy,
@@ -4527,8 +4537,15 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     uniforms[42] = controlsSnapshot.majorantSmooth ?? 0.85;
     uniforms[43] = controlsSnapshot.majorantGuard ?? 0.75;
     const bonfireAblation = normalizeBonfireAblationControls(controlsSnapshot);
-    const baseTemporalAccum = Math.max(0, Math.min(0.85, controlsSnapshot.temporalAccum ?? 0.25));
-    const requestedTemporalAccum = Math.max(0, Math.min(0.85, baseTemporalAccum * bonfireAblation.temporal));
+    const simCadence = normalizeSimCadence(controlsSnapshot.simCadence);
+    const willRunLiveSimForUniforms = shouldRunSimForFrame(state.frameCount, simCadence);
+    const framesSinceLiveSim = willRunLiveSimForUniforms || state.lastLiveSimFrameId < 0
+      ? 0
+      : Math.max(0, state.frameCount - state.lastLiveSimFrameId);
+    const cadencePhase = simCadence > 1
+      ? (willRunLiveSimForUniforms ? 0 : Math.max(0, Math.min(1, framesSinceLiveSim / simCadence)))
+      : 0;
+    const requestedTemporalAccum = Math.max(0, Math.min(0.85, (controlsSnapshot.temporalAccum ?? 0.25) * bonfireAblation.temporal));
     uniforms[44] = historyValid ? requestedTemporalAccum : 0;
     uniforms[45] = controlsSnapshot.temporalJitter ?? 0.85;
     uniforms[46] = controlsSnapshot.historyClamp ?? 0.70;
@@ -4572,18 +4589,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     uniforms[81] = sourcePrimitive.position[1];
     uniforms[82] = sourcePrimitive.position[2];
     uniforms[83] = volumePrimitives.length > 0 ? 1 : 0;
-    const simCadence = normalizeSimCadence(controlsSnapshot.simCadence);
-    const willRunLiveSimForUniforms = shouldRunSimForFrame(state.frameCount, simCadence);
-    const framesSinceLiveSim = willRunLiveSimForUniforms || state.lastLiveSimFrameId < 0
-      ? 0
-      : Math.max(0, state.frameCount - state.lastLiveSimFrameId);
-    const cadencePhase = simCadence > 1
-      ? (willRunLiveSimForUniforms ? 0 : Math.max(0, Math.min(1, framesSinceLiveSim / simCadence)))
-      : 0;
     uniforms[84] = cadencePhase;
     uniforms[85] = framesSinceLiveSim;
     uniforms[86] = simCadence;
-    uniforms[87] = state.lastSimFrameSkipped ? 1 : 0;
+    uniforms[87] = normalizeContinuationWarp(controlsSnapshot.continuationWarp);
     uniforms.set(previousViewProj.elements, 88);
     device.queue.writeBuffer(uniformBuffer, 0, uniforms);
     state.gridOverlay = controlsSnapshot.gridOverlay || 0;
@@ -4595,6 +4604,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.majorantSkip = uniforms[41];
     state.majorantSmooth = uniforms[42];
     state.majorantGuard = uniforms[43];
+    state.temporalPolicy = normalizeTemporalPolicy(controlsSnapshot.temporalPolicy);
     state.temporalAccum = requestedTemporalAccum;
     state.temporalJitter = uniforms[45];
     state.historyClamp = uniforms[46];
@@ -4615,6 +4625,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.continuationAuthority = state.simCadence > 1 ? 'continuation-from-latest-live-field-v0' : 'live-sim-v0';
     state.cadencePhase = cadencePhase;
     state.framesSinceLiveSim = framesSinceLiveSim;
+    state.continuationWarp = uniforms[87];
     state.cadenceNativeContinuationIdentity = CADENCE_NATIVE_CONTINUATION_IDENTITY;
     state.runtimeQualityRequested = normalizeRuntimeQuality(controlsSnapshot.runtimeQualityRequested);
     state.runtimeQualityEffective = normalizeRuntimeQuality(controlsSnapshot.runtimeQualityEffective || controlsSnapshot.runtimeQualityRequested);
@@ -4845,6 +4856,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       lastSimFrameSkipped: state.lastSimFrameSkipped,
       cadencePhase: state.cadencePhase,
       framesSinceLiveSim: state.framesSinceLiveSim,
+      continuationWarp: state.continuationWarp,
       cadenceNativeContinuationIdentity: state.cadenceNativeContinuationIdentity,
       pressureSourceStrategy,
       tallPlumePressureIterationStrategy: tallPlumePressureStrategy,
@@ -6100,6 +6112,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         lastSimFrameSkipped: state.lastSimFrameSkipped,
         cadencePhase: state.cadencePhase,
         framesSinceLiveSim: state.framesSinceLiveSim,
+        continuationWarp: state.continuationWarp,
         cadenceNativeContinuationIdentity: state.cadenceNativeContinuationIdentity,
         runtimeQualityRequested: state.runtimeQualityRequested,
         runtimeQualityEffective: state.runtimeQualityEffective,
@@ -6421,6 +6434,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       lastSimFrameSkipped: state.lastSimFrameSkipped,
       cadencePhase: state.cadencePhase,
       framesSinceLiveSim: state.framesSinceLiveSim,
+      continuationWarp: state.continuationWarp,
       cadenceNativeContinuationIdentity: state.cadenceNativeContinuationIdentity,
       runtimeQualityRequested: state.runtimeQualityRequested,
       runtimeQualityEffective: state.runtimeQualityEffective,
@@ -6593,6 +6607,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       state.simCadence = normalizeSimCadence(controlsSnapshot.simCadence);
       state.effectiveVisualAuthority = state.simCadence > 1 ? 'continuation' : 'live-sim';
       state.continuationAuthority = state.simCadence > 1 ? 'continuation-from-latest-live-field-v0' : 'live-sim-v0';
+      state.continuationWarp = normalizeContinuationWarp(controlsSnapshot.continuationWarp);
       state.runtimeQualityRequested = normalizeRuntimeQuality(controlsSnapshot.runtimeQualityRequested);
       state.runtimeQualityEffective = normalizeRuntimeQuality(controlsSnapshot.runtimeQualityEffective || controlsSnapshot.runtimeQualityRequested);
       state.gpuPressure = clampFinite(controlsSnapshot.gpuPressure, 0, 1, 0);

@@ -733,6 +733,11 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
       <input type="range" id="volume-sim-cadence" min="1" max="8" step="1" value="1">
       <span class="slider-val" id="volume-sim-cadence-val">live</span>
     </div>
+    <div class="slider-row">
+      <span class="slider-label">Warp</span>
+      <input type="range" id="volume-continuation-warp" min="0" max="1.5" step="0.05" value="1.00">
+      <span class="slider-val" id="volume-continuation-warp-val">1.00</span>
+    </div>
     </div>
     <div class="volume-control-section" data-volume-control-section="visual-tuning">
       <div class="volume-control-section-title">Visual Tuning</div>
@@ -7823,6 +7828,7 @@ let routedVolumePressureStrategy = 'global';
 let routedVolumePressureMode = 'auto';
 let routedVolumeSimProfile = false;
 let routedVolumeSimCadence = 1;
+let routedVolumeContinuationWarp = 1.00;
 let routedVolumeLifecycleEffect = 'none';
 let routedVolumeLifecycleT = 0;
 let routedVolumeQuenchVapor = 0;
@@ -7868,6 +7874,12 @@ function normalizeVolumeSimCadence(value) {
   const requested = Math.round(Number(value));
   if (!Number.isFinite(requested)) return 1;
   return Math.max(1, Math.min(8, requested));
+}
+
+function normalizeVolumeContinuationWarp(value) {
+  const requested = Number(value);
+  if (!Number.isFinite(requested)) return 1.00;
+  return Math.max(0, Math.min(1.5, requested));
 }
 
 function normalizeVolumeQualityReason(value) {
@@ -8307,6 +8319,7 @@ function readVolumeControls() {
     pressureStrategy: pressureConfig.pressureStrategy,
     simProfile: routedVolumeSimProfile,
     simCadence,
+    continuationWarp: normalizeVolumeContinuationWarp(document.getElementById('volume-continuation-warp').value),
     effectiveVisualAuthority: simCadence > 1 ? 'continuation' : 'live-sim',
     rayBudgetPreset: activeVolumeRayBudgetPreset || routedVolumeRayBudgetPreset,
     ...routedBonfireAblationControls,
@@ -8343,6 +8356,7 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-detail-scale-val').textContent = c.detailScale.toFixed(2);
   document.getElementById('volume-sim-cadence').value = String(c.simCadence);
   document.getElementById('volume-sim-cadence-val').textContent = c.simCadence > 1 ? `1/${c.simCadence}` : 'live';
+  document.getElementById('volume-continuation-warp-val').textContent = c.continuationWarp.toFixed(2);
   document.getElementById('volume-plume-height-val').textContent = c.plumeHeight.toFixed(2);
   document.getElementById('volume-wind-strength-val').textContent = c.windStrength.toFixed(2);
   document.getElementById('volume-wind-angle-val').textContent = `${Math.round(c.windAngle)}°`;
@@ -8585,6 +8599,11 @@ async function initKaminosVolumeRoute() {
     routedVolumeSimCadence = normalizeVolumeSimCadence(routeSimCadence);
     setVolumeControlValue('volume-sim-cadence', String(routedVolumeSimCadence));
   }
+  const routeContinuationWarp = Number(params.get('volume_continuation_warp'));
+  if (params.has('volume_continuation_warp') && Number.isFinite(routeContinuationWarp)) {
+    routedVolumeContinuationWarp = normalizeVolumeContinuationWarp(routeContinuationWarp);
+    setVolumeControlValue('volume-continuation-warp', routedVolumeContinuationWarp.toFixed(2));
+  }
   const routeGrid = Number(params.get('volume_grid'));
   if (Number.isFinite(routeGrid)) {
     document.getElementById('volume-grid-overlay').value = String(Math.max(0, Math.min(1, routeGrid)));
@@ -8808,7 +8827,7 @@ async function initKaminosVolumeRoute() {
     volumePrototype.setControls(readVolumeControls());
     refreshVolumeReadout();
   };
-  for (const id of ['volume-scene', 'volume-density', 'volume-fire', 'volume-radiance', 'volume-absorption', 'volume-glow', 'volume-smoke', 'volume-curl', 'volume-microdetail', 'volume-interface-shred', 'volume-fire-licks', 'volume-projection', 'volume-speed', 'volume-steps', 'volume-adaptive-rays', 'volume-occupancy-skip', 'volume-majorant-skip', 'volume-majorant-smooth', 'volume-majorant-guard', 'volume-temporal-accum', 'volume-temporal-jitter', 'volume-history-clamp', 'volume-fire-scale', 'volume-detail-scale', 'volume-plume-height', 'volume-wind-strength', 'volume-wind-angle', 'volume-wind-height', 'volume-render-scale', 'volume-sim-cadence', 'volume-input-radius', 'volume-flow-rate', 'volume-resolution', 'volume-majorant-grid', 'volume-grid-overlay', 'volume-flow-debug', 'volume-pressure-mode', 'volume-pressure-tier-overlay', 'volume-pressure-tier-lower-max', 'volume-pressure-tier-hero-min', 'volume-pressure-tier-hero-max', 'volume-canonical-spread', 'volume-canonical-centerline', 'volume-canonical-body-balance']) {
+  for (const id of ['volume-scene', 'volume-density', 'volume-fire', 'volume-radiance', 'volume-absorption', 'volume-glow', 'volume-smoke', 'volume-curl', 'volume-microdetail', 'volume-interface-shred', 'volume-fire-licks', 'volume-projection', 'volume-speed', 'volume-steps', 'volume-adaptive-rays', 'volume-occupancy-skip', 'volume-majorant-skip', 'volume-majorant-smooth', 'volume-majorant-guard', 'volume-temporal-accum', 'volume-temporal-jitter', 'volume-history-clamp', 'volume-fire-scale', 'volume-detail-scale', 'volume-plume-height', 'volume-wind-strength', 'volume-wind-angle', 'volume-wind-height', 'volume-render-scale', 'volume-sim-cadence', 'volume-continuation-warp', 'volume-input-radius', 'volume-flow-rate', 'volume-resolution', 'volume-majorant-grid', 'volume-grid-overlay', 'volume-flow-debug', 'volume-pressure-mode', 'volume-pressure-tier-overlay', 'volume-pressure-tier-lower-max', 'volume-pressure-tier-hero-min', 'volume-pressure-tier-hero-max', 'volume-canonical-spread', 'volume-canonical-centerline', 'volume-canonical-body-balance']) {
     document.getElementById(id).addEventListener('input', syncControls);
     document.getElementById(id).addEventListener('change', syncControls);
   }

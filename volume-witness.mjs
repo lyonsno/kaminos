@@ -454,6 +454,10 @@ const requestedSimCadence = Number(routeParams.get('volume_sim_cadence'));
 const expectedSimCadence = routeParams.has('volume_sim_cadence') && Number.isFinite(requestedSimCadence)
   ? Math.max(1, Math.min(8, Math.round(requestedSimCadence)))
   : 1;
+const requestedContinuationWarp = Number(routeParams.get('volume_continuation_warp'));
+const expectedContinuationWarp = routeParams.has('volume_continuation_warp') && Number.isFinite(requestedContinuationWarp)
+  ? Math.max(0, Math.min(1.5, requestedContinuationWarp))
+  : 1.00;
 const expectedVisualAuthority = expectedSimCadence > 1 ? 'continuation' : 'live-sim';
 const requestedGridOverlay = Number(routeParams.get('volume_grid'));
 const expectedGridOverlay = Number.isFinite(requestedGridOverlay)
@@ -1109,6 +1113,8 @@ async function main() {
     assert.equal(Boolean(state.simProfile), expectedSimProfile, 'effective sim profile flag did not reach debug state');
     assert.equal(state.controls?.simCadence, expectedSimCadence, 'sim cadence route/control did not apply');
     assert.equal(state.simCadence, expectedSimCadence, 'effective sim cadence did not reach debug state');
+    assert.ok(Math.abs((state.controls?.continuationWarp ?? 0) - expectedContinuationWarp) < 0.001, 'continuation warp route/control did not apply');
+    assert.ok(Math.abs((state.continuationWarp ?? 0) - expectedContinuationWarp) < 0.001, 'effective continuation warp did not reach debug state');
     assert.equal(state.effectiveVisualAuthority, expectedVisualAuthority, 'effective visual authority did not match sim cadence');
     if (expectedSimCadence > 1) {
       assert.ok(state.frameCount > state.simStepCount, 'low-cadence continuation did not create a frame/sim-step cadence gap');
@@ -1910,6 +1916,8 @@ async function main() {
       lastSimFrameSkipped: sample.lastSimFrameSkipped,
       cadencePhase: sample.cadencePhase,
       framesSinceLiveSim: sample.framesSinceLiveSim,
+      continuationWarp: sample.continuationWarp,
+      expectedContinuationWarp,
       cadenceNativeContinuationIdentity: sample.cadenceNativeContinuationIdentity,
       tallPlumeReactionCadenceDebug: sample.tallPlumeReactionCadenceDebug,
       tallPlumeFlameCutoffContract: sample.tallPlumeFlameCutoffContract,
