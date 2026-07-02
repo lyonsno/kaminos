@@ -75,6 +75,11 @@ assert.match(index, /majorantGuard/, 'Volume controls carry majorant edge/dilati
 assert.match(index, /id="volume-temporal-accum"/, 'Volume tab exposes bounded temporal accumulation control');
 assert.match(index, /volume_temporal_accum/, 'URL route can override temporal accumulation strength');
 assert.match(index, /temporalAccum/, 'Volume controls carry temporal accumulation strength into the renderer');
+assert.match(index, /id="volume-temporal-policy"/, 'Volume tab exposes named temporal/history policy control');
+assert.match(index, /volume_temporal_policy/, 'URL route can request a named temporal/history policy');
+assert.match(index, /VOLUME_TEMPORAL_POLICIES/, 'Volume controls define named temporal/history policies');
+assert.match(index, /balanced[\s\S]{0,160}temporalAccum:\s*0\.45[\s\S]{0,160}temporalJitter:\s*0\.00[\s\S]{0,160}historyClamp:\s*1\.00/, 'balanced temporal/history policy preserves the observed smooth 0.45/0/1 regime');
+assert.match(index, /temporalPolicy/, 'Volume controls carry temporal/history policy identity into the renderer');
 assert.match(index, /id="volume-temporal-jitter"/, 'Volume tab exposes temporal ray jitter control');
 assert.match(index, /volume_temporal_jitter/, 'URL route can override temporal ray jitter strength');
 assert.match(index, /temporalJitter/, 'Volume controls carry temporal ray jitter strength into the renderer');
@@ -524,6 +529,7 @@ assert.match(core, /interfaceHistoryProtect/, 'temporal weighting names the fire
 assert.match(core, /resetTemporalHistory/, 'renderer can reset temporal history on camera/control/grid changes');
 assert.match(core, /copyTextureToTexture/, 'renderer copies the resolved current frame into temporal history');
 assert.match(core, /state\.temporalAccum/, 'debug state exposes effective temporal accumulation strength');
+assert.match(core, /state\.temporalPolicy/, 'debug state exposes effective temporal/history policy identity');
 assert.match(core, /state\.detailScaleArtifactQuarantine/, 'debug state exposes whether the legacy detail-scale artifact quarantine is active');
 assert.match(core, /state\.visibleDetailOverlayGain/, 'debug state exposes whether raymarch fine-detail overlays are active for the current scene');
 assert.match(core, /state\.temporalJitter/, 'debug state exposes effective temporal jitter strength');
@@ -1059,6 +1065,7 @@ assert.match(witness, /expectedMajorantSkip/, 'witness verifies coarse majorant 
 assert.match(witness, /expectedMajorantSmooth/, 'witness verifies smoothed majorant route/control identity');
 assert.match(witness, /expectedMajorantGuard/, 'witness verifies majorant edge/dilation guard route/control identity');
 assert.match(witness, /expectedTemporalAccum/, 'witness verifies temporal accumulation route/control identity');
+assert.match(witness, /expectedTemporalPolicy/, 'witness verifies temporal/history policy route/control identity');
 assert.match(witness, /expectedTemporalJitter/, 'witness verifies temporal jitter route/control identity');
 assert.match(witness, /expectedHistoryClamp/, 'witness verifies temporal history clamp route/control identity');
 assert.match(witness, /expectedMajorantGrid/, 'witness verifies coarse majorant grid route/control identity');
@@ -1072,6 +1079,7 @@ assert.match(witness, /majorantSkip/, 'witness records effective coarse majorant
 assert.match(witness, /majorantSmooth/, 'witness records effective smoothed majorant sampling strength');
 assert.match(witness, /majorantGuard/, 'witness records effective majorant edge/dilation guard strength');
 assert.match(witness, /temporalAccum/, 'witness records effective temporal accumulation strength');
+assert.match(witness, /temporalPolicy/, 'witness records effective temporal/history policy identity');
 assert.match(witness, /temporalJitter/, 'witness records effective temporal jitter strength');
 assert.match(witness, /historyClamp/, 'witness records effective temporal history clamp strength');
 assert.match(witness, /temporalHistoryFrames/, 'witness records temporal history accumulation count');
@@ -1228,6 +1236,7 @@ assert.match(filmstripWitness, /captureFailurePhase/, 'filmstrip failure reports
 assert.match(filmstripWitness, /effectiveRoute/, 'filmstrip witness records effective route identity');
 assert.match(filmstripWitness, /backend/, 'filmstrip witness records effective backend identity');
 assert.match(filmstripWitness, /cadenceNativeContinuationIdentity/, 'filmstrip witness preserves cadence-native continuation identity');
+assert.match(filmstripWitness, /temporalPolicy/, 'filmstrip witness preserves temporal/history policy identity');
 assert.match(filmstripWitness, /frameDeltas/, 'filmstrip witness reports render frame deltas between captured frames');
 assert.match(filmstripWitness, /blankFrameCount/, 'filmstrip witness reports blank or missing frame counts');
 assert.match(filmstripWitness, /volume_sim_cadence/, 'filmstrip witness records the routed simulation cadence');

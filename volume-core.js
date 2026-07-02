@@ -125,6 +125,11 @@ function normalizeRuntimeQuality(value) {
   return 'live_high';
 }
 
+function normalizeTemporalPolicy(value) {
+  const normalized = String(value || 'manual').toLowerCase();
+  return ['manual', 'crisp', 'balanced', 'smooth'].includes(normalized) ? normalized : 'manual';
+}
+
 function runtimeQualityEffectiveFromPressure(requested, gpuPressure) {
   const normalized = normalizeRuntimeQuality(requested);
   if (normalized !== 'auto') return normalized;
@@ -3388,6 +3393,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     majorantSkip: 0.70,
     majorantSmooth: 0.85,
     majorantGuard: 0.75,
+    temporalPolicy: normalizeTemporalPolicy(controlsSnapshot.temporalPolicy),
     temporalAccum: 0.25,
     temporalJitter: 0.85,
     historyClamp: 0.70,
@@ -6069,6 +6075,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         majorantSkip: state.majorantSkip,
         majorantSmooth: state.majorantSmooth,
         majorantGuard: state.majorantGuard,
+        temporalPolicy: state.temporalPolicy,
         temporalAccum: state.temporalAccum,
         temporalJitter: state.temporalJitter,
         historyClamp: state.historyClamp,
@@ -6389,6 +6396,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       majorantSkip: state.majorantSkip,
       majorantSmooth: state.majorantSmooth,
       majorantGuard: state.majorantGuard,
+      temporalPolicy: state.temporalPolicy,
       temporalAccum: state.temporalAccum,
       temporalJitter: state.temporalJitter,
       historyClamp: state.historyClamp,
@@ -6567,6 +6575,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       state.majorantSkip = controlsSnapshot.majorantSkip ?? 0.70;
       state.majorantSmooth = controlsSnapshot.majorantSmooth ?? 0.85;
       state.majorantGuard = controlsSnapshot.majorantGuard ?? 0.75;
+      state.temporalPolicy = normalizeTemporalPolicy(controlsSnapshot.temporalPolicy);
       state.temporalAccum = Math.max(0, Math.min(0.85, controlsSnapshot.temporalAccum ?? 0.25));
       state.temporalJitter = controlsSnapshot.temporalJitter ?? 0.85;
       state.historyClamp = controlsSnapshot.historyClamp ?? 0.70;

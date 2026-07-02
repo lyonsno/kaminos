@@ -870,6 +870,16 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
       <span class="slider-val" id="volume-majorant-guard-val">0.75</span>
     </div>
     <div class="slider-row">
+      <span class="slider-label">Temporal Policy</span>
+      <select id="volume-temporal-policy" class="select-input">
+        <option value="manual">Manual</option>
+        <option value="crisp">Crisp</option>
+        <option value="balanced">Balanced</option>
+        <option value="smooth">Smooth</option>
+      </select>
+      <span class="slider-val" id="volume-temporal-policy-val">Manual</span>
+    </div>
+    <div class="slider-row">
       <span class="slider-label">Temporal Accum</span>
       <input type="range" id="volume-temporal-accum" min="0" max="0.85" step="0.05" value="0.25">
       <span class="slider-val" id="volume-temporal-accum-val">0.25</span>
@@ -7478,6 +7488,13 @@ const VOLUME_RAY_BUDGET_PRESETS = {
   hero: { raySteps: 144, adaptiveRays: 0.30, fire: 1.35, radiance: 1.60, absorption: 0.80 },
 };
 
+const VOLUME_TEMPORAL_POLICIES = {
+  manual: { label: 'Manual' },
+  crisp: { label: 'Crisp', temporalAccum: 0.35, temporalJitter: 0.00, historyClamp: 1.00 },
+  balanced: { label: 'Balanced', temporalAccum: 0.45, temporalJitter: 0.00, historyClamp: 1.00 },
+  smooth: { label: 'Smooth', temporalAccum: 0.55, temporalJitter: 0.00, historyClamp: 1.00 },
+};
+
 const CANONICAL_VOLUME_HIDDEN_CONTROLS = new Set([
   'volume-fire',
   'volume-radiance',
@@ -7789,6 +7806,8 @@ const BONFIRE_VOLUME_CAMERA_FRAME = {
 
 let activeVolumeRayBudgetPreset = '';
 let routedVolumeRayBudgetPreset = '';
+let activeVolumeTemporalPolicy = 'manual';
+let routedVolumeTemporalPolicy = '';
 let activeCanonicalVolumeMacroPreset = '';
 let routedCanonicalSourceMode = 'current';
 let routedCanonicalRenderMode = 'default';
@@ -8057,6 +8076,29 @@ function setVolumeControlValue(id, value) {
   el.value = String(value);
 }
 
+function normalizeVolumeTemporalPolicy(value) {
+  const normalized = String(value || 'manual').toLowerCase();
+  return Object.hasOwn(VOLUME_TEMPORAL_POLICIES, normalized) ? normalized : 'manual';
+}
+
+function applyVolumeTemporalPolicy(name, options = {}) {
+  const normalized = normalizeVolumeTemporalPolicy(name);
+  const policy = VOLUME_TEMPORAL_POLICIES[normalized];
+  activeVolumeTemporalPolicy = normalized;
+  routedVolumeTemporalPolicy = options.route ? normalized : '';
+  setVolumeControlValue('volume-temporal-policy', normalized);
+  if (Number.isFinite(policy.temporalAccum)) setVolumeControlValue('volume-temporal-accum', policy.temporalAccum.toFixed(2));
+  if (Number.isFinite(policy.temporalJitter)) setVolumeControlValue('volume-temporal-jitter', policy.temporalJitter.toFixed(2));
+  if (Number.isFinite(policy.historyClamp)) setVolumeControlValue('volume-history-clamp', policy.historyClamp.toFixed(2));
+  return normalized;
+}
+
+function markVolumeTemporalPolicyManual() {
+  activeVolumeTemporalPolicy = 'manual';
+  routedVolumeTemporalPolicy = '';
+  setVolumeControlValue('volume-temporal-policy', 'manual');
+}
+
 function formatVolumePresetControlValue(key, value) {
   if (['raySteps', 'resolution', 'majorantGrid', 'windAngle'].includes(key)) {
     return String(Math.round(value));
@@ -8116,6 +8158,7 @@ function applyTallPlumeOperatorPreset(name, options = {}) {
     if (key === 'label' || key === 'volumeScene') continue;
     setVolumeControlValue(volumeSceneControlId(key), formatVolumePresetControlValue(key, value));
   }
+  markVolumeTemporalPolicyManual();
   if (!options.keepBudgetPreset) {
     activeVolumeRayBudgetPreset = '';
     routedVolumeRayBudgetPreset = '';
@@ -8132,6 +8175,7 @@ function applyCanonicalVolumeMacroPreset(name) {
     if (key === 'label' || key === 'volumeScene' || key === 'sourceMode' || key === 'renderMode' || key === 'motionMode' || key === 'contentMode') continue;
     setVolumeControlValue(volumeSceneControlId(key), formatVolumePresetControlValue(key, value));
   }
+  markVolumeTemporalPolicyManual();
   routedCanonicalSourceMode = normalizeCanonicalVolumeSourceMode(preset.sourceMode || routedCanonicalSourceMode);
   routedCanonicalRenderMode = normalizeCanonicalRenderMode(preset.renderMode || routedCanonicalRenderMode);
   routedCanonicalMotionMode = normalizeCanonicalMotionMode(preset.motionMode || routedCanonicalMotionMode);
@@ -8213,6 +8257,7 @@ function readVolumeControls() {
     majorantSkip: parseFloat(document.getElementById('volume-majorant-skip').value),
     majorantSmooth: parseFloat(document.getElementById('volume-majorant-smooth').value),
     majorantGuard: parseFloat(document.getElementById('volume-majorant-guard').value),
+    temporalPolicy: activeVolumeTemporalPolicy || routedVolumeTemporalPolicy || 'manual',
     temporalAccum: parseFloat(document.getElementById('volume-temporal-accum').value),
     temporalJitter: parseFloat(document.getElementById('volume-temporal-jitter').value),
     historyClamp: parseFloat(document.getElementById('volume-history-clamp').value),
@@ -8289,6 +8334,8 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-majorant-skip-val').textContent = c.majorantSkip.toFixed(2);
   document.getElementById('volume-majorant-smooth-val').textContent = c.majorantSmooth.toFixed(2);
   document.getElementById('volume-majorant-guard-val').textContent = c.majorantGuard.toFixed(2);
+  setVolumeControlValue('volume-temporal-policy', c.temporalPolicy);
+  document.getElementById('volume-temporal-policy-val').textContent = VOLUME_TEMPORAL_POLICIES[c.temporalPolicy]?.label || 'Manual';
   document.getElementById('volume-temporal-accum-val').textContent = c.temporalAccum.toFixed(2);
   document.getElementById('volume-temporal-jitter-val').textContent = c.temporalJitter.toFixed(2);
   document.getElementById('volume-history-clamp-val').textContent = c.historyClamp.toFixed(2);
@@ -8656,17 +8703,28 @@ async function initKaminosVolumeRoute() {
   if (params.has('volume_majorant_guard') && Number.isFinite(routeMajorantGuard)) {
     document.getElementById('volume-majorant-guard').value = String(Math.max(0, Math.min(1, routeMajorantGuard)));
   }
+  const routeTemporalPolicy = params.get('volume_temporal_policy');
+  if (routeTemporalPolicy) {
+    applyVolumeTemporalPolicy(routeTemporalPolicy, { route: true });
+  }
+  let temporalPolicyNumericOverride = false;
   const routeTemporalAccum = Number(params.get('volume_temporal_accum'));
   if (params.has('volume_temporal_accum') && Number.isFinite(routeTemporalAccum)) {
     document.getElementById('volume-temporal-accum').value = String(Math.max(0, Math.min(0.85, routeTemporalAccum)));
+    temporalPolicyNumericOverride = true;
   }
   const routeTemporalJitter = Number(params.get('volume_temporal_jitter'));
   if (params.has('volume_temporal_jitter') && Number.isFinite(routeTemporalJitter)) {
     document.getElementById('volume-temporal-jitter').value = String(Math.max(0, Math.min(1, routeTemporalJitter)));
+    temporalPolicyNumericOverride = true;
   }
   const routeHistoryClamp = Number(params.get('volume_history_clamp'));
   if (params.has('volume_history_clamp') && Number.isFinite(routeHistoryClamp)) {
     document.getElementById('volume-history-clamp').value = String(Math.max(0, Math.min(1, routeHistoryClamp)));
+    temporalPolicyNumericOverride = true;
+  }
+  if (temporalPolicyNumericOverride) {
+    markVolumeTemporalPolicyManual();
   }
   const routeFireScale = Number(params.get('volume_fire_scale'));
   if (params.has('volume_fire_scale') && Number.isFinite(routeFireScale)) {
@@ -8728,6 +8786,11 @@ async function initKaminosVolumeRoute() {
     'volume-radiance',
     'volume-absorption',
   ]);
+  const temporalPolicyOwnedControls = new Set([
+    'volume-temporal-accum',
+    'volume-temporal-jitter',
+    'volume-history-clamp',
+  ]);
   const syncControls = event => {
     if (event?.target?.id === 'volume-scene') {
       applyVolumeScenePreset(event.target.value);
@@ -8738,6 +8801,9 @@ async function initKaminosVolumeRoute() {
       activeVolumeRayBudgetPreset = '';
       routedVolumeRayBudgetPreset = '';
     }
+    if (temporalPolicyOwnedControls.has(event?.target?.id)) {
+      markVolumeTemporalPolicyManual();
+    }
     updateVolumeControlLabels();
     volumePrototype.setControls(readVolumeControls());
     refreshVolumeReadout();
@@ -8746,6 +8812,12 @@ async function initKaminosVolumeRoute() {
     document.getElementById(id).addEventListener('input', syncControls);
     document.getElementById(id).addEventListener('change', syncControls);
   }
+  document.getElementById('volume-temporal-policy').addEventListener('change', event => {
+    applyVolumeTemporalPolicy(event.target.value);
+    updateVolumeControlLabels();
+    volumePrototype.setControls(readVolumeControls());
+    refreshVolumeReadout();
+  });
   const applyBudgetControls = () => {
     updateVolumeControlLabels();
     volumePrototype.setControls(readVolumeControls());

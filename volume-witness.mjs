@@ -77,6 +77,18 @@ function runtimeQualityFromPressure(requested, gpuPressure) {
   return 'live_high';
 }
 
+const VOLUME_TEMPORAL_POLICY_PRESETS = {
+  manual: null,
+  crisp: { temporalAccum: 0.35, temporalJitter: 0.00, historyClamp: 1.00 },
+  balanced: { temporalAccum: 0.45, temporalJitter: 0.00, historyClamp: 1.00 },
+  smooth: { temporalAccum: 0.55, temporalJitter: 0.00, historyClamp: 1.00 },
+};
+
+function normalizeTemporalPolicy(value) {
+  const normalized = String(value || 'manual').toLowerCase();
+  return Object.hasOwn(VOLUME_TEMPORAL_POLICY_PRESETS, normalized) ? normalized : 'manual';
+}
+
 function fireLickOperatorGainFromAmount(value) {
   const numeric = Number(value);
   const amount = Math.max(0, Math.min(5, Number.isFinite(numeric) ? numeric : 0));
@@ -491,17 +503,25 @@ const expectedMaxSmokeStripeRatio = routeParams.has('volume_max_smoke_stripe_rat
     ? 1.45
     : Infinity;
 const requestedTemporalAccum = Number(routeParams.get('volume_temporal_accum'));
-let expectedTemporalAccum = routeParams.has('volume_temporal_accum') && Number.isFinite(requestedTemporalAccum)
-  ? Math.max(0, Math.min(0.85, requestedTemporalAccum))
-  : canonicalMacroPreset.temporalAccum ?? scenePreset.temporalAccum ?? 0.25;
+let expectedTemporalPolicy = normalizeTemporalPolicy(routeParams.get('volume_temporal_policy'));
+const temporalPolicyPreset = VOLUME_TEMPORAL_POLICY_PRESETS[expectedTemporalPolicy];
+let expectedTemporalAccum = temporalPolicyPreset?.temporalAccum ?? canonicalMacroPreset.temporalAccum ?? scenePreset.temporalAccum ?? 0.25;
 const requestedTemporalJitter = Number(routeParams.get('volume_temporal_jitter'));
-const expectedTemporalJitter = routeParams.has('volume_temporal_jitter') && Number.isFinite(requestedTemporalJitter)
-  ? Math.max(0, Math.min(1, requestedTemporalJitter))
-  : canonicalMacroPreset.temporalJitter ?? scenePreset.temporalJitter ?? 0.85;
+let expectedTemporalJitter = temporalPolicyPreset?.temporalJitter ?? canonicalMacroPreset.temporalJitter ?? scenePreset.temporalJitter ?? 0.85;
 const requestedHistoryClamp = Number(routeParams.get('volume_history_clamp'));
-const expectedHistoryClamp = routeParams.has('volume_history_clamp') && Number.isFinite(requestedHistoryClamp)
-  ? Math.max(0, Math.min(1, requestedHistoryClamp))
-  : canonicalMacroPreset.historyClamp ?? scenePreset.historyClamp ?? 0.70;
+let expectedHistoryClamp = temporalPolicyPreset?.historyClamp ?? canonicalMacroPreset.historyClamp ?? scenePreset.historyClamp ?? 0.70;
+if (routeParams.has('volume_temporal_accum') && Number.isFinite(requestedTemporalAccum)) {
+  expectedTemporalAccum = Math.max(0, Math.min(0.85, requestedTemporalAccum));
+  expectedTemporalPolicy = 'manual';
+}
+if (routeParams.has('volume_temporal_jitter') && Number.isFinite(requestedTemporalJitter)) {
+  expectedTemporalJitter = Math.max(0, Math.min(1, requestedTemporalJitter));
+  expectedTemporalPolicy = 'manual';
+}
+if (routeParams.has('volume_history_clamp') && Number.isFinite(requestedHistoryClamp)) {
+  expectedHistoryClamp = Math.max(0, Math.min(1, requestedHistoryClamp));
+  expectedTemporalPolicy = 'manual';
+}
 const requestedDensity = Number(routeParams.get('volume_density'));
 const expectedDensity = routeParams.has('volume_density') && Number.isFinite(requestedDensity)
   ? Math.max(0.35, Math.min(6, requestedDensity))
@@ -943,6 +963,8 @@ async function main() {
     assert.ok(Math.abs((state.majorantSmooth ?? 0) - expectedMajorantSmooth) < 0.001, 'effective majorant smooth state did not match route/control');
     assert.ok(Math.abs((state.controls?.majorantGuard ?? 0) - expectedMajorantGuard) < 0.001, 'majorant guard route/control did not apply');
     assert.ok(Math.abs((state.majorantGuard ?? 0) - expectedMajorantGuard) < 0.001, 'effective majorant guard state did not match route/control');
+    assert.equal(state.controls?.temporalPolicy ?? 'manual', expectedTemporalPolicy, 'temporal policy route/control did not apply');
+    assert.equal(state.temporalPolicy ?? 'manual', expectedTemporalPolicy, 'effective temporal policy state did not match route/control');
     assert.ok(Math.abs((state.controls?.temporalAccum ?? 0) - expectedTemporalAccum) < 0.001, 'temporal accumulation route/control did not apply');
     assert.ok(Math.abs((state.temporalAccum ?? 0) - expectedEffectiveTemporalAccum) < 0.001, 'effective temporal accumulation state did not match route/control');
     assert.ok(Math.abs((state.controls?.temporalJitter ?? 0) - expectedTemporalJitter) < 0.001, 'temporal jitter route/control did not apply');
@@ -1855,6 +1877,8 @@ async function main() {
       majorantSkip: sample.majorantSkip,
       majorantSmooth: sample.majorantSmooth,
       majorantGuard: sample.majorantGuard,
+      temporalPolicy: sample.temporalPolicy,
+      expectedTemporalPolicy,
       temporalAccum: sample.temporalAccum,
       temporalJitter: sample.temporalJitter,
       historyClamp: sample.historyClamp,
