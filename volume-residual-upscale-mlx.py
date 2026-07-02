@@ -49,6 +49,29 @@ class DirectResidualUpscaler(nn.Module):
         return mx.clip(base_image + residual * 0.25, 0.0, 1.0)
 
 
+class HybridResidualUpscaler(nn.Module):
+    def __init__(self, hidden_channels, input_channels):
+        super().__init__()
+        self.direct_output = nn.Conv2d(input_channels, 3, kernel_size=3, padding=1)
+        self.detail_input = nn.Conv2d(input_channels, hidden_channels, kernel_size=3, padding=1)
+        self.detail_mid_a = nn.Conv2d(hidden_channels, hidden_channels, kernel_size=3, padding=1)
+        self.detail_mid_b = nn.Conv2d(hidden_channels, hidden_channels, kernel_size=3, padding=1)
+        self.detail_output = nn.Conv2d(hidden_channels, 3, kernel_size=3, padding=1)
+        self.direct_output.weight = mx.zeros_like(self.direct_output.weight)
+        self.direct_output.bias = mx.zeros_like(self.direct_output.bias)
+        self.detail_output.weight = mx.zeros_like(self.detail_output.weight)
+        self.detail_output.bias = mx.zeros_like(self.detail_output.bias)
+
+    def __call__(self, image):
+        base_image = image[..., :3]
+        direct_residual = self.direct_output(image)
+        detail = nn.relu(self.detail_input(image))
+        detail = nn.relu(self.detail_mid_a(detail))
+        detail = nn.relu(self.detail_mid_b(detail))
+        detail_residual = self.detail_output(detail)
+        return mx.clip(base_image + (direct_residual + detail_residual) * 0.25, 0.0, 1.0)
+
+
 def parse_args():
     parser = argparse.ArgumentParser(description="Tiny MLX residual-upscale smoke for Kaminos frame-locked render pairs.")
     parser.add_argument("--corpus-manifest", required=True, help="Path to corpus-manifest.json from frame-locked render-pair captures.")
@@ -57,7 +80,7 @@ def parse_args():
     parser.add_argument("--max-steps", dest="maxSteps", type=int, default=120, help="Bounded training steps for contention control.")
     parser.add_argument("--batch-size", type=int, default=4)
     parser.add_argument("--patch-size", type=int, default=96)
-    parser.add_argument("--model-arch", dest="modelArch", choices=["tiny-conv", "direct-residual"], default="tiny-conv")
+    parser.add_argument("--model-arch", dest="modelArch", choices=["tiny-conv", "direct-residual", "hybrid-residual"], default="tiny-conv")
     parser.add_argument("--hidden-channels", type=int, default=16)
     parser.add_argument("--learning-rate", type=float, default=1e-3)
     parser.add_argument("--eval-patches", type=int, default=64)
@@ -679,8 +702,10 @@ def main():
     scaleChannel = "lowRenderScale" if args.conditionRenderScale else None
     if args.modelArch == "tiny-conv":
         model = TinyResidualUpscaler(args.hidden_channels, input_channels)
-    else:
+    elif args.modelArch == "direct-residual":
         model = DirectResidualUpscaler(input_channels)
+    else:
+        model = HybridResidualUpscaler(args.hidden_channels, input_channels)
     optimizer = optim.Adam(learning_rate=args.learning_rate)
     temporalTrainPairCount = len(temporal_pair_candidates(train_items))
     temporalEvalPairCount = len(temporal_pair_candidates(eval_items))

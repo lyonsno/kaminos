@@ -1431,6 +1431,8 @@ assert.match(residualMlx, /kaminos\.volume\.residual-upscale-mlx\.v0/, 'MLX resi
 assert.match(residualMlx, /--corpus-manifest/, 'MLX residual harness reads a frame-locked corpus manifest path from the caller');
 assert.match(residualMlx, /--model-arch/, 'MLX residual harness exposes explicit model architecture selection');
 assert.match(residualMlx, /DirectResidualUpscaler/, 'MLX residual harness includes a deterministic direct residual model for seed-stability probes');
+assert.match(residualMlx, /hybrid-residual/, 'MLX residual harness exposes a hybrid direct-plus-hidden residual architecture');
+assert.match(residualMlx, /HybridResidualUpscaler/, 'MLX residual harness includes a hybrid direct-plus-hidden residual model');
 assert.match(residualMlx, /"modelArch": args\.modelArch/, 'MLX residual harness records effective model architecture in reports');
 assert.match(residualMlx, /frame-locked-render-scale-set-v0/, 'MLX residual harness validates frame-locked pair authority before training');
 assert.match(residualMlx, /cdp-canvas-clip-capture-after-render-only-frozen-sim-state/, 'MLX residual harness validates clean canvas image authority before training');
