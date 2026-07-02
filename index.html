@@ -759,6 +759,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
         <button class="btn" id="volume-basin-copy">Copy Basin</button>
         <button class="btn" id="volume-basin-restore">Restore Last</button>
         <button class="btn" id="volume-basin-warm-cap">Warm Cap</button>
+        <button class="btn" id="volume-basin-bonfire-family">Bonfire</button>
       </div>
     </div>
     <div class="slider-row">
@@ -9185,6 +9186,68 @@ const TALL_PLUME_OPERATOR_PRESETS = {
     pressureTierHeroMin: 0.00,
     pressureTierHeroMax: 0.55,
   },
+  pyro_material_bonfire_family_0702: {
+    label: 'pyro material bonfire family 0702',
+    volumeScene: 'tall_plume',
+    density: 6.00,
+    fire: 3.50,
+    radiance: 2.55,
+    absorption: 1.95,
+    glow: 2.35,
+    smoke: 2.80,
+    curl: 3.65,
+    microdetail: 2.50,
+    interfaceShred: 5.00,
+    fireLicks: 5.00,
+    projection: 1.50,
+    speed: 3.45,
+    raySteps: 160,
+    adaptiveRays: 0.05,
+    occupancySkip: 0.05,
+    majorantSkip: 1.00,
+    majorantSmooth: 0.00,
+    majorantGuard: 1.00,
+    temporalAccum: 0.00,
+    temporalJitter: 0.00,
+    historyClamp: 1.00,
+    fireScale: 0.52,
+    detailScale: 1.85,
+    plumeHeight: 1.85,
+    windStrength: 1.50,
+    windAngle: -65,
+    windHeight: -0.65,
+    renderScale: 0.30,
+    inputRadius: 0.20,
+    flowRate: 0.25,
+    resolution: 96,
+    majorantGrid: 48,
+    pyroDynamicDetail: 1,
+    pyroMaterialGain: 1.50,
+    pyroInterfaceFocus: 0.00,
+    pyroEdgeBite: 1.00,
+    pyroBiteBorder: 0.45,
+    pyroBiteTeeth: 0.60,
+    pyroBiteWake: 1.00,
+    pyroBiteHeat: 0.70,
+    pyroBiteChroma: 0.60,
+    pyroSmokeFold: 0.35,
+    pyroFoldBorder: 1.00,
+    pyroFoldWake: 1.00,
+    pyroRadiance: 6.10,
+    pyroRadianceGate: 1.00,
+    pyroRadianceSpill: 0.90,
+    pyroRadianceWarmth: 0.75,
+    pyroRadianceHue: 0.50,
+    pyroRadianceChroma: 0.55,
+    pyroDiagnosticPaint: 0.00,
+    pyroCarrierView: 'normal',
+    pyroOverdrive: 8.00,
+    pressureMode: 'global-p3',
+    pressureTierOverlay: 0.00,
+    pressureTierLowerMax: 0.84,
+    pressureTierHeroMin: 0.00,
+    pressureTierHeroMax: 0.69,
+  },
 };
 
 const CANONICAL_VOLUME_MACRO_PRESETS = {
@@ -10632,6 +10695,13 @@ async function initKaminosVolumeRoute() {
     volumePrototype.setControls(readVolumeControls());
     refreshVolumeReadout();
     saveVolumeBasinSnapshot('warm-cap-preset');
+  });
+  document.getElementById('volume-basin-bonfire-family')?.addEventListener('click', () => {
+    applyTallPlumeOperatorPreset('pyro_material_bonfire_family_0702');
+    updateVolumeControlLabels();
+    volumePrototype.setControls(readVolumeControls());
+    refreshVolumeReadout();
+    saveVolumeBasinSnapshot('bonfire-family-preset');
   });
   saveVolumeBasinSnapshot('route-init');
   document.getElementById('volume-toggle').addEventListener('click', async () => {
