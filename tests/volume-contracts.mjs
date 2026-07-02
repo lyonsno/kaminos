@@ -1441,6 +1441,11 @@ assert.match(fieldPairDataset, /captureRetryPolicy/, 'field-pair dataset records
 assert.match(fieldPairDataset, /captureAttempts/, 'field-pair dataset records every witness capture attempt instead of hiding retry history');
 assert.match(fieldPairDataset, /attemptIndex/, 'field-pair dataset records capture attempt indexes for retry provenance');
 assert.match(fieldPairDataset, /capture-attempts-exhausted/, 'field-pair dataset fails loudly when all capture attempts are exhausted');
+assert.match(fieldPairDataset, /--preflight-only/, 'field-pair dataset can classify route/replay viability without pretending to capture a trainable corpus');
+assert.match(fieldPairDataset, /--route-variant-preflight-continue-on-failure/, 'field-pair dataset can continue route/replay preflights to preserve a full pass/fail matrix');
+assert.match(fieldPairDataset, /viabilitySummary/, 'field-pair dataset summarizes route/replay preflight viability counts in the manifest');
+assert.match(fieldPairDataset, /preflighted-with-failures/, 'field-pair dataset marks failed classifier matrices separately from captured corpora');
+assert.match(fieldPairDataset, /not-trainable-preflight-classification/, 'field-pair dataset labels preflight-only manifests as non-trainable evidence');
 
 const fieldResidualProbePath = join(root, 'volume-field-residual-probe.py');
 assert.ok(existsSync(fieldResidualProbePath), 'volume field residual probe exists');

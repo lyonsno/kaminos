@@ -1164,13 +1164,28 @@ function summarizeRouteVariantPreflight(effective) {
   };
 }
 
-function runRouteVariantPreflights({ enabled, routeVariants, deterministicReplayStates, lowGrids, majorantGrid, baseUrl, outDir, debugPort, settleMs, windowSize, evidenceMode, cwd, captureRetryPolicy }) {
+function summarizeRouteVariantPreflightViability(receipts) {
+  const passedReceipts = receipts.filter((receipt) => receipt.status === 'passed');
+  const failedReceipts = receipts.filter((receipt) => receipt.status === 'failed');
+  return {
+    totalCells: receipts.length,
+    passedCells: passedReceipts.length,
+    failedCells: failedReceipts.length,
+    viableRouteReplayIdentities: passedReceipts.map((receipt) => `${receipt.routeVariantIdentity}/${receipt.replayStateIdentity}`),
+    failedRouteReplayIdentities: failedReceipts.map((receipt) => `${receipt.routeVariantIdentity}/${receipt.replayStateIdentity}`),
+  };
+}
+
+function runRouteVariantPreflights({ enabled, continueOnFailure, routeVariants, deterministicReplayStates, lowGrids, majorantGrid, baseUrl, outDir, debugPort, settleMs, windowSize, evidenceMode, cwd, captureRetryPolicy }) {
   if (!enabled) {
+    const receipts = [];
     return {
       schema: ROUTE_VARIANT_PREFLIGHT_SCHEMA,
       enabled: false,
+      continueOnFailure: false,
       status: 'skipped',
-      receipts: [],
+      receipts,
+      viabilitySummary: summarizeRouteVariantPreflightViability(receipts),
       limitation: 'Route variants were not preflighted before low/high field export; downstream captures still validate effective route and field evidence.',
     };
   }
@@ -1209,6 +1224,28 @@ function runRouteVariantPreflights({ enabled, routeVariants, deterministicReplay
           effective: summarizeRouteVariantPreflight(effective),
         });
       } catch (error) {
+        const sourceFailure = {
+          code: error.code || 'unknown',
+          failurePhase: error.failurePhase || 'unknown',
+          message: error.message,
+          details: error.details || {},
+        };
+        const failedReceipt = {
+          schema: ROUTE_VARIANT_PREFLIGHT_SCHEMA,
+          status: 'failed',
+          routeVariantIdentity: routeVariant.routeVariantIdentity,
+          routeVariant,
+          replayStateIdentity: replayState.replayStateIdentity,
+          replayState,
+          requestedRoute: route,
+          plan,
+          failure: sourceFailure,
+        };
+        if (continueOnFailure) {
+          receipts.push(failedReceipt);
+          preflightIndex += 1;
+          continue;
+        }
         const wrapped = new Error(`route variant preflight failed for ${routeVariant.routeVariantIdentity} / ${replayState.replayStateIdentity}: ${error.message}`);
         wrapped.code = error.code || 'route-variant-preflight-failed';
         wrapped.failurePhase = 'route-variant-preflight';
@@ -1220,12 +1257,7 @@ function runRouteVariantPreflights({ enabled, routeVariants, deterministicReplay
           requestedRoute: route,
           plan,
           partialReceipts: receipts,
-          sourceFailure: {
-            code: error.code || 'unknown',
-            failurePhase: error.failurePhase || 'unknown',
-            message: error.message,
-            details: error.details || {},
-          },
+          sourceFailure,
         };
         wrapped.partialReceipts = receipts;
         throw wrapped;
@@ -1236,8 +1268,10 @@ function runRouteVariantPreflights({ enabled, routeVariants, deterministicReplay
   return {
     schema: ROUTE_VARIANT_PREFLIGHT_SCHEMA,
     enabled: true,
-    status: 'passed',
+    continueOnFailure,
+    status: receipts.some((receipt) => receipt.status === 'failed') ? 'preflighted-with-failures' : 'passed',
     receipts,
+    viabilitySummary: summarizeRouteVariantPreflightViability(receipts),
     limitation: 'Preflight validates route/effective identity, field readback shape, occupancy, and visual witness viability before expensive field-tile export; it does not replace low/high capture validation.',
   };
 }
@@ -1284,7 +1318,9 @@ const fieldTileExport = args.has('--field-tile-export') ? {
 } : { enabled: false };
 const fieldTilePairingPolicy = resolveFieldTilePairingPolicy(args.get('--field-tile-pairing-policy'));
 const minCommonSpatialBinPairs = Math.max(0, Math.floor(Number(args.get('--field-tile-min-common-bin-pairs') || 0)));
-const routeVariantPreflightEnabled = args.has('--route-variant-preflight');
+const preflightOnly = args.has('--preflight-only');
+const routeVariantPreflightEnabled = args.has('--route-variant-preflight') || preflightOnly;
+const routeVariantPreflightContinueOnFailure = args.has('--route-variant-preflight-continue-on-failure');
 const captureRetries = Math.max(0, Math.min(5, Math.floor(Number(args.get('--capture-retries') || 0))));
 const captureRetryPolicy = {
   identity: 'capture-retry-same-witness-route-v0',
@@ -1355,7 +1391,7 @@ const pairs = routeVariants.flatMap((routeVariant, variantIndex) => deterministi
 
 const manifest = {
   schema: DATASET_SCHEMA,
-  status: dryRun ? 'dry-run' : 'running',
+  status: dryRun ? 'dry-run' : (preflightOnly ? 'preflighting' : 'running'),
   createdAt,
   updatedAt: createdAt,
   cwd,
@@ -1369,6 +1405,9 @@ const manifest = {
   outDir,
   manifestPath,
   dryRun,
+  preflightOnly,
+  trainable: !preflightOnly && !dryRun,
+  evidenceClass: preflightOnly ? 'not-trainable-preflight-classification' : 'trainable-field-pair-corpus',
   pairAuthority,
   fieldAuthority: FIELD_AUTHORITY,
   deterministicReplay,
@@ -1376,8 +1415,10 @@ const manifest = {
   routeVariantPreflight: {
     schema: ROUTE_VARIANT_PREFLIGHT_SCHEMA,
     enabled: routeVariantPreflightEnabled,
+    continueOnFailure: routeVariantPreflightContinueOnFailure,
     status: dryRun ? 'not-run-dry-run' : 'pending',
     receipts: [],
+    viabilitySummary: summarizeRouteVariantPreflightViability([]),
   },
   fieldTileExport,
   coverageExpansion: fieldTileExport.enabled ? {
@@ -1416,6 +1457,7 @@ if (!dryRun) {
   try {
     manifest.routeVariantPreflight = runRouteVariantPreflights({
       enabled: routeVariantPreflightEnabled,
+      continueOnFailure: routeVariantPreflightContinueOnFailure,
       routeVariants,
       deterministicReplayStates,
       lowGrids,
@@ -1429,6 +1471,25 @@ if (!dryRun) {
       cwd,
       captureRetryPolicy,
     });
+    if (!preflightOnly && manifest.routeVariantPreflight.viabilitySummary.failedCells > 0) {
+      manifest.failures.push({
+        code: 'route-variant-preflight-failed-cells',
+        failurePhase: 'route-variant-preflight',
+        message: 'route variant preflight found failed route/replay cells; rerun with --preflight-only to classify non-trainable viability or remove failed cells before capture',
+        details: {
+          viabilitySummary: manifest.routeVariantPreflight.viabilitySummary,
+          preflightOnly,
+        },
+      });
+      manifest.status = 'failed';
+    }
+    if (preflightOnly) {
+      manifest.status = manifest.routeVariantPreflight.viabilitySummary.failedCells > 0
+        ? 'preflighted-with-failures'
+        : 'preflighted';
+      manifest.trainable = false;
+      manifest.evidenceClass = 'not-trainable-preflight-classification';
+    }
     manifest.updatedAt = new Date().toISOString();
     writeJson(manifestPath, { dataset: manifest });
   } catch (error) {
@@ -1443,16 +1504,18 @@ if (!dryRun) {
     manifest.routeVariantPreflight = {
       schema: ROUTE_VARIANT_PREFLIGHT_SCHEMA,
       enabled: routeVariantPreflightEnabled,
+      continueOnFailure: routeVariantPreflightContinueOnFailure,
       status: 'failed',
       failure,
       receipts: Array.isArray(error.partialReceipts) ? error.partialReceipts : [],
+      viabilitySummary: summarizeRouteVariantPreflightViability(Array.isArray(error.partialReceipts) ? error.partialReceipts : []),
     };
     manifest.updatedAt = new Date().toISOString();
     writeJson(manifestPath, { dataset: manifest });
   }
 }
 
-if (!dryRun && !manifest.failures.length) {
+if (!dryRun && !preflightOnly && !manifest.failures.length) {
   for (const pair of manifest.pairs) {
     try {
       if (fieldTileExport.selectionPolicy === 'spatial-binned-occupied-fluid-front-tiles') {
