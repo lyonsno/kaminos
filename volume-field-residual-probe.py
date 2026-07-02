@@ -138,6 +138,11 @@ def parse_args() -> argparse.Namespace:
         help="Train on all other route variants and test on this routeVariantIdentity.",
     )
     parser.add_argument(
+        "--holdout-route-variant-list",
+        default=None,
+        help="Comma-separated routeVariantIdentity list to hold out as one route family.",
+    )
+    parser.add_argument(
         "--holdout-replay-state",
         default=None,
         help="Train on all other deterministic replay states and test on this replayStateIdentity.",
@@ -218,6 +223,7 @@ def base_report(args: argparse.Namespace) -> dict[str, Any]:
             "requireSameSpatialBin": not args.allow_different_spatial_bin,
             "maxNormalizedSeparation": args.max_normalized_separation,
             "holdoutRouteVariant": args.holdout_route_variant,
+            "holdoutRouteVariantList": args.holdout_route_variant_list,
             "holdoutReplayState": args.holdout_replay_state,
             "routeConditioning": args.route_conditioning,
         },
@@ -341,6 +347,20 @@ def replay_for_pair(pair: dict[str, Any]) -> dict[str, Any]:
     return high_replay if isinstance(high_replay, dict) else {}
 
 
+def parse_holdout_route_variant_list(raw_value: str | None) -> list[str]:
+    if not raw_value:
+        return []
+    seen: set[str] = set()
+    values: list[str] = []
+    for item in str(raw_value).split(","):
+        value = item.strip()
+        if not value or value in seen:
+            continue
+        seen.add(value)
+        values.append(value)
+    return values
+
+
 def route_conditioning_for_pair(pair: dict[str, Any], mode: str) -> dict[str, Any]:
     channels = route_conditioning_channels(mode)
     controls = effective_controls_for_pair(pair)
@@ -434,12 +454,45 @@ def candidate_matches(dataset: dict[str, Any], manifest_path: Path, args: argpar
 def split_matches(matches: list[dict[str, Any]], args: argparse.Namespace) -> tuple[list[int], list[int], dict[str, Any]]:
     if len(matches) < 2:
         raise ProbeFailure("split", "at least two usable tile pairs are required for a held-out split", {"usableTilePairs": len(matches)})
-    if args.holdout_route_variant and args.holdout_replay_state:
+    holdout_route_variants = parse_holdout_route_variant_list(args.holdout_route_variant_list)
+    requested_holdout_axes = sum(
+        1
+        for value in [args.holdout_route_variant, args.holdout_replay_state, holdout_route_variants]
+        if bool(value)
+    )
+    if requested_holdout_axes > 1:
         raise ProbeFailure(
             "split",
             "choose only one held-out axis per probe run",
-            {"holdoutRouteVariant": args.holdout_route_variant, "holdoutReplayState": args.holdout_replay_state},
+            {
+                "holdoutRouteVariant": args.holdout_route_variant,
+                "holdoutRouteVariantList": holdout_route_variants,
+                "holdoutReplayState": args.holdout_replay_state,
+            },
         )
+    if holdout_route_variants:
+        holdout = set(holdout_route_variants)
+        test = [index for index, match in enumerate(matches) if str(match.get("routeVariantIdentity")) in holdout]
+        train = [index for index, match in enumerate(matches) if str(match.get("routeVariantIdentity")) not in holdout]
+        if not train or not test:
+            raise ProbeFailure(
+                "split",
+                "route-variant-list holdout requires at least one train and one test tile pair",
+                {
+                    "holdoutRouteVariantList": holdout_route_variants,
+                    "usableTilePairs": len(matches),
+                    "availableRouteVariants": sorted({str(match.get("routeVariantIdentity")) for match in matches}),
+                    "trainTilePairs": len(train),
+                    "testTilePairs": len(test),
+                },
+            )
+        return train, test, {
+            "splitStrategy": "holdout-route-variant-list-v0",
+            "holdoutAxis": "routeVariantIdentity[]",
+            "holdoutValue": holdout_route_variants,
+            "trainFraction": None,
+            "seed": None,
+        }
     if args.holdout_route_variant:
         holdout = str(args.holdout_route_variant)
         test = [index for index, match in enumerate(matches) if match.get("routeVariantIdentity") == holdout]

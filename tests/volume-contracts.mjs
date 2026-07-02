@@ -1463,6 +1463,7 @@ assert.match(fieldResidualProbe, /--epochs/, 'field residual probe exposes nonli
 assert.match(fieldResidualProbe, /--learning-rate/, 'field residual probe exposes nonlinear learning rate as an explicit run control');
 assert.match(fieldResidualProbe, /linearContextComparison/, 'field residual probe compares nonlinear performance against the linear context model');
 assert.match(fieldResidualProbe, /--holdout-route-variant/, 'field residual probe can hold out a named route variant instead of only random tile pairs');
+assert.match(fieldResidualProbe, /--holdout-route-variant-list/, 'field residual probe can hold out a named family of route variants for stricter generalization probes');
 assert.match(fieldResidualProbe, /--holdout-replay-state/, 'field residual probe can hold out a named deterministic replay state instead of only random tile pairs');
 assert.match(fieldResidualProbe, /splitStrategy/, 'field residual probe reports whether the train/test split was random, route-held-out, or replay-held-out');
 assert.match(fieldResidualProbe, /--route-conditioning/, 'field residual probe can append route/replay conditioning features without changing model capacity');
