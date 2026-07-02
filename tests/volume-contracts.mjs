@@ -1470,3 +1470,6 @@ assert.match(fieldResidualProbe, /--route-conditioning/, 'field residual probe c
 assert.match(fieldResidualProbe, /route-controls-replay-v0/, 'field residual probe names the route-control plus replay conditioning identity');
 assert.match(fieldResidualProbe, /routeConditioningChannels/, 'field residual probe reports the route conditioning channel order');
 assert.match(fieldResidualProbe, /conditionedFeatureCount/, 'field residual probe reports the post-conditioning feature width separately from local context width');
+assert.match(fieldResidualProbe, /--target-channel-list/, 'field residual probe can train against an explicit decomposed target channel list');
+assert.match(fieldResidualProbe, /--target-channel-group/, 'field residual probe exposes named target channel groups for decomposition probes');
+assert.match(fieldResidualProbe, /targetChannelIndexes/, 'field residual probe reports selected target channel indexes');

@@ -89,6 +89,34 @@ REPLAY_CONDITIONING_CHANNELS = [
     "replayTimeStepMs",
     "replaySteps",
 ]
+FIELD_TILE_CHANNELS = [
+    "velocityX",
+    "velocityY",
+    "velocityZ",
+    "densityCarrier",
+    "smokeDensity",
+    "heat",
+    "fuel",
+    "detail",
+    "flame",
+    "ember",
+    "visibleFireCarrier",
+    "combustionFront",
+    "microdetail",
+    "interfaceShred",
+    "fireLick",
+    "emberFleck",
+    "frontTopology",
+]
+TARGET_CHANNEL_GROUPS = {
+    "all": FIELD_TILE_CHANNELS,
+    "motion": ["velocityX", "velocityY", "velocityZ"],
+    "smoke-density": ["densityCarrier", "smokeDensity"],
+    "thermal-fuel": ["heat", "fuel"],
+    "visible-fire": ["flame", "ember", "visibleFireCarrier", "combustionFront", "emberFleck"],
+    "micro-structure": ["detail", "microdetail", "interfaceShred", "fireLick", "frontTopology"],
+    "curl-interface": ["microdetail", "interfaceShred", "fireLick", "frontTopology"],
+}
 
 
 class ProbeFailure(RuntimeError):
@@ -152,6 +180,17 @@ def parse_args() -> argparse.Namespace:
         choices=[NO_ROUTE_CONDITIONING_IDENTITY, ROUTE_CONTROLS_CONDITIONING_IDENTITY, ROUTE_CONTROLS_REPLAY_CONDITIONING_IDENTITY],
         default=NO_ROUTE_CONDITIONING_IDENTITY,
         help="Append effective route-control and optional replay scalar features to spatial-context probe inputs.",
+    )
+    parser.add_argument(
+        "--target-channel-list",
+        default=None,
+        help="Comma-separated output channel names or indexes to train/evaluate while reading the full field input.",
+    )
+    parser.add_argument(
+        "--target-channel-group",
+        choices=sorted(TARGET_CHANNEL_GROUPS.keys()),
+        default="all",
+        help="Named target channel group for decomposition probes.",
     )
     return parser.parse_args()
 
@@ -226,6 +265,8 @@ def base_report(args: argparse.Namespace) -> dict[str, Any]:
             "holdoutRouteVariantList": args.holdout_route_variant_list,
             "holdoutReplayState": args.holdout_replay_state,
             "routeConditioning": args.route_conditioning,
+            "targetChannelList": args.target_channel_list,
+            "targetChannelGroup": args.target_channel_group,
         },
         "route": {
             "cwd": str(Path.cwd()),
@@ -348,6 +389,10 @@ def replay_for_pair(pair: dict[str, Any]) -> dict[str, Any]:
 
 
 def parse_holdout_route_variant_list(raw_value: str | None) -> list[str]:
+    return parse_csv_unique(raw_value)
+
+
+def parse_csv_unique(raw_value: str | None) -> list[str]:
     if not raw_value:
         return []
     seen: set[str] = set()
@@ -359,6 +404,90 @@ def parse_holdout_route_variant_list(raw_value: str | None) -> list[str]:
         seen.add(value)
         values.append(value)
     return values
+
+
+def infer_field_tile_channels(dataset: dict[str, Any], expected_count: int) -> list[str]:
+    channel_orders: list[list[str]] = []
+    for pair in dataset.get("pairs") or []:
+        for role in ["low", "high"]:
+            export = pair.get(role, {}).get("effective", {}).get("fieldTileExport")
+            channels = export.get("channels") if isinstance(export, dict) else None
+            if isinstance(channels, list) and channels:
+                channel_orders.append([str(channel) for channel in channels])
+    if channel_orders:
+        first = channel_orders[0]
+        for channels in channel_orders[1:]:
+            if channels != first:
+                raise ProbeFailure(
+                    "channel-identity",
+                    "field tile channel order changed across low/high exports",
+                    {"firstChannels": first, "mismatchedChannels": channels},
+                )
+        if len(first) != expected_count:
+            raise ProbeFailure(
+                "channel-identity",
+                "field tile channel count does not match tile payload width",
+                {"channels": first, "expectedCount": expected_count},
+            )
+        return first
+    if len(FIELD_TILE_CHANNELS) == expected_count:
+        return list(FIELD_TILE_CHANNELS)
+    return [f"channel-{index}" for index in range(expected_count)]
+
+
+def resolve_target_channels(args: argparse.Namespace, channel_names: list[str]) -> dict[str, Any]:
+    explicit = parse_csv_unique(args.target_channel_list)
+    group = str(args.target_channel_group or "all")
+    if explicit and group != "all":
+        raise ProbeFailure(
+            "target-channel-config",
+            "choose either --target-channel-list or a non-all --target-channel-group, not both",
+            {"targetChannelList": explicit, "targetChannelGroup": group},
+        )
+    requested = explicit if explicit else TARGET_CHANNEL_GROUPS.get(group, TARGET_CHANNEL_GROUPS["all"])
+    indexes: list[int] = []
+    selected: list[str] = []
+    for raw in requested:
+        token = str(raw).strip()
+        if not token:
+            continue
+        if token.isdigit():
+            index = int(token)
+            if index < 0 or index >= len(channel_names):
+                raise ProbeFailure(
+                    "target-channel-config",
+                    "target channel index is out of range",
+                    {"targetChannel": token, "availableChannels": channel_names},
+                )
+            name = channel_names[index]
+        else:
+            if token not in channel_names:
+                raise ProbeFailure(
+                    "target-channel-config",
+                    "target channel name is not present in field tile channels",
+                    {"targetChannel": token, "availableChannels": channel_names},
+                )
+            index = channel_names.index(token)
+            name = token
+        if index not in indexes:
+            indexes.append(index)
+            selected.append(name)
+    if not indexes:
+        raise ProbeFailure("target-channel-config", "at least one target channel is required", {"availableChannels": channel_names})
+    return {
+        "identity": "explicit-target-channel-list-v0" if explicit else f"target-channel-group-{group}-v0",
+        "targetChannelGroup": group if not explicit else None,
+        "sourceChannels": channel_names,
+        "targetChannelIndexes": indexes,
+        "targetChannels": selected,
+        "inputChannelCount": len(channel_names),
+        "targetChannelCount": len(indexes),
+        "selectionAuthority": "model-output-target-selection-only-full-field-input-preserved",
+    }
+
+
+def select_channels(values: np.ndarray, indexes: list[int]) -> np.ndarray:
+    return values[:, indexes].astype(np.float64)
 
 
 def route_conditioning_for_pair(pair: dict[str, Any], mode: str) -> dict[str, Any]:
@@ -923,11 +1052,18 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     test_high = flatten_tiles(test_high_tiles)
     if train_low.shape[1] != test_low.shape[1]:
         raise ProbeFailure("tile-read", "train/test channel counts differ", {"trainChannels": train_low.shape[1], "testChannels": test_low.shape[1]})
-    affine_scales, affine_biases = fit_affine_ridge(train_low, train_high, args.ridge)
-    train_affine_prediction = predict(train_low, affine_scales, affine_biases)
-    test_affine_prediction = predict(test_low, affine_scales, affine_biases)
-    mean_high = np.mean(train_high.astype(np.float64), axis=0)
-    mean_residual = np.mean(train_high.astype(np.float64) - train_low.astype(np.float64), axis=0)
+    channel_names = infer_field_tile_channels(dataset, train_low.shape[1])
+    target_channels = resolve_target_channels(args, channel_names)
+    target_indexes = [int(index) for index in target_channels["targetChannelIndexes"]]
+    train_low_target = select_channels(train_low, target_indexes)
+    train_high_target = select_channels(train_high, target_indexes)
+    test_low_target = select_channels(test_low, target_indexes)
+    test_high_target = select_channels(test_high, target_indexes)
+    affine_scales, affine_biases = fit_affine_ridge(train_low_target, train_high_target, args.ridge)
+    train_affine_prediction = predict(train_low_target, affine_scales, affine_biases)
+    test_affine_prediction = predict(test_low_target, affine_scales, affine_biases)
+    mean_high = np.mean(train_high_target.astype(np.float64), axis=0)
+    mean_residual = np.mean(train_high_target.astype(np.float64) - train_low_target.astype(np.float64), axis=0)
     model = model_identity(args)
     context_radius_value = max(0, int(args.context_radius))
     context = None
@@ -940,7 +1076,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             "identity": model,
             "backend": BACKEND,
             "ridge": args.ridge,
-            "trainableParameters": int(train_low.shape[1] * 2),
+            "trainableParameters": int(train_low_target.shape[1] * 2),
+            "targetChannels": target_channels,
             "scale": affine_scales,
             "bias": affine_biases,
             "meanHigh": mean_high,
@@ -953,7 +1090,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         test_route_conditioning = route_conditioning_feature_matrix(usable_matches, test_indexes, test_low_tiles)
         train_features = append_route_conditioning(train_local_features, train_route_conditioning)
         test_features = append_route_conditioning(test_local_features, test_route_conditioning)
-        weights, bias = fit_linear_ridge(train_features, train_high, args.ridge)
+        weights, bias = fit_linear_ridge(train_features, train_high_target, args.ridge)
         train_linear_context_prediction = predict_linear(train_features, weights, bias)
         test_linear_context_prediction = predict_linear(test_features, weights, bias)
         context = {
@@ -979,6 +1116,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                 "ridge": args.ridge,
                 "trainableParameters": int(weights.size + bias.size),
                 "context": context,
+                "targetChannels": target_channels,
                 "weightsShape": list(weights.shape),
                 "biasShape": list(bias.shape),
                 "weights": weights,
@@ -992,12 +1130,13 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                 "meanResidual": mean_residual,
             }
         else:
-            mlp = train_mlp_residual(train_features, train_low, train_high, test_features, test_low, args)
+            mlp = train_mlp_residual(train_features, train_low_target, train_high_target, test_features, test_low_target, args)
             model_prediction_train = mlp["trainPrediction"]
             model_prediction_test = mlp["testPrediction"]
             model_payload = mlp["payload"]
             model_payload.update({
                 "context": context,
+                "targetChannels": target_channels,
                 "linearContextBaseline": {
                     "identity": SPATIAL_CONTEXT_MODEL_IDENTITY,
                     "ridge": args.ridge,
@@ -1043,6 +1182,11 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             "discarded": discarded_matches,
             "tileShape": usable_matches[0]["shape"] if usable_matches else None,
             "channels": int(train_low.shape[1]),
+            "inputChannels": channel_names,
+            "inputChannelCount": int(train_low.shape[1]),
+            "targetChannels": target_channels["targetChannels"],
+            "targetChannelIndexes": target_channels["targetChannelIndexes"],
+            "targetChannelCount": target_channels["targetChannelCount"],
             "trainTilePairCount": len(train_indexes),
             "testTilePairCount": len(test_indexes),
             "trainSamples": int(train_low.shape[0]),
@@ -1054,8 +1198,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "metrics": {
             "train": split_report(
                 "train",
-                train_low,
-                train_high,
+                train_low_target,
+                train_high_target,
                 model_prediction_train,
                 mean_high,
                 mean_residual,
@@ -1068,8 +1212,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             ),
             "test": split_report(
                 "test",
-                test_low,
-                test_high,
+                test_low_target,
+                test_high_target,
                 model_prediction_test,
                 mean_high,
                 mean_residual,
