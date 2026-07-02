@@ -442,10 +442,14 @@ assert.match(index, /id="volume-flow-rate"/, 'Volume tab exposes an input flow-r
 assert.match(index, /id="volume-scene"/, 'Volume tab exposes an explicit volume scene selector');
 assert.match(index, /canonical_plume/, 'Volume tab exposes a minimal canonical plume proof scene');
 assert.match(index, /tall_plume/, 'Volume tab exposes a tall plume scale-test scene');
+assert.match(index, /preheat_plume/, 'Volume tab exposes a clean preheat plume scene distinct from bonfire');
 assert.match(index, /TALL_PLUME_OPERATOR_PRESETS/, 'tall plume operator-found regimes have stable named route presets');
 assert.match(index, /operator_fire_0622/, 'tall plume preserves the 2026-06-22 operator-found fire/smoke wind foothold by stable route identity');
 assert.match(index, /operator_fire_0622[\s\S]*temporalAccum:\s*0\.00/, 'operator fire foothold disables temporal accumulation while structured artifacts are under diagnosis');
 assert.match(index, /operator_fire_0622[\s\S]*detailScale:\s*1\.00/, 'operator fire foothold parks detail scale at a neutral value while legacy detail overlay is quarantined');
+assert.match(index, /preheat_plume[\s\S]*detailScale:\s*1\.00/, 'preheat plume parks detail scale at the quarantined neutral value for visual search');
+assert.match(index, /preheat_plume[\s\S]*renderScale:\s*0\.95/, 'preheat plume uses high enough render scale for visual judgment instead of scaffold-quality smoke');
+assert.match(index, /preheat_plume[\s\S]*raySteps:\s*128/, 'preheat plume uses enough ray steps for visual judgment instead of scaffold-quality smoke');
 assert.match(index, /volume_tall_preset/, 'URL route can select a named tall-plume operator preset');
 assert.match(index, /applyTallPlumeOperatorPreset/, 'tall-plume operator preset application is a named control path before wind route overrides');
 assert.match(index, /function isKaminosVolumeSmokeRoute/, 'volume smoke routes have a named isolation predicate for optional app-surface startup');
@@ -736,6 +740,8 @@ assert.match(core, /interfaceShreddingForce/, 'fluid compute shader shreds smoke
 assert.match(core, /fireLickBreakup/, 'fluid compute shader creates short-lived fire lick breakup from heat/fire fields');
 assert.match(core, /detailScaleArtifactQuarantine/, 'tall-plume fire foothold names the legacy detail-scale artifact quarantine');
 assert.match(core, /visibleDetailOverlayGain/, 'tall-plume fire foothold exposes a physical-detail overlay gain instead of letting detail scale imply realism');
+assert.match(core, /scene === 'tall_plume' \|\| scene === 'preheat_plume'/, 'preheat plume inherits the tall-plume detail-scale artifact quarantine');
+assert.match(core, /if \(scene === 'preheat_plume'\) return 1;/, 'preheat plume routes through tall-plume scene mode instead of bonfire mode');
 assert.doesNotMatch(core, /rawDetailForce = turbulentDetailForce\(p \* \(0\.82 \+ detailScale \* 0\.30\)/, 'legacy detail scale must not directly inject a source/smoke/heat turbulent force into the tall-plume foothold');
 assert.match(core, /transportedDetailPhaseAnchor/, 'tall-plume detail recovery names a transported phase anchor instead of restoring louder procedural detail');
 assert.match(core, /let\s+tallPlumeDetailPhaseAnchor\s*=\s*transportedDetailPhaseAnchor\(/, 'main fluid shader derives tall-plume detail phase from transported plume state');
@@ -1023,6 +1029,8 @@ assert.match(core, /quenchCoreCollapse/, 'render path computes a high-temperatur
 assert.match(core, /preheatStrength/, 'debug state reports cheap preheat lifecycle strength');
 assert.match(core, /preheatVisualModel/, 'debug state names the active preheat lifecycle visual model');
 assert.match(core, /preheat-ember-rim-v0/, 'preheat lifecycle visual has a stable ember-rim identity');
+assert.match(core, /preheatVisibleHazeFloor/, 'preheat lifecycle owns a named visible haze floor instead of relying on weak residual fire fields');
+assert.match(core, /preheatVisibleHazeAlpha/, 'preheat lifecycle contributes explicit visible alpha for operator/witness smoke');
 assert.match(core, /lifecycle_controls/, 'shader uniforms carry lifecycle mode separately from quench strength');
 assert.match(core, /normalizeRuntimeQuality/, 'volume core normalizes host-requested runtime quality');
 assert.match(core, /runtimeQualityRequested/, 'debug state records requested runtime quality separately from effective mode');
@@ -1464,6 +1472,9 @@ assert.match(witness, /expectedPrimitiveFixture/, 'witness derives expected volu
 assert.match(witness, /expectedVolumeSceneContext/, 'witness derives expected volume scene context identity from the route');
 assert.match(witness, /__kaminosVolumeSceneContext/, 'witness reads the live volume scene-context debug surface');
 assert.match(witness, /backdropMidtonePixels/, 'witness records a screenshot metric that can catch missing scene-context backdrop pixels');
+assert.match(index, /volume-scene-context-active #kaminos-volume-canvas\.active[\s\S]*mix-blend-mode:\s*screen/, 'scene-context routes screen-blend the direct black volume canvas so warm volume can composite over backdrop geometry');
+assert.match(index, /viewport\.classList\.toggle\('volume-scene-context-active'/, 'scene-context visibility toggles a viewport class used by the composition path');
+assert.match(index, /sceneContextActive[\s\S]*mesh\.visible\s*=\s*active && !sceneContextActive/, 'scene-context composition bypasses the fragile Three CanvasTexture bridge and lets the native WebGPU canvas screen-blend directly');
 assert.match(witness, /volumePrimitiveCount/, 'witness requires effective volume primitive consumption');
 assert.match(witness, /volumePrimitiveIds/, 'witness records stable primitive ids');
 assert.match(witness, /volumePrimitives/, 'witness report carries primitive records');
