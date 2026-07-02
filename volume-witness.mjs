@@ -1068,7 +1068,7 @@ async function main() {
     }
     phase = 'identity';
     let state = null;
-    for (let i = 0; i < 40; i++) {
+    for (let i = 0; i < 80; i++) {
       const stateEval = await wsRequest(ws, 'Runtime.evaluate', {
         expression: 'window.__kaminosVolumePrototype?.debugState?.()',
         returnByValue: true,
@@ -1088,7 +1088,10 @@ async function main() {
     const bridge = bridgeEval.result.value;
     assert.equal(bridge?.identity, 'volume-main-renderer-bridge-v0', 'wrong volume main-renderer bridge identity');
     assert.equal(bridge?.textureSource, 'kaminos-volume-canvas', 'volume bridge is not sourcing the native volume canvas');
-    assert.ok(state.frameCount > 5, 'volume route did not render enough frames');
+    assert.ok(
+      state.frameCount > 5,
+      `volume route did not render enough frames (${state.frameCount || 0} frames at ${state.displayWidth || 0}x${state.displayHeight || 0})`,
+    );
     assert.equal(state.volumeScene, expectedVolumeScene, 'volume scene route/control did not apply');
     assert.equal(state.controls?.volumeScene, expectedVolumeScene, 'volume scene debug controls did not preserve route identity');
     assert.equal(state.simGrid, expectedGrid, `fluid sim is not running on the expected ${expectedGrid}^3 grid`);

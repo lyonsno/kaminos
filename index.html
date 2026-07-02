@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" href="data:,">
 <title>Kaminos</title>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -1431,9 +1432,9 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
     <iframe
       id="finger-juice-viewport-frame"
       title="LERMS Finger Juice Primitive"
-      src="lerms-finger-juice.html?lerms_world_finger_juice=1"
+      data-src="lerms-finger-juice.html?lerms_world_finger_juice=1"
       allow="fullscreen"
-      loading="eager"
+      loading="lazy"
     ></iframe>
   </div>
   <div id="splat-correction-mode-badge" hidden>
@@ -1953,6 +1954,10 @@ async function initializeHybridSplatOverlayModuleUrl() {
   const queryUrl = hybridSplatOverlayModuleUrlFromSearch();
   if (queryUrl) {
     setHybridSplatOverlayModuleUrl(queryUrl, { persist: false });
+    return hybridSplatOverlayModuleUrl();
+  }
+  if (isKaminosVolumeSmokeRoute()) {
+    setHybridSplatOverlayModuleUrl(hybridSplatOverlayModuleUrl(), { persist: false });
     return hybridSplatOverlayModuleUrl();
   }
   try {
@@ -7601,6 +7606,7 @@ async function initScene() {
   function animate() {
     requestAnimationFrame(animate);
     controls.update();
+    const volumeSmokeRouteActive = isKaminosVolumeSmokeRoute();
     updateHybridSplatOverlayFrame();
     const motionAgencyActive = updateMotionAgencyFrame(performance.now() / 1000);
     const motionDecisionActive = updateMotionDecisionFrame(performance.now() / 1000);
@@ -7610,8 +7616,9 @@ async function initScene() {
     const motionTemporalActive = updateGeneratedPoseTemporalFrame(performance.now() / 1000);
     const forgeHostActive = updateForgeHostStationFrame(performance.now() / 1000);
     const volumeBridgeActive = volumeBridge ? volumeBridge.update() === true : false;
+    const mainRendererNeeded = !volumeSmokeRouteActive || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || motionOutputMapActive || motionTemporalActive || forgeHostActive;
 
-    if (needsRender || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || motionOutputMapActive || motionTemporalActive || forgeHostActive || volumeBridgeActive || idleFrames < IDLE_THRESHOLD) {
+    if (mainRendererNeeded && (needsRender || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || motionOutputMapActive || motionTemporalActive || forgeHostActive || volumeBridgeActive || idleFrames < IDLE_THRESHOLD)) {
       const t0 = performance.now();
 
       renderPipeline.render();
@@ -8090,6 +8097,16 @@ function setInfo(msg) {
   window._kaminosDirty?.();
 }
 
+function isKaminosVolumeSmokeRoute(params = new URLSearchParams(window.location.search)) {
+  return params.get('kaminos_volume_smoke') === '1';
+}
+
+function ensureFingerJuiceTabFrameLoaded() {
+  const fingerJuiceFrame = document.getElementById('finger-juice-viewport-frame');
+  if (!fingerJuiceFrame || fingerJuiceFrame.src) return;
+  fingerJuiceFrame.src = fingerJuiceFrame.dataset.src || FINGER_JUICE_STANDALONE_ROUTE;
+}
+
 function setActiveTab(tabName) {
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tabName));
   document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id === `tab-${tabName}`));
@@ -8101,6 +8118,7 @@ function setActiveTab(tabName) {
   const fingerJuicePanel = document.getElementById('finger-juice-operator-panel');
   if (fingerJuicePanel) {
     fingerJuicePanel.hidden = tabName !== 'finger-juice';
+    if (tabName === 'finger-juice') ensureFingerJuiceTabFrameLoaded();
   }
 }
 
@@ -8522,6 +8540,7 @@ function updateFingerJuiceTabReadout() {
 
 function reloadFingerJuiceTabFrame() {
   const fingerJuiceFrame = document.getElementById('finger-juice-viewport-frame');
+  fingerJuiceFrame.dataset.src = FINGER_JUICE_STANDALONE_ROUTE;
   fingerJuiceFrame.src = FINGER_JUICE_STANDALONE_ROUTE;
   setInfo('Finger Juice primitive reloaded');
 }
@@ -8904,6 +8923,7 @@ function initKaminosFingerJuiceTabRoute() {
   window.__kaminosFingerJuiceTabDebugState = kaminosFingerJuiceTabDebugState;
   setInterval(updateFingerJuiceTabReadout, 500);
   if (new URLSearchParams(window.location.search).get('kaminos_lerms_finger_juice') === '1') {
+    ensureFingerJuiceTabFrameLoaded();
     setActiveTab('finger-juice');
     setInfo('Finger Juice primitive - source-honest LERMS WebGPU smoke');
   }
@@ -12561,6 +12581,13 @@ async function grInit() {
   }
   // Default: show done
   grCurrentPath = 'done';
+  if (isKaminosVolumeSmokeRoute()) {
+    document.getElementById('splat-assets-list').innerHTML = '<div style="font-size:11px; color:#444; padding:8px;">Volume smoke route: asset browser deferred.</div>';
+    document.getElementById('greenroom-list').innerHTML = '<div style="font-size:11px; color:#444; padding:12px;">Volume smoke route: Greenroom browse deferred.</div>';
+    document.getElementById('scenes-list').innerHTML = '<div style="font-size:10px; color:#444; padding:8px;">Volume smoke route: scene browse deferred.</div>';
+    document.getElementById('scratch-list').innerHTML = '<div style="font-size:10px; color:#444; padding:8px;">Volume smoke route: scratch browse deferred.</div>';
+    return;
+  }
   grBrowseSplatAssets();
   grBrowse();
   grBrowseScenes();

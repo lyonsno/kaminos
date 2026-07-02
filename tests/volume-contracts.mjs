@@ -240,6 +240,12 @@ assert.match(index, /operator_fire_0622[\s\S]*temporalAccum:\s*0\.00/, 'operator
 assert.match(index, /operator_fire_0622[\s\S]*detailScale:\s*1\.00/, 'operator fire foothold parks detail scale at a neutral value while legacy detail overlay is quarantined');
 assert.match(index, /volume_tall_preset/, 'URL route can select a named tall-plume operator preset');
 assert.match(index, /applyTallPlumeOperatorPreset/, 'tall-plume operator preset application is a named control path before wind route overrides');
+assert.match(index, /function isKaminosVolumeSmokeRoute/, 'volume smoke routes have a named isolation predicate for optional app-surface startup');
+assert.match(index, /<link rel="icon" href="data:,">/, 'static volume smoke routes do not emit a favicon 404 before visual evidence');
+assert.match(index, /isKaminosVolumeSmokeRoute\(\)[\s\S]*\/api\/runtime-config/, 'volume smoke routes skip optional runtime-config fetches on static smoke servers');
+assert.match(index, /id="finger-juice-viewport-frame"[\s\S]*data-src="lerms-finger-juice\.html\?lerms_world_finger_juice=1"[\s\S]*loading="lazy"/, 'volume smoke startup does not eager-load the hidden Finger Juice child route');
+assert.match(index, /if \(isKaminosVolumeSmokeRoute\(\)\)[\s\S]*asset browser deferred[\s\S]*Greenroom browse deferred/, 'volume smoke startup defers optional Greenroom/API browser fetches');
+assert.match(index, /mainRendererNeeded = !volumeSmokeRouteActive/, 'volume smoke routes skip idle main-renderer draws while native volume canvas owns the viewport');
 assert.match(index, /volume_reaction_fuel/, 'URL route can starve tall-plume reaction fuel without rewriting visual controls');
 assert.match(index, /routedVolumeReactionFuelScale/, 'route-only reaction fuel scale is preserved outside the visible cockpit sliders');
 assert.match(index, /reactionFuelScale/, 'Volume controls carry tall-plume reaction fuel scale into renderer debug state');
@@ -1400,6 +1406,8 @@ assert.match(witness, /expectsBonfireConvectionProof/, 'witness has a simulation
 assert.match(witness, /bonfire plume lacked local zero-mean convection/, 'witness fails centered-but-dead bonfire columns instead of using visuals as proof');
 assert.match(witness, /captureViewportScreenshot/, 'witness can preserve a large viewport screenshot when thumbnail readback hides striping artifacts');
 assert.match(witness, /fullScreenshot/, 'witness report names the full-size screenshot artifact when captured');
+assert.match(witness, /for \(let i = 0; i < 80; i\+\+\)/, 'witness waits through first-frame WebGPU warmup before declaring a volume route dead');
+assert.match(witness, /volume route did not render enough frames \(\$\{state\.frameCount/, 'witness failure reports observed frame and viewport counts instead of a bare timeout');
 assert.match(witness, /curlMean/, 'witness requires curl diagnostic evidence');
 assert.match(witness, /divergenceMean/, 'witness requires divergence diagnostic evidence');
 assert.match(witness, /gridOverlay/, 'witness records grid overlay/debug state');
