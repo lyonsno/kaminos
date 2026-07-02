@@ -1563,6 +1563,106 @@ assert.match(interframeSequenceWitness, /paintCropPanel/, 'interframe cadence ab
 assert.match(interframeSequenceWitness, /data-frame-scrubber/, 'interframe cadence ablation playback exposes a frame scrubber for controlled motion inspection');
 assert.doesNotMatch(interframeSequenceWitness, /id="candidate-grid"/, 'interframe cadence ablation playback must not render an all-candidate animated grid');
 
+const interframeGapRiskReportPath = join(root, 'volume-interframe-gap-risk-report.mjs');
+assert.ok(existsSync(interframeGapRiskReportPath), 'volume interframe gap-risk report generator exists');
+const interframeGapRiskReport = existsSync(interframeGapRiskReportPath) ? readFileSync(interframeGapRiskReportPath, 'utf8') : '';
+assert.match(interframeGapRiskReport, /kaminos\.volume\.interframe-gap-risk-report\.v0/, 'interframe gap-risk report writes a stable schema identity');
+assert.match(interframeGapRiskReport, /kaminos\.volume\.interframe-sequence-witness\.v0/, 'interframe gap-risk report only consumes exact-truth interframe sequence reports');
+assert.match(interframeGapRiskReport, /--source-report/, 'interframe gap-risk report takes source reports from the caller');
+assert.match(interframeGapRiskReport, /--operator-smoke-file/, 'interframe gap-risk report can ingest operator visual smoke tags');
+assert.match(interframeGapRiskReport, /--require-operator-smoke/, 'interframe gap-risk report can fail loud when operator tags are required but missing');
+assert.match(interframeGapRiskReport, /full-rate-live-sim-truth/, 'interframe gap-risk report preserves exact full-rate simulator truth authority');
+assert.match(interframeGapRiskReport, /synthetic-comparison-not-live-simulator-output/, 'interframe gap-risk report preserves synthetic comparison authority');
+assert.match(interframeGapRiskReport, /actualMiddleUsed/, 'interframe gap-risk report checks actual-middle input/use authority');
+assert.match(interframeGapRiskReport, /sequenceAuthority/, 'interframe gap-risk report records effective sequence authority');
+assert.match(interframeGapRiskReport, /effectiveRoute/, 'interframe gap-risk report records effective route identity');
+assert.match(interframeGapRiskReport, /failurePhase/, 'interframe gap-risk report writes phase-tagged failure reports');
+assert.match(interframeGapRiskReport, /operator-smoke-missing/, 'interframe gap-risk report names missing operator smoke as a loud failure');
+assert.match(interframeGapRiskReport, /synthetic-fill-forbidden-here/, 'interframe gap-risk report can veto synthetic fill for visually failed routes');
+
+const interframeGapRiskFixtureDir = mkdtempSync(join(tmpdir(), 'kaminos-interframe-gap-risk-contract-'));
+const interframeGapRiskSourcePath = join(interframeGapRiskFixtureDir, 'interframe-sequence-report.json');
+const interframeGapRiskSmokePath = join(interframeGapRiskFixtureDir, 'operator-smoke.json');
+const interframeGapRiskOutPath = join(interframeGapRiskFixtureDir, 'gap-risk-report.json');
+writeFileSync(interframeGapRiskSourcePath, `${JSON.stringify({
+  schema: 'kaminos.volume.interframe-sequence-witness.v0',
+  status: 'completed',
+  sequenceAuthority: 'full-rate-live-sim-truth',
+  syntheticAuthority: 'synthetic-comparison-not-live-simulator-output',
+  requestedRoute: 'contract-requested-route',
+  reportPath: interframeGapRiskSourcePath,
+  totalFrameCount: 5,
+  cadence: 2,
+  realFrameCount: 5,
+  anchorFrameCount: 3,
+  sequence: {
+    authority: 'full-rate-live-sim-truth',
+    effectiveRoute: 'contract-effective-route',
+    backend: 'contract-backend',
+    totalFrameCount: 5,
+    cadence: 2,
+    frameStep: 1,
+    frames: [{ frameCount: 0 }, { frameCount: 1 }, { frameCount: 2 }, { frameCount: 3 }, { frameCount: 4 }],
+  },
+  candidates: [{
+    id: 'contract-rife',
+    sourceKind: 'external-command',
+    syntheticAuthority: 'synthetic-comparison-not-live-simulator-output',
+    actualMiddleUsed: false,
+    summaryMetrics: {
+      comparedFrameCount: 2,
+      meanAbsoluteError: 0.5,
+      rootMeanSquaredError: 2.0,
+      maxChannelError: 60,
+      highErrorPixelRatio: 0.02,
+      fireRegionMeanAbsoluteError: 21,
+      smokeRegionMeanAbsoluteError: 8,
+    },
+    failureModes: ['topology-lie', 'broad-smoke-mush'],
+    failures: [],
+    syntheticCadenceFrames: [{ sequenceIndex: 1 }, { sequenceIndex: 3 }],
+  }],
+}, null, 2)}\n`);
+writeFileSync(interframeGapRiskSmokePath, `${JSON.stringify({
+  schema: 'kaminos.volume.interframe-gap-risk-operator-smoke.v0',
+  observations: [{
+    sourceReport: interframeGapRiskSourcePath,
+    verdict: 'fail-hard',
+    riskTags: ['topology-lie', 'broad-smoke-mush'],
+    note: 'contract operator tag: false topology and smoke mush',
+  }],
+}, null, 2)}\n`);
+execFileSync(process.execPath, [
+  interframeGapRiskReportPath,
+  '--source-report',
+  interframeGapRiskSourcePath,
+  '--operator-smoke-file',
+  interframeGapRiskSmokePath,
+  '--require-operator-smoke',
+  '--report',
+  interframeGapRiskOutPath,
+], { stdio: 'pipe' });
+const interframeGapRiskPayload = JSON.parse(readFileSync(interframeGapRiskOutPath, 'utf8'));
+assert.equal(interframeGapRiskPayload.status, 'completed', 'interframe gap-risk report completes with exact truth and required operator smoke');
+assert.equal(interframeGapRiskPayload.sourceReports[0].sequenceAuthority, 'full-rate-live-sim-truth', 'interframe gap-risk report preserves source truth authority');
+assert.equal(interframeGapRiskPayload.sourceReports[0].effectiveRoute, 'contract-effective-route', 'interframe gap-risk report preserves effective route identity');
+assert.equal(interframeGapRiskPayload.sourceReports[0].operatorSmoke.verdict, 'fail-hard', 'interframe gap-risk report preserves operator smoke verdict');
+assert.equal(interframeGapRiskPayload.candidateRisks[0].actualMiddleUsed, false, 'interframe gap-risk report preserves candidate actual-middle authority');
+assert.equal(interframeGapRiskPayload.candidateRisks[0].verdict, 'synthetic-fill-forbidden-here', 'interframe gap-risk report vetoes visually failed synthetic fill');
+
+const interframeGapRiskMissingSmokeOutPath = join(interframeGapRiskFixtureDir, 'gap-risk-missing-smoke-report.json');
+assert.throws(() => execFileSync(process.execPath, [
+  interframeGapRiskReportPath,
+  '--source-report',
+  interframeGapRiskSourcePath,
+  '--require-operator-smoke',
+  '--report',
+  interframeGapRiskMissingSmokeOutPath,
+], { stdio: 'pipe' }), /operator-smoke-missing/, 'interframe gap-risk report fails loud when required operator smoke is absent');
+const interframeGapRiskFailurePayload = JSON.parse(readFileSync(interframeGapRiskMissingSmokeOutPath, 'utf8'));
+assert.equal(interframeGapRiskFailurePayload.status, 'failed', 'interframe gap-risk report writes a durable failure report');
+assert.equal(interframeGapRiskFailurePayload.failurePhase, 'validate-source-reports', 'interframe gap-risk report records the failed phase');
+
 const cadenceGapInterframeWitnessPath = join(root, 'volume-cadence-gap-interframe-witness.mjs');
 assert.ok(existsSync(cadenceGapInterframeWitnessPath), 'volume cadence-gap interframe witness generator exists');
 const cadenceGapInterframeWitness = existsSync(cadenceGapInterframeWitnessPath) ? readFileSync(cadenceGapInterframeWitnessPath, 'utf8') : '';
