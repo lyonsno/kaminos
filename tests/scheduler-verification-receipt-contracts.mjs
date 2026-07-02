@@ -169,6 +169,38 @@ assert.equal(mismatchedBoundaryAssertion.status, 'scheduler-unverified', 'caller
 assert.ok(mismatchedBoundaryAssertion.downgrades.includes('boundary-assertion-event-mismatch'));
 assert.equal(mismatchedBoundaryAssertion.falseAuthorityChecks.boundaryAssertionEventMismatch, true);
 
+const conflictingObservedBoundaryAssertion = baseReceipt({
+  eventTrace: {
+    schema: 'kaminos.webgpu-scheduler-event-trace.v0',
+    clock: 'performance.now',
+    timingAuthority: 'browser-wall-clock',
+    events: [
+      { tMs: 1, phase: 'heartbeat', boundary: 'unrelated-heartbeat', kind: 'heartbeat', source: 'mock' },
+      { tMs: 2, phase: 'queue', boundary: 'unrelated-queue', kind: 'queue-work-done-start', source: 'mock' },
+      { tMs: 3, phase: 'queue', boundary: 'unrelated-queue', kind: 'queue-work-done-end', queueDoneMs: 1, source: 'mock' },
+      { tMs: 4, phase: 'yield', boundary: 'unrelated-yield', kind: 'js-yield-start', source: 'mock' },
+      { tMs: 6, phase: 'yield', boundary: 'unrelated-yield', kind: 'js-yield-end', yieldMs: 2, source: 'mock' },
+    ],
+  },
+  boundaryAssertions: [
+    {
+      field: 'phaseChunkSize.spnPatch',
+      requested: 1,
+      effective: 1,
+      status: 'verified',
+      observedBoundary: 'unrelated-heartbeat',
+      observedCount: 1,
+      expectedMinimumCount: 1,
+      observedQueueWaitCount: 1,
+      observedYieldCount: 1,
+      unsupportedReason: null,
+    },
+  ],
+});
+assert.equal(conflictingObservedBoundaryAssertion.status, 'scheduler-unverified', 'recognized scheduler fields must derive their required boundary from field, not caller-supplied observedBoundary');
+assert.ok(conflictingObservedBoundaryAssertion.downgrades.includes('boundary-assertion-event-mismatch'));
+assert.equal(conflictingObservedBoundaryAssertion.falseAuthorityChecks.boundaryAssertionEventMismatch, true);
+
 const proxyOnly = baseReceipt({
   eventTrace: {
     schema: 'kaminos.webgpu-scheduler-event-trace.v0',
