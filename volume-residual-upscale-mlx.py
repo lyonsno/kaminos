@@ -75,6 +75,7 @@ def parse_args():
     parser.add_argument("--temporal-eval-scope", dest="temporalEvalScope", choices=["selected", "train", "eval"], default="selected")
     parser.add_argument("--temporal-crop-size", dest="temporalCropSize", type=int, default=None)
     parser.add_argument("--temporal-loss-weight", dest="temporalLossWeight", type=float, default=0.0, help="Optional paired-frame high-scale delta loss weight.")
+    parser.add_argument("--residual-temporal-loss-weight", dest="residualTemporalLossWeight", type=float, default=0.0, help="Optional paired-frame residual-delta damping loss weight.")
     return parser.parse_args()
 
 
@@ -289,6 +290,14 @@ def temporal_loss_value(model_instance, previous_low_batch, current_low_batch, p
     prediction_delta = current_prediction - previous_prediction
     target_delta = current_high_batch - previous_high_batch
     return mse_value(prediction_delta, target_delta)
+
+
+def residual_temporal_loss_value(model_instance, previous_low_batch, current_low_batch):
+    previous_prediction = model_instance(previous_low_batch)
+    current_prediction = model_instance(current_low_batch)
+    previous_residual = previous_prediction - rgb_channels(previous_low_batch)
+    current_residual = current_prediction - rgb_channels(current_low_batch)
+    return mse_value(current_residual - previous_residual, mx.zeros_like(previous_residual))
 
 
 def per_sample_mse(prediction, target):
@@ -527,6 +536,8 @@ def main():
     args = parse_args()
     if args.temporalLossWeight < 0:
         raise ValueError("--temporal-loss-weight must be non-negative")
+    if args.residualTemporalLossWeight < 0:
+        raise ValueError("--residual-temporal-loss-weight must be non-negative")
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     corpus, pairs = load_pairs(args.corpus_manifest, args.low_render_scale)
@@ -546,11 +557,13 @@ def main():
     temporalSelectedPairCount = len(temporal_pair_candidates(loaded))
     temporal_loss_pairs = temporal_pair_candidates(train_items)
     temporalLossFallback = None
-    if args.temporalLossWeight > 0 and not temporal_loss_pairs:
+    wantsTemporalPairLoss = args.temporalLossWeight > 0 or args.residualTemporalLossWeight > 0
+    if wantsTemporalPairLoss and not temporal_loss_pairs:
         temporal_loss_pairs = temporal_pair_candidates(loaded)
         temporalLossFallback = "selected-pairs-no-train-adjacent" if temporal_loss_pairs else "no-adjacent-same-scale-pairs"
     temporalLossPairCount = len(temporal_loss_pairs)
     activeTemporalLossWeight = args.temporalLossWeight if temporalLossPairCount else 0.0
+    activeResidualTemporalLossWeight = args.residualTemporalLossWeight if temporalLossPairCount else 0.0
 
     def loss_fn(model_instance, low_batch, high_batch, previous_low_batch, current_low_batch, previous_high_batch, current_high_batch):
         prediction = model_instance(low_batch)
@@ -565,23 +578,31 @@ def main():
             )
         else:
             still_loss = mse_value(prediction, high_batch)
+        total_loss = still_loss
         if activeTemporalLossWeight > 0:
-            return still_loss + activeTemporalLossWeight * temporal_loss_value(
+            total_loss = total_loss + activeTemporalLossWeight * temporal_loss_value(
                 model_instance,
                 previous_low_batch,
                 current_low_batch,
                 previous_high_batch,
                 current_high_batch,
             )
-        return still_loss
+        if activeResidualTemporalLossWeight > 0:
+            total_loss = total_loss + activeResidualTemporalLossWeight * residual_temporal_loss_value(
+                model_instance,
+                previous_low_batch,
+                current_low_batch,
+            )
+        return total_loss
 
     loss_and_grad = nn.value_and_grad(model, loss_fn)
     training_losses = []
     temporalTrainingLosses = []
+    residualTemporalTrainingLosses = []
     started = time.time()
     for step in range(max(0, args.maxSteps)):
         low_batch, high_batch = sample_patch_batch(train_items, rng, args.batch_size, args.patch_size, args.foregroundProbability, args.conditionRenderScale)
-        if activeTemporalLossWeight > 0:
+        if activeTemporalLossWeight > 0 or activeResidualTemporalLossWeight > 0:
             previous_low_batch, current_low_batch, previous_high_batch, current_high_batch = sample_temporal_pair_batch(
                 temporal_loss_pairs,
                 rng,
@@ -607,6 +628,12 @@ def main():
                 temporal_loss_float = float(temporal_loss)
                 entry["temporalLoss"] = temporal_loss_float
                 temporalTrainingLosses.append({"step": step + 1, "temporalLoss": temporal_loss_float})
+            if activeResidualTemporalLossWeight > 0:
+                residual_temporal_loss = residual_temporal_loss_value(model, previous_low_batch, current_low_batch)
+                mx.eval(residual_temporal_loss)
+                residual_temporal_loss_float = float(residual_temporal_loss)
+                entry["residualTemporalLoss"] = residual_temporal_loss_float
+                residualTemporalTrainingLosses.append({"step": step + 1, "residualTemporalLoss": residual_temporal_loss_float})
             training_losses.append(entry)
             print(json.dumps(entry))
         if args.sleepMs > 0:
@@ -675,6 +702,8 @@ def main():
         "conditionRenderScale": args.conditionRenderScale,
         "temporalLossWeight": args.temporalLossWeight,
         "activeTemporalLossWeight": activeTemporalLossWeight,
+        "residualTemporalLossWeight": args.residualTemporalLossWeight,
+        "activeResidualTemporalLossWeight": activeResidualTemporalLossWeight,
         "temporalLossPairCount": temporalLossPairCount,
         "temporalLossPairs": [
             {
@@ -704,6 +733,7 @@ def main():
         "device": str(mx.default_device()),
         "trainingLosses": training_losses,
         "temporalTrainingLosses": temporalTrainingLosses,
+        "residualTemporalTrainingLosses": residualTemporalTrainingLosses,
         **metrics,
         **temporalMetrics,
         "preview": str(preview_path),
