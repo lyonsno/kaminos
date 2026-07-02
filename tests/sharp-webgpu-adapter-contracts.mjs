@@ -43,6 +43,11 @@ assert.match(wrapperSource, /sharpScheduler/, 'wrapper must pass scheduler confi
 assert.match(wrapperSource, /schedulerTelemetry/, 'wrapper must capture browser-reported scheduler telemetry');
 assert.match(wrapperSource, /scheduler-unverified/, 'wrapper must fail loud when requested scheduler telemetry is absent');
 assert.match(wrapperSource, /pipelineScheduler/, 'wrapper must expose route-neutral pipeline scheduler evidence alongside raw breathingRoom');
+assert.match(wrapperSource, /function emitAdapterProgress\(/, 'wrapper must be able to stream adapter progress while SHARP is running');
+assert.match(wrapperSource, /function sharpBrowserProgressFromConsole\(/, 'wrapper must translate SHARP browser console milestones into progress events');
+assert.match(wrapperSource, /page\.on\('console'[\s\S]*emitSharpBrowserProgress/, 'wrapper must forward browser console milestones before final PLY completion');
+assert.match(wrapperSource, /sharp-webgpu-browser-console/, 'forwarded progress must name the SHARP browser console source');
+assert.match(wrapperSource, /\[SPN\]\s+Patch \$\{patchDone\}\/35 done/, 'wrapper must preserve SPN patch chunk milestones as visible progress');
 
 const witnessSource = readFileSync(witnessPath, 'utf8');
 assert.match(witnessSource, /recordAdapterSideArtifacts/, 'pipeline witness must ingest adapter side artifacts');
