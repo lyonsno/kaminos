@@ -76,6 +76,8 @@ def parse_args():
     parser.add_argument("--temporal-crop-size", dest="temporalCropSize", type=int, default=None)
     parser.add_argument("--temporal-loss-weight", dest="temporalLossWeight", type=float, default=0.0, help="Optional paired-frame high-scale delta loss weight.")
     parser.add_argument("--residual-temporal-loss-weight", dest="residualTemporalLossWeight", type=float, default=0.0, help="Optional paired-frame residual-delta damping loss weight.")
+    parser.add_argument("--residual-continuation-mode", dest="residualContinuationMode", choices=["none", "ema"], default="none", help="Optional inference-time residual continuation mode for temporal evaluation.")
+    parser.add_argument("--residual-continuation-alpha", dest="residualContinuationAlpha", type=float, default=1.0, help="EMA current-residual weight for residual continuation; 1.0 is raw model output.")
     return parser.parse_args()
 
 
@@ -388,26 +390,80 @@ def temporal_pair_candidates(items):
     return pairs
 
 
-def temporal_sequence_metrics(model, loaded, train_items, eval_items, out_dir, crop_size, previewMode, conditionRenderScale, temporalEvalScope):
+def apply_residual_continuation(rendered, residualContinuationMode, residualContinuationAlpha):
+    if residualContinuationMode == "none":
+        return [
+            (item, low_patch, high_patch, prediction, prediction)
+            for item, low_patch, high_patch, prediction in rendered
+        ]
+    continued = []
+    previous_continued_residual = None
+    for item, low_patch, high_patch, prediction in rendered:
+        raw_residual = prediction - low_patch
+        if previous_continued_residual is None:
+            continued_residual = raw_residual
+        else:
+            continued_residual = (
+                residualContinuationAlpha * raw_residual
+                + (1.0 - residualContinuationAlpha) * previous_continued_residual
+            )
+        continued_prediction = np.clip(low_patch + continued_residual, 0.0, 1.0)
+        continued.append((item, low_patch, high_patch, prediction, continued_prediction))
+        previous_continued_residual = continued_residual
+    return continued
+
+
+def empty_temporal_metrics(temporalEvalScope, residualContinuationMode, residualContinuationAlpha, effectiveMode):
+    return {
+        "temporalEvalScope": temporalEvalScope,
+        "temporalPairCount": 0,
+        "temporalBaselineDeltaPsnr": None,
+        "temporalModelDeltaPsnr": None,
+        "temporalDeltaPsnr": None,
+        "temporalFlickerAmplification": None,
+        "temporalPreview": None,
+        "temporalPreviewFocus": None,
+        "residualContinuationMode": residualContinuationMode,
+        "residualContinuationEffectiveMode": effectiveMode,
+        "residualContinuationAlpha": residualContinuationAlpha,
+        "residualContinuationAuthority": "offline-temporal-residual-ema-v0" if residualContinuationMode == "ema" else None,
+        "continuationStillBaselinePsnr": None,
+        "continuationStillRawModelPsnr": None,
+        "continuationStillModelPsnr": None,
+        "continuationStillDeltaPsnr": None,
+        "continuationStillVsRawDeltaPsnr": None,
+        "continuationTemporalModelDeltaPsnr": None,
+        "continuationTemporalDeltaPsnr": None,
+        "continuationFlickerAmplification": None,
+        "continuationPreview": None,
+    }
+
+
+def temporal_sequence_metrics(model, loaded, train_items, eval_items, out_dir, crop_size, previewMode, conditionRenderScale, temporalEvalScope, residualContinuationMode, residualContinuationAlpha):
     scoped_items = temporal_scope_items(temporalEvalScope, loaded, train_items, eval_items)
     groups = temporal_groups(scoped_items)
+    continuation_active = residualContinuationMode == "ema"
+    continuation_effective_mode = "ema" if continuation_active else "none"
     if not groups:
-        return {
-            "temporalEvalScope": temporalEvalScope,
-            "temporalPairCount": 0,
-            "temporalBaselineDeltaPsnr": None,
-            "temporalModelDeltaPsnr": None,
-            "temporalDeltaPsnr": None,
-            "temporalFlickerAmplification": None,
-            "temporalPreview": None,
-            "temporalPreviewFocus": None,
-        }
+        return empty_temporal_metrics(
+            temporalEvalScope,
+            residualContinuationMode,
+            residualContinuationAlpha,
+            "no-temporal-pairs" if continuation_active else "none",
+        )
     baseline_losses = []
     model_losses = []
+    continuation_losses = []
+    still_baseline_losses = []
+    still_model_losses = []
+    still_continuation_losses = []
     flicker_ratios = []
+    continuation_flicker_ratios = []
     temporal_pairs = []
     temporal_preview_path = out_dir / "temporal-preview-low0-low1-model0-model1-target0-target1-delta-diff.png"
+    continuation_preview_path = out_dir / "temporal-preview-continuation-low0-low1-model0-model1-cont0-cont1-target0-target1-delta-diff.png"
     temporal_preview_written = False
+    continuation_preview_written = False
     temporal_focus = None
     for group in groups:
         top, left, crop_height, crop_width, focus = crop_region(group[0], crop_size, previewMode)
@@ -417,12 +473,23 @@ def temporal_sequence_metrics(model, loaded, train_items, eval_items, out_dir, c
             low_patch, high_patch, model_input = crop_item_arrays(item, region, conditionRenderScale)
             pred_patch = predict_patch(model, model_input)
             rendered.append((item, low_patch, high_patch, pred_patch))
+        continued_rendered = apply_residual_continuation(
+            rendered,
+            residualContinuationMode,
+            residualContinuationAlpha,
+        )
+        for _item, low_patch, high_patch, prediction, continued_prediction in continued_rendered:
+            still_baseline_losses.append(float(np.mean(np.square(low_patch - high_patch))))
+            still_model_losses.append(float(np.mean(np.square(prediction - high_patch))))
+            if continuation_active:
+                still_continuation_losses.append(float(np.mean(np.square(continued_prediction - high_patch))))
         for index in range(1, len(rendered)):
-            previous_item, previous_low, previous_high, previous_prediction = rendered[index - 1]
-            current_item, current_low, current_high, current_prediction = rendered[index]
+            previous_item, previous_low, previous_high, previous_prediction, previous_continued = continued_rendered[index - 1]
+            current_item, current_low, current_high, current_prediction, current_continued = continued_rendered[index]
             target_delta = current_high - previous_high
             baseline_delta = current_low - previous_low
             model_delta = current_prediction - previous_prediction
+            continuation_delta = current_continued - previous_continued
             baseline_loss = float(np.mean(np.square(baseline_delta - target_delta)))
             model_loss = float(np.mean(np.square(model_delta - target_delta)))
             baseline_losses.append(baseline_loss)
@@ -431,7 +498,7 @@ def temporal_sequence_metrics(model, loaded, train_items, eval_items, out_dir, c
             model_energy = float(np.mean(np.abs(model_delta)))
             flicker_ratio = model_energy / max(baseline_energy, 1e-8)
             flicker_ratios.append(flicker_ratio)
-            temporal_pairs.append({
+            pair_entry = {
                 "previous": previous_item["id"],
                 "current": current_item["id"],
                 "lowRenderScale": current_item["lowRenderScale"],
@@ -442,7 +509,19 @@ def temporal_sequence_metrics(model, loaded, train_items, eval_items, out_dir, c
                 "modelDeltaMse": model_loss,
                 "temporalDeltaPsnr": psnr_from_mse(model_loss) - psnr_from_mse(baseline_loss),
                 "temporalFlickerAmplification": flicker_ratio,
-            })
+            }
+            if continuation_active:
+                continuation_loss = float(np.mean(np.square(continuation_delta - target_delta)))
+                continuation_losses.append(continuation_loss)
+                continuation_energy = float(np.mean(np.abs(continuation_delta)))
+                continuation_flicker_ratio = continuation_energy / max(baseline_energy, 1e-8)
+                continuation_flicker_ratios.append(continuation_flicker_ratio)
+                pair_entry.update({
+                    "continuationDeltaMse": continuation_loss,
+                    "continuationTemporalDeltaPsnr": psnr_from_mse(continuation_loss) - psnr_from_mse(baseline_loss),
+                    "continuationFlickerAmplification": continuation_flicker_ratio,
+                })
+            temporal_pairs.append(pair_entry)
             if not temporal_preview_written:
                 delta_diff = np.clip(np.abs(model_delta - target_delta) * 4.0, 0.0, 1.0)
                 strip = np.concatenate([
@@ -457,9 +536,24 @@ def temporal_sequence_metrics(model, loaded, train_items, eval_items, out_dir, c
                 Image.fromarray(np.clip(strip * 255.0, 0, 255).astype(np.uint8), "RGB").save(temporal_preview_path)
                 temporal_focus = focus
                 temporal_preview_written = True
+            if continuation_active and not continuation_preview_written:
+                continuation_delta_diff = np.clip(np.abs(continuation_delta - target_delta) * 4.0, 0.0, 1.0)
+                continuation_strip = np.concatenate([
+                    previous_low,
+                    current_low,
+                    previous_prediction,
+                    current_prediction,
+                    previous_continued,
+                    current_continued,
+                    previous_high,
+                    current_high,
+                    continuation_delta_diff,
+                ], axis=1)
+                Image.fromarray(np.clip(continuation_strip * 255.0, 0, 255).astype(np.uint8), "RGB").save(continuation_preview_path)
+                continuation_preview_written = True
     baseline_mse = float(np.mean(baseline_losses))
     model_mse = float(np.mean(model_losses))
-    return {
+    metrics = {
         "temporalEvalScope": temporalEvalScope,
         "temporalPairCount": len(temporal_pairs),
         "temporalBaselineDeltaMse": baseline_mse,
@@ -471,7 +565,41 @@ def temporal_sequence_metrics(model, loaded, train_items, eval_items, out_dir, c
         "temporalPairs": temporal_pairs,
         "temporalPreview": str(temporal_preview_path) if temporal_preview_written else None,
         "temporalPreviewFocus": temporal_focus,
+        "residualContinuationMode": residualContinuationMode,
+        "residualContinuationEffectiveMode": continuation_effective_mode,
+        "residualContinuationAlpha": residualContinuationAlpha,
+        "residualContinuationAuthority": "offline-temporal-residual-ema-v0" if continuation_active else None,
+        "continuationStillBaselinePsnr": None,
+        "continuationStillRawModelPsnr": None,
+        "continuationStillModelPsnr": None,
+        "continuationStillDeltaPsnr": None,
+        "continuationStillVsRawDeltaPsnr": None,
+        "continuationTemporalModelDeltaPsnr": None,
+        "continuationTemporalDeltaPsnr": None,
+        "continuationFlickerAmplification": None,
+        "continuationPreview": None,
     }
+    if continuation_active:
+        still_baseline_mse = float(np.mean(still_baseline_losses))
+        still_model_mse = float(np.mean(still_model_losses))
+        still_continuation_mse = float(np.mean(still_continuation_losses))
+        continuation_mse = float(np.mean(continuation_losses))
+        metrics.update({
+            "continuationStillBaselineMse": still_baseline_mse,
+            "continuationStillRawModelMse": still_model_mse,
+            "continuationStillModelMse": still_continuation_mse,
+            "continuationStillBaselinePsnr": psnr_from_mse(still_baseline_mse),
+            "continuationStillRawModelPsnr": psnr_from_mse(still_model_mse),
+            "continuationStillModelPsnr": psnr_from_mse(still_continuation_mse),
+            "continuationStillDeltaPsnr": psnr_from_mse(still_continuation_mse) - psnr_from_mse(still_baseline_mse),
+            "continuationStillVsRawDeltaPsnr": psnr_from_mse(still_continuation_mse) - psnr_from_mse(still_model_mse),
+            "continuationTemporalModelDeltaMse": continuation_mse,
+            "continuationTemporalModelDeltaPsnr": psnr_from_mse(continuation_mse),
+            "continuationTemporalDeltaPsnr": psnr_from_mse(continuation_mse) - psnr_from_mse(baseline_mse),
+            "continuationFlickerAmplification": float(np.mean(continuation_flicker_ratios)),
+            "continuationPreview": str(continuation_preview_path) if continuation_preview_written else None,
+        })
+    return metrics
 
 
 def evaluate_model(model, items, rng, batch_size, patch_size, eval_patches, foregroundProbability, conditionRenderScale, foregroundThreshold, foregroundLossWeight, differenceLossWeight):
@@ -538,6 +666,8 @@ def main():
         raise ValueError("--temporal-loss-weight must be non-negative")
     if args.residualTemporalLossWeight < 0:
         raise ValueError("--residual-temporal-loss-weight must be non-negative")
+    if args.residualContinuationAlpha < 0 or args.residualContinuationAlpha > 1:
+        raise ValueError("--residual-continuation-alpha must be between 0 and 1")
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     corpus, pairs = load_pairs(args.corpus_manifest, args.low_render_scale)
@@ -667,7 +797,13 @@ def main():
             args.preview_mode,
             args.conditionRenderScale,
             args.temporalEvalScope,
+            args.residualContinuationMode,
+            args.residualContinuationAlpha,
         )
+    residualContinuationEffectiveMode = temporalMetrics.get(
+        "residualContinuationEffectiveMode",
+        "none" if args.residualContinuationMode == "none" else "not-evaluated",
+    )
     report = {
         "schema": SCHEMA,
         "createdAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
@@ -704,6 +840,9 @@ def main():
         "activeTemporalLossWeight": activeTemporalLossWeight,
         "residualTemporalLossWeight": args.residualTemporalLossWeight,
         "activeResidualTemporalLossWeight": activeResidualTemporalLossWeight,
+        "residualContinuationMode": args.residualContinuationMode,
+        "residualContinuationEffectiveMode": residualContinuationEffectiveMode,
+        "residualContinuationAlpha": args.residualContinuationAlpha,
         "temporalLossPairCount": temporalLossPairCount,
         "temporalLossPairs": [
             {

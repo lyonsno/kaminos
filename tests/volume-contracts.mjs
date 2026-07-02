@@ -1467,6 +1467,16 @@ assert.match(residualMlx, /--residual-temporal-loss-weight/, 'MLX residual harne
 assert.match(residualMlx, /residualTemporalLossWeight/, 'MLX residual harness records residual-delta temporal damping weight in reports');
 assert.match(residualMlx, /residual_temporal_loss_value/, 'MLX residual harness can penalize time-varying residual correction directly');
 assert.match(residualMlx, /residualTemporalTrainingLosses/, 'MLX residual harness records residual-delta temporal loss samples during training');
+assert.match(residualMlx, /--residual-continuation-mode/, 'MLX residual harness exposes inference-time residual continuation mode');
+assert.match(residualMlx, /--residual-continuation-alpha/, 'MLX residual harness exposes explicit residual continuation EMA alpha');
+assert.match(residualMlx, /apply_residual_continuation/, 'MLX residual harness applies residual continuation during temporal evaluation');
+assert.match(residualMlx, /residualContinuationMode/, 'MLX residual harness records requested residual continuation mode');
+assert.match(residualMlx, /residualContinuationEffectiveMode/, 'MLX residual harness records effective residual continuation mode');
+assert.match(residualMlx, /residualContinuationAlpha/, 'MLX residual harness records effective residual continuation alpha');
+assert.match(residualMlx, /continuationStillDeltaPsnr/, 'MLX residual harness reports continuation still-frame PSNR impact');
+assert.match(residualMlx, /continuationTemporalDeltaPsnr/, 'MLX residual harness reports continuation temporal-delta PSNR');
+assert.match(residualMlx, /continuationFlickerAmplification/, 'MLX residual harness reports continuation flicker amplification');
+assert.match(residualMlx, /continuationPreview/, 'MLX residual harness writes a continuation temporal preview for visual inspection');
 assert.match(residualMlx, /temporalLossPairCount/, 'MLX residual harness reports how many adjacent frame pairs are available for temporal loss');
 assert.match(residualMlx, /sample_temporal_pair_batch/, 'MLX residual harness samples adjacent same-scale frame pairs for temporal supervision');
 assert.match(residualMlx, /temporal_loss_value/, 'MLX residual harness computes high-scale frame-delta supervision as a training loss');
