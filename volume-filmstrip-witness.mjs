@@ -193,7 +193,10 @@ function browserCaptureExpression(options) {
     async function waitForNextVolumeFrame() {
       const started = performance.now();
       while (performance.now() - started < 3000) {
-        await new Promise(resolve => requestAnimationFrame(resolve));
+        await Promise.race([
+          new Promise(resolve => requestAnimationFrame(resolve)),
+          new Promise(resolve => setTimeout(resolve, 100)),
+        ]);
         const state = prototype.debugState();
         if (state.frameCount !== previousFrameCount) return state;
       }
@@ -344,6 +347,72 @@ function groupContinuationGaps(annotatedFrames) {
   return [...groups.values()];
 }
 
+function phaseBucketKey(frame) {
+  return Number(frame.cadencePhase || 0).toFixed(2);
+}
+
+function finiteMean(values) {
+  const finite = values.filter(value => Number.isFinite(value));
+  if (finite.length < 1) return null;
+  return finite.reduce((sum, value) => sum + value, 0) / finite.length;
+}
+
+function finiteRange(values) {
+  const finite = values.filter(value => Number.isFinite(value));
+  if (finite.length < 1) return null;
+  return Math.max(...finite) - Math.min(...finite);
+}
+
+function summarizeFrames(frames) {
+  return {
+    count: frames.length,
+    meanLuma: finiteMean(frames.map(frame => frame.metrics?.meanLuma)),
+    litPixels: finiteMean(frames.map(frame => frame.metrics?.litPixels)),
+    fireLikePixels: finiteMean(frames.map(frame => frame.metrics?.fireLikePixels)),
+    smokeLikePixels: finiteMean(frames.map(frame => frame.metrics?.smokeLikePixels)),
+    changedPixelRatioFromPrevious: finiteMean(frames.map(frame => frame.metrics?.changedPixelRatioFromPrevious)),
+  };
+}
+
+function computePhaseBucketSummary(frames) {
+  const buckets = new Map();
+  for (const frame of frames) {
+    const key = phaseBucketKey(frame);
+    if (!buckets.has(key)) buckets.set(key, []);
+    buckets.get(key).push(frame);
+  }
+
+  const phaseBucketSummary = [...buckets.entries()]
+    .sort(([a], [b]) => Number(a) - Number(b))
+    .map(([cadencePhase, bucketFrames]) => ({
+      cadencePhase,
+      framesSinceLiveSimValues: [...new Set(bucketFrames.map(frame => frame.framesSinceLiveSim))].sort((a, b) => a - b),
+      ...summarizeFrames(bucketFrames),
+    }));
+
+  const liveBucket = phaseBucketSummary.find(bucket => bucket.cadencePhase === '0.00') || null;
+  const heldBuckets = phaseBucketSummary.filter(bucket => bucket.cadencePhase !== '0.00');
+  const heldSummary = summarizeFrames(frames.filter(frame => phaseBucketKey(frame) !== '0.00'));
+  const allBucketValues = key => phaseBucketSummary
+    .map(bucket => bucket[key])
+    .filter(value => Number.isFinite(value));
+  const phasePulseSummary = {
+    identity: 'kaminos-volume-phase-bucket-pulse-summary-v0',
+    liveBucket,
+    heldSummary,
+    meanLumaSwing: finiteRange(allBucketValues('meanLuma')),
+    fireLikePixelSwing: finiteRange(allBucketValues('fireLikePixels')),
+    smokeLikePixelSwing: finiteRange(allBucketValues('smokeLikePixels')),
+    litPixelSwing: finiteRange(allBucketValues('litPixels')),
+    changedPixelRatioSwing: finiteRange(allBucketValues('changedPixelRatioFromPrevious')),
+    liveMinusHeldMeanLuma: liveBucket && Number.isFinite(heldSummary.meanLuma) ? liveBucket.meanLuma - heldSummary.meanLuma : null,
+    liveMinusHeldFireLikePixels: liveBucket && Number.isFinite(heldSummary.fireLikePixels) ? liveBucket.fireLikePixels - heldSummary.fireLikePixels : null,
+    liveMinusHeldSmokeLikePixels: liveBucket && Number.isFinite(heldSummary.smokeLikePixels) ? liveBucket.smokeLikePixels - heldSummary.smokeLikePixels : null,
+  };
+
+  return { phaseBucketSummary, phasePulseSummary };
+}
+
 function writeGapBundle({ capture, report }) {
   if (!gapBundleDir) return null;
   const framesDir = join(gapBundleDir, 'frames');
@@ -456,6 +525,7 @@ async function main() {
     '--no-first-run',
     '--disable-background-timer-throttling',
     '--disable-renderer-backgrounding',
+    '--disable-backgrounding-occluded-windows',
     `--window-size=${windowSize}`,
     url,
   ], { stdio: 'ignore' });
@@ -531,6 +601,7 @@ async function main() {
         assert.equal(frames[0]?.framesSinceLiveSim, 0, 'aligned filmstrip did not begin on a live-sim anchor');
       }
     }
+    const { phaseBucketSummary, phasePulseSummary } = computePhaseBucketSummary(frames);
 
     const report = {
       identity: FILMSTRIP_WITNESS_IDENTITY,
@@ -555,6 +626,8 @@ async function main() {
       cadenceNativeContinuationIdentity: capture.finalState?.cadenceNativeContinuationIdentity,
       effectiveVisualAuthority: capture.finalState?.effectiveVisualAuthority,
       continuationAuthority: capture.finalState?.continuationAuthority,
+      phaseBucketSummary,
+      phasePulseSummary,
       frames,
     };
     const gapBundle = writeGapBundle({ capture, report });

@@ -1231,6 +1231,12 @@ assert.match(filmstripWitness, /cadenceNativeContinuationIdentity/, 'filmstrip w
 assert.match(filmstripWitness, /frameDeltas/, 'filmstrip witness reports render frame deltas between captured frames');
 assert.match(filmstripWitness, /blankFrameCount/, 'filmstrip witness reports blank or missing frame counts');
 assert.match(filmstripWitness, /volume_sim_cadence/, 'filmstrip witness records the routed simulation cadence');
+assert.match(filmstripWitness, /phaseBucketSummary/, 'filmstrip witness reports phase-bucket smoothness metrics');
+assert.match(filmstripWitness, /phasePulseSummary/, 'filmstrip witness reports p0-versus-held cadence pulse metrics');
+assert.match(filmstripWitness, /meanLumaSwing/, 'phase pulse summary records luma swing across cadence phases');
+assert.match(filmstripWitness, /fireLikePixelSwing/, 'phase pulse summary records fire-pixel swing across cadence phases');
+assert.match(filmstripWitness, /disable-backgrounding-occluded-windows/, 'filmstrip witness asks Chromium not to pause occluded visual evidence pages');
+assert.match(filmstripWitness, /setTimeout\(resolve,\s*100\)/, 'filmstrip witness timeout keeps advancing even when requestAnimationFrame is paused');
 assert.match(filmstripWitness, /GAP_BUNDLE_MANIFEST_IDENTITY/, 'filmstrip witness names a stable cadence-gap manifest identity');
 assert.match(filmstripWitness, /--gap-bundle-dir/, 'filmstrip witness can export an Interframe-ready gap bundle directory');
 assert.match(filmstripWitness, /--align-live-anchor/, 'filmstrip witness can align cadence-gap bundles to a live-sim anchor');
