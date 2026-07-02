@@ -24,6 +24,8 @@ SPATIAL_CONTEXT_MLP_MODEL_IDENTITY = "spatial-context-mlp-residual-v0"
 NO_ROUTE_CONDITIONING_IDENTITY = "none"
 ROUTE_CONTROLS_CONDITIONING_IDENTITY = "route-controls-v0"
 ROUTE_CONTROLS_REPLAY_CONDITIONING_IDENTITY = "route-controls-replay-v0"
+RANDOM_TILE_PAIR_SPLIT_IDENTITY = "random-tile-pair-v0"
+REPLAY_BALANCED_TILE_PAIR_SPLIT_IDENTITY = "replay-balanced-tile-pair-v0"
 MODEL_IDENTITY = AFFINE_MODEL_IDENTITY
 BACKEND = "numpy"
 ROUTE_CONTROL_CHANNELS = [
@@ -131,6 +133,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--manifest", required=True, help="Path to a volume field-pair dataset manifest JSON.")
     parser.add_argument("--out", required=True, help="Path to write the residual probe report JSON.")
     parser.add_argument("--train-fraction", type=float, default=0.75, help="Tile-pair training fraction.")
+    parser.add_argument(
+        "--split-strategy",
+        choices=[RANDOM_TILE_PAIR_SPLIT_IDENTITY, REPLAY_BALANCED_TILE_PAIR_SPLIT_IDENTITY],
+        default=RANDOM_TILE_PAIR_SPLIT_IDENTITY,
+        help="Train/test split strategy for non-holdout probes.",
+    )
     parser.add_argument("--ridge", type=float, default=1.0e-4, help="Ridge penalty for the selected linear model.")
     parser.add_argument("--seed", type=int, default=7, help="Deterministic tile-pair split seed.")
     parser.add_argument(
@@ -251,6 +259,7 @@ def base_report(args: argparse.Namespace) -> dict[str, Any]:
         "sourceManifest": str(Path(args.manifest).resolve()),
         "requested": {
             "trainFraction": args.train_fraction,
+            "splitStrategy": args.split_strategy,
             "ridge": args.ridge,
             "seed": args.seed,
             "model": model_identity(args),
@@ -669,12 +678,74 @@ def split_matches(matches: list[dict[str, Any]], args: argparse.Namespace) -> tu
             "seed": None,
         }
     fraction = min(0.95, max(0.05, float(args.train_fraction)))
+    if args.split_strategy == REPLAY_BALANCED_TILE_PAIR_SPLIT_IDENTITY:
+        rng = np.random.default_rng(args.seed)
+        by_replay: dict[str, list[int]] = {}
+        for index, match in enumerate(matches):
+            replay_state = str(match.get("replayStateIdentity") or "unknown-replay-state")
+            by_replay.setdefault(replay_state, []).append(index)
+        if len(by_replay) < 2:
+            raise ProbeFailure(
+                "split",
+                "replay-balanced split requires at least two replay states",
+                {
+                    "splitStrategy": REPLAY_BALANCED_TILE_PAIR_SPLIT_IDENTITY,
+                    "availableReplayStates": sorted(by_replay.keys()),
+                    "usableTilePairs": len(matches),
+                },
+            )
+        available_counts = {key: len(value) for key, value in sorted(by_replay.items())}
+        replay_quota = min(available_counts.values())
+        if replay_quota < 2:
+            raise ProbeFailure(
+                "split",
+                "replay-balanced split requires at least two usable tile pairs in every replay state",
+                {
+                    "splitStrategy": REPLAY_BALANCED_TILE_PAIR_SPLIT_IDENTITY,
+                    "availableReplayCounts": available_counts,
+                    "usableTilePairs": len(matches),
+                },
+            )
+        train_per_replay = int(math.floor(replay_quota * fraction))
+        train_per_replay = min(max(1, train_per_replay), replay_quota - 1)
+        test_per_replay = replay_quota - train_per_replay
+        train: list[int] = []
+        test: list[int] = []
+        selected_counts: dict[str, dict[str, int]] = {}
+        for replay_state, indexes in sorted(by_replay.items()):
+            selected = list(map(int, rng.permutation(indexes)[:replay_quota]))
+            selected_train = sorted(selected[:train_per_replay])
+            selected_test = sorted(selected[train_per_replay:])
+            train.extend(selected_train)
+            test.extend(selected_test)
+            selected_counts[replay_state] = {
+                "available": len(indexes),
+                "selected": replay_quota,
+                "train": len(selected_train),
+                "test": len(selected_test),
+            }
+        return sorted(train), sorted(test), {
+            "splitStrategy": REPLAY_BALANCED_TILE_PAIR_SPLIT_IDENTITY,
+            "holdoutAxis": None,
+            "holdoutValue": None,
+            "trainFraction": fraction,
+            "seed": args.seed,
+            "replayBalancedPolicy": {
+                "identity": "equal-tile-pair-quota-per-replay-state-v0",
+                "availableReplayCounts": available_counts,
+                "selectedReplayQuota": replay_quota,
+                "trainPerReplay": train_per_replay,
+                "testPerReplay": test_per_replay,
+                "selectedReplayCounts": selected_counts,
+                "limitation": "Replay states with more usable tile pairs are downsampled for balanced split diagnostics; this changes split composition, not field authority.",
+            },
+        }
     train_count = int(math.floor(len(matches) * fraction))
     train_count = min(max(1, train_count), len(matches) - 1)
     rng = np.random.default_rng(args.seed)
     permutation = list(map(int, rng.permutation(len(matches))))
     return sorted(permutation[:train_count]), sorted(permutation[train_count:]), {
-        "splitStrategy": "random-tile-pair-v0",
+        "splitStrategy": RANDOM_TILE_PAIR_SPLIT_IDENTITY,
         "holdoutAxis": None,
         "holdoutValue": None,
         "trainFraction": fraction,

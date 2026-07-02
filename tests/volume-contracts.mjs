@@ -1481,6 +1481,9 @@ assert.match(fieldResidualProbe, /--holdout-route-variant/, 'field residual prob
 assert.match(fieldResidualProbe, /--holdout-route-variant-list/, 'field residual probe can hold out a named family of route variants for stricter generalization probes');
 assert.match(fieldResidualProbe, /--holdout-replay-state/, 'field residual probe can hold out a named deterministic replay state instead of only random tile pairs');
 assert.match(fieldResidualProbe, /splitStrategy/, 'field residual probe reports whether the train/test split was random, route-held-out, or replay-held-out');
+assert.match(fieldResidualProbe, /--split-strategy/, 'field residual probe exposes train/test split strategy as an explicit run control');
+assert.match(fieldResidualProbe, /replay-balanced-tile-pair-v0/, 'field residual probe can balance random-style splits across replay states');
+assert.match(fieldResidualProbe, /replayBalancedPolicy/, 'field residual probe reports replay-balanced sampling counts instead of hiding replay skew');
 assert.match(fieldResidualProbe, /--route-conditioning/, 'field residual probe can append route/replay conditioning features without changing model capacity');
 assert.match(fieldResidualProbe, /route-controls-replay-v0/, 'field residual probe names the route-control plus replay conditioning identity');
 assert.match(fieldResidualProbe, /routeConditioningChannels/, 'field residual probe reports the route conditioning channel order');
