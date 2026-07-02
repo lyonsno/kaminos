@@ -591,6 +591,7 @@ struct Uniforms {
   pyro_diagnostic_controls: vec4<f32>,
   pyro_shape_controls: vec4<f32>,
   pyro_light_controls: vec4<f32>,
+  pyro_color_controls: vec4<f32>,
   previousViewProj: mat4x4<f32>,
 };
 
@@ -3114,6 +3115,10 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
   let pyroRadianceGate = clamp(u.pyro_light_controls.y, 0.0, 1.0);
   let pyroRadianceSpill = clamp(u.pyro_light_controls.z, 0.0, 1.0);
   let pyroRadianceWarmth = clamp(u.pyro_light_controls.w, 0.0, 1.0);
+  let pyroBiteHeat = clamp(u.pyro_color_controls.x, 0.0, 1.0);
+  let pyroBiteChroma = clamp(u.pyro_color_controls.y, 0.0, 1.0);
+  let pyroRadianceHue = clamp(u.pyro_color_controls.z, 0.0, 1.0);
+  let pyroRadianceChroma = clamp(u.pyro_color_controls.w, 0.0, 1.0);
   let canonicalSmokeContent = 1.0 - minimalPlumeRenderScene * step(0.5, canonicalContentMode) * (1.0 - step(1.5, canonicalContentMode));
   let canonicalFireContent = minimalPlumeRenderScene * step(0.5, canonicalContentMode);
   let canonicalFireRenderContent = mix(1.0, canonicalFireContent, minimalPlumeRenderScene);
@@ -3484,12 +3489,21 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
       local * (0.70 - pyroFoldExtinctionBoost * 0.24) + pyroFoldColor * pyroFoldExtinctionBoost * 0.54,
       clamp(pyroFoldExtinctionBoost, 0.0, 0.78)
     );
-    local = local * (1.0 - pyroBiteAlphaBoost * 0.36)
-      + vec3<f32>(1.18, 0.42, 0.08) * pyroBiteAlphaBoost * (0.34 + fireMix * 0.70);
-    let pyroRadianceCoolColor = vec3<f32>(0.58, 0.70, 0.72) * (0.45 + smoke * 0.22);
-    let pyroRadianceWarmColor = fireColor(renderTemp * 0.52 + 0.20) * (0.34 + smoke * 0.18)
-      + vec3<f32>(0.72, 0.48, 0.24) * pyroFoldWakeSignal * (0.08 + pyroRadianceSpill * 0.18);
-    let pyroRadianceColor = mix(pyroRadianceCoolColor, pyroRadianceWarmColor, pyroRadianceWarmth);
+    let pyroBiteEmberColor = vec3<f32>(0.90, 0.34, 0.10) * (0.72 + renderTemp * 0.18);
+    let pyroBiteHotColor = fireColor(renderTemp * 0.64 + 0.42) * (0.82 + fireMix * 0.36);
+    let pyroBiteMutedColor = mix(local, pyroBiteEmberColor, 0.44);
+    let pyroBiteSaturatedColor = mix(pyroBiteEmberColor, pyroBiteHotColor, pyroBiteHeat);
+    let pyroBiteColor = mix(pyroBiteMutedColor, pyroBiteSaturatedColor, pyroBiteChroma);
+    local = local * (1.0 - pyroBiteAlphaBoost * mix(0.24, 0.42, pyroBiteChroma))
+      + pyroBiteColor * pyroBiteAlphaBoost * (0.28 + fireMix * 0.62 + pyroBiteChroma * 0.18);
+    let pyroRadianceSmokeBlue = vec3<f32>(0.48, 0.66, 0.72) * (0.36 + smoke * 0.18);
+    let pyroRadianceNeutral = vec3<f32>(0.58, 0.61, 0.58) * (0.35 + smoke * 0.16);
+    let pyroRadianceAmber = fireColor(renderTemp * 0.46 + 0.24) * (0.30 + smoke * 0.16)
+      + vec3<f32>(0.82, 0.52, 0.22) * pyroFoldWakeSignal * (0.06 + pyroRadianceSpill * 0.16);
+    let pyroRadianceCoolColor = mix(pyroRadianceNeutral, pyroRadianceSmokeBlue, pyroRadianceChroma);
+    let pyroRadianceWarmColor = mix(pyroRadianceNeutral, pyroRadianceAmber, pyroRadianceChroma);
+    let pyroRadianceHueColor = mix(pyroRadianceCoolColor, pyroRadianceWarmColor, pyroRadianceHue);
+    let pyroRadianceColor = mix(pyroRadianceHueColor, pyroRadianceWarmColor, pyroRadianceWarmth * (0.36 + pyroRadianceChroma * 0.64));
     local = local + pyroRadianceColor * pyroRadianceBoost * mix(0.07, 0.16, pyroRadianceSpill);
     let pyroBorderDiagnostic = pyroLiveCarrier * pyroInterfaceSignal * pyroBorderMask * pyroCarrierOverdrive;
     let pyroDiagnosticColor =
@@ -3539,7 +3553,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   const invViewProj = new THREE.Matrix4();
   const viewProj = new THREE.Matrix4();
   const previousViewProj = new THREE.Matrix4();
-  const uniforms = new Float32Array(216);
+  const uniforms = new Float32Array(220);
   let controlsSnapshot = applyRuntimeQualityControls(getControls());
   let gridSize = normalizeGridSize(controlsSnapshot.resolution);
   let majorantGridSize = normalizeMajorantGridSize(controlsSnapshot.majorantGrid);
@@ -4995,6 +5009,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const pyroRadianceGate = Math.max(0, Math.min(1, controlsSnapshot.pyroRadianceGate ?? 0.62));
     const pyroRadianceSpill = Math.max(0, Math.min(1, controlsSnapshot.pyroRadianceSpill ?? 0.30));
     const pyroRadianceWarmth = Math.max(0, Math.min(1, controlsSnapshot.pyroRadianceWarmth ?? 0.45));
+    const pyroBiteHeat = Math.max(0, Math.min(1, controlsSnapshot.pyroBiteHeat ?? 0.65));
+    const pyroBiteChroma = Math.max(0, Math.min(1, controlsSnapshot.pyroBiteChroma ?? 0.55));
+    const pyroRadianceHue = Math.max(0, Math.min(1, controlsSnapshot.pyroRadianceHue ?? 0.50));
+    const pyroRadianceChroma = Math.max(0, Math.min(1, controlsSnapshot.pyroRadianceChroma ?? 0.55));
     const pyroDiagnosticPaint = Math.max(0, Math.min(1, controlsSnapshot.pyroDiagnosticPaint ?? 0));
     uniforms[184] = pyroInterfaceFocus;
     uniforms[185] = pyroEdgeBite;
@@ -5014,7 +5032,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     uniforms[197] = pyroRadianceGate;
     uniforms[198] = pyroRadianceSpill;
     uniforms[199] = pyroRadianceWarmth;
-    uniforms.set(previousViewProj.elements, 200);
+    uniforms[200] = pyroBiteHeat;
+    uniforms[201] = pyroBiteChroma;
+    uniforms[202] = pyroRadianceHue;
+    uniforms[203] = pyroRadianceChroma;
+    uniforms.set(previousViewProj.elements, 204);
     device.queue.writeBuffer(uniformBuffer, 0, uniforms);
     state.gridOverlay = controlsSnapshot.gridOverlay || 0;
     state.volumeScene = normalizeVolumeScene(controlsSnapshot.volumeScene);
@@ -5063,6 +5085,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         radianceGate: pyroRadianceGate,
         radianceSpill: pyroRadianceSpill,
         radianceWarmth: pyroRadianceWarmth,
+        biteHeat: pyroBiteHeat,
+        biteChroma: pyroBiteChroma,
+        radianceHue: pyroRadianceHue,
+        radianceChroma: pyroRadianceChroma,
         diagnosticPaint: pyroDiagnosticPaint,
       },
       carrierDebug: {
@@ -5077,6 +5103,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         biteShape: `${pyroBiteTeeth.toFixed(2)}t/${pyroBiteWake.toFixed(2)}w`,
         foldShape: `${pyroFoldWake.toFixed(2)}w`,
         radianceShape: `${pyroRadianceGate.toFixed(2)}g/${pyroRadianceSpill.toFixed(2)}s/${pyroRadianceWarmth.toFixed(2)}w`,
+        colorShape: `${pyroBiteHeat.toFixed(2)}bh/${pyroBiteChroma.toFixed(2)}bc/${pyroRadianceHue.toFixed(2)}rh/${pyroRadianceChroma.toFixed(2)}rc`,
       },
       spatialMemory: {
         identity: 'pyro-material-memory-spatial-coupling-v0',
