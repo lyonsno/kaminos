@@ -1497,3 +1497,15 @@ assert.match(fieldResidualProbe, /targetChannelIndexes/, 'field residual probe r
 assert.match(fieldResidualProbe, /--artifact-dir/, 'field residual probe can write offline residual application artifacts without touching rendering');
 assert.match(fieldResidualProbe, /kaminos.volume.field-residual-application-artifact.v0/, 'field residual application artifacts carry a stable schema identity');
 assert.match(fieldResidualProbe, /residualApplicationArtifact/, 'field residual probe reports the residual application artifact manifest path and authority');
+
+const fieldResidualArtifactEvaluatorPath = join(root, 'volume-field-residual-artifact-evaluator.py');
+assert.ok(existsSync(fieldResidualArtifactEvaluatorPath), 'volume field residual artifact evaluator exists');
+const fieldResidualArtifactEvaluator = existsSync(fieldResidualArtifactEvaluatorPath) ? readFileSync(fieldResidualArtifactEvaluatorPath, 'utf8') : '';
+assert.match(fieldResidualArtifactEvaluator, /kaminos\.volume\.field-residual-artifact-evaluation\.v0/, 'field residual artifact evaluator writes a stable evaluation report schema');
+assert.match(fieldResidualArtifactEvaluator, /kaminos\.volume\.field-residual-application-artifact\.v0/, 'field residual artifact evaluator validates application artifact manifests');
+assert.match(fieldResidualArtifactEvaluator, /verify_payload_descriptor/, 'field residual artifact evaluator verifies payload checksums and byte lengths before metrics');
+assert.match(fieldResidualArtifactEvaluator, /perChannelMetrics/, 'field residual artifact evaluator reports per-channel held-out field error metrics');
+assert.match(fieldResidualArtifactEvaluator, /routeReplayMetrics/, 'field residual artifact evaluator groups metrics by route and replay identity for comparison consumers');
+assert.match(fieldResidualArtifactEvaluator, /spatialErrorProfile/, 'field residual artifact evaluator emits spatial error profiles for stitched/offline field inspection');
+assert.match(fieldResidualArtifactEvaluator, /comparisonAuthority/, 'field residual artifact evaluator labels outputs as offline field comparison evidence instead of live renderer state');
+assert.match(fieldResidualArtifactEvaluator, /failurePhase/, 'field residual artifact evaluator writes failure-phase reports for corrupt or incomplete artifacts');
