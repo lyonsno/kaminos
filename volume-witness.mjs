@@ -1435,6 +1435,8 @@ async function main() {
       assert.ok((volumeSceneContext?.sphericalHarmonicCoefficients?.length ?? 0) >= 4, 'brick-wall fire-light probe did not report first-order spherical harmonics');
       assert.ok((volumeSceneContext?.fireLightProxy?.lightCount ?? 0) >= 3, 'brick-wall scene context did not expose the fire-light proxy light rig');
       assert.equal(volumeSceneContext?.fireLightProxy?.fireLightLiveSample?.identity, 'volume-live-frame-fire-light-readback-v0', 'brick-wall fire-light proxy did not expose the live-frame sample identity');
+      assert.equal(volumeSceneContext?.fireLightProxy?.measuredFireLight?.identity, 'volume-measured-fire-light-probe-v0', 'brick-wall fire-light proxy did not expose measured sim/frame light authority');
+      assert.equal(volumeSceneContext?.fireLightProxy?.measuredFireLight?.evidence?.liveFrame?.available, true, 'brick-wall fire-light proxy did not mark live-frame evidence as available');
       assert.ok(Number.isFinite(volumeSceneContext?.fireLightProxy?.liveFrameScalar), 'brick-wall fire-light proxy did not report a numeric live frame scalar');
       if (expectedVolumeFireLightProxy > 0.001) {
         assert.ok((volumeSceneContext?.fireLightProxy?.intensity ?? 0) > 0, 'brick-wall fire-light proxy did not derive positive intensity from active fire');

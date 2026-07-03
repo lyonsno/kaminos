@@ -15257,7 +15257,8 @@ const VOLUME_BRICK_WALL_LIGHTING = Object.freeze({
 const VOLUME_BRICK_WALL_FIRE_LIGHT_PROXY = Object.freeze({
   identity: 'volume-scene-fire-light-proxy-v0',
   probeIdentity: 'volume-fire-light-probe-sh1-v0',
-  sourceIdentity: 'volume-controls-emissive-summary-v0',
+  measuredAuthorityIdentity: 'volume-measured-fire-light-probe-v0',
+  sourceIdentity: 'volume-measured-fire-light-summary-v0',
   liveSampleIdentity: 'volume-live-frame-fire-light-readback-v0',
   defaultMode: 1,
   defaultGain: 1,
@@ -15272,16 +15273,11 @@ function computeVolumeFireLightProbe(volumeState = {}, fireLightLiveSample = nul
   const controlsState = volumeState.controls || {};
   const mode = clampVolumeValue(controlsState.fireLightProxy ?? VOLUME_BRICK_WALL_FIRE_LIGHT_PROXY.defaultMode, 0, 1);
   const gain = clampVolumeValue(controlsState.fireLightGain ?? VOLUME_BRICK_WALL_FIRE_LIGHT_PROXY.defaultGain, 0, 4);
+  const simReadback = volumeState.simReadback || {};
   const lifecycle = String(controlsState.lifecycleEffect || 'none').toLowerCase();
   const lifecycleT = clampVolumeValue(controlsState.lifecycleT ?? 0, 0, 1);
   const preheat = clampVolumeValue(volumeState.preheatStrength ?? 0, 0, 2);
   const quench = clampVolumeValue(volumeState.quenchVaporStrength ?? 0, 0, 2);
-  const fire = clampVolumeValue(controlsState.fire ?? 1.4, 0, 3.5);
-  const radiance = clampVolumeValue(controlsState.radiance ?? 1.8, 0, 3);
-  const glow = clampVolumeValue(controlsState.glow ?? 1.5, 0, 2.5);
-  const flow = clampVolumeValue(controlsState.flowRate ?? 0.15, 0, 2.5);
-  const fuel = clampVolumeValue(controlsState.reactionFuelScale ?? 1, 0, 1.5);
-  const plumeHeight = clampVolumeValue(controlsState.plumeHeight ?? 1.45, 0.7, 2.2);
   const windStrength = clampVolumeValue(controlsState.windStrength ?? 0, 0, 1.5);
   const windAngle = THREE.MathUtils.degToRad(Number.isFinite(controlsState.windAngle) ? controlsState.windAngle : 180);
   let lifecycleMultiplier = 1;
@@ -15290,23 +15286,97 @@ function computeVolumeFireLightProbe(volumeState = {}, fireLightLiveSample = nul
   const sourceAuthority = mode > 0.001 && volumeState.active !== false;
   const liveSampleScalar = clampVolumeValue(fireLightLiveSample?.scalar ?? 1, 0, 2.5);
   const liveSampleConfidence = clampVolumeValue(fireLightLiveSample?.confidence ?? 0, 0, 1);
+  const measuredFrameEnergy = clampVolumeValue(liveSampleScalar * liveSampleConfidence, 0, 2.5);
+  const measuredRadianceMean = Math.max(0, Number(simReadback.radianceMean) || 0);
+  const measuredFireWeight = Math.max(0, Number(simReadback.fireWeight) || 0);
+  const measuredMaxFireBinWeight = Math.max(0, Number(simReadback.maxFireBinWeight) || 0);
+  const measuredSimAvailable = !!(
+    Array.isArray(simReadback.sourceRelativeVisualHeightBins) ||
+    Number.isFinite(simReadback.radianceMean) ||
+    Number.isFinite(simReadback.fireWeight) ||
+    Number.isFinite(simReadback.maxFireBinWeight)
+  );
+  const measuredRadianceEnergy = clampVolumeValue(measuredRadianceMean * 24, 0, 2.6);
+  const measuredFireMassEnergy = clampVolumeValue(Math.log1p(measuredFireWeight) * 0.16, 0, 2.4);
+  const measuredPeakBinEnergy = clampVolumeValue(Math.log1p(measuredMaxFireBinWeight) * 0.20, 0, 1.8);
+  const measuredSimConfidence = clampVolumeValue(measuredRadianceEnergy * 0.34 + measuredFireMassEnergy * 0.22 + measuredPeakBinEnergy * 0.16, 0, 1);
+  const measuredConfidence = clampVolumeValue(Math.max(liveSampleConfidence, measuredSimConfidence), 0, 1);
+  const measuredBins = Array.isArray(simReadback.sourceRelativeVisualHeightBins)
+    ? simReadback.sourceRelativeVisualHeightBins.filter(bin => Number(bin?.fireWeight) > 0)
+    : [];
+  const measuredBinWeight = measuredBins.reduce((sum, bin) => sum + Math.max(0, Number(bin.fireWeight) || 0), 0);
+  let measuredBinCenter = 0;
+  let measuredBinLow = 0;
+  let measuredBinHigh = 0;
+  if (measuredBinWeight > 0) {
+    measuredBinCenter = measuredBins.reduce((sum, bin) => sum + (Number(bin.visualCenter) || 0) * Math.max(0, Number(bin.fireWeight) || 0), 0) / measuredBinWeight;
+    const significantBins = measuredBins.filter(bin => Math.max(0, Number(bin.fireWeight) || 0) >= measuredBinWeight * 0.025);
+    const boundsBins = significantBins.length > 0 ? significantBins : measuredBins;
+    measuredBinLow = boundsBins.reduce((min, bin) => Math.min(min, Number(bin.visualCenter) || 0), 1);
+    measuredBinHigh = boundsBins.reduce((max, bin) => Math.max(max, Number(bin.visualCenter) || 0), -1);
+  }
+  const measuredFireCenterX = Number.isFinite(simReadback.fireCenterX) ? simReadback.fireCenterX : 0;
+  const measuredFireCenterY = Number.isFinite(simReadback.fireCenterY)
+    ? simReadback.fireCenterY
+    : measuredBinCenter;
+  const measuredFireCenterZ = Number.isFinite(simReadback.fireCenterZ) ? simReadback.fireCenterZ : 0;
+  const measuredRise = clampVolumeValue(Math.max(
+    Math.abs(Number(simReadback.fireVisualRiseDisplacement) || 0),
+    Math.abs(measuredBinHigh - measuredBinLow),
+    Math.abs(Number(simReadback.risingSmokeVisualRiseDisplacement) || 0) * 0.24,
+  ), 0, 2.2);
   const frameCount = Number.isFinite(volumeState.frameCount) ? volumeState.frameCount : 0;
   const frameShimmer = 1 + Math.sin(frameCount * 0.173 + (fireLightLiveSample?.phaseSeed ?? 0)) * 0.055 * liveSampleConfidence;
-  const liveFrameScalar = sourceAuthority ? clampVolumeValue((0.18 + liveSampleScalar * 0.30) * frameShimmer, 0, 1.15) : 0;
-  const fireAuthority = sourceAuthority
-    ? fire * (0.34 + radiance * 0.34 + glow * 0.14) * (0.45 + flow * 0.36) * fuel * lifecycleMultiplier
+  const liveFrameScalar = sourceAuthority ? clampVolumeValue((0.48 + measuredFrameEnergy * 0.36) * frameShimmer, 0, 1.55) : 0;
+  const measuredEnergy = sourceAuthority
+    ? clampVolumeValue(
+      measuredRadianceEnergy * 0.46 +
+        measuredFireMassEnergy * 0.30 +
+        measuredPeakBinEnergy * 0.16 +
+        measuredFrameEnergy * 0.46,
+      0,
+      4.2,
+    )
     : 0;
-  const intensity = clampVolumeValue(fireAuthority * gain * liveFrameScalar, 0, 6);
+  const intensity = clampVolumeValue(measuredEnergy * gain * lifecycleMultiplier * (0.72 + liveFrameScalar * 0.28), 0, 6);
   const leanX = Math.cos(windAngle) * windStrength * 0.16;
   const leanZ = Math.sin(windAngle) * windStrength * 0.10;
   const liveCenterX = clampVolumeValue(fireLightLiveSample?.normalizedCenterX ?? 0, -1, 1);
   const liveCenterY = clampVolumeValue(fireLightLiveSample?.normalizedCenterY ?? 0, -1, 1);
+  const centerX = clampVolumeValue(measuredFireCenterX * 0.16 + liveCenterX * 0.10 * liveSampleConfidence + leanX, -0.28, 0.28);
+  const centerY = clampVolumeValue(measuredFireCenterY * 0.42 - 0.18 - liveCenterY * 0.08 * liveSampleConfidence, -0.72, 0.08);
+  const centerZ = clampVolumeValue(-0.46 + measuredFireCenterZ * 0.10 + leanZ, -0.70, -0.22);
   const centroid = {
-    x: clampVolumeValue(leanX + liveCenterX * 0.12 * liveSampleConfidence, -0.28, 0.28),
-    y: clampVolumeValue(-0.74 + plumeHeight * 0.18 + flow * 0.045 - liveCenterY * 0.10 * liveSampleConfidence, -0.72, 0.08),
-    z: clampVolumeValue(-0.46 + leanZ, -0.70, -0.22),
+    x: centerX,
+    y: centerY,
+    z: centerZ,
   };
-  const dominantDirection = new THREE.Vector3(leanX, 1.0, -0.32 + leanZ).normalize();
+  const radius = clampVolumeValue(1.05 + measuredRise * 0.42 + measuredEnergy * 0.13 + measuredConfidence * 0.18, 1.05, 2.35);
+  const contactWash = clampVolumeValue(intensity * (0.08 + measuredConfidence * 0.07), 0, 0.72);
+  const measuredFireLight = {
+    identity: VOLUME_BRICK_WALL_FIRE_LIGHT_PROXY.measuredAuthorityIdentity,
+    evidence: {
+      simReadback: {
+        available: measuredSimAvailable,
+        radianceMean: Number(measuredRadianceMean.toFixed(6)),
+        fireWeight: Number(measuredFireWeight.toFixed(3)),
+        maxFireBinWeight: Number(measuredMaxFireBinWeight.toFixed(3)),
+        fireCenterX: Number(measuredFireCenterX.toFixed(4)),
+        fireCenterY: Number(measuredFireCenterY.toFixed(4)),
+        fireCenterZ: Number(measuredFireCenterZ.toFixed(4)),
+        measuredRise: Number(measuredRise.toFixed(4)),
+      },
+      liveFrame: {
+        available: !!fireLightLiveSample && fireLightLiveSample.source === VOLUME_BRICK_WALL_FIRE_LIGHT_PROXY.liveSampleIdentity,
+        scalar: Number(liveSampleScalar.toFixed(4)),
+        confidence: Number(liveSampleConfidence.toFixed(4)),
+        frameEnergy: Number(measuredFrameEnergy.toFixed(4)),
+      },
+    },
+    measuredEnergy: Number(measuredEnergy.toFixed(5)),
+    measuredConfidence: Number(measuredConfidence.toFixed(5)),
+  };
+  const dominantDirection = new THREE.Vector3(centerX * 0.65 + leanX, 1.0 + measuredRise * 0.18, -0.32 + leanZ).normalize();
   const l0 = intensity * 0.282095;
   const l1Scale = intensity * 0.488603;
   return {
@@ -15320,10 +15390,11 @@ function computeVolumeFireLightProbe(volumeState = {}, fireLightLiveSample = nul
     sourceAuthority,
     liveFrameScalar,
     fireLightLiveSample,
+    measuredFireLight,
     intensity,
     centroid,
-    radius: clampVolumeValue(1.25 + plumeHeight * 0.34 + flow * 0.14, 1.2, 2.4),
-    contactWash: clampVolumeValue(intensity * (0.10 + flow * 0.035), 0, 0.72),
+    radius,
+    contactWash,
     sphericalHarmonicCoefficients: [
       Number(l0.toFixed(5)),
       Number((dominantDirection.x * l1Scale).toFixed(5)),
@@ -15659,6 +15730,7 @@ function createVolumeBrickWallContext() {
       gain: lastFireLightProbe.gain,
       liveFrameScalar: lastFireLightProbe.liveFrameScalar,
       fireLightLiveSample: lastFireLightProbe.fireLightLiveSample,
+      measuredFireLight: lastFireLightProbe.measuredFireLight,
       intensity: lastFireLightProbe.intensity,
       centroid: [c.x, c.y, c.z],
       radius: lastFireLightProbe.radius,
