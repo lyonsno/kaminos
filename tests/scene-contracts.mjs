@@ -132,6 +132,11 @@ assert.match(index, /hostDepth:\s*hybridSplatHostDepthContext\(/, 'Hybrid Render
 assert.match(index, /window\.kaminosSetHybridSplatHostDepthDebugEnabled/, 'Hybrid Renderer host-depth witness can A-B toggle native host-depth publication');
 assert.match(index, /window\.kaminosPlaceHybridSplatDepthOccluderDebugMesh/, 'Hybrid Renderer host-depth witness can place a deterministic real mesh occluder');
 assert.match(index, /window\.kaminosHybridSplatDepthOccluderDebugState/, 'Hybrid Renderer host-depth witness exposes projected occluder-region evidence');
+assert.match(index, /selectedSplatId[\s\S]*hybridSplatOverlayState\.objectId/, 'Hybrid Renderer host-depth pass hides only the selected hybrid splat instead of every peer splat');
+assert.match(index, /withHybridSplatHostDepthMaterialState[\s\S]*depthTest\s*=\s*true[\s\S]*depthWrite\s*=\s*true/, 'Hybrid Renderer host-depth pass temporarily makes peer splat previews write depth');
+assert.match(index, /withHybridSplatHostDepthMaterialState[\s\S]*transparent\s*=\s*false[\s\S]*opacity\s*=\s*1/, 'Hybrid Renderer host-depth pass makes transparent peer splat previews opaque only while writing depth');
+assert.match(index, /hostDepthIncludedSplatIds/, 'Hybrid Renderer host-depth status reports which peer splats contributed depth');
+assert.match(index, /window\.kaminosHybridSplatPeerDepthDebugState/, 'Hybrid Renderer exposes projected peer-splat evidence for two-splat host-depth smoke');
 assert.match(index, /sharedCanvasComposite:\s*false/, 'hybrid splat route stub must explicitly say shared canvas compositing is not implemented yet');
 assert.match(index, /realSplatRendering:\s*false/, 'hybrid splat route stub must not imply real splat rendering is active');
 assert.match(index, /id="splat-hybrid-renderer-panel"/, 'selected splats expose a visible Hybrid Renderer control surface, not only a URL flag');

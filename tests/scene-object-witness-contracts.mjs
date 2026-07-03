@@ -220,6 +220,9 @@ assert.match(witness, /hybrid-host-depth-occluder/, 'Host-depth compositor witne
 assert.match(witness, /host-depth occluder witness could not disable host depth for A\/B baseline/, 'Host-depth compositor witness proves the disabled baseline route identity before comparing pixels');
 assert.match(witness, /host-depth occluder witness did not activate the shared host-depth route cleanly/, 'Host-depth compositor witness proves shared-device native host-depth route identity');
 assert.match(witness, /host-depth occluder witness did not change the projected occluder region/, 'Host-depth compositor witness fails unless the host occluder changes pixels over the splat');
+assert.match(witness, /hybrid-two-splat-depth-order/, 'Host-depth compositor witness runs a deterministic peer-splat depth-order scenario');
+assert.match(witness, /two-splat depth witness did not include a peer splat in the host depth pass/, 'Two-splat compositor witness proves the non-selected splat contributes host depth');
+assert.match(witness, /two-splat depth witness did not change the projected peer-splat region/, 'Two-splat compositor witness fails unless enabling host depth changes pixels where splats overlap');
 assert.match(witness, /real-hybrid-cropped-unsupported-guard/, 'Real Hybrid Renderer witness covers cropped assets when renderer crop is unsupported');
 assert.match(witness, /uncropped expensive renderer start/, 'Real Hybrid Renderer witness rejects starting an uncropped full renderer for cropped splats');
 assert.match(witness, /real-hybrid-cropped-supported-overlay/, 'Real Hybrid Renderer witness covers cropped assets when renderer advertises crop support');

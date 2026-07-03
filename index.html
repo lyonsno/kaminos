@@ -1575,7 +1575,10 @@ function ensureHybridSplatHostDepthTarget() {
   return hybridSplatHostDepthRT;
 }
 
-function withHybridSplatPreviewDepthHidden(callback) {
+function withHybridSplatPreviewDepthHidden(callback, {
+  selectedSplatId = hybridSplatOverlayState.objectId,
+  hiddenSplatIds = [],
+} = {}) {
   const hidden = [];
   if (groundPlane?.visible !== false) {
     hidden.push(groundPlane);
@@ -1583,8 +1586,10 @@ function withHybridSplatPreviewDepthHidden(callback) {
   }
   for (const record of sceneObjects) {
     if (record.type !== 'splat') continue;
+    if (!selectedSplatId || record.id !== selectedSplatId) continue;
     const visualRoot = splatVisualRootFor(record.object) || record.object;
     if (!visualRoot || visualRoot.visible === false) continue;
+    hiddenSplatIds.push(record.id);
     hidden.push(visualRoot);
     visualRoot.visible = false;
   }
@@ -1595,10 +1600,57 @@ function withHybridSplatPreviewDepthHidden(callback) {
   }
 }
 
+function withHybridSplatHostDepthMaterialState(callback, {
+  selectedSplatId = hybridSplatOverlayState.objectId,
+  hostDepthIncludedSplatIds = [],
+} = {}) {
+  const changedMaterials = [];
+  const visitMaterial = material => {
+    if (!material) return;
+    changedMaterials.push({
+      material,
+      depthTest: material.depthTest,
+      depthWrite: material.depthWrite,
+      transparent: material.transparent,
+      opacity: material.opacity,
+    });
+    material.depthTest = true;
+    material.depthWrite = true;
+    material.transparent = false;
+    material.opacity = 1;
+    material.needsUpdate = true;
+  };
+  for (const record of sceneObjects) {
+    if (record.type !== 'splat') continue;
+    if (selectedSplatId && record.id === selectedSplatId) continue;
+    const visualRoot = splatVisualRootFor(record.object) || record.object;
+    if (!visualRoot || visualRoot.visible === false) continue;
+    hostDepthIncludedSplatIds.push(record.id);
+    visualRoot.traverse?.(object => {
+      const materials = Array.isArray(object.material) ? object.material : [object.material];
+      materials.forEach(visitMaterial);
+    });
+  }
+  try {
+    return callback();
+  } finally {
+    for (const state of changedMaterials) {
+      state.material.depthTest = state.depthTest;
+      state.material.depthWrite = state.depthWrite;
+      state.material.transparent = state.transparent;
+      state.material.opacity = state.opacity;
+      state.material.needsUpdate = true;
+    }
+  }
+}
+
 function renderHybridSplatHostDepthTarget() {
   if (!hybridSplatOverlayIsRendering() || !scene || !camera || !renderer) return null;
   const target = ensureHybridSplatHostDepthTarget();
   if (!target) return null;
+  const selectedSplatId = hybridSplatOverlayState.objectId;
+  const hostDepthHiddenSplatIds = [];
+  const hostDepthIncludedSplatIds = [];
   const previousTarget = typeof renderer.getRenderTarget === 'function' ? renderer.getRenderTarget() : null;
   const previousBackground = scene.background;
   const previousClearColor = new THREE.Color();
@@ -1610,7 +1662,13 @@ function renderHybridSplatHostDepthTarget() {
     renderer.setRenderTarget(target);
     renderer.setClearColor?.(0x000000, 0);
     renderer.clear?.();
-    withHybridSplatPreviewDepthHidden(() => renderer.render(scene, camera));
+    withHybridSplatPreviewDepthHidden(
+      () => withHybridSplatHostDepthMaterialState(
+        () => renderer.render(scene, camera),
+        { selectedSplatId, hostDepthIncludedSplatIds },
+      ),
+      { selectedSplatId, hiddenSplatIds: hostDepthHiddenSplatIds },
+    );
     hybridSplatHostDepthFrameId += 1;
     hybridSplatHostDepthStatus = {
       schema: 'kaminos.hybrid-splat.host-depth.v0',
@@ -1619,6 +1677,9 @@ function renderHybridSplatHostDepthTarget() {
       width: target.width,
       height: target.height,
       source: 'kaminos.webgpu-render-target',
+      selectedSplatId,
+      hostDepthHiddenSplatIds,
+      hostDepthIncludedSplatIds,
       updatedAt: new Date().toISOString(),
     };
   } catch (error) {
@@ -1775,6 +1836,39 @@ window.kaminosHybridSplatDepthOccluderDebugState = function() {
     schema: 'kaminos.hybrid-splat.depth-occluder-debug.v0',
     active: true,
     name: hybridSplatDepthOccluderDebugMesh.name,
+    position: center.toArray(),
+    screen,
+    hostDepthEnabled: hybridSplatHostDepthDebugEnabled,
+  };
+};
+
+window.kaminosHybridSplatPeerDepthDebugState = function(id = null) {
+  const record = id
+    ? sceneObjects.find(item => item.id === id)
+    : sceneObjects.find(item => item.type === 'splat' && item.id !== hybridSplatOverlayState.objectId);
+  if (!record || record.type !== 'splat' || !camera) {
+    return { schema: 'kaminos.hybrid-splat.peer-depth-debug.v0', active: false, objectId: id || null };
+  }
+  const visualRoot = splatVisualRootFor(record.object) || record.object;
+  if (!visualRoot) {
+    return { schema: 'kaminos.hybrid-splat.peer-depth-debug.v0', active: false, objectId: record.id };
+  }
+  visualRoot.updateMatrixWorld?.(true);
+  const center = visualRoot.getWorldPosition(new THREE.Vector3());
+  const ndc = center.clone().project(camera);
+  const size = renderer?.getDrawingBufferSize ? renderer.getDrawingBufferSize(new THREE.Vector2()) : new THREE.Vector2(window.innerWidth, window.innerHeight);
+  const screen = {
+    x: (ndc.x * 0.5 + 0.5) * size.x,
+    y: (-ndc.y * 0.5 + 0.5) * size.y,
+    ndc: ndc.toArray(),
+  };
+  return {
+    schema: 'kaminos.hybrid-splat.peer-depth-debug.v0',
+    active: true,
+    objectId: record.id,
+    selectedSplatId: hybridSplatOverlayState.objectId,
+    label: record.label || record.fileName || record.id,
+    visible: visualRoot.visible !== false,
     position: center.toArray(),
     screen,
     hostDepthEnabled: hybridSplatHostDepthDebugEnabled,

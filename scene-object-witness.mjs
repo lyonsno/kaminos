@@ -3095,6 +3095,18 @@ async function runRealHybridSplatOverlayScenario(ws) {
   lastEvidence.realHybridSplatOverlay = await evaluate(ws, `
     (async () => {
       const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      const waitForKaminosSplatRuntime = async () => {
+        for (let i = 0; i < 240; i++) {
+          if (typeof window.greenroomImportSplat === 'function'
+            && typeof window.kaminosSceneObjectDebugState === 'function'
+            && typeof window.kaminosSetHybridSplatOverlayModuleUrl === 'function') {
+            return true;
+          }
+          await wait(125);
+        }
+        return false;
+      };
+      const runtimeReady = await waitForKaminosSplatRuntime();
       const rowState = () => [...document.querySelectorAll('[data-scene-object-id]')].map(row => ({
         id: row.dataset.sceneObjectId,
         active: row.classList.contains('active'),
@@ -3150,6 +3162,7 @@ async function runRealHybridSplatOverlayScenario(ws) {
       const assetEntry = (requestedSplatAssetName
         ? assetEntries.find(entry => entry.name === requestedSplatAssetName || entry.path === requestedSplatAssetName)
         : null)
+        || assetEntries.find(entry => entry.name === 'evil_orb_final_composite.ply')
         || assetEntries.find(entry => entry.correction?.crop?.enabled !== true && (entry.size || 0) > 4096)
         || assetEntries.find(entry => (entry.size || 0) > 4096)
         || assetEntries.find(entry => entry.name === 'witness-crop-frame.ply')
@@ -3157,7 +3170,7 @@ async function runRealHybridSplatOverlayScenario(ws) {
         || null;
       const assetRows = await waitForAssetRows();
       const display = assetEntry?.display || { title: assetEntry?.name || assetEntry?.path || 'Splat' };
-      const actionExposed = !!assetEntry && typeof window.greenroomImportSplat === 'function';
+      const actionExposed = runtimeReady && !!assetEntry && typeof window.greenroomImportSplat === 'function';
       if (actionExposed) {
         const rendererSmokeCorrection = assetEntry.correction?.crop?.enabled === true ? null : assetEntry.correction || null;
         await window.greenroomImportSplat(assetEntry.source, assetEntry.name || assetEntry.path || 'splat.ply', display, {
@@ -3264,6 +3277,7 @@ async function runRealHybridSplatOverlayScenario(ws) {
         previewDebug,
         cameraCoherence,
         statusText,
+        runtimeReady,
         beforeSample,
         afterSample,
         overlayCanvas: overlayCanvas ? {
@@ -3418,6 +3432,150 @@ async function runHybridHostDepthOccluderScenario(ws) {
   }
   if (evidence.regionDiff.changedRatio < 0.025 || evidence.regionDiff.meanAbsDiff < 3.0) {
     throw new Error(`host-depth occluder witness did not change the projected occluder region when host depth was enabled: ${JSON.stringify(evidence)}`);
+  }
+}
+
+async function runHybridTwoSplatDepthOrderScenario(ws) {
+  await runRealHybridSplatOverlayScenario(ws);
+  phase = 'scenario-hybrid-two-splat-depth-order';
+
+  const setup = await evaluate(ws, `
+    (async () => {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      const overlayDebugBeforePeer = window.kaminosHybridSplatOverlayDebugState?.() || null;
+      const selectedSplatId = overlayDebugBeforePeer?.objectId || null;
+      const selectedSource = overlayDebugBeforePeer?.sourceIdentity?.source || overlayDebugBeforePeer?.loadedSource || null;
+      const beforeSplats = (window.kaminosSceneObjectDebugState?.() || []).filter(record => record.type === 'splat');
+      const assetData = await fetch('/api/assets?kind=splat').then(resp => resp.json());
+      const assetEntries = assetData.entries || [];
+      const peerAsset = assetEntries.find(entry => entry.source && entry.source !== selectedSource && (entry.size || 0) > 4096)
+        || assetEntries.find(entry => entry.source && entry.source !== selectedSource)
+        || null;
+      if (peerAsset && typeof window.greenroomImportSplat === 'function') {
+        await window.greenroomImportSplat(peerAsset.source, peerAsset.name || peerAsset.path || 'peer-splat.ply', peerAsset.display || { title: peerAsset.name || 'Peer Splat' }, {
+          clear: false,
+          metadata: {
+            source: peerAsset.source,
+            fileName: peerAsset.name || peerAsset.path || 'peer-splat.ply',
+            label: peerAsset.display?.title || peerAsset.name || 'Peer Splat',
+            splat: {
+              schema: 'kaminos.splat-asset.v0',
+              assetSource: peerAsset.source,
+              fileName: peerAsset.name || peerAsset.path || 'peer-splat.ply',
+              format: 'ply',
+              bounds: null,
+              splatCount: null,
+              sidecars: [],
+              correction: peerAsset.correction?.crop?.enabled === true ? null : peerAsset.correction || null,
+              provenance: {
+                source_group: peerAsset.stage === 'production' ? 'splat-production' : 'splat-inbox',
+                source_url: peerAsset.source,
+                root_id: peerAsset.root_id || null,
+                root_label: peerAsset.root_label || null,
+                asset_stage: peerAsset.stage || 'experimental',
+                asset_path: peerAsset.path || null,
+              },
+            },
+          },
+        });
+      }
+      for (let i = 0; i < 120; i++) {
+        const splats = (window.kaminosSceneObjectDebugState?.() || []).filter(record => record.type === 'splat');
+        if (splats.length > beforeSplats.length) break;
+        await wait(125);
+      }
+      const afterSplats = (window.kaminosSceneObjectDebugState?.() || []).filter(record => record.type === 'splat');
+      const peerSplat = afterSplats.find(record => record.id !== selectedSplatId && record.source === peerAsset?.source)
+        || afterSplats.find(record => record.id !== selectedSplatId)
+        || null;
+      if (peerSplat?.id) {
+        window.kaminosSetSceneObjectTransform?.(peerSplat.id, {
+          position: [0, 0.02, 1.15],
+          rotation: [0, 0, 0],
+          scale: [1.05, 1.05, 1.05],
+        });
+      }
+      if (selectedSplatId) window.selectSceneObject?.(selectedSplatId);
+      window.kaminosSetCameraDebugPose?.({ position: [0, 0.72, 3.05], target: [0, 0.03, 0.05] });
+      await wait(500);
+      const offToggle = window.kaminosSetHybridSplatHostDepthDebugEnabled?.(false) || null;
+      await wait(800);
+      const offDebug = window.kaminosHybridSplatOverlayDebugState?.() || null;
+      const host = document.getElementById('hybrid-splat-overlay-host');
+      const hostRect = host ? (() => {
+        const r = host.getBoundingClientRect();
+        return { x: r.x, y: r.y, width: r.width, height: r.height };
+      })() : null;
+      const peer = window.kaminosHybridSplatPeerDepthDebugState?.(peerSplat?.id) || null;
+      return {
+        selectedSplatId,
+        selectedSource,
+        peerAsset,
+        peerSplat,
+        beforeSplats,
+        afterSplats,
+        offToggle,
+        offDebug,
+        peer,
+        overlayHost: { rect: hostRect },
+      };
+    })()
+  `, { timeoutMs: 90000 });
+
+  const offShot = await capturePngScreenshot(ws, siblingPngPath('-two-splat-host-depth-off'));
+
+  const enable = await evaluate(ws, `
+    (async () => {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      const onToggle = window.kaminosSetHybridSplatHostDepthDebugEnabled?.(true) || null;
+      await wait(1000);
+      const onDebug = window.kaminosHybridSplatOverlayDebugState?.() || null;
+      const peer = window.kaminosHybridSplatPeerDepthDebugState?.(${JSON.stringify(null)}) || null;
+      const hostDepth = window.kaminosHybridSplatHostDepthDebugState?.() || null;
+      return { onToggle, onDebug, peer, hostDepth };
+    })()
+  `, { timeoutMs: 30000 });
+
+  const onShot = await capturePngScreenshot(ws, siblingPngPath('-two-splat-host-depth-on'));
+  const evidence = {
+    schema: 'kaminos.hybrid-splat.two-splat-depth-order-witness.v0',
+    setup,
+    enable,
+    overlayHost: setup.overlayHost,
+    occluder: enable.peer || setup.peer,
+    offScreenshot: offShot,
+    onScreenshot: onShot,
+  };
+  evidence.regionDiff = comparePngRegion(offShot.path, onShot.path, evidence, 120);
+  lastEvidence.hybridTwoSplatDepthOrder = evidence;
+
+  if (!setup.selectedSplatId || !setup.peerSplat?.id || setup.peerSplat.id === setup.selectedSplatId) {
+    throw new Error(`two-splat depth witness did not create a distinct selected splat plus peer splat: ${JSON.stringify(evidence)}`);
+  }
+  if (setup.offDebug?.capabilities?.hostDepthTexture !== false
+    || setup.offDebug?.depthCompositionTelemetry?.source === 'host-depth-texture') {
+    throw new Error(`two-splat depth witness could not disable host depth for A/B baseline: ${JSON.stringify(evidence)}`);
+  }
+  const onTelemetry = enable.onDebug?.depthCompositionTelemetry || null;
+  if (enable.onDebug?.capabilities?.hostDepthTexture !== true
+    || enable.onDebug?.capabilities?.sharedDevice !== true
+    || onTelemetry?.source !== 'host-depth-texture'
+    || enable.onDebug?.renderError) {
+    throw new Error(`two-splat depth witness did not activate the shared host-depth route cleanly: ${JSON.stringify(evidence)}`);
+  }
+  const included = enable.hostDepth?.status?.hostDepthIncludedSplatIds || [];
+  const hidden = enable.hostDepth?.status?.hostDepthHiddenSplatIds || [];
+  if (!included.includes(setup.peerSplat.id) || included.includes(setup.selectedSplatId) || hidden.includes(setup.peerSplat.id)) {
+    throw new Error(`two-splat depth witness did not include a peer splat in the host depth pass: ${JSON.stringify(evidence)}`);
+  }
+  if (!evidence.occluder?.active
+    || !Number.isFinite(evidence.occluder?.screen?.x)
+    || !Number.isFinite(evidence.occluder?.screen?.y)
+    || !evidence.overlayHost?.rect) {
+    throw new Error(`two-splat depth witness did not project a deterministic peer splat: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.regionDiff.changedRatio < 0.015 || evidence.regionDiff.meanAbsDiff < 2.0) {
+    throw new Error(`two-splat depth witness did not change the projected peer-splat region when host depth was enabled: ${JSON.stringify(evidence)}`);
   }
 }
 
@@ -4606,6 +4764,8 @@ try {
     await runRealHybridSplatOverlayScenario(ws);
   } else if (scenario === 'hybrid-host-depth-occluder') {
     await runHybridHostDepthOccluderScenario(ws);
+  } else if (scenario === 'hybrid-two-splat-depth-order') {
+    await runHybridTwoSplatDepthOrderScenario(ws);
   } else if (scenario === 'real-hybrid-cropped-unsupported-guard') {
     await runRealHybridCroppedUnsupportedGuardScenario(ws);
   } else if (scenario === 'real-hybrid-cropped-supported-overlay') {
@@ -4641,7 +4801,7 @@ try {
   phase = 'capturing-screenshot';
   const finalShot = await capturePngScreenshot(ws, out);
   phase = 'validating-screenshot';
-  if (scenario === 'real-hybrid-splat-overlay' || scenario === 'hybrid-host-depth-occluder') {
+  if (scenario === 'real-hybrid-splat-overlay' || scenario === 'hybrid-host-depth-occluder' || scenario === 'hybrid-two-splat-depth-order') {
     assertRealHybridScreenshotVisible(out);
   }
 
