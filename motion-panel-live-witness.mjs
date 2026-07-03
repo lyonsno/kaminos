@@ -502,6 +502,7 @@ async function captureFrame(ws, index) {
       pathWorld: actor?.pathWorld || state?.pathWorld || null,
       pathWorldInterrupt: actor?.pathWorldInterrupt || state?.pathWorldInterrupt || null,
       pathWorldEpisode: actor?.pathWorldEpisode || state?.pathWorldEpisode || state?.pathWorldInterrupt?.pathWorldEpisode || null,
+      pathWorldEncounterSemantics: actor?.pathWorldEncounterSemantics || state?.pathWorldEncounterSemantics || state?.pathWorldEpisode?.encounterSemantics || null,
       pathWorldEncounterTrajectory: actor?.pathWorldEncounterTrajectory || state?.pathWorldEncounterTrajectory || null,
       pathWorldResumeHandoff: actor?.pathWorldResumeHandoff || state?.pathWorldResumeHandoff || null,
       pathWorldRootConstraint: actor?.pathWorldRootConstraint || state?.pathWorldRootConstraint || null,
@@ -576,10 +577,13 @@ async function composeFilmstrip(ws, frames) {
     const clipletInterrupt = frame.debug?.clipletInterrupt || null;
     const pathWorldInterrupt = frame.debug?.pathWorldInterrupt || null;
     const pathWorldEpisode = frame.debug?.pathWorldEpisode || null;
+    const pathWorldEncounterSemantics = frame.debug?.pathWorldEncounterSemantics || pathWorldEpisode?.encounterSemantics || null;
     const pathWorldEncounterTrajectory = frame.debug?.pathWorldEncounterTrajectory || null;
     const pathWorldResumeHandoff = frame.debug?.pathWorldResumeHandoff || pathWorldEncounterTrajectory?.resumeHandoff || null;
     const episodePhase = pathWorldEpisode?.phase || pathWorldInterrupt?.phase || null;
     const trajectoryPhase = pathWorldEncounterTrajectory?.trajectoryPhase || pathWorldEncounterTrajectory?.activeSample?.trajectoryPhase || null;
+    const encounterArchetype = pathWorldEncounterSemantics?.encounterArchetype || pathWorldEncounterTrajectory?.encounterArchetype || null;
+    const trajectoryProfile = pathWorldEncounterSemantics?.trajectoryProfile || pathWorldEncounterTrajectory?.trajectoryProfile || null;
     const handoffPhase = pathWorldResumeHandoff?.handoffPhase || pathWorldResumeHandoff?.activeSample?.handoffPhase || null;
     const routeAuthority = frame.debug?.pathWorldRouteAuthority
       || pathWorldEncounterTrajectory?.routeAuthority
@@ -597,8 +601,10 @@ async function composeFilmstrip(ws, frames) {
     const episodeId = pathWorldEpisode?.episodeId ? pathWorldEpisode.episodeId.replace(/^path-world-/, '') : null;
     const state = [
       clipletLabel || behaviorState,
+      encounterArchetype ? `enc ${encounterArchetype}` : null,
       interruptState || behaviorPhase,
       trajectoryPhase ? `traj ${trajectoryPhase}` : null,
+      trajectoryProfile ? `profile ${trajectoryProfile}` : null,
       handoffPhase ? `handoff ${handoffPhase}` : null,
       routeAuthority ? `route ${routeAuthority}` : null,
       episodeId,

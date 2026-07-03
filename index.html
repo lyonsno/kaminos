@@ -5214,7 +5214,71 @@ function createMotionPanelPathWorldContactFrame(pathWorldSample, { actorRadius =
   };
 }
 
-function createMotionPanelPathWorldEncounterTrajectory({ episodeId, pathWorldSample, contactFrame }) {
+function createMotionPanelPathWorldEncounterSemantics({ episodeId, pathWorldSample, contactFrame, selected }) {
+  const label = String(selected?.labelGuess || selected?.id || '').toLowerCase();
+  const trigger = pathWorldSample?.trigger || {};
+  const depth = Math.max(0, Number(trigger.radius || 0) - Number(trigger.distance || Infinity));
+  const incoming = motionPanelPathWorldPointFromArray(contactFrame?.incomingHeading || pathWorldSample?.facing, [0, 0, 1]).setY(0);
+  if (incoming.lengthSq() < 1e-6) incoming.set(0, 0, 1);
+  incoming.normalize();
+  const normal = motionPanelPathWorldPointFromArray(contactFrame?.obstacleNormal, [0, 0, -1]).setY(0);
+  if (normal.lengthSq() < 1e-6) normal.set(0, 0, -1);
+  normal.normalize();
+  const approachDot = Number(incoming.dot(normal).toFixed(5));
+  let encounterArchetype = 'avoid';
+  if (depth > 0.06 || approachDot < -0.72) encounterArchetype = 'bump';
+  else if (/startle|recoil|escape|flinch|brake/.test(label)) encounterArchetype = 'recoil';
+  else if (/hesitat|notice|inspect|curious|watch/.test(label)) encounterArchetype = 'inspect';
+  const profiles = {
+    avoid: {
+      encounterIntent: 'pass around obstacle without granting it attention',
+      trajectoryProfile: 'clearance-arc',
+      attentionMode: 'route-target',
+      exitBias: 'tangent',
+      profileTuning: { retreatNormal: 0.24, incomingBrake: 0.06, releaseNormal: 0.23, releaseTangent: 0.4, resumeNormal: 0.17, resumeTangent: 0.82 },
+    },
+    inspect: {
+      encounterIntent: 'slow near obstacle and briefly face it before resuming',
+      trajectoryProfile: 'inspect-hold',
+      attentionMode: 'obstacle',
+      exitBias: 'hold-near-obstacle',
+      profileTuning: { retreatNormal: 0.16, incomingBrake: 0.04, releaseNormal: 0.27, releaseTangent: 0.18, resumeNormal: 0.2, resumeTangent: 0.42 },
+    },
+    bump: {
+      encounterIntent: 'absorb contact, compress, then slide off the blocker',
+      trajectoryProfile: 'impact-slide',
+      attentionMode: 'obstacle-then-route',
+      exitBias: 'normal',
+      profileTuning: { retreatNormal: 0.42, incomingBrake: 0.13, releaseNormal: 0.36, releaseTangent: 0.24, resumeNormal: 0.25, resumeTangent: 0.58 },
+    },
+    recoil: {
+      encounterIntent: 'pull away from the obstacle before finding the route again',
+      trajectoryProfile: 'recoil-arc',
+      attentionMode: 'escape-route',
+      exitBias: 'away',
+      profileTuning: { retreatNormal: 0.52, incomingBrake: 0.12, releaseNormal: 0.34, releaseTangent: 0.36, resumeNormal: 0.2, resumeTangent: 0.76 },
+    },
+  };
+  const selectedProfile = profiles[encounterArchetype] || profiles.avoid;
+  return {
+    schema: 'kaminos.generated-motion-path-world-encounter-semantics.v0',
+    semanticsId: `${episodeId}-semantics`,
+    pathWorldId: pathWorldSample?.pathWorldId || null,
+    obstacleId: contactFrame?.obstacleId || pathWorldSample?.trigger?.obstacleId || null,
+    selectedLabel: selected?.labelGuess || selected?.id || null,
+    encounterArchetype,
+    encounterIntent: selectedProfile.encounterIntent,
+    trajectoryProfile: selectedProfile.trajectoryProfile,
+    attentionMode: selectedProfile.attentionMode,
+    exitBias: selectedProfile.exitBias,
+    triggerDepth: Number(depth.toFixed(5)),
+    approachDot,
+    routeDirection: pathWorldSample?.direction || null,
+    profileTuning: selectedProfile.profileTuning,
+  };
+}
+
+function createMotionPanelPathWorldEncounterTrajectory({ episodeId, pathWorldSample, contactFrame, encounterSemantics }) {
   const contactPoint = motionPanelPathWorldPointFromArray(contactFrame?.contactPoint, pathWorldSample?.root || [0, 0, 0]);
   const normal = motionPanelPathWorldPointFromArray(contactFrame?.obstacleNormal, [0, 0, -1]).setY(0);
   if (normal.lengthSq() < 1e-6) normal.set(0, 0, -1);
@@ -5229,20 +5293,26 @@ function createMotionPanelPathWorldEncounterTrajectory({ episodeId, pathWorldSam
   const exitTangent = baseTangent.clone().multiplyScalar(tangentSign);
   const exitSide = tangentSign >= 0 ? 'tangent-positive' : 'tangent-negative';
   const entryPoint = motionPanelPathWorldPointFromArray(pathWorldSample?.root, contactFrame?.contactPoint || [0, 0, 0]);
+  const profileTuning = encounterSemantics?.profileTuning || {};
   const retreatPoint = contactPoint.clone()
-    .add(normal.clone().multiplyScalar(0.3))
-    .add(incoming.clone().multiplyScalar(-0.08));
+    .add(normal.clone().multiplyScalar(Number(profileTuning.retreatNormal ?? 0.3)))
+    .add(incoming.clone().multiplyScalar(-Number(profileTuning.incomingBrake ?? 0.08)));
   const releasePoint = contactPoint.clone()
-    .add(normal.clone().multiplyScalar(0.24))
-    .add(exitTangent.clone().multiplyScalar(0.28));
+    .add(normal.clone().multiplyScalar(Number(profileTuning.releaseNormal ?? 0.24)))
+    .add(exitTangent.clone().multiplyScalar(Number(profileTuning.releaseTangent ?? 0.28)));
   const resumePoint = contactPoint.clone()
-    .add(normal.clone().multiplyScalar(0.18))
-    .add(exitTangent.clone().multiplyScalar(0.66));
+    .add(normal.clone().multiplyScalar(Number(profileTuning.resumeNormal ?? 0.18)))
+    .add(exitTangent.clone().multiplyScalar(Number(profileTuning.resumeTangent ?? 0.66)));
   return {
     schema: 'kaminos.generated-motion-path-world-encounter-trajectory.v0',
     trajectoryId: `${episodeId}-trajectory`,
     pathWorldId: pathWorldSample?.pathWorldId || null,
     obstacleId: contactFrame?.obstacleId || pathWorldSample?.trigger?.obstacleId || null,
+    semanticsId: encounterSemantics?.semanticsId || null,
+    encounterArchetype: encounterSemantics?.encounterArchetype || null,
+    trajectoryProfile: encounterSemantics?.trajectoryProfile || null,
+    attentionMode: encounterSemantics?.attentionMode || null,
+    exitBias: encounterSemantics?.exitBias || null,
     exitSide,
     contactPoint: motionPanelPathWorldArrayFromPoint(contactPoint),
     entryPoint: motionPanelPathWorldArrayFromPoint(entryPoint),
@@ -5344,10 +5414,17 @@ function createMotionPanelPathWorldInterruptEpisode({ state, pathWorldSample, se
   const handoffDuration = 0.82;
   const firedAt = Number(elapsedTime) || 0;
   const contactFrame = createMotionPanelPathWorldContactFrame(pathWorldSample);
+  const encounterSemantics = createMotionPanelPathWorldEncounterSemantics({
+    episodeId,
+    pathWorldSample,
+    contactFrame,
+    selected,
+  });
   const encounterTrajectory = createMotionPanelPathWorldEncounterTrajectory({
     episodeId,
     pathWorldSample,
     contactFrame,
+    encounterSemantics,
   });
   const resumeHandoff = createMotionPanelPathWorldResumeHandoff({
     episodeId,
@@ -5377,6 +5454,7 @@ function createMotionPanelPathWorldInterruptEpisode({ state, pathWorldSample, se
     handoffUntil: Number((firedAt + playbackDuration + cooldownDuration + handoffDuration).toFixed(5)),
     suppressedUntilClear: true,
     contactFrame,
+    encounterSemantics,
     encounterTrajectory,
     resumeHandoff,
     trigger: pathWorldSample?.trigger || null,
@@ -6585,11 +6663,13 @@ function updateGeneratedPoseTemporalFrame(nowSeconds = performance.now() / 1000)
   const fallbackRootPosition = new THREE.Vector3(...displayGrounding.root).add(pathWorldOffset);
   let rootPosition = fallbackRootPosition.clone();
   let pathWorldRootConstraint = null;
+  let pathWorldEncounterSemantics = null;
   let pathWorldEncounterTrajectory = null;
   let pathWorldResumeHandoff = null;
   let pathWorldRouteAuthority = pathWorldSample ? 'world-path' : null;
   if (pathWorldSample) {
     const activePathWorldEpisode = pathWorldInterruptEnvelope?.interrupt?.pathWorldEpisode || null;
+    pathWorldEncounterSemantics = activePathWorldEpisode?.encounterSemantics || null;
     if (activePathWorldEpisode?.encounterTrajectory) {
       const trajectoryResult = motionPanelPathWorldEncounterTrajectoryRootPosition({
         pathWorldSample,
@@ -6605,6 +6685,7 @@ function updateGeneratedPoseTemporalFrame(nowSeconds = performance.now() / 1000)
             ...trajectoryResult.sample,
             root: undefined,
           },
+          encounterSemantics: activePathWorldEpisode.encounterSemantics || null,
           trajectoryPhase: trajectoryResult.sample.trajectoryPhase,
           routeAuthority: trajectoryResult.sample.routeAuthority,
           handoffPhase: trajectoryResult.sample.handoffPhase,
@@ -6652,9 +6733,20 @@ function updateGeneratedPoseTemporalFrame(nowSeconds = performance.now() / 1000)
       visual.interruptTrigger.material.opacity = 0;
     }
   }
-  const sampleAttention = pathWorldSample
-    ? new THREE.Vector3(...pathWorldSample.attention)
-    : new THREE.Vector3(...displayGrounding.attention);
+  const semanticAttentionMode = pathWorldEncounterSemantics?.attentionMode || null;
+  const shouldAttendObstacle = pathWorldSample
+    && pathWorldEncounterSemantics
+    && ['obstacle', 'obstacle-then-route'].includes(semanticAttentionMode)
+    && ['triggered', 'reaction', 'cooldown'].includes(pathWorldInterruptEnvelope?.interrupt?.phase || '');
+  const sampleAttention = shouldAttendObstacle
+    ? new THREE.Vector3(
+      Number(pathWorldSample.trigger?.center?.[0] || 0),
+      Number(pathWorldSample.trigger?.center?.[1] || 0) + 0.08,
+      Number(pathWorldSample.trigger?.center?.[2] || 0),
+    )
+    : pathWorldSample
+      ? new THREE.Vector3(...pathWorldSample.attention)
+      : new THREE.Vector3(...displayGrounding.attention);
   const attentionTarget = motionAttentionTargetForSample(sampleAttention, state.targetContext);
   const attention = attentionTarget.position;
   state.lastAttentionTargetContext = attentionTarget.context || state.targetContext;
@@ -6706,6 +6798,7 @@ function updateGeneratedPoseTemporalFrame(nowSeconds = performance.now() / 1000)
   state.lastPathWorld = pathWorldSample;
   state.lastPathWorldInterrupt = pathWorldInterruptEnvelope?.interrupt || null;
   state.lastPathWorldEpisode = pathWorldInterruptEnvelope?.interrupt?.pathWorldEpisode || null;
+  state.lastPathWorldEncounterSemantics = pathWorldEncounterSemantics;
   state.lastPathWorldEncounterTrajectory = pathWorldEncounterTrajectory;
   state.lastPathWorldResumeHandoff = pathWorldResumeHandoff;
   state.lastPathWorldRouteAuthority = pathWorldRouteAuthority;
@@ -6786,6 +6879,7 @@ function updateGeneratedPoseTemporalFrame(nowSeconds = performance.now() / 1000)
     pathWorld: pathWorldSample,
     pathWorldInterrupt: pathWorldInterruptEnvelope?.interrupt || null,
     pathWorldEpisode: pathWorldInterruptEnvelope?.interrupt?.pathWorldEpisode || null,
+    pathWorldEncounterSemantics,
     pathWorldEncounterTrajectory,
     pathWorldResumeHandoff,
     pathWorldRootConstraint,
@@ -8148,6 +8242,7 @@ window.kaminosGeneratedPoseTemporalDebugState = function() {
     pathWorld: state?.lastPathWorld || null,
     pathWorldInterrupt: state?.lastPathWorldInterrupt || null,
     pathWorldEpisode: state?.lastPathWorldEpisode || null,
+    pathWorldEncounterSemantics: state?.lastPathWorldEncounterSemantics || null,
     pathWorldEncounterTrajectory: state?.lastPathWorldEncounterTrajectory || null,
     pathWorldResumeHandoff: state?.lastPathWorldResumeHandoff || null,
     pathWorldRootConstraint: state?.lastPathWorldRootConstraint || null,
