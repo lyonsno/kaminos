@@ -1537,6 +1537,21 @@ assert.match(renderPairDataset, /renderPixelRatio/, 'render-pair dataset records
 assert.match(renderPairDataset, /dryRun/, 'render-pair dataset supports a dry run manifest without spending browser/GPU time');
 assert.match(renderPairDataset, /failurePhase/, 'render-pair dataset records the phase when capture or validation fails');
 
+const residualHandoffWitnessPath = join(root, 'volume-residual-handoff-witness.mjs');
+assert.ok(existsSync(residualHandoffWitnessPath), 'residual handoff witness exists');
+const residualHandoffWitness = existsSync(residualHandoffWitnessPath) ? readFileSync(residualHandoffWitnessPath, 'utf8') : '';
+assert.match(residualHandoffWitness, /kaminos\.volume\.residual-handoff-witness\.v0/, 'residual handoff witness writes a stable report schema identity');
+assert.match(residualHandoffWitness, /residual-upscale-model-artifact\.v0/, 'residual handoff witness requires the saved residual model artifact schema');
+assert.match(residualHandoffWitness, /offline-mlx-residual-upscaler-weights-v0/, 'residual handoff witness preserves offline MLX weight authority');
+assert.match(residualHandoffWitness, /residual-output-ema-continuation-handoff-v0/, 'residual handoff witness names the EMA continuation handoff authority');
+assert.match(residualHandoffWitness, /--residual-continuation-alpha/, 'residual handoff witness exposes the intended live EMA alpha');
+assert.match(residualHandoffWitness, /resetConditions/, 'residual handoff witness records when EMA continuation must reset');
+assert.match(residualHandoffWitness, /fallbackLabel/, 'residual handoff witness labels fallback or continuation output explicitly');
+assert.match(residualHandoffWitness, /loadedArtifactIdentity/, 'residual handoff witness records loaded artifact identity for browser handoff');
+assert.match(residualHandoffWitness, /gapRiskSummary/, 'residual handoff witness can ingest Pyro gap-risk verdicts without claiming synthetic cadence authority');
+assert.match(residualHandoffWitness, /visualProof/, 'residual handoff witness preserves an inspected visual proof path');
+assert.match(residualHandoffWitness, /failurePhase/, 'residual handoff witness writes failure phase before pretending handoff evidence exists');
+
 const dynamicTextureProofPath = join(root, 'volume-dynamic-texture-proof.mjs');
 assert.ok(existsSync(dynamicTextureProofPath), 'dynamic texture proof harness exists');
 const dynamicTextureProof = existsSync(dynamicTextureProofPath) ? readFileSync(dynamicTextureProofPath, 'utf8') : '';
