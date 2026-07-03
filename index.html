@@ -157,6 +157,13 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 .greenroom-cockpit-title { color: #e5f4ea; font-size: 12px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .greenroom-cockpit-meta { color: #76877d; font: 9px 'SF Mono', monospace; line-height: 1.3; overflow-wrap: anywhere; }
 .greenroom-cockpit-actions { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+.greenroom-cockpit-output-list { display: flex; flex-direction: column; gap: 6px; }
+.greenroom-cockpit-output-card { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: start; padding: 7px 8px; border: 1px solid #25342d; border-radius: 6px; background: #171f1b; }
+.greenroom-cockpit-output-main { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.greenroom-cockpit-output-title { color: #dcece2; font-size: 11px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.greenroom-cockpit-output-chip { display: inline-flex; width: fit-content; padding: 2px 5px; border-radius: 3px; background: #223127; color: #9ab5a6; font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+.greenroom-cockpit-output-actions { display: flex; justify-content: flex-end; align-items: center; gap: 5px; flex-wrap: wrap; max-width: 145px; }
+.greenroom-cockpit-output-actions .btn { padding: 5px 8px; font-size: 9px; }
 .moge-route-operator-panel { border: 1px solid #28414a; background: #151d20; border-radius: 7px; padding: 10px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 8px; }
 .moge-route-operator-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .moge-route-operator-title { color: #e8f6fb; font-size: 13px; font-weight: 700; }
@@ -972,6 +979,10 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
       </div>
       <div id="moge-route-operator-panel" class="moge-route-operator-panel" data-greenroom-moge-operator-panel>
         <div class="moge-route-operator-empty">MoGE route state has not loaded yet.</div>
+      </div>
+      <div class="greenroom-cockpit-row" data-greenroom-cockpit-usable-outputs hidden>
+        <div class="greenroom-cockpit-label">Recent usable outputs</div>
+        <div class="greenroom-cockpit-meta">No completed output actions indexed.</div>
       </div>
       <div class="greenroom-cockpit-row" data-greenroom-cockpit-degraded-history hidden>
         <div class="greenroom-cockpit-label">Malformed history</div>
@@ -9919,6 +9930,7 @@ function addGreenroomMeshActions(container, url, fileName, display) {
   const viewBtn = document.createElement('button');
   viewBtn.className = 'btn';
   viewBtn.textContent = 'View';
+  viewBtn.setAttribute('data-greenroom-cockpit-output-action', 'view-mesh');
   viewBtn.onclick = async (e) => {
     e.stopPropagation();
     try {
@@ -9930,6 +9942,7 @@ function addGreenroomMeshActions(container, url, fileName, display) {
   const importBtn = document.createElement('button');
   importBtn.className = 'btn';
   importBtn.textContent = 'Import';
+  importBtn.setAttribute('data-greenroom-cockpit-output-action', 'import-mesh');
   importBtn.onclick = async (e) => {
     e.stopPropagation();
     try {
@@ -9944,6 +9957,7 @@ function addGreenroomSplatActions(container, url, fileName, display) {
   importBtn.className = 'btn';
   importBtn.textContent = 'Import Splat';
   importBtn.dataset.greenroomSplatAction = 'import';
+  importBtn.setAttribute('data-greenroom-cockpit-output-action', 'import-splat');
   importBtn.onclick = async (e) => {
     e.stopPropagation();
     try {
@@ -10279,6 +10293,17 @@ function routeJobWorkClass(row = {}) {
   return intent && intent !== 'unknown' ? routeJob.intent : 'Normal';
 }
 
+function routeJobIntentLabel(row = {}) {
+  const routeJob = row.route_job || {};
+  const intent = String(routeJob.intent || '').toLowerCase();
+  const priority = String(routeJob.priorityClass || row.schedule?.priority_class || '').toLowerCase();
+  const routeId = String(routeJob.routeId || '').toLowerCase();
+  if (intent === 'checkpoint' || priority === 'checkpoint' || routeId.includes('checkpoint')) return 'Checkpoint';
+  if (intent === 'hero' || priority === 'hero') return 'Hero';
+  if (intent === 'preview' || priority === 'preview' || row.provider === ROUTE_EXECUTOR_BROWSER_WEBGPU) return 'Preview';
+  return routeJobWorkClass(row);
+}
+
 function routeJobHasDegradedTruth(row = {}) {
   const status = routeJobStatus(row);
   const warnings = row.route_job?.warnings || row.warnings || [];
@@ -10302,9 +10327,109 @@ function selectGreenroomCockpitRows(rows = []) {
   return {
     activeJob,
     degradedRows: rows.filter(routeJobHasDegradedTruth),
-    outputRow: rows.find(row => (row.output_links || []).length > 0) || null,
+    outputRows: selectGreenroomCockpitOutputRows(rows),
     mogeRow: selectMogeOperatorRouteRow(rows),
   };
+}
+
+function routeJobOutputSortKey(row = {}) {
+  const routeJob = row.route_job || {};
+  return routeJob.metadata?.routeResult?.createdAt
+    || routeJob.metadata?.submittedAt
+    || row.submitted_at
+    || row.created_at
+    || row.job_id
+    || '';
+}
+
+function selectGreenroomCockpitOutputRows(rows = []) {
+  return rows.filter(row => {
+    const links = greenroomCockpitPrimaryOutputLinks(row);
+    if (!links.length) return false;
+    if (routeJobHasDegradedTruth(row)) return false;
+    const status = routeJobStatus(row);
+    return status === 'done' || status === 'checkpoint_paused' || status === 'paused_at_checkpoint';
+  }).sort((a, b) => String(routeJobOutputSortKey(b)).localeCompare(String(routeJobOutputSortKey(a)))).slice(0, 4);
+}
+
+function greenroomOutputExtension(name = '') {
+  const match = String(name || '').toLowerCase().match(/(\.[a-z0-9]+)$/);
+  return match ? match[1] : '';
+}
+
+function greenroomCockpitPrimaryOutputLinks(row = {}) {
+  return (row.output_links || []).filter(link => {
+    const kind = String(link.kind || '').toLowerCase();
+    if (['mesh', 'depth', 'normal', 'pointmap'].includes(kind)) return true;
+    const extension = greenroomOutputExtension(link.name || link.path);
+    return ['.glb', '.gltf', '.obj', '.ply', '.spz', '.png', '.jpg', '.jpeg', '.webp'].includes(extension);
+  });
+}
+
+function renderGreenroomCockpitOutputLinkActions(container, row, link = {}) {
+  renderRouteJobOutputButton(container, link);
+  const extension = greenroomOutputExtension(link.name || link.path);
+  const display = {
+    title: `${routeJobOperatorLabel(row)} / ${link.name || routeJobOutputLabel(link)}`,
+    subtitle: routeJobDisplay(row).subtitle,
+    raw_name: link.name || link.path || '',
+  };
+  if (['.glb', '.gltf', '.obj'].includes(extension)) {
+    addGreenroomMeshActions(container, link.path, link.name || routeJobOperatorLabel(row), display);
+  } else if (['.ply', '.spz'].includes(extension)) {
+    addGreenroomSplatActions(container, link.path, link.name || routeJobOperatorLabel(row), display);
+  }
+}
+
+function renderGreenroomCockpitUsableOutputs(container, rows = []) {
+  if (!container) return;
+  if (!rows.length) {
+    container.hidden = true;
+    container.innerHTML = '<div class="greenroom-cockpit-label">Recent usable outputs</div><div class="greenroom-cockpit-meta">No completed output actions indexed.</div>';
+    return;
+  }
+  container.hidden = false;
+  container.innerHTML = '<div class="greenroom-cockpit-label">Recent usable outputs</div>';
+  const list = document.createElement('div');
+  list.className = 'greenroom-cockpit-output-list';
+  for (const row of rows) {
+    const routeJob = row.route_job || {};
+    const card = document.createElement('div');
+    card.className = 'greenroom-cockpit-output-card';
+    card.setAttribute('data-greenroom-cockpit-output-job-id', routeJob.id || row.job_id || '');
+    card.setAttribute('data-greenroom-cockpit-output-provider', row.provider || '');
+    card.setAttribute('data-greenroom-cockpit-output-status', routeJobStatus(row));
+    card.setAttribute('data-greenroom-cockpit-output-intent', routeJobIntentLabel(row));
+    card.setAttribute('data-greenroom-cockpit-output-route-id', routeJob.routeId || '');
+    const main = document.createElement('div');
+    main.className = 'greenroom-cockpit-output-main';
+    const chip = document.createElement('span');
+    chip.className = 'greenroom-cockpit-output-chip';
+    chip.textContent = routeJobIntentLabel(row);
+    main.appendChild(chip);
+    const title = document.createElement('div');
+    title.className = 'greenroom-cockpit-output-title';
+    title.textContent = routeJobOperatorLabel(row);
+    main.appendChild(title);
+    const meta = document.createElement('div');
+    meta.className = 'greenroom-cockpit-meta';
+    meta.textContent = [
+      routeJobStatus(row),
+      routeJob.routeId || null,
+      routeJob.id || row.job_id || null,
+    ].filter(Boolean).join(' / ');
+    main.appendChild(meta);
+    card.appendChild(main);
+    const actions = document.createElement('div');
+    actions.className = 'greenroom-cockpit-output-actions';
+    renderRouteJobLinkButton(actions, 'Receipt', row.receipt_link, 'Open Greenroom receipt');
+    for (const link of greenroomCockpitPrimaryOutputLinks(row).slice(0, 3)) {
+      renderGreenroomCockpitOutputLinkActions(actions, row, link);
+    }
+    card.appendChild(actions);
+    list.appendChild(card);
+  }
+  container.appendChild(list);
 }
 
 function renderGreenroomCockpit(data = {}) {
@@ -10360,6 +10485,11 @@ function renderGreenroomCockpit(data = {}) {
   }
 
   renderMogeRouteOperatorPanel(rows);
+
+  renderGreenroomCockpitUsableOutputs(
+    cockpit.querySelector('[data-greenroom-cockpit-usable-outputs]'),
+    selected.outputRows
+  );
 
   const degradedEl = cockpit.querySelector('[data-greenroom-cockpit-degraded-history]');
   if (degradedEl) {
@@ -10510,7 +10640,7 @@ function routeJobOutputLabel(link = {}) {
   if (kind === 'depth') return 'Depth';
   if (kind === 'normal') return 'Normal';
   if (kind === 'pointmap') return 'Pointmap';
-  if (kind === 'mesh') return 'Output';
+  if (kind === 'mesh') return 'Mesh';
   return 'File';
 }
 

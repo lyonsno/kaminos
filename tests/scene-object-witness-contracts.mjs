@@ -195,6 +195,13 @@ assert.match(indexHtml, /renderGreenroomCockpit/, 'Route refresh renders current
 assert.match(indexHtml, /selectGreenroomCockpitRows/, 'Greenroom cockpit selects active and degraded queue rows without archive expansion');
 assert.match(indexHtml, /data-greenroom-cockpit-summary/, 'Greenroom cockpit exposes a stable summary hook for operator smoke');
 assert.match(indexHtml, /data-greenroom-cockpit-active-job/, 'Greenroom cockpit exposes the active GPU job at top level');
+assert.match(indexHtml, /data-greenroom-cockpit-usable-outputs/, 'Greenroom cockpit exposes recent usable outputs before the archive graveyard');
+assert.match(indexHtml, /Recent usable outputs/, 'Greenroom cockpit names completed output actions in operator language');
+assert.match(indexHtml, /renderGreenroomCockpitUsableOutputs/, 'Greenroom cockpit renders a first-viewport usable output action section');
+assert.match(indexHtml, /greenroomCockpitPrimaryOutputLinks/, 'Greenroom cockpit filters bookkeeping files out of primary output actions');
+assert.match(indexHtml, /data-greenroom-cockpit-output-job-id/, 'Greenroom cockpit output cards preserve job identity');
+assert.match(indexHtml, /data-greenroom-cockpit-output-intent/, 'Greenroom cockpit output cards preserve preview/hero/checkpoint intent labels');
+assert.match(indexHtml, /addGreenroomMeshActions\([\s\S]*link\.path[\s\S]*link\.name/, 'Greenroom cockpit promotes mesh outputs to direct View and Import actions');
 assert.match(indexHtml, /data-greenroom-cockpit-degraded-history/, 'Greenroom cockpit surfaces malformed or degraded history without opening archives');
 assert.match(indexHtml, /Malformed history/, 'Greenroom cockpit names malformed history in operator language');
 assert.match(indexHtml, /moge-route-operator-panel/, 'Greenroom tab exposes a top-level MoGE route operator panel instead of burying it in the route list');
