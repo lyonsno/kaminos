@@ -1,0 +1,8 @@
+{
+  "name": "kaminos",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@kaminos/webgpu-inference-kit": "^0.1.4"
+  }
+}

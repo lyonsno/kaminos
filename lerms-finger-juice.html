@@ -1,0 +1,1461 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="data:,">
+  <title>LERMS Finger Juice Prototype</title>
+  <style>
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #10120f;
+      color: #f7f1d2;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+    canvas {
+      display: block;
+      position: fixed;
+      inset: 0;
+      width: 100vw;
+      height: 100vh;
+      transform: scale(1.42);
+      transform-origin: 50% 45%;
+      touch-action: none;
+    }
+    #juice-gpu-layer {
+      pointer-events: none;
+      z-index: 1;
+    }
+    #stage {
+      z-index: 0;
+      cursor: grab;
+    }
+    #stage.orbiting {
+      cursor: grabbing;
+    }
+    .hud {
+      position: fixed;
+      z-index: 2;
+      right: 10px;
+      bottom: 10px;
+      max-width: min(360px, calc(100vw - 20px));
+      padding: 7px 9px;
+      border: 1px solid rgba(247, 241, 210, 0.22);
+      background: rgba(16, 18, 15, 0.58);
+      border-radius: 6px;
+      font-size: 10px;
+      line-height: 1.18;
+      text-align: right;
+    }
+    .hud b {
+      color: #ffcf5a;
+      font-weight: 700;
+    }
+  </style>
+</head>
+<body
+  data-route="lerms_world_finger_juice=1"
+  data-effective-route="world-space-ballistic-surface-flow-particles-v0"
+  data-solver-route="webgpu_particle_solver_v0"
+  data-render-route="webgpu_particle_splat_renderer_v0"
+  data-terrain-contract="hill-of-hills-heightfield-collision-v0"
+  data-support-domain-renderer="support-domain-renderer-v0"
+  data-terrain-sample-renderer="source-terrain-sample-mesh-overlay-v0"
+  data-visual-renderer="source-legible-phase-breadcrumbs-v2"
+>
+  <canvas id="stage" width="1280" height="720"></canvas>
+  <canvas id="juice-gpu-layer" width="1280" height="720"></canvas>
+  <div class="hud" id="hud"></div>
+  <script type="module">
+    import {
+      LERMS_WORLD_FINGER_JUICE_ROUTE,
+      LERMS_WORLD_FINGER_JUICE_TERRAIN_CONTRACT,
+      createFingerJuiceHostPacket,
+      createFingerJuicePreviewBenchPayload,
+      createWorldFingerJuiceTransportPrototype,
+      normalizeHillTerrainSamplePacket,
+      normalizeWorldFingerJuiceEmitterPacket,
+    } from './lerms-finger-juice-core.js';
+    import {
+      LERMS_FINGER_JUICE_WEBGPU_SOLVER_ROUTE,
+      LERMS_FINGER_JUICE_WEBGPU_RENDERER_ROUTE,
+      LERMS_FINGER_JUICE_WEBGPU_EMITTER_BUFFER_ROUTE,
+      LERMS_FINGER_JUICE_WEBGPU_RESPAWN_CONTRACT,
+      createWebGPUFingerJuiceSolver,
+    } from './lerms-finger-juice-webgpu-core.js';
+
+    const canvas = document.getElementById('stage');
+    const gpuCanvas = document.getElementById('juice-gpu-layer');
+    const ctx = canvas.getContext('2d');
+    const hud = document.getElementById('hud');
+    const params = new URLSearchParams(location.search);
+    const routeActive = params.get('lerms_world_finger_juice') === '1';
+    const visualRenderer = 'source-legible-phase-breadcrumbs-v2';
+    const supportDomainRenderer = 'support-domain-renderer-v0';
+    const sourceTerrainSampleMeshOverlayRenderer = 'source-terrain-sample-mesh-overlay-v0';
+    const defaultHillSupportPayloadRoot = 'lerms-preview';
+    const defaultHillSupportPayloadPath = 'lerms-hill-of-hills-preview-bench-payload.json';
+    const defaultTerrainSamplePacketRoot = 'lerms-preview';
+    const defaultTerrainSamplePacketPath = 'kaminos-gutterglass-smoke-offer-host-0629/scratch/lerms-hill-of-hills-terrain-sample-packet.json';
+    const sourceTerrainSampleCouplingMode = 'source_height_samples_v0';
+    const particleSupportBudget = 36000;
+    const lerms = [
+      { id: 'red-lerm-1', position: [-0.18, 0.75, -0.48], radius: 0.26, mass: 1.1 },
+      { id: 'blue-lerm-1', position: [0.03, 0.75, -0.42], radius: 0.28, mass: 1.7 },
+      { id: 'yellow-lerm-1', position: [0.24, 0.76, -0.36], radius: 0.26, mass: 1.0 },
+    ];
+    const goins = [
+      { id: 'goin-1', position: [0.0, 0.75, -0.28], radius: 0.3, mass: 2.2 },
+    ];
+    const prototype = createWorldFingerJuiceTransportPrototype({
+      seed: 11,
+      maxParticles: particleSupportBudget,
+      lerms,
+      goins,
+    });
+
+    let activeWitnessEmitterConfig = 'short-smoke-v0';
+    let emitterPacket = normalizeWorldFingerJuiceEmitterPacket({
+      packet_id: 'kaminos-synthetic-finger-juice-smoke-1',
+      source_route: 'kaminos.lerms-finger-juice.synthetic-caster',
+      source_backend: 'kaminos.synthetic-caster-hand',
+      source_frame_id: 'kaminos-synthetic-caster-hand-frame-v0',
+      sidecar_sequence: 1,
+      evidence_kind: 'synthetic_fixture',
+      simulation_authority: 'synthetic_fixture',
+      sample_age_ms: 0,
+      route_identity: 'kaminos-lerms-finger-juice-synthetic-smoke',
+      hand_sample_space: {
+        id: 'kaminos.synthetic-hand-sample-space.v0',
+        convention: 'screen-origin-upper-left-to-world-fixture-v0',
+        handedness: 'right',
+        screen_x: 'operator_unmirrored',
+        screen_coordinates: 'css_pixels',
+        world_coordinates: 'kaminos_normalized_world',
+      },
+      lerms_world_frame: {
+        id: 'kaminos-hill-of-hills-local-v0',
+        terrain_frame_id: 'kaminos-hill-of-hills-local-v0',
+        units: 'normalized_world',
+        heightfield_contract: LERMS_WORLD_FINGER_JUICE_TERRAIN_CONTRACT,
+        projection_contract: 'synthetic-caster-perspective-v0',
+        world_from_hand_sample: 'kaminos.synthetic-caster-hand-to-hill-of-hills-v0',
+      },
+      emitters: [
+        { id: 'index', tip_index: 8, origin_world: [-0.18, 1.16, -0.86], aim_world: [0.18, -0.16, 1], motion_world: [0.05, 0, 0.08], extension: 0.95, chemistry: 'knockback', radius: 0.04, strength: 1.25, authority: { valid: true, stale: false, confidence: 0.94, force_safe: true }, active: true },
+        { id: 'middle', tip_index: 12, origin_world: [0.02, 1.14, -0.84], aim_world: [0, -0.18, 1], motion_world: [0, 0, 0.07], extension: 0.82, chemistry: 'pooling', radius: 0.052, strength: 1.0, authority: { valid: true, stale: false, confidence: 0.91, force_safe: true }, active: true },
+        { id: 'ring', tip_index: 16, origin_world: [0.18, 1.12, -0.82], aim_world: [-0.08, -0.2, 1], motion_world: [-0.02, 0, 0.06], extension: 0.66, chemistry: 'weird', radius: 0.046, strength: 0.82, authority: { valid: true, stale: false, confidence: 0.86, force_safe: true }, active: true },
+      ],
+    });
+    const expandedWitnessEmitterPacket = normalizeWorldFingerJuiceEmitterPacket({
+      packet_id: 'kaminos-synthetic-finger-juice-expanded-stress-1',
+      source_route: 'kaminos.lerms-finger-juice.synthetic-caster',
+      source_backend: 'kaminos.synthetic-caster-hand',
+      source_frame_id: 'kaminos-synthetic-caster-expanded-flow-frame-v0',
+      sidecar_sequence: 2,
+      evidence_kind: 'synthetic_fixture',
+      simulation_authority: 'synthetic_fixture',
+      sample_age_ms: 0,
+      route_identity: 'expanded-flow-stress-v0',
+      hand_sample_space: emitterPacket.hand_sample_space,
+      lerms_world_frame: emitterPacket.lerms_world_frame,
+      emitters: [
+        { id: 'index', tip_index: 8, origin_world: [-0.44, 1.22, -1.02], aim_world: [0.28, -0.18, 1.0], motion_world: [0.035, -0.04, 0.09], extension: 1.0, chemistry: 'knockback', radius: 0.112, strength: 1.14, authority: { valid: true, stale: false, confidence: 0.94, force_safe: true }, active: true },
+        { id: 'middle', tip_index: 12, origin_world: [0.0, 1.2, -1.04], aim_world: [0.0, -0.2, 1.0], motion_world: [0.0, -0.03, 0.095], extension: 1.0, chemistry: 'pooling', radius: 0.112, strength: 1.32, authority: { valid: true, stale: false, confidence: 0.91, force_safe: true }, active: true },
+        { id: 'ring', tip_index: 16, origin_world: [0.28, 1.18, -1.02], aim_world: [-0.22, -0.22, 1.0], motion_world: [-0.035, -0.04, 0.08], extension: 1.0, chemistry: 'weird', radius: 0.122, strength: 0.9, authority: { valid: true, stale: false, confidence: 0.86, force_safe: true }, active: true },
+      ],
+    });
+    prototype.setEmitters(emitterPacket);
+    let webgpuSolver = null;
+    let webgpuRenderer = null;
+    let webgpuState = {
+      solver_backend: 'initializing',
+      solverRoute: LERMS_FINGER_JUICE_WEBGPU_SOLVER_ROUTE,
+      emitterBufferRoute: LERMS_FINGER_JUICE_WEBGPU_EMITTER_BUFFER_ROUTE,
+      respawnContract: LERMS_FINGER_JUICE_WEBGPU_RESPAWN_CONTRACT,
+      render_backend: 'initializing',
+      renderRoute: LERMS_FINGER_JUICE_WEBGPU_RENDERER_ROUTE,
+    };
+    let hillSupportFramePayload = null;
+    let hillSupportFramePayloadStatus = 'not_requested';
+    let hillSupportFramePayloadRoute = null;
+    let hillSupportFramePayloadError = null;
+    let terrainSamplePacket = null;
+    let terrainSampleData = null;
+    let terrainSampleSurface = null;
+    let terrainSampleStatus = 'not_requested';
+    let terrainSamplePacketRoute = null;
+    let terrainSampleDataRoute = null;
+    let terrainSampleError = null;
+    let webgpuFramePending = false;
+    let webgpuReadbackPending = false;
+    let webgpuAccumulatedSeconds = 0;
+    let webgpuReadbackAccumulatedSeconds = 0;
+    let webgpuLastReadbackMs = 0;
+    let webgpuLastComputeMs = 0;
+    let webgpuLastSubmittedSteps = 0;
+    let webgpuSubmittedStepsTotal = 0;
+    let webgpuDroppedCatchupStepsTotal = 0;
+    let webgpuLastDroppedCatchupSteps = 0;
+    let webgpuRenderFrameCount = 0;
+    let liveReadbackRequestedCount = 0;
+    let liveReadbackCompletedCount = 0;
+    let liveReadbackSkippedCount = 0;
+    let liveReadbackCpuOracleMode = null;
+    let liveReadbackSummaryMode = null;
+    let witnessCaptureFrozen = false;
+    let witnessFrozenCaptureState = null;
+    const orbitCameraControlContract = 'orbit-camera-controls-v0';
+    const orbitCameraProjectionContract = 'orbit-perspective-camera-projection-v1';
+    const orbitCameraTarget = Object.freeze({ x: 0, y: 0.64, z: -0.2 });
+    const defaultFingerJuiceCamera = Object.freeze({ yaw: 0, pitch: 0, zoom: 1, panX: 0, panY: 0 });
+    let fingerJuiceCamera = { ...defaultFingerJuiceCamera };
+    let cameraDrag = null;
+    let operatorExpandedFlowInstalled = false;
+    let operatorExpandedFlowPending = false;
+    const operatorExpandedFlowDelaySeconds = 3.2;
+    const webgpuFrameStepDt = 1 / 120;
+    const webgpuMaxFrameSteps = 8;
+    const webgpuReadbackPeriod = 0.55;
+    const liveReadbackContract = 'live_readback_decoupled_v0';
+    const nonzeroWebgpuCanvasExtentContract = 'nonzero_webgpu_canvas_extent_v0';
+
+    function clampCamera(camera = fingerJuiceCamera) {
+      camera.yaw = Math.max(-0.92, Math.min(0.92, Number(camera.yaw) || 0));
+      camera.pitch = Math.max(-0.52, Math.min(0.62, Number(camera.pitch) || 0));
+      camera.zoom = Math.max(0.28, Math.min(2.4, Number(camera.zoom) || 1));
+      camera.panX = Math.max(-0.72, Math.min(0.72, Number(camera.panX) || 0));
+      camera.panY = Math.max(-0.56, Math.min(0.56, Number(camera.panY) || 0));
+      return camera;
+    }
+
+    function panCamera(deltaX = 0, deltaY = 0) {
+      fingerJuiceCamera.panX += deltaX / Math.max(1, window.innerWidth);
+      fingerJuiceCamera.panY += deltaY / Math.max(1, window.innerHeight);
+      const cameraPan = {
+        x: fingerJuiceCamera.panX,
+        y: fingerJuiceCamera.panY,
+      };
+      clampCamera();
+      return cameraPan;
+    }
+
+    function cameraSnapshot() {
+      const camera = clampCamera({ ...fingerJuiceCamera });
+      return {
+        cameraControlContract: orbitCameraControlContract,
+        cameraProjectionContract: orbitCameraProjectionContract,
+        yaw: Number(camera.yaw.toFixed(4)),
+        pitch: Number(camera.pitch.toFixed(4)),
+        zoom: Number(camera.zoom.toFixed(4)),
+        panX: Number(camera.panX.toFixed(4)),
+        panY: Number(camera.panY.toFixed(4)),
+        target: {
+          x: orbitCameraTarget.x,
+          y: orbitCameraTarget.y,
+          z: orbitCameraTarget.z,
+        },
+      };
+    }
+
+    function resetFingerJuiceCamera() {
+      fingerJuiceCamera = { ...defaultFingerJuiceCamera };
+      return cameraSnapshot();
+    }
+
+    function hillSupportPayloadRouteFromParams() {
+      const explicitUrl = params.get('hill_support_payload_url');
+      if (explicitUrl) {
+        return {
+          kind: 'url',
+          url: explicitUrl,
+          root: null,
+          path: null,
+        };
+      }
+      const root = params.get('hill_support_payload_root') || defaultHillSupportPayloadRoot;
+      const path = params.get('hill_support_payload_path') || defaultHillSupportPayloadPath;
+      if (!root || !path) return null;
+      return {
+        kind: 'api_read',
+        root,
+        path,
+        url: `/api/read?root=${encodeURIComponent(root)}&path=${encodeURIComponent(path)}`,
+      };
+    }
+
+    function apiReadRoute(root, path) {
+      if (!root || !path) return null;
+      return {
+        kind: 'api_read',
+        root,
+        path,
+        url: `/api/read?root=${encodeURIComponent(root)}&path=${encodeURIComponent(path)}`,
+      };
+    }
+
+    function terrainSamplePacketRouteFromParams() {
+      const explicitUrl = params.get('terrain_sample_packet_url') || params.get('preview_bench_terrain_sample_url');
+      if (explicitUrl) {
+        return {
+          kind: 'url',
+          url: explicitUrl,
+          root: null,
+          path: null,
+        };
+      }
+      const root = params.get('terrain_sample_packet_root')
+        || params.get('preview_bench_terrain_sample_root')
+        || defaultTerrainSamplePacketRoot;
+      const path = params.get('terrain_sample_packet_path')
+        || params.get('preview_bench_terrain_sample_path')
+        || defaultTerrainSamplePacketPath;
+      return apiReadRoute(root, path);
+    }
+
+    function terrainSampleDataRouteFromPacket(packetReport) {
+      const explicitUrl = params.get('terrain_sample_data_url');
+      if (explicitUrl) {
+        return {
+          kind: 'url',
+          url: explicitUrl,
+          root: null,
+          path: null,
+        };
+      }
+      const explicitRoot = params.get('terrain_sample_data_root');
+      const explicitPath = params.get('terrain_sample_data_path');
+      if (explicitRoot || explicitPath) return apiReadRoute(explicitRoot, explicitPath);
+      const packet = packetReport?.payload || packetReport?.terrainSamplePacket || packetReport || {};
+      const transport = packet.terrainSample?.transport || packet.payload?.terrainSample?.transport || {};
+      if (typeof transport.dataPath === 'string' && transport.dataPath.startsWith('/private/tmp/')) {
+        return apiReadRoute('lerms-preview', transport.dataPath.slice('/private/tmp/'.length));
+      }
+      if (typeof transport.dataPath === 'string' && transport.dataPath.startsWith('/tmp/')) {
+        return apiReadRoute('lerms-preview', transport.dataPath.slice('/tmp/'.length));
+      }
+      if (typeof transport.fetchUrl === 'string' && transport.fetchUrl) {
+        return {
+          kind: 'url',
+          url: transport.fetchUrl,
+          root: null,
+          path: null,
+        };
+      }
+      return null;
+    }
+
+    async function fetchJsonRoute(route) {
+      if (!route?.url) throw new Error('missing route url');
+      const response = await fetch(route.url, { cache: 'no-store' });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return response.json();
+    }
+
+    async function applyHillSupportFramePayload(payloadReport) {
+      hillSupportFramePayload = payloadReport;
+      hillSupportFramePayloadStatus = 'loaded';
+      if (webgpuSolver?.setHillSupportFramePayload) {
+        const supportState = webgpuSolver.setHillSupportFramePayload(payloadReport);
+        webgpuState = {
+          ...webgpuState,
+          ...supportState,
+          hillSupportFramePayloadStatus,
+          hillSupportFramePayloadRoute,
+        };
+        return supportState;
+      }
+      return null;
+    }
+
+    async function loadHillSupportFramePayload() {
+      hillSupportFramePayloadRoute = hillSupportPayloadRouteFromParams();
+      if (!hillSupportFramePayloadRoute) return null;
+      hillSupportFramePayloadStatus = 'loading';
+      try {
+        const payloadReport = await fetchJsonRoute(hillSupportFramePayloadRoute);
+        await applyHillSupportFramePayload(payloadReport);
+        return payloadReport;
+      } catch (error) {
+        hillSupportFramePayloadStatus = 'fallback_local_procedural';
+        hillSupportFramePayloadError = error.message || String(error);
+        webgpuState = {
+          ...webgpuState,
+          hillSupportFramePayloadStatus,
+          hillSupportFramePayloadRoute,
+          hillSupportFramePayloadError,
+          supportFrameSource: 'local_procedural_support_frame_v0',
+        };
+        return null;
+      }
+    }
+
+    function supportPayloadStateFields() {
+      return {
+        hillSupportFramePayloadStatus,
+        hillSupportFramePayloadRoute,
+        hillSupportFramePayloadError,
+        hillSupportFramePayloadSchema: hillSupportFramePayload?.payload?.schema || hillSupportFramePayload?.schema || null,
+      };
+    }
+
+    function terrainSampleStateFields() {
+      const diagnostics = terrainSampleSurface?.diagnostics || webgpuState?.terrainSampleDiagnostics || {};
+      return {
+        terrainSampleStatus,
+        terrainSamplePacketRoute,
+        terrainSampleDataRoute,
+        terrainSampleError,
+        terrainSamplePacketSchema: terrainSamplePacket?.payload?.schema || terrainSamplePacket?.schema || null,
+        terrainSampleDataSchema: terrainSampleData?.payload?.schema || terrainSampleData?.schema || null,
+        terrainSampleCouplingMode: diagnostics.terrainSampleCouplingMode
+          || terrainSampleSurface?.supportFrame?.heightfieldCouplingMode
+          || (terrainSampleSurface ? sourceTerrainSampleCouplingMode : 'local_procedural_heightfield_v0'),
+        terrainSampleGpuCollisionMode: diagnostics.terrainSampleGpuCollisionMode
+          || webgpuState?.terrainSampleGpuCollisionMode
+          || (terrainSampleSurface ? 'source_height_samples_gpu_storage_v0' : 'local_procedural_heightfield_gpu_v0'),
+        terrainSampleChecksum: diagnostics.sampleChecksum || terrainSampleSurface?.checksums?.sample || null,
+        terrainChannelChecksum: diagnostics.channelChecksum || terrainSampleSurface?.checksums?.channels || null,
+      };
+    }
+
+    async function applyTerrainSampleSurface(packetReport, dataReport) {
+      terrainSamplePacket = packetReport;
+      terrainSampleData = dataReport;
+      terrainSampleSurface = normalizeHillTerrainSamplePacket(packetReport, dataReport);
+      if (!terrainSampleSurface) throw new Error('invalid Hill terrain sample packet');
+      terrainSampleStatus = 'loaded';
+      terrainSampleError = null;
+      prototype.setTerrainSampleSurface?.(terrainSampleSurface);
+      if (webgpuSolver?.setTerrainSampleSurface) {
+        const terrainState = webgpuSolver.setTerrainSampleSurface(terrainSampleSurface);
+        webgpuState = {
+          ...webgpuState,
+          ...terrainState,
+          ...terrainSampleStateFields(),
+        };
+        return terrainState;
+      }
+      return terrainSampleStateFields();
+    }
+
+    async function loadTerrainSampleSurface() {
+      terrainSamplePacketRoute = terrainSamplePacketRouteFromParams();
+      if (!terrainSamplePacketRoute) return null;
+      terrainSampleStatus = 'loading';
+      try {
+        const packetReport = await fetchJsonRoute(terrainSamplePacketRoute);
+        terrainSampleDataRoute = terrainSampleDataRouteFromPacket(packetReport);
+        if (!terrainSampleDataRoute) throw new Error('missing terrain sample data route');
+        const dataReport = await fetchJsonRoute(terrainSampleDataRoute);
+        await applyTerrainSampleSurface(packetReport, dataReport);
+        return terrainSampleSurface;
+      } catch (error) {
+        terrainSampleStatus = 'fallback_local_procedural';
+        terrainSampleError = error.message || String(error);
+        terrainSamplePacket = null;
+        terrainSampleData = null;
+        terrainSampleSurface = null;
+        prototype.setTerrainSampleSurface?.(null);
+        if (webgpuSolver?.setTerrainSampleSurface) webgpuSolver.setTerrainSampleSurface(null);
+        webgpuState = {
+          ...webgpuState,
+          ...terrainSampleStateFields(),
+          terrainSampleStatus,
+          terrainSampleError,
+        };
+        return null;
+      }
+    }
+
+    const hillSupportFramePayloadPromise = loadHillSupportFramePayload();
+    const terrainSampleSurfacePromise = loadTerrainSampleSurface();
+
+    createWebGPUFingerJuiceSolver({
+      seed: 11,
+      maxParticles: particleSupportBudget,
+      emitterPacket,
+      lerms,
+      goins,
+      hillSupportFramePayload,
+      terrainSampleSurface,
+    }).then(solver => {
+      webgpuSolver = solver;
+      const initialSupportState = hillSupportFramePayload
+        ? solver.setHillSupportFramePayload?.(hillSupportFramePayload)
+        : null;
+      const initialTerrainState = terrainSampleSurface
+        ? solver.setTerrainSampleSurface?.(terrainSampleSurface)
+        : null;
+      webgpuState = {
+        ...webgpuState,
+        ...(initialSupportState || {}),
+        ...(initialTerrainState || {}),
+        solver_backend: solver.solver_backend,
+        solverRoute: solver.solverRoute,
+        shaderRoute: solver.shaderRoute,
+        emitterBufferRoute: solver.emitterBufferRoute,
+        respawnContract: solver.respawnContract,
+        render_backend: solver.render_backend,
+        renderRoute: solver.renderRoute,
+        renderShaderRoute: solver.renderShaderRoute,
+        adapterInfo: solver.adapterInfo,
+        reason: solver.reason,
+        cpuOracle: solver.cpuOracle,
+        workgroupSize: solver.workgroupSize,
+        maxParticles: solver.maxParticles,
+        ...supportPayloadStateFields(),
+        ...terrainSampleStateFields(),
+      };
+      return solver.createRenderer?.(gpuCanvas);
+    }).then(renderer => {
+      if (renderer) {
+        webgpuRenderer = renderer.render_backend === 'webgpu_direct_render' ? renderer : null;
+        webgpuState = {
+          ...webgpuState,
+          render_backend: renderer.render_backend,
+          renderRoute: renderer.renderRoute,
+          renderShaderRoute: renderer.renderShaderRoute,
+          renderReason: renderer.reason || null,
+        };
+      }
+      return webgpuSolver?.stepAndRead?.(30, 1 / 60);
+    }).then(state => {
+      if (state) {
+        webgpuState = {
+          ...state,
+          render_backend: webgpuState.render_backend,
+          renderRoute: webgpuState.renderRoute,
+          renderShaderRoute: webgpuState.renderShaderRoute,
+          ...supportPayloadStateFields(),
+          ...terrainSampleStateFields(),
+        };
+      }
+    }).catch(error => {
+      webgpuState = {
+        solver_backend: 'webgpu_unavailable',
+        solverRoute: LERMS_FINGER_JUICE_WEBGPU_SOLVER_ROUTE,
+        emitterBufferRoute: LERMS_FINGER_JUICE_WEBGPU_EMITTER_BUFFER_ROUTE,
+        respawnContract: LERMS_FINGER_JUICE_WEBGPU_RESPAWN_CONTRACT,
+        render_backend: 'webgpu_render_unavailable',
+        renderRoute: LERMS_FINGER_JUICE_WEBGPU_RENDERER_ROUTE,
+        error: error.message,
+        ...supportPayloadStateFields(),
+        ...terrainSampleStateFields(),
+      };
+    });
+
+    function readDebugState() {
+      const cpuState = prototype.debugState();
+      const hasWebgpuReadback = webgpuState?.solver_backend === 'webgpu_compute'
+        && webgpuState?.targets
+        && Array.isArray(webgpuState?.particles)
+        && Array.isArray(webgpuState?.trails);
+      const solverState = hasWebgpuReadback ? webgpuState : {
+        ...cpuState,
+        solver_backend: webgpuState?.solver_backend === 'webgpu_compute' ? 'webgpu_initializing' : webgpuState?.solver_backend || 'cpu_fallback',
+        solverRoute: webgpuState?.solverRoute || LERMS_FINGER_JUICE_WEBGPU_SOLVER_ROUTE,
+        shaderRoute: webgpuState?.shaderRoute || null,
+        emitterBufferRoute: webgpuState?.emitterBufferRoute || LERMS_FINGER_JUICE_WEBGPU_EMITTER_BUFFER_ROUTE,
+        respawnContract: webgpuState?.respawnContract || LERMS_FINGER_JUICE_WEBGPU_RESPAWN_CONTRACT,
+        adapterInfo: webgpuState?.adapterInfo || null,
+        reason: webgpuState?.reason || webgpuState?.error || null,
+        render_backend: webgpuState?.render_backend || 'cpu_canvas_render',
+        renderRoute: webgpuState?.renderRoute || null,
+        renderShaderRoute: webgpuState?.renderShaderRoute || null,
+        cpuOracle: webgpuState?.cpuOracle || null,
+      };
+      return {
+        requestedRoute: 'lerms_world_finger_juice=1',
+        routeActive,
+        effectiveRoute: LERMS_WORLD_FINGER_JUICE_ROUTE,
+        solverRoute: LERMS_FINGER_JUICE_WEBGPU_SOLVER_ROUTE,
+        emitterBufferRoute: webgpuState?.emitterBufferRoute || LERMS_FINGER_JUICE_WEBGPU_EMITTER_BUFFER_ROUTE,
+        respawnContract: webgpuState?.respawnContract || LERMS_FINGER_JUICE_WEBGPU_RESPAWN_CONTRACT,
+        visualRenderer,
+        supportDomainRenderer,
+        sourceTerrainSampleMeshOverlayRenderer,
+        fingerJuiceCamera: cameraSnapshot(),
+        terrainContract: LERMS_WORLD_FINGER_JUICE_TERRAIN_CONTRACT,
+        emitterPacket,
+        ...solverState,
+        ...supportPayloadStateFields(),
+        ...terrainSampleStateFields(),
+        activeWitnessEmitterConfig,
+        evidence_kind: emitterPacket.evidence_kind,
+        simulation_authority: emitterPacket.simulation_authority,
+        authority: emitterPacket.authority,
+        hand_sample_space: emitterPacket.hand_sample_space,
+        lerms_world_frame: emitterPacket.lerms_world_frame,
+        terrain_frame: emitterPacket.terrain_frame,
+        webgpu_cadence: {
+          pending: webgpuFramePending,
+          readback_pending: webgpuReadbackPending,
+          accumulated_seconds: Number(webgpuAccumulatedSeconds.toFixed(4)),
+          readback_accumulated_seconds: Number(webgpuReadbackAccumulatedSeconds.toFixed(4)),
+          fixed_step_dt: webgpuFrameStepDt,
+          max_frame_steps: webgpuMaxFrameSteps,
+          readback_period: webgpuReadbackPeriod,
+          last_readback_ms: Number(webgpuLastReadbackMs.toFixed(2)),
+          last_compute_ms: Number(webgpuLastComputeMs.toFixed(2)),
+          last_submitted_steps: webgpuLastSubmittedSteps,
+          last_dropped_catchup_steps: webgpuLastDroppedCatchupSteps,
+          submitted_steps_total: webgpuSubmittedStepsTotal,
+          dropped_catchup_steps_total: webgpuDroppedCatchupStepsTotal,
+          render_frame_count: webgpuRenderFrameCount,
+          live_readback_contract: liveReadbackContract,
+          live_readback_requested_count: liveReadbackRequestedCount,
+          live_readback_completed_count: liveReadbackCompletedCount,
+          live_readback_skipped_count: liveReadbackSkippedCount,
+          last_cpu_oracle_mode: liveReadbackCpuOracleMode || webgpuState?.cpuOracleMode || null,
+          last_live_readback_summary_mode: liveReadbackSummaryMode || webgpuState?.summaryMode || null,
+        },
+      };
+    }
+
+    async function installWitnessEmitterPacket(nextPacket, configId) {
+      emitterPacket = nextPacket;
+      activeWitnessEmitterConfig = configId;
+      prototype.setEmitters(emitterPacket);
+      if (routeActive && webgpuSolver?.setEmitterPacket) {
+        const updateState = await webgpuSolver.setEmitterPacket(emitterPacket);
+        webgpuState = {
+          ...webgpuState,
+          ...updateState,
+          activeWitnessEmitterConfig,
+        };
+      }
+      return readDebugState();
+    }
+
+    window.__lermsFingerJuiceStepForWitness = async ({ steps = 150, dt = 1 / 60, cpuOracle = false } = {}) => {
+      const safeSteps = Math.max(0, Math.floor(Number(steps) || 0));
+      const safeDt = Math.max(1 / 240, Math.min(1 / 20, Number(dt) || 1 / 60));
+      if (routeActive && webgpuSolver?.solver_backend === 'webgpu_compute') {
+        const previousCpuOracle = webgpuState.cpuOracle || null;
+        const state = await webgpuSolver.stepAndRead(safeSteps, safeDt, {
+          cpuOracle,
+          reason: cpuOracle ? 'witness_forced_oracle_readback' : 'witness_large_budget_readback',
+        });
+        liveReadbackCpuOracleMode = state.cpuOracleMode || liveReadbackCpuOracleMode;
+        webgpuState = {
+          ...state,
+          render_backend: webgpuState.render_backend,
+          renderRoute: webgpuState.renderRoute,
+          renderShaderRoute: webgpuState.renderShaderRoute,
+          cpuOracle: state.cpuOracle || previousCpuOracle,
+          ...supportPayloadStateFields(),
+          ...terrainSampleStateFields(),
+        };
+      } else if (routeActive) {
+        for (let i = 0; i < safeSteps; i += 1) prototype.step(safeDt);
+      }
+      return readDebugState();
+    };
+
+    window.__lermsFingerJuiceStressForWitness = async ({ steps = 420, dt = 1 / 60 } = {}) => {
+      const safeSteps = Math.max(240, Math.floor(Number(steps) || 420));
+      const safeDt = Math.max(1 / 240, Math.min(1 / 20, Number(dt) || 1 / 60));
+      await installWitnessEmitterPacket(expandedWitnessEmitterPacket, 'expanded-flow-stress-v0');
+      const state = await window.__lermsFingerJuiceStepForWitness({ steps: safeSteps, dt: safeDt });
+      return {
+        ...state,
+        expandedWitnessPhase: 'expanded-flow-stress-v0',
+        extendedFlowSteps: safeSteps,
+        extendedFlowSeconds: Number((safeSteps * safeDt).toFixed(3)),
+      };
+    };
+
+    function measureViewportExtent() {
+      const ratio = Math.max(1, Number(window.devicePixelRatio) || 1);
+      const visualViewport = window.visualViewport;
+      const width = Math.max(1, Math.floor(
+        Number(window.innerWidth)
+        || Number(visualViewport?.width)
+        || Number(document.documentElement.clientWidth)
+        || Number(document.body?.clientWidth)
+        || Number(canvas.clientWidth)
+        || Number(canvas.width) / ratio
+        || 1,
+      ));
+      const height = Math.max(1, Math.floor(
+        Number(window.innerHeight)
+        || Number(visualViewport?.height)
+        || Number(document.documentElement.clientHeight)
+        || Number(document.body?.clientHeight)
+        || Number(canvas.clientHeight)
+        || Number(canvas.height) / ratio
+        || 1,
+      ));
+      return {
+        extentContract: nonzeroWebgpuCanvasExtentContract,
+        width,
+        height,
+        ratio,
+        targetWidth: Math.max(1, Math.floor(width * ratio)),
+        targetHeight: Math.max(1, Math.floor(height * ratio)),
+      };
+    }
+
+    function resize() {
+      const extent = measureViewportExtent();
+      canvas.width = extent.targetWidth;
+      canvas.height = extent.targetHeight;
+      gpuCanvas.width = extent.targetWidth;
+      gpuCanvas.height = extent.targetHeight;
+      ctx.setTransform(extent.ratio, 0, 0, extent.ratio, 0, 0);
+    }
+
+    function responsiveSmokeProjection(width = window.innerWidth, height = window.innerHeight) {
+      const camera = clampCamera({ ...fingerJuiceCamera });
+      const projectionScale = Math.min(width * 0.82, height * 1.22) * camera.zoom;
+      return {
+        projectionContract: orbitCameraProjectionContract,
+        projectionScale,
+        cameraDistance: 2.4,
+        perspectiveFloor: 0.58,
+        centerX: width * (0.5 + camera.panX),
+        centerY: height * (0.64 + camera.panY),
+      };
+    }
+
+    function cameraSpacePoint(point) {
+      const camera = clampCamera({ ...fingerJuiceCamera });
+      const relativeX = (point[0] || 0) - orbitCameraTarget.x;
+      const relativeY = (point[1] || 0) - orbitCameraTarget.y;
+      const relativeZ = (point[2] || 0) - orbitCameraTarget.z;
+      const yawSin = Math.sin(camera.yaw);
+      const yawCos = Math.cos(camera.yaw);
+      const pitchSin = Math.sin(camera.pitch);
+      const pitchCos = Math.cos(camera.pitch);
+      const yawedX = relativeX * yawCos - relativeZ * yawSin;
+      const yawedZ = relativeX * yawSin + relativeZ * yawCos;
+      const pitchedY = relativeY * pitchCos - yawedZ * pitchSin;
+      const pitchedZ = relativeY * pitchSin + yawedZ * pitchCos;
+      return [yawedX, pitchedY, pitchedZ];
+    }
+
+    function project(point) {
+      const width = window.innerWidth;
+      const height = window.innerHeight;
+      const projection = responsiveSmokeProjection(width, height);
+      const cameraPoint = cameraSpacePoint(point);
+      const depth = projection.cameraDistance + cameraPoint[2];
+      const scale = projection.projectionScale / Math.max(projection.perspectiveFloor, depth);
+      return {
+        x: projection.centerX + cameraPoint[0] * scale,
+        y: projection.centerY - cameraPoint[1] * scale,
+        scale,
+        depth,
+      };
+    }
+
+    stage.addEventListener('pointerdown', event => {
+      const mode = event.shiftKey || event.button === 1 || event.button === 2 ? 'pan' : 'orbit';
+      cameraDrag = {
+        pointerId: event.pointerId,
+        mode,
+        x: event.clientX,
+        y: event.clientY,
+        yaw: fingerJuiceCamera.yaw,
+        pitch: fingerJuiceCamera.pitch,
+        panX: fingerJuiceCamera.panX,
+        panY: fingerJuiceCamera.panY,
+      };
+      stage.classList.add('orbiting');
+      stage.setPointerCapture?.(event.pointerId);
+      event.preventDefault();
+    });
+    stage.addEventListener('pointermove', event => {
+      if (!cameraDrag || cameraDrag.pointerId !== event.pointerId) return;
+      if (cameraDrag.mode === 'pan') {
+        fingerJuiceCamera.panX = cameraDrag.panX;
+        fingerJuiceCamera.panY = cameraDrag.panY;
+        panCamera(event.clientX - cameraDrag.x, event.clientY - cameraDrag.y);
+      } else {
+        fingerJuiceCamera.yaw = cameraDrag.yaw + (event.clientX - cameraDrag.x) * 0.0042;
+        fingerJuiceCamera.pitch = cameraDrag.pitch - (event.clientY - cameraDrag.y) * 0.0032;
+      }
+      clampCamera();
+      event.preventDefault();
+    });
+    function endCameraDrag(event) {
+      if (cameraDrag && cameraDrag.pointerId === event.pointerId) {
+        stage.releasePointerCapture?.(event.pointerId);
+        cameraDrag = null;
+        stage.classList.remove('orbiting');
+      }
+    }
+    stage.addEventListener('pointerup', endCameraDrag);
+    stage.addEventListener('pointercancel', endCameraDrag);
+    stage.addEventListener('contextmenu', event => event.preventDefault());
+    stage.addEventListener('wheel', event => {
+      fingerJuiceCamera.zoom *= Math.exp(-event.deltaY * 0.001);
+      clampCamera();
+      event.preventDefault();
+    }, { passive: false });
+    stage.addEventListener('dblclick', event => {
+      resetFingerJuiceCamera();
+      event.preventDefault();
+    });
+    window.__lermsFingerJuiceCameraForWitness = () => cameraSnapshot();
+
+    function visualActivityFrame(state = readDebugState()) {
+      const points = [];
+      const pushWorldPoint = point => {
+        if (!Array.isArray(point) || point.length < 3) return;
+        const projected = project(point);
+        if (Number.isFinite(projected.x) && Number.isFinite(projected.y)) {
+          points.push(projected);
+        }
+      };
+
+      for (const particle of state.particles || []) {
+        pushWorldPoint(particle.position);
+      }
+      for (const trail of state.trails || []) {
+        pushWorldPoint(trail.source_anchor?.position);
+        for (const marker of trail.phase_markers || []) {
+          pushWorldPoint(marker.position);
+        }
+        for (const sample of trail.samples || []) {
+          pushWorldPoint(sample.position);
+        }
+      }
+
+      if (!points.length) {
+        return {
+          visualActivityFrame: 'dense-fluid-activity-clip-v0',
+          pointCount: 0,
+          rawBounds: null,
+          clip: {
+            x: 0,
+            y: 0,
+            width: window.innerWidth,
+            height: window.innerHeight,
+            scale: 1,
+          },
+          viewport: {
+            width: window.innerWidth,
+            height: window.innerHeight,
+          },
+        };
+      }
+
+      let minX = Infinity;
+      let minY = Infinity;
+      let maxX = -Infinity;
+      let maxY = -Infinity;
+      for (const point of points) {
+        minX = Math.min(minX, point.x);
+        minY = Math.min(minY, point.y);
+        maxX = Math.max(maxX, point.x);
+        maxY = Math.max(maxY, point.y);
+      }
+
+      const width = window.innerWidth;
+      const height = window.innerHeight;
+      const rawWidth = Math.max(1, maxX - minX);
+      const rawHeight = Math.max(1, maxY - minY);
+
+      const visiblePoints = points
+        .filter(point => point.x >= -80 && point.x <= width + 80 && point.y >= -80 && point.y <= height + 80);
+      const densityRadius = 104;
+      let densest = visiblePoints[0] || points[0];
+      let densestScore = -Infinity;
+      for (const candidate of visiblePoints.length ? visiblePoints : points) {
+        let score = 0;
+        for (const point of visiblePoints.length ? visiblePoints : points) {
+          const dx = candidate.x - point.x;
+          const dy = candidate.y - point.y;
+          const distance2 = dx * dx + dy * dy;
+          if (distance2 <= densityRadius * densityRadius) {
+            score += 1 - distance2 / (densityRadius * densityRadius);
+          }
+        }
+        if (score > densestScore) {
+          densestScore = score;
+          densest = candidate;
+        }
+      }
+
+      const densePoints = (visiblePoints.length ? visiblePoints : points)
+        .filter(point => {
+          const dx = point.x - densest.x;
+          const dy = point.y - densest.y;
+          return dx * dx + dy * dy <= 184 * 184;
+        });
+      let denseMinX = Infinity;
+      let denseMinY = Infinity;
+      let denseMaxX = -Infinity;
+      let denseMaxY = -Infinity;
+      for (const point of densePoints.length ? densePoints : [densest]) {
+        denseMinX = Math.min(denseMinX, point.x);
+        denseMinY = Math.min(denseMinY, point.y);
+        denseMaxX = Math.max(denseMaxX, point.x);
+        denseMaxY = Math.max(denseMaxY, point.y);
+      }
+      const denseWidth = Math.max(1, denseMaxX - denseMinX);
+      const denseHeight = Math.max(1, denseMaxY - denseMinY);
+      const padX = Math.max(18, denseWidth * 0.08);
+      const padY = Math.max(18, denseHeight * 0.12);
+      let clipX = denseMinX - padX;
+      let clipY = denseMinY - padY;
+      let clipWidth = denseWidth + padX * 2;
+      let clipHeight = denseHeight + padY * 2;
+
+      const minClipWidth = Math.min(width, 320);
+      const minClipHeight = Math.min(height, 220);
+      const maxClipWidth = Math.min(width, 380);
+      const maxClipHeight = Math.min(height, 250);
+      if (clipWidth < minClipWidth) {
+        const delta = minClipWidth - clipWidth;
+        clipX -= delta * 0.5;
+        clipWidth = minClipWidth;
+      }
+      if (clipHeight < minClipHeight) {
+        const delta = minClipHeight - clipHeight;
+        clipY -= delta * 0.5;
+        clipHeight = minClipHeight;
+      }
+      if (clipWidth > maxClipWidth) {
+        clipX += (clipWidth - maxClipWidth) * 0.5;
+        clipWidth = maxClipWidth;
+      }
+      if (clipHeight > maxClipHeight) {
+        clipY += (clipHeight - maxClipHeight) * 0.5;
+        clipHeight = maxClipHeight;
+      }
+
+      clipX = Math.max(0, Math.min(width - 1, clipX));
+      clipY = Math.max(0, Math.min(height - 1, clipY));
+      if (clipX + clipWidth > width) clipX = Math.max(0, width - clipWidth);
+      if (clipY + clipHeight > height) clipY = Math.max(0, height - clipHeight);
+      clipWidth = Math.min(width - clipX, clipWidth);
+      clipHeight = Math.min(height - clipY, clipHeight);
+
+      return {
+        visualActivityFrame: 'dense-fluid-activity-clip-v0',
+        pointCount: points.length,
+        densePointCount: densePoints.length,
+        densityScore: Number(densestScore.toFixed(3)),
+        rawBounds: {
+          x: Number(minX.toFixed(2)),
+          y: Number(minY.toFixed(2)),
+          width: Number(rawWidth.toFixed(2)),
+          height: Number(rawHeight.toFixed(2)),
+        },
+        denseBounds: {
+          x: Number(denseMinX.toFixed(2)),
+          y: Number(denseMinY.toFixed(2)),
+          width: Number(denseWidth.toFixed(2)),
+          height: Number(denseHeight.toFixed(2)),
+        },
+        clip: {
+          x: Number(clipX.toFixed(2)),
+          y: Number(clipY.toFixed(2)),
+          width: Number(Math.max(1, clipWidth).toFixed(2)),
+          height: Number(Math.max(1, clipHeight).toFixed(2)),
+          scale: 1,
+        },
+        viewport: {
+          width,
+          height,
+        },
+      };
+    }
+
+    function drawTerrain() {
+      const width = window.innerWidth;
+      const height = window.innerHeight;
+      const horizon = height * 0.22;
+      const near = height * 0.91;
+      const gradient = ctx.createLinearGradient(0, horizon, 0, near);
+      gradient.addColorStop(0, '#24341f');
+      gradient.addColorStop(0.45, '#536735');
+      gradient.addColorStop(1, '#1b2418');
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.moveTo(0, near);
+      for (let i = 0; i <= 80; i += 1) {
+        const x = -1.2 + i * 2.4 / 80;
+        const y = prototype.terrainHeightAt(x, 0);
+        const p = project([x, y - 0.03, -0.05 + Math.abs(x) * 0.12]);
+        ctx.lineTo(p.x, p.y);
+      }
+      ctx.lineTo(width, near);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255, 207, 90, 0.20)';
+      ctx.lineWidth = 1;
+      for (let band = 0; band < 7; band += 1) {
+        const z = -0.5 + band * 0.22;
+        ctx.beginPath();
+        for (let i = 0; i <= 80; i += 1) {
+          const x = -1 + i * 2 / 80;
+          const p = project([x, prototype.terrainHeightAt(x, z), z]);
+          if (i === 0) ctx.moveTo(p.x, p.y);
+          else ctx.lineTo(p.x, p.y);
+        }
+        ctx.stroke();
+      }
+    }
+
+    function drawSourceTerrainSampleMeshOverlay() {
+      if (!terrainSampleSurface?.sampleHeightAt || !terrainSampleSurface?.worldBounds) return;
+      const bounds = terrainSampleSurface.worldBounds;
+      const xMin = Math.max(-1.15, Number(bounds.x?.min) || -1.15);
+      const xMax = Math.min(1.15, Number(bounds.x?.max) || 1.15);
+      const zMin = Math.max(-1.18, Number(bounds.z?.min) || -1.18);
+      const zMax = Math.min(0.72, Number(bounds.z?.max) || 0.72);
+      const columns = Math.max(6, Math.min(18, Math.floor(Number(terrainSampleSurface.grid?.columns) || 12)));
+      const rows = Math.max(6, Math.min(18, Math.floor(Number(terrainSampleSurface.grid?.rows) || 12)));
+      const pointAt = (x, z, lift = 0.015) => project([
+        x,
+        terrainSampleSurface.sampleHeightAt(x, z) + lift,
+        z,
+      ]);
+      ctx.save();
+      ctx.globalCompositeOperation = 'screen';
+      ctx.lineWidth = 1.15;
+      ctx.strokeStyle = 'rgba(101, 231, 255, 0.23)';
+      for (let row = 0; row <= rows; row += 1) {
+        const z = zMin + (zMax - zMin) * row / rows;
+        ctx.beginPath();
+        for (let col = 0; col <= columns; col += 1) {
+          const x = xMin + (xMax - xMin) * col / columns;
+          const point = pointAt(x, z);
+          if (col === 0) ctx.moveTo(point.x, point.y);
+          else ctx.lineTo(point.x, point.y);
+        }
+        ctx.stroke();
+      }
+      ctx.strokeStyle = 'rgba(255, 236, 132, 0.18)';
+      for (let col = 0; col <= columns; col += 1) {
+        const x = xMin + (xMax - xMin) * col / columns;
+        ctx.beginPath();
+        for (let row = 0; row <= rows; row += 1) {
+          const z = zMin + (zMax - zMin) * row / rows;
+          const point = pointAt(x, z);
+          if (row === 0) ctx.moveTo(point.x, point.y);
+          else ctx.lineTo(point.x, point.y);
+        }
+        ctx.stroke();
+      }
+      ctx.fillStyle = 'rgba(101, 231, 255, 0.34)';
+      for (let row = 0; row <= rows; row += Math.max(1, Math.floor(rows / 6))) {
+        for (let col = 0; col <= columns; col += Math.max(1, Math.floor(columns / 6))) {
+          const x = xMin + (xMax - xMin) * col / columns;
+          const z = zMin + (zMax - zMin) * row / rows;
+          const point = pointAt(x, z, 0.022);
+          ctx.beginPath();
+          ctx.arc(point.x, point.y, Math.max(1.5, Math.min(3.2, point.scale * 0.005)), 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      ctx.restore();
+    }
+
+    function drawTargets(state) {
+      const lermColors = ['#ff5c57', '#36b8d9', '#e2d34c'];
+      state.targets.lerms.forEach((target, index) => {
+        const p = project(target.position);
+        ctx.fillStyle = lermColors[index % lermColors.length];
+        ctx.beginPath();
+        ctx.ellipse(p.x, p.y, Math.min(28, 16 + target.hits * 0.02), Math.min(30, 20 + target.hits * 0.012), 0.1, 0, Math.PI * 2);
+        ctx.fill();
+      });
+      for (const goin of state.targets.goins) {
+        const g = project(goin.position);
+        ctx.fillStyle = '#ffbf30';
+        ctx.beginPath();
+        ctx.arc(g.x, g.y, Math.min(24, 14 + goin.hits * 0.02), 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#fff1a8';
+        ctx.stroke();
+      }
+    }
+
+    function drawReservoirDomains(state) {
+      const domains = state.substrateReservoirDiagnostics?.activeReservoirDomains?.components || [];
+      if (!domains.length) return;
+      ctx.save();
+      ctx.globalCompositeOperation = 'source-over';
+      domains.slice(0, 5).reverse().forEach((domain, index) => {
+        const bounds = domain.worldBounds;
+        if (!bounds?.x || !bounds?.z) return;
+        const corners = [
+          [bounds.x.min, prototype.terrainHeightAt(bounds.x.min, bounds.z.min) + 0.012, bounds.z.min],
+          [bounds.x.max, prototype.terrainHeightAt(bounds.x.max, bounds.z.min) + 0.012, bounds.z.min],
+          [bounds.x.max, prototype.terrainHeightAt(bounds.x.max, bounds.z.max) + 0.012, bounds.z.max],
+          [bounds.x.min, prototype.terrainHeightAt(bounds.x.min, bounds.z.max) + 0.012, bounds.z.max],
+        ].map(project);
+        const alpha = index === domains.length - 1 ? 0.22 : 0.11;
+        ctx.fillStyle = `rgba(255, 207, 90, ${alpha})`;
+        ctx.strokeStyle = `rgba(255, 241, 168, ${Math.min(0.52, alpha + 0.2)})`;
+        ctx.lineWidth = index === domains.length - 1 ? 2.5 : 1.4;
+        ctx.beginPath();
+        corners.forEach((point, cornerIndex) => {
+          if (cornerIndex === 0) ctx.moveTo(point.x, point.y);
+          else ctx.lineTo(point.x, point.y);
+        });
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        const center = project([
+          (bounds.x.min + bounds.x.max) * 0.5,
+          prototype.terrainHeightAt((bounds.x.min + bounds.x.max) * 0.5, (bounds.z.min + bounds.z.max) * 0.5) + 0.025,
+          (bounds.z.min + bounds.z.max) * 0.5,
+        ]);
+        ctx.fillStyle = 'rgba(255, 241, 168, 0.75)';
+        ctx.beginPath();
+        ctx.arc(center.x, center.y, Math.max(2.5, Math.min(7, Math.sqrt(domain.particleCount || 1) * 0.24)), 0, Math.PI * 2);
+        ctx.fill();
+      });
+      ctx.restore();
+    }
+
+    function juiceColor(chemistry, alpha) {
+      if (chemistry === 'knockback') return `rgba(255, 103, 86, ${alpha})`;
+      if (chemistry === 'pooling') return `rgba(72, 222, 198, ${alpha})`;
+      return `rgba(216, 168, 255, ${alpha})`;
+    }
+
+    function drawAirborneBreadcrumb(sample, trail) {
+      const p = project(sample.position);
+      const v = sample.velocity_hint || [0, 0, 0];
+      const head = project([sample.position[0] + v[0] * 0.022, sample.position[1] + v[1] * 0.022, sample.position[2] + v[2] * 0.022]);
+      ctx.strokeStyle = juiceColor(trail.chemistry, 0.48);
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(p.x, p.y);
+      ctx.lineTo(head.x, head.y);
+      ctx.stroke();
+      ctx.fillStyle = juiceColor(trail.chemistry, 0.36);
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 2.8, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    function drawImpactRing(sample, trail) {
+      const p = project(sample.position);
+      ctx.strokeStyle = juiceColor(trail.chemistry, 0.56);
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.ellipse(p.x, p.y + 1, 9, 3.8, 0.08, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    function drawSurfaceSmear(sample, trail) {
+      const p = project(sample.position);
+      const v = sample.velocity_hint || [0, 0, 0];
+      const tail = project([sample.position[0] - v[0] * 0.035, sample.position[1], sample.position[2] - v[2] * 0.035]);
+      ctx.strokeStyle = juiceColor(trail.chemistry, 0.28);
+      ctx.lineWidth = 5;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(tail.x, tail.y);
+      ctx.lineTo(p.x, p.y);
+      ctx.stroke();
+      ctx.fillStyle = juiceColor(trail.chemistry, 0.16);
+      ctx.beginPath();
+      ctx.ellipse(p.x, p.y + 2, 8, 3.2, 0.08, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    function drawJuiceTrails(state) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'source-over';
+      for (const trail of (state.trails || []).slice(0, 96)) {
+        if (!trail.samples || trail.samples.length < 2) continue;
+        const renderSamples = trail.samples.filter((_, index) => index % 3 === 0 || index === trail.samples.length - 1);
+        ctx.shadowBlur = 4;
+        ctx.shadowColor = juiceColor(trail.chemistry, 0.34);
+        for (const sample of renderSamples) {
+          if (sample.phase === 'surface_flow') drawSurfaceSmear(sample, trail);
+        }
+        for (const marker of trail.phase_markers || []) {
+          if (marker.phase === 'airborne') drawAirborneBreadcrumb(marker, trail);
+          else if (marker.phase === 'impact') drawImpactRing(marker, trail);
+        }
+        if (trail.source_anchor) {
+          const anchor = project(trail.source_anchor.position);
+          ctx.shadowBlur = 4;
+          ctx.shadowColor = juiceColor(trail.chemistry, 0.4);
+          ctx.strokeStyle = juiceColor(trail.chemistry, 0.58);
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(anchor.x, anchor.y, 5, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+      }
+      ctx.restore();
+    }
+
+    function drawParticles(state) {
+      for (const particle of state.particles) {
+        const p = project(particle.position);
+        const alpha = particle.phase === 'airborne' ? 0.86 : 0.55;
+        ctx.fillStyle = juiceColor(particle.chemistry, alpha);
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, particle.phase === 'airborne' ? 4.8 : 6.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    function drawCaster() {
+      const wrist = project([0, 0.12, -0.96]);
+      ctx.fillStyle = 'rgba(242, 220, 177, 0.28)';
+      ctx.beginPath();
+      ctx.ellipse(wrist.x, wrist.y + 38, 56, 38, 0, 0, Math.PI * 2);
+      ctx.fill();
+      for (const emitter of emitterPacket.emitters.filter(item => item.active)) {
+        const origin = project(emitter.origin_world);
+        const aimEnd = project([
+          emitter.origin_world[0] + emitter.aim_world[0] * 0.28,
+          emitter.origin_world[1] + emitter.aim_world[1] * 0.28,
+          emitter.origin_world[2] + emitter.aim_world[2] * 0.28,
+        ]);
+        ctx.strokeStyle = 'rgba(182, 188, 150, 0.28)';
+        ctx.lineWidth = 3;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(origin.x, origin.y);
+        ctx.lineTo(aimEnd.x, aimEnd.y);
+        ctx.stroke();
+      }
+    }
+
+    function renderWebGPUDirectLayer() {
+      if (webgpuRenderer?.render && webgpuState?.render_backend === 'webgpu_direct_render') {
+        const extent = measureViewportExtent();
+        const renderState = webgpuRenderer.render({
+          width: extent.width,
+          height: extent.height,
+          pixelRatio: extent.ratio,
+          camera: cameraSnapshot(),
+        });
+        webgpuRenderFrameCount = renderState.renderFrameCount;
+        webgpuState = { ...webgpuState, ...renderState };
+      }
+    }
+
+    function captureStateEnvelope(state, mode = 'live-render') {
+      return {
+        ...state,
+        witness_capture: {
+          contract: witnessCaptureFrozen ? 'witness-frozen-state-capture-v0' : 'live-render-state-v0',
+          mode,
+          frozen: witnessCaptureFrozen,
+          renderFrameCount: webgpuRenderFrameCount,
+          submittedStepsTotal: webgpuSubmittedStepsTotal,
+          readbackPending: webgpuReadbackPending,
+          framePending: webgpuFramePending,
+        },
+      };
+    }
+
+    function renderCurrentState() {
+      renderWebGPUDirectLayer();
+      const state = captureStateEnvelope(readDebugState());
+      ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+      drawTerrain();
+      drawSourceTerrainSampleMeshOverlay();
+      drawReservoirDomains(state);
+      drawCaster();
+      drawTargets(state);
+      if (state.render_backend !== 'webgpu_direct_render') {
+        drawJuiceTrails(state);
+        drawParticles(state);
+      }
+      const sourceDiagnostics = state.sourceDiagnostics || {};
+      const pressureDensityStats = state.pressureDensityStats || {};
+      const spatialPressureStats = state.spatialPressureStats || {};
+      const fluidDepthStats = state.fluidDepthStats || {};
+      const surfaceCohesionStats = state.surfaceCohesionStats || {};
+      const spatialSurfaceRelaxationStats = state.spatialSurfaceRelaxationStats || {};
+      const densityPositionSolveStats = state.densityPositionSolveStats || {};
+      const densityContinuityProjectionStats = state.densityContinuityProjectionStats || {};
+      const sampledNeighborhoodDensityStats = state.sampledNeighborhoodDensityStats || {};
+      const localPairDensityStats = state.localPairDensityStats || {};
+      const neighborSupportSubstrateStats = state.neighborSupportSubstrateStats || {};
+      const substrateDensityConstraintStats = state.substrateDensityConstraintStats || {};
+      const iterativeDensityContinuityStats = state.iterativeDensityContinuityStats || {};
+      const deepDensityContinuityStats = state.deepDensityContinuityStats || {};
+      const particleSupportBudgetStats = state.particleSupportBudgetStats || {};
+      const settleRestEnergyStats = state.settleRestEnergyStats || {};
+      const stabilityStats = state.stabilityStats || {};
+      const visualStreakBeadStats = state.visualStreakBeadStats || {};
+      const supportFrame = state.supportFrame || {};
+      const substrateReservoirDiagnostics = state.substrateReservoirDiagnostics || {};
+      const emitterDiagnostics = Array.isArray(state.emitterDiagnostics) ? state.emitterDiagnostics : [];
+      const emitterSummary = emitterDiagnostics
+        .map(emitter => `${emitter.emitter_id}:${emitter.activeParticleCount}`)
+        .join(' ');
+      const camera = cameraSnapshot();
+      const supportSource = supportFrame.supportFrameSource || state.supportFrameSource || 'local_procedural_support_frame_v0';
+      const supportAuthority = supportFrame.sourceAuthority || state.sourceAuthority || 'none';
+      const terrainSampleDiagnostics = state.terrainSampleDiagnostics || {};
+      const terrainCoupling = terrainSampleDiagnostics.terrainSampleCouplingMode
+        || state.terrainSampleCouplingMode
+        || 'local_procedural_heightfield_v0';
+      const terrainGpuMode = terrainSampleDiagnostics.terrainSampleGpuCollisionMode
+        || state.terrainSampleGpuCollisionMode
+        || 'local_procedural_heightfield_gpu_v0';
+      const terrainChecksum = terrainSampleDiagnostics.sampleChecksum || state.terrainSampleChecksum || 'none';
+      hud.innerHTML = `<b>${LERMS_WORLD_FINGER_JUICE_ROUTE}</b><br>${state.solver_backend} | ${state.solverRoute}<br>${state.render_backend || 'cpu_canvas_render'} | ${state.renderRoute || visualRenderer} | ${state.supportDomainRenderer || supportDomainRenderer}<br>${state.pressureContract || 'pressure-unavailable'} + ${state.spatialPressureContract || 'spatial-pressure-unavailable'} + ${state.fluidDepthContract || 'fluid-depth-unavailable'}<br>source ${sourceDiagnostics.authority || state.simulation_authority} | ${sourceDiagnostics.frameId || 'no-frame'} | ${state.activeWitnessEmitterConfig || 'short-smoke-v0'}<br>support ${supportSource} | ${state.hillSupportFramePayloadStatus || 'not_requested'} | ${supportAuthority}<br>terrain ${state.terrainSampleStatus || terrainSampleDiagnostics.terrainSampleStatus || 'not_requested'} | ${terrainCoupling} | ${terrainGpuMode} | sample ${terrainChecksum}<br>supportFrameChecksum ${supportFrame.supportFrameChecksum || 'none'} domains ${substrateReservoirDiagnostics.activeReservoirDomains?.componentCount ?? 0} cells ${substrateReservoirDiagnostics.occupiedCellCount ?? 0}<br>camera ${camera.cameraControlContract} yaw ${camera.yaw} pitch ${camera.pitch} zoom ${camera.zoom} pan ${camera.panX},${camera.panY}<br>emitters ${emitterSummary || 'none'} | ring dx ${state.ringEmitterLateralDrift?.average_x_delta ?? 0}<br>pressure avg ${pressureDensityStats.averageNeighborDensity ?? 0} max ${pressureDensityStats.maxNeighborDensity ?? 0} window ${pressureDensityStats.pressureNeighborWindow ?? 0}<br>spatial cells ${spatialPressureStats.occupiedCellCount ?? 0}/${spatialPressureStats.spatialCellCount ?? 0} max ${spatialPressureStats.maxCellOccupancy ?? 0} | viscosity ${fluidDepthStats.viscosityAffectedCount ?? 0}<br>cohesion ${surfaceCohesionStats.cohesionAffectedCount ?? 0} neighbors ${surfaceCohesionStats.averageCohesionNeighbors ?? 0} align ${surfaceCohesionStats.ribbonAlignment ?? 0}<br>relax ${spatialSurfaceRelaxationStats.relaxedParticleCount ?? 0} dense ${spatialSurfaceRelaxationStats.denseCellCount ?? 0} continuity ${spatialSurfaceRelaxationStats.sheetContinuityRatio ?? 0}<br>density solve ${densityPositionSolveStats.correctionCandidateCount ?? 0} err ${densityPositionSolveStats.averageConstraintError ?? 0}/${densityPositionSolveStats.maxConstraintError ?? 0} cover ${densityPositionSolveStats.densitySolveCoverageRatio ?? 0}<br>project cand ${densityContinuityProjectionStats.continuityProjectionCandidateCount ?? 0} peak ${densityContinuityProjectionStats.continuityPeakOccupancyRatio ?? 0} dense ${densityContinuityProjectionStats.continuityDenseCellCount ?? 0} refresh ${densityContinuityProjectionStats.continuityBinRefreshChunk ?? 0}<br>deep project ${deepDensityContinuityStats.deepContinuityProjectionCandidateCount ?? 0} peak ${deepDensityContinuityStats.deepContinuityPeakOccupancyRatio ?? 0} dense ${deepDensityContinuityStats.deepContinuityDenseCellCount ?? 0}<br>sampled nbr ${sampledNeighborhoodDensityStats.averageSampledNeighborCount ?? 0} close ${sampledNeighborhoodDensityStats.closeSamplePairCount ?? 0} cand ${sampledNeighborhoodDensityStats.neighborhoodDensityCorrectionCandidateCount ?? 0}<br>local pair ${localPairDensityStats.averageLocalPairNeighbors ?? 0} close ${localPairDensityStats.localPairClosePairCount ?? 0} cand ${localPairDensityStats.localPairProjectionCandidateCount ?? 0}<br>substrate ${neighborSupportSubstrateStats.averageSubstrateNeighborSupport ?? 0} p95 ${neighborSupportSubstrateStats.p95SubstrateNeighborSupport ?? 0} unsupported ${neighborSupportSubstrateStats.unsupportedSubstrateParticleCount ?? 0}<br>constraint ${substrateDensityConstraintStats.substrateConstraintCandidateCount ?? 0} low ${substrateDensityConstraintStats.lowSupportConstraintCount ?? 0} err ${substrateDensityConstraintStats.averageSubstrateConstraintError ?? 0}/${substrateDensityConstraintStats.maxSubstrateConstraintError ?? 0} unsupported ${substrateDensityConstraintStats.unsupportedSubstrateConstraintRatio ?? 0}<br>iterative ${iterativeDensityContinuityStats.iterativeDensityContinuityIterationCount ?? 0} cand ${iterativeDensityContinuityStats.iterativeDensityContinuityCandidateCount ?? 0} resid ${iterativeDensityContinuityStats.averageIterativeDensityResidual ?? 0}/${iterativeDensityContinuityStats.maxIterativeDensityResidual ?? 0} conv ${iterativeDensityContinuityStats.iterativeDensityConvergenceRatio ?? 0} clamps ${iterativeDensityContinuityStats.iterativeDensityClampCount ?? 0}<br>support avg ${particleSupportBudgetStats.averageSupportNeighborCount ?? 0} unsupported ${particleSupportBudgetStats.unsupportedCorrectionRatio ?? 0} grid ${particleSupportBudgetStats.supportGridCellCount ?? 0}<br>rest p95 ${settleRestEnergyStats.p95SettledSurfaceSpeed ?? 0} energy ${settleRestEnergyStats.restEnergyScore ?? 0}<br>stable risk ${stabilityStats.stabilityRiskScore ?? 0} fast ${stabilityStats.highSpeedParticleCount ?? 0} sat ${stabilityStats.denseCellSaturation ?? 0}<br>visual beads ${visualStreakBeadStats.detachedBeadParticleCount ?? 0} streak ${visualStreakBeadStats.longStreakParticleCount ?? 0} air ${visualStreakBeadStats.olderAirborneStreakCount ?? 0}<br>extent x ${state.flowExtentX ?? 0} z ${state.flowExtentZ ?? 0} | particles ${state.particleCount || 0} | surface ${state.surfaceFlowCount || 0} | hits ${state.juiceHitEventCount || state.juiceHitEvents?.length || 0}`;
+      window.__lermsFingerJuicePreviewBenchPayload = createFingerJuicePreviewBenchPayload(state, { reportPath: null });
+      window.__lermsFingerJuiceHostPacket = createFingerJuiceHostPacket(state, {
+        packetUrl: '/api/read?root=lerms-preview&path=big-papa-finger-juice-host-packet.json',
+      });
+      window.__lermsFingerJuiceDebug = readDebugState;
+      window.__lermsFingerJuiceRenderForWitness = renderCurrentState;
+      window.__lermsFingerJuiceVisualFrameForWitness = () => visualActivityFrame(readDebugState());
+      return state;
+    }
+
+    window.__lermsFingerJuiceFreezeForWitness = async ({ mode = 'full-viewport-smoke-v0' } = {}) => {
+      witnessCaptureFrozen = true;
+      for (let attempt = 0; attempt < 24 && (webgpuFramePending || webgpuReadbackPending); attempt += 1) {
+        await new Promise(resolve => setTimeout(resolve, 8));
+      }
+      const state = captureStateEnvelope(renderCurrentState(), mode);
+      witnessFrozenCaptureState = state;
+      window.__lermsFingerJuiceFrozenCaptureState = state;
+      return state;
+    };
+
+    window.__lermsFingerJuiceUnfreezeForWitness = () => {
+      witnessCaptureFrozen = false;
+      witnessFrozenCaptureState = null;
+      window.__lermsFingerJuiceFrozenCaptureState = null;
+      return readDebugState();
+    };
+
+    function maybeInstallOperatorExpandedFlow(now) {
+      if (!routeActive || witnessCaptureFrozen || operatorExpandedFlowInstalled || operatorExpandedFlowPending) return;
+      if (activeWitnessEmitterConfig !== 'short-smoke-v0') {
+        operatorExpandedFlowInstalled = true;
+        return;
+      }
+      if ((now - routeStartedAt) / 1000 < operatorExpandedFlowDelaySeconds) return;
+      operatorExpandedFlowPending = true;
+      installWitnessEmitterPacket(expandedWitnessEmitterPacket, 'operator-expanded-flow-v0')
+        .then(() => {
+          operatorExpandedFlowInstalled = true;
+        })
+        .catch(error => {
+          webgpuState = {
+            ...webgpuState,
+            operatorExpandedFlowError: error.message,
+          };
+        })
+        .finally(() => {
+          operatorExpandedFlowPending = false;
+        });
+    }
+
+    const routeStartedAt = performance.now();
+    let last = performance.now();
+    function frame(now) {
+      const rawDt = Math.max(0, (now - last) / 1000);
+      const dt = Math.min(1 / 30, Math.max(1 / 120, rawDt));
+      last = now;
+      if (routeActive && !witnessCaptureFrozen) {
+        maybeInstallOperatorExpandedFlow(now);
+        if (webgpuSolver?.solver_backend === 'webgpu_compute') {
+          webgpuAccumulatedSeconds += rawDt;
+          webgpuReadbackAccumulatedSeconds += rawDt;
+          if (!webgpuFramePending && webgpuAccumulatedSeconds >= webgpuFrameStepDt) {
+            const requestedSteps = Math.max(1, Math.floor(webgpuAccumulatedSeconds / webgpuFrameStepDt));
+            const submittedSteps = Math.min(webgpuMaxFrameSteps, requestedSteps);
+            webgpuLastDroppedCatchupSteps = Math.max(0, requestedSteps - submittedSteps);
+            webgpuDroppedCatchupStepsTotal += webgpuLastDroppedCatchupSteps;
+            webgpuAccumulatedSeconds -= submittedSteps * webgpuFrameStepDt;
+            if (webgpuLastDroppedCatchupSteps > 0) {
+              webgpuAccumulatedSeconds = Math.min(webgpuAccumulatedSeconds, webgpuFrameStepDt * webgpuMaxFrameSteps);
+            }
+            webgpuLastSubmittedSteps = submittedSteps;
+            webgpuSubmittedStepsTotal += submittedSteps;
+            webgpuFramePending = true;
+            const readbackStartedAt = performance.now();
+            webgpuSolver.step(submittedSteps, webgpuFrameStepDt).then(() => {
+            webgpuLastComputeMs = performance.now() - readbackStartedAt;
+              if (webgpuRenderer?.render) {
+                const extent = measureViewportExtent();
+                const renderState = webgpuRenderer.render({
+                  width: extent.width,
+                  height: extent.height,
+                  pixelRatio: extent.ratio,
+                  camera: cameraSnapshot(),
+                });
+                webgpuRenderFrameCount = renderState.renderFrameCount;
+                webgpuState = { ...webgpuState, ...renderState };
+              }
+            }).catch(error => {
+              webgpuState = {
+                ...webgpuState,
+                solver_backend: 'webgpu_unavailable',
+                error: error.message,
+              };
+            }).finally(() => {
+              webgpuFramePending = false;
+            });
+          }
+          if (!webgpuReadbackPending && webgpuReadbackAccumulatedSeconds >= webgpuReadbackPeriod) {
+            webgpuReadbackAccumulatedSeconds = 0;
+            liveReadbackRequestedCount += 1;
+            if (webgpuFramePending) {
+              liveReadbackSkippedCount += 1;
+              liveReadbackCpuOracleMode = 'skip_cpu_oracle_live_readback_v0';
+            } else {
+              webgpuReadbackPending = true;
+              const readbackStartedAt = performance.now();
+              const previousCpuOracle = webgpuState.cpuOracle || null;
+              webgpuSolver.stepAndRead(0, webgpuFrameStepDt, {
+                cpuOracle: false,
+                reason: 'live_animation_debug_readback',
+                summaryMode: 'live_lightweight_readback_v0',
+              }).then(state => {
+                webgpuLastReadbackMs = performance.now() - readbackStartedAt;
+                liveReadbackCompletedCount += 1;
+                liveReadbackCpuOracleMode = state.cpuOracleMode || liveReadbackCpuOracleMode;
+                liveReadbackSummaryMode = state.summaryMode || liveReadbackSummaryMode;
+                webgpuState = {
+                  ...webgpuState,
+                  ...state,
+                  render_backend: webgpuState.render_backend,
+                renderRoute: webgpuState.renderRoute,
+                renderShaderRoute: webgpuState.renderShaderRoute,
+                cpuOracle: state.cpuOracle || previousCpuOracle,
+                ...supportPayloadStateFields(),
+                ...terrainSampleStateFields(),
+              };
+              }).catch(error => {
+                webgpuState = {
+                  ...webgpuState,
+                  solver_backend: 'webgpu_unavailable',
+                  error: error.message,
+                };
+              }).finally(() => {
+                webgpuReadbackPending = false;
+              });
+            }
+          }
+        } else {
+          for (let i = 0; i < 2; i += 1) prototype.step(dt * 0.5);
+        }
+      }
+      renderCurrentState();
+      requestAnimationFrame(frame);
+    }
+
+    resize();
+    window.addEventListener('resize', resize);
+    requestAnimationFrame(frame);
+  </script>
+</body>
+</html>

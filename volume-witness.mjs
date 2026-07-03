@@ -35,13 +35,17 @@ const fieldTileSpatialBinIds = String(args.get('--field-tile-spatial-bin-ids') |
 const fullScreenshot = args.has('--full-screenshot')
   ? resolve(args.get('--full-screenshot') || out.replace(/\.png$/i, '.full.png'))
   : '';
-const VALID_EVIDENCE_MODES = new Set(['fire-volume', 'performance']);
+const VALID_EVIDENCE_MODES = new Set(['fire-volume', 'performance', 'pyro-material', 'no-fire-volume']);
 const evidenceMode = args.get('--evidence-mode') || 'fire-volume';
 if (!VALID_EVIDENCE_MODES.has(evidenceMode)) {
   throw new Error(`Unknown witness evidence mode: ${evidenceMode}`);
 }
 const expectsPerformanceVolumeEvidence = evidenceMode === 'performance';
-const visualEvidenceMode = expectsPerformanceVolumeEvidence ? 'performance-volume-signal' : 'fire-volume';
+const expectsPyroMaterialEvidence = evidenceMode === 'pyro-material';
+const expectsNoFireVolumeEvidence = evidenceMode === 'no-fire-volume';
+const visualEvidenceMode = expectsNoFireVolumeEvidence
+  ? 'no-fire-volume-signal'
+  : (expectsPyroMaterialEvidence ? 'pyro-material-coupled-volume-signal' : (expectsPerformanceVolumeEvidence ? 'performance-volume-signal' : 'fire-volume'));
 const TALL_PLUME_PRESSURE_ITERATION_STRATEGY_PRESSURE2 = 'tall-plume-pressure2-v0';
 const TALL_PLUME_PRESSURE_ITERATION_STRATEGY_INACTIVE = 'inactive';
 const TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY = 'tall-plume-spatial-pressure-tiers-v0';
@@ -206,6 +210,27 @@ function normalizePressureStrategy(value, volumeScene) {
   return volumeScene === 'tall_plume' && requested === 'spatial_tiers' ? 'spatial_tiers' : 'global';
 }
 
+function normalizeVolumePressureMode(value) {
+  const mode = String(value || 'auto').toLowerCase();
+  return ['auto', 'spatial-tiers', 'global-p3', 'global-p2', 'global-p1', 'routed-global'].includes(mode) ? mode : 'auto';
+}
+
+function pressureConfigForMode(mode, volumeScene, fallbackStrategy, fallbackIterations) {
+  const normalized = normalizeVolumePressureMode(mode);
+  switch (normalized) {
+    case 'spatial-tiers':
+      return { pressureStrategy: volumeScene === 'tall_plume' ? 'spatial_tiers' : 'global', pressureIterations: volumeScene === 'tall_plume' ? 3 : fallbackIterations };
+    case 'global-p3':
+      return { pressureStrategy: 'global', pressureIterations: 3 };
+    case 'global-p2':
+      return { pressureStrategy: 'global', pressureIterations: 2 };
+    case 'global-p1':
+      return { pressureStrategy: 'global', pressureIterations: 1 };
+    default:
+      return { pressureStrategy: fallbackStrategy, pressureIterations: fallbackIterations };
+  }
+}
+
 function expectedTallPlumePressureTierStrategy(volumeScene, pressureStrategy) {
   return volumeScene === 'tall_plume' && pressureStrategy === 'spatial_tiers'
     ? TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY
@@ -284,13 +309,180 @@ const TALL_PLUME_OPERATOR_PRESETS = {
     windHeight: -0.80,
     renderScale: 0.95,
   },
+  operator_memory_fire_0701: {
+    volumeScene: 'tall_plume',
+    density: 5.20,
+    fire: 0.00,
+    radiance: 3.00,
+    absorption: 2.00,
+    glow: 2.50,
+    smoke: 2.80,
+    curl: 2.70,
+    microdetail: 2.50,
+    interfaceShred: 5.00,
+    fireLicks: 1.70,
+    projection: 1.50,
+    speed: 5.00,
+    raySteps: 160,
+    adaptiveRays: 0.00,
+    occupancySkip: 0.00,
+    majorantSkip: 1.00,
+    majorantSmooth: 0.85,
+    majorantGuard: 0.50,
+    temporalAccum: 0.00,
+    temporalJitter: 0.00,
+    historyClamp: 0.70,
+    fireScale: 0.35,
+    detailScale: 0.50,
+    plumeHeight: 1.20,
+    windStrength: 0.80,
+    windAngle: 0,
+    windHeight: -0.35,
+    renderScale: 0.35,
+    inputRadius: 0.12,
+    flowRate: 0.35,
+    resolution: 128,
+    majorantGrid: 48,
+    pressureMode: 'global-p3',
+    pressureTierLowerMax: 0.64,
+    pressureTierHeroMin: 0.18,
+    pressureTierHeroMax: 0.53,
+  },
+  pyro_contrast_warm_cap_small_flame_0702: {
+    volumeScene: 'tall_plume',
+    density: 6.00,
+    fire: 3.50,
+    radiance: 2.30,
+    absorption: 0.30,
+    glow: 2.05,
+    smoke: 2.15,
+    curl: 3.70,
+    microdetail: 2.50,
+    interfaceShred: 5.00,
+    fireLicks: 5.00,
+    projection: 1.50,
+    speed: 0.75,
+    raySteps: 160,
+    adaptiveRays: 0.00,
+    occupancySkip: 0.00,
+    majorantSkip: 1.00,
+    majorantSmooth: 0.00,
+    majorantGuard: 1.00,
+    temporalAccum: 0.00,
+    temporalJitter: 0.00,
+    historyClamp: 0.70,
+    fireScale: 1.17,
+    detailScale: 2.55,
+    plumeHeight: 1.75,
+    windStrength: 1.50,
+    windAngle: 0,
+    windHeight: -0.55,
+    renderScale: 0.70,
+    inputRadius: 0.08,
+    flowRate: 0.25,
+    resolution: 160,
+    majorantGrid: 48,
+    pyroDynamicDetail: 1,
+    pyroMaterialGain: 1.50,
+    pyroInterfaceFocus: 0.00,
+    pyroEdgeBite: 1.00,
+    pyroBiteBorder: 0.60,
+    pyroBiteTeeth: 0.90,
+    pyroBiteWake: 1.00,
+    pyroBiteHeat: 0.70,
+    pyroBiteChroma: 0.60,
+    pyroSmokeFold: 1.00,
+    pyroFoldBorder: 0.85,
+    pyroFoldWake: 1.00,
+    pyroRadiance: 0.65,
+    pyroRadianceGate: 0.62,
+    pyroRadianceSpill: 0.30,
+    pyroRadianceWarmth: 0.45,
+    pyroRadianceHue: 0.50,
+    pyroRadianceChroma: 0.55,
+    pyroDiagnosticPaint: 0.00,
+    pyroCarrierView: 'normal',
+    pyroOverdrive: 8.00,
+    pressureMode: 'spatial-tiers',
+    pressureTierOverlay: 0.00,
+    pressureTierLowerMax: 0.74,
+    pressureTierHeroMin: 0.00,
+    pressureTierHeroMax: 0.55,
+  },
+  pyro_material_bonfire_family_0702: {
+    volumeScene: 'tall_plume',
+    density: 6.00,
+    fire: 3.50,
+    radiance: 2.55,
+    absorption: 1.95,
+    glow: 2.35,
+    smoke: 2.80,
+    curl: 3.65,
+    microdetail: 2.50,
+    interfaceShred: 5.00,
+    fireLicks: 5.00,
+    projection: 1.50,
+    speed: 3.45,
+    raySteps: 160,
+    adaptiveRays: 0.05,
+    occupancySkip: 0.05,
+    majorantSkip: 1.00,
+    majorantSmooth: 0.00,
+    majorantGuard: 1.00,
+    temporalAccum: 0.00,
+    temporalJitter: 0.00,
+    historyClamp: 1.00,
+    fireScale: 0.52,
+    detailScale: 1.85,
+    plumeHeight: 1.85,
+    windStrength: 1.50,
+    windAngle: -65,
+    windHeight: -0.65,
+    renderScale: 0.30,
+    inputRadius: 0.20,
+    flowRate: 0.25,
+    resolution: 96,
+    majorantGrid: 48,
+    pyroDynamicDetail: 1,
+    pyroMaterialGain: 1.50,
+    pyroInterfaceFocus: 0.00,
+    pyroEdgeBite: 1.00,
+    pyroBiteBorder: 0.45,
+    pyroBiteTeeth: 0.60,
+    pyroBiteWake: 1.00,
+    pyroBiteHeat: 0.70,
+    pyroBiteChroma: 0.60,
+    pyroSmokeFold: 0.35,
+    pyroFoldBorder: 1.00,
+    pyroFoldWake: 1.00,
+    pyroRadiance: 6.10,
+    pyroRadianceGate: 1.00,
+    pyroRadianceSpill: 0.90,
+    pyroRadianceWarmth: 0.75,
+    pyroRadianceHue: 0.50,
+    pyroRadianceChroma: 0.55,
+    pyroDiagnosticPaint: 0.00,
+    pyroCarrierView: 'normal',
+    pyroOverdrive: 8.00,
+    pressureMode: 'global-p3',
+    pressureTierOverlay: 0.00,
+    pressureTierLowerMax: 0.84,
+    pressureTierHeroMin: 0.00,
+    pressureTierHeroMax: 0.69,
+  },
 };
 const CANONICAL_VOLUME_MACRO_PRESETS = {
   macro_foothold_0621: {
     density: 0.45,
+    fire: 0.00,
+    radiance: 0.00,
+    glow: 0.00,
     smoke: 2.80,
     absorption: 2.00,
     curl: 1.00,
+    microdetail: 0.00,
+    interfaceShred: 0.00,
+    fireLicks: 0.00,
     projection: 1.05,
     speed: 0.30,
     raySteps: 148,
@@ -302,6 +494,8 @@ const CANONICAL_VOLUME_MACRO_PRESETS = {
     temporalAccum: 0.00,
     temporalJitter: 0.00,
     historyClamp: 1.00,
+    fireScale: 0.86,
+    detailScale: 0.75,
     plumeHeight: 1.45,
     renderScale: 0.65,
     inputRadius: 0.08,
@@ -314,9 +508,15 @@ const CANONICAL_VOLUME_MACRO_PRESETS = {
   },
   honest_smoke_0622: {
     density: 0.45,
+    fire: 0.00,
+    radiance: 0.00,
+    glow: 0.00,
     smoke: 2.80,
     absorption: 2.00,
     curl: 1.00,
+    microdetail: 0.00,
+    interfaceShred: 0.00,
+    fireLicks: 0.00,
     projection: 1.05,
     speed: 0.30,
     raySteps: 148,
@@ -328,6 +528,8 @@ const CANONICAL_VOLUME_MACRO_PRESETS = {
     temporalAccum: 0.00,
     temporalJitter: 0.00,
     historyClamp: 1.00,
+    fireScale: 0.86,
+    detailScale: 0.75,
     plumeHeight: 1.45,
     renderScale: 0.65,
     inputRadius: 0.08,
@@ -426,21 +628,36 @@ const expectedCanonicalBuoyancy = routeParams.has('volume_canonical_buoyancy') &
 const canonicalPassiveBottomNonRiseProof = expectsCanonicalPlumeProof && expectedCanonicalSourceMode === 'passive_bottom';
 const expectsCanonicalSmokeRise = expectsCanonicalPlumeProof && !canonicalPassiveBottomNonRiseProof;
 const requestedGrid = Number(routeParams.get('volume_resolution'));
-const expectedGrid = [32, 48, 64, 96, 128, 160].includes(requestedGrid) ? requestedGrid : canonicalMacroPreset.resolution ?? 96;
+const expectedGrid = [32, 48, 64, 96, 128, 160].includes(requestedGrid)
+  ? requestedGrid
+  : canonicalMacroPreset.resolution ?? scenePreset.resolution ?? 96;
 const requestedMajorantGrid = Number(routeParams.get('volume_majorant_grid'));
-const expectedMajorantGrid = [24, 32, 48].includes(requestedMajorantGrid) ? requestedMajorantGrid : canonicalMacroPreset.majorantGrid ?? 48;
+const expectedMajorantGrid = [24, 32, 48].includes(requestedMajorantGrid)
+  ? requestedMajorantGrid
+  : canonicalMacroPreset.majorantGrid ?? scenePreset.majorantGrid ?? 48;
 const requestedMajorantCadence = Number(routeParams.get('volume_majorant_cadence'));
 let expectedMajorantCadence = routeParams.has('volume_majorant_cadence') && Number.isFinite(requestedMajorantCadence)
   ? Math.max(1, Math.min(8, Math.round(requestedMajorantCadence)))
   : 1;
 const requestedPressureIterations = Number(routeParams.get('volume_pressure_iterations'));
-let expectedPressureStrategy = normalizePressureStrategy(routeParams.get('volume_pressure_strategy'), expectedVolumeScene);
+const requestedPressureMode = routeParams.get('volume_pressure_mode');
+const hasExplicitPressureRoute =
+  routeParams.has('volume_pressure_mode') ||
+  routeParams.has('volume_pressure_iterations') ||
+  routeParams.has('volume_pressure_strategy');
+let expectedPressureStrategy = normalizePressureStrategy(routeParams.get('volume_pressure_strategy') || scenePreset.pressureStrategy, expectedVolumeScene);
 let expectedSpatialPressureTiers = expectedPressureStrategy === 'spatial_tiers';
 let expectedPressureIterations = expectedSpatialPressureTiers
   ? 3
   : routeParams.has('volume_pressure_iterations') && Number.isFinite(requestedPressureIterations)
     ? Math.max(0, Math.min(12, Math.round(requestedPressureIterations)))
     : defaultPressureIterationsForScene(expectedVolumeScene);
+if (routeParams.has('volume_pressure_mode') || (!hasExplicitPressureRoute && scenePreset.pressureMode)) {
+  const pressureModeConfig = pressureConfigForMode(requestedPressureMode || scenePreset.pressureMode, expectedVolumeScene, expectedPressureStrategy, expectedPressureIterations);
+  expectedPressureStrategy = pressureModeConfig.pressureStrategy;
+  expectedPressureIterations = pressureModeConfig.pressureIterations;
+  expectedSpatialPressureTiers = expectedPressureStrategy === 'spatial_tiers';
+}
 let expectedPressureProjectionIterations = expectedSpatialPressureTiers ? 3 : expectedPressureIterations;
 let expectedTallPlumePressureStrategy = expectedSpatialPressureTiers
   ? TALL_PLUME_PRESSURE_ITERATION_STRATEGY_INACTIVE
@@ -897,7 +1114,7 @@ async function main() {
     }
     phase = 'identity';
     let state = null;
-    for (let i = 0; i < 40; i++) {
+    for (let i = 0; i < 80; i++) {
       const stateEval = await wsRequest(ws, 'Runtime.evaluate', {
         expression: 'window.__kaminosVolumePrototype?.debugState?.()',
         returnByValue: true,
@@ -917,7 +1134,10 @@ async function main() {
     const bridge = bridgeEval.result.value;
     assert.equal(bridge?.identity, 'volume-main-renderer-bridge-v0', 'wrong volume main-renderer bridge identity');
     assert.equal(bridge?.textureSource, 'kaminos-volume-canvas', 'volume bridge is not sourcing the native volume canvas');
-    assert.ok(state.frameCount > 5, 'volume route did not render enough frames');
+    assert.ok(
+      state.frameCount > 5,
+      `volume route did not render enough frames (${state.frameCount || 0} frames at ${state.displayWidth || 0}x${state.displayHeight || 0})`,
+    );
     assert.equal(state.volumeScene, expectedVolumeScene, 'volume scene route/control did not apply');
     assert.equal(state.controls?.volumeScene, expectedVolumeScene, 'volume scene debug controls did not preserve route identity');
     assert.equal(state.simGrid, expectedGrid, `fluid sim is not running on the expected ${expectedGrid}^3 grid`);
@@ -1355,7 +1575,7 @@ async function main() {
     if (!expectsCanonicalPlumeProof && !expectsFuelStarvedTallPlume && (!Number.isFinite(sample.simReadback.fireLayerMean) || sample.simReadback.fireLayerMean <= 0.0005)) {
       throw new Error(`GPU sim readback does not show a transported fire layer: ${JSON.stringify(sample.simReadback)}`);
     }
-    if (!expectsCanonicalPlumeProof && !expectsFuelStarvedTallPlume && (!Number.isFinite(sample.simReadback.radianceMean) || sample.simReadback.radianceMean <= 0.0005)) {
+    if (!expectsCanonicalPlumeProof && !expectsFuelStarvedTallPlume && !expectsNoFireVolumeEvidence && (!Number.isFinite(sample.simReadback.radianceMean) || sample.simReadback.radianceMean <= 0.0005)) {
       throw new Error(`GPU sim readback does not show fire radiance evidence: ${JSON.stringify(sample.simReadback)}`);
     }
     if (expectedVolumeScene === 'tall_plume') {
@@ -1785,9 +2005,20 @@ async function main() {
     const mainRendererBuffer = Buffer.from(pageShot.data, 'base64');
     writeFileSync(mainRendererScreenshot, mainRendererBuffer);
     const mainRendererMetrics = measureScreenshot(mainRendererBuffer);
+    const expectsNoFireMainRendererVolume = expectsNoFireVolumeEvidence ||
+      expectsFuelStarvedTallPlume ||
+      (expectsCanonicalPlumeProof && !expectsCanonicalFireEvidence);
     if (expectsSnuffVisualEvidence) {
       if (mainRendererMetrics.litPixels < 1500 || mainRendererMetrics.smokeLikePixels < 1500 || mainRendererMetrics.meanLuma < 8) {
         throw new Error(`main renderer screenshot missing bridged snuff vapor volume: ${JSON.stringify(mainRendererMetrics)}`);
+      }
+    } else if (expectsNoFireMainRendererVolume) {
+      if (mainRendererMetrics.litPixels < 650 || mainRendererMetrics.meanLuma < 1.5) {
+        throw new Error(`main renderer screenshot missing bridged no-fire volume signal: ${JSON.stringify(mainRendererMetrics)}`);
+      }
+    } else if (expectsPyroMaterialEvidence) {
+      if (mainRendererMetrics.litPixels < 1500 || mainRendererMetrics.meanLuma < 8) {
+        throw new Error(`main renderer screenshot missing bridged Pyro material volume: ${JSON.stringify(mainRendererMetrics)}`);
       }
     } else if (mainRendererMetrics.litPixels < 1500 || mainRendererMetrics.fireLikePixels < 80 || mainRendererMetrics.meanLuma < 8) {
       throw new Error(`main renderer screenshot missing bridged fire volume: ${JSON.stringify(mainRendererMetrics)}`);
@@ -1806,6 +2037,24 @@ async function main() {
           xyMax: canonicalFieldSlice?.xyMax,
         })}`);
       }
+    } else if (expectsNoFireVolumeEvidence) {
+      const noFireVolumeSignalPixels =
+        Number(metrics.litPixels || 0) +
+        Number(metrics.smokeLikePixels || 0) +
+        Number(metrics.volumeBounds?.pixelCount || 0);
+      if (metrics.litPixels < 220 || noFireVolumeSignalPixels < 350 || metrics.meanLuma < 1.2) {
+        throw new Error(`blank frame or missing no-fire volume signal: ${JSON.stringify({
+          ...metrics,
+          noFireVolumeSignalPixels,
+        })}`);
+      }
+      if (visibleFirePixels > 260) {
+        throw new Error(`no-fire volume evidence unexpectedly retained visible fire: ${JSON.stringify({
+          visibleFirePixels,
+          fireLikePixels: metrics.fireLikePixels,
+          emissiveLikePixels: metrics.emissiveLikePixels,
+        })}`);
+      }
     } else if (expectsCanonicalPlumeProof) {
       if (
         metrics.litPixels < 220 ||
@@ -1822,6 +2071,28 @@ async function main() {
     } else if (expectsSnuffVisualEvidence) {
       if (metrics.litPixels < 350 || metrics.smokeLikePixels < 120 || metrics.meanLuma < 1.5) {
         throw new Error(`snuff route did not preserve vapor/smoke volume evidence: ${JSON.stringify(metrics)}`);
+      }
+    } else if (expectsPyroMaterialEvidence) {
+      const coupling = sample.pyroMaterialRendererCoupling || state.pyroMaterialRendererCoupling || {};
+      const pyroVolumeSignalPixels =
+        Number(metrics.litPixels || 0) +
+        Number(metrics.smokeLikePixels || 0) +
+        Number(metrics.fireLikePixels || 0) +
+        Number(metrics.emissiveLikePixels || 0);
+      if (
+        coupling.identity !== 'pyro-material-memory-spatial-coupling-v0' ||
+        coupling.spatialMemory?.identity !== 'pyro-material-memory-spatial-coupling-v0' ||
+        !(coupling.spatialMemory?.uploadedCells > 0) ||
+        !(coupling.effectiveGain > 0) ||
+        coupling.materialShaderReadiness !== 'sampleable-debug-only'
+      ) {
+        throw new Error(`Pyro material evidence mode missing effective live spatial coupling: ${JSON.stringify(coupling)}`);
+      }
+      if (metrics.litPixels < 1000 || pyroVolumeSignalPixels < 1500 || metrics.meanLuma < 1.5) {
+        throw new Error(`blank frame or missing Pyro material volume signal: ${JSON.stringify({
+          ...metrics,
+          pyroVolumeSignalPixels,
+        })}`);
       }
     } else if (expectsPerformanceVolumeEvidence) {
       const volumeSignalPixels =
@@ -1867,6 +2138,8 @@ async function main() {
       windowSize,
       evidenceMode,
       visualEvidenceMode,
+      noFireEvidenceMode: expectsNoFireVolumeEvidence ? 'no-fire-volume-signal' : null,
+      pyroMaterialEvidenceMode: expectsPyroMaterialEvidence ? 'pyro-material-coupled-volume-signal' : null,
       performanceVisualWarnings,
       effectiveRoute: state.effectiveRoute,
       prototypeIdentity: state.prototypeIdentity,
@@ -1913,6 +2186,8 @@ async function main() {
       quenchVaporStrength: sample.quenchVaporStrength,
       snuffVisualModel: sample.snuffVisualModel,
       flameQuenchModel: sample.flameQuenchModel,
+      pyroDynamicDetail: sample.pyroDynamicDetail || state.pyroDynamicDetail || null,
+      pyroMaterialRendererCoupling: sample.pyroMaterialRendererCoupling || state.pyroMaterialRendererCoupling || null,
       runtimeQualityRequested: sample.runtimeQualityRequested,
       runtimeQualityEffective: sample.runtimeQualityEffective,
       gpuPressure: sample.gpuPressure,
@@ -2037,6 +2312,8 @@ async function main() {
       canonicalPassiveBottomFieldProof,
       expectsCanonicalSmokeRise,
       expectsCanonicalFireEvidence,
+      expectsNoFireVolumeEvidence,
+      expectsPyroMaterialEvidence,
       timing: sample.timing || stateTiming,
       timingEvidenceSource: (sample.timing || stateTiming).timingEvidenceSource,
       timingDisclaimer: (sample.timing || stateTiming).timingDisclaimer,

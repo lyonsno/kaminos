@@ -7,10 +7,11 @@ from tempfile import TemporaryDirectory
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import serve
-from serve import BROWSE_ROOTS
+from serve import ASSET_ROOTS, BROWSE_ROOTS
 from serve import KaminosHandler
 from serve import build_display_metadata, build_output_display_metadata
 from serve import list_greenroom_output_files, resolve_greenroom_output_dir
+from serve import list_asset_entries
 
 
 def test_http_status_404_log_does_not_crash():
@@ -263,6 +264,64 @@ def test_splat_asset_index_separates_experimental_and_production_roots():
         assert "loose-machine-scan.ply" not in {entry["name"] for entry in entries}
 
 
+def test_splat_asset_index_marks_stub_ply_as_not_splat_like():
+    with TemporaryDirectory(dir="/tmp") as tmp:
+        root = Path(tmp)
+        experimental = root / "splats" / "inbox"
+        experimental.mkdir(parents=True)
+        (experimental / "mesh-not-a-splat.ply").write_text("\n".join([
+            "ply",
+            "format ascii 1.0",
+            "element vertex 1",
+            "property float x",
+            "property float y",
+            "property float z",
+            "end_header",
+            "0 0 0",
+            "",
+        ]))
+        (experimental / "probable-gaussian-splat.ply").write_text("\n".join([
+            "ply",
+            "format ascii 1.0",
+            "element vertex 1",
+            "property float x",
+            "property float y",
+            "property float z",
+            "property float opacity",
+            "property float scale_0",
+            "property float scale_1",
+            "property float scale_2",
+            "property float rot_0",
+            "property float f_dc_0",
+            "end_header",
+            "0 0 0 1 1 1 1 1 1",
+            "",
+        ]))
+
+        previous_roots = list(serve.ASSET_ROOTS)
+        previous_browse = dict(BROWSE_ROOTS)
+        serve.ASSET_ROOTS[:] = [{
+            "id": "splat-inbox",
+            "label": "Experimental Splat Inbox",
+            "kind": "splat",
+            "stage": "experimental",
+            "path": experimental,
+        }]
+        BROWSE_ROOTS["splat-inbox"] = experimental
+        try:
+            entries = {entry["name"]: entry for entry in serve.list_asset_entries(kind="splat")}
+        finally:
+            serve.ASSET_ROOTS[:] = previous_roots
+            BROWSE_ROOTS.clear()
+            BROWSE_ROOTS.update(previous_browse)
+
+        assert entries["mesh-not-a-splat.ply"]["renderability"]["status"] == "not-splat-like"
+        assert "gaussian splat properties" in entries["mesh-not-a-splat.ply"]["renderability"]["reason"]
+        assert entries["probable-gaussian-splat.ply"]["renderability"]["status"] == "splat-header-like"
+        assert entries["probable-gaussian-splat.ply"]["renderability"]["previewState"] == "not-rendered"
+        assert "not a verified render" in entries["probable-gaussian-splat.ply"]["renderability"]["reason"]
+
+
 def test_splat_asset_index_allows_pointer_symlinks_inside_declared_roots():
     with TemporaryDirectory(dir="/tmp") as tmp:
         root = Path(tmp)
@@ -426,6 +485,117 @@ def test_runtime_config_exposes_hybrid_overlay_module_url_env():
     assert config["hybridSplatOverlayModuleUrl"] == "http://127.0.0.1:5174/src/splatOverlay.ts"
 
 
+def test_pipeline_manifest_endpoint_payload_is_route_identified():
+    payload = serve.pipeline_manifest_payload()
+
+    assert payload["schema"] == "kaminos.pipeline-manifest.v0"
+    assert payload["manifestPath"].endswith("pipelines/asset-pipelines.json")
+    assert len(payload["manifestSha256"]) == 64
+    assert any(pipeline["id"] == "prepared-splat-import-sidecar-v0" for pipeline in payload["pipelines"])
+    assert any(pipeline["routeId"] == "adapter.model-chain-availability.v0" for pipeline in payload["pipelines"])
+
+
+def test_image_asset_index_declares_local_image_roots():
+    with TemporaryDirectory(dir="/tmp") as tmp:
+        root = Path(tmp) / "images"
+        root.mkdir()
+        image = root / "prompt-card.png"
+        image.write_bytes(b"\\x89PNG\\r\\n\\x1a\\n")
+
+        previous_roots = list(ASSET_ROOTS)
+        previous_browse = dict(BROWSE_ROOTS)
+        ASSET_ROOTS[:] = [{
+            "id": "image-test",
+            "label": "Test Images",
+            "kind": "image",
+            "stage": "working",
+            "path": root,
+        }]
+        BROWSE_ROOTS["image-test"] = root
+        try:
+            entries = list_asset_entries(kind="image")
+        finally:
+            ASSET_ROOTS[:] = previous_roots
+            BROWSE_ROOTS.clear()
+            BROWSE_ROOTS.update(previous_browse)
+
+        assert len(entries) == 1
+        assert entries[0]["kind"] == "image"
+        assert entries[0]["root_id"] == "image-test"
+        assert entries[0]["source"] == "/api/read?root=image-test&path=prompt-card.png"
+        assert entries[0]["display"]["load_label"] == "Use Image"
+
+
+def test_pipeline_run_resolves_api_read_source_and_returns_bundle():
+    with TemporaryDirectory(dir="/tmp") as tmp:
+        root = Path(tmp)
+        source_root = root / "splats"
+        source_root.mkdir()
+        source = source_root / "prepared-source.ply"
+        source.write_text("ply\nformat ascii 1.0\nelement vertex 1\nproperty float x\nproperty float y\nproperty float z\nend_header\n0 0 0\n")
+        out_dir = root / "pipeline-run"
+
+        previous_browse = dict(BROWSE_ROOTS)
+        BROWSE_ROOTS["pipeline-test"] = source_root
+        try:
+            result = serve.run_pipeline_witness({
+                "pipelineId": "prepared-splat-import-sidecar-v0",
+                "source": "/api/read?root=pipeline-test&path=prepared-source.ply",
+                "outDir": str(out_dir),
+            })
+        finally:
+            BROWSE_ROOTS.clear()
+            BROWSE_ROOTS.update(previous_browse)
+
+        assert result["schema"] == "kaminos.pipeline-run-result.v0"
+        assert result["ok"] is True
+        assert result["source"]["path"] == str(source.resolve())
+        assert result["report"]["path"] == str(out_dir / "pipeline-witness.json")
+        assert result["bundle"]["path"] == str(out_dir / "pipeline-run.index.json")
+        assert result["report"]["document"]["effectivePipelineId"] == "prepared-splat-import-sidecar-v0"
+        assert result["bundle"]["document"]["registryScope"] == "run-local"
+        assert any(artifact["id"] == "sidecar" for artifact in result["bundle"]["document"]["artifacts"])
+
+
+def test_pipeline_run_rejects_sources_outside_declared_roots():
+    with TemporaryDirectory(dir="/tmp") as tmp:
+        outside = Path(tmp) / "outside.ply"
+        outside.write_text("ply\n")
+        try:
+            serve.run_pipeline_witness({
+                "pipelineId": "prepared-splat-import-sidecar-v0",
+                "sourcePath": str(outside),
+                "outDir": str(Path(tmp) / "out"),
+            })
+        except PermissionError as error:
+            assert "declared Kaminos roots" in str(error)
+        else:
+            raise AssertionError("absolute source paths outside declared roots must be rejected")
+
+
+def test_pipeline_run_rejects_excluded_api_read_roots():
+    with TemporaryDirectory(dir="/tmp") as tmp:
+        root = Path(tmp)
+        preview_root = root / "preview"
+        preview_root.mkdir()
+        preview_source = preview_root / "preview-source.ply"
+        preview_source.write_text("ply\n")
+
+        previous_browse = dict(BROWSE_ROOTS)
+        BROWSE_ROOTS["lerms-preview"] = preview_root
+        try:
+            serve.resolve_pipeline_source({
+                "source": "/api/read?root=lerms-preview&path=preview-source.ply",
+            })
+        except PermissionError as error:
+            assert "declared Kaminos roots" in str(error)
+        else:
+            raise AssertionError("excluded api-read roots must not become pipeline sources")
+        finally:
+            BROWSE_ROOTS.clear()
+            BROWSE_ROOTS.update(previous_browse)
+
+
 if __name__ == "__main__":
     test_http_status_404_log_does_not_crash()
     test_forge_host_registry_snapshot_preserves_endpoint_identity()
@@ -436,7 +606,13 @@ if __name__ == "__main__":
     test_greenroom_configured_root_outputs_are_served_even_when_outside_home()
     test_greenroom_stray_output_dirs_do_not_get_load_affordance()
     test_splat_asset_index_separates_experimental_and_production_roots()
+    test_splat_asset_index_marks_stub_ply_as_not_splat_like()
     test_splat_asset_index_allows_pointer_symlinks_inside_declared_roots()
     test_splat_asset_ingest_writes_only_to_experimental_inbox()
     test_splat_asset_correction_roundtrips_as_sidecar_metadata()
     test_runtime_config_exposes_hybrid_overlay_module_url_env()
+    test_pipeline_manifest_endpoint_payload_is_route_identified()
+    test_image_asset_index_declares_local_image_roots()
+    test_pipeline_run_resolves_api_read_source_and_returns_bundle()
+    test_pipeline_run_rejects_sources_outside_declared_roots()
+    test_pipeline_run_rejects_excluded_api_read_roots()
