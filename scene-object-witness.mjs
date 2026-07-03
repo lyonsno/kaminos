@@ -3354,6 +3354,80 @@ async function runRealHybridSplatOverlayScenario(ws) {
   }
 }
 
+async function runHybridRendererControlsDropdownScenario(ws) {
+  await runRealHybridSplatOverlayScenario(ws);
+  phase = 'scenario-hybrid-renderer-controls-dropdown';
+  lastEvidence.hybridRendererControlsDropdown = await evaluate(ws, `
+    (async () => {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      const toggle = document.getElementById('hybrid-splat-renderer-controls-toggle');
+      const popover = document.getElementById('hybrid-splat-renderer-controls-popover');
+      const viewportControls = document.getElementById('hybrid-splat-viewport-controls');
+      const rectFor = element => {
+        if (!element) return null;
+        const rect = element.getBoundingClientRect();
+        return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+      };
+      if (toggle && popover?.hidden) toggle.click();
+      await wait(180);
+      const toggleStyle = toggle ? getComputedStyle(toggle) : null;
+      const caretStyle = toggle ? getComputedStyle(toggle, '::after') : null;
+      const popoverStyle = popover ? getComputedStyle(popover) : null;
+      const open = !!popover && popover.hidden === false;
+      return {
+        viewportControlsVisible: !!viewportControls && viewportControls.hidden === false,
+        toggle: toggle ? {
+          text: toggle.textContent.trim(),
+          ariaHaspopup: toggle.getAttribute('aria-haspopup'),
+          ariaExpanded: toggle.getAttribute('aria-expanded'),
+          ariaControls: toggle.getAttribute('aria-controls'),
+          className: toggle.className,
+          rect: rectFor(toggle),
+          style: toggleStyle ? {
+            display: toggleStyle.display,
+            visibility: toggleStyle.visibility,
+          } : null,
+          caret: caretStyle ? {
+            content: caretStyle.content,
+            borderTopWidth: caretStyle.borderTopWidth,
+            borderLeftWidth: caretStyle.borderLeftWidth,
+            borderRightWidth: caretStyle.borderRightWidth,
+            transform: caretStyle.transform,
+          } : null,
+        } : null,
+        popover: popover ? {
+          open,
+          hidden: popover.hidden,
+          role: popover.getAttribute('role'),
+          rect: rectFor(popover),
+          title: popover.querySelector('.hybrid-control-title')?.textContent?.trim() || null,
+          sections: [...popover.querySelectorAll('.hybrid-control-section-title')].map(node => node.textContent.trim()),
+          inputCount: popover.querySelectorAll('input').length,
+          style: popoverStyle ? {
+            display: popoverStyle.display,
+            visibility: popoverStyle.visibility,
+            position: popoverStyle.position,
+            backgroundColor: popoverStyle.backgroundColor,
+            borderRadius: popoverStyle.borderRadius,
+          } : null,
+        } : null,
+      };
+    })()
+  `, { timeoutMs: 20000 });
+
+  const evidence = lastEvidence.hybridRendererControlsDropdown;
+  if (!evidence.viewportControlsVisible
+      || evidence.toggle?.text !== 'Renderer'
+      || evidence.toggle?.ariaHaspopup !== 'menu'
+      || evidence.toggle?.ariaExpanded !== 'true'
+      || !String(evidence.toggle?.className || '').includes('hybrid-splat-dropdown-trigger')
+      || evidence.popover?.open !== true
+      || evidence.popover?.role !== 'menu'
+      || (evidence.popover?.inputCount || 0) < 4) {
+    throw new Error(`hybrid renderer controls dropdown did not open: ${JSON.stringify(evidence)}`);
+  }
+}
+
 async function runHybridHostDepthOccluderScenario(ws) {
   await runRealHybridSplatOverlayScenario(ws);
   phase = 'scenario-hybrid-host-depth-occluder';
@@ -4766,6 +4840,8 @@ try {
     await runHybridHostDepthOccluderScenario(ws);
   } else if (scenario === 'hybrid-two-splat-depth-order') {
     await runHybridTwoSplatDepthOrderScenario(ws);
+  } else if (scenario === 'hybrid-renderer-controls-dropdown') {
+    await runHybridRendererControlsDropdownScenario(ws);
   } else if (scenario === 'real-hybrid-cropped-unsupported-guard') {
     await runRealHybridCroppedUnsupportedGuardScenario(ws);
   } else if (scenario === 'real-hybrid-cropped-supported-overlay') {
@@ -4801,7 +4877,7 @@ try {
   phase = 'capturing-screenshot';
   const finalShot = await capturePngScreenshot(ws, out);
   phase = 'validating-screenshot';
-  if (scenario === 'real-hybrid-splat-overlay' || scenario === 'hybrid-host-depth-occluder' || scenario === 'hybrid-two-splat-depth-order') {
+  if (scenario === 'real-hybrid-splat-overlay' || scenario === 'hybrid-host-depth-occluder' || scenario === 'hybrid-two-splat-depth-order' || scenario === 'hybrid-renderer-controls-dropdown') {
     assertRealHybridScreenshotVisible(out);
   }
 
