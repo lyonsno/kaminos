@@ -4430,12 +4430,26 @@ function createChannelThroughLineAudit(composition) {
   };
 }
 
+function applyControlledAperturePressureVariation(composition, frontParameters) {
+  for (const voidRecord of composition.AperturePressure.primaryVoids) {
+    voidRecord.radius = [
+      clamp(voidRecord.radius[0] * frontParameters.apertureBite, 0.26, 0.42),
+      clamp(voidRecord.radius[1] * frontParameters.lowerCupDepth, 0.46, 0.68),
+    ];
+    voidRecord.effectiveVariation = {
+      apertureBite: frontParameters.apertureBite,
+      lowerCupDepth: frontParameters.lowerCupDepth,
+    };
+  }
+}
+
 export function applyControlledOrbShellVariation(composition, descriptor) {
   const next = clone(composition);
   next.controlledVariation = descriptor;
   next.effectiveVariation = descriptor;
   const macroParameters = descriptor.effectiveParameters.macroAssemblages;
   const frontParameters = descriptor.effectiveParameters.frontApertureOwnership;
+  applyControlledAperturePressureVariation(next, frontParameters);
   for (const assemblage of next.macroAssemblages) {
     const params = macroParameters[assemblage.id];
     if (!params) continue;
@@ -4548,16 +4562,6 @@ export function applyControlledOrbShellVariation(composition, descriptor) {
     owner.preservedByVariation = true;
     if (owner.role === 'lower-cupping-owner') owner.ownerDominance = frontParameters.ownerDominance;
     if (owner.role === 'crossing-tuck-owner') owner.crossingTuckPhase = frontParameters.crossingTuckPhase;
-  }
-  for (const voidRecord of next.AperturePressure.primaryVoids) {
-    voidRecord.radius = [
-      clamp(voidRecord.radius[0] * frontParameters.apertureBite, 0.26, 0.42),
-      clamp(voidRecord.radius[1] * frontParameters.lowerCupDepth, 0.46, 0.68),
-    ];
-    voidRecord.effectiveVariation = {
-      apertureBite: frontParameters.apertureBite,
-      lowerCupDepth: frontParameters.lowerCupDepth,
-    };
   }
   next.controlledVariation = descriptor;
   next.effectiveVariation = descriptor;

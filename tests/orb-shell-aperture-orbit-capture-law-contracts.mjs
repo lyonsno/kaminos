@@ -23,10 +23,21 @@ const fixture = createTargetOrbShellCompositionFixture({
 });
 
 const law = fixture.apertureOrbitCaptureLaw;
+const livePrimaryVoid = fixture.AperturePressure.primaryVoids[0];
 assert.equal(law?.schema, 'ApertureOrbitCaptureLaw', 'fixture exposes macro-level aperture orbit capture law');
 assert.equal(law.mode, 'macro-aperture-orbit-capture-v0', 'law records first macro capture mode');
 assert.equal(law.sourceApertureId, 'primary-front-teardrop-void', 'law is anchored to the visible primary aperture');
 assert.ok(law.failureModes.includes('floating-strip-without-aperture-destination'), 'law preserves the false-closure failure it blocks');
+assert.notEqual(
+  livePrimaryVoid.radius[0].toFixed(3),
+  livePrimaryVoid.radius[1].toFixed(3),
+  'stress fixture primary aperture remains intentionally non-circular',
+);
+assert.deepEqual(
+  fixture.macroFamilySubstripPlan.apertureRelativeTerminationPlan.apertureField.orbitRadiusBand,
+  livePrimaryVoid.radius,
+  'aperture-relative termination field must consume the final varied live aperture radius',
+);
 
 const laneIds = law.orbitLanes.map(lane => lane.id);
 assert.ok(laneIds.includes('front-primary-orbit'), 'law exposes front primary orbit lane');
@@ -34,6 +45,22 @@ assert.ok(laneIds.includes('outer-capture-lane'), 'law exposes outer capture lan
 assert.ok(laneIds.includes('inner-return-lane'), 'law exposes inner return lane');
 assert.ok(law.orbitLanes.every(lane => lane.schema === 'ApertureOrbitLane'), 'all lanes use aperture orbit lane schema');
 assert.ok(law.orbitLanes.every(lane => lane.center?.length === 3 && lane.radius?.length === 2), 'all lanes carry center and ellipse radius');
+const laneById = new Map(law.orbitLanes.map(lane => [lane.id, lane]));
+assert.deepEqual(
+  laneById.get('front-primary-orbit')?.radius,
+  livePrimaryVoid.radius,
+  'front primary orbit lane must match the final visible non-circular aperture radius',
+);
+assert.deepEqual(
+  laneById.get('outer-capture-lane')?.radius.map((value, index) => Number((value / livePrimaryVoid.radius[index]).toFixed(2))),
+  [1.16, 1.08],
+  'outer capture lane must scale from the final visible non-circular aperture radius',
+);
+assert.deepEqual(
+  laneById.get('inner-return-lane')?.radius.map((value, index) => Number((value / livePrimaryVoid.radius[index]).toFixed(2))),
+  [0.78, 0.82],
+  'inner return lane must scale from the final visible non-circular aperture radius',
+);
 
 assert.equal(law.terminalRoles.length, fixture.macroAssemblages.length, 'law assigns one terminal role to every macro assemblage');
 const roleByParent = new Map(law.terminalRoles.map(role => [role.parentAssemblage, role]));
