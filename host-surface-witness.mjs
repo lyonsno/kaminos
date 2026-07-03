@@ -159,8 +159,10 @@ function summarizeMotionSamples(samples) {
   let goinObjectCount = 0;
   let actorObjectCount = 0;
   let possessionGlowVisibleCount = 0;
+  let rollingGoinVisualCount = 0;
   for (const sample of samples) {
     possessionGlowVisibleCount += sample.possessionGlowVisibleCount || 0;
+    rollingGoinVisualCount += sample.rollingGoinVisualCount || 0;
     for (const object of sample.objects || []) {
       if (object.name?.startsWith('lerms-preview-goin-')) goinObjectCount += 1;
       if (object.name?.startsWith('lerms-preview-actor-')) actorObjectCount += 1;
@@ -176,6 +178,7 @@ function summarizeMotionSamples(samples) {
     goinObjectCount,
     actorObjectCount,
     possessionGlowVisibleCount,
+    rollingGoinVisualCount,
     transitionInspector: samples.find(sample => sample.transitionInspector)?.transitionInspector || null,
     samples,
   };
@@ -187,6 +190,9 @@ async function sampleLermsMovingTimelineMotion(ws) {
     window.__kaminosLermsPreviewActorsGroup?.traverse?.(child => {
       if (child.userData?.kaminosLermsPossessionGlow && child.visible) possessionGlowVisibleCount += 1;
     });
+    const rollingGoinVisualCount = [...(window.__kaminosLermsPreviewActorsGroup?.children || [])]
+      .filter(child => child.userData?.kaminosLermsRollingGoinBisque && child.visible !== false)
+      .length;
     return {
       frame: window.__kaminosLermsPreviewTimelinePlaybackFrame ? {
         elapsedMs: window.__kaminosLermsPreviewTimelinePlaybackFrame.elapsedMs,
@@ -198,6 +204,7 @@ async function sampleLermsMovingTimelineMotion(ws) {
       trace: window.__kaminosLermsPreviewActorVisuals?.trace || null,
       transitionInspector: window.__kaminosLermsPreviewGoinTransitionInspector || null,
       possessionGlowVisibleCount,
+      rollingGoinVisualCount,
       objects: [...(window.__kaminosLermsPreviewActorsGroup?.children || [])].map(child => ({
         name: child.name,
         x: Number(child.position.x.toFixed(3)),
@@ -207,7 +214,7 @@ async function sampleLermsMovingTimelineMotion(ws) {
     };
   })()`;
   const samples = [];
-  for (const waitMs of [0, 850, 850, 850]) {
+  for (const waitMs of [0, 900, 900, 900, 900, 900, 900]) {
     if (waitMs) await delay(waitMs);
     samples.push(await evaluate(ws, sampleExpression));
   }
@@ -353,6 +360,9 @@ async function main() {
       }
       if (motionSamples.possessionGlowVisibleCount <= 0) {
         throw new Error(`LERMS moving-timeline possession glow was never visible: ${JSON.stringify(motionSamples)}`);
+      }
+      if (motionSamples.rollingGoinVisualCount <= 0) {
+        throw new Error(`LERMS moving-timeline rolling goin bisque was never visible: ${JSON.stringify(motionSamples)}`);
       }
     }
 

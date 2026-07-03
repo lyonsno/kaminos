@@ -565,24 +565,32 @@ export function createLermsPreviewGoinVisualPrimitives(goins = []) {
     const position = vector3(goin?.world, [index * 0.28, 0.5, 0]);
     const state = goin?.state || 'unknown';
     const custodyRole = goin?.custodyRole || null;
+    const rollingGoinBisque = state === 'rolling' || custodyRole === 'rolling_drop';
     return {
       schema: LERMS_PREVIEW_GOIN_VISUAL_SCHEMA,
       goinId: goin?.id || `goin-${String(index + 1).padStart(2, '0')}`,
       state,
       custodyRole,
       carrierLermId: goin?.carrierLermId || null,
-      kind: 'proxy_goin_orb',
+      kind: rollingGoinBisque ? 'chunky_golden_rolling_goin_bisque' : 'proxy_goin_orb',
       downgrade: 'proxy_goin_visual_only',
       position: [
         roundBenchNumber(position[0]),
         roundBenchNumber(position[1]),
         roundBenchNumber(position[2]),
       ],
-      radius: state === 'loose' || custodyRole === 'loose_field' ? 0.13 : 0.105,
+      radius: rollingGoinBisque ? 0.145 : state === 'loose' || custodyRole === 'loose_field' ? 0.13 : 0.105,
       color: state === 'carried' ? '#7ae7ff'
-        : state === 'loose' || custodyRole === 'loose_field' ? '#b5ff78'
-          : '#f3d463',
-      label: state === 'carried' && goin?.carrierLermId ? `CARRY ${goin.carrierLermId}` : state.toUpperCase(),
+        : rollingGoinBisque ? '#f0b648'
+          : state === 'loose' || custodyRole === 'loose_field' ? '#b5ff78'
+            : '#f3d463',
+      rollingGoinBisque: rollingGoinBisque ? {
+        schema: 'kaminos.lerms-rolling-goin-bisque.v0',
+        sourceState: state,
+        visualOnly: true,
+      } : null,
+      rollingSpin: 0,
+      label: state === 'carried' && goin?.carrierLermId ? `CARRY ${goin.carrierLermId}` : rollingGoinBisque ? 'ROLL' : state.toUpperCase(),
     };
   });
 }
@@ -641,6 +649,8 @@ function interpolateGoinVisualPrimitives(currentFrame, nextFrame, blend) {
       position: interpolateVec3(primitive.position, next.position, blend),
       radius: interpolateNumber(primitive.radius, next.radius, blend),
       color: blend >= 0.5 ? next.color : primitive.color,
+      rollingGoinBisque: blend >= 0.5 ? next.rollingGoinBisque || null : primitive.rollingGoinBisque || null,
+      rollingSpin: blend >= 0.5 ? next.rollingSpin || 0 : primitive.rollingSpin || 0,
       label: blend >= 0.5 ? next.label : primitive.label,
     };
   });
@@ -865,6 +875,13 @@ export function selectLermsPreviewTimelineFrame(timelineState, elapsedMs) {
   }
   const segmentDuration = Math.max((next.timeMs > current.timeMs ? next.timeMs : durationMs) - current.timeMs, 1);
   const blend = clampNumber((localMs - current.timeMs) / segmentDuration, 0, 1);
+  const goinVisualPrimitives = interpolateGoinVisualPrimitives(current, next, blend).map(primitive => {
+    if (!primitive.rollingGoinBisque) return primitive;
+    return {
+      ...primitive,
+      rollingSpin: roundBenchNumber((localMs / 155) % (Math.PI * 2)),
+    };
+  });
   return {
     schema: 'kaminos.lerms-preview-timeline-playback-frame.v0',
     elapsedMs: roundBenchNumber(localMs),
@@ -872,7 +889,7 @@ export function selectLermsPreviewTimelineFrame(timelineState, elapsedMs) {
     current: clone(current),
     next: clone(next),
     visualPrimitives: interpolateActorVisualPrimitives(current, next, blend),
-    goinVisualPrimitives: interpolateGoinVisualPrimitives(current, next, blend),
+    goinVisualPrimitives,
   };
 }
 

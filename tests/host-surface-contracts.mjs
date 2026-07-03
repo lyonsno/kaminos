@@ -34,11 +34,15 @@ assert.match(hostSurfaceWitnessSource, /goinObjectCount/, 'generic witness prove
 assert.match(hostSurfaceWitnessSource, /timelineTrace/, 'generic witness records LERMS timeline trace summary');
 assert.match(hostSurfaceWitnessSource, /transitionInspector/, 'generic witness records LERMS selected goin transition inspector state');
 assert.match(hostSurfaceWitnessSource, /possessionGlowVisibleCount/, 'generic witness proves carrying-lerm possession glow appears during playback');
+assert.match(hostSurfaceWitnessSource, /rollingGoinVisualCount/, 'generic witness proves rolling goin visual state appears during playback');
 assert.match(hostSurfaceWitnessSource, /primary_output_written/, 'generic witness writes durable reports even before screenshot success');
 assert.match(indexSource, /kaminosHostSurfaceDebugState/, 'browser exposes generic host-surface debug state');
 assert.match(indexSource, /kaminos_lerms_moving_timeline_host=1/, 'browser exposes a direct LERMS moving timeline host route');
 assert.match(indexSource, /makeLermsPreviewActivityReadout/, 'browser renders LERMS actor activity readouts');
 assert.match(indexSource, /makeLermsPreviewGoinVisualMesh/, 'browser renders LERMS goin visuals from timeline goin state');
+assert.match(indexSource, /makeLermsPreviewRollingGoinBisqueGeometry/, 'browser renders rolling goins as chunky golden bisque geometry');
+assert.match(indexSource, /updateLermsPreviewRollingGoinBisqueMotion/, 'browser applies visible roll motion to rolling goins');
+assert.match(indexSource, /kaminosLermsRollingGoinBisque/, 'browser exposes rolling goin bisque debug identity');
 assert.match(indexSource, /kaminosLermsPreviewGoin/, 'browser exposes goin visual debug identity');
 assert.match(indexSource, /goinVisualCount/, 'browser exposes rendered goin count in LERMS visual state');
 assert.match(indexSource, /updateLermsPreviewActorVisualMesh/, 'browser advances LERMS actors with in-place transform updates');
@@ -69,6 +73,8 @@ assert.match(worldChambersSource, /createLermsPreviewGoinVisualPrimitives/, 'tim
 assert.match(worldChambersSource, /createLermsPreviewGoinTransitionDiagnostics/, 'timeline state carries goin transition diagnostics');
 assert.match(worldChambersSource, /selectedGoinId/, 'timeline state identifies a selected goin for diagnostic readout');
 assert.match(worldChambersSource, /possessionGlow/, 'timeline actor visual primitives carry possession glow state');
+assert.match(worldChambersSource, /rollingGoinBisque/, 'timeline goin primitives carry rolling bisque visual state');
+assert.match(worldChambersSource, /rollingSpin/, 'timeline playback computes visible rolling spin');
 assert.match(worldChambersSource, /goinVisualPrimitives/, 'timeline playback interpolates goin visuals');
 
 const hostSurface = await import(hostSurfaceCorePath);

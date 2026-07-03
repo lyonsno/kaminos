@@ -8219,11 +8219,13 @@ function makeLermsPreviewGoinVisualMesh(primitive) {
     carrierLermId: primitive.carrierLermId || null,
     kind: primitive.kind,
     downgrade: primitive.downgrade,
+    rollingGoinBisque: primitive.rollingGoinBisque || null,
+    rollingSpin: primitive.rollingSpin || 0,
   };
   const radius = primitive.radius || 0.11;
   const color = new THREE.Color(primitive.color || '#f3d463');
   const body = new THREE.Mesh(
-    new THREE.SphereGeometry(1, 24, 16),
+    makeLermsPreviewGoinBodyGeometry(primitive),
     new THREE.MeshStandardMaterial({
       color,
       roughness: 0.32,
@@ -8234,6 +8236,7 @@ function makeLermsPreviewGoinVisualMesh(primitive) {
   );
   body.name = `${goinGroup.name}-body`;
   body.scale.setScalar(radius);
+  body.userData.kaminosLermsRollingGoinBisqueActive = !!primitive.rollingGoinBisque;
   body.castShadow = true;
   body.receiveShadow = true;
   goinGroup.add(body);
@@ -8251,7 +8254,18 @@ function makeLermsPreviewGoinVisualMesh(primitive) {
 
   const position = Array.isArray(primitive.position) ? primitive.position : [0, 0.5, 0];
   goinGroup.position.set(position[0], position[1] - 0.85, position[2]);
+  updateLermsPreviewRollingGoinBisqueMotion(goinGroup, primitive);
   return goinGroup;
+}
+
+function makeLermsPreviewRollingGoinBisqueGeometry() {
+  return new THREE.IcosahedronGeometry(1, 1);
+}
+
+function makeLermsPreviewGoinBodyGeometry(primitive) {
+  return primitive?.rollingGoinBisque
+    ? makeLermsPreviewRollingGoinBisqueGeometry()
+    : new THREE.SphereGeometry(1, 24, 16);
 }
 
 function makeLermsPreviewPathDot(name, position, color, radius = 0.022) {
@@ -8390,6 +8404,8 @@ function updateLermsPreviewGoinVisualMesh(goinGroup, primitive) {
     custodyRole: primitive.custodyRole || null,
     carrierLermId: primitive.carrierLermId || null,
     radius,
+    rollingGoinBisque: primitive.rollingGoinBisque || null,
+    rollingSpin: primitive.rollingSpin || 0,
   };
   const body = goinGroup.getObjectByName(`${goinGroup.name}-body`);
   if (body) {
@@ -8398,6 +8414,7 @@ function updateLermsPreviewGoinVisualMesh(goinGroup, primitive) {
     body.material?.emissive?.copy?.(color);
     if (body.material) body.material.emissiveIntensity = primitive.state === 'loose' ? 0.28 : 0.16;
   }
+  updateLermsPreviewRollingGoinBisqueMotion(goinGroup, primitive);
   const ring = goinGroup.getObjectByName(`${goinGroup.name}-custody-ring`);
   if (ring) {
     ring.material?.color?.copy?.(color);
@@ -8405,6 +8422,47 @@ function updateLermsPreviewGoinVisualMesh(goinGroup, primitive) {
   }
   const position = Array.isArray(primitive.position) ? primitive.position : [0, 0.5, 0];
   goinGroup.position.set(position[0], position[1] - 0.85, position[2]);
+}
+
+function updateLermsPreviewRollingGoinBisqueMotion(goinGroup, primitive) {
+  if (!goinGroup || !primitive) return;
+  const body = goinGroup.getObjectByName(`${goinGroup.name}-body`);
+  if (!body) return;
+  const active = !!primitive.rollingGoinBisque;
+  if (body.userData.kaminosLermsRollingGoinBisqueActive !== active) {
+    body.geometry?.dispose?.();
+    body.geometry = makeLermsPreviewGoinBodyGeometry(primitive);
+    body.userData.kaminosLermsRollingGoinBisqueActive = active;
+  }
+
+  const radius = primitive.radius || 0.11;
+  if (!active) {
+    body.scale.setScalar(radius);
+    body.rotation.set(0, 0, 0);
+    delete body.userData.kaminosLermsRollingGoinBisque;
+    delete goinGroup.userData.kaminosLermsRollingGoinBisque;
+    return;
+  }
+
+  const spin = Number(primitive.rollingSpin || 0);
+  const rollingDebug = {
+    schema: primitive.rollingGoinBisque.schema || 'kaminos.lerms-rolling-goin-bisque.v0',
+    goinId: primitive.goinId,
+    sourceState: primitive.rollingGoinBisque.sourceState || primitive.state,
+    visualOnly: true,
+    rollingSpin: Number(spin.toFixed(4)),
+  };
+  body.scale.set(radius * 1.34, radius * 0.9, radius * 1.08);
+  body.rotation.set(spin, 0, spin * 0.62);
+  body.userData.kaminosLermsRollingGoinBisque = rollingDebug;
+  goinGroup.userData.kaminosLermsRollingGoinBisque = rollingDebug;
+  if (body.material) {
+    body.material.color.set(0xf0b648);
+    body.material.emissive.set(0x6a3a0b);
+    body.material.emissiveIntensity = 0.34;
+    body.material.roughness = 0.58;
+    body.material.metalness = 0.16;
+  }
 }
 
 function frameLermsPreviewActorVisualsCamera(group, primitives, options = {}) {
