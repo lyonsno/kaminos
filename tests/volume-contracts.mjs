@@ -1477,6 +1477,8 @@ assert.match(fieldResidualProbe, /--hidden-width/, 'field residual probe exposes
 assert.match(fieldResidualProbe, /--epochs/, 'field residual probe exposes nonlinear training epochs as an explicit run control');
 assert.match(fieldResidualProbe, /--learning-rate/, 'field residual probe exposes nonlinear learning rate as an explicit run control');
 assert.match(fieldResidualProbe, /linearContextComparison/, 'field residual probe compares nonlinear performance against the linear context model');
+assert.match(fieldResidualProbe, /--independent-target-heads/, 'field residual probe can diagnose multi-target interference with independent nonlinear target heads');
+assert.match(fieldResidualProbe, /independentTargetHeads/, 'field residual probe reports independent target-head diagnostics when enabled');
 assert.match(fieldResidualProbe, /--holdout-route-variant/, 'field residual probe can hold out a named route variant instead of only random tile pairs');
 assert.match(fieldResidualProbe, /--holdout-route-variant-list/, 'field residual probe can hold out a named family of route variants for stricter generalization probes');
 assert.match(fieldResidualProbe, /--holdout-replay-state/, 'field residual probe can hold out a named deterministic replay state instead of only random tile pairs');

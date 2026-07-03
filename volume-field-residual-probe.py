@@ -161,6 +161,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--learning-rate", type=float, default=0.003, help="Adam learning rate for spatial-context-mlp-residual-v0.")
     parser.add_argument("--batch-size", type=int, default=512, help="Minibatch size for spatial-context-mlp-residual-v0.")
     parser.add_argument(
+        "--independent-target-heads",
+        action="store_true",
+        help="For spatial-context-mlp-residual-v0, train one independent nonlinear residual head per target channel to diagnose multi-target interference.",
+    )
+    parser.add_argument(
         "--allow-different-spatial-bin",
         action="store_true",
         help="Allow matched pairs whose sidecars do not report the same spatial bin.",
@@ -1008,7 +1013,7 @@ def tanh_forward(features: np.ndarray, weights1: np.ndarray, bias1: np.ndarray, 
     return hidden, output
 
 
-def train_mlp_residual(
+def train_mlp_residual_joint(
     train_features: np.ndarray,
     train_low: np.ndarray,
     train_high: np.ndarray,
@@ -1121,6 +1126,102 @@ def train_mlp_residual(
             "bias1": bias1,
             "weights2": weights2,
             "bias2": bias2,
+        },
+    }
+
+
+def train_mlp_residual(
+    train_features: np.ndarray,
+    train_low: np.ndarray,
+    train_high: np.ndarray,
+    test_features: np.ndarray,
+    test_low: np.ndarray,
+    args: argparse.Namespace,
+    target_channels: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    if not bool(getattr(args, "independent_target_heads", False)):
+        result = train_mlp_residual_joint(train_features, train_low, train_high, test_features, test_low, args)
+        result["payload"]["independentTargetHeads"] = {"enabled": False}
+        return result
+    if train_high.shape[1] <= 1:
+        result = train_mlp_residual_joint(train_features, train_low, train_high, test_features, test_low, args)
+        result["payload"]["independentTargetHeads"] = {
+            "enabled": True,
+            "effective": False,
+            "reason": "single-target-channel",
+        }
+        return result
+
+    train_predictions = []
+    test_predictions = []
+    heads = []
+    target_names = []
+    if target_channels is not None:
+        target_names = [str(name) for name in target_channels.get("targetChannels", [])]
+    for channel_index in range(train_high.shape[1]):
+        head = train_mlp_residual_joint(
+            train_features,
+            train_low[:, channel_index:channel_index + 1],
+            train_high[:, channel_index:channel_index + 1],
+            test_features,
+            test_low[:, channel_index:channel_index + 1],
+            args,
+        )
+        train_predictions.append(head["trainPrediction"])
+        test_predictions.append(head["testPrediction"])
+        payload = head["payload"]
+        heads.append({
+            "channelIndex": channel_index,
+            "channel": target_names[channel_index] if channel_index < len(target_names) else str(channel_index),
+            "hiddenWidth": payload.get("hiddenWidth"),
+            "epochs": payload.get("epochs"),
+            "batchSize": payload.get("batchSize"),
+            "learningRate": payload.get("learningRate"),
+            "l2": payload.get("l2"),
+            "firstBatchLoss": payload.get("firstBatchLoss"),
+            "finalBatchLoss": payload.get("finalBatchLoss"),
+            "trainableParameters": payload.get("trainableParameters"),
+            "featureMean": payload.get("featureMean"),
+            "featureStd": payload.get("featureStd"),
+            "residualMean": payload.get("residualMean"),
+            "residualStd": payload.get("residualStd"),
+            "weights1Shape": payload.get("weights1Shape"),
+            "bias1Shape": payload.get("bias1Shape"),
+            "weights2Shape": payload.get("weights2Shape"),
+            "bias2Shape": payload.get("bias2Shape"),
+            "weights1": payload.get("weights1"),
+            "bias1": payload.get("bias1"),
+            "weights2": payload.get("weights2"),
+            "bias2": payload.get("bias2"),
+        })
+
+    return {
+        "trainPrediction": np.concatenate(train_predictions, axis=1),
+        "testPrediction": np.concatenate(test_predictions, axis=1),
+        "payload": {
+            "identity": SPATIAL_CONTEXT_MLP_MODEL_IDENTITY,
+            "backend": BACKEND,
+            "optimizer": "adam-independent-local-minibatch-v0",
+            "activation": "tanh",
+            "residualTarget": "high-minus-low-center-voxel",
+            "hiddenWidth": max(1, int(args.hidden_width)),
+            "epochs": max(1, int(args.epochs)),
+            "batchSize": max(1, int(args.batch_size)),
+            "learningRate": max(1.0e-6, float(args.learning_rate)),
+            "l2": max(0.0, float(args.ridge)),
+            "trainableParameters": int(sum(int(head["trainableParameters"]) for head in heads)),
+            "weights1Shape": [head["weights1Shape"] for head in heads],
+            "bias1Shape": [head["bias1Shape"] for head in heads],
+            "weights2Shape": [head["weights2Shape"] for head in heads],
+            "bias2Shape": [head["bias2Shape"] for head in heads],
+            "independentTargetHeads": {
+                "enabled": True,
+                "effective": True,
+                "identity": "independent-target-channel-mlp-heads-v0",
+                "headCount": len(heads),
+                "heads": heads,
+                "limitation": "Diagnostic target-decomposition mode; it tests multi-target interference but does not change field authority or product integration status.",
+            },
         },
     }
 
@@ -1437,7 +1538,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                 "meanResidual": mean_residual,
             }
         else:
-            mlp = train_mlp_residual(train_features, train_low_target, train_high_target, test_features, test_low_target, args)
+            mlp = train_mlp_residual(train_features, train_low_target, train_high_target, test_features, test_low_target, args, target_channels)
             model_prediction_train = mlp["trainPrediction"]
             model_prediction_test = mlp["testPrediction"]
             model_payload = mlp["payload"]
