@@ -460,7 +460,7 @@ const expectedContinuationWarp = routeParams.has('volume_continuation_warp') && 
   : 1.00;
 const requestedContinuationTempo = Number(routeParams.get('volume_continuation_tempo'));
 const expectedContinuationTempo = routeParams.has('volume_continuation_tempo') && Number.isFinite(requestedContinuationTempo)
-  ? Math.max(0, Math.min(2, requestedContinuationTempo))
+  ? Math.max(0, Math.min(20, requestedContinuationTempo))
   : 1.00;
 const expectedVisualAuthority = expectedSimCadence > 1 ? 'continuation' : 'live-sim';
 const requestedGridOverlay = Number(routeParams.get('volume_grid'));

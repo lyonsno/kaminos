@@ -153,7 +153,7 @@ assert.match(index, /id="volume-sim-cadence" min="1" max="8" step="1"/, 'Volume 
 assert.match(index, /id="volume-sim-cadence-val"/, 'Volume cockpit exposes the effective sim-hold cadence value');
 assert.match(index, /id="volume-continuation-warp" min="0" max="1\.5" step="0\.05"/, 'Volume cockpit exposes a visible held-frame continuation warp slider');
 assert.match(index, /volume_continuation_warp/, 'URL route can override held-frame continuation warp strength');
-assert.match(index, /id="volume-continuation-tempo" min="0" max="2" step="0\.05"/, 'Volume cockpit exposes a visible held-frame continuation tempo slider');
+assert.match(index, /id="volume-continuation-tempo" min="0" max="20" step="0\.5"/, 'Volume cockpit exposes a visible held-frame continuation tempo slider with a 10x stress ceiling');
 assert.match(index, /volume_continuation_tempo/, 'URL route can override held-frame render-side continuation tempo');
 assert.match(index, /volume-sim-cadence-state/, 'Volume readout exposes the effective sim cadence');
 assert.match(index, /volume-cadence-gap/, 'Volume readout exposes the frame/sim-step cadence gap');
@@ -468,10 +468,13 @@ assert.match(core, /state\.continuationWarp/, 'debug state records the effective
 assert.match(core, /continuation_controls/, 'volume uniforms carry render-side continuation tempo controls separately from cadence phase');
 assert.match(core, /cadenceContinuationTempoPhase/, 'fragment shader names the cadence continuation tempo phase');
 assert.match(core, /u\.continuation_controls\.x/, 'continuation tempo gain is carried in continuation_controls.x');
+assert.match(core, /clampFinite\(value,\s*0,\s*20\.0,\s*1\.00\)/, 'continuation tempo normalizes to the 10x stress ceiling');
 assert.match(core, /state\.continuationTempo/, 'debug state records the effective continuation tempo gain');
 assert.match(core, /CADENCE_NATIVE_CONTINUATION_MAX_WARP/, 'cadence continuation warp has an explicit shader-local maximum');
 assert.match(core, /CADENCE_NATIVE_CONTINUATION_STEP_PER_HELD_FRAME/, 'cadence continuation warp advances by held render frame instead of plateauing inside a cadence cycle');
-assert.match(core, /cadenceNativeContinuationPoint\(p,\s*initialState\.xyz,\s*cadenceRenderContinuationMask\)/, 'compact plume render continuation must use the cadence continuation mask rather than a tall-plume-only gate');
+assert.match(core, /CADENCE_NATIVE_CONTINUATION_TEMPO_WARP_GAIN/, 'continuation tempo has an explicit bounded gain for held-field extrapolation');
+assert.match(core, /cadenceNativeContinuationPoint\(p,\s*initialState\.xyz,\s*cadenceRenderContinuationMask,\s*continuationTempoPhase\)/, 'field continuation sample point receives the route-controlled continuation tempo phase');
+assert.match(core, /continuationTempoWarpGain/, 'continuation tempo affects held-field continuation distance rather than only render detail time');
 assert.match(core, /sampleWorldVelocity\(continuedP\)/, 'fragment raymarch samples held fields through the cadence continuation point');
 assert.match(core, /CADENCE_LIVE_ANCHOR_HISTORY_BRIDGE_IDENTITY/, 'cadence live-anchor history bridge has a stable identity');
 assert.match(core, /cadenceLiveAnchorHistoryBridge/, 'fragment shader names the cadence live-anchor history bridge');

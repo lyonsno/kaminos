@@ -361,7 +361,7 @@ function normalizeContinuationWarp(value) {
 }
 
 function normalizeContinuationTempo(value) {
-  return clampFinite(value, 0, 2.0, 1.00);
+  return clampFinite(value, 0, 20.0, 1.00);
 }
 
 function defaultPressureIterationsForScene(value) {
@@ -561,6 +561,7 @@ const SLOTS_PER_CELL: u32 = 4u;
 const MAX_EXTERNAL_EMITTERS_WGSL: u32 = 32u;
 const CADENCE_NATIVE_CONTINUATION_STEP_PER_HELD_FRAME: f32 = 0.027;
 const CADENCE_NATIVE_CONTINUATION_MAX_WARP: f32 = 0.110;
+const CADENCE_NATIVE_CONTINUATION_TEMPO_WARP_GAIN: f32 = 0.10;
 
 struct Uniforms {
   invViewProj: mat4x4<f32>,
@@ -918,15 +919,16 @@ fn sampleWorldFrontField(p: vec3<f32>) -> f32 {
   return sampleFrontField(cell);
 }
 
-fn cadenceNativeContinuationPoint(p: vec3<f32>, velocity: vec3<f32>, sceneMask: f32) -> vec3<f32> {
+fn cadenceNativeContinuationPoint(p: vec3<f32>, velocity: vec3<f32>, sceneMask: f32, continuationTempoPhase: f32) -> vec3<f32> {
   let cadencePhase = clamp(u.cadence_controls.x, 0.0, 1.0);
   let framesSinceLiveSim = max(0.0, u.cadence_controls.y);
   let simCadence = max(1.0, u.cadence_controls.z);
   let continuationActive = step(1.5, simCadence) * step(0.001, cadencePhase) * sceneMask;
   let continuationWarpGain = clamp(u.cadence_controls.w, 0.0, 1.5);
+  let continuationTempoWarpGain = 1.0 + clamp(continuationTempoPhase, 0.0, 20.0) * CADENCE_NATIVE_CONTINUATION_TEMPO_WARP_GAIN;
   let speed = clamp(u.fire_smoke_curl_speed.w, 0.1, 5.0);
   let heldFrames = min(framesSinceLiveSim, max(1.0, simCadence - 1.0));
-  let cadenceContinuationDampedStep = min(CADENCE_NATIVE_CONTINUATION_MAX_WARP, heldFrames * CADENCE_NATIVE_CONTINUATION_STEP_PER_HELD_FRAME * continuationWarpGain);
+  let cadenceContinuationDampedStep = min(CADENCE_NATIVE_CONTINUATION_MAX_WARP, heldFrames * CADENCE_NATIVE_CONTINUATION_STEP_PER_HELD_FRAME * continuationWarpGain * continuationTempoWarpGain);
   let thermalRise = vec3<f32>(0.0, 0.012 + speed * 0.002, 0.0);
   let continuedP = p - (velocity + thermalRise) * cadenceContinuationDampedStep * continuationActive;
   return clamp(continuedP, vec3<f32>(-0.999), vec3<f32>(0.999));
@@ -935,7 +937,7 @@ fn cadenceNativeContinuationPoint(p: vec3<f32>, velocity: vec3<f32>, sceneMask: 
 fn cadenceContinuationTempoPhase(sceneMask: f32) -> f32 {
   let cadencePhase = clamp(u.cadence_controls.x, 0.0, 1.0);
   let simCadence = max(1.0, u.cadence_controls.z);
-  let tempoGain = clamp(u.continuation_controls.x, 0.0, 2.0);
+  let tempoGain = clamp(u.continuation_controls.x, 0.0, 20.0);
   let heldFrame = step(1.5, simCadence) * step(0.001, cadencePhase) * sceneMask;
   return cadencePhase * tempoGain * heldFrame;
 }
@@ -3144,7 +3146,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     if (f32(i) >= steps || raymarchEarlyTermination(trans) || t > endT) { break; }
     let p = ro + rd * t;
     let initialState = sampleWorldVelocity(p);
-    let continuedP = cadenceNativeContinuationPoint(p, initialState.xyz, cadenceRenderContinuationMask);
+    let continuedP = cadenceNativeContinuationPoint(p, initialState.xyz, cadenceRenderContinuationMask, continuationTempoPhase);
     let majorantNearest = sampleWorldMajorant(p);
     let majorantLinear = sampleWorldMajorantLinear(p);
     let majorantDilated = sampleWorldMajorantDilated(p);
