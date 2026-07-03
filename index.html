@@ -5121,7 +5121,7 @@ function sampleMotionPanelPathWorld(pathWorld, elapsedTime = 0, duration = 6) {
   const goal = pathWorld?.goal?.position
     ? [pathWorld.goal.position.x, pathWorld.goal.position.y, pathWorld.goal.position.z]
     : [0.62, 0.08, 0.94];
-  return {
+  const rawSample = {
     schema: 'kaminos.generated-motion-path-world-sample.v0',
     pathWorldId: pathWorld?.id || null,
     activeSource: 'world-path',
@@ -5145,6 +5145,15 @@ function sampleMotionPanelPathWorld(pathWorld, elapsedTime = 0, duration = 6) {
       fired: distance <= radius,
     },
   };
+  const pathWorldSteeringIntent = createMotionPanelPathWorldSteeringIntent({
+    pathWorld,
+    rawSample,
+    routeSample,
+    obstacle,
+    goal,
+    duration: cycle,
+  });
+  return applyMotionPanelPathWorldSteeringIntent(rawSample, pathWorldSteeringIntent);
 }
 
 function normalizeMotionPanelPathWorldXZ(vector, fallback = [0, 0, 1]) {
@@ -5174,6 +5183,128 @@ function motionPanelPathWorldArrayFromPoint(point) {
 function smoothMotionPanelPathWorldUnit(value) {
   const u = Math.max(0, Math.min(1, Number(value) || 0));
   return u * u * (3 - 2 * u);
+}
+
+function createMotionPanelPathWorldSteeringIntent({ pathWorld, rawSample, routeSample, obstacle, goal, duration = 6 }) {
+  const rawRoot = rawSample?.root || routeSample?.point || [0, 0, 0];
+  const direction = rawSample?.direction === 'return' ? 'return' : 'forward';
+  const routeDirectionSign = direction === 'return' ? -1 : 1;
+  const routeTangent = motionPanelPathWorldPointFromArray(routeSample?.tangent || rawSample?.facing, [0, 0, 1]).setY(0);
+  if (routeTangent.lengthSq() < 1e-6) routeTangent.set(0, 0, 1);
+  routeTangent.normalize().multiplyScalar(routeDirectionSign);
+  const center = motionPanelPathWorldPointFromArray(obstacle?.center, [0, 0, 0]).setY(0);
+  const root = motionPanelPathWorldPointFromArray(rawRoot).setY(0);
+  const radius = Math.max(0.001, Number(obstacle?.radius) || Number(rawSample?.trigger?.radius) || 0.24);
+  const hardContact = !!rawSample?.trigger?.fired;
+  const lookaheadStep = direction === 'return' ? -0.085 : 0.085;
+  const lookaheadProgress = clampMotionPanelPathWorldProgress(Number(rawSample?.progress) + lookaheadStep);
+  const lookaheadRoute = interpolateMotionPanelPathWorldRoute(pathWorld?.routePoints, lookaheadProgress);
+  const lookaheadRoot = motionPanelPathWorldPointFromArray(lookaheadRoute?.point, rawRoot).setY(0);
+  const rawDistance = Math.max(0, Number(rawSample?.trigger?.distance ?? root.distanceTo(center)));
+  const lookaheadDistance = lookaheadRoot.distanceTo(center);
+  const nearestDistance = Math.min(rawDistance, lookaheadDistance);
+  const precontactRadius = radius + 0.42;
+  const precontact = nearestDistance <= precontactRadius;
+  let obstacleNormal = root.clone().sub(center).setY(0);
+  if (obstacleNormal.lengthSq() < 1e-6) obstacleNormal = lookaheadRoot.clone().sub(center).setY(0);
+  if (obstacleNormal.lengthSq() < 1e-6) obstacleNormal = routeTangent.clone().multiplyScalar(-1);
+  if (obstacleNormal.lengthSq() < 1e-6) obstacleNormal.set(0, 0, -1);
+  obstacleNormal.normalize();
+  const tangent = new THREE.Vector3(-obstacleNormal.z, 0, obstacleNormal.x).normalize();
+  const tangentSign = tangent.dot(routeTangent) >= 0 ? 1 : -1;
+  const exitTangent = tangent.multiplyScalar(tangentSign);
+  const approachDot = Number(routeTangent.dot(obstacleNormal.clone().multiplyScalar(-1)).toFixed(5));
+  const proximity = precontact
+    ? smoothMotionPanelPathWorldUnit(Math.max(0, Math.min(1, (precontactRadius - nearestDistance) / Math.max(0.001, precontactRadius - radius))))
+    : 0;
+  const clearanceRadius = radius + 0.32;
+  const clearanceNeed = Math.max(0, clearanceRadius - rawDistance);
+  const routeBiasActive = precontact && (hardContact || approachDot > 0.05 || lookaheadDistance < rawDistance);
+  const normalBias = routeBiasActive ? clearanceNeed + proximity * 0.07 : 0;
+  const tangentBias = routeBiasActive ? proximity * 0.16 : 0;
+  const biasVector = obstacleNormal.clone()
+    .multiplyScalar(normalBias)
+    .add(exitTangent.clone().multiplyScalar(tangentBias));
+  const biasArray = motionPanelPathWorldArrayFromPoint(biasVector);
+  const biasedRoot = root.clone().add(biasVector).setY(Number(rawRoot[1] || 0));
+  const attentionBase = routeBiasActive
+    ? center.clone()
+      .add(exitTangent.clone().multiplyScalar(0.22))
+      .setY(Number(rawSample?.trigger?.center?.[1] || 0) + 0.08)
+    : motionPanelPathWorldPointFromArray(goal, rawSample?.attention || [0, 0, 1]);
+  const routeAuthority = 'steering';
+  const steeringIntent = hardContact
+    ? 'impact-repair'
+    : routeBiasActive
+      ? 'avoid'
+      : 'follow-route';
+  const encounterArchetype = hardContact
+    ? 'bump'
+    : routeBiasActive
+      ? 'avoid'
+      : 'clear';
+  return {
+    schema: 'kaminos.generated-motion-path-world-steering-intent.v0',
+    steeringId: `${rawSample?.pathWorldId || 'path-world'}-${String(rawSample?.wrappedTime ?? rawSample?.elapsedTime ?? 0).replace('.', '_')}-steering`,
+    pathWorldId: rawSample?.pathWorldId || pathWorld?.id || null,
+    obstacleId: rawSample?.trigger?.obstacleId || obstacle?.id || null,
+    steeringIntent,
+    encounterArchetype,
+    routeAuthority: routeBiasActive ? routeAuthority : 'world-path',
+    precontact,
+    hardContact,
+    routeBiasActive,
+    routeBias: biasArray,
+    attentionBias: motionPanelPathWorldArrayFromPoint(attentionBase),
+    rawRoot: rawSample?.root || null,
+    rawAttention: rawSample?.attention || null,
+    rawTrigger: rawSample?.trigger || null,
+    postSteeringRoot: motionPanelPathWorldArrayFromPoint(biasedRoot),
+    lookaheadProgress,
+    lookaheadDistance: Number(lookaheadDistance.toFixed(5)),
+    precontactRadius: Number(precontactRadius.toFixed(5)),
+    clearanceRadius: Number(clearanceRadius.toFixed(5)),
+    proximity: Number(proximity.toFixed(5)),
+    approachDot,
+  };
+}
+
+function applyMotionPanelPathWorldSteeringIntent(pathWorldSample, pathWorldSteeringIntent) {
+  if (!pathWorldSample || !pathWorldSteeringIntent) return pathWorldSample;
+  const routeBias = pathWorldSteeringIntent.routeBias || [0, 0, 0];
+  const rawRoot = pathWorldSteeringIntent.rawRoot || pathWorldSample.root || [0, 0, 0];
+  const biasedRoot = [
+    Number((Number(rawRoot[0] || 0) + Number(routeBias[0] || 0)).toFixed(5)),
+    Number(rawRoot[1] || 0),
+    Number((Number(rawRoot[2] || 0) + Number(routeBias[2] || 0)).toFixed(5)),
+  ];
+  const center = pathWorldSample.trigger?.center || [0, 0, 0];
+  const dx = biasedRoot[0] - Number(center[0] || 0);
+  const dz = biasedRoot[2] - Number(center[2] || 0);
+  const distance = Math.hypot(dx, dz);
+  const radius = Math.max(0.001, Number(pathWorldSample.trigger?.radius) || 0.24);
+  const steeredTrigger = {
+    ...pathWorldSample.trigger,
+    distance: Number(distance.toFixed(5)),
+    fired: distance <= radius,
+    rawTrigger: pathWorldSteeringIntent.rawTrigger || pathWorldSample.trigger,
+  };
+  return {
+    ...pathWorldSample,
+    reason: pathWorldSteeringIntent.routeBiasActive ? 'precontact-steering' : pathWorldSample.reason,
+    root: pathWorldSteeringIntent.routeBiasActive ? biasedRoot : pathWorldSample.root,
+    attention: pathWorldSteeringIntent.routeBiasActive ? pathWorldSteeringIntent.attentionBias : pathWorldSample.attention,
+    rawRoot: pathWorldSteeringIntent.rawRoot || pathWorldSample.root,
+    rawAttention: pathWorldSteeringIntent.rawAttention || pathWorldSample.attention,
+    rawTrigger: pathWorldSteeringIntent.rawTrigger || pathWorldSample.trigger,
+    trigger: steeredTrigger,
+    pathWorldSteeringIntent: {
+      ...pathWorldSteeringIntent,
+      postSteeringHardContact: steeredTrigger.fired,
+      routeBiasApplied: !!pathWorldSteeringIntent.routeBiasActive,
+      postSteeringTrigger: steeredTrigger,
+    },
+  };
 }
 
 function createMotionPanelPathWorldContactFrame(pathWorldSample, { actorRadius = 0.17 } = {}) {
@@ -6666,8 +6797,13 @@ function updateGeneratedPoseTemporalFrame(nowSeconds = performance.now() / 1000)
   let pathWorldEncounterSemantics = null;
   let pathWorldEncounterTrajectory = null;
   let pathWorldResumeHandoff = null;
+  let pathWorldSteeringIntent = null;
   let pathWorldRouteAuthority = pathWorldSample ? 'world-path' : null;
   if (pathWorldSample) {
+    pathWorldSteeringIntent = pathWorldSample.pathWorldSteeringIntent || null;
+    if (pathWorldSteeringIntent?.routeBiasApplied && pathWorldSteeringIntent?.precontact) {
+      pathWorldRouteAuthority = 'steering';
+    }
     const activePathWorldEpisode = pathWorldInterruptEnvelope?.interrupt?.pathWorldEpisode || null;
     pathWorldEncounterSemantics = activePathWorldEpisode?.encounterSemantics || null;
     if (activePathWorldEpisode?.encounterTrajectory) {
@@ -6710,7 +6846,7 @@ function updateGeneratedPoseTemporalFrame(nowSeconds = performance.now() / 1000)
       pathWorldInterruptEnvelope?.interrupt || null,
     );
     rootPosition.copy(pathWorldRootConstraint.root);
-    if (pathWorldRootConstraint?.constrained && pathWorldRouteAuthority === 'world-path') {
+    if (pathWorldRootConstraint?.constrained && (pathWorldRouteAuthority === 'world-path' || pathWorldRouteAuthority === 'steering')) {
       pathWorldRouteAuthority = 'constraint';
     }
   }
@@ -6801,6 +6937,7 @@ function updateGeneratedPoseTemporalFrame(nowSeconds = performance.now() / 1000)
   state.lastPathWorldEncounterSemantics = pathWorldEncounterSemantics;
   state.lastPathWorldEncounterTrajectory = pathWorldEncounterTrajectory;
   state.lastPathWorldResumeHandoff = pathWorldResumeHandoff;
+  state.lastPathWorldSteeringIntent = pathWorldSteeringIntent;
   state.lastPathWorldRouteAuthority = pathWorldRouteAuthority;
   state.lastPathWorldRootConstraint = pathWorldRootConstraint;
   state.lastDisplayGrounding = displayGrounding;
@@ -6882,6 +7019,7 @@ function updateGeneratedPoseTemporalFrame(nowSeconds = performance.now() / 1000)
     pathWorldEncounterSemantics,
     pathWorldEncounterTrajectory,
     pathWorldResumeHandoff,
+    pathWorldSteeringIntent,
     pathWorldRootConstraint,
     pathWorldRouteAuthority,
     pathWorldActiveSource: pathWorldInterruptEnvelope?.interrupt?.activeSource || pathWorldRouteAuthority || (pathWorldSample ? 'world-path' : null),
@@ -8245,6 +8383,7 @@ window.kaminosGeneratedPoseTemporalDebugState = function() {
     pathWorldEncounterSemantics: state?.lastPathWorldEncounterSemantics || null,
     pathWorldEncounterTrajectory: state?.lastPathWorldEncounterTrajectory || null,
     pathWorldResumeHandoff: state?.lastPathWorldResumeHandoff || null,
+    pathWorldSteeringIntent: state?.lastPathWorldSteeringIntent || null,
     pathWorldRootConstraint: state?.lastPathWorldRootConstraint || null,
     pathWorldRouteAuthority: state?.lastPathWorldRouteAuthority || (state?.lastPathWorld ? 'world-path' : null),
     pathWorldActiveSource: state?.lastPathWorldInterrupt?.activeSource || state?.lastPathWorldRouteAuthority || (state?.lastPathWorld ? 'world-path' : null),
