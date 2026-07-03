@@ -1536,6 +1536,27 @@ assert.match(renderPairDataset, /prototypeIdentity/, 'render-pair dataset record
 assert.match(renderPairDataset, /renderPixelRatio/, 'render-pair dataset records low/high internal-to-display pixel ratio');
 assert.match(renderPairDataset, /dryRun/, 'render-pair dataset supports a dry run manifest without spending browser/GPU time');
 assert.match(renderPairDataset, /failurePhase/, 'render-pair dataset records the phase when capture or validation fails');
+assert.match(renderPairDataset, /frame-locked-render-scale-set-v0/, 'render-pair dataset must expose frame-locked same-state pair authority for supervised residual training');
+assert.match(renderPairDataset, /sameStateCaptureId/, 'render-pair dataset records a same-state capture identity shared by low/high scales');
+assert.match(renderPairDataset, /baseFrameCount/, 'render-pair dataset records the frozen source frame count');
+assert.match(renderPairDataset, /baseSimStepCount/, 'render-pair dataset records the frozen source sim-step count');
+assert.match(renderPairDataset, /--render-scale-set/, 'render-pair dataset asks the witness for a same-state render-scale set');
+assert.match(renderPairDataset, /supervisedResidualTrainingSuitable/, 'render-pair dataset labels whether a pair is suitable for supervised residual training');
+assert.match(fieldSliceWitness, /sampleRenderScaleSet/, 'volume witness invokes the browser-side same-state render-scale set API');
+assert.match(fieldSliceWitness, /renderFrozenScaleToCanvas/, 'volume witness renders each same-state scale to the visible canvas before image capture');
+assert.match(fieldSliceWitness, /imageAuthority/, 'volume witness preserves screenshot authority for frozen-state scale images');
+assert.match(fieldSliceWitness, /canvasCssRect/, 'volume witness records canvas clip bounds for clean training images');
+assert.match(fieldSliceWitness, /Page\.captureScreenshot[\s\S]*clip/, 'volume witness captures clean canvas clips instead of full-page UI screenshots for render-scale pairs');
+assert.match(fieldSliceWitness, /fps-counter/, 'volume witness suppresses the in-viewport FPS HUD during clean render-scale pair capture');
+assert.match(fieldSliceWitness, /hudSuppression/, 'volume witness reports HUD suppression state for clean render-scale pair capture');
+assert.match(fieldSliceWitness, /--controlled-step-sequence/, 'volume witness exposes controlled-step sequence mode for temporal corpus generation');
+assert.match(fieldSliceWitness, /controlledStepFrame/, 'volume witness advances the browser simulator through explicit controlled-step frames');
+assert.match(fieldSliceWitness, /controlledStepSequenceReport/, 'volume witness reports controlled-step frame-locked captures for temporal corpus consumers');
+assert.match(core, /sampleRenderScaleSet/, 'volume core exposes a same-state multi-render-scale capture API');
+assert.match(core, /renderFrozenScaleToCanvas/, 'volume core exposes render-only frozen-state canvas capture');
+assert.match(core, /advanceSim:\s*false/, 'same-state render-scale capture renders without advancing the simulator for each scale');
+assert.match(core, /render-only-frozen-sim-state/, 'same-state render-scale capture labels render-only frozen simulator authority');
+assert.match(core, /cdp-canvas-clip-capture-after-render-only-frozen-sim-state/, 'volume core labels canvas-clip screenshot authority for frozen-state scale images');
 
 const dynamicTextureProofPath = join(root, 'volume-dynamic-texture-proof.mjs');
 assert.ok(existsSync(dynamicTextureProofPath), 'dynamic texture proof harness exists');
