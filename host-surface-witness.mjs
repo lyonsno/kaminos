@@ -219,6 +219,8 @@ async function main() {
       if (!Array.isArray(sourceCustody.kaminosOwns) || sourceCustody.kaminosOwns.length === 0) throw new Error('missing source custody kaminosOwns');
     }
 
+    await delay(settleMs);
+
     phase = 'measure_visual_activity';
     visualActivity = await evaluate(ws, `(() => {
       const actorObjects = [...(window.__kaminosLermsPreviewActorsGroup?.children || [])].map(child => ({
@@ -231,6 +233,31 @@ async function main() {
           actorObjectCount: actorObjects.length,
           actorObjects,
           actorVisualCount: window.__kaminosLermsPreviewActorVisuals?.actorVisualCount || 0,
+        };
+      }
+      const liveFrame = document.getElementById('finger-juice-host-live-frame');
+      if (liveFrame) {
+        const rect = liveFrame.getBoundingClientRect();
+        const style = getComputedStyle(liveFrame);
+        let childState = null;
+        let childError = null;
+        try {
+          const read = liveFrame.contentWindow?.__lermsFingerJuiceDebug;
+          childState = typeof read === 'function' ? read() : null;
+        } catch (error) {
+          childError = String(error?.message || error);
+        }
+        return {
+          kind: 'finger-juice-host-live-frame',
+          width: Math.round(rect.width),
+          height: Math.round(rect.height),
+          display: style.display,
+          visibility: style.visibility,
+          childStatePresent: Boolean(childState),
+          childError,
+          particleCount: childState?.particleCount ?? childState?.particles?.length ?? 0,
+          renderBackend: childState?.render_backend || childState?.renderBackend || null,
+          sourceAuthority: childState?.sourceDiagnostics?.authority || childState?.simulation_authority || null,
         };
       }
       const canvas = document.getElementById('finger-juice-host-canvas') || document.querySelector('canvas');
@@ -256,6 +283,17 @@ async function main() {
     })()`);
     if (visualActivity.kind === 'canvas' && visualActivity.activePixels < 120) {
       throw new Error(`host-surface canvas looks blank: ${JSON.stringify(visualActivity)}`);
+    }
+    if (visualActivity.kind === 'finger-juice-host-live-frame') {
+      if (visualActivity.width < 300 || visualActivity.height < 300 || visualActivity.display === 'none' || visualActivity.visibility === 'hidden') {
+        throw new Error(`host-surface live frame unavailable: ${JSON.stringify(visualActivity)}`);
+      }
+      if (!visualActivity.childStatePresent) {
+        throw new Error(`host-surface live frame missing child debug state: ${JSON.stringify(visualActivity)}`);
+      }
+      if ((visualActivity.particleCount || 0) <= 0) {
+        throw new Error(`host-surface live frame has no smoke particles: ${JSON.stringify(visualActivity)}`);
+      }
     }
     if (visualActivity.kind === 'three-scene' && visualActivity.actorObjectCount <= 0 && visualActivity.actorVisualCount <= 0) {
       throw new Error(`host-surface scene visual layer missing: ${JSON.stringify(visualActivity)}`);

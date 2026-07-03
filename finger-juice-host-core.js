@@ -8,6 +8,7 @@ export const KAMINOS_FINGER_JUICE_HOST_ROUTE = 'kaminos/finger-juice-host';
 export const BIG_PAPA_FINGER_JUICE_HOST_PACKET_SCHEMA = 'big-papa-finger-juice.host-packet.v0';
 export const BIG_PAPA_FINGER_JUICE_HOST_PACKET_ROUTE = 'big-papa/finger-juice/host-packet';
 export const BIG_PAPA_FINGER_JUICE_RENDER_PAYLOAD_PREVIEW_SCHEMA = 'big-papa-finger-juice.render-payload.preview.v0';
+export const FINGER_JUICE_HOST_LIVE_FRAME_DOWNGRADE = 'host_live_solver_iframe_until_native_render_buffer';
 
 export const FINGER_JUICE_HOST_ADAPTER = {
   hostId: 'finger-juice',
@@ -19,7 +20,10 @@ export const FINGER_JUICE_HOST_ADAPTER = {
   defaultProducerDiaulos: 'big-papa-finger-juice-fucker',
   defaultSourceAuthority: 'unknown',
   defaultSourceTruthAuthority: 'unknown',
-  defaultDowngrades: ['host_packet_preview_payload_not_native_render_buffer'],
+  defaultDowngrades: [
+    'host_packet_preview_payload_not_native_render_buffer',
+    FINGER_JUICE_HOST_LIVE_FRAME_DOWNGRADE,
+  ],
   defaultRejectedDebugSurfaces: [
     {
       surface: 'direct_lerms_finger_juice_debug_route',
@@ -164,6 +168,7 @@ export function normalizeFingerJuiceHostPacket(packet) {
     source.downgrades,
     renderPayload.downgrades,
     renderPayload.downgraded ? ['host_packet_preview_payload_not_native_render_buffer'] : [],
+    [FINGER_JUICE_HOST_LIVE_FRAME_DOWNGRADE],
   );
   const rejectedDebugSurfaces = arrayOrEmpty(custody.rejectedDebugSurfaces)
     .map(normalizeRejectedDebugSurface);
