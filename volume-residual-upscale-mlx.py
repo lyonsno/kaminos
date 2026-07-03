@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import hashlib
 import json
 import math
 import time
@@ -13,6 +14,8 @@ from PIL import Image
 
 
 SCHEMA = "kaminos.volume.residual-upscale-mlx.v0"
+MODEL_ARTIFACT_SCHEMA = "kaminos.volume.residual-upscale-model-artifact.v0"
+MODEL_ARTIFACT_AUTHORITY = "offline-mlx-residual-upscaler-weights-v0"
 PAIR_AUTHORITY = "frame-locked-render-scale-set-v0"
 IMAGE_AUTHORITY = "cdp-canvas-clip-capture-after-render-only-frozen-sim-state"
 
@@ -126,7 +129,147 @@ def parse_args():
     parser.add_argument("--residual-temporal-loss-weight", dest="residualTemporalLossWeight", type=float, default=0.0, help="Optional paired-frame residual-delta damping loss weight.")
     parser.add_argument("--residual-continuation-mode", dest="residualContinuationMode", choices=["none", "ema"], default="none", help="Optional inference-time residual continuation mode for temporal evaluation.")
     parser.add_argument("--residual-continuation-alpha", dest="residualContinuationAlpha", type=float, default=1.0, help="EMA current-residual weight for residual continuation; 1.0 is raw model output.")
+    parser.add_argument("--save-model-dir", dest="saveModelDir", default=None, help="Optional directory for a reusable residual-upscaler model artifact.")
+    parser.add_argument("--load-model-dir", dest="loadModelDir", default=None, help="Optional directory containing a saved residual-upscaler model artifact.")
+    parser.add_argument("--eval-only", dest="evalOnly", action="store_true", help="Evaluate a loaded model artifact without training or optimizer updates.")
     return parser.parse_args()
+
+
+def sha256_file(path):
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def make_model(model_arch, hidden_channels, input_channels, detail_gate):
+    if model_arch == "tiny-conv":
+        return TinyResidualUpscaler(hidden_channels, input_channels)
+    if model_arch == "direct-residual":
+        return DirectResidualUpscaler(input_channels)
+    if model_arch == "hybrid-residual":
+        return HybridResidualUpscaler(hidden_channels, input_channels)
+    if model_arch == "gated-detail-residual":
+        return GatedDetailResidualUpscaler(hidden_channels, input_channels, detail_gate)
+    raise ValueError(f"unsupported model architecture: {model_arch}")
+
+
+def model_config(model_arch, hidden_channels, input_channels, condition_render_scale, scale_channel, detail_gate):
+    return {
+        "modelArch": model_arch,
+        "hiddenChannels": hidden_channels,
+        "inputChannels": input_channels,
+        "conditionRenderScale": condition_render_scale,
+        "scaleChannel": scale_channel,
+        "detailGate": detail_gate if model_arch == "gated-detail-residual" else None,
+    }
+
+
+def artifact_manifest_path(model_dir):
+    return Path(model_dir) / "model-artifact.json"
+
+
+def save_model_artifact(model, model_dir, config, args, corpus, metrics, effective_max_steps, model_config_source):
+    model_dir = Path(model_dir)
+    model_dir.mkdir(parents=True, exist_ok=True)
+    weights_path = model_dir / "weights.safetensors"
+    model.save_weights(str(weights_path))
+    weights_sha256 = sha256_file(weights_path)
+    manifest = {
+        "schema": MODEL_ARTIFACT_SCHEMA,
+        "authority": MODEL_ARTIFACT_AUTHORITY,
+        "createdAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "weights": {
+            "path": str(weights_path.resolve()),
+            "filename": weights_path.name,
+            "sha256": weights_sha256,
+            "bytes": weights_path.stat().st_size,
+        },
+        "model": config,
+        "training": {
+            "seed": args.seed,
+            "requestedMaxSteps": args.maxSteps,
+            "effectiveMaxSteps": effective_max_steps,
+            "evalOnly": args.evalOnly,
+            "batchSize": args.batch_size,
+            "patchSize": args.patch_size,
+            "learningRate": args.learning_rate,
+            "lossMode": args.loss_mode,
+            "modelConfigSource": model_config_source,
+            "foregroundThreshold": args.foregroundThreshold,
+            "foregroundProbability": args.foregroundProbability,
+            "foregroundLossWeight": args.foregroundLossWeight,
+            "differenceLossWeight": args.differenceLossWeight,
+            "temporalLossWeight": args.temporalLossWeight,
+            "residualTemporalLossWeight": args.residualTemporalLossWeight,
+        },
+        "source": {
+            "corpusManifest": str(Path(args.corpus_manifest).resolve()),
+            "corpusSchema": corpus.get("schema"),
+            "pairAuthority": corpus.get("pairAuthority"),
+            "imageAuthority": corpus.get("imageAuthority"),
+            "lowRenderScale": args.low_render_scale,
+        },
+        "metricsAtSave": {
+            key: metrics.get(key)
+            for key in [
+                "baselinePsnr",
+                "modelPsnr",
+                "deltaPsnr",
+                "weightedBaselinePsnr",
+                "weightedModelPsnr",
+                "weightedDeltaPsnr",
+                "improvedPatchFraction",
+            ]
+            if key in metrics
+        },
+    }
+    manifest_path = artifact_manifest_path(model_dir)
+    manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
+    manifest_sha256 = sha256_file(manifest_path)
+    return {
+        "schema": manifest["schema"],
+        "authority": manifest["authority"],
+        "manifestPath": str(manifest_path.resolve()),
+        "manifestSha256": manifest_sha256,
+        "weightsPath": manifest["weights"]["path"],
+        "weightsSha256": manifest["weights"]["sha256"],
+        "model": manifest["model"],
+    }
+
+
+def load_model_artifact(model_dir):
+    model_dir = Path(model_dir)
+    manifest_path = artifact_manifest_path(model_dir)
+    if not manifest_path.exists():
+        raise ValueError(f"--load-model-dir lacks model-artifact.json: {model_dir}")
+    manifest = json.loads(manifest_path.read_text())
+    if manifest.get("schema") != MODEL_ARTIFACT_SCHEMA:
+        raise ValueError(f"unsupported model artifact schema in {manifest_path}: {manifest.get('schema')}")
+    if manifest.get("authority") != MODEL_ARTIFACT_AUTHORITY:
+        raise ValueError(f"unsupported model artifact authority in {manifest_path}: {manifest.get('authority')}")
+    config = manifest.get("model") or {}
+    weights = manifest.get("weights") or {}
+    weights_path = Path(weights.get("path") or model_dir / weights.get("filename", "weights.safetensors"))
+    if not weights_path.exists():
+        weights_path = model_dir / weights.get("filename", "weights.safetensors")
+    if not weights_path.exists():
+        raise ValueError(f"model artifact weights missing: {weights_path}")
+    expected_sha256 = weights.get("sha256")
+    actual_sha256 = sha256_file(weights_path)
+    if expected_sha256 and actual_sha256 != expected_sha256:
+        raise ValueError(f"model artifact weights checksum mismatch: {weights_path}")
+    return {
+        "schema": manifest["schema"],
+        "authority": manifest["authority"],
+        "manifestPath": str(manifest_path.resolve()),
+        "manifestSha256": sha256_file(manifest_path),
+        "weightsPath": str(weights_path.resolve()),
+        "weightsSha256": actual_sha256,
+        "model": config,
+        "raw": manifest,
+    }
 
 
 def load_image(path):
@@ -718,6 +861,8 @@ def main():
         raise ValueError("--detail-residual-gate must be non-negative")
     if args.residualContinuationAlpha < 0 or args.residualContinuationAlpha > 1:
         raise ValueError("--residual-continuation-alpha must be between 0 and 1")
+    if args.evalOnly and not args.loadModelDir:
+        raise ValueError("--eval-only requires --load-model-dir")
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     corpus, pairs = load_pairs(args.corpus_manifest, args.low_render_scale)
@@ -725,16 +870,47 @@ def main():
     train_items, eval_items = split_pairs(loaded)
     rng = np.random.default_rng(args.seed)
     mx.random.seed(args.seed)
-    input_channels = 4 if args.conditionRenderScale else 3
-    scaleChannel = "lowRenderScale" if args.conditionRenderScale else None
-    if args.modelArch == "tiny-conv":
-        model = TinyResidualUpscaler(args.hidden_channels, input_channels)
-    elif args.modelArch == "direct-residual":
-        model = DirectResidualUpscaler(input_channels)
-    elif args.modelArch == "hybrid-residual":
-        model = HybridResidualUpscaler(args.hidden_channels, input_channels)
+
+    loadedModelArtifact = None
+    loadedModelArtifactReport = None
+    if args.loadModelDir:
+        loadedModelArtifact = load_model_artifact(args.loadModelDir)
+        loadedModelArtifactReport = {
+            key: value
+            for key, value in loadedModelArtifact.items()
+            if key != "raw"
+        }
+        loaded_config = loadedModelArtifact["model"]
+        modelArch = loaded_config["modelArch"]
+        hiddenChannels = int(loaded_config["hiddenChannels"])
+        input_channels = int(loaded_config["inputChannels"])
+        conditionRenderScale = bool(loaded_config["conditionRenderScale"])
+        scaleChannel = loaded_config.get("scaleChannel")
+        loaded_detail_gate = loaded_config.get("detailGate")
+        detailGate = float(loaded_detail_gate) if loaded_detail_gate is not None else args.detailResidualGate
+        modelConfigSource = "loadedModelArtifact"
     else:
-        model = GatedDetailResidualUpscaler(args.hidden_channels, input_channels, args.detailResidualGate)
+        modelArch = args.modelArch
+        hiddenChannels = args.hidden_channels
+        conditionRenderScale = args.conditionRenderScale
+        input_channels = 4 if conditionRenderScale else 3
+        scaleChannel = "lowRenderScale" if conditionRenderScale else None
+        detailGate = args.detailResidualGate
+        modelConfigSource = "cli"
+
+    model = make_model(modelArch, hiddenChannels, input_channels, detailGate)
+    if loadedModelArtifact:
+        model.load_weights(loadedModelArtifact["weightsPath"])
+        mx.eval(model.parameters())
+    effectiveModelConfig = model_config(
+        modelArch,
+        hiddenChannels,
+        input_channels,
+        conditionRenderScale,
+        scaleChannel,
+        detailGate,
+    )
+    effectiveMaxSteps = 0 if args.evalOnly else args.maxSteps
     optimizer = optim.Adam(learning_rate=args.learning_rate)
     temporalTrainPairCount = len(temporal_pair_candidates(train_items))
     temporalEvalPairCount = len(temporal_pair_candidates(eval_items))
@@ -784,8 +960,8 @@ def main():
     temporalTrainingLosses = []
     residualTemporalTrainingLosses = []
     started = time.time()
-    for step in range(max(0, args.maxSteps)):
-        low_batch, high_batch = sample_patch_batch(train_items, rng, args.batch_size, args.patch_size, args.foregroundProbability, args.conditionRenderScale)
+    for step in range(max(0, effectiveMaxSteps)):
+        low_batch, high_batch = sample_patch_batch(train_items, rng, args.batch_size, args.patch_size, args.foregroundProbability, conditionRenderScale)
         if activeTemporalLossWeight > 0 or activeResidualTemporalLossWeight > 0:
             previous_low_batch, current_low_batch, previous_high_batch, current_high_batch = sample_temporal_pair_batch(
                 temporal_loss_pairs,
@@ -793,7 +969,7 @@ def main():
                 args.batch_size,
                 args.patch_size,
                 args.foregroundProbability,
-                args.conditionRenderScale,
+                conditionRenderScale,
             )
         else:
             previous_low_batch = low_batch
@@ -804,7 +980,7 @@ def main():
         optimizer.update(model, grads)
         mx.eval(model.parameters(), optimizer.state, loss)
         loss_float = float(loss)
-        if step == 0 or step == args.maxSteps - 1 or (step + 1) % max(1, args.maxSteps // 10) == 0:
+        if step == 0 or step == effectiveMaxSteps - 1 or (step + 1) % max(1, effectiveMaxSteps // 10) == 0:
             entry = {"step": step + 1, "loss": loss_float}
             if activeTemporalLossWeight > 0:
                 temporal_loss = temporal_loss_value(model, previous_low_batch, current_low_batch, previous_high_batch, current_high_batch)
@@ -832,13 +1008,13 @@ def main():
         args.patch_size,
         args.eval_patches,
         args.foregroundProbability,
-        args.conditionRenderScale,
+        conditionRenderScale,
         args.foregroundThreshold,
         args.foregroundLossWeight,
         args.differenceLossWeight,
     )
     preview_path = out_dir / "residual-preview-low-model-target-diff.png"
-    previewFocus = make_preview(model, eval_items[0], preview_path, args.preview_size, args.preview_mode, args.conditionRenderScale)
+    previewFocus = make_preview(model, eval_items[0], preview_path, args.preview_size, args.preview_mode, conditionRenderScale)
     temporalMetrics = {}
     if args.temporalEval:
         temporalMetrics = temporal_sequence_metrics(
@@ -849,7 +1025,7 @@ def main():
             out_dir,
             args.temporalCropSize or args.preview_size,
             args.preview_mode,
-            args.conditionRenderScale,
+            conditionRenderScale,
             args.temporalEvalScope,
             args.residualContinuationMode,
             args.residualContinuationAlpha,
@@ -858,6 +1034,18 @@ def main():
         "residualContinuationEffectiveMode",
         "none" if args.residualContinuationMode == "none" else "not-evaluated",
     )
+    savedModelArtifact = None
+    if args.saveModelDir:
+        savedModelArtifact = save_model_artifact(
+            model,
+            args.saveModelDir,
+            effectiveModelConfig,
+            args,
+            corpus,
+            metrics,
+            effectiveMaxSteps,
+            modelConfigSource,
+        )
     report = {
         "schema": SCHEMA,
         "createdAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
@@ -866,7 +1054,17 @@ def main():
         "pairAuthority": corpus.get("pairAuthority"),
         "imageAuthority": corpus.get("imageAuthority"),
         "lowRenderScale": args.low_render_scale,
-        "modelArch": args.modelArch,
+        "requestedModelArch": args.modelArch,
+        "modelArch": modelArch,
+        "modelConfigSource": modelConfigSource,
+        "modelArtifactSchema": MODEL_ARTIFACT_SCHEMA,
+        "modelArtifactAuthority": MODEL_ARTIFACT_AUTHORITY,
+        "requestedSaveModelDir": str(Path(args.saveModelDir).resolve()) if args.saveModelDir else None,
+        "requestedLoadModelDir": str(Path(args.loadModelDir).resolve()) if args.loadModelDir else None,
+        "savedModelArtifact": savedModelArtifact,
+        "loadedModelArtifact": loadedModelArtifactReport,
+        "evalOnly": args.evalOnly,
+        "trainingSkipped": args.evalOnly,
         "seed": args.seed,
         "seededRandomGenerators": ["numpy.default_rng", "mlx.core.random"],
         "selectedPairCount": len(loaded),
@@ -883,13 +1081,14 @@ def main():
         "temporalEvalPairCount": temporalEvalPairCount,
         "temporalSelectedPairCount": temporalSelectedPairCount,
         "maxSteps": args.maxSteps,
+        "effectiveMaxSteps": effectiveMaxSteps,
         "sleepMs": args.sleepMs,
         "lossMode": args.loss_mode,
         "foregroundThreshold": args.foregroundThreshold,
         "foregroundProbability": args.foregroundProbability,
         "foregroundLossWeight": args.foregroundLossWeight,
         "differenceLossWeight": args.differenceLossWeight,
-        "conditionRenderScale": args.conditionRenderScale,
+        "conditionRenderScale": conditionRenderScale,
         "temporalLossWeight": args.temporalLossWeight,
         "activeTemporalLossWeight": activeTemporalLossWeight,
         "residualTemporalLossWeight": args.residualTemporalLossWeight,
@@ -919,8 +1118,8 @@ def main():
         },
         "batchSize": args.batch_size,
         "patchSize": args.patch_size,
-        "hiddenChannels": args.hidden_channels,
-        "detailGate": args.detailResidualGate if args.modelArch == "gated-detail-residual" else None,
+        "hiddenChannels": hiddenChannels,
+        "detailGate": detailGate if modelArch == "gated-detail-residual" else None,
         "learningRate": args.learning_rate,
         "evalPatches": args.eval_patches,
         "durationSeconds": duration_seconds,

@@ -1436,7 +1436,8 @@ assert.match(residualMlx, /HybridResidualUpscaler/, 'MLX residual harness includ
 assert.match(residualMlx, /gated-detail-residual/, 'MLX residual harness exposes a gated detail residual architecture');
 assert.match(residualMlx, /GatedDetailResidualUpscaler/, 'MLX residual harness includes a gated direct-plus-detail residual model');
 assert.match(residualMlx, /detailGate/, 'MLX residual harness records or owns an explicit detail gate for gated residual probes');
-assert.match(residualMlx, /"modelArch": args\.modelArch/, 'MLX residual harness records effective model architecture in reports');
+assert.match(residualMlx, /"requestedModelArch": args\.modelArch/, 'MLX residual harness records requested model architecture in reports');
+assert.match(residualMlx, /"modelArch": modelArch/, 'MLX residual harness records effective model architecture in reports');
 assert.match(residualMlx, /frame-locked-render-scale-set-v0/, 'MLX residual harness validates frame-locked pair authority before training');
 assert.match(residualMlx, /cdp-canvas-clip-capture-after-render-only-frozen-sim-state/, 'MLX residual harness validates clean canvas image authority before training');
 assert.match(residualMlx, /baselinePsnr/, 'MLX residual harness reports linear-css-upscale baseline PSNR');
@@ -1482,6 +1483,14 @@ assert.match(residualMlx, /continuationStillDeltaPsnr/, 'MLX residual harness re
 assert.match(residualMlx, /continuationTemporalDeltaPsnr/, 'MLX residual harness reports continuation temporal-delta PSNR');
 assert.match(residualMlx, /continuationFlickerAmplification/, 'MLX residual harness reports continuation flicker amplification');
 assert.match(residualMlx, /continuationPreview/, 'MLX residual harness writes a continuation temporal preview for visual inspection');
+assert.match(residualMlx, /--save-model-dir/, 'MLX residual harness can save trained model artifacts for reuse');
+assert.match(residualMlx, /--load-model-dir/, 'MLX residual harness can load trained model artifacts without retraining');
+assert.match(residualMlx, /--eval-only/, 'MLX residual harness has an explicit eval-only path for loaded artifacts');
+assert.match(residualMlx, /kaminos\.volume\.residual-upscale-model-artifact\.v0/, 'MLX residual model artifacts carry a stable schema identity');
+assert.match(residualMlx, /save_model_artifact/, 'MLX residual harness writes model weights and metadata as an artifact');
+assert.match(residualMlx, /load_model_artifact/, 'MLX residual harness reads model weights and metadata as an artifact');
+assert.match(residualMlx, /loadedModelArtifact/, 'MLX residual reports identify the loaded model artifact');
+assert.match(residualMlx, /savedModelArtifact/, 'MLX residual reports identify the saved model artifact');
 assert.match(residualMlx, /temporalLossPairCount/, 'MLX residual harness reports how many adjacent frame pairs are available for temporal loss');
 assert.match(residualMlx, /sample_temporal_pair_batch/, 'MLX residual harness samples adjacent same-scale frame pairs for temporal supervision');
 assert.match(residualMlx, /temporal_loss_value/, 'MLX residual harness computes high-scale frame-delta supervision as a training loss');
