@@ -30,6 +30,11 @@ assert.match(index, /id="volume-canonical-motion-mode-state"/, 'Volume tab expos
 assert.match(index, /operator_memory_fire_0701/, 'Volume tab exposes the operator tall-plume Pyro-memory baseline preset');
 assert.match(index, /pyro_contrast_warm_cap_small_flame_0702/, 'Volume tab pins the operator-found Pyro contrast warm-cap small-flame basin by stable route identity');
 assert.match(index, /pyro_material_bonfire_family_0702/, 'Volume tab pins the operator-found Pyro material bonfire family basin by stable route identity');
+assert.match(index, /pyro_material_bonfire_family_0702:[\s\S]*resolution:\s*128/, 'Pyro material bonfire basin keeps the operator look-tuning resolution floor');
+assert.match(index, /pyro_material_bonfire_family_0702:[\s\S]*pyroRadiance:\s*10\.00/, 'Pyro material bonfire basin preserves the loud radiance contrast carrier');
+assert.match(index, /pyro_material_bonfire_family_0702:[\s\S]*pyroRadianceGate:\s*0\.10/, 'Pyro material bonfire basin preserves the sparse radiance gate');
+assert.match(index, /pyro_material_bonfire_family_0702:[\s\S]*pyroRadianceHue:\s*0\.05/, 'Pyro material bonfire basin preserves the amber-biased radiance color');
+assert.match(index, /pyro_material_bonfire_family_0702:[\s\S]*pressureMode:\s*'global-p3'/, 'Pyro material bonfire basin preserves the Full P3 pressure solve');
 assert.match(index, /id="volume-basin-bonfire-family"/, 'Volume cockpit exposes a one-click Pyro material bonfire family basin action');
 assert.match(index, /KAMINOS_VOLUME_BASIN_STORAGE_KEY/, 'Volume cockpit has a durable localStorage key for last-basin recovery');
 assert.match(index, /saveVolumeBasinSnapshot/, 'Volume cockpit autosaves current basin controls on slider changes');
@@ -37,6 +42,8 @@ assert.match(index, /restoreVolumeBasinSnapshot/, 'Volume cockpit can restore th
 assert.match(index, /buildVolumeBasinUrl/, 'Volume cockpit can serialize current controls into a copyable basin URL');
 assert.match(index, /id="volume-basin-copy"/, 'Volume cockpit exposes a copy-basin URL action');
 assert.match(index, /id="volume-basin-restore"/, 'Volume cockpit exposes a restore-last-basin action');
+assert.match(index, /Volume route controls loaded; renderer failed/, 'Volume route still hydrates basin controls when renderer activation fails');
+assert.match(index, /initKaminosVolumeRoute\(\)\.catch/, 'Volume route initializes from the scene-init fallback path for setup diagnostics');
 assert.match(index, /id="volume-pyro-interface-focus"/, 'Pyro cockpit exposes an interface-focus slider');
 assert.match(index, /Border carrier/i, 'Pyro interface-focus slider describes the standalone border carrier');
 assert.match(index, /id="volume-pyro-edge-bite"/, 'Pyro cockpit exposes an edge-bite slider');
