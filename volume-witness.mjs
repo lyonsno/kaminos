@@ -11,6 +11,23 @@ for (let i = 2; i < process.argv.length; i += 2) {
   args.set(process.argv[i], process.argv[i + 1]);
 }
 
+function parseNumberList(value) {
+  return String(value || '')
+    .split(',')
+    .map(entry => Number(entry.trim()))
+    .filter(entry => Number.isFinite(entry));
+}
+
+function clampRenderScale(value) {
+  const requested = Number(value);
+  if (!Number.isFinite(requested)) return 0.25;
+  return Math.max(0.1, Math.min(1, requested));
+}
+
+function scaleSlug(value) {
+  return `rs${String(Math.round(clampRenderScale(value) * 100)).padStart(3, '0')}`;
+}
+
 const url = args.get('--url') || 'http://127.0.0.1:8095/?kaminos_volume_smoke=1';
 const out = resolve(args.get('--out') || '/tmp/kaminos-volume-witness.png');
 const reportPath = resolve(args.get('--report') || out.replace(/\.png$/i, '.json'));
@@ -22,6 +39,14 @@ const windowSize = args.get('--window-size') || '1280,960';
 const fullScreenshot = args.has('--full-screenshot')
   ? resolve(args.get('--full-screenshot') || out.replace(/\.png$/i, '.full.png'))
   : '';
+const renderScaleSet = parseNumberList(args.get('--render-scale-set')).map(clampRenderScale);
+const renderScaleSetDir = resolve(args.get('--render-scale-set-dir') || dirname(out));
+const renderScaleSetPrefix = String(args.get('--render-scale-set-prefix') || 'same-state-render-scale-set');
+const controlledStepSequenceRequested = args.has('--controlled-step-sequence') && !['0', 'false', 'no'].includes(String(args.get('--controlled-step-sequence') || '1').toLowerCase());
+const controlledStepFrames = Math.max(1, Math.floor(Number(args.get('--controlled-step-frames') || 1)));
+const controlledStepDeltaMs = Math.max(0, Number(args.get('--controlled-step-delta-ms') || 220));
+const controlledStepDir = resolve(args.get('--controlled-step-dir') || renderScaleSetDir);
+const controlledStepPrefix = String(args.get('--controlled-step-prefix') || 'controlled-step-sequence');
 const VALID_EVIDENCE_MODES = new Set(['fire-volume', 'performance', 'pyro-material', 'no-fire-volume']);
 const evidenceMode = args.get('--evidence-mode') || 'fire-volume';
 if (!VALID_EVIDENCE_MODES.has(evidenceMode)) {
@@ -2267,6 +2292,452 @@ async function main() {
     } else if (metrics.litPixels < 1500 || visibleFirePixels < 450 || metrics.emissiveLikePixels < 80 || metrics.meanLuma < 8) {
       throw new Error(`blank frame or missing fire volume: ${JSON.stringify(metrics)}`);
     }
+    let renderScaleSetReport = null;
+    if (renderScaleSet.length && !controlledStepSequenceRequested) {
+      mkdirSync(renderScaleSetDir, { recursive: true });
+      const hudSuppressionEval = await wsRequest(ws, 'Runtime.evaluate', {
+        expression: `(() => {
+          const el = document.getElementById('fps-counter');
+          if (!el) return { ok: true, found: false, selector: '#fps-counter' };
+          const previous = {
+            visibility: el.style.visibility || '',
+            display: el.style.display || '',
+            textContent: el.textContent || '',
+          };
+          el.style.visibility = 'hidden';
+          return {
+            ok: true,
+            found: true,
+            selector: '#fps-counter',
+            previous,
+            applied: { visibility: el.style.visibility },
+          };
+        })()`,
+        returnByValue: true,
+      });
+      const hudSuppression = hudSuppressionEval.result.value || {
+        ok: false,
+        found: false,
+        selector: '#fps-counter',
+      };
+      const renderScaleSetEval = await wsRequest(ws, 'Runtime.evaluate', {
+        expression: `window.__kaminosVolumePrototype.sampleRenderScaleSet(${JSON.stringify({
+          renderScales: renderScaleSet,
+          includeRgba: false,
+          resumeRenderLoop: false,
+        })})`,
+        awaitPromise: true,
+        returnByValue: true,
+      });
+      const scaleSet = renderScaleSetEval.result.value;
+      if (scaleSet?.ok !== true || scaleSet?.sampleSetAuthority !== 'frame-locked-render-scale-set-v0') {
+        throw new Error(`Frame-locked render-scale set capture failed: ${JSON.stringify({
+          ok: scaleSet?.ok,
+          reason: scaleSet?.reason,
+          sampleSetAuthority: scaleSet?.sampleSetAuthority,
+          sameStateCaptureId: scaleSet?.sameStateCaptureId,
+        })}`);
+      }
+      const captures = [];
+      for (let index = 0; index < scaleSet.samples.length; index += 1) {
+        const scaleSample = scaleSet.samples[index];
+        const renderScale = clampRenderScale(scaleSample.requestedRenderScale ?? scaleSample.renderScale);
+        const slug = `${renderScaleSetPrefix}-${String(index + 1).padStart(2, '0')}-${scaleSlug(renderScale)}`;
+        const imagePath = resolve(renderScaleSetDir, `${slug}.png`);
+        const previewPath = resolve(renderScaleSetDir, `${slug}.preview.png`);
+        const captureReportPath = resolve(renderScaleSetDir, `${slug}.json`);
+        if (scaleSample.preview?.rgba && Number.isFinite(scaleSample.preview.width) && Number.isFinite(scaleSample.preview.height)) {
+          writeRgbaPng(previewPath, scaleSample.preview.width, scaleSample.preview.height, scaleSample.preview.rgba);
+        }
+        const canvasEval = await wsRequest(ws, 'Runtime.evaluate', {
+          expression: `window.__kaminosVolumePrototype.renderFrozenScaleToCanvas(${JSON.stringify({
+            renderScale,
+            now: scaleSet.fixedNowMs,
+            sameStateCaptureId: scaleSet.sameStateCaptureId,
+            baseFrameCount: scaleSet.baseFrameCount,
+            baseSimStepCount: scaleSet.baseSimStepCount,
+            restoreControls: false,
+            resumeRenderLoop: false,
+          })})`,
+          awaitPromise: true,
+          returnByValue: true,
+        });
+        const canvasCapture = canvasEval.result.value;
+        if (canvasCapture?.ok !== true || canvasCapture?.sampleAuthority !== 'render-only-frozen-sim-state') {
+          throw new Error(`Frame-locked render-scale canvas capture failed: ${JSON.stringify({
+            renderScale,
+            ok: canvasCapture?.ok,
+            reason: canvasCapture?.reason,
+            sampleAuthority: canvasCapture?.sampleAuthority,
+            sameStateCaptureId: canvasCapture?.sameStateCaptureId,
+          })}`);
+        }
+        const canvasCssRect = canvasCapture.canvasCssRect || {};
+        const screenshotClip = {
+          x: Math.max(0, Number(canvasCssRect.x) || 0),
+          y: Math.max(0, Number(canvasCssRect.y) || 0),
+          width: Math.max(1, Number(canvasCssRect.width) || 0),
+          height: Math.max(1, Number(canvasCssRect.height) || 0),
+          scale: 1,
+        };
+        if (!Number.isFinite(screenshotClip.width) || !Number.isFinite(screenshotClip.height) || screenshotClip.width <= 1 || screenshotClip.height <= 1) {
+          throw new Error(`missing-canvas-clip-bounds: ${JSON.stringify({
+            renderScale,
+            canvasCssRect,
+            imageAuthority: canvasCapture.imageAuthority,
+          })}`);
+        }
+        const scaleShot = await wsRequest(ws, 'Page.captureScreenshot', {
+          format: 'png',
+          fromSurface: true,
+          clip: screenshotClip,
+        });
+        const imageBuffer = Buffer.from(scaleShot.data, 'base64');
+        writeFileSync(imagePath, imageBuffer);
+        const imageMetrics = measureScreenshot(imageBuffer);
+        const { image, preview, simReadback, majorantReadback, ...sampleReport } = scaleSample;
+        const captureReport = {
+          ...sampleReport,
+          image: {
+            path: imagePath,
+            width: imageMetrics.width,
+            height: imageMetrics.height,
+            authority: canvasCapture.imageAuthority,
+            canvasCssRect,
+            screenshotClip,
+            devicePixelRatio: canvasCapture.devicePixelRatio,
+            hudSuppression,
+            metrics: imageMetrics,
+          },
+          preview: preview ? {
+            path: previewPath,
+            width: preview.width,
+            height: preview.height,
+          } : null,
+          canvasCapture,
+          simReadback: simReadback ? {
+            grid: simReadback.grid,
+            densityMean: simReadback.densityMean,
+            densityMax: simReadback.densityMax,
+            velocityMean: simReadback.velocityMean,
+            fireLayerMean: simReadback.fireLayerMean,
+            radianceMean: simReadback.radianceMean,
+            extinctionMean: simReadback.extinctionMean,
+            liveVoxels: simReadback.liveVoxels,
+            frontFieldIdentity: simReadback.frontFieldIdentity,
+          } : null,
+          majorantReadback: majorantReadback ? {
+            grid: majorantReadback.grid,
+            occupiedBricks: majorantReadback.occupiedBricks,
+            importanceMax: majorantReadback.importanceMax,
+          } : null,
+        };
+        writeFileSync(captureReportPath, JSON.stringify(captureReport, null, 2));
+        captures.push({
+          role: scaleSample.role,
+          requestedRenderScale: renderScale,
+          renderScale: scaleSample.renderScale,
+          renderPixelRatio: scaleSample.renderPixelRatio,
+          renderWidth: scaleSample.renderWidth,
+          renderHeight: scaleSample.renderHeight,
+          displayWidth: scaleSample.displayWidth,
+          displayHeight: scaleSample.displayHeight,
+          volumeReconstructionStyle: scaleSample.volumeReconstructionStyle,
+          sampleAuthority: scaleSample.sampleAuthority,
+          imageAuthority: canvasCapture.imageAuthority,
+          canvasCssRect,
+          screenshotClip,
+          devicePixelRatio: canvasCapture.devicePixelRatio,
+          hudSuppression,
+          sameStateCaptureId: scaleSample.sameStateCaptureId,
+          baseFrameCount: scaleSample.baseFrameCount,
+          baseSimStepCount: scaleSample.baseSimStepCount,
+          frameCount: canvasCapture.frameCount,
+          simStepCount: canvasCapture.simStepCount,
+          imageWidth: imageMetrics.width,
+          imageHeight: imageMetrics.height,
+          image: imagePath,
+          preview: previewPath,
+          report: captureReportPath,
+        });
+      }
+      const uniqueFrameCounts = new Set(captures.map(capture => capture.frameCount));
+      const uniqueSimStepCounts = new Set(captures.map(capture => capture.simStepCount));
+      renderScaleSetReport = {
+        sampleSetAuthority: scaleSet.sampleSetAuthority,
+        sampleAuthority: scaleSet.sampleAuthority,
+        sameStateCaptureId: scaleSet.sameStateCaptureId,
+        baseFrameCount: scaleSet.baseFrameCount,
+        baseSimStepCount: scaleSet.baseSimStepCount,
+        fixedNowMs: scaleSet.fixedNowMs,
+        renderScales: scaleSet.renderScales,
+        hudSuppression,
+        supervisedResidualTrainingSuitable: uniqueFrameCounts.size === 1 && uniqueSimStepCounts.size === 1,
+        captures,
+      };
+      if (!renderScaleSetReport.supervisedResidualTrainingSuitable) {
+        throw new Error(`Frame-locked render-scale set did not preserve one frame/sim state: ${JSON.stringify({
+          sameStateCaptureId: renderScaleSetReport.sameStateCaptureId,
+          frameCounts: Array.from(uniqueFrameCounts),
+          simStepCounts: Array.from(uniqueSimStepCounts),
+        })}`);
+      }
+    }
+    let controlledStepSequenceReport = null;
+    if (controlledStepSequenceRequested) {
+      if (!renderScaleSet.length) {
+        throw new Error('controlled-step-sequence requires --render-scale-set');
+      }
+      mkdirSync(controlledStepDir, { recursive: true });
+      const hudSuppressionEval = await wsRequest(ws, 'Runtime.evaluate', {
+        expression: `(() => {
+          const el = document.getElementById('fps-counter');
+          if (!el) return { ok: true, found: false, selector: '#fps-counter' };
+          const previous = {
+            visibility: el.style.visibility || '',
+            display: el.style.display || '',
+            textContent: el.textContent || '',
+          };
+          el.style.visibility = 'hidden';
+          return {
+            ok: true,
+            found: true,
+            selector: '#fps-counter',
+            previous,
+            applied: { visibility: el.style.visibility },
+          };
+        })()`,
+        returnByValue: true,
+      });
+      const hudSuppression = hudSuppressionEval.result.value || {
+        ok: false,
+        found: false,
+        selector: '#fps-counter',
+      };
+      const frames = [];
+      let sameBrowserSessionId = null;
+      let sequenceStartNowMs = null;
+      for (let controlledFrameIndex = 0; controlledFrameIndex < controlledStepFrames; controlledFrameIndex += 1) {
+        const controlledStepFrameIndex = controlledFrameIndex;
+        const controlledEval = await wsRequest(ws, 'Runtime.evaluate', {
+          expression: `window.__kaminosVolumePrototype.controlledStepFrame(${JSON.stringify({
+            controlledStepFrameIndex,
+            advanceSim: controlledFrameIndex > 0,
+            sameBrowserSessionId,
+            startNow: sequenceStartNowMs,
+            stepDeltaMs: controlledStepDeltaMs,
+            renderScales: renderScaleSet,
+            includeRgba: false,
+            resumeRenderLoop: false,
+          })})`,
+          awaitPromise: true,
+          returnByValue: true,
+        });
+        const frame = controlledEval.result.value;
+        if (frame?.ok !== true || frame?.sequenceAuthority !== 'controlled-step-sequence-v0') {
+          throw new Error(`Controlled-step frame capture failed: ${JSON.stringify({
+            ok: frame?.ok,
+            reason: frame?.reason,
+            sequenceAuthority: frame?.sequenceAuthority,
+            sameBrowserSessionId: frame?.sameBrowserSessionId,
+            controlledStepFrameIndex,
+          })}`);
+        }
+        sameBrowserSessionId = frame.sameBrowserSessionId;
+        sequenceStartNowMs = frame.sequenceStartNowMs;
+        const scaleSet = frame.scaleSet;
+        if (scaleSet?.ok !== true || scaleSet?.sampleSetAuthority !== 'frame-locked-render-scale-set-v0') {
+          throw new Error(`Controlled-step frame scale set failed: ${JSON.stringify({
+            controlledStepFrameIndex,
+            ok: scaleSet?.ok,
+            reason: scaleSet?.reason,
+            sampleSetAuthority: scaleSet?.sampleSetAuthority,
+            sameStateCaptureId: scaleSet?.sameStateCaptureId,
+          })}`);
+        }
+        const frameSlug = `frame-${String(controlledFrameIndex + 1).padStart(3, '0')}`;
+        const frameDir = resolve(controlledStepDir, frameSlug);
+        mkdirSync(frameDir, { recursive: true });
+        const captures = [];
+        for (let index = 0; index < scaleSet.samples.length; index += 1) {
+          const scaleSample = scaleSet.samples[index];
+          const renderScale = clampRenderScale(scaleSample.requestedRenderScale ?? scaleSample.renderScale);
+          const slug = `${controlledStepPrefix}-${frameSlug}-${String(index + 1).padStart(2, '0')}-${scaleSlug(renderScale)}`;
+          const imagePath = resolve(frameDir, `${slug}.png`);
+          const captureReportPath = resolve(frameDir, `${slug}.json`);
+          const canvasEval = await wsRequest(ws, 'Runtime.evaluate', {
+            expression: `window.__kaminosVolumePrototype.renderFrozenScaleToCanvas(${JSON.stringify({
+              renderScale,
+              now: scaleSet.fixedNowMs,
+              sameStateCaptureId: scaleSet.sameStateCaptureId,
+              baseFrameCount: scaleSet.baseFrameCount,
+              baseSimStepCount: scaleSet.baseSimStepCount,
+              restoreControls: false,
+              resumeRenderLoop: false,
+            })})`,
+            awaitPromise: true,
+            returnByValue: true,
+          });
+          const canvasCapture = canvasEval.result.value;
+          if (canvasCapture?.ok !== true || canvasCapture?.sampleAuthority !== 'render-only-frozen-sim-state') {
+            throw new Error(`Controlled-step canvas capture failed: ${JSON.stringify({
+              controlledStepFrameIndex,
+              renderScale,
+              ok: canvasCapture?.ok,
+              reason: canvasCapture?.reason,
+              sampleAuthority: canvasCapture?.sampleAuthority,
+              sameStateCaptureId: canvasCapture?.sameStateCaptureId,
+            })}`);
+          }
+          const canvasCssRect = canvasCapture.canvasCssRect || {};
+          const screenshotClip = {
+            x: Math.max(0, Number(canvasCssRect.x) || 0),
+            y: Math.max(0, Number(canvasCssRect.y) || 0),
+            width: Math.max(1, Number(canvasCssRect.width) || 0),
+            height: Math.max(1, Number(canvasCssRect.height) || 0),
+            scale: 1,
+          };
+          if (!Number.isFinite(screenshotClip.width) || !Number.isFinite(screenshotClip.height) || screenshotClip.width <= 1 || screenshotClip.height <= 1) {
+            throw new Error(`controlled-step-missing-canvas-clip-bounds: ${JSON.stringify({
+              controlledStepFrameIndex,
+              renderScale,
+              canvasCssRect,
+              imageAuthority: canvasCapture.imageAuthority,
+            })}`);
+          }
+          const scaleShot = await wsRequest(ws, 'Page.captureScreenshot', {
+            format: 'png',
+            fromSurface: true,
+            clip: screenshotClip,
+          });
+          const imageBuffer = Buffer.from(scaleShot.data, 'base64');
+          writeFileSync(imagePath, imageBuffer);
+          const imageMetrics = measureScreenshot(imageBuffer);
+          const { image, preview, simReadback, majorantReadback, ...sampleReport } = scaleSample;
+          const captureReport = {
+            ...sampleReport,
+            sequenceAuthority: frame.sequenceAuthority,
+            sameBrowserSessionId: frame.sameBrowserSessionId,
+            controlledStepFrameIndex,
+            controlledStepDeltaMs: frame.controlledStepDeltaMs,
+            controlledStepNowMs: frame.controlledStepNowMs,
+            controlledStepCapture: frame.controlledStepCapture,
+            image: {
+              path: imagePath,
+              width: imageMetrics.width,
+              height: imageMetrics.height,
+              authority: canvasCapture.imageAuthority,
+              canvasCssRect,
+              screenshotClip,
+              devicePixelRatio: canvasCapture.devicePixelRatio,
+              hudSuppression,
+              metrics: imageMetrics,
+            },
+            canvasCapture,
+            simReadback: simReadback ? {
+              grid: simReadback.grid,
+              densityMean: simReadback.densityMean,
+              densityMax: simReadback.densityMax,
+              velocityMean: simReadback.velocityMean,
+              fireLayerMean: simReadback.fireLayerMean,
+              radianceMean: simReadback.radianceMean,
+              extinctionMean: simReadback.extinctionMean,
+              liveVoxels: simReadback.liveVoxels,
+              frontFieldIdentity: simReadback.frontFieldIdentity,
+            } : null,
+            majorantReadback: majorantReadback ? {
+              grid: majorantReadback.grid,
+              occupiedBricks: majorantReadback.occupiedBricks,
+              importanceMax: majorantReadback.importanceMax,
+            } : null,
+          };
+          writeFileSync(captureReportPath, JSON.stringify(captureReport, null, 2));
+          captures.push({
+            role: scaleSample.role,
+            requestedRenderScale: renderScale,
+            renderScale: scaleSample.renderScale,
+            renderPixelRatio: scaleSample.renderPixelRatio,
+            renderWidth: scaleSample.renderWidth,
+            renderHeight: scaleSample.renderHeight,
+            displayWidth: scaleSample.displayWidth,
+            displayHeight: scaleSample.displayHeight,
+            volumeReconstructionStyle: scaleSample.volumeReconstructionStyle,
+            sampleAuthority: scaleSample.sampleAuthority,
+            imageAuthority: canvasCapture.imageAuthority,
+            canvasCssRect,
+            screenshotClip,
+            devicePixelRatio: canvasCapture.devicePixelRatio,
+            hudSuppression,
+            sameBrowserSessionId: frame.sameBrowserSessionId,
+            sequenceAuthority: frame.sequenceAuthority,
+            controlledStepFrameIndex,
+            controlledStepDeltaMs: frame.controlledStepDeltaMs,
+            controlledStepNowMs: frame.controlledStepNowMs,
+            controlledStepCapture: frame.controlledStepCapture,
+            sameStateCaptureId: scaleSample.sameStateCaptureId,
+            baseFrameCount: scaleSample.baseFrameCount,
+            baseSimStepCount: scaleSample.baseSimStepCount,
+            frameCount: canvasCapture.frameCount,
+            simStepCount: canvasCapture.simStepCount,
+            imageWidth: imageMetrics.width,
+            imageHeight: imageMetrics.height,
+            image: imagePath,
+            report: captureReportPath,
+          });
+        }
+        const uniqueFrameCounts = new Set(captures.map(capture => capture.frameCount));
+        const uniqueSimStepCounts = new Set(captures.map(capture => capture.simStepCount));
+        const controlledStepFrameReport = {
+          sequenceAuthority: frame.sequenceAuthority,
+          sampleSetAuthority: scaleSet.sampleSetAuthority,
+          sampleAuthority: scaleSet.sampleAuthority,
+          sameBrowserSessionId: frame.sameBrowserSessionId,
+          controlledStepFrameIndex,
+          controlledStepDeltaMs: frame.controlledStepDeltaMs,
+          controlledStepNowMs: frame.controlledStepNowMs,
+          controlledStepCapture: frame.controlledStepCapture,
+          sameStateCaptureId: scaleSet.sameStateCaptureId,
+          baseFrameCount: scaleSet.baseFrameCount,
+          baseSimStepCount: scaleSet.baseSimStepCount,
+          fixedNowMs: scaleSet.fixedNowMs,
+          renderScales: scaleSet.renderScales,
+          hudSuppression,
+          supervisedResidualTrainingSuitable: uniqueFrameCounts.size === 1 && uniqueSimStepCounts.size === 1,
+          captures,
+        };
+        if (!controlledStepFrameReport.supervisedResidualTrainingSuitable) {
+          throw new Error(`Controlled-step frame did not preserve one frame/sim state: ${JSON.stringify({
+            sameBrowserSessionId: frame.sameBrowserSessionId,
+            controlledStepFrameIndex,
+            sameStateCaptureId: scaleSet.sameStateCaptureId,
+            frameCounts: Array.from(uniqueFrameCounts),
+            simStepCounts: Array.from(uniqueSimStepCounts),
+          })}`);
+        }
+        frames.push(controlledStepFrameReport);
+      }
+      const sessionIds = new Set(frames.map(frame => frame.sameBrowserSessionId));
+      controlledStepSequenceReport = {
+        sequenceAuthority: 'controlled-step-sequence-v0',
+        sampleAuthority: 'controlled-step-sim-advance',
+        sameBrowserSessionId,
+        controlledStepDeltaMs,
+        requestedFrameCount: controlledStepFrames,
+        startNowMs: sequenceStartNowMs,
+        renderScales: renderScaleSet,
+        hudSuppression,
+        controlledStepCapture: frames.map(frame => frame.controlledStepCapture),
+        sameBrowserSequenceSuitable: sessionIds.size === 1 && frames.length === controlledStepFrames,
+        frames,
+      };
+      if (!controlledStepSequenceReport.sameBrowserSequenceSuitable) {
+        throw new Error(`Controlled-step sequence did not preserve one browser session: ${JSON.stringify({
+          sessionIds: Array.from(sessionIds),
+          frameCount: frames.length,
+          requestedFrameCount: controlledStepFrames,
+        })}`);
+      }
+    }
     const reportControls = {
       ...(state.controls || {}),
       rayBudgetPreset: state.controls?.rayBudgetPreset || rayBudgetPreset,
@@ -2478,6 +2949,8 @@ async function main() {
       mainRendererCaptureBackend: 'cdp-page-capture',
       fullScreenshot: fullScreenshotPath || null,
       fieldSliceScreenshot: fieldSliceOut || null,
+      renderScaleSet: renderScaleSetReport,
+      controlledStepSequence: controlledStepSequenceReport,
       metrics,
       mainRendererMetrics,
     };
