@@ -38,6 +38,8 @@ assert.match(index, /loadComputeRouteFireOutput/, 'browser can load the promoted
 assert.match(index, /SHARP started on this image, but the model adapter failed before producing a splat\./, 'failed live adapter runs say no splat was produced in operator-facing language');
 assert.match(index, /SHARP is working on this image: \$\{progress\.message\}/, 'running live adapter summary can lead with native progress message');
 assert.match(index, /SHARP is still working inside the browser adapter/, 'quiet live adapter runs say they are still running instead of looking frozen');
+assert.doesNotMatch(index, /function computeRouteFireProgressText\(progress = null, run = null\)\s*\{\s*if \(!progress\) return '--';/, 'running live adapter progress must not render as blank when no native milestone has arrived yet');
+assert.match(index, /no adapter milestone yet/, 'running live adapter progress field explains missing native milestones');
 assert.match(index, /refreshComputeRouteFireImages/, 'browser owns a source image refresh function');
 assert.match(index, /uploadComputeRouteFireInputImage/, 'browser owns a source image upload function');
 assert.match(index, /\/api\/compute-route-fire\/start/, 'browser starts the route through the Kaminos server API');

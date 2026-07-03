@@ -8130,7 +8130,16 @@ function computeRouteFireDurationText(ms) {
 }
 
 function computeRouteFireProgressText(progress = null, run = null) {
-  if (!progress) return '--';
+  if (!progress) {
+    if (run?.status === 'running') {
+      const elapsed = computeRouteFireDurationText(run.elapsedMs);
+      const quiet = computeRouteFireDurationText(run.progressQuietMs);
+      if (elapsed && quiet) return `running ${elapsed} · no adapter milestone yet for ${quiet}`;
+      if (elapsed) return `running ${elapsed} · no adapter milestone yet`;
+      return 'running · no adapter milestone yet';
+    }
+    return '--';
+  }
   const pieces = [];
   if (Number.isFinite(progress.progress)) {
     pieces.push(`${Math.round(progress.progress * 100)}%`);
