@@ -1,6 +1,7 @@
 const ROUTE_IDENTITY = 'native-3d-compute-fluid-raymarch-v0';
 const PROTOTYPE_IDENTITY = 'kaminos-volume-prototype-v0';
 const FRONT_FIELD_IDENTITY = 'combustion-front-topology-sidecar-v0';
+const TALL_PLUME_FIRE_TONGUE_CONTRACT = 'tall-plume-fire-tongue-sheet-v0';
 const DEFAULT_GRID_SIZE = 96;
 const SUPPORTED_GRID_SIZES = [32, 48, 64, 96, 128, 160];
 const FLUID_SLOTS_PER_CELL = 4;
@@ -2803,19 +2804,69 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     ),
     tallPlumeScene
   );
-  fireLick = fireLick * tallPlumeFuelReactionGate + tallPlumeFuelHeatReaction * fireLickOperatorGain * 0.16;
+  let tallPlumeTongueRiseBand = smoothstep(-0.78, -0.42, p.y) * (1.0 - smoothstep(0.42, 0.92, p.y));
+  let tallPlumeTongueTipTaper = 1.0 - smoothstep(0.52, 1.06, p.y);
+  let tallPlumeTongueShell = smoothstep(scaledSourceRadius * 0.18, scaledSourceRadius * 0.82, sourceRadial)
+    * (1.0 - smoothstep(scaledSmokeSourceRadius * 1.70, scaledSmokeSourceRadius * 3.05, sourceRadial));
+  let tallPlumeTongueAngular = atan2(sourceCenter.z, sourceCenter.x);
+  let tallPlumeTongueRibPhase = p.y * 33.0
+    + tallPlumeTongueAngular * 2.6
+    + sourceRadial * 23.0
+    - time * (3.2 + speed * 0.18);
+  let tallPlumeTongueRib = smoothstep(
+    0.28,
+    0.94,
+    0.5 + 0.5 * sin(tallPlumeTongueRibPhase + sin(p.x * 17.0 - p.z * 13.0 + time * 1.35) * 0.76)
+  );
+  let tallPlumeTongueNecking = clamp(
+    0.62
+      + tallPlumeFireContourBreakup * 0.22
+      + sin(p.y * 18.0 - time * 2.6 + sourceRadial * 31.0) * 0.18
+      + cos(p.x * 29.0 + p.z * 11.0 + time * 1.9) * 0.12,
+    0.16,
+    1.18
+  );
+  let tallPlumeFireTongueSheet = tallPlumeScene
+    * tallPlumeAboveSource
+    * tallPlumeTongueRiseBand
+    * tallPlumeTongueTipTaper
+    * tallPlumeTongueShell
+    * tallPlumeTongueRib
+    * tallPlumeTongueNecking
+    * tallPlumeFuelReactionGate
+    * smoothstep(0.0008, 0.070, tallPlumeFuelHeatReaction + tallPlumePilotReaction * 0.72 + fuel * heat * 0.20)
+    * (1.18 + fireLickOperatorGain * 0.18 + inputFlow * 0.42);
+  let tallPlumeTongueInteriorRelief = mix(
+    1.0,
+    clamp(
+      0.66
+        + tallPlumeRadialContour * 0.26
+        + tallPlumeReactionContour * 0.10
+        + tallPlumeFireTongueSheet * 0.34,
+      0.62,
+      1.08
+    ),
+    tallPlumeScene
+      * tallPlumeAboveSource
+      * smoothstep(0.004, 0.22, flame + flameDetail + fireLick + tallPlumeFuelHeatReaction)
+  );
+  fireLick = fireLick * tallPlumeFuelReactionGate * tallPlumeTongueInteriorRelief
+    + tallPlumeFuelHeatReaction * fireLickOperatorGain * 0.14
+    + tallPlumeFireTongueSheet * (0.42 + fireLickOperatorGain * 0.16);
   fireLick = max(fireLick, externalInjection.micro.z);
   emberFleck = max(emberFleck, lickBirth.w + emberRing * 0.18 + interfaceShred * 0.10);
   emberFleck = max(emberFleck, externalInjection.micro.w);
   materialDetail = max(materialDetail, microSmoke * 0.25 + interfaceShred * 0.38);
   flame = flame * mix(1.0, max(0.08, bonfireFlameStorageSourceRelief), bonfireScene);
+  flame = flame * tallPlumeTongueInteriorRelief;
   let columnFlameStorageBirth = fireBirth * (1.18 + 0.18 * bonfireTongues * bonfireScene) + heat * fuel * 0.060 + fireLick * 0.48;
   let tallPlumeRawSourceFireRelief = mix(1.0, tallPlumeReactionContour * mix(1.0, 0.35, tallPlumeAboveSource), tallPlumeScene);
   let tallPlumeReactionBoundFlameStorageBirth = (
     fireBirth * 0.024 * tallPlumeRawSourceFireRelief
-      + heat * fuel * 0.12
+      + heat * fuel * 0.11 * tallPlumeTongueInteriorRelief
       + fireLick * 0.30
-      + tallPlumeFuelHeatReaction * (1.22 + fireLickOperatorGain * 0.06)
+      + tallPlumeFuelHeatReaction * (1.06 + fireLickOperatorGain * 0.050) * tallPlumeTongueInteriorRelief
+      + tallPlumeFireTongueSheet * 0.86
   ) * tallPlumeFuelReactionGate;
   let columnReactionBoundFlameStorageBirth = mix(columnFlameStorageBirth, tallPlumeReactionBoundFlameStorageBirth, tallPlumeScene);
   let bonfireFrontStorageOccupancy = clamp(
@@ -2846,13 +2897,15 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let tallPlumeSourceSlabRelief = mix(1.0, tallPlumeRawSourceFireRelief * tallPlumeFireContourBreakup, tallPlumeScene);
   let tallPlumeReactionBoundFlameDetailBirth = (
     columnFlameDetailBirth * 0.018 * tallPlumeSourceSlabRelief
-      + tallPlumeFuelHeatReaction * (0.92 + fireLickOperatorGain * 0.05)
+      + tallPlumeFuelHeatReaction * (0.84 + fireLickOperatorGain * 0.045) * tallPlumeTongueInteriorRelief
       + fireLick * 0.20
+      + tallPlumeFireTongueSheet * (1.24 + fireLickOperatorGain * 0.075)
       + flame * 0.16
       + combustionFront * 0.12
   ) * tallPlumeFuelReactionGate;
   let columnReactionBoundFlameDetailBirth = mix(columnFlameDetailBirth, tallPlumeReactionBoundFlameDetailBirth, tallPlumeScene);
   flameDetail = flameDetail * mix(1.0, max(0.12, bonfireVisibleSourcePlugRelief), bonfireScene);
+  flameDetail = flameDetail * tallPlumeTongueInteriorRelief;
   visibleFireCarrier = flameDetail;
   let bonfireVisibleFireFrontGate = clamp(
     max(
@@ -3285,8 +3338,34 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
       + combustionFrontTopology * 0.08
       + interfaceShred * 0.08;
     let bonfireVisibleEmission = bonfireRenderedFireEdgeCarrier + flameDetail * 1.44 + ember * 0.48 + flame * 0.16;
+    let columnVisibleFlameAlphaCarrier = flame * 2.15 + ember * 0.86 + flameDetail * 0.82 + fireLick * 2.60 + emberFleck * 0.76 + interfaceShred * 0.26;
+    let tallPlumeRenderSourceCenter = p - u.primitive_source.xyz;
+    let tallPlumeRenderSourceRadial = length(tallPlumeRenderSourceCenter.xz);
+    let tallPlumeRenderSourceRadius = max(0.035, u.source_controls.x * fireScale);
+    let tallPlumeRenderSmokeRadius = max(0.055, u.source_controls.x * mix(0.92, 1.08, smoothstep(0.70, 2.20, plumeHeight)));
+    let tallPlumeRenderTongueRise = smoothstep(-0.78, -0.42, p.y) * (1.0 - smoothstep(0.42, 0.92, p.y));
+    let tallPlumeRenderTongueShell = smoothstep(tallPlumeRenderSourceRadius * 0.18, tallPlumeRenderSourceRadius * 0.82, tallPlumeRenderSourceRadial)
+      * (1.0 - smoothstep(tallPlumeRenderSmokeRadius * 1.70, tallPlumeRenderSmokeRadius * 3.05, tallPlumeRenderSourceRadial));
+    let tallPlumeRenderTongueRib = smoothstep(
+      0.28,
+      0.94,
+      0.5 + 0.5 * sin(p.y * 35.0 + atan2(tallPlumeRenderSourceCenter.z, tallPlumeRenderSourceCenter.x) * 2.4 - u.cameraPos_time.w * 3.1 + fireNoise * 0.72)
+    );
+    let tallPlumeFireTongueSheet = tallPlumeRenderScene
+      * tallPlumeRenderTongueRise
+      * tallPlumeRenderTongueShell
+      * tallPlumeRenderTongueRib
+      * smoothstep(0.006, 0.30, fireLick + flameDetail + combustionFront * 0.44 + combustionFrontTopology * 0.18)
+      * clamp(0.74 + fireNoise * 0.18 + verticalPhaseBreak * 0.10, 0.48, 1.22);
+    let tallPlumeTongueInteriorRelief = mix(
+      1.0,
+      clamp(0.66 + tallPlumeRenderTongueShell * 0.24 + tallPlumeFireTongueSheet * 0.34 + combustionFrontTopology * 0.08, 0.62, 1.08),
+      tallPlumeRenderScene * smoothstep(0.018, 0.64, flame + flameDetail + fireLick + heat * 0.25)
+    );
+    let tallPlumeVisibleFlameAlphaCarrier = columnVisibleFlameAlphaCarrier * tallPlumeTongueInteriorRelief
+      + tallPlumeFireTongueSheet * (fireLick * 2.65 + flameDetail * 1.44 + combustionFront * 0.44 + 0.055);
     let visibleFlameAlphaCarrier = mix(
-      flame * 2.15 + ember * 0.86 + flameDetail * 0.82 + fireLick * 2.60 + emberFleck * 0.76 + interfaceShred * 0.26,
+      mix(columnVisibleFlameAlphaCarrier, tallPlumeVisibleFlameAlphaCarrier, tallPlumeRenderScene),
       bonfireVisibleEmission + interfaceShred * 0.16,
       bonfireRenderScene
     );
@@ -3687,6 +3766,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     fireLickBreakupEnabled: false,
     fireLickBreakupEvaluationsPerCell: 0,
     fireLickOperatorGain: 0,
+    tallPlumeFireTongueContract: {
+      identity: TALL_PLUME_FIRE_TONGUE_CONTRACT,
+      authoritySource: 'live-fuel-heat-reaction-field',
+      routeScope: 'tall-plume-fire-only',
+      visualRole: 'reaction-bound-fire-tongue-carrier-not-smoke-shred',
+      resetPolicy: 'inherits-fluid-state-reset',
+      evidenceFields: ['tallPlumeFireTongueSheetMean', 'tallPlumeFireTongueShellRatio', 'tallPlumeFireTongueInteriorRatio'],
+    },
     pressureDivergencePasses: 0,
     pressureJacobiInlineDivergencePasses: 0,
     fullGridPassBreakdown: null,
@@ -5664,6 +5751,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     let fireFlameDetailWeightSum = 0;
     let fireLickWeightSum = 0;
     let fireHeatWeightSum = 0;
+    let tallPlumeFireTongueSheetWeightSum = 0;
+    let tallPlumeFireTongueShellWeightSum = 0;
+    let tallPlumeFireTongueInteriorWeightSum = 0;
     let emissionDetailWeightSum = 0;
     let emissionDetailWeightedX = 0;
     let emissionDetailWeightedZ = 0;
@@ -5701,6 +5791,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       fireFlameDetailWeight: 0,
       fireLickWeight: 0,
       fireHeatWeight: 0,
+      tallPlumeFireTongueSheetWeight: 0,
+      tallPlumeFireTongueShellWeight: 0,
+      tallPlumeFireTongueInteriorWeight: 0,
       emissionDetailWeight: 0,
       emissionDetailWeightedX: 0,
       emissionDetailWeightedZ: 0,
@@ -5740,6 +5833,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const center = Math.floor(gridSize * 0.5);
     const normalizedReadbackScene = normalizeVolumeScene(controlsSnapshot.volumeScene);
     const isCanonicalReadbackScene = normalizedReadbackScene === 'canonical_plume';
+    const isTallPlumeReadbackScene = normalizedReadbackScene === 'tall_plume';
     const isBonfireReadbackScene = normalizedReadbackScene === 'bonfire_plume';
     const canonicalReadbackSourceYNorm = clampFinite(controlsSnapshot.canonicalSourceY, -0.92, -0.20, -0.74);
     const sourceY01 = isBonfireReadbackScene
@@ -5773,6 +5867,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       const cz = clampIndex(z);
       const i = (cx + cy * gridSize + cz * gridSize * gridSize) * FLUID_COMPONENTS;
       return Math.max(0, data[i + 4]);
+    };
+    const readbackSmoothstep = (edge0, edge1, value) => {
+      if (edge0 === edge1) return value < edge0 ? 0 : 1;
+      const t = Math.max(0, Math.min(1, (value - edge0) / (edge1 - edge0)));
+      return t * t * (3 - 2 * t);
     };
     const buildCanonicalSmokeFieldSlice = () => {
       const panelWidth = 256;
@@ -5916,8 +6015,23 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         const lateralSpeed = Math.hypot(vx, vz);
         const radialDistance = Math.hypot(nx, nz);
         const sourceRadiusNorm = sourceRadius / Math.max(1, gridSize - 1) * 2;
+        const tallPlumeReadbackTongueShell = isTallPlumeReadbackScene
+          ? readbackSmoothstep(sourceRadiusNorm * 0.18, sourceRadiusNorm * 0.82, radialDistance)
+            * (1 - readbackSmoothstep(sourceRadiusNorm * 1.70, sourceRadiusNorm * 3.05, radialDistance))
+          : 0;
+        const tallPlumeReadbackTongueRise = isTallPlumeReadbackScene
+          ? readbackSmoothstep(-0.78, -0.42, ny) * (1 - readbackSmoothstep(0.42, 0.92, ny))
+          : 0;
+        const tallPlumeFireTongueSheetWeight = Math.max(
+          0,
+          (fireLick * 1.18 + visibleFireCarrier * 0.72 + combustionFront * 0.22 + combustionFrontTopology * 0.08)
+            * tallPlumeReadbackTongueShell
+            * tallPlumeReadbackTongueRise
+        );
         const fireInteriorWeight = radialDistance < sourceRadiusNorm * 0.70 ? fireWeight : 0;
         const fireRingWeight = radialDistance > sourceRadiusNorm * 0.86 ? fireWeight : 0;
+        const tallPlumeFireTongueInteriorWeight = radialDistance < sourceRadiusNorm * 0.70 ? tallPlumeFireTongueSheetWeight : 0;
+        const tallPlumeFireTongueShellWeight = radialDistance > sourceRadiusNorm * 0.86 ? tallPlumeFireTongueSheetWeight : 0;
         const emissionDetailWeight = Math.max(0, visibleFireCarrier);
         const smokeDetailWeight = Math.max(0, microdetail * 0.70 + interfaceShred * 0.55 + detail * 0.32);
         const radialVelocity = radialDistance > 0.0001 ? (nx * vx + nz * vz) / radialDistance : 0;
@@ -5950,6 +6064,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         fireFlameDetailWeightSum += fireFlameDetailWeight;
         fireLickWeightSum += fireLickWeight;
         fireHeatWeightSum += fireHeatWeight;
+        tallPlumeFireTongueSheetWeightSum += tallPlumeFireTongueSheetWeight;
+        tallPlumeFireTongueShellWeightSum += tallPlumeFireTongueShellWeight;
+        tallPlumeFireTongueInteriorWeightSum += tallPlumeFireTongueInteriorWeight;
         emissionDetailWeightSum += emissionDetailWeight;
         emissionDetailWeightedX += emissionDetailWeight * nx;
         emissionDetailWeightedZ += emissionDetailWeight * nz;
@@ -5976,6 +6093,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         bin.fireFlameDetailWeight += fireFlameDetailWeight;
         bin.fireLickWeight += fireLickWeight;
         bin.fireHeatWeight += fireHeatWeight;
+        bin.tallPlumeFireTongueSheetWeight += tallPlumeFireTongueSheetWeight;
+        bin.tallPlumeFireTongueShellWeight += tallPlumeFireTongueShellWeight;
+        bin.tallPlumeFireTongueInteriorWeight += tallPlumeFireTongueInteriorWeight;
         bin.emissionDetailWeight += emissionDetailWeight;
         bin.emissionDetailWeightedX += emissionDetailWeight * nx;
         bin.emissionDetailWeightedZ += emissionDetailWeight * nz;
@@ -6238,6 +6358,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const liftedFireRingWeight = liftedFireShellBins.reduce((sum, bin) => sum + bin.fireRingWeight, 0);
     const liftedFireShellRatio = liftedFireWeight > 0 ? liftedFireRingWeight / liftedFireWeight : 0;
     const liftedFireInteriorRatio = liftedFireWeight > 0 ? liftedFireInteriorWeight / liftedFireWeight : 0;
+    const tallPlumeFireTongueShellRatio = tallPlumeFireTongueSheetWeightSum > 0
+      ? tallPlumeFireTongueShellWeightSum / tallPlumeFireTongueSheetWeightSum
+      : 0;
+    const tallPlumeFireTongueInteriorRatio = tallPlumeFireTongueSheetWeightSum > 0
+      ? tallPlumeFireTongueInteriorWeightSum / tallPlumeFireTongueSheetWeightSum
+      : 0;
     const emissionDetailWeight = sourceRelativeVisualHeightBins.reduce((sum, bin) => sum + bin.emissionDetailWeight, 0);
     const liftedEmissionDetailWeight = sourceRelativeVisualHeightBins
       .filter(bin => bin.visualCenter > 0.05 && bin.visualCenter < 0.86)
@@ -6299,6 +6425,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       microdetailMean: microdetailSum / samples,
       interfaceShredMean: interfaceShredSum / samples,
       fireLickMean: fireLickSum / samples,
+      tallPlumeFireTongueContract: TALL_PLUME_FIRE_TONGUE_CONTRACT,
+      tallPlumeFireTongueSheetMean: tallPlumeFireTongueSheetWeightSum / samples,
       velocityMean: velocitySum / samples,
       curlMean: curlSum / samples,
       curlMax,
@@ -6367,6 +6495,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       liftedFireInteriorRatio,
       liftedFireInteriorWeight,
       liftedFireRingWeight,
+      tallPlumeFireTongueSheetWeight: tallPlumeFireTongueSheetWeightSum,
+      tallPlumeFireTongueShellRatio,
+      tallPlumeFireTongueInteriorRatio,
+      tallPlumeFireTongueShellWeight: tallPlumeFireTongueShellWeightSum,
+      tallPlumeFireTongueInteriorWeight: tallPlumeFireTongueInteriorWeightSum,
       liftedEmissionDetailRatio,
       liftedEmissionDetailWeight,
       emissionDetailWeight,
@@ -6404,6 +6537,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         fireWeight: bin.fireWeight,
         fireInteriorWeight: bin.fireInteriorWeight,
         fireRingWeight: bin.fireRingWeight,
+        tallPlumeFireTongueSheetWeight: bin.tallPlumeFireTongueSheetWeight,
+        tallPlumeFireTongueShellWeight: bin.tallPlumeFireTongueShellWeight,
+        tallPlumeFireTongueInteriorWeight: bin.tallPlumeFireTongueInteriorWeight,
         emissionDetailWeight: bin.emissionDetailWeight,
         emissionDetailCenterX: bin.emissionDetailWeight > 0 ? bin.emissionDetailWeightedX / bin.emissionDetailWeight : 0,
         emissionDetailCenterZ: bin.emissionDetailWeight > 0 ? bin.emissionDetailWeightedZ / bin.emissionDetailWeight : 0,

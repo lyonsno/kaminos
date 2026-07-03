@@ -666,6 +666,12 @@ assert.match(core, /extinctionMean/, 'sim readback reports smoke extinction evid
 assert.match(core, /microdetailMean/, 'sim readback reports transported microdetail evidence');
 assert.match(core, /interfaceShredMean/, 'sim readback reports interface shredding evidence');
 assert.match(core, /fireLickMean/, 'sim readback reports fire-lick breakup evidence');
+assert.match(core, /tall-plume-fire-tongue-sheet-v0/, 'debug state names the tall-plume fire-tongue sheet contract');
+assert.match(core, /tallPlumeFireTongueSheet/, 'fluid shader derives a dedicated tall-plume fire-tongue sheet carrier');
+assert.match(core, /tallPlumeTongueInteriorRelief/, 'tall-plume fire transfer relieves filled-in core mass instead of only adding brightness');
+assert.match(core, /tallPlumeFireTongueSheetMean/, 'sim readback reports tall-plume fire-tongue sheet evidence');
+assert.match(core, /tallPlumeFireTongueShellRatio/, 'sim readback reports whether tongue fire rides shell/edge structure');
+assert.match(core, /tallPlumeFireTongueInteriorRatio/, 'sim readback reports whether tongue fire collapsed into interior fill');
 assert.match(core, /source_controls/, 'fluid uniforms carry source radius and flow controls');
 assert.match(core, /u\.source_controls\.z/, 'fluid uniforms carry pressure/projection strength');
 assert.match(core, /u\.source_controls\.w/, 'fluid uniforms carry flow diagnostic overlay strength');
