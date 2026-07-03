@@ -23,6 +23,13 @@ assert.match(index, /volume-scene-context-brick-wall-v0/, 'brick-wall scene cont
 assert.match(index, /kaminos-trellis-crumbled-brick-wall-fast8-350k-4k-20260701Tasset-probe/, 'brick-wall scene context preserves the Molten/Trellis asset identity');
 assert.match(index, /ambientOcclusion:\s*false/, 'brick-wall scene context records AO-off composition truth');
 assert.match(index, /lightingExposure:\s*0\.8/, 'brick-wall scene context records the requested dim lighting exposure');
+assert.match(index, /volume_fire_light/, 'URL route can enable or disable the brick-wall flame-light proxy');
+assert.match(index, /volume_fire_light_gain/, 'URL route can tune the brick-wall flame-light proxy gain');
+assert.match(index, /volume-scene-fire-light-proxy-v0/, 'brick-wall scene context carries a stable flame-light proxy identity');
+assert.match(index, /volume-fire-light-probe-sh1-v0/, 'brick-wall flame-light proxy records its first-order spherical-harmonic probe identity');
+assert.match(index, /fireLightProxyMode/, 'brick-wall scene context reports requested/effective flame-light proxy mode');
+assert.match(index, /sphericalHarmonicCoefficients/, 'brick-wall scene context exposes the fire-light probe coefficients');
+assert.match(index, /staticEnvironmentIntensity:\s*0\.05/, 'brick-wall scene context dims static environment lighting when flame proxy lighting is active');
 assert.match(index, /globalGroundPlaneSuppressed/, 'brick-wall scene context reports suppression of the bright global app floor');
 assert.match(index, /window\.__kaminosVolumeSceneContext/, 'stone scene context is exposed for witness/debug truth');
 assert.doesNotMatch(index, /#kaminos-volume-canvas\.active \{ display: block; \}/, 'volume canvas active route must not rely on the stale display-block overlay rule');
@@ -1479,6 +1486,10 @@ assert.match(witness, /expectedVolumeSceneContext/, 'witness derives expected vo
 assert.match(witness, /__kaminosVolumeSceneContext/, 'witness reads the live volume scene-context debug surface');
 assert.match(witness, /volume-scene-context-brick-wall-v0/, 'witness knows the brick-wall scene-context identity');
 assert.match(witness, /trellis-fast8-350k-4k-brick-wall-glb-v0/, 'witness verifies the brick-wall asset identity');
+assert.match(witness, /expectedVolumeFireLightProxy/, 'witness derives expected flame-light proxy route identity');
+assert.match(witness, /volume-fire-light-probe-sh1-v0/, 'witness verifies the brick-wall fire-light probe identity');
+assert.match(witness, /fireLightProxyMode/, 'witness verifies the brick-wall flame-light proxy mode');
+assert.match(witness, /sphericalHarmonicCoefficients/, 'witness records fire-light spherical harmonic coefficients');
 assert.match(witness, /backdropMidtonePixels/, 'witness records a screenshot metric that can catch missing scene-context backdrop pixels');
 assert.match(index, /volume-scene-context-active #kaminos-volume-canvas\.active[\s\S]*mix-blend-mode:\s*screen/, 'scene-context routes screen-blend the direct black volume canvas so warm volume can composite over backdrop geometry');
 assert.match(index, /viewport\.classList\.toggle\('volume-scene-context-active'/, 'scene-context visibility toggles a viewport class used by the composition path');

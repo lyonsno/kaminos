@@ -822,6 +822,14 @@ const expectedVolumeScene = Object.hasOwn(VOLUME_SCENE_PRESETS, requestedVolumeS
 const expectedVolumeSceneContext = normalizeVolumeSceneContext(routeParams.get('volume_scene_context'));
 const expectsVolumeStoneSceneContext = expectedVolumeSceneContext === 'stone_test';
 const expectsVolumeBrickWallSceneContext = expectedVolumeSceneContext === 'brick_wall';
+const requestedVolumeFireLightProxy = Number(routeParams.get('volume_fire_light'));
+const expectedVolumeFireLightProxy = routeParams.has('volume_fire_light') && Number.isFinite(requestedVolumeFireLightProxy)
+  ? Math.max(0, Math.min(1, requestedVolumeFireLightProxy))
+  : 1;
+const requestedVolumeFireLightGain = Number(routeParams.get('volume_fire_light_gain'));
+const expectedVolumeFireLightGain = routeParams.has('volume_fire_light_gain') && Number.isFinite(requestedVolumeFireLightGain)
+  ? Math.max(0, Math.min(4, requestedVolumeFireLightGain))
+  : 1;
 const expectsCanonicalPlumeProof = expectedVolumeScene === 'canonical_plume';
 const fieldSliceOut = args.has('--field-slice')
   ? resolve(args.get('--field-slice') || out.replace(/\.png$/i, '.field-slice.png'))
@@ -1414,7 +1422,17 @@ async function main() {
       assert.equal(volumeSceneContext?.backgroundTruth, 'greenroom-glb-three-meshes-not-image-plate-v0', 'brick-wall volume scene context did not preserve GLB background truth identity');
       assert.equal(volumeSceneContext?.ambientOcclusion, false, 'brick-wall volume scene context did not record AO-off composition truth');
       assert.ok(Math.abs((volumeSceneContext?.lightingExposure ?? 0) - 0.8) < 0.001, 'brick-wall volume scene context did not record dim exposure');
-      assert.ok(Math.abs((volumeSceneContext?.environmentIntensity ?? 0) - 0.45) < 0.001, 'brick-wall volume scene context did not record dim environment intensity');
+      assert.ok(Math.abs((volumeSceneContext?.environmentIntensity ?? 0) - 0.05) < 0.001, 'brick-wall volume scene context did not record low static environment intensity');
+      assert.equal(volumeSceneContext?.fireLightProxyIdentity, 'volume-scene-fire-light-proxy-v0', 'brick-wall scene context did not expose flame-light proxy identity');
+      assert.equal(volumeSceneContext?.sphericalHarmonicProbeIdentity, 'volume-fire-light-probe-sh1-v0', 'brick-wall scene context did not expose fire-light probe identity');
+      assert.equal(volumeSceneContext?.fireLightProxyMode, expectedVolumeFireLightProxy > 0.001 ? 'fire-light-proxy' : 'disabled', 'brick-wall scene context did not apply flame-light proxy mode');
+      assert.ok(Math.abs((volumeSceneContext?.fireLightProxy?.gain ?? 0) - expectedVolumeFireLightGain) < 0.001, 'brick-wall scene context did not apply flame-light proxy gain');
+      assert.ok(Array.isArray(volumeSceneContext?.sphericalHarmonicCoefficients), 'brick-wall scene context did not report fire-light sphericalHarmonicCoefficients');
+      assert.ok((volumeSceneContext?.sphericalHarmonicCoefficients?.length ?? 0) >= 4, 'brick-wall fire-light probe did not report first-order spherical harmonics');
+      assert.ok((volumeSceneContext?.fireLightProxy?.lightCount ?? 0) >= 3, 'brick-wall scene context did not expose the fire-light proxy light rig');
+      if (expectedVolumeFireLightProxy > 0.001) {
+        assert.ok((volumeSceneContext?.fireLightProxy?.intensity ?? 0) > 0, 'brick-wall fire-light proxy did not derive positive intensity from active fire');
+      }
       assert.equal(volumeSceneContext?.globalGroundPlaneSuppressed, true, 'brick-wall volume scene context did not suppress the bright global app ground plane');
       assert.equal(volumeSceneContext?.loadState, 'loaded', `brick-wall GLB did not load: ${volumeSceneContext?.loadError || volumeSceneContext?.loadState}`);
       assert.ok((volumeSceneContext?.meshCount ?? 0) >= 2, 'brick-wall scene context did not expose live GLB/ground meshes');

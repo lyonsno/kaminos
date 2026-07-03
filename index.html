@@ -10271,6 +10271,8 @@ let routedVolumeQuenchVapor = 0;
 let routedVolumeRuntimeQuality = 'live_high';
 let routedVolumeGpuPressure = 0;
 let routedVolumeQualityReason = 'route-default';
+let routedVolumeFireLightProxy = 1;
+let routedVolumeFireLightGain = 1;
 const DEFAULT_BONFIRE_ABLATION_CONTROLS = {
   bonfireRecenter: 1,
   bonfireLateralDamping: 1,
@@ -14995,6 +14997,8 @@ function readVolumeControls() {
     runtimeQualityRequested: routedVolumeRuntimeQuality,
     gpuPressure: routedVolumeGpuPressure,
     runtimeQualityReason: routedVolumeQualityReason,
+    fireLightProxy: routedVolumeFireLightProxy,
+    fireLightGain: routedVolumeFireLightGain,
     majorantCadence: routedVolumeMajorantCadence,
     simCadence: routedVolumeSimCadence,
     pressureIterations: pressureConfig.pressureIterations,
@@ -15236,13 +15240,75 @@ const VOLUME_BRICK_WALL_ASSET = Object.freeze({
 const VOLUME_BRICK_WALL_LIGHTING = Object.freeze({
   ambientOcclusion: false,
   lightingExposure: 0.8,
-  environmentIntensity: 0.45,
+  environmentIntensity: 0.05,
+  staticEnvironmentIntensity: 0.05,
   materialSide: 'double-sided-opaque-if-needed',
+});
+const VOLUME_BRICK_WALL_FIRE_LIGHT_PROXY = Object.freeze({
+  identity: 'volume-scene-fire-light-proxy-v0',
+  probeIdentity: 'volume-fire-light-probe-sh1-v0',
+  sourceIdentity: 'volume-controls-emissive-summary-v0',
+  defaultMode: 1,
+  defaultGain: 1,
 });
 
 function normalizeVolumeSceneContext(value) {
   const normalized = String(value || 'none').trim().toLowerCase().replace(/-/g, '_');
   return VOLUME_SCENE_CONTEXTS.has(normalized) ? normalized : 'none';
+}
+
+function computeVolumeFireLightProbe(volumeState = {}) {
+  const controlsState = volumeState.controls || {};
+  const mode = clampVolumeValue(controlsState.fireLightProxy ?? VOLUME_BRICK_WALL_FIRE_LIGHT_PROXY.defaultMode, 0, 1);
+  const gain = clampVolumeValue(controlsState.fireLightGain ?? VOLUME_BRICK_WALL_FIRE_LIGHT_PROXY.defaultGain, 0, 4);
+  const lifecycle = String(controlsState.lifecycleEffect || 'none').toLowerCase();
+  const lifecycleT = clampVolumeValue(controlsState.lifecycleT ?? 0, 0, 1);
+  const preheat = clampVolumeValue(volumeState.preheatStrength ?? 0, 0, 2);
+  const quench = clampVolumeValue(volumeState.quenchVaporStrength ?? 0, 0, 2);
+  const fire = clampVolumeValue(controlsState.fire ?? 1.4, 0, 3.5);
+  const radiance = clampVolumeValue(controlsState.radiance ?? 1.8, 0, 3);
+  const glow = clampVolumeValue(controlsState.glow ?? 1.5, 0, 2.5);
+  const flow = clampVolumeValue(controlsState.flowRate ?? 0.15, 0, 2.5);
+  const fuel = clampVolumeValue(controlsState.reactionFuelScale ?? 1, 0, 1.5);
+  const plumeHeight = clampVolumeValue(controlsState.plumeHeight ?? 1.45, 0.7, 2.2);
+  const windStrength = clampVolumeValue(controlsState.windStrength ?? 0, 0, 1.5);
+  const windAngle = THREE.MathUtils.degToRad(Number.isFinite(controlsState.windAngle) ? controlsState.windAngle : 180);
+  let lifecycleMultiplier = 1;
+  if (lifecycle === 'preheat') lifecycleMultiplier = 0.12 + preheat * 0.24;
+  if (lifecycle === 'snuff') lifecycleMultiplier = Math.max(0, 1 - lifecycleT * 0.86 - quench * 0.12);
+  const sourceAuthority = mode > 0.001 && volumeState.active !== false;
+  const fireAuthority = sourceAuthority
+    ? fire * (0.34 + radiance * 0.34 + glow * 0.14) * (0.45 + flow * 0.36) * fuel * lifecycleMultiplier
+    : 0;
+  const intensity = clampVolumeValue(fireAuthority * gain, 0, 6);
+  const leanX = Math.cos(windAngle) * windStrength * 0.16;
+  const leanZ = Math.sin(windAngle) * windStrength * 0.10;
+  const centroid = {
+    x: clampVolumeValue(leanX, -0.28, 0.28),
+    y: clampVolumeValue(-0.74 + plumeHeight * 0.18 + flow * 0.045, -0.72, 0.08),
+    z: clampVolumeValue(-0.46 + leanZ, -0.70, -0.22),
+  };
+  const dominantDirection = new THREE.Vector3(leanX, 1.0, -0.32 + leanZ).normalize();
+  const l0 = intensity * 0.282095;
+  const l1Scale = intensity * 0.488603;
+  return {
+    identity: VOLUME_BRICK_WALL_FIRE_LIGHT_PROXY.probeIdentity,
+    sourceIdentity: VOLUME_BRICK_WALL_FIRE_LIGHT_PROXY.sourceIdentity,
+    order: 1,
+    mode: mode > 0.001 ? 'fire-light-proxy' : 'disabled',
+    gain,
+    sourceAuthority,
+    intensity,
+    centroid,
+    radius: clampVolumeValue(1.25 + plumeHeight * 0.34 + flow * 0.14, 1.2, 2.4),
+    contactWash: clampVolumeValue(intensity * (0.15 + flow * 0.05), 0, 1.2),
+    sphericalHarmonicCoefficients: [
+      Number(l0.toFixed(5)),
+      Number((dominantDirection.x * l1Scale).toFixed(5)),
+      Number((dominantDirection.y * l1Scale).toFixed(5)),
+      Number((dominantDirection.z * l1Scale).toFixed(5)),
+    ],
+  };
 }
 
 function createVolumeProceduralStoneTexture() {
@@ -15389,7 +15455,8 @@ function createVolumeBrickWallContext() {
       snap: 'rubble-base-on-ground-plane',
       ambientOcclusion: false,
       lightingExposure: 0.8,
-      environmentIntensity: 0.45,
+      environmentIntensity: 0.05,
+      staticEnvironmentIntensity: 0.05,
     },
     effectiveContext: 'none',
     loadState: 'idle',
@@ -15411,19 +15478,60 @@ function createVolumeBrickWallContext() {
   ground.position.set(0, -0.92, -0.42);
   group.add(ground);
 
-  const fill = new THREE.DirectionalLight(0xffd0a0, 0.42);
+  const fill = new THREE.DirectionalLight(0xffd0a0, 0.035);
   fill.name = 'volume-scene-context-brick-wall-dim-key-v0';
   fill.position.set(-2.6, 2.2, 2.1);
   group.add(fill);
 
-  const side = new THREE.DirectionalLight(0x90a8b8, 0.18);
+  const side = new THREE.DirectionalLight(0x90a8b8, 0.018);
   side.name = 'volume-scene-context-brick-wall-cool-side-v0';
   side.position.set(2.3, 1.4, 0.8);
   group.add(side);
 
+  const flameKey = new THREE.PointLight(0xffb760, 0, 3.4, 1.8);
+  flameKey.name = 'volume-scene-context-brick-wall-flame-key-proxy-v0';
+  group.add(flameKey);
+
+  const flameBounce = new THREE.PointLight(0xff6a24, 0, 2.2, 2.2);
+  flameBounce.name = 'volume-scene-context-brick-wall-flame-bounce-proxy-v0';
+  group.add(flameBounce);
+
+  const smokeWarmth = new THREE.PointLight(0x8ba6b0, 0, 3.8, 2.4);
+  smokeWarmth.name = 'volume-scene-context-brick-wall-smoke-memory-proxy-v0';
+  group.add(smokeWarmth);
+
+  const backwashMaterial = new THREE.MeshBasicMaterial({
+    color: new THREE.Color(0xffa654),
+    transparent: true,
+    opacity: 0,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+    toneMapped: false,
+    side: THREE.DoubleSide,
+  });
+  backwashMaterial.name = 'volume-scene-fire-light-contact-wash-v0';
+  const backwash = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 2.4), backwashMaterial);
+  backwash.name = 'volume-scene-context-brick-wall-contact-wash-v0';
+  backwash.position.set(0, -0.14, -0.91);
+  backwash.renderOrder = 40;
+  group.add(backwash);
+
   let loadedModel = null;
   let loadPromise = null;
   let previousGroundPlaneVisible = null;
+  let lastFireLightProbe = {
+    identity: VOLUME_BRICK_WALL_FIRE_LIGHT_PROXY.probeIdentity,
+    sourceIdentity: VOLUME_BRICK_WALL_FIRE_LIGHT_PROXY.sourceIdentity,
+    order: 1,
+    mode: 'fire-light-proxy',
+    gain: VOLUME_BRICK_WALL_FIRE_LIGHT_PROXY.defaultGain,
+    sourceAuthority: false,
+    intensity: 0,
+    centroid: { x: 0, y: -0.62, z: -0.46 },
+    radius: 1.2,
+    contactWash: 0,
+    sphericalHarmonicCoefficients: [0, 0, 0, 0],
+  };
 
   const applyDimLightingControls = () => {
     if (renderer) renderer.toneMappingExposure = VOLUME_BRICK_WALL_LIGHTING.lightingExposure;
@@ -15436,6 +15544,40 @@ function createVolumeBrickWallContext() {
     const intensityVal = document.getElementById('env-intensity-val');
     if (intensitySlider) intensitySlider.value = String(VOLUME_BRICK_WALL_LIGHTING.environmentIntensity);
     if (intensityVal) intensityVal.textContent = VOLUME_BRICK_WALL_LIGHTING.environmentIntensity.toFixed(1);
+  };
+
+  const applyFireLightProbe = volumeState => {
+    lastFireLightProbe = computeVolumeFireLightProbe(volumeState);
+    const c = lastFireLightProbe.centroid;
+    flameKey.position.set(c.x, c.y + 0.20, c.z + 0.20);
+    flameBounce.position.set(c.x * 0.35, Math.max(-0.82, c.y - 0.28), c.z + 0.48);
+    smokeWarmth.position.set(c.x * 0.55, c.y + 0.92, c.z - 0.08);
+    flameKey.intensity = lastFireLightProbe.intensity * 2.4;
+    flameKey.distance = lastFireLightProbe.radius * 2.35;
+    flameBounce.intensity = lastFireLightProbe.intensity * 0.72;
+    flameBounce.distance = lastFireLightProbe.radius * 1.8;
+    smokeWarmth.intensity = lastFireLightProbe.intensity * 0.18;
+    smokeWarmth.distance = lastFireLightProbe.radius * 2.8;
+    backwash.position.set(c.x * 0.32, -0.14 + Math.max(0, c.y + 0.72) * 0.22, -0.90);
+    const washScale = 0.9 + lastFireLightProbe.radius * 0.42;
+    backwash.scale.set(washScale, washScale * 1.1, 1);
+    backwashMaterial.opacity = clampVolumeValue(lastFireLightProbe.contactWash * 0.20, 0, 0.22);
+    group.userData.kaminosVolumeSceneContext.fireLightProxy = {
+      identity: VOLUME_BRICK_WALL_FIRE_LIGHT_PROXY.identity,
+      fireLightProxyMode: lastFireLightProbe.mode,
+      probeIdentity: lastFireLightProbe.identity,
+      sourceIdentity: lastFireLightProbe.sourceIdentity,
+      sphericalHarmonicOrder: lastFireLightProbe.order,
+      gain: lastFireLightProbe.gain,
+      intensity: lastFireLightProbe.intensity,
+      centroid: [c.x, c.y, c.z],
+      radius: lastFireLightProbe.radius,
+      contactWash: lastFireLightProbe.contactWash,
+      staticEnvironmentIntensity: VOLUME_BRICK_WALL_LIGHTING.staticEnvironmentIntensity,
+      sphericalHarmonicCoefficients: lastFireLightProbe.sphericalHarmonicCoefficients,
+      lightCount: 3,
+      lightNames: [flameKey.name, flameBounce.name, smokeWarmth.name],
+    };
   };
 
   const prepareLoadedModel = model => {
@@ -15526,6 +15668,9 @@ function createVolumeBrickWallContext() {
       return group.visible ? 'brick_wall' : effectiveContext;
     },
     debugState() {
+      if (group.visible && volumePrototype?.debugState) {
+        applyFireLightProbe(volumePrototype.debugState());
+      }
       const metadata = group.userData.kaminosVolumeSceneContext;
       const childMeshes = [];
       group.traverse(child => {
@@ -15550,6 +15695,12 @@ function createVolumeBrickWallContext() {
         ambientOcclusion: metadata.composition.ambientOcclusion,
         lightingExposure: metadata.composition.lightingExposure,
         environmentIntensity: metadata.composition.environmentIntensity,
+        staticEnvironmentIntensity: VOLUME_BRICK_WALL_LIGHTING.staticEnvironmentIntensity,
+        fireLightProxyIdentity: VOLUME_BRICK_WALL_FIRE_LIGHT_PROXY.identity,
+        fireLightProxyMode: metadata.fireLightProxy?.fireLightProxyMode || lastFireLightProbe.mode,
+        fireLightProxy: metadata.fireLightProxy || null,
+        sphericalHarmonicProbeIdentity: metadata.fireLightProxy?.probeIdentity || VOLUME_BRICK_WALL_FIRE_LIGHT_PROXY.probeIdentity,
+        sphericalHarmonicCoefficients: metadata.fireLightProxy?.sphericalHarmonicCoefficients || lastFireLightProbe.sphericalHarmonicCoefficients,
         globalGroundPlaneSuppressed: group.visible && groundPlane ? groundPlane.visible === false : false,
         terrainRole: metadata.composition.terrainRole,
         snap: metadata.composition.snap,
@@ -15558,6 +15709,18 @@ function createVolumeBrickWallContext() {
         loadedBounds: metadata.loadedBounds,
       };
     },
+    update(volumeState) {
+      if (group.visible) {
+        applyDimLightingControls();
+        applyFireLightProbe(volumeState);
+      } else {
+        flameKey.intensity = 0;
+        flameBounce.intensity = 0;
+        smokeWarmth.intensity = 0;
+        backwashMaterial.opacity = 0;
+      }
+      return lastFireLightProbe;
+    },
     dispose() {
       if (groundPlane && previousGroundPlaneVisible !== null) {
         groundPlane.visible = previousGroundPlaneVisible;
@@ -15565,9 +15728,11 @@ function createVolumeBrickWallContext() {
       }
       scene.remove(group);
       if (loadedModel) disposeObjectTree(loadedModel);
-      group.remove(ground, fill, side);
+      group.remove(ground, fill, side, flameKey, flameBounce, smokeWarmth, backwash);
       ground.geometry.dispose();
+      backwash.geometry.dispose();
       groundMaterial.dispose();
+      backwashMaterial.dispose();
     },
   };
 }
@@ -15589,6 +15754,10 @@ function createVolumeSceneContextRouter() {
       }
       viewport.classList.toggle('volume-scene-context-active', requested !== 'none');
       return requested;
+    },
+    update(volumeState) {
+      if (activeContext !== 'none') return contexts[activeContext]?.update?.(volumeState) || null;
+      return null;
     },
     debugState() {
       if (activeContext !== 'none') {
@@ -15650,6 +15819,7 @@ function createVolumeMainRendererBridge() {
     update() {
       const state = volumePrototype.debugState();
       const active = !!state.active;
+      volumeSceneContext?.update?.(state);
       const sceneContextActive = volumeSceneContext?.debugState?.()?.visible === true;
       mesh.visible = active && !sceneContextActive;
       if (!active) return false;
@@ -15765,6 +15935,14 @@ async function initKaminosVolumeRoute() {
   }
   if (params.has('volume_quality_reason')) {
     routedVolumeQualityReason = normalizeVolumeQualityReason(params.get('volume_quality_reason'));
+  }
+  const routeFireLightProxy = Number(params.get('volume_fire_light'));
+  if (params.has('volume_fire_light') && Number.isFinite(routeFireLightProxy)) {
+    routedVolumeFireLightProxy = clampVolumeValue(routeFireLightProxy, 0, 1);
+  }
+  const routeFireLightGain = Number(params.get('volume_fire_light_gain'));
+  if (params.has('volume_fire_light_gain') && Number.isFinite(routeFireLightGain)) {
+    routedVolumeFireLightGain = clampVolumeValue(routeFireLightGain, 0, 4);
   }
   const routeResolution = parseInt(params.get('volume_resolution') || '', 10);
   if ([32, 48, 64, 96, 128, 160].includes(routeResolution)) {
