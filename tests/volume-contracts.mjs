@@ -1552,6 +1552,19 @@ assert.match(residualHandoffWitness, /gapRiskSummary/, 'residual handoff witness
 assert.match(residualHandoffWitness, /visualProof/, 'residual handoff witness preserves an inspected visual proof path');
 assert.match(residualHandoffWitness, /failurePhase/, 'residual handoff witness writes failure phase before pretending handoff evidence exists');
 
+const residualComparisonAdapterPath = join(root, 'volume-residual-comparison-adapter.mjs');
+assert.ok(existsSync(residualComparisonAdapterPath), 'residual comparison adapter exists');
+const residualComparisonAdapter = existsSync(residualComparisonAdapterPath) ? readFileSync(residualComparisonAdapterPath, 'utf8') : '';
+assert.match(residualComparisonAdapter, /kaminos\.volume\.residual-comparison-adapter\.v0/, 'residual comparison adapter writes a stable report schema identity');
+assert.match(residualComparisonAdapter, /image-space-residual-vs-field-gap-comparison-v0/, 'residual comparison adapter names its cross-lane comparison authority');
+assert.match(residualComparisonAdapter, /residual-output-ema-continuation-handoff-v0/, 'residual comparison adapter requires the handoff witness authority');
+assert.match(residualComparisonAdapter, /kaminos\.volume\.interframe-gap-risk-report\.v0/, 'residual comparison adapter consumes the Pyro gap-risk schema');
+assert.match(residualComparisonAdapter, /synthetic-comparison-not-live-simulator-output/, 'residual comparison adapter preserves synthetic comparison labeling');
+assert.match(residualComparisonAdapter, /fieldEvidenceSummaries/, 'residual comparison adapter summarizes field-side evidence without taking field modeling custody');
+assert.match(residualComparisonAdapter, /noSyntheticCadenceAuthority/, 'residual comparison adapter explicitly refuses synthetic cadence authority');
+assert.match(residualComparisonAdapter, /comparisonBoundaries/, 'residual comparison adapter records comparison boundaries');
+assert.match(residualComparisonAdapter, /failurePhase/, 'residual comparison adapter writes failure phase before pretending comparison evidence exists');
+
 const dynamicTextureProofPath = join(root, 'volume-dynamic-texture-proof.mjs');
 assert.ok(existsSync(dynamicTextureProofPath), 'dynamic texture proof harness exists');
 const dynamicTextureProof = existsSync(dynamicTextureProofPath) ? readFileSync(dynamicTextureProofPath, 'utf8') : '';
