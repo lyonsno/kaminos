@@ -1810,3 +1810,18 @@ for (const control of ['fuel-off-decay', 'snuff-quench-reset', 'broad-smoke-no-f
 }
 assert.match(dynamicTextureProof, /confidenceFloor/, 'dynamic texture proof records confidence gating for the hidden detail state');
 assert.match(dynamicTextureProof, /failurePhase/, 'dynamic texture proof records the failure phase before pretending to produce evidence');
+
+const residualMlxPath = join(root, 'volume-residual-upscale-mlx.py');
+assert.ok(existsSync(residualMlxPath), 'MLX residual upscaler runner exists in the branch for reproducible Greenroom jobs');
+const residualMlx = existsSync(residualMlxPath) ? readFileSync(residualMlxPath, 'utf8') : '';
+assert.match(residualMlx, /kaminos\.volume\.residual-upscale-mlx\.v0/, 'MLX residual runner writes a stable report schema');
+assert.match(residualMlx, /frame-locked-render-scale-set-v0/, 'MLX residual runner accepts frame-locked same-state pair manifests');
+assert.match(residualMlx, /cdp-canvas-clip-capture-after-render-only-frozen-sim-state/, 'MLX residual runner requires canvas-clip same-state image authority');
+assert.match(residualMlx, /mx\.default_device\(\)/, 'MLX residual runner records the effective MLX device');
+
+const residualGreenroomRunnerPath = join(root, 'volume-residual-greenroom-runner.py');
+assert.ok(existsSync(residualGreenroomRunnerPath), 'Greenroom wrapper exists for residual MLX jobs');
+const residualGreenroomRunner = existsSync(residualGreenroomRunnerPath) ? readFileSync(residualGreenroomRunnerPath, 'utf8') : '';
+assert.match(residualGreenroomRunner, /kaminos\.volume\.residual-greenroom-runner\.v0/, 'Greenroom wrapper writes stable route-proof identity');
+assert.match(residualGreenroomRunner, /mlxDefaultDevice/, 'Greenroom wrapper prints MLX default device before heavy work');
+assert.match(residualGreenroomRunner, /greenroom-route-proof\.json/, 'Greenroom wrapper writes route proof into the job output directory');
