@@ -573,6 +573,29 @@ def test_pipeline_run_rejects_sources_outside_declared_roots():
             raise AssertionError("absolute source paths outside declared roots must be rejected")
 
 
+def test_pipeline_run_rejects_excluded_api_read_roots():
+    with TemporaryDirectory(dir="/tmp") as tmp:
+        root = Path(tmp)
+        preview_root = root / "preview"
+        preview_root.mkdir()
+        preview_source = preview_root / "preview-source.ply"
+        preview_source.write_text("ply\n")
+
+        previous_browse = dict(BROWSE_ROOTS)
+        BROWSE_ROOTS["lerms-preview"] = preview_root
+        try:
+            serve.resolve_pipeline_source({
+                "source": "/api/read?root=lerms-preview&path=preview-source.ply",
+            })
+        except PermissionError as error:
+            assert "declared Kaminos roots" in str(error)
+        else:
+            raise AssertionError("excluded api-read roots must not become pipeline sources")
+        finally:
+            BROWSE_ROOTS.clear()
+            BROWSE_ROOTS.update(previous_browse)
+
+
 if __name__ == "__main__":
     test_http_status_404_log_does_not_crash()
     test_forge_host_registry_snapshot_preserves_endpoint_identity()
@@ -592,3 +615,4 @@ if __name__ == "__main__":
     test_image_asset_index_declares_local_image_roots()
     test_pipeline_run_resolves_api_read_source_and_returns_bundle()
     test_pipeline_run_rejects_sources_outside_declared_roots()
+    test_pipeline_run_rejects_excluded_api_read_roots()

@@ -280,10 +280,20 @@ def _resolve_api_read_source(source):
     return target.resolve()
 
 
+def _api_read_source_root(source):
+    parsed = urlparse(source)
+    if parsed.path != "/api/read":
+        raise ValueError("source route must use /api/read")
+    params = parse_qs(parsed.query)
+    return params.get("root", [""])[0]
+
+
 def resolve_pipeline_source(payload):
     source = str(payload.get("source") or "").strip()
     source_path = str(payload.get("sourcePath") or "").strip()
     if source.startswith("/api/read"):
+        if _api_read_source_root(source) in PIPELINE_SOURCE_ROOT_EXCLUSIONS:
+            raise PermissionError("pipeline source must live under declared Kaminos roots")
         target = _resolve_api_read_source(source)
         return {"source": source, "path": str(target)}
     if source_path:
