@@ -39,19 +39,21 @@ assert.match(fingerJuiceHostMarkup, /Finger Juice Preview/, 'operator-facing Fin
 assert.match(hostCoreSource, /hostLabel:\s*'Finger Juice Preview'/, 'native Finger Juice host state uses the product-facing preview label');
 assert.match(indexSource, /id="finger-juice-host-overlay-title">Finger Juice Preview</, 'viewport Finger Juice host badge uses the product-facing preview label');
 assert.match(fingerJuiceHostMarkup, />Update now</, 'operator-facing Finger Juice host control exposes a one-shot preview update');
-assert.match(fingerJuiceHostMarkup, />View source</, 'operator-facing Finger Juice host keeps source view as an explicit escape hatch');
-assert.doesNotMatch(fingerJuiceHostMarkup, />Load Packet<|>Open Direct<|<span class="field-key">Route<\/span>|<span class="field-key">Host<\/span>|<span class="field-key">Packet<\/span>/, 'first-read Finger Juice host controls must not expose packet/route substrate labels');
+assert.doesNotMatch(fingerJuiceHostMarkup, />View source<|>Load Packet<|>Open Direct<|<span class="field-key">Route<\/span>|<span class="field-key">Host<\/span>|<span class="field-key">Packet<\/span>/, 'first-read Finger Juice host controls must not expose packet/route substrate labels or direct old-viewer escape hatches');
 assert.match(mainSource, /finger_juice_host_root/, 'native host supports file-root packet loading');
 assert.match(mainSource, /finger_juice_host_path/, 'native host supports file-path packet loading');
 assert.match(mainSource, /finger_juice_host_url/, 'native host supports direct packet URL loading');
-assert.match(indexSource, /id="finger-juice-host-canvas"/, 'native host owns a canvas instead of accepting an iframe as the host surface');
+assert.match(indexSource, /id="finger-juice-host-live-frame"/, 'native host shows the live finger juice smoke inside the Kaminos Host viewport');
+assert.match(indexSource, /host_live_solver_iframe_until_native_render_buffer/, 'native host labels live iframe use as a temporary render-buffer downgrade');
+assert.match(indexSource, /id="finger-juice-host-canvas"/, 'native host keeps a diagnostic canvas without making it the operator-visible host surface');
 assert.match(mainSource, /window\.kaminosFingerJuiceHostDebugState/, 'native host exposes state for browser witnesses');
 assert.match(indexSource, /big-papa-finger-juice\.host-packet\.v0/, 'native host displays Big Papa packet schema identity');
 assert.match(mainSource, /host_packet_preview_payload_not_native_render_buffer/, 'native host displays render-buffer downgrade');
-assert.match(indexSource, /finger-juice-host-open-direct/, 'native host keeps direct debug route as an explicit escape hatch');
+assert.doesNotMatch(indexSource, /finger-juice-host-open-direct/, 'native host must not expose an operator-facing direct old-viewer escape hatch');
 
 assert.match(hostWitnessSource, /kaminos_finger_juice_host=1/, 'host witness opens the native host route');
 assert.match(hostWitnessSource, /kaminosFingerJuiceHostDebugState/, 'host witness reads native host debug state');
+assert.match(hostWitnessSource, /finger-juice-host-live-frame/, 'host witness validates the operator-visible live Host frame');
 assert.match(hostWitnessSource, /big-papa-finger-juice\.host-packet\.v0/, 'host witness requires Big Papa packet schema');
 assert.match(hostWitnessSource, /host_packet_preview_payload_not_native_render_buffer/, 'host witness requires downgraded render payload evidence');
 assert.match(hostWitnessSource, /primary_output_written/, 'host witness writes durable failure reports even before the primary screenshot succeeds');

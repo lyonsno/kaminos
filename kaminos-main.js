@@ -70,6 +70,7 @@ import {
 import {
   BIG_PAPA_FINGER_JUICE_HOST_PACKET_SCHEMA,
   BIG_PAPA_FINGER_JUICE_HOST_PACKET_ROUTE,
+  FINGER_JUICE_HOST_LIVE_FRAME_DOWNGRADE,
   KAMINOS_FINGER_JUICE_HOST_ROUTE,
   KAMINOS_FINGER_JUICE_HOST_STATE_SCHEMA,
   createFingerJuiceHostState,
@@ -6644,7 +6645,10 @@ function setActiveTab(tabName) {
   const fingerJuiceHostPanel = document.getElementById('finger-juice-host-operator-panel');
   if (fingerJuiceHostPanel) {
     fingerJuiceHostPanel.hidden = tabName !== 'finger-juice-host';
-    if (tabName === 'finger-juice-host') requestAnimationFrame(drawFingerJuiceHostPreview);
+    if (tabName === 'finger-juice-host') {
+      ensureFingerJuiceHostFrameLoaded();
+      requestAnimationFrame(drawFingerJuiceHostPreview);
+    }
   }
   const gloveWellHostPanel = document.getElementById('glove-well-host-operator-panel');
   if (gloveWellHostPanel) {
@@ -7223,7 +7227,9 @@ function updateFingerJuiceHostReadout() {
   sourceAuthorityEl.classList.toggle('missing', state.status === 'error' || state.sourceAuthority === 'pending');
   const downgradeList = document.getElementById('finger-juice-host-downgrades');
   downgradeList.innerHTML = '';
-  const downgrades = state.downgrades?.length ? state.downgrades : ['host_packet_preview_payload_not_native_render_buffer'];
+  const downgrades = state.downgrades?.length
+    ? state.downgrades
+    : ['host_packet_preview_payload_not_native_render_buffer', FINGER_JUICE_HOST_LIVE_FRAME_DOWNGRADE];
   for (const downgrade of downgrades) {
     const chip = document.createElement('span');
     chip.className = 'finger-juice-host-chip';
@@ -7444,11 +7450,20 @@ function reloadFingerJuiceTabFrame() {
   setInfo('Finger Juice primitive reloaded');
 }
 
+function ensureFingerJuiceHostFrameLoaded() {
+  const fingerJuiceHostFrame = document.getElementById('finger-juice-host-live-frame');
+  if (!fingerJuiceHostFrame) return null;
+  const route = fingerJuiceHostFrame.dataset.src || FINGER_JUICE_STANDALONE_ROUTE;
+  if (!fingerJuiceHostFrame.getAttribute('src')) {
+    fingerJuiceHostFrame.src = route;
+  }
+  return fingerJuiceHostFrame.src;
+}
+
 function initKaminosFingerJuiceHostRoute() {
   if (fingerJuiceHostRouteInitialized) return;
   fingerJuiceHostRouteInitialized = true;
   const params = new URLSearchParams(window.location.search);
-  document.getElementById('finger-juice-host-open-direct').href = FINGER_JUICE_STANDALONE_ROUTE;
   document.getElementById('finger-juice-host-load').addEventListener('click', () => {
     loadFingerJuiceHostPacket(fingerJuiceHostRouteFromParams()).catch(error => console.error('Finger Juice host load failed:', error));
   });

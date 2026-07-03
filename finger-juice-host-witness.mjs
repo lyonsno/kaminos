@@ -16,6 +16,7 @@ const viewportWidth = Number(args.get('--viewport-width') || 1800);
 const viewportHeight = Number(args.get('--viewport-height') || 1120);
 const settleMs = Number(args.get('--settle-ms') || 2500);
 const hookWaitMs = Number(args.get('--hook-wait-ms') || Math.max(settleMs, 15000));
+const cdpTimeoutMs = Number(args.get('--cdp-timeout-ms') || Math.max(15000, hookWaitMs));
 
 let phase = 'initializing';
 let stderr = '';
@@ -40,6 +41,7 @@ function writeReport(report = {}) {
     viewport: { width: viewportWidth, height: viewportHeight },
     settleMs,
     hookWaitMs,
+    cdpTimeoutMs,
     failure_phase: phase,
     primary_output_written: primaryOutputWritten,
     browserVersion,
@@ -94,7 +96,7 @@ function wsRequest(ws, method, params = {}) {
     const timer = setTimeout(() => {
       ws.removeEventListener('message', onMessage);
       rejectReq(new Error(`${method}: CDP request timed out`));
-    }, 15000);
+    }, cdpTimeoutMs);
     const onMessage = event => {
       const msg = JSON.parse(String(event.data));
       if (msg.method === 'Runtime.consoleAPICalled') {
@@ -216,33 +218,40 @@ async function main() {
     if (!lastDebugState.downgrades?.includes('host_packet_preview_payload_not_native_render_buffer')) throw new Error('missing native render-buffer downgrade');
     if ((lastDebugState.previewParticleCount || 0) <= 0) throw new Error('no preview particles in native host state');
 
-    phase = 'measure_canvas';
+    await delay(settleMs);
+
+    phase = 'measure_live_frame';
     canvasActivity = await evaluate(ws, `(() => {
-      const canvas = document.getElementById('finger-juice-host-canvas');
-      if (!canvas || !canvas.width || !canvas.height) return { ok: false, reason: 'missing_canvas' };
-      const ctx = canvas.getContext('2d');
-      const width = canvas.width;
-      const height = canvas.height;
-      const sample = ctx.getImageData(0, 0, width, height).data;
-      let activePixels = 0;
-      for (let i = 0; i < sample.length; i += 4) {
-        const r = sample[i];
-        const g = sample[i + 1];
-        const b = sample[i + 2];
-        const max = Math.max(r, g, b);
-        const min = Math.min(r, g, b);
-        if (max > 80 && max - min > 24) activePixels += 1;
+      const frame = document.getElementById('finger-juice-host-live-frame');
+      if (!frame) return { ok: false, reason: 'missing_live_frame' };
+      const rect = frame.getBoundingClientRect();
+      const style = getComputedStyle(frame);
+      let childState = null;
+      let childError = null;
+      try {
+        const read = frame.contentWindow?.__lermsFingerJuiceDebug;
+        childState = typeof read === 'function' ? read() : null;
+      } catch (error) {
+        childError = String(error?.message || error);
       }
+      const particleCount = childState?.particleCount ?? childState?.particles?.length ?? 0;
       return {
-        ok: true,
-        width,
-        height,
-        activePixels,
-        activeRatio: Number((activePixels / Math.max(1, width * height)).toFixed(5)),
+        ok: rect.width >= 300 && rect.height >= 300 && style.display !== 'none' && style.visibility !== 'hidden',
+        kind: 'finger-juice-host-live-frame',
+        width: Math.round(rect.width),
+        height: Math.round(rect.height),
+        display: style.display,
+        visibility: style.visibility,
+        childStatePresent: Boolean(childState),
+        childError,
+        particleCount,
+        renderBackend: childState?.render_backend || childState?.renderBackend || null,
+        sourceAuthority: childState?.sourceDiagnostics?.authority || childState?.simulation_authority || null,
       };
     })()`);
-    if (!canvasActivity?.ok) throw new Error(`canvas unavailable: ${canvasActivity?.reason || 'unknown'}`);
-    if (canvasActivity.activePixels < 120) throw new Error(`native host canvas looks blank: ${JSON.stringify(canvasActivity)}`);
+    if (!canvasActivity?.ok) throw new Error(`live Host frame unavailable: ${JSON.stringify(canvasActivity)}`);
+    if (!canvasActivity.childStatePresent) throw new Error(`live Host frame child debug missing: ${JSON.stringify(canvasActivity)}`);
+    if ((canvasActivity.particleCount || 0) <= 0) throw new Error(`live Host frame has no particles: ${JSON.stringify(canvasActivity)}`);
 
     phase = 'capture_screenshot';
     const screenshot = await wsRequest(ws, 'Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });

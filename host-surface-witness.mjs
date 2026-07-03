@@ -27,7 +27,7 @@ const cdpTimeoutMs = Number(args.get('--cdp-timeout-ms') || Math.max(15000, hook
 const preferredCanvasId = expectedHostId === 'glove-well'
   ? 'glove-well-host-canvas'
   : expectedHostId === 'finger-juice'
-    ? 'finger-juice-host-canvas'
+    ? null
     : null;
 
 let phase = 'initializing';
@@ -256,12 +256,42 @@ async function main() {
       }
     }
 
+    await delay(settleMs);
+
     phase = 'measure_visual_activity';
     visualActivity = await evaluate(ws, `(() => {
       const actorObjects = [...(window.__kaminosLermsPreviewActorsGroup?.children || [])].map(child => ({
         name: child.name,
         position: child.position ? [Number(child.position.x.toFixed(3)), Number(child.position.y.toFixed(3)), Number(child.position.z.toFixed(3))] : null,
       }));
+      const liveFrame = document.getElementById('finger-juice-host-live-frame');
+      if (${JSON.stringify(expectedHostId)} === 'finger-juice') {
+        if (!liveFrame) return { kind: 'finger-juice-host-live-frame', ok: false, reason: 'missing_live_frame' };
+        const rect = liveFrame.getBoundingClientRect();
+        const style = getComputedStyle(liveFrame);
+        let childState = null;
+        let childError = null;
+        try {
+          const read = liveFrame.contentWindow?.__lermsFingerJuiceDebug;
+          childState = typeof read === 'function' ? read() : null;
+        } catch (error) {
+          childError = String(error?.message || error);
+        }
+        const particleCount = childState?.particleCount ?? childState?.particles?.length ?? 0;
+        return {
+          kind: 'finger-juice-host-live-frame',
+          ok: rect.width >= 300 && rect.height >= 300 && style.display !== 'none' && style.visibility !== 'hidden',
+          width: Math.round(rect.width),
+          height: Math.round(rect.height),
+          display: style.display,
+          visibility: style.visibility,
+          childStatePresent: Boolean(childState),
+          childError,
+          particleCount,
+          renderBackend: childState?.render_backend || childState?.renderBackend || null,
+          sourceAuthority: childState?.sourceDiagnostics?.authority || childState?.simulation_authority || null,
+        };
+      }
       if (actorObjects.length || window.__kaminosLermsPreviewActorVisuals?.actorVisualCount) {
         return {
           kind: 'three-scene',
@@ -294,6 +324,11 @@ async function main() {
     })()`);
     if (visualActivity.kind === 'canvas' && visualActivity.activePixels < 120) {
       throw new Error(`host-surface canvas looks blank: ${JSON.stringify(visualActivity)}`);
+    }
+    if (visualActivity.kind === 'finger-juice-host-live-frame') {
+      if (!visualActivity.ok) throw new Error(`finger-juice Host live frame unavailable: ${JSON.stringify(visualActivity)}`);
+      if (!visualActivity.childStatePresent) throw new Error(`finger-juice Host live child debug missing: ${JSON.stringify(visualActivity)}`);
+      if ((visualActivity.particleCount || 0) <= 0) throw new Error(`finger-juice Host live frame has no particles: ${JSON.stringify(visualActivity)}`);
     }
     if (visualActivity.kind === 'three-scene' && visualActivity.actorObjectCount <= 0 && visualActivity.actorVisualCount <= 0) {
       throw new Error(`host-surface scene visual layer missing: ${JSON.stringify(visualActivity)}`);
