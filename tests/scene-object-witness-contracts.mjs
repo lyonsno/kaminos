@@ -217,6 +217,7 @@ assert.match(indexHtml, /data-greenroom-moge-latest-result/, 'MoGE cockpit expos
 assert.match(indexHtml, /data-greenroom-moge-latest-request-id/, 'MoGE latest result card exposes request identity for freshness checks');
 assert.match(indexHtml, /data-greenroom-moge-latest-synthetic-fallback/, 'MoGE latest result card exposes whether source identity fell back to synthetic');
 assert.match(indexHtml, /data-greenroom-moge-fresh-result/, 'MoGE latest result card marks when it matches the last local Run Preview request');
+assert.match(indexHtml, /await runBrowserWebGpuPreviewRoute\(row\)[\s\S]*button\.textContent = 'Run Preview'[\s\S]*await grBrowseRouteJobs\(\)[\s\S]*Browser WebGPU preview submitted; refresh failed/, 'MoGE Run Preview success path resets the button and refreshes route state after submission without relabeling refresh failure as route failure');
 assert.match(indexHtml, /Latest result/, 'MoGE cockpit names completed browser output as a latest result instead of replacing the preview source control');
 assert.match(servePy, /rows\s*=\s*\[\s*_browser_webgpu_fixture_row\(\),\s*\*live_rows\s*\]/, 'Browser WebGPU provider keeps the reserved preview route available even after live result rows exist');
 assert.match(indexHtml, /data-greenroom-route-archive/, 'Native Greenroom route archive is addressable separately from the operator panel');

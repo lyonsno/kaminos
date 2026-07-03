@@ -10649,10 +10649,19 @@ function renderBrowserWebGpuPreviewActionButton(container, row) {
     button.textContent = 'Running...';
     try {
       await runBrowserWebGpuPreviewRoute(row);
+      button.textContent = 'Run Preview';
+      try {
+        await grBrowseRouteJobs();
+      } catch (refreshError) {
+        setInfo(`Browser WebGPU preview submitted; refresh failed: ${refreshError.message || refreshError}`);
+      }
     } catch (error) {
       button.disabled = false;
       button.textContent = 'Run Preview';
       setInfo(`Browser WebGPU preview failed: ${error.message || error}`);
+    } finally {
+      button.disabled = !mogeRouteHasRealSourceCandidate(row);
+      if (button.textContent === 'Running...') button.textContent = button.disabled ? 'Select Image' : 'Run Preview';
     }
   };
   container.appendChild(button);
