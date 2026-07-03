@@ -1192,7 +1192,10 @@ async function main() {
         returnByValue: true,
       });
       volumeSceneContext = sceneContextEval.result.value;
-      if (!expectsVolumeBrickWallSceneContext || volumeSceneContext?.loadState === 'loaded' || volumeSceneContext?.loadState === 'failed') break;
+      const brickWallLoaded = volumeSceneContext?.loadState === 'loaded' || volumeSceneContext?.loadState === 'failed';
+      const liveLightSatisfied = expectedVolumeFireLightProxy <= 0.001 ||
+        volumeSceneContext?.fireLightProxy?.fireLightLiveSample?.source === 'volume-live-frame-fire-light-readback-v0';
+      if (!expectsVolumeBrickWallSceneContext || (brickWallLoaded && liveLightSatisfied)) break;
       await delay(250);
     }
     if (expectsVolumeStoneSceneContext) {
@@ -1217,11 +1220,18 @@ async function main() {
       assert.equal(volumeSceneContext?.sphericalHarmonicProbeIdentity, 'volume-fire-light-probe-sh1-v0', 'brick-wall scene context did not expose fire-light probe identity');
       assert.equal(volumeSceneContext?.fireLightProxyMode, expectedVolumeFireLightProxy > 0.001 ? 'fire-light-proxy' : 'disabled', 'brick-wall scene context did not apply flame-light proxy mode');
       assert.ok(Math.abs((volumeSceneContext?.fireLightProxy?.gain ?? 0) - expectedVolumeFireLightGain) < 0.001, 'brick-wall scene context did not apply flame-light proxy gain');
+      assert.equal(volumeSceneContext?.ceilingVisibilityPolicy, 'volume-scene-brick-wall-ceiling-hidden-v0', 'brick-wall scene context did not apply ceiling-hidden framing policy');
       assert.ok(Array.isArray(volumeSceneContext?.sphericalHarmonicCoefficients), 'brick-wall scene context did not report fire-light sphericalHarmonicCoefficients');
       assert.ok((volumeSceneContext?.sphericalHarmonicCoefficients?.length ?? 0) >= 4, 'brick-wall fire-light probe did not report first-order spherical harmonics');
       assert.ok((volumeSceneContext?.fireLightProxy?.lightCount ?? 0) >= 3, 'brick-wall scene context did not expose the fire-light proxy light rig');
+      assert.equal(volumeSceneContext?.fireLightProxy?.fireLightLiveSample?.identity, 'volume-live-frame-fire-light-readback-v0', 'brick-wall fire-light proxy did not expose the live-frame sample identity');
+      assert.ok(Number.isFinite(volumeSceneContext?.fireLightProxy?.liveFrameScalar), 'brick-wall fire-light proxy did not report a numeric live frame scalar');
       if (expectedVolumeFireLightProxy > 0.001) {
         assert.ok((volumeSceneContext?.fireLightProxy?.intensity ?? 0) > 0, 'brick-wall fire-light proxy did not derive positive intensity from active fire');
+        assert.equal(volumeSceneContext?.fireLightProxy?.fireLightLiveSample?.source, 'volume-live-frame-fire-light-readback-v0', 'brick-wall fire-light proxy did not derive light from live rendered-frame fire evidence');
+        assert.ok((volumeSceneContext?.fireLightProxy?.liveFrameScalar ?? 0) > 0.05, 'brick-wall fire-light live scalar did not modulate above zero');
+      } else {
+        assert.equal(volumeSceneContext?.fireLightProxy?.liveFrameScalar ?? 0, 0, 'disabled brick-wall fire-light proxy should zero live frame scalar');
       }
       assert.equal(volumeSceneContext?.globalGroundPlaneSuppressed, true, 'brick-wall volume scene context did not suppress the bright global app ground plane');
       assert.equal(volumeSceneContext?.loadState, 'loaded', `brick-wall GLB did not load: ${volumeSceneContext?.loadError || volumeSceneContext?.loadState}`);

@@ -29,6 +29,11 @@ assert.match(index, /volume-fire-light-probe-sh1-v0/, 'brick-wall flame-light pr
 assert.match(index, /fireLightProxyMode/, 'brick-wall scene context reports requested/effective flame-light proxy mode');
 assert.match(index, /sphericalHarmonicCoefficients/, 'brick-wall scene context exposes the fire-light probe coefficients');
 assert.match(index, /staticEnvironmentIntensity:\s*0\.05/, 'brick-wall scene context dims static environment lighting when flame proxy lighting is active');
+assert.match(index, /volume-live-frame-fire-light-readback-v0/, 'brick-wall fire-light proxy must use live rendered-frame fire evidence instead of only static control summaries');
+assert.match(index, /fireLightLiveSample/, 'brick-wall fire-light debug state must expose the cached live fire-light sample');
+assert.match(index, /liveFrameScalar/, 'brick-wall fire-light probe must expose the live frame scalar that modulates light intensity');
+assert.match(index, /volume-scene-brick-wall-ceiling-hidden-v0/, 'brick-wall scene context must carry an explicit ceiling-hidden framing policy');
+assert.match(index, /BRICK_WALL_VOLUME_CAMERA_FRAME/, 'brick-wall scene context must have a camera frame that keeps the simulation ceiling out of the initial frustum');
 assert.match(index, /globalGroundPlaneSuppressed/, 'brick-wall scene context reports suppression of the bright global app floor');
 assert.match(index, /window\.__kaminosVolumeSceneContext/, 'stone scene context is exposed for witness/debug truth');
 assert.doesNotMatch(index, /#kaminos-volume-canvas\.active \{ display: block; \}/, 'volume canvas active route must not rely on the stale display-block overlay rule');
@@ -1242,6 +1247,8 @@ assert.match(witness, /expectedVolumeFireLightProxy/, 'witness derives expected 
 assert.match(witness, /volume-fire-light-probe-sh1-v0/, 'witness verifies the brick-wall fire-light probe identity');
 assert.match(witness, /fireLightProxyMode/, 'witness verifies the brick-wall flame-light proxy mode');
 assert.match(witness, /sphericalHarmonicCoefficients/, 'witness records fire-light spherical harmonic coefficients');
+assert.match(witness, /fireLightLiveSample/, 'witness records the live-frame fire-light scalar source');
+assert.match(witness, /ceilingVisibilityPolicy/, 'witness verifies the brick-wall ceiling-hidden framing policy');
 assert.match(witness, /backdropMidtonePixels/, 'witness records a screenshot metric that can catch missing scene-context backdrop pixels');
 assert.match(index, /volume-scene-context-active #kaminos-volume-canvas\.active[\s\S]*mix-blend-mode:\s*screen/, 'scene-context routes screen-blend the direct black volume canvas so warm volume can composite over backdrop geometry');
 assert.match(index, /viewport\.classList\.toggle\('volume-scene-context-active'/, 'scene-context visibility toggles a viewport class used by the composition path');
