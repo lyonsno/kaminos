@@ -177,6 +177,8 @@ assert.match(indexHtml, /loadMogeRouteImageDataFromUrl/, 'Browser WebGPU produce
 assert.match(indexHtml, /mogeRouteSourceImageCandidates/, 'Browser WebGPU producer has explicit source-image candidate precedence');
 assert.match(indexHtml, /sourceImageIdentity/, 'Browser WebGPU producer records source image identity in the route request');
 assert.match(indexHtml, /inputSourceKind/, 'Browser WebGPU producer records whether input came from row, scene, fixture, or synthetic fallback');
+assert.match(indexHtml, /assertMogeRouteRealInputForOperatorSmoke/, 'Browser WebGPU operator smoke rejects synthetic fallback before result submission');
+assert.match(indexHtml, /inputPreview\.syntheticFallback === true[\s\S]*MoGE operator smoke requires a real source image/, 'MoGE Run Preview must fail loud instead of submitting synthetic fallback as operator smoke');
 assert.match(indexHtml, /selectedSceneObjectEntry\(\)/, 'Browser WebGPU producer can fall back to selected Kaminos scene object metadata');
 assert.match(indexHtml, /renderMogeRouteSourceSelector/, 'Browser WebGPU route rows render a source selector near Run Preview');
 assert.match(indexHtml, /browserWebGpuRouteSourceSelectionByJobId/, 'Browser WebGPU route source selection is keyed by route job identity');
@@ -189,6 +191,7 @@ assert.match(indexHtml, /data-greenroom-route-source-selection-mode/, 'Route tra
 assert.match(indexHtml, /data-greenroom-route-effective-source-kind/, 'Route tray preserves effective source kind as inspectable row identity');
 assert.match(indexHtml, /data-greenroom-route-source-selector/, 'Browser WebGPU source selector has a stable DOM hook for visual/operator smoke');
 assert.match(indexHtml, /sourceImageLoadFailures/, 'Browser WebGPU source selector keeps load failures as secondary evidence');
+assert.match(indexHtml, /grBrowseScratch[\s\S]*renderMogeRouteOperatorPanel\(greenroomRouteJobState\.rows/, 'Scratch image refresh updates the top MoGE source controls after async scratch discovery');
 assert.match(indexHtml, /data-greenroom-cockpit/, 'Greenroom tab exposes a top-level cockpit instead of isolated widgets');
 assert.match(indexHtml, /Greenroom Cockpit/, 'Greenroom cockpit has a human-visible title');
 assert.match(indexHtml, /renderGreenroomCockpit/, 'Route refresh renders current queue and route state into the top-level cockpit');
@@ -211,6 +214,9 @@ assert.match(indexHtml, /selectMogeOperatorRouteRow/, 'MoGE operator panel selec
 assert.match(indexHtml, /data-greenroom-moge-operator-panel/, 'MoGE operator panel has a stable DOM hook for visual/operator smoke');
 assert.match(indexHtml, /data-greenroom-moge-preview-action/, 'MoGE cockpit keeps a new-preview action visible separately from completed results');
 assert.match(indexHtml, /data-greenroom-moge-latest-result/, 'MoGE cockpit exposes the latest completed result separately from the new-preview action');
+assert.match(indexHtml, /data-greenroom-moge-latest-request-id/, 'MoGE latest result card exposes request identity for freshness checks');
+assert.match(indexHtml, /data-greenroom-moge-latest-synthetic-fallback/, 'MoGE latest result card exposes whether source identity fell back to synthetic');
+assert.match(indexHtml, /data-greenroom-moge-fresh-result/, 'MoGE latest result card marks when it matches the last local Run Preview request');
 assert.match(indexHtml, /Latest result/, 'MoGE cockpit names completed browser output as a latest result instead of replacing the preview source control');
 assert.match(servePy, /rows\s*=\s*\[\s*_browser_webgpu_fixture_row\(\),\s*\*live_rows\s*\]/, 'Browser WebGPU provider keeps the reserved preview route available even after live result rows exist');
 assert.match(indexHtml, /data-greenroom-route-archive/, 'Native Greenroom route archive is addressable separately from the operator panel');

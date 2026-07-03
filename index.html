@@ -9232,6 +9232,7 @@ let greenroomRouteJobState = {
 };
 const browserWebGpuRouteSourceSelectionByJobId = new Map();
 let greenroomScratchImageCandidates = [];
+let lastMogePreviewRequestId = null;
 
 window.kaminosRouteJobDebugState = function() {
   return JSON.parse(JSON.stringify(greenroomRouteJobState));
@@ -10150,6 +10151,10 @@ function mogeRouteEffectiveSourceKind(row = {}) {
   return 'synthetic';
 }
 
+function mogeRouteHasRealSourceCandidate(row = {}) {
+  return mogeRouteSourceImageCandidates(row, mogeRouteSourceSelectionMode(row)).length > 0;
+}
+
 function mogeRouteEffectiveSourceLabel(kind) {
   if (kind === 'scene' || kind === 'selected-scene') return 'Selected scene image';
   if (kind === 'row') return 'Row source image';
@@ -10587,9 +10592,18 @@ function renderMogeRouteOperatorPanel(rows = []) {
     panel.appendChild(card);
   }
   if (latestResult) {
+    const latestRouteResult = latestResult.route_job?.metadata?.routeResult || {};
+    const latestRouteConfig = latestResult.route_job?.metadata?.routeConfig || {};
+    const latestRequestId = latestRouteResult.requestId || '';
+    const latestSyntheticFallback = latestRouteConfig.sourceImageSyntheticFallback === true
+      || latestResult.route_job?.metadata?.sourceImageSyntheticFallback === true;
     const resultCard = document.createElement('div');
     resultCard.className = 'moge-route-result-card';
     resultCard.setAttribute('data-greenroom-moge-latest-result', latestResult.route_job?.id || latestResult.job_id || '');
+    resultCard.setAttribute('data-greenroom-moge-latest-request-id', latestRequestId);
+    resultCard.setAttribute('data-greenroom-moge-latest-source-kind', mogeRouteEffectiveSourceKind(latestResult));
+    resultCard.setAttribute('data-greenroom-moge-latest-synthetic-fallback', String(latestSyntheticFallback));
+    resultCard.setAttribute('data-greenroom-moge-fresh-result', String(Boolean(latestRequestId && latestRequestId === lastMogePreviewRequestId)));
     const resultHead = document.createElement('div');
     resultHead.className = 'moge-route-result-head';
     resultHead.textContent = 'Latest result';
@@ -10615,13 +10629,22 @@ function renderMogeRouteOperatorPanel(rows = []) {
 
 function renderBrowserWebGpuPreviewActionButton(container, row) {
   if (!routeJobCanRunBrowserWebGpuPreview(row)) return;
+  const hasRealSource = mogeRouteHasRealSourceCandidate(row);
   const button = document.createElement('button');
   button.className = 'btn';
-  button.textContent = 'Run Preview';
-  button.title = 'Run the browser route producer and submit its kit result to Kaminos';
+  button.textContent = hasRealSource ? 'Run Preview' : 'Select Image';
+  button.title = hasRealSource
+    ? 'Run the browser route producer and submit its kit result to Kaminos'
+    : 'Select or import a real image before running the MoGE operator smoke';
   button.setAttribute('data-greenroom-route-action', 'run-browser-webgpu-preview');
+  button.setAttribute('data-greenroom-route-source-ready', String(hasRealSource));
+  button.disabled = !hasRealSource;
   button.onclick = async (event) => {
     event.stopPropagation();
+    if (!mogeRouteHasRealSourceCandidate(row)) {
+      setInfo('MoGE preview needs a real source image before it can run');
+      return;
+    }
     button.disabled = true;
     button.textContent = 'Running...';
     try {
@@ -11182,6 +11205,15 @@ async function resolveMogeRouteSourceImage(row = {}) {
   return synthetic;
 }
 
+function assertMogeRouteRealInputForOperatorSmoke(inputPreview = {}) {
+  if (inputPreview.syntheticFallback === true) {
+    throw new Error('MoGE operator smoke requires a real source image; select a scene, row, or scratch/import image before running preview.');
+  }
+  if (!['scene', 'row', 'scratch'].includes(String(inputPreview.inputSourceKind || inputPreview.sourceImageIdentity?.kind || ''))) {
+    throw new Error('MoGE operator smoke requires source identity from a selected scene, row, or scratch/import image.');
+  }
+}
+
 function flattenRouteAdapterNumericArray(value) {
   if (value == null) return [];
   if (ArrayBuffer.isView(value)) return Array.from(value);
@@ -11419,7 +11451,7 @@ function browserWebGpuPreviewDataUrl(role, routeJob, probe) {
   return canvas.toDataURL('image/png');
 }
 
-async function buildBrowserWebGpuPreviewRouteResult(row = {}) {
+async function buildBrowserWebGpuPreviewRouteResult(row = {}, options = {}) {
   const kit = await loadKaminosWebGpuInferenceKit();
   const routeJob = row.route_job || {};
   const route = kit.createMogeDepthNormalRouteDefinition();
@@ -11428,6 +11460,9 @@ async function buildBrowserWebGpuPreviewRouteResult(row = {}) {
   const startedAt = performance.now();
   const probe = await probeBrowserWebGpuRouteRuntime(kit);
   const inputPreview = await resolveMogeRouteSourceImage(row);
+  if (options.requireRealInput !== false) {
+    assertMogeRouteRealInputForOperatorSmoke(inputPreview);
+  }
   let adapterError = null;
   let realAdapterOutput = null;
   try {
@@ -11635,6 +11670,7 @@ async function buildBrowserWebGpuPreviewRouteResult(row = {}) {
 async function runBrowserWebGpuPreviewRoute(row = {}) {
   setInfo('Browser WebGPU preview route running');
   const result = await buildBrowserWebGpuPreviewRouteResult(row);
+  lastMogePreviewRequestId = result.requestId || null;
   const writeResult = await submitBrowserWebGpuRouteResult(result);
   setInfo('Browser WebGPU preview route submitted');
   return { result, writeResult };
@@ -12289,6 +12325,9 @@ async function grBrowseScratch() {
       }
     };
     listEl.appendChild(div);
+  }
+  if (greenroomRouteJobState?.rows?.length) {
+    renderMogeRouteOperatorPanel(greenroomRouteJobState.rows);
   }
 }
 
