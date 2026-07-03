@@ -58,6 +58,9 @@ BROWSE_ROOTS = {
     "pixal3d": Path(os.path.expanduser("~/dev/pixal3d-mlx/outputs")),
     "trellis2mlx": Path(os.path.expanduser("~/dev/trellis2mlx/assets/outputs")),
 }
+PIPELINE_SOURCE_ROOT_EXCLUSIONS = {
+    "lerms-preview",
+}
 
 GREENROOM_STATUS_DIRS = ("done", "failed", "running", "pending", "cancelled")
 MESH_EXTENSIONS = {".glb", ".gltf", ".obj", ".ply", ".spz"}
@@ -245,6 +248,16 @@ def _declared_read_roots():
     return [root.resolve() for root in roots if root.exists()]
 
 
+def _declared_pipeline_source_roots():
+    roots = [ROOT]
+    roots.extend(
+        Path(path).expanduser()
+        for root_id, path in BROWSE_ROOTS.items()
+        if root_id not in PIPELINE_SOURCE_ROOT_EXCLUSIONS
+    )
+    return [root.resolve() for root in roots if root.exists()]
+
+
 def _resolve_api_read_source(source):
     parsed = urlparse(source)
     if parsed.path != "/api/read":
@@ -284,7 +297,7 @@ def resolve_pipeline_source(payload):
     target = candidate.resolve()
     if not target.is_file():
         raise FileNotFoundError(str(target))
-    if not any(target.is_relative_to(root) for root in _declared_read_roots()):
+    if not any(target.is_relative_to(root) for root in _declared_pipeline_source_roots()):
         raise PermissionError("pipeline source must live under declared Kaminos roots")
     return {"source": source or source_path, "path": str(target)}
 
