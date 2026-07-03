@@ -10243,6 +10243,13 @@ const DEFAULT_VOLUME_CAMERA_FRAME = {
   target: [0, 0.02, 0],
 };
 
+const BRICK_WALL_VOLUME_CAMERA_FRAME = {
+  identity: 'volume-scene-brick-wall-ceiling-hidden-v0',
+  ceilingVisibilityPolicy: 'volume-scene-brick-wall-ceiling-hidden-v0',
+  position: [1.26, 0.04, 2.36],
+  target: [0, -0.34, 0],
+};
+
 const BONFIRE_VOLUME_CAMERA_FRAME = {
   position: [0, 0.10, 2.55],
   target: [0, 0.10, 0],
@@ -15218,7 +15225,10 @@ window.__kaminosRefreshVolumeReadout = refreshVolumeReadout;
 
 function frameVolumeCamera() {
   const sceneName = document.getElementById('volume-scene')?.value || 'compact_plume';
-  const frame = sceneName === 'bonfire_plume' ? BONFIRE_VOLUME_CAMERA_FRAME : DEFAULT_VOLUME_CAMERA_FRAME;
+  const sceneContext = volumeSceneContext?.debugState?.()?.effectiveContext || 'none';
+  const frame = sceneContext === 'brick_wall'
+    ? BRICK_WALL_VOLUME_CAMERA_FRAME
+    : sceneName === 'bonfire_plume' ? BONFIRE_VOLUME_CAMERA_FRAME : DEFAULT_VOLUME_CAMERA_FRAME;
   camera.position.set(...frame.position);
   controls.target.set(...frame.target);
   controls.update();
@@ -15248,6 +15258,7 @@ const VOLUME_BRICK_WALL_FIRE_LIGHT_PROXY = Object.freeze({
   identity: 'volume-scene-fire-light-proxy-v0',
   probeIdentity: 'volume-fire-light-probe-sh1-v0',
   sourceIdentity: 'volume-controls-emissive-summary-v0',
+  liveSampleIdentity: 'volume-live-frame-fire-light-readback-v0',
   defaultMode: 1,
   defaultGain: 1,
 });
@@ -15257,7 +15268,7 @@ function normalizeVolumeSceneContext(value) {
   return VOLUME_SCENE_CONTEXTS.has(normalized) ? normalized : 'none';
 }
 
-function computeVolumeFireLightProbe(volumeState = {}) {
+function computeVolumeFireLightProbe(volumeState = {}, fireLightLiveSample = null) {
   const controlsState = volumeState.controls || {};
   const mode = clampVolumeValue(controlsState.fireLightProxy ?? VOLUME_BRICK_WALL_FIRE_LIGHT_PROXY.defaultMode, 0, 1);
   const gain = clampVolumeValue(controlsState.fireLightGain ?? VOLUME_BRICK_WALL_FIRE_LIGHT_PROXY.defaultGain, 0, 4);
@@ -15277,15 +15288,22 @@ function computeVolumeFireLightProbe(volumeState = {}) {
   if (lifecycle === 'preheat') lifecycleMultiplier = 0.12 + preheat * 0.24;
   if (lifecycle === 'snuff') lifecycleMultiplier = Math.max(0, 1 - lifecycleT * 0.86 - quench * 0.12);
   const sourceAuthority = mode > 0.001 && volumeState.active !== false;
+  const liveSampleScalar = clampVolumeValue(fireLightLiveSample?.scalar ?? 1, 0, 2.5);
+  const liveSampleConfidence = clampVolumeValue(fireLightLiveSample?.confidence ?? 0, 0, 1);
+  const frameCount = Number.isFinite(volumeState.frameCount) ? volumeState.frameCount : 0;
+  const frameShimmer = 1 + Math.sin(frameCount * 0.173 + (fireLightLiveSample?.phaseSeed ?? 0)) * 0.055 * liveSampleConfidence;
+  const liveFrameScalar = sourceAuthority ? clampVolumeValue((0.18 + liveSampleScalar * 0.30) * frameShimmer, 0, 1.15) : 0;
   const fireAuthority = sourceAuthority
     ? fire * (0.34 + radiance * 0.34 + glow * 0.14) * (0.45 + flow * 0.36) * fuel * lifecycleMultiplier
     : 0;
-  const intensity = clampVolumeValue(fireAuthority * gain, 0, 6);
+  const intensity = clampVolumeValue(fireAuthority * gain * liveFrameScalar, 0, 6);
   const leanX = Math.cos(windAngle) * windStrength * 0.16;
   const leanZ = Math.sin(windAngle) * windStrength * 0.10;
+  const liveCenterX = clampVolumeValue(fireLightLiveSample?.normalizedCenterX ?? 0, -1, 1);
+  const liveCenterY = clampVolumeValue(fireLightLiveSample?.normalizedCenterY ?? 0, -1, 1);
   const centroid = {
-    x: clampVolumeValue(leanX, -0.28, 0.28),
-    y: clampVolumeValue(-0.74 + plumeHeight * 0.18 + flow * 0.045, -0.72, 0.08),
+    x: clampVolumeValue(leanX + liveCenterX * 0.12 * liveSampleConfidence, -0.28, 0.28),
+    y: clampVolumeValue(-0.74 + plumeHeight * 0.18 + flow * 0.045 - liveCenterY * 0.10 * liveSampleConfidence, -0.72, 0.08),
     z: clampVolumeValue(-0.46 + leanZ, -0.70, -0.22),
   };
   const dominantDirection = new THREE.Vector3(leanX, 1.0, -0.32 + leanZ).normalize();
@@ -15293,15 +15311,19 @@ function computeVolumeFireLightProbe(volumeState = {}) {
   const l1Scale = intensity * 0.488603;
   return {
     identity: VOLUME_BRICK_WALL_FIRE_LIGHT_PROXY.probeIdentity,
-    sourceIdentity: VOLUME_BRICK_WALL_FIRE_LIGHT_PROXY.sourceIdentity,
+    sourceIdentity: fireLightLiveSample?.source === VOLUME_BRICK_WALL_FIRE_LIGHT_PROXY.liveSampleIdentity
+      ? `${VOLUME_BRICK_WALL_FIRE_LIGHT_PROXY.sourceIdentity}+${VOLUME_BRICK_WALL_FIRE_LIGHT_PROXY.liveSampleIdentity}`
+      : VOLUME_BRICK_WALL_FIRE_LIGHT_PROXY.sourceIdentity,
     order: 1,
     mode: mode > 0.001 ? 'fire-light-proxy' : 'disabled',
     gain,
     sourceAuthority,
+    liveFrameScalar,
+    fireLightLiveSample,
     intensity,
     centroid,
     radius: clampVolumeValue(1.25 + plumeHeight * 0.34 + flow * 0.14, 1.2, 2.4),
-    contactWash: clampVolumeValue(intensity * (0.15 + flow * 0.05), 0, 1.2),
+    contactWash: clampVolumeValue(intensity * (0.10 + flow * 0.035), 0, 0.72),
     sphericalHarmonicCoefficients: [
       Number(l0.toFixed(5)),
       Number((dominantDirection.x * l1Scale).toFixed(5)),
@@ -15457,6 +15479,7 @@ function createVolumeBrickWallContext() {
       lightingExposure: 0.8,
       environmentIntensity: 0.05,
       staticEnvironmentIntensity: 0.05,
+      ceilingVisibilityPolicy: BRICK_WALL_VOLUME_CAMERA_FRAME.ceilingVisibilityPolicy,
     },
     effectiveContext: 'none',
     loadState: 'idle',
@@ -15519,6 +15542,21 @@ function createVolumeBrickWallContext() {
   let loadedModel = null;
   let loadPromise = null;
   let previousGroundPlaneVisible = null;
+  let fireLightLiveSamplePending = false;
+  let nextFireLightLiveSampleFrame = 0;
+  let fireLightLiveSample = {
+    identity: VOLUME_BRICK_WALL_FIRE_LIGHT_PROXY.liveSampleIdentity,
+    source: 'warm-start-before-first-readback',
+    frameId: 0,
+    scalar: 1,
+    confidence: 0,
+    normalizedCenterX: 0,
+    normalizedCenterY: 0,
+    fireLikePixels: 0,
+    emissiveLikePixels: 0,
+    fireEdgeEnergy: 0,
+    phaseSeed: 0,
+  };
   let lastFireLightProbe = {
     identity: VOLUME_BRICK_WALL_FIRE_LIGHT_PROXY.probeIdentity,
     sourceIdentity: VOLUME_BRICK_WALL_FIRE_LIGHT_PROXY.sourceIdentity,
@@ -15526,6 +15564,8 @@ function createVolumeBrickWallContext() {
     mode: 'fire-light-proxy',
     gain: VOLUME_BRICK_WALL_FIRE_LIGHT_PROXY.defaultGain,
     sourceAuthority: false,
+    liveFrameScalar: 0,
+    fireLightLiveSample,
     intensity: 0,
     centroid: { x: 0, y: -0.62, z: -0.46 },
     radius: 1.2,
@@ -15546,22 +15586,70 @@ function createVolumeBrickWallContext() {
     if (intensityVal) intensityVal.textContent = VOLUME_BRICK_WALL_LIGHTING.environmentIntensity.toFixed(1);
   };
 
+  const updateFireLightLiveSampleFromReadback = sample => {
+    if (!sample?.ok) return;
+    const fireBounds = sample.fireBounds || {};
+    const fireLikePixels = Math.max(0, Number(sample.fireLikePixels) || 0);
+    const emissiveLikePixels = Math.max(0, Number(sample.emissiveLikePixels) || 0);
+    const firePixelSignal = fireLikePixels + emissiveLikePixels * 1.6;
+    const fireFill = clampVolumeValue(firePixelSignal / 2600, 0, 1.8);
+    const meanLumaSignal = clampVolumeValue((Number(sample.meanLuma) || 0) / 70, 0, 1.6);
+    const edgeSignal = clampVolumeValue((Number(sample.fireEdgeEnergy) || 0) * 2.2, 0, 0.8);
+    const scalar = clampVolumeValue(0.30 + fireFill * 0.82 + meanLumaSignal * 0.22 + edgeSignal * 0.30, 0.18, 2.2);
+    const confidence = clampVolumeValue((fireLikePixels + emissiveLikePixels) / 620, 0, 1);
+    fireLightLiveSample = {
+      identity: VOLUME_BRICK_WALL_FIRE_LIGHT_PROXY.liveSampleIdentity,
+      source: 'volume-live-frame-fire-light-readback-v0',
+      frameId: Number(sample.frameCount) || 0,
+      scalar,
+      confidence,
+      normalizedCenterX: clampVolumeValue(Number(fireBounds.normalizedCenterX) || 0, -1, 1),
+      normalizedCenterY: clampVolumeValue(Number(fireBounds.normalizedCenterY) || 0, -1, 1),
+      fireLikePixels,
+      emissiveLikePixels,
+      fireEdgeEnergy: Number(sample.fireEdgeEnergy) || 0,
+      phaseSeed: ((Number(sample.frameCount) || 0) % 997) * 0.013,
+    };
+  };
+
+  const requestFireLightLiveSample = volumeState => {
+    const frameCount = Number(volumeState?.frameCount) || 0;
+    if (!group.visible || fireLightLiveSamplePending || frameCount < 8 || frameCount < nextFireLightLiveSampleFrame) return;
+    if (!volumePrototype?.sampleFrame) return;
+    fireLightLiveSamplePending = true;
+    nextFireLightLiveSampleFrame = frameCount + 6;
+    volumePrototype.sampleFrame()
+      .then(updateFireLightLiveSampleFromReadback)
+      .catch(err => {
+        fireLightLiveSample = {
+          ...fireLightLiveSample,
+          source: 'volume-live-frame-fire-light-readback-failed',
+          error: err?.message || String(err),
+          confidence: 0,
+        };
+      })
+      .finally(() => {
+        fireLightLiveSamplePending = false;
+      });
+  };
+
   const applyFireLightProbe = volumeState => {
-    lastFireLightProbe = computeVolumeFireLightProbe(volumeState);
+    requestFireLightLiveSample(volumeState);
+    lastFireLightProbe = computeVolumeFireLightProbe(volumeState, fireLightLiveSample);
     const c = lastFireLightProbe.centroid;
     flameKey.position.set(c.x, c.y + 0.20, c.z + 0.20);
     flameBounce.position.set(c.x * 0.35, Math.max(-0.82, c.y - 0.28), c.z + 0.48);
     smokeWarmth.position.set(c.x * 0.55, c.y + 0.92, c.z - 0.08);
-    flameKey.intensity = lastFireLightProbe.intensity * 2.4;
+    flameKey.intensity = lastFireLightProbe.intensity * 0.56;
     flameKey.distance = lastFireLightProbe.radius * 2.35;
-    flameBounce.intensity = lastFireLightProbe.intensity * 0.72;
+    flameBounce.intensity = lastFireLightProbe.intensity * 0.16;
     flameBounce.distance = lastFireLightProbe.radius * 1.8;
-    smokeWarmth.intensity = lastFireLightProbe.intensity * 0.18;
+    smokeWarmth.intensity = lastFireLightProbe.intensity * 0.045;
     smokeWarmth.distance = lastFireLightProbe.radius * 2.8;
     backwash.position.set(c.x * 0.32, -0.14 + Math.max(0, c.y + 0.72) * 0.22, -0.90);
     const washScale = 0.9 + lastFireLightProbe.radius * 0.42;
     backwash.scale.set(washScale, washScale * 1.1, 1);
-    backwashMaterial.opacity = clampVolumeValue(lastFireLightProbe.contactWash * 0.20, 0, 0.22);
+    backwashMaterial.opacity = clampVolumeValue(lastFireLightProbe.contactWash * 0.055, 0, 0.07);
     group.userData.kaminosVolumeSceneContext.fireLightProxy = {
       identity: VOLUME_BRICK_WALL_FIRE_LIGHT_PROXY.identity,
       fireLightProxyMode: lastFireLightProbe.mode,
@@ -15569,6 +15657,8 @@ function createVolumeBrickWallContext() {
       sourceIdentity: lastFireLightProbe.sourceIdentity,
       sphericalHarmonicOrder: lastFireLightProbe.order,
       gain: lastFireLightProbe.gain,
+      liveFrameScalar: lastFireLightProbe.liveFrameScalar,
+      fireLightLiveSample: lastFireLightProbe.fireLightLiveSample,
       intensity: lastFireLightProbe.intensity,
       centroid: [c.x, c.y, c.z],
       radius: lastFireLightProbe.radius,
@@ -15696,6 +15786,8 @@ function createVolumeBrickWallContext() {
         lightingExposure: metadata.composition.lightingExposure,
         environmentIntensity: metadata.composition.environmentIntensity,
         staticEnvironmentIntensity: VOLUME_BRICK_WALL_LIGHTING.staticEnvironmentIntensity,
+        ceilingVisibilityPolicy: metadata.composition.ceilingVisibilityPolicy,
+        cameraFrameIdentity: BRICK_WALL_VOLUME_CAMERA_FRAME.identity,
         fireLightProxyIdentity: VOLUME_BRICK_WALL_FIRE_LIGHT_PROXY.identity,
         fireLightProxyMode: metadata.fireLightProxy?.fireLightProxyMode || lastFireLightProbe.mode,
         fireLightProxy: metadata.fireLightProxy || null,
