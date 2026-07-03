@@ -36,6 +36,7 @@ assert.match(core, /SpatialTruthDiagnosticPass/, 'composition core must name dia
 assert.match(core, /SpatialTruthViewSet/, 'composition core must name the multi-view spatial-truth view set');
 assert.match(core, /enableSpatialTruthWitness/, 'composition witness must expose spatial-truth activation');
 assert.match(core, /frameSpatialTruthView/, 'composition witness must expose named spatial-truth camera framing');
+assert.match(core, /frameSpatialTruthSurveyPose/, 'composition witness must expose elevation/azimuth survey camera framing');
 assert.match(core, /MeshStandardMaterial/, 'spatial-truth clay must be based on env-lit MeshStandardMaterial');
 assert.match(core, /MeshNormalMaterial/, 'spatial-truth normal pass must use a real normal diagnostic material');
 assert.match(core, /MeshDepthMaterial/, 'spatial-truth depth pass must use a real depth diagnostic material');
@@ -53,5 +54,14 @@ assert.match(witness, /--diagnostic-pass/, 'headless witness must accept diagnos
 assert.match(witness, /--view-set/, 'headless witness must accept reusable view-set selection');
 assert.match(witness, /--contact-sheet-out/, 'headless witness must write a contact sheet artifact');
 assert.match(witness, /SpatialTruthContactSheet/, 'headless report must name spatial-truth contact sheets');
+assert.match(witness, /--survey-contact-sheet-out/, 'headless witness must write a large parallax survey contact sheet artifact');
+assert.match(witness, /--survey-elevations/, 'survey witness must accept explicit elevation rows');
+assert.match(witness, /--survey-azimuths/, 'survey witness must accept explicit azimuth columns');
+assert.match(witness, /SpatialTruthSurveyContactSheet/, 'headless report must name spatial-truth survey contact sheets distinctly from small view sets');
+assert.match(witness, /SpatialTruthSurveyGrid/, 'survey witness report must preserve the effective elevation/azimuth grid');
+assert.match(witness, /cameraPose/, 'survey witness cells must record their effective camera pose');
+assert.match(witness, /MohelIndicator/, 'survey witness must warn on large grids instead of silently capping them');
+assert.match(witness, /cellCount > 64/, 'survey witness must define the large-grid warning from actual requested cell count');
+assert.match(witness, /viewCount: captures\.length/, 'survey witness must report captured cell count from completed captures');
 assert.match(witness, /assertCompositionStructuralInvariants/, 'headless witness must isolate structural invariants from primary visual capture');
 assert.match(witness, /visualCaptureCompleted/, 'headless witness must report whether primary visual capture completed before optional assertions');

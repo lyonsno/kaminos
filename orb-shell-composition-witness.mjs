@@ -4,6 +4,7 @@ import { spawn } from 'node:child_process';
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
+import { pathToFileURL } from 'node:url';
 
 const args = new Map(process.argv.slice(2).map((arg, index, arr) => arg.startsWith('--') ? [arg, arr[index + 1]] : [arg, null]));
 const url = args.get('--url') || 'http://127.0.0.1:8097/?kaminos_orb_shell_grounding=1';
@@ -18,12 +19,27 @@ const diagnosticPass = args.get('--diagnostic-pass') || 'clay';
 const viewSet = args.get('--view-set') || 'spatial-truth-default-v0';
 const spatialTruthView = args.get('--spatial-view') || args.get('--view') || 'front';
 const contactSheetOut = args.has('--contact-sheet-out') ? resolve(args.get('--contact-sheet-out')) : null;
+const surveyContactSheetOut = args.has('--survey-contact-sheet-out') ? resolve(args.get('--survey-contact-sheet-out')) : null;
 const spatialTruthEnvMapIntensity = Number(args.get('--spatial-env-intensity') || 0.45);
 const spatialTruthExposure = Number(args.get('--spatial-exposure') || 0.9);
 const spatialTruthContactSheetViews = (args.get('--contact-sheet-views') || 'front,front-left,front-right,left,right,high-front,lower-socket-close')
   .split(',')
   .map(item => item.trim())
   .filter(Boolean);
+const spatialTruthSurveyElevations = (args.get('--survey-elevations') || '-45,-15,15,45')
+  .split(',')
+  .map(item => Number(item.trim()))
+  .filter(Number.isFinite);
+const spatialTruthSurveyAzimuths = (args.get('--survey-azimuths') || '0,45,90,135,180,225,270,315')
+  .split(',')
+  .map(item => Number(item.trim()))
+  .filter(Number.isFinite);
+const spatialTruthSurveyDistance = Number(args.get('--survey-distance') || 3.15);
+const spatialTruthSurveyTarget = (args.get('--survey-target') || '0.02,-0.05,0.64')
+  .split(',')
+  .map(item => Number(item.trim()))
+  .filter(Number.isFinite);
+const spatialTruthSurveyCellWidth = Number(args.get('--survey-cell-width') || 480);
 const clipCanvas = args.has('--clip-canvas');
 const forceAoRaw = args.get('--force-ao');
 const forceAo = forceAoRaw === undefined ? null : !['0', 'false', 'off', 'no'].includes(String(forceAoRaw).toLowerCase());
@@ -50,6 +66,7 @@ let lowerSocketSemanticRenderInventoryWitness = null;
 let spatialTruthWitness = null;
 let spatialTruthViewFrame = null;
 let spatialTruthContactSheet = null;
+let spatialTruthSurveyContactSheet = null;
 let materialTruthRoutePolicy = null;
 let materialTruthEnvPolicy = null;
 let preHdrWarmRoutePolicy = null;
@@ -169,6 +186,123 @@ async function captureSpatialTruthContactSheet(ws, captureOptions) {
     exposure: spatialTruthExposure,
     viewCount: captures.length,
     captures: captures.map(({ data, ...capture }) => capture),
+    screenshot: { path: sheetCapture.path, stats: sheetCapture.stats },
+  };
+}
+
+function assertSurveyGridConfig() {
+  assert.ok(spatialTruthSurveyElevations.length >= 1, '--survey-elevations produced no numeric rows');
+  assert.ok(spatialTruthSurveyAzimuths.length >= 1, '--survey-azimuths produced no numeric columns');
+  assert.ok(Number.isFinite(spatialTruthSurveyDistance) && spatialTruthSurveyDistance > 0, '--survey-distance must be positive');
+  assert.ok(spatialTruthSurveyTarget.length === 3, '--survey-target must be three comma-separated numbers');
+  assert.ok(Number.isFinite(spatialTruthSurveyCellWidth) && spatialTruthSurveyCellWidth >= 240, '--survey-cell-width must be at least 240');
+}
+
+function surveyCellPath(basePath, elevation, azimuth) {
+  const safeElevation = String(elevation).replace(/[^0-9.-]+/g, '-').replace(/\./g, 'p');
+  const safeAzimuth = String(azimuth).replace(/[^0-9.-]+/g, '-').replace(/\./g, 'p');
+  if (/\.png$/i.test(basePath)) return basePath.replace(/\.png$/i, `-el${safeElevation}-az${safeAzimuth}.png`);
+  return `${basePath}-el${safeElevation}-az${safeAzimuth}.png`;
+}
+
+async function frameSpatialTruthSurveyPose(ws, elevationDeg, azimuthDeg) {
+  return evaluate(ws, `
+    window.__kaminosOrbShellCompositionWitness?.frameSpatialTruthSurveyPose?.({
+      elevationDeg: ${JSON.stringify(elevationDeg)},
+      azimuthDeg: ${JSON.stringify(azimuthDeg)},
+      distance: ${JSON.stringify(spatialTruthSurveyDistance)},
+      target: ${JSON.stringify(spatialTruthSurveyTarget)}
+    })
+  `);
+}
+
+async function captureSpatialTruthSurveyContactSheet(ws, captureOptions) {
+  if (!surveyContactSheetOut) return null;
+  assert.equal(focus, 'spatial-truth', '--survey-contact-sheet-out is currently scoped to spatial-truth focus');
+  assertSurveyGridConfig();
+  const captures = [];
+  const cellCount = spatialTruthSurveyElevations.length * spatialTruthSurveyAzimuths.length;
+  const gridWarning = cellCount > 64
+    ? {
+        schema: 'MohelIndicator',
+        mode: 'uncapped-survey-grid-large-output-warning',
+        cellCount,
+        reason: 'survey grid is large; output was not capped because parallax coverage is evidence',
+      }
+    : null;
+  for (const elevationDeg of spatialTruthSurveyElevations) {
+    for (const azimuthDeg of spatialTruthSurveyAzimuths) {
+      const cell = await frameSpatialTruthSurveyPose(ws, elevationDeg, azimuthDeg);
+      assert.equal(cell?.schema, 'SpatialTruthSurveyCellFrame', 'survey cell framing failed');
+      await delay(320);
+      const cellPath = surveyCellPath(surveyContactSheetOut, elevationDeg, azimuthDeg);
+      const capture = await capturePng(ws, cellPath, captureOptions);
+      captures.push({
+        schema: 'SpatialTruthSurveyCellCapture',
+        elevationDeg,
+        azimuthDeg,
+        cameraPose: cell.cameraPose,
+        path: capture.path,
+        stats: capture.stats,
+      });
+    }
+  }
+  const columns = spatialTruthSurveyAzimuths.length;
+  const gap = 12;
+  const padding = 24;
+  const sheetWidth = Math.round((columns * spatialTruthSurveyCellWidth) + ((columns - 1) * gap) + (padding * 2));
+  const htmlPath = surveyContactSheetOut.replace(/\.png$/i, '.html');
+  const html = `<!doctype html>
+    <meta charset="utf-8">
+    <style>
+      body { margin: 0; background: #0a0d0f; color: #dfe8ea; font: 14px system-ui, sans-serif; }
+      .sheet { width: ${sheetWidth}px; padding: ${padding}px; display: grid; grid-template-columns: repeat(${columns}, ${spatialTruthSurveyCellWidth}px); gap: ${gap}px; box-sizing: border-box; }
+      figure { margin: 0; background: #020405; border: 1px solid #273238; overflow: hidden; }
+      img { display: block; width: ${spatialTruthSurveyCellWidth}px; aspect-ratio: 16 / 11; object-fit: cover; background: #000; }
+      figcaption { padding: 7px 8px; font: 12px 'SF Mono', ui-monospace, monospace; color: #a5bac0; display: flex; justify-content: space-between; gap: 8px; }
+      .meta { grid-column: 1 / -1; font: 14px 'SF Mono', ui-monospace, monospace; color: #93aab0; line-height: 1.45; }
+      .row-label { color: #f0d27c; }
+      .az { color: #8fd3ff; }
+    </style>
+    <div class="sheet">
+      <div class="meta">
+        SpatialTruthSurveyContactSheet | pass=${diagnosticPass} | elevations=${spatialTruthSurveyElevations.join(',')} | azimuths=${spatialTruthSurveyAzimuths.join(',')} | distance=${spatialTruthSurveyDistance} | target=${spatialTruthSurveyTarget.join(',')} | env=${spatialTruthEnvMapIntensity} | exposure=${spatialTruthExposure}
+      </div>
+      ${captures.map(capture => `
+        <figure>
+          <img src="${pathToFileURL(capture.path).href}">
+          <figcaption><span class="row-label">el ${capture.elevationDeg}</span><span class="az">az ${capture.azimuthDeg}</span></figcaption>
+        </figure>
+      `).join('')}
+    </div>`;
+  mkdirSync(dirname(htmlPath), { recursive: true });
+  writeFileSync(htmlPath, html);
+  await send(ws, 'Page.navigate', { url: pathToFileURL(htmlPath).href });
+  await delay(900);
+  const sheetCapture = await capturePng(ws, surveyContactSheetOut, { format: 'png', captureBeyondViewport: true });
+  return {
+    schema: 'SpatialTruthSurveyContactSheet',
+    mode: 'browser-composed-elevation-azimuth-survey-v0',
+    surveyContactSheetOut,
+    htmlPath,
+    diagnosticPass,
+    SpatialTruthSurveyGrid: {
+      schema: 'SpatialTruthSurveyGrid',
+      mode: 'elevation-azimuth-grid-v0',
+      elevations: spatialTruthSurveyElevations,
+      azimuths: spatialTruthSurveyAzimuths,
+      distance: spatialTruthSurveyDistance,
+      target: spatialTruthSurveyTarget,
+      cellWidth: spatialTruthSurveyCellWidth,
+      cellCount,
+      columns,
+      rows: spatialTruthSurveyElevations.length,
+      gridWarning,
+    },
+    envMapIntensity: spatialTruthEnvMapIntensity,
+    exposure: spatialTruthExposure,
+    viewCount: captures.length,
+    captures,
     screenshot: { path: sheetCapture.path, stats: sheetCapture.stats },
   };
 }
@@ -482,6 +616,10 @@ async function main() {
       if (focus === 'spatial-truth' && contactSheetOut) {
         phase = 'contact-sheet';
         spatialTruthContactSheet = await captureSpatialTruthContactSheet(ws, captureOptions);
+      }
+      if (focus === 'spatial-truth' && surveyContactSheetOut) {
+        phase = 'survey-contact-sheet';
+        spatialTruthSurveyContactSheet = await captureSpatialTruthSurveyContactSheet(ws, captureOptions);
       }
     } catch (error) {
       visualCaptureFailure = {
@@ -870,6 +1008,7 @@ async function main() {
       spatialTruthWitness,
       spatialTruthViewFrame,
       spatialTruthContactSheet,
+      spatialTruthSurveyContactSheet,
       materialTruthRoutePolicy,
       materialTruthEnvPolicy,
       preHdrWarmRoutePolicy,
@@ -959,6 +1098,7 @@ async function main() {
       spatialTruthWitness,
       spatialTruthViewFrame,
       spatialTruthContactSheet,
+      spatialTruthSurveyContactSheet,
       materialTruthRoutePolicy,
       materialTruthEnvPolicy,
       preHdrWarmRoutePolicy,
