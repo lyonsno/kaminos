@@ -68,3 +68,33 @@ assert.match(
   /adapterReport\?\.phase/,
   'Failure summary must expose adapter report phase when available',
 );
+assert.match(
+  index,
+  /function ensureSharpBreathingRoomImageAssets\(/,
+  'Generate panel must load indexed Kaminos image assets instead of depending on a pasted smoke URL',
+);
+assert.match(
+  index,
+  /loadPipelineAssetKind\('image'\)/,
+  'Generate panel must source its default SHARP input from the real image asset index',
+);
+assert.match(
+  index,
+  /function pipelineBestSharpSourceImage\(/,
+  'Generate panel must choose a real image asset and reject tiny proxy fixtures as default smoke inputs',
+);
+assert.match(
+  index,
+  /pipeline-test-image/,
+  'Default SHARP image selection must explicitly avoid the 1x1 pipeline test fixtures',
+);
+assert.match(
+  index,
+  /id="sharp-breathing-room-source-preview"/,
+  'Generate panel must preview the exact image source before SHARP runs',
+);
+assert.match(
+  index,
+  /pipelineLoadRunSplatArtifact\(run,\s*artifact\)/,
+  'A successful Generate-panel SHARP run must load its produced splat from the run-local result instead of sending the operator to hunt in Greenroom',
+);
