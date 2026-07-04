@@ -9,6 +9,7 @@ const witness = readFileSync(join(root, 'orb-shell-composition-witness.mjs'), 'u
 
 assert.match(core, /SocketTongueProvenancePlan/, 'composition core must name the socket-tongue provenance plan');
 assert.match(core, /createSocketTongueProvenancePlan/, 'composition core must build socket-tongue provenance from live anatomy');
+assert.match(core, /SocketTongueGenerativeInvariantPlan/, 'composition core must name the socket-tongue generative invariant plan');
 assert.match(core, /socketTongueProvenancePlan/, 'debug state must expose socket-tongue provenance');
 assert.match(witness, /socketTongueProvenancePlan/, 'headless witness report must preserve socket-tongue provenance');
 
@@ -90,6 +91,90 @@ assert.ok(candidate.anatomyMetrics.hiddenTerminalCapCount === 2, 'candidate reco
 assert.ok(candidate.anatomyMetrics.meanSideWallThickness > 0.045, 'candidate records a physical sidewall thickness metric');
 assert.ok(candidate.anatomyMetrics.endCapWidthExpansionRatio > 2, 'candidate captures the flared hook/terminus pressure');
 assert.ok(candidate.candidateScore >= 0.72, 'candidate score is high enough to preserve as procedural vocabulary');
+
+assert.equal(
+  plan.generativeInvariantPlan?.schema,
+  'SocketTongueGenerativeInvariantPlan',
+  'plan extracts generative invariants, not only source provenance',
+);
+assert.equal(
+  plan.generativeInvariantPlan.mode,
+  'socket-tongue-generative-invariants-v0',
+  'invariant plan records its mode',
+);
+assert.equal(
+  candidate.generativeInvariantRecord?.schema,
+  'SocketTongueGenerativeInvariantRecord',
+  'candidate carries its own invariant record',
+);
+assert.equal(
+  candidate.generativeInvariantRecord.recipeIntent,
+  'regenerate-secondary-underpass-socket-tongue-on-purpose',
+  'invariant record states the future generation recipe intent',
+);
+for (const prerequisite of [
+  'lower-socket-keel-selected',
+  'equatorial-cupping-whorl-selected',
+  'lower-equatorial-shared-socket-seam-active',
+  'lower-socket-role-is-tuck-tongue',
+  'plate-body-honesty-prevents-cord-collapse',
+  'terminal-caps-hidden-under-shared-socket-seam',
+  'live-promoted-body-sidewalls-present',
+]) {
+  assert.ok(
+    candidate.generativeInvariantRecord.hardPrerequisites.includes(prerequisite),
+    `invariant record names hard prerequisite ${prerequisite}`,
+  );
+}
+for (const invariant of [
+  'subordinate-objecthood-not-full-macro-lamella',
+  'visible-body-remains-sheetlike-before-tuck',
+  'terminal-cap-authority-hidden',
+  'sidewalls-remain-live-readable-thickness-surfaces',
+  'receiver-or-aperture-owner-required-before-disappearance',
+]) {
+  assert.ok(
+    candidate.generativeInvariantRecord.preservedInvariants.includes(invariant),
+    `invariant record preserves ${invariant}`,
+  );
+}
+for (const knob of [
+  'socketTongueArcLength',
+  'terminalHookPressure',
+  'receiverSeamPull',
+  'sidewallThickness',
+  'visiblePlateWidthFloor',
+]) {
+  assert.ok(
+    candidate.generativeInvariantRecord.tunableKnobs.some(item => item.name === knob),
+    `invariant record exposes tunable knob ${knob}`,
+  );
+}
+for (const failureClass of [
+  'promote-to-full-macro-lamella',
+  'collapse-to-cord',
+  'show-hidden-terminal-cap-as-object',
+  'smooth-away-hook-signal',
+  'leave-without-receiver-or-aperture-owner',
+]) {
+  assert.ok(
+    candidate.generativeInvariantRecord.forbiddenFailureClasses.includes(failureClass),
+    `invariant record forbids ${failureClass}`,
+  );
+}
+assert.ok(
+  candidate.generativeInvariantRecord.observedMetricBands.meanSideWallThickness.includes(candidate.anatomyMetrics.meanSideWallThickness),
+  'observed metric bands include the measured sidewall thickness without pretending it is the only valid value',
+);
+assert.ok(
+  candidate.generativeInvariantRecord.observedMetricBands.endCapWidthExpansionRatio.includes(candidate.anatomyMetrics.endCapWidthExpansionRatio),
+  'observed metric bands include the measured hook expansion without pretending it is the only valid value',
+);
+assert.deepEqual(
+  plan.generativeInvariantPlan.bestRecipeCandidateIds,
+  [candidate.id],
+  'generative invariant plan points future recipe work at the preserved socket-tongue candidate',
+);
 assert.equal(
   plan.bestCandidateId,
   candidate.id,

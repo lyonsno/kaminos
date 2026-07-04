@@ -9,6 +9,7 @@ export const ORB_SHELL_APERTURE_AWARE_TERMINUS_MODE = 'aperture-aware-terminus-v
 export const ORB_SHELL_APERTURE_ORBIT_CAPTURE_MODE = 'macro-aperture-orbit-capture-v0';
 export const ORB_SHELL_LOWER_SOCKET_RENDER_INVENTORY_MODE = 'lower-socket-semantic-render-inventory-v0';
 export const ORB_SHELL_SOCKET_TONGUE_PROVENANCE_MODE = 'socket-tongue-provenance-v0';
+export const ORB_SHELL_SOCKET_TONGUE_GENERATIVE_INVARIANT_MODE = 'socket-tongue-generative-invariants-v0';
 export const ORB_SHELL_MACRO_MORPHOLOGY_INVENTORY_MODE = 'macro-curve-vs-promoted-body-diagnostic-v0';
 
 const TAU = Math.PI * 2;
@@ -4331,6 +4332,140 @@ function maxCapWidthExpansionRatio(terminalCaps = []) {
   }, 0);
 }
 
+function socketTongueGenerativeKnobs(candidate, lowerSocket) {
+  return [
+    {
+      name: 'socketTongueArcLength',
+      sourceField: 'LowerSocketFamilyRoleLaw.tuckTongueRefinement.visibleArcLimitT',
+      observedValue: lowerSocket.lowerSocketFamilyRoleLaw?.tuckTongueRefinement?.visibleArcLimitT ?? null,
+      guidance: 'controls how much subordinate tongue remains visible before receiver/owner attachment',
+    },
+    {
+      name: 'terminalHookPressure',
+      sourceField: 'SocketTongueAnatomyMetrics.endCapWidthExpansionRatio',
+      observedValue: candidate.anatomyMetrics.endCapWidthExpansionRatio,
+      guidance: 'controls how strongly the terminal flares into a hook rather than a blunt strip end',
+    },
+    {
+      name: 'receiverSeamPull',
+      sourceField: 'LowerSocketFamilyRoleLaw.geometryEffect.socketAlignmentPull',
+      observedValue: lowerSocket.lowerSocketFamilyRoleLaw?.geometryEffect?.socketAlignmentPull ?? null,
+      guidance: 'pulls the tongue toward the lower/equatorial socket seam receiver',
+    },
+    {
+      name: 'sidewallThickness',
+      sourceField: 'SocketTongueAnatomyMetrics.meanSideWallThickness',
+      observedValue: candidate.anatomyMetrics.meanSideWallThickness,
+      guidance: 'keeps the tongue readable as lamellar sheet thickness instead of a line',
+    },
+    {
+      name: 'visiblePlateWidthFloor',
+      sourceField: 'LowerSocketPlateBodyHonestyLaw.visiblePlateWidthFloor',
+      observedValue: lowerSocket.lowerSocketPlateBodyHonestyLaw?.visiblePlateWidthFloor ?? null,
+      guidance: 'prevents the subordinate tongue from collapsing into a cord before a receiver exists',
+    },
+  ];
+}
+
+function createSocketTongueGenerativeInvariantRecord(candidate, lowerSocket) {
+  return {
+    schema: 'SocketTongueGenerativeInvariantRecord',
+    mode: ORB_SHELL_SOCKET_TONGUE_GENERATIVE_INVARIANT_MODE,
+    id: `${candidate.id}-generative-invariants`,
+    candidateId: candidate.id,
+    recipeIntent: 'regenerate-secondary-underpass-socket-tongue-on-purpose',
+    ontologyConfiguration: {
+      schema: 'SocketTongueOntologyConfiguration',
+      sourceMacroId: lowerSocket.id,
+      selectedRole: lowerSocket.lowerSocketFamilyRoleLaw?.selectedRole || null,
+      visibleAuthority: lowerSocket.macroPromotedBody?.visibleAuthority || null,
+      sourceObjecthood: 'subordinate-socket-insert-not-primary-macro',
+      receiverExpectation: 'lower-equatorial-shared-socket-seam-or-aperture-owner',
+    },
+    hardPrerequisites: [
+      'lower-socket-keel-selected',
+      'equatorial-cupping-whorl-selected',
+      'lower-equatorial-shared-socket-seam-active',
+      'lower-socket-role-is-tuck-tongue',
+      'plate-body-honesty-prevents-cord-collapse',
+      'terminal-caps-hidden-under-shared-socket-seam',
+      'live-promoted-body-sidewalls-present',
+    ],
+    preservedInvariants: [
+      'subordinate-objecthood-not-full-macro-lamella',
+      'visible-body-remains-sheetlike-before-tuck',
+      'terminal-cap-authority-hidden',
+      'sidewalls-remain-live-readable-thickness-surfaces',
+      'receiver-or-aperture-owner-required-before-disappearance',
+    ],
+    geometricConstraints: [
+      {
+        name: 'sheet-thickness-regime',
+        observedBasis: 'meanSideWallThickness',
+        constraint: 'tongue must remain visibly thick enough to read as lamellar sheet anatomy',
+      },
+      {
+        name: 'terminal-hook-pressure',
+        observedBasis: 'endCapWidthExpansionRatio',
+        constraint: 'terminal may flare into hook pressure but must not claim visible cap objecthood',
+      },
+      {
+        name: 'subordinate-width-regime',
+        observedBasis: 'visiblePlateWidthFloor plus promotedBodyScale',
+        constraint: 'body width is preserved enough to avoid cord collapse while staying subordinate',
+      },
+      {
+        name: 'receiver-dependent-disappearance',
+        observedBasis: 'hiddenTerminalCapIds plus tuckDisappearancePolicy',
+        constraint: 'disappearance is legal only when a receiver seam or aperture owner exists',
+      },
+    ],
+    tunableKnobs: socketTongueGenerativeKnobs(candidate, lowerSocket),
+    observedMetricBands: {
+      schema: 'SocketTongueObservedMetricBands',
+      meanSideWallThickness: [candidate.anatomyMetrics.meanSideWallThickness],
+      endCapWidthExpansionRatio: [candidate.anatomyMetrics.endCapWidthExpansionRatio],
+      sideWallThicknessRelativeVariationMax: [candidate.anatomyMetrics.sideWallThicknessRelativeVariationMax],
+      promotedBodyScale: [candidate.anatomyMetrics.promotedBodyScale],
+      terminalWidthScale: [candidate.anatomyMetrics.terminalWidthScale],
+      interpretation: 'single observed stress point, not final allowed range',
+    },
+    forbiddenFailureClasses: [
+      'promote-to-full-macro-lamella',
+      'collapse-to-cord',
+      'show-hidden-terminal-cap-as-object',
+      'smooth-away-hook-signal',
+      'leave-without-receiver-or-aperture-owner',
+    ],
+    futureSolverHooks: [
+      'socket-tongue-receiver-selection',
+      'aperture-contour-attachment',
+      'underpass-depth-field',
+      'sheet-preserving-smoothing',
+    ],
+  };
+}
+
+function createSocketTongueGenerativeInvariantPlan(candidates, lowerSocket) {
+  const records = lowerSocket
+    ? candidates.map(candidate => (
+      candidate.generativeInvariantRecord || createSocketTongueGenerativeInvariantRecord(candidate, lowerSocket)
+    ))
+    : [];
+  return {
+    schema: 'SocketTongueGenerativeInvariantPlan',
+    mode: ORB_SHELL_SOCKET_TONGUE_GENERATIVE_INVARIANT_MODE,
+    targetAssemblage: 'lower-socket-keel',
+    purpose: 'extract causal recipe constraints from the accidental socket tongue phenotype',
+    records,
+    recordCount: records.length,
+    bestRecipeCandidateIds: records.map(record => record.candidateId),
+    invariantExtractionVerdict: records.length
+      ? 'socket-tongue-generative-invariants-extracted'
+      : 'socket-tongue-generative-invariants-not-active',
+  };
+}
+
 function createSocketTongueProvenancePlan(composition) {
   const targetAssemblage = 'lower-socket-keel';
   const repeatabilityInputs = [socketTongueRepeatabilityInput(composition)];
@@ -4353,6 +4488,7 @@ function createSocketTongueProvenancePlan(composition) {
       candidates: [],
       candidateCount: 0,
       bestCandidateId: null,
+      generativeInvariantPlan: createSocketTongueGenerativeInvariantPlan([], null),
       supportingInventoryRecordIds: inventoryRecords.map(record => record.sourceId),
       provenanceVerdict: 'socket-tongue-source-not-selected',
       followupQuestions: [
@@ -4428,6 +4564,9 @@ function createSocketTongueProvenancePlan(composition) {
     candidateScore,
     repeatabilityInputs,
   };
+  const generativeInvariantRecord = createSocketTongueGenerativeInvariantRecord(candidate, lowerSocket);
+  candidate.generativeInvariantRecord = generativeInvariantRecord;
+  const generativeInvariantPlan = createSocketTongueGenerativeInvariantPlan([candidate], lowerSocket);
 
   return {
     schema: 'SocketTongueProvenancePlan',
@@ -4438,6 +4577,7 @@ function createSocketTongueProvenancePlan(composition) {
     candidates: [candidate],
     candidateCount: 1,
     bestCandidateId: candidate.id,
+    generativeInvariantPlan,
     supportingInventoryRecordIds: inventoryRecords.map(record => record.sourceId),
     provenanceVerdict: candidateScore >= 0.72
       ? 'socket-tongue-candidate-source-identified'
