@@ -57,6 +57,7 @@ SPLAT_EXTENSIONS = {".ply", ".spz"}
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp"}
 SPLAT_CORRECTION_SCHEMA = "kaminos.splat-correction.v0"
 COMPUTE_ROUTE_FIRE_PROMOTED_SPLAT_SCHEMA = "kaminos.compute-route-fire-promoted-splat.v0"
+COMPUTE_ROUTE_FIRE_ROUTE_CAPABILITY_SCHEMA = "kaminos.route-capability.v0"
 HYBRID_SPLAT_OVERLAY_MODULE_URL_ENV = "KAMINOS_HYBRID_SPLAT_OVERLAY_MODULE_URL"
 HYBRID_SPLAT_OVERLAY_MODULE_URL_ENV_LEGACY = "KAMINOS_HYBRID_SPLAT_MODULE_URL"
 ASSET_ROOTS = [
@@ -103,14 +104,23 @@ DEFAULT_COMPUTE_ROUTE_FIRE_INPUT = Path(os.environ.get(
     "KAMINOS_COMPUTE_ROUTE_FIRE_DEFAULT_INPUT",
     os.path.expanduser("~/.local/state/kaminos/assets/images/inbox/evil_orb_outer_shell_source_image.png"),
 )).expanduser()
-DEFAULT_COMPUTE_ROUTE_FIRE_PIPELINE_WORKTREE = Path(os.environ.get(
-    "KAMINOS_COMPUTE_ROUTE_FIRE_PIPELINE_WORKTREE",
-    "/private/tmp/kaminos-pipeline-gutfucker-0623",
+DEFAULT_COMPUTE_ROUTE_FIRE_PIPELINE_WORKTREE = (
+    Path(os.environ["KAMINOS_COMPUTE_ROUTE_FIRE_PIPELINE_WORKTREE"]).expanduser()
+    if os.environ.get("KAMINOS_COMPUTE_ROUTE_FIRE_PIPELINE_WORKTREE")
+    else None
+)
+DEFAULT_COMPUTE_ROUTE_FIRE_PACKAGED_ROUTE_DIR = Path(os.environ.get(
+    "KAMINOS_COMPUTE_ROUTE_FIRE_PACKAGED_ROUTE_DIR",
+    str(ROOT / "routes" / "sharp-image-to-splat-live-v0"),
 )).expanduser()
 DEFAULT_COMPUTE_ROUTE_FIRE_OUTPUT_ROOT = Path(os.environ.get(
     "KAMINOS_COMPUTE_ROUTE_FIRE_OUTPUT_ROOT",
     "/tmp/kaminos-compute-route-fire-actuated",
 )).expanduser()
+COMPUTE_ROUTE_FIRE_DEV_OVERRIDE_FILES = (
+    "pipeline-witness.mjs",
+    "scripts/run-sharp-webgpu-adapter.mjs",
+)
 
 
 def runtime_config():
@@ -128,30 +138,95 @@ def runtime_config():
 
 def compute_route_fire_config(overrides=None):
     overrides = overrides or {}
+    pipeline_worktree = overrides.get("pipeline_worktree", DEFAULT_COMPUTE_ROUTE_FIRE_PIPELINE_WORKTREE)
+    packaged_route_dir = overrides.get("packaged_route_dir", DEFAULT_COMPUTE_ROUTE_FIRE_PACKAGED_ROUTE_DIR)
     return {
         "schema": COMPUTE_ROUTE_FIRE_CONFIG_SCHEMA,
         "pipeline_id": overrides.get("pipeline_id", "sharp-image-to-splat-live-v0"),
         "requested_route": overrides.get("requested_route", "adapter.sharp-image-to-splat-live.v0"),
         "backend_class": overrides.get("backend_class", "browser-webgpu"),
-        "pipeline_worktree": Path(overrides.get("pipeline_worktree", DEFAULT_COMPUTE_ROUTE_FIRE_PIPELINE_WORKTREE)).expanduser(),
+        "pipeline_worktree": Path(pipeline_worktree).expanduser() if pipeline_worktree else None,
+        "packaged_route_dir": Path(packaged_route_dir).expanduser() if packaged_route_dir else None,
         "output_root": Path(overrides.get("output_root", DEFAULT_COMPUTE_ROUTE_FIRE_OUTPUT_ROOT)).expanduser(),
         "node_bin": overrides.get("node_bin", os.environ.get("KAMINOS_COMPUTE_ROUTE_FIRE_NODE_BIN", "node")),
         "default_input": Path(overrides.get("default_input", DEFAULT_COMPUTE_ROUTE_FIRE_INPUT)).expanduser(),
     }
 
 
+def _route_required_file_state(root, relative_files):
+    root = Path(root).expanduser() if root else None
+    rows = []
+    for rel_path in relative_files:
+        path = root / rel_path if root else None
+        rows.append({
+            "path": rel_path,
+            "absolutePath": str(path.resolve()) if path and path.exists() else (str(path) if path else None),
+            "exists": bool(path and path.is_file()),
+        })
+    return rows
+
+
+def _all_required_files_exist(rows):
+    return bool(rows) and all(row.get("exists") is True for row in rows)
+
+
+def compute_route_fire_route_capability(config=None):
+    config = config or compute_route_fire_config()
+    route_id = config["pipeline_id"]
+    packaged_route_dir = config.get("packaged_route_dir")
+    pipeline_worktree = config.get("pipeline_worktree")
+    packaged_files = _route_required_file_state(packaged_route_dir, COMPUTE_ROUTE_FIRE_DEV_OVERRIDE_FILES)
+    dev_files = _route_required_file_state(pipeline_worktree, COMPUTE_ROUTE_FIRE_DEV_OVERRIDE_FILES)
+    packaged_installed = bool(packaged_route_dir and _all_required_files_exist(packaged_files))
+    dev_override_active = bool(pipeline_worktree)
+    dev_override_usable = bool(dev_override_active and _all_required_files_exist(dev_files))
+    if packaged_installed:
+        mode = "installed"
+        current_runtime = "kaminos-installed-route"
+        operator_message = "SHARP can run locally from this Kaminos install."
+    elif dev_override_active:
+        mode = "dev_override"
+        current_runtime = "pipeline-worktree-dev-override"
+        if dev_override_usable:
+            operator_message = "SHARP is running through a development Pipeline checkout; the product path is a local Kaminos route."
+        else:
+            operator_message = "SHARP is pointed at a development Pipeline checkout, but that checkout is missing required route files."
+    else:
+        mode = "missing"
+        current_runtime = "not-installed"
+        operator_message = "SHARP is not installed in this Kaminos checkout yet."
+    return {
+        "schema": COMPUTE_ROUTE_FIRE_ROUTE_CAPABILITY_SCHEMA,
+        "routeId": route_id,
+        "requestedRoute": config["requested_route"],
+        "mode": mode,
+        "finalRuntime": "kaminos-installed-route",
+        "currentRuntime": current_runtime,
+        "operatorMessage": operator_message,
+        "packagedRouteDir": str(Path(packaged_route_dir).expanduser()) if packaged_route_dir else None,
+        "packagedRouteInstalled": packaged_installed,
+        "packagedRequiredFiles": packaged_files,
+        "devOverrideActive": dev_override_active,
+        "devOverrideUsable": dev_override_usable,
+        "pipelineWorktree": str(Path(pipeline_worktree).expanduser().resolve()) if pipeline_worktree else None,
+        "devOverrideRequiredFiles": dev_files,
+    }
+
+
 def compute_route_fire_config_public(config=None):
     config = config or compute_route_fire_config()
     default_input = Path(config["default_input"]).expanduser()
-    pipeline_worktree = Path(config["pipeline_worktree"]).expanduser()
+    pipeline_worktree = Path(config["pipeline_worktree"]).expanduser() if config.get("pipeline_worktree") else None
     output_root = Path(config["output_root"]).expanduser()
+    route_capability = compute_route_fire_route_capability(config)
     return {
         "schema": COMPUTE_ROUTE_FIRE_CONFIG_SCHEMA,
         "pipelineId": config["pipeline_id"],
         "requestedRoute": config["requested_route"],
         "backendClass": config["backend_class"],
-        "pipelineWorktree": str(pipeline_worktree),
-        "pipelineWorktreeExists": pipeline_worktree.exists(),
+        "pipelineWorktree": str(pipeline_worktree) if pipeline_worktree else None,
+        "pipelineWorktreeExists": bool(pipeline_worktree and pipeline_worktree.exists()),
+        "routeCapability": route_capability,
         "defaultInputPath": str(default_input),
         "defaultInputExists": default_input.exists(),
         "imageInputRoot": str(KAMINOS_IMAGE_INBOX_DIR.expanduser()),
@@ -345,9 +420,22 @@ def start_compute_route_fire_run(input_path=None, config=None):
     input_path = Path(input_path or config["default_input"]).expanduser()
     if not input_path.is_file():
         raise FileNotFoundError(f"input image does not exist: {input_path}")
-    pipeline_worktree = Path(config["pipeline_worktree"]).expanduser()
-    if not (pipeline_worktree / "pipeline-witness.mjs").is_file():
-        raise FileNotFoundError(f"pipeline-witness.mjs does not exist in {pipeline_worktree}")
+    route_capability = compute_route_fire_route_capability(config)
+    if route_capability["mode"] == "missing":
+        raise FileNotFoundError(route_capability["operatorMessage"])
+    if route_capability["mode"] == "installed":
+        pipeline_worktree = Path(config["packaged_route_dir"]).expanduser()
+    else:
+        if not route_capability["devOverrideUsable"]:
+            missing = [
+                row["path"]
+                for row in route_capability.get("devOverrideRequiredFiles", [])
+                if not row.get("exists")
+            ]
+            raise FileNotFoundError(
+                f"{route_capability['operatorMessage']} Missing: {', '.join(missing) or 'unknown route files'}"
+            )
+        pipeline_worktree = Path(config["pipeline_worktree"]).expanduser()
     run_id = f"sharp-live-{int(time.time() * 1000)}-{uuid.uuid4().hex[:8]}"
     run_root = Path(config["output_root"]).expanduser() / run_id
     output_dir = run_root / "pipeline-out"

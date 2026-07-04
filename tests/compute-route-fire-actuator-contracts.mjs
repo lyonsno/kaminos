@@ -21,6 +21,8 @@ assert.match(index, /\.tab-bar\s*\{[^}]*flex-wrap:\s*wrap/, 'sidebar tabs wrap s
 assert.match(index, /data-compute-route-fire-actuator-schema="kaminos\.compute-route-fire-actuator\.v0"/, 'actuator panel preserves schema identity');
 assert.match(index, /id="compute-route-fire-start"/, 'operator has an explicit control to start SHARP');
 assert.match(index, /id="compute-route-fire-run-summary"/, 'operator sees a plain-language run summary before evidence fields');
+assert.match(index, /id="compute-route-fire-capability-summary"/, 'operator sees whether SHARP is installed locally or running through a dev override');
+assert.match(index, /data-compute-route-fire-route-mode/, 'actuator preserves route capability mode as subtext');
 assert.match(index, /id="compute-route-fire-input-path"/, 'operator can see or edit the route input path');
 assert.match(index, /id="compute-route-fire-image-picker"/, 'operator can choose from local image inputs without pasting a path');
 assert.match(index, /id="compute-route-fire-refresh-images"/, 'operator can refresh the local image input list');
@@ -38,6 +40,8 @@ assert.match(index, /loadComputeRouteFireOutput/, 'browser can load the promoted
 assert.match(index, /SHARP started on this image, but the model adapter failed before producing a splat\./, 'failed live adapter runs say no splat was produced in operator-facing language');
 assert.match(index, /SHARP is working on this image: \$\{progress\.message\}/, 'running live adapter summary can lead with native progress message');
 assert.match(index, /SHARP is still working inside the browser adapter/, 'quiet live adapter runs say they are still running instead of looking frozen');
+assert.match(index, /routeCapability\.operatorMessage/, 'route capability summary leads with the server-provided human sentence');
+assert.match(index, /SHARP is not installed in this Kaminos checkout yet/, 'missing local SHARP route has human-primary UI language');
 assert.doesNotMatch(index, /function computeRouteFireProgressText\(progress = null, run = null\)\s*\{\s*if \(!progress\) return '--';/, 'running live adapter progress must not render as blank when no native milestone has arrived yet');
 assert.match(index, /no adapter milestone yet/, 'running live adapter progress field explains missing native milestones');
 assert.match(index, /refreshComputeRouteFireImages/, 'browser owns a source image refresh function');

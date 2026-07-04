@@ -14,6 +14,12 @@ from serve import build_display_metadata, build_output_display_metadata
 from serve import list_greenroom_output_files, resolve_greenroom_output_dir
 
 
+def add_fake_sharp_adapter_script(pipeline):
+    scripts = pipeline / "scripts"
+    scripts.mkdir(exist_ok=True)
+    (scripts / "run-sharp-webgpu-adapter.mjs").write_text("process.exit(0);\n")
+
+
 def test_http_status_404_log_does_not_crash():
     handler = KaminosHandler.__new__(KaminosHandler)
     handler.requestline = "GET /favicon.ico HTTP/1.1"
@@ -198,6 +204,7 @@ def test_compute_route_fire_run_actuates_fake_pipeline_and_cools_after_success()
         root = Path(tmp)
         pipeline = root / "pipeline"
         pipeline.mkdir()
+        add_fake_sharp_adapter_script(pipeline)
         input_path = root / "source.png"
         input_path.write_bytes(b"fake image")
         (pipeline / "pipeline-witness.mjs").write_text(
@@ -263,11 +270,59 @@ writeFileSync(report, JSON.stringify({
         assert any(artifact["id"] == "autoCropEvidence" for artifact in current["artifacts"])
 
 
+def test_compute_route_fire_config_defaults_to_missing_installed_route_not_hidden_worktree():
+    with TemporaryDirectory(dir="/tmp") as tmp:
+        root = Path(tmp)
+        config = serve.compute_route_fire_config({
+            "pipeline_worktree": None,
+            "packaged_route_dir": root / "routes" / "sharp-image-to-splat-live-v0",
+        })
+        public = serve.compute_route_fire_config_public(config)
+
+        assert config["pipeline_worktree"] is None
+        assert public["pipelineWorktree"] is None
+        assert public["pipelineWorktreeExists"] is False
+        assert public["routeCapability"]["schema"] == "kaminos.route-capability.v0"
+        assert public["routeCapability"]["routeId"] == "sharp-image-to-splat-live-v0"
+        assert public["routeCapability"]["mode"] == "missing"
+        assert public["routeCapability"]["finalRuntime"] == "kaminos-installed-route"
+        assert public["routeCapability"]["currentRuntime"] == "not-installed"
+        assert public["routeCapability"]["devOverrideActive"] is False
+        assert "not installed" in public["routeCapability"]["operatorMessage"]
+
+
+def test_compute_route_fire_config_marks_pipeline_checkout_as_dev_override():
+    with TemporaryDirectory(dir="/tmp") as tmp:
+        root = Path(tmp)
+        pipeline = root / "pipeline"
+        pipeline.mkdir()
+        (pipeline / "pipeline-witness.mjs").write_text("process.exit(0);\n")
+        add_fake_sharp_adapter_script(pipeline)
+
+        config = serve.compute_route_fire_config({
+            "pipeline_worktree": pipeline,
+            "packaged_route_dir": root / "routes" / "sharp-image-to-splat-live-v0",
+        })
+        public = serve.compute_route_fire_config_public(config)
+
+        assert public["routeCapability"]["schema"] == "kaminos.route-capability.v0"
+        assert public["routeCapability"]["mode"] == "dev_override"
+        assert public["routeCapability"]["finalRuntime"] == "kaminos-installed-route"
+        assert public["routeCapability"]["currentRuntime"] == "pipeline-worktree-dev-override"
+        assert public["routeCapability"]["devOverrideActive"] is True
+        assert public["routeCapability"]["devOverrideUsable"] is True
+        assert public["routeCapability"]["packagedRouteInstalled"] is False
+        assert public["routeCapability"]["pipelineWorktree"] == str(pipeline.resolve())
+        assert all(item["exists"] for item in public["routeCapability"]["devOverrideRequiredFiles"])
+        assert "development Pipeline checkout" in public["routeCapability"]["operatorMessage"]
+
+
 def test_compute_route_fire_run_failure_never_keeps_fire_burning():
     with TemporaryDirectory(dir="/tmp") as tmp:
         root = Path(tmp)
         pipeline = root / "pipeline"
         pipeline.mkdir()
+        add_fake_sharp_adapter_script(pipeline)
         input_path = root / "source.png"
         input_path.write_bytes(b"fake image")
         (pipeline / "pipeline-witness.mjs").write_text("process.exit(7);\n")
@@ -299,6 +354,7 @@ def test_compute_route_fire_run_exposes_native_pipeline_progress_before_completi
         root = Path(tmp)
         pipeline = root / "pipeline"
         pipeline.mkdir()
+        add_fake_sharp_adapter_script(pipeline)
         input_path = root / "source.png"
         input_path.write_bytes(b"fake image")
         (pipeline / "pipeline-witness.mjs").write_text(
@@ -403,6 +459,7 @@ def test_compute_route_fire_promotes_completed_splat_to_asset_inbox_with_source_
         root = Path(tmp)
         pipeline = root / "pipeline"
         pipeline.mkdir()
+        add_fake_sharp_adapter_script(pipeline)
         experimental = root / "splats" / "inbox"
         production = root / "splats" / "production"
         experimental.mkdir(parents=True)
@@ -498,6 +555,7 @@ def test_compute_route_fire_refuses_to_promote_failed_splat():
         root = Path(tmp)
         pipeline = root / "pipeline"
         pipeline.mkdir()
+        add_fake_sharp_adapter_script(pipeline)
         input_path = root / "source.png"
         input_path.write_bytes(b"fake image")
         (pipeline / "pipeline-witness.mjs").write_text("process.exit(7);\n")
@@ -700,4 +758,6 @@ if __name__ == "__main__":
     test_splat_asset_index_allows_pointer_symlinks_inside_declared_roots()
     test_splat_asset_ingest_writes_only_to_experimental_inbox()
     test_splat_asset_correction_roundtrips_as_sidecar_metadata()
+    test_compute_route_fire_config_defaults_to_missing_installed_route_not_hidden_worktree()
+    test_compute_route_fire_config_marks_pipeline_checkout_as_dev_override()
     test_runtime_config_exposes_hybrid_overlay_module_url_env()

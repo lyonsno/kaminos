@@ -1060,9 +1060,11 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
       id="compute-route-fire-actuator"
       data-compute-route-fire-actuator-schema="kaminos.compute-route-fire-actuator.v0"
       data-compute-route-fire-run-status="idle"
+      data-compute-route-fire-route-mode="unknown"
       hidden
     >
       <div class="field"><span class="field-key">Compute route</span><span class="route-chip" id="compute-route-fire-actuator-route">sharp-image-to-splat-live-v0</span></div>
+      <div class="compute-route-fire-run-summary" id="compute-route-fire-capability-summary" data-compute-route-fire-summary-state="idle">SHARP is not installed in this Kaminos checkout yet.</div>
       <div class="compute-route-fire-run-summary" id="compute-route-fire-run-summary" data-compute-route-fire-summary-state="idle">Choose an image and start SHARP when you want a new splat.</div>
       <div class="field"><span class="field-key">Status</span><span class="field-val" id="compute-route-fire-run-status">idle</span></div>
       <div class="field"><span class="field-key">Progress</span><span class="field-val route-fire-field-long" id="compute-route-fire-run-progress">--</span></div>
@@ -7812,6 +7814,7 @@ let computeRouteVisibleBenchModel = null;
 let computeRouteFireActuatorState = {
   enabled: false,
   run: null,
+  routeCapability: null,
   pollTimer: 0,
   promotedByRunId: {},
   loadedByRunId: {},
@@ -8119,6 +8122,28 @@ function computeRouteFireOutputCanLoad(run) {
   return run?.status === 'completed' && !!computeRouteFireArtifact(run, 'splat');
 }
 
+function computeRouteFireCanStart() {
+  const routeCapability = computeRouteFireActuatorState.routeCapability || {};
+  return routeCapability.mode === 'installed'
+    || (routeCapability.mode === 'dev_override' && routeCapability.devOverrideUsable === true);
+}
+
+function renderComputeRouteFireCapability(config = {}) {
+  const routeCapability = config.routeCapability || {
+    mode: 'missing',
+    operatorMessage: 'SHARP is not installed in this Kaminos checkout yet.',
+  };
+  computeRouteFireActuatorState.routeCapability = routeCapability;
+  const root = document.getElementById('compute-route-fire-actuator');
+  if (root) root.dataset.computeRouteFireRouteMode = routeCapability.mode || 'unknown';
+  const summary = document.getElementById('compute-route-fire-capability-summary');
+  if (summary) {
+    summary.textContent = routeCapability.operatorMessage || 'SHARP is not installed in this Kaminos checkout yet.';
+    summary.title = JSON.stringify(routeCapability);
+    summary.dataset.computeRouteFireSummaryState = computeRouteFireCanStart() ? 'completed' : 'failed';
+  }
+}
+
 function computeRouteFireDurationText(ms) {
   const value = Number(ms);
   if (!Number.isFinite(value) || value < 0) return '';
@@ -8217,12 +8242,15 @@ function renderComputeRouteFireRun(run = null) {
   const button = document.getElementById('compute-route-fire-start');
   if (button) {
     const active = status === 'starting' || status === 'running';
-    button.disabled = active;
+    const canStart = computeRouteFireCanStart();
+    button.disabled = active || !canStart;
     button.textContent = status === 'starting'
       ? 'Starting SHARP'
       : status === 'running'
         ? 'Running SHARP'
-        : 'Start SHARP';
+        : canStart
+          ? 'Start SHARP'
+          : 'Install SHARP';
   }
   document.getElementById('compute-route-fire-run-report').textContent = compactPathTail(run?.reportPath);
   document.getElementById('compute-route-fire-run-report').title = run?.reportPath || '';
@@ -8478,6 +8506,12 @@ async function pollComputeRouteFireRun(runId) {
 }
 
 async function startComputeRouteFireRun() {
+  if (!computeRouteFireCanStart()) {
+    const message = computeRouteFireActuatorState.routeCapability?.operatorMessage || 'SHARP is not installed in this Kaminos checkout yet.';
+    setInfo(message);
+    renderComputeRouteFireRun({ status: 'failed', error: message, artifacts: [] });
+    return { status: 'failed', error: message };
+  }
   computeRouteFireActuatorState.loadingRunId = null;
   renderComputeRouteFireRun({ status: 'starting', artifacts: [] });
   await applyComputeRouteFireVisualState({ status: 'idle' });
@@ -8509,6 +8543,7 @@ async function initComputeRouteFireActuator() {
     .then(response => response.json())
     .catch(error => ({ error: String(error), defaultInputPath: '' }));
   document.getElementById('compute-route-fire-actuator-route').textContent = config.pipelineId || 'sharp-image-to-splat-live-v0';
+  renderComputeRouteFireCapability(config);
   setComputeRouteFireInputPath(config.defaultInputPath || '');
   const picker = document.getElementById('compute-route-fire-image-picker');
   if (picker) {
