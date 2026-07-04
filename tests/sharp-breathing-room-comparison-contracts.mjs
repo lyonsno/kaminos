@@ -10,6 +10,8 @@ import {
   sharpBreathingRoomSchedulerProfileForMode,
   sharpBreathingRoomComparisonProfiles,
 } from '../lib/sharp-breathing-room-comparison.mjs';
+import { SHARP_BREATHING_ROOM_VALIDATION_SCHEMA } from '../lib/sharp-breathing-room-validation.mjs';
+import { createSchedulerVerificationReceipt } from '../lib/scheduler-verification-receipt.mjs';
 
 const root = new URL('..', import.meta.url).pathname;
 const manifestPath = join(root, 'pipelines', 'asset-pipelines.json');
@@ -17,35 +19,83 @@ const witnessPath = join(root, 'pipeline-witness.mjs');
 const runnerPath = join(root, 'scripts', 'run-sharp-breathing-room-comparison.mjs');
 
 function schedulerVerification({ status = 'verified', timingAuthority = 'browser-wall-clock', boundaryAssertions = true } = {}) {
+  const eventTrace = {
+    schema: 'kaminos.webgpu-scheduler-event-trace.v0',
+    clock: 'performance.now',
+    timingAuthority,
+    events: status === 'verified'
+      ? [
+          { tMs: 1, phase: 'spn', boundary: 'spn-patch-chunk', kind: 'chunk-start', index: 0, source: 'mock' },
+          { tMs: 2, phase: 'spn', boundary: 'spn-patch-chunk', kind: 'queue-work-done-start', index: 0, source: 'mock' },
+          { tMs: 3, phase: 'spn', boundary: 'spn-patch-chunk', kind: 'queue-work-done-end', index: 0, queueDoneMs: 1, source: 'mock' },
+          { tMs: 4, phase: 'spn', boundary: 'spn-patch-chunk', kind: 'js-yield-start', index: 0, source: 'mock' },
+          { tMs: 6, phase: 'spn', boundary: 'spn-patch-chunk', kind: 'js-yield-end', index: 0, yieldMs: 2, source: 'mock' },
+        ]
+      : [],
+  };
+  const assertions = boundaryAssertions ? [
+    {
+      field: 'phaseChunkSize.spnPatch',
+      requested: 1,
+      effective: 1,
+      status: 'verified',
+      observedBoundary: 'spn-patch-chunk',
+      observedCount: 1,
+      expectedMinimumCount: 1,
+      observedQueueWaitCount: 1,
+      observedYieldCount: 1,
+      unsupportedReason: null,
+    },
+  ] : [];
+  if (boundaryAssertions) {
+    return createSchedulerVerificationReceipt({
+      route: {
+        pipelineId: 'sharp-image-to-splat-live-v0',
+        requestedRouteId: 'adapter.sharp-image-to-splat-live.v0',
+        effectiveRouteId: 'adapter.sharp-image-to-splat-live.v0',
+        backendClass: 'browser-webgpu',
+        adapterReport: { path: '/tmp/sharp-adapter-report.json', sha256: '0'.repeat(64) },
+      },
+      scheduler: {
+        schema: 'kaminos.webgpu-route-scheduler.v0',
+        requestedScheduler: {
+          mode: 'cooperative',
+          phaseChunkSize: { spnPatch: 1 },
+          waitForSubmittedWorkDone: true,
+          yieldMs: 2,
+        },
+        effectiveScheduler: {
+          mode: 'cooperative',
+          phaseChunkSize: { spnPatch: 1 },
+          waitForSubmittedWorkDone: true,
+          yieldMs: 2,
+          unsupportedFields: [],
+        },
+        verificationState: status,
+      },
+      backpressure: {
+        schema: 'kaminos.webgpu-route-backpressure.v0',
+        effectiveBudget: 'furnace',
+      },
+      eventTrace,
+      boundaryAssertions: assertions,
+      frameTail: {
+        evidenceSource: timingAuthority,
+        disclaimer: 'not-gpu-exclusive-or-present-latency',
+        rafFps: 8.1,
+        frameP95Ms: 124.1,
+        queueDoneP95Ms: 473.6,
+      },
+    });
+  }
   return {
     schema: 'kaminos.webgpu-scheduler-verification-receipt.v0',
     status,
     classification: status === 'verified' ? 'observed-boundary' : 'config-only',
     observationClass: status === 'verified' ? 'observed-stage-boundary' : 'config-only',
     downgrades: status === 'verified' ? [] : ['yield-events-missing'],
-    eventTrace: {
-      schema: 'kaminos.webgpu-scheduler-event-trace.v0',
-      timingAuthority,
-      events: status === 'verified'
-        ? [
-            { phase: 'spn', boundary: 'spn-patch-chunk', kind: 'chunk-start' },
-            { phase: 'spn', boundary: 'spn-patch-chunk', kind: 'queue-work-done-start' },
-            { phase: 'spn', boundary: 'spn-patch-chunk', kind: 'queue-work-done-end' },
-            { phase: 'spn', boundary: 'spn-patch-chunk', kind: 'js-yield-start' },
-            { phase: 'spn', boundary: 'spn-patch-chunk', kind: 'js-yield-end' },
-          ]
-        : [],
-    },
-    boundaryAssertions: boundaryAssertions ? [
-      {
-        field: 'phaseChunkSize.spnPatch',
-        status: 'verified',
-        observedBoundary: 'spn-patch-chunk',
-        observedCount: 1,
-        observedQueueWaitCount: 1,
-        observedYieldCount: 1,
-      },
-    ] : [],
+    eventTrace,
+    boundaryAssertions: assertions,
     frameTail: {
       evidenceSource: timingAuthority,
       rafFps: 8.1,
@@ -177,6 +227,10 @@ const valid = createSharpBreathingRoomComparison({
   ],
 });
 assert.equal(valid.schema, SHARP_BREATHING_ROOM_COMPARISON_SCHEMA);
+assert.equal(valid.validation.schema, SHARP_BREATHING_ROOM_VALIDATION_SCHEMA);
+assert.equal(valid.validation.ok, true);
+assert.equal(valid.validation.canClaim.breathingRoomSmoke, true);
+assert.equal(valid.canClaim.breathingRoomSmoke, true);
 assert.equal(valid.status, 'valid-smoke');
 assert.equal(valid.evidenceClass, 'single-pair-smoke');
 assert.equal(valid.claimBoundary, 'single-pair smoke only; no optimization, speedup, slowdown, or stable throughput claim');
@@ -201,6 +255,7 @@ const mismatchedOutput = createSharpBreathingRoomComparison({
   ],
 });
 assert.equal(mismatchedOutput.status, 'invalid');
+assert.equal(mismatchedOutput.validation.errors.includes('same-input-output-mismatch'), true);
 assert.ok(mismatchedOutput.downgrades.includes('same-input-output-mismatch'));
 assert.equal(mismatchedOutput.falseClosureChecks.sameInputOutputMismatch, true);
 
@@ -346,7 +401,11 @@ writeFileSync(report, JSON.stringify({
   assert.equal(proc.status, 0, proc.stderr || proc.stdout);
   const runnerReport = JSON.parse(readFileSync(report, 'utf8'));
   assert.equal(runnerReport.schema, SHARP_BREATHING_ROOM_COMPARISON_SCHEMA);
-  assert.equal(runnerReport.status, 'route-bridge');
+  assert.equal(runnerReport.validation.schema, SHARP_BREATHING_ROOM_VALIDATION_SCHEMA);
+  assert.equal(runnerReport.status, 'invalid');
+  assert.equal(runnerReport.validation.ok, false);
+  assert.equal(runnerReport.validation.errors.some(error => error.endsWith('-fixture-route')), true);
+  assert.equal(runnerReport.falseClosureChecks.fallbackOrFixtureRoute, true);
   assert.ok(runnerReport.downgrades.includes('flame-contention-evidence-not-provided'));
   assert.equal(runnerReport.runs.length, 2);
   assert.equal(runnerReport.runs[0].profileId, 'baseline-default');

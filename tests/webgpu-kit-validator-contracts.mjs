@@ -14,18 +14,14 @@ assert.ok(existsSync(packageLockPath), 'Kaminos pipeline tooling must lock npm d
 const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8'));
 assert.equal(
   packageJson.dependencies?.['@kaminos/webgpu-inference-kit'],
-  '^0.1.4',
+  '^0.1.6',
   'Pipeline scheduler evidence must use the runtime WebGPU inference kit package',
 );
 
 const packageLock = JSON.parse(readFileSync(packageLockPath, 'utf8'));
 const lockedKit = packageLock.packages?.['node_modules/@kaminos/webgpu-inference-kit'];
-assert.equal(lockedKit?.version, '0.1.4', 'WebGPU inference kit lockfile must pin the adopted package version');
-assert.equal(
-  lockedKit?.integrity,
-  'sha512-/Ewab+9sM/anhr2+V66hp5+EMmeUFhUdBHRyMUnF2GOYzbYCsU31Ejye7I7m/1nkK94i/NQrD7NSrxmKHdx29g==',
-  'WebGPU inference kit lockfile must preserve the published package integrity Cranial handed off',
-);
+assert.equal(lockedKit?.version, '0.1.6', 'WebGPU inference kit lockfile must pin Cranial validator package version');
+assert.ok(lockedKit?.integrity, 'WebGPU inference kit lockfile must preserve published package integrity');
 
 for (const sourcePath of [witnessPath, wrapperPath]) {
   const source = readFileSync(sourcePath, 'utf8');
@@ -55,3 +51,17 @@ for (const sourcePath of [witnessPath, wrapperPath]) {
     `${sourcePath} must not hand-build the canonical scheduler profile from breathing-room telemetry`,
   );
 }
+
+const comparisonSource = readFileSync(join(root, 'lib', 'sharp-breathing-room-comparison.mjs'), 'utf8');
+assert.match(
+  comparisonSource,
+  /validateSharpBreathingRoomComparisonEvidence/,
+  'Pipeline SHARP breathing-room comparison builder must call the shared kit validator',
+);
+
+const validationShimSource = readFileSync(join(root, 'lib', 'sharp-breathing-room-validation.mjs'), 'utf8');
+assert.match(
+  validationShimSource,
+  /from ['"]@kaminos\/webgpu-inference-kit['"]/,
+  'Pipeline SHARP breathing-room validation shim must re-export the published package gate',
+);

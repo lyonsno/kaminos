@@ -10,7 +10,7 @@ import {
   createWebGpuRouteSchedulerProfile,
   validateWebGpuRouteBackpressureProfile,
   validateWebGpuRouteSchedulerProfile,
-} from './webgpu-inference-kit/src/index.js';
+} from '@kaminos/webgpu-inference-kit';
 import { createSchedulerVerificationReceipt } from './lib/scheduler-verification-receipt.mjs';
 
 const args = new Map();
