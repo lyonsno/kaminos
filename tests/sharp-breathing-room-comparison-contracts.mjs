@@ -7,6 +7,7 @@ import { spawnSync } from 'node:child_process';
 import {
   SHARP_BREATHING_ROOM_COMPARISON_SCHEMA,
   createSharpBreathingRoomComparison,
+  sharpBreathingRoomSchedulerProfileForMode,
   sharpBreathingRoomComparisonProfiles,
 } from '../lib/sharp-breathing-room-comparison.mjs';
 
@@ -138,14 +139,32 @@ const profiles = sharpBreathingRoomComparisonProfiles();
 assert.equal(profiles.schema, 'kaminos.sharp-breathing-room-comparison-profiles.v0');
 assert.equal(profiles.pairingKind, 'default-vs-cooperative');
 assert.equal(profiles.profiles[0].id, 'baseline-default');
+assert.equal(profiles.profiles[0].schedulerMode, 'default');
 assert.equal(profiles.profiles[0].scheduler.mode, 'default');
+assert.equal(profiles.profiles[0].env.KAMINOS_SHARP_WEBGPU_SCHEDULER_MODE, 'default');
 assert.equal(profiles.profiles[0].proofExpectation.schedulerVerification, 'not-verified-without-observed-events');
 assert.equal(profiles.profiles[1].id, 'cooperative-spn-gaussian');
+assert.equal(profiles.profiles[1].schedulerMode, 'friendly');
 assert.equal(profiles.profiles[1].scheduler.mode, 'cooperative');
 assert.equal(profiles.profiles[1].scheduler.spnPatchChunkSize, 1);
 assert.equal(profiles.profiles[1].scheduler.waitForSubmittedWorkDone, true);
 assert.equal(profiles.profiles[1].scheduler.gaussianPhaseYieldMs > 0, true);
 assert.equal(profiles.profiles[1].unsupportedFields.includes('vitBlockChunkSize'), true);
+assert.equal(profiles.profiles[1].env.KAMINOS_SHARP_WEBGPU_SCHEDULER_MODE, 'friendly');
+
+const friendlyProfile = sharpBreathingRoomSchedulerProfileForMode('friendly');
+assert.equal(friendlyProfile.id, 'cooperative-spn-gaussian');
+assert.equal(friendlyProfile.scheduler.mode, 'cooperative');
+assert.equal(friendlyProfile.scheduler.spnPatchChunkSize, 1);
+assert.equal(friendlyProfile.scheduler.gaussianPhaseYieldMs, 4);
+assert.equal(friendlyProfile.scheduler.vitBlockChunkSize, 2);
+assert.equal(friendlyProfile.unsupportedFields.includes('vitBlockChunkSize'), true);
+assert.equal(sharpBreathingRoomSchedulerProfileForMode('cooperative-spn-gaussian').schedulerMode, 'friendly');
+assert.throws(
+  () => sharpBreathingRoomSchedulerProfileForMode('bogus-friendly'),
+  /unknown SHARP breathing-room scheduler mode/,
+  'unknown Wake button modes must fail loud instead of silently using default',
+);
 
 const valid = createSharpBreathingRoomComparison({
   requestedPipelineId: 'sharp-image-to-splat-live-v0',

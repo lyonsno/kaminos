@@ -39,6 +39,8 @@ assert.match(wrapperSource, /computePlyBounds/, 'wrapper must derive autocrop ev
 assert.match(wrapperSource, /KAMINOS_PIPELINE_AUTOCROP_EVIDENCE/, 'wrapper must accept a caller-owned autocrop evidence path');
 assert.match(wrapperSource, /Browser\.setDownloadBehavior|setDownloadBehavior/, 'wrapper must write PLY through browser download behavior instead of stdout copy-paste');
 assert.match(wrapperSource, /KAMINOS_SHARP_WEBGPU_SCHEDULER/, 'wrapper must accept explicit SHARP-WebGPU scheduler config');
+assert.match(wrapperSource, /KAMINOS_SHARP_WEBGPU_SCHEDULER_MODE/, 'wrapper must accept Wake-friendly named scheduler modes');
+assert.match(wrapperSource, /--scheduler-mode/, 'wrapper must expose named scheduler modes through CLI as well as env');
 assert.match(wrapperSource, /sharpScheduler/, 'wrapper must pass scheduler config into the SHARP-WebGPU browser route');
 assert.match(wrapperSource, /schedulerTelemetry/, 'wrapper must capture browser-reported scheduler telemetry');
 assert.match(wrapperSource, /scheduler-unverified/, 'wrapper must fail loud when requested scheduler telemetry is absent');
@@ -71,14 +73,7 @@ try {
       ...process.env,
       KAMINOS_SHARP_WEBGPU_REPO: join(tempRoot, 'missing-sharp-webgpu'),
       KAMINOS_SHARP_WEBGPU_TIMEOUT_MS: '1000',
-      KAMINOS_SHARP_WEBGPU_SCHEDULER: JSON.stringify({
-        mode: 'cooperative',
-        spnPatchChunkSize: 1,
-        yieldMs: 3,
-        waitForSubmittedWorkDone: true,
-        gaussianPhaseYieldMs: 4,
-        vitBlockChunkSize: 2,
-      }),
+      KAMINOS_SHARP_WEBGPU_SCHEDULER_MODE: 'friendly',
     },
   });
 
@@ -90,16 +85,27 @@ try {
   assert.equal(failureReport.ok, false);
   assert.equal(failureReport.backend.modelFamily, 'SHARP-WebGPU');
   assert.equal(failureReport.backend.runtime, 'browser-webgpu');
+  assert.equal(failureReport.backend.schedulerMode.requested, 'friendly');
+  assert.equal(failureReport.backend.schedulerMode.effective, 'friendly');
+  assert.equal(failureReport.backend.schedulerMode.profileId, 'cooperative-spn-gaussian');
   assert.equal(failureReport.breathingRoom.schema, 'kaminos.sharp-webgpu-scheduler-evidence.v0');
   assert.equal(failureReport.breathingRoom.status, 'scheduler-unverified');
+  assert.equal(failureReport.breathingRoom.schedulerMode.requested, 'friendly');
+  assert.equal(failureReport.breathingRoom.schedulerMode.effective, 'friendly');
   assert.equal(failureReport.breathingRoom.requestedScheduler.spnPatchChunkSize, 1);
   assert.equal(failureReport.breathingRoom.requestedScheduler.vitBlockChunkSize, 2);
   assert.equal(failureReport.breathingRoom.effectiveScheduler, null);
   assert.equal(failureReport.pipelineScheduler.schema, 'kaminos.pipeline-scheduler-composition.v0');
   assert.equal(failureReport.pipelineScheduler.source, 'pipeline-adapter-report');
   assert.equal(failureReport.pipelineScheduler.verificationState, 'scheduler-unverified');
+  assert.equal(failureReport.pipelineScheduler.schedulerMode.requested, 'friendly');
+  assert.equal(failureReport.pipelineScheduler.schedulerMode.effective, 'friendly');
   assert.equal(failureReport.pipelineScheduler.requestedScheduler.vitBlockChunkSize, 2);
   assert.equal(failureReport.pipelineScheduler.effectiveScheduler, null);
+  assert.equal(failureReport.schedulerVerification.status, 'unsupported');
+  assert.equal(failureReport.schedulerVerification.classification, 'unsupported');
+  assert.equal(failureReport.schedulerVerification.boundaryAssertions.some(assertion => assertion.field === 'phaseChunkSize.vitBlock' && assertion.status === 'unsupported'), true);
+  assert.equal(failureReport.schedulerVerification.downgrades.includes('event-trace-missing'), true);
   assert.equal(failureReport.pipelineScheduler.scheduler.schema, 'kaminos.webgpu-route-scheduler.v0');
   assert.equal(failureReport.pipelineScheduler.scheduler.requestedScheduler.phaseChunkSize.vitBlock, 2);
   assert.equal(failureReport.pipelineScheduler.scheduler.effectiveScheduler.unsupportedFields.includes('phaseChunkSize'), true);
@@ -111,6 +117,33 @@ try {
   assert.deepEqual(failureReport.pipelineScheduler.failureDowngrades, ['effective-scheduler-missing']);
   assert.match(failureReport.phase, /validating|initializing|starting/, 'failure report must preserve failure phase');
   assert.match(failureReport.error, /SHARP-WebGPU repo|weights|package/, 'failure must name the missing native substrate');
+
+  const invalidModeReport = join(tempRoot, 'out', 'invalid-mode-report.json');
+  const invalidMode = spawnSync(process.execPath, [
+    wrapperPath,
+    '--input', input,
+    '--output', join(tempRoot, 'out', 'invalid-mode-output.ply'),
+    '--report', invalidModeReport,
+    '--scheduler-mode', 'bogus-friendly',
+  ], {
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      KAMINOS_SHARP_WEBGPU_REPO: join(tempRoot, 'missing-sharp-webgpu'),
+      KAMINOS_SHARP_WEBGPU_TIMEOUT_MS: '1000',
+    },
+  });
+
+  assert.notEqual(invalidMode.status, 0, 'unknown named scheduler mode must fail loud');
+  assert.ok(existsSync(invalidModeReport), 'unknown named scheduler mode must still write a durable report');
+  const invalidReport = JSON.parse(readFileSync(invalidModeReport, 'utf8'));
+  assert.equal(invalidReport.ok, false);
+  assert.equal(invalidReport.backend.schedulerMode.requested, 'bogus-friendly');
+  assert.equal(invalidReport.backend.schedulerMode.effective, null);
+  assert.equal(invalidReport.breathingRoom.schedulerMode.requested, 'bogus-friendly');
+  assert.equal(invalidReport.breathingRoom.schedulerMode.effective, null);
+  assert.match(invalidReport.error, /unknown SHARP breathing-room scheduler mode/);
+  assert.equal(existsSync(join(tempRoot, 'out', 'invalid-mode-output.ply')), false, 'unknown mode failure must not write a placeholder PLY');
 } finally {
   rmSync(tempRoot, { recursive: true, force: true });
 }

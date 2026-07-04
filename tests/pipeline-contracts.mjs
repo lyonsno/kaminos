@@ -364,6 +364,15 @@ mkdirSync(dirname(report), { recursive: true });
 writeFileSync(report, JSON.stringify({
   schema: 'mock.sharp-adapter-report.v0',
   ok: true,
+  backend: {
+    modelFamily: 'SHARP-WebGPU',
+    runtime: 'mock-adapter',
+    schedulerMode: {
+      requested: 'friendly',
+      effective: 'friendly',
+      profileId: 'cooperative-spn-gaussian'
+    }
+  },
   input,
   output,
   inputSha256: hash,
@@ -371,12 +380,18 @@ writeFileSync(report, JSON.stringify({
   breathingRoom: {
     schema: 'kaminos.sharp-webgpu-scheduler-evidence.v0',
     status: 'verified',
+    schedulerMode: {
+      requested: 'friendly',
+      effective: 'friendly',
+      profileId: 'cooperative-spn-gaussian'
+    },
     requestedScheduler: {
       mode: 'cooperative',
       spnPatchChunkSize: 1,
       yieldMs: 2,
       waitForSubmittedWorkDone: true,
-      gaussianPhaseYieldMs: 3
+      gaussianPhaseYieldMs: 3,
+      vitBlockChunkSize: 2
     },
     effectiveScheduler: {
       mode: 'cooperative',
@@ -432,13 +447,20 @@ writeFileSync(report, JSON.stringify({
   assert.equal(liveReport.stages[0].effectiveRoute.realModel, false);
   assert.equal(liveReport.stages[0].effectiveRoute.requestedRealModel, true);
   assert.equal(liveReport.stages[0].effectiveRoute.adapterReport.schema, 'mock.sharp-adapter-report.v0');
+  assert.equal(liveReport.stages[0].effectiveRoute.adapterReport.backend.schedulerMode.requested, 'friendly');
+  assert.equal(liveReport.stages[0].effectiveRoute.adapterReport.backend.schedulerMode.effective, 'friendly');
   assert.equal(liveReport.stages[0].effectiveRoute.adapterReport.breathingRoom.status, 'verified');
+  assert.equal(liveReport.stages[0].effectiveRoute.adapterReport.breathingRoom.schedulerMode.requested, 'friendly');
   assert.equal(liveReport.stages[0].effectiveRoute.adapterReport.breathingRoom.requestedScheduler.spnPatchChunkSize, 1);
   assert.equal(liveReport.stages[0].effectiveRoute.adapterReport.breathingRoom.effectiveScheduler.spnPatchChunkSize, 1);
   assert.deepEqual(liveReport.stages[0].effectiveRoute.adapterReport.breathingRoom.unsupportedFields, ['vitBlockChunkSize']);
+  assert.equal(liveReport.stages[0].effectiveRoute.adapterReport.schedulerVerification.schema, 'kaminos.webgpu-scheduler-verification-receipt.v0');
+  assert.equal(liveReport.stages[0].effectiveRoute.adapterReport.schedulerVerification.boundaryAssertions.some(assertion => assertion.field === 'phaseChunkSize.vitBlock' && assertion.status === 'unsupported'), true);
   assert.equal(liveReport.stages[0].effectiveRoute.adapterReport.pipelineScheduler.schema, 'kaminos.pipeline-scheduler-composition.v0');
   assert.equal(liveReport.stages[0].effectiveRoute.adapterReport.pipelineScheduler.source, 'pipeline-adapter-report');
   assert.equal(liveReport.stages[0].effectiveRoute.adapterReport.pipelineScheduler.verificationState, 'unsupported');
+  assert.equal(liveReport.stages[0].effectiveRoute.adapterReport.pipelineScheduler.schedulerMode.requested, 'friendly');
+  assert.equal(liveReport.stages[0].effectiveRoute.adapterReport.pipelineScheduler.schedulerMode.effective, 'friendly');
   assert.equal(liveReport.stages[0].effectiveRoute.adapterReport.pipelineScheduler.requestedScheduler.spnPatchChunkSize, 1);
   assert.equal(liveReport.stages[0].effectiveRoute.adapterReport.pipelineScheduler.effectiveScheduler.spnPatchChunkSize, 1);
   assert.deepEqual(liveReport.stages[0].effectiveRoute.adapterReport.pipelineScheduler.unsupportedFields, ['vitBlockChunkSize']);

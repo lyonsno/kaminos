@@ -760,6 +760,7 @@ function routeReceiptRuntimeSchedulerEvidence(report, effectiveRoute = null) {
     schema: 'kaminos.pipeline-scheduler-composition.v0',
     source,
     verificationState: schedulerVerificationState,
+    schedulerMode: report?.breathingRoom?.schedulerMode || report?.backend?.schedulerMode || null,
     requestedScheduler: scheduler?.requestedScheduler || null,
     effectiveScheduler: scheduler?.effectiveScheduler || null,
     unsupportedFields,
@@ -840,6 +841,7 @@ function pipelineSchedulerEvidence(report, effectiveRoute = null) {
     schema: 'kaminos.pipeline-scheduler-composition.v0',
     source: 'pipeline-adapter-report',
     verificationState,
+    schedulerMode: breathingRoom?.schedulerMode || report.backend?.schedulerMode || null,
     requestedScheduler: breathingRoom?.requestedScheduler || report.backend?.requestedScheduler || null,
     effectiveScheduler,
     unsupportedFields,
@@ -868,13 +870,15 @@ function pipelineSchedulerEvidence(report, effectiveRoute = null) {
 
 function adapterReportSummary(report, effectiveRoute = null) {
   if (!report) return null;
+  const pipelineScheduler = pipelineSchedulerEvidence(report, effectiveRoute);
   return {
     schema: report.schema || null,
     ok: report.ok ?? null,
     phase: report.phase || null,
     backend: report.backend || null,
     breathingRoom: report.breathingRoom || null,
-    pipelineScheduler: pipelineSchedulerEvidence(report, effectiveRoute),
+    schedulerVerification: report.schedulerVerification || pipelineScheduler.schedulerVerification || null,
+    pipelineScheduler,
     inputSha256: report.inputSha256 || report.input?.sha256 || null,
     outputBytes: report.outputBytes || report.output?.bytes || null,
   };
