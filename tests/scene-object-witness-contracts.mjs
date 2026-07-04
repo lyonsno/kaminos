@@ -192,6 +192,12 @@ assert.match(indexHtml, /data-greenroom-route-effective-source-kind/, 'Route tra
 assert.match(indexHtml, /data-greenroom-route-source-selector/, 'Browser WebGPU source selector has a stable DOM hook for visual/operator smoke');
 assert.match(indexHtml, /sourceImageLoadFailures/, 'Browser WebGPU source selector keeps load failures as secondary evidence');
 assert.match(indexHtml, /grBrowseScratch[\s\S]*renderMogeRouteOperatorPanel\(greenroomRouteJobState\.rows/, 'Scratch image refresh updates the top MoGE source controls after async scratch discovery');
+assert.match(indexHtml, /mogeSourceImageAssets/, 'MoGE cockpit keeps shared source-image asset state from the image inbox');
+assert.match(indexHtml, /grBrowseMogeSourceImages[\s\S]*assets[\s\S]*kind:\s*'image'/, 'MoGE cockpit browses shared /api/assets?kind=image source images');
+assert.match(indexHtml, /uploadMogeSourceImage[\s\S]*\/api\/source-images\/upload-image/, 'MoGE cockpit uploads picked images into the shared source-image inbox');
+assert.match(indexHtml, /data-greenroom-moge-source-image-picker/, 'MoGE cockpit exposes a stable source image picker hook');
+assert.match(indexHtml, /data-greenroom-moge-source-upload/, 'MoGE cockpit exposes a stable source upload hook');
+assert.match(indexHtml, /image-inbox/, 'MoGE source evidence preserves image-inbox identity instead of hiding it as a generic row source');
 assert.match(indexHtml, /data-greenroom-cockpit/, 'Greenroom tab exposes a top-level cockpit instead of isolated widgets');
 assert.match(indexHtml, /Greenroom Cockpit/, 'Greenroom cockpit has a human-visible title');
 assert.match(indexHtml, /renderGreenroomCockpit/, 'Route refresh renders current queue and route state into the top-level cockpit');

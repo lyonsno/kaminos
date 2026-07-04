@@ -896,6 +896,47 @@ def test_splat_asset_index_separates_experimental_and_production_roots():
         assert "loose-machine-scan.ply" not in {entry["name"] for entry in entries}
 
 
+def test_source_image_inbox_lists_and_ingests_route_sources():
+    with TemporaryDirectory(dir="/tmp") as tmp:
+        root = Path(tmp)
+        image_inbox = root / "images" / "inbox"
+        image_inbox.mkdir(parents=True)
+        (image_inbox / "chair source.PNG").write_bytes(b"png")
+        (root / "loose-source.png").write_bytes(b"must not appear")
+
+        previous_roots = list(serve.ASSET_ROOTS)
+        previous_browse = dict(BROWSE_ROOTS)
+        serve.ASSET_ROOTS[:] = [
+            {
+                "id": "image-inbox",
+                "label": "Source Images",
+                "kind": "image",
+                "stage": "experimental",
+                "path": image_inbox,
+            },
+        ]
+        BROWSE_ROOTS["image-inbox"] = image_inbox
+        try:
+            entries = serve.list_asset_entries(kind="image")
+            uploaded = serve.ingest_source_image_asset("MoGE Specimen 01.WEBP", b"webp")
+            refreshed = serve.list_asset_entries(kind="image")
+        finally:
+            serve.ASSET_ROOTS[:] = previous_roots
+            BROWSE_ROOTS.clear()
+            BROWSE_ROOTS.update(previous_browse)
+
+    assert [entry["root_id"] for entry in entries] == ["image-inbox"]
+    assert entries[0]["kind"] == "image"
+    assert entries[0]["source"].startswith("/api/read?root=image-inbox&path=")
+    assert entries[0]["serverPath"].endswith("chair source.PNG")
+    assert entries[0]["display"]["load_label"] == "Use Image"
+    assert uploaded["schema"] == "kaminos.source-image-asset.v0"
+    assert uploaded["entry"]["root_id"] == "image-inbox"
+    assert uploaded["entry"]["path"] == "moge-specimen-01.webp"
+    assert uploaded["inputPath"].endswith("moge-specimen-01.webp")
+    assert {entry["path"] for entry in refreshed} == {"chair source.PNG", "moge-specimen-01.webp"}
+
+
 def test_splat_asset_index_allows_pointer_symlinks_inside_declared_roots():
     with TemporaryDirectory(dir="/tmp") as tmp:
         root = Path(tmp)
@@ -1095,6 +1136,7 @@ if __name__ == "__main__":
     test_route_provider_all_combines_native_greenroom_and_browser_webgpu_rows()
     test_native_greenroom_route_provider_preserves_degraded_legacy_rows()
     test_splat_asset_index_separates_experimental_and_production_roots()
+    test_source_image_inbox_lists_and_ingests_route_sources()
     test_splat_asset_index_allows_pointer_symlinks_inside_declared_roots()
     test_splat_asset_ingest_writes_only_to_experimental_inbox()
     test_splat_asset_correction_roundtrips_as_sidecar_metadata()

@@ -152,6 +152,9 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 .moge-route-source-selector { display: grid; grid-template-columns: minmax(120px, 160px); gap: 3px; align-items: start; flex: 0 1 180px; min-width: 140px; }
 .moge-route-source-selector select { width: 100%; min-width: 0; height: 25px; background: #181818; border: 1px solid #333; border-radius: 5px; color: #bbb; font-size: 10px; padding: 3px 6px; outline: none; }
 .moge-route-source-selector select:focus { border-color: #1976d2; color: #fff; }
+.moge-route-source-inputs { display: flex; gap: 5px; align-items: center; flex-wrap: wrap; }
+.moge-route-source-inputs select { flex: 1 1 100%; }
+.moge-route-source-inputs input[type="file"] { width: 100%; color: #777; font-size: 10px; }
 .moge-route-source-primary { color: #cfcfcf; font-size: 10px; line-height: 1.25; overflow-wrap: anywhere; }
 .moge-route-source-evidence { color: #666; font: 9px 'SF Mono', monospace; line-height: 1.25; overflow-wrap: anywhere; }
 .greenroom-cockpit { border: 1px solid #2e3c35; background: #151a17; border-radius: 7px; padding: 10px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 8px; }
@@ -9236,7 +9239,9 @@ let greenroomRouteJobState = {
   error: null,
 };
 const browserWebGpuRouteSourceSelectionByJobId = new Map();
+const mogeSourceImageSelectionByJobId = new Map();
 let greenroomScratchImageCandidates = [];
+let mogeSourceImageAssets = [];
 let lastMogePreviewRequestId = null;
 let lastMogePreviewRunState = null;
 
@@ -10177,6 +10182,10 @@ function setMogeRouteSourceSelectionMode(row = {}, mode = 'auto') {
   return normalized;
 }
 
+function mogeRouteFirstCandidate(row = {}, mode = mogeRouteSourceSelectionMode(row)) {
+  return mogeRouteSourceImageCandidates(row, mode)[0] || null;
+}
+
 function mogeRouteEffectiveSourceKind(row = {}) {
   const routeJob = row.route_job || {};
   const metadata = routeJob.metadata || {};
@@ -10184,13 +10193,14 @@ function mogeRouteEffectiveSourceKind(row = {}) {
   if (recorded) return recorded;
   const mode = mogeRouteSourceSelectionMode(row);
   const availability = mogeRouteSourceAvailability(row);
+  const firstCandidate = mogeRouteFirstCandidate(row, mode);
   if (mode === 'synthetic') return 'synthetic';
-  if (mode === 'selected-scene') return availability.scene ? 'scene' : 'synthetic';
-  if (mode === 'row') return availability.row ? 'row' : 'synthetic';
-  if (mode === 'scratch') return availability.scratch ? 'scratch' : 'synthetic';
+  if (mode === 'selected-scene') return availability.scene ? (firstCandidate?.kind || 'scene') : 'synthetic';
+  if (mode === 'row') return availability.row ? (firstCandidate?.kind || 'row') : 'synthetic';
+  if (mode === 'scratch') return availability.scratch ? (firstCandidate?.kind || 'scratch') : 'synthetic';
   if (availability.row) return 'row';
   if (availability.scene) return 'scene';
-  if (availability.scratch) return 'scratch';
+  if (availability.scratch) return mogeRouteFirstCandidate(row, 'scratch')?.kind || 'scratch';
   return 'synthetic';
 }
 
@@ -10201,6 +10211,7 @@ function mogeRouteHasRealSourceCandidate(row = {}) {
 function mogeRouteEffectiveSourceLabel(kind) {
   if (kind === 'scene' || kind === 'selected-scene') return 'Selected scene image';
   if (kind === 'row') return 'Row source image';
+  if (kind === 'image-inbox') return 'Imported source image';
   if (kind === 'scratch') return 'Scratch/imported image';
   if (kind === 'synthetic') return 'Generated test image';
   return 'No usable image';
@@ -10220,6 +10231,7 @@ function mogeRouteEffectiveSourceSentence(row = {}) {
   }
   if (kind === 'scene') return 'MoGE will use the selected scene image.';
   if (kind === 'row') return 'MoGE will use the source already attached to this row.';
+  if (kind === 'image-inbox') return 'MoGE will use the imported source image.';
   if (kind === 'scratch') return 'MoGE will use the scratch image you imported.';
   if (kind === 'synthetic') return 'MoGE will use a generated test image because no real source is available.';
   return 'MoGE needs a usable image before it can run.';
@@ -10229,7 +10241,7 @@ function mogeRouteSourceAvailability(row = {}) {
   return {
     row: mogeRouteRowSourceImageCandidates(row).length > 0,
     scene: mogeRouteSelectedSceneImageCandidates().length > 0,
-    scratch: mogeRouteScratchImageCandidates().length > 0,
+    scratch: mogeRouteScratchImageCandidates(row).length > 0,
   };
 }
 
@@ -10304,6 +10316,64 @@ function renderMogeRouteSourceSelector(container, row) {
     };
     select.onclick = event => event.stopPropagation();
     wrapper.appendChild(select);
+
+    const sourceInputs = document.createElement('div');
+    sourceInputs.className = 'moge-route-source-inputs';
+    const imagePicker = document.createElement('select');
+    imagePicker.setAttribute('aria-label', 'Imported MoGE source image');
+    imagePicker.setAttribute('data-greenroom-moge-source-image-picker', 'true');
+    const selectedCandidate = mogeSelectedSourceImageCandidate(row);
+    if (!mogeSourceImageAssets.length) {
+      imagePicker.appendChild(new Option('No imported source images yet', ''));
+    } else {
+      imagePicker.appendChild(new Option('Choose imported source image...', ''));
+      for (const entry of mogeSourceImageAssets) {
+        const label = entry.display?.title || entry.name || entry.path || 'Source image';
+        const option = new Option(label, entry.id || entry.serverPath || entry.source || '');
+        option.title = entry.serverPath || entry.source || entry.path || '';
+        imagePicker.appendChild(option);
+      }
+    }
+    if (selectedCandidate) {
+      const selectedEntry = mogeSourceImageAssets.find(entry => {
+        const value = entry.id || entry.serverPath || entry.source || '';
+        return value === mogeSourceImageSelectionByJobId.get(routeJobSourceSelectionKey(row));
+      });
+      if (selectedEntry) imagePicker.value = selectedEntry.id || selectedEntry.serverPath || selectedEntry.source || '';
+    }
+    imagePicker.onchange = (event) => {
+      event.stopPropagation();
+      if (imagePicker.value) {
+        mogeSourceImageSelectionByJobId.set(routeJobSourceSelectionKey(row), imagePicker.value);
+        setMogeRouteSourceSelectionMode(row, 'scratch');
+        select.value = 'scratch';
+      }
+      refresh();
+    };
+    imagePicker.onclick = event => event.stopPropagation();
+    sourceInputs.appendChild(imagePicker);
+
+    const upload = document.createElement('input');
+    upload.type = 'file';
+    upload.accept = 'image/png,image/jpeg,image/webp,image/bmp';
+    upload.setAttribute('data-greenroom-moge-source-upload', 'true');
+    upload.onchange = async (event) => {
+      event.stopPropagation();
+      const file = upload.files?.[0];
+      if (!file) return;
+      upload.disabled = true;
+      try {
+        await uploadMogeSourceImage(file, row);
+      } catch (error) {
+        setInfo(`MoGE source image upload failed: ${error.message || error}`);
+      } finally {
+        upload.disabled = false;
+        upload.value = '';
+      }
+    };
+    upload.onclick = event => event.stopPropagation();
+    sourceInputs.appendChild(upload);
+    wrapper.appendChild(sourceInputs);
   }
   wrapper.appendChild(primary);
   wrapper.appendChild(evidence);
@@ -11136,8 +11206,54 @@ function normalizeMogeRouteSourceImageCandidate(candidate, fallback = {}) {
     url: url.trim(),
     label: String(label || 'source image'),
     objectId: value.objectId || fallback.objectId || null,
+    rootId: value.rootId || value.root_id || fallback.rootId || null,
+    serverPath: value.serverPath || fallback.serverPath || null,
     role: value.role || fallback.role || 'source-image',
   };
+}
+
+function mogeSourceImageAssetCandidate(entry = {}) {
+  return normalizeMogeRouteSourceImageCandidate({
+    kind: 'image-inbox',
+    url: entry.source,
+    label: entry.display?.title || entry.name || entry.path,
+    rootId: entry.root_id || 'image-inbox',
+    serverPath: entry.serverPath || null,
+    role: 'source-image',
+  }, { kind: 'image-inbox' });
+}
+
+function mogeSelectedSourceImageCandidate(row = {}) {
+  const selectedId = mogeSourceImageSelectionByJobId.get(routeJobSourceSelectionKey(row));
+  const selectedEntry = mogeSourceImageAssets.find(entry => entry.id === selectedId || entry.serverPath === selectedId || entry.source === selectedId);
+  return selectedEntry ? mogeSourceImageAssetCandidate(selectedEntry) : null;
+}
+
+async function grBrowseMogeSourceImages(options = {}) {
+  const data = await grFetchApi('assets', { kind: 'image' });
+  mogeSourceImageAssets = Array.isArray(data.entries) ? data.entries : [];
+  if (options.render !== false) renderMogeRouteOperatorPanel(greenroomRouteJobState.rows || []);
+  return mogeSourceImageAssets;
+}
+
+async function uploadMogeSourceImage(file, row = {}) {
+  if (!file) return null;
+  const response = await fetch(`/api/source-images/upload-image?${new URLSearchParams({ name: file.name })}`, {
+    method: 'POST',
+    headers: { 'Content-Type': file.type || 'application/octet-stream' },
+    body: await file.arrayBuffer(),
+  });
+  const uploaded = await response.json().catch(() => ({}));
+  if (!response.ok || uploaded.error || !uploaded.entry) {
+    throw new Error(uploaded.error || `Source image upload failed ${response.status}`);
+  }
+  await grBrowseMogeSourceImages({ render: false });
+  const key = routeJobSourceSelectionKey(row);
+  mogeSourceImageSelectionByJobId.set(key, uploaded.entry.id || uploaded.entry.serverPath || uploaded.entry.source);
+  setMogeRouteSourceSelectionMode(row, 'scratch');
+  setInfo(`MoGE source image: ${uploaded.entry.display?.title || uploaded.entry.name || file.name}`);
+  renderMogeRouteOperatorPanel(greenroomRouteJobState.rows || []);
+  return uploaded;
 }
 
 function mogeRouteImageUrlLooksLoadable(url) {
@@ -11199,8 +11315,12 @@ function mogeRouteSelectedSceneImageCandidates() {
   return candidates.filter(candidate => mogeRouteImageUrlLooksLoadable(candidate.url));
 }
 
-function mogeRouteScratchImageCandidates() {
-  return greenroomScratchImageCandidates
+function mogeRouteScratchImageCandidates(row = {}) {
+  return [
+    ...[mogeSelectedSourceImageCandidate(row)].filter(Boolean),
+    ...mogeSourceImageAssets.map(entry => mogeSourceImageAssetCandidate(entry)).filter(Boolean),
+    ...greenroomScratchImageCandidates,
+  ]
     .map(candidate => normalizeMogeRouteSourceImageCandidate(candidate, { kind: 'scratch' }))
     .filter(candidate => candidate && mogeRouteImageUrlLooksLoadable(candidate.url));
 }
@@ -11209,11 +11329,11 @@ function mogeRouteSourceImageCandidates(row = {}, mode = mogeRouteSourceSelectio
   if (mode === 'synthetic') return [];
   if (mode === 'selected-scene') return mogeRouteSelectedSceneImageCandidates();
   if (mode === 'row') return mogeRouteRowSourceImageCandidates(row);
-  if (mode === 'scratch') return mogeRouteScratchImageCandidates();
+  if (mode === 'scratch') return mogeRouteScratchImageCandidates(row);
   return [
     ...mogeRouteRowSourceImageCandidates(row),
     ...mogeRouteSelectedSceneImageCandidates(),
-    ...mogeRouteScratchImageCandidates(),
+    ...mogeRouteScratchImageCandidates(row),
   ];
 }
 
@@ -11225,6 +11345,8 @@ function sourceImageIdentity(candidate, extra = {}) {
     url: inlineMatch ? `data:${inlineMatch[1].toLowerCase()};base64,<inline>` : rawUrl,
     label: candidate?.label || extra.label || 'synthetic MoGE preview input',
     objectId: candidate?.objectId || extra.objectId || null,
+    rootId: candidate?.rootId || extra.rootId || null,
+    serverPath: candidate?.serverPath || extra.serverPath || null,
     role: candidate?.role || extra.role || 'source-image',
     inline: Boolean(inlineMatch),
   };
@@ -11328,7 +11450,7 @@ function assertMogeRouteRealInputForOperatorSmoke(inputPreview = {}) {
   if (inputPreview.syntheticFallback === true) {
     throw new Error('MoGE operator smoke requires a real source image; select a scene, row, or scratch/import image before running preview.');
   }
-  if (!['scene', 'row', 'scratch'].includes(String(inputPreview.inputSourceKind || inputPreview.sourceImageIdentity?.kind || ''))) {
+  if (!['scene', 'row', 'scratch', 'image-inbox'].includes(String(inputPreview.inputSourceKind || inputPreview.sourceImageIdentity?.kind || ''))) {
     throw new Error('MoGE operator smoke requires source identity from a selected scene, row, or scratch/import image.');
   }
 }
@@ -11923,6 +12045,7 @@ async function grInit() {
   // Default: show done
   grCurrentPath = 'done';
   grBrowseRouteJobs();
+  grBrowseMogeSourceImages();
   grBrowseSplatAssets();
   grBrowse();
   grBrowseScenes();
