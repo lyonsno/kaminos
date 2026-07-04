@@ -29,6 +29,28 @@ def apply_limited_residual(base_image, residual, residualOutputLimit, residualAp
     return mx.clip(base_image + scaled_residual, 0.0, 1.0)
 
 
+def feather_residual_mask(mask, featherRadius):
+    if mask is None:
+        return None
+    radius = max(0, int(featherRadius))
+    clipped = mx.clip(mask, 0.0, 1.0)
+    if radius == 0:
+        return clipped
+    padded = mx.pad(clipped, [(0, 0), (radius, radius), (radius, radius), (0, 0)])
+    height = clipped.shape[1]
+    width = clipped.shape[2]
+    softened = clipped
+    for offset_y in range(-radius, radius + 1):
+        for offset_x in range(-radius, radius + 1):
+            distance = max(abs(offset_y), abs(offset_x))
+            weight = max(0.0, 1.0 - (distance / float(radius + 1)))
+            if weight <= 0:
+                continue
+            shifted = padded[:, radius + offset_y:radius + offset_y + height, radius + offset_x:radius + offset_x + width, :]
+            softened = mx.maximum(softened, shifted * weight)
+    return mx.clip(softened, 0.0, 1.0)
+
+
 class TinyResidualUpscaler(nn.Module):
     def __init__(self, hidden_channels, input_channels, residual_output_limit):
         super().__init__()
@@ -142,7 +164,9 @@ def parse_args():
     parser.add_argument("--edge-gradient-loss-weight", dest="edgeGradientLossWeight", type=float, default=0.0)
     parser.add_argument("--outside-edge-residual-weight", dest="outsideEdgeResidualWeight", type=float, default=0.0)
     parser.add_argument("--residual-output-limit", dest="residualOutputLimit", type=float, default=0.0, help="Optional symmetric clamp on the scaled RGB residual before adding it to the low image; 0 disables the clamp.")
-    parser.add_argument("--residual-application-mask-mode", dest="residualApplicationMaskMode", choices=["off", "active-edge-band"], default="off", help="Optionally multiply the applied residual by the active edge-band mask; low-* edge-band modes are inference-available, target-derived modes are teacher-only upper bounds.")
+    parser.add_argument("--residual-application-mask-mode", dest="residualApplicationMaskMode", choices=["off", "active-edge-band", "soft-active-edge-band"], default="off", help="Optionally multiply the applied residual by the active edge-band mask; low-* edge-band modes are inference-available, target-derived modes are teacher-only upper bounds.")
+    parser.add_argument("--residual-mask-feather-radius", dest="residualMaskFeatherRadius", type=int, default=0, help="Optional pixel radius for soft-active-edge-band residual application masks.")
+    parser.add_argument("--residual-smoothness-loss-weight", dest="residualSmoothnessLossWeight", type=float, default=0.0, help="Optional smoothness loss on the applied residual to suppress ringing artifacts.")
     parser.add_argument("--condition-render-scale", dest="conditionRenderScale", action="store_true")
     parser.add_argument("--temporal-eval", dest="temporalEval", action="store_true")
     parser.add_argument("--temporal-eval-scope", dest="temporalEvalScope", choices=["selected", "train", "eval"], default="selected")
@@ -177,7 +201,7 @@ def make_model(model_arch, hidden_channels, input_channels, detail_gate, residua
     raise ValueError(f"unsupported model architecture: {model_arch}")
 
 
-def model_config(model_arch, hidden_channels, input_channels, condition_render_scale, scale_channel, detail_gate, residual_output_limit, residual_application_mask_mode):
+def model_config(model_arch, hidden_channels, input_channels, condition_render_scale, scale_channel, detail_gate, residual_output_limit, residual_application_mask_mode, residual_mask_feather_radius):
     return {
         "modelArch": model_arch,
         "hiddenChannels": hidden_channels,
@@ -187,6 +211,7 @@ def model_config(model_arch, hidden_channels, input_channels, condition_render_s
         "detailGate": detail_gate if model_arch == "gated-detail-residual" else None,
         "residualOutputLimit": residual_output_limit,
         "residualApplicationMaskMode": residual_application_mask_mode,
+        "residualMaskFeatherRadius": residual_mask_feather_radius,
     }
 
 
@@ -235,7 +260,9 @@ def save_model_artifact(model, model_dir, config, args, corpus, metrics, effecti
             "outsideEdgeResidualWeight": args.outsideEdgeResidualWeight,
             "residualOutputLimit": args.residualOutputLimit,
             "residualApplicationMaskMode": args.residualApplicationMaskMode,
+            "residualMaskFeatherRadius": args.residualMaskFeatherRadius,
             "residualApplicationMaskAuthority": residual_application_mask_authority(args.residualApplicationMaskMode, args.edgeBandMode),
+            "residualSmoothnessLossWeight": args.residualSmoothnessLossWeight,
             "temporalLossWeight": args.temporalLossWeight,
             "residualTemporalLossWeight": args.residualTemporalLossWeight,
         },
@@ -411,12 +438,22 @@ def residual_application_mask_authority(residualApplicationMaskMode, edgeBandMod
             return "teacher-upper-bound-target-derived-active-edge-band"
         if edge_authority == "off":
             return "inactive-edge-band-mask"
+    if residualApplicationMaskMode == "soft-active-edge-band":
+        edge_authority = edge_band_authority(edgeBandMode)
+        if edge_authority == "inference-available-low-image-proxy":
+            return "inference-available-soft-active-edge-band"
+        if edge_authority == "target-derived-low-high":
+            return "teacher-upper-bound-target-derived-soft-active-edge-band"
+        if edge_authority == "off":
+            return "inactive-soft-edge-band-mask"
     return "unknown"
 
 
-def residual_application_mask(mask, residualApplicationMaskMode):
+def residual_application_mask(mask, residualApplicationMaskMode, residualMaskFeatherRadius=0):
     if residualApplicationMaskMode == "active-edge-band":
-        return mask
+        return mx.clip(mask, 0.0, 1.0) if mask is not None else None
+    if residualApplicationMaskMode == "soft-active-edge-band":
+        return feather_residual_mask(mask, residualMaskFeatherRadius)
     return None
 
 
@@ -647,6 +684,19 @@ def edge_gradient_loss_value(prediction, target, edge_mask):
     return 0.5 * (masked_mse_value(dx_prediction, dx_target, dx_mask) + masked_mse_value(dy_prediction, dy_target, dy_mask))
 
 
+def residual_smoothness_loss_value(prediction, low_batch, edge_mask):
+    residual = prediction - rgb_channels(low_batch)
+    edge_mask = mx.clip(edge_mask, 0.0, 1.0)
+    dx_residual = residual[:, :, 1:, :] - residual[:, :, :-1, :]
+    dx_mask = mx.maximum(edge_mask[:, :, 1:, :], edge_mask[:, :, :-1, :])
+    dy_residual = residual[:, 1:, :, :] - residual[:, :-1, :, :]
+    dy_mask = mx.maximum(edge_mask[:, 1:, :, :], edge_mask[:, :-1, :, :])
+    return 0.5 * (
+        masked_mse_value(dx_residual, mx.zeros_like(dx_residual), dx_mask)
+        + masked_mse_value(dy_residual, mx.zeros_like(dy_residual), dy_mask)
+    )
+
+
 def edge_band_loss_value(prediction, target, low_batch, edge_mask, edgeLossWeight, edgeGradientLossWeight, outsideEdgeResidualWeight):
     total = mx.array(0.0)
     if edgeLossWeight > 0:
@@ -660,17 +710,17 @@ def edge_band_loss_value(prediction, target, low_batch, edge_mask, edgeLossWeigh
     return total
 
 
-def temporal_loss_value(model_instance, previous_low_batch, current_low_batch, previous_high_batch, current_high_batch, previous_mask_batch, current_mask_batch, residualApplicationMaskMode):
-    previous_prediction = model_instance(previous_low_batch, residual_application_mask(previous_mask_batch, residualApplicationMaskMode))
-    current_prediction = model_instance(current_low_batch, residual_application_mask(current_mask_batch, residualApplicationMaskMode))
+def temporal_loss_value(model_instance, previous_low_batch, current_low_batch, previous_high_batch, current_high_batch, previous_mask_batch, current_mask_batch, residualApplicationMaskMode, residualMaskFeatherRadius):
+    previous_prediction = model_instance(previous_low_batch, residual_application_mask(previous_mask_batch, residualApplicationMaskMode, residualMaskFeatherRadius))
+    current_prediction = model_instance(current_low_batch, residual_application_mask(current_mask_batch, residualApplicationMaskMode, residualMaskFeatherRadius))
     prediction_delta = current_prediction - previous_prediction
     target_delta = current_high_batch - previous_high_batch
     return mse_value(prediction_delta, target_delta)
 
 
-def residual_temporal_loss_value(model_instance, previous_low_batch, current_low_batch, previous_mask_batch, current_mask_batch, residualApplicationMaskMode):
-    previous_prediction = model_instance(previous_low_batch, residual_application_mask(previous_mask_batch, residualApplicationMaskMode))
-    current_prediction = model_instance(current_low_batch, residual_application_mask(current_mask_batch, residualApplicationMaskMode))
+def residual_temporal_loss_value(model_instance, previous_low_batch, current_low_batch, previous_mask_batch, current_mask_batch, residualApplicationMaskMode, residualMaskFeatherRadius):
+    previous_prediction = model_instance(previous_low_batch, residual_application_mask(previous_mask_batch, residualApplicationMaskMode, residualMaskFeatherRadius))
+    current_prediction = model_instance(current_low_batch, residual_application_mask(current_mask_batch, residualApplicationMaskMode, residualMaskFeatherRadius))
     previous_residual = previous_prediction - rgb_channels(previous_low_batch)
     current_residual = current_prediction - rgb_channels(current_low_batch)
     return mse_value(current_residual - previous_residual, mx.zeros_like(previous_residual))
@@ -724,11 +774,11 @@ def crop_item_arrays(item, region, conditionRenderScale):
     return low_patch, high_patch, model_input, edge_mask
 
 
-def predict_patch(model, model_input, residual_mask=None, residualApplicationMaskMode="off"):
+def predict_patch(model, model_input, residual_mask=None, residualApplicationMaskMode="off", residualMaskFeatherRadius=0):
     mask = None
     if residual_mask is not None:
         mask = mx.array(residual_mask[None, ...])
-    prediction = model(mx.array(model_input[None, ...]), residual_application_mask(mask, residualApplicationMaskMode))
+    prediction = model(mx.array(model_input[None, ...]), residual_application_mask(mask, residualApplicationMaskMode, residualMaskFeatherRadius))
     mx.eval(prediction)
     return np.array(prediction[0])
 
@@ -826,7 +876,7 @@ def empty_temporal_metrics(temporalEvalScope, residualContinuationMode, residual
     }
 
 
-def temporal_sequence_metrics(model, loaded, train_items, eval_items, out_dir, crop_size, previewMode, conditionRenderScale, temporalEvalScope, residualContinuationMode, residualContinuationAlpha, residualApplicationMaskMode):
+def temporal_sequence_metrics(model, loaded, train_items, eval_items, out_dir, crop_size, previewMode, conditionRenderScale, temporalEvalScope, residualContinuationMode, residualContinuationAlpha, residualApplicationMaskMode, residualMaskFeatherRadius):
     scoped_items = temporal_scope_items(temporalEvalScope, loaded, train_items, eval_items)
     groups = temporal_groups(scoped_items)
     continuation_active = residualContinuationMode == "ema"
@@ -858,7 +908,7 @@ def temporal_sequence_metrics(model, loaded, train_items, eval_items, out_dir, c
         rendered = []
         for item in group:
             low_patch, high_patch, model_input, residual_mask = crop_item_arrays(item, region, conditionRenderScale)
-            pred_patch = predict_patch(model, model_input, residual_mask, residualApplicationMaskMode)
+            pred_patch = predict_patch(model, model_input, residual_mask, residualApplicationMaskMode, residualMaskFeatherRadius)
             rendered.append((item, low_patch, high_patch, pred_patch))
         continued_rendered = apply_residual_continuation(
             rendered,
@@ -989,7 +1039,7 @@ def temporal_sequence_metrics(model, loaded, train_items, eval_items, out_dir, c
     return metrics
 
 
-def evaluate_model(model, items, rng, batch_size, patch_size, eval_patches, foregroundProbability, edgeSamplingProbability, conditionRenderScale, foregroundThreshold, foregroundLossWeight, differenceLossWeight, residualApplicationMaskMode):
+def evaluate_model(model, items, rng, batch_size, patch_size, eval_patches, foregroundProbability, edgeSamplingProbability, conditionRenderScale, foregroundThreshold, foregroundLossWeight, differenceLossWeight, residualApplicationMaskMode, residualMaskFeatherRadius):
     baseline_losses = []
     model_losses = []
     weighted_baseline_losses = []
@@ -1007,7 +1057,7 @@ def evaluate_model(model, items, rng, batch_size, patch_size, eval_patches, fore
     for _ in range(batches):
         low_batch, high_batch, edge_mask_batch, target_edge_mask_batch = sample_patch_batch(items, rng, batch_size, patch_size, foregroundProbability, edgeSamplingProbability, conditionRenderScale)
         low_rgb = rgb_channels(low_batch)
-        prediction = model(low_batch, residual_application_mask(edge_mask_batch, residualApplicationMaskMode))
+        prediction = model(low_batch, residual_application_mask(edge_mask_batch, residualApplicationMaskMode, residualMaskFeatherRadius))
         baseline_loss = mse_value(low_rgb, high_batch)
         model_loss = mse_value(prediction, high_batch)
         weighted_baseline_loss = weighted_mse_value(low_rgb, high_batch, low_batch, foregroundThreshold, foregroundLossWeight, differenceLossWeight)
@@ -1088,7 +1138,7 @@ def evaluate_model(model, items, rng, batch_size, patch_size, eval_patches, fore
     }
 
 
-def make_preview(model, eval_item, out_path, diagnostic_out_path, preview_size, previewMode, conditionRenderScale, residualApplicationMaskMode):
+def make_preview(model, eval_item, out_path, diagnostic_out_path, preview_size, previewMode, conditionRenderScale, residualApplicationMaskMode, residualMaskFeatherRadius):
     low = eval_item["low"]
     high = eval_item["high"]
     top, left, crop_height, crop_width, previewFocus = crop_region(eval_item, preview_size, previewMode)
@@ -1096,7 +1146,7 @@ def make_preview(model, eval_item, out_path, diagnostic_out_path, preview_size, 
     high_patch = high[top:top + crop_height, left:left + crop_width, :]
     model_input = model_input_from_rgb(low_patch, eval_item["lowRenderScale"], conditionRenderScale)
     edge_mask = eval_item.get("edgeBandMask", np.zeros((*low.shape[:2], 1), dtype=np.float32))[top:top + crop_height, left:left + crop_width, :]
-    pred_patch = predict_patch(model, model_input, edge_mask, residualApplicationMaskMode)
+    pred_patch = predict_patch(model, model_input, edge_mask, residualApplicationMaskMode, residualMaskFeatherRadius)
     diff_patch = np.clip(np.abs(pred_patch - high_patch) * 4.0, 0.0, 1.0)
     strip = np.concatenate([low_patch, pred_patch, high_patch, diff_patch], axis=1)
     Image.fromarray(np.clip(strip * 255.0, 0, 255).astype(np.uint8), "RGB").save(out_path)
@@ -1121,12 +1171,15 @@ def main():
         raise ValueError("--edge-band-threshold must be non-negative")
     if args.edgeBandDilate < 0:
         raise ValueError("--edge-band-dilate must be non-negative")
+    if args.residualMaskFeatherRadius < 0:
+        raise ValueError("--residual-mask-feather-radius must be non-negative")
     for label, value in [
         ("--edge-sampling-probability", args.edgeSamplingProbability),
         ("--edge-loss-weight", args.edgeLossWeight),
         ("--edge-gradient-loss-weight", args.edgeGradientLossWeight),
         ("--outside-edge-residual-weight", args.outsideEdgeResidualWeight),
         ("--residual-output-limit", args.residualOutputLimit),
+        ("--residual-smoothness-loss-weight", args.residualSmoothnessLossWeight),
     ]:
         if value < 0:
             raise ValueError(f"{label} must be non-negative")
@@ -1163,6 +1216,7 @@ def main():
         detailGate = float(loaded_detail_gate) if loaded_detail_gate is not None else args.detailResidualGate
         residualOutputLimit = float(loaded_config.get("residualOutputLimit", args.residualOutputLimit))
         residualApplicationMaskMode = loaded_config.get("residualApplicationMaskMode", args.residualApplicationMaskMode)
+        residualMaskFeatherRadius = int(loaded_config.get("residualMaskFeatherRadius", args.residualMaskFeatherRadius))
         modelConfigSource = "loadedModelArtifact"
     else:
         modelArch = args.modelArch
@@ -1173,6 +1227,7 @@ def main():
         detailGate = args.detailResidualGate
         residualOutputLimit = args.residualOutputLimit
         residualApplicationMaskMode = args.residualApplicationMaskMode
+        residualMaskFeatherRadius = args.residualMaskFeatherRadius
         modelConfigSource = "cli"
 
     model = make_model(modelArch, hiddenChannels, input_channels, detailGate, residualOutputLimit)
@@ -1188,6 +1243,7 @@ def main():
         detailGate,
         residualOutputLimit,
         residualApplicationMaskMode,
+        residualMaskFeatherRadius,
     )
     effectiveMaxSteps = 0 if args.evalOnly else args.maxSteps
     optimizer = optim.Adam(learning_rate=args.learning_rate)
@@ -1205,7 +1261,7 @@ def main():
     activeResidualTemporalLossWeight = args.residualTemporalLossWeight if temporalLossPairCount else 0.0
 
     def loss_fn(model_instance, low_batch, high_batch, edge_mask_batch, previous_low_batch, current_low_batch, previous_high_batch, current_high_batch, previous_mask_batch, current_mask_batch):
-        prediction = model_instance(low_batch, residual_application_mask(edge_mask_batch, residualApplicationMaskMode))
+        prediction = model_instance(low_batch, residual_application_mask(edge_mask_batch, residualApplicationMaskMode, residualMaskFeatherRadius))
         if args.loss_mode == "weighted":
             still_loss = weighted_mse_value(
                 prediction,
@@ -1227,6 +1283,12 @@ def main():
             args.edgeGradientLossWeight,
             args.outsideEdgeResidualWeight,
         )
+        if args.residualSmoothnessLossWeight > 0:
+            total_loss = total_loss + float(args.residualSmoothnessLossWeight) * residual_smoothness_loss_value(
+                prediction,
+                low_batch,
+                edge_mask_batch,
+            )
         if activeTemporalLossWeight > 0:
             total_loss = total_loss + activeTemporalLossWeight * temporal_loss_value(
                 model_instance,
@@ -1237,6 +1299,7 @@ def main():
                 previous_mask_batch,
                 current_mask_batch,
                 residualApplicationMaskMode,
+                residualMaskFeatherRadius,
             )
         if activeResidualTemporalLossWeight > 0:
             total_loss = total_loss + activeResidualTemporalLossWeight * residual_temporal_loss_value(
@@ -1246,6 +1309,7 @@ def main():
                 previous_mask_batch,
                 current_mask_batch,
                 residualApplicationMaskMode,
+                residualMaskFeatherRadius,
             )
         return total_loss
 
@@ -1287,13 +1351,13 @@ def main():
         if step == 0 or step == effectiveMaxSteps - 1 or (step + 1) % max(1, effectiveMaxSteps // 10) == 0:
             entry = {"step": step + 1, "loss": loss_float}
             if activeTemporalLossWeight > 0:
-                temporal_loss = temporal_loss_value(model, previous_low_batch, current_low_batch, previous_high_batch, current_high_batch, previous_mask_batch, current_mask_batch, residualApplicationMaskMode)
+                temporal_loss = temporal_loss_value(model, previous_low_batch, current_low_batch, previous_high_batch, current_high_batch, previous_mask_batch, current_mask_batch, residualApplicationMaskMode, residualMaskFeatherRadius)
                 mx.eval(temporal_loss)
                 temporal_loss_float = float(temporal_loss)
                 entry["temporalLoss"] = temporal_loss_float
                 temporalTrainingLosses.append({"step": step + 1, "temporalLoss": temporal_loss_float})
             if activeResidualTemporalLossWeight > 0:
-                residual_temporal_loss = residual_temporal_loss_value(model, previous_low_batch, current_low_batch, previous_mask_batch, current_mask_batch, residualApplicationMaskMode)
+                residual_temporal_loss = residual_temporal_loss_value(model, previous_low_batch, current_low_batch, previous_mask_batch, current_mask_batch, residualApplicationMaskMode, residualMaskFeatherRadius)
                 mx.eval(residual_temporal_loss)
                 residual_temporal_loss_float = float(residual_temporal_loss)
                 entry["residualTemporalLoss"] = residual_temporal_loss_float
@@ -1318,10 +1382,11 @@ def main():
         args.foregroundLossWeight,
         args.differenceLossWeight,
         residualApplicationMaskMode,
+        residualMaskFeatherRadius,
     )
     preview_path = out_dir / "residual-preview-low-model-target-diff.png"
     diagnostic_preview_path = out_dir / "residual-preview-low-model-target-targetres-modelres-error-mask.png"
-    previewFocus = make_preview(model, eval_items[0], preview_path, diagnostic_preview_path, args.preview_size, args.preview_mode, conditionRenderScale, residualApplicationMaskMode)
+    previewFocus = make_preview(model, eval_items[0], preview_path, diagnostic_preview_path, args.preview_size, args.preview_mode, conditionRenderScale, residualApplicationMaskMode, residualMaskFeatherRadius)
     temporalMetrics = {}
     if args.temporalEval:
         temporalMetrics = temporal_sequence_metrics(
@@ -1337,6 +1402,7 @@ def main():
             args.residualContinuationMode,
             args.residualContinuationAlpha,
             residualApplicationMaskMode,
+            residualMaskFeatherRadius,
         )
     residualContinuationEffectiveMode = temporalMetrics.get(
         "residualContinuationEffectiveMode",
@@ -1406,7 +1472,9 @@ def main():
         "outsideEdgeResidualWeight": args.outsideEdgeResidualWeight,
         "residualOutputLimit": residualOutputLimit,
         "residualApplicationMaskMode": residualApplicationMaskMode,
+        "residualMaskFeatherRadius": residualMaskFeatherRadius,
         "residualApplicationMaskAuthority": residual_application_mask_authority(residualApplicationMaskMode, args.edgeBandMode),
+        "residualSmoothnessLossWeight": args.residualSmoothnessLossWeight,
         "conditionRenderScale": conditionRenderScale,
         "temporalLossWeight": args.temporalLossWeight,
         "activeTemporalLossWeight": activeTemporalLossWeight,
@@ -1465,7 +1533,9 @@ def main():
         "detailGate": detailGate if modelArch == "gated-detail-residual" else None,
         "residualOutputLimit": residualOutputLimit,
         "residualApplicationMaskMode": residualApplicationMaskMode,
+        "residualMaskFeatherRadius": residualMaskFeatherRadius,
         "residualApplicationMaskAuthority": residual_application_mask_authority(residualApplicationMaskMode, args.edgeBandMode),
+        "residualSmoothnessLossWeight": args.residualSmoothnessLossWeight,
         "learningRate": args.learning_rate,
         "evalPatches": args.eval_patches,
         "durationSeconds": duration_seconds,
