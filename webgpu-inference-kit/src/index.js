@@ -58,6 +58,13 @@ export {
 } from './scheduler-verification-receipt.js';
 
 export {
+  SHARP_BREATHING_ROOM_SINGLE_PAIR_CLAIM_BOUNDARY,
+  SHARP_BREATHING_ROOM_VALIDATION_SCHEMA,
+  classifySharpBreathingRoomComparisonEvidence,
+  validateSharpBreathingRoomComparisonEvidence,
+} from './sharp-breathing-room-validation.js';
+
+export {
   classifyWebGpuRouteReceiptEvidence,
   classifyWebGpuRouteWorkerResultEvidence,
   WEBGPU_ROUTE_EVIDENCE_CLASSIFICATION_SCHEMA,

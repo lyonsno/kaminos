@@ -69,6 +69,7 @@ The fourth layer protects the first three. It should not swallow the whole story
 - `createWebGpuLocalRouteReceipt(input)`, `createWebGpuRouteReceiptFromArtifacts(input)`, `createRouteReceiptArtifacts(input)`, `finishAndValidateRouteProfile(input)`, `validateRouteReceipt(receipt)`, and `assertAuthoritativeRouteReceipt(receipt)`: shared receipt construction and validation helpers.
 - `classifyWebGpuRouteReceiptEvidence(receipt)` and `classifyWebGpuRouteWorkerResultEvidence(result)`: consumer-side classification helpers for authoritative, fallback, partial, cached, stale, route-mismatch, and invalid route outputs.
 - `createWebGpuRouteSchemaContract(input)`: compact schema/version contract for route repos that need conformance tests against this package.
+- `validateSharpBreathingRoomComparisonEvidence(comparison)` and `classifySharpBreathingRoomComparisonEvidence(comparison)`: shared SHARP default-vs-cooperative comparison guardrail that distinguishes route-bridge from single-pair smoke, blocks optimization claims, and rejects verified-without-events, proxy-only proof, missing frame/queue evidence, stale visible UI, fixture/fallback routes, output mismatch, and ViT chunking overclaim.
 
 ## Near-Term Direction
 
