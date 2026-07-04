@@ -1842,6 +1842,11 @@ assert.match(residualGreenroomRunner, /kaminos\.volume\.residual-greenroom-runne
 assert.match(residualGreenroomRunner, /mlxDefaultDevice/, 'Greenroom wrapper prints MLX default device before heavy work');
 assert.match(residualGreenroomRunner, /greenroom-route-proof\.json/, 'Greenroom wrapper writes route proof into the job output directory');
 assert.match(residualMlx, /--edge-band-mode/, 'MLX residual runner can derive target-error edge bands from low/high pairs');
+assert.match(residualMlx, /low-gradient/, 'MLX residual runner supports low-image gradient proxy masks for inference-available edge curriculum probes');
+assert.match(residualMlx, /low-luma/, 'MLX residual runner supports low-image luma proxy masks for inference-available fire/body curriculum probes');
+assert.match(residualMlx, /low-gradient-luma/, 'MLX residual runner supports mixed low-image gradient+luma proxy masks');
+assert.match(residualMlx, /edgeBandAuthority/, 'MLX residual runner reports whether the active edge-band mask was target-derived or low-image proxy-derived');
+assert.match(residualMlx, /targetEdgeBandDeltaPsnr/, 'MLX residual runner audits proxy-mask runs against target-derived edge bands');
 assert.match(residualMlx, /--edge-sampling-probability/, 'MLX residual runner can bias patch sampling toward target-error edge bands');
 assert.match(residualMlx, /--edge-loss-weight/, 'MLX residual runner exposes explicit edge-band reconstruction loss');
 assert.match(residualMlx, /--edge-gradient-loss-weight/, 'MLX residual runner exposes edge-band gradient loss for crisp silhouette recovery');
@@ -1852,5 +1857,6 @@ assert.match(residualMlx, /edgeBandDeltaPsnr/, 'MLX residual runner reports edge
 assert.match(residualMlx, /outsideEdgeResidualMse/, 'MLX residual runner reports outside-edge residual damage separately from edge improvement');
 assert.match(residualMlx, /residual-preview-low-model-target-targetres-modelres-error-mask\.png/, 'MLX residual runner writes a preview strip exposing target residual, model residual, remaining error, and mask');
 assert.match(residualGreenroomRunner, /--edge-band-mode/, 'Greenroom residual wrapper forwards edge-band mode to the MLX runner');
+assert.match(residualGreenroomRunner, /targetEdgeBandDeltaPsnr/, 'Greenroom residual wrapper preserves target-edge audit metrics from proxy-mask runs');
 assert.match(residualGreenroomRunner, /--edge-sampling-probability/, 'Greenroom residual wrapper forwards edge-biased sampling probability');
 assert.match(residualGreenroomRunner, /--edge-gradient-loss-weight/, 'Greenroom residual wrapper forwards edge gradient loss weight');
