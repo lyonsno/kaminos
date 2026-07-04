@@ -1490,6 +1490,9 @@ assert.match(witness, /pyro-material/, 'witness accepts a visible Pyro material-
 assert.match(witness, /pyro-material-coupled-volume-signal/, 'witness reports Pyro material-memory visual evidence identity');
 assert.match(witness, /pyro-material-memory-spatial-coupling-v0/, 'witness requires the spatial Pyro material-memory renderer coupling identity');
 assert.match(witness, /expectsPyroMaterialEvidence/, 'witness separates Pyro material-memory visual evidence from ordinary orange-fire gates');
+assert.match(witness, /pyroRawCarrierPaintEvidence/, 'witness reports raw-carrier Pyro Flame Paint evidence separately from stock fire-layer evidence');
+assert.match(witness, /pyro-raw-carrier-paint-evidence-v0/, 'witness names the raw-carrier Pyro Flame Paint evidence identity');
+assert.match(witness, /stock-fire-layer-low-but-raw-pyro-carrier-live/, 'Pyro material witness can accept low stock fire-layer readback only when raw live carriers prove authority');
 assert.match(witness, /no-fire-volume/, 'witness accepts a deliberate no-fire volume evidence mode');
 assert.match(witness, /no-fire-volume-signal/, 'witness reports no-fire volume visual evidence identity');
 assert.match(witness, /expectsNoFireVolumeEvidence/, 'witness separates deliberate no-fire evidence from missing fire failures');

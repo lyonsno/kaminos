@@ -180,6 +180,79 @@ function expectedTallPlumeTransitionBandExtraReadsPerCell() {
   return 0;
 }
 
+function finiteNumber(value, fallback = 0) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : fallback;
+}
+
+function buildPyroRawCarrierPaintEvidence(sample = {}, state = {}) {
+  const sim = sample.simReadback || {};
+  const coupling = sample.pyroMaterialRendererCoupling || state.pyroMaterialRendererCoupling || {};
+  const controls = coupling.carrierControls || {};
+  const flamePaint = finiteNumber(controls.flamePaint);
+  const stockMix = finiteNumber(controls.stockMix, 1);
+  const effectiveGain = finiteNumber(coupling.effectiveGain);
+  const liveFireAuthority = finiteNumber(coupling.liveFireAuthority);
+  const uploadedCells = finiteNumber(coupling.spatialMemory?.uploadedCells);
+  const fireLayerMean = finiteNumber(sim.fireLayerMean);
+  const heatMean = finiteNumber(sim.heatMean);
+  const reactionMean = finiteNumber(sim.reactionMean);
+  const fuelConsumptionMean = finiteNumber(sim.fuelConsumptionMean);
+  const fireLickMean = finiteNumber(sim.fireLickMean);
+  const combustionFrontMean = finiteNumber(sim.combustionFrontMean);
+  const frontTopologyMean = finiteNumber(sim.frontTopologyMean);
+  const detailMean = finiteNumber(sim.detailMean);
+  const radianceMean = finiteNumber(sim.radianceMean);
+  const rawCarrierScore =
+    heatMean +
+    reactionMean +
+    fuelConsumptionMean * 8 +
+    fireLickMean * 3 +
+    combustionFrontMean * 5 +
+    frontTopologyMean * 5 +
+    detailMean * 0.25 +
+    radianceMean * 0.5;
+  const hasLiveSpatialCoupling =
+    coupling.identity === 'pyro-material-memory-spatial-coupling-v0' &&
+    coupling.spatialMemory?.identity === 'pyro-material-memory-spatial-coupling-v0' &&
+    uploadedCells > 0 &&
+    effectiveGain > 0 &&
+    liveFireAuthority > 0.05 &&
+    coupling.materialShaderReadiness === 'sampleable-debug-only';
+  const wantsRawPaint = flamePaint > 0.05 && stockMix < 0.95;
+  const hasRawLiveCarrier = rawCarrierScore > 0.0025 && (heatMean > 0.001 || reactionMean > 0.001 || fireLickMean > 0.0002 || combustionFrontMean > 0.00003 || frontTopologyMean > 0.00003);
+  const stockFireLayerLow = fireLayerMean <= 0.0005;
+  const acceptsLowStockFireLayer = hasLiveSpatialCoupling && wantsRawPaint && hasRawLiveCarrier;
+  return {
+    identity: 'pyro-raw-carrier-paint-evidence-v0',
+    phase: stockFireLayerLow && acceptsLowStockFireLayer
+      ? 'stock-fire-layer-low-but-raw-pyro-carrier-live'
+      : (stockFireLayerLow ? 'stock-fire-layer-low-raw-pyro-carrier-unproven' : 'stock-fire-layer-present'),
+    acceptsLowStockFireLayer,
+    hasLiveSpatialCoupling,
+    wantsRawPaint,
+    hasRawLiveCarrier,
+    flamePaint,
+    stockMix,
+    effectiveGain,
+    liveFireAuthority,
+    uploadedCells,
+    materialShaderReadiness: coupling.materialShaderReadiness || null,
+    fireLayerMean,
+    rawCarrierScore,
+    carriers: {
+      heatMean,
+      reactionMean,
+      fuelConsumptionMean,
+      fireLickMean,
+      combustionFrontMean,
+      frontTopologyMean,
+      detailMean,
+      radianceMean,
+    },
+  };
+}
+
 function defaultPressureIterationsForScene(volumeScene) {
   if (volumeScene === 'tall_plume') return 2;
   return volumeScene === 'bonfire_plume' ? 8 : 4;
@@ -1502,8 +1575,15 @@ async function main() {
     if (!expectsCanonicalPlumeProof && (!Number.isFinite(sample.simReadback.detailMean) || sample.simReadback.detailMean <= 0.0005)) {
       throw new Error(`GPU sim readback does not show transported material detail: ${JSON.stringify(sample.simReadback)}`);
     }
-    if (!expectsCanonicalPlumeProof && !expectsFuelStarvedTallPlume && (!Number.isFinite(sample.simReadback.fireLayerMean) || sample.simReadback.fireLayerMean <= 0.0005)) {
-      throw new Error(`GPU sim readback does not show a transported fire layer: ${JSON.stringify(sample.simReadback)}`);
+    const pyroRawCarrierPaintEvidence = buildPyroRawCarrierPaintEvidence(sample, state);
+    const acceptsRawCarrierPyroPaint =
+      expectsPyroMaterialEvidence &&
+      pyroRawCarrierPaintEvidence.acceptsLowStockFireLayer;
+    if (!expectsCanonicalPlumeProof && !expectsFuelStarvedTallPlume && (!Number.isFinite(sample.simReadback.fireLayerMean) || sample.simReadback.fireLayerMean <= 0.0005) && !acceptsRawCarrierPyroPaint) {
+      throw new Error(`GPU sim readback does not show a transported fire layer or raw-carrier Pyro paint evidence: ${JSON.stringify({
+        simReadback: sample.simReadback,
+        pyroRawCarrierPaintEvidence,
+      })}`);
     }
     if (!expectsCanonicalPlumeProof && !expectsFuelStarvedTallPlume && !expectsNoFireVolumeEvidence && (!Number.isFinite(sample.simReadback.radianceMean) || sample.simReadback.radianceMean <= 0.0005)) {
       throw new Error(`GPU sim readback does not show fire radiance evidence: ${JSON.stringify(sample.simReadback)}`);
@@ -2070,6 +2150,7 @@ async function main() {
       visualEvidenceMode,
       noFireEvidenceMode: expectsNoFireVolumeEvidence ? 'no-fire-volume-signal' : null,
       pyroMaterialEvidenceMode: expectsPyroMaterialEvidence ? 'pyro-material-coupled-volume-signal' : null,
+      pyroRawCarrierPaintEvidence,
       performanceVisualWarnings,
       effectiveRoute: state.effectiveRoute,
       prototypeIdentity: state.prototypeIdentity,
