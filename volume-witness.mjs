@@ -33,6 +33,8 @@ const reportPath = resolve(args.get('--report') || out.replace(/\.png$/i, '.json
 const port = Number(args.get('--debug-port') || 9433);
 const chrome = process.env.KAMINOS_CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const userDataDir = args.get('--user-data-dir') || `/tmp/kaminos-volume-witness-profile-${port}`;
+const reuseBrowser = args.has('--reuse-browser');
+const keepBrowserOpen = args.has('--keep-browser-open');
 const settleMs = Number(args.get('--settle-ms') || 1500);
 const windowSize = args.get('--window-size') || '1280,960';
 const fullScreenshot = args.has('--full-screenshot')
@@ -914,6 +916,50 @@ async function waitForCdp() {
   throw new Error('Chrome DevTools endpoint did not open');
 }
 
+async function cdpAvailable() {
+  try {
+    await cdpFetch('/json/version');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function attachOrLaunchSharedBrowser() {
+  if (reuseBrowser && await cdpAvailable()) {
+    return {
+      identity: 'attach-or-launch-shared-cdp-browser-v0',
+      mode: 'attached-existing',
+      port,
+      userDataDir,
+      keepBrowserOpen,
+      process: null,
+    };
+  }
+  const proc = spawn(chrome, [
+    `--remote-debugging-port=${port}`,
+    `--user-data-dir=${userDataDir}`,
+    '--no-first-run',
+    '--disable-background-timer-throttling',
+    '--disable-renderer-backgrounding',
+    `--window-size=${windowSize}`,
+    url,
+  ], { stdio: 'ignore' });
+  return {
+    identity: reuseBrowser ? 'attach-or-launch-shared-cdp-browser-v0' : 'per-capture-chrome-process-v0',
+    mode: reuseBrowser ? 'launched-shared' : 'launched-per-capture',
+    port,
+    userDataDir,
+    keepBrowserOpen,
+    process: proc,
+  };
+}
+
+function closeBrowserSession(browserSession) {
+  if (browserSession?.keepBrowserOpen) return;
+  browserSession?.process?.kill('SIGTERM');
+}
+
 function wsRequest(ws, method, params = {}) {
   const id = ws._nextId = (ws._nextId || 0) + 1;
   ws.send(JSON.stringify({ id, method, params }));
@@ -1081,15 +1127,7 @@ async function main() {
   mkdirSync(dirname(out), { recursive: true });
   mkdirSync(dirname(reportPath), { recursive: true });
 
-  const proc = spawn(chrome, [
-    `--remote-debugging-port=${port}`,
-    `--user-data-dir=${userDataDir}`,
-    '--no-first-run',
-    '--disable-background-timer-throttling',
-    '--disable-renderer-backgrounding',
-    `--window-size=${windowSize}`,
-    url,
-  ], { stdio: 'ignore' });
+  const browserSession = await attachOrLaunchSharedBrowser();
 
   let phase = 'launch';
   try {
@@ -1104,7 +1142,9 @@ async function main() {
     await wsRequest(ws, 'Page.enable');
     phase = 'load';
     await wsRequest(ws, 'Page.navigate', { url });
-    await wsRequest(ws, 'Page.bringToFront');
+    if (!reuseBrowser) {
+      await wsRequest(ws, 'Page.bringToFront');
+    }
     await delay(settleMs);
     if (expectedExternalEmitterMode === 'synthetic_hand_trails') {
       await wsRequest(ws, 'Runtime.evaluate', {
@@ -2735,10 +2775,17 @@ async function main() {
       controlledStepSequence: controlledStepSequenceReport,
       metrics,
       mainRendererMetrics,
+      browserSession: {
+        identity: browserSession.identity,
+        mode: browserSession.mode,
+        port: browserSession.port,
+        userDataDir: browserSession.userDataDir,
+        keepBrowserOpen: browserSession.keepBrowserOpen,
+      },
     };
     writeFileSync(reportPath, JSON.stringify(report, null, 2));
     ws.close();
-    proc.kill('SIGTERM');
+    closeBrowserSession(browserSession);
     console.log(JSON.stringify(report, null, 2));
   } catch (err) {
     let state = null;
@@ -2770,9 +2817,16 @@ async function main() {
       state,
       screenshot: out,
       fullScreenshot: fullScreenshot || null,
+      browserSession: {
+        identity: browserSession.identity,
+        mode: browserSession.mode,
+        port: browserSession.port,
+        userDataDir: browserSession.userDataDir,
+        keepBrowserOpen: browserSession.keepBrowserOpen,
+      },
     };
     writeFileSync(reportPath, JSON.stringify(report, null, 2));
-    proc.kill('SIGTERM');
+    closeBrowserSession(browserSession);
     console.error(JSON.stringify(report, null, 2));
     process.exit(1);
   }

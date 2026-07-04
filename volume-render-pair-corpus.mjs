@@ -605,6 +605,7 @@ function runVariant({ variant, index, args, corpus, cwd }) {
       '--settle-ms', String(sequenceSettleMs),
       '--window-size', corpus.windowSize,
       '--evidence-mode', corpus.evidenceMode,
+      '--reuse-witness-browser', '1',
     ];
     if (corpus.dryRun) command.push('--dry-run');
     const frameSummary = {
