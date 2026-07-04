@@ -20,6 +20,77 @@ function parseTime(value) {
   return Number.isFinite(ms) ? ms : null;
 }
 
+function clone(value) {
+  return value == null ? value : JSON.parse(JSON.stringify(value));
+}
+
+const FALSE_VERIFIED_SCHEDULER_DOWNGRADES = new Set([
+  'yield-events-missing',
+  'event-trace-missing',
+  'queue-wait-events-missing',
+  'boundary-assertion-event-mismatch',
+  'requested-boundary-assertion-missing',
+  'requested-field-dropped-without-unsupported',
+  'boundary-assertions-missing',
+  'timing-proxy-only',
+  'route-identity-missing',
+  'scheduler-envelope-missing',
+  'backpressure-envelope-missing',
+]);
+
+function nestedSchedulerDowngrades(schedulerVerification) {
+  return Array.isArray(schedulerVerification?.downgrades)
+    ? [...schedulerVerification.downgrades]
+    : [];
+}
+
+function hasVerifiedBoundaryAssertion(schedulerVerification) {
+  return Array.isArray(schedulerVerification?.boundaryAssertions)
+    && schedulerVerification.boundaryAssertions.some(assertion => assertion?.status === 'verified');
+}
+
+function hasEventTraceEvents(schedulerVerification) {
+  return Array.isArray(schedulerVerification?.eventTrace?.events)
+    && schedulerVerification.eventTrace.events.length > 0;
+}
+
+function normalizeNestedSchedulerVerification(schedulerVerification) {
+  if (!schedulerVerification) {
+    return {
+      receipt: null,
+      reportedStatus: null,
+      status: null,
+      classification: null,
+      observationClass: null,
+      downgrades: [],
+      timingAuthority: null,
+    };
+  }
+  const receipt = clone(schedulerVerification);
+  const downgrades = nestedSchedulerDowngrades(schedulerVerification);
+  const reportedStatus = schedulerVerification.status || null;
+  const falseVerifiedDowngrade = downgrades.some(downgrade => FALSE_VERIFIED_SCHEDULER_DOWNGRADES.has(downgrade));
+  const falseVerifiedShape = reportedStatus === 'verified'
+    && (!hasEventTraceEvents(schedulerVerification) || !hasVerifiedBoundaryAssertion(schedulerVerification));
+  const status = reportedStatus === 'verified' && (falseVerifiedDowngrade || falseVerifiedShape)
+    ? 'scheduler-unverified'
+    : reportedStatus;
+  if (status !== reportedStatus) {
+    receipt.reportedStatus = reportedStatus;
+    receipt.status = status;
+    if (receipt.classification === 'observed-boundary') receipt.classification = 'config-only';
+  }
+  return {
+    receipt,
+    reportedStatus,
+    status,
+    classification: receipt.classification || null,
+    observationClass: receipt.observationClass || null,
+    downgrades,
+    timingAuthority: receipt.eventTrace?.timingAuthority || null,
+  };
+}
+
 function staleReason(receipt, options) {
   if (!Number.isFinite(options.maxAgeMs)) return null;
   const createdMs = parseTime(receipt.createdAt);
@@ -119,6 +190,7 @@ export function classifyWebGpuRouteReceiptEvidence(receipt, options = {}) {
   const base = baseClassification(receipt, options);
   const scheduler = receipt?.runtime?.scheduler || null;
   const backpressure = receipt?.runtime?.backpressure || null;
+  const schedulerVerification = normalizeNestedSchedulerVerification(receipt?.runtime?.schedulerVerification || null);
   return {
     schema: WEBGPU_ROUTE_EVIDENCE_CLASSIFICATION_SCHEMA,
     classification: base.classification,
@@ -131,7 +203,14 @@ export function classifyWebGpuRouteReceiptEvidence(receipt, options = {}) {
     adapterName: receipt?.backend?.adapterName || null,
     timingSource: receipt?.timings?.source || receipt?.timings?.profile?.timingSource || null,
     totalMs: Number.isFinite(receipt?.timings?.totalMs) ? receipt.timings.totalMs : null,
-    schedulerVerificationState: scheduler?.verificationState || null,
+    schedulerVerification: schedulerVerification.receipt,
+    schedulerVerificationState: schedulerVerification.status || scheduler?.verificationState || null,
+    schedulerVerificationStatus: schedulerVerification.status,
+    schedulerVerificationReportedStatus: schedulerVerification.reportedStatus,
+    schedulerVerificationClassification: schedulerVerification.classification,
+    schedulerVerificationObservationClass: schedulerVerification.observationClass,
+    schedulerVerificationDowngrades: schedulerVerification.downgrades,
+    schedulerVerificationEventTraceTimingAuthority: schedulerVerification.timingAuthority,
     schedulerMode: scheduler?.effectiveScheduler?.mode || scheduler?.requestedScheduler?.mode || null,
     schedulerUnsupportedFields: Array.isArray(scheduler?.effectiveScheduler?.unsupportedFields)
       ? [...scheduler.effectiveScheduler.unsupportedFields]

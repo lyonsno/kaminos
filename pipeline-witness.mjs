@@ -4,12 +4,13 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileS
 import { delimiter, dirname, extname, isAbsolute, join, resolve } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import {
+  classifyWebGpuRouteReceiptEvidence,
   createSharpImageToSplatRouteDefinition,
   createWebGpuRouteBackpressureProfile,
   createWebGpuRouteSchedulerProfile,
   validateWebGpuRouteBackpressureProfile,
   validateWebGpuRouteSchedulerProfile,
-} from '@kaminos/webgpu-inference-kit';
+} from './webgpu-inference-kit/src/index.js';
 import { createSchedulerVerificationReceipt } from './lib/scheduler-verification-receipt.mjs';
 
 const args = new Map();
@@ -708,6 +709,78 @@ function schedulerVerificationReceipt(evidence, report = null, effectiveRoute = 
   });
 }
 
+function routeReceiptRuntimeSchedulerEvidence(report, effectiveRoute = null) {
+  const receipt = report?.receipt || report?.routeReceipt || null;
+  const runtime = receipt?.runtime || null;
+  if (!runtime?.scheduler && !runtime?.backpressure && !runtime?.schedulerVerification) return null;
+  const routeReceiptClassification = classifyWebGpuRouteReceiptEvidence(receipt);
+  const routeReceiptAuthoritative = routeReceiptClassification.classification === 'authoritative-live-webgpu';
+  const schedulerVerification = routeReceiptClassification.schedulerVerification || null;
+  const schedulerVerificationState = routeReceiptAuthoritative
+    ? (routeReceiptClassification.schedulerVerificationStatus || routeReceiptClassification.schedulerVerificationState || 'scheduler-unverified')
+    : 'scheduler-unverified';
+  const unsupportedFields = [
+    ...(Array.isArray(runtime.scheduler?.unsupportedFields) ? runtime.scheduler.unsupportedFields : []),
+    ...(Array.isArray(runtime.scheduler?.effectiveScheduler?.unsupportedFields) ? runtime.scheduler.effectiveScheduler.unsupportedFields : []),
+  ];
+  const scheduler = routeReceiptAuthoritative && runtime.scheduler
+    ? runtime.scheduler
+    : createValidatedSchedulerProfile({
+      requestedScheduler: runtime.scheduler?.requestedScheduler || {},
+      effectiveScheduler: runtime.scheduler?.effectiveScheduler || null,
+      unsupportedFields,
+      verificationState: schedulerVerificationState,
+      breathability: runtime.scheduler?.breathability || pipelineKitDefaultBreathability(report, effectiveRoute),
+    });
+  const backpressure = routeReceiptAuthoritative && runtime.backpressure
+    ? runtime.backpressure
+    : (runtime.backpressure || backpressurePlaceholder(report, effectiveRoute));
+  const source = routeReceiptAuthoritative ? 'route-receipt' : 'route-receipt-non-authoritative';
+  const routeReceiptDowngrade = routeReceiptAuthoritative ? [] : [`route-receipt-${routeReceiptClassification.classification}`];
+  const nonAuthoritativeSchedulerVerification = schedulerVerification ? {
+    ...schedulerVerification,
+    status: schedulerVerificationState,
+    classification: schedulerVerification.classification === 'observed-boundary'
+      ? 'config-only'
+      : schedulerVerification.classification,
+    reportedStatus: schedulerVerification.reportedStatus || routeReceiptClassification.schedulerVerificationReportedStatus || schedulerVerification.status || null,
+  } : null;
+  const effectiveSchedulerVerification = routeReceiptAuthoritative
+    ? schedulerVerification
+    : nonAuthoritativeSchedulerVerification;
+  const schedulerVerificationDowngrades = Array.isArray(routeReceiptClassification.schedulerVerificationDowngrades)
+    ? routeReceiptClassification.schedulerVerificationDowngrades
+    : [];
+  const failureDowngrades = [
+    ...routeReceiptDowngrade,
+    ...schedulerVerificationDowngrades,
+  ];
+  const evidence = {
+    schema: 'kaminos.pipeline-scheduler-composition.v0',
+    source,
+    verificationState: schedulerVerificationState,
+    requestedScheduler: scheduler?.requestedScheduler || null,
+    effectiveScheduler: scheduler?.effectiveScheduler || null,
+    unsupportedFields,
+    scheduler,
+    backpressure,
+    phaseBoundaries: Array.isArray(effectiveSchedulerVerification?.boundaryAssertions)
+      ? effectiveSchedulerVerification.boundaryAssertions.map(assertion => assertion?.observedBoundary).filter(Boolean)
+      : [],
+    backendIdentity: adapterBackendIdentity(report, effectiveRoute),
+    optimizationIdentity: emptyOptimizationIdentity(),
+    raw: {
+      breathingRoom: report?.breathingRoom || null,
+      routeReceipt: receipt,
+      routeReceiptClassification,
+    },
+    routeReceiptClassification,
+    failureDowngrades,
+    schedulerVerification: effectiveSchedulerVerification,
+  };
+  return validateOrNormalizePipelineSchedulerEvidence(evidence, report, effectiveRoute);
+}
+
 function pipelineSchedulerEvidence(report, effectiveRoute = null) {
   if (!report) {
     const evidence = {
@@ -740,6 +813,8 @@ function pipelineSchedulerEvidence(report, effectiveRoute = null) {
   if (report.pipelineScheduler?.schema === 'kaminos.pipeline-scheduler-composition.v0') {
     return validateOrNormalizePipelineSchedulerEvidence(report.pipelineScheduler, report, effectiveRoute);
   }
+  const routeReceiptEvidence = routeReceiptRuntimeSchedulerEvidence(report, effectiveRoute);
+  if (routeReceiptEvidence) return routeReceiptEvidence;
   const breathingRoom = report.breathingRoom || null;
   const effectiveScheduler = breathingRoom?.effectiveScheduler || null;
   const unsupportedFields = Array.isArray(breathingRoom?.unsupportedFields)

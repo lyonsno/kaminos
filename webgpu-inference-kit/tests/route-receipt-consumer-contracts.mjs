@@ -90,6 +90,48 @@ receipt.runtime = {
     },
   },
 };
+receipt.runtime.schedulerVerification = {
+  schema: 'kaminos.webgpu-scheduler-verification-receipt.v0',
+  status: 'scheduler-unverified',
+  classification: 'config-only',
+  observationClass: 'observed-stage-boundary',
+  downgrades: ['yield-events-missing'],
+  eventTrace: {
+    schema: 'kaminos.webgpu-scheduler-event-trace.v0',
+    clock: 'performance.now',
+    timingAuthority: 'queue-submit-wait',
+    events: [
+      { tMs: 1, phase: 'backbone', boundary: 'moge-stage-boundary', kind: 'queue-work-done-start' },
+      { tMs: 2, phase: 'backbone', boundary: 'moge-stage-boundary', kind: 'queue-work-done-end' },
+    ],
+  },
+  boundaryAssertions: [
+    {
+      field: 'stage.backbone',
+      requested: 'present',
+      effective: 'present',
+      status: 'observed',
+      observedBoundary: 'backbone',
+      observedCount: 1,
+    },
+    {
+      field: 'stage.decoder-heads',
+      requested: 'present',
+      effective: 'present',
+      status: 'observed',
+      observedBoundary: 'decoder-heads',
+      observedCount: 1,
+    },
+    {
+      field: 'stage.output-readback',
+      requested: 'present',
+      effective: 'present',
+      status: 'observed',
+      observedBoundary: 'output-readback',
+      observedCount: 1,
+    },
+  ],
+};
 
 const authoritative = classifyWebGpuRouteReceiptEvidence(receipt, {
   expectedRouteId: route.routeId,
@@ -99,6 +141,12 @@ assert.equal(authoritative.schema, 'kaminos.webgpu-route-evidence-classification
 assert.equal(authoritative.classification, 'authoritative-live-webgpu');
 assert.equal(authoritative.authoritative, true);
 assert.equal(authoritative.schedulerVerificationState, 'scheduler-unverified');
+assert.equal(authoritative.schedulerVerificationStatus, 'scheduler-unverified');
+assert.equal(authoritative.schedulerVerificationClassification, 'config-only');
+assert.equal(authoritative.schedulerVerificationObservationClass, 'observed-stage-boundary');
+assert.deepEqual(authoritative.schedulerVerificationDowngrades, ['yield-events-missing']);
+assert.equal(authoritative.schedulerVerificationEventTraceTimingAuthority, 'queue-submit-wait');
+assert.equal(authoritative.schedulerVerification.boundaryAssertions.length, 3);
 assert.equal(authoritative.schedulerMode, 'cooperative');
 assert.equal(authoritative.requestedBudget, 'visible-wait');
 assert.equal(authoritative.effectiveBudget, 'visible-wait');
@@ -106,6 +154,29 @@ assert.equal(authoritative.longFrameCount, 1);
 assert.equal(authoritative.routeId, route.routeId);
 assert.deepEqual(authoritative.outputRoles, ['depth', 'normal']);
 assert.equal(authoritative.timingSource, 'queue-submit-wait');
+
+const contradictorySchedulerProof = classifyWebGpuRouteReceiptEvidence({
+  ...receipt,
+  runtime: {
+    ...receipt.runtime,
+    schedulerVerification: {
+      ...receipt.runtime.schedulerVerification,
+      status: 'verified',
+      classification: 'observed-boundary',
+      downgrades: ['yield-events-missing'],
+    },
+  },
+}, {
+  expectedRouteId: route.routeId,
+  now: receipt.createdAt,
+});
+assert.equal(contradictorySchedulerProof.classification, 'authoritative-live-webgpu');
+assert.equal(contradictorySchedulerProof.authoritative, true);
+assert.equal(contradictorySchedulerProof.schedulerVerificationReportedStatus, 'verified');
+assert.equal(contradictorySchedulerProof.schedulerVerificationState, 'scheduler-unverified');
+assert.equal(contradictorySchedulerProof.schedulerVerificationStatus, 'scheduler-unverified');
+assert.equal(contradictorySchedulerProof.schedulerVerification.status, 'scheduler-unverified');
+assert.deepEqual(contradictorySchedulerProof.schedulerVerificationDowngrades, ['yield-events-missing']);
 
 const fallback = classifyWebGpuRouteReceiptEvidence({
   ...receipt,
