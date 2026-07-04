@@ -113,7 +113,7 @@ def parse_args():
     parser.add_argument("--learning-rate", type=float, default=1e-3)
     parser.add_argument("--eval-patches", type=int, default=64)
     parser.add_argument("--preview-size", type=int, default=384)
-    parser.add_argument("--preview-mode", choices=["center", "foreground"], default="center")
+    parser.add_argument("--preview-mode", choices=["center", "foreground", "edge-band"], default="center")
     parser.add_argument("--seed", type=int, default=630)
     parser.add_argument("--sleep-ms", dest="sleepMs", type=float, default=0.0, help="Optional per-step sleep throttle for contention control.")
     parser.add_argument("--foreground-threshold", dest="foregroundThreshold", type=float, default=0.025)
@@ -121,6 +121,13 @@ def parse_args():
     parser.add_argument("--loss-mode", choices=["mse", "weighted"], default="mse")
     parser.add_argument("--foreground-loss-weight", dest="foregroundLossWeight", type=float, default=0.0)
     parser.add_argument("--difference-loss-weight", dest="differenceLossWeight", type=float, default=0.0)
+    parser.add_argument("--edge-band-mode", dest="edgeBandMode", choices=["off", "difference", "gradient", "difference-gradient"], default="off", help="Derive target-error edge bands from low/high pairs for sampling, loss, metrics, and previews.")
+    parser.add_argument("--edge-band-threshold", dest="edgeBandThreshold", type=float, default=0.03)
+    parser.add_argument("--edge-band-dilate", dest="edgeBandDilate", type=int, default=2)
+    parser.add_argument("--edge-sampling-probability", dest="edgeSamplingProbability", type=float, default=0.0)
+    parser.add_argument("--edge-loss-weight", dest="edgeLossWeight", type=float, default=0.0)
+    parser.add_argument("--edge-gradient-loss-weight", dest="edgeGradientLossWeight", type=float, default=0.0)
+    parser.add_argument("--outside-edge-residual-weight", dest="outsideEdgeResidualWeight", type=float, default=0.0)
     parser.add_argument("--condition-render-scale", dest="conditionRenderScale", action="store_true")
     parser.add_argument("--temporal-eval", dest="temporalEval", action="store_true")
     parser.add_argument("--temporal-eval-scope", dest="temporalEvalScope", choices=["selected", "train", "eval"], default="selected")
@@ -201,6 +208,13 @@ def save_model_artifact(model, model_dir, config, args, corpus, metrics, effecti
             "foregroundProbability": args.foregroundProbability,
             "foregroundLossWeight": args.foregroundLossWeight,
             "differenceLossWeight": args.differenceLossWeight,
+            "edgeBandMode": args.edgeBandMode,
+            "edgeBandThreshold": args.edgeBandThreshold,
+            "edgeBandDilate": args.edgeBandDilate,
+            "edgeSamplingProbability": args.edgeSamplingProbability,
+            "edgeLossWeight": args.edgeLossWeight,
+            "edgeGradientLossWeight": args.edgeGradientLossWeight,
+            "outsideEdgeResidualWeight": args.outsideEdgeResidualWeight,
             "temporalLossWeight": args.temporalLossWeight,
             "residualTemporalLossWeight": args.residualTemporalLossWeight,
         },
@@ -220,6 +234,10 @@ def save_model_artifact(model, model_dir, config, args, corpus, metrics, effecti
                 "weightedBaselinePsnr",
                 "weightedModelPsnr",
                 "weightedDeltaPsnr",
+                "edgeBandBaselinePsnr",
+                "edgeBandModelPsnr",
+                "edgeBandDeltaPsnr",
+                "outsideEdgeResidualMse",
                 "improvedPatchFraction",
             ]
             if key in metrics
@@ -325,7 +343,47 @@ def foreground_pixels(low_image, high_image, foregroundThreshold):
     return np.argwhere(mask)
 
 
-def load_pair_arrays(pairs, foregroundThreshold):
+def image_gradient_signal(image):
+    luma = np.max(image, axis=2)
+    gradient = np.zeros_like(luma, dtype=np.float32)
+    gradient[:, 1:] = np.maximum(gradient[:, 1:], np.abs(luma[:, 1:] - luma[:, :-1]))
+    gradient[:, :-1] = np.maximum(gradient[:, :-1], np.abs(luma[:, 1:] - luma[:, :-1]))
+    gradient[1:, :] = np.maximum(gradient[1:, :], np.abs(luma[1:, :] - luma[:-1, :]))
+    gradient[:-1, :] = np.maximum(gradient[:-1, :], np.abs(luma[1:, :] - luma[:-1, :]))
+    return gradient
+
+
+def dilate_bool_mask(mask, radius):
+    radius = max(0, int(radius))
+    if radius == 0 or not np.any(mask):
+        return mask
+    padded = np.pad(mask, radius, mode="constant", constant_values=False)
+    dilated = np.zeros_like(mask, dtype=bool)
+    height, width = mask.shape
+    for offset_y in range(radius * 2 + 1):
+        for offset_x in range(radius * 2 + 1):
+            dilated |= padded[offset_y:offset_y + height, offset_x:offset_x + width]
+    return dilated
+
+
+def edge_band_mask(low_image, high_image, edgeBandMode, edgeBandThreshold, edgeBandDilate):
+    if edgeBandMode == "off":
+        signal = np.zeros(low_image.shape[:2], dtype=np.float32)
+        return np.zeros(low_image.shape[:2], dtype=bool), signal
+    signals = []
+    if edgeBandMode in {"difference", "difference-gradient"}:
+        signals.append(np.max(np.abs(high_image - low_image), axis=2))
+    if edgeBandMode in {"gradient", "difference-gradient"}:
+        low_gradient = image_gradient_signal(low_image)
+        high_gradient = image_gradient_signal(high_image)
+        signals.append(np.maximum(high_gradient - low_gradient, 0.0))
+    signal = np.maximum.reduce(signals).astype(np.float32) if signals else np.zeros(low_image.shape[:2], dtype=np.float32)
+    mask = signal > max(float(edgeBandThreshold), 0.0)
+    mask = dilate_bool_mask(mask, edgeBandDilate)
+    return mask, signal
+
+
+def load_pair_arrays(pairs, foregroundThreshold, edgeBandMode, edgeBandThreshold, edgeBandDilate):
     loaded = []
     for pair in pairs:
         low_path = Path(pair["low"]["path"])
@@ -335,12 +393,20 @@ def load_pair_arrays(pairs, foregroundThreshold):
         if low_image.shape != high_image.shape:
             raise ValueError(f"loaded image shape mismatch: {low_path} vs {high_path}")
         foreground = foreground_pixels(low_image, high_image, foregroundThreshold)
+        edge_mask, edge_signal = edge_band_mask(low_image, high_image, edgeBandMode, edgeBandThreshold, edgeBandDilate)
+        edge_pixels = np.argwhere(edge_mask)
         loaded.append({
             "id": f"{pair.get('variantId')}::{pair.get('pairId')}",
             "low": low_image,
             "high": high_image,
             "foreground": foreground,
             "foregroundPixels": int(foreground.shape[0]),
+            "edgeBandMask": edge_mask.astype(np.float32)[..., None],
+            "edgeBand": edge_pixels,
+            "edgeBandPixels": int(edge_pixels.shape[0]),
+            "edgeBandCoverage": float(np.mean(edge_mask)),
+            "edgeBandSignalMean": float(np.mean(edge_signal)),
+            "edgeBandSignalMax": float(np.max(edge_signal)),
             "lowPath": str(low_path),
             "highPath": str(high_path),
             "lowRenderScale": float(pair.get("lowRenderScale")),
@@ -393,16 +459,22 @@ def model_input_from_rgb(low_patch, low_render_scale, conditionRenderScale):
     return np.concatenate([low_patch, scaleChannel], axis=2)
 
 
-def sample_patch_batch(items, rng, batch_size, patch_size, foregroundProbability, conditionRenderScale):
+def sample_patch_batch(items, rng, batch_size, patch_size, foregroundProbability, edgeSamplingProbability, conditionRenderScale):
     lows = []
     highs = []
+    edge_masks = []
     for _ in range(batch_size):
         item = items[int(rng.integers(0, len(items)))]
         height, width, _channels = item["low"].shape
         crop_height = min(patch_size, height)
         crop_width = min(patch_size, width)
         foreground = item.get("foreground")
-        if foreground is not None and foreground.shape[0] and rng.random() < foregroundProbability:
+        edge_band = item.get("edgeBand")
+        if edge_band is not None and edge_band.shape[0] and rng.random() < edgeSamplingProbability:
+            center_y, center_x = edge_band[int(rng.integers(0, edge_band.shape[0]))]
+            top = int(np.clip(center_y - crop_height // 2, 0, max(0, height - crop_height)))
+            left = int(np.clip(center_x - crop_width // 2, 0, max(0, width - crop_width)))
+        elif foreground is not None and foreground.shape[0] and rng.random() < foregroundProbability:
             center_y, center_x = foreground[int(rng.integers(0, foreground.shape[0]))]
             top = int(np.clip(center_y - crop_height // 2, 0, max(0, height - crop_height)))
             left = int(np.clip(center_x - crop_width // 2, 0, max(0, width - crop_width)))
@@ -412,7 +484,8 @@ def sample_patch_batch(items, rng, batch_size, patch_size, foregroundProbability
         low_patch = item["low"][top:top + crop_height, left:left + crop_width, :]
         lows.append(model_input_from_rgb(low_patch, item["lowRenderScale"], conditionRenderScale))
         highs.append(item["high"][top:top + crop_height, left:left + crop_width, :])
-    return mx.array(np.stack(lows, axis=0)), mx.array(np.stack(highs, axis=0))
+        edge_masks.append(item.get("edgeBandMask", np.zeros((*item["low"].shape[:2], 1), dtype=np.float32))[top:top + crop_height, left:left + crop_width, :])
+    return mx.array(np.stack(lows, axis=0)), mx.array(np.stack(highs, axis=0)), mx.array(np.stack(edge_masks, axis=0))
 
 
 def sample_temporal_pair_batch(temporal_pairs, rng, batch_size, patch_size, foregroundProbability, conditionRenderScale):
@@ -477,6 +550,37 @@ def weighted_mse_value(prediction, target, low_batch, foregroundThreshold, foreg
     return weighted / normalizer
 
 
+def masked_mse_value(prediction, target, mask):
+    mask = mx.clip(mask, 0.0, 1.0)
+    numerator = mx.mean(mx.square(prediction - target) * mask)
+    normalizer = mx.maximum(mx.mean(mask), 1e-6)
+    return numerator / normalizer
+
+
+def edge_gradient_loss_value(prediction, target, edge_mask):
+    edge_mask = mx.clip(edge_mask, 0.0, 1.0)
+    dx_prediction = prediction[:, :, 1:, :] - prediction[:, :, :-1, :]
+    dx_target = target[:, :, 1:, :] - target[:, :, :-1, :]
+    dx_mask = mx.maximum(edge_mask[:, :, 1:, :], edge_mask[:, :, :-1, :])
+    dy_prediction = prediction[:, 1:, :, :] - prediction[:, :-1, :, :]
+    dy_target = target[:, 1:, :, :] - target[:, :-1, :, :]
+    dy_mask = mx.maximum(edge_mask[:, 1:, :, :], edge_mask[:, :-1, :, :])
+    return 0.5 * (masked_mse_value(dx_prediction, dx_target, dx_mask) + masked_mse_value(dy_prediction, dy_target, dy_mask))
+
+
+def edge_band_loss_value(prediction, target, low_batch, edge_mask, edgeLossWeight, edgeGradientLossWeight, outsideEdgeResidualWeight):
+    total = mx.array(0.0)
+    if edgeLossWeight > 0:
+        total = total + float(edgeLossWeight) * masked_mse_value(prediction, target, edge_mask)
+    if edgeGradientLossWeight > 0:
+        total = total + float(edgeGradientLossWeight) * edge_gradient_loss_value(prediction, target, edge_mask)
+    if outsideEdgeResidualWeight > 0:
+        low_rgb = rgb_channels(low_batch)
+        outside_mask = 1.0 - mx.clip(edge_mask, 0.0, 1.0)
+        total = total + float(outsideEdgeResidualWeight) * masked_mse_value(prediction - low_rgb, mx.zeros_like(prediction), outside_mask)
+    return total
+
+
 def temporal_loss_value(model_instance, previous_low_batch, current_low_batch, previous_high_batch, current_high_batch):
     previous_prediction = model_instance(previous_low_batch)
     current_prediction = model_instance(current_low_batch)
@@ -516,6 +620,15 @@ def crop_region(item, crop_size, previewMode):
             "centerY": float(center_y),
             "centerX": float(center_x),
             "foregroundPixels": item.get("foregroundPixels", 0),
+        }
+    if previewMode == "edge-band" and item.get("edgeBand") is not None and item["edgeBand"].shape[0]:
+        center_y, center_x = np.mean(item["edgeBand"], axis=0)
+        focus = {
+            "mode": "edge-band",
+            "centerY": float(center_y),
+            "centerX": float(center_x),
+            "foregroundPixels": item.get("foregroundPixels", 0),
+            "edgeBandPixels": item.get("edgeBandPixels", 0),
         }
     top = int(np.clip(focus["centerY"] - crop_height // 2, 0, max(0, height - crop_height)))
     left = int(np.clip(focus["centerX"] - crop_width // 2, 0, max(0, width - crop_width)))
@@ -793,35 +906,62 @@ def temporal_sequence_metrics(model, loaded, train_items, eval_items, out_dir, c
     return metrics
 
 
-def evaluate_model(model, items, rng, batch_size, patch_size, eval_patches, foregroundProbability, conditionRenderScale, foregroundThreshold, foregroundLossWeight, differenceLossWeight):
+def evaluate_model(model, items, rng, batch_size, patch_size, eval_patches, foregroundProbability, edgeSamplingProbability, conditionRenderScale, foregroundThreshold, foregroundLossWeight, differenceLossWeight):
     baseline_losses = []
     model_losses = []
     weighted_baseline_losses = []
     weighted_model_losses = []
+    edge_baseline_losses = []
+    edge_model_losses = []
+    outside_edge_residual_losses = []
+    edge_mask_coverages = []
     improved_patches = 0
     compared_patches = 0
     batches = max(1, math.ceil(eval_patches / batch_size))
     for _ in range(batches):
-        low_batch, high_batch = sample_patch_batch(items, rng, batch_size, patch_size, foregroundProbability, conditionRenderScale)
+        low_batch, high_batch, edge_mask_batch = sample_patch_batch(items, rng, batch_size, patch_size, foregroundProbability, edgeSamplingProbability, conditionRenderScale)
         low_rgb = rgb_channels(low_batch)
         prediction = model(low_batch)
         baseline_loss = mse_value(low_rgb, high_batch)
         model_loss = mse_value(prediction, high_batch)
         weighted_baseline_loss = weighted_mse_value(low_rgb, high_batch, low_batch, foregroundThreshold, foregroundLossWeight, differenceLossWeight)
         weighted_model_loss = weighted_mse_value(prediction, high_batch, low_batch, foregroundThreshold, foregroundLossWeight, differenceLossWeight)
+        edge_baseline_loss = masked_mse_value(low_rgb, high_batch, edge_mask_batch)
+        edge_model_loss = masked_mse_value(prediction, high_batch, edge_mask_batch)
+        outside_edge_residual_loss = masked_mse_value(prediction - low_rgb, mx.zeros_like(prediction), 1.0 - mx.clip(edge_mask_batch, 0.0, 1.0))
+        edge_mask_coverage = mx.mean(edge_mask_batch)
         baseline_sample_mse = per_sample_mse(low_rgb, high_batch)
         model_sample_mse = per_sample_mse(prediction, high_batch)
-        mx.eval(baseline_loss, model_loss, weighted_baseline_loss, weighted_model_loss, baseline_sample_mse, model_sample_mse)
+        mx.eval(
+            baseline_loss,
+            model_loss,
+            weighted_baseline_loss,
+            weighted_model_loss,
+            edge_baseline_loss,
+            edge_model_loss,
+            outside_edge_residual_loss,
+            edge_mask_coverage,
+            baseline_sample_mse,
+            model_sample_mse,
+        )
         baseline_losses.append(float(baseline_loss))
         model_losses.append(float(model_loss))
         weighted_baseline_losses.append(float(weighted_baseline_loss))
         weighted_model_losses.append(float(weighted_model_loss))
+        edge_baseline_losses.append(float(edge_baseline_loss))
+        edge_model_losses.append(float(edge_model_loss))
+        outside_edge_residual_losses.append(float(outside_edge_residual_loss))
+        edge_mask_coverages.append(float(edge_mask_coverage))
         improved_patches += int(np.sum(np.array(model_sample_mse) < np.array(baseline_sample_mse)))
         compared_patches += int(np.array(model_sample_mse).shape[0])
     baseline_mse = float(np.mean(baseline_losses))
     model_mse = float(np.mean(model_losses))
     weighted_baseline_mse = float(np.mean(weighted_baseline_losses))
     weighted_model_mse = float(np.mean(weighted_model_losses))
+    edge_baseline_mse = float(np.mean(edge_baseline_losses))
+    edge_model_mse = float(np.mean(edge_model_losses))
+    outside_edge_residual_mse = float(np.mean(outside_edge_residual_losses))
+    edge_band_coverage = float(np.mean(edge_mask_coverages))
     return {
         "baselineMse": baseline_mse,
         "modelMse": model_mse,
@@ -833,11 +973,18 @@ def evaluate_model(model, items, rng, batch_size, patch_size, eval_patches, fore
         "weightedBaselinePsnr": psnr_from_mse(weighted_baseline_mse),
         "weightedModelPsnr": psnr_from_mse(weighted_model_mse),
         "weightedDeltaPsnr": psnr_from_mse(weighted_model_mse) - psnr_from_mse(weighted_baseline_mse),
+        "edgeBandBaselineMse": edge_baseline_mse,
+        "edgeBandModelMse": edge_model_mse,
+        "edgeBandBaselinePsnr": psnr_from_mse(edge_baseline_mse),
+        "edgeBandModelPsnr": psnr_from_mse(edge_model_mse),
+        "edgeBandDeltaPsnr": psnr_from_mse(edge_model_mse) - psnr_from_mse(edge_baseline_mse),
+        "edgeBandEvalCoverage": edge_band_coverage,
+        "outsideEdgeResidualMse": outside_edge_residual_mse,
         "improvedPatchFraction": improved_patches / max(1, compared_patches),
     }
 
 
-def make_preview(model, eval_item, out_path, preview_size, previewMode, conditionRenderScale):
+def make_preview(model, eval_item, out_path, diagnostic_out_path, preview_size, previewMode, conditionRenderScale):
     low = eval_item["low"]
     high = eval_item["high"]
     top, left, crop_height, crop_width, previewFocus = crop_region(eval_item, preview_size, previewMode)
@@ -848,6 +995,13 @@ def make_preview(model, eval_item, out_path, preview_size, previewMode, conditio
     diff_patch = np.clip(np.abs(pred_patch - high_patch) * 4.0, 0.0, 1.0)
     strip = np.concatenate([low_patch, pred_patch, high_patch, diff_patch], axis=1)
     Image.fromarray(np.clip(strip * 255.0, 0, 255).astype(np.uint8), "RGB").save(out_path)
+    edge_mask = eval_item.get("edgeBandMask", np.zeros((*low.shape[:2], 1), dtype=np.float32))[top:top + crop_height, left:left + crop_width, :]
+    target_residual = np.clip(np.abs(high_patch - low_patch) * 4.0, 0.0, 1.0)
+    model_residual = np.clip(np.abs(pred_patch - low_patch) * 4.0, 0.0, 1.0)
+    remaining_error = np.clip(np.abs(high_patch - pred_patch) * 4.0, 0.0, 1.0)
+    mask_rgb = np.repeat(np.clip(edge_mask, 0.0, 1.0), 3, axis=2)
+    diagnostic_strip = np.concatenate([low_patch, pred_patch, high_patch, target_residual, model_residual, remaining_error, mask_rgb], axis=1)
+    Image.fromarray(np.clip(diagnostic_strip * 255.0, 0, 255).astype(np.uint8), "RGB").save(diagnostic_out_path)
     return previewFocus
 
 
@@ -859,6 +1013,20 @@ def main():
         raise ValueError("--residual-temporal-loss-weight must be non-negative")
     if args.detailResidualGate < 0:
         raise ValueError("--detail-residual-gate must be non-negative")
+    if args.edgeBandThreshold < 0:
+        raise ValueError("--edge-band-threshold must be non-negative")
+    if args.edgeBandDilate < 0:
+        raise ValueError("--edge-band-dilate must be non-negative")
+    for label, value in [
+        ("--edge-sampling-probability", args.edgeSamplingProbability),
+        ("--edge-loss-weight", args.edgeLossWeight),
+        ("--edge-gradient-loss-weight", args.edgeGradientLossWeight),
+        ("--outside-edge-residual-weight", args.outsideEdgeResidualWeight),
+    ]:
+        if value < 0:
+            raise ValueError(f"{label} must be non-negative")
+    if args.edgeSamplingProbability > 1:
+        raise ValueError("--edge-sampling-probability must be between 0 and 1")
     if args.residualContinuationAlpha < 0 or args.residualContinuationAlpha > 1:
         raise ValueError("--residual-continuation-alpha must be between 0 and 1")
     if args.evalOnly and not args.loadModelDir:
@@ -866,7 +1034,7 @@ def main():
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     corpus, pairs = load_pairs(args.corpus_manifest, args.low_render_scale)
-    loaded = load_pair_arrays(pairs, args.foregroundThreshold)
+    loaded = load_pair_arrays(pairs, args.foregroundThreshold, args.edgeBandMode, args.edgeBandThreshold, args.edgeBandDilate)
     train_items, eval_items = split_pairs(loaded)
     rng = np.random.default_rng(args.seed)
     mx.random.seed(args.seed)
@@ -925,7 +1093,7 @@ def main():
     activeTemporalLossWeight = args.temporalLossWeight if temporalLossPairCount else 0.0
     activeResidualTemporalLossWeight = args.residualTemporalLossWeight if temporalLossPairCount else 0.0
 
-    def loss_fn(model_instance, low_batch, high_batch, previous_low_batch, current_low_batch, previous_high_batch, current_high_batch):
+    def loss_fn(model_instance, low_batch, high_batch, edge_mask_batch, previous_low_batch, current_low_batch, previous_high_batch, current_high_batch):
         prediction = model_instance(low_batch)
         if args.loss_mode == "weighted":
             still_loss = weighted_mse_value(
@@ -939,6 +1107,15 @@ def main():
         else:
             still_loss = mse_value(prediction, high_batch)
         total_loss = still_loss
+        total_loss = total_loss + edge_band_loss_value(
+            prediction,
+            high_batch,
+            low_batch,
+            edge_mask_batch,
+            args.edgeLossWeight,
+            args.edgeGradientLossWeight,
+            args.outsideEdgeResidualWeight,
+        )
         if activeTemporalLossWeight > 0:
             total_loss = total_loss + activeTemporalLossWeight * temporal_loss_value(
                 model_instance,
@@ -961,7 +1138,15 @@ def main():
     residualTemporalTrainingLosses = []
     started = time.time()
     for step in range(max(0, effectiveMaxSteps)):
-        low_batch, high_batch = sample_patch_batch(train_items, rng, args.batch_size, args.patch_size, args.foregroundProbability, conditionRenderScale)
+        low_batch, high_batch, edge_mask_batch = sample_patch_batch(
+            train_items,
+            rng,
+            args.batch_size,
+            args.patch_size,
+            args.foregroundProbability,
+            args.edgeSamplingProbability,
+            conditionRenderScale,
+        )
         if activeTemporalLossWeight > 0 or activeResidualTemporalLossWeight > 0:
             previous_low_batch, current_low_batch, previous_high_batch, current_high_batch = sample_temporal_pair_batch(
                 temporal_loss_pairs,
@@ -976,7 +1161,7 @@ def main():
             current_low_batch = low_batch
             previous_high_batch = high_batch
             current_high_batch = high_batch
-        loss, grads = loss_and_grad(model, low_batch, high_batch, previous_low_batch, current_low_batch, previous_high_batch, current_high_batch)
+        loss, grads = loss_and_grad(model, low_batch, high_batch, edge_mask_batch, previous_low_batch, current_low_batch, previous_high_batch, current_high_batch)
         optimizer.update(model, grads)
         mx.eval(model.parameters(), optimizer.state, loss)
         loss_float = float(loss)
@@ -1008,13 +1193,15 @@ def main():
         args.patch_size,
         args.eval_patches,
         args.foregroundProbability,
+        args.edgeSamplingProbability,
         conditionRenderScale,
         args.foregroundThreshold,
         args.foregroundLossWeight,
         args.differenceLossWeight,
     )
     preview_path = out_dir / "residual-preview-low-model-target-diff.png"
-    previewFocus = make_preview(model, eval_items[0], preview_path, args.preview_size, args.preview_mode, conditionRenderScale)
+    diagnostic_preview_path = out_dir / "residual-preview-low-model-target-targetres-modelres-error-mask.png"
+    previewFocus = make_preview(model, eval_items[0], preview_path, diagnostic_preview_path, args.preview_size, args.preview_mode, conditionRenderScale)
     temporalMetrics = {}
     if args.temporalEval:
         temporalMetrics = temporal_sequence_metrics(
@@ -1088,6 +1275,13 @@ def main():
         "foregroundProbability": args.foregroundProbability,
         "foregroundLossWeight": args.foregroundLossWeight,
         "differenceLossWeight": args.differenceLossWeight,
+        "edgeBandMode": args.edgeBandMode,
+        "edgeBandThreshold": args.edgeBandThreshold,
+        "edgeBandDilate": args.edgeBandDilate,
+        "edgeSamplingProbability": args.edgeSamplingProbability,
+        "edgeLossWeight": args.edgeLossWeight,
+        "edgeGradientLossWeight": args.edgeGradientLossWeight,
+        "outsideEdgeResidualWeight": args.outsideEdgeResidualWeight,
         "conditionRenderScale": conditionRenderScale,
         "temporalLossWeight": args.temporalLossWeight,
         "activeTemporalLossWeight": activeTemporalLossWeight,
@@ -1116,6 +1310,18 @@ def main():
             item["id"]: item["foregroundPixels"]
             for item in loaded
         },
+        "edgeBandPixels": {
+            item["id"]: item["edgeBandPixels"]
+            for item in loaded
+        },
+        "edgeBandCoverage": {
+            item["id"]: item["edgeBandCoverage"]
+            for item in loaded
+        },
+        "edgeBandSignalMax": {
+            item["id"]: item["edgeBandSignalMax"]
+            for item in loaded
+        },
         "batchSize": args.batch_size,
         "patchSize": args.patch_size,
         "hiddenChannels": hiddenChannels,
@@ -1130,6 +1336,7 @@ def main():
         **metrics,
         **temporalMetrics,
         "preview": str(preview_path),
+        "diagnosticPreview": str(diagnostic_preview_path),
     }
     report_path = out_dir / "residual-report.json"
     report_path.write_text(json.dumps(report, indent=2))
