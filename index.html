@@ -118,13 +118,15 @@ canvas { display: block; }
 #env-loading { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #444; font-size: 12px; font-family: 'SF Mono', monospace; pointer-events: none; }
 
 /* Exposure slider */
-.slider-row { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
+.slider-row { display: flex; align-items: center; gap: 8px; margin: 6px 0; user-select: none; -webkit-user-select: none; }
 .volume-control-section { margin: 10px 0 12px; padding: 8px 0; border-top: 1px solid #252525; border-bottom: 1px solid #202020; }
 .volume-control-section-title { font-size: 10px; color: #777; font-weight: 600; margin: 0 0 6px; }
-.slider-label { font-size: 10px; color: #666; min-width: 60px; }
-.slider-val { font-size: 10px; color: #888; font-family: 'SF Mono', monospace; min-width: 30px; }
-.slider-help { display: block; margin: -2px 0 6px 68px; color: #4f6470; font-size: 9px; line-height: 1.25; }
+.slider-label { font-size: 10px; color: #666; min-width: 60px; user-select: none; -webkit-user-select: none; }
+.slider-val { font-size: 10px; color: #888; font-family: 'SF Mono', monospace; min-width: 30px; user-select: none; -webkit-user-select: none; }
+.slider-help { display: block; margin: -2px 0 6px 68px; color: #4f6470; font-size: 9px; line-height: 1.25; user-select: none; -webkit-user-select: none; }
 input[type="range"] { flex: 1; -webkit-appearance: none; height: 3px; background: #333; border-radius: 2px; outline: none; }
+.slider-row input[type="range"] { min-height: 24px; cursor: grab; touch-action: pan-y; }
+.slider-row input[type="range"]:active { cursor: grabbing; }
 input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 12px; background: #1976d2; border-radius: 50%; cursor: pointer; }
 input[type="color"].volume-color-swatch { flex: 1; min-width: 0; height: 24px; padding: 0; border: 1px solid #333; border-radius: 5px; background: #151515; cursor: pointer; }
 input[type="color"].volume-color-swatch::-webkit-color-swatch-wrapper { padding: 2px; }
@@ -1283,6 +1285,42 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
       <span class="slider-val" id="volume-pyro-bite-fire-lock-val">0.75</span>
     </div>
     <span class="slider-help">Bite fire lock: memory can whisper at 0, current flame authority required at 1.</span>
+    <div class="slider-row">
+      <span class="slider-label">Core Bite</span>
+      <input type="range" id="volume-pyro-bite-core" min="0" max="1" step="0.05" value="0.65">
+      <span class="slider-val" id="volume-pyro-bite-core-val">0.65</span>
+    </div>
+    <span class="slider-help">Core bite: inner current-flame teeth; stacks under rim and afterbite.</span>
+    <div class="slider-row">
+      <span class="slider-label">Core Cut</span>
+      <input type="range" id="volume-pyro-bite-core-cut" min="0" max="1" step="0.05" value="0.45">
+      <span class="slider-val" id="volume-pyro-bite-core-cut-val">0.45</span>
+    </div>
+    <span class="slider-help">Core cut: broad current fire at 0, selective hot core at 1.</span>
+    <div class="slider-row">
+      <span class="slider-label">Rim Bite</span>
+      <input type="range" id="volume-pyro-bite-rim" min="0" max="1" step="0.05" value="0.75">
+      <span class="slider-val" id="volume-pyro-bite-rim-val">0.75</span>
+    </div>
+    <span class="slider-help">Rim bite: flame-smoke interface teeth, separate from core body bite.</span>
+    <div class="slider-row">
+      <span class="slider-label">Rim Cut</span>
+      <input type="range" id="volume-pyro-bite-rim-cut" min="0" max="1" step="0.05" value="0.55">
+      <span class="slider-val" id="volume-pyro-bite-rim-cut-val">0.55</span>
+    </div>
+    <span class="slider-help">Rim cut: soft seam at 0, strict flame-smoke edge at 1.</span>
+    <div class="slider-row">
+      <span class="slider-label">After Bite</span>
+      <input type="range" id="volume-pyro-bite-after" min="0" max="1" step="0.05" value="0.35">
+      <span class="slider-val" id="volume-pyro-bite-after-val">0.35</span>
+    </div>
+    <span class="slider-help">After bite: ember wake bite where fire just fed the plume.</span>
+    <div class="slider-row">
+      <span class="slider-label">After Cut</span>
+      <input type="range" id="volume-pyro-bite-after-cut" min="0" max="1" step="0.05" value="0.50">
+      <span class="slider-val" id="volume-pyro-bite-after-cut-val">0.50</span>
+    </div>
+    <span class="slider-help">After cut: broad wake stain at 0, selective fresh afterburn at 1.</span>
     <div class="slider-row">
       <span class="slider-label">Fire Mode</span>
       <select id="volume-pyro-fire-mode" class="select-input">
@@ -9541,6 +9579,7 @@ const VOLUME_LOOK_LIBRARY_IDENTITY = 'kaminos-volume-look-library-v1';
 const PYRO_LOOK_FIELDS = [
   'pyroDynamicDetail', 'pyroMaterialGain', 'pyroInterfaceFocus', 'pyroEdgeBite',
   'pyroBiteBorder', 'pyroBiteTeeth', 'pyroBiteWake', 'pyroBiteHeight', 'pyroBiteFireLock',
+  'pyroBiteCore', 'pyroBiteCoreCut', 'pyroBiteRim', 'pyroBiteRimCut', 'pyroBiteAfter', 'pyroBiteAfterCut',
   'pyroFireMode', 'pyroFlamePaint', 'pyroStockMix', 'pyroFlameLuma', 'pyroFlameCoreColor', 'pyroFlameEdgeColor',
   'pyroBiteHeat', 'pyroBiteChroma', 'pyroBiteLuma', 'pyroBiteEmberColor', 'pyroBiteHotColor',
   'pyroSmokeFold', 'pyroFoldBorder', 'pyroFoldWake', 'pyroWakeLift', 'pyroWakeWarmth',
@@ -10398,6 +10437,12 @@ const VOLUME_BASIN_ROUTE_FIELDS = [
   ['pyroBiteWake', 'volume_pyro_bite_wake'],
   ['pyroBiteHeight', 'volume_pyro_bite_height'],
   ['pyroBiteFireLock', 'volume_pyro_bite_fire_lock'],
+  ['pyroBiteCore', 'volume_pyro_bite_core'],
+  ['pyroBiteCoreCut', 'volume_pyro_bite_core_cut'],
+  ['pyroBiteRim', 'volume_pyro_bite_rim'],
+  ['pyroBiteRimCut', 'volume_pyro_bite_rim_cut'],
+  ['pyroBiteAfter', 'volume_pyro_bite_after'],
+  ['pyroBiteAfterCut', 'volume_pyro_bite_after_cut'],
   ['pyroFireMode', 'volume_pyro_fire_mode'],
   ['pyroFlamePaint', 'volume_pyro_flame_paint'],
   ['pyroStockMix', 'volume_pyro_stock_mix'],
@@ -14623,6 +14668,12 @@ function readVolumeControls() {
     pyroBiteWake: parseFloat(document.getElementById('volume-pyro-bite-wake').value),
     pyroBiteHeight: parseFloat(document.getElementById('volume-pyro-bite-height').value),
     pyroBiteFireLock: parseFloat(document.getElementById('volume-pyro-bite-fire-lock').value),
+    pyroBiteCore: parseFloat(document.getElementById('volume-pyro-bite-core').value),
+    pyroBiteCoreCut: parseFloat(document.getElementById('volume-pyro-bite-core-cut').value),
+    pyroBiteRim: parseFloat(document.getElementById('volume-pyro-bite-rim').value),
+    pyroBiteRimCut: parseFloat(document.getElementById('volume-pyro-bite-rim-cut').value),
+    pyroBiteAfter: parseFloat(document.getElementById('volume-pyro-bite-after').value),
+    pyroBiteAfterCut: parseFloat(document.getElementById('volume-pyro-bite-after-cut').value),
     pyroFireMode: document.getElementById('volume-pyro-fire-mode').value,
     pyroFlamePaint: parseFloat(document.getElementById('volume-pyro-flame-paint').value),
     pyroStockMix: parseFloat(document.getElementById('volume-pyro-stock-mix').value),
@@ -14745,6 +14796,12 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-pyro-bite-wake-val').textContent = c.pyroBiteWake.toFixed(2);
   document.getElementById('volume-pyro-bite-height-val').textContent = c.pyroBiteHeight.toFixed(2);
   document.getElementById('volume-pyro-bite-fire-lock-val').textContent = c.pyroBiteFireLock.toFixed(2);
+  document.getElementById('volume-pyro-bite-core-val').textContent = c.pyroBiteCore.toFixed(2);
+  document.getElementById('volume-pyro-bite-core-cut-val').textContent = c.pyroBiteCoreCut.toFixed(2);
+  document.getElementById('volume-pyro-bite-rim-val').textContent = c.pyroBiteRim.toFixed(2);
+  document.getElementById('volume-pyro-bite-rim-cut-val').textContent = c.pyroBiteRimCut.toFixed(2);
+  document.getElementById('volume-pyro-bite-after-val').textContent = c.pyroBiteAfter.toFixed(2);
+  document.getElementById('volume-pyro-bite-after-cut-val').textContent = c.pyroBiteAfterCut.toFixed(2);
   document.getElementById('volume-pyro-fire-mode-val').textContent = c.pyroFireMode;
   document.getElementById('volume-pyro-flame-paint-val').textContent = c.pyroFlamePaint.toFixed(2);
   document.getElementById('volume-pyro-stock-mix-val').textContent = c.pyroStockMix.toFixed(2);
@@ -15169,6 +15226,30 @@ async function initKaminosVolumeRoute() {
   if (params.has('volume_pyro_bite_fire_lock') && Number.isFinite(routePyroBiteFireLock)) {
     document.getElementById('volume-pyro-bite-fire-lock').value = String(Math.max(0, Math.min(1, routePyroBiteFireLock)));
   }
+  const routePyroBiteCore = Number(params.get('volume_pyro_bite_core'));
+  if (params.has('volume_pyro_bite_core') && Number.isFinite(routePyroBiteCore)) {
+    document.getElementById('volume-pyro-bite-core').value = String(Math.max(0, Math.min(1, routePyroBiteCore)));
+  }
+  const routePyroBiteCoreCut = Number(params.get('volume_pyro_bite_core_cut'));
+  if (params.has('volume_pyro_bite_core_cut') && Number.isFinite(routePyroBiteCoreCut)) {
+    document.getElementById('volume-pyro-bite-core-cut').value = String(Math.max(0, Math.min(1, routePyroBiteCoreCut)));
+  }
+  const routePyroBiteRim = Number(params.get('volume_pyro_bite_rim'));
+  if (params.has('volume_pyro_bite_rim') && Number.isFinite(routePyroBiteRim)) {
+    document.getElementById('volume-pyro-bite-rim').value = String(Math.max(0, Math.min(1, routePyroBiteRim)));
+  }
+  const routePyroBiteRimCut = Number(params.get('volume_pyro_bite_rim_cut'));
+  if (params.has('volume_pyro_bite_rim_cut') && Number.isFinite(routePyroBiteRimCut)) {
+    document.getElementById('volume-pyro-bite-rim-cut').value = String(Math.max(0, Math.min(1, routePyroBiteRimCut)));
+  }
+  const routePyroBiteAfter = Number(params.get('volume_pyro_bite_after'));
+  if (params.has('volume_pyro_bite_after') && Number.isFinite(routePyroBiteAfter)) {
+    document.getElementById('volume-pyro-bite-after').value = String(Math.max(0, Math.min(1, routePyroBiteAfter)));
+  }
+  const routePyroBiteAfterCut = Number(params.get('volume_pyro_bite_after_cut'));
+  if (params.has('volume_pyro_bite_after_cut') && Number.isFinite(routePyroBiteAfterCut)) {
+    document.getElementById('volume-pyro-bite-after-cut').value = String(Math.max(0, Math.min(1, routePyroBiteAfterCut)));
+  }
   const routePyroFireMode = params.get('volume_pyro_fire_mode');
   if (['stock', 'hybrid', 'pyro-owned'].includes(routePyroFireMode)) {
     document.getElementById('volume-pyro-fire-mode').value = routePyroFireMode;
@@ -15453,7 +15534,7 @@ async function initKaminosVolumeRoute() {
     refreshVolumeReadout();
     saveVolumeBasinSnapshot(event?.target?.id || 'control-change');
   };
-  for (const id of ['volume-scene', 'volume-density', 'volume-fire', 'volume-radiance', 'volume-absorption', 'volume-glow', 'volume-smoke', 'volume-curl', 'volume-microdetail', 'volume-interface-shred', 'volume-fire-licks', 'volume-projection', 'volume-speed', 'volume-steps', 'volume-adaptive-rays', 'volume-occupancy-skip', 'volume-majorant-skip', 'volume-majorant-smooth', 'volume-majorant-guard', 'volume-temporal-accum', 'volume-temporal-jitter', 'volume-history-clamp', 'volume-fire-scale', 'volume-detail-scale', 'volume-plume-height', 'volume-wind-strength', 'volume-wind-angle', 'volume-wind-height', 'volume-render-scale', 'volume-input-radius', 'volume-flow-rate', 'volume-resolution', 'volume-majorant-grid', 'volume-grid-overlay', 'volume-flow-debug', 'volume-look-freeze', 'volume-pyro-compare', 'volume-pyro-detail', 'volume-pyro-material-gain', 'volume-pyro-interface-focus', 'volume-pyro-edge-bite', 'volume-pyro-bite-border', 'volume-pyro-bite-teeth', 'volume-pyro-bite-wake', 'volume-pyro-bite-height', 'volume-pyro-bite-fire-lock', 'volume-pyro-fire-mode', 'volume-pyro-flame-paint', 'volume-pyro-stock-mix', 'volume-pyro-flame-luma', 'volume-pyro-flame-core-color', 'volume-pyro-flame-edge-color', 'volume-pyro-bite-heat', 'volume-pyro-bite-chroma', 'volume-pyro-bite-luma', 'volume-pyro-bite-ember-color', 'volume-pyro-bite-hot-color', 'volume-pyro-smoke-fold', 'volume-pyro-fold-border', 'volume-pyro-fold-wake', 'volume-pyro-wake-lift', 'volume-pyro-wake-warmth', 'volume-pyro-wake-luma', 'volume-pyro-wake-shadow-color', 'volume-pyro-wake-ember-color', 'volume-pyro-radiance', 'volume-pyro-radiance-gate', 'volume-pyro-radiance-spill', 'volume-pyro-radiance-warmth', 'volume-pyro-radiance-hue', 'volume-pyro-radiance-chroma', 'volume-pyro-radiance-luma', 'volume-pyro-radiance-cool-color', 'volume-pyro-radiance-warm-color', 'volume-pyro-radiance-source', 'volume-pyro-radiance-height', 'volume-pyro-radiance-border', 'volume-pyro-radiance-teeth', 'volume-pyro-radiance-rise', 'volume-pyro-radiance-fire-lock', 'volume-pyro-diagnostic-paint', 'volume-pyro-carrier-view', 'volume-pyro-overdrive', 'volume-pressure-mode', 'volume-pressure-tier-overlay', 'volume-pressure-tier-lower-max', 'volume-pressure-tier-hero-min', 'volume-pressure-tier-hero-max', 'volume-canonical-spread', 'volume-canonical-centerline', 'volume-canonical-body-balance']) {
+  for (const id of ['volume-scene', 'volume-density', 'volume-fire', 'volume-radiance', 'volume-absorption', 'volume-glow', 'volume-smoke', 'volume-curl', 'volume-microdetail', 'volume-interface-shred', 'volume-fire-licks', 'volume-projection', 'volume-speed', 'volume-steps', 'volume-adaptive-rays', 'volume-occupancy-skip', 'volume-majorant-skip', 'volume-majorant-smooth', 'volume-majorant-guard', 'volume-temporal-accum', 'volume-temporal-jitter', 'volume-history-clamp', 'volume-fire-scale', 'volume-detail-scale', 'volume-plume-height', 'volume-wind-strength', 'volume-wind-angle', 'volume-wind-height', 'volume-render-scale', 'volume-input-radius', 'volume-flow-rate', 'volume-resolution', 'volume-majorant-grid', 'volume-grid-overlay', 'volume-flow-debug', 'volume-look-freeze', 'volume-pyro-compare', 'volume-pyro-detail', 'volume-pyro-material-gain', 'volume-pyro-interface-focus', 'volume-pyro-edge-bite', 'volume-pyro-bite-border', 'volume-pyro-bite-teeth', 'volume-pyro-bite-wake', 'volume-pyro-bite-height', 'volume-pyro-bite-fire-lock', 'volume-pyro-bite-core', 'volume-pyro-bite-core-cut', 'volume-pyro-bite-rim', 'volume-pyro-bite-rim-cut', 'volume-pyro-bite-after', 'volume-pyro-bite-after-cut', 'volume-pyro-fire-mode', 'volume-pyro-flame-paint', 'volume-pyro-stock-mix', 'volume-pyro-flame-luma', 'volume-pyro-flame-core-color', 'volume-pyro-flame-edge-color', 'volume-pyro-bite-heat', 'volume-pyro-bite-chroma', 'volume-pyro-bite-luma', 'volume-pyro-bite-ember-color', 'volume-pyro-bite-hot-color', 'volume-pyro-smoke-fold', 'volume-pyro-fold-border', 'volume-pyro-fold-wake', 'volume-pyro-wake-lift', 'volume-pyro-wake-warmth', 'volume-pyro-wake-luma', 'volume-pyro-wake-shadow-color', 'volume-pyro-wake-ember-color', 'volume-pyro-radiance', 'volume-pyro-radiance-gate', 'volume-pyro-radiance-spill', 'volume-pyro-radiance-warmth', 'volume-pyro-radiance-hue', 'volume-pyro-radiance-chroma', 'volume-pyro-radiance-luma', 'volume-pyro-radiance-cool-color', 'volume-pyro-radiance-warm-color', 'volume-pyro-radiance-source', 'volume-pyro-radiance-height', 'volume-pyro-radiance-border', 'volume-pyro-radiance-teeth', 'volume-pyro-radiance-rise', 'volume-pyro-radiance-fire-lock', 'volume-pyro-diagnostic-paint', 'volume-pyro-carrier-view', 'volume-pyro-overdrive', 'volume-pressure-mode', 'volume-pressure-tier-overlay', 'volume-pressure-tier-lower-max', 'volume-pressure-tier-hero-min', 'volume-pressure-tier-hero-max', 'volume-canonical-spread', 'volume-canonical-centerline', 'volume-canonical-body-balance']) {
     document.getElementById(id).addEventListener('input', syncControls);
     document.getElementById(id).addEventListener('change', syncControls);
   }

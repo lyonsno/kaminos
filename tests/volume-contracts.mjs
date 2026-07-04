@@ -70,6 +70,8 @@ assert.match(index, /volume_pyro_compare/, 'Basin URLs preserve Pyro compare mod
 assert.match(index, /id="volume-look-lab-state"/, 'Volume readout exposes effective look-lab freeze/compare state');
 assert.match(index, /Volume route controls loaded; renderer failed/, 'Volume route still hydrates basin controls when renderer activation fails');
 assert.match(index, /initKaminosVolumeRoute\(\)\.catch/, 'Volume route initializes from the scene-init fallback path for setup diagnostics');
+assert.match(index, /\.slider-row\s*\{[^}]*user-select:\s*none/, 'Slider rows prevent label/help text selection from stealing drag gestures');
+assert.match(index, /\.slider-row input\[type="range"\]\s*\{[^}]*min-height:\s*24px/, 'Range sliders expose a taller grab lane than the visible rail');
 assert.match(index, /id="volume-pyro-interface-focus"/, 'Pyro cockpit exposes an interface-focus slider');
 assert.match(index, /Border carrier/i, 'Pyro interface-focus slider describes the standalone border carrier');
 assert.match(index, /id="volume-pyro-edge-bite"/, 'Pyro cockpit exposes an edge-bite slider');
@@ -84,6 +86,18 @@ assert.match(index, /id="volume-pyro-bite-height"/, 'Pyro cockpit exposes a bite
 assert.match(index, /Bite climb/i, 'Pyro bite-height slider describes low-edge versus higher plume bite permission');
 assert.match(index, /id="volume-pyro-bite-fire-lock"/, 'Pyro cockpit exposes a bite live-fire lock');
 assert.match(index, /Bite fire lock/i, 'Pyro bite fire-lock slider describes whether current flame authority is required');
+assert.match(index, /id="volume-pyro-bite-core"/, 'Pyro cockpit exposes a Bite core layer gain');
+assert.match(index, /Core bite/i, 'Pyro Bite core layer describes current-flame teeth');
+assert.match(index, /id="volume-pyro-bite-core-cut"/, 'Pyro cockpit exposes a Bite core threshold cut');
+assert.match(index, /Core cut/i, 'Pyro Bite core cut describes broad versus selective current-fire bite');
+assert.match(index, /id="volume-pyro-bite-rim"/, 'Pyro cockpit exposes a Bite rim/interface layer gain');
+assert.match(index, /Rim bite/i, 'Pyro Bite rim layer describes flame-smoke interface teeth');
+assert.match(index, /id="volume-pyro-bite-rim-cut"/, 'Pyro cockpit exposes a Bite rim threshold cut');
+assert.match(index, /Rim cut/i, 'Pyro Bite rim cut describes soft versus strict seam bite');
+assert.match(index, /id="volume-pyro-bite-after"/, 'Pyro cockpit exposes a Bite after/wake layer gain');
+assert.match(index, /After bite/i, 'Pyro Bite after layer describes ember wake bite');
+assert.match(index, /id="volume-pyro-bite-after-cut"/, 'Pyro cockpit exposes a Bite after threshold cut');
+assert.match(index, /After cut/i, 'Pyro Bite after cut describes broad versus selective wake bite');
 assert.match(index, /id="volume-pyro-smoke-fold"/, 'Pyro cockpit exposes a smoke-fold slider');
 assert.match(index, /darken and fold smoke/i, 'Pyro smoke-fold slider describes the smoke/absorption carrier');
 assert.match(index, /id="volume-pyro-fold-border"/, 'Pyro cockpit exposes a fold-specific border focus slider');
@@ -178,6 +192,16 @@ for (const param of [
 }
 assert.match(index, /volume_pyro_bite_height/, 'Pyro basin URLs preserve bite height gate');
 assert.match(index, /volume_pyro_bite_fire_lock/, 'Pyro basin URLs preserve bite live-fire lock');
+for (const param of [
+  'volume_pyro_bite_core',
+  'volume_pyro_bite_core_cut',
+  'volume_pyro_bite_rim',
+  'volume_pyro_bite_rim_cut',
+  'volume_pyro_bite_after',
+  'volume_pyro_bite_after_cut',
+]) {
+  assert.match(index, new RegExp(param), `Pyro basin URLs preserve stacked Bite control ${param}`);
+}
 assert.match(index, /volume_pyro_wake_lift/, 'Pyro basin URLs preserve wake lift');
 assert.match(index, /volume_pyro_wake_warmth/, 'Pyro basin URLs preserve wake warmth');
 assert.match(index, /volume_pyro_radiance_source/, 'Pyro basin URLs preserve radiance source routing');
@@ -199,6 +223,12 @@ assert.match(index, /routePyroStockMix/, 'Pyro route parser accepts stock flame 
 assert.match(index, /routePyroFlameCoreColor/, 'Pyro route parser accepts editable flame core color');
 assert.match(index, /routePyroBiteHeight/, 'Pyro route parser accepts bite height gate');
 assert.match(index, /routePyroBiteFireLock/, 'Pyro route parser accepts bite live-fire lock');
+assert.match(index, /routePyroBiteCore/, 'Pyro route parser accepts Bite core gain');
+assert.match(index, /routePyroBiteCoreCut/, 'Pyro route parser accepts Bite core threshold cut');
+assert.match(index, /routePyroBiteRim/, 'Pyro route parser accepts Bite rim gain');
+assert.match(index, /routePyroBiteRimCut/, 'Pyro route parser accepts Bite rim threshold cut');
+assert.match(index, /routePyroBiteAfter/, 'Pyro route parser accepts Bite after/wake gain');
+assert.match(index, /routePyroBiteAfterCut/, 'Pyro route parser accepts Bite after/wake threshold cut');
 assert.match(index, /routePyroWakeLift/, 'Pyro route parser accepts wake lift');
 assert.match(index, /routePyroWakeWarmth/, 'Pyro route parser accepts wake warmth');
 assert.match(index, /routePyroRadianceSource/, 'Pyro route parser accepts radiance source routing');
@@ -888,6 +918,12 @@ assert.match(core, /pyroWakeWarmth\s*=\s*clamp\(u\.pyro_route_controls\.w,\s*0\.
 assert.match(core, /pyro_radiance_route_controls:\s*vec4<f32>/, 'WGSL uniforms expose Pyro radiance source/height routing controls');
 assert.match(core, /pyroRadianceSource\s*=\s*clamp\(u\.pyro_radiance_route_controls\.x,\s*0\.0,\s*2\.0\)/, 'WGSL accepts a separate Radiance source selector');
 assert.match(core, /pyroRadianceHeight\s*=\s*clamp\(u\.pyro_radiance_route_controls\.y,\s*0\.0,\s*1\.0\)/, 'WGSL accepts a separate Radiance height gate');
+assert.match(core, /pyro_bite_stack_controls:\s*vec4<f32>/, 'WGSL receives the first packed Bite stack layer controls');
+assert.match(core, /pyro_bite_stack_controls2:\s*vec4<f32>/, 'WGSL receives the second packed Bite stack layer controls');
+assert.match(core, /pyroBiteCoreEvent/, 'WGSL derives a named inner/current-flame Bite layer');
+assert.match(core, /pyroBiteRimEvent/, 'WGSL derives a named rim/interface Bite layer');
+assert.match(core, /pyroBiteAfterEvent/, 'WGSL derives a named after/wake Bite layer');
+assert.match(core, /pyroStackedBiteEvent/, 'WGSL combines Bite layers before load-bearing alpha/color contribution');
 assert.match(core, /pyroWakeSignal/, 'WGSL computes a named smoke-memory Wake carrier separate from Bite');
 assert.match(core, /pyroCurrentFireLock/, 'WGSL computes a named current-fire authority lock for Bite');
 assert.match(core, /uniforms\[200\]\s*=\s*pyroBiteHeat/, 'CPU uploads Bite heat into the Pyro color uniform block');
@@ -897,7 +933,7 @@ assert.match(core, /uniforms\[203\]\s*=\s*pyroRadianceChroma/, 'CPU uploads Radi
 assert.match(core, /uniforms\[212\]\s*=\s*pyroFlamePaint/, 'CPU uploads flame paint gain into the Pyro luma uniform block');
 assert.match(core, /uniforms\[213\]\s*=\s*pyroFlameLuma/, 'CPU uploads flame luminance into the Pyro luma uniform block');
 assert.match(core, /writePyroPaletteUniform/, 'CPU uploads editable Pyro palette color endpoints');
-assert.match(core, /uniforms\.set\(previousViewProj\.elements,\s*252\)/, 'previous view-projection matrix shifts after palette uniforms');
+assert.match(core, /uniforms\.set\(previousViewProj\.elements,\s*260\)/, 'previous view-projection matrix shifts after Bite-stack and palette uniforms');
 assert.match(core, /paletteShape/, 'debug state exposes editable Pyro palette shape');
 assert.match(core, /lumaShape/, 'debug state exposes independent Pyro luma shape');
 assert.match(core, /radianceShape/, 'debug state exposes Pyro radiance gate/spill/warmth shape');
