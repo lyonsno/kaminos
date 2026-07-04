@@ -75,6 +75,15 @@ async function waitForCdpPort(port) {
   throw new Error(`shared witness browser CDP endpoint did not open on port ${port}`);
 }
 
+async function cdpAvailableForPort(port) {
+  try {
+    await cdpFetchForPort(port, '/json/version');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function wsRequest(ws, method, params = {}) {
   const id = ws._nextId = (ws._nextId || 0) + 1;
   ws.send(JSON.stringify({ id, method, params }));
@@ -119,6 +128,19 @@ function makeWitnessBrowserSession({ enabled, port, userDataDir, windowSize, ini
 
 async function startWitnessBrowserSession(session) {
   if (!session?.enabled) return { ...session, status: 'disabled' };
+  if (session.keepOpen && await cdpAvailableForPort(session.port)) {
+    const version = await cdpFetchForPort(session.port, '/json/version');
+    return {
+      ...session,
+      status: 'started',
+      mode: 'attached-existing-shared-headful-cdp-browser',
+      startedAt: new Date().toISOString(),
+      browser: version.Browser || null,
+      webSocketDebuggerUrl: version.webSocketDebuggerUrl || null,
+      pid: null,
+      process: null,
+    };
+  }
   const chrome = process.env.KAMINOS_CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
   const proc = spawn(chrome, [
     `--remote-debugging-port=${session.port}`,
