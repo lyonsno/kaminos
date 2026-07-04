@@ -227,6 +227,8 @@ def main():
             final_receipt["deltaPsnr"] = report.get("deltaPsnr")
             final_receipt["weightedDeltaPsnr"] = report.get("weightedDeltaPsnr")
             final_receipt["edgeBandDeltaPsnr"] = report.get("edgeBandDeltaPsnr")
+            final_receipt["targetEdgeBandDeltaPsnr"] = report.get("targetEdgeBandDeltaPsnr")
+            final_receipt["edgeBandAuthority"] = report.get("edgeBandAuthority")
             final_receipt["outsideEdgeResidualMse"] = report.get("outsideEdgeResidualMse")
         except Exception as exc:
             final_receipt["residualReportReadError"] = repr(exc)

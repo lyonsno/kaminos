@@ -121,7 +121,7 @@ def parse_args():
     parser.add_argument("--loss-mode", choices=["mse", "weighted"], default="mse")
     parser.add_argument("--foreground-loss-weight", dest="foregroundLossWeight", type=float, default=0.0)
     parser.add_argument("--difference-loss-weight", dest="differenceLossWeight", type=float, default=0.0)
-    parser.add_argument("--edge-band-mode", dest="edgeBandMode", choices=["off", "difference", "gradient", "difference-gradient"], default="off", help="Derive target-error edge bands from low/high pairs for sampling, loss, metrics, and previews.")
+    parser.add_argument("--edge-band-mode", dest="edgeBandMode", choices=["off", "difference", "gradient", "difference-gradient", "low-gradient", "low-luma", "low-gradient-luma"], default="off", help="Derive edge bands from target low/high pairs or inference-available low-image proxy signals for sampling, loss, metrics, and previews.")
     parser.add_argument("--edge-band-threshold", dest="edgeBandThreshold", type=float, default=0.03)
     parser.add_argument("--edge-band-dilate", dest="edgeBandDilate", type=int, default=2)
     parser.add_argument("--edge-sampling-probability", dest="edgeSamplingProbability", type=float, default=0.0)
@@ -209,6 +209,7 @@ def save_model_artifact(model, model_dir, config, args, corpus, metrics, effecti
             "foregroundLossWeight": args.foregroundLossWeight,
             "differenceLossWeight": args.differenceLossWeight,
             "edgeBandMode": args.edgeBandMode,
+            "edgeBandAuthority": edge_band_authority(args.edgeBandMode),
             "edgeBandThreshold": args.edgeBandThreshold,
             "edgeBandDilate": args.edgeBandDilate,
             "edgeSamplingProbability": args.edgeSamplingProbability,
@@ -237,6 +238,9 @@ def save_model_artifact(model, model_dir, config, args, corpus, metrics, effecti
                 "edgeBandBaselinePsnr",
                 "edgeBandModelPsnr",
                 "edgeBandDeltaPsnr",
+                "targetEdgeBandBaselinePsnr",
+                "targetEdgeBandModelPsnr",
+                "targetEdgeBandDeltaPsnr",
                 "outsideEdgeResidualMse",
                 "improvedPatchFraction",
             ]
@@ -366,6 +370,16 @@ def dilate_bool_mask(mask, radius):
     return dilated
 
 
+def edge_band_authority(edgeBandMode):
+    if edgeBandMode == "off":
+        return "off"
+    if edgeBandMode in {"difference", "gradient", "difference-gradient"}:
+        return "target-derived-low-high"
+    if edgeBandMode in {"low-gradient", "low-luma", "low-gradient-luma"}:
+        return "inference-available-low-image-proxy"
+    return "unknown"
+
+
 def edge_band_mask(low_image, high_image, edgeBandMode, edgeBandThreshold, edgeBandDilate):
     if edgeBandMode == "off":
         signal = np.zeros(low_image.shape[:2], dtype=np.float32)
@@ -377,6 +391,10 @@ def edge_band_mask(low_image, high_image, edgeBandMode, edgeBandThreshold, edgeB
         low_gradient = image_gradient_signal(low_image)
         high_gradient = image_gradient_signal(high_image)
         signals.append(np.maximum(high_gradient - low_gradient, 0.0))
+    if edgeBandMode in {"low-gradient", "low-gradient-luma"}:
+        signals.append(image_gradient_signal(low_image))
+    if edgeBandMode in {"low-luma", "low-gradient-luma"}:
+        signals.append(np.max(low_image, axis=2))
     signal = np.maximum.reduce(signals).astype(np.float32) if signals else np.zeros(low_image.shape[:2], dtype=np.float32)
     mask = signal > max(float(edgeBandThreshold), 0.0)
     mask = dilate_bool_mask(mask, edgeBandDilate)
@@ -394,7 +412,9 @@ def load_pair_arrays(pairs, foregroundThreshold, edgeBandMode, edgeBandThreshold
             raise ValueError(f"loaded image shape mismatch: {low_path} vs {high_path}")
         foreground = foreground_pixels(low_image, high_image, foregroundThreshold)
         edge_mask, edge_signal = edge_band_mask(low_image, high_image, edgeBandMode, edgeBandThreshold, edgeBandDilate)
+        target_edge_mask, target_edge_signal = edge_band_mask(low_image, high_image, "difference-gradient", edgeBandThreshold, edgeBandDilate)
         edge_pixels = np.argwhere(edge_mask)
+        target_edge_pixels = np.argwhere(target_edge_mask)
         loaded.append({
             "id": f"{pair.get('variantId')}::{pair.get('pairId')}",
             "low": low_image,
@@ -407,6 +427,12 @@ def load_pair_arrays(pairs, foregroundThreshold, edgeBandMode, edgeBandThreshold
             "edgeBandCoverage": float(np.mean(edge_mask)),
             "edgeBandSignalMean": float(np.mean(edge_signal)),
             "edgeBandSignalMax": float(np.max(edge_signal)),
+            "targetEdgeBandMask": target_edge_mask.astype(np.float32)[..., None],
+            "targetEdgeBand": target_edge_pixels,
+            "targetEdgeBandPixels": int(target_edge_pixels.shape[0]),
+            "targetEdgeBandCoverage": float(np.mean(target_edge_mask)),
+            "targetEdgeBandSignalMean": float(np.mean(target_edge_signal)),
+            "targetEdgeBandSignalMax": float(np.max(target_edge_signal)),
             "lowPath": str(low_path),
             "highPath": str(high_path),
             "lowRenderScale": float(pair.get("lowRenderScale")),
@@ -463,6 +489,7 @@ def sample_patch_batch(items, rng, batch_size, patch_size, foregroundProbability
     lows = []
     highs = []
     edge_masks = []
+    target_edge_masks = []
     for _ in range(batch_size):
         item = items[int(rng.integers(0, len(items)))]
         height, width, _channels = item["low"].shape
@@ -485,7 +512,13 @@ def sample_patch_batch(items, rng, batch_size, patch_size, foregroundProbability
         lows.append(model_input_from_rgb(low_patch, item["lowRenderScale"], conditionRenderScale))
         highs.append(item["high"][top:top + crop_height, left:left + crop_width, :])
         edge_masks.append(item.get("edgeBandMask", np.zeros((*item["low"].shape[:2], 1), dtype=np.float32))[top:top + crop_height, left:left + crop_width, :])
-    return mx.array(np.stack(lows, axis=0)), mx.array(np.stack(highs, axis=0)), mx.array(np.stack(edge_masks, axis=0))
+        target_edge_masks.append(item.get("targetEdgeBandMask", item.get("edgeBandMask", np.zeros((*item["low"].shape[:2], 1), dtype=np.float32)))[top:top + crop_height, left:left + crop_width, :])
+    return (
+        mx.array(np.stack(lows, axis=0)),
+        mx.array(np.stack(highs, axis=0)),
+        mx.array(np.stack(edge_masks, axis=0)),
+        mx.array(np.stack(target_edge_masks, axis=0)),
+    )
 
 
 def sample_temporal_pair_batch(temporal_pairs, rng, batch_size, patch_size, foregroundProbability, conditionRenderScale):
@@ -913,13 +946,16 @@ def evaluate_model(model, items, rng, batch_size, patch_size, eval_patches, fore
     weighted_model_losses = []
     edge_baseline_losses = []
     edge_model_losses = []
+    target_edge_baseline_losses = []
+    target_edge_model_losses = []
     outside_edge_residual_losses = []
     edge_mask_coverages = []
+    target_edge_mask_coverages = []
     improved_patches = 0
     compared_patches = 0
     batches = max(1, math.ceil(eval_patches / batch_size))
     for _ in range(batches):
-        low_batch, high_batch, edge_mask_batch = sample_patch_batch(items, rng, batch_size, patch_size, foregroundProbability, edgeSamplingProbability, conditionRenderScale)
+        low_batch, high_batch, edge_mask_batch, target_edge_mask_batch = sample_patch_batch(items, rng, batch_size, patch_size, foregroundProbability, edgeSamplingProbability, conditionRenderScale)
         low_rgb = rgb_channels(low_batch)
         prediction = model(low_batch)
         baseline_loss = mse_value(low_rgb, high_batch)
@@ -928,8 +964,11 @@ def evaluate_model(model, items, rng, batch_size, patch_size, eval_patches, fore
         weighted_model_loss = weighted_mse_value(prediction, high_batch, low_batch, foregroundThreshold, foregroundLossWeight, differenceLossWeight)
         edge_baseline_loss = masked_mse_value(low_rgb, high_batch, edge_mask_batch)
         edge_model_loss = masked_mse_value(prediction, high_batch, edge_mask_batch)
+        target_edge_baseline_loss = masked_mse_value(low_rgb, high_batch, target_edge_mask_batch)
+        target_edge_model_loss = masked_mse_value(prediction, high_batch, target_edge_mask_batch)
         outside_edge_residual_loss = masked_mse_value(prediction - low_rgb, mx.zeros_like(prediction), 1.0 - mx.clip(edge_mask_batch, 0.0, 1.0))
         edge_mask_coverage = mx.mean(edge_mask_batch)
+        target_edge_mask_coverage = mx.mean(target_edge_mask_batch)
         baseline_sample_mse = per_sample_mse(low_rgb, high_batch)
         model_sample_mse = per_sample_mse(prediction, high_batch)
         mx.eval(
@@ -939,8 +978,11 @@ def evaluate_model(model, items, rng, batch_size, patch_size, eval_patches, fore
             weighted_model_loss,
             edge_baseline_loss,
             edge_model_loss,
+            target_edge_baseline_loss,
+            target_edge_model_loss,
             outside_edge_residual_loss,
             edge_mask_coverage,
+            target_edge_mask_coverage,
             baseline_sample_mse,
             model_sample_mse,
         )
@@ -950,8 +992,11 @@ def evaluate_model(model, items, rng, batch_size, patch_size, eval_patches, fore
         weighted_model_losses.append(float(weighted_model_loss))
         edge_baseline_losses.append(float(edge_baseline_loss))
         edge_model_losses.append(float(edge_model_loss))
+        target_edge_baseline_losses.append(float(target_edge_baseline_loss))
+        target_edge_model_losses.append(float(target_edge_model_loss))
         outside_edge_residual_losses.append(float(outside_edge_residual_loss))
         edge_mask_coverages.append(float(edge_mask_coverage))
+        target_edge_mask_coverages.append(float(target_edge_mask_coverage))
         improved_patches += int(np.sum(np.array(model_sample_mse) < np.array(baseline_sample_mse)))
         compared_patches += int(np.array(model_sample_mse).shape[0])
     baseline_mse = float(np.mean(baseline_losses))
@@ -960,8 +1005,11 @@ def evaluate_model(model, items, rng, batch_size, patch_size, eval_patches, fore
     weighted_model_mse = float(np.mean(weighted_model_losses))
     edge_baseline_mse = float(np.mean(edge_baseline_losses))
     edge_model_mse = float(np.mean(edge_model_losses))
+    target_edge_baseline_mse = float(np.mean(target_edge_baseline_losses))
+    target_edge_model_mse = float(np.mean(target_edge_model_losses))
     outside_edge_residual_mse = float(np.mean(outside_edge_residual_losses))
     edge_band_coverage = float(np.mean(edge_mask_coverages))
+    target_edge_band_coverage = float(np.mean(target_edge_mask_coverages))
     return {
         "baselineMse": baseline_mse,
         "modelMse": model_mse,
@@ -979,6 +1027,12 @@ def evaluate_model(model, items, rng, batch_size, patch_size, eval_patches, fore
         "edgeBandModelPsnr": psnr_from_mse(edge_model_mse),
         "edgeBandDeltaPsnr": psnr_from_mse(edge_model_mse) - psnr_from_mse(edge_baseline_mse),
         "edgeBandEvalCoverage": edge_band_coverage,
+        "targetEdgeBandBaselineMse": target_edge_baseline_mse,
+        "targetEdgeBandModelMse": target_edge_model_mse,
+        "targetEdgeBandBaselinePsnr": psnr_from_mse(target_edge_baseline_mse),
+        "targetEdgeBandModelPsnr": psnr_from_mse(target_edge_model_mse),
+        "targetEdgeBandDeltaPsnr": psnr_from_mse(target_edge_model_mse) - psnr_from_mse(target_edge_baseline_mse),
+        "targetEdgeBandEvalCoverage": target_edge_band_coverage,
         "outsideEdgeResidualMse": outside_edge_residual_mse,
         "improvedPatchFraction": improved_patches / max(1, compared_patches),
     }
@@ -1138,7 +1192,7 @@ def main():
     residualTemporalTrainingLosses = []
     started = time.time()
     for step in range(max(0, effectiveMaxSteps)):
-        low_batch, high_batch, edge_mask_batch = sample_patch_batch(
+        low_batch, high_batch, edge_mask_batch, _target_edge_mask_batch = sample_patch_batch(
             train_items,
             rng,
             args.batch_size,
@@ -1276,6 +1330,7 @@ def main():
         "foregroundLossWeight": args.foregroundLossWeight,
         "differenceLossWeight": args.differenceLossWeight,
         "edgeBandMode": args.edgeBandMode,
+        "edgeBandAuthority": edge_band_authority(args.edgeBandMode),
         "edgeBandThreshold": args.edgeBandThreshold,
         "edgeBandDilate": args.edgeBandDilate,
         "edgeSamplingProbability": args.edgeSamplingProbability,
@@ -1320,6 +1375,18 @@ def main():
         },
         "edgeBandSignalMax": {
             item["id"]: item["edgeBandSignalMax"]
+            for item in loaded
+        },
+        "targetEdgeBandPixels": {
+            item["id"]: item["targetEdgeBandPixels"]
+            for item in loaded
+        },
+        "targetEdgeBandCoverage": {
+            item["id"]: item["targetEdgeBandCoverage"]
+            for item in loaded
+        },
+        "targetEdgeBandSignalMax": {
+            item["id"]: item["targetEdgeBandSignalMax"]
             for item in loaded
         },
         "batchSize": args.batch_size,
