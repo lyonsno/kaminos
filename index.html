@@ -70,6 +70,9 @@ h2 { font-size: 11px; font-weight: 600; margin: 18px 0 8px; color: #666; text-tr
     .sharp-breathing-room-actions .btn { width: 100%; margin: 0; }
     .sharp-breathing-room-status { min-height: 30px; color: #d8c37a; font-size: 11px; line-height: 1.35; margin-top: 7px; }
     .sharp-breathing-room-source { color: #888; font: 10px 'SF Mono', monospace; overflow-wrap: anywhere; margin-top: 5px; }
+    .sharp-breathing-room-source-preview { border: 1px solid #2d2d2d; border-radius: 7px; background: #141414; min-height: 150px; margin: 8px 0; overflow: hidden; display: flex; align-items: center; justify-content: center; }
+    .sharp-breathing-room-source-preview img { display: block; width: 100%; max-height: 240px; object-fit: contain; background: #101010; }
+    .sharp-breathing-room-source-preview.empty { color: #666; font-size: 11px; padding: 14px; text-align: center; }
 
 /* Viewport */
 #viewport { flex: 1; position: relative; background: #111; }
@@ -1569,7 +1572,8 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
     <h2>Route Image to Splat</h2>
     <div class="panel" id="sharp-breathing-room-panel">
       <div class="field"><span class="field-key">Image</span><span class="field-val" id="sharp-breathing-room-source-label">No image selected</span></div>
-      <input class="gen-input" id="sharp-breathing-room-source-input" spellcheck="false" autocomplete="off" placeholder="/api/read?root=image-inbox&path=source.png">
+      <input class="gen-input" id="sharp-breathing-room-source-input" spellcheck="false" autocomplete="off" placeholder="Paste a different image source">
+      <div class="sharp-breathing-room-source-preview empty" id="sharp-breathing-room-source-preview">No image loaded yet.</div>
       <div class="sharp-breathing-room-actions">
         <button type="button" class="btn" id="sharp-breathing-room-default-button" onclick="runSharpBreathingRoomProfile('baseline-default')">Run default</button>
         <button type="button" class="btn" id="sharp-breathing-room-friendly-button" onclick="runSharpBreathingRoomProfile('cooperative-spn-gaussian')">Run friendly</button>
@@ -10476,6 +10480,51 @@ function sharpBreathingRoomManualSource() {
   };
 }
 
+function pipelineBestSharpSourceImage(entries = []) {
+  const useful = entries.filter(entry => {
+    if (!entry?.source || entry.kind !== 'image') return false;
+    const name = `${entry.name || ''} ${entry.path || ''}`.toLowerCase();
+    if (name.includes('pipeline-test-image')) return false;
+    return Number(entry.size || 0) > 4096;
+  });
+  return useful[0] || entries.find(entry => entry?.source && entry.kind === 'image') || null;
+}
+
+async function loadPipelineAssetKind(kind) {
+  const response = await fetch(`/api/assets?kind=${encodeURIComponent(kind)}`);
+  if (!response.ok) throw new Error(`Pipeline assets load failed: ${response.status}`);
+  const data = await response.json();
+  if (data.error) throw new Error(data.error);
+  const entries = data.entries || [];
+  pipelineDockState.browserAssetsByKind[kind] = entries;
+  if (
+    pipelineDockState.browserSelectedAssetIds?.[kind] &&
+    !entries.some(entry => entry.id === pipelineDockState.browserSelectedAssetIds[kind])
+  ) {
+    pipelineDockState.browserSelectedAssetIds[kind] = null;
+  }
+  if (pipelineDockState.activeAssetPalette === kind) {
+    pipelineDockState.browserAssets = entries;
+    pipelineDockState.browserStatus = 'loaded';
+    renderPipelineAssetBrowser();
+  }
+  renderPipelineDock();
+  return entries;
+}
+
+async function ensureSharpBreathingRoomImageAssets() {
+  const cached = pipelineDockState.browserAssetsByKind?.image || [];
+  const entries = cached.length ? cached : await loadPipelineAssetKind('image');
+  const selectedId = pipelineDockState.browserSelectedAssetIds?.image || null;
+  const selected = entries.find(entry => entry.id === selectedId);
+  if (!selected) {
+    const next = pipelineBestSharpSourceImage(entries);
+    if (next) pipelineDockState.browserSelectedAssetIds.image = next.id;
+  }
+  renderSharpBreathingRoomHarness();
+  return entries;
+}
+
 function sharpBreathingRoomSelectedSource() {
   const manual = sharpBreathingRoomManualSource();
   if (manual) return manual;
@@ -10501,8 +10550,22 @@ function renderSharpBreathingRoomHarness() {
   const source = sharpBreathingRoomSelectedSource();
   const label = document.getElementById('sharp-breathing-room-source-label');
   const summary = document.getElementById('sharp-breathing-room-source-summary');
+  const preview = document.getElementById('sharp-breathing-room-source-preview');
   if (label) label.textContent = source?.label || 'No image selected';
   if (summary) summary.textContent = source?.source || 'Select an image asset below or paste an image source.';
+  if (preview) {
+    preview.innerHTML = '';
+    preview.classList.toggle('empty', !source?.source);
+    if (source?.source) {
+      const img = document.createElement('img');
+      img.id = 'sharp-breathing-room-source-preview-image';
+      img.src = source.source;
+      img.alt = source.label || 'Selected source image';
+      preview.appendChild(img);
+    } else {
+      preview.textContent = 'No image loaded yet.';
+    }
+  }
   const running = Boolean(sharpBreathingRoomRunningProfileId);
   for (const [profileId, buttonId] of Object.entries({
     'baseline-default': 'sharp-breathing-room-default-button',
@@ -14188,12 +14251,27 @@ async function runSharpBreathingRoomProfile(profileId) {
     });
     const artifact = pipelinePrimaryRunArtifact(run);
     if (run?.ok) {
-      setSharpBreathingRoomStatus(
-        artifact?.path
-          ? `${profileLabel} finished and wrote an output. Load Output from the run result to place it in the scene.`
-          : `${profileLabel} finished with evidence only; inspect the run result for the failure boundary.`,
-        artifact?.path ? 'complete' : 'evidence-only',
-      );
+      if (pipelineArtifactIsLoadableSplat(artifact)) {
+        try {
+          const record = await pipelineLoadRunSplatArtifact(run, artifact);
+          setSharpBreathingRoomStatus(
+            `${profileLabel} finished and loaded the generated splat into the scene: ${record?.label || artifact.path.split('/').pop() || 'pipeline output'}.`,
+            'complete',
+          );
+        } catch (loadErr) {
+          setSharpBreathingRoomStatus(
+            `${profileLabel} finished, but Kaminos could not load the generated splat into the scene. ${loadErr.message || loadErr}`,
+            'error',
+          );
+        }
+      } else {
+        setSharpBreathingRoomStatus(
+          artifact?.path
+            ? `${profileLabel} finished and wrote an output, but that output is not a loadable splat.`
+            : `${profileLabel} finished with evidence only; inspect the run result for the failure boundary.`,
+          artifact?.path ? 'evidence-only' : 'evidence-only',
+        );
+      }
     } else {
       setSharpBreathingRoomStatus(`${profileLabel} failed before producing a splat. ${pipelineRunFailureSummary(run)}`.trim(), 'error');
     }
@@ -14261,6 +14339,7 @@ function initPipelineDock() {
     setInfo(err.message || String(err));
     renderPipelineDock();
   });
+  ensureSharpBreathingRoomImageAssets().catch(err => setSharpBreathingRoomStatus(`Image assets could not be loaded for SHARP: ${err.message || err}`, 'error'));
   renderPipelineAssetBrowser();
 }
 
