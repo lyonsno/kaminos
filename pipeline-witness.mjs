@@ -491,6 +491,7 @@ function routeSchedulerInputFromEvidence({
   breathability = null,
 } = {}) {
   const requestedMode = requestedScheduler.mode === 'cooperative' ? 'cooperative' : 'throughput';
+  const effectiveMode = effectiveScheduler?.mode === 'cooperative' ? 'cooperative' : requestedMode;
   const hasEffectiveScheduler = Boolean(effectiveScheduler);
   const profileVerificationState = unsupportedFields.length
     ? 'unsupported'
@@ -503,7 +504,7 @@ function routeSchedulerInputFromEvidence({
       phaseChunkSize: phaseChunkSizeFromScheduler(requestedScheduler),
     },
     effectiveScheduler: {
-      mode: effectiveScheduler?.mode || requestedMode,
+      mode: effectiveMode,
       yieldMs: effectiveScheduler?.yieldMs ?? requestedScheduler.yieldMs ?? 0,
       waitForSubmittedWorkDone: Boolean(effectiveScheduler?.waitForSubmittedWorkDone ?? requestedScheduler.waitForSubmittedWorkDone),
       phaseChunkSize: phaseChunkSizeFromScheduler(effectiveScheduler || {}),

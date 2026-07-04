@@ -170,6 +170,8 @@ function sharpRouteBackpressure() {
 function routeSchedulerInputFromBreathingRoom(breathingRoom = {}) {
   const requested = breathingRoom?.requestedScheduler || requestedScheduler;
   const effective = breathingRoom?.effectiveScheduler || {};
+  const requestedMode = requested.mode === 'cooperative' ? 'cooperative' : 'throughput';
+  const effectiveMode = effective.mode === 'cooperative' ? 'cooperative' : requestedMode;
   const hasEffectiveScheduler = Boolean(breathingRoom?.effectiveScheduler);
   const unsupportedFields = Array.isArray(breathingRoom?.unsupportedFields)
     ? breathingRoom.unsupportedFields
@@ -179,13 +181,13 @@ function routeSchedulerInputFromBreathingRoom(breathingRoom = {}) {
     : (breathingRoom?.status || (breathingRoom?.effectiveScheduler ? 'verified' : 'scheduler-unverified'));
   return {
     requestedScheduler: {
-      mode: requested.mode === 'cooperative' ? 'cooperative' : 'throughput',
+      mode: requestedMode,
       yieldMs: requested.yieldMs ?? 0,
       waitForSubmittedWorkDone: Boolean(requested.waitForSubmittedWorkDone),
       phaseChunkSize: phaseChunkSizeFromScheduler(requested),
     },
     effectiveScheduler: {
-      mode: effective.mode || (requested.mode === 'cooperative' ? 'cooperative' : 'throughput'),
+      mode: effectiveMode,
       yieldMs: effective.yieldMs ?? requested.yieldMs ?? 0,
       waitForSubmittedWorkDone: Boolean(effective.waitForSubmittedWorkDone ?? requested.waitForSubmittedWorkDone),
       phaseChunkSize: phaseChunkSizeFromScheduler(effective),
