@@ -1510,9 +1510,15 @@ assert.match(witness, /sphericalHarmonicCoefficients/, 'witness records fire-lig
 assert.match(witness, /fireLightLiveSample/, 'witness records the live-frame fire-light scalar source');
 assert.match(witness, /ceilingVisibilityPolicy/, 'witness verifies the brick-wall ceiling-hidden framing policy');
 assert.match(witness, /backdropMidtonePixels/, 'witness records a screenshot metric that can catch missing scene-context backdrop pixels');
-assert.match(index, /volume-scene-context-active #kaminos-volume-canvas\.active[\s\S]*mix-blend-mode:\s*screen/, 'scene-context routes screen-blend the direct black volume canvas so warm volume can composite over backdrop geometry');
+assert.match(index, /volume-scene-context-active #kaminos-volume-canvas\.active[\s\S]*opacity:\s*1[\s\S]*mix-blend-mode:\s*screen/, 'scene-context routes screen-blend the direct native WebGPU canvas over the rendered backdrop scene');
 assert.match(index, /viewport\.classList\.toggle\('volume-scene-context-active'/, 'scene-context visibility toggles a viewport class used by the composition path');
-assert.match(index, /sceneContextActive[\s\S]*mesh\.visible\s*=\s*active && !sceneContextActive/, 'scene-context composition bypasses the fragile Three CanvasTexture bridge and lets the native WebGPU canvas screen-blend directly');
+assert.match(index, /mesh\.visible\s*=\s*active && !sceneContextActive/, 'scene-context composition bypasses the fragile Three CanvasTexture bridge and uses the native volume canvas as the screen-blended volume layer');
+assert.match(index, /mainRendererNeeded[\s\S]*volumeSceneContextActive/, 'scene-context routes force the main renderer to render the backdrop beneath the native volume canvas');
+assert.match(witness, /operatorVisible/, 'witness checks the raw canvas operator visibility contract for scene-context composition');
+assert.match(witness, /viewportRendererScreenshot/, 'witness captures the operator-visible viewport separately from the native volume readback');
+assert.match(witness, /whiteHotLikePixels/, 'witness counts white-hot flame instead of only orange-red fire pixels');
+assert.match(witness, /sceneContextVolumeSignalPixels/, 'brick-wall scene-context witness uses a scene-context volume signal gate instead of the isolated fire-volume gate');
+assert.match(witness, /hasTransportedFireEvidence/, 'witness accepts broader live-fire evidence instead of a single brittle fireLayerMean threshold');
 assert.match(witness, /volumePrimitiveCount/, 'witness requires effective volume primitive consumption');
 assert.match(witness, /volumePrimitiveIds/, 'witness records stable primitive ids');
 assert.match(witness, /volumePrimitives/, 'witness report carries primitive records');
@@ -1700,7 +1706,7 @@ assert.match(witness, /stock-fire-layer-low-but-raw-pyro-carrier-live/, 'Pyro ma
 assert.match(witness, /no-fire-volume/, 'witness accepts a deliberate no-fire volume evidence mode');
 assert.match(witness, /no-fire-volume-signal/, 'witness reports no-fire volume visual evidence identity');
 assert.match(witness, /expectsNoFireVolumeEvidence/, 'witness separates deliberate no-fire evidence from missing fire failures');
-assert.match(witness, /if \(\s*!expectsCanonicalPlumeProof\s*&&\s*!expectsFuelStarvedTallPlume\s*&&\s*!expectsNoFireVolumeEvidence\s*&&\s*\(!Number\.isFinite\(sample\.simReadback\.fireLayerMean\) \|\| sample\.simReadback\.fireLayerMean <= 0\.0005\)\s*&&\s*!acceptsRawCarrierPyroPaint\s*\)/, 'no-fire evidence routes do not require positive transported fire-layer readback');
+assert.match(witness, /const hasTransportedFireEvidence =[\s\S]*acceptsRawCarrierPyroPaint;[\s\S]*if \(\s*!expectsCanonicalPlumeProof\s*&&\s*!expectsFuelStarvedTallPlume\s*&&\s*!expectsNoFireVolumeEvidence\s*&&\s*!hasTransportedFireEvidence\s*\)/, 'no-fire evidence routes do not require positive transported fire-layer readback');
 assert.match(witness, /!expectsFuelStarvedTallPlume\s*&&\s*!expectsNoFireVolumeEvidence[\s\S]*radianceMean/, 'no-fire evidence routes do not require positive fire radiance readback');
 assert.match(witness, /pyroDynamicDetail/, 'witness report carries Pyro dynamic detail state and reset semantics');
 assert.match(witness, /rayBudgetPreset/, 'witness records named ray-budget preset/config identity when present');
