@@ -57,6 +57,16 @@ assert.match(
 );
 assert.match(
   trainer,
+  /choices=\["center", "foreground", "edge-band", "full-frame"\]/,
+  'residual trainer must expose explicit full-frame preview mode instead of relying on oversized crop accidents',
+);
+assert.match(
+  trainer,
+  /--preview-frame-count/,
+  'residual trainer must expose a preview frame count for product-view multi-frame witnesses',
+);
+assert.match(
+  trainer,
   /def constrain_residual_color\(/,
   'residual trainer must implement color-space residual constraining, not merely report a color knob',
 );
@@ -79,6 +89,16 @@ assert.match(
   trainer,
   /"chromaResidualLossWeight":/,
   'model artifacts and reports must preserve the chroma residual loss weight',
+);
+assert.match(
+  trainer,
+  /"fullFramePreview":/,
+  'reports must preserve full-frame preview identity when product-view evidence is requested',
+);
+assert.match(
+  trainer,
+  /"previewFrames":/,
+  'reports must preserve all emitted preview frame artifacts, not only a single representative crop',
 );
 assert.match(
   greenroomRunner,
@@ -104,4 +124,9 @@ assert.match(
   greenroomRunner,
   /--chroma-residual-loss-weight/,
   'Greenroom wrapper must pass chroma residual loss weight through to the MLX trainer',
+);
+assert.match(
+  greenroomRunner,
+  /--preview-frame-count/,
+  'Greenroom wrapper must pass preview frame count through to the MLX trainer',
 );
