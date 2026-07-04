@@ -31,11 +31,14 @@ assert.match(index, /fireLightProxyMode/, 'brick-wall scene context reports requ
 assert.match(index, /sphericalHarmonicCoefficients/, 'brick-wall scene context exposes the fire-light probe coefficients');
 assert.match(index, /staticEnvironmentIntensity:\s*0\.05/, 'brick-wall scene context dims static environment lighting when flame proxy lighting is active');
 assert.match(index, /volume-live-frame-fire-light-readback-v0/, 'brick-wall fire-light proxy must use live rendered-frame fire evidence instead of only static control summaries');
-assert.match(index, /volume-live-frame-fire-light-state-v0/, 'brick-wall fire-light proxy must derive a per-render-frame light sample from current volume state');
+assert.match(index, /volume-cpu-fire-light-support-state-v0/, 'brick-wall fire-light proxy must name CPU light support as support instead of live GPU authority');
+assert.match(index, /cpuSupportAuthority/, 'brick-wall fire-light debug state must expose CPU support/fill authority separately from GPU wash authority');
+assert.match(index, /volume-gpu-brick-wall-wash-v0/, 'brick-wall scene context must expose the GPU-resident wall-wash identity');
+assert.match(index, /gpuWallWashAuthority/, 'brick-wall scene context must expose GPU wall-wash authority separately from the Three light rig');
 assert.match(index, /async-bounded-readback-support/, 'brick-wall fire-light readback support cadence must be explicitly distinct from render-frame cadence');
 assert.match(index, /fireLightLiveSample/, 'brick-wall fire-light debug state must expose the cached live fire-light sample');
 assert.match(index, /liveFrameScalar/, 'brick-wall fire-light probe must expose the live frame scalar that modulates light intensity');
-assert.match(index, /cadence:\s*'per-render-frame'/, 'brick-wall fire-light live sample must report per-render-frame cadence');
+assert.match(index, /cadence:\s*'per-render-frame-cpu-support'/, 'brick-wall CPU support sample must not report authoritative GPU render-frame cadence');
 assert.match(index, /supportCadence:\s*readbackSupport\?\.cadence/, 'brick-wall fire-light sample must report the support cadence separately from live cadence');
 assert.doesNotMatch(index, /nextFireLightLiveSampleFrame|frameCount\s*\+\s*6/, 'brick-wall fire-light flicker must not be throttled behind a multi-frame sample cadence');
 const fireLightProbeStart = index.indexOf('function computeVolumeFireLightProbe');
@@ -814,6 +817,11 @@ assert.match(core, /temporalJitterOffset/, 'fragment shader jitters ray phase th
 assert.match(core, /temporalHistoryClamp/, 'fragment shader clamps history against current-frame radiance to avoid fire smearing');
 assert.match(core, /temporalResolveColor/, 'fragment shader resolves current and history color with bounded accumulation');
 assert.match(core, /previousViewProj/, 'temporal reprojection carries a previous view-projection matrix into the shader');
+assert.match(core, /brick_wall_gpu_wash_controls/, 'fluid uniforms carry a dedicated GPU brick-wall wash control vector');
+assert.match(core, /gpuWallWashEnergy/, 'fluid fragment shader accumulates wall-wash energy on the GPU from live fire samples');
+assert.match(core, /volume-gpu-brick-wall-wash-v0/, 'fluid debug state exposes the GPU-resident brick-wall wash identity');
+assert.match(core, /per-render-frame-gpu-fragment/, 'fluid debug state reports GPU wall-wash cadence as per fragment frame');
+assert.match(core, /cpuReadbackAuthority:\s*false/, 'GPU wall-wash debug state must not derive authority from CPU readback');
 assert.match(core, /temporalReprojectionUv/, 'fragment shader computes a reprojected history UV instead of sampling same-screen history only');
 assert.match(core, /temporalReprojectionConfidence/, 'fragment shader computes material/velocity confidence for temporal reprojection');
 assert.match(core, /temporalReactiveMask/, 'fragment shader rejects temporal history near reactive fire/smoke changes and skip edges');
@@ -947,7 +955,7 @@ assert.match(core, /pyro_light_controls:\s*vec4<f32>/, 'WGSL uniforms expose Pyr
 assert.match(core, /pyro_route_controls:\s*vec4<f32>/, 'WGSL uniforms expose Pyro carrier routing controls to the renderer');
 assert.match(core, /pyro_detail_cells:\s*array<vec4<f32>,\s*24>/, 'WGSL uniforms expose the full 8x3 Pyro material-memory cell atlas to the renderer');
 assert.match(core, /pyro-material-memory-render-coupling-v0/, 'debug state names the visible Pyro material-memory renderer coupling identity');
-assert.match(core, /new Float32Array\(280\)/, 'CPU uniform buffer covers lifecycle plus full Pyro material-memory controls and previous view-projection');
+assert.match(core, /new Float32Array\(284\)/, 'CPU uniform buffer covers lifecycle, full Pyro material-memory controls, GPU wall wash, and previous view-projection');
 assert.match(core, /uniforms\[88\]\s*=\s*pyroMaterialGain/, 'CPU uploads Pyro material-memory gain into the lifecycle-shifted WGSL uniform block');
 assert.match(core, /normalizeLookFreeze\(controlsSnapshot\.lookFreeze\)/, 'CPU render path normalizes the look-lab freeze control');
 assert.match(core, /normalizePyroCompareMode\(controlsSnapshot\.pyroCompareMode\)/, 'CPU render path normalizes the Pyro compare mode');
@@ -957,6 +965,8 @@ assert.match(core, /pumpLookLabFrozenFrame\(\)/, 'Frozen look-lab controls force
 assert.match(core, /if \(lookFreeze\)[\s\S]*state\.lookFreezeFrame[\s\S]*else[\s\S]*encodeSim\(encoder\)[\s\S]*encodeMajorant\(encoder\)/, 'Look-lab freeze skips sim and majorant passes while live mode keeps stepping');
 assert.match(core, /uniforms\[89\]\s*=\s*pyroMaterialEnergy/, 'CPU uploads reset-gated Pyro material-memory energy into the lifecycle-shifted WGSL uniform block');
 assert.match(core, /uniforms\[92\s*\+\s*memoryIndex\s*\*\s*4\]\s*=\s*sample\[0\]/, 'CPU uploads each Pyro material-memory atlas cell into the lifecycle-shifted uniform block');
+assert.match(core, /uniforms\[264\]\s*=\s*gpuWallWashEnabled/, 'CPU uploads GPU wall-wash enable after the expanded Pyro palette block');
+assert.match(core, /uniforms\.set\(previousViewProj\.elements,\s*268\)/, 'CPU uploads previous view-projection after the GPU wall-wash vec4');
 assert.match(core, /samplePyroMaterialMemoryCell\(p\)/, 'shader samples Pyro material memory spatially from the current raymarch position');
 assert.match(core, /pyroInterfaceFocus/, 'shader gates Pyro memory toward the flame/smoke interface');
 assert.match(core, /pyroEdgeBite/, 'shader lets Pyro memory perturb flame edge detail');
@@ -1042,7 +1052,7 @@ assert.match(core, /uniforms\[207\]\s*=\s*pyroRadianceChroma/, 'CPU uploads Radi
 assert.match(core, /uniforms\[216\]\s*=\s*pyroFlamePaint/, 'CPU uploads flame paint gain into the lifecycle-shifted Pyro luma uniform block');
 assert.match(core, /uniforms\[217\]\s*=\s*pyroFlameLuma/, 'CPU uploads flame luminance into the lifecycle-shifted Pyro luma uniform block');
 assert.match(core, /writePyroPaletteUniform/, 'CPU uploads editable Pyro palette color endpoints');
-assert.match(core, /uniforms\.set\(previousViewProj\.elements,\s*264\)/, 'previous view-projection matrix shifts after lifecycle, Bite-stack, and palette uniforms');
+assert.match(core, /uniforms\.set\(previousViewProj\.elements,\s*268\)/, 'previous view-projection matrix shifts after lifecycle, Bite-stack, palette, and GPU wall-wash uniforms');
 assert.match(core, /paletteShape/, 'debug state exposes editable Pyro palette shape');
 assert.match(core, /lumaShape/, 'debug state exposes independent Pyro luma shape');
 assert.match(core, /radianceShape/, 'debug state exposes Pyro radiance gate/spill/warmth shape');
@@ -1513,7 +1523,9 @@ assert.match(witness, /volume-fire-light-probe-sh1-v0/, 'witness verifies the br
 assert.match(witness, /fireLightProxyMode/, 'witness verifies the brick-wall flame-light proxy mode');
 assert.match(witness, /volume-measured-fire-light-probe-v0/, 'witness verifies brick-wall flame-light proxy measured authority identity');
 assert.match(witness, /sphericalHarmonicCoefficients/, 'witness records fire-light spherical harmonic coefficients');
-assert.match(witness, /fireLightLiveSample/, 'witness records the live-frame fire-light scalar source');
+assert.match(witness, /fireLightLiveSample/, 'witness records the CPU support fire-light scalar source');
+assert.match(witness, /gpuWallWash/, 'witness records GPU wall-wash authority for brick-wall route');
+assert.match(witness, /per-render-frame-gpu-fragment/, 'witness distinguishes GPU wall-wash cadence from CPU support cadence');
 assert.match(witness, /ceilingVisibilityPolicy/, 'witness verifies the brick-wall ceiling-hidden framing policy');
 assert.match(witness, /backdropMidtonePixels/, 'witness records a screenshot metric that can catch missing scene-context backdrop pixels');
 assert.match(index, /volume-scene-context-active #kaminos-volume-canvas\.active[\s\S]*opacity:\s*1[\s\S]*mix-blend-mode:\s*screen/, 'scene-context routes screen-blend the direct native WebGPU canvas over the rendered backdrop scene');

@@ -9,6 +9,9 @@ const DEFAULT_MAJORANT_GRID_SIZE = 48;
 const SUPPORTED_MAJORANT_GRID_SIZES = [24, 32, 48];
 const MAX_EXTERNAL_EMITTERS = 32;
 const EXTERNAL_EMITTER_COMPONENTS = 20;
+const BRICK_WALL_GPU_WASH_IDENTITY = 'volume-gpu-brick-wall-wash-v0';
+const BRICK_WALL_GPU_WASH_AUTHORITY = 'webgpu-fragment-live-fire-wall-wash-v0';
+const BRICK_WALL_GPU_WASH_SOURCE = 'fragment-shader-live-fire-accumulation-v0';
 const DEFAULT_VOLUME_SCENE = 'compact_plume';
 const SUPPORTED_VOLUME_SCENES = new Set([DEFAULT_VOLUME_SCENE, 'canonical_plume', 'tall_plume', 'preheat_plume', 'bonfire_plume']);
 const CANONICAL_SOURCE_MODE_VALUES = {
@@ -65,6 +68,11 @@ function volumeReconstructionIdentity(renderScale, reconstructionStyle) {
 
 function normalizeVolumeScene(value) {
   return SUPPORTED_VOLUME_SCENES.has(value) ? value : DEFAULT_VOLUME_SCENE;
+}
+
+function normalizeVolumeSceneContext(value) {
+  const normalized = String(value || 'none').trim().toLowerCase().replace(/-/g, '_');
+  return normalized === 'brick_wall' || normalized === 'stone_test' ? normalized : 'none';
 }
 
 function normalizeCanonicalSourceMode(value) {
@@ -706,6 +714,7 @@ struct Uniforms {
   pyro_palette_wake_ember: vec4<f32>,
   pyro_palette_radiance: vec4<f32>,
   pyro_palette_radiance_warm: vec4<f32>,
+  brick_wall_gpu_wash_controls: vec4<f32>,
   previousViewProj: mat4x4<f32>,
 };
 
@@ -3234,6 +3243,10 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
   let pyroBiteChroma = clamp(u.pyro_color_controls.y, 0.0, 1.0);
   let pyroRadianceHue = clamp(u.pyro_color_controls.z, 0.0, 1.0);
   let pyroRadianceChroma = clamp(u.pyro_color_controls.w, 0.0, 1.0);
+  let brickWallGpuWashEnabled = clamp(u.brick_wall_gpu_wash_controls.x, 0.0, 1.0);
+  let brickWallGpuWashGain = clamp(u.brick_wall_gpu_wash_controls.y, 0.0, 4.0);
+  let brickWallGpuWashReach = clamp(u.brick_wall_gpu_wash_controls.z, 0.45, 2.6);
+  let brickWallGpuWashDebug = clamp(u.brick_wall_gpu_wash_controls.w, 0.0, 1.0);
   let lifecycleMode = clamp(u.lifecycle_controls.x, 0.0, 3.0);
   let preheatStrength = clamp(u.lifecycle_controls.y, 0.0, 1.0);
   let preheatLifecycle = step(1.5, lifecycleMode) * (1.0 - step(2.5, lifecycleMode));
@@ -3291,6 +3304,9 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
   var temporalFireHistoryProtectSum = 0.0;
   var temporalInterfaceHistoryProtectSum = 0.0;
   var temporalDetailHistoryProtectSum = 0.0;
+  var gpuWallWashEnergy = 0.0;
+  var gpuWallWashWeight = 0.0;
+  var gpuWallWashCentroid = vec2<f32>(0.0);
 
   for (var i = 0; i < 192; i = i + 1) {
     if (f32(i) >= steps || raymarchEarlyTermination(trans) || t > endT) { break; }
@@ -3913,6 +3929,21 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     let preheatVisibleHazeCol = mix(vec3<f32>(0.46, 0.52, 0.48), vec3<f32>(1.0, 0.50, 0.18), 0.60 + preheatVisibleHazeFloor * 0.25) * (0.45 + preheatStrength * 0.32 + preheatVisibleHazeFloor * 0.55);
     local = mix(local, preheatVisibleHazeCol, clamp(preheatVisibleHazeFloor * 0.42 + preheatVisibleHazeAlpha * 5.4, 0.0, 0.58));
     local = mix(local, preheatCol, clamp(preheatCarrier * 0.14 + preheatAlpha * 5.8, 0.0, 0.46));
+    let gpuWallWashCarrier = brickWallGpuWashEnabled
+      * smoothstep(0.003, 0.056, fireAlpha + preheatAlpha * 0.20)
+      * smoothstep(0.08, 1.28, renderTemp + flameDetail * 0.44 + quenchedFireLick * 0.35 + pyroRadianceBoost * 0.060)
+      * trans;
+    let gpuWallWashSample = clamp(
+      gpuWallWashCarrier
+        * (renderTemp * 0.30 + fireAlpha * 7.5 + radianceEmission.r * 0.18 + pyroRadianceBoost * 0.055)
+        * localDt
+        * (0.70 + fireFilament * 0.18 + bonfireFireRenderBreakup * 0.10),
+      0.0,
+      0.18
+    );
+    gpuWallWashEnergy = gpuWallWashEnergy + gpuWallWashSample;
+    gpuWallWashWeight = gpuWallWashWeight + gpuWallWashCarrier * localDt;
+    gpuWallWashCentroid = gpuWallWashCentroid + p.xy * gpuWallWashCarrier * localDt;
     let diagnosticColor = mix(vec3<f32>(0.08, 0.72, 0.95), vec3<f32>(1.0, 0.18, 0.08), smoothstep(0.010, 0.085, divDebug)) * (0.35 + smoothstep(0.012, 0.18, curlDebug));
     local = mix(local, diagnosticColor, flowDebug * smoothstep(0.015, 0.12, curlDebug + divDebug));
     let pressureTierOverlay = pressureTierDebugOverlayColor(y);
@@ -3924,6 +3955,18 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
   }
 
   let vignette = 1.0 - smoothstep(0.28, 1.48, length(ndc));
+  let gpuWallWashCenter = gpuWallWashCentroid / max(gpuWallWashWeight, 0.0001);
+  let gpuWallWashCenterUv = vec2<f32>(
+    clamp(0.50 + gpuWallWashCenter.x * 0.24, 0.18, 0.82),
+    clamp(0.70 - gpuWallWashCenter.y * 0.28, 0.18, 0.88)
+  );
+  let gpuWallWashUvDelta = (in.uv - gpuWallWashCenterUv) * vec2<f32>(1.0, 1.28);
+  let gpuWallWashBlob = exp(-dot(gpuWallWashUvDelta, gpuWallWashUvDelta) / max(0.018, 0.13 * brickWallGpuWashReach));
+  let gpuWallWashFlicker = 0.86 + 0.14 * sin(u.cameraPos_time.w * 18.7 + gpuWallWashEnergy * 7.4 + gpuWallWashCenter.x * 2.1);
+  let gpuWallWashSignal = clamp(gpuWallWashEnergy * brickWallGpuWashGain * gpuWallWashBlob * gpuWallWashFlicker, 0.0, 1.7);
+  let gpuWallWashColor = mix(vec3<f32>(1.0, 0.38, 0.10), vec3<f32>(1.0, 0.72, 0.30), clamp(gpuWallWashEnergy * 2.8, 0.0, 1.0));
+  color = color + gpuWallWashColor * gpuWallWashSignal * 0.22;
+  color = mix(color, vec3<f32>(1.0, 0.22, 0.05), brickWallGpuWashDebug * smoothstep(0.005, 0.055, gpuWallWashEnergy) * 0.35);
   let exposed = vec3<f32>(1.0) - exp(-color * 0.96);
   var grade = exposed * (0.80 + 0.18 * vignette);
   let overlay = clamp(gridAccum * u.grid_overlay_debug.x * 1.8, 0.0, 1.0);
@@ -3949,7 +3992,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   const invViewProj = new THREE.Matrix4();
   const viewProj = new THREE.Matrix4();
   const previousViewProj = new THREE.Matrix4();
-  const uniforms = new Float32Array(280);
+  const uniforms = new Float32Array(284);
   let controlsSnapshot = applyRuntimeQualityControls(getControls());
   let gridSize = normalizeGridSize(controlsSnapshot.resolution);
   let majorantGridSize = normalizeMajorantGridSize(controlsSnapshot.majorantGrid);
@@ -5529,8 +5572,30 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     writePyroPaletteUniform(uniforms, 252, controlsSnapshot.pyroWakeEmberColor, '#b06a2a');
     writePyroPaletteUniform(uniforms, 256, controlsSnapshot.pyroRadianceCoolColor, '#7aa8b8');
     writePyroPaletteUniform(uniforms, 260, controlsSnapshot.pyroRadianceWarmColor, '#d18438');
-    uniforms.set(previousViewProj.elements, 264);
+    const gpuWallWashEnabled = normalizeVolumeSceneContext(controlsSnapshot.volumeSceneContext) === 'brick_wall'
+      && Math.max(0, Math.min(1, controlsSnapshot.fireLightProxy ?? 1)) > 0.001
+      ? 1
+      : 0;
+    const gpuWallWashGain = Math.max(0, Math.min(4, controlsSnapshot.fireLightGain ?? 1));
+    const gpuWallWashReach = Math.max(0.45, Math.min(2.6, controlsSnapshot.gpuWallWashReach ?? 1.15));
+    uniforms[264] = gpuWallWashEnabled;
+    uniforms[265] = gpuWallWashGain;
+    uniforms[266] = gpuWallWashReach;
+    uniforms[267] = Math.max(0, Math.min(1, controlsSnapshot.gpuWallWashDebug ?? 0));
+    uniforms.set(previousViewProj.elements, 268);
     device.queue.writeBuffer(uniformBuffer, 0, uniforms);
+    state.gpuWallWash = {
+      identity: BRICK_WALL_GPU_WASH_IDENTITY,
+      authority: BRICK_WALL_GPU_WASH_AUTHORITY,
+      source: BRICK_WALL_GPU_WASH_SOURCE,
+      cadence: 'per-render-frame-gpu-fragment',
+      enabled: gpuWallWashEnabled > 0,
+      gain: gpuWallWashGain,
+      reach: gpuWallWashReach,
+      routeContext: normalizeVolumeSceneContext(controlsSnapshot.volumeSceneContext),
+      cpuReadbackAuthority: false,
+      supportRole: 'cpu-readback-and-three-light-rig-fill-only',
+    };
     state.gridOverlay = controlsSnapshot.gridOverlay || 0;
     state.lookFreeze = lookFreeze;
     state.pyroCompareMode = pyroCompareMode;

@@ -15005,6 +15005,7 @@ function readVolumeControls() {
     runtimeQualityRequested: routedVolumeRuntimeQuality,
     gpuPressure: routedVolumeGpuPressure,
     runtimeQualityReason: routedVolumeQualityReason,
+    volumeSceneContext: volumeSceneContext?.debugState?.()?.effectiveContext || normalizeVolumeSceneContext(new URLSearchParams(window.location.search).get('volume_scene_context')),
     fireLightProxy: routedVolumeFireLightProxy,
     fireLightGain: routedVolumeFireLightGain,
     majorantCadence: routedVolumeMajorantCadence,
@@ -15261,9 +15262,16 @@ const VOLUME_BRICK_WALL_FIRE_LIGHT_PROXY = Object.freeze({
   measuredAuthorityIdentity: 'volume-measured-fire-light-probe-v0',
   sourceIdentity: 'volume-measured-fire-light-summary-v0',
   liveSampleIdentity: 'volume-live-frame-fire-light-readback-v0',
-  liveStateIdentity: 'volume-live-frame-fire-light-state-v0',
+  liveStateIdentity: 'volume-cpu-fire-light-support-state-v0',
+  cpuSupportAuthority: 'cpu-readback-three-light-fill-support-v0',
   defaultMode: 1,
   defaultGain: 1,
+});
+const VOLUME_BRICK_WALL_GPU_WASH = Object.freeze({
+  identity: 'volume-gpu-brick-wall-wash-v0',
+  authority: 'webgpu-fragment-live-fire-wall-wash-v0',
+  source: 'fragment-shader-live-fire-accumulation-v0',
+  cadence: 'per-render-frame-gpu-fragment',
 });
 
 function normalizeVolumeSceneContext(value) {
@@ -15473,6 +15481,8 @@ function deriveVolumeFireLightStateSample(volumeState = {}, readbackSupport = nu
   return {
     identity: VOLUME_BRICK_WALL_FIRE_LIGHT_PROXY.liveStateIdentity,
     source: VOLUME_BRICK_WALL_FIRE_LIGHT_PROXY.liveStateIdentity,
+    authority: VOLUME_BRICK_WALL_FIRE_LIGHT_PROXY.cpuSupportAuthority,
+    authorityScope: 'cpu-support-fill-not-gpu-wall-wash',
     frameId: frameCount,
     scalar,
     confidence,
@@ -15489,7 +15499,7 @@ function deriveVolumeFireLightStateSample(volumeState = {}, readbackSupport = nu
     simReadbackAgeMs,
     supportSource: readbackSupport?.source || null,
     supportCadence: readbackSupport?.cadence || 'async-bounded-readback-support',
-    cadence: 'per-render-frame',
+    cadence: 'per-render-frame-cpu-support',
     phaseSeed,
   };
 }
@@ -15807,6 +15817,15 @@ function createVolumeBrickWallContext() {
     requestFireLightReadbackSupport(volumeState);
     fireLightLiveSample = deriveVolumeFireLightStateSample(volumeState, fireLightReadbackSupport);
     lastFireLightProbe = computeVolumeFireLightProbe(volumeState, fireLightLiveSample);
+    const gpuWallWash = volumeState?.gpuWallWash || {
+      identity: VOLUME_BRICK_WALL_GPU_WASH.identity,
+      authority: VOLUME_BRICK_WALL_GPU_WASH.authority,
+      source: VOLUME_BRICK_WALL_GPU_WASH.source,
+      cadence: VOLUME_BRICK_WALL_GPU_WASH.cadence,
+      enabled: false,
+      cpuReadbackAuthority: false,
+      supportRole: 'cpu-readback-and-three-light-rig-fill-only',
+    };
     const c = lastFireLightProbe.centroid;
     flameKey.position.set(c.x, c.y + 0.20, c.z + 0.20);
     flameBounce.position.set(c.x * 0.35, Math.max(-0.82, c.y - 0.28), c.z + 0.48);
@@ -15826,6 +15845,10 @@ function createVolumeBrickWallContext() {
       fireLightProxyMode: lastFireLightProbe.mode,
       probeIdentity: lastFireLightProbe.identity,
       sourceIdentity: lastFireLightProbe.sourceIdentity,
+      cpuSupportAuthority: VOLUME_BRICK_WALL_FIRE_LIGHT_PROXY.cpuSupportAuthority,
+      cpuSupportIdentity: VOLUME_BRICK_WALL_FIRE_LIGHT_PROXY.liveStateIdentity,
+      gpuWallWashAuthority: gpuWallWash.authority,
+      gpuWallWash,
       sphericalHarmonicOrder: lastFireLightProbe.order,
       gain: lastFireLightProbe.gain,
       liveFrameScalar: lastFireLightProbe.liveFrameScalar,
