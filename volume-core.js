@@ -6634,6 +6634,19 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     return result;
   }
 
+  let latestSimReadback = null;
+  let latestSimReadbackFrameId = 0;
+  let latestSimReadbackAtMs = 0;
+
+  function latestSimReadbackDebug() {
+    return {
+      latestSimReadback,
+      latestSimReadbackFrameId,
+      latestSimReadbackAuthority: latestSimReadback ? 'latest-sim-readback-cache-v0' : 'unavailable',
+      latestSimReadbackAgeMs: latestSimReadbackAtMs > 0 ? Math.max(0, performance.now() - latestSimReadbackAtMs) : null,
+    };
+  }
+
   async function sampleFrame() {
     if (!state.active || !device) return { ok: false, reason: 'inactive', ...state };
     updateUniforms(performance.now());
@@ -6956,6 +6969,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     buffer.unmap();
     buffer.destroy();
     const simReadback = await sampleSimReadback();
+    latestSimReadback = simReadback ? { ...simReadback } : null;
+    latestSimReadbackFrameId = state.frameCount;
+    latestSimReadbackAtMs = performance.now();
     updatePyroDynamicDetailState({ simReadback, inputKind: 'sim-readback' });
     const majorantReadback = await sampleMajorantReadback();
     const fireLumaMean = fireLumaSum / Math.max(1, fireEdgeSamples);
@@ -7129,6 +7145,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       simCostLedger: state.simCostLedger ? { ...state.simCostLedger } : null,
       timing: { ...state.timing },
       simReadback,
+      latestSimReadback,
+      latestSimReadbackFrameId,
+      latestSimReadbackAuthority: latestSimReadback ? 'latest-sim-readback-cache-v0' : 'unavailable',
+      latestSimReadbackAgeMs: latestSimReadbackAtMs > 0 ? Math.max(0, performance.now() - latestSimReadbackAtMs) : null,
       majorantReadback,
       effectiveRoute: state.effectiveRoute,
       prototypeIdentity: state.prototypeIdentity,
@@ -7282,6 +7302,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       return {
         ...state,
         controls: { ...controlsSnapshot },
+        ...latestSimReadbackDebug(),
         pyroDynamicDetail: clonePyroDynamicDetail(),
         pyroMaterialRendererCoupling: state.pyroMaterialRendererCoupling ? { ...state.pyroMaterialRendererCoupling } : null,
       };

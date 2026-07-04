@@ -30,8 +30,13 @@ assert.match(index, /fireLightProxyMode/, 'brick-wall scene context reports requ
 assert.match(index, /sphericalHarmonicCoefficients/, 'brick-wall scene context exposes the fire-light probe coefficients');
 assert.match(index, /staticEnvironmentIntensity:\s*0\.05/, 'brick-wall scene context dims static environment lighting when flame proxy lighting is active');
 assert.match(index, /volume-live-frame-fire-light-readback-v0/, 'brick-wall fire-light proxy must use live rendered-frame fire evidence instead of only static control summaries');
+assert.match(index, /volume-live-frame-fire-light-state-v0/, 'brick-wall fire-light proxy must derive a per-render-frame light sample from current volume state');
+assert.match(index, /async-bounded-readback-support/, 'brick-wall fire-light readback support cadence must be explicitly distinct from render-frame cadence');
 assert.match(index, /fireLightLiveSample/, 'brick-wall fire-light debug state must expose the cached live fire-light sample');
 assert.match(index, /liveFrameScalar/, 'brick-wall fire-light probe must expose the live frame scalar that modulates light intensity');
+assert.match(index, /cadence:\s*'per-render-frame'/, 'brick-wall fire-light live sample must report per-render-frame cadence');
+assert.match(index, /supportCadence:\s*readbackSupport\?\.cadence/, 'brick-wall fire-light sample must report the support cadence separately from live cadence');
+assert.doesNotMatch(index, /nextFireLightLiveSampleFrame|frameCount\s*\+\s*6/, 'brick-wall fire-light flicker must not be throttled behind a multi-frame sample cadence');
 const fireLightProbeStart = index.indexOf('function computeVolumeFireLightProbe');
 const fireLightProbeEnd = index.indexOf('function createVolumeProceduralStoneTexture', fireLightProbeStart);
 assert.ok(fireLightProbeStart >= 0 && fireLightProbeEnd > fireLightProbeStart, 'brick-wall fire-light probe body is extractable for contract checks');
@@ -437,6 +442,7 @@ assert.match(index, /screenSpacePanning\s*=\s*true/, 'viewport pan tracks screen
 const corePath = join(root, 'volume-core.js');
 assert.ok(existsSync(corePath), 'volume-core.js exists');
 const core = existsSync(corePath) ? readFileSync(corePath, 'utf8') : '';
+assert.match(core, /latest-sim-readback-cache-v0/, 'volume debug state must expose latest sim readback cache authority for fire-light support');
 assert.match(core, /export function createKaminosVolumePrototype/, 'volume module exports createKaminosVolumePrototype');
 assert.match(core, /kaminos-volume-prototype-v0/, 'volume module exposes stable witness identity');
 assert.match(core, /native-3d-compute-fluid-raymarch-v0/, 'volume module records compute-backed fluid route identity');

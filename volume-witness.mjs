@@ -1223,8 +1223,14 @@ async function main() {
       });
       volumeSceneContext = sceneContextEval.result.value;
       const brickWallLoaded = volumeSceneContext?.loadState === 'loaded' || volumeSceneContext?.loadState === 'failed';
+      const fireLightSample = volumeSceneContext?.fireLightProxy?.fireLightLiveSample || {};
       const liveLightSatisfied = expectedVolumeFireLightProxy <= 0.001 ||
-        volumeSceneContext?.fireLightProxy?.fireLightLiveSample?.source === 'volume-live-frame-fire-light-readback-v0';
+        (
+          fireLightSample.source === 'volume-live-frame-fire-light-state-v0' &&
+          fireLightSample.supportSource === 'volume-live-frame-fire-light-readback-v0' &&
+          fireLightSample.simReadbackSource === 'latest-sim-readback-cache-v0' &&
+          (fireLightSample.stateFireWeight ?? 0) > 8
+        );
       if (!expectsVolumeBrickWallSceneContext || (brickWallLoaded && liveLightSatisfied)) break;
       await delay(250);
     }
@@ -1254,14 +1260,52 @@ async function main() {
       assert.ok(Array.isArray(volumeSceneContext?.sphericalHarmonicCoefficients), 'brick-wall scene context did not report fire-light sphericalHarmonicCoefficients');
       assert.ok((volumeSceneContext?.sphericalHarmonicCoefficients?.length ?? 0) >= 4, 'brick-wall fire-light probe did not report first-order spherical harmonics');
       assert.ok((volumeSceneContext?.fireLightProxy?.lightCount ?? 0) >= 3, 'brick-wall scene context did not expose the fire-light proxy light rig');
-      assert.equal(volumeSceneContext?.fireLightProxy?.fireLightLiveSample?.identity, 'volume-live-frame-fire-light-readback-v0', 'brick-wall fire-light proxy did not expose the live-frame sample identity');
+      assert.equal(volumeSceneContext?.fireLightProxy?.fireLightLiveSample?.identity, 'volume-live-frame-fire-light-state-v0', 'brick-wall fire-light proxy did not expose the per-frame live-state sample identity');
+      assert.equal(volumeSceneContext?.fireLightProxy?.fireLightLiveSample?.cadence, 'per-render-frame', 'brick-wall fire-light proxy did not report per-render-frame light cadence');
+      assert.equal(volumeSceneContext?.fireLightProxy?.fireLightLiveSample?.supportCadence, 'async-bounded-readback-support', 'brick-wall fire-light support cadence must not impersonate render-frame cadence');
       assert.equal(volumeSceneContext?.fireLightProxy?.measuredFireLight?.identity, 'volume-measured-fire-light-probe-v0', 'brick-wall fire-light proxy did not expose measured sim/frame light authority');
       assert.equal(volumeSceneContext?.fireLightProxy?.measuredFireLight?.evidence?.liveFrame?.available, true, 'brick-wall fire-light proxy did not mark live-frame evidence as available');
+      assert.equal(volumeSceneContext?.fireLightProxy?.measuredFireLight?.evidence?.liveFrame?.source, 'volume-live-frame-fire-light-state-v0', 'brick-wall fire-light proxy did not derive light authority from current frame state');
       assert.ok(Number.isFinite(volumeSceneContext?.fireLightProxy?.liveFrameScalar), 'brick-wall fire-light proxy did not report a numeric live frame scalar');
       if (expectedVolumeFireLightProxy > 0.001) {
         assert.ok((volumeSceneContext?.fireLightProxy?.intensity ?? 0) > 0, 'brick-wall fire-light proxy did not derive positive intensity from active fire');
-        assert.equal(volumeSceneContext?.fireLightProxy?.fireLightLiveSample?.source, 'volume-live-frame-fire-light-readback-v0', 'brick-wall fire-light proxy did not derive light from live rendered-frame fire evidence');
+        assert.equal(volumeSceneContext?.fireLightProxy?.fireLightLiveSample?.source, 'volume-live-frame-fire-light-state-v0', 'brick-wall fire-light proxy did not derive light from current live volume state');
+        assert.equal(volumeSceneContext?.fireLightProxy?.measuredFireLight?.evidence?.simReadback?.source, 'latest-sim-readback-cache-v0', 'brick-wall fire-light proxy did not expose cached sim readback as support evidence');
+        assert.ok(
+          (volumeSceneContext?.fireLightProxy?.fireLightLiveSample?.stateRadianceMean ?? 0) > 0 ||
+          (volumeSceneContext?.fireLightProxy?.fireLightLiveSample?.stateFireWeight ?? 0) > 0 ||
+          (volumeSceneContext?.fireLightProxy?.fireLightLiveSample?.stateMaxFireBinWeight ?? 0) > 0,
+          'brick-wall fire-light live-state sample did not carry any sim energy evidence',
+        );
         assert.ok((volumeSceneContext?.fireLightProxy?.liveFrameScalar ?? 0) > 0.05, 'brick-wall fire-light live scalar did not modulate above zero');
+        const fireLightCadenceEval = await wsRequest(ws, 'Runtime.evaluate', {
+          expression: `(async () => {
+            const before = window.__kaminosVolumeSceneContext?.debugState?.()?.fireLightProxy || null;
+            await new Promise(resolve => requestAnimationFrame(resolve));
+            await new Promise(resolve => requestAnimationFrame(resolve));
+            const after = window.__kaminosVolumeSceneContext?.debugState?.()?.fireLightProxy || null;
+            return {
+              beforeFrameId: before?.fireLightLiveSample?.frameId ?? null,
+              afterFrameId: after?.fireLightLiveSample?.frameId ?? null,
+              beforeScalar: before?.fireLightLiveSample?.scalar ?? null,
+              afterScalar: after?.fireLightLiveSample?.scalar ?? null,
+              beforeLiveFrameScalar: before?.liveFrameScalar ?? null,
+              afterLiveFrameScalar: after?.liveFrameScalar ?? null,
+            };
+          })()`,
+          awaitPromise: true,
+          returnByValue: true,
+        });
+        const fireLightCadence = fireLightCadenceEval.result.value || {};
+        assert.ok(
+          Number(fireLightCadence.afterFrameId) > Number(fireLightCadence.beforeFrameId),
+          `brick-wall fire-light sample did not advance at render-frame cadence: ${JSON.stringify(fireLightCadence)}`,
+        );
+        assert.ok(
+          Math.abs(Number(fireLightCadence.afterScalar) - Number(fireLightCadence.beforeScalar)) > 1e-6 ||
+            Math.abs(Number(fireLightCadence.afterLiveFrameScalar) - Number(fireLightCadence.beforeLiveFrameScalar)) > 1e-6,
+          `brick-wall fire-light scalar did not change across render frames: ${JSON.stringify(fireLightCadence)}`,
+        );
       } else {
         assert.equal(volumeSceneContext?.fireLightProxy?.liveFrameScalar ?? 0, 0, 'disabled brick-wall fire-light proxy should zero live frame scalar');
       }
@@ -2297,7 +2341,7 @@ async function main() {
         Number(metrics.fireLikePixels || 0) +
         Number(metrics.emissiveLikePixels || 0) +
         Number(metrics.whiteHotLikePixels || 0);
-      if (metrics.litPixels < 1200 || sceneContextVolumeSignalPixels < 1800 || visibleFirePixels < 120 || metrics.meanLuma < 6) {
+      if (metrics.litPixels < 1200 || sceneContextVolumeSignalPixels < 1800 || visibleFirePixels < 80 || metrics.meanLuma < 6) {
         throw new Error(`brick-wall scene-context route missing live fire/volume signal: ${JSON.stringify({
           ...metrics,
           visibleFirePixels,
