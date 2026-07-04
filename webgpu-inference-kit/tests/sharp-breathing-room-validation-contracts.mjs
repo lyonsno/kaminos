@@ -246,6 +246,28 @@ assert.equal(failedSchedulerReceipt.status, 'invalid');
 assert.ok(failedSchedulerReceipt.errors.includes('cooperative-scheduler-receipt-invalid'));
 assert.equal(failedSchedulerReceipt.canClaim.schedulerProof, false);
 
+const derivedSmokeWithFailedSchedulerReceipt = validateSharpBreathingRoomComparisonEvidence(comparisonReport({
+  status: null,
+  evidenceClass: null,
+  cooperativeVerification: {
+    schema: 'kaminos.webgpu-scheduler-verification-receipt.v0',
+    status: 'failed',
+    classification: 'config-only',
+    eventTrace: {
+      timingAuthority: 'browser-wall-clock',
+      events: [{ kind: 'anything' }],
+    },
+    boundaryAssertions: [
+      { field: 'phaseChunkSize.spnPatch', requested: 1, effective: 999, status: 'verified' },
+    ],
+  },
+}));
+assert.equal(derivedSmokeWithFailedSchedulerReceipt.ok, false);
+assert.equal(derivedSmokeWithFailedSchedulerReceipt.status, 'invalid');
+assert.ok(derivedSmokeWithFailedSchedulerReceipt.errors.includes('cooperative-scheduler-receipt-invalid'));
+assert.equal(derivedSmokeWithFailedSchedulerReceipt.canClaim.breathingRoomSmoke, false);
+assert.equal(derivedSmokeWithFailedSchedulerReceipt.canClaim.schedulerProof, false);
+
 const unrelatedEventBareAssertion = validateSharpBreathingRoomComparisonEvidence(comparisonReport({
   cooperativeVerification: {
     schema: 'kaminos.webgpu-scheduler-verification-receipt.v0',

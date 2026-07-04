@@ -215,6 +215,12 @@ function comparisonClaimsRouteBridge(comparison = {}) {
   return comparison.status === 'route-bridge' || comparison.evidenceClass === 'route-bridge';
 }
 
+function comparisonWouldClassifyAsSmoke(comparison = {}, baseline, cooperative) {
+  if (comparisonClaimsSmoke(comparison)) return true;
+  if (comparisonClaimsRouteBridge(comparison)) return false;
+  return Boolean(baseline && cooperative && hasFrameQueueEvidence(baseline) && hasFrameQueueEvidence(cooperative));
+}
+
 function deriveStatus(comparison, errors) {
   if (errors.length) return 'invalid';
   if (comparisonClaimsSmoke(comparison)) return 'valid-smoke';
@@ -260,7 +266,8 @@ export function validateSharpBreathingRoomComparisonEvidence(comparison = {}) {
 
   const cooperativeVerification = verification(cooperative);
   const cooperativeHasSchedulerProof = hasObservedSchedulerBoundaryProof(cooperativeVerification);
-  if (comparisonClaimsSmoke(comparison) && cooperative && !cooperativeHasSchedulerProof) {
+  const wouldClassifyAsSmoke = comparisonWouldClassifyAsSmoke(comparison, baseline, cooperative);
+  if (wouldClassifyAsSmoke && cooperative && !cooperativeHasSchedulerProof) {
     addUnique(errors, 'cooperative-scheduler-receipt-invalid');
   }
   if (verifiedWithoutBoundaryProof(cooperativeVerification)) {
@@ -276,7 +283,7 @@ export function validateSharpBreathingRoomComparisonEvidence(comparison = {}) {
     addUnique(errors, 'vit-block-chunking-overclaimed');
   }
 
-  if (comparisonClaimsSmoke(comparison)) {
+  if (wouldClassifyAsSmoke) {
     if (baseline && !hasFrameQueueEvidence(baseline)) {
       falseClosureChecks.missingFrameQueueEvidence = true;
       addUnique(errors, 'baseline-frame-queue-evidence-missing');
