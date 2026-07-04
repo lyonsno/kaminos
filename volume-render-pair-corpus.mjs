@@ -801,6 +801,10 @@ const outRoot = resolve(args.get('--out-dir') || '/tmp/kaminos-frame-locked-pair
 const manifestPath = resolve(args.get('--manifest') || `${outRoot}/corpus-manifest.json`);
 const lowRenderScales = numberList(args.get('--low-render-scales') || args.get('--low-render-scale'), '0.10,0.15,0.18,0.25').map(clampRenderScale);
 const highRenderScale = clampRenderScale(args.get('--high-render-scale') || 1);
+const overlappingLowRenderScale = lowRenderScales.find(renderScale => renderScale.toFixed(3) === highRenderScale.toFixed(3));
+if (overlappingLowRenderScale !== undefined) {
+  throw new Error(`low/high render-scale overlap: low render scale ${overlappingLowRenderScale.toFixed(3)} matches high render scale ${highRenderScale.toFixed(3)}`);
+}
 const settleMs = Number(args.get('--settle-ms') || 5200);
 const framesPerSequence = positiveInteger(args.get('--frames-per-sequence'), 1);
 const frameStrideMs = nonNegativeNumber(args.get('--frame-stride-ms'), 320);
