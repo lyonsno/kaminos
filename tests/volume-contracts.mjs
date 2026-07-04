@@ -1851,6 +1851,9 @@ assert.match(residualMlx, /--edge-sampling-probability/, 'MLX residual runner ca
 assert.match(residualMlx, /--edge-loss-weight/, 'MLX residual runner exposes explicit edge-band reconstruction loss');
 assert.match(residualMlx, /--edge-gradient-loss-weight/, 'MLX residual runner exposes edge-band gradient loss for crisp silhouette recovery');
 assert.match(residualMlx, /--outside-edge-residual-weight/, 'MLX residual runner can penalize hallucinated residual energy outside target-error edge bands');
+assert.match(residualMlx, /--residual-output-limit/, 'MLX residual runner can bound residual output amplitude to prevent edge-mask ringing from poisoning background');
+assert.match(residualMlx, /residualOutputLimit/, 'MLX residual runner reports the effective residual output limit');
+assert.match(residualMlx, /apply_limited_residual/, 'MLX residual runner centralizes residual limiting before adding model residuals back to the low image');
 assert.match(residualMlx, /edge_band_mask/, 'MLX residual runner names the target-derived edge-band mask builder');
 assert.match(residualMlx, /edgeBandPixels/, 'MLX residual runner records edge-band mask pixel counts per pair');
 assert.match(residualMlx, /edgeBandDeltaPsnr/, 'MLX residual runner reports edge-band PSNR delta separately from full-frame PSNR');
@@ -1860,3 +1863,4 @@ assert.match(residualGreenroomRunner, /--edge-band-mode/, 'Greenroom residual wr
 assert.match(residualGreenroomRunner, /targetEdgeBandDeltaPsnr/, 'Greenroom residual wrapper preserves target-edge audit metrics from proxy-mask runs');
 assert.match(residualGreenroomRunner, /--edge-sampling-probability/, 'Greenroom residual wrapper forwards edge-biased sampling probability');
 assert.match(residualGreenroomRunner, /--edge-gradient-loss-weight/, 'Greenroom residual wrapper forwards edge gradient loss weight');
+assert.match(residualGreenroomRunner, /--residual-output-limit/, 'Greenroom residual wrapper forwards residual output limit for bounded proxy-mask runs');
