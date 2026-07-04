@@ -2065,6 +2065,10 @@ assert.match(renderPairDataset, /baseFrameCount/, 'render-pair dataset records t
 assert.match(renderPairDataset, /baseSimStepCount/, 'render-pair dataset records the frozen source sim-step count');
 assert.match(renderPairDataset, /--render-scale-set/, 'render-pair dataset asks the witness for a same-state render-scale set');
 assert.match(renderPairDataset, /supervisedResidualTrainingSuitable/, 'render-pair dataset labels whether a pair is suitable for supervised residual training');
+assert.match(renderPairDataset, /--reuse-witness-browser/, 'render-pair dataset can reuse one headful witness browser across repeated captures');
+assert.match(renderPairDataset, /shared-headful-cdp-browser-v0/, 'render-pair dataset records the shared headful CDP browser reuse policy');
+assert.match(renderPairDataset, /witnessBrowserSession/, 'render-pair dataset records effective witness browser session identity in the manifest');
+assert.match(renderPairDataset, /cleanupWitnessBrowserSession/, 'render-pair dataset closes the shared witness browser once after capture instead of per frame');
 assert.match(fieldSliceWitness, /sampleRenderScaleSet/, 'volume witness invokes the browser-side same-state render-scale set API');
 assert.match(fieldSliceWitness, /renderFrozenScaleToCanvas/, 'volume witness renders each same-state scale to the visible canvas before image capture');
 assert.match(fieldSliceWitness, /imageAuthority/, 'volume witness preserves screenshot authority for frozen-state scale images');
@@ -2075,6 +2079,9 @@ assert.match(fieldSliceWitness, /hudSuppression/, 'volume witness reports HUD su
 assert.match(fieldSliceWitness, /--controlled-step-sequence/, 'volume witness exposes controlled-step sequence mode for temporal corpus generation');
 assert.match(fieldSliceWitness, /controlledStepFrame/, 'volume witness advances the browser simulator through explicit controlled-step frames');
 assert.match(fieldSliceWitness, /controlledStepSequenceReport/, 'volume witness reports controlled-step frame-locked captures for temporal corpus consumers');
+assert.match(fieldSliceWitness, /--reuse-browser/, 'volume witness can attach to an existing headful browser for repeated capture');
+assert.match(fieldSliceWitness, /attach-or-launch-shared-cdp-browser-v0/, 'volume witness names the attach-or-launch shared browser policy');
+assert.match(fieldSliceWitness, /keepBrowserOpen/, 'volume witness can leave the shared browser alive for the dataset runner instead of killing it per capture');
 assert.match(core, /sampleRenderScaleSet/, 'volume core exposes a same-state multi-render-scale capture API');
 assert.match(core, /renderFrozenScaleToCanvas/, 'volume core exposes render-only frozen-state canvas capture');
 assert.match(core, /advanceSim:\s*false/, 'same-state render-scale capture renders without advancing the simulator for each scale');
@@ -2137,6 +2144,9 @@ assert.match(residualMlx, /--outside-edge-residual-weight/, 'MLX residual runner
 assert.match(residualMlx, /--residual-output-limit/, 'MLX residual runner can bound residual output amplitude to prevent edge-mask ringing from poisoning background');
 assert.match(residualMlx, /residualOutputLimit/, 'MLX residual runner reports the effective residual output limit');
 assert.match(residualMlx, /apply_limited_residual/, 'MLX residual runner centralizes residual limiting before adding model residuals back to the low image');
+assert.match(residualMlx, /--residual-application-mask-mode/, 'MLX residual runner can gate applied residuals with an inference-available mask');
+assert.match(residualMlx, /residualApplicationMaskAuthority/, 'MLX residual runner reports whether the residual application mask is inference-available or target-derived');
+assert.match(residualMlx, /residualApplicationMaskMode/, 'saved MLX residual artifacts preserve the residual application mask mode');
 assert.match(residualMlx, /edge_band_mask/, 'MLX residual runner names the target-derived edge-band mask builder');
 assert.match(residualMlx, /edgeBandPixels/, 'MLX residual runner records edge-band mask pixel counts per pair');
 assert.match(residualMlx, /edgeBandDeltaPsnr/, 'MLX residual runner reports edge-band PSNR delta separately from full-frame PSNR');
@@ -2147,3 +2157,4 @@ assert.match(residualGreenroomRunner, /targetEdgeBandDeltaPsnr/, 'Greenroom resi
 assert.match(residualGreenroomRunner, /--edge-sampling-probability/, 'Greenroom residual wrapper forwards edge-biased sampling probability');
 assert.match(residualGreenroomRunner, /--edge-gradient-loss-weight/, 'Greenroom residual wrapper forwards edge gradient loss weight');
 assert.match(residualGreenroomRunner, /--residual-output-limit/, 'Greenroom residual wrapper forwards residual output limit for bounded proxy-mask runs');
+assert.match(residualGreenroomRunner, /--residual-application-mask-mode/, 'Greenroom residual wrapper forwards residual application mask mode for inference-authority gate probes');
