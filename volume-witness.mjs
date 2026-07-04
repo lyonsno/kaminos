@@ -1433,14 +1433,12 @@ async function main() {
       });
       volumeSceneContext = sceneContextEval.result.value;
       const brickWallLoaded = volumeSceneContext?.loadState === 'loaded' || volumeSceneContext?.loadState === 'failed';
-      const fireLightSample = volumeSceneContext?.fireLightProxy?.fireLightLiveSample || {};
       const gpuWallWash = volumeSceneContext?.fireLightProxy?.gpuWallWash || {};
       const liveLightSatisfied = expectedVolumeFireLightProxy <= 0.001 ||
         (
-          fireLightSample.source === 'volume-cpu-fire-light-support-state-v0' &&
-          fireLightSample.supportSource === 'volume-live-frame-fire-light-readback-v0' &&
-          fireLightSample.simReadbackSource === 'latest-sim-readback-cache-v0' &&
-          (fireLightSample.stateFireWeight ?? 0) > 8 &&
+          volumeSceneContext?.fireLightProxy?.liveCpuReadback === false &&
+          volumeSceneContext?.fireLightProxy?.threeLightSupport === 'removed' &&
+          (volumeSceneContext?.fireLightProxy?.lightCount ?? -1) === 0 &&
           gpuWallWash.identity === 'volume-gpu-brick-wall-wash-v0' &&
           gpuWallWash.cadence === 'per-render-frame-gpu-fragment' &&
           gpuWallWash.cpuReadbackAuthority === false
@@ -1468,65 +1466,29 @@ async function main() {
       assert.ok(Math.abs((volumeSceneContext?.environmentIntensity ?? 0) - 0.05) < 0.001, 'brick-wall volume scene context did not record low static environment intensity');
       assert.equal(volumeSceneContext?.fireLightProxyIdentity, 'volume-scene-fire-light-proxy-v0', 'brick-wall scene context did not expose flame-light proxy identity');
       assert.equal(volumeSceneContext?.sphericalHarmonicProbeIdentity, 'volume-fire-light-probe-sh1-v0', 'brick-wall scene context did not expose fire-light probe identity');
-      assert.equal(volumeSceneContext?.fireLightProxyMode, expectedVolumeFireLightProxy > 0.001 ? 'fire-light-proxy' : 'disabled', 'brick-wall scene context did not apply flame-light proxy mode');
+      assert.equal(volumeSceneContext?.fireLightProxyMode, expectedVolumeFireLightProxy > 0.001 ? 'gpu-wall-wash' : 'disabled', 'brick-wall scene context did not apply GPU wall-wash proxy mode');
       assert.ok(Math.abs((volumeSceneContext?.fireLightProxy?.gain ?? 0) - expectedVolumeFireLightGain) < 0.001, 'brick-wall scene context did not apply flame-light proxy gain');
       assert.equal(volumeSceneContext?.ceilingVisibilityPolicy, 'volume-scene-brick-wall-ceiling-hidden-v0', 'brick-wall scene context did not apply ceiling-hidden framing policy');
       assert.ok(Array.isArray(volumeSceneContext?.sphericalHarmonicCoefficients), 'brick-wall scene context did not report fire-light sphericalHarmonicCoefficients');
       assert.ok((volumeSceneContext?.sphericalHarmonicCoefficients?.length ?? 0) >= 4, 'brick-wall fire-light probe did not report first-order spherical harmonics');
-      assert.ok((volumeSceneContext?.fireLightProxy?.lightCount ?? 0) >= 3, 'brick-wall scene context did not expose the fire-light proxy light rig');
-      assert.equal(volumeSceneContext?.fireLightProxy?.fireLightLiveSample?.identity, 'volume-cpu-fire-light-support-state-v0', 'brick-wall fire-light proxy did not expose the CPU support sample identity');
-      assert.equal(volumeSceneContext?.fireLightProxy?.fireLightLiveSample?.cadence, 'per-render-frame-cpu-support', 'brick-wall fire-light proxy did not report CPU support cadence honestly');
-      assert.equal(volumeSceneContext?.fireLightProxy?.fireLightLiveSample?.supportCadence, 'async-bounded-readback-support', 'brick-wall fire-light support cadence must not impersonate render-frame cadence');
-      assert.equal(volumeSceneContext?.fireLightProxy?.cpuSupportAuthority, 'cpu-readback-three-light-fill-support-v0', 'brick-wall fire-light proxy did not expose CPU support/fill authority');
+      assert.equal(volumeSceneContext?.fireLightProxy?.lightCount, 0, 'brick-wall scene context must not expose a live Three light rig');
+      assert.equal(volumeSceneContext?.fireLightProxy?.lightNames?.length ?? -1, 0, 'brick-wall scene context must not expose live Three light names');
+      assert.equal(volumeSceneContext?.fireLightProxy?.liveCpuReadback, false, 'brick-wall scene context must report CPU readback absent from lighting');
+      assert.equal(volumeSceneContext?.fireLightProxy?.threeLightSupport, 'removed', 'brick-wall scene context must report Three light support removed');
+      assert.equal(volumeSceneContext?.fireLightProxy?.fireLightLiveSample, undefined, 'brick-wall fire-light proxy must not expose a CPU live-frame sample');
+      assert.equal(volumeSceneContext?.fireLightProxy?.cpuSupportAuthority, undefined, 'brick-wall fire-light proxy must not expose CPU support authority');
       assert.equal(volumeSceneContext?.fireLightProxy?.gpuWallWash?.identity, 'volume-gpu-brick-wall-wash-v0', 'brick-wall scene context did not expose GPU wall-wash identity');
       assert.equal(volumeSceneContext?.fireLightProxy?.gpuWallWash?.authority, 'webgpu-fragment-live-fire-wall-wash-v0', 'brick-wall scene context did not expose GPU wall-wash authority');
       assert.equal(volumeSceneContext?.fireLightProxy?.gpuWallWash?.cadence, 'per-render-frame-gpu-fragment', 'brick-wall GPU wall-wash cadence did not report per-fragment frame authority');
       assert.equal(volumeSceneContext?.fireLightProxy?.gpuWallWash?.cpuReadbackAuthority, false, 'brick-wall GPU wall-wash must not derive authority from CPU readback');
-      assert.equal(volumeSceneContext?.fireLightProxy?.measuredFireLight?.identity, 'volume-measured-fire-light-probe-v0', 'brick-wall fire-light proxy did not expose measured sim/frame light authority');
-      assert.equal(volumeSceneContext?.fireLightProxy?.measuredFireLight?.evidence?.liveFrame?.available, true, 'brick-wall fire-light proxy did not mark live-frame evidence as available');
-      assert.equal(volumeSceneContext?.fireLightProxy?.measuredFireLight?.evidence?.liveFrame?.source, 'volume-cpu-fire-light-support-state-v0', 'brick-wall fire-light proxy did not derive support light from current CPU support state');
-      assert.ok(Number.isFinite(volumeSceneContext?.fireLightProxy?.liveFrameScalar), 'brick-wall fire-light proxy did not report a numeric live frame scalar');
+      assert.equal(volumeSceneContext?.fireLightProxy?.measuredFireLight, undefined, 'brick-wall fire-light proxy must not expose stale CPU/sim measured light authority');
+      assert.equal(volumeSceneContext?.fireLightProxy?.liveFrameScalar, undefined, 'brick-wall fire-light proxy must not expose CPU live-frame scalar');
       if (expectedVolumeFireLightProxy > 0.001) {
-        assert.ok((volumeSceneContext?.fireLightProxy?.intensity ?? 0) > 0, 'brick-wall fire-light proxy did not derive positive intensity from active fire');
-        assert.equal(volumeSceneContext?.fireLightProxy?.fireLightLiveSample?.source, 'volume-cpu-fire-light-support-state-v0', 'brick-wall fire-light proxy did not derive support light from current volume state');
-        assert.equal(volumeSceneContext?.fireLightProxy?.measuredFireLight?.evidence?.simReadback?.source, 'latest-sim-readback-cache-v0', 'brick-wall fire-light proxy did not expose cached sim readback as support evidence');
-        assert.ok(
-          (volumeSceneContext?.fireLightProxy?.fireLightLiveSample?.stateRadianceMean ?? 0) > 0 ||
-          (volumeSceneContext?.fireLightProxy?.fireLightLiveSample?.stateFireWeight ?? 0) > 0 ||
-          (volumeSceneContext?.fireLightProxy?.fireLightLiveSample?.stateMaxFireBinWeight ?? 0) > 0,
-          'brick-wall fire-light live-state sample did not carry any sim energy evidence',
-        );
-        assert.ok((volumeSceneContext?.fireLightProxy?.liveFrameScalar ?? 0) > 0.05, 'brick-wall fire-light live scalar did not modulate above zero');
-        const fireLightCadenceEval = await wsRequest(ws, 'Runtime.evaluate', {
-          expression: `(async () => {
-            const before = window.__kaminosVolumeSceneContext?.debugState?.()?.fireLightProxy || null;
-            await new Promise(resolve => requestAnimationFrame(resolve));
-            await new Promise(resolve => requestAnimationFrame(resolve));
-            const after = window.__kaminosVolumeSceneContext?.debugState?.()?.fireLightProxy || null;
-            return {
-              beforeFrameId: before?.fireLightLiveSample?.frameId ?? null,
-              afterFrameId: after?.fireLightLiveSample?.frameId ?? null,
-              beforeScalar: before?.fireLightLiveSample?.scalar ?? null,
-              afterScalar: after?.fireLightLiveSample?.scalar ?? null,
-              beforeLiveFrameScalar: before?.liveFrameScalar ?? null,
-              afterLiveFrameScalar: after?.liveFrameScalar ?? null,
-            };
-          })()`,
-          awaitPromise: true,
-          returnByValue: true,
-        });
-        const fireLightCadence = fireLightCadenceEval.result.value || {};
-        assert.ok(
-          Number(fireLightCadence.afterFrameId) > Number(fireLightCadence.beforeFrameId),
-          `brick-wall fire-light sample did not advance at render-frame cadence: ${JSON.stringify(fireLightCadence)}`,
-        );
-        assert.ok(
-          Math.abs(Number(fireLightCadence.afterScalar) - Number(fireLightCadence.beforeScalar)) > 1e-6 ||
-            Math.abs(Number(fireLightCadence.afterLiveFrameScalar) - Number(fireLightCadence.beforeLiveFrameScalar)) > 1e-6,
-          `brick-wall fire-light scalar did not change across render frames: ${JSON.stringify(fireLightCadence)}`,
-        );
+        assert.equal(volumeSceneContext?.fireLightProxy?.intensity, 0, 'brick-wall Three light intensity must remain zero when GPU wall wash is active');
+        assert.equal(volumeSceneContext?.fireLightProxy?.contactWash, 0, 'brick-wall CPU/Three contact wash must remain zero when GPU wall wash is active');
+        assert.equal(volumeSceneContext?.fireLightProxy?.gpuWallWash?.enabled, true, 'brick-wall GPU wall wash did not become active');
       } else {
-        assert.equal(volumeSceneContext?.fireLightProxy?.liveFrameScalar ?? 0, 0, 'disabled brick-wall fire-light proxy should zero live frame scalar');
+        assert.equal(volumeSceneContext?.fireLightProxy?.gpuWallWash?.enabled, false, 'disabled brick-wall fire-light proxy should disable GPU wall wash');
       }
       assert.equal(volumeSceneContext?.globalGroundPlaneSuppressed, true, 'brick-wall volume scene context did not suppress the bright global app ground plane');
       assert.equal(volumeSceneContext?.loadState, 'loaded', `brick-wall GLB did not load: ${volumeSceneContext?.loadError || volumeSceneContext?.loadState}`);

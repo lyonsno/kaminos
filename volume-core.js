@@ -3307,6 +3307,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
   var gpuWallWashEnergy = 0.0;
   var gpuWallWashWeight = 0.0;
   var gpuWallWashCentroid = vec2<f32>(0.0);
+  var gpuWallWashMoment = vec2<f32>(0.0);
 
   for (var i = 0; i < 192; i = i + 1) {
     if (f32(i) >= steps || raymarchEarlyTermination(trans) || t > endT) { break; }
@@ -3944,6 +3945,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     gpuWallWashEnergy = gpuWallWashEnergy + gpuWallWashSample;
     gpuWallWashWeight = gpuWallWashWeight + gpuWallWashCarrier * localDt;
     gpuWallWashCentroid = gpuWallWashCentroid + p.xy * gpuWallWashCarrier * localDt;
+    gpuWallWashMoment = gpuWallWashMoment + p.xy * p.xy * gpuWallWashCarrier * localDt;
     let diagnosticColor = mix(vec3<f32>(0.08, 0.72, 0.95), vec3<f32>(1.0, 0.18, 0.08), smoothstep(0.010, 0.085, divDebug)) * (0.35 + smoothstep(0.012, 0.18, curlDebug));
     local = mix(local, diagnosticColor, flowDebug * smoothstep(0.015, 0.12, curlDebug + divDebug));
     let pressureTierOverlay = pressureTierDebugOverlayColor(y);
@@ -3956,14 +3958,35 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 
   let vignette = 1.0 - smoothstep(0.28, 1.48, length(ndc));
   let gpuWallWashCenter = gpuWallWashCentroid / max(gpuWallWashWeight, 0.0001);
+  let gpuWallWashVariance = max(gpuWallWashMoment / max(gpuWallWashWeight, 0.0001) - gpuWallWashCenter * gpuWallWashCenter, vec2<f32>(0.0));
+  let gpuWallWashExtent = clamp(length(sqrt(gpuWallWashVariance)), 0.0, 0.95);
   let gpuWallWashCenterUv = vec2<f32>(
     clamp(0.50 + gpuWallWashCenter.x * 0.24, 0.18, 0.82),
     clamp(0.70 - gpuWallWashCenter.y * 0.28, 0.18, 0.88)
   );
-  let gpuWallWashUvDelta = (in.uv - gpuWallWashCenterUv) * vec2<f32>(1.0, 1.28);
-  let gpuWallWashBlob = exp(-dot(gpuWallWashUvDelta, gpuWallWashUvDelta) / max(0.018, 0.13 * brickWallGpuWashReach));
+  let gpuWallWashWallCenter = vec2<f32>(
+    clamp(gpuWallWashCenterUv.x + 0.15 + gpuWallWashExtent * 0.08, 0.22, 0.88),
+    clamp(gpuWallWashCenterUv.y - 0.04, 0.16, 0.84)
+  );
+  let gpuWallWashWallDelta = (in.uv - gpuWallWashWallCenter) * vec2<f32>(0.52, 0.82);
+  let gpuWallWashHotDelta = (in.uv - gpuWallWashCenterUv) * vec2<f32>(1.05, 1.32);
+  let gpuWallWashWallRadius = max(0.030, (0.28 + gpuWallWashExtent * 0.52) * brickWallGpuWashReach);
+  let gpuWallWashCoreRadius = max(0.016, (0.070 + gpuWallWashExtent * 0.12) * brickWallGpuWashReach);
+  let gpuWallWashWallLobe = exp(-dot(gpuWallWashWallDelta, gpuWallWashWallDelta) / gpuWallWashWallRadius);
+  let gpuWallWashHotCore = exp(-dot(gpuWallWashHotDelta, gpuWallWashHotDelta) / gpuWallWashCoreRadius);
+  let gpuWallWashBrickModulation = 0.88
+    + 0.08 * sin(in.uv.y * 154.0 + gpuWallWashWallCenter.x * 7.0)
+    + 0.04 * sin(in.uv.x * 82.0 - in.uv.y * 19.0);
   let gpuWallWashFlicker = 0.86 + 0.14 * sin(u.cameraPos_time.w * 18.7 + gpuWallWashEnergy * 7.4 + gpuWallWashCenter.x * 2.1);
-  let gpuWallWashSignal = clamp(gpuWallWashEnergy * brickWallGpuWashGain * gpuWallWashBlob * gpuWallWashFlicker, 0.0, 1.7);
+  let gpuWallWashSignal = clamp(
+    gpuWallWashEnergy
+      * brickWallGpuWashGain
+      * (gpuWallWashWallLobe * 0.82 + gpuWallWashHotCore * 0.30)
+      * gpuWallWashFlicker
+      * clamp(gpuWallWashBrickModulation, 0.72, 1.05),
+    0.0,
+    1.7
+  );
   let gpuWallWashColor = mix(vec3<f32>(1.0, 0.38, 0.10), vec3<f32>(1.0, 0.72, 0.30), clamp(gpuWallWashEnergy * 2.8, 0.0, 1.0));
   color = color + gpuWallWashColor * gpuWallWashSignal * 0.22;
   color = mix(color, vec3<f32>(1.0, 0.22, 0.05), brickWallGpuWashDebug * smoothstep(0.005, 0.055, gpuWallWashEnergy) * 0.35);
@@ -5594,7 +5617,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       reach: gpuWallWashReach,
       routeContext: normalizeVolumeSceneContext(controlsSnapshot.volumeSceneContext),
       cpuReadbackAuthority: false,
-      supportRole: 'cpu-readback-and-three-light-rig-fill-only',
+      supportRole: 'gpu-only-no-cpu-readback',
     };
     state.gridOverlay = controlsSnapshot.gridOverlay || 0;
     state.lookFreeze = lookFreeze;
