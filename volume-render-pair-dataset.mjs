@@ -254,6 +254,7 @@ function makeFrameLockedCapturePlan({ pairId, lowRenderScale, highRenderScale, r
     );
   }
   return {
+    pairId,
     role: 'frame-locked-render-scale-set',
     requestedRenderScales: renderScaleSet,
     requestedRenderScale: clampRenderScale(highRenderScale),
@@ -478,6 +479,21 @@ function runCapture(plan, cwd) {
   return validateCapture(plan);
 }
 
+function summarizeDryRunEndpoint(plan, role, renderScale) {
+  return {
+    path: role === 'low'
+      ? resolve(dirname(plan.out), `${plan.pairId || 'pair'}-01-${scaleSlug(renderScale)}.png`)
+      : resolve(dirname(plan.out), `${plan.pairId || 'pair'}-02-${scaleSlug(renderScale)}.png`),
+    report: role === 'low'
+      ? resolve(dirname(plan.out), `${plan.pairId || 'pair'}-01-${scaleSlug(renderScale)}.json`)
+      : resolve(dirname(plan.out), `${plan.pairId || 'pair'}-02-${scaleSlug(renderScale)}.json`),
+    requestedRenderScale: clampRenderScale(renderScale),
+    renderScale: clampRenderScale(renderScale),
+    imageAuthority: 'dry-run-frame-locked-render-scale-plan',
+    sampleAuthority: 'dry-run-render-only-frozen-sim-state-plan',
+  };
+}
+
 const args = parseArgs(process.argv.slice(2));
 const cwd = new URL('.', import.meta.url).pathname;
 const outDir = resolve(args.get('--out-dir') || '/tmp/kaminos-render-pair-dataset');
@@ -507,24 +523,36 @@ const pairs = lowRenderScales.map((lowRenderScale, index) => {
   const pairId = `pair-${String(index + 1).padStart(3, '0')}-${scaleSlug(lowRenderScale)}-to-${scaleSlug(highRenderScale)}`;
   const pairDir = resolve(outDir, pairId);
   const highRoute = routeWithRenderScale(baseUrl, highRenderScale);
+  const capture = makeFrameLockedCapturePlan({
+    pairId,
+    lowRenderScale,
+    highRenderScale,
+    route: highRoute,
+    pairDir,
+    debugPort: witnessBrowserSession.enabled ? witnessBrowserSession.port : debugPort + index,
+    settleMs,
+    windowSize,
+    evidenceMode,
+    witnessBrowserSession,
+  });
   return {
     pairId,
     pairAuthority: FRAME_LOCKED_PAIR_AUTHORITY,
     supervisedResidualTrainingSuitable: !dryRun,
     lowRenderScale,
     highRenderScale,
-    capture: makeFrameLockedCapturePlan({
-      pairId,
-      lowRenderScale,
-      highRenderScale,
-      route: highRoute,
-      pairDir,
-      debugPort: witnessBrowserSession.enabled ? witnessBrowserSession.port : debugPort + index,
-      settleMs,
-      windowSize,
-      evidenceMode,
-      witnessBrowserSession,
-    }),
+    status: dryRun ? 'dry-run' : 'planned',
+    capture,
+    ...(dryRun ? {
+      low: summarizeDryRunEndpoint(capture, 'low', lowRenderScale),
+      high: summarizeDryRunEndpoint(capture, 'high', highRenderScale),
+      effective: {
+        pairAuthority: FRAME_LOCKED_PAIR_AUTHORITY,
+        supervisedResidualTrainingSuitable: false,
+        low: summarizeDryRunEndpoint(capture, 'low', lowRenderScale),
+        high: summarizeDryRunEndpoint(capture, 'high', highRenderScale),
+      },
+    } : {}),
   };
 });
 
