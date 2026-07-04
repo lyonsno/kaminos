@@ -101,6 +101,16 @@ assert.match(
   'reports must preserve all emitted preview frame artifacts, not only a single representative crop',
 );
 assert.match(
+  trainer,
+  /"temporalSequencePreview":/,
+  'temporal witnesses must preserve a sequence contact-sheet artifact, not only scalar temporal metrics',
+);
+assert.match(
+  trainer,
+  /"temporalSequenceFrames":/,
+  'temporal witnesses must report the exact rendered frame rows used by the sequence contact sheet',
+);
+assert.match(
   greenroomRunner,
   /--residual-mask-feather-radius/,
   'Greenroom wrapper must pass residual mask feather radius through to the MLX trainer',
