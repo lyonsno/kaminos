@@ -49,6 +49,7 @@ def parse_args():
     parser.add_argument("--edge-loss-weight", default="0")
     parser.add_argument("--edge-gradient-loss-weight", default="0")
     parser.add_argument("--outside-edge-residual-weight", default="0")
+    parser.add_argument("--residual-output-limit", default="0")
     parser.add_argument("--condition-render-scale", default="false")
     parser.add_argument("--temporal-eval", default="true")
     parser.add_argument("--temporal-eval-scope", default="selected")
@@ -146,6 +147,8 @@ def build_child_command(args):
         str(args.edge_gradient_loss_weight),
         "--outside-edge-residual-weight",
         str(args.outside_edge_residual_weight),
+        "--residual-output-limit",
+        str(args.residual_output_limit),
         "--temporal-eval-scope",
         str(args.temporal_eval_scope),
         "--temporal-loss-weight",
@@ -230,6 +233,7 @@ def main():
             final_receipt["targetEdgeBandDeltaPsnr"] = report.get("targetEdgeBandDeltaPsnr")
             final_receipt["edgeBandAuthority"] = report.get("edgeBandAuthority")
             final_receipt["outsideEdgeResidualMse"] = report.get("outsideEdgeResidualMse")
+            final_receipt["residualOutputLimit"] = report.get("residualOutputLimit")
         except Exception as exc:
             final_receipt["residualReportReadError"] = repr(exc)
     (out_dir / "greenroom-runner-receipt.json").write_text(json.dumps(final_receipt, indent=2) + "\n")
