@@ -1525,6 +1525,9 @@ assert.match(greenroomBenchmark, /dryRun/, 'greenroom benchmark supports writing
 const renderPairDatasetPath = join(root, 'volume-render-pair-dataset.mjs');
 assert.ok(existsSync(renderPairDatasetPath), 'volume render-scale pair dataset extractor exists');
 const renderPairDataset = existsSync(renderPairDatasetPath) ? readFileSync(renderPairDatasetPath, 'utf8') : '';
+const renderPairCorpusPath = join(root, 'volume-render-pair-corpus.mjs');
+assert.ok(existsSync(renderPairCorpusPath), 'volume render-scale pair corpus generator exists');
+const renderPairCorpus = existsSync(renderPairCorpusPath) ? readFileSync(renderPairCorpusPath, 'utf8') : '';
 assert.match(renderPairDataset, /kaminos\.volume\.render-pair-dataset\.v0/, 'render-pair dataset writes a stable dataset schema identity');
 assert.match(renderPairDataset, /volume-witness\.mjs/, 'render-pair dataset captures frames through the witness instead of bypassing route validation');
 assert.match(renderPairDataset, /lowRenderScale/, 'render-pair dataset records requested low render scale');
@@ -1546,6 +1549,10 @@ assert.match(renderPairDataset, /--reuse-witness-browser/, 'render-pair dataset 
 assert.match(renderPairDataset, /shared-headful-cdp-browser-v0/, 'render-pair dataset records the shared headful CDP browser reuse policy');
 assert.match(renderPairDataset, /witnessBrowserSession/, 'render-pair dataset records effective witness browser session identity in the manifest');
 assert.match(renderPairDataset, /cleanupWitnessBrowserSession/, 'render-pair dataset closes the shared witness browser once after capture instead of per frame');
+assert.match(renderPairCorpus, /shared-headful-cdp-browser-v0/, 'render-pair corpus records the shared headful browser policy for whole-corpus capture runs');
+assert.match(renderPairCorpus, /corpus-owned-shared-headful-cdp-browser/, 'render-pair corpus can hold one headful browser across all variant/frame child captures');
+assert.match(renderPairCorpus, /cleanupCorpusWitnessBrowserSession/, 'render-pair corpus closes its shared witness browser once after all captures');
+assert.match(renderPairCorpus, /--keep-witness-browser-open/, 'render-pair corpus keeps child dataset browsers open for corpus-level cleanup');
 assert.match(fieldSliceWitness, /sampleRenderScaleSet/, 'volume witness invokes the browser-side same-state render-scale set API');
 assert.match(fieldSliceWitness, /renderFrozenScaleToCanvas/, 'volume witness renders each same-state scale to the visible canvas before image capture');
 assert.match(fieldSliceWitness, /imageAuthority/, 'volume witness preserves screenshot authority for frozen-state scale images');

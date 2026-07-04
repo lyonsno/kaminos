@@ -73,6 +73,74 @@ function readJson(path) {
   return JSON.parse(readFileSync(path, 'utf8'));
 }
 
+function delay(ms) {
+  return new Promise(resolveDelay => setTimeout(resolveDelay, ms));
+}
+
+async function cdpFetchForPort(port, path, options) {
+  const resp = await fetch(`http://127.0.0.1:${port}${path}`, options);
+  if (!resp.ok) throw new Error(`CDP ${path} failed ${resp.status}`);
+  return resp.json();
+}
+
+function wsRequest(ws, method, params = {}) {
+  const id = ws._nextId = (ws._nextId || 0) + 1;
+  ws.send(JSON.stringify({ id, method, params }));
+  return new Promise((resolveReq, rejectReq) => {
+    const onMessage = event => {
+      const msg = JSON.parse(String(event.data));
+      if (msg.id !== id) return;
+      ws.removeEventListener('message', onMessage);
+      if (msg.error) rejectReq(new Error(`${method}: ${msg.error.message}`));
+      else resolveReq(msg.result);
+    };
+    ws.addEventListener('message', onMessage);
+  });
+}
+
+function waitForWebSocketOpen(ws) {
+  return new Promise((resolveOpen, rejectOpen) => {
+    ws.addEventListener('open', resolveOpen, { once: true });
+    ws.addEventListener('error', () => rejectOpen(new Error('WebSocket open failed')), { once: true });
+  });
+}
+
+async function closeCdpBrowser(port) {
+  const version = await cdpFetchForPort(port, '/json/version');
+  if (!version.webSocketDebuggerUrl) return false;
+  const ws = new WebSocket(version.webSocketDebuggerUrl);
+  await waitForWebSocketOpen(ws);
+  try {
+    await wsRequest(ws, 'Browser.close');
+  } finally {
+    ws.close();
+  }
+  return true;
+}
+
+async function cleanupCorpusWitnessBrowserSession(corpus) {
+  const session = corpus.witnessBrowserSession;
+  if (!session?.enabled || corpus.dryRun) {
+    corpus.witnessBrowserSession = {
+      ...session,
+      cleanupStatus: session?.enabled ? 'not-run-dry-run' : 'disabled',
+    };
+    return;
+  }
+  let browserCloseSent = false;
+  try {
+    browserCloseSent = await closeCdpBrowser(session.port);
+  } catch {
+    browserCloseSent = false;
+  }
+  corpus.witnessBrowserSession = {
+    ...session,
+    cleanupStatus: browserCloseSent ? 'closed' : 'not-open-or-already-closed',
+    closedAt: new Date().toISOString(),
+    browserCloseSent,
+  };
+}
+
 function gitValue(args, fallback = null) {
   try {
     return execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim() || fallback;
@@ -333,7 +401,7 @@ function runControlledStepVariant({ variant, index, corpus, cwd }) {
   const previewPath = resolve(variantDir, 'controlled-step-witness-preview.png');
   const fullScreenshot = resolve(variantDir, 'controlled-step-witness.full.png');
   const controlledStepDir = resolve(variantDir, 'controlled-step-frames');
-  const debugPort = corpus.debugPort + index * 32;
+  const debugPort = corpus.reuseWitnessBrowser ? corpus.debugPort : corpus.debugPort + index * 32;
   const command = [
     process.execPath,
     'volume-witness.mjs',
@@ -354,6 +422,13 @@ function runControlledStepVariant({ variant, index, corpus, cwd }) {
     '--controlled-step-dir', controlledStepDir,
     '--controlled-step-prefix', variant.id,
   ];
+  if (corpus.reuseWitnessBrowser) {
+    command.push(
+      '--reuse-browser', '1',
+      '--keep-browser-open', '1',
+      '--user-data-dir', corpus.witnessBrowserSession.userDataDir
+    );
+  }
   const summary = {
     id: variant.id,
     label: variant.label,
@@ -571,7 +646,7 @@ function runVariant({ variant, index, args, corpus, cwd }) {
     status: 'running',
     settleMs: variant.settleMs,
     overrides: variant.overrides,
-    debugPort: corpus.debugPort + index * 32,
+    debugPort: corpus.reuseWitnessBrowser ? corpus.debugPort : corpus.debugPort + index * 32,
     route,
     manifestPath: null,
     stdout: null,
@@ -592,7 +667,7 @@ function runVariant({ variant, index, args, corpus, cwd }) {
     const stdout = resolve(frameDir, 'dataset.stdout.log');
     const stderr = resolve(frameDir, 'dataset.stderr.log');
     const sequenceSettleMs = variant.settleMs + frameIndex * corpus.frameStrideMs;
-    const debugPort = corpus.debugPort + index * 32 + frameIndex * 4;
+    const debugPort = corpus.reuseWitnessBrowser ? corpus.debugPort : corpus.debugPort + index * 32 + frameIndex * 4;
     const command = [
       process.execPath,
       'volume-render-pair-dataset.mjs',
@@ -605,8 +680,16 @@ function runVariant({ variant, index, args, corpus, cwd }) {
       '--settle-ms', String(sequenceSettleMs),
       '--window-size', corpus.windowSize,
       '--evidence-mode', corpus.evidenceMode,
-      '--reuse-witness-browser', '1',
     ];
+    if (corpus.reuseWitnessBrowser) {
+      command.push(
+        '--reuse-witness-browser', '1',
+        '--keep-witness-browser-open', '1',
+        '--witness-browser-user-data-dir', corpus.witnessBrowserSession.userDataDir
+      );
+    } else {
+      command.push('--no-reuse-witness-browser', '1');
+    }
     if (corpus.dryRun) command.push('--dry-run');
     const frameSummary = {
       frameId,
@@ -732,6 +815,22 @@ const activeSequenceAuthority = sequenceMode === 'controlled-step'
   : (temporalSequenceMode ? SEQUENCE_AUTHORITY : null);
 const controlledStepDeltaMs = nonNegativeNumber(args.get('--controlled-step-delta-ms'), frameStrideMs);
 const variants = loadVariants(args, settleMs);
+const reuseWitnessBrowser = args.has('--reuse-witness-browser') || !args.has('--no-reuse-witness-browser');
+const witnessBrowserSession = {
+  identity: 'shared-headful-cdp-browser-v0',
+  attachIdentity: 'attach-or-launch-shared-cdp-browser-v0',
+  enabled: reuseWitnessBrowser,
+  mode: reuseWitnessBrowser ? 'corpus-owned-shared-headful-cdp-browser' : 'per-dataset-or-witness-browser',
+  port: Number(args.get('--debug-port') || 9800),
+  userDataDir: resolve(args.get('--witness-browser-user-data-dir') || `/tmp/kaminos-render-pair-corpus-witness-profile-${Number(args.get('--debug-port') || 9800)}`),
+  launchPolicy: reuseWitnessBrowser
+    ? 'attach-or-launch-on-first-child-capture-many-cleanup-once'
+    : 'child-captures-own-browser',
+  focusStealMitigation: reuseWitnessBrowser
+    ? 'one-headful-window-per-corpus-run-no-page-bringToFront-during-reused-captures'
+    : 'none',
+  cleanupStatus: args.has('--dry-run') ? 'not-run-dry-run' : 'pending',
+};
 const createdAt = new Date().toISOString();
 const corpus = {
   schema: CORPUS_SCHEMA,
@@ -759,6 +858,8 @@ const corpus = {
   lowRenderScales,
   highRenderScale,
   debugPort: Number(args.get('--debug-port') || 9800),
+  reuseWitnessBrowser,
+  witnessBrowserSession,
   settleMs,
   framesPerSequence,
   frameStrideMs,
@@ -797,6 +898,7 @@ if (!corpus.failures.length) {
 } else {
   corpus.status = 'failed';
 }
+await cleanupCorpusWitnessBrowserSession(corpus);
 writeJson(manifestPath, corpus);
 console.log(JSON.stringify(corpus, null, 2));
 if (corpus.failures.length && !corpus.keepGoing) process.exit(1);
