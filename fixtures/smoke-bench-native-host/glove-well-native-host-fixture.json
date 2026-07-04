@@ -1,0 +1,91 @@
+{
+  "observedAt": "2026-07-04T02:40:00.000Z",
+  "requiredPrimitiveRoles": [
+    "wealth_source",
+    "rolling_goin",
+    "hand_skeleton_bone",
+    "aim_arc_sample",
+    "lerm_desire_link"
+  ],
+  "screenshot": {
+    "path": "/tmp/kaminos-glove-well-native-host-fixture.png",
+    "bytes": 12345
+  },
+  "offer": {
+    "schema": "kaminos.smoke-bench.offer.v0",
+    "id": "offer:greedy-glove-fucker:glove-well-native-host-fixture",
+    "producerDiaulos": "greedy-glove-fucker",
+    "title": "Glove Well Native Host Fixture",
+    "sourceRef": "fixtures/smoke-bench-native-host/glove-well-native-host-fixture.json",
+    "authority": "host_payload_fixture",
+    "displayState": "available",
+    "freshness": "fresh_fixture",
+    "primaryTarget": {
+      "schema": "kaminos.smoke-bench.primary-target.v0",
+      "id": "target:glove-well-native-host-fixture",
+      "kind": "native-host",
+      "surface": "glove-well",
+      "url": null,
+      "adapter": {
+        "id": "glove-well",
+        "kind": "native_host",
+        "acceptancePredicate": "source_owned_primitives_visible"
+      },
+      "hostPayload": {
+        "schema": "lerms.glove-well-host-packet.v0",
+        "route": "lerms/glove-well/host-packet"
+      },
+      "stateStream": null,
+      "asset": null
+    },
+    "artifacts": [],
+    "bundle": null,
+    "hostPayload": {
+      "schema": "lerms.glove-well-host-packet.v0",
+      "route": "lerms/glove-well/host-packet"
+    },
+    "stateStream": null,
+    "downgrades": [
+      "fixture_packet_not_live_glove_sidecar"
+    ],
+    "legacyForgeHostOffer": null
+  },
+  "adapterState": {
+    "schema": "kaminos.host-surface.state.v0",
+    "route": "kaminos/host-surface",
+    "hostId": "glove-well",
+    "hostLabel": "Glove Well",
+    "hostRoute": "kaminos/glove-well-host",
+    "hostStateSchema": "kaminos.glove-well-host.state.v0",
+    "packetSchema": "lerms.glove-well-host-packet.v0",
+    "packetRoute": "lerms/glove-well/host-packet",
+    "sourceAuthority": "host_payload_fixture",
+    "sourceTruthAuthority": "lerms_glove_well_packet_fixture",
+    "freshness": {
+      "status": "fresh",
+      "observedAt": "2026-07-04T02:39:00.000Z",
+      "sampleAgeMs": 120
+    },
+    "visual": {
+      "canvasNonblank": true,
+      "primitiveRoleCounts": {
+        "wealth_source": 2,
+        "rolling_goin": 3,
+        "hand_skeleton_bone": 21,
+        "aim_arc_sample": 8,
+        "lerm_desire_link": 5
+      }
+    },
+    "downgrades": [
+      "fixture_packet_not_live_glove_sidecar"
+    ],
+    "rejectedDebugSurfaces": [
+      {
+        "surface": "standalone-glove-debug",
+        "label": "Standalone Glove Debug",
+        "acceptanceSurface": false,
+        "reason": "debug route is not Smoke Bench native host"
+      }
+    ]
+  }
+}

@@ -4,10 +4,12 @@ import { join } from 'node:path';
 
 const root = new URL('..', import.meta.url).pathname;
 const smokeBenchCorePath = join(root, 'smoke-bench-core.js');
+const nativeHostWitnessPath = join(root, 'smoke-bench-native-host-witness.mjs');
 const forgeHostCorePath = join(root, 'forge-host-core.js');
 const indexPath = join(root, 'index.html');
 
 assert.ok(existsSync(smokeBenchCorePath), 'Smoke Bench core contract exists');
+assert.ok(existsSync(nativeHostWitnessPath), 'Smoke Bench native-host witness exists');
 assert.ok(existsSync(forgeHostCorePath), 'Forge Host core exists');
 assert.ok(existsSync(indexPath), 'Kaminos app shell exists');
 
@@ -19,9 +21,11 @@ assert.equal(smokeBench.KAMINOS_SMOKE_BENCH_OFFER_SCHEMA, 'kaminos.smoke-bench.o
 assert.equal(smokeBench.KAMINOS_SMOKE_BENCH_PRIMARY_TARGET_SCHEMA, 'kaminos.smoke-bench.primary-target.v0');
 assert.equal(smokeBench.KAMINOS_SMOKE_BENCH_ROUTE_SCHEMA, 'kaminos.smoke-bench.route.v0');
 assert.equal(smokeBench.KAMINOS_SMOKE_BENCH_SHELL_SCHEMA, 'kaminos.smoke-bench.shell.v0');
+assert.equal(smokeBench.KAMINOS_SMOKE_BENCH_NATIVE_HOST_CONFORMANCE_SCHEMA, 'kaminos.smoke-bench.native-host-conformance.v0');
 assert.equal(typeof smokeBench.createSmokeBenchOffer, 'function');
 assert.equal(typeof smokeBench.routeSmokeBenchOfferToTarget, 'function');
 assert.equal(typeof smokeBench.normalizeForgeHostOfferForSmokeBench, 'function');
+assert.equal(typeof smokeBench.evaluateSmokeBenchNativeHostConformance, 'function');
 
 const browserOffer = smokeBench.createSmokeBenchOffer({
   id: 'offer:test:browser',
@@ -93,6 +97,105 @@ assert.equal(nativeRoute.primaryTarget.kind, 'native-host');
 assert.equal(nativeRoute.adapter.kind, 'native_host');
 assert.equal(nativeRoute.hostPayload.schema, 'lerms.glove-well-host-packet.v0');
 assert.equal(nativeRoute.targetUrl, null);
+
+const gloveWellAdapterState = {
+  schema: 'kaminos.host-surface.state.v0',
+  route: 'kaminos/host-surface',
+  hostId: 'glove-well',
+  hostRoute: 'kaminos/glove-well-host',
+  hostStateSchema: 'kaminos.glove-well-host.state.v0',
+  packetSchema: 'lerms.glove-well-host-packet.v0',
+  packetRoute: 'lerms/glove-well/host-packet',
+  sourceAuthority: 'host_payload_fixture',
+  sourceTruthAuthority: 'lerms_glove_well_packet_fixture',
+  freshness: {
+    status: 'fresh',
+    observedAt: '2026-07-04T02:30:00.000Z',
+    sampleAgeMs: 120,
+  },
+  visual: {
+    canvasNonblank: true,
+    primitiveRoleCounts: {
+      wealth_source: 2,
+      rolling_goin: 3,
+      hand_skeleton_bone: 21,
+      aim_arc_sample: 8,
+      lerm_desire_link: 5,
+    },
+  },
+  rejectedDebugSurfaces: [
+    { surface: 'standalone-glove-debug', acceptanceSurface: false, reason: 'debug route is not Smoke Bench native host' },
+  ],
+  downgrades: ['fixture_packet_not_live_glove_sidecar'],
+};
+
+const nativeConformance = smokeBench.evaluateSmokeBenchNativeHostConformance({
+  route: nativeRoute,
+  adapterState: gloveWellAdapterState,
+  requiredPrimitiveRoles: ['wealth_source', 'rolling_goin', 'hand_skeleton_bone', 'aim_arc_sample', 'lerm_desire_link'],
+  screenshot: { path: '/tmp/kaminos-glove-well-native-host.png', bytes: 12345 },
+  observedAt: '2026-07-04T02:31:00.000Z',
+});
+assert.equal(nativeConformance.schema, 'kaminos.smoke-bench.native-host-conformance.v0');
+assert.equal(nativeConformance.ok, true);
+assert.equal(nativeConformance.requested.adapterId, 'glove-well');
+assert.equal(nativeConformance.effective.adapterId, 'glove-well');
+assert.equal(nativeConformance.requested.primaryTargetKind, 'native-host');
+assert.equal(nativeConformance.effective.packetSchema, 'lerms.glove-well-host-packet.v0');
+assert.equal(nativeConformance.effective.packetRoute, 'lerms/glove-well/host-packet');
+assert.deepEqual(nativeConformance.missingPrimitiveRoles, []);
+assert.equal(nativeConformance.primitiveRoleCounts.hand_skeleton_bone, 21);
+assert.ok(nativeConformance.routeWarnings.includes('pop_out_escape_not_acceptance'));
+assert.ok(nativeConformance.screenshot.path.endsWith('kaminos-glove-well-native-host.png'));
+
+const wrongSchemaConformance = smokeBench.evaluateSmokeBenchNativeHostConformance({
+  route: nativeRoute,
+  adapterState: {
+    ...gloveWellAdapterState,
+    packetSchema: 'lerms.wrong-packet.v0',
+  },
+  requiredPrimitiveRoles: ['wealth_source'],
+});
+assert.equal(wrongSchemaConformance.ok, false);
+assert.ok(wrongSchemaConformance.violations.some(item => /packet schema/i.test(item)));
+
+const nonblankProxyConformance = smokeBench.evaluateSmokeBenchNativeHostConformance({
+  route: nativeRoute,
+  adapterState: {
+    ...gloveWellAdapterState,
+    visual: {
+      canvasNonblank: true,
+      primitiveRoleCounts: {},
+    },
+  },
+  requiredPrimitiveRoles: ['wealth_source'],
+});
+assert.equal(nonblankProxyConformance.ok, false);
+assert.ok(nonblankProxyConformance.violations.some(item => /primitive role.*wealth_source/i.test(item)));
+assert.ok(nonblankProxyConformance.violations.some(item => /nonblank/i.test(item)));
+
+const iframeProxyConformance = smokeBench.evaluateSmokeBenchNativeHostConformance({
+  route: {
+    ...nativeRoute,
+    adapter: { id: 'glove-well', kind: 'browser_iframe', acceptancePredicate: 'iframe_loaded_same_origin_target' },
+  },
+  adapterState: gloveWellAdapterState,
+  requiredPrimitiveRoles: ['wealth_source'],
+});
+assert.equal(iframeProxyConformance.ok, false);
+assert.ok(iframeProxyConformance.violations.some(item => /native.*adapter/i.test(item)));
+
+const fallbackLiveConformance = smokeBench.evaluateSmokeBenchNativeHostConformance({
+  route: {
+    ...nativeRoute,
+    sourceAuthority: 'fallback',
+    displayState: 'live',
+  },
+  adapterState: gloveWellAdapterState,
+  requiredPrimitiveRoles: ['wealth_source'],
+});
+assert.equal(fallbackLiveConformance.ok, false);
+assert.ok(fallbackLiveConformance.violations.some(item => /fallback.*live/i.test(item)));
 
 const streamOffer = smokeBench.createSmokeBenchOffer({
   id: 'offer:test:hand-state',

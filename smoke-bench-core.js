@@ -2,6 +2,7 @@ export const KAMINOS_SMOKE_BENCH_OFFER_SCHEMA = 'kaminos.smoke-bench.offer.v0';
 export const KAMINOS_SMOKE_BENCH_PRIMARY_TARGET_SCHEMA = 'kaminos.smoke-bench.primary-target.v0';
 export const KAMINOS_SMOKE_BENCH_ROUTE_SCHEMA = 'kaminos.smoke-bench.route.v0';
 export const KAMINOS_SMOKE_BENCH_SHELL_SCHEMA = 'kaminos.smoke-bench.shell.v0';
+export const KAMINOS_SMOKE_BENCH_NATIVE_HOST_CONFORMANCE_SCHEMA = 'kaminos.smoke-bench.native-host-conformance.v0';
 
 const NON_LIVE_AUTHORITIES = new Set([
   'fixture',
@@ -24,6 +25,10 @@ function objectOrNull(value) {
 
 function arrayOrEmpty(value) {
   return Array.isArray(value) ? value : [];
+}
+
+function objectOrEmpty(value) {
+  return objectOrNull(value) || {};
 }
 
 function targetIdFromOfferId(offerId) {
@@ -208,5 +213,143 @@ export function routeSmokeBenchOfferToTarget(offerRecord, {
     downgrades: cloneJson(offerRecord.downgrades || []),
     operatorInspectionStatus: 'pending',
     routeWarnings: ['pop_out_escape_not_acceptance', 'not_chat_bridge', 'not_command_execution'],
+  };
+}
+
+function primitiveRoleCountsFromState(adapterState) {
+  const visual = objectOrEmpty(adapterState?.visual);
+  const roleCounts = objectOrEmpty(visual.primitiveRoleCounts);
+  const normalized = {};
+  for (const [role, count] of Object.entries(roleCounts)) {
+    const numeric = Number(count);
+    normalized[role] = Number.isFinite(numeric) && numeric > 0 ? numeric : 0;
+  }
+  return normalized;
+}
+
+function effectiveSourceAuthority(adapterState = {}, route = {}) {
+  return adapterState.sourceAuthority
+    || adapterState.source?.authority
+    || route.sourceAuthority
+    || 'unknown';
+}
+
+function effectiveFreshness(adapterState = {}) {
+  return objectOrEmpty(adapterState.freshness);
+}
+
+export function evaluateSmokeBenchNativeHostConformance({
+  route,
+  adapterState,
+  requiredPrimitiveRoles = [],
+  screenshot = null,
+  observedAt = new Date().toISOString(),
+} = {}) {
+  const violations = [];
+  const routeObject = objectOrEmpty(route);
+  const target = objectOrEmpty(routeObject.primaryTarget);
+  const adapter = objectOrEmpty(routeObject.adapter || target.adapter);
+  const state = objectOrEmpty(adapterState);
+  const hostPayload = objectOrEmpty(routeObject.hostPayload || target.hostPayload);
+  const freshness = effectiveFreshness(state);
+  const primitiveRoleCounts = primitiveRoleCountsFromState(state);
+  const missingPrimitiveRoles = [];
+  const rejectedDebugSurfaces = arrayOrEmpty(state.rejectedDebugSurfaces);
+  const stateVisual = objectOrEmpty(state.visual);
+  const sourceAuthority = effectiveSourceAuthority(state, routeObject);
+  const routeWarnings = [
+    ...arrayOrEmpty(routeObject.routeWarnings),
+    ...arrayOrEmpty(state.routeWarnings),
+  ].filter((item, index, array) => item && array.indexOf(item) === index);
+
+  if (routeObject.schema !== KAMINOS_SMOKE_BENCH_ROUTE_SCHEMA) {
+    violations.push(`route schema mismatch: ${routeObject.schema || 'missing'}`);
+  }
+  if (target.schema !== KAMINOS_SMOKE_BENCH_PRIMARY_TARGET_SCHEMA) {
+    violations.push(`primary target schema mismatch: ${target.schema || 'missing'}`);
+  }
+  if (target.kind !== 'native-host') {
+    violations.push(`native-host conformance expected primaryTarget.kind native-host, got ${target.kind || 'missing'}`);
+  }
+  if (adapter.kind !== 'native_host') {
+    violations.push(`native-host conformance expected native adapter, got ${adapter.kind || 'missing'}`);
+  }
+  if (adapter.kind === 'browser_iframe' || adapter.kind === 'link_out') {
+    violations.push(`${adapter.kind} cannot satisfy native-host Smoke Bench acceptance`);
+  }
+  if (hasLiveDisplayLie(routeObject.sourceAuthority, routeObject.displayState)) {
+    violations.push(`${routeObject.sourceAuthority} Smoke Bench route claimed live display authority`);
+  }
+  if (NON_LIVE_AUTHORITIES.has(sourceAuthority) && routeObject.displayState === 'live') {
+    violations.push(`${sourceAuthority} adapter state claimed live display authority`);
+  }
+  if (freshness.status === 'stale' && routeObject.displayState === 'live') {
+    violations.push('stale native-host adapter state claimed live display authority');
+  }
+  if (!hostPayload.schema) violations.push('native-host primaryTarget missing hostPayload schema');
+  if (!hostPayload.route) violations.push('native-host primaryTarget missing hostPayload route');
+  if (state.hostId && adapter.id && state.hostId !== adapter.id) {
+    violations.push(`effective adapter id ${state.hostId} did not match requested adapter id ${adapter.id}`);
+  }
+  if (state.packetSchema && hostPayload.schema && state.packetSchema !== hostPayload.schema) {
+    violations.push(`effective packet schema ${state.packetSchema} did not match requested hostPayload schema ${hostPayload.schema}`);
+  }
+  if (state.packetRoute && hostPayload.route && state.packetRoute !== hostPayload.route) {
+    violations.push(`effective packet route ${state.packetRoute} did not match requested hostPayload route ${hostPayload.route}`);
+  }
+  if (stateVisual.defaultMarkers === true || stateVisual.syntheticDefaultMarkers === true) {
+    violations.push('default markers cannot satisfy native-host Smoke Bench acceptance');
+  }
+  for (const role of arrayOrEmpty(requiredPrimitiveRoles)) {
+    if (!primitiveRoleCounts[role]) {
+      missingPrimitiveRoles.push(role);
+      violations.push(`missing required primitive role ${role}`);
+    }
+  }
+  if (stateVisual.canvasNonblank && Object.keys(primitiveRoleCounts).length === 0) {
+    violations.push('nonblank canvas without source-owned primitive roles is proxy evidence');
+  }
+  for (const surface of rejectedDebugSurfaces) {
+    if (surface?.acceptanceSurface === true) {
+      violations.push(`rejected debug surface ${surface.surface || surface.id || 'unknown'} was marked as acceptance surface`);
+    }
+  }
+
+  return {
+    schema: KAMINOS_SMOKE_BENCH_NATIVE_HOST_CONFORMANCE_SCHEMA,
+    ok: violations.length === 0,
+    observedAt,
+    requested: {
+      routeId: routeObject.id || null,
+      offerId: routeObject.offerId || null,
+      primaryTargetId: target.id || null,
+      primaryTargetKind: target.kind || null,
+      surface: target.surface || null,
+      adapterId: adapter.id || null,
+      adapterKind: adapter.kind || null,
+      hostPayloadSchema: hostPayload.schema || null,
+      hostPayloadRoute: hostPayload.route || null,
+    },
+    effective: {
+      adapterId: state.hostId || adapter.id || null,
+      hostRoute: state.hostRoute || null,
+      hostStateSchema: state.hostStateSchema || null,
+      packetSchema: state.packetSchema || null,
+      packetRoute: state.packetRoute || null,
+      sourceAuthority,
+      freshnessStatus: freshness.status || 'unknown',
+      sampleAgeMs: freshness.sampleAgeMs ?? null,
+    },
+    primitiveRoleCounts,
+    requiredPrimitiveRoles: arrayOrEmpty(requiredPrimitiveRoles).map(String),
+    missingPrimitiveRoles,
+    rejectedDebugSurfaces: cloneJson(rejectedDebugSurfaces),
+    downgrades: [
+      ...arrayOrEmpty(routeObject.downgrades),
+      ...arrayOrEmpty(state.downgrades),
+    ].filter((item, index, array) => item && array.indexOf(item) === index),
+    routeWarnings,
+    screenshot: screenshot ? cloneJson(screenshot) : null,
+    violations,
   };
 }
