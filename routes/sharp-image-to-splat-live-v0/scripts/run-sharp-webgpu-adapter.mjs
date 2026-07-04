@@ -382,7 +382,7 @@ function sharpBrowserProgressFromConsole(text) {
     [/\[Gaussian\] Running initializer/, 'sharp-webgpu:gaussian-initializer', '[Gaussian] Running initializer', 0.76],
     [/\[Gaussian\] Running decoder/, 'sharp-webgpu:gaussian-decoder', '[Gaussian] Running decoder', 0.80],
     [/\[Gaussian\] Running texture\/geometry heads/, 'sharp-webgpu:gaussian-heads', '[Gaussian] Running texture/geometry heads', 0.84],
-    [/\[Gaussian\] Output:/, 'sharp-webgpu:gaussian-output', '[Gaussian] Gaussian output produced', 0.86],
+    [/\[Gaussian\] Output:/, 'sharp-webgpu:gaussian-output', 'Intermediate Gaussian output is ready; SHARP still has to compose and write the PLY splat.', 0.86],
     [/\[Compose\] Building base Gaussians/, 'sharp-webgpu:compose-base-gaussians', '[Compose] Building base Gaussians', 0.88],
     [/\[Compose\] Composing Gaussians/, 'sharp-webgpu:compose-gaussians', '[Compose] Composing Gaussians', 0.89],
     [/\[Compose\] Writing PLY/, 'sharp-webgpu:write-ply', '[Compose] Writing PLY', 0.90],
@@ -825,15 +825,36 @@ async function runBrowserInference() {
     if (!result.ok) throw new Error(result.error || 'SHARP-WebGPU page reported failure');
 
     phase = 'downloading-ply';
+    emitAdapterProgress({
+      phase: 'sharp-webgpu:download-ply',
+      message: 'SHARP has a PLY link and Kaminos is downloading the splat file.',
+      routePhaseKind: 'final-artifact-download',
+      finalSplatReady: false,
+      progress: 0.91,
+    });
     await page.click('#download-ply');
     const downloadedPly = await waitForDownload();
     renameSync(downloadedPly, output);
 
     phase = 'capturing-depth-output';
+    emitAdapterProgress({
+      phase: 'sharp-webgpu:capture-depth',
+      message: 'Kaminos is capturing depth evidence for the generated splat.',
+      routePhaseKind: 'route-evidence-capture',
+      finalSplatReady: true,
+      progress: 0.94,
+    });
     const depthDataUrl = await page.$eval('#depth-canvas', canvas => canvas.toDataURL('image/png'));
     writeFileSync(depthPath, dataUrlToBuffer(depthDataUrl));
 
     phase = 'writing-metadata';
+    emitAdapterProgress({
+      phase: 'sharp-webgpu:write-metadata',
+      message: 'Kaminos is writing metadata and route evidence for the generated splat.',
+      routePhaseKind: 'route-evidence-write',
+      finalSplatReady: true,
+      progress: 0.96,
+    });
     const metadata = {
       schema: 'kaminos.sharp-webgpu-metadata.v0',
       backend: {

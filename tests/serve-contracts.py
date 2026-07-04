@@ -537,6 +537,93 @@ writeFileSync(report, JSON.stringify({
         assert current["latestProgress"]["message"] == "Running image encoder"
         assert current["latestProgress"]["progress"] == 0.42
         assert current["latestProgress"]["stream"] == "stdout"
+        assert current["currentRoutePhase"]["phase"] == "stage:run-sharp-image-to-splat:image-encoder"
+        assert current["routePhaseTimeline"][0]["phase"] == "stage:run-sharp-image-to-splat:image-encoder"
+        assert current["routePhaseTimeline"][0]["firstSeenAtMs"] > 0
+
+
+def test_compute_route_fire_progress_labels_gaussian_output_as_intermediate_phase():
+    event = serve._compute_route_fire_progress_event_from_line(
+        json.dumps({
+            "schema": "kaminos.pipeline-progress.v0",
+            "kind": "adapter-progress",
+            "phase": "sharp-webgpu:gaussian-output",
+            "message": "[Gaussian] Gaussian output produced",
+            "progress": 0.86,
+        }),
+        "stdout",
+    )
+
+    assert event["operatorMessage"] == "Intermediate Gaussian output is ready; SHARP still has to compose and write the PLY splat."
+    assert event["routePhaseKind"] == "intermediate-model-output"
+    assert event["finalSplatReady"] is False
+
+
+def test_compute_route_fire_snapshot_exposes_route_phase_timeline():
+    run = {
+        "run_id": "phase-test",
+        "status": "running",
+        "visual_phase": "burn",
+        "allows_full_burn": True,
+        "pipeline_id": "sharp-image-to-splat-live-v0",
+        "requested_route": "adapter.sharp-image-to-splat-live.v0",
+        "backend_class": "browser-webgpu",
+        "input_path": Path("/tmp/source.png"),
+        "output_dir": Path("/tmp/out"),
+        "report_path": Path("/tmp/out/pipeline-witness.json"),
+        "stdout_log_path": Path("/tmp/stdout.log"),
+        "stderr_log_path": Path("/tmp/stderr.log"),
+        "started_at": "2026-07-04T00:00:00Z",
+        "started_at_ms": 1000,
+        "finished_at": None,
+        "finished_at_ms": None,
+        "exit_code": None,
+        "error": None,
+        "pipeline_report": None,
+        "progress_events": [
+            {
+                "schema": "kaminos.pipeline-progress.v0",
+                "phase": "sharp-webgpu:gaussian-output",
+                "message": "[Gaussian] Gaussian output produced",
+                "operatorMessage": "Intermediate Gaussian output is ready; SHARP still has to compose and write the PLY splat.",
+                "routePhaseKind": "intermediate-model-output",
+                "finalSplatReady": False,
+                "receivedAt": "2026-07-04T00:00:02Z",
+                "receivedAtMs": 2000,
+            },
+            {
+                "schema": "kaminos.pipeline-progress.v0",
+                "phase": "sharp-webgpu:write-ply",
+                "message": "[Compose] Writing PLY",
+                "operatorMessage": "SHARP is writing the PLY splat file.",
+                "routePhaseKind": "final-artifact-write",
+                "finalSplatReady": False,
+                "receivedAt": "2026-07-04T00:00:05Z",
+                "receivedAtMs": 5000,
+            },
+        ],
+        "latest_progress": {
+            "schema": "kaminos.pipeline-progress.v0",
+            "phase": "sharp-webgpu:write-ply",
+            "message": "[Compose] Writing PLY",
+            "operatorMessage": "SHARP is writing the PLY splat file.",
+            "routePhaseKind": "final-artifact-write",
+            "finalSplatReady": False,
+            "receivedAt": "2026-07-04T00:00:05Z",
+            "receivedAtMs": 5000,
+        },
+        "progress_lock": None,
+    }
+
+    snapshot = serve._compute_route_fire_snapshot(run, now_ms=7000)
+    assert snapshot["currentRoutePhase"]["phase"] == "sharp-webgpu:write-ply"
+    assert snapshot["currentRoutePhase"]["operatorMessage"] == "SHARP is writing the PLY splat file."
+    assert snapshot["currentRoutePhase"]["quietMs"] == 2000
+    assert [row["phase"] for row in snapshot["routePhaseTimeline"]] == [
+        "sharp-webgpu:gaussian-output",
+        "sharp-webgpu:write-ply",
+    ]
+    assert snapshot["routePhaseTimeline"][0]["durationUntilNextMs"] == 3000
 
 
 def test_image_asset_inbox_and_upload_are_first_class_source_inputs():

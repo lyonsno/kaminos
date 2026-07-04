@@ -8158,6 +8158,15 @@ function computeRouteFireDurationText(ms) {
   return rest ? `${minutes}m ${rest}s` : `${minutes}m`;
 }
 
+function computeRouteFireOperatorMessage(progress = null) {
+  if (!progress) return '';
+  if (progress.operatorMessage) return progress.operatorMessage;
+  if (progress.phase === 'sharp-webgpu:gaussian-output' || /Gaussian output produced/.test(progress.message || '')) {
+    return 'Intermediate Gaussian output is ready; SHARP still has to compose and write the PLY splat.';
+  }
+  return progress.message || progress.phase || '';
+}
+
 function computeRouteFireProgressText(progress = null, run = null) {
   if (!progress) {
     if (run?.status === 'running') {
@@ -8176,10 +8185,9 @@ function computeRouteFireProgressText(progress = null, run = null) {
   if (run?.status === 'running' && Number.isFinite(run.progressQuietMs) && run.progressQuietMs > 15000) {
     pieces.push(`still working; last update ${computeRouteFireDurationText(run.progressQuietMs)} ago`);
   }
-  if (progress.message) {
-    pieces.push(progress.message);
-  } else if (progress.phase) {
-    pieces.push(progress.phase);
+  const operatorMessage = computeRouteFireOperatorMessage(progress);
+  if (operatorMessage) {
+    pieces.push(operatorMessage);
   }
   if (progress.stream) {
     pieces.push(progress.stream);
@@ -8197,8 +8205,9 @@ function computeRouteFireRunSummary(run = null, promoted = null) {
     if (progress && Number.isFinite(run?.progressQuietMs) && run.progressQuietMs > 15000) {
       return `SHARP is still working inside the browser adapter; no new milestone has arrived for ${computeRouteFireDurationText(run.progressQuietMs)}.`;
     }
-    if (progress?.message) {
-      return `SHARP is working on this image: ${progress.message}.`;
+    const operatorMessage = computeRouteFireOperatorMessage(progress);
+    if (operatorMessage) {
+      return `SHARP is working on this image: ${operatorMessage}`;
     }
     return 'SHARP is working on this image; the furnace is burning while the live route runs.';
   }
@@ -8241,7 +8250,10 @@ function renderComputeRouteFireRun(run = null) {
   if (progressEl) {
     const progressText = computeRouteFireProgressText(run?.latestProgress || null, run);
     progressEl.textContent = progressText;
-    progressEl.title = run?.latestProgress ? JSON.stringify(run.latestProgress) : '';
+    progressEl.title = run?.latestProgress ? JSON.stringify({
+      latestProgress: run.latestProgress,
+      currentRoutePhase: run.currentRoutePhase || null,
+    }) : '';
   }
   const button = document.getElementById('compute-route-fire-start');
   if (button) {

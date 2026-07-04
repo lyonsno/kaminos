@@ -270,11 +270,98 @@ def _compute_route_fire_progress_event_from_line(line, stream_name):
         return None
     if event.get("schema") != "kaminos.pipeline-progress.v0":
         return None
-    return {
+    return _enrich_compute_route_fire_progress_event({
         **event,
         "schema": "kaminos.pipeline-progress.v0",
         "kind": event.get("kind") or "pipeline-progress",
         "stream": stream_name,
+    })
+
+
+def _compute_route_fire_phase_truth(event):
+    phase = str(event.get("phase") or event.get("adapterPhase") or "")
+    message = str(event.get("message") or "")
+    if phase == "sharp-webgpu:gaussian-output" or "[Gaussian] Output:" in message or "Gaussian output produced" in message:
+        return {
+            "operatorMessage": "Intermediate Gaussian output is ready; SHARP still has to compose and write the PLY splat.",
+            "routePhaseKind": "intermediate-model-output",
+            "finalSplatReady": False,
+        }
+    phase_truth = {
+        "sharp-webgpu:write-ply": (
+            "SHARP is writing the PLY splat file.",
+            "final-artifact-write",
+            False,
+        ),
+        "sharp-webgpu:download-ply": (
+            "SHARP has a PLY link and Kaminos is downloading the splat file.",
+            "final-artifact-download",
+            False,
+        ),
+        "sharp-webgpu:capture-depth": (
+            "Kaminos is capturing depth evidence for the generated splat.",
+            "route-evidence-capture",
+            True,
+        ),
+        "sharp-webgpu:write-metadata": (
+            "Kaminos is writing metadata and route evidence for the generated splat.",
+            "route-evidence-write",
+            True,
+        ),
+        "stage:run-sharp-image-to-splat:output-written": (
+            "The PLY splat file is written; Kaminos is validating route evidence.",
+            "final-artifact-written",
+            True,
+        ),
+        "complete": (
+            "Kaminos is writing the final route bundle evidence.",
+            "route-evidence-write",
+            True,
+        ),
+    }
+    if phase in phase_truth:
+        operator_message, route_phase_kind, final_splat_ready = phase_truth[phase]
+        return {
+            "operatorMessage": operator_message,
+            "routePhaseKind": route_phase_kind,
+            "finalSplatReady": final_splat_ready,
+        }
+    if phase.startswith("sharp-webgpu:gaussian"):
+        return {
+            "operatorMessage": message or "SHARP is running the Gaussian model stage.",
+            "routePhaseKind": "model-inference",
+            "finalSplatReady": False,
+        }
+    if phase.startswith("sharp-webgpu:compose"):
+        return {
+            "operatorMessage": message or "SHARP is composing Gaussians into a splat artifact.",
+            "routePhaseKind": "artifact-compose",
+            "finalSplatReady": False,
+        }
+    if phase:
+        return {
+            "operatorMessage": message or phase,
+            "routePhaseKind": "route-progress",
+            "finalSplatReady": False,
+        }
+    return {
+        "operatorMessage": message,
+        "routePhaseKind": "route-progress",
+        "finalSplatReady": False,
+    }
+
+
+def _enrich_compute_route_fire_progress_event(event):
+    if not isinstance(event, dict):
+        return event
+    phase_truth = _compute_route_fire_phase_truth(event)
+    return {
+        **event,
+        "operatorMessage": event.get("operatorMessage") or phase_truth["operatorMessage"],
+        "routePhaseKind": event.get("routePhaseKind") or phase_truth["routePhaseKind"],
+        "finalSplatReady": event.get("finalSplatReady")
+        if isinstance(event.get("finalSplatReady"), bool)
+        else phase_truth["finalSplatReady"],
     }
 
 
@@ -320,8 +407,62 @@ def _capture_compute_route_fire_stream(run, pipe, stream_name, log_handle):
             pass
 
 
-def _compute_route_fire_snapshot(run):
-    now_ms = int(time.time() * 1000)
+def _compute_route_fire_phase_timeline(progress_events, now_ms):
+    rows = []
+    by_phase = {}
+    for event in progress_events:
+        if not isinstance(event, dict):
+            continue
+        phase = event.get("phase") or event.get("adapterPhase")
+        if not phase:
+            continue
+        received_ms = event.get("receivedAtMs")
+        if not isinstance(received_ms, int):
+            continue
+        if phase not in by_phase:
+            row = {
+                "phase": phase,
+                "routePhaseKind": event.get("routePhaseKind") or "route-progress",
+                "operatorMessage": event.get("operatorMessage") or event.get("message") or phase,
+                "message": event.get("message") or None,
+                "firstSeenAt": event.get("receivedAt"),
+                "firstSeenAtMs": received_ms,
+                "lastSeenAt": event.get("receivedAt"),
+                "lastSeenAtMs": received_ms,
+                "durationMs": 0,
+                "durationUntilNextMs": None,
+                "eventCount": 0,
+                "finalSplatReady": event.get("finalSplatReady") is True,
+            }
+            by_phase[phase] = row
+            rows.append(row)
+        row = by_phase[phase]
+        row["lastSeenAt"] = event.get("receivedAt") or row["lastSeenAt"]
+        row["lastSeenAtMs"] = received_ms
+        row["durationMs"] = max(0, int(row["lastSeenAtMs"]) - int(row["firstSeenAtMs"]))
+        row["eventCount"] += 1
+        row["operatorMessage"] = event.get("operatorMessage") or row["operatorMessage"]
+        row["message"] = event.get("message") or row["message"]
+        row["routePhaseKind"] = event.get("routePhaseKind") or row["routePhaseKind"]
+        row["finalSplatReady"] = row["finalSplatReady"] or event.get("finalSplatReady") is True
+    for index, row in enumerate(rows):
+        next_row = rows[index + 1] if index + 1 < len(rows) else None
+        end_ms = next_row["firstSeenAtMs"] if next_row else now_ms
+        row["durationUntilNextMs"] = max(0, int(end_ms) - int(row["firstSeenAtMs"]))
+    return rows
+
+
+def _compute_route_fire_current_phase(progress_events, now_ms):
+    timeline = _compute_route_fire_phase_timeline(progress_events, now_ms)
+    if not timeline:
+        return None
+    current = {**timeline[-1]}
+    current["quietMs"] = max(0, int(now_ms) - int(current["lastSeenAtMs"]))
+    return current
+
+
+def _compute_route_fire_snapshot(run, now_ms=None):
+    now_ms = int(now_ms if now_ms is not None else time.time() * 1000)
     report = run.get("pipeline_report")
     progress_lock = run.get("progress_lock")
     if progress_lock:
@@ -340,6 +481,8 @@ def _compute_route_fire_snapshot(run):
         if latest_progress_ms is not None
         else max(0, now_ms - int(started_at_ms))
     )
+    route_phase_timeline = _compute_route_fire_phase_timeline(progress_events, now_ms)
+    current_route_phase = _compute_route_fire_current_phase(progress_events, now_ms)
     return {
         "schema": COMPUTE_ROUTE_FIRE_RUN_SCHEMA,
         "runId": run["run_id"],
@@ -364,6 +507,8 @@ def _compute_route_fire_snapshot(run):
         "error": run.get("error"),
         "latestProgress": latest_progress,
         "progressEvents": progress_events,
+        "currentRoutePhase": current_route_phase,
+        "routePhaseTimeline": route_phase_timeline,
         "pipelineReport": report,
         "artifacts": _compute_route_fire_artifacts_from_report(report),
     }

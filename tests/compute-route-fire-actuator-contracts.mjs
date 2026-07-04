@@ -38,7 +38,10 @@ assert.match(index, /pollComputeRouteFireRun/, 'browser polls live route status 
 assert.match(index, /promoteComputeRouteFireOutput/, 'browser promotes completed route output before import');
 assert.match(index, /loadComputeRouteFireOutput/, 'browser can load the promoted route output into the scene');
 assert.match(index, /SHARP started on this image, but the model adapter failed before producing a splat\./, 'failed live adapter runs say no splat was produced in operator-facing language');
-assert.match(index, /SHARP is working on this image: \$\{progress\.message\}/, 'running live adapter summary can lead with native progress message');
+assert.match(index, /SHARP is working on this image: \$\{operatorMessage\}/, 'running live adapter summary can lead with human phase truth');
+assert.match(index, /progress\.operatorMessage/, 'running live adapter summary prefers human phase truth over raw adapter text');
+assert.match(index, /Intermediate Gaussian output is ready; SHARP still has to compose and write the PLY splat\./, 'Gaussian output milestone is labeled as intermediate instead of final splat completion');
+assert.match(index, /currentRoutePhase/, 'operator-facing route run keeps current route phase evidence from the server');
 assert.match(index, /SHARP is still working inside the browser adapter/, 'quiet live adapter runs say they are still running instead of looking frozen');
 assert.match(index, /routeCapability\.operatorMessage/, 'route capability summary leads with the server-provided human sentence');
 assert.match(index, /SHARP is not installed in this Kaminos checkout yet/, 'missing local SHARP route has human-primary UI language');
