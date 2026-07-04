@@ -20,8 +20,17 @@ PAIR_AUTHORITY = "frame-locked-render-scale-set-v0"
 IMAGE_AUTHORITY = "cdp-canvas-clip-capture-after-render-only-frozen-sim-state"
 
 
-def apply_limited_residual(base_image, residual, residualOutputLimit, residualApplicationMask=None):
-    scaled_residual = residual * 0.25
+def constrain_residual_color(residual, residualColorMode, chromaResidualScale):
+    if residualColorMode == "luma-chroma":
+        luma_residual = mx.mean(residual, axis=3, keepdims=True)
+        chroma_residual = residual - luma_residual
+        return luma_residual + chroma_residual * float(chromaResidualScale)
+    return residual
+
+
+def apply_limited_residual(base_image, residual, residualOutputLimit, residualApplicationMask=None, residualColorMode="rgb", chromaResidualScale=1.0):
+    color_residual = constrain_residual_color(residual, residualColorMode, chromaResidualScale)
+    scaled_residual = color_residual * 0.25
     if residualApplicationMask is not None:
         scaled_residual = scaled_residual * mx.clip(residualApplicationMask, 0.0, 1.0)
     if residualOutputLimit and residualOutputLimit > 0:
@@ -52,9 +61,11 @@ def feather_residual_mask(mask, featherRadius):
 
 
 class TinyResidualUpscaler(nn.Module):
-    def __init__(self, hidden_channels, input_channels, residual_output_limit):
+    def __init__(self, hidden_channels, input_channels, residual_output_limit, residual_color_mode, chroma_residual_scale):
         super().__init__()
         self.residualOutputLimit = float(residual_output_limit)
+        self.residualColorMode = residual_color_mode
+        self.chromaResidualScale = float(chroma_residual_scale)
         self.input = nn.Conv2d(input_channels, hidden_channels, kernel_size=3, padding=1)
         self.mid_a = nn.Conv2d(hidden_channels, hidden_channels, kernel_size=3, padding=1)
         self.mid_b = nn.Conv2d(hidden_channels, hidden_channels, kernel_size=3, padding=1)
@@ -68,13 +79,15 @@ class TinyResidualUpscaler(nn.Module):
         hidden = nn.relu(self.mid_a(hidden))
         hidden = nn.relu(self.mid_b(hidden))
         residual = self.output(hidden)
-        return apply_limited_residual(base_image, residual, self.residualOutputLimit, residualApplicationMask)
+        return apply_limited_residual(base_image, residual, self.residualOutputLimit, residualApplicationMask, self.residualColorMode, self.chromaResidualScale)
 
 
 class DirectResidualUpscaler(nn.Module):
-    def __init__(self, input_channels, residual_output_limit):
+    def __init__(self, input_channels, residual_output_limit, residual_color_mode, chroma_residual_scale):
         super().__init__()
         self.residualOutputLimit = float(residual_output_limit)
+        self.residualColorMode = residual_color_mode
+        self.chromaResidualScale = float(chroma_residual_scale)
         self.output = nn.Conv2d(input_channels, 3, kernel_size=3, padding=1)
         self.output.weight = mx.zeros_like(self.output.weight)
         self.output.bias = mx.zeros_like(self.output.bias)
@@ -82,13 +95,15 @@ class DirectResidualUpscaler(nn.Module):
     def __call__(self, image, residualApplicationMask=None):
         base_image = image[..., :3]
         residual = self.output(image)
-        return apply_limited_residual(base_image, residual, self.residualOutputLimit, residualApplicationMask)
+        return apply_limited_residual(base_image, residual, self.residualOutputLimit, residualApplicationMask, self.residualColorMode, self.chromaResidualScale)
 
 
 class HybridResidualUpscaler(nn.Module):
-    def __init__(self, hidden_channels, input_channels, residual_output_limit):
+    def __init__(self, hidden_channels, input_channels, residual_output_limit, residual_color_mode, chroma_residual_scale):
         super().__init__()
         self.residualOutputLimit = float(residual_output_limit)
+        self.residualColorMode = residual_color_mode
+        self.chromaResidualScale = float(chroma_residual_scale)
         self.direct_output = nn.Conv2d(input_channels, 3, kernel_size=3, padding=1)
         self.detail_input = nn.Conv2d(input_channels, hidden_channels, kernel_size=3, padding=1)
         self.detail_mid_a = nn.Conv2d(hidden_channels, hidden_channels, kernel_size=3, padding=1)
@@ -106,14 +121,16 @@ class HybridResidualUpscaler(nn.Module):
         detail = nn.relu(self.detail_mid_a(detail))
         detail = nn.relu(self.detail_mid_b(detail))
         detail_residual = self.detail_output(detail)
-        return apply_limited_residual(base_image, direct_residual + detail_residual, self.residualOutputLimit, residualApplicationMask)
+        return apply_limited_residual(base_image, direct_residual + detail_residual, self.residualOutputLimit, residualApplicationMask, self.residualColorMode, self.chromaResidualScale)
 
 
 class GatedDetailResidualUpscaler(nn.Module):
-    def __init__(self, hidden_channels, input_channels, detail_gate, residual_output_limit):
+    def __init__(self, hidden_channels, input_channels, detail_gate, residual_output_limit, residual_color_mode, chroma_residual_scale):
         super().__init__()
         self.detailGate = float(detail_gate)
         self.residualOutputLimit = float(residual_output_limit)
+        self.residualColorMode = residual_color_mode
+        self.chromaResidualScale = float(chroma_residual_scale)
         self.direct_output = nn.Conv2d(input_channels, 3, kernel_size=3, padding=1)
         self.detail_input = nn.Conv2d(input_channels, hidden_channels, kernel_size=3, padding=1)
         self.detail_mid_a = nn.Conv2d(hidden_channels, hidden_channels, kernel_size=3, padding=1)
@@ -131,7 +148,7 @@ class GatedDetailResidualUpscaler(nn.Module):
         detail = nn.relu(self.detail_mid_a(detail))
         detail = nn.relu(self.detail_mid_b(detail))
         detail_residual = self.detail_output(detail) * self.detailGate
-        return apply_limited_residual(base_image, direct_residual + detail_residual, self.residualOutputLimit, residualApplicationMask)
+        return apply_limited_residual(base_image, direct_residual + detail_residual, self.residualOutputLimit, residualApplicationMask, self.residualColorMode, self.chromaResidualScale)
 
 
 def parse_args():
@@ -164,6 +181,9 @@ def parse_args():
     parser.add_argument("--edge-gradient-loss-weight", dest="edgeGradientLossWeight", type=float, default=0.0)
     parser.add_argument("--outside-edge-residual-weight", dest="outsideEdgeResidualWeight", type=float, default=0.0)
     parser.add_argument("--residual-output-limit", dest="residualOutputLimit", type=float, default=0.0, help="Optional symmetric clamp on the scaled RGB residual before adding it to the low image; 0 disables the clamp.")
+    parser.add_argument("--residual-color-mode", dest="residualColorMode", choices=["rgb", "luma-chroma"], default="rgb", help="Optionally decompose learned residuals into luma plus scaled chroma before applying them.")
+    parser.add_argument("--chroma-residual-scale", dest="chromaResidualScale", type=float, default=1.0, help="Chroma multiplier used when --residual-color-mode=luma-chroma.")
+    parser.add_argument("--chroma-residual-loss-weight", dest="chromaResidualLossWeight", type=float, default=0.0, help="Optional active-edge penalty on chromatic residual energy.")
     parser.add_argument("--residual-application-mask-mode", dest="residualApplicationMaskMode", choices=["off", "active-edge-band", "soft-active-edge-band"], default="off", help="Optionally multiply the applied residual by the active edge-band mask; low-* edge-band modes are inference-available, target-derived modes are teacher-only upper bounds.")
     parser.add_argument("--residual-mask-feather-radius", dest="residualMaskFeatherRadius", type=int, default=0, help="Optional pixel radius for soft-active-edge-band residual application masks.")
     parser.add_argument("--residual-smoothness-loss-weight", dest="residualSmoothnessLossWeight", type=float, default=0.0, help="Optional smoothness loss on the applied residual to suppress ringing artifacts.")
@@ -189,19 +209,19 @@ def sha256_file(path):
     return digest.hexdigest()
 
 
-def make_model(model_arch, hidden_channels, input_channels, detail_gate, residual_output_limit):
+def make_model(model_arch, hidden_channels, input_channels, detail_gate, residual_output_limit, residual_color_mode, chroma_residual_scale):
     if model_arch == "tiny-conv":
-        return TinyResidualUpscaler(hidden_channels, input_channels, residual_output_limit)
+        return TinyResidualUpscaler(hidden_channels, input_channels, residual_output_limit, residual_color_mode, chroma_residual_scale)
     if model_arch == "direct-residual":
-        return DirectResidualUpscaler(input_channels, residual_output_limit)
+        return DirectResidualUpscaler(input_channels, residual_output_limit, residual_color_mode, chroma_residual_scale)
     if model_arch == "hybrid-residual":
-        return HybridResidualUpscaler(hidden_channels, input_channels, residual_output_limit)
+        return HybridResidualUpscaler(hidden_channels, input_channels, residual_output_limit, residual_color_mode, chroma_residual_scale)
     if model_arch == "gated-detail-residual":
-        return GatedDetailResidualUpscaler(hidden_channels, input_channels, detail_gate, residual_output_limit)
+        return GatedDetailResidualUpscaler(hidden_channels, input_channels, detail_gate, residual_output_limit, residual_color_mode, chroma_residual_scale)
     raise ValueError(f"unsupported model architecture: {model_arch}")
 
 
-def model_config(model_arch, hidden_channels, input_channels, condition_render_scale, scale_channel, detail_gate, residual_output_limit, residual_application_mask_mode, residual_mask_feather_radius):
+def model_config(model_arch, hidden_channels, input_channels, condition_render_scale, scale_channel, detail_gate, residual_output_limit, residual_application_mask_mode, residual_mask_feather_radius, residual_color_mode, chroma_residual_scale):
     return {
         "modelArch": model_arch,
         "hiddenChannels": hidden_channels,
@@ -212,6 +232,8 @@ def model_config(model_arch, hidden_channels, input_channels, condition_render_s
         "residualOutputLimit": residual_output_limit,
         "residualApplicationMaskMode": residual_application_mask_mode,
         "residualMaskFeatherRadius": residual_mask_feather_radius,
+        "residualColorMode": residual_color_mode,
+        "chromaResidualScale": chroma_residual_scale,
     }
 
 
@@ -259,6 +281,9 @@ def save_model_artifact(model, model_dir, config, args, corpus, metrics, effecti
             "edgeGradientLossWeight": args.edgeGradientLossWeight,
             "outsideEdgeResidualWeight": args.outsideEdgeResidualWeight,
             "residualOutputLimit": args.residualOutputLimit,
+            "residualColorMode": args.residualColorMode,
+            "chromaResidualScale": args.chromaResidualScale,
+            "chromaResidualLossWeight": args.chromaResidualLossWeight,
             "residualApplicationMaskMode": args.residualApplicationMaskMode,
             "residualMaskFeatherRadius": args.residualMaskFeatherRadius,
             "residualApplicationMaskAuthority": residual_application_mask_authority(args.residualApplicationMaskMode, args.edgeBandMode),
@@ -695,6 +720,12 @@ def residual_smoothness_loss_value(prediction, low_batch, edge_mask):
         masked_mse_value(dx_residual, mx.zeros_like(dx_residual), dx_mask)
         + masked_mse_value(dy_residual, mx.zeros_like(dy_residual), dy_mask)
     )
+
+
+def chroma_residual_loss_value(prediction, low_batch, edge_mask):
+    residual = prediction - rgb_channels(low_batch)
+    chroma_residual = residual - mx.mean(residual, axis=3, keepdims=True)
+    return masked_mse_value(chroma_residual, mx.zeros_like(chroma_residual), edge_mask)
 
 
 def edge_band_loss_value(prediction, target, low_batch, edge_mask, edgeLossWeight, edgeGradientLossWeight, outsideEdgeResidualWeight):
@@ -1173,6 +1204,8 @@ def main():
         raise ValueError("--edge-band-dilate must be non-negative")
     if args.residualMaskFeatherRadius < 0:
         raise ValueError("--residual-mask-feather-radius must be non-negative")
+    if args.chromaResidualScale < 0:
+        raise ValueError("--chroma-residual-scale must be non-negative")
     for label, value in [
         ("--edge-sampling-probability", args.edgeSamplingProbability),
         ("--edge-loss-weight", args.edgeLossWeight),
@@ -1180,6 +1213,7 @@ def main():
         ("--outside-edge-residual-weight", args.outsideEdgeResidualWeight),
         ("--residual-output-limit", args.residualOutputLimit),
         ("--residual-smoothness-loss-weight", args.residualSmoothnessLossWeight),
+        ("--chroma-residual-loss-weight", args.chromaResidualLossWeight),
     ]:
         if value < 0:
             raise ValueError(f"{label} must be non-negative")
@@ -1215,6 +1249,8 @@ def main():
         loaded_detail_gate = loaded_config.get("detailGate")
         detailGate = float(loaded_detail_gate) if loaded_detail_gate is not None else args.detailResidualGate
         residualOutputLimit = float(loaded_config.get("residualOutputLimit", args.residualOutputLimit))
+        residualColorMode = loaded_config.get("residualColorMode", args.residualColorMode)
+        chromaResidualScale = float(loaded_config.get("chromaResidualScale", args.chromaResidualScale))
         residualApplicationMaskMode = loaded_config.get("residualApplicationMaskMode", args.residualApplicationMaskMode)
         residualMaskFeatherRadius = int(loaded_config.get("residualMaskFeatherRadius", args.residualMaskFeatherRadius))
         modelConfigSource = "loadedModelArtifact"
@@ -1226,11 +1262,13 @@ def main():
         scaleChannel = "lowRenderScale" if conditionRenderScale else None
         detailGate = args.detailResidualGate
         residualOutputLimit = args.residualOutputLimit
+        residualColorMode = args.residualColorMode
+        chromaResidualScale = args.chromaResidualScale
         residualApplicationMaskMode = args.residualApplicationMaskMode
         residualMaskFeatherRadius = args.residualMaskFeatherRadius
         modelConfigSource = "cli"
 
-    model = make_model(modelArch, hiddenChannels, input_channels, detailGate, residualOutputLimit)
+    model = make_model(modelArch, hiddenChannels, input_channels, detailGate, residualOutputLimit, residualColorMode, chromaResidualScale)
     if loadedModelArtifact:
         model.load_weights(loadedModelArtifact["weightsPath"])
         mx.eval(model.parameters())
@@ -1244,6 +1282,8 @@ def main():
         residualOutputLimit,
         residualApplicationMaskMode,
         residualMaskFeatherRadius,
+        residualColorMode,
+        chromaResidualScale,
     )
     effectiveMaxSteps = 0 if args.evalOnly else args.maxSteps
     optimizer = optim.Adam(learning_rate=args.learning_rate)
@@ -1285,6 +1325,12 @@ def main():
         )
         if args.residualSmoothnessLossWeight > 0:
             total_loss = total_loss + float(args.residualSmoothnessLossWeight) * residual_smoothness_loss_value(
+                prediction,
+                low_batch,
+                edge_mask_batch,
+            )
+        if args.chromaResidualLossWeight > 0:
+            total_loss = total_loss + float(args.chromaResidualLossWeight) * chroma_residual_loss_value(
                 prediction,
                 low_batch,
                 edge_mask_batch,
@@ -1471,6 +1517,9 @@ def main():
         "edgeGradientLossWeight": args.edgeGradientLossWeight,
         "outsideEdgeResidualWeight": args.outsideEdgeResidualWeight,
         "residualOutputLimit": residualOutputLimit,
+        "residualColorMode": residualColorMode,
+        "chromaResidualScale": chromaResidualScale,
+        "chromaResidualLossWeight": args.chromaResidualLossWeight,
         "residualApplicationMaskMode": residualApplicationMaskMode,
         "residualMaskFeatherRadius": residualMaskFeatherRadius,
         "residualApplicationMaskAuthority": residual_application_mask_authority(residualApplicationMaskMode, args.edgeBandMode),
@@ -1532,6 +1581,9 @@ def main():
         "hiddenChannels": hiddenChannels,
         "detailGate": detailGate if modelArch == "gated-detail-residual" else None,
         "residualOutputLimit": residualOutputLimit,
+        "residualColorMode": residualColorMode,
+        "chromaResidualScale": chromaResidualScale,
+        "chromaResidualLossWeight": args.chromaResidualLossWeight,
         "residualApplicationMaskMode": residualApplicationMaskMode,
         "residualMaskFeatherRadius": residualMaskFeatherRadius,
         "residualApplicationMaskAuthority": residual_application_mask_authority(residualApplicationMaskMode, args.edgeBandMode),

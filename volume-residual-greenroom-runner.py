@@ -50,6 +50,9 @@ def parse_args():
     parser.add_argument("--edge-gradient-loss-weight", default="0")
     parser.add_argument("--outside-edge-residual-weight", default="0")
     parser.add_argument("--residual-output-limit", default="0")
+    parser.add_argument("--residual-color-mode", default="rgb")
+    parser.add_argument("--chroma-residual-scale", default="1.0")
+    parser.add_argument("--chroma-residual-loss-weight", default="0")
     parser.add_argument("--residual-application-mask-mode", default="off")
     parser.add_argument("--residual-mask-feather-radius", default="0")
     parser.add_argument("--residual-smoothness-loss-weight", default="0")
@@ -152,6 +155,12 @@ def build_child_command(args):
         str(args.outside_edge_residual_weight),
         "--residual-output-limit",
         str(args.residual_output_limit),
+        "--residual-color-mode",
+        str(args.residual_color_mode),
+        "--chroma-residual-scale",
+        str(args.chroma_residual_scale),
+        "--chroma-residual-loss-weight",
+        str(args.chroma_residual_loss_weight),
         "--residual-application-mask-mode",
         str(args.residual_application_mask_mode),
         "--residual-mask-feather-radius",
@@ -243,6 +252,9 @@ def main():
             final_receipt["edgeBandAuthority"] = report.get("edgeBandAuthority")
             final_receipt["outsideEdgeResidualMse"] = report.get("outsideEdgeResidualMse")
             final_receipt["residualOutputLimit"] = report.get("residualOutputLimit")
+            final_receipt["residualColorMode"] = report.get("residualColorMode")
+            final_receipt["chromaResidualScale"] = report.get("chromaResidualScale")
+            final_receipt["chromaResidualLossWeight"] = report.get("chromaResidualLossWeight")
             final_receipt["residualApplicationMaskMode"] = report.get("residualApplicationMaskMode")
             final_receipt["residualMaskFeatherRadius"] = report.get("residualMaskFeatherRadius")
             final_receipt["residualSmoothnessLossWeight"] = report.get("residualSmoothnessLossWeight")
