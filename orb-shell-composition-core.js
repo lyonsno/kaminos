@@ -8,6 +8,7 @@ export const ORB_SHELL_APERTURE_TANGENCY_WITNESS_MODE = 'aperture-tangency-witne
 export const ORB_SHELL_APERTURE_AWARE_TERMINUS_MODE = 'aperture-aware-terminus-v0';
 export const ORB_SHELL_APERTURE_ORBIT_CAPTURE_MODE = 'macro-aperture-orbit-capture-v0';
 export const ORB_SHELL_LOWER_SOCKET_RENDER_INVENTORY_MODE = 'lower-socket-semantic-render-inventory-v0';
+export const ORB_SHELL_SOCKET_TONGUE_PROVENANCE_MODE = 'socket-tongue-provenance-v0';
 export const ORB_SHELL_MACRO_MORPHOLOGY_INVENTORY_MODE = 'macro-curve-vs-promoted-body-diagnostic-v0';
 
 const TAU = Math.PI * 2;
@@ -4311,6 +4312,144 @@ function createLowerSocketRenderInventoryPlan(composition) {
   };
 }
 
+function socketTongueRepeatabilityInput(composition) {
+  return {
+    schema: 'SocketTongueRepeatabilityInput',
+    variantId: composition.effectiveVariation?.variantId || composition.controlledVariation?.variantId || 'baseline',
+    variationSeed: composition.effectiveVariation?.variationSeed ?? composition.controlledVariation?.variationSeed ?? 0,
+    variationLeafCount: composition.effectiveVariation?.variationLeafCount ?? composition.controlledVariation?.variationLeafCount ?? 10,
+    selectedMacroAssemblageIds: composition.macroAssemblageCountLaw?.selectedMacroAssemblageIds || composition.macroAssemblages.map(item => item.id),
+  };
+}
+
+function maxCapWidthExpansionRatio(terminalCaps = []) {
+  return terminalCaps.reduce((maxRatio, cap) => {
+    const min = cap.capWidthStats?.min || 0;
+    const max = cap.capWidthStats?.max || 0;
+    if (!min || !max) return maxRatio;
+    return Math.max(maxRatio, max / min);
+  }, 0);
+}
+
+function createSocketTongueProvenancePlan(composition) {
+  const targetAssemblage = 'lower-socket-keel';
+  const repeatabilityInputs = [socketTongueRepeatabilityInput(composition)];
+  const lowerSocket = composition.macroAssemblages.find(assemblage => assemblage.id === targetAssemblage);
+  const sideWalls = (composition.liveMacroSideWallPlan?.sideWalls || [])
+    .filter(wall => wall.parentAssemblage === targetAssemblage);
+  const terminalCaps = (composition.liveMacroSideWallPlan?.terminalCaps || [])
+    .filter(cap => cap.parentAssemblage === targetAssemblage);
+  const hiddenTerminalCaps = terminalCaps.filter(cap => cap.normalRenderVisible === false);
+  const inventoryRecords = (composition.lowerSocketRenderInventoryPlan?.expectedRecords || [])
+    .filter(record => record.parentAssemblage === targetAssemblage);
+
+  if (!lowerSocket?.macroPromotedBody) {
+    return {
+      schema: 'SocketTongueProvenancePlan',
+      mode: ORB_SHELL_SOCKET_TONGUE_PROVENANCE_MODE,
+      targetAssemblage,
+      diagnosticQuestion: 'what procedural source created the lower-left hooked socket tongue',
+      repeatabilityInputs,
+      candidates: [],
+      candidateCount: 0,
+      bestCandidateId: null,
+      supportingInventoryRecordIds: inventoryRecords.map(record => record.sourceId),
+      provenanceVerdict: 'socket-tongue-source-not-selected',
+      followupQuestions: [
+        'which selected stress inputs should intentionally request secondary socket tongues',
+      ],
+    };
+  }
+
+  const meanSideWallThickness = sideWalls.length
+    ? sideWalls.reduce((sum, wall) => sum + (wall.sideWallThicknessStats?.mean || 0), 0) / sideWalls.length
+    : 0;
+  const endCapWidthExpansionRatio = maxCapWidthExpansionRatio(terminalCaps);
+  const roleLaw = lowerSocket.lowerSocketFamilyRoleLaw || lowerSocket.macroPromotedBody.lowerSocketFamilyRoleLaw;
+  const plateLaw = lowerSocket.lowerSocketPlateBodyHonestyLaw || lowerSocket.macroPromotedBody.lowerSocketPlateBodyHonestyLaw;
+  const stripLaw = lowerSocket.lowerSocketStripHonestyLaw || lowerSocket.macroPromotedBody.lowerSocketStripHonestyLaw;
+  const scoreParts = [
+    roleLaw?.selectedRole === 'tuck-tongue' ? 0.26 : 0,
+    sideWalls.length >= 2 ? 0.18 : 0,
+    hiddenTerminalCaps.length >= 2 ? 0.18 : 0,
+    meanSideWallThickness > 0.045 ? 0.12 : 0,
+    endCapWidthExpansionRatio > 2 ? 0.18 : 0,
+    plateLaw ? 0.08 : 0,
+  ];
+  const candidateScore = clamp(scoreParts.reduce((sum, value) => sum + value, 0), 0, 1);
+  const candidate = {
+    schema: 'SocketTongueCandidate',
+    mode: ORB_SHELL_SOCKET_TONGUE_PROVENANCE_MODE,
+    id: `${targetAssemblage}-promoted-body-socket-tongue-candidate`,
+    candidateClass: 'secondary-underpass-socket-tongue-candidate',
+    provisionalDisposition: 'preserve-as-secondary-vocabulary-candidate',
+    parentAssemblage: targetAssemblage,
+    sourceClass: 'MacroPromotedBody',
+    sourceId: lowerSocket.macroPromotedBody.id,
+    sourcePath: 'macroAssemblages.lower-socket-keel.macroPromotedBody',
+    roleLawId: roleLaw?.id || null,
+    stripHonestyLawId: stripLaw?.id || null,
+    plateBodyHonestyLawId: plateLaw?.id || null,
+    sideWallIds: sideWalls.map(wall => wall.id),
+    hiddenTerminalCapIds: hiddenTerminalCaps.map(cap => cap.id),
+    supportingInventoryRecordIds: inventoryRecords.map(record => record.sourceId),
+    supportingEvidenceClasses: [
+      'MacroPromotedBody',
+      ...(sideWalls.length ? ['LiveMacroSideWall'] : []),
+      ...(terminalCaps.length ? ['LiveMacroTerminalCap'] : []),
+      ...(roleLaw ? ['LowerSocketFamilyRoleLaw'] : []),
+      ...(stripLaw ? ['LowerSocketStripHonestyLaw'] : []),
+      ...(plateLaw ? ['LowerSocketPlateBodyHonestyLaw'] : []),
+    ],
+    whyInteresting: [
+      'hooked-lower-socket-return',
+      'narrow-subordinate-underpass-body',
+      'socket-adjacent-secondary-anatomy',
+      'visible-signal-emerged-from-lawful-lower-socket-stack',
+    ],
+    notMacroLamellaBecause: [
+      roleLaw?.selectedRole === 'tuck-tongue' ? 'selected-role-is-tuck-tongue' : 'not-selected-as-primary-macro-family',
+      hiddenTerminalCaps.length ? 'hidden-terminal-caps-deny-independent-objecthood' : 'terminal-cap-authority-not-full-objecthood',
+      'source-is-subordinate-lower-socket-keel',
+      'requires-future-receiver-or-aperture-owner-before-final-tuck',
+    ],
+    anatomyMetrics: {
+      schema: 'SocketTongueAnatomyMetrics',
+      sideWallCount: sideWalls.length,
+      hiddenTerminalCapCount: hiddenTerminalCaps.length,
+      terminalCapCount: terminalCaps.length,
+      meanSideWallThickness,
+      sideWallThicknessRelativeVariationMax: sideWalls.reduce((max, wall) => Math.max(max, wall.sideWallThicknessStats?.relativeVariation || 0), 0),
+      endCapWidthExpansionRatio,
+      visibleAuthority: lowerSocket.macroPromotedBody.visibleAuthority || null,
+      promotedBodyScale: lowerSocket.macroPromotedBody.promotedBodyScale || null,
+      terminalWidthScale: lowerSocket.macroPromotedBody.sideSilhouettePolicy?.terminalWidthScale || null,
+    },
+    candidateScore,
+    repeatabilityInputs,
+  };
+
+  return {
+    schema: 'SocketTongueProvenancePlan',
+    mode: ORB_SHELL_SOCKET_TONGUE_PROVENANCE_MODE,
+    targetAssemblage,
+    diagnosticQuestion: 'what procedural source created the lower-left hooked socket tongue',
+    repeatabilityInputs,
+    candidates: [candidate],
+    candidateCount: 1,
+    bestCandidateId: candidate.id,
+    supportingInventoryRecordIds: inventoryRecords.map(record => record.sourceId),
+    provenanceVerdict: candidateScore >= 0.72
+      ? 'socket-tongue-candidate-source-identified'
+      : 'socket-tongue-source-present-but-not-yet-coherent',
+    followupQuestions: [
+      'how should secondary socket tongues intentionally attach to aperture/socket contour owners',
+      'which receiver owns the underpass or latch when the lower socket tongue disappears',
+      'which variation knobs request this vocabulary without turning it into a full macro lamella',
+    ],
+  };
+}
+
 function sampleEarlySphereCurvePoint(assemblage, t, radius = 1.045) {
   const control = assemblage.spine.control;
   const torsion = assemblage.macroTorsionField;
@@ -4745,6 +4884,7 @@ export function applyControlledOrbShellVariation(composition, descriptor) {
   next.lamellarPlateBoundaryPlan = createLamellarPlateBoundaryPlan(next);
   next.lamellarInnerReturnPlan = createLamellarInnerReturnPlan(next);
   next.lowerSocketRenderInventoryPlan = createLowerSocketRenderInventoryPlan(next);
+  next.socketTongueProvenancePlan = createSocketTongueProvenancePlan(next);
   next.apertureOrbitCaptureWitnessPlan = createApertureOrbitCaptureWitnessPlan(next);
   next.macroMorphologyInventory = createMacroMorphologyInventory(next);
   next.frontApertureOwnership.effectiveVariation = frontParameters;
@@ -6885,6 +7025,10 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
       lowerSocketRenderInventoryPlan: composition.lowerSocketRenderInventoryPlan,
       lowerSocketRenderInventoryExpectedClasses: composition.lowerSocketRenderInventoryPlan?.expectedRenderClasses || [],
       lowerSocketRenderInventoryExpectedRecordCount: composition.lowerSocketRenderInventoryPlan?.expectedRecordCount || 0,
+      SocketTongueProvenancePlan: composition.socketTongueProvenancePlan,
+      socketTongueProvenancePlan: composition.socketTongueProvenancePlan,
+      socketTongueCandidateCount: composition.socketTongueProvenancePlan?.candidateCount || 0,
+      socketTongueBestCandidateId: composition.socketTongueProvenancePlan?.bestCandidateId || null,
       MacroContactMap: composition.macroContactMap,
       macroContactMap: composition.macroContactMap,
       macroContactCount: composition.macroContactMap?.contactCount || 0,
@@ -7633,6 +7777,11 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
         lowerSocketRenderInventory: lowerSocketSemanticRenderInventory(),
         lowerSocketRenderInventoryExpectedClasses: composition.lowerSocketRenderInventoryPlan?.expectedRenderClasses || [],
         lowerSocketRenderInventoryExpectedRecordCount: composition.lowerSocketRenderInventoryPlan?.expectedRecordCount || 0,
+        SocketTongueProvenancePlan: composition.socketTongueProvenancePlan,
+        socketTongueProvenancePlan: composition.socketTongueProvenancePlan,
+        SocketTongueCandidate: composition.socketTongueProvenancePlan?.candidates || [],
+        socketTongueCandidateCount: composition.socketTongueProvenancePlan?.candidateCount || 0,
+        socketTongueBestCandidateId: composition.socketTongueProvenancePlan?.bestCandidateId || null,
         MacroContactMap: composition.macroContactMap,
         macroContactMap: composition.macroContactMap,
         MacroContactSample: composition.macroContactMap?.contacts || [],
