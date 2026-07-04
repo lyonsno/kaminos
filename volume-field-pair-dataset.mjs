@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { closeSync, mkdirSync, openSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
-import { execFileSync, spawnSync } from 'node:child_process';
+import { execFileSync, spawn, spawnSync } from 'node:child_process';
 
 const DATASET_SCHEMA = 'kaminos.volume.field-pair-dataset.v0';
 const FIELD_PROJECTION_TENSOR_SCHEMA = 'kaminos.volume.field-projection-tensor.v0';
@@ -17,6 +17,8 @@ const SEQUENTIAL_PAIR_AUTHORITY = 'route-paired-sequential-field-readbacks-not-f
 const DETERMINISTIC_REPLAY_PAIR_AUTHORITY = 'deterministic-replay-same-route-controls-fixed-step-not-state-transfer';
 const DETERMINISTIC_REPLAY_IDENTITY = 'deterministic-replay-same-route-controls-fixed-step-v0';
 const FIELD_AUTHORITY = 'webgpu-copy-src-readback-simReadback-summary-and-majorant';
+const WITNESS_BROWSER_REUSE_IDENTITY = 'shared-headful-cdp-browser-v0';
+const WITNESS_BROWSER_ATTACH_IDENTITY = 'attach-or-launch-shared-cdp-browser-v0';
 const DEFAULT_BASE_URL = 'http://127.0.0.1:8097/?kaminos_volume_smoke=1&volume_scene=tall_plume&volume_tall_preset=operator_fire_0622&volume_resolution=128&volume_majorant_grid=48&volume_steps=148&volume_adaptive_rays=0.75&volume_density=3.05&volume_fire=0.50&volume_radiance=3&volume_absorption=0&volume_glow=2.5&volume_smoke=2.8&volume_curl=3.5&volume_microdetail=2.5&volume_interface_shred=0&volume_fire_licks=0&volume_projection=1.5&volume_speed=5&volume_fire_scale=0.59&volume_detail_scale=0.45&volume_plume_height=2.2&volume_wind_strength=0&volume_wind_angle=180&volume_wind_height=-0.8&volume_input_radius=0.11&volume_flow_rate=0.35&volume_reaction_fuel=1&volume_majorant_cadence=1&volume_pressure_iterations=2&volume_pressure_strategy=global&volume_sim_profile=1&volume_temporal_accum=0&volume_temporal_jitter=0&volume_history_clamp=1&volume_occupancy_skip=0.1&volume_majorant_skip=0&volume_majorant_smooth=0.1&volume_majorant_guard=0.3';
 const SUPPORTED_GRIDS = [96, 128, 160];
 const SUPPORTED_MAJORANT_GRIDS = [24, 32, 48];
@@ -85,6 +87,134 @@ function writeJson(path, payload) {
 
 function readJson(path) {
   return JSON.parse(readFileSync(path, 'utf8'));
+}
+
+function delay(ms) {
+  return new Promise((resolveDelay) => setTimeout(resolveDelay, ms));
+}
+
+async function cdpFetchForPort(port, path, options) {
+  const resp = await fetch(`http://127.0.0.1:${port}${path}`, options);
+  if (!resp.ok) throw new Error(`CDP ${path} failed ${resp.status}`);
+  return resp.json();
+}
+
+async function waitForCdpPort(port) {
+  for (let index = 0; index < 80; index += 1) {
+    try {
+      return await cdpFetchForPort(port, '/json/version');
+    } catch {
+      await delay(125);
+    }
+  }
+  throw new Error(`shared witness browser CDP endpoint did not open on port ${port}`);
+}
+
+function wsRequest(ws, method, params = {}) {
+  const id = ws._nextId = (ws._nextId || 0) + 1;
+  ws.send(JSON.stringify({ id, method, params }));
+  return new Promise((resolveReq, rejectReq) => {
+    const onMessage = (event) => {
+      const msg = JSON.parse(String(event.data));
+      if (msg.id !== id) return;
+      ws.removeEventListener('message', onMessage);
+      if (msg.error) rejectReq(new Error(`${method}: ${msg.error.message}`));
+      else resolveReq(msg.result);
+    };
+    ws.addEventListener('message', onMessage);
+  });
+}
+
+function waitForWebSocketOpen(ws) {
+  return new Promise((resolveOpen, rejectOpen) => {
+    ws.addEventListener('open', resolveOpen, { once: true });
+    ws.addEventListener('error', () => rejectOpen(new Error('WebSocket open failed')), { once: true });
+  });
+}
+
+function makeWitnessBrowserSession({ enabled, port, userDataDir, windowSize, initialUrl }) {
+  return {
+    identity: WITNESS_BROWSER_REUSE_IDENTITY,
+    attachIdentity: WITNESS_BROWSER_ATTACH_IDENTITY,
+    enabled,
+    mode: enabled ? 'dataset-owned-shared-headful-cdp-browser' : 'per-capture-witness-browser',
+    port,
+    userDataDir,
+    windowSize,
+    initialUrl,
+    launchPolicy: enabled
+      ? 'launch-once-attach-many-cleanup-once'
+      : 'volume-witness-launches-and-closes-chrome-per-capture',
+    focusStealMitigation: enabled
+      ? 'one-headful-window-per-corpus-run-no-page-bringToFront-during-reused-captures'
+      : 'none',
+  };
+}
+
+async function startWitnessBrowserSession(session) {
+  if (!session?.enabled) return { ...session, status: 'disabled' };
+  const chrome = process.env.KAMINOS_CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+  const proc = spawn(chrome, [
+    `--remote-debugging-port=${session.port}`,
+    `--user-data-dir=${session.userDataDir}`,
+    '--no-first-run',
+    '--disable-background-timer-throttling',
+    '--disable-renderer-backgrounding',
+    `--window-size=${session.windowSize}`,
+    session.initialUrl,
+  ], { stdio: 'ignore' });
+  const startedAt = new Date().toISOString();
+  try {
+    const version = await waitForCdpPort(session.port);
+    return {
+      ...session,
+      status: 'started',
+      startedAt,
+      browser: version.Browser || null,
+      webSocketDebuggerUrl: version.webSocketDebuggerUrl || null,
+      pid: proc.pid,
+      process: proc,
+    };
+  } catch (error) {
+    proc.kill('SIGTERM');
+    throw error;
+  }
+}
+
+async function closeCdpBrowser(port) {
+  const version = await cdpFetchForPort(port, '/json/version');
+  if (!version.webSocketDebuggerUrl) return false;
+  const ws = new WebSocket(version.webSocketDebuggerUrl);
+  await waitForWebSocketOpen(ws);
+  try {
+    await wsRequest(ws, 'Browser.close');
+  } finally {
+    ws.close();
+  }
+  return true;
+}
+
+async function cleanupWitnessBrowserSession(session) {
+  if (!session?.enabled || session.status !== 'started') return { ...session, cleanupStatus: 'not-needed' };
+  let browserCloseSent = false;
+  let processKillSent = false;
+  try {
+    browserCloseSent = await closeCdpBrowser(session.port);
+  } catch {
+    browserCloseSent = false;
+  }
+  if (session.process && !session.process.killed) {
+    session.process.kill('SIGTERM');
+    processKillSent = true;
+  }
+  const { process: _process, ...serializableSession } = session;
+  return {
+    ...serializableSession,
+    cleanupStatus: 'closed',
+    closedAt: new Date().toISOString(),
+    browserCloseSent,
+    processKillSent,
+  };
 }
 
 function gitValue(args, fallback = null) {
@@ -902,7 +1032,7 @@ function summarizeFieldEvidence(witness, plan) {
   };
 }
 
-function makeCapturePlan({ pairId, role, grid, majorantGrid, route, pairDir, debugPort, settleMs, windowSize, evidenceMode, deterministicReplay, fieldTileExport }) {
+function makeCapturePlan({ pairId, role, grid, majorantGrid, route, pairDir, debugPort, settleMs, windowSize, evidenceMode, deterministicReplay, fieldTileExport, witnessBrowserSession }) {
   const slug = `${pairId}-${role}-${gridSlug(grid)}`;
   const out = resolve(pairDir, `${slug}.png`);
   const report = resolve(pairDir, `${slug}.json`);
@@ -943,6 +1073,13 @@ function makeCapturePlan({ pairId, role, grid, majorantGrid, route, pairDir, deb
       command.push('--field-tile-spatial-bin-ids', fieldTileExport.spatialBinIds.join(','));
     }
   }
+  if (witnessBrowserSession?.enabled) {
+    command.push(
+      '--reuse-browser', '1',
+      '--keep-browser-open', '1',
+      '--user-data-dir', witnessBrowserSession.userDataDir
+    );
+  }
   return {
     slug,
     role,
@@ -956,6 +1093,14 @@ function makeCapturePlan({ pairId, role, grid, majorantGrid, route, pairDir, deb
     fieldTileExportArtifact,
     deterministicReplay: deterministicReplay?.enabled ? { ...deterministicReplay } : null,
     fieldTileExport: fieldTileExport?.enabled ? { ...fieldTileExport } : null,
+    witnessBrowserSession: witnessBrowserSession?.enabled ? {
+      identity: witnessBrowserSession.identity,
+      attachIdentity: witnessBrowserSession.attachIdentity,
+      enabled: true,
+      port: witnessBrowserSession.port,
+      userDataDir: witnessBrowserSession.userDataDir,
+      launchPolicy: witnessBrowserSession.launchPolicy,
+    } : null,
     stdout,
     stderr,
     command,
@@ -1247,7 +1392,7 @@ function routeReplayCellAllowed(routeReplayViabilityFilter, routeVariantIdentity
     .includes(routeReplayIdentity(routeVariantIdentity, replayStateIdentity));
 }
 
-function runRouteVariantPreflights({ enabled, continueOnFailure, routeReplayViabilityFilter, routeVariants, deterministicReplayStates, lowGrids, majorantGrid, baseUrl, outDir, debugPort, settleMs, windowSize, evidenceMode, cwd, captureRetryPolicy }) {
+function runRouteVariantPreflights({ enabled, continueOnFailure, routeReplayViabilityFilter, routeVariants, deterministicReplayStates, lowGrids, majorantGrid, baseUrl, outDir, debugPort, settleMs, windowSize, evidenceMode, cwd, captureRetryPolicy, witnessBrowserSession }) {
   if (!enabled) {
     const receipts = [];
     return {
@@ -1277,12 +1422,13 @@ function runRouteVariantPreflights({ enabled, continueOnFailure, routeReplayViab
         majorantGrid,
         route,
         pairDir,
-        debugPort: debugPort + 10000 + preflightIndex,
+        debugPort: witnessBrowserSession?.enabled ? witnessBrowserSession.port : debugPort + 10000 + preflightIndex,
         settleMs,
         windowSize,
         evidenceMode,
         deterministicReplay: replayState.deterministicReplay,
         fieldTileExport: { enabled: false },
+        witnessBrowserSession,
       });
       try {
         const effective = runCapture(plan, cwd, captureRetryPolicy);
@@ -1364,6 +1510,14 @@ const settleMs = Number(args.get('--settle-ms') || 8000);
 const windowSize = String(args.get('--window-size') || '1280,960');
 const debugPort = Number(args.get('--debug-port') || 9700);
 const evidenceMode = String(args.get('--evidence-mode') || 'performance');
+const reuseWitnessBrowser = args.has('--reuse-witness-browser') || !args.has('--no-reuse-witness-browser');
+const witnessBrowserSession = makeWitnessBrowserSession({
+  enabled: reuseWitnessBrowser,
+  port: debugPort,
+  userDataDir: resolve(args.get('--witness-browser-user-data-dir') || `/tmp/kaminos-field-pair-witness-profile-${debugPort}`),
+  windowSize,
+  initialUrl: applyRouteVariant(baseUrl, routeVariants[0]),
+});
 const deterministicReplaySteps = Math.max(0, Math.floor(Number(args.get('--deterministic-replay-steps') || 0)));
 const deterministicReplayTimeStepMs = Number(args.get('--deterministic-replay-time-step-ms') || (1000 / 60));
 const deterministicReplayStartMs = Number(args.get('--deterministic-replay-start-ms') || 1000);
@@ -1424,6 +1578,8 @@ const allPairs = routeVariants.flatMap((routeVariant, variantIndex) => determini
   const pairDir = resolve(outDir, pairId);
   const lowRoute = routeWithGrid(variantBaseUrl, lowGrid, majorantGrid);
   const highRoute = routeWithGrid(variantBaseUrl, highGrid, majorantGrid);
+  const lowDebugPort = witnessBrowserSession.enabled ? witnessBrowserSession.port : debugPort + pairIndex * 2;
+  const highDebugPort = witnessBrowserSession.enabled ? witnessBrowserSession.port : debugPort + pairIndex * 2 + 1;
   return {
     pairId,
     routeReplayIdentity: routeReplayIdentity(routeVariant.routeVariantIdentity, replayState.replayStateIdentity),
@@ -1445,12 +1601,13 @@ const allPairs = routeVariants.flatMap((routeVariant, variantIndex) => determini
       majorantGrid,
       route: lowRoute,
       pairDir,
-      debugPort: debugPort + pairIndex * 2,
+      debugPort: lowDebugPort,
       settleMs,
       windowSize,
       evidenceMode,
       deterministicReplay: replayState.deterministicReplay,
       fieldTileExport,
+      witnessBrowserSession,
     }),
     high: makeCapturePlan({
       pairId,
@@ -1459,12 +1616,13 @@ const allPairs = routeVariants.flatMap((routeVariant, variantIndex) => determini
       majorantGrid,
       route: highRoute,
       pairDir,
-      debugPort: debugPort + pairIndex * 2 + 1,
+      debugPort: highDebugPort,
       settleMs,
       windowSize,
       evidenceMode,
       deterministicReplay: replayState.deterministicReplay,
       fieldTileExport,
+      witnessBrowserSession,
     }),
   };
 })));
@@ -1501,6 +1659,10 @@ const manifest = {
   pairAuthority,
   fieldAuthority: FIELD_AUTHORITY,
   deterministicReplay,
+  witnessBrowserSession: {
+    ...witnessBrowserSession,
+    status: dryRun ? 'not-run-dry-run' : (witnessBrowserSession.enabled ? 'pending' : 'disabled'),
+  },
   captureRetryPolicy,
   routeVariantPreflight: {
     schema: ROUTE_VARIANT_PREFLIGHT_SCHEMA,
@@ -1543,7 +1705,38 @@ const manifest = {
 
 writeJson(manifestPath, { dataset: manifest });
 
-if (!dryRun) {
+let startedWitnessBrowserSession = null;
+if (!dryRun && witnessBrowserSession.enabled) {
+  try {
+    startedWitnessBrowserSession = await startWitnessBrowserSession(witnessBrowserSession);
+    const { process: _process, ...serializableSession } = startedWitnessBrowserSession;
+    manifest.witnessBrowserSession = serializableSession;
+    manifest.updatedAt = new Date().toISOString();
+    writeJson(manifestPath, { dataset: manifest });
+  } catch (error) {
+    manifest.status = 'failed';
+    manifest.witnessBrowserSession = {
+      ...witnessBrowserSession,
+      status: 'failed',
+      failurePhase: 'witness-browser-session-launch',
+      error: error.message,
+    };
+    manifest.failures.push({
+      code: 'witness-browser-session-launch-failed',
+      failurePhase: 'witness-browser-session-launch',
+      message: error.message,
+      details: {
+        port: witnessBrowserSession.port,
+        userDataDir: witnessBrowserSession.userDataDir,
+        launchPolicy: witnessBrowserSession.launchPolicy,
+      },
+    });
+    manifest.updatedAt = new Date().toISOString();
+    writeJson(manifestPath, { dataset: manifest });
+  }
+}
+
+if (!dryRun && !manifest.failures.length) {
   try {
     manifest.routeVariantPreflight = runRouteVariantPreflights({
       enabled: routeVariantPreflightEnabled,
@@ -1561,6 +1754,7 @@ if (!dryRun) {
       evidenceMode,
       cwd,
       captureRetryPolicy,
+      witnessBrowserSession,
     });
     if (!preflightOnly && manifest.routeVariantPreflight.viabilitySummary.failedCells > 0) {
       manifest.failures.push({
@@ -1646,6 +1840,12 @@ if (!dryRun && !preflightOnly && !manifest.failures.length) {
     manifest.updatedAt = new Date().toISOString();
     writeJson(manifestPath, { dataset: manifest });
   }
+}
+
+if (!dryRun && witnessBrowserSession.enabled) {
+  manifest.witnessBrowserSession = await cleanupWitnessBrowserSession(startedWitnessBrowserSession || manifest.witnessBrowserSession);
+  manifest.updatedAt = new Date().toISOString();
+  writeJson(manifestPath, { dataset: manifest });
 }
 
 console.log(JSON.stringify({ dataset: manifest }, null, 2));

@@ -1611,6 +1611,10 @@ assert.match(fieldPairDataset, /captureRetryPolicy/, 'field-pair dataset records
 assert.match(fieldPairDataset, /captureAttempts/, 'field-pair dataset records every witness capture attempt instead of hiding retry history');
 assert.match(fieldPairDataset, /attemptIndex/, 'field-pair dataset records capture attempt indexes for retry provenance');
 assert.match(fieldPairDataset, /capture-attempts-exhausted/, 'field-pair dataset fails loudly when all capture attempts are exhausted');
+assert.match(fieldPairDataset, /--reuse-witness-browser/, 'field-pair dataset can reuse one headful witness browser across a corpus run');
+assert.match(fieldPairDataset, /shared-headful-cdp-browser-v0/, 'field-pair dataset records the shared headful CDP browser reuse policy');
+assert.match(fieldPairDataset, /witnessBrowserSession/, 'field-pair dataset records effective witness browser session identity in the manifest');
+assert.match(fieldPairDataset, /cleanupWitnessBrowserSession/, 'field-pair dataset closes the shared witness browser once after corpus capture instead of per frame');
 assert.match(fieldPairDataset, /--preflight-only/, 'field-pair dataset can classify route/replay viability without pretending to capture a trainable corpus');
 assert.match(fieldPairDataset, /--route-variant-preflight-continue-on-failure/, 'field-pair dataset can continue route/replay preflights to preserve a full pass/fail matrix');
 assert.match(fieldPairDataset, /viabilitySummary/, 'field-pair dataset summarizes route/replay preflight viability counts in the manifest');
@@ -1669,6 +1673,10 @@ assert.match(fieldResidualProbe, /targetChannelIndexes/, 'field residual probe r
 assert.match(fieldResidualProbe, /--artifact-dir/, 'field residual probe can write offline residual application artifacts without touching rendering');
 assert.match(fieldResidualProbe, /kaminos.volume.field-residual-application-artifact.v0/, 'field residual application artifacts carry a stable schema identity');
 assert.match(fieldResidualProbe, /residualApplicationArtifact/, 'field residual probe reports the residual application artifact manifest path and authority');
+
+assert.match(witness, /--reuse-browser/, 'volume witness can attach to an existing headful browser for repeated capture');
+assert.match(witness, /attach-or-launch-shared-cdp-browser-v0/, 'volume witness names the attach-or-launch shared browser policy');
+assert.match(witness, /keepBrowserOpen/, 'volume witness can leave the shared browser alive for the dataset runner instead of killing it per capture');
 
 const fieldResidualArtifactEvaluatorPath = join(root, 'volume-field-residual-artifact-evaluator.py');
 assert.ok(existsSync(fieldResidualArtifactEvaluatorPath), 'volume field residual artifact evaluator exists');
