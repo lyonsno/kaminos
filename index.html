@@ -7932,9 +7932,10 @@ async function initScene() {
     const motionTemporalActive = updateGeneratedPoseTemporalFrame(performance.now() / 1000);
     const forgeHostActive = updateForgeHostStationFrame(performance.now() / 1000);
     const volumeBridgeActive = volumeBridge ? volumeBridge.update() === true : false;
-    const mainRendererNeeded = !volumeSmokeRouteActive || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || motionOutputMapActive || motionTemporalActive || forgeHostActive;
+    const volumeSceneContextActive = volumeSceneContext?.debugState?.()?.visible === true;
+    const mainRendererNeeded = !volumeSmokeRouteActive || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || motionOutputMapActive || motionTemporalActive || forgeHostActive || volumeBridgeActive || volumeSceneContextActive;
 
-    if (mainRendererNeeded && (needsRender || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || motionOutputMapActive || motionTemporalActive || forgeHostActive || volumeBridgeActive || idleFrames < IDLE_THRESHOLD)) {
+    if (mainRendererNeeded && (needsRender || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || motionOutputMapActive || motionTemporalActive || forgeHostActive || volumeBridgeActive || volumeSceneContextActive || idleFrames < IDLE_THRESHOLD)) {
       const t0 = performance.now();
 
       renderPipeline.render();
@@ -15220,7 +15221,7 @@ function createVolumeMainRendererBridge() {
       const sceneContextActive = volumeSceneContext?.debugState?.()?.visible === true;
       mesh.visible = active && !sceneContextActive;
       if (!active) return false;
-      if (sceneContextActive) return true;
+      if (sceneContextActive) return false;
       const requestedFilter = state.volumeReconstructionStyle === 'nearest-css-upscale' ? THREE.NearestFilter : THREE.LinearFilter;
       if (sourceTexture.magFilter !== requestedFilter || sourceTexture.minFilter !== requestedFilter) {
         sourceTexture.magFilter = requestedFilter;

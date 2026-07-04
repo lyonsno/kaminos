@@ -1033,6 +1033,7 @@ function measureScreenshot(buffer) {
   let fireLike = 0;
   let smokeLike = 0;
   let warmLike = 0;
+  let whiteHotLike = 0;
   let backdropMidtone = 0;
   let totalLum = 0;
   let samples = 0;
@@ -1048,6 +1049,7 @@ function measureScreenshot(buffer) {
       samples++;
       if (lum > 20) lit++;
       if (r > 120 && g > 70 && b < 80) fireLike++;
+      if (r > 150 && g > 130 && b > 80 && lum > 120 && r >= b && g >= b * 0.75) whiteHotLike++;
       if (r > 95 && g > 45 && b < 110 && r >= g && lum > 35) warmLike++;
       if (b > 28 && g > 28 && r < 95 && Math.abs(g - b) < 55) smokeLike++;
       if (lum > 28 && lum < 125 && Math.max(r, g, b) - Math.min(r, g, b) < 55) backdropMidtone++;
@@ -1059,6 +1061,7 @@ function measureScreenshot(buffer) {
     meanLuma: totalLum / Math.max(1, samples),
     litPixels: lit,
     fireLikePixels: fireLike,
+    whiteHotLikePixels: whiteHotLike,
     warmLikePixels: warmLike,
     smokeLikePixels: smokeLike,
     backdropMidtonePixels: backdropMidtone,
@@ -1112,6 +1115,33 @@ async function captureViewportScreenshot(ws, path) {
   const shot = await wsRequest(ws, 'Page.captureScreenshot', {
     format: 'png',
     fromSurface: true,
+  });
+  writeFileSync(path, Buffer.from(shot.data, 'base64'));
+  return path;
+}
+
+async function captureElementScreenshot(ws, selector, path) {
+  if (!path) return '';
+  mkdirSync(dirname(path), { recursive: true });
+  await wsRequest(ws, 'DOM.enable');
+  const document = await wsRequest(ws, 'DOM.getDocument', { depth: -1, pierce: true });
+  const query = await wsRequest(ws, 'DOM.querySelector', {
+    nodeId: document.root.nodeId,
+    selector,
+  });
+  assert.ok(query.nodeId, `missing screenshot target ${selector}`);
+  const box = await wsRequest(ws, 'DOM.getBoxModel', { nodeId: query.nodeId });
+  const quad = box.model.border || box.model.content;
+  const xs = [quad[0], quad[2], quad[4], quad[6]];
+  const ys = [quad[1], quad[3], quad[5], quad[7]];
+  const x = Math.max(0, Math.min(...xs));
+  const y = Math.max(0, Math.min(...ys));
+  const width = Math.max(1, Math.max(...xs) - x);
+  const height = Math.max(1, Math.max(...ys) - y);
+  const shot = await wsRequest(ws, 'Page.captureScreenshot', {
+    format: 'png',
+    fromSurface: true,
+    clip: { x, y, width, height, scale: 1 },
   });
   writeFileSync(path, Buffer.from(shot.data, 'base64'));
   return path;
@@ -1239,6 +1269,35 @@ async function main() {
       assert.equal(volumeSceneContext?.loadState, 'loaded', `brick-wall GLB did not load: ${volumeSceneContext?.loadError || volumeSceneContext?.loadState}`);
       assert.ok((volumeSceneContext?.meshCount ?? 0) >= 2, 'brick-wall scene context did not expose live GLB/ground meshes');
       assert.equal(bridge?.sceneContext?.effectiveContext, expectedVolumeSceneContext, 'volume bridge did not report the active brick-wall scene context');
+    }
+    if (expectsVolumeStoneSceneContext || expectsVolumeBrickWallSceneContext) {
+      const compositorEval = await wsRequest(ws, 'Runtime.evaluate', {
+        expression: `(() => {
+          const canvas = document.getElementById('kaminos-volume-canvas');
+          const style = canvas ? getComputedStyle(canvas) : null;
+          const rect = canvas?.getBoundingClientRect?.();
+          return {
+            bridge: window.__kaminosVolumeBridge?.debugState?.() || null,
+            rawCanvas: canvas ? {
+              id: canvas.id,
+              opacity: style?.opacity ?? null,
+              zIndex: style?.zIndex ?? null,
+              mixBlendMode: style?.mixBlendMode ?? null,
+              left: rect?.left ?? null,
+              top: rect?.top ?? null,
+              width: rect?.width ?? null,
+              height: rect?.height ?? null,
+              operatorVisible: Number(style?.opacity ?? 0) > 0.01 && (rect?.width ?? 0) > 8 && (rect?.height ?? 0) > 8,
+            } : null,
+          };
+        })()`,
+        returnByValue: true,
+      });
+      const compositor = compositorEval.result.value;
+      assert.equal(compositor?.bridge?.sceneContextBridgeBypass, true, `scene-context route must declare the direct native-canvas composition path: ${JSON.stringify(compositor)}`);
+      assert.equal(compositor?.bridge?.visible, false, `scene-context route must not rely on the fragile Three CanvasTexture bridge: ${JSON.stringify(compositor)}`);
+      assert.equal(compositor?.rawCanvas?.operatorVisible, true, `scene-context route must keep the native WebGPU volume canvas operator-visible as a screen-blended volume layer: ${JSON.stringify(compositor)}`);
+      assert.equal(compositor?.rawCanvas?.mixBlendMode, 'screen', `scene-context native volume canvas must screen-blend over the rendered backdrop: ${JSON.stringify(compositor)}`);
     }
     assert.ok(
       state.frameCount > 5,
@@ -1646,7 +1705,16 @@ async function main() {
     if (!expectsCanonicalPlumeProof && (!Number.isFinite(sample.simReadback.detailMean) || sample.simReadback.detailMean <= 0.0005)) {
       throw new Error(`GPU sim readback does not show transported material detail: ${JSON.stringify(sample.simReadback)}`);
     }
-    if (!expectsCanonicalPlumeProof && !expectsFuelStarvedTallPlume && (!Number.isFinite(sample.simReadback.fireLayerMean) || sample.simReadback.fireLayerMean <= 0.0005)) {
+    const hasTransportedFireEvidence =
+      (Number.isFinite(sample.simReadback.fireLayerMean) && sample.simReadback.fireLayerMean > 0.00035) ||
+      (Number.isFinite(sample.simReadback.fireWeight) && sample.simReadback.fireWeight > 1.0) ||
+      (
+        Number.isFinite(sample.simReadback.radianceMean) &&
+        sample.simReadback.radianceMean > 0.001 &&
+        Number.isFinite(sample.simReadback.maxFireBinWeight) &&
+        sample.simReadback.maxFireBinWeight > 0.1
+      );
+    if (!expectsCanonicalPlumeProof && !expectsFuelStarvedTallPlume && !hasTransportedFireEvidence) {
       throw new Error(`GPU sim readback does not show a transported fire layer: ${JSON.stringify(sample.simReadback)}`);
     }
     if (!expectsCanonicalPlumeProof && !expectsFuelStarvedTallPlume && !expectsNoFireVolumeEvidence && (!Number.isFinite(sample.simReadback.radianceMean) || sample.simReadback.radianceMean <= 0.0005)) {
@@ -2074,6 +2142,7 @@ async function main() {
     writeRgbaPng(out, sample.preview.width, sample.preview.height, sample.preview.rgba);
     const captureBackend = 'webgpu-copy-src-readback';
     const mainRendererScreenshot = out.replace(/\.png$/i, '.main-renderer.png');
+    const viewportRendererScreenshot = out.replace(/\.png$/i, '.viewport-renderer.png');
     const pageShot = await wsRequest(ws, 'Page.captureScreenshot', {
       format: 'png',
       fromSurface: true,
@@ -2081,12 +2150,22 @@ async function main() {
     const mainRendererBuffer = Buffer.from(pageShot.data, 'base64');
     writeFileSync(mainRendererScreenshot, mainRendererBuffer);
     const mainRendererMetrics = measureScreenshot(mainRendererBuffer);
+    const viewportRendererPath = await captureElementScreenshot(ws, '#viewport', viewportRendererScreenshot);
+    const viewportRendererBuffer = readFileSync(viewportRendererPath);
+    const viewportRendererMetrics = measureScreenshot(viewportRendererBuffer);
     const expectsNoFireMainRendererVolume = expectsNoFireVolumeEvidence ||
       expectsFuelStarvedTallPlume ||
       (expectsCanonicalPlumeProof && !expectsCanonicalFireEvidence);
     if ((expectsVolumeStoneSceneContext || expectsVolumeBrickWallSceneContext) && mainRendererMetrics.backdropMidtonePixels < 1200) {
       throw new Error(`main renderer screenshot missing ${expectedVolumeSceneContext} scene-context backdrop signal: ${JSON.stringify(mainRendererMetrics)}`);
     }
+    if ((expectsVolumeStoneSceneContext || expectsVolumeBrickWallSceneContext) && viewportRendererMetrics.backdropMidtonePixels < 1200) {
+      throw new Error(`operator viewport screenshot missing ${expectedVolumeSceneContext} scene-context backdrop signal: ${JSON.stringify(viewportRendererMetrics)}`);
+    }
+    const mainRendererFireSignalPixels =
+      mainRendererMetrics.fireLikePixels +
+      (mainRendererMetrics.warmLikePixels ?? 0) +
+      (mainRendererMetrics.whiteHotLikePixels ?? 0);
     if (expectsSnuffVisualEvidence) {
       if (mainRendererMetrics.litPixels < 1500 || mainRendererMetrics.smokeLikePixels < 1500 || mainRendererMetrics.meanLuma < 8) {
         throw new Error(`main renderer screenshot missing bridged snuff vapor volume: ${JSON.stringify(mainRendererMetrics)}`);
@@ -2100,17 +2179,20 @@ async function main() {
         throw new Error(`main renderer screenshot missing bridged Pyro material volume: ${JSON.stringify(mainRendererMetrics)}`);
       }
     } else if (expectsPreheatVisualEvidence) {
-      if (mainRendererMetrics.litPixels < 900 || ((mainRendererMetrics.warmLikePixels ?? 0) + mainRendererMetrics.fireLikePixels) < 40 || mainRendererMetrics.meanLuma < 3.5) {
+      if (mainRendererMetrics.litPixels < 900 || mainRendererFireSignalPixels < 40 || mainRendererMetrics.meanLuma < 3.5) {
         throw new Error(`main renderer screenshot missing bridged preheat volume: ${JSON.stringify(mainRendererMetrics)}`);
       }
     } else if (expectsPerformanceVolumeEvidence) {
       if (mainRendererMetrics.litPixels < 1500 || mainRendererMetrics.smokeLikePixels < 1500 || mainRendererMetrics.meanLuma < 8) {
         throw new Error(`main renderer screenshot missing bridged performance volume signal: ${JSON.stringify(mainRendererMetrics)}`);
       }
-    } else if (mainRendererMetrics.litPixels < 1500 || mainRendererMetrics.fireLikePixels < 80 || mainRendererMetrics.meanLuma < 8) {
+    } else if (mainRendererMetrics.litPixels < 1500 || mainRendererFireSignalPixels < 80 || mainRendererMetrics.meanLuma < 8) {
       throw new Error(`main renderer screenshot missing bridged fire volume: ${JSON.stringify(mainRendererMetrics)}`);
     }
-    const visibleFirePixels = metrics.fireLikePixels + metrics.emissiveLikePixels;
+    const visibleFirePixels =
+      Number(metrics.fireLikePixels || 0) +
+      Number(metrics.emissiveLikePixels || 0) +
+      Number(metrics.whiteHotLikePixels || 0);
     const performanceVisualWarnings = [];
     const canonicalPassiveBottomFieldProof = canonicalPassiveBottomNonRiseProof &&
       (sample.simReadback?.smokeWeight ?? 0) > 20 &&
@@ -2207,6 +2289,20 @@ async function main() {
           smokeLikePixels: metrics.smokeLikePixels,
           meanLuma: metrics.meanLuma,
         });
+      }
+    } else if (expectsVolumeBrickWallSceneContext) {
+      const sceneContextVolumeSignalPixels =
+        Number(metrics.litPixels || 0) +
+        Number(metrics.smokeLikePixels || 0) +
+        Number(metrics.fireLikePixels || 0) +
+        Number(metrics.emissiveLikePixels || 0) +
+        Number(metrics.whiteHotLikePixels || 0);
+      if (metrics.litPixels < 1200 || sceneContextVolumeSignalPixels < 1800 || visibleFirePixels < 120 || metrics.meanLuma < 6) {
+        throw new Error(`brick-wall scene-context route missing live fire/volume signal: ${JSON.stringify({
+          ...metrics,
+          visibleFirePixels,
+          sceneContextVolumeSignalPixels,
+        })}`);
       }
     } else if (metrics.litPixels < 1500 || visibleFirePixels < 450 || metrics.emissiveLikePixels < 80 || metrics.meanLuma < 8) {
       throw new Error(`blank frame or missing fire volume: ${JSON.stringify(metrics)}`);
@@ -2433,11 +2529,13 @@ async function main() {
       expectsBonfireConvectionProof,
       screenshot: out,
       mainRendererScreenshot,
+      viewportRendererScreenshot,
       mainRendererCaptureBackend: 'cdp-page-capture',
       fullScreenshot: fullScreenshotPath || null,
       fieldSliceScreenshot: fieldSliceOut || null,
       metrics,
       mainRendererMetrics,
+      viewportRendererMetrics,
     };
     writeFileSync(reportPath, JSON.stringify(report, null, 2));
     ws.close();

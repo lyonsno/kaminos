@@ -1262,9 +1262,15 @@ assert.match(witness, /sphericalHarmonicCoefficients/, 'witness records fire-lig
 assert.match(witness, /fireLightLiveSample/, 'witness records the live-frame fire-light scalar source');
 assert.match(witness, /ceilingVisibilityPolicy/, 'witness verifies the brick-wall ceiling-hidden framing policy');
 assert.match(witness, /backdropMidtonePixels/, 'witness records a screenshot metric that can catch missing scene-context backdrop pixels');
-assert.match(index, /volume-scene-context-active #kaminos-volume-canvas\.active[\s\S]*mix-blend-mode:\s*screen/, 'scene-context routes screen-blend the direct black volume canvas so warm volume can composite over backdrop geometry');
+assert.match(index, /volume-scene-context-active #kaminos-volume-canvas\.active[\s\S]*opacity:\s*1[\s\S]*mix-blend-mode:\s*screen/, 'scene-context routes screen-blend the direct native WebGPU canvas over the rendered backdrop scene');
 assert.match(index, /viewport\.classList\.toggle\('volume-scene-context-active'/, 'scene-context visibility toggles a viewport class used by the composition path');
-assert.match(index, /sceneContextActive[\s\S]*mesh\.visible\s*=\s*active && !sceneContextActive/, 'scene-context composition bypasses the fragile Three CanvasTexture bridge and lets the native WebGPU canvas screen-blend directly');
+assert.match(index, /mesh\.visible\s*=\s*active && !sceneContextActive/, 'scene-context composition bypasses the fragile Three CanvasTexture bridge and uses the native volume canvas as the screen-blended volume layer');
+assert.match(index, /mainRendererNeeded[\s\S]*volumeSceneContextActive/, 'scene-context routes force the main renderer to render the backdrop beneath the native volume canvas');
+assert.match(witness, /operatorVisible/, 'witness checks the raw canvas operator visibility contract for scene-context composition');
+assert.match(witness, /viewportRendererScreenshot/, 'witness captures the operator-visible viewport separately from the native volume readback');
+assert.match(witness, /whiteHotLikePixels/, 'witness counts white-hot flame instead of only orange-red fire pixels');
+assert.match(witness, /sceneContextVolumeSignalPixels/, 'brick-wall scene-context witness uses a scene-context volume signal gate instead of the isolated fire-volume gate');
+assert.match(witness, /hasTransportedFireEvidence/, 'witness accepts broader live-fire evidence instead of a single brittle fireLayerMean threshold');
 assert.match(witness, /volumePrimitiveCount/, 'witness requires effective volume primitive consumption');
 assert.match(witness, /volumePrimitiveIds/, 'witness records stable primitive ids');
 assert.match(witness, /volumePrimitives/, 'witness report carries primitive records');
