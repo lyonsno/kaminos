@@ -2630,6 +2630,80 @@ function terminalBlendSpanForApertureAwareTerminus(role) {
   return [0.58, 1];
 }
 
+function apertureAwareTerminusRenderPull(role) {
+  if (role === 'orbit-tangent') return 0.082;
+  if (role === 'socket-latch') return 0.09;
+  if (role === 'underpass-return') return 0.072;
+  if (role === 'counter-curve') return 0.058;
+  return 0.064;
+}
+
+function apertureAwareTerminusTangentPull(role) {
+  if (role === 'orbit-tangent') return 0.036;
+  if (role === 'socket-latch') return 0.02;
+  if (role === 'underpass-return') return -0.024;
+  if (role === 'counter-curve') return -0.032;
+  return 0.014;
+}
+
+function apertureAwareTerminusPlaneForRole(role) {
+  return `${role}-aperture-contour-terminal-plane`;
+}
+
+function shapeApertureAwareTerminusCapSamples(cap, record) {
+  const genericCapSamples = clone(cap.capSamples);
+  const targetContourPull = apertureAwareTerminusRenderPull(record.terminusRole);
+  const tangentPull = apertureAwareTerminusTangentPull(record.terminusRole);
+  const terminalPoint = record.terminalPoint || genericCapSamples.outerMid;
+  const contourDirection = normalizePoint(subtractPoints(record.targetPoint, terminalPoint));
+  const targetTangent = normalizePoint(record.targetTangent || record.terminalTangent || [0, 0, 1]);
+  const terminalTangent = normalizePoint(record.terminalTangent || record.targetTangent || [0, 0, 1]);
+  const tangentAxis = normalizePoint(lerpPoint(terminalTangent, targetTangent, 0.72));
+  const normalAxis = normalizePoint(record.targetNormal || genericCapSamples.outerMid);
+  const contourDelta = scalePoint(contourDirection, targetContourPull);
+  const tangentDelta = scalePoint(tangentAxis, tangentPull);
+  const innerContourDelta = scalePoint(contourDirection, targetContourPull * 0.62);
+  const innerTangentDelta = scalePoint(tangentAxis, tangentPull * 0.44);
+  const edgeContourDelta = scalePoint(contourDirection, targetContourPull * 0.34);
+  const edgeTangentDelta = scalePoint(tangentAxis, tangentPull * 0.22);
+  const normalRelief = scalePoint(normalAxis, record.terminusRole === 'socket-latch' ? -0.006 : 0.004);
+  const shapedCapSamples = {
+    outerLeft: addPoints(addPoints(genericCapSamples.outerLeft, edgeContourDelta), edgeTangentDelta),
+    outerRight: addPoints(addPoints(genericCapSamples.outerRight, edgeContourDelta), edgeTangentDelta),
+    innerLeft: addPoints(genericCapSamples.innerLeft, scalePoint(edgeContourDelta, 0.72)),
+    innerRight: addPoints(genericCapSamples.innerRight, scalePoint(edgeContourDelta, 0.72)),
+    outerMid: addPoints(addPoints(addPoints(genericCapSamples.outerMid, contourDelta), tangentDelta), normalRelief),
+    innerMid: addPoints(addPoints(genericCapSamples.innerMid, innerContourDelta), innerTangentDelta),
+  };
+  return {
+    schema: 'ApertureAwareTerminusRenderConsumer',
+    mode: `${ORB_SHELL_APERTURE_AWARE_TERMINUS_MODE}-render-consumer-v0`,
+    recordId: record.id,
+    sourceSubstripId: record.sourceSubstripId,
+    sourceApertureId: record.sourceApertureId,
+    role: record.terminusRole,
+    targetContourPull,
+    tangentPull,
+    terminalTangentAlignment: Math.abs(dotPoints(tangentAxis, targetTangent)),
+    contourDirection,
+    tangentAxis,
+    genericCapSamples,
+    shapedCapSamples,
+    renderConsumptionVerdict: 'end-cap-samples-shaped-by-aperture-aware-terminus',
+  };
+}
+
+function applyApertureAwareTerminusToEndCap(endCap, record) {
+  if (!endCap) return null;
+  const renderConsumer = shapeApertureAwareTerminusCapSamples(endCap, record);
+  endCap.apertureAwareRenderConsumer = renderConsumer;
+  endCap.capSamples = clone(renderConsumer.shapedCapSamples);
+  endCap.geometryKind = 'aperture-contour-aware-substrip-end-cap';
+  endCap.terminalPlane = record.terminalPlane;
+  endCap.renderConsumptionVerdict = renderConsumer.renderConsumptionVerdict;
+  return renderConsumer;
+}
+
 function createApertureAwareTerminusPlan(composition, apertureRelativeTerminationPlan, substrips) {
   const primaryVoid = composition.AperturePressure?.primaryVoids?.[0];
   const apertureField = apertureRelativeTerminationPlan?.apertureField;
@@ -2672,7 +2746,7 @@ function createApertureAwareTerminusPlan(composition, apertureRelativeTerminatio
       terminalPoint: terminalSample.center,
       terminalTangent: normalizePoint(terminalSample.tangent),
       terminalBlendSpan: terminalBlendSpanForApertureAwareTerminus(terminusRole),
-      terminalPlane: endCap?.terminalPlane || substrip.apertureTermination?.terminalPlane || 'aperture-relative-angled-terminal',
+      terminalPlane: apertureAwareTerminusPlaneForRole(terminusRole),
       renderedGeometryIds: [
         substrip.id,
         endCap?.id,
@@ -2686,7 +2760,10 @@ function createApertureAwareTerminusPlan(composition, apertureRelativeTerminatio
       falseClosureBlocked: 'role-label-without-rendered-terminus-consumer',
     };
     substrip.apertureAwareTerminus = record;
-    if (endCap) endCap.apertureAwareTerminus = record;
+    if (endCap) {
+      endCap.apertureAwareTerminus = record;
+      record.renderConsumer = applyApertureAwareTerminusToEndCap(endCap, record);
+    }
     return record;
   });
   const roleCounts = records.reduce((counts, record) => {
@@ -5650,6 +5727,8 @@ function makeMacroFamilySubstripTerminalCapGeometry(THREE, cap) {
   geometry.computeVertexNormals();
   geometry.computeBoundingSphere();
   geometry.userData.MacroFamilySubstripTerminalCap = cap;
+  geometry.userData.ApertureAwareTerminus = cap.apertureAwareTerminus || null;
+  geometry.userData.ApertureAwareTerminusRenderConsumer = cap.apertureAwareRenderConsumer || null;
   return geometry;
 }
 
@@ -6564,6 +6643,8 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
           capMesh.userData.MacroFamilySubstripPlan = composition.macroFamilySubstripPlan;
           capMesh.userData.MacroFamilySubstrip = substrip;
           capMesh.userData.MacroFamilySubstripTerminalCap = cap;
+          capMesh.userData.ApertureAwareTerminus = cap.apertureAwareTerminus || null;
+          capMesh.userData.ApertureAwareTerminusRenderConsumer = cap.apertureAwareRenderConsumer || null;
           capMesh.userData.MacroPromotedBody = assemblage.macroPromotedBody;
           macroGroup.add(capMesh);
         }
@@ -7588,6 +7669,8 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
         ApertureAwareTerminus: composition.macroFamilySubstripPlan?.apertureAwareTerminusPlan?.records || [],
         apertureAwareTerminusCount: composition.macroFamilySubstripPlan?.apertureAwareTerminusPlan?.recordCount || 0,
         apertureAwareTerminusRoleCounts: composition.macroFamilySubstripPlan?.apertureAwareTerminusPlan?.roleCounts || {},
+        ApertureAwareTerminusRenderConsumer: (composition.macroFamilySubstripPlan?.apertureAwareTerminusPlan?.records || []).map(record => record.renderConsumer).filter(Boolean),
+        apertureAwareTerminusRenderConsumerCount: (composition.macroFamilySubstripPlan?.apertureAwareTerminusPlan?.records || []).filter(record => record.renderConsumer).length,
         apertureAwareTerminusWitnessGeometryIds: composition.macroFamilySubstripPlan?.apertureAwareTerminusPlan?.witnessGeometryIds || [],
         ApertureTangencyWitnessPlan: composition.macroFamilySubstripPlan?.apertureTangencyWitnessPlan,
         apertureTangencyWitnessPlan: composition.macroFamilySubstripPlan?.apertureTangencyWitnessPlan,

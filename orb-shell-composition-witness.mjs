@@ -449,6 +449,7 @@ async function main() {
     spatialTruthExposure,
     phase,
   };
+  let state = null;
   try {
     rmSync(userDataDir, { recursive: true, force: true });
     phase = 'launch-chrome';
@@ -576,7 +577,7 @@ async function main() {
     if (forceAo !== null) {
       assert.equal(renderEffectPolicy?.ambientOcclusionEnabled, forceAo, 'forced AO state did not take effect');
     }
-    const state = await evaluate(ws, `
+    state = await evaluate(ws, `
       (() => {
         const state = window.__kaminosOrbShellCompositionWitness?.debugState?.();
         if (!state) return state;
@@ -711,6 +712,8 @@ async function main() {
     assert.equal(state?.apertureAwareTerminusPlan?.schema, 'ApertureAwareTerminusPlan', 'aperture-aware terminus plan missing from debug state');
     assert.equal(state?.apertureAwareTerminusCount, state.macroFamilySubstripCount, 'aperture-aware terminus count must match visible substrip count');
     assert.ok(state?.ApertureAwareTerminus?.every(record => record?.schema === 'ApertureAwareTerminus'), 'ApertureAwareTerminus records missing from debug state');
+    assert.equal(state?.apertureAwareTerminusRenderConsumerCount, state.apertureAwareTerminusCount, 'aperture-aware terminus render consumer count must match terminus records');
+    assert.ok(state?.ApertureAwareTerminusRenderConsumer?.every(record => record?.schema === 'ApertureAwareTerminusRenderConsumer'), 'ApertureAwareTerminusRenderConsumer records missing from debug state');
     assert.ok(state?.apertureAwareTerminusWitnessGeometryIds?.some(id => id.includes('target-tangent')), 'aperture-aware terminus target tangent witness ids missing');
     assert.equal(state?.apertureTangencyWitnessPlan?.schema, 'ApertureTangencyWitnessPlan', 'aperture tangency witness plan missing from debug state');
     assert.equal(state?.apertureTangencyWitnessPlan?.measuredApertureFieldId, state.apertureRelativeTerminationPlan.apertureField.id, 'aperture tangency witness must measure active termination field');
@@ -948,6 +951,8 @@ async function main() {
       ApertureAwareTerminus: state.ApertureAwareTerminus,
       apertureAwareTerminusCount: state.apertureAwareTerminusCount,
       apertureAwareTerminusRoleCounts: state.apertureAwareTerminusRoleCounts,
+      ApertureAwareTerminusRenderConsumer: state.ApertureAwareTerminusRenderConsumer,
+      apertureAwareTerminusRenderConsumerCount: state.apertureAwareTerminusRenderConsumerCount,
       apertureAwareTerminusWitnessGeometryIds: state.apertureAwareTerminusWitnessGeometryIds,
       ApertureTangencyWitnessPlan: state.ApertureTangencyWitnessPlan,
       apertureTangencyWitnessPlan: state.apertureTangencyWitnessPlan,
@@ -1113,6 +1118,10 @@ async function main() {
       materialTruthEnvPolicy,
       preHdrWarmRoutePolicy,
       preHdrWarmPhasePolicy,
+      ApertureAwareTerminusRenderConsumer: state?.ApertureAwareTerminusRenderConsumer,
+      apertureAwareTerminusRenderConsumerCount: state?.apertureAwareTerminusRenderConsumerCount,
+      ApertureAwareTerminus: state?.ApertureAwareTerminus,
+      apertureAwareTerminusCount: state?.apertureAwareTerminusCount,
       browserEvents,
       stderrTail: stderr.slice(-2000),
     });
