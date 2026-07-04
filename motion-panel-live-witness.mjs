@@ -506,6 +506,7 @@ async function captureFrame(ws, index) {
       pathWorldEncounterTrajectory: actor?.pathWorldEncounterTrajectory || state?.pathWorldEncounterTrajectory || null,
       pathWorldResumeHandoff: actor?.pathWorldResumeHandoff || state?.pathWorldResumeHandoff || null,
       pathWorldSteeringIntent: actor?.pathWorldSteeringIntent || state?.pathWorldSteeringIntent || state?.pathWorld?.pathWorldSteeringIntent || null,
+      pathWorldSteeringMemory: actor?.pathWorldSteeringMemory || state?.pathWorldSteeringMemory || state?.pathWorld?.pathWorldSteeringMemory || state?.pathWorldSteeringIntent?.pathWorldSteeringMemory || null,
       pathWorldRootConstraint: actor?.pathWorldRootConstraint || state?.pathWorldRootConstraint || null,
       pathWorldRouteAuthority: actor?.pathWorldRouteAuthority || state?.pathWorldRouteAuthority || null,
       pathWorldActiveSource: actor?.pathWorldActiveSource || state?.pathWorldActiveSource || null,
@@ -582,12 +583,15 @@ async function composeFilmstrip(ws, frames) {
     const pathWorldEncounterTrajectory = frame.debug?.pathWorldEncounterTrajectory || null;
     const pathWorldResumeHandoff = frame.debug?.pathWorldResumeHandoff || pathWorldEncounterTrajectory?.resumeHandoff || null;
     const pathWorldSteeringIntent = frame.debug?.pathWorldSteeringIntent || frame.debug?.pathWorld?.pathWorldSteeringIntent || null;
+    const pathWorldSteeringMemory = frame.debug?.pathWorldSteeringMemory || pathWorldSteeringIntent?.pathWorldSteeringMemory || null;
     const episodePhase = pathWorldEpisode?.phase || pathWorldInterrupt?.phase || null;
     const trajectoryPhase = pathWorldEncounterTrajectory?.trajectoryPhase || pathWorldEncounterTrajectory?.activeSample?.trajectoryPhase || null;
     const encounterArchetype = pathWorldEncounterSemantics?.encounterArchetype || pathWorldEncounterTrajectory?.encounterArchetype || null;
     const trajectoryProfile = pathWorldEncounterSemantics?.trajectoryProfile || pathWorldEncounterTrajectory?.trajectoryProfile || null;
     const steeringIntent = pathWorldSteeringIntent?.steeringIntent || null;
     const precontact = pathWorldSteeringIntent?.precontact && pathWorldSteeringIntent?.routeBiasApplied ? 'precontact' : null;
+    const memoryActive = pathWorldSteeringMemory?.memoryActive ? 'memory active' : null;
+    const memorySide = pathWorldSteeringMemory?.memorySide ? `side ${pathWorldSteeringMemory.memorySide}` : null;
     const handoffPhase = pathWorldResumeHandoff?.handoffPhase || pathWorldResumeHandoff?.activeSample?.handoffPhase || null;
     const routeAuthority = frame.debug?.pathWorldRouteAuthority
       || pathWorldEncounterTrajectory?.routeAuthority
@@ -606,6 +610,8 @@ async function composeFilmstrip(ws, frames) {
     const state = [
       clipletLabel || behaviorState,
       steeringIntent ? `steer ${steeringIntent}` : null,
+      memoryActive,
+      memorySide,
       precontact,
       encounterArchetype ? `enc ${encounterArchetype}` : null,
       interruptState || behaviorPhase,
@@ -641,14 +647,14 @@ ${tiles.map(tile => `<div class="tile"><img src="${escapeHtml(tile.src)}"><div c
 </div>
 </body>
 </html>`);
+  const contactSheetUrl = pathToFileURL(htmlPath).href;
+  await wsRequest(ws, 'Page.navigate', { url: contactSheetUrl }, { timeoutMs: 20000 });
   await wsRequest(ws, 'Emulation.setDeviceMetricsOverride', {
     width: sheetWidth,
     height: sheetHeight,
     deviceScaleFactor: 1,
     mobile: false,
   }, { timeoutMs: 20000 });
-  const contactSheetUrl = pathToFileURL(htmlPath).href;
-  await wsRequest(ws, 'Page.navigate', { url: contactSheetUrl }, { timeoutMs: 20000 });
   const navigationDeadline = Date.now() + 20000;
   for (;;) {
     const state = await evaluate(ws, `(() => ({

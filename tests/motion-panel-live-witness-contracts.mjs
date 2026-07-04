@@ -48,6 +48,16 @@ assert.match(witness, /sourceFrameLabel/, 'live witness contact-sheet labels exp
 assert.match(witness, /contact-sheet\.html/, 'live witness composes large visual smokes through a file-backed contact sheet');
 assert.match(witness, /pathToFileURL/, 'live witness loads the local contact sheet by file URL instead of base64 eval payloads');
 assert.match(witness, /contact sheet navigation did not settle/, 'live witness rejects stale app-page evidence before capturing the contact sheet');
+{
+  const contactSheetBlock = witness.match(/async function composeFilmstrip[\s\S]*?return \{[\s\S]*?path: filmstripPath,/)?.[0] || '';
+  const navigateIndex = contactSheetBlock.indexOf("Page.navigate', { url: contactSheetUrl }");
+  const metricsIndex = contactSheetBlock.indexOf("Emulation.setDeviceMetricsOverride");
+  assert.ok(navigateIndex >= 0 && metricsIndex >= 0, 'live witness contact-sheet compositor must navigate and resize explicitly');
+  assert.ok(
+    navigateIndex < metricsIndex,
+    'live witness must navigate off the live WebGPU app before resizing viewport to full contact-sheet dimensions',
+  );
+}
 assert.match(witness, /pngDimensions/, 'live witness derives contact-sheet crop from captured PNG dimensions');
 assert.match(witness, /Emulation\.setDeviceMetricsOverride/, 'live witness sizes the browser viewport to the complete generated contact sheet');
 assert.doesNotMatch(witness, /screenshotDataUrl:\s*frame\.screenshotDataUrl/, 'live witness filmstrip composition must not send every captured frame through Runtime.evaluate');

@@ -5106,7 +5106,7 @@ function createGeneratedPoseTemporalPathWorld() {
   };
 }
 
-function sampleMotionPanelPathWorld(pathWorld, elapsedTime = 0, duration = 6) {
+function sampleMotionPanelPathWorld(pathWorld, elapsedTime = 0, duration = 6, options = {}) {
   const cycle = Math.max(2.4, Number(duration) || Number(pathWorld?.duration) || 6);
   const wrappedTime = ((Number(elapsedTime) || 0) % cycle + cycle) % cycle;
   const phase = wrappedTime / cycle;
@@ -5153,7 +5153,16 @@ function sampleMotionPanelPathWorld(pathWorld, elapsedTime = 0, duration = 6) {
     goal,
     duration: cycle,
   });
-  return applyMotionPanelPathWorldSteeringIntent(rawSample, pathWorldSteeringIntent);
+  const pathWorldSteeringMemory = createMotionPanelPathWorldSteeringMemory({
+    pathWorld,
+    rawSample,
+    pathWorldSteeringIntent,
+    runtime: options.pathWorldSteeringMemoryRuntime || null,
+  });
+  return applyMotionPanelPathWorldSteeringIntent(
+    rawSample,
+    applyMotionPanelPathWorldSteeringMemory(pathWorldSteeringIntent, pathWorldSteeringMemory),
+  );
 }
 
 function normalizeMotionPanelPathWorldXZ(vector, fallback = [0, 0, 1]) {
@@ -5256,6 +5265,12 @@ function createMotionPanelPathWorldSteeringIntent({ pathWorld, rawSample, routeS
     routeBiasActive,
     routeBias: biasArray,
     attentionBias: motionPanelPathWorldArrayFromPoint(attentionBase),
+    obstacleNormal: motionPanelPathWorldArrayFromPoint(obstacleNormal),
+    routeTangent: motionPanelPathWorldArrayFromPoint(routeTangent),
+    sideCandidate: tangentSign >= 0 ? 'positive' : 'negative',
+    sideVector: motionPanelPathWorldArrayFromPoint(exitTangent),
+    normalBiasMagnitude: Number(normalBias.toFixed(5)),
+    tangentBiasMagnitude: Number(tangentBias.toFixed(5)),
     rawRoot: rawSample?.root || null,
     rawAttention: rawSample?.attention || null,
     rawTrigger: rawSample?.trigger || null,
@@ -5266,6 +5281,136 @@ function createMotionPanelPathWorldSteeringIntent({ pathWorld, rawSample, routeS
     clearanceRadius: Number(clearanceRadius.toFixed(5)),
     proximity: Number(proximity.toFixed(5)),
     approachDot,
+  };
+}
+
+function motionPanelPathWorldSteeringSideVector(pathWorldSteeringIntent, memorySide = 'positive') {
+  const obstacleNormal = motionPanelPathWorldPointFromArray(
+    pathWorldSteeringIntent?.obstacleNormal,
+    [0, 0, -1],
+  ).setY(0);
+  if (obstacleNormal.lengthSq() < 1e-6) obstacleNormal.set(0, 0, -1);
+  obstacleNormal.normalize();
+  const sideSign = memorySide === 'negative' ? -1 : 1;
+  const sideVector = new THREE.Vector3(-obstacleNormal.z, 0, obstacleNormal.x)
+    .normalize()
+    .multiplyScalar(sideSign);
+  return {
+    obstacleNormal,
+    sideVector,
+  };
+}
+
+function createMotionPanelPathWorldSteeringMemory({ pathWorld, rawSample, pathWorldSteeringIntent, runtime = null }) {
+  const steeringMemoryReleaseMargin = 0.14;
+  const obstacleId = pathWorldSteeringIntent?.obstacleId || rawSample?.trigger?.obstacleId || 'path-world-obstacle';
+  const pathWorldId = pathWorldSteeringIntent?.pathWorldId || rawSample?.pathWorldId || pathWorld?.id || 'path-world';
+  const direction = rawSample?.direction === 'return' ? 'return' : 'forward';
+  const runtimeMatches = runtime
+    && runtime.obstacleId === obstacleId
+    && runtime.pathWorldId === pathWorldId
+    && runtime.memorySide;
+  const directionalSide = runtimeMatches && runtime.sideByDirection
+    ? runtime.sideByDirection[direction]
+    : null;
+  const obstacleSide = runtimeMatches && runtime.obstacleSide
+    ? runtime.obstacleSide
+    : null;
+  const sideCandidate = pathWorldSteeringIntent?.sideCandidate === 'negative' ? 'negative' : 'positive';
+  const rawDistance = Number(pathWorldSteeringIntent?.rawTrigger?.distance ?? rawSample?.trigger?.distance ?? 999);
+  const precontactRadius = Number(pathWorldSteeringIntent?.precontactRadius || 0);
+  const releaseDistance = precontactRadius + steeringMemoryReleaseMargin;
+  const shouldEngage = !!(
+    pathWorldSteeringIntent?.routeBiasActive
+    || pathWorldSteeringIntent?.precontact
+    || pathWorldSteeringIntent?.hardContact
+  );
+  const memoryActive = shouldEngage || !!(runtimeMatches && runtime.memoryActive && rawDistance <= releaseDistance);
+  const memoryRelease = memoryActive
+    ? shouldEngage ? 'hold' : 'release-margin'
+    : runtimeMatches && runtime.memoryActive ? 'released' : 'idle';
+  const memorySide = memoryActive && obstacleSide
+    ? obstacleSide
+    : memoryActive && directionalSide
+    ? directionalSide
+    : memoryActive && runtimeMatches
+    ? runtime.memorySide
+    : sideCandidate;
+  const sideChoiceSource = memoryActive
+    ? obstacleSide ? 'obstacle-latched' : directionalSide ? 'direction-latched' : runtimeMatches ? 'latched' : 'candidate-latch'
+    : 'per-frame-fallback';
+  const { obstacleNormal, sideVector } = motionPanelPathWorldSteeringSideVector(pathWorldSteeringIntent, memorySide);
+  const normalBias = shouldEngage ? Number(pathWorldSteeringIntent?.normalBiasMagnitude || 0) : 0;
+  const tangentBias = shouldEngage ? Number(pathWorldSteeringIntent?.tangentBiasMagnitude || 0) : 0;
+  const targetBias = obstacleNormal.clone()
+    .multiplyScalar(normalBias)
+    .add(sideVector.clone().multiplyScalar(tangentBias));
+  const previousBias = runtimeMatches && Array.isArray(runtime.smoothedRouteBias)
+    ? motionPanelPathWorldPointFromArray(runtime.smoothedRouteBias)
+    : new THREE.Vector3(0, 0, 0);
+  const smoothingAlpha = shouldEngage ? 0.42 : 0.24;
+  const smoothedBias = previousBias.lerp(targetBias, smoothingAlpha);
+  if (!memoryActive && smoothedBias.length() < 0.006) smoothedBias.set(0, 0, 0);
+  const root = motionPanelPathWorldPointFromArray(pathWorldSteeringIntent?.rawRoot || rawSample?.root, [0, 0, 0]);
+  const postRoot = root.clone().add(smoothedBias).setY(root.y);
+  const center = motionPanelPathWorldPointFromArray(pathWorldSteeringIntent?.rawTrigger?.center || rawSample?.trigger?.center, [0, 0, 0]);
+  const attentionBias = memoryActive
+    ? center.clone().add(sideVector.clone().multiplyScalar(0.22)).setY(center.y + 0.08)
+    : motionPanelPathWorldPointFromArray(pathWorldSteeringIntent?.attentionBias || rawSample?.attention, [0, 0, 1]);
+  const memory = {
+    schema: 'kaminos.generated-motion-path-world-steering-memory.v0',
+    memoryId: `${pathWorldId}-${obstacleId}-steering-memory`,
+    pathWorldId,
+    obstacleId,
+    direction,
+    memoryActive,
+    memorySide,
+    sideChoiceSource,
+    memoryRelease,
+    steeringMemoryReleaseMargin: Number(steeringMemoryReleaseMargin.toFixed(5)),
+    releaseDistance: Number(releaseDistance.toFixed(5)),
+    rawDistance: Number(rawDistance.toFixed(5)),
+    smoothedRouteBias: motionPanelPathWorldArrayFromPoint(smoothedBias),
+    targetRouteBias: motionPanelPathWorldArrayFromPoint(targetBias),
+    sideVector: motionPanelPathWorldArrayFromPoint(sideVector),
+    postMemoryRoot: motionPanelPathWorldArrayFromPoint(postRoot),
+    attentionBias: motionPanelPathWorldArrayFromPoint(attentionBias),
+  };
+  if (runtime) {
+    const sideByDirection = {
+      ...(runtime.sideByDirection || {}),
+    };
+    if (memoryActive) sideByDirection[direction] = memorySide;
+    Object.assign(runtime, {
+      schema: 'kaminos.generated-motion-path-world-steering-memory-runtime.v0',
+      pathWorldId,
+      obstacleId,
+      memoryActive,
+      memorySide,
+      obstacleSide: memoryActive ? memorySide : runtime.obstacleSide || null,
+      sideByDirection,
+      sideChoiceSource,
+      memoryRelease,
+      smoothedRouteBias: memory.smoothedRouteBias,
+      lastRawDistance: memory.rawDistance,
+      lastUpdatedAt: Number(rawSample?.elapsedTime ?? 0),
+    });
+  }
+  return memory;
+}
+
+function applyMotionPanelPathWorldSteeringMemory(pathWorldSteeringIntent, pathWorldSteeringMemory) {
+  if (!pathWorldSteeringIntent || !pathWorldSteeringMemory) return pathWorldSteeringIntent;
+  const smoothedRouteBias = pathWorldSteeringMemory.smoothedRouteBias || pathWorldSteeringIntent.routeBias || [0, 0, 0];
+  const routeBiasMagnitude = Math.hypot(Number(smoothedRouteBias[0] || 0), Number(smoothedRouteBias[2] || 0));
+  const routeBiasActive = !!pathWorldSteeringMemory.memoryActive && routeBiasMagnitude > 0.002;
+  return {
+    ...pathWorldSteeringIntent,
+    routeBiasActive,
+    routeBias: smoothedRouteBias,
+    attentionBias: pathWorldSteeringMemory.attentionBias || pathWorldSteeringIntent.attentionBias,
+    postSteeringRoot: pathWorldSteeringMemory.postMemoryRoot || pathWorldSteeringIntent.postSteeringRoot,
+    pathWorldSteeringMemory,
   };
 }
 
@@ -5298,6 +5443,7 @@ function applyMotionPanelPathWorldSteeringIntent(pathWorldSample, pathWorldSteer
     rawAttention: pathWorldSteeringIntent.rawAttention || pathWorldSample.attention,
     rawTrigger: pathWorldSteeringIntent.rawTrigger || pathWorldSample.trigger,
     trigger: steeredTrigger,
+    pathWorldSteeringMemory: pathWorldSteeringIntent.pathWorldSteeringMemory || null,
     pathWorldSteeringIntent: {
       ...pathWorldSteeringIntent,
       postSteeringHardContact: steeredTrigger.fired,
@@ -6468,6 +6614,7 @@ async function createGeneratedPoseTemporalScene({ force = false, clipId = null, 
     sourceGhost,
     pathWorld,
     pathWorldInterruptRuntime: null,
+    pathWorldSteeringMemoryRuntime: null,
     duration: harness.duration,
     startedAt: performance.now() / 1000,
     timeScale: motionPanelSpeedFromInputs(),
@@ -6493,6 +6640,7 @@ async function createGeneratedPoseTemporalScene({ force = false, clipId = null, 
     lastClipletInterruptTimeline: null,
     lastPathWorld: null,
     lastPathWorldInterrupt: null,
+    lastPathWorldSteeringMemory: null,
   };
   updateMotionPhraseControlApplicability();
   updateGeneratedPoseTemporalFrame(performance.now() / 1000);
@@ -6744,7 +6892,9 @@ function updateGeneratedPoseTemporalFrame(nowSeconds = performance.now() / 1000)
   const interruptSourceInput = state.generatedInput || state.track;
   const pathTriggerMode = motionPanelClipletInterruptModeFromInputs() === 'path-trigger';
   const pathWorldSample = state.pathWorld
-    ? sampleMotionPanelPathWorld(state.pathWorld, elapsedTime, state.duration)
+    ? sampleMotionPanelPathWorld(state.pathWorld, elapsedTime, state.duration, {
+      pathWorldSteeringMemoryRuntime: state.pathWorldSteeringMemoryRuntime || (state.pathWorldSteeringMemoryRuntime = {}),
+    })
     : null;
   const clipletInterruptTimeline = !pathWorldSample && pathTriggerMode
     ? motionPanelClipletInterruptFromInputs(interruptSourceInput, state.generatedMotionCliplets)
@@ -6798,9 +6948,11 @@ function updateGeneratedPoseTemporalFrame(nowSeconds = performance.now() / 1000)
   let pathWorldEncounterTrajectory = null;
   let pathWorldResumeHandoff = null;
   let pathWorldSteeringIntent = null;
+  let pathWorldSteeringMemory = null;
   let pathWorldRouteAuthority = pathWorldSample ? 'world-path' : null;
   if (pathWorldSample) {
     pathWorldSteeringIntent = pathWorldSample.pathWorldSteeringIntent || null;
+    pathWorldSteeringMemory = pathWorldSample.pathWorldSteeringMemory || pathWorldSteeringIntent?.pathWorldSteeringMemory || null;
     if (pathWorldSteeringIntent?.routeBiasApplied && pathWorldSteeringIntent?.precontact) {
       pathWorldRouteAuthority = 'steering';
     }
@@ -6938,6 +7090,7 @@ function updateGeneratedPoseTemporalFrame(nowSeconds = performance.now() / 1000)
   state.lastPathWorldEncounterTrajectory = pathWorldEncounterTrajectory;
   state.lastPathWorldResumeHandoff = pathWorldResumeHandoff;
   state.lastPathWorldSteeringIntent = pathWorldSteeringIntent;
+  state.lastPathWorldSteeringMemory = pathWorldSteeringMemory;
   state.lastPathWorldRouteAuthority = pathWorldRouteAuthority;
   state.lastPathWorldRootConstraint = pathWorldRootConstraint;
   state.lastDisplayGrounding = displayGrounding;
@@ -7020,6 +7173,7 @@ function updateGeneratedPoseTemporalFrame(nowSeconds = performance.now() / 1000)
     pathWorldEncounterTrajectory,
     pathWorldResumeHandoff,
     pathWorldSteeringIntent,
+    pathWorldSteeringMemory,
     pathWorldRootConstraint,
     pathWorldRouteAuthority,
     pathWorldActiveSource: pathWorldInterruptEnvelope?.interrupt?.activeSource || pathWorldRouteAuthority || (pathWorldSample ? 'world-path' : null),
@@ -8384,6 +8538,7 @@ window.kaminosGeneratedPoseTemporalDebugState = function() {
     pathWorldEncounterTrajectory: state?.lastPathWorldEncounterTrajectory || null,
     pathWorldResumeHandoff: state?.lastPathWorldResumeHandoff || null,
     pathWorldSteeringIntent: state?.lastPathWorldSteeringIntent || null,
+    pathWorldSteeringMemory: state?.lastPathWorldSteeringMemory || state?.lastPathWorldSteeringIntent?.pathWorldSteeringMemory || null,
     pathWorldRootConstraint: state?.lastPathWorldRootConstraint || null,
     pathWorldRouteAuthority: state?.lastPathWorldRouteAuthority || (state?.lastPathWorld ? 'world-path' : null),
     pathWorldActiveSource: state?.lastPathWorldInterrupt?.activeSource || state?.lastPathWorldRouteAuthority || (state?.lastPathWorld ? 'world-path' : null),
