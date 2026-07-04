@@ -1284,6 +1284,16 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
     </div>
     <span class="slider-help">Bite fire lock: memory can whisper at 0, current flame authority required at 1.</span>
     <div class="slider-row">
+      <span class="slider-label">Fire Mode</span>
+      <select id="volume-pyro-fire-mode" class="select-input">
+        <option value="stock">Stock</option>
+        <option value="hybrid" selected>Hybrid</option>
+        <option value="pyro-owned">Pyro-owned</option>
+      </select>
+      <span class="slider-val" id="volume-pyro-fire-mode-val">hybrid</span>
+    </div>
+    <span class="slider-help">Fire mode: stock renders old flame, hybrid mixes, Pyro-owned mutes stock fire and paints from raw live carriers.</span>
+    <div class="slider-row">
       <span class="slider-label">Flame Paint</span>
       <input type="range" id="volume-pyro-flame-paint" min="0" max="3" step="0.05" value="0">
       <span class="slider-val" id="volume-pyro-flame-paint-val">0.00</span>
@@ -1461,6 +1471,30 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
       <span class="slider-val" id="volume-pyro-radiance-height-val">0.45</span>
     </div>
     <span class="slider-help">Radiance height: low contrast agent at 0, higher plume permission at 1.</span>
+    <div class="slider-row">
+      <span class="slider-label">Radiance Border</span>
+      <input type="range" id="volume-pyro-radiance-border" min="0" max="1" step="0.05" value="0.55">
+      <span class="slider-val" id="volume-pyro-radiance-border-val">0.55</span>
+    </div>
+    <span class="slider-help">Radiance border: broad fire body at 0, flame/smoke seam light at 1.</span>
+    <div class="slider-row">
+      <span class="slider-label">Radiance Teeth</span>
+      <input type="range" id="volume-pyro-radiance-teeth" min="0" max="1" step="0.05" value="0.45">
+      <span class="slider-val" id="volume-pyro-radiance-teeth-val">0.45</span>
+    </div>
+    <span class="slider-help">Radiance teeth: smooth fire light at 0, torn nonlinear edge highlights at 1.</span>
+    <div class="slider-row">
+      <span class="slider-label">Radiance Rise</span>
+      <input type="range" id="volume-pyro-radiance-rise" min="0" max="1" step="0.05" value="0.45">
+      <span class="slider-val" id="volume-pyro-radiance-rise-val">0.45</span>
+    </div>
+    <span class="slider-help">Radiance rise: keeps contrast low at 0, lets the light climb the plume at 1.</span>
+    <div class="slider-row">
+      <span class="slider-label">Radiance Fire Lock</span>
+      <input type="range" id="volume-pyro-radiance-fire-lock" min="0" max="1" step="0.05" value="0.65">
+      <span class="slider-val" id="volume-pyro-radiance-fire-lock-val">0.65</span>
+    </div>
+    <span class="slider-help">Radiance fire lock: contrast can ride wake at 0, current raw flame authority gates it at 1.</span>
     <div class="slider-row">
       <span class="slider-label">Diag Paint</span>
       <input type="range" id="volume-pyro-diagnostic-paint" min="0" max="1" step="0.05" value="0">
@@ -9507,13 +9541,14 @@ const VOLUME_LOOK_LIBRARY_IDENTITY = 'kaminos-volume-look-library-v1';
 const PYRO_LOOK_FIELDS = [
   'pyroDynamicDetail', 'pyroMaterialGain', 'pyroInterfaceFocus', 'pyroEdgeBite',
   'pyroBiteBorder', 'pyroBiteTeeth', 'pyroBiteWake', 'pyroBiteHeight', 'pyroBiteFireLock',
-  'pyroFlamePaint', 'pyroStockMix', 'pyroFlameLuma', 'pyroFlameCoreColor', 'pyroFlameEdgeColor',
+  'pyroFireMode', 'pyroFlamePaint', 'pyroStockMix', 'pyroFlameLuma', 'pyroFlameCoreColor', 'pyroFlameEdgeColor',
   'pyroBiteHeat', 'pyroBiteChroma', 'pyroBiteLuma', 'pyroBiteEmberColor', 'pyroBiteHotColor',
   'pyroSmokeFold', 'pyroFoldBorder', 'pyroFoldWake', 'pyroWakeLift', 'pyroWakeWarmth',
   'pyroWakeLuma', 'pyroWakeShadowColor', 'pyroWakeEmberColor', 'pyroRadiance',
   'pyroRadianceGate', 'pyroRadianceSpill', 'pyroRadianceWarmth', 'pyroRadianceHue',
   'pyroRadianceChroma', 'pyroRadianceLuma', 'pyroRadianceCoolColor', 'pyroRadianceWarmColor',
-  'pyroRadianceSource', 'pyroRadianceHeight', 'pyroDiagnosticPaint', 'pyroCarrierView',
+  'pyroRadianceSource', 'pyroRadianceHeight', 'pyroRadianceBorder', 'pyroRadianceTeeth',
+  'pyroRadianceRise', 'pyroRadianceFireLock', 'pyroDiagnosticPaint', 'pyroCarrierView',
   'pyroOverdrive',
 ];
 const FIRESIM_LOOK_FIELDS = [
@@ -10363,6 +10398,7 @@ const VOLUME_BASIN_ROUTE_FIELDS = [
   ['pyroBiteWake', 'volume_pyro_bite_wake'],
   ['pyroBiteHeight', 'volume_pyro_bite_height'],
   ['pyroBiteFireLock', 'volume_pyro_bite_fire_lock'],
+  ['pyroFireMode', 'volume_pyro_fire_mode'],
   ['pyroFlamePaint', 'volume_pyro_flame_paint'],
   ['pyroStockMix', 'volume_pyro_stock_mix'],
   ['pyroFlameLuma', 'volume_pyro_flame_luma'],
@@ -10392,6 +10428,10 @@ const VOLUME_BASIN_ROUTE_FIELDS = [
   ['pyroRadianceWarmColor', 'volume_pyro_radiance_warm_color'],
   ['pyroRadianceSource', 'volume_pyro_radiance_source'],
   ['pyroRadianceHeight', 'volume_pyro_radiance_height'],
+  ['pyroRadianceBorder', 'volume_pyro_radiance_border'],
+  ['pyroRadianceTeeth', 'volume_pyro_radiance_teeth'],
+  ['pyroRadianceRise', 'volume_pyro_radiance_rise'],
+  ['pyroRadianceFireLock', 'volume_pyro_radiance_fire_lock'],
   ['pyroDiagnosticPaint', 'volume_pyro_diagnostic_paint'],
   ['pyroCarrierView', 'volume_pyro_carrier_view'],
   ['pyroOverdrive', 'volume_pyro_overdrive'],
@@ -14583,6 +14623,7 @@ function readVolumeControls() {
     pyroBiteWake: parseFloat(document.getElementById('volume-pyro-bite-wake').value),
     pyroBiteHeight: parseFloat(document.getElementById('volume-pyro-bite-height').value),
     pyroBiteFireLock: parseFloat(document.getElementById('volume-pyro-bite-fire-lock').value),
+    pyroFireMode: document.getElementById('volume-pyro-fire-mode').value,
     pyroFlamePaint: parseFloat(document.getElementById('volume-pyro-flame-paint').value),
     pyroStockMix: parseFloat(document.getElementById('volume-pyro-stock-mix').value),
     pyroFlameLuma: parseFloat(document.getElementById('volume-pyro-flame-luma').value),
@@ -14612,6 +14653,10 @@ function readVolumeControls() {
     pyroRadianceWarmColor: normalizeVolumeHexColor(document.getElementById('volume-pyro-radiance-warm-color').value, '#d18438'),
     pyroRadianceSource: document.getElementById('volume-pyro-radiance-source').value,
     pyroRadianceHeight: parseFloat(document.getElementById('volume-pyro-radiance-height').value),
+    pyroRadianceBorder: parseFloat(document.getElementById('volume-pyro-radiance-border').value),
+    pyroRadianceTeeth: parseFloat(document.getElementById('volume-pyro-radiance-teeth').value),
+    pyroRadianceRise: parseFloat(document.getElementById('volume-pyro-radiance-rise').value),
+    pyroRadianceFireLock: parseFloat(document.getElementById('volume-pyro-radiance-fire-lock').value),
     pyroDiagnosticPaint: parseFloat(document.getElementById('volume-pyro-diagnostic-paint').value),
     pyroCarrierView: document.getElementById('volume-pyro-carrier-view').value,
     pyroOverdrive: parseFloat(document.getElementById('volume-pyro-overdrive').value),
@@ -14700,6 +14745,7 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-pyro-bite-wake-val').textContent = c.pyroBiteWake.toFixed(2);
   document.getElementById('volume-pyro-bite-height-val').textContent = c.pyroBiteHeight.toFixed(2);
   document.getElementById('volume-pyro-bite-fire-lock-val').textContent = c.pyroBiteFireLock.toFixed(2);
+  document.getElementById('volume-pyro-fire-mode-val').textContent = c.pyroFireMode;
   document.getElementById('volume-pyro-flame-paint-val').textContent = c.pyroFlamePaint.toFixed(2);
   document.getElementById('volume-pyro-stock-mix-val').textContent = c.pyroStockMix.toFixed(2);
   document.getElementById('volume-pyro-flame-luma-val').textContent = c.pyroFlameLuma.toFixed(2);
@@ -14729,6 +14775,10 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-pyro-radiance-warm-color-val').textContent = c.pyroRadianceWarmColor;
   document.getElementById('volume-pyro-radiance-source-val').textContent = c.pyroRadianceSource;
   document.getElementById('volume-pyro-radiance-height-val').textContent = c.pyroRadianceHeight.toFixed(2);
+  document.getElementById('volume-pyro-radiance-border-val').textContent = c.pyroRadianceBorder.toFixed(2);
+  document.getElementById('volume-pyro-radiance-teeth-val').textContent = c.pyroRadianceTeeth.toFixed(2);
+  document.getElementById('volume-pyro-radiance-rise-val').textContent = c.pyroRadianceRise.toFixed(2);
+  document.getElementById('volume-pyro-radiance-fire-lock-val').textContent = c.pyroRadianceFireLock.toFixed(2);
   document.getElementById('volume-pyro-diagnostic-paint-val').textContent = c.pyroDiagnosticPaint.toFixed(2);
   document.getElementById('volume-pyro-carrier-view-val').textContent = c.pyroCarrierView;
   document.getElementById('volume-pyro-overdrive-val').textContent = c.pyroOverdrive.toFixed(2);
@@ -15119,6 +15169,10 @@ async function initKaminosVolumeRoute() {
   if (params.has('volume_pyro_bite_fire_lock') && Number.isFinite(routePyroBiteFireLock)) {
     document.getElementById('volume-pyro-bite-fire-lock').value = String(Math.max(0, Math.min(1, routePyroBiteFireLock)));
   }
+  const routePyroFireMode = params.get('volume_pyro_fire_mode');
+  if (['stock', 'hybrid', 'pyro-owned'].includes(routePyroFireMode)) {
+    document.getElementById('volume-pyro-fire-mode').value = routePyroFireMode;
+  }
   const routePyroFlamePaint = Number(params.get('volume_pyro_flame_paint'));
   if (params.has('volume_pyro_flame_paint') && Number.isFinite(routePyroFlamePaint)) {
     document.getElementById('volume-pyro-flame-paint').value = String(Math.max(0, Math.min(3, routePyroFlamePaint)));
@@ -15218,6 +15272,22 @@ async function initKaminosVolumeRoute() {
   const routePyroRadianceHeight = Number(params.get('volume_pyro_radiance_height'));
   if (params.has('volume_pyro_radiance_height') && Number.isFinite(routePyroRadianceHeight)) {
     document.getElementById('volume-pyro-radiance-height').value = String(Math.max(0, Math.min(1, routePyroRadianceHeight)));
+  }
+  const routePyroRadianceBorder = Number(params.get('volume_pyro_radiance_border'));
+  if (params.has('volume_pyro_radiance_border') && Number.isFinite(routePyroRadianceBorder)) {
+    document.getElementById('volume-pyro-radiance-border').value = String(Math.max(0, Math.min(1, routePyroRadianceBorder)));
+  }
+  const routePyroRadianceTeeth = Number(params.get('volume_pyro_radiance_teeth'));
+  if (params.has('volume_pyro_radiance_teeth') && Number.isFinite(routePyroRadianceTeeth)) {
+    document.getElementById('volume-pyro-radiance-teeth').value = String(Math.max(0, Math.min(1, routePyroRadianceTeeth)));
+  }
+  const routePyroRadianceRise = Number(params.get('volume_pyro_radiance_rise'));
+  if (params.has('volume_pyro_radiance_rise') && Number.isFinite(routePyroRadianceRise)) {
+    document.getElementById('volume-pyro-radiance-rise').value = String(Math.max(0, Math.min(1, routePyroRadianceRise)));
+  }
+  const routePyroRadianceFireLock = Number(params.get('volume_pyro_radiance_fire_lock'));
+  if (params.has('volume_pyro_radiance_fire_lock') && Number.isFinite(routePyroRadianceFireLock)) {
+    document.getElementById('volume-pyro-radiance-fire-lock').value = String(Math.max(0, Math.min(1, routePyroRadianceFireLock)));
   }
   const routePyroDiagnosticPaint = Number(params.get('volume_pyro_diagnostic_paint'));
   const routePyroDebugTint = Number(params.get('volume_pyro_debug_tint'));
@@ -15383,7 +15453,7 @@ async function initKaminosVolumeRoute() {
     refreshVolumeReadout();
     saveVolumeBasinSnapshot(event?.target?.id || 'control-change');
   };
-  for (const id of ['volume-scene', 'volume-density', 'volume-fire', 'volume-radiance', 'volume-absorption', 'volume-glow', 'volume-smoke', 'volume-curl', 'volume-microdetail', 'volume-interface-shred', 'volume-fire-licks', 'volume-projection', 'volume-speed', 'volume-steps', 'volume-adaptive-rays', 'volume-occupancy-skip', 'volume-majorant-skip', 'volume-majorant-smooth', 'volume-majorant-guard', 'volume-temporal-accum', 'volume-temporal-jitter', 'volume-history-clamp', 'volume-fire-scale', 'volume-detail-scale', 'volume-plume-height', 'volume-wind-strength', 'volume-wind-angle', 'volume-wind-height', 'volume-render-scale', 'volume-input-radius', 'volume-flow-rate', 'volume-resolution', 'volume-majorant-grid', 'volume-grid-overlay', 'volume-flow-debug', 'volume-look-freeze', 'volume-pyro-compare', 'volume-pyro-detail', 'volume-pyro-material-gain', 'volume-pyro-interface-focus', 'volume-pyro-edge-bite', 'volume-pyro-bite-border', 'volume-pyro-bite-teeth', 'volume-pyro-bite-wake', 'volume-pyro-bite-height', 'volume-pyro-bite-fire-lock', 'volume-pyro-flame-paint', 'volume-pyro-stock-mix', 'volume-pyro-flame-luma', 'volume-pyro-flame-core-color', 'volume-pyro-flame-edge-color', 'volume-pyro-bite-heat', 'volume-pyro-bite-chroma', 'volume-pyro-bite-luma', 'volume-pyro-bite-ember-color', 'volume-pyro-bite-hot-color', 'volume-pyro-smoke-fold', 'volume-pyro-fold-border', 'volume-pyro-fold-wake', 'volume-pyro-wake-lift', 'volume-pyro-wake-warmth', 'volume-pyro-wake-luma', 'volume-pyro-wake-shadow-color', 'volume-pyro-wake-ember-color', 'volume-pyro-radiance', 'volume-pyro-radiance-gate', 'volume-pyro-radiance-spill', 'volume-pyro-radiance-warmth', 'volume-pyro-radiance-hue', 'volume-pyro-radiance-chroma', 'volume-pyro-radiance-luma', 'volume-pyro-radiance-cool-color', 'volume-pyro-radiance-warm-color', 'volume-pyro-radiance-source', 'volume-pyro-radiance-height', 'volume-pyro-diagnostic-paint', 'volume-pyro-carrier-view', 'volume-pyro-overdrive', 'volume-pressure-mode', 'volume-pressure-tier-overlay', 'volume-pressure-tier-lower-max', 'volume-pressure-tier-hero-min', 'volume-pressure-tier-hero-max', 'volume-canonical-spread', 'volume-canonical-centerline', 'volume-canonical-body-balance']) {
+  for (const id of ['volume-scene', 'volume-density', 'volume-fire', 'volume-radiance', 'volume-absorption', 'volume-glow', 'volume-smoke', 'volume-curl', 'volume-microdetail', 'volume-interface-shred', 'volume-fire-licks', 'volume-projection', 'volume-speed', 'volume-steps', 'volume-adaptive-rays', 'volume-occupancy-skip', 'volume-majorant-skip', 'volume-majorant-smooth', 'volume-majorant-guard', 'volume-temporal-accum', 'volume-temporal-jitter', 'volume-history-clamp', 'volume-fire-scale', 'volume-detail-scale', 'volume-plume-height', 'volume-wind-strength', 'volume-wind-angle', 'volume-wind-height', 'volume-render-scale', 'volume-input-radius', 'volume-flow-rate', 'volume-resolution', 'volume-majorant-grid', 'volume-grid-overlay', 'volume-flow-debug', 'volume-look-freeze', 'volume-pyro-compare', 'volume-pyro-detail', 'volume-pyro-material-gain', 'volume-pyro-interface-focus', 'volume-pyro-edge-bite', 'volume-pyro-bite-border', 'volume-pyro-bite-teeth', 'volume-pyro-bite-wake', 'volume-pyro-bite-height', 'volume-pyro-bite-fire-lock', 'volume-pyro-fire-mode', 'volume-pyro-flame-paint', 'volume-pyro-stock-mix', 'volume-pyro-flame-luma', 'volume-pyro-flame-core-color', 'volume-pyro-flame-edge-color', 'volume-pyro-bite-heat', 'volume-pyro-bite-chroma', 'volume-pyro-bite-luma', 'volume-pyro-bite-ember-color', 'volume-pyro-bite-hot-color', 'volume-pyro-smoke-fold', 'volume-pyro-fold-border', 'volume-pyro-fold-wake', 'volume-pyro-wake-lift', 'volume-pyro-wake-warmth', 'volume-pyro-wake-luma', 'volume-pyro-wake-shadow-color', 'volume-pyro-wake-ember-color', 'volume-pyro-radiance', 'volume-pyro-radiance-gate', 'volume-pyro-radiance-spill', 'volume-pyro-radiance-warmth', 'volume-pyro-radiance-hue', 'volume-pyro-radiance-chroma', 'volume-pyro-radiance-luma', 'volume-pyro-radiance-cool-color', 'volume-pyro-radiance-warm-color', 'volume-pyro-radiance-source', 'volume-pyro-radiance-height', 'volume-pyro-radiance-border', 'volume-pyro-radiance-teeth', 'volume-pyro-radiance-rise', 'volume-pyro-radiance-fire-lock', 'volume-pyro-diagnostic-paint', 'volume-pyro-carrier-view', 'volume-pyro-overdrive', 'volume-pressure-mode', 'volume-pressure-tier-overlay', 'volume-pressure-tier-lower-max', 'volume-pressure-tier-hero-min', 'volume-pressure-tier-hero-max', 'volume-canonical-spread', 'volume-canonical-centerline', 'volume-canonical-body-balance']) {
     document.getElementById(id).addEventListener('input', syncControls);
     document.getElementById(id).addEventListener('change', syncControls);
   }
