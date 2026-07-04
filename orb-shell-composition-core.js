@@ -10,6 +10,7 @@ export const ORB_SHELL_APERTURE_ORBIT_CAPTURE_MODE = 'macro-aperture-orbit-captu
 export const ORB_SHELL_LOWER_SOCKET_RENDER_INVENTORY_MODE = 'lower-socket-semantic-render-inventory-v0';
 export const ORB_SHELL_SOCKET_TONGUE_PROVENANCE_MODE = 'socket-tongue-provenance-v0';
 export const ORB_SHELL_SOCKET_TONGUE_GENERATIVE_INVARIANT_MODE = 'socket-tongue-generative-invariants-v0';
+export const ORB_SHELL_SOCKET_TONGUE_REPRODUCTION_MODE = 'socket-tongue-reproduction-probe-v0';
 export const ORB_SHELL_MACRO_MORPHOLOGY_INVENTORY_MODE = 'macro-curve-vs-promoted-body-diagnostic-v0';
 
 const TAU = Math.PI * 2;
@@ -4587,6 +4588,173 @@ function createSocketTongueProvenancePlan(composition) {
       'which receiver owns the underpass or latch when the lower socket tongue disappears',
       'which variation knobs request this vocabulary without turning it into a full macro lamella',
     ],
+  };
+}
+
+export const DEFAULT_SOCKET_TONGUE_REPRODUCTION_PROBE_CONFIGS = [
+  { variantId: 'wide-cup', variationSeed: 6, variationLeafCount: 11, label: 'reference-wide-cup-six-eleven' },
+  { variantId: 'wide-cup', variationSeed: 8, variationLeafCount: 12, label: 'wide-cup-neighbor-eight-twelve' },
+  { variantId: 'wide-cup', variationSeed: 10, variationLeafCount: 14, label: 'wide-cup-negative-no-lower-socket' },
+  { variantId: 'wide-cup', variationSeed: 14, variationLeafCount: 14, label: 'wide-cup-dense-fourteen' },
+  { variantId: 'left-heavy-rim', variationSeed: 12, variationLeafCount: 11, label: 'left-heavy-rim-cross-variant' },
+  { variantId: 'asymmetric-tuck', variationSeed: 11, variationLeafCount: 14, label: 'asymmetric-tuck-dense' },
+  { variantId: 'tight-crown', variationSeed: 18, variationLeafCount: 14, label: 'tight-crown-dense' },
+];
+
+function socketTongueProbeConfigKey(config) {
+  return `${config.variantId}:seed-${config.variationSeed}:leaf-${config.variationLeafCount}`;
+}
+
+function socketTongueCandidateMetrics(candidate) {
+  const metrics = candidate?.anatomyMetrics || {};
+  return {
+    schema: 'SocketTongueReproductionMetrics',
+    candidateScore: candidate?.candidateScore || 0,
+    sideWallCount: metrics.sideWallCount || 0,
+    hiddenTerminalCapCount: metrics.hiddenTerminalCapCount || 0,
+    terminalCapCount: metrics.terminalCapCount || 0,
+    meanSideWallThickness: metrics.meanSideWallThickness || 0,
+    sideWallThicknessRelativeVariationMax: metrics.sideWallThicknessRelativeVariationMax || 0,
+    endCapWidthExpansionRatio: metrics.endCapWidthExpansionRatio || 0,
+    promotedBodyScale: metrics.promotedBodyScale || null,
+    terminalWidthScale: metrics.terminalWidthScale || null,
+  };
+}
+
+function createSocketTongueReproductionProbeCase(config, composition, referenceCandidateId) {
+  const selectedMacroAssemblageIds = composition.macroAssemblages.map(assemblage => assemblage.id);
+  const provenancePlan = composition.socketTongueProvenancePlan || createSocketTongueProvenancePlan(composition);
+  const candidate = provenancePlan.candidates?.[0] || null;
+  const lowerSocket = composition.macroAssemblages.find(assemblage => assemblage.id === 'lower-socket-keel') || null;
+  const roleLaw = lowerSocket?.lowerSocketFamilyRoleLaw || composition.lowerSocketFamilyRoleLaw || null;
+  const plateLaw = lowerSocket?.lowerSocketPlateBodyHonestyLaw || null;
+  const invariantRecord = candidate?.generativeInvariantRecord || null;
+  const metrics = socketTongueCandidateMetrics(candidate);
+  const receiverPresent = Boolean(
+    selectedMacroAssemblageIds.includes('equatorial-cupping-whorl')
+      && (
+        roleLaw?.requiredRelations?.includes('lower-socket-tucks-under-equatorial-lip')
+        || composition.lowerEquatorialSeamLaw?.schema
+        || composition.apertureOwnership?.schema
+      ),
+  );
+  const contractFlags = {
+    schema: 'SocketTongueReproductionContractFlags',
+    lowerSocketSelected: selectedMacroAssemblageIds.includes('lower-socket-keel'),
+    receiverPresent,
+    subordinateObjecthood: Boolean(
+      roleLaw?.visibleAuthority === 'subordinate-socket-insert'
+        || invariantRecord?.preservedInvariants?.includes('subordinate-objecthood-not-full-macro-lamella')
+    ),
+    sheetlikeBody: Boolean(
+      metrics.meanSideWallThickness >= 0.045
+        && (plateLaw?.cordLikeShrinkageForbidden || invariantRecord?.preservedInvariants?.includes('visible-body-remains-sheetlike-before-tuck'))
+    ),
+    hiddenTerminalCaps: metrics.hiddenTerminalCapCount >= 2,
+    liveSidewalls: metrics.sideWallCount >= 2,
+    hookPressure: metrics.endCapWidthExpansionRatio >= 2,
+    sourceCandidatePresent: Boolean(candidate),
+  };
+  const failureClasses = [];
+  if (!contractFlags.lowerSocketSelected) failureClasses.push('failed-no-lower-socket');
+  if (contractFlags.lowerSocketSelected && !contractFlags.receiverPresent) failureClasses.push('failed-no-receiver');
+  if (candidate && !contractFlags.sheetlikeBody) failureClasses.push('failed-cord-collapse');
+  if (candidate && !contractFlags.subordinateObjecthood) failureClasses.push('failed-full-macro');
+  if (candidate && !contractFlags.liveSidewalls) failureClasses.push('failed-crumple');
+  if (candidate && !contractFlags.hiddenTerminalCaps) failureClasses.push('show-hidden-terminal-cap-as-object');
+  if (candidate && !contractFlags.hookPressure) failureClasses.push('smooth-away-hook-signal');
+
+  const requiredFlags = [
+    'lowerSocketSelected',
+    'receiverPresent',
+    'subordinateObjecthood',
+    'sheetlikeBody',
+    'hiddenTerminalCaps',
+    'liveSidewalls',
+    'hookPressure',
+    'sourceCandidatePresent',
+  ];
+  const satisfiedFlagCount = requiredFlags.filter(flag => contractFlags[flag]).length;
+  const disposition = failureClasses.length === 0 && satisfiedFlagCount === requiredFlags.length
+    ? 'reproduced'
+    : candidate && satisfiedFlagCount >= 5
+      ? 'partial'
+      : failureClasses[0] || 'failed-crumple';
+  return {
+    schema: 'SocketTongueReproductionProbeCase',
+    mode: ORB_SHELL_SOCKET_TONGUE_REPRODUCTION_MODE,
+    id: `socket-tongue-reproduction-${socketTongueProbeConfigKey(config)}`,
+    label: config.label || socketTongueProbeConfigKey(config),
+    config: {
+      variantId: config.variantId || 'baseline',
+      variationSeed: Number(config.variationSeed) || 0,
+      variationLeafCount: Number(config.variationLeafCount) || 10,
+    },
+    isReferenceCase: Boolean(candidate?.id && candidate.id === referenceCandidateId && config.variantId === 'wide-cup' && Number(config.variationSeed) === 6 && Number(config.variationLeafCount) === 11),
+    selectedMacroAssemblageIds,
+    candidateId: candidate?.id || null,
+    provenanceVerdict: provenancePlan.provenanceVerdict || null,
+    invariantRecordId: invariantRecord?.id || null,
+    contractFlags,
+    metrics,
+    disposition,
+    failureClasses,
+    nextSlicePressure: disposition === 'reproduced'
+      ? 'candidate-generalizes-now-attack-smoothness-and-receiver-geometry'
+      : 'law-or-selection-repair-before-smoothing',
+  };
+}
+
+export function createSocketTongueReproductionProbeMatrix(configs = DEFAULT_SOCKET_TONGUE_REPRODUCTION_PROBE_CONFIGS) {
+  const referenceCandidateId = 'lower-socket-keel-promoted-body-socket-tongue-candidate';
+  const cases = configs.map(config => {
+    const composition = createTargetOrbShellCompositionFixture(config);
+    return createSocketTongueReproductionProbeCase(config, composition, referenceCandidateId);
+  });
+  const reproducedCases = cases.filter(item => item.disposition === 'reproduced');
+  const reproducedExcludingReference = reproducedCases.filter(item => !item.isReferenceCase);
+  const partialCases = cases.filter(item => item.disposition === 'partial');
+  const failedCases = cases.filter(item => item.disposition.startsWith('failed'));
+  const failureClassCounts = cases.reduce((counts, item) => {
+    for (const failureClass of item.failureClasses) {
+      counts[failureClass] = (counts[failureClass] || 0) + 1;
+    }
+    return counts;
+  }, {});
+  const geometryUnlocked = reproducedExcludingReference.length >= 2;
+  return {
+    schema: 'SocketTongueReproductionProbeMatrix',
+    mode: ORB_SHELL_SOCKET_TONGUE_REPRODUCTION_MODE,
+    referenceCandidateId,
+    purpose: 'test whether the socket-tongue invariant recipe can be reproduced beyond the original beautiful accident',
+    probeConfigs: configs.map(config => ({
+      variantId: config.variantId || 'baseline',
+      variationSeed: Number(config.variationSeed) || 0,
+      variationLeafCount: Number(config.variationLeafCount) || 10,
+      label: config.label || socketTongueProbeConfigKey(config),
+    })),
+    cases,
+    caseCount: cases.length,
+    summary: {
+      schema: 'SocketTongueReproductionProbeSummary',
+      reproducedCount: reproducedCases.length,
+      reproducedExcludingReferenceCount: reproducedExcludingReference.length,
+      partialCount: partialCases.length,
+      failureCount: failedCases.length,
+      failureClassCounts,
+      reproducedCaseIds: reproducedCases.map(item => item.id),
+      reproducedExcludingReferenceCaseIds: reproducedExcludingReference.map(item => item.id),
+    },
+    geometryGate: {
+      schema: 'SocketTongueReproductionGeometryGate',
+      verdict: geometryUnlocked ? 'geometry-repair-unlocked' : 'law-repair-required-before-geometry',
+      requiredNonReferenceReproductions: 2,
+      observedNonReferenceReproductions: reproducedExcludingReference.length,
+      acceptanceEvidence: reproducedExcludingReference.map(item => item.id),
+      nextRecommendedSlice: geometryUnlocked
+        ? 'lower-socket-smoothness-and-receiver-geometry-repair'
+        : 'socket-tongue-selection-or-receiver-law-repair',
+    },
   };
 }
 
