@@ -391,8 +391,8 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
             <div class="splat-hybrid-renderer-status" id="splat-hybrid-renderer-status">Idle</div>
             <input class="splat-hybrid-url" id="splat-hybrid-renderer-module-url" spellcheck="false" autocomplete="off" aria-label="Hybrid Renderer overlay module URL">
             <div class="splat-correction-actions">
-              <button type="button" class="btn" id="splat-hybrid-renderer-start-button" onclick="startSelectedSplatHybridRenderer()">Start Hybrid</button>
-              <button type="button" class="btn" id="splat-hybrid-renderer-reload-button" onclick="reloadSelectedSplatHybridRenderer()">Reload</button>
+              <button type="button" class="btn" id="splat-hybrid-renderer-start-button" onclick="startHybridSplatSceneRenderer()">Start Scene</button>
+              <button type="button" class="btn" id="splat-hybrid-renderer-reload-button" onclick="reloadHybridSplatSceneRenderer()">Reload</button>
               <button type="button" class="btn" id="splat-hybrid-renderer-stop-button" onclick="stopHybridSplatOverlay()">Stop</button>
             </div>
           </div>
@@ -1072,8 +1072,8 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
   <div id="hybrid-splat-overlay-host" aria-hidden="true"></div>
   <div id="hybrid-splat-viewport-controls" hidden>
     <div class="hybrid-splat-viewport-actions">
-      <button type="button" class="tb-btn primary" id="hybrid-splat-viewport-start-button" onclick="toggleHybridSplatViewportRenderer()">Start Hybrid</button>
-      <button type="button" class="tb-btn" id="hybrid-splat-viewport-reload-button" onclick="reloadSelectedSplatHybridRenderer()">Reload</button>
+      <button type="button" class="tb-btn primary" id="hybrid-splat-viewport-start-button" onclick="toggleHybridSplatViewportRenderer()">Start Scene</button>
+      <button type="button" class="tb-btn" id="hybrid-splat-viewport-reload-button" onclick="reloadHybridSplatSceneRenderer()">Reload</button>
       <button type="button" id="hybrid-splat-renderer-controls-toggle" aria-haspopup="menu" aria-expanded="false" aria-controls="hybrid-splat-renderer-controls-popover" class="tb-btn hybrid-splat-dropdown-trigger" onclick="toggleHybridSplatRendererControlsPopover()">Renderer</button>
     </div>
     <div class="hybrid-splat-viewport-status" id="hybrid-splat-viewport-status">Select a splat</div>
@@ -1348,6 +1348,8 @@ let hybridSplatOverlayState = {
   module: null,
   handle: null,
   objectId: null,
+  rendererMode: null,
+  sceneSplatIds: [],
   loadedSource: null,
   loadedFileName: null,
   loadedAt: null,
@@ -1431,10 +1433,25 @@ class HybridMeshSplatRoute {
 
 const hybridMeshSplatRoute = new HybridMeshSplatRoute();
 
+function sceneSplatRecords() {
+  return sceneObjects.filter(record => record.type === 'splat' && record.source);
+}
+
+function hybridSplatOverlayRendererOwnedSplatIds() {
+  if (hybridSplatOverlayState.rendererMode === 'scene') {
+    return hybridSplatOverlayState.sceneSplatIds.slice();
+  }
+  return hybridSplatOverlayState.objectId ? [hybridSplatOverlayState.objectId] : [];
+}
+
 function hybridSplatOverlayIsRendering() {
   return !!hybridSplatOverlayState.handle
     && hybridSplatOverlayState.status === 'rendering'
-    && !!hybridSplatOverlayState.objectId;
+    && (
+      hybridSplatOverlayState.rendererMode === 'scene'
+        ? hybridSplatOverlayState.sceneSplatIds.length > 0
+        : !!hybridSplatOverlayState.objectId
+    );
 }
 
 function hybridSplatOverlayCropAppliedByRenderer() {
@@ -1473,6 +1490,8 @@ function clearHybridSplatOverlayHandle() {
   hybridSplatOverlayState.sceneContextAccepted = false;
   hybridSplatOverlayState.sceneContextTelemetry = null;
   hybridSplatOverlayState.rendererControlsTelemetry = null;
+  hybridSplatOverlayState.rendererMode = null;
+  hybridSplatOverlayState.sceneSplatIds = [];
   hybridSplatOverlayState.frameCount = 0;
 }
 
@@ -1483,6 +1502,8 @@ function hybridSplatOverlayDebugState() {
     error: hybridSplatOverlayState.error,
     moduleUrl: hybridSplatOverlayState.moduleUrl,
     objectId: hybridSplatOverlayState.objectId,
+    rendererMode: hybridSplatOverlayState.rendererMode,
+    sceneSplatIds: hybridSplatOverlayState.sceneSplatIds.slice(),
     loadedSource: hybridSplatOverlayState.loadedSource,
     loadedFileName: hybridSplatOverlayState.loadedFileName,
     loadedAt: hybridSplatOverlayState.loadedAt,
@@ -1495,6 +1516,7 @@ function hybridSplatOverlayDebugState() {
     capabilities: handle?.capabilities || null,
     handleCapabilities: handle?.capabilities || null,
     sourceIdentity: handle?.sourceIdentity || null,
+    sceneIdentity: handle?.sceneIdentity || null,
     correctionApplication: handle?.correctionApplication || null,
     sceneContextAccepted: hybridSplatOverlayState.sceneContextAccepted,
     sceneContextTelemetry: hybridSplatOverlayState.sceneContextTelemetry,
@@ -1581,16 +1603,19 @@ function ensureHybridSplatHostDepthTarget() {
 
 function withHybridSplatPreviewDepthHidden(callback, {
   selectedSplatId = hybridSplatOverlayState.objectId,
+  rendererOwnedSplatIds = hybridSplatOverlayRendererOwnedSplatIds(),
   hiddenSplatIds = [],
 } = {}) {
   const hidden = [];
+  const ownedIds = new Set(rendererOwnedSplatIds);
   if (groundPlane?.visible !== false) {
     hidden.push(groundPlane);
     groundPlane.visible = false;
   }
   for (const record of sceneObjects) {
     if (record.type !== 'splat') continue;
-    if (!selectedSplatId || record.id !== selectedSplatId) continue;
+    const hideRecord = ownedIds.size > 0 ? ownedIds.has(record.id) : (!!selectedSplatId && record.id === selectedSplatId);
+    if (!hideRecord) continue;
     const visualRoot = splatVisualRootFor(record.object) || record.object;
     if (!visualRoot || visualRoot.visible === false) continue;
     hiddenSplatIds.push(record.id);
@@ -1606,9 +1631,11 @@ function withHybridSplatPreviewDepthHidden(callback, {
 
 function withHybridSplatHostDepthMaterialState(callback, {
   selectedSplatId = hybridSplatOverlayState.objectId,
+  rendererOwnedSplatIds = hybridSplatOverlayRendererOwnedSplatIds(),
   hostDepthIncludedSplatIds = [],
 } = {}) {
   const changedMaterials = [];
+  const ownedIds = new Set(rendererOwnedSplatIds);
   const visitMaterial = material => {
     if (!material) return;
     changedMaterials.push({
@@ -1626,7 +1653,8 @@ function withHybridSplatHostDepthMaterialState(callback, {
   };
   for (const record of sceneObjects) {
     if (record.type !== 'splat') continue;
-    if (selectedSplatId && record.id === selectedSplatId) continue;
+    const rendererOwned = ownedIds.size > 0 ? ownedIds.has(record.id) : (!!selectedSplatId && record.id === selectedSplatId);
+    if (rendererOwned) continue;
     const visualRoot = splatVisualRootFor(record.object) || record.object;
     if (!visualRoot || visualRoot.visible === false) continue;
     hostDepthIncludedSplatIds.push(record.id);
@@ -1653,6 +1681,7 @@ function renderHybridSplatHostDepthTarget() {
   const target = ensureHybridSplatHostDepthTarget();
   if (!target) return null;
   const selectedSplatId = hybridSplatOverlayState.objectId;
+  const rendererOwnedSplatIds = hybridSplatOverlayRendererOwnedSplatIds();
   const hostDepthHiddenSplatIds = [];
   const hostDepthIncludedSplatIds = [];
   const previousTarget = typeof renderer.getRenderTarget === 'function' ? renderer.getRenderTarget() : null;
@@ -1669,9 +1698,9 @@ function renderHybridSplatHostDepthTarget() {
     withHybridSplatPreviewDepthHidden(
       () => withHybridSplatHostDepthMaterialState(
         () => renderer.render(scene, camera),
-        { selectedSplatId, hostDepthIncludedSplatIds },
+        { selectedSplatId, rendererOwnedSplatIds, hostDepthIncludedSplatIds },
       ),
-      { selectedSplatId, hiddenSplatIds: hostDepthHiddenSplatIds },
+      { selectedSplatId, rendererOwnedSplatIds, hiddenSplatIds: hostDepthHiddenSplatIds },
     );
     hybridSplatHostDepthFrameId += 1;
     hybridSplatHostDepthStatus = {
@@ -1682,6 +1711,7 @@ function renderHybridSplatHostDepthTarget() {
       height: target.height,
       source: 'kaminos.webgpu-render-target',
       selectedSplatId,
+      rendererOwnedSplatIds,
       hostDepthHiddenSplatIds,
       hostDepthIncludedSplatIds,
       updatedAt: new Date().toISOString(),
@@ -1911,13 +1941,19 @@ function hybridSplatOverlayProjectToScreen(point, viewMatrix, projectionMatrix, 
 
 function hybridSplatOverlayProjectionProbe(frame = hybridSplatOverlayState.lastFrame) {
   if (!frame?.effectiveViewMatrix || !frame?.projectionMatrix || !frame?.viewport) return null;
-  const probePoint = Array.isArray(frame.rawAssetBoundsCenter) && frame.rawAssetBoundsCenter.length === 3
+  const rawProbePoint = Array.isArray(frame.rawAssetBoundsCenter) && frame.rawAssetBoundsCenter.length === 3
     ? [
         frame.rawAssetBoundsCenter[0],
         frame.rawAssetBoundsCenter[1] + (Array.isArray(frame.rawAssetBoundsSize) ? (frame.rawAssetBoundsSize[1] || 0) * 0.25 : 0.25),
         frame.rawAssetBoundsCenter[2],
       ]
     : [0, 0, 0];
+  let probePoint = rawProbePoint;
+  if (frame.rendererMode === 'scene' && Array.isArray(frame.overlayAssetWorldMatrix) && frame.overlayAssetWorldMatrix.length === 16) {
+    probePoint = new THREE.Vector3(rawProbePoint[0], rawProbePoint[1], rawProbePoint[2])
+      .applyMatrix4(new THREE.Matrix4().fromArray(frame.overlayAssetWorldMatrix))
+      .toArray();
+  }
   const viewMatrix = new THREE.Matrix4().fromArray(frame.effectiveViewMatrix);
   const hostProjection = new THREE.Matrix4().fromArray(frame.projectionMatrix);
   const overlayProjectionArgument = new THREE.Matrix4().fromArray(frame.overlayProjectionMatrix || frame.projectionMatrix);
@@ -1929,7 +1965,8 @@ function hybridSplatOverlayProjectionProbe(frame = hybridSplatOverlayState.lastF
     source: frame.source || null,
     projectionFrameMode: frame.projectionFrameMode || 'uncompensated',
     probePoint,
-    probePointRole: 'raw-asset-upper-quarter',
+    rawProbePoint,
+    probePointRole: frame.rendererMode === 'scene' ? 'scene-world-upper-quarter' : 'raw-asset-upper-quarter',
     viewport: frame.viewport,
     kaminosPreviewScreen: hybridSplatOverlayProjectToScreen(probePoint, viewMatrix, hostProjection, frame.viewport),
     pbrnextOverlayScreen: hybridSplatOverlayProjectToScreen(probePoint, viewMatrix, overlayEffectiveProjection, frame.viewport),
@@ -2302,40 +2339,46 @@ function toggleHybridSplatRendererControlsPopover() {
 }
 
 async function toggleHybridSplatViewportRenderer() {
-  const entry = selectedSplatRecord();
-  const activeTarget = entry && hybridSplatOverlayState.objectId === entry.id;
-  if (activeTarget && (hybridSplatOverlayState.status === 'rendering' || hybridSplatOverlayState.status === 'loading')) {
+  if (hybridSplatOverlayState.rendererMode === 'scene'
+      && (hybridSplatOverlayState.status === 'rendering' || hybridSplatOverlayState.status === 'loading')) {
     return stopHybridSplatOverlay();
   }
-  return startSelectedSplatHybridRenderer();
+  return startHybridSplatSceneRenderer();
 }
 
 function updateHybridSplatViewportControls(entry) {
   const controls = document.getElementById('hybrid-splat-viewport-controls');
   if (!controls) return;
   const isSplat = entry?.type === 'splat';
-  controls.hidden = !isSplat;
-  if (!isSplat) {
+  const sceneSplats = sceneSplatRecords();
+  const hasSceneSplatSource = sceneSplats.length > 0;
+  controls.hidden = !isSplat && !hasSceneSplatSource && !hybridSplatOverlayIsRendering();
+  if (controls.hidden) {
     setHybridSplatRendererControlsPopoverOpen(false);
     return;
   }
-  const activeTarget = hybridSplatOverlayState.objectId === entry.id;
+  const activeTarget = hybridSplatOverlayState.rendererMode === 'scene'
+    || (entry && hybridSplatOverlayState.objectId === entry.id);
   const busy = hybridSplatOverlayState.status === 'loading';
-  const rendering = activeTarget && hybridSplatOverlayState.status === 'rendering';
-  const hasSource = !!entry.source;
+  const rendering = hybridSplatOverlayState.rendererMode === 'scene'
+    ? hybridSplatOverlayState.status === 'rendering'
+    : activeTarget && hybridSplatOverlayState.status === 'rendering';
+  const hasSource = hasSceneSplatSource || !!entry?.source;
   const startButton = document.getElementById('hybrid-splat-viewport-start-button');
   const reloadButton = document.getElementById('hybrid-splat-viewport-reload-button');
   const statusEl = document.getElementById('hybrid-splat-viewport-status');
   if (startButton) {
     startButton.disabled = busy || (!hasSource && !rendering);
-    startButton.textContent = busy && activeTarget ? 'Starting...' : (rendering ? 'Stop Hybrid' : 'Start Hybrid');
+    startButton.textContent = busy && activeTarget ? 'Starting...' : (rendering ? 'Stop Scene' : 'Start Scene');
     startButton.classList.toggle('rendering', rendering);
   }
   if (reloadButton) reloadButton.disabled = busy || !hasSource;
   if (statusEl) {
     const cropNote = `crop=${hybridSplatOverlayCropAppliedByRenderer()}`;
     const mode = rendering ? 'dual-canvas P0' : 'point-cloud preview';
-    const source = entry.fileName || entry.label || entry.source || 'no source';
+    const source = hybridSplatOverlayState.rendererMode === 'scene'
+      ? `${hybridSplatOverlayState.sceneSplatIds.length || sceneSplats.length} scene splats`
+      : entry?.fileName || entry?.label || entry?.source || 'no source';
     const detail = `${hybridSplatOverlayState.status} · ${mode} · ${cropNote} · ${source}`;
     statusEl.textContent = hybridSplatOverlayState.error ? `${detail} · ${hybridSplatOverlayState.error}` : detail;
     statusEl.classList.toggle('error', hybridSplatOverlayState.status === 'error');
@@ -2460,22 +2503,46 @@ function hybridSplatOverlaySourceUrl(source) {
   return new URL(String(source || ''), window.location.href).href;
 }
 
-function updateHybridSplatOverlayFrame() {
-  const handle = hybridSplatOverlayState.handle;
-  const record = selectedSplatRecord(hybridSplatOverlayState.objectId);
-  if (!handle || !record?.object || !camera) return null;
-  camera.updateMatrixWorld?.();
-  record.object.updateMatrixWorld?.(true);
+function splatOverlaySceneEntry(record) {
   const visualRoot = splatVisualRootFor(record.object) || record.object;
   visualRoot.updateMatrixWorld?.(true);
   const assetFrame = splatRawAssetToPreviewMatrix(record);
   const overlayAssetWorldMatrix = assetFrame
     ? new THREE.Matrix4().multiplyMatrices(visualRoot.matrixWorld, assetFrame.matrix)
     : new THREE.Matrix4().copy(visualRoot.matrixWorld);
+  return {
+    id: record.id,
+    source: hybridSplatOverlaySourceUrl(record.source),
+    fileName: record.fileName || record.label || `${record.id}.ply`,
+    modelMatrix: Array.from(overlayAssetWorldMatrix.elements),
+    correction: splatOverlayCorrectionIdentity(record, assetFrame),
+  };
+}
+
+function updateHybridSplatOverlayFrame() {
+  const handle = hybridSplatOverlayState.handle;
+  const sceneMode = hybridSplatOverlayState.rendererMode === 'scene';
+  const record = sceneMode
+    ? (selectedSplatRecord(hybridSplatOverlayState.objectId) || selectedSplatRecord() || sceneSplatRecords()[0])
+    : selectedSplatRecord(hybridSplatOverlayState.objectId);
+  if (!handle || !record?.object || !camera) return null;
+  camera.updateMatrixWorld?.();
+  record.object.updateMatrixWorld?.(true);
+  const visualRoot = splatVisualRootFor(record.object) || record.object;
+  visualRoot.updateMatrixWorld?.(true);
+  const assetFrame = splatRawAssetToPreviewMatrix(record);
+  const debugOverlayAssetWorldMatrix = assetFrame
+    ? new THREE.Matrix4().multiplyMatrices(visualRoot.matrixWorld, assetFrame.matrix)
+    : new THREE.Matrix4().copy(visualRoot.matrixWorld);
+  const rendererModelMatrix = sceneMode ? new THREE.Matrix4().identity() : debugOverlayAssetWorldMatrix;
   const overlayViewMatrix = new THREE.Matrix4().copy(camera.matrixWorldInverse);
-  const effectiveViewMatrix = new THREE.Matrix4().multiplyMatrices(overlayViewMatrix, overlayAssetWorldMatrix);
+  const effectiveViewMatrix = sceneMode
+    ? new THREE.Matrix4().copy(overlayViewMatrix)
+    : new THREE.Matrix4().multiplyMatrices(overlayViewMatrix, debugOverlayAssetWorldMatrix);
   const cameraWorld = camera.getWorldPosition(new THREE.Vector3());
-  const cameraLocal = cameraWorld.clone().applyMatrix4(new THREE.Matrix4().copy(overlayAssetWorldMatrix).invert());
+  const cameraLocal = sceneMode
+    ? cameraWorld.clone()
+    : cameraWorld.clone().applyMatrix4(new THREE.Matrix4().copy(debugOverlayAssetWorldMatrix).invert());
   const view = new Float32Array(overlayViewMatrix.elements);
   const overlayProjectionMatrix = hybridSplatOverlayProjectionMatrixForPbrnext(camera.projectionMatrix);
   const projection = new Float32Array(overlayProjectionMatrix.elements);
@@ -2483,22 +2550,25 @@ function updateHybridSplatOverlayFrame() {
   const viewport = currentHybridOverlayViewport();
   ensureHybridSplatHostDepthTarget();
   handle.setViewport(viewport.width, viewport.height, viewport.devicePixelRatio);
-  handle.setModelMatrix(new Float32Array(overlayAssetWorldMatrix.elements));
+  handle.setModelMatrix(new Float32Array(rendererModelMatrix.elements));
   handle.setCameraMatrices(view, projection, cameraPosition);
   hybridSplatOverlayState.frameCount += 1;
   hybridSplatOverlayState.lastFrame = {
     schema: 'kaminos.hybrid-splat-overlay.frame.v0',
+    rendererMode: sceneMode ? 'scene' : 'selected',
+    sceneSplatIds: hybridSplatOverlayState.sceneSplatIds.slice(),
     objectId: record.id,
     source: record.source || null,
     canvasMode: 'dual-canvas-overlay',
     correctionAppliedMode: 'visual-root-world-matrix',
-    assetFrameMode: assetFrame ? 'raw-ply-to-normalized-preview' : 'preview-local',
-    modelMatrixFrameMode: 'pbrnext-setModelMatrix-owned',
+    assetFrameMode: sceneMode ? 'scene-world-pretransformed' : (assetFrame ? 'raw-ply-to-normalized-preview' : 'preview-local'),
+    modelMatrixFrameMode: sceneMode ? 'kaminos-scene-world-pretransformed' : 'pbrnext-setModelMatrix-owned',
     cropAppliedByRenderer: hybridSplatOverlayCropAppliedByRenderer(),
     viewport,
     objectWorldMatrix: Array.from(record.object.matrixWorld.elements),
     visualRootWorldMatrix: Array.from(visualRoot.matrixWorld.elements),
-    overlayAssetWorldMatrix: Array.from(overlayAssetWorldMatrix.elements),
+    overlayAssetWorldMatrix: Array.from(debugOverlayAssetWorldMatrix.elements),
+    rendererModelMatrix: Array.from(rendererModelMatrix.elements),
     rawAssetToPreviewMatrix: assetFrame ? Array.from(assetFrame.matrix.elements) : null,
     rawAssetToPreviewScale: assetFrame?.scale || null,
     rawAssetBoundsCenter: assetFrame?.center || null,
@@ -2513,6 +2583,7 @@ function updateHybridSplatOverlayFrame() {
     splatCorrection: normalizeSplatCorrection(record.splat?.correction),
     overlayCapabilities: handle.capabilities || null,
     sourceIdentity: handle.sourceIdentity || null,
+    sceneIdentity: handle.sceneIdentity || null,
     correctionApplication: handle.correctionApplication || null,
     updatedAt: new Date().toISOString(),
   };
@@ -2521,6 +2592,58 @@ function updateHybridSplatOverlayFrame() {
   hybridSplatOverlayState.lastFrame.hostDepthPublish = publishHybridSplatHostDepthTexture(handle);
   hybridSplatOverlayState.lastFrame.rendererControlsTelemetry = publishHybridSplatRendererControls(handle);
   return hybridSplatOverlayState.lastFrame;
+}
+
+async function startHybridSplatSceneRenderer() {
+  const records = sceneSplatRecords();
+  if (!records.length) {
+    setInfo('No reloadable splats in scene');
+    return null;
+  }
+  const debugEntry = selectedSplatRecord() || records[0];
+  try {
+    setHybridSplatOverlayStatus('loading');
+    if (hybridSplatOverlayState.handle && hybridSplatOverlayState.rendererMode !== 'scene') {
+      stopHybridSplatOverlay({ silent: true });
+      setHybridSplatOverlayStatus('loading');
+    }
+    const handle = await ensureHybridSplatOverlayHandle();
+    if (typeof handle.loadSceneSplats !== 'function') {
+      throw new Error('Hybrid overlay module does not expose loadSceneSplats');
+    }
+    const croppedRecord = records.find(splatRecordRequiresRendererCrop);
+    if (croppedRecord && !hybridSplatOverlayHandleSupportsCrop(handle)) {
+      const error = new Error('Renderer crop unsupported for cropped scene splats; keeping Kaminos point-cloud previews active');
+      clearHybridSplatOverlayHandle();
+      setHybridSplatOverlayStatus('error', error);
+      buildRenderHandoffV0(debugEntry);
+      window._kaminosDirty?.();
+      setInfo(error.message);
+      return hybridSplatOverlayDebugState();
+    }
+    const entries = records.map(splatOverlaySceneEntry);
+    hybridSplatOverlayState.rendererMode = 'scene';
+    hybridSplatOverlayState.sceneSplatIds = entries.map(entry => entry.id);
+    hybridSplatOverlayState.objectId = debugEntry.id;
+    hybridSplatOverlayState.loadedSource = 'scene-splats';
+    hybridSplatOverlayState.loadedFileName = null;
+    await handle.loadSceneSplats(entries);
+    restoreHybridSplatPreviewObjects();
+    records.forEach(hideHybridSplatPreviewObject);
+    publishHybridSplatRendererControls(handle);
+    updateHybridSplatOverlayFrame();
+    handle.start();
+    hybridSplatOverlayState.loadedAt = new Date().toISOString();
+    setHybridSplatOverlayStatus('rendering');
+    buildRenderHandoffV0(debugEntry);
+    window._kaminosDirty?.();
+    setInfo(`Hybrid scene renderer started: ${entries.length} splats`);
+    return hybridSplatOverlayDebugState();
+  } catch (error) {
+    setHybridSplatOverlayStatus('error', error);
+    setInfo(`Hybrid scene renderer failed: ${error.message}`);
+    throw error;
+  }
 }
 
 async function startSelectedSplatHybridRenderer() {
@@ -2539,6 +2662,8 @@ async function startSelectedSplatHybridRenderer() {
       stopHybridSplatOverlay({ silent: true });
     }
     const overlaySource = hybridSplatOverlaySourceUrl(entry.source);
+    hybridSplatOverlayState.rendererMode = 'selected';
+    hybridSplatOverlayState.sceneSplatIds = [];
     hybridSplatOverlayState.objectId = entry.id;
     hybridSplatOverlayState.loadedSource = overlaySource;
     hybridSplatOverlayState.loadedFileName = entry.fileName || entry.label || null;
@@ -2584,6 +2709,11 @@ function stopHybridSplatOverlay(options = {}) {
   if (active) buildRenderHandoffV0(active);
   if (!options.silent) setInfo('Hybrid renderer overlay stopped');
   return hybridSplatOverlayDebugState();
+}
+
+async function reloadHybridSplatSceneRenderer() {
+  stopHybridSplatOverlay({ silent: true });
+  return startHybridSplatSceneRenderer();
 }
 
 async function reloadSelectedSplatHybridRenderer() {
@@ -3958,6 +4088,8 @@ window.kaminosHybridSplatRendererControlsDebugState = () => hybridSplatOverlaySt
 window.kaminosPublishHybridSplatRendererControls = publishHybridSplatRendererControls;
 window.toggleHybridSplatViewportRenderer = toggleHybridSplatViewportRenderer;
 window.toggleHybridSplatRendererControlsPopover = toggleHybridSplatRendererControlsPopover;
+window.startHybridSplatSceneRenderer = startHybridSplatSceneRenderer;
+window.reloadHybridSplatSceneRenderer = reloadHybridSplatSceneRenderer;
 window.startSelectedSplatHybridRenderer = startSelectedSplatHybridRenderer;
 window.reloadSelectedSplatHybridRenderer = reloadSelectedSplatHybridRenderer;
 window.stopHybridSplatOverlay = stopHybridSplatOverlay;

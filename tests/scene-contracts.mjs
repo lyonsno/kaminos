@@ -6,6 +6,14 @@ const root = new URL('..', import.meta.url).pathname;
 const index = readFileSync(join(root, 'index.html'), 'utf8');
 const persistence = readFileSync(join(root, 'scene-persistence-core.js'), 'utf8');
 
+function sourceBetween(source, startPattern, endPattern) {
+  const start = source.search(startPattern);
+  assert.notEqual(start, -1, `missing source slice start: ${startPattern}`);
+  const endOffset = source.slice(start).search(endPattern);
+  assert.notEqual(endOffset, -1, `missing source slice end: ${endPattern}`);
+  return source.slice(start, start + endOffset);
+}
+
 assert.match(persistence, /export const SCENE_SCHEMA\s*=\s*'kaminos\.scene\.v1'/, 'scene files declare the multi-object schema in the shared persistence core');
 assert.match(index, /from '\.\/scene-persistence-core\.js'/, 'workbench imports the shared scene persistence core');
 assert.match(index, /let sceneObjects\s*=\s*\[\]/, 'workbench keeps an explicit authored scene object registry');
@@ -132,10 +140,10 @@ assert.match(index, /hostDepth:\s*hybridSplatHostDepthContext\(/, 'Hybrid Render
 assert.match(index, /window\.kaminosSetHybridSplatHostDepthDebugEnabled/, 'Hybrid Renderer host-depth witness can A-B toggle native host-depth publication');
 assert.match(index, /window\.kaminosPlaceHybridSplatDepthOccluderDebugMesh/, 'Hybrid Renderer host-depth witness can place a deterministic real mesh occluder');
 assert.match(index, /window\.kaminosHybridSplatDepthOccluderDebugState/, 'Hybrid Renderer host-depth witness exposes projected occluder-region evidence');
-assert.match(index, /selectedSplatId[\s\S]*hybridSplatOverlayState\.objectId/, 'Hybrid Renderer host-depth pass hides only the selected hybrid splat instead of every peer splat');
-assert.match(index, /withHybridSplatHostDepthMaterialState[\s\S]*depthTest\s*=\s*true[\s\S]*depthWrite\s*=\s*true/, 'Hybrid Renderer host-depth pass temporarily makes peer splat previews write depth');
-assert.match(index, /withHybridSplatHostDepthMaterialState[\s\S]*transparent\s*=\s*false[\s\S]*opacity\s*=\s*1/, 'Hybrid Renderer host-depth pass makes transparent peer splat previews opaque only while writing depth');
-assert.match(index, /hostDepthIncludedSplatIds/, 'Hybrid Renderer host-depth status reports which peer splats contributed depth');
+assert.match(index, /rendererOwnedSplatIds[\s\S]*hybridSplatOverlayRendererOwnedSplatIds\(\)/, 'Hybrid Renderer host-depth pass derives every renderer-owned scene splat id, not only the selected splat');
+assert.match(index, /withHybridSplatPreviewDepthHidden[\s\S]*rendererOwnedSplatIds/, 'Hybrid Renderer host-depth pass hides every renderer-owned scene splat preview');
+assert.match(index, /withHybridSplatHostDepthMaterialState[\s\S]*rendererOwnedSplatIds/, 'Hybrid Renderer host-depth pass excludes renderer-owned scene splats from peer preview depth');
+assert.match(index, /hostDepthHiddenSplatIds/, 'Hybrid Renderer host-depth status reports which scene splats were removed from host depth');
 assert.match(index, /window\.kaminosHybridSplatPeerDepthDebugState/, 'Hybrid Renderer exposes projected peer-splat evidence for two-splat host-depth smoke');
 assert.match(index, /sharedCanvasComposite:\s*false/, 'hybrid splat route stub must explicitly say shared canvas compositing is not implemented yet');
 assert.match(index, /realSplatRendering:\s*false/, 'hybrid splat route stub must not imply real splat rendering is active');
@@ -147,6 +155,13 @@ assert.match(index, /id="hybrid-splat-viewport-start-button"/, 'Hybrid Renderer 
 assert.match(index, /id="hybrid-splat-renderer-controls-popover"/, 'Hybrid Renderer material/AO/normal controls are available from a viewport popover');
 assert.match(index, /id="hybrid-splat-renderer-controls-toggle"[\s\S]*aria-haspopup="menu"[\s\S]*aria-expanded="false"[\s\S]*class="[^"]*hybrid-splat-dropdown-trigger/, 'Hybrid Renderer renderer-controls trigger presents as a dropdown affordance instead of a plain button');
 assert.match(index, /hybrid-splat-dropdown-trigger::after/, 'Hybrid Renderer dropdown trigger draws a compact caret affordance in viewport chrome');
+assert.match(index, /function startHybridSplatSceneRenderer\(/, 'Hybrid Renderer starts as a scene-level renderer instead of a selected-splat overlay');
+assert.match(index, /sceneSplatIds/, 'Hybrid Renderer debug state reports every renderer-owned splat id in the scene');
+assert.match(index, /rendererMode:\s*hybridSplatOverlayState\.rendererMode/, 'Hybrid Renderer debug state publishes the active renderer mode');
+assert.match(index, /hybridSplatOverlayState\.rendererMode\s*=\s*'scene'/, 'Hybrid Renderer scene start identifies scene-level renderer mode');
+const hybridSplatViewportToggleBody = sourceBetween(index, /async function toggleHybridSplatViewportRenderer\(\)/, /function updateHybridSplatViewportControls\(/);
+assert.match(hybridSplatViewportToggleBody, /startHybridSplatSceneRenderer\(\)/, 'Viewport Start Hybrid dispatches through the scene-level renderer path');
+assert.doesNotMatch(hybridSplatViewportToggleBody, /startSelectedSplatHybridRenderer\(\)/, 'Viewport Start Hybrid must not dispatch through the selected-splat renderer path');
 assert.match(index, /viewportEventHitsInteractiveOverlay[\s\S]*#hybrid-splat-viewport-controls/, 'Hybrid Renderer viewport controls must not bubble into empty-viewport selection clearing');
 assert.match(index, /function publishHybridSplatRendererControls\(/, 'Kaminos publishes renderer-control slider state through the overlay setRendererControls API');
 assert.match(index, /rendererControlsTelemetry/, 'Hybrid Renderer debug state exposes renderer-control telemetry for smoke evidence');
@@ -164,7 +179,8 @@ assert.match(index, /function splatRawAssetToPreviewMatrix\(/, 'Hybrid Renderer 
 assert.match(index, /function hybridSplatOverlayProjectionMatrixForPbrnext\(/, 'Hybrid Renderer overlay compensates PBRnext camera projection into the Kaminos/Three screen frame');
 assert.match(index, /function hybridSplatOverlayProjectionProbe\(/, 'Hybrid Renderer overlay exposes a projection probe for camera-coherence witnesses');
 assert.match(index, /pbrnext-vertical-flip-precompensated/, 'Hybrid Renderer overlay records the PBRnext projection compensation mode');
-assert.match(index, /modelMatrixFrameMode:\s*'pbrnext-setModelMatrix-owned'/, 'Hybrid Renderer overlay records that PBRnext owns setModelMatrix transform application');
+assert.match(index, /'pbrnext-setModelMatrix-owned'/, 'Hybrid Renderer selected-splat compatibility path records that PBRnext owns setModelMatrix transform application');
+assert.match(index, /'kaminos-scene-world-pretransformed'/, 'Hybrid Renderer scene path records that Kaminos pretransformed scene splats before renderer load');
 assert.match(index, /const overlayViewMatrix = new THREE\.Matrix4\(\)\.copy\(camera\.matrixWorldInverse\)/, 'Hybrid Renderer overlay passes camera view without baking object matrix once PBRnext owns setModelMatrix');
 assert.match(index, /const cameraPosition = new Float32Array\(cameraWorld\.toArray\(\)\)/, 'Hybrid Renderer overlay passes world camera position for PBRnext model-local conversion');
 assert.match(index, /\.setModelMatrix\(/, 'Hybrid Renderer overlay receives the effective overlay asset-world matrix through the PBRnext frame contract');

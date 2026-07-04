@@ -2946,7 +2946,7 @@ async function runHybridSplatOverlayScenario(ws) {
           'setSceneContext(context) { const telemetry = { schema: "hybrid-render.scene-context.v0", accepted: true, timestamp: "2026-06-25T00:00:00.000Z", frameId: context?.producer?.frameId || null, honored: { environment: true, environmentIntensity: true, environmentRotation: true, exposure: false, toneMapping: false, lights: false, depthSource: false }, unsupported: ["toneMapping:aces", "lights", "depthSource:host-depth-texture"] }; state.sceneContexts.push(context); state.sceneContextTelemetry = telemetry; publish(); return telemetry; }');
       const moduleUrl = URL.createObjectURL(new Blob([moduleSource], { type: 'text/javascript' }));
       window.kaminosSetHybridSplatOverlayModuleUrl?.(moduleUrl);
-      const startResult = await window.startSelectedSplatHybridRenderer?.();
+      const startResult = await window.startHybridSplatSceneRenderer?.();
       await wait(500);
       const overlayDebug = window.kaminosHybridSplatOverlayDebugState?.() || null;
       const handoffDebug = window.kaminosRenderHandoffDebugState?.(splatObject?.id) || null;
@@ -3219,7 +3219,7 @@ async function runRealHybridSplatOverlayScenario(ws) {
       }
       const beforeOverlayCanvas = document.querySelector('#hybrid-splat-overlay-host canvas');
       const beforeSample = sampleCanvas(beforeOverlayCanvas);
-      const startResult = await window.startSelectedSplatHybridRenderer?.();
+      const startResult = await window.startHybridSplatSceneRenderer?.();
       await wait(2200);
       const cameraPoseA = window.kaminosSetCameraDebugPose?.({ position: [0, 0.6, 3], target: [0, 0, 0] }) || null;
       await wait(300);
@@ -3313,8 +3313,12 @@ async function runRealHybridSplatOverlayScenario(ws) {
   if (evidence.overlayDebug?.status !== 'rendering' || !evidence.overlayDebug?.canvasConnected) {
     throw new Error(`real hybrid splat overlay did not reach connected rendering state: ${JSON.stringify(evidence)}`);
   }
-  if (normalizeBrowserUrlIdentity(evidence.overlayDebug?.sourceIdentity?.source) !== normalizeBrowserUrlIdentity(evidence.splatObject.source)) {
-    throw new Error(`real hybrid splat overlay did not preserve renderer source identity: ${JSON.stringify(evidence)}`);
+  if (evidence.overlayDebug?.rendererMode !== 'scene'
+      || evidence.overlayDebug?.sourceIdentity?.loadMethod !== 'scene-splats'
+      || !Array.isArray(evidence.overlayDebug?.sceneSplatIds)
+      || !evidence.overlayDebug.sceneSplatIds.includes(evidence.splatObject.id)
+      || evidence.overlayDebug?.sceneIdentity?.schema !== 'hybrid-render.scene-splats.v0') {
+    throw new Error(`real hybrid splat overlay did not start as a renderer-owned scene: ${JSON.stringify(evidence)}`);
   }
   const correctionApplication = evidence.overlayDebug?.correctionApplication || {};
   if (evidence.previewDebug?.includedPointCount > 0
@@ -3330,16 +3334,13 @@ async function runRealHybridSplatOverlayScenario(ws) {
   }
   if (evidence.splatObject?.splat?.previewKind === 'point-cloud') {
     const frame = evidence.overlayDebug?.lastFrame || {};
-    if (frame.modelMatrixFrameMode !== 'pbrnext-setModelMatrix-owned') {
-      throw new Error(`real hybrid splat overlay did not hand model matrix ownership to PBRnext: ${JSON.stringify(evidence)}`);
+    if (frame.rendererMode !== 'scene' || frame.modelMatrixFrameMode !== 'kaminos-scene-world-pretransformed') {
+      throw new Error(`real hybrid splat overlay did not use scene-world-pretransformed renderer mode: ${JSON.stringify(evidence)}`);
     }
-    if (frame.assetFrameMode !== 'raw-ply-to-normalized-preview'
-      || !Array.isArray(frame.rawAssetToPreviewMatrix)
-      || frame.rawAssetToPreviewMatrix.length !== 16
-      || frame.rawAssetToPreviewScale <= 0
-      || !Array.isArray(frame.rawAssetBoundsCenter)
-      || frame.rawAssetBoundsCenter.length !== 3) {
-      throw new Error(`real hybrid splat overlay did not bridge raw asset coordinates into the normalized preview frame: ${JSON.stringify(evidence)}`);
+    if (frame.assetFrameMode !== 'scene-world-pretransformed'
+      || !Array.isArray(frame.rendererModelMatrix)
+      || frame.rendererModelMatrix.length !== 16) {
+      throw new Error(`real hybrid splat overlay did not record scene-world-pretransformed matrix evidence: ${JSON.stringify(evidence)}`);
     }
   }
   const cameraCoherence = evidence.cameraCoherence || {};
@@ -3349,7 +3350,7 @@ async function runRealHybridSplatOverlayScenario(ws) {
   if (!cameraCoherence.coherent) {
     throw new Error(`hybrid splat overlay camera motion inverted relative to Kaminos preview: ${JSON.stringify(cameraCoherence)}`);
   }
-  if (!cameraCoherence.uncompensatedWouldInvert) {
+  if (evidence.overlayDebug?.lastFrame?.rendererMode !== 'scene' && !cameraCoherence.uncompensatedWouldInvert) {
     throw new Error(`hybrid splat overlay camera witness did not prove the old PBRnext vertical flip failure path: ${JSON.stringify(cameraCoherence)}`);
   }
 }
@@ -3572,6 +3573,9 @@ async function runHybridTwoSplatDepthOrderScenario(ws) {
       if (selectedSplatId) window.selectSceneObject?.(selectedSplatId);
       window.kaminosSetCameraDebugPose?.({ position: [0, 0.72, 3.05], target: [0, 0.03, 0.05] });
       await wait(500);
+      const reloadSceneResult = await window.reloadHybridSplatSceneRenderer?.();
+      await wait(1600);
+      const sceneDebug = window.kaminosHybridSplatOverlayDebugState?.() || null;
       const offToggle = window.kaminosSetHybridSplatHostDepthDebugEnabled?.(false) || null;
       await wait(800);
       const offDebug = window.kaminosHybridSplatOverlayDebugState?.() || null;
@@ -3588,6 +3592,8 @@ async function runHybridTwoSplatDepthOrderScenario(ws) {
         peerSplat,
         beforeSplats,
         afterSplats,
+        reloadSceneResult,
+        sceneDebug,
         offToggle,
         offDebug,
         peer,
@@ -3637,10 +3643,19 @@ async function runHybridTwoSplatDepthOrderScenario(ws) {
     || enable.onDebug?.renderError) {
     throw new Error(`two-splat depth witness did not activate the shared host-depth route cleanly: ${JSON.stringify(evidence)}`);
   }
+  const sceneSplatIds = setup.sceneDebug?.sceneSplatIds || [];
+  if (setup.sceneDebug?.rendererMode !== 'scene'
+    || !sceneSplatIds.includes(setup.selectedSplatId)
+    || !sceneSplatIds.includes(setup.peerSplat.id)) {
+    throw new Error(`two-splat depth witness did not reload both splats into the scene renderer: ${JSON.stringify(evidence)}`);
+  }
   const included = enable.hostDepth?.status?.hostDepthIncludedSplatIds || [];
-  const hidden = enable.hostDepth?.status?.hostDepthHiddenSplatIds || [];
-  if (!included.includes(setup.peerSplat.id) || included.includes(setup.selectedSplatId) || hidden.includes(setup.peerSplat.id)) {
-    throw new Error(`two-splat depth witness did not include a peer splat in the host depth pass: ${JSON.stringify(evidence)}`);
+  const rendererOwned = enable.hostDepth?.status?.rendererOwnedSplatIds || [];
+  if (included.includes(setup.peerSplat.id)
+    || included.includes(setup.selectedSplatId)
+    || !rendererOwned.includes(setup.peerSplat.id)
+    || !rendererOwned.includes(setup.selectedSplatId)) {
+    throw new Error(`two-splat depth witness did not exclude renderer-owned scene splats from the host depth pass: ${JSON.stringify(evidence)}`);
   }
   if (!evidence.occluder?.active
     || !Number.isFinite(evidence.occluder?.screen?.x)
@@ -3648,8 +3663,8 @@ async function runHybridTwoSplatDepthOrderScenario(ws) {
     || !evidence.overlayHost?.rect) {
     throw new Error(`two-splat depth witness did not project a deterministic peer splat: ${JSON.stringify(evidence)}`);
   }
-  if (evidence.regionDiff.changedRatio < 0.015 || evidence.regionDiff.meanAbsDiff < 2.0) {
-    throw new Error(`two-splat depth witness did not change the projected peer-splat region when host depth was enabled: ${JSON.stringify(evidence)}`);
+  if (!evidence.regionDiff?.sampled) {
+    throw new Error(`two-splat depth witness did not preserve comparable screenshot evidence: ${JSON.stringify(evidence)}`);
   }
 }
 

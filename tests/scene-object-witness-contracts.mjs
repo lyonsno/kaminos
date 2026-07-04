@@ -221,8 +221,9 @@ assert.match(witness, /host-depth occluder witness could not disable host depth 
 assert.match(witness, /host-depth occluder witness did not activate the shared host-depth route cleanly/, 'Host-depth compositor witness proves shared-device native host-depth route identity');
 assert.match(witness, /host-depth occluder witness did not change the projected occluder region/, 'Host-depth compositor witness fails unless the host occluder changes pixels over the splat');
 assert.match(witness, /hybrid-two-splat-depth-order/, 'Host-depth compositor witness runs a deterministic peer-splat depth-order scenario');
-assert.match(witness, /two-splat depth witness did not include a peer splat in the host depth pass/, 'Two-splat compositor witness proves the non-selected splat contributes host depth');
-assert.match(witness, /two-splat depth witness did not change the projected peer-splat region/, 'Two-splat compositor witness fails unless enabling host depth changes pixels where splats overlap');
+assert.match(witness, /two-splat depth witness did not reload both splats into the scene renderer/, 'Two-splat compositor witness proves both splats are renderer-owned before host-depth smoke');
+assert.match(witness, /two-splat depth witness did not exclude renderer-owned scene splats from the host depth pass/, 'Two-splat compositor witness rejects peer splat preview depth contribution under scene-level ownership');
+assert.match(witness, /two-splat depth witness did not preserve comparable screenshot evidence/, 'Two-splat compositor witness still preserves visual screenshot evidence even when peer previews are removed from host depth');
 assert.match(witness, /hybrid-renderer-controls-dropdown/, 'Hybrid Renderer witness can capture the viewport renderer-controls dropdown in its open state');
 assert.match(witness, /hybrid renderer controls dropdown did not open/, 'Hybrid Renderer dropdown witness fails when the menu cannot be opened');
 assert.match(witness, /real-hybrid-cropped-unsupported-guard/, 'Real Hybrid Renderer witness covers cropped assets when renderer crop is unsupported');
@@ -231,8 +232,9 @@ assert.match(witness, /real-hybrid-cropped-supported-overlay/, 'Real Hybrid Rend
 assert.match(witness, /crop-capable renderer did not render the corrected cropped splat/, 'Real Hybrid Renderer witness requires corrected cropped splats to reach the overlay');
 assert.match(witness, /cropped hybrid overlay did not report renderer-side crop application/, 'Real Hybrid Renderer witness requires renderer-side crop telemetry before trusting cropped overlays');
 assert.match(witness, /cropped hybrid overlay lost scene-context acceptance/, 'Real Hybrid Renderer witness keeps cropped overlay acceptance tied to scene-context telemetry');
-assert.match(witness, /real hybrid splat overlay did not bridge raw asset coordinates into the normalized preview frame/, 'Real Hybrid Renderer witness fails when raw PLY splats are rendered without Kaminos preview normalization');
-assert.match(witness, /real hybrid splat overlay did not hand model matrix ownership to PBRnext/, 'Real Hybrid Renderer witness fails while Kaminos still bakes object matrices into camera view');
+assert.match(witness, /real hybrid splat overlay did not start as a renderer-owned scene/, 'Real Hybrid Renderer witness fails unless the live renderer owns the scene splat set');
+assert.match(witness, /real hybrid splat overlay did not use scene-world-pretransformed renderer mode/, 'Real Hybrid Renderer witness fails unless Kaminos pretransforms scene splats before renderer load');
+assert.match(witness, /real hybrid splat overlay did not record scene-world-pretransformed matrix evidence/, 'Real Hybrid Renderer witness preserves scene renderer matrix-frame evidence');
 assert.match(witness, /hybrid splat overlay camera motion inverted relative to Kaminos preview/, 'Real Hybrid Renderer witness fails when the overlay layer moves inverted under camera motion');
 assert.match(witness, /--hybrid-module-url/, 'Real Hybrid Renderer witness can target a non-default PBRnext module server without rewriting the witness');
 assert.match(indexHtml, /capabilities: handle\?\.capabilities \|\| null/, 'Hybrid Renderer debug state exposes stable overlayDebug.capabilities alias');
