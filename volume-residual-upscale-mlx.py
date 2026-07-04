@@ -165,7 +165,8 @@ def parse_args():
     parser.add_argument("--learning-rate", type=float, default=1e-3)
     parser.add_argument("--eval-patches", type=int, default=64)
     parser.add_argument("--preview-size", type=int, default=384)
-    parser.add_argument("--preview-mode", choices=["center", "foreground", "edge-band"], default="center")
+    parser.add_argument("--preview-mode", choices=["center", "foreground", "edge-band", "full-frame"], default="center")
+    parser.add_argument("--preview-frame-count", dest="previewFrameCount", type=int, default=1, help="Number of eval-item preview frames to emit for product-view witnesses.")
     parser.add_argument("--seed", type=int, default=630)
     parser.add_argument("--sleep-ms", dest="sleepMs", type=float, default=0.0, help="Optional per-step sleep throttle for contention control.")
     parser.add_argument("--foreground-threshold", dest="foregroundThreshold", type=float, default=0.025)
@@ -765,6 +766,19 @@ def per_sample_mse(prediction, target):
 def crop_region(item, crop_size, previewMode):
     low = item["low"]
     height, width, _channels = low.shape
+    if previewMode == "full-frame":
+        return 0, 0, height, width, {
+            "mode": "full-frame",
+            "centerY": height / 2,
+            "centerX": width / 2,
+            "foregroundPixels": item.get("foregroundPixels", 0),
+            "edgeBandPixels": item.get("edgeBandPixels", 0),
+            "fullFrame": True,
+            "top": 0,
+            "left": 0,
+            "height": height,
+            "width": width,
+        }
     crop_height = min(crop_size, height)
     crop_width = min(crop_size, width)
     focus = {
@@ -1190,6 +1204,39 @@ def make_preview(model, eval_item, out_path, diagnostic_out_path, preview_size, 
     return previewFocus
 
 
+def make_preview_frames(model, eval_items, out_dir, preview_size, previewMode, conditionRenderScale, residualApplicationMaskMode, residualMaskFeatherRadius, previewFrameCount, primary_preview_path, primary_diagnostic_preview_path, primary_preview_focus):
+    frame_count = min(max(1, int(previewFrameCount)), len(eval_items))
+    frames = [{
+        "index": 0,
+        "item": eval_items[0]["id"],
+        "preview": str(primary_preview_path),
+        "diagnosticPreview": str(primary_diagnostic_preview_path),
+        "previewFocus": primary_preview_focus,
+    }]
+    for index in range(1, frame_count):
+        preview_path = out_dir / f"residual-preview-frame-{index:03d}-low-model-target-diff.png"
+        diagnostic_preview_path = out_dir / f"residual-preview-frame-{index:03d}-low-model-target-targetres-modelres-error-mask.png"
+        focus = make_preview(
+            model,
+            eval_items[index],
+            preview_path,
+            diagnostic_preview_path,
+            preview_size,
+            previewMode,
+            conditionRenderScale,
+            residualApplicationMaskMode,
+            residualMaskFeatherRadius,
+        )
+        frames.append({
+            "index": index,
+            "item": eval_items[index]["id"],
+            "preview": str(preview_path),
+            "diagnosticPreview": str(diagnostic_preview_path),
+            "previewFocus": focus,
+        })
+    return frames
+
+
 def main():
     args = parse_args()
     if args.temporalLossWeight < 0:
@@ -1204,6 +1251,8 @@ def main():
         raise ValueError("--edge-band-dilate must be non-negative")
     if args.residualMaskFeatherRadius < 0:
         raise ValueError("--residual-mask-feather-radius must be non-negative")
+    if args.previewFrameCount < 1:
+        raise ValueError("--preview-frame-count must be at least 1")
     if args.chromaResidualScale < 0:
         raise ValueError("--chroma-residual-scale must be non-negative")
     for label, value in [
@@ -1433,6 +1482,20 @@ def main():
     preview_path = out_dir / "residual-preview-low-model-target-diff.png"
     diagnostic_preview_path = out_dir / "residual-preview-low-model-target-targetres-modelres-error-mask.png"
     previewFocus = make_preview(model, eval_items[0], preview_path, diagnostic_preview_path, args.preview_size, args.preview_mode, conditionRenderScale, residualApplicationMaskMode, residualMaskFeatherRadius)
+    previewFrames = make_preview_frames(
+        model,
+        eval_items,
+        out_dir,
+        args.preview_size,
+        args.preview_mode,
+        conditionRenderScale,
+        residualApplicationMaskMode,
+        residualMaskFeatherRadius,
+        args.previewFrameCount,
+        preview_path,
+        diagnostic_preview_path,
+        previewFocus,
+    )
     temporalMetrics = {}
     if args.temporalEval:
         temporalMetrics = temporal_sequence_metrics(
@@ -1543,6 +1606,8 @@ def main():
         ],
         "temporalLossFallback": temporalLossFallback,
         "previewMode": args.preview_mode,
+        "previewFrameCount": args.previewFrameCount,
+        "fullFramePreview": args.preview_mode == "full-frame",
         "previewFocus": previewFocus,
         "temporalEval": args.temporalEval,
         "temporalEvalScope": args.temporalEvalScope,
@@ -1599,6 +1664,7 @@ def main():
         **temporalMetrics,
         "preview": str(preview_path),
         "diagnosticPreview": str(diagnostic_preview_path),
+        "previewFrames": previewFrames,
     }
     report_path = out_dir / "residual-report.json"
     report_path.write_text(json.dumps(report, indent=2))
