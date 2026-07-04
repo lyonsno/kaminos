@@ -20,9 +20,17 @@ PAIR_AUTHORITY = "frame-locked-render-scale-set-v0"
 IMAGE_AUTHORITY = "cdp-canvas-clip-capture-after-render-only-frozen-sim-state"
 
 
+def apply_limited_residual(base_image, residual, residualOutputLimit):
+    scaled_residual = residual * 0.25
+    if residualOutputLimit and residualOutputLimit > 0:
+        scaled_residual = mx.clip(scaled_residual, -float(residualOutputLimit), float(residualOutputLimit))
+    return mx.clip(base_image + scaled_residual, 0.0, 1.0)
+
+
 class TinyResidualUpscaler(nn.Module):
-    def __init__(self, hidden_channels, input_channels):
+    def __init__(self, hidden_channels, input_channels, residual_output_limit):
         super().__init__()
+        self.residualOutputLimit = float(residual_output_limit)
         self.input = nn.Conv2d(input_channels, hidden_channels, kernel_size=3, padding=1)
         self.mid_a = nn.Conv2d(hidden_channels, hidden_channels, kernel_size=3, padding=1)
         self.mid_b = nn.Conv2d(hidden_channels, hidden_channels, kernel_size=3, padding=1)
@@ -36,12 +44,13 @@ class TinyResidualUpscaler(nn.Module):
         hidden = nn.relu(self.mid_a(hidden))
         hidden = nn.relu(self.mid_b(hidden))
         residual = self.output(hidden)
-        return mx.clip(base_image + residual * 0.25, 0.0, 1.0)
+        return apply_limited_residual(base_image, residual, self.residualOutputLimit)
 
 
 class DirectResidualUpscaler(nn.Module):
-    def __init__(self, input_channels):
+    def __init__(self, input_channels, residual_output_limit):
         super().__init__()
+        self.residualOutputLimit = float(residual_output_limit)
         self.output = nn.Conv2d(input_channels, 3, kernel_size=3, padding=1)
         self.output.weight = mx.zeros_like(self.output.weight)
         self.output.bias = mx.zeros_like(self.output.bias)
@@ -49,12 +58,13 @@ class DirectResidualUpscaler(nn.Module):
     def __call__(self, image):
         base_image = image[..., :3]
         residual = self.output(image)
-        return mx.clip(base_image + residual * 0.25, 0.0, 1.0)
+        return apply_limited_residual(base_image, residual, self.residualOutputLimit)
 
 
 class HybridResidualUpscaler(nn.Module):
-    def __init__(self, hidden_channels, input_channels):
+    def __init__(self, hidden_channels, input_channels, residual_output_limit):
         super().__init__()
+        self.residualOutputLimit = float(residual_output_limit)
         self.direct_output = nn.Conv2d(input_channels, 3, kernel_size=3, padding=1)
         self.detail_input = nn.Conv2d(input_channels, hidden_channels, kernel_size=3, padding=1)
         self.detail_mid_a = nn.Conv2d(hidden_channels, hidden_channels, kernel_size=3, padding=1)
@@ -72,13 +82,14 @@ class HybridResidualUpscaler(nn.Module):
         detail = nn.relu(self.detail_mid_a(detail))
         detail = nn.relu(self.detail_mid_b(detail))
         detail_residual = self.detail_output(detail)
-        return mx.clip(base_image + (direct_residual + detail_residual) * 0.25, 0.0, 1.0)
+        return apply_limited_residual(base_image, direct_residual + detail_residual, self.residualOutputLimit)
 
 
 class GatedDetailResidualUpscaler(nn.Module):
-    def __init__(self, hidden_channels, input_channels, detail_gate):
+    def __init__(self, hidden_channels, input_channels, detail_gate, residual_output_limit):
         super().__init__()
         self.detailGate = float(detail_gate)
+        self.residualOutputLimit = float(residual_output_limit)
         self.direct_output = nn.Conv2d(input_channels, 3, kernel_size=3, padding=1)
         self.detail_input = nn.Conv2d(input_channels, hidden_channels, kernel_size=3, padding=1)
         self.detail_mid_a = nn.Conv2d(hidden_channels, hidden_channels, kernel_size=3, padding=1)
@@ -96,7 +107,7 @@ class GatedDetailResidualUpscaler(nn.Module):
         detail = nn.relu(self.detail_mid_a(detail))
         detail = nn.relu(self.detail_mid_b(detail))
         detail_residual = self.detail_output(detail) * self.detailGate
-        return mx.clip(base_image + (direct_residual + detail_residual) * 0.25, 0.0, 1.0)
+        return apply_limited_residual(base_image, direct_residual + detail_residual, self.residualOutputLimit)
 
 
 def parse_args():
@@ -128,6 +139,7 @@ def parse_args():
     parser.add_argument("--edge-loss-weight", dest="edgeLossWeight", type=float, default=0.0)
     parser.add_argument("--edge-gradient-loss-weight", dest="edgeGradientLossWeight", type=float, default=0.0)
     parser.add_argument("--outside-edge-residual-weight", dest="outsideEdgeResidualWeight", type=float, default=0.0)
+    parser.add_argument("--residual-output-limit", dest="residualOutputLimit", type=float, default=0.0, help="Optional symmetric clamp on the scaled RGB residual before adding it to the low image; 0 disables the clamp.")
     parser.add_argument("--condition-render-scale", dest="conditionRenderScale", action="store_true")
     parser.add_argument("--temporal-eval", dest="temporalEval", action="store_true")
     parser.add_argument("--temporal-eval-scope", dest="temporalEvalScope", choices=["selected", "train", "eval"], default="selected")
@@ -150,19 +162,19 @@ def sha256_file(path):
     return digest.hexdigest()
 
 
-def make_model(model_arch, hidden_channels, input_channels, detail_gate):
+def make_model(model_arch, hidden_channels, input_channels, detail_gate, residual_output_limit):
     if model_arch == "tiny-conv":
-        return TinyResidualUpscaler(hidden_channels, input_channels)
+        return TinyResidualUpscaler(hidden_channels, input_channels, residual_output_limit)
     if model_arch == "direct-residual":
-        return DirectResidualUpscaler(input_channels)
+        return DirectResidualUpscaler(input_channels, residual_output_limit)
     if model_arch == "hybrid-residual":
-        return HybridResidualUpscaler(hidden_channels, input_channels)
+        return HybridResidualUpscaler(hidden_channels, input_channels, residual_output_limit)
     if model_arch == "gated-detail-residual":
-        return GatedDetailResidualUpscaler(hidden_channels, input_channels, detail_gate)
+        return GatedDetailResidualUpscaler(hidden_channels, input_channels, detail_gate, residual_output_limit)
     raise ValueError(f"unsupported model architecture: {model_arch}")
 
 
-def model_config(model_arch, hidden_channels, input_channels, condition_render_scale, scale_channel, detail_gate):
+def model_config(model_arch, hidden_channels, input_channels, condition_render_scale, scale_channel, detail_gate, residual_output_limit):
     return {
         "modelArch": model_arch,
         "hiddenChannels": hidden_channels,
@@ -170,6 +182,7 @@ def model_config(model_arch, hidden_channels, input_channels, condition_render_s
         "conditionRenderScale": condition_render_scale,
         "scaleChannel": scale_channel,
         "detailGate": detail_gate if model_arch == "gated-detail-residual" else None,
+        "residualOutputLimit": residual_output_limit,
     }
 
 
@@ -216,6 +229,7 @@ def save_model_artifact(model, model_dir, config, args, corpus, metrics, effecti
             "edgeLossWeight": args.edgeLossWeight,
             "edgeGradientLossWeight": args.edgeGradientLossWeight,
             "outsideEdgeResidualWeight": args.outsideEdgeResidualWeight,
+            "residualOutputLimit": args.residualOutputLimit,
             "temporalLossWeight": args.temporalLossWeight,
             "residualTemporalLossWeight": args.residualTemporalLossWeight,
         },
@@ -1076,6 +1090,7 @@ def main():
         ("--edge-loss-weight", args.edgeLossWeight),
         ("--edge-gradient-loss-weight", args.edgeGradientLossWeight),
         ("--outside-edge-residual-weight", args.outsideEdgeResidualWeight),
+        ("--residual-output-limit", args.residualOutputLimit),
     ]:
         if value < 0:
             raise ValueError(f"{label} must be non-negative")
@@ -1110,6 +1125,7 @@ def main():
         scaleChannel = loaded_config.get("scaleChannel")
         loaded_detail_gate = loaded_config.get("detailGate")
         detailGate = float(loaded_detail_gate) if loaded_detail_gate is not None else args.detailResidualGate
+        residualOutputLimit = float(loaded_config.get("residualOutputLimit", args.residualOutputLimit))
         modelConfigSource = "loadedModelArtifact"
     else:
         modelArch = args.modelArch
@@ -1118,9 +1134,10 @@ def main():
         input_channels = 4 if conditionRenderScale else 3
         scaleChannel = "lowRenderScale" if conditionRenderScale else None
         detailGate = args.detailResidualGate
+        residualOutputLimit = args.residualOutputLimit
         modelConfigSource = "cli"
 
-    model = make_model(modelArch, hiddenChannels, input_channels, detailGate)
+    model = make_model(modelArch, hiddenChannels, input_channels, detailGate, residualOutputLimit)
     if loadedModelArtifact:
         model.load_weights(loadedModelArtifact["weightsPath"])
         mx.eval(model.parameters())
@@ -1131,6 +1148,7 @@ def main():
         conditionRenderScale,
         scaleChannel,
         detailGate,
+        residualOutputLimit,
     )
     effectiveMaxSteps = 0 if args.evalOnly else args.maxSteps
     optimizer = optim.Adam(learning_rate=args.learning_rate)
@@ -1337,6 +1355,7 @@ def main():
         "edgeLossWeight": args.edgeLossWeight,
         "edgeGradientLossWeight": args.edgeGradientLossWeight,
         "outsideEdgeResidualWeight": args.outsideEdgeResidualWeight,
+        "residualOutputLimit": residualOutputLimit,
         "conditionRenderScale": conditionRenderScale,
         "temporalLossWeight": args.temporalLossWeight,
         "activeTemporalLossWeight": activeTemporalLossWeight,
@@ -1393,6 +1412,7 @@ def main():
         "patchSize": args.patch_size,
         "hiddenChannels": hiddenChannels,
         "detailGate": detailGate if modelArch == "gated-detail-residual" else None,
+        "residualOutputLimit": residualOutputLimit,
         "learningRate": args.learning_rate,
         "evalPatches": args.eval_patches,
         "durationSeconds": duration_seconds,
