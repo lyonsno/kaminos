@@ -2124,3 +2124,16 @@ const residualGreenroomRunner = existsSync(residualGreenroomRunnerPath) ? readFi
 assert.match(residualGreenroomRunner, /kaminos\.volume\.residual-greenroom-runner\.v0/, 'Greenroom wrapper writes stable route-proof identity');
 assert.match(residualGreenroomRunner, /mlxDefaultDevice/, 'Greenroom wrapper prints MLX default device before heavy work');
 assert.match(residualGreenroomRunner, /greenroom-route-proof\.json/, 'Greenroom wrapper writes route proof into the job output directory');
+assert.match(residualMlx, /--edge-band-mode/, 'MLX residual runner can derive target-error edge bands from low/high pairs');
+assert.match(residualMlx, /--edge-sampling-probability/, 'MLX residual runner can bias patch sampling toward target-error edge bands');
+assert.match(residualMlx, /--edge-loss-weight/, 'MLX residual runner exposes explicit edge-band reconstruction loss');
+assert.match(residualMlx, /--edge-gradient-loss-weight/, 'MLX residual runner exposes edge-band gradient loss for crisp silhouette recovery');
+assert.match(residualMlx, /--outside-edge-residual-weight/, 'MLX residual runner can penalize hallucinated residual energy outside target-error edge bands');
+assert.match(residualMlx, /edge_band_mask/, 'MLX residual runner names the target-derived edge-band mask builder');
+assert.match(residualMlx, /edgeBandPixels/, 'MLX residual runner records edge-band mask pixel counts per pair');
+assert.match(residualMlx, /edgeBandDeltaPsnr/, 'MLX residual runner reports edge-band PSNR delta separately from full-frame PSNR');
+assert.match(residualMlx, /outsideEdgeResidualMse/, 'MLX residual runner reports outside-edge residual damage separately from edge improvement');
+assert.match(residualMlx, /residual-preview-low-model-target-targetres-modelres-error-mask\.png/, 'MLX residual runner writes a preview strip exposing target residual, model residual, remaining error, and mask');
+assert.match(residualGreenroomRunner, /--edge-band-mode/, 'Greenroom residual wrapper forwards edge-band mode to the MLX runner');
+assert.match(residualGreenroomRunner, /--edge-sampling-probability/, 'Greenroom residual wrapper forwards edge-biased sampling probability');
+assert.match(residualGreenroomRunner, /--edge-gradient-loss-weight/, 'Greenroom residual wrapper forwards edge gradient loss weight');

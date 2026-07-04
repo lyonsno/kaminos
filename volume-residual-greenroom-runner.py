@@ -42,6 +42,13 @@ def parse_args():
     parser.add_argument("--loss-mode", default="weighted")
     parser.add_argument("--foreground-loss-weight", default="2.0")
     parser.add_argument("--difference-loss-weight", default="0.25")
+    parser.add_argument("--edge-band-mode", default="off")
+    parser.add_argument("--edge-band-threshold", default="0.03")
+    parser.add_argument("--edge-band-dilate", default="2")
+    parser.add_argument("--edge-sampling-probability", default="0")
+    parser.add_argument("--edge-loss-weight", default="0")
+    parser.add_argument("--edge-gradient-loss-weight", default="0")
+    parser.add_argument("--outside-edge-residual-weight", default="0")
     parser.add_argument("--condition-render-scale", default="false")
     parser.add_argument("--temporal-eval", default="true")
     parser.add_argument("--temporal-eval-scope", default="selected")
@@ -125,6 +132,20 @@ def build_child_command(args):
         str(args.foreground_loss_weight),
         "--difference-loss-weight",
         str(args.difference_loss_weight),
+        "--edge-band-mode",
+        str(args.edge_band_mode),
+        "--edge-band-threshold",
+        str(args.edge_band_threshold),
+        "--edge-band-dilate",
+        str(args.edge_band_dilate),
+        "--edge-sampling-probability",
+        str(args.edge_sampling_probability),
+        "--edge-loss-weight",
+        str(args.edge_loss_weight),
+        "--edge-gradient-loss-weight",
+        str(args.edge_gradient_loss_weight),
+        "--outside-edge-residual-weight",
+        str(args.outside_edge_residual_weight),
         "--temporal-eval-scope",
         str(args.temporal_eval_scope),
         "--temporal-loss-weight",
@@ -205,6 +226,8 @@ def main():
             final_receipt["modelPsnr"] = report.get("modelPsnr")
             final_receipt["deltaPsnr"] = report.get("deltaPsnr")
             final_receipt["weightedDeltaPsnr"] = report.get("weightedDeltaPsnr")
+            final_receipt["edgeBandDeltaPsnr"] = report.get("edgeBandDeltaPsnr")
+            final_receipt["outsideEdgeResidualMse"] = report.get("outsideEdgeResidualMse")
         except Exception as exc:
             final_receipt["residualReportReadError"] = repr(exc)
     (out_dir / "greenroom-runner-receipt.json").write_text(json.dumps(final_receipt, indent=2) + "\n")
