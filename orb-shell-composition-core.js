@@ -5,6 +5,7 @@ export const ORB_SHELL_MACRO_TORSION_MODE = 'macro-torsion-field-v0';
 export const ORB_SHELL_MACRO_FAMILY_SUBSTRIP_MODE = 'parent-owned-lamellar-substrip-decomposition-v0';
 export const ORB_SHELL_APERTURE_TERMINATION_MODE = 'aperture-relative-lamellar-termination-v0';
 export const ORB_SHELL_APERTURE_TANGENCY_WITNESS_MODE = 'aperture-tangency-witness-v0';
+export const ORB_SHELL_APERTURE_AWARE_TERMINUS_MODE = 'aperture-aware-terminus-v0';
 export const ORB_SHELL_APERTURE_ORBIT_CAPTURE_MODE = 'macro-aperture-orbit-capture-v0';
 export const ORB_SHELL_LOWER_SOCKET_RENDER_INVENTORY_MODE = 'lower-socket-semantic-render-inventory-v0';
 export const ORB_SHELL_MACRO_MORPHOLOGY_INVENTORY_MODE = 'macro-curve-vs-promoted-body-diagnostic-v0';
@@ -2607,6 +2608,112 @@ function createApertureTangencyWitnessPlan(composition, apertureRelativeTerminat
   };
 }
 
+function apertureAwareTerminusRoleForSubstrip(substrip) {
+  const terminationClass = substrip.apertureTermination?.terminationClass;
+  const siblingRole = substrip.siblingRole || substrip.apertureTermination?.siblingRole;
+  if (terminationClass === 'counter-curve-blade') {
+    return substrip.apertureTermination?.ownsFurthestVisibleTip ? 'counter-curve' : 'socket-latch';
+  }
+  if (terminationClass === 'orbit-capture') {
+    if (siblingRole === 'lead') return 'orbit-tangent';
+    if (siblingRole === 'inner') return 'underpass-return';
+    return 'socket-latch';
+  }
+  return 'rim-segment';
+}
+
+function terminalBlendSpanForApertureAwareTerminus(role) {
+  if (role === 'counter-curve') return [0.62, 1];
+  if (role === 'underpass-return') return [0.56, 1];
+  if (role === 'socket-latch') return [0.6, 1];
+  if (role === 'rim-segment') return [0.66, 1];
+  return [0.58, 1];
+}
+
+function createApertureAwareTerminusPlan(composition, apertureRelativeTerminationPlan, substrips) {
+  const primaryVoid = composition.AperturePressure?.primaryVoids?.[0];
+  const apertureField = apertureRelativeTerminationPlan?.apertureField;
+  if (!primaryVoid || !apertureField) {
+    return {
+      schema: 'ApertureAwareTerminusPlan',
+      mode: ORB_SHELL_APERTURE_AWARE_TERMINUS_MODE,
+      id: 'limited-two-family-aperture-aware-terminus-plan',
+      sourceApertureId: primaryVoid?.id || null,
+      sourceApertureRadius: primaryVoid?.radius || null,
+      recordCount: 0,
+      records: [],
+      roleCounts: {},
+      failureModes: ['missing-visible-aperture-source', 'generic-strip-cap-without-contour-destiny'],
+    };
+  }
+  const records = substrips.map(substrip => {
+    const terminalSample = substrip.edgeSamples.at(-1);
+    const nearest = nearestAperturePressureRingSample(primaryVoid, terminalSample.center);
+    const terminusRole = apertureAwareTerminusRoleForSubstrip(substrip);
+    const endCap = substrip.terminalCaps.find(cap => cap.endRole === 'end-terminus');
+    const id = `${substrip.id}-aperture-aware-terminus`;
+    const record = {
+      schema: 'ApertureAwareTerminus',
+      mode: ORB_SHELL_APERTURE_AWARE_TERMINUS_MODE,
+      id,
+      sourceSubstripId: substrip.id,
+      parentAssemblage: substrip.parentAssemblage,
+      siblingRole: substrip.siblingRole,
+      terminusRole,
+      terminationClass: substrip.apertureTermination?.terminationClass,
+      terminalVisibility: substrip.apertureTermination?.terminalVisibility,
+      sourceApertureId: primaryVoid.id,
+      sourceApertureFieldId: apertureField.id,
+      sourceApertureRadius: primaryVoid.radius,
+      targetPoint: nearest.point,
+      targetTangent: nearest.tangent,
+      targetNormal: normalizePoint(nearest.point),
+      nearestApertureAngleRadians: nearest.angle,
+      terminalPoint: terminalSample.center,
+      terminalTangent: normalizePoint(terminalSample.tangent),
+      terminalBlendSpan: terminalBlendSpanForApertureAwareTerminus(terminusRole),
+      terminalPlane: endCap?.terminalPlane || substrip.apertureTermination?.terminalPlane || 'aperture-relative-angled-terminal',
+      renderedGeometryIds: [
+        substrip.id,
+        endCap?.id,
+      ].filter(Boolean),
+      witnessGeometryIds: [
+        `${id}-target-point`,
+        `${id}-target-tangent`,
+        `${id}-terminal-tangent`,
+      ],
+      law: `${terminusRole}-relative-to-non-circular-aperture-contour`,
+      falseClosureBlocked: 'role-label-without-rendered-terminus-consumer',
+    };
+    substrip.apertureAwareTerminus = record;
+    if (endCap) endCap.apertureAwareTerminus = record;
+    return record;
+  });
+  const roleCounts = records.reduce((counts, record) => {
+    counts[record.terminusRole] = (counts[record.terminusRole] || 0) + 1;
+    return counts;
+  }, {});
+  return {
+    schema: 'ApertureAwareTerminusPlan',
+    mode: ORB_SHELL_APERTURE_AWARE_TERMINUS_MODE,
+    id: 'limited-two-family-aperture-aware-terminus-plan',
+    sourceApertureId: primaryVoid.id,
+    sourceApertureFieldId: apertureField.id,
+    sourceApertureRadius: primaryVoid.radius,
+    sourceContourLaw: 'non-circular-socket-contour-is-terminal-destiny-source',
+    recordCount: records.length,
+    records,
+    roleCounts,
+    renderedGeometryIds: records.flatMap(record => record.renderedGeometryIds),
+    witnessGeometryIds: records.flatMap(record => record.witnessGeometryIds),
+    failureModes: [
+      'generic-strip-cap-without-contour-destiny',
+      'role-label-without-rendered-terminus-consumer',
+      'circular-orbit-assumption-after-non-circular-socket-authority',
+    ],
+  };
+}
+
 function dynamicSubstripVRange(spec, localT) {
   const [baseV0, baseV1] = spec.normalizedVRange;
   const baseCenter = (baseV0 + baseV1) * 0.5;
@@ -3027,6 +3134,11 @@ function createMacroFamilySubstripPlan(composition) {
     parentAssemblageIds,
     substrips,
   );
+  const apertureAwareTerminusPlan = createApertureAwareTerminusPlan(
+    composition,
+    apertureRelativeTerminationPlan,
+    substrips,
+  );
   const apertureTangencyWitnessPlan = createApertureTangencyWitnessPlan(
     composition,
     apertureRelativeTerminationPlan,
@@ -3044,6 +3156,7 @@ function createMacroFamilySubstripPlan(composition) {
     gapContracts,
     gapContractCount: gapContracts.length,
     apertureRelativeTerminationPlan,
+    apertureAwareTerminusPlan,
     apertureTangencyWitnessPlan,
     apertureTerminationClassCounts: apertureRelativeTerminationPlan.apertureTerminationClassCounts,
     renderPolicy: {
@@ -6717,6 +6830,12 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
       apertureRelativeTerminationPlan: composition.macroFamilySubstripPlan?.apertureRelativeTerminationPlan,
       apertureTerminationField: composition.macroFamilySubstripPlan?.apertureRelativeTerminationPlan?.apertureField,
       apertureTerminationClassCounts: composition.macroFamilySubstripPlan?.apertureTerminationClassCounts || {},
+      ApertureAwareTerminusPlan: composition.macroFamilySubstripPlan?.apertureAwareTerminusPlan,
+      apertureAwareTerminusPlan: composition.macroFamilySubstripPlan?.apertureAwareTerminusPlan,
+      ApertureAwareTerminus: composition.macroFamilySubstripPlan?.apertureAwareTerminusPlan?.records || [],
+      apertureAwareTerminusCount: composition.macroFamilySubstripPlan?.apertureAwareTerminusPlan?.recordCount || 0,
+      apertureAwareTerminusRoleCounts: composition.macroFamilySubstripPlan?.apertureAwareTerminusPlan?.roleCounts || {},
+      apertureAwareTerminusWitnessGeometryIds: composition.macroFamilySubstripPlan?.apertureAwareTerminusPlan?.witnessGeometryIds || [],
       apertureTangencyWitnessPlan: composition.macroFamilySubstripPlan?.apertureTangencyWitnessPlan,
       apertureTangencySampleCount: composition.macroFamilySubstripPlan?.apertureTangencyWitnessPlan?.sampleCount || 0,
       apertureTangencyVerdictCounts: composition.macroFamilySubstripPlan?.apertureTangencyWitnessPlan?.verdictCounts || {},
@@ -7464,6 +7583,12 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
         apertureRelativeTerminationPlan: composition.macroFamilySubstripPlan?.apertureRelativeTerminationPlan,
         apertureTerminationField: composition.macroFamilySubstripPlan?.apertureRelativeTerminationPlan?.apertureField,
         apertureTerminationClassCounts: composition.macroFamilySubstripPlan?.apertureTerminationClassCounts || {},
+        ApertureAwareTerminusPlan: composition.macroFamilySubstripPlan?.apertureAwareTerminusPlan,
+        apertureAwareTerminusPlan: composition.macroFamilySubstripPlan?.apertureAwareTerminusPlan,
+        ApertureAwareTerminus: composition.macroFamilySubstripPlan?.apertureAwareTerminusPlan?.records || [],
+        apertureAwareTerminusCount: composition.macroFamilySubstripPlan?.apertureAwareTerminusPlan?.recordCount || 0,
+        apertureAwareTerminusRoleCounts: composition.macroFamilySubstripPlan?.apertureAwareTerminusPlan?.roleCounts || {},
+        apertureAwareTerminusWitnessGeometryIds: composition.macroFamilySubstripPlan?.apertureAwareTerminusPlan?.witnessGeometryIds || [],
         ApertureTangencyWitnessPlan: composition.macroFamilySubstripPlan?.apertureTangencyWitnessPlan,
         apertureTangencyWitnessPlan: composition.macroFamilySubstripPlan?.apertureTangencyWitnessPlan,
         ApertureTangencySample: composition.macroFamilySubstripPlan?.apertureTangencyWitnessPlan?.samples || [],

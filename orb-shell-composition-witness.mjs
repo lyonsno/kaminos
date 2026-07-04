@@ -708,6 +708,10 @@ async function main() {
     assert.equal(state?.apertureTerminationField?.schema, 'ApertureTerminationField', 'aperture termination field missing from debug state');
     assert.ok(state?.apertureTerminationClassCounts?.['orbit-capture'] >= 1, 'orbit-capture termination class missing from debug state');
     assert.ok(state?.apertureTerminationClassCounts?.['counter-curve-blade'] >= 1, 'counter-curve blade termination class missing from debug state');
+    assert.equal(state?.apertureAwareTerminusPlan?.schema, 'ApertureAwareTerminusPlan', 'aperture-aware terminus plan missing from debug state');
+    assert.equal(state?.apertureAwareTerminusCount, state.macroFamilySubstripCount, 'aperture-aware terminus count must match visible substrip count');
+    assert.ok(state?.ApertureAwareTerminus?.every(record => record?.schema === 'ApertureAwareTerminus'), 'ApertureAwareTerminus records missing from debug state');
+    assert.ok(state?.apertureAwareTerminusWitnessGeometryIds?.some(id => id.includes('target-tangent')), 'aperture-aware terminus target tangent witness ids missing');
     assert.equal(state?.apertureTangencyWitnessPlan?.schema, 'ApertureTangencyWitnessPlan', 'aperture tangency witness plan missing from debug state');
     assert.equal(state?.apertureTangencyWitnessPlan?.measuredApertureFieldId, state.apertureRelativeTerminationPlan.apertureField.id, 'aperture tangency witness must measure active termination field');
     assert.equal(state?.apertureTangencyMeasuredApertureSourceId, 'primary-front-teardrop-void', 'aperture tangency witness must measure visible blue aperture source');
@@ -939,6 +943,12 @@ async function main() {
       apertureRelativeTerminationPlan: state.apertureRelativeTerminationPlan,
       apertureTerminationField: state.apertureTerminationField,
       apertureTerminationClassCounts: state.apertureTerminationClassCounts,
+      ApertureAwareTerminusPlan: state.ApertureAwareTerminusPlan,
+      apertureAwareTerminusPlan: state.apertureAwareTerminusPlan,
+      ApertureAwareTerminus: state.ApertureAwareTerminus,
+      apertureAwareTerminusCount: state.apertureAwareTerminusCount,
+      apertureAwareTerminusRoleCounts: state.apertureAwareTerminusRoleCounts,
+      apertureAwareTerminusWitnessGeometryIds: state.apertureAwareTerminusWitnessGeometryIds,
       ApertureTangencyWitnessPlan: state.ApertureTangencyWitnessPlan,
       apertureTangencyWitnessPlan: state.apertureTangencyWitnessPlan,
       ApertureTangencySample: state.ApertureTangencySample,
