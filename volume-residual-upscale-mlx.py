@@ -905,6 +905,8 @@ def empty_temporal_metrics(temporalEvalScope, residualContinuationMode, residual
         "temporalFlickerAmplification": None,
         "temporalPreview": None,
         "temporalPreviewFocus": None,
+        "temporalSequencePreview": None,
+        "temporalSequenceFrames": [],
         "residualContinuationMode": residualContinuationMode,
         "residualContinuationEffectiveMode": effectiveMode,
         "residualContinuationAlpha": residualContinuationAlpha,
@@ -943,10 +945,13 @@ def temporal_sequence_metrics(model, loaded, train_items, eval_items, out_dir, c
     continuation_flicker_ratios = []
     temporal_pairs = []
     temporal_preview_path = out_dir / "temporal-preview-low0-low1-model0-model1-target0-target1-delta-diff.png"
+    temporal_sequence_preview_path = out_dir / "temporal-sequence-preview-low-model-target-error-mask.png"
     continuation_preview_path = out_dir / "temporal-preview-continuation-low0-low1-model0-model1-cont0-cont1-target0-target1-delta-diff.png"
     temporal_preview_written = False
+    temporal_sequence_preview_written = False
     continuation_preview_written = False
     temporal_focus = None
+    temporal_sequence_frames = []
     for group in groups:
         top, left, crop_height, crop_width, focus = crop_region(group[0], crop_size, previewMode)
         region = (top, left, crop_height, crop_width)
@@ -955,6 +960,13 @@ def temporal_sequence_metrics(model, loaded, train_items, eval_items, out_dir, c
             low_patch, high_patch, model_input, residual_mask = crop_item_arrays(item, region, conditionRenderScale)
             pred_patch = predict_patch(model, model_input, residual_mask, residualApplicationMaskMode, residualMaskFeatherRadius)
             rendered.append((item, low_patch, high_patch, pred_patch))
+        if not temporal_sequence_preview_written:
+            temporal_sequence_frames = save_temporal_sequence_preview(
+                rendered,
+                focus,
+                temporal_sequence_preview_path,
+            )
+            temporal_sequence_preview_written = True
         continued_rendered = apply_residual_continuation(
             rendered,
             residualContinuationMode,
@@ -1047,6 +1059,8 @@ def temporal_sequence_metrics(model, loaded, train_items, eval_items, out_dir, c
         "temporalPairs": temporal_pairs,
         "temporalPreview": str(temporal_preview_path) if temporal_preview_written else None,
         "temporalPreviewFocus": temporal_focus,
+        "temporalSequencePreview": str(temporal_sequence_preview_path) if temporal_sequence_preview_written else None,
+        "temporalSequenceFrames": temporal_sequence_frames,
         "residualContinuationMode": residualContinuationMode,
         "residualContinuationEffectiveMode": continuation_effective_mode,
         "residualContinuationAlpha": residualContinuationAlpha,
@@ -1234,6 +1248,36 @@ def make_preview_frames(model, eval_items, out_dir, preview_size, previewMode, c
             "diagnosticPreview": str(diagnostic_preview_path),
             "previewFocus": focus,
         })
+    return frames
+
+
+def save_temporal_sequence_preview(rendered, focus, out_path):
+    rows = []
+    frames = []
+    for item, low_patch, high_patch, prediction in rendered:
+        remaining_error = np.clip(np.abs(high_patch - prediction) * 4.0, 0.0, 1.0)
+        edge_mask = item.get("edgeBandMask", np.zeros((*item["low"].shape[:2], 1), dtype=np.float32))
+        top = focus["top"]
+        left = focus["left"]
+        crop_height = focus["height"]
+        crop_width = focus["width"]
+        mask_patch = edge_mask[top:top + crop_height, left:left + crop_width, :]
+        mask_rgb = np.repeat(np.clip(mask_patch, 0.0, 1.0), 3, axis=2)
+        rows.append(np.concatenate([
+            low_patch,
+            prediction,
+            high_patch,
+            remaining_error,
+            mask_rgb,
+        ], axis=1))
+        frames.append({
+            "item": item["id"],
+            "temporalSequenceId": item.get("temporalSequenceId"),
+            "temporalFrameIndex": item.get("temporalFrameIndex"),
+            "lowRenderScale": item["lowRenderScale"],
+        })
+    sheet = np.concatenate(rows, axis=0)
+    Image.fromarray(np.clip(sheet * 255.0, 0, 255).astype(np.uint8), "RGB").save(out_path)
     return frames
 
 
