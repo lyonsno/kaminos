@@ -1079,6 +1079,36 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
       <input type="range" id="volume-fire-licks" min="0" max="5" step="0.05" value="1.65">
       <span class="slider-val" id="volume-fire-licks-val">1.65</span>
     </div>
+    <div class="slider-row" data-volume-visual-cost-knob="fire-tongue-shape">
+      <span class="slider-label">Tongue Gain</span>
+      <input type="range" id="volume-fire-tongue-gain" min="0" max="2.5" step="0.05" value="1">
+      <span class="slider-val" id="volume-fire-tongue-gain-val">1.00</span>
+    </div>
+    <div class="slider-row" data-volume-visual-cost-knob="fire-tongue-shape">
+      <span class="slider-label">Tongue Shell</span>
+      <input type="range" id="volume-fire-tongue-shell" min="0" max="2" step="0.05" value="1">
+      <span class="slider-val" id="volume-fire-tongue-shell-val">1.00</span>
+    </div>
+    <div class="slider-row" data-volume-visual-cost-knob="fire-tongue-shape">
+      <span class="slider-label">Tongue Width</span>
+      <input type="range" id="volume-fire-tongue-width" min="0.35" max="2" step="0.05" value="1">
+      <span class="slider-val" id="volume-fire-tongue-width-val">1.00</span>
+    </div>
+    <div class="slider-row" data-volume-visual-cost-knob="fire-tongue-shape">
+      <span class="slider-label">Tongue Rib</span>
+      <input type="range" id="volume-fire-tongue-rib" min="0" max="2" step="0.05" value="1">
+      <span class="slider-val" id="volume-fire-tongue-rib-val">1.00</span>
+    </div>
+    <div class="slider-row" data-volume-visual-cost-knob="fire-tongue-shape">
+      <span class="slider-label">Tongue Relief</span>
+      <input type="range" id="volume-fire-tongue-relief" min="0" max="2" step="0.05" value="1">
+      <span class="slider-val" id="volume-fire-tongue-relief-val">1.00</span>
+    </div>
+    <div class="slider-row" data-volume-visual-cost-knob="fire-tongue-shape">
+      <span class="slider-label">Tongue Taper</span>
+      <input type="range" id="volume-fire-tongue-taper" min="0" max="2" step="0.05" value="1">
+      <span class="slider-val" id="volume-fire-tongue-taper-val">1.00</span>
+    </div>
     <div class="slider-row" data-volume-visual-cost-knob="projection-pass-gate">
       <span class="slider-label">Projection</span>
       <input type="range" id="volume-projection" min="0" max="1.5" step="0.05" value="0.65">
@@ -9572,6 +9602,12 @@ const CANONICAL_VOLUME_HIDDEN_CONTROLS = new Set([
   'volume-microdetail',
   'volume-interface-shred',
   'volume-fire-licks',
+  'volume-fire-tongue-gain',
+  'volume-fire-tongue-shell',
+  'volume-fire-tongue-width',
+  'volume-fire-tongue-rib',
+  'volume-fire-tongue-relief',
+  'volume-fire-tongue-taper',
   'volume-fire-scale',
   'volume-detail-scale',
   'volume-wind-strength',
@@ -9628,6 +9664,12 @@ const VOLUME_SCENE_PRESETS = {
     microdetail: 0.00,
     interfaceShred: 0.00,
     fireLicks: 0.00,
+    fireTongueGain: 1.00,
+    fireTongueShell: 1.00,
+    fireTongueWidth: 1.00,
+    fireTongueRib: 1.00,
+    fireTongueRelief: 1.00,
+    fireTongueTaper: 1.00,
     projection: 0.65,
     speed: 4.20,
     inputRadius: 0.12,
@@ -9654,6 +9696,12 @@ const VOLUME_SCENE_PRESETS = {
     microdetail: 2.50,
     interfaceShred: 2.50,
     fireLicks: 1.65,
+    fireTongueGain: 1.00,
+    fireTongueShell: 1.00,
+    fireTongueWidth: 1.00,
+    fireTongueRib: 1.00,
+    fireTongueRelief: 1.00,
+    fireTongueTaper: 1.00,
     projection: 0.65,
     speed: 5.00,
     inputRadius: 0.12,
@@ -9680,6 +9728,12 @@ const VOLUME_SCENE_PRESETS = {
     microdetail: 2.50,
     interfaceShred: 1.20,
     fireLicks: 5.00,
+    fireTongueGain: 1.00,
+    fireTongueShell: 1.00,
+    fireTongueWidth: 1.00,
+    fireTongueRib: 1.00,
+    fireTongueRelief: 1.00,
+    fireTongueTaper: 1.00,
     projection: 0.90,
     speed: 5.00,
     inputRadius: 0.08,
@@ -9706,6 +9760,12 @@ const VOLUME_SCENE_PRESETS = {
     microdetail: 2.50,
     interfaceShred: 1.85,
     fireLicks: 4.25,
+    fireTongueGain: 1.00,
+    fireTongueShell: 1.00,
+    fireTongueWidth: 1.00,
+    fireTongueRib: 1.00,
+    fireTongueRelief: 1.00,
+    fireTongueTaper: 1.00,
     projection: 0.85,
     speed: 5.00,
     inputRadius: 0.16,
@@ -10461,6 +10521,12 @@ const VOLUME_BASIN_ROUTE_FIELDS = [
   ['microdetail', 'volume_microdetail'],
   ['interfaceShred', 'volume_interface_shred'],
   ['fireLicks', 'volume_fire_licks'],
+  ['fireTongueGain', 'volume_fire_tongue_gain'],
+  ['fireTongueShell', 'volume_fire_tongue_shell'],
+  ['fireTongueWidth', 'volume_fire_tongue_width'],
+  ['fireTongueRib', 'volume_fire_tongue_rib'],
+  ['fireTongueRelief', 'volume_fire_tongue_relief'],
+  ['fireTongueTaper', 'volume_fire_tongue_taper'],
   ['projection', 'volume_projection'],
   ['speed', 'volume_speed'],
   ['fireScale', 'volume_fire_scale'],
@@ -14711,6 +14777,12 @@ function readVolumeControls() {
     microdetail: parseFloat(document.getElementById('volume-microdetail').value),
     interfaceShred: parseFloat(document.getElementById('volume-interface-shred').value),
     fireLicks: parseFloat(document.getElementById('volume-fire-licks').value),
+    fireTongueGain: parseFloat(document.getElementById('volume-fire-tongue-gain').value),
+    fireTongueShell: parseFloat(document.getElementById('volume-fire-tongue-shell').value),
+    fireTongueWidth: parseFloat(document.getElementById('volume-fire-tongue-width').value),
+    fireTongueRib: parseFloat(document.getElementById('volume-fire-tongue-rib').value),
+    fireTongueRelief: parseFloat(document.getElementById('volume-fire-tongue-relief').value),
+    fireTongueTaper: parseFloat(document.getElementById('volume-fire-tongue-taper').value),
     projection: parseFloat(document.getElementById('volume-projection').value),
     speed: parseFloat(document.getElementById('volume-speed').value),
     raySteps: parseFloat(document.getElementById('volume-steps').value),
@@ -14842,6 +14914,12 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-microdetail-val').textContent = c.microdetail.toFixed(2);
   document.getElementById('volume-interface-shred-val').textContent = c.interfaceShred.toFixed(2);
   document.getElementById('volume-fire-licks-val').textContent = c.fireLicks.toFixed(2);
+  document.getElementById('volume-fire-tongue-gain-val').textContent = c.fireTongueGain.toFixed(2);
+  document.getElementById('volume-fire-tongue-shell-val').textContent = c.fireTongueShell.toFixed(2);
+  document.getElementById('volume-fire-tongue-width-val').textContent = c.fireTongueWidth.toFixed(2);
+  document.getElementById('volume-fire-tongue-rib-val').textContent = c.fireTongueRib.toFixed(2);
+  document.getElementById('volume-fire-tongue-relief-val').textContent = c.fireTongueRelief.toFixed(2);
+  document.getElementById('volume-fire-tongue-taper-val').textContent = c.fireTongueTaper.toFixed(2);
   document.getElementById('volume-projection-val').textContent = c.projection.toFixed(2);
   document.getElementById('volume-speed-val').textContent = c.speed.toFixed(2);
   document.getElementById('volume-steps-val').textContent = String(c.raySteps | 0);
@@ -15266,6 +15344,30 @@ async function initKaminosVolumeRoute() {
   if (params.has('volume_fire_licks') && Number.isFinite(routeFireLicks)) {
     document.getElementById('volume-fire-licks').value = String(Math.max(0, Math.min(5, routeFireLicks)));
   }
+  const routeFireTongueGain = Number(params.get('volume_fire_tongue_gain'));
+  if (params.has('volume_fire_tongue_gain') && Number.isFinite(routeFireTongueGain)) {
+    document.getElementById('volume-fire-tongue-gain').value = String(Math.max(0, Math.min(2.5, routeFireTongueGain)));
+  }
+  const routeFireTongueShell = Number(params.get('volume_fire_tongue_shell'));
+  if (params.has('volume_fire_tongue_shell') && Number.isFinite(routeFireTongueShell)) {
+    document.getElementById('volume-fire-tongue-shell').value = String(Math.max(0, Math.min(2, routeFireTongueShell)));
+  }
+  const routeFireTongueWidth = Number(params.get('volume_fire_tongue_width'));
+  if (params.has('volume_fire_tongue_width') && Number.isFinite(routeFireTongueWidth)) {
+    document.getElementById('volume-fire-tongue-width').value = String(Math.max(0.35, Math.min(2, routeFireTongueWidth)));
+  }
+  const routeFireTongueRib = Number(params.get('volume_fire_tongue_rib'));
+  if (params.has('volume_fire_tongue_rib') && Number.isFinite(routeFireTongueRib)) {
+    document.getElementById('volume-fire-tongue-rib').value = String(Math.max(0, Math.min(2, routeFireTongueRib)));
+  }
+  const routeFireTongueRelief = Number(params.get('volume_fire_tongue_relief'));
+  if (params.has('volume_fire_tongue_relief') && Number.isFinite(routeFireTongueRelief)) {
+    document.getElementById('volume-fire-tongue-relief').value = String(Math.max(0, Math.min(2, routeFireTongueRelief)));
+  }
+  const routeFireTongueTaper = Number(params.get('volume_fire_tongue_taper'));
+  if (params.has('volume_fire_tongue_taper') && Number.isFinite(routeFireTongueTaper)) {
+    document.getElementById('volume-fire-tongue-taper').value = String(Math.max(0, Math.min(2, routeFireTongueTaper)));
+  }
   const routeRadiance = Number(params.get('volume_radiance'));
   if (params.has('volume_radiance') && Number.isFinite(routeRadiance)) {
     document.getElementById('volume-radiance').value = String(Math.max(0, Math.min(3, routeRadiance)));
@@ -15637,7 +15739,7 @@ async function initKaminosVolumeRoute() {
     refreshVolumeReadout();
     saveVolumeBasinSnapshot(event?.target?.id || 'control-change');
   };
-  for (const id of ['volume-scene', 'volume-density', 'volume-fire', 'volume-radiance', 'volume-absorption', 'volume-glow', 'volume-smoke', 'volume-curl', 'volume-microdetail', 'volume-interface-shred', 'volume-fire-licks', 'volume-projection', 'volume-speed', 'volume-steps', 'volume-adaptive-rays', 'volume-occupancy-skip', 'volume-majorant-skip', 'volume-majorant-smooth', 'volume-majorant-guard', 'volume-temporal-accum', 'volume-temporal-jitter', 'volume-history-clamp', 'volume-fire-scale', 'volume-detail-scale', 'volume-plume-height', 'volume-wind-strength', 'volume-wind-angle', 'volume-wind-height', 'volume-render-scale', 'volume-residual-mode', 'volume-residual-model-url', 'volume-residual-strength', 'volume-input-radius', 'volume-flow-rate', 'volume-resolution', 'volume-majorant-grid', 'volume-grid-overlay', 'volume-flow-debug', 'volume-look-freeze', 'volume-pyro-compare', 'volume-pyro-detail', 'volume-pyro-material-gain', 'volume-pyro-interface-focus', 'volume-pyro-edge-bite', 'volume-pyro-bite-border', 'volume-pyro-bite-teeth', 'volume-pyro-bite-wake', 'volume-pyro-bite-height', 'volume-pyro-bite-fire-lock', 'volume-pyro-bite-core', 'volume-pyro-bite-core-cut', 'volume-pyro-bite-rim', 'volume-pyro-bite-rim-cut', 'volume-pyro-bite-after', 'volume-pyro-bite-after-cut', 'volume-pyro-fire-mode', 'volume-pyro-flame-paint', 'volume-pyro-stock-mix', 'volume-pyro-flame-luma', 'volume-pyro-flame-core-color', 'volume-pyro-flame-edge-color', 'volume-pyro-bite-heat', 'volume-pyro-bite-chroma', 'volume-pyro-bite-luma', 'volume-pyro-bite-ember-color', 'volume-pyro-bite-hot-color', 'volume-pyro-smoke-fold', 'volume-pyro-fold-border', 'volume-pyro-fold-wake', 'volume-pyro-wake-lift', 'volume-pyro-wake-warmth', 'volume-pyro-wake-luma', 'volume-pyro-wake-shadow-color', 'volume-pyro-wake-ember-color', 'volume-pyro-radiance', 'volume-pyro-radiance-gate', 'volume-pyro-radiance-spill', 'volume-pyro-radiance-warmth', 'volume-pyro-radiance-hue', 'volume-pyro-radiance-chroma', 'volume-pyro-radiance-luma', 'volume-pyro-radiance-cool-color', 'volume-pyro-radiance-warm-color', 'volume-pyro-radiance-source', 'volume-pyro-radiance-height', 'volume-pyro-radiance-border', 'volume-pyro-radiance-teeth', 'volume-pyro-radiance-rise', 'volume-pyro-radiance-fire-lock', 'volume-pyro-diagnostic-paint', 'volume-pyro-carrier-view', 'volume-pyro-overdrive', 'volume-pressure-mode', 'volume-pressure-tier-overlay', 'volume-pressure-tier-lower-max', 'volume-pressure-tier-hero-min', 'volume-pressure-tier-hero-max', 'volume-canonical-spread', 'volume-canonical-centerline', 'volume-canonical-body-balance']) {
+  for (const id of ['volume-scene', 'volume-density', 'volume-fire', 'volume-radiance', 'volume-absorption', 'volume-glow', 'volume-smoke', 'volume-curl', 'volume-microdetail', 'volume-interface-shred', 'volume-fire-licks', 'volume-fire-tongue-gain', 'volume-fire-tongue-shell', 'volume-fire-tongue-width', 'volume-fire-tongue-rib', 'volume-fire-tongue-relief', 'volume-fire-tongue-taper', 'volume-projection', 'volume-speed', 'volume-steps', 'volume-adaptive-rays', 'volume-occupancy-skip', 'volume-majorant-skip', 'volume-majorant-smooth', 'volume-majorant-guard', 'volume-temporal-accum', 'volume-temporal-jitter', 'volume-history-clamp', 'volume-fire-scale', 'volume-detail-scale', 'volume-plume-height', 'volume-wind-strength', 'volume-wind-angle', 'volume-wind-height', 'volume-render-scale', 'volume-residual-mode', 'volume-residual-model-url', 'volume-residual-strength', 'volume-input-radius', 'volume-flow-rate', 'volume-resolution', 'volume-majorant-grid', 'volume-grid-overlay', 'volume-flow-debug', 'volume-look-freeze', 'volume-pyro-compare', 'volume-pyro-detail', 'volume-pyro-material-gain', 'volume-pyro-interface-focus', 'volume-pyro-edge-bite', 'volume-pyro-bite-border', 'volume-pyro-bite-teeth', 'volume-pyro-bite-wake', 'volume-pyro-bite-height', 'volume-pyro-bite-fire-lock', 'volume-pyro-bite-core', 'volume-pyro-bite-core-cut', 'volume-pyro-bite-rim', 'volume-pyro-bite-rim-cut', 'volume-pyro-bite-after', 'volume-pyro-bite-after-cut', 'volume-pyro-fire-mode', 'volume-pyro-flame-paint', 'volume-pyro-stock-mix', 'volume-pyro-flame-luma', 'volume-pyro-flame-core-color', 'volume-pyro-flame-edge-color', 'volume-pyro-bite-heat', 'volume-pyro-bite-chroma', 'volume-pyro-bite-luma', 'volume-pyro-bite-ember-color', 'volume-pyro-bite-hot-color', 'volume-pyro-smoke-fold', 'volume-pyro-fold-border', 'volume-pyro-fold-wake', 'volume-pyro-wake-lift', 'volume-pyro-wake-warmth', 'volume-pyro-wake-luma', 'volume-pyro-wake-shadow-color', 'volume-pyro-wake-ember-color', 'volume-pyro-radiance', 'volume-pyro-radiance-gate', 'volume-pyro-radiance-spill', 'volume-pyro-radiance-warmth', 'volume-pyro-radiance-hue', 'volume-pyro-radiance-chroma', 'volume-pyro-radiance-luma', 'volume-pyro-radiance-cool-color', 'volume-pyro-radiance-warm-color', 'volume-pyro-radiance-source', 'volume-pyro-radiance-height', 'volume-pyro-radiance-border', 'volume-pyro-radiance-teeth', 'volume-pyro-radiance-rise', 'volume-pyro-radiance-fire-lock', 'volume-pyro-diagnostic-paint', 'volume-pyro-carrier-view', 'volume-pyro-overdrive', 'volume-pressure-mode', 'volume-pressure-tier-overlay', 'volume-pressure-tier-lower-max', 'volume-pressure-tier-hero-min', 'volume-pressure-tier-hero-max', 'volume-canonical-spread', 'volume-canonical-centerline', 'volume-canonical-body-balance']) {
     document.getElementById(id).addEventListener('input', syncControls);
     document.getElementById(id).addEventListener('change', syncControls);
   }
