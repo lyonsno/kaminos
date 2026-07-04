@@ -23,6 +23,25 @@ if (!depthPath || !metadataPath || !autoCropEvidencePath) {
 const delayMs = Number(process.env.KAMINOS_MOCK_SHARP_DELAY_MS || 0);
 const progressEnabled = process.env.KAMINOS_MOCK_SHARP_PROGRESS === '1' || process.env.KAMINOS_PIPELINE_PROGRESS_STREAM === '1';
 
+function parseJsonObject(value) {
+  if (!value) return {};
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+const requestedScheduler = {
+  mode: 'default',
+  ...parseJsonObject(process.env.KAMINOS_SHARP_WEBGPU_SCHEDULER),
+};
+const effectiveScheduler = { ...requestedScheduler };
+const unsupportedFields = Number.isInteger(effectiveScheduler.vitBlockChunkSize)
+  ? ['vitBlockChunkSize']
+  : [];
+
 function emitMockSharpProgress(phase, message, progress) {
   if (!progressEnabled) return;
   process.stdout.write(`${JSON.stringify({
@@ -128,6 +147,54 @@ mkdirSync(dirname(report), { recursive: true });
 writeFileSync(report, `${JSON.stringify({
   schema: 'kaminos.mock-sharp-adapter-report.v0',
   ok: true,
+  backend: {
+    requestedScheduler,
+  },
+  breathingRoom: {
+    schema: 'kaminos.sharp-webgpu-scheduler-evidence.v0',
+    status: unsupportedFields.length ? 'unsupported' : 'verified',
+    requestedScheduler,
+    effectiveScheduler,
+    unsupportedFields,
+    telemetry: {
+      schema: 'sharp-webgpu.scheduler-telemetry.v0',
+      status: unsupportedFields.length ? 'unsupported' : 'verified',
+      timingAuthority: 'mock-adapter-event-trace',
+      events: [
+        { phase: 'spn-patch-chunk', kind: 'yield', atMs: 1 },
+        ...(Number.isInteger(effectiveScheduler.gaussianPhaseYieldMs)
+          ? [{ phase: 'gaussian-phase', kind: 'yield', atMs: 2 }]
+          : []),
+        ...(effectiveScheduler.waitForSubmittedWorkDone
+          ? [{ phase: 'queue-submit-wait', kind: 'queue-wait', atMs: 3 }]
+          : []),
+      ],
+      boundaryAssertions: [
+        { field: 'spnPatchChunkSize', observedBoundary: 'spn-patch-chunk' },
+        ...(Number.isInteger(effectiveScheduler.gaussianPhaseYieldMs)
+          ? [{ field: 'gaussianPhaseYieldMs', observedBoundary: 'gaussian-phase' }]
+          : []),
+        ...(effectiveScheduler.waitForSubmittedWorkDone
+          ? [{ field: 'waitForSubmittedWorkDone', observedBoundary: 'queue-submit-wait' }]
+          : []),
+      ],
+      frameTail: {
+        evidenceSource: 'mock-adapter',
+        disclaimer: 'mock fixture timing; not GPU contention evidence',
+        frameP95Ms: 16,
+        queueDoneP95Ms: effectiveScheduler.waitForSubmittedWorkDone ? 4 : null,
+      },
+    },
+    boundaryAssertions: [
+      { field: 'spnPatchChunkSize', observedBoundary: 'spn-patch-chunk' },
+      ...(Number.isInteger(effectiveScheduler.gaussianPhaseYieldMs)
+        ? [{ field: 'gaussianPhaseYieldMs', observedBoundary: 'gaussian-phase' }]
+        : []),
+      ...(effectiveScheduler.waitForSubmittedWorkDone
+        ? [{ field: 'waitForSubmittedWorkDone', observedBoundary: 'queue-submit-wait' }]
+        : []),
+    ],
+  },
   input,
   output,
   inputSha256,
