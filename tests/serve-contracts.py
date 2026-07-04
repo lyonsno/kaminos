@@ -856,6 +856,7 @@ def test_browser_webgpu_greenroom_preview_submit_writes_temp_queue_job():
         assert request["params"]["route_id"] == MOGE_WEBGPU_ROUTE_ID
         assert request["params"]["request_id"] == "req:moge-preview-queued"
         assert request["params"]["result_dir"] == str(results_dir)
+        assert request["params"]["kaminos_root"] == str(serve.ROOT)
         assert request["params"]["module_base_url"] == "http://127.0.0.1:5195/"
         assert request["params"]["source_image_identity"]["rootId"] == "image-inbox"
         assert request["params"]["source_image_identity"]["sha256"] == "sha256:source"
@@ -864,6 +865,42 @@ def test_browser_webgpu_greenroom_preview_submit_writes_temp_queue_job():
         assert status["params"]["route_intent"] == "preview"
         assert schedule["priority_class"] == "preview"
         assert schedule["route_id"] == MOGE_WEBGPU_ROUTE_ID
+
+
+def test_browser_webgpu_greenroom_preview_submit_preserves_empty_module_url_for_runner_template():
+    with TemporaryDirectory(dir="/tmp") as tmp:
+        root = Path(tmp)
+        greenroom = root / "greenroom"
+        image_inbox = root / "images"
+        source = image_inbox / "shoe-input.png"
+        source.parent.mkdir(parents=True)
+        source.write_bytes(b"png")
+
+        previous_browse = dict(BROWSE_ROOTS)
+        previous_results = serve.BROWSER_WEBGPU_ROUTE_RESULTS_DIR
+        BROWSE_ROOTS["greenroom"] = greenroom
+        BROWSE_ROOTS["image-inbox"] = image_inbox
+        serve.BROWSER_WEBGPU_ROUTE_RESULTS_DIR = root / "results"
+        try:
+            receipt = serve.submit_browser_webgpu_greenroom_preview({
+                "routeId": MOGE_WEBGPU_ROUTE_ID,
+                "requestId": "req:moge-preview-no-module",
+                "sourceImageIdentity": {
+                    "kind": "image-inbox",
+                    "rootId": "image-inbox",
+                    "path": "shoe-input.png",
+                    "serverPath": str(source),
+                },
+            })
+        finally:
+            BROWSE_ROOTS.clear()
+            BROWSE_ROOTS.update(previous_browse)
+            serve.BROWSER_WEBGPU_ROUTE_RESULTS_DIR = previous_results
+
+        request = json.loads((Path(receipt["job_dir"]) / "request.json").read_text())
+
+        assert request["params"]["module_base_url"] == ""
+        assert request["params"]["kaminos_root"] == str(serve.ROOT)
 
 
 def test_webgpu_inference_kit_static_asset_resolves_to_local_package_only():
@@ -1219,6 +1256,7 @@ if __name__ == "__main__":
     test_browser_webgpu_route_provider_rejects_partial_or_incomplete_kit_results_as_row_owners()
     test_browser_webgpu_route_result_writer_persists_authoritative_payload()
     test_browser_webgpu_route_result_writer_rejects_unconfigured_or_incomplete_payloads()
+    test_browser_webgpu_greenroom_preview_submit_preserves_empty_module_url_for_runner_template()
     test_webgpu_inference_kit_static_asset_resolves_to_local_package_only()
     test_route_provider_all_combines_native_greenroom_and_browser_webgpu_rows()
     test_native_greenroom_route_provider_preserves_degraded_legacy_rows()

@@ -195,6 +195,8 @@ assert.match(indexHtml, /grBrowseScratch[\s\S]*renderMogeRouteOperatorPanel\(gre
 assert.match(indexHtml, /mogeSourceImageAssets/, 'MoGE cockpit keeps shared source-image asset state from the image inbox');
 assert.match(indexHtml, /grBrowseMogeSourceImages[\s\S]*assets[\s\S]*kind:\s*'image'/, 'MoGE cockpit browses shared /api/assets?kind=image source images');
 assert.match(indexHtml, /uploadMogeSourceImage[\s\S]*\/api\/source-images\/upload-image/, 'MoGE cockpit uploads picked images into the shared source-image inbox');
+assert.match(indexHtml, /window\.kaminosSelectMogeSourceImageForRoute/, 'MoGE cockpit exposes a smoke helper that selects an imported source image through the same route-keyed state as the UI');
+assert.match(indexHtml, /window\.kaminosSetGreenroomBrowserRunnerModeForPreview/, 'MoGE cockpit exposes a smoke helper for the Greenroom runner mode used by queued previews');
 assert.match(indexHtml, /data-greenroom-moge-source-image-picker/, 'MoGE cockpit exposes a stable source image picker hook');
 assert.match(indexHtml, /data-greenroom-moge-source-upload/, 'MoGE cockpit exposes a stable source upload hook');
 assert.match(indexHtml, /image-inbox/, 'MoGE source evidence preserves image-inbox identity instead of hiding it as a generic row source');

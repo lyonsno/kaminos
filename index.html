@@ -12397,10 +12397,47 @@ async function ingestDroppedSplatFile(file, options = {}) {
 window.grBrowseSplatAssets = grBrowseSplatAssets;
 window.grBrowseRouteJobs = grBrowseRouteJobs;
 window.grBrowse = grBrowse;
+window.grBrowseMogeSourceImages = grBrowseMogeSourceImages;
 window.kaminosSubmitBrowserWebGpuRouteResult = submitBrowserWebGpuRouteResult;
 window.kaminosBuildBrowserWebGpuPreviewRouteResult = buildBrowserWebGpuPreviewRouteResult;
 window.kaminosRunBrowserWebGpuPreviewRoute = runBrowserWebGpuPreviewRoute;
 window.kaminosQueueBrowserWebGpuPreviewRoute = queueBrowserWebGpuPreviewRoute;
+window.kaminosSetGreenroomBrowserRunnerModeForPreview = setGreenroomBrowserRunnerModeForPreview;
+window.kaminosGreenroomBrowserRunnerModeForPreview = greenroomBrowserRunnerModeForPreview;
+window.kaminosMogeSourceImageDebugState = function() {
+  return JSON.parse(JSON.stringify({
+    assets: mogeSourceImageAssets,
+    selections: Array.from(mogeSourceImageSelectionByJobId.entries()),
+  }));
+};
+window.kaminosSelectMogeSourceImageForRoute = async function(row = {}, selector = '') {
+  await grBrowseMogeSourceImages({ render: false });
+  const wanted = String(selector || '').trim();
+  const entry = mogeSourceImageAssets.find(candidate => {
+    const values = [
+      candidate.id,
+      candidate.serverPath,
+      candidate.source,
+      candidate.path,
+      candidate.name,
+      candidate.display?.title,
+    ].filter(Boolean).map(String);
+    return wanted ? values.some(value => value === wanted || value.includes(wanted)) : true;
+  });
+  if (!entry) throw new Error(`No imported MoGE source image matches ${wanted || 'available image assets'}`);
+  const key = routeJobSourceSelectionKey(row);
+  const selected = entry.id || entry.serverPath || entry.source;
+  mogeSourceImageSelectionByJobId.set(key, selected);
+  setMogeRouteSourceSelectionMode(row, 'scratch');
+  renderMogeRouteOperatorPanel(greenroomRouteJobState.rows || []);
+  return {
+    key,
+    selected,
+    selectionMode: mogeRouteSourceSelectionMode(row),
+    effectiveSourceKind: mogeRouteEffectiveSourceKind(row),
+    entry,
+  };
+};
 window.kaminosIngestDroppedSplatFile = ingestDroppedSplatFile;
 
 async function grOpenJobDir(path) {
