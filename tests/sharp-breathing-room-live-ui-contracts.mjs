@@ -53,3 +53,18 @@ assert.match(
   /sharp-breathing-room-status/,
   'Generate panel must show the route status beside the two buttons',
 );
+assert.match(
+  index,
+  /function pipelineRunFailureSummary\(/,
+  'Generate panel failures must extract backend report details instead of showing only generic failure copy',
+);
+assert.match(
+  index,
+  /stderrTail/,
+  'Failure summary must inspect adapter stderr when the run fails before output',
+);
+assert.match(
+  index,
+  /adapterReport\?\.phase/,
+  'Failure summary must expose adapter report phase when available',
+);
