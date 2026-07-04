@@ -15,11 +15,11 @@ const dependencyVersion = packageJson.dependencies?.['@kaminos/webgpu-inference-
 
 assert.equal(packageJson.type, 'module', 'Kaminos package manifest keeps Node contract tests on ESM');
 assert.ok(dependencyVersion, 'Kaminos declares @kaminos/webgpu-inference-kit as a runtime dependency');
-assert.match(dependencyVersion, /0\.1\.1/, 'Kaminos pins the published kit version consumed by the browser route producer');
-assert.equal(packageLock.packages?.['node_modules/@kaminos/webgpu-inference-kit']?.version, '0.1.1', 'package lock resolves the published kit version');
+assert.match(dependencyVersion, /0\.1\.5/, 'Kaminos pins the published kit version consumed by the browser route producer');
+assert.equal(packageLock.packages?.['node_modules/@kaminos/webgpu-inference-kit']?.version, '0.1.5', 'package lock resolves the published kit version');
 
 const kit = await import('@kaminos/webgpu-inference-kit');
-assert.equal(kit.WEBGPU_INFERENCE_KIT_VERSION, '0.1.1');
+assert.equal(kit.WEBGPU_INFERENCE_KIT_VERSION, '0.1.5');
 assert.equal(kit.MOGE_DEPTH_NORMAL_ROUTE_ID, 'moge.depth-normal.webgpu-local.v0');
 assert.equal(typeof kit.createMogeDepthNormalRouteDefinition, 'function');
 assert.equal(typeof kit.createMogeDepthNormalRouteReceipt, 'function');

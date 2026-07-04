@@ -779,6 +779,89 @@ def test_browser_webgpu_route_result_writer_rejects_unconfigured_or_incomplete_p
         assert [path.name for path in results_dir.glob("*.json")] == ["moge.depth-normal.webgpu-local.v0__req-moge-bunnycake.json"]
 
 
+def test_runtime_config_exposes_browser_webgpu_direct_run_interlock():
+    previous = os.environ.get("KAMINOS_BROWSER_WEBGPU_DIRECT_RUN")
+    os.environ.pop("KAMINOS_BROWSER_WEBGPU_DIRECT_RUN", None)
+    try:
+        config = serve.runtime_config()
+        assert config["browserWebGpuDirectRunEnabled"] is False
+        assert config["browserWebGpuGreenroomJobType"] == "kaminos-moge-webgpu-browser-preview"
+    finally:
+        if previous is not None:
+            os.environ["KAMINOS_BROWSER_WEBGPU_DIRECT_RUN"] = previous
+
+    os.environ["KAMINOS_BROWSER_WEBGPU_DIRECT_RUN"] = "1"
+    try:
+        config = serve.runtime_config()
+        assert config["browserWebGpuDirectRunEnabled"] is True
+    finally:
+        if previous is None:
+            os.environ.pop("KAMINOS_BROWSER_WEBGPU_DIRECT_RUN", None)
+        else:
+            os.environ["KAMINOS_BROWSER_WEBGPU_DIRECT_RUN"] = previous
+
+
+def test_browser_webgpu_greenroom_preview_submit_writes_temp_queue_job():
+    with TemporaryDirectory(dir="/tmp") as tmp:
+        root = Path(tmp)
+        greenroom = root / "greenroom"
+        image_inbox = root / "images"
+        results_dir = root / "results"
+        source = image_inbox / "shoe-input.png"
+        source.parent.mkdir(parents=True)
+        source.write_bytes(b"png")
+
+        previous_browse = dict(BROWSE_ROOTS)
+        previous_results = serve.BROWSER_WEBGPU_ROUTE_RESULTS_DIR
+        BROWSE_ROOTS["greenroom"] = greenroom
+        BROWSE_ROOTS["image-inbox"] = image_inbox
+        serve.BROWSER_WEBGPU_ROUTE_RESULTS_DIR = results_dir
+        try:
+            receipt = serve.submit_browser_webgpu_greenroom_preview({
+                "routeId": MOGE_WEBGPU_ROUTE_ID,
+                "requestId": "req:moge-preview-queued",
+                "sourceImageIdentity": {
+                    "kind": "image-inbox",
+                    "rootId": "image-inbox",
+                    "path": "shoe-input.png",
+                    "serverPath": str(source),
+                    "label": "Shoe Input",
+                    "sha256": "sha256:source",
+                },
+                "moduleBaseUrl": "http://127.0.0.1:5195/",
+            })
+        finally:
+            BROWSE_ROOTS.clear()
+            BROWSE_ROOTS.update(previous_browse)
+            serve.BROWSER_WEBGPU_ROUTE_RESULTS_DIR = previous_results
+
+        job_dir = Path(receipt["job_dir"])
+        request = json.loads((job_dir / "request.json").read_text())
+        status = json.loads((job_dir / "status.json").read_text())
+        schedule = json.loads((job_dir / "schedule.json").read_text())
+
+        assert receipt["schema"] == "kaminos.browser-webgpu-greenroom-submit.v0"
+        assert receipt["provider"] == "native-greenroom"
+        assert receipt["request_id"] == "req:moge-preview-queued"
+        assert receipt["route_id"] == MOGE_WEBGPU_ROUTE_ID
+        assert receipt["route_provider_index"]["provider"]["kind"] == "kaminos-route-providers"
+        assert job_dir.parent == greenroom / "pending"
+        assert request["job_type"] == "kaminos-moge-webgpu-browser-preview"
+        assert request["input_path"] == str(source)
+        assert request["output_dir"] == str(greenroom / "outputs" / request["job_id"])
+        assert request["params"]["route_id"] == MOGE_WEBGPU_ROUTE_ID
+        assert request["params"]["request_id"] == "req:moge-preview-queued"
+        assert request["params"]["result_dir"] == str(results_dir)
+        assert request["params"]["module_base_url"] == "http://127.0.0.1:5195/"
+        assert request["params"]["source_image_identity"]["rootId"] == "image-inbox"
+        assert request["params"]["source_image_identity"]["sha256"] == "sha256:source"
+        assert status["status"] == "pending"
+        assert status["job_type"] == "kaminos-moge-webgpu-browser-preview"
+        assert status["params"]["route_intent"] == "preview"
+        assert schedule["priority_class"] == "preview"
+        assert schedule["route_id"] == MOGE_WEBGPU_ROUTE_ID
+
+
 def test_webgpu_inference_kit_static_asset_resolves_to_local_package_only():
     package_root = Path(__file__).resolve().parents[1] / "node_modules" / "@kaminos" / "webgpu-inference-kit"
     index_js = package_root / "src" / "index.js"

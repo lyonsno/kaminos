@@ -2,6 +2,7 @@
 """Kaminos dev server with directory browsing API."""
 
 import http.server
+import fcntl
 import json
 import os
 import re
@@ -88,6 +89,8 @@ ROUTE_JOB_INTENTS = {"preview", "hero", "checkpoint", "unknown"}
 HYBRID_SPLAT_OVERLAY_MODULE_URL_ENV = "KAMINOS_HYBRID_SPLAT_OVERLAY_MODULE_URL"
 HYBRID_SPLAT_OVERLAY_MODULE_URL_ENV_LEGACY = "KAMINOS_HYBRID_SPLAT_MODULE_URL"
 MOGE_WEBGPU_MODULE_BASE_URL_ENV = "KAMINOS_MOGE_WEBGPU_MODULE_BASE_URL"
+BROWSER_WEBGPU_DIRECT_RUN_ENV = "KAMINOS_BROWSER_WEBGPU_DIRECT_RUN"
+BROWSER_WEBGPU_GREENROOM_JOB_TYPE = "kaminos-moge-webgpu-browser-preview"
 ASSET_ROOTS = [
     {
         "id": "splat-inbox",
@@ -138,7 +141,13 @@ def runtime_config():
         "schema": "kaminos.runtime-config.v0",
         "hybridSplatOverlayModuleUrl": module_url or None,
         "mogeWebGpuModuleBaseUrl": moge_webgpu_module_base_url or None,
+        "browserWebGpuDirectRunEnabled": _env_flag(BROWSER_WEBGPU_DIRECT_RUN_ENV),
+        "browserWebGpuGreenroomJobType": BROWSER_WEBGPU_GREENROOM_JOB_TYPE,
     }
+
+
+def _env_flag(name):
+    return str(os.environ.get(name, "")).strip().lower() in {"1", "true", "yes", "on"}
 
 
 def splat_asset_root_allows_pointer(root_name):
@@ -615,6 +624,19 @@ def _greenroom_route_intent(job_type, status, schedule, state):
     return "unknown"
 
 
+def _greenroom_route_id(job_type, state):
+    params = (state or {}).get("params") if isinstance(state, dict) else {}
+    params = params if isinstance(params, dict) else {}
+    return (
+        (state or {}).get("route_id")
+        or (state or {}).get("routeId")
+        or params.get("route_id")
+        or params.get("routeId")
+        or job_type
+        or "unknown"
+    )
+
+
 def _greenroom_receipt_link(status_dir, job_id):
     return "/api/read?" + urlencode({
         "root": "greenroom",
@@ -841,7 +863,7 @@ def _native_greenroom_route_job(job_id, job_type, status, schedule, state, statu
     return {
         "schema": ROUTE_JOB_SCHEMA,
         "id": job_id,
-        "routeId": job_type or "unknown",
+        "routeId": _greenroom_route_id(job_type, state),
         "executor": {
             "kind": "native-greenroom",
             "id": "local-greenroom",
@@ -1429,6 +1451,132 @@ def write_browser_webgpu_route_result(result):
     }
 
 
+def _safe_job_id_fragment(value):
+    safe = "".join(
+        char if char.isalnum() or char in ".-_" else "-"
+        for char in str(value or "").strip()
+    ).strip(".-_")
+    return safe[:48] or uuid.uuid4().hex[:12]
+
+
+def _atomic_write_json(path, payload):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    body = json.dumps(payload, indent=2, sort_keys=True) + "\n"
+    tmp_path = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
+    tmp_path.write_text(body, encoding="utf-8")
+    os.replace(tmp_path, path)
+
+
+def _resolve_browser_webgpu_source_path(identity):
+    if not isinstance(identity, dict):
+        raise ValueError("sourceImageIdentity must be an object")
+    root_id = identity.get("rootId") or identity.get("root_id") or identity.get("kind")
+    if not _is_nonempty_string(root_id):
+        raise ValueError("sourceImageIdentity.rootId is required for Greenroom submission")
+    source_root = BROWSE_ROOTS.get(str(root_id))
+    if not source_root:
+        raise ValueError(f"Unsupported source image root: {root_id}")
+    root = Path(source_root).expanduser().resolve()
+    if identity.get("serverPath"):
+        source = Path(str(identity["serverPath"])).expanduser().resolve()
+    elif identity.get("path"):
+        source = (root / str(identity["path"])).resolve()
+    else:
+        raise ValueError("sourceImageIdentity.serverPath or path is required for Greenroom submission")
+    if not source.is_relative_to(root):
+        raise PermissionError("source image path escapes its declared root")
+    if not source.is_file():
+        raise FileNotFoundError(f"source image not found: {source}")
+    return source
+
+
+def submit_browser_webgpu_greenroom_preview(payload):
+    """Queue a browser WebGPU preview as a native Greenroom job without running it."""
+    payload = payload if isinstance(payload, dict) else {}
+    route_id = str(payload.get("routeId") or "moge.depth-normal.webgpu-local.v0")
+    request_id = str(payload.get("requestId") or f"req:moge-preview-{int(time.time() * 1000)}")
+    source_identity = payload.get("sourceImageIdentity") if isinstance(payload.get("sourceImageIdentity"), dict) else {}
+    source_path = _resolve_browser_webgpu_source_path(source_identity)
+    greenroom = BROWSE_ROOTS.get("greenroom")
+    if not greenroom:
+        raise RuntimeError("GPU_GREENROOM_DIR is not configured")
+    greenroom = Path(greenroom).expanduser()
+    result_dir = Path(BROWSER_WEBGPU_ROUTE_RESULTS_DIR or (greenroom / "outputs" / "browser-webgpu-route-results")).expanduser()
+    submitted_at = time.time()
+
+    for subdir in ("pending", "running", "done", "failed", "cancelled", "outputs"):
+        (greenroom / subdir).mkdir(parents=True, exist_ok=True)
+
+    lock_path = greenroom / "gpu.lock"
+    lock_fd = open(lock_path, "w")
+    try:
+        fcntl.flock(lock_fd, fcntl.LOCK_EX)
+        base_job_id = f"kaminos-moge-webgpu-{_safe_job_id_fragment(request_id)}"
+        job_id = base_job_id
+        while (greenroom / "pending" / job_id).exists():
+            job_id = f"{base_job_id}-{uuid.uuid4().hex[:6]}"
+        output_dir = greenroom / "outputs" / job_id
+        job_dir = greenroom / "pending" / job_id
+        job_dir.mkdir(parents=True, exist_ok=False)
+
+        params = {
+            "route_id": route_id,
+            "request_id": request_id,
+            "route_intent": "preview",
+            "priority_class": "preview",
+            "executor": "browser-webgpu-greenroom",
+            "result_dir": str(result_dir),
+            "module_base_url": str(payload.get("moduleBaseUrl") or "").strip() or None,
+            "source_image_identity": source_identity,
+            "source_image_path": str(source_path),
+            "direct_browser_webgpu": False,
+            "kit_version": "0.1.5",
+        }
+        request = {
+            "job_type": BROWSER_WEBGPU_GREENROOM_JOB_TYPE,
+            "input_path": str(source_path),
+            "output_dir": str(output_dir),
+            "params": params,
+            "job_id": job_id,
+            "submitted_at": submitted_at,
+        }
+        status = {
+            "job_id": job_id,
+            "status": "pending",
+            "job_type": BROWSER_WEBGPU_GREENROOM_JOB_TYPE,
+            "input_path": str(source_path),
+            "output_dir": str(output_dir),
+            "params": params,
+            "submitted_at": submitted_at,
+            "warnings": [],
+        }
+        schedule = {
+            "schema": "gpu-greenroom.schedule.v1",
+            "priority_class": "preview",
+            "submitted_at": submitted_at,
+            "route_id": route_id,
+            "request_id": request_id,
+        }
+        _atomic_write_json(job_dir / "request.json", request)
+        _atomic_write_json(job_dir / "status.json", status)
+        _atomic_write_json(job_dir / "schedule.json", schedule)
+    finally:
+        fcntl.flock(lock_fd, fcntl.LOCK_UN)
+        lock_fd.close()
+
+    return {
+        "schema": "kaminos.browser-webgpu-greenroom-submit.v0",
+        "provider": "native-greenroom",
+        "job_id": job_id,
+        "request_id": request_id,
+        "route_id": route_id,
+        "job_dir": str(job_dir),
+        "input_path": str(source_path),
+        "result_dir": str(result_dir),
+        "route_provider_index": build_route_provider_index("all"),
+    }
+
+
 def _browser_webgpu_route_row_from_result(path, result):
     receipt = result["receipt"]
     runtime = receipt.get("runtime") if isinstance(receipt.get("runtime"), dict) else {}
@@ -1749,6 +1897,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_splat_correction_post(parse_qs(parsed.query))
         elif parsed.path == "/api/route-results/browser-webgpu":
             self.handle_browser_webgpu_route_result_post()
+        elif parsed.path == "/api/route-jobs/browser-webgpu-preview":
+            self.handle_browser_webgpu_greenroom_preview_post()
         elif parsed.path == "/api/route-jobs/checkpoint-pause":
             self.handle_route_job_checkpoint_pause(parse_qs(parsed.query))
         else:
@@ -2112,6 +2262,31 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.send_json({"error": str(error)}, 403)
             return
         except ValueError as error:
+            self.send_json({"error": str(error)}, 400)
+            return
+        self.send_json(result, 201)
+
+    def handle_browser_webgpu_greenroom_preview_post(self):
+        """Queue a browser WebGPU preview through Greenroom without running it in-page."""
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+        except ValueError:
+            self.send_json({"error": "Invalid Content-Length"}, 400)
+            return
+        try:
+            payload = json.loads(self.rfile.read(length) or b"{}")
+        except Exception:
+            self.send_json({"error": "Invalid JSON"}, 400)
+            return
+        try:
+            result = submit_browser_webgpu_greenroom_preview(payload)
+        except PermissionError as error:
+            self.send_json({"error": str(error)}, 403)
+            return
+        except FileNotFoundError as error:
+            self.send_json({"error": str(error)}, 404)
+            return
+        except (RuntimeError, ValueError) as error:
             self.send_json({"error": str(error)}, 400)
             return
         self.send_json(result, 201)

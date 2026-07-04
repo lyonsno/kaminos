@@ -9216,12 +9216,20 @@ const WEBGPU_ROUTE_SCHEDULER_SCHEMA = 'kaminos.webgpu-route-scheduler.v0';
 const WEBGPU_ROUTE_BACKPRESSURE_SCHEMA = 'kaminos.webgpu-route-backpressure.v0';
 const WEBGPU_INFERENCE_KIT_MODULE_URL = '/vendor/@kaminos/webgpu-inference-kit/src/index.js';
 const MOGE_WEBGPU_MODULE_BASE_URL_ENV = 'KAMINOS_MOGE_WEBGPU_MODULE_BASE_URL';
+const BROWSER_WEBGPU_DIRECT_RUN_ENV = 'KAMINOS_BROWSER_WEBGPU_DIRECT_RUN';
+const BROWSER_WEBGPU_GREENROOM_JOB_TYPE = 'kaminos-moge-webgpu-browser-preview';
 const MOGE_WEBGPU_MODULE_BASE_URL_PARAMS = [
   'moge_webgpu_module_base_url',
   'mogeWebGpuModuleBaseUrl',
   'moge_module_base_url',
 ];
 let kaminosWebGpuInferenceKitPromise = null;
+let kaminosRuntimeConfigPromise = null;
+let kaminosRuntimeConfig = {
+  schema: 'kaminos.runtime-config.v0',
+  browserWebGpuDirectRunEnabled: false,
+  browserWebGpuGreenroomJobType: BROWSER_WEBGPU_GREENROOM_JOB_TYPE,
+};
 let mogeWebGpuRouteAdapterState = {
   moduleBaseUrl: initialMogeWebGpuModuleBaseUrl(),
   runtimeConfigLoaded: false,
@@ -9275,6 +9283,32 @@ function renderMogePreviewRunProgress(container) {
   progress.setAttribute('data-greenroom-moge-run-request-id', lastMogePreviewRunState?.requestId || '');
   progress.textContent = mogePreviewRunProgressText();
   container.appendChild(progress);
+}
+
+async function loadKaminosRuntimeConfig() {
+  if (!kaminosRuntimeConfigPromise) {
+    kaminosRuntimeConfigPromise = fetch('/api/runtime-config', { cache: 'no-store' })
+      .then(response => {
+        if (!response.ok) throw new Error(`runtime config ${response.status}`);
+        return response.json();
+      })
+      .then(config => {
+        kaminosRuntimeConfig = {
+          ...kaminosRuntimeConfig,
+          ...(config || {}),
+        };
+        return kaminosRuntimeConfig;
+      })
+      .catch(error => {
+        console.warn('Kaminos runtime config unavailable; keeping conservative local defaults', error);
+        return kaminosRuntimeConfig;
+      });
+  }
+  return kaminosRuntimeConfigPromise;
+}
+
+function browserWebGpuDirectRunEnabled(config = kaminosRuntimeConfig) {
+  return config?.browserWebGpuDirectRunEnabled === true;
 }
 
 async function waitForMogePreviewPaint() {
@@ -10762,7 +10796,13 @@ function renderBrowserWebGpuPreviewActionButton(container, row) {
     button.disabled = true;
     button.textContent = 'Running...';
     try {
-      await runBrowserWebGpuPreviewRoute(row);
+      const runtimeConfig = await loadKaminosRuntimeConfig();
+      if (browserWebGpuDirectRunEnabled(runtimeConfig)) {
+        await runBrowserWebGpuPreviewRoute(row);
+      } else {
+        button.textContent = 'Queueing...';
+        await queueBrowserWebGpuPreviewRoute(row);
+      }
       button.textContent = 'Run Preview';
       try {
         await grBrowseRouteJobs();
@@ -11929,6 +11969,42 @@ async function runBrowserWebGpuPreviewRoute(row = {}) {
   return { result, writeResult };
 }
 
+async function queueBrowserWebGpuPreviewRoute(row = {}) {
+  const routeJob = row.route_job || {};
+  const requestId = `req:moge-preview-${Date.now()}`;
+  updateMogePreviewRunProgress('started', 'MoGE preview started: queueing through Greenroom', requestId);
+  await waitForMogePreviewPaint();
+  await initializeMogeWebGpuModuleBaseUrl();
+  updateMogePreviewRunProgress('resolving-source', 'MoGE preview resolving source image for Greenroom', requestId);
+  const inputPreview = await resolveMogeRouteSourceImage(row);
+  assertMogeRouteRealInputForOperatorSmoke(inputPreview);
+  const sourceImageIdentity = {
+    ...(inputPreview.sourceImageIdentity || {}),
+    sha256: inputPreview.sourceImageIdentity?.sha256 || inputPreview.sourceImageIdentity?.pixelSha256 || null,
+  };
+  const payload = {
+    routeId: routeJob.routeId || 'moge.depth-normal.webgpu-local.v0',
+    requestId,
+    sourceImageIdentity,
+    inputSourceKind: inputPreview.inputSourceKind,
+    sourceSelectionMode: inputPreview.sourceSelectionMode || mogeRouteSourceSelectionMode(row),
+    moduleBaseUrl: mogeWebGpuModuleBaseUrl() || null,
+  };
+  updateMogePreviewRunProgress('queueing', 'MoGE preview submitting Greenroom job', requestId);
+  const submission = await grPostJsonApi('route-jobs/browser-webgpu-preview', payload);
+  lastMogePreviewRequestId = submission.request_id || requestId;
+  if (submission.route_provider_index) {
+    greenroomRouteJobState = {
+      ...submission.route_provider_index,
+      loadedAt: new Date().toISOString(),
+      error: null,
+    };
+  }
+  updateMogePreviewRunProgress('queued', 'Browser WebGPU preview queued in Greenroom', submission.request_id || requestId);
+  await grBrowseRouteJobs();
+  return { submission };
+}
+
 async function grBrowseSplatAssets() {
   const listEl = document.getElementById('splat-assets-list');
   if (!listEl) return;
@@ -12277,6 +12353,7 @@ window.grBrowse = grBrowse;
 window.kaminosSubmitBrowserWebGpuRouteResult = submitBrowserWebGpuRouteResult;
 window.kaminosBuildBrowserWebGpuPreviewRouteResult = buildBrowserWebGpuPreviewRouteResult;
 window.kaminosRunBrowserWebGpuPreviewRoute = runBrowserWebGpuPreviewRoute;
+window.kaminosQueueBrowserWebGpuPreviewRoute = queueBrowserWebGpuPreviewRoute;
 window.kaminosIngestDroppedSplatFile = ingestDroppedSplatFile;
 
 async function grOpenJobDir(path) {
