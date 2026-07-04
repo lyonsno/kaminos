@@ -1,0 +1,308 @@
+{
+  "schema": "kaminos.pipeline-manifest.v0",
+  "version": 0,
+  "description": "Kaminos asset generation pipeline manifest. Routes here are runnable composition contracts; stage receipts must say when work is real, fixture-backed, cached, skipped, or failed.",
+  "pipelines": [
+    {
+      "id": "evil-orb-sharp-fixture-pbr-v0",
+      "label": "Evil Orb SHARP Fixture: Image To Visible Splat",
+      "routeId": "fixture.sharp-splat-pbr-sidecar.v0",
+      "description": "Fixture-backed source-image to visible splat candidate to Kaminos import sidecar chain. It copies KAMINOS_SHARP_FIXTURE_SPLAT or a local evil-orb SHARP-derived fixture into the run bundle, records provenance, and can be loaded into the scene. This is not live SHARP, MoGE, or SuperMat inference.",
+      "artifacts": {
+        "input": {
+          "role": "source-image",
+          "required": true
+        },
+        "splat": {
+          "role": "splat-candidate",
+          "pathTemplate": "artifacts/evil-orb.fixture.ply"
+        },
+        "sidecar": {
+          "role": "kaminos-import-sidecar",
+          "pathTemplate": "artifacts/evil-orb.fixture.kaminos-pipeline.json"
+        }
+      },
+      "stages": [
+        {
+          "id": "fixture-sharp-splat",
+          "label": "Copy SHARP Fixture Splat",
+          "statusMode": "fixture",
+          "route": {
+            "id": "fixture.sharp-image-to-splat.v0",
+            "tool": "pipeline-witness.mjs",
+            "realModel": false,
+            "modelFamily": "SHARP",
+            "effectiveBackend": "fixture"
+          },
+          "inputArtifact": "input",
+          "outputArtifact": "splat"
+        },
+        {
+          "id": "fixture-kaminos-sidecar",
+          "label": "Fixture Kaminos Import Sidecar",
+          "statusMode": "fixture",
+          "route": {
+            "id": "fixture.kaminos-import-sidecar.v0",
+            "tool": "pipeline-witness.mjs",
+            "realModel": false,
+            "effectiveBackend": "fixture"
+          },
+          "inputArtifact": "splat",
+          "outputArtifact": "sidecar"
+        }
+      ]
+    },
+    {
+      "id": "prepared-splat-import-sidecar-v0",
+      "label": "Inspect Existing Splat + Write Import Sidecar",
+      "routeId": "prepared.splat-import-sidecar.v0",
+      "description": "Inspects an existing splat artifact and writes a Kaminos import sidecar for it. This route does not generate a new splat, does not copy the prepared artifact into a global store, and does not claim renderer truth; use Load Source to view the original selected splat.",
+      "artifacts": {
+        "input": {
+          "role": "prepared-splat",
+          "required": true
+        },
+        "inspection": {
+          "role": "prepared-artifact-inspection",
+          "pathTemplate": "artifacts/prepared-artifact.inspect.json"
+        },
+        "sidecar": {
+          "role": "kaminos-import-sidecar",
+          "pathTemplate": "artifacts/prepared-artifact.kaminos-pipeline.json"
+        }
+      },
+      "stages": [
+        {
+          "id": "inspect-prepared-splat",
+          "label": "Inspect Existing Splat File",
+          "statusMode": "prepared-artifact",
+          "route": {
+            "id": "local.prepared-artifact-inspect.v0",
+            "tool": "pipeline-witness.mjs",
+            "realModel": false,
+            "effectiveBackend": "local-file-inspection"
+          },
+          "inputArtifact": "input",
+          "outputArtifact": "inspection"
+        },
+        {
+          "id": "write-prepared-splat-sidecar",
+          "label": "Write Kaminos Import Sidecar",
+          "statusMode": "prepared-artifact",
+          "route": {
+            "id": "local.kaminos-import-sidecar.v0",
+            "tool": "pipeline-witness.mjs",
+            "realModel": false,
+            "effectiveBackend": "local-sidecar-writer"
+          },
+          "inputArtifact": "inspection",
+          "outputArtifact": "sidecar"
+        }
+      ]
+    },
+    {
+      "id": "sharp-image-to-splat-live-v0",
+      "label": "SHARP Image To Visible Splat",
+      "routeId": "adapter.sharp-image-to-splat-live.v0",
+      "description": "Native SHARP-WebGPU source-image to visible splat route. It executes KAMINOS_SHARP_COMMAND or the bundled browser/WebGPU adapter with --input, --output, and --report paths. The adapter drives the SHARP-WebGPU app, writes route-local PLY/depth/metadata evidence, and does not fall back to the evil-orb fixture.",
+      "artifacts": {
+        "input": {
+          "role": "source-image",
+          "required": true
+        },
+        "splat": {
+          "role": "splat-candidate",
+          "pathTemplate": "artifacts/sharp-output.ply"
+        },
+        "depthMap": {
+          "role": "depth-map",
+          "pathTemplate": "artifacts/sharp-webgpu-depth.png"
+        },
+        "metadata": {
+          "role": "sharp-webgpu-metadata",
+          "pathTemplate": "artifacts/sharp-webgpu-metadata.json"
+        },
+        "autoCropEvidence": {
+          "role": "splat-autocrop-evidence",
+          "schema": "kaminos.splat-autocrop-evidence.v0",
+          "pathTemplate": "artifacts/sharp-output.splat-autocrop-evidence.json"
+        },
+        "sidecar": {
+          "role": "kaminos-import-sidecar",
+          "pathTemplate": "artifacts/sharp-output.kaminos-pipeline.json"
+        }
+      },
+      "stages": [
+        {
+          "id": "run-sharp-image-to-splat",
+          "label": "Run SHARP Image To Splat Adapter",
+          "statusMode": "model-adapter",
+          "route": {
+            "id": "adapter.sharp-image-to-splat.v0",
+            "tool": "SHARP-WebGPU",
+            "commandEnv": "KAMINOS_SHARP_COMMAND",
+            "commandDefault": "scripts/run-sharp-webgpu-adapter.mjs",
+            "modelFamily": "SHARP-WebGPU",
+            "realModel": true,
+            "executesModel": true,
+            "effectiveBackend": "browser-webgpu"
+          },
+          "inputArtifact": "input",
+          "outputArtifact": "splat",
+          "requiredSideArtifacts": ["depthMap", "metadata", "autoCropEvidence"]
+        },
+        {
+          "id": "write-live-sharp-sidecar",
+          "label": "Write Live SHARP Import Sidecar",
+          "statusMode": "model-adapter",
+          "route": {
+            "id": "local.kaminos-import-sidecar.v0",
+            "tool": "pipeline-witness.mjs",
+            "realModel": false,
+            "effectiveBackend": "local-sidecar-writer"
+          },
+          "inputArtifact": "splat",
+          "outputArtifact": "sidecar"
+        }
+      ]
+    },
+    {
+      "id": "live-model-route-adapter-check-v0",
+      "label": "Live Model Route Adapter Availability Check",
+      "routeId": "adapter.model-chain-availability.v0",
+      "description": "Checks whether live model stages have explicit local command configuration. It records availability without executing SHARP, MoGE, SuperMat, Trellis, or other model routes.",
+      "artifacts": {
+        "input": {
+          "role": "source-image",
+          "required": true
+        },
+        "sharpAdapter": {
+          "role": "route-adapter-availability-report",
+          "pathTemplate": "artifacts/adapter-sharp-image-to-splat.json"
+        },
+        "mogeAdapter": {
+          "role": "route-adapter-availability-report",
+          "pathTemplate": "artifacts/adapter-moge-normal-bake.json"
+        },
+        "supermatAdapter": {
+          "role": "route-adapter-availability-report",
+          "pathTemplate": "artifacts/adapter-supermat-material-bake.json"
+        }
+      },
+      "stages": [
+        {
+          "id": "check-sharp-image-to-splat-adapter",
+          "label": "Check SHARP Image To Splat Adapter",
+          "statusMode": "adapter-check",
+          "route": {
+            "id": "adapter.sharp-image-to-splat.v0",
+            "tool": "SHARP",
+            "commandEnv": "KAMINOS_SHARP_COMMAND",
+            "modelFamily": "SHARP",
+            "executesModel": false
+          },
+          "inputArtifact": "input",
+          "outputArtifact": "sharpAdapter"
+        },
+        {
+          "id": "check-moge-normal-bake-adapter",
+          "label": "Check MoGE Normal Bake Adapter",
+          "statusMode": "adapter-check",
+          "route": {
+            "id": "adapter.moge-normal-bake.v0",
+            "tool": "MoGE",
+            "commandEnv": "KAMINOS_MOGE_COMMAND",
+            "modelFamily": "MoGE",
+            "executesModel": false
+          },
+          "inputArtifact": "input",
+          "outputArtifact": "mogeAdapter"
+        },
+        {
+          "id": "check-supermat-material-bake-adapter",
+          "label": "Check SuperMat Material Bake Adapter",
+          "statusMode": "adapter-check",
+          "route": {
+            "id": "adapter.supermat-material-bake.v0",
+            "tool": "SuperMat",
+            "commandEnv": "KAMINOS_SUPERMAT_COMMAND",
+            "modelFamily": "SuperMat",
+            "executesModel": false
+          },
+          "inputArtifact": "input",
+          "outputArtifact": "supermatAdapter"
+        }
+      ]
+    },
+    {
+      "id": "lotus-normals-from-image-v0",
+      "label": "Lotus-D Image To Normal Map",
+      "routeId": "adapter.lotus-normals.v0",
+      "description": "Greenroom image-to-normal route. It executes KAMINOS_LOTUS_NORMALS_COMMAND or the bundled gpu-greenroom lotus_normals adapter with --input, --output, and --report paths. The output is a route-local normal-map artifact and adapter report, not renderer truth or a baked material claim.",
+      "artifacts": {
+        "input": {
+          "role": "source-image",
+          "required": true
+        },
+        "normalMap": {
+          "role": "normal-map",
+          "pathTemplate": "artifacts/lotus-normal-map.png"
+        }
+      },
+      "stages": [
+        {
+          "id": "run-lotus-normals",
+          "label": "Run Lotus-D Normal Adapter",
+          "statusMode": "model-adapter",
+          "route": {
+            "id": "adapter.lotus-normals.v0",
+            "tool": "Lotus-D",
+            "commandEnv": "KAMINOS_LOTUS_NORMALS_COMMAND",
+            "commandDefault": "scripts/run-lotus-greenroom-adapter.mjs",
+            "modelFamily": "Lotus-D",
+            "realModel": true,
+            "executesModel": true,
+            "effectiveBackend": "external-command"
+          },
+          "inputArtifact": "input",
+          "outputArtifact": "normalMap"
+        }
+      ]
+    },
+    {
+      "id": "chord-materials-from-image-v0",
+      "label": "CHORD Image To PBR Material Bundle",
+      "routeId": "adapter.chord-materials.v0",
+      "description": "Greenroom image-to-PBR-material route. It executes KAMINOS_CHORD_MATERIALS_COMMAND or the bundled gpu-greenroom chord_materials adapter with --input, --output, and --report paths. The output is a caller-rooted material bundle describing CHORD basecolor, normal, roughness, and metalness artifacts when the configured adapter produces them.",
+      "artifacts": {
+        "input": {
+          "role": "source-image",
+          "required": true
+        },
+        "materialBundle": {
+          "role": "pbr-material-bundle",
+          "pathTemplate": "artifacts/chord-materials.kaminos-material-bundle.json"
+        }
+      },
+      "stages": [
+        {
+          "id": "run-chord-materials",
+          "label": "Run CHORD Material Adapter",
+          "statusMode": "model-adapter",
+          "route": {
+            "id": "adapter.chord-materials.v0",
+            "tool": "CHORD",
+            "commandEnv": "KAMINOS_CHORD_MATERIALS_COMMAND",
+            "commandDefault": "scripts/run-chord-greenroom-adapter.mjs",
+            "modelFamily": "CHORD",
+            "realModel": true,
+            "executesModel": true,
+            "effectiveBackend": "external-command"
+          },
+          "inputArtifact": "input",
+          "outputArtifact": "materialBundle"
+        }
+      ]
+    }
+  ]
+}

@@ -2,6 +2,7 @@ export {
   assertAuthoritativeRouteReceipt,
   createWebGpuLocalRouteReceipt,
   validateRouteReceipt,
+  WEBGPU_ROUTE_RECEIPT_SCHEMA,
 } from './route-receipt.js';
 
 export {
@@ -24,10 +25,72 @@ export {
 } from './staged-profile.js';
 
 export {
+  WEBGPU_INFERENCE_KIT_VERSION,
+  createKernelProfileMetadata,
+  createRouteKernelProfileMetadata,
+  createRouteTimingMetadata,
+  validateKernelProfileMetadata,
+  validateRouteTimingMetadata,
+} from './kernel-profile.js';
+
+export {
+  createWebGpuRuntimeProfile,
+  createWebGpuRuntimeProfileInput,
+  validateWebGpuRuntimeProfile,
+  WEBGPU_RUNTIME_PROFILE_SCHEMA,
+} from './runtime-profile.js';
+
+export {
+  createWebGpuRouteBackpressureProfile,
+  createWebGpuRouteSchedulerProfile,
+  validateWebGpuRouteBackpressureProfile,
+  validateWebGpuRouteSchedulerProfile,
+  WEBGPU_ROUTE_BACKPRESSURE_SCHEMA,
+  WEBGPU_ROUTE_SCHEDULER_SCHEMA,
+} from './scheduler-backpressure.js';
+
+export {
+  classifyWebGpuRouteReceiptEvidence,
+  classifyWebGpuRouteWorkerResultEvidence,
+  WEBGPU_ROUTE_EVIDENCE_CLASSIFICATION_SCHEMA,
+} from './route-receipt-consumer.js';
+
+export {
   MOGE_DEPTH_NORMAL_ROUTE_ID,
   createMogeDepthNormalRouteDefinition,
   createMogeDepthNormalRouteReceipt,
 } from './moge-route.js';
+
+export {
+  SHARP_IMAGE_TO_SPLAT_ROUTE_ID,
+  createSharpImageToSplatRouteDefinition,
+  createSharpImageToSplatRouteReceipt,
+} from './sharp-route.js';
+
+export {
+  KIMODO_TEXT_TO_MOTION_ROUTE_ID,
+  createKimodoTextToMotionRouteDefinition,
+  createKimodoTextToMotionRouteReceipt,
+} from './kimodo-route.js';
+
+export {
+  SF3D_IMAGE_TO_MESH_ROUTE_ID,
+  createSf3dImageToMeshRouteDefinition,
+  createSf3dImageToMeshRouteReceipt,
+} from './sf3d-route.js';
+
+export {
+  createWebGpuRouteSchemaContract,
+} from './route-schema-contract.js';
+
+export {
+  createRouteReceiptArtifacts,
+  createRouteReceiptInputArtifact,
+  createWebGpuRouteReceiptFromArtifacts,
+  finishAndValidateRouteProfile,
+  validateRouteReceiptArtifact,
+  validateRouteReceiptBackendIdentity,
+} from './route-receipt-helper.js';
 
 export {
   assertAuthoritativeRouteWorkerResult,
@@ -38,4 +101,7 @@ export {
   validateRouteDefinition,
   validateRouteInvocationRequest,
   validateRouteWorkerResult,
+  WEBGPU_ROUTE_DEFINITION_SCHEMA,
+  WEBGPU_ROUTE_REQUEST_SCHEMA,
+  WEBGPU_ROUTE_RESULT_SCHEMA,
 } from './route-boundary.js';

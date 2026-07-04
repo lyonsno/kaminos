@@ -180,17 +180,17 @@ def compute_route_fire_route_capability(config=None):
     packaged_installed = bool(packaged_route_dir and _all_required_files_exist(packaged_files))
     dev_override_active = bool(pipeline_worktree)
     dev_override_usable = bool(dev_override_active and _all_required_files_exist(dev_files))
-    if packaged_installed:
-        mode = "installed"
-        current_runtime = "kaminos-installed-route"
-        operator_message = "SHARP can run locally from this Kaminos install."
-    elif dev_override_active:
+    if dev_override_active:
         mode = "dev_override"
         current_runtime = "pipeline-worktree-dev-override"
         if dev_override_usable:
             operator_message = "SHARP is running through a development Pipeline checkout; the product path is a local Kaminos route."
         else:
             operator_message = "SHARP is pointed at a development Pipeline checkout, but that checkout is missing required route files."
+    elif packaged_installed:
+        mode = "installed"
+        current_runtime = "kaminos-installed-route"
+        operator_message = "SHARP can run locally from this Kaminos install."
     else:
         mode = "missing"
         current_runtime = "not-installed"

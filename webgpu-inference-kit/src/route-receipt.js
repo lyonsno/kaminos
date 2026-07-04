@@ -1,4 +1,4 @@
-const RECEIPT_SCHEMA = 'kaminos.webgpu-route-receipt.v0';
+export const WEBGPU_ROUTE_RECEIPT_SCHEMA = 'kaminos.webgpu-route-receipt.v0';
 
 function clone(value) {
   return value == null ? value : JSON.parse(JSON.stringify(value));
@@ -25,7 +25,7 @@ function requireArray(errors, value, path) {
 export function createWebGpuLocalRouteReceipt(input) {
   const status = input.status || (input.fallbackReason ? 'fallback' : 'real');
   return {
-    schema: RECEIPT_SCHEMA,
+    schema: WEBGPU_ROUTE_RECEIPT_SCHEMA,
     requestedRouteId: input.requestedRouteId,
     effectiveRouteId: input.effectiveRouteId,
     status,
@@ -47,8 +47,8 @@ export function validateRouteReceipt(receipt) {
     return { ok: false, errors: ['receipt must be an object'] };
   }
 
-  if (receipt.schema !== RECEIPT_SCHEMA) {
-    errors.push(`schema must be ${RECEIPT_SCHEMA}`);
+  if (receipt.schema !== WEBGPU_ROUTE_RECEIPT_SCHEMA) {
+    errors.push(`schema must be ${WEBGPU_ROUTE_RECEIPT_SCHEMA}`);
   }
 
   requireString(errors, receipt.requestedRouteId, 'requestedRouteId');

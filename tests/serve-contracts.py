@@ -298,10 +298,14 @@ def test_compute_route_fire_config_marks_pipeline_checkout_as_dev_override():
         pipeline.mkdir()
         (pipeline / "pipeline-witness.mjs").write_text("process.exit(0);\n")
         add_fake_sharp_adapter_script(pipeline)
+        packaged = root / "routes" / "sharp-image-to-splat-live-v0"
+        (packaged / "scripts").mkdir(parents=True)
+        (packaged / "pipeline-witness.mjs").write_text("process.exit(0);\n")
+        add_fake_sharp_adapter_script(packaged)
 
         config = serve.compute_route_fire_config({
             "pipeline_worktree": pipeline,
-            "packaged_route_dir": root / "routes" / "sharp-image-to-splat-live-v0",
+            "packaged_route_dir": packaged,
         })
         public = serve.compute_route_fire_config_public(config)
 
@@ -311,10 +315,125 @@ def test_compute_route_fire_config_marks_pipeline_checkout_as_dev_override():
         assert public["routeCapability"]["currentRuntime"] == "pipeline-worktree-dev-override"
         assert public["routeCapability"]["devOverrideActive"] is True
         assert public["routeCapability"]["devOverrideUsable"] is True
-        assert public["routeCapability"]["packagedRouteInstalled"] is False
+        assert public["routeCapability"]["packagedRouteInstalled"] is True
         assert public["routeCapability"]["pipelineWorktree"] == str(pipeline.resolve())
         assert all(item["exists"] for item in public["routeCapability"]["devOverrideRequiredFiles"])
         assert "development Pipeline checkout" in public["routeCapability"]["operatorMessage"]
+
+
+def test_compute_route_fire_installed_route_package_is_repo_local_product_path():
+    route_dir = serve.ROOT / "routes" / "sharp-image-to-splat-live-v0"
+    manifest_path = route_dir / "kaminos-route.json"
+    pipeline_manifest_path = route_dir / "pipelines" / "asset-pipelines.json"
+    adapter_path = route_dir / "scripts" / "run-sharp-webgpu-adapter.mjs"
+    witness_path = route_dir / "pipeline-witness.mjs"
+
+    assert manifest_path.is_file()
+    manifest = json.loads(manifest_path.read_text())
+    assert manifest["schema"] == "kaminos.installed-route-package.v0"
+    assert manifest["routeId"] == "sharp-image-to-splat-live-v0"
+    assert manifest["runtime"] == "kaminos-installed-route"
+    assert manifest["entrypoint"] == "pipeline-witness.mjs"
+    assert manifest["adapterEntrypoint"] == "scripts/run-sharp-webgpu-adapter.mjs"
+    assert manifest["pipelineManifest"] == "pipelines/asset-pipelines.json"
+    assert "pipeline-worktree" not in json.dumps(manifest).lower()
+
+    pipeline_manifest = json.loads(pipeline_manifest_path.read_text())
+    live_pipeline = next(
+        pipeline for pipeline in pipeline_manifest["pipelines"]
+        if pipeline["id"] == "sharp-image-to-splat-live-v0"
+    )
+    assert live_pipeline["routeId"] == "adapter.sharp-image-to-splat-live.v0"
+    assert adapter_path.is_file()
+    assert witness_path.is_file()
+
+    config = serve.compute_route_fire_config({
+        "pipeline_worktree": None,
+        "packaged_route_dir": route_dir,
+    })
+    public = serve.compute_route_fire_config_public(config)
+    assert public["pipelineWorktree"] is None
+    assert public["routeCapability"]["mode"] == "installed"
+    assert public["routeCapability"]["currentRuntime"] == "kaminos-installed-route"
+    assert public["routeCapability"]["packagedRouteInstalled"] is True
+    assert all(item["exists"] for item in public["routeCapability"]["packagedRequiredFiles"])
+
+
+def test_compute_route_fire_installed_route_runs_without_pipeline_worktree_and_preserves_fixture_truth():
+    with TemporaryDirectory(dir="/tmp") as tmp:
+        root = Path(tmp)
+        input_path = root / "source.png"
+        input_path.write_bytes(b"fake image")
+        mock_command = root / "mock-sharp-command.mjs"
+        mock_command.write_text(
+            """
+#!/usr/bin/env node
+import { mkdirSync, writeFileSync } from 'node:fs';
+const arg = name => process.argv[process.argv.indexOf(name) + 1];
+const output = arg('--output');
+const report = arg('--report');
+const artifactPaths = JSON.parse(process.env.KAMINOS_PIPELINE_ARTIFACT_PATHS || '{}');
+mkdirSync(output.replace(/\\/[^/]+$/, ''), { recursive: true });
+writeFileSync(output, 'ply\\n');
+for (const [id, path] of Object.entries(artifactPaths)) {
+  if (id === 'splat' || !path) continue;
+  mkdirSync(path.replace(/\\/[^/]+$/, ''), { recursive: true });
+  writeFileSync(path, id === 'metadata' ? JSON.stringify({ schema: 'mock-sharp-metadata.v0' }) : `${id}\\n`);
+}
+writeFileSync(report, JSON.stringify({
+  schema: 'kaminos.mock-sharp-webgpu-adapter-report.v0',
+  ok: true,
+  phase: 'complete',
+  output: { path: output, bytes: 4 },
+  outputs: {
+    depthMap: { id: 'depthMap', role: 'depth-map', path: artifactPaths.depthMap, bytes: 9 },
+    metadata: { id: 'metadata', role: 'sharp-webgpu-metadata', path: artifactPaths.metadata, bytes: 36 },
+    autoCropEvidence: { id: 'autoCropEvidence', role: 'splat-autocrop-evidence', path: artifactPaths.autoCropEvidence, bytes: 17 }
+  },
+  backend: { modelFamily: 'SHARP-WebGPU', runtime: 'mock-adapter' },
+  breathingRoom: {
+    status: 'scheduler-unverified',
+    requestedScheduler: { mode: 'cooperative', yieldMs: 2, waitForSubmittedWorkDone: true },
+    effectiveScheduler: null,
+    telemetry: { eventTrace: { timingAuthority: 'mock-command' }, events: [] }
+  }
+}, null, 2));
+""".strip()
+        )
+        os.chmod(mock_command, 0o755)
+        previous_command = os.environ.get("KAMINOS_SHARP_COMMAND")
+        os.environ["KAMINOS_SHARP_COMMAND"] = str(mock_command)
+        try:
+            run = serve.start_compute_route_fire_run(
+                input_path=str(input_path),
+                config={
+                    "pipeline_worktree": None,
+                    "packaged_route_dir": serve.ROOT / "routes" / "sharp-image-to-splat-live-v0",
+                    "output_root": root / "runs",
+                },
+            )
+            deadline = time.time() + 5
+            current = run
+            while time.time() < deadline:
+                current = serve.compute_route_fire_status(run["runId"])
+                if current["status"] != "running":
+                    break
+                time.sleep(0.05)
+        finally:
+            if previous_command is None:
+                os.environ.pop("KAMINOS_SHARP_COMMAND", None)
+            else:
+                os.environ["KAMINOS_SHARP_COMMAND"] = previous_command
+
+        assert current["status"] == "completed"
+        assert current["pipelineReport"]["ok"] is True
+        assert current["pipelineReport"]["effectiveRouteConfig"]["manifestPath"].endswith(
+            "/routes/sharp-image-to-splat-live-v0/pipelines/asset-pipelines.json"
+        )
+        first_stage = current["pipelineReport"]["stages"][0]
+        assert first_stage["effectiveRoute"]["availability"]["source"] == "env"
+        assert first_stage["effectiveRoute"]["fixtureMode"] == "mock-adapter"
+        assert any(artifact["id"] == "splat" and artifact["status"] == "fixture" for artifact in current["artifacts"])
 
 
 def test_compute_route_fire_run_failure_never_keeps_fire_burning():

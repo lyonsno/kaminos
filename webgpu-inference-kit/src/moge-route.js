@@ -1,32 +1,101 @@
-import { createWebGpuLocalRouteReceipt } from './route-receipt.js';
-import { finishStagedSubmitProfile, validateStagedSubmitProfile } from './staged-profile.js';
-import { validateWebGpuBackendIdentity } from './gpu-environment.js';
 import { defineWebGpuRoute } from './route-boundary.js';
+import {
+  createKernelProfileMetadata,
+  createRouteKernelProfileMetadata,
+} from './kernel-profile.js';
+import {
+  createRouteReceiptArtifacts,
+  createRouteReceiptInputArtifact,
+  createWebGpuRouteReceiptFromArtifacts,
+} from './route-receipt-helper.js';
+import {
+  createWebGpuRouteBackpressureProfile,
+  createWebGpuRouteSchedulerProfile,
+} from './scheduler-backpressure.js';
 
 export const MOGE_DEPTH_NORMAL_ROUTE_ID = 'moge.depth-normal.webgpu-local.v0';
 const MOGE_MODEL_ID = 'Ruicheng/moge-2-vitl-normal';
+const DEFAULT_KERNEL_PROFILE = 'conv-transpose2d-stride2';
+const REQUIRED_STAGES = ['backbone', 'decoder-heads', 'output-readback'];
+const OUTPUT_ROLES = [
+  { key: 'depth', role: 'depth', required: true },
+  { key: 'normal', role: 'normal', required: true },
+  { key: 'pointMap', role: 'pointmap', required: false },
+  { key: 'mask', role: 'mask', required: false },
+];
 
-function requireArtifact(value, name) {
-  if (!value || typeof value !== 'object') throw new Error(`${name} output must be an object`);
-  if (typeof value.artifactId !== 'string' || value.artifactId.length === 0) {
-    throw new Error(`${name} output must include artifactId`);
-  }
-  if (typeof value.sha256 !== 'string' || value.sha256.length === 0) {
-    throw new Error(`${name} output must include sha256`);
-  }
-  if (!Array.isArray(value.shape) || value.shape.length === 0) {
-    throw new Error(`${name} output must include shape`);
-  }
+function createDefaultMogeScheduler() {
+  return createWebGpuRouteSchedulerProfile({
+    requestedScheduler: {
+      mode: 'cooperative',
+      yieldMs: 4,
+      waitForSubmittedWorkDone: true,
+      phaseChunkSize: {
+        backbone: 1,
+        'decoder-heads': 1,
+        'output-readback': 1,
+      },
+    },
+    effectiveScheduler: {
+      mode: 'cooperative',
+      yieldMs: 4,
+      waitForSubmittedWorkDone: true,
+      phaseChunkSize: {
+        backbone: 1,
+        'decoder-heads': 1,
+        'output-readback': 1,
+      },
+      unsupportedFields: [],
+    },
+    verificationState: 'scheduler-unverified',
+    breathability: {
+      spans: [
+        {
+          name: 'backbone-submit',
+          stage: 'backbone',
+          kind: 'gpu-submit-bound',
+          interruptible: false,
+          canYieldBefore: true,
+          canYieldAfter: true,
+          nonInterruptibleReason: 'GPU command buffers cannot be preempted after submit',
+        },
+        {
+          name: 'decoder-heads-submit',
+          stage: 'decoder-heads',
+          kind: 'gpu-submit-bound',
+          interruptible: false,
+          canYieldBefore: true,
+          canYieldAfter: true,
+          nonInterruptibleReason: 'GPU command buffers cannot be preempted after submit',
+        },
+        {
+          name: 'output-readback',
+          stage: 'output-readback',
+          kind: 'readback-bound',
+          interruptible: false,
+          canYieldBefore: true,
+          canYieldAfter: true,
+        },
+      ],
+      checkpoints: REQUIRED_STAGES.map(stage => ({
+        name: `after-${stage}`,
+        kind: stage === 'output-readback' ? 'readback' : 'stage-boundary',
+        afterStage: stage,
+        yieldable: true,
+        waitsForSubmittedWorkDone: true,
+      })),
+      notes: 'MoGE can cooperate between staged submits and readback, not inside a submitted GPU pass.',
+    },
+  });
 }
 
-function outputArtifact(role, artifact) {
-  return {
-    role,
-    artifactId: artifact.artifactId,
-    sha256: artifact.sha256,
-    shape: [...artifact.shape],
-    status: artifact.status || 'real',
-  };
+function createDefaultMogeBackpressure() {
+  return createWebGpuRouteBackpressureProfile({
+    requestedBudget: 'visible-wait',
+    effectiveBudget: 'visible-wait',
+    memoryExclusivity: 'shared',
+    warmCacheState: 'unknown',
+  });
 }
 
 export function createMogeDepthNormalRouteReceipt(input) {
@@ -37,30 +106,7 @@ export function createMogeDepthNormalRouteReceipt(input) {
   if (!input.outputs?.depth) throw new Error('depth output is required');
   if (!input.outputs?.normal) throw new Error('normal output is required');
 
-  requireArtifact(input.outputs.depth, 'depth');
-  requireArtifact(input.outputs.normal, 'normal');
-  if (input.outputs.pointMap) requireArtifact(input.outputs.pointMap, 'pointMap');
-  if (input.outputs.mask) requireArtifact(input.outputs.mask, 'mask');
-
-  const backendResult = validateWebGpuBackendIdentity(input.backend);
-  if (!backendResult.ok) {
-    throw new Error(`invalid WebGPU backend identity: ${backendResult.errors.join('; ')}`);
-  }
-
-  const profile = finishStagedSubmitProfile(input.profile);
-  const profileResult = validateStagedSubmitProfile(profile);
-  if (!profileResult.ok) {
-    throw new Error(`invalid staged profile: ${profileResult.errors.join('; ')}`);
-  }
-
-  const outputs = [
-    outputArtifact('depth', input.outputs.depth),
-    outputArtifact('normal', input.outputs.normal),
-  ];
-  if (input.outputs.pointMap) outputs.push(outputArtifact('pointmap', input.outputs.pointMap));
-  if (input.outputs.mask) outputs.push(outputArtifact('mask', input.outputs.mask));
-
-  return createWebGpuLocalRouteReceipt({
+  return createWebGpuRouteReceiptFromArtifacts({
     requestedRouteId: MOGE_DEPTH_NORMAL_ROUTE_ID,
     effectiveRouteId: input.effectiveRouteId || MOGE_DEPTH_NORMAL_ROUTE_ID,
     status: input.status || (input.fallbackReason ? 'fallback' : 'real'),
@@ -72,30 +118,22 @@ export function createMogeDepthNormalRouteReceipt(input) {
       weightsHash: input.model?.weightsHash,
       dtype: input.model?.dtype || 'fp16',
     },
-    kernel: {
-      kitVersion: input.kernel?.kitVersion || '0.0.0',
-      profile: input.kernel?.profile,
-      commit: input.kernel?.commit || null,
-    },
+    kernel: createKernelProfileMetadata(input.kernel, { requireProfile: true }),
     inputs: [
-      {
-        role: 'source-image',
-        artifactId: input.input.artifactId,
-        sha256: input.input.sha256,
-        shape: Array.isArray(input.input.shape) ? [...input.input.shape] : undefined,
-      },
+      createRouteReceiptInputArtifact('source-image', input.input),
     ],
-    outputs,
-    timings: {
-      source: profile.timingSource,
-      totalMs: profile.totalMs,
-      stages: profile.stages,
-      profile,
-    },
+    outputs: createRouteReceiptArtifacts({ artifacts: input.outputs, roles: OUTPUT_ROLES }),
+    profile: input.profile,
   });
 }
 
 export function createMogeDepthNormalRouteDefinition(input = {}) {
+  const routeMetadata = createRouteKernelProfileMetadata(input, {
+    defaultProfile: DEFAULT_KERNEL_PROFILE,
+    requiredStages: REQUIRED_STAGES,
+    timingSource: 'queue-submit-wait',
+  });
+
   return defineWebGpuRoute({
     routeId: MOGE_DEPTH_NORMAL_ROUTE_ID,
     backendKind: 'webgpu-local',
@@ -104,11 +142,7 @@ export function createMogeDepthNormalRouteDefinition(input = {}) {
       revision: input.model?.revision || 'local-vitl-normal',
       dtype: input.model?.dtype || 'fp16',
     },
-    kernel: {
-      kitVersion: input.kernel?.kitVersion || '0.0.0',
-      profile: input.kernel?.profile || 'conv-transpose2d-stride2',
-      commit: input.kernel?.commit || null,
-    },
+    kernel: routeMetadata.kernel,
     inputs: [
       { role: 'source-image', required: true, artifactRequired: true, hashRequired: true },
     ],
@@ -119,8 +153,10 @@ export function createMogeDepthNormalRouteDefinition(input = {}) {
       { role: 'mask', required: false, artifactRequired: true, hashRequired: true, shape: [592, 592] },
     ],
     requiredFeatures: input.requiredFeatures || [],
-    requiredStages: input.requiredStages || ['backbone', 'decoder-heads', 'output-readback'],
-    timingSource: input.timingSource || 'queue-submit-wait',
+    requiredStages: routeMetadata.requiredStages,
+    timingSource: routeMetadata.timingSource,
+    scheduler: input.scheduler || createDefaultMogeScheduler(),
+    backpressure: input.backpressure || createDefaultMogeBackpressure(),
     worker: input.worker || {
       exportName: 'runMogeDepthNormalRoute',
     },

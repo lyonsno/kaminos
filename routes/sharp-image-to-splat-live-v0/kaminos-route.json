@@ -1,0 +1,18 @@
+{
+  "schema": "kaminos.installed-route-package.v0",
+  "routeId": "sharp-image-to-splat-live-v0",
+  "label": "SHARP Image To Visible Splat",
+  "runtime": "kaminos-installed-route",
+  "entrypoint": "pipeline-witness.mjs",
+  "adapterEntrypoint": "scripts/run-sharp-webgpu-adapter.mjs",
+  "pipelineManifest": "pipelines/asset-pipelines.json",
+  "modelFamily": "SHARP-WebGPU",
+  "backendClass": "browser-webgpu",
+  "truthBoundary": "Kaminos-owned route package; runs local SHARP-WebGPU when its external model repo, weights, and Chrome prerequisites are installed.",
+  "sourceTruth": {
+    "fixtureFallback": false,
+    "requiresExternalModelInstall": true,
+    "externalModelEnv": "KAMINOS_SHARP_WEBGPU_REPO",
+    "externalChromeEnv": "KAMINOS_SHARP_WEBGPU_CHROME"
+  }
+}
