@@ -59,13 +59,17 @@ h2 { font-size: 11px; font-weight: 600; margin: 18px 0 8px; color: #666; text-tr
 .search-loading { text-align: center; color: #555; font-size: 11px; padding: 20px; }
 .search-hint { font-size: 10px; color: #444; margin-top: 4px; }
 
-/* Generate panel */
-.gen-input { width: 100%; padding: 8px 12px; background: #1f1f1f; border: 1px solid #333; border-radius: 6px; color: #ccc; font-size: 12px; outline: none; margin-bottom: 6px; }
-.gen-input:focus { border-color: #1976d2; }
-.gen-input::placeholder { color: #555; }
-.gen-preview { width: 100%; border-radius: 6px; margin-top: 8px; display: none; }
-.api-key-input { width: 100%; padding: 6px 10px; background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 4px; color: #888; font-size: 10px; font-family: 'SF Mono', monospace; outline: none; margin-bottom: 6px; }
-.api-key-input:focus { border-color: #444; }
+    /* Generate panel */
+    .gen-input { width: 100%; padding: 8px 12px; background: #1f1f1f; border: 1px solid #333; border-radius: 6px; color: #ccc; font-size: 12px; outline: none; margin-bottom: 6px; }
+    .gen-input:focus { border-color: #1976d2; }
+    .gen-input::placeholder { color: #555; }
+    .gen-preview { width: 100%; border-radius: 6px; margin-top: 8px; display: none; }
+    .api-key-input { width: 100%; padding: 6px 10px; background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 4px; color: #888; font-size: 10px; font-family: 'SF Mono', monospace; outline: none; margin-bottom: 6px; }
+    .api-key-input:focus { border-color: #444; }
+    .sharp-breathing-room-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 9px 0; }
+    .sharp-breathing-room-actions .btn { width: 100%; margin: 0; }
+    .sharp-breathing-room-status { min-height: 30px; color: #d8c37a; font-size: 11px; line-height: 1.35; margin-top: 7px; }
+    .sharp-breathing-room-source { color: #888; font: 10px 'SF Mono', monospace; overflow-wrap: anywhere; margin-top: 5px; }
 
 /* Viewport */
 #viewport { flex: 1; position: relative; background: #111; }
@@ -2293,6 +2297,17 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
 
   <!-- Generate Tab -->
   <div class="tab-content" id="tab-generate">
+    <h2>Route Image to Splat</h2>
+    <div class="panel" id="sharp-breathing-room-panel">
+      <div class="field"><span class="field-key">Image</span><span class="field-val" id="sharp-breathing-room-source-label">No image selected</span></div>
+      <input class="gen-input" id="sharp-breathing-room-source-input" spellcheck="false" autocomplete="off" placeholder="/api/read?root=image-inbox&path=source.png">
+      <div class="sharp-breathing-room-actions">
+        <button type="button" class="btn" id="sharp-breathing-room-default-button" onclick="runSharpBreathingRoomProfile('baseline-default')">Run default</button>
+        <button type="button" class="btn" id="sharp-breathing-room-friendly-button" onclick="runSharpBreathingRoomProfile('cooperative-spn-gaussian')">Run friendly</button>
+      </div>
+      <div class="sharp-breathing-room-source" id="sharp-breathing-room-source-summary">Select an image asset below or paste an image source.</div>
+      <div class="sharp-breathing-room-status" id="sharp-breathing-room-status">Choose a route to send the selected image through SHARP.</div>
+    </div>
     <h2>Image Generation</h2>
     <p style="font-size: 11px; color: #666; margin-bottom: 12px;">Generate test images to feed through the MoGe + SuperMat pipeline.</p>
     <div class="panel">
@@ -12250,6 +12265,15 @@ function selectedPipelineBrowserAsset() {
   return (pipelineDockState.browserAssets || []).find(entry => entry.id === selectedId) || null;
 }
 
+function selectedPipelineBrowserAssetForKind(kind) {
+  const selectedId = pipelineDockState.browserSelectedAssetIds?.[kind] || null;
+  if (!selectedId) return null;
+  return [
+    ...(pipelineDockState.browserAssets || []),
+    ...Object.values(pipelineDockState.browserAssetsByKind || {}).flat(),
+  ].find(entry => entry?.id === selectedId && entry.kind === kind) || null;
+}
+
 function pipelinePaletteLabel(kind = pipelineDockState.activeAssetPalette) {
   if (kind === 'image') return 'Image';
   return 'Splat';
@@ -12297,6 +12321,63 @@ function pipelineSelectedSource() {
     source,
     objectId: entry.id,
   };
+}
+
+const sharpBreathingRoomProfileLabels = {
+  'baseline-default': 'Default',
+  'cooperative-spn-gaussian': 'Friendly',
+};
+
+let sharpBreathingRoomRunningProfileId = null;
+
+function sharpBreathingRoomManualSource() {
+  const manual = document.getElementById('sharp-breathing-room-source-input')?.value?.trim();
+  if (!manual) return null;
+  return {
+    kind: 'manual-image',
+    label: manual.split('/').pop() || 'Manual image',
+    source: manual,
+  };
+}
+
+function sharpBreathingRoomSelectedSource() {
+  const manual = sharpBreathingRoomManualSource();
+  if (manual) return manual;
+  const imageAsset = selectedPipelineBrowserAssetForKind('image');
+  if (imageAsset) return pipelineBrowserAssetSource(imageAsset);
+  const selected = pipelineSelectedSource();
+  if (selected?.kind?.includes?.('image') || /\.(png|jpe?g|webp|gif)(?:$|[?#])/i.test(selected?.source || selected?.path || '')) {
+    return selected;
+  }
+  return selected || null;
+}
+
+function setSharpBreathingRoomStatus(message, kind = 'idle') {
+  const status = document.getElementById('sharp-breathing-room-status');
+  if (status) {
+    status.textContent = message || '';
+    status.dataset.status = kind;
+  }
+  if (message) setInfo(message);
+}
+
+function renderSharpBreathingRoomHarness() {
+  const source = sharpBreathingRoomSelectedSource();
+  const label = document.getElementById('sharp-breathing-room-source-label');
+  const summary = document.getElementById('sharp-breathing-room-source-summary');
+  if (label) label.textContent = source?.label || 'No image selected';
+  if (summary) summary.textContent = source?.source || 'Select an image asset below or paste an image source.';
+  const running = Boolean(sharpBreathingRoomRunningProfileId);
+  for (const [profileId, buttonId] of Object.entries({
+    'baseline-default': 'sharp-breathing-room-default-button',
+    'cooperative-spn-gaussian': 'sharp-breathing-room-friendly-button',
+  })) {
+    const button = document.getElementById(buttonId);
+    if (!button) continue;
+    const labelText = sharpBreathingRoomProfileLabels[profileId] || profileId;
+    button.disabled = running;
+    button.textContent = sharpBreathingRoomRunningProfileId === profileId ? `Running ${labelText.toLowerCase()}` : `Run ${labelText.toLowerCase()}`;
+  }
 }
 
 function renderPipelineAssetCard(entry) {
@@ -15174,6 +15255,7 @@ function pipelineRunResultRows(result) {
     { key: 'effect', value: primaryArtifact ? `${artifactRole || 'output'} artifact written${loadable ? '; preview still must be loaded explicitly.' : '; open artifact evidence or route into a later preview/baking node.'}` : 'Run evidence written without a primary output artifact.' },
     ...(adapterFixture ? [{ key: 'truth', value: 'mock adapter fixture output; not real model inference' }] : fixtureBacked ? [{ key: 'truth', value: 'input provenance only; output fixed fixture' }] : []),
     { key: 'scheduler', value: pipelineGraphSchedulerEvidenceLabel(schedulerEvidence) },
+    { key: 'requested route', value: result.schedulerProfile?.operatorLabel || result.schedulerProfile?.label || 'ordinary route' },
     { key: 'scheduler verification', value: pipelineGraphSchedulerVerificationLabel(schedulerEvidence) },
     { key: 'scheduler profile', value: schedulerEvidence?.scheduler?.schema || 'missing' },
     { key: 'backpressure profile', value: schedulerEvidence?.backpressure?.schema || 'missing' },
@@ -15852,6 +15934,7 @@ function renderPipelineDock() {
 	    `).join('');
 	  }
 	  pipelineRenderGraphWorkspaceSummary();
+  renderSharpBreathingRoomHarness();
 	  renderPipelineGraphWorkbench();
 	  renderPipelineRunShelf();
 	  renderPipelineRunResultPanel();
@@ -15904,6 +15987,59 @@ async function readPipelineRunStream(response, onProgress) {
   return finalResult;
 }
 
+async function runSharpBreathingRoomProfile(profileId) {
+  const profileLabel = sharpBreathingRoomProfileLabels[profileId] || profileId;
+  const source = sharpBreathingRoomSelectedSource();
+  const pipelineId = 'sharp-image-to-splat-live-v0';
+  if (!source?.source) {
+    setSharpBreathingRoomStatus('Select an image or paste an image source before running SHARP.', 'error');
+    return null;
+  }
+  if (!pipelineManifest) await loadPipelineManifest();
+  const pipeline = pipelineManifest?.pipelines?.find(route => route.id === pipelineId);
+  const inputCheck = pipelineSourceSatisfiesRouteInput(source, pipelineRouteInputRequirement(pipeline));
+  if (!inputCheck.ok) {
+    setSharpBreathingRoomStatus(`SHARP needs an image source. ${inputCheck.hint || ''}`.trim(), 'error');
+    return null;
+  }
+  sharpBreathingRoomRunningProfileId = profileId;
+  renderSharpBreathingRoomHarness();
+  setSharpBreathingRoomStatus(`SHARP is running the ${profileLabel.toLowerCase()} route on this image.`, 'running');
+  try {
+    const run = await runSelectedPipeline({
+      sourceOverride: source,
+      pipelineId,
+      pipeline,
+      generator: pipelineGeneratorForPipelineId(pipelineId),
+      schedulerProfileId: profileId,
+      onProgress: event => {
+        if (event?.message) {
+          const progress = Number.isFinite(event.progress) ? ` ${Math.round(event.progress * 100)}%` : '';
+          setSharpBreathingRoomStatus(`${profileLabel}: ${event.message}${progress}`, 'running');
+        }
+      },
+    });
+    const artifact = pipelinePrimaryRunArtifact(run);
+    if (run?.ok) {
+      setSharpBreathingRoomStatus(
+        artifact?.path
+          ? `${profileLabel} finished and wrote an output. Load Output from the run result to place it in the scene.`
+          : `${profileLabel} finished with evidence only; inspect the run result for the failure boundary.`,
+        artifact?.path ? 'complete' : 'evidence-only',
+      );
+    } else {
+      setSharpBreathingRoomStatus(`${profileLabel} failed before producing a splat. ${run?.error || ''}`.trim(), 'error');
+    }
+    return run;
+  } catch (err) {
+    setSharpBreathingRoomStatus(`${profileLabel} failed before producing a splat. ${err.message || err}`, 'error');
+    throw err;
+  } finally {
+    sharpBreathingRoomRunningProfileId = null;
+    renderSharpBreathingRoomHarness();
+  }
+}
+
 async function runSelectedPipeline(options = {}) {
   const source = options.sourceOverride || pipelineSelectedSource();
   if (!source?.source) {
@@ -15922,6 +16058,7 @@ async function runSelectedPipeline(options = {}) {
       pipelineId: requestedPipelineId,
       source: source.source,
       clientRunId: options.clientRunId || null,
+      schedulerProfileId: options.schedulerProfileId || null,
       streamProgress: true,
     }),
   });
@@ -15945,6 +16082,9 @@ function initPipelineDock() {
   document.getElementById('pipeline-source-input')?.addEventListener('input', () => {
     renderPipelineDock();
   });
+  document.getElementById('sharp-breathing-room-source-input')?.addEventListener('input', () => {
+    renderSharpBreathingRoomHarness();
+  });
   document.getElementById('pipeline-refresh-button')?.addEventListener('click', () => loadPipelineManifest().catch(err => setInfo(err.message || String(err))));
   document.getElementById('pipeline-browser-refresh')?.addEventListener('click', () => loadPipelineAssetBrowser().catch(err => setInfo(err.message || String(err))));
   document.querySelectorAll('[data-pipeline-asset-palette]').forEach(button => {
@@ -15960,6 +16100,7 @@ function initPipelineDock() {
 window.loadPipelineManifest = loadPipelineManifest;
 window.loadPipelineAssetBrowser = loadPipelineAssetBrowser;
 window.runSelectedPipeline = runSelectedPipeline;
+window.runSharpBreathingRoomProfile = runSharpBreathingRoomProfile;
 window.selectPipelineGenerator = selectPipelineGenerator;
 window.pipelineLoadSelectedSource = pipelineLoadSelectedSource;
 window.pipelineLoadRunSplatArtifact = pipelineLoadRunSplatArtifact;

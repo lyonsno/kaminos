@@ -12,6 +12,7 @@ from serve import KaminosHandler
 from serve import build_display_metadata, build_output_display_metadata
 from serve import list_greenroom_output_files, resolve_greenroom_output_dir
 from serve import list_asset_entries
+from serve import resolve_sharp_scheduler_profile, pipeline_witness_env_for_payload
 
 
 def test_http_status_404_log_does_not_crash():
@@ -95,6 +96,45 @@ def test_forge_host_registry_snapshot_fallback_is_not_live():
     assert snapshot["endpointRegistry"]["loaded"] is False
     assert snapshot["endpoints"] == []
     assert snapshot["warnings"], "missing registry should be visible to the browser instead of silently falling back"
+
+
+def test_sharp_breathing_room_profiles_are_named_operator_routes_with_explicit_env():
+    default = resolve_sharp_scheduler_profile("baseline-default")
+    friendly = resolve_sharp_scheduler_profile("cooperative-spn-gaussian")
+
+    assert default["id"] == "baseline-default"
+    assert default["operatorLabel"] == "Default"
+    assert json.loads(default["env"]["KAMINOS_SHARP_WEBGPU_SCHEDULER"]) == {"mode": "default"}
+    assert friendly["id"] == "cooperative-spn-gaussian"
+    assert friendly["operatorLabel"] == "Friendly"
+    friendly_scheduler = json.loads(friendly["env"]["KAMINOS_SHARP_WEBGPU_SCHEDULER"])
+    assert friendly_scheduler["mode"] == "cooperative"
+    assert friendly_scheduler["spnPatchChunkSize"] == 1
+    assert friendly_scheduler["yieldMs"] == 3
+    assert friendly_scheduler["waitForSubmittedWorkDone"] is True
+    assert friendly_scheduler["gaussianPhaseYieldMs"] == 4
+    assert friendly_scheduler["vitBlockChunkSize"] == 2
+
+
+def test_sharp_breathing_room_unknown_profile_fails_instead_of_falling_back():
+    try:
+        resolve_sharp_scheduler_profile("friendly-but-typo")
+    except ValueError as error:
+        assert "Unknown SHARP scheduler profile" in str(error)
+    else:
+        raise AssertionError("unknown scheduler profile must not silently fall back to default")
+
+
+def test_pipeline_witness_env_for_payload_preserves_requested_scheduler_profile():
+    env, profile = pipeline_witness_env_for_payload({
+        "pipelineId": "sharp-image-to-splat-live-v0",
+        "schedulerProfileId": "cooperative-spn-gaussian",
+    })
+
+    assert profile["id"] == "cooperative-spn-gaussian"
+    assert profile["operatorLabel"] == "Friendly"
+    assert json.loads(env["KAMINOS_SHARP_WEBGPU_SCHEDULER"])["mode"] == "cooperative"
+    assert json.loads(env["KAMINOS_SHARP_WEBGPU_SCHEDULER"])["gaussianPhaseYieldMs"] == 4
 
 
 def test_volume_only_scene_save_name_uses_scene_fallback():
