@@ -11834,18 +11834,18 @@ async function buildBrowserWebGpuPreviewRouteResult(row = {}, options = {}) {
       p99FrameGapMs: totalMs,
     },
   });
+  const routeRequiredStages = route.requiredStages || ['backbone', 'decoder-heads', 'output-readback'];
   const profile = kit.createStagedSubmitProfile({
     route: routeIsReal ? 'moge-webgpu-browser-route-adapter' : 'browser-preview-producer',
-    timingSource: 'performance.now',
-    requiredStages: routeIsReal ? ['adapter-probe', 'moge-init-run', 'artifact-render', 'result-submit'] : ['adapter-probe', 'artifact-render', 'result-submit'],
+    timingSource: 'queue-submit-wait',
+    requiredStages: routeRequiredStages,
   });
-  kit.addStagedSubmitStage(profile, { name: 'adapter-probe', ms: Number(Math.min(totalMs, 8).toFixed(1)) });
-  if (routeIsReal) {
-    const adapterMs = Number(Math.max((realAdapterOutput.timings?.totalMs ?? totalMs) - 4, 0).toFixed(1));
-    kit.addStagedSubmitStage(profile, { name: 'moge-init-run', ms: adapterMs });
-  }
-  kit.addStagedSubmitStage(profile, { name: 'artifact-render', ms: Number(Math.max(totalMs - 8, 0).toFixed(1)) });
-  kit.addStagedSubmitStage(profile, { name: 'result-submit', ms: 0 });
+  const adapterMs = routeIsReal
+    ? Number(Math.max((realAdapterOutput.timings?.totalMs ?? totalMs) - 4, 0).toFixed(1))
+    : Number(Math.min(totalMs, 8).toFixed(1));
+  kit.addStagedSubmitStage(profile, { name: 'backbone', ms: adapterMs });
+  kit.addStagedSubmitStage(profile, { name: 'decoder-heads', ms: Number(Math.max(totalMs - adapterMs, 0).toFixed(1)) });
+  kit.addStagedSubmitStage(profile, { name: 'output-readback', ms: 0 });
   const runtimeProfile = kit.createWebGpuRuntimeProfile({
     routeId,
     runtimeLabel: routeIsReal ? 'moge-webgpu-browser-route-adapter' : (probe.available ? 'browser-webgpu-preview-adapter-probed' : 'browser-webgpu-preview-demo-producer'),
@@ -11861,8 +11861,8 @@ async function buildBrowserWebGpuPreviewRouteResult(row = {}, options = {}) {
       fallbackReason,
       moduleBaseUrl: realAdapterOutput?.moduleBaseUrl || mogeWebGpuModuleBaseUrl() || null,
     },
-    requiredStages: routeIsReal ? ['adapter-probe', 'moge-init-run', 'artifact-render', 'result-submit'] : ['adapter-probe', 'artifact-render', 'result-submit'],
-    timingSource: 'performance.now',
+    requiredStages: routeRequiredStages,
+    timingSource: 'queue-submit-wait',
   });
   runtimeProfile.evidence = {
     ...runtimeProfile.evidence,
@@ -11879,6 +11879,7 @@ async function buildBrowserWebGpuPreviewRouteResult(row = {}, options = {}) {
     normal: outputArtifacts.normal,
   };
   if (outputArtifacts.pointMap) requestOutputs.pointmap = outputArtifacts.pointMap;
+  const incomingRouteConfig = routeJob.metadata?.routeConfig || row.routeConfig || {};
   const request = kit.createRouteInvocationRequest(route, {
     requestId,
     inputs: { 'source-image': inputArtifact },
@@ -11893,6 +11894,7 @@ async function buildBrowserWebGpuPreviewRouteResult(row = {}, options = {}) {
       sourceSelectionMode: inputPreview.sourceSelectionMode || mogeRouteSourceSelectionMode(row),
       sourceImageSyntheticFallback: inputPreview.syntheticFallback === true,
       sourceImageLoadFailures: inputPreview.sourceImageLoadFailures || [],
+      greenroomJobId: incomingRouteConfig.greenroomJobId || null,
     },
     createdAt: runtimeProfile.createdAt,
   });
@@ -11930,7 +11932,7 @@ async function buildBrowserWebGpuPreviewRouteResult(row = {}, options = {}) {
     mediaType: previewByRole[output.role]?.mediaType,
   }));
   receipt.timings = {
-    source: 'performance.now',
+    source: 'queue-submit-wait',
     totalMs,
     stages: runtimeProfile.profile.stages,
   };

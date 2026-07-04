@@ -247,6 +247,12 @@ assert.match(indexHtml, /<details[^>]+id="gpu-greenroom-output-archive"/, 'GPU G
 assert.doesNotMatch(indexHtml, /<details[^>]+id="gpu-greenroom-output-archive"[^>]+open/, 'GPU Greenroom output history must not be open by default');
 assert.match(indexHtml, /data-greenroom-route-input-source-kind/, 'Route tray preserves browser route input source kind as inspectable row identity');
 assert.match(indexHtml, /previewDataUrl/, 'Browser WebGPU preview producer includes an inspectable output artifact');
+assert.match(indexHtml, /const routeRequiredStages = route\.requiredStages/, 'Browser WebGPU producer uses the route-required stage list for kit-valid receipts');
+assert.match(indexHtml, /timingSource: 'queue-submit-wait'/, 'Browser WebGPU producer preserves the MoGE queue-submit-wait timing source expected by kit validation');
+assert.match(indexHtml, /kit\.addStagedSubmitStage\(profile, \{ name: 'backbone'/, 'Browser WebGPU producer records the required backbone stage');
+assert.match(indexHtml, /kit\.addStagedSubmitStage\(profile, \{ name: 'decoder-heads'/, 'Browser WebGPU producer records the required decoder-heads stage');
+assert.match(indexHtml, /kit\.addStagedSubmitStage\(profile, \{ name: 'output-readback'/, 'Browser WebGPU producer records the required output-readback stage');
+assert.match(indexHtml, /greenroomJobId: incomingRouteConfig\.greenroomJobId/, 'Browser WebGPU producer preserves Greenroom job identity in route-result config');
 assert.match(indexHtml, /data-greenroom-route-output-kind/, 'Route tray preserves output artifact kind on browser route output links');
 assert.match(indexHtml, /fixture route identity only/, 'Route tray can warn when a browser WebGPU row is identity-only fixture evidence');
 assert.match(indexHtml, /scheduler unverified/, 'Route tray can warn when browser WebGPU scheduler evidence is unverified');
