@@ -35,9 +35,11 @@ const sourceOpacity = positiveNumber(args.get('--source-opacity'), 0.55, '--sour
 const overlaySize = positiveNumber(args.get('--overlay-size'), 3, '--overlay-size');
 const sourceUpAxis = args.get('--source-up-axis') || 'auto';
 const sourceForwardAxis = args.get('--source-forward-axis') || 'auto';
+const takeSource = String(args.get('--take-source') || 'generate');
+const durableTakeId = String(args.get('--durable-take-id') || '');
 const clipletPlayback = String(args.get('--cliplet-playback') || 'full');
 const clipletInterrupt = String(args.get('--cliplet-interrupt') || 'off');
-const tileWidth = positiveInt(args.get('--tile-width'), 420, '--tile-width');
+const tileWidth = positiveInt(args.get('--tile-width'), 560, '--tile-width');
 const columns = positiveInt(args.get('--columns'), frameTotal, '--columns');
 const exportCurrentView = args.has('--export-current-view');
 const exportSelectedCliplet = args.has('--export-selected-cliplet');
@@ -114,6 +116,8 @@ function writeReport(report) {
     overlaySize,
     sourceUpAxis,
     sourceForwardAxis,
+    takeSource,
+    durableTakeId,
     clipletPlayback,
     tileWidth,
     columns,
@@ -341,6 +345,107 @@ async function generateMotion(ws) {
   }))`, { timeoutMs: 240000 });
 }
 
+async function loadWitnessMotionSource(ws) {
+  if (takeSource === 'generate') {
+    const generated = await generateMotion(ws);
+    if (!generated?.ok) throw new Error(`window.generateMotion() failed: ${JSON.stringify(generated)}`);
+    if (!generated?.takeShelf?.selectedTake) throw new Error(`motion take shelf did not select generated take: ${JSON.stringify(generated?.takeShelf || null)}`);
+    return {
+      schema: 'kaminos.motion-panel-live-motion-source.v0',
+      ok: true,
+      takeSource,
+      generated,
+      selectedTake: generated.takeShelf.selectedTake,
+      takeShelf: generated.takeShelf,
+    };
+  }
+  if (takeSource === 'fixture') {
+    return evaluate(ws, `(async () => {
+      if (typeof window.previewMotionPanelTemporalFixture !== 'function') throw new Error('fixture preview function unavailable');
+      const result = await window.previewMotionPanelTemporalFixture();
+      const shelf = window.kaminosMotionPanelTakeShelfDebugState?.();
+      if (!shelf?.selectedTake) throw new Error('fixture preview did not select a take: ' + JSON.stringify(shelf || null));
+      return {
+        schema: 'kaminos.motion-panel-live-motion-source.v0',
+        ok: true,
+        takeSource: 'fixture',
+        fixture: result,
+        selectedTake: shelf.selectedTake,
+        takeShelf: shelf,
+      };
+    })().catch(error => ({
+      schema: 'kaminos.motion-panel-live-motion-source.v0',
+      ok: false,
+      takeSource: 'fixture',
+      error: String(error?.message || error),
+    }))`, { timeoutMs: 60000 });
+  }
+  if (takeSource === 'saved') {
+    return evaluate(ws, `(async () => {
+      if (typeof window.loadDurableMotionPanelTakes !== 'function') throw new Error('load durable takes function unavailable');
+      if (typeof window.previewDurableMotionPanelTake !== 'function') throw new Error('preview durable take function unavailable');
+      const listed = await window.loadDurableMotionPanelTakes({ silent: true });
+      const requestedId = ${JSON.stringify(durableTakeId)};
+      const takeId = requestedId || listed?.takes?.[0]?.id;
+      if (!takeId) throw new Error('no durable motion takes available for saved witness source');
+      const preview = await window.previewDurableMotionPanelTake(takeId);
+      const shelf = window.kaminosMotionPanelTakeShelfDebugState?.();
+      if (!shelf?.selectedTake) throw new Error('saved take preview did not select a take: ' + JSON.stringify(shelf || null));
+      return {
+        schema: 'kaminos.motion-panel-live-motion-source.v0',
+        ok: true,
+        takeSource: 'saved',
+        durableTakeId: takeId,
+        listed,
+        preview,
+        selectedTake: shelf.selectedTake,
+        takeShelf: shelf,
+      };
+    })().catch(error => ({
+      schema: 'kaminos.motion-panel-live-motion-source.v0',
+      ok: false,
+      takeSource: 'saved',
+      durableTakeId: ${JSON.stringify(durableTakeId)},
+      error: String(error?.message || error),
+    }))`, { timeoutMs: 60000 });
+  }
+  if (takeSource === 'current') {
+    return evaluate(ws, `(() => {
+      const shelf = window.kaminosMotionPanelTakeShelfDebugState?.();
+      if (!shelf?.selectedTake) {
+        return {
+          schema: 'kaminos.motion-panel-live-motion-source.v0',
+          ok: false,
+          takeSource: 'current',
+          error: 'current take source requested but no selected take is loaded',
+          takeShelf: shelf || null,
+        };
+      }
+      return {
+        schema: 'kaminos.motion-panel-live-motion-source.v0',
+        ok: true,
+        takeSource: 'current',
+        selectedTake: shelf.selectedTake,
+        takeShelf: shelf,
+      };
+    })()`, { timeoutMs: 20000 });
+  }
+  throw new Error(`--take-source must be generate, fixture, saved, or current; got ${takeSource}`);
+}
+
+async function resetWitnessMotionClock(ws) {
+  return evaluate(ws, `(async () => {
+    if (typeof window.resetGeneratedPoseTemporalClock !== 'function') throw new Error('resetGeneratedPoseTemporalClock unavailable');
+    const result = window.resetGeneratedPoseTemporalClock({ resetPathWorld: true });
+    if (!result?.ok) throw new Error('generated temporal clock reset failed: ' + JSON.stringify(result || null));
+    return result;
+  })().catch(error => ({
+    schema: 'kaminos.generated-pose-temporal-clock-reset.v0',
+    ok: false,
+    error: String(error?.message || error),
+  }))`);
+}
+
 async function promoteAndReloadMotionTake(ws) {
   return evaluate(ws, `(async () => {
     if (typeof window.promoteMotionPanelSelectedTake !== 'function') throw new Error('missing window.promoteMotionPanelSelectedTake');
@@ -500,6 +605,7 @@ async function captureFrame(ws, index) {
       clipletInterrupt: actor?.clipletInterrupt || state?.clipletInterrupt || null,
       clipletInterruptTimeline: state?.clipletInterruptTimeline || null,
       pathWorld: actor?.pathWorld || state?.pathWorld || null,
+      routeMode: actor?.pathWorld?.routeMode || state?.pathWorld?.routeMode || state?.pathWorld?.pathWorldSample?.routeMode || null,
       pathWorldInterrupt: actor?.pathWorldInterrupt || state?.pathWorldInterrupt || null,
       pathWorldEpisode: actor?.pathWorldEpisode || state?.pathWorldEpisode || state?.pathWorldInterrupt?.pathWorldEpisode || null,
       pathWorldEncounterSemantics: actor?.pathWorldEncounterSemantics || state?.pathWorldEncounterSemantics || state?.pathWorldEpisode?.encounterSemantics || null,
@@ -887,10 +993,11 @@ try {
   phase = 'configuring-panel';
   const configured = await configureMotionPanel(ws);
 
-  phase = 'generating-motion';
-  const generated = await generateMotion(ws);
-  if (!generated?.ok) throw new Error(`window.generateMotion() failed: ${JSON.stringify(generated)}`);
-  if (!generated?.takeShelf?.selectedTake) throw new Error(`motion take shelf did not select generated take: ${JSON.stringify(generated?.takeShelf || null)}`);
+  phase = `loading-motion-source-${takeSource}`;
+  const motionSource = await loadWitnessMotionSource(ws);
+  if (!motionSource?.ok) throw new Error(`motion source load failed: ${JSON.stringify(motionSource)}`);
+  const generated = motionSource.generated || null;
+  let motionClockReset = null;
   let promotedTake = null;
   if (promoteTake) {
     phase = 'promoting-motion-take';
@@ -909,7 +1016,10 @@ try {
     phase = 'focusing-take-shelf';
     takeShelfFocus = await focusMotionPanelTakeShelf(ws);
   }
-  await delay(settleMs);
+  phase = 'resetting-motion-clock';
+  motionClockReset = await resetWitnessMotionClock(ws);
+  if (!motionClockReset?.ok) throw new Error(`motion clock reset failed: ${JSON.stringify(motionClockReset)}`);
+  await delay(Math.min(settleMs, 180));
 
   let filmstrip = null;
   let frames = [];
@@ -963,8 +1073,10 @@ try {
     phrasePreviewFocus,
     takeShelfFocus,
     promotedTake,
+    motionSource,
+    motionClockReset,
     generated,
-    takeShelf: promotedTake?.takeShelf || generated?.takeShelf || null,
+    takeShelf: promotedTake?.takeShelf || motionSource?.takeShelf || generated?.takeShelf || null,
     frames,
     filmstrip,
   });

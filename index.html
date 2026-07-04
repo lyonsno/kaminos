@@ -5094,6 +5094,7 @@ function createGeneratedPoseTemporalPathWorld() {
     schema: 'kaminos.generated-motion-path-world.v0',
     route: MOTION_ROUTE_IDENTITY,
     id: 'generated-pose-temporal-path-world-0',
+    routeMode: 'goal-seeking',
     group,
     routeLine: route,
     wall,
@@ -5106,12 +5107,52 @@ function createGeneratedPoseTemporalPathWorld() {
   };
 }
 
+function motionPanelPathWorldRouteMode(pathWorld) {
+  return pathWorld?.routeMode === 'patrol-return' ? 'patrol-return' : 'goal-seeking';
+}
+
+function sampleMotionPanelPathWorldGoalProgress(pathWorld, elapsedTime = 0, duration = 6) {
+  const routeMode = motionPanelPathWorldRouteMode(pathWorld);
+  const cycle = Math.max(2.4, Number(duration) || Number(pathWorld?.duration) || 6);
+  const rawTime = Math.max(0, Number(elapsedTime) || 0);
+  if (routeMode === 'patrol-return') {
+    const wrappedTime = (rawTime % cycle + cycle) % cycle;
+    const phase = Math.max(0, Math.min(1, wrappedTime / cycle || 0));
+    const forward = phase < 0.5;
+    const patrolProgress = forward ? phase * 2 : 1 - (phase - 0.5) * 2;
+    const patrolReason = forward ? 'seeking-goal' : 'returning-to-start';
+    return {
+      routeMode,
+      progress: Number(patrolProgress.toFixed(5)),
+      direction: forward ? 'forward' : 'return',
+      reason: patrolReason,
+    };
+  }
+  const phase = Math.max(0, Math.min(1, rawTime / cycle || 0));
+  const progress = clampMotionPanelPathWorldProgress(phase);
+  return {
+    routeMode,
+    progress,
+    direction: 'forward',
+    reason: progress >= 0.995 ? 'goal-hold' : 'seeking-goal',
+  };
+}
+
+function advanceMotionPanelPathWorldProgress(pathWorld, fromProgress, advance = 0.18) {
+  const routeMode = motionPanelPathWorldRouteMode(pathWorld);
+  const progress = clampMotionPanelPathWorldProgress(fromProgress);
+  const step = Math.max(0.01, Number(advance) || 0.18);
+  if (routeMode === 'patrol-return') return clampMotionPanelPathWorldProgress(progress + step);
+  return clampMotionPanelPathWorldProgress(Math.max(progress, progress + step));
+}
+
 function sampleMotionPanelPathWorld(pathWorld, elapsedTime = 0, duration = 6, options = {}) {
   const cycle = Math.max(2.4, Number(duration) || Number(pathWorld?.duration) || 6);
   const wrappedTime = ((Number(elapsedTime) || 0) % cycle + cycle) % cycle;
-  const phase = wrappedTime / cycle;
-  const forward = phase < 0.5;
-  const u = forward ? phase * 2 : 1 - (phase - 0.5) * 2;
+  const goalProgress = sampleMotionPanelPathWorldGoalProgress(pathWorld, elapsedTime, cycle);
+  const routeMode = goalProgress.routeMode;
+  const forward = goalProgress.direction !== 'return';
+  const u = goalProgress.progress;
   const routeSample = interpolateMotionPanelPathWorldRoute(pathWorld?.routePoints, u);
   const obstacle = pathWorld?.obstacle || { id: 'missing-obstacle', center: [0, 0, 0], radius: 0.001 };
   const dx = routeSample.point[0] - Number(obstacle.center?.[0] || 0);
@@ -5124,8 +5165,9 @@ function sampleMotionPanelPathWorld(pathWorld, elapsedTime = 0, duration = 6, op
   const rawSample = {
     schema: 'kaminos.generated-motion-path-world-sample.v0',
     pathWorldId: pathWorld?.id || null,
+    routeMode,
     activeSource: 'world-path',
-    reason: forward ? 'seeking-goal' : 'returning-to-start',
+    reason: goalProgress.reason,
     elapsedTime: Number((Number(elapsedTime) || 0).toFixed(5)),
     wrappedTime: Number(wrappedTime.toFixed(5)),
     progress: Number(u.toFixed(5)),
@@ -5702,26 +5744,39 @@ function createMotionPanelPathWorldResumeHandoff({
   duration = 6,
 }) {
   const direction = pathWorldSample?.direction === 'return' ? 'return' : 'forward';
+  const routeMode = motionPanelPathWorldRouteMode(pathWorld);
   const preEncounterRouteProgress = clampMotionPanelPathWorldProgress(pathWorldSample?.progress);
   const handoffEndTime = Number(firedAt || 0)
     + Math.max(0, Number(playbackDuration) || 0)
     + Math.max(0, Number(cooldownDuration) || 0)
     + Math.max(0, Number(handoffDuration) || 0);
-  let targetSample = sampleMotionPanelPathWorld(pathWorld, handoffEndTime, duration);
   const obstacleCenter = pathWorldSample?.trigger?.center || pathWorld?.obstacle?.center || [0, 0, 0];
   const obstacleRadius = Math.max(0.001, Number(pathWorldSample?.trigger?.radius) || Number(pathWorld?.obstacle?.radius) || 0.24);
   const clearanceRadius = obstacleRadius + 0.17;
+  let targetSample = routeMode === 'goal-seeking'
+    ? {
+      progress: advanceMotionPanelPathWorldProgress(pathWorld, preEncounterRouteProgress, 0.22),
+      direction: 'forward',
+    }
+    : sampleMotionPanelPathWorld(pathWorld, handoffEndTime, duration);
+  let targetProgressBasis = routeMode === 'goal-seeking' ? 'goal-advance' : 'time-sample';
   let handoffTargetProgress = clampMotionPanelPathWorldProgress(targetSample?.progress);
   let routeSample = interpolateMotionPanelPathWorldRoute(pathWorld?.routePoints, handoffTargetProgress);
   for (let i = 0; i < 8; i++) {
     const dx = Number(routeSample.point[0] || 0) - Number(obstacleCenter[0] || 0);
     const dz = Number(routeSample.point[2] || 0) - Number(obstacleCenter[2] || 0);
     if (Math.hypot(dx, dz) >= clearanceRadius + 0.04) break;
-    targetSample = sampleMotionPanelPathWorld(pathWorld, handoffEndTime + (i + 1) * 0.18, duration);
+    targetSample = routeMode === 'goal-seeking'
+      ? {
+        progress: advanceMotionPanelPathWorldProgress(pathWorld, handoffTargetProgress, 0.06),
+        direction: 'forward',
+      }
+      : sampleMotionPanelPathWorld(pathWorld, handoffEndTime + (i + 1) * 0.18, duration);
     handoffTargetProgress = clampMotionPanelPathWorldProgress(targetSample?.progress);
+    if (routeMode === 'goal-seeking') targetProgressBasis = 'goal-advance';
     routeSample = interpolateMotionPanelPathWorldRoute(pathWorld?.routePoints, handoffTargetProgress);
   }
-  const directionSign = targetSample?.direction === 'return' ? -1 : 1;
+  const directionSign = routeMode === 'patrol-return' && targetSample?.direction === 'return' ? -1 : 1;
   const routeTangent = routeSample.tangent.map(value => Number((value * directionSign).toFixed(5)));
   const handoffStartPoint = (encounterTrajectory?.resumePoint || pathWorldSample?.root || [0, 0, 0])
     .map(value => Number(Number(value || 0).toFixed(5)));
@@ -5745,9 +5800,11 @@ function createMotionPanelPathWorldResumeHandoff({
     handoffId: `${episodeId}-resume-handoff`,
     pathWorldId: pathWorldSample?.pathWorldId || pathWorld?.id || null,
     obstacleId: pathWorldSample?.trigger?.obstacleId || encounterTrajectory?.obstacleId || null,
+    routeMode,
     routeAuthority: 'handoff',
     preEncounterRouteProgress,
     handoffTargetProgress,
+    targetProgressBasis: routeMode === 'goal-seeking' ? 'goal-advance' : targetProgressBasis,
     handoffEndTime: Number(handoffEndTime.toFixed(5)),
     routeSegmentIndex: routeSample.segmentIndex,
     direction: targetSample?.direction || direction,
@@ -7275,6 +7332,38 @@ function updateGeneratedPoseTemporalFrame(nowSeconds = performance.now() / 1000)
   return true;
 }
 
+function resetGeneratedPoseTemporalClock(options = {}) {
+  if (!motionTemporalState?.active) {
+    return {
+      schema: 'kaminos.generated-pose-temporal-clock-reset.v0',
+      ok: false,
+      reason: 'inactive',
+    };
+  }
+  const resetPathWorld = options.resetPathWorld !== false;
+  const nowSeconds = performance.now() / 1000;
+  motionTemporalState.startedAt = nowSeconds;
+  motionTemporalState.lastClipletPlayback = null;
+  motionTemporalState.lastClipletPlaybackTimeline = null;
+  motionTemporalState.lastClipletInterrupt = null;
+  motionTemporalState.lastClipletInterruptTimeline = null;
+  motionTemporalState.lastPathWorldInterrupt = null;
+  motionTemporalState.lastPathWorldSteeringMemory = null;
+  if (resetPathWorld) {
+    motionTemporalState.pathWorldInterruptRuntime = null;
+    motionTemporalState.pathWorldSteeringMemoryRuntime = null;
+  }
+  const updated = updateGeneratedPoseTemporalFrame(nowSeconds);
+  return {
+    schema: 'kaminos.generated-pose-temporal-clock-reset.v0',
+    ok: !!updated,
+    startedAt: nowSeconds,
+    resetPathWorld,
+    routeMode: motionTemporalState.pathWorld?.routeMode || null,
+    frameCount: motionTemporalState.frameCount,
+  };
+}
+
 function updateMotionTrackFrame(nowSeconds = performance.now() / 1000) {
   if (!motionTrackState?.active) return false;
   const state = motionTrackState;
@@ -7860,6 +7949,8 @@ async function previewMotionPanelTemporalFixture() {
   setInfo('Motion panel fixture previewed on temporal orb');
   return result;
 }
+window.previewMotionPanelTemporalFixture = previewMotionPanelTemporalFixture;
+window.resetGeneratedPoseTemporalClock = resetGeneratedPoseTemporalClock;
 
 async function generateMotionPanelTemporalPreview() {
   const serverUrl = String(document.getElementById('motion-panel-server-url')?.value || 'http://localhost:8098').replace(/\/+$/, '');
@@ -8280,12 +8371,7 @@ function initKaminosMotionAgencyRoute() {
   document.getElementById('motion-panel-export-selected-cliplet')?.addEventListener('click', () => void exportMotionPanelSelectedClipletFilmstrip());
   const resetMotionClipletSelection = () => {
     if (!motionTemporalState?.active) return;
-    motionTemporalState.startedAt = performance.now() / 1000;
-    motionTemporalState.lastClipletPlayback = null;
-    motionTemporalState.lastClipletPlaybackTimeline = null;
-    motionTemporalState.lastClipletInterrupt = null;
-    motionTemporalState.lastClipletInterruptTimeline = null;
-    updateGeneratedPoseTemporalFrame(performance.now() / 1000);
+    resetGeneratedPoseTemporalClock({ resetPathWorld: true });
     renderMotionPanelPhrasePreview(motionTemporalState.generatedMotionCliplets);
   };
   document.getElementById('motion-panel-cliplet-playback')?.addEventListener('change', resetMotionClipletSelection);
