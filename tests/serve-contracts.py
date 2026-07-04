@@ -786,6 +786,7 @@ def test_runtime_config_exposes_browser_webgpu_direct_run_interlock():
         config = serve.runtime_config()
         assert config["browserWebGpuDirectRunEnabled"] is False
         assert config["browserWebGpuGreenroomJobType"] == "kaminos-moge-webgpu-browser-preview"
+        assert config["browserWebGpuGreenroomRunnerMode"] == "browser"
     finally:
         if previous is not None:
             os.environ["KAMINOS_BROWSER_WEBGPU_DIRECT_RUN"] = previous
@@ -848,6 +849,9 @@ def test_browser_webgpu_greenroom_preview_submit_writes_temp_queue_job():
         assert job_dir.parent == greenroom / "pending"
         assert request["job_type"] == "kaminos-moge-webgpu-browser-preview"
         assert request["input_path"] == str(source)
+        assert request["params"]["runner_mode"] == "browser"
+        assert status["params"]["runner_mode"] == "browser"
+        assert receipt["runner_mode"] == "browser"
         assert request["output_dir"] == str(greenroom / "outputs" / request["job_id"])
         assert request["params"]["route_id"] == MOGE_WEBGPU_ROUTE_ID
         assert request["params"]["request_id"] == "req:moge-preview-queued"

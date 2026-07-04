@@ -9229,7 +9229,9 @@ let kaminosRuntimeConfig = {
   schema: 'kaminos.runtime-config.v0',
   browserWebGpuDirectRunEnabled: false,
   browserWebGpuGreenroomJobType: BROWSER_WEBGPU_GREENROOM_JOB_TYPE,
+  browserWebGpuGreenroomRunnerMode: 'browser',
 };
+let browserWebGpuGreenroomRunnerMode = 'browser';
 let mogeWebGpuRouteAdapterState = {
   moduleBaseUrl: initialMogeWebGpuModuleBaseUrl(),
   runtimeConfigLoaded: false,
@@ -9285,6 +9287,32 @@ function renderMogePreviewRunProgress(container) {
   container.appendChild(progress);
 }
 
+function renderMogeGreenroomRunnerModeControl(container) {
+  const wrapper = document.createElement('div');
+  wrapper.className = 'moge-route-source-evidence';
+  wrapper.setAttribute('data-greenroom-moge-runner-mode', greenroomBrowserRunnerModeForPreview());
+  const label = document.createElement('span');
+  label.textContent = 'Runner ';
+  const select = document.createElement('select');
+  select.setAttribute('aria-label', 'Greenroom browser runner mode');
+  select.setAttribute('data-greenroom-moge-runner-mode-control', 'true');
+  for (const [value, text] of [['browser', 'Browser'], ['fixture', 'Fixture']]) {
+    const option = document.createElement('option');
+    option.value = value;
+    option.textContent = text;
+    if (greenroomBrowserRunnerModeForPreview() === value) option.selected = true;
+    select.appendChild(option);
+  }
+  select.onchange = () => {
+    const mode = setGreenroomBrowserRunnerModeForPreview(select.value);
+    wrapper.setAttribute('data-greenroom-moge-runner-mode', mode);
+    setInfo(`MoGE Greenroom runner: ${mode}`);
+  };
+  wrapper.appendChild(label);
+  wrapper.appendChild(select);
+  container.appendChild(wrapper);
+}
+
 async function loadKaminosRuntimeConfig() {
   if (!kaminosRuntimeConfigPromise) {
     kaminosRuntimeConfigPromise = fetch('/api/runtime-config', { cache: 'no-store' })
@@ -9297,6 +9325,7 @@ async function loadKaminosRuntimeConfig() {
           ...kaminosRuntimeConfig,
           ...(config || {}),
         };
+        setGreenroomBrowserRunnerModeForPreview(kaminosRuntimeConfig.browserWebGpuGreenroomRunnerMode);
         return kaminosRuntimeConfig;
       })
       .catch(error => {
@@ -9309,6 +9338,20 @@ async function loadKaminosRuntimeConfig() {
 
 function browserWebGpuDirectRunEnabled(config = kaminosRuntimeConfig) {
   return config?.browserWebGpuDirectRunEnabled === true;
+}
+
+function normalizeBrowserWebGpuGreenroomRunnerMode(mode) {
+  const normalized = String(mode || '').trim().toLowerCase();
+  return normalized === 'fixture' ? 'fixture' : 'browser';
+}
+
+function greenroomBrowserRunnerModeForPreview() {
+  return normalizeBrowserWebGpuGreenroomRunnerMode(browserWebGpuGreenroomRunnerMode || kaminosRuntimeConfig.browserWebGpuGreenroomRunnerMode);
+}
+
+function setGreenroomBrowserRunnerModeForPreview(mode) {
+  browserWebGpuGreenroomRunnerMode = normalizeBrowserWebGpuGreenroomRunnerMode(mode);
+  return browserWebGpuGreenroomRunnerMode;
 }
 
 async function waitForMogePreviewPaint() {
@@ -10735,6 +10778,7 @@ function renderMogeRouteOperatorPanel(rows = []) {
     card.setAttribute('data-greenroom-route-input-source-kind', previewRow.route_job?.metadata?.inputSourceKind || '');
     card.setAttribute('data-greenroom-route-source-image-kind', previewRow.route_job?.metadata?.sourceImage?.kind || '');
     renderMogeRouteSourceSelector(card, previewRow);
+    renderMogeGreenroomRunnerModeControl(card);
     renderMogePreviewRunProgress(card);
     renderBrowserWebGpuPreviewActionButton(card, previewRow);
     panel.appendChild(card);
@@ -11991,6 +12035,7 @@ async function queueBrowserWebGpuPreviewRoute(row = {}) {
     inputSourceKind: inputPreview.inputSourceKind,
     sourceSelectionMode: inputPreview.sourceSelectionMode || mogeRouteSourceSelectionMode(row),
     moduleBaseUrl: mogeWebGpuModuleBaseUrl() || null,
+    runnerMode: greenroomBrowserRunnerModeForPreview(),
   };
   updateMogePreviewRunProgress('queueing', 'MoGE preview submitting Greenroom job', requestId);
   const submission = await grPostJsonApi('route-jobs/browser-webgpu-preview', payload);

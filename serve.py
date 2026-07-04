@@ -90,6 +90,7 @@ HYBRID_SPLAT_OVERLAY_MODULE_URL_ENV = "KAMINOS_HYBRID_SPLAT_OVERLAY_MODULE_URL"
 HYBRID_SPLAT_OVERLAY_MODULE_URL_ENV_LEGACY = "KAMINOS_HYBRID_SPLAT_MODULE_URL"
 MOGE_WEBGPU_MODULE_BASE_URL_ENV = "KAMINOS_MOGE_WEBGPU_MODULE_BASE_URL"
 BROWSER_WEBGPU_DIRECT_RUN_ENV = "KAMINOS_BROWSER_WEBGPU_DIRECT_RUN"
+BROWSER_WEBGPU_GREENROOM_RUNNER_MODE_ENV = "KAMINOS_BROWSER_WEBGPU_GREENROOM_RUNNER_MODE"
 BROWSER_WEBGPU_GREENROOM_JOB_TYPE = "kaminos-moge-webgpu-browser-preview"
 ASSET_ROOTS = [
     {
@@ -143,11 +144,23 @@ def runtime_config():
         "mogeWebGpuModuleBaseUrl": moge_webgpu_module_base_url or None,
         "browserWebGpuDirectRunEnabled": _env_flag(BROWSER_WEBGPU_DIRECT_RUN_ENV),
         "browserWebGpuGreenroomJobType": BROWSER_WEBGPU_GREENROOM_JOB_TYPE,
+        "browserWebGpuGreenroomRunnerMode": _browser_webgpu_greenroom_runner_mode(
+            os.environ.get(BROWSER_WEBGPU_GREENROOM_RUNNER_MODE_ENV)
+        ),
     }
 
 
 def _env_flag(name):
     return str(os.environ.get(name, "")).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _browser_webgpu_greenroom_runner_mode(value):
+    raw = str(value or "").strip().lower()
+    if raw in {"", "browser"}:
+        return "browser"
+    if raw == "fixture":
+        return "fixture"
+    raise ValueError("browser WebGPU Greenroom runner mode must be browser or fixture")
 
 
 def splat_asset_root_allows_pointer(root_name):
@@ -1495,6 +1508,7 @@ def submit_browser_webgpu_greenroom_preview(payload):
     payload = payload if isinstance(payload, dict) else {}
     route_id = str(payload.get("routeId") or "moge.depth-normal.webgpu-local.v0")
     request_id = str(payload.get("requestId") or f"req:moge-preview-{int(time.time() * 1000)}")
+    runner_mode = _browser_webgpu_greenroom_runner_mode(payload.get("runnerMode"))
     source_identity = payload.get("sourceImageIdentity") if isinstance(payload.get("sourceImageIdentity"), dict) else {}
     source_path = _resolve_browser_webgpu_source_path(source_identity)
     greenroom = BROWSE_ROOTS.get("greenroom")
@@ -1525,6 +1539,7 @@ def submit_browser_webgpu_greenroom_preview(payload):
             "route_intent": "preview",
             "priority_class": "preview",
             "executor": "browser-webgpu-greenroom",
+            "runner_mode": runner_mode,
             "result_dir": str(result_dir),
             "module_base_url": str(payload.get("moduleBaseUrl") or "").strip() or None,
             "source_image_identity": source_identity,
@@ -1573,6 +1588,7 @@ def submit_browser_webgpu_greenroom_preview(payload):
         "job_dir": str(job_dir),
         "input_path": str(source_path),
         "result_dir": str(result_dir),
+        "runner_mode": runner_mode,
         "route_provider_index": build_route_provider_index("all"),
     }
 

@@ -230,6 +230,10 @@ assert.match(indexHtml, /data-greenroom-moge-fresh-result/, 'MoGE latest result 
 assert.match(indexHtml, /await runBrowserWebGpuPreviewRoute\(row\)[\s\S]*button\.textContent = 'Run Preview'[\s\S]*await grBrowseRouteJobs\(\)[\s\S]*Browser WebGPU preview submitted; refresh failed/, 'MoGE Run Preview success path resets the button and refreshes route state after submission without relabeling refresh failure as route failure');
 assert.match(indexHtml, /lastMogePreviewRunState/, 'MoGE cockpit keeps explicit preview run progress state');
 assert.match(indexHtml, /data-greenroom-moge-run-progress/, 'MoGE cockpit exposes a stable run progress hook');
+assert.match(indexHtml, /browserWebGpuGreenroomRunnerMode/, 'MoGE cockpit reads the configured Greenroom browser runner mode');
+assert.match(indexHtml, /data-greenroom-moge-runner-mode-control/, 'MoGE cockpit exposes a runner mode control for Greenroom preview submissions');
+assert.match(indexHtml, /greenroomBrowserRunnerModeForPreview/, 'MoGE preview queueing resolves the selected Greenroom runner mode');
+assert.match(indexHtml, /runnerMode: greenroomBrowserRunnerModeForPreview\(\)/, 'MoGE preview queue payload includes the selected Greenroom runner mode');
 assert.match(indexHtml, /MoGE preview started[\s\S]*MoGE preview running model[\s\S]*MoGE preview rendering outputs[\s\S]*MoGE preview submitting result/, 'MoGE Run Preview reports started/running/rendering/submitting phases instead of a bare pending state');
 assert.match(indexHtml, /waitForMogePreviewPaint/, 'MoGE Run Preview yields a paint frame so started/running messages can become visible before heavy WebGPU work');
 assert.match(indexHtml, /showGreenroomRouteImageOutput/, 'MoGE image outputs render inside the Kaminos viewport instead of opening broken tabs');
