@@ -222,6 +222,8 @@ assert.match(indexHtml, /lastMogePreviewRunState/, 'MoGE cockpit keeps explicit 
 assert.match(indexHtml, /data-greenroom-moge-run-progress/, 'MoGE cockpit exposes a stable run progress hook');
 assert.match(indexHtml, /MoGE preview started[\s\S]*MoGE preview running model[\s\S]*MoGE preview rendering outputs[\s\S]*MoGE preview submitting result/, 'MoGE Run Preview reports started/running/rendering/submitting phases instead of a bare pending state');
 assert.match(indexHtml, /waitForMogePreviewPaint/, 'MoGE Run Preview yields a paint frame so started/running messages can become visible before heavy WebGPU work');
+assert.match(indexHtml, /showGreenroomRouteImageOutput/, 'MoGE image outputs render inside the Kaminos viewport instead of opening broken tabs');
+assert.match(indexHtml, /renderRouteJobOutputButton[\s\S]*isRouteJobImageOutput[\s\S]*showGreenroomRouteImageOutput/, 'Route output buttons route image outputs to the in-app preview path before generic link opening');
 assert.match(indexHtml, /Latest result/, 'MoGE cockpit names completed browser output as a latest result instead of replacing the preview source control');
 assert.match(servePy, /rows\s*=\s*\[\s*_browser_webgpu_fixture_row\(\),\s*\*live_rows\s*\]/, 'Browser WebGPU provider keeps the reserved preview route available even after live result rows exist');
 assert.match(indexHtml, /data-greenroom-route-archive/, 'Native Greenroom route archive is addressable separately from the operator panel');

@@ -91,6 +91,11 @@ canvas { display: block; }
 .greenroom-preview-title { color: #eee; font-size: 13px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .greenroom-preview-source { color: #777; font: 10px 'SF Mono', monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-bottom: 8px; }
 .greenroom-preview-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+#greenroom-route-image-preview { position: absolute; inset: 0; z-index: 4; display: flex; align-items: center; justify-content: center; background: #080808; }
+#greenroom-route-image-preview[hidden] { display: none; }
+.greenroom-route-image-preview-img { max-width: 100%; max-height: 100%; object-fit: contain; image-rendering: auto; }
+.greenroom-route-image-preview-bar { position: absolute; top: 12px; left: 12px; right: 12px; display: flex; align-items: center; justify-content: space-between; gap: 10px; background: rgba(0,0,0,0.72); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 8px 10px; }
+.greenroom-route-image-preview-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #ddd; font: 11px 'SF Mono', monospace; }
 
 #viewport-drop-overlay { position: absolute; inset: 0; background: rgba(25,118,210,0.12); border: 2px dashed #1976d2; display: none; align-items: center; justify-content: center; font-size: 16px; color: #1976d2; font-weight: 600; pointer-events: none; z-index: 10; border-radius: 0; }
 #viewport.dragover #viewport-drop-overlay { display: flex; }
@@ -10715,7 +10720,73 @@ function routeJobOutputLabel(link = {}) {
   return 'File';
 }
 
+function routeJobOutputUrl(link = {}) {
+  return link.path || link.url || link.href || link.previewDataUrl || link.dataUrl || '';
+}
+
+function isRouteJobImageOutput(link = {}) {
+  const mediaType = String(link.media_type || link.mediaType || '').toLowerCase();
+  const url = routeJobOutputUrl(link);
+  return mediaType.startsWith('image/') || String(url).startsWith('data:image/');
+}
+
+function removeGreenroomRouteImagePreview() {
+  document.getElementById('greenroom-route-image-preview')?.remove();
+}
+
+function showGreenroomRouteImageOutput(link = {}) {
+  const url = routeJobOutputUrl(link);
+  if (!url) return false;
+  removeGreenroomRouteImagePreview();
+  const viewport = document.getElementById('viewport');
+  if (!viewport) return false;
+  const host = document.createElement('div');
+  host.id = 'greenroom-route-image-preview';
+  host.setAttribute('data-greenroom-route-image-preview', 'true');
+  host.setAttribute('data-greenroom-route-output-kind', link.kind || 'output');
+  const img = document.createElement('img');
+  img.className = 'greenroom-route-image-preview-img';
+  img.src = url;
+  img.alt = link.name || routeJobOutputLabel(link);
+  img.setAttribute('data-greenroom-route-image-preview-img', 'true');
+  const bar = document.createElement('div');
+  bar.className = 'greenroom-route-image-preview-bar';
+  const title = document.createElement('div');
+  title.className = 'greenroom-route-image-preview-title';
+  title.textContent = `${routeJobOutputLabel(link)} / ${link.name || 'route output'}`;
+  const close = document.createElement('button');
+  close.className = 'btn';
+  close.textContent = 'Close';
+  close.onclick = (event) => {
+    event.stopPropagation();
+    removeGreenroomRouteImagePreview();
+    setInfo('Route output preview closed');
+  };
+  bar.appendChild(title);
+  bar.appendChild(close);
+  host.appendChild(img);
+  host.appendChild(bar);
+  viewport.appendChild(host);
+  setInfo(`Greenroom output: ${routeJobOutputLabel(link)}`);
+  return true;
+}
+
 function renderRouteJobOutputButton(container, link = {}) {
+  if (isRouteJobImageOutput(link)) {
+    const button = document.createElement('button');
+    button.className = 'btn';
+    button.textContent = routeJobOutputLabel(link);
+    button.title = link.name || routeJobOutputUrl(link);
+    button.setAttribute('data-greenroom-route-output-kind', link.kind || 'output');
+    if (link.media_type) button.setAttribute('data-greenroom-route-output-media-type', link.media_type);
+    button.setAttribute('data-greenroom-route-output-preview', 'image');
+    button.onclick = (event) => {
+      event.stopPropagation();
+      showGreenroomRouteImageOutput(link);
+    };
+    container.appendChild(button);
+    return;
+  }
   const button = renderRouteJobLinkButton(container, routeJobOutputLabel(link), link.path, link.name || link.path);
   if (!button) return;
   button.setAttribute('data-greenroom-route-output-kind', link.kind || 'output');
