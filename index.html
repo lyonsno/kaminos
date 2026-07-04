@@ -15987,6 +15987,37 @@ async function readPipelineRunStream(response, onProgress) {
   return finalResult;
 }
 
+function compactErrorLine(text) {
+  const line = String(text || '')
+    .split(/\r?\n/)
+    .map(part => part.trim())
+    .find(Boolean) || '';
+  return line.replace(/^Error:\s*/, '').slice(0, 240);
+}
+
+function pipelineRunFailureSummary(result) {
+  const report = result?.report?.document || {};
+  const failedStage = (report.stages || []).find(stage => stage?.status === 'failed') || (report.stages || [])[0] || null;
+  const effectiveRoute = failedStage?.effectiveRoute || {};
+  const adapterReport = effectiveRoute.adapterReport || null;
+  const phase = adapterReport?.phase || failedStage?.failurePhase || report.phase || result?.phase || 'failed';
+  const detail = compactErrorLine(
+    result?.error
+    || report.error
+    || failedStage?.error
+    || adapterReport?.error
+    || effectiveRoute.stderrTail
+    || result?.stderrTail
+    || result?.stdoutTail
+  );
+  const reportPath = result?.report?.path || effectiveRoute.adapterReportPath || null;
+  return [
+    detail || 'The backend failed before producing a splat.',
+    phase ? `Phase: ${phase}.` : '',
+    reportPath ? `Report: ${reportPath}` : '',
+  ].filter(Boolean).join(' ');
+}
+
 async function runSharpBreathingRoomProfile(profileId) {
   const profileLabel = sharpBreathingRoomProfileLabels[profileId] || profileId;
   const source = sharpBreathingRoomSelectedSource();
@@ -16028,7 +16059,7 @@ async function runSharpBreathingRoomProfile(profileId) {
         artifact?.path ? 'complete' : 'evidence-only',
       );
     } else {
-      setSharpBreathingRoomStatus(`${profileLabel} failed before producing a splat. ${run?.error || ''}`.trim(), 'error');
+      setSharpBreathingRoomStatus(`${profileLabel} failed before producing a splat. ${pipelineRunFailureSummary(run)}`.trim(), 'error');
     }
     return run;
   } catch (err) {
