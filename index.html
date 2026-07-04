@@ -1782,7 +1782,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
       <button class="tb-btn" data-greenroom-preview-action="back" onclick="restoreAuthoredSceneFromPreview()">Back to Scene</button>
     </div>
   </div>
-  <div id="forge-smoke-target-viewer" data-forge-smoke-target-active="false">
+  <div id="forge-smoke-target-viewer" data-forge-smoke-target-active="false" data-kaminos-smoke-bench-shell-schema="kaminos.smoke-bench.shell.v0" data-kaminos-smoke-bench-warning="pop_out_escape_not_acceptance">
     <div class="forge-smoke-target-bar">
       <div>
         <div class="forge-smoke-target-title" id="forge-smoke-target-title">Smoke Target</div>
@@ -5250,13 +5250,19 @@ function openForgeHostSmokeTarget(chamber = forgeHostState?.smokeChamber || null
   popout.href = url;
   frame.src = url;
   forgeHostState.smokeTargetViewer = {
-    schema: 'kaminos.forge-host.smoke-target-viewer.v0',
+    schema: 'kaminos.smoke-bench.shell.v0',
+    legacySchema: 'kaminos.forge-host.smoke-target-viewer.v0',
     active: true,
     url,
     title: label,
     chamberId: chamber.id,
     sourceOfferId: chamber.sourceOffer?.id || null,
     producerDiaulos: chamber.producerDiaulos || null,
+    primaryTarget: chamber.primaryTarget || chamber.smokeBench?.primaryTarget || null,
+    adapter: chamber.adapter || chamber.smokeBench?.adapter || null,
+    smokeBenchRoute: chamber.smokeBench || null,
+    operatorInspectionStatus: chamber.smokeBench?.operatorInspectionStatus || 'pending',
+    routeWarnings: chamber.smokeBench?.routeWarnings || ['pop_out_escape_not_acceptance'],
   };
   setInfo(`Smoke target: ${label}`);
   window._kaminosDirty?.();
@@ -5484,6 +5490,14 @@ window.kaminosOpenForgeHostSmokeOffer = openForgeHostSmokeOffer;
 window.kaminosRouteForgeHostSmokeOfferToChamber = routeForgeHostSmokeOfferToChamber;
 window.kaminosOpenForgeHostSmokeTarget = openForgeHostSmokeTarget;
 window.closeForgeHostSmokeTarget = closeForgeHostSmokeTarget;
+window.kaminosSmokeBenchDebugState = function() {
+  return {
+    schema: 'kaminos.smoke-bench.shell.v0',
+    activeRoute: forgeHostState?.smokeChamber?.smokeBench || null,
+    viewer: forgeHostState?.smokeTargetViewer || null,
+    routeWarnings: ['pop_out_escape_not_acceptance'],
+  };
+};
 window.kaminosPublishForgeHostSmokeResultOffer = async function(payload) {
   const response = await fetch('/api/forge-host/smoke-result-offer', {
     method: 'POST',

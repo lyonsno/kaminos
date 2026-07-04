@@ -1,3 +1,8 @@
+import {
+  normalizeForgeHostOfferForSmokeBench,
+  routeSmokeBenchOfferToTarget,
+} from './smoke-bench-core.js';
+
 export const FORGE_HOST_STATION_MANIFEST_SCHEMA = 'kaminos.forge-host.station-manifest.v0';
 export const FORGE_HOST_STATION_ANCHOR_SCHEMA = 'kaminos.forge-host.station-anchor.v0';
 export const FORGE_HOST_STATION_VISUAL_SCHEMA = 'kaminos.forge-host.station-visual.v0';
@@ -111,6 +116,8 @@ export function routeForgeHostSmokeOfferToChamber(offerRecord, station = {}, {
   const routeWarnings = isResultOffer
     ? ['not_chat_bridge', 'not_command_execution', 'not_source_thread_delivery']
     : ['not_chat_bridge', 'not_command_execution'];
+  const smokeBenchOffer = normalizeForgeHostOfferForSmokeBench(offerRecord, station);
+  const smokeBenchRoute = routeSmokeBenchOfferToTarget(smokeBenchOffer, { openedAt });
   return {
     schema: FORGE_HOST_SMOKE_CHAMBER_SCHEMA,
     id: `smoke-chamber:${offerRecord.id}`,
@@ -131,6 +138,9 @@ export function routeForgeHostSmokeOfferToChamber(offerRecord, station = {}, {
     summary: offerRecord.summary || '',
     resultStatus: offerRecord.resultStatus || null,
     downgrades: cloneJson(offerRecord.downgrades || []),
+    primaryTarget: cloneJson(smokeBenchRoute.primaryTarget),
+    adapter: cloneJson(smokeBenchRoute.adapter),
+    smokeBench: smokeBenchRoute,
     captureAffordances: [
       { id: 'screenshot', label: 'Screenshot', status: 'placeholder' },
       { id: 'filmstrip', label: 'Filmstrip', status: 'placeholder' },
