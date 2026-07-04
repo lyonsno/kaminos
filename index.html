@@ -5194,6 +5194,19 @@ function smoothMotionPanelPathWorldUnit(value) {
   return u * u * (3 - 2 * u);
 }
 
+function limitMotionPanelPathWorldRootStep(previousRoot, targetRoot, maxStep) {
+  const previous = previousRoot.clone().setY(0);
+  const target = targetRoot.clone().setY(0);
+  const delta = target.sub(previous);
+  const distance = delta.length();
+  if (!Number.isFinite(distance) || distance <= Math.max(0, Number(maxStep) || 0)) {
+    return targetRoot.clone();
+  }
+  const limited = previousRoot.clone().add(delta.normalize().multiplyScalar(Math.max(0, Number(maxStep) || 0)));
+  limited.y = targetRoot.y;
+  return limited;
+}
+
 function createMotionPanelPathWorldSteeringIntent({ pathWorld, rawSample, routeSample, obstacle, goal, duration = 6 }) {
   const rawRoot = rawSample?.root || routeSample?.point || [0, 0, 0];
   const direction = rawSample?.direction === 'return' ? 'return' : 'forward';
@@ -5325,9 +5338,27 @@ function createMotionPanelPathWorldSteeringMemory({ pathWorld, rawSample, pathWo
     || pathWorldSteeringIntent?.precontact
     || pathWorldSteeringIntent?.hardContact
   );
-  const memoryActive = shouldEngage || !!(runtimeMatches && runtime.memoryActive && rawDistance <= releaseDistance);
+  const root = motionPanelPathWorldPointFromArray(pathWorldSteeringIntent?.rawRoot || rawSample?.root, [0, 0, 0]);
+  const previousPostMemoryRoot = runtimeMatches && Array.isArray(runtime.lastPostMemoryRoot)
+    ? motionPanelPathWorldPointFromArray(runtime.lastPostMemoryRoot, root.toArray())
+    : null;
+  const rootHandoffReleaseDistance = 0.18;
+  const rootHandoffDistance = previousPostMemoryRoot
+    ? previousPostMemoryRoot.clone().setY(0).distanceTo(root.clone().setY(0))
+    : 0;
+  const needsRootHandoff = !!(
+    runtimeMatches
+    && runtime.memoryActive
+    && previousPostMemoryRoot
+    && rootHandoffDistance > rootHandoffReleaseDistance
+  );
+  const memoryActive = shouldEngage || !!(
+    runtimeMatches
+    && runtime.memoryActive
+    && (rawDistance <= releaseDistance || needsRootHandoff)
+  );
   const memoryRelease = memoryActive
-    ? shouldEngage ? 'hold' : 'release-margin'
+    ? shouldEngage ? 'hold' : needsRootHandoff ? 'root-handoff' : 'release-margin'
     : runtimeMatches && runtime.memoryActive ? 'released' : 'idle';
   const memorySide = memoryActive && obstacleSide
     ? obstacleSide
@@ -5351,9 +5382,45 @@ function createMotionPanelPathWorldSteeringMemory({ pathWorld, rawSample, pathWo
   const smoothingAlpha = shouldEngage ? 0.42 : 0.24;
   const smoothedBias = previousBias.lerp(targetBias, smoothingAlpha);
   if (!memoryActive && smoothedBias.length() < 0.006) smoothedBias.set(0, 0, 0);
-  const root = motionPanelPathWorldPointFromArray(pathWorldSteeringIntent?.rawRoot || rawSample?.root, [0, 0, 0]);
-  const postRoot = root.clone().add(smoothedBias).setY(root.y);
+  const targetPostRoot = root.clone().add(smoothedBias).setY(root.y);
+  const cycleDuration = Math.max(2.4, Number(pathWorld?.duration) || 6);
+  const memoryTime = Number(rawSample?.wrappedTime ?? rawSample?.elapsedTime ?? 0);
+  const previousMemoryTime = runtimeMatches && Number.isFinite(Number(runtime.lastMemoryTime))
+    ? Number(runtime.lastMemoryTime)
+    : memoryTime;
+  let memoryDeltaTime = memoryTime - previousMemoryTime;
+  if (memoryDeltaTime < 0) memoryDeltaTime += cycleDuration;
+  memoryDeltaTime = Math.max(1 / 60, Math.min(0.12, memoryDeltaTime || 1 / 60));
+  const rootVelocityLimit = memoryActive ? 0.38 : 1.2;
+  const rootStepLimit = rootVelocityLimit * memoryDeltaTime;
+  const rootSmoothingAlpha = shouldEngage ? 0.34 : 0.2;
+  const blendedPostMemoryRoot = memoryActive && previousPostMemoryRoot
+    ? previousPostMemoryRoot.clone().lerp(targetPostRoot, rootSmoothingAlpha).setY(targetPostRoot.y)
+    : targetPostRoot;
+  let smoothedPostMemoryRoot = memoryActive && previousPostMemoryRoot
+    ? limitMotionPanelPathWorldRootStep(previousPostMemoryRoot, blendedPostMemoryRoot, rootStepLimit)
+    : blendedPostMemoryRoot;
+  let rootStepDistance = previousPostMemoryRoot
+    ? smoothedPostMemoryRoot.clone().setY(0).distanceTo(previousPostMemoryRoot.clone().setY(0))
+    : 0;
   const center = motionPanelPathWorldPointFromArray(pathWorldSteeringIntent?.rawTrigger?.center || rawSample?.trigger?.center, [0, 0, 0]);
+  const memoryClearanceRadius = Math.max(0.001, Number(pathWorldSteeringIntent?.rawTrigger?.radius ?? rawSample?.trigger?.radius ?? 0.24)) + 0.07;
+  let clearanceProjectionApplied = false;
+  if (memoryActive) {
+    let clearanceVector = smoothedPostMemoryRoot.clone().setY(0).sub(center.clone().setY(0));
+    if (clearanceVector.lengthSq() < 1e-6) clearanceVector = sideVector.clone().setY(0);
+    if (clearanceVector.lengthSq() < 1e-6) clearanceVector.set(1, 0, 0);
+    const clearanceDistance = clearanceVector.length();
+    if (clearanceDistance < memoryClearanceRadius) {
+      smoothedPostMemoryRoot = center.clone()
+        .add(clearanceVector.normalize().multiplyScalar(memoryClearanceRadius))
+        .setY(smoothedPostMemoryRoot.y);
+      clearanceProjectionApplied = true;
+      rootStepDistance = previousPostMemoryRoot
+        ? smoothedPostMemoryRoot.clone().setY(0).distanceTo(previousPostMemoryRoot.clone().setY(0))
+        : rootStepDistance;
+    }
+  }
   const attentionBias = memoryActive
     ? center.clone().add(sideVector.clone().multiplyScalar(0.22)).setY(center.y + 0.08)
     : motionPanelPathWorldPointFromArray(pathWorldSteeringIntent?.attentionBias || rawSample?.attention, [0, 0, 1]);
@@ -5370,10 +5437,20 @@ function createMotionPanelPathWorldSteeringMemory({ pathWorld, rawSample, pathWo
     steeringMemoryReleaseMargin: Number(steeringMemoryReleaseMargin.toFixed(5)),
     releaseDistance: Number(releaseDistance.toFixed(5)),
     rawDistance: Number(rawDistance.toFixed(5)),
+    rootHandoffDistance: Number(rootHandoffDistance.toFixed(5)),
+    rootHandoffReleaseDistance: Number(rootHandoffReleaseDistance.toFixed(5)),
     smoothedRouteBias: motionPanelPathWorldArrayFromPoint(smoothedBias),
     targetRouteBias: motionPanelPathWorldArrayFromPoint(targetBias),
     sideVector: motionPanelPathWorldArrayFromPoint(sideVector),
-    postMemoryRoot: motionPanelPathWorldArrayFromPoint(postRoot),
+    rootVelocityLimit: Number(rootVelocityLimit.toFixed(5)),
+    rootStepLimit: Number(rootStepLimit.toFixed(5)),
+    rootStepDistance: Number(rootStepDistance.toFixed(5)),
+    memoryClearanceRadius: Number(memoryClearanceRadius.toFixed(5)),
+    clearanceProjectionApplied,
+    memoryDeltaTime: Number(memoryDeltaTime.toFixed(5)),
+    smoothedPostMemoryRoot: motionPanelPathWorldArrayFromPoint(smoothedPostMemoryRoot),
+    targetPostMemoryRoot: motionPanelPathWorldArrayFromPoint(targetPostRoot),
+    postMemoryRoot: motionPanelPathWorldArrayFromPoint(smoothedPostMemoryRoot),
     attentionBias: motionPanelPathWorldArrayFromPoint(attentionBias),
   };
   if (runtime) {
@@ -5392,7 +5469,9 @@ function createMotionPanelPathWorldSteeringMemory({ pathWorld, rawSample, pathWo
       sideChoiceSource,
       memoryRelease,
       smoothedRouteBias: memory.smoothedRouteBias,
+      lastPostMemoryRoot: memory.postMemoryRoot,
       lastRawDistance: memory.rawDistance,
+      lastMemoryTime: memoryTime,
       lastUpdatedAt: Number(rawSample?.elapsedTime ?? 0),
     });
   }
@@ -5403,10 +5482,15 @@ function applyMotionPanelPathWorldSteeringMemory(pathWorldSteeringIntent, pathWo
   if (!pathWorldSteeringIntent || !pathWorldSteeringMemory) return pathWorldSteeringIntent;
   const smoothedRouteBias = pathWorldSteeringMemory.smoothedRouteBias || pathWorldSteeringIntent.routeBias || [0, 0, 0];
   const routeBiasMagnitude = Math.hypot(Number(smoothedRouteBias[0] || 0), Number(smoothedRouteBias[2] || 0));
-  const routeBiasActive = !!pathWorldSteeringMemory.memoryActive && routeBiasMagnitude > 0.002;
+  const memoryRootOverrideActive = !!(
+    pathWorldSteeringMemory.memoryActive
+    && Array.isArray(pathWorldSteeringMemory.postMemoryRoot)
+  );
+  const routeBiasActive = memoryRootOverrideActive || (!!pathWorldSteeringMemory.memoryActive && routeBiasMagnitude > 0.002);
   return {
     ...pathWorldSteeringIntent,
     routeBiasActive,
+    memoryRootOverrideActive,
     routeBias: smoothedRouteBias,
     attentionBias: pathWorldSteeringMemory.attentionBias || pathWorldSteeringIntent.attentionBias,
     postSteeringRoot: pathWorldSteeringMemory.postMemoryRoot || pathWorldSteeringIntent.postSteeringRoot,
@@ -5418,7 +5502,7 @@ function applyMotionPanelPathWorldSteeringIntent(pathWorldSample, pathWorldSteer
   if (!pathWorldSample || !pathWorldSteeringIntent) return pathWorldSample;
   const routeBias = pathWorldSteeringIntent.routeBias || [0, 0, 0];
   const rawRoot = pathWorldSteeringIntent.rawRoot || pathWorldSample.root || [0, 0, 0];
-  const biasedRoot = [
+  const biasedRoot = pathWorldSteeringIntent.postSteeringRoot || [
     Number((Number(rawRoot[0] || 0) + Number(routeBias[0] || 0)).toFixed(5)),
     Number(rawRoot[1] || 0),
     Number((Number(rawRoot[2] || 0) + Number(routeBias[2] || 0)).toFixed(5)),
