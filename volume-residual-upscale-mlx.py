@@ -20,8 +20,10 @@ PAIR_AUTHORITY = "frame-locked-render-scale-set-v0"
 IMAGE_AUTHORITY = "cdp-canvas-clip-capture-after-render-only-frozen-sim-state"
 
 
-def apply_limited_residual(base_image, residual, residualOutputLimit):
+def apply_limited_residual(base_image, residual, residualOutputLimit, residualApplicationMask=None):
     scaled_residual = residual * 0.25
+    if residualApplicationMask is not None:
+        scaled_residual = scaled_residual * mx.clip(residualApplicationMask, 0.0, 1.0)
     if residualOutputLimit and residualOutputLimit > 0:
         scaled_residual = mx.clip(scaled_residual, -float(residualOutputLimit), float(residualOutputLimit))
     return mx.clip(base_image + scaled_residual, 0.0, 1.0)
@@ -38,13 +40,13 @@ class TinyResidualUpscaler(nn.Module):
         self.output.weight = mx.zeros_like(self.output.weight)
         self.output.bias = mx.zeros_like(self.output.bias)
 
-    def __call__(self, image):
+    def __call__(self, image, residualApplicationMask=None):
         base_image = image[..., :3]
         hidden = nn.relu(self.input(image))
         hidden = nn.relu(self.mid_a(hidden))
         hidden = nn.relu(self.mid_b(hidden))
         residual = self.output(hidden)
-        return apply_limited_residual(base_image, residual, self.residualOutputLimit)
+        return apply_limited_residual(base_image, residual, self.residualOutputLimit, residualApplicationMask)
 
 
 class DirectResidualUpscaler(nn.Module):
@@ -55,10 +57,10 @@ class DirectResidualUpscaler(nn.Module):
         self.output.weight = mx.zeros_like(self.output.weight)
         self.output.bias = mx.zeros_like(self.output.bias)
 
-    def __call__(self, image):
+    def __call__(self, image, residualApplicationMask=None):
         base_image = image[..., :3]
         residual = self.output(image)
-        return apply_limited_residual(base_image, residual, self.residualOutputLimit)
+        return apply_limited_residual(base_image, residual, self.residualOutputLimit, residualApplicationMask)
 
 
 class HybridResidualUpscaler(nn.Module):
@@ -75,14 +77,14 @@ class HybridResidualUpscaler(nn.Module):
         self.detail_output.weight = mx.zeros_like(self.detail_output.weight)
         self.detail_output.bias = mx.zeros_like(self.detail_output.bias)
 
-    def __call__(self, image):
+    def __call__(self, image, residualApplicationMask=None):
         base_image = image[..., :3]
         direct_residual = self.direct_output(image)
         detail = nn.relu(self.detail_input(image))
         detail = nn.relu(self.detail_mid_a(detail))
         detail = nn.relu(self.detail_mid_b(detail))
         detail_residual = self.detail_output(detail)
-        return apply_limited_residual(base_image, direct_residual + detail_residual, self.residualOutputLimit)
+        return apply_limited_residual(base_image, direct_residual + detail_residual, self.residualOutputLimit, residualApplicationMask)
 
 
 class GatedDetailResidualUpscaler(nn.Module):
@@ -100,14 +102,14 @@ class GatedDetailResidualUpscaler(nn.Module):
         self.detail_output.weight = mx.zeros_like(self.detail_output.weight)
         self.detail_output.bias = mx.zeros_like(self.detail_output.bias)
 
-    def __call__(self, image):
+    def __call__(self, image, residualApplicationMask=None):
         base_image = image[..., :3]
         direct_residual = self.direct_output(image)
         detail = nn.relu(self.detail_input(image))
         detail = nn.relu(self.detail_mid_a(detail))
         detail = nn.relu(self.detail_mid_b(detail))
         detail_residual = self.detail_output(detail) * self.detailGate
-        return apply_limited_residual(base_image, direct_residual + detail_residual, self.residualOutputLimit)
+        return apply_limited_residual(base_image, direct_residual + detail_residual, self.residualOutputLimit, residualApplicationMask)
 
 
 def parse_args():
@@ -140,6 +142,7 @@ def parse_args():
     parser.add_argument("--edge-gradient-loss-weight", dest="edgeGradientLossWeight", type=float, default=0.0)
     parser.add_argument("--outside-edge-residual-weight", dest="outsideEdgeResidualWeight", type=float, default=0.0)
     parser.add_argument("--residual-output-limit", dest="residualOutputLimit", type=float, default=0.0, help="Optional symmetric clamp on the scaled RGB residual before adding it to the low image; 0 disables the clamp.")
+    parser.add_argument("--residual-application-mask-mode", dest="residualApplicationMaskMode", choices=["off", "active-edge-band"], default="off", help="Optionally multiply the applied residual by the active edge-band mask; low-* edge-band modes are inference-available, target-derived modes are teacher-only upper bounds.")
     parser.add_argument("--condition-render-scale", dest="conditionRenderScale", action="store_true")
     parser.add_argument("--temporal-eval", dest="temporalEval", action="store_true")
     parser.add_argument("--temporal-eval-scope", dest="temporalEvalScope", choices=["selected", "train", "eval"], default="selected")
@@ -174,7 +177,7 @@ def make_model(model_arch, hidden_channels, input_channels, detail_gate, residua
     raise ValueError(f"unsupported model architecture: {model_arch}")
 
 
-def model_config(model_arch, hidden_channels, input_channels, condition_render_scale, scale_channel, detail_gate, residual_output_limit):
+def model_config(model_arch, hidden_channels, input_channels, condition_render_scale, scale_channel, detail_gate, residual_output_limit, residual_application_mask_mode):
     return {
         "modelArch": model_arch,
         "hiddenChannels": hidden_channels,
@@ -183,6 +186,7 @@ def model_config(model_arch, hidden_channels, input_channels, condition_render_s
         "scaleChannel": scale_channel,
         "detailGate": detail_gate if model_arch == "gated-detail-residual" else None,
         "residualOutputLimit": residual_output_limit,
+        "residualApplicationMaskMode": residual_application_mask_mode,
     }
 
 
@@ -230,6 +234,8 @@ def save_model_artifact(model, model_dir, config, args, corpus, metrics, effecti
             "edgeGradientLossWeight": args.edgeGradientLossWeight,
             "outsideEdgeResidualWeight": args.outsideEdgeResidualWeight,
             "residualOutputLimit": args.residualOutputLimit,
+            "residualApplicationMaskMode": args.residualApplicationMaskMode,
+            "residualApplicationMaskAuthority": residual_application_mask_authority(args.residualApplicationMaskMode, args.edgeBandMode),
             "temporalLossWeight": args.temporalLossWeight,
             "residualTemporalLossWeight": args.residualTemporalLossWeight,
         },
@@ -394,6 +400,26 @@ def edge_band_authority(edgeBandMode):
     return "unknown"
 
 
+def residual_application_mask_authority(residualApplicationMaskMode, edgeBandMode):
+    if residualApplicationMaskMode == "off":
+        return "off"
+    if residualApplicationMaskMode == "active-edge-band":
+        edge_authority = edge_band_authority(edgeBandMode)
+        if edge_authority == "inference-available-low-image-proxy":
+            return "inference-available-active-edge-band"
+        if edge_authority == "target-derived-low-high":
+            return "teacher-upper-bound-target-derived-active-edge-band"
+        if edge_authority == "off":
+            return "inactive-edge-band-mask"
+    return "unknown"
+
+
+def residual_application_mask(mask, residualApplicationMaskMode):
+    if residualApplicationMaskMode == "active-edge-band":
+        return mask
+    return None
+
+
 def edge_band_mask(low_image, high_image, edgeBandMode, edgeBandThreshold, edgeBandDilate):
     if edgeBandMode == "off":
         signal = np.zeros(low_image.shape[:2], dtype=np.float32)
@@ -540,6 +566,8 @@ def sample_temporal_pair_batch(temporal_pairs, rng, batch_size, patch_size, fore
     current_lows = []
     previous_highs = []
     current_highs = []
+    previous_masks = []
+    current_masks = []
     for _ in range(batch_size):
         previous_item, current_item = temporal_pairs[int(rng.integers(0, len(temporal_pairs)))]
         height, width, _channels = current_item["low"].shape
@@ -556,17 +584,21 @@ def sample_temporal_pair_batch(temporal_pairs, rng, batch_size, patch_size, fore
             top = int(rng.integers(0, max(1, height - crop_height + 1)))
             left = int(rng.integers(0, max(1, width - crop_width + 1)))
         region = (top, left, crop_height, crop_width)
-        _previous_low_rgb, previous_high, previous_model_input = crop_item_arrays(previous_item, region, conditionRenderScale)
-        _current_low_rgb, current_high, current_model_input = crop_item_arrays(current_item, region, conditionRenderScale)
+        _previous_low_rgb, previous_high, previous_model_input, previous_mask = crop_item_arrays(previous_item, region, conditionRenderScale)
+        _current_low_rgb, current_high, current_model_input, current_mask = crop_item_arrays(current_item, region, conditionRenderScale)
         previous_lows.append(previous_model_input)
         current_lows.append(current_model_input)
         previous_highs.append(previous_high)
         current_highs.append(current_high)
+        previous_masks.append(previous_mask)
+        current_masks.append(current_mask)
     return (
         mx.array(np.stack(previous_lows, axis=0)),
         mx.array(np.stack(current_lows, axis=0)),
         mx.array(np.stack(previous_highs, axis=0)),
         mx.array(np.stack(current_highs, axis=0)),
+        mx.array(np.stack(previous_masks, axis=0)),
+        mx.array(np.stack(current_masks, axis=0)),
     )
 
 
@@ -628,17 +660,17 @@ def edge_band_loss_value(prediction, target, low_batch, edge_mask, edgeLossWeigh
     return total
 
 
-def temporal_loss_value(model_instance, previous_low_batch, current_low_batch, previous_high_batch, current_high_batch):
-    previous_prediction = model_instance(previous_low_batch)
-    current_prediction = model_instance(current_low_batch)
+def temporal_loss_value(model_instance, previous_low_batch, current_low_batch, previous_high_batch, current_high_batch, previous_mask_batch, current_mask_batch, residualApplicationMaskMode):
+    previous_prediction = model_instance(previous_low_batch, residual_application_mask(previous_mask_batch, residualApplicationMaskMode))
+    current_prediction = model_instance(current_low_batch, residual_application_mask(current_mask_batch, residualApplicationMaskMode))
     prediction_delta = current_prediction - previous_prediction
     target_delta = current_high_batch - previous_high_batch
     return mse_value(prediction_delta, target_delta)
 
 
-def residual_temporal_loss_value(model_instance, previous_low_batch, current_low_batch):
-    previous_prediction = model_instance(previous_low_batch)
-    current_prediction = model_instance(current_low_batch)
+def residual_temporal_loss_value(model_instance, previous_low_batch, current_low_batch, previous_mask_batch, current_mask_batch, residualApplicationMaskMode):
+    previous_prediction = model_instance(previous_low_batch, residual_application_mask(previous_mask_batch, residualApplicationMaskMode))
+    current_prediction = model_instance(current_low_batch, residual_application_mask(current_mask_batch, residualApplicationMaskMode))
     previous_residual = previous_prediction - rgb_channels(previous_low_batch)
     current_residual = current_prediction - rgb_channels(current_low_batch)
     return mse_value(current_residual - previous_residual, mx.zeros_like(previous_residual))
@@ -688,11 +720,15 @@ def crop_item_arrays(item, region, conditionRenderScale):
     low_patch = item["low"][top:top + crop_height, left:left + crop_width, :]
     high_patch = item["high"][top:top + crop_height, left:left + crop_width, :]
     model_input = model_input_from_rgb(low_patch, item["lowRenderScale"], conditionRenderScale)
-    return low_patch, high_patch, model_input
+    edge_mask = item.get("edgeBandMask", np.zeros((*item["low"].shape[:2], 1), dtype=np.float32))[top:top + crop_height, left:left + crop_width, :]
+    return low_patch, high_patch, model_input, edge_mask
 
 
-def predict_patch(model, model_input):
-    prediction = model(mx.array(model_input[None, ...]))
+def predict_patch(model, model_input, residual_mask=None, residualApplicationMaskMode="off"):
+    mask = None
+    if residual_mask is not None:
+        mask = mx.array(residual_mask[None, ...])
+    prediction = model(mx.array(model_input[None, ...]), residual_application_mask(mask, residualApplicationMaskMode))
     mx.eval(prediction)
     return np.array(prediction[0])
 
@@ -790,7 +826,7 @@ def empty_temporal_metrics(temporalEvalScope, residualContinuationMode, residual
     }
 
 
-def temporal_sequence_metrics(model, loaded, train_items, eval_items, out_dir, crop_size, previewMode, conditionRenderScale, temporalEvalScope, residualContinuationMode, residualContinuationAlpha):
+def temporal_sequence_metrics(model, loaded, train_items, eval_items, out_dir, crop_size, previewMode, conditionRenderScale, temporalEvalScope, residualContinuationMode, residualContinuationAlpha, residualApplicationMaskMode):
     scoped_items = temporal_scope_items(temporalEvalScope, loaded, train_items, eval_items)
     groups = temporal_groups(scoped_items)
     continuation_active = residualContinuationMode == "ema"
@@ -821,8 +857,8 @@ def temporal_sequence_metrics(model, loaded, train_items, eval_items, out_dir, c
         region = (top, left, crop_height, crop_width)
         rendered = []
         for item in group:
-            low_patch, high_patch, model_input = crop_item_arrays(item, region, conditionRenderScale)
-            pred_patch = predict_patch(model, model_input)
+            low_patch, high_patch, model_input, residual_mask = crop_item_arrays(item, region, conditionRenderScale)
+            pred_patch = predict_patch(model, model_input, residual_mask, residualApplicationMaskMode)
             rendered.append((item, low_patch, high_patch, pred_patch))
         continued_rendered = apply_residual_continuation(
             rendered,
@@ -953,7 +989,7 @@ def temporal_sequence_metrics(model, loaded, train_items, eval_items, out_dir, c
     return metrics
 
 
-def evaluate_model(model, items, rng, batch_size, patch_size, eval_patches, foregroundProbability, edgeSamplingProbability, conditionRenderScale, foregroundThreshold, foregroundLossWeight, differenceLossWeight):
+def evaluate_model(model, items, rng, batch_size, patch_size, eval_patches, foregroundProbability, edgeSamplingProbability, conditionRenderScale, foregroundThreshold, foregroundLossWeight, differenceLossWeight, residualApplicationMaskMode):
     baseline_losses = []
     model_losses = []
     weighted_baseline_losses = []
@@ -971,7 +1007,7 @@ def evaluate_model(model, items, rng, batch_size, patch_size, eval_patches, fore
     for _ in range(batches):
         low_batch, high_batch, edge_mask_batch, target_edge_mask_batch = sample_patch_batch(items, rng, batch_size, patch_size, foregroundProbability, edgeSamplingProbability, conditionRenderScale)
         low_rgb = rgb_channels(low_batch)
-        prediction = model(low_batch)
+        prediction = model(low_batch, residual_application_mask(edge_mask_batch, residualApplicationMaskMode))
         baseline_loss = mse_value(low_rgb, high_batch)
         model_loss = mse_value(prediction, high_batch)
         weighted_baseline_loss = weighted_mse_value(low_rgb, high_batch, low_batch, foregroundThreshold, foregroundLossWeight, differenceLossWeight)
@@ -1052,18 +1088,18 @@ def evaluate_model(model, items, rng, batch_size, patch_size, eval_patches, fore
     }
 
 
-def make_preview(model, eval_item, out_path, diagnostic_out_path, preview_size, previewMode, conditionRenderScale):
+def make_preview(model, eval_item, out_path, diagnostic_out_path, preview_size, previewMode, conditionRenderScale, residualApplicationMaskMode):
     low = eval_item["low"]
     high = eval_item["high"]
     top, left, crop_height, crop_width, previewFocus = crop_region(eval_item, preview_size, previewMode)
     low_patch = low[top:top + crop_height, left:left + crop_width, :]
     high_patch = high[top:top + crop_height, left:left + crop_width, :]
     model_input = model_input_from_rgb(low_patch, eval_item["lowRenderScale"], conditionRenderScale)
-    pred_patch = predict_patch(model, model_input)
+    edge_mask = eval_item.get("edgeBandMask", np.zeros((*low.shape[:2], 1), dtype=np.float32))[top:top + crop_height, left:left + crop_width, :]
+    pred_patch = predict_patch(model, model_input, edge_mask, residualApplicationMaskMode)
     diff_patch = np.clip(np.abs(pred_patch - high_patch) * 4.0, 0.0, 1.0)
     strip = np.concatenate([low_patch, pred_patch, high_patch, diff_patch], axis=1)
     Image.fromarray(np.clip(strip * 255.0, 0, 255).astype(np.uint8), "RGB").save(out_path)
-    edge_mask = eval_item.get("edgeBandMask", np.zeros((*low.shape[:2], 1), dtype=np.float32))[top:top + crop_height, left:left + crop_width, :]
     target_residual = np.clip(np.abs(high_patch - low_patch) * 4.0, 0.0, 1.0)
     model_residual = np.clip(np.abs(pred_patch - low_patch) * 4.0, 0.0, 1.0)
     remaining_error = np.clip(np.abs(high_patch - pred_patch) * 4.0, 0.0, 1.0)
@@ -1126,6 +1162,7 @@ def main():
         loaded_detail_gate = loaded_config.get("detailGate")
         detailGate = float(loaded_detail_gate) if loaded_detail_gate is not None else args.detailResidualGate
         residualOutputLimit = float(loaded_config.get("residualOutputLimit", args.residualOutputLimit))
+        residualApplicationMaskMode = loaded_config.get("residualApplicationMaskMode", args.residualApplicationMaskMode)
         modelConfigSource = "loadedModelArtifact"
     else:
         modelArch = args.modelArch
@@ -1135,6 +1172,7 @@ def main():
         scaleChannel = "lowRenderScale" if conditionRenderScale else None
         detailGate = args.detailResidualGate
         residualOutputLimit = args.residualOutputLimit
+        residualApplicationMaskMode = args.residualApplicationMaskMode
         modelConfigSource = "cli"
 
     model = make_model(modelArch, hiddenChannels, input_channels, detailGate, residualOutputLimit)
@@ -1149,6 +1187,7 @@ def main():
         scaleChannel,
         detailGate,
         residualOutputLimit,
+        residualApplicationMaskMode,
     )
     effectiveMaxSteps = 0 if args.evalOnly else args.maxSteps
     optimizer = optim.Adam(learning_rate=args.learning_rate)
@@ -1165,8 +1204,8 @@ def main():
     activeTemporalLossWeight = args.temporalLossWeight if temporalLossPairCount else 0.0
     activeResidualTemporalLossWeight = args.residualTemporalLossWeight if temporalLossPairCount else 0.0
 
-    def loss_fn(model_instance, low_batch, high_batch, edge_mask_batch, previous_low_batch, current_low_batch, previous_high_batch, current_high_batch):
-        prediction = model_instance(low_batch)
+    def loss_fn(model_instance, low_batch, high_batch, edge_mask_batch, previous_low_batch, current_low_batch, previous_high_batch, current_high_batch, previous_mask_batch, current_mask_batch):
+        prediction = model_instance(low_batch, residual_application_mask(edge_mask_batch, residualApplicationMaskMode))
         if args.loss_mode == "weighted":
             still_loss = weighted_mse_value(
                 prediction,
@@ -1195,12 +1234,18 @@ def main():
                 current_low_batch,
                 previous_high_batch,
                 current_high_batch,
+                previous_mask_batch,
+                current_mask_batch,
+                residualApplicationMaskMode,
             )
         if activeResidualTemporalLossWeight > 0:
             total_loss = total_loss + activeResidualTemporalLossWeight * residual_temporal_loss_value(
                 model_instance,
                 previous_low_batch,
                 current_low_batch,
+                previous_mask_batch,
+                current_mask_batch,
+                residualApplicationMaskMode,
             )
         return total_loss
 
@@ -1220,7 +1265,7 @@ def main():
             conditionRenderScale,
         )
         if activeTemporalLossWeight > 0 or activeResidualTemporalLossWeight > 0:
-            previous_low_batch, current_low_batch, previous_high_batch, current_high_batch = sample_temporal_pair_batch(
+            previous_low_batch, current_low_batch, previous_high_batch, current_high_batch, previous_mask_batch, current_mask_batch = sample_temporal_pair_batch(
                 temporal_loss_pairs,
                 rng,
                 args.batch_size,
@@ -1233,20 +1278,22 @@ def main():
             current_low_batch = low_batch
             previous_high_batch = high_batch
             current_high_batch = high_batch
-        loss, grads = loss_and_grad(model, low_batch, high_batch, edge_mask_batch, previous_low_batch, current_low_batch, previous_high_batch, current_high_batch)
+            previous_mask_batch = edge_mask_batch
+            current_mask_batch = edge_mask_batch
+        loss, grads = loss_and_grad(model, low_batch, high_batch, edge_mask_batch, previous_low_batch, current_low_batch, previous_high_batch, current_high_batch, previous_mask_batch, current_mask_batch)
         optimizer.update(model, grads)
         mx.eval(model.parameters(), optimizer.state, loss)
         loss_float = float(loss)
         if step == 0 or step == effectiveMaxSteps - 1 or (step + 1) % max(1, effectiveMaxSteps // 10) == 0:
             entry = {"step": step + 1, "loss": loss_float}
             if activeTemporalLossWeight > 0:
-                temporal_loss = temporal_loss_value(model, previous_low_batch, current_low_batch, previous_high_batch, current_high_batch)
+                temporal_loss = temporal_loss_value(model, previous_low_batch, current_low_batch, previous_high_batch, current_high_batch, previous_mask_batch, current_mask_batch, residualApplicationMaskMode)
                 mx.eval(temporal_loss)
                 temporal_loss_float = float(temporal_loss)
                 entry["temporalLoss"] = temporal_loss_float
                 temporalTrainingLosses.append({"step": step + 1, "temporalLoss": temporal_loss_float})
             if activeResidualTemporalLossWeight > 0:
-                residual_temporal_loss = residual_temporal_loss_value(model, previous_low_batch, current_low_batch)
+                residual_temporal_loss = residual_temporal_loss_value(model, previous_low_batch, current_low_batch, previous_mask_batch, current_mask_batch, residualApplicationMaskMode)
                 mx.eval(residual_temporal_loss)
                 residual_temporal_loss_float = float(residual_temporal_loss)
                 entry["residualTemporalLoss"] = residual_temporal_loss_float
@@ -1270,10 +1317,11 @@ def main():
         args.foregroundThreshold,
         args.foregroundLossWeight,
         args.differenceLossWeight,
+        residualApplicationMaskMode,
     )
     preview_path = out_dir / "residual-preview-low-model-target-diff.png"
     diagnostic_preview_path = out_dir / "residual-preview-low-model-target-targetres-modelres-error-mask.png"
-    previewFocus = make_preview(model, eval_items[0], preview_path, diagnostic_preview_path, args.preview_size, args.preview_mode, conditionRenderScale)
+    previewFocus = make_preview(model, eval_items[0], preview_path, diagnostic_preview_path, args.preview_size, args.preview_mode, conditionRenderScale, residualApplicationMaskMode)
     temporalMetrics = {}
     if args.temporalEval:
         temporalMetrics = temporal_sequence_metrics(
@@ -1288,6 +1336,7 @@ def main():
             args.temporalEvalScope,
             args.residualContinuationMode,
             args.residualContinuationAlpha,
+            residualApplicationMaskMode,
         )
     residualContinuationEffectiveMode = temporalMetrics.get(
         "residualContinuationEffectiveMode",
@@ -1356,6 +1405,8 @@ def main():
         "edgeGradientLossWeight": args.edgeGradientLossWeight,
         "outsideEdgeResidualWeight": args.outsideEdgeResidualWeight,
         "residualOutputLimit": residualOutputLimit,
+        "residualApplicationMaskMode": residualApplicationMaskMode,
+        "residualApplicationMaskAuthority": residual_application_mask_authority(residualApplicationMaskMode, args.edgeBandMode),
         "conditionRenderScale": conditionRenderScale,
         "temporalLossWeight": args.temporalLossWeight,
         "activeTemporalLossWeight": activeTemporalLossWeight,
@@ -1413,6 +1464,8 @@ def main():
         "hiddenChannels": hiddenChannels,
         "detailGate": detailGate if modelArch == "gated-detail-residual" else None,
         "residualOutputLimit": residualOutputLimit,
+        "residualApplicationMaskMode": residualApplicationMaskMode,
+        "residualApplicationMaskAuthority": residual_application_mask_authority(residualApplicationMaskMode, args.edgeBandMode),
         "learningRate": args.learning_rate,
         "evalPatches": args.eval_patches,
         "durationSeconds": duration_seconds,

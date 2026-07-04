@@ -50,6 +50,7 @@ def parse_args():
     parser.add_argument("--edge-gradient-loss-weight", default="0")
     parser.add_argument("--outside-edge-residual-weight", default="0")
     parser.add_argument("--residual-output-limit", default="0")
+    parser.add_argument("--residual-application-mask-mode", default="off")
     parser.add_argument("--condition-render-scale", default="false")
     parser.add_argument("--temporal-eval", default="true")
     parser.add_argument("--temporal-eval-scope", default="selected")
@@ -149,6 +150,8 @@ def build_child_command(args):
         str(args.outside_edge_residual_weight),
         "--residual-output-limit",
         str(args.residual_output_limit),
+        "--residual-application-mask-mode",
+        str(args.residual_application_mask_mode),
         "--temporal-eval-scope",
         str(args.temporal_eval_scope),
         "--temporal-loss-weight",
