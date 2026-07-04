@@ -15261,6 +15261,7 @@ const VOLUME_BRICK_WALL_FIRE_LIGHT_PROXY = Object.freeze({
   measuredAuthorityIdentity: 'volume-measured-fire-light-probe-v0',
   sourceIdentity: 'volume-measured-fire-light-summary-v0',
   liveSampleIdentity: 'volume-live-frame-fire-light-readback-v0',
+  liveStateIdentity: 'volume-live-frame-fire-light-state-v0',
   defaultMode: 1,
   defaultGain: 1,
 });
@@ -15274,7 +15275,7 @@ function computeVolumeFireLightProbe(volumeState = {}, fireLightLiveSample = nul
   const controlsState = volumeState.controls || {};
   const mode = clampVolumeValue(controlsState.fireLightProxy ?? VOLUME_BRICK_WALL_FIRE_LIGHT_PROXY.defaultMode, 0, 1);
   const gain = clampVolumeValue(controlsState.fireLightGain ?? VOLUME_BRICK_WALL_FIRE_LIGHT_PROXY.defaultGain, 0, 4);
-  const simReadback = volumeState.simReadback || {};
+  const simReadback = volumeState.latestSimReadback || volumeState.simReadback || {};
   const lifecycle = String(controlsState.lifecycleEffect || 'none').toLowerCase();
   const lifecycleT = clampVolumeValue(controlsState.lifecycleT ?? 0, 0, 1);
   const preheat = clampVolumeValue(volumeState.preheatStrength ?? 0, 0, 2);
@@ -15359,6 +15360,9 @@ function computeVolumeFireLightProbe(volumeState = {}, fireLightLiveSample = nul
     evidence: {
       simReadback: {
         available: measuredSimAvailable,
+        source: fireLightLiveSample?.simReadbackSource || (measuredSimAvailable ? 'inline-sim-readback-v0' : null),
+        frameId: Number.isFinite(fireLightLiveSample?.simReadbackFrameId) ? fireLightLiveSample.simReadbackFrameId : null,
+        ageMs: Number.isFinite(fireLightLiveSample?.simReadbackAgeMs) ? Number(fireLightLiveSample.simReadbackAgeMs.toFixed(2)) : null,
         radianceMean: Number(measuredRadianceMean.toFixed(6)),
         fireWeight: Number(measuredFireWeight.toFixed(3)),
         maxFireBinWeight: Number(measuredMaxFireBinWeight.toFixed(3)),
@@ -15368,10 +15372,15 @@ function computeVolumeFireLightProbe(volumeState = {}, fireLightLiveSample = nul
         measuredRise: Number(measuredRise.toFixed(4)),
       },
       liveFrame: {
-        available: !!fireLightLiveSample && fireLightLiveSample.source === VOLUME_BRICK_WALL_FIRE_LIGHT_PROXY.liveSampleIdentity,
+        available: !!fireLightLiveSample && (
+          fireLightLiveSample.source === VOLUME_BRICK_WALL_FIRE_LIGHT_PROXY.liveStateIdentity ||
+          fireLightLiveSample.source === VOLUME_BRICK_WALL_FIRE_LIGHT_PROXY.liveSampleIdentity
+        ),
         scalar: Number(liveSampleScalar.toFixed(4)),
         confidence: Number(liveSampleConfidence.toFixed(4)),
         frameEnergy: Number(measuredFrameEnergy.toFixed(4)),
+        source: fireLightLiveSample?.source || null,
+        supportSource: fireLightLiveSample?.supportSource || null,
       },
     },
     measuredEnergy: Number(measuredEnergy.toFixed(5)),
@@ -15382,9 +15391,11 @@ function computeVolumeFireLightProbe(volumeState = {}, fireLightLiveSample = nul
   const l1Scale = intensity * 0.488603;
   return {
     identity: VOLUME_BRICK_WALL_FIRE_LIGHT_PROXY.probeIdentity,
-    sourceIdentity: fireLightLiveSample?.source === VOLUME_BRICK_WALL_FIRE_LIGHT_PROXY.liveSampleIdentity
-      ? `${VOLUME_BRICK_WALL_FIRE_LIGHT_PROXY.sourceIdentity}+${VOLUME_BRICK_WALL_FIRE_LIGHT_PROXY.liveSampleIdentity}`
-      : VOLUME_BRICK_WALL_FIRE_LIGHT_PROXY.sourceIdentity,
+    sourceIdentity: fireLightLiveSample?.source === VOLUME_BRICK_WALL_FIRE_LIGHT_PROXY.liveStateIdentity
+      ? `${VOLUME_BRICK_WALL_FIRE_LIGHT_PROXY.sourceIdentity}+${VOLUME_BRICK_WALL_FIRE_LIGHT_PROXY.liveStateIdentity}`
+      : fireLightLiveSample?.source === VOLUME_BRICK_WALL_FIRE_LIGHT_PROXY.liveSampleIdentity
+        ? `${VOLUME_BRICK_WALL_FIRE_LIGHT_PROXY.sourceIdentity}+${VOLUME_BRICK_WALL_FIRE_LIGHT_PROXY.liveSampleIdentity}`
+        : VOLUME_BRICK_WALL_FIRE_LIGHT_PROXY.sourceIdentity,
     order: 1,
     mode: mode > 0.001 ? 'fire-light-proxy' : 'disabled',
     gain,
@@ -15402,6 +15413,84 @@ function computeVolumeFireLightProbe(volumeState = {}, fireLightLiveSample = nul
       Number((dominantDirection.y * l1Scale).toFixed(5)),
       Number((dominantDirection.z * l1Scale).toFixed(5)),
     ],
+  };
+}
+
+function deriveVolumeFireLightStateSample(volumeState = {}, readbackSupport = null) {
+  const simReadback = volumeState.latestSimReadback || volumeState.simReadback || {};
+  const simReadbackSource = volumeState.latestSimReadback
+    ? 'latest-sim-readback-cache-v0'
+    : volumeState.simReadback
+      ? 'inline-sim-readback-v0'
+      : null;
+  const frameCount = Number.isFinite(volumeState.frameCount) ? volumeState.frameCount : 0;
+  const simReadbackFrameId = Number.isFinite(volumeState.latestSimReadbackFrameId)
+    ? volumeState.latestSimReadbackFrameId
+    : null;
+  const simReadbackAgeMs = Number.isFinite(volumeState.latestSimReadbackAgeMs)
+    ? volumeState.latestSimReadbackAgeMs
+    : null;
+  const measuredRadianceMean = Math.max(0, Number(simReadback.radianceMean) || 0);
+  const measuredFireWeight = Math.max(0, Number(simReadback.fireWeight) || 0);
+  const measuredMaxFireBinWeight = Math.max(0, Number(simReadback.maxFireBinWeight) || 0);
+  const radianceSignal = clampVolumeValue(measuredRadianceMean * 24, 0, 2.6);
+  const fireMassSignal = clampVolumeValue(Math.log1p(measuredFireWeight) * 0.16, 0, 2.4);
+  const peakBinSignal = clampVolumeValue(Math.log1p(measuredMaxFireBinWeight) * 0.20, 0, 1.8);
+  const readbackScalar = readbackSupport?.source === VOLUME_BRICK_WALL_FIRE_LIGHT_PROXY.liveSampleIdentity
+    ? clampVolumeValue(readbackSupport.scalar ?? 0, 0, 2.5)
+    : 0;
+  const readbackConfidence = readbackSupport?.source === VOLUME_BRICK_WALL_FIRE_LIGHT_PROXY.liveSampleIdentity
+    ? clampVolumeValue(readbackSupport.confidence ?? 0, 0, 1)
+    : 0;
+  const stateEnergy = clampVolumeValue(
+    radianceSignal * 0.48 +
+      fireMassSignal * 0.32 +
+      peakBinSignal * 0.22 +
+      readbackScalar * readbackConfidence * 0.18,
+    0,
+    2.5,
+  );
+  const confidence = clampVolumeValue(
+    radianceSignal * 0.34 +
+      fireMassSignal * 0.22 +
+      peakBinSignal * 0.16 +
+      readbackConfidence * 0.18,
+    0,
+    1,
+  );
+  const fireBounds = readbackSupport?.fireBounds || {};
+  const readbackCenterX = Number.isFinite(readbackSupport?.normalizedCenterX)
+    ? readbackSupport.normalizedCenterX
+    : Number(fireBounds.normalizedCenterX) || 0;
+  const readbackCenterY = Number.isFinite(readbackSupport?.normalizedCenterY)
+    ? readbackSupport.normalizedCenterY
+    : Number(fireBounds.normalizedCenterY) || 0;
+  const measuredFireCenterX = Number.isFinite(simReadback.fireCenterX) ? simReadback.fireCenterX : 0;
+  const measuredFireCenterY = Number.isFinite(simReadback.fireCenterY) ? simReadback.fireCenterY : 0;
+  const phaseSeed = frameCount * 0.021 + measuredMaxFireBinWeight * 0.017 + measuredRadianceMean * 3.1;
+  const frameFlicker = 1 + Math.sin(frameCount * 0.233 + phaseSeed) * 0.14 * confidence;
+  const scalar = clampVolumeValue((0.24 + stateEnergy * 0.68) * frameFlicker, 0.12, 2.2);
+  return {
+    identity: VOLUME_BRICK_WALL_FIRE_LIGHT_PROXY.liveStateIdentity,
+    source: VOLUME_BRICK_WALL_FIRE_LIGHT_PROXY.liveStateIdentity,
+    frameId: frameCount,
+    scalar,
+    confidence,
+    normalizedCenterX: clampVolumeValue(measuredFireCenterX * 0.75 + readbackCenterX * readbackConfidence * 0.25, -1, 1),
+    normalizedCenterY: clampVolumeValue(-measuredFireCenterY * 0.45 + readbackCenterY * readbackConfidence * 0.20, -1, 1),
+    fireLikePixels: Math.max(0, Number(readbackSupport?.fireLikePixels) || 0),
+    emissiveLikePixels: Math.max(0, Number(readbackSupport?.emissiveLikePixels) || 0),
+    fireEdgeEnergy: Number(readbackSupport?.fireEdgeEnergy) || 0,
+    stateRadianceMean: measuredRadianceMean,
+    stateFireWeight: measuredFireWeight,
+    stateMaxFireBinWeight: measuredMaxFireBinWeight,
+    simReadbackSource,
+    simReadbackFrameId,
+    simReadbackAgeMs,
+    supportSource: readbackSupport?.source || null,
+    supportCadence: readbackSupport?.cadence || 'async-bounded-readback-support',
+    cadence: 'per-render-frame',
+    phaseSeed,
   };
 }
 
@@ -15614,11 +15703,11 @@ function createVolumeBrickWallContext() {
   let loadedModel = null;
   let loadPromise = null;
   let previousGroundPlaneVisible = null;
-  let fireLightLiveSamplePending = false;
-  let nextFireLightLiveSampleFrame = 0;
-  let fireLightLiveSample = {
+  let fireLightReadbackSupportPending = false;
+  let fireLightReadbackSupport = {
     identity: VOLUME_BRICK_WALL_FIRE_LIGHT_PROXY.liveSampleIdentity,
     source: 'warm-start-before-first-readback',
+    cadence: 'async-bounded-readback-support',
     frameId: 0,
     scalar: 1,
     confidence: 0,
@@ -15629,6 +15718,7 @@ function createVolumeBrickWallContext() {
     fireEdgeEnergy: 0,
     phaseSeed: 0,
   };
+  let fireLightLiveSample = deriveVolumeFireLightStateSample({}, fireLightReadbackSupport);
   let lastFireLightProbe = {
     identity: VOLUME_BRICK_WALL_FIRE_LIGHT_PROXY.probeIdentity,
     sourceIdentity: VOLUME_BRICK_WALL_FIRE_LIGHT_PROXY.sourceIdentity,
@@ -15658,7 +15748,7 @@ function createVolumeBrickWallContext() {
     if (intensityVal) intensityVal.textContent = VOLUME_BRICK_WALL_LIGHTING.environmentIntensity.toFixed(1);
   };
 
-  const updateFireLightLiveSampleFromReadback = sample => {
+  const updateFireLightReadbackSupport = sample => {
     if (!sample?.ok) return;
     const fireBounds = sample.fireBounds || {};
     const fireLikePixels = Math.max(0, Number(sample.fireLikePixels) || 0);
@@ -15669,9 +15759,10 @@ function createVolumeBrickWallContext() {
     const edgeSignal = clampVolumeValue((Number(sample.fireEdgeEnergy) || 0) * 2.2, 0, 0.8);
     const scalar = clampVolumeValue(0.30 + fireFill * 0.82 + meanLumaSignal * 0.22 + edgeSignal * 0.30, 0.18, 2.2);
     const confidence = clampVolumeValue((fireLikePixels + emissiveLikePixels) / 620, 0, 1);
-    fireLightLiveSample = {
+    fireLightReadbackSupport = {
       identity: VOLUME_BRICK_WALL_FIRE_LIGHT_PROXY.liveSampleIdentity,
       source: 'volume-live-frame-fire-light-readback-v0',
+      cadence: 'async-bounded-readback-support',
       frameId: Number(sample.frameCount) || 0,
       scalar,
       confidence,
@@ -15684,29 +15775,37 @@ function createVolumeBrickWallContext() {
     };
   };
 
-  const requestFireLightLiveSample = volumeState => {
+  const requestFireLightReadbackSupport = volumeState => {
     const frameCount = Number(volumeState?.frameCount) || 0;
-    if (!group.visible || fireLightLiveSamplePending || frameCount < 8 || frameCount < nextFireLightLiveSampleFrame) return;
+    if (!group.visible || fireLightReadbackSupportPending || frameCount < 8) return;
+    const now = performance.now();
+    const supportAgeMs = now - (Number(fireLightReadbackSupport.requestedAtMs) || 0);
+    if (supportAgeMs < 96) return;
     if (!volumePrototype?.sampleFrame) return;
-    fireLightLiveSamplePending = true;
-    nextFireLightLiveSampleFrame = frameCount + 6;
+    fireLightReadbackSupportPending = true;
+    fireLightReadbackSupport = {
+      ...fireLightReadbackSupport,
+      cadence: 'async-bounded-readback-support',
+      requestedAtMs: now,
+    };
     volumePrototype.sampleFrame()
-      .then(updateFireLightLiveSampleFromReadback)
+      .then(updateFireLightReadbackSupport)
       .catch(err => {
-        fireLightLiveSample = {
-          ...fireLightLiveSample,
+        fireLightReadbackSupport = {
+          ...fireLightReadbackSupport,
           source: 'volume-live-frame-fire-light-readback-failed',
           error: err?.message || String(err),
           confidence: 0,
         };
       })
       .finally(() => {
-        fireLightLiveSamplePending = false;
+        fireLightReadbackSupportPending = false;
       });
   };
 
   const applyFireLightProbe = volumeState => {
-    requestFireLightLiveSample(volumeState);
+    requestFireLightReadbackSupport(volumeState);
+    fireLightLiveSample = deriveVolumeFireLightStateSample(volumeState, fireLightReadbackSupport);
     lastFireLightProbe = computeVolumeFireLightProbe(volumeState, fireLightLiveSample);
     const c = lastFireLightProbe.centroid;
     flameKey.position.set(c.x, c.y + 0.20, c.z + 0.20);
