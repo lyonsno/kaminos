@@ -50,6 +50,14 @@ export {
 } from './scheduler-backpressure.js';
 
 export {
+  SCHEDULER_EVENT_TRACE_SCHEMA,
+  SCHEDULER_VERIFICATION_RECEIPT_SCHEMA,
+  classifySchedulerVerificationReceipt,
+  createSchedulerVerificationReceipt,
+  validateSchedulerVerificationReceipt,
+} from './scheduler-verification-receipt.js';
+
+export {
   classifyWebGpuRouteReceiptEvidence,
   classifyWebGpuRouteWorkerResultEvidence,
   WEBGPU_ROUTE_EVIDENCE_CLASSIFICATION_SCHEMA,

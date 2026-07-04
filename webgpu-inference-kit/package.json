@@ -1,6 +1,6 @@
 {
   "name": "@kaminos/webgpu-inference-kit",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "private": false,
   "type": "module",
   "description": "Composable browser WebGPU inference route contracts, runtime profiles, and scheduler envelopes.",
@@ -21,6 +21,6 @@
     ".": "./src/index.js"
   },
   "scripts": {
-    "test": "node tests/receipt-contracts.mjs && node tests/tensor-manifest-contracts.mjs && node tests/gpu-environment-contracts.mjs && node tests/browser-device-context-contracts.mjs && node tests/staged-profile-contracts.mjs && node tests/kernel-profile-contracts.mjs && node tests/runtime-profile-contracts.mjs && node tests/scheduler-backpressure-contracts.mjs && node tests/route-schema-contracts.mjs && node tests/route-receipt-helper-contracts.mjs && node tests/route-receipt-consumer-contracts.mjs && node tests/moge-route-contracts.mjs && node tests/sharp-route-contracts.mjs && node tests/kimodo-route-contracts.mjs && node tests/sf3d-route-contracts.mjs && node tests/route-boundary-contracts.mjs"
+    "test": "node tests/receipt-contracts.mjs && node tests/tensor-manifest-contracts.mjs && node tests/gpu-environment-contracts.mjs && node tests/browser-device-context-contracts.mjs && node tests/staged-profile-contracts.mjs && node tests/kernel-profile-contracts.mjs && node tests/runtime-profile-contracts.mjs && node tests/scheduler-backpressure-contracts.mjs && node tests/scheduler-verification-receipt-contracts.mjs && node tests/route-schema-contracts.mjs && node tests/route-receipt-helper-contracts.mjs && node tests/route-receipt-consumer-contracts.mjs && node tests/moge-route-contracts.mjs && node tests/sharp-route-contracts.mjs && node tests/kimodo-route-contracts.mjs && node tests/sf3d-route-contracts.mjs && node tests/route-boundary-contracts.mjs"
   }
 }
