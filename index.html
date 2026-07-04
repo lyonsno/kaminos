@@ -8049,6 +8049,8 @@ function renderComputeRouteVisibleBench() {
   root.dataset.computeRouteVisibleSchedulerState = bench.evidence.scheduler.verificationState || '';
   root.dataset.computeRouteVisibleSchedulerVerificationStatus = bench.evidence.schedulerVerification?.status || '';
   root.dataset.computeRouteVisibleSchedulerVerificationClassification = bench.evidence.schedulerVerification?.classification || '';
+  root.dataset.computeRouteVisibleSchedulerObservationClass = bench.evidence.schedulerVerification?.observationClass || '';
+  root.dataset.computeRouteVisibleSchedulerYieldUnverified = bench.evidence.schedulerVerification?.yieldUnverified === true ? '1' : '0';
   root.dataset.computeRouteVisibleVisualSource = bench.evidence.visualSource.source || '';
   root.dataset.computeRouteVisibleOutputStatus = bench.evidence.output.status || '';
   root.dataset.computeRouteVisibleTabClaim = 'volume';
@@ -8066,6 +8068,8 @@ function renderComputeRouteVisibleBench() {
   addComputeRouteVisibleEvidenceRow(rows, 'Status', `${bench.evidence.route.activePhase || 'unknown'} -> ${bench.evidence.route.finalPhase || 'unknown'}`);
   addComputeRouteVisibleEvidenceRow(rows, 'Scheduler', `${bench.evidence.scheduler.verificationState || 'unknown'} / ${bench.evidence.scheduler.effectiveMode || 'unknown'}`);
   addComputeRouteVisibleEvidenceRow(rows, 'Scheduler verification', `${bench.evidence.schedulerVerification?.status || bench.evidence.scheduler.verificationState || 'unknown'} / ${bench.evidence.schedulerVerification?.classification || 'config unknown'}`);
+  addComputeRouteVisibleEvidenceRow(rows, 'Observed boundary', bench.evidence.schedulerVerification?.observationClass || 'not recorded');
+  addComputeRouteVisibleEvidenceRow(rows, 'Yield warning', bench.evidence.schedulerVerification?.yieldUnverified ? 'stage boundaries observed; scheduler yields are not verified' : 'no yield downgrade recorded');
   addComputeRouteVisibleEvidenceRow(rows, 'Scheduler downgrades', bench.evidence.schedulerVerification?.downgrades || []);
   addComputeRouteVisibleEvidenceRow(rows, 'Scheduler schema', bench.evidence.scheduler.schema);
   addComputeRouteVisibleEvidenceRow(rows, 'Timing authority', `${bench.evidence.schedulerVerification?.timingEvidenceSource || bench.evidence.frameTail.timingEvidenceSource || 'unknown'} / ${bench.evidence.schedulerVerification?.timingDisclaimer || bench.evidence.frameTail.timingDisclaimer || 'no disclaimer recorded'}`);

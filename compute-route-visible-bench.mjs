@@ -86,13 +86,19 @@ function computeVisibleBenchPrimaryText(witness = {}) {
   const routeLabel = routeFamilyLabel(witness);
   const noun = outputNoun(witness);
   const producedOutput = witness.outputHandoff?.status === 'real-output-produced';
+  const schedulerVerification = schedulerVerificationFromWitness(witness);
   const schedulerUnverified = witness.falseClosureChecks?.schedulerUnverified === true
-    || witness.scheduler?.verificationState === 'scheduler-unverified';
+    || witness.scheduler?.verificationState === 'scheduler-unverified'
+    || witness.runtime?.scheduler?.verificationState === 'scheduler-unverified'
+    || schedulerVerification?.status === 'scheduler-unverified';
   const visualSourceNotLive = witness.falseClosureChecks?.visualSourceNotLive === true;
   const activeLive = witness.routePhase?.active?.allowsFullBurn === true
     && witness.visualSourceTruth?.source === 'live-webgpu-volume';
   if (!producedOutput) {
     return `${routeLabel} ran, but Kaminos did not record a usable output.`;
+  }
+  if (schedulerVerification?.yieldUnverified) {
+    return `${routeLabel} made ${noun} from this image and observed stage boundaries, but it has not proven scheduler yields.`;
   }
   if (schedulerUnverified) {
     return `${routeLabel} made ${noun} from this image, but Kaminos could not prove the route scheduler stayed cooperative.`;
@@ -108,22 +114,30 @@ function computeVisibleBenchPrimaryText(witness = {}) {
 
 function schedulerVerificationFromWitness(witness = {}) {
   const receipt = witness.schedulerVerification
+    || witness.runtime?.schedulerVerification
     || witness.pipelineScheduler?.schedulerVerification
+    || witness.pipelineScheduler?.runtime?.schedulerVerification
     || witness.pipelineScheduler?.scheduler?.schedulerVerification
     || witness.scheduler?.schedulerVerification
     || null;
   if (!receipt || typeof receipt !== 'object') return null;
   const frameTail = receipt.frameTail || {};
   const falseAuthorityChecks = receipt.falseAuthorityChecks || {};
+  const downgrades = unique(receipt.downgrades || receipt.failureDowngrades || []);
+  const eventTrace = cloneObject(receipt.eventTrace) || {};
   return {
     schema: receipt.schema || 'kaminos.webgpu-scheduler-verification-receipt.v0',
     status: receipt.status || receipt.schedulerStatus || receipt.verificationState || 'scheduler-unverified',
     classification: receipt.classification || null,
-    downgrades: unique(receipt.downgrades || receipt.failureDowngrades || []),
-    timingEvidenceSource: frameTail.evidenceSource || receipt.timingEvidenceSource || null,
+    observationClass: receipt.observationClass || null,
+    downgrades,
+    boundaryAssertions: asArray(receipt.boundaryAssertions).map(assertion => cloneObject(assertion)).filter(Boolean),
+    eventTrace,
+    timingEvidenceSource: eventTrace.timingAuthority || frameTail.evidenceSource || receipt.timingEvidenceSource || null,
     timingDisclaimer: frameTail.disclaimer || receipt.timingDisclaimer || null,
     timingProxyOnly: falseAuthorityChecks.timingProxyOnly === true,
     eventTraceMissing: falseAuthorityChecks.eventTraceMissing === true,
+    yieldUnverified: downgrades.includes('yield-events-missing'),
     route: {
       pipelineId: receipt.route?.pipelineId || witness.routeIdentity?.pipelineId || null,
       requestedRoute: receipt.route?.requestedRouteId || witness.routeIdentity?.requestedRoute || null,
@@ -142,6 +156,7 @@ export function buildComputeRouteVisibleBenchModel({ witness } = {}) {
     || witness.routeIdentity?.requestedRoute
     || 'compute-route';
   const schedulerEvidence = witness.pipelineScheduler || witness.scheduler || {};
+  const runtimeSchedulerEvidence = witness.runtime?.scheduler || {};
   const schedulerVerification = schedulerVerificationFromWitness(witness);
   const warnings = unique([
     ...asArray(witness.sourceTruthWarnings),
@@ -165,21 +180,21 @@ export function buildComputeRouteVisibleBenchModel({ witness } = {}) {
         statusBadge: witness.routePhase?.final?.statusBadge || witness.routePhase?.active?.statusBadge || null,
       },
       scheduler: {
-        schema: schedulerEvidence.schema || witness.scheduler?.schema || null,
-        verificationState: schedulerVerification?.status || schedulerEvidence.verificationState || witness.scheduler?.verificationState || null,
-        requestedMode: schedulerEvidence.requestedScheduler?.mode || witness.scheduler?.requestedScheduler?.mode || null,
-        effectiveMode: schedulerEvidence.effectiveScheduler?.mode || witness.scheduler?.effectiveScheduler?.mode || null,
-        nestedSchedulerSchema: schedulerEvidence.scheduler?.schema || witness.scheduler?.schema || null,
+        schema: schedulerEvidence.schema || runtimeSchedulerEvidence.schema || witness.scheduler?.schema || null,
+        verificationState: schedulerVerification?.status || schedulerEvidence.verificationState || runtimeSchedulerEvidence.verificationState || witness.scheduler?.verificationState || null,
+        requestedMode: schedulerEvidence.requestedScheduler?.mode || runtimeSchedulerEvidence.requestedScheduler?.mode || witness.scheduler?.requestedScheduler?.mode || null,
+        effectiveMode: schedulerEvidence.effectiveScheduler?.mode || runtimeSchedulerEvidence.effectiveScheduler?.mode || witness.scheduler?.effectiveScheduler?.mode || null,
+        nestedSchedulerSchema: schedulerEvidence.scheduler?.schema || runtimeSchedulerEvidence.schema || witness.scheduler?.schema || null,
         rawAdapterSchema: schedulerEvidence.raw?.breathingRoom?.schema || witness.scheduler?.adapterEvidence?.schema || null,
       },
       schedulerVerification,
       backpressure: {
-        schema: witness.backpressure?.schema || null,
-        requestedBudget: witness.backpressure?.requestedBudget || null,
-        effectiveBudget: witness.backpressure?.effectiveBudget || null,
-        memoryExclusivity: witness.backpressure?.memoryExclusivity || null,
-        warmCacheState: witness.backpressure?.warmCacheState || null,
-        frameTail: cloneObject(witness.backpressure?.frameTail) || {},
+        schema: witness.backpressure?.schema || witness.runtime?.backpressure?.schema || null,
+        requestedBudget: witness.backpressure?.requestedBudget || witness.runtime?.backpressure?.requestedBudget || null,
+        effectiveBudget: witness.backpressure?.effectiveBudget || witness.runtime?.backpressure?.effectiveBudget || null,
+        memoryExclusivity: witness.backpressure?.memoryExclusivity || witness.runtime?.backpressure?.memoryExclusivity || null,
+        warmCacheState: witness.backpressure?.warmCacheState || witness.runtime?.backpressure?.warmCacheState || null,
+        frameTail: cloneObject(witness.backpressure?.frameTail) || cloneObject(witness.runtime?.backpressure?.frameTail) || {},
       },
       visualSource: cloneObject(witness.visualSourceTruth) || {},
       visualBudget: {

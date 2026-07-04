@@ -621,6 +621,59 @@ assert.equal(schedulerReceiptVisibleBench.evidence.schedulerVerification.eventTr
 assert.equal(schedulerReceiptVisibleBench.evidence.route.effectiveRoute, 'adapter.sharp-image-to-splat-live.v0');
 assert.match(schedulerReceiptVisibleBench.primaryText, /could not prove the route scheduler stayed cooperative/);
 
+const mogeRuntimeSchedulerWitness = {
+  ...schedulerReceiptWitness,
+  routeIdentity: {
+    pipelineId: 'moge-image-to-depth-live-v0',
+    requestedRoute: 'adapter.moge-image-to-depth-live.v0',
+    effectiveRoute: 'adapter.moge-image-to-depth-live.v0',
+    backendClass: 'browser-webgpu',
+  },
+  runtime: {
+    scheduler: {
+      schema: 'kaminos.webgpu-route-scheduler.v0',
+      verificationState: 'scheduler-unverified',
+    },
+    backpressure: {
+      schema: 'kaminos.webgpu-backpressure-receipt.v0',
+      effectiveBudget: 'cooperative',
+    },
+    schedulerVerification: {
+      schema: 'kaminos.webgpu-scheduler-verification-receipt.v0',
+      status: 'scheduler-unverified',
+      classification: 'config-only',
+      observationClass: 'observed-stage-boundary',
+      downgrades: ['yield-events-missing'],
+      boundaryAssertions: [
+        { stage: 'backbone', status: 'observed-stage-boundary' },
+        { stage: 'decoder-heads', status: 'observed-stage-boundary' },
+        { stage: 'output-readback', status: 'observed-stage-boundary' },
+      ],
+      eventTrace: {
+        timingAuthority: 'queue-submit-wait',
+      },
+    },
+  },
+  schedulerVerification: null,
+  pipelineScheduler: null,
+  scheduler: null,
+  falseClosureChecks: {
+    ...schedulerReceiptWitness.falseClosureChecks,
+    schedulerUnverified: true,
+  },
+};
+const mogeRuntimeVisibleBench = buildComputeRouteVisibleBenchModel({
+  witness: mogeRuntimeSchedulerWitness,
+});
+assert.equal(mogeRuntimeVisibleBench.evidence.schedulerVerification.status, 'scheduler-unverified');
+assert.equal(mogeRuntimeVisibleBench.evidence.schedulerVerification.classification, 'config-only');
+assert.equal(mogeRuntimeVisibleBench.evidence.schedulerVerification.observationClass, 'observed-stage-boundary');
+assert.deepEqual(mogeRuntimeVisibleBench.evidence.schedulerVerification.downgrades, ['yield-events-missing']);
+assert.equal(mogeRuntimeVisibleBench.evidence.schedulerVerification.eventTrace.timingAuthority, 'queue-submit-wait');
+assert.equal(mogeRuntimeVisibleBench.evidence.schedulerVerification.yieldUnverified, true);
+assert.equal(mogeRuntimeVisibleBench.evidence.schedulerVerification.boundaryAssertions.length, 3);
+assert.match(mogeRuntimeVisibleBench.primaryText, /observed stage boundaries, but it has not proven scheduler yields/);
+
 const visibleBenchUrl = computeRouteVisibleBenchUrl(pipelineSchedulerWitness, {
   baseUrl: 'http://127.0.0.1:18121/',
 });
@@ -646,6 +699,8 @@ assert.match(index, /setActiveTab\('volume'\)/, 'accepted visible bench opens on
 assert.match(index, /computeRouteVisibleTabClaim/, 'accepted visible bench records that it claimed the Volume tab for visible evidence');
 assert.match(index, /bootstrapComputeRouteVisibleBenchRoute\(\)/, 'accepted visible bench bootstraps before renderer-heavy initialization can fail');
 assert.match(index, /Scheduler verification/, 'visible bench names scheduler verification separately from scheduler config');
+assert.match(index, /Observed boundary/, 'visible bench separates observed stage boundaries from verified scheduler proof');
+assert.match(index, /Yield warning/, 'visible bench preserves yield-events-missing as a visible warning');
 assert.match(index, /Timing authority/, 'visible bench shows timing authority for scheduler/frame-tail evidence');
 assert.doesNotMatch(index, /Root request/, 'operator-facing route bench must not expose internal root-request wording');
 
