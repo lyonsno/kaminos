@@ -1,5 +1,7 @@
 export const SHARP_BREATHING_ROOM_VALIDATION_SCHEMA = 'kaminos.sharp-breathing-room-validation.v0';
 
+import { validateSchedulerVerificationReceipt } from './scheduler-verification-receipt.js';
+
 export const SHARP_BREATHING_ROOM_SINGLE_PAIR_CLAIM_BOUNDARY =
   'single-pair smoke only; no optimization, speedup, slowdown, or stable throughput claim';
 
@@ -45,8 +47,28 @@ function verification(run = {}) {
 }
 
 function hasObservedSchedulerBoundaryProof(schedulerVerification = {}) {
-  return asArray(schedulerVerification.eventTrace?.events).length > 0
-    && asArray(schedulerVerification.boundaryAssertions).some(assertion => assertion?.status === 'verified');
+  const validated = validateSchedulerVerificationReceipt(schedulerVerification);
+  if (!validated.ok) return false;
+  if (!['verified', 'unsupported'].includes(schedulerVerification.status)) return false;
+  if (schedulerVerification.falseAuthorityChecks?.timingProxyOnly) return false;
+  if (schedulerVerification.falseAuthorityChecks?.eventTraceMissing) return false;
+  if (schedulerVerification.falseAuthorityChecks?.queueWaitEventsMissing) return false;
+  if (schedulerVerification.falseAuthorityChecks?.boundaryAssertionEventMismatch) return false;
+  if (schedulerVerification.falseAuthorityChecks?.requestedBoundaryAssertionMissing) return false;
+  if (schedulerVerification.falseAuthorityChecks?.requestedFieldDroppedWithoutUnsupported) return false;
+  const downgrades = asArray(schedulerVerification.downgrades);
+  if (downgrades.some(downgrade => [
+    'event-trace-missing',
+    'timing-proxy-only',
+    'queue-wait-events-missing',
+    'yield-events-missing',
+    'boundary-assertion-event-mismatch',
+    'requested-boundary-assertion-missing',
+    'requested-field-dropped-without-unsupported',
+  ].includes(downgrade))) return false;
+  const events = asArray(schedulerVerification.eventTrace?.events);
+  return events.length > 0
+    && asArray(schedulerVerification.boundaryAssertions).some(assertionHasVerifiedEventEvidence(events));
 }
 
 function verifiedWithoutBoundaryProof(schedulerVerification = {}) {
@@ -99,6 +121,35 @@ function hasVitBlockOverclaim(run = {}) {
   const unsupportedFields = unsupportedFieldsForRun(run);
   if (unsupportedCoversVitBlock(unsupportedFields)) return false;
   return vitBlockIsAsserted(run) || schedulerRequestsVitBlock(verification(run));
+}
+
+function expectedBoundaryForAssertion(assertion = {}) {
+  if (assertion.observedBoundary) return assertion.observedBoundary;
+  if (assertion.field === 'phaseChunkSize.spnPatch' || assertion.field === 'spnPatchChunkSize') {
+    return 'spn-patch-chunk';
+  }
+  if (assertion.field === 'phaseYieldMs.gaussianPhase' || assertion.field === 'gaussianPhaseYieldMs') {
+    return 'gaussian-phase';
+  }
+  return null;
+}
+
+function eventMatchesBoundary(event = {}, boundary) {
+  if (!boundary) return false;
+  return event.boundary === boundary
+    || event.phase === boundary
+    || event.stage === boundary
+    || event.name === boundary;
+}
+
+function assertionHasVerifiedEventEvidence(events = []) {
+  return assertion => {
+    if (assertion?.status !== 'verified') return false;
+    if (!finite(assertion.observedCount) || Number(assertion.observedCount) <= 0) return false;
+    if (!finite(assertion.observedQueueWaitCount) || Number(assertion.observedQueueWaitCount) <= 0) return false;
+    if (!finite(assertion.observedYieldCount) || Number(assertion.observedYieldCount) <= 0) return false;
+    return events.some(event => eventMatchesBoundary(event, expectedBoundaryForAssertion(assertion)));
+  };
 }
 
 function artifact(run = {}) {
@@ -193,7 +244,7 @@ export function validateSharpBreathingRoomComparisonEvidence(comparison = {}) {
     routeIdentityMissing: false,
   };
 
-  if (comparison.schema && comparison.schema !== SHARP_BREATHING_ROOM_COMPARISON_SCHEMA) {
+  if (comparison.schema !== SHARP_BREATHING_ROOM_COMPARISON_SCHEMA) {
     addUnique(errors, 'schema-mismatch');
   }
   if (!baseline || !cooperative) addUnique(errors, 'baseline-cooperative-pair-missing');
@@ -208,6 +259,10 @@ export function validateSharpBreathingRoomComparisonEvidence(comparison = {}) {
   }
 
   const cooperativeVerification = verification(cooperative);
+  const cooperativeHasSchedulerProof = hasObservedSchedulerBoundaryProof(cooperativeVerification);
+  if (comparisonClaimsSmoke(comparison) && cooperative && !cooperativeHasSchedulerProof) {
+    addUnique(errors, 'cooperative-scheduler-receipt-invalid');
+  }
   if (verifiedWithoutBoundaryProof(cooperativeVerification)) {
     falseClosureChecks.verifiedWithoutObservedBoundary = true;
     addUnique(errors, 'cooperative-verified-without-boundary-proof');
@@ -270,7 +325,7 @@ export function validateSharpBreathingRoomComparisonEvidence(comparison = {}) {
     canClaim: {
       routeBridge: errors.length === 0 && status === 'route-bridge',
       breathingRoomSmoke: errors.length === 0 && status === 'valid-smoke',
-      schedulerProof: errors.length === 0 && hasObservedSchedulerBoundaryProof(cooperativeVerification),
+      schedulerProof: errors.length === 0 && cooperativeHasSchedulerProof,
       optimization: false,
     },
     claimBoundary: SHARP_BREATHING_ROOM_SINGLE_PAIR_CLAIM_BOUNDARY,

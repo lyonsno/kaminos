@@ -204,6 +204,15 @@ assert.equal(routeBridge.canClaim.routeBridge, true);
 assert.equal(routeBridge.canClaim.breathingRoomSmoke, false);
 assert.equal(routeBridge.errors.includes('missing-frame-queue-evidence'), false);
 
+const missingSchemaReport = comparisonReport();
+delete missingSchemaReport.schema;
+const missingSchema = validateSharpBreathingRoomComparisonEvidence(missingSchemaReport);
+assert.equal(missingSchema.ok, false);
+assert.equal(missingSchema.status, 'invalid');
+assert.ok(missingSchema.errors.includes('schema-mismatch'));
+assert.equal(missingSchema.canClaim.breathingRoomSmoke, false);
+assert.equal(missingSchema.canClaim.schedulerProof, false);
+
 const forgedVerified = validateSharpBreathingRoomComparisonEvidence(comparisonReport({
   cooperativeVerification: {
     schema: 'kaminos.webgpu-scheduler-verification-receipt.v0',
@@ -217,6 +226,55 @@ assert.equal(forgedVerified.ok, false);
 assert.equal(forgedVerified.status, 'invalid');
 assert.ok(forgedVerified.errors.includes('cooperative-verified-without-boundary-proof'));
 assert.equal(forgedVerified.falseClosureChecks.verifiedWithoutObservedBoundary, true);
+
+const failedSchedulerReceipt = validateSharpBreathingRoomComparisonEvidence(comparisonReport({
+  cooperativeVerification: {
+    schema: 'kaminos.webgpu-scheduler-verification-receipt.v0',
+    status: 'failed',
+    classification: 'config-only',
+    eventTrace: {
+      timingAuthority: 'browser-wall-clock',
+      events: [{ kind: 'anything' }],
+    },
+    boundaryAssertions: [
+      { field: 'phaseChunkSize.spnPatch', requested: 1, effective: 999, status: 'verified' },
+    ],
+  },
+}));
+assert.equal(failedSchedulerReceipt.ok, false);
+assert.equal(failedSchedulerReceipt.status, 'invalid');
+assert.ok(failedSchedulerReceipt.errors.includes('cooperative-scheduler-receipt-invalid'));
+assert.equal(failedSchedulerReceipt.canClaim.schedulerProof, false);
+
+const unrelatedEventBareAssertion = validateSharpBreathingRoomComparisonEvidence(comparisonReport({
+  cooperativeVerification: {
+    schema: 'kaminos.webgpu-scheduler-verification-receipt.v0',
+    status: 'verified',
+    classification: 'observed-boundary',
+    route: {
+      pipelineId: 'sharp-image-to-splat-live-v0',
+      requestedRouteId: 'adapter.sharp-image-to-splat-live.v0',
+      effectiveRouteId: 'adapter.sharp-image-to-splat-live.v0',
+    },
+    scheduler: {
+      schema: 'kaminos.webgpu-route-scheduler.v0',
+      requestedScheduler: { mode: 'cooperative' },
+      effectiveScheduler: { mode: 'cooperative', unsupportedFields: ['phaseChunkSize.vitBlock'] },
+    },
+    backpressure: { schema: 'kaminos.webgpu-route-backpressure.v0' },
+    eventTrace: {
+      timingAuthority: 'browser-wall-clock',
+      events: [{ kind: 'unrelated' }],
+    },
+    boundaryAssertions: [
+      { field: 'phaseChunkSize.spnPatch', status: 'verified' },
+    ],
+  },
+}));
+assert.equal(unrelatedEventBareAssertion.ok, false);
+assert.equal(unrelatedEventBareAssertion.status, 'invalid');
+assert.ok(unrelatedEventBareAssertion.errors.includes('cooperative-scheduler-receipt-invalid'));
+assert.equal(unrelatedEventBareAssertion.canClaim.schedulerProof, false);
 
 const proxyOnly = validateSharpBreathingRoomComparisonEvidence(comparisonReport({
   cooperativeVerification: schedulerVerification({ timingAuthority: 'raf-and-queue-proxy' }),
