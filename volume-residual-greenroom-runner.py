@@ -51,6 +51,8 @@ def parse_args():
     parser.add_argument("--outside-edge-residual-weight", default="0")
     parser.add_argument("--residual-output-limit", default="0")
     parser.add_argument("--residual-application-mask-mode", default="off")
+    parser.add_argument("--residual-mask-feather-radius", default="0")
+    parser.add_argument("--residual-smoothness-loss-weight", default="0")
     parser.add_argument("--condition-render-scale", default="false")
     parser.add_argument("--temporal-eval", default="true")
     parser.add_argument("--temporal-eval-scope", default="selected")
@@ -152,6 +154,10 @@ def build_child_command(args):
         str(args.residual_output_limit),
         "--residual-application-mask-mode",
         str(args.residual_application_mask_mode),
+        "--residual-mask-feather-radius",
+        str(args.residual_mask_feather_radius),
+        "--residual-smoothness-loss-weight",
+        str(args.residual_smoothness_loss_weight),
         "--temporal-eval-scope",
         str(args.temporal_eval_scope),
         "--temporal-loss-weight",
@@ -237,6 +243,9 @@ def main():
             final_receipt["edgeBandAuthority"] = report.get("edgeBandAuthority")
             final_receipt["outsideEdgeResidualMse"] = report.get("outsideEdgeResidualMse")
             final_receipt["residualOutputLimit"] = report.get("residualOutputLimit")
+            final_receipt["residualApplicationMaskMode"] = report.get("residualApplicationMaskMode")
+            final_receipt["residualMaskFeatherRadius"] = report.get("residualMaskFeatherRadius")
+            final_receipt["residualSmoothnessLossWeight"] = report.get("residualSmoothnessLossWeight")
         except Exception as exc:
             final_receipt["residualReportReadError"] = repr(exc)
     (out_dir / "greenroom-runner-receipt.json").write_text(json.dumps(final_receipt, indent=2) + "\n")
