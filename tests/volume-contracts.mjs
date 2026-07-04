@@ -1566,6 +1566,7 @@ assert.match(fieldSliceWitness, /controlledStepSequenceReport/, 'volume witness 
 assert.match(fieldSliceWitness, /--reuse-browser/, 'volume witness can attach to an existing headful browser for repeated capture');
 assert.match(fieldSliceWitness, /attach-or-launch-shared-cdp-browser-v0/, 'volume witness names the attach-or-launch shared browser policy');
 assert.match(fieldSliceWitness, /keepBrowserOpen/, 'volume witness can leave the shared browser alive for the dataset runner instead of killing it per capture');
+assert.match(fieldSliceWitness, /unref\(\)/, 'volume witness must detach kept-open Chrome so shared-browser corpus captures do not hang after writing reports');
 assert.match(core, /sampleRenderScaleSet/, 'volume core exposes a same-state multi-render-scale capture API');
 assert.match(core, /renderFrozenScaleToCanvas/, 'volume core exposes render-only frozen-state canvas capture');
 assert.match(core, /advanceSim:\s*false/, 'same-state render-scale capture renders without advancing the simulator for each scale');

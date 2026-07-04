@@ -944,7 +944,8 @@ async function attachOrLaunchSharedBrowser() {
     '--disable-renderer-backgrounding',
     `--window-size=${windowSize}`,
     url,
-  ], { stdio: 'ignore' });
+  ], { stdio: 'ignore', detached: keepBrowserOpen });
+  if (keepBrowserOpen) proc.unref();
   return {
     identity: reuseBrowser ? 'attach-or-launch-shared-cdp-browser-v0' : 'per-capture-chrome-process-v0',
     mode: reuseBrowser ? 'launched-shared' : 'launched-per-capture',
