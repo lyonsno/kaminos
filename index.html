@@ -9233,6 +9233,44 @@ let greenroomRouteJobState = {
 const browserWebGpuRouteSourceSelectionByJobId = new Map();
 let greenroomScratchImageCandidates = [];
 let lastMogePreviewRequestId = null;
+let lastMogePreviewRunState = null;
+
+function mogePreviewRunProgressText() {
+  if (!lastMogePreviewRunState) return 'MoGE preview idle';
+  const request = lastMogePreviewRunState.requestId ? ` / ${lastMogePreviewRunState.requestId}` : '';
+  return `${lastMogePreviewRunState.message}${request}`;
+}
+
+function updateMogePreviewRunProgress(phase, message, requestId = null) {
+  lastMogePreviewRunState = {
+    phase,
+    message,
+    requestId,
+    updatedAt: new Date().toISOString(),
+  };
+  const progress = document.querySelector('[data-greenroom-moge-run-progress]');
+  if (progress) {
+    progress.setAttribute('data-greenroom-moge-run-phase', phase);
+    progress.setAttribute('data-greenroom-moge-run-request-id', requestId || '');
+    progress.textContent = mogePreviewRunProgressText();
+  }
+  setInfo(message);
+}
+
+function renderMogePreviewRunProgress(container) {
+  const progress = document.createElement('div');
+  progress.className = 'moge-route-source-evidence';
+  progress.setAttribute('data-greenroom-moge-run-progress', 'true');
+  progress.setAttribute('data-greenroom-moge-run-phase', lastMogePreviewRunState?.phase || 'idle');
+  progress.setAttribute('data-greenroom-moge-run-request-id', lastMogePreviewRunState?.requestId || '');
+  progress.textContent = mogePreviewRunProgressText();
+  container.appendChild(progress);
+}
+
+async function waitForMogePreviewPaint() {
+  await new Promise(resolve => requestAnimationFrame(resolve));
+  await new Promise(resolve => setTimeout(resolve, 0));
+}
 
 window.kaminosRouteJobDebugState = function() {
   return JSON.parse(JSON.stringify(greenroomRouteJobState));
@@ -10588,6 +10626,7 @@ function renderMogeRouteOperatorPanel(rows = []) {
     card.setAttribute('data-greenroom-route-input-source-kind', previewRow.route_job?.metadata?.inputSourceKind || '');
     card.setAttribute('data-greenroom-route-source-image-kind', previewRow.route_job?.metadata?.sourceImage?.kind || '');
     renderMogeRouteSourceSelector(card, previewRow);
+    renderMogePreviewRunProgress(card);
     renderBrowserWebGpuPreviewActionButton(card, previewRow);
     panel.appendChild(card);
   }
@@ -11465,9 +11504,12 @@ async function buildBrowserWebGpuPreviewRouteResult(row = {}, options = {}) {
   const routeJob = row.route_job || {};
   const route = kit.createMogeDepthNormalRouteDefinition();
   const routeId = routeJob.routeId || kit.MOGE_DEPTH_NORMAL_ROUTE_ID;
-  const requestId = `req:moge-preview-${Date.now()}`;
+  const requestId = options.requestId || `req:moge-preview-${Date.now()}`;
   const startedAt = performance.now();
+  updateMogePreviewRunProgress('probing', 'MoGE preview started: probing WebGPU', requestId);
+  await waitForMogePreviewPaint();
   const probe = await probeBrowserWebGpuRouteRuntime(kit);
+  updateMogePreviewRunProgress('resolving-source', 'MoGE preview resolving source image', requestId);
   const inputPreview = await resolveMogeRouteSourceImage(row);
   if (options.requireRealInput !== false) {
     assertMogeRouteRealInputForOperatorSmoke(inputPreview);
@@ -11475,6 +11517,8 @@ async function buildBrowserWebGpuPreviewRouteResult(row = {}, options = {}) {
   let adapterError = null;
   let realAdapterOutput = null;
   try {
+    updateMogePreviewRunProgress('running-model', 'MoGE preview running model', requestId);
+    await waitForMogePreviewPaint();
     const adapterResult = await runMogeWebGpuRouteAdapter({
       row,
       routeJob,
@@ -11488,6 +11532,8 @@ async function buildBrowserWebGpuPreviewRouteResult(row = {}, options = {}) {
       startedAt,
     });
     if (adapterResult && adapterResult.status === 'real') {
+      updateMogePreviewRunProgress('rendering-outputs', 'MoGE preview rendering outputs', requestId);
+      await waitForMogePreviewPaint();
       realAdapterOutput = await normalizeMogeRouteAdapterOutput(adapterResult, {
         row,
         routeJob,
@@ -11501,6 +11547,8 @@ async function buildBrowserWebGpuPreviewRouteResult(row = {}, options = {}) {
   }
   const outputArtifacts = realAdapterOutput?.outputArtifacts || {};
   if (!realAdapterOutput) {
+    updateMogePreviewRunProgress('rendering-outputs', 'MoGE preview rendering outputs', requestId);
+    await waitForMogePreviewPaint();
     const outputRoles = ['depth', 'normal', 'pointMap'];
     for (const role of outputRoles) {
       const outputRole = role === 'pointMap' ? 'pointmap' : role;
@@ -11677,11 +11725,14 @@ async function buildBrowserWebGpuPreviewRouteResult(row = {}, options = {}) {
 }
 
 async function runBrowserWebGpuPreviewRoute(row = {}) {
-  setInfo('Browser WebGPU preview route running');
-  const result = await buildBrowserWebGpuPreviewRouteResult(row);
+  const requestId = `req:moge-preview-${Date.now()}`;
+  updateMogePreviewRunProgress('started', 'MoGE preview started', requestId);
+  await waitForMogePreviewPaint();
+  const result = await buildBrowserWebGpuPreviewRouteResult(row, { requestId });
   lastMogePreviewRequestId = result.requestId || null;
+  updateMogePreviewRunProgress('submitting', 'MoGE preview submitting result', result.requestId || requestId);
   const writeResult = await submitBrowserWebGpuRouteResult(result);
-  setInfo('Browser WebGPU preview route submitted');
+  updateMogePreviewRunProgress('submitted', 'Browser WebGPU preview route submitted', result.requestId || requestId);
   return { result, writeResult };
 }
 

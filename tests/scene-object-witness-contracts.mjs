@@ -218,6 +218,10 @@ assert.match(indexHtml, /data-greenroom-moge-latest-request-id/, 'MoGE latest re
 assert.match(indexHtml, /data-greenroom-moge-latest-synthetic-fallback/, 'MoGE latest result card exposes whether source identity fell back to synthetic');
 assert.match(indexHtml, /data-greenroom-moge-fresh-result/, 'MoGE latest result card marks when it matches the last local Run Preview request');
 assert.match(indexHtml, /await runBrowserWebGpuPreviewRoute\(row\)[\s\S]*button\.textContent = 'Run Preview'[\s\S]*await grBrowseRouteJobs\(\)[\s\S]*Browser WebGPU preview submitted; refresh failed/, 'MoGE Run Preview success path resets the button and refreshes route state after submission without relabeling refresh failure as route failure');
+assert.match(indexHtml, /lastMogePreviewRunState/, 'MoGE cockpit keeps explicit preview run progress state');
+assert.match(indexHtml, /data-greenroom-moge-run-progress/, 'MoGE cockpit exposes a stable run progress hook');
+assert.match(indexHtml, /MoGE preview started[\s\S]*MoGE preview running model[\s\S]*MoGE preview rendering outputs[\s\S]*MoGE preview submitting result/, 'MoGE Run Preview reports started/running/rendering/submitting phases instead of a bare pending state');
+assert.match(indexHtml, /waitForMogePreviewPaint/, 'MoGE Run Preview yields a paint frame so started/running messages can become visible before heavy WebGPU work');
 assert.match(indexHtml, /Latest result/, 'MoGE cockpit names completed browser output as a latest result instead of replacing the preview source control');
 assert.match(servePy, /rows\s*=\s*\[\s*_browser_webgpu_fixture_row\(\),\s*\*live_rows\s*\]/, 'Browser WebGPU provider keeps the reserved preview route available even after live result rows exist');
 assert.match(indexHtml, /data-greenroom-route-archive/, 'Native Greenroom route archive is addressable separately from the operator panel');
