@@ -11,6 +11,13 @@ export {
 } from './tensor-manifest.js';
 
 export {
+  WEBGPU_INFERENCE_RUNTIME_SCHEMA,
+  createCooperativeYield,
+  createWebGpuInferenceRuntime,
+  createWebGpuResourceCaches,
+} from './inference-runtime.js';
+
+export {
   createWebGpuBackendIdentity,
   createWebGpuDeviceRequest,
   requestBrowserWebGpuDevice,
