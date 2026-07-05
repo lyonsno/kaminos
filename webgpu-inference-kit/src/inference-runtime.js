@@ -13,6 +13,12 @@ import {
   createStagedSubmitProfile,
   finishStagedSubmitProfile,
 } from './staged-profile.js';
+import {
+  assertTensorDataByteLength,
+  createGpuTensor,
+  createUniformBuffer as createRuntimeUniformBuffer,
+  defineComputeKernel as defineRuntimeComputeKernel,
+} from './runtime-primitives.js';
 
 export const WEBGPU_INFERENCE_RUNTIME_SCHEMA = 'kaminos.webgpu-inference-runtime.v0';
 
@@ -216,6 +222,11 @@ function createStageFacade(runtime, stageState) {
     createBuffer: runtime.createBuffer,
     writeBuffer: runtime.writeBuffer,
     readBuffer: runtime.readBuffer,
+    createTensor: runtime.createTensor,
+    uploadTensor: runtime.uploadTensor,
+    readTensor: runtime.readTensor,
+    createUniformBuffer: runtime.createUniformBuffer,
+    defineComputeKernel: runtime.defineComputeKernel,
     async yieldToBrowser(metadata = {}) {
       const event = await runtime.yieldToBrowser(metadata);
       stageState.yields.push(event);
@@ -294,6 +305,100 @@ export async function createWebGpuInferenceRuntime(input = {}) {
 
     readBuffer(buffer, options = {}) {
       return readMappedBuffer(buffer, options);
+    },
+
+    createTensor(tensorInput = {}) {
+      return createGpuTensor(tensorInput, {
+        createBuffer: descriptor => runtime.createBuffer(descriptor),
+      });
+    },
+
+    uploadTensor(tensor, data, offset = 0) {
+      if (!tensor || typeof tensor !== 'object') throw new Error('tensor must be an object');
+      if (!tensor.buffer) throw new Error('tensor must expose buffer');
+      assertTensorDataByteLength(tensor, data);
+      runtime.writeBuffer(tensor.buffer, data, offset);
+      return tensor;
+    },
+
+    readTensor(tensor, options = {}) {
+      if (!tensor || typeof tensor !== 'object') throw new Error('tensor must be an object');
+      if (!tensor.buffer) throw new Error('tensor must expose buffer');
+      return runtime.readBuffer(tensor.buffer, {
+        size: tensor.byteLength,
+        ...options,
+      });
+    },
+
+    createUniformBuffer(uniformInput = {}) {
+      return createRuntimeUniformBuffer(uniformInput, {
+        createBuffer: descriptor => runtime.createBuffer(descriptor),
+        writeBuffer: (buffer, data) => runtime.writeBuffer(buffer, data),
+      });
+    },
+
+    defineComputeKernel(kernelInput = {}) {
+      return defineRuntimeComputeKernel(kernelInput, {
+        device,
+        getShaderModule: runtime.getShaderModule,
+        getComputePipeline: runtime.getComputePipeline,
+      });
+    },
+
+    async runKernel(kernelDefinition, options = {}) {
+      if (!kernelDefinition || typeof kernelDefinition !== 'object') {
+        throw new Error('kernelDefinition must be an object');
+      }
+      if (!Array.isArray(options.dispatch) || options.dispatch.length < 1 || options.dispatch.length > 3) {
+        throw new Error('dispatch must be an array with 1 to 3 dimensions');
+      }
+      const dispatch = [
+        options.dispatch[0],
+        options.dispatch[1] ?? 1,
+        options.dispatch[2] ?? 1,
+      ];
+      for (const dim of dispatch) {
+        if (!Number.isInteger(dim) || dim < 1) throw new Error('dispatch dimensions must be positive integers');
+      }
+      if (typeof device.createCommandEncoder !== 'function') {
+        throw new Error('device.createCommandEncoder must be available');
+      }
+      if (options.submit !== false && typeof queue.submit !== 'function') {
+        throw new Error('queue.submit must be available');
+      }
+
+      const stageName = options.stage || kernelDefinition.name;
+      const metadata = {
+        kernelName: kernelDefinition.name,
+        dispatch,
+        bindings: Array.isArray(kernelDefinition.bindings)
+          ? kernelDefinition.bindings.map(binding => binding.name)
+          : [],
+        ...(options.metadata || {}),
+      };
+
+      return runtime.runStage(stageName, async stage => {
+        const encoder = device.createCommandEncoder({
+          label: options.encoderLabel || `${kernelDefinition.name}.encoder`,
+        });
+        const pass = encoder.beginComputePass({
+          label: options.passLabel || `${kernelDefinition.name}.compute-pass`,
+        });
+        pass.setPipeline(kernelDefinition.pipeline);
+        pass.setBindGroup(0, kernelDefinition.bindGroup);
+        pass.dispatchWorkgroups(...dispatch);
+        pass.end();
+        const commandBuffer = encoder.finish();
+        if (options.submit !== false) {
+          queue.submit([commandBuffer]);
+        }
+        if (options.yieldAfter === true) {
+          await stage.yieldToBrowser({
+            reason: options.yieldReason || `${kernelDefinition.name}.post-submit`,
+          });
+        }
+        return commandBuffer;
+      }, metadata);
     },
 
     yieldToBrowser(metadata = {}) {
