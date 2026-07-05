@@ -2647,6 +2647,7 @@ let modelSourceType = null; // 'glb', 'obj', 'pbr', 'demo'
 let currentSceneFile = null; // filename of last saved/loaded scene (for overwrite)
 let volumePrototype = null;
 let volumeBridge = null;
+let kaminosVolumeRouteInitPromise = null;
 let motionAgencyState = null;
 let motionDecisionState = null;
 let motionPhraseControlState = null;
@@ -12389,6 +12390,69 @@ async function ensureSharpBreathingRoomImageAssets() {
   return entries;
 }
 
+async function ensureKaminosVolumeRouteInitialized() {
+  if (volumePrototype) return volumePrototype;
+  kaminosVolumeRouteInitPromise ||= initKaminosVolumeRoute();
+  await kaminosVolumeRouteInitPromise;
+  return volumePrototype;
+}
+
+async function beginSharpBreathingRoomKilnFire({ profileId, source, pipelineId }) {
+  const previousState = volumePrototype?.debugState?.() || null;
+  const fireState = {
+    schema: 'kaminos.sharp-breathing-room.kiln-fire-state.v0',
+    phase: 'starting',
+    profileId,
+    pipelineId,
+    source: source?.source || null,
+    sourceLabel: source?.label || null,
+    startedAt: new Date().toISOString(),
+    activatedByRun: false,
+    previousActive: previousState?.active === true,
+    error: null,
+  };
+  window.__kaminosSharpBreathingRoomKilnFireState = fireState;
+  try {
+    await ensureKaminosVolumeRouteInitialized();
+    const wasActive = volumePrototype?.debugState?.().active === true;
+    applyTallPlumeOperatorPreset('pyro_material_bonfire_family_0702', { keepBudgetPreset: true });
+    updateVolumeControlLabels();
+    volumePrototype.setControls(readVolumeControls());
+    frameVolumeCamera();
+    await volumePrototype.setActive(true);
+    fireState.phase = 'burning';
+    fireState.activatedByRun = !wasActive;
+    fireState.previousActive = wasActive;
+    fireState.volumeDebugState = volumePrototype.debugState();
+    window.__kaminosSharpBreathingRoomKilnFireState = fireState;
+    refreshVolumeReadout();
+    return fireState;
+  } catch (err) {
+    fireState.phase = 'failed';
+    fireState.error = err?.message || String(err);
+    window.__kaminosSharpBreathingRoomKilnFireState = fireState;
+    setSharpBreathingRoomStatus(`The route is running, but the kiln fire could not start: ${fireState.error}`, 'error');
+    return fireState;
+  }
+}
+
+function endSharpBreathingRoomKilnFire(phase = 'complete') {
+  const fireState = window.__kaminosSharpBreathingRoomKilnFireState || null;
+  if (!fireState) return null;
+  fireState.phase = phase;
+  fireState.finishedAt = new Date().toISOString();
+  if (fireState.activatedByRun && volumePrototype) {
+    volumePrototype.setActive(false);
+    fireState.volumeReleased = true;
+  } else {
+    fireState.volumeReleased = false;
+  }
+  fireState.volumeDebugState = volumePrototype?.debugState?.() || null;
+  window.__kaminosSharpBreathingRoomKilnFireState = fireState;
+  refreshVolumeReadout();
+  return fireState;
+}
+
 function sharpBreathingRoomSelectedSource() {
   const manual = sharpBreathingRoomManualSource();
   if (manual) return manual;
@@ -16099,6 +16163,7 @@ async function runSharpBreathingRoomProfile(profileId) {
   sharpBreathingRoomRunningProfileId = profileId;
   renderSharpBreathingRoomHarness();
   setSharpBreathingRoomStatus(`SHARP is running the ${profileLabel.toLowerCase()} route on this image.`, 'running');
+  await beginSharpBreathingRoomKilnFire({ profileId, source, pipelineId });
   try {
     const run = await runSelectedPipeline({
       sourceOverride: source,
@@ -16144,6 +16209,7 @@ async function runSharpBreathingRoomProfile(profileId) {
     setSharpBreathingRoomStatus(`${profileLabel} failed before producing a splat. ${err.message || err}`, 'error');
     throw err;
   } finally {
+    endSharpBreathingRoomKilnFire('complete');
     sharpBreathingRoomRunningProfileId = null;
     renderSharpBreathingRoomHarness();
   }
@@ -20556,7 +20622,7 @@ initScene().then(() => {
       }
     }
   });
-  initKaminosVolumeRoute();
+  kaminosVolumeRouteInitPromise = initKaminosVolumeRoute();
   initKaminosMotionAgencyRoute();
   initWorldChambersRoute();
   initKaminosFingerJuiceHostRoute();
