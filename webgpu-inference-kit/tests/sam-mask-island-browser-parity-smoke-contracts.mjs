@@ -21,6 +21,7 @@ assert.match(routeSource, /debugReadback/, 'route runner must label raw readback
 
 assert.match(smokeHtml, /sam-mask-island-parity\.js/, 'smoke page must load the parity module');
 assert.match(smokeHtml, /sam-mask-parity-canvas/, 'smoke page must expose a visible mask parity canvas');
+assert.match(smokeHtml, /sam-source-image/, 'smoke page must expose the source image panel');
 
 assert.match(smokeJs, /navigator\.gpu/, 'browser smoke must require a real browser WebGPU adapter');
 assert.match(smokeJs, /requestAdapter/, 'browser smoke must request an effective adapter');
@@ -30,6 +31,9 @@ assert.match(smokeJs, /samMaskIslandParitySmokeState/, 'browser smoke must expos
 assert.match(smokeJs, /fullSam3BrowserExecution:\s*false/, 'browser smoke must preserve the bounded island claim');
 assert.match(smokeJs, /manifest\.staticWeights/, 'browser smoke must preserve synthetic static-weight identity');
 assert.doesNotMatch(smokeJs, /weightsHash:\s*embeddingTensor\.sha256/, 'browser smoke must not pretend the input embedding is a weights hash');
+assert.match(smokeJs, /sourceImage/, 'browser smoke must preserve source image identity');
+assert.match(smokeJs, /selectedMaskIndex/, 'browser smoke must render a selected reference/webgpu mask');
+assert.match(smokeJs, /drawVisualWitness/, 'browser smoke must draw source/reference/webgpu/diff witness panels');
 assert.match(smokeJs, /maskLogitsMaxAbsDiff/, 'browser smoke must report logits diff');
 assert.match(smokeJs, /binaryMismatchCount/, 'browser smoke must report binary mismatch count');
 
@@ -43,6 +47,8 @@ assert.match(witness, /requestedRouteId/, 'witness must preserve requested route
 assert.match(witness, /effectiveRouteId/, 'witness must preserve effective route identity');
 assert.match(witness, /backendIdentity/, 'witness must preserve browser backend identity');
 assert.match(witness, /tensorPacket/, 'witness must preserve tensor packet identity');
+assert.match(witness, /--packet-tool/, 'witness must allow a real boundary packet exporter');
+assert.match(witness, /sourceImage/, 'witness report must preserve source image identity');
 
 assert.equal(join(new URL('.', root).pathname, 'smokes').includes('webgpu-inference-kit'), true);
 

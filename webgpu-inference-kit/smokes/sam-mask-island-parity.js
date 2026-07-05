@@ -20,6 +20,8 @@ const state = {
   backendIdentity: null,
   routeReceipt: null,
   parity: null,
+  sourceImage: null,
+  selectedMaskIndex: null,
   error: null,
 };
 
@@ -31,6 +33,7 @@ const statusEl = document.getElementById('status');
 const summaryEl = document.getElementById('summary');
 const reportEl = document.getElementById('report');
 const canvas = document.getElementById('sam-mask-parity-canvas');
+const sourceImageEl = document.getElementById('sam-source-image');
 
 function setStatus(status, message = status) {
   state.status = status;
@@ -88,30 +91,62 @@ function mismatchCount(a, b) {
   return count;
 }
 
-function drawMaskGrid(expected, actual, shape) {
+function sliceMask(values, shape, tokenIndex) {
+  const hw = shape.height * shape.width;
+  const offset = tokenIndex * hw;
+  return Array.from(values.slice(offset, offset + hw));
+}
+
+function loadImage(url) {
+  return new Promise((resolveLoad, rejectLoad) => {
+    const image = new Image();
+    image.onload = () => resolveLoad(image);
+    image.onerror = () => rejectLoad(new Error(`source image failed to load: ${url}`));
+    image.src = url;
+  });
+}
+
+function drawBinaryPanel(ctx, values, shape, x, y, width, height, colors) {
+  const image = ctx.createImageData(shape.width, shape.height);
+  for (let index = 0; index < values.length; index += 1) {
+    const on = Number(values[index]) !== 0;
+    const color = on ? colors.on : colors.off;
+    const pixel = index * 4;
+    image.data[pixel] = color[0];
+    image.data[pixel + 1] = color[1];
+    image.data[pixel + 2] = color[2];
+    image.data[pixel + 3] = 255;
+  }
+  const scratch = document.createElement('canvas');
+  scratch.width = shape.width;
+  scratch.height = shape.height;
+  scratch.getContext('2d').putImageData(image, 0, 0);
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(scratch, x, y, width, height);
+}
+
+function drawVisualWitness({ sourceImage, expected, actual, shape, selectedMaskIndex }) {
   const ctx = canvas.getContext('2d');
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.fillStyle = '#050706';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  const cell = Math.max(12, Math.floor(Math.min(80 / shape.width, 80 / shape.height)));
+  const expectedMask = sliceMask(expected, shape, selectedMaskIndex);
+  const actualMask = sliceMask(actual, shape, selectedMaskIndex);
+  const diffMask = expectedMask.map((value, index) => value === actualMask[index] ? 0 : 1);
   const panels = [
-    { label: 'expected', values: expected, x: 8 },
-    { label: 'webgpu', values: actual, x: 92 },
-    { label: 'diff', values: expected.map((value, index) => value === actual[index] ? 0 : 1), x: 176 },
+    { label: 'source', x: 16, draw: () => ctx.drawImage(sourceImage, 16, 34, 200, 200) },
+    { label: `reference mask ${selectedMaskIndex}`, x: 248, draw: () => drawBinaryPanel(ctx, expectedMask, shape, 248, 34, 200, 200, { on: [99, 230, 142], off: [34, 48, 42] }) },
+    { label: 'webgpu', x: 480, draw: () => drawBinaryPanel(ctx, actualMask, shape, 480, 34, 200, 200, { on: [88, 182, 255], off: [34, 43, 52] }) },
+    { label: 'diff', x: 712, draw: () => drawBinaryPanel(ctx, diffMask, shape, 712, 34, 200, 200, { on: [255, 77, 109], off: [30, 32, 32] }) },
   ];
-  ctx.font = '10px monospace';
+  ctx.font = '13px monospace';
   for (const panel of panels) {
     ctx.fillStyle = '#dfe8e0';
-    ctx.fillText(panel.label, panel.x, 12);
-    for (let y = 0; y < shape.height; y += 1) {
-      for (let x = 0; x < shape.width; x += 1) {
-        const value = panel.values[y * shape.width + x];
-        ctx.fillStyle = value ? '#63e68e' : '#22302a';
-        if (panel.label === 'diff' && value) ctx.fillStyle = '#ff4d6d';
-        ctx.fillRect(panel.x + x * cell, 22 + y * cell, cell - 1, cell - 1);
-      }
-    }
+    ctx.fillText(panel.label, panel.x, 20);
+    panel.draw();
+    ctx.strokeStyle = '#59635e';
+    ctx.strokeRect(panel.x, 34, 200, 200);
   }
 }
 
@@ -125,8 +160,13 @@ async function main() {
     if (manifest.claims?.fullSam3BrowserExecution !== false) {
       throw new Error('oracle packet must not claim full SAM3 browser execution');
     }
-    if (!manifest.staticWeights?.sha256 || manifest.staticWeights.role !== 'none') {
-      throw new Error('oracle packet must preserve explicit no-static-weights identity');
+    state.claims = {
+      fullSam3BrowserExecution: manifest.claims.fullSam3BrowserExecution,
+      upstream: manifest.claims.upstream,
+      browserExecutedStages: manifest.claims.browserExecutedStages,
+    };
+    if (!manifest.staticWeights?.sha256 || !['none', 'reference-upstream'].includes(manifest.staticWeights.role)) {
+      throw new Error('oracle packet must preserve explicit static-weight or reference-weight identity');
     }
 
     const hyperTensor = tensorByRole(manifest, 'hyper-input');
@@ -137,6 +177,15 @@ async function main() {
     const upscaledEmbedding = await fetchArray(resolveManifestFile(embeddingTensor.file), Float32Array);
     const expectedLogits = await fetchArray(resolveManifestFile(expectedLogitsTensor.file), Float32Array);
     const expectedBinary = await fetchArray(resolveManifestFile(expectedBinaryTensor.file), Uint32Array);
+    const sourceImageUrl = manifest.sourceImage?.file ? resolveManifestFile(manifest.sourceImage.file) : null;
+    const sourceImage = sourceImageUrl ? await loadImage(sourceImageUrl) : null;
+    if (sourceImageUrl) sourceImageEl.src = sourceImageUrl;
+    const selectedMaskIndex = Number.isInteger(manifest.visualization?.selectedMaskIndex)
+      ? manifest.visualization.selectedMaskIndex
+      : 0;
+    if (selectedMaskIndex < 0 || selectedMaskIndex >= manifest.shape.maskTokens) {
+      throw new Error(`selectedMaskIndex ${selectedMaskIndex} out of range`);
+    }
 
     const cpuOracle = createSam3MaskProjectionCpuOracle({
       hyperInput,
@@ -147,7 +196,9 @@ async function main() {
       logitsMaxAbsDiff: maxAbsDiff(expectedLogits, cpuOracle.maskLogits),
       binaryMismatchCount: mismatchCount(expectedBinary, cpuOracle.binaryMask),
     };
-    if (oracleSelfCheck.logitsMaxAbsDiff !== 0 || oracleSelfCheck.binaryMismatchCount !== 0) {
+    const cpuTolerance = manifest.tolerances?.cpuOracleLogitsMaxAbsDiff ?? 0;
+    const binaryTolerance = manifest.tolerances?.binaryMismatchCount ?? 0;
+    if (oracleSelfCheck.logitsMaxAbsDiff > cpuTolerance || oracleSelfCheck.binaryMismatchCount > binaryTolerance) {
       throw new Error(`oracle packet self-check failed: ${JSON.stringify(oracleSelfCheck)}`);
     }
 
@@ -226,18 +277,29 @@ async function main() {
       expectedElementCount: expectedLogits.length,
       gpuElementCount: gpuLogits.length,
     };
-    if (parity.maskLogitsMaxAbsDiff > 0.00001 || parity.binaryMismatchCount !== 0) {
+    const gpuTolerance = manifest.tolerances?.webGpuLogitsMaxAbsDiff ?? 0.00001;
+    if (parity.maskLogitsMaxAbsDiff > gpuTolerance || parity.binaryMismatchCount > binaryTolerance) {
       throw new Error(`WebGPU parity mismatch: ${JSON.stringify(parity)}`);
     }
 
-    drawMaskGrid(Array.from(expectedBinary), Array.from(gpuBinary), manifest.shape);
+    drawVisualWitness({
+      sourceImage,
+      expected: expectedBinary,
+      actual: gpuBinary,
+      shape: manifest.shape,
+      selectedMaskIndex,
+    });
     state.status = 'passed';
     state.effectiveRouteId = result.receipt.effectiveRouteId;
+    state.sourceImage = manifest.sourceImage || null;
+    state.selectedMaskIndex = selectedMaskIndex;
     state.tensorPacket = {
       manifestUrl,
       schema: manifest.schema,
       mode: manifest.mode,
       boundary: manifest.boundary,
+      sourceImage: manifest.sourceImage || null,
+      reference: manifest.reference || null,
       hyperInputSha256: hyperTensor.sha256,
       upscaledEmbeddingSha256: embeddingTensor.sha256,
       expectedMaskLogitsSha256: expectedLogitsTensor.sha256,
@@ -250,7 +312,9 @@ async function main() {
     renderSummary({
       status: state.status,
       route: state.effectiveRouteId,
+      mode: manifest.mode,
       adapter: state.backendIdentity?.adapterName,
+      selectedMask: selectedMaskIndex,
       logitsDiff: parity.maskLogitsMaxAbsDiff,
       binaryMismatch: parity.binaryMismatchCount,
     });

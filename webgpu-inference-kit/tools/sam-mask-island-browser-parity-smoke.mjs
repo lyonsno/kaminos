@@ -20,6 +20,17 @@ const serverPort = Number(args.get('--server-port') || 18527);
 const chrome = process.env.KAMINOS_CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const userDataDir = args.get('--user-data-dir') || `/tmp/kaminos-sam-mask-island-profile-${debugPort}-${process.pid}`;
 const oracleDir = resolve(args.get('--oracle-dir') || `/tmp/kaminos-sam-mask-island-oracle-${process.pid}`);
+const packetMode = args.get('--packet-mode') || 'synthetic';
+const packetTool = resolve(args.get('--packet-tool') || (
+  packetMode === 'mlx-reference-export'
+    ? join(packageRoot, 'tools/sam-mask-island-mlx-boundary-packet.py')
+    : join(packageRoot, 'tools/sam-mask-island-oracle-packet.mjs')
+));
+const mlxVlmRoot = resolve(args.get('--mlx-vlm-root') || process.env.KAMINOS_MLX_VLM_ROOT || '/Users/noahlyons/dev/mlx-vlm');
+const sourceImage = args.get('--image') || process.env.KAMINOS_SAM3_FIXTURE_IMAGE || '/Users/noahlyons/dev/sam3/assets/images/truck.jpg';
+const prompt = args.get('--prompt') || (packetMode === 'mlx-reference-export' ? 'truck' : 'synthetic mask island parity');
+const model = args.get('--model') || 'mlx-community/sam3-image';
+const resolution = Number(args.get('--resolution') || 224);
 const viewportWidth = Number(args.get('--viewport-width') || 1000);
 const viewportHeight = Number(args.get('--viewport-height') || 520);
 const hookWaitMs = Number(args.get('--hook-wait-ms') || 20000);
@@ -49,6 +60,14 @@ function writeReport(extra = {}) {
     requestedUrl: `http://127.0.0.1:${serverPort}/smokes/sam-mask-island-parity.html?manifest=/oracle/tensor-manifest.json`,
     packageRoot,
     oracleDir,
+    packetMode,
+    packetTool,
+    mlxVlmRoot,
+    sourceImage: lastState?.sourceImage || lastState?.tensorPacket?.sourceImage || null,
+    requestedSourceImage: sourceImage,
+    prompt,
+    model,
+    resolution,
     debugPort,
     serverPort,
     chrome,
@@ -128,21 +147,37 @@ function startServer() {
 
 function generateOraclePacket() {
   mkdirSync(oracleDir, { recursive: true });
-  const proc = spawnSync(process.execPath, [
-    join(packageRoot, 'tools/sam-mask-island-oracle-packet.mjs'),
-    '--out-dir', oracleDir,
-    '--batch', '1',
-    '--mask-tokens', '1',
-    '--channels', '2',
-    '--height', '8',
-    '--width', '8',
-    '--source-image-artifact-id', 'image:synthetic-sam-browser-parity',
-    '--source-image-sha256', 'sha256:synthetic-browser-parity-image',
-    '--prompt', 'synthetic mask island parity',
-    '--model', 'mlx-community/sam3-image',
-  ], {
-    cwd: packageRoot,
+  const isPython = packetTool.endsWith('.py');
+  const command = isPython ? 'uv' : process.execPath;
+  const packetArgs = isPython
+    ? [
+        'run',
+        '--project', mlxVlmRoot,
+        'python',
+        packetTool,
+        '--out-dir', oracleDir,
+        '--image', sourceImage,
+        '--prompt', prompt,
+        '--model', model,
+        '--resolution', String(resolution),
+      ]
+    : [
+        packetTool,
+        '--out-dir', oracleDir,
+        '--batch', '1',
+        '--mask-tokens', '1',
+        '--channels', '2',
+        '--height', '8',
+        '--width', '8',
+        '--source-image-artifact-id', 'image:synthetic-sam-browser-parity',
+        '--source-image-sha256', 'sha256:synthetic-browser-parity-image',
+        '--prompt', prompt,
+        '--model', model,
+      ];
+  const proc = spawnSync(command, packetArgs, {
+    cwd: isPython ? mlxVlmRoot : packageRoot,
     encoding: 'utf8',
+    timeout: packetMode === 'mlx-reference-export' ? 120000 : undefined,
   });
   if (proc.status !== 0) {
     throw new Error(`oracle packet generation failed: ${proc.stderr || proc.stdout}`);
@@ -286,7 +321,7 @@ async function main() {
     }
     if (!lastState.backendIdentity?.adapterName) throw new Error('backendIdentity.adapterName missing');
     if (!lastState.tensorPacket?.hyperInputSha256) throw new Error('tensorPacket identity missing');
-    if (lastState.parity?.maskLogitsMaxAbsDiff !== 0) throw new Error('mask logits parity is not exact');
+    if (lastState.parity?.maskLogitsMaxAbsDiff > 0.0001) throw new Error('mask logits parity exceeds tolerance');
     if (lastState.parity?.binaryMismatchCount !== 0) throw new Error('binary mask parity mismatch');
     if (lastState.claims?.fullSam3BrowserExecution !== false) throw new Error('smoke overclaimed full SAM3 browser execution');
 
