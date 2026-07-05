@@ -71,6 +71,21 @@ assert.match(
   'volume runtime frame texture must be sampleable by the residual postprocess',
 );
 assert.match(
+  core,
+  /volumeResidualCost/,
+  'browser residual route must expose per-frame residual cost telemetry in public state',
+);
+assert.match(
+  core,
+  /cpu-encode-proxy-not-gpu-exclusive/,
+  'browser residual cost telemetry must be labeled as a CPU encode proxy, not isolated GPU timing',
+);
+assert.match(
+  core,
+  /estimatedKernelSamplesPerFrame/,
+  'browser residual cost telemetry must report deterministic per-frame residual sampling work',
+);
+assert.match(
   html,
   /id="volume-render-scale"[^>]*step="any"/,
   'volume render scale route/control must not snap arbitrary low render scales such as 0.18 to coarse UI increments',

@@ -4717,6 +4717,31 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     volumeResidualModelSchema: null,
     volumeResidualModelError: null,
     volumeResidualStrength: normalizeBrowserResidualStrength(controlsSnapshot.volumeResidualStrength),
+    volumeResidualCost: {
+      identity: 'browser-direct-residual-cost-v0',
+      applied: false,
+      evidenceSource: 'cpu-encode-proxy-not-gpu-exclusive',
+      disclaimer: 'CPU render-pass encode timing plus deterministic work counts; not isolated GPU execution time.',
+      outputPixels: 0,
+      renderWidth: 0,
+      renderHeight: 0,
+      sourcePassEncodeMs: null,
+      residualPassEncodeMs: null,
+      totalEncodeMs: null,
+      sourcePassEncodeP95Ms: null,
+      residualPassEncodeP95Ms: null,
+      totalEncodeP95Ms: null,
+      renderPassesAdded: 0,
+      estimatedTextureSamplesPerPixel: 0,
+      estimatedTextureSamplesPerFrame: 0,
+      estimatedKernelSamplesPerPixel: 0,
+      estimatedKernelSamplesPerFrame: 0,
+      estimatedMultiplyAddsPerPixel: 0,
+      estimatedMultiplyAddsPerFrame: 0,
+      modelArch: null,
+      modelUrl: null,
+      authority: 'off',
+    },
     volumeScene: normalizeVolumeScene(controlsSnapshot.volumeScene),
     frameCount: 0,
     simStepCount: 0,
@@ -5153,6 +5178,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     rafDelta: [],
     cpuFrame: [],
     queueDone: [],
+    residualSourceEncode: [],
+    residualEncode: [],
+    residualTotalEncode: [],
   };
   let lastRafNow = 0;
   let queueProbePending = false;
@@ -5203,6 +5231,50 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       queueProbePending: queueProbePending,
       queueSamples: timingSamples.queueDone.length,
       queueTimingAvailable: true,
+    };
+  }
+
+  function residualWorkEstimate(applied) {
+    const outputPixels = applied ? Math.max(0, Math.floor(state.width || 0) * Math.floor(state.height || 0)) : 0;
+    const textureSamplesPerPixel = applied ? 14 : 0;
+    const kernelSamplesPerPixel = applied ? 9 : 0;
+    const multiplyAddsPerPixel = applied ? 81 : 0;
+    return {
+      outputPixels,
+      renderWidth: applied ? state.width : 0,
+      renderHeight: applied ? state.height : 0,
+      renderPassesAdded: applied ? 2 : 0,
+      estimatedTextureSamplesPerPixel: textureSamplesPerPixel,
+      estimatedTextureSamplesPerFrame: outputPixels * textureSamplesPerPixel,
+      estimatedKernelSamplesPerPixel: kernelSamplesPerPixel,
+      estimatedKernelSamplesPerFrame: outputPixels * kernelSamplesPerPixel,
+      estimatedMultiplyAddsPerPixel: multiplyAddsPerPixel,
+      estimatedMultiplyAddsPerFrame: outputPixels * multiplyAddsPerPixel,
+    };
+  }
+
+  function recordBrowserResidualCost({ applied, sourcePassEncodeMs = null, residualPassEncodeMs = null } = {}) {
+    const totalEncodeMs = applied ? (sourcePassEncodeMs || 0) + (residualPassEncodeMs || 0) : null;
+    if (applied) {
+      pushTimingSample('residualSourceEncode', sourcePassEncodeMs, 120);
+      pushTimingSample('residualEncode', residualPassEncodeMs, 120);
+      pushTimingSample('residualTotalEncode', totalEncodeMs, 120);
+    }
+    state.volumeResidualCost = {
+      identity: 'browser-direct-residual-cost-v0',
+      applied: Boolean(applied),
+      evidenceSource: 'cpu-encode-proxy-not-gpu-exclusive',
+      disclaimer: 'CPU render-pass encode timing plus deterministic work counts; not isolated GPU execution time.',
+      ...residualWorkEstimate(Boolean(applied)),
+      sourcePassEncodeMs: applied ? sourcePassEncodeMs : null,
+      residualPassEncodeMs: applied ? residualPassEncodeMs : null,
+      totalEncodeMs,
+      sourcePassEncodeP95Ms: applied ? percentileTiming(timingSamples.residualSourceEncode, 0.95) : null,
+      residualPassEncodeP95Ms: applied ? percentileTiming(timingSamples.residualEncode, 0.95) : null,
+      totalEncodeP95Ms: applied ? percentileTiming(timingSamples.residualTotalEncode, 0.95) : null,
+      modelArch: applied ? browserResidualModel?.modelArch || null : null,
+      modelUrl: applied ? browserResidualModel?.url || state.volumeResidualModelUrl || null : null,
+      authority: applied ? state.volumeResidualAuthority : 'off',
     };
   }
 
@@ -7510,12 +7582,18 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       encodeBoundarySidecar(encoder);
       const currentTexture = context.getCurrentTexture();
       if (browserResidualCanApply()) {
+        const sourceEncodeStart = performance.now();
         ensureFrameTexture();
         encodeDraw(encoder, frameTexture.createView(), 'kaminos volume browser residual source pass', readbackPipeline);
-        encodeBrowserResidualPass(encoder, currentTexture.createView());
+        const sourcePassEncodeMs = performance.now() - sourceEncodeStart;
+        const residualEncodeStart = performance.now();
+        const residualApplied = encodeBrowserResidualPass(encoder, currentTexture.createView());
+        const residualPassEncodeMs = performance.now() - residualEncodeStart;
+        recordBrowserResidualCost({ applied: residualApplied, sourcePassEncodeMs, residualPassEncodeMs });
       } else {
         encodeDraw(encoder, currentTexture.createView(), 'kaminos volume canvas pass');
         state.volumeReconstructionStyle = state.renderScale < 0.999 ? 'linear-css-upscale' : 'native-resolution';
+        recordBrowserResidualCost({ applied: false });
       }
       encodeHistoryCopy(encoder, currentTexture);
       device.queue.submit([encoder.finish()]);
