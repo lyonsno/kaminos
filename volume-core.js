@@ -3965,12 +3965,12 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     clamp(0.70 - gpuWallWashCenter.y * 0.28, 0.18, 0.88)
   );
   let gpuWallWashWallCenter = vec2<f32>(
-    clamp(gpuWallWashCenterUv.x + 0.15 + gpuWallWashExtent * 0.08, 0.22, 0.88),
-    clamp(gpuWallWashCenterUv.y - 0.04, 0.16, 0.84)
+    clamp(gpuWallWashCenterUv.x + 0.28 + gpuWallWashExtent * 0.10, 0.30, 0.93),
+    clamp(gpuWallWashCenterUv.y - 0.02, 0.16, 0.86)
   );
-  let gpuWallWashWallDelta = (in.uv - gpuWallWashWallCenter) * vec2<f32>(0.52, 0.82);
+  let gpuWallWashWallDelta = (in.uv - gpuWallWashWallCenter) * vec2<f32>(0.30, 0.48);
   let gpuWallWashHotDelta = (in.uv - gpuWallWashCenterUv) * vec2<f32>(1.05, 1.32);
-  let gpuWallWashWallRadius = max(0.030, (0.28 + gpuWallWashExtent * 0.52) * brickWallGpuWashReach);
+  let gpuWallWashWallRadius = max(0.090, (0.62 + gpuWallWashExtent * 0.90) * brickWallGpuWashReach);
   let gpuWallWashCoreRadius = max(0.016, (0.070 + gpuWallWashExtent * 0.12) * brickWallGpuWashReach);
   let gpuWallWashWallLobe = exp(-dot(gpuWallWashWallDelta, gpuWallWashWallDelta) / gpuWallWashWallRadius);
   let gpuWallWashHotCore = exp(-dot(gpuWallWashHotDelta, gpuWallWashHotDelta) / gpuWallWashCoreRadius);
@@ -3978,17 +3978,21 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     + 0.08 * sin(in.uv.y * 154.0 + gpuWallWashWallCenter.x * 7.0)
     + 0.04 * sin(in.uv.x * 82.0 - in.uv.y * 19.0);
   let gpuWallWashFlicker = 0.86 + 0.14 * sin(u.cameraPos_time.w * 18.7 + gpuWallWashEnergy * 7.4 + gpuWallWashCenter.x * 2.1);
+  let gpuWallWashVisibleEnergy = smoothstep(0.002, 0.052, gpuWallWashEnergy);
+  let gpuWallWashRadiantEnergy = clamp(gpuWallWashEnergy * 18.0, 0.0, 1.8);
   let gpuWallWashSignal = clamp(
-    gpuWallWashEnergy
+    (gpuWallWashVisibleEnergy * 0.58 + gpuWallWashRadiantEnergy * 0.44)
       * brickWallGpuWashGain
-      * (gpuWallWashWallLobe * 0.82 + gpuWallWashHotCore * 0.30)
+      * (gpuWallWashWallLobe * 1.36 + gpuWallWashHotCore * 0.14)
       * gpuWallWashFlicker
       * clamp(gpuWallWashBrickModulation, 0.72, 1.05),
     0.0,
-    1.7
+    4.4
   );
-  let gpuWallWashColor = mix(vec3<f32>(1.0, 0.38, 0.10), vec3<f32>(1.0, 0.72, 0.30), clamp(gpuWallWashEnergy * 2.8, 0.0, 1.0));
-  color = color + gpuWallWashColor * gpuWallWashSignal * 0.22;
+  let gpuWallWashBackdropFloor = gpuWallWashVisibleEnergy * gpuWallWashWallLobe * (0.34 + brickWallGpuWashGain * 0.18);
+  let gpuWallWashBackdropStrength = 0.74;
+  let gpuWallWashColor = mix(vec3<f32>(1.0, 0.34, 0.075), vec3<f32>(1.0, 0.69, 0.26), clamp(gpuWallWashRadiantEnergy * 0.72, 0.0, 1.0));
+  color = color + gpuWallWashColor * (gpuWallWashSignal * gpuWallWashBackdropStrength + gpuWallWashBackdropFloor);
   color = mix(color, vec3<f32>(1.0, 0.22, 0.05), brickWallGpuWashDebug * smoothstep(0.005, 0.055, gpuWallWashEnergy) * 0.35);
   let exposed = vec3<f32>(1.0) - exp(-color * 0.96);
   var grade = exposed * (0.80 + 0.18 * vignette);

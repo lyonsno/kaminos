@@ -10281,6 +10281,7 @@ let routedVolumeGpuPressure = 0;
 let routedVolumeQualityReason = 'route-default';
 let routedVolumeFireLightProxy = 1;
 let routedVolumeFireLightGain = 1;
+let routedVolumeGpuWallWashReach = 1.15;
 const DEFAULT_BONFIRE_ABLATION_CONTROLS = {
   bonfireRecenter: 1,
   bonfireLateralDamping: 1,
@@ -15008,6 +15009,7 @@ function readVolumeControls() {
     volumeSceneContext: volumeSceneContext?.debugState?.()?.effectiveContext || normalizeVolumeSceneContext(new URLSearchParams(window.location.search).get('volume_scene_context')),
     fireLightProxy: routedVolumeFireLightProxy,
     fireLightGain: routedVolumeFireLightGain,
+    gpuWallWashReach: routedVolumeGpuWallWashReach,
     majorantCadence: routedVolumeMajorantCadence,
     simCadence: routedVolumeSimCadence,
     pressureIterations: pressureConfig.pressureIterations,
@@ -15886,6 +15888,10 @@ async function initKaminosVolumeRoute() {
   const routeFireLightGain = Number(params.get('volume_fire_light_gain'));
   if (params.has('volume_fire_light_gain') && Number.isFinite(routeFireLightGain)) {
     routedVolumeFireLightGain = clampVolumeValue(routeFireLightGain, 0, 4);
+  }
+  const routeGpuWallWashReach = Number(params.get('volume_gpu_wall_wash_reach'));
+  if (params.has('volume_gpu_wall_wash_reach') && Number.isFinite(routeGpuWallWashReach)) {
+    routedVolumeGpuWallWashReach = clampVolumeValue(routeGpuWallWashReach, 0.45, 2.6);
   }
   const routeResolution = parseInt(params.get('volume_resolution') || '', 10);
   if ([32, 48, 64, 96, 128, 160].includes(routeResolution)) {
