@@ -35,6 +35,19 @@ SPATIAL_BIN_HOLDOUT_SPLIT_IDENTITY = "holdout-spatial-bin-list-v0"
 SPATIAL_BIN_INCLUDE_FILTER_IDENTITY = "include-spatial-bin-list-v0"
 MODEL_IDENTITY = AFFINE_MODEL_IDENTITY
 BACKEND = "numpy"
+SUPPORT_OPPORTUNITY_IDENTITY = "support-opportunity-classification-v0"
+SUPPORT_TARGET_ABS_THRESHOLD = 1.0e-3
+SUPPORT_RESIDUAL_ABS_THRESHOLD = 1.0e-3
+SUPPORT_EMPTY_TRUTH_RMS = 1.0e-5
+SUPPORT_EMPTY_RESIDUAL_RMS = 5.0e-3
+SUPPORT_SUPPRESSION_RESIDUAL_RMS = 2.0e-2
+SUPPORT_TINY_LINEAR_RMSE = 1.0e-2
+SUPPORT_TINY_MODEL_RMSE = 1.5e-2
+SUPPORT_LINEAR_SOLVED_RELATIVE_RMSE = 6.0e-2
+SUPPORT_REAL_SIGNAL_TRUTH_RMS = 5.0e-2
+SUPPORT_REAL_SIGNAL_RESIDUAL_RMS = 2.0e-2
+SUPPORT_NONLINEAR_OPPORTUNITY_LINEAR_RELATIVE_RMSE = 8.0e-2
+SUPPORT_BAD_MODEL_RELATIVE_RMSE = 1.5e-1
 ROUTE_CONTROL_CHANNELS = [
     "density",
     "fire",
@@ -1551,6 +1564,144 @@ def metrics(prediction: np.ndarray, target: np.ndarray) -> dict[str, Any]:
     }
 
 
+def safe_ratio(numerator: float, denominator: float) -> float | None:
+    if denominator <= 0 or not math.isfinite(denominator):
+        return None
+    return float(numerator / denominator)
+
+
+def support_distribution(values: np.ndarray, threshold: float) -> dict[str, Any]:
+    values64 = values.astype(np.float64)
+    absolute = np.abs(values64)
+    squared = values64 * values64
+    return {
+        "meanAbs": float(np.mean(absolute)),
+        "rms": float(np.sqrt(np.mean(squared))),
+        "maxAbs": float(np.max(absolute)) if absolute.size else 0.0,
+        "occupancyFraction": float(np.mean(absolute > threshold)) if absolute.size else 0.0,
+        "threshold": float(threshold),
+    }
+
+
+def opportunity_classification(
+    support: dict[str, Any],
+    model_metrics: dict[str, Any],
+    comparison_metrics: dict[str, Any] | None,
+) -> dict[str, Any]:
+    truth_rms = float(support["truthHighTarget"]["rms"])
+    residual_rms = float(support["truthResidual"]["rms"])
+    model_rmse = float(model_metrics["rmse"])
+    linear_rmse = float(comparison_metrics["rmse"]) if comparison_metrics is not None else None
+    improvement = None
+    if comparison_metrics is not None:
+        comparison_mse = float(comparison_metrics["mse"])
+        if comparison_mse > 0:
+            improvement = float((comparison_mse - float(model_metrics["mse"])) / comparison_mse)
+    model_relative = safe_ratio(model_rmse, truth_rms)
+    linear_relative = safe_ratio(linear_rmse, truth_rms) if linear_rmse is not None else None
+    residual_relative = safe_ratio(residual_rms, truth_rms)
+
+    if truth_rms < SUPPORT_EMPTY_TRUTH_RMS and residual_rms < SUPPORT_EMPTY_RESIDUAL_RMS:
+        opportunity_class = "support-empty"
+        reason = "high target and residual target are both effectively empty"
+    elif truth_rms < SUPPORT_EMPTY_TRUTH_RMS and residual_rms >= SUPPORT_SUPPRESSION_RESIDUAL_RMS:
+        if improvement is not None and improvement > 0:
+            opportunity_class = "suppression-nonlinear-win"
+            reason = "high target is empty but residual suppression is meaningful and nonlinear beats linear"
+        elif improvement is not None and improvement < 0:
+            opportunity_class = "suppression-model-miss"
+            reason = "high target is empty but residual suppression is meaningful and model loses to linear"
+        else:
+            opportunity_class = "suppression-signal-undefined"
+            reason = "high target is empty but residual suppression is meaningful; comparison is undefined"
+    elif linear_rmse is not None and linear_rmse < SUPPORT_TINY_LINEAR_RMSE and model_rmse < SUPPORT_TINY_MODEL_RMSE:
+        opportunity_class = "tiny-error-low-stakes"
+        reason = "both linear and model absolute errors are tiny"
+    elif linear_relative is not None and linear_relative < SUPPORT_LINEAR_SOLVED_RELATIVE_RMSE:
+        if improvement is not None and improvement < 0 and model_relative is not None and model_relative > SUPPORT_BAD_MODEL_RELATIVE_RMSE:
+            opportunity_class = "unstable-regression"
+            reason = "linear is already excellent but model adds meaningful relative error"
+        else:
+            opportunity_class = "linear-already-solved"
+            reason = "linear baseline error is small relative to target energy"
+    elif improvement is not None and improvement > 0:
+        if (
+            linear_relative is not None
+            and linear_relative >= SUPPORT_NONLINEAR_OPPORTUNITY_LINEAR_RELATIVE_RMSE
+            and residual_rms >= SUPPORT_REAL_SIGNAL_RESIDUAL_RMS
+        ):
+            opportunity_class = "nonlinear-win"
+            reason = "linear leaves meaningful error and nonlinear model improves it"
+        else:
+            opportunity_class = "low-stakes-win"
+            reason = "model beats linear, but linear error or residual opportunity is small"
+    elif improvement is not None and improvement < 0:
+        if truth_rms >= SUPPORT_REAL_SIGNAL_TRUTH_RMS and residual_rms >= SUPPORT_REAL_SIGNAL_RESIDUAL_RMS:
+            opportunity_class = "model-miss-on-real-signal"
+            reason = "model loses on a target/residual slice with meaningful energy"
+        else:
+            opportunity_class = "tiny-error-low-stakes"
+            reason = "model loses, but target or residual energy is low"
+    else:
+        opportunity_class = "undefined-comparison"
+        reason = "linear comparison is undefined; inspect support and absolute errors"
+
+    return {
+        "identity": SUPPORT_OPPORTUNITY_IDENTITY,
+        "class": opportunity_class,
+        "reason": reason,
+        "modelRmseOverTruthRms": model_relative,
+        "linearRmseOverTruthRms": linear_relative,
+        "residualRmsOverTruthRms": residual_relative,
+        "improvementVsLinearContext": improvement,
+    }
+
+
+def support_opportunity_report(
+    low: np.ndarray,
+    high: np.ndarray,
+    model_prediction: np.ndarray,
+    model_metrics: dict[str, Any],
+    comparison_metrics: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    low64 = low.astype(np.float64)
+    high64 = high.astype(np.float64)
+    model64 = model_prediction.astype(np.float64)
+    truth_residual = high64 - low64
+    model_error = model64 - high64
+    support = {
+        "identity": SUPPORT_OPPORTUNITY_IDENTITY,
+        "thresholds": {
+            "targetAbs": SUPPORT_TARGET_ABS_THRESHOLD,
+            "residualAbs": SUPPORT_RESIDUAL_ABS_THRESHOLD,
+            "emptyTruthRms": SUPPORT_EMPTY_TRUTH_RMS,
+            "emptyResidualRms": SUPPORT_EMPTY_RESIDUAL_RMS,
+            "suppressionResidualRms": SUPPORT_SUPPRESSION_RESIDUAL_RMS,
+            "tinyLinearRmse": SUPPORT_TINY_LINEAR_RMSE,
+            "tinyModelRmse": SUPPORT_TINY_MODEL_RMSE,
+            "linearSolvedRelativeRmse": SUPPORT_LINEAR_SOLVED_RELATIVE_RMSE,
+            "realSignalTruthRms": SUPPORT_REAL_SIGNAL_TRUTH_RMS,
+            "realSignalResidualRms": SUPPORT_REAL_SIGNAL_RESIDUAL_RMS,
+            "nonlinearOpportunityLinearRelativeRmse": SUPPORT_NONLINEAR_OPPORTUNITY_LINEAR_RELATIVE_RMSE,
+            "badModelRelativeRmse": SUPPORT_BAD_MODEL_RELATIVE_RMSE,
+        },
+        "truthHighTarget": support_distribution(high64, SUPPORT_TARGET_ABS_THRESHOLD),
+        "lowTarget": support_distribution(low64, SUPPORT_TARGET_ABS_THRESHOLD),
+        "truthResidual": support_distribution(truth_residual, SUPPORT_RESIDUAL_ABS_THRESHOLD),
+        "modelError": support_distribution(model_error, SUPPORT_TARGET_ABS_THRESHOLD),
+        "comparisonBaseline": None if comparison_metrics is None else {
+            "identity": "linear-context-baseline-v0",
+            "mse": comparison_metrics.get("mse"),
+            "mae": comparison_metrics.get("mae"),
+            "rmse": comparison_metrics.get("rmse"),
+        },
+    }
+    support["truthOccupancyFraction"] = support["truthHighTarget"]["occupancyFraction"]
+    support["residualOccupancyFraction"] = support["truthResidual"]["occupancyFraction"]
+    support["opportunity"] = opportunity_classification(support, model_metrics, comparison_metrics)
+    return support
+
+
 def improvement_vs_identity(model_metrics: dict[str, Any], identity_metrics: dict[str, Any]) -> float | None:
     identity_mse = float(identity_metrics["mse"])
     if identity_mse <= 0:
@@ -1572,6 +1723,7 @@ def split_report(
     mean_residual_prediction = low.astype(np.float64) + mean_residual.reshape(1, -1)
     model_metrics = metrics(model_prediction, high)
     mean_residual_metrics = metrics(mean_residual_prediction, high)
+    support_opportunity = support_opportunity_report(low, high, model_prediction, model_metrics)
     report = {
         "split": name,
         "samples": int(low.shape[0]),
@@ -1580,6 +1732,7 @@ def split_report(
         "meanHighBaseline": metrics(mean_high_prediction, high),
         "meanResidualBaseline": mean_residual_metrics,
         "model": model_metrics,
+        "supportOpportunity": support_opportunity,
         "improvementVsIdentity": improvement_vs_identity(model_metrics, identity),
         "meanResidualImprovementVsIdentity": improvement_vs_identity(mean_residual_metrics, identity),
     }
@@ -1600,6 +1753,7 @@ def split_report(
             report[comparison_name]["linearContextBaseline"] = comparison_metrics
             report[comparison_name]["modelMseDeltaVsLinearContext"] = model_mse - comparison_mse
             report[comparison_name]["improvementVsLinearContext"] = report[comparison_name]["improvement"]
+            report["supportOpportunity"] = support_opportunity_report(low, high, model_prediction, model_metrics, comparison_metrics)
     return report
 
 

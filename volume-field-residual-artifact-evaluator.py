@@ -21,6 +21,9 @@ APPLICATION_ARTIFACT_SCHEMA = "kaminos.volume.field-residual-application-artifac
 APPLICATION_ARTIFACT_IDENTITY = "offline-test-tile-target-residual-application-v0"
 COMPARISON_AUTHORITY = "offline-heldout-field-artifact-comparison-not-live-renderer-state"
 BACKEND = "numpy"
+SUPPORT_OPPORTUNITY_IDENTITY = "artifact-support-opportunity-summary-v0"
+SUPPORT_TARGET_ABS_THRESHOLD = 1.0e-3
+SUPPORT_RESIDUAL_ABS_THRESHOLD = 1.0e-3
 PAYLOAD_KEYS = [
     "lowTarget",
     "predictedHighTarget",
@@ -182,6 +185,42 @@ def mse_mae_max(error: np.ndarray) -> dict[str, float]:
     }
 
 
+def support_distribution(values: np.ndarray, threshold: float) -> dict[str, float]:
+    values64 = values.astype(np.float64)
+    absolute = np.abs(values64)
+    squared = values64 * values64
+    return {
+        "meanAbs": float(np.mean(absolute)),
+        "rms": float(np.sqrt(np.mean(squared))),
+        "maxAbs": float(np.max(absolute)) if absolute.size else 0.0,
+        "occupancyFraction": float(np.mean(absolute > threshold)) if absolute.size else 0.0,
+        "threshold": float(threshold),
+    }
+
+
+def support_opportunity_summary(
+    low_values: np.ndarray,
+    truth_values: np.ndarray,
+    residual_values: np.ndarray,
+    model_errors: np.ndarray,
+) -> dict[str, Any]:
+    summary = {
+        "identity": SUPPORT_OPPORTUNITY_IDENTITY,
+        "thresholds": {
+            "targetAbs": SUPPORT_TARGET_ABS_THRESHOLD,
+            "residualAbs": SUPPORT_RESIDUAL_ABS_THRESHOLD,
+        },
+        "truthHighTarget": support_distribution(truth_values, SUPPORT_TARGET_ABS_THRESHOLD),
+        "lowTarget": support_distribution(low_values, SUPPORT_TARGET_ABS_THRESHOLD),
+        "truthResidual": support_distribution(truth_values - low_values, SUPPORT_RESIDUAL_ABS_THRESHOLD),
+        "modelResidual": support_distribution(residual_values, SUPPORT_RESIDUAL_ABS_THRESHOLD),
+        "modelError": support_distribution(model_errors, SUPPORT_TARGET_ABS_THRESHOLD),
+    }
+    summary["truthOccupancyFraction"] = summary["truthHighTarget"]["occupancyFraction"]
+    summary["residualOccupancyFraction"] = summary["truthResidual"]["occupancyFraction"]
+    return summary
+
+
 def improvement(baseline_mse: float, model_mse: float) -> float | None:
     if baseline_mse == 0:
         return None
@@ -256,6 +295,8 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
     payload_verification: list[dict[str, Any]] = []
     model_error_chunks = []
     identity_error_chunks = []
+    low_chunks = []
+    truth_chunks = []
     residual_chunks = []
     local_sum_squared = None
     local_sum_absolute = None
@@ -321,6 +362,8 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
         tile_rows.append(tile_row)
         model_error_chunks.append(tile_error.reshape(-1, channel_count))
         identity_error_chunks.append(identity_error.reshape(-1, channel_count))
+        low_chunks.append(low.reshape(-1, channel_count))
+        truth_chunks.append(truth.reshape(-1, channel_count))
         residual_chunks.append(residual.reshape(-1, channel_count))
 
         per_channel_squared += np.sum(tile_error.reshape(-1, channel_count) ** 2, axis=0)
@@ -341,6 +384,8 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
 
     model_errors = np.vstack(model_error_chunks)
     identity_errors = np.vstack(identity_error_chunks)
+    low_values = np.vstack(low_chunks)
+    truth_values = np.vstack(truth_chunks)
     residual_values = np.vstack(residual_chunks)
     model_mse = float(np.mean(model_errors ** 2))
     identity_mse = float(np.mean(identity_errors ** 2))
@@ -427,6 +472,7 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
             "targetChannels": channels,
             "model": mse_mae_max(model_errors),
             "identityBaseline": mse_mae_max(identity_errors),
+            "supportOpportunity": support_opportunity_summary(low_values, truth_values, residual_values, model_errors),
             "residualMagnitude": {
                 **mse_mae_max(residual_values),
                 "mse": residual_magnitude_mse,

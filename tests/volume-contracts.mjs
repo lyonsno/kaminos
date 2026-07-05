@@ -1657,6 +1657,11 @@ assert.match(fieldResidualProbe, /--hidden-width/, 'field residual probe exposes
 assert.match(fieldResidualProbe, /--epochs/, 'field residual probe exposes nonlinear training epochs as an explicit run control');
 assert.match(fieldResidualProbe, /--learning-rate/, 'field residual probe exposes nonlinear learning rate as an explicit run control');
 assert.match(fieldResidualProbe, /linearContextComparison/, 'field residual probe compares nonlinear performance against the linear context model');
+assert.match(fieldResidualProbe, /supportOpportunity/, 'field residual probe reports support/opportunity metrics alongside residual error metrics');
+assert.match(fieldResidualProbe, /truthOccupancyFraction/, 'field residual probe reports target occupancy so sparse rows do not masquerade as model verdicts');
+assert.match(fieldResidualProbe, /residualOccupancyFraction/, 'field residual probe reports residual occupancy for high-minus-low support interpretation');
+assert.match(fieldResidualProbe, /suppression-nonlinear-win/, 'field residual probe distinguishes zero-high suppression wins from empty support');
+assert.match(fieldResidualProbe, /model-miss-on-real-signal/, 'field residual probe names real signal misses separately from tiny-error rows');
 assert.match(fieldResidualProbe, /--independent-target-heads/, 'field residual probe can diagnose multi-target interference with independent nonlinear target heads');
 assert.match(fieldResidualProbe, /independentTargetHeads/, 'field residual probe reports independent target-head diagnostics when enabled');
 assert.match(fieldResidualProbe, /--holdout-route-variant/, 'field residual probe can hold out a named route variant instead of only random tile pairs');
@@ -1703,6 +1708,9 @@ assert.match(fieldResidualArtifactEvaluator, /verify_payload_descriptor/, 'field
 assert.match(fieldResidualArtifactEvaluator, /perChannelMetrics/, 'field residual artifact evaluator reports per-channel held-out field error metrics');
 assert.match(fieldResidualArtifactEvaluator, /routeReplayMetrics/, 'field residual artifact evaluator groups metrics by route and replay identity for comparison consumers');
 assert.match(fieldResidualArtifactEvaluator, /spatialErrorProfile/, 'field residual artifact evaluator emits spatial error profiles for stitched/offline field inspection');
+assert.match(fieldResidualArtifactEvaluator, /supportOpportunity/, 'field residual artifact evaluator reports target/residual support opportunity from written payloads');
+assert.match(fieldResidualArtifactEvaluator, /truthOccupancyFraction/, 'field residual artifact evaluator reports target occupancy from artifact payloads');
+assert.match(fieldResidualArtifactEvaluator, /residualOccupancyFraction/, 'field residual artifact evaluator reports residual occupancy from artifact payloads');
 assert.match(fieldResidualArtifactEvaluator, /comparisonAuthority/, 'field residual artifact evaluator labels outputs as offline field comparison evidence instead of live renderer state');
 assert.match(fieldResidualArtifactEvaluator, /failurePhase/, 'field residual artifact evaluator writes failure-phase reports for corrupt or incomplete artifacts');
 
