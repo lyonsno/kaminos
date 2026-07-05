@@ -32,6 +32,7 @@ NORMALIZED_CELL_SPATIAL_CONDITIONING_IDENTITY = "normalized-cell-spatial-conditi
 RANDOM_TILE_PAIR_SPLIT_IDENTITY = "random-tile-pair-v0"
 REPLAY_BALANCED_TILE_PAIR_SPLIT_IDENTITY = "replay-balanced-tile-pair-v0"
 SPATIAL_BIN_HOLDOUT_SPLIT_IDENTITY = "holdout-spatial-bin-list-v0"
+SPATIAL_BIN_INCLUDE_FILTER_IDENTITY = "include-spatial-bin-list-v0"
 MODEL_IDENTITY = AFFINE_MODEL_IDENTITY
 BACKEND = "numpy"
 ROUTE_CONTROL_CHANNELS = [
@@ -220,6 +221,11 @@ def parse_args() -> argparse.Namespace:
         help="Comma-separated replayStateIdentity list to include before train/test splitting; excluded replay states remain reported.",
     )
     parser.add_argument(
+        "--include-spatial-bin-list",
+        default=None,
+        help="Comma-separated spatialBinId list to include before train/test splitting for per-region bake diagnostics; excluded bins remain reported.",
+    )
+    parser.add_argument(
         "--route-conditioning",
         choices=[NO_ROUTE_CONDITIONING_IDENTITY, ROUTE_CONTROLS_CONDITIONING_IDENTITY, ROUTE_CONTROLS_REPLAY_CONDITIONING_IDENTITY],
         default=NO_ROUTE_CONDITIONING_IDENTITY,
@@ -341,6 +347,7 @@ def base_report(args: argparse.Namespace) -> dict[str, Any]:
             "holdoutReplayState": args.holdout_replay_state,
             "holdoutSpatialBinList": args.holdout_spatial_bin_list,
             "includeReplayStateList": args.include_replay_state_list,
+            "includeSpatialBinList": args.include_spatial_bin_list,
             "routeConditioning": args.route_conditioning,
             "spatialConditioning": args.spatial_conditioning,
             "targetChannelList": args.target_channel_list,
@@ -478,6 +485,10 @@ def parse_holdout_route_variant_list(raw_value: str | None) -> list[str]:
 
 
 def parse_holdout_spatial_bin_list(raw_value: str | None) -> list[str]:
+    return parse_csv_unique(raw_value)
+
+
+def parse_include_spatial_bin_list(raw_value: str | None) -> list[str]:
     return parse_csv_unique(raw_value)
 
 
@@ -695,6 +706,93 @@ def candidate_matches(dataset: dict[str, Any], manifest_path: Path, args: argpar
                 "highEnergySum": match.get("highEnergySum"),
             })
     return usable, discarded
+
+
+def filter_matches_by_spatial_bin(matches: list[dict[str, Any]], args: argparse.Namespace) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    include_spatial_bins = parse_include_spatial_bin_list(args.include_spatial_bin_list)
+    available_counts: dict[str, int] = {}
+    ambiguous_matches: list[dict[str, Any]] = []
+    for index, match in enumerate(matches):
+        low_bin = match.get("lowSpatialBinId")
+        high_bin = match.get("highSpatialBinId")
+        if low_bin != high_bin:
+            ambiguous_matches.append({
+                "index": index,
+                "pairId": match.get("pairId"),
+                "matchId": match.get("matchId"),
+                "lowSpatialBinId": low_bin,
+                "highSpatialBinId": high_bin,
+            })
+            continue
+        spatial_bin = str(low_bin or "unknown-spatial-bin")
+        available_counts[spatial_bin] = available_counts.get(spatial_bin, 0) + 1
+    if ambiguous_matches:
+        raise ProbeFailure(
+            "spatial-bin-filter",
+            "spatial-bin include filter requires matches with identical low/high spatial bins",
+            {
+                "filterIdentity": SPATIAL_BIN_INCLUDE_FILTER_IDENTITY,
+                "requestedSpatialBinIds": include_spatial_bins,
+                "ambiguousMatches": ambiguous_matches,
+            },
+        )
+    if not include_spatial_bins:
+        return matches, {
+            "identity": "none",
+            "requestedSpatialBinIds": [],
+            "includedSpatialBinIds": sorted(available_counts.keys()),
+            "excludedSpatialBinIds": [],
+            "availableSpatialBinCounts": dict(sorted(available_counts.items())),
+            "includedSpatialBinCounts": dict(sorted(available_counts.items())),
+            "excludedSpatialBinCounts": {},
+            "limitation": "No spatial-bin include filter was requested.",
+        }
+    include_set = set(include_spatial_bins)
+    unknown = [value for value in include_spatial_bins if value not in available_counts]
+    if unknown:
+        raise ProbeFailure(
+            "spatial-bin-filter",
+            "requested spatial-bin include filter names bins that are absent from usable matches",
+            {
+                "filterIdentity": SPATIAL_BIN_INCLUDE_FILTER_IDENTITY,
+                "requestedSpatialBinIds": include_spatial_bins,
+                "missingSpatialBinIds": unknown,
+                "availableSpatialBinIds": sorted(available_counts.keys()),
+                "availableSpatialBinCounts": dict(sorted(available_counts.items())),
+            },
+        )
+    filtered = [match for match in matches if str(match.get("lowSpatialBinId") or "unknown-spatial-bin") in include_set]
+    if len(filtered) < 2:
+        raise ProbeFailure(
+            "spatial-bin-filter",
+            "spatial-bin include filter left fewer than two usable tile pairs",
+            {
+                "filterIdentity": SPATIAL_BIN_INCLUDE_FILTER_IDENTITY,
+                "requestedSpatialBinIds": include_spatial_bins,
+                "usableTilePairsBeforeSpatialBinFilter": len(matches),
+                "usableTilePairsAfterSpatialBinFilter": len(filtered),
+                "availableSpatialBinCounts": dict(sorted(available_counts.items())),
+            },
+        )
+    included_counts: dict[str, int] = {}
+    excluded_counts: dict[str, int] = {}
+    for spatial_bin, count in available_counts.items():
+        if spatial_bin in include_set:
+            included_counts[spatial_bin] = count
+        else:
+            excluded_counts[spatial_bin] = count
+    return filtered, {
+        "identity": SPATIAL_BIN_INCLUDE_FILTER_IDENTITY,
+        "requestedSpatialBinIds": include_spatial_bins,
+        "includedSpatialBinIds": [value for value in include_spatial_bins if value in included_counts],
+        "excludedSpatialBinIds": sorted(excluded_counts.keys()),
+        "availableSpatialBinCounts": dict(sorted(available_counts.items())),
+        "includedSpatialBinCounts": dict(sorted(included_counts.items())),
+        "excludedSpatialBinCounts": dict(sorted(excluded_counts.items())),
+        "usableTilePairsBeforeSpatialBinFilter": len(matches),
+        "usableTilePairsAfterSpatialBinFilter": len(filtered),
+        "limitation": "This narrows a diagnostic probe over existing field-pair payloads; it does not mutate the source corpus or claim excluded regions are physically irrelevant.",
+    }
 
 
 def filter_matches_by_replay_state(matches: list[dict[str, Any]], args: argparse.Namespace) -> tuple[list[dict[str, Any]], dict[str, Any]]:
@@ -1630,6 +1728,7 @@ def write_residual_application_artifact(
             "splitStrategy": report.get("data", {}).get("splitStrategy"),
             "holdoutAxis": report.get("data", {}).get("holdoutAxis"),
             "holdoutValue": report.get("data", {}).get("holdoutValue"),
+            "spatialBinFilter": report.get("data", {}).get("spatialBinFilter"),
             "replayStateFilter": report.get("data", {}).get("replayStateFilter"),
         },
         "metrics": {
@@ -1663,6 +1762,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     if dataset.get("status") != "captured":
         raise ProbeFailure("manifest-validate", "source dataset is not captured", {"status": dataset.get("status")})
     usable_matches, discarded_matches = candidate_matches(dataset, manifest_path, args)
+    usable_matches_before_spatial_bin_filter = len(usable_matches)
+    usable_matches, spatial_bin_filter = filter_matches_by_spatial_bin(usable_matches, args)
     usable_matches_before_replay_state_filter = len(usable_matches)
     usable_matches, replay_state_filter = filter_matches_by_replay_state(usable_matches, args)
     train_indexes, test_indexes, split_strategy = split_matches(usable_matches, args)
@@ -1808,8 +1909,10 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         },
         "data": {
             **split_strategy,
+            "spatialBinFilter": spatial_bin_filter,
             "replayStateFilter": replay_state_filter,
-            "candidateMatchedTilePairs": usable_matches_before_replay_state_filter + len(discarded_matches),
+            "candidateMatchedTilePairs": usable_matches_before_spatial_bin_filter + len(discarded_matches),
+            "usableTilePairsBeforeSpatialBinFilter": usable_matches_before_spatial_bin_filter,
             "usableTilePairsBeforeReplayStateFilter": usable_matches_before_replay_state_filter,
             "usableTilePairs": len(usable_matches),
             "discardedTilePairs": len(discarded_matches),
