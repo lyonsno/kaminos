@@ -18,6 +18,7 @@ const calls = {
   bindGroups: [],
   computePipelines: [],
   commandEncoders: [],
+  copies: [],
   passes: [],
   dispatches: [],
   submissions: [],
@@ -31,6 +32,12 @@ const now = () => {
 
 const queue = {
   writeBuffer(buffer, offset, data, dataOffset, size) {
+    const view = data instanceof ArrayBuffer
+      ? new Uint8Array(data)
+      : new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+    const sourceOffset = dataOffset || 0;
+    const writeSize = size ?? (view.byteLength - sourceOffset);
+    buffer.data.set(view.subarray(sourceOffset, sourceOffset + writeSize), offset);
     calls.writes.push({
       label: buffer.descriptor.label,
       offset,
@@ -40,6 +47,14 @@ const queue = {
     });
   },
   submit(commandBuffers) {
+    for (const commandBuffer of commandBuffers) {
+      for (const copy of commandBuffer.copies || []) {
+        copy.destination.data.set(
+          copy.source.data.subarray(copy.sourceOffset, copy.sourceOffset + copy.size),
+          copy.destinationOffset,
+        );
+      }
+    }
     calls.submissions.push(commandBuffers);
   },
 };
@@ -52,12 +67,18 @@ const device = {
   },
   queue,
   createBuffer(descriptor) {
+    const data = new Uint8Array(descriptor.size);
     const buffer = {
       descriptor,
-      async mapAsync() {},
-      getMappedRange() {
+      data,
+      async mapAsync() {
+        if ((descriptor.usage & WEBGPU_BUFFER_USAGE.mapRead) === 0) {
+          throw new Error(`buffer ${descriptor.label} missing MAP_READ usage`);
+        }
+      },
+      getMappedRange(offset = 0, size = descriptor.size - offset) {
         calls.reads.push(descriptor.label);
-        return new Uint8Array(descriptor.size).buffer;
+        return data.slice(offset, offset + size).buffer;
       },
       unmap() {},
     };
@@ -86,7 +107,18 @@ const device = {
   },
   createCommandEncoder(descriptor) {
     calls.commandEncoders.push(descriptor);
+    const copies = [];
     return {
+      copyBufferToBuffer(source, sourceOffset, destination, destinationOffset, size) {
+        calls.copies.push({
+          sourceLabel: source.descriptor.label,
+          destinationLabel: destination.descriptor.label,
+          sourceOffset,
+          destinationOffset,
+          size,
+        });
+        copies.push({ source, sourceOffset, destination, destinationOffset, size });
+      },
       beginComputePass(passDescriptor) {
         calls.passes.push(passDescriptor);
         return {
@@ -105,7 +137,7 @@ const device = {
         };
       },
       finish() {
-        return { label: descriptor.label };
+        return { label: descriptor.label, copies };
       },
     };
   },
@@ -188,6 +220,7 @@ const outputMask = runtime.createTensor({
   dtype: 'f32',
   usage: WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copySrc,
 });
+new Float32Array(outputMask.buffer.data.buffer).set([0.125, 0.5, 0.875]);
 
 const kernel = runtime.defineComputeKernel({
   name: 'sam3.mask-attention',
@@ -214,6 +247,13 @@ await runtime.runKernel(kernel, {
 
 assert.deepEqual(calls.dispatches.at(-1), { x: 8, y: 8, z: 1 });
 assert.equal(calls.submissions.length, 1);
+
+const outputReadback = await runtime.readTensor(outputMask);
+assert.deepEqual(new Float32Array(outputReadback, 0, 3), new Float32Array([0.125, 0.5, 0.875]));
+assert.equal(calls.copies.at(-1).sourceLabel, 'sam3.output-mask');
+assert.equal(calls.copies.at(-1).destinationLabel, 'sam3.output-mask.readback');
+assert.equal(calls.reads.at(-1), 'sam3.output-mask.readback');
+assert.equal(calls.submissions.length, 2);
 
 const profile = runtime.finishProfile({
   evidence: { mode: 'live', source: 'runtime-primitives-contract' },

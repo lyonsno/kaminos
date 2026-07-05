@@ -14,6 +14,7 @@ import {
   finishStagedSubmitProfile,
 } from './staged-profile.js';
 import {
+  WEBGPU_BUFFER_USAGE,
   assertTensorDataByteLength,
   createGpuTensor,
   createUniformBuffer as createRuntimeUniformBuffer,
@@ -215,6 +216,47 @@ async function readMappedBuffer(buffer, options = {}) {
   return copy;
 }
 
+async function readBufferViaStaging(runtime, tensor, options = {}) {
+  const size = options.size ?? tensor.byteLength;
+  const sourceOffset = options.sourceOffset ?? options.offset ?? tensor.bufferOffset ?? 0;
+  if (!Number.isInteger(size) || size < 0) throw new Error('readTensor size must be a non-negative integer');
+  if (!Number.isInteger(sourceOffset) || sourceOffset < 0) {
+    throw new Error('readTensor sourceOffset must be a non-negative integer');
+  }
+  if (Number.isInteger(tensor.usage) && (tensor.usage & WEBGPU_BUFFER_USAGE.copySrc) === 0) {
+    throw new Error('readTensor requires tensor usage to include copySrc unless the tensor buffer is mapRead');
+  }
+  if (typeof runtime.device.createCommandEncoder !== 'function') {
+    throw new Error('device.createCommandEncoder must be available for tensor readback');
+  }
+  if (typeof runtime.queue.submit !== 'function') {
+    throw new Error('queue.submit must be available for tensor readback');
+  }
+
+  const staging = runtime.createBuffer({
+    label: options.stagingLabel || `${tensor.name || 'tensor'}.readback`,
+    size,
+    usage: WEBGPU_BUFFER_USAGE.mapRead | WEBGPU_BUFFER_USAGE.copyDst,
+  });
+  const encoder = runtime.device.createCommandEncoder({
+    label: options.encoderLabel || `${tensor.name || 'tensor'}.readback.encoder`,
+  });
+  if (typeof encoder.copyBufferToBuffer !== 'function') {
+    throw new Error('command encoder must support copyBufferToBuffer for tensor readback');
+  }
+  encoder.copyBufferToBuffer(tensor.buffer, sourceOffset, staging, 0, size);
+  const commandBuffer = encoder.finish();
+  runtime.queue.submit([commandBuffer]);
+  if (options.waitForSubmittedWorkDone === true && typeof runtime.queue.onSubmittedWorkDone === 'function') {
+    await runtime.queue.onSubmittedWorkDone();
+  }
+  return runtime.readBuffer(staging, {
+    mapMode: options.mapMode,
+    offset: 0,
+    size,
+  });
+}
+
 function createStageFacade(runtime, stageState) {
   return {
     getShaderModule: runtime.getShaderModule,
@@ -324,10 +366,13 @@ export async function createWebGpuInferenceRuntime(input = {}) {
     readTensor(tensor, options = {}) {
       if (!tensor || typeof tensor !== 'object') throw new Error('tensor must be an object');
       if (!tensor.buffer) throw new Error('tensor must expose buffer');
-      return runtime.readBuffer(tensor.buffer, {
-        size: tensor.byteLength,
-        ...options,
-      });
+      if (Number.isInteger(tensor.usage) && (tensor.usage & WEBGPU_BUFFER_USAGE.mapRead) !== 0) {
+        return runtime.readBuffer(tensor.buffer, {
+          size: tensor.byteLength,
+          ...options,
+        });
+      }
+      return readBufferViaStaging(runtime, tensor, options);
     },
 
     createUniformBuffer(uniformInput = {}) {
