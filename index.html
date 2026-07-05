@@ -16709,6 +16709,13 @@ function kaminosSplatAssetRouteLabel(path, fileName) {
   return greenroomHumanizeName(source, fileName || 'Splat asset');
 }
 
+function kaminosImageAssetRouteLabel(path, fileName) {
+  const parts = String(path || '').split('/').filter(Boolean);
+  const genericFile = /^(output|image|source|asset)\.(png|jpe?g|webp|avif)$/i.test(fileName || '');
+  const source = genericFile && parts.length > 1 ? parts[parts.length - 2] : (fileName || parts[parts.length - 1]);
+  return greenroomHumanizeName(source, fileName || 'Image asset');
+}
+
 function kaminosMeshAssetRouteFromSearch(params = new URLSearchParams(window.location.search)) {
   const requestedRoot = params.get('mesh_root');
   const requestedPath = params.get('mesh_path');
@@ -16773,6 +16780,40 @@ function kaminosSplatAssetRouteFromSearch(params = new URLSearchParams(window.lo
     effectiveUrl,
     fileName,
     label: kaminosSplatAssetRouteLabel(route.requestedPath, fileName),
+  };
+}
+
+function kaminosImageAssetRouteFromSearch(params = new URLSearchParams(window.location.search)) {
+  const requestedRoot = params.get('image_root');
+  const requestedPath = params.get('image_path');
+  const legacyImagePath = params.get('img_path') || (!requestedRoot ? requestedPath : null);
+  const imageUrl = params.get('image_url');
+  const imgUrl = params.get('img_url');
+  let route = null;
+  if (requestedRoot && requestedPath) {
+    route = {
+      requestedRoot,
+      requestedPath,
+      sourceParam: 'image_root/image_path',
+    };
+  } else {
+    route = kaminosApiReadRouteFromUrl(imageUrl) || kaminosApiReadRouteFromUrl(imgUrl);
+    if (!route && legacyImagePath) {
+      route = {
+        requestedRoot: params.get('img_root') || 'image-inbox',
+        requestedPath: legacyImagePath,
+        sourceParam: params.get('img_path') ? 'img_path' : 'image_path',
+      };
+    }
+  }
+  if (!route) return null;
+  const effectiveUrl = `/api/read?${new URLSearchParams({ root: route.requestedRoot, path: route.requestedPath }).toString()}`;
+  const fileName = route.requestedPath.split('/').pop() || 'image.png';
+  return {
+    ...route,
+    effectiveUrl,
+    fileName,
+    label: kaminosImageAssetRouteLabel(route.requestedPath, fileName),
   };
 }
 
@@ -16904,6 +16945,78 @@ async function loadKaminosSplatAssetRoute(route = kaminosSplatAssetRouteFromSear
     };
     console.error('Splat asset link load failed:', error);
     setInfo(`Splat asset link failed: ${kaminosAssetSmokeLinkState.error}`);
+    window._kaminosDirty?.();
+    return false;
+  }
+}
+
+async function loadKaminosImageAssetRoute(route = kaminosImageAssetRouteFromSearch()) {
+  if (!route) return false;
+  kaminosAssetSmokeLinkState = {
+    schema: 'kaminos.asset-smoke-link.v0',
+    assetType: 'image',
+    status: 'loading',
+    requestedRoot: route.requestedRoot,
+    requestedPath: route.requestedPath,
+    effectiveUrl: route.effectiveUrl,
+    fileName: route.fileName,
+    label: route.label,
+    registeredObjectId: null,
+    registeredAt: null,
+    error: null,
+  };
+  window._kaminosDirty?.();
+  setInfo(`Loading image asset: ${route.label}`);
+  try {
+    const format = route.fileName.split('.').pop()?.toLowerCase() || 'png';
+    const mesh = await showImagePlane(route.effectiveUrl, {
+      clear: true,
+      metadata: {
+        source: route.effectiveUrl,
+        type: 'image',
+        fileName: route.fileName,
+        label: route.label,
+        assetSmokeLink: {
+          schema: 'kaminos.asset-smoke-link.v0',
+          assetType: 'image',
+          requestedRoot: route.requestedRoot,
+          requestedPath: route.requestedPath,
+          effectiveUrl: route.effectiveUrl,
+          sourceParam: route.sourceParam,
+        },
+        image: {
+          schema: 'kaminos.image-plane.v0',
+          assetSource: route.effectiveUrl,
+          fileName: route.fileName,
+          format,
+          root_id: route.requestedRoot,
+          path: route.requestedPath,
+          provenance: provenanceForSource(route.effectiveUrl),
+        },
+      },
+    });
+    const registered = mesh?.userData?.kaminosSceneObject || null;
+    if (!registered?.id) {
+      throw new Error('Image loaded but no scene object registration was recorded');
+    }
+    kaminosAssetSmokeLinkState = {
+      ...kaminosAssetSmokeLinkState,
+      status: 'loaded',
+      registeredObjectId: registered.id,
+      registeredAt: new Date().toISOString(),
+      error: null,
+    };
+    setInfo(`Image asset loaded: ${route.label}`);
+    window._kaminosDirty?.();
+    return true;
+  } catch (error) {
+    kaminosAssetSmokeLinkState = {
+      ...kaminosAssetSmokeLinkState,
+      status: 'failed',
+      error: error?.message || String(error),
+    };
+    console.error('Image asset link load failed:', error);
+    setInfo(`Image asset link failed: ${kaminosAssetSmokeLinkState.error}`);
     window._kaminosDirty?.();
     return false;
   }
@@ -18758,6 +18871,11 @@ initScene().then(() => {
     const splatRoute = kaminosSplatAssetRouteFromSearch(params);
     if (splatRoute) {
       await loadKaminosSplatAssetRoute(splatRoute);
+      return;
+    }
+    const imageRoute = kaminosImageAssetRouteFromSearch(params);
+    if (imageRoute) {
+      await loadKaminosImageAssetRoute(imageRoute);
       return;
     }
     const loadSplat = params.get('load');
