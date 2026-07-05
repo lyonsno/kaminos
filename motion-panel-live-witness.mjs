@@ -39,6 +39,7 @@ const takeSource = String(args.get('--take-source') || 'generate');
 const durableTakeId = String(args.get('--durable-take-id') || '');
 const clipletPlayback = String(args.get('--cliplet-playback') || 'full');
 const clipletInterrupt = String(args.get('--cliplet-interrupt') || 'off');
+const routeMode = String(args.get('--route-mode') || '');
 const tileWidth = positiveInt(args.get('--tile-width'), 560, '--tile-width');
 const columns = positiveInt(args.get('--columns'), frameTotal, '--columns');
 const exportCurrentView = args.has('--export-current-view');
@@ -306,6 +307,9 @@ async function configureMotionPanel(ws) {
     setSelectValue('motion-panel-source-forward-axis', ${JSON.stringify(sourceForwardAxis)});
     requireEl('motion-panel-source-opacity').value = ${JSON.stringify(String(sourceOpacity))};
     requireEl('motion-panel-source-overlay-size').value = ${JSON.stringify(String(overlaySize))};
+    if (${JSON.stringify(!!routeMode)} && document.getElementById('motion-panel-route-mode')) {
+      setSelectValue('motion-panel-route-mode', ${JSON.stringify(routeMode)});
+    }
     requireEl('motion-panel-duration').value = ${JSON.stringify(String(duration))};
     requireEl('motion-panel-steps').value = ${JSON.stringify(String(steps))};
     const exportValues = ${JSON.stringify(exportCurrentView)} ? {
@@ -314,7 +318,7 @@ async function configureMotionPanel(ws) {
       tileWidth: setSelectValue('motion-panel-export-resolution', ${JSON.stringify(String(tileWidth))}),
       referenceMode: setSelectValue('motion-panel-export-reference', ${JSON.stringify(exportReferenceMode)}),
     } : null;
-    for (const id of ['motion-panel-source-ghost-mode', 'motion-panel-source-up-axis', 'motion-panel-source-forward-axis', 'motion-panel-source-opacity', 'motion-panel-source-overlay-size', 'motion-panel-duration', 'motion-panel-steps', 'motion-panel-export-reference']) {
+    for (const id of ['motion-panel-source-ghost-mode', 'motion-panel-source-up-axis', 'motion-panel-source-forward-axis', 'motion-panel-source-opacity', 'motion-panel-source-overlay-size', 'motion-panel-route-mode', 'motion-panel-duration', 'motion-panel-steps', 'motion-panel-export-reference']) {
       document.getElementById(id)?.dispatchEvent(new Event('input', { bubbles: true }));
       document.getElementById(id)?.dispatchEvent(new Event('change', { bubbles: true }));
     }
@@ -326,6 +330,7 @@ async function configureMotionPanel(ws) {
       sourceForwardAxis: requireEl('motion-panel-source-forward-axis').value,
       sourceOpacity: requireEl('motion-panel-source-opacity').value,
       overlaySize: requireEl('motion-panel-source-overlay-size').value,
+      routeMode: document.getElementById('motion-panel-route-mode')?.value || null,
       duration: requireEl('motion-panel-duration').value,
       steps: requireEl('motion-panel-steps').value,
       exportValues,
@@ -645,6 +650,11 @@ async function captureFrame(ws, index) {
       clipletInterruptTimeline: state?.clipletInterruptTimeline || null,
       pathWorld: actor?.pathWorld || state?.pathWorld || null,
       routeMode: actor?.pathWorld?.routeMode || state?.pathWorld?.routeMode || state?.pathWorld?.pathWorldSample?.routeMode || null,
+      routeConductor: actor?.routeConductor || state?.routeConductor || state?.pathWorld?.routeConductor || null,
+      routePlaybackMode: actor?.routePlaybackMode || state?.routePlaybackMode || state?.routeConductor?.routePlaybackMode || state?.pathWorld?.routePlaybackMode || null,
+      routePhase: actor?.routePhase || state?.routePhase || state?.routeConductor?.routePhase || state?.pathWorld?.routePhase || null,
+      routeProgress: actor?.routeProgress ?? state?.routeProgress ?? state?.routeConductor?.routeProgress ?? state?.pathWorld?.progress ?? null,
+      routeDirection: actor?.routeDirection || state?.routeDirection || state?.routeConductor?.routeDirection || state?.pathWorld?.direction || null,
       pathWorldInterrupt: actor?.pathWorldInterrupt || state?.pathWorldInterrupt || null,
       pathWorldEpisode: actor?.pathWorldEpisode || state?.pathWorldEpisode || state?.pathWorldInterrupt?.pathWorldEpisode || null,
       pathWorldEncounterSemantics: actor?.pathWorldEncounterSemantics || state?.pathWorldEncounterSemantics || state?.pathWorldEpisode?.encounterSemantics || null,
@@ -753,6 +763,10 @@ async function composeFilmstrip(ws, frames) {
     const memoryActive = pathWorldSteeringMemory?.memoryActive ? 'memory active' : null;
     const memorySide = pathWorldSteeringMemory?.memorySide ? `side ${pathWorldSteeringMemory.memorySide}` : null;
     const handoffPhase = pathWorldResumeHandoff?.handoffPhase || pathWorldResumeHandoff?.activeSample?.handoffPhase || null;
+    const routePlaybackMode = frame.debug?.routePlaybackMode || frame.debug?.routeConductor?.routePlaybackMode || frame.debug?.routeMode || null;
+    const routePhase = frame.debug?.routePhase || frame.debug?.routeConductor?.routePhase || null;
+    const routeProgress = Number(frame.debug?.routeProgress ?? frame.debug?.routeConductor?.routeProgress);
+    const routeDirection = frame.debug?.routeDirection || frame.debug?.routeConductor?.routeDirection || null;
     const routeAuthority = frame.debug?.pathWorldRouteAuthority
       || pathWorldEncounterTrajectory?.routeAuthority
       || pathWorldResumeHandoff?.routeAuthority
@@ -778,6 +792,9 @@ async function composeFilmstrip(ws, frames) {
       trajectoryPhase ? `traj ${trajectoryPhase}` : null,
       trajectoryProfile ? `profile ${trajectoryProfile}` : null,
       handoffPhase ? `handoff ${handoffPhase}` : null,
+      routePlaybackMode && routePhase
+        ? `${routePlaybackMode} ${routePhase}${Number.isFinite(routeProgress) ? ` ${routeProgress.toFixed(2)}` : ''}${routeDirection ? ` ${routeDirection}` : ''}`
+        : null,
       routeAuthority ? `route ${routeAuthority}` : null,
       episodeId,
     ].filter(Boolean).join(' / ') || 'generated motion';

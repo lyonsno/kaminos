@@ -518,6 +518,16 @@ input[type="range"]:disabled::-webkit-slider-thumb { background: #555; cursor: n
         <div class="motion-panel-section-title">Path World</div>
         <div class="motion-panel-section-subtitle" id="motion-panel-path-world-mode">route -> wall trigger -> reaction cliplet</div>
         <div class="field"><span class="field-key">Source</span><span class="field-val" id="motion-panel-path-world-active-source">inactive</span></div>
+        <div class="slider-row">
+          <span class="slider-label">Route</span>
+          <select id="motion-panel-route-mode" class="select-input">
+            <option value="one-shot-hold" selected>One-shot hold</option>
+            <option value="loop">Loop</option>
+            <option value="patrol-return">Patrol return</option>
+          </select>
+        </div>
+        <div class="field"><span class="field-key">Phase</span><span class="field-val" id="motion-panel-route-phase">inactive</span></div>
+        <div class="field"><span class="field-key">Progress</span><span class="field-val" id="motion-panel-route-progress">0.00</span></div>
         <div class="field"><span class="field-key">Trigger</span><span class="field-val" id="motion-panel-path-world-trigger-state">no world</span></div>
         <div class="field"><span class="field-key">Obstacle</span><span class="field-val" id="motion-panel-path-world-obstacle">none</span></div>
         <div class="field"><span class="field-key">Reason</span><span class="field-val" id="motion-panel-path-world-reason">waiting</span></div>
@@ -3986,6 +3996,7 @@ function motionPanelPathWorldReadout() {
   const actor = motionTemporalState?.lastActors?.[0] || null;
   const pathWorld = actor?.pathWorld || motionTemporalState?.lastPathWorld || null;
   const interrupt = actor?.pathWorldInterrupt || motionTemporalState?.lastPathWorldInterrupt || null;
+  const routeConductor = actor?.routeConductor || pathWorld?.routeConductor || motionTemporalState?.lastRouteConductor || null;
   const routePlan = actor?.pathWorldRoutePlan || pathWorld?.routePlan || motionTemporalState?.pathWorld?.routePlan || null;
   const hillTerrainSurface = actor?.hillTerrainSurface || pathWorld?.hillTerrainSurface || motionTemporalState?.pathWorld?.hillTerrainSurface || null;
   const hillTerrainFrame = actor?.hillTerrainFrame || pathWorld?.hillTerrainFrame || motionTemporalState?.pathWorld?.hillTerrainFrame || null;
@@ -4012,6 +4023,13 @@ function motionPanelPathWorldReadout() {
     triggerState,
     obstacleId: trigger?.obstacleId || interrupt?.obstacleId || 'none',
     reason: carrierFollowActive ? 'hill-carrier-follow' : interrupt?.reason || pathWorld?.reason || 'waiting',
+    routeConductor,
+    routePlaybackMode: routeConductor?.routePlaybackMode || pathWorld?.routePlaybackMode || pathWorld?.routeMode || null,
+    routePhase: routeConductor?.routePhase || pathWorld?.routePhase || 'inactive',
+    routeProgress: Number.isFinite(Number(routeConductor?.routeProgress ?? pathWorld?.progress))
+      ? Number(Number(routeConductor?.routeProgress ?? pathWorld?.progress).toFixed(5))
+      : null,
+    routeDirection: routeConductor?.routeDirection || pathWorld?.direction || null,
     triggerDistance: Number.isFinite(Number(trigger?.distance)) ? Number(Number(trigger.distance).toFixed(5)) : null,
     triggerRadius: Number.isFinite(Number(trigger?.radius)) ? Number(Number(trigger.radius).toFixed(5)) : null,
     fired: !!interrupt?.fired || !!trigger?.fired,
@@ -4043,6 +4061,8 @@ function updateMotionPanelPathWorldReadout() {
     el.classList.toggle('missing', !present && value === 'inactive');
   };
   setField('motion-panel-path-world-active-source', readout.activeSource, readout.active);
+  setField('motion-panel-route-phase', readout.routePhase, readout.active);
+  setField('motion-panel-route-progress', readout.routeProgress == null ? '0.00' : readout.routeProgress.toFixed(2), readout.active);
   const triggerLabel = readout.triggerDistance == null
     ? readout.triggerState
     : `${readout.triggerState} ${readout.triggerDistance.toFixed(2)}/${readout.triggerRadius?.toFixed(2) ?? '?'}`;
@@ -5309,7 +5329,7 @@ function createMotionPanelHillNativePathWorld(routePlan, terrainSource, options 
     schema: 'kaminos.generated-motion-path-world.v0',
     route: MOTION_ROUTE_IDENTITY,
     id: `generated-pose-temporal-hill-native-route-world-${routePlan?.id || 'hill-route-plan'}`,
-    routeMode: 'patrol-return',
+    routeMode: 'one-shot-hold',
     routeAuthority: 'terrain-affordance-route-plan',
     routeSource: routePlan?.evidence?.routeSource || 'hill-motion-affordance-grid',
     reason: 'hill-native-route-world',
@@ -5335,6 +5355,37 @@ function createMotionPanelHillNativePathWorld(routePlan, terrainSource, options 
       displayTransform: terrainSurface.frame.displayTransform,
     },
     duration: 12,
+  };
+}
+
+const MOTION_PANEL_ROUTE_CONDUCTOR_MODES = new Set(['goal-seeking', 'one-shot-hold', 'loop', 'patrol-return']);
+
+function normalizeMotionPanelRouteConductorMode(value, fallback = 'one-shot-hold') {
+  const mode = String(value || '').trim().toLowerCase();
+  if (MOTION_PANEL_ROUTE_CONDUCTOR_MODES.has(mode)) return mode;
+  return fallback;
+}
+
+function motionPanelRouteConductorModeFromInputs(pathWorld = null, params = new URLSearchParams(window.location.search)) {
+  const fromUrl = params.get('kaminos_route_mode') || params.get('kaminos_hill_route_mode');
+  if (fromUrl) return normalizeMotionPanelRouteConductorMode(fromUrl);
+  const selectValue = document.getElementById('motion-panel-route-mode')?.value || '';
+  if (selectValue) return normalizeMotionPanelRouteConductorMode(selectValue);
+  return normalizeMotionPanelRouteConductorMode(pathWorld?.routeMode, 'one-shot-hold');
+}
+
+function motionPanelRouteConductorEvidence(pathWorld, goalProgress, elapsedTime = 0, cycle = 6) {
+  const progress = Number(goalProgress?.progress || 0);
+  return {
+    schema: 'kaminos.motion-panel-route-conductor.v0',
+    routeMode: goalProgress?.routeMode || motionPanelPathWorldRouteMode(pathWorld),
+    routePlaybackMode: goalProgress?.routePlaybackMode || goalProgress?.routeMode || motionPanelPathWorldRouteMode(pathWorld),
+    routePhase: goalProgress?.routePhase || 'traversing',
+    routeProgress: Number(progress.toFixed(5)),
+    routeDirection: goalProgress?.direction || 'forward',
+    routeReason: goalProgress?.reason || pathWorld?.reason || 'route-conductor',
+    routeCycle: Number((Math.max(2.4, Number(cycle) || 6)).toFixed(5)),
+    routeElapsedTime: Number((Math.max(0, Number(elapsedTime) || 0)).toFixed(5)),
   };
 }
 
@@ -5421,6 +5472,8 @@ function createMotionPanelCarrierPathFollower(pathWorldSample, hillTerrainCarrie
     carrierAuthority: 'terrain-route',
     routeAuthority: pathWorldSample.routeAuthority || pathWorldSample.activeSource || 'terrain-affordance-route-plan',
     routeSource: pathWorldSample.routeSource || 'hill-motion-affordance-grid',
+    routePlaybackMode: pathWorldSample.routePlaybackMode || pathWorldSample.routeMode || null,
+    routePhase: pathWorldSample.routePhase || null,
     routeProgress: Number(pathWorldSample.progress || 0),
     routeDirection: pathWorldSample.direction || null,
     routeSegmentIndex: pathWorldSample.routeSegmentIndex ?? null,
@@ -5552,7 +5605,7 @@ function createGeneratedPoseTemporalPathWorld(options = {}) {
 }
 
 function motionPanelPathWorldRouteMode(pathWorld) {
-  return pathWorld?.routeMode === 'patrol-return' ? 'patrol-return' : 'goal-seeking';
+  return normalizeMotionPanelRouteConductorMode(pathWorld?.routeMode, 'goal-seeking');
 }
 
 function sampleMotionPanelPathWorldGoalProgress(pathWorld, elapsedTime = 0, duration = 6) {
@@ -5567,17 +5620,46 @@ function sampleMotionPanelPathWorldGoalProgress(pathWorld, elapsedTime = 0, dura
     const patrolReason = forward ? 'seeking-goal' : 'returning-to-start';
     return {
       routeMode,
+      routePlaybackMode: routeMode,
       progress: Number(patrolProgress.toFixed(5)),
       direction: forward ? 'forward' : 'return',
+      routePhase: forward ? 'traversing' : 'returning',
       reason: patrolReason,
+    };
+  }
+  if (routeMode === 'loop') {
+    const wrappedTime = (rawTime % cycle + cycle) % cycle;
+    const phase = Math.max(0, Math.min(1, wrappedTime / cycle || 0));
+    const progress = clampMotionPanelPathWorldProgress(phase);
+    return {
+      routeMode,
+      routePlaybackMode: routeMode,
+      progress,
+      direction: 'forward',
+      routePhase: progress >= 0.985 ? 'looping' : 'traversing',
+      reason: 'looping-route',
+    };
+  }
+  if (routeMode === 'one-shot-hold') {
+    const phase = Math.max(0, Math.min(1, rawTime / cycle || 0));
+    const progress = clampMotionPanelPathWorldProgress(phase);
+    return {
+      routeMode,
+      routePlaybackMode: routeMode,
+      progress,
+      direction: 'forward',
+      routePhase: progress >= 0.995 ? 'holding' : (progress <= 0.005 ? 'entering' : 'traversing'),
+      reason: progress >= 0.995 ? 'goal-hold' : 'seeking-goal',
     };
   }
   const phase = Math.max(0, Math.min(1, rawTime / cycle || 0));
   const progress = clampMotionPanelPathWorldProgress(phase);
   return {
     routeMode,
+    routePlaybackMode: 'one-shot-hold',
     progress,
     direction: 'forward',
+    routePhase: progress >= 0.995 ? 'holding' : 'traversing',
     reason: progress >= 0.995 ? 'goal-hold' : 'seeking-goal',
   };
 }
@@ -5587,6 +5669,7 @@ function advanceMotionPanelPathWorldProgress(pathWorld, fromProgress, advance = 
   const progress = clampMotionPanelPathWorldProgress(fromProgress);
   const step = Math.max(0.01, Number(advance) || 0.18);
   if (routeMode === 'patrol-return') return clampMotionPanelPathWorldProgress(progress + step);
+  if (routeMode === 'loop') return clampMotionPanelPathWorldProgress((progress + step) % 1);
   return clampMotionPanelPathWorldProgress(Math.max(progress, progress + step));
 }
 
@@ -5594,6 +5677,7 @@ function sampleMotionPanelPathWorld(pathWorld, elapsedTime = 0, duration = 6, op
   const cycle = Math.max(2.4, Number(pathWorld?.duration) || Number(duration) || 6);
   const wrappedTime = ((Number(elapsedTime) || 0) % cycle + cycle) % cycle;
   const goalProgress = sampleMotionPanelPathWorldGoalProgress(pathWorld, elapsedTime, cycle);
+  const routeConductor = motionPanelRouteConductorEvidence(pathWorld, goalProgress, elapsedTime, cycle);
   const routeMode = goalProgress.routeMode;
   const forward = goalProgress.direction !== 'return';
   const u = goalProgress.progress;
@@ -5610,6 +5694,9 @@ function sampleMotionPanelPathWorld(pathWorld, elapsedTime = 0, duration = 6, op
     schema: 'kaminos.generated-motion-path-world-sample.v0',
     pathWorldId: pathWorld?.id || null,
     routeMode,
+    routePlaybackMode: routeConductor.routePlaybackMode,
+    routePhase: routeConductor.routePhase,
+    routeConductor,
     activeSource: pathWorld?.routeAuthority || 'world-path',
     routeAuthority: pathWorld?.routeAuthority || 'world-path',
     routeSource: pathWorld?.routeSource || 'procedural-fixture',
@@ -7497,8 +7584,17 @@ function updateGeneratedPoseTemporalFrame(nowSeconds = performance.now() / 1000)
   const hillCarrierFollowRequested = state.pathWorld
     ? motionPanelHillCarrierFollowEnabled(state.pathWorld)
     : false;
+  const routePlaybackMode = state.pathWorld
+    ? motionPanelRouteConductorModeFromInputs(state.pathWorld)
+    : null;
+  const effectivePathWorld = state.pathWorld && routePlaybackMode
+    ? {
+      ...state.pathWorld,
+      routeMode: routePlaybackMode,
+    }
+    : state.pathWorld;
   const pathWorldSample = state.pathWorld
-    ? sampleMotionPanelPathWorld(state.pathWorld, elapsedTime, state.duration, {
+    ? sampleMotionPanelPathWorld(effectivePathWorld, elapsedTime, state.duration, {
       pathWorldSteeringMemoryRuntime: state.pathWorldSteeringMemoryRuntime || (state.pathWorldSteeringMemoryRuntime = {}),
       disableSteering: hillCarrierFollowRequested,
     })
@@ -7721,6 +7817,7 @@ function updateGeneratedPoseTemporalFrame(nowSeconds = performance.now() / 1000)
   state.lastPathWorldResumeHandoff = pathWorldResumeHandoff;
   state.lastPathWorldSteeringIntent = pathWorldSteeringIntent;
   state.lastPathWorldSteeringMemory = pathWorldSteeringMemory;
+  state.lastRouteConductor = pathWorldSample?.routeConductor || null;
   state.lastPathWorldRouteAuthority = pathWorldRouteAuthority;
   state.lastPathWorldRootConstraint = pathWorldRootConstraint;
   state.lastHillTerrainCarrier = hillTerrainCarrier;
@@ -7799,6 +7896,11 @@ function updateGeneratedPoseTemporalFrame(nowSeconds = performance.now() / 1000)
     clipletInterruptMode: clipletInterruptTimeline?.mode || 'off',
     clipletInterruptTimeline,
     pathWorld: pathWorldSample,
+    routeConductor: pathWorldSample?.routeConductor || null,
+    routePlaybackMode: pathWorldSample?.routePlaybackMode || pathWorldSample?.routeMode || null,
+    routePhase: pathWorldSample?.routePhase || null,
+    routeProgress: pathWorldSample?.progress ?? null,
+    routeDirection: pathWorldSample?.direction || null,
     pathWorldInterrupt: pathWorldInterruptEnvelope?.interrupt || null,
     pathWorldEpisode: pathWorldInterruptEnvelope?.interrupt?.pathWorldEpisode || null,
     pathWorldEncounterSemantics,
@@ -8935,6 +9037,7 @@ function initKaminosMotionAgencyRoute() {
     renderMotionPanelPhrasePreview(motionTemporalState.generatedMotionCliplets);
   };
   document.getElementById('motion-panel-cliplet-playback')?.addEventListener('change', resetMotionClipletSelection);
+  document.getElementById('motion-panel-route-mode')?.addEventListener('change', resetMotionClipletSelection);
   document.querySelectorAll('input[name="motion-panel-cliplet-interrupt"]').forEach(input => {
     input.addEventListener('change', resetMotionClipletSelection);
   });
@@ -9277,6 +9380,11 @@ window.kaminosGeneratedPoseTemporalDebugState = function() {
     pathWorldSteeringIntent: state?.lastPathWorldSteeringIntent || null,
     pathWorldSteeringMemory: state?.lastPathWorldSteeringMemory || state?.lastPathWorldSteeringIntent?.pathWorldSteeringMemory || null,
     pathWorldRootConstraint: state?.lastPathWorldRootConstraint || null,
+    routeConductor: state?.lastRouteConductor || state?.lastPathWorld?.routeConductor || state?.lastActors?.[0]?.routeConductor || null,
+    routePlaybackMode: state?.lastRouteConductor?.routePlaybackMode || state?.lastPathWorld?.routePlaybackMode || state?.lastActors?.[0]?.routePlaybackMode || null,
+    routePhase: state?.lastRouteConductor?.routePhase || state?.lastPathWorld?.routePhase || state?.lastActors?.[0]?.routePhase || null,
+    routeProgress: state?.lastRouteConductor?.routeProgress ?? state?.lastPathWorld?.progress ?? state?.lastActors?.[0]?.routeProgress ?? null,
+    routeDirection: state?.lastRouteConductor?.routeDirection || state?.lastPathWorld?.direction || state?.lastActors?.[0]?.routeDirection || null,
     pathWorldRouteAuthority: state?.lastPathWorldRouteAuthority || (state?.lastPathWorld ? 'world-path' : null),
     pathWorldRoutePlan: state?.pathWorld?.routePlan || state?.lastPathWorld?.routePlan || null,
     pathWorldActiveSource: state?.lastPathWorldInterrupt?.activeSource || state?.lastPathWorldRouteAuthority || (state?.lastPathWorld ? 'world-path' : null),

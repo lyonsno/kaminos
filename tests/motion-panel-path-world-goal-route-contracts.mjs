@@ -16,6 +16,21 @@ assert.match(
 );
 assert.match(
   index,
+  /function normalizeMotionPanelRouteConductorMode/,
+  'Path World sampling must normalize explicit route conductor modes before sampling progress',
+);
+assert.match(
+  index,
+  /routeMode === 'one-shot-hold'/,
+  'one-shot-hold route mode must be explicit rather than hidden behind goal-seeking defaults',
+);
+assert.match(
+  index,
+  /routeMode === 'loop'/,
+  'loop route mode must be explicit rather than encoded as accidental wrapped goal seeking',
+);
+assert.match(
+  index,
   /sampleMotionPanelPathWorldGoalProgress\(pathWorld,\s*elapsedTime,\s*cycle\)/,
   'goal-seeking Path World progress must be sampled from unwrapped elapsed time so it can hold at the goal',
 );
@@ -50,7 +65,27 @@ assert.match(
   'actor/debug evidence must expose path-world route mode',
 );
 assert.match(
+  index,
+  /routeConductor/,
+  'actor/debug evidence must expose route conductor state',
+);
+assert.match(
+  index,
+  /routePhase/,
+  'actor/debug evidence must expose route phase',
+);
+assert.match(
+  index,
+  /routePlaybackMode/,
+  'actor/debug evidence must expose effective route playback mode',
+);
+assert.match(
   liveWitness,
   /routeMode/,
   'live witness must record path-world route mode in frame evidence',
+);
+assert.match(
+  liveWitness,
+  /routePhase/,
+  'live witness must record route phase in frame evidence',
 );

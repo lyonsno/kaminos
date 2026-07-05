@@ -19,8 +19,14 @@ assert.match(index, /pathWorldRoutePlan/, 'Path World debug exposes the route pl
 assert.match(index, /hillTerrainSurface/, 'Path World debug exposes the mounted Hill terrain surface evidence');
 assert.match(index, /hillTerrainFrame/, 'Path World debug preserves the Hill support-frame source identity');
 assert.match(index, /hill-native-route-world/, 'Hill route smoke names the Hill-native route world instead of only the flat display projection');
-assert.match(index, /routeMode:\s*'patrol-return'/, 'Hill-native route smoke loops over terrain instead of parking at the goal');
+assert.match(index, /routeMode:\s*'one-shot-hold'/, 'Hill-native route smoke defaults to forward traversal and hold instead of reverse patrol');
+assert.doesNotMatch(index, /routeMode:\s*'patrol-return'[\s\S]{0,600}reason:\s*'hill-native-route-world'/, 'Hill-native route smoke must not hardcode patrol-return as the default route conductor mode');
 assert.match(index, /duration:\s*12/, 'Hill-native route smoke uses a slow enough cycle to show route following');
+assert.match(index, /id="motion-panel-route-mode"/, 'operator can choose the route conductor playback mode without digging');
+assert.match(index, /function motionPanelRouteConductorModeFromInputs/, 'browser resolves route conductor mode from operator/url state');
+assert.match(index, /function motionPanelRouteConductorEvidence/, 'browser emits explicit route conductor evidence');
+assert.match(index, /routePhase/, 'route conductor evidence records phase, not only progress');
+assert.match(index, /routePlaybackMode/, 'actor/debug evidence records the effective route playback mode');
 assert.match(index, /function createMotionPanelHillTerrainCarrier/, 'browser separates Hill route grounding from generated expressive root motion');
 assert.match(index, /hillTerrainCarrier/, 'actor/debug evidence exposes Hill terrain carrier grounding');
 assert.match(index, /terrainCarrierRoot/, 'Hill carrier evidence records the authoritative terrain root');
@@ -50,6 +56,9 @@ assert.match(liveWitness, /hillTerrainCarrier/, 'live witness records Hill terra
 assert.match(liveWitness, /groundingAuthority/, 'live witness records carrier grounding authority');
 assert.match(liveWitness, /carrierPathFollower/, 'live witness records carrier path follower evidence');
 assert.match(liveWitness, /airborneGrant/, 'live witness records whether carrier following allowed airborne motion');
+assert.match(liveWitness, /routePhase/, 'live witness records route conductor phase evidence');
+assert.match(liveWitness, /routePlaybackMode/, 'live witness records route conductor playback mode evidence');
+assert.match(liveWitness, /routeProgress/, 'live witness records route conductor progress evidence');
 assert.match(liveWitness, /lastTrustworthyEvidence/, 'live witness failure report preserves last trustworthy frame evidence');
 assert.match(liveWitness, /lastFramePath/, 'live witness partial-failure evidence records the last captured frame path');
 assert.match(liveWitness, /composing-filmstrip/, 'live witness identifies filmstrip composition as a distinct failure phase');
