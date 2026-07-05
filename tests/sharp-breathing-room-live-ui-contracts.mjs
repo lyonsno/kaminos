@@ -98,3 +98,23 @@ assert.match(
   /pipelineLoadRunSplatArtifact\(run,\s*artifact\)/,
   'A successful Generate-panel SHARP run must load its produced splat from the run-local result instead of sending the operator to hunt in Greenroom',
 );
+assert.match(
+  index,
+  /async function beginSharpBreathingRoomKilnFire\(/,
+  'Generate panel must have an explicit kiln-fire activation helper for live SHARP runs',
+);
+assert.match(
+  index,
+  /beginSharpBreathingRoomKilnFire\(\{\s*profileId,\s*source,\s*pipelineId/s,
+  'Run default/friendly must ignite the live kiln before starting SHARP inference',
+);
+assert.match(
+  index,
+  /volumePrototype\.setActive\(true\)/,
+  'Kiln-fire activation must turn on the existing volume renderer instead of only changing status text',
+);
+assert.match(
+  index,
+  /window\.__kaminosSharpBreathingRoomKilnFireState/,
+  'Kiln-fire activation must expose debug state so smokes can prove the run button actually ignited the furnace',
+);
