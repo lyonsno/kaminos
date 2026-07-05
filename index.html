@@ -15278,7 +15278,9 @@ const VOLUME_BRICK_WALL_GLOW_PROXY = Object.freeze({
   authority: 'scene-space-wall-attached-proxy-no-cpu-readback-v0',
   energyAuthority: 'control-and-frame-cadence-proxy-not-fire-frame-readback-v0',
   materialIdentity: 'brick-wall-additive-fire-glow-material-v0',
-  geometryIdentity: 'brick-wall-attached-glow-plane-v0',
+  geometryIdentity: 'brick-wall-bounded-contact-glow-plane-v0',
+  placementAuthority: 'operator-smoked-flame-wall-contact-left-fit-v0',
+  maskAuthority: 'bounded-plane-fit-not-object-mask-v0',
 });
 
 function normalizeVolumeSceneContext(value) {
@@ -15315,11 +15317,11 @@ function createBrickWallFireGlowTexture() {
   canvas.height = 256;
   const ctx = canvas.getContext('2d');
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  const glow = ctx.createRadialGradient(104, 150, 5, 122, 132, 164);
+  const glow = ctx.createRadialGradient(80, 154, 5, 118, 134, 138);
   glow.addColorStop(0.0, 'rgba(255,244,190,0.86)');
   glow.addColorStop(0.15, 'rgba(255,174,72,0.52)');
   glow.addColorStop(0.40, 'rgba(255,108,30,0.23)');
-  glow.addColorStop(0.76, 'rgba(170,44,14,0.070)');
+  glow.addColorStop(0.72, 'rgba(170,44,14,0.050)');
   glow.addColorStop(1.0, 'rgba(0,0,0,0.0)');
   ctx.fillStyle = glow;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -15532,7 +15534,7 @@ function createVolumeBrickWallContext() {
     side: THREE.DoubleSide,
   });
   wallGlowMaterial.name = VOLUME_BRICK_WALL_GLOW_PROXY.materialIdentity;
-  const wallGlow = new THREE.Mesh(new THREE.PlaneGeometry(2.55, 2.05), wallGlowMaterial);
+  const wallGlow = new THREE.Mesh(new THREE.PlaneGeometry(1.82, 1.54), wallGlowMaterial);
   wallGlow.name = VOLUME_BRICK_WALL_GLOW_PROXY.identity;
   wallGlow.userData.kaminosWallAttachedGlow = {
     identity: VOLUME_BRICK_WALL_GLOW_PROXY.identity,
@@ -15540,8 +15542,10 @@ function createVolumeBrickWallContext() {
     energyAuthority: VOLUME_BRICK_WALL_GLOW_PROXY.energyAuthority,
     materialIdentity: VOLUME_BRICK_WALL_GLOW_PROXY.materialIdentity,
     geometryIdentity: VOLUME_BRICK_WALL_GLOW_PROXY.geometryIdentity,
+    placementAuthority: VOLUME_BRICK_WALL_GLOW_PROXY.placementAuthority,
+    maskAuthority: VOLUME_BRICK_WALL_GLOW_PROXY.maskAuthority,
   };
-  wallGlow.position.set(0.82, -0.28, -0.56);
+  wallGlow.position.set(0.34, -0.34, -0.56);
   wallGlow.rotation.y = -0.18;
   wallGlow.rotation.x = 0.02;
   wallGlow.renderOrder = 18;
@@ -15557,6 +15561,8 @@ function createVolumeBrickWallContext() {
     authority: VOLUME_BRICK_WALL_GLOW_PROXY.authority,
     energyAuthority: VOLUME_BRICK_WALL_GLOW_PROXY.energyAuthority,
     mode: 'disabled',
+    placementAuthority: VOLUME_BRICK_WALL_GLOW_PROXY.placementAuthority,
+    maskAuthority: VOLUME_BRICK_WALL_GLOW_PROXY.maskAuthority,
     opacity: 0,
     visible: false,
     scale: [1, 1, 1],
@@ -15604,11 +15610,11 @@ function createVolumeBrickWallContext() {
       0,
       1.65
     );
-    const glowOpacity = clampVolumeValue(glowEnergy * 0.48, 0, 0.58);
+    const glowOpacity = clampVolumeValue(glowEnergy * 0.36, 0, 0.46);
     const glowScale = 0.86 + clampVolumeValue(glowEnergy, 0, 1.4) * 0.32;
     wallGlow.visible = group.visible && glowOpacity > 0.006;
     wallGlowMaterial.opacity = wallGlow.visible ? glowOpacity : 0;
-    wallGlow.scale.set(1.04 + glowScale * 0.38, 0.96 + glowScale * 0.28, 1);
+    wallGlow.scale.set(0.86 + glowScale * 0.24, 0.82 + glowScale * 0.22, 1);
     wallGlowMaterial.color.setRGB(
       1.0,
       0.34 + clampVolumeValue(radianceControl * 0.030, 0, 0.16),
@@ -15620,6 +15626,8 @@ function createVolumeBrickWallContext() {
       energyAuthority: VOLUME_BRICK_WALL_GLOW_PROXY.energyAuthority,
       materialIdentity: VOLUME_BRICK_WALL_GLOW_PROXY.materialIdentity,
       geometryIdentity: VOLUME_BRICK_WALL_GLOW_PROXY.geometryIdentity,
+      placementAuthority: VOLUME_BRICK_WALL_GLOW_PROXY.placementAuthority,
+      maskAuthority: VOLUME_BRICK_WALL_GLOW_PROXY.maskAuthority,
       mode: lastFireLightProbe.mode,
       opacity: wallGlowMaterial.opacity,
       visible: wallGlow.visible,
