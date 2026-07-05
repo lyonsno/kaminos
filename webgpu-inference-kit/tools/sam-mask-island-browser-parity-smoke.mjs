@@ -69,6 +69,16 @@ function writeReport(extra = {}) {
   }, null, 2));
 }
 
+function withFailurePhase(error, failurePhase) {
+  if (error && typeof error === 'object') {
+    error.failurePhase = failurePhase;
+    return error;
+  }
+  const wrapped = new Error(String(error));
+  wrapped.failurePhase = failurePhase;
+  return wrapped;
+}
+
 function contentType(path) {
   const ext = extname(path).toLowerCase();
   if (ext === '.html') return 'text/html; charset=utf-8';
@@ -232,12 +242,17 @@ async function main() {
     if (headless) chromeArgs.push('--headless=new');
     chromeArgs.push(url);
     chromeProcess = spawn(chrome, chromeArgs, { stdio: ['ignore', 'ignore', 'pipe'] });
+    const chromeSpawnError = new Promise((_, rejectSpawn) => {
+      chromeProcess.once('error', error => {
+        rejectSpawn(withFailurePhase(error, 'launch_chrome'));
+      });
+    });
     chromeProcess.stderr.on('data', chunk => {
       stderr += chunk.toString();
     });
 
     phase = 'connect_cdp';
-    browserVersion = await waitForCdp();
+    browserVersion = await Promise.race([waitForCdp(), chromeSpawnError]);
     const pages = await cdpFetch('/json/list');
     const page = pages.find(candidate => candidate.type === 'page' && candidate.url.includes('sam-mask-island-parity.html')) || pages[0];
     if (!page?.webSocketDebuggerUrl) throw new Error('Chrome page target missing debugger URL');
@@ -289,8 +304,11 @@ async function main() {
     });
     await ws.close?.();
   } catch (error) {
+    const failurePhase = error?.failurePhase || phase;
+    phase = failurePhase;
     writeReport({
       ok: false,
+      failure_phase: failurePhase,
       error: String(error?.stack || error?.message || error),
     });
     throw error;

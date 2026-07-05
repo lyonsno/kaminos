@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
+import { mkdtemp } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { spawnSync } from 'node:child_process';
 
 const root = new URL('..', import.meta.url);
 const packageJson = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
@@ -42,5 +45,33 @@ assert.match(witness, /backendIdentity/, 'witness must preserve browser backend 
 assert.match(witness, /tensorPacket/, 'witness must preserve tensor packet identity');
 
 assert.equal(join(new URL('.', root).pathname, 'smokes').includes('webgpu-inference-kit'), true);
+
+const invalidChromeDir = await mkdtemp(join(tmpdir(), 'sam-mask-invalid-chrome-'));
+const invalidChromeReport = join(invalidChromeDir, 'report.json');
+const invalidChromeScreenshot = join(invalidChromeDir, 'screenshot.png');
+const invalidChromePath = join(invalidChromeDir, 'definitely-not-chrome');
+const invalidChromeRun = spawnSync(process.execPath, [
+  'tools/sam-mask-island-browser-parity-smoke.mjs',
+  '--out', invalidChromeScreenshot,
+  '--report', invalidChromeReport,
+  '--debug-port', String(19527 + (process.pid % 1000)),
+  '--server-port', String(20527 + (process.pid % 1000)),
+], {
+  cwd: new URL('..', import.meta.url),
+  encoding: 'utf8',
+  env: {
+    ...process.env,
+    KAMINOS_CHROME: invalidChromePath,
+  },
+});
+assert.notEqual(invalidChromeRun.status, 0, 'invalid Chrome path must fail');
+assert.equal(existsSync(invalidChromeReport), true, 'invalid Chrome path must still write a report');
+const invalidChromeFailure = JSON.parse(readFileSync(invalidChromeReport, 'utf8'));
+assert.equal(invalidChromeFailure.ok, false);
+assert.equal(invalidChromeFailure.failure_phase, 'launch_chrome');
+assert.equal(invalidChromeFailure.primary_output_written, false);
+assert.equal(invalidChromeFailure.screenshot, null);
+assert.equal(invalidChromeFailure.chrome, invalidChromePath);
+assert.match(invalidChromeFailure.error, /ENOENT|spawn/i);
 
 console.log('sam mask island browser parity smoke contracts passed');
