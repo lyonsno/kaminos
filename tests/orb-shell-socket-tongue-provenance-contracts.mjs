@@ -63,12 +63,17 @@ assert.deepEqual(
   'candidate names the live sidewalls that make the hooked tongue legible',
 );
 assert.deepEqual(
-  candidate.hiddenTerminalCapIds.sort(),
+  candidate.protectedTerminalCapIds.sort(),
   [
     'lower-socket-keel-start-terminus-live-terminal-cap',
     'lower-socket-keel-end-terminus-live-terminal-cap',
   ].sort(),
-  'candidate preserves hidden terminal caps as supporting topology evidence',
+  'candidate preserves protected terminal caps as supporting socket-tongue topology evidence',
+);
+assert.deepEqual(
+  candidate.provisionalVisibleTerminalCapIds.sort(),
+  candidate.protectedTerminalCapIds.sort(),
+  'receiverless candidate keeps protected caps provisionally visible until receiver-owned absorption exists',
 );
 assert.ok(
   candidate.supportingEvidenceClasses.includes('LiveMacroSideWall')
@@ -83,11 +88,12 @@ assert.ok(
 );
 assert.ok(
   candidate.notMacroLamellaBecause.includes('selected-role-is-tuck-tongue')
-    && candidate.notMacroLamellaBecause.includes('hidden-terminal-caps-deny-independent-objecthood'),
+    && candidate.notMacroLamellaBecause.includes('protected-terminal-caps-deny-independent-objecthood'),
   'candidate explains why this should not be promoted as a full macro lamella',
 );
 assert.ok(candidate.anatomyMetrics.sideWallCount >= 2, 'candidate records sidewall count');
-assert.ok(candidate.anatomyMetrics.hiddenTerminalCapCount === 2, 'candidate records hidden terminal cap count');
+assert.ok(candidate.anatomyMetrics.protectedTerminalCapCount === 2, 'candidate records protected terminal cap count');
+assert.ok(candidate.anatomyMetrics.provisionalVisibleTerminalCapCount === 2, 'candidate records provisional visible terminal caps before receiver ownership exists');
 assert.ok(candidate.anatomyMetrics.meanSideWallThickness > 0.045, 'candidate records a physical sidewall thickness metric');
 assert.ok(candidate.anatomyMetrics.endCapWidthExpansionRatio > 2, 'candidate captures the flared hook/terminus pressure');
 assert.ok(candidate.candidateScore >= 0.72, 'candidate score is high enough to preserve as procedural vocabulary');
@@ -118,7 +124,7 @@ for (const prerequisite of [
   'lower-equatorial-shared-socket-seam-active',
   'lower-socket-role-is-tuck-tongue',
   'plate-body-honesty-prevents-cord-collapse',
-  'terminal-caps-hidden-under-shared-socket-seam',
+  'terminal-caps-protected-by-receiver-or-provisional-visibility',
   'live-promoted-body-sidewalls-present',
 ]) {
   assert.ok(
@@ -129,7 +135,7 @@ for (const prerequisite of [
 for (const invariant of [
   'subordinate-objecthood-not-full-macro-lamella',
   'visible-body-remains-sheetlike-before-tuck',
-  'terminal-cap-authority-hidden',
+  'terminal-cap-authority-protected',
   'sidewalls-remain-live-readable-thickness-surfaces',
   'receiver-or-aperture-owner-required-before-disappearance',
 ]) {
@@ -153,7 +159,7 @@ for (const knob of [
 for (const failureClass of [
   'promote-to-full-macro-lamella',
   'collapse-to-cord',
-  'show-hidden-terminal-cap-as-object',
+  'show-unowned-terminal-cap-as-settled-object',
   'smooth-away-hook-signal',
   'leave-without-receiver-or-aperture-owner',
 ]) {

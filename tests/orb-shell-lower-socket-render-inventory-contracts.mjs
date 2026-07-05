@@ -96,9 +96,10 @@ assert.ok(
   plan.expectedRecords.some(record => (
     record.renderClass === 'LiveMacroTerminalCap'
     && record.parentAssemblage === 'lower-socket-keel'
-    && record.normalRenderExpected === false
+    && record.normalRenderExpected === true
+    && record.suppressionAuthority === null
   )),
-  'inventory must preserve hidden terminal caps as named non-visible evidence',
+  'inventory must preserve receiverless socket-tongue terminal caps as named provisional visible evidence',
 );
 assert.ok(
   plan.failureClassesIfVisible.includes('stale-subordinate-anatomy-visible'),

@@ -89,8 +89,13 @@ assert.equal(
 );
 assert.equal(
   fiveMacro.lowerSocketFamilyRoleLaw.tuckTongueRefinement.terminalCapAuthority,
-  'hidden-under-shared-socket-seam',
-  'tuck tongue refinement demotes terminal caps so they do not grant independent macro objecthood',
+  'provisional-visible-until-receiver-owned-tuck',
+  'tuck tongue refinement keeps receiverless terminal caps visible as provisional socket-tongue evidence',
+);
+assert.equal(
+  fiveMacro.lowerSocketFamilyRoleLaw.tuckTongueRefinement.receiverOwnedTuckDisposition,
+  null,
+  'current tuck tongue refinement has not yet earned receiver-owned absorption',
 );
 assert.ok(
   fiveMacro.lowerSocketFamilyRoleLaw.geometryEffect.interval.t1 >= 0.98,
@@ -178,17 +183,21 @@ assert.equal(
   'lower socket still keeps topology cap records even when normal render demotes their authority',
 );
 assert.ok(
-  lowerSocketTerminalCaps.every(cap => cap.normalRenderVisible === false),
-  'lower socket tuck terminal caps are hidden in normal render instead of reading as independent object ends',
+  lowerSocketTerminalCaps.every(cap => cap.normalRenderVisible === true),
+  'receiverless lower socket tuck terminal caps remain visible instead of pretending shared-seam absorption is solved',
 );
 assert.ok(
-  lowerSocketTerminalCaps.every(cap => cap.capAuthority === 'hidden-under-shared-socket-seam'),
-  'lower socket tuck terminal caps carry the hidden seam authority',
+  lowerSocketTerminalCaps.every(cap => cap.capAuthority === 'provisional-visible-until-receiver-owned-tuck'),
+  'lower socket tuck terminal caps carry provisional socket-tongue authority',
+);
+assert.ok(
+  lowerSocketTerminalCaps.every(cap => cap.receiverOwnedTuckDisposition === null),
+  'visible lower socket terminal caps record missing receiver-owned tuck disposition',
 );
 assert.deepEqual(
   fiveMacro.liveMacroSideWallPlan.normalRenderHiddenTerminalCapIds.filter(id => id.startsWith('lower-socket-keel-')).sort(),
-  lowerSocketTerminalCaps.map(cap => cap.id).sort(),
-  'sidewall plan accounts for hidden lower socket terminal caps before rendering',
+  [],
+  'sidewall plan does not hide lower socket provisional terminal caps before receiver-owned absorption',
 );
 
 const lowerEquatorialContact = fiveMacro.macroContactMap.contacts.find(item => (

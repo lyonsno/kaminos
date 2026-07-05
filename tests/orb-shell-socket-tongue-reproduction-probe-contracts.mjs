@@ -72,7 +72,7 @@ for (const caseRecord of probe.cases) {
     assert.ok(caseRecord.contractFlags.receiverPresent, 'reproduced case has receiver/seam/aperture owner evidence');
     assert.ok(caseRecord.contractFlags.subordinateObjecthood, 'reproduced case stays subordinate');
     assert.ok(caseRecord.contractFlags.sheetlikeBody, 'reproduced case remains sheetlike');
-    assert.ok(caseRecord.contractFlags.hiddenTerminalCaps, 'reproduced case hides terminal cap authority');
+    assert.ok(caseRecord.contractFlags.protectedTerminalCaps, 'reproduced case protects terminal cap authority by receiver ownership or provisional visibility');
     assert.ok(caseRecord.contractFlags.liveSidewalls, 'reproduced case has live sidewalls');
     assert.ok(caseRecord.metrics.meanSideWallThickness >= 0.045, 'reproduced case preserves readable sidewall thickness');
     assert.ok(caseRecord.metrics.endCapWidthExpansionRatio >= 2, 'reproduced case preserves hook pressure');

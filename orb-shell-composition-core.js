@@ -11,6 +11,7 @@ export const ORB_SHELL_LOWER_SOCKET_RENDER_INVENTORY_MODE = 'lower-socket-semant
 export const ORB_SHELL_SOCKET_TONGUE_PROVENANCE_MODE = 'socket-tongue-provenance-v0';
 export const ORB_SHELL_SOCKET_TONGUE_GENERATIVE_INVARIANT_MODE = 'socket-tongue-generative-invariants-v0';
 export const ORB_SHELL_SOCKET_TONGUE_REPRODUCTION_MODE = 'socket-tongue-reproduction-probe-v0';
+export const ORB_SHELL_SOCKET_TONGUE_POST_STRIP_HONESTY_MODE = 'socket-tongue-post-strip-honesty-preservation-v0';
 export const ORB_SHELL_MACRO_MORPHOLOGY_INVENTORY_MODE = 'macro-curve-vs-promoted-body-diagnostic-v0';
 
 const TAU = Math.PI * 2;
@@ -857,8 +858,12 @@ function createLowerSocketFamilyRoleLaw(composition) {
       maxLateralWander: hasEquatorialSocket ? 0.06 : 0.035,
       terminalBehavior: 'persist-terminal-absorption-through-mesh-end',
       terminalCapAuthority: hasEquatorialSocket
-        ? 'hidden-under-shared-socket-seam'
+        ? 'provisional-visible-until-receiver-owned-tuck'
         : 'absorbed-no-visible-terminal-cap',
+      terminalCapVisibilityPolicy: hasEquatorialSocket
+        ? 'visible-until-receiver-owned-occlusion-or-absorption'
+        : 'hidden-after-absorption',
+      receiverOwnedTuckDisposition: null,
       socketAlignment: hasEquatorialSocket
         ? 'pull-terminal-rows-under-equatorial-lip'
         : 'absorb-terminal-rows-into-seam-pressure',
@@ -995,6 +1000,35 @@ function createLowerSocketStripHonestyLaw(composition) {
   const lowerSocket = composition.macroAssemblages.find(assemblage => assemblage.id === 'lower-socket-keel');
   const roleLaw = composition.lowerSocketFamilyRoleLaw;
   if (!lowerSocket || roleLaw?.selectedRole !== 'tuck-tongue') return null;
+  const socketTongueIdentityPreservation = {
+    mode: 'socket-tongue-aware-kink-budget-v0',
+    protectedCandidateIds: [
+      'lower-socket-keel-promoted-body-socket-tongue-candidate',
+    ],
+    protectedSignalClasses: [
+      'terminal-hook-signal',
+      'subordinate-sheet-objecthood',
+      'protected-terminal-cap-authority',
+      'receiver-dependent-disappearance',
+    ],
+    protectedSignalSpans: [
+      {
+        signal: 'subordinate-sheet-body',
+        t0: 0.05,
+        t1: 0.86,
+        strengthScale: 0.68,
+      },
+      {
+        signal: 'terminal-hook-pressure',
+        t0: 0.72,
+        t1: 1,
+        strengthScale: 0.42,
+      },
+    ],
+    requiresReceiverOwnedAbsorptionDisposition: true,
+    silentErasureAllowed: false,
+    reason: 'socket-tongue invariant work marked this lower-socket phenotype as vocabulary; strip honesty may reduce crumple but may not erase hook/tongue identity without an explicit receiver-owned absorption record',
+  };
   return {
     schema: 'LowerSocketStripHonestyLaw',
     id: 'lower-socket-strip-honesty-law',
@@ -1058,6 +1092,7 @@ function createLowerSocketStripHonestyLaw(composition) {
         repeatedKinkThreshold: 0.29,
         repeatedKinkCountLimit: 4,
         repeatedKinkEnergyLimit: 2.2,
+        socketTongueIdentityPreservation,
         reason: 'strip honesty is a procedural constraint, not an aesthetic suggestion; iteratively reduce measured kink budget before tuck/merge solving',
       },
       repeatedKinkCountLimit: 4,
@@ -1751,6 +1786,17 @@ function smoothLowerSocketStripHonestySideWallSamples(assemblage, samples, passM
   }));
 }
 
+function socketTongueIdentityStrengthScale(policy, t) {
+  if (!policy?.protectedSignalSpans) return 1;
+  return policy.protectedSignalSpans.reduce((scale, span) => {
+    if (t < span.t0 || t > span.t1) return scale;
+    const edgeFade = smoothStep(span.t0, span.t0 + 0.05, t)
+      * (1 - smoothStep(span.t1 - 0.05, span.t1, t));
+    const spanScale = 1 - (1 - (span.strengthScale ?? 1)) * edgeFade;
+    return Math.min(scale, spanScale);
+  }, 1);
+}
+
 function solveLowerSocketKinkBudget(smoothing, samples) {
   const solver = smoothing.kinkBudgetSolver;
   if (!solver || samples.length < 5) return samples;
@@ -1780,11 +1826,22 @@ function solveLowerSocketKinkBudget(smoothing, samples) {
         outer: [...sample.outer],
         inner: [...sample.inner],
       }));
+      const identityScale = item.angle > (solver.maxTurnLimit ?? Number.POSITIVE_INFINITY)
+        ? 1
+        : socketTongueIdentityStrengthScale(
+          solver.socketTongueIdentityPreservation,
+          next[index].t,
+        );
+      const localStrength = strength * identityScale;
       for (const key of ['outer', 'inner']) {
         const neighborAverage = lerpPoint(next[index - 1][key], next[index + 1][key], 0.5);
-        candidate[index][key] = lerpPoint(next[index][key], neighborAverage, strength);
+        candidate[index][key] = lerpPoint(next[index][key], neighborAverage, localStrength);
       }
       candidate[index].stripHonestyKinkBudgetSolverMode = solver.mode;
+      if (solver.socketTongueIdentityPreservation) {
+        candidate[index].socketTongueIdentityPreservationMode = solver.socketTongueIdentityPreservation.mode;
+        candidate[index].socketTongueIdentityPreservationStrengthScale = localStrength / (strength || 1);
+      }
       const candidateMetrics = sideCurveBudgetMetrics(candidate, solver);
       if (candidateMetrics.score < bestMetrics.score) {
         bestCandidate = candidate;
@@ -2109,8 +2166,13 @@ function createLiveMacroTerminalCap(assemblage, sideWalls, endRole) {
   const rightWall = sideWalls.find(wall => wall.targetEdge === 'right-promoted-body-edge');
   if (!leftWall || !rightWall) return null;
   const roleLaw = assemblage.lowerSocketFamilyRoleLaw || assemblage.macroPromotedBody?.lowerSocketFamilyRoleLaw;
-  const terminalCapAuthority = roleLaw?.tuckTongueRefinement?.terminalCapAuthority || 'visible-promoted-body-terminal-cap';
-  const normalRenderVisible = terminalCapAuthority === 'visible-promoted-body-terminal-cap';
+  const tuckRefinement = roleLaw?.tuckTongueRefinement || null;
+  const terminalCapAuthority = tuckRefinement?.terminalCapAuthority || 'visible-promoted-body-terminal-cap';
+  const receiverOwnedTuckDisposition = tuckRefinement?.receiverOwnedTuckDisposition || null;
+  const provisionalSocketTongueVisible = terminalCapAuthority === 'provisional-visible-until-receiver-owned-tuck'
+    && !receiverOwnedTuckDisposition;
+  const normalRenderVisible = terminalCapAuthority === 'visible-promoted-body-terminal-cap'
+    || provisionalSocketTongueVisible;
   const sampleIndex = endRole === 'start-terminus' ? 0 : leftWall.sideWallSamples.length - 1;
   const left = leftWall.sideWallSamples[sampleIndex];
   const right = rightWall.sideWallSamples[sampleIndex];
@@ -2136,6 +2198,9 @@ function createLiveMacroTerminalCap(assemblage, sideWalls, endRole) {
     t: endRole === 'start-terminus' ? 0 : 1,
     normalRenderVisible,
     capAuthority: terminalCapAuthority,
+    terminalCapVisibilityPolicy: tuckRefinement?.terminalCapVisibilityPolicy || null,
+    receiverOwnedTuckDisposition,
+    provisionalSocketTongueVisible,
     sideWallIds: [leftWall.id, rightWall.id],
     capSamples: {
       outerLeft: left.outer,
@@ -2155,9 +2220,11 @@ function createLiveMacroTerminalCap(assemblage, sideWalls, endRole) {
       innerThicknessEdgeShared: true,
       couplingVerdict: 'terminal-cap-bridges-sidewalls-and-thickness-edges',
     },
-    visualContract: normalRenderVisible
-      ? 'normal live render shows a closed solid end on the promoted shell strip'
-      : 'topology cap exists but normal render hides it under the shared socket seam',
+    visualContract: provisionalSocketTongueVisible
+      ? 'normal live render preserves provisional socket-tongue terminal evidence until a receiver-owned tuck disposition exists'
+      : normalRenderVisible
+        ? 'normal live render shows a closed solid end on the promoted shell strip'
+        : 'topology cap exists but normal render hides it under an explicit receiver or seam authority',
   };
 }
 
@@ -4603,13 +4670,13 @@ function createSocketTongueGenerativeInvariantRecord(candidate, lowerSocket) {
       'lower-equatorial-shared-socket-seam-active',
       'lower-socket-role-is-tuck-tongue',
       'plate-body-honesty-prevents-cord-collapse',
-      'terminal-caps-hidden-under-shared-socket-seam',
+      'terminal-caps-protected-by-receiver-or-provisional-visibility',
       'live-promoted-body-sidewalls-present',
     ],
     preservedInvariants: [
       'subordinate-objecthood-not-full-macro-lamella',
       'visible-body-remains-sheetlike-before-tuck',
-      'terminal-cap-authority-hidden',
+      'terminal-cap-authority-protected',
       'sidewalls-remain-live-readable-thickness-surfaces',
       'receiver-or-aperture-owner-required-before-disappearance',
     ],
@@ -4631,7 +4698,7 @@ function createSocketTongueGenerativeInvariantRecord(candidate, lowerSocket) {
       },
       {
         name: 'receiver-dependent-disappearance',
-        observedBasis: 'hiddenTerminalCapIds plus tuckDisappearancePolicy',
+        observedBasis: 'protectedTerminalCapIds plus tuckDisappearancePolicy',
         constraint: 'disappearance is legal only when a receiver seam or aperture owner exists',
       },
     ],
@@ -4648,7 +4715,7 @@ function createSocketTongueGenerativeInvariantRecord(candidate, lowerSocket) {
     forbiddenFailureClasses: [
       'promote-to-full-macro-lamella',
       'collapse-to-cord',
-      'show-hidden-terminal-cap-as-object',
+      'show-unowned-terminal-cap-as-settled-object',
       'smooth-away-hook-signal',
       'leave-without-receiver-or-aperture-owner',
     ],
@@ -4681,6 +4748,107 @@ function createSocketTongueGenerativeInvariantPlan(candidates, lowerSocket) {
   };
 }
 
+function createSocketTonguePostStripHonestyPreservationRecord(candidate, lowerSocket, identityPolicy) {
+  const invariantRecord = candidate.generativeInvariantRecord || createSocketTongueGenerativeInvariantRecord(candidate, lowerSocket);
+  const metrics = candidate.anatomyMetrics || {};
+  const failureClasses = [];
+  const hasHookPressure = (metrics.endCapWidthExpansionRatio || 0) >= 2;
+  const hasSheetBody = (metrics.meanSideWallThickness || 0) >= 0.045
+    && invariantRecord.preservedInvariants.includes('visible-body-remains-sheetlike-before-tuck');
+  const hasProtectedCaps = (metrics.protectedTerminalCapCount || metrics.hiddenTerminalCapCount || 0) >= 2;
+  const hasLiveSidewalls = (metrics.sideWallCount || 0) >= 2;
+  const receiverOwnedAbsorptionDisposition = null;
+  if (!hasHookPressure) failureClasses.push('smooth-away-hook-signal');
+  if (!hasSheetBody) failureClasses.push('collapse-to-cord');
+  if (!hasProtectedCaps) failureClasses.push('show-unowned-terminal-cap-as-settled-object');
+  if (!hasLiveSidewalls) failureClasses.push('failed-crumple');
+  if (
+    candidate.provisionalDisposition === 'preserve-as-secondary-vocabulary-candidate'
+    && !receiverOwnedAbsorptionDisposition
+    && !hasHookPressure
+  ) {
+    failureClasses.push('erase-secondary-socket-tongue-without-receiver-disposition');
+  }
+  return {
+    schema: 'SocketTonguePostStripHonestyPreservationRecord',
+    mode: ORB_SHELL_SOCKET_TONGUE_POST_STRIP_HONESTY_MODE,
+    id: `${candidate.id}-post-strip-honesty-preservation`,
+    candidateId: candidate.id,
+    stripHonestyLawId: lowerSocket.lowerSocketStripHonestyLaw?.id || null,
+    invariantRecordId: invariantRecord.id,
+    identityPolicyMode: identityPolicy?.mode || null,
+    preStripDisposition: candidate.provisionalDisposition,
+    receiverOwnedAbsorptionDisposition,
+    provisionalVisibleCapAuthority: lowerSocket.lowerSocketFamilyRoleLaw?.tuckTongueRefinement?.terminalCapAuthority || null,
+    terminalCapVisibilityPolicy: lowerSocket.lowerSocketFamilyRoleLaw?.tuckTongueRefinement?.terminalCapVisibilityPolicy || null,
+    silentErasureAllowed: false,
+    protectedSignalSpans: identityPolicy?.protectedSignalSpans || [
+      { signal: 'subordinate-sheet-body', t0: 0.05, t1: 0.86 },
+      { signal: 'terminal-hook-pressure', t0: 0.72, t1: 1 },
+    ],
+    smoothingMayChange: [
+      'high-frequency-sidewall-kinks',
+      'local-visible-edge-waviness',
+      'centerline-lateral-wander',
+    ],
+    smoothingMayNotChange: [
+      'secondary-socket-tongue-objecthood',
+      'terminal-hook-signal',
+      'protected-terminal-cap-authority',
+      'receiver-dependent-disappearance-contract',
+    ],
+    preservationEvidence: {
+      schema: 'SocketTonguePostStripHonestyEvidence',
+      candidateScore: candidate.candidateScore,
+      sideWallCount: metrics.sideWallCount || 0,
+      hiddenTerminalCapCount: metrics.hiddenTerminalCapCount || 0,
+      protectedTerminalCapCount: metrics.protectedTerminalCapCount || metrics.hiddenTerminalCapCount || 0,
+      provisionalVisibleTerminalCapCount: metrics.provisionalVisibleTerminalCapCount || 0,
+      meanSideWallThickness: metrics.meanSideWallThickness || 0,
+      endCapWidthExpansionRatio: metrics.endCapWidthExpansionRatio || 0,
+      protectedCandidateIds: identityPolicy?.protectedCandidateIds || [],
+    },
+    failureClasses,
+    identityPreservationVerdict: failureClasses.length
+      ? 'socket-tongue-preservation-failed-after-strip-honesty'
+      : 'protected-secondary-socket-tongue-preserved-after-strip-honesty',
+  };
+}
+
+function createSocketTonguePostStripHonestyPreservationPlan(candidates, lowerSocket) {
+  const identityPolicy = lowerSocket?.lowerSocketStripHonestyLaw
+    ?.sideCurveSmoothing
+    ?.kinkBudgetSolver
+    ?.socketTongueIdentityPreservation || null;
+  const records = lowerSocket
+    ? candidates.map(candidate => createSocketTonguePostStripHonestyPreservationRecord(candidate, lowerSocket, identityPolicy))
+    : [];
+  const protectedFailureClasses = [
+    'smooth-away-hook-signal',
+    'erase-secondary-socket-tongue-without-receiver-disposition',
+    'collapse-to-cord',
+    'show-unowned-terminal-cap-as-settled-object',
+  ];
+  return {
+    schema: 'SocketTonguePostStripHonestyPreservationPlan',
+    mode: ORB_SHELL_SOCKET_TONGUE_POST_STRIP_HONESTY_MODE,
+    targetAssemblage: 'lower-socket-keel',
+    targetCandidateId: candidates[0]?.id || 'lower-socket-keel-promoted-body-socket-tongue-candidate',
+    stripHonestyLawId: lowerSocket?.lowerSocketStripHonestyLaw?.id || null,
+    purpose: 'make strip-honesty smoothing accountable to preserved secondary socket-tongue vocabulary',
+    identityPolicyMode: identityPolicy?.mode || null,
+    protectedFailureClasses,
+    records,
+    recordCount: records.length,
+    erasurePolicy: 'candidate disappearance is legal only with explicit receiver-owned absorption or tuck disposition',
+    preservationVerdict: records.length && records.every(record => record.identityPreservationVerdict === 'protected-secondary-socket-tongue-preserved-after-strip-honesty')
+      ? 'socket-tongue-identity-preserved-after-strip-honesty'
+      : records.length
+        ? 'socket-tongue-identity-risk-after-strip-honesty'
+        : 'socket-tongue-preservation-not-active',
+  };
+}
+
 function createSocketTongueProvenancePlan(composition) {
   const targetAssemblage = 'lower-socket-keel';
   const repeatabilityInputs = [socketTongueRepeatabilityInput(composition)];
@@ -4690,6 +4858,11 @@ function createSocketTongueProvenancePlan(composition) {
   const terminalCaps = (composition.liveMacroSideWallPlan?.terminalCaps || [])
     .filter(cap => cap.parentAssemblage === targetAssemblage);
   const hiddenTerminalCaps = terminalCaps.filter(cap => cap.normalRenderVisible === false);
+  const provisionalVisibleTerminalCaps = terminalCaps.filter(cap => cap.provisionalSocketTongueVisible === true);
+  const protectedTerminalCaps = terminalCaps.filter(cap => (
+    cap.normalRenderVisible === false
+    || cap.provisionalSocketTongueVisible === true
+  ));
   const inventoryRecords = (composition.lowerSocketRenderInventoryPlan?.expectedRecords || [])
     .filter(record => record.parentAssemblage === targetAssemblage);
 
@@ -4704,6 +4877,7 @@ function createSocketTongueProvenancePlan(composition) {
       candidateCount: 0,
       bestCandidateId: null,
       generativeInvariantPlan: createSocketTongueGenerativeInvariantPlan([], null),
+      postStripHonestyPreservationPlan: createSocketTonguePostStripHonestyPreservationPlan([], null),
       supportingInventoryRecordIds: inventoryRecords.map(record => record.sourceId),
       provenanceVerdict: 'socket-tongue-source-not-selected',
       followupQuestions: [
@@ -4722,7 +4896,7 @@ function createSocketTongueProvenancePlan(composition) {
   const scoreParts = [
     roleLaw?.selectedRole === 'tuck-tongue' ? 0.26 : 0,
     sideWalls.length >= 2 ? 0.18 : 0,
-    hiddenTerminalCaps.length >= 2 ? 0.18 : 0,
+    protectedTerminalCaps.length >= 2 ? 0.18 : 0,
     meanSideWallThickness > 0.045 ? 0.12 : 0,
     endCapWidthExpansionRatio > 2 ? 0.18 : 0,
     plateLaw ? 0.08 : 0,
@@ -4743,6 +4917,8 @@ function createSocketTongueProvenancePlan(composition) {
     plateBodyHonestyLawId: plateLaw?.id || null,
     sideWallIds: sideWalls.map(wall => wall.id),
     hiddenTerminalCapIds: hiddenTerminalCaps.map(cap => cap.id),
+    provisionalVisibleTerminalCapIds: provisionalVisibleTerminalCaps.map(cap => cap.id),
+    protectedTerminalCapIds: protectedTerminalCaps.map(cap => cap.id),
     supportingInventoryRecordIds: inventoryRecords.map(record => record.sourceId),
     supportingEvidenceClasses: [
       'MacroPromotedBody',
@@ -4760,7 +4936,7 @@ function createSocketTongueProvenancePlan(composition) {
     ],
     notMacroLamellaBecause: [
       roleLaw?.selectedRole === 'tuck-tongue' ? 'selected-role-is-tuck-tongue' : 'not-selected-as-primary-macro-family',
-      hiddenTerminalCaps.length ? 'hidden-terminal-caps-deny-independent-objecthood' : 'terminal-cap-authority-not-full-objecthood',
+      protectedTerminalCaps.length ? 'protected-terminal-caps-deny-independent-objecthood' : 'terminal-cap-authority-not-full-objecthood',
       'source-is-subordinate-lower-socket-keel',
       'requires-future-receiver-or-aperture-owner-before-final-tuck',
     ],
@@ -4768,6 +4944,8 @@ function createSocketTongueProvenancePlan(composition) {
       schema: 'SocketTongueAnatomyMetrics',
       sideWallCount: sideWalls.length,
       hiddenTerminalCapCount: hiddenTerminalCaps.length,
+      provisionalVisibleTerminalCapCount: provisionalVisibleTerminalCaps.length,
+      protectedTerminalCapCount: protectedTerminalCaps.length,
       terminalCapCount: terminalCaps.length,
       meanSideWallThickness,
       sideWallThicknessRelativeVariationMax: sideWalls.reduce((max, wall) => Math.max(max, wall.sideWallThicknessStats?.relativeVariation || 0), 0),
@@ -4782,6 +4960,8 @@ function createSocketTongueProvenancePlan(composition) {
   const generativeInvariantRecord = createSocketTongueGenerativeInvariantRecord(candidate, lowerSocket);
   candidate.generativeInvariantRecord = generativeInvariantRecord;
   const generativeInvariantPlan = createSocketTongueGenerativeInvariantPlan([candidate], lowerSocket);
+  const postStripHonestyPreservationPlan = createSocketTonguePostStripHonestyPreservationPlan([candidate], lowerSocket);
+  candidate.postStripHonestyPreservationRecord = postStripHonestyPreservationPlan.records.find(record => record.candidateId === candidate.id) || null;
 
   return {
     schema: 'SocketTongueProvenancePlan',
@@ -4793,6 +4973,7 @@ function createSocketTongueProvenancePlan(composition) {
     candidateCount: 1,
     bestCandidateId: candidate.id,
     generativeInvariantPlan,
+    postStripHonestyPreservationPlan,
     supportingInventoryRecordIds: inventoryRecords.map(record => record.sourceId),
     provenanceVerdict: candidateScore >= 0.72
       ? 'socket-tongue-candidate-source-identified'
@@ -4826,6 +5007,8 @@ function socketTongueCandidateMetrics(candidate) {
     candidateScore: candidate?.candidateScore || 0,
     sideWallCount: metrics.sideWallCount || 0,
     hiddenTerminalCapCount: metrics.hiddenTerminalCapCount || 0,
+    provisionalVisibleTerminalCapCount: metrics.provisionalVisibleTerminalCapCount || 0,
+    protectedTerminalCapCount: metrics.protectedTerminalCapCount || metrics.hiddenTerminalCapCount || 0,
     terminalCapCount: metrics.terminalCapCount || 0,
     meanSideWallThickness: metrics.meanSideWallThickness || 0,
     sideWallThicknessRelativeVariationMax: metrics.sideWallThicknessRelativeVariationMax || 0,
@@ -4864,7 +5047,7 @@ function createSocketTongueReproductionProbeCase(config, composition, referenceC
       metrics.meanSideWallThickness >= 0.045
         && (plateLaw?.cordLikeShrinkageForbidden || invariantRecord?.preservedInvariants?.includes('visible-body-remains-sheetlike-before-tuck'))
     ),
-    hiddenTerminalCaps: metrics.hiddenTerminalCapCount >= 2,
+    protectedTerminalCaps: metrics.protectedTerminalCapCount >= 2,
     liveSidewalls: metrics.sideWallCount >= 2,
     hookPressure: metrics.endCapWidthExpansionRatio >= 2,
     sourceCandidatePresent: Boolean(candidate),
@@ -4875,7 +5058,7 @@ function createSocketTongueReproductionProbeCase(config, composition, referenceC
   if (candidate && !contractFlags.sheetlikeBody) failureClasses.push('failed-cord-collapse');
   if (candidate && !contractFlags.subordinateObjecthood) failureClasses.push('failed-full-macro');
   if (candidate && !contractFlags.liveSidewalls) failureClasses.push('failed-crumple');
-  if (candidate && !contractFlags.hiddenTerminalCaps) failureClasses.push('show-hidden-terminal-cap-as-object');
+  if (candidate && !contractFlags.protectedTerminalCaps) failureClasses.push('show-unowned-terminal-cap-as-settled-object');
   if (candidate && !contractFlags.hookPressure) failureClasses.push('smooth-away-hook-signal');
 
   const requiredFlags = [
@@ -4883,7 +5066,7 @@ function createSocketTongueReproductionProbeCase(config, composition, referenceC
     'receiverPresent',
     'subordinateObjecthood',
     'sheetlikeBody',
-    'hiddenTerminalCaps',
+    'protectedTerminalCaps',
     'liveSidewalls',
     'hookPressure',
     'sourceCandidatePresent',
