@@ -4,6 +4,7 @@ import { join } from 'node:path';
 
 const root = new URL('..', import.meta.url).pathname;
 const index = readFileSync(join(root, 'index.html'), 'utf8');
+const volumeWitness = readFileSync(join(root, 'volume-witness.mjs'), 'utf8');
 
 assert.match(index, /data-tab="volume"/, 'sidebar exposes a Volume tab');
 assert.match(index, /id="tab-volume"/, 'Volume tab content is present');
@@ -211,6 +212,10 @@ assert.match(index, /volume_pyro_radiance_border/, 'Pyro basin URLs preserve rad
 assert.match(index, /volume_pyro_radiance_teeth/, 'Pyro basin URLs preserve radiance teeth/bite');
 assert.match(index, /volume_pyro_radiance_rise/, 'Pyro basin URLs preserve radiance rise/climb');
 assert.match(index, /volume_pyro_radiance_fire_lock/, 'Pyro basin URLs preserve radiance live-fire lock');
+assert.doesNotMatch(volumeWitness, /`\/tmp\/kaminos-volume-witness-profile-\$\{port\}`/, 'Volume witness must not reuse one persistent browser profile per debug port');
+assert.match(volumeWitness, /mkdtempSync\([^)]*kaminos-volume-witness-profile-/, 'Volume witness default profile must be fresh per run so stale localStorage cannot shadow the requested route');
+assert.doesNotMatch(volumeWitness, /Number\(args\.get\('--debug-port'\) \|\| 9433\)/, 'Volume witness must not reuse one fixed default Chrome debug port across runs');
+assert.match(volumeWitness, /randomInt\(/, 'Volume witness default debug port must be randomized so stale Chrome targets cannot shadow the requested route');
 assert.match(index, /routePyroRadianceGate/, 'Pyro route parser accepts radiance gate');
 assert.match(index, /routePyroRadianceSpill/, 'Pyro route parser accepts radiance spill');
 assert.match(index, /routePyroRadianceWarmth/, 'Pyro route parser accepts radiance warmth');

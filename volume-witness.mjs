@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
 import { deflateSync, inflateSync as zlibInflateSync } from 'node:zlib';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { execFileSync, spawn } from 'node:child_process';
+import { randomInt } from 'node:crypto';
 
 const args = new Map();
 for (let i = 2; i < process.argv.length; i += 2) {
@@ -13,9 +14,9 @@ for (let i = 2; i < process.argv.length; i += 2) {
 const url = args.get('--url') || 'http://127.0.0.1:8095/?kaminos_volume_smoke=1';
 const out = resolve(args.get('--out') || '/tmp/kaminos-volume-witness.png');
 const reportPath = resolve(args.get('--report') || out.replace(/\.png$/i, '.json'));
-const port = Number(args.get('--debug-port') || 9433);
+const port = Number(args.get('--debug-port') || randomInt(42000, 62000));
 const chrome = process.env.KAMINOS_CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
-const userDataDir = args.get('--user-data-dir') || `/tmp/kaminos-volume-witness-profile-${port}`;
+const userDataDir = args.get('--user-data-dir') || mkdtempSync('/tmp/kaminos-volume-witness-profile-');
 const settleMs = Number(args.get('--settle-ms') || 1500);
 const windowSize = args.get('--window-size') || '1280,960';
 const fullScreenshot = args.has('--full-screenshot')
