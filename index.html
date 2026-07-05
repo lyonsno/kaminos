@@ -1287,8 +1287,8 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
     <span class="slider-help">Bite fire lock: memory can whisper at 0, current flame authority required at 1.</span>
     <div class="slider-row">
       <span class="slider-label">Core Bite</span>
-      <input type="range" id="volume-pyro-bite-core" min="0" max="1" step="0.05" value="0.65">
-      <span class="slider-val" id="volume-pyro-bite-core-val">0.65</span>
+      <input type="range" id="volume-pyro-bite-core" min="0" max="1" step="0.05" value="0">
+      <span class="slider-val" id="volume-pyro-bite-core-val">0.00</span>
     </div>
     <span class="slider-help">Core bite: inner current-flame teeth; stacks under rim and afterbite.</span>
     <div class="slider-row">
@@ -1299,8 +1299,8 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
     <span class="slider-help">Core cut: broad current fire at 0, selective hot core at 1.</span>
     <div class="slider-row">
       <span class="slider-label">Rim Bite</span>
-      <input type="range" id="volume-pyro-bite-rim" min="0" max="1" step="0.05" value="0.75">
-      <span class="slider-val" id="volume-pyro-bite-rim-val">0.75</span>
+      <input type="range" id="volume-pyro-bite-rim" min="0" max="1" step="0.05" value="0">
+      <span class="slider-val" id="volume-pyro-bite-rim-val">0.00</span>
     </div>
     <span class="slider-help">Rim bite: flame-smoke interface teeth, separate from core body bite.</span>
     <div class="slider-row">
@@ -1311,8 +1311,8 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
     <span class="slider-help">Rim cut: soft seam at 0, strict flame-smoke edge at 1.</span>
     <div class="slider-row">
       <span class="slider-label">After Bite</span>
-      <input type="range" id="volume-pyro-bite-after" min="0" max="1" step="0.05" value="0.35">
-      <span class="slider-val" id="volume-pyro-bite-after-val">0.35</span>
+      <input type="range" id="volume-pyro-bite-after" min="0" max="1" step="0.05" value="0">
+      <span class="slider-val" id="volume-pyro-bite-after-val">0.00</span>
     </div>
     <span class="slider-help">After bite: ember wake bite where fire just fed the plume.</span>
     <div class="slider-row">
@@ -9596,6 +9596,11 @@ const FIRESIM_LOOK_FIELDS = [
   'detailScale', 'plumeHeight', 'windStrength', 'windAngle', 'windHeight', 'inputRadius',
   'flowRate',
 ];
+const LEGACY_BITE_STACK_DEFAULTS = {
+  pyroBiteCore: 0.65,
+  pyroBiteRim: 0.75,
+  pyroBiteAfter: 0.35,
+};
 
 const VOLUME_SCENE_PRESETS = {
   canonical_plume: {
@@ -10587,8 +10592,30 @@ function normalizeVolumeLookLibrary(raw = null) {
     identity: VOLUME_LOOK_LIBRARY_IDENTITY,
     version: 1,
     updatedAt: typeof library.updatedAt === 'string' ? library.updatedAt : now,
-    pyro: Array.isArray(library.pyro) ? library.pyro.filter(entry => entry && entry.name && entry.controls) : [],
-    firesim: Array.isArray(library.firesim) ? library.firesim.filter(entry => entry && entry.name && entry.controls) : [],
+    pyro: Array.isArray(library.pyro) ? library.pyro.map(entry => normalizeVolumeLookEntry(entry, 'pyro')).filter(Boolean) : [],
+    firesim: Array.isArray(library.firesim) ? library.firesim.map(entry => normalizeVolumeLookEntry(entry, 'firesim')).filter(Boolean) : [],
+  };
+}
+
+function matchesLegacyBiteStackDefaults(controls = {}) {
+  return Object.entries(LEGACY_BITE_STACK_DEFAULTS).every(([key, value]) => Math.abs(Number(controls[key]) - value) < 1e-6);
+}
+
+function normalizeVolumeLookControls(kind, controls = {}, entry = {}) {
+  const normalized = controls && typeof controls === 'object' ? { ...controls } : {};
+  if (normalizeVolumeLookLibraryKind(kind) === 'pyro' && entry.biteStackAuthored !== true && matchesLegacyBiteStackDefaults(normalized)) {
+    normalized.pyroBiteCore = 0;
+    normalized.pyroBiteRim = 0;
+    normalized.pyroBiteAfter = 0;
+  }
+  return normalized;
+}
+
+function normalizeVolumeLookEntry(entry, kind) {
+  if (!entry || !entry.name || !entry.controls) return null;
+  return {
+    ...entry,
+    controls: normalizeVolumeLookControls(kind, entry.controls, entry),
   };
 }
 
@@ -10670,6 +10697,9 @@ function saveVolumeLookLibraryEntry() {
     fields: volumeLookLibraryFields(kind),
     controls: pickVolumeLookControls(volumeLookLibraryFields(kind)),
   };
+  if (kind === 'pyro') {
+    entry.biteStackAuthored = ['pyroBiteCore', 'pyroBiteRim', 'pyroBiteAfter'].some(key => Number(entry.controls[key]) > 0);
+  }
   const index = entries.findIndex(candidate => candidate.name === name);
   if (index >= 0) entries[index] = { ...entries[index], ...entry, savedAt: entries[index].savedAt || now };
   else entries.push(entry);

@@ -3581,9 +3581,9 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
       1.25
     );
     let pyroStackedBiteEvent = clamp(
-      pyroBiteEvent * 0.55 + pyroBiteCoreEvent * 0.70 + pyroBiteRimEvent * 0.82 + pyroBiteAfterEvent * 0.55,
+      pyroBiteEvent + pyroBiteCoreEvent * 0.36 + pyroBiteRimEvent * 0.54 + pyroBiteAfterEvent * 0.32,
       0.0,
-      1.65
+      1.55
     );
     let pyroEdgeBreakup = pyroBiteCarrier
       * pyroEdgeBite
@@ -5332,11 +5332,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const pyroBiteWake = Math.max(0, Math.min(1, controlsSnapshot.pyroBiteWake ?? 0.25));
     const pyroBiteHeight = Math.max(0, Math.min(1, controlsSnapshot.pyroBiteHeight ?? 0.35));
     const pyroBiteFireLock = Math.max(0, Math.min(1, controlsSnapshot.pyroBiteFireLock ?? 0.75));
-    const pyroBiteCore = Math.max(0, Math.min(1, controlsSnapshot.pyroBiteCore ?? 0.65));
+    const pyroBiteCore = Math.max(0, Math.min(1, controlsSnapshot.pyroBiteCore ?? 0));
     const pyroBiteCoreCut = Math.max(0, Math.min(1, controlsSnapshot.pyroBiteCoreCut ?? 0.45));
-    const pyroBiteRim = Math.max(0, Math.min(1, controlsSnapshot.pyroBiteRim ?? 0.75));
+    const pyroBiteRim = Math.max(0, Math.min(1, controlsSnapshot.pyroBiteRim ?? 0));
     const pyroBiteRimCut = Math.max(0, Math.min(1, controlsSnapshot.pyroBiteRimCut ?? 0.55));
-    const pyroBiteAfter = Math.max(0, Math.min(1, controlsSnapshot.pyroBiteAfter ?? 0.35));
+    const pyroBiteAfter = Math.max(0, Math.min(1, controlsSnapshot.pyroBiteAfter ?? 0));
     const pyroBiteAfterCut = Math.max(0, Math.min(1, controlsSnapshot.pyroBiteAfterCut ?? 0.50));
     const pyroSmokeFold = Math.max(0, Math.min(1, controlsSnapshot.pyroSmokeFold ?? 0.25));
     const pyroFoldBorderFocus = Math.max(0, Math.min(1, controlsSnapshot.pyroFoldBorder ?? 0.35));

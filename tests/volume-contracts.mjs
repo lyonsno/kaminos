@@ -929,6 +929,18 @@ assert.match(core, /pyroBiteCoreEvent/, 'WGSL derives a named inner/current-flam
 assert.match(core, /pyroBiteRimEvent/, 'WGSL derives a named rim/interface Bite layer');
 assert.match(core, /pyroBiteAfterEvent/, 'WGSL derives a named after/wake Bite layer');
 assert.match(core, /pyroStackedBiteEvent/, 'WGSL combines Bite layers before load-bearing alpha/color contribution');
+assert.match(index, /LEGACY_BITE_STACK_DEFAULTS/, 'Look-library migration names the old non-neutral Bite stack defaults');
+assert.match(index, /matchesLegacyBiteStackDefaults/, 'Look-library migration detects stale Bite-stack defaults from saved looks');
+assert.match(index, /entry\.biteStackAuthored !== true && matchesLegacyBiteStackDefaults/, 'Look-library migration only neutralizes un-authored legacy Bite stack defaults');
+assert.match(index, /entry\.biteStackAuthored = \['pyroBiteCore', 'pyroBiteRim', 'pyroBiteAfter'\]/, 'Saved Pyro looks mark intentionally authored Bite stack layers');
+for (const id of [
+  'volume-pyro-bite-core',
+  'volume-pyro-bite-rim',
+  'volume-pyro-bite-after',
+]) {
+  assert.match(index, new RegExp(`id="${id}"[^>]*value="0"`), `Bite stack gain ${id} defaults neutral so legacy Bite remains the baseline look`);
+}
+assert.match(core, /pyroStackedBiteEvent\s*=\s*clamp\(\s*pyroBiteEvent\s*\+/, 'Stacked Bite preserves the legacy Bite carrier at full strength before optional layers add detail');
 assert.match(core, /pyroWakeSignal/, 'WGSL computes a named smoke-memory Wake carrier separate from Bite');
 assert.match(core, /pyroCurrentFireLock/, 'WGSL computes a named current-fire authority lock for Bite');
 assert.match(core, /uniforms\[200\]\s*=\s*pyroBiteHeat/, 'CPU uploads Bite heat into the Pyro color uniform block');
