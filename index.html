@@ -15263,15 +15263,22 @@ const VOLUME_BRICK_WALL_LIGHTING = Object.freeze({
 const VOLUME_BRICK_WALL_FIRE_LIGHT_PROXY = Object.freeze({
   identity: 'volume-scene-fire-light-proxy-v0',
   probeIdentity: 'volume-fire-light-probe-sh1-v0',
-  sourceIdentity: 'volume-gpu-wall-wash-only-v0',
+  sourceIdentity: 'volume-wall-attached-glow-proxy-v0',
   defaultMode: 1,
   defaultGain: 1,
 });
 const VOLUME_BRICK_WALL_GPU_WASH = Object.freeze({
   identity: 'volume-gpu-brick-wall-wash-v0',
   authority: 'webgpu-fragment-live-fire-wall-wash-v0',
-  source: 'fragment-shader-live-fire-accumulation-plus-route-proxy-v0',
+  source: 'fragment-shader-live-fire-meter-no-color-write-v0',
   cadence: 'per-render-frame-gpu-fragment',
+});
+const VOLUME_BRICK_WALL_GLOW_PROXY = Object.freeze({
+  identity: 'volume-scene-fire-wall-glow-proxy-v0',
+  authority: 'scene-space-wall-attached-proxy-no-cpu-readback-v0',
+  energyAuthority: 'control-and-frame-cadence-proxy-not-fire-frame-readback-v0',
+  materialIdentity: 'brick-wall-additive-fire-glow-material-v0',
+  geometryIdentity: 'brick-wall-attached-glow-plane-v0',
 });
 
 function normalizeVolumeSceneContext(value) {
@@ -15289,7 +15296,7 @@ function computeBrickWallGpuWashProbe(volumeState = {}) {
     identity: VOLUME_BRICK_WALL_FIRE_LIGHT_PROXY.probeIdentity,
     sourceIdentity: `${VOLUME_BRICK_WALL_FIRE_LIGHT_PROXY.sourceIdentity}+${gpuWallWash.authority || VOLUME_BRICK_WALL_GPU_WASH.authority}`,
     order: 1,
-    mode: sourceAuthority ? 'gpu-wall-wash' : 'disabled',
+    mode: sourceAuthority ? 'wall-space-glow' : 'disabled',
     gain,
     sourceAuthority,
     liveCpuReadback: false,
@@ -15300,6 +15307,38 @@ function computeBrickWallGpuWashProbe(volumeState = {}) {
     contactWash: 0,
     sphericalHarmonicCoefficients: [0, 0, 0, 0],
   };
+}
+
+function createBrickWallFireGlowTexture() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 256;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const glow = ctx.createRadialGradient(104, 150, 5, 122, 132, 164);
+  glow.addColorStop(0.0, 'rgba(255,244,190,0.86)');
+  glow.addColorStop(0.15, 'rgba(255,174,72,0.52)');
+  glow.addColorStop(0.40, 'rgba(255,108,30,0.23)');
+  glow.addColorStop(0.76, 'rgba(170,44,14,0.070)');
+  glow.addColorStop(1.0, 'rgba(0,0,0,0.0)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.globalCompositeOperation = 'destination-in';
+  const vertical = ctx.createLinearGradient(0, 20, 0, 240);
+  vertical.addColorStop(0.0, 'rgba(255,255,255,0.02)');
+  vertical.addColorStop(0.16, 'rgba(255,255,255,0.88)');
+  vertical.addColorStop(0.76, 'rgba(255,255,255,0.82)');
+  vertical.addColorStop(1.0, 'rgba(255,255,255,0.0)');
+  ctx.fillStyle = vertical;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.globalCompositeOperation = 'source-over';
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.generateMipmaps = false;
+  texture.minFilter = THREE.LinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  texture.userData.kaminosIdentity = VOLUME_BRICK_WALL_GLOW_PROXY.materialIdentity;
+  return texture;
 }
 
 function createVolumeProceduralStoneTexture() {
@@ -15480,10 +15519,49 @@ function createVolumeBrickWallContext() {
   side.position.set(2.3, 1.4, 0.8);
   group.add(side);
 
+  const wallGlowTexture = createBrickWallFireGlowTexture();
+  const wallGlowMaterial = new THREE.MeshBasicMaterial({
+    map: wallGlowTexture,
+    color: new THREE.Color(0xff8a24),
+    transparent: true,
+    opacity: 0,
+    depthTest: false,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+    toneMapped: false,
+    side: THREE.DoubleSide,
+  });
+  wallGlowMaterial.name = VOLUME_BRICK_WALL_GLOW_PROXY.materialIdentity;
+  const wallGlow = new THREE.Mesh(new THREE.PlaneGeometry(2.55, 2.05), wallGlowMaterial);
+  wallGlow.name = VOLUME_BRICK_WALL_GLOW_PROXY.identity;
+  wallGlow.userData.kaminosWallAttachedGlow = {
+    identity: VOLUME_BRICK_WALL_GLOW_PROXY.identity,
+    authority: VOLUME_BRICK_WALL_GLOW_PROXY.authority,
+    energyAuthority: VOLUME_BRICK_WALL_GLOW_PROXY.energyAuthority,
+    materialIdentity: VOLUME_BRICK_WALL_GLOW_PROXY.materialIdentity,
+    geometryIdentity: VOLUME_BRICK_WALL_GLOW_PROXY.geometryIdentity,
+  };
+  wallGlow.position.set(0.82, -0.28, -0.56);
+  wallGlow.rotation.y = -0.18;
+  wallGlow.rotation.x = 0.02;
+  wallGlow.renderOrder = 18;
+  wallGlow.visible = false;
+  group.add(wallGlow);
+
   let loadedModel = null;
   let loadPromise = null;
   let previousGroundPlaneVisible = null;
   let lastFireLightProbe = computeBrickWallGpuWashProbe({});
+  let lastWallAttachedGlow = {
+    identity: VOLUME_BRICK_WALL_GLOW_PROXY.identity,
+    authority: VOLUME_BRICK_WALL_GLOW_PROXY.authority,
+    energyAuthority: VOLUME_BRICK_WALL_GLOW_PROXY.energyAuthority,
+    mode: 'disabled',
+    opacity: 0,
+    visible: false,
+    scale: [1, 1, 1],
+    liveCpuReadback: false,
+  };
 
   const applyDimLightingControls = () => {
     if (renderer) renderer.toneMappingExposure = VOLUME_BRICK_WALL_LIGHTING.lightingExposure;
@@ -15507,7 +15585,50 @@ function createVolumeBrickWallContext() {
       cadence: VOLUME_BRICK_WALL_GPU_WASH.cadence,
       enabled: false,
       cpuReadbackAuthority: false,
-      supportRole: 'gpu-only-no-cpu-readback-route-proxy-wall-tint',
+      supportRole: 'gpu-meter-drives-scene-space-wall-glow-v0',
+    };
+    const controlsState = volumeState?.controls || {};
+    const routeGain = lastFireLightProbe.sourceAuthority ? lastFireLightProbe.gain : 0;
+    const fireControl = clampVolumeValue(controlsState.fire ?? 1, 0, 5);
+    const radianceControl = clampVolumeValue(controlsState.radiance ?? 1, 0, 5);
+    const glowControl = clampVolumeValue(controlsState.glow ?? 1, 0, 5);
+    const frameSeed = Number.isFinite(volumeState?.frameCount) ? volumeState.frameCount : 0;
+    const flicker = 0.84
+      + Math.sin(frameSeed * 0.37 + fireControl * 1.9) * 0.09
+      + Math.sin(frameSeed * 0.071 + radianceControl * 2.3) * 0.05;
+    const glowEnergy = clampVolumeValue(
+      routeGain
+        * (0.36 + fireControl * 0.20)
+        * (0.48 + radianceControl * 0.12 + glowControl * 0.05)
+        * flicker,
+      0,
+      1.65
+    );
+    const glowOpacity = clampVolumeValue(glowEnergy * 0.48, 0, 0.58);
+    const glowScale = 0.86 + clampVolumeValue(glowEnergy, 0, 1.4) * 0.32;
+    wallGlow.visible = group.visible && glowOpacity > 0.006;
+    wallGlowMaterial.opacity = wallGlow.visible ? glowOpacity : 0;
+    wallGlow.scale.set(1.04 + glowScale * 0.38, 0.96 + glowScale * 0.28, 1);
+    wallGlowMaterial.color.setRGB(
+      1.0,
+      0.34 + clampVolumeValue(radianceControl * 0.030, 0, 0.16),
+      0.08 + clampVolumeValue(glowControl * 0.014, 0, 0.08)
+    );
+    lastWallAttachedGlow = {
+      identity: VOLUME_BRICK_WALL_GLOW_PROXY.identity,
+      authority: VOLUME_BRICK_WALL_GLOW_PROXY.authority,
+      energyAuthority: VOLUME_BRICK_WALL_GLOW_PROXY.energyAuthority,
+      materialIdentity: VOLUME_BRICK_WALL_GLOW_PROXY.materialIdentity,
+      geometryIdentity: VOLUME_BRICK_WALL_GLOW_PROXY.geometryIdentity,
+      mode: lastFireLightProbe.mode,
+      opacity: wallGlowMaterial.opacity,
+      visible: wallGlow.visible,
+      position: wallGlow.position.toArray(),
+      rotation: [wallGlow.rotation.x, wallGlow.rotation.y, wallGlow.rotation.z],
+      scale: wallGlow.scale.toArray(),
+      renderOrder: wallGlow.renderOrder,
+      liveCpuReadback: false,
+      drive: 'control-and-live-frame-cadence-proxy-no-readback-v0',
     };
     const c = lastFireLightProbe.centroid;
     group.userData.kaminosVolumeSceneContext.fireLightProxy = {
@@ -15519,6 +15640,7 @@ function createVolumeBrickWallContext() {
       threeLightSupport: 'removed',
       gpuWallWashAuthority: gpuWallWash.authority,
       gpuWallWash,
+      wallAttachedGlow: lastWallAttachedGlow,
       sphericalHarmonicOrder: lastFireLightProbe.order,
       gain: lastFireLightProbe.gain,
       intensity: lastFireLightProbe.intensity,
@@ -15653,6 +15775,7 @@ function createVolumeBrickWallContext() {
         fireLightProxyIdentity: VOLUME_BRICK_WALL_FIRE_LIGHT_PROXY.identity,
         fireLightProxyMode: metadata.fireLightProxy?.fireLightProxyMode || lastFireLightProbe.mode,
         fireLightProxy: metadata.fireLightProxy || null,
+        wallAttachedGlow: metadata.fireLightProxy?.wallAttachedGlow || lastWallAttachedGlow,
         sphericalHarmonicProbeIdentity: metadata.fireLightProxy?.probeIdentity || VOLUME_BRICK_WALL_FIRE_LIGHT_PROXY.probeIdentity,
         sphericalHarmonicCoefficients: metadata.fireLightProxy?.sphericalHarmonicCoefficients || lastFireLightProbe.sphericalHarmonicCoefficients,
         globalGroundPlaneSuppressed: group.visible && groundPlane ? groundPlane.visible === false : false,
@@ -15678,8 +15801,12 @@ function createVolumeBrickWallContext() {
       scene.remove(group);
       if (loadedModel) disposeObjectTree(loadedModel);
       group.remove(ground, fill, side);
+      group.remove(wallGlow);
       ground.geometry.dispose();
       groundMaterial.dispose();
+      wallGlow.geometry.dispose();
+      wallGlowTexture.dispose();
+      wallGlowMaterial.dispose();
     },
   };
 }

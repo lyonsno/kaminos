@@ -1466,8 +1466,11 @@ async function main() {
       assert.ok(Math.abs((volumeSceneContext?.environmentIntensity ?? 0) - 0.05) < 0.001, 'brick-wall volume scene context did not record low static environment intensity');
       assert.equal(volumeSceneContext?.fireLightProxyIdentity, 'volume-scene-fire-light-proxy-v0', 'brick-wall scene context did not expose flame-light proxy identity');
       assert.equal(volumeSceneContext?.sphericalHarmonicProbeIdentity, 'volume-fire-light-probe-sh1-v0', 'brick-wall scene context did not expose fire-light probe identity');
-      assert.equal(volumeSceneContext?.fireLightProxyMode, expectedVolumeFireLightProxy > 0.001 ? 'gpu-wall-wash' : 'disabled', 'brick-wall scene context did not apply GPU wall-wash proxy mode');
+      assert.equal(volumeSceneContext?.fireLightProxyMode, expectedVolumeFireLightProxy > 0.001 ? 'wall-space-glow' : 'disabled', 'brick-wall scene context did not apply wall-space glow proxy mode');
       assert.ok(Math.abs((volumeSceneContext?.fireLightProxy?.gain ?? 0) - expectedVolumeFireLightGain) < 0.001, 'brick-wall scene context did not apply flame-light proxy gain');
+      assert.equal(volumeSceneContext?.wallAttachedGlow?.identity, 'volume-scene-fire-wall-glow-proxy-v0', 'brick-wall scene context did not expose wall-attached glow identity');
+      assert.equal(volumeSceneContext?.wallAttachedGlow?.authority, 'scene-space-wall-attached-proxy-no-cpu-readback-v0', 'brick-wall scene context did not expose wall-attached glow authority');
+      assert.equal(volumeSceneContext?.wallAttachedGlow?.energyAuthority, 'control-and-frame-cadence-proxy-not-fire-frame-readback-v0', 'brick-wall scene context must disclose that wall glow energy is not a fire-frame readback');
       assert.equal(volumeSceneContext?.ceilingVisibilityPolicy, 'volume-scene-brick-wall-ceiling-hidden-v0', 'brick-wall scene context did not apply ceiling-hidden framing policy');
       assert.ok(Array.isArray(volumeSceneContext?.sphericalHarmonicCoefficients), 'brick-wall scene context did not report fire-light sphericalHarmonicCoefficients');
       assert.ok((volumeSceneContext?.sphericalHarmonicCoefficients?.length ?? 0) >= 4, 'brick-wall fire-light probe did not report first-order spherical harmonics');
@@ -1487,8 +1490,11 @@ async function main() {
         assert.equal(volumeSceneContext?.fireLightProxy?.intensity, 0, 'brick-wall Three light intensity must remain zero when GPU wall wash is active');
         assert.equal(volumeSceneContext?.fireLightProxy?.contactWash, 0, 'brick-wall CPU/Three contact wash must remain zero when GPU wall wash is active');
         assert.equal(volumeSceneContext?.fireLightProxy?.gpuWallWash?.enabled, true, 'brick-wall GPU wall wash did not become active');
+        assert.equal(volumeSceneContext?.wallAttachedGlow?.visible, true, 'brick-wall wall-attached glow did not become visible');
+        assert.ok((volumeSceneContext?.wallAttachedGlow?.opacity ?? 0) > 0.01, 'brick-wall wall-attached glow opacity did not rise above zero');
       } else {
         assert.equal(volumeSceneContext?.fireLightProxy?.gpuWallWash?.enabled, false, 'disabled brick-wall fire-light proxy should disable GPU wall wash');
+        assert.equal(volumeSceneContext?.wallAttachedGlow?.visible, false, 'disabled brick-wall fire-light proxy should hide wall-attached glow');
       }
       assert.equal(volumeSceneContext?.globalGroundPlaneSuppressed, true, 'brick-wall volume scene context did not suppress the bright global app ground plane');
       assert.equal(volumeSceneContext?.loadState, 'loaded', `brick-wall GLB did not load: ${volumeSceneContext?.loadError || volumeSceneContext?.loadState}`);
