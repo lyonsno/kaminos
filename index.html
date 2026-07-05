@@ -516,7 +516,7 @@ input[type="range"]:disabled::-webkit-slider-thumb { background: #555; cursor: n
 
       <section id="motion-panel-path-world-section">
         <div class="motion-panel-section-title">Path World</div>
-        <div class="motion-panel-section-subtitle">route -> wall trigger -> reaction cliplet</div>
+        <div class="motion-panel-section-subtitle" id="motion-panel-path-world-mode">route -> wall trigger -> reaction cliplet</div>
         <div class="field"><span class="field-key">Source</span><span class="field-val" id="motion-panel-path-world-active-source">inactive</span></div>
         <div class="field"><span class="field-key">Trigger</span><span class="field-val" id="motion-panel-path-world-trigger-state">no world</span></div>
         <div class="field"><span class="field-key">Obstacle</span><span class="field-val" id="motion-panel-path-world-obstacle">none</span></div>
@@ -3990,18 +3990,28 @@ function motionPanelPathWorldReadout() {
   const hillTerrainSurface = actor?.hillTerrainSurface || pathWorld?.hillTerrainSurface || motionTemporalState?.pathWorld?.hillTerrainSurface || null;
   const hillTerrainFrame = actor?.hillTerrainFrame || pathWorld?.hillTerrainFrame || motionTemporalState?.pathWorld?.hillTerrainFrame || null;
   const hillTerrainCarrier = actor?.hillTerrainCarrier || motionTemporalState?.lastHillTerrainCarrier || null;
-  const activeSource = actor?.pathWorldActiveSource
+  const carrierPathFollower = actor?.carrierPathFollower || motionTemporalState?.lastCarrierPathFollower || null;
+  const carrierFollowActive = !!carrierPathFollower;
+  const activeSource = carrierFollowActive
+    ? (carrierPathFollower.routeAuthority || 'terrain-affordance-route-plan')
+    : actor?.pathWorldActiveSource
     || interrupt?.activeSource
     || pathWorld?.routeAuthority
     || (routePlan ? 'terrain-affordance-route-plan' : pathWorld ? 'world-path' : 'inactive');
   const trigger = pathWorld?.trigger || interrupt?.trigger || null;
+  const triggerState = carrierFollowActive
+    ? (carrierPathFollower.pathTriggerRequested ? 'suppressed-by-carrier' : 'terrain-contact')
+    : interrupt?.state || (trigger?.fired ? 'armed-contact' : pathWorld ? 'armed' : 'inactive');
   return {
     schema: 'kaminos.motion-panel-path-world-readout.v0',
     active: !!pathWorld,
+    modeLabel: carrierFollowActive
+      ? 'terrain route -> carrier contact -> local affect'
+      : 'route -> wall trigger -> reaction cliplet',
     activeSource,
-    triggerState: interrupt?.state || (trigger?.fired ? 'armed-contact' : pathWorld ? 'armed' : 'inactive'),
+    triggerState,
     obstacleId: trigger?.obstacleId || interrupt?.obstacleId || 'none',
-    reason: interrupt?.reason || pathWorld?.reason || 'waiting',
+    reason: carrierFollowActive ? 'hill-carrier-follow' : interrupt?.reason || pathWorld?.reason || 'waiting',
     triggerDistance: Number.isFinite(Number(trigger?.distance)) ? Number(Number(trigger.distance).toFixed(5)) : null,
     triggerRadius: Number.isFinite(Number(trigger?.radius)) ? Number(Number(trigger.radius).toFixed(5)) : null,
     fired: !!interrupt?.fired || !!trigger?.fired,
@@ -4012,6 +4022,8 @@ function motionPanelPathWorldReadout() {
     hillTerrainSurface,
     hillTerrainFrame,
     hillTerrainCarrier,
+    carrierPathFollower,
+    pathTriggerSuppressedByCarrierFollower: !!carrierPathFollower?.pathTriggerSuppressedByCarrierFollower,
     groundingAuthority: hillTerrainCarrier?.groundingAuthority || actor?.groundingAuthority || null,
     sectionVisible: !!document.getElementById('motion-panel-path-world-section'),
     controls: {
@@ -4037,6 +4049,8 @@ function updateMotionPanelPathWorldReadout() {
   setField('motion-panel-path-world-trigger-state', triggerLabel, readout.active);
   setField('motion-panel-path-world-obstacle', readout.obstacleId, readout.active);
   setField('motion-panel-path-world-reason', readout.reason, readout.active);
+  const mode = document.getElementById('motion-panel-path-world-mode');
+  if (mode) mode.textContent = readout.modeLabel;
   return readout;
 }
 
@@ -5295,7 +5309,7 @@ function createMotionPanelHillNativePathWorld(routePlan, terrainSource, options 
     schema: 'kaminos.generated-motion-path-world.v0',
     route: MOTION_ROUTE_IDENTITY,
     id: `generated-pose-temporal-hill-native-route-world-${routePlan?.id || 'hill-route-plan'}`,
-    routeMode: 'goal-seeking',
+    routeMode: 'patrol-return',
     routeAuthority: 'terrain-affordance-route-plan',
     routeSource: routePlan?.evidence?.routeSource || 'hill-motion-affordance-grid',
     reason: 'hill-native-route-world',
@@ -5320,7 +5334,7 @@ function createMotionPanelHillNativePathWorld(routePlan, terrainSource, options 
       displayRoutePointCount: safeRoutePoints.length,
       displayTransform: terrainSurface.frame.displayTransform,
     },
-    duration: 6,
+    duration: 12,
   };
 }
 
@@ -5331,6 +5345,18 @@ function motionPanelVector3FromArray(value, fallback = [0, 0, 0]) {
     Number(source[1] || 0),
     Number(source[2] || 0),
   );
+}
+
+function motionPanelPathWorldIsHillNativeCarrier(pathWorldOrSample = null) {
+  return pathWorldOrSample?.hillTerrainFrame?.displayTransform?.kind === 'hill-native-route-world'
+    || pathWorldOrSample?.displayProjection?.displayTransform?.kind === 'hill-native-route-world';
+}
+
+function motionPanelHillCarrierFollowEnabled(pathWorldOrSample = null, params = new URLSearchParams(window.location.search)) {
+  const requested = params.get('kaminos_hill_carrier_follow');
+  if (['0', 'false', 'off', 'no'].includes(String(requested || '').toLowerCase())) return false;
+  if (['1', 'true', 'on', 'yes'].includes(String(requested || '').toLowerCase())) return true;
+  return motionPanelPathWorldIsHillNativeCarrier(pathWorldOrSample);
 }
 
 function createMotionPanelHillTerrainCarrier(pathWorldSample, displayGrounding, temporalSample = null, options = {}) {
@@ -5379,6 +5405,37 @@ function createMotionPanelHillTerrainCarrier(pathWorldSample, displayGrounding, 
       sourceRef: hillFrame.sourceRef || null,
       displayTransform: hillFrame.displayTransform || null,
     },
+  };
+}
+
+function createMotionPanelCarrierPathFollower(pathWorldSample, hillTerrainCarrier, options = {}) {
+  if (!pathWorldSample || !hillTerrainCarrier) return null;
+  const terrainContact = motionPanelVector3FromArray(pathWorldSample.root);
+  const routeTangent = normalizeMotionPanelPathWorldXZ(pathWorldSample.facing, [0, 0, 1]);
+  const expressiveOffset = motionPanelVector3FromArray(hillTerrainCarrier.expressiveRootOffset);
+  return {
+    schema: 'kaminos.motion-panel-carrier-path-follower.v0',
+    mode: 'hill-carrier-follow',
+    route: 'hill-native-route-world',
+    pathWorldId: pathWorldSample.pathWorldId || null,
+    carrierAuthority: 'terrain-route',
+    routeAuthority: pathWorldSample.routeAuthority || pathWorldSample.activeSource || 'terrain-affordance-route-plan',
+    routeSource: pathWorldSample.routeSource || 'hill-motion-affordance-grid',
+    routeProgress: Number(pathWorldSample.progress || 0),
+    routeDirection: pathWorldSample.direction || null,
+    routeSegmentIndex: pathWorldSample.routeSegmentIndex ?? null,
+    terrainContact: terrainContact.toArray().map(value => Number(value.toFixed(5))),
+    terrainCarrierRoot: hillTerrainCarrier.terrainCarrierRoot || null,
+    groundedRoot: hillTerrainCarrier.groundedRoot || null,
+    routeTangent,
+    carrierHeading: routeTangent,
+    expressiveRootOffset: expressiveOffset.toArray().map(value => Number(value.toFixed(5))),
+    expressiveBounds: hillTerrainCarrier.expressiveBounds || null,
+    airborneGrant: false,
+    steeringDisabledByCarrierFollower: !!pathWorldSample.steeringDisabledByCarrierFollower,
+    pathTriggerSuppressedByCarrierFollower: !!options.pathTriggerSuppressedByCarrierFollower,
+    pathTriggerRequested: !!options.pathTriggerRequested,
+    groundingAuthority: hillTerrainCarrier.groundingAuthority || 'hill-terrain-carrier',
   };
 }
 
@@ -5500,7 +5557,7 @@ function motionPanelPathWorldRouteMode(pathWorld) {
 
 function sampleMotionPanelPathWorldGoalProgress(pathWorld, elapsedTime = 0, duration = 6) {
   const routeMode = motionPanelPathWorldRouteMode(pathWorld);
-  const cycle = Math.max(2.4, Number(duration) || Number(pathWorld?.duration) || 6);
+  const cycle = Math.max(2.4, Number(pathWorld?.duration) || Number(duration) || 6);
   const rawTime = Math.max(0, Number(elapsedTime) || 0);
   if (routeMode === 'patrol-return') {
     const wrappedTime = (rawTime % cycle + cycle) % cycle;
@@ -5534,7 +5591,7 @@ function advanceMotionPanelPathWorldProgress(pathWorld, fromProgress, advance = 
 }
 
 function sampleMotionPanelPathWorld(pathWorld, elapsedTime = 0, duration = 6, options = {}) {
-  const cycle = Math.max(2.4, Number(duration) || Number(pathWorld?.duration) || 6);
+  const cycle = Math.max(2.4, Number(pathWorld?.duration) || Number(duration) || 6);
   const wrappedTime = ((Number(elapsedTime) || 0) % cycle + cycle) % cycle;
   const goalProgress = sampleMotionPanelPathWorldGoalProgress(pathWorld, elapsedTime, cycle);
   const routeMode = goalProgress.routeMode;
@@ -5580,6 +5637,14 @@ function sampleMotionPanelPathWorld(pathWorld, elapsedTime = 0, duration = 6, op
       fired: distance <= radius,
     },
   };
+  if (options.disableSteering) {
+    return {
+      ...rawSample,
+      pathWorldSteeringIntent: null,
+      pathWorldSteeringMemory: null,
+      steeringDisabledByCarrierFollower: !!options.disableSteering,
+    };
+  }
   const pathWorldSteeringIntent = createMotionPanelPathWorldSteeringIntent({
     pathWorld,
     rawSample,
@@ -7429,18 +7494,25 @@ function updateGeneratedPoseTemporalFrame(nowSeconds = performance.now() / 1000)
   const elapsedTime = (nowSeconds - state.startedAt) * state.timeScale;
   const interruptSourceInput = state.generatedInput || state.track;
   const pathTriggerMode = motionPanelClipletInterruptModeFromInputs() === 'path-trigger';
+  const hillCarrierFollowRequested = state.pathWorld
+    ? motionPanelHillCarrierFollowEnabled(state.pathWorld)
+    : false;
   const pathWorldSample = state.pathWorld
     ? sampleMotionPanelPathWorld(state.pathWorld, elapsedTime, state.duration, {
       pathWorldSteeringMemoryRuntime: state.pathWorldSteeringMemoryRuntime || (state.pathWorldSteeringMemoryRuntime = {}),
+      disableSteering: hillCarrierFollowRequested,
     })
     : null;
-  const clipletInterruptTimeline = !pathWorldSample && pathTriggerMode
+  const hillCarrierFollowMode = motionPanelHillCarrierFollowEnabled(pathWorldSample || state.pathWorld);
+  const pathTriggerSuppressedByCarrierFollower = !!(pathTriggerMode && hillCarrierFollowMode);
+  const effectivePathTriggerMode = pathTriggerMode && !hillCarrierFollowMode;
+  const clipletInterruptTimeline = !pathWorldSample && effectivePathTriggerMode
     ? motionPanelClipletInterruptFromInputs(interruptSourceInput, state.generatedMotionCliplets)
     : null;
   const clipletInterruptEnvelope = clipletInterruptTimeline
     ? sampleGeneratedPoseClipletPathInterrupt(interruptSourceInput, clipletInterruptTimeline, elapsedTime)
     : null;
-  const pathWorldInterruptEnvelope = pathWorldSample && pathTriggerMode
+  const pathWorldInterruptEnvelope = pathWorldSample && effectivePathTriggerMode
     ? motionPanelPathWorldInterruptFromSample(state, pathWorldSample, elapsedTime)
     : null;
   const clipletPlaybackTimeline = clipletInterruptTimeline ? null : motionPanelClipletPlaybackFromInputs(state.generatedMotionCliplets);
@@ -7476,7 +7548,23 @@ function updateGeneratedPoseTemporalFrame(nowSeconds = performance.now() / 1000)
     minCenterY: 0.18,
   };
   const displayGrounding = mapGeneratedPoseTemporalGroundedDisplaySample(sample, displayGroundingOptions);
-  const hillTerrainCarrier = createMotionPanelHillTerrainCarrier(pathWorldSample, displayGrounding, temporalSample);
+  const hillTerrainCarrier = createMotionPanelHillTerrainCarrier(
+    pathWorldSample,
+    displayGrounding,
+    temporalSample,
+    hillCarrierFollowMode
+      ? {
+        horizontal: 0.055,
+        downward: 0.025,
+        upward: 0.055,
+        roll: 0.42,
+      }
+      : {},
+  );
+  const carrierPathFollower = createMotionPanelCarrierPathFollower(pathWorldSample, hillTerrainCarrier, {
+    pathTriggerRequested: pathTriggerMode,
+    pathTriggerSuppressedByCarrierFollower,
+  });
   const fallbackRootPosition = hillTerrainCarrier
     ? motionPanelVector3FromArray(hillTerrainCarrier.groundedRoot)
     : new THREE.Vector3(...displayGrounding.root).add(pathWorldSample
@@ -7636,6 +7724,7 @@ function updateGeneratedPoseTemporalFrame(nowSeconds = performance.now() / 1000)
   state.lastPathWorldRouteAuthority = pathWorldRouteAuthority;
   state.lastPathWorldRootConstraint = pathWorldRootConstraint;
   state.lastHillTerrainCarrier = hillTerrainCarrier;
+  state.lastCarrierPathFollower = carrierPathFollower;
   state.lastDisplayGrounding = displayGrounding;
   const behaviorState = buildGeneratedPoseTemporalBehaviorState({
     track: state.track,
@@ -7720,7 +7809,13 @@ function updateGeneratedPoseTemporalFrame(nowSeconds = performance.now() / 1000)
     pathWorldRootConstraint,
     pathWorldRouteAuthority,
     hillTerrainCarrier,
-    groundingAuthority: hillTerrainCarrier?.groundingAuthority || (pathWorldSample ? pathWorldRouteAuthority : null),
+    carrierPathFollower,
+    terrainContact: carrierPathFollower?.terrainContact || null,
+    routeTangent: carrierPathFollower?.routeTangent || null,
+    carrierHeading: carrierPathFollower?.carrierHeading || null,
+    airborneGrant: carrierPathFollower?.airborneGrant ?? null,
+    pathTriggerSuppressedByCarrierFollower,
+    groundingAuthority: carrierPathFollower?.groundingAuthority || hillTerrainCarrier?.groundingAuthority || (pathWorldSample ? pathWorldRouteAuthority : null),
     terrainCarrierRoot: hillTerrainCarrier?.terrainCarrierRoot || null,
     expressiveRootOffset: hillTerrainCarrier?.expressiveRootOffset || null,
     pathWorldRoutePlan: pathWorldSample?.routePlan || state.pathWorld?.routePlan || null,
@@ -9188,6 +9283,15 @@ window.kaminosGeneratedPoseTemporalDebugState = function() {
     hillTerrainSurface: state?.lastPathWorld?.hillTerrainSurface || state?.pathWorld?.hillTerrainSurface || null,
     hillTerrainFrame: state?.lastPathWorld?.hillTerrainFrame || state?.pathWorld?.hillTerrainFrame || null,
     hillTerrainCarrier: state?.lastHillTerrainCarrier || state?.lastActors?.[0]?.hillTerrainCarrier || null,
+    carrierPathFollower: state?.lastCarrierPathFollower || state?.lastActors?.[0]?.carrierPathFollower || null,
+    terrainContact: state?.lastCarrierPathFollower?.terrainContact || state?.lastActors?.[0]?.terrainContact || null,
+    routeTangent: state?.lastCarrierPathFollower?.routeTangent || state?.lastActors?.[0]?.routeTangent || null,
+    carrierHeading: state?.lastCarrierPathFollower?.carrierHeading || state?.lastActors?.[0]?.carrierHeading || null,
+    airborneGrant: state?.lastCarrierPathFollower?.airborneGrant ?? state?.lastActors?.[0]?.airborneGrant ?? null,
+    pathTriggerSuppressedByCarrierFollower: !!(
+      state?.lastCarrierPathFollower?.pathTriggerSuppressedByCarrierFollower
+      || state?.lastActors?.[0]?.pathTriggerSuppressedByCarrierFollower
+    ),
     groundingAuthority: state?.lastHillTerrainCarrier?.groundingAuthority || state?.lastActors?.[0]?.groundingAuthority || null,
     attentionTargetMode: motionAttentionTargetModeFromInputs(),
     attentionTargetEvidence: state?.lastAttentionTargetEvidence || selectedSceneObjectMotionAttentionTarget(),

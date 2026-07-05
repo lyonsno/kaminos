@@ -26,8 +26,10 @@ assert.match(index, /cooldown/, 'episode phase labels include cooldown');
 assert.match(index, /resume/, 'episode phase labels include resume');
 assert.match(index, /pathWorldEpisode/, 'actor/debug evidence exposes the active path-world episode');
 assert.match(index, /const pathTriggerMode = motionPanelClipletInterruptModeFromInputs\(\) === 'path-trigger'/, 'browser reads path-trigger mode once for routing');
-assert.match(index, /const clipletInterruptTimeline = !pathWorldSample && pathTriggerMode/, 'source cliplet interrupts are fallback-only when no path-world sample is active');
-assert.match(index, /const pathWorldInterruptEnvelope = pathWorldSample && pathTriggerMode/, 'path-trigger drives path-world episodes when path-world is active');
+assert.match(index, /const effectivePathTriggerMode = pathTriggerMode && !hillCarrierFollowMode/, 'browser separates requested path-trigger mode from the effective mode');
+assert.match(index, /const clipletInterruptTimeline = !pathWorldSample && effectivePathTriggerMode/, 'source cliplet interrupts are fallback-only when no path-world sample is active');
+assert.match(index, /const pathWorldInterruptEnvelope = pathWorldSample && effectivePathTriggerMode/, 'effective path-trigger drives path-world episodes when path-world is active');
+assert.match(index, /pathTriggerSuppressedByCarrierFollower/, 'Hill carrier following can suppress path-trigger episodes without deleting the requested mode');
 
 assert.match(liveWitness, /pathWorldEpisode/, 'live witness records path-world episode evidence');
 assert.match(liveWitness, /episodePhase/, 'live witness filmstrip labels include episode phase evidence');

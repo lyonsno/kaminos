@@ -65,6 +65,7 @@ let effectiveUrl = null;
 let browserVersion = null;
 let consoleEvents = [];
 let runtimeIdentity = null;
+let lastTrustworthyEvidence = null;
 
 function positiveInt(value, fallback, name) {
   if (value == null || value === '') return fallback;
@@ -658,6 +659,16 @@ async function captureFrame(ws, index) {
       hillTerrainSurface: actor?.hillTerrainSurface || state?.hillTerrainSurface || state?.pathWorld?.hillTerrainSurface || null,
       hillTerrainFrame: actor?.hillTerrainFrame || state?.hillTerrainFrame || state?.pathWorld?.hillTerrainFrame || null,
       hillTerrainCarrier: actor?.hillTerrainCarrier || state?.hillTerrainCarrier || null,
+      carrierPathFollower: actor?.carrierPathFollower || state?.carrierPathFollower || null,
+      terrainContact: actor?.terrainContact || state?.terrainContact || state?.carrierPathFollower?.terrainContact || null,
+      routeTangent: actor?.routeTangent || state?.routeTangent || state?.carrierPathFollower?.routeTangent || null,
+      carrierHeading: actor?.carrierHeading || state?.carrierHeading || state?.carrierPathFollower?.carrierHeading || null,
+      airborneGrant: actor?.airborneGrant ?? state?.airborneGrant ?? state?.carrierPathFollower?.airborneGrant ?? null,
+      pathTriggerSuppressedByCarrierFollower: !!(
+        actor?.pathTriggerSuppressedByCarrierFollower
+        || state?.pathTriggerSuppressedByCarrierFollower
+        || state?.carrierPathFollower?.pathTriggerSuppressedByCarrierFollower
+      ),
       groundingAuthority: actor?.groundingAuthority || state?.groundingAuthority || state?.hillTerrainCarrier?.groundingAuthority || null,
       pathWorldPanel: window.kaminosMotionPanelPathWorldDebugState?.() || null,
       generatedMotionCliplets: state?.generatedMotionCliplets || state?.generatedPoseTemporalHarness?.generatedMotionCliplets || null,
@@ -1083,7 +1094,22 @@ try {
     phase = 'capturing-frames';
     const capturedFrames = [];
     for (let index = 0; index < frameTotal; index++) {
-      capturedFrames.push(await captureFrame(ws, index));
+      const capturedFrame = await captureFrame(ws, index);
+      capturedFrames.push(capturedFrame);
+      lastTrustworthyEvidence = {
+        schema: 'kaminos.motion-panel-live-last-trustworthy-evidence.v0',
+        phase: 'capturing-frames',
+        frameCount: capturedFrames.length,
+        expectedFrameCount: frameTotal,
+        lastFramePath: capturedFrame.path,
+        framePaths: capturedFrames.map(frame => frame.path),
+        lastFrameDebug: {
+          actorRoot: capturedFrame.debug?.actorRoot || null,
+          carrierPathFollower: capturedFrame.debug?.carrierPathFollower || null,
+          pathWorldRouteAuthority: capturedFrame.debug?.pathWorldRouteAuthority || null,
+          pathTriggerSuppressedByCarrierFollower: capturedFrame.debug?.pathTriggerSuppressedByCarrierFollower ?? null,
+        },
+      };
       if (index < frameTotal - 1) await delay(intervalMs);
     }
     if (sourceMode === 'overlay') {
@@ -1105,8 +1131,21 @@ try {
     }
 
     phase = 'composing-filmstrip';
+    lastTrustworthyEvidence = {
+      ...lastTrustworthyEvidence,
+      phase: 'composing-filmstrip',
+      frameCount: capturedFrames.length,
+      framePaths: capturedFrames.map(frame => frame.path),
+    };
     filmstrip = await composeFilmstrip(ws, capturedFrames);
     frames = capturedFrames.map(({ screenshotDataUrl, ...frame }) => frame);
+    lastTrustworthyEvidence = {
+      schema: 'kaminos.motion-panel-live-last-trustworthy-evidence.v0',
+      phase: 'composed-filmstrip',
+      frameCount: frames.length,
+      framePaths: frames.map(frame => frame.path),
+      filmstripPath: filmstrip?.path || null,
+    };
   }
 
   phase = 'writing-report';
@@ -1135,6 +1174,8 @@ try {
   writeReport({
     ok: false,
     error: error.stack || String(error),
+    effectiveUrl,
+    lastTrustworthyEvidence,
   });
   if (chromeProcess) chromeProcess.kill('SIGTERM');
   throw error;

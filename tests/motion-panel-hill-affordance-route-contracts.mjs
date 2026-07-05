@@ -19,11 +19,26 @@ assert.match(index, /pathWorldRoutePlan/, 'Path World debug exposes the route pl
 assert.match(index, /hillTerrainSurface/, 'Path World debug exposes the mounted Hill terrain surface evidence');
 assert.match(index, /hillTerrainFrame/, 'Path World debug preserves the Hill support-frame source identity');
 assert.match(index, /hill-native-route-world/, 'Hill route smoke names the Hill-native route world instead of only the flat display projection');
+assert.match(index, /routeMode:\s*'patrol-return'/, 'Hill-native route smoke loops over terrain instead of parking at the goal');
+assert.match(index, /duration:\s*12/, 'Hill-native route smoke uses a slow enough cycle to show route following');
 assert.match(index, /function createMotionPanelHillTerrainCarrier/, 'browser separates Hill route grounding from generated expressive root motion');
 assert.match(index, /hillTerrainCarrier/, 'actor/debug evidence exposes Hill terrain carrier grounding');
 assert.match(index, /terrainCarrierRoot/, 'Hill carrier evidence records the authoritative terrain root');
 assert.match(index, /expressiveRootOffset/, 'Hill carrier evidence records bounded generated-motion offset separately');
 assert.match(index, /groundingAuthority:\s*'hill-terrain-carrier'/, 'Hill carrier evidence names terrain carrier as grounding authority');
+assert.match(index, /kaminos_hill_carrier_follow/, 'Hill smoke links can explicitly request carrier path following');
+assert.match(index, /function motionPanelHillCarrierFollowEnabled/, 'browser has a Hill carrier follower mode gate');
+assert.match(index, /function createMotionPanelCarrierPathFollower/, 'browser creates explicit carrier path follower evidence');
+assert.match(index, /carrierPathFollower/, 'actor/debug evidence exposes carrier path follower state');
+assert.match(index, /terrainContact/, 'carrier path follower records the authoritative terrain contact');
+assert.match(index, /routeTangent/, 'carrier path follower records route tangent evidence');
+assert.match(index, /carrierHeading/, 'carrier path follower records heading evidence');
+assert.match(index, /airborneGrant:\s*false/, 'carrier path follower forbids generated motion from granting airborne travel');
+assert.match(index, /pathTriggerSuppressedByCarrierFollower/, 'carrier path follower suppresses obstacle-trigger cliplets on Hill route smoke');
+assert.match(index, /motion-panel-path-world-mode/, 'Path World panel exposes the effective carrier-follow mode label');
+assert.match(index, /terrain route -> carrier contact -> local affect/, 'operator readout distinguishes Hill carrier following from wall-trigger reaction mode');
+assert.match(index, /suppressed-by-carrier/, 'operator readout names path trigger suppression when carrier following owns travel');
+assert.match(index, /hill-carrier-follow/, 'operator readout names the carrier-follow reason instead of generic path-trigger state');
 
 assert.match(liveWitness, /--hill-affordance-packet/, 'live witness accepts a Hill affordance packet path');
 assert.match(liveWitness, /--hill-affordance-data/, 'live witness accepts a Hill affordance data path');
@@ -33,3 +48,8 @@ assert.match(liveWitness, /hillTerrainSurface/, 'live witness records Hill terra
 assert.match(liveWitness, /hillTerrainFrame/, 'live witness records Hill terrain frame evidence');
 assert.match(liveWitness, /hillTerrainCarrier/, 'live witness records Hill terrain carrier evidence');
 assert.match(liveWitness, /groundingAuthority/, 'live witness records carrier grounding authority');
+assert.match(liveWitness, /carrierPathFollower/, 'live witness records carrier path follower evidence');
+assert.match(liveWitness, /airborneGrant/, 'live witness records whether carrier following allowed airborne motion');
+assert.match(liveWitness, /lastTrustworthyEvidence/, 'live witness failure report preserves last trustworthy frame evidence');
+assert.match(liveWitness, /lastFramePath/, 'live witness partial-failure evidence records the last captured frame path');
+assert.match(liveWitness, /composing-filmstrip/, 'live witness identifies filmstrip composition as a distinct failure phase');
