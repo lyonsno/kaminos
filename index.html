@@ -1044,6 +1044,8 @@ import {
   buildGeneratedPoseTemporalCliplets,
   buildGeneratedPoseTemporalBehaviorState,
   buildGeneratedPoseTemporalHarness,
+  createMotionRoutePlanFromTerrainAffordance,
+  decodeHillMotionAffordancePacket,
   generatedPoseClipletForSourceFrame,
   generatedPoseTemporalClipById,
   interpolateGeneratedPoseTemporalSample,
@@ -1052,6 +1054,7 @@ import {
   mapGeneratedPoseTemporalGroundedDisplaySample,
   normalizeMotionSourceOrientationRemap,
   normalizeMotionPhraseControls,
+  sampleMotionRoutePlan,
   sampleGeneratedPoseTemporalMotion,
   sampleGeneratedPoseClipletPathInterrupt,
   sampleGeneratedPoseClipletPlayback,
@@ -1107,6 +1110,7 @@ let motionPhraseControlState = null;
 let motionTrackState = null;
 let motionOutputMapState = null;
 let motionTemporalState = null;
+let motionPanelHillAffordanceRoutePlan = null;
 let generatedPoseTemporalRegistryPromise = null;
 const VOLUME_PRIMITIVE_SCHEMA = 'kaminos.volume-primitives.v0';
 const LAMELLAR_PLACEHOLDER_CONTRACT = 'temporary-aesthetic-composition-primitive-not-final-lamellar-topology';
@@ -3974,7 +3978,11 @@ function motionPanelPathWorldReadout() {
   const actor = motionTemporalState?.lastActors?.[0] || null;
   const pathWorld = actor?.pathWorld || motionTemporalState?.lastPathWorld || null;
   const interrupt = actor?.pathWorldInterrupt || motionTemporalState?.lastPathWorldInterrupt || null;
-  const activeSource = actor?.pathWorldActiveSource || interrupt?.activeSource || (pathWorld ? 'world-path' : 'inactive');
+  const routePlan = actor?.pathWorldRoutePlan || pathWorld?.routePlan || motionTemporalState?.pathWorld?.routePlan || null;
+  const activeSource = actor?.pathWorldActiveSource
+    || interrupt?.activeSource
+    || pathWorld?.routeAuthority
+    || (routePlan ? 'terrain-affordance-route-plan' : pathWorld ? 'world-path' : 'inactive');
   const trigger = pathWorld?.trigger || interrupt?.trigger || null;
   return {
     schema: 'kaminos.motion-panel-path-world-readout.v0',
@@ -3987,6 +3995,9 @@ function motionPanelPathWorldReadout() {
     triggerRadius: Number.isFinite(Number(trigger?.radius)) ? Number(Number(trigger.radius).toFixed(5)) : null,
     fired: !!interrupt?.fired || !!trigger?.fired,
     worldId: pathWorld?.pathWorldId || interrupt?.pathWorldId || motionTemporalState?.pathWorld?.id || null,
+    routePlan,
+    routeSource: pathWorld?.routeSource || routePlan?.evidence?.routeSource || null,
+    sourceRef: routePlan?.source?.sourceRef || null,
     sectionVisible: !!document.getElementById('motion-panel-path-world-section'),
     controls: {
       previewButton: !!document.getElementById('motion-panel-preview-path-world'),
@@ -5024,11 +5035,43 @@ function interpolateMotionPanelPathWorldRoute(routePoints, u) {
   return { point: [...finalPoint], tangent: [0, 0, 1], segmentIndex: points.length - 2 };
 }
 
-function createGeneratedPoseTemporalPathWorld() {
+function motionPanelDisplayRoutePointsForRoutePlan(routePlan) {
+  const sourcePoints = Array.isArray(routePlan?.routePoints)
+    ? routePlan.routePoints.map(point => point.world).filter(point => Array.isArray(point) && point.length >= 3)
+    : [];
+  if (sourcePoints.length < 2) return null;
+  const xs = sourcePoints.map(point => Number(point[0]) || 0);
+  const zs = sourcePoints.map(point => Number(point[2]) || 0);
+  const minX = Math.min(...xs);
+  const maxX = Math.max(...xs);
+  const minZ = Math.min(...zs);
+  const maxZ = Math.max(...zs);
+  const spanX = Math.max(1e-6, maxX - minX);
+  const spanZ = Math.max(1e-6, maxZ - minZ);
+  const scale = Math.min(1.72 / spanX, 2.32 / spanZ);
+  const centerX = (minX + maxX) * 0.5;
+  const centerZ = (minZ + maxZ) * 0.5;
+  return sourcePoints.map(point => [
+    Number(((Number(point[0]) - centerX) * scale).toFixed(5)),
+    0,
+    Number((((Number(point[2]) - centerZ) * scale) + 0.03).toFixed(5)),
+  ]);
+}
+
+function createMotionPanelHillAffordancePathWorld(routePlan, options = {}) {
+  return createGeneratedPoseTemporalPathWorld({
+    ...options,
+    routePlan,
+  });
+}
+
+function createGeneratedPoseTemporalPathWorld(options = {}) {
   const group = new THREE.Group();
   group.name = 'generated-pose-temporal-path-world';
   group.userData.schema = 'kaminos.generated-motion-path-world.v0';
-  const routePoints = [
+  const routePlan = options.routePlan || null;
+  const terrainRoutePoints = motionPanelDisplayRoutePointsForRoutePlan(routePlan);
+  const routePoints = terrainRoutePoints || [
     [-0.92, 0, -0.88],
     [-0.52, 0, -0.42],
     [-0.14, 0, -0.06],
@@ -5036,6 +5079,12 @@ function createGeneratedPoseTemporalPathWorld() {
     [0.34, 0, 0.62],
     [0.62, 0, 0.94],
   ];
+  const routePlanSample = routePlan ? sampleMotionRoutePlan(routePlan, 0.52) : null;
+  const obstacleCenterPoint = routePlan
+    ? routePoints[Math.min(routePoints.length - 1, Math.max(0, Math.floor(routePoints.length * 0.52)))]
+    : [0.08, 0, 0.25];
+  const goalPoint = routePoints[routePoints.length - 1] || [0.62, 0, 0.94];
+  const startPoint = routePoints[0] || [-0.92, 0, -0.88];
   const routeGeometry = new THREE.BufferGeometry().setFromPoints(
     routePoints.map(point => new THREE.Vector3(point[0], 0.018, point[2])),
   );
@@ -5052,7 +5101,7 @@ function createGeneratedPoseTemporalPathWorld() {
     new THREE.MeshBasicMaterial({ color: 0x2d3237, transparent: true, opacity: 0.78 }),
   );
   wall.name = 'generated-pose-temporal-path-world-wall';
-  wall.position.set(0.06, 0.2, 0.27);
+  wall.position.set(Number(obstacleCenterPoint[0] || 0), 0.2, Number(obstacleCenterPoint[2] || 0));
   wall.rotation.y = -0.33;
   group.add(wall);
 
@@ -5062,7 +5111,7 @@ function createGeneratedPoseTemporalPathWorld() {
   );
   trigger.name = 'generated-pose-temporal-path-world-trigger';
   trigger.rotation.x = -Math.PI / 2;
-  trigger.position.set(0.08, 0.024, 0.25);
+  trigger.position.set(Number(obstacleCenterPoint[0] || 0), 0.024, Number(obstacleCenterPoint[2] || 0));
   trigger.renderOrder = 34;
   group.add(trigger);
 
@@ -5071,7 +5120,7 @@ function createGeneratedPoseTemporalPathWorld() {
     new THREE.MeshBasicMaterial({ color: 0xf0d28a, transparent: true, opacity: 0.9 }),
   );
   goal.name = 'generated-pose-temporal-path-world-goal';
-  goal.position.set(0.62, 0.08, 0.94);
+  goal.position.set(Number(goalPoint[0] || 0), 0.08, Number(goalPoint[2] || 0));
   group.add(goal);
 
   const startMarker = new THREE.Mesh(
@@ -5079,22 +5128,25 @@ function createGeneratedPoseTemporalPathWorld() {
     new THREE.MeshBasicMaterial({ color: 0x8ad6c1, transparent: true, opacity: 0.75 }),
   );
   startMarker.name = 'generated-pose-temporal-path-world-start';
-  startMarker.position.set(routePoints[0][0], 0.055, routePoints[0][2]);
+  startMarker.position.set(Number(startPoint[0] || 0), 0.055, Number(startPoint[2] || 0));
   group.add(startMarker);
 
   const obstacle = {
-    id: 'path-world-wall-0',
+    id: routePlan ? 'hill-route-plan-probe-0' : 'path-world-wall-0',
     kind: 'wall',
     triggerKind: 'sphere',
-    center: [0.08, 0, 0.25],
-    radius: 0.24,
-    label: 'wall trigger',
+    center: [Number(obstacleCenterPoint[0] || 0), 0, Number(obstacleCenterPoint[2] || 0)],
+    radius: routePlan ? 0.16 : 0.24,
+    label: routePlan ? 'Hill route probe' : 'wall trigger',
   };
   return {
     schema: 'kaminos.generated-motion-path-world.v0',
     route: MOTION_ROUTE_IDENTITY,
-    id: 'generated-pose-temporal-path-world-0',
+    id: routePlan ? `generated-pose-temporal-path-world-${routePlan.id || 'hill-route-plan'}` : 'generated-pose-temporal-path-world-0',
     routeMode: 'goal-seeking',
+    routeAuthority: routePlan ? 'terrain-affordance-route-plan' : 'world-path',
+    routeSource: routePlan ? routePlan.evidence?.routeSource || 'hill-motion-affordance-grid' : 'procedural-fixture',
+    reason: routePlan ? 'hill-motion-affordance-grid' : 'route-wall-trigger-reaction-cliplet',
     group,
     routeLine: route,
     wall,
@@ -5103,6 +5155,15 @@ function createGeneratedPoseTemporalPathWorld() {
     startMarker,
     routePoints,
     obstacle,
+    routePlan,
+    routePlanSample,
+    displayProjection: routePlan ? {
+      schema: 'kaminos.motion-route-plan-display-projection.v0',
+      source: routePlan.evidence?.routeSource || 'hill-motion-affordance-grid',
+      sourceRef: routePlan.source?.sourceRef || null,
+      sourceRoutePointCount: routePlan.routePoints?.length || 0,
+      displayRoutePointCount: routePoints.length,
+    } : null,
     duration: 6,
   };
 }
@@ -5166,8 +5227,10 @@ function sampleMotionPanelPathWorld(pathWorld, elapsedTime = 0, duration = 6, op
     schema: 'kaminos.generated-motion-path-world-sample.v0',
     pathWorldId: pathWorld?.id || null,
     routeMode,
-    activeSource: 'world-path',
-    reason: goalProgress.reason,
+    activeSource: pathWorld?.routeAuthority || 'world-path',
+    routeAuthority: pathWorld?.routeAuthority || 'world-path',
+    routeSource: pathWorld?.routeSource || 'procedural-fixture',
+    reason: pathWorld?.reason || goalProgress.reason,
     elapsedTime: Number((Number(elapsedTime) || 0).toFixed(5)),
     wrappedTime: Number(wrappedTime.toFixed(5)),
     progress: Number(u.toFixed(5)),
@@ -5176,6 +5239,8 @@ function sampleMotionPanelPathWorld(pathWorld, elapsedTime = 0, duration = 6, op
     root: routeSample.point.map(value => Number(value.toFixed(5))),
     facing: routeSample.tangent.map(value => Number((forward ? value : -value).toFixed(5))),
     attention: goal.map(value => Number(value.toFixed(5))),
+    routePlan: pathWorld?.routePlan || null,
+    routePlanSample: pathWorld?.routePlan ? sampleMotionRoutePlan(pathWorld.routePlan, u) : null,
     trigger: {
       schema: 'kaminos.generated-motion-path-world-trigger-sample.v0',
       obstacleId: obstacle.id,
@@ -6693,7 +6758,9 @@ async function createGeneratedPoseTemporalScene({ force = false, clipId = null, 
   floor.rotation.x = -Math.PI / 2;
   floor.position.set(0, -0.012, 0.1);
   root.add(floor);
-  const pathWorld = createGeneratedPoseTemporalPathWorld();
+  const pathWorld = createGeneratedPoseTemporalPathWorld({
+    routePlan: motionPanelHillAffordanceRoutePlan,
+  });
   root.add(pathWorld.group);
 
   const visual = makeMotionDecisionVisual({
@@ -7090,7 +7157,7 @@ function updateGeneratedPoseTemporalFrame(nowSeconds = performance.now() / 1000)
   let pathWorldResumeHandoff = null;
   let pathWorldSteeringIntent = null;
   let pathWorldSteeringMemory = null;
-  let pathWorldRouteAuthority = pathWorldSample ? 'world-path' : null;
+  let pathWorldRouteAuthority = pathWorldSample ? (pathWorldSample.routeAuthority || pathWorldSample.activeSource || 'world-path') : null;
   if (pathWorldSample) {
     pathWorldSteeringIntent = pathWorldSample.pathWorldSteeringIntent || null;
     pathWorldSteeringMemory = pathWorldSample.pathWorldSteeringMemory || pathWorldSteeringIntent?.pathWorldSteeringMemory || null;
@@ -7317,6 +7384,7 @@ function updateGeneratedPoseTemporalFrame(nowSeconds = performance.now() / 1000)
     pathWorldSteeringMemory,
     pathWorldRootConstraint,
     pathWorldRouteAuthority,
+    pathWorldRoutePlan: pathWorldSample?.routePlan || state.pathWorld?.routePlan || null,
     pathWorldActiveSource: pathWorldInterruptEnvelope?.interrupt?.activeSource || pathWorldRouteAuthority || (pathWorldSample ? 'world-path' : null),
     sourceFrame: temporalSample?.sourceFrame ?? null,
     sourceTime: temporalSample?.time ?? null,
@@ -7937,6 +8005,44 @@ window.kaminosPreviewMotionServerResult = async function(result, options = {}) {
     clip,
     take: take?.metadata || null,
     state: state?.schema || null,
+  };
+};
+
+window.kaminosPreviewHillMotionAffordanceRoutePlan = async function(packet, data, options = {}) {
+  const source = decodeHillMotionAffordancePacket({ packet, data });
+  const routePlan = createMotionRoutePlanFromTerrainAffordance(source, {
+    id: options.id || `hill-route-${source.frameId || source.checksums?.channels || 'live'}`,
+    start: options.start,
+    goal: options.goal,
+    actorRadius: options.actorRadius || 0.17,
+    costWeights: options.costWeights,
+  });
+  const previousState = motionTemporalState;
+  motionPanelHillAffordanceRoutePlan = routePlan;
+  const state = await createGeneratedPoseTemporalScene({
+    force: true,
+    generatedInput: previousState?.generatedInput || null,
+    sourceResult: previousState?.sourceResult || null,
+    registryUrl: previousState?.registrySource || null,
+    clipId: previousState?.requestedClipId || null,
+  });
+  const frame = frameMotionPanelPathWorld();
+  updateMotionPanelPathWorldReadout();
+  setMotionPanelTemporalStatus(`Hill route plan installed: ${routePlan.routePoints.length} points`, '#66bb6a');
+  setInfo('Hill of Hills terrain route mounted into Path World');
+  return {
+    schema: 'kaminos.motion-panel-hill-affordance-route-preview.v0',
+    ok: true,
+    routePlan,
+    source: {
+      sourceRef: source.sourceRef,
+      authority: source.authority,
+      routeSource: routePlan.evidence?.routeSource || null,
+      checksums: source.checksums,
+    },
+    state: state?.schema || null,
+    pathWorldPanel: window.kaminosMotionPanelPathWorldDebugState?.() || null,
+    frame,
   };
 };
 
@@ -8711,6 +8817,7 @@ window.kaminosGeneratedPoseTemporalDebugState = function() {
     pathWorldSteeringMemory: state?.lastPathWorldSteeringMemory || state?.lastPathWorldSteeringIntent?.pathWorldSteeringMemory || null,
     pathWorldRootConstraint: state?.lastPathWorldRootConstraint || null,
     pathWorldRouteAuthority: state?.lastPathWorldRouteAuthority || (state?.lastPathWorld ? 'world-path' : null),
+    pathWorldRoutePlan: state?.pathWorld?.routePlan || state?.lastPathWorld?.routePlan || null,
     pathWorldActiveSource: state?.lastPathWorldInterrupt?.activeSource || state?.lastPathWorldRouteAuthority || (state?.lastPathWorld ? 'world-path' : null),
     attentionTargetMode: motionAttentionTargetModeFromInputs(),
     attentionTargetEvidence: state?.lastAttentionTargetEvidence || selectedSceneObjectMotionAttentionTarget(),

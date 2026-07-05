@@ -9,6 +9,10 @@ export const GENERATED_POSE_OUTPUT_MAP_SCHEMA = 'kaminos.generated-pose-output-m
 export const GENERATED_MOTION_BEHAVIOR_STATE_SCHEMA = 'kaminos.generated-motion-behavior-state.v0';
 export const GENERATED_MOTION_CLIPLETS_SCHEMA = 'kaminos.generated-motion-cliplets.v0';
 export const GENERATED_MOTION_CLIPLET_INTERRUPT_SCHEMA = 'kaminos.generated-motion-cliplet-interrupt.v0';
+export const HILL_OF_HILLS_MOTION_AFFORDANCE_PACKET_SCHEMA = 'lerms.hill-of-hills.motion-affordance-packet.v0';
+export const HILL_OF_HILLS_MOTION_AFFORDANCE_DATA_SCHEMA = 'lerms.hill-of-hills.motion-affordance-data.v0';
+export const MOTION_TERRAIN_AFFORDANCE_SOURCE_SCHEMA = 'kaminos.motion-terrain-affordance-source.v0';
+export const MOTION_ROUTE_PLAN_SCHEMA = 'kaminos.motion-route-plan.v0';
 export const MOTION_ROUTE_IDENTITY = 'procedural-orb-motion-grammar-v0';
 export const DEFAULT_GENERATED_POSE_TEMPORAL_REGISTRY_URL = 'fixtures/generated-pose-temporal/kimodo-matrix.v0.json';
 export const MOTION_SERVER_TEMPORAL_SOURCE_FORMAT = 'motion-server-soma77-json';
@@ -61,6 +65,392 @@ function normalizeVec3(a, fallback = [0, 0, 1]) {
   const len = lengthVec3(a);
   if (len <= 1e-8) return [...fallback];
   return [a[0] / len, a[1] / len, a[2] / len];
+}
+
+const HILL_MOTION_AFFORDANCE_CHANNEL_LAYOUT = [
+  'height',
+  'normal',
+  'gradient',
+  'slope',
+  'heightDelta',
+  'surfaceVelocity',
+  'routePressure',
+  'flowAccumulation',
+  'ridgeStrength',
+  'valleyStrength',
+  'ditchPotential',
+  'growthPotential',
+  'phaseAmount',
+  'topologyAmount',
+  'wetness',
+  'growthTint',
+  'materialClass',
+  'regionClass',
+  'motionHint',
+  'assetHint',
+  'dirty',
+  'shock',
+];
+
+function stableRoundedNumber(value, digits = 5) {
+  return Number(Number(value || 0).toFixed(digits));
+}
+
+function base64ToBytes(base64) {
+  const text = String(base64 || '');
+  if (typeof Buffer !== 'undefined') return Uint8Array.from(Buffer.from(text, 'base64'));
+  const binary = globalThis.atob(text);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+function decodeBase64Float32LE(base64) {
+  const bytes = base64ToBytes(base64);
+  if (bytes.byteLength % 4 !== 0) throw new Error(`Hill motion affordance channel byte length is not f32-aligned: ${bytes.byteLength}`);
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const values = new Float32Array(bytes.byteLength / 4);
+  for (let i = 0; i < values.length; i++) values[i] = view.getFloat32(i * 4, true);
+  return values;
+}
+
+function assertHillAffordance(condition, message) {
+  if (!condition) throw new Error(`Hill motion affordance packet invalid: ${message}`);
+}
+
+function sameStringList(a = [], b = []) {
+  if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
+  return a.every((value, index) => value === b[index]);
+}
+
+function hillWorldFromGrid(grid, worldBounds, column, row, height = 0) {
+  const cols = Math.max(1, Number(grid?.columns) || 1);
+  const rows = Math.max(1, Number(grid?.rows) || 1);
+  const xMin = Number(worldBounds?.x?.min ?? 0);
+  const xMax = Number(worldBounds?.x?.max ?? xMin);
+  const zMin = Number(worldBounds?.z?.min ?? 0);
+  const zMax = Number(worldBounds?.z?.max ?? zMin);
+  const xT = cols <= 1 ? 0 : column / (cols - 1);
+  const zT = rows <= 1 ? 0 : row / (rows - 1);
+  return [
+    stableRoundedNumber(lerp(xMin, xMax, xT)),
+    stableRoundedNumber(height),
+    stableRoundedNumber(lerp(zMin, zMax, zT)),
+  ];
+}
+
+function hillGridFromWorld(grid, worldBounds, point) {
+  const cols = Math.max(1, Number(grid?.columns) || 1);
+  const rows = Math.max(1, Number(grid?.rows) || 1);
+  const xMin = Number(worldBounds?.x?.min ?? 0);
+  const xMax = Number(worldBounds?.x?.max ?? xMin);
+  const zMin = Number(worldBounds?.z?.min ?? 0);
+  const zMax = Number(worldBounds?.z?.max ?? zMin);
+  const x = Number(point?.[0] ?? xMin);
+  const z = Number(point?.[2] ?? zMin);
+  const xT = xMax === xMin ? 0 : (x - xMin) / (xMax - xMin);
+  const zT = zMax === zMin ? 0 : (z - zMin) / (zMax - zMin);
+  return {
+    column: Math.max(0, Math.min(cols - 1, Math.round(xT * (cols - 1)))),
+    row: Math.max(0, Math.min(rows - 1, Math.round(zT * (rows - 1)))),
+  };
+}
+
+function hillGridIndex(grid, column, row) {
+  return row * Math.max(1, Number(grid?.columns) || 1) + column;
+}
+
+function hillChannelScalar(source, name, index, component = 0, fallback = 0) {
+  const channel = source?.channels?.[name];
+  if (!channel?.values) return fallback;
+  return Number(channel.values[index * channel.componentCount + component] ?? fallback);
+}
+
+function decodeHillMotionChannel(name, encoded, sampleCount) {
+  assertHillAffordance(encoded && encoded.encoding === 'base64-f32-le', `channel ${name} must use base64-f32-le encoding`);
+  const components = Array.isArray(encoded.components) && encoded.components.length > 0
+    ? encoded.components.map(component => String(component))
+    : ['value'];
+  const componentCount = components.length;
+  const shape = Array.isArray(encoded.shape) ? encoded.shape.map(value => Number(value)) : [];
+  assertHillAffordance(shape.length > 0, `channel ${name} is missing shape`);
+  assertHillAffordance(shape[0] === sampleCount, `channel ${name} shape does not match grid sample count`);
+  if (shape.length > 1) assertHillAffordance(shape[1] === componentCount, `channel ${name} component shape does not match components`);
+  const expectedByteLength = sampleCount * componentCount * 4;
+  assertHillAffordance(Number(encoded.byteLength) === expectedByteLength, `channel ${name} byteLength does not match shape`);
+  const values = decodeBase64Float32LE(encoded.data);
+  assertHillAffordance(values.length === sampleCount * componentCount, `channel ${name} decoded length does not match shape`);
+  return {
+    name,
+    encoding: encoded.encoding,
+    components,
+    componentCount,
+    shape,
+    byteLength: expectedByteLength,
+    checksum: encoded.checksum || null,
+    values,
+  };
+}
+
+export function decodeHillMotionAffordancePacket({ packet, data } = {}) {
+  assertHillAffordance(packet?.schema === HILL_OF_HILLS_MOTION_AFFORDANCE_PACKET_SCHEMA, `packet schema must be ${HILL_OF_HILLS_MOTION_AFFORDANCE_PACKET_SCHEMA}`);
+  assertHillAffordance(data?.schema === HILL_OF_HILLS_MOTION_AFFORDANCE_DATA_SCHEMA, `data schema must be ${HILL_OF_HILLS_MOTION_AFFORDANCE_DATA_SCHEMA}`);
+  assertHillAffordance(packet.status === 'fresh-live-motion-affordance', 'packet status must be fresh-live-motion-affordance');
+  assertHillAffordance(packet.freshness?.status === 'fresh-live-motion-affordance', 'packet freshness must be fresh-live-motion-affordance');
+  assertHillAffordance(packet.source?.authority === 'live_simulation', 'packet source authority must be live_simulation');
+  assertHillAffordance(data.sourceTruth?.authority === 'live_simulation', 'data source authority must be live_simulation');
+  assertHillAffordance(packet.source?.producerDiaulos === 'hill-of-hills-fucker', 'packet producer must be hill-of-hills-fucker');
+  assertHillAffordance(packet.source?.intendedConsumerDiaulos === 'mushfinger-clayfucker', 'packet consumer must be mushfinger-clayfucker');
+  assertHillAffordance(packet.affordance?.intentEvidenceOnly === true && data.intentEvidenceOnly === true, 'packet/data must declare intent evidence only');
+  const packetLayout = packet.affordance?.channelLayout || [];
+  const dataLayout = data.channelLayout || [];
+  assertHillAffordance(sameStringList(packetLayout, HILL_MOTION_AFFORDANCE_CHANNEL_LAYOUT), 'packet channel layout does not match Hill motion affordance v0');
+  assertHillAffordance(sameStringList(dataLayout, HILL_MOTION_AFFORDANCE_CHANNEL_LAYOUT), 'data channel layout does not match Hill motion affordance v0');
+  const packetChecksums = packet.affordance?.checksums || {};
+  const dataChecksums = data.checksums || {};
+  for (const key of ['supportFrame', 'topology', 'material', 'phase', 'phaseInfluence', 'dirtyRegion', 'channels']) {
+    assertHillAffordance(packetChecksums[key] && packetChecksums[key] === dataChecksums[key], `checksum mismatch for ${key}`);
+  }
+  const grid = data.grid;
+  assertHillAffordance(grid && Number(grid.columns) > 0 && Number(grid.rows) > 0, 'data grid must include positive rows/columns');
+  const sampleCount = Number(grid.sampleCount);
+  assertHillAffordance(sampleCount === Number(grid.columns) * Number(grid.rows), 'grid sample count must equal rows * columns');
+  const channels = {};
+  for (const name of HILL_MOTION_AFFORDANCE_CHANNEL_LAYOUT) {
+    channels[name] = decodeHillMotionChannel(name, data.channels?.[name], sampleCount);
+  }
+  return {
+    schema: MOTION_TERRAIN_AFFORDANCE_SOURCE_SCHEMA,
+    source: {
+      schema: packet.schema,
+      route: packet.route,
+      frameId: packet.frameId,
+      status: packet.status,
+    },
+    data: {
+      schema: data.schema,
+    },
+    sourceRef: packet.source.sourceRef,
+    route: packet.source.route,
+    authority: packet.source.authority,
+    backend: packet.source.backend || data.sourceTruth?.backend || null,
+    configId: packet.source.configId || data.sourceTruth?.configId || null,
+    producerDiaulos: packet.source.producerDiaulos,
+    intendedConsumerDiaulos: packet.source.intendedConsumerDiaulos,
+    intentEvidenceOnly: true,
+    grid: {
+      columns: Number(grid.columns),
+      rows: Number(grid.rows),
+      sampleCount,
+      spacing: {
+        x: Number(grid.spacing?.x ?? 0),
+        z: Number(grid.spacing?.z ?? 0),
+      },
+    },
+    worldBounds: data.worldBounds,
+    domainBounds: data.domainBounds,
+    checksums: { ...dataChecksums },
+    channelLayout: [...dataLayout],
+    channels,
+    rejectedDebugSurfaces: Array.isArray(packet.rejectedDebugSurfaces) ? packet.rejectedDebugSurfaces.map(surface => ({ ...surface })) : [],
+    custody: packet.custody || null,
+    freshness: packet.freshness || null,
+    affordanceSummary: packet.affordance,
+  };
+}
+
+function motionTerrainRouteCost(source, index, weights) {
+  const routePressure = hillChannelScalar(source, 'routePressure', index, 0);
+  const slope = hillChannelScalar(source, 'slope', index, 0);
+  const dirty = hillChannelScalar(source, 'dirty', index, 0);
+  const shock = hillChannelScalar(source, 'shock', index, 0);
+  const heightDelta = Math.abs(hillChannelScalar(source, 'heightDelta', index, 0));
+  const velocity = Math.hypot(
+    hillChannelScalar(source, 'surfaceVelocity', index, 0),
+    hillChannelScalar(source, 'surfaceVelocity', index, 1, 0),
+    hillChannelScalar(source, 'surfaceVelocity', index, 2, 0),
+  );
+  return Math.max(0.01,
+    1
+    + Number(weights.slope || 0) * slope
+    + Number(weights.dirty || 0) * dirty
+    + Number(weights.shock || 0) * shock
+    + Number(weights.heightDelta || 0) * heightDelta
+    + Number(weights.surfaceVelocity || 0) * velocity
+    - Number(weights.routePressure || 0) * routePressure * 0.25
+  );
+}
+
+function reconstructMotionTerrainRoute(cameFrom, current) {
+  const path = [current];
+  let cursor = current;
+  while (cameFrom.has(cursor)) {
+    cursor = cameFrom.get(cursor);
+    path.push(cursor);
+  }
+  return path.reverse();
+}
+
+export function createMotionRoutePlanFromTerrainAffordance(sourceInput, options = {}) {
+  const source = sourceInput?.schema === MOTION_TERRAIN_AFFORDANCE_SOURCE_SCHEMA
+    ? sourceInput
+    : decodeHillMotionAffordancePacket(sourceInput);
+  const grid = source.grid;
+  const weights = {
+    routePressure: 2,
+    slope: 3,
+    dirty: 24,
+    shock: 24,
+    heightDelta: 2,
+    surfaceVelocity: 1,
+    ...(options.costWeights || {}),
+  };
+  const start = hillGridFromWorld(grid, source.worldBounds, options.start || [source.worldBounds?.x?.min || 0, 0, source.worldBounds?.z?.min || 0]);
+  const goal = hillGridFromWorld(grid, source.worldBounds, options.goal || [source.worldBounds?.x?.max || 0, 0, source.worldBounds?.z?.max || 0]);
+  const startIndex = hillGridIndex(grid, start.column, start.row);
+  const goalIndex = hillGridIndex(grid, goal.column, goal.row);
+  const open = new Set([startIndex]);
+  const cameFrom = new Map();
+  const gScore = new Map([[startIndex, 0]]);
+  const fScore = new Map([[startIndex, Math.hypot(goal.column - start.column, goal.row - start.row)]]);
+  const cols = grid.columns;
+  const rows = grid.rows;
+  const neighbors = [
+    [-1, 0], [1, 0], [0, -1], [0, 1],
+    [-1, -1], [1, -1], [-1, 1], [1, 1],
+  ];
+  let visitedCount = 0;
+  while (open.size > 0) {
+    let current = null;
+    let best = Infinity;
+    for (const index of open) {
+      const score = fScore.get(index) ?? Infinity;
+      if (score < best) {
+        best = score;
+        current = index;
+      }
+    }
+    if (current === goalIndex) {
+      const indices = reconstructMotionTerrainRoute(cameFrom, current);
+      const routePoints = indices.map((index) => {
+        const row = Math.floor(index / cols);
+        const column = index - row * cols;
+        const height = hillChannelScalar(source, 'height', index, 0);
+        return {
+          index,
+          grid: { column, row },
+          world: hillWorldFromGrid(grid, source.worldBounds, column, row, height),
+          terrain: {
+            routePressure: stableRoundedNumber(hillChannelScalar(source, 'routePressure', index, 0)),
+            slope: stableRoundedNumber(hillChannelScalar(source, 'slope', index, 0)),
+            dirty: stableRoundedNumber(hillChannelScalar(source, 'dirty', index, 0)),
+            shock: stableRoundedNumber(hillChannelScalar(source, 'shock', index, 0)),
+          },
+          cost: stableRoundedNumber(motionTerrainRouteCost(source, index, weights)),
+        };
+      });
+      const routeLength = routePoints.slice(1).reduce((total, point, index) => {
+        const previous = routePoints[index].world;
+        return total + Math.hypot(point.world[0] - previous[0], point.world[2] - previous[2]);
+      }, 0);
+      return {
+        schema: MOTION_ROUTE_PLAN_SCHEMA,
+        id: options.id || `hill-route-${source.checksums.channels || 'unknown'}`,
+        authority: 'terrain-affordance-route-plan',
+        route: MOTION_ROUTE_IDENTITY,
+        source: {
+          schema: source.schema,
+          sourceRef: source.sourceRef,
+          authority: source.authority,
+          backend: source.backend,
+          configId: source.configId,
+          checksums: { ...source.checksums },
+        },
+        grid: {
+          columns: cols,
+          rows,
+          start,
+          goal,
+        },
+        routePoints,
+        cost: {
+          total: stableRoundedNumber(gScore.get(goalIndex) ?? 0),
+          routeLength: stableRoundedNumber(routeLength),
+          visitedCount,
+          weights,
+        },
+        evidence: {
+          schema: 'kaminos.motion-route-plan-evidence.v0',
+          costBasis: ['routePressure', 'slope', 'dirty', 'shock', 'heightDelta', 'surfaceVelocity'],
+          routeSource: 'hill-motion-affordance-grid',
+          sourceRef: source.sourceRef,
+          checksums: { ...source.checksums },
+        },
+      };
+    }
+    open.delete(current);
+    visitedCount++;
+    const row = Math.floor(current / cols);
+    const column = current - row * cols;
+    for (const [dc, dr] of neighbors) {
+      const nextColumn = column + dc;
+      const nextRow = row + dr;
+      if (nextColumn < 0 || nextColumn >= cols || nextRow < 0 || nextRow >= rows) continue;
+      const next = hillGridIndex(grid, nextColumn, nextRow);
+      const diagonal = dc !== 0 && dr !== 0;
+      const stepDistance = diagonal ? Math.SQRT2 : 1;
+      const tentative = (gScore.get(current) ?? Infinity) + stepDistance * motionTerrainRouteCost(source, next, weights);
+      if (tentative < (gScore.get(next) ?? Infinity)) {
+        cameFrom.set(next, current);
+        gScore.set(next, tentative);
+        const heuristic = Math.hypot(goal.column - nextColumn, goal.row - nextRow);
+        fScore.set(next, tentative + heuristic);
+        open.add(next);
+      }
+    }
+  }
+  throw new Error('Motion route plan failed: no route through Hill terrain affordance grid');
+}
+
+export function sampleMotionRoutePlan(routePlan, progress = 0) {
+  const points = routePlan?.routePoints || [];
+  if (points.length === 0) throw new Error('Motion route plan sample failed: route has no points');
+  const u = clamp(Number(progress) || 0, 0, 1);
+  if (points.length === 1) {
+    return {
+      schema: 'kaminos.motion-route-plan-sample.v0',
+      routePlanId: routePlan.id || null,
+      progress: u,
+      routePointIndex: 0,
+      root: [...points[0].world],
+      facing: [0, 0, 1],
+      source: routePlan.source,
+    };
+  }
+  const lengths = [0];
+  let total = 0;
+  for (let i = 1; i < points.length; i++) {
+    total += Math.hypot(points[i].world[0] - points[i - 1].world[0], points[i].world[2] - points[i - 1].world[2]);
+    lengths.push(total);
+  }
+  const target = total * u;
+  let segment = 0;
+  while (segment < lengths.length - 2 && lengths[segment + 1] < target) segment++;
+  const a = points[segment].world;
+  const b = points[Math.min(points.length - 1, segment + 1)].world;
+  const span = Math.max(1e-6, lengths[segment + 1] - lengths[segment]);
+  const t = clamp((target - lengths[segment]) / span, 0, 1);
+  const root = mixVec3(a, b, t).map(value => stableRoundedNumber(value));
+  const facing = normalizeVec3([b[0] - a[0], 0, b[2] - a[2]], [0, 0, 1]).map(value => stableRoundedNumber(value));
+  return {
+    schema: 'kaminos.motion-route-plan-sample.v0',
+    routePlanId: routePlan.id || null,
+    progress: stableRoundedNumber(u),
+    routePointIndex: segment,
+    root,
+    facing,
+    source: routePlan.source,
+  };
 }
 
 function mixVec3(a, b, t) {

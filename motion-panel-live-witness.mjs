@@ -49,6 +49,8 @@ const promoteTake = args.has('--promote-take');
 const exportReferenceMode = exportReferenceModeFromArgs(args.get('--export-reference-mode'));
 const cameraPosition = args.get('--camera-position') || '';
 const cameraTarget = args.get('--camera-target') || '';
+const hillAffordancePacketPath = args.get('--hill-affordance-packet') || '';
+const hillAffordanceDataPath = args.get('--hill-affordance-data') || '';
 const port = positiveInt(args.get('--debug-port'), 9670, '--debug-port');
 const chrome = process.env.KAMINOS_CHROME || args.get('--chrome') || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const outDir = resolve(args.get('--out-dir') || `/tmp/kaminos-motion-panel-live-witness-${timestamp}`);
@@ -129,6 +131,8 @@ function writeReport(report) {
     exportReferenceMode,
     cameraPosition,
     cameraTarget,
+    hillAffordancePacketPath,
+    hillAffordanceDataPath,
     debugPort: port,
     chrome,
     userDataDir,
@@ -433,6 +437,38 @@ async function loadWitnessMotionSource(ws) {
   throw new Error(`--take-source must be generate, fixture, saved, or current; got ${takeSource}`);
 }
 
+async function installHillAffordanceRoutePlan(ws) {
+  if (!hillAffordancePacketPath && !hillAffordanceDataPath) return null;
+  if (!hillAffordancePacketPath || !hillAffordanceDataPath) {
+    throw new Error('--hill-affordance-packet and --hill-affordance-data must be provided together');
+  }
+  const packet = JSON.parse(readFileSync(resolve(hillAffordancePacketPath), 'utf8'));
+  const data = JSON.parse(readFileSync(resolve(hillAffordanceDataPath), 'utf8'));
+  return evaluate(ws, `(async () => {
+    if (typeof window.kaminosPreviewHillMotionAffordanceRoutePlan !== 'function') throw new Error('missing window.kaminosPreviewHillMotionAffordanceRoutePlan');
+    const result = await window.kaminosPreviewHillMotionAffordanceRoutePlan(${JSON.stringify(packet)}, ${JSON.stringify(data)}, {
+      id: 'witness-hill-motion-affordance-route',
+    });
+    const state = window.kaminosGeneratedPoseTemporalDebugState?.();
+    if (!result?.routePlan || !state?.pathWorldRoutePlan) {
+      throw new Error('Hill route plan did not become active Path World route evidence: ' + JSON.stringify({ result, state }));
+    }
+    return {
+      schema: 'kaminos.motion-panel-live-hill-affordance-route.v0',
+      ok: true,
+      result,
+      pathWorldPanel: window.kaminosMotionPanelPathWorldDebugState?.() || null,
+      pathWorldRoutePlan: state.pathWorldRoutePlan,
+      pathWorldActiveSource: state.pathWorldActiveSource || null,
+      pathWorldRouteAuthority: state.pathWorldRouteAuthority || null,
+    };
+  })().catch(error => ({
+    schema: 'kaminos.motion-panel-live-hill-affordance-route.v0',
+    ok: false,
+    error: String(error?.message || error),
+  }))`, { timeoutMs: 60000 });
+}
+
 async function resetWitnessMotionClock(ws) {
   return evaluate(ws, `(async () => {
     if (typeof window.resetGeneratedPoseTemporalClock !== 'function') throw new Error('resetGeneratedPoseTemporalClock unavailable');
@@ -615,6 +651,7 @@ async function captureFrame(ws, index) {
       pathWorldSteeringMemory: actor?.pathWorldSteeringMemory || state?.pathWorldSteeringMemory || state?.pathWorld?.pathWorldSteeringMemory || state?.pathWorldSteeringIntent?.pathWorldSteeringMemory || null,
       pathWorldRootConstraint: actor?.pathWorldRootConstraint || state?.pathWorldRootConstraint || null,
       pathWorldRouteAuthority: actor?.pathWorldRouteAuthority || state?.pathWorldRouteAuthority || null,
+      pathWorldRoutePlan: actor?.pathWorldRoutePlan || state?.pathWorldRoutePlan || state?.pathWorld?.routePlan || null,
       pathWorldActiveSource: actor?.pathWorldActiveSource || state?.pathWorldActiveSource || null,
       pathWorldPanel: window.kaminosMotionPanelPathWorldDebugState?.() || null,
       generatedMotionCliplets: state?.generatedMotionCliplets || state?.generatedPoseTemporalHarness?.generatedMotionCliplets || null,
@@ -997,6 +1034,12 @@ try {
   const motionSource = await loadWitnessMotionSource(ws);
   if (!motionSource?.ok) throw new Error(`motion source load failed: ${JSON.stringify(motionSource)}`);
   const generated = motionSource.generated || null;
+  let hillAffordanceRoute = null;
+  if (hillAffordancePacketPath || hillAffordanceDataPath) {
+    phase = 'installing-hill-affordance-route';
+    hillAffordanceRoute = await installHillAffordanceRoutePlan(ws);
+    if (!hillAffordanceRoute?.ok) throw new Error(`Hill affordance route install failed: ${JSON.stringify(hillAffordanceRoute)}`);
+  }
   let motionClockReset = null;
   let promotedTake = null;
   if (promoteTake) {
@@ -1073,6 +1116,7 @@ try {
     phrasePreviewFocus,
     takeShelfFocus,
     promotedTake,
+    hillAffordanceRoute,
     motionSource,
     motionClockReset,
     generated,
