@@ -14,6 +14,10 @@ import {
   finishStagedSubmitProfile,
 } from './staged-profile.js';
 import {
+  defineWebGpuPhaseProgram,
+  runWebGpuPhaseProgram,
+} from './phase-program.js';
+import {
   WEBGPU_BUFFER_USAGE,
   assertTensorDataByteLength,
   createGpuTensor,
@@ -318,6 +322,8 @@ function createStageFacade(runtime, stageState) {
     readTensor: runtime.readTensor,
     createUniformBuffer: runtime.createUniformBuffer,
     defineComputeKernel: runtime.defineComputeKernel,
+    defineProgram: runtime.defineProgram,
+    runProgram: runtime.runProgram,
     async yieldToBrowser(metadata = {}) {
       const event = await runtime.yieldToBrowser(metadata);
       stageState.yields.push(event);
@@ -437,6 +443,14 @@ export async function createWebGpuInferenceRuntime(input = {}) {
         getShaderModule: runtime.getShaderModule,
         getComputePipeline: runtime.getComputePipeline,
       });
+    },
+
+    defineProgram(programInput = {}) {
+      return defineWebGpuPhaseProgram(programInput, { runtime });
+    },
+
+    runProgram(program, options = {}) {
+      return runWebGpuPhaseProgram(program, { runtime, ...options });
     },
 
     async runKernel(kernelDefinition, options = {}) {

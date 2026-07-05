@@ -24,6 +24,13 @@ export {
 } from './runtime-primitives.js';
 
 export {
+  WEBGPU_PHASE_PROGRAM_RUN_SCHEMA,
+  WEBGPU_PHASE_PROGRAM_SCHEMA,
+  defineWebGpuPhaseProgram,
+  runWebGpuPhaseProgram,
+} from './phase-program.js';
+
+export {
   WEBGPU_INFERENCE_RUNTIME_SCHEMA,
   createCooperativeYield,
   createWebGpuInferenceRuntime,
