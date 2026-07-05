@@ -5,6 +5,62 @@ const index = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 
 assert.match(
   index,
+  /id="kiln-route-bench-panel"/,
+  'Generate panel must expose a route-generic kiln bench, not only a SHARP-specific smoke card',
+);
+assert.match(
+  index,
+  /data-kiln-route-bench="generate"/,
+  'Generate route bench must carry a stable smoke selector for browser witnesses',
+);
+assert.match(
+  index,
+  /const KILN_ROUTE_BENCH_ROUTES\s*=/,
+  'Generate route bench must define routes as data so SHARP is the first route, not the whole UI contract',
+);
+assert.match(
+  index,
+  /pipelineId:\s*'sharp-image-to-splat-live-v0'/,
+  'Kiln route bench must keep SHARP as a route definition with explicit pipeline identity',
+);
+assert.match(
+  index,
+  /sourceKind:\s*'image'/,
+  'Kiln route bench route definitions must declare their source kind for MoGE/Lotus/CHORD composition',
+);
+assert.match(
+  index,
+  /function renderKilnRouteBench\(/,
+  'Generate surface must render through a generic kiln route bench helper',
+);
+assert.match(
+  index,
+  /function kilnRouteBenchSelectedSource\(/,
+  'Generate route bench must resolve the selected image through a shared source helper',
+);
+assert.match(
+  index,
+  /function runKilnRouteBenchRoute\(/,
+  'Generate route bench buttons must actuate routes through a generic runner before calling SHARP-specific compatibility wrappers',
+);
+assert.match(
+  index,
+  /window\.__kaminosKilnRouteBenchState/,
+  'Route bench must expose debug state so smokes can prove source, route, status, and result truth',
+);
+assert.match(
+  index,
+  /Choose an image, pick a route, and cook it into an asset/,
+  'Route bench primary copy must explain the operator flow in ordinary language',
+);
+assert.doesNotMatch(
+  index,
+  /Root Request|root request|Evidence Bundle|evidence bundle/,
+  'Generate route bench must not expose internal ontology as operator-facing primary copy',
+);
+
+assert.match(
+  index,
   /id="sharp-breathing-room-default-button"/,
   'Generate panel must expose a dedicated default SHARP route button',
 );

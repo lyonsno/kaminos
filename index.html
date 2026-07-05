@@ -66,7 +66,10 @@ h2 { font-size: 11px; font-weight: 600; margin: 18px 0 8px; color: #666; text-tr
     .gen-preview { width: 100%; border-radius: 6px; margin-top: 8px; display: none; }
     .api-key-input { width: 100%; padding: 6px 10px; background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 4px; color: #888; font-size: 10px; font-family: 'SF Mono', monospace; outline: none; margin-bottom: 6px; }
     .api-key-input:focus { border-color: #444; }
+    .kiln-route-bench-summary { color: #cfcfcf; font-size: 12px; line-height: 1.45; margin-bottom: 10px; }
+    .kiln-route-bench-actions,
     .sharp-breathing-room-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 9px 0; }
+    .kiln-route-bench-actions .btn,
     .sharp-breathing-room-actions .btn { width: 100%; margin: 0; }
     .sharp-breathing-room-status { min-height: 30px; color: #d8c37a; font-size: 11px; line-height: 1.35; margin-top: 7px; }
     .sharp-breathing-room-source { color: #888; font: 10px 'SF Mono', monospace; overflow-wrap: anywhere; margin-top: 5px; }
@@ -1569,17 +1572,19 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 
   <!-- Generate Tab -->
   <div class="tab-content" id="tab-generate">
-    <h2>Route Image to Splat</h2>
-    <div class="panel" id="sharp-breathing-room-panel">
+    <h2>Kiln Route Bench</h2>
+    <div class="panel" id="kiln-route-bench-panel" data-kiln-route-bench="generate">
+      <div class="kiln-route-bench-summary" id="kiln-route-bench-primary-copy">Choose an image, pick a route, and cook it into an asset.</div>
+      <div class="field"><span class="field-key">Route</span><span class="field-val" id="kiln-route-bench-route-label">SHARP image to splat</span></div>
       <div class="field"><span class="field-key">Image</span><span class="field-val" id="sharp-breathing-room-source-label">No image selected</span></div>
       <input class="gen-input" id="sharp-breathing-room-source-input" spellcheck="false" autocomplete="off" placeholder="Paste a different image source">
       <div class="sharp-breathing-room-source-preview empty" id="sharp-breathing-room-source-preview">No image loaded yet.</div>
-      <div class="sharp-breathing-room-actions">
+      <div class="kiln-route-bench-actions sharp-breathing-room-actions">
         <button type="button" class="btn" id="sharp-breathing-room-default-button" onclick="runSharpBreathingRoomProfile('baseline-default')">Run default</button>
         <button type="button" class="btn" id="sharp-breathing-room-friendly-button" onclick="runSharpBreathingRoomProfile('cooperative-spn-gaussian')">Run friendly</button>
       </div>
       <div class="sharp-breathing-room-source" id="sharp-breathing-room-source-summary">Select an image asset below or paste an image source.</div>
-      <div class="sharp-breathing-room-status" id="sharp-breathing-room-status">Choose a route to send the selected image through SHARP. Friendly gives SHARP more room when the box is busy; default is the comparison path.</div>
+      <div class="sharp-breathing-room-status" id="sharp-breathing-room-status">Choose an image, pick a route, and cook it into an asset. Friendly gives SHARP more room when the box is busy; default is the comparison path.</div>
     </div>
     <h2>Image Generation</h2>
     <p style="font-size: 11px; color: #666; margin-bottom: 12px;">Generate test images to feed through the MoGe + SuperMat pipeline.</p>
@@ -10469,7 +10474,76 @@ const sharpBreathingRoomProfileLabels = {
   'cooperative-spn-gaussian': 'Friendly',
 };
 
+const KILN_ROUTE_BENCH_ROUTES = [
+  {
+    id: 'sharp-image-to-splat-live-v0',
+    pipelineId: 'sharp-image-to-splat-live-v0',
+    title: 'SHARP image to splat',
+    actionTitle: 'SHARP',
+    sourceKind: 'image',
+    outputKind: 'splat',
+    primaryCopy: 'Choose an image, pick a route, and cook it into an asset.',
+    idleCopy: 'Choose an image, pick a route, and cook it into an asset. Friendly gives SHARP more room when the box is busy; default is the comparison path.',
+    missingSourceCopy: 'Select an image or paste an image source before running SHARP.',
+    sourceHint: 'Select an image asset below or paste an image source.',
+    profileLabels: sharpBreathingRoomProfileLabels,
+    actions: [
+      {
+        profileId: 'baseline-default',
+        buttonId: 'sharp-breathing-room-default-button',
+        label: 'Default',
+        buttonLabel: 'Run default',
+        runningLabel: 'Running default',
+      },
+      {
+        profileId: 'cooperative-spn-gaussian',
+        buttonId: 'sharp-breathing-room-friendly-button',
+        label: 'Friendly',
+        buttonLabel: 'Run friendly',
+        runningLabel: 'Running friendly',
+      },
+    ],
+  },
+];
+
+let kilnRouteBenchState = {
+  schema: 'kaminos.kiln-route-bench-state.v0',
+  selectedRouteId: 'sharp-image-to-splat-live-v0',
+  sourceKind: 'image',
+  status: 'idle',
+  message: 'Choose an image, pick a route, and cook it into an asset.',
+  runningProfileId: null,
+  source: null,
+  result: null,
+  updatedAt: null,
+};
+
 let sharpBreathingRoomRunningProfileId = null;
+
+function selectedKilnRouteBenchRoute(routeId = kilnRouteBenchState.selectedRouteId) {
+  return KILN_ROUTE_BENCH_ROUTES.find(route => route.id === routeId || route.pipelineId === routeId) || KILN_ROUTE_BENCH_ROUTES[0];
+}
+
+function setKilnRouteBenchStatus(message, kind = 'idle', extra = {}) {
+  const route = selectedKilnRouteBenchRoute(extra.routeId);
+  kilnRouteBenchState = {
+    ...kilnRouteBenchState,
+    selectedRouteId: route.id,
+    sourceKind: route.sourceKind,
+    status: kind,
+    message: message || '',
+    ...extra,
+    updatedAt: new Date().toISOString(),
+  };
+  window.__kaminosKilnRouteBenchState = kilnRouteBenchState;
+  const status = document.getElementById('sharp-breathing-room-status');
+  if (status) {
+    status.textContent = message || '';
+    status.dataset.status = kind;
+    status.dataset.kilnRouteId = route.id;
+  }
+  if (message) setInfo(message);
+}
 
 function sharpBreathingRoomManualSource() {
   const manual = document.getElementById('sharp-breathing-room-source-input')?.value?.trim();
@@ -10524,6 +10598,19 @@ async function ensureSharpBreathingRoomImageAssets() {
   }
   renderSharpBreathingRoomHarness();
   return entries;
+}
+
+function kilnRouteBenchSelectedSource(route = selectedKilnRouteBenchRoute()) {
+  if (route.sourceKind !== 'image') return pipelineSelectedSource();
+  const manual = sharpBreathingRoomManualSource();
+  if (manual) return manual;
+  const imageAsset = selectedPipelineBrowserAssetForKind('image');
+  if (imageAsset) return pipelineBrowserAssetSource(imageAsset);
+  const selected = pipelineSelectedSource();
+  if (selected?.kind?.includes?.('image') || /\.(png|jpe?g|webp|gif)(?:$|[?#])/i.test(selected?.source || selected?.path || '')) {
+    return selected;
+  }
+  return selected || null;
 }
 
 async function ensureKaminosVolumeRouteInitialized() {
@@ -10590,33 +10677,36 @@ function endSharpBreathingRoomKilnFire(phase = 'complete') {
 }
 
 function sharpBreathingRoomSelectedSource() {
-  const manual = sharpBreathingRoomManualSource();
-  if (manual) return manual;
-  const imageAsset = selectedPipelineBrowserAssetForKind('image');
-  if (imageAsset) return pipelineBrowserAssetSource(imageAsset);
-  const selected = pipelineSelectedSource();
-  if (selected?.kind?.includes?.('image') || /\.(png|jpe?g|webp|gif)(?:$|[?#])/i.test(selected?.source || selected?.path || '')) {
-    return selected;
-  }
-  return selected || null;
+  return kilnRouteBenchSelectedSource(selectedKilnRouteBenchRoute('sharp-image-to-splat-live-v0'));
 }
 
 function setSharpBreathingRoomStatus(message, kind = 'idle') {
-  const status = document.getElementById('sharp-breathing-room-status');
-  if (status) {
-    status.textContent = message || '';
-    status.dataset.status = kind;
-  }
-  if (message) setInfo(message);
+  setKilnRouteBenchStatus(message, kind, { routeId: 'sharp-image-to-splat-live-v0' });
 }
 
-function renderSharpBreathingRoomHarness() {
-  const source = sharpBreathingRoomSelectedSource();
+function renderKilnRouteBench() {
+  const route = selectedKilnRouteBenchRoute();
+  const source = kilnRouteBenchSelectedSource(route);
+  kilnRouteBenchState = {
+    ...kilnRouteBenchState,
+    selectedRouteId: route.id,
+    sourceKind: route.sourceKind,
+    source,
+    runningProfileId: sharpBreathingRoomRunningProfileId,
+  };
+  window.__kaminosKilnRouteBenchState = kilnRouteBenchState;
+  const routeLabel = document.getElementById('kiln-route-bench-route-label');
+  const primaryCopy = document.getElementById('kiln-route-bench-primary-copy');
   const label = document.getElementById('sharp-breathing-room-source-label');
   const summary = document.getElementById('sharp-breathing-room-source-summary');
   const preview = document.getElementById('sharp-breathing-room-source-preview');
+  if (routeLabel) {
+    routeLabel.textContent = route.title || route.id;
+    routeLabel.title = route.pipelineId || route.id;
+  }
+  if (primaryCopy) primaryCopy.textContent = route.primaryCopy || 'Choose a source and run a route.';
   if (label) label.textContent = source?.label || 'No image selected';
-  if (summary) summary.textContent = source?.source || 'Select an image asset below or paste an image source.';
+  if (summary) summary.textContent = source?.source || route.sourceHint || 'Select a source.';
   if (preview) {
     preview.innerHTML = '';
     preview.classList.toggle('empty', !source?.source);
@@ -10631,16 +10721,21 @@ function renderSharpBreathingRoomHarness() {
     }
   }
   const running = Boolean(sharpBreathingRoomRunningProfileId);
-  for (const [profileId, buttonId] of Object.entries({
-    'baseline-default': 'sharp-breathing-room-default-button',
-    'cooperative-spn-gaussian': 'sharp-breathing-room-friendly-button',
-  })) {
-    const button = document.getElementById(buttonId);
+  for (const action of route.actions || []) {
+    const button = document.getElementById(action.buttonId);
     if (!button) continue;
-    const labelText = sharpBreathingRoomProfileLabels[profileId] || profileId;
+    const labelText = action.label || route.profileLabels?.[action.profileId] || action.profileId;
     button.disabled = running;
-    button.textContent = sharpBreathingRoomRunningProfileId === profileId ? `Running ${labelText.toLowerCase()}` : `Run ${labelText.toLowerCase()}`;
+    button.dataset.kilnRouteId = route.id;
+    button.dataset.kilnRouteProfileId = action.profileId;
+    button.textContent = sharpBreathingRoomRunningProfileId === action.profileId
+      ? (action.runningLabel || `Running ${labelText.toLowerCase()}`)
+      : (action.buttonLabel || `Run ${labelText.toLowerCase()}`);
   }
+}
+
+function renderSharpBreathingRoomHarness() {
+  renderKilnRouteBench();
 }
 
 function renderPipelineAssetCard(entry) {
@@ -14287,24 +14382,38 @@ function pipelineRunFailureSummary(result) {
   ].filter(Boolean).join(' ');
 }
 
-async function runSharpBreathingRoomProfile(profileId) {
-  const profileLabel = sharpBreathingRoomProfileLabels[profileId] || profileId;
-  const source = sharpBreathingRoomSelectedSource();
-  const pipelineId = 'sharp-image-to-splat-live-v0';
+async function runKilnRouteBenchRoute(routeId, profileId) {
+  const route = selectedKilnRouteBenchRoute(routeId);
+  const profileLabel = route.profileLabels?.[profileId] || profileId;
+  const source = kilnRouteBenchSelectedSource(route);
+  const pipelineId = route.pipelineId;
   if (!source?.source) {
-    setSharpBreathingRoomStatus('Select an image or paste an image source before running SHARP.', 'error');
+    setKilnRouteBenchStatus(route.missingSourceCopy || 'Select a source before running this route.', 'error', {
+      routeId: route.id,
+      source,
+      runningProfileId: null,
+    });
     return null;
   }
   if (!pipelineManifest) await loadPipelineManifest();
   const pipeline = pipelineManifest?.pipelines?.find(route => route.id === pipelineId);
   const inputCheck = pipelineSourceSatisfiesRouteInput(source, pipelineRouteInputRequirement(pipeline));
   if (!inputCheck.ok) {
-    setSharpBreathingRoomStatus(`SHARP needs an image source. ${inputCheck.hint || ''}`.trim(), 'error');
+    setKilnRouteBenchStatus(`${route.actionTitle || route.title} needs an image source. ${inputCheck.hint || ''}`.trim(), 'error', {
+      routeId: route.id,
+      source,
+      runningProfileId: null,
+    });
     return null;
   }
   sharpBreathingRoomRunningProfileId = profileId;
-  renderSharpBreathingRoomHarness();
-  setSharpBreathingRoomStatus(`SHARP is running the ${profileLabel.toLowerCase()} route on this image.`, 'running');
+  renderKilnRouteBench();
+  setKilnRouteBenchStatus(`${route.actionTitle || route.title} is running the ${profileLabel.toLowerCase()} route on this image.`, 'running', {
+    routeId: route.id,
+    source,
+    runningProfileId: profileId,
+    result: null,
+  });
   await beginSharpBreathingRoomKilnFire({ profileId, source, pipelineId });
   try {
     const run = await runSelectedPipeline({
@@ -14316,7 +14425,12 @@ async function runSharpBreathingRoomProfile(profileId) {
       onProgress: event => {
         if (event?.message) {
           const progress = Number.isFinite(event.progress) ? ` ${Math.round(event.progress * 100)}%` : '';
-          setSharpBreathingRoomStatus(`${profileLabel}: ${event.message}${progress}`, 'running');
+          setKilnRouteBenchStatus(`${profileLabel}: ${event.message}${progress}`, 'running', {
+            routeId: route.id,
+            source,
+            runningProfileId: profileId,
+            progressEvent: event,
+          });
         }
       },
     });
@@ -14325,36 +14439,53 @@ async function runSharpBreathingRoomProfile(profileId) {
       if (pipelineArtifactIsLoadableSplat(artifact)) {
         try {
           const record = await pipelineLoadRunSplatArtifact(run, artifact);
-          setSharpBreathingRoomStatus(
+          setKilnRouteBenchStatus(
             `${profileLabel} finished and loaded the generated splat into the scene: ${record?.label || artifact.path.split('/').pop() || 'pipeline output'}.`,
             'complete',
+            { routeId: route.id, source, result: run, loadedRecord: record, runningProfileId: null },
           );
         } catch (loadErr) {
-          setSharpBreathingRoomStatus(
+          setKilnRouteBenchStatus(
             `${profileLabel} finished, but Kaminos could not load the generated splat into the scene. ${loadErr.message || loadErr}`,
             'error',
+            { routeId: route.id, source, result: run, runningProfileId: null },
           );
         }
       } else {
-        setSharpBreathingRoomStatus(
+        setKilnRouteBenchStatus(
           artifact?.path
             ? `${profileLabel} finished and wrote an output, but that output is not a loadable splat.`
             : `${profileLabel} finished with evidence only; inspect the run result for the failure boundary.`,
           artifact?.path ? 'evidence-only' : 'evidence-only',
+          { routeId: route.id, source, result: run, runningProfileId: null },
         );
       }
     } else {
-      setSharpBreathingRoomStatus(`${profileLabel} failed before producing a splat. ${pipelineRunFailureSummary(run)}`.trim(), 'error');
+      setKilnRouteBenchStatus(`${profileLabel} failed before producing a splat. ${pipelineRunFailureSummary(run)}`.trim(), 'error', {
+        routeId: route.id,
+        source,
+        result: run,
+        runningProfileId: null,
+      });
     }
     return run;
   } catch (err) {
-    setSharpBreathingRoomStatus(`${profileLabel} failed before producing a splat. ${err.message || err}`, 'error');
+    setKilnRouteBenchStatus(`${profileLabel} failed before producing a splat. ${err.message || err}`, 'error', {
+      routeId: route.id,
+      source,
+      error: err?.message || String(err),
+      runningProfileId: null,
+    });
     throw err;
   } finally {
     endSharpBreathingRoomKilnFire('complete');
     sharpBreathingRoomRunningProfileId = null;
-    renderSharpBreathingRoomHarness();
+    renderKilnRouteBench();
   }
+}
+
+async function runSharpBreathingRoomProfile(profileId) {
+  return runKilnRouteBenchRoute('sharp-image-to-splat-live-v0', profileId);
 }
 
 async function runSelectedPipeline(options = {}) {
@@ -14418,6 +14549,8 @@ function initPipelineDock() {
 window.loadPipelineManifest = loadPipelineManifest;
 window.loadPipelineAssetBrowser = loadPipelineAssetBrowser;
 window.runSelectedPipeline = runSelectedPipeline;
+window.runKilnRouteBenchRoute = runKilnRouteBenchRoute;
+window.renderKilnRouteBench = renderKilnRouteBench;
 window.runSharpBreathingRoomProfile = runSharpBreathingRoomProfile;
 window.selectPipelineGenerator = selectPipelineGenerator;
 window.pipelineLoadSelectedSource = pipelineLoadSelectedSource;
