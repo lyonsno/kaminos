@@ -63,6 +63,18 @@ function normalizeRenderScale(value) {
   return Math.max(0.1, Math.min(1, requested));
 }
 
+function normalizeBrowserResidualMode(value) {
+  const mode = String(value || 'off').toLowerCase().replace(/_/g, '-');
+  if (['direct', 'direct-residual', 'webgpu-direct-residual', 'on', '1', 'true'].includes(mode)) return 'webgpu-direct-residual';
+  return 'off';
+}
+
+function normalizeBrowserResidualStrength(value) {
+  const requested = Number(value);
+  if (!Number.isFinite(requested)) return 1;
+  return Math.max(0, Math.min(2, requested));
+}
+
 function normalizeVolumeScene(value) {
   return SUPPORTED_VOLUME_SCENES.has(value) ? value : DEFAULT_VOLUME_SCENE;
 }
@@ -4572,6 +4584,89 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 }
 `;
 
+const BROWSER_RESIDUAL_WGSL = `
+struct VertexOut {
+  @builtin(position) position: vec4<f32>,
+  @location(0) uv: vec2<f32>,
+};
+
+@vertex
+fn vs(@builtin(vertex_index) vertexIndex: u32) -> VertexOut {
+  var positions = array<vec2<f32>, 3>(
+    vec2<f32>(-1.0, -1.0),
+    vec2<f32>(3.0, -1.0),
+    vec2<f32>(-1.0, 3.0)
+  );
+  let position = positions[vertexIndex];
+  var out: VertexOut;
+  out.position = vec4<f32>(position, 0.0, 1.0);
+  out.uv = position * 0.5 + vec2<f32>(0.5, 0.5);
+  return out;
+}
+
+@group(0) @binding(0) var sourceFrame: texture_2d<f32>;
+@group(0) @binding(1) var sourceSampler: sampler;
+@group(0) @binding(2) var<storage, read> residualData: array<f32>;
+
+fn residualWeight(outputChannel: u32, offsetY: u32, offsetX: u32, inputChannel: u32) -> f32 {
+  return residualData[(((outputChannel * 3u + offsetY) * 3u + offsetX) * 3u + inputChannel)];
+}
+
+fn residualBias(outputChannel: u32) -> f32 {
+  return residualData[81u + outputChannel];
+}
+
+fn lumaMax(color: vec3<f32>) -> f32 {
+  return max(color.r, max(color.g, color.b));
+}
+
+fn edgeSignal(uv: vec2<f32>, texel: vec2<f32>, center: vec3<f32>) -> f32 {
+  let c = lumaMax(center);
+  let left = lumaMax(textureSampleLevel(sourceFrame, sourceSampler, uv + vec2<f32>(-texel.x, 0.0), 0.0).rgb);
+  let right = lumaMax(textureSampleLevel(sourceFrame, sourceSampler, uv + vec2<f32>(texel.x, 0.0), 0.0).rgb);
+  let down = lumaMax(textureSampleLevel(sourceFrame, sourceSampler, uv + vec2<f32>(0.0, -texel.y), 0.0).rgb);
+  let up = lumaMax(textureSampleLevel(sourceFrame, sourceSampler, uv + vec2<f32>(0.0, texel.y), 0.0).rgb);
+  return max(max(abs(c - left), abs(c - right)), max(abs(c - down), abs(c - up)));
+}
+
+@fragment
+fn fs(in: VertexOut) -> @location(0) vec4<f32> {
+  let dims = vec2<f32>(textureDimensions(sourceFrame));
+  let texel = 1.0 / max(dims, vec2<f32>(1.0));
+  let uv = clamp(in.uv, vec2<f32>(0.0), vec2<f32>(1.0));
+  let center = textureSampleLevel(sourceFrame, sourceSampler, uv, 0.0).rgb;
+  var residual = vec3<f32>(residualBias(0u), residualBias(1u), residualBias(2u));
+  for (var oy: u32 = 0u; oy < 3u; oy = oy + 1u) {
+    for (var ox: u32 = 0u; ox < 3u; ox = ox + 1u) {
+      let offset = vec2<f32>(f32(i32(ox) - 1), f32(i32(oy) - 1)) * texel;
+      let sampleColor = textureSampleLevel(sourceFrame, sourceSampler, uv + offset, 0.0).rgb;
+      residual.x = residual.x + dot(sampleColor, vec3<f32>(
+        residualWeight(0u, oy, ox, 0u),
+        residualWeight(0u, oy, ox, 1u),
+        residualWeight(0u, oy, ox, 2u)
+      ));
+      residual.y = residual.y + dot(sampleColor, vec3<f32>(
+        residualWeight(1u, oy, ox, 0u),
+        residualWeight(1u, oy, ox, 1u),
+        residualWeight(1u, oy, ox, 2u)
+      ));
+      residual.z = residual.z + dot(sampleColor, vec3<f32>(
+        residualWeight(2u, oy, ox, 0u),
+        residualWeight(2u, oy, ox, 1u),
+        residualWeight(2u, oy, ox, 2u)
+      ));
+    }
+  }
+  let residualLimit = residualData[84u];
+  let edgeThreshold = residualData[85u];
+  let strength = residualData[86u];
+  let signal = edgeSignal(uv, texel, center);
+  let mask = smoothstep(edgeThreshold * 0.35, max(edgeThreshold * 1.85, edgeThreshold + 0.0001), signal);
+  let limitedResidual = clamp(residual, vec3<f32>(-residualLimit), vec3<f32>(residualLimit));
+  return vec4<f32>(clamp(center + limitedResidual * mask * strength, vec3<f32>(0.0), vec3<f32>(1.0)), 1.0);
+}
+`;
+
 export function createKaminosVolumePrototype({ THREE, viewport, camera, controls, getControls, onStatus }) {
   const canvas = document.createElement('canvas');
   canvas.id = 'kaminos-volume-canvas';
@@ -4615,6 +4710,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     renderScale: normalizeRenderScale(controlsSnapshot.renderScale),
     renderPixelRatio: 1,
     volumeReconstructionStyle: 'linear-css-upscale',
+    volumeResidualMode: normalizeBrowserResidualMode(controlsSnapshot.volumeResidualMode),
+    volumeResidualModelUrl: String(controlsSnapshot.volumeResidualModelUrl || ''),
+    volumeResidualStatus: 'off',
+    volumeResidualAuthority: 'off',
+    volumeResidualModelSchema: null,
+    volumeResidualModelError: null,
+    volumeResidualStrength: normalizeBrowserResidualStrength(controlsSnapshot.volumeResidualStrength),
     volumeScene: normalizeVolumeScene(controlsSnapshot.volumeScene),
     frameCount: 0,
     simStepCount: 0,
@@ -4979,6 +5081,17 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let context = null;
   let pipeline = null;
   let readbackPipeline = null;
+  let browserResidualPipeline = null;
+  let browserResidualBindGroupLayout = null;
+  let browserResidualPipelineLayout = null;
+  let browserResidualShader = null;
+  let browserResidualSampler = null;
+  let browserResidualBuffer = null;
+  let browserResidualBindGroup = null;
+  let browserResidualTextureKey = '';
+  let browserResidualModel = null;
+  let browserResidualModelUrl = '';
+  let browserResidualLoadPromise = null;
   let computePipeline = null;
   let pressureDivergencePipeline = null;
   let pressureJacobiPipeline = null;
@@ -5723,6 +5836,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     });
     pipeline = makePipeline(format, `kaminos volume canvas native-3d-compute-fluid-raymarch-v0 ${gridSize}^3`);
     readbackPipeline = makePipeline('rgba8unorm', `kaminos volume readback native-3d-compute-fluid-raymarch-v0 ${gridSize}^3`);
+    browserResidualPipeline = device.createRenderPipeline({
+      label: `kaminos volume browser webgpu-direct-residual postprocess ${gridSize}^3`,
+      layout: browserResidualPipelineLayout,
+      vertex: { module: browserResidualShader, entryPoint: 'vs' },
+      fragment: { module: browserResidualShader, entryPoint: 'fs', targets: [{ format }] },
+      primitive: { topology: 'triangle-list' },
+    });
     computePipeline = device.createComputePipeline({
       label: `kaminos first fluid sim compute pipeline ${gridSize}^3`,
       layout: pipelineLayout,
@@ -5927,6 +6047,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       addressModeU: 'clamp-to-edge',
       addressModeV: 'clamp-to-edge',
     });
+    browserResidualSampler = device.createSampler({
+      label: 'kaminos browser direct residual source sampler',
+      magFilter: 'linear',
+      minFilter: 'linear',
+      addressModeU: 'clamp-to-edge',
+      addressModeV: 'clamp-to-edge',
+    });
     shader = device.createShaderModule({ label: 'kaminos compute fluid raymarch wgsl', code: WGSL });
     const compilationInfo = await shader.getCompilationInfo();
     const compilationErrors = compilationInfo.messages.filter(message => message.type === 'error');
@@ -5935,6 +6062,15 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         .map(message => `${message.lineNum}:${message.linePos} ${message.message}`)
         .join('\n');
       throw new Error(`WGSL compilation failed:\n${detail}`);
+    }
+    browserResidualShader = device.createShaderModule({ label: 'kaminos browser direct residual wgsl', code: BROWSER_RESIDUAL_WGSL });
+    const residualCompilationInfo = await browserResidualShader.getCompilationInfo();
+    const residualCompilationErrors = residualCompilationInfo.messages.filter(message => message.type === 'error');
+    if (residualCompilationErrors.length > 0) {
+      const detail = residualCompilationErrors
+        .map(message => `${message.lineNum}:${message.linePos} ${message.message}`)
+        .join('\n');
+      throw new Error(`Browser residual WGSL compilation failed:\n${detail}`);
     }
     bindGroupLayout = device.createBindGroupLayout({
       label: 'kaminos fluid bind group layout',
@@ -6090,9 +6226,33 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       label: 'kaminos empty bind group layout',
       entries: [],
     });
+    browserResidualBindGroupLayout = device.createBindGroupLayout({
+      label: 'kaminos browser direct residual bind group layout',
+      entries: [
+        {
+          binding: 0,
+          visibility: GPUShaderStage.FRAGMENT,
+          texture: { sampleType: 'float' },
+        },
+        {
+          binding: 1,
+          visibility: GPUShaderStage.FRAGMENT,
+          sampler: { type: 'filtering' },
+        },
+        {
+          binding: 2,
+          visibility: GPUShaderStage.FRAGMENT,
+          buffer: { type: 'read-only-storage' },
+        },
+      ],
+    });
     pipelineLayout = device.createPipelineLayout({
       label: 'kaminos fluid pipeline layout',
       bindGroupLayouts: [bindGroupLayout],
+    });
+    browserResidualPipelineLayout = device.createPipelineLayout({
+      label: 'kaminos browser direct residual pipeline layout',
+      bindGroupLayouts: [browserResidualBindGroupLayout],
     });
     majorantPipelineLayout = device.createPipelineLayout({
       label: 'kaminos coarse majorant pipeline layout',
@@ -6163,7 +6323,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       state.renderHeight = renderHeight;
       state.renderScale = renderScale;
       state.renderPixelRatio = renderWidth / Math.max(1, displayWidth);
-      state.volumeReconstructionStyle = renderScale < 0.999 ? 'linear-css-upscale' : 'native-resolution';
+      state.volumeReconstructionStyle = browserResidualCanApply()
+        ? 'webgpu-direct-residual'
+        : (renderScale < 0.999 ? 'linear-css-upscale' : 'native-resolution');
       canvas.style.imageRendering = 'auto';
       frameTextureSize = '';
     }
@@ -6177,9 +6339,136 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       label: 'kaminos volume witness frame texture',
       size: { width: state.width, height: state.height, depthOrArrayLayers: 1 },
       format: 'rgba8unorm',
-      usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
+      usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC | GPUTextureUsage.TEXTURE_BINDING,
     });
     frameTextureSize = key;
+    browserResidualBindGroup = null;
+    browserResidualTextureKey = '';
+  }
+
+  function browserResidualRequested() {
+    return normalizeBrowserResidualMode(controlsSnapshot.volumeResidualMode) === 'webgpu-direct-residual';
+  }
+
+  function validateBrowserResidualModel(model, url) {
+    if (!model || typeof model !== 'object') throw new Error('browser residual model is not an object');
+    if (model.schema !== 'kaminos.volume.browser-residual-model.v0') throw new Error(`unsupported browser residual model schema: ${model.schema || 'missing'}`);
+    if (model.authority !== 'browser-webgpu-direct-residual-v0') throw new Error(`unsupported browser residual authority: ${model.authority || 'missing'}`);
+    if (model.modelArch !== 'direct-residual') throw new Error(`browser residual one-pass route requires direct-residual, got ${model.modelArch || 'missing'}`);
+    const kernel = model.weights?.['output.weight'];
+    const bias = model.weights?.['output.bias'];
+    if (!Array.isArray(kernel?.data) || kernel.data.length !== 81) throw new Error('browser residual output.weight must contain 81 floats');
+    if (!Array.isArray(bias?.data) || bias.data.length !== 3) throw new Error('browser residual output.bias must contain 3 floats');
+    const residualLimit = Number(model.residualOutputLimit);
+    if (!(residualLimit > 0)) throw new Error('browser residual residualOutputLimit must be positive');
+    return {
+      ...model,
+      url,
+      residualOutputLimit: residualLimit,
+      edgeBandThreshold: Math.max(0.0001, Number(model.edgeBandThreshold) || 0.015),
+      residualWeights: [...kernel.data.map(Number), ...bias.data.map(Number)],
+    };
+  }
+
+  async function ensureBrowserResidualModel() {
+    state.volumeResidualMode = normalizeBrowserResidualMode(controlsSnapshot.volumeResidualMode);
+    state.volumeResidualModelUrl = String(controlsSnapshot.volumeResidualModelUrl || '');
+    state.volumeResidualStrength = normalizeBrowserResidualStrength(controlsSnapshot.volumeResidualStrength);
+    if (!browserResidualRequested()) {
+      state.volumeResidualStatus = 'off';
+      state.volumeResidualAuthority = 'off';
+      state.volumeResidualModelSchema = null;
+      state.volumeResidualModelError = null;
+      return;
+    }
+    if (!state.volumeResidualModelUrl) {
+      browserResidualModel = null;
+      browserResidualModelUrl = '';
+      state.volumeResidualStatus = 'missing-model-url';
+      state.volumeResidualAuthority = 'off';
+      state.volumeResidualModelSchema = null;
+      state.volumeResidualModelError = 'volume_residual_model_url is required for webgpu-direct-residual';
+      return;
+    }
+    if (browserResidualModel && browserResidualModelUrl === state.volumeResidualModelUrl) {
+      state.volumeResidualStatus = 'loaded';
+      state.volumeResidualAuthority = browserResidualModel.authority;
+      state.volumeResidualModelSchema = browserResidualModel.schema;
+      state.volumeResidualModelError = null;
+      return;
+    }
+    if (!browserResidualLoadPromise || browserResidualModelUrl !== state.volumeResidualModelUrl) {
+      const url = state.volumeResidualModelUrl;
+      browserResidualModelUrl = url;
+      state.volumeResidualStatus = 'loading';
+      browserResidualLoadPromise = fetch(url, { cache: 'no-store' })
+        .then(response => {
+          if (!response.ok) throw new Error(`browser residual model fetch failed ${response.status} ${response.statusText}`);
+          return response.json();
+        })
+        .then(json => validateBrowserResidualModel(json, url));
+    }
+    try {
+      browserResidualModel = await browserResidualLoadPromise;
+      state.volumeResidualStatus = 'loaded';
+      state.volumeResidualAuthority = browserResidualModel.authority;
+      state.volumeResidualModelSchema = browserResidualModel.schema;
+      state.volumeResidualModelError = null;
+      writeBrowserResidualBuffer();
+    } catch (err) {
+      browserResidualModel = null;
+      browserResidualBindGroup = null;
+      state.volumeResidualStatus = 'error';
+      state.volumeResidualAuthority = 'off';
+      state.volumeResidualModelSchema = null;
+      state.volumeResidualModelError = err?.message || String(err);
+      emitStatus({ phase: 'browser-residual-error', error: state.volumeResidualModelError });
+    }
+  }
+
+  function writeBrowserResidualBuffer() {
+    if (!device || !browserResidualModel) return;
+    const data = new Float32Array(88);
+    data.set(browserResidualModel.residualWeights.slice(0, 84), 0);
+    data[84] = browserResidualModel.residualOutputLimit;
+    data[85] = browserResidualModel.edgeBandThreshold;
+    data[86] = normalizeBrowserResidualStrength(controlsSnapshot.volumeResidualStrength);
+    data[87] = 1;
+    if (!browserResidualBuffer) {
+      browserResidualBuffer = device.createBuffer({
+        label: 'kaminos browser direct residual weights',
+        size: data.byteLength,
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+      });
+    }
+    device.queue.writeBuffer(browserResidualBuffer, 0, data);
+  }
+
+  function browserResidualCanApply() {
+    return browserResidualRequested()
+      && browserResidualModel
+      && browserResidualPipeline
+      && browserResidualSampler
+      && browserResidualBuffer
+      && state.volumeResidualStatus === 'loaded';
+  }
+
+  function ensureBrowserResidualBindGroup() {
+    if (!browserResidualCanApply()) return null;
+    const key = `${state.width}x${state.height}:${browserResidualModel.url}:${state.volumeResidualStrength}`;
+    if (browserResidualBindGroup && browserResidualTextureKey === key) return browserResidualBindGroup;
+    writeBrowserResidualBuffer();
+    browserResidualBindGroup = device.createBindGroup({
+      label: 'kaminos browser direct residual bind group',
+      layout: browserResidualBindGroupLayout,
+      entries: [
+        { binding: 0, resource: frameTexture.createView() },
+        { binding: 1, resource: browserResidualSampler },
+        { binding: 2, resource: { buffer: browserResidualBuffer } },
+      ],
+    });
+    browserResidualTextureKey = key;
+    return browserResidualBindGroup;
   }
 
   function updateUniforms(now) {
@@ -7166,6 +7455,26 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     pass.end();
   }
 
+  function encodeBrowserResidualPass(encoder, view) {
+    const bindGroup = ensureBrowserResidualBindGroup();
+    if (!bindGroup) return false;
+    const pass = encoder.beginRenderPass({
+      label: 'kaminos browser webgpu-direct-residual pass',
+      colorAttachments: [{
+        view,
+        clearValue: { r: 0.004, g: 0.005, b: 0.006, a: 1 },
+        loadOp: 'clear',
+        storeOp: 'store',
+      }],
+    });
+    pass.setPipeline(browserResidualPipeline);
+    pass.setBindGroup(0, bindGroup);
+    pass.draw(3);
+    pass.end();
+    state.volumeReconstructionStyle = 'webgpu-direct-residual';
+    return true;
+  }
+
   function encodeHistoryCopy(encoder, sourceTexture) {
     if (!historyTexture || state.width < 1 || state.height < 1) return;
     encoder.copyTextureToTexture(
@@ -7200,7 +7509,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       }
       encodeBoundarySidecar(encoder);
       const currentTexture = context.getCurrentTexture();
-      encodeDraw(encoder, currentTexture.createView(), 'kaminos volume canvas pass');
+      if (browserResidualCanApply()) {
+        ensureFrameTexture();
+        encodeDraw(encoder, frameTexture.createView(), 'kaminos volume browser residual source pass', readbackPipeline);
+        encodeBrowserResidualPass(encoder, currentTexture.createView());
+      } else {
+        encodeDraw(encoder, currentTexture.createView(), 'kaminos volume canvas pass');
+        state.volumeReconstructionStyle = state.renderScale < 0.999 ? 'linear-css-upscale' : 'native-resolution';
+      }
       encodeHistoryCopy(encoder, currentTexture);
       device.queue.submit([encoder.finish()]);
       commitPreviousViewProjection();
@@ -9234,6 +9550,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       state.bonfireAblation = normalizeBonfireAblationControls(controlsSnapshot);
       state.renderScale = normalizeRenderScale(controlsSnapshot.renderScale);
       state.renderPixelRatio = state.renderWidth / Math.max(1, state.displayWidth || state.renderWidth || 1);
+      state.volumeResidualMode = normalizeBrowserResidualMode(controlsSnapshot.volumeResidualMode);
+      state.volumeResidualModelUrl = String(controlsSnapshot.volumeResidualModelUrl || '');
+      state.volumeResidualStrength = normalizeBrowserResidualStrength(controlsSnapshot.volumeResidualStrength);
+      if (device) void ensureBrowserResidualModel();
       state.majorantGrid = majorantGridSize;
       state.majorantCadence = normalizeMajorantBuildCadence(controlsSnapshot.majorantCadence);
       state.pressureIterationDefault = defaultPressureIterationsForScene(controlsSnapshot.volumeScene);
@@ -9312,6 +9632,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       if (active) {
         try {
           await ensureGpu();
+          await ensureBrowserResidualModel();
           state.active = true;
           state.error = null;
           canvas.classList.add('active');

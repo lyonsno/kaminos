@@ -11619,6 +11619,9 @@ const VOLUME_BASIN_ROUTE_FIELDS = [
   ['oracleActivityCurlNoise', 'volume_oracle_activity_curl_noise'],
   ['oracleActivityVorticity', 'volume_oracle_activity_vorticity'],
   ['oracleActivityMaterial', 'volume_oracle_activity_material'],
+  ['volumeResidualMode', 'volume_residual_mode'],
+  ['volumeResidualModelUrl', 'volume_residual_model_url'],
+  ['volumeResidualStrength', 'volume_residual_strength'],
   ['lookFreeze', 'volume_look_freeze'],
   ['pyroCompareMode', 'volume_pyro_compare'],
   ['pyroDynamicDetail', 'volume_pyro_detail'],
@@ -16043,6 +16046,7 @@ function backOffVolumeLegacyPyroControls(controls) {
 function readVolumeControls() {
   const volumeScene = document.getElementById('volume-scene').value;
   const pressureConfig = volumePressureConfigForMode(document.getElementById('volume-pressure-mode').value, volumeScene);
+  const params = new URLSearchParams(window.location.search);
   const reactionLiveView = normalizeReactionFrontLiveView(document.getElementById('volume-reaction-live-view')?.value);
   const boundarySidecarSource = normalizeBoundarySidecarSource(document.getElementById('volume-boundary-sidecar-source')?.value);
   const boundarySidecarView = normalizeBoundarySidecarView(document.getElementById('volume-boundary-sidecar-view')?.value);
@@ -16194,6 +16198,9 @@ function readVolumeControls() {
     shellSmoke: parseFloat(document.getElementById('volume-shell-smoke').value),
     resolution: parseInt(document.getElementById('volume-resolution').value, 10),
     majorantGrid: parseInt(document.getElementById('volume-majorant-grid').value, 10),
+    volumeResidualMode: params.get('volume_residual_mode') || 'off',
+    volumeResidualModelUrl: params.get('volume_residual_model_url') || '',
+    volumeResidualStrength: Number.isFinite(Number(params.get('volume_residual_strength'))) ? Number(params.get('volume_residual_strength')) : 1,
     gridOverlay: parseFloat(document.getElementById('volume-grid-overlay').value),
     flowDebug: parseFloat(document.getElementById('volume-flow-debug').value),
     oracleActivityCue: parseFloat(document.getElementById('volume-oracle-activity-cue').value),
