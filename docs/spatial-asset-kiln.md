@@ -73,6 +73,13 @@ They should make the operator's normal actions cheap: open the evidence, change
 camera, inspect provenance, capture a screenshot or filmstrip, and route a note
 back to the producer with the observed evidence attached.
 
+Agents building smoke surfaces should use
+[Smoke Workbench For Agents](smoke-workbench-for-agents.md) as the operational
+entry point. The short rule is: Kaminos is the smoke-making toolkit. Bring
+source law or live state, mount it in a Kaminos route, witness the same route
+the operator will click, and keep lane-local demos as debug surfaces rather
+than acceptance smokes.
+
 This is where the kiln metaphor becomes useful rather than ornamental. A bench
 can show whether a specimen is live, cached, fixture, fallback, stale, failed,
 or promoted. Those states should be visible beside the specimen rather than

@@ -6,6 +6,8 @@ The current prototype includes realtime volumetric fire and smoke running direct
 
 The broader architecture is documented in [Spatial Asset Kiln](docs/spatial-asset-kiln.md). The short version: Kaminos is becoming a place where generated artifacts can enter World Chambers, sit on Workbench/Kiln surfaces, expose Preview Benches for smoke, and advertise Smoke Offers that an operator can open, inspect, capture, and route back into the work.
 
+Agents preparing visual or spatial smoke should start with [Smoke Workbench For Agents](docs/smoke-workbench-for-agents.md). The guide describes Kaminos as the toolkit for making smokes: mount the source state in a Kaminos route, witness the operator route, capture evidence, then publish the Smoke Offer.
+
 ## Asset Kiln
 
 Creative inference has an awkward rhythm: the operator forms a hypothesis about a generator, commits an experiment, then waits during the exact moment when curiosity is sharpest. Kaminos turns that wait into visible material transformation.
