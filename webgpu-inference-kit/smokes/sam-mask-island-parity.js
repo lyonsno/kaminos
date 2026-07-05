@@ -125,7 +125,28 @@ function drawBinaryPanel(ctx, values, shape, x, y, width, height, colors) {
   ctx.drawImage(scratch, x, y, width, height);
 }
 
-function drawVisualWitness({ sourceImage, expected, actual, shape, selectedMaskIndex }) {
+function drawSourcePanel(ctx, sourceImage, sourceImageIdentity, x, y, width, height) {
+  if (sourceImage) {
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(sourceImage, x, y, width, height);
+    return;
+  }
+  ctx.fillStyle = '#151a18';
+  ctx.fillRect(x, y, width, height);
+  ctx.strokeStyle = '#59635e';
+  ctx.strokeRect(x + 0.5, y + 0.5, width - 1, height - 1);
+  ctx.fillStyle = '#dfe8e0';
+  ctx.font = '12px monospace';
+  ctx.fillText('synthetic source', x + 12, y + 30);
+  ctx.fillStyle = '#9fafaa';
+  ctx.font = '10px monospace';
+  const artifact = sourceImageIdentity?.artifactId || 'image:synthetic';
+  const sha = sourceImageIdentity?.sha256 || 'sha256:synthetic-image';
+  ctx.fillText(artifact.slice(0, 26), x + 12, y + 52);
+  ctx.fillText(sha.slice(0, 30), x + 12, y + 70);
+}
+
+function drawVisualWitness({ sourceImage, sourceImageIdentity, expected, actual, shape, selectedMaskIndex }) {
   const ctx = canvas.getContext('2d');
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.fillStyle = '#050706';
@@ -135,7 +156,7 @@ function drawVisualWitness({ sourceImage, expected, actual, shape, selectedMaskI
   const actualMask = sliceMask(actual, shape, selectedMaskIndex);
   const diffMask = expectedMask.map((value, index) => value === actualMask[index] ? 0 : 1);
   const panels = [
-    { label: 'source', x: 16, draw: () => ctx.drawImage(sourceImage, 16, 34, 200, 200) },
+    { label: 'source', x: 16, draw: () => drawSourcePanel(ctx, sourceImage, sourceImageIdentity, 16, 34, 200, 200) },
     { label: `reference mask ${selectedMaskIndex}`, x: 248, draw: () => drawBinaryPanel(ctx, expectedMask, shape, 248, 34, 200, 200, { on: [99, 230, 142], off: [34, 48, 42] }) },
     { label: 'webgpu', x: 480, draw: () => drawBinaryPanel(ctx, actualMask, shape, 480, 34, 200, 200, { on: [88, 182, 255], off: [34, 43, 52] }) },
     { label: 'diff', x: 712, draw: () => drawBinaryPanel(ctx, diffMask, shape, 712, 34, 200, 200, { on: [255, 77, 109], off: [30, 32, 32] }) },
@@ -284,6 +305,7 @@ async function main() {
 
     drawVisualWitness({
       sourceImage,
+      sourceImageIdentity: manifest.sourceImage || null,
       expected: expectedBinary,
       actual: gpuBinary,
       shape: manifest.shape,

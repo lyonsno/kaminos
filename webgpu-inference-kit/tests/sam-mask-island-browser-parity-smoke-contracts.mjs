@@ -34,6 +34,8 @@ assert.doesNotMatch(smokeJs, /weightsHash:\s*embeddingTensor\.sha256/, 'browser 
 assert.match(smokeJs, /sourceImage/, 'browser smoke must preserve source image identity');
 assert.match(smokeJs, /selectedMaskIndex/, 'browser smoke must render a selected reference/webgpu mask');
 assert.match(smokeJs, /drawVisualWitness/, 'browser smoke must draw source/reference/webgpu/diff witness panels');
+assert.match(smokeJs, /drawSourcePanel/, 'browser smoke must handle packets without a source image file');
+assert.match(smokeJs, /synthetic source/i, 'browser smoke must visibly label synthetic source placeholders');
 assert.match(smokeJs, /maskLogitsMaxAbsDiff/, 'browser smoke must report logits diff');
 assert.match(smokeJs, /binaryMismatchCount/, 'browser smoke must report binary mismatch count');
 

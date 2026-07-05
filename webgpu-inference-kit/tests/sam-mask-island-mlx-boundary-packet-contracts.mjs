@@ -24,7 +24,15 @@ const fixtureImage = process.env.KAMINOS_SAM3_FIXTURE_IMAGE || '/Users/noahlyons
 const outDir = await mkdtemp(join(tmpdir(), 'sam-mask-mlx-boundary-'));
 
 assert.ok(packageJson.files.includes('tools'), 'package must publish real-boundary packet exporter');
-assert.match(packageJson.scripts.test, /sam-mask-island-mlx-boundary-packet-contracts\.mjs/, 'package test script must include real-boundary packet contracts');
+assert.ok(
+  packageJson.scripts['test:live:sam-mlx-boundary']?.includes('sam-mask-island-mlx-boundary-packet-contracts.mjs'),
+  'package must expose real MLX boundary contracts through an explicit live test script',
+);
+assert.doesNotMatch(
+  packageJson.scripts.test,
+  /sam-mask-island-mlx-boundary-packet-contracts\.mjs/,
+  'default npm test must not require private MLX checkout, SAM fixture, or cached model weights',
+);
 assert.equal(existsSync(exporter), true, 'real MLX boundary packet exporter must exist');
 
 const run = spawnSync('uv', [
