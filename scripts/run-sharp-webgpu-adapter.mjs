@@ -411,6 +411,61 @@ function emitSharpBrowserProgress(text) {
   return event;
 }
 
+const SHARP_BROWSER_MILESTONE_PATTERN = /\[(SPN|Monodepth|Gaussian|Compose)\]|Loaded \d+ tensors from SHARP weight file/;
+
+function lastSharpBrowserMilestone() {
+  for (let index = browserLogs.length - 1; index >= 0; index -= 1) {
+    const entry = browserLogs[index];
+    if (SHARP_BROWSER_MILESTONE_PATTERN.test(entry?.text || '')) return entry;
+  }
+  return null;
+}
+
+function classifySharpWaitFailure(error) {
+  const lastBrowserMilestone = lastSharpBrowserMilestone();
+  const lastText = lastBrowserMilestone?.text || '';
+  const browserLogTail = browserLogs.slice(-20);
+  const base = {
+    schema: 'kaminos.sharp-webgpu-adapter-failure.v0',
+    phase,
+    error: error?.message || String(error),
+    requestedScheduler,
+    lastBrowserMilestone,
+    browserLogTail,
+    operatorHint: 'Try Run friendly next; it gives SHARP more browser and GPU breathing room while keeping this failure report honest.',
+  };
+  if (/\[Monodepth\] Output disparity/.test(lastText)) {
+    return {
+      ...base,
+      classification: 'model-stalled-after-monodepth',
+      operatorMessage: 'SHARP produced the monodepth disparity map, then stopped before Gaussian decoding or PLY output.',
+      nextExpectedMilestone: '[Gaussian] Running initializer',
+    };
+  }
+  if (/\[Gaussian\]/.test(lastText)) {
+    return {
+      ...base,
+      classification: 'model-stalled-during-gaussian-output',
+      operatorMessage: 'SHARP reached Gaussian decoding, then stopped before writing a loadable PLY.',
+      nextExpectedMilestone: '[Compose] Writing PLY',
+    };
+  }
+  if (/\[SPN\]/.test(lastText)) {
+    return {
+      ...base,
+      classification: 'model-stalled-during-spn-or-before-monodepth',
+      operatorMessage: 'SHARP reached the SPN image encoder, then stopped before monodepth completed.',
+      nextExpectedMilestone: '[Monodepth] Running decoder',
+    };
+  }
+  return {
+    ...base,
+    classification: 'sharp-webgpu-browser-wait-failed',
+    operatorMessage: 'SHARP did not expose a completed PLY or a page error before the browser wait failed.',
+    nextExpectedMilestone: 'download-ply link with OK validity',
+  };
+}
+
 function writeJson(path, value) {
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`);
@@ -460,9 +515,18 @@ function writeReport(extra = {}) {
 }
 
 function fail(error, extra = {}) {
+  const failure = extra.failure || (phase === 'running-sharp-webgpu-inference'
+    ? classifySharpWaitFailure(error)
+    : null);
+  const browserLastMilestone = failure?.lastBrowserMilestone || lastSharpBrowserMilestone();
   writeReport({
     ok: false,
     error: error?.message || String(error),
+    ...(failure ? { failure } : {}),
+    lastTrustworthyEvidence: {
+      ...lastTrustworthyEvidence,
+      ...(browserLastMilestone ? { browserLastMilestone } : {}),
+    },
     ...extra,
   });
   console.error(error?.stack || error);

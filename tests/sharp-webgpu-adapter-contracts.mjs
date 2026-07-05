@@ -48,6 +48,11 @@ assert.match(wrapperSource, /function sharpBrowserProgressFromConsole\(/, 'wrapp
 assert.match(wrapperSource, /page\.on\('console'[\s\S]*emitSharpBrowserProgress/, 'wrapper must forward browser console milestones before final PLY completion');
 assert.match(wrapperSource, /sharp-webgpu-browser-console/, 'forwarded progress must name the SHARP browser console source');
 assert.match(wrapperSource, /\[SPN\]\s+Patch \$\{patchDone\}\/35 done/, 'wrapper must preserve SPN patch chunk milestones as visible progress');
+assert.match(wrapperSource, /function lastSharpBrowserMilestone\(/, 'wrapper must preserve the last SHARP browser milestone for failed runs');
+assert.match(wrapperSource, /function classifySharpWaitFailure\(/, 'wrapper must classify browser wait failures instead of reporting only a generic Puppeteer error');
+assert.match(wrapperSource, /model-stalled-after-monodepth/, 'wrapper must classify failures that stop after monodepth before Gaussian or PLY output');
+assert.match(wrapperSource, /browserLastMilestone/, 'failure reports must promote the last browser milestone into trustworthy evidence');
+assert.match(wrapperSource, /operatorMessage/, 'failure reports must carry operator-facing copy for visible smoke surfaces');
 
 const witnessSource = readFileSync(witnessPath, 'utf8');
 assert.match(witnessSource, /recordAdapterSideArtifacts/, 'pipeline witness must ingest adapter side artifacts');
