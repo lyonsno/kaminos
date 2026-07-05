@@ -1602,6 +1602,7 @@ assert.match(fieldPairDataset, /excludedByPairingPolicy/, 'field-pair dataset re
 assert.match(fieldPairDataset, /minCommonSpatialBinPairs/, 'field-pair dataset can fail loudly when common-bin pairing is too sparse for a clean corpus proof');
 assert.match(fieldPairDataset, /--route-variants/, 'field-pair dataset can read named route variants from a file instead of requiring hand-spliced one-route corpora');
 assert.match(fieldPairDataset, /routeVariantIdentity/, 'field-pair dataset records the active route variant identity per low/high pair');
+assert.match(fieldPairDataset, /source\.routeVariantIdentity/, 'field-pair dataset preserves canonical routeVariantIdentity from route variant files');
 assert.match(fieldPairDataset, /applyRouteVariant/, 'field-pair dataset applies explicit query-param route variant controls before low/high grid routing');
 assert.match(fieldPairDataset, /routeVariants/, 'field-pair dataset preserves the requested route variant set in the manifest');
 assert.match(fieldPairDataset, /--route-variant-preflight/, 'field-pair dataset can preflight route variants before spending low/high field tile exports');

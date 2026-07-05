@@ -236,7 +236,7 @@ function routeWithGrid(baseUrl, grid, majorantGrid) {
 
 function normalizeRouteVariant(entry, index) {
   const source = entry && typeof entry === 'object' ? entry : {};
-  const identity = slugify(source.id || source.identity || source.name || `variant-${index + 1}`, `variant-${index + 1}`);
+  const identity = slugify(source.routeVariantIdentity || source.id || source.identity || source.name || `variant-${index + 1}`, `variant-${index + 1}`);
   const query = source.query || source.queryParams || source.params || {};
   const queryParams = {};
   for (const [key, value] of Object.entries(query)) {
