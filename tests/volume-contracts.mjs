@@ -35,6 +35,11 @@ assert.match(index, /gpuWallWashAuthority/, 'brick-wall scene context must expos
 assert.match(index, /volume-scene-fire-wall-glow-proxy-v0/, 'brick-wall scene context must expose a wall-attached glow proxy identity');
 assert.match(index, /control-and-frame-cadence-proxy-not-fire-frame-readback-v0/, 'brick-wall wall glow must disclose that the visible proxy is not a fire-frame readback');
 assert.match(index, /wallAttachedGlow/, 'brick-wall scene context must report the wall-attached glow proxy state');
+assert.match(index, /volume-screen-space-fire-receiver-light-v0/, 'brick-wall lighting must expose the screen-space fire receiver-light route identity');
+assert.match(index, /three-tsl-prepass-depth-v0/, 'screen-space fire receiver light must disclose its Three/TSL depth prepass authority');
+assert.match(index, /three-tsl-prepass-packed-normal-v0/, 'screen-space fire receiver light must disclose its Three/TSL packed-normal prepass authority');
+assert.match(index, /uploaded-control-fire-envelope-no-readback-v0/, 'screen-space fire receiver light must disclose its no-readback uploaded control energy envelope');
+assert.match(index, /receiverLight/, 'brick-wall scene context must report the screen-space receiver-light state');
 assert.match(index, /liveCpuReadback:\s*false/, 'brick-wall route must report that live CPU readback is absent from lighting');
 assert.match(index, /threeLightSupport:\s*'removed'/, 'brick-wall route must report that the old Three light rig is removed');
 assert.doesNotMatch(index, /volume-live-frame-fire-light-readback-v0/, 'brick-wall route must not keep the live frame readback light path around');
@@ -1532,6 +1537,10 @@ assert.match(witness, /liveCpuReadback/, 'witness verifies brick-wall lighting h
 assert.match(witness, /threeLightSupport/, 'witness verifies the old Three light rig is removed for brick-wall lighting');
 assert.match(witness, /gpuWallWash/, 'witness records GPU wall-wash authority for brick-wall route');
 assert.match(witness, /per-render-frame-gpu-fragment/, 'witness records GPU wall-wash cadence');
+assert.match(witness, /volume-screen-space-fire-receiver-light-v0/, 'witness verifies the screen-space receiver-light identity');
+assert.match(witness, /three-tsl-prepass-depth-v0/, 'witness verifies the screen-space receiver light depth authority');
+assert.match(witness, /three-tsl-prepass-packed-normal-v0/, 'witness verifies the screen-space receiver light normal authority');
+assert.match(witness, /uploaded-control-fire-envelope-no-readback-v0/, 'witness verifies the screen-space receiver light energy authority');
 assert.match(witness, /ceilingVisibilityPolicy/, 'witness verifies the brick-wall ceiling-hidden framing policy');
 assert.match(witness, /backdropMidtonePixels/, 'witness records a screenshot metric that can catch missing scene-context backdrop pixels');
 assert.match(index, /volume-scene-context-active #kaminos-volume-canvas\.active[\s\S]*opacity:\s*1[\s\S]*mix-blend-mode:\s*screen/, 'scene-context routes screen-blend the direct native WebGPU canvas over the rendered backdrop scene');

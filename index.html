@@ -2040,7 +2040,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
 
 <script type="module">
 import * as THREE from 'three';
-import { pass, mrt, normalView, vec3, vec4, mix, float, uniform, texture, packNormalToRGB, unpackRGBToNormal, sample, positionView, convertToTexture } from 'three/tsl';
+import { pass, mrt, normalView, vec3, vec4, mix, float, uniform, texture, packNormalToRGB, unpackRGBToNormal, sample, positionView, convertToTexture, uv, distance, smoothstep, dot, abs } from 'three/tsl';
 import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
 import { createKaminosVolumePrototype } from './volume-core.js?v=pyro-palette-flame-paint-0703';
@@ -2136,6 +2136,10 @@ let scene, camera, renderer, controls, pmremGenerator, transformControls;
 let sceneRaycaster, scenePointerNdc;
 let postProcessing = null;
 let aoPass = null, aoIntensity = null, renderPipeline = null, scenePass = null;
+let fireReceiverLightGainNode = null;
+let fireReceiverLightCenterNode = null;
+let fireReceiverLightRadiusNode = null;
+let fireReceiverLightDebugState = null;
 let backdropMesh = null;
 let currentMesh = null;
 let groundPlane = null;
@@ -8100,7 +8104,24 @@ async function initScene() {
 
   aoIntensity = uniform(document.getElementById('ao-toggle').checked ? parseFloat(document.getElementById('ao-intensity').value) : 0);
   const aoOutput = mix(float(1.0), denoisePass.r, aoIntensity);
-  renderPipeline.outputNode = scenePass.mul(vec4(vec3(aoOutput), 1));
+  fireReceiverLightGainNode = uniform(0);
+  fireReceiverLightCenterNode = uniform(new THREE.Vector2(
+    VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.center[0],
+    VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.center[1]
+  ));
+  fireReceiverLightRadiusNode = uniform(VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.radius);
+  const receiverUv = uv();
+  const receiverDepth = prePassDepth.sample(receiverUv).x;
+  const receiverNormal = prePassNormal.sample(receiverUv).rgb.normalize();
+  const receiverDistance = distance(receiverUv, fireReceiverLightCenterNode);
+  const receiverLobe = float(1.0).sub(smoothstep(fireReceiverLightRadiusNode.mul(0.18), fireReceiverLightRadiusNode, receiverDistance));
+  const receiverVerticalFalloff = float(1.0).sub(smoothstep(float(0.80), float(0.98), receiverUv.y));
+  const receiverDepthMask = float(1.0).sub(smoothstep(float(0.995), float(1.0), receiverDepth));
+  const receiverNormalMask = smoothstep(float(0.05), float(0.82), abs(dot(receiverNormal, vec3(0.0, 0.0, 1.0))));
+  const receiverMask = receiverLobe.mul(receiverVerticalFalloff).mul(receiverDepthMask).mul(receiverNormalMask);
+  const receiverLight = vec3(1.0, 0.36, 0.07).mul(receiverMask.mul(fireReceiverLightGainNode));
+  const sceneOutput = scenePass.mul(vec4(vec3(aoOutput), 1));
+  renderPipeline.outputNode = sceneOutput.add(vec4(receiverLight, 0));
   window.kaminosAODebugState = () => ({
     route: 'three-tsl-render-pipeline-gtao-compute',
     hasRenderPipeline: !!renderPipeline,
@@ -8112,7 +8133,9 @@ async function initScene() {
     scale: aoPass?.scale?.value ?? null,
     thickness: aoPass?.thickness?.value ?? null,
     falloff: aoPass?.distanceFallOff?.value ?? null,
+    receiverLight: fireReceiverLightDebugState,
   });
+  window.kaminosFireReceiverLightDebugState = () => fireReceiverLightDebugState;
 
   window.addEventListener('resize', () => {
     const w = vp.clientWidth;
@@ -15282,6 +15305,20 @@ const VOLUME_BRICK_WALL_GLOW_PROXY = Object.freeze({
   placementAuthority: 'operator-smoked-flame-wall-contact-left-fit-v0',
   maskAuthority: 'bounded-plane-fit-not-object-mask-v0',
 });
+const VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT = Object.freeze({
+  identity: 'volume-screen-space-fire-receiver-light-v0',
+  routeAuthority: 'three-tsl-render-pipeline-depth-normal-receiver-light-v0',
+  depthAuthority: 'three-tsl-prepass-depth-v0',
+  normalAuthority: 'three-tsl-prepass-packed-normal-v0',
+  energyAuthority: 'uploaded-control-fire-envelope-no-readback-v0',
+  maskAuthority: 'screen-space-depth-normal-receiver-mask-v0',
+  cadence: 'per-render-frame-gpu-tsl',
+  center: [0.42, 0.62],
+  radius: 0.31,
+  gainScale: 0.34,
+  maxGain: 0.58,
+  receiverWindow: 'depth+packed-normal+screen-lobe-v0',
+});
 
 function normalizeVolumeSceneContext(value) {
   const normalized = String(value || 'none').trim().toLowerCase().replace(/-/g, '_');
@@ -15298,7 +15335,7 @@ function computeBrickWallGpuWashProbe(volumeState = {}) {
     identity: VOLUME_BRICK_WALL_FIRE_LIGHT_PROXY.probeIdentity,
     sourceIdentity: `${VOLUME_BRICK_WALL_FIRE_LIGHT_PROXY.sourceIdentity}+${gpuWallWash.authority || VOLUME_BRICK_WALL_GPU_WASH.authority}`,
     order: 1,
-    mode: sourceAuthority ? 'wall-space-glow' : 'disabled',
+    mode: sourceAuthority ? 'screen-space-receiver-light' : 'disabled',
     gain,
     sourceAuthority,
     liveCpuReadback: false,
@@ -15568,6 +15605,24 @@ function createVolumeBrickWallContext() {
     scale: [1, 1, 1],
     liveCpuReadback: false,
   };
+  let lastReceiverLight = {
+    identity: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.identity,
+    routeAuthority: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.routeAuthority,
+    depthAuthority: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.depthAuthority,
+    normalAuthority: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.normalAuthority,
+    energyAuthority: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.energyAuthority,
+    maskAuthority: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.maskAuthority,
+    cadence: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.cadence,
+    enabled: false,
+    gain: 0,
+    center: [...VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.center],
+    radius: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.radius,
+    gainScale: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.gainScale,
+    maxGain: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.maxGain,
+    receiverWindow: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.receiverWindow,
+    cpuReadbackAuthority: false,
+    threeLightSupport: 'removed',
+  };
 
   const applyDimLightingControls = () => {
     if (renderer) renderer.toneMappingExposure = VOLUME_BRICK_WALL_LIGHTING.lightingExposure;
@@ -15610,16 +15665,51 @@ function createVolumeBrickWallContext() {
       0,
       1.65
     );
-    const glowOpacity = clampVolumeValue(glowEnergy * 0.36, 0, 0.46);
+    const receiverGain = clampVolumeValue(
+      glowEnergy * VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.gainScale,
+      0,
+      VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.maxGain
+    );
+    const receiverEnabled = group.visible && receiverGain > 0.006 && lastFireLightProbe.sourceAuthority;
+    if (fireReceiverLightGainNode) fireReceiverLightGainNode.value = receiverEnabled ? receiverGain : 0;
+    if (fireReceiverLightCenterNode) fireReceiverLightCenterNode.value.set(
+      VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.center[0],
+      VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.center[1]
+    );
+    if (fireReceiverLightRadiusNode) fireReceiverLightRadiusNode.value = VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.radius;
+    const glowOpacity = 0;
     const glowScale = 0.86 + clampVolumeValue(glowEnergy, 0, 1.4) * 0.32;
-    wallGlow.visible = group.visible && glowOpacity > 0.006;
-    wallGlowMaterial.opacity = wallGlow.visible ? glowOpacity : 0;
+    wallGlow.visible = false;
+    wallGlowMaterial.opacity = 0;
     wallGlow.scale.set(0.86 + glowScale * 0.24, 0.82 + glowScale * 0.22, 1);
     wallGlowMaterial.color.setRGB(
       1.0,
       0.34 + clampVolumeValue(radianceControl * 0.030, 0, 0.16),
       0.08 + clampVolumeValue(glowControl * 0.014, 0, 0.08)
     );
+    lastReceiverLight = {
+      identity: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.identity,
+      routeAuthority: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.routeAuthority,
+      depthAuthority: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.depthAuthority,
+      normalAuthority: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.normalAuthority,
+      energyAuthority: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.energyAuthority,
+      maskAuthority: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.maskAuthority,
+      cadence: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.cadence,
+      mode: lastFireLightProbe.mode,
+      enabled: receiverEnabled,
+      gain: receiverEnabled ? receiverGain : 0,
+      rawEnvelope: glowEnergy,
+      center: [...VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.center],
+      radius: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.radius,
+      gainScale: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.gainScale,
+      maxGain: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.maxGain,
+      receiverWindow: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.receiverWindow,
+      liveCpuReadback: false,
+      cpuReadbackAuthority: false,
+      threeLightSupport: 'removed',
+      drive: 'control-envelope-uploaded-as-gpu-uniform-no-readback-v0',
+    };
+    fireReceiverLightDebugState = lastReceiverLight;
     lastWallAttachedGlow = {
       identity: VOLUME_BRICK_WALL_GLOW_PROXY.identity,
       authority: VOLUME_BRICK_WALL_GLOW_PROXY.authority,
@@ -15636,7 +15726,7 @@ function createVolumeBrickWallContext() {
       scale: wallGlow.scale.toArray(),
       renderOrder: wallGlow.renderOrder,
       liveCpuReadback: false,
-      drive: 'control-and-live-frame-cadence-proxy-no-readback-v0',
+      drive: 'legacy-proxy-hidden-by-screen-space-receiver-light-v0',
     };
     const c = lastFireLightProbe.centroid;
     group.userData.kaminosVolumeSceneContext.fireLightProxy = {
@@ -15648,6 +15738,7 @@ function createVolumeBrickWallContext() {
       threeLightSupport: 'removed',
       gpuWallWashAuthority: gpuWallWash.authority,
       gpuWallWash,
+      receiverLight: lastReceiverLight,
       wallAttachedGlow: lastWallAttachedGlow,
       sphericalHarmonicOrder: lastFireLightProbe.order,
       gain: lastFireLightProbe.gain,
@@ -15745,6 +15836,7 @@ function createVolumeBrickWallContext() {
       } else if (groundPlane && previousGroundPlaneVisible !== null) {
         groundPlane.visible = previousGroundPlaneVisible;
         previousGroundPlaneVisible = null;
+        if (fireReceiverLightGainNode) fireReceiverLightGainNode.value = 0;
       }
       window._kaminosDirty?.();
       return group.visible ? 'brick_wall' : effectiveContext;
@@ -15783,6 +15875,7 @@ function createVolumeBrickWallContext() {
         fireLightProxyIdentity: VOLUME_BRICK_WALL_FIRE_LIGHT_PROXY.identity,
         fireLightProxyMode: metadata.fireLightProxy?.fireLightProxyMode || lastFireLightProbe.mode,
         fireLightProxy: metadata.fireLightProxy || null,
+        receiverLight: metadata.fireLightProxy?.receiverLight || lastReceiverLight,
         wallAttachedGlow: metadata.fireLightProxy?.wallAttachedGlow || lastWallAttachedGlow,
         sphericalHarmonicProbeIdentity: metadata.fireLightProxy?.probeIdentity || VOLUME_BRICK_WALL_FIRE_LIGHT_PROXY.probeIdentity,
         sphericalHarmonicCoefficients: metadata.fireLightProxy?.sphericalHarmonicCoefficients || lastFireLightProbe.sphericalHarmonicCoefficients,
