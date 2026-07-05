@@ -90,3 +90,38 @@ assert.match(
   /id="volume-render-scale"[^>]*step="any"/,
   'volume render scale route/control must not snap arbitrary low render scales such as 0.18 to coarse UI increments',
 );
+assert.match(
+  html,
+  /id="volume-residual-mode"/,
+  'volume UI must expose residual mode so the operator can live-toggle same-state residual application',
+);
+assert.match(
+  html,
+  /id="volume-residual-strength"/,
+  'volume UI must expose residual strength for same-state residual comparison',
+);
+assert.match(
+  html,
+  /id="volume-residual-model-url"/,
+  'volume UI must expose the residual model URL to preserve model identity during live comparison',
+);
+assert.match(
+  html,
+  /'volume-residual-mode'[\s\S]*'volume-residual-model-url'[\s\S]*'volume-residual-strength'/,
+  'volume residual controls must participate in the live syncControls input/change loop',
+);
+assert.match(
+  html,
+  /params\.get\('volume_residual_mode'\)[\s\S]*setVolumeControlValue\('volume-residual-mode'/,
+  'volume residual mode route param must populate the live residual mode control before runtime reads controls',
+);
+assert.match(
+  html,
+  /params\.has\('volume_residual_model_url'\)[\s\S]*setVolumeControlValue\('volume-residual-model-url'/,
+  'volume residual model URL route param must populate the live residual model control',
+);
+assert.match(
+  html,
+  /params\.has\('volume_residual_strength'\)[\s\S]*setVolumeControlValue\('volume-residual-strength'/,
+  'volume residual strength route param must populate the live residual strength control',
+);
