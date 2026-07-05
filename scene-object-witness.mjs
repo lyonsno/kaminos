@@ -194,6 +194,66 @@ async function runMeshAssetLinkScenario(ws) {
   `, { timeoutMs: 45000 });
 }
 
+async function runSplatAssetLinkScenario(ws) {
+  phase = 'scenario-splat-asset-link';
+  lastEvidence.splatAssetLink = await evaluate(ws, `
+    (async () => {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      const waitForAssetLink = async () => {
+        for (let i = 0; i < 160; i++) {
+          const state = window.kaminosAssetSmokeLinkDebugState?.();
+          const objects = window.kaminosSceneObjectDebugState?.() || [];
+          if (state?.status === 'loaded' && state.registeredObjectId && objects.some(object => object.id === state.registeredObjectId)) {
+            return { state, objects };
+          }
+          if (state?.status === 'failed') {
+            throw new Error('splat asset link failed before registration: ' + JSON.stringify(state));
+          }
+          await wait(125);
+        }
+        return {
+          state: window.kaminosAssetSmokeLinkDebugState?.() || null,
+          objects: window.kaminosSceneObjectDebugState?.() || [],
+        };
+      };
+      const evidence = await waitForAssetLink();
+      const state = evidence.state;
+      if (!state || state.schema !== 'kaminos.asset-smoke-link.v0') {
+        throw new Error('splat asset link debug state missing schema: ' + JSON.stringify(evidence));
+      }
+      if (state.assetType !== 'splat') {
+        throw new Error('splat asset link debug state used wrong asset type: ' + JSON.stringify(state));
+      }
+      if (!state.requestedRoot || !state.requestedPath || !state.effectiveUrl?.includes('/api/read?')) {
+        throw new Error('splat asset link did not preserve requested/effective route identity: ' + JSON.stringify(state));
+      }
+      const object = evidence.objects.find(record => record.id === state.registeredObjectId);
+      if (!object || object.type !== 'splat' || object.source !== state.effectiveUrl) {
+        throw new Error('splat asset link did not register the loaded PLY as a splat scene object: ' + JSON.stringify({ state, object, objects: evidence.objects }));
+      }
+      if (object.splat?.format !== 'ply' || !object.splat?.previewKind) {
+        throw new Error('splat asset link registered without PLY splat preview metadata: ' + JSON.stringify({ state, object }));
+      }
+      const resourceNames = performance.getEntriesByType('resource').map(entry => entry.name);
+      const requestedResource = resourceNames.find(name => name.includes('/api/read?') && name.includes('root=' + encodeURIComponent(state.requestedRoot)) && name.includes('path=' + encodeURIComponent(state.requestedPath)));
+      if (!requestedResource) {
+        throw new Error('splat asset link registered without a matching browser resource request: ' + JSON.stringify({ state, resourceNames }));
+      }
+      const row = [...document.querySelectorAll('[data-scene-object-id]')].find(row => row.dataset.sceneObjectId === state.registeredObjectId);
+      if (!row) {
+        throw new Error('splat asset link registered object missing from scene object list: ' + JSON.stringify({ state, rows: [...document.querySelectorAll('[data-scene-object-id]')].map(row => row.dataset.sceneObjectId) }));
+      }
+      return {
+        state,
+        object,
+        requestedResource,
+        rowText: row.textContent.trim(),
+        info: document.getElementById('info-bar')?.textContent?.trim() || null,
+      };
+    })()
+  `, { timeoutMs: 45000 });
+}
+
 async function dispatchMouseClick(ws, point) {
   await wsRequest(ws, 'Input.dispatchMouseEvent', {
     type: 'mousePressed',
@@ -4826,6 +4886,8 @@ try {
     await runAoRouteDeltaScenario(ws);
   } else if (scenario === 'mesh-asset-link') {
     await runMeshAssetLinkScenario(ws);
+  } else if (scenario === 'splat-asset-link') {
+    await runSplatAssetLinkScenario(ws);
   } else if (scenario === 'forge-host-smoke-offers') {
     await runForgeHostSmokeOffersScenario(ws);
   } else if (scenario === 'forge-host-live-registry') {
