@@ -1,8 +1,12 @@
 # Preview Bench Adapters
 
-Kaminos Preview Bench adapters are the handoff path for another lane that wants Kaminos to host, inspect, and witness a payload without Kaminos owning that lane's domain logic.
+Kaminos Preview Bench adapters are composition surfaces for lanes that want
+Kaminos to host, inspect, and witness a payload while the source lane owns its
+domain logic.
 
-Use this when a source lane has produced a live, fixture, or archived evidence payload and needs an operator-facing Kaminos surface for smoke. Do not create a bespoke Kaminos route unless the payload needs new host behavior.
+Use a Preview Bench when a source lane has produced a live, fixture, or archived
+evidence payload and needs an operator-facing Kaminos surface for smoke. Create
+a project-specific route when the payload needs new host behavior.
 
 ## Route
 
@@ -18,11 +22,14 @@ The generic URL route is:
 ?world_chamber=lerms-underhill&posture=inspect&bench=terrain-preview&preview_bench_payload_url=http://127.0.0.1:8099/your-payload.json
 ```
 
-Project-specific aliases such as `lerms_actor_motion_payload_root` may exist for compatibility, but new lanes should start with `preview_bench_payload_root`, `preview_bench_payload_path`, or `preview_bench_payload_url`.
+Project-specific aliases such as `lerms_actor_motion_payload_root` may exist
+for compatibility. New lanes can start with `preview_bench_payload_root`,
+`preview_bench_payload_path`, or `preview_bench_payload_url`.
 
 ## Envelope
 
-Kaminos reads a `kaminos.preview-bench.payload-report.v0` report that wraps a source-owned payload:
+Kaminos reads a `kaminos.preview-bench.payload-report.v0` report that wraps a
+source-owned payload:
 
 ```json
 {
@@ -54,13 +61,13 @@ Kaminos reads a `kaminos.preview-bench.payload-report.v0` report that wraps a so
       "count": 3
     },
     "downgrades": [
-      "host_visualization_not_source_truth"
+      "display_authority_only"
     ],
-    "rejectedSurfaces": [
+    "debugSurfaces": [
       {
         "route": "browser/?debug=1",
-        "acceptanceSurface": false,
-        "reason": "debug route is not Kaminos Preview Bench acceptance"
+        "role": "debug",
+        "reason": "source-lane local debug view"
       }
     ],
     "custody": {
@@ -73,11 +80,15 @@ Kaminos reads a `kaminos.preview-bench.payload-report.v0` report that wraps a so
 
 ## Custody
 
-Source owns payload semantics, source schemas, domain truth, freshness claims, and whether a payload is live, fixture, archived, stale, or fallback.
+Source owns payload semantics, source schemas, domain truth, freshness claims,
+and whether a payload is live, fixture, archived, stale, or fallback.
 
-Kaminos owns host display, route/source/fallback badge rendering, acceptance-surface validation, and browser witness capture.
+Kaminos owns host display, route/source/fallback badge rendering,
+acceptance-surface validation, and browser witness capture.
 
-Kaminos does not rename source schemas, reinterpret domain semantics, or turn a debug route into an acceptance surface. If the payload is fixture, stale, proxy, or visual-only, that downgrade must stay visible.
+The adapter preserves source schemas, domain semantics, debug route labels, and
+downgrade visibility. Fixture, stale, proxy, and visual-only payloads keep their
+downgrade state visible.
 
 ## Smoke
 
@@ -91,4 +102,6 @@ node scene-object-witness.mjs \
   --report /tmp/kaminos-preview-bench-payload.json
 ```
 
-The witness must record the effective URL, server roots, payload schema, source authority, downgrades, rejected surfaces, and custody split. Sidebar text alone is not acceptance evidence.
+The witness records the effective URL, server roots, payload schema, source
+authority, downgrades, debug surface roles, and custody split. Acceptance
+evidence includes the captured operator route and its report.
