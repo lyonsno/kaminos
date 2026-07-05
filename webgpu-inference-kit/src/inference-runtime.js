@@ -477,12 +477,12 @@ export async function createWebGpuInferenceRuntime(input = {}) {
 
       const stageName = options.stage || kernelDefinition.name;
       const metadata = {
+        ...(options.metadata || {}),
         kernelName: kernelDefinition.name,
         dispatch,
         bindings: Array.isArray(kernelDefinition.bindings)
           ? kernelDefinition.bindings.map(binding => binding.name)
           : [],
-        ...(options.metadata || {}),
       };
 
       return runtime.runStage(stageName, async stage => {

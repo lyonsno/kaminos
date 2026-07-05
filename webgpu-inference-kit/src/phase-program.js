@@ -203,10 +203,11 @@ export async function runWebGpuPhaseProgram(program, options = {}) {
         yieldAfter: phase.yieldAfter,
         yieldReason: phase.yieldReason,
         metadata: {
+          ...phase.metadata,
+          phaseMetadata: clone(phase.metadata || {}),
           programName: program.name,
           phaseName: phase.name,
           phaseIndex: phase.phaseIndex,
-          ...phase.metadata,
         },
       });
       phaseResults.push({ name: phase.name, kind: phase.kind, commandBuffer });
@@ -221,11 +222,12 @@ export async function runWebGpuPhaseProgram(program, options = {}) {
         }
         return readbackOutputs;
       }, {
+        ...phase.metadata,
+        phaseMetadata: clone(phase.metadata || {}),
         programName: program.name,
         phaseName: phase.name,
         phaseIndex: phase.phaseIndex,
         readbacks: phase.readbacks.map(readback => readback.name),
-        ...phase.metadata,
       });
       Object.assign(outputs, phaseOutputs);
       phaseResults.push({ name: phase.name, kind: phase.kind, outputs: Object.keys(phaseOutputs) });

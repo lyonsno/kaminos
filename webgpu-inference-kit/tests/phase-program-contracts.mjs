@@ -178,8 +178,32 @@ const program = runtime.defineProgram({
     },
   },
   phases: [
-    { name: 'decode-mask', kernel: 'decodeMask', dispatch: [1, 1, 1], yieldAfter: true, metadata: { tiles: 1 } },
-    { name: 'readback-mask', readbacks: [{ name: 'maskBytes', tensor: 'outputMask' }] },
+    {
+      name: 'decode-mask',
+      kernel: 'decodeMask',
+      dispatch: [1, 1, 1],
+      yieldAfter: true,
+      metadata: {
+        programName: 'spoofed-program',
+        phaseName: 'spoofed-phase',
+        phaseIndex: 99,
+        kernelName: 'spoofed-kernel',
+        dispatch: ['fake'],
+        bindings: ['fakeBinding'],
+        tiles: 1,
+      },
+    },
+    {
+      name: 'readback-mask',
+      readbacks: [{ name: 'maskBytes', tensor: 'outputMask' }],
+      metadata: {
+        programName: 'spoofed-program',
+        phaseName: 'spoofed-readback',
+        phaseIndex: 88,
+        readbacks: ['fakeBytes'],
+        note: 'caller metadata survives without identity authority',
+      },
+    },
   ],
   metadata: { route: 'sam3-mask-island' },
 });
@@ -219,8 +243,16 @@ assert.deepEqual(profile.profile.stageNames, ['decode-mask', 'readback-mask']);
 assert.equal(profile.profile.stages[0].metadata.programName, 'sam3.mask-decoder-program');
 assert.equal(profile.profile.stages[0].metadata.phaseIndex, 0);
 assert.equal(profile.profile.stages[0].metadata.kernelName, 'decodeMask');
+assert.deepEqual(profile.profile.stages[0].metadata.dispatch, [1, 1, 1]);
+assert.deepEqual(profile.profile.stages[0].metadata.bindings, ['imageEmbedding', 'params', 'outputMask']);
 assert.equal(profile.profile.stages[0].metadata.tiles, 1);
+assert.equal(profile.profile.stages[0].metadata.phaseMetadata.programName, 'spoofed-program');
+assert.equal(profile.profile.stages[0].metadata.phaseMetadata.kernelName, 'spoofed-kernel');
 assert.equal(profile.profile.stages[0].metadata.yields[0].reason, 'sam3.mask-decoder-program.decode-mask.post-submit');
 assert.deepEqual(profile.profile.stages[1].metadata.readbacks, ['maskBytes']);
+assert.equal(profile.profile.stages[1].metadata.programName, 'sam3.mask-decoder-program');
+assert.equal(profile.profile.stages[1].metadata.phaseName, 'readback-mask');
+assert.equal(profile.profile.stages[1].metadata.phaseIndex, 1);
+assert.equal(profile.profile.stages[1].metadata.phaseMetadata.readbacks[0], 'fakeBytes');
 
 console.log('phase program contracts passed');
