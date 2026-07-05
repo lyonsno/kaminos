@@ -2182,7 +2182,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let tallPlumeSourceWidthGate = tallPlumeScene * smoothstep(0.095, 0.180, scaledSourceRadius);
   let tallPlumeSourceRadial01 = clamp(sourceRadial / max(scaledSourceRadius, 0.001), 0.0, 3.0);
   let tallPlumeFrontPacketDensity = mix(1.0, 2.25, tallPlumeSourceWidthGate);
-  let tallPlumeSourceAngle = atan2(sourceCenter.z, sourceCenter.x);
+  let tallPlumeSourceAngle = tallPlumeSmokeDebandAngle;
   let tallPlumeAnnularFrontRadius = mix(0.70, 0.86, tallPlumeSourceWidthGate);
   let tallPlumeAnnularFrontWidth = 0.18 - tallPlumeSourceWidthGate * 0.035;
   let tallPlumeAnnularFrontBand = exp(
