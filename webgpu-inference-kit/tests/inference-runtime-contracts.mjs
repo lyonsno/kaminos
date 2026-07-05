@@ -78,6 +78,18 @@ const pipelineB = caches.getComputePipeline('sam3-mask-decoder', {
 assert.equal(pipelineA, pipelineB);
 assert.equal(calls.computePipelines.length, 1);
 
+const nativeLikeModuleA = Object.create(null);
+const nativeLikeModuleB = Object.create(null);
+caches.getComputePipeline('same-label-native-module', {
+  layout: 'auto',
+  compute: { module: nativeLikeModuleA, entryPoint: 'main' },
+});
+caches.getComputePipeline('same-label-native-module', {
+  layout: 'auto',
+  compute: { module: nativeLikeModuleB, entryPoint: 'main' },
+});
+assert.equal(calls.computePipelines.length, 3);
+
 const adapter = {
   features: new Set(['shader-f16']),
   limits: device.limits,
@@ -154,6 +166,17 @@ await assert.rejects(
     kernel: { profile: 'bad' },
   }),
   /device.*gpu/i,
+);
+
+await assert.rejects(
+  () => createWebGpuInferenceRuntime({
+    routeId: 'missing-backend-identity.webgpu-local.v0',
+    device,
+    queue,
+    kernel: { profile: 'identity-required' },
+    requiredStages: ['stage'],
+  }),
+  /adapterName|backendIdentity|adapter identity/i,
 );
 
 console.log('inference runtime contracts passed');

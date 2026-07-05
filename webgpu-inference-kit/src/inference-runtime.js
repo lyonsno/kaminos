@@ -32,16 +32,36 @@ function defaultSleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-function stableStringify(value) {
+const GPU_OBJECT_IDENTITY_KEYS = new Set(['module', 'layout']);
+
+function createObjectIdentityTracker() {
+  const objectIds = new WeakMap();
+  let nextObjectId = 1;
+
+  return function getObjectId(value) {
+    if (!objectIds.has(value)) {
+      objectIds.set(value, nextObjectId);
+      nextObjectId += 1;
+    }
+    return objectIds.get(value);
+  };
+}
+
+function pipelineDescriptorKey(descriptor, getObjectId) {
   const seen = new WeakSet();
-  return JSON.stringify(value, (_key, inner) => {
+  return JSON.stringify(descriptor, (key, inner) => {
     if (typeof inner === 'function') return `[Function:${inner.name || 'anonymous'}]`;
     if (!inner || typeof inner !== 'object') return inner;
+    if (GPU_OBJECT_IDENTITY_KEYS.has(key)) {
+      return { __gpuObjectId: getObjectId(inner) };
+    }
     if (seen.has(inner)) return '[Circular]';
     seen.add(inner);
     if (Array.isArray(inner)) return inner;
+    const keys = Object.keys(inner);
+    if (keys.length === 0) return { __objectId: getObjectId(inner) };
     const out = {};
-    for (const key of Object.keys(inner).sort()) out[key] = inner[key];
+    for (const objectKey of keys.sort()) out[objectKey] = inner[objectKey];
     return out;
   });
 }
@@ -58,8 +78,13 @@ function normalizeBackendIdentity(input, context) {
   if (input.backendIdentity?.kind === 'webgpu-local') return clone(input.backendIdentity);
   if (context?.backendIdentity?.kind === 'webgpu-local') return clone(context.backendIdentity);
 
+  const adapterName = input.adapterName || input.adapter?.info?.description || input.adapter?.info?.device;
+  if (!isNonEmptyString(adapterName)) {
+    throw new Error('adapter identity required when wrapping an existing device; provide backendIdentity, adapterName, or adapter.info');
+  }
+
   return createWebGpuBackendIdentity({
-    adapterName: input.adapterName || input.adapter?.info?.description || input.adapter?.info?.device || 'browser-webgpu-adapter',
+    adapterName,
     browser: input.browser || globalThis.navigator?.userAgent || null,
     requestedFeatures: input.requestedFeatures || context?.deviceRequest?.requiredFeatures || [],
     effectiveFeatures: input.effectiveFeatures || input.device?.features || context?.device?.features || input.adapter?.features || [],
@@ -101,6 +126,7 @@ export function createWebGpuResourceCaches(device) {
 
   const shaderModules = new Map();
   const computePipelines = new Map();
+  const getObjectId = createObjectIdentityTracker();
 
   return {
     getShaderModule(label, code, descriptor = {}) {
@@ -124,7 +150,7 @@ export function createWebGpuResourceCaches(device) {
       if (!descriptor || typeof descriptor !== 'object') throw new Error('compute pipeline descriptor must be an object');
       if (typeof device.createComputePipeline !== 'function') throw new Error('device.createComputePipeline must be available');
 
-      const key = `${label}\u0000${stableStringify(descriptor)}`;
+      const key = `${label}\u0000${pipelineDescriptorKey(descriptor, getObjectId)}`;
       if (!computePipelines.has(key)) {
         computePipelines.set(key, device.createComputePipeline({
           ...descriptor,
