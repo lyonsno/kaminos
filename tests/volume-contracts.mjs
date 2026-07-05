@@ -1777,6 +1777,22 @@ assert.match(renderPairDataset, /renderPixelRatio/, 'render-pair dataset records
 assert.match(renderPairDataset, /dryRun/, 'render-pair dataset supports a dry run manifest without spending browser/GPU time');
 assert.match(renderPairDataset, /failurePhase/, 'render-pair dataset records the phase when capture or validation fails');
 
+const sourceScaleProbePath = join(root, 'volume-source-scale-probe.mjs');
+assert.ok(existsSync(sourceScaleProbePath), 'source-scale blobbiness probe exists');
+const sourceScaleProbe = existsSync(sourceScaleProbePath) ? readFileSync(sourceScaleProbePath, 'utf8') : '';
+assert.match(sourceScaleProbe, /kaminos\.volume\.source-scale-blobbiness-probe\.v0/, 'source-scale probe writes a stable manifest schema identity');
+assert.match(sourceScaleProbe, /volume-witness\.mjs/, 'source-scale probe captures frames through the witness instead of bypassing route validation');
+assert.match(sourceScaleProbe, /volume_input_radius/, 'source-scale probe varies source radius through the public route parameter');
+assert.match(sourceScaleProbe, /volume_fire_scale/, 'source-scale probe varies fire scale through the public route parameter');
+assert.match(sourceScaleProbe, /effectiveRouteIdentity/, 'source-scale probe records effective route identity from each witness');
+assert.match(sourceScaleProbe, /sourceRadius/, 'source-scale probe records the requested source radius');
+assert.match(sourceScaleProbe, /perimeterAreaRatio/, 'source-scale probe reports flame boundary complexity');
+assert.match(sourceScaleProbe, /boundaryGradientEnergy/, 'source-scale probe reports boundary gradient energy');
+assert.match(sourceScaleProbe, /localMaxCount/, 'source-scale probe reports interior lobe/local-maximum count');
+assert.match(sourceScaleProbe, /saturationFraction/, 'source-scale probe reports whiteout/saturation fraction');
+assert.match(sourceScaleProbe, /complexityCollapseRatio/, 'source-scale probe reports large-source complexity collapse ratios');
+assert.match(sourceScaleProbe, /failurePhase/, 'source-scale probe records the failure phase before pretending to produce evidence');
+
 const dynamicTextureProofPath = join(root, 'volume-dynamic-texture-proof.mjs');
 assert.ok(existsSync(dynamicTextureProofPath), 'dynamic texture proof harness exists');
 const dynamicTextureProof = existsSync(dynamicTextureProofPath) ? readFileSync(dynamicTextureProofPath, 'utf8') : '';
