@@ -461,6 +461,8 @@ async function installHillAffordanceRoutePlan(ws) {
       pathWorldRoutePlan: state.pathWorldRoutePlan,
       pathWorldActiveSource: state.pathWorldActiveSource || null,
       pathWorldRouteAuthority: state.pathWorldRouteAuthority || null,
+      hillTerrainSurface: state.hillTerrainSurface || null,
+      hillTerrainFrame: state.hillTerrainFrame || null,
     };
   })().catch(error => ({
     schema: 'kaminos.motion-panel-live-hill-affordance-route.v0',
@@ -653,6 +655,8 @@ async function captureFrame(ws, index) {
       pathWorldRouteAuthority: actor?.pathWorldRouteAuthority || state?.pathWorldRouteAuthority || null,
       pathWorldRoutePlan: actor?.pathWorldRoutePlan || state?.pathWorldRoutePlan || state?.pathWorld?.routePlan || null,
       pathWorldActiveSource: actor?.pathWorldActiveSource || state?.pathWorldActiveSource || null,
+      hillTerrainSurface: actor?.hillTerrainSurface || state?.hillTerrainSurface || state?.pathWorld?.hillTerrainSurface || null,
+      hillTerrainFrame: actor?.hillTerrainFrame || state?.hillTerrainFrame || state?.pathWorld?.hillTerrainFrame || null,
       pathWorldPanel: window.kaminosMotionPanelPathWorldDebugState?.() || null,
       generatedMotionCliplets: state?.generatedMotionCliplets || state?.generatedPoseTemporalHarness?.generatedMotionCliplets || null,
       attentionTargetEvidence: actor?.attentionTargetEvidence || state?.attentionTargetEvidence || null,
