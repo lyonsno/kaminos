@@ -401,10 +401,10 @@ export async function createWebGpuInferenceRuntime(input = {}) {
       });
     },
 
-    uploadTensor(tensor, data, offset = 0) {
+    uploadTensor(tensor, data, offset = undefined) {
       if (!tensor || typeof tensor !== 'object') throw new Error('tensor must be an object');
       if (!tensor.buffer) throw new Error('tensor must expose buffer');
-      runtime.writeBuffer(tensor.buffer, tensorUploadData(tensor, data), offset);
+      runtime.writeBuffer(tensor.buffer, tensorUploadData(tensor, data), offset ?? tensor.bufferOffset ?? 0);
       return tensor;
     },
 

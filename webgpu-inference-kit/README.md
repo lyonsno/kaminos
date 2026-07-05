@@ -97,7 +97,7 @@ await runtime.runKernel(maskDecoder, {
 });
 
 const maskBytes = await runtime.runStage("readback-mask", async stage => {
-  return stage.readBuffer(maskReadbackBuffer, { size: maskByteLength });
+  return stage.readTensor(outputMask);
 });
 
 const profile = runtime.finishProfile({

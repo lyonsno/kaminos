@@ -251,6 +251,22 @@ const offsetReadback = runtime.createTensor({
   usage: WEBGPU_BUFFER_USAGE.mapRead | WEBGPU_BUFFER_USAGE.copyDst,
 });
 
+const offsetUploadBuffer = device.createBuffer({
+  label: 'sam3.offset-upload',
+  size: 8,
+  usage: WEBGPU_BUFFER_USAGE.copyDst | WEBGPU_BUFFER_USAGE.copySrc,
+});
+const offsetUpload = runtime.createTensor({
+  name: 'sam3.offset-upload-view',
+  shape: [4],
+  dtype: 'u8',
+  buffer: offsetUploadBuffer,
+  bufferOffset: 4,
+  usage: WEBGPU_BUFFER_USAGE.copyDst | WEBGPU_BUFFER_USAGE.copySrc,
+});
+runtime.uploadTensor(offsetUpload, new Uint8Array([9, 8, 7, 6]));
+assert.deepEqual([...offsetUploadBuffer.data], [0, 0, 0, 0, 9, 8, 7, 6]);
+
 const kernel = runtime.defineComputeKernel({
   name: 'sam3.mask-attention',
   code: '@compute @workgroup_size(8, 8, 1) fn main() {}',
