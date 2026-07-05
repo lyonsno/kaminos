@@ -58,6 +58,10 @@ assert.match(wrapperSource, /operatorMessage/, 'failure reports must carry opera
 assert.match(wrapperSource, /function serializeErrorDetails\(/, 'wrapper must serialize Puppeteer error name, stack, and nested cause');
 assert.match(wrapperSource, /function classifyUnderlyingErrorCause\(/, 'wrapper must classify the underlying wait failure cause when Puppeteer exposes one');
 assert.match(wrapperSource, /errorCauseClassification/, 'wrapper failure reports must include the underlying cause classification');
+assert.match(wrapperSource, /function detectSharpPageLoadFailure\(/, 'wrapper must detect Vite/module page-load failures before pretending inference is running');
+assert.match(wrapperSource, /sharp-webgpu-page-load-failed/, 'wrapper must classify SHARP page-load failures distinctly from model inference failures');
+assert.match(wrapperSource, /Failed to resolve import/, 'wrapper must preserve Vite import resolution errors in page-load failure reports');
+assert.match(wrapperSource, /timed out\|ms exceeded/, 'wrapper timeout classifier must match ProtocolError timeout wording from Puppeteer');
 assert.match(wrapperSource, /browserLifecycleEvents/, 'wrapper reports must preserve browser lifecycle events alongside console logs');
 assert.match(wrapperSource, /page\.on\('close'/, 'wrapper must record page close events');
 assert.match(wrapperSource, /page\.on\('error'/, 'wrapper must record page crash/error events');

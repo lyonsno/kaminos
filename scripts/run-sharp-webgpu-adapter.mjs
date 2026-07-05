@@ -492,12 +492,51 @@ function serializeErrorDetails(error, depth = 0) {
 function classifyUnderlyingErrorCause(error) {
   const details = serializeErrorDetails(error);
   const joined = JSON.stringify(details || {});
-  if (/\\bTimeoutError\\b|\\btimeout\\b|ms exceeded/i.test(joined)) return 'wait-timeout';
+  if (/Failed to resolve import|Pre-transform error|Internal server error|vite/i.test(joined)) return 'browser-page-load-error';
+  if (/\bTimeoutError\b|\btimeout\b|timed out|ms exceeded/i.test(joined)) return 'wait-timeout';
   if (/target closed|session closed|browser has disconnected|detached frame|frame detached/i.test(joined)) return 'browser-target-closed';
-  if (/Protocol error|Runtime\\.callFunctionOn|Execution context/i.test(joined)) return 'browser-protocol-error';
+  if (/ProtocolError|Protocol error|Runtime\.callFunctionOn|Execution context/i.test(joined)) return 'browser-protocol-error';
   if (/WebGPU device lost|GPU device lost|uncaptured|out of memory|oom|allocation/i.test(joined)) return 'webgpu-device-or-memory-error';
   if (/Request failed/i.test(joined)) return 'browser-request-failure';
   return 'unknown';
+}
+
+function compactServerErrorTail() {
+  const lines = String(serverLogs.stderr || '')
+    .split(/\r?\n/)
+    .map(line => line.trimEnd())
+    .filter(Boolean);
+  return lines.slice(-18).join('\n').slice(-5000);
+}
+
+function detectSharpPageLoadFailure() {
+  const serverError = compactServerErrorTail();
+  const scriptFailure = [...browserLifecycleEvents]
+    .reverse()
+    .find(event => event.type === 'requestfailed' && event.resourceType === 'script');
+  if (!scriptFailure && !/Failed to resolve import|Pre-transform error|Internal server error/i.test(serverError)) {
+    return null;
+  }
+  if (!/Failed to resolve import|Pre-transform error|Internal server error/i.test(serverError)) return null;
+  const importMatch = serverError.match(/Failed to resolve import "([^"]+)" from "([^"]+)"/);
+  return {
+    schema: 'kaminos.sharp-webgpu-adapter-failure.v0',
+    phase,
+    classification: 'sharp-webgpu-page-load-failed',
+    errorCauseClassification: 'browser-page-load-error',
+    operatorMessage: importMatch
+      ? `SHARP-WebGPU could not load ${importMatch[1]} from ${importMatch[2]}; inference never started.`
+      : 'SHARP-WebGPU served its app page with a module load error; inference never started.',
+    error: 'SHARP-WebGPU page failed to load its app module before inference started',
+    requestedScheduler,
+    failedRequest: scriptFailure || null,
+    serverErrorTail: serverError,
+    lastBrowserMilestone: lastSharpBrowserMilestone(),
+    browserLogTail: browserLogs.slice(-20),
+    browserLifecycleTail: browserLifecycleEvents.slice(-20),
+    nextExpectedMilestone: 'Loaded SHARP app module and weights',
+    operatorHint: 'Run npm install in the SHARP-WebGPU checkout or restore the missing package before rerunning the route.',
+  };
 }
 
 const SHARP_BROWSER_MILESTONE_PATTERN = /\[(SPN|Monodepth|Gaussian|Compose)\]|Loaded \d+ tensors from SHARP weight file/;
@@ -611,9 +650,9 @@ function writeReport(extra = {}) {
 }
 
 function fail(error, extra = {}) {
-  const failure = extra.failure || (phase === 'running-sharp-webgpu-inference'
-    ? classifySharpWaitFailure(error)
-    : null);
+  const failure = extra.failure
+    || error?.sharpPageLoadFailure
+    || (phase === 'running-sharp-webgpu-inference' ? classifySharpWaitFailure(error) : null);
   const browserLastMilestone = failure?.lastBrowserMilestone || lastSharpBrowserMilestone();
   writeReport({
     ok: false,
@@ -975,6 +1014,13 @@ async function runBrowserInference() {
     const browserUrl = new URL(url);
     browserUrl.searchParams.set('sharpScheduler', JSON.stringify(requestedScheduler));
     await page.goto(browserUrl.href, { waitUntil: 'networkidle0', timeout: 30000 });
+    const pageLoadFailure = detectSharpPageLoadFailure();
+    if (pageLoadFailure) {
+      const error = new Error(pageLoadFailure.operatorMessage);
+      error.cause = new Error(pageLoadFailure.serverErrorTail || pageLoadFailure.failedRequest?.errorText || 'SHARP page load failed');
+      error.sharpPageLoadFailure = pageLoadFailure;
+      throw error;
+    }
     await page.$eval('#use-spn', element => {
       element.checked = true;
       element.dispatchEvent(new Event('change', { bubbles: true }));
