@@ -3989,6 +3989,7 @@ function motionPanelPathWorldReadout() {
   const routePlan = actor?.pathWorldRoutePlan || pathWorld?.routePlan || motionTemporalState?.pathWorld?.routePlan || null;
   const hillTerrainSurface = actor?.hillTerrainSurface || pathWorld?.hillTerrainSurface || motionTemporalState?.pathWorld?.hillTerrainSurface || null;
   const hillTerrainFrame = actor?.hillTerrainFrame || pathWorld?.hillTerrainFrame || motionTemporalState?.pathWorld?.hillTerrainFrame || null;
+  const hillTerrainCarrier = actor?.hillTerrainCarrier || motionTemporalState?.lastHillTerrainCarrier || null;
   const activeSource = actor?.pathWorldActiveSource
     || interrupt?.activeSource
     || pathWorld?.routeAuthority
@@ -4010,6 +4011,8 @@ function motionPanelPathWorldReadout() {
     sourceRef: routePlan?.source?.sourceRef || null,
     hillTerrainSurface,
     hillTerrainFrame,
+    hillTerrainCarrier,
+    groundingAuthority: hillTerrainCarrier?.groundingAuthority || actor?.groundingAuthority || null,
     sectionVisible: !!document.getElementById('motion-panel-path-world-section'),
     controls: {
       previewButton: !!document.getElementById('motion-panel-preview-path-world'),
@@ -5318,6 +5321,64 @@ function createMotionPanelHillNativePathWorld(routePlan, terrainSource, options 
       displayTransform: terrainSurface.frame.displayTransform,
     },
     duration: 6,
+  };
+}
+
+function motionPanelVector3FromArray(value, fallback = [0, 0, 0]) {
+  const source = Array.isArray(value) ? value : fallback;
+  return new THREE.Vector3(
+    Number(source[0] || 0),
+    Number(source[1] || 0),
+    Number(source[2] || 0),
+  );
+}
+
+function createMotionPanelHillTerrainCarrier(pathWorldSample, displayGrounding, temporalSample = null, options = {}) {
+  const hillFrame = pathWorldSample?.hillTerrainFrame || null;
+  if (hillFrame?.displayTransform?.kind !== 'hill-native-route-world') return null;
+  const terrainRoot = motionPanelVector3FromArray(pathWorldSample.root);
+  const rawExpressiveRoot = motionPanelVector3FromArray(displayGrounding?.root, [0, 0.18, 0]);
+  const centerClearance = Math.max(0.08, Number(options.centerClearance ?? 0.18));
+  const bounds = {
+    horizontal: Math.max(0.02, Number(options.horizontal ?? 0.1)),
+    downward: Math.max(0, Number(options.downward ?? 0.05)),
+    upward: Math.max(0.02, Number(options.upward ?? 0.16)),
+    roll: Math.max(0.12, Number(options.roll ?? 0.72)),
+  };
+  const baseExpressiveY = Number(displayGrounding?.sourceVerticalPolicy?.minCenterY ?? centerClearance);
+  const terrainCarrierRoot = terrainRoot.clone().add(new THREE.Vector3(0, centerClearance, 0));
+  const expressiveRootOffset = new THREE.Vector3(
+    Math.max(-bounds.horizontal, Math.min(bounds.horizontal, rawExpressiveRoot.x)),
+    Math.max(-bounds.downward, Math.min(bounds.upward, rawExpressiveRoot.y - baseExpressiveY)),
+    Math.max(-bounds.horizontal, Math.min(bounds.horizontal, rawExpressiveRoot.z)),
+  );
+  const groundedRoot = terrainCarrierRoot.clone().add(expressiveRootOffset);
+  const rawBodyRoll = Number(temporalSample?.chestRoot?.[0] || 0) * 1.8;
+  const expressiveBodyRoll = Math.max(-bounds.roll, Math.min(bounds.roll, rawBodyRoll));
+  return {
+    schema: 'kaminos.motion-panel-hill-terrain-carrier.v0',
+    route: 'hill-native-route-world',
+    groundingAuthority: 'hill-terrain-carrier',
+    pathWorldId: pathWorldSample?.pathWorldId || null,
+    terrainCarrierRoot: terrainCarrierRoot.toArray().map(value => Number(value.toFixed(5))),
+    rawExpressiveRoot: rawExpressiveRoot.toArray().map(value => Number(value.toFixed(5))),
+    expressiveRootOffset: expressiveRootOffset.toArray().map(value => Number(value.toFixed(5))),
+    groundedRoot: groundedRoot.toArray().map(value => Number(value.toFixed(5))),
+    terrainNormal: [0, 1, 0],
+    centerClearance: Number(centerClearance.toFixed(5)),
+    expressiveBounds: {
+      horizontal: Number(bounds.horizontal.toFixed(5)),
+      downward: Number(bounds.downward.toFixed(5)),
+      upward: Number(bounds.upward.toFixed(5)),
+      roll: Number(bounds.roll.toFixed(5)),
+    },
+    rawBodyRoll: Number(rawBodyRoll.toFixed(5)),
+    expressiveBodyRoll: Number(expressiveBodyRoll.toFixed(5)),
+    carrierFrame: {
+      schema: hillFrame.schema || null,
+      sourceRef: hillFrame.sourceRef || null,
+      displayTransform: hillFrame.displayTransform || null,
+    },
   };
 }
 
@@ -7415,10 +7476,12 @@ function updateGeneratedPoseTemporalFrame(nowSeconds = performance.now() / 1000)
     minCenterY: 0.18,
   };
   const displayGrounding = mapGeneratedPoseTemporalGroundedDisplaySample(sample, displayGroundingOptions);
-  const pathWorldOffset = pathWorldSample
-    ? new THREE.Vector3(...pathWorldSample.root)
-    : new THREE.Vector3(0, 0, 0);
-  const fallbackRootPosition = new THREE.Vector3(...displayGrounding.root).add(pathWorldOffset);
+  const hillTerrainCarrier = createMotionPanelHillTerrainCarrier(pathWorldSample, displayGrounding, temporalSample);
+  const fallbackRootPosition = hillTerrainCarrier
+    ? motionPanelVector3FromArray(hillTerrainCarrier.groundedRoot)
+    : new THREE.Vector3(...displayGrounding.root).add(pathWorldSample
+      ? new THREE.Vector3(...pathWorldSample.root)
+      : new THREE.Vector3(0, 0, 0));
   let rootPosition = fallbackRootPosition.clone();
   let pathWorldRootConstraint = null;
   let pathWorldEncounterSemantics = null;
@@ -7519,7 +7582,9 @@ function updateGeneratedPoseTemporalFrame(nowSeconds = performance.now() / 1000)
   const displayedFacing = attention.clone().sub(rootPosition).normalize();
   visual.group.position.copy(rootPosition);
   visual.group.lookAt(attention);
-  visual.group.rotation.z += (temporalSample?.chestRoot?.[0] || 0) * 1.8;
+  visual.group.rotation.z += hillTerrainCarrier
+    ? Number(hillTerrainCarrier.expressiveBodyRoll || 0)
+    : (temporalSample?.chestRoot?.[0] || 0) * 1.8;
   const displayCompression = Math.max(compression, Number(displayGrounding.groundedCompression || 0));
   const groundedCompression = Number(displayGrounding.groundedCompression || 0);
   visual.body.scale.set(
@@ -7570,6 +7635,7 @@ function updateGeneratedPoseTemporalFrame(nowSeconds = performance.now() / 1000)
   state.lastPathWorldSteeringMemory = pathWorldSteeringMemory;
   state.lastPathWorldRouteAuthority = pathWorldRouteAuthority;
   state.lastPathWorldRootConstraint = pathWorldRootConstraint;
+  state.lastHillTerrainCarrier = hillTerrainCarrier;
   state.lastDisplayGrounding = displayGrounding;
   const behaviorState = buildGeneratedPoseTemporalBehaviorState({
     track: state.track,
@@ -7653,6 +7719,10 @@ function updateGeneratedPoseTemporalFrame(nowSeconds = performance.now() / 1000)
     pathWorldSteeringMemory,
     pathWorldRootConstraint,
     pathWorldRouteAuthority,
+    hillTerrainCarrier,
+    groundingAuthority: hillTerrainCarrier?.groundingAuthority || (pathWorldSample ? pathWorldRouteAuthority : null),
+    terrainCarrierRoot: hillTerrainCarrier?.terrainCarrierRoot || null,
+    expressiveRootOffset: hillTerrainCarrier?.expressiveRootOffset || null,
     pathWorldRoutePlan: pathWorldSample?.routePlan || state.pathWorld?.routePlan || null,
     pathWorldActiveSource: pathWorldInterruptEnvelope?.interrupt?.activeSource || pathWorldRouteAuthority || (pathWorldSample ? 'world-path' : null),
     sourceFrame: temporalSample?.sourceFrame ?? null,
@@ -9117,6 +9187,8 @@ window.kaminosGeneratedPoseTemporalDebugState = function() {
     pathWorldActiveSource: state?.lastPathWorldInterrupt?.activeSource || state?.lastPathWorldRouteAuthority || (state?.lastPathWorld ? 'world-path' : null),
     hillTerrainSurface: state?.lastPathWorld?.hillTerrainSurface || state?.pathWorld?.hillTerrainSurface || null,
     hillTerrainFrame: state?.lastPathWorld?.hillTerrainFrame || state?.pathWorld?.hillTerrainFrame || null,
+    hillTerrainCarrier: state?.lastHillTerrainCarrier || state?.lastActors?.[0]?.hillTerrainCarrier || null,
+    groundingAuthority: state?.lastHillTerrainCarrier?.groundingAuthority || state?.lastActors?.[0]?.groundingAuthority || null,
     attentionTargetMode: motionAttentionTargetModeFromInputs(),
     attentionTargetEvidence: state?.lastAttentionTargetEvidence || selectedSceneObjectMotionAttentionTarget(),
     behaviorState: state?.lastBehaviorState || null,

@@ -657,6 +657,8 @@ async function captureFrame(ws, index) {
       pathWorldActiveSource: actor?.pathWorldActiveSource || state?.pathWorldActiveSource || null,
       hillTerrainSurface: actor?.hillTerrainSurface || state?.hillTerrainSurface || state?.pathWorld?.hillTerrainSurface || null,
       hillTerrainFrame: actor?.hillTerrainFrame || state?.hillTerrainFrame || state?.pathWorld?.hillTerrainFrame || null,
+      hillTerrainCarrier: actor?.hillTerrainCarrier || state?.hillTerrainCarrier || null,
+      groundingAuthority: actor?.groundingAuthority || state?.groundingAuthority || state?.hillTerrainCarrier?.groundingAuthority || null,
       pathWorldPanel: window.kaminosMotionPanelPathWorldDebugState?.() || null,
       generatedMotionCliplets: state?.generatedMotionCliplets || state?.generatedPoseTemporalHarness?.generatedMotionCliplets || null,
       attentionTargetEvidence: actor?.attentionTargetEvidence || state?.attentionTargetEvidence || null,

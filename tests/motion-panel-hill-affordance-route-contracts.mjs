@@ -19,6 +19,11 @@ assert.match(index, /pathWorldRoutePlan/, 'Path World debug exposes the route pl
 assert.match(index, /hillTerrainSurface/, 'Path World debug exposes the mounted Hill terrain surface evidence');
 assert.match(index, /hillTerrainFrame/, 'Path World debug preserves the Hill support-frame source identity');
 assert.match(index, /hill-native-route-world/, 'Hill route smoke names the Hill-native route world instead of only the flat display projection');
+assert.match(index, /function createMotionPanelHillTerrainCarrier/, 'browser separates Hill route grounding from generated expressive root motion');
+assert.match(index, /hillTerrainCarrier/, 'actor/debug evidence exposes Hill terrain carrier grounding');
+assert.match(index, /terrainCarrierRoot/, 'Hill carrier evidence records the authoritative terrain root');
+assert.match(index, /expressiveRootOffset/, 'Hill carrier evidence records bounded generated-motion offset separately');
+assert.match(index, /groundingAuthority:\s*'hill-terrain-carrier'/, 'Hill carrier evidence names terrain carrier as grounding authority');
 
 assert.match(liveWitness, /--hill-affordance-packet/, 'live witness accepts a Hill affordance packet path');
 assert.match(liveWitness, /--hill-affordance-data/, 'live witness accepts a Hill affordance data path');
@@ -26,3 +31,5 @@ assert.match(liveWitness, /kaminosPreviewHillMotionAffordanceRoutePlan/, 'live w
 assert.match(liveWitness, /pathWorldRoutePlan/, 'live witness report carries Hill route plan evidence');
 assert.match(liveWitness, /hillTerrainSurface/, 'live witness records Hill terrain surface evidence');
 assert.match(liveWitness, /hillTerrainFrame/, 'live witness records Hill terrain frame evidence');
+assert.match(liveWitness, /hillTerrainCarrier/, 'live witness records Hill terrain carrier evidence');
+assert.match(liveWitness, /groundingAuthority/, 'live witness records carrier grounding authority');
