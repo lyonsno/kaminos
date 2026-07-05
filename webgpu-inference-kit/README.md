@@ -59,6 +59,10 @@ await runtime.runStage("decode-mask", async stage => {
   });
 });
 
+const maskBytes = await runtime.runStage("readback-mask", async stage => {
+  return stage.readBuffer(maskReadbackBuffer, { size: maskByteLength });
+});
+
 const profile = runtime.finishProfile({
   evidence: { mode: "live", source: "sam3-browser-webgpu-route" },
 });
