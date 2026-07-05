@@ -1,4 +1,8 @@
-import { defineWebGpuRoute, createRouteWorkerResult } from './route-boundary.js';
+import {
+  assertAuthoritativeRouteWorkerResult,
+  defineWebGpuRoute,
+  createRouteWorkerResult,
+} from './route-boundary.js';
 import { createWebGpuInferenceRuntime } from './inference-runtime.js';
 import {
   createKernelProfileMetadata,
@@ -542,7 +546,7 @@ export async function runSam3MaskDecoderIslandRoute(input = {}) {
     outputs: outputArtifacts,
     backend: runtime.backendIdentity,
     model: {
-      revision: input.model?.revision,
+      revision: input.model?.revision || route.model?.revision,
       weightsHash: input.model?.weightsHash || weightsPacket.sha256,
       dtype: input.model?.dtype || 'fp32',
     },
@@ -556,8 +560,8 @@ export async function runSam3MaskDecoderIslandRoute(input = {}) {
   });
 
   if (nonEmptyString(input.effectiveRouteId) && input.effectiveRouteId !== SAM3_MASK_DECODER_ISLAND_ROUTE_ID) {
-    result.receipt.effectiveRouteId = input.effectiveRouteId;
+    throw new Error(`effectiveRouteId must remain ${SAM3_MASK_DECODER_ISLAND_ROUTE_ID} for authoritative SAM mask island output`);
   }
 
-  return result;
+  return assertAuthoritativeRouteWorkerResult(result, route);
 }

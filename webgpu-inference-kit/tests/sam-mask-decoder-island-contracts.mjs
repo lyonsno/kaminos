@@ -226,6 +226,24 @@ assert.equal(calls.submitted.length, 2);
 assert.equal(calls.copies.length, 2);
 assert.equal(calls.submittedWorkDone, 3);
 
+const defaultModelDevice = makeFakeWebGpuDevice();
+const defaultModelResult = await runSam3MaskDecoderIslandRoute({
+  request,
+  device: defaultModelDevice.device,
+  queue: defaultModelDevice.queue,
+  adapterName: 'Fake Apple WebGPU Adapter',
+  browser: 'Node fake WebGPU',
+  kernel: route.kernel,
+  tensors: {
+    hyperInput: projection.inputs.hyperInput,
+    upscaledEmbedding: projection.inputs.upscaledEmbedding,
+    shape: projection.shape,
+  },
+});
+assert.equal(defaultModelResult.receipt.model.revision, 'mlx-oracle-upstream-mask-island');
+assert.equal(validateRouteWorkerResult(defaultModelResult, route).ok, true);
+assert.doesNotThrow(() => assertAuthoritativeRouteWorkerResult(defaultModelResult, route));
+
 assert.throws(
   () => createSam3MaskDecoderIslandRouteReceipt({
     sourceImage: request.inputs[0],
