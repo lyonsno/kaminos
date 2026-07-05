@@ -214,6 +214,9 @@ function tensorUploadData(tensor, data) {
   const logicalByteLength = assertTensorDataByteLength(tensor, data);
   const allocationByteLength = tensor.allocationByteLength ?? alignTo(logicalByteLength, 4);
   if (allocationByteLength === logicalByteLength && logicalByteLength % 4 === 0) return data;
+  if (tensor.ownsBuffer !== true && tensor.paddingReserved !== true) {
+    throw new Error('caller-owned tensor upload padding must be reserved before sub-4-byte padded writes');
+  }
   const padded = new Uint8Array(allocationByteLength);
   padded.set(dataBytes(data));
   return padded;

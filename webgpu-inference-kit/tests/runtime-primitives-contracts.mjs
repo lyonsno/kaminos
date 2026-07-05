@@ -32,11 +32,13 @@ const now = () => {
 
 const queue = {
   writeBuffer(buffer, offset, data, dataOffset, size) {
+    if (offset % 4 !== 0) throw new Error('writeBuffer offset must be multiple of 4');
     const view = data instanceof ArrayBuffer
       ? new Uint8Array(data)
       : new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
     const sourceOffset = dataOffset || 0;
     const writeSize = size ?? (view.byteLength - sourceOffset);
+    if (writeSize % 4 !== 0) throw new Error('writeBuffer size must be multiple of 4');
     buffer.data.set(view.subarray(sourceOffset, sourceOffset + writeSize), offset);
     calls.writes.push({
       label: buffer.descriptor.label,
@@ -266,6 +268,38 @@ const offsetUpload = runtime.createTensor({
 });
 runtime.uploadTensor(offsetUpload, new Uint8Array([9, 8, 7, 6]));
 assert.deepEqual([...offsetUploadBuffer.data], [0, 0, 0, 0, 9, 8, 7, 6]);
+
+const sharedSmallUploadBuffer = device.createBuffer({
+  label: 'sam3.shared-small-upload',
+  size: 8,
+  usage: WEBGPU_BUFFER_USAGE.copyDst | WEBGPU_BUFFER_USAGE.copySrc,
+});
+sharedSmallUploadBuffer.data.set([1, 2, 3, 4, 5, 6, 7, 8]);
+const sharedSmallUpload = runtime.createTensor({
+  name: 'sam3.shared-small-upload-view',
+  shape: [1],
+  dtype: 'u8',
+  buffer: sharedSmallUploadBuffer,
+  bufferOffset: 4,
+  usage: WEBGPU_BUFFER_USAGE.copyDst | WEBGPU_BUFFER_USAGE.copySrc,
+});
+assert.throws(
+  () => runtime.uploadTensor(sharedSmallUpload, new Uint8Array([99])),
+  /caller-owned.*padding/i,
+);
+assert.deepEqual([...sharedSmallUploadBuffer.data], [1, 2, 3, 4, 5, 6, 7, 8]);
+
+const reservedSmallUpload = runtime.createTensor({
+  name: 'sam3.reserved-small-upload-view',
+  shape: [1],
+  dtype: 'u8',
+  buffer: sharedSmallUploadBuffer,
+  bufferOffset: 4,
+  paddingReserved: true,
+  usage: WEBGPU_BUFFER_USAGE.copyDst | WEBGPU_BUFFER_USAGE.copySrc,
+});
+runtime.uploadTensor(reservedSmallUpload, new Uint8Array([99]));
+assert.deepEqual([...sharedSmallUploadBuffer.data], [1, 2, 3, 4, 99, 0, 0, 0]);
 
 const kernel = runtime.defineComputeKernel({
   name: 'sam3.mask-attention',

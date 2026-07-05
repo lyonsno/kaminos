@@ -107,6 +107,7 @@ export function createGpuTensor(input = {}, options = {}) {
   const bytesPerElement = DTYPE_BYTES.get(dtype);
   const byteLength = elements * bytesPerElement;
   const allocationByteLength = alignTo(byteLength, 4);
+  const ownsBuffer = !input.buffer;
   const usage = input.usage ?? (
     WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst | WEBGPU_BUFFER_USAGE.copySrc
   );
@@ -122,6 +123,8 @@ export function createGpuTensor(input = {}, options = {}) {
     bytesPerElement,
     byteLength,
     allocationByteLength,
+    ownsBuffer,
+    paddingReserved: ownsBuffer || Boolean(input.paddingReserved),
     usage,
     bufferOffset: input.bufferOffset || 0,
     metadata: clone(input.metadata || {}),
