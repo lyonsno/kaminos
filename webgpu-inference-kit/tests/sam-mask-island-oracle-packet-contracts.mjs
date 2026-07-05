@@ -44,6 +44,13 @@ assert.equal(manifest.routeId, SAM3_MASK_DECODER_ISLAND_ROUTE_ID);
 assert.equal(manifest.mode, 'synthetic');
 assert.equal(manifest.model.id, 'mlx-community/sam3-image');
 assert.equal(manifest.boundary, 'sam3-mask-projection-threshold');
+assert.deepEqual(manifest.staticWeights, {
+  artifactId: 'sam3-weights:none-mask-projection-oracle-boundary',
+  sha256: manifest.staticWeights.sha256,
+  role: 'none',
+  reason: 'synthetic mask projection boundary has no static decoder weights',
+});
+assert.match(manifest.staticWeights.sha256, /^sha256:[0-9a-f]{64}$/);
 assert.equal(manifest.claims.fullSam3BrowserExecution, false);
 assert.equal(manifest.claims.upstream, 'synthetic-oracle');
 assert.deepEqual(manifest.shape, {
@@ -82,6 +89,7 @@ assert.equal(receipt.sourceImage.artifactId, 'image:evil-orb');
 assert.equal(receipt.sourceImage.sha256, 'sha256:source-image');
 assert.equal(receipt.prompt.text, 'orb');
 assert.match(receipt.prompt.sha256, /^sha256:[0-9a-f]{64}$/);
+assert.deepEqual(receipt.staticWeights, manifest.staticWeights);
 assert.equal(receipt.outputs.tensorManifest, join(outDir, 'tensor-manifest.json'));
 assert.equal(receipt.outputs.expectedMaskLogits, join(outDir, 'expected-mask-logits.f32.bin'));
 assert.equal(receipt.outputs.expectedBinaryMask, join(outDir, 'expected-binary-mask.u32.bin'));

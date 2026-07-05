@@ -168,6 +168,12 @@ async function main() {
   };
 
   const promptHash = sha256(Buffer.from(args.prompt, 'utf8'));
+  const staticWeights = {
+    artifactId: 'sam3-weights:none-mask-projection-oracle-boundary',
+    sha256: sha256(Buffer.from('sam3-mask-projection-threshold:no-static-decoder-weights', 'utf8')),
+    role: 'none',
+    reason: 'synthetic mask projection boundary has no static decoder weights',
+  };
   const manifest = {
     schema: SCHEMA,
     routeId: SAM3_MASK_DECODER_ISLAND_ROUTE_ID,
@@ -186,6 +192,7 @@ async function main() {
       artifactId: args.sourceImageArtifactId,
       sha256: args.sourceImageSha256,
     },
+    staticWeights,
     shape,
     claims: {
       fullSam3BrowserExecution: false,
@@ -243,6 +250,7 @@ async function main() {
     model: manifest.model,
     prompt: manifest.prompt,
     sourceImage: manifest.sourceImage,
+    staticWeights: manifest.staticWeights,
     shape,
     outputs: {
       tensorManifest: manifestPath,

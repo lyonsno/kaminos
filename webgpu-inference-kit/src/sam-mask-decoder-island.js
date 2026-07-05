@@ -563,5 +563,14 @@ export async function runSam3MaskDecoderIslandRoute(input = {}) {
     throw new Error(`effectiveRouteId must remain ${SAM3_MASK_DECODER_ISLAND_ROUTE_ID} for authoritative SAM mask island output`);
   }
 
-  return assertAuthoritativeRouteWorkerResult(result, route);
+  const authoritative = assertAuthoritativeRouteWorkerResult(result, route);
+  if (input.includeReadback === true) {
+    authoritative.debugReadback = {
+      mode: 'explicit-debug-evidence',
+      maskLogits: Array.from(new Float32Array(readback.maskLogits)),
+      binaryMask: Array.from(new Uint32Array(readback.binaryMask)),
+    };
+  }
+
+  return authoritative;
 }
