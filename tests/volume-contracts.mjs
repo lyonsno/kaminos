@@ -1675,6 +1675,10 @@ assert.match(fieldResidualProbe, /excludedReplayStateIdentities/, 'field residua
 assert.match(fieldResidualProbe, /--route-conditioning/, 'field residual probe can append route/replay conditioning features without changing model capacity');
 assert.match(fieldResidualProbe, /route-controls-replay-v0/, 'field residual probe names the route-control plus replay conditioning identity');
 assert.match(fieldResidualProbe, /routeConditioningChannels/, 'field residual probe reports the route conditioning channel order');
+assert.match(fieldResidualProbe, /--spatial-conditioning/, 'field residual probe can append explicit normalized position features for spatial holdout probes');
+assert.match(fieldResidualProbe, /normalized-cell-spatial-conditioning-v0/, 'field residual probe names the normalized cell/bin spatial conditioning identity');
+assert.match(fieldResidualProbe, /spatialConditioningChannels/, 'field residual probe reports the spatial conditioning channel order');
+assert.match(fieldResidualProbe, /spatialConditioningFeatureCount/, 'field residual probe reports spatial conditioning feature width separately from local context width');
 assert.match(fieldResidualProbe, /conditionedFeatureCount/, 'field residual probe reports the post-conditioning feature width separately from local context width');
 assert.match(fieldResidualProbe, /--target-channel-list/, 'field residual probe can train against an explicit decomposed target channel list');
 assert.match(fieldResidualProbe, /--target-channel-group/, 'field residual probe exposes named target channel groups for decomposition probes');

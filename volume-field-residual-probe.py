@@ -27,6 +27,8 @@ SPATIAL_CONTEXT_MLP_MODEL_IDENTITY = "spatial-context-mlp-residual-v0"
 NO_ROUTE_CONDITIONING_IDENTITY = "none"
 ROUTE_CONTROLS_CONDITIONING_IDENTITY = "route-controls-v0"
 ROUTE_CONTROLS_REPLAY_CONDITIONING_IDENTITY = "route-controls-replay-v0"
+NO_SPATIAL_CONDITIONING_IDENTITY = "none"
+NORMALIZED_CELL_SPATIAL_CONDITIONING_IDENTITY = "normalized-cell-spatial-conditioning-v0"
 RANDOM_TILE_PAIR_SPLIT_IDENTITY = "random-tile-pair-v0"
 REPLAY_BALANCED_TILE_PAIR_SPLIT_IDENTITY = "replay-balanced-tile-pair-v0"
 SPATIAL_BIN_HOLDOUT_SPLIT_IDENTITY = "holdout-spatial-bin-list-v0"
@@ -94,6 +96,21 @@ REPLAY_CONDITIONING_CHANNELS = [
     "replayStartTimeMs",
     "replayTimeStepMs",
     "replaySteps",
+]
+SPATIAL_CONDITIONING_CHANNELS = [
+    "lowNormalizedCellCenterX",
+    "lowNormalizedCellCenterY",
+    "lowNormalizedCellCenterZ",
+    "lowCenteredCellX",
+    "lowCenteredCellY",
+    "lowCenteredCellZ",
+    "lowCellRadiusXZ",
+    "lowNormalizedTileCenterX",
+    "lowNormalizedTileCenterY",
+    "lowNormalizedTileCenterZ",
+    "lowSpatialBinCenterX",
+    "lowSpatialBinCenterY",
+    "lowSpatialBinCenterZ",
 ]
 FIELD_TILE_CHANNELS = [
     "velocityX",
@@ -209,6 +226,12 @@ def parse_args() -> argparse.Namespace:
         help="Append effective route-control and optional replay scalar features to spatial-context probe inputs.",
     )
     parser.add_argument(
+        "--spatial-conditioning",
+        choices=[NO_SPATIAL_CONDITIONING_IDENTITY, NORMALIZED_CELL_SPATIAL_CONDITIONING_IDENTITY],
+        default=NO_SPATIAL_CONDITIONING_IDENTITY,
+        help="Append explicit normalized cell, tile, and spatial-bin position features to spatial-context probe inputs.",
+    )
+    parser.add_argument(
         "--target-channel-list",
         default=None,
         help="Comma-separated output channel names or indexes to train/evaluate while reading the full field input.",
@@ -319,6 +342,7 @@ def base_report(args: argparse.Namespace) -> dict[str, Any]:
             "holdoutSpatialBinList": args.holdout_spatial_bin_list,
             "includeReplayStateList": args.include_replay_state_list,
             "routeConditioning": args.route_conditioning,
+            "spatialConditioning": args.spatial_conditioning,
             "targetChannelList": args.target_channel_list,
             "targetChannelGroup": args.target_channel_group,
             "artifactDir": args.artifact_dir,
@@ -417,6 +441,12 @@ def route_conditioning_channels(mode: str) -> list[str]:
     return []
 
 
+def spatial_conditioning_channels(mode: str) -> list[str]:
+    if mode == NORMALIZED_CELL_SPATIAL_CONDITIONING_IDENTITY:
+        return list(SPATIAL_CONDITIONING_CHANNELS)
+    return []
+
+
 def effective_controls_for_pair(pair: dict[str, Any]) -> dict[str, Any]:
     low_controls = pair.get("low", {}).get("effective", {}).get("controls")
     high_controls = pair.get("high", {}).get("effective", {}).get("controls")
@@ -467,6 +497,18 @@ def parse_csv_unique(raw_value: str | None) -> list[str]:
         seen.add(value)
         values.append(value)
     return values
+
+
+def parse_spatial_bin_id(raw_value: Any) -> tuple[int, int, int] | None:
+    if not isinstance(raw_value, str):
+        return None
+    parts = raw_value.strip().split("-")
+    if len(parts) != 3 or not parts[0].startswith("b"):
+        return None
+    try:
+        return (int(parts[0][1:]), int(parts[1]), int(parts[2]))
+    except ValueError:
+        return None
 
 
 def infer_field_tile_channels(dataset: dict[str, Any], expected_count: int) -> list[str]:
@@ -590,6 +632,10 @@ def candidate_matches(dataset: dict[str, Any], manifest_path: Path, args: argpar
         if not isinstance(pairing, dict):
             discarded.append({"pairId": pair.get("pairId"), "reason": "missing-fieldTileCoveragePairing"})
             continue
+        low_export = pair.get("low", {}).get("effective", {}).get("fieldTileExport")
+        if not isinstance(low_export, dict):
+            low_export = pair.get("low", {}).get("fieldTileExport")
+        spatial_bin_count = int(finite_float((low_export or {}).get("spatialBinCount"), 0.0)) if isinstance(low_export, dict) else 0
         for match in pairing.get("matchedTilePairs", []):
             match_id = f"{pair.get('pairId')}:{match.get('matchId')}"
             if require_same_bin and not match.get("sameSpatialBin"):
@@ -632,6 +678,14 @@ def candidate_matches(dataset: dict[str, Any], manifest_path: Path, args: argpar
                 "sameSpatialBin": bool(match.get("sameSpatialBin")),
                 "lowSpatialBinId": match.get("lowSpatialBinId"),
                 "highSpatialBinId": match.get("highSpatialBinId"),
+                "lowSpatialBinCoord": parse_spatial_bin_id(match.get("lowSpatialBinId")),
+                "spatialBinCount": spatial_bin_count,
+                "lowNormalizedOrigin": match.get("lowNormalizedOrigin"),
+                "lowNormalizedSize": match.get("lowNormalizedSize"),
+                "lowNormalizedCenter": match.get("lowNormalizedCenter"),
+                "highNormalizedOrigin": match.get("highNormalizedOrigin"),
+                "highNormalizedSize": match.get("highNormalizedSize"),
+                "highNormalizedCenter": match.get("highNormalizedCenter"),
                 "normalizedTileDistance": match.get("normalizedTileDistance"),
                 "normalizedTileSeparation": match.get("normalizedTileSeparation"),
                 "shape": [int(value) for value in low_shape],
@@ -1056,6 +1110,68 @@ def route_conditioning_feature_matrix(matches: list[dict[str, Any]], indexes: li
     return np.concatenate(rows, axis=0)
 
 
+def spatial_conditioning_feature_matrix(matches: list[dict[str, Any]], indexes: list[int], tiles: list[np.ndarray], mode: str) -> np.ndarray:
+    channels = spatial_conditioning_channels(mode)
+    sample_total = sum(int(np.prod(tile.shape[:-1])) for tile in tiles)
+    if not indexes or not channels:
+        return np.zeros((sample_total, 0), dtype=np.float64)
+    rows = []
+    for match_index, tile in zip(indexes, tiles):
+        match = matches[match_index]
+        if tile.ndim != 4:
+            raise ProbeFailure("spatial-conditioning", f"spatial conditioning requires 4D tile tensors, got shape {list(tile.shape)}")
+        sx, sy, sz, _channels = tile.shape
+        origin = np.asarray(match.get("lowNormalizedOrigin") or [0.0, 0.0, 0.0], dtype=np.float64)
+        size = np.asarray(match.get("lowNormalizedSize") or [1.0, 1.0, 1.0], dtype=np.float64)
+        center = np.asarray(match.get("lowNormalizedCenter") or (origin + size * 0.5), dtype=np.float64)
+        if origin.size != 3 or size.size != 3 or center.size != 3:
+            raise ProbeFailure(
+                "spatial-conditioning",
+                "matched tile does not carry 3D normalized spatial coordinates",
+                {
+                    "matchIndex": match_index,
+                    "lowNormalizedOrigin": match.get("lowNormalizedOrigin"),
+                    "lowNormalizedSize": match.get("lowNormalizedSize"),
+                    "lowNormalizedCenter": match.get("lowNormalizedCenter"),
+                },
+            )
+        x = origin[0] + size[0] * ((np.arange(sx, dtype=np.float64) + 0.5) / max(sx, 1))
+        y = origin[1] + size[1] * ((np.arange(sy, dtype=np.float64) + 0.5) / max(sy, 1))
+        z = origin[2] + size[2] * ((np.arange(sz, dtype=np.float64) + 0.5) / max(sz, 1))
+        xx, yy, zz = np.meshgrid(x, y, z, indexing="ij")
+        centered_x = xx * 2.0 - 1.0
+        centered_y = yy * 2.0 - 1.0
+        centered_z = zz * 2.0 - 1.0
+        radius_xz = np.sqrt(np.square(xx - 0.5) + np.square(zz - 0.5))
+        spatial_bin_count = max(int(match.get("spatialBinCount") or 0), 1)
+        bin_coord = match.get("lowSpatialBinCoord")
+        if isinstance(bin_coord, (list, tuple)) and len(bin_coord) == 3:
+            bin_center = np.asarray([(float(value) + 0.5) / spatial_bin_count for value in bin_coord], dtype=np.float64)
+        else:
+            bin_center = np.asarray([0.5, 0.5, 0.5], dtype=np.float64)
+        sample_count = int(np.prod(tile.shape[:-1]))
+        broadcast_center = np.broadcast_to(center.reshape(1, 3), (sample_count, 3))
+        broadcast_bin = np.broadcast_to(bin_center.reshape(1, 3), (sample_count, 3))
+        rows.append(
+            np.column_stack([
+                xx.reshape(-1),
+                yy.reshape(-1),
+                zz.reshape(-1),
+                centered_x.reshape(-1),
+                centered_y.reshape(-1),
+                centered_z.reshape(-1),
+                radius_xz.reshape(-1),
+                broadcast_center[:, 0],
+                broadcast_center[:, 1],
+                broadcast_center[:, 2],
+                broadcast_bin[:, 0],
+                broadcast_bin[:, 1],
+                broadcast_bin[:, 2],
+            ]).astype(np.float64)
+        )
+    return np.concatenate(rows, axis=0)
+
+
 def append_route_conditioning(features: np.ndarray, conditioning: np.ndarray) -> np.ndarray:
     if conditioning.shape[1] == 0:
         return features
@@ -1063,6 +1179,18 @@ def append_route_conditioning(features: np.ndarray, conditioning: np.ndarray) ->
         raise ProbeFailure(
             "route-conditioning",
             "route conditioning row count does not match spatial feature rows",
+            {"featureRows": int(features.shape[0]), "conditioningRows": int(conditioning.shape[0])},
+        )
+    return np.concatenate([features.astype(np.float64), conditioning.astype(np.float64)], axis=1)
+
+
+def append_spatial_conditioning(features: np.ndarray, conditioning: np.ndarray) -> np.ndarray:
+    if conditioning.shape[1] == 0:
+        return features
+    if conditioning.shape[0] != features.shape[0]:
+        raise ProbeFailure(
+            "spatial-conditioning",
+            "spatial conditioning row count does not match spatial feature rows",
             {"featureRows": int(features.shape[0]), "conditioningRows": int(conditioning.shape[0])},
         )
     return np.concatenate([features.astype(np.float64), conditioning.astype(np.float64)], axis=1)
@@ -1582,8 +1710,12 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         test_local_features = context_feature_matrix(test_low_tiles, context_radius_value)
         train_route_conditioning = route_conditioning_feature_matrix(usable_matches, train_indexes, train_low_tiles)
         test_route_conditioning = route_conditioning_feature_matrix(usable_matches, test_indexes, test_low_tiles)
+        train_spatial_conditioning = spatial_conditioning_feature_matrix(usable_matches, train_indexes, train_low_tiles, args.spatial_conditioning)
+        test_spatial_conditioning = spatial_conditioning_feature_matrix(usable_matches, test_indexes, test_low_tiles, args.spatial_conditioning)
         train_features = append_route_conditioning(train_local_features, train_route_conditioning)
         test_features = append_route_conditioning(test_local_features, test_route_conditioning)
+        train_features = append_spatial_conditioning(train_features, train_spatial_conditioning)
+        test_features = append_spatial_conditioning(test_features, test_spatial_conditioning)
         weights, bias = fit_linear_ridge(train_features, train_high_target, args.ridge)
         train_linear_context_prediction = predict_linear(train_features, weights, bias)
         test_linear_context_prediction = predict_linear(test_features, weights, bias)
@@ -1598,6 +1730,12 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                 "routeConditioningChannels": route_conditioning_channels(args.route_conditioning),
                 "routeConditioningFeatureCount": int(train_route_conditioning.shape[1]),
                 "source": "effective witness controls with query fallback; replay scalars included only for route-controls-replay-v0",
+            },
+            "spatialConditioning": {
+                "identity": args.spatial_conditioning,
+                "spatialConditioningChannels": spatial_conditioning_channels(args.spatial_conditioning),
+                "spatialConditioningFeatureCount": int(train_spatial_conditioning.shape[1]),
+                "source": "matched low-tile normalized cell centers, tile centers, and parsed spatial-bin centers",
             },
             "contextFeatureOrder": "dx-major,dy,dz over edge-padded low tile, channels preserved per offset",
         }
@@ -1725,8 +1863,10 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     if context is not None:
         report["data"]["contextWindow"] = context["contextWindow"]
         report["data"]["contextFeatureCount"] = context["contextFeatureCount"]
+        report["data"]["localContextFeatureCount"] = context["localContextFeatureCount"]
         report["data"]["conditionedFeatureCount"] = context["conditionedFeatureCount"]
         report["data"]["routeConditioning"] = context["routeConditioning"]
+        report["data"]["spatialConditioning"] = context["spatialConditioning"]
     residual_application_artifact = write_residual_application_artifact(
         args,
         manifest_path,
