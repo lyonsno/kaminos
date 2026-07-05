@@ -392,6 +392,11 @@ assert.match(index, /data-greenroom-preview-action="back"/, 'Greenroom Preview e
 assert.match(index, /showGLB\(url,[\s\S]*register:\s*false/, 'Greenroom View loads preview geometry without registering an authored scene object');
 assert.match(index, /greenroomImportMesh\([\s\S]*clear:\s*false/, 'Greenroom Import appends explicitly without relying on the Assets tab Append checkbox');
 assert.match(index, /greenroomImportSplat\([\s\S]*clear:\s*false/, 'Greenroom Import Splat appends explicitly without relying on the Assets tab Append checkbox');
+assert.match(index, /function kaminosMeshAssetRouteFromSearch\(/, 'Kaminos exposes a first-class mesh_root/mesh_path boot route for GLB smoke links');
+assert.match(index, /function loadKaminosMeshAssetRoute\(/, 'Kaminos mesh smoke links load through an explicit boot function instead of an inert app shell');
+assert.match(index, /mesh_root[\s\S]*mesh_path[\s\S]*\/api\/read\?/, 'Kaminos mesh smoke links preserve requested root/path and build an effective /api/read route');
+assert.match(index, /window\.kaminosAssetSmokeLinkDebugState/, 'browser witnesses can inspect direct asset smoke link request and registration state without DOM inference');
+assert.match(index, /kaminosAssetSmokeLinkState[\s\S]*requestedRoot[\s\S]*requestedPath[\s\S]*effectiveUrl[\s\S]*registeredObjectId/, 'direct asset smoke links preserve requested/effective route identity and scene-object registration identity');
 assert.match(index, /if \(greenroomPreviewIsActive\(\)\)[\s\S]*Greenroom preview is temporary/, 'scene save refuses to write while a Greenroom Preview is active');
 assert.match(index, /btn\.textContent = 'View'/, 'Greenroom mesh rows render a View button');
 assert.match(index, /textContent = 'Import'/, 'Greenroom mesh rows render an Import button');
