@@ -2158,7 +2158,26 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   var bonfireDetailBreakup = breakup;
   let smokeSourceFalloff = 1.0 / max(0.0048, scaledSmokeSourceRadius * scaledSmokeSourceRadius);
   let fireSourceFalloff = 1.0 / max(0.0036, scaledSourceRadius * scaledSourceRadius);
-  let columnSource = exp(-sourceRadial * sourceRadial * smokeSourceFalloff) * sourceBand * breakup * inputFlow;
+  let tallPlumeSmokeDebandAngle = atan2(sourceCenter.z, sourceCenter.x);
+  let tallPlumeSmokeDebandWarp = sourceCenter.xz
+    + vec2<f32>(
+      sin(sourceCenter.z * 8.7 + sourceCenter.y * 4.9 + time * 0.23),
+      cos(sourceCenter.x * 7.9 - sourceCenter.y * 4.3 - time * 0.19)
+    ) * scaledSmokeSourceRadius * 0.28;
+  let tallPlumeSmokeDebandBasis = clamp(
+    0.78
+      + 0.11 * sin(length(tallPlumeSmokeDebandWarp) * 22.0 - sourceCenter.y * 6.4 + time * 0.42)
+      + 0.08 * cos(tallPlumeSmokeDebandAngle * 5.0 + sourceCenter.y * 7.2 - time * 0.31)
+      + 0.07 * (hash31(floor(vec3<f32>(
+        tallPlumeSmokeDebandWarp.x * 11.0,
+        sourceCenter.y * 9.0,
+        tallPlumeSmokeDebandWarp.y * 11.0
+      ))) - 0.5),
+    0.46,
+    1.16
+  );
+  let tallPlumeSmokeSourceBreakup = tallPlumeSmokeDebandBasis;
+  let columnSource = exp(-sourceRadial * sourceRadial * smokeSourceFalloff) * sourceBand * mix(breakup, tallPlumeSmokeSourceBreakup, tallPlumeScene) * inputFlow;
   let tallPlumeEmitterBand = smoothstep(-0.25, -0.10, sourceCenter.y) * (1.0 - smoothstep(0.12, 0.40, sourceCenter.y));
   let tallPlumeSourceWidthGate = tallPlumeScene * smoothstep(0.095, 0.180, scaledSourceRadius);
   let tallPlumeSourceRadial01 = clamp(sourceRadial / max(scaledSourceRadius, 0.001), 0.0, 3.0);

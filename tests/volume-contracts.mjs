@@ -1030,6 +1030,11 @@ assert.match(core, /tallPlumeFrontPacketDensity/, 'tall plume source width must 
 assert.match(core, /tallPlumeAnnularFrontBirth/, 'tall plume wide-source birth must add an annular combustion-front carrier');
 assert.match(core, /tallPlumeInteriorFireRelief/, 'tall plume wide-source birth must relieve the interior so broad sources do not become solid hot plugs');
 assert.match(core, /let columnFrontTopologyBirth = max\(columnCombustionFrontBirth \* 0\.32, tallPlumeAnnularFrontBirth \* 0\.42\);/, 'tall plume annular source birth must feed combustion front topology, not only visible flame color');
+assert.match(core, /tallPlumeSmokeDebandWarp/, 'tall plume smoke source must warp away from the old planar breakup carrier');
+assert.match(core, /tallPlumeSmokeDebandBasis/, 'tall plume smoke source must use a named de-banded scalar basis');
+assert.match(core, /tallPlumeSmokeSourceBreakup/, 'tall plume smoke source must expose the de-banded breakup selected for smoke density birth');
+assert.match(core, /let columnSource = exp\(-sourceRadial \* sourceRadial \* smokeSourceFalloff\) \* sourceBand \* mix\(breakup, tallPlumeSmokeSourceBreakup, tallPlumeScene\) \* inputFlow;/, 'tall plume smoke birth must swap the old planar breakup out of the density source');
+assert.doesNotMatch(core, /let columnSource = exp\(-sourceRadial \* sourceRadial \* smokeSourceFalloff\) \* sourceBand \* breakup \* inputFlow;/, 'tall plume smoke birth must not bake the old planar breakup directly into density');
 assert.match(core, /tallPlumeLiveReactionCarrier/, 'tall plume reaction is driven by compact combustion carrier rather than broad smoke source');
 assert.doesNotMatch(core, /let tallPlumeLiveFlameSurvival = tallPlumeReactionSurvival \* tallPlumeFuelSurvival \* tallPlumeFlameContourSurvival;/, 'tall plume live flame survival must not bypass front topology and tip taper');
 assert.match(core, /fireBirth \* 0\.024 \* tallPlumeRawSourceFireRelief/, 'tall plume flame storage must downweight raw source birth at high flow');
