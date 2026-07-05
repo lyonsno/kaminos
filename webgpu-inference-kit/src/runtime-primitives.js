@@ -106,6 +106,7 @@ export function createGpuTensor(input = {}, options = {}) {
   const elements = tensorElements(shape);
   const bytesPerElement = DTYPE_BYTES.get(dtype);
   const byteLength = elements * bytesPerElement;
+  const allocationByteLength = alignTo(byteLength, 4);
   const usage = input.usage ?? (
     WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst | WEBGPU_BUFFER_USAGE.copySrc
   );
@@ -120,6 +121,7 @@ export function createGpuTensor(input = {}, options = {}) {
     elements,
     bytesPerElement,
     byteLength,
+    allocationByteLength,
     usage,
     bufferOffset: input.bufferOffset || 0,
     metadata: clone(input.metadata || {}),
@@ -128,12 +130,12 @@ export function createGpuTensor(input = {}, options = {}) {
   if (input.buffer) {
     tensor.buffer = input.buffer;
   } else if (typeof options.createBuffer === 'function') {
-    tensor.buffer = options.createBuffer({
-      label: input.label || input.name,
-      size: byteLength,
-      usage,
-      mappedAtCreation: Boolean(input.mappedAtCreation),
-    });
+      tensor.buffer = options.createBuffer({
+        label: input.label || input.name,
+        size: allocationByteLength,
+        usage,
+        mappedAtCreation: Boolean(input.mappedAtCreation),
+      });
   }
 
   return tensor;

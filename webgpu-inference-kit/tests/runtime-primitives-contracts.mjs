@@ -71,10 +71,12 @@ const device = {
     const buffer = {
       descriptor,
       data,
-      async mapAsync() {
+      async mapAsync(_mode, offset = 0, size = descriptor.size - offset) {
         if ((descriptor.usage & WEBGPU_BUFFER_USAGE.mapRead) === 0) {
           throw new Error(`buffer ${descriptor.label} missing MAP_READ usage`);
         }
+        if (offset % 8 !== 0) throw new Error('map offset must be multiple of 8');
+        if (size % 4 !== 0) throw new Error('map size must be multiple of 4');
       },
       getMappedRange(offset = 0, size = descriptor.size - offset) {
         calls.reads.push(descriptor.label);
@@ -110,6 +112,9 @@ const device = {
     const copies = [];
     return {
       copyBufferToBuffer(source, sourceOffset, destination, destinationOffset, size) {
+        if (sourceOffset % 4 !== 0) throw new Error('copy sourceOffset must be multiple of 4');
+        if (destinationOffset % 4 !== 0) throw new Error('copy destinationOffset must be multiple of 4');
+        if (size % 4 !== 0) throw new Error('copy size must be multiple of 4');
         calls.copies.push({
           sourceLabel: source.descriptor.label,
           destinationLabel: destination.descriptor.label,
@@ -222,6 +227,30 @@ const outputMask = runtime.createTensor({
 });
 new Float32Array(outputMask.buffer.data.buffer).set([0.125, 0.5, 0.875]);
 
+const oneByteMask = runtime.createTensor({
+  name: 'sam3.one-byte-mask',
+  shape: [1],
+  dtype: 'u8',
+  usage: WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst | WEBGPU_BUFFER_USAGE.copySrc,
+});
+assert.equal(oneByteMask.byteLength, 1);
+runtime.uploadTensor(oneByteMask, new Uint8Array([197]));
+
+const mappableReadbackBuffer = device.createBuffer({
+  label: 'sam3.offset-readback',
+  size: 8,
+  usage: WEBGPU_BUFFER_USAGE.mapRead | WEBGPU_BUFFER_USAGE.copyDst,
+});
+mappableReadbackBuffer.data.set([1, 2, 3, 4, 9, 8, 7, 6]);
+const offsetReadback = runtime.createTensor({
+  name: 'sam3.offset-readback-view',
+  shape: [1],
+  dtype: 'u32',
+  buffer: mappableReadbackBuffer,
+  bufferOffset: 4,
+  usage: WEBGPU_BUFFER_USAGE.mapRead | WEBGPU_BUFFER_USAGE.copyDst,
+});
+
 const kernel = runtime.defineComputeKernel({
   name: 'sam3.mask-attention',
   code: '@compute @workgroup_size(8, 8, 1) fn main() {}',
@@ -254,6 +283,15 @@ assert.equal(calls.copies.at(-1).sourceLabel, 'sam3.output-mask');
 assert.equal(calls.copies.at(-1).destinationLabel, 'sam3.output-mask.readback');
 assert.equal(calls.reads.at(-1), 'sam3.output-mask.readback');
 assert.equal(calls.submissions.length, 2);
+
+const oneByteReadback = await runtime.readTensor(oneByteMask);
+assert.deepEqual([...new Uint8Array(oneByteReadback)], [197]);
+assert.equal(calls.buffers.find(buffer => buffer.label === 'sam3.one-byte-mask').size, 4);
+assert.equal(calls.copies.at(-1).sourceLabel, 'sam3.one-byte-mask');
+assert.equal(calls.copies.at(-1).size, 4);
+
+const offsetReadbackBytes = await runtime.readTensor(offsetReadback);
+assert.deepEqual([...new Uint8Array(offsetReadbackBytes)], [9, 8, 7, 6]);
 
 const profile = runtime.finishProfile({
   evidence: { mode: 'live', source: 'runtime-primitives-contract' },

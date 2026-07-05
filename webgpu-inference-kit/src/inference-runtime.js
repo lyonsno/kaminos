@@ -196,6 +196,29 @@ function byteLengthOf(data) {
   return null;
 }
 
+function alignTo(value, alignment) {
+  return Math.ceil(value / alignment) * alignment;
+}
+
+function alignDown(value, alignment) {
+  return Math.floor(value / alignment) * alignment;
+}
+
+function dataBytes(data) {
+  if (data instanceof ArrayBuffer) return new Uint8Array(data);
+  if (ArrayBuffer.isView(data)) return new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+  throw new Error('data must be an ArrayBuffer or typed array view');
+}
+
+function tensorUploadData(tensor, data) {
+  const logicalByteLength = assertTensorDataByteLength(tensor, data);
+  const allocationByteLength = tensor.allocationByteLength ?? alignTo(logicalByteLength, 4);
+  if (allocationByteLength === logicalByteLength && logicalByteLength % 4 === 0) return data;
+  const padded = new Uint8Array(allocationByteLength);
+  padded.set(dataBytes(data));
+  return padded;
+}
+
 function queueWriteBuffer(queue, buffer, data, offset = 0, dataOffset = 0, size = undefined) {
   if (!queue || typeof queue.writeBuffer !== 'function') throw new Error('queue.writeBuffer must be available');
   const byteLength = byteLengthOf(data);
@@ -216,13 +239,35 @@ async function readMappedBuffer(buffer, options = {}) {
   return copy;
 }
 
+async function readMappedBufferSlice(buffer, options = {}) {
+  const sourceOffset = options.sourceOffset ?? options.offset ?? 0;
+  const logicalSize = options.size;
+  if (!Number.isInteger(sourceOffset) || sourceOffset < 0) {
+    throw new Error('readBuffer sourceOffset must be a non-negative integer');
+  }
+  if (!Number.isInteger(logicalSize) || logicalSize < 0) {
+    throw new Error('readBuffer size must be a non-negative integer');
+  }
+  const mapOffset = alignDown(sourceOffset, 8);
+  const sliceOffset = sourceOffset - mapOffset;
+  const mappedSize = alignTo(sliceOffset + logicalSize, 4);
+  const mapped = await readMappedBuffer(buffer, {
+    mapMode: options.mapMode,
+    offset: mapOffset,
+    size: mappedSize,
+  });
+  return mapped.slice(sliceOffset, sliceOffset + logicalSize);
+}
+
 async function readBufferViaStaging(runtime, tensor, options = {}) {
   const size = options.size ?? tensor.byteLength;
+  const alignedSize = options.alignedSize ?? alignTo(size, 4);
   const sourceOffset = options.sourceOffset ?? options.offset ?? tensor.bufferOffset ?? 0;
   if (!Number.isInteger(size) || size < 0) throw new Error('readTensor size must be a non-negative integer');
   if (!Number.isInteger(sourceOffset) || sourceOffset < 0) {
     throw new Error('readTensor sourceOffset must be a non-negative integer');
   }
+  if (sourceOffset % 4 !== 0) throw new Error('readTensor sourceOffset must be a multiple of 4');
   if (Number.isInteger(tensor.usage) && (tensor.usage & WEBGPU_BUFFER_USAGE.copySrc) === 0) {
     throw new Error('readTensor requires tensor usage to include copySrc unless the tensor buffer is mapRead');
   }
@@ -235,7 +280,7 @@ async function readBufferViaStaging(runtime, tensor, options = {}) {
 
   const staging = runtime.createBuffer({
     label: options.stagingLabel || `${tensor.name || 'tensor'}.readback`,
-    size,
+    size: alignedSize,
     usage: WEBGPU_BUFFER_USAGE.mapRead | WEBGPU_BUFFER_USAGE.copyDst,
   });
   const encoder = runtime.device.createCommandEncoder({
@@ -244,17 +289,18 @@ async function readBufferViaStaging(runtime, tensor, options = {}) {
   if (typeof encoder.copyBufferToBuffer !== 'function') {
     throw new Error('command encoder must support copyBufferToBuffer for tensor readback');
   }
-  encoder.copyBufferToBuffer(tensor.buffer, sourceOffset, staging, 0, size);
+  encoder.copyBufferToBuffer(tensor.buffer, sourceOffset, staging, 0, alignedSize);
   const commandBuffer = encoder.finish();
   runtime.queue.submit([commandBuffer]);
   if (options.waitForSubmittedWorkDone === true && typeof runtime.queue.onSubmittedWorkDone === 'function') {
     await runtime.queue.onSubmittedWorkDone();
   }
-  return runtime.readBuffer(staging, {
+  const mapped = await runtime.readBuffer(staging, {
     mapMode: options.mapMode,
     offset: 0,
-    size,
+    size: alignedSize,
   });
+  return mapped.slice(0, size);
 }
 
 function createStageFacade(runtime, stageState) {
@@ -358,8 +404,7 @@ export async function createWebGpuInferenceRuntime(input = {}) {
     uploadTensor(tensor, data, offset = 0) {
       if (!tensor || typeof tensor !== 'object') throw new Error('tensor must be an object');
       if (!tensor.buffer) throw new Error('tensor must expose buffer');
-      assertTensorDataByteLength(tensor, data);
-      runtime.writeBuffer(tensor.buffer, data, offset);
+      runtime.writeBuffer(tensor.buffer, tensorUploadData(tensor, data), offset);
       return tensor;
     },
 
@@ -367,9 +412,10 @@ export async function createWebGpuInferenceRuntime(input = {}) {
       if (!tensor || typeof tensor !== 'object') throw new Error('tensor must be an object');
       if (!tensor.buffer) throw new Error('tensor must expose buffer');
       if (Number.isInteger(tensor.usage) && (tensor.usage & WEBGPU_BUFFER_USAGE.mapRead) !== 0) {
-        return runtime.readBuffer(tensor.buffer, {
-          size: tensor.byteLength,
+        return readMappedBufferSlice(tensor.buffer, {
           ...options,
+          sourceOffset: options.sourceOffset ?? options.offset ?? tensor.bufferOffset ?? 0,
+          size: options.size ?? tensor.byteLength,
         });
       }
       return readBufferViaStaging(runtime, tensor, options);
