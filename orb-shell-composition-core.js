@@ -1023,8 +1023,10 @@ function createLowerSocketStripHonestyLaw(composition) {
     centerlinePathLaw: {
       mode: 'law-owned-directed-socket-return-spine-v0',
       maxLateralWanderRatio: 0.065,
-      sourceClampLateralWanderRatio: 0.055,
+      sourceClampLateralWanderRatio: 0.065,
       straighteningStrength: 1,
+      fairingIterations: 14,
+      fairingStrength: 0.58,
       protectedEndpointT: 0.04,
       reason: 'semantic render inventory showed the promoted body was born as a wandering mini-macro; tuck-tongue must own one directed socket-return spine before tuck/merge solving',
     },
@@ -1035,6 +1037,29 @@ function createLowerSocketStripHonestyLaw(composition) {
       protectedEndpointT: 0.035,
       smoothingT0: 0.04,
       smoothingT1: 0.94,
+      postTerminalFairingPass: true,
+      postTerminalFairingMode: 'law-owned-post-terminal-fairing-v0',
+      visibleEdgeLocalFairing: {
+        mode: 'law-owned-visible-edge-local-fairing-v0',
+        t0: 0.7,
+        t1: 0.84,
+        iterations: 9,
+        strength: 0.48,
+        reason: 'after centerline honesty, one visible edge can still inherit local frame waviness; fair the readable sheet band without changing terminal destiny',
+      },
+      kinkBudgetSolver: {
+        mode: 'law-owned-kink-budget-solver-v0',
+        iterations: 42,
+        strength: 0.36,
+        maxTurnLimit: 0.92,
+        visibleT0: 0.08,
+        visibleT1: 0.88,
+        visibleKinkThreshold: 0.18,
+        repeatedKinkThreshold: 0.29,
+        repeatedKinkCountLimit: 4,
+        repeatedKinkEnergyLimit: 2.2,
+        reason: 'strip honesty is a procedural constraint, not an aesthetic suggestion; iteratively reduce measured kink budget before tuck/merge solving',
+      },
       repeatedKinkCountLimit: 4,
       repeatedKinkEnergyLimit: 2.2,
       reason: 'semantic inventory pinned visible offender to promoted-body/live-sidewall path; smooth that source path rather than editing downstream renderables',
@@ -1240,10 +1265,9 @@ function lowerSocketAnatomyEffectAt(assemblage, t) {
   if (plateInfluence) {
     widthScale = Math.max(widthScale, plateLaw.anatomyWidthScaleFloor * plateInfluence);
   }
-  const terminalPressure = Math.max(
-    1 - smoothStep(0.62, 1, profile),
-    smoothStep(law.terminationDecision.terminalCutStartT, 1, t),
-  );
+  const terminalTaperPressure = 1 - smoothStep(0.62, 1, profile);
+  const terminalCutPressure = smoothStep(law.terminationDecision.terminalCutStartT, 1, t);
+  const terminalPressure = 1 - ((1 - terminalTaperPressure) * (1 - terminalCutPressure));
   const underfoldPressure = Math.exp(-Math.pow((t - 0.46) / 0.18, 2));
   return {
     widthScale,
@@ -1676,7 +1700,7 @@ function continueTerminalPoint(prev2, prev1) {
   return addScaledPoint(prev1, tangent, length);
 }
 
-function smoothLowerSocketStripHonestySideWallSamples(assemblage, samples) {
+function smoothLowerSocketStripHonestySideWallSamples(assemblage, samples, passMode = null) {
   const law = assemblage.lowerSocketStripHonestyLaw
     || assemblage.macroPromotedBody?.lowerSocketStripHonestyLaw;
   const smoothing = law?.sideCurveSmoothing;
@@ -1707,13 +1731,174 @@ function smoothLowerSocketStripHonestySideWallSamples(assemblage, samples) {
         const neighborAverage = lerpPoint(previous[index - 1][key], previous[index + 1][key], 0.5);
         next[index][key] = lerpPoint(previous[index][key], neighborAverage, localStrength);
       }
-      next[index].stripHonestySmoothingMode = smoothing.mode;
+      next[index].stripHonestySmoothingMode = passMode || smoothing.mode;
+      next[index].stripHonestySmoothingPasses = [
+        ...(next[index].stripHonestySmoothingPasses || []),
+        passMode || smoothing.mode,
+      ];
     }
   }
-  return next.map(sample => ({
+  let faired = next;
+  for (const fairing of [
+    smoothing.visibleEdgeLocalFairing,
+  ].filter(Boolean)) {
+    faired = fairLowerSocketVisibleEdgeSamples(fairing, faired);
+  }
+  faired = solveLowerSocketKinkBudget(smoothing, faired);
+  return faired.map(sample => ({
     ...sample,
     thickness: pointDistance(sample.outer, sample.inner),
   }));
+}
+
+function solveLowerSocketKinkBudget(smoothing, samples) {
+  const solver = smoothing.kinkBudgetSolver;
+  if (!solver || samples.length < 5) return samples;
+  let next = samples.map(sample => ({
+    ...sample,
+    outer: [...sample.outer],
+    inner: [...sample.inner],
+  }));
+  let metrics = sideCurveBudgetMetrics(next, solver);
+  const iterations = Math.max(1, Math.round(solver.iterations || 1));
+  const strength = clamp(solver.strength ?? 0.25, 0, 0.72);
+  for (let iteration = 0; iteration < iterations; iteration++) {
+    if (
+      metrics.maxTurn <= (solver.maxTurnLimit ?? Number.POSITIVE_INFINITY)
+      && metrics.visibleKinkCount <= (solver.repeatedKinkCountLimit ?? Number.POSITIVE_INFINITY)
+      && metrics.visibleKinkEnergy <= (solver.repeatedKinkEnergyLimit ?? Number.POSITIVE_INFINITY)
+    ) {
+      break;
+    }
+    let bestCandidate = null;
+    let bestMetrics = metrics;
+    for (const item of metrics.offenders) {
+      const index = item.index;
+      if (index <= 0 || index >= next.length - 1) continue;
+      const candidate = next.map(sample => ({
+        ...sample,
+        outer: [...sample.outer],
+        inner: [...sample.inner],
+      }));
+      for (const key of ['outer', 'inner']) {
+        const neighborAverage = lerpPoint(next[index - 1][key], next[index + 1][key], 0.5);
+        candidate[index][key] = lerpPoint(next[index][key], neighborAverage, strength);
+      }
+      candidate[index].stripHonestyKinkBudgetSolverMode = solver.mode;
+      const candidateMetrics = sideCurveBudgetMetrics(candidate, solver);
+      if (candidateMetrics.score < bestMetrics.score) {
+        bestCandidate = candidate;
+        bestMetrics = candidateMetrics;
+      }
+    }
+    if (!bestCandidate) break;
+    next = bestCandidate;
+    metrics = bestMetrics;
+  }
+  return next.map(sample => ({
+    ...sample,
+    stripHonestyKinkBudgetScore: metrics.score,
+    stripHonestyKinkBudgetMaxTurn: metrics.maxTurn,
+    stripHonestyKinkBudgetVisibleEnergy: metrics.visibleKinkEnergy,
+    stripHonestyKinkBudgetVisibleCount: metrics.visibleKinkCount,
+  }));
+}
+
+function sideCurveBudgetMetrics(samples, solver) {
+  const visibleT0 = solver.visibleT0 ?? 0.08;
+  const visibleT1 = solver.visibleT1 ?? 0.88;
+  const energyThreshold = solver.visibleKinkThreshold ?? 0.18;
+  const countThreshold = solver.repeatedKinkThreshold ?? 0.29;
+  let maxTurn = 0;
+  let visibleKinkEnergy = 0;
+  let visibleKinkCount = 0;
+  const offenders = [];
+  for (let index = 1; index < samples.length - 1; index++) {
+    const angle = sideCurveTurnAngle(samples, index, 'outer');
+    maxTurn = Math.max(maxTurn, angle);
+    const t = samples[index].t;
+    const isVisible = t >= visibleT0 && t <= visibleT1;
+    if (isVisible && angle >= energyThreshold) visibleKinkEnergy += angle;
+    if (isVisible && angle >= countThreshold) visibleKinkCount++;
+    if (
+      angle > (solver.maxTurnLimit ?? Number.POSITIVE_INFINITY)
+      || (isVisible && angle >= energyThreshold)
+    ) {
+      offenders.push({ index, angle });
+    }
+  }
+  offenders.sort((a, b) => b.angle - a.angle);
+  const maxTurnOverage = Math.max(0, maxTurn - (solver.maxTurnLimit ?? maxTurn));
+  const countOverage = Math.max(0, visibleKinkCount - (solver.repeatedKinkCountLimit ?? visibleKinkCount));
+  const energyOverage = Math.max(0, visibleKinkEnergy - (solver.repeatedKinkEnergyLimit ?? visibleKinkEnergy));
+  return {
+    maxTurn,
+    visibleKinkEnergy,
+    visibleKinkCount,
+    offenders: offenders.slice(0, 8),
+    score: maxTurnOverage * 8 + countOverage * 2 + energyOverage,
+  };
+}
+
+function sideCurveTurnAngle(samples, index, key) {
+  const previous = normalizePoint(subtractPoints(samples[index][key], samples[index - 1][key]));
+  const next = normalizePoint(subtractPoints(samples[index + 1][key], samples[index][key]));
+  return Math.acos(clamp(dotPoints(previous, next), -1, 1));
+}
+
+function fairLowerSocketVisibleEdgeSamples(fairing, samples) {
+  if (!fairing || samples.length < 5) return samples;
+  const t0 = fairing.t0 ?? 0.7;
+  const t1 = fairing.t1 ?? 0.84;
+  if (t1 <= t0) return samples;
+  const strength = clamp(fairing.strength ?? 0, 0, 0.72);
+  if (strength <= 0) return samples;
+  const iterations = Math.max(1, Math.round(fairing.iterations || 1));
+  const currentEnergy = sideCurveKinkEnergy(samples, t0, t1);
+  let next = samples.map(sample => ({
+    ...sample,
+    outer: [...sample.outer],
+    inner: [...sample.inner],
+  }));
+  for (let iteration = 0; iteration < iterations; iteration++) {
+    const previous = next.map(sample => ({
+      outer: [...sample.outer],
+      inner: [...sample.inner],
+    }));
+    for (let index = 1; index < next.length - 1; index++) {
+      const t = next[index].t;
+      if (t < t0 || t > t1) continue;
+      const u = clamp((t - t0) / (t1 - t0), 0, 1);
+      const windowFade = smoothStep(0, 0.25, u) * (1 - smoothStep(0.75, 1, u));
+      for (const key of ['outer', 'inner']) {
+        const neighborAverage = lerpPoint(previous[index - 1][key], previous[index + 1][key], 0.5);
+        next[index][key] = lerpPoint(previous[index][key], neighborAverage, strength * windowFade);
+      }
+      next[index].stripHonestyVisibleEdgeFairingMode = fairing.mode;
+    }
+  }
+  const candidateEnergy = sideCurveKinkEnergy(next, t0, t1);
+  if (candidateEnergy > currentEnergy) return samples;
+  return next.map(sample => ({
+    ...sample,
+    stripHonestyVisibleEdgeFairingEnergyBefore: currentEnergy,
+    stripHonestyVisibleEdgeFairingEnergyAfter: candidateEnergy,
+  }));
+}
+
+function sideCurveKinkEnergy(samples, t0, t1, threshold = 0.18) {
+  let energy = 0;
+  for (let index = 1; index < samples.length - 1; index++) {
+    const t = samples[index].t;
+    if (t < t0 || t > t1) continue;
+    for (const key of ['outer', 'inner']) {
+      const previous = normalizePoint(subtractPoints(samples[index][key], samples[index - 1][key]));
+      const next = normalizePoint(subtractPoints(samples[index + 1][key], samples[index][key]));
+      const angle = Math.acos(clamp(dotPoints(previous, next), -1, 1));
+      if (angle >= threshold) energy += angle;
+    }
+  }
+  return energy;
 }
 
 function applyLowerSocketRenderedEdgePathLaw(assemblage, samples) {
@@ -1775,7 +1960,7 @@ function applyLowerSocketCenterlinePathLaw(assemblage, points) {
   );
   const protectedEndpointT = law.protectedEndpointT ?? 0.04;
   const strength = clamp(law.straighteningStrength ?? 1, 0, 1);
-  return points.map((point, index) => {
+  const clampedPoints = points.map((point, index) => {
     const t = index / (points.length - 1);
     if (t <= protectedEndpointT || t >= 1 - protectedEndpointT) return point;
     const relative = subtractPoints(point, start);
@@ -1789,6 +1974,25 @@ function applyLowerSocketCenterlinePathLaw(assemblage, points) {
     const clamped = addScaledPoint(projected, normalizePoint(lateral), maxLateralWander);
     return lerpPoint(point, clamped, strength * endpointFade);
   });
+  const fairingIterations = Math.max(0, Math.round(law.fairingIterations || 0));
+  const fairingStrength = clamp(law.fairingStrength ?? 0, 0, 0.72);
+  if (!fairingIterations || fairingStrength <= 0) return clampedPoints;
+  let next = clampedPoints.map(point => [...point]);
+  for (let iteration = 0; iteration < fairingIterations; iteration++) {
+    const previous = next.map(point => [...point]);
+    for (let index = 1; index < next.length - 1; index++) {
+      const t = index / (next.length - 1);
+      if (t <= protectedEndpointT || t >= 1 - protectedEndpointT) continue;
+      const endpointFade = smoothStep(protectedEndpointT, protectedEndpointT + 0.12, t)
+        * (1 - smoothStep(1 - protectedEndpointT - 0.12, 1 - protectedEndpointT, t));
+      next[index] = lerpPoint(
+        previous[index],
+        lerpPoint(previous[index - 1], previous[index + 1], 0.5),
+        fairingStrength * endpointFade,
+      );
+    }
+  }
+  return next;
 }
 
 function macroPromotedBodyCenterlinePoints(assemblage, rowCount = 72, radius = 1.045) {
@@ -1852,12 +2056,22 @@ function macroPromotedBodyEdgeSamples(assemblage, targetEdge, rowCount = 72) {
       thickness: pointDistance(outer, inner),
     };
   });
-  return smoothLowerSocketPlateBodyTerminalSamples(
+  const pathLawSamples = applyLowerSocketRenderedEdgePathLaw(assemblage, samples);
+  const stripSmoothedSamples = smoothLowerSocketStripHonestySideWallSamples(
     assemblage,
-    smoothLowerSocketStripHonestySideWallSamples(
-      assemblage,
-      applyLowerSocketRenderedEdgePathLaw(assemblage, samples),
-    ),
+    pathLawSamples,
+  );
+  const terminalContinuedSamples = smoothLowerSocketPlateBodyTerminalSamples(
+    assemblage,
+    stripSmoothedSamples,
+  );
+  const smoothing = assemblage.lowerSocketStripHonestyLaw?.sideCurveSmoothing
+    || assemblage.macroPromotedBody?.lowerSocketStripHonestyLaw?.sideCurveSmoothing;
+  if (!smoothing?.postTerminalFairingPass) return terminalContinuedSamples;
+  return smoothLowerSocketStripHonestySideWallSamples(
+    assemblage,
+    terminalContinuedSamples,
+    smoothing.postTerminalFairingMode || smoothing.mode,
   );
 }
 
