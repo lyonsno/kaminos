@@ -230,6 +230,8 @@ assert.match(indexHtml, /data-greenroom-moge-latest-request-id/, 'MoGE latest re
 assert.match(indexHtml, /data-greenroom-moge-latest-synthetic-fallback/, 'MoGE latest result card exposes whether source identity fell back to synthetic');
 assert.match(indexHtml, /data-greenroom-moge-fresh-result/, 'MoGE latest result card marks when it matches the last local Run Preview request');
 assert.match(indexHtml, /await runBrowserWebGpuPreviewRoute\(row\)[\s\S]*button\.textContent = 'Run Preview'[\s\S]*await grBrowseRouteJobs\(\)[\s\S]*Browser WebGPU preview submitted; refresh failed/, 'MoGE Run Preview success path resets the button and refreshes route state after submission without relabeling refresh failure as route failure');
+assert.match(indexHtml, /waitForGreenroomBrowserPreviewResult[\s\S]*mogeResultRowMatchesRequest[\s\S]*grBrowseRouteJobs/, 'Queued MoGE Greenroom preview polls until the produced route result is visible instead of requiring manual refresh');
+assert.match(indexHtml, /updateMogePreviewRunProgress\('waiting-for-worker'[\s\S]*Greenroom worker running browser preview/, 'Queued MoGE Greenroom preview exposes worker-wait progress while the Greenroom job runs');
 assert.match(indexHtml, /lastMogePreviewRunState/, 'MoGE cockpit keeps explicit preview run progress state');
 assert.match(indexHtml, /data-greenroom-moge-run-progress/, 'MoGE cockpit exposes a stable run progress hook');
 assert.match(indexHtml, /browserWebGpuGreenroomRunnerMode/, 'MoGE cockpit reads the configured Greenroom browser runner mode');

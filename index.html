@@ -12015,6 +12015,55 @@ async function runBrowserWebGpuPreviewRoute(row = {}) {
   return { result, writeResult };
 }
 
+function greenroomRequestJobIdFragment(requestId = '') {
+  return String(requestId || '')
+    .trim()
+    .replace(/[^a-zA-Z0-9._-]+/g, '-')
+    .replace(/^[-._]+|[-._]+$/g, '')
+    .slice(0, 48);
+}
+
+function mogeResultRowMatchesRequest(row = {}, requestId = '') {
+  const routeResult = row.route_job?.metadata?.routeResult || {};
+  return row.provider === ROUTE_EXECUTOR_BROWSER_WEBGPU
+    && (row.route_job?.status === 'done' || row.status_dir === 'route-result')
+    && routeResult.requestId === requestId;
+}
+
+function mogeNativeGreenroomRowForRequest(rows = [], requestId = '') {
+  const fragment = greenroomRequestJobIdFragment(requestId);
+  if (!fragment) return null;
+  return rows.find(row => {
+    if (row.provider !== 'native-greenroom') return false;
+    const id = String(row.route_job?.id || row.job_id || '');
+    return id.includes(fragment);
+  }) || null;
+}
+
+async function waitForGreenroomBrowserPreviewResult(requestId, options = {}) {
+  const timeoutMs = Number.isFinite(options.timeoutMs) ? options.timeoutMs : 130000;
+  const intervalMs = Number.isFinite(options.intervalMs) ? options.intervalMs : 1000;
+  const deadline = Date.now() + timeoutMs;
+  let lastNativeStatus = null;
+  while (Date.now() <= deadline) {
+    updateMogePreviewRunProgress('waiting-for-worker', 'Greenroom worker running browser preview', requestId);
+    await grBrowseRouteJobs();
+    const rows = greenroomRouteJobState.rows || [];
+    const resultRow = rows.find(row => mogeResultRowMatchesRequest(row, requestId)) || null;
+    if (resultRow) {
+      updateMogePreviewRunProgress('result-ready', 'Browser WebGPU preview result ready', requestId);
+      return resultRow;
+    }
+    const nativeRow = mogeNativeGreenroomRowForRequest(rows, requestId);
+    lastNativeStatus = nativeRow ? routeJobStatus(nativeRow) : lastNativeStatus;
+    if (lastNativeStatus === 'failed') {
+      throw new Error(`Greenroom browser preview failed before route-result output: ${requestId}`);
+    }
+    await new Promise(resolve => setTimeout(resolve, intervalMs));
+  }
+  throw new Error(`Timed out waiting for Greenroom browser preview result ${requestId}; last native status ${lastNativeStatus || 'unknown'}`);
+}
+
 async function queueBrowserWebGpuPreviewRoute(row = {}) {
   const routeJob = row.route_job || {};
   const requestId = `req:moge-preview-${Date.now()}`;
@@ -12048,8 +12097,8 @@ async function queueBrowserWebGpuPreviewRoute(row = {}) {
     };
   }
   updateMogePreviewRunProgress('queued', 'Browser WebGPU preview queued in Greenroom', submission.request_id || requestId);
-  await grBrowseRouteJobs();
-  return { submission };
+  const resultRow = await waitForGreenroomBrowserPreviewResult(submission.request_id || requestId);
+  return { submission, resultRow };
 }
 
 async function grBrowseSplatAssets() {
