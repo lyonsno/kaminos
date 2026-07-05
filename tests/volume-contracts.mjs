@@ -1557,6 +1557,7 @@ assert.match(witness, /stock-fire-layer-low-but-raw-pyro-carrier-live/, 'Pyro ma
 assert.match(witness, /no-fire-volume/, 'witness accepts a deliberate no-fire volume evidence mode');
 assert.match(witness, /no-fire-volume-signal/, 'witness reports no-fire volume visual evidence identity');
 assert.match(witness, /expectsNoFireVolumeEvidence/, 'witness separates deliberate no-fire evidence from missing fire failures');
+assert.match(witness, /if \(\s*!expectsCanonicalPlumeProof\s*&&\s*!expectsFuelStarvedTallPlume\s*&&\s*!expectsNoFireVolumeEvidence\s*&&\s*\(!Number\.isFinite\(sample\.simReadback\.fireLayerMean\) \|\| sample\.simReadback\.fireLayerMean <= 0\.0005\)\s*&&\s*!acceptsRawCarrierPyroPaint\s*\)/, 'no-fire evidence routes do not require positive transported fire-layer readback');
 assert.match(witness, /!expectsFuelStarvedTallPlume\s*&&\s*!expectsNoFireVolumeEvidence[\s\S]*radianceMean/, 'no-fire evidence routes do not require positive fire radiance readback');
 assert.match(witness, /pyroDynamicDetail/, 'witness report carries Pyro dynamic detail state and reset semantics');
 assert.match(witness, /rayBudgetPreset/, 'witness records named ray-budget preset/config identity when present');
