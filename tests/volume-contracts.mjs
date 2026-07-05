@@ -225,6 +225,8 @@ assert.doesNotMatch(volumeWitness, /`\/tmp\/kaminos-volume-witness-profile-\$\{p
 assert.match(volumeWitness, /mkdtempSync\([^)]*kaminos-volume-witness-profile-/, 'Volume witness default profile must be fresh per run so stale localStorage cannot shadow the requested route');
 assert.doesNotMatch(volumeWitness, /Number\(args\.get\('--debug-port'\) \|\| 9433\)/, 'Volume witness must not reuse one fixed default Chrome debug port across runs');
 assert.match(volumeWitness, /randomInt\(/, 'Volume witness default debug port must be randomized so stale Chrome targets cannot shadow the requested route');
+assert.match(volumeWitness, /exceptionDetails/, 'Volume witness must preserve Runtime.evaluate exception details when GPU readback rejects');
+assert.match(volumeWitness, /GPU frame readback evaluation rejected/, 'Volume witness must fail loud with the browser-side readback rejection instead of reporting undefined');
 assert.match(index, /routePyroRadianceGate/, 'Pyro route parser accepts radiance gate');
 assert.match(index, /routePyroRadianceSpill/, 'Pyro route parser accepts radiance spill');
 assert.match(index, /routePyroRadianceWarmth/, 'Pyro route parser accepts radiance warmth');

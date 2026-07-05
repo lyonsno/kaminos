@@ -1528,6 +1528,18 @@ async function main() {
       awaitPromise: true,
       returnByValue: true,
     });
+    if (sampleEval.exceptionDetails) {
+      throw new Error(`GPU frame readback evaluation rejected: ${JSON.stringify({
+        exceptionDetails: sampleEval.exceptionDetails,
+        sampleExpression,
+      })}`);
+    }
+    if (sampleEval.result?.subtype === 'error') {
+      throw new Error(`GPU frame readback evaluation rejected: ${JSON.stringify({
+        result: sampleEval.result,
+        sampleExpression,
+      })}`);
+    }
     const sample = sampleEval.result.value;
     if (sample?.ok !== true) {
       throw new Error(`GPU frame readback failed: ${JSON.stringify(sample)}`);
