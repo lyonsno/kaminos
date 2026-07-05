@@ -122,6 +122,14 @@ export {
 } from './sf3d-route.js';
 
 export {
+  SAM3_MASK_DECODER_ISLAND_ROUTE_ID,
+  createSam3MaskDecoderIslandRouteDefinition,
+  createSam3MaskDecoderIslandRouteReceipt,
+  createSam3MaskProjectionCpuOracle,
+  runSam3MaskDecoderIslandRoute,
+} from './sam-mask-decoder-island.js';
+
+export {
   createWebGpuRouteSchemaContract,
 } from './route-schema-contract.js';
 
