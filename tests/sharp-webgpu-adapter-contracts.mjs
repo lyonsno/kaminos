@@ -53,6 +53,13 @@ assert.match(wrapperSource, /function classifySharpWaitFailure\(/, 'wrapper must
 assert.match(wrapperSource, /model-stalled-after-monodepth/, 'wrapper must classify failures that stop after monodepth before Gaussian or PLY output');
 assert.match(wrapperSource, /browserLastMilestone/, 'failure reports must promote the last browser milestone into trustworthy evidence');
 assert.match(wrapperSource, /operatorMessage/, 'failure reports must carry operator-facing copy for visible smoke surfaces');
+assert.match(wrapperSource, /function serializeErrorDetails\(/, 'wrapper must serialize Puppeteer error name, stack, and nested cause');
+assert.match(wrapperSource, /function classifyUnderlyingErrorCause\(/, 'wrapper must classify the underlying wait failure cause when Puppeteer exposes one');
+assert.match(wrapperSource, /errorCauseClassification/, 'wrapper failure reports must include the underlying cause classification');
+assert.match(wrapperSource, /browserLifecycleEvents/, 'wrapper reports must preserve browser lifecycle events alongside console logs');
+assert.match(wrapperSource, /page\.on\('close'/, 'wrapper must record page close events');
+assert.match(wrapperSource, /page\.on\('error'/, 'wrapper must record page crash/error events');
+assert.match(wrapperSource, /requestfailed/, 'wrapper must record failed browser requests when the live page fails before output');
 
 const witnessSource = readFileSync(witnessPath, 'utf8');
 assert.match(witnessSource, /recordAdapterSideArtifacts/, 'pipeline witness must ingest adapter side artifacts');

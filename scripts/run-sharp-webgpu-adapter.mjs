@@ -59,6 +59,7 @@ let phase = 'initializing';
 let server = null;
 const serverLogs = { stdout: '', stderr: '' };
 const browserLogs = [];
+const browserLifecycleEvents = [];
 const emittedBrowserProgressKeys = new Set();
 const lastTrustworthyEvidence = {};
 
@@ -411,6 +412,37 @@ function emitSharpBrowserProgress(text) {
   return event;
 }
 
+function recordBrowserLifecycleEvent(type, extra = {}) {
+  browserLifecycleEvents.push({
+    type,
+    at: new Date().toISOString(),
+    phase,
+    ...extra,
+  });
+}
+
+function serializeErrorDetails(error, depth = 0) {
+  if (!error || depth > 3) return error ? { message: String(error) } : null;
+  const details = {
+    name: error.name || null,
+    message: error.message || String(error),
+    stack: error.stack || null,
+  };
+  if (error.cause) details.cause = serializeErrorDetails(error.cause, depth + 1);
+  return details;
+}
+
+function classifyUnderlyingErrorCause(error) {
+  const details = serializeErrorDetails(error);
+  const joined = JSON.stringify(details || {});
+  if (/\\bTimeoutError\\b|\\btimeout\\b|ms exceeded/i.test(joined)) return 'wait-timeout';
+  if (/target closed|session closed|browser has disconnected|detached frame|frame detached/i.test(joined)) return 'browser-target-closed';
+  if (/Protocol error|Runtime\\.callFunctionOn|Execution context/i.test(joined)) return 'browser-protocol-error';
+  if (/WebGPU device lost|GPU device lost|uncaptured|out of memory|oom|allocation/i.test(joined)) return 'webgpu-device-or-memory-error';
+  if (/Request failed/i.test(joined)) return 'browser-request-failure';
+  return 'unknown';
+}
+
 const SHARP_BROWSER_MILESTONE_PATTERN = /\[(SPN|Monodepth|Gaussian|Compose)\]|Loaded \d+ tensors from SHARP weight file/;
 
 function lastSharpBrowserMilestone() {
@@ -425,13 +457,18 @@ function classifySharpWaitFailure(error) {
   const lastBrowserMilestone = lastSharpBrowserMilestone();
   const lastText = lastBrowserMilestone?.text || '';
   const browserLogTail = browserLogs.slice(-20);
+  const errorDetails = serializeErrorDetails(error);
+  const errorCauseClassification = classifyUnderlyingErrorCause(error);
   const base = {
     schema: 'kaminos.sharp-webgpu-adapter-failure.v0',
     phase,
     error: error?.message || String(error),
+    errorDetails,
+    errorCauseClassification,
     requestedScheduler,
     lastBrowserMilestone,
     browserLogTail,
+    browserLifecycleTail: browserLifecycleEvents.slice(-20),
     operatorHint: 'Try Run friendly next; it gives SHARP more browser and GPU breathing room while keeping this failure report honest.',
   };
   if (/\[Monodepth\] Output disparity/.test(lastText)) {
@@ -506,6 +543,7 @@ function reportBase(extra = {}) {
       stderrTail: serverLogs.stderr.slice(-4000),
     },
     browserLogs: browserLogs.slice(-80),
+    browserLifecycleEvents: browserLifecycleEvents.slice(-80),
     ...extra,
   };
 }
@@ -522,6 +560,7 @@ function fail(error, extra = {}) {
   writeReport({
     ok: false,
     error: error?.message || String(error),
+    errorDetails: serializeErrorDetails(error),
     ...(failure ? { failure } : {}),
     lastTrustworthyEvidence: {
       ...lastTrustworthyEvidence,
@@ -834,6 +873,9 @@ async function runBrowserInference() {
     ],
     defaultViewport: { width: 1280, height: 900 },
   });
+  browser.on('disconnected', () => {
+    recordBrowserLifecycleEvent('browser-disconnected');
+  });
 
   try {
     const page = await browser.newPage();
@@ -843,6 +885,26 @@ async function runBrowserInference() {
       emitSharpBrowserProgress(text);
     });
     page.on('pageerror', error => browserLogs.push({ type: 'pageerror', text: error?.message || String(error) }));
+    page.on('error', error => {
+      const text = error?.message || String(error);
+      browserLogs.push({ type: 'page-error', text });
+      recordBrowserLifecycleEvent('page-error', { error: serializeErrorDetails(error) });
+    });
+    page.on('close', () => {
+      recordBrowserLifecycleEvent('page-close');
+    });
+    page.on('requestfailed', request => {
+      const failure = request.failure();
+      const url = request.url();
+      const text = `Request failed: ${failure?.errorText || 'unknown'} ${url}`;
+      browserLogs.push({ type: 'requestfailed', text });
+      recordBrowserLifecycleEvent('requestfailed', {
+        url,
+        method: request.method(),
+        resourceType: request.resourceType(),
+        errorText: failure?.errorText || null,
+      });
+    });
 
     const session = await page.target().createCDPSession();
     await session.send('Browser.setDownloadBehavior', {
