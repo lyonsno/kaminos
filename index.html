@@ -2266,6 +2266,7 @@ let hybridSplatOverlayState = {
   sceneContextAccepted: false,
   sceneContextTelemetry: null,
   rendererControlsTelemetry: null,
+  moduleIdentity: null,
   frameCount: 0,
 };
 
@@ -2393,6 +2394,7 @@ function hybridSplatOverlayDebugState() {
     sceneContextAccepted: hybridSplatOverlayState.sceneContextAccepted,
     sceneContextTelemetry: hybridSplatOverlayState.sceneContextTelemetry,
     rendererControlsTelemetry: hybridSplatOverlayState.rendererControlsTelemetry,
+    moduleIdentity: hybridSplatOverlayState.moduleIdentity,
     lastSceneContext: hybridSplatOverlayState.lastSceneContext,
     lastFrame: hybridSplatOverlayState.lastFrame,
   };
@@ -2473,6 +2475,7 @@ function setHybridSplatOverlayModuleUrl(url, options = {}) {
   if (nextUrl !== hybridSplatOverlayState.moduleUrl) {
     hybridSplatOverlayState.moduleUrl = nextUrl;
     hybridSplatOverlayState.module = null;
+    hybridSplatOverlayState.moduleIdentity = null;
   }
   if (persist) localStorage.setItem('kaminosHybridSplatOverlayModuleUrl', hybridSplatOverlayState.moduleUrl);
   updateHybridSplatOverlayPanel(selectedSceneObjectEntry());
@@ -2894,15 +2897,86 @@ function splatRawAssetToPreviewMatrix(record) {
   };
 }
 
+function hybridSplatOverlayModuleContentIsJavascript(contentType = '', moduleUrl = '') {
+  const normalized = String(contentType || '').toLowerCase();
+  if (normalized.includes('javascript') || normalized.includes('ecmascript') || normalized.includes('typescript')) return true;
+  if (!normalized && /\.(mjs|js|ts)(?:[?#].*)?$/i.test(moduleUrl)) return true;
+  return false;
+}
+
+async function resolveHybridSplatOverlayModuleIdentity(moduleUrl = hybridSplatOverlayModuleUrl()) {
+  const identity = {
+    schema: 'kaminos.hybrid-renderer.module-identity.v0',
+    moduleUrl,
+    status: 'checking',
+    fetchedAt: new Date().toISOString(),
+    httpStatus: null,
+    contentType: null,
+    responseStart: null,
+    error: null,
+  };
+  hybridSplatOverlayState.moduleIdentity = identity;
+  window._kaminosDirty?.();
+  try {
+    const response = await fetch(moduleUrl, {
+      cache: 'no-store',
+      mode: 'cors',
+      credentials: 'omit',
+    });
+    identity.httpStatus = response.status;
+    identity.contentType = response.headers.get('content-type') || '';
+    if (!response.ok) {
+      throw new Error(`${moduleUrl} returned HTTP ${response.status}; expected JavaScript module`);
+    }
+    if (!hybridSplatOverlayModuleContentIsJavascript(identity.contentType, moduleUrl)) {
+      const text = await response.text().catch(() => '');
+      identity.responseStart = text.slice(0, 160);
+      throw new Error(`${moduleUrl} returned content-type ${identity.contentType || 'unknown'}; expected JavaScript module`);
+    }
+    identity.status = 'resolved';
+    identity.resolvedAt = new Date().toISOString();
+    hybridSplatOverlayState.moduleIdentity = identity;
+    window._kaminosDirty?.();
+    return identity;
+  } catch (error) {
+    identity.status = 'failed';
+    identity.error = `Hybrid Renderer module unavailable: ${error.message || error}`;
+    identity.failedAt = new Date().toISOString();
+    hybridSplatOverlayState.moduleIdentity = identity;
+    window._kaminosDirty?.();
+    throw new Error(identity.error);
+  }
+}
+
 async function loadHybridSplatOverlayModule() {
   const moduleUrl = hybridSplatOverlayModuleUrl();
   if (hybridSplatOverlayState.module && hybridSplatOverlayState.moduleUrl === moduleUrl) {
     return hybridSplatOverlayState.module;
   }
-  const loaded = await import(moduleUrl);
-  if (typeof loaded.createSplatOverlay !== 'function') {
-    throw new Error('Hybrid overlay module did not export createSplatOverlay');
+  const identity = await resolveHybridSplatOverlayModuleIdentity(moduleUrl);
+  let loaded = null;
+  try {
+    loaded = await import(moduleUrl);
+  } catch (error) {
+    identity.status = 'failed';
+    identity.error = `Hybrid Renderer module unavailable: dynamic import failed for ${moduleUrl}: ${error.message || error}`;
+    identity.failedAt = new Date().toISOString();
+    hybridSplatOverlayState.moduleIdentity = identity;
+    window._kaminosDirty?.();
+    throw new Error(identity.error);
   }
+  if (typeof loaded.createSplatOverlay !== 'function') {
+    identity.status = 'failed';
+    identity.error = 'Hybrid Renderer module unavailable: module did not export createSplatOverlay';
+    identity.failedAt = new Date().toISOString();
+    hybridSplatOverlayState.moduleIdentity = identity;
+    window._kaminosDirty?.();
+    throw new Error(identity.error);
+  }
+  identity.status = 'loaded';
+  identity.loadedAt = new Date().toISOString();
+  identity.exports = Object.keys(loaded).sort();
+  hybridSplatOverlayState.moduleIdentity = identity;
   hybridSplatOverlayState.module = loaded;
   hybridSplatOverlayState.moduleUrl = moduleUrl;
   return loaded;
@@ -3068,7 +3142,9 @@ async function startSelectedSplatHybridRenderer() {
   } catch (error) {
     setHybridSplatOverlayStatus('error', error);
     setInfo(`Hybrid renderer overlay failed: ${error.message}`);
-    throw error;
+    buildRenderHandoffV0(entry);
+    window._kaminosDirty?.();
+    return hybridSplatOverlayDebugState();
   }
 }
 
@@ -4453,6 +4529,7 @@ window.resetSelectedSplatCorrection = resetSelectedSplatCorrection;
 window.kaminosHybridSplatOverlayDebugState = hybridSplatOverlayDebugState;
 window.kaminosHybridSplatOverlayProjectionProbe = () => hybridSplatOverlayProjectionProbe();
 window.kaminosSetHybridSplatOverlayModuleUrl = setHybridSplatOverlayModuleUrl;
+window.kaminosHybridSplatRendererModuleDebugState = () => hybridSplatOverlayState.moduleIdentity;
 window.kaminosHybridSplatRendererControlsDebugState = () => hybridSplatOverlayState.rendererControlsTelemetry;
 window.kaminosPublishHybridSplatRendererControls = publishHybridSplatRendererControls;
 window.toggleHybridSplatViewportRenderer = toggleHybridSplatViewportRenderer;

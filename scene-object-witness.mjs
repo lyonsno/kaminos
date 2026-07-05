@@ -254,6 +254,77 @@ async function runSplatAssetLinkScenario(ws) {
   `, { timeoutMs: 45000 });
 }
 
+async function runHybridRendererModuleWrongServerScenario(ws) {
+  phase = 'scenario-hybrid-renderer-module-wrong-server';
+  lastEvidence.hybridRendererModuleWrongServer = await evaluate(ws, `
+    (async () => {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      const waitForLinkedSplat = async () => {
+        for (let i = 0; i < 160; i++) {
+          const state = window.kaminosAssetSmokeLinkDebugState?.();
+          const objects = window.kaminosSceneObjectDebugState?.() || [];
+          const object = state?.registeredObjectId
+            ? objects.find(record => record.id === state.registeredObjectId)
+            : objects.find(record => record.type === 'splat');
+          if (object?.type === 'splat') return { state, object, objects };
+          if (state?.status === 'failed') {
+            throw new Error('wrong-server module witness could not load splat route first: ' + JSON.stringify(state));
+          }
+          await wait(125);
+        }
+        return {
+          state: window.kaminosAssetSmokeLinkDebugState?.() || null,
+          object: (window.kaminosSceneObjectDebugState?.() || []).find(record => record.type === 'splat') || null,
+          objects: window.kaminosSceneObjectDebugState?.() || [],
+        };
+      };
+      const linked = await waitForLinkedSplat();
+      if (!linked.object?.id) {
+        throw new Error('wrong-server module witness did not start from a loaded splat: ' + JSON.stringify(linked));
+      }
+      window.selectSceneObject?.(linked.object.id);
+      await wait(100);
+      const wrongModuleUrl = new URL('/', location.href).href;
+      window.kaminosSetHybridSplatOverlayModuleUrl?.(wrongModuleUrl);
+      let startResult = null;
+      let thrown = null;
+      try {
+        startResult = await window.startSelectedSplatHybridRenderer?.();
+      } catch (error) {
+        thrown = String(error?.message || error);
+      }
+      await wait(400);
+      const overlayDebug = window.kaminosHybridSplatOverlayDebugState?.() || null;
+      const moduleDebug = window.kaminosHybridSplatRendererModuleDebugState?.() || null;
+      const info = document.getElementById('info-bar')?.textContent?.trim() || null;
+      return {
+        linked,
+        wrongModuleUrl,
+        startResult,
+        thrown,
+        overlayDebug,
+        moduleDebug,
+        info,
+      };
+    })()
+  `, { timeoutMs: 45000 });
+  const evidence = lastEvidence.hybridRendererModuleWrongServer;
+  if (evidence.thrown) {
+    throw new Error(`wrong-server module leaked an uncaught exception: ${evidence.thrown}`);
+  }
+  const message = `${evidence.overlayDebug?.error || ''} ${evidence.moduleDebug?.error || ''} ${evidence.info || ''}`;
+  if (evidence.overlayDebug?.status !== 'error'
+      || evidence.moduleDebug?.status !== 'failed'
+      || !/Hybrid Renderer module unavailable/.test(message)
+      || !/expected JavaScript module/.test(message)) {
+    throw new Error(`wrong-server module did not fail with renderer module diagnostics: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.moduleDebug?.moduleUrl !== evidence.wrongModuleUrl
+      || evidence.moduleDebug?.contentType?.includes('html') !== true) {
+    throw new Error(`wrong-server module diagnostics did not preserve effective HTML response identity: ${JSON.stringify(evidence)}`);
+  }
+}
+
 async function runImageAssetLinkScenario(ws) {
   phase = 'scenario-image-asset-link';
   lastEvidence.imageAssetLink = await evaluate(ws, `
@@ -4948,6 +5019,8 @@ try {
     await runMeshAssetLinkScenario(ws);
   } else if (scenario === 'splat-asset-link') {
     await runSplatAssetLinkScenario(ws);
+  } else if (scenario === 'hybrid-renderer-module-wrong-server') {
+    await runHybridRendererModuleWrongServerScenario(ws);
   } else if (scenario === 'image-asset-link') {
     await runImageAssetLinkScenario(ws);
   } else if (scenario === 'forge-host-smoke-offers') {

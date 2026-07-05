@@ -226,6 +226,9 @@ assert.match(witness, /real hybrid splat overlay canvas has no visible geometry/
 assert.match(witness, /real-hybrid-cropped-unsupported-guard/, 'Real Hybrid Renderer witness covers cropped assets when renderer crop is unsupported');
 assert.match(witness, /uncropped expensive renderer start/, 'Real Hybrid Renderer witness rejects starting an uncropped full renderer for cropped splats');
 assert.match(witness, /real-hybrid-cropped-supported-overlay/, 'Real Hybrid Renderer witness covers cropped assets when renderer advertises crop support');
+assert.match(witness, /hybrid-renderer-module-wrong-server/, 'Hybrid Renderer witness covers wrong-server module URLs that return the Kaminos app shell instead of a renderer module');
+assert.match(witness, /wrong-server module did not fail with renderer module diagnostics/, 'Hybrid Renderer wrong-server witness requires clean module diagnostics instead of an uncaught dynamic import crash');
+assert.match(witness, /kaminosHybridSplatRendererModuleDebugState/, 'Hybrid Renderer wrong-server witness reads effective module identity from the browser debug surface');
 assert.match(witness, /crop-capable renderer did not render the corrected cropped splat/, 'Real Hybrid Renderer witness requires corrected cropped splats to reach the overlay');
 assert.match(witness, /cropped hybrid overlay did not report renderer-side crop application/, 'Real Hybrid Renderer witness requires renderer-side crop telemetry before trusting cropped overlays');
 assert.match(witness, /cropped hybrid overlay lost scene-context acceptance/, 'Real Hybrid Renderer witness keeps cropped overlay acceptance tied to scene-context telemetry');

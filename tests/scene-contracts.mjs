@@ -315,6 +315,11 @@ assert.match(index, /const DEFAULT_HYBRID_SPLAT_OVERLAY_MODULE_URL/, 'Hybrid Ren
 assert.match(index, /async function initializeHybridSplatOverlayModuleUrl\(/, 'Hybrid Renderer module URL initializes from runtime config before operator smoke');
 assert.match(index, /\/api\/runtime-config/, 'Hybrid Renderer module URL can be populated by the Kaminos dev server');
 assert.match(index, /hybrid_splat_overlay_module_url/, 'Hybrid Renderer module URL can be carried by a smoke URL parameter instead of manual paste');
+assert.match(index, /async function resolveHybridSplatOverlayModuleIdentity\(/, 'Hybrid Renderer module loading preflights the effective module URL before dynamic import');
+assert.match(index, /kaminos\.hybrid-renderer\.module-identity\.v0/, 'Hybrid Renderer module preflight records schema identity for wrong-server diagnostics');
+assert.match(index, /Hybrid Renderer module unavailable/, 'Hybrid Renderer module preflight fails loud with operator-visible unavailable-module copy');
+assert.match(index, /expected JavaScript module/, 'Hybrid Renderer module preflight rejects HTML/app-shell responses instead of passing them to dynamic import');
+assert.match(index, /window\.kaminosHybridSplatRendererModuleDebugState/, 'browser witnesses can inspect effective Hybrid Renderer module identity without DOM inference');
 assert.match(index, /async function startSelectedSplatHybridRenderer\(/, 'selected splats can start the Hybrid Mesh Splat Renderer overlay from the UI');
 assert.match(index, /function updateHybridSplatOverlayFrame\(/, 'Hybrid Renderer overlay receives per-frame camera/object matrices from Kaminos');
 assert.match(index, /function prepareHybridSplatOverlayHost\(/, 'Hybrid Renderer overlay host layout is stamped inline before external modules can mutate it');
