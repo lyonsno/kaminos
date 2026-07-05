@@ -8,6 +8,9 @@ assert.match(index, /decodeHillMotionAffordancePacket/, 'browser imports the Hil
 assert.match(index, /createMotionRoutePlanFromTerrainAffordance/, 'browser imports the Hill terrain route planner');
 assert.match(index, /function createMotionPanelHillAffordancePathWorld/, 'browser can convert a Hill route plan into a Path World route');
 assert.match(index, /window\.kaminosPreviewHillMotionAffordanceRoutePlan/, 'browser exposes a scriptable Hill route preview entrypoint');
+assert.match(index, /previewHillMotionAffordanceRouteFromParams/, 'browser can auto-load a Hill route from smoke URL params');
+assert.match(index, /kaminos_hill_affordance_packet/, 'browser supports a Hill packet URL param for operator smoke links');
+assert.match(index, /kaminos_hill_affordance_data/, 'browser supports a Hill data URL param for operator smoke links');
 assert.match(index, /terrain-affordance-route-plan/, 'Path World evidence names terrain affordance route authority');
 assert.match(index, /hill-motion-affordance-grid/, 'Path World evidence preserves Hill grid route source identity');
 assert.match(index, /pathWorldRoutePlan/, 'Path World debug exposes the route plan evidence');

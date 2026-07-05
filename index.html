@@ -8451,6 +8451,23 @@ async function exportMotionPanelSelectedClipletFilmstrip() {
 }
 window.exportMotionPanelSelectedClipletFilmstrip = exportMotionPanelSelectedClipletFilmstrip;
 
+async function previewHillMotionAffordanceRouteFromParams(params = new URLSearchParams(window.location.search)) {
+  const packetUrl = params.get('kaminos_hill_affordance_packet');
+  const dataUrl = params.get('kaminos_hill_affordance_data');
+  if (!packetUrl && !dataUrl) return null;
+  if (!packetUrl || !dataUrl) throw new Error('Hill route smoke requires both kaminos_hill_affordance_packet and kaminos_hill_affordance_data');
+  const [packetResponse, dataResponse] = await Promise.all([
+    fetch(packetUrl, { cache: 'no-store' }),
+    fetch(dataUrl, { cache: 'no-store' }),
+  ]);
+  if (!packetResponse.ok) throw new Error(`Hill packet fetch failed: ${packetResponse.status} ${packetUrl}`);
+  if (!dataResponse.ok) throw new Error(`Hill data fetch failed: ${dataResponse.status} ${dataUrl}`);
+  const [packet, data] = await Promise.all([packetResponse.json(), dataResponse.json()]);
+  return window.kaminosPreviewHillMotionAffordanceRoutePlan(packet, data, {
+    id: params.get('kaminos_hill_affordance_id') || 'url-hill-motion-affordance-route',
+  });
+}
+
 function initKaminosMotionAgencyRoute() {
   renderMotionPhraseControlPresets();
   wireMotionPanelSlider('motion-panel-duration', 's');
@@ -8512,14 +8529,21 @@ function initKaminosMotionAgencyRoute() {
     });
   }
   const params = new URLSearchParams(window.location.search);
-  if (params.has('kaminos_motion_agency') || params.has('kaminos_motion_phrase') || params.has('kaminos_motion_phrase_controls') || params.has('kaminos_motion_tracks') || params.has('kaminos_generated_motion_track') || params.has('kaminos_motion_output_map') || params.has('kaminos_generated_pose_temporal') || params.has('kaminos_motion_panel_temporal_fixture')) {
+  const hasHillAffordanceRoute = params.has('kaminos_hill_affordance_packet') || params.has('kaminos_hill_affordance_data');
+  const loadHillAffordanceRoute = () => hasHillAffordanceRoute
+    ? previewHillMotionAffordanceRouteFromParams(params).catch(error => {
+      setMotionPanelTemporalStatus(`Hill route load failed: ${error.message}`, '#ef5350');
+      throw error;
+    })
+    : null;
+  if (params.has('kaminos_motion_agency') || params.has('kaminos_motion_phrase') || params.has('kaminos_motion_phrase_controls') || params.has('kaminos_motion_tracks') || params.has('kaminos_generated_motion_track') || params.has('kaminos_motion_output_map') || params.has('kaminos_generated_pose_temporal') || params.has('kaminos_motion_panel_temporal_fixture') || hasHillAffordanceRoute) {
     document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === 'motion'));
     document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id === 'tab-motion'));
     void loadDurableMotionPanelTakes({ silent: true }).catch(error => {
       setMotionPanelTemporalStatus(`Saved takes unavailable: ${error.message}`, '#f0b85a');
     });
-    if (params.has('kaminos_motion_panel_temporal_fixture')) void previewMotionPanelTemporalFixture();
-    else if (params.has('kaminos_generated_pose_temporal')) void createGeneratedPoseTemporalScene();
+    if (params.has('kaminos_motion_panel_temporal_fixture')) void previewMotionPanelTemporalFixture().then(loadHillAffordanceRoute);
+    else if (params.has('kaminos_generated_pose_temporal') || hasHillAffordanceRoute) void createGeneratedPoseTemporalScene().then(loadHillAffordanceRoute);
     else if (params.has('kaminos_motion_output_map')) createGeneratedPoseOutputMapScene();
     else if (params.has('kaminos_generated_motion_track')) createGeneratedMotionTrackHarnessScene();
     else if (params.has('kaminos_motion_tracks')) createMotionTrackHarnessScene();
