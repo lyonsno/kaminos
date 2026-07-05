@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from 'node:fs';
 
 const root = new URL('..', import.meta.url).pathname;
 const core = readFileSync(`${root}/volume-core.js`, 'utf8');
+const html = readFileSync(`${root}/index.html`, 'utf8');
 const exporterPath = `${root}/volume-residual-browser-export.py`;
 
 assert.equal(
@@ -68,4 +69,9 @@ assert.match(
   core,
   /GPUTextureUsage\.TEXTURE_BINDING/,
   'volume runtime frame texture must be sampleable by the residual postprocess',
+);
+assert.match(
+  html,
+  /id="volume-render-scale"[^>]*step="any"/,
+  'volume render scale route/control must not snap arbitrary low render scales such as 0.18 to coarse UI increments',
 );
