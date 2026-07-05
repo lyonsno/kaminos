@@ -29,6 +29,7 @@ ROUTE_CONTROLS_CONDITIONING_IDENTITY = "route-controls-v0"
 ROUTE_CONTROLS_REPLAY_CONDITIONING_IDENTITY = "route-controls-replay-v0"
 RANDOM_TILE_PAIR_SPLIT_IDENTITY = "random-tile-pair-v0"
 REPLAY_BALANCED_TILE_PAIR_SPLIT_IDENTITY = "replay-balanced-tile-pair-v0"
+SPATIAL_BIN_HOLDOUT_SPLIT_IDENTITY = "holdout-spatial-bin-list-v0"
 MODEL_IDENTITY = AFFINE_MODEL_IDENTITY
 BACKEND = "numpy"
 ROUTE_CONTROL_CHANNELS = [
@@ -192,6 +193,11 @@ def parse_args() -> argparse.Namespace:
         help="Train on all other deterministic replay states and test on this replayStateIdentity.",
     )
     parser.add_argument(
+        "--holdout-spatial-bin-list",
+        default=None,
+        help="Comma-separated spatialBinId list to hold out for region generalization probes.",
+    )
+    parser.add_argument(
         "--include-replay-state-list",
         default=None,
         help="Comma-separated replayStateIdentity list to include before train/test splitting; excluded replay states remain reported.",
@@ -310,6 +316,7 @@ def base_report(args: argparse.Namespace) -> dict[str, Any]:
             "holdoutRouteVariant": args.holdout_route_variant,
             "holdoutRouteVariantList": args.holdout_route_variant_list,
             "holdoutReplayState": args.holdout_replay_state,
+            "holdoutSpatialBinList": args.holdout_spatial_bin_list,
             "includeReplayStateList": args.include_replay_state_list,
             "routeConditioning": args.route_conditioning,
             "targetChannelList": args.target_channel_list,
@@ -437,6 +444,10 @@ def replay_for_pair(pair: dict[str, Any]) -> dict[str, Any]:
 
 
 def parse_holdout_route_variant_list(raw_value: str | None) -> list[str]:
+    return parse_csv_unique(raw_value)
+
+
+def parse_holdout_spatial_bin_list(raw_value: str | None) -> list[str]:
     return parse_csv_unique(raw_value)
 
 
@@ -700,9 +711,10 @@ def split_matches(matches: list[dict[str, Any]], args: argparse.Namespace) -> tu
     if len(matches) < 2:
         raise ProbeFailure("split", "at least two usable tile pairs are required for a held-out split", {"usableTilePairs": len(matches)})
     holdout_route_variants = parse_holdout_route_variant_list(args.holdout_route_variant_list)
+    holdout_spatial_bins = parse_holdout_spatial_bin_list(args.holdout_spatial_bin_list)
     requested_holdout_axes = sum(
         1
-        for value in [args.holdout_route_variant, args.holdout_replay_state, holdout_route_variants]
+        for value in [args.holdout_route_variant, args.holdout_replay_state, holdout_route_variants, holdout_spatial_bins]
         if bool(value)
     )
     if requested_holdout_axes > 1:
@@ -713,6 +725,7 @@ def split_matches(matches: list[dict[str, Any]], args: argparse.Namespace) -> tu
                 "holdoutRouteVariant": args.holdout_route_variant,
                 "holdoutRouteVariantList": holdout_route_variants,
                 "holdoutReplayState": args.holdout_replay_state,
+                "holdoutSpatialBinList": holdout_spatial_bins,
             },
         )
     if holdout_route_variants:
@@ -783,6 +796,79 @@ def split_matches(matches: list[dict[str, Any]], args: argparse.Namespace) -> tu
             "holdoutValue": holdout,
             "trainFraction": None,
             "seed": None,
+        }
+    if holdout_spatial_bins:
+        holdout = set(holdout_spatial_bins)
+        available_counts: dict[str, int] = {}
+        ambiguous_matches: list[dict[str, Any]] = []
+        for index, match in enumerate(matches):
+            low_bin = match.get("lowSpatialBinId")
+            high_bin = match.get("highSpatialBinId")
+            if low_bin != high_bin:
+                ambiguous_matches.append({
+                    "index": index,
+                    "pairId": match.get("pairId"),
+                    "matchId": match.get("matchId"),
+                    "lowSpatialBinId": low_bin,
+                    "highSpatialBinId": high_bin,
+                })
+                continue
+            spatial_bin = str(low_bin or "unknown-spatial-bin")
+            available_counts[spatial_bin] = available_counts.get(spatial_bin, 0) + 1
+        if ambiguous_matches:
+            raise ProbeFailure(
+                "split",
+                "spatial-bin holdout requires matches with identical low/high spatial bins",
+                {
+                    "splitStrategy": SPATIAL_BIN_HOLDOUT_SPLIT_IDENTITY,
+                    "holdoutSpatialBinList": holdout_spatial_bins,
+                    "ambiguousMatches": ambiguous_matches,
+                },
+            )
+        test = [
+            index
+            for index, match in enumerate(matches)
+            if str(match.get("lowSpatialBinId") or "unknown-spatial-bin") in holdout
+        ]
+        train = [
+            index
+            for index, match in enumerate(matches)
+            if str(match.get("lowSpatialBinId") or "unknown-spatial-bin") not in holdout
+        ]
+        if not train or not test:
+            raise ProbeFailure(
+                "split",
+                "spatial-bin holdout requires at least one train and one test tile pair",
+                {
+                    "holdoutSpatialBinList": holdout_spatial_bins,
+                    "usableTilePairs": len(matches),
+                    "availableSpatialBinCounts": dict(sorted(available_counts.items())),
+                    "trainTilePairs": len(train),
+                    "testTilePairs": len(test),
+                },
+            )
+        train_counts: dict[str, int] = {}
+        test_counts: dict[str, int] = {}
+        for index in train:
+            spatial_bin = str(matches[index].get("lowSpatialBinId") or "unknown-spatial-bin")
+            train_counts[spatial_bin] = train_counts.get(spatial_bin, 0) + 1
+        for index in test:
+            spatial_bin = str(matches[index].get("lowSpatialBinId") or "unknown-spatial-bin")
+            test_counts[spatial_bin] = test_counts.get(spatial_bin, 0) + 1
+        return train, test, {
+            "splitStrategy": SPATIAL_BIN_HOLDOUT_SPLIT_IDENTITY,
+            "holdoutAxis": "spatialBinId[]",
+            "holdoutValue": holdout_spatial_bins,
+            "trainFraction": None,
+            "seed": None,
+            "spatialBinHoldoutPolicy": {
+                "identity": "same-spatial-bin-region-holdout-v0",
+                "requestedSpatialBinIds": holdout_spatial_bins,
+                "availableSpatialBinCounts": dict(sorted(available_counts.items())),
+                "trainSpatialBinCounts": dict(sorted(train_counts.items())),
+                "testSpatialBinCounts": dict(sorted(test_counts.items())),
+                "limitation": "Spatial-bin holdout uses selected exported tile bin ids; it is a region-generalization diagnostic, not full-volume spatial coverage.",
+            },
         }
     fraction = min(0.95, max(0.05, float(args.train_fraction)))
     if args.split_strategy == REPLAY_BALANCED_TILE_PAIR_SPLIT_IDENTITY:

@@ -1661,6 +1661,9 @@ assert.match(fieldResidualProbe, /independentTargetHeads/, 'field residual probe
 assert.match(fieldResidualProbe, /--holdout-route-variant/, 'field residual probe can hold out a named route variant instead of only random tile pairs');
 assert.match(fieldResidualProbe, /--holdout-route-variant-list/, 'field residual probe can hold out a named family of route variants for stricter generalization probes');
 assert.match(fieldResidualProbe, /--holdout-replay-state/, 'field residual probe can hold out a named deterministic replay state instead of only random tile pairs');
+assert.match(fieldResidualProbe, /--holdout-spatial-bin-list/, 'field residual probe can hold out named spatial bins for region generalization probes');
+assert.match(fieldResidualProbe, /holdout-spatial-bin-list-v0/, 'field residual probe names spatial-bin holdout split identity');
+assert.match(fieldResidualProbe, /availableSpatialBinCounts/, 'field residual probe reports spatial-bin split support counts');
 assert.match(fieldResidualProbe, /splitStrategy/, 'field residual probe reports whether the train/test split was random, route-held-out, or replay-held-out');
 assert.match(fieldResidualProbe, /--split-strategy/, 'field residual probe exposes train/test split strategy as an explicit run control');
 assert.match(fieldResidualProbe, /replay-balanced-tile-pair-v0/, 'field residual probe can balance random-style splits across replay states');
