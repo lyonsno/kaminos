@@ -11,7 +11,7 @@ const MAX_EXTERNAL_EMITTERS = 32;
 const EXTERNAL_EMITTER_COMPONENTS = 20;
 const BRICK_WALL_GPU_WASH_IDENTITY = 'volume-gpu-brick-wall-wash-v0';
 const BRICK_WALL_GPU_WASH_AUTHORITY = 'webgpu-fragment-live-fire-wall-wash-v0';
-const BRICK_WALL_GPU_WASH_SOURCE = 'fragment-shader-live-fire-accumulation-v0';
+const BRICK_WALL_GPU_WASH_SOURCE = 'fragment-shader-live-fire-accumulation-plus-route-proxy-v0';
 const DEFAULT_VOLUME_SCENE = 'compact_plume';
 const SUPPORTED_VOLUME_SCENES = new Set([DEFAULT_VOLUME_SCENE, 'canonical_plume', 'tall_plume', 'preheat_plume', 'bonfire_plume']);
 const CANONICAL_SOURCE_MODE_VALUES = {
@@ -3964,38 +3964,65 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     clamp(0.50 + gpuWallWashCenter.x * 0.24, 0.18, 0.82),
     clamp(0.70 - gpuWallWashCenter.y * 0.28, 0.18, 0.88)
   );
+  let gpuWallWashWallLift = 0.18 + gpuWallWashExtent * 0.08;
   let gpuWallWashWallCenter = vec2<f32>(
-    clamp(gpuWallWashCenterUv.x + 0.28 + gpuWallWashExtent * 0.10, 0.30, 0.93),
-    clamp(gpuWallWashCenterUv.y - 0.02, 0.16, 0.86)
+    clamp(gpuWallWashCenterUv.x + 0.14 + gpuWallWashExtent * 0.06, 0.36, 0.82),
+    clamp(gpuWallWashCenterUv.y - gpuWallWashWallLift, 0.34, 0.74)
   );
-  let gpuWallWashWallDelta = (in.uv - gpuWallWashWallCenter) * vec2<f32>(0.30, 0.48);
+  let gpuWallWashWallDelta = (in.uv - gpuWallWashWallCenter) * vec2<f32>(0.44, 0.62);
   let gpuWallWashHotDelta = (in.uv - gpuWallWashCenterUv) * vec2<f32>(1.05, 1.32);
-  let gpuWallWashWallRadius = max(0.090, (0.62 + gpuWallWashExtent * 0.90) * brickWallGpuWashReach);
+  let gpuWallWashWallRadius = max(0.060, (0.42 + gpuWallWashExtent * 0.64) * brickWallGpuWashReach);
   let gpuWallWashCoreRadius = max(0.016, (0.070 + gpuWallWashExtent * 0.12) * brickWallGpuWashReach);
   let gpuWallWashWallLobe = exp(-dot(gpuWallWashWallDelta, gpuWallWashWallDelta) / gpuWallWashWallRadius);
   let gpuWallWashHotCore = exp(-dot(gpuWallWashHotDelta, gpuWallWashHotDelta) / gpuWallWashCoreRadius);
+  let gpuWallWashBrickFaceMask =
+    smoothstep(0.36, 0.50, in.uv.x)
+      * (1.0 - smoothstep(0.96, 1.02, in.uv.x))
+      * smoothstep(0.18, 0.30, in.uv.y)
+      * (1.0 - smoothstep(0.82, 0.94, in.uv.y));
+  let gpuWallWashBrickSplashCenter = vec2<f32>(
+    clamp(max(gpuWallWashWallCenter.x, gpuWallWashCenterUv.x + 0.18), 0.48, 0.78),
+    clamp(gpuWallWashWallCenter.y + 0.03, 0.38, 0.66)
+  );
+  let gpuWallWashBrickSplashDelta = (in.uv - gpuWallWashBrickSplashCenter) * vec2<f32>(1.80, 2.10);
+  let gpuWallWashBrickSplashRadius = max(0.026, (0.040 + gpuWallWashExtent * 0.070) * brickWallGpuWashReach);
+  let gpuWallWashBrickSplash = gpuWallWashBrickFaceMask
+    * exp(-dot(gpuWallWashBrickSplashDelta, gpuWallWashBrickSplashDelta) / gpuWallWashBrickSplashRadius);
+  let gpuWallWashCompositeLobe = max(gpuWallWashWallLobe * 0.62, gpuWallWashBrickSplash * 1.36);
   let gpuWallWashBrickModulation = 0.88
-    + 0.08 * sin(in.uv.y * 154.0 + gpuWallWashWallCenter.x * 7.0)
+    + 0.08 * sin(in.uv.y * 154.0 + gpuWallWashBrickSplashCenter.x * 7.0)
     + 0.04 * sin(in.uv.x * 82.0 - in.uv.y * 19.0);
   let gpuWallWashFlicker = 0.86 + 0.14 * sin(u.cameraPos_time.w * 18.7 + gpuWallWashEnergy * 7.4 + gpuWallWashCenter.x * 2.1);
-  let gpuWallWashVisibleEnergy = smoothstep(0.002, 0.052, gpuWallWashEnergy);
-  let gpuWallWashRadiantEnergy = clamp(gpuWallWashEnergy * 18.0, 0.0, 1.8);
+  let gpuWallWashVisibleEnergy = smoothstep(0.000002, 0.0018, gpuWallWashEnergy);
+  let gpuWallWashRadiantEnergy = clamp(gpuWallWashEnergy * 180.0, 0.0, 2.8);
+  let gpuWallWashPresenceEnergy = smoothstep(0.000002, 0.00016, gpuWallWashWeight);
+  let gpuWallWashRouteProxyEnergy = brickWallGpuWashEnabled * smoothstep(0.05, 0.70, brickWallGpuWashGain);
+  let gpuWallWashAccumEnergy = clamp(max(max(gpuWallWashVisibleEnergy, gpuWallWashRadiantEnergy * 0.52), gpuWallWashPresenceEnergy * 0.86), 0.0, 1.9);
+  let gpuWallWashLiveEnergy = clamp(max(gpuWallWashAccumEnergy, gpuWallWashRouteProxyEnergy * 0.16), 0.0, 1.9);
   let gpuWallWashSignal = clamp(
-    (gpuWallWashVisibleEnergy * 0.58 + gpuWallWashRadiantEnergy * 0.44)
+    (gpuWallWashAccumEnergy * 0.68 + gpuWallWashRadiantEnergy * 0.50)
       * brickWallGpuWashGain
-      * (gpuWallWashWallLobe * 1.36 + gpuWallWashHotCore * 0.14)
+      * (gpuWallWashCompositeLobe * 1.52 + gpuWallWashHotCore * 0.10)
       * gpuWallWashFlicker
       * clamp(gpuWallWashBrickModulation, 0.72, 1.05),
     0.0,
-    4.4
+    5.8
   );
-  let gpuWallWashBackdropFloor = gpuWallWashVisibleEnergy * gpuWallWashWallLobe * (0.34 + brickWallGpuWashGain * 0.18);
-  let gpuWallWashBackdropStrength = 0.74;
+  let gpuWallWashBackdropFloor = gpuWallWashAccumEnergy * gpuWallWashCompositeLobe * (0.90 + brickWallGpuWashGain * 0.40);
+  let gpuWallWashBackdropStrength = 1.85;
   let gpuWallWashColor = mix(vec3<f32>(1.0, 0.34, 0.075), vec3<f32>(1.0, 0.69, 0.26), clamp(gpuWallWashRadiantEnergy * 0.72, 0.0, 1.0));
-  color = color + gpuWallWashColor * (gpuWallWashSignal * gpuWallWashBackdropStrength + gpuWallWashBackdropFloor);
-  color = mix(color, vec3<f32>(1.0, 0.22, 0.05), brickWallGpuWashDebug * smoothstep(0.005, 0.055, gpuWallWashEnergy) * 0.35);
+  let gpuWallWashDirectWallThrow = gpuWallWashBrickSplash
+    * gpuWallWashLiveEnergy
+    * brickWallGpuWashGain
+    * (0.88 + gpuWallWashFlicker * 0.34)
+    * clamp(gpuWallWashBrickModulation, 0.78, 1.08);
+  color = color + gpuWallWashColor * (gpuWallWashSignal * gpuWallWashBackdropStrength + gpuWallWashBackdropFloor)
+    + vec3<f32>(1.0, 0.36, 0.06) * gpuWallWashDirectWallThrow * 0.24;
+  color = mix(color, vec3<f32>(1.0, 0.22, 0.05), brickWallGpuWashDebug * brickWallGpuWashEnabled * smoothstep(0.16, 0.56, gpuWallWashBrickSplash) * 0.82);
   let exposed = vec3<f32>(1.0) - exp(-color * 0.96);
   var grade = exposed * (0.80 + 0.18 * vignette);
+  let gpuWallWashPostToneWallTint = clamp(gpuWallWashDirectWallThrow * 0.060, 0.0, 0.16);
+  grade = grade + vec3<f32>(1.0, 0.34, 0.07) * gpuWallWashPostToneWallTint;
   let overlay = clamp(gridAccum * u.grid_overlay_debug.x * 1.8, 0.0, 1.0);
   grade = mix(grade, vec3<f32>(0.04, 0.86, 0.98), overlay * 0.76);
   let current = pow(max(grade, vec3<f32>(0.0)), vec3<f32>(0.84));
@@ -5621,7 +5648,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       reach: gpuWallWashReach,
       routeContext: normalizeVolumeSceneContext(controlsSnapshot.volumeSceneContext),
       cpuReadbackAuthority: false,
-      supportRole: 'gpu-only-no-cpu-readback',
+      supportRole: 'gpu-only-no-cpu-readback-route-proxy-wall-tint',
     };
     state.gridOverlay = controlsSnapshot.gridOverlay || 0;
     state.lookFreeze = lookFreeze;

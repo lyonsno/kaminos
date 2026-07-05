@@ -10282,6 +10282,7 @@ let routedVolumeQualityReason = 'route-default';
 let routedVolumeFireLightProxy = 1;
 let routedVolumeFireLightGain = 1;
 let routedVolumeGpuWallWashReach = 1.15;
+let routedVolumeGpuWallWashDebug = 0;
 const DEFAULT_BONFIRE_ABLATION_CONTROLS = {
   bonfireRecenter: 1,
   bonfireLateralDamping: 1,
@@ -15010,6 +15011,7 @@ function readVolumeControls() {
     fireLightProxy: routedVolumeFireLightProxy,
     fireLightGain: routedVolumeFireLightGain,
     gpuWallWashReach: routedVolumeGpuWallWashReach,
+    gpuWallWashDebug: routedVolumeGpuWallWashDebug,
     majorantCadence: routedVolumeMajorantCadence,
     simCadence: routedVolumeSimCadence,
     pressureIterations: pressureConfig.pressureIterations,
@@ -15268,7 +15270,7 @@ const VOLUME_BRICK_WALL_FIRE_LIGHT_PROXY = Object.freeze({
 const VOLUME_BRICK_WALL_GPU_WASH = Object.freeze({
   identity: 'volume-gpu-brick-wall-wash-v0',
   authority: 'webgpu-fragment-live-fire-wall-wash-v0',
-  source: 'fragment-shader-live-fire-accumulation-v0',
+  source: 'fragment-shader-live-fire-accumulation-plus-route-proxy-v0',
   cadence: 'per-render-frame-gpu-fragment',
 });
 
@@ -15505,7 +15507,7 @@ function createVolumeBrickWallContext() {
       cadence: VOLUME_BRICK_WALL_GPU_WASH.cadence,
       enabled: false,
       cpuReadbackAuthority: false,
-      supportRole: 'gpu-only-no-cpu-readback',
+      supportRole: 'gpu-only-no-cpu-readback-route-proxy-wall-tint',
     };
     const c = lastFireLightProbe.centroid;
     group.userData.kaminosVolumeSceneContext.fireLightProxy = {
@@ -15892,6 +15894,10 @@ async function initKaminosVolumeRoute() {
   const routeGpuWallWashReach = Number(params.get('volume_gpu_wall_wash_reach'));
   if (params.has('volume_gpu_wall_wash_reach') && Number.isFinite(routeGpuWallWashReach)) {
     routedVolumeGpuWallWashReach = clampVolumeValue(routeGpuWallWashReach, 0.45, 2.6);
+  }
+  const routeGpuWallWashDebug = Number(params.get('volume_gpu_wall_wash_debug'));
+  if (params.has('volume_gpu_wall_wash_debug') && Number.isFinite(routeGpuWallWashDebug)) {
+    routedVolumeGpuWallWashDebug = clampVolumeValue(routeGpuWallWashDebug, 0, 1);
   }
   const routeResolution = parseInt(params.get('volume_resolution') || '', 10);
   if ([32, 48, 64, 96, 128, 160].includes(routeResolution)) {

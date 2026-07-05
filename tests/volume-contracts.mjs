@@ -816,12 +816,17 @@ assert.match(core, /previousViewProj/, 'temporal reprojection carries a previous
 assert.match(core, /brick_wall_gpu_wash_controls/, 'fluid uniforms carry a dedicated GPU brick-wall wash control vector');
 assert.match(core, /gpuWallWashEnergy/, 'fluid fragment shader accumulates wall-wash energy on the GPU from live fire samples');
 assert.match(core, /gpuWallWashWallLobe/, 'fluid fragment shader broadens brick-wall wash into a wall-projected lobe');
+assert.match(core, /gpuWallWashBrickFaceMask/, 'brick-wall GPU wash must include an explicit brick-face mask so the light lands on the PBR wall, not only the volume haze');
+assert.match(core, /gpuWallWashRouteProxyEnergy/, 'brick-wall GPU wash must expose the route-proxy energy used when one fragment cannot see off-ray fire brightness');
+assert.match(core, /gpuWallWashPostToneWallTint/, 'brick-wall GPU wash must include a bounded post-tonemap wall tint for visible PBR wall throw');
 assert.match(core, /gpuWallWashHotCore/, 'fluid fragment shader keeps a smaller hot core separate from the broad wall wash');
 assert.match(core, /gpuWallWashBackdropStrength/, 'fluid fragment shader must have an explicit backdrop wash strength high enough to replace the removed Three light fake');
 assert.match(index, /volume_gpu_wall_wash_reach/, 'brick-wall GPU wash reach must be route-tunable for operator smoke');
+assert.match(index, /volume_gpu_wall_wash_debug/, 'brick-wall GPU wash debug mask must be route-tunable when operator smoke cannot see the wall light');
 assert.match(core, /volume-gpu-brick-wall-wash-v0/, 'fluid debug state exposes the GPU-resident brick-wall wash identity');
 assert.match(core, /per-render-frame-gpu-fragment/, 'fluid debug state reports GPU wall-wash cadence as per fragment frame');
 assert.match(core, /cpuReadbackAuthority:\s*false/, 'GPU wall-wash debug state must not derive authority from CPU readback');
+assert.match(core, /gpu-only-no-cpu-readback-route-proxy-wall-tint/, 'GPU wall-wash debug state must disclose the route-proxy wall-tint fallback');
 assert.match(core, /temporalReprojectionUv/, 'fragment shader computes a reprojected history UV instead of sampling same-screen history only');
 assert.match(core, /temporalReprojectionConfidence/, 'fragment shader computes material/velocity confidence for temporal reprojection');
 assert.match(core, /temporalReactiveMask/, 'fragment shader rejects temporal history near reactive fire/smoke changes and skip edges');
