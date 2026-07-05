@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
 import { deflateSync, inflateSync as zlibInflateSync } from 'node:zlib';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { execFileSync, spawn } from 'node:child_process';
+import { randomInt } from 'node:crypto';
 
 const args = new Map();
 for (let i = 2; i < process.argv.length; i += 2) {
@@ -13,11 +14,11 @@ for (let i = 2; i < process.argv.length; i += 2) {
 const url = args.get('--url') || 'http://127.0.0.1:8095/?kaminos_volume_smoke=1';
 const out = resolve(args.get('--out') || '/tmp/kaminos-volume-witness.png');
 const reportPath = resolve(args.get('--report') || out.replace(/\.png$/i, '.json'));
-const port = Number(args.get('--debug-port') || 9433);
+const port = Number(args.get('--debug-port') || randomInt(42000, 62000));
 const chrome = process.env.KAMINOS_CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
-const userDataDir = args.get('--user-data-dir') || `/tmp/kaminos-volume-witness-profile-${port}`;
 const reuseBrowser = args.has('--reuse-browser');
 const keepBrowserOpen = args.has('--keep-browser-open');
+const userDataDir = args.get('--user-data-dir') || mkdtempSync('/tmp/kaminos-volume-witness-profile-');
 const settleMs = Number(args.get('--settle-ms') || 1500);
 const windowSize = args.get('--window-size') || '1280,960';
 const deterministicReplaySteps = Number(args.get('--deterministic-replay-steps') || 0);
@@ -194,6 +195,79 @@ function expectedTallPlumeTransitionBandStrategy(volumeScene) {
 
 function expectedTallPlumeTransitionBandExtraReadsPerCell() {
   return 0;
+}
+
+function finiteNumber(value, fallback = 0) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : fallback;
+}
+
+function buildPyroRawCarrierPaintEvidence(sample = {}, state = {}) {
+  const sim = sample.simReadback || {};
+  const coupling = sample.pyroMaterialRendererCoupling || state.pyroMaterialRendererCoupling || {};
+  const controls = coupling.carrierControls || {};
+  const flamePaint = finiteNumber(controls.flamePaint);
+  const stockMix = finiteNumber(controls.stockMix, 1);
+  const effectiveGain = finiteNumber(coupling.effectiveGain);
+  const liveFireAuthority = finiteNumber(coupling.liveFireAuthority);
+  const uploadedCells = finiteNumber(coupling.spatialMemory?.uploadedCells);
+  const fireLayerMean = finiteNumber(sim.fireLayerMean);
+  const heatMean = finiteNumber(sim.heatMean);
+  const reactionMean = finiteNumber(sim.reactionMean);
+  const fuelConsumptionMean = finiteNumber(sim.fuelConsumptionMean);
+  const fireLickMean = finiteNumber(sim.fireLickMean);
+  const combustionFrontMean = finiteNumber(sim.combustionFrontMean);
+  const frontTopologyMean = finiteNumber(sim.frontTopologyMean);
+  const detailMean = finiteNumber(sim.detailMean);
+  const radianceMean = finiteNumber(sim.radianceMean);
+  const rawCarrierScore =
+    heatMean +
+    reactionMean +
+    fuelConsumptionMean * 8 +
+    fireLickMean * 3 +
+    combustionFrontMean * 5 +
+    frontTopologyMean * 5 +
+    detailMean * 0.25 +
+    radianceMean * 0.5;
+  const hasLiveSpatialCoupling =
+    coupling.identity === 'pyro-material-memory-spatial-coupling-v0' &&
+    coupling.spatialMemory?.identity === 'pyro-material-memory-spatial-coupling-v0' &&
+    uploadedCells > 0 &&
+    effectiveGain > 0 &&
+    liveFireAuthority > 0.05 &&
+    coupling.materialShaderReadiness === 'sampleable-debug-only';
+  const wantsRawPaint = flamePaint > 0.05 && stockMix < 0.95;
+  const hasRawLiveCarrier = rawCarrierScore > 0.0025 && (heatMean > 0.001 || reactionMean > 0.001 || fireLickMean > 0.0002 || combustionFrontMean > 0.00003 || frontTopologyMean > 0.00003);
+  const stockFireLayerLow = fireLayerMean <= 0.0005;
+  const acceptsLowStockFireLayer = hasLiveSpatialCoupling && wantsRawPaint && hasRawLiveCarrier;
+  return {
+    identity: 'pyro-raw-carrier-paint-evidence-v0',
+    phase: stockFireLayerLow && acceptsLowStockFireLayer
+      ? 'stock-fire-layer-low-but-raw-pyro-carrier-live'
+      : (stockFireLayerLow ? 'stock-fire-layer-low-raw-pyro-carrier-unproven' : 'stock-fire-layer-present'),
+    acceptsLowStockFireLayer,
+    hasLiveSpatialCoupling,
+    wantsRawPaint,
+    hasRawLiveCarrier,
+    flamePaint,
+    stockMix,
+    effectiveGain,
+    liveFireAuthority,
+    uploadedCells,
+    materialShaderReadiness: coupling.materialShaderReadiness || null,
+    fireLayerMean,
+    rawCarrierScore,
+    carriers: {
+      heatMean,
+      reactionMean,
+      fuelConsumptionMean,
+      fireLickMean,
+      combustionFrontMean,
+      frontTopologyMean,
+      detailMean,
+      radianceMean,
+    },
+  };
 }
 
 function defaultPressureIterationsForScene(volumeScene) {
@@ -414,17 +488,17 @@ const TALL_PLUME_OPERATOR_PRESETS = {
   pyro_material_bonfire_family_0702: {
     volumeScene: 'tall_plume',
     density: 6.00,
-    fire: 3.50,
-    radiance: 2.55,
-    absorption: 1.95,
+    fire: 1.50,
+    radiance: 2.25,
+    absorption: 1.70,
     glow: 2.35,
     smoke: 2.80,
     curl: 3.65,
     microdetail: 2.50,
-    interfaceShred: 5.00,
+    interfaceShred: 4.70,
     fireLicks: 5.00,
     projection: 1.50,
-    speed: 3.45,
+    speed: 2.55,
     raySteps: 160,
     adaptiveRays: 0.05,
     occupancySkip: 0.05,
@@ -434,35 +508,35 @@ const TALL_PLUME_OPERATOR_PRESETS = {
     temporalAccum: 0.00,
     temporalJitter: 0.00,
     historyClamp: 1.00,
-    fireScale: 0.52,
-    detailScale: 1.85,
+    fireScale: 0.63,
+    detailScale: 0.45,
     plumeHeight: 1.85,
     windStrength: 1.50,
     windAngle: -65,
-    windHeight: -0.65,
-    renderScale: 0.30,
-    inputRadius: 0.20,
-    flowRate: 0.25,
-    resolution: 96,
+    windHeight: -0.80,
+    renderScale: 1.00,
+    inputRadius: 0.14,
+    flowRate: 0.30,
+    resolution: 128,
     majorantGrid: 48,
     pyroDynamicDetail: 1,
     pyroMaterialGain: 1.50,
     pyroInterfaceFocus: 0.00,
     pyroEdgeBite: 1.00,
-    pyroBiteBorder: 0.45,
-    pyroBiteTeeth: 0.60,
+    pyroBiteBorder: 0.00,
+    pyroBiteTeeth: 1.00,
     pyroBiteWake: 1.00,
-    pyroBiteHeat: 0.70,
+    pyroBiteHeat: 0.00,
     pyroBiteChroma: 0.60,
-    pyroSmokeFold: 0.35,
-    pyroFoldBorder: 1.00,
-    pyroFoldWake: 1.00,
-    pyroRadiance: 6.10,
-    pyroRadianceGate: 1.00,
-    pyroRadianceSpill: 0.90,
-    pyroRadianceWarmth: 0.75,
-    pyroRadianceHue: 0.50,
-    pyroRadianceChroma: 0.55,
+    pyroSmokeFold: 0.45,
+    pyroFoldBorder: 0.95,
+    pyroFoldWake: 0.05,
+    pyroRadiance: 10.00,
+    pyroRadianceGate: 0.10,
+    pyroRadianceSpill: 0.50,
+    pyroRadianceWarmth: 0.10,
+    pyroRadianceHue: 0.05,
+    pyroRadianceChroma: 1.00,
     pyroDiagnosticPaint: 0.00,
     pyroCarrierView: 'normal',
     pyroOverdrive: 8.00,
@@ -1612,8 +1686,15 @@ async function main() {
     if (!expectsCanonicalPlumeProof && (!Number.isFinite(sample.simReadback.detailMean) || sample.simReadback.detailMean <= 0.0005)) {
       throw new Error(`GPU sim readback does not show transported material detail: ${JSON.stringify(sample.simReadback)}`);
     }
-    if (!expectsCanonicalPlumeProof && !expectsFuelStarvedTallPlume && (!Number.isFinite(sample.simReadback.fireLayerMean) || sample.simReadback.fireLayerMean <= 0.0005)) {
-      throw new Error(`GPU sim readback does not show a transported fire layer: ${JSON.stringify(sample.simReadback)}`);
+    const pyroRawCarrierPaintEvidence = buildPyroRawCarrierPaintEvidence(sample, state);
+    const acceptsRawCarrierPyroPaint =
+      expectsPyroMaterialEvidence &&
+      pyroRawCarrierPaintEvidence.acceptsLowStockFireLayer;
+    if (!expectsCanonicalPlumeProof && !expectsFuelStarvedTallPlume && !expectsNoFireVolumeEvidence && (!Number.isFinite(sample.simReadback.fireLayerMean) || sample.simReadback.fireLayerMean <= 0.0005) && !acceptsRawCarrierPyroPaint) {
+      throw new Error(`GPU sim readback does not show a transported fire layer or raw-carrier Pyro paint evidence: ${JSON.stringify({
+        simReadback: sample.simReadback,
+        pyroRawCarrierPaintEvidence,
+      })}`);
     }
     if (!expectsCanonicalPlumeProof && !expectsFuelStarvedTallPlume && !expectsNoFireVolumeEvidence && (!Number.isFinite(sample.simReadback.radianceMean) || sample.simReadback.radianceMean <= 0.0005)) {
       throw new Error(`GPU sim readback does not show fire radiance evidence: ${JSON.stringify(sample.simReadback)}`);
@@ -2180,6 +2261,7 @@ async function main() {
       visualEvidenceMode,
       noFireEvidenceMode: expectsNoFireVolumeEvidence ? 'no-fire-volume-signal' : null,
       pyroMaterialEvidenceMode: expectsPyroMaterialEvidence ? 'pyro-material-coupled-volume-signal' : null,
+      pyroRawCarrierPaintEvidence,
       performanceVisualWarnings,
       effectiveRoute: state.effectiveRoute,
       prototypeIdentity: state.prototypeIdentity,

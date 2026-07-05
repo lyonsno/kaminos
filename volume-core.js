@@ -347,8 +347,43 @@ function clampFinite(value, min, max, fallback) {
   return Math.max(min, Math.min(max, number));
 }
 
+function pyroHexColorToRgb(value, fallback) {
+  const raw = String(value || fallback || '#ffffff').trim();
+  const normalized = /^#[0-9a-f]{6}$/i.test(raw)
+    ? raw.slice(1)
+    : (/^[0-9a-f]{6}$/i.test(raw) ? raw : String(fallback || '#ffffff').replace(/^#/, ''));
+  const safe = /^[0-9a-f]{6}$/i.test(normalized) ? normalized : 'ffffff';
+  return [
+    parseInt(safe.slice(0, 2), 16) / 255,
+    parseInt(safe.slice(2, 4), 16) / 255,
+    parseInt(safe.slice(4, 6), 16) / 255,
+  ];
+}
+
+function writePyroPaletteUniform(uniforms, offset, value, fallback) {
+  const rgb = pyroHexColorToRgb(value, fallback);
+  uniforms[offset] = rgb[0];
+  uniforms[offset + 1] = rgb[1];
+  uniforms[offset + 2] = rgb[2];
+  uniforms[offset + 3] = 1;
+}
+
 function normalizePyroDynamicDetailEnabled(value) {
   return clampFinite(value, 0, 1, 0) >= 0.5;
+}
+
+function normalizeLookFreeze(value) {
+  return clampFinite(value, 0, 1, 0) >= 0.5 ? 1 : 0;
+}
+
+function normalizePyroCompareMode(value) {
+  const mode = String(value || 'live').toLowerCase();
+  if (mode === 'base') return 'base';
+  return 'live';
+}
+
+function lookFreezeCanPin(state) {
+  return (state?.simStepCount || 0) > 0;
 }
 
 function pyroCarrierViewModeValue(value) {
@@ -356,9 +391,31 @@ function pyroCarrierViewModeValue(value) {
   if (mode === 'border') return 1;
   if (mode === 'bite') return 2;
   if (mode === 'fold') return 3;
-  if (mode === 'radiance') return 4;
-  if (mode === 'all') return 5;
+  if (mode === 'wake') return 4;
+  if (mode === 'radiance') return 5;
+  if (mode === 'all') return 6;
   return 0;
+}
+
+function pyroRadianceSourceValue(value) {
+  const mode = String(value || 'fire').toLowerCase();
+  if (mode === 'mixed') return 1;
+  if (mode === 'wake') return 2;
+  return 0;
+}
+
+function normalizePyroFireMode(value) {
+  const mode = String(value || 'hybrid').toLowerCase();
+  if (mode === 'stock') return 'stock';
+  if (mode === 'pyro-owned' || mode === 'pyro_owned' || mode === 'owned') return 'pyro-owned';
+  return 'hybrid';
+}
+
+function pyroFireModeValue(value) {
+  const mode = normalizePyroFireMode(value);
+  if (mode === 'stock') return 0;
+  if (mode === 'pyro-owned') return 2;
+  return 1;
 }
 
 function fireLickOperatorGainFromAmount(value) {
@@ -594,6 +651,20 @@ struct Uniforms {
   pyro_shape_controls: vec4<f32>,
   pyro_light_controls: vec4<f32>,
   pyro_color_controls: vec4<f32>,
+  pyro_route_controls: vec4<f32>,
+  pyro_radiance_route_controls: vec4<f32>,
+  pyro_luma_controls: vec4<f32>,
+  pyro_luma_controls2: vec4<f32>,
+  pyro_bite_stack_controls: vec4<f32>,
+  pyro_bite_stack_controls2: vec4<f32>,
+  pyro_palette_flame: vec4<f32>,
+  pyro_palette_flame_edge: vec4<f32>,
+  pyro_palette_bite: vec4<f32>,
+  pyro_palette_bite_hot: vec4<f32>,
+  pyro_palette_wake: vec4<f32>,
+  pyro_palette_wake_ember: vec4<f32>,
+  pyro_palette_radiance: vec4<f32>,
+  pyro_palette_radiance_warm: vec4<f32>,
   previousViewProj: mat4x4<f32>,
 };
 
@@ -3106,13 +3177,14 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
   let pyroEdgeBite = clamp(u.pyro_carrier_controls.y, 0.0, 1.0);
   let pyroSmokeFold = clamp(u.pyro_carrier_controls.z, 0.0, 1.0);
   let pyroDiagnosticPaint = clamp(u.pyro_carrier_controls.w, 0.0, 1.0);
-  let pyroCarrierViewMode = clamp(u.pyro_diagnostic_controls.x, 0.0, 5.0);
+  let pyroCarrierViewMode = clamp(u.pyro_diagnostic_controls.x, 0.0, 6.0);
   let pyroCarrierOverdrive = clamp(u.pyro_diagnostic_controls.y, 1.0, 8.0);
   let pyroBiteBorderFocus = clamp(u.pyro_diagnostic_controls.z, 0.0, 1.0);
   let pyroFoldBorderFocus = clamp(u.pyro_diagnostic_controls.w, 0.0, 1.0);
   let pyroBiteTeeth = clamp(u.pyro_shape_controls.x, 0.0, 1.0);
   let pyroBiteWake = clamp(u.pyro_shape_controls.y, 0.0, 1.0);
   let pyroFoldWake = clamp(u.pyro_shape_controls.z, 0.0, 1.0);
+  let pyroFireMode = clamp(u.pyro_shape_controls.w, 0.0, 2.0);
   let pyroContrastRadiance = clamp(u.pyro_light_controls.x, 0.0, 10.0);
   let pyroRadianceGate = clamp(u.pyro_light_controls.y, 0.0, 1.0);
   let pyroRadianceSpill = clamp(u.pyro_light_controls.z, 0.0, 1.0);
@@ -3121,6 +3193,36 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
   let pyroBiteChroma = clamp(u.pyro_color_controls.y, 0.0, 1.0);
   let pyroRadianceHue = clamp(u.pyro_color_controls.z, 0.0, 1.0);
   let pyroRadianceChroma = clamp(u.pyro_color_controls.w, 0.0, 1.0);
+  let pyroBiteHeight = clamp(u.pyro_route_controls.x, 0.0, 1.0);
+  let pyroBiteFireLock = clamp(u.pyro_route_controls.y, 0.0, 1.0);
+  let pyroWakeLift = clamp(u.pyro_route_controls.z, 0.0, 1.0);
+  let pyroWakeWarmth = clamp(u.pyro_route_controls.w, 0.0, 1.0);
+  let pyroRadianceSource = clamp(u.pyro_radiance_route_controls.x, 0.0, 2.0);
+  let pyroRadianceHeight = clamp(u.pyro_radiance_route_controls.y, 0.0, 1.0);
+  let pyroRadianceBorder = clamp(u.pyro_radiance_route_controls.z, 0.0, 1.0);
+  let pyroRadianceTeeth = clamp(u.pyro_radiance_route_controls.w, 0.0, 1.0);
+  let pyroFlamePaint = clamp(u.pyro_luma_controls.x, 0.0, 3.0);
+  let pyroFlameLuma = clamp(u.pyro_luma_controls.y, 0.0, 3.0);
+  let pyroStockMix = clamp(u.pyro_luma_controls.z, 0.0, 1.0);
+  let pyroBiteLuma = clamp(u.pyro_luma_controls.w, 0.0, 3.0);
+  let pyroWakeLuma = clamp(u.pyro_luma_controls2.x, 0.0, 3.0);
+  let pyroRadianceLuma = clamp(u.pyro_luma_controls2.y, 0.0, 3.0);
+  let pyroRadianceRise = clamp(u.pyro_luma_controls2.z, 0.0, 1.0);
+  let pyroRadianceFireLock = clamp(u.pyro_luma_controls2.w, 0.0, 1.0);
+  let pyroBiteCore = clamp(u.pyro_bite_stack_controls.x, 0.0, 1.0);
+  let pyroBiteCoreCut = clamp(u.pyro_bite_stack_controls.y, 0.0, 1.0);
+  let pyroBiteRim = clamp(u.pyro_bite_stack_controls.z, 0.0, 1.0);
+  let pyroBiteRimCut = clamp(u.pyro_bite_stack_controls.w, 0.0, 1.0);
+  let pyroBiteAfter = clamp(u.pyro_bite_stack_controls2.x, 0.0, 1.0);
+  let pyroBiteAfterCut = clamp(u.pyro_bite_stack_controls2.y, 0.0, 1.0);
+  let pyroFlameCoreColor = u.pyro_palette_flame.rgb;
+  let pyroFlameEdgeColor = u.pyro_palette_flame_edge.rgb;
+  let pyroBiteEmberEndpoint = u.pyro_palette_bite.rgb;
+  let pyroBiteHotEndpoint = u.pyro_palette_bite_hot.rgb;
+  let pyroWakeShadowEndpoint = u.pyro_palette_wake.rgb;
+  let pyroWakeEmberEndpoint = u.pyro_palette_wake_ember.rgb;
+  let pyroRadianceCoolEndpoint = u.pyro_palette_radiance.rgb;
+  let pyroRadianceWarmEndpoint = u.pyro_palette_radiance_warm.rgb;
   let canonicalSmokeContent = 1.0 - minimalPlumeRenderScene * step(0.5, canonicalContentMode) * (1.0 - step(1.5, canonicalContentMode));
   let canonicalFireContent = minimalPlumeRenderScene * step(0.5, canonicalContentMode);
   let canonicalFireRenderContent = mix(1.0, canonicalFireContent, minimalPlumeRenderScene);
@@ -3373,11 +3475,13 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     let pyroBorderView = 1.0 - step(0.5, abs(pyroCarrierViewMode - 1.0));
     let pyroBiteView = 1.0 - step(0.5, abs(pyroCarrierViewMode - 2.0));
     let pyroFoldView = 1.0 - step(0.5, abs(pyroCarrierViewMode - 3.0));
-    let pyroRadianceView = 1.0 - step(0.5, abs(pyroCarrierViewMode - 4.0));
-    let pyroAllView = 1.0 - step(0.5, abs(pyroCarrierViewMode - 5.0));
+    let pyroWakeView = 1.0 - step(0.5, abs(pyroCarrierViewMode - 4.0));
+    let pyroRadianceView = 1.0 - step(0.5, abs(pyroCarrierViewMode - 5.0));
+    let pyroAllView = 1.0 - step(0.5, abs(pyroCarrierViewMode - 6.0));
     let pyroBorderMask = clamp(pyroNormalView + pyroBorderView + pyroAllView, 0.0, 1.0);
     let pyroBiteMask = clamp(pyroNormalView + pyroBiteView + pyroAllView, 0.0, 1.0);
     let pyroFoldMask = clamp(pyroNormalView + pyroFoldView + pyroAllView, 0.0, 1.0);
+    let pyroWakeMask = clamp(pyroNormalView + pyroWakeView + pyroAllView, 0.0, 1.0);
     let pyroRadianceMask = clamp(pyroNormalView + pyroRadianceView + pyroAllView, 0.0, 1.0);
     let pyroMemoryPattern = 0.5 + 0.5 * sin(
       p.y * 31.0
@@ -3399,11 +3503,40 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     let radianceEmission = fireRadianceEmission(renderTemp, quenchedFlameDetail, quenchedFireLick, quenchedEmberFleck, radianceGain, glowGain) * mix(1.0, bonfireFireRenderBreakup * bonfireTransportedFireLumaShaper, bonfireRenderScene) * flameBodyAuthority;
     let smokeBacklight = fireColor(renderTemp * 0.72) * smokeAlpha * glowGain * smoothstep(0.16, 1.25, renderTemp) * (0.13 + fireFilament * 0.10 * flameBodyAuthority);
     let fireMix = smoothstep(0.005, 0.052, fireAlpha) * smoothstep(0.08, 0.70, renderTemp);
-    let pyroBiteBodyEvent = smoothstep(0.03, 0.62, fireMix + fireAlpha * 8.0);
+    let pyroOwnedFireMode = step(1.5, pyroFireMode);
+    let pyroHybridFireMode = step(0.5, pyroFireMode) * (1.0 - pyroOwnedFireMode);
+    let pyroStockFireVisibility = 1.0 - pyroOwnedFireMode;
+    let pyroRawCombustionSignal = smoothstep(
+      0.026,
+      0.62,
+      rawTemp + heat * 0.18 + flameDetail * 0.50 + fireLick * 0.34 + combustionFront * 0.25 + combustionFrontTopology * 0.18 + ember * 0.12
+    );
+    let pyroRawBodySignal = smoothstep(
+      0.010,
+      0.38,
+      visibleFlameAlphaCarrier * 0.16 + flameDetail * 0.34 + fireLick * 0.24 + combustionFront * 0.16 + rawTemp * 0.18 + heat * 0.08
+    );
+    let pyroRawFireMix = clamp(pyroRawCombustionSignal * max(pyroRawBodySignal, 0.22 + pyroHybridFireMode * 0.10 + pyroOwnedFireMode * 0.18), 0.0, 1.0);
+    let pyroRawCurrentFire = clamp(max(pyroRawFireMix, smoothstep(0.012, 0.50, flameDetail + quenchedFireLick * 0.55 + combustionFront * 0.18)), 0.0, 1.0);
+    let pyroFireEventCarrier = clamp(max(fireMix * pyroStockFireVisibility, pyroRawCurrentFire), 0.0, 1.0);
+    let pyroCurrentFireLock = mix(
+      1.0,
+      max(
+        pyroRawCurrentFire,
+        smoothstep(0.008, 0.20, fireAlpha * pyroStockFireVisibility + pyroFireEventCarrier * 0.34 + flameDetail * 0.16 + quenchedFireLick * 0.10)
+      ),
+      pyroBiteFireLock
+    );
+    let pyroBiteHeightGate = 1.0 - smoothstep(
+      mix(0.22, 0.76, pyroBiteHeight),
+      mix(0.44, 1.05, pyroBiteHeight),
+      y
+    );
+    let pyroBiteBodyEvent = smoothstep(0.03, 0.62, pyroFireEventCarrier + fireAlpha * pyroStockFireVisibility * 2.2 + pyroRawCombustionSignal * 0.20);
     let pyroBiteEdgeEvent = clamp(
       pyroInterfaceSignal
-        * smoothstep(0.018, 0.48, fireMix + flameDetail * 0.38 + fireLick * 0.25)
-        * (1.0 - smoothstep(0.58, 0.98, fireMix + fireAlpha * 2.2))
+        * smoothstep(0.018, 0.48, pyroFireEventCarrier + flameDetail * 0.38 + fireLick * 0.25 + combustionFront * 0.16)
+        * (1.0 - smoothstep(0.58, 1.05, pyroFireEventCarrier + fireAlpha * pyroStockFireVisibility * 1.1))
         * (0.72 + interfaceShred * 0.22 + fireLick * 0.18),
       0.0,
       1.0
@@ -3413,17 +3546,53 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
         * smoothstep(-0.84, -0.24, p.y)
         * (1.0 - smoothstep(0.22, 0.76, p.y))
         * smoothstep(0.018, 0.58, smoke + rawExtinction + microSmoke * 0.34)
-        * smoothstep(0.014, 0.52, fireMix + flameDetail * 0.42 + fireLick * 0.30),
+        * smoothstep(0.014, 0.52, pyroFireEventCarrier + flameDetail * 0.42 + fireLick * 0.30),
       0.0,
       1.0
     );
-    let pyroBiteEvent = clamp(mix(pyroBiteBodyEvent, pyroBiteEdgeEvent, pyroBiteTeeth) + pyroBiteWakeSignal * 0.58, 0.0, 1.35);
+    let pyroBiteEvent = clamp(mix(pyroBiteBodyEvent, pyroBiteEdgeEvent, pyroBiteTeeth) * pyroBiteHeightGate * pyroCurrentFireLock, 0.0, 1.20);
+    let pyroBiteCoreGate = smoothstep(
+      mix(0.018, 0.30, pyroBiteCoreCut),
+      mix(0.18, 0.82, pyroBiteCoreCut),
+      pyroFireEventCarrier + pyroRawCombustionSignal * 0.35 + flameDetail * 0.24
+    );
+    let pyroBiteCoreEvent = clamp(
+      pyroBiteCore * pyroBiteBodyEvent * pyroBiteCoreGate * pyroBiteHeightGate * pyroCurrentFireLock,
+      0.0,
+      1.25
+    );
+    let pyroBiteRimGate = smoothstep(
+      mix(0.010, 0.24, pyroBiteRimCut),
+      mix(0.16, 0.72, pyroBiteRimCut),
+      pyroInterfaceSignal + interfaceShred * 0.18 + fireLick * 0.12
+    );
+    let pyroBiteRimEvent = clamp(
+      pyroBiteRim * pyroBiteEdgeEvent * pyroBiteRimGate * pyroBiteHeightGate * pyroCurrentFireLock,
+      0.0,
+      1.25
+    );
+    let pyroBiteAfterGate = smoothstep(
+      mix(0.010, 0.22, pyroBiteAfterCut),
+      mix(0.12, 0.68, pyroBiteAfterCut),
+      pyroBiteWakeSignal + smoke * 0.08 + rawExtinction * 0.08
+    );
+    let pyroBiteAfterFireGate = mix(1.0, pyroRawCurrentFire, 0.35 + pyroBiteFireLock * 0.35);
+    let pyroBiteAfterEvent = clamp(
+      pyroBiteAfter * pyroBiteWakeSignal * pyroBiteAfterGate * pyroBiteHeightGate * pyroBiteAfterFireGate,
+      0.0,
+      1.25
+    );
+    let pyroStackedBiteEvent = clamp(
+      pyroBiteEvent + pyroBiteCoreEvent * 0.36 + pyroBiteRimEvent * 0.54 + pyroBiteAfterEvent * 0.32,
+      0.0,
+      1.55
+    );
     let pyroEdgeBreakup = pyroBiteCarrier
       * pyroEdgeBite
       * pyroBiteMask
       * pyroCarrierOverdrive
       * (0.40 + pyroMemoryPattern * 0.60)
-      * pyroBiteEvent;
+      * pyroStackedBiteEvent;
     let pyroFoldWakeSignal = clamp(
       smoothstep(0.02, 0.62, smoke + rawExtinction + microSmoke * 0.24)
         * mix(
@@ -3442,11 +3611,85 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
       * pyroCarrierOverdrive
       * (0.34 + pyroSpatialEnergy * 0.66)
       * pyroFoldWakeSignal;
-    let pyroRadianceEvent = max(
-      pyroBiteEvent * (0.24 + 0.36 * (1.0 - pyroRadianceSpill)),
-      pyroFoldWakeSignal * (0.22 + pyroRadianceSpill * 0.78)
+    let pyroWakeHeightGate = 1.0 - smoothstep(
+      mix(0.48, 0.92, pyroWakeLift),
+      mix(0.72, 1.08, pyroWakeLift),
+      y
     );
-    let pyroRadianceBody = smoke + rawExtinction + microSmoke * 0.32;
+    let pyroWakeEvent = clamp(
+      (pyroBiteWakeSignal * (0.48 + pyroBiteWake * 0.52) + pyroFoldWakeSignal * (0.34 + pyroFoldWake * 0.44))
+        * pyroWakeHeightGate
+        * smoothstep(0.025, 0.72, smoke + rawExtinction + microSmoke * 0.34),
+      0.0,
+      1.45
+    );
+    let pyroWakeSignal = pyroBaseCarrier
+      * pyroWakeMask
+      * pyroCarrierOverdrive
+      * (0.20 + pyroSpatialEnergy * 0.62 + pyroSmokeAuthority * 0.18)
+      * pyroWakeEvent;
+    let pyroRadianceFreshFireGate = smoothstep(
+      0.018,
+      0.44,
+      rawTemp + heat * 0.20 + visibleFlameAlphaCarrier * 0.34 + combustionFront * 0.22 + fireLick * 0.12
+    );
+    let pyroRadianceFireBodyEvent = smoothstep(
+      0.025,
+      0.68,
+      mix(pyroRawCurrentFire, pyroRadianceFreshFireGate + pyroRawCurrentFire * 0.22, pyroRadianceFireLock)
+        + rawTemp * 0.18
+        + heat * 0.08
+        + combustionFront * 0.16
+    );
+    let pyroRadianceFireEdgeEvent = clamp(
+      pyroInterfaceSignal
+        * smoothstep(0.014, 0.54, pyroFireEventCarrier + flameDetail * 0.40 + fireLick * 0.30 + combustionFront * 0.22)
+        * (1.0 - smoothstep(0.64, 1.06, pyroFireEventCarrier + pyroRawCombustionSignal * 0.34))
+        * (0.70 + pyroMemoryPattern * 0.22 + fireLick * 0.14),
+      0.0,
+      1.25
+    );
+    let pyroRadianceFreshLock = mix(
+      1.0,
+      clamp(max(pyroRadianceFreshFireGate, pyroRadianceFireEdgeEvent * 0.42), 0.0, 1.0),
+      pyroRadianceFireLock
+    );
+    let pyroRadianceBorderEvent = mix(pyroRadianceFireBodyEvent, max(pyroRadianceFireEdgeEvent, pyroRadianceFireBodyEvent * 0.24), pyroRadianceBorder);
+    let pyroRadianceToothedEvent = mix(
+      pyroRadianceBorderEvent,
+      pyroRadianceFireEdgeEvent * (0.72 + pyroMemoryPattern * 0.48 + fireLick * 0.20),
+      pyroRadianceTeeth
+    );
+    let pyroFireRadianceEvent = clamp(
+      pyroRadianceToothedEvent
+        * pyroRadianceFreshLock
+        * (0.28 + 0.42 * (1.0 - pyroRadianceSpill)),
+      0.0,
+      1.45
+    );
+    let pyroWakeRadianceEvent = max(pyroWakeEvent * (0.20 + pyroRadianceSpill * 0.80), pyroFoldWakeSignal * (0.16 + pyroRadianceSpill * 0.54));
+    let pyroMixedRadianceEvent = max(pyroFireRadianceEvent, pyroWakeRadianceEvent);
+    let pyroRadianceFireSource = 1.0 - step(0.5, pyroRadianceSource);
+    let pyroRadianceMixedSource = 1.0 - step(0.5, abs(pyroRadianceSource - 1.0));
+    let pyroRadianceWakeSource = 1.0 - step(0.5, abs(pyroRadianceSource - 2.0));
+    let pyroRadianceEvent = max(
+      max(pyroFireRadianceEvent * pyroRadianceFireSource, pyroMixedRadianceEvent * pyroRadianceMixedSource),
+      pyroWakeRadianceEvent * pyroRadianceWakeSource
+    );
+    let pyroRadianceFireSourceWeight = clamp(pyroRadianceFireSource + pyroRadianceMixedSource * (1.0 - pyroRadianceSpill) * 0.42, 0.0, 1.0);
+    let pyroRadianceHeightGate = 1.0 - smoothstep(
+      mix(0.30, 0.88, max(pyroRadianceHeight, pyroRadianceRise)),
+      mix(0.54, 1.12, max(pyroRadianceHeight, pyroRadianceRise)),
+      y
+    );
+    let pyroRadianceBody = max(smoke + rawExtinction + microSmoke * 0.32, pyroRawCurrentFire * (0.26 + (1.0 - pyroRadianceSpill) * 0.42));
+    let pyroRadianceFireCarrier = pyroMaterialGain
+      * pyroMaterialEnergy
+      * pyroLiveAuthority
+      * (0.24 + pyroSpatialEnergy * 0.76)
+      * smoothstep(0.012, 0.38, rawTemp + heat * 0.26 + flameDetail * 0.58 + fireLick * 0.40 + combustionFront * 0.26)
+      * smoothstep(0.010, 0.48, pyroRadianceFreshFireGate + pyroFireRadianceEvent * 0.84 + pyroRawCurrentFire * 0.22);
+    let pyroRadianceCarrier = mix(pyroBaseCarrier, max(pyroBaseCarrier * 0.36, pyroRadianceFireCarrier), pyroRadianceFireSourceWeight);
     let pyroRadianceGateFloor = mix(0.006, 0.13, pyroRadianceGate);
     let pyroRadianceGateCeil = mix(0.50, 0.82, pyroRadianceGate);
     let pyroRadianceSparsity = smoothstep(
@@ -3455,58 +3698,124 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
       pyroRadianceEvent * (0.62 + flameDetail * 0.24 + quenchedFireLick * 0.16)
     );
     let pyroRadianceSpillSignal = mix(
-      smoothstep(0.035, 0.55, pyroInterfaceSignal + pyroBiteEdgeEvent * 0.65 + flameDetail * 0.12),
+      smoothstep(0.035, 0.55, pyroInterfaceSignal + pyroRadianceFireEdgeEvent * 0.72 + flameDetail * 0.12),
       smoothstep(0.012, 0.62, pyroRadianceBody),
       pyroRadianceSpill
     );
     let pyroRadianceContrastSignal = clamp(
-      pyroBaseCarrier
+      pyroRadianceCarrier
         * pyroContrastRadiance
         * pyroRadianceMask
         * pyroCarrierOverdrive
         * (0.36 + pyroSpatialEnergy * 0.64)
         * pyroRadianceSparsity
         * pyroRadianceSpillSignal
-        * (0.18 + fireMix * 0.46 + flameDetail * 0.16 + quenchedFireLick * 0.14),
+        * pyroRadianceHeightGate
+        * (0.18 + pyroFireEventCarrier * 0.46 + flameDetail * 0.16 + quenchedFireLick * 0.14),
       0.0,
       12.0
     );
     let pyroRadianceBoost = clamp(
       pyroRadianceContrastSignal
         * mix(
-          0.16 + renderTemp * 0.12,
-          0.18 + smoke * 0.42 + renderTemp * 0.14 + pyroMemoryPattern * 0.08,
-          pyroRadianceSpill
+          0.78 + pyroRadianceFreshFireGate * 0.62 + pyroRadianceFireEdgeEvent * 0.44 + pyroRawFireMix * 0.30,
+          mix(
+            0.16 + renderTemp * 0.12,
+            0.18 + smoke * 0.42 + renderTemp * 0.14 + pyroMemoryPattern * 0.08,
+            pyroRadianceSpill
+          ),
+          1.0 - pyroRadianceFireSourceWeight
         ),
       0.0,
       9.0
     );
+    let pyroRadianceAlphaBoost = clamp(
+      pyroRadianceFireSourceWeight
+        * pyroRadianceContrastSignal
+        * (0.22 + pyroRadianceFreshFireGate * 0.72 + pyroRadianceFireEdgeEvent * 0.36 + pyroRawFireMix * 0.18),
+      0.0,
+      4.0
+    );
     let pyroBiteAlphaBoost = clamp(pyroEdgeBreakup * (0.40 + fireMix * 0.80), 0.0, 2.4);
     let pyroFoldExtinctionBoost = clamp(pyroSmokeFoldSignal * (0.34 + smoke * 0.85 + rawExtinction * 0.55), 0.0, 2.8);
-    alpha = clamp(alpha + pyroBiteAlphaBoost * rayStepOpacity * 0.080 + pyroFoldExtinctionBoost * rayStepOpacity * 0.060, 0.0, 0.28);
-    var local = mix(smokeCol, flameCol * 0.30 + radianceEmission * 0.70, fireMix);
+    let pyroWakeAlphaBoost = clamp(pyroWakeSignal * (0.22 + smoke * 0.62 + rawExtinction * 0.36), 0.0, 2.1);
+    let pyroOwnedFireAlphaBoost = clamp(
+      pyroOwnedFireMode * pyroBaseCarrier * pyroLiveAuthority * pyroFlamePaint * pyroRawCurrentFire
+        * (0.32 + pyroSpatialEnergy * 0.44 + flameDetail * 0.18 + fireLick * 0.14),
+      0.0,
+      2.4
+    );
+    alpha = clamp(
+      alpha
+        + pyroBiteAlphaBoost * rayStepOpacity * 0.080
+        + pyroFoldExtinctionBoost * rayStepOpacity * 0.060
+        + pyroWakeAlphaBoost * rayStepOpacity * 0.045
+        + pyroOwnedFireAlphaBoost * rayStepOpacity * 0.070
+        + pyroRadianceAlphaBoost * rayStepOpacity * 0.130,
+      0.0,
+      0.28
+    );
+    var local = mix(smokeCol, flameCol * 0.30 + radianceEmission * 0.70, fireMix * pyroStockFireVisibility);
+    let pyroFlamePaintSignal = clamp(
+      pyroBaseCarrier
+        * pyroLiveAuthority
+        * pyroFlamePaint
+        * pyroRawFireMix
+        * (0.34 + pyroSpatialEnergy * 0.46 + flameDetail * 0.16 + quenchedFireLick * 0.12),
+      0.0,
+      3.0
+    );
+    let pyroFlamePaintChroma = mix(
+      pyroFlameEdgeColor * (0.54 + renderTemp * 0.20 + fireFilament * 0.10),
+      pyroFlameCoreColor * (0.84 + rawTemp * 0.42 + fireFilament * 0.18),
+      smoothstep(0.22, 0.92, pyroRawFireMix + rawTemp * 0.20 + flameDetail * 0.22)
+    );
+    let pyroLocalLuma = max(dot(local, vec3<f32>(0.2126, 0.7152, 0.0722)), 0.001);
+    let pyroRawPaintLuma = max(pyroLocalLuma, pyroRawCurrentFire * (0.32 + rawTemp * 0.72 + flameDetail * 0.32 + fireLick * 0.22 + combustionFront * 0.18));
+    let pyroFlameChromaLuma = max(dot(pyroFlamePaintChroma, vec3<f32>(0.2126, 0.7152, 0.0722)), 0.001);
+    let pyroFlamePaintColor = pyroFlamePaintChroma * (pyroRawPaintLuma / pyroFlameChromaLuma) * pyroFlameLuma;
+    local = mix(
+      local,
+      pyroFlamePaintColor,
+      clamp(pyroFlamePaintSignal * mix(0.28, 0.92, 1.0 - pyroStockMix), 0.0, 0.95)
+    );
     let pyroFoldColor = vec3<f32>(0.18, 0.28, 0.31);
     local = mix(
       local,
       local * (0.70 - pyroFoldExtinctionBoost * 0.24) + pyroFoldColor * pyroFoldExtinctionBoost * 0.54,
       clamp(pyroFoldExtinctionBoost, 0.0, 0.78)
     );
-    let pyroBiteEmberColor = vec3<f32>(0.90, 0.34, 0.10) * (0.72 + renderTemp * 0.18);
-    let pyroBiteHotColor = fireColor(renderTemp * 0.64 + 0.42) * (0.82 + fireMix * 0.36);
+    let pyroWakeNeutralColor = pyroWakeShadowEndpoint * (0.70 + smoke * 0.16);
+    let pyroWakeAmberColor = pyroWakeEmberEndpoint * (0.24 + smoke * 0.18 + pyroMemoryPattern * 0.10 + pyroRawFireMix * 0.08);
+    let pyroWakeColor = mix(pyroWakeNeutralColor, pyroWakeAmberColor, pyroWakeWarmth);
+    local = mix(
+      local,
+      local * (0.82 - pyroWakeAlphaBoost * 0.12) + pyroWakeColor * pyroWakeAlphaBoost * 0.48 * pyroWakeLuma,
+      clamp(pyroWakeAlphaBoost, 0.0, 0.72)
+    );
+    let pyroBiteEmberColor = pyroBiteEmberEndpoint * (0.72 + renderTemp * 0.18 + pyroRawFireMix * 0.12);
+    let pyroBiteHotColor = pyroBiteHotEndpoint * (0.82 + max(fireMix, pyroRawFireMix) * 0.36);
     let pyroBiteMutedColor = mix(local, pyroBiteEmberColor, 0.44);
     let pyroBiteSaturatedColor = mix(pyroBiteEmberColor, pyroBiteHotColor, pyroBiteHeat);
     let pyroBiteColor = mix(pyroBiteMutedColor, pyroBiteSaturatedColor, pyroBiteChroma);
     local = local * (1.0 - pyroBiteAlphaBoost * mix(0.24, 0.42, pyroBiteChroma))
-      + pyroBiteColor * pyroBiteAlphaBoost * (0.28 + fireMix * 0.62 + pyroBiteChroma * 0.18);
-    let pyroRadianceSmokeBlue = vec3<f32>(0.48, 0.66, 0.72) * (0.36 + smoke * 0.18);
-    let pyroRadianceNeutral = vec3<f32>(0.58, 0.61, 0.58) * (0.35 + smoke * 0.16);
-    let pyroRadianceAmber = fireColor(renderTemp * 0.46 + 0.24) * (0.30 + smoke * 0.16)
-      + vec3<f32>(0.82, 0.52, 0.22) * pyroFoldWakeSignal * (0.06 + pyroRadianceSpill * 0.16);
+      + pyroBiteColor * pyroBiteAlphaBoost * pyroBiteLuma * (0.28 + max(fireMix, pyroRawFireMix) * 0.62 + pyroBiteChroma * 0.18);
+    let pyroRadianceSmokeBlue = pyroRadianceCoolEndpoint * (0.36 + smoke * 0.18);
+    let pyroRadianceNeutral = mix(pyroRadianceCoolEndpoint, pyroRadianceWarmEndpoint, 0.45) * (0.35 + smoke * 0.16);
+    let pyroRadianceAmber = pyroRadianceWarmEndpoint * (0.30 + smoke * 0.16 + pyroRawFireMix * 0.08)
+      + pyroRadianceWarmEndpoint * pyroFoldWakeSignal * (0.06 + pyroRadianceSpill * 0.16);
     let pyroRadianceCoolColor = mix(pyroRadianceNeutral, pyroRadianceSmokeBlue, pyroRadianceChroma);
     let pyroRadianceWarmColor = mix(pyroRadianceNeutral, pyroRadianceAmber, pyroRadianceChroma);
     let pyroRadianceHueColor = mix(pyroRadianceCoolColor, pyroRadianceWarmColor, pyroRadianceHue);
-    let pyroRadianceColor = mix(pyroRadianceHueColor, pyroRadianceWarmColor, pyroRadianceWarmth * (0.36 + pyroRadianceChroma * 0.64));
-    local = local + pyroRadianceColor * pyroRadianceBoost * mix(0.07, 0.16, pyroRadianceSpill);
+    let pyroRadianceFireGold = mix(pyroRadianceWarmEndpoint, pyroBiteHotEndpoint, 0.36 + pyroRadianceChroma * 0.44)
+      * (0.44 + pyroRawFireMix * 0.18 + pyroRadianceFireEdgeEvent * 0.22 + pyroRadianceFreshFireGate * 0.16);
+    let pyroRadianceColor = mix(
+      mix(pyroRadianceHueColor, pyroRadianceWarmColor, pyroRadianceWarmth * (0.36 + pyroRadianceChroma * 0.64)),
+      pyroRadianceFireGold,
+      pyroRadianceFireSourceWeight
+    );
+    let pyroRadianceLocalWeight = mix(mix(0.42, 0.20, pyroRadianceSpill), mix(0.07, 0.16, pyroRadianceSpill), 1.0 - pyroRadianceFireSourceWeight);
+    local = local + pyroRadianceColor * pyroRadianceBoost * pyroRadianceLuma * pyroRadianceLocalWeight;
     let pyroBorderDiagnostic = pyroLiveCarrier * pyroInterfaceSignal * pyroBorderMask * pyroCarrierOverdrive;
     let pyroDiagnosticColor =
       vec3<f32>(0.10, 0.78, 1.0) * clamp(pyroBorderDiagnostic, 0.0, 1.0)
@@ -3523,7 +3832,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     local = mix(local, diagnosticColor, flowDebug * smoothstep(0.015, 0.12, curlDebug + divDebug));
     let pressureTierOverlay = pressureTierDebugOverlayColor(y);
     local = mix(local, pressureTierOverlay.rgb, pressureTierOverlay.a);
-    color = color + trans * (alpha * local + fireAlpha * radianceEmission * mix(0.82, 0.62, bonfireRenderScene) + smokeBacklight + pyroRadianceColor * pyroRadianceBoost * rayStepOpacity * mix(0.012, 0.030, pyroRadianceSpill));
+    color = color + trans * (alpha * local + fireAlpha * pyroStockFireVisibility * radianceEmission * mix(0.82, 0.62, bonfireRenderScene) + smokeBacklight * pyroStockFireVisibility + pyroRadianceColor * pyroRadianceBoost * pyroRadianceLuma * rayStepOpacity * mix(mix(0.080, 0.030, pyroRadianceSpill), mix(0.012, 0.030, pyroRadianceSpill), 1.0 - pyroRadianceFireSourceWeight));
     let extinctionStep = clamp(alpha * (0.46 + extinction * 0.16) + fireAlpha * 0.08, 0.0, 0.34);
     trans = trans * exp(-extinctionStep);
     t = t + localDt;
@@ -3555,7 +3864,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   const invViewProj = new THREE.Matrix4();
   const viewProj = new THREE.Matrix4();
   const previousViewProj = new THREE.Matrix4();
-  const uniforms = new Float32Array(220);
+  const uniforms = new Float32Array(276);
   let controlsSnapshot = applyRuntimeQualityControls(getControls());
   let gridSize = normalizeGridSize(controlsSnapshot.resolution);
   let majorantGridSize = normalizeMajorantGridSize(controlsSnapshot.majorantGrid);
@@ -3579,6 +3888,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     frameCount: 0,
     simStepCount: 0,
     deterministicReplay: null,
+    lookFreeze: normalizeLookFreeze(controlsSnapshot.lookFreeze),
+    lookFreezeFrame: null,
+    lookFreezeSkippedFrames: 0,
+    pyroCompareMode: normalizePyroCompareMode(controlsSnapshot.pyroCompareMode),
+    pyroCompareMuted: false,
     simGrid: gridSize,
     simGridLabel: `${gridSize}^3 velocity-material-fire-microdetail-storage-buffer+${FRONT_FIELD_IDENTITY}`,
     gridOverlay: 0,
@@ -4385,6 +4699,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       snapshot.majorantGrid,
       snapshot.gridOverlay,
       snapshot.flowDebug,
+      normalizeLookFreeze(snapshot.lookFreeze),
+      normalizePyroCompareMode(snapshot.pyroCompareMode),
       snapshot.pressureStrategy,
       snapshot.pressureTierLowerMax,
       snapshot.pressureTierHeroMin,
@@ -4985,14 +5301,26 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     uniforms[81] = sourcePrimitive.position[1];
     uniforms[82] = sourcePrimitive.position[2];
     uniforms[83] = volumePrimitives.length > 0 ? 1 : 0;
-    const pyroDetailForRender = updatePyroDynamicDetailState({ inputKind: 'control-proxy' });
+    const lookFreeze = normalizeLookFreeze(controlsSnapshot.lookFreeze) && lookFreezeCanPin(state) ? 1 : 0;
+    const pyroCompareMode = normalizePyroCompareMode(controlsSnapshot.pyroCompareMode);
+    const frozenPyroDetail = lookFreeze && state.pyroDynamicDetail?.materialMemory ? state.pyroDynamicDetail : null;
+    const pyroDetailForRender = frozenPyroDetail || updatePyroDynamicDetailState({ inputKind: 'control-proxy' });
+    if (frozenPyroDetail) {
+      state.pyroDynamicDetail = {
+        ...frozenPyroDetail,
+        frozen: true,
+        freezeFrame: state.lookFreezeFrame ?? state.frameCount,
+        lastInputKind: 'look-lab-frozen',
+      };
+    }
     const materialMemory = pyroDetailForRender.materialMemory || {};
     const pyroMaterialRequestedGain = Math.max(0, Math.min(1.5, controlsSnapshot.pyroMaterialGain ?? 0));
     const pyroMaterialSampleable = pyroMaterialRequestedGain > 0 && materialMemory.shaderReadiness === 'sampleable-debug-only';
-    const pyroMaterialGain = pyroMaterialSampleable ? pyroMaterialRequestedGain : 0;
-    const pyroMaterialEnergy = pyroMaterialSampleable ? Math.max(0, Math.min(1, materialMemory.energyMean ?? pyroDetailForRender.stateEnergy ?? 0)) : 0;
-    const pyroMaterialLiveAuthority = pyroMaterialSampleable ? Math.max(0, Math.min(1, pyroDetailForRender.liveFireAuthority ?? 0)) : 0;
-    const pyroMaterialSmokeAuthority = pyroMaterialSampleable ? Math.max(0, Math.min(1, pyroDetailForRender.smokeAuthority ?? 0)) : 0;
+    const pyroCompareMuted = pyroCompareMode === 'base';
+    const pyroMaterialGain = pyroMaterialSampleable && !pyroCompareMuted ? pyroMaterialRequestedGain : 0;
+    const pyroMaterialEnergy = pyroMaterialSampleable && !pyroCompareMuted ? Math.max(0, Math.min(1, materialMemory.energyMean ?? pyroDetailForRender.stateEnergy ?? 0)) : 0;
+    const pyroMaterialLiveAuthority = pyroMaterialSampleable && !pyroCompareMuted ? Math.max(0, Math.min(1, pyroDetailForRender.liveFireAuthority ?? 0)) : 0;
+    const pyroMaterialSmokeAuthority = pyroMaterialSampleable && !pyroCompareMuted ? Math.max(0, Math.min(1, pyroDetailForRender.smokeAuthority ?? 0)) : 0;
     uniforms[84] = pyroMaterialGain;
     uniforms[85] = pyroMaterialEnergy;
     uniforms[86] = pyroMaterialLiveAuthority;
@@ -5000,24 +5328,34 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const materialSamples = Array.isArray(materialMemory.sampleVector4) ? materialMemory.sampleVector4 : [];
     let uploadedPyroMaterialCells = 0;
     for (let memoryIndex = 0; memoryIndex < 24; memoryIndex += 1) {
-      const sample = pyroMaterialSampleable && Array.isArray(materialSamples[memoryIndex])
+      const sample = pyroMaterialSampleable && !pyroCompareMuted && Array.isArray(materialSamples[memoryIndex])
         ? materialSamples[memoryIndex]
         : [0, 0, 0, 0];
       uniforms[88 + memoryIndex * 4] = sample[0] ?? 0;
       uniforms[89 + memoryIndex * 4] = sample[1] ?? 0;
       uniforms[90 + memoryIndex * 4] = sample[2] ?? 0;
       uniforms[91 + memoryIndex * 4] = sample[3] ?? 0;
-      if (pyroMaterialSampleable) uploadedPyroMaterialCells += 1;
+      if (pyroMaterialSampleable && !pyroCompareMuted) uploadedPyroMaterialCells += 1;
     }
     const pyroInterfaceFocus = Math.max(0, Math.min(1, controlsSnapshot.pyroInterfaceFocus ?? 0.75));
     const pyroEdgeBite = Math.max(0, Math.min(1, controlsSnapshot.pyroEdgeBite ?? 0.35));
     const pyroBiteBorderFocus = Math.max(0, Math.min(1, controlsSnapshot.pyroBiteBorder ?? 0.45));
     const pyroBiteTeeth = Math.max(0, Math.min(1, controlsSnapshot.pyroBiteTeeth ?? 0.55));
     const pyroBiteWake = Math.max(0, Math.min(1, controlsSnapshot.pyroBiteWake ?? 0.25));
+    const pyroBiteHeight = Math.max(0, Math.min(1, controlsSnapshot.pyroBiteHeight ?? 0.35));
+    const pyroBiteFireLock = Math.max(0, Math.min(1, controlsSnapshot.pyroBiteFireLock ?? 0.75));
+    const pyroBiteCore = Math.max(0, Math.min(1, controlsSnapshot.pyroBiteCore ?? 0));
+    const pyroBiteCoreCut = Math.max(0, Math.min(1, controlsSnapshot.pyroBiteCoreCut ?? 0.45));
+    const pyroBiteRim = Math.max(0, Math.min(1, controlsSnapshot.pyroBiteRim ?? 0));
+    const pyroBiteRimCut = Math.max(0, Math.min(1, controlsSnapshot.pyroBiteRimCut ?? 0.55));
+    const pyroBiteAfter = Math.max(0, Math.min(1, controlsSnapshot.pyroBiteAfter ?? 0));
+    const pyroBiteAfterCut = Math.max(0, Math.min(1, controlsSnapshot.pyroBiteAfterCut ?? 0.50));
     const pyroSmokeFold = Math.max(0, Math.min(1, controlsSnapshot.pyroSmokeFold ?? 0.25));
     const pyroFoldBorderFocus = Math.max(0, Math.min(1, controlsSnapshot.pyroFoldBorder ?? 0.35));
     const pyroFoldWake = Math.max(0, Math.min(1, controlsSnapshot.pyroFoldWake ?? 0.35));
-    const pyroContrastRadiance = Math.max(0, Math.min(10, controlsSnapshot.pyroRadiance ?? 0));
+    const pyroWakeLift = Math.max(0, Math.min(1, controlsSnapshot.pyroWakeLift ?? 0.45));
+    const pyroWakeWarmth = Math.max(0, Math.min(1, controlsSnapshot.pyroWakeWarmth ?? 0.35));
+    const pyroContrastRadiance = pyroCompareMuted ? 0 : Math.max(0, Math.min(10, controlsSnapshot.pyroRadiance ?? 0));
     const pyroRadianceGate = Math.max(0, Math.min(1, controlsSnapshot.pyroRadianceGate ?? 0.62));
     const pyroRadianceSpill = Math.max(0, Math.min(1, controlsSnapshot.pyroRadianceSpill ?? 0.30));
     const pyroRadianceWarmth = Math.max(0, Math.min(1, controlsSnapshot.pyroRadianceWarmth ?? 0.45));
@@ -5025,7 +5363,21 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const pyroBiteChroma = Math.max(0, Math.min(1, controlsSnapshot.pyroBiteChroma ?? 0.55));
     const pyroRadianceHue = Math.max(0, Math.min(1, controlsSnapshot.pyroRadianceHue ?? 0.50));
     const pyroRadianceChroma = Math.max(0, Math.min(1, controlsSnapshot.pyroRadianceChroma ?? 0.55));
-    const pyroDiagnosticPaint = Math.max(0, Math.min(1, controlsSnapshot.pyroDiagnosticPaint ?? 0));
+    const pyroFireModeName = normalizePyroFireMode(controlsSnapshot.pyroFireMode);
+    const pyroFireMode = pyroFireModeValue(pyroFireModeName);
+    const pyroRadianceSource = pyroRadianceSourceValue(controlsSnapshot.pyroRadianceSource);
+    const pyroRadianceHeight = Math.max(0, Math.min(1, controlsSnapshot.pyroRadianceHeight ?? 0.45));
+    const pyroRadianceBorder = Math.max(0, Math.min(1, controlsSnapshot.pyroRadianceBorder ?? 0.55));
+    const pyroRadianceTeeth = Math.max(0, Math.min(1, controlsSnapshot.pyroRadianceTeeth ?? 0.45));
+    const pyroFlamePaint = pyroCompareMuted ? 0 : Math.max(0, Math.min(3, controlsSnapshot.pyroFlamePaint ?? 0));
+    const pyroFlameLuma = Math.max(0, Math.min(3, controlsSnapshot.pyroFlameLuma ?? 1));
+    const pyroStockMix = Math.max(0, Math.min(1, controlsSnapshot.pyroStockMix ?? 1));
+    const pyroBiteLuma = Math.max(0, Math.min(3, controlsSnapshot.pyroBiteLuma ?? 1));
+    const pyroWakeLuma = Math.max(0, Math.min(3, controlsSnapshot.pyroWakeLuma ?? 1));
+    const pyroRadianceLuma = Math.max(0, Math.min(3, controlsSnapshot.pyroRadianceLuma ?? 1));
+    const pyroRadianceRise = Math.max(0, Math.min(1, controlsSnapshot.pyroRadianceRise ?? 0.45));
+    const pyroRadianceFireLock = Math.max(0, Math.min(1, controlsSnapshot.pyroRadianceFireLock ?? 0.65));
+    const pyroDiagnosticPaint = pyroCompareMuted ? 0 : Math.max(0, Math.min(1, controlsSnapshot.pyroDiagnosticPaint ?? 0));
     uniforms[184] = pyroInterfaceFocus;
     uniforms[185] = pyroEdgeBite;
     uniforms[186] = pyroSmokeFold;
@@ -5039,7 +5391,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     uniforms[192] = pyroBiteTeeth;
     uniforms[193] = pyroBiteWake;
     uniforms[194] = pyroFoldWake;
-    uniforms[195] = 0;
+    uniforms[195] = pyroFireMode;
     uniforms[196] = pyroContrastRadiance;
     uniforms[197] = pyroRadianceGate;
     uniforms[198] = pyroRadianceSpill;
@@ -5048,9 +5400,44 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     uniforms[201] = pyroBiteChroma;
     uniforms[202] = pyroRadianceHue;
     uniforms[203] = pyroRadianceChroma;
-    uniforms.set(previousViewProj.elements, 204);
+    uniforms[204] = pyroBiteHeight;
+    uniforms[205] = pyroBiteFireLock;
+    uniforms[206] = pyroWakeLift;
+    uniforms[207] = pyroWakeWarmth;
+    uniforms[208] = pyroRadianceSource;
+    uniforms[209] = pyroRadianceHeight;
+    uniforms[210] = pyroRadianceBorder;
+    uniforms[211] = pyroRadianceTeeth;
+    uniforms[212] = pyroFlamePaint;
+    uniforms[213] = pyroFlameLuma;
+    uniforms[214] = pyroStockMix;
+    uniforms[215] = pyroBiteLuma;
+    uniforms[216] = pyroWakeLuma;
+    uniforms[217] = pyroRadianceLuma;
+    uniforms[218] = pyroRadianceRise;
+    uniforms[219] = pyroRadianceFireLock;
+    uniforms[220] = pyroBiteCore;
+    uniforms[221] = pyroBiteCoreCut;
+    uniforms[222] = pyroBiteRim;
+    uniforms[223] = pyroBiteRimCut;
+    uniforms[224] = pyroBiteAfter;
+    uniforms[225] = pyroBiteAfterCut;
+    uniforms[226] = 0;
+    uniforms[227] = 0;
+    writePyroPaletteUniform(uniforms, 228, controlsSnapshot.pyroFlameCoreColor, '#fff4b8');
+    writePyroPaletteUniform(uniforms, 232, controlsSnapshot.pyroFlameEdgeColor, '#ff8a24');
+    writePyroPaletteUniform(uniforms, 236, controlsSnapshot.pyroBiteEmberColor, '#e65a1a');
+    writePyroPaletteUniform(uniforms, 240, controlsSnapshot.pyroBiteHotColor, '#fff4b8');
+    writePyroPaletteUniform(uniforms, 244, controlsSnapshot.pyroWakeShadowColor, '#384c50');
+    writePyroPaletteUniform(uniforms, 248, controlsSnapshot.pyroWakeEmberColor, '#b06a2a');
+    writePyroPaletteUniform(uniforms, 252, controlsSnapshot.pyroRadianceCoolColor, '#7aa8b8');
+    writePyroPaletteUniform(uniforms, 256, controlsSnapshot.pyroRadianceWarmColor, '#d18438');
+    uniforms.set(previousViewProj.elements, 260);
     device.queue.writeBuffer(uniformBuffer, 0, uniforms);
     state.gridOverlay = controlsSnapshot.gridOverlay || 0;
+    state.lookFreeze = lookFreeze;
+    state.pyroCompareMode = pyroCompareMode;
+    state.pyroCompareMuted = pyroCompareMuted;
     state.volumeScene = normalizeVolumeScene(controlsSnapshot.volumeScene);
     state.bonfireReferenceConfinement = bonfireReferenceConfinementDebug(controlsSnapshot.volumeScene);
     state.minimalPlumeProof = minimalPlumeProofDebug(controlsSnapshot.volumeScene);
@@ -5078,6 +5465,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       identity: 'pyro-material-memory-spatial-coupling-v0',
       lineage: 'pyro-material-memory-render-coupling-v0',
       visualRole: 'opt-in-renderer-diagnostic-not-main-fire-authority',
+      compareMode: pyroCompareMode,
+      compareMuted: pyroCompareMuted,
       requestedGain: pyroMaterialRequestedGain,
       effectiveGain: pyroMaterialGain,
       materialShaderReadiness: materialMemory.shaderReadiness || 'blocked-reset',
@@ -5090,17 +5479,50 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         biteBorderFocus: pyroBiteBorderFocus,
         biteTeeth: pyroBiteTeeth,
         biteWake: pyroBiteWake,
+        biteHeight: pyroBiteHeight,
+        biteFireLock: pyroBiteFireLock,
+        biteCore: pyroBiteCore,
+        biteCoreCut: pyroBiteCoreCut,
+        biteRim: pyroBiteRim,
+        biteRimCut: pyroBiteRimCut,
+        biteAfter: pyroBiteAfter,
+        biteAfterCut: pyroBiteAfterCut,
         smokeFold: pyroSmokeFold,
         foldBorderFocus: pyroFoldBorderFocus,
         foldWake: pyroFoldWake,
+        wakeLift: pyroWakeLift,
+        wakeWarmth: pyroWakeWarmth,
         radiance: pyroContrastRadiance,
         radianceGate: pyroRadianceGate,
         radianceSpill: pyroRadianceSpill,
         radianceWarmth: pyroRadianceWarmth,
+        fireMode: pyroFireModeName,
         biteHeat: pyroBiteHeat,
         biteChroma: pyroBiteChroma,
+        flamePaint: pyroFlamePaint,
+        flameLuma: pyroFlameLuma,
+        stockMix: pyroStockMix,
+        biteLuma: pyroBiteLuma,
+        wakeLuma: pyroWakeLuma,
+        radianceLuma: pyroRadianceLuma,
+        palette: {
+          flameCore: controlsSnapshot.pyroFlameCoreColor || '#fff4b8',
+          flameEdge: controlsSnapshot.pyroFlameEdgeColor || '#ff8a24',
+          biteEmber: controlsSnapshot.pyroBiteEmberColor || '#e65a1a',
+          biteHot: controlsSnapshot.pyroBiteHotColor || '#fff4b8',
+          wakeShadow: controlsSnapshot.pyroWakeShadowColor || '#384c50',
+          wakeEmber: controlsSnapshot.pyroWakeEmberColor || '#b06a2a',
+          radianceCool: controlsSnapshot.pyroRadianceCoolColor || '#7aa8b8',
+          radianceWarm: controlsSnapshot.pyroRadianceWarmColor || '#d18438',
+        },
         radianceHue: pyroRadianceHue,
         radianceChroma: pyroRadianceChroma,
+        radianceSource: controlsSnapshot.pyroRadianceSource || 'fire',
+        radianceHeight: pyroRadianceHeight,
+        radianceBorder: pyroRadianceBorder,
+        radianceTeeth: pyroRadianceTeeth,
+        radianceRise: pyroRadianceRise,
+        radianceFireLock: pyroRadianceFireLock,
         diagnosticPaint: pyroDiagnosticPaint,
       },
       carrierDebug: {
@@ -5109,13 +5531,17 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         overdrive: pyroCarrierOverdrive,
         diagnosticPaint: pyroDiagnosticPaint,
         borderSignalMax: pyroMaterialGain * pyroMaterialLiveAuthority * pyroInterfaceFocus * pyroCarrierOverdrive,
-        biteSignalMax: pyroMaterialGain * pyroMaterialLiveAuthority * pyroEdgeBite * pyroCarrierOverdrive,
+        biteSignalMax: pyroMaterialGain * pyroMaterialLiveAuthority * pyroEdgeBite * pyroCarrierOverdrive * Math.max(1, pyroBiteCore + pyroBiteRim + pyroBiteAfter),
         foldSignalMax: pyroMaterialGain * pyroMaterialSmokeAuthority * pyroSmokeFold * pyroCarrierOverdrive,
         radianceSignalMax: pyroMaterialGain * pyroMaterialLiveAuthority * pyroMaterialSmokeAuthority * pyroContrastRadiance * pyroCarrierOverdrive,
-        biteShape: `${pyroBiteTeeth.toFixed(2)}t/${pyroBiteWake.toFixed(2)}w`,
-        foldShape: `${pyroFoldWake.toFixed(2)}w`,
-        radianceShape: `${pyroRadianceGate.toFixed(2)}g/${pyroRadianceSpill.toFixed(2)}s/${pyroRadianceWarmth.toFixed(2)}w`,
+        biteShape: `${pyroBiteTeeth.toFixed(2)}t/${pyroBiteWake.toFixed(2)}w/${pyroBiteHeight.toFixed(2)}h/${pyroBiteFireLock.toFixed(2)}f`,
+        biteStack: `${pyroBiteCore.toFixed(2)}c/${pyroBiteRim.toFixed(2)}r/${pyroBiteAfter.toFixed(2)}a`,
+        biteCuts: `${pyroBiteCoreCut.toFixed(2)}c/${pyroBiteRimCut.toFixed(2)}r/${pyroBiteAfterCut.toFixed(2)}a`,
+        foldShape: `${pyroFoldWake.toFixed(2)}w/${pyroWakeLift.toFixed(2)}l/${pyroWakeWarmth.toFixed(2)}a`,
+        radianceShape: `${pyroRadianceGate.toFixed(2)}g/${pyroRadianceSpill.toFixed(2)}s/${pyroRadianceBorder.toFixed(2)}b/${pyroRadianceTeeth.toFixed(2)}t/${pyroRadianceRise.toFixed(2)}r/${pyroRadianceFireLock.toFixed(2)}f/${controlsSnapshot.pyroRadianceSource || 'fire'}/${pyroRadianceHeight.toFixed(2)}h`,
         colorShape: `${pyroBiteHeat.toFixed(2)}bh/${pyroBiteChroma.toFixed(2)}bc/${pyroRadianceHue.toFixed(2)}rh/${pyroRadianceChroma.toFixed(2)}rc`,
+        lumaShape: `${pyroFlamePaint.toFixed(2)}fp/${pyroStockMix.toFixed(2)}sm/${pyroFlameLuma.toFixed(2)}fl/${pyroBiteLuma.toFixed(2)}bl/${pyroWakeLuma.toFixed(2)}wl/${pyroRadianceLuma.toFixed(2)}rl`,
+        paletteShape: `${controlsSnapshot.pyroFlameCoreColor || '#fff4b8'}/${controlsSnapshot.pyroFlameEdgeColor || '#ff8a24'}/${controlsSnapshot.pyroBiteEmberColor || '#e65a1a'}/${controlsSnapshot.pyroRadianceWarmColor || '#d18438'}`,
       },
       spatialMemory: {
         identity: 'pyro-material-memory-spatial-coupling-v0',
@@ -5583,8 +6009,18 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       controls?.update?.();
       updateUniforms(now);
       const encoder = device.createCommandEncoder({ label: 'kaminos compute fluid frame' });
-      encodeSim(encoder);
-      encodeMajorant(encoder);
+      const lookFreeze = normalizeLookFreeze(controlsSnapshot.lookFreeze) && lookFreezeCanPin(state) ? 1 : 0;
+      state.lookFreeze = lookFreeze;
+      if (lookFreeze) {
+        if (state.lookFreezeFrame === null) state.lookFreezeFrame = state.frameCount;
+        state.lookFreezeSkippedFrames += 1;
+        state.majorantBuiltThisFrame = false;
+      } else {
+        state.lookFreezeFrame = null;
+        state.lookFreezeSkippedFrames = 0;
+        encodeSim(encoder);
+        encodeMajorant(encoder);
+      }
       const currentTexture = context.getCurrentTexture();
       encodeDraw(encoder, currentTexture.createView(), 'kaminos volume canvas pass');
       encodeHistoryCopy(encoder, currentTexture);
@@ -5841,6 +6277,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       emptyTiles,
       tiles,
     };
+  }
+
+  function pumpLookLabFrozenFrame() {
+    if (!state.active || !device) return;
+    if (!(normalizeLookFreeze(controlsSnapshot.lookFreeze) && lookFreezeCanPin(state))) return;
+    cancelAnimationFrame(raf);
+    raf = 0;
+    render(performance.now());
   }
 
   async function sampleSimReadback(fieldTileExportOptions = null) {
@@ -7364,6 +7808,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         state.majorantGrid = majorantGridSize;
       }
       state.gridOverlay = controlsSnapshot.gridOverlay || 0;
+      state.lookFreeze = normalizeLookFreeze(controlsSnapshot.lookFreeze);
+      state.pyroCompareMode = normalizePyroCompareMode(controlsSnapshot.pyroCompareMode);
       state.volumeScene = normalizeVolumeScene(controlsSnapshot.volumeScene);
       state.bonfireReferenceConfinement = bonfireReferenceConfinementDebug(controlsSnapshot.volumeScene);
       state.minimalPlumeProof = minimalPlumeProofDebug(controlsSnapshot.volumeScene);
@@ -7412,6 +7858,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       state.pressureTierOverlayOpacity = normalizePressureTierControls(controlsSnapshot).overlay;
       state.simProfile = normalizeSimProfileFlag(controlsSnapshot.simProfile);
       updateSimCostLedger();
+      pumpLookLabFrozenFrame();
     },
     setVolumePrimitives(next) {
       const incoming = Array.isArray(next) ? next : [];

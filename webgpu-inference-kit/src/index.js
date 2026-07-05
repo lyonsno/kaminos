@@ -11,6 +11,13 @@ export {
 } from './tensor-manifest.js';
 
 export {
+  WEBGPU_INFERENCE_RUNTIME_SCHEMA,
+  createCooperativeYield,
+  createWebGpuInferenceRuntime,
+  createWebGpuResourceCaches,
+} from './inference-runtime.js';
+
+export {
   createWebGpuBackendIdentity,
   createWebGpuDeviceRequest,
   requestBrowserWebGpuDevice,
@@ -48,6 +55,21 @@ export {
   WEBGPU_ROUTE_BACKPRESSURE_SCHEMA,
   WEBGPU_ROUTE_SCHEDULER_SCHEMA,
 } from './scheduler-backpressure.js';
+
+export {
+  SCHEDULER_EVENT_TRACE_SCHEMA,
+  SCHEDULER_VERIFICATION_RECEIPT_SCHEMA,
+  classifySchedulerVerificationReceipt,
+  createSchedulerVerificationReceipt,
+  validateSchedulerVerificationReceipt,
+} from './scheduler-verification-receipt.js';
+
+export {
+  SHARP_BREATHING_ROOM_SINGLE_PAIR_CLAIM_BOUNDARY,
+  SHARP_BREATHING_ROOM_VALIDATION_SCHEMA,
+  classifySharpBreathingRoomComparisonEvidence,
+  validateSharpBreathingRoomComparisonEvidence,
+} from './sharp-breathing-room-validation.js';
 
 export {
   classifyWebGpuRouteReceiptEvidence,

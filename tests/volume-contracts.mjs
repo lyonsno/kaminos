@@ -4,6 +4,7 @@ import { join } from 'node:path';
 
 const root = new URL('..', import.meta.url).pathname;
 const index = readFileSync(join(root, 'index.html'), 'utf8');
+const volumeWitness = readFileSync(join(root, 'volume-witness.mjs'), 'utf8');
 
 assert.match(index, /data-tab="volume"/, 'sidebar exposes a Volume tab');
 assert.match(index, /id="tab-volume"/, 'Volume tab content is present');
@@ -23,13 +24,18 @@ assert.match(index, /VOLUME_PRIMITIVE_SCHEMA/, 'scene data names the volume prim
 assert.match(index, /volumePrimitives/, 'scene data persists authored volume primitives');
 assert.match(index, /setVolumePrimitivesState/, 'scene loading can restore authored volume primitives');
 assert.match(index, /volume-core\.js/, 'index imports the volume prototype module');
-assert.match(index, /volume-core\.js\?v=pyro-carrier-color-0702/, 'volume prototype import carries a cache key when Pyro carrier color shaping lands');
+assert.match(index, /volume-core\.js\?v=pyro-palette-flame-paint-0703/, 'volume prototype import carries a cache key when editable Pyro palette and flame paint land');
 assert.match(index, /id="volume-render-source-orientation"/, 'Volume tab exposes render/source orientation identity for operator smoke');
 assert.match(index, /id="volume-canonical-render-mode-state"/, 'Volume tab exposes effective canonical render diagnostic mode for operator smoke');
 assert.match(index, /id="volume-canonical-motion-mode-state"/, 'Volume tab exposes effective canonical motion diagnostic mode for operator smoke');
 assert.match(index, /operator_memory_fire_0701/, 'Volume tab exposes the operator tall-plume Pyro-memory baseline preset');
 assert.match(index, /pyro_contrast_warm_cap_small_flame_0702/, 'Volume tab pins the operator-found Pyro contrast warm-cap small-flame basin by stable route identity');
 assert.match(index, /pyro_material_bonfire_family_0702/, 'Volume tab pins the operator-found Pyro material bonfire family basin by stable route identity');
+assert.match(index, /pyro_material_bonfire_family_0702:[\s\S]*resolution:\s*128/, 'Pyro material bonfire basin keeps the operator look-tuning resolution floor');
+assert.match(index, /pyro_material_bonfire_family_0702:[\s\S]*pyroRadiance:\s*10\.00/, 'Pyro material bonfire basin preserves the loud radiance contrast carrier');
+assert.match(index, /pyro_material_bonfire_family_0702:[\s\S]*pyroRadianceGate:\s*0\.10/, 'Pyro material bonfire basin preserves the sparse radiance gate');
+assert.match(index, /pyro_material_bonfire_family_0702:[\s\S]*pyroRadianceHue:\s*0\.05/, 'Pyro material bonfire basin preserves the amber-biased radiance color');
+assert.match(index, /pyro_material_bonfire_family_0702:[\s\S]*pressureMode:\s*'global-p3'/, 'Pyro material bonfire basin preserves the Full P3 pressure solve');
 assert.match(index, /id="volume-basin-bonfire-family"/, 'Volume cockpit exposes a one-click Pyro material bonfire family basin action');
 assert.match(index, /KAMINOS_VOLUME_BASIN_STORAGE_KEY/, 'Volume cockpit has a durable localStorage key for last-basin recovery');
 assert.match(index, /saveVolumeBasinSnapshot/, 'Volume cockpit autosaves current basin controls on slider changes');
@@ -37,6 +43,45 @@ assert.match(index, /restoreVolumeBasinSnapshot/, 'Volume cockpit can restore th
 assert.match(index, /buildVolumeBasinUrl/, 'Volume cockpit can serialize current controls into a copyable basin URL');
 assert.match(index, /id="volume-basin-copy"/, 'Volume cockpit exposes a copy-basin URL action');
 assert.match(index, /id="volume-basin-restore"/, 'Volume cockpit exposes a restore-last-basin action');
+assert.match(index, /id="volume-basin-slot"/, 'Volume cockpit exposes named local basin slots');
+assert.match(index, /KAMINOS_VOLUME_BASIN_SLOT_STORAGE_PREFIX/, 'Volume cockpit stores basin slots under a stable localStorage prefix');
+assert.match(index, /VOLUME_LOOK_LIBRARY_IDENTITY/, 'Volume cockpit has a stable JSON look-library identity');
+assert.match(index, /KAMINOS_VOLUME_LOOK_LIBRARY_STORAGE_KEY/, 'Volume cockpit stores the editable JSON look library under a stable browser key');
+assert.match(index, /PYRO_LOOK_FIELDS/, 'Volume cockpit defines a Pyro-only look field list');
+assert.match(index, /FIRESIM_LOOK_FIELDS/, 'Volume cockpit defines a FireSim look field list separate from render expense');
+assert.match(index, /id="volume-look-library-kind"/, 'Volume cockpit exposes a Pyro/FireSim library selector');
+assert.match(index, /id="volume-look-library-name"/, 'Volume cockpit exposes a named look-library entry field');
+assert.match(index, /id="volume-look-library-entry"/, 'Volume cockpit exposes a saved look-library entry selector');
+assert.match(index, /id="volume-look-library-json"/, 'Volume cockpit exposes an editable JSON import/export buffer');
+assert.match(index, /saveVolumeLookLibraryEntry/, 'Volume cockpit can save named Pyro/FireSim look-library entries');
+assert.match(index, /loadVolumeLookLibraryEntry/, 'Volume cockpit can load named Pyro/FireSim look-library entries');
+assert.match(index, /exportVolumeLookLibraryJson/, 'Volume cockpit can export the page JSON look library');
+assert.match(index, /importVolumeLookLibraryJson/, 'Volume cockpit can import the page JSON look library');
+const saveVolumeLookLibraryEntryFn = index.match(/function saveVolumeLookLibraryEntry\(\) \{([\s\S]*?)\n\}/)?.[1] || '';
+assert.match(saveVolumeLookLibraryEntryFn, /saveVolumeBasinSnapshot\(`look-library-save-\$\{kind\}-\$\{name\}`\)/, 'Saving a named look also refreshes the full current basin snapshot');
+const loadVolumeLookLibraryEntryFn = index.match(/function loadVolumeLookLibraryEntry\(\) \{([\s\S]*?)\n\}/)?.[1] || '';
+assert.match(loadVolumeLookLibraryEntryFn, /saveVolumeBasinSnapshot\(`look-library-load-\$\{kind\}-\$\{entry\.name\}`\)/, 'Loading a named look refreshes the full current basin snapshot after partial look controls apply');
+const applyBudgetControlsFn = index.match(/const applyBudgetControls = \(\) => \{([\s\S]*?)\n  \};/)?.[1] || '';
+assert.match(applyBudgetControlsFn, /saveVolumeBasinSnapshot\('budget-controls'\)/, 'Budget/gamut changes refresh the durable full basin snapshot instead of leaving restore state stale');
+assert.doesNotMatch(index, /LEGACY_BITE_STACK_DEFAULTS/, 'Look-library normalization must not rewrite saved Bite stack layers behind the operator');
+assert.doesNotMatch(index, /matchesLegacyBiteStackDefaults/, 'Look-library normalization must not infer old Bite defaults and zero authored-looking values');
+assert.doesNotMatch(index, /entry\.biteStackAuthored !== true[\s\S]*pyroBiteCore\s*=\s*0/, 'Look-library load/import must preserve explicit Bite core values even when older metadata is absent');
+const fireSimLookFields = index.match(/const FIRESIM_LOOK_FIELDS = \[([\s\S]*?)\];/);
+assert.ok(fireSimLookFields, 'FireSim look library exposes an inspectable field list');
+for (const forbidden of ['raySteps', 'adaptiveRays', 'occupancySkip', 'majorantSkip', 'majorantSmooth', 'majorantGuard', 'temporalAccum', 'temporalJitter', 'historyClamp', 'renderScale', 'resolution', 'majorantGrid', 'pressureMode', 'pressureTierOverlay', 'pressureTierLowerMax', 'pressureTierHeroMin', 'pressureTierHeroMax']) {
+  assert.doesNotMatch(fireSimLookFields[1], new RegExp(`'${forbidden}'`), `FireSim look presets must not save ${forbidden} expense/solve state`);
+}
+assert.match(index, /id="volume-look-freeze"/, 'Volume look lab exposes a freeze control');
+assert.match(index, /stops fluid steps/i, 'Volume freeze control explains that only sim stepping stops');
+assert.match(index, /id="volume-pyro-compare"/, 'Volume look lab exposes a same-frame Pyro compare selector');
+assert.match(index, /Base only/, 'Pyro compare selector can mute Pyro carriers against the same frozen sim');
+assert.match(index, /volume_look_freeze/, 'Basin URLs preserve look-lab freeze state');
+assert.match(index, /volume_pyro_compare/, 'Basin URLs preserve Pyro compare mode');
+assert.match(index, /id="volume-look-lab-state"/, 'Volume readout exposes effective look-lab freeze/compare state');
+assert.match(index, /Volume route controls loaded; renderer failed/, 'Volume route still hydrates basin controls when renderer activation fails');
+assert.match(index, /initKaminosVolumeRoute\(\)\.catch/, 'Volume route initializes from the scene-init fallback path for setup diagnostics');
+assert.match(index, /\.slider-row\s*\{[^}]*user-select:\s*none/, 'Slider rows prevent label/help text selection from stealing drag gestures');
+assert.match(index, /\.slider-row input\[type="range"\]\s*\{[^}]*min-height:\s*24px/, 'Range sliders expose a taller grab lane than the visible rail');
 assert.match(index, /id="volume-pyro-interface-focus"/, 'Pyro cockpit exposes an interface-focus slider');
 assert.match(index, /Border carrier/i, 'Pyro interface-focus slider describes the standalone border carrier');
 assert.match(index, /id="volume-pyro-edge-bite"/, 'Pyro cockpit exposes an edge-bite slider');
@@ -47,12 +92,32 @@ assert.match(index, /id="volume-pyro-bite-teeth"/, 'Pyro cockpit exposes a bite 
 assert.match(index, /Bite teeth/i, 'Pyro bite-teeth slider describes torn flame-edge bite');
 assert.match(index, /id="volume-pyro-bite-wake"/, 'Pyro cockpit exposes a bite wake/lift slider');
 assert.match(index, /Bite wake/i, 'Pyro bite-wake slider describes lower rising boundary influence');
+assert.match(index, /id="volume-pyro-bite-height"/, 'Pyro cockpit exposes a bite height/climb gate');
+assert.match(index, /Bite climb/i, 'Pyro bite-height slider describes low-edge versus higher plume bite permission');
+assert.match(index, /id="volume-pyro-bite-fire-lock"/, 'Pyro cockpit exposes a bite live-fire lock');
+assert.match(index, /Bite fire lock/i, 'Pyro bite fire-lock slider describes whether current flame authority is required');
+assert.match(index, /id="volume-pyro-bite-core"/, 'Pyro cockpit exposes a Bite core layer gain');
+assert.match(index, /Core bite/i, 'Pyro Bite core layer describes current-flame teeth');
+assert.match(index, /id="volume-pyro-bite-core-cut"/, 'Pyro cockpit exposes a Bite core threshold cut');
+assert.match(index, /Core cut/i, 'Pyro Bite core cut describes broad versus selective current-fire bite');
+assert.match(index, /id="volume-pyro-bite-rim"/, 'Pyro cockpit exposes a Bite rim/interface layer gain');
+assert.match(index, /Rim bite/i, 'Pyro Bite rim layer describes flame-smoke interface teeth');
+assert.match(index, /id="volume-pyro-bite-rim-cut"/, 'Pyro cockpit exposes a Bite rim threshold cut');
+assert.match(index, /Rim cut/i, 'Pyro Bite rim cut describes soft versus strict seam bite');
+assert.match(index, /id="volume-pyro-bite-after"/, 'Pyro cockpit exposes a Bite after/wake layer gain');
+assert.match(index, /After bite/i, 'Pyro Bite after layer describes ember wake bite');
+assert.match(index, /id="volume-pyro-bite-after-cut"/, 'Pyro cockpit exposes a Bite after threshold cut');
+assert.match(index, /After cut/i, 'Pyro Bite after cut describes broad versus selective wake bite');
 assert.match(index, /id="volume-pyro-smoke-fold"/, 'Pyro cockpit exposes a smoke-fold slider');
 assert.match(index, /darken and fold smoke/i, 'Pyro smoke-fold slider describes the smoke/absorption carrier');
 assert.match(index, /id="volume-pyro-fold-border"/, 'Pyro cockpit exposes a fold-specific border focus slider');
 assert.match(index, /Fold border focus/i, 'Pyro fold-border slider describes smoke body versus seam wake');
 assert.match(index, /id="volume-pyro-fold-wake"/, 'Pyro cockpit exposes a fold wake-length slider');
 assert.match(index, /Fold wake/i, 'Pyro fold-wake slider describes downstream smoke memory');
+assert.match(index, /id="volume-pyro-wake-lift"/, 'Pyro cockpit exposes a separate smoke-memory wake lift slider');
+assert.match(index, /Wake lift/i, 'Pyro wake-lift slider describes how far remembered fire can climb into smoke');
+assert.match(index, /id="volume-pyro-wake-warmth"/, 'Pyro cockpit exposes a separate smoke-memory wake warmth slider');
+assert.match(index, /Wake warmth/i, 'Pyro wake-warmth slider describes neutral smoke-memory versus amber remembered-fire warmth');
 assert.match(index, /id="volume-pyro-radiance"/, 'Pyro cockpit exposes a radiance contrast slider');
 assert.match(index, /id="volume-pyro-radiance"[^>]+max="10"/, 'Pyro radiance slider reaches loud basin-search range');
 assert.match(index, /Pyro radiance/i, 'Pyro radiance slider describes live-field contrast illumination');
@@ -70,6 +135,46 @@ assert.match(index, /id="volume-pyro-radiance-hue"/, 'Pyro cockpit exposes a rad
 assert.match(index, /Radiance hue/i, 'Pyro radiance hue slider describes smoke-blue versus amber carrier bias');
 assert.match(index, /id="volume-pyro-radiance-chroma"/, 'Pyro cockpit exposes a radiance chroma slider');
 assert.match(index, /Radiance chroma/i, 'Pyro radiance chroma slider describes gray contrast versus colored glow');
+assert.match(index, /id="volume-pyro-flame-paint"/, 'Pyro cockpit exposes a flame paint gain slider');
+assert.match(index, /Flame paint/i, 'Pyro flame paint slider describes repainting live flame from raw simulation authority');
+assert.match(index, /id="volume-pyro-stock-mix"/, 'Pyro cockpit exposes stock flame mix control');
+assert.match(index, /Stock mix/i, 'Pyro stock mix slider describes how much default flame color survives');
+for (const [id, label] of [
+  ['volume-pyro-flame-core-color', 'Flame core'],
+  ['volume-pyro-flame-edge-color', 'Flame edge'],
+  ['volume-pyro-bite-ember-color', 'Bite ember'],
+  ['volume-pyro-bite-hot-color', 'Bite hot'],
+  ['volume-pyro-wake-shadow-color', 'Wake shadow'],
+  ['volume-pyro-wake-ember-color', 'Wake ember'],
+  ['volume-pyro-radiance-cool-color', 'Rad cool'],
+  ['volume-pyro-radiance-warm-color', 'Rad warm'],
+]) {
+  assert.match(index, new RegExp(`id="${id}"[^>]+type="color"|type="color"[^>]+id="${id}"`), `Pyro cockpit exposes editable endpoint swatch ${id}`);
+  assert.match(index, new RegExp(label, 'i'), `Pyro cockpit labels the ${label} editable endpoint`);
+}
+for (const [id, copy] of [
+  ['volume-pyro-flame-luma', 'Flame luma'],
+  ['volume-pyro-bite-luma', 'Bite luma'],
+  ['volume-pyro-wake-luma', 'Wake luma'],
+  ['volume-pyro-radiance-luma', 'Rad luma'],
+]) {
+  assert.match(index, new RegExp(`id="${id}"`), `Pyro cockpit exposes independent luminance control ${id}`);
+  assert.match(index, new RegExp(copy, 'i'), `Pyro cockpit labels ${copy} as a luminance control`);
+}
+assert.match(index, /id="volume-pyro-radiance-source"/, 'Pyro cockpit exposes a radiance source selector');
+assert.match(index, /Fire edge.*Mixed.*Smoke wake/s, 'Pyro radiance source selector can choose fire edge, mixed, or smoke wake');
+assert.match(index, /id="volume-pyro-radiance-height"/, 'Pyro cockpit exposes a radiance height gate');
+assert.match(index, /Radiance height/i, 'Pyro radiance-height slider describes low contrast versus high plume permission');
+assert.match(index, /id="volume-pyro-fire-mode"/, 'Pyro cockpit exposes a fire-renderer ownership mode');
+assert.match(index, /Stock.*Hybrid.*Pyro-owned/s, 'Pyro fire mode can mute stock flame appearance while leaving live combustion authority available');
+assert.match(index, /id="volume-pyro-radiance-border"/, 'Pyro cockpit exposes a radiance border/focus slider');
+assert.match(index, /Radiance border/i, 'Pyro radiance border slider describes body glow versus flame seam focus');
+assert.match(index, /id="volume-pyro-radiance-teeth"/, 'Pyro cockpit exposes a radiance teeth/bite slider');
+assert.match(index, /Radiance teeth/i, 'Pyro radiance teeth slider describes smooth glow versus torn hot-edge light');
+assert.match(index, /id="volume-pyro-radiance-rise"/, 'Pyro cockpit exposes a radiance rise/climb slider');
+assert.match(index, /Radiance rise/i, 'Pyro radiance rise slider describes low flame light versus higher wake permission');
+assert.match(index, /id="volume-pyro-radiance-fire-lock"/, 'Pyro cockpit exposes a radiance live-fire lock');
+assert.match(index, /Radiance fire lock/i, 'Pyro radiance fire-lock slider describes whether current raw fire authority is required');
 assert.match(index, /volume_pyro_radiance_gate/, 'Pyro basin URLs preserve radiance gate');
 assert.match(index, /volume_pyro_radiance_spill/, 'Pyro basin URLs preserve radiance spill');
 assert.match(index, /volume_pyro_radiance_warmth/, 'Pyro basin URLs preserve radiance warmth');
@@ -77,6 +182,49 @@ assert.match(index, /volume_pyro_bite_heat/, 'Pyro basin URLs preserve bite heat
 assert.match(index, /volume_pyro_bite_chroma/, 'Pyro basin URLs preserve bite chroma');
 assert.match(index, /volume_pyro_radiance_hue/, 'Pyro basin URLs preserve radiance hue');
 assert.match(index, /volume_pyro_radiance_chroma/, 'Pyro basin URLs preserve radiance chroma');
+for (const param of [
+  'volume_pyro_flame_paint',
+  'volume_pyro_stock_mix',
+  'volume_pyro_flame_core_color',
+  'volume_pyro_flame_edge_color',
+  'volume_pyro_bite_ember_color',
+  'volume_pyro_bite_hot_color',
+  'volume_pyro_wake_shadow_color',
+  'volume_pyro_wake_ember_color',
+  'volume_pyro_radiance_cool_color',
+  'volume_pyro_radiance_warm_color',
+  'volume_pyro_flame_luma',
+  'volume_pyro_bite_luma',
+  'volume_pyro_wake_luma',
+  'volume_pyro_radiance_luma',
+]) {
+  assert.match(index, new RegExp(param), `Pyro basin URLs preserve ${param}`);
+}
+assert.match(index, /volume_pyro_bite_height/, 'Pyro basin URLs preserve bite height gate');
+assert.match(index, /volume_pyro_bite_fire_lock/, 'Pyro basin URLs preserve bite live-fire lock');
+for (const param of [
+  'volume_pyro_bite_core',
+  'volume_pyro_bite_core_cut',
+  'volume_pyro_bite_rim',
+  'volume_pyro_bite_rim_cut',
+  'volume_pyro_bite_after',
+  'volume_pyro_bite_after_cut',
+]) {
+  assert.match(index, new RegExp(param), `Pyro basin URLs preserve stacked Bite control ${param}`);
+}
+assert.match(index, /volume_pyro_wake_lift/, 'Pyro basin URLs preserve wake lift');
+assert.match(index, /volume_pyro_wake_warmth/, 'Pyro basin URLs preserve wake warmth');
+assert.match(index, /volume_pyro_radiance_source/, 'Pyro basin URLs preserve radiance source routing');
+assert.match(index, /volume_pyro_radiance_height/, 'Pyro basin URLs preserve radiance height gate');
+assert.match(index, /volume_pyro_fire_mode/, 'Pyro basin URLs preserve fire-renderer ownership mode');
+assert.match(index, /volume_pyro_radiance_border/, 'Pyro basin URLs preserve radiance border/focus');
+assert.match(index, /volume_pyro_radiance_teeth/, 'Pyro basin URLs preserve radiance teeth/bite');
+assert.match(index, /volume_pyro_radiance_rise/, 'Pyro basin URLs preserve radiance rise/climb');
+assert.match(index, /volume_pyro_radiance_fire_lock/, 'Pyro basin URLs preserve radiance live-fire lock');
+assert.doesNotMatch(volumeWitness, /`\/tmp\/kaminos-volume-witness-profile-\$\{port\}`/, 'Volume witness must not reuse one persistent browser profile per debug port');
+assert.match(volumeWitness, /mkdtempSync\([^)]*kaminos-volume-witness-profile-/, 'Volume witness default profile must be fresh per run so stale localStorage cannot shadow the requested route');
+assert.doesNotMatch(volumeWitness, /Number\(args\.get\('--debug-port'\) \|\| 9433\)/, 'Volume witness must not reuse one fixed default Chrome debug port across runs');
+assert.match(volumeWitness, /randomInt\(/, 'Volume witness default debug port must be randomized so stale Chrome targets cannot shadow the requested route');
 assert.match(index, /routePyroRadianceGate/, 'Pyro route parser accepts radiance gate');
 assert.match(index, /routePyroRadianceSpill/, 'Pyro route parser accepts radiance spill');
 assert.match(index, /routePyroRadianceWarmth/, 'Pyro route parser accepts radiance warmth');
@@ -84,14 +232,35 @@ assert.match(index, /routePyroBiteHeat/, 'Pyro route parser accepts bite heat co
 assert.match(index, /routePyroBiteChroma/, 'Pyro route parser accepts bite chroma');
 assert.match(index, /routePyroRadianceHue/, 'Pyro route parser accepts radiance hue');
 assert.match(index, /routePyroRadianceChroma/, 'Pyro route parser accepts radiance chroma');
+assert.match(index, /routePyroFlamePaint/, 'Pyro route parser accepts flame paint gain');
+assert.match(index, /routePyroStockMix/, 'Pyro route parser accepts stock flame mix');
+assert.match(index, /routePyroFlameCoreColor/, 'Pyro route parser accepts editable flame core color');
+assert.match(index, /routePyroBiteHeight/, 'Pyro route parser accepts bite height gate');
+assert.match(index, /routePyroBiteFireLock/, 'Pyro route parser accepts bite live-fire lock');
+assert.match(index, /routePyroBiteCore/, 'Pyro route parser accepts Bite core gain');
+assert.match(index, /routePyroBiteCoreCut/, 'Pyro route parser accepts Bite core threshold cut');
+assert.match(index, /routePyroBiteRim/, 'Pyro route parser accepts Bite rim gain');
+assert.match(index, /routePyroBiteRimCut/, 'Pyro route parser accepts Bite rim threshold cut');
+assert.match(index, /routePyroBiteAfter/, 'Pyro route parser accepts Bite after/wake gain');
+assert.match(index, /routePyroBiteAfterCut/, 'Pyro route parser accepts Bite after/wake threshold cut');
+assert.match(index, /routePyroWakeLift/, 'Pyro route parser accepts wake lift');
+assert.match(index, /routePyroWakeWarmth/, 'Pyro route parser accepts wake warmth');
+assert.match(index, /routePyroRadianceSource/, 'Pyro route parser accepts radiance source routing');
+assert.match(index, /routePyroRadianceHeight/, 'Pyro route parser accepts radiance height gate');
+assert.match(index, /routePyroFireMode/, 'Pyro route parser accepts fire-renderer ownership mode');
+assert.match(index, /routePyroRadianceBorder/, 'Pyro route parser accepts radiance border/focus');
+assert.match(index, /routePyroRadianceTeeth/, 'Pyro route parser accepts radiance teeth/bite');
+assert.match(index, /routePyroRadianceRise/, 'Pyro route parser accepts radiance rise/climb');
+assert.match(index, /routePyroRadianceFireLock/, 'Pyro route parser accepts radiance live-fire lock');
 assert.match(index, /id="volume-pyro-diagnostic-paint"/, 'Pyro cockpit exposes diagnostic paint separately from carrier strength');
 assert.match(index, /false-color carrier paint/i, 'Pyro diagnostic-paint slider describes that color is inspection paint');
 assert.match(index, /id="volume-pyro-carrier-view"/, 'Pyro cockpit exposes a carrier isolate selector');
 assert.match(index, /Bite only/i, 'Pyro carrier isolate selector can show Bite alone');
 assert.match(index, /Fold only/i, 'Pyro carrier isolate selector can show Fold alone');
+assert.match(index, /Wake only/i, 'Pyro carrier isolate selector can show Wake alone');
 assert.match(index, /Radiance only/i, 'Pyro carrier isolate selector can show Radiance alone');
 assert.match(index, /All carriers/i, 'Pyro carrier selector can expose all carriers without implying forced loud paint');
-assert.match(index, /\['normal', 'border', 'bite', 'fold', 'radiance', 'all'\]\.includes\(routePyroCarrierView\)/, 'Pyro carrier-view URL route accepts the Radiance isolate mode');
+assert.match(index, /\['normal', 'border', 'bite', 'fold', 'wake', 'radiance', 'all'\]\.includes\(routePyroCarrierView\)/, 'Pyro carrier-view URL route accepts the Wake and Radiance isolate modes');
 assert.match(index, /Math\.min\(10,\s*routePyroRadiance\)/, 'Pyro radiance URL route accepts the same loud range as the cockpit slider');
 assert.match(index, /id="volume-pyro-overdrive"/, 'Pyro cockpit exposes a diagnostic overdrive slider');
 assert.match(index, /Continuous carrier gain/i, 'Pyro overdrive slider describes a reachable normal-mode gain, not a fake diagnostic mode');
@@ -693,9 +862,16 @@ assert.match(core, /pyro_carrier_controls:\s*vec4<f32>/, 'WGSL uniforms expose P
 assert.match(core, /pyro_diagnostic_controls:\s*vec4<f32>/, 'WGSL uniforms expose Pyro carrier isolate/overdrive diagnostics to the renderer');
 assert.match(core, /pyro_shape_controls:\s*vec4<f32>/, 'WGSL uniforms expose Pyro Bite/Fold shaping controls to the renderer');
 assert.match(core, /pyro_light_controls:\s*vec4<f32>/, 'WGSL uniforms expose Pyro contrast-lighting controls to the renderer');
+assert.match(core, /pyro_route_controls:\s*vec4<f32>/, 'WGSL uniforms expose Pyro carrier routing controls to the renderer');
 assert.match(core, /pyro_detail_cells:\s*array<vec4<f32>,\s*24>/, 'WGSL uniforms expose the full 8x3 Pyro material-memory cell atlas to the renderer');
 assert.match(core, /pyro-material-memory-render-coupling-v0/, 'debug state names the visible Pyro material-memory renderer coupling identity');
 assert.match(core, /uniforms\[84\]\s*=\s*pyroMaterialGain/, 'CPU uploads Pyro material-memory gain into the WGSL uniform block');
+assert.match(core, /normalizeLookFreeze\(controlsSnapshot\.lookFreeze\)/, 'CPU render path normalizes the look-lab freeze control');
+assert.match(core, /normalizePyroCompareMode\(controlsSnapshot\.pyroCompareMode\)/, 'CPU render path normalizes the Pyro compare mode');
+assert.match(core, /pyroCompareMuted\s*=\s*pyroCompareMode\s*===\s*'base'/, 'Base compare mode mutes Pyro material carriers');
+assert.match(core, /lookFreezeCanPin\(state\)/, 'Look-lab freeze waits for an initialized sim frame before pinning');
+assert.match(core, /pumpLookLabFrozenFrame\(\)/, 'Frozen look-lab controls force a redraw even when the browser parks RAF');
+assert.match(core, /if \(lookFreeze\)[\s\S]*state\.lookFreezeFrame[\s\S]*else[\s\S]*encodeSim\(encoder\)[\s\S]*encodeMajorant\(encoder\)/, 'Look-lab freeze skips sim and majorant passes while live mode keeps stepping');
 assert.match(core, /uniforms\[85\]\s*=\s*pyroMaterialEnergy/, 'CPU uploads reset-gated Pyro material-memory energy into the WGSL uniform block');
 assert.match(core, /uniforms\[88\s*\+\s*memoryIndex\s*\*\s*4\]\s*=\s*sample\[0\]/, 'CPU uploads each Pyro material-memory atlas cell into the uniform block');
 assert.match(core, /samplePyroMaterialMemoryCell\(p\)/, 'shader samples Pyro material memory spatially from the current raymarch position');
@@ -731,10 +907,61 @@ assert.match(core, /pyroBiteHeat\s*=\s*clamp\(u\.pyro_color_controls\.x,\s*0\.0,
 assert.match(core, /pyroBiteChroma\s*=\s*clamp\(u\.pyro_color_controls\.y,\s*0\.0,\s*1\.0\)/, 'WGSL accepts a separate Bite chroma control');
 assert.match(core, /pyroRadianceHue\s*=\s*clamp\(u\.pyro_color_controls\.z,\s*0\.0,\s*1\.0\)/, 'WGSL accepts a separate Radiance hue-bias control');
 assert.match(core, /pyroRadianceChroma\s*=\s*clamp\(u\.pyro_color_controls\.w,\s*0\.0,\s*1\.0\)/, 'WGSL accepts a separate Radiance chroma control');
+assert.match(core, /pyro_luma_controls:\s*vec4<f32>/, 'WGSL receives packed Pyro gain/luminance controls');
+assert.match(core, /pyroFlamePaint\s*=\s*clamp\(u\.pyro_luma_controls\.x,\s*0\.0,\s*3\.0\)/, 'WGSL accepts independent Pyro flame paint gain');
+assert.match(core, /pyroFlameLuma\s*=\s*clamp\(u\.pyro_luma_controls\.y,\s*0\.0,\s*3\.0\)/, 'WGSL accepts independent Pyro flame luminance');
+assert.match(core, /pyroStockMix\s*=\s*clamp\(u\.pyro_luma_controls\.z,\s*0\.0,\s*1\.0\)/, 'WGSL accepts default flame color survival mix');
+assert.match(core, /pyroBiteLuma\s*=\s*clamp\(u\.pyro_luma_controls\.w,\s*0\.0,\s*3\.0\)/, 'WGSL accepts independent Bite luminance');
+assert.match(core, /pyroWakeLuma\s*=\s*clamp\(u\.pyro_luma_controls2\.x,\s*0\.0,\s*3\.0\)/, 'WGSL accepts independent Wake luminance');
+assert.match(core, /pyroRadianceLuma\s*=\s*clamp\(u\.pyro_luma_controls2\.y,\s*0\.0,\s*3\.0\)/, 'WGSL accepts independent Radiance luminance');
+for (const uniform of [
+  'pyro_palette_flame',
+  'pyro_palette_flame_edge',
+  'pyro_palette_bite',
+  'pyro_palette_bite_hot',
+  'pyro_palette_wake',
+  'pyro_palette_wake_ember',
+  'pyro_palette_radiance',
+  'pyro_palette_radiance_warm',
+]) {
+  assert.match(core, new RegExp(`${uniform}:\\s*vec4<f32>`), `WGSL receives editable palette uniform ${uniform}`);
+}
+assert.match(core, /pyroRawFireMix/, 'WGSL derives a raw live-fire mix separate from display Fire gain');
+assert.match(core, /pyroFlamePaintSignal/, 'WGSL derives a named Pyro flame-paint carrier');
+assert.match(core, /pyroBiteHeight\s*=\s*clamp\(u\.pyro_route_controls\.x,\s*0\.0,\s*1\.0\)/, 'WGSL accepts a separate Bite height/climb gate');
+assert.match(core, /pyroBiteFireLock\s*=\s*clamp\(u\.pyro_route_controls\.y,\s*0\.0,\s*1\.0\)/, 'WGSL accepts a separate Bite current-fire authority lock');
+assert.match(core, /pyroWakeLift\s*=\s*clamp\(u\.pyro_route_controls\.z,\s*0\.0,\s*1\.0\)/, 'WGSL accepts a separate smoke-memory Wake lift control');
+assert.match(core, /pyroWakeWarmth\s*=\s*clamp\(u\.pyro_route_controls\.w,\s*0\.0,\s*1\.0\)/, 'WGSL accepts a separate smoke-memory Wake warmth control');
+assert.match(core, /pyro_radiance_route_controls:\s*vec4<f32>/, 'WGSL uniforms expose Pyro radiance source/height routing controls');
+assert.match(core, /pyroRadianceSource\s*=\s*clamp\(u\.pyro_radiance_route_controls\.x,\s*0\.0,\s*2\.0\)/, 'WGSL accepts a separate Radiance source selector');
+assert.match(core, /pyroRadianceHeight\s*=\s*clamp\(u\.pyro_radiance_route_controls\.y,\s*0\.0,\s*1\.0\)/, 'WGSL accepts a separate Radiance height gate');
+assert.match(core, /pyro_bite_stack_controls:\s*vec4<f32>/, 'WGSL receives the first packed Bite stack layer controls');
+assert.match(core, /pyro_bite_stack_controls2:\s*vec4<f32>/, 'WGSL receives the second packed Bite stack layer controls');
+assert.match(core, /pyroBiteCoreEvent/, 'WGSL derives a named inner/current-flame Bite layer');
+assert.match(core, /pyroBiteRimEvent/, 'WGSL derives a named rim/interface Bite layer');
+assert.match(core, /pyroBiteAfterEvent/, 'WGSL derives a named after/wake Bite layer');
+assert.match(core, /pyroStackedBiteEvent/, 'WGSL combines Bite layers before load-bearing alpha/color contribution');
+assert.match(index, /entry\.biteStackAuthored = \['pyroBiteCore', 'pyroBiteRim', 'pyroBiteAfter'\]/, 'Saved Pyro looks mark intentionally authored Bite stack layers');
+for (const id of [
+  'volume-pyro-bite-core',
+  'volume-pyro-bite-rim',
+  'volume-pyro-bite-after',
+]) {
+  assert.match(index, new RegExp(`id="${id}"[^>]*value="0"`), `Bite stack gain ${id} defaults neutral so legacy Bite remains the baseline look`);
+}
+assert.match(core, /pyroStackedBiteEvent\s*=\s*clamp\(\s*pyroBiteEvent\s*\+/, 'Stacked Bite preserves the legacy Bite carrier at full strength before optional layers add detail');
+assert.match(core, /pyroWakeSignal/, 'WGSL computes a named smoke-memory Wake carrier separate from Bite');
+assert.match(core, /pyroCurrentFireLock/, 'WGSL computes a named current-fire authority lock for Bite');
 assert.match(core, /uniforms\[200\]\s*=\s*pyroBiteHeat/, 'CPU uploads Bite heat into the Pyro color uniform block');
 assert.match(core, /uniforms\[201\]\s*=\s*pyroBiteChroma/, 'CPU uploads Bite chroma into the Pyro color uniform block');
 assert.match(core, /uniforms\[202\]\s*=\s*pyroRadianceHue/, 'CPU uploads Radiance hue into the Pyro color uniform block');
 assert.match(core, /uniforms\[203\]\s*=\s*pyroRadianceChroma/, 'CPU uploads Radiance chroma into the Pyro color uniform block');
+assert.match(core, /uniforms\[212\]\s*=\s*pyroFlamePaint/, 'CPU uploads flame paint gain into the Pyro luma uniform block');
+assert.match(core, /uniforms\[213\]\s*=\s*pyroFlameLuma/, 'CPU uploads flame luminance into the Pyro luma uniform block');
+assert.match(core, /writePyroPaletteUniform/, 'CPU uploads editable Pyro palette color endpoints');
+assert.match(core, /uniforms\.set\(previousViewProj\.elements,\s*260\)/, 'previous view-projection matrix shifts after Bite-stack and palette uniforms');
+assert.match(core, /paletteShape/, 'debug state exposes editable Pyro palette shape');
+assert.match(core, /lumaShape/, 'debug state exposes independent Pyro luma shape');
 assert.match(core, /radianceShape/, 'debug state exposes Pyro radiance gate/spill/warmth shape');
 assert.match(core, /colorShape/, 'debug state exposes Pyro Bite/Radiance color shaping');
 assert.match(core, /pyroBiteAlphaBoost/, 'Bite carrier affects load-bearing flame alpha instead of final color only');
@@ -1345,9 +1572,13 @@ assert.match(witness, /pyro-material/, 'witness accepts a visible Pyro material-
 assert.match(witness, /pyro-material-coupled-volume-signal/, 'witness reports Pyro material-memory visual evidence identity');
 assert.match(witness, /pyro-material-memory-spatial-coupling-v0/, 'witness requires the spatial Pyro material-memory renderer coupling identity');
 assert.match(witness, /expectsPyroMaterialEvidence/, 'witness separates Pyro material-memory visual evidence from ordinary orange-fire gates');
+assert.match(witness, /pyroRawCarrierPaintEvidence/, 'witness reports raw-carrier Pyro Flame Paint evidence separately from stock fire-layer evidence');
+assert.match(witness, /pyro-raw-carrier-paint-evidence-v0/, 'witness names the raw-carrier Pyro Flame Paint evidence identity');
+assert.match(witness, /stock-fire-layer-low-but-raw-pyro-carrier-live/, 'Pyro material witness can accept low stock fire-layer readback only when raw live carriers prove authority');
 assert.match(witness, /no-fire-volume/, 'witness accepts a deliberate no-fire volume evidence mode');
 assert.match(witness, /no-fire-volume-signal/, 'witness reports no-fire volume visual evidence identity');
 assert.match(witness, /expectsNoFireVolumeEvidence/, 'witness separates deliberate no-fire evidence from missing fire failures');
+assert.match(witness, /if \(\s*!expectsCanonicalPlumeProof\s*&&\s*!expectsFuelStarvedTallPlume\s*&&\s*!expectsNoFireVolumeEvidence\s*&&\s*\(!Number\.isFinite\(sample\.simReadback\.fireLayerMean\) \|\| sample\.simReadback\.fireLayerMean <= 0\.0005\)\s*&&\s*!acceptsRawCarrierPyroPaint\s*\)/, 'no-fire evidence routes do not require positive transported fire-layer readback');
 assert.match(witness, /!expectsFuelStarvedTallPlume\s*&&\s*!expectsNoFireVolumeEvidence[\s\S]*radianceMean/, 'no-fire evidence routes do not require positive fire radiance readback');
 assert.match(witness, /pyroDynamicDetail/, 'witness report carries Pyro dynamic detail state and reset semantics');
 assert.match(witness, /rayBudgetPreset/, 'witness records named ray-budget preset/config identity when present');

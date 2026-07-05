@@ -118,14 +118,19 @@ canvas { display: block; }
 #env-loading { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #444; font-size: 12px; font-family: 'SF Mono', monospace; pointer-events: none; }
 
 /* Exposure slider */
-.slider-row { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
+.slider-row { display: flex; align-items: center; gap: 8px; margin: 6px 0; user-select: none; -webkit-user-select: none; }
 .volume-control-section { margin: 10px 0 12px; padding: 8px 0; border-top: 1px solid #252525; border-bottom: 1px solid #202020; }
 .volume-control-section-title { font-size: 10px; color: #777; font-weight: 600; margin: 0 0 6px; }
-.slider-label { font-size: 10px; color: #666; min-width: 60px; }
-.slider-val { font-size: 10px; color: #888; font-family: 'SF Mono', monospace; min-width: 30px; }
-.slider-help { display: block; margin: -2px 0 6px 68px; color: #4f6470; font-size: 9px; line-height: 1.25; }
+.slider-label { font-size: 10px; color: #666; min-width: 60px; user-select: none; -webkit-user-select: none; }
+.slider-val { font-size: 10px; color: #888; font-family: 'SF Mono', monospace; min-width: 30px; user-select: none; -webkit-user-select: none; }
+.slider-help { display: block; margin: -2px 0 6px 68px; color: #4f6470; font-size: 9px; line-height: 1.25; user-select: none; -webkit-user-select: none; }
 input[type="range"] { flex: 1; -webkit-appearance: none; height: 3px; background: #333; border-radius: 2px; outline: none; }
+.slider-row input[type="range"] { min-height: 24px; cursor: grab; touch-action: pan-y; }
+.slider-row input[type="range"]:active { cursor: grabbing; }
 input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 12px; background: #1976d2; border-radius: 50%; cursor: pointer; }
+input[type="color"].volume-color-swatch { flex: 1; min-width: 0; height: 24px; padding: 0; border: 1px solid #333; border-radius: 5px; background: #151515; cursor: pointer; }
+input[type="color"].volume-color-swatch::-webkit-color-swatch-wrapper { padding: 2px; }
+input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; border-radius: 3px; }
 .select-input { flex: 1; background: #202020; border: 1px solid #333; color: #bbb; border-radius: 5px; padding: 4px 8px; font-size: 11px; outline: none; }
 .select-input:focus { border-color: #1976d2; }
 
@@ -967,6 +972,35 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
         <button class="btn" id="volume-basin-warm-cap">Warm Cap</button>
         <button class="btn" id="volume-basin-bonfire-family">Bonfire</button>
       </div>
+      <div class="volume-actions">
+        <select id="volume-basin-slot" class="select-input">
+          <option value="a" selected>Slot A</option>
+          <option value="b">Slot B</option>
+          <option value="c">Slot C</option>
+          <option value="d">Slot D</option>
+        </select>
+        <button class="btn" id="volume-basin-slot-save">Save Slot</button>
+        <button class="btn" id="volume-basin-slot-load">Load Slot</button>
+      </div>
+      <div class="volume-actions">
+        <select id="volume-look-library-kind" class="select-input">
+          <option value="pyro" selected>Pyro looks</option>
+          <option value="firesim">FireSim looks</option>
+        </select>
+        <select id="volume-look-library-entry" class="select-input">
+          <option value="">No saved looks</option>
+        </select>
+      </div>
+      <div class="volume-actions">
+        <input id="volume-look-library-name" class="search-input" type="text" placeholder="look name">
+      </div>
+      <div class="volume-actions">
+        <button class="btn" id="volume-look-library-save">Save Look</button>
+        <button class="btn" id="volume-look-library-load">Load Look</button>
+        <button class="btn" id="volume-look-library-export">Export JSON</button>
+        <button class="btn" id="volume-look-library-import">Import JSON</button>
+      </div>
+      <textarea id="volume-look-library-json" class="gen-input" rows="4" spellcheck="false" placeholder='{"identity":"kaminos-volume-look-library-v1",...}'></textarea>
     </div>
     <div class="slider-row">
       <span class="slider-label">Scene</span>
@@ -978,6 +1012,21 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
       </select>
       <span class="slider-val" id="volume-scene-val">compact</span>
     </div>
+    <div class="slider-row">
+      <span class="slider-label">Freeze</span>
+      <input type="range" id="volume-look-freeze" min="0" max="1" step="1" value="0">
+      <span class="slider-val" id="volume-look-freeze-val">live</span>
+    </div>
+    <span class="slider-help">Look lab freeze: stops fluid steps; shader, camera, and Pyro compare still redraw the same volume.</span>
+    <div class="slider-row">
+      <span class="slider-label">Compare</span>
+      <select id="volume-pyro-compare" class="select-input">
+        <option value="live" selected>Live Pyro</option>
+        <option value="base">Base only</option>
+      </select>
+      <span class="slider-val" id="volume-pyro-compare-val">live</span>
+    </div>
+    <span class="slider-help">Same-frame A/B: Live Pyro uses contrast carriers; Base only mutes them without moving the sim.</span>
     <div class="volume-control-section" data-volume-control-section="visual-tuning">
       <div class="volume-control-section-title">Visual Tuning</div>
     <div class="slider-row" data-volume-visual-cost-knob="occupied-volume">
@@ -1226,6 +1275,94 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
     </div>
     <span class="slider-help">Bite wake: lets the bite climb into the lower rising boundary.</span>
     <div class="slider-row">
+      <span class="slider-label">Bite Climb</span>
+      <input type="range" id="volume-pyro-bite-height" min="0" max="1" step="0.05" value="0.35">
+      <span class="slider-val" id="volume-pyro-bite-height-val">0.35</span>
+    </div>
+    <span class="slider-help">Bite climb: low flame-edge teeth at 0, higher plume permission at 1.</span>
+    <div class="slider-row">
+      <span class="slider-label">Bite Fire Lock</span>
+      <input type="range" id="volume-pyro-bite-fire-lock" min="0" max="1" step="0.05" value="0.75">
+      <span class="slider-val" id="volume-pyro-bite-fire-lock-val">0.75</span>
+    </div>
+    <span class="slider-help">Bite fire lock: memory can whisper at 0, current flame authority required at 1.</span>
+    <div class="slider-row">
+      <span class="slider-label">Core Bite</span>
+      <input type="range" id="volume-pyro-bite-core" min="0" max="1" step="0.05" value="0">
+      <span class="slider-val" id="volume-pyro-bite-core-val">0.00</span>
+    </div>
+    <span class="slider-help">Core bite: inner current-flame teeth; stacks under rim and afterbite.</span>
+    <div class="slider-row">
+      <span class="slider-label">Core Cut</span>
+      <input type="range" id="volume-pyro-bite-core-cut" min="0" max="1" step="0.05" value="0.45">
+      <span class="slider-val" id="volume-pyro-bite-core-cut-val">0.45</span>
+    </div>
+    <span class="slider-help">Core cut: broad current fire at 0, selective hot core at 1.</span>
+    <div class="slider-row">
+      <span class="slider-label">Rim Bite</span>
+      <input type="range" id="volume-pyro-bite-rim" min="0" max="1" step="0.05" value="0">
+      <span class="slider-val" id="volume-pyro-bite-rim-val">0.00</span>
+    </div>
+    <span class="slider-help">Rim bite: flame-smoke interface teeth, separate from core body bite.</span>
+    <div class="slider-row">
+      <span class="slider-label">Rim Cut</span>
+      <input type="range" id="volume-pyro-bite-rim-cut" min="0" max="1" step="0.05" value="0.55">
+      <span class="slider-val" id="volume-pyro-bite-rim-cut-val">0.55</span>
+    </div>
+    <span class="slider-help">Rim cut: soft seam at 0, strict flame-smoke edge at 1.</span>
+    <div class="slider-row">
+      <span class="slider-label">After Bite</span>
+      <input type="range" id="volume-pyro-bite-after" min="0" max="1" step="0.05" value="0">
+      <span class="slider-val" id="volume-pyro-bite-after-val">0.00</span>
+    </div>
+    <span class="slider-help">After bite: ember wake bite where fire just fed the plume.</span>
+    <div class="slider-row">
+      <span class="slider-label">After Cut</span>
+      <input type="range" id="volume-pyro-bite-after-cut" min="0" max="1" step="0.05" value="0.50">
+      <span class="slider-val" id="volume-pyro-bite-after-cut-val">0.50</span>
+    </div>
+    <span class="slider-help">After cut: broad wake stain at 0, selective fresh afterburn at 1.</span>
+    <div class="slider-row">
+      <span class="slider-label">Fire Mode</span>
+      <select id="volume-pyro-fire-mode" class="select-input">
+        <option value="stock">Stock</option>
+        <option value="hybrid" selected>Hybrid</option>
+        <option value="pyro-owned">Pyro-owned</option>
+      </select>
+      <span class="slider-val" id="volume-pyro-fire-mode-val">hybrid</span>
+    </div>
+    <span class="slider-help">Fire mode: stock renders old flame, hybrid mixes, Pyro-owned mutes stock fire and paints from raw live carriers.</span>
+    <div class="slider-row">
+      <span class="slider-label">Flame Paint</span>
+      <input type="range" id="volume-pyro-flame-paint" min="0" max="3" step="0.05" value="0">
+      <span class="slider-val" id="volume-pyro-flame-paint-val">0.00</span>
+    </div>
+    <span class="slider-help">Flame paint: repaint live flame from raw simulation authority, even when stock Fire display is quiet.</span>
+    <div class="slider-row">
+      <span class="slider-label">Stock Mix</span>
+      <input type="range" id="volume-pyro-stock-mix" min="0" max="1" step="0.05" value="1">
+      <span class="slider-val" id="volume-pyro-stock-mix-val">1.00</span>
+    </div>
+    <span class="slider-help">Stock mix: default flame color survives at 1, Pyro palette owns the flame at 0.</span>
+    <div class="slider-row">
+      <span class="slider-label">Flame Luma</span>
+      <input type="range" id="volume-pyro-flame-luma" min="0" max="3" step="0.05" value="1">
+      <span class="slider-val" id="volume-pyro-flame-luma-val">1.00</span>
+    </div>
+    <span class="slider-help">Flame luma: brightness of the Pyro-painted live flame, separate from paint gain.</span>
+    <div class="slider-row">
+      <span class="slider-label">Flame Core</span>
+      <input type="color" class="volume-color-swatch" id="volume-pyro-flame-core-color" value="#fff4b8">
+      <span class="slider-val" id="volume-pyro-flame-core-color-val">#fff4b8</span>
+    </div>
+    <span class="slider-help">Flame core editable endpoint: high raw-fire paint color.</span>
+    <div class="slider-row">
+      <span class="slider-label">Flame Edge</span>
+      <input type="color" class="volume-color-swatch" id="volume-pyro-flame-edge-color" value="#ff8a24">
+      <span class="slider-val" id="volume-pyro-flame-edge-color-val">#ff8a24</span>
+    </div>
+    <span class="slider-help">Flame edge editable endpoint: lower raw-fire rim color.</span>
+    <div class="slider-row">
       <span class="slider-label">Bite Heat</span>
       <input type="range" id="volume-pyro-bite-heat" min="0" max="1" step="0.05" value="0.65">
       <span class="slider-val" id="volume-pyro-bite-heat-val">0.65</span>
@@ -1237,6 +1374,24 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
       <span class="slider-val" id="volume-pyro-bite-chroma-val">0.55</span>
     </div>
     <span class="slider-help">Bite chroma: muted material at 0, saturated torn edge at 1.</span>
+    <div class="slider-row">
+      <span class="slider-label">Bite Luma</span>
+      <input type="range" id="volume-pyro-bite-luma" min="0" max="3" step="0.05" value="1">
+      <span class="slider-val" id="volume-pyro-bite-luma-val">1.00</span>
+    </div>
+    <span class="slider-help">Bite luma: brightness of torn-edge Bite color, separate from Bite gain.</span>
+    <div class="slider-row">
+      <span class="slider-label">Bite Ember</span>
+      <input type="color" class="volume-color-swatch" id="volume-pyro-bite-ember-color" value="#e65a1a">
+      <span class="slider-val" id="volume-pyro-bite-ember-color-val">#e65a1a</span>
+    </div>
+    <span class="slider-help">Bite ember editable endpoint: copper side of the torn edge.</span>
+    <div class="slider-row">
+      <span class="slider-label">Bite Hot</span>
+      <input type="color" class="volume-color-swatch" id="volume-pyro-bite-hot-color" value="#fff4b8">
+      <span class="slider-val" id="volume-pyro-bite-hot-color-val">#fff4b8</span>
+    </div>
+    <span class="slider-help">Bite hot editable endpoint: white-hot side of the torn edge.</span>
     <div class="slider-row">
       <span class="slider-label">Pyro Fold</span>
       <input type="range" id="volume-pyro-smoke-fold" min="0" max="1" step="0.05" value="0.25">
@@ -1255,6 +1410,36 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
       <span class="slider-val" id="volume-pyro-fold-wake-val">0.35</span>
     </div>
     <span class="slider-help">Fold wake: short seam bruise at 0, downstream smoke memory at 1.</span>
+    <div class="slider-row">
+      <span class="slider-label">Wake Lift</span>
+      <input type="range" id="volume-pyro-wake-lift" min="0" max="1" step="0.05" value="0.45">
+      <span class="slider-val" id="volume-pyro-wake-lift-val">0.45</span>
+    </div>
+    <span class="slider-help">Wake lift: keeps remembered fire low at 0, lets smoke-memory climb at 1.</span>
+    <div class="slider-row">
+      <span class="slider-label">Wake Warmth</span>
+      <input type="range" id="volume-pyro-wake-warmth" min="0" max="1" step="0.05" value="0.35">
+      <span class="slider-val" id="volume-pyro-wake-warmth-val">0.35</span>
+    </div>
+    <span class="slider-help">Wake warmth: neutral folded smoke at 0, amber remembered-fire tissue at 1.</span>
+    <div class="slider-row">
+      <span class="slider-label">Wake Luma</span>
+      <input type="range" id="volume-pyro-wake-luma" min="0" max="3" step="0.05" value="1">
+      <span class="slider-val" id="volume-pyro-wake-luma-val">1.00</span>
+    </div>
+    <span class="slider-help">Wake luma: brightness of smoke-memory Wake color, separate from Wake warmth.</span>
+    <div class="slider-row">
+      <span class="slider-label">Wake Shadow</span>
+      <input type="color" class="volume-color-swatch" id="volume-pyro-wake-shadow-color" value="#384c50">
+      <span class="slider-val" id="volume-pyro-wake-shadow-color-val">#384c50</span>
+    </div>
+    <span class="slider-help">Wake shadow editable endpoint: cool folded smoke memory.</span>
+    <div class="slider-row">
+      <span class="slider-label">Wake Ember</span>
+      <input type="color" class="volume-color-swatch" id="volume-pyro-wake-ember-color" value="#b06a2a">
+      <span class="slider-val" id="volume-pyro-wake-ember-color-val">#b06a2a</span>
+    </div>
+    <span class="slider-help">Wake ember editable endpoint: remembered-fire smoke tissue.</span>
     <div class="slider-row">
       <span class="slider-label">Pyro Radiance</span>
       <input type="range" id="volume-pyro-radiance" min="0" max="10" step="0.05" value="0">
@@ -1292,6 +1477,64 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
     </div>
     <span class="slider-help">Radiance chroma: gray contrast at 0, colored glow tissue at 1.</span>
     <div class="slider-row">
+      <span class="slider-label">Rad Luma</span>
+      <input type="range" id="volume-pyro-radiance-luma" min="0" max="3" step="0.05" value="1">
+      <span class="slider-val" id="volume-pyro-radiance-luma-val">1.00</span>
+    </div>
+    <span class="slider-help">Rad luma: brightness of Pyro radiance tissue, separate from radiance gain.</span>
+    <div class="slider-row">
+      <span class="slider-label">Rad Cool</span>
+      <input type="color" class="volume-color-swatch" id="volume-pyro-radiance-cool-color" value="#7aa8b8">
+      <span class="slider-val" id="volume-pyro-radiance-cool-color-val">#7aa8b8</span>
+    </div>
+    <span class="slider-help">Rad cool editable endpoint: sparse cool contrast color.</span>
+    <div class="slider-row">
+      <span class="slider-label">Rad Warm</span>
+      <input type="color" class="volume-color-swatch" id="volume-pyro-radiance-warm-color" value="#d18438">
+      <span class="slider-val" id="volume-pyro-radiance-warm-color-val">#d18438</span>
+    </div>
+    <span class="slider-help">Rad warm editable endpoint: sparse amber contrast color.</span>
+    <div class="slider-row">
+      <span class="slider-label">Rad Source</span>
+      <select id="volume-pyro-radiance-source" class="select-input">
+        <option value="fire" selected>Fire edge</option>
+        <option value="mixed">Mixed</option>
+        <option value="wake">Smoke wake</option>
+      </select>
+      <span class="slider-val" id="volume-pyro-radiance-source-val">fire</span>
+    </div>
+    <span class="slider-help">Radiance source: choose whether contrast listens to fire edge, mixed carriers, or smoke wake.</span>
+    <div class="slider-row">
+      <span class="slider-label">Rad Height</span>
+      <input type="range" id="volume-pyro-radiance-height" min="0" max="1" step="0.05" value="0.45">
+      <span class="slider-val" id="volume-pyro-radiance-height-val">0.45</span>
+    </div>
+    <span class="slider-help">Radiance height: low contrast agent at 0, higher plume permission at 1.</span>
+    <div class="slider-row">
+      <span class="slider-label">Radiance Border</span>
+      <input type="range" id="volume-pyro-radiance-border" min="0" max="1" step="0.05" value="0.55">
+      <span class="slider-val" id="volume-pyro-radiance-border-val">0.55</span>
+    </div>
+    <span class="slider-help">Radiance border: broad fire body at 0, flame/smoke seam light at 1.</span>
+    <div class="slider-row">
+      <span class="slider-label">Radiance Teeth</span>
+      <input type="range" id="volume-pyro-radiance-teeth" min="0" max="1" step="0.05" value="0.45">
+      <span class="slider-val" id="volume-pyro-radiance-teeth-val">0.45</span>
+    </div>
+    <span class="slider-help">Radiance teeth: smooth fire light at 0, torn nonlinear edge highlights at 1.</span>
+    <div class="slider-row">
+      <span class="slider-label">Radiance Rise</span>
+      <input type="range" id="volume-pyro-radiance-rise" min="0" max="1" step="0.05" value="0.45">
+      <span class="slider-val" id="volume-pyro-radiance-rise-val">0.45</span>
+    </div>
+    <span class="slider-help">Radiance rise: keeps contrast low at 0, lets the light climb the plume at 1.</span>
+    <div class="slider-row">
+      <span class="slider-label">Radiance Fire Lock</span>
+      <input type="range" id="volume-pyro-radiance-fire-lock" min="0" max="1" step="0.05" value="0.65">
+      <span class="slider-val" id="volume-pyro-radiance-fire-lock-val">0.65</span>
+    </div>
+    <span class="slider-help">Radiance fire lock: contrast can ride wake at 0, current raw flame authority gates it at 1.</span>
+    <div class="slider-row">
       <span class="slider-label">Diag Paint</span>
       <input type="range" id="volume-pyro-diagnostic-paint" min="0" max="1" step="0.05" value="0">
       <span class="slider-val" id="volume-pyro-diagnostic-paint-val">0.00</span>
@@ -1304,6 +1547,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
         <option value="border">Border only</option>
         <option value="bite">Bite only</option>
         <option value="fold">Fold only</option>
+        <option value="wake">Wake only</option>
         <option value="radiance">Radiance only</option>
         <option value="all">All carriers</option>
       </select>
@@ -1375,6 +1619,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
       <div class="field"><span class="field-key">Frame p95</span><span class="field-val" id="volume-frame-p95">-- ms</span></div>
       <div class="field"><span class="field-key">Queue done</span><span class="field-val" id="volume-queue-ms">-- ms</span></div>
       <div class="field"><span class="field-key">Queue p95</span><span class="field-val" id="volume-queue-p95">-- ms</span></div>
+      <div class="field"><span class="field-key">Look lab</span><span class="field-val" id="volume-look-lab-state">live / live pyro</span></div>
       <div class="field"><span class="field-key">Pyro detail</span><span class="field-val" id="volume-pyro-detail-state">inactive</span></div>
       <div class="field"><span class="field-key">Pyro carriers</span><span class="field-val" id="volume-pyro-carrier-state">normal / 1.00x</span></div>
       <div class="field"><span class="field-key">Pyro confidence</span><span class="field-val" id="volume-pyro-detail-confidence">0.00</span></div>
@@ -1789,7 +2034,7 @@ import * as THREE from 'three';
 import { pass, mrt, normalView, vec3, vec4, mix, float, uniform, texture, packNormalToRGB, unpackRGBToNormal, sample, positionView, convertToTexture } from 'three/tsl';
 import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
-import { createKaminosVolumePrototype } from './volume-core.js?v=pyro-carrier-color-0702';
+import { createKaminosVolumePrototype } from './volume-core.js?v=pyro-palette-flame-paint-0703';
 import {
   DEFAULT_DECISION_MOTION_PLAN,
   DEFAULT_MOTION_PHRASE_CONTROLS,
@@ -9328,7 +9573,30 @@ const NON_CANONICAL_VOLUME_HIDDEN_CONTROLS = new Set([
 ]);
 
 const KAMINOS_VOLUME_BASIN_STORAGE_KEY = 'kaminos.volume.lastBasin.v1';
+const KAMINOS_VOLUME_BASIN_SLOT_STORAGE_PREFIX = 'kaminos.volume.basinSlot.v1.';
 const VOLUME_BASIN_SNAPSHOT_IDENTITY = 'kaminos-volume-basin-snapshot-v1';
+const KAMINOS_VOLUME_LOOK_LIBRARY_STORAGE_KEY = 'kaminos.volume.lookLibrary.v1';
+const VOLUME_LOOK_LIBRARY_IDENTITY = 'kaminos-volume-look-library-v1';
+const PYRO_LOOK_FIELDS = [
+  'pyroDynamicDetail', 'pyroMaterialGain', 'pyroInterfaceFocus', 'pyroEdgeBite',
+  'pyroBiteBorder', 'pyroBiteTeeth', 'pyroBiteWake', 'pyroBiteHeight', 'pyroBiteFireLock',
+  'pyroBiteCore', 'pyroBiteCoreCut', 'pyroBiteRim', 'pyroBiteRimCut', 'pyroBiteAfter', 'pyroBiteAfterCut',
+  'pyroFireMode', 'pyroFlamePaint', 'pyroStockMix', 'pyroFlameLuma', 'pyroFlameCoreColor', 'pyroFlameEdgeColor',
+  'pyroBiteHeat', 'pyroBiteChroma', 'pyroBiteLuma', 'pyroBiteEmberColor', 'pyroBiteHotColor',
+  'pyroSmokeFold', 'pyroFoldBorder', 'pyroFoldWake', 'pyroWakeLift', 'pyroWakeWarmth',
+  'pyroWakeLuma', 'pyroWakeShadowColor', 'pyroWakeEmberColor', 'pyroRadiance',
+  'pyroRadianceGate', 'pyroRadianceSpill', 'pyroRadianceWarmth', 'pyroRadianceHue',
+  'pyroRadianceChroma', 'pyroRadianceLuma', 'pyroRadianceCoolColor', 'pyroRadianceWarmColor',
+  'pyroRadianceSource', 'pyroRadianceHeight', 'pyroRadianceBorder', 'pyroRadianceTeeth',
+  'pyroRadianceRise', 'pyroRadianceFireLock', 'pyroDiagnosticPaint', 'pyroCarrierView',
+  'pyroOverdrive',
+];
+const FIRESIM_LOOK_FIELDS = [
+  'volumeScene', 'density', 'fire', 'radiance', 'absorption', 'glow', 'smoke', 'curl',
+  'microdetail', 'interfaceShred', 'fireLicks', 'projection', 'speed', 'fireScale',
+  'detailScale', 'plumeHeight', 'windStrength', 'windAngle', 'windHeight', 'inputRadius',
+  'flowRate',
+];
 
 const VOLUME_SCENE_PRESETS = {
   canonical_plume: {
@@ -9576,17 +9844,17 @@ const TALL_PLUME_OPERATOR_PRESETS = {
     label: 'pyro material bonfire family 0702',
     volumeScene: 'tall_plume',
     density: 6.00,
-    fire: 3.50,
-    radiance: 2.55,
-    absorption: 1.95,
+    fire: 1.50,
+    radiance: 2.25,
+    absorption: 1.70,
     glow: 2.35,
     smoke: 2.80,
     curl: 3.65,
     microdetail: 2.50,
-    interfaceShred: 5.00,
+    interfaceShred: 4.70,
     fireLicks: 5.00,
     projection: 1.50,
-    speed: 3.45,
+    speed: 2.55,
     raySteps: 160,
     adaptiveRays: 0.05,
     occupancySkip: 0.05,
@@ -9596,35 +9864,35 @@ const TALL_PLUME_OPERATOR_PRESETS = {
     temporalAccum: 0.00,
     temporalJitter: 0.00,
     historyClamp: 1.00,
-    fireScale: 0.52,
-    detailScale: 1.85,
+    fireScale: 0.63,
+    detailScale: 0.45,
     plumeHeight: 1.85,
     windStrength: 1.50,
     windAngle: -65,
-    windHeight: -0.65,
-    renderScale: 0.30,
-    inputRadius: 0.20,
-    flowRate: 0.25,
-    resolution: 96,
+    windHeight: -0.80,
+    renderScale: 1.00,
+    inputRadius: 0.14,
+    flowRate: 0.30,
+    resolution: 128,
     majorantGrid: 48,
     pyroDynamicDetail: 1,
     pyroMaterialGain: 1.50,
     pyroInterfaceFocus: 0.00,
     pyroEdgeBite: 1.00,
-    pyroBiteBorder: 0.45,
-    pyroBiteTeeth: 0.60,
+    pyroBiteBorder: 0.00,
+    pyroBiteTeeth: 1.00,
     pyroBiteWake: 1.00,
-    pyroBiteHeat: 0.70,
+    pyroBiteHeat: 0.00,
     pyroBiteChroma: 0.60,
-    pyroSmokeFold: 0.35,
-    pyroFoldBorder: 1.00,
-    pyroFoldWake: 1.00,
-    pyroRadiance: 6.10,
-    pyroRadianceGate: 1.00,
-    pyroRadianceSpill: 0.90,
-    pyroRadianceWarmth: 0.75,
-    pyroRadianceHue: 0.50,
-    pyroRadianceChroma: 0.55,
+    pyroSmokeFold: 0.45,
+    pyroFoldBorder: 0.95,
+    pyroFoldWake: 0.05,
+    pyroRadiance: 10.00,
+    pyroRadianceGate: 0.10,
+    pyroRadianceSpill: 0.50,
+    pyroRadianceWarmth: 0.10,
+    pyroRadianceHue: 0.05,
+    pyroRadianceChroma: 1.00,
     pyroDiagnosticPaint: 0.00,
     pyroCarrierView: 'normal',
     pyroOverdrive: 8.00,
@@ -10042,7 +10310,19 @@ function setVolumeControlValue(id, value) {
   el.value = String(value);
 }
 
+function normalizeVolumeHexColor(value, fallback = '#ffffff') {
+  const raw = String(value || '').trim();
+  if (/^#[0-9a-f]{6}$/i.test(raw)) return raw.toLowerCase();
+  if (/^[0-9a-f]{6}$/i.test(raw)) return `#${raw.toLowerCase()}`;
+  return fallback;
+}
+
+function setVolumeColorControlValue(id, value, fallback) {
+  setVolumeControlValue(id, normalizeVolumeHexColor(value, fallback));
+}
+
 function formatVolumePresetControlValue(key, value) {
+  if (/Color$/.test(key)) return normalizeVolumeHexColor(value);
   if (['raySteps', 'resolution', 'majorantGrid', 'windAngle'].includes(key)) {
     return String(Math.round(value));
   }
@@ -10074,6 +10354,8 @@ function volumeSceneControlId(key) {
     volumeScene: 'volume-scene',
     raySteps: 'volume-steps',
     pyroDynamicDetail: 'volume-pyro-detail',
+    pyroCompareMode: 'volume-pyro-compare',
+    lookFreeze: 'volume-look-freeze',
   };
   if (explicit[key]) return explicit[key];
   return `volume-${key.replace(/[A-Z]/g, letter => `-${letter.toLowerCase()}`)}`;
@@ -10145,6 +10427,8 @@ const VOLUME_BASIN_ROUTE_FIELDS = [
   ['renderScale', 'volume_render_scale'],
   ['resolution', 'volume_resolution'],
   ['majorantGrid', 'volume_majorant_grid'],
+  ['lookFreeze', 'volume_look_freeze'],
+  ['pyroCompareMode', 'volume_pyro_compare'],
   ['pyroDynamicDetail', 'volume_pyro_detail'],
   ['pyroMaterialGain', 'volume_pyro_material_gain'],
   ['pyroInterfaceFocus', 'volume_pyro_interface_focus'],
@@ -10152,17 +10436,48 @@ const VOLUME_BASIN_ROUTE_FIELDS = [
   ['pyroBiteBorder', 'volume_pyro_bite_border'],
   ['pyroBiteTeeth', 'volume_pyro_bite_teeth'],
   ['pyroBiteWake', 'volume_pyro_bite_wake'],
+  ['pyroBiteHeight', 'volume_pyro_bite_height'],
+  ['pyroBiteFireLock', 'volume_pyro_bite_fire_lock'],
+  ['pyroBiteCore', 'volume_pyro_bite_core'],
+  ['pyroBiteCoreCut', 'volume_pyro_bite_core_cut'],
+  ['pyroBiteRim', 'volume_pyro_bite_rim'],
+  ['pyroBiteRimCut', 'volume_pyro_bite_rim_cut'],
+  ['pyroBiteAfter', 'volume_pyro_bite_after'],
+  ['pyroBiteAfterCut', 'volume_pyro_bite_after_cut'],
+  ['pyroFireMode', 'volume_pyro_fire_mode'],
+  ['pyroFlamePaint', 'volume_pyro_flame_paint'],
+  ['pyroStockMix', 'volume_pyro_stock_mix'],
+  ['pyroFlameLuma', 'volume_pyro_flame_luma'],
+  ['pyroFlameCoreColor', 'volume_pyro_flame_core_color'],
+  ['pyroFlameEdgeColor', 'volume_pyro_flame_edge_color'],
   ['pyroBiteHeat', 'volume_pyro_bite_heat'],
   ['pyroBiteChroma', 'volume_pyro_bite_chroma'],
+  ['pyroBiteLuma', 'volume_pyro_bite_luma'],
+  ['pyroBiteEmberColor', 'volume_pyro_bite_ember_color'],
+  ['pyroBiteHotColor', 'volume_pyro_bite_hot_color'],
   ['pyroSmokeFold', 'volume_pyro_smoke_fold'],
   ['pyroFoldBorder', 'volume_pyro_fold_border'],
   ['pyroFoldWake', 'volume_pyro_fold_wake'],
+  ['pyroWakeLift', 'volume_pyro_wake_lift'],
+  ['pyroWakeWarmth', 'volume_pyro_wake_warmth'],
+  ['pyroWakeLuma', 'volume_pyro_wake_luma'],
+  ['pyroWakeShadowColor', 'volume_pyro_wake_shadow_color'],
+  ['pyroWakeEmberColor', 'volume_pyro_wake_ember_color'],
   ['pyroRadiance', 'volume_pyro_radiance'],
   ['pyroRadianceGate', 'volume_pyro_radiance_gate'],
   ['pyroRadianceSpill', 'volume_pyro_radiance_spill'],
   ['pyroRadianceWarmth', 'volume_pyro_radiance_warmth'],
   ['pyroRadianceHue', 'volume_pyro_radiance_hue'],
   ['pyroRadianceChroma', 'volume_pyro_radiance_chroma'],
+  ['pyroRadianceLuma', 'volume_pyro_radiance_luma'],
+  ['pyroRadianceCoolColor', 'volume_pyro_radiance_cool_color'],
+  ['pyroRadianceWarmColor', 'volume_pyro_radiance_warm_color'],
+  ['pyroRadianceSource', 'volume_pyro_radiance_source'],
+  ['pyroRadianceHeight', 'volume_pyro_radiance_height'],
+  ['pyroRadianceBorder', 'volume_pyro_radiance_border'],
+  ['pyroRadianceTeeth', 'volume_pyro_radiance_teeth'],
+  ['pyroRadianceRise', 'volume_pyro_radiance_rise'],
+  ['pyroRadianceFireLock', 'volume_pyro_radiance_fire_lock'],
   ['pyroDiagnosticPaint', 'volume_pyro_diagnostic_paint'],
   ['pyroCarrierView', 'volume_pyro_carrier_view'],
   ['pyroOverdrive', 'volume_pyro_overdrive'],
@@ -10230,6 +10545,214 @@ function restoreVolumeBasinSnapshot() {
   volumePrototype?.setControls(readVolumeControls());
   refreshVolumeReadout();
   setInfo(`Restored volume basin from ${snapshot.savedAt || 'local storage'}`);
+  return true;
+}
+
+function selectedVolumeBasinSlot() {
+  const slot = String(document.getElementById('volume-basin-slot')?.value || 'a').toLowerCase();
+  return ['a', 'b', 'c', 'd'].includes(slot) ? slot : 'a';
+}
+
+function saveVolumeBasinSlot(slot = selectedVolumeBasinSlot()) {
+  const snapshot = saveVolumeBasinSnapshot(`slot-${slot}`);
+  try {
+    localStorage.setItem(`${KAMINOS_VOLUME_BASIN_SLOT_STORAGE_PREFIX}${slot}`, JSON.stringify(snapshot));
+    setInfo(`Saved volume basin slot ${slot.toUpperCase()}`);
+  } catch {
+    setInfo(`Could not save volume basin slot ${slot.toUpperCase()}`);
+  }
+  return snapshot;
+}
+
+function restoreVolumeBasinSlot(slot = selectedVolumeBasinSlot()) {
+  let snapshot = null;
+  try {
+    snapshot = JSON.parse(localStorage.getItem(`${KAMINOS_VOLUME_BASIN_SLOT_STORAGE_PREFIX}${slot}`));
+  } catch {}
+  if (!snapshot || snapshot.identity !== VOLUME_BASIN_SNAPSHOT_IDENTITY || !snapshot.controls) {
+    setInfo(`No saved volume basin in slot ${slot.toUpperCase()}`);
+    return false;
+  }
+  applyVolumeControlsSnapshot(snapshot.controls);
+  updateVolumeControlLabels();
+  volumePrototype?.setControls(readVolumeControls());
+  refreshVolumeReadout();
+  setInfo(`Loaded volume basin slot ${slot.toUpperCase()}`);
+  return true;
+}
+
+function normalizeVolumeLookLibrary(raw = null) {
+  const now = new Date().toISOString();
+  const library = raw && typeof raw === 'object' ? raw : {};
+  return {
+    identity: VOLUME_LOOK_LIBRARY_IDENTITY,
+    version: 1,
+    updatedAt: typeof library.updatedAt === 'string' ? library.updatedAt : now,
+    pyro: Array.isArray(library.pyro) ? library.pyro.map(entry => normalizeVolumeLookEntry(entry, 'pyro')).filter(Boolean) : [],
+    firesim: Array.isArray(library.firesim) ? library.firesim.map(entry => normalizeVolumeLookEntry(entry, 'firesim')).filter(Boolean) : [],
+  };
+}
+
+function normalizeVolumeLookControls(kind, controls = {}, entry = {}) {
+  return controls && typeof controls === 'object' ? { ...controls } : {};
+}
+
+function normalizeVolumeLookEntry(entry, kind) {
+  if (!entry || !entry.name || !entry.controls) return null;
+  return {
+    ...entry,
+    controls: normalizeVolumeLookControls(kind, entry.controls, entry),
+  };
+}
+
+function readVolumeLookLibrary() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(KAMINOS_VOLUME_LOOK_LIBRARY_STORAGE_KEY));
+    return normalizeVolumeLookLibrary(parsed);
+  } catch {
+    return normalizeVolumeLookLibrary();
+  }
+}
+
+function writeVolumeLookLibrary(library) {
+  const normalized = normalizeVolumeLookLibrary({ ...library, updatedAt: new Date().toISOString() });
+  try {
+    localStorage.setItem(KAMINOS_VOLUME_LOOK_LIBRARY_STORAGE_KEY, JSON.stringify(normalized));
+  } catch {}
+  refreshVolumeLookLibraryList(normalized);
+  return normalized;
+}
+
+function normalizeVolumeLookLibraryKind(kind) {
+  return String(kind || 'pyro').toLowerCase() === 'firesim' ? 'firesim' : 'pyro';
+}
+
+function currentVolumeLookLibraryKind() {
+  return normalizeVolumeLookLibraryKind(document.getElementById('volume-look-library-kind')?.value);
+}
+
+function volumeLookLibraryFields(kind = currentVolumeLookLibraryKind()) {
+  return normalizeVolumeLookLibraryKind(kind) === 'firesim' ? FIRESIM_LOOK_FIELDS : PYRO_LOOK_FIELDS;
+}
+
+function pickVolumeLookControls(fields, controlsSnapshot = readVolumeControls()) {
+  const picked = {};
+  for (const key of fields) {
+    if (controlsSnapshot[key] !== undefined && controlsSnapshot[key] !== null) picked[key] = controlsSnapshot[key];
+  }
+  return picked;
+}
+
+function refreshVolumeLookLibraryList(library = readVolumeLookLibrary()) {
+  const kind = currentVolumeLookLibraryKind();
+  const select = document.getElementById('volume-look-library-entry');
+  if (!select) return;
+  const previous = select.value;
+  const entries = Array.isArray(library[kind]) ? library[kind] : [];
+  select.innerHTML = '';
+  if (!entries.length) {
+    const option = document.createElement('option');
+    option.value = '';
+    option.textContent = 'No saved looks';
+    select.appendChild(option);
+    return;
+  }
+  for (const entry of entries) {
+    const option = document.createElement('option');
+    option.value = entry.name;
+    option.textContent = entry.name;
+    select.appendChild(option);
+  }
+  select.value = entries.some(entry => entry.name === previous) ? previous : entries[entries.length - 1].name;
+  const nameInput = document.getElementById('volume-look-library-name');
+  if (nameInput && !nameInput.value) nameInput.value = select.value;
+}
+
+function saveVolumeLookLibraryEntry() {
+  const kind = currentVolumeLookLibraryKind();
+  const nameInput = document.getElementById('volume-look-library-name');
+  const name = String(nameInput?.value || '').trim() || `${kind}-look-${new Date().toISOString().replace(/[:.]/g, '-')}`;
+  const library = readVolumeLookLibrary();
+  const entries = Array.isArray(library[kind]) ? [...library[kind]] : [];
+  const now = new Date().toISOString();
+  const entry = {
+    name,
+    kind,
+    savedAt: now,
+    updatedAt: now,
+    fields: volumeLookLibraryFields(kind),
+    controls: pickVolumeLookControls(volumeLookLibraryFields(kind)),
+  };
+  if (kind === 'pyro') {
+    entry.biteStackAuthored = ['pyroBiteCore', 'pyroBiteRim', 'pyroBiteAfter'].some(key => Number(entry.controls[key]) > 0);
+  }
+  const index = entries.findIndex(candidate => candidate.name === name);
+  if (index >= 0) entries[index] = { ...entries[index], ...entry, savedAt: entries[index].savedAt || now };
+  else entries.push(entry);
+  library[kind] = entries;
+  const normalized = writeVolumeLookLibrary(library);
+  document.getElementById('volume-look-library-entry').value = name;
+  document.getElementById('volume-look-library-json').value = JSON.stringify(normalized, null, 2);
+  saveVolumeBasinSnapshot(`look-library-save-${kind}-${name}`);
+  setInfo(`Saved ${kind} look: ${name}`);
+  return entry;
+}
+
+function loadVolumeLookLibraryEntry() {
+  const kind = currentVolumeLookLibraryKind();
+  const name = document.getElementById('volume-look-library-entry')?.value || document.getElementById('volume-look-library-name')?.value || '';
+  const library = readVolumeLookLibrary();
+  const entry = (library[kind] || []).find(candidate => candidate.name === name);
+  if (!entry) {
+    setInfo(`No ${kind} look named ${name || '(blank)'}`);
+    return false;
+  }
+  applyVolumeControlsSnapshot(entry.controls || {});
+  updateVolumeControlLabels();
+  volumePrototype?.setControls(readVolumeControls());
+  refreshVolumeReadout();
+  document.getElementById('volume-look-library-name').value = entry.name;
+  saveVolumeBasinSnapshot(`look-library-load-${kind}-${entry.name}`);
+  setInfo(`Loaded ${kind} look: ${entry.name}`);
+  return true;
+}
+
+async function exportVolumeLookLibraryJson() {
+  const library = readVolumeLookLibrary();
+  const json = JSON.stringify(library, null, 2);
+  const buffer = document.getElementById('volume-look-library-json');
+  if (buffer) buffer.value = json;
+  try {
+    await navigator.clipboard.writeText(json);
+    setInfo('Exported volume look library JSON to clipboard');
+  } catch {
+    setInfo('Exported volume look library JSON to the page buffer');
+  }
+  return json;
+}
+
+function importVolumeLookLibraryJson() {
+  const buffer = document.getElementById('volume-look-library-json');
+  let parsed = null;
+  try {
+    parsed = JSON.parse(buffer?.value || '');
+  } catch {
+    setInfo('Look library JSON did not parse');
+    return false;
+  }
+  const incoming = normalizeVolumeLookLibrary(parsed);
+  if (parsed?.identity !== VOLUME_LOOK_LIBRARY_IDENTITY) {
+    setInfo('Look library JSON has the wrong identity');
+    return false;
+  }
+  const current = readVolumeLookLibrary();
+  for (const kind of ['pyro', 'firesim']) {
+    const byName = new Map((current[kind] || []).map(entry => [entry.name, entry]));
+    for (const entry of incoming[kind] || []) byName.set(entry.name, entry);
+    current[kind] = [...byName.values()];
+  }
+  writeVolumeLookLibrary(current);
+  setInfo('Imported volume look library JSON');
   return true;
 }
 
@@ -14152,6 +14675,8 @@ function readVolumeControls() {
     majorantGrid: parseInt(document.getElementById('volume-majorant-grid').value, 10),
     gridOverlay: parseFloat(document.getElementById('volume-grid-overlay').value),
     flowDebug: parseFloat(document.getElementById('volume-flow-debug').value),
+    lookFreeze: parseFloat(document.getElementById('volume-look-freeze').value),
+    pyroCompareMode: document.getElementById('volume-pyro-compare').value,
     pyroDynamicDetail: parseFloat(document.getElementById('volume-pyro-detail').value),
     pyroMaterialGain: parseFloat(document.getElementById('volume-pyro-material-gain').value),
     pyroInterfaceFocus: parseFloat(document.getElementById('volume-pyro-interface-focus').value),
@@ -14159,17 +14684,48 @@ function readVolumeControls() {
     pyroBiteBorder: parseFloat(document.getElementById('volume-pyro-bite-border').value),
     pyroBiteTeeth: parseFloat(document.getElementById('volume-pyro-bite-teeth').value),
     pyroBiteWake: parseFloat(document.getElementById('volume-pyro-bite-wake').value),
+    pyroBiteHeight: parseFloat(document.getElementById('volume-pyro-bite-height').value),
+    pyroBiteFireLock: parseFloat(document.getElementById('volume-pyro-bite-fire-lock').value),
+    pyroBiteCore: parseFloat(document.getElementById('volume-pyro-bite-core').value),
+    pyroBiteCoreCut: parseFloat(document.getElementById('volume-pyro-bite-core-cut').value),
+    pyroBiteRim: parseFloat(document.getElementById('volume-pyro-bite-rim').value),
+    pyroBiteRimCut: parseFloat(document.getElementById('volume-pyro-bite-rim-cut').value),
+    pyroBiteAfter: parseFloat(document.getElementById('volume-pyro-bite-after').value),
+    pyroBiteAfterCut: parseFloat(document.getElementById('volume-pyro-bite-after-cut').value),
+    pyroFireMode: document.getElementById('volume-pyro-fire-mode').value,
+    pyroFlamePaint: parseFloat(document.getElementById('volume-pyro-flame-paint').value),
+    pyroStockMix: parseFloat(document.getElementById('volume-pyro-stock-mix').value),
+    pyroFlameLuma: parseFloat(document.getElementById('volume-pyro-flame-luma').value),
+    pyroFlameCoreColor: normalizeVolumeHexColor(document.getElementById('volume-pyro-flame-core-color').value, '#fff4b8'),
+    pyroFlameEdgeColor: normalizeVolumeHexColor(document.getElementById('volume-pyro-flame-edge-color').value, '#ff8a24'),
     pyroBiteHeat: parseFloat(document.getElementById('volume-pyro-bite-heat').value),
     pyroBiteChroma: parseFloat(document.getElementById('volume-pyro-bite-chroma').value),
+    pyroBiteLuma: parseFloat(document.getElementById('volume-pyro-bite-luma').value),
+    pyroBiteEmberColor: normalizeVolumeHexColor(document.getElementById('volume-pyro-bite-ember-color').value, '#e65a1a'),
+    pyroBiteHotColor: normalizeVolumeHexColor(document.getElementById('volume-pyro-bite-hot-color').value, '#fff4b8'),
     pyroSmokeFold: parseFloat(document.getElementById('volume-pyro-smoke-fold').value),
     pyroFoldBorder: parseFloat(document.getElementById('volume-pyro-fold-border').value),
     pyroFoldWake: parseFloat(document.getElementById('volume-pyro-fold-wake').value),
+    pyroWakeLift: parseFloat(document.getElementById('volume-pyro-wake-lift').value),
+    pyroWakeWarmth: parseFloat(document.getElementById('volume-pyro-wake-warmth').value),
+    pyroWakeLuma: parseFloat(document.getElementById('volume-pyro-wake-luma').value),
+    pyroWakeShadowColor: normalizeVolumeHexColor(document.getElementById('volume-pyro-wake-shadow-color').value, '#384c50'),
+    pyroWakeEmberColor: normalizeVolumeHexColor(document.getElementById('volume-pyro-wake-ember-color').value, '#b06a2a'),
     pyroRadiance: parseFloat(document.getElementById('volume-pyro-radiance').value),
     pyroRadianceGate: parseFloat(document.getElementById('volume-pyro-radiance-gate').value),
     pyroRadianceSpill: parseFloat(document.getElementById('volume-pyro-radiance-spill').value),
     pyroRadianceWarmth: parseFloat(document.getElementById('volume-pyro-radiance-warmth').value),
     pyroRadianceHue: parseFloat(document.getElementById('volume-pyro-radiance-hue').value),
     pyroRadianceChroma: parseFloat(document.getElementById('volume-pyro-radiance-chroma').value),
+    pyroRadianceLuma: parseFloat(document.getElementById('volume-pyro-radiance-luma').value),
+    pyroRadianceCoolColor: normalizeVolumeHexColor(document.getElementById('volume-pyro-radiance-cool-color').value, '#7aa8b8'),
+    pyroRadianceWarmColor: normalizeVolumeHexColor(document.getElementById('volume-pyro-radiance-warm-color').value, '#d18438'),
+    pyroRadianceSource: document.getElementById('volume-pyro-radiance-source').value,
+    pyroRadianceHeight: parseFloat(document.getElementById('volume-pyro-radiance-height').value),
+    pyroRadianceBorder: parseFloat(document.getElementById('volume-pyro-radiance-border').value),
+    pyroRadianceTeeth: parseFloat(document.getElementById('volume-pyro-radiance-teeth').value),
+    pyroRadianceRise: parseFloat(document.getElementById('volume-pyro-radiance-rise').value),
+    pyroRadianceFireLock: parseFloat(document.getElementById('volume-pyro-radiance-fire-lock').value),
     pyroDiagnosticPaint: parseFloat(document.getElementById('volume-pyro-diagnostic-paint').value),
     pyroCarrierView: document.getElementById('volume-pyro-carrier-view').value,
     pyroOverdrive: parseFloat(document.getElementById('volume-pyro-overdrive').value),
@@ -14247,6 +14803,8 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-majorant-grid-val').textContent = `${c.majorantGrid}^3`;
   document.getElementById('volume-grid-overlay-val').textContent = c.gridOverlay.toFixed(2);
   document.getElementById('volume-flow-debug-val').textContent = c.flowDebug.toFixed(2);
+  document.getElementById('volume-look-freeze-val').textContent = c.lookFreeze >= 0.5 ? 'frozen' : 'live';
+  document.getElementById('volume-pyro-compare-val').textContent = c.pyroCompareMode === 'base' ? 'base' : 'live';
   document.getElementById('volume-pyro-detail-val').textContent = c.pyroDynamicDetail >= 0.5 ? 'on' : 'off';
   document.getElementById('volume-pyro-material-gain-val').textContent = c.pyroMaterialGain.toFixed(2);
   document.getElementById('volume-pyro-interface-focus-val').textContent = c.pyroInterfaceFocus.toFixed(2);
@@ -14254,17 +14812,48 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-pyro-bite-border-val').textContent = c.pyroBiteBorder.toFixed(2);
   document.getElementById('volume-pyro-bite-teeth-val').textContent = c.pyroBiteTeeth.toFixed(2);
   document.getElementById('volume-pyro-bite-wake-val').textContent = c.pyroBiteWake.toFixed(2);
+  document.getElementById('volume-pyro-bite-height-val').textContent = c.pyroBiteHeight.toFixed(2);
+  document.getElementById('volume-pyro-bite-fire-lock-val').textContent = c.pyroBiteFireLock.toFixed(2);
+  document.getElementById('volume-pyro-bite-core-val').textContent = c.pyroBiteCore.toFixed(2);
+  document.getElementById('volume-pyro-bite-core-cut-val').textContent = c.pyroBiteCoreCut.toFixed(2);
+  document.getElementById('volume-pyro-bite-rim-val').textContent = c.pyroBiteRim.toFixed(2);
+  document.getElementById('volume-pyro-bite-rim-cut-val').textContent = c.pyroBiteRimCut.toFixed(2);
+  document.getElementById('volume-pyro-bite-after-val').textContent = c.pyroBiteAfter.toFixed(2);
+  document.getElementById('volume-pyro-bite-after-cut-val').textContent = c.pyroBiteAfterCut.toFixed(2);
+  document.getElementById('volume-pyro-fire-mode-val').textContent = c.pyroFireMode;
+  document.getElementById('volume-pyro-flame-paint-val').textContent = c.pyroFlamePaint.toFixed(2);
+  document.getElementById('volume-pyro-stock-mix-val').textContent = c.pyroStockMix.toFixed(2);
+  document.getElementById('volume-pyro-flame-luma-val').textContent = c.pyroFlameLuma.toFixed(2);
+  document.getElementById('volume-pyro-flame-core-color-val').textContent = c.pyroFlameCoreColor;
+  document.getElementById('volume-pyro-flame-edge-color-val').textContent = c.pyroFlameEdgeColor;
   document.getElementById('volume-pyro-bite-heat-val').textContent = c.pyroBiteHeat.toFixed(2);
   document.getElementById('volume-pyro-bite-chroma-val').textContent = c.pyroBiteChroma.toFixed(2);
+  document.getElementById('volume-pyro-bite-luma-val').textContent = c.pyroBiteLuma.toFixed(2);
+  document.getElementById('volume-pyro-bite-ember-color-val').textContent = c.pyroBiteEmberColor;
+  document.getElementById('volume-pyro-bite-hot-color-val').textContent = c.pyroBiteHotColor;
   document.getElementById('volume-pyro-smoke-fold-val').textContent = c.pyroSmokeFold.toFixed(2);
   document.getElementById('volume-pyro-fold-border-val').textContent = c.pyroFoldBorder.toFixed(2);
   document.getElementById('volume-pyro-fold-wake-val').textContent = c.pyroFoldWake.toFixed(2);
+  document.getElementById('volume-pyro-wake-lift-val').textContent = c.pyroWakeLift.toFixed(2);
+  document.getElementById('volume-pyro-wake-warmth-val').textContent = c.pyroWakeWarmth.toFixed(2);
+  document.getElementById('volume-pyro-wake-luma-val').textContent = c.pyroWakeLuma.toFixed(2);
+  document.getElementById('volume-pyro-wake-shadow-color-val').textContent = c.pyroWakeShadowColor;
+  document.getElementById('volume-pyro-wake-ember-color-val').textContent = c.pyroWakeEmberColor;
   document.getElementById('volume-pyro-radiance-val').textContent = c.pyroRadiance.toFixed(2);
   document.getElementById('volume-pyro-radiance-gate-val').textContent = c.pyroRadianceGate.toFixed(2);
   document.getElementById('volume-pyro-radiance-spill-val').textContent = c.pyroRadianceSpill.toFixed(2);
   document.getElementById('volume-pyro-radiance-warmth-val').textContent = c.pyroRadianceWarmth.toFixed(2);
   document.getElementById('volume-pyro-radiance-hue-val').textContent = c.pyroRadianceHue.toFixed(2);
   document.getElementById('volume-pyro-radiance-chroma-val').textContent = c.pyroRadianceChroma.toFixed(2);
+  document.getElementById('volume-pyro-radiance-luma-val').textContent = c.pyroRadianceLuma.toFixed(2);
+  document.getElementById('volume-pyro-radiance-cool-color-val').textContent = c.pyroRadianceCoolColor;
+  document.getElementById('volume-pyro-radiance-warm-color-val').textContent = c.pyroRadianceWarmColor;
+  document.getElementById('volume-pyro-radiance-source-val').textContent = c.pyroRadianceSource;
+  document.getElementById('volume-pyro-radiance-height-val').textContent = c.pyroRadianceHeight.toFixed(2);
+  document.getElementById('volume-pyro-radiance-border-val').textContent = c.pyroRadianceBorder.toFixed(2);
+  document.getElementById('volume-pyro-radiance-teeth-val').textContent = c.pyroRadianceTeeth.toFixed(2);
+  document.getElementById('volume-pyro-radiance-rise-val').textContent = c.pyroRadianceRise.toFixed(2);
+  document.getElementById('volume-pyro-radiance-fire-lock-val').textContent = c.pyroRadianceFireLock.toFixed(2);
   document.getElementById('volume-pyro-diagnostic-paint-val').textContent = c.pyroDiagnosticPaint.toFixed(2);
   document.getElementById('volume-pyro-carrier-view-val').textContent = c.pyroCarrierView;
   document.getElementById('volume-pyro-overdrive-val').textContent = c.pyroOverdrive.toFixed(2);
@@ -14355,6 +14944,9 @@ function refreshVolumeReadout() {
   document.getElementById('volume-frame-p95').textContent = Number.isFinite(timing.frameP95Ms) ? `${timing.frameP95Ms.toFixed(1)} ms` : '-- ms';
   document.getElementById('volume-queue-ms').textContent = Number.isFinite(timing.queueDoneMs) ? `${timing.queueDoneMs.toFixed(1)} ms` : (timing.queueProbePending ? 'pending' : '-- ms');
   document.getElementById('volume-queue-p95').textContent = Number.isFinite(timing.queueDoneP95Ms) ? `${timing.queueDoneP95Ms.toFixed(1)} ms` : '-- ms';
+  const lookLabMode = s.lookFreeze >= 0.5 ? `frozen@${s.lookFreezeFrame ?? s.frameCount}` : 'live';
+  const compareMode = s.pyroCompareMode === 'base' || s.pyroCompareMuted ? 'base-only' : 'live-pyro';
+  document.getElementById('volume-look-lab-state').textContent = `${lookLabMode} / ${compareMode}`;
   const pyroDetail = s.pyroDynamicDetail || {};
   const pyroState = pyroDetail.enabled
     ? (pyroDetail.resetGate ? 'reset' : (pyroDetail.liveFireAuthority > 0.015 ? 'live-coupled' : 'decay'))
@@ -14644,6 +15236,58 @@ async function initKaminosVolumeRoute() {
   if (params.has('volume_pyro_bite_wake') && Number.isFinite(routePyroBiteWake)) {
     document.getElementById('volume-pyro-bite-wake').value = String(Math.max(0, Math.min(1, routePyroBiteWake)));
   }
+  const routePyroBiteHeight = Number(params.get('volume_pyro_bite_height'));
+  if (params.has('volume_pyro_bite_height') && Number.isFinite(routePyroBiteHeight)) {
+    document.getElementById('volume-pyro-bite-height').value = String(Math.max(0, Math.min(1, routePyroBiteHeight)));
+  }
+  const routePyroBiteFireLock = Number(params.get('volume_pyro_bite_fire_lock'));
+  if (params.has('volume_pyro_bite_fire_lock') && Number.isFinite(routePyroBiteFireLock)) {
+    document.getElementById('volume-pyro-bite-fire-lock').value = String(Math.max(0, Math.min(1, routePyroBiteFireLock)));
+  }
+  const routePyroBiteCore = Number(params.get('volume_pyro_bite_core'));
+  if (params.has('volume_pyro_bite_core') && Number.isFinite(routePyroBiteCore)) {
+    document.getElementById('volume-pyro-bite-core').value = String(Math.max(0, Math.min(1, routePyroBiteCore)));
+  }
+  const routePyroBiteCoreCut = Number(params.get('volume_pyro_bite_core_cut'));
+  if (params.has('volume_pyro_bite_core_cut') && Number.isFinite(routePyroBiteCoreCut)) {
+    document.getElementById('volume-pyro-bite-core-cut').value = String(Math.max(0, Math.min(1, routePyroBiteCoreCut)));
+  }
+  const routePyroBiteRim = Number(params.get('volume_pyro_bite_rim'));
+  if (params.has('volume_pyro_bite_rim') && Number.isFinite(routePyroBiteRim)) {
+    document.getElementById('volume-pyro-bite-rim').value = String(Math.max(0, Math.min(1, routePyroBiteRim)));
+  }
+  const routePyroBiteRimCut = Number(params.get('volume_pyro_bite_rim_cut'));
+  if (params.has('volume_pyro_bite_rim_cut') && Number.isFinite(routePyroBiteRimCut)) {
+    document.getElementById('volume-pyro-bite-rim-cut').value = String(Math.max(0, Math.min(1, routePyroBiteRimCut)));
+  }
+  const routePyroBiteAfter = Number(params.get('volume_pyro_bite_after'));
+  if (params.has('volume_pyro_bite_after') && Number.isFinite(routePyroBiteAfter)) {
+    document.getElementById('volume-pyro-bite-after').value = String(Math.max(0, Math.min(1, routePyroBiteAfter)));
+  }
+  const routePyroBiteAfterCut = Number(params.get('volume_pyro_bite_after_cut'));
+  if (params.has('volume_pyro_bite_after_cut') && Number.isFinite(routePyroBiteAfterCut)) {
+    document.getElementById('volume-pyro-bite-after-cut').value = String(Math.max(0, Math.min(1, routePyroBiteAfterCut)));
+  }
+  const routePyroFireMode = params.get('volume_pyro_fire_mode');
+  if (['stock', 'hybrid', 'pyro-owned'].includes(routePyroFireMode)) {
+    document.getElementById('volume-pyro-fire-mode').value = routePyroFireMode;
+  }
+  const routePyroFlamePaint = Number(params.get('volume_pyro_flame_paint'));
+  if (params.has('volume_pyro_flame_paint') && Number.isFinite(routePyroFlamePaint)) {
+    document.getElementById('volume-pyro-flame-paint').value = String(Math.max(0, Math.min(3, routePyroFlamePaint)));
+  }
+  const routePyroStockMix = Number(params.get('volume_pyro_stock_mix'));
+  if (params.has('volume_pyro_stock_mix') && Number.isFinite(routePyroStockMix)) {
+    document.getElementById('volume-pyro-stock-mix').value = String(Math.max(0, Math.min(1, routePyroStockMix)));
+  }
+  const routePyroFlameLuma = Number(params.get('volume_pyro_flame_luma'));
+  if (params.has('volume_pyro_flame_luma') && Number.isFinite(routePyroFlameLuma)) {
+    document.getElementById('volume-pyro-flame-luma').value = String(Math.max(0, Math.min(3, routePyroFlameLuma)));
+  }
+  const routePyroFlameCoreColor = params.get('volume_pyro_flame_core_color');
+  if (routePyroFlameCoreColor) setVolumeColorControlValue('volume-pyro-flame-core-color', routePyroFlameCoreColor, '#fff4b8');
+  const routePyroFlameEdgeColor = params.get('volume_pyro_flame_edge_color');
+  if (routePyroFlameEdgeColor) setVolumeColorControlValue('volume-pyro-flame-edge-color', routePyroFlameEdgeColor, '#ff8a24');
   const routePyroBiteHeat = Number(params.get('volume_pyro_bite_heat'));
   if (params.has('volume_pyro_bite_heat') && Number.isFinite(routePyroBiteHeat)) {
     document.getElementById('volume-pyro-bite-heat').value = String(Math.max(0, Math.min(1, routePyroBiteHeat)));
@@ -14652,6 +15296,14 @@ async function initKaminosVolumeRoute() {
   if (params.has('volume_pyro_bite_chroma') && Number.isFinite(routePyroBiteChroma)) {
     document.getElementById('volume-pyro-bite-chroma').value = String(Math.max(0, Math.min(1, routePyroBiteChroma)));
   }
+  const routePyroBiteLuma = Number(params.get('volume_pyro_bite_luma'));
+  if (params.has('volume_pyro_bite_luma') && Number.isFinite(routePyroBiteLuma)) {
+    document.getElementById('volume-pyro-bite-luma').value = String(Math.max(0, Math.min(3, routePyroBiteLuma)));
+  }
+  const routePyroBiteEmberColor = params.get('volume_pyro_bite_ember_color');
+  if (routePyroBiteEmberColor) setVolumeColorControlValue('volume-pyro-bite-ember-color', routePyroBiteEmberColor, '#e65a1a');
+  const routePyroBiteHotColor = params.get('volume_pyro_bite_hot_color');
+  if (routePyroBiteHotColor) setVolumeColorControlValue('volume-pyro-bite-hot-color', routePyroBiteHotColor, '#fff4b8');
   const routePyroSmokeFold = Number(params.get('volume_pyro_smoke_fold'));
   if (params.has('volume_pyro_smoke_fold') && Number.isFinite(routePyroSmokeFold)) {
     document.getElementById('volume-pyro-smoke-fold').value = String(Math.max(0, Math.min(1, routePyroSmokeFold)));
@@ -14664,6 +15316,22 @@ async function initKaminosVolumeRoute() {
   if (params.has('volume_pyro_fold_wake') && Number.isFinite(routePyroFoldWake)) {
     document.getElementById('volume-pyro-fold-wake').value = String(Math.max(0, Math.min(1, routePyroFoldWake)));
   }
+  const routePyroWakeLift = Number(params.get('volume_pyro_wake_lift'));
+  if (params.has('volume_pyro_wake_lift') && Number.isFinite(routePyroWakeLift)) {
+    document.getElementById('volume-pyro-wake-lift').value = String(Math.max(0, Math.min(1, routePyroWakeLift)));
+  }
+  const routePyroWakeWarmth = Number(params.get('volume_pyro_wake_warmth'));
+  if (params.has('volume_pyro_wake_warmth') && Number.isFinite(routePyroWakeWarmth)) {
+    document.getElementById('volume-pyro-wake-warmth').value = String(Math.max(0, Math.min(1, routePyroWakeWarmth)));
+  }
+  const routePyroWakeLuma = Number(params.get('volume_pyro_wake_luma'));
+  if (params.has('volume_pyro_wake_luma') && Number.isFinite(routePyroWakeLuma)) {
+    document.getElementById('volume-pyro-wake-luma').value = String(Math.max(0, Math.min(3, routePyroWakeLuma)));
+  }
+  const routePyroWakeShadowColor = params.get('volume_pyro_wake_shadow_color');
+  if (routePyroWakeShadowColor) setVolumeColorControlValue('volume-pyro-wake-shadow-color', routePyroWakeShadowColor, '#384c50');
+  const routePyroWakeEmberColor = params.get('volume_pyro_wake_ember_color');
+  if (routePyroWakeEmberColor) setVolumeColorControlValue('volume-pyro-wake-ember-color', routePyroWakeEmberColor, '#b06a2a');
   const routePyroRadiance = Number(params.get('volume_pyro_radiance'));
   if (params.has('volume_pyro_radiance') && Number.isFinite(routePyroRadiance)) {
     document.getElementById('volume-pyro-radiance').value = String(Math.max(0, Math.min(10, routePyroRadiance)));
@@ -14688,6 +15356,38 @@ async function initKaminosVolumeRoute() {
   if (params.has('volume_pyro_radiance_chroma') && Number.isFinite(routePyroRadianceChroma)) {
     document.getElementById('volume-pyro-radiance-chroma').value = String(Math.max(0, Math.min(1, routePyroRadianceChroma)));
   }
+  const routePyroRadianceLuma = Number(params.get('volume_pyro_radiance_luma'));
+  if (params.has('volume_pyro_radiance_luma') && Number.isFinite(routePyroRadianceLuma)) {
+    document.getElementById('volume-pyro-radiance-luma').value = String(Math.max(0, Math.min(3, routePyroRadianceLuma)));
+  }
+  const routePyroRadianceCoolColor = params.get('volume_pyro_radiance_cool_color');
+  if (routePyroRadianceCoolColor) setVolumeColorControlValue('volume-pyro-radiance-cool-color', routePyroRadianceCoolColor, '#7aa8b8');
+  const routePyroRadianceWarmColor = params.get('volume_pyro_radiance_warm_color');
+  if (routePyroRadianceWarmColor) setVolumeColorControlValue('volume-pyro-radiance-warm-color', routePyroRadianceWarmColor, '#d18438');
+  const routePyroRadianceSource = params.get('volume_pyro_radiance_source');
+  if (['fire', 'mixed', 'wake'].includes(routePyroRadianceSource)) {
+    document.getElementById('volume-pyro-radiance-source').value = routePyroRadianceSource;
+  }
+  const routePyroRadianceHeight = Number(params.get('volume_pyro_radiance_height'));
+  if (params.has('volume_pyro_radiance_height') && Number.isFinite(routePyroRadianceHeight)) {
+    document.getElementById('volume-pyro-radiance-height').value = String(Math.max(0, Math.min(1, routePyroRadianceHeight)));
+  }
+  const routePyroRadianceBorder = Number(params.get('volume_pyro_radiance_border'));
+  if (params.has('volume_pyro_radiance_border') && Number.isFinite(routePyroRadianceBorder)) {
+    document.getElementById('volume-pyro-radiance-border').value = String(Math.max(0, Math.min(1, routePyroRadianceBorder)));
+  }
+  const routePyroRadianceTeeth = Number(params.get('volume_pyro_radiance_teeth'));
+  if (params.has('volume_pyro_radiance_teeth') && Number.isFinite(routePyroRadianceTeeth)) {
+    document.getElementById('volume-pyro-radiance-teeth').value = String(Math.max(0, Math.min(1, routePyroRadianceTeeth)));
+  }
+  const routePyroRadianceRise = Number(params.get('volume_pyro_radiance_rise'));
+  if (params.has('volume_pyro_radiance_rise') && Number.isFinite(routePyroRadianceRise)) {
+    document.getElementById('volume-pyro-radiance-rise').value = String(Math.max(0, Math.min(1, routePyroRadianceRise)));
+  }
+  const routePyroRadianceFireLock = Number(params.get('volume_pyro_radiance_fire_lock'));
+  if (params.has('volume_pyro_radiance_fire_lock') && Number.isFinite(routePyroRadianceFireLock)) {
+    document.getElementById('volume-pyro-radiance-fire-lock').value = String(Math.max(0, Math.min(1, routePyroRadianceFireLock)));
+  }
   const routePyroDiagnosticPaint = Number(params.get('volume_pyro_diagnostic_paint'));
   const routePyroDebugTint = Number(params.get('volume_pyro_debug_tint'));
   if (params.has('volume_pyro_diagnostic_paint') && Number.isFinite(routePyroDiagnosticPaint)) {
@@ -14696,7 +15396,7 @@ async function initKaminosVolumeRoute() {
     document.getElementById('volume-pyro-diagnostic-paint').value = String(Math.max(0, Math.min(1, routePyroDebugTint)));
   }
   const routePyroCarrierView = params.get('volume_pyro_carrier_view');
-  if (['normal', 'border', 'bite', 'fold', 'radiance', 'all'].includes(routePyroCarrierView)) {
+  if (['normal', 'border', 'bite', 'fold', 'wake', 'radiance', 'all'].includes(routePyroCarrierView)) {
     document.getElementById('volume-pyro-carrier-view').value = routePyroCarrierView;
   }
   const routePyroOverdrive = Number(params.get('volume_pyro_overdrive'));
@@ -14797,6 +15497,14 @@ async function initKaminosVolumeRoute() {
   if (params.has('volume_render_scale') && Number.isFinite(routeRenderScale)) {
     document.getElementById('volume-render-scale').value = String(Math.max(0.1, Math.min(1, routeRenderScale)));
   }
+  const routeLookFreeze = Number(params.get('volume_look_freeze'));
+  if (params.has('volume_look_freeze') && Number.isFinite(routeLookFreeze)) {
+    document.getElementById('volume-look-freeze').value = String(Math.max(0, Math.min(1, Math.round(routeLookFreeze))));
+  }
+  const routePyroCompare = params.get('volume_pyro_compare');
+  if (['live', 'base'].includes(routePyroCompare)) {
+    document.getElementById('volume-pyro-compare').value = routePyroCompare;
+  }
   const routeExternalEmitters = params.get('volume_external_emitters') || '';
   updateVolumeControlLabels();
   volumePrototype = createKaminosVolumePrototype({
@@ -14844,7 +15552,7 @@ async function initKaminosVolumeRoute() {
     refreshVolumeReadout();
     saveVolumeBasinSnapshot(event?.target?.id || 'control-change');
   };
-  for (const id of ['volume-scene', 'volume-density', 'volume-fire', 'volume-radiance', 'volume-absorption', 'volume-glow', 'volume-smoke', 'volume-curl', 'volume-microdetail', 'volume-interface-shred', 'volume-fire-licks', 'volume-projection', 'volume-speed', 'volume-steps', 'volume-adaptive-rays', 'volume-occupancy-skip', 'volume-majorant-skip', 'volume-majorant-smooth', 'volume-majorant-guard', 'volume-temporal-accum', 'volume-temporal-jitter', 'volume-history-clamp', 'volume-fire-scale', 'volume-detail-scale', 'volume-plume-height', 'volume-wind-strength', 'volume-wind-angle', 'volume-wind-height', 'volume-render-scale', 'volume-input-radius', 'volume-flow-rate', 'volume-resolution', 'volume-majorant-grid', 'volume-grid-overlay', 'volume-flow-debug', 'volume-pyro-detail', 'volume-pyro-material-gain', 'volume-pyro-interface-focus', 'volume-pyro-edge-bite', 'volume-pyro-bite-border', 'volume-pyro-bite-teeth', 'volume-pyro-bite-wake', 'volume-pyro-bite-heat', 'volume-pyro-bite-chroma', 'volume-pyro-smoke-fold', 'volume-pyro-fold-border', 'volume-pyro-fold-wake', 'volume-pyro-radiance', 'volume-pyro-radiance-gate', 'volume-pyro-radiance-spill', 'volume-pyro-radiance-warmth', 'volume-pyro-radiance-hue', 'volume-pyro-radiance-chroma', 'volume-pyro-diagnostic-paint', 'volume-pyro-carrier-view', 'volume-pyro-overdrive', 'volume-pressure-mode', 'volume-pressure-tier-overlay', 'volume-pressure-tier-lower-max', 'volume-pressure-tier-hero-min', 'volume-pressure-tier-hero-max', 'volume-canonical-spread', 'volume-canonical-centerline', 'volume-canonical-body-balance']) {
+  for (const id of ['volume-scene', 'volume-density', 'volume-fire', 'volume-radiance', 'volume-absorption', 'volume-glow', 'volume-smoke', 'volume-curl', 'volume-microdetail', 'volume-interface-shred', 'volume-fire-licks', 'volume-projection', 'volume-speed', 'volume-steps', 'volume-adaptive-rays', 'volume-occupancy-skip', 'volume-majorant-skip', 'volume-majorant-smooth', 'volume-majorant-guard', 'volume-temporal-accum', 'volume-temporal-jitter', 'volume-history-clamp', 'volume-fire-scale', 'volume-detail-scale', 'volume-plume-height', 'volume-wind-strength', 'volume-wind-angle', 'volume-wind-height', 'volume-render-scale', 'volume-input-radius', 'volume-flow-rate', 'volume-resolution', 'volume-majorant-grid', 'volume-grid-overlay', 'volume-flow-debug', 'volume-look-freeze', 'volume-pyro-compare', 'volume-pyro-detail', 'volume-pyro-material-gain', 'volume-pyro-interface-focus', 'volume-pyro-edge-bite', 'volume-pyro-bite-border', 'volume-pyro-bite-teeth', 'volume-pyro-bite-wake', 'volume-pyro-bite-height', 'volume-pyro-bite-fire-lock', 'volume-pyro-bite-core', 'volume-pyro-bite-core-cut', 'volume-pyro-bite-rim', 'volume-pyro-bite-rim-cut', 'volume-pyro-bite-after', 'volume-pyro-bite-after-cut', 'volume-pyro-fire-mode', 'volume-pyro-flame-paint', 'volume-pyro-stock-mix', 'volume-pyro-flame-luma', 'volume-pyro-flame-core-color', 'volume-pyro-flame-edge-color', 'volume-pyro-bite-heat', 'volume-pyro-bite-chroma', 'volume-pyro-bite-luma', 'volume-pyro-bite-ember-color', 'volume-pyro-bite-hot-color', 'volume-pyro-smoke-fold', 'volume-pyro-fold-border', 'volume-pyro-fold-wake', 'volume-pyro-wake-lift', 'volume-pyro-wake-warmth', 'volume-pyro-wake-luma', 'volume-pyro-wake-shadow-color', 'volume-pyro-wake-ember-color', 'volume-pyro-radiance', 'volume-pyro-radiance-gate', 'volume-pyro-radiance-spill', 'volume-pyro-radiance-warmth', 'volume-pyro-radiance-hue', 'volume-pyro-radiance-chroma', 'volume-pyro-radiance-luma', 'volume-pyro-radiance-cool-color', 'volume-pyro-radiance-warm-color', 'volume-pyro-radiance-source', 'volume-pyro-radiance-height', 'volume-pyro-radiance-border', 'volume-pyro-radiance-teeth', 'volume-pyro-radiance-rise', 'volume-pyro-radiance-fire-lock', 'volume-pyro-diagnostic-paint', 'volume-pyro-carrier-view', 'volume-pyro-overdrive', 'volume-pressure-mode', 'volume-pressure-tier-overlay', 'volume-pressure-tier-lower-max', 'volume-pressure-tier-hero-min', 'volume-pressure-tier-hero-max', 'volume-canonical-spread', 'volume-canonical-centerline', 'volume-canonical-body-balance']) {
     document.getElementById(id).addEventListener('input', syncControls);
     document.getElementById(id).addEventListener('change', syncControls);
   }
@@ -14852,6 +15560,7 @@ async function initKaminosVolumeRoute() {
     updateVolumeControlLabels();
     volumePrototype.setControls(readVolumeControls());
     refreshVolumeReadout();
+    saveVolumeBasinSnapshot('budget-controls');
   };
   const gamut = document.getElementById('volume-ray-budget-gamut');
   const updateGamutFromPointer = event => {
@@ -14889,6 +15598,17 @@ async function initKaminosVolumeRoute() {
   });
   document.getElementById('volume-basin-copy')?.addEventListener('click', () => void copyVolumeBasinUrl());
   document.getElementById('volume-basin-restore')?.addEventListener('click', () => restoreVolumeBasinSnapshot());
+  document.getElementById('volume-basin-slot-save')?.addEventListener('click', () => saveVolumeBasinSlot());
+  document.getElementById('volume-basin-slot-load')?.addEventListener('click', () => restoreVolumeBasinSlot());
+  document.getElementById('volume-look-library-kind')?.addEventListener('change', () => refreshVolumeLookLibraryList());
+  document.getElementById('volume-look-library-entry')?.addEventListener('change', event => {
+    const nameInput = document.getElementById('volume-look-library-name');
+    if (nameInput) nameInput.value = event.target.value;
+  });
+  document.getElementById('volume-look-library-save')?.addEventListener('click', () => saveVolumeLookLibraryEntry());
+  document.getElementById('volume-look-library-load')?.addEventListener('click', () => loadVolumeLookLibraryEntry());
+  document.getElementById('volume-look-library-export')?.addEventListener('click', () => void exportVolumeLookLibraryJson());
+  document.getElementById('volume-look-library-import')?.addEventListener('click', () => importVolumeLookLibraryJson());
   document.getElementById('volume-basin-warm-cap')?.addEventListener('click', () => {
     applyTallPlumeOperatorPreset('pyro_contrast_warm_cap_small_flame_0702');
     updateVolumeControlLabels();
@@ -14904,6 +15624,7 @@ async function initKaminosVolumeRoute() {
     saveVolumeBasinSnapshot('bonfire-family-preset');
   });
   saveVolumeBasinSnapshot('route-init');
+  refreshVolumeLookLibraryList();
   document.getElementById('volume-toggle').addEventListener('click', async () => {
     if (volumePrototype.debugState().active) {
       volumePrototype.setActive(false);
@@ -14931,13 +15652,18 @@ async function initKaminosVolumeRoute() {
 
   if (params.get('kaminos_volume_smoke') === '1') {
     setActiveTab('volume');
-    frameVolumeCamera();
-    await volumePrototype.setActive(true);
-    refreshSyntheticExternalEmitters();
-    if (routeExternalEmitters === 'synthetic_hand_trails') {
-      syntheticEmitterTimer = window.setInterval(refreshSyntheticExternalEmitters, 100);
+    if (camera && controls) frameVolumeCamera();
+    try {
+      await volumePrototype.setActive(true);
+      refreshSyntheticExternalEmitters();
+      if (routeExternalEmitters === 'synthetic_hand_trails') {
+        syntheticEmitterTimer = window.setInterval(refreshSyntheticExternalEmitters, 100);
+      }
+      setInfo('Volume renderer — native WebGPU compute fluid raymarch');
+    } catch (err) {
+      console.error('Volume route activation failed:', err);
+      setInfo(`Volume route controls loaded; renderer failed: ${err?.message || err}`);
     }
-    setInfo('Volume renderer — native WebGPU compute fluid raymarch');
   }
   syncControls();
   setInterval(refreshVolumeReadout, 500);
@@ -17830,6 +18556,9 @@ initScene().then(() => {
   initEnvButtons();
   loadDemoButtons();
   restoreSettings();
+  initKaminosVolumeRoute().catch(err => {
+    console.error('volume route init failed after scene init failure:', err);
+  });
   initWorldChambersRoute();
   initKaminosFingerJuiceHostRoute();
   initKaminosFingerJuiceTabRoute();

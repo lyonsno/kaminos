@@ -22,6 +22,7 @@ import {
   validateWebGpuRouteBackpressureProfile,
   validateWebGpuRouteSchedulerProfile,
 } from '@kaminos/webgpu-inference-kit';
+import { sharpBreathingRoomSchedulerProfileForMode } from '../lib/sharp-breathing-room-comparison.mjs';
 import { createSchedulerVerificationReceipt } from '../lib/scheduler-verification-receipt.mjs';
 
 const args = new Map();
@@ -45,7 +46,9 @@ const chromePath = process.env.KAMINOS_SHARP_WEBGPU_CHROME || '/Applications/Goo
 const requestedPort = Number(process.env.KAMINOS_SHARP_WEBGPU_PORT || 0);
 const port = requestedPort || (54000 + Math.floor(Math.random() * 1000));
 const timeoutMs = Number(process.env.KAMINOS_SHARP_WEBGPU_TIMEOUT_MS || 420000);
-const requestedScheduler = parseRequestedScheduler();
+const parsedSchedulerRequest = parseRequestedSchedulerRequest();
+const requestedScheduler = parsedSchedulerRequest.scheduler;
+const schedulerModeIdentity = parsedSchedulerRequest.schedulerMode;
 const outputDir = output ? dirname(output) : null;
 const depthPath = outputDir ? join(outputDir, 'sharp-webgpu-depth.png') : null;
 const metadataPath = outputDir ? join(outputDir, 'sharp-webgpu-metadata.json') : null;
@@ -98,8 +101,33 @@ function maybeBool(value) {
   return /^(1|true|yes|on)$/i.test(String(value));
 }
 
-function parseRequestedScheduler() {
+function requestedSchedulerModeName() {
+  return args.get('--scheduler-mode')
+    || process.env.KAMINOS_SHARP_WEBGPU_SCHEDULER_MODE
+    || process.env.KAMINOS_SHARP_BREATHING_ROOM_MODE
+    || null;
+}
+
+function schedulerModeForRawScheduler(scheduler = {}) {
+  if (scheduler.mode === 'cooperative') return 'custom-cooperative';
+  if (scheduler.mode === 'default' || !scheduler.mode) return 'default';
+  return `custom-${scheduler.mode}`;
+}
+
+function parseRequestedSchedulerRequest() {
+  const requestedMode = requestedSchedulerModeName();
+  let profile = null;
+  let schedulerModeError = null;
+  if (requestedMode) {
+    try {
+      profile = sharpBreathingRoomSchedulerProfileForMode(requestedMode);
+    } catch (error) {
+      schedulerModeError = error;
+    }
+  }
+
   const scheduler = {
+    ...(profile?.scheduler || {}),
     ...parseJsonObject(process.env.KAMINOS_SHARP_WEBGPU_SCHEDULER),
   };
   const discrete = {
@@ -112,9 +140,36 @@ function parseRequestedScheduler() {
   for (const [key, value] of Object.entries(discrete)) {
     if (value !== undefined) scheduler[key] = value;
   }
-  return {
+  const resolvedScheduler = {
     mode: scheduler.mode || (Object.keys(scheduler).length ? 'cooperative' : 'default'),
     ...scheduler,
+  };
+  const effectiveMode = schedulerModeError
+    ? null
+    : (profile?.schedulerMode || schedulerModeForRawScheduler(resolvedScheduler));
+  return {
+    scheduler: schedulerModeError
+      ? { mode: 'invalid' }
+      : resolvedScheduler,
+    schedulerMode: {
+      schema: 'kaminos.sharp-webgpu-scheduler-mode.v0',
+      requested: requestedMode || effectiveMode,
+      effective: effectiveMode,
+      profileId: profile?.id || null,
+      profileLabel: profile?.label || null,
+      source: requestedMode
+        ? (args.has('--scheduler-mode') ? 'cli' : 'env')
+        : (process.env.KAMINOS_SHARP_WEBGPU_SCHEDULER ? 'json-env' : 'default'),
+      unsupportedFields: profile?.unsupportedFields || [],
+      error: schedulerModeError?.message || null,
+    },
+  };
+}
+
+function schedulerModeEvidence() {
+  return {
+    ...schedulerModeIdentity,
+    requestedScheduler,
   };
 }
 
@@ -124,6 +179,7 @@ function schedulerEvidence(telemetry = null, statusOverride = null) {
   return {
     schema: 'kaminos.sharp-webgpu-scheduler-evidence.v0',
     status,
+    schedulerMode: schedulerModeEvidence(),
     requestedScheduler,
     effectiveScheduler,
     unsupportedFields: telemetry?.unsupportedFields || [],
@@ -170,6 +226,8 @@ function sharpRouteBackpressure() {
 function routeSchedulerInputFromBreathingRoom(breathingRoom = {}) {
   const requested = breathingRoom?.requestedScheduler || requestedScheduler;
   const effective = breathingRoom?.effectiveScheduler || {};
+  const requestedMode = requested.mode === 'cooperative' ? 'cooperative' : 'throughput';
+  const effectiveMode = effective.mode === 'cooperative' ? 'cooperative' : requestedMode;
   const hasEffectiveScheduler = Boolean(breathingRoom?.effectiveScheduler);
   const unsupportedFields = Array.isArray(breathingRoom?.unsupportedFields)
     ? breathingRoom.unsupportedFields
@@ -179,13 +237,13 @@ function routeSchedulerInputFromBreathingRoom(breathingRoom = {}) {
     : (breathingRoom?.status || (breathingRoom?.effectiveScheduler ? 'verified' : 'scheduler-unverified'));
   return {
     requestedScheduler: {
-      mode: requested.mode === 'cooperative' ? 'cooperative' : 'throughput',
+      mode: requestedMode,
       yieldMs: requested.yieldMs ?? 0,
       waitForSubmittedWorkDone: Boolean(requested.waitForSubmittedWorkDone),
       phaseChunkSize: phaseChunkSizeFromScheduler(requested),
     },
     effectiveScheduler: {
-      mode: effective.mode || (requested.mode === 'cooperative' ? 'cooperative' : 'throughput'),
+      mode: effectiveMode,
       yieldMs: effective.yieldMs ?? requested.yieldMs ?? 0,
       waitForSubmittedWorkDone: Boolean(effective.waitForSubmittedWorkDone ?? requested.waitForSubmittedWorkDone),
       phaseChunkSize: phaseChunkSizeFromScheduler(effective),
@@ -295,6 +353,7 @@ function pipelineSchedulerEvidence(breathingRoom) {
     schema: 'kaminos.pipeline-scheduler-composition.v0',
     source: 'pipeline-adapter-report',
     verificationState,
+    schedulerMode: breathingRoom?.schedulerMode || schedulerModeEvidence(),
     requestedScheduler: breathingRoom?.requestedScheduler || requestedScheduler,
     effectiveScheduler,
     unsupportedFields,
@@ -438,6 +497,7 @@ function reportBase(extra = {}) {
       appUrl: url,
       chromePath,
       weightsPath: join(sharpRepo, 'public', 'weights.bin'),
+      schedulerMode: schedulerModeEvidence(),
       requestedScheduler,
     },
     breathingRoom,
@@ -468,6 +528,7 @@ function fail(error, extra = {}) {
 }
 
 function validateInputs() {
+  if (schedulerModeIdentity.error) throw new Error(schedulerModeIdentity.error);
   if (!input || !output || !report) throw new Error('expected --input, --output, and --report');
   if (!existsSync(input)) throw new Error(`input image does not exist: ${input}`);
   if (!existsSync(sharpRepo)) throw new Error(`SHARP-WebGPU repo does not exist: ${sharpRepo}`);
