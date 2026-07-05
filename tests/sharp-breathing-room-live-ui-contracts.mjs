@@ -70,6 +70,21 @@ assert.match(
 );
 assert.match(
   index,
+  /adapterReport\?\.failure\?\.operatorMessage/,
+  'Failure summary must prefer operator-facing adapter failure copy when the live route records one',
+);
+assert.match(
+  index,
+  /lastTrustworthyEvidence\?\.browserLastMilestone/,
+  'Failure summary must expose the last trustworthy SHARP browser milestone when a run fails before PLY output',
+);
+assert.match(
+  index,
+  /Friendly gives SHARP more room/,
+  'Generate panel must steer live smoke toward the cooperative route while preserving default as a comparison path',
+);
+assert.match(
+  index,
   /function ensureSharpBreathingRoomImageAssets\(/,
   'Generate panel must load indexed Kaminos image assets instead of depending on a pasted smoke URL',
 );

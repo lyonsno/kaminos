@@ -2310,7 +2310,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
         <button type="button" class="btn" id="sharp-breathing-room-friendly-button" onclick="runSharpBreathingRoomProfile('cooperative-spn-gaussian')">Run friendly</button>
       </div>
       <div class="sharp-breathing-room-source" id="sharp-breathing-room-source-summary">Select an image asset below or paste an image source.</div>
-      <div class="sharp-breathing-room-status" id="sharp-breathing-room-status">Choose a route to send the selected image through SHARP.</div>
+      <div class="sharp-breathing-room-status" id="sharp-breathing-room-status">Choose a route to send the selected image through SHARP. Friendly gives SHARP more room when the box is busy; default is the comparison path.</div>
     </div>
     <h2>Image Generation</h2>
     <p style="font-size: 11px; color: #666; margin-bottom: 12px;">Generate test images to feed through the MoGe + SuperMat pipeline.</p>
@@ -16128,8 +16128,12 @@ function pipelineRunFailureSummary(result) {
   const effectiveRoute = failedStage?.effectiveRoute || {};
   const adapterReport = effectiveRoute.adapterReport || null;
   const phase = adapterReport?.phase || failedStage?.failurePhase || report.phase || result?.phase || 'failed';
+  const browserMilestone = adapterReport?.lastTrustworthyEvidence?.browserLastMilestone?.text
+    || adapterReport?.failure?.lastBrowserMilestone?.text
+    || null;
   const detail = compactErrorLine(
-    result?.error
+    adapterReport?.failure?.operatorMessage
+    || result?.error
     || report.error
     || failedStage?.error
     || adapterReport?.error
@@ -16140,6 +16144,8 @@ function pipelineRunFailureSummary(result) {
   const reportPath = result?.report?.path || effectiveRoute.adapterReportPath || null;
   return [
     detail || 'The backend failed before producing a splat.',
+    browserMilestone ? `Last model step: ${compactErrorLine(browserMilestone)}.` : '',
+    adapterReport?.failure?.operatorHint ? compactErrorLine(adapterReport.failure.operatorHint) : '',
     phase ? `Phase: ${phase}.` : '',
     reportPath ? `Report: ${reportPath}` : '',
   ].filter(Boolean).join(' ');
