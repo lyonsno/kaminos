@@ -9596,11 +9596,6 @@ const FIRESIM_LOOK_FIELDS = [
   'detailScale', 'plumeHeight', 'windStrength', 'windAngle', 'windHeight', 'inputRadius',
   'flowRate',
 ];
-const LEGACY_BITE_STACK_DEFAULTS = {
-  pyroBiteCore: 0.65,
-  pyroBiteRim: 0.75,
-  pyroBiteAfter: 0.35,
-};
 
 const VOLUME_SCENE_PRESETS = {
   canonical_plume: {
@@ -10597,18 +10592,8 @@ function normalizeVolumeLookLibrary(raw = null) {
   };
 }
 
-function matchesLegacyBiteStackDefaults(controls = {}) {
-  return Object.entries(LEGACY_BITE_STACK_DEFAULTS).every(([key, value]) => Math.abs(Number(controls[key]) - value) < 1e-6);
-}
-
 function normalizeVolumeLookControls(kind, controls = {}, entry = {}) {
-  const normalized = controls && typeof controls === 'object' ? { ...controls } : {};
-  if (normalizeVolumeLookLibraryKind(kind) === 'pyro' && entry.biteStackAuthored !== true && matchesLegacyBiteStackDefaults(normalized)) {
-    normalized.pyroBiteCore = 0;
-    normalized.pyroBiteRim = 0;
-    normalized.pyroBiteAfter = 0;
-  }
-  return normalized;
+  return controls && typeof controls === 'object' ? { ...controls } : {};
 }
 
 function normalizeVolumeLookEntry(entry, kind) {
@@ -10707,6 +10692,7 @@ function saveVolumeLookLibraryEntry() {
   const normalized = writeVolumeLookLibrary(library);
   document.getElementById('volume-look-library-entry').value = name;
   document.getElementById('volume-look-library-json').value = JSON.stringify(normalized, null, 2);
+  saveVolumeBasinSnapshot(`look-library-save-${kind}-${name}`);
   setInfo(`Saved ${kind} look: ${name}`);
   return entry;
 }
@@ -10725,6 +10711,7 @@ function loadVolumeLookLibraryEntry() {
   volumePrototype?.setControls(readVolumeControls());
   refreshVolumeReadout();
   document.getElementById('volume-look-library-name').value = entry.name;
+  saveVolumeBasinSnapshot(`look-library-load-${kind}-${entry.name}`);
   setInfo(`Loaded ${kind} look: ${entry.name}`);
   return true;
 }
@@ -15572,6 +15559,7 @@ async function initKaminosVolumeRoute() {
     updateVolumeControlLabels();
     volumePrototype.setControls(readVolumeControls());
     refreshVolumeReadout();
+    saveVolumeBasinSnapshot('budget-controls');
   };
   const gamut = document.getElementById('volume-ray-budget-gamut');
   const updateGamutFromPointer = event => {

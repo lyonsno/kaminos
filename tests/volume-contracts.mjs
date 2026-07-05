@@ -57,6 +57,15 @@ assert.match(index, /saveVolumeLookLibraryEntry/, 'Volume cockpit can save named
 assert.match(index, /loadVolumeLookLibraryEntry/, 'Volume cockpit can load named Pyro/FireSim look-library entries');
 assert.match(index, /exportVolumeLookLibraryJson/, 'Volume cockpit can export the page JSON look library');
 assert.match(index, /importVolumeLookLibraryJson/, 'Volume cockpit can import the page JSON look library');
+const saveVolumeLookLibraryEntryFn = index.match(/function saveVolumeLookLibraryEntry\(\) \{([\s\S]*?)\n\}/)?.[1] || '';
+assert.match(saveVolumeLookLibraryEntryFn, /saveVolumeBasinSnapshot\(`look-library-save-\$\{kind\}-\$\{name\}`\)/, 'Saving a named look also refreshes the full current basin snapshot');
+const loadVolumeLookLibraryEntryFn = index.match(/function loadVolumeLookLibraryEntry\(\) \{([\s\S]*?)\n\}/)?.[1] || '';
+assert.match(loadVolumeLookLibraryEntryFn, /saveVolumeBasinSnapshot\(`look-library-load-\$\{kind\}-\$\{entry\.name\}`\)/, 'Loading a named look refreshes the full current basin snapshot after partial look controls apply');
+const applyBudgetControlsFn = index.match(/const applyBudgetControls = \(\) => \{([\s\S]*?)\n  \};/)?.[1] || '';
+assert.match(applyBudgetControlsFn, /saveVolumeBasinSnapshot\('budget-controls'\)/, 'Budget/gamut changes refresh the durable full basin snapshot instead of leaving restore state stale');
+assert.doesNotMatch(index, /LEGACY_BITE_STACK_DEFAULTS/, 'Look-library normalization must not rewrite saved Bite stack layers behind the operator');
+assert.doesNotMatch(index, /matchesLegacyBiteStackDefaults/, 'Look-library normalization must not infer old Bite defaults and zero authored-looking values');
+assert.doesNotMatch(index, /entry\.biteStackAuthored !== true[\s\S]*pyroBiteCore\s*=\s*0/, 'Look-library load/import must preserve explicit Bite core values even when older metadata is absent');
 const fireSimLookFields = index.match(/const FIRESIM_LOOK_FIELDS = \[([\s\S]*?)\];/);
 assert.ok(fireSimLookFields, 'FireSim look library exposes an inspectable field list');
 for (const forbidden of ['raySteps', 'adaptiveRays', 'occupancySkip', 'majorantSkip', 'majorantSmooth', 'majorantGuard', 'temporalAccum', 'temporalJitter', 'historyClamp', 'renderScale', 'resolution', 'majorantGrid', 'pressureMode', 'pressureTierOverlay', 'pressureTierLowerMax', 'pressureTierHeroMin', 'pressureTierHeroMax']) {
@@ -929,9 +938,6 @@ assert.match(core, /pyroBiteCoreEvent/, 'WGSL derives a named inner/current-flam
 assert.match(core, /pyroBiteRimEvent/, 'WGSL derives a named rim/interface Bite layer');
 assert.match(core, /pyroBiteAfterEvent/, 'WGSL derives a named after/wake Bite layer');
 assert.match(core, /pyroStackedBiteEvent/, 'WGSL combines Bite layers before load-bearing alpha/color contribution');
-assert.match(index, /LEGACY_BITE_STACK_DEFAULTS/, 'Look-library migration names the old non-neutral Bite stack defaults');
-assert.match(index, /matchesLegacyBiteStackDefaults/, 'Look-library migration detects stale Bite-stack defaults from saved looks');
-assert.match(index, /entry\.biteStackAuthored !== true && matchesLegacyBiteStackDefaults/, 'Look-library migration only neutralizes un-authored legacy Bite stack defaults');
 assert.match(index, /entry\.biteStackAuthored = \['pyroBiteCore', 'pyroBiteRim', 'pyroBiteAfter'\]/, 'Saved Pyro looks mark intentionally authored Bite stack layers');
 for (const id of [
   'volume-pyro-bite-core',
