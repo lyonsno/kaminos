@@ -1161,6 +1161,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
         <option value="96" selected>96^3</option>
         <option value="128">128^3</option>
         <option value="160">160^3</option>
+        <option value="192">192^3</option>
       </select>
       <span class="slider-val" id="volume-resolution-val">96^3</span>
     </div>
@@ -14518,7 +14519,7 @@ async function initKaminosVolumeRoute() {
     routedVolumeQualityReason = normalizeVolumeQualityReason(params.get('volume_quality_reason'));
   }
   const routeResolution = parseInt(params.get('volume_resolution') || '', 10);
-  if ([32, 48, 64, 96, 128, 160].includes(routeResolution)) {
+  if ([32, 48, 64, 96, 128, 160, 192].includes(routeResolution)) {
     document.getElementById('volume-resolution').value = String(routeResolution);
   }
   const routeMajorantGrid = parseInt(params.get('volume_majorant_grid') || '', 10);

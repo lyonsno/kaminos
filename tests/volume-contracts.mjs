@@ -216,6 +216,8 @@ assert.match(index, /volume_sim_profile/, 'URL route can request sim-cost profil
 assert.match(index, /simProfile/, 'Volume controls carry sim profile request identity into the renderer');
 assert.match(index, /<option value="128">128\^3<\/option>/, 'Volume grid selector can test a 128^3 simulation volume');
 assert.match(index, /<option value="160">160\^3<\/option>/, 'Volume grid selector can test a 160^3 simulation volume');
+assert.match(index, /<option value="192">192\^3<\/option>/, 'Volume grid selector can test a 192^3 simulation volume after high-grid residual evidence');
+assert.match(index, /\[32,\s*48,\s*64,\s*96,\s*128,\s*160,\s*192\]\.includes\(routeResolution\)/, 'Volume route intake accepts 192^3 instead of silently leaving the simulator at the default grid');
 assert.match(index, /<option value="32">32\^3 majorant<\/option>/, 'Majorant grid selector can test a 32^3 coarse field');
 assert.match(index, /<option value="48" selected>48\^3 majorant<\/option>/, 'Majorant grid selector defaults to the sweep-selected 48^3 coarse field');
 assert.match(index, /id="volume-ray-budget-gamut"/, 'Volume tab exposes the coupled ray-budget gamut control');
@@ -448,8 +450,9 @@ assert.match(core, /canonical-source-control-change/, 'canonical source-control 
 assert.match(core, /sourceStateResetNeeded[\s\S]*rebuildFluidState\(requestedGrid, requestedMajorantGrid, 'canonical-source-control-change'\)/, 'canonical source-control edits rebuild the live fluid field instead of only resetting temporal history');
 assert.match(core, /state\.fluidStateResetReason/, 'debug state exposes why the live fluid field was rebuilt');
 assert.match(core, /state\.fluidStateResetCount/, 'debug state exposes source-control fluid reset count');
-assert.match(core, /SUPPORTED_GRID_SIZES\s*=\s*\[[^\]]*128[^\]]*160[^\]]*\]/s, 'fluid sim supports bounded larger 128^3 and 160^3 sweep grids');
+assert.match(core, /SUPPORTED_GRID_SIZES\s*=\s*\[[^\]]*128[^\]]*160[^\]]*192[^\]]*\]/s, 'fluid sim supports bounded larger 128^3, 160^3, and 192^3 sweep grids');
 assert.match(core, /maxStorageBufferBindingSize/, 'larger sim grids request the required WebGPU storage-buffer binding limit');
+assert.match(core, /maxBufferSize/, 'larger sim grids request the required WebGPU buffer-allocation limit');
 assert.match(core, /FLUID_SLOTS_PER_CELL\s*=\s*4/, 'fluid sim stores a distinct transported microdetail slot beyond fire and smoke material channels');
 assert.doesNotMatch(core, /FLUID_SLOTS_PER_CELL\s*=\s*[5-9]/, 'transported emission detail must reuse existing fire storage instead of adding a fifth fluid slot');
 assert.match(core, /FLUID_COMPONENTS\s*=\s*FLUID_SLOTS_PER_CELL\s*\*\s*4/, 'fluid component count derives from the four slot layout');
@@ -1543,6 +1546,7 @@ const fieldPairDataset = existsSync(fieldPairDatasetPath) ? readFileSync(fieldPa
 assert.match(fieldPairDataset, /kaminos\.volume\.field-pair-dataset\.v0/, 'field-pair dataset writes a stable dataset schema identity');
 assert.match(fieldPairDataset, /volume-witness\.mjs/, 'field-pair dataset captures field state through the witness instead of bypassing route validation');
 assert.match(fieldPairDataset, /volume_resolution/, 'field-pair dataset varies simulation grid resolution through the public route parameter');
+assert.match(fieldPairDataset, /SUPPORTED_GRIDS\s*=\s*\[[^\]]*96[^\]]*128[^\]]*160[^\]]*192[^\]]*\]/s, 'field-pair dataset can request 192^3 high-grid corpora without silently normalizing to 160');
 assert.match(fieldPairDataset, /lowGrid/, 'field-pair dataset records requested low simulation grid');
 assert.match(fieldPairDataset, /highGrid/, 'field-pair dataset records requested high simulation grid');
 assert.match(fieldPairDataset, /gridScaleRatio/, 'field-pair dataset records the low/high grid relationship explicitly');
@@ -1604,6 +1608,7 @@ assert.match(fieldPairDataset, /--route-variant-preflight/, 'field-pair dataset 
 assert.match(fieldPairDataset, /routeVariantPreflight/, 'field-pair dataset records route-variant preflight receipts in the manifest');
 assert.match(fieldPairDataset, /route-variant-preflight/, 'field-pair dataset names route-variant preflight as a distinct failure phase');
 assert.match(fieldPairDataset, /--deterministic-replay-start-ms-list/, 'field-pair dataset can expand deterministic replay over multiple start states');
+assert.match(witness, /\[32,\s*48,\s*64,\s*96,\s*128,\s*160,\s*192\]\.includes\(requestedGrid\)/, 'volume witness verifies 192^3 route identity instead of clamping or accepting fallback grid evidence');
 assert.match(fieldPairDataset, /deterministicReplayStates/, 'field-pair dataset records the deterministic replay state axis in the manifest');
 assert.match(fieldPairDataset, /replayStateIdentity/, 'field-pair dataset records the active replay state identity per low/high pair');
 assert.match(fieldPairDataset, /--capture-retries/, 'field-pair dataset exposes capture retries as an explicit corpus reliability control');

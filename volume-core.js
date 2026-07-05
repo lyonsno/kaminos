@@ -4,7 +4,7 @@ const FRONT_FIELD_IDENTITY = 'combustion-front-topology-sidecar-v0';
 const DETERMINISTIC_REPLAY_IDENTITY = 'deterministic-replay-same-route-controls-fixed-step-v0';
 const FIELD_TILE_EXPORT_IDENTITY = 'kaminos.volume.field-tile-export.v0';
 const DEFAULT_GRID_SIZE = 96;
-const SUPPORTED_GRID_SIZES = [32, 48, 64, 96, 128, 160];
+const SUPPORTED_GRID_SIZES = [32, 48, 64, 96, 128, 160, 192];
 const FLUID_SLOTS_PER_CELL = 4;
 const FLUID_COMPONENTS = FLUID_SLOTS_PER_CELL * 4;
 const DEFAULT_MAJORANT_GRID_SIZE = 48;
@@ -4654,10 +4654,19 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     }
     adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
     if (!adapter) throw new Error('WebGPU adapter unavailable');
-    const maxRequestedFluidBufferBytes = fluidBufferBytes(Math.max(...SUPPORTED_GRID_SIZES));
+    const maxSupportedGridSize = Math.max(...SUPPORTED_GRID_SIZES);
+    const maxRequestedFluidBufferBytes = fluidBufferBytes(maxSupportedGridSize);
+    const maxRequestedBufferBytes = Math.max(
+      maxRequestedFluidBufferBytes,
+      pressureBufferBytes(maxSupportedGridSize),
+      frontFieldBufferBytes(maxSupportedGridSize),
+    );
     const requiredLimits = {};
     if ((adapter.limits?.maxStorageBufferBindingSize ?? 0) >= maxRequestedFluidBufferBytes) {
       requiredLimits.maxStorageBufferBindingSize = maxRequestedFluidBufferBytes;
+    }
+    if ((adapter.limits?.maxBufferSize ?? 0) >= maxRequestedBufferBytes) {
+      requiredLimits.maxBufferSize = maxRequestedBufferBytes;
     }
     device = await adapter.requestDevice(Object.keys(requiredLimits).length ? { requiredLimits } : undefined);
     context = canvas.getContext('webgpu');
