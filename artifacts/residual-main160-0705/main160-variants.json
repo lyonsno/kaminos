@@ -1,0 +1,47 @@
+{
+  "variants": [
+    {
+      "id": "main-pyro-basin-160",
+      "label": "current main pyro basin at 160 grid",
+      "tags": ["main", "pyro-basin", "160-grid", "smoke-folds"],
+      "settleMs": 6200,
+      "overrides": {
+        "volume_tall_preset": "pyro_material_bonfire_family_0702",
+        "volume_resolution": 160,
+        "volume_render_scale": 1,
+        "volume_steps": 160,
+        "volume_ray_steps": 160
+      }
+    },
+    {
+      "id": "main-warm-cap-160",
+      "label": "warm cap small flame nonlinear smoke structure at 160 grid",
+      "tags": ["main", "warm-cap", "160-grid", "flame-tongues"],
+      "settleMs": 6400,
+      "overrides": {
+        "volume_tall_preset": "pyro_contrast_warm_cap_small_flame_0702",
+        "volume_resolution": 160,
+        "volume_render_scale": 1,
+        "volume_steps": 160,
+        "volume_ray_steps": 160
+      }
+    },
+    {
+      "id": "main-pyro-basin-fold-late-160",
+      "label": "current main pyro basin later folded plume at 160 grid",
+      "tags": ["main", "pyro-basin", "160-grid", "late-fold"],
+      "settleMs": 7600,
+      "overrides": {
+        "volume_tall_preset": "pyro_material_bonfire_family_0702",
+        "volume_resolution": 160,
+        "volume_render_scale": 1,
+        "volume_steps": 180,
+        "volume_ray_steps": 160,
+        "volume_wind_angle": -45,
+        "volume_plume_height": 1.45,
+        "volume_fire_scale": 0.72,
+        "volume_detail_scale": 0.62
+      }
+    }
+  ]
+}
