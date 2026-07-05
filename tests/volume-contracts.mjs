@@ -1025,6 +1025,11 @@ assert.match(core, /tallPlumeSourceSlabRelief/, 'tall plume high-flow source sla
 assert.match(core, /tallPlumeEmitterBand/, 'tall plume has a named compact emitter band for combustion source birth');
 assert.match(core, /tallPlumeCombustionSource/, 'tall plume combustion source is separated from the broad smoke source column');
 assert.match(core, /tallPlumeEmitterFireBirth/, 'tall plume fire birth is separated from the broad column fire source');
+assert.match(core, /tallPlumeSourceWidthGate/, 'tall plume source birth must explicitly know when the emitter is wide enough to need extra front topology');
+assert.match(core, /tallPlumeFrontPacketDensity/, 'tall plume source width must scale front packet density instead of only scaling the hot body');
+assert.match(core, /tallPlumeAnnularFrontBirth/, 'tall plume wide-source birth must add an annular combustion-front carrier');
+assert.match(core, /tallPlumeInteriorFireRelief/, 'tall plume wide-source birth must relieve the interior so broad sources do not become solid hot plugs');
+assert.match(core, /let columnFrontTopologyBirth = max\(columnCombustionFrontBirth \* 0\.32, tallPlumeAnnularFrontBirth \* 0\.42\);/, 'tall plume annular source birth must feed combustion front topology, not only visible flame color');
 assert.match(core, /tallPlumeLiveReactionCarrier/, 'tall plume reaction is driven by compact combustion carrier rather than broad smoke source');
 assert.doesNotMatch(core, /let tallPlumeLiveFlameSurvival = tallPlumeReactionSurvival \* tallPlumeFuelSurvival \* tallPlumeFlameContourSurvival;/, 'tall plume live flame survival must not bypass front topology and tip taper');
 assert.match(core, /fireBirth \* 0\.024 \* tallPlumeRawSourceFireRelief/, 'tall plume flame storage must downweight raw source birth at high flow');

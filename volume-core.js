@@ -2160,6 +2160,29 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let fireSourceFalloff = 1.0 / max(0.0036, scaledSourceRadius * scaledSourceRadius);
   let columnSource = exp(-sourceRadial * sourceRadial * smokeSourceFalloff) * sourceBand * breakup * inputFlow;
   let tallPlumeEmitterBand = smoothstep(-0.25, -0.10, sourceCenter.y) * (1.0 - smoothstep(0.12, 0.40, sourceCenter.y));
+  let tallPlumeSourceWidthGate = tallPlumeScene * smoothstep(0.095, 0.180, scaledSourceRadius);
+  let tallPlumeSourceRadial01 = clamp(sourceRadial / max(scaledSourceRadius, 0.001), 0.0, 3.0);
+  let tallPlumeFrontPacketDensity = mix(1.0, 2.25, tallPlumeSourceWidthGate);
+  let tallPlumeSourceAngle = atan2(sourceCenter.z, sourceCenter.x);
+  let tallPlumeAnnularFrontRadius = mix(0.70, 0.86, tallPlumeSourceWidthGate);
+  let tallPlumeAnnularFrontWidth = 0.18 - tallPlumeSourceWidthGate * 0.035;
+  let tallPlumeAnnularFrontBand = exp(
+    -pow(abs(tallPlumeSourceRadial01 - tallPlumeAnnularFrontRadius), 2.0)
+      / max(0.0025, tallPlumeAnnularFrontWidth * tallPlumeAnnularFrontWidth)
+  );
+  let tallPlumeFrontPacketBreakup = clamp(
+    0.72
+      + (breakup - 0.64) * 0.38
+      + 0.16 * sin(tallPlumeSourceAngle * (4.0 + tallPlumeFrontPacketDensity * 2.0) + sourceRadial * (23.0 + tallPlumeFrontPacketDensity * 7.0) - time * 1.45)
+      + 0.12 * cos(tallPlumeSourceAngle * (7.0 + tallPlumeFrontPacketDensity) - p.y * 13.0 + time * 1.10),
+    0.36,
+    1.34
+  );
+  let tallPlumeInteriorFireRelief = mix(
+    1.0,
+    mix(0.62, 1.08, smoothstep(0.34, 0.94, tallPlumeSourceRadial01)),
+    tallPlumeSourceWidthGate
+  );
   let tallPlumeEmitterBreakup = clamp(
     0.70
       + (breakup - 0.64) * 0.62
@@ -2168,10 +2191,17 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     0.28,
     1.18
   );
+  let tallPlumeAnnularFrontBirth = tallPlumeSourceWidthGate
+    * tallPlumeEmitterBand
+    * tallPlumeAnnularFrontBand
+    * tallPlumeFrontPacketBreakup
+    * inputFlow;
   let tallPlumeCombustionSource = exp(-sourceRadial * sourceRadial * smokeSourceFalloff * 1.22)
     * tallPlumeEmitterBand
     * tallPlumeEmitterBreakup
-    * inputFlow;
+    * inputFlow
+    * tallPlumeInteriorFireRelief
+    + tallPlumeAnnularFrontBirth * 0.34;
   let canonicalSourceCell = vec2<f32>(
     sin(p.x * 8.1 + p.z * 2.7 + canonicalPhaseTime * 0.43),
     cos(p.z * 7.6 - p.x * 3.2 - canonicalPhaseTime * 0.39)
@@ -2309,7 +2339,9 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     * tallPlumeEmitterBand
     * inputFlow
     * sourceScaleCompensation
-    * (0.52 + 0.48 * tallPlumeEmitterBreakup);
+    * tallPlumeInteriorFireRelief
+    * (0.52 + 0.48 * tallPlumeEmitterBreakup)
+    + tallPlumeAnnularFrontBirth * sourceScaleCompensation * 0.22;
   let bonfireCoreHeat = clamp(
     bonfireReferenceSourceModel.x * 0.92
       + bonfireReactionProgress * 0.18
@@ -2560,13 +2592,16 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     bonfireLickBirth = bonfireRadialFireLickBreakup(cellI, p * detailDomain, time, fireLickOperatorGain, heat, fuel, flame, flameDetail, source);
   }
   let lickBirth = mix(columnLickBirth, bonfireLickBirth, bonfireScene);
+  let tallPlumeAnnularFrontContribution = tallPlumeAnnularFrontBirth * (0.34 + fireLickOperatorGain * 0.025);
   let columnCombustionFrontBirth = clamp(
-    (lickBirth.y * 0.34 + interfaceEnergy * source * 0.62 + fireBirth * 0.12) * (0.36 + fireLickOperatorGain * 0.07),
+    (lickBirth.y * 0.34 + interfaceEnergy * source * 0.62 + fireBirth * 0.12) * (0.36 + fireLickOperatorGain * 0.07)
+      + tallPlumeAnnularFrontContribution,
     0.0,
-    1.35
+    1.55
   );
   let combustionFrontBirth = mix(columnCombustionFrontBirth, bonfireCombustionFrontBirth, bonfireScene);
-  combustionFrontTopology = max(combustionFrontTopology, mix(columnCombustionFrontBirth * 0.32, bonfireFrontTopologyBirth + bonfireCombustionFrontBirth * 0.18, bonfireScene));
+  let columnFrontTopologyBirth = max(columnCombustionFrontBirth * 0.32, tallPlumeAnnularFrontBirth * 0.42);
+  combustionFrontTopology = max(combustionFrontTopology, mix(columnFrontTopologyBirth, bonfireFrontTopologyBirth + bonfireCombustionFrontBirth * 0.18, bonfireScene));
   let externalInjection = applyExternalEmitterInjection(externalEmitterInfluence(p, time));
   let confinement = vorticityConfinement(cellI, 0.034 + curl * 0.044);
   let bonfireReferenceFrontContact = clamp(
