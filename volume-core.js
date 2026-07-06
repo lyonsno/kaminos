@@ -5,6 +5,7 @@ const DETERMINISTIC_REPLAY_IDENTITY = 'deterministic-replay-same-route-controls-
 const FIELD_TILE_EXPORT_IDENTITY = 'kaminos.volume.field-tile-export.v0';
 const FULL_FIELD_EXPORT_IDENTITY = 'kaminos.volume.full-field-export.v0';
 const DEBUG_FIELD_TILE_PATCH_IDENTITY = 'debug-field-tile-patch-render-override-v0';
+const FULL_FIELD_BUFFER_OVERRIDE_IDENTITY = 'debug-full-field-buffer-render-override-v0';
 const DEFAULT_GRID_SIZE = 96;
 const SUPPORTED_GRID_SIZES = [32, 48, 64, 96, 128, 160, 192];
 const FLUID_SLOTS_PER_CELL = 4;
@@ -4029,6 +4030,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     pressureJacobiInlineDivergencePasses: 0,
     fullGridPassBreakdown: null,
     fullFieldExportSession: null,
+    fullFieldBufferRenderOverride: null,
     frontFieldIdentity: FRONT_FIELD_IDENTITY,
     frontFieldBytes: frontFieldBufferBytes(gridSize),
     frontFieldReadIndex: 0,
@@ -7441,6 +7443,172 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     return FIELD_TILE_CHANNELS.indexOf(String(channel));
   }
 
+  let debugFullFieldBufferOverrideSession = null;
+
+  function fullFieldBufferOverrideFailure(resultBase, failurePhase, error, extra = {}) {
+    const failed = {
+      ...resultBase,
+      status: 'failed',
+      failurePhase,
+      error,
+      grid: gridSize,
+      ...extra,
+    };
+    state.fullFieldBufferRenderOverride = failed;
+    return failed;
+  }
+
+  function decodeBase64Bytes(base64) {
+    const binary = atob(String(base64 || ''));
+    const bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index += 1) {
+      bytes[index] = binary.charCodeAt(index);
+    }
+    return bytes;
+  }
+
+  function beginDebugFullFieldBufferOverride(payload = {}) {
+    const resultBase = {
+      identity: FULL_FIELD_BUFFER_OVERRIDE_IDENTITY,
+      authority: 'full-grid-buffer-render-override-not-selected-tiles',
+      limitation: 'Debug full-field buffer override for residual render stills; replaces active render buffers and does not claim product integration.',
+      role: payload.role || 'unknown',
+      sourceApplicationManifest: payload.sourceApplicationManifest || null,
+      sourceFieldAuthority: payload.sourceFieldAuthority || null,
+    };
+    if (!device || !fluidBuffers[currentFluid] || !frontBuffers[currentFront]) {
+      return fullFieldBufferOverrideFailure(resultBase, 'inactive', 'WebGPU device or active field buffers are unavailable.');
+    }
+    const requestedGrid = Number(payload.grid);
+    if (!Number.isFinite(requestedGrid) || requestedGrid !== gridSize) {
+      return fullFieldBufferOverrideFailure(resultBase, 'grid-validate', 'Override grid does not match active renderer grid.', {
+        requestedGrid,
+        activeGrid: gridSize,
+      });
+    }
+    const fluid = payload.fluid || {};
+    const front = payload.front || {};
+    const expectedFluidBytes = fluidBufferBytes(gridSize);
+    const expectedFrontBytes = frontFieldBufferBytes(gridSize);
+    if (Number(fluid.byteLength) !== expectedFluidBytes || Number(front.byteLength) !== expectedFrontBytes) {
+      return fullFieldBufferOverrideFailure(resultBase, 'descriptor-validate', 'Override sidecar byte lengths do not match active grid buffers.', {
+        expectedFluidBytes,
+        expectedFrontBytes,
+        fluidByteLength: Number(fluid.byteLength),
+        frontByteLength: Number(front.byteLength),
+      });
+    }
+    const session = {
+      ...resultBase,
+      status: 'receiving',
+      sessionId: `full-buffer-override-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`,
+      grid: gridSize,
+      fluidBytesExpected: expectedFluidBytes,
+      frontBytesExpected: expectedFrontBytes,
+      fluidBytesWritten: 0,
+      frontBytesWritten: 0,
+      fluidChunks: 0,
+      frontChunks: 0,
+      startedAtFrameCount: state.frameCount,
+      startedAtSimStepCount: state.simStepCount,
+      fluidSha256: fluid.sha256 || null,
+      frontSha256: front.sha256 || null,
+      fluidChannelOrder: Array.isArray(fluid.channelOrder) ? fluid.channelOrder.map(String) : FIELD_TILE_CHANNELS.slice(0, FLUID_COMPONENTS),
+      frontChannelOrder: Array.isArray(front.channelOrder) ? front.channelOrder.map(String) : ['frontTopology'],
+    };
+    debugFullFieldBufferOverrideSession = session;
+    state.fullFieldBufferRenderOverride = { ...session };
+    return { ok: true, ...state.fullFieldBufferRenderOverride };
+  }
+
+  function writeDebugFullFieldBufferOverrideChunk(payload = {}) {
+    const session = debugFullFieldBufferOverrideSession;
+    const resultBase = session || {
+      identity: FULL_FIELD_BUFFER_OVERRIDE_IDENTITY,
+      authority: 'full-grid-buffer-render-override-not-selected-tiles',
+      role: payload.role || 'unknown',
+    };
+    if (!session || session.status !== 'receiving') {
+      return fullFieldBufferOverrideFailure(resultBase, 'chunk-write', 'No active full-field buffer override session.');
+    }
+    if (String(payload.sessionId || '') !== session.sessionId) {
+      return fullFieldBufferOverrideFailure(resultBase, 'chunk-write', 'Full-field buffer override session id mismatch.', {
+        requestedSessionId: payload.sessionId || null,
+        activeSessionId: session.sessionId,
+      });
+    }
+    const kind = String(payload.kind || 'fluid') === 'front' ? 'front' : 'fluid';
+    const bytes = decodeBase64Bytes(payload.base64 || '');
+    const byteOffset = Math.max(0, Math.floor(Number(payload.byteOffset) || 0));
+    const expectedBytes = kind === 'front' ? session.frontBytesExpected : session.fluidBytesExpected;
+    if (bytes.byteLength < 1 || byteOffset + bytes.byteLength > expectedBytes) {
+      return fullFieldBufferOverrideFailure(resultBase, 'chunk-validate', 'Full-field override chunk has invalid byte range.', {
+        kind,
+        byteOffset,
+        byteLength: bytes.byteLength,
+        expectedBytes,
+      });
+    }
+    if (kind === 'front') {
+      device.queue.writeBuffer(frontBuffers[currentFront], byteOffset, bytes);
+      session.frontBytesWritten += bytes.byteLength;
+      session.frontChunks += 1;
+    } else {
+      device.queue.writeBuffer(fluidBuffers[currentFluid], byteOffset, bytes);
+      session.fluidBytesWritten += bytes.byteLength;
+      session.fluidChunks += 1;
+    }
+    state.fullFieldBufferRenderOverride = { ...session };
+    return {
+      ok: true,
+      identity: FULL_FIELD_BUFFER_OVERRIDE_IDENTITY,
+      status: 'chunk-written',
+      sessionId: session.sessionId,
+      kind,
+      byteOffset,
+      byteLength: bytes.byteLength,
+      fluidBytesWritten: session.fluidBytesWritten,
+      frontBytesWritten: session.frontBytesWritten,
+    };
+  }
+
+  async function finishDebugFullFieldBufferOverride(payload = {}) {
+    const session = debugFullFieldBufferOverrideSession;
+    const resultBase = session || {
+      identity: FULL_FIELD_BUFFER_OVERRIDE_IDENTITY,
+      authority: 'full-grid-buffer-render-override-not-selected-tiles',
+      role: payload.role || 'unknown',
+    };
+    if (!session || session.status !== 'receiving') {
+      return fullFieldBufferOverrideFailure(resultBase, 'finish', 'No active full-field buffer override session.');
+    }
+    if (String(payload.sessionId || '') !== session.sessionId) {
+      return fullFieldBufferOverrideFailure(resultBase, 'finish', 'Full-field buffer override session id mismatch.', {
+        requestedSessionId: payload.sessionId || null,
+        activeSessionId: session.sessionId,
+      });
+    }
+    if (session.fluidBytesWritten !== session.fluidBytesExpected || session.frontBytesWritten !== session.frontBytesExpected) {
+      return fullFieldBufferOverrideFailure(resultBase, 'finish-validate', 'Full-field override did not receive complete fluid/front buffers.', {
+        fluidBytesWritten: session.fluidBytesWritten,
+        fluidBytesExpected: session.fluidBytesExpected,
+        frontBytesWritten: session.frontBytesWritten,
+        frontBytesExpected: session.frontBytesExpected,
+      });
+    }
+    await device.queue.onSubmittedWorkDone?.();
+    resetTemporalHistory('debug-full-field-buffer-render-override');
+    const receipt = {
+      ...session,
+      status: 'applied',
+      completedAtFrameCount: state.frameCount,
+      completedAtSimStepCount: state.simStepCount,
+    };
+    debugFullFieldBufferOverrideSession = null;
+    state.fullFieldBufferRenderOverride = receipt;
+    return { ok: true, ...receipt };
+  }
+
   async function applyDebugFieldTilePatch(payload = {}) {
     const startedAt = performance.now();
     const resultBase = {
@@ -8314,6 +8482,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       return canvas;
     },
     applyDebugFieldTilePatch,
+    beginDebugFullFieldBufferOverride,
+    writeDebugFullFieldBufferOverrideChunk,
+    finishDebugFullFieldBufferOverride,
     beginDebugFullFieldExport,
     readDebugFullFieldExportChunk,
     releaseDebugFullFieldExport,

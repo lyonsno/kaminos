@@ -2029,6 +2029,38 @@ assert.match(fullGridFieldExport, /prototypeIdentity/, 'full-grid export manifes
 assert.match(fullGridFieldExport, /fluidChannelOrder/, 'full-grid export manifest records fluid channel order');
 assert.match(fullGridFieldExport, /frontChannelOrder/, 'full-grid export manifest records front channel order');
 
+const fullGridResidualApplyPath = join(root, 'volume-full-grid-field-residual-apply.py');
+assert.ok(existsSync(fullGridResidualApplyPath), 'volume full-grid field residual application harness exists');
+const fullGridResidualApply = existsSync(fullGridResidualApplyPath) ? readFileSync(fullGridResidualApplyPath, 'utf8') : '';
+assert.match(fullGridResidualApply, /kaminos\.volume\.full-grid-field-residual-application\.v0/, 'full-grid residual application writes a stable manifest schema');
+assert.match(fullGridResidualApply, /full-grid-local-ridge-residual-v0/, 'full-grid residual application names its first complete-field model identity');
+assert.match(fullGridResidualApply, /lowUpsampled/, 'full-grid residual application writes a complete low-upsampled comparison field');
+assert.match(fullGridResidualApply, /predictedHigh/, 'full-grid residual application writes a complete predicted high-grid field');
+assert.match(fullGridResidualApply, /truthHigh/, 'full-grid residual application preserves the complete truth-high sidecar reference');
+assert.match(fullGridResidualApply, /completeFieldCoverage/, 'full-grid residual application manifest states complete field coverage explicitly');
+assert.match(fullGridResidualApply, /fitOnSamePairVisualDiagnostic/, 'full-grid residual application labels same-pair fitted visuals separately from held-out proof');
+assert.match(fullGridResidualApply, /failurePhase/, 'full-grid residual application writes failure-phase reports for corrupt sidecars or model failures');
+assert.match(core, /FULL_FIELD_BUFFER_OVERRIDE_IDENTITY\s*=\s*'debug-full-field-buffer-render-override-v0'/, 'volume core names full-buffer render override separately from tile patch override');
+assert.match(core, /beginDebugFullFieldBufferOverride/, 'volume prototype can begin a complete full-field buffer render override');
+assert.match(core, /writeDebugFullFieldBufferOverrideChunk/, 'volume prototype can receive full-field override chunks without selected tile boundaries');
+assert.match(core, /finishDebugFullFieldBufferOverride/, 'volume prototype can finalize full-field buffer override receipts');
+assert.match(core, /fullFieldBufferRenderOverride/, 'debug state preserves full-field buffer render override identity and status');
+
+const fullGridResidualRenderPath = join(root, 'volume-full-grid-field-residual-render-still.mjs');
+assert.ok(existsSync(fullGridResidualRenderPath), 'volume full-grid residual render-still harness exists');
+const fullGridResidualRender = existsSync(fullGridResidualRenderPath) ? readFileSync(fullGridResidualRenderPath, 'utf8') : '';
+assert.match(fullGridResidualRender, /kaminos\.volume\.full-grid-field-residual-render-still\.v0/, 'full-grid residual render-still harness writes a stable manifest schema');
+assert.match(fullGridResidualRender, /--application-manifest/, 'full-grid residual render-still consumes a full-grid residual application manifest');
+assert.match(fullGridResidualRender, /beginDebugFullFieldBufferOverride/, 'full-grid residual render-still uses the full-buffer override hook');
+assert.match(fullGridResidualRender, /writeDebugFullFieldBufferOverrideChunk/, 'full-grid residual render-still streams complete sidecar chunks into the renderer');
+assert.match(fullGridResidualRender, /finishDebugFullFieldBufferOverride/, 'full-grid residual render-still finalizes full-buffer render override receipts');
+assert.match(fullGridResidualRender, /lowUpsampled/, 'full-grid residual render-still renders the complete low-upsampled field');
+assert.match(fullGridResidualRender, /predictedHigh/, 'full-grid residual render-still renders the complete predicted high field');
+assert.match(fullGridResidualRender, /truthHigh/, 'full-grid residual render-still renders the deterministic true-high baseline');
+assert.match(fullGridResidualRender, /full-grid-buffer-render-override-not-selected-tiles/, 'full-grid residual render-still says visuals come from full-buffer override rather than selected tiles');
+assert.match(fullGridResidualRender, /contactSheet/, 'full-grid residual render-still writes an inspectable contact sheet');
+assert.match(fullGridResidualRender, /failurePhase/, 'full-grid residual render-still writes failure-phase reports when rendering fails');
+
 const dynamicTextureProofPath = join(root, 'volume-dynamic-texture-proof.mjs');
 assert.ok(existsSync(dynamicTextureProofPath), 'dynamic texture proof harness exists');
 const dynamicTextureProof = existsSync(dynamicTextureProofPath) ? readFileSync(dynamicTextureProofPath, 'utf8') : '';
