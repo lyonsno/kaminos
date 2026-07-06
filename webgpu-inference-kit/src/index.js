@@ -130,6 +130,14 @@ export {
 } from './sam-mask-decoder-island.js';
 
 export {
+  SAM3_MASK_TAIL_PHASE_PROGRAM_ROUTE_ID,
+  createSam3MaskTailPhaseProgramCpuOracle,
+  createSam3MaskTailPhaseProgramRouteDefinition,
+  createSam3MaskTailPhaseProgramRouteReceipt,
+  runSam3MaskTailPhaseProgramRoute,
+} from './sam-mask-tail-phase-program.js';
+
+export {
   createWebGpuRouteSchemaContract,
 } from './route-schema-contract.js';
 

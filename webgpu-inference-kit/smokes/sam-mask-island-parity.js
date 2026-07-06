@@ -1,15 +1,24 @@
 import {
   SAM3_MASK_DECODER_ISLAND_ROUTE_ID,
+  SAM3_MASK_TAIL_PHASE_PROGRAM_ROUTE_ID,
   createRouteInvocationRequest,
   createSam3MaskDecoderIslandRouteDefinition,
   createSam3MaskProjectionCpuOracle,
+  createSam3MaskTailPhaseProgramCpuOracle,
+  createSam3MaskTailPhaseProgramRouteDefinition,
   runSam3MaskDecoderIslandRoute,
+  runSam3MaskTailPhaseProgramRoute,
 } from '../src/index.js';
+
+const SUPPORTED_ROUTE_IDS = new Set([
+  SAM3_MASK_DECODER_ISLAND_ROUTE_ID,
+  SAM3_MASK_TAIL_PHASE_PROGRAM_ROUTE_ID,
+]);
 
 const state = {
   schema: 'kaminos.sam3-mask-island.browser-parity-state.v0',
   status: 'loading',
-  requestedRouteId: SAM3_MASK_DECODER_ISLAND_ROUTE_ID,
+  requestedRouteId: null,
   effectiveRouteId: null,
   claims: {
     fullSam3BrowserExecution: false,
@@ -71,6 +80,12 @@ function tensorByRole(manifest, role) {
   const tensor = manifest.tensors.find(entry => entry.role === role);
   if (!tensor) throw new Error(`manifest missing tensor role ${role}`);
   return tensor;
+}
+
+function weightByRole(manifest, role) {
+  const weight = manifest.weights?.find(entry => entry.role === role);
+  if (!weight) throw new Error(`manifest missing weight role ${role}`);
+  return weight;
 }
 
 function maxAbsDiff(a, b) {
@@ -171,13 +186,162 @@ function drawVisualWitness({ sourceImage, sourceImageIdentity, expected, actual,
   }
 }
 
+async function loadMaskDecoderIslandPayload(manifest) {
+  const hyperTensor = tensorByRole(manifest, 'hyper-input');
+  const embeddingTensor = tensorByRole(manifest, 'upscaled-embedding');
+  const expectedLogitsTensor = tensorByRole(manifest, 'expected-mask-logits');
+  const expectedBinaryTensor = tensorByRole(manifest, 'expected-binary-mask');
+  const hyperInput = await fetchArray(resolveManifestFile(hyperTensor.file), Float32Array);
+  const upscaledEmbedding = await fetchArray(resolveManifestFile(embeddingTensor.file), Float32Array);
+  const expectedLogits = await fetchArray(resolveManifestFile(expectedLogitsTensor.file), Float32Array);
+  const expectedBinary = await fetchArray(resolveManifestFile(expectedBinaryTensor.file), Uint32Array);
+  const cpuOracle = createSam3MaskProjectionCpuOracle({
+    hyperInput,
+    upscaledEmbedding,
+    shape: manifest.shape,
+  });
+  return {
+    routeKind: 'mask-decoder-island',
+    expectedLogits,
+    expectedBinary,
+    cpuSelfCheck: {
+      logitsMaxAbsDiff: maxAbsDiff(expectedLogits, cpuOracle.maskLogits),
+      binaryMismatchCount: mismatchCount(expectedBinary, cpuOracle.binaryMask),
+    },
+    tensorIdentity: {
+      hyperInputSha256: hyperTensor.sha256,
+      upscaledEmbeddingSha256: embeddingTensor.sha256,
+      expectedMaskLogitsSha256: expectedLogitsTensor.sha256,
+      expectedBinaryMaskSha256: expectedBinaryTensor.sha256,
+    },
+    async run({ device, adapter, route, request }) {
+      return runSam3MaskDecoderIslandRoute({
+        request,
+        route,
+        device,
+        queue: device.queue,
+        adapterName: adapter.info?.description || adapter.info?.device || 'browser-webgpu-adapter',
+        browser: navigator.userAgent,
+        kernel: route.kernel,
+        model: {
+          revision: route.model.revision,
+          weightsHash: manifest.staticWeights.sha256,
+          dtype: 'fp32',
+        },
+        tensors: {
+          hyperInput,
+          upscaledEmbedding,
+          shape: manifest.shape,
+        },
+        includeReadback: true,
+      });
+    },
+  };
+}
+
+async function loadMaskTailPayload(manifest) {
+  const lastHsTensor = tensorByRole(manifest, 'last-hs');
+  const pixelEmbedTensor = tensorByRole(manifest, 'pixel-embed');
+  const expectedMaskEmbeddingsTensor = tensorByRole(manifest, 'expected-mask-embeddings');
+  const expectedUpscaledTensor = tensorByRole(manifest, 'expected-upscaled-embedding');
+  const expectedLogitsTensor = tensorByRole(manifest, 'expected-mask-logits');
+  const expectedBinaryTensor = tensorByRole(manifest, 'expected-binary-mask');
+  const weightRoles = [
+    'mask-embedder-layer-0-weight',
+    'mask-embedder-layer-0-bias',
+    'mask-embedder-layer-1-weight',
+    'mask-embedder-layer-1-bias',
+    'mask-embedder-layer-2-weight',
+    'mask-embedder-layer-2-bias',
+    'instance-projection-weight',
+    'instance-projection-bias',
+  ];
+  const weightsByRole = Object.fromEntries(weightRoles.map(role => [role, weightByRole(manifest, role)]));
+  const lastHs = await fetchArray(resolveManifestFile(lastHsTensor.file), Float32Array);
+  const pixelEmbed = await fetchArray(resolveManifestFile(pixelEmbedTensor.file), Float32Array);
+  const expectedMaskEmbeddings = await fetchArray(resolveManifestFile(expectedMaskEmbeddingsTensor.file), Float32Array);
+  const expectedUpscaledEmbedding = await fetchArray(resolveManifestFile(expectedUpscaledTensor.file), Float32Array);
+  const expectedLogits = await fetchArray(resolveManifestFile(expectedLogitsTensor.file), Float32Array);
+  const expectedBinary = await fetchArray(resolveManifestFile(expectedBinaryTensor.file), Uint32Array);
+  const weights = {
+    maskEmbedder: [
+      {
+        weight: await fetchArray(resolveManifestFile(weightsByRole['mask-embedder-layer-0-weight'].file), Float32Array),
+        bias: await fetchArray(resolveManifestFile(weightsByRole['mask-embedder-layer-0-bias'].file), Float32Array),
+      },
+      {
+        weight: await fetchArray(resolveManifestFile(weightsByRole['mask-embedder-layer-1-weight'].file), Float32Array),
+        bias: await fetchArray(resolveManifestFile(weightsByRole['mask-embedder-layer-1-bias'].file), Float32Array),
+      },
+      {
+        weight: await fetchArray(resolveManifestFile(weightsByRole['mask-embedder-layer-2-weight'].file), Float32Array),
+        bias: await fetchArray(resolveManifestFile(weightsByRole['mask-embedder-layer-2-bias'].file), Float32Array),
+      },
+    ],
+    instanceProjection: {
+      weight: await fetchArray(resolveManifestFile(weightsByRole['instance-projection-weight'].file), Float32Array),
+      bias: await fetchArray(resolveManifestFile(weightsByRole['instance-projection-bias'].file), Float32Array),
+    },
+  };
+  const cpuOracle = createSam3MaskTailPhaseProgramCpuOracle({
+    lastHs,
+    pixelEmbed,
+    weights,
+    shape: manifest.shape,
+  });
+  return {
+    routeKind: 'mask-tail-phase-program',
+    expectedLogits,
+    expectedBinary,
+    cpuSelfCheck: {
+      maskEmbeddingsMaxAbsDiff: maxAbsDiff(expectedMaskEmbeddings, cpuOracle.maskEmbeddings),
+      upscaledEmbeddingMaxAbsDiff: maxAbsDiff(expectedUpscaledEmbedding, cpuOracle.upscaledEmbedding),
+      logitsMaxAbsDiff: maxAbsDiff(expectedLogits, cpuOracle.maskLogits),
+      binaryMismatchCount: mismatchCount(expectedBinary, cpuOracle.binaryMask),
+    },
+    tensorIdentity: {
+      lastHsSha256: lastHsTensor.sha256,
+      pixelEmbedSha256: pixelEmbedTensor.sha256,
+      expectedMaskEmbeddingsSha256: expectedMaskEmbeddingsTensor.sha256,
+      expectedUpscaledEmbeddingSha256: expectedUpscaledTensor.sha256,
+      expectedMaskLogitsSha256: expectedLogitsTensor.sha256,
+      expectedBinaryMaskSha256: expectedBinaryTensor.sha256,
+      weightsSha256: Object.fromEntries(Object.entries(weightsByRole).map(([role, weight]) => [role, weight.sha256])),
+    },
+    async run({ device, adapter, route, request }) {
+      return runSam3MaskTailPhaseProgramRoute({
+        request,
+        route,
+        device,
+        queue: device.queue,
+        adapterName: adapter.info?.description || adapter.info?.device || 'browser-webgpu-adapter',
+        browser: navigator.userAgent,
+        kernel: route.kernel,
+        model: {
+          revision: route.model.revision,
+          weightsHash: manifest.staticWeights.sha256,
+          dtype: 'fp32',
+        },
+        tensors: {
+          lastHs,
+          pixelEmbed,
+          weights,
+          shape: manifest.shape,
+        },
+        includeReadback: true,
+      });
+    },
+  };
+}
+
 async function main() {
   try {
     setStatus('load-oracle-packet');
     const manifest = await fetchJson(manifestUrl);
-    if (manifest.routeId !== SAM3_MASK_DECODER_ISLAND_ROUTE_ID) {
-      throw new Error(`manifest route mismatch: ${manifest.routeId}`);
+    if (!SUPPORTED_ROUTE_IDS.has(manifest.routeId)) {
+      throw new Error(`unsupported manifest route: ${manifest.routeId}`);
     }
+    state.requestedRouteId = manifest.routeId;
     if (manifest.claims?.fullSam3BrowserExecution !== false) {
       throw new Error('oracle packet must not claim full SAM3 browser execution');
     }
@@ -190,14 +354,11 @@ async function main() {
       throw new Error('oracle packet must preserve explicit static-weight or reference-weight identity');
     }
 
-    const hyperTensor = tensorByRole(manifest, 'hyper-input');
-    const embeddingTensor = tensorByRole(manifest, 'upscaled-embedding');
-    const expectedLogitsTensor = tensorByRole(manifest, 'expected-mask-logits');
-    const expectedBinaryTensor = tensorByRole(manifest, 'expected-binary-mask');
-    const hyperInput = await fetchArray(resolveManifestFile(hyperTensor.file), Float32Array);
-    const upscaledEmbedding = await fetchArray(resolveManifestFile(embeddingTensor.file), Float32Array);
-    const expectedLogits = await fetchArray(resolveManifestFile(expectedLogitsTensor.file), Float32Array);
-    const expectedBinary = await fetchArray(resolveManifestFile(expectedBinaryTensor.file), Uint32Array);
+    const payload = manifest.routeId === SAM3_MASK_TAIL_PHASE_PROGRAM_ROUTE_ID
+      ? await loadMaskTailPayload(manifest)
+      : await loadMaskDecoderIslandPayload(manifest);
+    const expectedLogits = payload.expectedLogits;
+    const expectedBinary = payload.expectedBinary;
     const sourceImageUrl = manifest.sourceImage?.file ? resolveManifestFile(manifest.sourceImage.file) : null;
     const sourceImage = sourceImageUrl ? await loadImage(sourceImageUrl) : null;
     if (sourceImageUrl) sourceImageEl.src = sourceImageUrl;
@@ -208,19 +369,17 @@ async function main() {
       throw new Error(`selectedMaskIndex ${selectedMaskIndex} out of range`);
     }
 
-    const cpuOracle = createSam3MaskProjectionCpuOracle({
-      hyperInput,
-      upscaledEmbedding,
-      shape: manifest.shape,
-    });
-    const oracleSelfCheck = {
-      logitsMaxAbsDiff: maxAbsDiff(expectedLogits, cpuOracle.maskLogits),
-      binaryMismatchCount: mismatchCount(expectedBinary, cpuOracle.binaryMask),
-    };
-    const cpuTolerance = manifest.tolerances?.cpuOracleLogitsMaxAbsDiff ?? 0;
     const binaryTolerance = manifest.tolerances?.binaryMismatchCount ?? 0;
-    if (oracleSelfCheck.logitsMaxAbsDiff > cpuTolerance || oracleSelfCheck.binaryMismatchCount > binaryTolerance) {
-      throw new Error(`oracle packet self-check failed: ${JSON.stringify(oracleSelfCheck)}`);
+    const oracleLogitsTolerance = manifest.tolerances?.cpuOracleLogitsMaxAbsDiff ?? manifest.tolerances?.webGpuLogitsMaxAbsDiff ?? 0;
+    const maskEmbeddingsTolerance = manifest.tolerances?.maskEmbeddingsMaxAbsDiff ?? 0;
+    const upscaledTolerance = manifest.tolerances?.upscaledEmbeddingMaxAbsDiff ?? 0;
+    if (
+      (payload.cpuSelfCheck.logitsMaxAbsDiff ?? 0) > oracleLogitsTolerance
+      || (payload.cpuSelfCheck.maskEmbeddingsMaxAbsDiff ?? 0) > maskEmbeddingsTolerance
+      || (payload.cpuSelfCheck.upscaledEmbeddingMaxAbsDiff ?? 0) > upscaledTolerance
+      || payload.cpuSelfCheck.binaryMismatchCount > binaryTolerance
+    ) {
+      throw new Error(`oracle packet self-check failed: ${JSON.stringify(payload.cpuSelfCheck)}`);
     }
 
     setStatus('request-webgpu-adapter');
@@ -229,7 +388,18 @@ async function main() {
     if (!adapter) throw new Error('WebGPU adapter unavailable');
     const device = await adapter.requestDevice();
 
-    const route = createSam3MaskDecoderIslandRouteDefinition({
+    const route = manifest.routeId === SAM3_MASK_TAIL_PHASE_PROGRAM_ROUTE_ID
+      ? createSam3MaskTailPhaseProgramRouteDefinition({
+          model: {
+            revision: manifest.model?.id || 'mlx-reference-mask-tail',
+            dtype: 'fp32',
+          },
+          kernel: {
+            profile: 'sam3-mask-tail-phase-program-v0',
+            commit: params.get('commit') || null,
+          },
+        })
+      : createSam3MaskDecoderIslandRouteDefinition({
       model: {
         revision: manifest.model?.id || 'synthetic-oracle',
         dtype: 'fp32',
@@ -239,25 +409,41 @@ async function main() {
         commit: params.get('commit') || null,
       },
     });
+    const sourceArtifact = {
+      artifactId: manifest.sourceImage?.artifactId || 'image:synthetic',
+      sha256: manifest.sourceImage?.sha256 || 'sha256:synthetic-image',
+      shape: [manifest.shape.height, manifest.shape.width, 3],
+    };
+    const inputArtifacts = manifest.routeId === SAM3_MASK_TAIL_PHASE_PROGRAM_ROUTE_ID
+      ? {
+          'source-image': sourceArtifact,
+          'sam3-mask-tail-tensors': {
+            artifactId: 'sam3-mask-tail-tensors:browser-parity',
+            sha256: payload.tensorIdentity.lastHsSha256,
+            shape: [1],
+          },
+          'sam3-mask-tail-weights': {
+            artifactId: manifest.staticWeights.artifactId,
+            sha256: manifest.staticWeights.sha256,
+            shape: [1],
+          },
+        }
+      : {
+          'source-image': sourceArtifact,
+          'sam3-decoder-tensors': {
+            artifactId: 'sam3-tensors:browser-parity',
+            sha256: payload.tensorIdentity.hyperInputSha256,
+            shape: [1],
+          },
+          'sam3-decoder-weights': {
+            artifactId: manifest.staticWeights.artifactId,
+            sha256: manifest.staticWeights.sha256,
+            shape: [1],
+          },
+        };
     const request = createRouteInvocationRequest(route, {
       requestId: `sam-browser-parity-${Date.now()}`,
-      inputs: {
-        'source-image': {
-          artifactId: manifest.sourceImage?.artifactId || 'image:synthetic',
-          sha256: manifest.sourceImage?.sha256 || 'sha256:synthetic-image',
-          shape: [manifest.shape.height, manifest.shape.width, 3],
-        },
-        'sam3-decoder-tensors': {
-          artifactId: 'sam3-tensors:browser-parity',
-          sha256: hyperTensor.sha256,
-          shape: [1],
-        },
-        'sam3-decoder-weights': {
-          artifactId: manifest.staticWeights.artifactId,
-          sha256: manifest.staticWeights.sha256,
-          shape: [1],
-        },
-      },
+      inputs: inputArtifacts,
       outputs: {
         'mask-logits': { artifactId: 'sam3-mask-logits:browser-parity', shape: [manifest.shape.batch, manifest.shape.maskTokens, manifest.shape.height, manifest.shape.width] },
         'mask-binary': { artifactId: 'sam3-mask-binary:browser-parity', shape: [manifest.shape.batch, manifest.shape.maskTokens, manifest.shape.height, manifest.shape.width] },
@@ -269,26 +455,7 @@ async function main() {
     });
 
     setStatus('run-webgpu-route');
-    const result = await runSam3MaskDecoderIslandRoute({
-      request,
-      route,
-      device,
-      queue: device.queue,
-      adapterName: adapter.info?.description || adapter.info?.device || 'browser-webgpu-adapter',
-      browser: navigator.userAgent,
-      kernel: route.kernel,
-      model: {
-        revision: route.model.revision,
-        weightsHash: manifest.staticWeights.sha256,
-        dtype: 'fp32',
-      },
-      tensors: {
-        hyperInput,
-        upscaledEmbedding,
-        shape: manifest.shape,
-      },
-      includeReadback: true,
-    });
+    const result = await payload.run({ device, adapter, route, request });
 
     const gpuLogits = new Float32Array(result.debugReadback.maskLogits);
     const gpuBinary = new Uint32Array(result.debugReadback.binaryMask);
@@ -320,12 +487,10 @@ async function main() {
       schema: manifest.schema,
       mode: manifest.mode,
       boundary: manifest.boundary,
+      routeKind: payload.routeKind,
       sourceImage: manifest.sourceImage || null,
       reference: manifest.reference || null,
-      hyperInputSha256: hyperTensor.sha256,
-      upscaledEmbeddingSha256: embeddingTensor.sha256,
-      expectedMaskLogitsSha256: expectedLogitsTensor.sha256,
-      expectedBinaryMaskSha256: expectedBinaryTensor.sha256,
+      ...payload.tensorIdentity,
       staticWeights: manifest.staticWeights,
     };
     state.backendIdentity = result.backend;
