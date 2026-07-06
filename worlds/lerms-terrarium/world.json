@@ -479,6 +479,23 @@
           "source": "glovewell smoke capture"
         }
       ],
+      "smokeOffers": [
+        {
+          "id": "glove-emitter-native-host-smoke-offer",
+          "label": "Glove Emitter Native Host Gap Route",
+          "route": "index.html?kaminos_forge_host=live&world_chamber=lerms-underhill&world_cartridge=lerms-terrarium&world_crucible=glove-emitter&forge_host_smoke_offer=glove-emitter-native-host-smoke-offer",
+          "targetSurface": "forge-host-smoke-offers",
+          "sourceRole": "glove-well-source",
+          "authority": "gap_report_route",
+          "freshness": "waiting",
+          "outputClass": "gap_report",
+          "expectedReceipt": "firing_receipt",
+          "downgrades": [
+            "kaminos_event_cache_empty_until_live_hand_packets",
+            "native_host_visual_smoke_not_yet_passing"
+          ]
+        }
+      ],
       "graduationMode": "extract_shared_runtime",
       "graduationQuestion": "Does this glove firing remain a Kaminos adapter recipe, move into lerms/glove implementation, or become shared hand-state/native-host runtime?",
       "stewardship": {

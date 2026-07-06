@@ -23,6 +23,7 @@ assert.ok(existsSync(worldJsonPath), 'lerms terrarium cartridge has world.json')
 assert.ok(existsSync(compositionPath), 'lerms terrarium cartridge has composition.js');
 assert.ok(existsSync(graduationPath), 'lerms terrarium cartridge has graduation.md');
 assert.ok(existsSync(witnessesPath), 'lerms terrarium cartridge has witnesses directory');
+assert.ok(existsSync(join(root, 'docs/world-cartridge-first-use-workflow.md')), 'first-use workflow doc path advertised to pilot consumers resolves');
 
 const {
   WORLD_CARTRIDGE_INDEX_SCHEMA,
@@ -128,6 +129,12 @@ assert.equal(normalized.crucibles.find(crucible => crucible.id === 'hill-of-hill
 assert.equal(normalized.crucibles.find(crucible => crucible.id === 'finger-fluid').handles.some(handle => handle.kind === 'state-stream'), true);
 assert.match(normalized.crucibles.find(crucible => crucible.id === 'glove-emitter').stewardship.role, /workbench/i);
 assert.equal(normalized.crucibles.find(crucible => crucible.id === 'glove-emitter').sourceOwnership.owner, 'glove-well-source');
+assert.deepEqual(normalized.crucibles.find(crucible => crucible.id === 'glove-emitter').smokeOffers.map(offer => offer.id), [
+  'glove-emitter-native-host-smoke-offer',
+]);
+assert.equal(normalized.crucibles.find(crucible => crucible.id === 'glove-emitter').smokeOffers[0].authority, 'gap_report_route');
+assert.equal(normalized.crucibles.find(crucible => crucible.id === 'glove-emitter').smokeOffers[0].outputClass, 'gap_report');
+assert.match(normalized.crucibles.find(crucible => crucible.id === 'glove-emitter').smokeOffers[0].route, /world_crucible=glove-emitter/);
 assert.equal(normalized.graduation.modes.length, WORLD_CARTRIDGE_GRADUATION_MODES.length);
 assert.equal(normalized.graduation.currentMode, 'remain_in_kaminos_terrarium');
 assert.equal(normalized.witnesses[0].schema, 'kaminos.world-cartridge.witness.v0');
@@ -244,6 +251,26 @@ assert.throws(
 assert.throws(
   () => normalizeWorldCartridgeManifest({
     ...manifest,
+    crucibles: [
+      {
+        ...manifest.crucibles.find(crucible => crucible.id === 'glove-emitter'),
+        smokeOffers: [
+          {
+            id: 'bad-smoke-offer',
+            authority: 'gap_report_route',
+            outputClass: 'gap_report',
+          },
+        ],
+      },
+    ],
+  }),
+  /smoke offer 0 must include route/,
+  'smoke offers fail loud when they lack a clickable/API route',
+);
+
+assert.throws(
+  () => normalizeWorldCartridgeManifest({
+    ...manifest,
     firstUseTrial: {
       schema: WORLD_CARTRIDGE_FIRST_USE_TRIAL_SCHEMA,
       entryRoute: '/api/world-cartridges',
@@ -287,6 +314,8 @@ assert.equal(index.cartridges[0].defaultRoute.query.world_cartridge, 'lerms-terr
 assert.equal(index.cartridges[0].firstUseTrial.firstMove, 'choose_crucible');
 assert.equal(index.cartridges[0].firstUseTrial.trialSteps.includes('run_firing'), true);
 assert.equal(index.cartridges[0].firstUseTrial.consumerCoverage.some(coverage => coverage.consumer === 'lerm-feel-fucker'), false);
+assert.equal(index.cartridges[0].crucibles.find(crucible => crucible.id === 'glove-emitter').smokeOffers[0].id, 'glove-emitter-native-host-smoke-offer');
+assert.equal(index.cartridges[0].crucibles.find(crucible => crucible.id === 'glove-emitter').smokeOffers[0].authority, 'gap_report_route');
 assert.equal(index.cartridges[0].crucibleCount, 4);
 assert.deepEqual(index.cartridges[0].crucibles.map(crucible => crucible.id), [
   'hill-of-hills',

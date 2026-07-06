@@ -161,6 +161,24 @@ function normalizeSmokeApparitions(apparitions, crucibleIndex) {
   });
 }
 
+function normalizeSmokeOffers(offers, crucibleIndex) {
+  return objectList(offers).map((offer, index) => {
+    if (!offer.id) {
+      throw new Error(`world crucible ${crucibleIndex} smoke offer ${index} must include id`);
+    }
+    if (!offer.route) {
+      throw new Error(`world crucible ${crucibleIndex} smoke offer ${index} must include route`);
+    }
+    if (!offer.authority) {
+      throw new Error(`world crucible ${crucibleIndex} smoke offer ${index} must include authority`);
+    }
+    if (!offer.outputClass) {
+      throw new Error(`world crucible ${crucibleIndex} smoke offer ${index} must include outputClass`);
+    }
+    return clone(offer);
+  });
+}
+
 function normalizeCrucibles(crucibles) {
   return objectList(crucibles).map((crucible, index) => {
     if (crucible.schema !== WORLD_CRUCIBLE_DESCRIPTOR_SCHEMA) {
@@ -196,6 +214,7 @@ function normalizeCrucibles(crucibles) {
       casts: requireNonEmptyReferenceList(crucible.casts, `world crucible ${index} casts`),
       receipts: requireNonEmptyReferenceList(crucible.receipts, `world crucible ${index} receipts`),
       smokeApparitions: normalizeSmokeApparitions(crucible.smokeApparitions, index),
+      smokeOffers: normalizeSmokeOffers(crucible.smokeOffers, index),
       graduationMode: crucible.graduationMode,
       graduationQuestion: crucible.graduationQuestion,
       stewardship: clone(stewardship),

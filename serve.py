@@ -285,6 +285,15 @@ def _world_cartridge_summary(manifest, cartridge_dir):
         for apparition_index, apparition in enumerate(crucible.get("smokeApparitions") or []):
             if not apparition.get("route"):
                 raise ValueError(f"world crucible {index} smoke apparition {apparition_index} missing route")
+        for offer_index, offer in enumerate(crucible.get("smokeOffers") or []):
+            if not offer.get("id"):
+                raise ValueError(f"world crucible {index} smoke offer {offer_index} missing id")
+            if not offer.get("route"):
+                raise ValueError(f"world crucible {index} smoke offer {offer_index} missing route")
+            if not offer.get("authority"):
+                raise ValueError(f"world crucible {index} smoke offer {offer_index} missing authority")
+            if not offer.get("outputClass"):
+                raise ValueError(f"world crucible {index} smoke offer {offer_index} missing outputClass")
     return {
         "schema": WORLD_CARTRIDGE_MANIFEST_SCHEMA,
         "id": manifest.get("id"),

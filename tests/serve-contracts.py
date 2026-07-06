@@ -132,6 +132,11 @@ def test_world_cartridge_index_discovers_lerms_terrarium():
     assert "firing" in cartridge["crucibles"][0]["consumerCanStartBy"]
     assert cartridge["crucibles"][2]["stewardship"]["owner"] == "hand-integration-workbench"
     assert cartridge["crucibles"][2]["sourceOwnership"]["owner"] == "finger-fluid-source"
+    glove_emitter = next(crucible for crucible in cartridge["crucibles"] if crucible["id"] == "glove-emitter")
+    assert glove_emitter["smokeOffers"][0]["id"] == "glove-emitter-native-host-smoke-offer"
+    assert glove_emitter["smokeOffers"][0]["authority"] == "gap_report_route"
+    assert glove_emitter["smokeOffers"][0]["outputClass"] == "gap_report"
+    assert "world_crucible=glove-emitter" in glove_emitter["smokeOffers"][0]["route"]
     assert cartridge["witnessCount"] == 1
     assert index["errors"] == []
 

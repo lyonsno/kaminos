@@ -28,6 +28,7 @@ export function createLermsTerrariumComposition(manifest) {
       stewardshipOwner: crucible.stewardship.owner,
       sourceOwner: crucible.sourceOwnership.owner,
       smokeApparitionRoute: crucible.smokeApparitions[0]?.route || '',
+      smokeOffers: crucible.smokeOffers || [],
     })),
     smokeOfferSeed: {
       label: 'LERMS Terrarium',
