@@ -528,6 +528,9 @@ input[type="range"]:disabled::-webkit-slider-thumb { background: #555; cursor: n
         </div>
         <div class="field"><span class="field-key">Phase</span><span class="field-val" id="motion-panel-route-phase">inactive</span></div>
         <div class="field"><span class="field-key">Progress</span><span class="field-val" id="motion-panel-route-progress">0.00</span></div>
+        <div class="field"><span class="field-key">Profile</span><span class="field-val" id="motion-panel-hill-route-profile">none</span></div>
+        <div class="field"><span class="field-key">Fixture</span><span class="field-val" id="motion-panel-hill-route-fixture">none</span></div>
+        <div class="field"><span class="field-key">Terrain</span><span class="field-val" id="motion-panel-hill-terrain-overlay">none</span></div>
         <div class="field"><span class="field-key">Trigger</span><span class="field-val" id="motion-panel-path-world-trigger-state">no world</span></div>
         <div class="field"><span class="field-key">Obstacle</span><span class="field-val" id="motion-panel-path-world-obstacle">none</span></div>
         <div class="field"><span class="field-key">Reason</span><span class="field-val" id="motion-panel-path-world-reason">waiting</span></div>
@@ -1065,6 +1068,7 @@ import {
   normalizeMotionTerrainRouteCostProfile,
   normalizeMotionSourceOrientationRemap,
   normalizeMotionPhraseControls,
+  sampleMotionTerrainRouteCostBreakdown,
   sampleMotionRoutePlan,
   sampleGeneratedPoseTemporalMotion,
   sampleGeneratedPoseClipletPathInterrupt,
@@ -4038,6 +4042,8 @@ function motionPanelPathWorldReadout() {
     worldId: pathWorld?.pathWorldId || interrupt?.pathWorldId || motionTemporalState?.pathWorld?.id || null,
     routePlan,
     pathWorldRouteCostProfile: routeCostProfile,
+    pathWorldRouteFixture: routePlan?.evidence?.routeFixture || pathWorld?.pathWorldRouteFixture || null,
+    terrainOverlayMode: hillTerrainSurface?.terrainOverlayMode || pathWorld?.terrainOverlayMode || routePlan?.evidence?.terrainOverlayMode || null,
     staticFieldMode: routePlan?.evidence?.staticFieldMode || routeCostProfile?.staticFieldMode || null,
     dynamicContinuity: routePlan?.evidence?.dynamicContinuity || routeCostProfile?.dynamicContinuity || null,
     routeSource: pathWorld?.routeSource || routePlan?.evidence?.routeSource || null,
@@ -4068,6 +4074,9 @@ function updateMotionPanelPathWorldReadout() {
   setField('motion-panel-path-world-active-source', readout.activeSource, readout.active);
   setField('motion-panel-route-phase', readout.routePhase, readout.active);
   setField('motion-panel-route-progress', readout.routeProgress == null ? '0.00' : readout.routeProgress.toFixed(2), readout.active);
+  setField('motion-panel-hill-route-profile', readout.pathWorldRouteCostProfile?.id || 'none', !!readout.pathWorldRouteCostProfile);
+  setField('motion-panel-hill-route-fixture', readout.pathWorldRouteFixture?.id || 'none', !!readout.pathWorldRouteFixture);
+  setField('motion-panel-hill-terrain-overlay', readout.terrainOverlayMode || 'none', !!readout.terrainOverlayMode);
   const triggerLabel = readout.triggerDistance == null
     ? readout.triggerState
     : `${readout.triggerState} ${readout.triggerDistance.toFixed(2)}/${readout.triggerRadius?.toFixed(2) ?? '?'}`;
@@ -5184,8 +5193,145 @@ function motionPanelHillWorldFromGrid(source, column, row, height = 0) {
   ];
 }
 
+const MOTION_PANEL_HILL_TERRAIN_OVERLAY_MODES = new Set([
+  'route-cost',
+  'route-pressure',
+  'slope',
+  'dirty-shock',
+  'growth',
+  'topology',
+  'composite',
+]);
+
+const MOTION_PANEL_HILL_ROUTE_FIXTURES = {
+  diagonal: {
+    id: 'diagonal',
+    label: 'Diagonal bounds',
+    start: [0.06, 0.08],
+    goal: [0.94, 0.92],
+    reason: 'legacy corner-to-corner route sanity check',
+  },
+  'meadow-cross': {
+    id: 'meadow-cross',
+    label: 'Meadow cross',
+    start: [0.12, 0.62],
+    goal: [0.88, 0.44],
+    reason: 'crosses the growth/route-pressure field instead of only proving two endpoints',
+  },
+  'ridge-run': {
+    id: 'ridge-run',
+    label: 'Ridge run',
+    start: [0.18, 0.2],
+    goal: [0.78, 0.78],
+    reason: 'biases the route toward exposed ridge and pressure corridors',
+  },
+  'north-meadow': {
+    id: 'north-meadow',
+    label: 'North meadow',
+    start: [0.22, 0.36],
+    goal: [0.74, 0.2],
+    reason: 'shorter upper-field crossing for legible terrain-overlay smoke',
+  },
+};
+
+function normalizeMotionPanelHillTerrainOverlayMode(value, fallback = 'route-cost') {
+  const mode = String(value || '').trim().toLowerCase();
+  return MOTION_PANEL_HILL_TERRAIN_OVERLAY_MODES.has(mode) ? mode : fallback;
+}
+
+function normalizeMotionPanelHillRouteFixture(value, fallback = 'meadow-cross') {
+  const id = String(value || '').trim().toLowerCase();
+  return MOTION_PANEL_HILL_ROUTE_FIXTURES[id] || MOTION_PANEL_HILL_ROUTE_FIXTURES[fallback] || MOTION_PANEL_HILL_ROUTE_FIXTURES.diagonal;
+}
+
+function motionPanelHillRelativeWorldPoint(source, relative) {
+  const bounds = source?.worldBounds || {};
+  const xMin = Number(bounds.x?.min ?? 0);
+  const xMax = Number(bounds.x?.max ?? xMin);
+  const zMin = Number(bounds.z?.min ?? 0);
+  const zMax = Number(bounds.z?.max ?? zMin);
+  const u = Math.max(0, Math.min(1, Number(relative?.[0] ?? 0)));
+  const v = Math.max(0, Math.min(1, Number(relative?.[1] ?? 0)));
+  return [
+    Number((xMin + (xMax - xMin) * u).toFixed(5)),
+    0,
+    Number((zMin + (zMax - zMin) * v).toFixed(5)),
+  ];
+}
+
+function motionPanelHillRouteFixtureEndpoints(source, fixtureInput = 'meadow-cross') {
+  const fixture = normalizeMotionPanelHillRouteFixture(fixtureInput);
+  return {
+    schema: 'kaminos.motion-panel-hill-route-fixture-endpoints.v0',
+    id: fixture.id,
+    label: fixture.label,
+    reason: fixture.reason,
+    start: motionPanelHillRelativeWorldPoint(source, fixture.start),
+    goal: motionPanelHillRelativeWorldPoint(source, fixture.goal),
+    relative: {
+      start: [...fixture.start],
+      goal: [...fixture.goal],
+    },
+  };
+}
+
+function motionPanelHillTerrainOverlayScalar(source, index, overlayMode = 'route-cost', costProfile = 'cautious-lerm') {
+  const mode = normalizeMotionPanelHillTerrainOverlayMode(overlayMode);
+  const scalar = name => Math.max(0, Math.min(1, motionPanelHillChannelValue(source, name, index)));
+  if (mode === 'route-cost') {
+    const breakdown = sampleMotionTerrainRouteCostBreakdown(source, index, costProfile);
+    const value = Math.max(0, Math.min(1, Number(breakdown.total || 0) / 14));
+    return { mode, value, label: 'route cost', breakdown };
+  }
+  if (mode === 'route-pressure') return { mode, value: scalar('routePressure'), label: 'route pressure' };
+  if (mode === 'slope') return { mode, value: scalar('slope'), label: 'slope' };
+  if (mode === 'dirty-shock') return { mode, value: Math.max(scalar('dirty'), scalar('shock')), label: 'dirty/shock' };
+  if (mode === 'growth') return { mode, value: scalar('growthPotential'), label: 'growth' };
+  if (mode === 'topology') return { mode, value: scalar('topologyAmount'), label: 'topology phase' };
+  const pressure = scalar('routePressure');
+  const slope = scalar('slope');
+  const danger = Math.max(scalar('dirty'), scalar('shock'));
+  return {
+    mode: 'composite',
+    value: Math.max(0, Math.min(1, pressure * 0.48 + slope * 0.22 + danger * 0.3)),
+    label: 'composite',
+    components: { pressure, slope, danger },
+  };
+}
+
+function motionPanelHillTerrainOverlayColor(color, overlay) {
+  const value = Math.max(0, Math.min(1, Number(overlay?.value || 0)));
+  if (overlay.mode === 'route-cost') color.setHSL(0.36 - value * 0.34, 0.72, 0.22 + value * 0.18);
+  else if (overlay.mode === 'route-pressure') color.setHSL(0.48, 0.38 + value * 0.42, 0.16 + value * 0.32);
+  else if (overlay.mode === 'slope') color.setHSL(0.17 - value * 0.08, 0.34 + value * 0.42, 0.18 + value * 0.26);
+  else if (overlay.mode === 'dirty-shock') color.setHSL(0.02, 0.5 + value * 0.32, 0.16 + value * 0.34);
+  else if (overlay.mode === 'growth') color.setHSL(0.31, 0.34 + value * 0.5, 0.18 + value * 0.28);
+  else if (overlay.mode === 'topology') color.setHSL(0.7 - value * 0.12, 0.36 + value * 0.34, 0.2 + value * 0.2);
+  else {
+    const pressure = Number(overlay?.components?.pressure || 0);
+    const slope = Number(overlay?.components?.slope || 0);
+    const danger = Number(overlay?.components?.danger || 0);
+    if (danger > 0.2) color.setRGB(0.72, 0.18, 0.12);
+    else color.setHSL(0.24 + pressure * 0.12 - slope * 0.06, 0.38 + pressure * 0.24, 0.22 + pressure * 0.22 - slope * 0.1);
+  }
+  return color;
+}
+
 function createMotionPanelHillTerrainSurface(source, routePlan = null, options = {}) {
   const frame = createMotionPanelHillTerrainFrame(source);
+  const costProfile = normalizeMotionTerrainRouteCostProfile(
+    options.costProfile || routePlan?.cost?.profile || 'cautious-lerm',
+    options.costWeights || {},
+  );
+  const overlayMode = normalizeMotionPanelHillTerrainOverlayMode(options.terrainOverlayMode || options.overlayMode || routePlan?.evidence?.terrainOverlayMode || 'route-cost');
+  const overlayLegend = {
+    schema: 'kaminos.motion-panel-hill-terrain-overlay-legend.v0',
+    mode: overlayMode,
+    costProfile: costProfile.id,
+    channels: overlayMode === 'route-cost'
+      ? ['routePressure', 'slope', 'dirty', 'shock', 'heightDelta', 'surfaceVelocity', 'topologyAmount', 'growthPotential', 'ridgeStrength', 'valleyStrength']
+      : [overlayMode],
+  };
   const grid = source?.grid || {};
   const cols = Math.max(1, Number(grid.columns) || 1);
   const rows = Math.max(1, Number(grid.rows) || 1);
@@ -5199,13 +5345,8 @@ function createMotionPanelHillTerrainSurface(source, routePlan = null, options =
       const world = motionPanelHillWorldFromGrid(source, column, row, motionPanelHillChannelValue(source, 'height', index));
       const point = motionPanelHillDisplayPoint(frame, world);
       positions.push(point[0], point[1], point[2]);
-      const pressure = Math.max(0, Math.min(1, motionPanelHillChannelValue(source, 'routePressure', index)));
-      const slope = Math.max(0, Math.min(1, motionPanelHillChannelValue(source, 'slope', index)));
-      const dirty = Math.max(0, Math.min(1, motionPanelHillChannelValue(source, 'dirty', index)));
-      const shock = Math.max(0, Math.min(1, motionPanelHillChannelValue(source, 'shock', index)));
-      if (shock > 0.2) color.setRGB(0.72, 0.18, 0.12);
-      else if (dirty > 0.2) color.setRGB(0.64, 0.38, 0.16);
-      else color.setHSL(0.24 + pressure * 0.12, 0.38 + pressure * 0.24, 0.22 + pressure * 0.22 - slope * 0.1);
+      const overlay = motionPanelHillTerrainOverlayScalar(source, index, overlayMode, costProfile);
+      motionPanelHillTerrainOverlayColor(color, overlay);
       colors.push(color.r, color.g, color.b);
     }
   }
@@ -5248,6 +5389,8 @@ function createMotionPanelHillTerrainSurface(source, routePlan = null, options =
     route: 'hill-native-route-world',
     sourceRef: source?.sourceRef || null,
     routePlanId: routePlan?.id || null,
+    terrainOverlayMode: overlayMode,
+    costProfile: costProfile.id,
   };
   group.add(mesh);
   group.add(wire);
@@ -5269,6 +5412,9 @@ function createMotionPanelHillTerrainSurface(source, routePlan = null, options =
       routeSource: 'hill-motion-affordance-grid',
       grid: { columns: cols, rows, sampleCount: cols * rows },
       triangleCount: indices.length / 3,
+      terrainOverlayMode: overlayMode,
+      overlayLegend,
+      costProfile,
       checksums: source?.checksums || null,
       displayTransform: frame.displayTransform,
     },
@@ -5348,6 +5494,8 @@ function createMotionPanelHillNativePathWorld(routePlan, terrainSource, options 
     obstacle,
     routePlan,
     routePlanSample: routePlan ? sampleMotionRoutePlan(routePlan, 0.52) : null,
+    pathWorldRouteFixture: routePlan?.evidence?.routeFixture || options.routeFixtureEvidence || null,
+    terrainOverlayMode: terrainSurface.evidence.terrainOverlayMode,
     hillTerrainSurface: terrainSurface.evidence,
     hillTerrainFrame: terrainSurface.frame,
     displayProjection: {
@@ -8552,13 +8700,28 @@ window.kaminosPreviewMotionServerResult = async function(result, options = {}) {
 window.kaminosPreviewHillMotionAffordanceRoutePlan = async function(packet, data, options = {}) {
   const source = decodeHillMotionAffordancePacket({ packet, data });
   const costProfile = normalizeMotionTerrainRouteCostProfile(options.costProfile || 'cautious-lerm', options.costWeights || {});
+  const terrainOverlayMode = normalizeMotionPanelHillTerrainOverlayMode(options.terrainOverlayMode || options.overlayMode || 'route-cost');
+  const routeFixture = motionPanelHillRouteFixtureEndpoints(source, options.routeFixture || options.fixture || 'meadow-cross');
+  const start = options.start || routeFixture.start;
+  const goal = options.goal || routeFixture.goal;
   const routePlan = createMotionRoutePlanFromTerrainAffordance(source, {
     id: options.id || `hill-route-${source.frameId || source.checksums?.channels || 'live'}`,
-    start: options.start,
-    goal: options.goal,
+    start,
+    goal,
     actorRadius: options.actorRadius || 0.17,
     costProfile,
   });
+  routePlan.evidence.routeFixture = {
+    schema: 'kaminos.motion-panel-hill-route-fixture.v0',
+    id: routeFixture.id,
+    label: routeFixture.label,
+    reason: routeFixture.reason,
+    start: routeFixture.start,
+    goal: routeFixture.goal,
+    startSource: options.start ? 'explicit-option' : 'fixture',
+    goalSource: options.goal ? 'explicit-option' : 'fixture',
+  };
+  routePlan.evidence.terrainOverlayMode = terrainOverlayMode;
   const previousState = motionTemporalState;
   motionPanelHillAffordanceRoutePlan = routePlan;
   motionPanelHillAffordanceSource = source;
@@ -8582,6 +8745,8 @@ window.kaminosPreviewHillMotionAffordanceRoutePlan = async function(packet, data
       authority: source.authority,
       routeSource: routePlan.evidence?.routeSource || null,
       costProfile: routePlan.cost?.profile || costProfile,
+      pathWorldRouteFixture: routePlan.evidence.routeFixture,
+      terrainOverlayMode,
       staticFieldMode: routePlan.evidence?.staticFieldMode || 'frozen-source-snapshot',
       dynamicContinuity: routePlan.evidence?.dynamicContinuity || 'not-claimed',
       checksums: source.checksums,
@@ -8590,6 +8755,8 @@ window.kaminosPreviewHillMotionAffordanceRoutePlan = async function(packet, data
     pathWorldPanel: window.kaminosMotionPanelPathWorldDebugState?.() || null,
     hillTerrainSurface: state?.pathWorld?.hillTerrainSurface || null,
     hillTerrainFrame: state?.pathWorld?.hillTerrainFrame || null,
+    pathWorldRouteFixture: routePlan.evidence.routeFixture,
+    terrainOverlayMode,
     frame,
   };
 };
@@ -9013,6 +9180,9 @@ async function previewHillMotionAffordanceRouteFromParams(params = new URLSearch
   const [packet, data] = await Promise.all([packetResponse.json(), dataResponse.json()]);
   return window.kaminosPreviewHillMotionAffordanceRoutePlan(packet, data, {
     id: params.get('kaminos_hill_affordance_id') || 'url-hill-motion-affordance-route',
+    costProfile: params.get('kaminos_hill_route_profile') || 'cautious-lerm',
+    terrainOverlayMode: params.get('kaminos_hill_terrain_overlay') || 'route-cost',
+    routeFixture: params.get('kaminos_hill_route_fixture') || 'meadow-cross',
   });
 }
 
@@ -9397,6 +9567,8 @@ window.kaminosGeneratedPoseTemporalDebugState = function() {
     pathWorldRouteAuthority: state?.lastPathWorldRouteAuthority || (state?.lastPathWorld ? 'world-path' : null),
     pathWorldRoutePlan: state?.pathWorld?.routePlan || state?.lastPathWorld?.routePlan || null,
     pathWorldRouteCostProfile: (state?.pathWorld?.routePlan || state?.lastPathWorld?.routePlan || null)?.cost?.profile || null,
+    pathWorldRouteFixture: (state?.pathWorld?.routePlan || state?.lastPathWorld?.routePlan || null)?.evidence?.routeFixture || state?.lastPathWorld?.pathWorldRouteFixture || null,
+    terrainOverlayMode: state?.lastPathWorld?.terrainOverlayMode || state?.pathWorld?.hillTerrainSurface?.terrainOverlayMode || null,
     staticFieldMode: (state?.pathWorld?.routePlan || state?.lastPathWorld?.routePlan || null)?.evidence?.staticFieldMode || null,
     dynamicContinuity: (state?.pathWorld?.routePlan || state?.lastPathWorld?.routePlan || null)?.evidence?.dynamicContinuity || null,
     pathWorldActiveSource: state?.lastPathWorldInterrupt?.activeSource || state?.lastPathWorldRouteAuthority || (state?.lastPathWorld ? 'world-path' : null),

@@ -52,6 +52,9 @@ const cameraPosition = args.get('--camera-position') || '';
 const cameraTarget = args.get('--camera-target') || '';
 const hillAffordancePacketPath = args.get('--hill-affordance-packet') || '';
 const hillAffordanceDataPath = args.get('--hill-affordance-data') || '';
+const hillRouteProfile = args.get('--hill-route-profile') || '';
+const hillTerrainOverlay = args.get('--hill-terrain-overlay') || '';
+const hillRouteFixture = args.get('--hill-route-fixture') || '';
 const port = positiveInt(args.get('--debug-port'), 9670, '--debug-port');
 const chrome = process.env.KAMINOS_CHROME || args.get('--chrome') || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const outDir = resolve(args.get('--out-dir') || `/tmp/kaminos-motion-panel-live-witness-${timestamp}`);
@@ -135,6 +138,9 @@ function writeReport(report) {
     cameraTarget,
     hillAffordancePacketPath,
     hillAffordanceDataPath,
+    hillRouteProfile,
+    hillTerrainOverlay,
+    hillRouteFixture,
     debugPort: port,
     chrome,
     userDataDir,
@@ -454,6 +460,9 @@ async function installHillAffordanceRoutePlan(ws) {
     if (typeof window.kaminosPreviewHillMotionAffordanceRoutePlan !== 'function') throw new Error('missing window.kaminosPreviewHillMotionAffordanceRoutePlan');
     const result = await window.kaminosPreviewHillMotionAffordanceRoutePlan(${JSON.stringify(packet)}, ${JSON.stringify(data)}, {
       id: 'witness-hill-motion-affordance-route',
+      costProfile: ${JSON.stringify(hillRouteProfile || undefined)},
+      terrainOverlayMode: ${JSON.stringify(hillTerrainOverlay || undefined)},
+      routeFixture: ${JSON.stringify(hillRouteFixture || undefined)},
     });
     const state = window.kaminosGeneratedPoseTemporalDebugState?.();
     if (!result?.routePlan || !state?.pathWorldRoutePlan) {
@@ -469,6 +478,8 @@ async function installHillAffordanceRoutePlan(ws) {
       pathWorldRouteAuthority: state.pathWorldRouteAuthority || null,
       hillTerrainSurface: state.hillTerrainSurface || null,
       hillTerrainFrame: state.hillTerrainFrame || null,
+      pathWorldRouteFixture: state.pathWorldRouteFixture || result?.pathWorldRouteFixture || null,
+      terrainOverlayMode: state.terrainOverlayMode || result?.terrainOverlayMode || state.hillTerrainSurface?.terrainOverlayMode || null,
       pathWorldRouteCostProfile: state.pathWorldRouteCostProfile || state.pathWorldRoutePlan?.cost?.profile || null,
       staticFieldMode: state.staticFieldMode || state.pathWorldRoutePlan?.evidence?.staticFieldMode || null,
       dynamicContinuity: state.dynamicContinuity || state.pathWorldRoutePlan?.evidence?.dynamicContinuity || null,

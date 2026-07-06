@@ -14,10 +14,23 @@ assert.match(index, /window\.kaminosPreviewHillMotionAffordanceRoutePlan/, 'brow
 assert.match(index, /previewHillMotionAffordanceRouteFromParams/, 'browser can auto-load a Hill route from smoke URL params');
 assert.match(index, /kaminos_hill_affordance_packet/, 'browser supports a Hill packet URL param for operator smoke links');
 assert.match(index, /kaminos_hill_affordance_data/, 'browser supports a Hill data URL param for operator smoke links');
+assert.match(index, /kaminos_hill_route_profile/, 'browser smoke links can select the Hill terrain cost profile');
+assert.match(index, /kaminos_hill_terrain_overlay/, 'browser smoke links can select the Hill terrain visualization overlay');
+assert.match(index, /kaminos_hill_route_fixture/, 'browser smoke links can select meaningful Hill route start/goal fixtures');
+assert.match(index, /function normalizeMotionPanelHillRouteFixture/, 'browser normalizes named Hill start/goal fixtures instead of defaulting to unlabelled corners');
+assert.match(index, /function normalizeMotionPanelHillTerrainOverlayMode/, 'browser normalizes Hill terrain overlay modes for repeatable smoke');
+assert.match(index, /function motionPanelHillRouteFixtureEndpoints/, 'browser resolves fixture-relative Hill endpoints from source world bounds');
+assert.match(index, /function motionPanelHillTerrainOverlayScalar/, 'browser computes per-sample Hill terrain overlay scalars');
+assert.match(index, /sampleMotionTerrainRouteCostBreakdown/, 'browser uses the same route-cost sampler as the planner for cost visualization');
 assert.match(index, /terrain-affordance-route-plan/, 'Path World evidence names terrain affordance route authority');
 assert.match(index, /hill-motion-affordance-grid/, 'Path World evidence preserves Hill grid route source identity');
 assert.match(index, /pathWorldRoutePlan/, 'Path World debug exposes the route plan evidence');
 assert.match(index, /pathWorldRouteCostProfile/, 'Path World debug exposes route cost profile evidence');
+assert.match(index, /pathWorldRouteFixture/, 'Path World debug exposes the effective Hill route fixture');
+assert.match(index, /terrainOverlayMode/, 'Path World debug exposes the effective Hill terrain overlay mode');
+assert.match(index, /id="motion-panel-hill-route-profile"/, 'Path World panel visibly names the active Hill route profile');
+assert.match(index, /id="motion-panel-hill-route-fixture"/, 'Path World panel visibly names the active Hill route fixture');
+assert.match(index, /id="motion-panel-hill-terrain-overlay"/, 'Path World panel visibly names the active Hill terrain overlay');
 assert.match(index, /frozen-source-snapshot/, 'browser route evidence labels static Hill packet planning as a frozen source snapshot');
 assert.match(index, /dynamicContinuity/, 'browser route evidence avoids silently claiming dynamic topology continuity');
 assert.match(index, /hillTerrainSurface/, 'Path World debug exposes the mounted Hill terrain surface evidence');
@@ -52,6 +65,9 @@ assert.match(index, /hill-carrier-follow/, 'operator readout names the carrier-f
 
 assert.match(liveWitness, /--hill-affordance-packet/, 'live witness accepts a Hill affordance packet path');
 assert.match(liveWitness, /--hill-affordance-data/, 'live witness accepts a Hill affordance data path');
+assert.match(liveWitness, /--hill-route-profile/, 'live witness accepts a Hill route cost profile');
+assert.match(liveWitness, /--hill-terrain-overlay/, 'live witness accepts a Hill terrain overlay mode');
+assert.match(liveWitness, /--hill-route-fixture/, 'live witness accepts a named Hill route fixture');
 assert.match(liveWitness, /kaminosPreviewHillMotionAffordanceRoutePlan/, 'live witness can install the Hill route plan before frame capture');
 assert.match(liveWitness, /pathWorldRoutePlan/, 'live witness report carries Hill route plan evidence');
 assert.match(liveWitness, /pathWorldRouteCostProfile/, 'live witness report carries Hill route cost profile evidence');
@@ -59,6 +75,8 @@ assert.match(liveWitness, /staticFieldMode/, 'live witness carries static field 
 assert.match(liveWitness, /dynamicContinuity/, 'live witness carries dynamic continuity non-claim evidence');
 assert.match(liveWitness, /hillTerrainSurface/, 'live witness records Hill terrain surface evidence');
 assert.match(liveWitness, /hillTerrainFrame/, 'live witness records Hill terrain frame evidence');
+assert.match(liveWitness, /pathWorldRouteFixture/, 'live witness records the effective Hill route fixture');
+assert.match(liveWitness, /terrainOverlayMode/, 'live witness records the effective Hill terrain overlay mode');
 assert.match(liveWitness, /hillTerrainCarrier/, 'live witness records Hill terrain carrier evidence');
 assert.match(liveWitness, /groundingAuthority/, 'live witness records carrier grounding authority');
 assert.match(liveWitness, /carrierPathFollower/, 'live witness records carrier path follower evidence');

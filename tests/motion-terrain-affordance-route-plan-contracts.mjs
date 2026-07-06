@@ -8,6 +8,7 @@ import {
   createMotionRoutePlanFromTerrainAffordance,
   decodeHillMotionAffordancePacket,
   normalizeMotionTerrainRouteCostProfile,
+  sampleMotionTerrainRouteCostBreakdown,
   sampleMotionRoutePlan,
 } from '../motion-core.js';
 
@@ -284,6 +285,11 @@ assert.ok(plan.evidence.costBasis.includes('routePressure'), 'route plan names H
 assert.ok(plan.evidence.costBasis.includes('dirty'), 'route plan names dirty/shock penalty channels');
 assert.ok(plan.routePoints.every(point => point.costBreakdown?.profileId === 'cautious-lerm'), 'route points expose profile-tagged cost breakdowns');
 assert.ok(plan.routePoints.some(point => point.costBreakdown?.components?.slope > 0), 'route points expose slope contribution for debug overlays');
+const sampledBreakdown = sampleMotionTerrainRouteCostBreakdown(source, 12, plan.cost.profile);
+assert.equal(sampledBreakdown.schema, 'kaminos.motion-route-cost-breakdown.v0');
+assert.equal(sampledBreakdown.profileId, 'cautious-lerm', 'terrain overlay can sample costs with the same profile identity as the planner');
+assert.ok(sampledBreakdown.components.dirty > 0, 'terrain overlay cost sampler exposes dirty contribution for red/unsafe terrain');
+assert.ok(sampledBreakdown.components.shock > 0, 'terrain overlay cost sampler exposes shock contribution for red/unsafe terrain');
 
 const ridgeProfile = normalizeMotionTerrainRouteCostProfile('ridge-runner', { slope: 1.25 });
 assert.equal(ridgeProfile.id, 'ridge-runner');

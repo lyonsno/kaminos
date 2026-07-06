@@ -383,6 +383,14 @@ function motionTerrainRouteCostBreakdown(source, index, weights, profileId = nul
   };
 }
 
+export function sampleMotionTerrainRouteCostBreakdown(sourceInput, index, profile = 'cautious-lerm', overrides = {}) {
+  const source = sourceInput?.schema === MOTION_TERRAIN_AFFORDANCE_SOURCE_SCHEMA
+    ? sourceInput
+    : decodeHillMotionAffordancePacket(sourceInput);
+  const costProfile = normalizeMotionTerrainRouteCostProfile(profile, overrides || {});
+  return motionTerrainRouteCostBreakdown(source, Number(index) || 0, costProfile.weights, costProfile.id);
+}
+
 function motionTerrainRouteCost(source, index, weights) {
   return motionTerrainRouteCostBreakdown(source, index, weights).total;
 }
