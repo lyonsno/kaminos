@@ -5,6 +5,7 @@ import {
   SAM3_PROMPT_FPN_PHASE_PROGRAM_ROUTE_ID,
   SAM3_DETR_ENCODER_PHASE_PROGRAM_ROUTE_ID,
   SAM3_DETR_DECODER_PHASE_PROGRAM_ROUTE_ID,
+  SAM3_SCORING_PHASE_PROGRAM_ROUTE_ID,
   createRouteInvocationRequest,
   createSam3MaskDecoderIslandRouteDefinition,
   createSam3MaskProjectionCpuOracle,
@@ -16,12 +17,15 @@ import {
   createSam3PromptFpnPhaseProgramRouteDefinition,
   createSam3DetrEncoderPhaseProgramRouteDefinition,
   createSam3DetrDecoderPhaseProgramRouteDefinition,
+  createSam3ScoringPhaseProgramCpuOracle,
+  createSam3ScoringPhaseProgramRouteDefinition,
   runSam3MaskDecoderIslandRoute,
   runSam3MaskTailPhaseProgramRoute,
   runSam3PixelDecoderPhaseProgramRoute,
   runSam3PromptFpnPhaseProgramRoute,
   runSam3DetrEncoderPhaseProgramRoute,
   runSam3DetrDecoderPhaseProgramRoute,
+  runSam3ScoringPhaseProgramRoute,
 } from '../src/index.js';
 
 const SUPPORTED_ROUTE_IDS = new Set([
@@ -31,6 +35,7 @@ const SUPPORTED_ROUTE_IDS = new Set([
   SAM3_PROMPT_FPN_PHASE_PROGRAM_ROUTE_ID,
   SAM3_DETR_ENCODER_PHASE_PROGRAM_ROUTE_ID,
   SAM3_DETR_DECODER_PHASE_PROGRAM_ROUTE_ID,
+  SAM3_SCORING_PHASE_PROGRAM_ROUTE_ID,
 ]);
 const PIXEL_DECODER_WEIGHT_ROLE_EXAMPLES = ['pixel-decoder-stage-0-conv-weight'];
 
@@ -231,6 +236,47 @@ function drawVisualWitness({ sourceImage, sourceImageIdentity, expected, actual,
     ctx.strokeStyle = '#59635e';
     ctx.strokeRect(panel.x, 34, 200, 200);
   }
+}
+
+function drawScoringWitness({ sourceImage, sourceImageIdentity, expected, actual }) {
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = '#050706';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  drawSourcePanel(ctx, sourceImage, sourceImageIdentity, 16, 34, 200, 200);
+  ctx.strokeStyle = '#59635e';
+  ctx.strokeRect(16, 34, 200, 200);
+  ctx.fillStyle = '#dfe8e0';
+  ctx.font = '13px monospace';
+  ctx.fillText('source', 16, 20);
+  ctx.fillText('SAM3 scoring logits', 248, 20);
+  const count = Math.min(expected.length, 64);
+  let maxAbs = 1e-6;
+  for (let index = 0; index < count; index += 1) {
+    maxAbs = Math.max(maxAbs, Math.abs(expected[index]), Math.abs(actual[index]));
+  }
+  const baseY = 135;
+  const step = Math.max(4, Math.floor(680 / Math.max(count, 1)));
+  for (let index = 0; index < count; index += 1) {
+    const x = 248 + index * step;
+    const expectedHeight = Math.round((Math.abs(expected[index]) / maxAbs) * 90);
+    const actualHeight = Math.round((Math.abs(actual[index]) / maxAbs) * 90);
+    ctx.fillStyle = expected[index] >= 0 ? '#63e68e' : '#ff6b8a';
+    ctx.fillRect(x, expected[index] >= 0 ? baseY - expectedHeight : baseY, Math.max(1, step - 2), expectedHeight);
+    ctx.fillStyle = actual[index] >= 0 ? '#58b6ff' : '#d985ff';
+    ctx.fillRect(x, actual[index] >= 0 ? baseY + 104 - actualHeight : baseY + 104, Math.max(1, step - 2), actualHeight);
+  }
+  ctx.strokeStyle = '#59635e';
+  ctx.beginPath();
+  ctx.moveTo(248, baseY + 0.5);
+  ctx.lineTo(928, baseY + 0.5);
+  ctx.moveTo(248, baseY + 104.5);
+  ctx.lineTo(928, baseY + 104.5);
+  ctx.stroke();
+  ctx.fillStyle = '#9fafaa';
+  ctx.font = '12px monospace';
+  ctx.fillText(`reference logits first ${count}`, 248, 248);
+  ctx.fillText(`webgpu logits first ${count}`, 248, 268);
 }
 
 function loadDetrLayerWeightRoles(layerCount) {
@@ -871,6 +917,84 @@ async function loadDetrStackPayload(manifest) {
           downstreamTensorSha256,
         },
       };
+    },
+  };
+}
+
+async function loadScoringPayload(manifest) {
+  const hiddenTensor = tensorByRole(manifest, 'hidden-states');
+  const promptTensor = tensorByRole(manifest, 'prompt-features');
+  const promptMaskTensor = tensorByRole(manifest, 'prompt-mask');
+  const expectedPredLogitsTensor = tensorByRole(manifest, 'expected-pred-logits');
+  const weightRoles = [
+    'scoring-text-mlp-layer-1-weight',
+    'scoring-text-mlp-layer-1-bias',
+    'scoring-text-mlp-layer-2-weight',
+    'scoring-text-mlp-layer-2-bias',
+    'scoring-text-mlp-out-norm-weight',
+    'scoring-text-mlp-out-norm-bias',
+    'scoring-text-proj-weight',
+    'scoring-text-proj-bias',
+    'scoring-query-proj-weight',
+    'scoring-query-proj-bias',
+  ];
+  const weightsByRole = Object.fromEntries(weightRoles.map(role => [role, weightByRole(manifest, role)]));
+  const hiddenStates = await fetchArray(resolveManifestFile(hiddenTensor.file), Float32Array);
+  const promptFeatures = await fetchArray(resolveManifestFile(promptTensor.file), Float32Array);
+  const promptMask = await fetchArray(resolveManifestFile(promptMaskTensor.file), Float32Array);
+  const expectedPredLogits = await fetchArray(resolveManifestFile(expectedPredLogitsTensor.file), Float32Array);
+  const weights = {
+    textMlpLayer1Weight: await fetchArray(resolveManifestFile(weightsByRole['scoring-text-mlp-layer-1-weight'].file), Float32Array),
+    textMlpLayer1Bias: await fetchArray(resolveManifestFile(weightsByRole['scoring-text-mlp-layer-1-bias'].file), Float32Array),
+    textMlpLayer2Weight: await fetchArray(resolveManifestFile(weightsByRole['scoring-text-mlp-layer-2-weight'].file), Float32Array),
+    textMlpLayer2Bias: await fetchArray(resolveManifestFile(weightsByRole['scoring-text-mlp-layer-2-bias'].file), Float32Array),
+    textMlpOutNormWeight: await fetchArray(resolveManifestFile(weightsByRole['scoring-text-mlp-out-norm-weight'].file), Float32Array),
+    textMlpOutNormBias: await fetchArray(resolveManifestFile(weightsByRole['scoring-text-mlp-out-norm-bias'].file), Float32Array),
+    textProjWeight: await fetchArray(resolveManifestFile(weightsByRole['scoring-text-proj-weight'].file), Float32Array),
+    textProjBias: await fetchArray(resolveManifestFile(weightsByRole['scoring-text-proj-bias'].file), Float32Array),
+    queryProjWeight: await fetchArray(resolveManifestFile(weightsByRole['scoring-query-proj-weight'].file), Float32Array),
+    queryProjBias: await fetchArray(resolveManifestFile(weightsByRole['scoring-query-proj-bias'].file), Float32Array),
+  };
+  const shape = {
+    layerCount: manifest.shape.layerCount,
+    batch: manifest.shape.batch,
+    queryTokens: manifest.shape.queryTokens,
+    promptTokens: manifest.shape.promptTokens,
+    channels: manifest.shape.channels,
+    mlpHidden: manifest.shape.mlpHidden,
+  };
+  const oracle = createSam3ScoringPhaseProgramCpuOracle({ hiddenStates, promptFeatures, promptMask, weights, shape });
+  return {
+    routeKind: 'scoring-phase-program',
+    expectedPredLogits,
+    cpuSelfCheck: {
+      predLogitsMaxAbsDiff: maxAbsDiff(expectedPredLogits, oracle.predLogits),
+      binaryMismatchCount: 0,
+    },
+    tensorIdentity: {
+      hiddenStatesSha256: hiddenTensor.sha256,
+      promptFeaturesSha256: promptTensor.sha256,
+      promptMaskSha256: promptMaskTensor.sha256,
+      expectedPredLogitsSha256: expectedPredLogitsTensor.sha256,
+      weightsSha256: Object.fromEntries(Object.entries(weightsByRole).map(([role, weight]) => [role, weight.sha256])),
+    },
+    async run({ device, adapter, route, request }) {
+      return runSam3ScoringPhaseProgramRoute({
+        request,
+        route,
+        device,
+        queue: device.queue,
+        adapterName: adapter.info?.description || adapter.info?.device || 'browser-webgpu-adapter',
+        browser: navigator.userAgent,
+        kernel: route.kernel,
+        model: {
+          revision: route.model.revision,
+          weightsHash: manifest.staticWeights.sha256,
+          dtype: 'fp32',
+        },
+        tensors: { hiddenStates, promptFeatures, promptMask, weights, shape },
+        includeReadback: true,
+      });
     },
   };
 }
@@ -1625,17 +1749,21 @@ async function main() {
       ? await loadPixelDecoderPayload(manifest)
       : manifest.routeId === SAM3_MASK_TAIL_PHASE_PROGRAM_ROUTE_ID
         ? await loadMaskTailPayload(manifest)
+      : manifest.routeId === SAM3_SCORING_PHASE_PROGRAM_ROUTE_ID
+        ? await loadScoringPayload(manifest)
         : await loadMaskDecoderIslandPayload(manifest);
     const expectedLogits = payload.expectedLogits;
     const expectedBinary = payload.expectedBinary;
+    const expectedPredLogits = payload.expectedPredLogits;
     const visualShape = payload.maskShape || manifest.shape;
+    const hasMaskOutput = Boolean(expectedBinary);
     const sourceImageUrl = manifest.sourceImage?.file ? resolveManifestFile(manifest.sourceImage.file) : null;
     const sourceImage = sourceImageUrl ? await loadImage(sourceImageUrl) : null;
     if (sourceImageUrl) sourceImageEl.src = sourceImageUrl;
     const selectedMaskIndex = Number.isInteger(manifest.visualization?.selectedMaskIndex)
       ? manifest.visualization.selectedMaskIndex
       : 0;
-    if (selectedMaskIndex < 0 || selectedMaskIndex >= manifest.shape.maskTokens) {
+    if (hasMaskOutput && (selectedMaskIndex < 0 || selectedMaskIndex >= manifest.shape.maskTokens)) {
       throw new Error(`selectedMaskIndex ${selectedMaskIndex} out of range`);
     }
 
@@ -1646,8 +1774,10 @@ async function main() {
     const pixelEmbedTolerance = manifest.tolerances?.pixelEmbedMaxAbsDiff ?? 0;
     const maskEmbeddingsTolerance = manifest.tolerances?.maskEmbeddingsMaxAbsDiff ?? 0;
     const upscaledTolerance = manifest.tolerances?.upscaledEmbeddingMaxAbsDiff ?? 0;
+    const scoringTolerance = manifest.tolerances?.predLogitsMaxAbsDiff ?? 0;
     if (
       (payload.cpuSelfCheck.logitsMaxAbsDiff ?? 0) > oracleLogitsTolerance
+      || (payload.cpuSelfCheck.predLogitsMaxAbsDiff ?? 0) > scoringTolerance
       || (payload.cpuSelfCheck.promptFpnMaxAbsDiff ?? 0) > promptFpnTolerance
       || (payload.cpuSelfCheck.pixelEmbedMaxAbsDiff ?? 0) > pixelEmbedTolerance
       || (payload.cpuSelfCheck.maskEmbeddingsMaxAbsDiff ?? 0) > maskEmbeddingsTolerance
@@ -1721,6 +1851,17 @@ async function main() {
             commit: params.get('commit') || null,
           },
         })
+      : manifest.routeId === SAM3_SCORING_PHASE_PROGRAM_ROUTE_ID
+      ? createSam3ScoringPhaseProgramRouteDefinition({
+          model: {
+            revision: manifest.model?.id || 'mlx-reference-scoring',
+            dtype: 'fp32',
+          },
+          kernel: {
+            profile: 'sam3-scoring-phase-program-v0',
+            commit: params.get('commit') || null,
+          },
+        })
       : createSam3MaskDecoderIslandRouteDefinition({
       model: {
         revision: manifest.model?.id || 'synthetic-oracle',
@@ -1761,6 +1902,13 @@ async function main() {
       : null;
     const pixelTensorBundleSha256 = manifest.routeId === SAM3_PIXEL_DECODER_PHASE_PROGRAM_ROUTE_ID
       ? await aggregateTensorBundleSha256('sam3-pixel-decoder-tensors', Object.entries(payload.tensorIdentity.fpnFeatureSha256).map(([role, sha256]) => ({ role, sha256 })))
+      : null;
+    const scoringTensorBundleSha256 = manifest.routeId === SAM3_SCORING_PHASE_PROGRAM_ROUTE_ID
+      ? await aggregateTensorBundleSha256('sam3-scoring-tensors', [
+          { role: 'hidden-states', sha256: payload.tensorIdentity.hiddenStatesSha256 },
+          { role: 'prompt-features', sha256: payload.tensorIdentity.promptFeaturesSha256 },
+          { role: 'prompt-mask', sha256: payload.tensorIdentity.promptMaskSha256 },
+        ])
       : null;
     const inputArtifacts = manifest.routeId === SAM3_DETR_DECODER_PHASE_PROGRAM_ROUTE_ID
       ? {
@@ -1822,6 +1970,18 @@ async function main() {
             sha256: manifest.staticWeights.sha256,
           },
         }
+      : manifest.routeId === SAM3_SCORING_PHASE_PROGRAM_ROUTE_ID
+      ? {
+          'source-image': sourceArtifact,
+          'sam3-scoring-tensors': {
+            artifactId: 'sam3-scoring-tensors:browser-parity',
+            sha256: scoringTensorBundleSha256,
+          },
+          'sam3-scoring-weights': {
+            artifactId: manifest.staticWeights.artifactId,
+            sha256: manifest.staticWeights.sha256,
+          },
+        }
       : {
           'source-image': sourceArtifact,
           'sam3-decoder-tensors': {
@@ -1849,6 +2009,8 @@ async function main() {
           ? { 'prompt-fpn-feature': { artifactId: 'sam3-prompt-fpn-feature:browser-parity', shape: [manifest.shape.batch, manifest.shape.height, manifest.shape.width, manifest.shape.channels] } }
           : manifest.routeId === SAM3_PIXEL_DECODER_PHASE_PROGRAM_ROUTE_ID
           ? { 'pixel-embed': { artifactId: 'sam3-pixel-embed:browser-parity', shape: [manifest.shape.batch, manifest.shape.height, manifest.shape.width, manifest.shape.channels] } }
+          : manifest.routeId === SAM3_SCORING_PHASE_PROGRAM_ROUTE_ID
+          ? { 'pred-logits': { artifactId: 'sam3-pred-logits:browser-parity', shape: [manifest.shape.layerCount, manifest.shape.batch, manifest.shape.queryTokens, 1] } }
           : {
               'mask-logits': { artifactId: 'sam3-mask-logits:browser-parity', shape: [manifest.shape.batch, manifest.shape.maskTokens, manifest.shape.height, manifest.shape.width] },
               'mask-binary': { artifactId: 'sam3-mask-binary:browser-parity', shape: [manifest.shape.batch, manifest.shape.maskTokens, manifest.shape.height, manifest.shape.width] },
@@ -1863,8 +2025,9 @@ async function main() {
     setStatus('run-webgpu-route');
     const result = await payload.run({ device, adapter, route, request });
 
-    const gpuLogits = new Float32Array(result.debugReadback.maskLogits);
-    const gpuBinary = new Uint32Array(result.debugReadback.binaryMask);
+    const gpuLogits = result.debugReadback.maskLogits ? new Float32Array(result.debugReadback.maskLogits) : null;
+    const gpuBinary = result.debugReadback.binaryMask ? new Uint32Array(result.debugReadback.binaryMask) : null;
+    const gpuPredLogits = result.debugReadback.predLogits ? new Float32Array(result.debugReadback.predLogits) : null;
     const parity = {
       encoderHiddenStatesMaxAbsDiff: result.debugReadback.encoderHiddenStates ? maxAbsDiff(payload.expectedEncoderHiddenStates || [], new Float32Array(result.debugReadback.encoderHiddenStates)) : undefined,
       lastHsMaxAbsDiff: result.debugReadback.lastHs ? maxAbsDiff(payload.expectedLastHs || [], new Float32Array(result.debugReadback.lastHs)) : undefined,
@@ -1872,10 +2035,11 @@ async function main() {
       presenceLogitsMaxAbsDiff: result.debugReadback.presenceLogits ? maxAbsDiff(payload.expectedPresenceLogits || [], new Float32Array(result.debugReadback.presenceLogits)) : undefined,
       promptFpnMaxAbsDiff: result.debugReadback.promptFpnFeature ? maxAbsDiff(payload.expectedPromptFpnFeature || [], new Float32Array(result.debugReadback.promptFpnFeature)) : undefined,
       pixelEmbedMaxAbsDiff: result.debugReadback.pixelEmbed ? maxAbsDiff(payload.expectedPixelEmbed || [], new Float32Array(result.debugReadback.pixelEmbed)) : undefined,
-      maskLogitsMaxAbsDiff: maxAbsDiff(expectedLogits, gpuLogits),
-      binaryMismatchCount: mismatchCount(expectedBinary, gpuBinary),
-      expectedElementCount: expectedLogits.length,
-      gpuElementCount: gpuLogits.length,
+      maskLogitsMaxAbsDiff: gpuLogits ? maxAbsDiff(expectedLogits, gpuLogits) : undefined,
+      predLogitsMaxAbsDiff: gpuPredLogits ? maxAbsDiff(expectedPredLogits, gpuPredLogits) : undefined,
+      binaryMismatchCount: gpuBinary ? mismatchCount(expectedBinary, gpuBinary) : 0,
+      expectedElementCount: expectedLogits?.length ?? expectedPredLogits?.length,
+      gpuElementCount: gpuLogits?.length ?? gpuPredLogits?.length,
     };
     const gpuTolerance = manifest.tolerances?.webGpuLogitsMaxAbsDiff ?? 0.00001;
     const gpuLastHsTolerance = manifest.tolerances?.lastHsMaxAbsDiff ?? 0.0002;
@@ -1891,6 +2055,8 @@ async function main() {
       expectedReferenceBoxes: payload.expectedReferenceBoxes ? Array.from(payload.expectedReferenceBoxes.slice(0, 16)) : undefined,
       presenceLogits: result.debugReadback.presenceLogits ? Array.from(new Float32Array(result.debugReadback.presenceLogits).slice(0, 8)) : undefined,
       expectedPresenceLogits: payload.expectedPresenceLogits ? Array.from(payload.expectedPresenceLogits.slice(0, 8)) : undefined,
+      predLogits: result.debugReadback.predLogits ? Array.from(new Float32Array(result.debugReadback.predLogits).slice(0, 16)) : undefined,
+      expectedPredLogits: payload.expectedPredLogits ? Array.from(payload.expectedPredLogits.slice(0, 16)) : undefined,
     };
     state.parity = parity;
     state.debugReadbackSamples = debugReadbackSamples;
@@ -1906,20 +2072,30 @@ async function main() {
       || (parity.presenceLogitsMaxAbsDiff ?? 0) > gpuPresenceLogitsTolerance
       || (parity.promptFpnMaxAbsDiff ?? 0) > gpuPromptFpnTolerance
       || (parity.pixelEmbedMaxAbsDiff ?? 0) > gpuPixelTolerance
-      || parity.maskLogitsMaxAbsDiff > gpuTolerance
+      || (parity.maskLogitsMaxAbsDiff ?? 0) > gpuTolerance
+      || (parity.predLogitsMaxAbsDiff ?? 0) > scoringTolerance
       || parity.binaryMismatchCount > binaryTolerance
     ) {
       throw new Error(`WebGPU parity mismatch: ${JSON.stringify(parity)}`);
     }
 
-    drawVisualWitness({
-      sourceImage,
-      sourceImageIdentity: manifest.sourceImage || null,
-      expected: expectedBinary,
-      actual: gpuBinary,
-      shape: visualShape,
-      selectedMaskIndex,
-    });
+    if (hasMaskOutput) {
+      drawVisualWitness({
+        sourceImage,
+        sourceImageIdentity: manifest.sourceImage || null,
+        expected: expectedBinary,
+        actual: gpuBinary,
+        shape: visualShape,
+        selectedMaskIndex,
+      });
+    } else {
+      drawScoringWitness({
+        sourceImage,
+        sourceImageIdentity: manifest.sourceImage || null,
+        expected: expectedPredLogits,
+        actual: gpuPredLogits,
+      });
+    }
     state.status = 'passed';
     state.effectiveRouteId = result.receipt.effectiveRouteId;
     state.sourceImage = manifest.sourceImage || null;
@@ -1949,7 +2125,7 @@ async function main() {
       mode: manifest.mode,
       adapter: state.backendIdentity?.adapterName,
       selectedMask: selectedMaskIndex,
-      logitsDiff: parity.maskLogitsMaxAbsDiff,
+      logitsDiff: parity.maskLogitsMaxAbsDiff ?? parity.predLogitsMaxAbsDiff,
       binaryMismatch: parity.binaryMismatchCount,
     });
     setStatus('passed', 'WebGPU parity passed');

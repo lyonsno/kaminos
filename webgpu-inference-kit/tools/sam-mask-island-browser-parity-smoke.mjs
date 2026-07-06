@@ -11,6 +11,7 @@ const PIXEL_DECODER_PHASE_PROGRAM_ROUTE_ID = 'sam3.pixel-decoder.phase-program.w
 const PROMPT_FPN_PHASE_PROGRAM_ROUTE_ID = 'sam3.prompt-fpn.phase-program.webgpu-local.v0';
 const DETR_ENCODER_PHASE_PROGRAM_ROUTE_ID = 'sam3.detr-encoder.phase-program.webgpu-local.v0';
 const DETR_DECODER_PHASE_PROGRAM_ROUTE_ID = 'sam3.detr-decoder.phase-program.webgpu-local.v0';
+const SCORING_PHASE_PROGRAM_ROUTE_ID = 'sam3.scoring.phase-program.webgpu-local.v0';
 
 const args = new Map();
 for (let i = 2; i < process.argv.length; i += 2) {
@@ -29,6 +30,8 @@ const packetMode = args.get('--packet-mode') || 'synthetic';
 const packetTool = resolve(args.get('--packet-tool') || (
   packetMode === 'mlx-prompt-fpn-export'
     ? join(packageRoot, 'tools/sam-prompt-fpn-mlx-packet.py')
+    : packetMode === 'mlx-scoring-export'
+    ? join(packageRoot, 'tools/sam-scoring-mlx-packet.py')
     : packetMode === 'mlx-detr-stack-export'
     ? join(packageRoot, 'tools/sam-detr-stack-mlx-packet.py')
     : packetMode === 'mlx-detr-decoder-export'
@@ -48,6 +51,8 @@ const sourceImage = args.get('--image') || process.env.KAMINOS_SAM3_FIXTURE_IMAG
 const requestedRouteId = args.get('--route-id') || (
   packetMode === 'mlx-prompt-fpn-export'
     ? PROMPT_FPN_PHASE_PROGRAM_ROUTE_ID
+    : packetMode === 'mlx-scoring-export'
+    ? SCORING_PHASE_PROGRAM_ROUTE_ID
     : packetMode === 'mlx-detr-stack-export'
     ? DETR_ENCODER_PHASE_PROGRAM_ROUTE_ID
     : packetMode === 'mlx-detr-decoder-export'
@@ -355,7 +360,17 @@ async function main() {
       throw new Error(`route identity mismatch: ${lastState.requestedRouteId} -> ${lastState.effectiveRouteId}`);
     }
     if (!lastState.backendIdentity?.adapterName) throw new Error('backendIdentity.adapterName missing');
-    if (packetMode === 'mlx-detr-stack-export') {
+    if (requestedRouteId === SCORING_PHASE_PROGRAM_ROUTE_ID) {
+      if (!lastState.tensorPacket?.hiddenStatesSha256 || !lastState.tensorPacket?.promptFeaturesSha256 || !lastState.tensorPacket?.promptMaskSha256 || !lastState.tensorPacket?.expectedPredLogitsSha256 || !lastState.tensorPacket?.weightsSha256) {
+        throw new Error('SAM3 scoring tensorPacket identity missing');
+      }
+      const scoringInput = lastState.routeReceipt?.inputs?.find(input => input.role === 'sam3-scoring-tensors');
+      if (!scoringInput?.sha256) throw new Error('SAM3 scoring receipt tensor input missing');
+      const predLogitsOutput = lastState.routeReceipt?.outputs?.find(output => output.role === 'pred-logits');
+      if (!predLogitsOutput?.sha256 || !predLogitsOutput?.artifactId) throw new Error('SAM3 scoring pred-logits output identity missing');
+      if (lastState.parity?.predLogitsMaxAbsDiff > 0.0005) throw new Error('SAM3 scoring pred-logits parity exceeds tolerance');
+      if (lastState.parity?.expectedElementCount !== lastState.parity?.gpuElementCount) throw new Error('SAM3 scoring element count mismatch');
+    } else if (packetMode === 'mlx-detr-stack-export') {
       if (!lastState.tensorPacket?.encoderSrcSha256 || !lastState.tensorPacket?.encoderPosSha256 || !lastState.tensorPacket?.expectedEncoderHiddenStatesSha256 || !lastState.tensorPacket?.expectedLastHsSha256 || !lastState.tensorPacket?.expectedReferenceBoxesSha256 || !lastState.tensorPacket?.expectedPresenceLogitsSha256 || !lastState.tensorPacket?.pixelEmbedSha256 || !lastState.tensorPacket?.weightsSha256) {
         throw new Error('DETR stack tensorPacket identity missing');
       }

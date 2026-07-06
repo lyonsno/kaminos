@@ -170,6 +170,14 @@ export {
 } from './sam-detr-decoder-phase-program.js';
 
 export {
+  SAM3_SCORING_PHASE_PROGRAM_ROUTE_ID,
+  createSam3ScoringPhaseProgramCpuOracle,
+  createSam3ScoringPhaseProgramRouteDefinition,
+  createSam3ScoringPhaseProgramRouteReceipt,
+  runSam3ScoringPhaseProgramRoute,
+} from './sam-scoring-phase-program.js';
+
+export {
   createWebGpuRouteSchemaContract,
 } from './route-schema-contract.js';
 

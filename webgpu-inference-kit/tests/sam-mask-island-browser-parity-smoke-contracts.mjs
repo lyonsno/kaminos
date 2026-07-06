@@ -31,6 +31,7 @@ assert.match(smokeJs, /runSam3PixelDecoderPhaseProgramRoute/, 'browser smoke mus
 assert.match(smokeJs, /runSam3PromptFpnPhaseProgramRoute/, 'browser smoke must run the prompt-FPN phase-program route runner');
 assert.match(smokeJs, /runSam3DetrEncoderPhaseProgramRoute/, 'browser smoke must run the DETR encoder phase-program route runner');
 assert.match(smokeJs, /runSam3DetrDecoderPhaseProgramRoute/, 'browser smoke must run the DETR decoder phase-program route runner');
+assert.match(smokeJs, /runSam3ScoringPhaseProgramRoute/, 'browser smoke must run the SAM3 scoring phase-program route runner');
 assert.match(smokeJs, /createSam3MaskProjectionCpuOracle/, 'browser smoke must compare against the CPU oracle');
 assert.match(smokeJs, /createSam3MaskTailPhaseProgramCpuOracle/, 'browser smoke must compare mask-tail packets against the CPU oracle');
 assert.match(smokeJs, /createSam3PixelDecoderPhaseProgramCpuOracle/, 'browser smoke must compare pixel-decoder packets against the CPU oracle');
@@ -44,6 +45,7 @@ assert.match(smokeJs, /SAM3_PIXEL_DECODER_PHASE_PROGRAM_ROUTE_ID/, 'browser smok
 assert.match(smokeJs, /SAM3_PROMPT_FPN_PHASE_PROGRAM_ROUTE_ID/, 'browser smoke must route prompt-FPN manifests by route identity');
 assert.match(smokeJs, /SAM3_DETR_ENCODER_PHASE_PROGRAM_ROUTE_ID/, 'browser smoke must route DETR encoder manifests by route identity');
 assert.match(smokeJs, /SAM3_DETR_DECODER_PHASE_PROGRAM_ROUTE_ID/, 'browser smoke must route DETR decoder manifests by route identity');
+assert.match(smokeJs, /SAM3_SCORING_PHASE_PROGRAM_ROUTE_ID/, 'browser smoke must route SAM3 scoring manifests by route identity');
 assert.match(smokeJs, /sam3-mask-tail-tensors/, 'browser smoke must preserve mask-tail tensor input identity');
 assert.match(smokeJs, /sam3-pixel-decoder-tensors/, 'browser smoke must preserve pixel-decoder tensor input identity');
 assert.match(smokeJs, /sam3-prompt-fpn-tensors/, 'browser smoke must preserve prompt-FPN tensor input identity');
@@ -78,6 +80,7 @@ assert.match(smokeJs, /maskLogitsMaxAbsDiff/, 'browser smoke must report logits 
 assert.match(smokeJs, /lastHsMaxAbsDiff/, 'browser smoke must report DETR decoder last-hs diff');
 assert.match(smokeJs, /referenceBoxesMaxAbsDiff/, 'browser smoke must report DETR decoder reference-box diff');
 assert.match(smokeJs, /presenceLogitsMaxAbsDiff/, 'browser smoke must report DETR decoder presence-logit diff');
+assert.match(smokeJs, /predLogitsMaxAbsDiff/, 'browser smoke must report SAM3 scoring logit diff');
 assert.match(smokeJs, /binaryMismatchCount/, 'browser smoke must report binary mismatch count');
 
 assert.match(witness, /--enable-unsafe-webgpu/, 'witness must launch Chrome with WebGPU enabled');
@@ -97,11 +100,13 @@ assert.match(witness, /mlx-prompt-fpn-export/, 'witness must allow a real prompt
 assert.match(witness, /mlx-detr-encoder-export/, 'witness must allow a real DETR encoder packet exporter');
 assert.match(witness, /mlx-detr-decoder-export/, 'witness must allow a real DETR decoder packet exporter');
 assert.match(witness, /mlx-detr-stack-export/, 'witness must allow a real contiguous DETR stack packet exporter');
+assert.match(witness, /mlx-scoring-export/, 'witness must allow a real SAM3 scoring packet exporter');
 assert.match(witness, /MASK_TAIL_PHASE_PROGRAM_ROUTE_ID/, 'witness must preserve mask-tail route identity');
 assert.match(witness, /PIXEL_DECODER_PHASE_PROGRAM_ROUTE_ID/, 'witness must preserve pixel-decoder route identity');
 assert.match(witness, /PROMPT_FPN_PHASE_PROGRAM_ROUTE_ID/, 'witness must preserve prompt-FPN route identity');
 assert.match(witness, /DETR_ENCODER_PHASE_PROGRAM_ROUTE_ID/, 'witness must preserve DETR encoder route identity');
 assert.match(witness, /DETR_DECODER_PHASE_PROGRAM_ROUTE_ID/, 'witness must preserve DETR decoder route identity');
+assert.match(witness, /SCORING_PHASE_PROGRAM_ROUTE_ID/, 'witness must preserve SAM3 scoring route identity');
 assert.match(witness, /lastHsSha256/, 'witness must preserve mask-tail tensor identity');
 assert.match(witness, /expectedLastHsSha256/, 'witness must preserve DETR decoder last-hs tensor identity');
 assert.match(witness, /expectedReferenceBoxesSha256/, 'witness must preserve DETR decoder reference-box tensor identity');
