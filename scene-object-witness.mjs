@@ -403,6 +403,67 @@ async function runForgeHostSmokeChamberRoutingScenario(ws) {
   `, { timeoutMs: 25000 });
 }
 
+async function runForgeHostSmokeOfferRouteOpenScenario(ws) {
+  phase = 'scenario-forge-host-smoke-offer-route-open';
+  lastEvidence.forgeHostSmokeOfferRouteOpen = await evaluate(ws, `
+    (async () => {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      for (let i = 0; i < 80; i++) {
+        const state = window.kaminosForgeHostDebugState?.();
+        if (state?.active && state?.smokeChamber?.sourceOffer?.id === 'glove-emitter-native-host-smoke-offer') break;
+        await wait(125);
+      }
+      const state = window.kaminosForgeHostDebugState?.();
+      if (!state?.active) throw new Error('Forge Host route-open scenario did not activate');
+      const chamber = state.smokeChamber;
+      const panel = document.querySelector('#forge-host-smoke-chamber');
+      if (!panel) throw new Error('Forge Host route-open chamber panel missing from DOM');
+      if (panel.dataset.forgeHostSmokeChamberActive !== 'true') {
+        throw new Error('Forge Host route-open did not activate the Smoke Chamber: ' + panel.outerHTML);
+      }
+      if (chamber?.schema !== 'kaminos.forge-host.smoke-chamber.v0') {
+        throw new Error('Forge Host route-open did not materialize chamber schema: ' + JSON.stringify({ chamber, state }));
+      }
+      if (chamber.sourceOffer?.id !== 'glove-emitter-native-host-smoke-offer') {
+        throw new Error('Forge Host route-open selected the wrong offer: ' + JSON.stringify({ chamber, lastOpenedOffer: state.lastOpenedOffer }));
+      }
+      if (chamber.sourceAuthority !== 'gap_report_route' || chamber.freshness !== 'waiting') {
+        throw new Error('Forge Host route-open lost gap-route authority posture: ' + JSON.stringify(chamber));
+      }
+      if (chamber.displayState === 'live') {
+        throw new Error('Forge Host route-open overclaimed live display state for waiting gap route: ' + JSON.stringify(chamber));
+      }
+      if (!/lerms-terrarium/.test(chamber.sourceRef) || !/glove-emitter/.test(chamber.sourceRef)) {
+        throw new Error('Forge Host route-open lost cartridge/crucible source identity: ' + JSON.stringify(chamber));
+      }
+      if (!state.stations.some(station => station.smokeOffers?.some(offer => offer.id === 'glove-emitter-native-host-smoke-offer'))) {
+        throw new Error('Forge Host route-open did not expose the cartridge smoke offer on a station row: ' + JSON.stringify(state.stations));
+      }
+      const sourceRoleStation = state.stations.find(station => /glove/i.test([
+        station['dia' + 'ulos'],
+        station.callSign,
+        station.role,
+      ].join(' ')));
+      if (sourceRoleStation && state.selectedActorId !== sourceRoleStation.actorId) {
+        throw new Error('Forge Host route-open did not prefer the visible glove station for glove-well-source: ' + JSON.stringify({ selectedActorId: state.selectedActorId, sourceRoleStation }));
+      }
+      panel.scrollIntoView({ block: 'center' });
+      await wait(150);
+      return {
+        selectedActorId: state.selectedActorId,
+        openedOffer: state.lastOpenedOffer,
+        chamber,
+        stationOffers: state.stations.map(station => ({
+          actorId: station.actorId,
+          sourceId: station['dia' + 'ulos'],
+          offers: station.smokeOffers.map(offer => offer.id),
+          selected: station.selected,
+        })),
+      };
+    })()
+  `, { timeoutMs: 25000 });
+}
+
 function assertClickedSelection(evidence, phaseLabel, clickedId, otherId) {
   const rows = evidence || [];
   const activeRows = rows.filter(row => row.active && row.pressed === 'true');
@@ -4773,6 +4834,8 @@ try {
     await runForgeHostLiveRegistryScenario(ws);
   } else if (scenario === 'forge-host-smoke-chamber-routing') {
     await runForgeHostSmokeChamberRoutingScenario(ws);
+  } else if (scenario === 'forge-host-smoke-offer-route-open') {
+    await runForgeHostSmokeOfferRouteOpenScenario(ws);
   } else if (scenario === 'viewport-click-select-deselect') {
     await runViewportClickSelectDeselectScenario(ws);
   } else if (scenario === 'splat-viewport-empty-deselect') {

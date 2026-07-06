@@ -39,12 +39,14 @@ assert.match(witness, /ao-route-delta/, 'witness supports an AO route on/off del
 assert.match(witness, /forge-host-smoke-offers/, 'witness supports Forge Host smoke offer station projection');
 assert.match(witness, /forge-host-live-registry/, 'witness supports Forge Host live registry station projection');
 assert.match(witness, /forge-host-smoke-chamber-routing/, 'witness supports opening a live Smoke Offer into a chamber');
+assert.match(witness, /forge-host-smoke-offer-route-open/, 'witness supports route params opening a cartridge Smoke Offer into a chamber');
 assert.match(indexHtml, /data-forge-host-smoke-chamber-schema="kaminos\.forge-host\.smoke-chamber\.v0"/, 'Forge Host smoke chamber exposes schema identity for browser witnesses');
 assert.match(witness, /kaminosForgeHostDebugState/, 'Forge Host witness reads the explicit browser debug state');
 assert.match(witness, /kaminos\.forge-host\.smoke-chamber\.v0/, 'Forge Host witness validates smoke chamber schema identity');
 assert.match(witness, /fixture offer claimed live display authority/, 'Forge Host witness fails loud on fixture/live false authority');
 assert.match(witness, /live registry scene used fallback authority/, 'Forge Host live witness fails loud on fallback/live false authority');
 assert.match(witness, /smoke chamber routed fallback as live/, 'Forge Host chamber witness fails loud on fallback/live false authority');
+assert.match(witness, /Forge Host route-open overclaimed live display state/, 'Forge Host route-open witness fails loud when a waiting gap route claims live display');
 assert.match(witness, /requestedUrl:\s*url/, 'witness report records requested URL');
 assert.match(witness, /effectiveUrl:/, 'witness report records effective browser URL');
 assert.match(witness, /effectiveServerRoots:/, 'witness report records effective server root identity');

@@ -2074,6 +2074,7 @@ import {
 } from './scene-persistence-core.js';
 import {
   FORGE_HOST_REGISTRY_SNAPSHOT_SCHEMA,
+  FORGE_HOST_SMOKE_OFFER_SCHEMA,
   FORGE_HOST_STATION_ATTENTION_SCHEMA,
   buildForgeHostManifestFromRegistrySnapshot,
   buildForgeHostFixture,
@@ -5229,6 +5230,165 @@ function openForgeHostSmokeOffer(offerId) {
   return forgeHostState.smokeChamber;
 }
 
+async function loadWorldCartridgeIndexForForgeRoute() {
+  const response = await fetch('/api/world-cartridges');
+  const payload = await response.json();
+  if (!response.ok || payload?.error) {
+    throw new Error(`World cartridge index unavailable: ${payload?.error || response.status}`);
+  }
+  if (payload.schema !== 'kaminos.world-cartridges.index.v0') {
+    throw new Error(`World cartridge index schema mismatch: ${payload.schema || 'missing'}`);
+  }
+  return payload;
+}
+
+function routeParamSmokeOfferRequest(params = new URLSearchParams(window.location.search)) {
+  const cartridgeId = params.get('world_cartridge');
+  const crucibleId = params.get('world_crucible');
+  const offerId = params.get('forge_host_smoke_offer');
+  if (!cartridgeId && !crucibleId && !offerId) return null;
+  if (!cartridgeId || !crucibleId || !offerId) {
+    throw new Error('Forge Host smoke offer route requires world_cartridge, world_crucible, and forge_host_smoke_offer together');
+  }
+  return { cartridgeId, crucibleId, offerId };
+}
+
+function findWorldCartridgeSmokeOffer(index, request) {
+  const cartridge = index?.cartridges?.find(item => item.id === request.cartridgeId);
+  const crucible = cartridge?.crucibles?.find(item => item.id === request.crucibleId);
+  const offerRecord = crucible?.smokeOffers?.find(item => item.id === request.offerId);
+  if (!cartridge || !crucible || !offerRecord) {
+    throw new Error(`Forge Host route could not find world cartridge smoke offer: ${request.cartridgeId}/${request.crucibleId}/${request.offerId}`);
+  }
+  return { cartridge, crucible, offerRecord };
+}
+
+function displayStateForCartridgeOffer(offerRecord) {
+  if (offerRecord.displayState) return offerRecord.displayState;
+  if (offerRecord.authority === 'live' && offerRecord.freshness !== 'waiting') return 'live';
+  return offerRecord.freshness || offerRecord.authority || 'unknown';
+}
+
+function forgeSmokeOfferFromWorldCartridge({ cartridge, crucible, offerRecord }) {
+  const sourceRef = `world-cartridge:${cartridge.id}/${crucible.id}/${offerRecord.id}`;
+  return {
+    schema: FORGE_HOST_SMOKE_OFFER_SCHEMA,
+    id: offerRecord.id,
+    producerDiaulos: offerRecord.sourceRole || crucible.sourceOwnership?.owner || crucible.stewardship?.owner || cartridge.id,
+    title: offerRecord.label || offerRecord.id,
+    targetSurface: offerRecord.targetSurface || 'world-cartridge-smoke-offer',
+    sourceRef,
+    targetUrl: offerRecord.route || null,
+    authority: offerRecord.authority || 'unknown',
+    freshness: offerRecord.freshness || 'unknown',
+    displayState: displayStateForCartridgeOffer(offerRecord),
+    downgrades: Array.isArray(offerRecord.downgrades) ? [...offerRecord.downgrades] : [],
+    worldCartridge: {
+      cartridgeId: cartridge.id,
+      cartridgeTitle: cartridge.title || cartridge.id,
+      crucibleId: crucible.id,
+      crucibleTitle: crucible.title || crucible.id,
+      sourceRole: offerRecord.sourceRole || null,
+      outputClass: offerRecord.outputClass || null,
+      expectedReceipt: offerRecord.expectedReceipt || null,
+      graduationMode: crucible.graduationMode || null,
+    },
+  };
+}
+
+function stationScoreForCartridgeOffer(station, offerRecord) {
+  const sourceRole = String(offerRecord.sourceRole || offerRecord.worldCartridge?.sourceRole || '').toLowerCase();
+  const stationSourceId = station['dia' + 'ulos'];
+  const haystack = [
+    stationSourceId,
+    station.callSign,
+    station.role,
+    ...(station.sourceTopoi || []),
+  ].join(' ').toLowerCase();
+  if (sourceRole && haystack.includes(sourceRole)) return 100;
+  if (sourceRole === 'glove-well-source' && /glove/.test(haystack)) return 90;
+  if (sourceRole === 'finger-fluid-source' && /big-papa|finger|juice/.test(haystack)) return 90;
+  if (sourceRole === 'lerm-species-source' && /lerm|horde|species|body/.test(haystack)) return 90;
+  if (/workbench|kiln/.test(haystack)) return 40;
+  return 0;
+}
+
+function stationForCartridgeOffer(offerRecord, routeIdentity) {
+  if (!forgeHostState?.manifest) throw new Error('Forge Host route station requested before manifest exists');
+  const stations = forgeHostState.manifest.stations || [];
+  let best = null;
+  for (const station of stations) {
+    const score = stationScoreForCartridgeOffer(station, offerRecord);
+    if (!best || score > best.score) best = { station, score };
+  }
+  if (best?.score > 0) return best.station;
+  const actorId = `forge-station:world-cartridge:${routeIdentity.cartridge.id}:${routeIdentity.crucible.id}`;
+  const existing = stations.find(station => station.actorId === actorId);
+  if (existing) return existing;
+  const fallbackStation = {
+    actorId,
+    ['dia' + 'ulos']: offerRecord.sourceRole || routeIdentity.crucible.id,
+    callSign: routeIdentity.crucible.title || routeIdentity.crucible.id,
+    role: offerRecord.sourceRole || 'World Cartridge Offer',
+    status: 'waiting',
+    sourceAuthority: 'world_cartridge_route',
+    displayState: 'waiting',
+    registryStatus: null,
+    observedAt: null,
+    sourceTopoi: [],
+    endpoint: {},
+    statusColor: '#d5b668',
+    anchor: {
+      schema: 'kaminos.forge-host.station-anchor.v0',
+      id: `anchor:world-cartridge:${routeIdentity.cartridge.id}:${routeIdentity.crucible.id}`,
+      authority: 'host_generated_world_cartridge_route',
+      position: [0, -0.58, 1.34],
+      benchLookTarget: [0, -0.28, 0.45],
+      offerLookTarget: [0.46, -0.22, 1.82],
+    },
+    visual: {
+      schema: 'kaminos.forge-host.station-visual.v0',
+      shape: 'schnoz_orb_proxy',
+      ringLabel: 'Smoke',
+      radius: 0.2,
+      color: '#d5b668',
+    },
+    attention: {
+      schema: FORGE_HOST_STATION_ATTENTION_SCHEMA,
+      mode: 'waiting',
+      primaryLookTarget: 'offer',
+      dwellMs: 700,
+      jitter: 0.12,
+    },
+    smokeOffers: [],
+  };
+  stations.push(fallbackStation);
+  const visual = makeForgeHostStationVisual(fallbackStation);
+  forgeHostState.root.add(visual.group);
+  forgeHostState.visuals.push(visual);
+  return fallbackStation;
+}
+
+function upsertForgeHostSmokeOffer(station, offerRecord) {
+  const existingIndex = station.smokeOffers.findIndex(item => item.id === offerRecord.id);
+  if (existingIndex >= 0) station.smokeOffers[existingIndex] = offerRecord;
+  else station.smokeOffers.push(offerRecord);
+}
+
+async function openForgeHostSmokeOfferFromRoute(params = new URLSearchParams(window.location.search)) {
+  const request = routeParamSmokeOfferRequest(params);
+  if (!request) return null;
+  const index = await loadWorldCartridgeIndexForForgeRoute();
+  const routeIdentity = findWorldCartridgeSmokeOffer(index, request);
+  const offerRecord = forgeSmokeOfferFromWorldCartridge(routeIdentity);
+  const station = stationForCartridgeOffer(offerRecord, routeIdentity);
+  upsertForgeHostSmokeOffer(station, offerRecord);
+  setForgeHostSelectedActor(station.actorId);
+  const chamber = openForgeHostSmokeOffer(offerRecord.id);
+  setInfo(`Smoke chamber: ${offerRecord.title}`);
+  return chamber;
+}
+
 function renderForgeHostOfferList() {
   const list = document.getElementById('forge-host-offer-list');
   const summary = document.getElementById('forge-host-selected-summary');
@@ -7489,7 +7649,9 @@ function initKaminosMotionAgencyRoute() {
   const params = new URLSearchParams(window.location.search);
   if (params.has('kaminos_forge_host')) {
     const forgeSource = params.get('kaminos_forge_host') === 'live' ? 'live_registry' : 'fixture';
-    void createForgeHostStationScene({ force: true, source: forgeSource });
+    void createForgeHostStationScene({ force: true, source: forgeSource })
+      .then(() => openForgeHostSmokeOfferFromRoute(params))
+      .catch(error => setInfo(`Forge Host route failed: ${error.message || error}`));
   } else if (params.has('kaminos_motion_agency') || params.has('kaminos_motion_phrase') || params.has('kaminos_motion_phrase_controls') || params.has('kaminos_motion_tracks') || params.has('kaminos_generated_motion_track') || params.has('kaminos_motion_output_map') || params.has('kaminos_generated_pose_temporal') || params.has('kaminos_motion_panel_temporal_fixture')) {
     setActiveTab('motion');
     if (params.has('kaminos_motion_panel_temporal_fixture')) void previewMotionPanelTemporalFixture();
