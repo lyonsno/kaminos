@@ -10035,6 +10035,29 @@ const TALL_PLUME_OPERATOR_PRESETS = {
 
 const DEFAULT_VOLUME_SMOKE_TALL_PRESET = 'pyro_material_bonfire_family_0702';
 
+const BUILT_IN_VOLUME_LOOK_LIBRARY = {
+  identity: VOLUME_LOOK_LIBRARY_IDENTITY,
+  version: 1,
+  updatedAt: '2026-07-06T08:21:46.551Z',
+  pyro: [
+    {
+      name: 'exploding-jellow-fireball-motherfucker',
+      kind: 'pyro',
+      savedAt: '2026-07-06T08:21:46.551Z',
+      updatedAt: '2026-07-06T08:21:46.551Z',
+      fields: [...PYRO_LOOK_FIELDS],
+      controls: Object.fromEntries(
+        PYRO_LOOK_FIELDS
+          .filter(key => TALL_PLUME_OPERATOR_PRESETS.exploding_jellow_fireball_motherfucker_0706[key] !== undefined)
+          .map(key => [key, TALL_PLUME_OPERATOR_PRESETS.exploding_jellow_fireball_motherfucker_0706[key]])
+      ),
+      sourceBacked: true,
+      biteStackAuthored: true,
+    },
+  ],
+  firesim: [],
+};
+
 const CANONICAL_VOLUME_MACRO_PRESETS = {
   macro_foothold_0621: {
     label: 'macro foothold 0621',
@@ -10736,12 +10759,32 @@ function normalizeVolumeLookEntry(entry, kind) {
   };
 }
 
+function cloneVolumeLookLibraryEntry(entry) {
+  return {
+    ...entry,
+    fields: Array.isArray(entry.fields) ? [...entry.fields] : [],
+    controls: entry.controls && typeof entry.controls === 'object' ? { ...entry.controls } : {},
+  };
+}
+
+function mergeVolumeLookLibraryWithBuiltIns(library = normalizeVolumeLookLibrary()) {
+  const normalized = normalizeVolumeLookLibrary(library);
+  const builtIns = normalizeVolumeLookLibrary(BUILT_IN_VOLUME_LOOK_LIBRARY);
+  for (const kind of ['pyro', 'firesim']) {
+    const byName = new Map();
+    for (const entry of builtIns[kind] || []) byName.set(entry.name, cloneVolumeLookLibraryEntry(entry));
+    for (const entry of normalized[kind] || []) byName.set(entry.name, cloneVolumeLookLibraryEntry(entry));
+    normalized[kind] = [...byName.values()];
+  }
+  return normalized;
+}
+
 function readVolumeLookLibrary() {
   try {
     const parsed = JSON.parse(localStorage.getItem(KAMINOS_VOLUME_LOOK_LIBRARY_STORAGE_KEY));
-    return normalizeVolumeLookLibrary(parsed);
+    return mergeVolumeLookLibraryWithBuiltIns(parsed);
   } catch {
-    return normalizeVolumeLookLibrary();
+    return mergeVolumeLookLibraryWithBuiltIns();
   }
 }
 
