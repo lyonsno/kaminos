@@ -28,11 +28,43 @@ assert.match(routeSource, /sam3-detr-decoder-phase-program-v0/, 'DETR decoder ro
 
 const route = createSam3DetrDecoderPhaseProgramRouteDefinition({
   kernel: { profile: 'sam3-detr-decoder-phase-program-v0', commit: 'abc1234' },
+  shape: {
+    batch: 1,
+    queryTokens: 1,
+    promptTokens: 1,
+    spatialTokens: 1,
+    channels: 2,
+    heads: 1,
+    layerCount: 1,
+    mlpHidden: 3,
+    sineFeatures: 1,
+    height: 1,
+    width: 1,
+  },
 });
 assert.equal(route.routeId, SAM3_DETR_DECODER_PHASE_PROGRAM_ROUTE_ID);
 assert.equal(route.backendKind, 'webgpu-local');
 assert.deepEqual(route.requiredInputRoles, ['source-image', 'sam3-detr-decoder-tensors', 'sam3-detr-decoder-weights']);
 assert.deepEqual(route.requiredOutputRoles, ['last-hs', 'reference-boxes', 'presence-logits']);
+for (const requiredStage of [
+  'detr-decoder-ref-point-head-1-0',
+  'detr-decoder-pad-query-position-0',
+  'detr-decoder-box-rpb-x-hidden-0',
+  'detr-decoder-self-q-0',
+  'detr-decoder-self-output-0',
+  'detr-decoder-text-q-0',
+  'detr-decoder-vision-key-add-pos-0',
+  'detr-decoder-mlp-fc1-0',
+  'detr-decoder-output-layernorm-0',
+  'detr-decoder-box-head-1-0',
+  'detr-decoder-slice-presence-0',
+  'detr-decoder-presence-layernorm-0',
+]) {
+  assert.ok(
+    route.requiredStages.includes(requiredStage),
+    `DETR decoder requiredStages must include granular executed phase ${requiredStage}`,
+  );
+}
 assert.equal(validateRouteDefinition(route).ok, true);
 
 const zero2 = new Float32Array(2);
