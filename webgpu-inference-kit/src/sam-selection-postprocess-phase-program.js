@@ -88,11 +88,10 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
   let height = reference_boxes[box_base + 3u];
   let image_width = f32(dims.image_width);
   let image_height = f32(dims.image_height);
-  let clip_max = max(image_width, image_height);
-  boxes[box_base + 0u] = clamp_pixel((cx - width * 0.5) * image_width, clip_max);
-  boxes[box_base + 1u] = clamp_pixel((cy - height * 0.5) * image_height, clip_max);
-  boxes[box_base + 2u] = clamp_pixel((cx + width * 0.5) * image_width, clip_max);
-  boxes[box_base + 3u] = clamp_pixel((cy + height * 0.5) * image_height, clip_max);
+  boxes[box_base + 0u] = clamp_pixel((cx - width * 0.5) * image_width, image_width);
+  boxes[box_base + 1u] = clamp_pixel((cy - height * 0.5) * image_height, image_height);
+  boxes[box_base + 2u] = clamp_pixel((cx + width * 0.5) * image_width, image_width);
+  boxes[box_base + 3u] = clamp_pixel((cy + height * 0.5) * image_height, image_height);
 }
 `;
 
@@ -224,7 +223,6 @@ export function createSam3SelectionPostprocessPhaseProgramCpuOracle(input) {
   const selectedScore = new Float32Array(shape.batch);
   const selectedBox = new Float32Array(shape.batch * 4);
   const layer = shape.layerCount - 1;
-  const clipMax = Math.max(shape.imageWidth, shape.imageHeight);
   for (let b = 0; b < shape.batch; b += 1) {
     let bestIndex = 0;
     let bestScore = -1;
@@ -239,10 +237,10 @@ export function createSam3SelectionPostprocessPhaseProgramCpuOracle(input) {
       const cy = referenceBoxes[boxBase + 1];
       const width = referenceBoxes[boxBase + 2];
       const height = referenceBoxes[boxBase + 3];
-      boxes[boxBase] = clipPixel((cx - width / 2) * shape.imageWidth, clipMax);
-      boxes[boxBase + 1] = clipPixel((cy - height / 2) * shape.imageHeight, clipMax);
-      boxes[boxBase + 2] = clipPixel((cx + width / 2) * shape.imageWidth, clipMax);
-      boxes[boxBase + 3] = clipPixel((cy + height / 2) * shape.imageHeight, clipMax);
+      boxes[boxBase] = clipPixel((cx - width / 2) * shape.imageWidth, shape.imageWidth);
+      boxes[boxBase + 1] = clipPixel((cy - height / 2) * shape.imageHeight, shape.imageHeight);
+      boxes[boxBase + 2] = clipPixel((cx + width / 2) * shape.imageWidth, shape.imageWidth);
+      boxes[boxBase + 3] = clipPixel((cy + height / 2) * shape.imageHeight, shape.imageHeight);
       if (keep[index] && score > bestScore) {
         bestScore = score;
         bestIndex = q;

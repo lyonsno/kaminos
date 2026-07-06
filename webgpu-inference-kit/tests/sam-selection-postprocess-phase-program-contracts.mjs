@@ -60,4 +60,20 @@ assert.equal(oracle.selectedIndex[0], 1);
 assert.ok(oracle.keep[1] === 1 && oracle.keep[0] === 0, 'selection threshold must keep only scores above threshold');
 assert.ok(Math.abs(oracle.boxes[4] - 60) < 0.00001 && Math.abs(oracle.boxes[6] - 140) < 0.00001, 'selection box conversion must scale x by image width');
 
+const landscapeClamp = createSam3SelectionPostprocessPhaseProgramCpuOracle({
+  predLogits: new Float32Array([10]),
+  referenceBoxes: new Float32Array([0.5, 1.1, 0.2, 0.4]),
+  presenceLogits: new Float32Array([10]),
+  shape: { layerCount: 1, batch: 1, queryTokens: 1, imageHeight: 100, imageWidth: 200, scoreThreshold: 0.5 },
+});
+assert.deepEqual(Array.from(landscapeClamp.selectedBox), [80, 90, 120, 100], 'selection boxes must clamp y coordinates to image height, not max(width,height)');
+
+const portraitClamp = createSam3SelectionPostprocessPhaseProgramCpuOracle({
+  predLogits: new Float32Array([10]),
+  referenceBoxes: new Float32Array([1.1, 0.5, 0.4, 0.2]),
+  presenceLogits: new Float32Array([10]),
+  shape: { layerCount: 1, batch: 1, queryTokens: 1, imageHeight: 200, imageWidth: 100, scoreThreshold: 0.5 },
+});
+assert.deepEqual(Array.from(portraitClamp.selectedBox), [90, 80, 100, 120], 'selection boxes must clamp x coordinates to image width, not max(width,height)');
+
 console.log('sam selection postprocess phase-program contracts passed');
