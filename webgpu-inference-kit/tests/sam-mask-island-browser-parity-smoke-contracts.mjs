@@ -37,6 +37,9 @@ assert.match(smokeJs, /SAM3_MASK_TAIL_PHASE_PROGRAM_ROUTE_ID/, 'browser smoke mu
 assert.match(smokeJs, /sam3-mask-tail-tensors/, 'browser smoke must preserve mask-tail tensor input identity');
 assert.match(smokeJs, /mask-embedder-layer-0-weight/, 'browser smoke must load real mask embedder weights for mask-tail');
 assert.match(smokeJs, /sourceImage/, 'browser smoke must preserve source image identity');
+assert.match(smokeJs, /sourceImageShape/, 'browser smoke must derive source artifact shape through a named helper');
+assert.match(smokeJs, /manifest\.sourceImage\?\.resolution/, 'browser smoke must use sourceImage.resolution for source artifact shape when present');
+assert.doesNotMatch(smokeJs, /shape:\s*\[1\]/, 'browser smoke must not put fake placeholder shapes on aggregate packet artifacts');
 assert.match(smokeJs, /selectedMaskIndex/, 'browser smoke must render a selected reference/webgpu mask');
 assert.match(smokeJs, /drawVisualWitness/, 'browser smoke must draw source/reference/webgpu/diff witness panels');
 assert.match(smokeJs, /drawSourcePanel/, 'browser smoke must handle packets without a source image file');

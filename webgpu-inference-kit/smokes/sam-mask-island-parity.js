@@ -121,6 +121,14 @@ function loadImage(url) {
   });
 }
 
+function sourceImageShape(manifest) {
+  const resolution = manifest.sourceImage?.resolution;
+  if (!Array.isArray(resolution) || resolution.length !== 2) return undefined;
+  const [width, height] = resolution;
+  if (!Number.isInteger(width) || !Number.isInteger(height) || width <= 0 || height <= 0) return undefined;
+  return [height, width, 3];
+}
+
 function drawBinaryPanel(ctx, values, shape, x, y, width, height, colors) {
   const image = ctx.createImageData(shape.width, shape.height);
   for (let index = 0; index < values.length; index += 1) {
@@ -412,7 +420,7 @@ async function main() {
     const sourceArtifact = {
       artifactId: manifest.sourceImage?.artifactId || 'image:synthetic',
       sha256: manifest.sourceImage?.sha256 || 'sha256:synthetic-image',
-      shape: [manifest.shape.height, manifest.shape.width, 3],
+      shape: sourceImageShape(manifest),
     };
     const inputArtifacts = manifest.routeId === SAM3_MASK_TAIL_PHASE_PROGRAM_ROUTE_ID
       ? {
@@ -420,12 +428,10 @@ async function main() {
           'sam3-mask-tail-tensors': {
             artifactId: 'sam3-mask-tail-tensors:browser-parity',
             sha256: payload.tensorIdentity.lastHsSha256,
-            shape: [1],
           },
           'sam3-mask-tail-weights': {
             artifactId: manifest.staticWeights.artifactId,
             sha256: manifest.staticWeights.sha256,
-            shape: [1],
           },
         }
       : {
@@ -433,12 +439,10 @@ async function main() {
           'sam3-decoder-tensors': {
             artifactId: 'sam3-tensors:browser-parity',
             sha256: payload.tensorIdentity.hyperInputSha256,
-            shape: [1],
           },
           'sam3-decoder-weights': {
             artifactId: manifest.staticWeights.artifactId,
             sha256: manifest.staticWeights.sha256,
-            shape: [1],
           },
         };
     const request = createRouteInvocationRequest(route, {
