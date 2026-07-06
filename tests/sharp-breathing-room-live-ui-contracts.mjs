@@ -71,6 +71,51 @@ assert.match(
 );
 assert.match(
   index,
+  /id="sharp-breathing-room-comparison-button"/,
+  'Generate panel must expose a one-action SHARP comparison smoke button',
+);
+assert.match(
+  index,
+  />Run comparison</,
+  'Comparison button must use operator-facing copy instead of internal route profile ids',
+);
+assert.match(
+  index,
+  /async function runSharpBreathingRoomComparison\(/,
+  'Generate panel must implement one operator action that runs default then friendly for comparison',
+);
+assert.match(
+  index,
+  /\{\s*profileId:\s*'baseline-default',\s*label:\s*'Default'\s*\}/,
+  'Comparison action must include the default SHARP route in the ordered comparison steps',
+);
+assert.match(
+  index,
+  /\{\s*profileId:\s*'cooperative-spn-gaussian',\s*label:\s*'Friendly'\s*\}/,
+  'Comparison action must include the friendly SHARP route in the ordered comparison steps',
+);
+assert.match(
+  index,
+  /runKilnRouteBenchRoute\('sharp-image-to-splat-live-v0',\s*step\.profileId\)/,
+  'Comparison action must run each comparison step through the generic bench runner',
+);
+assert.match(
+  index,
+  /comparisonRuns:\s*\[\]/,
+  'Route bench state must preserve a comparison run list so default/friendly results do not collapse into one status',
+);
+assert.match(
+  index,
+  /window\.__kaminosSharpBreathingRoomComparisonState/,
+  'Comparison smoke must expose debug state for operator and witness inspection',
+);
+assert.match(
+  index,
+  /Default then friendly/,
+  'Comparison status must explain that the two runs are sequential, not simultaneous SHARP contention',
+);
+assert.match(
+  index,
   />Run default</,
   'Default route button must use operator-facing copy instead of an internal profile id',
 );
