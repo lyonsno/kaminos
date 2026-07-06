@@ -28,6 +28,7 @@ const {
   WORLD_CARTRIDGE_INDEX_SCHEMA,
   WORLD_CARTRIDGE_MANIFEST_SCHEMA,
   WORLD_CRUCIBLE_DESCRIPTOR_SCHEMA,
+  WORLD_CARTRIDGE_FIRST_USE_TRIAL_SCHEMA,
   WORLD_CARTRIDGE_DISCOVERY_ROUTE,
   WORLD_CARTRIDGE_GRADUATION_MODES,
   LERMS_TERRARIUM_CARTRIDGE_ID,
@@ -39,6 +40,7 @@ const {
 assert.equal(WORLD_CARTRIDGE_INDEX_SCHEMA, 'kaminos.world-cartridges.index.v0');
 assert.equal(WORLD_CARTRIDGE_MANIFEST_SCHEMA, 'kaminos.world-cartridge.manifest.v0');
 assert.equal(WORLD_CRUCIBLE_DESCRIPTOR_SCHEMA, 'kaminos.world-crucible.descriptor.v0');
+assert.equal(WORLD_CARTRIDGE_FIRST_USE_TRIAL_SCHEMA, 'kaminos.world-cartridge.first-use-trial.v0');
 assert.equal(WORLD_CARTRIDGE_DISCOVERY_ROUTE, '/api/world-cartridges');
 assert.equal(LERMS_TERRARIUM_CARTRIDGE_ID, 'lerms-terrarium');
 assert.deepEqual(WORLD_CARTRIDGE_GRADUATION_MODES, [
@@ -69,6 +71,27 @@ assert.equal(normalized.affordanceBindings.some(binding => binding.id === 'world
 assert.equal(normalized.affordanceBindings.some(binding => binding.id === 'mushfinger-motion-agency'), true);
 assert.equal(normalized.affordanceBindings.some(binding => binding.id === 'palm-hand-surface-runtime'), true);
 assert.equal(normalized.generationBasins.some(basin => basin.id === 'little-body-variants'), true);
+assert.equal(normalized.firstUseTrial.schema, WORLD_CARTRIDGE_FIRST_USE_TRIAL_SCHEMA);
+assert.equal(normalized.firstUseTrial.entryRoute, '/api/world-cartridges');
+assert.equal(normalized.firstUseTrial.firstMove, 'choose_crucible');
+assert.deepEqual(normalized.firstUseTrial.trialSteps, [
+  'enter_cartridge',
+  'choose_crucible',
+  'name_armature',
+  'name_handle',
+  'run_firing',
+  'emit_shard_or_cast',
+  'write_receipt',
+  'answer_graduation_question',
+]);
+assert.ok(normalized.firstUseTrial.allowedOutputs.includes('firing_receipt'));
+assert.ok(normalized.firstUseTrial.allowedOutputs.includes('gap_report'));
+assert.ok(normalized.firstUseTrial.failureSignals.includes('no_crucible_chosen'));
+assert.ok(normalized.firstUseTrial.graduationQuestion.includes('Kaminos'));
+assert.deepEqual(normalized.firstUseTrial.consumerCoverage.find(coverage => coverage.consumer === 'lerm-feel-fucker').crucibles, [
+  'finger-fluid',
+  'glove-emitter',
+]);
 assert.deepEqual(normalized.crucibles.map(crucible => crucible.id), [
   'hill-of-hills',
   'lerm-species',
@@ -89,10 +112,15 @@ for (const crucible of normalized.crucibles) {
   assert.ok(crucible.receipts.length >= 1, `${crucible.id} records receipts`);
   assert.ok(crucible.smokeApparitions.length >= 1, `${crucible.id} carries smoke apparition hooks`);
   assert.ok(WORLD_CARTRIDGE_GRADUATION_MODES.includes(crucible.graduationMode), `${crucible.id} graduation mode is known`);
-  assert.equal(typeof crucible.custody.owner, 'string', `${crucible.id} names custody owner`);
+  assert.ok(crucible.consumerCanStartBy.includes('firing'), `${crucible.id} tells a consumer how to run a firing`);
+  assert.ok(crucible.graduationQuestion.includes('?'), `${crucible.id} carries a graduation question`);
+  assert.equal(typeof crucible.stewardship.owner, 'string', `${crucible.id} names workbench stewardship owner`);
+  assert.equal(typeof crucible.sourceOwnership.owner, 'string', `${crucible.id} names subsystem source owner`);
 }
 assert.equal(normalized.crucibles.find(crucible => crucible.id === 'hill-of-hills').smokeApparitions[0].route, 'future:moge-depth-smoke-apparition');
 assert.equal(normalized.crucibles.find(crucible => crucible.id === 'finger-fluid').handles.some(handle => handle.kind === 'state-stream'), true);
+assert.match(normalized.crucibles.find(crucible => crucible.id === 'glove-emitter').stewardship.role, /workbench/i);
+assert.match(normalized.crucibles.find(crucible => crucible.id === 'glove-emitter').sourceOwnership.owner, /greedy/i);
 assert.equal(normalized.graduation.modes.length, WORLD_CARTRIDGE_GRADUATION_MODES.length);
 assert.equal(normalized.graduation.currentMode, 'remain_in_kaminos_terrarium');
 assert.equal(normalized.witnesses[0].schema, 'kaminos.world-cartridge.witness.v0');
@@ -186,6 +214,7 @@ assert.throws(
         role: 'invalid fixture',
         status: 'fixture',
         makingIntent: 'Try to prove route identity.',
+        consumerCanStartBy: 'Run a bad firing.',
         armatures: ['bad'],
         handles: ['bad'],
         firings: ['bad'],
@@ -194,12 +223,47 @@ assert.throws(
         receipts: ['bad'],
         smokeApparitions: [{ id: 'blank-apparition' }],
         graduationMode: 'remain_in_kaminos_terrarium',
+        graduationQuestion: 'Where should this go?',
+        stewardship: { owner: 'test' },
+        sourceOwnership: { owner: 'test-source' },
         custody: { owner: 'test' },
       },
     ],
   }),
   /smoke apparition 0 must include route/,
   'smoke apparition hooks must name the route they intend to prove',
+);
+
+assert.throws(
+  () => normalizeWorldCartridgeManifest({
+    ...manifest,
+    firstUseTrial: {
+      schema: WORLD_CARTRIDGE_FIRST_USE_TRIAL_SCHEMA,
+      entryRoute: '/api/world-cartridges',
+      firstMove: 'read_some_private_report',
+      chooseCrucible: 'Guess from context.',
+      trialSteps: ['enter_cartridge'],
+      allowedOutputs: ['gap_report'],
+      failureSignals: ['no_crucible_chosen'],
+      graduationQuestion: 'Where should this go?',
+    },
+  }),
+  /firstUseTrial firstMove must be choose_crucible/,
+  'the cartridge first-use route forces crucible choice as the first operational move',
+);
+
+assert.throws(
+  () => normalizeWorldCartridgeManifest({
+    ...manifest,
+    crucibles: [
+      {
+        ...manifest.crucibles[0],
+        consumerCanStartBy: '',
+      },
+    ],
+  }),
+  /must include consumerCanStartBy/,
+  'a crucible must tell an unaided consumer the first productive action',
 );
 
 const loaded = loadWorldCartridgeFromDirectory(cartridgeDir);
@@ -213,6 +277,8 @@ assert.equal(index.cartridges.length, 1);
 assert.equal(index.cartridges[0].id, 'lerms-terrarium');
 assert.equal(index.cartridges[0].summary.creatureFamilies.includes('red-lerms'), true);
 assert.equal(index.cartridges[0].defaultRoute.query.world_cartridge, 'lerms-terrarium');
+assert.equal(index.cartridges[0].firstUseTrial.firstMove, 'choose_crucible');
+assert.equal(index.cartridges[0].firstUseTrial.trialSteps.includes('run_firing'), true);
 assert.equal(index.cartridges[0].crucibleCount, 4);
 assert.deepEqual(index.cartridges[0].crucibles.map(crucible => crucible.id), [
   'hill-of-hills',

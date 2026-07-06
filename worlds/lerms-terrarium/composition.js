@@ -16,13 +16,17 @@ export function createLermsTerrariumComposition(manifest) {
       owner: binding.owner,
       route: binding.route,
     })),
+    firstUseTrial: manifest.firstUseTrial,
     crucibleSeeds: manifest.crucibles.map(crucible => ({
       id: crucible.id,
       title: crucible.title,
       role: crucible.role,
       status: crucible.status,
+      consumerCanStartBy: crucible.consumerCanStartBy,
       graduationMode: crucible.graduationMode,
-      owner: crucible.custody.owner,
+      graduationQuestion: crucible.graduationQuestion,
+      stewardshipOwner: crucible.stewardship.owner,
+      sourceOwner: crucible.sourceOwnership.owner,
       smokeApparitionRoute: crucible.smokeApparitions[0]?.route || '',
     })),
     smokeOfferSeed: {

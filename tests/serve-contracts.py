@@ -110,6 +110,13 @@ def test_world_cartridge_index_discovers_lerms_terrarium():
     assert cartridge["authority"]["displayAuthority"] == "fixture_cartridge"
     assert cartridge["defaultRoute"]["query"]["world_cartridge"] == "lerms-terrarium"
     assert cartridge["defaultRoute"]["query"]["world_chamber"] == "lerms-underhill"
+    assert cartridge["firstUseTrial"]["schema"] == "kaminos.world-cartridge.first-use-trial.v0"
+    assert cartridge["firstUseTrial"]["firstMove"] == "choose_crucible"
+    assert "run_firing" in cartridge["firstUseTrial"]["trialSteps"]
+    assert next(
+        coverage for coverage in cartridge["firstUseTrial"]["consumerCoverage"]
+        if coverage["consumer"] == "lerm-feel-fucker"
+    )["crucibles"] == ["finger-fluid", "glove-emitter"]
     assert any(bridge["repo"] == "lerms" and bridge["role"] == "game-law" for bridge in cartridge["sourceBridges"])
     assert any(binding["id"] == "mushfinger-motion-agency" for binding in cartridge["affordanceBindings"])
     assert any(basin["id"] == "little-body-variants" for basin in cartridge["generationBasins"])
@@ -122,6 +129,9 @@ def test_world_cartridge_index_discovers_lerms_terrarium():
     ]
     assert cartridge["crucibles"][0]["schema"] == "kaminos.world-crucible.descriptor.v0"
     assert cartridge["crucibles"][0]["smokeApparitions"][0]["route"] == "future:moge-depth-smoke-apparition"
+    assert "firing" in cartridge["crucibles"][0]["consumerCanStartBy"]
+    assert cartridge["crucibles"][2]["stewardship"]["owner"] == "palm-daddy"
+    assert cartridge["crucibles"][2]["sourceOwnership"]["owner"] == "big-papa-finger-juice-fucker"
     assert cartridge["witnessCount"] == 1
     assert index["errors"] == []
 

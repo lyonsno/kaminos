@@ -84,6 +84,34 @@ inside the Kaminos worktree, choose the relevant crucible, reuse existing
 armatures and handles, add a firing, and leave a cast or receipt for the next
 lane.
 
+## First-Use Trial
+
+A cartridge that expects agent consumers should publish a **first-use trial**.
+The trial is the route through the Kaminos ontology. It tells an unaided lane
+how to begin work without a private explanation.
+
+The LERMS terrarium first-use path is:
+
+1. enter the cartridge through `/api/world-cartridges` or the current cartridge
+   manifest;
+2. choose one crucible;
+3. name the armature being mounted;
+4. name the handle being used;
+5. run one firing;
+6. classify the output as a shard, cast, receipt, smoke-apparition route,
+   graduation report, or gap report;
+7. answer the graduation question.
+
+Each crucible carries a `consumerCanStartBy` card. That card is the first move
+for an agent lane. It should name the armature, handle, firing, output class,
+and receipt expectation in one compact action.
+
+The first-use trial also separates **stewardship** from **source ownership**.
+Stewardship names who is responsible for the Kaminos workbench path. Source
+ownership names who owns the subsystem, domain payload, or implementation truth.
+The two can differ, especially when one lane is responsible for making other
+lanes succeed through better affordances.
+
 ## LERMS Terrarium
 
 The first worked cartridge direction is a **LERMS terrarium**. It is a

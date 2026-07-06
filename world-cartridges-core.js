@@ -5,6 +5,7 @@ export const WORLD_CARTRIDGE_INDEX_SCHEMA = 'kaminos.world-cartridges.index.v0';
 export const WORLD_CARTRIDGE_MANIFEST_SCHEMA = 'kaminos.world-cartridge.manifest.v0';
 export const WORLD_CARTRIDGE_WITNESS_SCHEMA = 'kaminos.world-cartridge.witness.v0';
 export const WORLD_CRUCIBLE_DESCRIPTOR_SCHEMA = 'kaminos.world-crucible.descriptor.v0';
+export const WORLD_CARTRIDGE_FIRST_USE_TRIAL_SCHEMA = 'kaminos.world-cartridge.first-use-trial.v0';
 export const WORLD_CARTRIDGE_DISCOVERY_ROUTE = '/api/world-cartridges';
 export const LERMS_TERRARIUM_CARTRIDGE_ID = 'lerms-terrarium';
 
@@ -14,6 +15,17 @@ export const WORLD_CARTRIDGE_GRADUATION_MODES = [
   'extract_shared_runtime',
   'ship_kaminos_backed_shell',
   'archive_prototype',
+];
+
+export const WORLD_CARTRIDGE_FIRST_USE_TRIAL_STEPS = [
+  'enter_cartridge',
+  'choose_crucible',
+  'name_armature',
+  'name_handle',
+  'run_firing',
+  'emit_shard_or_cast',
+  'write_receipt',
+  'answer_graduation_question',
 ];
 
 function clone(value) {
@@ -53,6 +65,12 @@ function requireNonEmptyReferenceList(value, label) {
   const refs = referenceList(value);
   if (!refs.length) throw new Error(`${label} must include at least one entry`);
   return refs;
+}
+
+function requireNonEmptyStringList(value, label) {
+  const items = stringList(value);
+  if (!items.length) throw new Error(`${label} must include at least one entry`);
+  return items;
 }
 
 function normalizeDefaultRoute(route, cartridgeId) {
@@ -98,6 +116,42 @@ function normalizeWitnesses(witnesses) {
   });
 }
 
+function normalizeFirstUseTrial(firstUseTrial) {
+  assertPlainObject(firstUseTrial, 'world cartridge firstUseTrial');
+  if (firstUseTrial.schema !== WORLD_CARTRIDGE_FIRST_USE_TRIAL_SCHEMA) {
+    throw new Error(`world cartridge firstUseTrial schema mismatch: ${firstUseTrial.schema || 'missing'}`);
+  }
+  if (firstUseTrial.firstMove !== 'choose_crucible') {
+    throw new Error('world cartridge firstUseTrial firstMove must be choose_crucible');
+  }
+  if (!firstUseTrial.entryRoute) {
+    throw new Error('world cartridge firstUseTrial must include entryRoute');
+  }
+  if (!firstUseTrial.chooseCrucible) {
+    throw new Error('world cartridge firstUseTrial must include chooseCrucible');
+  }
+  if (!firstUseTrial.graduationQuestion) {
+    throw new Error('world cartridge firstUseTrial must include graduationQuestion');
+  }
+  const trialSteps = stringList(firstUseTrial.trialSteps);
+  for (const step of WORLD_CARTRIDGE_FIRST_USE_TRIAL_STEPS) {
+    if (!trialSteps.includes(step)) {
+      throw new Error(`world cartridge firstUseTrial missing trial step: ${step}`);
+    }
+  }
+  return {
+    schema: WORLD_CARTRIDGE_FIRST_USE_TRIAL_SCHEMA,
+    entryRoute: firstUseTrial.entryRoute,
+    firstMove: firstUseTrial.firstMove,
+    chooseCrucible: firstUseTrial.chooseCrucible,
+    trialSteps,
+    allowedOutputs: requireNonEmptyStringList(firstUseTrial.allowedOutputs, 'world cartridge firstUseTrial allowedOutputs'),
+    failureSignals: stringList(firstUseTrial.failureSignals),
+    consumerCoverage: objectList(firstUseTrial.consumerCoverage),
+    graduationQuestion: firstUseTrial.graduationQuestion,
+  };
+}
+
 function normalizeSmokeApparitions(apparitions, crucibleIndex) {
   return objectList(apparitions).map((apparition, index) => {
     if (!apparition.route) {
@@ -117,11 +171,16 @@ function normalizeCrucibles(crucibles) {
     if (!crucible.role) throw new Error(`world crucible ${index} must include role`);
     if (!crucible.status) throw new Error(`world crucible ${index} must include status`);
     if (!crucible.makingIntent) throw new Error(`world crucible ${index} must include makingIntent`);
+    if (!crucible.consumerCanStartBy) throw new Error(`world crucible ${index} must include consumerCanStartBy`);
+    if (!crucible.graduationQuestion) throw new Error(`world crucible ${index} must include graduationQuestion`);
     if (!WORLD_CARTRIDGE_GRADUATION_MODES.includes(crucible.graduationMode)) {
       throw new Error(`world crucible ${index} graduationMode is unknown: ${crucible.graduationMode || 'missing'}`);
     }
-    assertPlainObject(crucible.custody, `world crucible ${index} custody`);
-    if (!crucible.custody.owner) throw new Error(`world crucible ${index} custody must include owner`);
+    const stewardship = crucible.stewardship || crucible.custody;
+    assertPlainObject(stewardship, `world crucible ${index} stewardship`);
+    if (!stewardship.owner) throw new Error(`world crucible ${index} stewardship must include owner`);
+    assertPlainObject(crucible.sourceOwnership, `world crucible ${index} sourceOwnership`);
+    if (!crucible.sourceOwnership.owner) throw new Error(`world crucible ${index} sourceOwnership must include owner`);
     return {
       schema: WORLD_CRUCIBLE_DESCRIPTOR_SCHEMA,
       id: crucible.id,
@@ -129,6 +188,7 @@ function normalizeCrucibles(crucibles) {
       role: crucible.role,
       status: crucible.status,
       makingIntent: crucible.makingIntent,
+      consumerCanStartBy: crucible.consumerCanStartBy,
       armatures: requireNonEmptyReferenceList(crucible.armatures, `world crucible ${index} armatures`),
       handles: requireNonEmptyReferenceList(crucible.handles, `world crucible ${index} handles`),
       firings: requireNonEmptyReferenceList(crucible.firings, `world crucible ${index} firings`),
@@ -137,7 +197,10 @@ function normalizeCrucibles(crucibles) {
       receipts: requireNonEmptyReferenceList(crucible.receipts, `world crucible ${index} receipts`),
       smokeApparitions: normalizeSmokeApparitions(crucible.smokeApparitions, index),
       graduationMode: crucible.graduationMode,
-      custody: clone(crucible.custody),
+      graduationQuestion: crucible.graduationQuestion,
+      stewardship: clone(stewardship),
+      sourceOwnership: clone(crucible.sourceOwnership),
+      custody: clone(stewardship),
     };
   });
 }
@@ -183,6 +246,7 @@ export function normalizeWorldCartridgeManifest(manifest, options = {}) {
     affordanceBindings: objectList(manifest.affordanceBindings),
     generationBasins: objectList(manifest.generationBasins),
     sceneRecipes: objectList(manifest.sceneRecipes),
+    firstUseTrial: normalizeFirstUseTrial(manifest.firstUseTrial || {}),
     crucibles: normalizeCrucibles(manifest.crucibles || []),
     graduation: normalizeGraduation(manifest.graduation || {}),
     witnesses: normalizeWitnesses(manifest.witnesses || []),
@@ -216,6 +280,7 @@ function cartridgeSummary(cartridge, rootDir) {
     sourceBridges: clone(cartridge.sourceBridges),
     affordanceBindings: clone(cartridge.affordanceBindings),
     generationBasins: clone(cartridge.generationBasins),
+    firstUseTrial: clone(cartridge.firstUseTrial),
     crucibles: clone(cartridge.crucibles),
     crucibleCount: cartridge.crucibles.length,
     witnessCount: cartridge.witnesses.length,

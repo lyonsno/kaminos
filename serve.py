@@ -81,6 +81,7 @@ FORGE_HOST_DIAULOS_REGISTRY_PATH = Path(os.environ.get(
 WORLD_CARTRIDGE_INDEX_SCHEMA = "kaminos.world-cartridges.index.v0"
 WORLD_CARTRIDGE_MANIFEST_SCHEMA = "kaminos.world-cartridge.manifest.v0"
 WORLD_CRUCIBLE_DESCRIPTOR_SCHEMA = "kaminos.world-crucible.descriptor.v0"
+WORLD_CARTRIDGE_FIRST_USE_TRIAL_SCHEMA = "kaminos.world-cartridge.first-use-trial.v0"
 WORLD_CARTRIDGE_DISCOVERY_ROUTE = "/api/world-cartridges"
 WORLD_CARTRIDGES_DIR = Path(os.environ.get(
     "KAMINOS_WORLD_CARTRIDGES_DIR",
@@ -253,6 +254,7 @@ def pipeline_manifest_payload():
 def _world_cartridge_summary(manifest, cartridge_dir):
     authority = manifest.get("authority") or {}
     crucibles = manifest.get("crucibles") or []
+    first_use_trial = manifest.get("firstUseTrial") or {}
     if manifest.get("schema") != WORLD_CARTRIDGE_MANIFEST_SCHEMA:
         raise ValueError(f"world cartridge manifest schema mismatch: {manifest.get('schema') or 'missing'}")
     if not manifest.get("id"):
@@ -261,11 +263,25 @@ def _world_cartridge_summary(manifest, cartridge_dir):
         raise ValueError("world cartridge manifest missing fixture identity")
     if authority.get("displayAuthority") == "live_cartridge":
         raise ValueError("fixture cartridge cannot claim live display authority")
+    if first_use_trial.get("schema") != WORLD_CARTRIDGE_FIRST_USE_TRIAL_SCHEMA:
+        raise ValueError(f"world cartridge firstUseTrial schema mismatch: {first_use_trial.get('schema') or 'missing'}")
+    if first_use_trial.get("firstMove") != "choose_crucible":
+        raise ValueError("world cartridge firstUseTrial firstMove must be choose_crucible")
+    if "run_firing" not in (first_use_trial.get("trialSteps") or []):
+        raise ValueError("world cartridge firstUseTrial missing run_firing trial step")
     for index, crucible in enumerate(crucibles):
         if crucible.get("schema") != WORLD_CRUCIBLE_DESCRIPTOR_SCHEMA:
             raise ValueError(f"world crucible {index} schema mismatch: {crucible.get('schema') or 'missing'}")
         if not crucible.get("makingIntent"):
             raise ValueError(f"world crucible {index} missing makingIntent")
+        if not crucible.get("consumerCanStartBy"):
+            raise ValueError(f"world crucible {index} missing consumerCanStartBy")
+        if not crucible.get("graduationQuestion"):
+            raise ValueError(f"world crucible {index} missing graduationQuestion")
+        if not (crucible.get("stewardship") or {}).get("owner"):
+            raise ValueError(f"world crucible {index} missing stewardship owner")
+        if not (crucible.get("sourceOwnership") or {}).get("owner"):
+            raise ValueError(f"world crucible {index} missing sourceOwnership owner")
         for apparition_index, apparition in enumerate(crucible.get("smokeApparitions") or []):
             if not apparition.get("route"):
                 raise ValueError(f"world crucible {index} smoke apparition {apparition_index} missing route")
@@ -282,6 +298,7 @@ def _world_cartridge_summary(manifest, cartridge_dir):
         "sourceBridges": manifest.get("sourceBridges") or [],
         "affordanceBindings": manifest.get("affordanceBindings") or [],
         "generationBasins": manifest.get("generationBasins") or [],
+        "firstUseTrial": first_use_trial,
         "crucibles": crucibles,
         "crucibleCount": len(crucibles),
         "witnessCount": len(manifest.get("witnesses") or []),

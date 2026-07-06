@@ -118,6 +118,67 @@
       "affordances": ["mushfinger-motion-agency", "world-chamber-lerms-underhill"]
     }
   ],
+  "firstUseTrial": {
+    "schema": "kaminos.world-cartridge.first-use-trial.v0",
+    "entryRoute": "/api/world-cartridges",
+    "firstMove": "choose_crucible",
+    "chooseCrucible": "Choose the crucible whose armature and handles match the part of the lerms terrarium work your lane can move. A valid first use begins by naming the cartridge, naming one crucible, naming one armature, naming one handle, and running one firing.",
+    "trialSteps": [
+      "enter_cartridge",
+      "choose_crucible",
+      "name_armature",
+      "name_handle",
+      "run_firing",
+      "emit_shard_or_cast",
+      "write_receipt",
+      "answer_graduation_question"
+    ],
+    "allowedOutputs": [
+      "firing_receipt",
+      "shard",
+      "cast",
+      "smoke_apparition_route",
+      "graduation_report",
+      "gap_report"
+    ],
+    "failureSignals": [
+      "no_crucible_chosen",
+      "no_armature_named",
+      "no_handle_used",
+      "no_firing_recorded",
+      "output_not_classified_as_shard_cast_or_receipt",
+      "graduation_question_absent",
+      "source_ownership_blurred_with_workbench_stewardship"
+    ],
+    "consumerCoverage": [
+      {
+        "consumer": "hill-of-hills-fucker",
+        "crucibles": ["hill-of-hills"],
+        "firstUse": "Choose `hill-of-hills`, name the chamber or terrain-state armature, use one terrain handle, run one firing, and leave a terrain receipt."
+      },
+      {
+        "consumer": "lerm-horde-fucker",
+        "crucibles": ["lerm-species"],
+        "firstUse": "Choose `lerm-species`, name the creature/body armature, use one motion or attention handle, run one firing, and leave a creature receipt."
+      },
+      {
+        "consumer": "lerm-feel-fucker",
+        "crucibles": ["finger-fluid", "glove-emitter"],
+        "firstUse": "Choose `finger-fluid` when the firing is about emitted interaction or creature response; choose `glove-emitter` when the firing is about hand/glove route control or live compositing."
+      },
+      {
+        "consumer": "big-papa-finger-juice-fucker",
+        "crucibles": ["finger-fluid"],
+        "firstUse": "Choose `finger-fluid`, name the hand-state or fluid interaction armature, use one emitter handle, run one firing, and leave a fluid receipt."
+      },
+      {
+        "consumer": "greedy-glove-fucker",
+        "crucibles": ["glove-emitter"],
+        "firstUse": "Choose `glove-emitter`, name the native-host armature, use one source-route handle, run one firing, and leave a glove receipt."
+      }
+    ],
+    "graduationQuestion": "After this firing, should the result remain in the Kaminos terrarium, become a lerms domain-native patch, become a shared runtime candidate, ship as a Kaminos-backed shell, or archive as prototype memory?"
+  },
   "crucibles": [
     {
       "schema": "kaminos.world-crucible.descriptor.v0",
@@ -126,6 +187,7 @@
       "role": "Terrain phase-space crucible for semantic topological gradients, chamber placement, and future terrain hologram smokes.",
       "status": "fixture_seed",
       "makingIntent": "Let Kaminos host the Hill as a manipulable terrain world while lerms keeps the game-specific terrain law that survives the smoke.",
+      "consumerCanStartBy": "Run a firing that mounts one terrain or route behavior onto the lerms-underhill chamber armature, uses a terrain posture or semantic phase handle, and leaves a receipt classifying the output as a shard, cast, or gap.",
       "armatures": [
         {
           "id": "lerms-underhill-chamber",
@@ -187,6 +249,15 @@
         }
       ],
       "graduationMode": "remain_in_kaminos_terrarium",
+      "graduationQuestion": "Does this terrain firing remain a Kaminos terrarium surface, become lerms domain-native terrain law, or expose a shared terrain/path runtime candidate?",
+      "stewardship": {
+        "owner": "minion-spawnfucker",
+        "role": "Kaminos cartridge and crucible workbench stewardship"
+      },
+      "sourceOwnership": {
+        "owner": "hill-of-hills-fucker",
+        "role": "Hill terrain source packets and domain terrain behavior"
+      },
       "custody": {
         "owner": "minion-spawnfucker",
         "sourceRepo": "kaminos",
@@ -200,6 +271,7 @@
       "role": "Creature body, posture, gait, and interaction crucible for taste-first creature making.",
       "status": "fixture_seed",
       "makingIntent": "Give agent lanes a Kaminos workbench for composing lerm bodies and behaviors from existing actor, station, and motion affordances.",
+      "consumerCanStartBy": "Run a firing that mounts one lerm body, posture, or behavior take onto a creature or actor armature, uses one motion or attention handle, and leaves a receipt classifying the output as a shard, cast, or gap.",
       "armatures": [
         {
           "id": "little-body-variants",
@@ -254,6 +326,15 @@
         }
       ],
       "graduationMode": "remain_in_kaminos_terrarium",
+      "graduationQuestion": "Does this creature firing remain a Kaminos terrarium example, move into lerms species/gameplay implementation, or become shared motion/body vocabulary?",
+      "stewardship": {
+        "owner": "minion-spawnfucker",
+        "role": "Kaminos crucible workflow and consumer trial stewardship"
+      },
+      "sourceOwnership": {
+        "owner": "lerm-horde-fucker",
+        "role": "Lerm species/body/gameplay source direction, with Mushfinger owning reusable motion substrate"
+      },
       "custody": {
         "owner": "mushfinger-clayfucker",
         "sourceRepo": "kaminos",
@@ -267,6 +348,7 @@
       "role": "Hand-emitted fluid, smoke, and creature-response crucible for direct operator interaction.",
       "status": "fixture_seed",
       "makingIntent": "Let hand-state experiments become visible Kaminos interactions before lerms chooses the domain-native gameplay shape.",
+      "consumerCanStartBy": "Run a firing that mounts one fluid emission or creature response onto the hand-state armature, uses one state-stream or emitter handle, and leaves a receipt classifying the output as a shard, cast, or gap.",
       "armatures": [
         {
           "id": "finger-fluid-interactions",
@@ -321,6 +403,15 @@
         }
       ],
       "graduationMode": "extract_shared_runtime",
+      "graduationQuestion": "Does this finger-fluid firing remain a Kaminos terrarium affordance, move into lerms gameplay, or become shared hand/fluid runtime?",
+      "stewardship": {
+        "owner": "palm-daddy",
+        "role": "Workbench success and hand-surface integration stewardship"
+      },
+      "sourceOwnership": {
+        "owner": "big-papa-finger-juice-fucker",
+        "role": "Finger-fluid subsystem source payloads, solver direction, and smoke targets"
+      },
       "custody": {
         "owner": "palm-daddy",
         "sourceRepo": "shared-runtime-candidate",
@@ -334,6 +425,7 @@
       "role": "Glovewell native-host adapter crucible for proving that Kaminos can be the happy path for visual smokes.",
       "status": "fixture_seed",
       "makingIntent": "Keep the glove work inside the Kaminos bench while making the reusable hand/glove route obvious enough for consumer lanes to follow.",
+      "consumerCanStartBy": "Run a firing that mounts one glove or hand-surface source route onto a native-host armature, uses one smoke-offer or source-route handle, and leaves a receipt classifying the output as a shard, cast, or gap.",
       "armatures": [
         {
           "id": "palm-hand-surface-runtime",
@@ -388,6 +480,15 @@
         }
       ],
       "graduationMode": "extract_shared_runtime",
+      "graduationQuestion": "Does this glove firing remain a Kaminos adapter recipe, move into lerms/glove implementation, or become shared hand-state/native-host runtime?",
+      "stewardship": {
+        "owner": "palm-daddy",
+        "role": "Workbench success and hand/glove integration stewardship"
+      },
+      "sourceOwnership": {
+        "owner": "greedy-glove-fucker",
+        "role": "Glovewell source packets, glove gameplay semantics, and native-host target payloads"
+      },
       "custody": {
         "owner": "palm-daddy",
         "sourceRepo": "shared-runtime-candidate",
