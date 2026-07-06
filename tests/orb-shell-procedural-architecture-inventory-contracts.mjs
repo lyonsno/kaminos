@@ -15,6 +15,11 @@ assert.match(core, /enableProceduralArchitectureInventoryWitness/, 'browser witn
 assert.match(core, /proceduralArchitectureInventoryDebugState/, 'browser witness must expose a compact architecture inventory debug state');
 assert.match(witness, /procedural-architecture-inventory/, 'headless witness must know the architecture inventory focus');
 assert.match(witness, /proceduralArchitectureInventoryDebugState/, 'headless architecture focus must avoid the full generic debug state payload');
+assert.match(
+  witness,
+  /proceduralArchitectureInventory: state\?\.proceduralArchitectureInventory/,
+  'headless witness failure report must preserve the architecture x-ray state after visual capture failure',
+);
 assert.match(index, /orbShellFocus === 'procedural-architecture-inventory'/, 'operator route must expose procedural architecture focus');
 assert.match(index, /enableProceduralArchitectureInventoryWitness/, 'operator route must activate procedural architecture witness');
 

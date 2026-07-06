@@ -50,6 +50,9 @@ const requestedUiControls = {
   leafCount: uiLeafCountRaw === undefined ? null : Number(uiLeafCountRaw),
 };
 const shouldApplyUiControls = Number.isFinite(requestedUiControls.seed) || Number.isFinite(requestedUiControls.leafCount);
+const reportFirstVisualOptionalFocuses = new Set([
+  'procedural-architecture-inventory',
+]);
 
 let phase = 'init';
 let browser = null;
@@ -653,22 +656,22 @@ async function main() {
       `);
     }
     phase = 'screenshot';
-    let captureOptions = { format: 'png', captureBeyondViewport: false };
-    if (
-      clipCanvas
-      || focus === 'side-rim-clean-topology'
-      || focus === 'live-terminal-caps'
-      || focus === 'aperture-tangency'
-      || focus === 'aperture-orbit-capture'
-      || focus === 'procedural-architecture-inventory'
-      || focus === 'lower-socket-semantic-render-inventory'
-      || focus === 'material-truth'
-      || focus === 'pre-hdr-warm'
-      || focus === 'spatial-truth'
-    ) {
-      captureOptions = await canvasCaptureOptions(ws, focus);
-    }
     try {
+      let captureOptions = { format: 'png', captureBeyondViewport: false };
+      if (
+        clipCanvas
+        || focus === 'side-rim-clean-topology'
+        || focus === 'live-terminal-caps'
+        || focus === 'aperture-tangency'
+        || focus === 'aperture-orbit-capture'
+        || focus === 'procedural-architecture-inventory'
+        || focus === 'lower-socket-semantic-render-inventory'
+        || focus === 'material-truth'
+        || focus === 'pre-hdr-warm'
+        || focus === 'spatial-truth'
+      ) {
+        captureOptions = await canvasCaptureOptions(ws, focus);
+      }
       primaryCapture = await capturePng(ws, out, captureOptions);
       visualCaptureCompleted = true;
       if (focus === 'spatial-truth' && contactSheetOut) {
@@ -685,7 +688,7 @@ async function main() {
         phase,
         message: error.message,
       };
-      throw error;
+      if (!reportFirstVisualOptionalFocuses.has(focus)) throw error;
     }
 
     phase = 'structural-assertions';
@@ -966,7 +969,7 @@ async function main() {
     assert.ok(state?.forbiddenFailureClasses?.includes('strip-soup'), 'failure class evidence missing');
     }
     await assertCompositionStructuralInvariants();
-    const stats = primaryCapture.stats;
+    const stats = primaryCapture?.stats ?? null;
     ws.close();
 
     writeReport({
@@ -978,7 +981,7 @@ async function main() {
       phase,
       visualCaptureCompleted,
       visualCaptureFailure,
-      screenshot: { path: out, bytes: stats.bytes },
+      screenshot: primaryCapture ? { path: out, bytes: stats.bytes } : null,
       visualStats: stats,
       macroAssemblageCount: state.macroAssemblageCount,
       MacroAssemblageCountLaw: state.MacroAssemblageCountLaw,
@@ -1220,6 +1223,12 @@ async function main() {
       SocketTongueCandidate: state?.SocketTongueCandidate,
       socketTongueCandidateCount: state?.socketTongueCandidateCount,
       socketTongueBestCandidateId: state?.socketTongueBestCandidateId,
+      OrbShellProceduralArchitectureInventory: state?.OrbShellProceduralArchitectureInventory,
+      proceduralArchitectureInventory: state?.proceduralArchitectureInventory,
+      proceduralArchitectureInventoryRecordCount: state?.proceduralArchitectureInventoryRecordCount,
+      proceduralArchitectureInventoryLayerCounts: state?.proceduralArchitectureInventoryLayerCounts,
+      proceduralArchitectureInventorySemanticClassCounts: state?.proceduralArchitectureInventorySemanticClassCounts,
+      proceduralArchitectureInventorySourceStageCounts: state?.proceduralArchitectureInventorySourceStageCounts,
       ApertureAwareTerminusRenderConsumer: state?.ApertureAwareTerminusRenderConsumer,
       apertureAwareTerminusRenderConsumerCount: state?.apertureAwareTerminusRenderConsumerCount,
       ApertureAwareTerminus: state?.ApertureAwareTerminus,

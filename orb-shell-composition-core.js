@@ -5211,6 +5211,16 @@ function createMacroSphereCurveDecomposition(assemblage, sampleCount = 48, radiu
   };
 }
 
+function triangleCircumradius(a, b, c) {
+  const ab = pointDistance(a, b);
+  const bc = pointDistance(b, c);
+  const ca = pointDistance(c, a);
+  const cross = crossPoints(subtractPoints(b, a), subtractPoints(c, a));
+  const doubleArea = Math.hypot(...cross);
+  if (doubleArea < 1e-8 || ab < 1e-8 || bc < 1e-8 || ca < 1e-8) return Infinity;
+  return (ab * bc * ca) / (2 * doubleArea);
+}
+
 function curveMorphologyMetrics(points) {
   const finitePoints = (points || []).filter(point => (
     Array.isArray(point)
@@ -5228,6 +5238,8 @@ function curveMorphologyMetrics(points) {
       meanTurnAngle: 0,
       turnEnergy: 0,
       estimatedInflectionCount: 0,
+      minimumCurvatureRadius: Infinity,
+      maximumCurvature: 0,
     };
   }
   let length = 0;
@@ -5263,6 +5275,12 @@ function curveMorphologyMetrics(points) {
   }
   const turnEnergy = turnAngles.reduce((sum, angle) => sum + Math.abs(angle), 0);
   const maxTurnAngle = Math.max(0, ...turnAngles);
+  const curvatureRadii = [];
+  for (let index = 1; index < finitePoints.length - 1; index++) {
+    const radius = triangleCircumradius(finitePoints[index - 1], finitePoints[index], finitePoints[index + 1]);
+    if (Number.isFinite(radius)) curvatureRadii.push(radius);
+  }
+  const minimumCurvatureRadius = curvatureRadii.length ? Math.min(...curvatureRadii) : Infinity;
   return {
     schema: 'MacroCurveMorphologyMetrics',
     sampleCount: finitePoints.length,
@@ -5276,7 +5294,57 @@ function curveMorphologyMetrics(points) {
     meanTurnAngle: turnAngles.length ? turnEnergy / turnAngles.length : 0,
     turnEnergy,
     estimatedInflectionCount,
+    minimumCurvatureRadius,
+    maximumCurvature: Number.isFinite(minimumCurvatureRadius) && minimumCurvatureRadius > 0
+      ? 1 / minimumCurvatureRadius
+      : 0,
   };
+}
+
+function createCurvatureWidthCapLaw(assemblage) {
+  const earlySphereCurve = createMacroSphereCurveDecomposition(assemblage);
+  const sourceCurveMetrics = curveMorphologyMetrics(earlySphereCurve.samples.map(sample => sample.point));
+  const body = assemblage.territoryBodyOccupancy;
+  const promoted = assemblage.macroPromotedBody;
+  const expanded = assemblage.expandedRegionProxy;
+  const curvatureRadiusWidthRatio = 0.22;
+  const uncappedPeakSideWidth = (body?.widthProfile?.mid || 0.16)
+    * (promoted?.promotedBodyScale || 1.22)
+    * (expanded?.coverageScale || 1);
+  const minimumCurvatureRadius = sourceCurveMetrics.minimumCurvatureRadius;
+  const curvatureLimitedSideWidth = Number.isFinite(minimumCurvatureRadius)
+    ? minimumCurvatureRadius * curvatureRadiusWidthRatio
+    : uncappedPeakSideWidth;
+  const maxSideWidth = Math.min(uncappedPeakSideWidth, curvatureLimitedSideWidth);
+  const widthScale = uncappedPeakSideWidth > 1e-6
+    ? clamp(maxSideWidth / uncappedPeakSideWidth, 0, 1)
+    : 1;
+  return {
+    schema: 'CurvatureWidthCapLaw',
+    mode: 'macrostrip-width-limited-by-source-curve-curvature-v0',
+    sourceStage: 'post-variation-pre-promotion-sphere-line',
+    parentAssemblage: assemblage.id,
+    sourceCurveId: earlySphereCurve.id,
+    curvatureRadiusWidthRatio,
+    minimumCurvatureRadius,
+    maximumCurvature: sourceCurveMetrics.maximumCurvature,
+    uncappedPeakSideWidth,
+    curvatureLimitedSideWidth,
+    maxSideWidth,
+    widthScale,
+    capApplied: widthScale < 0.995,
+    visualIntent: 'prevent a wide promoted macrostrip from crimping across a tighter source curve than it can physically carry',
+  };
+}
+
+function attachCurvatureWidthCapLaws(composition) {
+  for (const assemblage of composition.macroAssemblages || []) {
+    if (!assemblage.macroPromotedBody) continue;
+    const law = createCurvatureWidthCapLaw(assemblage);
+    assemblage.curvatureWidthCapLaw = law;
+    assemblage.macroPromotedBody.curvatureWidthCapLaw = law;
+  }
+  return composition;
 }
 
 function aggregateSideWallMetrics(sideWalls) {
@@ -5333,6 +5401,7 @@ function createMacroMorphologyInventoryRecord(composition, assemblage) {
   const promotedCenterlineMetrics = curveMorphologyMetrics(promotedPoints);
   const sideWallMetrics = aggregateSideWallMetrics(sideWalls);
   const substripFamilyMetrics = aggregateSubstripMetrics(substrips);
+  const curvatureWidthCapLaw = assemblage.macroPromotedBody?.curvatureWidthCapLaw || assemblage.curvatureWidthCapLaw || null;
   const renderClassComparison = retiredParentIds.includes(assemblage.id) && substrips.length
     ? 'parent-owned-substrip-family'
     : retiredParentIds.includes(assemblage.id)
@@ -5357,6 +5426,9 @@ function createMacroMorphologyInventoryRecord(composition, assemblage) {
   if (renderClassComparison === 'parent-owned-substrip-family' && substrips.length >= 2) {
     pathologyClasses.push('strip-family-visually-forgiving');
   }
+  if (curvatureWidthCapLaw?.capApplied) {
+    pathologyClasses.push('curvature-width-cap-applied');
+  }
   if (assemblage.id === 'lower-socket-keel') {
     pathologyClasses.push('wandering-s-hook-visible-offender');
   }
@@ -5373,6 +5445,7 @@ function createMacroMorphologyInventoryRecord(composition, assemblage) {
     promotedCenterlineMetrics,
     sideWallMetrics,
     substripFamilyMetrics,
+    curvatureWidthCapLaw,
     pathologyClasses: [...new Set(pathologyClasses)],
     diagnosticQuestion: [
       assemblage.id === 'lower-socket-keel'
@@ -5442,6 +5515,18 @@ function compactProceduralArchitectureInventory(inventory) {
     layerCounts: inventory.layerCounts,
     semanticClassCounts: inventory.semanticClassCounts,
     sourceStageCounts: inventory.sourceStageCounts,
+    externalRouteXrayCount: inventory.externalRouteXrayCount,
+    externalRouteXrays: (inventory.externalRouteXrays || []).map(xray => ({
+      id: xray.id,
+      schema: xray.schema,
+      mode: xray.mode,
+      sourceDiaulos: xray.sourceDiaulos,
+      routeIdentity: xray.routeIdentity,
+      yieldingContract: xray.yieldingContract,
+      positiveSmokeEvidence: xray.positiveSmokeEvidence,
+      evidenceBoundary: xray.evidenceBoundary,
+      sourceReceipts: xray.sourceReceipts,
+    })),
     unresolvedArchitectureQuestions: inventory.unresolvedArchitectureQuestions,
     diagnosticVerdict: inventory.diagnosticVerdict,
     records: (inventory.records || []).map(record => ({
@@ -5704,6 +5789,86 @@ function createSocketTongueStressArchitectureRecord(composition, candidate) {
   };
 }
 
+function createCranialYieldingRouteXray() {
+  return {
+    schema: 'ExternalYieldingRouteXray',
+    mode: 'cranial-phase-program-yielding-route-xray-v0',
+    id: 'cranial-depth-enema-yielding-route-xray',
+    sourceDiaulos: 'cranial-depth-enema',
+    sourceReceipts: [
+      'webgpu-kit-phase-program-019-landed-2026-07-05',
+      'cranial-webgpu-kit-phase-program-landing-2026-07-05',
+      'cranial-sharp-vit-block-chunking-2026-07-05',
+      'cranial-sharp-vit2-positive-smoke-rerun-2026-07-05',
+      'cranial-sharp-vit2-contention-failure-2026-07-05',
+    ],
+    routeIdentity: {
+      package: '@kaminos/webgpu-inference-kit',
+      packageVersion: '0.1.9',
+      mainCommit: '874ac000d57e865ef500f2f84a3110c2014e4008',
+      phaseProgramSchema: 'kaminos.webgpu-phase-program.v0',
+      phaseProgramRunSchema: 'kaminos.webgpu-phase-program-run.v0',
+      schedulerVerificationReceiptSchema: 'kaminos.webgpu-scheduler-verification-receipt.v0',
+      sharpRouteId: 'sharp.image-to-splat.webgpu-local.v0',
+      sharpVitBlockChunkCommit: '614e42f444fe0a8782e5f7e585465f7fb2a32019',
+    },
+    localSubstrate: {
+      packagePath: 'webgpu-inference-kit/src/index.js',
+      packageVersion: '0.1.9',
+      functionAvailability: {
+        defineWebGpuPhaseProgram: 'function',
+        runWebGpuPhaseProgram: 'function',
+        createCooperativeYield: 'function',
+      },
+    },
+    yieldingContract: {
+      primitive: 'createCooperativeYield',
+      phaseProgramFields: [
+        'phase.yieldAfter',
+        'phase.yieldReason',
+        'yieldPolicy.afterEachKernel',
+      ],
+      schedulerFields: [
+        'phaseChunkSize.vitBlock',
+        'vitBlockChunkSize',
+        'phaseChunkSize.spnPatch',
+        'spnPatchChunkSize',
+      ],
+      observedBoundaries: [
+        'vit-block-chunk',
+        'queue-work-done-start',
+        'queue-work-done-end',
+        'yield-start',
+        'yield-end',
+      ],
+      routeStageBoundary: 'phase-edge-yield-after-kernel-or-readback',
+    },
+    positiveSmokeEvidence: {
+      source: 'sharp-vit-block-chunking positive coherent-output smoke',
+      routeEvidence: 'authoritative-live-webgpu',
+      valid: 'OK',
+      plyAvailable: true,
+      gaussianCount: 1179648,
+      schedulerVerificationState: 'verified',
+      scheduler: {
+        mode: 'cooperative',
+        spnPatchChunkSize: 1,
+        vitBlockChunkSize: 2,
+        yieldMs: 0,
+      },
+      witness: '/tmp/sharp-vit2-positive-smoke-rerun.json',
+    },
+    evidenceBoundary: {
+      contentionPastGaussianPostSpn: 'not-proven',
+      accelerationClaim: 'not-claimed',
+      lamellarGeometryImpact: 'diagnostic-substrate-only',
+      currentUse: 'xray-route-identity-before-consumption',
+      failureEvidence: 'contended full-route witness reached gaussian/post-SPN work then failed with Waiting failed',
+    },
+    xrayDisposition: 'local-substrate-visible-consumption-not-yet-integrated',
+  };
+}
+
 function createProceduralArchitectureInventory(composition) {
   const records = [];
   for (const assemblage of composition.macroAssemblages || []) {
@@ -5720,6 +5885,9 @@ function createProceduralArchitectureInventory(composition) {
       records.push(createSocketTongueStressArchitectureRecord(composition, candidate));
     }
   }
+  const externalRouteXrays = [
+    createCranialYieldingRouteXray(),
+  ];
   return {
     schema: 'OrbShellProceduralArchitectureInventory',
     mode: ORB_SHELL_PROCEDURAL_ARCHITECTURE_INVENTORY_MODE,
@@ -5728,6 +5896,8 @@ function createProceduralArchitectureInventory(composition) {
     visualDecompositionMode: 'curve-first-semantic-objects-before-mesh-caps-materials',
     records,
     recordCount: records.length,
+    externalRouteXrays,
+    externalRouteXrayCount: externalRouteXrays.length,
     layerCounts: countBy(records, 'objectLayer'),
     semanticClassCounts: countBy(records, 'semanticClass'),
     sourceStageCounts: records.reduce((counts, record) => {
