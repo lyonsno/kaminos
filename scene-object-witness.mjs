@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
+import { inflateSync } from 'node:zlib';
 
 const args = new Map();
 for (let i = 2; i < process.argv.length; i += 2) {
@@ -68,6 +69,196 @@ async function capturePngScreenshot(ws, screenshotPath) {
   mkdirSync(dirname(screenshotPath), { recursive: true });
   writeFileSync(screenshotPath, png);
   return { path: screenshotPath, bytes: png.length };
+}
+
+function decodePng8(buffer) {
+  assert.equal(buffer.readUInt32BE(0), 0x89504e47, 'screenshot is not a PNG');
+  let offset = 8;
+  let width = 0;
+  let height = 0;
+  let bitDepth = 0;
+  let colorType = 0;
+  let interlace = 0;
+  const idat = [];
+  while (offset < buffer.length) {
+    const length = buffer.readUInt32BE(offset);
+    const type = buffer.toString('ascii', offset + 4, offset + 8);
+    const dataStart = offset + 8;
+    const dataEnd = dataStart + length;
+    const data = buffer.subarray(dataStart, dataEnd);
+    if (type === 'IHDR') {
+      width = data.readUInt32BE(0);
+      height = data.readUInt32BE(4);
+      bitDepth = data[8];
+      colorType = data[9];
+      interlace = data[12];
+    } else if (type === 'IDAT') {
+      idat.push(data);
+    } else if (type === 'IEND') {
+      break;
+    }
+    offset = dataEnd + 4;
+  }
+  if (bitDepth !== 8 || interlace !== 0 || (colorType !== 2 && colorType !== 6)) {
+    throw new Error(`unsupported PNG format for visual sample: bitDepth=${bitDepth} colorType=${colorType} interlace=${interlace}`);
+  }
+  const channels = colorType === 6 ? 4 : 3;
+  const stride = width * channels;
+  const raw = inflateSync(Buffer.concat(idat));
+  const pixels = Buffer.alloc(width * height * channels);
+  let src = 0;
+  for (let y = 0; y < height; y += 1) {
+    const filter = raw[src++];
+    const rowStart = y * stride;
+    const prevStart = (y - 1) * stride;
+    for (let x = 0; x < stride; x += 1) {
+      const left = x >= channels ? pixels[rowStart + x - channels] : 0;
+      const up = y > 0 ? pixels[prevStart + x] : 0;
+      const upLeft = y > 0 && x >= channels ? pixels[prevStart + x - channels] : 0;
+      const p = left + up - upLeft;
+      const pa = Math.abs(p - left);
+      const pb = Math.abs(p - up);
+      const pc = Math.abs(p - upLeft);
+      const predictor = pa <= pb && pa <= pc ? left : (pb <= pc ? up : upLeft);
+      const encoded = raw[src++];
+      let value = encoded;
+      if (filter === 1) value = encoded + left;
+      else if (filter === 2) value = encoded + up;
+      else if (filter === 3) value = encoded + Math.floor((left + up) / 2);
+      else if (filter === 4) value = encoded + predictor;
+      else if (filter !== 0) throw new Error(`unsupported PNG filter ${filter}`);
+      pixels[rowStart + x] = value & 0xff;
+    }
+  }
+  return { width, height, channels, pixels };
+}
+
+function sampleRealHybridScreenshot(buffer, evidence) {
+  const image = decodePng8(buffer);
+  const hostRect = evidence?.overlayHost?.rect || { x: 0, y: 0, width: image.width, height: image.height };
+  const probe = evidence?.cameraCoherence?.projectionProbeB?.pbrnextOverlayScreen
+    || evidence?.cameraCoherence?.projectionProbeA?.pbrnextOverlayScreen
+    || { x: hostRect.width / 2, y: hostRect.height / 2 };
+  const hostRight = Math.max(1, hostRect.x + hostRect.width);
+  const hostBottom = Math.max(1, hostRect.y + hostRect.height);
+  const scaleX = image.width / hostRight;
+  const scaleY = image.height / hostBottom;
+  const cx = Math.round((hostRect.x + probe.x) * scaleX);
+  const cy = Math.round((hostRect.y + probe.y) * scaleY);
+  const radius = 140;
+  let minX = Math.max(0, cx - radius);
+  let maxX = Math.min(image.width - 1, cx + radius);
+  let minY = Math.max(0, cy - radius);
+  let maxY = Math.min(image.height - 1, cy + radius);
+  if (maxX < minX || maxY < minY) {
+    minX = Math.max(0, Math.round(hostRect.x * scaleX));
+    maxX = Math.min(image.width - 1, Math.round((hostRect.x + hostRect.width) * scaleX));
+    minY = Math.max(0, Math.round(hostRect.y * scaleY));
+    maxY = Math.min(image.height - 1, Math.round((hostRect.y + hostRect.height) * scaleY));
+  }
+  let sampledPixels = 0;
+  let edgePixels = 0;
+  let emissivePixels = 0;
+  let brightPixels = 0;
+  const lumaAt = (x, y) => {
+    const index = (y * image.width + x) * image.channels;
+    const r = image.pixels[index];
+    const g = image.pixels[index + 1];
+    const b = image.pixels[index + 2];
+    return { r, g, b, y: 0.2126 * r + 0.7152 * g + 0.0722 * b };
+  };
+  for (let y = minY; y <= maxY; y += 1) {
+    for (let x = minX; x <= maxX; x += 1) {
+      const p = lumaAt(x, y);
+      sampledPixels += 1;
+      if (p.r > 120 && p.g > 35 && p.g < 190 && p.b < 110 && p.r > p.g * 1.12) emissivePixels += 1;
+      if (p.r + p.g + p.b > 420) brightPixels += 1;
+      if (x < maxX) {
+        const r = lumaAt(x + 1, y);
+        if (Math.abs(p.y - r.y) > 18) edgePixels += 1;
+      }
+      if (y < maxY) {
+        const d = lumaAt(x, y + 1);
+        if (Math.abs(p.y - d.y) > 18) edgePixels += 1;
+      }
+    }
+  }
+  return {
+    sampled: true,
+    image: { width: image.width, height: image.height, channels: image.channels },
+    center: { x: cx, y: cy },
+    rect: { x: minX, y: minY, width: maxX - minX + 1, height: maxY - minY + 1 },
+    sampledPixels,
+    edgePixels,
+    emissivePixels,
+    brightPixels,
+    visible: edgePixels > 500 || emissivePixels > 8 || brightPixels > 100,
+  };
+}
+
+function assertRealHybridScreenshotVisible(screenshotPath) {
+  const evidence = lastEvidence.realHybridSplatOverlay;
+  if (!evidence) return;
+  const sample = sampleRealHybridScreenshot(readFileSync(screenshotPath), evidence);
+  evidence.screenshotSample = sample;
+  if ((evidence.afterSample?.visiblePixels || 0) <= 0 && !sample.visible) {
+    throw new Error(`real hybrid splat overlay screenshot has no visible splat-region geometry: ${JSON.stringify({
+      afterSample: evidence.afterSample,
+      screenshotSample: sample,
+      overlayDebug: evidence.overlayDebug,
+    })}`);
+  }
+}
+
+function screenshotPointForHostScreen(image, hostRect, screen) {
+  const hostRight = Math.max(1, hostRect.x + hostRect.width);
+  const hostBottom = Math.max(1, hostRect.y + hostRect.height);
+  return {
+    x: Math.round((hostRect.x + screen.x) * (image.width / hostRight)),
+    y: Math.round((hostRect.y + screen.y) * (image.height / hostBottom)),
+  };
+}
+
+function comparePngRegion(pathA, pathB, evidence, radius = 90) {
+  const a = decodePng8(readFileSync(pathA));
+  const b = decodePng8(readFileSync(pathB));
+  if (a.width !== b.width || a.height !== b.height || a.channels !== b.channels) {
+    throw new Error(`cannot compare screenshots with different formats: ${pathA} vs ${pathB}`);
+  }
+  const hostRect = evidence?.overlayHost?.rect || { x: 0, y: 0, width: a.width, height: a.height };
+  const screen = evidence?.occluder?.screen;
+  const center = screenshotPointForHostScreen(a, hostRect, screen || { x: hostRect.width / 2, y: hostRect.height / 2 });
+  const minX = Math.max(0, center.x - radius);
+  const maxX = Math.min(a.width - 1, center.x + radius);
+  const minY = Math.max(0, center.y - radius);
+  const maxY = Math.min(a.height - 1, center.y + radius);
+  let sampledPixels = 0;
+  let changedPixels = 0;
+  let absDiffSum = 0;
+  let maxDiff = 0;
+  for (let y = minY; y <= maxY; y += 1) {
+    for (let x = minX; x <= maxX; x += 1) {
+      const index = (y * a.width + x) * a.channels;
+      const dr = Math.abs(a.pixels[index] - b.pixels[index]);
+      const dg = Math.abs(a.pixels[index + 1] - b.pixels[index + 1]);
+      const db = Math.abs(a.pixels[index + 2] - b.pixels[index + 2]);
+      const diff = dr + dg + db;
+      sampledPixels += 1;
+      absDiffSum += diff;
+      maxDiff = Math.max(maxDiff, diff);
+      if (diff > 40) changedPixels += 1;
+    }
+  }
+  return {
+    sampled: true,
+    center,
+    rect: { x: minX, y: minY, width: maxX - minX + 1, height: maxY - minY + 1 },
+    sampledPixels,
+    changedPixels,
+    changedRatio: sampledPixels > 0 ? changedPixels / sampledPixels : 0,
+    meanAbsDiff: sampledPixels > 0 ? absDiffSum / sampledPixels : 0,
+    maxDiff,
+  };
 }
 
 async function cdpFetch(path, options) {
@@ -289,7 +480,7 @@ async function runHybridRendererModuleWrongServerScenario(ws) {
       let startResult = null;
       let thrown = null;
       try {
-        startResult = await window.startSelectedSplatHybridRenderer?.();
+        startResult = await window.startHybridSplatSceneRenderer?.();
       } catch (error) {
         thrown = String(error?.message || error);
       }
@@ -390,8 +581,9 @@ async function runHybridRendererDefaultPackageRouteScenario(ws) {
   if (evidence.moduleDebug?.status !== 'loaded'
       || evidence.overlayDebug?.status !== 'rendering'
       || evidence.startResult?.status !== 'rendering'
-      || evidence.overlayDebug?.sourceIdentity?.source !== evidence.linked.object.source) {
-    throw new Error(`default package route did not start renderer from the selected splat: ${JSON.stringify(evidence)}`);
+      || evidence.overlayDebug?.rendererMode !== 'scene'
+      || !evidence.overlayDebug?.sceneSplatIds?.includes(evidence.linked.object.id)) {
+    throw new Error(`default package route did not start the scene renderer from the packaged route: ${JSON.stringify(evidence)}`);
   }
 }
 
@@ -3478,7 +3670,7 @@ async function runHybridSplatOverlayScenario(ws) {
           'setSceneContext(context) { const telemetry = { schema: "hybrid-render.scene-context.v0", accepted: true, timestamp: "2026-06-25T00:00:00.000Z", frameId: context?.producer?.frameId || null, honored: { environment: true, environmentIntensity: true, environmentRotation: true, exposure: false, toneMapping: false, lights: false, depthSource: false }, unsupported: ["toneMapping:aces", "lights", "depthSource:host-depth-texture"] }; state.sceneContexts.push(context); state.sceneContextTelemetry = telemetry; publish(); return telemetry; }');
       const moduleUrl = URL.createObjectURL(new Blob([moduleSource], { type: 'text/javascript' }));
       window.kaminosSetHybridSplatOverlayModuleUrl?.(moduleUrl);
-      const startResult = await window.startSelectedSplatHybridRenderer?.();
+      const startResult = await window.startHybridSplatSceneRenderer?.();
       await wait(500);
       const overlayDebug = window.kaminosHybridSplatOverlayDebugState?.() || null;
       const handoffDebug = window.kaminosRenderHandoffDebugState?.(splatObject?.id) || null;
@@ -3679,11 +3871,18 @@ async function runRealHybridSplatOverlayScenario(ws) {
       const assetData = await fetch('/api/assets?kind=splat').then(resp => resp.json());
       const requestedSplatAssetName = ${JSON.stringify(splatAssetName)};
       const assetEntries = assetData.entries || [];
-      const assetEntry = (requestedSplatAssetName
+      const rendererCapableEntry = entry => !!entry?.source
+        && entry.renderability?.status !== 'not-splat-like'
+        && (entry.size || 0) > 4096;
+      const requestedEntry = requestedSplatAssetName
         ? assetEntries.find(entry => entry.name === requestedSplatAssetName || entry.path === requestedSplatAssetName)
-        : null)
-        || assetEntries.find(entry => entry.correction?.crop?.enabled !== true && (entry.size || 0) > 4096)
-        || assetEntries.find(entry => (entry.size || 0) > 4096)
+        : null;
+      if (requestedEntry?.renderability?.status === 'not-splat-like') {
+        throw new Error(\`requested splat asset is point-cloud-only, not renderer-capable: \${requestedSplatAssetName}\`);
+      }
+      const assetEntry = (requestedEntry && rendererCapableEntry(requestedEntry) ? requestedEntry : null)
+        || assetEntries.find(entry => rendererCapableEntry(entry) && entry.correction?.crop?.enabled !== true)
+        || assetEntries.find(rendererCapableEntry)
         || assetEntries.find(entry => entry.name === 'witness-crop-frame.ply')
         || assetEntries[0]
         || null;
@@ -3707,6 +3906,7 @@ async function runRealHybridSplatOverlayScenario(ws) {
               splatCount: null,
               sidecars: [],
               correction: rendererSmokeCorrection,
+              renderability: assetEntry.renderability || null,
               provenance: {
                 source_group: assetEntry.stage === 'production' ? 'splat-production' : 'splat-inbox',
                 source_url: assetEntry.source,
@@ -3738,7 +3938,7 @@ async function runRealHybridSplatOverlayScenario(ws) {
       }
       const beforeOverlayCanvas = document.querySelector('#hybrid-splat-overlay-host canvas');
       const beforeSample = sampleCanvas(beforeOverlayCanvas);
-      const startResult = await window.startSelectedSplatHybridRenderer?.();
+      const startResult = await window.startHybridSplatSceneRenderer?.();
       await wait(2200);
       const cameraPoseA = window.kaminosSetCameraDebugPose?.({ position: [0, 0.6, 3], target: [0, 0, 0] }) || null;
       await wait(300);
@@ -3831,8 +4031,9 @@ async function runRealHybridSplatOverlayScenario(ws) {
   if (evidence.overlayDebug?.status !== 'rendering' || !evidence.overlayDebug?.canvasConnected) {
     throw new Error(`real hybrid splat overlay did not reach connected rendering state: ${JSON.stringify(evidence)}`);
   }
-  if (evidence.overlayDebug?.sourceIdentity?.source !== evidence.splatObject.source) {
-    throw new Error(`real hybrid splat overlay did not preserve renderer source identity: ${JSON.stringify(evidence)}`);
+  if (evidence.overlayDebug?.rendererMode !== 'scene'
+      || !evidence.overlayDebug?.sceneSplatIds?.includes(evidence.splatObject.id)) {
+    throw new Error(`real hybrid splat overlay did not start as a renderer-owned scene: ${JSON.stringify(evidence)}`);
   }
   const correctionApplication = evidence.overlayDebug?.correctionApplication || {};
   if (evidence.previewDebug?.includedPointCount > 0
@@ -3848,16 +4049,17 @@ async function runRealHybridSplatOverlayScenario(ws) {
   }
   if (evidence.splatObject?.splat?.previewKind === 'point-cloud') {
     const frame = evidence.overlayDebug?.lastFrame || {};
-    if (frame.modelMatrixFrameMode !== 'pbrnext-setModelMatrix-owned') {
-      throw new Error(`real hybrid splat overlay did not hand model matrix ownership to PBRnext: ${JSON.stringify(evidence)}`);
+    if (frame.modelMatrixFrameMode !== 'kaminos-scene-world-pretransformed') {
+      throw new Error(`real hybrid splat overlay did not record scene-world-pretransformed matrix evidence: ${JSON.stringify(evidence)}`);
     }
-    if (frame.assetFrameMode !== 'raw-ply-to-normalized-preview'
-      || !Array.isArray(frame.rawAssetToPreviewMatrix)
-      || frame.rawAssetToPreviewMatrix.length !== 16
-      || frame.rawAssetToPreviewScale <= 0
-      || !Array.isArray(frame.rawAssetBoundsCenter)
-      || frame.rawAssetBoundsCenter.length !== 3) {
-      throw new Error(`real hybrid splat overlay did not bridge raw asset coordinates into the normalized preview frame: ${JSON.stringify(evidence)}`);
+    if (frame.assetFrameMode !== 'scene-world-pretransformed'
+      || !Array.isArray(frame.rendererModelMatrix)
+      || frame.rendererModelMatrix.length !== 16
+      || frame.rendererModelMatrix[0] !== 1
+      || frame.rendererModelMatrix[5] !== 1
+      || frame.rendererModelMatrix[10] !== 1
+      || frame.rendererModelMatrix[15] !== 1) {
+      throw new Error(`real hybrid splat overlay did not use scene-world-pretransformed renderer mode: ${JSON.stringify(evidence)}`);
     }
   }
   const cameraCoherence = evidence.cameraCoherence || {};
@@ -3869,6 +4071,334 @@ async function runRealHybridSplatOverlayScenario(ws) {
   }
   if (!cameraCoherence.uncompensatedWouldInvert) {
     throw new Error(`hybrid splat overlay camera witness did not prove the old PBRnext vertical flip failure path: ${JSON.stringify(cameraCoherence)}`);
+  }
+}
+
+async function runHybridHostDepthOccluderScenario(ws) {
+  await runRealHybridSplatOverlayScenario(ws);
+  phase = 'scenario-hybrid-host-depth-occluder';
+
+  const setup = await evaluate(ws, `
+    (async () => {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      const occluder = window.kaminosPlaceHybridSplatDepthOccluderDebugMesh?.({
+        x: 0,
+        y: 0.06,
+        z: 0.48,
+        width: 0.72,
+        height: 0.72,
+        depth: 0.08,
+      }) || null;
+      await wait(500);
+      const offToggle = window.kaminosSetHybridSplatHostDepthDebugEnabled?.(false) || null;
+      await wait(700);
+      const offDebug = window.kaminosHybridSplatOverlayDebugState?.() || null;
+      const host = document.getElementById('hybrid-splat-overlay-host');
+      const hostRect = host ? (() => {
+        const r = host.getBoundingClientRect();
+        return { x: r.x, y: r.y, width: r.width, height: r.height };
+      })() : null;
+      return {
+        occluder,
+        offToggle,
+        offDebug,
+        overlayHost: { rect: hostRect },
+      };
+    })()
+  `, { timeoutMs: 30000 });
+
+  const offShot = await capturePngScreenshot(ws, siblingPngPath('-host-depth-off'));
+
+  const enable = await evaluate(ws, `
+    (async () => {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      const onToggle = window.kaminosSetHybridSplatHostDepthDebugEnabled?.(true) || null;
+      await wait(900);
+      const onDebug = window.kaminosHybridSplatOverlayDebugState?.() || null;
+      const occluder = window.kaminosHybridSplatDepthOccluderDebugState?.() || null;
+      return { onToggle, onDebug, occluder };
+    })()
+  `, { timeoutMs: 30000 });
+
+  const onShot = await capturePngScreenshot(ws, siblingPngPath('-host-depth-on'));
+  const evidence = {
+    schema: 'kaminos.hybrid-splat.host-depth-occluder-witness.v0',
+    setup,
+    enable,
+    overlayHost: setup.overlayHost,
+    occluder: enable.occluder || setup.occluder,
+    offScreenshot: offShot,
+    onScreenshot: onShot,
+  };
+  evidence.regionDiff = comparePngRegion(offShot.path, onShot.path, evidence, 95);
+  lastEvidence.hybridHostDepthOccluder = evidence;
+
+  if (setup.offDebug?.capabilities?.hostDepthTexture !== false
+    || setup.offDebug?.depthCompositionTelemetry?.source === 'host-depth-texture') {
+    throw new Error(`host-depth occluder witness could not disable host depth for A/B baseline: ${JSON.stringify(evidence)}`);
+  }
+  const onTelemetry = enable.onDebug?.depthCompositionTelemetry || null;
+  if (enable.onDebug?.capabilities?.hostDepthTexture !== true
+    || enable.onDebug?.capabilities?.sharedDevice !== true
+    || onTelemetry?.source !== 'host-depth-texture'
+    || enable.onDebug?.renderError) {
+    throw new Error(`host-depth occluder witness did not activate the shared host-depth route cleanly: ${JSON.stringify(evidence)}`);
+  }
+  if (!evidence.occluder?.active
+    || !Number.isFinite(evidence.occluder?.screen?.x)
+    || !Number.isFinite(evidence.occluder?.screen?.y)
+    || !evidence.overlayHost?.rect) {
+    throw new Error(`host-depth occluder witness did not project a deterministic host occluder: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.regionDiff.changedRatio < 0.025 || evidence.regionDiff.meanAbsDiff < 3.0) {
+    throw new Error(`host-depth occluder witness did not change the projected occluder region when host depth was enabled: ${JSON.stringify(evidence)}`);
+  }
+}
+
+async function runHybridTwoSplatDepthOrderScenario(ws) {
+  await runRealHybridSplatOverlayScenario(ws);
+  phase = 'scenario-hybrid-two-splat-depth-order';
+
+  const setup = await evaluate(ws, `
+    (async () => {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      const overlayDebugBeforePeer = window.kaminosHybridSplatOverlayDebugState?.() || null;
+      const selectedSplatId = overlayDebugBeforePeer?.objectId || null;
+      const selectedSource = overlayDebugBeforePeer?.sourceIdentity?.source || overlayDebugBeforePeer?.loadedSource || null;
+      const beforeSplats = (window.kaminosSceneObjectDebugState?.() || []).filter(record => record.type === 'splat');
+      const assetData = await fetch('/api/assets?kind=splat').then(resp => resp.json());
+      const assetEntries = assetData.entries || [];
+      const rendererCapableEntry = entry => !!entry?.source
+        && entry.renderability?.status !== 'not-splat-like'
+        && (entry.size || 0) > 4096;
+      const peerAsset = assetEntries.find(entry => rendererCapableEntry(entry) && entry.source !== selectedSource)
+        || assetEntries.find(entry => entry.source && entry.source !== selectedSource && entry.renderability?.status !== 'not-splat-like')
+        || null;
+      if (peerAsset && typeof window.greenroomImportSplat === 'function') {
+        await window.greenroomImportSplat(peerAsset.source, peerAsset.name || peerAsset.path || 'peer-splat.ply', peerAsset.display || { title: peerAsset.name || 'Peer Splat' }, {
+          clear: false,
+          metadata: {
+            source: peerAsset.source,
+            fileName: peerAsset.name || peerAsset.path || 'peer-splat.ply',
+            label: peerAsset.display?.title || peerAsset.name || 'Peer Splat',
+            splat: {
+              schema: 'kaminos.splat-asset.v0',
+              assetSource: peerAsset.source,
+              fileName: peerAsset.name || peerAsset.path || 'peer-splat.ply',
+              format: 'ply',
+              bounds: null,
+              splatCount: null,
+              sidecars: [],
+              correction: peerAsset.correction?.crop?.enabled === true ? null : peerAsset.correction || null,
+              renderability: peerAsset.renderability || null,
+              provenance: {
+                source_group: peerAsset.stage === 'production' ? 'splat-production' : 'splat-inbox',
+                source_url: peerAsset.source,
+                root_id: peerAsset.root_id || null,
+                root_label: peerAsset.root_label || null,
+                asset_stage: peerAsset.stage || 'experimental',
+                asset_path: peerAsset.path || null,
+              },
+            },
+          },
+        });
+      }
+      for (let i = 0; i < 120; i++) {
+        const splats = (window.kaminosSceneObjectDebugState?.() || []).filter(record => record.type === 'splat');
+        if (splats.length > beforeSplats.length) break;
+        await wait(125);
+      }
+      const afterSplats = (window.kaminosSceneObjectDebugState?.() || []).filter(record => record.type === 'splat');
+      const peerSplat = afterSplats.find(record => record.id !== selectedSplatId && record.source === peerAsset?.source)
+        || afterSplats.find(record => record.id !== selectedSplatId)
+        || null;
+      if (peerSplat?.id) {
+        window.kaminosSetSceneObjectTransform?.(peerSplat.id, {
+          position: [0, 0.02, 1.15],
+          rotation: [0, 0, 0],
+          scale: [1.05, 1.05, 1.05],
+        });
+      }
+      if (selectedSplatId) window.selectSceneObject?.(selectedSplatId);
+      window.kaminosSetCameraDebugPose?.({ position: [0, 0.72, 3.05], target: [0, 0.03, 0.05] });
+      await wait(500);
+      const reloadSceneResult = await window.reloadHybridSplatSceneRenderer?.();
+      await wait(1600);
+      const sceneDebug = window.kaminosHybridSplatOverlayDebugState?.() || null;
+      const offToggle = window.kaminosSetHybridSplatHostDepthDebugEnabled?.(false) || null;
+      await wait(800);
+      const offDebug = window.kaminosHybridSplatOverlayDebugState?.() || null;
+      const host = document.getElementById('hybrid-splat-overlay-host');
+      const hostRect = host ? (() => {
+        const r = host.getBoundingClientRect();
+        return { x: r.x, y: r.y, width: r.width, height: r.height };
+      })() : null;
+      const peer = window.kaminosHybridSplatPeerDepthDebugState?.(peerSplat?.id) || null;
+      return {
+        selectedSplatId,
+        selectedSource,
+        peerAsset,
+        peerSplat,
+        beforeSplats,
+        afterSplats,
+        reloadSceneResult,
+        sceneDebug,
+        offToggle,
+        offDebug,
+        peer,
+        overlayHost: { rect: hostRect },
+      };
+    })()
+  `, { timeoutMs: 90000 });
+
+  const offShot = await capturePngScreenshot(ws, siblingPngPath('-two-splat-host-depth-off'));
+
+  const enable = await evaluate(ws, `
+    (async () => {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      const onToggle = window.kaminosSetHybridSplatHostDepthDebugEnabled?.(true) || null;
+      await wait(1000);
+      const onDebug = window.kaminosHybridSplatOverlayDebugState?.() || null;
+      const peer = window.kaminosHybridSplatPeerDepthDebugState?.(${JSON.stringify(null)}) || null;
+      const hostDepth = window.kaminosHybridSplatHostDepthDebugState?.() || null;
+      return { onToggle, onDebug, peer, hostDepth };
+    })()
+  `, { timeoutMs: 30000 });
+
+  const onShot = await capturePngScreenshot(ws, siblingPngPath('-two-splat-host-depth-on'));
+  const evidence = {
+    schema: 'kaminos.hybrid-splat.two-splat-depth-order-witness.v0',
+    setup,
+    enable,
+    overlayHost: setup.overlayHost,
+    occluder: enable.peer || setup.peer,
+    offScreenshot: offShot,
+    onScreenshot: onShot,
+  };
+  evidence.regionDiff = comparePngRegion(offShot.path, onShot.path, evidence, 120);
+  lastEvidence.hybridTwoSplatDepthOrder = evidence;
+
+  if (!setup.selectedSplatId || !setup.peerSplat?.id || setup.peerSplat.id === setup.selectedSplatId) {
+    throw new Error(`two-splat depth witness did not create a distinct selected splat plus peer splat: ${JSON.stringify(evidence)}`);
+  }
+  if (setup.offDebug?.capabilities?.hostDepthTexture !== false
+    || setup.offDebug?.depthCompositionTelemetry?.source === 'host-depth-texture') {
+    throw new Error(`two-splat depth witness could not disable host depth for A/B baseline: ${JSON.stringify(evidence)}`);
+  }
+  const onTelemetry = enable.onDebug?.depthCompositionTelemetry || null;
+  if (enable.onDebug?.capabilities?.hostDepthTexture !== true
+    || enable.onDebug?.capabilities?.sharedDevice !== true
+    || onTelemetry?.source !== 'host-depth-texture'
+    || enable.onDebug?.renderError) {
+    throw new Error(`two-splat depth witness did not activate the shared host-depth route cleanly: ${JSON.stringify(evidence)}`);
+  }
+  const sceneSplatIds = setup.sceneDebug?.sceneSplatIds || [];
+  if (setup.sceneDebug?.rendererMode !== 'scene'
+    || !sceneSplatIds.includes(setup.selectedSplatId)
+    || !sceneSplatIds.includes(setup.peerSplat.id)) {
+    throw new Error(`two-splat depth witness did not reload both splats into the scene renderer: ${JSON.stringify(evidence)}`);
+  }
+  const included = enable.hostDepth?.status?.hostDepthIncludedSplatIds || [];
+  const rendererOwned = enable.hostDepth?.status?.rendererOwnedSplatIds || [];
+  if (included.includes(setup.peerSplat.id)
+    || included.includes(setup.selectedSplatId)
+    || !rendererOwned.includes(setup.peerSplat.id)
+    || !rendererOwned.includes(setup.selectedSplatId)) {
+    throw new Error(`two-splat depth witness did not exclude renderer-owned scene splats from the host depth pass: ${JSON.stringify(evidence)}`);
+  }
+  if (!evidence.occluder?.active
+    || !Number.isFinite(evidence.occluder?.screen?.x)
+    || !Number.isFinite(evidence.occluder?.screen?.y)
+    || !evidence.overlayHost?.rect) {
+    throw new Error(`two-splat depth witness did not project a deterministic peer splat: ${JSON.stringify(evidence)}`);
+  }
+  if (!evidence.regionDiff?.sampled) {
+    throw new Error(`two-splat depth witness did not preserve comparable screenshot evidence: ${JSON.stringify(evidence)}`);
+  }
+}
+
+async function runHybridLiveImportSceneMembershipScenario(ws) {
+  await runRealHybridSplatOverlayScenario(ws);
+  phase = 'scenario-hybrid-live-import-scene-membership';
+
+  lastEvidence.hybridLiveImportSceneMembership = await evaluate(ws, `
+    (async () => {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      const beforeDebug = window.kaminosHybridSplatOverlayDebugState?.() || null;
+      const beforeSplats = (window.kaminosSceneObjectDebugState?.() || []).filter(record => record.type === 'splat');
+      const beforeSources = new Set(beforeSplats.map(record => record.source).filter(Boolean));
+      const assetData = await fetch('/api/assets?kind=splat').then(resp => resp.json());
+      const rendererCapableEntry = entry => !!entry?.source
+        && entry.renderability?.status !== 'not-splat-like'
+        && (entry.size || 0) > 4096;
+      const peerAsset = (assetData.entries || []).find(entry => rendererCapableEntry(entry) && !beforeSources.has(entry.source))
+        || (assetData.entries || []).find(entry => entry.source && !beforeSources.has(entry.source) && entry.renderability?.status !== 'not-splat-like')
+        || null;
+      if (peerAsset && typeof window.greenroomImportSplat === 'function') {
+        await window.greenroomImportSplat(peerAsset.source, peerAsset.name || peerAsset.path || 'live-peer-splat.ply', peerAsset.display || { title: peerAsset.name || 'Live Peer Splat' }, {
+          clear: false,
+          metadata: {
+            source: peerAsset.source,
+            fileName: peerAsset.name || peerAsset.path || 'live-peer-splat.ply',
+            label: peerAsset.display?.title || peerAsset.name || 'Live Peer Splat',
+            splat: {
+              schema: 'kaminos.splat-asset.v0',
+              assetSource: peerAsset.source,
+              fileName: peerAsset.name || peerAsset.path || 'live-peer-splat.ply',
+              format: 'ply',
+              bounds: null,
+              splatCount: null,
+              sidecars: [],
+              correction: peerAsset.correction?.crop?.enabled === true ? null : peerAsset.correction || null,
+              renderability: peerAsset.renderability || null,
+              provenance: {
+                source_group: peerAsset.stage === 'production' ? 'splat-production' : 'splat-inbox',
+                source_url: peerAsset.source,
+                root_id: peerAsset.root_id || null,
+                root_label: peerAsset.root_label || null,
+                asset_stage: peerAsset.stage || 'experimental',
+                asset_path: peerAsset.path || null,
+              },
+            },
+          },
+        });
+      }
+      let afterSplats = [];
+      let peerSplat = null;
+      let afterDebug = null;
+      for (let i = 0; i < 80; i++) {
+        afterSplats = (window.kaminosSceneObjectDebugState?.() || []).filter(record => record.type === 'splat');
+        peerSplat = afterSplats.find(record => !beforeSplats.some(before => before.id === record.id)) || null;
+        afterDebug = window.kaminosHybridSplatOverlayDebugState?.() || null;
+        if (peerSplat?.id
+          && beforeDebug?.sceneSplatIds?.every(id => afterDebug?.sceneSplatIds?.includes(id))
+          && afterDebug?.sceneSplatIds?.includes(peerSplat.id)) {
+          break;
+        }
+        await wait(125);
+      }
+      const peerVisibility = window.kaminosHybridSplatPeerDepthDebugState?.(peerSplat?.id) || null;
+      const hostDepth = window.kaminosHybridSplatHostDepthDebugState?.() || null;
+      return { beforeDebug, beforeSplats, peerAsset, afterSplats, peerSplat, afterDebug, peerVisibility, hostDepth };
+    })()
+  `, { timeoutMs: 90000 });
+
+  const evidence = lastEvidence.hybridLiveImportSceneMembership;
+  if (evidence.beforeDebug?.rendererMode !== 'scene' || evidence.beforeDebug?.status !== 'rendering') {
+    throw new Error(`live-import scene membership witness did not begin with a running scene renderer: ${JSON.stringify(evidence)}`);
+  }
+  if (!evidence.peerSplat?.id) {
+    throw new Error(`live-import scene membership witness did not import a second splat while rendering: ${JSON.stringify(evidence)}`);
+  }
+  const sceneSplatIds = evidence.afterDebug?.sceneSplatIds || [];
+  if (evidence.afterDebug?.rendererMode !== 'scene'
+    || evidence.afterDebug?.status !== 'rendering'
+    || !sceneSplatIds.includes(evidence.peerSplat.id)
+    || !evidence.beforeDebug.sceneSplatIds.every(id => sceneSplatIds.includes(id))) {
+    throw new Error(`live-import scene membership witness did not add the imported splat to the active renderer scene: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.peerVisibility?.visible !== false) {
+    throw new Error(`live-import scene membership witness left the imported renderer-owned point-cloud preview visible: ${JSON.stringify(evidence)}`);
   }
 }
 
@@ -5067,6 +5597,12 @@ try {
     await runHybridSplatOverlayScenario(ws);
   } else if (scenario === 'real-hybrid-splat-overlay') {
     await runRealHybridSplatOverlayScenario(ws);
+  } else if (scenario === 'hybrid-host-depth-occluder') {
+    await runHybridHostDepthOccluderScenario(ws);
+  } else if (scenario === 'hybrid-two-splat-depth-order') {
+    await runHybridTwoSplatDepthOrderScenario(ws);
+  } else if (scenario === 'hybrid-live-import-scene-membership') {
+    await runHybridLiveImportSceneMembershipScenario(ws);
   } else if (scenario === 'real-hybrid-cropped-unsupported-guard') {
     await runRealHybridCroppedUnsupportedGuardScenario(ws);
   } else if (scenario === 'real-hybrid-cropped-supported-overlay') {
@@ -5111,6 +5647,10 @@ try {
 
   phase = 'capturing-screenshot';
   const finalShot = await capturePngScreenshot(ws, out);
+  phase = 'validating-screenshot';
+  if (scenario === 'real-hybrid-splat-overlay' || scenario === 'hybrid-host-depth-occluder' || scenario === 'hybrid-two-splat-depth-order' || scenario === 'hybrid-renderer-controls-dropdown') {
+    assertRealHybridScreenshotVisible(out);
+  }
 
   phase = 'writing-report';
   const report = {
