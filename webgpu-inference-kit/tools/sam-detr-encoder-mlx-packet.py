@@ -96,7 +96,7 @@ def run_reference(model, image, prompt, resolution):
     src = encoder_feat.reshape(batch, height * width, channels)
     pos_flat = fpn_pos_trimmed[-1].reshape(batch, height * width, channels)
     encoded = det.detr_encoder(src, pos_flat, inputs_embeds, attention_mask)
-    hs, _, presence_logits = det.detr_decoder(
+    hs, ref_boxes, presence_logits = det.detr_decoder(
         vision_features=encoded,
         inputs_embeds=inputs_embeds,
         vision_pos_encoding=pos_flat,
@@ -134,6 +134,7 @@ def run_reference(model, image, prompt, resolution):
         instance_embed,
         mask_embeddings,
         pred_logits,
+        ref_boxes,
         presence_logits,
     )
     backbone_features = [np.array(feat, dtype=np.float32) for feat in fpn_trimmed]
@@ -156,7 +157,10 @@ def run_reference(model, image, prompt, resolution):
         "prompt_features": np.array(inputs_embeds, dtype=np.float32),
         "prompt_mask": np.array(attention_mask, dtype=np.float32),
         "prompt_fpn_feature": np.array(prompt_fpn_feature, dtype=np.float32),
+        "decoder_hidden_states": np.array(hs, dtype=np.float32),
         "last_hs": np.array(hs[-1], dtype=np.float32),
+        "reference_boxes": np.array(ref_boxes[-1], dtype=np.float32),
+        "presence_logits_full": np.array(presence_logits, dtype=np.float32),
         "pixel": pixel,
         "mask_emb": mask_emb,
         "upscaled": upscaled,

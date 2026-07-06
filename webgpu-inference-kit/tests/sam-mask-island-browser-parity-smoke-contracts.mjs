@@ -61,9 +61,12 @@ assert.match(smokeJs, /pixelResult\.receipt\.outputs/, 'downstream mask-tail rec
 assert.match(smokeJs, /pixelEmbedOutput/, 'browser smoke must preserve the pixel output identity as the composition edge');
 assert.match(smokeJs, /promptFpnOutput/, 'browser smoke must preserve the prompt-FPN output identity as the upstream composition edge');
 assert.match(smokeJs, /encoderHiddenStatesOutput/, 'browser smoke must preserve the DETR encoder output identity as the upstream composition edge');
+assert.match(smokeJs, /detrEncoderOutput/, 'browser smoke must preserve DETR encoder output identity when feeding the DETR decoder');
+assert.match(smokeJs, /decoderTensorSha256/, 'browser smoke must bind DETR encoder output into the DETR decoder tensor receipt');
 assert.match(smokeJs, /lastHsOutput/, 'browser smoke must preserve the DETR decoder last-hs output identity as the upstream composition edge');
 assert.match(smokeJs, /referenceBoxesOutput/, 'browser smoke must preserve the DETR decoder reference-box output identity');
 assert.match(smokeJs, /presenceLogitsOutput/, 'browser smoke must preserve the DETR decoder presence-logits output identity');
+assert.match(smokeJs, /detr-encoder-detr-decoder-mask-tail-composition/, 'browser smoke must expose contiguous DETR encoder -> decoder -> mask-tail composition');
 assert.match(smokeJs, /compositionRouteReceipts/, 'browser smoke must preserve the full DETR/prompt-FPN/pixel/mask-tail receipt chain');
 assert.match(smokeJs, /midstreamRouteReceipt:\s*null/, 'browser smoke state must reserve a midstream route receipt slot');
 assert.match(smokeJs, /state\.midstreamRouteReceipt\s*=\s*result\.midstreamRouteReceipt/, 'browser smoke must persist the pixel route receipt for prompt-FPN composition');
@@ -93,6 +96,7 @@ assert.match(witness, /mlx-pixel-decoder-export/, 'witness must allow a real pix
 assert.match(witness, /mlx-prompt-fpn-export/, 'witness must allow a real prompt-FPN packet exporter');
 assert.match(witness, /mlx-detr-encoder-export/, 'witness must allow a real DETR encoder packet exporter');
 assert.match(witness, /mlx-detr-decoder-export/, 'witness must allow a real DETR decoder packet exporter');
+assert.match(witness, /mlx-detr-stack-export/, 'witness must allow a real contiguous DETR stack packet exporter');
 assert.match(witness, /MASK_TAIL_PHASE_PROGRAM_ROUTE_ID/, 'witness must preserve mask-tail route identity');
 assert.match(witness, /PIXEL_DECODER_PHASE_PROGRAM_ROUTE_ID/, 'witness must preserve pixel-decoder route identity');
 assert.match(witness, /PROMPT_FPN_PHASE_PROGRAM_ROUTE_ID/, 'witness must preserve prompt-FPN route identity');
@@ -108,6 +112,7 @@ assert.match(witness, /midstreamRouteReceipt/, 'witness report must preserve mid
 assert.match(witness, /pixelTensorSha256/, 'witness must assert prompt-FPN output composition into the pixel route tensor input');
 assert.match(witness, /downstreamTensorSha256/, 'witness must assert pixel output composition into the mask-tail tensor input');
 assert.match(witness, /encoderTensorSha256/, 'witness must assert DETR output composition into the prompt-FPN tensor input');
+assert.match(witness, /decoderTensorSha256/, 'witness must assert DETR encoder output composition into the DETR decoder tensor input');
 assert.match(witness, /lastHsOutput/, 'witness must assert DETR decoder last-hs output composition into the mask-tail tensor input');
 assert.match(witness, /compositionRouteReceipts/, 'witness report must preserve the full composed route receipt chain');
 
