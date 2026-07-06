@@ -111,6 +111,21 @@ assert.match(
   'browser residual cost telemetry must account for the extra feature-texture sample work',
 );
 assert.match(
+  core,
+  /volumeResidualFeatureDebug/,
+  'browser residual route must expose whether the shader-authority feature plane is being debug-rendered',
+);
+assert.match(
+  core,
+  /residual-feature-debug-false-color-v0/,
+  'browser residual shader must label the false-color feature debug output mode',
+);
+assert.match(
+  core,
+  /debugFeatureView/,
+  'browser residual shader must branch to a direct feature-plane visualization instead of inferring through final RGB',
+);
+assert.match(
   html,
   /id="volume-render-scale"[^>]*step="any"/,
   'volume render scale route/control must not snap arbitrary low render scales such as 0.18 to coarse UI increments',
@@ -132,8 +147,13 @@ assert.match(
 );
 assert.match(
   html,
-  /'volume-residual-mode'[\s\S]*'volume-residual-model-url'[\s\S]*'volume-residual-strength'/,
-  'volume residual controls must participate in the live syncControls input/change loop',
+  /id="volume-residual-feature-debug"/,
+  'volume UI must expose the residual feature-plane debug toggle',
+);
+assert.match(
+  html,
+  /'volume-residual-mode'[\s\S]*'volume-residual-model-url'[\s\S]*'volume-residual-strength'[\s\S]*'volume-residual-feature-debug'/,
+  'volume residual controls and feature debug toggle must participate in the live syncControls input/change loop',
 );
 assert.match(
   html,
@@ -149,4 +169,9 @@ assert.match(
   html,
   /params\.has\('volume_residual_strength'\)[\s\S]*setVolumeControlValue\('volume-residual-strength'/,
   'volume residual strength route param must populate the live residual strength control',
+);
+assert.match(
+  html,
+  /params\.has\('volume_residual_feature_debug'\)[\s\S]*setVolumeControlValue\('volume-residual-feature-debug'/,
+  'volume residual feature debug route param must populate the live feature debug toggle',
 );
