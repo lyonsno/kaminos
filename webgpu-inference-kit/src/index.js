@@ -11,6 +11,26 @@ export {
 } from './tensor-manifest.js';
 
 export {
+  WEBGPU_BUFFER_USAGE,
+  WEBGPU_COMPUTE_KERNEL_SCHEMA,
+  WEBGPU_SHADER_STAGE,
+  WEBGPU_TENSOR_SCHEMA,
+  WEBGPU_UNIFORM_BUFFER_SCHEMA,
+  assertTensorDataByteLength,
+  createGpuTensor,
+  createUniformBuffer,
+  defineComputeKernel,
+  packUniforms,
+} from './runtime-primitives.js';
+
+export {
+  WEBGPU_PHASE_PROGRAM_RUN_SCHEMA,
+  WEBGPU_PHASE_PROGRAM_SCHEMA,
+  defineWebGpuPhaseProgram,
+  runWebGpuPhaseProgram,
+} from './phase-program.js';
+
+export {
   WEBGPU_INFERENCE_RUNTIME_SCHEMA,
   createCooperativeYield,
   createWebGpuInferenceRuntime,

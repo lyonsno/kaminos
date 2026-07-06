@@ -16,6 +16,7 @@ npm install @kaminos/webgpu-inference-kit
 
 ```js
 import {
+  WEBGPU_BUFFER_USAGE,
   createWebGpuInferenceRuntime,
 } from "@kaminos/webgpu-inference-kit";
 
@@ -40,6 +41,33 @@ const weights = runtime.createBuffer({
 });
 runtime.writeBuffer(weights, weightsBytes);
 
+const imageEmbedding = runtime.createTensor({
+  name: "sam3.image-embedding",
+  shape: [1, 256, 64, 64],
+  dtype: "f16",
+  usage: WEBGPU_BUFFER_USAGE.storage |
+    WEBGPU_BUFFER_USAGE.copyDst |
+    WEBGPU_BUFFER_USAGE.copySrc,
+});
+runtime.uploadTensor(imageEmbedding, imageEmbeddingBytes);
+
+const outputMask = runtime.createTensor({
+  name: "sam3.output-mask",
+  shape: [1, 1, 64, 64],
+  dtype: "f32",
+  usage: WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copySrc,
+});
+
+const params = runtime.createUniformBuffer({
+  label: "sam3.mask-decoder.params",
+  schema: [
+    { name: "width", type: "u32" },
+    { name: "height", type: "u32" },
+    { name: "threshold", type: "f32" },
+  ],
+  values: { width: 64, height: 64, threshold: 0.5 },
+});
+
 await runtime.runStage("encode-image", async stage => {
   const module = stage.getShaderModule("sam3.image-encoder", imageEncoderWgsl);
   const pipeline = stage.getComputePipeline("sam3.image-encoder", {
@@ -51,17 +79,27 @@ await runtime.runStage("encode-image", async stage => {
   await stage.yieldToBrowser({ reason: "between-image-encoder-tiles" });
 });
 
-await runtime.runStage("decode-mask", async stage => {
-  const module = stage.getShaderModule("sam3.mask-decoder", maskDecoderWgsl);
-  stage.getComputePipeline("sam3.mask-decoder", {
-    layout: "auto",
-    compute: { module, entryPoint: "main" },
-  });
+const maskProgram = runtime.defineProgram({
+  name: "sam3.mask-program",
+  tensors: { imageEmbedding, outputMask },
+  uniforms: { params },
+  kernels: {
+    decodeMask: {
+      code: maskDecoderWgsl,
+      bindings: [
+        { name: "imageEmbedding", resource: "tensor:imageEmbedding", access: "read-only-storage" },
+        { name: "params", resource: "uniform:params", type: "uniform" },
+        { name: "outputMask", resource: "tensor:outputMask", access: "storage" },
+      ],
+    },
+  },
+  phases: [
+    { name: "decode-mask", kernel: "decodeMask", dispatch: [8, 8, 1], yieldAfter: true },
+    { name: "readback-mask", readbacks: [{ name: "maskBytes", tensor: "outputMask" }] },
+  ],
 });
-
-const maskBytes = await runtime.runStage("readback-mask", async stage => {
-  return stage.readBuffer(maskReadbackBuffer, { size: maskByteLength });
-});
+const programResult = await runtime.runProgram(maskProgram);
+const maskBytes = programResult.outputs.maskBytes;
 
 const profile = runtime.finishProfile({
   evidence: { mode: "live", source: "sam3-browser-webgpu-route" },
@@ -76,6 +114,10 @@ That `profile` is the runtime receipt substrate a route can attach to its output
 - `createWebGpuResourceCaches(device)`: cache shader modules and compute pipelines by label plus descriptor so repeated stage invocations do not rebuild obvious resources.
 - `createCooperativeYield(input)`: standardize cooperative browser yields, optionally waiting for `queue.onSubmittedWorkDone()` before yielding to the event loop.
 - `runtime.createBuffer(descriptor)`, `runtime.writeBuffer(buffer, data, ...)`, and `runtime.readBuffer(buffer, options)`: small buffer helpers for model weights, activations, and readback paths.
+- `runtime.createTensor(input)`, `runtime.uploadTensor(tensor, data)`, and `runtime.readTensor(tensor)`: create GPU-backed tensors with dtype, shape, strides, byte-length validation, and upload/readback helpers.
+- `packUniforms(schema, values)` and `runtime.createUniformBuffer(input)`: pack small scalar/vector parameter blocks into WGSL-compatible uniform buffers and update them without hand-rolling offsets.
+- `runtime.defineComputeKernel(input)` and `runtime.runKernel(kernel, options)`: build bind group layouts, bind groups, pipeline layouts, compute pipelines, command encoders, compute passes, dispatches, submits, and stage profile entries from one kernel descriptor.
+- `runtime.defineProgram(input)` and `runtime.runProgram(program)`: declare a small phase program above single-kernel dispatch, resolving named tensors/uniforms/buffers into kernel bindings, executing kernel phases, running readback phases, preserving staged profile metadata, and applying yield boundaries at phase edges.
 - `runtime.runStage(name, fn, metadata)`: wrap major model phases such as ViT encoder blocks, diffusion steps, triplane decode, mask decode, readback, or mesh/splat finalization.
 - `runtime.finishProfile(options)`: emit a `kaminos.webgpu-runtime-profile.v0` profile that downstream routes and schedulers can consume.
 - `defineTensorManifest(input)`: normalize model tensor metadata, dtype sizes, byte lengths, offsets, and shapes for browser-loaded weight bundles.

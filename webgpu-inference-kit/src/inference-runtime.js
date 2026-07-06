@@ -13,6 +13,17 @@ import {
   createStagedSubmitProfile,
   finishStagedSubmitProfile,
 } from './staged-profile.js';
+import {
+  defineWebGpuPhaseProgram,
+  runWebGpuPhaseProgram,
+} from './phase-program.js';
+import {
+  WEBGPU_BUFFER_USAGE,
+  assertTensorDataByteLength,
+  createGpuTensor,
+  createUniformBuffer as createRuntimeUniformBuffer,
+  defineComputeKernel as defineRuntimeComputeKernel,
+} from './runtime-primitives.js';
 
 export const WEBGPU_INFERENCE_RUNTIME_SCHEMA = 'kaminos.webgpu-inference-runtime.v0';
 
@@ -189,6 +200,32 @@ function byteLengthOf(data) {
   return null;
 }
 
+function alignTo(value, alignment) {
+  return Math.ceil(value / alignment) * alignment;
+}
+
+function alignDown(value, alignment) {
+  return Math.floor(value / alignment) * alignment;
+}
+
+function dataBytes(data) {
+  if (data instanceof ArrayBuffer) return new Uint8Array(data);
+  if (ArrayBuffer.isView(data)) return new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+  throw new Error('data must be an ArrayBuffer or typed array view');
+}
+
+function tensorUploadData(tensor, data) {
+  const logicalByteLength = assertTensorDataByteLength(tensor, data);
+  const allocationByteLength = tensor.allocationByteLength ?? alignTo(logicalByteLength, 4);
+  if (allocationByteLength === logicalByteLength && logicalByteLength % 4 === 0) return data;
+  if (tensor.ownsBuffer !== true && tensor.paddingReserved !== true) {
+    throw new Error('caller-owned tensor upload padding must be reserved before sub-4-byte padded writes');
+  }
+  const padded = new Uint8Array(allocationByteLength);
+  padded.set(dataBytes(data));
+  return padded;
+}
+
 function queueWriteBuffer(queue, buffer, data, offset = 0, dataOffset = 0, size = undefined) {
   if (!queue || typeof queue.writeBuffer !== 'function') throw new Error('queue.writeBuffer must be available');
   const byteLength = byteLengthOf(data);
@@ -209,6 +246,70 @@ async function readMappedBuffer(buffer, options = {}) {
   return copy;
 }
 
+async function readMappedBufferSlice(buffer, options = {}) {
+  const sourceOffset = options.sourceOffset ?? options.offset ?? 0;
+  const logicalSize = options.size;
+  if (!Number.isInteger(sourceOffset) || sourceOffset < 0) {
+    throw new Error('readBuffer sourceOffset must be a non-negative integer');
+  }
+  if (!Number.isInteger(logicalSize) || logicalSize < 0) {
+    throw new Error('readBuffer size must be a non-negative integer');
+  }
+  const mapOffset = alignDown(sourceOffset, 8);
+  const sliceOffset = sourceOffset - mapOffset;
+  const mappedSize = alignTo(sliceOffset + logicalSize, 4);
+  const mapped = await readMappedBuffer(buffer, {
+    mapMode: options.mapMode,
+    offset: mapOffset,
+    size: mappedSize,
+  });
+  return mapped.slice(sliceOffset, sliceOffset + logicalSize);
+}
+
+async function readBufferViaStaging(runtime, tensor, options = {}) {
+  const size = options.size ?? tensor.byteLength;
+  const alignedSize = options.alignedSize ?? alignTo(size, 4);
+  const sourceOffset = options.sourceOffset ?? options.offset ?? tensor.bufferOffset ?? 0;
+  if (!Number.isInteger(size) || size < 0) throw new Error('readTensor size must be a non-negative integer');
+  if (!Number.isInteger(sourceOffset) || sourceOffset < 0) {
+    throw new Error('readTensor sourceOffset must be a non-negative integer');
+  }
+  if (sourceOffset % 4 !== 0) throw new Error('readTensor sourceOffset must be a multiple of 4');
+  if (Number.isInteger(tensor.usage) && (tensor.usage & WEBGPU_BUFFER_USAGE.copySrc) === 0) {
+    throw new Error('readTensor requires tensor usage to include copySrc unless the tensor buffer is mapRead');
+  }
+  if (typeof runtime.device.createCommandEncoder !== 'function') {
+    throw new Error('device.createCommandEncoder must be available for tensor readback');
+  }
+  if (typeof runtime.queue.submit !== 'function') {
+    throw new Error('queue.submit must be available for tensor readback');
+  }
+
+  const staging = runtime.createBuffer({
+    label: options.stagingLabel || `${tensor.name || 'tensor'}.readback`,
+    size: alignedSize,
+    usage: WEBGPU_BUFFER_USAGE.mapRead | WEBGPU_BUFFER_USAGE.copyDst,
+  });
+  const encoder = runtime.device.createCommandEncoder({
+    label: options.encoderLabel || `${tensor.name || 'tensor'}.readback.encoder`,
+  });
+  if (typeof encoder.copyBufferToBuffer !== 'function') {
+    throw new Error('command encoder must support copyBufferToBuffer for tensor readback');
+  }
+  encoder.copyBufferToBuffer(tensor.buffer, sourceOffset, staging, 0, alignedSize);
+  const commandBuffer = encoder.finish();
+  runtime.queue.submit([commandBuffer]);
+  if (options.waitForSubmittedWorkDone === true && typeof runtime.queue.onSubmittedWorkDone === 'function') {
+    await runtime.queue.onSubmittedWorkDone();
+  }
+  const mapped = await runtime.readBuffer(staging, {
+    mapMode: options.mapMode,
+    offset: 0,
+    size: alignedSize,
+  });
+  return mapped.slice(0, size);
+}
+
 function createStageFacade(runtime, stageState) {
   return {
     getShaderModule: runtime.getShaderModule,
@@ -216,6 +317,13 @@ function createStageFacade(runtime, stageState) {
     createBuffer: runtime.createBuffer,
     writeBuffer: runtime.writeBuffer,
     readBuffer: runtime.readBuffer,
+    createTensor: runtime.createTensor,
+    uploadTensor: runtime.uploadTensor,
+    readTensor: runtime.readTensor,
+    createUniformBuffer: runtime.createUniformBuffer,
+    defineComputeKernel: runtime.defineComputeKernel,
+    defineProgram: runtime.defineProgram,
+    runProgram: runtime.runProgram,
     async yieldToBrowser(metadata = {}) {
       const event = await runtime.yieldToBrowser(metadata);
       stageState.yields.push(event);
@@ -294,6 +402,111 @@ export async function createWebGpuInferenceRuntime(input = {}) {
 
     readBuffer(buffer, options = {}) {
       return readMappedBuffer(buffer, options);
+    },
+
+    createTensor(tensorInput = {}) {
+      return createGpuTensor(tensorInput, {
+        createBuffer: descriptor => runtime.createBuffer(descriptor),
+      });
+    },
+
+    uploadTensor(tensor, data, offset = undefined) {
+      if (!tensor || typeof tensor !== 'object') throw new Error('tensor must be an object');
+      if (!tensor.buffer) throw new Error('tensor must expose buffer');
+      runtime.writeBuffer(tensor.buffer, tensorUploadData(tensor, data), offset ?? tensor.bufferOffset ?? 0);
+      return tensor;
+    },
+
+    readTensor(tensor, options = {}) {
+      if (!tensor || typeof tensor !== 'object') throw new Error('tensor must be an object');
+      if (!tensor.buffer) throw new Error('tensor must expose buffer');
+      if (Number.isInteger(tensor.usage) && (tensor.usage & WEBGPU_BUFFER_USAGE.mapRead) !== 0) {
+        return readMappedBufferSlice(tensor.buffer, {
+          ...options,
+          sourceOffset: options.sourceOffset ?? options.offset ?? tensor.bufferOffset ?? 0,
+          size: options.size ?? tensor.byteLength,
+        });
+      }
+      return readBufferViaStaging(runtime, tensor, options);
+    },
+
+    createUniformBuffer(uniformInput = {}) {
+      return createRuntimeUniformBuffer(uniformInput, {
+        createBuffer: descriptor => runtime.createBuffer(descriptor),
+        writeBuffer: (buffer, data) => runtime.writeBuffer(buffer, data),
+      });
+    },
+
+    defineComputeKernel(kernelInput = {}) {
+      return defineRuntimeComputeKernel(kernelInput, {
+        device,
+        getShaderModule: runtime.getShaderModule,
+        getComputePipeline: runtime.getComputePipeline,
+      });
+    },
+
+    defineProgram(programInput = {}) {
+      return defineWebGpuPhaseProgram(programInput, { runtime });
+    },
+
+    runProgram(program, options = {}) {
+      return runWebGpuPhaseProgram(program, { runtime, ...options });
+    },
+
+    async runKernel(kernelDefinition, options = {}) {
+      if (!kernelDefinition || typeof kernelDefinition !== 'object') {
+        throw new Error('kernelDefinition must be an object');
+      }
+      if (!Array.isArray(options.dispatch) || options.dispatch.length < 1 || options.dispatch.length > 3) {
+        throw new Error('dispatch must be an array with 1 to 3 dimensions');
+      }
+      const dispatch = [
+        options.dispatch[0],
+        options.dispatch[1] ?? 1,
+        options.dispatch[2] ?? 1,
+      ];
+      for (const dim of dispatch) {
+        if (!Number.isInteger(dim) || dim < 1) throw new Error('dispatch dimensions must be positive integers');
+      }
+      if (typeof device.createCommandEncoder !== 'function') {
+        throw new Error('device.createCommandEncoder must be available');
+      }
+      if (options.submit !== false && typeof queue.submit !== 'function') {
+        throw new Error('queue.submit must be available');
+      }
+
+      const stageName = options.stage || kernelDefinition.name;
+      const metadata = {
+        ...(options.metadata || {}),
+        kernelName: kernelDefinition.name,
+        dispatch,
+        bindings: Array.isArray(kernelDefinition.bindings)
+          ? kernelDefinition.bindings.map(binding => binding.name)
+          : [],
+      };
+
+      return runtime.runStage(stageName, async stage => {
+        const encoder = device.createCommandEncoder({
+          label: options.encoderLabel || `${kernelDefinition.name}.encoder`,
+        });
+        const pass = encoder.beginComputePass({
+          label: options.passLabel || `${kernelDefinition.name}.compute-pass`,
+        });
+        pass.setPipeline(kernelDefinition.pipeline);
+        pass.setBindGroup(0, kernelDefinition.bindGroup);
+        pass.dispatchWorkgroups(...dispatch);
+        pass.end();
+        const commandBuffer = encoder.finish();
+        if (options.submit !== false) {
+          queue.submit([commandBuffer]);
+        }
+        if (options.yieldAfter === true) {
+          await stage.yieldToBrowser({
+            reason: options.yieldReason || `${kernelDefinition.name}.post-submit`,
+          });
+        }
+        return commandBuffer;
+      }, metadata);
     },
 
     yieldToBrowser(metadata = {}) {
