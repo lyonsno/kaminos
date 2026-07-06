@@ -62,7 +62,9 @@ let apertureTangencyWitness = null;
 let apertureOrbitCaptureWitness = null;
 let macroContactMapWitness = null;
 let macroMorphologyInventoryWitness = null;
+let proceduralArchitectureInventoryWitness = null;
 let lowerSocketSemanticRenderInventoryWitness = null;
+let sideWallVisibilityProbe = null;
 let spatialTruthWitness = null;
 let spatialTruthViewFrame = null;
 let spatialTruthContactSheet = null;
@@ -542,6 +544,11 @@ async function main() {
       macroMorphologyInventoryWitness = await evaluate(ws, 'window.__kaminosOrbShellCompositionWitness?.enableMacroMorphologyInventoryWitness?.()');
       await delay(500);
     }
+    if (focus === 'procedural-architecture-inventory') {
+      await evaluate(ws, 'window.__kaminosOrbShellCompositionWitness?.frameMacroMorphologyInventory?.()');
+      proceduralArchitectureInventoryWitness = await evaluate(ws, 'window.__kaminosOrbShellCompositionWitness?.enableProceduralArchitectureInventoryWitness?.()');
+      await delay(500);
+    }
     if (focus === 'lower-socket-semantic-render-inventory') {
       await evaluate(ws, 'window.__kaminosOrbShellCompositionWitness?.frameLowerSocketAnatomy?.()');
       lowerSocketSemanticRenderInventoryWitness = await evaluate(ws, 'window.__kaminosOrbShellCompositionWitness?.enableLowerSocketSemanticRenderInventoryWitness?.()');
@@ -577,25 +584,74 @@ async function main() {
     if (forceAo !== null) {
       assert.equal(renderEffectPolicy?.ambientOcclusionEnabled, forceAo, 'forced AO state did not take effect');
     }
-    state = await evaluate(ws, `
-      (() => {
-        const state = window.__kaminosOrbShellCompositionWitness?.debugState?.();
-        if (!state) return state;
-        const composition = state.OrbShellComposition;
-        state.OrbShellComposition = composition ? {
-          schema: 'OrbShellCompositionDebugSummary',
-          identity: state.identity,
-          macroAssemblageCount: state.macroAssemblageCount,
-          macroAssemblageIds: state.macroAssemblageIds,
-          variantId: state.variantId,
-          variationSeed: state.variationSeed,
-          variationLeafCount: state.variationLeafCount,
-          macroMorphologyRecordCount: state.macroMorphologyRecordCount,
-          diagnosticCompactionReason: 'avoid-returning-full-nested-composition-through-cdp-report-path',
-        } : null;
-        return state;
-      })()
-    `);
+    if (focus === 'procedural-architecture-inventory') {
+      state = await evaluate(ws, `
+        window.__kaminosOrbShellCompositionWitness?.proceduralArchitectureInventoryDebugState?.()
+      `);
+    } else {
+      state = await evaluate(ws, `
+        (() => {
+          const state = window.__kaminosOrbShellCompositionWitness?.debugState?.();
+          if (!state) return state;
+          const composition = state.OrbShellComposition;
+          const architecture = state.proceduralArchitectureInventory;
+          if (architecture) {
+            const compactArchitecture = {
+              schema: architecture.schema,
+              mode: architecture.mode,
+              stressCaseId: architecture.stressCaseId,
+              activeRepairPosture: architecture.activeRepairPosture,
+              visualDecompositionMode: architecture.visualDecompositionMode,
+              recordCount: architecture.recordCount,
+              layerCounts: architecture.layerCounts,
+              semanticClassCounts: architecture.semanticClassCounts,
+              sourceStageCounts: architecture.sourceStageCounts,
+              unresolvedArchitectureQuestions: architecture.unresolvedArchitectureQuestions,
+              diagnosticVerdict: architecture.diagnosticVerdict,
+              records: (architecture.records || []).map(record => ({
+                id: record.id,
+                parentAssemblage: record.parentAssemblage,
+                semanticRole: record.semanticRole,
+                semanticClass: record.semanticClass,
+                objectLayer: record.objectLayer,
+                sourceCurve: record.sourceCurve,
+                territory: {
+                  id: record.territory?.id,
+                  territoryId: record.territory?.territoryId,
+                  source: record.territory?.source,
+                  bodyOccupancyId: record.territory?.bodyOccupancyId,
+                },
+                widthProfile: {
+                  id: record.widthProfile?.id,
+                  source: record.widthProfile?.source,
+                },
+                terminal: record.terminal,
+                receiverRelation: record.receiverRelation,
+                meshDerivation: record.meshDerivation,
+                localMorphologyTuningAllowed: record.localMorphologyTuningAllowed,
+                failureClasses: record.failureClasses,
+                pathologyClasses: record.pathologyClasses,
+                diagnosticQuestions: record.diagnosticQuestions,
+              })),
+            };
+            state.proceduralArchitectureInventory = compactArchitecture;
+            state.OrbShellProceduralArchitectureInventory = compactArchitecture;
+          }
+          state.OrbShellComposition = composition ? {
+            schema: 'OrbShellCompositionDebugSummary',
+            identity: state.identity,
+            macroAssemblageCount: state.macroAssemblageCount,
+            macroAssemblageIds: state.macroAssemblageIds,
+            variantId: state.variantId,
+            variationSeed: state.variationSeed,
+            variationLeafCount: state.variationLeafCount,
+            macroMorphologyRecordCount: state.macroMorphologyRecordCount,
+            diagnosticCompactionReason: 'avoid-returning-full-nested-composition-through-cdp-report-path',
+          } : null;
+          return state;
+        })()
+      `);
+    }
     phase = 'screenshot';
     let captureOptions = { format: 'png', captureBeyondViewport: false };
     if (
@@ -604,6 +660,7 @@ async function main() {
       || focus === 'live-terminal-caps'
       || focus === 'aperture-tangency'
       || focus === 'aperture-orbit-capture'
+      || focus === 'procedural-architecture-inventory'
       || focus === 'lower-socket-semantic-render-inventory'
       || focus === 'material-truth'
       || focus === 'pre-hdr-warm'
@@ -637,6 +694,25 @@ async function main() {
     assert.equal(state?.active, true, 'composition witness inactive');
     assert.equal(state?.baselineDisposition, 'coherent-but-wrong-model-baseline', 'v0 baseline disposition missing');
     assert.ok(state?.macroAssemblageCount >= 3 && state.macroAssemblageCount <= 5, 'composition must expose 3-5 macro assemblages');
+    if (focus === 'procedural-architecture-inventory') {
+      assert.deepEqual(state?.selectedMacroAssemblageIds, state?.macroAssemblageIds, 'selected macro ids must match rendered macro ids');
+      assert.ok(state?.selectedMacroAssemblageIds?.includes('north-west-dominant-thrust'), 'north-west anchor macro missing from selected ids');
+      assert.ok(state?.selectedMacroAssemblageIds?.includes('north-east-counter-thrust'), 'north-east anchor macro missing from selected ids');
+      assert.equal(state?.OrbShellProceduralArchitectureInventory?.schema, 'OrbShellProceduralArchitectureInventory', 'procedural architecture inventory missing from debug state');
+      assert.equal(state?.proceduralArchitectureInventory?.mode, 'curve-first-semantic-architecture-xray-v0', 'procedural architecture inventory used wrong mode');
+      assert.equal(state?.proceduralArchitectureInventoryRecordCount, state.proceduralArchitectureInventory?.records?.length, 'procedural architecture inventory record count mismatch');
+      assert.ok(state?.proceduralArchitectureInventoryRecordCount >= state.macroAssemblageCount, 'procedural architecture inventory must cover every macro family');
+      assert.ok(state?.MacroSphereCurveDecomposition?.every(curve => curve?.id && curve?.generationStage), 'compact architecture state must preserve source curve identities');
+      assert.equal(proceduralArchitectureInventoryWitness?.schema, 'ProceduralArchitectureInventoryWitnessState', 'procedural architecture inventory witness did not activate');
+      assert.equal(proceduralArchitectureInventoryWitness?.mode, 'procedural-architecture-inventory-isolated-v0', 'procedural architecture witness used wrong mode');
+      assert.ok(proceduralArchitectureInventoryWitness?.visibleCurveCount >= state.macroAssemblageCount, 'procedural architecture witness must show source curves for selected macros');
+      assert.equal(
+        proceduralArchitectureInventoryWitness?.stressCaseId,
+        'lower-socket-keel-promoted-body-socket-tongue-candidate',
+        'procedural architecture witness must preserve lower-socket stress case identity',
+      );
+      return;
+    }
     assert.equal(state?.MacroAssemblageCountLaw?.schema, 'MacroAssemblageCountLaw', 'MacroAssemblageCountLaw missing from debug state');
     assert.deepEqual(state?.selectedMacroAssemblageIds, state?.macroAssemblageIds, 'selected macro ids must match rendered macro ids');
     assert.ok(state?.selectedMacroAssemblageIds?.includes('north-west-dominant-thrust'), 'north-west anchor macro missing from selected ids');
@@ -684,6 +760,17 @@ async function main() {
       assert.equal(macroMorphologyInventoryWitness?.mode, 'macro-morphology-inventory-isolated-v0', 'macro morphology inventory witness used wrong mode');
       assert.equal(macroMorphologyInventoryWitness?.visibleCurveCount, state.macroAssemblageCount, 'macro morphology witness must show one early curve per macro');
       assert.ok(macroMorphologyInventoryWitness?.visibleReferenceIds?.includes('macro-morphology-reference-sphere'), 'macro morphology witness must show the reference sphere');
+    }
+    if (focus === 'procedural-architecture-inventory') {
+      assert.equal(proceduralArchitectureInventoryWitness?.schema, 'ProceduralArchitectureInventoryWitnessState', 'procedural architecture inventory witness did not activate');
+      assert.equal(proceduralArchitectureInventoryWitness?.mode, 'procedural-architecture-inventory-isolated-v0', 'procedural architecture witness used wrong mode');
+      assert.equal(state?.OrbShellProceduralArchitectureInventory?.schema, 'OrbShellProceduralArchitectureInventory', 'procedural architecture inventory missing from debug state');
+      assert.ok(proceduralArchitectureInventoryWitness?.visibleCurveCount >= state.macroAssemblageCount, 'procedural architecture witness must show source curves for selected macros');
+      assert.equal(
+        proceduralArchitectureInventoryWitness?.stressCaseId,
+        'lower-socket-keel-promoted-body-socket-tongue-candidate',
+        'procedural architecture witness must preserve lower-socket stress case identity',
+      );
     }
     assert.ok(state?.bandMemberCount >= state.macroAssemblageCount * 2, 'composition must expose child band families');
     assert.equal(state?.territoryBodyCount, state.macroAssemblageCount, 'composition must expose one MacroTerritoryBody per macro assemblage');
@@ -815,7 +902,7 @@ async function main() {
     assert.equal(state?.declaredSecondLayer, false, 'inner-return side plane must not declare a full second layer');
     assert.ok(state?.targetInnerReturnBoundaryIds?.includes('right-side-rim-reveal-gap'), 'right-side rim target missing from debug state');
     assert.ok(state?.LamellarInnerReturnSidePlaneMesh?.every(mesh => mesh?.schema === 'LamellarInnerReturnSidePlaneMesh'), 'LamellarInnerReturnSidePlaneMesh records missing from debug state');
-    const sideWallVisibilityProbe = await evaluate(ws, `
+    sideWallVisibilityProbe = await evaluate(ws, `
       window.__kaminosOrbShellCompositionWitness?.sideWallVisibilityProbe?.({
         width: window.innerWidth,
         height: window.innerHeight
@@ -922,6 +1009,11 @@ async function main() {
       macroMorphologyRecordCount: state.macroMorphologyRecordCount,
       macroMorphologyPathologyClassCounts: state.macroMorphologyPathologyClassCounts,
       macroMorphologyInventoryWitness,
+      OrbShellProceduralArchitectureInventory: state.OrbShellProceduralArchitectureInventory,
+      proceduralArchitectureInventory: state.proceduralArchitectureInventory,
+      proceduralArchitectureInventoryRecordCount: state.proceduralArchitectureInventoryRecordCount,
+      proceduralArchitectureInventoryLayerCounts: state.proceduralArchitectureInventoryLayerCounts,
+      proceduralArchitectureInventoryWitness,
       LowerSocketKeelAnatomyLaw: state.LowerSocketKeelAnatomyLaw,
       lowerSocketKeelAnatomyLaw: state.lowerSocketKeelAnatomyLaw,
       lowerSocketKeelAnatomyVerdict: state.lowerSocketKeelAnatomyVerdict,

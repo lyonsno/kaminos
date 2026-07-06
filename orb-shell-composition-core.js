@@ -13,6 +13,7 @@ export const ORB_SHELL_SOCKET_TONGUE_GENERATIVE_INVARIANT_MODE = 'socket-tongue-
 export const ORB_SHELL_SOCKET_TONGUE_REPRODUCTION_MODE = 'socket-tongue-reproduction-probe-v0';
 export const ORB_SHELL_SOCKET_TONGUE_POST_STRIP_HONESTY_MODE = 'socket-tongue-post-strip-honesty-preservation-v0';
 export const ORB_SHELL_MACRO_MORPHOLOGY_INVENTORY_MODE = 'macro-curve-vs-promoted-body-diagnostic-v0';
+export const ORB_SHELL_PROCEDURAL_ARCHITECTURE_INVENTORY_MODE = 'curve-first-semantic-architecture-xray-v0';
 
 const TAU = Math.PI * 2;
 const MACRO_VARIATION_IDS = [
@@ -5420,6 +5421,329 @@ function createMacroMorphologyInventory(composition) {
   };
 }
 
+function countBy(records, field) {
+  const counts = {};
+  for (const record of records || []) {
+    const key = record?.[field] || 'unknown';
+    counts[key] = (counts[key] || 0) + 1;
+  }
+  return counts;
+}
+
+function compactProceduralArchitectureInventory(inventory) {
+  if (!inventory) return null;
+  return {
+    schema: inventory.schema,
+    mode: inventory.mode,
+    stressCaseId: inventory.stressCaseId,
+    activeRepairPosture: inventory.activeRepairPosture,
+    visualDecompositionMode: inventory.visualDecompositionMode,
+    recordCount: inventory.recordCount,
+    layerCounts: inventory.layerCounts,
+    semanticClassCounts: inventory.semanticClassCounts,
+    sourceStageCounts: inventory.sourceStageCounts,
+    unresolvedArchitectureQuestions: inventory.unresolvedArchitectureQuestions,
+    diagnosticVerdict: inventory.diagnosticVerdict,
+    records: (inventory.records || []).map(record => ({
+      id: record.id,
+      parentAssemblage: record.parentAssemblage,
+      semanticRole: record.semanticRole,
+      semanticClass: record.semanticClass,
+      objectLayer: record.objectLayer,
+      sourceCurve: record.sourceCurve ? {
+        id: record.sourceCurve.id,
+        sourceCurveId: record.sourceCurve.sourceCurveId,
+        stage: record.sourceCurve.stage,
+        proceduralFamily: record.sourceCurve.proceduralFamily,
+        impulseLine: record.sourceCurve.impulseLine,
+        sampleCount: record.sourceCurve.sampleCount,
+        visualOverlayId: record.sourceCurve.visualOverlayId,
+      } : null,
+      territory: record.territory ? {
+        id: record.territory.id,
+        territoryId: record.territory.territoryId,
+        source: record.territory.source,
+        bodyOccupancyId: record.territory.bodyOccupancyId,
+        boundaryPressureFieldId: record.territory.boundaryPressureFieldId,
+      } : null,
+      widthProfile: record.widthProfile ? {
+        id: record.widthProfile.id,
+        source: record.widthProfile.source,
+        laneOffset: record.widthProfile.laneOffset ?? null,
+        widthScale: record.widthProfile.widthScale ?? null,
+        curvatureWidthCapId: record.widthProfile.curvatureWidthCapId ?? null,
+      } : null,
+      terminal: record.terminal,
+      receiverRelation: record.receiverRelation,
+      meshDerivation: record.meshDerivation,
+      localMorphologyTuningAllowed: record.localMorphologyTuningAllowed,
+      failureClasses: record.failureClasses,
+      pathologyClasses: record.pathologyClasses,
+      diagnosticQuestions: record.diagnosticQuestions,
+    })),
+  };
+}
+
+function architectureTerminalRole(composition, parentAssemblage) {
+  const apertureRole = composition.apertureOrbitCaptureLaw?.terminalRoles?.find(role => (
+    role.parentAssemblage === parentAssemblage
+    || role.macroId === parentAssemblage
+    || role.sourceMacroId === parentAssemblage
+  ));
+  return apertureRole || null;
+}
+
+function architectureSourceCurveRef(morphologyRecord, assemblage) {
+  const curve = morphologyRecord?.earlySphereCurve || createMacroSphereCurveDecomposition(assemblage);
+  return {
+    id: curve.id,
+    sourceCurveId: curve.id,
+    stage: curve.generationStage,
+    proceduralFamily: curve.sourceControl?.proceduralFamily || assemblage?.spine?.proceduralFamily || null,
+    impulseLine: curve.sourceControl?.impulseLine || assemblage?.spine?.impulseLine || null,
+    sampleCount: curve.sampleCount,
+    visualOverlayId: curve.visualOverlayId,
+  };
+}
+
+function architectureTerritoryRef(assemblage) {
+  const territory = assemblage?.sphericalTerritory || {};
+  return {
+    id: `${assemblage.id}-spherical-territory`,
+    territoryId: `${assemblage.id}-spherical-territory`,
+    source: 'sphericalTerritory',
+    centerPhase: territory.centerPhase,
+    angularWidth: territory.angularWidth,
+    bodyOccupancyId: assemblage?.territoryBodyOccupancy?.id || null,
+    boundaryPressureFieldId: assemblage?.territoryBodyOccupancy?.boundaryPressureField?.id || null,
+  };
+}
+
+function architectureWidthProfileRef(assemblage, source = 'territoryBodyOccupancy.widthProfile') {
+  const profile = assemblage?.territoryBodyOccupancy?.widthProfile || {};
+  return {
+    id: `${assemblage.id}-width-profile`,
+    source,
+    start: profile.start ?? null,
+    mid: profile.mid ?? null,
+    end: profile.end ?? null,
+    curvatureWidthCapId: assemblage?.curvatureWidthCapLaw?.sourceCurveId || assemblage?.macroPromotedBody?.curvatureWidthCapLaw?.sourceCurveId || null,
+  };
+}
+
+function createMacroFamilyArchitectureRecord(composition, assemblage) {
+  const morphologyRecord = composition.macroMorphologyInventory?.records?.find(record => record.parentAssemblage === assemblage.id);
+  const terminalRole = architectureTerminalRole(composition, assemblage.id);
+  return {
+    schema: 'ProceduralArchitectureInventoryRecord',
+    mode: ORB_SHELL_PROCEDURAL_ARCHITECTURE_INVENTORY_MODE,
+    id: `${assemblage.id}-macro-family-architecture-record`,
+    parentAssemblage: assemblage.id,
+    semanticRole: assemblage.role || 'macro-shell-family',
+    semanticClass: 'macro-family',
+    objectLayer: 'semantic-object',
+    sourceCurve: architectureSourceCurveRef(morphologyRecord, assemblage),
+    territory: architectureTerritoryRef(assemblage),
+    widthProfile: architectureWidthProfileRef(assemblage),
+    terminal: {
+      mode: terminalRole?.terminalMode || terminalRole?.terminationMode || 'macro-family-terminal-role-pending',
+      roleId: terminalRole?.id || null,
+      apertureRelation: terminalRole?.apertureRelation || terminalRole?.role || null,
+    },
+    receiverRelation: {
+      mode: assemblage.id === 'lower-socket-keel'
+        ? 'receiver-required-but-not-owned'
+        : terminalRole?.receiverRelation || 'not-required-or-not-yet-measured',
+      receiverId: terminalRole?.receiverId || null,
+    },
+    meshDerivation: {
+      mode: morphologyRecord?.renderClassComparison || 'direct-wide-promoted-body',
+      promotedBodyId: assemblage.macroPromotedBody?.id || null,
+      localTuningAllowed: assemblage.id !== 'lower-socket-keel',
+    },
+    localMorphologyTuningAllowed: assemblage.id !== 'lower-socket-keel',
+    pathologyClasses: morphologyRecord?.pathologyClasses || [],
+    diagnosticQuestions: [
+      assemblage.id === 'lower-socket-keel'
+        ? 'is the lower-socket failure born in source curve, width profile, terminal law, receiver law, or mesh derivation'
+        : 'which layer owns this macro family before mesh promotion',
+      'can this visible form be explained without inspecting final material shading',
+    ],
+  };
+}
+
+function createSubstripArchitectureRecord(composition, substrip) {
+  const assemblage = composition.macroAssemblages.find(item => item.id === substrip.parentAssemblage);
+  const morphologyRecord = composition.macroMorphologyInventory?.records?.find(record => record.parentAssemblage === substrip.parentAssemblage);
+  return {
+    schema: 'ProceduralArchitectureInventoryRecord',
+    mode: ORB_SHELL_PROCEDURAL_ARCHITECTURE_INVENTORY_MODE,
+    id: `${substrip.id}-architecture-record`,
+    parentAssemblage: substrip.parentAssemblage,
+    semanticRole: substrip.role || 'macro-family-substrip',
+    semanticClass: 'macro-family-substrip',
+    objectLayer: 'semantic-object',
+    sourceCurve: architectureSourceCurveRef(morphologyRecord, assemblage),
+    territory: architectureTerritoryRef(assemblage),
+    widthProfile: {
+      id: `${substrip.id}-width-profile`,
+      source: 'macroFamilySubstripPlan.substrips.edgeSamples',
+      laneOffset: substrip.laneOffset ?? null,
+      widthScale: substrip.widthScale ?? null,
+    },
+    terminal: {
+      mode: substrip.apertureAwareTerminus?.terminalMode || substrip.terminalMode || 'substrip-terminal-caps-derived',
+      terminalCapCount: substrip.terminalCaps?.length || 0,
+    },
+    receiverRelation: {
+      mode: substrip.apertureAwareTerminus?.receiverRelation || 'inherits-parent-aperture-field',
+      receiverId: substrip.apertureAwareTerminus?.receiverId || null,
+    },
+    meshDerivation: {
+      mode: 'parent-owned-substrip-family-mesh',
+      sourcePlan: 'macroFamilySubstripPlan',
+      localTuningAllowed: true,
+    },
+    localMorphologyTuningAllowed: true,
+    pathologyClasses: [],
+    diagnosticQuestions: [
+      'does substrip decomposition solve a source law or merely hide wide-body failure',
+    ],
+  };
+}
+
+function createTerminalCapArchitectureRecord(composition, cap) {
+  const assemblage = composition.macroAssemblages.find(item => item.id === cap.parentAssemblage);
+  const morphologyRecord = composition.macroMorphologyInventory?.records?.find(record => record.parentAssemblage === cap.parentAssemblage);
+  return {
+    schema: 'ProceduralArchitectureInventoryRecord',
+    mode: ORB_SHELL_PROCEDURAL_ARCHITECTURE_INVENTORY_MODE,
+    id: `${cap.id}-architecture-record`,
+    parentAssemblage: cap.parentAssemblage,
+    semanticRole: cap.role || cap.capRole || 'live-terminal-cap',
+    semanticClass: 'live-terminal-cap',
+    objectLayer: 'render-artifact',
+    sourceCurve: architectureSourceCurveRef(morphologyRecord, assemblage),
+    territory: architectureTerritoryRef(assemblage),
+    widthProfile: {
+      id: `${cap.id}-cap-width-profile`,
+      source: 'liveMacroSideWallPlan.terminalCaps',
+      width: cap.width || cap.capWidth || null,
+      terminalWidthScale: cap.terminalWidthScale ?? null,
+    },
+    terminal: {
+      mode: cap.terminalCapAuthority || cap.terminalCapVisibilityPolicy || 'terminal-cap-derived-from-sidewall',
+      visibilityPolicy: cap.terminalCapVisibilityPolicy || null,
+      provisionalVisible: !!cap.provisionalSocketTongueVisible,
+    },
+    receiverRelation: {
+      mode: cap.receiverOwnedTuckDisposition ? 'receiver-owned' : 'receiver-required-but-not-owned',
+      receiverId: cap.receiverOwnedTuckDisposition?.receiverId || null,
+      disposition: cap.receiverOwnedTuckDisposition || null,
+    },
+    meshDerivation: {
+      mode: 'terminal-cap-render-artifact-from-live-sidewall',
+      sourcePlan: 'liveMacroSideWallPlan.terminalCaps',
+      localTuningAllowed: false,
+    },
+    localMorphologyTuningAllowed: false,
+    pathologyClasses: cap.provisionalSocketTongueVisible ? ['provisional-terminal-evidence'] : [],
+    diagnosticQuestions: [
+      'is this cap a terminal semantic claim or merely a render closure artifact',
+    ],
+  };
+}
+
+function createSocketTongueStressArchitectureRecord(composition, candidate) {
+  const assemblage = composition.macroAssemblages.find(item => item.id === candidate.parentAssemblage);
+  const morphologyRecord = composition.macroMorphologyInventory?.records?.find(record => record.parentAssemblage === candidate.parentAssemblage);
+  return {
+    schema: 'ProceduralArchitectureInventoryRecord',
+    mode: ORB_SHELL_PROCEDURAL_ARCHITECTURE_INVENTORY_MODE,
+    id: `${candidate.id}-architecture-record`,
+    parentAssemblage: candidate.parentAssemblage,
+    semanticRole: 'provisional lower-socket tongue stress case',
+    semanticClass: 'provisional-socket-tongue-stress-case',
+    objectLayer: 'semantic-object',
+    sourceCurve: architectureSourceCurveRef(morphologyRecord, assemblage),
+    territory: architectureTerritoryRef(assemblage),
+    widthProfile: {
+      id: `${candidate.id}-stress-width-profile`,
+      source: 'socketTongueProvenancePlan.candidates.anatomyMetrics',
+      meanSideWallThickness: candidate.anatomyMetrics?.meanSideWallThickness ?? null,
+      endCapWidthExpansionRatio: candidate.anatomyMetrics?.endCapWidthExpansionRatio ?? null,
+    },
+    terminal: {
+      mode: 'provisional-visible-until-receiver-owned-tuck',
+      protectedTerminalCapIds: candidate.protectedTerminalCapIds || [],
+      provisionalVisibleTerminalCapIds: candidate.provisionalVisibleTerminalCapIds || [],
+    },
+    receiverRelation: {
+      mode: 'receiver-required-but-not-owned',
+      receiverId: null,
+      disposition: null,
+    },
+    meshDerivation: {
+      mode: 'stress-case-derived-from-promoted-body-sidewalls-and-provisional-caps',
+      sourcePath: candidate.sourcePath,
+      localTuningAllowed: false,
+    },
+    localMorphologyTuningAllowed: false,
+    failureClasses: [
+      'downstream-constraint-soup-risk',
+      'local-morphology-loop-demoted',
+    ],
+    pathologyClasses: [
+      'downstream-constraint-soup-risk',
+      'local-morphology-loop-demoted',
+    ],
+    diagnosticQuestions: [
+      'which layer owns lower-socket tongue repair',
+      'is the visible appendage born from curve law, terminal law, receiver law, or render closure',
+    ],
+  };
+}
+
+function createProceduralArchitectureInventory(composition) {
+  const records = [];
+  for (const assemblage of composition.macroAssemblages || []) {
+    records.push(createMacroFamilyArchitectureRecord(composition, assemblage));
+  }
+  for (const substrip of composition.macroFamilySubstripPlan?.substrips || []) {
+    records.push(createSubstripArchitectureRecord(composition, substrip));
+  }
+  for (const cap of composition.liveMacroSideWallPlan?.terminalCaps || []) {
+    records.push(createTerminalCapArchitectureRecord(composition, cap));
+  }
+  for (const candidate of composition.socketTongueProvenancePlan?.candidates || []) {
+    if (candidate.id === 'lower-socket-keel-promoted-body-socket-tongue-candidate') {
+      records.push(createSocketTongueStressArchitectureRecord(composition, candidate));
+    }
+  }
+  return {
+    schema: 'OrbShellProceduralArchitectureInventory',
+    mode: ORB_SHELL_PROCEDURAL_ARCHITECTURE_INVENTORY_MODE,
+    stressCaseId: 'lower-socket-keel-promoted-body-socket-tongue-candidate',
+    activeRepairPosture: 'diagnose-upstream-laws-before-local-morphology-tuning',
+    visualDecompositionMode: 'curve-first-semantic-objects-before-mesh-caps-materials',
+    records,
+    recordCount: records.length,
+    layerCounts: countBy(records, 'objectLayer'),
+    semanticClassCounts: countBy(records, 'semanticClass'),
+    sourceStageCounts: records.reduce((counts, record) => {
+      const key = record.sourceCurve?.stage || 'unknown';
+      counts[key] = (counts[key] || 0) + 1;
+      return counts;
+    }, {}),
+    unresolvedArchitectureQuestions: [
+      'which layer owns lower-socket tongue repair',
+      'where do macro families stop being real objects and become implied territories',
+      'which terminal modes are semantic laws versus render closures',
+    ],
+    diagnosticVerdict: 'architecture-inventory-before-next-morphology-edit',
+  };
+}
+
 function createChannelThroughLineAudit(composition) {
   const northEast = composition.macroAssemblages.find(assemblage => assemblage.id === 'north-east-counter-thrust');
   const candidates = [
@@ -5592,6 +5916,7 @@ export function applyControlledOrbShellVariation(composition, descriptor) {
   next.socketTongueProvenancePlan = createSocketTongueProvenancePlan(next);
   next.apertureOrbitCaptureWitnessPlan = createApertureOrbitCaptureWitnessPlan(next);
   next.macroMorphologyInventory = createMacroMorphologyInventory(next);
+  next.proceduralArchitectureInventory = createProceduralArchitectureInventory(next);
   next.frontApertureOwnership.effectiveVariation = frontParameters;
   for (const owner of next.frontApertureOwnership.owners) {
     owner.preservedByVariation = true;
@@ -7744,6 +8069,10 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
       MacroSphereCurveDecomposition: composition.macroMorphologyInventory?.curveDecompositions || [],
       macroMorphologyRecordCount: composition.macroMorphologyInventory?.recordCount || 0,
       macroMorphologyPathologyClassCounts: composition.macroMorphologyInventory?.pathologyClassCounts || {},
+      OrbShellProceduralArchitectureInventory: composition.proceduralArchitectureInventory,
+      proceduralArchitectureInventory: composition.proceduralArchitectureInventory,
+      proceduralArchitectureInventoryRecordCount: composition.proceduralArchitectureInventory?.recordCount || 0,
+      proceduralArchitectureInventoryLayerCounts: composition.proceduralArchitectureInventory?.layerCounts || {},
       LowerSocketKeelAnatomyLaw: composition.lowerSocketKeelAnatomyLaw,
       lowerSocketKeelAnatomyLaw: composition.lowerSocketKeelAnatomyLaw,
       lowerSocketKeelAnatomyVerdict: composition.lowerSocketKeelAnatomyVerdict,
@@ -8232,6 +8561,59 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
         ],
       };
     },
+    enableProceduralArchitectureInventoryWitness() {
+      scene.children.forEach(child => {
+        if (child !== group) {
+          child.userData.proceduralArchitectureInventoryWitnessHidden = true;
+          child.visible = false;
+        }
+      });
+      let visibleCount = 0;
+      let hiddenCount = 0;
+      const visibleCurveIds = [];
+      const visibleSemanticMeshIds = [];
+      const visibleReferenceIds = [];
+      group?.traverse(child => {
+        if (!child.isMesh) return;
+        const curve = child.userData?.MacroSphereCurveDecomposition;
+        const isReferenceSphere = !!child.userData?.MacroMorphologyReferenceSphere;
+        const promoted = child.userData?.MacroPromotedBody;
+        const substrip = child.userData?.MacroFamilySubstrip;
+        const terminalCap = child.userData?.LiveMacroTerminalCap;
+        const aperture = child.userData?.AperturePressure;
+        const isSemanticContext = !!promoted || !!substrip || !!terminalCap || !!aperture;
+        child.visible = !!curve || isReferenceSphere || isSemanticContext;
+        if (child.visible) {
+          visibleCount += 1;
+          if (curve) visibleCurveIds.push(child.name);
+          if (isReferenceSphere) visibleReferenceIds.push(child.name);
+          if (isSemanticContext && !curve && !isReferenceSphere) visibleSemanticMeshIds.push(child.name);
+        } else {
+          hiddenCount += 1;
+        }
+      });
+      this.frameMacroMorphologyInventory();
+      return {
+        schema: 'ProceduralArchitectureInventoryWitnessState',
+        mode: 'procedural-architecture-inventory-isolated-v0',
+        visualDecompositionMode: composition.proceduralArchitectureInventory?.visualDecompositionMode,
+        inventory: compactProceduralArchitectureInventory(composition.proceduralArchitectureInventory),
+        visibleCount,
+        hiddenCount,
+        visibleCurveCount: visibleCurveIds.length,
+        visibleCurveIds,
+        visibleSemanticMeshIds,
+        visibleReferenceIds,
+        stressCaseId: composition.proceduralArchitectureInventory?.stressCaseId,
+        layerCounts: composition.proceduralArchitectureInventory?.layerCounts || {},
+        semanticClassCounts: composition.proceduralArchitectureInventory?.semanticClassCounts || {},
+        diagnosticQuestion: [
+          'what semantic object produced each visible mesh',
+          'which curve and territory does each generated element claim',
+          'which layer owns lower-socket tongue repair',
+        ],
+      };
+    },
     enableApertureTangencyWitness() {
       scene.children.forEach(child => {
         if (child !== group) {
@@ -8442,6 +8824,53 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
       active = false;
       disposeGroup();
     },
+    proceduralArchitectureInventoryDebugState() {
+      const compactInventory = compactProceduralArchitectureInventory(composition.proceduralArchitectureInventory);
+      return {
+        schema: 'ProceduralArchitectureInventoryDebugState',
+        identity: ORB_SHELL_COMPOSITION_IDENTITY,
+        active,
+        baselineDisposition: ORB_SHELL_COMPOSITION_BASELINE,
+        variantId: composition.effectiveVariation.variantId,
+        variationSeed: composition.effectiveVariation.variationSeed,
+        variationLeafCount: composition.effectiveVariation.variationLeafCount,
+        uiControlSource: composition.effectiveVariation.uiControlSource,
+        macroAssemblageCount: composition.macroAssemblages.length,
+        macroAssemblageIds: composition.macroAssemblages.map(item => item.id),
+        selectedMacroAssemblageIds: composition.macroAssemblageCountLaw?.selectedMacroAssemblageIds || [],
+        retiredMacroAssemblageIds: composition.macroAssemblageCountLaw?.retiredMacroAssemblageIds || [],
+        macroMorphologyRecordCount: composition.macroMorphologyInventory?.recordCount || 0,
+        macroMorphologyPathologyClassCounts: composition.macroMorphologyInventory?.pathologyClassCounts || {},
+        MacroSphereCurveDecomposition: (composition.macroMorphologyInventory?.curveDecompositions || []).map(curve => ({
+          id: curve.id,
+          parentAssemblage: curve.parentAssemblage,
+          generationStage: curve.generationStage,
+          visualOverlayId: curve.visualOverlayId,
+          sampleCount: curve.sampleCount,
+          sourceControl: curve.sourceControl,
+          pathologyClasses: curve.pathologyClasses,
+        })),
+        OrbShellProceduralArchitectureInventory: compactInventory,
+        proceduralArchitectureInventory: compactInventory,
+        proceduralArchitectureInventoryRecordCount: compactInventory?.recordCount || 0,
+        proceduralArchitectureInventoryLayerCounts: compactInventory?.layerCounts || {},
+        proceduralArchitectureInventorySemanticClassCounts: compactInventory?.semanticClassCounts || {},
+        proceduralArchitectureInventorySourceStageCounts: compactInventory?.sourceStageCounts || {},
+        stressCaseId: compactInventory?.stressCaseId || null,
+        diagnosticQuestion: compactInventory?.unresolvedArchitectureQuestions || [],
+        OrbShellComposition: {
+          schema: 'OrbShellCompositionDebugSummary',
+          identity: ORB_SHELL_COMPOSITION_IDENTITY,
+          macroAssemblageCount: composition.macroAssemblages.length,
+          macroAssemblageIds: composition.macroAssemblages.map(item => item.id),
+          variantId: composition.effectiveVariation.variantId,
+          variationSeed: composition.effectiveVariation.variationSeed,
+          variationLeafCount: composition.effectiveVariation.variationLeafCount,
+          macroMorphologyRecordCount: composition.macroMorphologyInventory?.recordCount || 0,
+          diagnosticCompactionReason: 'architecture-inventory-focus-uses-dedicated-compact-state',
+        },
+      };
+    },
     debugState() {
       return {
         identity: ORB_SHELL_COMPOSITION_IDENTITY,
@@ -8499,6 +8928,10 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
         MacroSphereCurveDecomposition: composition.macroMorphologyInventory?.curveDecompositions || [],
         macroMorphologyRecordCount: composition.macroMorphologyInventory?.recordCount || 0,
         macroMorphologyPathologyClassCounts: composition.macroMorphologyInventory?.pathologyClassCounts || {},
+        OrbShellProceduralArchitectureInventory: composition.proceduralArchitectureInventory,
+        proceduralArchitectureInventory: composition.proceduralArchitectureInventory,
+        proceduralArchitectureInventoryRecordCount: composition.proceduralArchitectureInventory?.recordCount || 0,
+        proceduralArchitectureInventoryLayerCounts: composition.proceduralArchitectureInventory?.layerCounts || {},
         LowerSocketKeelAnatomyLaw: composition.lowerSocketKeelAnatomyLaw,
         lowerSocketKeelAnatomyLaw: composition.lowerSocketKeelAnatomyLaw,
         lowerSocketKeelAnatomyVerdict: composition.lowerSocketKeelAnatomyVerdict,

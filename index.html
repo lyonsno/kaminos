@@ -16206,6 +16206,10 @@ function initOrbShellCompositionRoute() {
       const witnessState = orbShellCompositionWitness.enableMacroMorphologyInventoryWitness();
       setOrbShellSemanticLegend(null);
       setInfo(`Orb Shell Macro Morphology Inventory: ${witnessState.visibleCurveCount} early sphere curves visible`);
+    } else if (orbShellFocus === 'procedural-architecture-inventory') {
+      const witnessState = orbShellCompositionWitness.enableProceduralArchitectureInventoryWitness();
+      setOrbShellSemanticLegend(null);
+      setInfo(`Orb Shell Procedural Architecture Inventory: ${witnessState.visibleCurveCount} curves / ${witnessState.inventory?.recordCount || 0} architecture records`);
     } else if (orbShellFocus === 'aperture-orbit-capture') {
       const witnessState = orbShellCompositionWitness.enableApertureOrbitCaptureWitness();
       orbShellCompositionWitness.frameApertureOrbitCaptureWitness();
