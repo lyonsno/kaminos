@@ -20,7 +20,7 @@ PAIR_AUTHORITY = "frame-locked-render-scale-set-v0"
 IMAGE_AUTHORITY = "cdp-canvas-clip-capture-after-render-only-frozen-sim-state"
 FEATURE_INPUT_AUTHORITY = "shader-material-authority-residual-feature-v0"
 FLOW_DEBUG_AUXILIARY_INPUT_AUTHORITY = "flow-debug-interface-canvas-capture-v0"
-IMAGE_FEATURE_INPUT_MODES = {"feature-rgba", "aux-rgba"}
+IMAGE_FEATURE_INPUT_MODES = {"feature-rgba", "aux-rgba", "aux-rgb"}
 
 
 def constrain_residual_color(residual, residualColorMode, chromaResidualScale):
@@ -163,7 +163,7 @@ def parse_args():
     parser.add_argument("--batch-size", type=int, default=4)
     parser.add_argument("--patch-size", type=int, default=96)
     parser.add_argument("--model-arch", dest="modelArch", choices=["tiny-conv", "direct-residual", "hybrid-residual", "gated-detail-residual"], default="tiny-conv")
-    parser.add_argument("--feature-input-mode", dest="featureInputMode", choices=["rgb", "feature-rgba", "aux-rgba"], default="rgb", help="Model input source: low RGB only, low RGB plus shader/material residual feature RGBA, or low RGB plus auxiliary debug RGBA.")
+    parser.add_argument("--feature-input-mode", dest="featureInputMode", choices=["rgb", "feature-rgba", "aux-rgba", "aux-rgb"], default="rgb", help="Model input source: low RGB only, low RGB plus shader/material residual feature RGBA, low RGB plus auxiliary debug RGBA, or low RGB plus auxiliary debug RGB.")
     parser.add_argument("--hidden-channels", type=int, default=16)
     parser.add_argument("--detail-residual-gate", dest="detailResidualGate", type=float, default=2.0, help="Fixed multiplier for the hidden detail residual in gated-detail-residual probes.")
     parser.add_argument("--learning-rate", type=float, default=1e-3)
@@ -383,21 +383,25 @@ def load_image(path):
     return np.asarray(image, dtype=np.float32) / 255.0
 
 
-def load_feature_image(path, target_height, target_width):
-    image = Image.open(path).convert("RGBA")
+def load_feature_image(path, target_height, target_width, channels=4):
+    image = Image.open(path).convert("RGBA" if channels == 4 else "RGB")
     if image.size != (target_width, target_height):
         image = image.resize((target_width, target_height), Image.Resampling.BILINEAR)
     return np.asarray(image, dtype=np.float32) / 255.0
 
 
 def feature_input_channels(featureInputMode):
-    return 4 if featureInputMode in IMAGE_FEATURE_INPUT_MODES else 0
+    if featureInputMode in {"feature-rgba", "aux-rgba"}:
+        return 4
+    if featureInputMode == "aux-rgb":
+        return 3
+    return 0
 
 
 def feature_input_authority(featureInputMode):
     if featureInputMode == "feature-rgba":
         return FEATURE_INPUT_AUTHORITY
-    if featureInputMode == "aux-rgba":
+    if featureInputMode in {"aux-rgba", "aux-rgb"}:
         return FLOW_DEBUG_AUXILIARY_INPUT_AUTHORITY
     return "off"
 
@@ -559,16 +563,16 @@ def load_pair_arrays(pairs, foregroundThreshold, edgeBandMode, edgeBandThreshold
             if feature_authority != FEATURE_INPUT_AUTHORITY:
                 raise ValueError(f"pair feature authority is not {FEATURE_INPUT_AUTHORITY}: {pair.get('pairId')} got {feature_authority!r}")
             feature_image = load_feature_image(feature_path, low_image.shape[0], low_image.shape[1])
-        elif featureInputMode == "aux-rgba":
+        elif featureInputMode in {"aux-rgba", "aux-rgb"}:
             auxiliary_captures = pair.get("low", {}).get("auxiliaryCaptures") or {}
             flow_debug_capture = auxiliary_captures.get("flowDebug") or {}
             feature_path = flow_debug_capture.get("path")
             if not feature_path:
-                raise ValueError(f"pair lacks auxiliaryCaptures.flowDebug.path for --feature-input-mode=aux-rgba: {pair.get('pairId')}")
+                raise ValueError(f"pair lacks auxiliaryCaptures.flowDebug.path for --feature-input-mode={featureInputMode}: {pair.get('pairId')}")
             auxiliary_authority = flow_debug_capture.get("auxiliaryAuthority")
             if auxiliary_authority != FLOW_DEBUG_AUXILIARY_INPUT_AUTHORITY:
                 raise ValueError(f"pair Flow Debug auxiliary authority is not {FLOW_DEBUG_AUXILIARY_INPUT_AUTHORITY}: {pair.get('pairId')} got {auxiliary_authority!r}")
-            feature_image = load_feature_image(feature_path, low_image.shape[0], low_image.shape[1])
+            feature_image = load_feature_image(feature_path, low_image.shape[0], low_image.shape[1], feature_input_channels(featureInputMode))
         foreground = foreground_pixels(low_image, high_image, foregroundThreshold)
         edge_mask, edge_signal = edge_band_mask(low_image, high_image, edgeBandMode, edgeBandThreshold, edgeBandDilate)
         target_edge_mask, target_edge_signal = edge_band_mask(low_image, high_image, "difference-gradient", edgeBandThreshold, edgeBandDilate)
