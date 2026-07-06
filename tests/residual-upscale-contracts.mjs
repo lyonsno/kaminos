@@ -162,6 +162,16 @@ assert.match(
 );
 assert.match(
   trainer,
+  /aux-red-cyan-abs/,
+  'residual trainer must support a normalized red/cyan opponent carrier derived from Flow Debug',
+);
+assert.match(
+  trainer,
+  /aux-opponent-gradient/,
+  'residual trainer must support a normalized Flow Debug opponent-gradient carrier',
+);
+assert.match(
+  trainer,
   /shader-material-authority-residual-feature-v0/,
   'residual trainer must preserve shader/material feature authority instead of treating feature inputs as screen-space proxies',
 );
