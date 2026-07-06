@@ -9,6 +9,7 @@ const MASK_DECODER_ISLAND_ROUTE_ID = 'sam3.mask-decoder-island.webgpu-local.v0';
 const MASK_TAIL_PHASE_PROGRAM_ROUTE_ID = 'sam3.mask-tail.phase-program.webgpu-local.v0';
 const PIXEL_DECODER_PHASE_PROGRAM_ROUTE_ID = 'sam3.pixel-decoder.phase-program.webgpu-local.v0';
 const PROMPT_FPN_PHASE_PROGRAM_ROUTE_ID = 'sam3.prompt-fpn.phase-program.webgpu-local.v0';
+const DETR_ENCODER_PHASE_PROGRAM_ROUTE_ID = 'sam3.detr-encoder.phase-program.webgpu-local.v0';
 
 const args = new Map();
 for (let i = 2; i < process.argv.length; i += 2) {
@@ -27,6 +28,8 @@ const packetMode = args.get('--packet-mode') || 'synthetic';
 const packetTool = resolve(args.get('--packet-tool') || (
   packetMode === 'mlx-prompt-fpn-export'
     ? join(packageRoot, 'tools/sam-prompt-fpn-mlx-packet.py')
+    : packetMode === 'mlx-detr-encoder-export'
+    ? join(packageRoot, 'tools/sam-detr-encoder-mlx-packet.py')
     : packetMode === 'mlx-pixel-decoder-export'
     ? join(packageRoot, 'tools/sam-pixel-decoder-mlx-packet.py')
     : packetMode === 'mlx-mask-tail-export'
@@ -40,6 +43,8 @@ const sourceImage = args.get('--image') || process.env.KAMINOS_SAM3_FIXTURE_IMAG
 const requestedRouteId = args.get('--route-id') || (
   packetMode === 'mlx-prompt-fpn-export'
     ? PROMPT_FPN_PHASE_PROGRAM_ROUTE_ID
+    : packetMode === 'mlx-detr-encoder-export'
+    ? DETR_ENCODER_PHASE_PROGRAM_ROUTE_ID
     : packetMode === 'mlx-pixel-decoder-export'
     ? PIXEL_DECODER_PHASE_PROGRAM_ROUTE_ID
     : packetMode === 'mlx-mask-tail-export'
@@ -103,6 +108,7 @@ function writeReport(extra = {}) {
     routeReceipt: lastState?.routeReceipt || null,
     midstreamRouteReceipt: lastState?.midstreamRouteReceipt || null,
     downstreamRouteReceipt: lastState?.downstreamRouteReceipt || null,
+    compositionRouteReceipts: lastState?.compositionRouteReceipts || null,
     parity: lastState?.parity || null,
     ...extra,
   }, null, 2));
@@ -340,7 +346,37 @@ async function main() {
       throw new Error(`route identity mismatch: ${lastState.requestedRouteId} -> ${lastState.effectiveRouteId}`);
     }
     if (!lastState.backendIdentity?.adapterName) throw new Error('backendIdentity.adapterName missing');
-    if (requestedRouteId === PROMPT_FPN_PHASE_PROGRAM_ROUTE_ID) {
+    if (requestedRouteId === DETR_ENCODER_PHASE_PROGRAM_ROUTE_ID) {
+      if (!lastState.tensorPacket?.encoderSrcSha256 || !lastState.tensorPacket?.encoderPosSha256 || !lastState.tensorPacket?.expectedEncoderHiddenStatesSha256 || !lastState.tensorPacket?.weightsSha256) {
+        throw new Error('DETR encoder tensorPacket identity missing');
+      }
+      if (!Array.isArray(lastState.compositionRouteReceipts) || lastState.compositionRouteReceipts.length !== 4) {
+        throw new Error('DETR encoder composition receipt chain missing');
+      }
+      const [detrReceipt, promptReceipt, pixelReceipt, tailReceipt] = lastState.compositionRouteReceipts;
+      const compositionEdge = lastState.compositionEdge;
+      if (detrReceipt.effectiveRouteId !== DETR_ENCODER_PHASE_PROGRAM_ROUTE_ID) throw new Error('DETR receipt identity mismatch');
+      if (promptReceipt.effectiveRouteId !== PROMPT_FPN_PHASE_PROGRAM_ROUTE_ID) throw new Error('DETR prompt-FPN receipt identity mismatch');
+      if (pixelReceipt.effectiveRouteId !== PIXEL_DECODER_PHASE_PROGRAM_ROUTE_ID) throw new Error('DETR pixel receipt identity mismatch');
+      if (tailReceipt.effectiveRouteId !== MASK_TAIL_PHASE_PROGRAM_ROUTE_ID) throw new Error('DETR mask-tail receipt identity mismatch');
+      const encoderOutput = detrReceipt.outputs?.find(output => output.role === 'encoder-hidden-states');
+      if (
+        encoderOutput?.artifactId !== compositionEdge?.encoderHiddenStatesOutput?.artifactId
+        || encoderOutput?.sha256 !== compositionEdge?.encoderHiddenStatesOutput?.sha256
+        || JSON.stringify(encoderOutput?.shape) !== JSON.stringify(compositionEdge?.encoderHiddenStatesOutput?.shape)
+      ) {
+        throw new Error('DETR encoder output identity does not match composition edge');
+      }
+      const promptTensorInput = promptReceipt.inputs?.find(input => input.role === 'sam3-prompt-fpn-tensors');
+      if (promptTensorInput?.sha256 !== compositionEdge?.encoderTensorSha256) throw new Error('DETR encoderTensorSha256 does not match prompt-FPN receipt input');
+      const pixelTensorInput = pixelReceipt.inputs?.find(input => input.role === 'sam3-pixel-decoder-tensors');
+      if (pixelTensorInput?.sha256 !== compositionEdge?.pixelTensorSha256) throw new Error('DETR pixelTensorSha256 does not match pixel receipt input');
+      const downstreamTensorInput = tailReceipt.inputs?.find(input => input.role === 'sam3-mask-tail-tensors');
+      if (downstreamTensorInput?.sha256 !== compositionEdge?.downstreamTensorSha256) throw new Error('DETR downstreamTensorSha256 does not match mask-tail receipt input');
+      if (lastState.parity?.encoderHiddenStatesMaxAbsDiff > 0.0003) throw new Error('DETR encoder parity exceeds tolerance');
+      if (lastState.parity?.promptFpnMaxAbsDiff > 0.0003) throw new Error('DETR prompt-FPN parity exceeds tolerance');
+      if (lastState.parity?.binaryMismatchCount > 8) throw new Error('DETR binary mask parity exceeds tolerance');
+    } else if (requestedRouteId === PROMPT_FPN_PHASE_PROGRAM_ROUTE_ID) {
       if (!lastState.tensorPacket?.encoderHiddenStatesSha256 || !lastState.tensorPacket?.expectedPromptFpnFeatureSha256 || !lastState.tensorPacket?.weightsSha256) {
         throw new Error('prompt-FPN tensorPacket identity missing');
       }

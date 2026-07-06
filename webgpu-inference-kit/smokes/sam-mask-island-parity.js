@@ -3,6 +3,7 @@ import {
   SAM3_MASK_TAIL_PHASE_PROGRAM_ROUTE_ID,
   SAM3_PIXEL_DECODER_PHASE_PROGRAM_ROUTE_ID,
   SAM3_PROMPT_FPN_PHASE_PROGRAM_ROUTE_ID,
+  SAM3_DETR_ENCODER_PHASE_PROGRAM_ROUTE_ID,
   createRouteInvocationRequest,
   createSam3MaskDecoderIslandRouteDefinition,
   createSam3MaskProjectionCpuOracle,
@@ -12,10 +13,12 @@ import {
   createSam3PixelDecoderPhaseProgramRouteDefinition,
   createSam3PromptFpnPhaseProgramCpuOracle,
   createSam3PromptFpnPhaseProgramRouteDefinition,
+  createSam3DetrEncoderPhaseProgramRouteDefinition,
   runSam3MaskDecoderIslandRoute,
   runSam3MaskTailPhaseProgramRoute,
   runSam3PixelDecoderPhaseProgramRoute,
   runSam3PromptFpnPhaseProgramRoute,
+  runSam3DetrEncoderPhaseProgramRoute,
 } from '../src/index.js';
 
 const SUPPORTED_ROUTE_IDS = new Set([
@@ -23,6 +26,7 @@ const SUPPORTED_ROUTE_IDS = new Set([
   SAM3_MASK_TAIL_PHASE_PROGRAM_ROUTE_ID,
   SAM3_PIXEL_DECODER_PHASE_PROGRAM_ROUTE_ID,
   SAM3_PROMPT_FPN_PHASE_PROGRAM_ROUTE_ID,
+  SAM3_DETR_ENCODER_PHASE_PROGRAM_ROUTE_ID,
 ]);
 const PIXEL_DECODER_WEIGHT_ROLE_EXAMPLES = ['pixel-decoder-stage-0-conv-weight'];
 
@@ -41,6 +45,7 @@ const state = {
   routeReceipt: null,
   midstreamRouteReceipt: null,
   downstreamRouteReceipt: null,
+  compositionRouteReceipts: null,
   compositionEdge: null,
   parity: null,
   sourceImage: null,
@@ -221,6 +226,72 @@ function drawVisualWitness({ sourceImage, sourceImageIdentity, expected, actual,
     ctx.strokeStyle = '#59635e';
     ctx.strokeRect(panel.x, 34, 200, 200);
   }
+}
+
+function loadDetrLayerWeightRoles(layerCount) {
+  const roles = [];
+  for (let layer = 0; layer < layerCount; layer += 1) {
+    roles.push(
+      `detr-encoder-layer-${layer}-layernorm1-weight`,
+      `detr-encoder-layer-${layer}-layernorm1-bias`,
+      `detr-encoder-layer-${layer}-self-q-weight`,
+      `detr-encoder-layer-${layer}-self-q-bias`,
+      `detr-encoder-layer-${layer}-self-k-weight`,
+      `detr-encoder-layer-${layer}-self-k-bias`,
+      `detr-encoder-layer-${layer}-self-v-weight`,
+      `detr-encoder-layer-${layer}-self-v-bias`,
+      `detr-encoder-layer-${layer}-self-o-weight`,
+      `detr-encoder-layer-${layer}-self-o-bias`,
+      `detr-encoder-layer-${layer}-layernorm2-weight`,
+      `detr-encoder-layer-${layer}-layernorm2-bias`,
+      `detr-encoder-layer-${layer}-cross-q-weight`,
+      `detr-encoder-layer-${layer}-cross-q-bias`,
+      `detr-encoder-layer-${layer}-cross-k-weight`,
+      `detr-encoder-layer-${layer}-cross-k-bias`,
+      `detr-encoder-layer-${layer}-cross-v-weight`,
+      `detr-encoder-layer-${layer}-cross-v-bias`,
+      `detr-encoder-layer-${layer}-cross-o-weight`,
+      `detr-encoder-layer-${layer}-cross-o-bias`,
+      `detr-encoder-layer-${layer}-layernorm3-weight`,
+      `detr-encoder-layer-${layer}-layernorm3-bias`,
+      `detr-encoder-layer-${layer}-fc1-weight`,
+      `detr-encoder-layer-${layer}-fc1-bias`,
+      `detr-encoder-layer-${layer}-fc2-weight`,
+      `detr-encoder-layer-${layer}-fc2-bias`,
+    );
+  }
+  return roles;
+}
+
+async function loadDetrEncoderLayers(manifest, weightsByRole) {
+  return Promise.all(Array.from({ length: manifest.shape.layerCount }, async (_, layer) => ({
+    layerNorm1Weight: await fetchArray(resolveManifestFile(weightsByRole[`detr-encoder-layer-${layer}-layernorm1-weight`].file), Float32Array),
+    layerNorm1Bias: await fetchArray(resolveManifestFile(weightsByRole[`detr-encoder-layer-${layer}-layernorm1-bias`].file), Float32Array),
+    selfQWeight: await fetchArray(resolveManifestFile(weightsByRole[`detr-encoder-layer-${layer}-self-q-weight`].file), Float32Array),
+    selfQBias: await fetchArray(resolveManifestFile(weightsByRole[`detr-encoder-layer-${layer}-self-q-bias`].file), Float32Array),
+    selfKWeight: await fetchArray(resolveManifestFile(weightsByRole[`detr-encoder-layer-${layer}-self-k-weight`].file), Float32Array),
+    selfKBias: await fetchArray(resolveManifestFile(weightsByRole[`detr-encoder-layer-${layer}-self-k-bias`].file), Float32Array),
+    selfVWeight: await fetchArray(resolveManifestFile(weightsByRole[`detr-encoder-layer-${layer}-self-v-weight`].file), Float32Array),
+    selfVBias: await fetchArray(resolveManifestFile(weightsByRole[`detr-encoder-layer-${layer}-self-v-bias`].file), Float32Array),
+    selfOWeight: await fetchArray(resolveManifestFile(weightsByRole[`detr-encoder-layer-${layer}-self-o-weight`].file), Float32Array),
+    selfOBias: await fetchArray(resolveManifestFile(weightsByRole[`detr-encoder-layer-${layer}-self-o-bias`].file), Float32Array),
+    layerNorm2Weight: await fetchArray(resolveManifestFile(weightsByRole[`detr-encoder-layer-${layer}-layernorm2-weight`].file), Float32Array),
+    layerNorm2Bias: await fetchArray(resolveManifestFile(weightsByRole[`detr-encoder-layer-${layer}-layernorm2-bias`].file), Float32Array),
+    crossQWeight: await fetchArray(resolveManifestFile(weightsByRole[`detr-encoder-layer-${layer}-cross-q-weight`].file), Float32Array),
+    crossQBias: await fetchArray(resolveManifestFile(weightsByRole[`detr-encoder-layer-${layer}-cross-q-bias`].file), Float32Array),
+    crossKWeight: await fetchArray(resolveManifestFile(weightsByRole[`detr-encoder-layer-${layer}-cross-k-weight`].file), Float32Array),
+    crossKBias: await fetchArray(resolveManifestFile(weightsByRole[`detr-encoder-layer-${layer}-cross-k-bias`].file), Float32Array),
+    crossVWeight: await fetchArray(resolveManifestFile(weightsByRole[`detr-encoder-layer-${layer}-cross-v-weight`].file), Float32Array),
+    crossVBias: await fetchArray(resolveManifestFile(weightsByRole[`detr-encoder-layer-${layer}-cross-v-bias`].file), Float32Array),
+    crossOWeight: await fetchArray(resolveManifestFile(weightsByRole[`detr-encoder-layer-${layer}-cross-o-weight`].file), Float32Array),
+    crossOBias: await fetchArray(resolveManifestFile(weightsByRole[`detr-encoder-layer-${layer}-cross-o-bias`].file), Float32Array),
+    layerNorm3Weight: await fetchArray(resolveManifestFile(weightsByRole[`detr-encoder-layer-${layer}-layernorm3-weight`].file), Float32Array),
+    layerNorm3Bias: await fetchArray(resolveManifestFile(weightsByRole[`detr-encoder-layer-${layer}-layernorm3-bias`].file), Float32Array),
+    fc1Weight: await fetchArray(resolveManifestFile(weightsByRole[`detr-encoder-layer-${layer}-fc1-weight`].file), Float32Array),
+    fc1Bias: await fetchArray(resolveManifestFile(weightsByRole[`detr-encoder-layer-${layer}-fc1-bias`].file), Float32Array),
+    fc2Weight: await fetchArray(resolveManifestFile(weightsByRole[`detr-encoder-layer-${layer}-fc2-weight`].file), Float32Array),
+    fc2Bias: await fetchArray(resolveManifestFile(weightsByRole[`detr-encoder-layer-${layer}-fc2-bias`].file), Float32Array),
+  })));
 }
 
 async function loadMaskDecoderIslandPayload(manifest) {
@@ -581,6 +652,205 @@ async function loadPixelDecoderPayload(manifest) {
   };
 }
 
+async function loadDetrEncoderPayload(manifest) {
+  const encoderSrcTensor = tensorByRole(manifest, 'encoder-src');
+  const encoderPosTensor = tensorByRole(manifest, 'encoder-pos');
+  const promptTensor = tensorByRole(manifest, 'prompt-features');
+  const promptMaskTensor = tensorByRole(manifest, 'prompt-mask');
+  const expectedEncoderTensor = tensorByRole(manifest, 'expected-encoder-hidden-states');
+  const backboneTensors = manifest.shape.levels.map((_, index) => tensorByRole(manifest, `backbone-fpn-feature-${index}`));
+  const expectedPromptTensor = tensorByRole(manifest, 'expected-prompt-fpn-feature');
+  const lastHsTensor = tensorByRole(manifest, 'last-hs');
+  const expectedPixelTensor = tensorByRole(manifest, 'expected-pixel-embed');
+  const expectedLogitsTensor = tensorByRole(manifest, 'expected-mask-logits');
+  const expectedBinaryTensor = tensorByRole(manifest, 'expected-binary-mask');
+  const encoderSrc = await fetchArray(resolveManifestFile(encoderSrcTensor.file), Float32Array);
+  const encoderPos = await fetchArray(resolveManifestFile(encoderPosTensor.file), Float32Array);
+  const promptFeatures = await fetchArray(resolveManifestFile(promptTensor.file), Float32Array);
+  const promptMask = await fetchArray(resolveManifestFile(promptMaskTensor.file), Float32Array);
+  const expectedEncoderHiddenStates = await fetchArray(resolveManifestFile(expectedEncoderTensor.file), Float32Array);
+  const backboneFeatures = await Promise.all(backboneTensors.map(tensor => fetchArray(resolveManifestFile(tensor.file), Float32Array)));
+  const expectedPromptFpnFeature = await fetchArray(resolveManifestFile(expectedPromptTensor.file), Float32Array);
+  const lastHs = await fetchArray(resolveManifestFile(lastHsTensor.file), Float32Array);
+  const expectedPixelEmbed = await fetchArray(resolveManifestFile(expectedPixelTensor.file), Float32Array);
+  const expectedLogits = await fetchArray(resolveManifestFile(expectedLogitsTensor.file), Float32Array);
+  const expectedBinary = await fetchArray(resolveManifestFile(expectedBinaryTensor.file), Uint32Array);
+  const detrWeightRoles = loadDetrLayerWeightRoles(manifest.shape.layerCount);
+  const promptWeightRoles = [
+    'prompt-cross-attn-norm-weight',
+    'prompt-cross-attn-norm-bias',
+    'prompt-cross-attn-q-weight',
+    'prompt-cross-attn-q-bias',
+    'prompt-cross-attn-k-weight',
+    'prompt-cross-attn-k-bias',
+    'prompt-cross-attn-v-weight',
+    'prompt-cross-attn-v-bias',
+    'prompt-cross-attn-o-weight',
+    'prompt-cross-attn-o-bias',
+  ];
+  const pixelWeightRoles = [];
+  for (let stage = 0; stage < manifest.shape.levels.length - 1; stage += 1) {
+    pixelWeightRoles.push(
+      `pixel-decoder-stage-${stage}-conv-weight`,
+      `pixel-decoder-stage-${stage}-conv-bias`,
+      `pixel-decoder-stage-${stage}-norm-weight`,
+      `pixel-decoder-stage-${stage}-norm-bias`,
+    );
+  }
+  const tailWeightRoles = [
+    'mask-embedder-layer-0-weight',
+    'mask-embedder-layer-0-bias',
+    'mask-embedder-layer-1-weight',
+    'mask-embedder-layer-1-bias',
+    'mask-embedder-layer-2-weight',
+    'mask-embedder-layer-2-bias',
+    'instance-projection-weight',
+    'instance-projection-bias',
+  ];
+  const weightsByRole = Object.fromEntries([...detrWeightRoles, ...promptWeightRoles, ...pixelWeightRoles, ...tailWeightRoles].map(role => [role, weightByRole(manifest, role)]));
+  const detrWeights = { layers: await loadDetrEncoderLayers(manifest, weightsByRole) };
+  const promptWeights = {
+    layerNormWeight: await fetchArray(resolveManifestFile(weightsByRole['prompt-cross-attn-norm-weight'].file), Float32Array),
+    layerNormBias: await fetchArray(resolveManifestFile(weightsByRole['prompt-cross-attn-norm-bias'].file), Float32Array),
+    qWeight: await fetchArray(resolveManifestFile(weightsByRole['prompt-cross-attn-q-weight'].file), Float32Array),
+    qBias: await fetchArray(resolveManifestFile(weightsByRole['prompt-cross-attn-q-bias'].file), Float32Array),
+    kWeight: await fetchArray(resolveManifestFile(weightsByRole['prompt-cross-attn-k-weight'].file), Float32Array),
+    kBias: await fetchArray(resolveManifestFile(weightsByRole['prompt-cross-attn-k-bias'].file), Float32Array),
+    vWeight: await fetchArray(resolveManifestFile(weightsByRole['prompt-cross-attn-v-weight'].file), Float32Array),
+    vBias: await fetchArray(resolveManifestFile(weightsByRole['prompt-cross-attn-v-bias'].file), Float32Array),
+    oWeight: await fetchArray(resolveManifestFile(weightsByRole['prompt-cross-attn-o-weight'].file), Float32Array),
+    oBias: await fetchArray(resolveManifestFile(weightsByRole['prompt-cross-attn-o-bias'].file), Float32Array),
+  };
+  const pixelWeights = {
+    stages: await Promise.all(Array.from({ length: manifest.shape.levels.length - 1 }, async (_, stage) => ({
+      convWeight: await fetchArray(resolveManifestFile(weightsByRole[`pixel-decoder-stage-${stage}-conv-weight`].file), Float32Array),
+      convBias: await fetchArray(resolveManifestFile(weightsByRole[`pixel-decoder-stage-${stage}-conv-bias`].file), Float32Array),
+      normWeight: await fetchArray(resolveManifestFile(weightsByRole[`pixel-decoder-stage-${stage}-norm-weight`].file), Float32Array),
+      normBias: await fetchArray(resolveManifestFile(weightsByRole[`pixel-decoder-stage-${stage}-norm-bias`].file), Float32Array),
+    }))),
+  };
+  const tailWeights = {
+    maskEmbedder: [
+      { weight: await fetchArray(resolveManifestFile(weightsByRole['mask-embedder-layer-0-weight'].file), Float32Array), bias: await fetchArray(resolveManifestFile(weightsByRole['mask-embedder-layer-0-bias'].file), Float32Array) },
+      { weight: await fetchArray(resolveManifestFile(weightsByRole['mask-embedder-layer-1-weight'].file), Float32Array), bias: await fetchArray(resolveManifestFile(weightsByRole['mask-embedder-layer-1-bias'].file), Float32Array) },
+      { weight: await fetchArray(resolveManifestFile(weightsByRole['mask-embedder-layer-2-weight'].file), Float32Array), bias: await fetchArray(resolveManifestFile(weightsByRole['mask-embedder-layer-2-bias'].file), Float32Array) },
+    ],
+    instanceProjection: {
+      weight: await fetchArray(resolveManifestFile(weightsByRole['instance-projection-weight'].file), Float32Array),
+      bias: await fetchArray(resolveManifestFile(weightsByRole['instance-projection-bias'].file), Float32Array),
+    },
+  };
+  const detrShape = { batch: manifest.shape.batch, spatialTokens: manifest.shape.spatialTokens, promptTokens: manifest.shape.promptTokens, channels: manifest.shape.channels, heads: manifest.shape.heads, layerCount: manifest.shape.layerCount, mlpHidden: manifest.shape.mlpHidden, height: manifest.shape.height, width: manifest.shape.width };
+  const promptShape = { batch: manifest.shape.batch, spatialTokens: manifest.shape.spatialTokens, promptTokens: manifest.shape.promptTokens, channels: manifest.shape.channels, heads: manifest.shape.heads, height: manifest.shape.height, width: manifest.shape.width };
+  const pixelShape = { batch: manifest.shape.batch, channels: manifest.shape.channels, groups: manifest.shape.groups, levels: manifest.shape.levels };
+  const maskTailShape = { batch: manifest.shape.batch, maskTokens: manifest.shape.maskTokens, channels: manifest.shape.channels, height: manifest.shape.levels[0].height, width: manifest.shape.levels[0].width };
+  const pixelOracle = createSam3PixelDecoderPhaseProgramCpuOracle({ features: [backboneFeatures[0], backboneFeatures[1], expectedPromptFpnFeature], weights: pixelWeights, shape: pixelShape });
+  const maskOracle = createSam3MaskTailPhaseProgramCpuOracle({ lastHs, pixelEmbed: expectedPixelEmbed, weights: tailWeights, shape: maskTailShape });
+  return {
+    routeKind: 'detr-encoder-prompt-fpn-pixel-decoder-mask-tail-composition',
+    expectedEncoderHiddenStates,
+    expectedPromptFpnFeature,
+    expectedPixelEmbed,
+    expectedLogits,
+    expectedBinary,
+    cpuSelfCheck: {
+      pixelEmbedMaxAbsDiff: maxAbsDiff(expectedPixelEmbed, pixelOracle.pixelEmbed),
+      logitsMaxAbsDiff: maxAbsDiff(expectedLogits, maskOracle.maskLogits),
+      binaryMismatchCount: mismatchCount(expectedBinary, maskOracle.binaryMask),
+    },
+    tensorIdentity: {
+      encoderSrcSha256: encoderSrcTensor.sha256,
+      encoderPosSha256: encoderPosTensor.sha256,
+      promptFeaturesSha256: promptTensor.sha256,
+      promptMaskSha256: promptMaskTensor.sha256,
+      expectedEncoderHiddenStatesSha256: expectedEncoderTensor.sha256,
+      expectedPromptFpnFeatureSha256: expectedPromptTensor.sha256,
+      backboneFpnFeatureSha256: Object.fromEntries(backboneTensors.map((tensor, index) => [`backbone-fpn-feature-${index}`, tensor.sha256])),
+      lastHsSha256: lastHsTensor.sha256,
+      expectedPixelEmbedSha256: expectedPixelTensor.sha256,
+      expectedMaskLogitsSha256: expectedLogitsTensor.sha256,
+      expectedBinaryMaskSha256: expectedBinaryTensor.sha256,
+      weightsSha256: Object.fromEntries(Object.entries(weightsByRole).map(([role, weight]) => [role, weight.sha256])),
+    },
+    async run({ device, adapter, route, request }) {
+      const detrResult = await runSam3DetrEncoderPhaseProgramRoute({ request, route, device, queue: device.queue, adapterName: adapter.info?.description || adapter.info?.device || 'browser-webgpu-adapter', browser: navigator.userAgent, kernel: route.kernel, model: { revision: route.model.revision, weightsHash: manifest.staticWeights.sha256, dtype: 'fp32' }, tensors: { encoderSrc, encoderPos, promptFeatures, promptMask, layers: detrWeights.layers, shape: detrShape }, includeReadback: true });
+      const gpuEncoderHiddenStates = new Float32Array(detrResult.debugReadback.encoderHiddenStates);
+      const encoderHiddenStatesOutput = detrResult.receipt.outputs.find(output => output.role === 'encoder-hidden-states');
+      if (!encoderHiddenStatesOutput?.sha256 || !encoderHiddenStatesOutput?.artifactId) throw new Error('DETR encoder output identity missing');
+      const encoderTensorSha256 = await aggregateTensorBundleSha256('sam3-prompt-fpn-composed-tensors', [
+        { role: 'encoder-hidden-states', artifactId: encoderHiddenStatesOutput.artifactId, sha256: encoderHiddenStatesOutput.sha256, shape: encoderHiddenStatesOutput.shape },
+        { role: 'prompt-features', sha256: promptTensor.sha256 },
+        { role: 'prompt-mask', sha256: promptMaskTensor.sha256 },
+      ]);
+      const promptRoute = createSam3PromptFpnPhaseProgramRouteDefinition({ model: { revision: manifest.model?.id || 'mlx-reference-prompt-fpn', dtype: 'fp32' }, kernel: { profile: 'sam3-prompt-fpn-phase-program-v0', commit: params.get('commit') || null } });
+      const promptRequest = createRouteInvocationRequest(promptRoute, {
+        requestId: `sam-browser-detr-prompt-${Date.now()}`,
+        inputs: {
+          'source-image': { artifactId: manifest.sourceImage?.artifactId || 'image:synthetic', sha256: manifest.sourceImage?.sha256 || 'sha256:synthetic-image', shape: sourceImageShape(manifest) },
+          'sam3-prompt-fpn-tensors': { artifactId: 'sam3-prompt-fpn-tensors:browser-detr-composition', sha256: encoderTensorSha256 },
+          'sam3-prompt-fpn-weights': { artifactId: manifest.staticWeights.artifactId, sha256: manifest.staticWeights.sha256 },
+        },
+        outputs: { 'prompt-fpn-feature': { artifactId: 'sam3-prompt-fpn-feature:browser-detr-composition', shape: [manifest.shape.batch, manifest.shape.height, manifest.shape.width, manifest.shape.channels] } },
+        routeConfig: { upstream: manifest.claims?.upstream || 'mlx-reference-detr-encoder', promptHash: manifest.prompt?.sha256, composedFrom: detrResult.receipt?.effectiveRouteId, encoderHiddenStatesOutput },
+      });
+      const promptResult = await runSam3PromptFpnPhaseProgramRoute({ request: promptRequest, route: promptRoute, device, queue: device.queue, adapterName: adapter.info?.description || adapter.info?.device || 'browser-webgpu-adapter', browser: navigator.userAgent, kernel: promptRoute.kernel, model: { revision: promptRoute.model.revision, weightsHash: manifest.staticWeights.sha256, dtype: 'fp32' }, tensors: { encoderHiddenStates: gpuEncoderHiddenStates, promptFeatures, promptMask, weights: promptWeights, shape: promptShape }, includeReadback: true });
+      const gpuPromptFpnFeature = new Float32Array(promptResult.debugReadback.promptFpnFeature);
+      const promptFpnOutput = promptResult.receipt.outputs.find(output => output.role === 'prompt-fpn-feature');
+      if (!promptFpnOutput?.sha256 || !promptFpnOutput?.artifactId) throw new Error('prompt-FPN route output identity missing');
+      const pixelTensorSha256 = await aggregateTensorBundleSha256('sam3-pixel-decoder-composed-tensors', [
+        { role: 'backbone-fpn-feature-0', sha256: backboneTensors[0].sha256 },
+        { role: 'backbone-fpn-feature-1', sha256: backboneTensors[1].sha256 },
+        { role: 'prompt-fpn-feature', artifactId: promptFpnOutput.artifactId, sha256: promptFpnOutput.sha256, shape: promptFpnOutput.shape },
+      ]);
+      const pixelRoute = createSam3PixelDecoderPhaseProgramRouteDefinition({ stageCount: manifest.shape.levels.length - 1, model: { revision: manifest.model?.id || 'mlx-reference-pixel-decoder', dtype: 'fp32' }, kernel: { profile: 'sam3-pixel-decoder-phase-program-v0', commit: params.get('commit') || null } });
+      const pixelRequest = createRouteInvocationRequest(pixelRoute, {
+        requestId: `sam-browser-detr-pixel-${Date.now()}`,
+        inputs: {
+          'source-image': { artifactId: manifest.sourceImage?.artifactId || 'image:synthetic', sha256: manifest.sourceImage?.sha256 || 'sha256:synthetic-image', shape: sourceImageShape(manifest) },
+          'sam3-pixel-decoder-tensors': { artifactId: 'sam3-pixel-decoder-tensors:browser-detr-composition', sha256: pixelTensorSha256 },
+          'sam3-pixel-decoder-weights': { artifactId: manifest.staticWeights.artifactId, sha256: manifest.staticWeights.sha256 },
+        },
+        outputs: { 'pixel-embed': { artifactId: 'sam3-pixel-embed:browser-detr-composition', shape: [manifest.shape.batch, manifest.shape.levels[0].height, manifest.shape.levels[0].width, manifest.shape.channels] } },
+        routeConfig: { upstream: manifest.claims?.upstream || 'mlx-reference-detr-encoder', promptHash: manifest.prompt?.sha256, composedFrom: promptResult.receipt?.effectiveRouteId, promptFpnOutput },
+      });
+      const pixelResult = await runSam3PixelDecoderPhaseProgramRoute({ request: pixelRequest, route: pixelRoute, device, queue: device.queue, adapterName: adapter.info?.description || adapter.info?.device || 'browser-webgpu-adapter', browser: navigator.userAgent, kernel: pixelRoute.kernel, model: { revision: pixelRoute.model.revision, weightsHash: manifest.staticWeights.sha256, dtype: 'fp32' }, tensors: { features: [backboneFeatures[0], backboneFeatures[1], gpuPromptFpnFeature], weights: pixelWeights, shape: pixelShape }, includeReadback: true });
+      const gpuPixelEmbed = new Float32Array(pixelResult.debugReadback.pixelEmbed);
+      const pixelEmbedOutput = pixelResult.receipt.outputs.find(output => output.role === 'pixel-embed');
+      if (!pixelEmbedOutput?.sha256 || !pixelEmbedOutput?.artifactId) throw new Error('pixel route output identity missing');
+      const downstreamTensorSha256 = await aggregateTensorBundleSha256('sam3-mask-tail-composed-tensors', [
+        { role: 'last-hs', sha256: lastHsTensor.sha256 },
+        { role: 'pixel-embed', artifactId: pixelEmbedOutput.artifactId, sha256: pixelEmbedOutput.sha256, shape: pixelEmbedOutput.shape },
+      ]);
+      const maskRoute = createSam3MaskTailPhaseProgramRouteDefinition({ model: { revision: manifest.model?.id || 'mlx-reference-mask-tail', dtype: 'fp32' }, kernel: { profile: 'sam3-mask-tail-phase-program-v0', commit: params.get('commit') || null } });
+      const maskRequest = createRouteInvocationRequest(maskRoute, {
+        requestId: `sam-browser-detr-tail-${Date.now()}`,
+        inputs: {
+          'source-image': { artifactId: manifest.sourceImage?.artifactId || 'image:synthetic', sha256: manifest.sourceImage?.sha256 || 'sha256:synthetic-image', shape: sourceImageShape(manifest) },
+          'sam3-mask-tail-tensors': { artifactId: 'sam3-mask-tail-tensors:browser-detr-composition', sha256: downstreamTensorSha256 },
+          'sam3-mask-tail-weights': { artifactId: manifest.staticWeights.artifactId, sha256: manifest.staticWeights.sha256 },
+        },
+        outputs: {
+          'mask-logits': { artifactId: 'sam3-mask-logits:browser-detr-composition', shape: [manifest.shape.batch, manifest.shape.maskTokens, manifest.shape.levels[0].height, manifest.shape.levels[0].width] },
+          'mask-binary': { artifactId: 'sam3-mask-binary:browser-detr-composition', shape: [manifest.shape.batch, manifest.shape.maskTokens, manifest.shape.levels[0].height, manifest.shape.levels[0].width] },
+        },
+        routeConfig: { upstream: manifest.claims?.upstream || 'mlx-reference-detr-encoder', promptHash: manifest.prompt?.sha256, composedFrom: pixelResult.receipt?.effectiveRouteId, pixelEmbedOutput },
+      });
+      const tailResult = await runSam3MaskTailPhaseProgramRoute({ request: maskRequest, route: maskRoute, device, queue: device.queue, adapterName: adapter.info?.description || adapter.info?.device || 'browser-webgpu-adapter', browser: navigator.userAgent, kernel: maskRoute.kernel, model: { revision: maskRoute.model.revision, weightsHash: manifest.staticWeights.sha256, dtype: 'fp32' }, tensors: { lastHs, pixelEmbed: gpuPixelEmbed, weights: tailWeights, shape: maskTailShape }, includeReadback: true });
+      return {
+        ...tailResult,
+        receipt: detrResult.receipt,
+        routeReceipt: detrResult.receipt,
+        midstreamRouteReceipt: promptResult.receipt,
+        downstreamRouteReceipt: tailResult.receipt,
+        compositionRouteReceipts: [detrResult.receipt, promptResult.receipt, pixelResult.receipt, tailResult.receipt],
+        backend: tailResult.backend,
+        debugReadback: { encoderHiddenStates: Array.from(gpuEncoderHiddenStates), promptFpnFeature: Array.from(gpuPromptFpnFeature), pixelEmbed: Array.from(gpuPixelEmbed), maskLogits: tailResult.debugReadback.maskLogits, binaryMask: tailResult.debugReadback.binaryMask },
+        compositionEdge: { upstreamRouteId: detrResult.receipt.effectiveRouteId, promptRouteId: promptResult.receipt.effectiveRouteId, midstreamRouteId: pixelResult.receipt.effectiveRouteId, downstreamRouteId: tailResult.receipt.effectiveRouteId, encoderHiddenStatesOutput, encoderTensorSha256, promptFpnOutput, pixelTensorSha256, pixelEmbedOutput, downstreamTensorSha256 },
+      };
+    },
+  };
+}
+
 async function loadPromptFpnPayload(manifest) {
   const encoderTensor = tensorByRole(manifest, 'encoder-hidden-states');
   const promptTensor = tensorByRole(manifest, 'prompt-features');
@@ -762,7 +1032,9 @@ async function main() {
       throw new Error('oracle packet must preserve explicit static-weight or reference-weight identity');
     }
 
-    const payload = manifest.routeId === SAM3_PROMPT_FPN_PHASE_PROGRAM_ROUTE_ID
+    const payload = manifest.routeId === SAM3_DETR_ENCODER_PHASE_PROGRAM_ROUTE_ID
+      ? await loadDetrEncoderPayload(manifest)
+      : manifest.routeId === SAM3_PROMPT_FPN_PHASE_PROGRAM_ROUTE_ID
       ? await loadPromptFpnPayload(manifest)
       : manifest.routeId === SAM3_PIXEL_DECODER_PHASE_PROGRAM_ROUTE_ID
       ? await loadPixelDecoderPayload(manifest)
@@ -805,7 +1077,19 @@ async function main() {
     if (!adapter) throw new Error('WebGPU adapter unavailable');
     const device = await adapter.requestDevice();
 
-    const route = manifest.routeId === SAM3_PROMPT_FPN_PHASE_PROGRAM_ROUTE_ID
+    const route = manifest.routeId === SAM3_DETR_ENCODER_PHASE_PROGRAM_ROUTE_ID
+      ? createSam3DetrEncoderPhaseProgramRouteDefinition({
+          model: {
+            revision: manifest.model?.id || 'mlx-reference-detr-encoder',
+            dtype: 'fp32',
+          },
+          kernel: {
+            profile: 'sam3-detr-encoder-phase-program-v0',
+            commit: params.get('commit') || null,
+          },
+          shape: manifest.shape,
+        })
+      : manifest.routeId === SAM3_PROMPT_FPN_PHASE_PROGRAM_ROUTE_ID
       ? createSam3PromptFpnPhaseProgramRouteDefinition({
           model: {
             revision: manifest.model?.id || 'mlx-reference-prompt-fpn',
@@ -854,6 +1138,14 @@ async function main() {
       sha256: manifest.sourceImage?.sha256 || 'sha256:synthetic-image',
       shape: sourceImageShape(manifest),
     };
+    const detrTensorBundleSha256 = manifest.routeId === SAM3_DETR_ENCODER_PHASE_PROGRAM_ROUTE_ID
+      ? await aggregateTensorBundleSha256('sam3-detr-encoder-tensors', [
+          { role: 'encoder-src', sha256: payload.tensorIdentity.encoderSrcSha256 },
+          { role: 'encoder-pos', sha256: payload.tensorIdentity.encoderPosSha256 },
+          { role: 'prompt-features', sha256: payload.tensorIdentity.promptFeaturesSha256 },
+          { role: 'prompt-mask', sha256: payload.tensorIdentity.promptMaskSha256 },
+        ])
+      : null;
     const promptTensorBundleSha256 = manifest.routeId === SAM3_PROMPT_FPN_PHASE_PROGRAM_ROUTE_ID
       ? await aggregateTensorBundleSha256('sam3-prompt-fpn-tensors', [
           { role: 'encoder-hidden-states', sha256: payload.tensorIdentity.encoderHiddenStatesSha256 },
@@ -864,7 +1156,19 @@ async function main() {
     const pixelTensorBundleSha256 = manifest.routeId === SAM3_PIXEL_DECODER_PHASE_PROGRAM_ROUTE_ID
       ? await aggregateTensorBundleSha256('sam3-pixel-decoder-tensors', Object.entries(payload.tensorIdentity.fpnFeatureSha256).map(([role, sha256]) => ({ role, sha256 })))
       : null;
-    const inputArtifacts = manifest.routeId === SAM3_PROMPT_FPN_PHASE_PROGRAM_ROUTE_ID
+    const inputArtifacts = manifest.routeId === SAM3_DETR_ENCODER_PHASE_PROGRAM_ROUTE_ID
+      ? {
+          'source-image': sourceArtifact,
+          'sam3-detr-encoder-tensors': {
+            artifactId: 'sam3-detr-encoder-tensors:browser-parity',
+            sha256: detrTensorBundleSha256,
+          },
+          'sam3-detr-encoder-weights': {
+            artifactId: manifest.staticWeights.artifactId,
+            sha256: manifest.staticWeights.sha256,
+          },
+        }
+      : manifest.routeId === SAM3_PROMPT_FPN_PHASE_PROGRAM_ROUTE_ID
       ? {
           'source-image': sourceArtifact,
           'sam3-prompt-fpn-tensors': {
@@ -915,7 +1219,9 @@ async function main() {
       requestId: `sam-browser-parity-${Date.now()}`,
       inputs: inputArtifacts,
       outputs: {
-        ...(manifest.routeId === SAM3_PROMPT_FPN_PHASE_PROGRAM_ROUTE_ID
+        ...(manifest.routeId === SAM3_DETR_ENCODER_PHASE_PROGRAM_ROUTE_ID
+          ? { 'encoder-hidden-states': { artifactId: 'sam3-encoder-hidden-states:browser-parity', shape: [manifest.shape.batch, manifest.shape.spatialTokens, manifest.shape.channels] } }
+          : manifest.routeId === SAM3_PROMPT_FPN_PHASE_PROGRAM_ROUTE_ID
           ? { 'prompt-fpn-feature': { artifactId: 'sam3-prompt-fpn-feature:browser-parity', shape: [manifest.shape.batch, manifest.shape.height, manifest.shape.width, manifest.shape.channels] } }
           : manifest.routeId === SAM3_PIXEL_DECODER_PHASE_PROGRAM_ROUTE_ID
           ? { 'pixel-embed': { artifactId: 'sam3-pixel-embed:browser-parity', shape: [manifest.shape.batch, manifest.shape.height, manifest.shape.width, manifest.shape.channels] } }
@@ -936,6 +1242,7 @@ async function main() {
     const gpuLogits = new Float32Array(result.debugReadback.maskLogits);
     const gpuBinary = new Uint32Array(result.debugReadback.binaryMask);
     const parity = {
+      encoderHiddenStatesMaxAbsDiff: result.debugReadback.encoderHiddenStates ? maxAbsDiff(payload.expectedEncoderHiddenStates || [], new Float32Array(result.debugReadback.encoderHiddenStates)) : undefined,
       promptFpnMaxAbsDiff: result.debugReadback.promptFpnFeature ? maxAbsDiff(payload.expectedPromptFpnFeature || [], new Float32Array(result.debugReadback.promptFpnFeature)) : undefined,
       pixelEmbedMaxAbsDiff: result.debugReadback.pixelEmbed ? maxAbsDiff(payload.expectedPixelEmbed || [], new Float32Array(result.debugReadback.pixelEmbed)) : undefined,
       maskLogitsMaxAbsDiff: maxAbsDiff(expectedLogits, gpuLogits),
@@ -944,9 +1251,10 @@ async function main() {
       gpuElementCount: gpuLogits.length,
     };
     const gpuTolerance = manifest.tolerances?.webGpuLogitsMaxAbsDiff ?? 0.00001;
+    const gpuEncoderTolerance = manifest.tolerances?.encoderHiddenStatesMaxAbsDiff ?? 0.0002;
     const gpuPromptFpnTolerance = manifest.tolerances?.promptFpnMaxAbsDiff ?? 0.00001;
     const gpuPixelTolerance = manifest.tolerances?.pixelEmbedMaxAbsDiff ?? 0.00001;
-    if ((parity.promptFpnMaxAbsDiff ?? 0) > gpuPromptFpnTolerance || (parity.pixelEmbedMaxAbsDiff ?? 0) > gpuPixelTolerance || parity.maskLogitsMaxAbsDiff > gpuTolerance || parity.binaryMismatchCount > binaryTolerance) {
+    if ((parity.encoderHiddenStatesMaxAbsDiff ?? 0) > gpuEncoderTolerance || (parity.promptFpnMaxAbsDiff ?? 0) > gpuPromptFpnTolerance || (parity.pixelEmbedMaxAbsDiff ?? 0) > gpuPixelTolerance || parity.maskLogitsMaxAbsDiff > gpuTolerance || parity.binaryMismatchCount > binaryTolerance) {
       throw new Error(`WebGPU parity mismatch: ${JSON.stringify(parity)}`);
     }
 
@@ -977,6 +1285,7 @@ async function main() {
     state.routeReceipt = result.receipt;
     state.midstreamRouteReceipt = result.midstreamRouteReceipt || null;
     state.downstreamRouteReceipt = result.downstreamRouteReceipt || null;
+    state.compositionRouteReceipts = result.compositionRouteReceipts || null;
     state.compositionEdge = result.compositionEdge || null;
     state.parity = parity;
     renderSummary({

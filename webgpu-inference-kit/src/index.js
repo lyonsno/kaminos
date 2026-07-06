@@ -154,6 +154,14 @@ export {
 } from './sam-prompt-fpn-phase-program.js';
 
 export {
+  SAM3_DETR_ENCODER_PHASE_PROGRAM_ROUTE_ID,
+  createSam3DetrEncoderPhaseProgramCpuOracle,
+  createSam3DetrEncoderPhaseProgramRouteDefinition,
+  createSam3DetrEncoderPhaseProgramRouteReceipt,
+  runSam3DetrEncoderPhaseProgramRoute,
+} from './sam-detr-encoder-phase-program.js';
+
+export {
   createWebGpuRouteSchemaContract,
 } from './route-schema-contract.js';
 
