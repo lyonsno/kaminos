@@ -1473,6 +1473,15 @@ async function main() {
       assert.equal(volumeSceneContext?.receiverLight?.depthAuthority, 'three-tsl-prepass-depth-v0', 'brick-wall screen-space receiver light did not expose depth prepass authority');
       assert.equal(volumeSceneContext?.receiverLight?.normalAuthority, 'three-tsl-prepass-packed-normal-v0', 'brick-wall screen-space receiver light did not expose normal prepass authority');
       assert.equal(volumeSceneContext?.receiverLight?.energyAuthority, 'uploaded-control-fire-envelope-no-readback-v0', 'brick-wall screen-space receiver light must disclose uploaded no-readback envelope authority');
+      assert.equal(volumeSceneContext?.receiverLight?.envelopeModel, 'uploaded-control-fire-envelope-v05-no-readback-v0', 'brick-wall screen-space receiver light did not expose the v0.5 no-readback envelope model');
+      assert.equal(volumeSceneContext?.receiverLight?.drive, 'control-sim-envelope-uploaded-as-gpu-uniform-no-readback-v05', 'brick-wall screen-space receiver light did not report the v0.5 uploaded-uniform drive');
+      assert.equal(volumeSceneContext?.receiverLight?.envelopeInputs?.cpuReadbackAuthority, false, 'brick-wall receiver envelope inputs must not claim CPU readback authority');
+      assert.ok(Number.isFinite(volumeSceneContext?.receiverLight?.envelopeInputs?.fireControl), 'brick-wall receiver envelope inputs did not expose fireControl');
+      assert.ok(Number.isFinite(volumeSceneContext?.receiverLight?.envelopeInputs?.radianceControl), 'brick-wall receiver envelope inputs did not expose radianceControl');
+      assert.ok(Number.isFinite(volumeSceneContext?.receiverLight?.envelopeInputs?.pyroRadianceBoost), 'brick-wall receiver envelope inputs did not expose Pyro radiance contribution');
+      assert.ok(Number.isFinite(volumeSceneContext?.receiverLight?.envelopeInputs?.fireLickFlicker), 'brick-wall receiver envelope inputs did not expose fire-lick flicker contribution');
+      assert.ok(Number.isFinite(volumeSceneContext?.receiverLight?.envelopeInputs?.lifecycleDamping), 'brick-wall receiver envelope inputs did not expose lifecycle damping');
+      assert.ok(Number.isFinite(volumeSceneContext?.receiverLight?.envelopeInputs?.visibleFireProxy), 'brick-wall receiver envelope inputs did not expose the visible-fire proxy');
       assert.equal(volumeSceneContext?.receiverLight?.cpuReadbackAuthority, false, 'brick-wall screen-space receiver light must not derive authority from CPU readback');
       assert.equal(volumeSceneContext?.wallAttachedGlow?.identity, 'volume-scene-fire-wall-glow-proxy-v0', 'brick-wall scene context did not expose wall-attached glow identity');
       assert.equal(volumeSceneContext?.wallAttachedGlow?.authority, 'scene-space-wall-attached-proxy-no-cpu-readback-v0', 'brick-wall scene context did not expose wall-attached glow authority');

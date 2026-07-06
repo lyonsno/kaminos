@@ -39,6 +39,12 @@ assert.match(index, /volume-screen-space-fire-receiver-light-v0/, 'brick-wall li
 assert.match(index, /three-tsl-prepass-depth-v0/, 'screen-space fire receiver light must disclose its Three/TSL depth prepass authority');
 assert.match(index, /three-tsl-prepass-packed-normal-v0/, 'screen-space fire receiver light must disclose its Three/TSL packed-normal prepass authority');
 assert.match(index, /uploaded-control-fire-envelope-no-readback-v0/, 'screen-space fire receiver light must disclose its no-readback uploaded control energy envelope');
+assert.match(index, /uploaded-control-fire-envelope-v05-no-readback-v0/, 'screen-space fire receiver light must disclose the v0.5 no-readback control/sim energy envelope');
+assert.match(index, /receiverEnvelopeInputs/, 'screen-space fire receiver light must expose the effective envelope inputs that drive the uploaded uniform');
+assert.match(index, /lifecycleDamping/, 'screen-space fire receiver envelope must damp quench/snuff lifecycle states instead of lighting stale flame');
+assert.match(index, /pyroRadianceBoost/, 'screen-space fire receiver envelope must include Pyro radiance controls in its visible-fire proxy');
+assert.match(index, /fireLickFlicker/, 'screen-space fire receiver envelope must let fire-lick controls affect flicker amplitude');
+assert.match(index, /visibleFireProxy/, 'screen-space fire receiver envelope must name the proxy that stands in for measured visible fire');
 assert.match(index, /receiverLight/, 'brick-wall scene context must report the screen-space receiver-light state');
 assert.match(index, /liveCpuReadback:\s*false/, 'brick-wall route must report that live CPU readback is absent from lighting');
 assert.match(index, /threeLightSupport:\s*'removed'/, 'brick-wall route must report that the old Three light rig is removed');

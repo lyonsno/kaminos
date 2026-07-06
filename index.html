@@ -15311,6 +15311,7 @@ const VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT = Object.freeze({
   depthAuthority: 'three-tsl-prepass-depth-v0',
   normalAuthority: 'three-tsl-prepass-packed-normal-v0',
   energyAuthority: 'uploaded-control-fire-envelope-no-readback-v0',
+  envelopeModel: 'uploaded-control-fire-envelope-v05-no-readback-v0',
   maskAuthority: 'screen-space-depth-normal-receiver-mask-v0',
   cadence: 'per-render-frame-gpu-tsl',
   center: [0.42, 0.62],
@@ -15637,6 +15638,97 @@ function createVolumeBrickWallContext() {
     if (intensityVal) intensityVal.textContent = VOLUME_BRICK_WALL_LIGHTING.environmentIntensity.toFixed(1);
   };
 
+  const computeReceiverEnvelope = (volumeState, routeGain) => {
+    const controlsState = volumeState?.controls || {};
+    const fireControl = clampVolumeValue(controlsState.fire ?? 1, 0, 5);
+    const radianceControl = clampVolumeValue(controlsState.radiance ?? 1, 0, 5);
+    const glowControl = clampVolumeValue(controlsState.glow ?? 1, 0, 5);
+    const fireLicksControl = clampVolumeValue(controlsState.fireLicks ?? 0, 0, 5);
+    const pyroMaterialGain = clampVolumeValue(controlsState.pyroMaterialGain ?? 0, 0, 1.5);
+    const pyroRadianceControl = clampVolumeValue(controlsState.pyroRadiance ?? 0, 0, 10);
+    const pyroRadianceSpill = clampVolumeValue(controlsState.pyroRadianceSpill ?? 0.30, 0, 1);
+    const pyroRadianceWarmth = clampVolumeValue(controlsState.pyroRadianceWarmth ?? 0.45, 0, 1);
+    const pyroOverdrive = clampVolumeValue(controlsState.pyroOverdrive ?? 1, 1, 8);
+    const lifecycleEffect = String(controlsState.lifecycleEffect || 'none');
+    const lifecycleT = clampVolumeValue(controlsState.lifecycleT ?? 0, 0, 1);
+    const quenchVapor = clampVolumeValue(controlsState.quenchVapor ?? volumeState?.quenchVaporStrength ?? 0, 0, 2);
+    const quenchStrength = clampVolumeValue(volumeState?.quenchVaporStrength ?? quenchVapor, 0, 2);
+    const snuffDamping = lifecycleEffect === 'snuff'
+      ? 1 - clampVolumeValue(lifecycleT * 0.72 + quenchStrength * 0.34, 0, 0.94)
+      : 1;
+    const preheatLift = lifecycleEffect === 'preheat'
+      ? clampVolumeValue(0.22 + lifecycleT * 0.32 + glowControl * 0.026 + pyroRadianceControl * 0.018, 0.18, 0.76)
+      : 1;
+    const lifecycleDamping = clampVolumeValue(snuffDamping * preheatLift, 0.03, 1.08);
+    const pyroRadianceBoost = clampVolumeValue(
+      pyroMaterialGain
+        * pyroRadianceControl
+        * (0.020 + pyroRadianceSpill * 0.030 + pyroRadianceWarmth * 0.022)
+        * (0.62 + pyroOverdrive * 0.055),
+      0,
+      0.72
+    );
+    const fireLickFlicker = clampVolumeValue(fireLicksControl / 5, 0, 1);
+    const visibleFireProxy = clampVolumeValue(
+      routeGain
+        * lifecycleDamping
+        * (
+          fireControl * 0.22
+          + radianceControl * 0.105
+          + glowControl * 0.045
+          + fireLicksControl * 0.035
+          + pyroRadianceBoost
+          + 0.14
+        ),
+      0,
+      2.35
+    );
+    const frameSeed = Number.isFinite(volumeState?.frameCount) ? volumeState.frameCount : 0;
+    const flickerAmplitude = clampVolumeValue(
+      (0.040 + fireLickFlicker * 0.075 + pyroRadianceBoost * 0.052) * lifecycleDamping,
+      0.018,
+      0.16
+    );
+    const flicker = clampVolumeValue(
+      0.96
+        + Math.sin(frameSeed * 0.37 + fireControl * 1.9) * flickerAmplitude
+        + Math.sin(frameSeed * 0.131 + radianceControl * 2.3) * flickerAmplitude * 0.56
+        + Math.sin(frameSeed * 0.071 + fireLicksControl * 1.7) * flickerAmplitude * 0.38,
+      0.62,
+      1.28
+    );
+    const rawEnvelope = clampVolumeValue(
+      visibleFireProxy
+        * (0.26 + radianceControl * 0.055 + glowControl * 0.022 + pyroRadianceBoost * 0.11)
+        * flicker,
+      0,
+      1.65
+    );
+    return {
+      model: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.envelopeModel,
+      rawEnvelope,
+      fireControl,
+      radianceControl,
+      glowControl,
+      fireLicksControl,
+      fireLickFlicker,
+      pyroMaterialGain,
+      pyroRadianceControl,
+      pyroRadianceBoost,
+      pyroOverdrive,
+      lifecycleEffect,
+      lifecycleT,
+      quenchVapor,
+      quenchStrength,
+      lifecycleDamping,
+      visibleFireProxy,
+      flicker,
+      flickerAmplitude,
+      routeGain,
+      cpuReadbackAuthority: false,
+    };
+  };
+
   const applyFireLightProbe = volumeState => {
     lastFireLightProbe = computeBrickWallGpuWashProbe(volumeState);
     const gpuWallWash = volumeState?.gpuWallWash || {
@@ -15650,21 +15742,9 @@ function createVolumeBrickWallContext() {
     };
     const controlsState = volumeState?.controls || {};
     const routeGain = lastFireLightProbe.sourceAuthority ? lastFireLightProbe.gain : 0;
-    const fireControl = clampVolumeValue(controlsState.fire ?? 1, 0, 5);
-    const radianceControl = clampVolumeValue(controlsState.radiance ?? 1, 0, 5);
-    const glowControl = clampVolumeValue(controlsState.glow ?? 1, 0, 5);
-    const frameSeed = Number.isFinite(volumeState?.frameCount) ? volumeState.frameCount : 0;
-    const flicker = 0.84
-      + Math.sin(frameSeed * 0.37 + fireControl * 1.9) * 0.09
-      + Math.sin(frameSeed * 0.071 + radianceControl * 2.3) * 0.05;
-    const glowEnergy = clampVolumeValue(
-      routeGain
-        * (0.36 + fireControl * 0.20)
-        * (0.48 + radianceControl * 0.12 + glowControl * 0.05)
-        * flicker,
-      0,
-      1.65
-    );
+    const receiverEnvelopeInputs = computeReceiverEnvelope(volumeState, routeGain);
+    const { fireControl, radianceControl, glowControl } = receiverEnvelopeInputs;
+    const glowEnergy = receiverEnvelopeInputs.rawEnvelope;
     const receiverGain = clampVolumeValue(
       glowEnergy * VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.gainScale,
       0,
@@ -15693,12 +15773,14 @@ function createVolumeBrickWallContext() {
       depthAuthority: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.depthAuthority,
       normalAuthority: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.normalAuthority,
       energyAuthority: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.energyAuthority,
+      envelopeModel: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.envelopeModel,
       maskAuthority: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.maskAuthority,
       cadence: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.cadence,
       mode: lastFireLightProbe.mode,
       enabled: receiverEnabled,
       gain: receiverEnabled ? receiverGain : 0,
       rawEnvelope: glowEnergy,
+      envelopeInputs: receiverEnvelopeInputs,
       center: [...VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.center],
       radius: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.radius,
       gainScale: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.gainScale,
@@ -15707,7 +15789,7 @@ function createVolumeBrickWallContext() {
       liveCpuReadback: false,
       cpuReadbackAuthority: false,
       threeLightSupport: 'removed',
-      drive: 'control-envelope-uploaded-as-gpu-uniform-no-readback-v0',
+      drive: 'control-sim-envelope-uploaded-as-gpu-uniform-no-readback-v05',
     };
     fireReceiverLightDebugState = lastReceiverLight;
     lastWallAttachedGlow = {
