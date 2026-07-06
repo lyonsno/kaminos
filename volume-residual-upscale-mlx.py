@@ -20,7 +20,10 @@ PAIR_AUTHORITY = "frame-locked-render-scale-set-v0"
 IMAGE_AUTHORITY = "cdp-canvas-clip-capture-after-render-only-frozen-sim-state"
 FEATURE_INPUT_AUTHORITY = "shader-material-authority-residual-feature-v0"
 FLOW_DEBUG_AUXILIARY_INPUT_AUTHORITY = "flow-debug-interface-canvas-capture-v0"
-IMAGE_FEATURE_INPUT_MODES = {"feature-rgba", "aux-rgba", "aux-rgb"}
+FLOW_DEBUG_REDCYAN_ABS_INPUT_AUTHORITY = "flow-debug-derived-red-cyan-abs-v0"
+FLOW_DEBUG_OPPONENT_GRADIENT_INPUT_AUTHORITY = "flow-debug-derived-opponent-gradient-v0"
+IMAGE_FEATURE_INPUT_MODES = {"feature-rgba", "aux-rgba", "aux-rgb", "aux-red-cyan-abs", "aux-opponent-gradient"}
+FLOW_DEBUG_DERIVED_INPUT_MODES = {"aux-red-cyan-abs", "aux-opponent-gradient"}
 
 
 def constrain_residual_color(residual, residualColorMode, chromaResidualScale):
@@ -163,7 +166,7 @@ def parse_args():
     parser.add_argument("--batch-size", type=int, default=4)
     parser.add_argument("--patch-size", type=int, default=96)
     parser.add_argument("--model-arch", dest="modelArch", choices=["tiny-conv", "direct-residual", "hybrid-residual", "gated-detail-residual"], default="tiny-conv")
-    parser.add_argument("--feature-input-mode", dest="featureInputMode", choices=["rgb", "feature-rgba", "aux-rgba", "aux-rgb"], default="rgb", help="Model input source: low RGB only, low RGB plus shader/material residual feature RGBA, low RGB plus auxiliary debug RGBA, or low RGB plus auxiliary debug RGB.")
+    parser.add_argument("--feature-input-mode", dest="featureInputMode", choices=["rgb", "feature-rgba", "aux-rgba", "aux-rgb", "aux-red-cyan-abs", "aux-opponent-gradient"], default="rgb", help="Model input source: low RGB only, low RGB plus shader/material residual feature RGBA, raw Flow Debug RGB/RGBA, or normalized Flow Debug derived carriers.")
     parser.add_argument("--hidden-channels", type=int, default=16)
     parser.add_argument("--detail-residual-gate", dest="detailResidualGate", type=float, default=2.0, help="Fixed multiplier for the hidden detail residual in gated-detail-residual probes.")
     parser.add_argument("--learning-rate", type=float, default=1e-3)
@@ -390,11 +393,43 @@ def load_feature_image(path, target_height, target_width, channels=4):
     return np.asarray(image, dtype=np.float32) / 255.0
 
 
+def percentile_normalize(values, low=1.0, high=99.0):
+    finite = values[np.isfinite(values)]
+    if finite.size == 0:
+        return np.zeros((*values.shape, 1), dtype=np.float32)
+    lo = float(np.percentile(finite, low))
+    hi = float(np.percentile(finite, high))
+    if hi <= lo + 1e-6:
+        normalized = np.zeros(values.shape, dtype=np.float32)
+    else:
+        normalized = np.clip((values - lo) / (hi - lo), 0.0, 1.0).astype(np.float32)
+    return normalized[..., None]
+
+
+def load_flow_debug_derived_image(path, target_height, target_width, featureInputMode):
+    image = Image.open(path).convert("RGB")
+    if image.size != (target_width, target_height):
+        image = image.resize((target_width, target_height), Image.Resampling.BILINEAR)
+    rgb = np.asarray(image, dtype=np.float32) / 255.0
+    red = rgb[:, :, 0]
+    green = rgb[:, :, 1]
+    blue = rgb[:, :, 2]
+    red_cyan_abs = np.abs(red - 0.5 * (green + blue))
+    if featureInputMode == "aux-red-cyan-abs":
+        return percentile_normalize(red_cyan_abs)
+    if featureInputMode == "aux-opponent-gradient":
+        grad_y, grad_x = np.gradient(red_cyan_abs.astype(np.float32))
+        return percentile_normalize(np.sqrt(grad_x * grad_x + grad_y * grad_y), 5.0, 99.0)
+    raise ValueError(f"unsupported Flow Debug derived mode: {featureInputMode}")
+
+
 def feature_input_channels(featureInputMode):
     if featureInputMode in {"feature-rgba", "aux-rgba"}:
         return 4
     if featureInputMode == "aux-rgb":
         return 3
+    if featureInputMode in FLOW_DEBUG_DERIVED_INPUT_MODES:
+        return 1
     return 0
 
 
@@ -403,6 +438,10 @@ def feature_input_authority(featureInputMode):
         return FEATURE_INPUT_AUTHORITY
     if featureInputMode in {"aux-rgba", "aux-rgb"}:
         return FLOW_DEBUG_AUXILIARY_INPUT_AUTHORITY
+    if featureInputMode == "aux-red-cyan-abs":
+        return FLOW_DEBUG_REDCYAN_ABS_INPUT_AUTHORITY
+    if featureInputMode == "aux-opponent-gradient":
+        return FLOW_DEBUG_OPPONENT_GRADIENT_INPUT_AUTHORITY
     return "off"
 
 
@@ -563,7 +602,7 @@ def load_pair_arrays(pairs, foregroundThreshold, edgeBandMode, edgeBandThreshold
             if feature_authority != FEATURE_INPUT_AUTHORITY:
                 raise ValueError(f"pair feature authority is not {FEATURE_INPUT_AUTHORITY}: {pair.get('pairId')} got {feature_authority!r}")
             feature_image = load_feature_image(feature_path, low_image.shape[0], low_image.shape[1])
-        elif featureInputMode in {"aux-rgba", "aux-rgb"}:
+        elif featureInputMode in {"aux-rgba", "aux-rgb"} | FLOW_DEBUG_DERIVED_INPUT_MODES:
             auxiliary_captures = pair.get("low", {}).get("auxiliaryCaptures") or {}
             flow_debug_capture = auxiliary_captures.get("flowDebug") or {}
             feature_path = flow_debug_capture.get("path")
@@ -572,7 +611,10 @@ def load_pair_arrays(pairs, foregroundThreshold, edgeBandMode, edgeBandThreshold
             auxiliary_authority = flow_debug_capture.get("auxiliaryAuthority")
             if auxiliary_authority != FLOW_DEBUG_AUXILIARY_INPUT_AUTHORITY:
                 raise ValueError(f"pair Flow Debug auxiliary authority is not {FLOW_DEBUG_AUXILIARY_INPUT_AUTHORITY}: {pair.get('pairId')} got {auxiliary_authority!r}")
-            feature_image = load_feature_image(feature_path, low_image.shape[0], low_image.shape[1], feature_input_channels(featureInputMode))
+            if featureInputMode in FLOW_DEBUG_DERIVED_INPUT_MODES:
+                feature_image = load_flow_debug_derived_image(feature_path, low_image.shape[0], low_image.shape[1], featureInputMode)
+            else:
+                feature_image = load_feature_image(feature_path, low_image.shape[0], low_image.shape[1], feature_input_channels(featureInputMode))
         foreground = foreground_pixels(low_image, high_image, foregroundThreshold)
         edge_mask, edge_signal = edge_band_mask(low_image, high_image, edgeBandMode, edgeBandThreshold, edgeBandDilate)
         target_edge_mask, target_edge_signal = edge_band_mask(low_image, high_image, "difference-gradient", edgeBandThreshold, edgeBandDilate)
