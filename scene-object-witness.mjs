@@ -325,6 +325,76 @@ async function runHybridRendererModuleWrongServerScenario(ws) {
   }
 }
 
+async function runHybridRendererDefaultPackageRouteScenario(ws) {
+  phase = 'scenario-hybrid-renderer-default-package-route';
+  lastEvidence.hybridRendererDefaultPackageRoute = await evaluate(ws, `
+    (async () => {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      localStorage.removeItem('kaminosHybridSplatOverlayModuleUrl');
+      const waitForLinkedSplat = async () => {
+        for (let i = 0; i < 160; i++) {
+          const state = window.kaminosAssetSmokeLinkDebugState?.();
+          const objects = window.kaminosSceneObjectDebugState?.() || [];
+          const object = state?.registeredObjectId
+            ? objects.find(record => record.id === state.registeredObjectId)
+            : objects.find(record => record.type === 'splat');
+          if (object?.type === 'splat') return { state, object, objects };
+          if (state?.status === 'failed') {
+            throw new Error('default package route witness could not load splat route first: ' + JSON.stringify(state));
+          }
+          await wait(125);
+        }
+        return {
+          state: window.kaminosAssetSmokeLinkDebugState?.() || null,
+          object: (window.kaminosSceneObjectDebugState?.() || []).find(record => record.type === 'splat') || null,
+          objects: window.kaminosSceneObjectDebugState?.() || [],
+        };
+      };
+      const linked = await waitForLinkedSplat();
+      if (!linked.object?.id) {
+        throw new Error('default package route witness did not start from a loaded splat: ' + JSON.stringify(linked));
+      }
+      window.selectSceneObject?.(linked.object.id);
+      await wait(100);
+      let startResult = null;
+      let thrown = null;
+      try {
+        startResult = await window.startSelectedSplatHybridRenderer?.();
+      } catch (error) {
+        thrown = String(error?.message || error);
+      }
+      await wait(900);
+      const overlayDebug = window.kaminosHybridSplatOverlayDebugState?.() || null;
+      const moduleDebug = window.kaminosHybridSplatRendererModuleDebugState?.() || null;
+      const routeDebug = window.kaminosHybridMeshSplatRouteDebugState?.() || null;
+      return {
+        linked,
+        startResult,
+        thrown,
+        overlayDebug,
+        moduleDebug,
+        routeDebug,
+      };
+    })()
+  `, { timeoutMs: 45000 });
+  const evidence = lastEvidence.hybridRendererDefaultPackageRoute;
+  if (evidence.thrown) {
+    throw new Error(`default package route leaked an uncaught exception: ${evidence.thrown}`);
+  }
+  if (evidence.moduleDebug?.moduleUrl !== '/vendor/meshsplat-renderer/splatOverlay.js'
+      || evidence.moduleDebug?.source !== 'packaged-local'
+      || evidence.moduleDebug?.packageRoute !== '/vendor/meshsplat-renderer/splatOverlay.js'
+      || evidence.moduleDebug?.moduleUrl?.includes('127.0.0.1:5173')) {
+    throw new Error(`default package route did not use packaged module identity: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.moduleDebug?.status !== 'loaded'
+      || evidence.overlayDebug?.status !== 'rendering'
+      || evidence.startResult?.status !== 'rendering'
+      || evidence.overlayDebug?.sourceIdentity?.source !== evidence.linked.object.source) {
+    throw new Error(`default package route did not start renderer from the selected splat: ${JSON.stringify(evidence)}`);
+  }
+}
+
 async function runImageAssetLinkScenario(ws) {
   phase = 'scenario-image-asset-link';
   lastEvidence.imageAssetLink = await evaluate(ws, `
@@ -5021,6 +5091,8 @@ try {
     await runSplatAssetLinkScenario(ws);
   } else if (scenario === 'hybrid-renderer-module-wrong-server') {
     await runHybridRendererModuleWrongServerScenario(ws);
+  } else if (scenario === 'hybrid-renderer-default-package-route') {
+    await runHybridRendererDefaultPackageRouteScenario(ws);
   } else if (scenario === 'image-asset-link') {
     await runImageAssetLinkScenario(ws);
   } else if (scenario === 'forge-host-smoke-offers') {

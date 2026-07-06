@@ -229,6 +229,9 @@ assert.match(witness, /real-hybrid-cropped-supported-overlay/, 'Real Hybrid Rend
 assert.match(witness, /hybrid-renderer-module-wrong-server/, 'Hybrid Renderer witness covers wrong-server module URLs that return the Kaminos app shell instead of a renderer module');
 assert.match(witness, /wrong-server module did not fail with renderer module diagnostics/, 'Hybrid Renderer wrong-server witness requires clean module diagnostics instead of an uncaught dynamic import crash');
 assert.match(witness, /kaminosHybridSplatRendererModuleDebugState/, 'Hybrid Renderer wrong-server witness reads effective module identity from the browser debug surface');
+assert.match(witness, /hybrid-renderer-default-package-route/, 'Hybrid Renderer witness covers the default same-origin packaged module route');
+assert.match(witness, /default package route did not use packaged module identity/, 'Hybrid Renderer default package witness rejects ambient 5173 dev-server defaults');
+assert.match(witness, /default package route did not start renderer from the selected splat/, 'Hybrid Renderer default package witness requires the packaged module to start the selected splat renderer');
 assert.match(witness, /crop-capable renderer did not render the corrected cropped splat/, 'Real Hybrid Renderer witness requires corrected cropped splats to reach the overlay');
 assert.match(witness, /cropped hybrid overlay did not report renderer-side crop application/, 'Real Hybrid Renderer witness requires renderer-side crop telemetry before trusting cropped overlays');
 assert.match(witness, /cropped hybrid overlay lost scene-context acceptance/, 'Real Hybrid Renderer witness keeps cropped overlay acceptance tied to scene-context telemetry');

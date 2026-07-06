@@ -2229,12 +2229,17 @@ let transformGizmoDragging = false;
 let splatCorrectionMode = null;
 const SPLAT_CROP_TARGET_MIN_SIZE = 0.02;
 const SCENE_OBJECT_POINT_PICK_THRESHOLD = 0.025;
-const DEFAULT_HYBRID_SPLAT_OVERLAY_MODULE_URL = 'http://127.0.0.1:5173/src/splatOverlay.ts';
+const DEFAULT_HYBRID_SPLAT_OVERLAY_MODULE_URL = '/vendor/meshsplat-renderer/splatOverlay.js';
+const HYBRID_SPLAT_OVERLAY_PACKAGE_ROUTE = '/vendor/meshsplat-renderer/';
 const HYBRID_SPLAT_OVERLAY_MODULE_URL_PARAMS = [
   'hybrid_splat_overlay_module_url',
   'hybridSplatOverlayModuleUrl',
   'splat_overlay_module_url',
 ];
+
+function hybridSplatOverlayPackagedModuleUrl() {
+  return DEFAULT_HYBRID_SPLAT_OVERLAY_MODULE_URL;
+}
 
 function hybridSplatOverlayModuleUrlFromSearch() {
   const params = new URLSearchParams(window.location.search);
@@ -2247,7 +2252,6 @@ function hybridSplatOverlayModuleUrlFromSearch() {
 
 function initialHybridSplatOverlayModuleUrl() {
   return hybridSplatOverlayModuleUrlFromSearch()
-    || localStorage.getItem('kaminosHybridSplatOverlayModuleUrl')
     || DEFAULT_HYBRID_SPLAT_OVERLAY_MODULE_URL;
 }
 
@@ -2467,6 +2471,14 @@ function setHybridSplatOverlayStatus(status, error = null) {
 
 function hybridSplatOverlayModuleUrl() {
   return hybridSplatOverlayState.moduleUrl || DEFAULT_HYBRID_SPLAT_OVERLAY_MODULE_URL;
+}
+
+function hybridSplatOverlayModuleRouteKind(moduleUrl = hybridSplatOverlayModuleUrl()) {
+  const value = String(moduleUrl || '').trim();
+  if (!value || value === hybridSplatOverlayPackagedModuleUrl() || value.startsWith(HYBRID_SPLAT_OVERLAY_PACKAGE_ROUTE)) {
+    return 'packaged-local';
+  }
+  return 'external-debug-override';
 }
 
 function setHybridSplatOverlayModuleUrl(url, options = {}) {
@@ -2908,6 +2920,8 @@ async function resolveHybridSplatOverlayModuleIdentity(moduleUrl = hybridSplatOv
   const identity = {
     schema: 'kaminos.hybrid-renderer.module-identity.v0',
     moduleUrl,
+    source: hybridSplatOverlayModuleRouteKind(moduleUrl),
+    packageRoute: hybridSplatOverlayPackagedModuleUrl(),
     status: 'checking',
     fetchedAt: new Date().toISOString(),
     httpStatus: null,

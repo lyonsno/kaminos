@@ -311,12 +311,15 @@ assert.match(index, /viewportEventHitsInteractiveOverlay[\s\S]*#hybrid-splat-vie
 assert.match(index, /function publishHybridSplatRendererControls\(/, 'Kaminos publishes renderer-control slider state through the overlay setRendererControls API');
 assert.match(index, /rendererControlsTelemetry/, 'Hybrid Renderer debug state exposes renderer-control telemetry for smoke evidence');
 assert.match(index, /id="hybrid-splat-overlay-host"/, 'Hybrid Renderer overlay has a named viewport host for dual-canvas composition');
-assert.match(index, /const DEFAULT_HYBRID_SPLAT_OVERLAY_MODULE_URL/, 'Hybrid Renderer overlay route has an inspectable default module URL');
+assert.match(index, /const DEFAULT_HYBRID_SPLAT_OVERLAY_MODULE_URL = '\/vendor\/meshsplat-renderer\/splatOverlay\.js'/, 'Hybrid Renderer default module URL is the same-origin packaged renderer route');
+assert.doesNotMatch(index, /DEFAULT_HYBRID_SPLAT_OVERLAY_MODULE_URL = 'http:\/\/127\.0\.0\.1:5173\/src\/splatOverlay\.ts'/, 'Hybrid Renderer default module URL must not depend on the ambient renderer dev server');
 assert.match(index, /async function initializeHybridSplatOverlayModuleUrl\(/, 'Hybrid Renderer module URL initializes from runtime config before operator smoke');
 assert.match(index, /\/api\/runtime-config/, 'Hybrid Renderer module URL can be populated by the Kaminos dev server');
 assert.match(index, /hybrid_splat_overlay_module_url/, 'Hybrid Renderer module URL can be carried by a smoke URL parameter instead of manual paste');
 assert.match(index, /async function resolveHybridSplatOverlayModuleIdentity\(/, 'Hybrid Renderer module loading preflights the effective module URL before dynamic import');
 assert.match(index, /kaminos\.hybrid-renderer\.module-identity\.v0/, 'Hybrid Renderer module preflight records schema identity for wrong-server diagnostics');
+assert.match(index, /hybridSplatOverlayModuleRouteKind\(/, 'Hybrid Renderer module identity classifies packaged defaults versus explicit debug overrides');
+assert.match(index, /packageRoute:\s*hybridSplatOverlayPackagedModuleUrl\(\)/, 'Hybrid Renderer module identity exposes the packaged route expected by default Start Hybrid');
 assert.match(index, /Hybrid Renderer module unavailable/, 'Hybrid Renderer module preflight fails loud with operator-visible unavailable-module copy');
 assert.match(index, /expected JavaScript module/, 'Hybrid Renderer module preflight rejects HTML/app-shell responses instead of passing them to dynamic import');
 assert.match(index, /window\.kaminosHybridSplatRendererModuleDebugState/, 'browser witnesses can inspect effective Hybrid Renderer module identity without DOM inference');

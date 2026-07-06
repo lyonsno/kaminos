@@ -483,6 +483,26 @@ def test_runtime_config_exposes_hybrid_overlay_module_url_env():
 
     assert config["schema"] == "kaminos.runtime-config.v0"
     assert config["hybridSplatOverlayModuleUrl"] == "http://127.0.0.1:5174/src/splatOverlay.ts"
+    assert config["hybridSplatOverlayModuleSource"] == "external-override"
+
+
+def test_runtime_config_defaults_to_packaged_hybrid_renderer_route():
+    previous = os.environ.get("KAMINOS_HYBRID_SPLAT_OVERLAY_MODULE_URL")
+    previous_legacy = os.environ.get("KAMINOS_HYBRID_SPLAT_MODULE_URL")
+    os.environ.pop("KAMINOS_HYBRID_SPLAT_OVERLAY_MODULE_URL", None)
+    os.environ.pop("KAMINOS_HYBRID_SPLAT_MODULE_URL", None)
+    try:
+        config = serve.runtime_config()
+    finally:
+        if previous is not None:
+            os.environ["KAMINOS_HYBRID_SPLAT_OVERLAY_MODULE_URL"] = previous
+        if previous_legacy is not None:
+            os.environ["KAMINOS_HYBRID_SPLAT_MODULE_URL"] = previous_legacy
+
+    assert config["schema"] == "kaminos.runtime-config.v0"
+    assert config["hybridSplatOverlayModuleUrl"] == "/vendor/meshsplat-renderer/splatOverlay.js"
+    assert config["hybridSplatOverlayModuleSource"] == "packaged-local"
+    assert config["hybridSplatOverlayPackageRoute"] == "/vendor/meshsplat-renderer/"
 
 
 def test_pipeline_manifest_endpoint_payload_is_route_identified():
@@ -611,6 +631,7 @@ if __name__ == "__main__":
     test_splat_asset_ingest_writes_only_to_experimental_inbox()
     test_splat_asset_correction_roundtrips_as_sidecar_metadata()
     test_runtime_config_exposes_hybrid_overlay_module_url_env()
+    test_runtime_config_defaults_to_packaged_hybrid_renderer_route()
     test_pipeline_manifest_endpoint_payload_is_route_identified()
     test_image_asset_index_declares_local_image_roots()
     test_pipeline_run_resolves_api_read_source_and_returns_bundle()

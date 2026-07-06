@@ -69,6 +69,12 @@ IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp"}
 SPLAT_CORRECTION_SCHEMA = "kaminos.splat-correction.v0"
 HYBRID_SPLAT_OVERLAY_MODULE_URL_ENV = "KAMINOS_HYBRID_SPLAT_OVERLAY_MODULE_URL"
 HYBRID_SPLAT_OVERLAY_MODULE_URL_ENV_LEGACY = "KAMINOS_HYBRID_SPLAT_MODULE_URL"
+HYBRID_SPLAT_OVERLAY_PACKAGE_ROUTE = "/vendor/meshsplat-renderer/"
+HYBRID_SPLAT_OVERLAY_PACKAGED_MODULE_URL = HYBRID_SPLAT_OVERLAY_PACKAGE_ROUTE + "splatOverlay.js"
+KAMINOS_MESH_SPLAT_RENDERER_PACKAGE_DIR = Path(os.environ.get(
+    "KAMINOS_MESH_SPLAT_RENDERER_PACKAGE_DIR",
+    os.path.expanduser("~/.local/state/kaminos/renderer-packages/meshsplat"),
+)).expanduser()
 FORGE_HOST_REGISTRY_SNAPSHOT_SCHEMA = "kaminos.forge-host.registry-snapshot.v0"
 FORGE_HOST_ENDPOINT_REGISTRY_PATH = Path(os.environ.get(
     "KAMINOS_FORGE_HOST_ENDPOINT_REGISTRY",
@@ -125,9 +131,13 @@ def runtime_config():
         or os.environ.get(HYBRID_SPLAT_OVERLAY_MODULE_URL_ENV_LEGACY)
         or ""
     ).strip()
+    module_source = "external-override" if module_url else "packaged-local"
     return {
         "schema": "kaminos.runtime-config.v0",
-        "hybridSplatOverlayModuleUrl": module_url or None,
+        "hybridSplatOverlayModuleUrl": module_url or HYBRID_SPLAT_OVERLAY_PACKAGED_MODULE_URL,
+        "hybridSplatOverlayModuleSource": module_source,
+        "hybridSplatOverlayPackageRoute": HYBRID_SPLAT_OVERLAY_PACKAGE_ROUTE,
+        "hybridSplatOverlayPackageDir": str(KAMINOS_MESH_SPLAT_RENDERER_PACKAGE_DIR),
     }
 
 
@@ -958,6 +968,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_job_output(parse_qs(parsed.query))
         elif parsed.path == "/api/delete-scene":
             self.handle_delete_scene(parse_qs(parsed.query))
+        elif parsed.path.startswith(HYBRID_SPLAT_OVERLAY_PACKAGE_ROUTE):
+            self.handle_hybrid_splat_overlay_package_module(parsed.path)
         else:
             super().do_GET()
 
@@ -976,6 +988,40 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
 
     def handle_runtime_config(self):
         self.send_json(runtime_config())
+
+    def handle_hybrid_splat_overlay_package_module(self, route_path):
+        rel = route_path.removeprefix(HYBRID_SPLAT_OVERLAY_PACKAGE_ROUTE) or "splatOverlay.js"
+        if rel.startswith("/") or ".." in Path(rel).parts:
+            self.send_json({"error": "Path traversal"}, 403)
+            return
+        root = KAMINOS_MESH_SPLAT_RENDERER_PACKAGE_DIR.resolve()
+        target = (root / rel).resolve()
+        if not target.is_relative_to(root):
+            self.send_json({"error": "Path traversal"}, 403)
+            return
+        if not target.is_file():
+            self.send_json({
+                "schema": "kaminos.hybrid-renderer.package-module-missing.v0",
+                "error": "Hybrid Renderer packaged module artifact is missing",
+                "packageDir": str(root),
+                "requestedPath": rel,
+                "buildCommand": "cd ~/dev/hybrid-differentiable-defferred-splat-mesh-renderer && npm run build:overlay-package",
+            }, 404)
+            return
+
+        content_types = {
+            ".js": "text/javascript",
+            ".mjs": "text/javascript",
+            ".map": "application/json",
+            ".json": "application/json",
+        }
+        body = target.read_bytes()
+        self.send_response(200)
+        self.send_header("Content-Type", content_types.get(target.suffix.lower(), "application/octet-stream"))
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-cache")
+        self.end_headers()
+        self.wfile.write(body)
 
     def handle_forge_host_registry(self):
         self.send_json(build_forge_host_registry_snapshot())
