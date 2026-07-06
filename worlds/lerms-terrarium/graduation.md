@@ -23,7 +23,13 @@ Current accounting:
 
 - Kaminos keeps the cartridge host, world-chamber binding, smoke-offer bridge,
   capture path, and forge-side examples.
+- Kaminos records active lerms making work as cartridge crucibles. The first
+  crucibles are `hill-of-hills`, `lerm-species`, `finger-fluid`, and
+  `glove-emitter`.
 - lerms keeps game law, creature semantics, gameplay runtime, saves, and
   domain-native creature systems.
 - Shared-runtime candidates include hand state, reusable creature motion
   adapters, and repeated route/capture helpers.
+- Smoke apparition hooks begin as planned cartridge references. They give
+  terrain, creature, hand, and glove smokes a future spatial rendering target
+  for screenshot, filmstrip, depth, normal, and volumetric display.

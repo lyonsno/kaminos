@@ -27,6 +27,7 @@ assert.ok(existsSync(witnessesPath), 'lerms terrarium cartridge has witnesses di
 const {
   WORLD_CARTRIDGE_INDEX_SCHEMA,
   WORLD_CARTRIDGE_MANIFEST_SCHEMA,
+  WORLD_CRUCIBLE_DESCRIPTOR_SCHEMA,
   WORLD_CARTRIDGE_DISCOVERY_ROUTE,
   WORLD_CARTRIDGE_GRADUATION_MODES,
   LERMS_TERRARIUM_CARTRIDGE_ID,
@@ -37,6 +38,7 @@ const {
 
 assert.equal(WORLD_CARTRIDGE_INDEX_SCHEMA, 'kaminos.world-cartridges.index.v0');
 assert.equal(WORLD_CARTRIDGE_MANIFEST_SCHEMA, 'kaminos.world-cartridge.manifest.v0');
+assert.equal(WORLD_CRUCIBLE_DESCRIPTOR_SCHEMA, 'kaminos.world-crucible.descriptor.v0');
 assert.equal(WORLD_CARTRIDGE_DISCOVERY_ROUTE, '/api/world-cartridges');
 assert.equal(LERMS_TERRARIUM_CARTRIDGE_ID, 'lerms-terrarium');
 assert.deepEqual(WORLD_CARTRIDGE_GRADUATION_MODES, [
@@ -67,6 +69,30 @@ assert.equal(normalized.affordanceBindings.some(binding => binding.id === 'world
 assert.equal(normalized.affordanceBindings.some(binding => binding.id === 'mushfinger-motion-agency'), true);
 assert.equal(normalized.affordanceBindings.some(binding => binding.id === 'palm-hand-surface-runtime'), true);
 assert.equal(normalized.generationBasins.some(basin => basin.id === 'little-body-variants'), true);
+assert.deepEqual(normalized.crucibles.map(crucible => crucible.id), [
+  'hill-of-hills',
+  'lerm-species',
+  'finger-fluid',
+  'glove-emitter',
+]);
+for (const crucible of normalized.crucibles) {
+  assert.equal(crucible.schema, WORLD_CRUCIBLE_DESCRIPTOR_SCHEMA);
+  assert.ok(crucible.title, `${crucible.id} has a title`);
+  assert.ok(crucible.role, `${crucible.id} has a role`);
+  assert.ok(crucible.status, `${crucible.id} has a status`);
+  assert.ok(crucible.makingIntent, `${crucible.id} has making intent`);
+  assert.ok(crucible.armatures.length >= 1, `${crucible.id} names an armature`);
+  assert.ok(crucible.handles.length >= 1, `${crucible.id} names operator/agent handles`);
+  assert.ok(crucible.firings.length >= 1, `${crucible.id} records firing memory`);
+  assert.ok(crucible.shards.length >= 1, `${crucible.id} records shards`);
+  assert.ok(crucible.casts.length >= 1, `${crucible.id} records casts`);
+  assert.ok(crucible.receipts.length >= 1, `${crucible.id} records receipts`);
+  assert.ok(crucible.smokeApparitions.length >= 1, `${crucible.id} carries smoke apparition hooks`);
+  assert.ok(WORLD_CARTRIDGE_GRADUATION_MODES.includes(crucible.graduationMode), `${crucible.id} graduation mode is known`);
+  assert.equal(typeof crucible.custody.owner, 'string', `${crucible.id} names custody owner`);
+}
+assert.equal(normalized.crucibles.find(crucible => crucible.id === 'hill-of-hills').smokeApparitions[0].route, 'future:moge-depth-smoke-apparition');
+assert.equal(normalized.crucibles.find(crucible => crucible.id === 'finger-fluid').handles.some(handle => handle.kind === 'state-stream'), true);
 assert.equal(normalized.graduation.modes.length, WORLD_CARTRIDGE_GRADUATION_MODES.length);
 assert.equal(normalized.graduation.currentMode, 'remain_in_kaminos_terrarium');
 assert.equal(normalized.witnesses[0].schema, 'kaminos.world-cartridge.witness.v0');
@@ -98,6 +124,84 @@ assert.throws(
   'fixture-backed cartridges fail loud if they claim live display authority',
 );
 
+assert.throws(
+  () => normalizeWorldCartridgeManifest({
+    ...manifest,
+    crucibles: [
+      {
+        id: 'bad-crucible',
+        title: 'Bad Crucible',
+        role: 'invalid fixture',
+        status: 'fixture',
+        armatures: ['missing-intent'],
+        handles: ['nope'],
+        firings: ['nope'],
+        shards: ['nope'],
+        casts: ['nope'],
+        receipts: ['nope'],
+        smokeApparitions: [{ route: 'future:moge-depth-smoke-apparition' }],
+        graduationMode: 'remain_in_kaminos_terrarium',
+        custody: { owner: 'test' },
+      },
+    ],
+  }),
+  /crucible 0 schema mismatch/,
+  'crucibles fail loud when schema identity is missing',
+);
+
+assert.throws(
+  () => normalizeWorldCartridgeManifest({
+    ...manifest,
+    crucibles: [
+      {
+        schema: WORLD_CRUCIBLE_DESCRIPTOR_SCHEMA,
+        id: 'bad-crucible',
+        title: 'Bad Crucible',
+        role: 'invalid fixture',
+        status: 'fixture',
+        armatures: ['missing-intent'],
+        handles: ['nope'],
+        firings: ['nope'],
+        shards: ['nope'],
+        casts: ['nope'],
+        receipts: ['nope'],
+        smokeApparitions: [{ route: 'future:moge-depth-smoke-apparition' }],
+        graduationMode: 'remain_in_kaminos_terrarium',
+        custody: { owner: 'test' },
+      },
+    ],
+  }),
+  /must include makingIntent/,
+  'crucibles fail loud when they lack a positive making intent',
+);
+
+assert.throws(
+  () => normalizeWorldCartridgeManifest({
+    ...manifest,
+    crucibles: [
+      {
+        schema: WORLD_CRUCIBLE_DESCRIPTOR_SCHEMA,
+        id: 'bad-crucible',
+        title: 'Bad Crucible',
+        role: 'invalid fixture',
+        status: 'fixture',
+        makingIntent: 'Try to prove route identity.',
+        armatures: ['bad'],
+        handles: ['bad'],
+        firings: ['bad'],
+        shards: ['bad'],
+        casts: ['bad'],
+        receipts: ['bad'],
+        smokeApparitions: [{ id: 'blank-apparition' }],
+        graduationMode: 'remain_in_kaminos_terrarium',
+        custody: { owner: 'test' },
+      },
+    ],
+  }),
+  /smoke apparition 0 must include route/,
+  'smoke apparition hooks must name the route they intend to prove',
+);
+
 const loaded = loadWorldCartridgeFromDirectory(cartridgeDir);
 assert.equal(loaded.id, 'lerms-terrarium');
 assert.equal(loaded.files.manifestPath.endsWith('worlds/lerms-terrarium/world.json'), true);
@@ -109,3 +213,10 @@ assert.equal(index.cartridges.length, 1);
 assert.equal(index.cartridges[0].id, 'lerms-terrarium');
 assert.equal(index.cartridges[0].summary.creatureFamilies.includes('red-lerms'), true);
 assert.equal(index.cartridges[0].defaultRoute.query.world_cartridge, 'lerms-terrarium');
+assert.equal(index.cartridges[0].crucibleCount, 4);
+assert.deepEqual(index.cartridges[0].crucibles.map(crucible => crucible.id), [
+  'hill-of-hills',
+  'lerm-species',
+  'finger-fluid',
+  'glove-emitter',
+]);

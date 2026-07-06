@@ -113,6 +113,15 @@ def test_world_cartridge_index_discovers_lerms_terrarium():
     assert any(bridge["repo"] == "lerms" and bridge["role"] == "game-law" for bridge in cartridge["sourceBridges"])
     assert any(binding["id"] == "mushfinger-motion-agency" for binding in cartridge["affordanceBindings"])
     assert any(basin["id"] == "little-body-variants" for basin in cartridge["generationBasins"])
+    assert cartridge["crucibleCount"] == 4
+    assert [crucible["id"] for crucible in cartridge["crucibles"]] == [
+        "hill-of-hills",
+        "lerm-species",
+        "finger-fluid",
+        "glove-emitter",
+    ]
+    assert cartridge["crucibles"][0]["schema"] == "kaminos.world-crucible.descriptor.v0"
+    assert cartridge["crucibles"][0]["smokeApparitions"][0]["route"] == "future:moge-depth-smoke-apparition"
     assert cartridge["witnessCount"] == 1
     assert index["errors"] == []
 

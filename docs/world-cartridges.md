@@ -15,6 +15,8 @@ A cartridge can carry:
 - Kaminos affordance bindings for viewers, benches, fire, camera, capture,
   actors, stations, and smoke offers;
 - example scenes and fixture states for quick entry;
+- crucibles that preserve armatures, handles, firings, shards, casts, receipts,
+  and smoke-apparition hooks for active making work;
 - witness scenarios, screenshots, filmstrips, and route receipts;
 - graduation accounting that records where successful work moves next.
 
@@ -58,6 +60,29 @@ An agent composition can:
 This makes Kaminos a spatial pre-production forge. Agent work happens in the
 same browser world that the operator smokes, while source repos keep their own
 domain laws and product loops.
+
+## Crucibles
+
+A **crucible** is a named making zone inside a cartridge. It gathers the working
+memory for one world feature, creature family, interaction, or adapter route.
+The cartridge gives the world its outer package; a crucible gives active work a
+place to accumulate shape.
+
+A crucible records:
+
+- **armatures:** the structural supports the work mounts onto;
+- **handles:** the operator and agent controls used to touch it;
+- **firings:** attempts, runs, and smokes that changed the shape;
+- **shards:** useful fragments that survived a firing;
+- **casts:** promoted takes that can be reused;
+- **receipts:** observations and route records;
+- **smoke apparitions:** planned or implemented spatial renderings of smoke
+  evidence, screenshots, filmstrips, or depth/normal captures.
+
+Crucibles make cartridge work easier to pass between agents. A lane can start
+inside the Kaminos worktree, choose the relevant crucible, reuse existing
+armatures and handles, add a firing, and leave a cast or receipt for the next
+lane.
 
 ## LERMS Terrarium
 
@@ -122,9 +147,10 @@ worlds/<cartridge-id>/
 ```
 
 `world.json` names the cartridge, audience, default chamber, starting scenes,
-asset roots, source bridges, and affordance bindings. `composition.js` mounts
-the first scene or route. `graduation.md` records the current graduation mode
-and the custody split discovered by smokes. `witnesses/` stores route evidence
-for operator and agent review.
+asset roots, source bridges, affordance bindings, and crucibles.
+`composition.js` mounts the first scene or route and can expose compact
+crucible seeds. `graduation.md` records the current graduation mode and the
+custody split discovered by smokes. `witnesses/` stores route evidence for
+operator and agent review.
 
 The scaffold can grow as the cartridge proves its shape.

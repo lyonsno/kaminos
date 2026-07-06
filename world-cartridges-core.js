@@ -4,6 +4,7 @@ import { join, relative } from 'node:path';
 export const WORLD_CARTRIDGE_INDEX_SCHEMA = 'kaminos.world-cartridges.index.v0';
 export const WORLD_CARTRIDGE_MANIFEST_SCHEMA = 'kaminos.world-cartridge.manifest.v0';
 export const WORLD_CARTRIDGE_WITNESS_SCHEMA = 'kaminos.world-cartridge.witness.v0';
+export const WORLD_CRUCIBLE_DESCRIPTOR_SCHEMA = 'kaminos.world-crucible.descriptor.v0';
 export const WORLD_CARTRIDGE_DISCOVERY_ROUTE = '/api/world-cartridges';
 export const LERMS_TERRARIUM_CARTRIDGE_ID = 'lerms-terrarium';
 
@@ -35,6 +36,23 @@ function objectList(value) {
   return Array.isArray(value)
     ? value.filter(item => item && typeof item === 'object' && !Array.isArray(item)).map(item => clone(item))
     : [];
+}
+
+function referenceList(value) {
+  return Array.isArray(value)
+    ? value
+      .filter(item => {
+        if (typeof item === 'string') return item.trim();
+        return item && typeof item === 'object' && !Array.isArray(item);
+      })
+      .map(item => (typeof item === 'string' ? { id: item.trim() } : clone(item)))
+    : [];
+}
+
+function requireNonEmptyReferenceList(value, label) {
+  const refs = referenceList(value);
+  if (!refs.length) throw new Error(`${label} must include at least one entry`);
+  return refs;
 }
 
 function normalizeDefaultRoute(route, cartridgeId) {
@@ -80,6 +98,50 @@ function normalizeWitnesses(witnesses) {
   });
 }
 
+function normalizeSmokeApparitions(apparitions, crucibleIndex) {
+  return objectList(apparitions).map((apparition, index) => {
+    if (!apparition.route) {
+      throw new Error(`world crucible ${crucibleIndex} smoke apparition ${index} must include route`);
+    }
+    return apparition;
+  });
+}
+
+function normalizeCrucibles(crucibles) {
+  return objectList(crucibles).map((crucible, index) => {
+    if (crucible.schema !== WORLD_CRUCIBLE_DESCRIPTOR_SCHEMA) {
+      throw new Error(`world crucible ${index} schema mismatch: ${crucible.schema || 'missing'}`);
+    }
+    if (!crucible.id) throw new Error(`world crucible ${index} must include id`);
+    if (!crucible.title) throw new Error(`world crucible ${index} must include title`);
+    if (!crucible.role) throw new Error(`world crucible ${index} must include role`);
+    if (!crucible.status) throw new Error(`world crucible ${index} must include status`);
+    if (!crucible.makingIntent) throw new Error(`world crucible ${index} must include makingIntent`);
+    if (!WORLD_CARTRIDGE_GRADUATION_MODES.includes(crucible.graduationMode)) {
+      throw new Error(`world crucible ${index} graduationMode is unknown: ${crucible.graduationMode || 'missing'}`);
+    }
+    assertPlainObject(crucible.custody, `world crucible ${index} custody`);
+    if (!crucible.custody.owner) throw new Error(`world crucible ${index} custody must include owner`);
+    return {
+      schema: WORLD_CRUCIBLE_DESCRIPTOR_SCHEMA,
+      id: crucible.id,
+      title: crucible.title,
+      role: crucible.role,
+      status: crucible.status,
+      makingIntent: crucible.makingIntent,
+      armatures: requireNonEmptyReferenceList(crucible.armatures, `world crucible ${index} armatures`),
+      handles: requireNonEmptyReferenceList(crucible.handles, `world crucible ${index} handles`),
+      firings: requireNonEmptyReferenceList(crucible.firings, `world crucible ${index} firings`),
+      shards: requireNonEmptyReferenceList(crucible.shards, `world crucible ${index} shards`),
+      casts: requireNonEmptyReferenceList(crucible.casts, `world crucible ${index} casts`),
+      receipts: requireNonEmptyReferenceList(crucible.receipts, `world crucible ${index} receipts`),
+      smokeApparitions: normalizeSmokeApparitions(crucible.smokeApparitions, index),
+      graduationMode: crucible.graduationMode,
+      custody: clone(crucible.custody),
+    };
+  });
+}
+
 export function normalizeWorldCartridgeManifest(manifest, options = {}) {
   assertPlainObject(manifest, 'world cartridge manifest');
   if (manifest.schema !== WORLD_CARTRIDGE_MANIFEST_SCHEMA) {
@@ -121,6 +183,7 @@ export function normalizeWorldCartridgeManifest(manifest, options = {}) {
     affordanceBindings: objectList(manifest.affordanceBindings),
     generationBasins: objectList(manifest.generationBasins),
     sceneRecipes: objectList(manifest.sceneRecipes),
+    crucibles: normalizeCrucibles(manifest.crucibles || []),
     graduation: normalizeGraduation(manifest.graduation || {}),
     witnesses: normalizeWitnesses(manifest.witnesses || []),
     files,
@@ -153,6 +216,8 @@ function cartridgeSummary(cartridge, rootDir) {
     sourceBridges: clone(cartridge.sourceBridges),
     affordanceBindings: clone(cartridge.affordanceBindings),
     generationBasins: clone(cartridge.generationBasins),
+    crucibles: clone(cartridge.crucibles),
+    crucibleCount: cartridge.crucibles.length,
     witnessCount: cartridge.witnesses.length,
     path: rootDir && cartridge.files.rootDir ? relative(rootDir, cartridge.files.rootDir) || '.' : cartridge.slug,
   };
