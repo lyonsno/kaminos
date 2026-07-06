@@ -3943,12 +3943,20 @@ fn vs(@builtin(vertex_index) vertexIndex: u32) -> VertexOut {
 @group(0) @binding(2) var<storage, read> residualData: array<f32>;
 @group(0) @binding(3) var sourceFeature: texture_2d<f32>;
 
-fn residualWeight(outputChannel: u32, offsetY: u32, offsetX: u32, inputChannel: u32) -> f32 {
-  return residualData[(((outputChannel * 3u + offsetY) * 3u + offsetX) * 3u + inputChannel)];
+fn residualDataHeaderFloats() -> u32 {
+  return 16u;
 }
 
-fn residualBias(outputChannel: u32) -> f32 {
-  return residualData[81u + outputChannel];
+fn browserResidualInputChannels() -> u32 {
+  return u32(clamp(residualData[0u], 3.0, 7.0));
+}
+
+fn residualWeight(outputChannel: u32, offsetY: u32, offsetX: u32, inputChannel: u32, inputChannels: u32) -> f32 {
+  return residualData[residualDataHeaderFloats() + (((outputChannel * 3u + offsetY) * 3u + offsetX) * inputChannels + inputChannel)];
+}
+
+fn residualBias(outputChannel: u32, inputChannels: u32) -> f32 {
+  return residualData[residualDataHeaderFloats() + 27u * inputChannels + outputChannel];
 }
 
 fn lumaMax(color: vec3<f32>) -> f32 {
@@ -3981,35 +3989,38 @@ fn fs(in: VertexOut) -> @location(0) vec4<f32> {
   let texel = 1.0 / max(dims, vec2<f32>(1.0));
   let uv = clamp(in.uv, vec2<f32>(0.0), vec2<f32>(1.0));
   let center = textureSampleLevel(sourceFrame, sourceSampler, uv, 0.0).rgb;
-  var residual = vec3<f32>(residualBias(0u), residualBias(1u), residualBias(2u));
+  let feature = textureSampleLevel(sourceFeature, sourceSampler, uv, 0.0);
+  let inputChannels = browserResidualInputChannels();
+  var residual = vec3<f32>(residualBias(0u, inputChannels), residualBias(1u, inputChannels), residualBias(2u, inputChannels));
   for (var oy: u32 = 0u; oy < 3u; oy = oy + 1u) {
     for (var ox: u32 = 0u; ox < 3u; ox = ox + 1u) {
       let offset = vec2<f32>(f32(i32(ox) - 1), f32(i32(oy) - 1)) * texel;
       let sampleColor = textureSampleLevel(sourceFrame, sourceSampler, uv + offset, 0.0).rgb;
-      residual.x = residual.x + dot(sampleColor, vec3<f32>(
-        residualWeight(0u, oy, ox, 0u),
-        residualWeight(0u, oy, ox, 1u),
-        residualWeight(0u, oy, ox, 2u)
-      ));
-      residual.y = residual.y + dot(sampleColor, vec3<f32>(
-        residualWeight(1u, oy, ox, 0u),
-        residualWeight(1u, oy, ox, 1u),
-        residualWeight(1u, oy, ox, 2u)
-      ));
-      residual.z = residual.z + dot(sampleColor, vec3<f32>(
-        residualWeight(2u, oy, ox, 0u),
-        residualWeight(2u, oy, ox, 1u),
-        residualWeight(2u, oy, ox, 2u)
-      ));
+      let sampleFeature = textureSampleLevel(sourceFeature, sourceSampler, uv + offset, 0.0);
+      let sampleInputs = array<f32, 7>(
+        sampleColor.r,
+        sampleColor.g,
+        sampleColor.b,
+        sampleFeature.r,
+        sampleFeature.g,
+        sampleFeature.b,
+        sampleFeature.a
+      );
+      for (var inputChannel: u32 = 0u; inputChannel < inputChannels; inputChannel = inputChannel + 1u) {
+        let value = sampleInputs[inputChannel];
+        residual.x = residual.x + value * residualWeight(0u, oy, ox, inputChannel, inputChannels);
+        residual.y = residual.y + value * residualWeight(1u, oy, ox, inputChannel, inputChannels);
+        residual.z = residual.z + value * residualWeight(2u, oy, ox, inputChannel, inputChannels);
+      }
     }
   }
-  let residualLimit = residualData[84u];
-  let edgeThreshold = residualData[85u];
-  let strength = residualData[86u];
+  let residualParamsOffset = residualDataHeaderFloats() + 27u * inputChannels + 3u;
+  let residualLimit = residualData[residualParamsOffset + 0u];
+  let edgeThreshold = residualData[residualParamsOffset + 1u];
+  let strength = residualData[residualParamsOffset + 2u];
   let signal = edgeSignal(uv, texel, center);
   let mask = smoothstep(edgeThreshold * 0.35, max(edgeThreshold * 1.85, edgeThreshold + 0.0001), signal);
-  let feature = textureSampleLevel(sourceFeature, sourceSampler, uv, 0.0);
-  if (residualData[87u] > 0.5) {
+  if (residualData[residualParamsOffset + 3u] > 0.5) {
     return vec4<f32>(debugFeatureView(feature), 1.0);
   }
   let fireAuthority = max(feature.r, max(feature.g * 0.88, feature.b * 0.72));
@@ -4444,6 +4455,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let browserResidualShader = null;
   let browserResidualSampler = null;
   let browserResidualBuffer = null;
+  let browserResidualBufferSize = 0;
   let browserResidualBindGroup = null;
   let browserResidualTextureKey = '';
   let browserResidualModel = null;
@@ -4563,13 +4575,17 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
 
   function residualWorkEstimate(applied) {
     const outputPixels = applied ? Math.max(0, Math.floor(state.width || 0) * Math.floor(state.height || 0)) : 0;
-    const textureSamplesPerPixel = applied ? 15 : 0;
+    const inputChannels = applied ? Math.max(3, Math.min(7, Number(browserResidualModel?.inputChannels) || 3)) : 0;
+    const featureInputChannels = Math.max(0, inputChannels - 3);
+    const textureSamplesPerPixel = applied ? 9 * (1 + (featureInputChannels > 0 ? 1 : 0)) + 6 : 0;
     const kernelSamplesPerPixel = applied ? 9 : 0;
-    const multiplyAddsPerPixel = applied ? 81 : 0;
+    const multiplyAddsPerPixel = applied ? 27 * inputChannels : 0;
     return {
       outputPixels,
       renderWidth: applied ? state.width : 0,
       renderHeight: applied ? state.height : 0,
+      browserResidualInputChannels: inputChannels,
+      featureInputChannels,
       renderPassesAdded: applied ? 2 : 0,
       estimatedTextureSamplesPerPixel: textureSamplesPerPixel,
       estimatedTextureSamplesPerFrame: outputPixels * textureSamplesPerPixel,
@@ -4601,6 +4617,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       residualPassEncodeP95Ms: applied ? percentileTiming(timingSamples.residualEncode, 0.95) : null,
       totalEncodeP95Ms: applied ? percentileTiming(timingSamples.residualTotalEncode, 0.95) : null,
       modelArch: applied ? browserResidualModel?.modelArch || null : null,
+      featureInputMode: applied ? browserResidualModel?.featureInputMode || 'rgb' : null,
       modelUrl: applied ? browserResidualModel?.url || state.volumeResidualModelUrl || null : null,
       authority: applied ? state.volumeResidualAuthority : 'off',
     };
@@ -5545,7 +5562,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       label: 'kaminos browser residual shader-material-authority feature texture',
       size: { width: state.width, height: state.height, depthOrArrayLayers: 1 },
       format: 'rgba8unorm',
-      usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+      usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_SRC,
     });
     browserResidualFeatureTextureSize = key;
     browserResidualBindGroup = null;
@@ -5563,13 +5580,21 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     if (model.modelArch !== 'direct-residual') throw new Error(`browser residual one-pass route requires direct-residual, got ${model.modelArch || 'missing'}`);
     const kernel = model.weights?.['output.weight'];
     const bias = model.weights?.['output.bias'];
-    if (!Array.isArray(kernel?.data) || kernel.data.length !== 81) throw new Error('browser residual output.weight must contain 81 floats');
+    const inputChannels = Math.max(3, Math.min(7, Math.floor(Number(model.inputChannels) || 3)));
+    if (![3, 7].includes(inputChannels)) throw new Error(`browser residual inputChannels must be 3 or 7, got ${model.inputChannels || 'missing'}`);
+    if (!Array.isArray(kernel?.data) || kernel.data.length !== 27 * inputChannels) throw new Error(`browser residual output.weight must contain ${27 * inputChannels} floats for ${inputChannels} input channels`);
     if (!Array.isArray(bias?.data) || bias.data.length !== 3) throw new Error('browser residual output.bias must contain 3 floats');
+    const featureInputMode = model.featureInputMode || 'rgb';
+    if (inputChannels === 7 && featureInputMode !== 'feature-rgba') throw new Error(`browser residual 7-channel model must declare feature-rgba, got ${featureInputMode}`);
+    if (inputChannels === 3 && featureInputMode === 'feature-rgba') throw new Error('browser residual feature-rgba model must carry 7 input channels');
     const residualLimit = Number(model.residualOutputLimit);
     if (!(residualLimit > 0)) throw new Error('browser residual residualOutputLimit must be positive');
     return {
       ...model,
       url,
+      inputChannels,
+      featureInputMode,
+      browserResidualInputChannels: inputChannels,
       residualOutputLimit: residualLimit,
       edgeBandThreshold: Math.max(0.0001, Number(model.edgeBandThreshold) || 0.015),
       residualWeights: [...kernel.data.map(Number), ...bias.data.map(Number)],
@@ -5639,18 +5664,29 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
 
   function writeBrowserResidualBuffer() {
     if (!device || !browserResidualModel) return;
-    const data = new Float32Array(88);
-    data.set(browserResidualModel.residualWeights.slice(0, 84), 0);
-    data[84] = browserResidualModel.residualOutputLimit;
-    data[85] = browserResidualModel.edgeBandThreshold;
-    data[86] = normalizeBrowserResidualStrength(controlsSnapshot.volumeResidualStrength);
-    data[87] = normalizeBrowserResidualFeatureDebug(controlsSnapshot.volumeResidualFeatureDebug);
-    if (!browserResidualBuffer) {
+    const residualDataHeaderFloats = 16;
+    const inputChannels = browserResidualModel.inputChannels || 3;
+    const weightCount = 27 * inputChannels;
+    const biasCount = 3;
+    const paramCount = 4;
+    const data = new Float32Array(residualDataHeaderFloats + weightCount + biasCount + paramCount);
+    data[0] = inputChannels;
+    data.set(browserResidualModel.residualWeights.slice(0, weightCount + biasCount), residualDataHeaderFloats);
+    const paramsOffset = residualDataHeaderFloats + weightCount + biasCount;
+    data[paramsOffset + 0] = browserResidualModel.residualOutputLimit;
+    data[paramsOffset + 1] = browserResidualModel.edgeBandThreshold;
+    data[paramsOffset + 2] = normalizeBrowserResidualStrength(controlsSnapshot.volumeResidualStrength);
+    data[paramsOffset + 3] = normalizeBrowserResidualFeatureDebug(controlsSnapshot.volumeResidualFeatureDebug);
+    if (!browserResidualBuffer || browserResidualBufferSize !== data.byteLength) {
+      browserResidualBuffer?.destroy();
       browserResidualBuffer = device.createBuffer({
         label: 'kaminos browser direct residual weights',
         size: data.byteLength,
         usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
       });
+      browserResidualBufferSize = data.byteLength;
+      browserResidualBindGroup = null;
+      browserResidualTextureKey = '';
     }
     device.queue.writeBuffer(browserResidualBuffer, 0, data);
   }
@@ -7474,6 +7510,41 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     return result;
   }
 
+  async function readTextureRgba8(texture, width, height, label = 'kaminos rgba8 texture readback') {
+    const bytesPerPixel = 4;
+    const unpaddedBytesPerRow = width * bytesPerPixel;
+    const bytesPerRow = Math.ceil(unpaddedBytesPerRow / 256) * 256;
+    const buffer = device.createBuffer({
+      label,
+      size: bytesPerRow * height,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+    });
+    const encoder = device.createCommandEncoder({ label: `${label} encoder` });
+    encoder.copyTextureToBuffer(
+      { texture },
+      { buffer, bytesPerRow, rowsPerImage: height },
+      { width, height, depthOrArrayLayers: 1 }
+    );
+    device.queue.submit([encoder.finish()]);
+    await buffer.mapAsync(GPUMapMode.READ);
+    const data = new Uint8Array(buffer.getMappedRange());
+    const rgba = new Uint8Array(width * height * bytesPerPixel);
+    for (let y = 0; y < height; y += 1) {
+      const src = y * bytesPerRow;
+      const dst = y * width * bytesPerPixel;
+      rgba.set(data.slice(src, src + width * bytesPerPixel), dst);
+    }
+    buffer.unmap();
+    buffer.destroy();
+    return {
+      width,
+      height,
+      rgba: Array.from(rgba),
+      bytesPerRow,
+      unpaddedBytesPerRow,
+    };
+  }
+
   async function sampleFrame(options = {}) {
     if (!state.active || !device) return { ok: false, reason: 'inactive', ...state };
     const advanceSim = options.advanceSim !== false;
@@ -8108,6 +8179,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const scaleSet = await sampleRenderScaleSet({
       renderScales,
       includeRgba: options.includeRgba === true,
+      includeFeatureRgba: options.includeFeatureRgba === true,
       now: controlledStepNowMs,
       sameStateCaptureId,
       resumeRenderLoop: false,
@@ -8155,6 +8227,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           stepDeltaMs: controlledStepDeltaMs,
           renderScales,
           includeRgba: options.includeRgba === true,
+          includeFeatureRgba: options.includeFeatureRgba === true,
           resumeRenderLoop: false,
         });
         frames.push(frame);
@@ -8209,11 +8282,27 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       if (device.queue?.onSubmittedWorkDone) {
         await device.queue.onSubmittedWorkDone();
       }
+      const featureCapture = options.includeFeatureRgba === true && browserResidualFeatureTexture
+        ? await readTextureRgba8(
+          browserResidualFeatureTexture,
+          state.width,
+          state.height,
+          'kaminos residual shader-material-authority feature readback'
+        )
+        : null;
       const canvasRect = canvas.getBoundingClientRect();
       return {
         ok: true,
         sampleAuthority: 'render-only-frozen-sim-state',
         imageAuthority: 'cdp-canvas-clip-capture-after-render-only-frozen-sim-state',
+        featureCapture: featureCapture ? {
+          ...featureCapture,
+          featureAuthority: BROWSER_RESIDUAL_FEATURE_AUTHORITY,
+          imageAuthority: 'gpu-feature-texture-rgba8-readback-frozen-sim-state',
+          inputChannels: 4,
+          channelLayout: 'radiance-fire-interface-smoke',
+          source: 'browserResidualFeatureTexture',
+        } : null,
         sameStateCaptureId,
         baseFrameCount,
         baseSimStepCount,
