@@ -1963,6 +1963,11 @@ assert.match(fieldResidualArtifactEvaluator, /truthOccupancyFraction/, 'field re
 assert.match(fieldResidualArtifactEvaluator, /residualOccupancyFraction/, 'field residual artifact evaluator reports residual occupancy from artifact payloads');
 assert.match(fieldResidualArtifactEvaluator, /comparisonAuthority/, 'field residual artifact evaluator labels outputs as offline field comparison evidence instead of live renderer state');
 assert.match(fieldResidualArtifactEvaluator, /failurePhase/, 'field residual artifact evaluator writes failure-phase reports for corrupt or incomplete artifacts');
+assert.match(fieldResidualArtifactEvaluator, /--visual-preview-dir/, 'field residual artifact evaluator can write optional visual previews from verified artifact payloads');
+assert.match(fieldResidualArtifactEvaluator, /kaminos\.volume\.field-residual-visual-preview\.v0/, 'field residual visual previews carry a stable schema identity');
+assert.match(fieldResidualArtifactEvaluator, /offline-field-tile-visual-preview-not-renderer-state/, 'field residual visual previews fail loud as offline tile diagnostics rather than renderer evidence');
+assert.match(fieldResidualArtifactEvaluator, /visualPreviews/, 'field residual artifact evaluator reports visual preview paths and source identity in its evaluation report');
+assert.match(fieldResidualArtifactEvaluator, /write_png_rgb/, 'field residual artifact evaluator writes inspectable PNG previews without depending on browser rendering');
 
 const dynamicTextureProofPath = join(root, 'volume-dynamic-texture-proof.mjs');
 assert.ok(existsSync(dynamicTextureProofPath), 'dynamic texture proof harness exists');

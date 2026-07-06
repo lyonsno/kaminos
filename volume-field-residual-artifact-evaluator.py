@@ -7,8 +7,10 @@ import argparse
 import hashlib
 import json
 import platform
+import struct
 import subprocess
 import sys
+import zlib
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -19,11 +21,14 @@ import numpy as np
 REPORT_SCHEMA = "kaminos.volume.field-residual-artifact-evaluation.v0"
 APPLICATION_ARTIFACT_SCHEMA = "kaminos.volume.field-residual-application-artifact.v0"
 APPLICATION_ARTIFACT_IDENTITY = "offline-test-tile-target-residual-application-v0"
+VISUAL_PREVIEW_SCHEMA = "kaminos.volume.field-residual-visual-preview.v0"
+VISUAL_PREVIEW_AUTHORITY = "offline-field-tile-visual-preview-not-renderer-state"
 COMPARISON_AUTHORITY = "offline-heldout-field-artifact-comparison-not-live-renderer-state"
 BACKEND = "numpy"
 SUPPORT_OPPORTUNITY_IDENTITY = "artifact-support-opportunity-summary-v0"
 SUPPORT_TARGET_ABS_THRESHOLD = 1.0e-3
 SUPPORT_RESIDUAL_ABS_THRESHOLD = 1.0e-3
+VISUAL_TILE_SCALE = 12
 PAYLOAD_KEYS = [
     "lowTarget",
     "predictedHighTarget",
@@ -44,6 +49,11 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--artifact-manifest", required=True, help="Residual application artifact manifest JSON.")
     parser.add_argument("--out", required=True, help="Path to write the evaluation report JSON.")
+    parser.add_argument(
+        "--visual-preview-dir",
+        default=None,
+        help="Optional directory for PNG visual previews generated from verified artifact payloads.",
+    )
     return parser.parse_args()
 
 
@@ -91,6 +101,26 @@ def to_jsonable(value: Any) -> Any:
 def write_json(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(to_jsonable(payload), indent=2) + "\n", encoding="utf-8")
+
+
+def write_png_rgb(path: Path, rgb: np.ndarray) -> None:
+    if rgb.dtype != np.uint8 or rgb.ndim != 3 or rgb.shape[2] != 3:
+        raise EvaluationFailure("visual-preview-write", "PNG input must be an RGB uint8 array", {"shape": list(rgb.shape), "dtype": str(rgb.dtype)})
+
+    def chunk(kind: bytes, payload: bytes) -> bytes:
+        return struct.pack(">I", len(payload)) + kind + payload + struct.pack(">I", zlib.crc32(kind + payload) & 0xFFFFFFFF)
+
+    height, width, _ = rgb.shape
+    rows = [b"\x00" + np.ascontiguousarray(rgb[y]).tobytes() for y in range(height)]
+    payload = b"".join(rows)
+    png = [
+        b"\x89PNG\r\n\x1a\n",
+        chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)),
+        chunk(b"IDAT", zlib.compress(payload, level=6)),
+        chunk(b"IEND", b""),
+    ]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(b"".join(png))
 
 
 def read_json(path: Path) -> dict[str, Any]:
@@ -263,6 +293,172 @@ def grouped_metrics(rows: list[dict[str, Any]], group_keys: list[str]) -> list[d
     return result
 
 
+def scalar_projection(values: np.ndarray) -> np.ndarray:
+    if values.ndim != 4:
+        raise EvaluationFailure("visual-preview-project", "visual preview payload is not a 4D tile", {"shape": list(values.shape)})
+    per_voxel = np.max(np.abs(values.astype(np.float64)), axis=-1)
+    return np.max(per_voxel, axis=2)
+
+
+def normalize_projection(values: np.ndarray, scale: float) -> np.ndarray:
+    if scale <= 0:
+        return np.zeros_like(values, dtype=np.float64)
+    return np.clip(values / scale, 0.0, 1.0)
+
+
+def heat_rgb(values: np.ndarray) -> np.ndarray:
+    values = np.clip(values.astype(np.float64), 0.0, 1.0)
+    red = np.clip(3.0 * values, 0.0, 1.0)
+    green = np.clip(3.0 * values - 0.85, 0.0, 1.0)
+    blue = np.clip(3.0 * values - 2.0, 0.0, 1.0) * 0.75
+    floor = 0.03 + 0.05 * values
+    rgb = np.stack([
+        np.maximum(red, floor),
+        np.maximum(green, floor),
+        np.maximum(blue, floor),
+    ], axis=-1)
+    return np.asarray(np.round(rgb * 255.0), dtype=np.uint8)
+
+
+def scaled_rgb(tile: np.ndarray, scale: int) -> np.ndarray:
+    if scale <= 1:
+        return tile
+    return np.repeat(np.repeat(tile, scale, axis=0), scale, axis=1)
+
+
+def write_visual_previews(
+    args: argparse.Namespace,
+    manifest_path: Path,
+    manifest: dict[str, Any],
+    visual_tiles: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    if not getattr(args, "visual_preview_dir", None):
+        return []
+    if not visual_tiles:
+        raise EvaluationFailure("visual-preview-write", "no verified tiles available for visual preview", {"sourceArtifactManifest": str(manifest_path)})
+
+    preview_dir = Path(args.visual_preview_dir).resolve()
+    preview_dir.mkdir(parents=True, exist_ok=True)
+    row_keys = ["lowTarget", "predictedHighTarget", "truthHighTarget", "residualTarget", "errorTarget"]
+    row_labels = {
+        "lowTarget": "low-target",
+        "predictedHighTarget": "predicted-high-target",
+        "truthHighTarget": "truth-high-target",
+        "residualTarget": "model-residual",
+        "errorTarget": "abs-error-mask",
+    }
+    projections_by_key: dict[str, list[np.ndarray]] = {key: [] for key in row_keys}
+    for tile in visual_tiles:
+        for key in row_keys:
+            projections_by_key[key].append(scalar_projection(tile["payloads"][key]))
+
+    field_scale = max(
+        float(np.max(projection)) if projection.size else 0.0
+        for key in ["lowTarget", "predictedHighTarget", "truthHighTarget"]
+        for projection in projections_by_key[key]
+    )
+    residual_scale = max(float(np.max(projection)) if projection.size else 0.0 for projection in projections_by_key["residualTarget"])
+    error_scale = max(float(np.max(projection)) if projection.size else 0.0 for projection in projections_by_key["errorTarget"])
+    row_scale = {
+        "lowTarget": field_scale,
+        "predictedHighTarget": field_scale,
+        "truthHighTarget": field_scale,
+        "residualTarget": residual_scale,
+        "errorTarget": error_scale,
+    }
+
+    separator = 3
+    tile_gap = 2
+    rendered_rows = []
+    for key in row_keys:
+        rendered_tiles = []
+        for projection in projections_by_key[key]:
+            rgb = heat_rgb(normalize_projection(projection, row_scale[key]))
+            rendered_tiles.append(scaled_rgb(rgb, VISUAL_TILE_SCALE))
+        gap = np.full((rendered_tiles[0].shape[0], tile_gap, 3), 24, dtype=np.uint8)
+        row_image = rendered_tiles[0]
+        for rendered in rendered_tiles[1:]:
+            row_image = np.concatenate([row_image, gap, rendered], axis=1)
+        rendered_rows.append(row_image)
+
+    row_width = max(row.shape[1] for row in rendered_rows)
+    padded_rows = []
+    for row in rendered_rows:
+        if row.shape[1] < row_width:
+            pad = np.full((row.shape[0], row_width - row.shape[1], 3), 10, dtype=np.uint8)
+            row = np.concatenate([row, pad], axis=1)
+        padded_rows.append(row)
+    row_separator = np.full((separator, row_width, 3), 58, dtype=np.uint8)
+    contact_sheet = padded_rows[0]
+    for row in padded_rows[1:]:
+        contact_sheet = np.concatenate([contact_sheet, row_separator, row], axis=0)
+
+    preview_path = preview_dir / "field-residual-preview.png"
+    sidecar_path = preview_dir / "field-residual-preview.json"
+    write_png_rgb(preview_path, contact_sheet)
+    sidecar = {
+        "schema": VISUAL_PREVIEW_SCHEMA,
+        "identity": "offline-field-residual-visual-preview-v0",
+        "status": "written",
+        "createdAt": utc_now(),
+        "visualPreviewAuthority": VISUAL_PREVIEW_AUTHORITY,
+        "sourceArtifactManifest": str(manifest_path),
+        "sourceArtifactSha256": sha256_file(manifest_path),
+        "artifact": {
+            "schema": manifest.get("schema"),
+            "identity": manifest.get("identity"),
+            "artifactAuthority": manifest.get("artifactAuthority"),
+            "sourceManifest": manifest.get("sourceManifest"),
+            "sourceDataset": manifest.get("sourceDataset"),
+            "model": manifest.get("model"),
+            "split": manifest.get("split"),
+        },
+        "projection": {
+            "operator": "max(abs(channel)) per voxel, then max projection across z",
+            "tileScale": VISUAL_TILE_SCALE,
+            "rowOrder": [row_labels[key] for key in row_keys],
+            "normalization": {
+                "lowTarget/predictedHighTarget/truthHighTargetSharedMax": field_scale,
+                "residualTargetMax": residual_scale,
+                "errorTargetMax": error_scale,
+            },
+        },
+        "tiles": [
+            {
+                "column": index,
+                "order": tile["metadata"].get("order", index),
+                "pairId": tile["metadata"].get("pairId"),
+                "matchId": tile["metadata"].get("matchId"),
+                "routeVariantIdentity": tile["metadata"].get("routeVariantIdentity"),
+                "replayStateIdentity": tile["metadata"].get("replayStateIdentity"),
+                "shape": tile["metadata"].get("shape"),
+                "targetChannels": tile["metadata"].get("targetChannels"),
+            }
+            for index, tile in enumerate(visual_tiles)
+        ],
+        "outputs": {
+            "png": str(preview_path),
+            "json": str(sidecar_path),
+        },
+        "limitation": "Offline field-tile scalar projection from verified artifact payloads only; not a renderer, screen-space output, or simulator-state mutation.",
+    }
+    write_json(sidecar_path, sidecar)
+    return [{
+        "schema": VISUAL_PREVIEW_SCHEMA,
+        "identity": sidecar["identity"],
+        "status": "written",
+        "visualPreviewAuthority": VISUAL_PREVIEW_AUTHORITY,
+        "pngPath": str(preview_path),
+        "pngSha256": sha256_file(preview_path),
+        "jsonPath": str(sidecar_path),
+        "jsonSha256": sha256_file(sidecar_path),
+        "tileCount": len(visual_tiles),
+        "rowOrder": sidecar["projection"]["rowOrder"],
+        "projection": sidecar["projection"]["operator"],
+        "limitation": sidecar["limitation"],
+    }]
+
+
 def validate_manifest(manifest_path: Path, manifest: dict[str, Any]) -> None:
     if manifest.get("schema") != APPLICATION_ARTIFACT_SCHEMA:
         raise EvaluationFailure("manifest-validate", "artifact manifest schema mismatch", {"schema": manifest.get("schema")})
@@ -293,6 +489,7 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
 
     tile_rows: list[dict[str, Any]] = []
     payload_verification: list[dict[str, Any]] = []
+    visual_tiles: list[dict[str, Any]] = []
     model_error_chunks = []
     identity_error_chunks = []
     low_chunks = []
@@ -360,6 +557,18 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
             "residualMagnitude": mse_mae_max(residual),
         }
         tile_rows.append(tile_row)
+        visual_tiles.append({
+            "metadata": {
+                "order": tile.get("order", index),
+                "pairId": tile.get("pairId"),
+                "matchId": tile.get("matchId"),
+                "routeVariantIdentity": tile.get("routeVariantIdentity"),
+                "replayStateIdentity": tile.get("replayStateIdentity"),
+                "shape": shape,
+                "targetChannels": channels,
+            },
+            "payloads": payloads,
+        })
         model_error_chunks.append(tile_error.reshape(-1, channel_count))
         identity_error_chunks.append(identity_error.reshape(-1, channel_count))
         low_chunks.append(low.reshape(-1, channel_count))
@@ -430,6 +639,7 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
             "z": np.mean(local_mae, axis=(0, 1)),
         },
     }
+    visual_previews = write_visual_previews(args, manifest_path, manifest, visual_tiles)
 
     report = {
         "schema": REPORT_SCHEMA,
@@ -466,6 +676,7 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
             "payloadKeys": PAYLOAD_KEYS,
             "payloads": payload_verification,
         },
+        "visualPreviews": visual_previews,
         "metrics": {
             "sampleCount": int(model_errors.size),
             "tileCount": len(tile_rows),
