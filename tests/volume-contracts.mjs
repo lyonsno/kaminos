@@ -42,10 +42,14 @@ assert.match(index, /three-tsl-prepass-packed-normal-v0/, 'screen-space fire rec
 assert.match(index, /uploaded-control-fire-envelope-no-readback-v0/, 'screen-space fire receiver light must disclose its no-readback uploaded control energy envelope');
 assert.match(index, /uploaded-control-fire-envelope-v05-no-readback-v0/, 'screen-space fire receiver light must disclose the v0.5 no-readback control/sim energy envelope');
 assert.match(index, /rendered-volume-canvas-fire-energy-v15-no-readback-v0/, 'screen-space fire receiver light must disclose rendered-volume texture fire-energy authority');
+assert.match(index, /rendered-volume-canvas-energy-route-gain-v16/, 'screen-space fire receiver light must drive scalar intensity from route gain and rendered-volume texture energy, not the uploaded control proxy');
 assert.match(index, /three-tsl-render-pipeline-volume-texture-sample-v0/, 'screen-space fire receiver light must disclose the TSL volume texture sample authority');
 assert.match(index, /volumeEnergySamples/, 'screen-space fire receiver light must expose the rendered-volume fire-energy sampling model');
 assert.match(index, /fallbackEnergyAuthority/, 'screen-space fire receiver light must keep the old uploaded envelope only as an explicit fallback authority');
-assert.match(index, /receiverEnvelopeInputs/, 'screen-space fire receiver light must expose the effective envelope inputs that drive the uploaded uniform');
+assert.match(index, /volume-foreground-occluded-receiver-light-v0/, 'screen-space fire receiver light must disclose foreground-volume occlusion so wall light cannot bleach the overlaid fire body');
+assert.match(index, /foregroundOcclusionAuthority/, 'screen-space fire receiver light debug must expose foreground-volume occlusion authority');
+assert.doesNotMatch(index, /const glowEnergy = receiverEnvelopeInputs\.rawEnvelope;[\s\S]{0,500}fireReceiverLightGainNode\)\s*fireReceiverLightGainNode\.value = receiverEnabled \? receiverGain : 0;/, 'rendered-volume receiver light must not upload the old control-envelope scalar as the live light gain');
+assert.match(index, /receiverEnvelopeInputs/, 'screen-space fire receiver light must expose the fallback envelope inputs without using them as the live scalar drive');
 assert.match(index, /lifecycleDamping/, 'screen-space fire receiver envelope must damp quench/snuff lifecycle states instead of lighting stale flame');
 assert.match(index, /pyroRadianceBoost/, 'screen-space fire receiver envelope must include Pyro radiance controls in its visible-fire proxy');
 assert.match(index, /fireLickFlicker/, 'screen-space fire receiver envelope must let fire-lick controls affect flicker amplitude');

@@ -1478,8 +1478,9 @@ async function main() {
       assert.equal(volumeSceneContext?.receiverLight?.volumeEnergy?.samplingAuthority, 'three-tsl-render-pipeline-volume-texture-sample-v0', 'brick-wall screen-space receiver light did not expose TSL volume texture sample authority');
       assert.equal(volumeSceneContext?.receiverLight?.volumeEnergy?.cpuReadbackAuthority, false, 'brick-wall volume texture fire-energy sampling must not claim CPU readback authority');
       assert.ok((volumeSceneContext?.receiverLight?.volumeEnergy?.sampleCount ?? 0) >= 5, 'brick-wall volume texture fire-energy sampling did not expose enough fixed samples for the fire body');
+      assert.equal(volumeSceneContext?.receiverLight?.foregroundOcclusionAuthority, 'volume-foreground-occluded-receiver-light-v0', 'brick-wall screen-space receiver light must attenuate under the foreground volume so it cannot bleach the fire body');
       assert.equal(volumeSceneContext?.receiverLight?.envelopeModel, 'uploaded-control-fire-envelope-v05-no-readback-v0', 'brick-wall screen-space receiver light did not expose the v0.5 no-readback envelope model');
-      assert.equal(volumeSceneContext?.receiverLight?.drive, 'rendered-volume-canvas-energy-modulated-by-uploaded-envelope-v15', 'brick-wall screen-space receiver light did not report the v1.5 rendered-volume energy drive');
+      assert.equal(volumeSceneContext?.receiverLight?.drive, 'rendered-volume-canvas-energy-route-gain-v16', 'brick-wall screen-space receiver light must report route gain plus rendered-volume texture energy drive');
       assert.equal(volumeSceneContext?.receiverLight?.envelopeInputs?.cpuReadbackAuthority, false, 'brick-wall receiver envelope inputs must not claim CPU readback authority');
       assert.ok(Number.isFinite(volumeSceneContext?.receiverLight?.envelopeInputs?.fireControl), 'brick-wall receiver envelope inputs did not expose fireControl');
       assert.ok(Number.isFinite(volumeSceneContext?.receiverLight?.envelopeInputs?.radianceControl), 'brick-wall receiver envelope inputs did not expose radianceControl');
