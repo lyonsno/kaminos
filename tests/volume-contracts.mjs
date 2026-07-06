@@ -1929,6 +1929,11 @@ assert.match(fieldResidualProbe, /--spatial-conditioning/, 'field residual probe
 assert.match(fieldResidualProbe, /normalized-cell-spatial-conditioning-v0/, 'field residual probe names the normalized cell/bin spatial conditioning identity');
 assert.match(fieldResidualProbe, /spatialConditioningChannels/, 'field residual probe reports the spatial conditioning channel order');
 assert.match(fieldResidualProbe, /spatialConditioningFeatureCount/, 'field residual probe reports spatial conditioning feature width separately from local context width');
+assert.match(fieldResidualProbe, /--support-conditioning/, 'field residual probe can append local support/occupancy cue features without increasing MLP capacity');
+assert.match(fieldResidualProbe, /local-window-support-v0/, 'field residual probe names the local-window support conditioning identity');
+assert.match(fieldResidualProbe, /supportConditioningChannels/, 'field residual probe reports the support conditioning channel order');
+assert.match(fieldResidualProbe, /supportConditioningFeatureCount/, 'field residual probe reports support conditioning feature width separately from local context width');
+assert.match(fieldResidualProbe, /support-conditioning/, 'field residual probe has a failure phase for support conditioning shape mismatches');
 assert.match(fieldResidualProbe, /conditionedFeatureCount/, 'field residual probe reports the post-conditioning feature width separately from local context width');
 assert.match(fieldResidualProbe, /--target-channel-list/, 'field residual probe can train against an explicit decomposed target channel list');
 assert.match(fieldResidualProbe, /--target-channel-group/, 'field residual probe exposes named target channel groups for decomposition probes');

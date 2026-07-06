@@ -29,6 +29,8 @@ ROUTE_CONTROLS_CONDITIONING_IDENTITY = "route-controls-v0"
 ROUTE_CONTROLS_REPLAY_CONDITIONING_IDENTITY = "route-controls-replay-v0"
 NO_SPATIAL_CONDITIONING_IDENTITY = "none"
 NORMALIZED_CELL_SPATIAL_CONDITIONING_IDENTITY = "normalized-cell-spatial-conditioning-v0"
+NO_SUPPORT_CONDITIONING_IDENTITY = "none"
+LOCAL_WINDOW_SUPPORT_CONDITIONING_IDENTITY = "local-window-support-v0"
 RANDOM_TILE_PAIR_SPLIT_IDENTITY = "random-tile-pair-v0"
 REPLAY_BALANCED_TILE_PAIR_SPLIT_IDENTITY = "replay-balanced-tile-pair-v0"
 SPATIAL_BIN_HOLDOUT_SPLIT_IDENTITY = "holdout-spatial-bin-list-v0"
@@ -125,6 +127,28 @@ SPATIAL_CONDITIONING_CHANNELS = [
     "lowSpatialBinCenterX",
     "lowSpatialBinCenterY",
     "lowSpatialBinCenterZ",
+]
+SUPPORT_CONDITIONING_CHANNELS = [
+    "localAllAbsMean",
+    "localAllAbsMax",
+    "localAllOccupancy1e3",
+    "localAllOccupancy1e2",
+    "centerAllAbsMean",
+    "centerAllAbsMax",
+    "centerAllOccupancy1e3",
+    "centerAllOccupancy1e2",
+    "localVisibleFireAbsMean",
+    "localVisibleFireAbsMax",
+    "localVisibleFireOccupancy1e3",
+    "centerVisibleFireAbsMean",
+    "centerVisibleFireAbsMax",
+    "centerVisibleFireOccupancy1e3",
+    "localSmokeDensityAbsMean",
+    "localSmokeDensityAbsMax",
+    "localSmokeDensityOccupancy1e3",
+    "centerSmokeDensityAbsMean",
+    "centerSmokeDensityAbsMax",
+    "centerSmokeDensityOccupancy1e3",
 ]
 FIELD_TILE_CHANNELS = [
     "velocityX",
@@ -251,6 +275,12 @@ def parse_args() -> argparse.Namespace:
         help="Append explicit normalized cell, tile, and spatial-bin position features to spatial-context probe inputs.",
     )
     parser.add_argument(
+        "--support-conditioning",
+        choices=[NO_SUPPORT_CONDITIONING_IDENTITY, LOCAL_WINDOW_SUPPORT_CONDITIONING_IDENTITY],
+        default=NO_SUPPORT_CONDITIONING_IDENTITY,
+        help="Append explicit local low-field support/occupancy cue features to spatial-context probe inputs.",
+    )
+    parser.add_argument(
         "--target-channel-list",
         default=None,
         help="Comma-separated output channel names or indexes to train/evaluate while reading the full field input.",
@@ -363,6 +393,7 @@ def base_report(args: argparse.Namespace) -> dict[str, Any]:
             "includeSpatialBinList": args.include_spatial_bin_list,
             "routeConditioning": args.route_conditioning,
             "spatialConditioning": args.spatial_conditioning,
+            "supportConditioning": args.support_conditioning,
             "targetChannelList": args.target_channel_list,
             "targetChannelGroup": args.target_channel_group,
             "artifactDir": args.artifact_dir,
@@ -464,6 +495,12 @@ def route_conditioning_channels(mode: str) -> list[str]:
 def spatial_conditioning_channels(mode: str) -> list[str]:
     if mode == NORMALIZED_CELL_SPATIAL_CONDITIONING_IDENTITY:
         return list(SPATIAL_CONDITIONING_CHANNELS)
+    return []
+
+
+def support_conditioning_channels(mode: str) -> list[str]:
+    if mode == LOCAL_WINDOW_SUPPORT_CONDITIONING_IDENTITY:
+        return list(SUPPORT_CONDITIONING_CHANNELS)
     return []
 
 
@@ -1197,6 +1234,84 @@ def context_feature_matrix(tiles: list[np.ndarray], radius: int) -> np.ndarray:
     return np.concatenate([context_features_for_tile(tile, radius) for tile in tiles], axis=0)
 
 
+def channel_indexes_for_names(channel_names: list[str], requested_names: list[str]) -> list[int]:
+    index_by_name = {str(name): index for index, name in enumerate(channel_names)}
+    return [index_by_name[name] for name in requested_names if name in index_by_name]
+
+
+def support_stats_from_values(values: np.ndarray) -> np.ndarray:
+    if values.size == 0:
+        return np.zeros((values.shape[0], 3), dtype=np.float64)
+    absolute = np.abs(values.astype(np.float64))
+    return np.column_stack([
+        np.mean(absolute, axis=1),
+        np.max(absolute, axis=1),
+        np.mean(absolute > SUPPORT_TARGET_ABS_THRESHOLD, axis=1),
+    ]).astype(np.float64)
+
+
+def support_conditioning_for_tile(tile: np.ndarray, radius: int, channel_names: list[str]) -> np.ndarray:
+    if tile.ndim != 4:
+        raise ProbeFailure("support-conditioning", f"support conditioning requires 4D tile tensors, got shape {list(tile.shape)}")
+    local_features = context_features_for_tile(tile, radius)
+    center = tile.reshape(-1, tile.shape[-1]).astype(np.float64)
+    channel_count = int(tile.shape[-1])
+    window_size = max(1, local_features.shape[1] // max(1, channel_count))
+    local_window = local_features.reshape(local_features.shape[0], window_size, channel_count)
+    local_all = np.abs(local_features.astype(np.float64))
+    center_all = np.abs(center)
+    visible_indexes = channel_indexes_for_names(channel_names, TARGET_CHANNEL_GROUPS["visible-fire"])
+    smoke_indexes = channel_indexes_for_names(channel_names, TARGET_CHANNEL_GROUPS["smoke-density"])
+
+    def local_group(indexes: list[int]) -> np.ndarray:
+        if not indexes:
+            return np.zeros((local_features.shape[0], 0), dtype=np.float64)
+        return local_window[:, :, indexes].reshape(local_features.shape[0], -1)
+
+    def center_group(indexes: list[int]) -> np.ndarray:
+        if not indexes:
+            return np.zeros((center.shape[0], 0), dtype=np.float64)
+        return center[:, indexes]
+
+    all_support = np.column_stack([
+        np.mean(local_all, axis=1),
+        np.max(local_all, axis=1),
+        np.mean(local_all > SUPPORT_TARGET_ABS_THRESHOLD, axis=1),
+        np.mean(local_all > 1.0e-2, axis=1),
+        np.mean(center_all, axis=1),
+        np.max(center_all, axis=1),
+        np.mean(center_all > SUPPORT_TARGET_ABS_THRESHOLD, axis=1),
+        np.mean(center_all > 1.0e-2, axis=1),
+    ])
+    return np.column_stack([
+        all_support,
+        support_stats_from_values(local_group(visible_indexes)),
+        support_stats_from_values(center_group(visible_indexes)),
+        support_stats_from_values(local_group(smoke_indexes)),
+        support_stats_from_values(center_group(smoke_indexes)),
+    ]).astype(np.float64)
+
+
+def support_conditioning_feature_matrix(tiles: list[np.ndarray], radius: int, channel_names: list[str], mode: str) -> np.ndarray:
+    channels = support_conditioning_channels(mode)
+    sample_total = sum(int(np.prod(tile.shape[:-1])) for tile in tiles)
+    if not tiles or not channels:
+        return np.zeros((sample_total, 0), dtype=np.float64)
+    rows = [support_conditioning_for_tile(tile, radius, channel_names) for tile in tiles]
+    for index, row in enumerate(rows):
+        if row.shape[1] != len(channels):
+            raise ProbeFailure(
+                "support-conditioning",
+                "support conditioning vector width changed across tile pairs",
+                {
+                    "tileIndex": index,
+                    "expectedChannels": len(channels),
+                    "actualChannels": int(row.shape[1]),
+                },
+            )
+    return np.concatenate(rows, axis=0)
+
+
 def route_conditioning_feature_matrix(matches: list[dict[str, Any]], indexes: list[int], tiles: list[np.ndarray]) -> np.ndarray:
     if not indexes:
         return np.zeros((0, 0), dtype=np.float64)
@@ -1302,6 +1417,18 @@ def append_spatial_conditioning(features: np.ndarray, conditioning: np.ndarray) 
         raise ProbeFailure(
             "spatial-conditioning",
             "spatial conditioning row count does not match spatial feature rows",
+            {"featureRows": int(features.shape[0]), "conditioningRows": int(conditioning.shape[0])},
+        )
+    return np.concatenate([features.astype(np.float64), conditioning.astype(np.float64)], axis=1)
+
+
+def append_support_conditioning(features: np.ndarray, conditioning: np.ndarray) -> np.ndarray:
+    if conditioning.shape[1] == 0:
+        return features
+    if conditioning.shape[0] != features.shape[0]:
+        raise ProbeFailure(
+            "support-conditioning",
+            "support conditioning row count does not match spatial feature rows",
             {"featureRows": int(features.shape[0]), "conditioningRows": int(conditioning.shape[0])},
         )
     return np.concatenate([features.astype(np.float64), conditioning.astype(np.float64)], axis=1)
@@ -1967,10 +2094,14 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         test_route_conditioning = route_conditioning_feature_matrix(usable_matches, test_indexes, test_low_tiles)
         train_spatial_conditioning = spatial_conditioning_feature_matrix(usable_matches, train_indexes, train_low_tiles, args.spatial_conditioning)
         test_spatial_conditioning = spatial_conditioning_feature_matrix(usable_matches, test_indexes, test_low_tiles, args.spatial_conditioning)
+        train_support_conditioning = support_conditioning_feature_matrix(train_low_tiles, context_radius_value, channel_names, args.support_conditioning)
+        test_support_conditioning = support_conditioning_feature_matrix(test_low_tiles, context_radius_value, channel_names, args.support_conditioning)
         train_features = append_route_conditioning(train_local_features, train_route_conditioning)
         test_features = append_route_conditioning(test_local_features, test_route_conditioning)
         train_features = append_spatial_conditioning(train_features, train_spatial_conditioning)
         test_features = append_spatial_conditioning(test_features, test_spatial_conditioning)
+        train_features = append_support_conditioning(train_features, train_support_conditioning)
+        test_features = append_support_conditioning(test_features, test_support_conditioning)
         weights, bias = fit_linear_ridge(train_features, train_high_target, args.ridge)
         train_linear_context_prediction = predict_linear(train_features, weights, bias)
         test_linear_context_prediction = predict_linear(test_features, weights, bias)
@@ -1991,6 +2122,12 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                 "spatialConditioningChannels": spatial_conditioning_channels(args.spatial_conditioning),
                 "spatialConditioningFeatureCount": int(train_spatial_conditioning.shape[1]),
                 "source": "matched low-tile normalized cell centers, tile centers, and parsed spatial-bin centers",
+            },
+            "supportConditioning": {
+                "identity": args.support_conditioning,
+                "supportConditioningChannels": support_conditioning_channels(args.support_conditioning),
+                "supportConditioningFeatureCount": int(train_support_conditioning.shape[1]),
+                "source": "low-field local window and center support summaries computed from the same context radius",
             },
             "contextFeatureOrder": "dx-major,dy,dz over edge-padded low tile, channels preserved per offset",
         }
@@ -2124,6 +2261,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         report["data"]["conditionedFeatureCount"] = context["conditionedFeatureCount"]
         report["data"]["routeConditioning"] = context["routeConditioning"]
         report["data"]["spatialConditioning"] = context["spatialConditioning"]
+        report["data"]["supportConditioning"] = context["supportConditioning"]
     residual_application_artifact = write_residual_application_artifact(
         args,
         manifest_path,
