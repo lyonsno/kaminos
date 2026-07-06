@@ -45,6 +45,11 @@ const renderScaleSet = parseNumberList(args.get('--render-scale-set')).map(clamp
 const renderScaleSetDir = resolve(args.get('--render-scale-set-dir') || dirname(out));
 const renderScaleSetPrefix = String(args.get('--render-scale-set-prefix') || 'same-state-render-scale-set');
 const renderScaleFeatureCaptures = args.has('--render-scale-feature-captures') && !['0', 'false', 'no'].includes(String(args.get('--render-scale-feature-captures') || '1').toLowerCase());
+const renderScaleAuxiliaryCaptureModes = new Set(String(args.get('--render-scale-auxiliary-captures') || '')
+  .split(',')
+  .map(entry => entry.trim().toLowerCase())
+  .filter(Boolean));
+const renderScaleFlowDebugCaptures = renderScaleAuxiliaryCaptureModes.has('flow-debug') || renderScaleAuxiliaryCaptureModes.has('flow_debug');
 const controlledStepSequenceRequested = args.has('--controlled-step-sequence') && !['0', 'false', 'no'].includes(String(args.get('--controlled-step-sequence') || '1').toLowerCase());
 const controlledStepFrames = Math.max(1, Math.floor(Number(args.get('--controlled-step-frames') || 1)));
 const controlledStepDeltaMs = Math.max(0, Number(args.get('--controlled-step-delta-ms') || 220));
@@ -58,6 +63,7 @@ if (!VALID_EVIDENCE_MODES.has(evidenceMode)) {
 const expectsPerformanceVolumeEvidence = evidenceMode === 'performance';
 const expectsPyroMaterialEvidence = evidenceMode === 'pyro-material';
 const expectsNoFireVolumeEvidence = evidenceMode === 'no-fire-volume';
+const FLOW_DEBUG_AUXILIARY_CAPTURE_AUTHORITY = 'flow-debug-interface-canvas-capture-v0';
 const visualEvidenceMode = expectsNoFireVolumeEvidence
   ? 'no-fire-volume-signal'
   : (expectsPyroMaterialEvidence ? 'pyro-material-coupled-volume-signal' : (expectsPerformanceVolumeEvidence ? 'performance-volume-signal' : 'fire-volume'));
@@ -1090,6 +1096,70 @@ function wsRequest(ws, method, params = {}) {
     };
     ws.addEventListener('message', onMessage);
   });
+}
+
+async function captureFlowDebugAuxiliary({
+  ws,
+  renderScale,
+  scaleSet,
+  outputPath,
+  screenshotClip,
+  canvasCssRect,
+  hudSuppression,
+}) {
+  const flowDebugEval = await wsRequest(ws, 'Runtime.evaluate', {
+    expression: `window.__kaminosVolumePrototype.renderFrozenScaleToCanvas(${JSON.stringify({
+      renderScale,
+      now: scaleSet.fixedNowMs,
+      sameStateCaptureId: scaleSet.sameStateCaptureId,
+      baseFrameCount: scaleSet.baseFrameCount,
+      baseSimStepCount: scaleSet.baseSimStepCount,
+      includeFeatureRgba: false,
+      controlOverrides: { flowDebug: 1 },
+      restoreControls: true,
+      resumeRenderLoop: false,
+    })})`,
+    awaitPromise: true,
+    returnByValue: true,
+  });
+  const flowDebugCapture = flowDebugEval.result.value;
+  if (flowDebugCapture?.ok !== true || flowDebugCapture?.sampleAuthority !== 'render-only-frozen-sim-state') {
+    throw new Error(`Flow Debug auxiliary capture failed: ${JSON.stringify({
+      renderScale,
+      ok: flowDebugCapture?.ok,
+      reason: flowDebugCapture?.reason,
+      sampleAuthority: flowDebugCapture?.sampleAuthority,
+      sameStateCaptureId: flowDebugCapture?.sameStateCaptureId,
+    })}`);
+  }
+  const flowDebugShot = await wsRequest(ws, 'Page.captureScreenshot', {
+    format: 'png',
+    fromSurface: true,
+    clip: screenshotClip,
+  });
+  const imageBuffer = Buffer.from(flowDebugShot.data, 'base64');
+  writeFileSync(outputPath, imageBuffer);
+  const metrics = measureScreenshot(imageBuffer);
+  return {
+    path: outputPath,
+    width: metrics.width,
+    height: metrics.height,
+    auxiliaryAuthority: FLOW_DEBUG_AUXILIARY_CAPTURE_AUTHORITY,
+    imageAuthority: flowDebugCapture.imageAuthority,
+    inputChannels: 4,
+    channelLayout: 'flow-debug-interface-cyan-red-rgba',
+    source: 'volume_flow_debug',
+    controlOverrides: { flowDebug: 1 },
+    sampleAuthority: flowDebugCapture.sampleAuthority,
+    sameStateCaptureId: flowDebugCapture.sameStateCaptureId,
+    frameCount: flowDebugCapture.frameCount,
+    simStepCount: flowDebugCapture.simStepCount,
+    canvasCssRect,
+    screenshotClip,
+    devicePixelRatio: flowDebugCapture.devicePixelRatio,
+    hudSuppression,
+    metrics,
+  };
 }
 
 function waitForWebSocketOpen(ws) {
@@ -2295,6 +2365,7 @@ async function main() {
         const imagePath = resolve(renderScaleSetDir, `${slug}.png`);
         const previewPath = resolve(renderScaleSetDir, `${slug}.preview.png`);
         const featurePath = resolve(renderScaleSetDir, `${slug}.feature.png`);
+        const flowDebugPath = resolve(renderScaleSetDir, `${slug}.flow-debug.png`);
         const captureReportPath = resolve(renderScaleSetDir, `${slug}.json`);
         if (scaleSample.preview?.rgba && Number.isFinite(scaleSample.preview.width) && Number.isFinite(scaleSample.preview.height)) {
           writeRgbaPng(previewPath, scaleSample.preview.width, scaleSample.preview.height, scaleSample.preview.rgba);
@@ -2350,6 +2421,18 @@ async function main() {
         if (featureCapture?.rgba && Number.isFinite(featureCapture.width) && Number.isFinite(featureCapture.height)) {
           writeRgbaPng(featurePath, featureCapture.width, featureCapture.height, featureCapture.rgba);
         }
+        const auxiliaryCaptures = {};
+        if (renderScaleFlowDebugCaptures && scaleSample.role !== 'high') {
+          auxiliaryCaptures.flowDebug = await captureFlowDebugAuxiliary({
+            ws,
+            renderScale,
+            scaleSet,
+            outputPath: flowDebugPath,
+            screenshotClip,
+            canvasCssRect,
+            hudSuppression,
+          });
+        }
         const { image, preview, simReadback, majorantReadback, ...sampleReport } = scaleSample;
         const captureReport = {
           ...sampleReport,
@@ -2381,6 +2464,7 @@ async function main() {
             source: featureCapture.source,
             sourcePassApplied: featureCapture.sourcePassApplied,
           } : null,
+          auxiliaryCaptures: Object.keys(auxiliaryCaptures).length ? auxiliaryCaptures : null,
           simReadback: simReadback ? {
             grid: simReadback.grid,
             densityMean: simReadback.densityMean,
@@ -2435,6 +2519,7 @@ async function main() {
             source: featureCapture.source,
             sourcePassApplied: featureCapture.sourcePassApplied,
           } : null,
+          auxiliaryCaptures: Object.keys(auxiliaryCaptures).length ? auxiliaryCaptures : null,
           preview: previewPath,
           report: captureReportPath,
         });
@@ -2545,6 +2630,7 @@ async function main() {
           const slug = `${controlledStepPrefix}-${frameSlug}-${String(index + 1).padStart(2, '0')}-${scaleSlug(renderScale)}`;
           const imagePath = resolve(frameDir, `${slug}.png`);
           const featurePath = resolve(frameDir, `${slug}.feature.png`);
+          const flowDebugPath = resolve(frameDir, `${slug}.flow-debug.png`);
           const captureReportPath = resolve(frameDir, `${slug}.json`);
           const canvasEval = await wsRequest(ws, 'Runtime.evaluate', {
             expression: `window.__kaminosVolumePrototype.renderFrozenScaleToCanvas(${JSON.stringify({
@@ -2599,6 +2685,18 @@ async function main() {
           if (featureCapture?.rgba && Number.isFinite(featureCapture.width) && Number.isFinite(featureCapture.height)) {
             writeRgbaPng(featurePath, featureCapture.width, featureCapture.height, featureCapture.rgba);
           }
+          const auxiliaryCaptures = {};
+          if (renderScaleFlowDebugCaptures && scaleSample.role !== 'high') {
+            auxiliaryCaptures.flowDebug = await captureFlowDebugAuxiliary({
+              ws,
+              renderScale,
+              scaleSet,
+              outputPath: flowDebugPath,
+              screenshotClip,
+              canvasCssRect,
+              hudSuppression,
+            });
+          }
           const { image, preview, simReadback, majorantReadback, ...sampleReport } = scaleSample;
           const captureReport = {
             ...sampleReport,
@@ -2631,6 +2729,7 @@ async function main() {
               source: featureCapture.source,
               sourcePassApplied: featureCapture.sourcePassApplied,
             } : null,
+            auxiliaryCaptures: Object.keys(auxiliaryCaptures).length ? auxiliaryCaptures : null,
             simReadback: simReadback ? {
               grid: simReadback.grid,
               densityMean: simReadback.densityMean,
@@ -2691,6 +2790,7 @@ async function main() {
               source: featureCapture.source,
               sourcePassApplied: featureCapture.sourcePassApplied,
             } : null,
+            auxiliaryCaptures: Object.keys(auxiliaryCaptures).length ? auxiliaryCaptures : null,
             report: captureReportPath,
           });
         }

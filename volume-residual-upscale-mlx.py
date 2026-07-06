@@ -19,6 +19,8 @@ MODEL_ARTIFACT_AUTHORITY = "offline-mlx-residual-upscaler-weights-v0"
 PAIR_AUTHORITY = "frame-locked-render-scale-set-v0"
 IMAGE_AUTHORITY = "cdp-canvas-clip-capture-after-render-only-frozen-sim-state"
 FEATURE_INPUT_AUTHORITY = "shader-material-authority-residual-feature-v0"
+FLOW_DEBUG_AUXILIARY_INPUT_AUTHORITY = "flow-debug-interface-canvas-capture-v0"
+IMAGE_FEATURE_INPUT_MODES = {"feature-rgba", "aux-rgba"}
 
 
 def constrain_residual_color(residual, residualColorMode, chromaResidualScale):
@@ -161,7 +163,7 @@ def parse_args():
     parser.add_argument("--batch-size", type=int, default=4)
     parser.add_argument("--patch-size", type=int, default=96)
     parser.add_argument("--model-arch", dest="modelArch", choices=["tiny-conv", "direct-residual", "hybrid-residual", "gated-detail-residual"], default="tiny-conv")
-    parser.add_argument("--feature-input-mode", dest="featureInputMode", choices=["rgb", "feature-rgba"], default="rgb", help="Model input source: low RGB only, or low RGB plus shader/material residual feature RGBA.")
+    parser.add_argument("--feature-input-mode", dest="featureInputMode", choices=["rgb", "feature-rgba", "aux-rgba"], default="rgb", help="Model input source: low RGB only, low RGB plus shader/material residual feature RGBA, or low RGB plus auxiliary debug RGBA.")
     parser.add_argument("--hidden-channels", type=int, default=16)
     parser.add_argument("--detail-residual-gate", dest="detailResidualGate", type=float, default=2.0, help="Fixed multiplier for the hidden detail residual in gated-detail-residual probes.")
     parser.add_argument("--learning-rate", type=float, default=1e-3)
@@ -389,11 +391,19 @@ def load_feature_image(path, target_height, target_width):
 
 
 def feature_input_channels(featureInputMode):
-    return 4 if featureInputMode == "feature-rgba" else 0
+    return 4 if featureInputMode in IMAGE_FEATURE_INPUT_MODES else 0
 
 
 def feature_input_authority(featureInputMode):
-    return FEATURE_INPUT_AUTHORITY if featureInputMode == "feature-rgba" else "off"
+    if featureInputMode == "feature-rgba":
+        return FEATURE_INPUT_AUTHORITY
+    if featureInputMode == "aux-rgba":
+        return FLOW_DEBUG_AUXILIARY_INPUT_AUTHORITY
+    return "off"
+
+
+def uses_feature_image(featureInputMode):
+    return featureInputMode in IMAGE_FEATURE_INPUT_MODES
 
 
 def psnr_from_mse(mse):
@@ -549,6 +559,16 @@ def load_pair_arrays(pairs, foregroundThreshold, edgeBandMode, edgeBandThreshold
             if feature_authority != FEATURE_INPUT_AUTHORITY:
                 raise ValueError(f"pair feature authority is not {FEATURE_INPUT_AUTHORITY}: {pair.get('pairId')} got {feature_authority!r}")
             feature_image = load_feature_image(feature_path, low_image.shape[0], low_image.shape[1])
+        elif featureInputMode == "aux-rgba":
+            auxiliary_captures = pair.get("low", {}).get("auxiliaryCaptures") or {}
+            flow_debug_capture = auxiliary_captures.get("flowDebug") or {}
+            feature_path = flow_debug_capture.get("path")
+            if not feature_path:
+                raise ValueError(f"pair lacks auxiliaryCaptures.flowDebug.path for --feature-input-mode=aux-rgba: {pair.get('pairId')}")
+            auxiliary_authority = flow_debug_capture.get("auxiliaryAuthority")
+            if auxiliary_authority != FLOW_DEBUG_AUXILIARY_INPUT_AUTHORITY:
+                raise ValueError(f"pair Flow Debug auxiliary authority is not {FLOW_DEBUG_AUXILIARY_INPUT_AUTHORITY}: {pair.get('pairId')} got {auxiliary_authority!r}")
+            feature_image = load_feature_image(feature_path, low_image.shape[0], low_image.shape[1])
         foreground = foreground_pixels(low_image, high_image, foregroundThreshold)
         edge_mask, edge_signal = edge_band_mask(low_image, high_image, edgeBandMode, edgeBandThreshold, edgeBandDilate)
         target_edge_mask, target_edge_signal = edge_band_mask(low_image, high_image, "difference-gradient", edgeBandThreshold, edgeBandDilate)
@@ -624,9 +644,9 @@ def split_pairs(loaded):
 
 def model_input_from_rgb(low_patch, low_render_scale, conditionRenderScale, feature_patch=None, featureInputMode="rgb"):
     input_parts = [low_patch]
-    if featureInputMode == "feature-rgba":
+    if uses_feature_image(featureInputMode):
         if feature_patch is None:
-            raise ValueError("feature-rgba model input requires a feature_patch")
+            raise ValueError(f"{featureInputMode} model input requires a feature_patch")
         input_parts.append(feature_patch)
     scaleChannel = np.full((*low_patch.shape[:2], 1), float(low_render_scale), dtype=np.float32)
     if conditionRenderScale:
@@ -658,7 +678,7 @@ def sample_patch_batch(items, rng, batch_size, patch_size, foregroundProbability
             top = int(rng.integers(0, max(1, height - crop_height + 1)))
             left = int(rng.integers(0, max(1, width - crop_width + 1)))
         low_patch = item["low"][top:top + crop_height, left:left + crop_width, :]
-        feature_patch = item["feature"][top:top + crop_height, left:left + crop_width, :] if featureInputMode == "feature-rgba" else None
+        feature_patch = item["feature"][top:top + crop_height, left:left + crop_width, :] if uses_feature_image(featureInputMode) else None
         lows.append(model_input_from_rgb(low_patch, item["lowRenderScale"], conditionRenderScale, feature_patch, featureInputMode))
         highs.append(item["high"][top:top + crop_height, left:left + crop_width, :])
         edge_masks.append(item.get("edgeBandMask", np.zeros((*item["low"].shape[:2], 1), dtype=np.float32))[top:top + crop_height, left:left + crop_width, :])
@@ -861,7 +881,7 @@ def crop_item_arrays(item, region, conditionRenderScale, featureInputMode="rgb")
     top, left, crop_height, crop_width = region
     low_patch = item["low"][top:top + crop_height, left:left + crop_width, :]
     high_patch = item["high"][top:top + crop_height, left:left + crop_width, :]
-    feature_patch = item["feature"][top:top + crop_height, left:left + crop_width, :] if featureInputMode == "feature-rgba" else None
+    feature_patch = item["feature"][top:top + crop_height, left:left + crop_width, :] if uses_feature_image(featureInputMode) else None
     model_input = model_input_from_rgb(low_patch, item["lowRenderScale"], conditionRenderScale, feature_patch, featureInputMode)
     edge_mask = item.get("edgeBandMask", np.zeros((*item["low"].shape[:2], 1), dtype=np.float32))[top:top + crop_height, left:left + crop_width, :]
     return low_patch, high_patch, model_input, edge_mask
@@ -1251,7 +1271,7 @@ def make_preview(model, eval_item, out_path, diagnostic_out_path, preview_size, 
     top, left, crop_height, crop_width, previewFocus = crop_region(eval_item, preview_size, previewMode)
     low_patch = low[top:top + crop_height, left:left + crop_width, :]
     high_patch = high[top:top + crop_height, left:left + crop_width, :]
-    feature_patch = eval_item["feature"][top:top + crop_height, left:left + crop_width, :] if featureInputMode == "feature-rgba" else None
+    feature_patch = eval_item["feature"][top:top + crop_height, left:left + crop_width, :] if uses_feature_image(featureInputMode) else None
     model_input = model_input_from_rgb(low_patch, eval_item["lowRenderScale"], conditionRenderScale, feature_patch, featureInputMode)
     edge_mask = eval_item.get("edgeBandMask", np.zeros((*low.shape[:2], 1), dtype=np.float32))[top:top + crop_height, left:left + crop_width, :]
     pred_patch = predict_patch(model, model_input, edge_mask, residualApplicationMaskMode, residualMaskFeatherRadius)
