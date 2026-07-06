@@ -9722,12 +9722,19 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       const encoder = device.createCommandEncoder({ label: 'kaminos frozen render-scale canvas capture' });
       encodeMajorant(encoder, { force: true });
       const currentTexture = context.getCurrentTexture();
-      encodeDraw(encoder, currentTexture.createView(), 'kaminos frozen render-scale canvas pass');
+      let featureCaptureSourcePassApplied = false;
+      if (options.includeFeatureRgba === true) {
+        ensureBrowserResidualFeatureTexture();
+        encodeBrowserResidualSourcePass(encoder, currentTexture.createView(), browserResidualFeatureTexture.createView());
+        featureCaptureSourcePassApplied = true;
+      } else {
+        encodeDraw(encoder, currentTexture.createView(), 'kaminos frozen render-scale canvas pass');
+      }
       device.queue.submit([encoder.finish()]);
       if (device.queue?.onSubmittedWorkDone) {
         await device.queue.onSubmittedWorkDone();
       }
-      const featureCapture = options.includeFeatureRgba === true && browserResidualFeatureTexture
+      const featureCapture = featureCaptureSourcePassApplied && browserResidualFeatureTexture
         ? await readTextureRgba8(
           browserResidualFeatureTexture,
           state.width,
@@ -9743,11 +9750,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         featureCapture: featureCapture ? {
           ...featureCapture,
           featureAuthority: BROWSER_RESIDUAL_FEATURE_AUTHORITY,
-          imageAuthority: 'gpu-feature-texture-rgba8-readback-frozen-sim-state',
+          imageAuthority: 'gpu-feature-texture-rgba8-readback-frozen-sim-state-source-pass',
           inputChannels: 4,
           channelLayout: 'radiance-fire-interface-smoke',
           source: 'browserResidualFeatureTexture',
+          sourcePassApplied: featureCaptureSourcePassApplied,
         } : null,
+        featureCaptureSourcePassApplied,
         sameStateCaptureId,
         baseFrameCount,
         baseSimStepCount,

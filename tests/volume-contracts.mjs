@@ -2103,6 +2103,12 @@ assert.match(fieldSliceWitness, /keepBrowserOpen/, 'volume witness can leave the
 assert.match(fieldSliceWitness, /unref\(\)/, 'volume witness must detach kept-open Chrome so shared-browser corpus captures do not hang after writing reports');
 assert.match(core, /sampleRenderScaleSet/, 'volume core exposes a same-state multi-render-scale capture API');
 assert.match(core, /renderFrozenScaleToCanvas/, 'volume core exposes render-only frozen-state canvas capture');
+const renderFrozenScaleToCanvasStart = core.indexOf('async function renderFrozenScaleToCanvas');
+const renderFrozenScaleToCanvasEnd = core.indexOf('async function sampleRenderScaleSet', renderFrozenScaleToCanvasStart);
+const renderFrozenScaleToCanvasBody = core.slice(renderFrozenScaleToCanvasStart, renderFrozenScaleToCanvasEnd);
+assert.match(renderFrozenScaleToCanvasBody, /includeFeatureRgba[\s\S]*encodeBrowserResidualSourcePass/, 'frozen feature captures must render the residual source MRT for the requested frozen scale instead of reading a stale feature texture');
+assert.match(renderFrozenScaleToCanvasBody, /featureCaptureSourcePassApplied/, 'frozen feature captures must report whether the source pass produced the feature texture for this capture');
+assert.match(renderFrozenScaleToCanvasBody, /gpu-feature-texture-rgba8-readback-frozen-sim-state-source-pass/, 'frozen feature captures must distinguish source-pass feature readback authority from opportunistic texture readback');
 assert.match(core, /advanceSim:\s*false/, 'same-state render-scale capture renders without advancing the simulator for each scale');
 assert.match(core, /render-only-frozen-sim-state/, 'same-state render-scale capture labels render-only frozen simulator authority');
 assert.match(core, /cdp-canvas-clip-capture-after-render-only-frozen-sim-state/, 'volume core labels canvas-clip screenshot authority for frozen-state scale images');
