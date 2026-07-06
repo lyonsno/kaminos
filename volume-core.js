@@ -9722,13 +9722,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       const encoder = device.createCommandEncoder({ label: 'kaminos frozen render-scale canvas capture' });
       encodeMajorant(encoder, { force: true });
       const currentTexture = context.getCurrentTexture();
+      encodeDraw(encoder, currentTexture.createView(), 'kaminos frozen render-scale canvas pass');
       let featureCaptureSourcePassApplied = false;
       if (options.includeFeatureRgba === true) {
+        ensureFrameTexture();
         ensureBrowserResidualFeatureTexture();
-        encodeBrowserResidualSourcePass(encoder, currentTexture.createView(), browserResidualFeatureTexture.createView());
+        encodeBrowserResidualSourcePass(encoder, frameTexture.createView(), browserResidualFeatureTexture.createView());
         featureCaptureSourcePassApplied = true;
-      } else {
-        encodeDraw(encoder, currentTexture.createView(), 'kaminos frozen render-scale canvas pass');
       }
       device.queue.submit([encoder.finish()]);
       if (device.queue?.onSubmittedWorkDone) {
