@@ -1969,6 +1969,23 @@ assert.match(fieldResidualArtifactEvaluator, /offline-field-tile-visual-preview-
 assert.match(fieldResidualArtifactEvaluator, /visualPreviews/, 'field residual artifact evaluator reports visual preview paths and source identity in its evaluation report');
 assert.match(fieldResidualArtifactEvaluator, /write_png_rgb/, 'field residual artifact evaluator writes inspectable PNG previews without depending on browser rendering');
 
+assert.match(core, /applyDebugFieldTilePatch/, 'volume prototype exposes a debug-only field tile patch hook for residual render stills');
+assert.match(core, /debug-field-tile-patch-render-override-v0/, 'field tile patch hook names its debug override identity');
+assert.match(core, /fieldTilePatchRenderOverride/, 'debug state preserves field tile patch render override identity and status');
+assert.match(core, /device\.queue\.writeBuffer\(fluidBuffers\[currentFluid\]/, 'field tile patch hook writes selected tile values into the active fluid render buffer');
+assert.match(core, /device\.queue\.writeBuffer\(frontBuffers\[currentFront\]/, 'field tile patch hook writes selected front-topology values into the active front render buffer');
+
+const fieldResidualRenderStillPath = join(root, 'volume-field-residual-render-still.mjs');
+assert.ok(existsSync(fieldResidualRenderStillPath), 'field residual render-still harness exists');
+const fieldResidualRenderStill = existsSync(fieldResidualRenderStillPath) ? readFileSync(fieldResidualRenderStillPath, 'utf8') : '';
+assert.match(fieldResidualRenderStill, /kaminos\.volume\.field-residual-render-still\.v0/, 'field residual render-still harness writes a stable manifest schema');
+assert.match(fieldResidualRenderStill, /--artifact-manifest/, 'field residual render-still harness consumes a residual application artifact manifest');
+assert.match(fieldResidualRenderStill, /lowTarget/, 'field residual render-still harness renders low-target patched tiles');
+assert.match(fieldResidualRenderStill, /predictedHighTarget/, 'field residual render-still harness renders predicted-high patched tiles');
+assert.match(fieldResidualRenderStill, /truthHighTarget/, 'field residual render-still harness renders truth-high patched tiles');
+assert.match(fieldResidualRenderStill, /residual-augmented-selected-field-tiles-not-full-volume-prediction/, 'field residual render-still manifest says selected tile patches are not full-volume prediction');
+assert.match(fieldResidualRenderStill, /failurePhase/, 'field residual render-still harness writes failure-phase reports when rendering fails');
+
 const dynamicTextureProofPath = join(root, 'volume-dynamic-texture-proof.mjs');
 assert.ok(existsSync(dynamicTextureProofPath), 'dynamic texture proof harness exists');
 const dynamicTextureProof = existsSync(dynamicTextureProofPath) ? readFileSync(dynamicTextureProofPath, 'utf8') : '';

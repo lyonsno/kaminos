@@ -3,10 +3,30 @@ const PROTOTYPE_IDENTITY = 'kaminos-volume-prototype-v0';
 const FRONT_FIELD_IDENTITY = 'combustion-front-topology-sidecar-v0';
 const DETERMINISTIC_REPLAY_IDENTITY = 'deterministic-replay-same-route-controls-fixed-step-v0';
 const FIELD_TILE_EXPORT_IDENTITY = 'kaminos.volume.field-tile-export.v0';
+const DEBUG_FIELD_TILE_PATCH_IDENTITY = 'debug-field-tile-patch-render-override-v0';
 const DEFAULT_GRID_SIZE = 96;
 const SUPPORTED_GRID_SIZES = [32, 48, 64, 96, 128, 160, 192];
 const FLUID_SLOTS_PER_CELL = 4;
 const FLUID_COMPONENTS = FLUID_SLOTS_PER_CELL * 4;
+const FIELD_TILE_CHANNELS = [
+  'velocityX',
+  'velocityY',
+  'velocityZ',
+  'densityCarrier',
+  'smokeDensity',
+  'heat',
+  'fuel',
+  'detail',
+  'flame',
+  'ember',
+  'visibleFireCarrier',
+  'combustionFront',
+  'microdetail',
+  'interfaceShred',
+  'fireLick',
+  'emberFleck',
+  'frontTopology',
+];
 const DEFAULT_MAJORANT_GRID_SIZE = 48;
 const SUPPORTED_MAJORANT_GRID_SIZES = [24, 32, 48];
 const MAX_EXTERNAL_EMITTERS = 32;
@@ -4056,6 +4076,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       queueTimingAvailable: false,
     },
     error: null,
+    fieldTilePatchRenderOverride: null,
   };
 
   let pyroDynamicDetailEnergy = 0;
@@ -6069,25 +6090,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   function buildFieldTileExport(data, frontData, options = null) {
     const config = normalizeFieldTileExportOptions(options);
     if (!config) return null;
-    const channels = [
-      'velocityX',
-      'velocityY',
-      'velocityZ',
-      'densityCarrier',
-      'smokeDensity',
-      'heat',
-      'fuel',
-      'detail',
-      'flame',
-      'ember',
-      'visibleFireCarrier',
-      'combustionFront',
-      'microdetail',
-      'interfaceShred',
-      'fireLick',
-      'emberFleck',
-      'frontTopology',
-    ];
+    const channels = FIELD_TILE_CHANNELS;
     const tileSize = config.tileSize;
     const tileOrigins = [];
     let emptyTiles = 0;
@@ -7188,6 +7191,157 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     return result;
   }
 
+  function finitePatchNumber(value, fallback = 0) {
+    const number = Number(value);
+    return Number.isFinite(number) ? number : fallback;
+  }
+
+  function fieldTileChannelIndex(channel) {
+    return FIELD_TILE_CHANNELS.indexOf(String(channel));
+  }
+
+  async function applyDebugFieldTilePatch(payload = {}) {
+    const startedAt = performance.now();
+    const resultBase = {
+      identity: DEBUG_FIELD_TILE_PATCH_IDENTITY,
+      authority: 'debug-render-override-selected-field-tiles-not-simulator-truth',
+      limitation: 'Selected field tile patch for residual render stills only; not full-volume prediction, simulator training truth, or product path.',
+      patchTarget: payload.patchTarget || 'unknown',
+      sourceArtifactManifest: payload.sourceArtifactManifest || null,
+      sourceArtifactAuthority: payload.sourceArtifactAuthority || null,
+    };
+    if (!device || !fluidBuffers[currentFluid] || !frontBuffers[currentFront]) {
+      const failed = {
+        ...resultBase,
+        status: 'failed',
+        failurePhase: 'inactive',
+        error: 'WebGPU device or active field buffers are unavailable.',
+        grid: gridSize,
+      };
+      state.fieldTilePatchRenderOverride = failed;
+      return failed;
+    }
+    const requestedGrid = Number(payload.grid);
+    if (!Number.isFinite(requestedGrid) || requestedGrid !== gridSize) {
+      const failed = {
+        ...resultBase,
+        status: 'failed',
+        failurePhase: 'grid-validate',
+        error: 'Patch grid does not match active renderer grid.',
+        requestedGrid,
+        activeGrid: gridSize,
+      };
+      state.fieldTilePatchRenderOverride = failed;
+      return failed;
+    }
+    const tiles = Array.isArray(payload.tiles) ? payload.tiles : [];
+    if (!tiles.length) {
+      const failed = {
+        ...resultBase,
+        status: 'failed',
+        failurePhase: 'tile-validate',
+        error: 'Patch payload has no tiles.',
+        grid: gridSize,
+      };
+      state.fieldTilePatchRenderOverride = failed;
+      return failed;
+    }
+
+    const value = new Float32Array(1);
+    let patchedTiles = 0;
+    let patchedCells = 0;
+    let fluidWrites = 0;
+    let frontWrites = 0;
+    const targetChannels = new Set();
+    for (let tileIndex = 0; tileIndex < tiles.length; tileIndex += 1) {
+      const tile = tiles[tileIndex] || {};
+      const origin = Array.isArray(tile.origin) ? tile.origin.map(item => Math.floor(Number(item))) : [];
+      const size = Array.isArray(tile.size) ? tile.size.map(item => Math.floor(Number(item))) : [];
+      const channels = Array.isArray(tile.channels) ? tile.channels.map(String) : [];
+      const values = Array.isArray(tile.values) ? tile.values : [];
+      if (
+        origin.length !== 3 ||
+        size.length !== 3 ||
+        channels.length < 1 ||
+        values.length !== size[0] * size[1] * size[2] * channels.length ||
+        origin.some(item => !Number.isFinite(item) || item < 0) ||
+        size.some(item => !Number.isFinite(item) || item < 1) ||
+        origin[0] + size[0] > gridSize ||
+        origin[1] + size[1] > gridSize ||
+        origin[2] + size[2] > gridSize
+      ) {
+        const failed = {
+          ...resultBase,
+          status: 'failed',
+          failurePhase: 'tile-validate',
+          error: 'Patch tile has invalid origin, size, channels, or value count.',
+          tileIndex,
+          origin,
+          size,
+          channelCount: channels.length,
+          valueCount: values.length,
+          grid: gridSize,
+        };
+        state.fieldTilePatchRenderOverride = failed;
+        return failed;
+      }
+      const channelIndexes = channels.map(channel => fieldTileChannelIndex(channel));
+      if (channelIndexes.some(index => index < 0)) {
+        const failed = {
+          ...resultBase,
+          status: 'failed',
+          failurePhase: 'channel-validate',
+          error: 'Patch tile names a channel outside the renderer field tile schema.',
+          tileIndex,
+          channels,
+          supportedChannels: FIELD_TILE_CHANNELS,
+        };
+        state.fieldTilePatchRenderOverride = failed;
+        return failed;
+      }
+
+      let src = 0;
+      for (let z = 0; z < size[2]; z += 1) {
+        for (let y = 0; y < size[1]; y += 1) {
+          for (let x = 0; x < size[0]; x += 1) {
+            const cell = (origin[0] + x) + (origin[1] + y) * gridSize + (origin[2] + z) * gridSize * gridSize;
+            for (let channelOffset = 0; channelOffset < channels.length; channelOffset += 1) {
+              const channelIndex = channelIndexes[channelOffset];
+              value[0] = finitePatchNumber(values[src++], 0);
+              targetChannels.add(FIELD_TILE_CHANNELS[channelIndex]);
+              if (channelIndex === 16) {
+                device.queue.writeBuffer(frontBuffers[currentFront], cell * 4, value);
+                frontWrites += 1;
+              } else {
+                device.queue.writeBuffer(fluidBuffers[currentFluid], (cell * FLUID_COMPONENTS + channelIndex) * 4, value);
+                fluidWrites += 1;
+              }
+            }
+            patchedCells += 1;
+          }
+        }
+      }
+      patchedTiles += 1;
+    }
+    await device.queue.onSubmittedWorkDone?.();
+    resetTemporalHistory('debug-field-tile-patch-render-override');
+    const receipt = {
+      ...resultBase,
+      status: 'applied',
+      grid: gridSize,
+      tileCount: patchedTiles,
+      patchedCellVisits: patchedCells,
+      fluidWrites,
+      frontWrites,
+      targetChannels: Array.from(targetChannels),
+      appliedAtFrameCount: state.frameCount,
+      appliedAtSimStepCount: state.simStepCount,
+      elapsedMs: performance.now() - startedAt,
+    };
+    state.fieldTilePatchRenderOverride = receipt;
+    return receipt;
+  }
+
   function normalizeDeterministicReplayOptions(options = {}) {
     const steps = Math.max(1, Math.min(600, Math.floor(Number(options.steps ?? options.replaySteps ?? 96))));
     const timeStepMs = Math.max(1, Math.min(100, Number(options.timeStepMs ?? options.replayTimeStepMs ?? 1000 / 60)));
@@ -7362,6 +7516,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         simProfile: state.simProfile,
         simCostLedger: state.simCostLedger ? { ...state.simCostLedger } : null,
         timing: { ...state.timing },
+        fieldTilePatchRenderOverride: state.fieldTilePatchRenderOverride ? { ...state.fieldTilePatchRenderOverride } : null,
         effectiveRoute: state.effectiveRoute,
         prototypeIdentity: state.prototypeIdentity,
         backend: state.backend,
@@ -7689,6 +7844,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       simProfile: state.simProfile,
       simCostLedger: state.simCostLedger ? { ...state.simCostLedger } : null,
       timing: { ...state.timing },
+      fieldTilePatchRenderOverride: state.fieldTilePatchRenderOverride ? { ...state.fieldTilePatchRenderOverride } : null,
       simReadback,
       majorantReadback,
       effectiveRoute: state.effectiveRoute,
@@ -7916,6 +8072,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     canvasElement() {
       return canvas;
     },
+    applyDebugFieldTilePatch,
     sampleFrame,
     sampleDeterministicReplayFrame,
     dispose() {
