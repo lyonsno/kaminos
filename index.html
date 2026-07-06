@@ -1196,6 +1196,12 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
       <span class="slider-val" id="volume-residual-strength-val">1.00</span>
     </div>
     <div class="slider-row">
+      <span class="slider-label">Feature View</span>
+      <input type="range" id="volume-residual-feature-debug" min="0" max="1" step="1" value="0">
+      <span class="slider-val" id="volume-residual-feature-debug-val">off</span>
+    </div>
+    <span class="slider-help">False-color residual feature plane: orange=radiance/fire, blue=interface/smoke authority.</span>
+    <div class="slider-row">
       <span class="slider-label">Residual Model</span>
       <input type="text" id="volume-residual-model-url" class="text-input" value="" placeholder="artifacts/.../browser-direct-rs018.json">
       <span class="slider-val" id="volume-residual-model-url-val">none</span>
@@ -10531,6 +10537,7 @@ function volumeSceneControlId(key) {
     volumeResidualMode: 'volume-residual-mode',
     volumeResidualModelUrl: 'volume-residual-model-url',
     volumeResidualStrength: 'volume-residual-strength',
+    volumeResidualFeatureDebug: 'volume-residual-feature-debug',
   };
   if (explicit[key]) return explicit[key];
   return `volume-${key.replace(/[A-Z]/g, letter => `-${letter.toLowerCase()}`)}`;
@@ -10605,6 +10612,7 @@ const VOLUME_BASIN_ROUTE_FIELDS = [
   ['volumeResidualMode', 'volume_residual_mode'],
   ['volumeResidualModelUrl', 'volume_residual_model_url'],
   ['volumeResidualStrength', 'volume_residual_strength'],
+  ['volumeResidualFeatureDebug', 'volume_residual_feature_debug'],
   ['lookFreeze', 'volume_look_freeze'],
   ['pyroCompareMode', 'volume_pyro_compare'],
   ['pyroDynamicDetail', 'volume_pyro_detail'],
@@ -14875,6 +14883,7 @@ function readVolumeControls() {
     volumeResidualMode: document.getElementById('volume-residual-mode').value || 'off',
     volumeResidualModelUrl: document.getElementById('volume-residual-model-url').value || '',
     volumeResidualStrength: parseFloat(document.getElementById('volume-residual-strength').value),
+    volumeResidualFeatureDebug: parseFloat(document.getElementById('volume-residual-feature-debug').value),
     gridOverlay: parseFloat(document.getElementById('volume-grid-overlay').value),
     flowDebug: parseFloat(document.getElementById('volume-flow-debug').value),
     lookFreeze: parseFloat(document.getElementById('volume-look-freeze').value),
@@ -15001,6 +15010,7 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-render-scale-val').textContent = c.renderScale.toFixed(2);
   document.getElementById('volume-residual-mode-val').textContent = c.volumeResidualMode === 'webgpu-direct-residual' ? 'direct' : 'off';
   document.getElementById('volume-residual-strength-val').textContent = c.volumeResidualStrength.toFixed(2);
+  document.getElementById('volume-residual-feature-debug-val').textContent = c.volumeResidualFeatureDebug >= 1 ? 'feature' : 'off';
   document.getElementById('volume-residual-model-url-val').textContent = c.volumeResidualModelUrl ? c.volumeResidualModelUrl.split('/').at(-1) : 'none';
   document.getElementById('volume-input-radius-val').textContent = c.inputRadius.toFixed(2);
   document.getElementById('volume-flow-rate-val').textContent = c.flowRate.toFixed(2);
@@ -15721,6 +15731,10 @@ async function initKaminosVolumeRoute() {
   if (params.has('volume_residual_strength') && Number.isFinite(routeResidualStrength)) {
     setVolumeControlValue('volume-residual-strength', Math.max(0, Math.min(2, routeResidualStrength)).toFixed(2));
   }
+  const routeResidualFeatureDebug = Number(params.get('volume_residual_feature_debug'));
+  if (params.has('volume_residual_feature_debug') && Number.isFinite(routeResidualFeatureDebug)) {
+    setVolumeControlValue('volume-residual-feature-debug', Math.max(0, Math.min(1, Math.round(routeResidualFeatureDebug))).toFixed(0));
+  }
   const routeLookFreeze = Number(params.get('volume_look_freeze'));
   if (params.has('volume_look_freeze') && Number.isFinite(routeLookFreeze)) {
     document.getElementById('volume-look-freeze').value = String(Math.max(0, Math.min(1, Math.round(routeLookFreeze))));
@@ -15776,7 +15790,7 @@ async function initKaminosVolumeRoute() {
     refreshVolumeReadout();
     saveVolumeBasinSnapshot(event?.target?.id || 'control-change');
   };
-  for (const id of ['volume-scene', 'volume-density', 'volume-fire', 'volume-radiance', 'volume-absorption', 'volume-glow', 'volume-smoke', 'volume-curl', 'volume-microdetail', 'volume-interface-shred', 'volume-fire-licks', 'volume-projection', 'volume-speed', 'volume-steps', 'volume-adaptive-rays', 'volume-occupancy-skip', 'volume-majorant-skip', 'volume-majorant-smooth', 'volume-majorant-guard', 'volume-temporal-accum', 'volume-temporal-jitter', 'volume-history-clamp', 'volume-fire-scale', 'volume-detail-scale', 'volume-plume-height', 'volume-wind-strength', 'volume-wind-angle', 'volume-wind-height', 'volume-render-scale', 'volume-residual-mode', 'volume-residual-model-url', 'volume-residual-strength', 'volume-input-radius', 'volume-flow-rate', 'volume-resolution', 'volume-majorant-grid', 'volume-grid-overlay', 'volume-flow-debug', 'volume-look-freeze', 'volume-pyro-compare', 'volume-pyro-detail', 'volume-pyro-material-gain', 'volume-pyro-interface-focus', 'volume-pyro-edge-bite', 'volume-pyro-bite-border', 'volume-pyro-bite-teeth', 'volume-pyro-bite-wake', 'volume-pyro-bite-height', 'volume-pyro-bite-fire-lock', 'volume-pyro-bite-core', 'volume-pyro-bite-core-cut', 'volume-pyro-bite-rim', 'volume-pyro-bite-rim-cut', 'volume-pyro-bite-after', 'volume-pyro-bite-after-cut', 'volume-pyro-fire-mode', 'volume-pyro-flame-paint', 'volume-pyro-stock-mix', 'volume-pyro-flame-luma', 'volume-pyro-flame-core-color', 'volume-pyro-flame-edge-color', 'volume-pyro-bite-heat', 'volume-pyro-bite-chroma', 'volume-pyro-bite-luma', 'volume-pyro-bite-ember-color', 'volume-pyro-bite-hot-color', 'volume-pyro-smoke-fold', 'volume-pyro-fold-border', 'volume-pyro-fold-wake', 'volume-pyro-wake-lift', 'volume-pyro-wake-warmth', 'volume-pyro-wake-luma', 'volume-pyro-wake-shadow-color', 'volume-pyro-wake-ember-color', 'volume-pyro-radiance', 'volume-pyro-radiance-gate', 'volume-pyro-radiance-spill', 'volume-pyro-radiance-warmth', 'volume-pyro-radiance-hue', 'volume-pyro-radiance-chroma', 'volume-pyro-radiance-luma', 'volume-pyro-radiance-cool-color', 'volume-pyro-radiance-warm-color', 'volume-pyro-radiance-source', 'volume-pyro-radiance-height', 'volume-pyro-radiance-border', 'volume-pyro-radiance-teeth', 'volume-pyro-radiance-rise', 'volume-pyro-radiance-fire-lock', 'volume-pyro-diagnostic-paint', 'volume-pyro-carrier-view', 'volume-pyro-overdrive', 'volume-pressure-mode', 'volume-pressure-tier-overlay', 'volume-pressure-tier-lower-max', 'volume-pressure-tier-hero-min', 'volume-pressure-tier-hero-max', 'volume-canonical-spread', 'volume-canonical-centerline', 'volume-canonical-body-balance']) {
+  for (const id of ['volume-scene', 'volume-density', 'volume-fire', 'volume-radiance', 'volume-absorption', 'volume-glow', 'volume-smoke', 'volume-curl', 'volume-microdetail', 'volume-interface-shred', 'volume-fire-licks', 'volume-projection', 'volume-speed', 'volume-steps', 'volume-adaptive-rays', 'volume-occupancy-skip', 'volume-majorant-skip', 'volume-majorant-smooth', 'volume-majorant-guard', 'volume-temporal-accum', 'volume-temporal-jitter', 'volume-history-clamp', 'volume-fire-scale', 'volume-detail-scale', 'volume-plume-height', 'volume-wind-strength', 'volume-wind-angle', 'volume-wind-height', 'volume-render-scale', 'volume-residual-mode', 'volume-residual-model-url', 'volume-residual-strength', 'volume-residual-feature-debug', 'volume-input-radius', 'volume-flow-rate', 'volume-resolution', 'volume-majorant-grid', 'volume-grid-overlay', 'volume-flow-debug', 'volume-look-freeze', 'volume-pyro-compare', 'volume-pyro-detail', 'volume-pyro-material-gain', 'volume-pyro-interface-focus', 'volume-pyro-edge-bite', 'volume-pyro-bite-border', 'volume-pyro-bite-teeth', 'volume-pyro-bite-wake', 'volume-pyro-bite-height', 'volume-pyro-bite-fire-lock', 'volume-pyro-bite-core', 'volume-pyro-bite-core-cut', 'volume-pyro-bite-rim', 'volume-pyro-bite-rim-cut', 'volume-pyro-bite-after', 'volume-pyro-bite-after-cut', 'volume-pyro-fire-mode', 'volume-pyro-flame-paint', 'volume-pyro-stock-mix', 'volume-pyro-flame-luma', 'volume-pyro-flame-core-color', 'volume-pyro-flame-edge-color', 'volume-pyro-bite-heat', 'volume-pyro-bite-chroma', 'volume-pyro-bite-luma', 'volume-pyro-bite-ember-color', 'volume-pyro-bite-hot-color', 'volume-pyro-smoke-fold', 'volume-pyro-fold-border', 'volume-pyro-fold-wake', 'volume-pyro-wake-lift', 'volume-pyro-wake-warmth', 'volume-pyro-wake-luma', 'volume-pyro-wake-shadow-color', 'volume-pyro-wake-ember-color', 'volume-pyro-radiance', 'volume-pyro-radiance-gate', 'volume-pyro-radiance-spill', 'volume-pyro-radiance-warmth', 'volume-pyro-radiance-hue', 'volume-pyro-radiance-chroma', 'volume-pyro-radiance-luma', 'volume-pyro-radiance-cool-color', 'volume-pyro-radiance-warm-color', 'volume-pyro-radiance-source', 'volume-pyro-radiance-height', 'volume-pyro-radiance-border', 'volume-pyro-radiance-teeth', 'volume-pyro-radiance-rise', 'volume-pyro-radiance-fire-lock', 'volume-pyro-diagnostic-paint', 'volume-pyro-carrier-view', 'volume-pyro-overdrive', 'volume-pressure-mode', 'volume-pressure-tier-overlay', 'volume-pressure-tier-lower-max', 'volume-pressure-tier-hero-min', 'volume-pressure-tier-hero-max', 'volume-canonical-spread', 'volume-canonical-centerline', 'volume-canonical-body-balance']) {
     document.getElementById(id).addEventListener('input', syncControls);
     document.getElementById(id).addEventListener('change', syncControls);
   }

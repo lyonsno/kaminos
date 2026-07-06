@@ -1538,6 +1538,10 @@ assert.match(witness, /renderScale/, 'witness records effective internal render 
 assert.match(witness, /displayWidth/, 'witness records displayed canvas width');
 assert.match(witness, /renderWidth/, 'witness records internal render width');
 assert.match(witness, /renderPixelRatio/, 'witness records render-to-display pixel ratio');
+assert.match(witness, /volumeResidualMode/, 'witness records effective residual mode when residual reconstruction is active');
+assert.match(witness, /volumeResidualFeatureAuthority/, 'witness records residual feature-plane authority identity');
+assert.match(witness, /volumeResidualFeatureDebugMode/, 'witness records residual feature debug visualization identity');
+assert.match(witness, /volumeResidualCost/, 'witness records residual application cost evidence');
 assert.match(witness, /expectedExternalEmitterMode/, 'witness verifies external emitter route identity when requested');
 assert.match(witness, /externalEmitterMode/, 'witness records external emitter mode');
 assert.match(witness, /externalEmitterCount/, 'witness records effective external emitter count');

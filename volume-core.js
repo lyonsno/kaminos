@@ -62,6 +62,11 @@ function normalizeBrowserResidualStrength(value) {
   return Math.max(0, Math.min(2, requested));
 }
 
+function normalizeBrowserResidualFeatureDebug(value) {
+  const normalized = String(value ?? '0').toLowerCase();
+  return normalized === '1' || normalized === 'true' || normalized === 'on' || normalized === 'debug' ? 1 : 0;
+}
+
 function normalizeVolumeScene(value) {
   return SUPPORTED_VOLUME_SCENES.has(value) ? value : DEFAULT_VOLUME_SCENE;
 }
@@ -3959,6 +3964,17 @@ fn edgeSignal(uv: vec2<f32>, texel: vec2<f32>, center: vec3<f32>) -> f32 {
   return max(max(abs(c - left), abs(c - right)), max(abs(c - down), abs(c - up)));
 }
 
+fn debugFeatureView(feature: vec4<f32>) -> vec3<f32> {
+  let radiance = feature.r;
+  let fire = feature.g;
+  let interfaceAuthority = feature.b;
+  let smoke = feature.a;
+  let fireColor = vec3<f32>(1.0, 0.38, 0.02) * max(radiance, fire);
+  let interfaceColor = vec3<f32>(0.05, 0.52, 1.0) * interfaceAuthority;
+  let smokeColor = vec3<f32>(0.05, 0.20, 0.34) * smoke;
+  return clamp(fireColor + interfaceColor + smokeColor, vec3<f32>(0.0), vec3<f32>(1.0));
+}
+
 @fragment
 fn fs(in: VertexOut) -> @location(0) vec4<f32> {
   let dims = vec2<f32>(textureDimensions(sourceFrame));
@@ -3993,6 +4009,9 @@ fn fs(in: VertexOut) -> @location(0) vec4<f32> {
   let signal = edgeSignal(uv, texel, center);
   let mask = smoothstep(edgeThreshold * 0.35, max(edgeThreshold * 1.85, edgeThreshold + 0.0001), signal);
   let feature = textureSampleLevel(sourceFeature, sourceSampler, uv, 0.0);
+  if (residualData[87u] > 0.5) {
+    return vec4<f32>(debugFeatureView(feature), 1.0);
+  }
   let fireAuthority = max(feature.r, max(feature.g * 0.88, feature.b * 0.72));
   let smokeCrunchGuard = 1.0 - smoothstep(0.30, 0.82, feature.a) * (1.0 - smoothstep(0.08, 0.34, fireAuthority));
   let shaderAuthorityMask = clamp(mix(0.18, 1.0, fireAuthority) * smokeCrunchGuard, 0.0, 1.0);
@@ -4036,6 +4055,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     volumeResidualStatus: 'off',
     volumeResidualAuthority: 'off',
     volumeResidualFeatureAuthority: 'off',
+    volumeResidualFeatureDebug: normalizeBrowserResidualFeatureDebug(controlsSnapshot.volumeResidualFeatureDebug),
+    volumeResidualFeatureDebugMode: normalizeBrowserResidualFeatureDebug(controlsSnapshot.volumeResidualFeatureDebug) ? 'residual-feature-debug-false-color-v0' : 'off',
     volumeResidualModelSchema: null,
     volumeResidualModelError: null,
     volumeResidualStrength: normalizeBrowserResidualStrength(controlsSnapshot.volumeResidualStrength),
@@ -5623,7 +5644,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     data[84] = browserResidualModel.residualOutputLimit;
     data[85] = browserResidualModel.edgeBandThreshold;
     data[86] = normalizeBrowserResidualStrength(controlsSnapshot.volumeResidualStrength);
-    data[87] = 1;
+    data[87] = normalizeBrowserResidualFeatureDebug(controlsSnapshot.volumeResidualFeatureDebug);
     if (!browserResidualBuffer) {
       browserResidualBuffer = device.createBuffer({
         label: 'kaminos browser direct residual weights',
@@ -5646,7 +5667,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
 
   function ensureBrowserResidualBindGroup() {
     if (!browserResidualCanApply()) return null;
-    const key = `${state.width}x${state.height}:${browserResidualModel.url}:${state.volumeResidualStrength}`;
+    const key = `${state.width}x${state.height}:${browserResidualModel.url}:${state.volumeResidualStrength}:${state.volumeResidualFeatureDebug}`;
     if (browserResidualBindGroup && browserResidualTextureKey === key) return browserResidualBindGroup;
     writeBrowserResidualBuffer();
     browserResidualBindGroup = device.createBindGroup({
@@ -8311,6 +8332,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       state.volumeResidualMode = normalizeBrowserResidualMode(controlsSnapshot.volumeResidualMode);
       state.volumeResidualModelUrl = String(controlsSnapshot.volumeResidualModelUrl || '');
       state.volumeResidualStrength = normalizeBrowserResidualStrength(controlsSnapshot.volumeResidualStrength);
+      state.volumeResidualFeatureDebug = normalizeBrowserResidualFeatureDebug(controlsSnapshot.volumeResidualFeatureDebug);
+      state.volumeResidualFeatureDebugMode = state.volumeResidualFeatureDebug ? 'residual-feature-debug-false-color-v0' : 'off';
       if (device) void ensureBrowserResidualModel();
       state.majorantGrid = majorantGridSize;
       state.majorantCadence = normalizeMajorantBuildCadence(controlsSnapshot.majorantCadence);
