@@ -10,6 +10,7 @@ const APPLICATION_ARTIFACT_SCHEMA = 'kaminos.volume.field-residual-application-a
 const FOCUSED_RENDER_SCHEMA = 'kaminos.volume.field-residual-focused-render-discriminator.v0';
 const PATCH_LIMITATION = 'residual-augmented-selected-field-tiles-not-full-volume-prediction';
 const FOCUSED_RENDER_LIMITATION = 'selected-patch-difference-focused-not-full-volume-proof';
+const RESIDUAL_GAIN_CONSTRUCTION = 'lowPlusGainPredictedResidual';
 const DEFAULT_PAYLOAD_KEYS = ['lowTarget', 'predictedHighTarget', 'truthHighTarget'];
 
 function parseArgs(argv) {
@@ -141,6 +142,59 @@ function payloadForKey(artifact, artifactManifestPath, key, grid) {
   return {
     grid,
     patchTarget: key,
+    sourceArtifactManifest: artifactManifestPath,
+    sourceArtifactAuthority: artifact.artifactAuthority,
+    tiles,
+  };
+}
+
+function gainToken(gain) {
+  return String(gain)
+    .replace(/^-/, 'm')
+    .replace(/\./g, 'p')
+    .replace(/[^A-Za-z0-9_]/g, '_');
+}
+
+function gainRoleName(gain) {
+  return `predictedHighTargetGain${gainToken(gain)}`;
+}
+
+function parseResidualGainList(args) {
+  const raw = args.get('--residual-gain-list');
+  if (!raw) return [];
+  return String(raw)
+    .split(',')
+    .map(item => Number(item.trim()))
+    .filter(value => Number.isFinite(value));
+}
+
+function payloadForResidualGain(artifact, artifactManifestPath, gain, grid) {
+  const role = gainRoleName(gain);
+  const tiles = artifact.tiles.map((tile) => {
+    const shape = (tile.shape || []).map(Number);
+    if (shape.length !== 4) throw new Error(`tile ${tile.order} has invalid shape`);
+    const channels = tile.targetChannels || artifact.model?.targetChannels?.targetChannels || [];
+    const expectedValues = product(shape);
+    const lowValues = readFloat32Payload(artifactManifestPath, tile.lowTarget, expectedValues);
+    const predictedValues = readFloat32Payload(artifactManifestPath, tile.predictedHighTarget, expectedValues);
+    const values = lowValues.map((lowValue, index) => lowValue + gain * (predictedValues[index] - lowValue));
+    const origin = parseOriginFromPath(tile.sourceHighPath);
+    return {
+      order: tile.order,
+      pairId: tile.pairId,
+      matchId: tile.matchId,
+      replayStateIdentity: tile.replayStateIdentity,
+      origin,
+      size: [shape[2], shape[1], shape[0]],
+      channels,
+      values,
+    };
+  });
+  return {
+    grid,
+    patchTarget: role,
+    residualGain: gain,
+    residualConstruction: RESIDUAL_GAIN_CONSTRUCTION,
     sourceArtifactManifest: artifactManifestPath,
     sourceArtifactAuthority: artifact.artifactAuthority,
     tiles,
@@ -559,6 +613,17 @@ async function main() {
       .map(item => item.trim())
       .filter(Boolean);
     const patchPayloads = Object.fromEntries(payloadKeys.map(key => [key, payloadForKey(artifact, artifactManifest, key, grid)]));
+    const residualGainSweep = parseResidualGainList(args).map((gain) => {
+      const role = gainRoleName(gain);
+      patchPayloads[role] = payloadForResidualGain(artifact, artifactManifest, gain, grid);
+      return {
+        role,
+        gain,
+        residualConstruction: RESIDUAL_GAIN_CONSTRUCTION,
+        expression: 'lowTarget + gain * (predictedHighTarget - lowTarget)',
+      };
+    });
+    const patchRoles = [...payloadKeys, ...residualGainSweep.map(item => item.role)];
     const debugPort = Number(args.get('--debug-port') || 9877);
     const windowSize = String(args.get('--window-size') || '1024,1024');
     const settleMs = Number(args.get('--settle-ms') || 3500);
@@ -602,15 +667,18 @@ async function main() {
       rgba: baselineRender.preview.rgba,
     });
 
-    for (const key of payloadKeys) {
+    for (const key of patchRoles) {
       phase = `patched-${key}`;
-      const { patch, sample } = await capturePatched(ws, replay, patchPayloads[key]);
+      const patchPayload = patchPayloads[key];
+      const { patch, sample } = await capturePatched(ws, replay, patchPayload);
       const png = resolve(outDir, `${key}.selected-field-tile-render.png`);
       writeRgbaPng(png, sample.preview.width, sample.preview.height, sample.preview.rgba);
       outputs.push({
         role: key,
         path: png,
         sha256: sha256File(png),
+        residualGain: patchPayload.residualGain ?? null,
+        residualConstruction: patchPayload.residualConstruction ?? null,
         patch,
         sample: {
           width: sample.width,
@@ -674,6 +742,7 @@ async function main() {
       residualRenderAuthority: 'debug-field-tile-patch-render-override-v0',
       limitation: PATCH_LIMITATION,
       tilePatchScope,
+      residualGainSweep,
       outputs,
       focusedRenderDiscriminator,
     };

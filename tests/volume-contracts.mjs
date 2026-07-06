@@ -1984,6 +1984,10 @@ assert.match(fieldResidualRenderStill, /lowTarget/, 'field residual render-still
 assert.match(fieldResidualRenderStill, /predictedHighTarget/, 'field residual render-still harness renders predicted-high patched tiles');
 assert.match(fieldResidualRenderStill, /truthHighTarget/, 'field residual render-still harness renders truth-high patched tiles');
 assert.match(fieldResidualRenderStill, /residual-augmented-selected-field-tiles-not-full-volume-prediction/, 'field residual render-still manifest says selected tile patches are not full-volume prediction');
+assert.match(fieldResidualRenderStill, /--residual-gain-list/, 'field residual render-still harness can sweep boosted predicted residual gains');
+assert.match(fieldResidualRenderStill, /lowPlusGainPredictedResidual/, 'field residual gain sweep names the low plus gain times predicted residual construction');
+assert.match(fieldResidualRenderStill, /residualGainSweep/, 'field residual render-still manifest records residual gain sweep roles and gains');
+assert.match(fieldResidualRenderStill, /predictedHighTargetGain/, 'field residual gain sweep writes gain-specific predicted target roles');
 assert.match(fieldResidualRenderStill, /--focused-output-dir/, 'field residual render-still harness can write focused visual discriminator crops');
 assert.match(fieldResidualRenderStill, /kaminos\.volume\.field-residual-focused-render-discriminator\.v0/, 'focused residual render crops carry a stable discriminator schema');
 assert.match(fieldResidualRenderStill, /differenceLocalizedCropWindow/, 'focused residual render manifest records the shared difference-localized crop window');
