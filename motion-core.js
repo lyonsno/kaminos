@@ -259,26 +259,132 @@ export function decodeHillMotionAffordancePacket({ packet, data } = {}) {
   };
 }
 
-function motionTerrainRouteCost(source, index, weights) {
+const MOTION_TERRAIN_ROUTE_COST_PROFILES = {
+  'cautious-lerm': {
+    id: 'cautious-lerm',
+    label: 'Cautious lerm',
+    weights: {
+      routePressure: 2.2,
+      slope: 4.8,
+      dirty: 32,
+      shock: 48,
+      heightDelta: 3,
+      surfaceVelocity: 2,
+      topologyAmount: 3,
+      growthPotential: -0.6,
+      ridgeStrength: 0.8,
+      valleyStrength: 0.4,
+    },
+    semanticBasis: [
+      'prefer existing route pressure',
+      'avoid unstable topology',
+      'avoid steep terrain',
+      'avoid dirty/shock samples',
+      'accept growth/cover as mild attraction',
+    ],
+  },
+  'ridge-runner': {
+    id: 'ridge-runner',
+    label: 'Ridge runner',
+    weights: {
+      routePressure: 2.8,
+      slope: 2,
+      dirty: 24,
+      shock: 32,
+      heightDelta: 1.5,
+      surfaceVelocity: 1,
+      topologyAmount: 1.5,
+      growthPotential: 0.2,
+      ridgeStrength: -1.6,
+      valleyStrength: 1.8,
+    },
+    semanticBasis: [
+      'prefer ridge/route exposure',
+      'avoid valley gathering',
+      'tolerate moderate slope',
+    ],
+  },
+  meadow: {
+    id: 'meadow',
+    label: 'Meadow seeker',
+    weights: {
+      routePressure: 1.8,
+      slope: 3.2,
+      dirty: 20,
+      shock: 36,
+      heightDelta: 2,
+      surfaceVelocity: 1,
+      topologyAmount: 2,
+      growthPotential: -2.2,
+      ridgeStrength: 0.6,
+      valleyStrength: 0.3,
+    },
+    semanticBasis: [
+      'prefer growth/meadow cover',
+      'prefer existing route pressure',
+      'avoid unstable topology',
+    ],
+  },
+};
+
+export function normalizeMotionTerrainRouteCostProfile(profile = 'cautious-lerm', overrides = {}) {
+  const requested = typeof profile === 'string' ? profile : profile?.id;
+  const base = MOTION_TERRAIN_ROUTE_COST_PROFILES[requested] || MOTION_TERRAIN_ROUTE_COST_PROFILES['cautious-lerm'];
+  return {
+    id: base.id,
+    requestedId: requested || base.id,
+    label: base.label,
+    staticFieldMode: 'frozen-source-snapshot',
+    dynamicContinuity: 'not-claimed',
+    weights: {
+      ...base.weights,
+      ...(profile && typeof profile === 'object' ? profile.weights || {} : {}),
+      ...(overrides || {}),
+    },
+    semanticBasis: [...base.semanticBasis],
+  };
+}
+
+function motionTerrainRouteCostBreakdown(source, index, weights, profileId = null) {
   const routePressure = hillChannelScalar(source, 'routePressure', index, 0);
   const slope = hillChannelScalar(source, 'slope', index, 0);
   const dirty = hillChannelScalar(source, 'dirty', index, 0);
   const shock = hillChannelScalar(source, 'shock', index, 0);
   const heightDelta = Math.abs(hillChannelScalar(source, 'heightDelta', index, 0));
+  const topologyAmount = hillChannelScalar(source, 'topologyAmount', index, 0);
+  const growthPotential = hillChannelScalar(source, 'growthPotential', index, 0);
+  const ridgeStrength = hillChannelScalar(source, 'ridgeStrength', index, 0);
+  const valleyStrength = hillChannelScalar(source, 'valleyStrength', index, 0);
   const velocity = Math.hypot(
     hillChannelScalar(source, 'surfaceVelocity', index, 0),
     hillChannelScalar(source, 'surfaceVelocity', index, 1, 0),
     hillChannelScalar(source, 'surfaceVelocity', index, 2, 0),
   );
-  return Math.max(0.01,
-    1
-    + Number(weights.slope || 0) * slope
-    + Number(weights.dirty || 0) * dirty
-    + Number(weights.shock || 0) * shock
-    + Number(weights.heightDelta || 0) * heightDelta
-    + Number(weights.surfaceVelocity || 0) * velocity
-    - Number(weights.routePressure || 0) * routePressure * 0.25
-  );
+  const components = {
+    base: 1,
+    routePressure: -Number(weights.routePressure || 0) * routePressure * 0.25,
+    slope: Number(weights.slope || 0) * slope,
+    dirty: Number(weights.dirty || 0) * dirty,
+    shock: Number(weights.shock || 0) * shock,
+    heightDelta: Number(weights.heightDelta || 0) * heightDelta,
+    surfaceVelocity: Number(weights.surfaceVelocity || 0) * velocity,
+    topologyAmount: Number(weights.topologyAmount || 0) * topologyAmount,
+    growthPotential: Number(weights.growthPotential || 0) * growthPotential,
+    ridgeStrength: Number(weights.ridgeStrength || 0) * ridgeStrength,
+    valleyStrength: Number(weights.valleyStrength || 0) * valleyStrength,
+  };
+  const raw = Object.values(components).reduce((total, value) => total + value, 0);
+  const total = Math.max(0.01, raw);
+  return {
+    schema: 'kaminos.motion-route-cost-breakdown.v0',
+    profileId,
+    total,
+    components,
+  };
+}
+
+function motionTerrainRouteCost(source, index, weights) {
+  return motionTerrainRouteCostBreakdown(source, index, weights).total;
 }
 
 function reconstructMotionTerrainRoute(cameFrom, current) {
@@ -296,15 +402,8 @@ export function createMotionRoutePlanFromTerrainAffordance(sourceInput, options 
     ? sourceInput
     : decodeHillMotionAffordancePacket(sourceInput);
   const grid = source.grid;
-  const weights = {
-    routePressure: 2,
-    slope: 3,
-    dirty: 24,
-    shock: 24,
-    heightDelta: 2,
-    surfaceVelocity: 1,
-    ...(options.costWeights || {}),
-  };
+  const profile = normalizeMotionTerrainRouteCostProfile(options.costProfile, options.costWeights || {});
+  const weights = profile.weights;
   const start = hillGridFromWorld(grid, source.worldBounds, options.start || [source.worldBounds?.x?.min || 0, 0, source.worldBounds?.z?.min || 0]);
   const goal = hillGridFromWorld(grid, source.worldBounds, options.goal || [source.worldBounds?.x?.max || 0, 0, source.worldBounds?.z?.max || 0]);
   const startIndex = hillGridIndex(grid, start.column, start.row);
@@ -336,6 +435,7 @@ export function createMotionRoutePlanFromTerrainAffordance(sourceInput, options 
         const row = Math.floor(index / cols);
         const column = index - row * cols;
         const height = hillChannelScalar(source, 'height', index, 0);
+        const costBreakdown = motionTerrainRouteCostBreakdown(source, index, weights, profile.id);
         return {
           index,
           grid: { column, row },
@@ -347,6 +447,12 @@ export function createMotionRoutePlanFromTerrainAffordance(sourceInput, options 
             shock: stableRoundedNumber(hillChannelScalar(source, 'shock', index, 0)),
           },
           cost: stableRoundedNumber(motionTerrainRouteCost(source, index, weights)),
+          costBreakdown: {
+            ...costBreakdown,
+            total: stableRoundedNumber(costBreakdown.total),
+            components: Object.fromEntries(Object.entries(costBreakdown.components)
+              .map(([key, value]) => [key, stableRoundedNumber(value)])),
+          },
         };
       });
       const routeLength = routePoints.slice(1).reduce((total, point, index) => {
@@ -378,10 +484,14 @@ export function createMotionRoutePlanFromTerrainAffordance(sourceInput, options 
           routeLength: stableRoundedNumber(routeLength),
           visitedCount,
           weights,
+          profile,
         },
         evidence: {
           schema: 'kaminos.motion-route-plan-evidence.v0',
-          costBasis: ['routePressure', 'slope', 'dirty', 'shock', 'heightDelta', 'surfaceVelocity'],
+          staticFieldMode: profile.staticFieldMode,
+          dynamicContinuity: profile.dynamicContinuity,
+          costBasis: ['routePressure', 'slope', 'dirty', 'shock', 'heightDelta', 'surfaceVelocity', 'topologyAmount', 'growthPotential', 'ridgeStrength', 'valleyStrength'],
+          semanticBasis: [...profile.semanticBasis],
           routeSource: 'hill-motion-affordance-grid',
           sourceRef: source.sourceRef,
           checksums: { ...source.checksums },

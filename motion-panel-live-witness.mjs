@@ -469,6 +469,9 @@ async function installHillAffordanceRoutePlan(ws) {
       pathWorldRouteAuthority: state.pathWorldRouteAuthority || null,
       hillTerrainSurface: state.hillTerrainSurface || null,
       hillTerrainFrame: state.hillTerrainFrame || null,
+      pathWorldRouteCostProfile: state.pathWorldRouteCostProfile || state.pathWorldRoutePlan?.cost?.profile || null,
+      staticFieldMode: state.staticFieldMode || state.pathWorldRoutePlan?.evidence?.staticFieldMode || null,
+      dynamicContinuity: state.dynamicContinuity || state.pathWorldRoutePlan?.evidence?.dynamicContinuity || null,
     };
   })().catch(error => ({
     schema: 'kaminos.motion-panel-live-hill-affordance-route.v0',
@@ -665,6 +668,9 @@ async function captureFrame(ws, index) {
       pathWorldRootConstraint: actor?.pathWorldRootConstraint || state?.pathWorldRootConstraint || null,
       pathWorldRouteAuthority: actor?.pathWorldRouteAuthority || state?.pathWorldRouteAuthority || null,
       pathWorldRoutePlan: actor?.pathWorldRoutePlan || state?.pathWorldRoutePlan || state?.pathWorld?.routePlan || null,
+      pathWorldRouteCostProfile: actor?.pathWorldRouteCostProfile || state?.pathWorldRouteCostProfile || state?.pathWorldRoutePlan?.cost?.profile || state?.pathWorld?.routePlan?.cost?.profile || null,
+      staticFieldMode: actor?.staticFieldMode || state?.staticFieldMode || state?.pathWorldRoutePlan?.evidence?.staticFieldMode || state?.pathWorld?.routePlan?.evidence?.staticFieldMode || null,
+      dynamicContinuity: actor?.dynamicContinuity || state?.dynamicContinuity || state?.pathWorldRoutePlan?.evidence?.dynamicContinuity || state?.pathWorld?.routePlan?.evidence?.dynamicContinuity || null,
       pathWorldActiveSource: actor?.pathWorldActiveSource || state?.pathWorldActiveSource || null,
       hillTerrainSurface: actor?.hillTerrainSurface || state?.hillTerrainSurface || state?.pathWorld?.hillTerrainSurface || null,
       hillTerrainFrame: actor?.hillTerrainFrame || state?.hillTerrainFrame || state?.pathWorld?.hillTerrainFrame || null,

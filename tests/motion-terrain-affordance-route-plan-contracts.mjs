@@ -7,6 +7,7 @@ import {
   MOTION_ROUTE_PLAN_SCHEMA,
   createMotionRoutePlanFromTerrainAffordance,
   decodeHillMotionAffordancePacket,
+  normalizeMotionTerrainRouteCostProfile,
   sampleMotionRoutePlan,
 } from '../motion-core.js';
 
@@ -247,6 +248,7 @@ const plan = createMotionRoutePlanFromTerrainAffordance(source, {
   start: [0, 0, 0],
   goal: [4, 0, 4],
   actorRadius: 0.2,
+  costProfile: 'cautious-lerm',
   costWeights: {
     routePressure: 2.4,
     slope: 4,
@@ -271,8 +273,22 @@ assert.equal(
   'route plan avoids the dirty/shock center cell when a clean route exists',
 );
 assert.ok(plan.cost.total > 0, 'route plan records accumulated route cost');
+assert.equal(plan.cost.profile.id, 'cautious-lerm', 'route plan records the named cost/preference profile');
+assert.equal(plan.cost.profile.label, 'Cautious lerm', 'route plan exposes a human/agent-readable profile label');
+assert.equal(plan.cost.profile.staticFieldMode, 'frozen-source-snapshot', 'route plan names static source-snapshot mode instead of dynamic continuity');
+assert.equal(plan.cost.profile.weights.slope, 4, 'explicit caller weights override named profile defaults');
+assert.ok(plan.cost.profile.semanticBasis.includes('avoid unstable topology'), 'profile explains semantic route pressure in operator-readable terms');
+assert.equal(plan.evidence.staticFieldMode, 'frozen-source-snapshot', 'route evidence states that this planner used a frozen Hill field');
+assert.equal(plan.evidence.dynamicContinuity, 'not-claimed', 'route evidence does not imply moving-topology continuity');
 assert.ok(plan.evidence.costBasis.includes('routePressure'), 'route plan names Hill cost channels');
 assert.ok(plan.evidence.costBasis.includes('dirty'), 'route plan names dirty/shock penalty channels');
+assert.ok(plan.routePoints.every(point => point.costBreakdown?.profileId === 'cautious-lerm'), 'route points expose profile-tagged cost breakdowns');
+assert.ok(plan.routePoints.some(point => point.costBreakdown?.components?.slope > 0), 'route points expose slope contribution for debug overlays');
+
+const ridgeProfile = normalizeMotionTerrainRouteCostProfile('ridge-runner', { slope: 1.25 });
+assert.equal(ridgeProfile.id, 'ridge-runner');
+assert.equal(ridgeProfile.weights.slope, 1.25);
+assert.ok(ridgeProfile.semanticBasis.includes('prefer ridge/route exposure'));
 
 const mid = sampleMotionRoutePlan(plan, 0.5);
 assert.equal(mid.schema, 'kaminos.motion-route-plan-sample.v0');

@@ -6,6 +6,7 @@ const liveWitness = readFileSync(new URL('../motion-panel-live-witness.mjs', imp
 
 assert.match(index, /decodeHillMotionAffordancePacket/, 'browser imports the Hill motion affordance decoder');
 assert.match(index, /createMotionRoutePlanFromTerrainAffordance/, 'browser imports the Hill terrain route planner');
+assert.match(index, /normalizeMotionTerrainRouteCostProfile/, 'browser imports named Hill route cost profiles');
 assert.match(index, /function createMotionPanelHillAffordancePathWorld/, 'browser can convert a Hill route plan into a Path World route');
 assert.match(index, /function createMotionPanelHillTerrainSurface/, 'browser can create a Hill support-frame terrain surface');
 assert.match(index, /function createMotionPanelHillNativePathWorld/, 'browser can mount a Hill route and actor in the Hill world frame');
@@ -16,6 +17,9 @@ assert.match(index, /kaminos_hill_affordance_data/, 'browser supports a Hill dat
 assert.match(index, /terrain-affordance-route-plan/, 'Path World evidence names terrain affordance route authority');
 assert.match(index, /hill-motion-affordance-grid/, 'Path World evidence preserves Hill grid route source identity');
 assert.match(index, /pathWorldRoutePlan/, 'Path World debug exposes the route plan evidence');
+assert.match(index, /pathWorldRouteCostProfile/, 'Path World debug exposes route cost profile evidence');
+assert.match(index, /frozen-source-snapshot/, 'browser route evidence labels static Hill packet planning as a frozen source snapshot');
+assert.match(index, /dynamicContinuity/, 'browser route evidence avoids silently claiming dynamic topology continuity');
 assert.match(index, /hillTerrainSurface/, 'Path World debug exposes the mounted Hill terrain surface evidence');
 assert.match(index, /hillTerrainFrame/, 'Path World debug preserves the Hill support-frame source identity');
 assert.match(index, /hill-native-route-world/, 'Hill route smoke names the Hill-native route world instead of only the flat display projection');
@@ -50,6 +54,9 @@ assert.match(liveWitness, /--hill-affordance-packet/, 'live witness accepts a Hi
 assert.match(liveWitness, /--hill-affordance-data/, 'live witness accepts a Hill affordance data path');
 assert.match(liveWitness, /kaminosPreviewHillMotionAffordanceRoutePlan/, 'live witness can install the Hill route plan before frame capture');
 assert.match(liveWitness, /pathWorldRoutePlan/, 'live witness report carries Hill route plan evidence');
+assert.match(liveWitness, /pathWorldRouteCostProfile/, 'live witness report carries Hill route cost profile evidence');
+assert.match(liveWitness, /staticFieldMode/, 'live witness carries static field mode evidence');
+assert.match(liveWitness, /dynamicContinuity/, 'live witness carries dynamic continuity non-claim evidence');
 assert.match(liveWitness, /hillTerrainSurface/, 'live witness records Hill terrain surface evidence');
 assert.match(liveWitness, /hillTerrainFrame/, 'live witness records Hill terrain frame evidence');
 assert.match(liveWitness, /hillTerrainCarrier/, 'live witness records Hill terrain carrier evidence');

@@ -1062,6 +1062,7 @@ import {
   motionClipById,
   motionPhraseBodyScale,
   mapGeneratedPoseTemporalGroundedDisplaySample,
+  normalizeMotionTerrainRouteCostProfile,
   normalizeMotionSourceOrientationRemap,
   normalizeMotionPhraseControls,
   sampleMotionRoutePlan,
@@ -3998,6 +3999,7 @@ function motionPanelPathWorldReadout() {
   const interrupt = actor?.pathWorldInterrupt || motionTemporalState?.lastPathWorldInterrupt || null;
   const routeConductor = actor?.routeConductor || pathWorld?.routeConductor || motionTemporalState?.lastRouteConductor || null;
   const routePlan = actor?.pathWorldRoutePlan || pathWorld?.routePlan || motionTemporalState?.pathWorld?.routePlan || null;
+  const routeCostProfile = routePlan?.cost?.profile || null;
   const hillTerrainSurface = actor?.hillTerrainSurface || pathWorld?.hillTerrainSurface || motionTemporalState?.pathWorld?.hillTerrainSurface || null;
   const hillTerrainFrame = actor?.hillTerrainFrame || pathWorld?.hillTerrainFrame || motionTemporalState?.pathWorld?.hillTerrainFrame || null;
   const hillTerrainCarrier = actor?.hillTerrainCarrier || motionTemporalState?.lastHillTerrainCarrier || null;
@@ -4035,6 +4037,9 @@ function motionPanelPathWorldReadout() {
     fired: !!interrupt?.fired || !!trigger?.fired,
     worldId: pathWorld?.pathWorldId || interrupt?.pathWorldId || motionTemporalState?.pathWorld?.id || null,
     routePlan,
+    pathWorldRouteCostProfile: routeCostProfile,
+    staticFieldMode: routePlan?.evidence?.staticFieldMode || routeCostProfile?.staticFieldMode || null,
+    dynamicContinuity: routePlan?.evidence?.dynamicContinuity || routeCostProfile?.dynamicContinuity || null,
     routeSource: pathWorld?.routeSource || routePlan?.evidence?.routeSource || null,
     sourceRef: routePlan?.source?.sourceRef || null,
     hillTerrainSurface,
@@ -8546,12 +8551,13 @@ window.kaminosPreviewMotionServerResult = async function(result, options = {}) {
 
 window.kaminosPreviewHillMotionAffordanceRoutePlan = async function(packet, data, options = {}) {
   const source = decodeHillMotionAffordancePacket({ packet, data });
+  const costProfile = normalizeMotionTerrainRouteCostProfile(options.costProfile || 'cautious-lerm', options.costWeights || {});
   const routePlan = createMotionRoutePlanFromTerrainAffordance(source, {
     id: options.id || `hill-route-${source.frameId || source.checksums?.channels || 'live'}`,
     start: options.start,
     goal: options.goal,
     actorRadius: options.actorRadius || 0.17,
-    costWeights: options.costWeights,
+    costProfile,
   });
   const previousState = motionTemporalState;
   motionPanelHillAffordanceRoutePlan = routePlan;
@@ -8575,6 +8581,9 @@ window.kaminosPreviewHillMotionAffordanceRoutePlan = async function(packet, data
       sourceRef: source.sourceRef,
       authority: source.authority,
       routeSource: routePlan.evidence?.routeSource || null,
+      costProfile: routePlan.cost?.profile || costProfile,
+      staticFieldMode: routePlan.evidence?.staticFieldMode || 'frozen-source-snapshot',
+      dynamicContinuity: routePlan.evidence?.dynamicContinuity || 'not-claimed',
       checksums: source.checksums,
     },
     state: state?.schema || null,
@@ -9387,6 +9396,9 @@ window.kaminosGeneratedPoseTemporalDebugState = function() {
     routeDirection: state?.lastRouteConductor?.routeDirection || state?.lastPathWorld?.direction || state?.lastActors?.[0]?.routeDirection || null,
     pathWorldRouteAuthority: state?.lastPathWorldRouteAuthority || (state?.lastPathWorld ? 'world-path' : null),
     pathWorldRoutePlan: state?.pathWorld?.routePlan || state?.lastPathWorld?.routePlan || null,
+    pathWorldRouteCostProfile: (state?.pathWorld?.routePlan || state?.lastPathWorld?.routePlan || null)?.cost?.profile || null,
+    staticFieldMode: (state?.pathWorld?.routePlan || state?.lastPathWorld?.routePlan || null)?.evidence?.staticFieldMode || null,
+    dynamicContinuity: (state?.pathWorld?.routePlan || state?.lastPathWorld?.routePlan || null)?.evidence?.dynamicContinuity || null,
     pathWorldActiveSource: state?.lastPathWorldInterrupt?.activeSource || state?.lastPathWorldRouteAuthority || (state?.lastPathWorld ? 'world-path' : null),
     hillTerrainSurface: state?.lastPathWorld?.hillTerrainSurface || state?.pathWorld?.hillTerrainSurface || null,
     hillTerrainFrame: state?.lastPathWorld?.hillTerrainFrame || state?.pathWorld?.hillTerrainFrame || null,
