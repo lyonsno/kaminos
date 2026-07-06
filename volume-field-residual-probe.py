@@ -21,6 +21,10 @@ import numpy as np
 REPORT_SCHEMA = "kaminos.volume.field-residual-probe.v0"
 RESIDUAL_APPLICATION_ARTIFACT_SCHEMA = "kaminos.volume.field-residual-application-artifact.v0"
 RESIDUAL_APPLICATION_ARTIFACT_IDENTITY = "offline-test-tile-target-residual-application-v0"
+ARTIFACT_COVERAGE_TEST = "test"
+ARTIFACT_COVERAGE_TRAIN_AND_TEST = "train-and-test"
+ARTIFACT_COVERAGE_TEST_IDENTITY = "heldout-test-predicted-tiles-v0"
+ARTIFACT_COVERAGE_TRAIN_AND_TEST_IDENTITY = "train-and-test-predicted-tiles-v0"
 AFFINE_MODEL_IDENTITY = "same-bin-per-channel-affine-ridge-v0"
 SPATIAL_CONTEXT_MODEL_IDENTITY = "spatial-context-linear-ridge-v0"
 SPATIAL_CONTEXT_MLP_MODEL_IDENTITY = "spatial-context-mlp-residual-v0"
@@ -295,6 +299,12 @@ def parse_args() -> argparse.Namespace:
         "--artifact-dir",
         default=None,
         help="Optional directory for offline residual application artifacts over the held-out test tiles.",
+    )
+    parser.add_argument(
+        "--artifact-coverage",
+        choices=[ARTIFACT_COVERAGE_TEST, ARTIFACT_COVERAGE_TRAIN_AND_TEST],
+        default=ARTIFACT_COVERAGE_TEST,
+        help="Which predicted tiles to write into --artifact-dir. 'test' is held-out proof; 'train-and-test' is denser visual coverage and labels fitted train tiles.",
     )
     return parser.parse_args()
 
@@ -1928,10 +1938,11 @@ def write_residual_application_artifact(
     dataset: dict[str, Any],
     report: dict[str, Any],
     matches: list[dict[str, Any]],
-    test_indexes: list[int],
-    test_low_tiles: list[np.ndarray],
-    test_high_tiles: list[np.ndarray],
-    model_prediction_test: np.ndarray,
+    artifact_indexes: list[int],
+    artifact_low_tiles: list[np.ndarray],
+    artifact_high_tiles: list[np.ndarray],
+    artifact_split_names: list[str],
+    model_prediction_artifact: np.ndarray,
     target_indexes: list[int],
     target_channels: dict[str, Any],
 ) -> dict[str, Any] | None:
@@ -1945,22 +1956,23 @@ def write_residual_application_artifact(
 
     offset = 0
     tiles: list[dict[str, Any]] = []
-    for order, match_index in enumerate(test_indexes):
+    for order, match_index in enumerate(artifact_indexes):
         match = matches[match_index]
-        low_tile = test_low_tiles[order]
-        high_tile = test_high_tiles[order]
+        low_tile = artifact_low_tiles[order]
+        high_tile = artifact_high_tiles[order]
         spatial_shape = [int(value) for value in low_tile.shape[:-1]]
         voxel_count = product(spatial_shape)
         target_shape = [*spatial_shape, target_channel_count]
         low_target = select_channels(low_tile.reshape(-1, low_tile.shape[-1]), target_indexes).reshape(target_shape)
         truth_target = select_channels(high_tile.reshape(-1, high_tile.shape[-1]), target_indexes).reshape(target_shape)
-        prediction_target = model_prediction_test[offset:offset + voxel_count].reshape(target_shape)
+        prediction_target = model_prediction_artifact[offset:offset + voxel_count].reshape(target_shape)
         offset += voxel_count
         residual_target = prediction_target - low_target
         error_target = prediction_target - truth_target
         stem = f"{order + 1:04d}-{safe_slug(match.get('pairId'))}-{safe_slug(match.get('matchId'))}"
         tiles.append({
             "order": order,
+            "sourceSplit": artifact_split_names[order],
             "pairId": match.get("pairId"),
             "matchId": match.get("matchId"),
             "routeVariantIdentity": match.get("routeVariantIdentity"),
@@ -1977,19 +1989,47 @@ def write_residual_application_artifact(
             "metrics": artifact_tile_metrics(prediction_target, truth_target),
         })
 
-    if offset != int(model_prediction_test.shape[0]):
+    if offset != int(model_prediction_artifact.shape[0]):
         raise ProbeFailure(
             "artifact-write",
-            "artifact prediction/test tile sample counts diverged",
-            {"predictionSamples": int(model_prediction_test.shape[0]), "writtenSamples": offset},
+            "artifact prediction/tile sample counts diverged",
+            {"predictionSamples": int(model_prediction_artifact.shape[0]), "writtenSamples": offset},
         )
+
+    coverage_identity = (
+        ARTIFACT_COVERAGE_TRAIN_AND_TEST_IDENTITY
+        if args.artifact_coverage == ARTIFACT_COVERAGE_TRAIN_AND_TEST
+        else ARTIFACT_COVERAGE_TEST_IDENTITY
+    )
+    train_tile_count = sum(1 for name in artifact_split_names if name == "train")
+    test_tile_count = sum(1 for name in artifact_split_names if name == "test")
+    artifact_coverage = {
+        "identity": coverage_identity,
+        "requestedCoverage": args.artifact_coverage,
+        "writtenTileCount": len(tiles),
+        "trainTileCount": train_tile_count,
+        "testTileCount": test_tile_count,
+        "heldoutProofTileCount": test_tile_count,
+        "fittedPredictionTileCount": train_tile_count,
+        "limitation": (
+            "Held-out test tile predictions only."
+            if args.artifact_coverage == ARTIFACT_COVERAGE_TEST
+            else "Train plus test predictions for denser render coverage; train-split tiles are fitted predictions and must not be counted as held-out proof."
+        ),
+    }
+    artifact_authority = (
+        "offline-residual-application-on-train-and-heldout-field-tiles-not-renderer-integration"
+        if args.artifact_coverage == ARTIFACT_COVERAGE_TRAIN_AND_TEST
+        else "offline-residual-application-on-heldout-field-tiles-not-renderer-integration"
+    )
 
     manifest = {
         "schema": RESIDUAL_APPLICATION_ARTIFACT_SCHEMA,
         "identity": RESIDUAL_APPLICATION_ARTIFACT_IDENTITY,
         "status": "written",
         "createdAt": utc_now(),
-        "artifactAuthority": "offline-residual-application-on-heldout-field-tiles-not-renderer-integration",
+        "artifactAuthority": artifact_authority,
+        "artifactCoverage": artifact_coverage,
         "sourceManifest": str(manifest_path),
         "sourceDataset": {
             "schema": dataset.get("schema"),
@@ -2016,9 +2056,9 @@ def write_residual_application_artifact(
             "test": report.get("metrics", {}).get("test"),
         },
         "tileCount": len(tiles),
-        "sampleCount": int(model_prediction_test.shape[0]),
+        "sampleCount": int(model_prediction_artifact.shape[0]),
         "tiles": tiles,
-        "limitation": "Offline field-target application artifact only; does not mutate simulator state, rendering, or product paths.",
+        "limitation": f"Offline field-target application artifact only; does not mutate simulator state, rendering, or product paths. {artifact_coverage['limitation']}",
     }
     artifact_manifest_path = artifact_dir / "manifest.json"
     write_json(artifact_manifest_path, manifest)
@@ -2030,8 +2070,9 @@ def write_residual_application_artifact(
         "manifestPath": str(artifact_manifest_path),
         "manifestSha256": sha256_file(artifact_manifest_path),
         "artifactAuthority": manifest["artifactAuthority"],
+        "artifactCoverage": artifact_coverage,
         "tileCount": len(tiles),
-        "sampleCount": int(model_prediction_test.shape[0]),
+        "sampleCount": int(model_prediction_artifact.shape[0]),
         "targetChannels": target_channels["targetChannels"],
         "limitation": manifest["limitation"],
     }
@@ -2262,16 +2303,29 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         report["data"]["routeConditioning"] = context["routeConditioning"]
         report["data"]["spatialConditioning"] = context["spatialConditioning"]
         report["data"]["supportConditioning"] = context["supportConditioning"]
+    if args.artifact_coverage == ARTIFACT_COVERAGE_TRAIN_AND_TEST:
+        artifact_indexes = [*train_indexes, *test_indexes]
+        artifact_low_tiles = [*train_low_tiles, *test_low_tiles]
+        artifact_high_tiles = [*train_high_tiles, *test_high_tiles]
+        artifact_split_names = ["train"] * len(train_indexes) + ["test"] * len(test_indexes)
+        model_prediction_artifact = np.concatenate([model_prediction_train, model_prediction_test], axis=0)
+    else:
+        artifact_indexes = test_indexes
+        artifact_low_tiles = test_low_tiles
+        artifact_high_tiles = test_high_tiles
+        artifact_split_names = ["test"] * len(test_indexes)
+        model_prediction_artifact = model_prediction_test
     residual_application_artifact = write_residual_application_artifact(
         args,
         manifest_path,
         dataset,
         report,
         usable_matches,
-        test_indexes,
-        test_low_tiles,
-        test_high_tiles,
-        model_prediction_test,
+        artifact_indexes,
+        artifact_low_tiles,
+        artifact_high_tiles,
+        artifact_split_names,
+        model_prediction_artifact,
         target_indexes,
         target_channels,
     )

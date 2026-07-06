@@ -838,7 +838,8 @@ async function main() {
       grid,
       tileCount: artifact.tiles.length,
       targetChannels: artifact.model?.targetChannels?.targetChannels || artifact.tiles[0]?.targetChannels || [],
-      note: 'Only selected held-out field tiles are patched before rendering; unpatched cells remain the deterministic high-grid replay state.',
+      artifactCoverage: artifact.artifactCoverage || null,
+      note: 'Only artifact-declared selected field tiles are patched before rendering; unpatched cells remain the deterministic high-grid replay state. Coverage identity determines whether patched tiles are held-out proof or denser train/test visual coverage.',
     };
     const focusedRenderDiscriminator = writeFocusedRenderDiscriminator({
       args,

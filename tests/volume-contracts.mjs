@@ -1942,6 +1942,9 @@ assert.match(fieldResidualProbe, /--target-channel-list/, 'field residual probe 
 assert.match(fieldResidualProbe, /--target-channel-group/, 'field residual probe exposes named target channel groups for decomposition probes');
 assert.match(fieldResidualProbe, /targetChannelIndexes/, 'field residual probe reports selected target channel indexes');
 assert.match(fieldResidualProbe, /--artifact-dir/, 'field residual probe can write offline residual application artifacts without touching rendering');
+assert.match(fieldResidualProbe, /--artifact-coverage/, 'field residual probe can write residual application artifacts beyond held-out test tiles');
+assert.match(fieldResidualProbe, /train-and-test-predicted-tiles-v0/, 'dense residual application artifacts distinguish train plus test predicted tile coverage from held-out proof');
+assert.match(fieldResidualProbe, /artifactCoverage/, 'field residual application artifact manifests record prediction coverage identity and limitations');
 assert.match(fieldResidualProbe, /kaminos.volume.field-residual-application-artifact.v0/, 'field residual application artifacts carry a stable schema identity');
 assert.match(fieldResidualProbe, /residualApplicationArtifact/, 'field residual probe reports the residual application artifact manifest path and authority');
 
@@ -1993,6 +1996,7 @@ assert.match(fieldResidualRenderStill, /kaminos\.volume\.field-residual-temporal
 assert.match(fieldResidualRenderStill, /temporalTraceFrames/, 'field residual temporal trace records per-frame outputs and motion metrics');
 assert.match(fieldResidualRenderStill, /temporalTraceContactSheet/, 'field residual temporal trace writes an inspectable contact sheet');
 assert.match(fieldResidualRenderStill, /single-patch-live-sim-advance-not-framewise-model/, 'field residual temporal trace limitation says it is one patch evolved by the simulator');
+assert.match(fieldResidualRenderStill, /artifactCoverage/, 'field residual render-still manifests preserve artifact coverage identity for dense train/test visual runs');
 assert.match(fieldResidualRenderStill, /--focused-output-dir/, 'field residual render-still harness can write focused visual discriminator crops');
 assert.match(fieldResidualRenderStill, /kaminos\.volume\.field-residual-focused-render-discriminator\.v0/, 'focused residual render crops carry a stable discriminator schema');
 assert.match(fieldResidualRenderStill, /differenceLocalizedCropWindow/, 'focused residual render manifest records the shared difference-localized crop window');
