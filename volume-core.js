@@ -1,6 +1,7 @@
 const ROUTE_IDENTITY = 'native-3d-compute-fluid-raymarch-v0';
 const PROTOTYPE_IDENTITY = 'kaminos-volume-prototype-v0';
 const FRONT_FIELD_IDENTITY = 'combustion-front-topology-sidecar-v0';
+const BROWSER_RESIDUAL_FEATURE_AUTHORITY = 'shader-material-authority-residual-feature-v0';
 const DEFAULT_GRID_SIZE = 96;
 const SUPPORTED_GRID_SIZES = [32, 48, 64, 96, 128, 160];
 const FLUID_SLOTS_PER_CELL = 4;
@@ -3146,8 +3147,24 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   frontDst[idx] = clamp(combustionFrontTopology, 0.0, 2.0);
 }
 
-@fragment
-fn fs(in: VSOut) -> @location(0) vec4<f32> {
+struct RaymarchResult {
+  color: vec4<f32>,
+  residualFeature: vec4<f32>,
+};
+
+struct ResidualSourceOutput {
+  @location(0) color: vec4<f32>,
+  @location(1) residualFeature: vec4<f32>,
+};
+
+fn makeRaymarchResult(color: vec4<f32>, residualFeature: vec4<f32>) -> RaymarchResult {
+  var result: RaymarchResult;
+  result.color = color;
+  result.residualFeature = residualFeature;
+  return result;
+}
+
+fn raymarchVolume(in: VSOut) -> RaymarchResult {
   let ndc = vec2<f32>(in.uv.x * 2.0 - 1.0, in.uv.y * 2.0 - 1.0);
   let nearClip = vec4<f32>(ndc, -1.0, 1.0);
   let farClip = vec4<f32>(ndc, 1.0, 1.0);
@@ -3159,7 +3176,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
   let rd = normalize(farWorld - nearWorld);
   let hit = boxHit(ro, rd, vec3<f32>(1.0, 1.0, 1.0));
   if (hit.y <= max(hit.x, 0.0)) {
-    return vec4<f32>(0.004, 0.005, 0.006, 1.0);
+    return makeRaymarchResult(vec4<f32>(0.004, 0.005, 0.006, 1.0), vec4<f32>(0.0));
   }
 
   let steps = clamp(u.viewport_steps_density.z, 24.0, 192.0);
@@ -3245,6 +3262,10 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
   var t = startT + jitter + bonfireSpatialRayDephase;
   var trans = 1.0;
   var color = vec3<f32>(0.004, 0.005, 0.006);
+  var residualRadianceAuthority = 0.0;
+  var residualFireAuthority = 0.0;
+  var residualInterfaceAuthority = 0.0;
+  var residualSmokeAuthority = 0.0;
   let entryP = ro + rd * startT;
   let exitP = ro + rd * endT;
   var gridAccum = max(gridLine(entryP), gridLine(exitP));
@@ -3843,6 +3864,12 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     let pressureTierOverlay = pressureTierDebugOverlayColor(y);
     local = mix(local, pressureTierOverlay.rgb, pressureTierOverlay.a);
     color = color + trans * (alpha * local + fireAlpha * pyroStockFireVisibility * radianceEmission * mix(0.82, 0.62, bonfireRenderScene) + smokeBacklight * pyroStockFireVisibility + pyroRadianceColor * pyroRadianceBoost * pyroRadianceLuma * rayStepOpacity * mix(mix(0.080, 0.030, pyroRadianceSpill), mix(0.012, 0.030, pyroRadianceSpill), 1.0 - pyroRadianceFireSourceWeight));
+    let residualFeatureWeight = trans * rayStepOpacity;
+    let residualRadianceLuma = max(dot(radianceEmission + pyroRadianceColor * pyroRadianceBoost * pyroRadianceLuma, vec3<f32>(0.2126, 0.7152, 0.0722)), 0.0);
+    residualRadianceAuthority = residualRadianceAuthority + residualFeatureWeight * clamp(residualRadianceLuma * 0.30 + pyroRadianceBoost * 0.75 + pyroFireRadianceEvent * 0.40, 0.0, 4.0);
+    residualFireAuthority = residualFireAuthority + residualFeatureWeight * clamp(pyroRawCurrentFire * 1.05 + fireMix * 0.90 + pyroFireEventCarrier * 0.55, 0.0, 3.5);
+    residualInterfaceAuthority = residualInterfaceAuthority + residualFeatureWeight * clamp(pyroInterfaceSignal * 0.85 + pyroBiteAlphaBoost * 0.36 + flameDetail * 0.18 + fireLick * 0.16, 0.0, 3.5);
+    residualSmokeAuthority = residualSmokeAuthority + residualFeatureWeight * clamp(smoke * 0.55 + rawExtinction * 0.38 + microSmoke * 0.32 + pyroFoldExtinctionBoost * 0.18, 0.0, 3.0);
     let extinctionStep = clamp(alpha * (0.46 + extinction * 0.16) + fireAlpha * 0.08, 0.0, 0.34);
     trans = trans * exp(-extinctionStep);
     t = t + localDt;
@@ -3860,7 +3887,29 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
   let temporalConfidence = temporalReprojectionConfidence(temporalMaterialWeight, temporalMajorantEdge, temporalReactiveSignal);
   let temporalUv = temporalReprojectionUv(temporalWorld, temporalVelocity, temporalConfidence);
   let materialTemporalWeights = materialAwareTemporalWeights(temporalSmokeHistoryTrustSum, temporalFireHistoryProtectSum, temporalInterfaceHistoryProtectSum, temporalDetailHistoryProtectSum, temporalMaterialWeight);
-  return vec4<f32>(temporalResolveColor(current, in.uv, temporalUv.xy, temporalConfidence * temporalUv.z, temporalReactiveSignal, temporalMajorantEdge, temporalUv.z, materialTemporalWeights), 1.0);
+  let resolvedColor = temporalResolveColor(current, in.uv, temporalUv.xy, temporalConfidence * temporalUv.z, temporalReactiveSignal, temporalMajorantEdge, temporalUv.z, materialTemporalWeights);
+  let residualFeature = vec4<f32>(
+    clamp(1.0 - exp(-residualRadianceAuthority * 0.72), 0.0, 1.0),
+    clamp(1.0 - exp(-residualFireAuthority * 0.82), 0.0, 1.0),
+    clamp(1.0 - exp(-residualInterfaceAuthority * 0.90), 0.0, 1.0),
+    clamp(1.0 - exp(-residualSmokeAuthority * 0.56), 0.0, 1.0)
+  );
+  return makeRaymarchResult(vec4<f32>(resolvedColor, 1.0), residualFeature);
+}
+
+@fragment
+fn fs(in: VSOut) -> @location(0) vec4<f32> {
+  let result = raymarchVolume(in);
+  return result.color;
+}
+
+@fragment
+fn fsResidualSource(in: VSOut) -> ResidualSourceOutput {
+  let result = raymarchVolume(in);
+  var out: ResidualSourceOutput;
+  out.color = result.color;
+  out.residualFeature = result.residualFeature;
+  return out;
 }
 `;
 
@@ -3887,6 +3936,7 @@ fn vs(@builtin(vertex_index) vertexIndex: u32) -> VertexOut {
 @group(0) @binding(0) var sourceFrame: texture_2d<f32>;
 @group(0) @binding(1) var sourceSampler: sampler;
 @group(0) @binding(2) var<storage, read> residualData: array<f32>;
+@group(0) @binding(3) var sourceFeature: texture_2d<f32>;
 
 fn residualWeight(outputChannel: u32, offsetY: u32, offsetX: u32, inputChannel: u32) -> f32 {
   return residualData[(((outputChannel * 3u + offsetY) * 3u + offsetX) * 3u + inputChannel)];
@@ -3942,8 +3992,12 @@ fn fs(in: VertexOut) -> @location(0) vec4<f32> {
   let strength = residualData[86u];
   let signal = edgeSignal(uv, texel, center);
   let mask = smoothstep(edgeThreshold * 0.35, max(edgeThreshold * 1.85, edgeThreshold + 0.0001), signal);
+  let feature = textureSampleLevel(sourceFeature, sourceSampler, uv, 0.0);
+  let fireAuthority = max(feature.r, max(feature.g * 0.88, feature.b * 0.72));
+  let smokeCrunchGuard = 1.0 - smoothstep(0.30, 0.82, feature.a) * (1.0 - smoothstep(0.08, 0.34, fireAuthority));
+  let shaderAuthorityMask = clamp(mix(0.18, 1.0, fireAuthority) * smokeCrunchGuard, 0.0, 1.0);
   let limitedResidual = clamp(residual, vec3<f32>(-residualLimit), vec3<f32>(residualLimit));
-  return vec4<f32>(clamp(center + limitedResidual * mask * strength, vec3<f32>(0.0), vec3<f32>(1.0)), 1.0);
+  return vec4<f32>(clamp(center + limitedResidual * mask * shaderAuthorityMask * strength, vec3<f32>(0.0), vec3<f32>(1.0)), 1.0);
 }
 `;
 
@@ -3981,6 +4035,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     volumeResidualModelUrl: String(controlsSnapshot.volumeResidualModelUrl || ''),
     volumeResidualStatus: 'off',
     volumeResidualAuthority: 'off',
+    volumeResidualFeatureAuthority: 'off',
     volumeResidualModelSchema: null,
     volumeResidualModelError: null,
     volumeResidualStrength: normalizeBrowserResidualStrength(controlsSnapshot.volumeResidualStrength),
@@ -4001,6 +4056,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       renderPassesAdded: 0,
       estimatedTextureSamplesPerPixel: 0,
       estimatedTextureSamplesPerFrame: 0,
+      featureSamplesPerFrame: 0,
       estimatedKernelSamplesPerPixel: 0,
       estimatedKernelSamplesPerFrame: 0,
       estimatedMultiplyAddsPerPixel: 0,
@@ -4361,6 +4417,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let pipeline = null;
   let readbackPipeline = null;
   let browserResidualPipeline = null;
+  let browserResidualSourcePipeline = null;
   let browserResidualBindGroupLayout = null;
   let browserResidualPipelineLayout = null;
   let browserResidualShader = null;
@@ -4412,6 +4469,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let currentFront = 0;
   let frameTexture = null;
   let frameTextureSize = '';
+  let browserResidualFeatureTexture = null;
+  let browserResidualFeatureTextureSize = '';
   let historyTexture = null;
   let historyTextureSize = '';
   let historySampler = null;
@@ -4483,7 +4542,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
 
   function residualWorkEstimate(applied) {
     const outputPixels = applied ? Math.max(0, Math.floor(state.width || 0) * Math.floor(state.height || 0)) : 0;
-    const textureSamplesPerPixel = applied ? 14 : 0;
+    const textureSamplesPerPixel = applied ? 15 : 0;
     const kernelSamplesPerPixel = applied ? 9 : 0;
     const multiplyAddsPerPixel = applied ? 81 : 0;
     return {
@@ -4493,6 +4552,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       renderPassesAdded: applied ? 2 : 0,
       estimatedTextureSamplesPerPixel: textureSamplesPerPixel,
       estimatedTextureSamplesPerFrame: outputPixels * textureSamplesPerPixel,
+      featureSamplesPerFrame: applied ? outputPixels : 0,
       estimatedKernelSamplesPerPixel: kernelSamplesPerPixel,
       estimatedKernelSamplesPerFrame: outputPixels * kernelSamplesPerPixel,
       estimatedMultiplyAddsPerPixel: multiplyAddsPerPixel,
@@ -5016,6 +5076,18 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     });
     pipeline = makePipeline(format, `kaminos volume canvas native-3d-compute-fluid-raymarch-v0 ${gridSize}^3`);
     readbackPipeline = makePipeline('rgba8unorm', `kaminos volume readback native-3d-compute-fluid-raymarch-v0 ${gridSize}^3`);
+    browserResidualSourcePipeline = device.createRenderPipeline({
+      label: `kaminos volume browser residual shader-material-authority source ${gridSize}^3`,
+      layout: pipelineLayout,
+      vertex: { module: shader, entryPoint: 'vs' },
+      fragment: {
+        module: shader,
+        entryPoint: 'fsResidualSource',
+        constants: renderPipelineConstants,
+        targets: [{ format: 'rgba8unorm' }, { format: 'rgba8unorm' }],
+      },
+      primitive: { topology: 'triangle-list' },
+    });
     browserResidualPipeline = device.createRenderPipeline({
       label: `kaminos volume browser webgpu-direct-residual postprocess ${gridSize}^3`,
       layout: browserResidualPipelineLayout,
@@ -5347,6 +5419,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           visibility: GPUShaderStage.FRAGMENT,
           buffer: { type: 'read-only-storage' },
         },
+        {
+          binding: 3,
+          visibility: GPUShaderStage.FRAGMENT,
+          texture: { sampleType: 'float' },
+        },
       ],
     });
     pipelineLayout = device.createPipelineLayout({
@@ -5420,6 +5497,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         : (renderScale < 0.999 ? 'linear-css-upscale' : 'native-resolution');
       canvas.style.imageRendering = 'auto';
       frameTextureSize = '';
+      browserResidualFeatureTextureSize = '';
     }
   }
 
@@ -5434,6 +5512,21 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC | GPUTextureUsage.TEXTURE_BINDING,
     });
     frameTextureSize = key;
+    browserResidualBindGroup = null;
+    browserResidualTextureKey = '';
+  }
+
+  function ensureBrowserResidualFeatureTexture() {
+    const key = `${state.width}x${state.height}`;
+    if (browserResidualFeatureTexture && browserResidualFeatureTextureSize === key) return;
+    browserResidualFeatureTexture?.destroy();
+    browserResidualFeatureTexture = device.createTexture({
+      label: 'kaminos browser residual shader-material-authority feature texture',
+      size: { width: state.width, height: state.height, depthOrArrayLayers: 1 },
+      format: 'rgba8unorm',
+      usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+    });
+    browserResidualFeatureTextureSize = key;
     browserResidualBindGroup = null;
     browserResidualTextureKey = '';
   }
@@ -5469,6 +5562,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     if (!browserResidualRequested()) {
       state.volumeResidualStatus = 'off';
       state.volumeResidualAuthority = 'off';
+      state.volumeResidualFeatureAuthority = 'off';
       state.volumeResidualModelSchema = null;
       state.volumeResidualModelError = null;
       return;
@@ -5478,6 +5572,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       browserResidualModelUrl = '';
       state.volumeResidualStatus = 'missing-model-url';
       state.volumeResidualAuthority = 'off';
+      state.volumeResidualFeatureAuthority = 'off';
       state.volumeResidualModelSchema = null;
       state.volumeResidualModelError = 'volume_residual_model_url is required for webgpu-direct-residual';
       return;
@@ -5485,6 +5580,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     if (browserResidualModel && browserResidualModelUrl === state.volumeResidualModelUrl) {
       state.volumeResidualStatus = 'loaded';
       state.volumeResidualAuthority = browserResidualModel.authority;
+      state.volumeResidualFeatureAuthority = BROWSER_RESIDUAL_FEATURE_AUTHORITY;
       state.volumeResidualModelSchema = browserResidualModel.schema;
       state.volumeResidualModelError = null;
       return;
@@ -5504,6 +5600,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       browserResidualModel = await browserResidualLoadPromise;
       state.volumeResidualStatus = 'loaded';
       state.volumeResidualAuthority = browserResidualModel.authority;
+      state.volumeResidualFeatureAuthority = BROWSER_RESIDUAL_FEATURE_AUTHORITY;
       state.volumeResidualModelSchema = browserResidualModel.schema;
       state.volumeResidualModelError = null;
       writeBrowserResidualBuffer();
@@ -5512,6 +5609,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       browserResidualBindGroup = null;
       state.volumeResidualStatus = 'error';
       state.volumeResidualAuthority = 'off';
+      state.volumeResidualFeatureAuthority = 'off';
       state.volumeResidualModelSchema = null;
       state.volumeResidualModelError = err?.message || String(err);
       emitStatus({ phase: 'browser-residual-error', error: state.volumeResidualModelError });
@@ -5540,6 +5638,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     return browserResidualRequested()
       && browserResidualModel
       && browserResidualPipeline
+      && browserResidualSourcePipeline
       && browserResidualSampler
       && browserResidualBuffer
       && state.volumeResidualStatus === 'loaded';
@@ -5557,6 +5656,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         { binding: 0, resource: frameTexture.createView() },
         { binding: 1, resource: browserResidualSampler },
         { binding: 2, resource: { buffer: browserResidualBuffer } },
+        { binding: 3, resource: browserResidualFeatureTexture.createView() },
       ],
     });
     browserResidualTextureKey = key;
@@ -6338,6 +6438,30 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     pass.end();
   }
 
+  function encodeBrowserResidualSourcePass(encoder, colorView, featureView) {
+    const pass = encoder.beginRenderPass({
+      label: 'kaminos volume browser residual shader-material-authority source pass',
+      colorAttachments: [
+        {
+          view: colorView,
+          clearValue: { r: 0.004, g: 0.005, b: 0.006, a: 1 },
+          loadOp: 'clear',
+          storeOp: 'store',
+        },
+        {
+          view: featureView,
+          clearValue: { r: 0, g: 0, b: 0, a: 0 },
+          loadOp: 'clear',
+          storeOp: 'store',
+        },
+      ],
+    });
+    pass.setPipeline(browserResidualSourcePipeline);
+    pass.setBindGroup(0, bindGroups[currentFluid]);
+    pass.draw(3);
+    pass.end();
+  }
+
   function encodeBrowserResidualPass(encoder, view) {
     const bindGroup = ensureBrowserResidualBindGroup();
     if (!bindGroup) return false;
@@ -6394,7 +6518,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       if (browserResidualCanApply()) {
         const sourceEncodeStart = performance.now();
         ensureFrameTexture();
-        encodeDraw(encoder, frameTexture.createView(), 'kaminos volume browser residual source pass', readbackPipeline);
+        ensureBrowserResidualFeatureTexture();
+        encodeBrowserResidualSourcePass(encoder, frameTexture.createView(), browserResidualFeatureTexture.createView());
         const sourcePassEncodeMs = performance.now() - sourceEncodeStart;
         const residualEncodeStart = performance.now();
         const residualApplied = encodeBrowserResidualPass(encoder, currentTexture.createView());
@@ -8262,6 +8387,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     dispose() {
       this.setActive(false);
       frameTexture?.destroy();
+      browserResidualFeatureTexture?.destroy();
       externalEmitterBuffer?.destroy();
       destroyTemporalHistory();
       destroyFluidState();

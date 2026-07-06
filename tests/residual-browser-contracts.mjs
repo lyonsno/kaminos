@@ -86,6 +86,31 @@ assert.match(
   'browser residual cost telemetry must report deterministic per-frame residual sampling work',
 );
 assert.match(
+  core,
+  /shader-material-authority-residual-feature-v0/,
+  'browser residual source pass must label its inference-time feature plane as shader/material authority, not a screen-space proxy',
+);
+assert.match(
+  core,
+  /fsResidualSource/,
+  'browser residual source pass must use a distinct raymarch fragment entry that can emit color plus feature side-channel targets',
+);
+assert.match(
+  core,
+  /browserResidualFeatureTexture/,
+  'browser residual route must allocate a sampleable feature texture alongside the source frame texture',
+);
+assert.match(
+  core,
+  /@location\(1\)\s+residualFeature/,
+  'raymarch source pass must emit residual features through a second render target without a second volume traversal',
+);
+assert.match(
+  core,
+  /featureSamplesPerFrame/,
+  'browser residual cost telemetry must account for the extra feature-texture sample work',
+);
+assert.match(
   html,
   /id="volume-render-scale"[^>]*step="any"/,
   'volume render scale route/control must not snap arbitrary low render scales such as 0.18 to coarse UI increments',
