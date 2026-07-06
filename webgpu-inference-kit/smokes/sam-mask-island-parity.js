@@ -9,6 +9,7 @@ import {
   SAM3_SELECTION_POSTPROCESS_PHASE_PROGRAM_ROUTE_ID,
   SAM3_IMAGE_PREPROCESS_PHASE_PROGRAM_ROUTE_ID,
   SAM3_IMAGE_PATCH_EMBED_PHASE_PROGRAM_ROUTE_ID,
+  SAM3_IMAGE_VIT_PREFIX_PHASE_PROGRAM_ROUTE_ID,
   createRouteInvocationRequest,
   createSam3MaskDecoderIslandRouteDefinition,
   createSam3MaskProjectionCpuOracle,
@@ -16,6 +17,8 @@ import {
   createSam3ImagePreprocessPhaseProgramRouteDefinition,
   createSam3ImagePatchEmbedPhaseProgramCpuOracle,
   createSam3ImagePatchEmbedPhaseProgramRouteDefinition,
+  createSam3ImageVitPrefixPhaseProgramCpuOracle,
+  createSam3ImageVitPrefixPhaseProgramRouteDefinition,
   createSam3MaskTailPhaseProgramCpuOracle,
   createSam3MaskTailPhaseProgramRouteDefinition,
   createSam3PixelDecoderPhaseProgramCpuOracle,
@@ -38,6 +41,7 @@ import {
   runSam3SelectionPostprocessPhaseProgramRoute,
   runSam3ImagePreprocessPhaseProgramRoute,
   runSam3ImagePatchEmbedPhaseProgramRoute,
+  runSam3ImageVitPrefixPhaseProgramRoute,
 } from '../src/index.js';
 
 const SUPPORTED_ROUTE_IDS = new Set([
@@ -51,6 +55,7 @@ const SUPPORTED_ROUTE_IDS = new Set([
   SAM3_SELECTION_POSTPROCESS_PHASE_PROGRAM_ROUTE_ID,
   SAM3_IMAGE_PREPROCESS_PHASE_PROGRAM_ROUTE_ID,
   SAM3_IMAGE_PATCH_EMBED_PHASE_PROGRAM_ROUTE_ID,
+  SAM3_IMAGE_VIT_PREFIX_PHASE_PROGRAM_ROUTE_ID,
 ]);
 const PIXEL_DECODER_WEIGHT_ROLE_EXAMPLES = ['pixel-decoder-stage-0-conv-weight'];
 
@@ -74,6 +79,7 @@ const state = {
   detectorStackEvidence: null,
   imagePreprocessEvidence: null,
   imagePatchEmbedEvidence: null,
+  imageVitPrefixEvidence: null,
   parity: null,
   debugReadbackSamples: null,
   sourceImage: null,
@@ -195,6 +201,16 @@ function imagePatchEmbedShape(manifest) {
     patchHeight: manifest.shape.patchHeight,
     patchWidth: manifest.shape.patchWidth,
     hiddenSize: manifest.shape.visionHiddenSize,
+  };
+}
+
+function imageVitPrefixShape(manifest) {
+  return {
+    batch: manifest.shape.batch || 1,
+    patchHeight: manifest.shape.patchHeight,
+    patchWidth: manifest.shape.patchWidth,
+    hiddenSize: manifest.shape.visionHiddenSize,
+    pretrainGridSize: manifest.shape.pretrainGridSize,
   };
 }
 
@@ -729,13 +745,15 @@ async function loadDetrDecoderPayload(manifest) {
 }
 
 async function loadDetrStackPayload(manifest) {
-  const includeImagePatchEmbed = manifest.mode === 'mlx-detector-stack-patch-embed-export' || manifest.boundary === 'sam3-browser-local-image-preprocess-patch-embed-detector-stack-phase-program';
+  const includeImageVitPrefix = manifest.mode === 'mlx-detector-stack-vit-prefix-export' || manifest.boundary === 'sam3-browser-local-image-preprocess-patch-embed-vit-prefix-detector-stack-phase-program';
+  const includeImagePatchEmbed = includeImageVitPrefix || manifest.mode === 'mlx-detector-stack-patch-embed-export' || manifest.boundary === 'sam3-browser-local-image-preprocess-patch-embed-detector-stack-phase-program';
   const includeImagePreprocess = includeImagePatchEmbed || manifest.mode === 'mlx-detector-stack-preprocess-export' || manifest.boundary === 'sam3-browser-local-image-preprocess-detector-stack-phase-program';
   const includeDetectorStack = includeImagePreprocess || includeImagePatchEmbed || manifest.mode === 'mlx-detector-stack-export' || manifest.boundary === 'sam3-detector-stack-browser-local-detector-mask-phase-program';
   const includeStackSelection = includeDetectorStack || manifest.mode === 'mlx-detr-stack-selection-export' || manifest.boundary === 'sam3-detector-detr-encoder-decoder-scoring-selection-mask-tail-phase-program';
   const includeStackScoring = includeStackSelection || manifest.mode === 'mlx-detr-stack-scoring-export' || manifest.boundary === 'sam3-detector-detr-encoder-decoder-scoring-mask-tail-phase-program';
   const expectedPixelValuesTensor = includeImagePreprocess ? tensorByRole(manifest, 'expected-pixel-values') : null;
   const expectedPatchEmbeddingsTensor = includeImagePatchEmbed ? tensorByRole(manifest, 'expected-patch-embeddings') : null;
+  const expectedVitPrefixTensor = includeImageVitPrefix ? tensorByRole(manifest, 'expected-vit-prefix-hidden-states') : null;
   const encoderSrcTensor = tensorByRole(manifest, 'encoder-src');
   const encoderPosTensor = tensorByRole(manifest, 'encoder-pos');
   const promptTensor = tensorByRole(manifest, 'prompt-features');
@@ -815,7 +833,8 @@ async function loadDetrStackPayload(manifest) {
     'scoring-query-proj-bias',
   ];
   const patchEmbedWeightRoles = includeImagePatchEmbed ? ['patch-embed-projection-weight'] : [];
-  const weightsByRole = Object.fromEntries([...encoderRoles, ...decoderLayerRoles, ...decoderSharedRoles, ...patchEmbedWeightRoles, ...(includeStackScoring ? scoringWeightRoles : []), ...tailWeightRoles].map(role => [role, weightByRole(manifest, role)]));
+  const vitPrefixWeightRoles = includeImageVitPrefix ? ['vit-position-embeddings', 'vit-backbone-layernorm-weight', 'vit-backbone-layernorm-bias'] : [];
+  const weightsByRole = Object.fromEntries([...encoderRoles, ...decoderLayerRoles, ...decoderSharedRoles, ...patchEmbedWeightRoles, ...vitPrefixWeightRoles, ...(includeStackScoring ? scoringWeightRoles : []), ...tailWeightRoles].map(role => [role, weightByRole(manifest, role)]));
   const encoderSrc = await fetchArray(resolveManifestFile(encoderSrcTensor.file), Float32Array);
   const encoderPos = await fetchArray(resolveManifestFile(encoderPosTensor.file), Float32Array);
   const promptFeatures = await fetchArray(resolveManifestFile(promptTensor.file), Float32Array);
@@ -834,7 +853,13 @@ async function loadDetrStackPayload(manifest) {
   const expectedSelectedBox = expectedSelectedBoxTensor ? await fetchArray(resolveManifestFile(expectedSelectedBoxTensor.file), Float32Array) : null;
   const expectedPixelValues = expectedPixelValuesTensor ? await fetchArray(resolveManifestFile(expectedPixelValuesTensor.file), Float32Array) : null;
   const expectedPatchEmbeddings = expectedPatchEmbeddingsTensor ? await fetchArray(resolveManifestFile(expectedPatchEmbeddingsTensor.file), Float32Array) : null;
+  const expectedVitPrefixHiddenStates = expectedVitPrefixTensor ? await fetchArray(resolveManifestFile(expectedVitPrefixTensor.file), Float32Array) : null;
   const patchProjectionWeight = includeImagePatchEmbed ? await fetchArray(resolveManifestFile(weightsByRole['patch-embed-projection-weight'].file), Float32Array) : null;
+  const vitPrefixWeights = includeImageVitPrefix ? {
+    positionEmbeddings: await fetchArray(resolveManifestFile(weightsByRole['vit-position-embeddings'].file), Float32Array),
+    layerNormWeight: await fetchArray(resolveManifestFile(weightsByRole['vit-backbone-layernorm-weight'].file), Float32Array),
+    layerNormBias: await fetchArray(resolveManifestFile(weightsByRole['vit-backbone-layernorm-bias'].file), Float32Array),
+  } : null;
   const pixelEmbed = await fetchArray(resolveManifestFile(pixelEmbedTensor.file), Float32Array);
   const expectedMaskEmbeddings = await fetchArray(resolveManifestFile(expectedMaskEmbeddingsTensor.file), Float32Array);
   const expectedUpscaledEmbedding = await fetchArray(resolveManifestFile(expectedUpscaledTensor.file), Float32Array);
@@ -904,17 +929,19 @@ async function loadDetrStackPayload(manifest) {
   const scoringShape = { layerCount: manifest.shape.layerCount, batch: manifest.shape.batch, queryTokens: manifest.shape.queryTokens, promptTokens: manifest.shape.promptTokens, channels: manifest.shape.channels, mlpHidden: manifest.shape.mlpHidden };
   const selectionShape = { layerCount: manifest.shape.layerCount, batch: manifest.shape.batch, queryTokens: manifest.shape.queryTokens, imageHeight: manifest.sourceImage?.resolution?.[1] || manifest.shape.maskHeight, imageWidth: manifest.sourceImage?.resolution?.[0] || manifest.shape.maskWidth, scoreThreshold: manifest.postprocess?.scoreThreshold ?? 0.5 };
   const patchEmbedShape = includeImagePatchEmbed ? imagePatchEmbedShape(manifest) : null;
+  const vitPrefixShape = includeImageVitPrefix ? imageVitPrefixShape(manifest) : null;
   const maskOracle = createSam3MaskTailPhaseProgramCpuOracle({ lastHs: expectedLastHs, pixelEmbed, weights: tailWeights, shape: maskTailShape });
   const patchEmbedOracle = includeImagePatchEmbed ? createSam3ImagePatchEmbedPhaseProgramCpuOracle({ pixelValues: expectedPixelValues, weights: { projection: patchProjectionWeight }, shape: patchEmbedShape }) : null;
+  const vitPrefixOracle = includeImageVitPrefix ? createSam3ImageVitPrefixPhaseProgramCpuOracle({ patchEmbeddings: expectedPatchEmbeddings, weights: vitPrefixWeights, shape: vitPrefixShape }) : null;
   const scoringOracle = includeStackScoring ? createSam3ScoringPhaseProgramCpuOracle({ hiddenStates: expectedDecoderHiddenStates, promptFeatures, promptMask, weights: scoringWeights, shape: scoringShape }) : null;
   const selectionOracle = includeStackSelection ? createSam3SelectionPostprocessPhaseProgramCpuOracle({ predLogits: expectedPredLogits, referenceBoxes: expectedReferenceBoxes, presenceLogits: expectedPresenceLogits, shape: selectionShape }) : null;
   return {
-    routeKind: includeImagePatchEmbed ? 'image-patch-embed-detector-stack-composition' : includeImagePreprocess ? 'image-preprocess-detector-stack-composition' : includeDetectorStack ? 'detector-stack-browser-local-composition' : includeStackSelection ? 'detr-encoder-detr-decoder-scoring-selection-mask-tail-composition' : includeStackScoring ? 'detr-encoder-detr-decoder-scoring-mask-tail-composition' : 'detr-encoder-detr-decoder-mask-tail-composition',
+    routeKind: includeImageVitPrefix ? 'image-vit-prefix-detector-stack-composition' : includeImagePatchEmbed ? 'image-patch-embed-detector-stack-composition' : includeImagePreprocess ? 'image-preprocess-detector-stack-composition' : includeDetectorStack ? 'detector-stack-browser-local-composition' : includeStackSelection ? 'detr-encoder-detr-decoder-scoring-selection-mask-tail-composition' : includeStackScoring ? 'detr-encoder-detr-decoder-scoring-mask-tail-composition' : 'detr-encoder-detr-decoder-mask-tail-composition',
     detectorStackEvidence: includeDetectorStack ? {
       packetMode: manifest.mode,
       schema: manifest.schema,
       boundary: manifest.boundary,
-      routeKind: includeImagePatchEmbed ? 'image-patch-embed-detector-stack-composition' : includeImagePreprocess ? 'image-preprocess-detector-stack-composition' : 'detector-stack-browser-local-composition',
+      routeKind: includeImageVitPrefix ? 'image-vit-prefix-detector-stack-composition' : includeImagePatchEmbed ? 'image-patch-embed-detector-stack-composition' : includeImagePreprocess ? 'image-preprocess-detector-stack-composition' : 'detector-stack-browser-local-composition',
       upstreamBoundaries: manifest.upstreamBoundaries || [],
       nonClaims: {
         fullSam3BrowserExecution: true,
@@ -953,8 +980,25 @@ async function loadDetrStackPayload(manifest) {
         fullSam3BrowserExecution: true,
       },
     } : null,
+    imageVitPrefixEvidence: includeImageVitPrefix ? {
+      packetMode: manifest.mode,
+      schema: manifest.schema,
+      boundary: manifest.imageVitPrefix?.boundary || manifest.boundary,
+      routeKind: 'image-vit-prefix-detector-stack-composition',
+      source: manifest.imageVitPrefix?.source || 'browser-local-patch-embeddings',
+      positionEmbeddings: manifest.imageVitPrefix?.positionEmbeddings || null,
+      layerNorm: manifest.imageVitPrefix?.layerNorm || null,
+      nonClaims: {
+        originalImageResize: true,
+        browserLocalViTBlocks: true,
+        browserLocalFpnNeck: true,
+        browserLocalTextEncoder: true,
+        fullSam3BrowserExecution: true,
+      },
+    } : null,
     expectedPixelValues,
     expectedPatchEmbeddings,
+    expectedVitPrefixHiddenStates,
     expectedEncoderHiddenStates,
     expectedDecoderHiddenStates,
     expectedLastHs,
@@ -975,6 +1019,7 @@ async function loadDetrStackPayload(manifest) {
     cpuSelfCheck: {
       maskEmbeddingsMaxAbsDiff: maxAbsDiff(expectedMaskEmbeddings, maskOracle.maskEmbeddings),
       patchEmbeddingsMaxAbsDiff: patchEmbedOracle ? maxAbsDiff(expectedPatchEmbeddings, patchEmbedOracle.patchEmbeddings) : undefined,
+      vitPrefixHiddenStatesMaxAbsDiff: vitPrefixOracle ? maxAbsDiff(expectedVitPrefixHiddenStates, vitPrefixOracle.vitPrefixHiddenStates) : undefined,
       upscaledEmbeddingMaxAbsDiff: maxAbsDiff(expectedUpscaledEmbedding, maskOracle.upscaledEmbedding),
       logitsMaxAbsDiff: maxAbsDiff(expectedLogits, maskOracle.maskLogits),
       predLogitsMaxAbsDiff: scoringOracle ? maxAbsDiff(expectedPredLogits, scoringOracle.predLogits) : undefined,
@@ -1005,7 +1050,11 @@ async function loadDetrStackPayload(manifest) {
       expectedSelectedBoxSha256: expectedSelectedBoxTensor?.sha256,
       expectedPixelValuesSha256: expectedPixelValuesTensor?.sha256,
       expectedPatchEmbeddingsSha256: expectedPatchEmbeddingsTensor?.sha256,
+      expectedVitPrefixHiddenStatesSha256: expectedVitPrefixTensor?.sha256,
       patchProjectionWeightSha256: weightsByRole['patch-embed-projection-weight']?.sha256,
+      positionEmbeddingsSha256: weightsByRole['vit-position-embeddings']?.sha256,
+      backboneLayerNormWeightSha256: weightsByRole['vit-backbone-layernorm-weight']?.sha256,
+      backboneLayerNormBiasSha256: weightsByRole['vit-backbone-layernorm-bias']?.sha256,
       pixelEmbedSha256: pixelEmbedTensor.sha256,
       expectedMaskEmbeddingsSha256: expectedMaskEmbeddingsTensor.sha256,
       expectedUpscaledEmbeddingSha256: expectedUpscaledTensor.sha256,
@@ -1024,6 +1073,11 @@ async function loadDetrStackPayload(manifest) {
       let patchEmbeddingsOutput = null;
       let patchEmbeddingsTensorSha256 = null;
       let imagePatchEmbedCpuMaxAbsDiff = undefined;
+      let imageVitPrefixResult = null;
+      let gpuVitPrefixHiddenStates = null;
+      let vitPrefixHiddenStatesOutput = null;
+      let vitPrefixHiddenStatesTensorSha256 = null;
+      let imageVitPrefixCpuMaxAbsDiff = undefined;
       if (includeImagePreprocess) {
         const preprocessShape = imagePreprocessShape(manifest);
         const rgba = rgbaFromSourceImage(sourceImage, preprocessShape);
@@ -1080,6 +1134,40 @@ async function loadDetrStackPayload(manifest) {
         gpuPatchEmbeddings = new Float32Array(imagePatchEmbedResult.debugReadback.patchEmbeddings);
         patchEmbeddingsOutput = imagePatchEmbedResult.receipt.outputs.find(output => output.role === 'patch-embeddings');
         if (!patchEmbeddingsOutput?.sha256 || !patchEmbeddingsOutput?.artifactId) throw new Error('SAM3 image patch-embed output identity missing');
+      }
+      if (includeImageVitPrefix) {
+        const vitPrefixCpuOracle = createSam3ImageVitPrefixPhaseProgramCpuOracle({ patchEmbeddings: gpuPatchEmbeddings, weights: vitPrefixWeights, shape: vitPrefixShape });
+        imageVitPrefixCpuMaxAbsDiff = maxAbsDiff(expectedVitPrefixHiddenStates, vitPrefixCpuOracle.vitPrefixHiddenStates);
+        vitPrefixHiddenStatesTensorSha256 = await aggregateTensorBundleSha256('sam3-image-vit-prefix-composed-tensors', [
+          { role: 'patch-embeddings', artifactId: patchEmbeddingsOutput.artifactId, sha256: patchEmbeddingsOutput.sha256, shape: patchEmbeddingsOutput.shape },
+          { role: 'vit-position-embeddings', sha256: weightsByRole['vit-position-embeddings'].sha256 },
+          { role: 'vit-backbone-layernorm-weight', sha256: weightsByRole['vit-backbone-layernorm-weight'].sha256 },
+          { role: 'vit-backbone-layernorm-bias', sha256: weightsByRole['vit-backbone-layernorm-bias'].sha256 },
+        ]);
+        const imageVitPrefixRoute = createSam3ImageVitPrefixPhaseProgramRouteDefinition({
+          model: { revision: manifest.model?.id || 'mlx-reference-image-vit-prefix', dtype: 'fp32' },
+          kernel: { profile: 'sam3-image-vit-prefix-phase-program-v0', commit: params.get('commit') || null },
+        });
+        const imageVitPrefixRequest = createRouteInvocationRequest(imageVitPrefixRoute, {
+          requestId: `sam-browser-image-vit-prefix-${Date.now()}`,
+          inputs: {
+            'source-image': { artifactId: manifest.sourceImage?.artifactId || 'image:synthetic', sha256: manifest.sourceImage?.sha256 || 'sha256:synthetic-image', shape: sourceImageShape(manifest) },
+            'patch-embeddings': { artifactId: patchEmbeddingsOutput.artifactId, sha256: patchEmbeddingsOutput.sha256, shape: patchEmbeddingsOutput.shape },
+            'sam3-image-vit-prefix-weights': { artifactId: manifest.staticWeights.artifactId, sha256: await aggregateTensorBundleSha256('sam3-image-vit-prefix-weights', [
+              { role: 'vit-position-embeddings', sha256: weightsByRole['vit-position-embeddings'].sha256 },
+              { role: 'vit-backbone-layernorm-weight', sha256: weightsByRole['vit-backbone-layernorm-weight'].sha256 },
+              { role: 'vit-backbone-layernorm-bias', sha256: weightsByRole['vit-backbone-layernorm-bias'].sha256 },
+            ]) },
+          },
+          outputs: {
+            'vit-prefix-hidden-states': { artifactId: 'sam3-vit-prefix-hidden-states:browser-detector-stack-composition', shape: [vitPrefixShape.batch, vitPrefixShape.patchHeight, vitPrefixShape.patchWidth, vitPrefixShape.hiddenSize] },
+          },
+          routeConfig: { upstream: manifest.claims?.upstream || 'mlx-reference-detr-stack', imageVitPrefix: manifest.imageVitPrefix || null, composedFrom: imagePatchEmbedResult.receipt?.effectiveRouteId, patchEmbeddingsOutput },
+        });
+        imageVitPrefixResult = await runSam3ImageVitPrefixPhaseProgramRoute({ request: imageVitPrefixRequest, route: imageVitPrefixRoute, device, queue: device.queue, adapterName: adapter.info?.description || adapter.info?.device || 'browser-webgpu-adapter', browser: navigator.userAgent, kernel: imageVitPrefixRoute.kernel, model: { revision: imageVitPrefixRoute.model.revision, weightsHash: imageVitPrefixRequest.inputs.find(input => input.role === 'sam3-image-vit-prefix-weights')?.sha256, dtype: 'fp32' }, tensors: { patchEmbeddings: gpuPatchEmbeddings, weights: vitPrefixWeights, shape: vitPrefixShape }, includeReadback: true });
+        gpuVitPrefixHiddenStates = new Float32Array(imageVitPrefixResult.debugReadback.vitPrefixHiddenStates);
+        vitPrefixHiddenStatesOutput = imageVitPrefixResult.receipt.outputs.find(output => output.role === 'vit-prefix-hidden-states');
+        if (!vitPrefixHiddenStatesOutput?.sha256 || !vitPrefixHiddenStatesOutput?.artifactId) throw new Error('SAM3 image ViT-prefix output identity missing');
       }
       const encoderResult = await runSam3DetrEncoderPhaseProgramRoute({ request, route, device, queue: device.queue, adapterName: adapter.info?.description || adapter.info?.device || 'browser-webgpu-adapter', browser: navigator.userAgent, kernel: route.kernel, model: { revision: route.model.revision, weightsHash: manifest.staticWeights.sha256, dtype: 'fp32' }, tensors: { encoderSrc, encoderPos, promptFeatures, promptMask, layers: encoderWeights.layers, shape: encoderShape }, includeReadback: true });
       const gpuEncoderHiddenStates = new Float32Array(encoderResult.debugReadback.encoderHiddenStates);
@@ -1215,13 +1303,15 @@ async function loadDetrStackPayload(manifest) {
         routeReceipt: encoderResult.receipt,
         midstreamRouteReceipt: decoderResult.receipt,
         downstreamRouteReceipt: tailResult.receipt,
-        compositionRouteReceipts: includeImagePatchEmbed ? [imagePreprocessResult.receipt, imagePatchEmbedResult.receipt, encoderResult.receipt, decoderResult.receipt, scoringResult.receipt, selectionResult.receipt, tailResult.receipt] : includeImagePreprocess ? [imagePreprocessResult.receipt, encoderResult.receipt, decoderResult.receipt, scoringResult.receipt, selectionResult.receipt, tailResult.receipt] : includeStackSelection ? [encoderResult.receipt, decoderResult.receipt, scoringResult.receipt, selectionResult.receipt, tailResult.receipt] : includeStackScoring ? [encoderResult.receipt, decoderResult.receipt, scoringResult.receipt, tailResult.receipt] : [encoderResult.receipt, decoderResult.receipt, tailResult.receipt],
+        compositionRouteReceipts: includeImageVitPrefix ? [imagePreprocessResult.receipt, imagePatchEmbedResult.receipt, imageVitPrefixResult.receipt, encoderResult.receipt, decoderResult.receipt, scoringResult.receipt, selectionResult.receipt, tailResult.receipt] : includeImagePatchEmbed ? [imagePreprocessResult.receipt, imagePatchEmbedResult.receipt, encoderResult.receipt, decoderResult.receipt, scoringResult.receipt, selectionResult.receipt, tailResult.receipt] : includeImagePreprocess ? [imagePreprocessResult.receipt, encoderResult.receipt, decoderResult.receipt, scoringResult.receipt, selectionResult.receipt, tailResult.receipt] : includeStackSelection ? [encoderResult.receipt, decoderResult.receipt, scoringResult.receipt, selectionResult.receipt, tailResult.receipt] : includeStackScoring ? [encoderResult.receipt, decoderResult.receipt, scoringResult.receipt, tailResult.receipt] : [encoderResult.receipt, decoderResult.receipt, tailResult.receipt],
         backend: tailResult.backend,
         debugReadback: {
           pixelValues: gpuPixelValues ? Array.from(gpuPixelValues) : undefined,
           imagePreprocessCpuMaxAbsDiff,
           patchEmbeddings: gpuPatchEmbeddings ? Array.from(gpuPatchEmbeddings) : undefined,
           imagePatchEmbedCpuMaxAbsDiff,
+          vitPrefixHiddenStates: gpuVitPrefixHiddenStates ? Array.from(gpuVitPrefixHiddenStates) : undefined,
+          imageVitPrefixCpuMaxAbsDiff,
           encoderHiddenStates: Array.from(gpuEncoderHiddenStates),
           decoderHiddenStates: gpuDecoderHiddenStates ? Array.from(gpuDecoderHiddenStates) : undefined,
           lastHs: Array.from(gpuLastHs),
@@ -1246,6 +1336,12 @@ async function loadDetrStackPayload(manifest) {
           patchEmbeddingsTensorSha256,
           patchEmbeddingsOutput,
           patchProjectionWeightSha256: weightsByRole['patch-embed-projection-weight']?.sha256,
+          imageVitPrefixRouteId: imageVitPrefixResult?.receipt?.effectiveRouteId,
+          vitPrefixHiddenStatesTensorSha256,
+          vitPrefixHiddenStatesOutput,
+          positionEmbeddingsSha256: weightsByRole['vit-position-embeddings']?.sha256,
+          backboneLayerNormWeightSha256: weightsByRole['vit-backbone-layernorm-weight']?.sha256,
+          backboneLayerNormBiasSha256: weightsByRole['vit-backbone-layernorm-bias']?.sha256,
           midstreamRouteId: decoderResult.receipt.effectiveRouteId,
           downstreamRouteId: tailResult.receipt.effectiveRouteId,
           detrEncoderOutput,
@@ -2083,7 +2179,7 @@ async function main() {
       throw new Error('oracle packet must preserve explicit static-weight or reference-weight identity');
     }
 
-    const payload = manifest.mode === 'mlx-detr-stack-export' || manifest.mode === 'mlx-detr-stack-scoring-export' || manifest.mode === 'mlx-detr-stack-selection-export' || manifest.mode === 'mlx-detector-stack-export' || manifest.mode === 'mlx-detector-stack-preprocess-export' || manifest.mode === 'mlx-detector-stack-patch-embed-export' || manifest.boundary === 'sam3-detector-detr-encoder-decoder-mask-tail-phase-program' || manifest.boundary === 'sam3-detector-detr-encoder-decoder-scoring-mask-tail-phase-program' || manifest.boundary === 'sam3-detector-detr-encoder-decoder-scoring-selection-mask-tail-phase-program' || manifest.boundary === 'sam3-detector-stack-browser-local-detector-mask-phase-program' || manifest.boundary === 'sam3-browser-local-image-preprocess-detector-stack-phase-program' || manifest.boundary === 'sam3-browser-local-image-preprocess-patch-embed-detector-stack-phase-program'
+    const payload = manifest.mode === 'mlx-detr-stack-export' || manifest.mode === 'mlx-detr-stack-scoring-export' || manifest.mode === 'mlx-detr-stack-selection-export' || manifest.mode === 'mlx-detector-stack-export' || manifest.mode === 'mlx-detector-stack-preprocess-export' || manifest.mode === 'mlx-detector-stack-patch-embed-export' || manifest.mode === 'mlx-detector-stack-vit-prefix-export' || manifest.boundary === 'sam3-detector-detr-encoder-decoder-mask-tail-phase-program' || manifest.boundary === 'sam3-detector-detr-encoder-decoder-scoring-mask-tail-phase-program' || manifest.boundary === 'sam3-detector-detr-encoder-decoder-scoring-selection-mask-tail-phase-program' || manifest.boundary === 'sam3-detector-stack-browser-local-detector-mask-phase-program' || manifest.boundary === 'sam3-browser-local-image-preprocess-detector-stack-phase-program' || manifest.boundary === 'sam3-browser-local-image-preprocess-patch-embed-detector-stack-phase-program' || manifest.boundary === 'sam3-browser-local-image-preprocess-patch-embed-vit-prefix-detector-stack-phase-program'
       ? await loadDetrStackPayload(manifest)
       : manifest.routeId === SAM3_DETR_DECODER_PHASE_PROGRAM_ROUTE_ID
       ? await loadDetrDecoderPayload(manifest)
@@ -2383,6 +2479,8 @@ async function main() {
       imagePreprocessCpuMaxAbsDiff: result.debugReadback.imagePreprocessCpuMaxAbsDiff,
       patchEmbeddingsMaxAbsDiff: result.debugReadback.patchEmbeddings ? maxAbsDiff(payload.expectedPatchEmbeddings || [], new Float32Array(result.debugReadback.patchEmbeddings)) : undefined,
       imagePatchEmbedCpuMaxAbsDiff: result.debugReadback.imagePatchEmbedCpuMaxAbsDiff,
+      vitPrefixHiddenStatesMaxAbsDiff: result.debugReadback.vitPrefixHiddenStates ? maxAbsDiff(payload.expectedVitPrefixHiddenStates || [], new Float32Array(result.debugReadback.vitPrefixHiddenStates)) : undefined,
+      imageVitPrefixCpuMaxAbsDiff: result.debugReadback.imageVitPrefixCpuMaxAbsDiff,
       promptFpnMaxAbsDiff: result.debugReadback.promptFpnFeature ? maxAbsDiff(payload.expectedPromptFpnFeature || [], new Float32Array(result.debugReadback.promptFpnFeature)) : undefined,
       pixelEmbedMaxAbsDiff: result.debugReadback.pixelEmbed ? maxAbsDiff(payload.expectedPixelEmbed || [], new Float32Array(result.debugReadback.pixelEmbed)) : undefined,
       maskLogitsMaxAbsDiff: gpuLogits ? maxAbsDiff(expectedLogits, gpuLogits) : undefined,
@@ -2406,6 +2504,8 @@ async function main() {
     const gpuPixelValuesTolerance = manifest.tolerances?.pixelValuesMaxAbsDiff ?? 0.000001;
     const gpuPatchEmbeddingsTolerance = manifest.tolerances?.patchEmbeddingsMaxAbsDiff ?? 0.0005;
     const gpuPatchEmbedCpuTolerance = manifest.tolerances?.imagePatchEmbedCpuMaxAbsDiff ?? 0.000002;
+    const gpuVitPrefixTolerance = manifest.tolerances?.vitPrefixHiddenStatesMaxAbsDiff ?? 0.0007;
+    const gpuVitPrefixCpuTolerance = manifest.tolerances?.imageVitPrefixCpuMaxAbsDiff ?? 0.0007;
     const gpuPromptFpnTolerance = manifest.tolerances?.promptFpnMaxAbsDiff ?? 0.00001;
     const gpuPixelTolerance = manifest.tolerances?.pixelEmbedMaxAbsDiff ?? 0.00001;
     const selectionScoresTolerance = manifest.tolerances?.selectionScoresMaxAbsDiff ?? 0.00001;
@@ -2427,6 +2527,8 @@ async function main() {
       expectedPixelValues: payload.expectedPixelValues ? Array.from(payload.expectedPixelValues.slice(0, 16)) : undefined,
       patchEmbeddings: result.debugReadback.patchEmbeddings ? Array.from(new Float32Array(result.debugReadback.patchEmbeddings).slice(0, 16)) : undefined,
       expectedPatchEmbeddings: payload.expectedPatchEmbeddings ? Array.from(payload.expectedPatchEmbeddings.slice(0, 16)) : undefined,
+      vitPrefixHiddenStates: result.debugReadback.vitPrefixHiddenStates ? Array.from(new Float32Array(result.debugReadback.vitPrefixHiddenStates).slice(0, 16)) : undefined,
+      expectedVitPrefixHiddenStates: payload.expectedVitPrefixHiddenStates ? Array.from(payload.expectedVitPrefixHiddenStates.slice(0, 16)) : undefined,
       predLogits: result.debugReadback.predLogits ? Array.from(new Float32Array(result.debugReadback.predLogits).slice(0, 16)) : undefined,
       expectedPredLogits: payload.expectedPredLogits ? Array.from(payload.expectedPredLogits.slice(0, 16)) : undefined,
       selectedIndex: result.debugReadback.selectedIndex ? Array.from(new Uint32Array(result.debugReadback.selectedIndex).slice(0, 8)) : undefined,
@@ -2486,6 +2588,21 @@ async function main() {
       },
       debugReadbackSample: debugReadbackSamples.patchEmbeddings,
     } : null;
+    state.imageVitPrefixEvidence = payload.imageVitPrefixEvidence ? {
+      ...payload.imageVitPrefixEvidence,
+      receipt: result.compositionRouteReceipts?.find(receipt => receipt.effectiveRouteId === SAM3_IMAGE_VIT_PREFIX_PHASE_PROGRAM_ROUTE_ID) || null,
+      receiptChain: (result.compositionRouteReceipts || []).map(receipt => receipt.effectiveRouteId),
+      vitPrefixHiddenStatesTensorSha256: result.compositionEdge?.vitPrefixHiddenStatesTensorSha256 || null,
+      vitPrefixHiddenStatesOutput: result.compositionEdge?.vitPrefixHiddenStatesOutput || null,
+      positionEmbeddingsSha256: result.compositionEdge?.positionEmbeddingsSha256 || null,
+      backboneLayerNormWeightSha256: result.compositionEdge?.backboneLayerNormWeightSha256 || null,
+      backboneLayerNormBiasSha256: result.compositionEdge?.backboneLayerNormBiasSha256 || null,
+      parity: {
+        vitPrefixHiddenStatesMaxAbsDiff: parity.vitPrefixHiddenStatesMaxAbsDiff,
+        imageVitPrefixCpuMaxAbsDiff: parity.imageVitPrefixCpuMaxAbsDiff,
+      },
+      debugReadbackSample: debugReadbackSamples.vitPrefixHiddenStates,
+    } : null;
     if (
       (parity.encoderHiddenStatesMaxAbsDiff ?? 0) > gpuEncoderTolerance
       || (parity.decoderHiddenStatesMaxAbsDiff ?? 0) > gpuDecoderHiddenStatesTolerance
@@ -2496,6 +2613,8 @@ async function main() {
       || (parity.imagePreprocessCpuMaxAbsDiff ?? 0) > gpuPixelValuesTolerance
       || (parity.patchEmbeddingsMaxAbsDiff ?? 0) > gpuPatchEmbeddingsTolerance
       || (parity.imagePatchEmbedCpuMaxAbsDiff ?? 0) > gpuPatchEmbedCpuTolerance
+      || (parity.vitPrefixHiddenStatesMaxAbsDiff ?? 0) > gpuVitPrefixTolerance
+      || (parity.imageVitPrefixCpuMaxAbsDiff ?? 0) > gpuVitPrefixCpuTolerance
       || (parity.promptFpnMaxAbsDiff ?? 0) > gpuPromptFpnTolerance
       || (parity.pixelEmbedMaxAbsDiff ?? 0) > gpuPixelTolerance
       || (parity.maskLogitsMaxAbsDiff ?? 0) > gpuTolerance
@@ -2574,6 +2693,21 @@ async function main() {
         imagePatchEmbedCpuMaxAbsDiff: parity.imagePatchEmbedCpuMaxAbsDiff,
       },
       debugReadbackSample: debugReadbackSamples.patchEmbeddings,
+    } : null;
+    state.imageVitPrefixEvidence = payload.imageVitPrefixEvidence ? {
+      ...payload.imageVitPrefixEvidence,
+      receipt: result.compositionRouteReceipts?.find(receipt => receipt.effectiveRouteId === SAM3_IMAGE_VIT_PREFIX_PHASE_PROGRAM_ROUTE_ID) || null,
+      receiptChain: (result.compositionRouteReceipts || []).map(receipt => receipt.effectiveRouteId),
+      vitPrefixHiddenStatesTensorSha256: result.compositionEdge?.vitPrefixHiddenStatesTensorSha256 || null,
+      vitPrefixHiddenStatesOutput: result.compositionEdge?.vitPrefixHiddenStatesOutput || null,
+      positionEmbeddingsSha256: result.compositionEdge?.positionEmbeddingsSha256 || null,
+      backboneLayerNormWeightSha256: result.compositionEdge?.backboneLayerNormWeightSha256 || null,
+      backboneLayerNormBiasSha256: result.compositionEdge?.backboneLayerNormBiasSha256 || null,
+      parity: {
+        vitPrefixHiddenStatesMaxAbsDiff: parity.vitPrefixHiddenStatesMaxAbsDiff,
+        imageVitPrefixCpuMaxAbsDiff: parity.imageVitPrefixCpuMaxAbsDiff,
+      },
+      debugReadbackSample: debugReadbackSamples.vitPrefixHiddenStates,
     } : null;
     state.debugReadbackSamples = debugReadbackSamples;
     state.parity = parity;

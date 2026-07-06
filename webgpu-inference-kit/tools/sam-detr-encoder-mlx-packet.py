@@ -87,6 +87,13 @@ def run_reference(model, image, prompt, resolution):
     attention_mask = mx.array(text["attention_mask"])
     det = model.detector_model
     patch_embeddings = det.vision_encoder.backbone.embeddings(pixel_values)
+    backbone = det.vision_encoder.backbone
+    patch_h = resolution // backbone.config.patch_size
+    patch_w = resolution // backbone.config.patch_size
+    pos = backbone._tile_pos_embed(backbone.embeddings.position_embeddings, patch_h, patch_w)
+    vit_prefix_hidden_states = backbone.layer_norm(
+        (patch_embeddings + pos).reshape(patch_embeddings.shape[0], patch_h, patch_w, -1)
+    )
     fpn_features = det.vision_encoder(pixel_values)
     fpn_pos = [det._pos_enc(feat) for feat in fpn_features]
     fpn_trimmed = fpn_features[:-1]
@@ -135,6 +142,7 @@ def run_reference(model, image, prompt, resolution):
         pixel_embed,
         instance_embed,
         mask_embeddings,
+        vit_prefix_hidden_states,
         all_logits,
         pred_logits,
         ref_boxes,
@@ -154,6 +162,7 @@ def run_reference(model, image, prompt, resolution):
     return {
         "encoder_src": np.array(src, dtype=np.float32),
         "patch_embeddings": np.array(patch_embeddings, dtype=np.float32),
+        "vit_prefix_hidden_states": np.array(vit_prefix_hidden_states, dtype=np.float32),
         "encoder_pos": np.array(pos_flat, dtype=np.float32),
         "encoder_hidden_states": np.array(encoded, dtype=np.float32),
         "backbone_features": backbone_features,

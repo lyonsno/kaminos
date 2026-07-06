@@ -154,6 +154,14 @@ export {
 } from './sam-image-patch-embed-phase-program.js';
 
 export {
+  SAM3_IMAGE_VIT_PREFIX_PHASE_PROGRAM_ROUTE_ID,
+  createSam3ImageVitPrefixPhaseProgramCpuOracle,
+  createSam3ImageVitPrefixPhaseProgramRouteDefinition,
+  createSam3ImageVitPrefixPhaseProgramRouteReceipt,
+  runSam3ImageVitPrefixPhaseProgramRoute,
+} from './sam-image-vit-prefix-phase-program.js';
+
+export {
   SAM3_PIXEL_DECODER_PHASE_PROGRAM_ROUTE_ID,
   createSam3PixelDecoderPhaseProgramCpuOracle,
   createSam3PixelDecoderPhaseProgramRouteDefinition,
