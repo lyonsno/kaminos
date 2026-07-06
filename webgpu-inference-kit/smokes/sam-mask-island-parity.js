@@ -39,6 +39,7 @@ const state = {
   tensorPacket: null,
   backendIdentity: null,
   routeReceipt: null,
+  midstreamRouteReceipt: null,
   downstreamRouteReceipt: null,
   compositionEdge: null,
   parity: null,
@@ -974,6 +975,7 @@ async function main() {
     };
     state.backendIdentity = result.backend;
     state.routeReceipt = result.receipt;
+    state.midstreamRouteReceipt = result.midstreamRouteReceipt || null;
     state.downstreamRouteReceipt = result.downstreamRouteReceipt || null;
     state.compositionEdge = result.compositionEdge || null;
     state.parity = parity;

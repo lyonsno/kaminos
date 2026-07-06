@@ -54,6 +54,8 @@ assert.doesNotMatch(smokeJs, /sha256:\s*payload\.tensorIdentity\.fpnFeatureSha25
 assert.match(smokeJs, /pixelResult\.receipt\.outputs/, 'downstream mask-tail receipt must reference the upstream pixel route output');
 assert.match(smokeJs, /pixelEmbedOutput/, 'browser smoke must preserve the pixel output identity as the composition edge');
 assert.match(smokeJs, /promptFpnOutput/, 'browser smoke must preserve the prompt-FPN output identity as the upstream composition edge');
+assert.match(smokeJs, /midstreamRouteReceipt:\s*null/, 'browser smoke state must reserve a midstream route receipt slot');
+assert.match(smokeJs, /state\.midstreamRouteReceipt\s*=\s*result\.midstreamRouteReceipt/, 'browser smoke must persist the pixel route receipt for prompt-FPN composition');
 assert.match(smokeJs, /selectedMaskIndex/, 'browser smoke must render a selected reference/webgpu mask');
 assert.match(smokeJs, /drawVisualWitness/, 'browser smoke must draw source/reference/webgpu/diff witness panels');
 assert.match(smokeJs, /drawSourcePanel/, 'browser smoke must handle packets without a source image file');
@@ -81,6 +83,9 @@ assert.match(witness, /PROMPT_FPN_PHASE_PROGRAM_ROUTE_ID/, 'witness must preserv
 assert.match(witness, /lastHsSha256/, 'witness must preserve mask-tail tensor identity');
 assert.match(witness, /expectedPixelEmbedSha256/, 'witness must preserve pixel-decoder tensor identity');
 assert.match(witness, /sourceImage/, 'witness report must preserve source image identity');
+assert.match(witness, /midstreamRouteReceipt/, 'witness report must preserve midstream pixel route receipt identity');
+assert.match(witness, /pixelTensorSha256/, 'witness must assert prompt-FPN output composition into the pixel route tensor input');
+assert.match(witness, /downstreamTensorSha256/, 'witness must assert pixel output composition into the mask-tail tensor input');
 
 assert.equal(join(new URL('.', root).pathname, 'smokes').includes('webgpu-inference-kit'), true);
 

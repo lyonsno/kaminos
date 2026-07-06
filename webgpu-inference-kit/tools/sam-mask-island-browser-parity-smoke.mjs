@@ -101,6 +101,8 @@ function writeReport(extra = {}) {
     backendIdentity: lastState?.backendIdentity || null,
     tensorPacket: lastState?.tensorPacket || null,
     routeReceipt: lastState?.routeReceipt || null,
+    midstreamRouteReceipt: lastState?.midstreamRouteReceipt || null,
+    downstreamRouteReceipt: lastState?.downstreamRouteReceipt || null,
     parity: lastState?.parity || null,
     ...extra,
   }, null, 2));
@@ -342,6 +344,24 @@ async function main() {
       if (!lastState.tensorPacket?.encoderHiddenStatesSha256 || !lastState.tensorPacket?.expectedPromptFpnFeatureSha256 || !lastState.tensorPacket?.weightsSha256) {
         throw new Error('prompt-FPN tensorPacket identity missing');
       }
+      const midstreamRouteReceipt = lastState.midstreamRouteReceipt;
+      const downstreamRouteReceipt = lastState.downstreamRouteReceipt;
+      const compositionEdge = lastState.compositionEdge;
+      if (!midstreamRouteReceipt) throw new Error('prompt-FPN midstream pixel route receipt missing');
+      if (!downstreamRouteReceipt) throw new Error('prompt-FPN downstream mask-tail route receipt missing');
+      if (midstreamRouteReceipt.effectiveRouteId !== PIXEL_DECODER_PHASE_PROGRAM_ROUTE_ID) throw new Error('prompt-FPN midstream route identity mismatch');
+      const pixelTensorInput = midstreamRouteReceipt.inputs?.find(input => input.role === 'sam3-pixel-decoder-tensors');
+      if (pixelTensorInput?.sha256 !== compositionEdge?.pixelTensorSha256) throw new Error('prompt-FPN pixelTensorSha256 does not match midstream receipt input');
+      const pixelEmbedOutput = midstreamRouteReceipt.outputs?.find(output => output.role === 'pixel-embed');
+      if (
+        pixelEmbedOutput?.artifactId !== compositionEdge?.pixelEmbedOutput?.artifactId
+        || pixelEmbedOutput?.sha256 !== compositionEdge?.pixelEmbedOutput?.sha256
+        || JSON.stringify(pixelEmbedOutput?.shape) !== JSON.stringify(compositionEdge?.pixelEmbedOutput?.shape)
+      ) {
+        throw new Error('prompt-FPN pixel output identity does not match midstream receipt output');
+      }
+      const downstreamTensorInput = downstreamRouteReceipt.inputs?.find(input => input.role === 'sam3-mask-tail-tensors');
+      if (downstreamTensorInput?.sha256 !== compositionEdge?.downstreamTensorSha256) throw new Error('prompt-FPN downstreamTensorSha256 does not match mask-tail receipt input');
       if (lastState.parity?.promptFpnMaxAbsDiff > 0.0003) throw new Error('prompt-FPN parity exceeds tolerance');
       if (lastState.parity?.binaryMismatchCount > 8) throw new Error('prompt-FPN binary mask parity exceeds tolerance');
     } else if (requestedRouteId === PIXEL_DECODER_PHASE_PROGRAM_ROUTE_ID) {
