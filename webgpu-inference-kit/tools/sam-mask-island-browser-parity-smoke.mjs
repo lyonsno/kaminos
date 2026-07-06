@@ -14,6 +14,7 @@ const DETR_DECODER_PHASE_PROGRAM_ROUTE_ID = 'sam3.detr-decoder.phase-program.web
 const SCORING_PHASE_PROGRAM_ROUTE_ID = 'sam3.scoring.phase-program.webgpu-local.v0';
 const SELECTION_POSTPROCESS_PHASE_PROGRAM_ROUTE_ID = 'sam3.selection-postprocess.phase-program.webgpu-local.v0';
 const DETR_STACK_SCORING_PHASE_PROGRAM_ROUTE_ID = DETR_ENCODER_PHASE_PROGRAM_ROUTE_ID;
+const DETECTOR_STACK_PACKET_MODE = 'mlx-detector-stack-export';
 
 const args = new Map();
 for (let i = 2; i < process.argv.length; i += 2) {
@@ -34,6 +35,8 @@ const packetTool = resolve(args.get('--packet-tool') || (
     ? join(packageRoot, 'tools/sam-prompt-fpn-mlx-packet.py')
     : packetMode === 'mlx-scoring-export'
     ? join(packageRoot, 'tools/sam-scoring-mlx-packet.py')
+    : packetMode === DETECTOR_STACK_PACKET_MODE
+    ? join(packageRoot, 'tools/sam-detr-stack-mlx-packet.py')
     : packetMode === 'mlx-detr-stack-selection-export'
     ? join(packageRoot, 'tools/sam-detr-stack-mlx-packet.py')
     : packetMode === 'mlx-detr-stack-scoring-export'
@@ -59,6 +62,8 @@ const requestedRouteId = args.get('--route-id') || (
     ? PROMPT_FPN_PHASE_PROGRAM_ROUTE_ID
     : packetMode === 'mlx-scoring-export'
     ? SCORING_PHASE_PROGRAM_ROUTE_ID
+    : packetMode === DETECTOR_STACK_PACKET_MODE
+    ? DETR_STACK_SCORING_PHASE_PROGRAM_ROUTE_ID
     : packetMode === 'mlx-detr-stack-selection-export'
     ? DETR_STACK_SCORING_PHASE_PROGRAM_ROUTE_ID
     : packetMode === 'mlx-detr-stack-scoring-export'
@@ -94,6 +99,50 @@ let lastState = null;
 let server = null;
 let chromeProcess = null;
 const consoleEvents = [];
+
+function detectorStackReport(state) {
+  const detectorStackEvidence = state?.detectorStackEvidence || null;
+  if (!detectorStackEvidence) return null;
+  return {
+    schema: state.tensorPacket?.schema || null,
+    mode: state.tensorPacket?.mode || null,
+    boundary: state.tensorPacket?.boundary || null,
+    routeKind: state.tensorPacket?.routeKind || null,
+    receiptChain: detectorStackEvidence.receiptChain || [],
+    upstreamBoundaries: detectorStackEvidence.upstreamBoundaries || [],
+    nonClaims: detectorStackEvidence.nonClaims || {},
+    selectionTensorSha256: state.compositionEdge?.selectionTensorSha256 || null,
+    selectionOutput: state.compositionEdge?.selectionOutput || null,
+    downstreamTensorSha256: state.compositionEdge?.downstreamTensorSha256 || null,
+    parity: state.parity || null,
+    selectedIndex: detectorStackEvidence.selectedIndex,
+    selectedScore: detectorStackEvidence.selectedScore,
+  };
+}
+
+function assertDetectorStackEvidence(state) {
+  const report = detectorStackReport(state);
+  if (!report) throw new Error('canonical detectorStack report missing');
+  if (report.mode !== DETECTOR_STACK_PACKET_MODE) throw new Error('canonical detectorStack packet mode mismatch');
+  if (report.schema !== 'kaminos.sam3-detector-stack-real-boundary-packet.v0') throw new Error('canonical detectorStack schema mismatch');
+  if (report.routeKind !== 'detector-stack-browser-local-composition') throw new Error('canonical detectorStack route kind mismatch');
+  const expectedReceipts = [
+    DETR_STACK_SCORING_PHASE_PROGRAM_ROUTE_ID,
+    DETR_DECODER_PHASE_PROGRAM_ROUTE_ID,
+    SCORING_PHASE_PROGRAM_ROUTE_ID,
+    SELECTION_POSTPROCESS_PHASE_PROGRAM_ROUTE_ID,
+    MASK_TAIL_PHASE_PROGRAM_ROUTE_ID,
+  ];
+  if (JSON.stringify(report.receiptChain) !== JSON.stringify(expectedReceipts)) throw new Error('canonical detectorStack receipt chain mismatch');
+  if (!report.selectionTensorSha256 || !report.selectionOutput?.sha256 || !report.downstreamTensorSha256) throw new Error('canonical detectorStack composition edge incomplete');
+  if (!Array.isArray(report.upstreamBoundaries) || report.upstreamBoundaries.length < 5) throw new Error('canonical detectorStack upstream boundary foothold missing');
+  if (report.nonClaims?.fullSam3BrowserExecution !== true || report.nonClaims?.browserLocalVisionEncoder !== true || report.nonClaims?.browserLocalTextEncoder !== true || report.nonClaims?.nms !== true) throw new Error('canonical detectorStack bounded non-claims missing');
+  const selectionEmptyEvidenceRejected = Number(report.selectedScore || 0) <= 0;
+  if (selectionEmptyEvidenceRejected) throw new Error('canonical detectorStack selected-object evidence is empty');
+  if (report.parity?.selectionKeepMismatchCount > 0) throw new Error('canonical detectorStack keep mask mismatch');
+  if (report.parity?.selectedIndexMaxAbsDiff > 0) throw new Error('canonical detectorStack selected index mismatch');
+  return report;
+}
 
 function delay(ms) {
   return new Promise(resolveDelay => setTimeout(resolveDelay, ms));
@@ -135,6 +184,7 @@ function writeReport(extra = {}) {
     downstreamRouteReceipt: lastState?.downstreamRouteReceipt || null,
     compositionRouteReceipts: lastState?.compositionRouteReceipts || null,
     parity: lastState?.parity || null,
+    detectorStack: detectorStackReport(lastState),
     ...extra,
   }, null, 2));
 }
@@ -226,8 +276,9 @@ function generateOraclePacket() {
         '--model', model,
       ];
   if (isPython && packetMode === 'mlx-detr-stack-scoring-export') packetArgs.push('--include-scoring');
+  if (isPython && packetMode === DETECTOR_STACK_PACKET_MODE) packetArgs.push('--detector-stack');
   if (isPython && packetMode === 'mlx-detr-stack-selection-export') packetArgs.push('--include-selection');
-  if (isPython && packetMode === 'mlx-detr-stack-selection-export' && scoreThreshold != null) packetArgs.push('--score-threshold', scoreThreshold);
+  if (isPython && (packetMode === 'mlx-detr-stack-selection-export' || packetMode === DETECTOR_STACK_PACKET_MODE) && scoreThreshold != null) packetArgs.push('--score-threshold', scoreThreshold);
   const proc = spawnSync(command, packetArgs, {
     cwd: isPython ? mlxVlmRoot : packageRoot,
     encoding: 'utf8',
@@ -384,7 +435,7 @@ async function main() {
       if (!predLogitsOutput?.sha256 || !predLogitsOutput?.artifactId) throw new Error('SAM3 scoring pred-logits output identity missing');
       if (lastState.parity?.predLogitsMaxAbsDiff > 0.0005) throw new Error('SAM3 scoring pred-logits parity exceeds tolerance');
       if (lastState.parity?.expectedElementCount !== lastState.parity?.gpuElementCount) throw new Error('SAM3 scoring element count mismatch');
-    } else if (packetMode === 'mlx-detr-stack-selection-export') {
+    } else if (packetMode === 'mlx-detr-stack-selection-export' || packetMode === DETECTOR_STACK_PACKET_MODE) {
       if (!lastState.tensorPacket?.expectedSelectionScoresSha256 || !lastState.tensorPacket?.expectedSelectionBoxesSha256 || !lastState.tensorPacket?.expectedSelectionKeepSha256 || !lastState.tensorPacket?.expectedSelectedIndexSha256 || !lastState.tensorPacket?.expectedSelectedScoreSha256 || !lastState.tensorPacket?.expectedSelectedBoxSha256) {
         throw new Error('DETR stack selection tensorPacket identity missing');
       }
@@ -416,6 +467,7 @@ async function main() {
       if (lastState.parity?.selectedScoreMaxAbsDiff > 0.00001) throw new Error('DETR stack selected score parity exceeds tolerance');
       if (lastState.parity?.selectedBoxMaxAbsDiff > 0.0001) throw new Error('DETR stack selected box parity exceeds tolerance');
       if (lastState.parity?.binaryMismatchCount > 8) throw new Error('DETR stack selection binary mask parity exceeds tolerance');
+      if (packetMode === DETECTOR_STACK_PACKET_MODE) assertDetectorStackEvidence(lastState);
     } else if (packetMode === 'mlx-detr-stack-scoring-export') {
       if (!lastState.tensorPacket?.encoderSrcSha256 || !lastState.tensorPacket?.encoderPosSha256 || !lastState.tensorPacket?.expectedEncoderHiddenStatesSha256 || !lastState.tensorPacket?.expectedDecoderHiddenStatesSha256 || !lastState.tensorPacket?.expectedLastHsSha256 || !lastState.tensorPacket?.expectedReferenceBoxesSha256 || !lastState.tensorPacket?.expectedPresenceLogitsSha256 || !lastState.tensorPacket?.expectedPredLogitsSha256 || !lastState.tensorPacket?.pixelEmbedSha256 || !lastState.tensorPacket?.weightsSha256) {
         throw new Error('DETR stack scoring tensorPacket identity missing');

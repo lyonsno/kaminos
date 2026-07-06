@@ -17,6 +17,8 @@ SCORING_SCHEMA = "kaminos.sam3-detr-stack-scoring-real-boundary-packet.v0"
 SCORING_BOUNDARY = "sam3-detector-detr-encoder-decoder-scoring-mask-tail-phase-program"
 SELECTION_SCHEMA = "kaminos.sam3-detr-stack-selection-real-boundary-packet.v0"
 SELECTION_BOUNDARY = "sam3-detector-detr-encoder-decoder-scoring-selection-mask-tail-phase-program"
+DETECTOR_STACK_SCHEMA = "kaminos.sam3-detector-stack-real-boundary-packet.v0"
+DETECTOR_STACK_BOUNDARY = "sam3-detector-stack-browser-local-detector-mask-phase-program"
 
 
 def load_tool_module(filename: str, name: str):
@@ -41,6 +43,7 @@ def parse_args():
     parser.add_argument("--resolution", type=int, default=224)
     parser.add_argument("--include-scoring", action="store_true", help="Also export SAM3 dot-product scoring tensors and weights for composed browser execution.")
     parser.add_argument("--include-selection", action="store_true", help="Also export SAM3 score threshold/object-selection postprocess expectations.")
+    parser.add_argument("--detector-stack", action="store_true", help="Export the canonical detector-stack witness packet with DETR, scoring, selection, and mask-tail expectations.")
     parser.add_argument("--score-threshold", type=float, default=0.5)
     return parser.parse_args()
 
@@ -99,7 +102,8 @@ def main():
     source_path = out_dir / "source-image.png"
     image.resize((args.resolution, args.resolution), Image.BILINEAR).save(source_path)
     ref = encoder_tool.run_reference(model, image, args.prompt, args.resolution)
-    include_scoring = args.include_scoring or args.include_selection
+    include_selection = args.include_selection or args.detector_stack
+    include_scoring = args.include_scoring or include_selection
     shape = {
         "batch": int(ref["last_hs"].shape[0]),
         "channels": int(ref["last_hs"].shape[2]),
@@ -129,7 +133,7 @@ def main():
     encoder_tool.add_tensor(tensor_entries, out_dir, "expected-presence-logits", "expected-presence-logits.f32.bin", ref["presence_logits_full"], [shape["layerCount"], shape["batch"], 1], "L,B,1")
     if include_scoring:
         encoder_tool.add_tensor(tensor_entries, out_dir, "expected-pred-logits", "expected-pred-logits.f32.bin", ref["all_pred_logits"], [shape["layerCount"], shape["batch"], shape["queryTokens"], 1], "L,B,Q,1")
-    if args.include_selection:
+    if include_selection:
         selection = selection_reference(ref, args.resolution, args.score_threshold)
         encoder_tool.add_tensor(tensor_entries, out_dir, "expected-selection-scores", "expected-selection-scores.f32.bin", selection["scores"], [shape["batch"], shape["queryTokens"]], "B,Q")
         encoder_tool.add_tensor(tensor_entries, out_dir, "expected-selection-boxes", "expected-selection-boxes.f32.bin", selection["boxes"], [shape["batch"], shape["queryTokens"], 4], "B,Q,4")
@@ -156,19 +160,27 @@ def main():
         "framework": {"name": "mlx-vlm", "root": str(Path(os.environ.get("KAMINOS_MLX_VLM_ROOT", Path.cwd())).resolve()), "execution": "uv-run"},
     }
     manifest = {
-        "schema": SELECTION_SCHEMA if args.include_selection else SCORING_SCHEMA if include_scoring else SCHEMA,
+        "schema": DETECTOR_STACK_SCHEMA if args.detector_stack else SELECTION_SCHEMA if include_selection else SCORING_SCHEMA if include_scoring else SCHEMA,
         "routeId": ROUTE_ID,
-        "mode": "mlx-detr-stack-selection-export" if args.include_selection else "mlx-detr-stack-scoring-export" if include_scoring else "mlx-detr-stack-export",
-        "boundary": SELECTION_BOUNDARY if args.include_selection else SCORING_BOUNDARY if include_scoring else BOUNDARY,
+        "mode": "mlx-detector-stack-export" if args.detector_stack else "mlx-detr-stack-selection-export" if include_selection else "mlx-detr-stack-scoring-export" if include_scoring else "mlx-detr-stack-export",
+        "boundary": DETECTOR_STACK_BOUNDARY if args.detector_stack else SELECTION_BOUNDARY if include_selection else SCORING_BOUNDARY if include_scoring else BOUNDARY,
         "createdAt": datetime.now(timezone.utc).isoformat(),
         "reference": reference,
         "model": {"id": args.model, "role": "mlx-reference-upstream"},
         "prompt": {"text": args.prompt, "sha256": encoder_tool.sha256_bytes(args.prompt.encode("utf-8"))},
         "sourceImage": {"artifactId": f"image:{image_path.name}:sam3-reference-source", "file": "source-image.png", "path": str(source_path), "sha256": encoder_tool.sha256_file(source_path), "originalPath": str(image_path), "resolution": [args.resolution, args.resolution]},
-        "staticWeights": {"artifactId": f"sam3-weights:{args.model}:detr-stack-reference-upstream", "sha256": weights_sha, "role": "reference-upstream", "reason": "weights exported for browser DETR encoder, DETR decoder, dot-product scoring, selection postprocess, and downstream mask-tail phase-program execution" if args.include_selection else "weights exported for browser DETR encoder, DETR decoder, dot-product scoring, and downstream mask-tail phase-program execution" if include_scoring else "weights exported for browser DETR encoder, DETR decoder, and downstream mask-tail phase-program execution"},
+        "staticWeights": {"artifactId": f"sam3-weights:{args.model}:detr-stack-reference-upstream", "sha256": weights_sha, "role": "reference-upstream", "reason": "weights exported for browser DETR encoder, DETR decoder, dot-product scoring, selection postprocess, and downstream mask-tail phase-program execution" if include_selection else "weights exported for browser DETR encoder, DETR decoder, dot-product scoring, and downstream mask-tail phase-program execution" if include_scoring else "weights exported for browser DETR encoder, DETR decoder, and downstream mask-tail phase-program execution"},
         "shape": shape,
-        "claims": {"fullSam3BrowserExecution": False, "upstream": "mlx-vlm-sam3-detector-reference", "browserExecutedStages": ["detr-encoder", "detr-decoder", *(['dot-product-scoring'] if include_scoring else []), *(['score-threshold', 'box-postprocess', 'object-selection'] if args.include_selection else []), "mask-embedder", "instance-projection", "decode-mask", "threshold-mask"]},
-        "postprocess": {"scoreThreshold": args.score_threshold, "nms": False} if args.include_selection else None,
+        "claims": {"fullSam3BrowserExecution": False, "upstream": "mlx-vlm-sam3-detector-reference", "browserExecutedStages": ["detr-encoder", "detr-decoder", *(['dot-product-scoring'] if include_scoring else []), *(['score-threshold', 'box-postprocess', 'object-selection'] if include_selection else []), "mask-embedder", "instance-projection", "decode-mask", "threshold-mask"]},
+        "upstreamBoundaries": [
+            {"role": "source-image", "owner": "mlx-vlm-reference", "status": "mlx-owned", "nextBrowserIsland": "image-preprocess-and-vision-encoder"},
+            {"role": "encoder-src", "owner": "mlx-vlm-reference", "status": "mlx-owned", "nextBrowserIsland": "image-text-detr-encoder-inputs"},
+            {"role": "encoder-pos", "owner": "mlx-vlm-reference", "status": "mlx-owned", "nextBrowserIsland": "image-text-detr-encoder-inputs"},
+            {"role": "prompt-features", "owner": "mlx-vlm-reference", "status": "mlx-owned", "nextBrowserIsland": "text-token-prompt-encoder"},
+            {"role": "prompt-mask", "owner": "mlx-vlm-reference", "status": "mlx-owned", "nextBrowserIsland": "text-token-prompt-encoder"},
+            {"role": "pixel-embed", "owner": "mlx-vlm-reference", "status": "mlx-owned", "nextBrowserIsland": "image-encoder-pixel-embedding"},
+        ] if args.detector_stack else None,
+        "postprocess": {"scoreThreshold": args.score_threshold, "nms": False} if include_selection else None,
         "tolerances": {"encoderHiddenStatesMaxAbsDiff": 0.0003, "lastHsMaxAbsDiff": 0.0006, "decoderHiddenStatesMaxAbsDiff": 0.0006, "referenceBoxesMaxAbsDiff": 0.0006, "presenceLogitsMaxAbsDiff": 0.0006, "predLogitsMaxAbsDiff": 0.0005, "selectedIndexMaxAbsDiff": 0, "selectedScoreMaxAbsDiff": 0.00001, "selectedBoxMaxAbsDiff": 0.0001, "selectionScoresMaxAbsDiff": 0.00001, "selectionBoxesMaxAbsDiff": 0.0002, "selectionKeepMismatchCount": 0, "maskEmbeddingsMaxAbsDiff": 0.0001, "upscaledEmbeddingMaxAbsDiff": 0.0001, "webGpuLogitsMaxAbsDiff": 0.001, "cpuOracleBinaryMismatchCount": 8, "binaryMismatchCount": 8},
         "visualization": {"selectedMaskIndex": int(ref["selected"]), "selectedMaskScore": float(ref["scores"][ref["selected"]]), "presenceLogits": [float(x) for x in ref["presence"]]},
         "tensors": tensor_entries,
