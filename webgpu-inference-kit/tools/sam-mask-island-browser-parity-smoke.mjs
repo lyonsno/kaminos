@@ -117,6 +117,8 @@ function detectorStackReport(state) {
     parity: state.parity || null,
     selectedIndex: detectorStackEvidence.selectedIndex,
     selectedScore: detectorStackEvidence.selectedScore,
+    visualSelectedMaskIndex: state.selectedMaskIndex,
+    selectedMaskIndexSource: state.selectedMaskIndexSource,
   };
 }
 
@@ -139,6 +141,7 @@ function assertDetectorStackEvidence(state) {
   if (report.nonClaims?.fullSam3BrowserExecution !== true || report.nonClaims?.browserLocalVisionEncoder !== true || report.nonClaims?.browserLocalTextEncoder !== true || report.nonClaims?.nms !== true) throw new Error('canonical detectorStack bounded non-claims missing');
   const selectionEmptyEvidenceRejected = Number(report.selectedScore || 0) <= 0;
   if (selectionEmptyEvidenceRejected) throw new Error('canonical detectorStack selected-object evidence is empty');
+  if (report.visualSelectedMaskIndex !== report.selectedIndex || report.selectedMaskIndexSource !== 'detector-selection') throw new Error('canonical detectorStack visual selected mask drift');
   if (report.parity?.selectionKeepMismatchCount > 0) throw new Error('canonical detectorStack keep mask mismatch');
   if (report.parity?.selectedIndexMaxAbsDiff > 0) throw new Error('canonical detectorStack selected index mismatch');
   return report;

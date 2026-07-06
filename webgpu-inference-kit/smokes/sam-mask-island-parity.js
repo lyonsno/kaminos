@@ -1938,12 +1938,11 @@ async function main() {
     const sourceImageUrl = manifest.sourceImage?.file ? resolveManifestFile(manifest.sourceImage.file) : null;
     const sourceImage = sourceImageUrl ? await loadImage(sourceImageUrl) : null;
     if (sourceImageUrl) sourceImageEl.src = sourceImageUrl;
-    const selectedMaskIndex = Number.isInteger(manifest.visualization?.selectedMaskIndex)
+    const legacySelectedMaskIndex = Number.isInteger(manifest.visualization?.selectedMaskIndex)
       ? manifest.visualization.selectedMaskIndex
       : 0;
-    if (hasMaskOutput && (selectedMaskIndex < 0 || selectedMaskIndex >= manifest.shape.maskTokens)) {
-      throw new Error(`selectedMaskIndex ${selectedMaskIndex} out of range`);
-    }
+    let selectedMaskIndex = legacySelectedMaskIndex;
+    let selectedMaskIndexSource = 'manifest-visualization';
 
     const binaryTolerance = manifest.tolerances?.binaryMismatchCount ?? 0;
     const cpuOracleBinaryTolerance = manifest.tolerances?.cpuOracleBinaryMismatchCount ?? binaryTolerance;
@@ -2256,6 +2255,16 @@ async function main() {
       selectedScore: result.debugReadback.selectedScore ? Array.from(new Float32Array(result.debugReadback.selectedScore).slice(0, 8)) : undefined,
       expectedSelectedScore: payload.expectedSelectedScore ? Array.from(payload.expectedSelectedScore.slice(0, 8)) : undefined,
     };
+    const detectorSelectedMaskIndex = Number.isInteger(debugReadbackSamples.selectedIndex?.[0])
+      ? debugReadbackSamples.selectedIndex[0]
+      : null;
+    if (payload.detectorStackEvidence && detectorSelectedMaskIndex !== null) {
+      selectedMaskIndex = detectorSelectedMaskIndex;
+      selectedMaskIndexSource = 'detector-selection';
+    }
+    if (hasMaskOutput && (selectedMaskIndex < 0 || selectedMaskIndex >= manifest.shape.maskTokens)) {
+      throw new Error(`selectedMaskIndex ${selectedMaskIndex} out of range`);
+    }
     state.parity = parity;
     state.debugReadbackSamples = debugReadbackSamples;
     state.routeReceipt = result.receipt;
@@ -2270,6 +2279,8 @@ async function main() {
       parity,
       selectedIndex: debugReadbackSamples.selectedIndex?.[0],
       selectedScore: debugReadbackSamples.selectedScore?.[0],
+      visualSelectedMaskIndex: selectedMaskIndex,
+      selectedMaskIndexSource,
     } : null;
     if (
       (parity.encoderHiddenStatesMaxAbsDiff ?? 0) > gpuEncoderTolerance
@@ -2313,6 +2324,7 @@ async function main() {
     state.effectiveRouteId = result.receipt.effectiveRouteId;
     state.sourceImage = manifest.sourceImage || null;
     state.selectedMaskIndex = selectedMaskIndex;
+    state.selectedMaskIndexSource = selectedMaskIndexSource;
     state.tensorPacket = {
       manifestUrl,
       schema: manifest.schema,

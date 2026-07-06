@@ -30,6 +30,7 @@
     "test:live:sam-prompt-fpn": "node tests/sam-prompt-fpn-mlx-packet-contracts.mjs",
     "test:live:sam-detr-encoder": "node tests/sam-detr-encoder-mlx-packet-contracts.mjs",
     "test:live:sam-detr-decoder": "node tests/sam-detr-decoder-mlx-packet-contracts.mjs",
-    "test:live:sam-scoring": "node tests/sam-scoring-mlx-packet-contracts.mjs"
+    "test:live:sam-scoring": "node tests/sam-scoring-mlx-packet-contracts.mjs",
+    "test:live:sam-detector-stack": "node tools/sam-mask-island-browser-parity-smoke.mjs --packet-mode mlx-detector-stack-export --score-threshold 0.1 --out /tmp/kaminos-sam-detector-stack-live.png --report /tmp/kaminos-sam-detector-stack-live.json --debug-port 9542 --server-port 18542 --hook-wait-ms 30000 --cdp-timeout-ms 30000"
   }
 }
