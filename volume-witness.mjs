@@ -2950,6 +2950,7 @@ async function main() {
             inputChannels: featureCapture.inputChannels,
             channelLayout: featureCapture.channelLayout,
             source: featureCapture.source,
+            sourcePassApplied: featureCapture.sourcePassApplied,
           } : null,
           simReadback: simReadback ? {
             grid: simReadback.grid,
@@ -3003,6 +3004,7 @@ async function main() {
             inputChannels: featureCapture.inputChannels,
             channelLayout: featureCapture.channelLayout,
             source: featureCapture.source,
+            sourcePassApplied: featureCapture.sourcePassApplied,
           } : null,
           preview: previewPath,
           report: captureReportPath,
@@ -3198,6 +3200,7 @@ async function main() {
               inputChannels: featureCapture.inputChannels,
               channelLayout: featureCapture.channelLayout,
               source: featureCapture.source,
+              sourcePassApplied: featureCapture.sourcePassApplied,
             } : null,
             simReadback: simReadback ? {
               grid: simReadback.grid,
@@ -3257,6 +3260,7 @@ async function main() {
               inputChannels: featureCapture.inputChannels,
               channelLayout: featureCapture.channelLayout,
               source: featureCapture.source,
+              sourcePassApplied: featureCapture.sourcePassApplied,
             } : null,
             report: captureReportPath,
           });

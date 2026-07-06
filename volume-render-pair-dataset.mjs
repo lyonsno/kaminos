@@ -10,6 +10,7 @@ const FRAME_LOCKED_PAIR_AUTHORITY = 'frame-locked-render-scale-set-v0';
 const WITNESS_BROWSER_REUSE_IDENTITY = 'shared-headful-cdp-browser-v0';
 const WITNESS_BROWSER_ATTACH_IDENTITY = 'attach-or-launch-shared-cdp-browser-v0';
 const RESIDUAL_FEATURE_AUTHORITY = 'shader-material-authority-residual-feature-v0';
+const RESIDUAL_FEATURE_IMAGE_AUTHORITY = 'gpu-feature-texture-rgba8-readback-frozen-sim-state-source-pass';
 const DEFAULT_BASE_URL = 'http://127.0.0.1:8097/?kaminos_volume_smoke=1&volume_scene=tall_plume&volume_tall_preset=operator_fire_0622&volume_resolution=128&volume_majorant_grid=48&volume_steps=148&volume_adaptive_rays=0.75&volume_density=3.05&volume_fire=0.50&volume_radiance=3&volume_absorption=0&volume_glow=2.5&volume_smoke=2.8&volume_curl=3.5&volume_microdetail=2.5&volume_interface_shred=0&volume_fire_licks=0&volume_projection=1.5&volume_speed=5&volume_fire_scale=0.59&volume_detail_scale=0.45&volume_plume_height=2.2&volume_wind_strength=0&volume_wind_angle=180&volume_wind_height=-0.8&volume_input_radius=0.11&volume_flow_rate=0.35&volume_reaction_fuel=1&volume_majorant_cadence=1&volume_pressure_iterations=2&volume_pressure_strategy=global&volume_sim_profile=1&volume_temporal_accum=0&volume_temporal_jitter=0&volume_history_clamp=1&volume_occupancy_skip=0.1&volume_majorant_skip=0&volume_majorant_smooth=0.1&volume_majorant_guard=0.3';
 
 function parseArgs(argv) {
@@ -551,7 +552,7 @@ const pairs = lowRenderScales.map((lowRenderScale, index) => {
     featureCapture: featureCaptures ? {
       requested: true,
       featureAuthority: RESIDUAL_FEATURE_AUTHORITY,
-      imageAuthority: 'gpu-feature-texture-rgba8-readback-frozen-sim-state',
+      imageAuthority: RESIDUAL_FEATURE_IMAGE_AUTHORITY,
       inputChannels: 4,
       channelLayout: 'radiance-fire-interface-smoke',
     } : null,
