@@ -71,6 +71,7 @@ h2 { font-size: 11px; font-weight: 600; margin: 18px 0 8px; color: #666; text-tr
     .sharp-breathing-room-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 9px 0; }
     .kiln-route-bench-actions .btn,
     .sharp-breathing-room-actions .btn { width: 100%; margin: 0; }
+    .kiln-route-bench-actions .comparison { grid-column: 1 / -1; }
     .sharp-breathing-room-status { min-height: 30px; color: #d8c37a; font-size: 11px; line-height: 1.35; margin-top: 7px; }
     .sharp-breathing-room-source { color: #888; font: 10px 'SF Mono', monospace; overflow-wrap: anywhere; margin-top: 5px; }
     .sharp-breathing-room-source-preview { border: 1px solid #2d2d2d; border-radius: 7px; background: #141414; min-height: 150px; margin: 8px 0; overflow: hidden; display: flex; align-items: center; justify-content: center; }
@@ -2313,6 +2314,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
       <div class="kiln-route-bench-actions sharp-breathing-room-actions">
         <button type="button" class="btn" id="sharp-breathing-room-default-button" onclick="runSharpBreathingRoomProfile('baseline-default')">Run default</button>
         <button type="button" class="btn" id="sharp-breathing-room-friendly-button" onclick="runSharpBreathingRoomProfile('cooperative-spn-gaussian')">Run friendly</button>
+        <button type="button" class="btn comparison" id="sharp-breathing-room-comparison-button" onclick="runSharpBreathingRoomComparison()">Run comparison</button>
       </div>
       <div class="sharp-breathing-room-source" id="sharp-breathing-room-source-summary">Select an image asset below or paste an image source.</div>
       <div class="sharp-breathing-room-status" id="sharp-breathing-room-status">Choose an image, pick a route, and cook it into an asset. Friendly gives SHARP more room when the box is busy; default is the comparison path.</div>
@@ -12377,6 +12379,7 @@ let kilnRouteBenchState = {
   status: 'idle',
   message: 'Choose an image, pick a route, and cook it into an asset.',
   runningProfileId: null,
+  comparisonRuns: [],
   source: null,
   result: null,
   updatedAt: null,
@@ -12595,6 +12598,11 @@ function renderKilnRouteBench() {
     button.textContent = sharpBreathingRoomRunningProfileId === action.profileId
       ? (action.runningLabel || `Running ${labelText.toLowerCase()}`)
       : (action.buttonLabel || `Run ${labelText.toLowerCase()}`);
+  }
+  const comparisonButton = document.getElementById('sharp-breathing-room-comparison-button');
+  if (comparisonButton) {
+    comparisonButton.disabled = running;
+    comparisonButton.textContent = running ? 'Running comparison' : 'Run comparison';
   }
 }
 
@@ -16352,6 +16360,86 @@ async function runSharpBreathingRoomProfile(profileId) {
   return runKilnRouteBenchRoute('sharp-image-to-splat-live-v0', profileId);
 }
 
+async function runSharpBreathingRoomComparison() {
+  const route = selectedKilnRouteBenchRoute('sharp-image-to-splat-live-v0');
+  const source = kilnRouteBenchSelectedSource(route);
+  const startedAt = new Date().toISOString();
+  const comparisonState = {
+    schema: 'kaminos.sharp-breathing-room-comparison-state.v0',
+    routeId: route.id,
+    source,
+    startedAt,
+    status: 'running',
+    mode: 'sequential-default-then-friendly',
+    comparisonRuns: [],
+  };
+  window.__kaminosSharpBreathingRoomComparisonState = comparisonState;
+  if (!source?.source) {
+    comparisonState.status = 'failed';
+    comparisonState.finishedAt = new Date().toISOString();
+    comparisonState.error = route.missingSourceCopy || 'Select a source before running this route.';
+    window.__kaminosSharpBreathingRoomComparisonState = comparisonState;
+    setKilnRouteBenchStatus(comparisonState.error, 'error', {
+      routeId: route.id,
+      source,
+      comparisonRuns: comparisonState.comparisonRuns,
+    });
+    return comparisonState;
+  }
+  setKilnRouteBenchStatus('Default then friendly: Kaminos will run the two SHARP routes one after the other on this image.', 'running', {
+    routeId: route.id,
+    source,
+    comparisonRuns: comparisonState.comparisonRuns,
+  });
+  const steps = [
+    { profileId: 'baseline-default', label: 'Default' },
+    { profileId: 'cooperative-spn-gaussian', label: 'Friendly' },
+  ];
+  for (const step of steps) {
+    let run = null;
+    try {
+      run = await runKilnRouteBenchRoute('sharp-image-to-splat-live-v0', step.profileId);
+    } catch (err) {
+      run = {
+        ok: false,
+        pipelineId: route.pipelineId,
+        error: err?.message || String(err),
+      };
+    }
+    comparisonState.comparisonRuns.push({
+      profileId: step.profileId,
+      label: step.label,
+      ok: run?.ok === true,
+      runId: run ? pipelineRunDisplayId(run) : null,
+      report: run?.report?.path || null,
+      artifact: pipelinePrimaryRunArtifact(run)?.path || null,
+      error: run?.ok === false ? pipelineRunFailureSummary(run) : null,
+    });
+    window.__kaminosSharpBreathingRoomComparisonState = comparisonState;
+    if (!run?.ok) {
+      comparisonState.status = 'failed';
+      comparisonState.finishedAt = new Date().toISOString();
+      setKilnRouteBenchStatus(`${step.label} failed during the default-then-friendly comparison. ${pipelineRunFailureSummary(run)}`.trim(), 'error', {
+        routeId: route.id,
+        source,
+        result: run,
+        comparisonRuns: comparisonState.comparisonRuns,
+      });
+      return comparisonState;
+    }
+  }
+  comparisonState.status = 'complete';
+  comparisonState.finishedAt = new Date().toISOString();
+  window.__kaminosSharpBreathingRoomComparisonState = comparisonState;
+  setKilnRouteBenchStatus('Default then friendly comparison finished. Check the two run reports for route timing, scheduler proof, and flame behavior.', 'complete', {
+    routeId: route.id,
+    source,
+    comparisonRuns: comparisonState.comparisonRuns,
+    result: comparisonState.comparisonRuns.at(-1) || null,
+  });
+  return comparisonState;
+}
+
 async function runSelectedPipeline(options = {}) {
   const source = options.sourceOverride || pipelineSelectedSource();
   if (!source?.source) {
@@ -16416,6 +16504,7 @@ window.runSelectedPipeline = runSelectedPipeline;
 window.runKilnRouteBenchRoute = runKilnRouteBenchRoute;
 window.renderKilnRouteBench = renderKilnRouteBench;
 window.runSharpBreathingRoomProfile = runSharpBreathingRoomProfile;
+window.runSharpBreathingRoomComparison = runSharpBreathingRoomComparison;
 window.selectPipelineGenerator = selectPipelineGenerator;
 window.pipelineLoadSelectedSource = pipelineLoadSelectedSource;
 window.pipelineLoadRunSplatArtifact = pipelineLoadRunSplatArtifact;
