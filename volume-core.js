@@ -8266,12 +8266,15 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     }
     const controlsBefore = { ...controlsSnapshot };
     const renderScale = normalizeRenderScale(options.renderScale ?? controlsSnapshot.renderScale);
+    const controlOverrides = options.controlOverrides && typeof options.controlOverrides === 'object'
+      ? { ...options.controlOverrides }
+      : {};
     const fixedNow = Number.isFinite(Number(options.now)) ? Number(options.now) : performance.now();
     const sameStateCaptureId = options.sameStateCaptureId ? String(options.sameStateCaptureId) : null;
     const baseFrameCount = Number.isFinite(Number(options.baseFrameCount)) ? Number(options.baseFrameCount) : state.frameCount;
     const baseSimStepCount = Number.isFinite(Number(options.baseSimStepCount)) ? Number(options.baseSimStepCount) : state.simStepCount;
     try {
-      controlsSnapshot = applyRuntimeQualityControls({ ...controlsSnapshot, renderScale });
+      controlsSnapshot = applyRuntimeQualityControls({ ...controlsSnapshot, ...controlOverrides, renderScale });
       resetTemporalHistory('same-state-render-scale-canvas-capture');
       updateUniforms(fixedNow);
       const encoder = device.createCommandEncoder({ label: 'kaminos frozen render-scale canvas capture' });
@@ -8302,6 +8305,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         ok: true,
         sampleAuthority: 'render-only-frozen-sim-state',
         imageAuthority: 'cdp-canvas-clip-capture-after-render-only-frozen-sim-state',
+        controlOverrides,
         featureCapture: featureCapture ? {
           ...featureCapture,
           featureAuthority: BROWSER_RESIDUAL_FEATURE_AUTHORITY,

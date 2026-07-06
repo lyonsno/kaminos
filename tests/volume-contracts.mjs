@@ -1822,10 +1822,14 @@ const controlledStepVariantStart = renderPairCorpus.indexOf('function runControl
 const controlledStepVariantSummaryStart = renderPairCorpus.indexOf('const summary = {', controlledStepVariantStart);
 const controlledStepVariantCommandBlock = renderPairCorpus.slice(controlledStepVariantStart, controlledStepVariantSummaryStart);
 assert.match(controlledStepVariantCommandBlock, /--render-scale-feature-captures/, 'render-pair corpus forwards requested feature captures through controlled-step witness captures');
+assert.match(controlledStepVariantCommandBlock, /--render-scale-auxiliary-captures/, 'render-pair corpus forwards requested Flow Debug/interface auxiliary captures through controlled-step witness captures');
 assert.match(fieldSliceWitness, /sampleRenderScaleSet/, 'volume witness invokes the browser-side same-state render-scale set API');
 assert.match(fieldSliceWitness, /renderFrozenScaleToCanvas/, 'volume witness renders each same-state scale to the visible canvas before image capture');
 assert.match(fieldSliceWitness, /imageAuthority/, 'volume witness preserves screenshot authority for frozen-state scale images');
 assert.match(fieldSliceWitness, /sourcePassApplied/, 'volume witness preserves whether feature captures came from the frozen source pass');
+assert.match(fieldSliceWitness, /--render-scale-auxiliary-captures/, 'volume witness exposes auxiliary render-scale captures for debug-conditioning images');
+assert.match(fieldSliceWitness, /flowDebug/, 'volume witness labels the Flow Debug/interface auxiliary capture separately from residual material features');
+assert.match(fieldSliceWitness, /controlOverrides:\s*\{\s*flowDebug:\s*1\s*\}/, 'Flow Debug auxiliary capture must use the flow/interface debug control override');
 assert.match(fieldSliceWitness, /canvasCssRect/, 'volume witness records canvas clip bounds for clean training images');
 assert.match(fieldSliceWitness, /Page\.captureScreenshot[\s\S]*clip/, 'volume witness captures clean canvas clips instead of full-page UI screenshots for render-scale pairs');
 assert.match(fieldSliceWitness, /fps-counter/, 'volume witness suppresses the in-viewport FPS HUD during clean render-scale pair capture');
@@ -1842,6 +1846,8 @@ assert.match(core, /renderFrozenScaleToCanvas/, 'volume core exposes render-only
 const renderFrozenScaleToCanvasStart = core.indexOf('async function renderFrozenScaleToCanvas');
 const renderFrozenScaleToCanvasEnd = core.indexOf('async function sampleRenderScaleSet', renderFrozenScaleToCanvasStart);
 const renderFrozenScaleToCanvasBody = core.slice(renderFrozenScaleToCanvasStart, renderFrozenScaleToCanvasEnd);
+assert.match(renderFrozenScaleToCanvasBody, /controlOverrides/, 'frozen render-scale canvas capture accepts explicit render-only control overrides for auxiliary debug captures');
+assert.match(renderFrozenScaleToCanvasBody, /\.\.\.controlsSnapshot,\s*\.\.\.controlOverrides,\s*renderScale/, 'frozen render-scale control overrides must be applied before renderScale so requested scale remains authoritative');
 assert.match(renderFrozenScaleToCanvasBody, /includeFeatureRgba[\s\S]*encodeBrowserResidualSourcePass/, 'frozen feature captures must render the residual source MRT for the requested frozen scale instead of reading a stale feature texture');
 assert.match(renderFrozenScaleToCanvasBody, /encodeDraw\(encoder,\s*currentTexture\.createView\(\),\s*'kaminos frozen render-scale canvas pass'\)[\s\S]*includeFeatureRgba[\s\S]*ensureFrameTexture\(\)[\s\S]*encodeBrowserResidualSourcePass\(encoder,\s*frameTexture\.createView\(\),\s*browserResidualFeatureTexture\.createView\(\)\)/, 'frozen feature captures must preserve the normal visible RGB draw and render feature MRT into an offscreen frame texture');
 assert.doesNotMatch(renderFrozenScaleToCanvasBody, /encodeBrowserResidualSourcePass\(encoder,\s*currentTexture\.createView\(\),\s*browserResidualFeatureTexture\.createView\(\)\)/, 'frozen feature source pass must not overwrite the visible canvas texture');

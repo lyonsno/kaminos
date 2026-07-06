@@ -152,8 +152,18 @@ assert.match(
 );
 assert.match(
   trainer,
+  /aux-rgba/,
+  'residual trainer must support low RGB plus auxiliary debug RGBA as a 7-channel model input',
+);
+assert.match(
+  trainer,
   /shader-material-authority-residual-feature-v0/,
   'residual trainer must preserve shader/material feature authority instead of treating feature inputs as screen-space proxies',
+);
+assert.match(
+  trainer,
+  /flow-debug-interface-canvas-capture-v0/,
+  'residual trainer must preserve Flow Debug/interface authority instead of treating auxiliary inputs as residual feature planes',
 );
 assert.match(
   trainer,
@@ -164,6 +174,11 @@ assert.match(
   trainer,
   /featurePath/,
   'residual trainer must load per-pair feature images from the corpus rather than synthesizing hidden proxy features',
+);
+assert.match(
+  trainer,
+  /auxiliaryCaptures/,
+  'residual trainer must load auxiliary debug images from the corpus rather than hiding them behind featurePath',
 );
 assert.match(
   greenroomRunner,
