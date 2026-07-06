@@ -8,6 +8,7 @@ const REPORT_SCHEMA = 'kaminos.sam3-mask-island.browser-parity-smoke.v0';
 const MASK_DECODER_ISLAND_ROUTE_ID = 'sam3.mask-decoder-island.webgpu-local.v0';
 const MASK_TAIL_PHASE_PROGRAM_ROUTE_ID = 'sam3.mask-tail.phase-program.webgpu-local.v0';
 const PIXEL_DECODER_PHASE_PROGRAM_ROUTE_ID = 'sam3.pixel-decoder.phase-program.webgpu-local.v0';
+const PROMPT_FPN_PHASE_PROGRAM_ROUTE_ID = 'sam3.prompt-fpn.phase-program.webgpu-local.v0';
 
 const args = new Map();
 for (let i = 2; i < process.argv.length; i += 2) {
@@ -24,7 +25,9 @@ const userDataDir = args.get('--user-data-dir') || `/tmp/kaminos-sam-mask-island
 const oracleDir = resolve(args.get('--oracle-dir') || `/tmp/kaminos-sam-mask-island-oracle-${process.pid}`);
 const packetMode = args.get('--packet-mode') || 'synthetic';
 const packetTool = resolve(args.get('--packet-tool') || (
-  packetMode === 'mlx-pixel-decoder-export'
+  packetMode === 'mlx-prompt-fpn-export'
+    ? join(packageRoot, 'tools/sam-prompt-fpn-mlx-packet.py')
+    : packetMode === 'mlx-pixel-decoder-export'
     ? join(packageRoot, 'tools/sam-pixel-decoder-mlx-packet.py')
     : packetMode === 'mlx-mask-tail-export'
     ? join(packageRoot, 'tools/sam-mask-tail-mlx-packet.py')
@@ -35,7 +38,9 @@ const packetTool = resolve(args.get('--packet-tool') || (
 const mlxVlmRoot = resolve(args.get('--mlx-vlm-root') || process.env.KAMINOS_MLX_VLM_ROOT || '/Users/noahlyons/dev/mlx-vlm');
 const sourceImage = args.get('--image') || process.env.KAMINOS_SAM3_FIXTURE_IMAGE || '/Users/noahlyons/dev/sam3/assets/images/truck.jpg';
 const requestedRouteId = args.get('--route-id') || (
-  packetMode === 'mlx-pixel-decoder-export'
+  packetMode === 'mlx-prompt-fpn-export'
+    ? PROMPT_FPN_PHASE_PROGRAM_ROUTE_ID
+    : packetMode === 'mlx-pixel-decoder-export'
     ? PIXEL_DECODER_PHASE_PROGRAM_ROUTE_ID
     : packetMode === 'mlx-mask-tail-export'
     ? MASK_TAIL_PHASE_PROGRAM_ROUTE_ID
@@ -333,7 +338,13 @@ async function main() {
       throw new Error(`route identity mismatch: ${lastState.requestedRouteId} -> ${lastState.effectiveRouteId}`);
     }
     if (!lastState.backendIdentity?.adapterName) throw new Error('backendIdentity.adapterName missing');
-    if (requestedRouteId === PIXEL_DECODER_PHASE_PROGRAM_ROUTE_ID) {
+    if (requestedRouteId === PROMPT_FPN_PHASE_PROGRAM_ROUTE_ID) {
+      if (!lastState.tensorPacket?.encoderHiddenStatesSha256 || !lastState.tensorPacket?.expectedPromptFpnFeatureSha256 || !lastState.tensorPacket?.weightsSha256) {
+        throw new Error('prompt-FPN tensorPacket identity missing');
+      }
+      if (lastState.parity?.promptFpnMaxAbsDiff > 0.0003) throw new Error('prompt-FPN parity exceeds tolerance');
+      if (lastState.parity?.binaryMismatchCount > 8) throw new Error('prompt-FPN binary mask parity exceeds tolerance');
+    } else if (requestedRouteId === PIXEL_DECODER_PHASE_PROGRAM_ROUTE_ID) {
       if (!lastState.tensorPacket?.fpnFeatureSha256 || !lastState.tensorPacket?.expectedPixelEmbedSha256 || !lastState.tensorPacket?.weightsSha256) {
         throw new Error('pixel-decoder tensorPacket identity missing');
       }
