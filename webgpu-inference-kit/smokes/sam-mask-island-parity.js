@@ -34,6 +34,8 @@ const state = {
   tensorPacket: null,
   backendIdentity: null,
   routeReceipt: null,
+  downstreamRouteReceipt: null,
+  compositionEdge: null,
   parity: null,
   sourceImage: null,
   selectedMaskIndex: null,
@@ -133,6 +135,21 @@ function sourceImageShape(manifest) {
   const [width, height] = resolution;
   if (!Number.isInteger(width) || !Number.isInteger(height) || width <= 0 || height <= 0) return undefined;
   return [height, width, 3];
+}
+
+async function aggregateTensorBundleSha256(kind, entries) {
+  const canonical = JSON.stringify({
+    kind,
+    entries: entries.map(entry => ({
+      role: entry.role,
+      artifactId: entry.artifactId,
+      sha256: entry.sha256,
+      shape: entry.shape,
+    })),
+  });
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(canonical));
+  const bytes = new Uint8Array(digest);
+  return `sha256:${Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('')}`;
 }
 
 function drawBinaryPanel(ctx, values, shape, x, y, width, height, colors) {
@@ -471,6 +488,12 @@ async function loadPixelDecoderPayload(manifest) {
         includeReadback: true,
       });
       const gpuPixelEmbed = new Float32Array(pixelResult.debugReadback.pixelEmbed);
+      const pixelEmbedOutput = pixelResult.receipt.outputs.find(output => output.role === 'pixel-embed');
+      if (!pixelEmbedOutput?.sha256 || !pixelEmbedOutput?.artifactId) throw new Error('pixel route output identity missing');
+      const downstreamTensorSha256 = await aggregateTensorBundleSha256('sam3-mask-tail-composed-tensors', [
+        { role: 'last-hs', sha256: lastHsTensor.sha256 },
+        { role: 'pixel-embed', artifactId: pixelEmbedOutput.artifactId, sha256: pixelEmbedOutput.sha256, shape: pixelEmbedOutput.shape },
+      ]);
       const maskRoute = createSam3MaskTailPhaseProgramRouteDefinition({
         model: {
           revision: manifest.model?.id || 'mlx-reference-mask-tail',
@@ -491,7 +514,7 @@ async function loadPixelDecoderPayload(manifest) {
           },
           'sam3-mask-tail-tensors': {
             artifactId: 'sam3-mask-tail-tensors:browser-pixel-decoder-composition',
-            sha256: lastHsTensor.sha256,
+            sha256: downstreamTensorSha256,
           },
           'sam3-mask-tail-weights': {
             artifactId: manifest.staticWeights.artifactId,
@@ -506,6 +529,7 @@ async function loadPixelDecoderPayload(manifest) {
           upstream: manifest.claims?.upstream || 'mlx-reference-pixel-decoder',
           promptHash: manifest.prompt?.sha256,
           composedFrom: pixelResult.receipt?.effectiveRouteId,
+          pixelEmbedOutput,
         },
       });
       const tailResult = await runSam3MaskTailPhaseProgramRoute({
@@ -539,6 +563,12 @@ async function loadPixelDecoderPayload(manifest) {
           pixelEmbed: Array.from(gpuPixelEmbed),
           maskLogits: tailResult.debugReadback.maskLogits,
           binaryMask: tailResult.debugReadback.binaryMask,
+        },
+        compositionEdge: {
+          upstreamRouteId: pixelResult.receipt.effectiveRouteId,
+          downstreamRouteId: tailResult.receipt.effectiveRouteId,
+          pixelEmbedOutput,
+          downstreamTensorSha256,
         },
       };
     },
@@ -642,12 +672,15 @@ async function main() {
       sha256: manifest.sourceImage?.sha256 || 'sha256:synthetic-image',
       shape: sourceImageShape(manifest),
     };
+    const pixelTensorBundleSha256 = manifest.routeId === SAM3_PIXEL_DECODER_PHASE_PROGRAM_ROUTE_ID
+      ? await aggregateTensorBundleSha256('sam3-pixel-decoder-tensors', Object.entries(payload.tensorIdentity.fpnFeatureSha256).map(([role, sha256]) => ({ role, sha256 })))
+      : null;
     const inputArtifacts = manifest.routeId === SAM3_PIXEL_DECODER_PHASE_PROGRAM_ROUTE_ID
       ? {
           'source-image': sourceArtifact,
           'sam3-pixel-decoder-tensors': {
             artifactId: 'sam3-pixel-decoder-tensors:browser-parity',
-            sha256: payload.tensorIdentity.fpnFeatureSha256['fpn-feature-0'],
+            sha256: pixelTensorBundleSha256,
           },
           'sam3-pixel-decoder-weights': {
             artifactId: manifest.staticWeights.artifactId,
@@ -738,6 +771,7 @@ async function main() {
     state.backendIdentity = result.backend;
     state.routeReceipt = result.receipt;
     state.downstreamRouteReceipt = result.downstreamRouteReceipt || null;
+    state.compositionEdge = result.compositionEdge || null;
     state.parity = parity;
     renderSummary({
       status: state.status,

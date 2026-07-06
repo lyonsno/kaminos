@@ -43,8 +43,12 @@ assert.match(smokeJs, /mask-embedder-layer-0-weight/, 'browser smoke must load r
 assert.match(smokeJs, /pixel-decoder-stage-0-conv-weight/, 'browser smoke must load real pixel-decoder weights');
 assert.match(smokeJs, /sourceImage/, 'browser smoke must preserve source image identity');
 assert.match(smokeJs, /sourceImageShape/, 'browser smoke must derive source artifact shape through a named helper');
+assert.match(smokeJs, /aggregateTensorBundleSha256/, 'browser smoke must compute aggregate tensor bundle identities');
 assert.match(smokeJs, /manifest\.sourceImage\?\.resolution/, 'browser smoke must use sourceImage.resolution for source artifact shape when present');
 assert.doesNotMatch(smokeJs, /shape:\s*\[1\]/, 'browser smoke must not put fake placeholder shapes on aggregate packet artifacts');
+assert.doesNotMatch(smokeJs, /sha256:\s*payload\.tensorIdentity\.fpnFeatureSha256\['fpn-feature-0'\]/, 'pixel route receipt must not identify the tensor bundle only by fpn-feature-0');
+assert.match(smokeJs, /pixelResult\.receipt\.outputs/, 'downstream mask-tail receipt must reference the upstream pixel route output');
+assert.match(smokeJs, /pixelEmbedOutput/, 'browser smoke must preserve the pixel output identity as the composition edge');
 assert.match(smokeJs, /selectedMaskIndex/, 'browser smoke must render a selected reference/webgpu mask');
 assert.match(smokeJs, /drawVisualWitness/, 'browser smoke must draw source/reference/webgpu/diff witness panels');
 assert.match(smokeJs, /drawSourcePanel/, 'browser smoke must handle packets without a source image file');

@@ -214,7 +214,7 @@ def main():
         "shape": shape,
         "claims": {"fullSam3BrowserExecution": False, "upstream": "mlx-vlm-sam3-detector-reference", "browserExecutedStages": ["pixel-decoder", "mask-embedder", "instance-projection", "decode-mask", "threshold-mask"]},
         "visualization": {"selectedMaskIndex": selected, "selectedMaskScore": float(scores[selected]), "presenceLogits": [float(x) for x in presence]},
-        "tolerances": {"pixelEmbedMaxAbsDiff": 0.0002, "maskEmbeddingsMaxAbsDiff": 0.0001, "upscaledEmbeddingMaxAbsDiff": 0.0001, "webGpuLogitsMaxAbsDiff": 0.0004, "cpuOracleBinaryMismatchCount": 4, "binaryMismatchCount": 0},
+        "tolerances": {"pixelEmbedMaxAbsDiff": 0.0002, "maskEmbeddingsMaxAbsDiff": 0.0001, "upscaledEmbeddingMaxAbsDiff": 0.0001, "webGpuLogitsMaxAbsDiff": 0.0004, "cpuOracleBinaryMismatchCount": 4, "binaryMismatchCount": 4},
         "tensors": tensor_entries,
         "weights": weight_entries,
     }

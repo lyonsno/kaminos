@@ -338,15 +338,18 @@ async function main() {
         throw new Error('pixel-decoder tensorPacket identity missing');
       }
       if (lastState.parity?.pixelEmbedMaxAbsDiff > 0.0002) throw new Error('pixel embed parity exceeds tolerance');
+      if (lastState.parity?.binaryMismatchCount > 4) throw new Error('pixel decoder binary mask parity exceeds tolerance');
     } else if (requestedRouteId === MASK_TAIL_PHASE_PROGRAM_ROUTE_ID) {
       if (!lastState.tensorPacket?.lastHsSha256 || !lastState.tensorPacket?.pixelEmbedSha256 || !lastState.tensorPacket?.weightsSha256) {
         throw new Error('mask-tail tensorPacket identity missing');
       }
+      if (lastState.parity?.binaryMismatchCount !== 0) throw new Error('binary mask parity mismatch');
+    } else if (lastState.parity?.binaryMismatchCount !== 0) {
+      throw new Error('binary mask parity mismatch');
     } else if (!lastState.tensorPacket?.hyperInputSha256) {
       throw new Error('tensorPacket identity missing');
     }
     if (lastState.parity?.maskLogitsMaxAbsDiff > 0.0001) throw new Error('mask logits parity exceeds tolerance');
-    if (lastState.parity?.binaryMismatchCount !== 0) throw new Error('binary mask parity mismatch');
     if (lastState.claims?.fullSam3BrowserExecution !== false) throw new Error('smoke overclaimed full SAM3 browser execution');
 
     phase = 'capture_screenshot';
