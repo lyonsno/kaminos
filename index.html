@@ -468,6 +468,13 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
 .forge-chamber-kicker { color: #7f9a86; font: 9px 'SF Mono', monospace; text-transform: uppercase; letter-spacing: 0.7px; }
 .forge-chamber-actions { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 9px; }
 .forge-chamber-actions .btn { padding: 4px 8px; margin: 0; font-size: 10px; color: #888; }
+.forge-chamber-host { margin-top: 10px; border: 1px solid #314336; border-radius: 6px; background: #101612; overflow: hidden; }
+.forge-chamber-host-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 7px 8px; border-bottom: 1px solid #26342b; font: 9px 'SF Mono', monospace; color: #91ad99; }
+.forge-chamber-host iframe { width: 100%; height: 360px; border: 0; display: block; background: #0b0f0d; }
+.forge-chamber-host img { display: block; width: 100%; max-height: 360px; object-fit: contain; background: #0b0f0d; }
+.forge-chamber-route-card { padding: 10px; font: 10px 'SF Mono', monospace; color: #a4b6a9; display: grid; gap: 5px; }
+.forge-chamber-route-card a { color: #f0d28a; overflow-wrap: anywhere; }
+.forge-chamber-route-card .reason { color: #d5b668; }
 
 /* LERMS finger juice primitive */
 .finger-juice-readout { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 8px; margin-top: 8px; }
@@ -5418,15 +5425,150 @@ function renderForgeHostOfferList() {
   }
 }
 
+function commandLikeSmokeTarget(targetUrl) {
+  const text = String(targetUrl || '').trim();
+  return /\s/.test(text) && !/^(https?:|\/|\.\/|\.\.\/|\?|#)/i.test(text);
+}
+
+function smokeChamberTargetExtension(pathname) {
+  const match = String(pathname || '').match(/\.([a-z0-9]+)$/i);
+  return match ? match[1].toLowerCase() : '';
+}
+
+function resolveForgeHostSmokeChamberInlineHost(chamber) {
+  const targetUrl = String(chamber?.targetUrl || '').trim();
+  if (!targetUrl) {
+    return {
+      kind: 'route-card',
+      reason: 'missing_target_url',
+      recursive: false,
+      targetUrl: null,
+      effectiveUrl: null,
+    };
+  }
+  if (targetUrl.startsWith('#')) {
+    return {
+      kind: 'route-card',
+      reason: 'anchor_only_target',
+      recursive: false,
+      targetUrl,
+      effectiveUrl: targetUrl,
+    };
+  }
+  if (commandLikeSmokeTarget(targetUrl)) {
+    return {
+      kind: 'route-card',
+      reason: 'non_url_target',
+      recursive: false,
+      targetUrl,
+      effectiveUrl: targetUrl,
+    };
+  }
+  let effective = null;
+  try {
+    effective = new URL(targetUrl, window.location.href);
+  } catch {
+    return {
+      kind: 'route-card',
+      reason: 'unparseable_target_url',
+      recursive: false,
+      targetUrl,
+      effectiveUrl: targetUrl,
+    };
+  }
+  const current = new URL(window.location.href);
+  const recursive = effective.origin === current.origin
+    && effective.pathname === current.pathname
+    && effective.searchParams.has('kaminos_forge_host')
+    && effective.searchParams.get('forge_host_smoke_offer') === chamber?.sourceOffer?.id;
+  if (recursive) {
+    return {
+      kind: 'route-card',
+      reason: 'recursive_forge_host_route',
+      recursive: true,
+      targetUrl,
+      effectiveUrl: effective.href,
+    };
+  }
+  const extension = smokeChamberTargetExtension(effective.pathname);
+  if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'avif'].includes(extension)) {
+    return {
+      kind: 'image',
+      reason: 'image_target',
+      recursive: false,
+      targetUrl,
+      effectiveUrl: effective.href,
+    };
+  }
+  if (
+    effective.origin === window.location.origin
+    || ['html', 'htm', 'md', 'txt'].includes(extension)
+    || targetUrl.startsWith('?')
+  ) {
+    return {
+      kind: 'iframe',
+      reason: 'browser_target',
+      recursive: false,
+      targetUrl,
+      effectiveUrl: effective.href,
+    };
+  }
+  return {
+    kind: 'route-card',
+    reason: 'unsupported_external_target',
+    recursive: false,
+    targetUrl,
+    effectiveUrl: effective.href,
+  };
+}
+
+function renderForgeHostSmokeChamberInlineHost(inlineHost) {
+  const effectiveUrl = inlineHost?.effectiveUrl || inlineHost?.targetUrl || '';
+  const head = `
+    <div class="forge-chamber-host-head">
+      <span>${escapeHtml(inlineHost.kind)}</span>
+      <span>${escapeHtml(inlineHost.reason || 'target')}</span>
+    </div>
+  `;
+  if (inlineHost.kind === 'iframe') {
+    return `
+      <div class="forge-chamber-host" data-forge-chamber-host-kind="iframe" data-forge-chamber-host-reason="${escapeHtml(inlineHost.reason)}">
+        ${head}
+        <iframe data-forge-chamber-inline-frame="true" src="${escapeHtml(effectiveUrl)}" loading="lazy" title="Smoke Chamber Target"></iframe>
+      </div>
+    `;
+  }
+  if (inlineHost.kind === 'image') {
+    return `
+      <div class="forge-chamber-host" data-forge-chamber-host-kind="image" data-forge-chamber-host-reason="${escapeHtml(inlineHost.reason)}">
+        ${head}
+        <img data-forge-chamber-inline-image="true" src="${escapeHtml(effectiveUrl)}" alt="Smoke Chamber target">
+      </div>
+    `;
+  }
+  return `
+    <div class="forge-chamber-host" data-forge-chamber-host-kind="route-card" data-forge-chamber-host-reason="${escapeHtml(inlineHost.reason)}" data-forge-chamber-host-recursive="${inlineHost.recursive ? 'true' : 'false'}">
+      ${head}
+      <div class="forge-chamber-route-card">
+        <div class="reason">${escapeHtml(inlineHost.reason || 'not_embedded')}</div>
+        <a href="${escapeHtml(effectiveUrl || '#')}" target="_blank" rel="noreferrer">${escapeHtml(effectiveUrl || inlineHost.targetUrl || 'missing target')}</a>
+      </div>
+    </div>
+  `;
+}
+
 function renderForgeHostSmokeChamber() {
   const chamberEl = document.getElementById('forge-host-smoke-chamber');
   if (!chamberEl) return;
   const chamber = forgeHostState?.smokeChamber || null;
   chamberEl.dataset.forgeHostSmokeChamberActive = chamber ? 'true' : 'false';
   if (!chamber) {
+    if (forgeHostState) forgeHostState.smokeChamberInlineHost = null;
     chamberEl.innerHTML = '<div class="forge-empty">Open a Smoke Offer</div>';
     return;
   }
+  const inlineHost = resolveForgeHostSmokeChamberInlineHost(chamber);
+  if (forgeHostState) forgeHostState.smokeChamberInlineHost = inlineHost;
   const affordances = (chamber.captureAffordances || []).map(affordance => (
     `<button type="button" class="btn" disabled data-forge-chamber-affordance="${escapeHtml(affordance.id)}">${escapeHtml(affordance.label)}</button>`
   )).join('');
@@ -5446,6 +5588,7 @@ function renderForgeHostSmokeChamber() {
       <div class="field"><span class="field-key">Source</span><span class="field-val">${escapeHtml(chamber.sourceRef)}</span></div>
       <div class="field"><span class="field-key">Warnings</span><span class="field-val">${escapeHtml((chamber.routeWarnings || []).join(', '))}</span></div>
     </div>
+    ${renderForgeHostSmokeChamberInlineHost(inlineHost)}
     <div class="forge-chamber-actions">${affordances}</div>
   `;
 }
@@ -5628,6 +5771,7 @@ window.kaminosForgeHostDebugState = function() {
     stations,
     lastOpenedOffer: state?.lastOpenedOffer || null,
     smokeChamber: state?.smokeChamber || null,
+    smokeChamberInlineHost: state?.smokeChamberInlineHost || null,
     frameCount: state?.frameCount || 0,
   };
 };

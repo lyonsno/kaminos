@@ -37,6 +37,7 @@ assert.match(witness, /viewport-click-select-deselect/, 'witness supports viewpo
 assert.match(witness, /object-groups-roundtrip/, 'witness supports an object grouping and rename roundtrip scenario');
 assert.match(witness, /ao-route-delta/, 'witness supports an AO route on/off delta scenario');
 assert.match(witness, /forge-host-smoke-offers/, 'witness supports Forge Host smoke offer station projection');
+assert.match(witness, /forge-host-inline-chamber-host/, 'witness supports inline Smoke Chamber hosting for embeddable targets');
 assert.match(witness, /forge-host-live-registry/, 'witness supports Forge Host live registry station projection');
 assert.match(witness, /forge-host-smoke-chamber-routing/, 'witness supports opening a live Smoke Offer into a chamber');
 assert.match(witness, /forge-host-smoke-offer-route-open/, 'witness supports route params opening a cartridge Smoke Offer into a chamber');
@@ -47,6 +48,7 @@ assert.match(witness, /fixture offer claimed live display authority/, 'Forge Hos
 assert.match(witness, /live registry scene used fallback authority/, 'Forge Host live witness fails loud on fallback/live false authority');
 assert.match(witness, /smoke chamber routed fallback as live/, 'Forge Host chamber witness fails loud on fallback/live false authority');
 assert.match(witness, /Forge Host route-open overclaimed live display state/, 'Forge Host route-open witness fails loud when a waiting gap route claims live display');
+assert.match(witness, /did not keep recursive Forge Host target as a downgraded route card/, 'Forge Host witness rejects recursive inline chamber embeds');
 assert.match(witness, /requestedUrl:\s*url/, 'witness report records requested URL');
 assert.match(witness, /effectiveUrl:/, 'witness report records effective browser URL');
 assert.match(witness, /effectiveServerRoots:/, 'witness report records effective server root identity');

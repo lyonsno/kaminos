@@ -279,6 +279,55 @@ async function runForgeHostSmokeOffersScenario(ws) {
   `, { timeoutMs: 20000 });
 }
 
+async function runForgeHostInlineChamberHostScenario(ws) {
+  phase = 'scenario-forge-host-inline-chamber-host';
+  lastEvidence.forgeHostInlineChamberHost = await evaluate(ws, `
+    (async () => {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      const initial = window.kaminosForgeHostDebugState?.();
+      if (!initial?.active) throw new Error('Forge Host inline-host scenario did not activate');
+      const targetStation = initial.stations.find(station => station.smokeOffers?.some(offer => offer.targetSurface === 'preview-bench'));
+      if (!targetStation) throw new Error('Forge Host inline-host fixture had no preview-bench offer: ' + JSON.stringify(initial.stations));
+      window.selectForgeHostStation(targetStation.actorId);
+      await wait(250);
+      const selected = window.kaminosForgeHostDebugState();
+      const offer = selected.selectedStation.smokeOffers.find(item => item.targetSurface === 'preview-bench');
+      const chamber = window.kaminosOpenForgeHostSmokeOffer(offer.id);
+      await wait(400);
+      const finalState = window.kaminosForgeHostDebugState();
+      const host = finalState.smokeChamberInlineHost;
+      const hostPanel = document.querySelector('[data-forge-chamber-host-kind]');
+      if (chamber.sourceOffer?.id !== offer.id || finalState.smokeChamber?.sourceOffer?.id !== offer.id) {
+        throw new Error('Forge Host inline-host chamber did not preserve offer identity: ' + JSON.stringify({ offer, chamber, finalState }));
+      }
+      if (host?.kind !== 'iframe') {
+        throw new Error('Forge Host inline-host did not choose iframe for preview-bench target: ' + JSON.stringify(host));
+      }
+      if (!host.effectiveUrl || !/world_chamber=lerms-underhill/.test(host.effectiveUrl)) {
+        throw new Error('Forge Host inline-host lost effective target URL: ' + JSON.stringify(host));
+      }
+      if (host.recursive) {
+        throw new Error('Forge Host inline-host marked a safe preview-bench target recursive: ' + JSON.stringify(host));
+      }
+      if (!hostPanel || hostPanel.dataset.forgeChamberHostKind !== 'iframe') {
+        throw new Error('Forge Host inline-host DOM did not expose iframe host kind: ' + (hostPanel?.outerHTML || 'missing'));
+      }
+      const iframe = hostPanel.querySelector('iframe[data-forge-chamber-inline-frame="true"]');
+      if (!iframe) throw new Error('Forge Host inline-host did not render an iframe');
+      if (!/world_chamber=lerms-underhill/.test(iframe.getAttribute('src') || '')) {
+        throw new Error('Forge Host inline-host iframe src lost world chamber route: ' + iframe.outerHTML);
+      }
+      return {
+        selectedActorId: finalState.selectedActorId,
+        openedOffer: finalState.lastOpenedOffer,
+        chamber,
+        inlineHost: host,
+        hostText: hostPanel.textContent.trim(),
+      };
+    })()
+  `, { timeoutMs: 25000 });
+}
+
 async function runForgeHostLiveRegistryScenario(ws) {
   phase = 'scenario-forge-host-live-registry';
   lastEvidence.forgeHostLiveRegistry = await evaluate(ws, `
@@ -438,6 +487,9 @@ async function runForgeHostSmokeOfferRouteOpenScenario(ws) {
       }
       if (!state.stations.some(station => station.smokeOffers?.some(offer => offer.id === 'glove-emitter-native-host-smoke-offer'))) {
         throw new Error('Forge Host route-open did not expose the cartridge smoke offer on a station row: ' + JSON.stringify(state.stations));
+      }
+      if (state.smokeChamberInlineHost?.kind !== 'route-card' || !state.smokeChamberInlineHost?.recursive) {
+        throw new Error('Forge Host route-open did not keep recursive Forge Host target as a downgraded route card: ' + JSON.stringify(state.smokeChamberInlineHost));
       }
       const sourceRoleStation = state.stations.find(station => /glove/i.test([
         station['dia' + 'ulos'],
@@ -4830,6 +4882,8 @@ try {
     await runAoRouteDeltaScenario(ws);
   } else if (scenario === 'forge-host-smoke-offers') {
     await runForgeHostSmokeOffersScenario(ws);
+  } else if (scenario === 'forge-host-inline-chamber-host') {
+    await runForgeHostInlineChamberHostScenario(ws);
   } else if (scenario === 'forge-host-live-registry') {
     await runForgeHostLiveRegistryScenario(ws);
   } else if (scenario === 'forge-host-smoke-chamber-routing') {
