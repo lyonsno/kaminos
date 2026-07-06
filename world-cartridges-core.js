@@ -5,6 +5,7 @@ export const WORLD_CARTRIDGE_INDEX_SCHEMA = 'kaminos.world-cartridges.index.v0';
 export const WORLD_CARTRIDGE_MANIFEST_SCHEMA = 'kaminos.world-cartridge.manifest.v0';
 export const WORLD_CARTRIDGE_WITNESS_SCHEMA = 'kaminos.world-cartridge.witness.v0';
 export const WORLD_CRUCIBLE_DESCRIPTOR_SCHEMA = 'kaminos.world-crucible.descriptor.v0';
+export const WORLD_CARTRIDGE_SMOKE_WORKBENCH_HELPER_SCHEMA = 'kaminos.world-cartridge.smoke-workbench-helper.v0';
 export const WORLD_CARTRIDGE_FIRST_USE_TRIAL_SCHEMA = 'kaminos.world-cartridge.first-use-trial.v0';
 export const WORLD_CARTRIDGE_DISCOVERY_ROUTE = '/api/world-cartridges';
 export const LERMS_TERRARIUM_CARTRIDGE_ID = 'lerms-terrarium';
@@ -161,7 +162,38 @@ function normalizeSmokeApparitions(apparitions, crucibleIndex) {
   });
 }
 
-function normalizeSmokeOffers(offers, crucibleIndex) {
+function buildSmokeWorkbenchHelper(offer, {
+  cartridgeId,
+  crucibleId,
+  defaultChamber,
+  defaultRoute,
+} = {}) {
+  const query = new URLSearchParams();
+  query.set('kaminos_forge_host', 'live');
+  const chamber = defaultChamber || defaultRoute?.query?.world_chamber;
+  if (chamber) query.set('world_chamber', chamber);
+  query.set('world_cartridge', cartridgeId);
+  query.set('world_crucible', crucibleId);
+  query.set('forge_host_smoke_offer', offer.id);
+  return {
+    schema: WORLD_CARTRIDGE_SMOKE_WORKBENCH_HELPER_SCHEMA,
+    routeKind: 'forge-host-smoke-offer-route',
+    operatorRoute: `?${query.toString()}`,
+    operatorSteps: [
+      'open_operator_route',
+      'inspect_inline_chamber',
+      'capture_smoke_receipt',
+      'return_source_owned_firing_or_gap_report',
+    ],
+    receiptSchema: 'kaminos.forge-host.smoke-receipt.v0',
+    docs: [
+      'docs/smoke-workbench-for-agents.md',
+      'docs/world-cartridge-first-use-workflow.md',
+    ],
+  };
+}
+
+function normalizeSmokeOffers(offers, crucibleIndex, context = {}) {
   return objectList(offers).map((offer, index) => {
     if (!offer.id) {
       throw new Error(`world crucible ${crucibleIndex} smoke offer ${index} must include id`);
@@ -175,11 +207,14 @@ function normalizeSmokeOffers(offers, crucibleIndex) {
     if (!offer.outputClass) {
       throw new Error(`world crucible ${crucibleIndex} smoke offer ${index} must include outputClass`);
     }
-    return clone(offer);
+    return {
+      ...clone(offer),
+      smokeWorkbench: buildSmokeWorkbenchHelper(offer, context),
+    };
   });
 }
 
-function normalizeCrucibles(crucibles) {
+function normalizeCrucibles(crucibles, context = {}) {
   return objectList(crucibles).map((crucible, index) => {
     if (crucible.schema !== WORLD_CRUCIBLE_DESCRIPTOR_SCHEMA) {
       throw new Error(`world crucible ${index} schema mismatch: ${crucible.schema || 'missing'}`);
@@ -214,7 +249,10 @@ function normalizeCrucibles(crucibles) {
       casts: requireNonEmptyReferenceList(crucible.casts, `world crucible ${index} casts`),
       receipts: requireNonEmptyReferenceList(crucible.receipts, `world crucible ${index} receipts`),
       smokeApparitions: normalizeSmokeApparitions(crucible.smokeApparitions, index),
-      smokeOffers: normalizeSmokeOffers(crucible.smokeOffers, index),
+      smokeOffers: normalizeSmokeOffers(crucible.smokeOffers, index, {
+        ...context,
+        crucibleId: crucible.id,
+      }),
       graduationMode: crucible.graduationMode,
       graduationQuestion: crucible.graduationQuestion,
       stewardship: clone(stewardship),
@@ -239,6 +277,8 @@ export function normalizeWorldCartridgeManifest(manifest, options = {}) {
     throw new Error(`${manifest.id} fixture cartridge cannot claim live display authority`);
   }
   const slug = manifest.slug || manifest.id;
+  const defaultRoute = normalizeDefaultRoute(manifest.defaultRoute || {}, manifest.id);
+  const defaultChamber = manifest.defaultChamber || defaultRoute.query.world_chamber || null;
   const files = {
     manifestPath: options.manifestPath || null,
     rootDir: options.rootDir || null,
@@ -259,14 +299,18 @@ export function normalizeWorldCartridgeManifest(manifest, options = {}) {
     audience: stringList(manifest.audience),
     authority: clone(manifest.authority),
     lineage: clone(manifest.lineage || {}),
-    defaultChamber: manifest.defaultChamber || null,
-    defaultRoute: normalizeDefaultRoute(manifest.defaultRoute || {}, manifest.id),
+    defaultChamber,
+    defaultRoute,
     sourceBridges: objectList(manifest.sourceBridges),
     affordanceBindings: objectList(manifest.affordanceBindings),
     generationBasins: objectList(manifest.generationBasins),
     sceneRecipes: objectList(manifest.sceneRecipes),
     firstUseTrial: normalizeFirstUseTrial(manifest.firstUseTrial || {}),
-    crucibles: normalizeCrucibles(manifest.crucibles || []),
+    crucibles: normalizeCrucibles(manifest.crucibles || [], {
+      cartridgeId: manifest.id,
+      defaultChamber,
+      defaultRoute,
+    }),
     graduation: normalizeGraduation(manifest.graduation || {}),
     witnesses: normalizeWitnesses(manifest.witnesses || []),
     files,

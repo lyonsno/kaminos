@@ -133,6 +133,37 @@ Until full Smoke Workbench tooling exists, use this manual sequence.
    Advertise the smoke once the Kaminos route is the easy route. Keep debug
    links visibly secondary.
 
+## Shortest Cartridge Smoke Path
+
+For a cartridge or crucible smoke, begin at `/api/world-cartridges`. Pick the
+cartridge, then the crucible, then the `smokeOffers` entry for your output. The
+offer carries a computed `smokeWorkbench` card with the operator route and the
+receipt loop.
+
+The Forge Host route shape is:
+
+```text
+?kaminos_forge_host=live
+  &world_chamber=<default-chamber>
+  &world_cartridge=<cartridge-id>
+  &world_crucible=<crucible-id>
+  &forge_host_smoke_offer=<offer-id>
+```
+
+Open that route in the Kaminos worktree. The chamber should select the station,
+open the offer, display authority/freshness/downgrades, and choose an inline
+host when the target can be embedded. Use Screenshot or Receipt in the Smoke
+Chamber to capture `kaminos.forge-host.smoke-receipt.v0`.
+
+Return to your lane with two pieces:
+
+- your source-owned firing, cast, route, packet, or gap report; and
+- the Kaminos smoke receipt from the operator route.
+
+Kaminos owns the route, host, capture, receipt, and operator-visible
+workbench state. Your lane owns the behavior, packet, source payload, and the
+claim that the domain thing works.
+
 ## Minimum Deliverable
 
 Before you tell the operator or another lane that a smoke is available, have

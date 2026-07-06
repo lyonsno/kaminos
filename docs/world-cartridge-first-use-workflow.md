@@ -16,6 +16,11 @@ Then follow the cartridge's `firstUseTrial`:
 
 Each crucible carries `consumerCanStartBy`, `armatures`, `handles`, `firings`, allowed output memory, ownership fields, and any API-visible `smokeOffers`. A `smokeOffers` entry is a route into the Kaminos Smoke Workbench or Forge Host surface for that crucible. Its `authority`, `freshness`, `outputClass`, and `downgrades` define what the route is allowed to prove.
 
+When a smoke offer has a `smokeWorkbench` card, use its `operatorRoute` as the
+Kaminos entry point. The card names the Forge Host route kind, the receipt
+schema, and the operator steps: open the route, inspect the inline chamber,
+capture a smoke receipt, then return the source-owned firing or gap report.
+
 For `lerms-terrarium/glove-emitter`, the first offer is a gap-report route, not passing visual smoke. It gives consumers and the operator a discoverable Kaminos route for the Glove Well/native-host work while preserving the current waiting/stale downgrades.
 
 The broader cartridge ontology and scaffold are documented in [World Cartridges](world-cartridges.md).

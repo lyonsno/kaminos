@@ -81,6 +81,7 @@ FORGE_HOST_DIAULOS_REGISTRY_PATH = Path(os.environ.get(
 WORLD_CARTRIDGE_INDEX_SCHEMA = "kaminos.world-cartridges.index.v0"
 WORLD_CARTRIDGE_MANIFEST_SCHEMA = "kaminos.world-cartridge.manifest.v0"
 WORLD_CRUCIBLE_DESCRIPTOR_SCHEMA = "kaminos.world-crucible.descriptor.v0"
+WORLD_CARTRIDGE_SMOKE_WORKBENCH_HELPER_SCHEMA = "kaminos.world-cartridge.smoke-workbench-helper.v0"
 WORLD_CARTRIDGE_FIRST_USE_TRIAL_SCHEMA = "kaminos.world-cartridge.first-use-trial.v0"
 WORLD_CARTRIDGE_DISCOVERY_ROUTE = "/api/world-cartridges"
 WORLD_CARTRIDGES_DIR = Path(os.environ.get(
@@ -251,6 +252,50 @@ def pipeline_manifest_payload():
     }
 
 
+def _smoke_workbench_helper(manifest, crucible, offer):
+    default_route = manifest.get("defaultRoute") or {}
+    default_query = default_route.get("query") or {}
+    query = {
+        "kaminos_forge_host": "live",
+        "world_cartridge": manifest.get("id"),
+        "world_crucible": crucible.get("id"),
+        "forge_host_smoke_offer": offer.get("id"),
+    }
+    chamber = manifest.get("defaultChamber") or default_query.get("world_chamber")
+    if chamber:
+        query["world_chamber"] = chamber
+    return {
+        "schema": WORLD_CARTRIDGE_SMOKE_WORKBENCH_HELPER_SCHEMA,
+        "routeKind": "forge-host-smoke-offer-route",
+        "operatorRoute": f"?{urlencode(query)}",
+        "operatorSteps": [
+            "open_operator_route",
+            "inspect_inline_chamber",
+            "capture_smoke_receipt",
+            "return_source_owned_firing_or_gap_report",
+        ],
+        "receiptSchema": "kaminos.forge-host.smoke-receipt.v0",
+        "docs": [
+            "docs/smoke-workbench-for-agents.md",
+            "docs/world-cartridge-first-use-workflow.md",
+        ],
+    }
+
+
+def _crucibles_with_smoke_workbench_helpers(manifest):
+    crucibles = []
+    for crucible in manifest.get("crucibles") or []:
+        crucible_copy = json.loads(json.dumps(crucible))
+        smoke_offers = []
+        for offer in crucible_copy.get("smokeOffers") or []:
+            offer_copy = json.loads(json.dumps(offer))
+            offer_copy["smokeWorkbench"] = _smoke_workbench_helper(manifest, crucible_copy, offer_copy)
+            smoke_offers.append(offer_copy)
+        crucible_copy["smokeOffers"] = smoke_offers
+        crucibles.append(crucible_copy)
+    return crucibles
+
+
 def _world_cartridge_summary(manifest, cartridge_dir):
     authority = manifest.get("authority") or {}
     crucibles = manifest.get("crucibles") or []
@@ -308,7 +353,7 @@ def _world_cartridge_summary(manifest, cartridge_dir):
         "affordanceBindings": manifest.get("affordanceBindings") or [],
         "generationBasins": manifest.get("generationBasins") or [],
         "firstUseTrial": first_use_trial,
-        "crucibles": crucibles,
+        "crucibles": _crucibles_with_smoke_workbench_helpers(manifest),
         "crucibleCount": len(crucibles),
         "witnessCount": len(manifest.get("witnesses") or []),
         "path": cartridge_dir.name,

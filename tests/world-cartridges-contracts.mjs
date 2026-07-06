@@ -29,6 +29,7 @@ const {
   WORLD_CARTRIDGE_INDEX_SCHEMA,
   WORLD_CARTRIDGE_MANIFEST_SCHEMA,
   WORLD_CRUCIBLE_DESCRIPTOR_SCHEMA,
+  WORLD_CARTRIDGE_SMOKE_WORKBENCH_HELPER_SCHEMA,
   WORLD_CARTRIDGE_FIRST_USE_TRIAL_SCHEMA,
   WORLD_CARTRIDGE_DISCOVERY_ROUTE,
   WORLD_CARTRIDGE_GRADUATION_MODES,
@@ -41,6 +42,7 @@ const {
 assert.equal(WORLD_CARTRIDGE_INDEX_SCHEMA, 'kaminos.world-cartridges.index.v0');
 assert.equal(WORLD_CARTRIDGE_MANIFEST_SCHEMA, 'kaminos.world-cartridge.manifest.v0');
 assert.equal(WORLD_CRUCIBLE_DESCRIPTOR_SCHEMA, 'kaminos.world-crucible.descriptor.v0');
+assert.equal(WORLD_CARTRIDGE_SMOKE_WORKBENCH_HELPER_SCHEMA, 'kaminos.world-cartridge.smoke-workbench-helper.v0');
 assert.equal(WORLD_CARTRIDGE_FIRST_USE_TRIAL_SCHEMA, 'kaminos.world-cartridge.first-use-trial.v0');
 assert.equal(WORLD_CARTRIDGE_DISCOVERY_ROUTE, '/api/world-cartridges');
 assert.equal(LERMS_TERRARIUM_CARTRIDGE_ID, 'lerms-terrarium');
@@ -54,6 +56,7 @@ assert.deepEqual(WORLD_CARTRIDGE_GRADUATION_MODES, [
 
 const manifest = JSON.parse(readFileSync(worldJsonPath, 'utf8'));
 const manifestSource = readFileSync(worldJsonPath, 'utf8');
+const smokeWorkbenchGuide = readFileSync(join(root, 'docs/smoke-workbench-for-agents.md'), 'utf8');
 const privateDiaulosHandlePattern = /\b(?:minion-spawnfucker|palm-daddy|mushfinger-clayfucker|molten-heartfucker|hill-of-hills-fucker|lerm-horde-fucker|lerm-feel-fucker|big-papa-finger-juice-fucker|greedy-glove-fucker)\b/;
 assert.doesNotMatch(
   manifestSource,
@@ -135,6 +138,23 @@ assert.deepEqual(normalized.crucibles.find(crucible => crucible.id === 'glove-em
 assert.equal(normalized.crucibles.find(crucible => crucible.id === 'glove-emitter').smokeOffers[0].authority, 'gap_report_route');
 assert.equal(normalized.crucibles.find(crucible => crucible.id === 'glove-emitter').smokeOffers[0].outputClass, 'gap_report');
 assert.match(normalized.crucibles.find(crucible => crucible.id === 'glove-emitter').smokeOffers[0].route, /world_crucible=glove-emitter/);
+const gloveEmitterWorkbench = normalized.crucibles.find(crucible => crucible.id === 'glove-emitter').smokeOffers[0].smokeWorkbench;
+assert.equal(gloveEmitterWorkbench.schema, WORLD_CARTRIDGE_SMOKE_WORKBENCH_HELPER_SCHEMA);
+assert.equal(gloveEmitterWorkbench.routeKind, 'forge-host-smoke-offer-route');
+assert.match(gloveEmitterWorkbench.operatorRoute, /^\?kaminos_forge_host=live&/);
+assert.match(gloveEmitterWorkbench.operatorRoute, /world_cartridge=lerms-terrarium/);
+assert.match(gloveEmitterWorkbench.operatorRoute, /world_crucible=glove-emitter/);
+assert.match(gloveEmitterWorkbench.operatorRoute, /forge_host_smoke_offer=glove-emitter-native-host-smoke-offer/);
+assert.deepEqual(gloveEmitterWorkbench.operatorSteps, [
+  'open_operator_route',
+  'inspect_inline_chamber',
+  'capture_smoke_receipt',
+  'return_source_owned_firing_or_gap_report',
+]);
+assert.equal(gloveEmitterWorkbench.receiptSchema, 'kaminos.forge-host.smoke-receipt.v0');
+assert.ok(gloveEmitterWorkbench.docs.includes('docs/smoke-workbench-for-agents.md'));
+assert.match(smokeWorkbenchGuide, /Shortest Cartridge Smoke Path/i, 'agent smoke guide names the shortest cartridge smoke path');
+assert.match(smokeWorkbenchGuide, /kaminos_forge_host=live[\s\S]*forge_host_smoke_offer/i, 'agent smoke guide shows the Forge Host query params for a cartridge offer');
 assert.equal(normalized.graduation.modes.length, WORLD_CARTRIDGE_GRADUATION_MODES.length);
 assert.equal(normalized.graduation.currentMode, 'remain_in_kaminos_terrarium');
 assert.equal(normalized.witnesses[0].schema, 'kaminos.world-cartridge.witness.v0');
