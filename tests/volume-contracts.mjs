@@ -1988,6 +1988,11 @@ assert.match(fieldResidualRenderStill, /--residual-gain-list/, 'field residual r
 assert.match(fieldResidualRenderStill, /lowPlusGainPredictedResidual/, 'field residual gain sweep names the low plus gain times predicted residual construction');
 assert.match(fieldResidualRenderStill, /residualGainSweep/, 'field residual render-still manifest records residual gain sweep roles and gains');
 assert.match(fieldResidualRenderStill, /predictedHighTargetGain/, 'field residual gain sweep writes gain-specific predicted target roles');
+assert.match(fieldResidualRenderStill, /--temporal-trace-role/, 'field residual render-still harness can trace a selected patched role through live sim time');
+assert.match(fieldResidualRenderStill, /kaminos\.volume\.field-residual-temporal-trace\.v0/, 'field residual temporal traces carry a stable manifest schema');
+assert.match(fieldResidualRenderStill, /temporalTraceFrames/, 'field residual temporal trace records per-frame outputs and motion metrics');
+assert.match(fieldResidualRenderStill, /temporalTraceContactSheet/, 'field residual temporal trace writes an inspectable contact sheet');
+assert.match(fieldResidualRenderStill, /single-patch-live-sim-advance-not-framewise-model/, 'field residual temporal trace limitation says it is one patch evolved by the simulator');
 assert.match(fieldResidualRenderStill, /--focused-output-dir/, 'field residual render-still harness can write focused visual discriminator crops');
 assert.match(fieldResidualRenderStill, /kaminos\.volume\.field-residual-focused-render-discriminator\.v0/, 'focused residual render crops carry a stable discriminator schema');
 assert.match(fieldResidualRenderStill, /differenceLocalizedCropWindow/, 'focused residual render manifest records the shared difference-localized crop window');

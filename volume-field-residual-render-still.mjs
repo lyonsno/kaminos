@@ -8,8 +8,10 @@ import { deflateSync } from 'node:zlib';
 const MANIFEST_SCHEMA = 'kaminos.volume.field-residual-render-still.v0';
 const APPLICATION_ARTIFACT_SCHEMA = 'kaminos.volume.field-residual-application-artifact.v0';
 const FOCUSED_RENDER_SCHEMA = 'kaminos.volume.field-residual-focused-render-discriminator.v0';
+const TEMPORAL_TRACE_SCHEMA = 'kaminos.volume.field-residual-temporal-trace.v0';
 const PATCH_LIMITATION = 'residual-augmented-selected-field-tiles-not-full-volume-prediction';
 const FOCUSED_RENDER_LIMITATION = 'selected-patch-difference-focused-not-full-volume-proof';
+const TEMPORAL_TRACE_LIMITATION = 'single-patch-live-sim-advance-not-framewise-model';
 const RESIDUAL_GAIN_CONSTRUCTION = 'lowPlusGainPredictedResidual';
 const DEFAULT_PAYLOAD_KEYS = ['lowTarget', 'predictedHighTarget', 'truthHighTarget'];
 
@@ -441,6 +443,125 @@ function writeFocusedRenderDiscriminator({ args, outDir, frames, outputs, route,
   };
 }
 
+async function captureTemporalFrame(ws, nowMs, advanceSim) {
+  return evaluate(ws, `window.__kaminosVolumePrototype.sampleFrame(${JSON.stringify({ allowInactive: true, advanceSim, nowMs })})`);
+}
+
+async function writeTemporalTrace({ args, outDir, ws, replay, patchPayloads, route, tilePatchScope }) {
+  const role = String(args.get('--temporal-trace-role') || '');
+  if (!role) return null;
+  const patchPayload = patchPayloads[role];
+  if (!patchPayload) throw new Error(`temporal trace role ${role} is not a known patch role`);
+  const frameCount = Math.max(2, Math.floor(numericArg(args, '--temporal-trace-frame-count', 10, 2)));
+  const stepMs = numericArg(args, '--temporal-trace-step-ms', replay.timeStepMs, 0);
+  const traceDir = resolve(outDir, `temporalTrace-${role}`);
+  mkdirSync(traceDir, { recursive: true });
+
+  const replaySample = await captureReplay(ws, replay, replay.startTimeMs);
+  if (replaySample?.ok !== true) throw new Error(`temporal trace replay failed before patch: ${JSON.stringify(replaySample)}`);
+  const patch = await evaluate(ws, `window.__kaminosVolumePrototype.applyDebugFieldTilePatch(${JSON.stringify(patchPayload)})`);
+  if (patch?.status !== 'applied') throw new Error(`temporal trace field tile patch failed: ${JSON.stringify(patch)}`);
+
+  const finalTimeMs = replay.startTimeMs + Math.max(0, replay.steps - 1) * replay.timeStepMs;
+  const framePayloads = [];
+  for (let frameIndex = 0; frameIndex < frameCount; frameIndex += 1) {
+    const sample = await captureTemporalFrame(ws, finalTimeMs + frameIndex * stepMs, frameIndex > 0);
+    if (sample?.ok !== true) throw new Error(`temporal trace sample ${frameIndex} failed: ${JSON.stringify(sample)}`);
+    const path = resolve(traceDir, `frame-${String(frameIndex).padStart(3, '0')}.png`);
+    writeRgbaPng(path, sample.preview.width, sample.preview.height, sample.preview.rgba);
+    framePayloads.push({
+      frameIndex,
+      elapsedMs: frameIndex * stepMs,
+      path,
+      sha256: sha256File(path),
+      width: sample.preview.width,
+      height: sample.preview.height,
+      rgba: sample.preview.rgba,
+      sample: {
+        simGrid: sample.simGrid,
+        simStepCount: sample.simStepCount,
+        fireLikePixels: sample.fireLikePixels,
+        smokeLikePixels: sample.smokeLikePixels,
+        fireEdgeEnergy: sample.fireEdgeEnergy,
+        smokeHorizontalEnergy: sample.smokeHorizontalEnergy,
+        smokeVerticalEnergy: sample.smokeVerticalEnergy,
+      },
+    });
+  }
+
+  const fullWidth = framePayloads[0].width * framePayloads.length;
+  const fullHeight = framePayloads[0].height;
+  const contact = new Uint8Array(fullWidth * fullHeight * 4);
+  for (const frame of framePayloads) {
+    pasteRgba(contact, fullWidth, frame.rgba, frame.width, frame.height, frame.width * frame.frameIndex, 0);
+  }
+  const temporalTraceContactSheet = resolve(traceDir, 'temporalTraceContactSheet.png');
+  writeRgbaPng(temporalTraceContactSheet, fullWidth, fullHeight, Array.from(contact));
+
+  const crop = computeDifferenceLocalizedCropWindow(
+    framePayloads.map(frame => ({ role: `frame-${frame.frameIndex}`, width: frame.width, height: frame.height, rgba: frame.rgba })),
+    numericArg(args, '--focus-diff-threshold', 2, 0, 255),
+    Math.floor(numericArg(args, '--focus-padding', 18, 0, 256))
+  );
+  const cropWidth = crop.width * framePayloads.length;
+  const cropHeight = crop.height;
+  const focusedContact = new Uint8Array(cropWidth * cropHeight * 4);
+  const croppedFrames = framePayloads.map((frame) => {
+    const rgba = cropRgba(frame.rgba, frame.width, crop);
+    const cropPath = resolve(traceDir, `frame-${String(frame.frameIndex).padStart(3, '0')}.focused-crop.png`);
+    writeRgbaPng(cropPath, crop.width, crop.height, Array.from(rgba));
+    pasteRgba(focusedContact, cropWidth, rgba, crop.width, crop.height, crop.width * frame.frameIndex, 0);
+    return { ...frame, cropPath, cropSha256: sha256File(cropPath), cropRgba: rgba };
+  });
+  const focusedTemporalTraceContactSheet = resolve(traceDir, 'focusedTemporalTraceContactSheet.png');
+  writeRgbaPng(focusedTemporalTraceContactSheet, cropWidth, cropHeight, Array.from(focusedContact));
+  const firstCrop = croppedFrames[0].cropRgba;
+  const temporalTraceFrames = croppedFrames.map((frame, index) => ({
+    frameIndex: frame.frameIndex,
+    elapsedMs: frame.elapsedMs,
+    path: frame.path,
+    sha256: frame.sha256,
+    focusedCropPath: frame.cropPath,
+    focusedCropSha256: frame.cropSha256,
+    sample: frame.sample,
+    cropDeltaVsFirst: index === 0 ? null : cropDeltaMetrics(firstCrop, frame.cropRgba),
+    cropDeltaVsPrevious: index === 0 ? null : cropDeltaMetrics(croppedFrames[index - 1].cropRgba, frame.cropRgba),
+  }));
+  const trace = {
+    schema: TEMPORAL_TRACE_SCHEMA,
+    status: 'captured',
+    authority: 'single-selected-field-patch-evolved-by-live-simulator',
+    limitation: TEMPORAL_TRACE_LIMITATION,
+    role,
+    residualGain: patchPayload.residualGain ?? null,
+    residualConstruction: patchPayload.residualConstruction ?? null,
+    sourceArtifactManifest: patchPayload.sourceArtifactManifest,
+    route,
+    deterministicReplay: replay,
+    frameCount,
+    stepMs,
+    patch,
+    tilePatchScope,
+    differenceLocalizedCropWindow: crop,
+    temporalTraceFrames,
+    temporalTraceContactSheet: {
+      path: temporalTraceContactSheet,
+      sha256: sha256File(temporalTraceContactSheet),
+    },
+    focusedTemporalTraceContactSheet: {
+      path: focusedTemporalTraceContactSheet,
+      sha256: sha256File(focusedTemporalTraceContactSheet),
+    },
+  };
+  const manifest = resolve(traceDir, 'temporal-trace.json');
+  writeJson(manifest, trace);
+  return {
+    ...trace,
+    manifest,
+    manifestSha256: sha256File(manifest),
+  };
+}
+
 async function delay(ms) {
   return new Promise(resolveDelay => setTimeout(resolveDelay, ms));
 }
@@ -728,6 +849,17 @@ async function main() {
       replay,
       tilePatchScope,
     });
+    phase = 'temporal-trace';
+    const temporalTrace = await writeTemporalTrace({
+      args,
+      outDir,
+      ws,
+      replay,
+      patchPayloads,
+      route,
+      tilePatchScope,
+    });
+    phase = 'write-report';
     const report = {
       schema: MANIFEST_SCHEMA,
       status: 'captured',
@@ -745,6 +877,7 @@ async function main() {
       residualGainSweep,
       outputs,
       focusedRenderDiscriminator,
+      temporalTrace,
     };
     writeJson(manifestOut, report);
     ws.close();
