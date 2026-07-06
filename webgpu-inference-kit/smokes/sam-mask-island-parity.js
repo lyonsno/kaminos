@@ -7,9 +7,12 @@ import {
   SAM3_DETR_DECODER_PHASE_PROGRAM_ROUTE_ID,
   SAM3_SCORING_PHASE_PROGRAM_ROUTE_ID,
   SAM3_SELECTION_POSTPROCESS_PHASE_PROGRAM_ROUTE_ID,
+  SAM3_IMAGE_PREPROCESS_PHASE_PROGRAM_ROUTE_ID,
   createRouteInvocationRequest,
   createSam3MaskDecoderIslandRouteDefinition,
   createSam3MaskProjectionCpuOracle,
+  createSam3ImagePreprocessPhaseProgramCpuOracle,
+  createSam3ImagePreprocessPhaseProgramRouteDefinition,
   createSam3MaskTailPhaseProgramCpuOracle,
   createSam3MaskTailPhaseProgramRouteDefinition,
   createSam3PixelDecoderPhaseProgramCpuOracle,
@@ -30,6 +33,7 @@ import {
   runSam3DetrDecoderPhaseProgramRoute,
   runSam3ScoringPhaseProgramRoute,
   runSam3SelectionPostprocessPhaseProgramRoute,
+  runSam3ImagePreprocessPhaseProgramRoute,
 } from '../src/index.js';
 
 const SUPPORTED_ROUTE_IDS = new Set([
@@ -41,6 +45,7 @@ const SUPPORTED_ROUTE_IDS = new Set([
   SAM3_DETR_DECODER_PHASE_PROGRAM_ROUTE_ID,
   SAM3_SCORING_PHASE_PROGRAM_ROUTE_ID,
   SAM3_SELECTION_POSTPROCESS_PHASE_PROGRAM_ROUTE_ID,
+  SAM3_IMAGE_PREPROCESS_PHASE_PROGRAM_ROUTE_ID,
 ]);
 const PIXEL_DECODER_WEIGHT_ROLE_EXAMPLES = ['pixel-decoder-stage-0-conv-weight'];
 
@@ -62,6 +67,7 @@ const state = {
   compositionRouteReceipts: null,
   compositionEdge: null,
   detectorStackEvidence: null,
+  imagePreprocessEvidence: null,
   parity: null,
   debugReadbackSamples: null,
   sourceImage: null,
@@ -162,6 +168,25 @@ function sourceImageShape(manifest) {
   const [width, height] = resolution;
   if (!Number.isInteger(width) || !Number.isInteger(height) || width <= 0 || height <= 0) return undefined;
   return [height, width, 3];
+}
+
+function imagePreprocessShape(manifest) {
+  return {
+    batch: manifest.shape.batch || 1,
+    height: manifest.shape.imageHeight || manifest.sourceImage?.resolution?.[1],
+    width: manifest.shape.imageWidth || manifest.sourceImage?.resolution?.[0],
+    channels: manifest.shape.imageChannels || 3,
+  };
+}
+
+function rgbaFromSourceImage(sourceImage, shape) {
+  if (!sourceImage) throw new Error('source image is required for SAM3 image-preprocess ingress');
+  const scratch = document.createElement('canvas');
+  scratch.width = shape.width;
+  scratch.height = shape.height;
+  const ctx = scratch.getContext('2d', { willReadFrequently: true });
+  ctx.drawImage(sourceImage, 0, 0, shape.width, shape.height);
+  return ctx.getImageData(0, 0, shape.width, shape.height).data;
 }
 
 async function aggregateTensorBundleSha256(kind, entries) {
@@ -685,9 +710,11 @@ async function loadDetrDecoderPayload(manifest) {
 }
 
 async function loadDetrStackPayload(manifest) {
-  const includeDetectorStack = manifest.mode === 'mlx-detector-stack-export' || manifest.boundary === 'sam3-detector-stack-browser-local-detector-mask-phase-program';
+  const includeImagePreprocess = manifest.mode === 'mlx-detector-stack-preprocess-export' || manifest.boundary === 'sam3-browser-local-image-preprocess-detector-stack-phase-program';
+  const includeDetectorStack = includeImagePreprocess || manifest.mode === 'mlx-detector-stack-export' || manifest.boundary === 'sam3-detector-stack-browser-local-detector-mask-phase-program';
   const includeStackSelection = includeDetectorStack || manifest.mode === 'mlx-detr-stack-selection-export' || manifest.boundary === 'sam3-detector-detr-encoder-decoder-scoring-selection-mask-tail-phase-program';
   const includeStackScoring = includeStackSelection || manifest.mode === 'mlx-detr-stack-scoring-export' || manifest.boundary === 'sam3-detector-detr-encoder-decoder-scoring-mask-tail-phase-program';
+  const expectedPixelValuesTensor = includeImagePreprocess ? tensorByRole(manifest, 'expected-pixel-values') : null;
   const encoderSrcTensor = tensorByRole(manifest, 'encoder-src');
   const encoderPosTensor = tensorByRole(manifest, 'encoder-pos');
   const promptTensor = tensorByRole(manifest, 'prompt-features');
@@ -783,6 +810,7 @@ async function loadDetrStackPayload(manifest) {
   const expectedSelectedIndex = expectedSelectedIndexTensor ? await fetchArray(resolveManifestFile(expectedSelectedIndexTensor.file), Uint32Array) : null;
   const expectedSelectedScore = expectedSelectedScoreTensor ? await fetchArray(resolveManifestFile(expectedSelectedScoreTensor.file), Float32Array) : null;
   const expectedSelectedBox = expectedSelectedBoxTensor ? await fetchArray(resolveManifestFile(expectedSelectedBoxTensor.file), Float32Array) : null;
+  const expectedPixelValues = expectedPixelValuesTensor ? await fetchArray(resolveManifestFile(expectedPixelValuesTensor.file), Float32Array) : null;
   const pixelEmbed = await fetchArray(resolveManifestFile(pixelEmbedTensor.file), Float32Array);
   const expectedMaskEmbeddings = await fetchArray(resolveManifestFile(expectedMaskEmbeddingsTensor.file), Float32Array);
   const expectedUpscaledEmbedding = await fetchArray(resolveManifestFile(expectedUpscaledTensor.file), Float32Array);
@@ -855,20 +883,36 @@ async function loadDetrStackPayload(manifest) {
   const scoringOracle = includeStackScoring ? createSam3ScoringPhaseProgramCpuOracle({ hiddenStates: expectedDecoderHiddenStates, promptFeatures, promptMask, weights: scoringWeights, shape: scoringShape }) : null;
   const selectionOracle = includeStackSelection ? createSam3SelectionPostprocessPhaseProgramCpuOracle({ predLogits: expectedPredLogits, referenceBoxes: expectedReferenceBoxes, presenceLogits: expectedPresenceLogits, shape: selectionShape }) : null;
   return {
-    routeKind: includeDetectorStack ? 'detector-stack-browser-local-composition' : includeStackSelection ? 'detr-encoder-detr-decoder-scoring-selection-mask-tail-composition' : includeStackScoring ? 'detr-encoder-detr-decoder-scoring-mask-tail-composition' : 'detr-encoder-detr-decoder-mask-tail-composition',
+    routeKind: includeImagePreprocess ? 'image-preprocess-detector-stack-composition' : includeDetectorStack ? 'detector-stack-browser-local-composition' : includeStackSelection ? 'detr-encoder-detr-decoder-scoring-selection-mask-tail-composition' : includeStackScoring ? 'detr-encoder-detr-decoder-scoring-mask-tail-composition' : 'detr-encoder-detr-decoder-mask-tail-composition',
     detectorStackEvidence: includeDetectorStack ? {
       packetMode: manifest.mode,
       schema: manifest.schema,
       boundary: manifest.boundary,
-      routeKind: 'detector-stack-browser-local-composition',
+      routeKind: includeImagePreprocess ? 'image-preprocess-detector-stack-composition' : 'detector-stack-browser-local-composition',
       upstreamBoundaries: manifest.upstreamBoundaries || [],
       nonClaims: {
         fullSam3BrowserExecution: true,
         browserLocalVisionEncoder: true,
         browserLocalTextEncoder: true,
+        originalImageResize: true,
         nms: manifest.postprocess?.nms === false,
       },
     } : null,
+    imagePreprocessEvidence: includeImagePreprocess ? {
+      packetMode: manifest.mode,
+      schema: manifest.schema,
+      boundary: manifest.imagePreprocess?.boundary || manifest.boundary,
+      routeKind: 'image-preprocess-detector-stack-composition',
+      source: manifest.imagePreprocess?.source || 'browser-served-source-image',
+      normalization: manifest.imagePreprocess?.normalization || null,
+      nonClaims: {
+        originalImageResize: true,
+        browserLocalVisionEncoder: true,
+        browserLocalTextEncoder: true,
+        fullSam3BrowserExecution: true,
+      },
+    } : null,
+    expectedPixelValues,
     expectedEncoderHiddenStates,
     expectedDecoderHiddenStates,
     expectedLastHs,
@@ -916,6 +960,7 @@ async function loadDetrStackPayload(manifest) {
       expectedSelectedIndexSha256: expectedSelectedIndexTensor?.sha256,
       expectedSelectedScoreSha256: expectedSelectedScoreTensor?.sha256,
       expectedSelectedBoxSha256: expectedSelectedBoxTensor?.sha256,
+      expectedPixelValuesSha256: expectedPixelValuesTensor?.sha256,
       pixelEmbedSha256: pixelEmbedTensor.sha256,
       expectedMaskEmbeddingsSha256: expectedMaskEmbeddingsTensor.sha256,
       expectedUpscaledEmbeddingSha256: expectedUpscaledTensor.sha256,
@@ -923,7 +968,41 @@ async function loadDetrStackPayload(manifest) {
       expectedBinaryMaskSha256: expectedBinaryTensor.sha256,
       weightsSha256: Object.fromEntries(Object.entries(weightsByRole).map(([role, weight]) => [role, weight.sha256])),
     },
-    async run({ device, adapter, route, request }) {
+    async run({ device, adapter, route, request, sourceImage }) {
+      let imagePreprocessResult = null;
+      let gpuPixelValues = null;
+      let pixelValuesOutput = null;
+      let pixelValuesTensorSha256 = null;
+      let imagePreprocessCpuMaxAbsDiff = undefined;
+      if (includeImagePreprocess) {
+        const preprocessShape = imagePreprocessShape(manifest);
+        const rgba = rgbaFromSourceImage(sourceImage, preprocessShape);
+        const cpuOracle = createSam3ImagePreprocessPhaseProgramCpuOracle({ rgba, shape: preprocessShape });
+        imagePreprocessCpuMaxAbsDiff = maxAbsDiff(expectedPixelValues, cpuOracle.pixelValues);
+        pixelValuesTensorSha256 = await aggregateTensorBundleSha256('sam3-image-preprocess-composed-tensors', [
+          { role: 'source-image', artifactId: manifest.sourceImage?.artifactId || 'image:synthetic', sha256: manifest.sourceImage?.sha256 || 'sha256:synthetic-image', shape: sourceImageShape(manifest) },
+          { role: 'expected-pixel-values', sha256: expectedPixelValuesTensor.sha256, shape: expectedPixelValuesTensor.shape },
+        ]);
+        const imagePreprocessRoute = createSam3ImagePreprocessPhaseProgramRouteDefinition({
+          model: { revision: manifest.model?.id || 'mlx-reference-image-preprocess', dtype: 'u8-to-fp32' },
+          kernel: { profile: 'sam3-image-preprocess-phase-program-v0', commit: params.get('commit') || null },
+        });
+        const imagePreprocessRequest = createRouteInvocationRequest(imagePreprocessRoute, {
+          requestId: `sam-browser-image-preprocess-${Date.now()}`,
+          inputs: {
+            'source-image': { artifactId: manifest.sourceImage?.artifactId || 'image:synthetic', sha256: manifest.sourceImage?.sha256 || 'sha256:synthetic-image', shape: sourceImageShape(manifest) },
+            'sam3-image-preprocess-tensors': { artifactId: 'sam3-image-preprocess-tensors:browser-detector-stack-composition', sha256: pixelValuesTensorSha256 },
+          },
+          outputs: {
+            'pixel-values': { artifactId: 'sam3-pixel-values:browser-detector-stack-composition', shape: [preprocessShape.batch, preprocessShape.height, preprocessShape.width, preprocessShape.channels] },
+          },
+          routeConfig: { upstream: manifest.claims?.upstream || 'mlx-reference-detr-stack', imagePreprocess: manifest.imagePreprocess || null },
+        });
+        imagePreprocessResult = await runSam3ImagePreprocessPhaseProgramRoute({ request: imagePreprocessRequest, route: imagePreprocessRoute, device, queue: device.queue, adapterName: adapter.info?.description || adapter.info?.device || 'browser-webgpu-adapter', browser: navigator.userAgent, kernel: imagePreprocessRoute.kernel, model: { revision: imagePreprocessRoute.model.revision, weightsHash: 'none', dtype: 'u8-to-fp32' }, tensors: { rgba, shape: preprocessShape }, includeReadback: true });
+        gpuPixelValues = new Float32Array(imagePreprocessResult.debugReadback.pixelValues);
+        pixelValuesOutput = imagePreprocessResult.receipt.outputs.find(output => output.role === 'pixel-values');
+        if (!pixelValuesOutput?.sha256 || !pixelValuesOutput?.artifactId) throw new Error('SAM3 image-preprocess pixel-values output identity missing');
+      }
       const encoderResult = await runSam3DetrEncoderPhaseProgramRoute({ request, route, device, queue: device.queue, adapterName: adapter.info?.description || adapter.info?.device || 'browser-webgpu-adapter', browser: navigator.userAgent, kernel: route.kernel, model: { revision: route.model.revision, weightsHash: manifest.staticWeights.sha256, dtype: 'fp32' }, tensors: { encoderSrc, encoderPos, promptFeatures, promptMask, layers: encoderWeights.layers, shape: encoderShape }, includeReadback: true });
       const gpuEncoderHiddenStates = new Float32Array(encoderResult.debugReadback.encoderHiddenStates);
       const detrEncoderOutput = encoderResult.receipt.outputs.find(output => output.role === 'encoder-hidden-states');
@@ -1058,9 +1137,11 @@ async function loadDetrStackPayload(manifest) {
         routeReceipt: encoderResult.receipt,
         midstreamRouteReceipt: decoderResult.receipt,
         downstreamRouteReceipt: tailResult.receipt,
-        compositionRouteReceipts: includeStackSelection ? [encoderResult.receipt, decoderResult.receipt, scoringResult.receipt, selectionResult.receipt, tailResult.receipt] : includeStackScoring ? [encoderResult.receipt, decoderResult.receipt, scoringResult.receipt, tailResult.receipt] : [encoderResult.receipt, decoderResult.receipt, tailResult.receipt],
+        compositionRouteReceipts: includeImagePreprocess ? [imagePreprocessResult.receipt, encoderResult.receipt, decoderResult.receipt, scoringResult.receipt, selectionResult.receipt, tailResult.receipt] : includeStackSelection ? [encoderResult.receipt, decoderResult.receipt, scoringResult.receipt, selectionResult.receipt, tailResult.receipt] : includeStackScoring ? [encoderResult.receipt, decoderResult.receipt, scoringResult.receipt, tailResult.receipt] : [encoderResult.receipt, decoderResult.receipt, tailResult.receipt],
         backend: tailResult.backend,
         debugReadback: {
+          pixelValues: gpuPixelValues ? Array.from(gpuPixelValues) : undefined,
+          imagePreprocessCpuMaxAbsDiff,
           encoderHiddenStates: Array.from(gpuEncoderHiddenStates),
           decoderHiddenStates: gpuDecoderHiddenStates ? Array.from(gpuDecoderHiddenStates) : undefined,
           lastHs: Array.from(gpuLastHs),
@@ -1078,6 +1159,9 @@ async function loadDetrStackPayload(manifest) {
         },
         compositionEdge: {
           upstreamRouteId: encoderResult.receipt.effectiveRouteId,
+          imagePreprocessRouteId: imagePreprocessResult?.receipt?.effectiveRouteId,
+          pixelValuesTensorSha256,
+          pixelValuesOutput,
           midstreamRouteId: decoderResult.receipt.effectiveRouteId,
           downstreamRouteId: tailResult.receipt.effectiveRouteId,
           detrEncoderOutput,
@@ -1915,7 +1999,7 @@ async function main() {
       throw new Error('oracle packet must preserve explicit static-weight or reference-weight identity');
     }
 
-    const payload = manifest.mode === 'mlx-detr-stack-export' || manifest.mode === 'mlx-detr-stack-scoring-export' || manifest.mode === 'mlx-detr-stack-selection-export' || manifest.mode === 'mlx-detector-stack-export' || manifest.boundary === 'sam3-detector-detr-encoder-decoder-mask-tail-phase-program' || manifest.boundary === 'sam3-detector-detr-encoder-decoder-scoring-mask-tail-phase-program' || manifest.boundary === 'sam3-detector-detr-encoder-decoder-scoring-selection-mask-tail-phase-program' || manifest.boundary === 'sam3-detector-stack-browser-local-detector-mask-phase-program'
+    const payload = manifest.mode === 'mlx-detr-stack-export' || manifest.mode === 'mlx-detr-stack-scoring-export' || manifest.mode === 'mlx-detr-stack-selection-export' || manifest.mode === 'mlx-detector-stack-export' || manifest.mode === 'mlx-detector-stack-preprocess-export' || manifest.boundary === 'sam3-detector-detr-encoder-decoder-mask-tail-phase-program' || manifest.boundary === 'sam3-detector-detr-encoder-decoder-scoring-mask-tail-phase-program' || manifest.boundary === 'sam3-detector-detr-encoder-decoder-scoring-selection-mask-tail-phase-program' || manifest.boundary === 'sam3-detector-stack-browser-local-detector-mask-phase-program' || manifest.boundary === 'sam3-browser-local-image-preprocess-detector-stack-phase-program'
       ? await loadDetrStackPayload(manifest)
       : manifest.routeId === SAM3_DETR_DECODER_PHASE_PROGRAM_ROUTE_ID
       ? await loadDetrDecoderPayload(manifest)
@@ -2200,7 +2284,7 @@ async function main() {
     });
 
     setStatus('run-webgpu-route');
-    const result = await payload.run({ device, adapter, route, request });
+    const result = await payload.run({ device, adapter, route, request, sourceImage });
 
     const gpuLogits = result.debugReadback.maskLogits ? new Float32Array(result.debugReadback.maskLogits) : null;
     const gpuBinary = result.debugReadback.binaryMask ? new Uint32Array(result.debugReadback.binaryMask) : null;
@@ -2211,6 +2295,8 @@ async function main() {
       lastHsMaxAbsDiff: result.debugReadback.lastHs ? maxAbsDiff(payload.expectedLastHs || [], new Float32Array(result.debugReadback.lastHs)) : undefined,
       referenceBoxesMaxAbsDiff: result.debugReadback.referenceBoxes ? maxAbsDiff(payload.expectedReferenceBoxes || [], new Float32Array(result.debugReadback.referenceBoxes)) : undefined,
       presenceLogitsMaxAbsDiff: result.debugReadback.presenceLogits ? maxAbsDiff(payload.expectedPresenceLogits || [], new Float32Array(result.debugReadback.presenceLogits)) : undefined,
+      pixelValuesMaxAbsDiff: result.debugReadback.pixelValues ? maxAbsDiff(payload.expectedPixelValues || [], new Float32Array(result.debugReadback.pixelValues)) : undefined,
+      imagePreprocessCpuMaxAbsDiff: result.debugReadback.imagePreprocessCpuMaxAbsDiff,
       promptFpnMaxAbsDiff: result.debugReadback.promptFpnFeature ? maxAbsDiff(payload.expectedPromptFpnFeature || [], new Float32Array(result.debugReadback.promptFpnFeature)) : undefined,
       pixelEmbedMaxAbsDiff: result.debugReadback.pixelEmbed ? maxAbsDiff(payload.expectedPixelEmbed || [], new Float32Array(result.debugReadback.pixelEmbed)) : undefined,
       maskLogitsMaxAbsDiff: gpuLogits ? maxAbsDiff(expectedLogits, gpuLogits) : undefined,
@@ -2231,6 +2317,7 @@ async function main() {
     const gpuPresenceLogitsTolerance = manifest.tolerances?.presenceLogitsMaxAbsDiff ?? 0.0002;
     const gpuEncoderTolerance = manifest.tolerances?.encoderHiddenStatesMaxAbsDiff ?? 0.0002;
     const gpuDecoderHiddenStatesTolerance = manifest.tolerances?.decoderHiddenStatesMaxAbsDiff ?? gpuLastHsTolerance;
+    const gpuPixelValuesTolerance = manifest.tolerances?.pixelValuesMaxAbsDiff ?? 0.000001;
     const gpuPromptFpnTolerance = manifest.tolerances?.promptFpnMaxAbsDiff ?? 0.00001;
     const gpuPixelTolerance = manifest.tolerances?.pixelEmbedMaxAbsDiff ?? 0.00001;
     const selectionScoresTolerance = manifest.tolerances?.selectionScoresMaxAbsDiff ?? 0.00001;
@@ -2248,6 +2335,8 @@ async function main() {
       expectedReferenceBoxes: payload.expectedReferenceBoxes ? Array.from(payload.expectedReferenceBoxes.slice(0, 16)) : undefined,
       presenceLogits: result.debugReadback.presenceLogits ? Array.from(new Float32Array(result.debugReadback.presenceLogits).slice(0, 8)) : undefined,
       expectedPresenceLogits: payload.expectedPresenceLogits ? Array.from(payload.expectedPresenceLogits.slice(0, 8)) : undefined,
+      pixelValues: result.debugReadback.pixelValues ? Array.from(new Float32Array(result.debugReadback.pixelValues).slice(0, 16)) : undefined,
+      expectedPixelValues: payload.expectedPixelValues ? Array.from(payload.expectedPixelValues.slice(0, 16)) : undefined,
       predLogits: result.debugReadback.predLogits ? Array.from(new Float32Array(result.debugReadback.predLogits).slice(0, 16)) : undefined,
       expectedPredLogits: payload.expectedPredLogits ? Array.from(payload.expectedPredLogits.slice(0, 16)) : undefined,
       selectedIndex: result.debugReadback.selectedIndex ? Array.from(new Uint32Array(result.debugReadback.selectedIndex).slice(0, 8)) : undefined,
@@ -2282,12 +2371,26 @@ async function main() {
       visualSelectedMaskIndex: selectedMaskIndex,
       selectedMaskIndexSource,
     } : null;
+    state.imagePreprocessEvidence = payload.imagePreprocessEvidence ? {
+      ...payload.imagePreprocessEvidence,
+      receipt: result.compositionRouteReceipts?.find(receipt => receipt.effectiveRouteId === SAM3_IMAGE_PREPROCESS_PHASE_PROGRAM_ROUTE_ID) || null,
+      receiptChain: (result.compositionRouteReceipts || []).map(receipt => receipt.effectiveRouteId),
+      pixelValuesTensorSha256: result.compositionEdge?.pixelValuesTensorSha256 || null,
+      pixelValuesOutput: result.compositionEdge?.pixelValuesOutput || null,
+      parity: {
+        pixelValuesMaxAbsDiff: parity.pixelValuesMaxAbsDiff,
+        imagePreprocessCpuMaxAbsDiff: parity.imagePreprocessCpuMaxAbsDiff,
+      },
+      debugReadbackSample: debugReadbackSamples.pixelValues,
+    } : null;
     if (
       (parity.encoderHiddenStatesMaxAbsDiff ?? 0) > gpuEncoderTolerance
       || (parity.decoderHiddenStatesMaxAbsDiff ?? 0) > gpuDecoderHiddenStatesTolerance
       || (parity.lastHsMaxAbsDiff ?? 0) > gpuLastHsTolerance
       || (parity.referenceBoxesMaxAbsDiff ?? 0) > gpuReferenceBoxesTolerance
       || (parity.presenceLogitsMaxAbsDiff ?? 0) > gpuPresenceLogitsTolerance
+      || (parity.pixelValuesMaxAbsDiff ?? 0) > gpuPixelValuesTolerance
+      || (parity.imagePreprocessCpuMaxAbsDiff ?? 0) > gpuPixelValuesTolerance
       || (parity.promptFpnMaxAbsDiff ?? 0) > gpuPromptFpnTolerance
       || (parity.pixelEmbedMaxAbsDiff ?? 0) > gpuPixelTolerance
       || (parity.maskLogitsMaxAbsDiff ?? 0) > gpuTolerance
@@ -2342,6 +2445,18 @@ async function main() {
     state.downstreamRouteReceipt = result.downstreamRouteReceipt || null;
     state.compositionRouteReceipts = result.compositionRouteReceipts || null;
     state.compositionEdge = result.compositionEdge || null;
+    state.imagePreprocessEvidence = payload.imagePreprocessEvidence ? {
+      ...payload.imagePreprocessEvidence,
+      receipt: result.compositionRouteReceipts?.find(receipt => receipt.effectiveRouteId === SAM3_IMAGE_PREPROCESS_PHASE_PROGRAM_ROUTE_ID) || null,
+      receiptChain: (result.compositionRouteReceipts || []).map(receipt => receipt.effectiveRouteId),
+      pixelValuesTensorSha256: result.compositionEdge?.pixelValuesTensorSha256 || null,
+      pixelValuesOutput: result.compositionEdge?.pixelValuesOutput || null,
+      parity: {
+        pixelValuesMaxAbsDiff: parity.pixelValuesMaxAbsDiff,
+        imagePreprocessCpuMaxAbsDiff: parity.imagePreprocessCpuMaxAbsDiff,
+      },
+      debugReadbackSample: debugReadbackSamples.pixelValues,
+    } : null;
     state.debugReadbackSamples = debugReadbackSamples;
     state.parity = parity;
     renderSummary({

@@ -138,6 +138,14 @@ export {
 } from './sam-mask-tail-phase-program.js';
 
 export {
+  SAM3_IMAGE_PREPROCESS_PHASE_PROGRAM_ROUTE_ID,
+  createSam3ImagePreprocessPhaseProgramCpuOracle,
+  createSam3ImagePreprocessPhaseProgramRouteDefinition,
+  createSam3ImagePreprocessPhaseProgramRouteReceipt,
+  runSam3ImagePreprocessPhaseProgramRoute,
+} from './sam-image-preprocess-phase-program.js';
+
+export {
   SAM3_PIXEL_DECODER_PHASE_PROGRAM_ROUTE_ID,
   createSam3PixelDecoderPhaseProgramCpuOracle,
   createSam3PixelDecoderPhaseProgramRouteDefinition,
