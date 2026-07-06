@@ -317,11 +317,44 @@ async function runForgeHostInlineChamberHostScenario(ws) {
       if (!/world_chamber=lerms-underhill/.test(iframe.getAttribute('src') || '')) {
         throw new Error('Forge Host inline-host iframe src lost world chamber route: ' + iframe.outerHTML);
       }
+      if (typeof window.kaminosCaptureForgeHostSmokeReceipt !== 'function') {
+        throw new Error('Forge Host inline-host did not expose receipt capture API');
+      }
+      const receipt = await window.kaminosCaptureForgeHostSmokeReceipt({
+        disposition: 'observed',
+        operatorNote: 'witness-inline-host',
+        includeScreenshot: true,
+      });
+      if (receipt.schema !== 'kaminos.forge-host.smoke-receipt.v0') {
+        throw new Error('Forge Host receipt schema mismatch: ' + JSON.stringify(receipt));
+      }
+      if (receipt.sourceOffer?.id !== offer.id || receipt.chamber?.id !== chamber.id) {
+        throw new Error('Forge Host receipt did not preserve offer/chamber identity: ' + JSON.stringify(receipt));
+      }
+      if (receipt.inlineHost?.kind !== 'iframe' || !/world_chamber=lerms-underhill/.test(receipt.inlineHost?.effectiveUrl || '')) {
+        throw new Error('Forge Host receipt lost inline host identity: ' + JSON.stringify(receipt.inlineHost));
+      }
+      if (receipt.capture?.kind !== 'viewport_png_data_url' || !/^data:image\\/png;base64,/.test(receipt.capture?.dataUrl || '')) {
+        throw new Error('Forge Host receipt did not include viewport PNG data URL: ' + JSON.stringify(receipt.capture));
+      }
+      if (!receipt.capture?.scope || !/viewport/i.test(receipt.capture.scope)) {
+        throw new Error('Forge Host receipt did not name screenshot capture scope: ' + JSON.stringify(receipt.capture));
+      }
+      const receiptForReport = {
+        ...receipt,
+        capture: {
+          ...receipt.capture,
+          dataUrlPrefix: receipt.capture.dataUrl.slice(0, 32),
+          dataUrlLength: receipt.capture.dataUrl.length,
+          dataUrl: '[redacted-by-witness-after-prefix-and-length-check]',
+        },
+      };
       return {
         selectedActorId: finalState.selectedActorId,
         openedOffer: finalState.lastOpenedOffer,
         chamber,
         inlineHost: host,
+        receipt: receiptForReport,
         hostText: hostPanel.textContent.trim(),
       };
     })()

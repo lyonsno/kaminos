@@ -76,7 +76,7 @@ export function routeForgeHostSmokeOfferToChamber(offerRecord, station = {}, {
     sourceOffer: cloneJson(offerRecord),
     downgrades: cloneJson(offerRecord.downgrades || []),
     captureAffordances: [
-      { id: 'screenshot', label: 'Screenshot', status: 'placeholder' },
+      { id: 'screenshot', label: 'Screenshot', status: 'available' },
       { id: 'filmstrip', label: 'Filmstrip', status: 'placeholder' },
       { id: 'reply', label: 'Reply', status: 'placeholder' },
     ],

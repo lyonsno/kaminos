@@ -5557,6 +5557,93 @@ function renderForgeHostSmokeChamberInlineHost(inlineHost) {
   `;
 }
 
+async function captureForgeHostViewportPngDataUrl() {
+  if (!renderer?.domElement?.toDataURL) {
+    throw new Error('Forge Host screenshot capture unavailable: renderer canvas has no toDataURL');
+  }
+  window._kaminosDirty?.();
+  await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  const dataUrl = renderer.domElement.toDataURL('image/png');
+  if (!/^data:image\/png;base64,/.test(dataUrl)) {
+    throw new Error('Forge Host screenshot capture did not produce a PNG data URL');
+  }
+  return {
+    kind: 'viewport_png_data_url',
+    scope: 'Kaminos WebGPU viewport only; sidebar/chamber DOM and iframe contents are not included',
+    capturedAt: new Date().toISOString(),
+    width: renderer.domElement.width,
+    height: renderer.domElement.height,
+    dataUrl,
+    byteEstimate: Math.floor((dataUrl.length - 'data:image/png;base64,'.length) * 0.75),
+  };
+}
+
+async function kaminosCaptureForgeHostSmokeReceipt(options = {}) {
+  const chamber = forgeHostState?.smokeChamber || null;
+  if (!chamber) throw new Error('Forge Host smoke receipt requires an opened Smoke Chamber');
+  const inlineHost = forgeHostState?.smokeChamberInlineHost || resolveForgeHostSmokeChamberInlineHost(chamber);
+  const includeScreenshot = options.includeScreenshot !== false;
+  const receipt = {
+    schema: 'kaminos.forge-host.smoke-receipt.v0',
+    receiptId: `forge-smoke-receipt:${chamber.sourceOffer?.id || chamber.id}:${Date.now()}`,
+    createdAt: new Date().toISOString(),
+    currentRoute: window.location.href,
+    disposition: options.disposition || 'observed',
+    operatorNote: options.operatorNote || '',
+    sourceOffer: chamber.sourceOffer || null,
+    chamber: {
+      id: chamber.id,
+      schema: chamber.schema,
+      routeIdentity: chamber.routeIdentity,
+      stationActorId: chamber.stationActorId,
+      sourceAuthority: chamber.sourceAuthority,
+      displayState: chamber.displayState,
+      freshness: chamber.freshness,
+      targetSurface: chamber.targetSurface,
+      sourceRef: chamber.sourceRef,
+      targetUrl: chamber.targetUrl,
+      downgrades: chamber.downgrades || [],
+      routeWarnings: chamber.routeWarnings || [],
+    },
+    inlineHost,
+    capture: null,
+  };
+  if (includeScreenshot) receipt.capture = await captureForgeHostViewportPngDataUrl();
+  forgeHostState.lastSmokeReceipt = receipt;
+  setInfo(`Smoke receipt captured: ${chamber.sourceOffer?.title || chamber.id}`);
+  updateForgeHostReadout();
+  return receipt;
+}
+
+function downloadJsonObject(filename, value) {
+  const blob = new Blob([JSON.stringify(value, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+async function handleForgeHostChamberAction(actionId) {
+  if (actionId === 'screenshot') {
+    const receipt = await kaminosCaptureForgeHostSmokeReceipt({ includeScreenshot: true, disposition: 'observed' });
+    downloadJsonObject(`${receipt.receiptId.replace(/[^a-z0-9_.-]+/gi, '-')}.json`, receipt);
+    return receipt;
+  }
+  if (actionId === 'receipt') {
+    const receipt = await kaminosCaptureForgeHostSmokeReceipt({ includeScreenshot: false, disposition: 'observed' });
+    downloadJsonObject(`${receipt.receiptId.replace(/[^a-z0-9_.-]+/gi, '-')}.json`, receipt);
+    return receipt;
+  }
+  setInfo(`${actionId} capture is not implemented in this slice`);
+  return null;
+}
+
+window.kaminosCaptureForgeHostSmokeReceipt = kaminosCaptureForgeHostSmokeReceipt;
+
 function renderForgeHostSmokeChamber() {
   const chamberEl = document.getElementById('forge-host-smoke-chamber');
   if (!chamberEl) return;
@@ -5570,7 +5657,7 @@ function renderForgeHostSmokeChamber() {
   const inlineHost = resolveForgeHostSmokeChamberInlineHost(chamber);
   if (forgeHostState) forgeHostState.smokeChamberInlineHost = inlineHost;
   const affordances = (chamber.captureAffordances || []).map(affordance => (
-    `<button type="button" class="btn" disabled data-forge-chamber-affordance="${escapeHtml(affordance.id)}">${escapeHtml(affordance.label)}</button>`
+    `<button type="button" class="btn" ${affordance.id === 'screenshot' ? '' : 'disabled'} data-forge-chamber-affordance="${escapeHtml(affordance.id)}">${escapeHtml(affordance.label)}</button>`
   )).join('');
   chamberEl.innerHTML = `
     <div class="forge-chamber-head">
@@ -5589,8 +5676,15 @@ function renderForgeHostSmokeChamber() {
       <div class="field"><span class="field-key">Warnings</span><span class="field-val">${escapeHtml((chamber.routeWarnings || []).join(', '))}</span></div>
     </div>
     ${renderForgeHostSmokeChamberInlineHost(inlineHost)}
-    <div class="forge-chamber-actions">${affordances}</div>
+    <div class="forge-chamber-actions">${affordances}<button type="button" class="btn" data-forge-chamber-affordance="receipt">Receipt</button></div>
   `;
+  chamberEl.querySelectorAll('[data-forge-chamber-affordance]:not([disabled])').forEach(button => {
+    button.addEventListener('click', () => {
+      void handleForgeHostChamberAction(button.dataset.forgeChamberAffordance).catch(error => {
+        setInfo(`Smoke receipt failed: ${error.message || error}`);
+      });
+    });
+  });
 }
 
 function updateForgeHostReadout() {
@@ -5772,6 +5866,7 @@ window.kaminosForgeHostDebugState = function() {
     lastOpenedOffer: state?.lastOpenedOffer || null,
     smokeChamber: state?.smokeChamber || null,
     smokeChamberInlineHost: state?.smokeChamberInlineHost || null,
+    lastSmokeReceipt: state?.lastSmokeReceipt || null,
     frameCount: state?.frameCount || 0,
   };
 };
