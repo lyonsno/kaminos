@@ -10,6 +10,7 @@ const MASK_TAIL_PHASE_PROGRAM_ROUTE_ID = 'sam3.mask-tail.phase-program.webgpu-lo
 const PIXEL_DECODER_PHASE_PROGRAM_ROUTE_ID = 'sam3.pixel-decoder.phase-program.webgpu-local.v0';
 const PROMPT_FPN_PHASE_PROGRAM_ROUTE_ID = 'sam3.prompt-fpn.phase-program.webgpu-local.v0';
 const DETR_ENCODER_PHASE_PROGRAM_ROUTE_ID = 'sam3.detr-encoder.phase-program.webgpu-local.v0';
+const DETR_DECODER_PHASE_PROGRAM_ROUTE_ID = 'sam3.detr-decoder.phase-program.webgpu-local.v0';
 
 const args = new Map();
 for (let i = 2; i < process.argv.length; i += 2) {
@@ -28,6 +29,8 @@ const packetMode = args.get('--packet-mode') || 'synthetic';
 const packetTool = resolve(args.get('--packet-tool') || (
   packetMode === 'mlx-prompt-fpn-export'
     ? join(packageRoot, 'tools/sam-prompt-fpn-mlx-packet.py')
+    : packetMode === 'mlx-detr-decoder-export'
+    ? join(packageRoot, 'tools/sam-detr-decoder-mlx-packet.py')
     : packetMode === 'mlx-detr-encoder-export'
     ? join(packageRoot, 'tools/sam-detr-encoder-mlx-packet.py')
     : packetMode === 'mlx-pixel-decoder-export'
@@ -43,6 +46,8 @@ const sourceImage = args.get('--image') || process.env.KAMINOS_SAM3_FIXTURE_IMAG
 const requestedRouteId = args.get('--route-id') || (
   packetMode === 'mlx-prompt-fpn-export'
     ? PROMPT_FPN_PHASE_PROGRAM_ROUTE_ID
+    : packetMode === 'mlx-detr-decoder-export'
+    ? DETR_DECODER_PHASE_PROGRAM_ROUTE_ID
     : packetMode === 'mlx-detr-encoder-export'
     ? DETR_ENCODER_PHASE_PROGRAM_ROUTE_ID
     : packetMode === 'mlx-pixel-decoder-export'
@@ -346,7 +351,46 @@ async function main() {
       throw new Error(`route identity mismatch: ${lastState.requestedRouteId} -> ${lastState.effectiveRouteId}`);
     }
     if (!lastState.backendIdentity?.adapterName) throw new Error('backendIdentity.adapterName missing');
-    if (requestedRouteId === DETR_ENCODER_PHASE_PROGRAM_ROUTE_ID) {
+    if (requestedRouteId === DETR_DECODER_PHASE_PROGRAM_ROUTE_ID) {
+      if (!lastState.tensorPacket?.encoderHiddenStatesSha256 || !lastState.tensorPacket?.encoderPosSha256 || !lastState.tensorPacket?.expectedLastHsSha256 || !lastState.tensorPacket?.expectedReferenceBoxesSha256 || !lastState.tensorPacket?.expectedPresenceLogitsSha256 || !lastState.tensorPacket?.pixelEmbedSha256 || !lastState.tensorPacket?.weightsSha256) {
+        throw new Error('DETR decoder tensorPacket identity missing');
+      }
+      if (!Array.isArray(lastState.compositionRouteReceipts) || lastState.compositionRouteReceipts.length !== 2) {
+        throw new Error('DETR decoder composition receipt chain missing');
+      }
+      const [decoderReceipt, tailReceipt] = lastState.compositionRouteReceipts;
+      const compositionEdge = lastState.compositionEdge;
+      if (decoderReceipt.effectiveRouteId !== DETR_DECODER_PHASE_PROGRAM_ROUTE_ID) throw new Error('DETR decoder receipt identity mismatch');
+      if (tailReceipt.effectiveRouteId !== MASK_TAIL_PHASE_PROGRAM_ROUTE_ID) throw new Error('DETR decoder mask-tail receipt identity mismatch');
+      const lastHsOutput = decoderReceipt.outputs?.find(output => output.role === 'last-hs');
+      const referenceBoxesOutput = decoderReceipt.outputs?.find(output => output.role === 'reference-boxes');
+      const presenceLogitsOutput = decoderReceipt.outputs?.find(output => output.role === 'presence-logits');
+      if (
+        lastHsOutput?.artifactId !== compositionEdge?.lastHsOutput?.artifactId
+        || lastHsOutput?.sha256 !== compositionEdge?.lastHsOutput?.sha256
+        || JSON.stringify(lastHsOutput?.shape) !== JSON.stringify(compositionEdge?.lastHsOutput?.shape)
+      ) {
+        throw new Error('DETR decoder last-hs output identity does not match composition edge');
+      }
+      if (
+        referenceBoxesOutput?.artifactId !== compositionEdge?.referenceBoxesOutput?.artifactId
+        || referenceBoxesOutput?.sha256 !== compositionEdge?.referenceBoxesOutput?.sha256
+      ) {
+        throw new Error('DETR decoder reference-boxes output identity does not match composition edge');
+      }
+      if (
+        presenceLogitsOutput?.artifactId !== compositionEdge?.presenceLogitsOutput?.artifactId
+        || presenceLogitsOutput?.sha256 !== compositionEdge?.presenceLogitsOutput?.sha256
+      ) {
+        throw new Error('DETR decoder presence-logits output identity does not match composition edge');
+      }
+      const downstreamTensorInput = tailReceipt.inputs?.find(input => input.role === 'sam3-mask-tail-tensors');
+      if (downstreamTensorInput?.sha256 !== compositionEdge?.downstreamTensorSha256) throw new Error('DETR decoder downstreamTensorSha256 does not match mask-tail receipt input');
+      if (lastState.parity?.lastHsMaxAbsDiff > 0.0006) throw new Error('DETR decoder last-hs parity exceeds tolerance');
+      if (lastState.parity?.referenceBoxesMaxAbsDiff > 0.0006) throw new Error('DETR decoder reference-box parity exceeds tolerance');
+      if (lastState.parity?.presenceLogitsMaxAbsDiff > 0.0006) throw new Error('DETR decoder presence parity exceeds tolerance');
+      if (lastState.parity?.binaryMismatchCount > 8) throw new Error('DETR decoder binary mask parity exceeds tolerance');
+    } else if (requestedRouteId === DETR_ENCODER_PHASE_PROGRAM_ROUTE_ID) {
       if (!lastState.tensorPacket?.encoderSrcSha256 || !lastState.tensorPacket?.encoderPosSha256 || !lastState.tensorPacket?.expectedEncoderHiddenStatesSha256 || !lastState.tensorPacket?.weightsSha256) {
         throw new Error('DETR encoder tensorPacket identity missing');
       }

@@ -162,6 +162,14 @@ export {
 } from './sam-detr-encoder-phase-program.js';
 
 export {
+  SAM3_DETR_DECODER_PHASE_PROGRAM_ROUTE_ID,
+  createSam3DetrDecoderPhaseProgramCpuOracle,
+  createSam3DetrDecoderPhaseProgramRouteDefinition,
+  createSam3DetrDecoderPhaseProgramRouteReceipt,
+  runSam3DetrDecoderPhaseProgramRoute,
+} from './sam-detr-decoder-phase-program.js';
+
+export {
   createWebGpuRouteSchemaContract,
 } from './route-schema-contract.js';
 
