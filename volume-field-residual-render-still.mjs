@@ -7,7 +7,9 @@ import { deflateSync } from 'node:zlib';
 
 const MANIFEST_SCHEMA = 'kaminos.volume.field-residual-render-still.v0';
 const APPLICATION_ARTIFACT_SCHEMA = 'kaminos.volume.field-residual-application-artifact.v0';
+const FOCUSED_RENDER_SCHEMA = 'kaminos.volume.field-residual-focused-render-discriminator.v0';
 const PATCH_LIMITATION = 'residual-augmented-selected-field-tiles-not-full-volume-prediction';
+const FOCUSED_RENDER_LIMITATION = 'selected-patch-difference-focused-not-full-volume-proof';
 const DEFAULT_PAYLOAD_KEYS = ['lowTarget', 'predictedHighTarget', 'truthHighTarget'];
 
 function parseArgs(argv) {
@@ -185,6 +187,204 @@ function writeRgbaPng(path, width, height, rgba) {
     pngChunk('IDAT', deflateSync(raw)),
     pngChunk('IEND', Buffer.alloc(0)),
   ]));
+}
+
+function numericArg(args, key, fallback, min = -Infinity, max = Infinity) {
+  const value = Number(args.get(key));
+  if (!Number.isFinite(value)) return fallback;
+  return Math.max(min, Math.min(max, value));
+}
+
+function rgbaDifference(baseRgba, otherRgba, offset) {
+  return (
+    Math.abs(Number(baseRgba[offset]) - Number(otherRgba[offset])) +
+    Math.abs(Number(baseRgba[offset + 1]) - Number(otherRgba[offset + 1])) +
+    Math.abs(Number(baseRgba[offset + 2]) - Number(otherRgba[offset + 2]))
+  ) / 3;
+}
+
+function computeDifferenceLocalizedCropWindow(frames, threshold, padding) {
+  const baseline = frames[0];
+  let minX = baseline.width;
+  let minY = baseline.height;
+  let maxX = -1;
+  let maxY = -1;
+  let changedPixelCount = 0;
+  let deltaSum = 0;
+  let maxDelta = 0;
+  for (const frame of frames.slice(1)) {
+    if (frame.width !== baseline.width || frame.height !== baseline.height) {
+      throw new Error('focused discriminator frames have mismatched dimensions');
+    }
+    for (let y = 0; y < baseline.height; y += 1) {
+      for (let x = 0; x < baseline.width; x += 1) {
+        const offset = (y * baseline.width + x) * 4;
+        const delta = rgbaDifference(baseline.rgba, frame.rgba, offset);
+        maxDelta = Math.max(maxDelta, delta);
+        if (delta < threshold) continue;
+        minX = Math.min(minX, x);
+        minY = Math.min(minY, y);
+        maxX = Math.max(maxX, x);
+        maxY = Math.max(maxY, y);
+        changedPixelCount += 1;
+        deltaSum += delta;
+      }
+    }
+  }
+  if (maxX < 0 || maxY < 0) {
+    return {
+      x: 0,
+      y: 0,
+      width: baseline.width,
+      height: baseline.height,
+      threshold,
+      padding,
+      changedPixelCount,
+      meanChangedDelta: 0,
+      maxDelta,
+      fallback: 'full-preview-no-difference-above-threshold',
+    };
+  }
+  const x = Math.max(0, minX - padding);
+  const y = Math.max(0, minY - padding);
+  const right = Math.min(baseline.width - 1, maxX + padding);
+  const bottom = Math.min(baseline.height - 1, maxY + padding);
+  return {
+    x,
+    y,
+    width: right - x + 1,
+    height: bottom - y + 1,
+    threshold,
+    padding,
+    changedPixelCount,
+    meanChangedDelta: deltaSum / Math.max(1, changedPixelCount),
+    maxDelta,
+    fallback: null,
+  };
+}
+
+function cropRgba(rgba, sourceWidth, crop) {
+  const out = new Uint8Array(crop.width * crop.height * 4);
+  for (let y = 0; y < crop.height; y += 1) {
+    const sourceStart = ((crop.y + y) * sourceWidth + crop.x) * 4;
+    const sourceEnd = sourceStart + crop.width * 4;
+    out.set(rgba.slice(sourceStart, sourceEnd), y * crop.width * 4);
+  }
+  return out;
+}
+
+function pasteRgba(target, targetWidth, source, sourceWidth, sourceHeight, dstX, dstY) {
+  for (let y = 0; y < sourceHeight; y += 1) {
+    const sourceStart = y * sourceWidth * 4;
+    const targetStart = ((dstY + y) * targetWidth + dstX) * 4;
+    target.set(source.slice(sourceStart, sourceStart + sourceWidth * 4), targetStart);
+  }
+}
+
+function cropDeltaMetrics(baselineCrop, roleCrop) {
+  let sum = 0;
+  let max = 0;
+  let changedAbove2 = 0;
+  let changedAbove6 = 0;
+  const pixels = Math.floor(baselineCrop.length / 4);
+  for (let index = 0; index < pixels; index += 1) {
+    const offset = index * 4;
+    const delta = rgbaDifference(baselineCrop, roleCrop, offset);
+    sum += delta;
+    max = Math.max(max, delta);
+    if (delta >= 2) changedAbove2 += 1;
+    if (delta >= 6) changedAbove6 += 1;
+  }
+  return {
+    meanAbsRgbDelta: sum / Math.max(1, pixels),
+    maxAbsRgbDelta: max,
+    changedPixelFractionAt2: changedAbove2 / Math.max(1, pixels),
+    changedPixelFractionAt6: changedAbove6 / Math.max(1, pixels),
+  };
+}
+
+function buildPairwiseRoleDelta(croppedFrames) {
+  const pairs = [];
+  for (let left = 0; left < croppedFrames.length; left += 1) {
+    for (let right = left + 1; right < croppedFrames.length; right += 1) {
+      pairs.push({
+        leftRole: croppedFrames[left].role,
+        rightRole: croppedFrames[right].role,
+        ...cropDeltaMetrics(croppedFrames[left].rgba, croppedFrames[right].rgba),
+      });
+    }
+  }
+  return pairs;
+}
+
+function writeFocusedRenderDiscriminator({ args, outDir, frames, outputs, route, replay, tilePatchScope }) {
+  const requestedDir = args.get('--focused-output-dir');
+  if (!requestedDir) return null;
+  const focusedOutputDir = resolve(String(requestedDir));
+  mkdirSync(focusedOutputDir, { recursive: true });
+  const threshold = numericArg(args, '--focus-diff-threshold', 2, 0, 255);
+  const padding = Math.floor(numericArg(args, '--focus-padding', 18, 0, 256));
+  const differenceLocalizedCropWindow = computeDifferenceLocalizedCropWindow(frames, threshold, padding);
+  const baselineCrop = cropRgba(frames[0].rgba, frames[0].width, differenceLocalizedCropWindow);
+  const focusedOutputs = [];
+  const croppedFrames = [];
+  const contactSheet = new Uint8Array(differenceLocalizedCropWindow.width * frames.length * differenceLocalizedCropWindow.height * 4);
+  for (let index = 0; index < frames.length; index += 1) {
+    const frame = frames[index];
+    const crop = cropRgba(frame.rgba, frame.width, differenceLocalizedCropWindow);
+    croppedFrames.push({ role: frame.role, rgba: crop });
+    const path = resolve(focusedOutputDir, `${frame.role}.focused-crop.png`);
+    writeRgbaPng(path, differenceLocalizedCropWindow.width, differenceLocalizedCropWindow.height, Array.from(crop));
+    pasteRgba(
+      contactSheet,
+      differenceLocalizedCropWindow.width * frames.length,
+      crop,
+      differenceLocalizedCropWindow.width,
+      differenceLocalizedCropWindow.height,
+      differenceLocalizedCropWindow.width * index,
+      0
+    );
+    focusedOutputs.push({
+      role: frame.role,
+      path,
+      sha256: sha256File(path),
+      sourceRenderPath: outputs.find(output => output.role === frame.role)?.path || null,
+      cropDeltaVsBaseline: index === 0 ? null : cropDeltaMetrics(baselineCrop, crop),
+    });
+  }
+  const focusedContactSheet = resolve(focusedOutputDir, 'focusedContactSheet.png');
+  writeRgbaPng(
+    focusedContactSheet,
+    differenceLocalizedCropWindow.width * frames.length,
+    differenceLocalizedCropWindow.height,
+    Array.from(contactSheet)
+  );
+  const discriminator = {
+    schema: FOCUSED_RENDER_SCHEMA,
+    status: 'captured',
+    authority: 'difference-localized-render-crop-from-selected-field-tile-patches',
+    limitation: FOCUSED_RENDER_LIMITATION,
+    sourceRenderOutDir: outDir,
+    route,
+    deterministicReplay: replay,
+    tilePatchScope,
+    differenceLocalizedCropWindow,
+    roleOrder: frames.map(frame => frame.role),
+    pairwiseRoleDelta: buildPairwiseRoleDelta(croppedFrames),
+    outputs: focusedOutputs,
+    focusedContactSheet: {
+      path: focusedContactSheet,
+      sha256: sha256File(focusedContactSheet),
+      columnOrder: frames.map(frame => frame.role),
+    },
+  };
+  const manifestPath = resolve(focusedOutputDir, 'focused-render-discriminator.json');
+  writeJson(manifestPath, discriminator);
+  return {
+    ...discriminator,
+    manifest: manifestPath,
+    manifestSha256: sha256File(manifestPath),
+  };
 }
 
 async function delay(ms) {
@@ -377,6 +577,7 @@ async function main() {
     if (baselineRender?.ok !== true) throw new Error(`baseline no-advance sample failed: ${JSON.stringify(baselineRender)}`);
 
     const outputs = [];
+    const frames = [];
     const baselinePng = resolve(outDir, 'true-high-route-baseline.png');
     writeRgbaPng(baselinePng, baselineRender.preview.width, baselineRender.preview.height, baselineRender.preview.rgba);
     outputs.push({
@@ -393,6 +594,12 @@ async function main() {
         smokeLikePixels: baselineRender.smokeLikePixels,
         fireEdgeEnergy: baselineRender.fireEdgeEnergy,
       },
+    });
+    frames.push({
+      role: 'true-high-route-baseline',
+      width: baselineRender.preview.width,
+      height: baselineRender.preview.height,
+      rgba: baselineRender.preview.rgba,
     });
 
     for (const key of payloadKeys) {
@@ -417,9 +624,42 @@ async function main() {
           fieldTilePatchRenderOverride: sample.fieldTilePatchRenderOverride,
         },
       });
+      frames.push({
+        role: key,
+        width: sample.preview.width,
+        height: sample.preview.height,
+        rgba: sample.preview.rgba,
+      });
     }
 
     phase = 'write-report';
+    const route = {
+      requestedUrl: url,
+      effectiveRoute: baseline.effectiveRoute,
+      prototypeIdentity: baseline.prototypeIdentity,
+      backend: baseline.backend,
+      initialState: {
+        effectiveRoute: initialState.effectiveRoute,
+        prototypeIdentity: initialState.prototypeIdentity,
+        backend: initialState.backend,
+        simGrid: initialState.simGrid,
+      },
+    };
+    const tilePatchScope = {
+      grid,
+      tileCount: artifact.tiles.length,
+      targetChannels: artifact.model?.targetChannels?.targetChannels || artifact.tiles[0]?.targetChannels || [],
+      note: 'Only selected held-out field tiles are patched before rendering; unpatched cells remain the deterministic high-grid replay state.',
+    };
+    const focusedRenderDiscriminator = writeFocusedRenderDiscriminator({
+      args,
+      outDir,
+      frames,
+      outputs,
+      route,
+      replay,
+      tilePatchScope,
+    });
     const report = {
       schema: MANIFEST_SCHEMA,
       status: 'captured',
@@ -429,28 +669,13 @@ async function main() {
       sourceManifest: artifact.sourceManifest || null,
       sourceManifestSha256: artifact.sourceManifest ? sha256File(resolve(dirname(artifactManifest), artifact.sourceManifest)) : null,
       outDir,
-      route: {
-        requestedUrl: url,
-        effectiveRoute: baseline.effectiveRoute,
-        prototypeIdentity: baseline.prototypeIdentity,
-        backend: baseline.backend,
-        initialState: {
-          effectiveRoute: initialState.effectiveRoute,
-          prototypeIdentity: initialState.prototypeIdentity,
-          backend: initialState.backend,
-          simGrid: initialState.simGrid,
-        },
-      },
+      route,
       deterministicReplay: replay,
       residualRenderAuthority: 'debug-field-tile-patch-render-override-v0',
       limitation: PATCH_LIMITATION,
-      tilePatchScope: {
-        grid,
-        tileCount: artifact.tiles.length,
-        targetChannels: artifact.model?.targetChannels?.targetChannels || artifact.tiles[0]?.targetChannels || [],
-        note: 'Only selected held-out field tiles are patched before rendering; unpatched cells remain the deterministic high-grid replay state.',
-      },
+      tilePatchScope,
       outputs,
+      focusedRenderDiscriminator,
     };
     writeJson(manifestOut, report);
     ws.close();

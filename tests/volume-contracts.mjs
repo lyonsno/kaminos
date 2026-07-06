@@ -1984,6 +1984,12 @@ assert.match(fieldResidualRenderStill, /lowTarget/, 'field residual render-still
 assert.match(fieldResidualRenderStill, /predictedHighTarget/, 'field residual render-still harness renders predicted-high patched tiles');
 assert.match(fieldResidualRenderStill, /truthHighTarget/, 'field residual render-still harness renders truth-high patched tiles');
 assert.match(fieldResidualRenderStill, /residual-augmented-selected-field-tiles-not-full-volume-prediction/, 'field residual render-still manifest says selected tile patches are not full-volume prediction');
+assert.match(fieldResidualRenderStill, /--focused-output-dir/, 'field residual render-still harness can write focused visual discriminator crops');
+assert.match(fieldResidualRenderStill, /kaminos\.volume\.field-residual-focused-render-discriminator\.v0/, 'focused residual render crops carry a stable discriminator schema');
+assert.match(fieldResidualRenderStill, /differenceLocalizedCropWindow/, 'focused residual render manifest records the shared difference-localized crop window');
+assert.match(fieldResidualRenderStill, /pairwiseRoleDelta/, 'focused residual render manifest records pairwise crop deltas for truthward comparison');
+assert.match(fieldResidualRenderStill, /selected-patch-difference-focused-not-full-volume-proof/, 'focused residual render manifest says difference crops are not full-volume proof');
+assert.match(fieldResidualRenderStill, /focusedContactSheet/, 'field residual render-still harness writes a focused contact sheet for visual inspection');
 assert.match(fieldResidualRenderStill, /failurePhase/, 'field residual render-still harness writes failure-phase reports when rendering fails');
 
 const dynamicTextureProofPath = join(root, 'volume-dynamic-texture-proof.mjs');
