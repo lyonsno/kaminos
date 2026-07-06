@@ -157,6 +157,11 @@ assert.match(
 );
 assert.match(
   trainer,
+  /aux-rgb/,
+  'residual trainer must support low RGB plus auxiliary debug RGB without a constant alpha bias channel',
+);
+assert.match(
+  trainer,
   /shader-material-authority-residual-feature-v0/,
   'residual trainer must preserve shader/material feature authority instead of treating feature inputs as screen-space proxies',
 );
