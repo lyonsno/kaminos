@@ -63,25 +63,25 @@
     {
       "id": "mushfinger-motion-agency",
       "kind": "actor-motion",
-      "owner": "mushfinger-clayfucker",
+      "owner": "actor-motion-substrate",
       "route": "kaminos_motion_agency=1&kaminos_generated_pose_temporal=1"
     },
     {
       "id": "palm-hand-surface-runtime",
       "kind": "state-stream",
-      "owner": "palm-daddy",
+      "owner": "hand-surface-runtime",
       "route": "hand-state.frame.v0"
     },
     {
       "id": "molten-asset-candidates",
       "kind": "asset-generation",
-      "owner": "molten-heartfucker",
+      "owner": "generated-asset-pipeline",
       "route": "generated assets into Kaminos asset routes"
     },
     {
       "id": "minion-forge-host-smoke-offers",
       "kind": "operator-smoke",
-      "owner": "minion-spawnfucker",
+      "owner": "forge-host-smoke-workbench",
       "route": "forge-host smoke offers and capture"
     }
   ],
@@ -152,27 +152,27 @@
     ],
     "consumerCoverage": [
       {
-        "consumer": "hill-of-hills-fucker",
+        "consumer": "hill-terrain-source",
         "crucibles": ["hill-of-hills"],
         "firstUse": "Choose `hill-of-hills`, name the chamber or terrain-state armature, use one terrain handle, run one firing, and leave a terrain receipt."
       },
       {
-        "consumer": "lerm-horde-fucker",
+        "consumer": "lerm-species-source",
         "crucibles": ["lerm-species"],
         "firstUse": "Choose `lerm-species`, name the creature/body armature, use one motion or attention handle, run one firing, and leave a creature receipt."
       },
       {
-        "consumer": "lerm-feel-fucker",
+        "consumer": "hand-feel-live-compositing",
         "crucibles": ["finger-fluid", "glove-emitter"],
         "firstUse": "Choose `finger-fluid` when the firing is about emitted interaction or creature response; choose `glove-emitter` when the firing is about hand/glove route control or live compositing."
       },
       {
-        "consumer": "big-papa-finger-juice-fucker",
+        "consumer": "finger-fluid-source",
         "crucibles": ["finger-fluid"],
         "firstUse": "Choose `finger-fluid`, name the hand-state or fluid interaction armature, use one emitter handle, run one firing, and leave a fluid receipt."
       },
       {
-        "consumer": "greedy-glove-fucker",
+        "consumer": "glove-well-source",
         "crucibles": ["glove-emitter"],
         "firstUse": "Choose `glove-emitter`, name the native-host armature, use one source-route handle, run one firing, and leave a glove receipt."
       }
@@ -251,15 +251,15 @@
       "graduationMode": "remain_in_kaminos_terrarium",
       "graduationQuestion": "Does this terrain firing remain a Kaminos terrarium surface, become lerms domain-native terrain law, or expose a shared terrain/path runtime candidate?",
       "stewardship": {
-        "owner": "minion-spawnfucker",
+        "owner": "cartridge-workbench-steward",
         "role": "Kaminos cartridge and crucible workbench stewardship"
       },
       "sourceOwnership": {
-        "owner": "hill-of-hills-fucker",
+        "owner": "hill-terrain-source",
         "role": "Hill terrain source packets and domain terrain behavior"
       },
       "custody": {
-        "owner": "minion-spawnfucker",
+        "owner": "cartridge-workbench-steward",
         "sourceRepo": "kaminos",
         "domainPartner": "lerms"
       }
@@ -328,15 +328,15 @@
       "graduationMode": "remain_in_kaminos_terrarium",
       "graduationQuestion": "Does this creature firing remain a Kaminos terrarium example, move into lerms species/gameplay implementation, or become shared motion/body vocabulary?",
       "stewardship": {
-        "owner": "minion-spawnfucker",
+        "owner": "cartridge-workbench-steward",
         "role": "Kaminos crucible workflow and consumer trial stewardship"
       },
       "sourceOwnership": {
-        "owner": "lerm-horde-fucker",
-        "role": "Lerm species/body/gameplay source direction, with Mushfinger owning reusable motion substrate"
+        "owner": "lerm-species-source",
+        "role": "Lerm species/body/gameplay source direction, with reusable motion substrate as a dependency"
       },
       "custody": {
-        "owner": "mushfinger-clayfucker",
+        "owner": "cartridge-workbench-steward",
         "sourceRepo": "kaminos",
         "domainPartner": "lerms"
       }
@@ -405,15 +405,15 @@
       "graduationMode": "extract_shared_runtime",
       "graduationQuestion": "Does this finger-fluid firing remain a Kaminos terrarium affordance, move into lerms gameplay, or become shared hand/fluid runtime?",
       "stewardship": {
-        "owner": "palm-daddy",
+        "owner": "hand-integration-workbench",
         "role": "Workbench success and hand-surface integration stewardship"
       },
       "sourceOwnership": {
-        "owner": "big-papa-finger-juice-fucker",
+        "owner": "finger-fluid-source",
         "role": "Finger-fluid subsystem source payloads, solver direction, and smoke targets"
       },
       "custody": {
-        "owner": "palm-daddy",
+        "owner": "hand-integration-workbench",
         "sourceRepo": "shared-runtime-candidate",
         "domainPartner": "lerms"
       }
@@ -482,15 +482,15 @@
       "graduationMode": "extract_shared_runtime",
       "graduationQuestion": "Does this glove firing remain a Kaminos adapter recipe, move into lerms/glove implementation, or become shared hand-state/native-host runtime?",
       "stewardship": {
-        "owner": "palm-daddy",
+        "owner": "hand-integration-workbench",
         "role": "Workbench success and hand/glove integration stewardship"
       },
       "sourceOwnership": {
-        "owner": "greedy-glove-fucker",
+        "owner": "glove-well-source",
         "role": "Glovewell source packets, glove gameplay semantics, and native-host target payloads"
       },
       "custody": {
-        "owner": "palm-daddy",
+        "owner": "hand-integration-workbench",
         "sourceRepo": "shared-runtime-candidate",
         "domainPartner": "lerms"
       }

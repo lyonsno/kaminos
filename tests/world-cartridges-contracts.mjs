@@ -52,6 +52,13 @@ assert.deepEqual(WORLD_CARTRIDGE_GRADUATION_MODES, [
 ]);
 
 const manifest = JSON.parse(readFileSync(worldJsonPath, 'utf8'));
+const manifestSource = readFileSync(worldJsonPath, 'utf8');
+const privateDiaulosHandlePattern = /\b(?:minion-spawnfucker|palm-daddy|mushfinger-clayfucker|molten-heartfucker|hill-of-hills-fucker|lerm-horde-fucker|lerm-feel-fucker|big-papa-finger-juice-fucker|greedy-glove-fucker)\b/;
+assert.doesNotMatch(
+  manifestSource,
+  privateDiaulosHandlePattern,
+  'world cartridge manifest uses role/subsystem keys instead of private Diaulos handles',
+);
 const normalized = normalizeWorldCartridgeManifest(manifest, {
   manifestPath: worldJsonPath,
   rootDir: cartridgeDir,
@@ -88,7 +95,7 @@ assert.ok(normalized.firstUseTrial.allowedOutputs.includes('firing_receipt'));
 assert.ok(normalized.firstUseTrial.allowedOutputs.includes('gap_report'));
 assert.ok(normalized.firstUseTrial.failureSignals.includes('no_crucible_chosen'));
 assert.ok(normalized.firstUseTrial.graduationQuestion.includes('Kaminos'));
-assert.deepEqual(normalized.firstUseTrial.consumerCoverage.find(coverage => coverage.consumer === 'lerm-feel-fucker').crucibles, [
+assert.deepEqual(normalized.firstUseTrial.consumerCoverage.find(coverage => coverage.consumer === 'hand-feel-live-compositing').crucibles, [
   'finger-fluid',
   'glove-emitter',
 ]);
@@ -120,7 +127,7 @@ for (const crucible of normalized.crucibles) {
 assert.equal(normalized.crucibles.find(crucible => crucible.id === 'hill-of-hills').smokeApparitions[0].route, 'future:moge-depth-smoke-apparition');
 assert.equal(normalized.crucibles.find(crucible => crucible.id === 'finger-fluid').handles.some(handle => handle.kind === 'state-stream'), true);
 assert.match(normalized.crucibles.find(crucible => crucible.id === 'glove-emitter').stewardship.role, /workbench/i);
-assert.match(normalized.crucibles.find(crucible => crucible.id === 'glove-emitter').sourceOwnership.owner, /greedy/i);
+assert.equal(normalized.crucibles.find(crucible => crucible.id === 'glove-emitter').sourceOwnership.owner, 'glove-well-source');
 assert.equal(normalized.graduation.modes.length, WORLD_CARTRIDGE_GRADUATION_MODES.length);
 assert.equal(normalized.graduation.currentMode, 'remain_in_kaminos_terrarium');
 assert.equal(normalized.witnesses[0].schema, 'kaminos.world-cartridge.witness.v0');
@@ -279,6 +286,7 @@ assert.equal(index.cartridges[0].summary.creatureFamilies.includes('red-lerms'),
 assert.equal(index.cartridges[0].defaultRoute.query.world_cartridge, 'lerms-terrarium');
 assert.equal(index.cartridges[0].firstUseTrial.firstMove, 'choose_crucible');
 assert.equal(index.cartridges[0].firstUseTrial.trialSteps.includes('run_firing'), true);
+assert.equal(index.cartridges[0].firstUseTrial.consumerCoverage.some(coverage => coverage.consumer === 'lerm-feel-fucker'), false);
 assert.equal(index.cartridges[0].crucibleCount, 4);
 assert.deepEqual(index.cartridges[0].crucibles.map(crucible => crucible.id), [
   'hill-of-hills',

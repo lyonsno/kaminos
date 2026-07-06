@@ -115,7 +115,7 @@ def test_world_cartridge_index_discovers_lerms_terrarium():
     assert "run_firing" in cartridge["firstUseTrial"]["trialSteps"]
     assert next(
         coverage for coverage in cartridge["firstUseTrial"]["consumerCoverage"]
-        if coverage["consumer"] == "lerm-feel-fucker"
+        if coverage["consumer"] == "hand-feel-live-compositing"
     )["crucibles"] == ["finger-fluid", "glove-emitter"]
     assert any(bridge["repo"] == "lerms" and bridge["role"] == "game-law" for bridge in cartridge["sourceBridges"])
     assert any(binding["id"] == "mushfinger-motion-agency" for binding in cartridge["affordanceBindings"])
@@ -130,8 +130,8 @@ def test_world_cartridge_index_discovers_lerms_terrarium():
     assert cartridge["crucibles"][0]["schema"] == "kaminos.world-crucible.descriptor.v0"
     assert cartridge["crucibles"][0]["smokeApparitions"][0]["route"] == "future:moge-depth-smoke-apparition"
     assert "firing" in cartridge["crucibles"][0]["consumerCanStartBy"]
-    assert cartridge["crucibles"][2]["stewardship"]["owner"] == "palm-daddy"
-    assert cartridge["crucibles"][2]["sourceOwnership"]["owner"] == "big-papa-finger-juice-fucker"
+    assert cartridge["crucibles"][2]["stewardship"]["owner"] == "hand-integration-workbench"
+    assert cartridge["crucibles"][2]["sourceOwnership"]["owner"] == "finger-fluid-source"
     assert cartridge["witnessCount"] == 1
     assert index["errors"] == []
 
