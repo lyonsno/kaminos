@@ -97,6 +97,26 @@ def test_forge_host_registry_snapshot_fallback_is_not_live():
     assert snapshot["warnings"], "missing registry should be visible to the browser instead of silently falling back"
 
 
+def test_world_cartridge_index_discovers_lerms_terrarium():
+    index = serve.build_world_cartridge_index()
+
+    assert index["schema"] == "kaminos.world-cartridges.index.v0"
+    assert index["discoveryRoute"] == "/api/world-cartridges"
+    assert len(index["cartridges"]) == 1
+    cartridge = index["cartridges"][0]
+    assert cartridge["id"] == "lerms-terrarium"
+    assert cartridge["title"] == "LERMS Terrarium"
+    assert cartridge["authority"]["fixtureIdentity"] == "lerms-terrarium.fixture.v0"
+    assert cartridge["authority"]["displayAuthority"] == "fixture_cartridge"
+    assert cartridge["defaultRoute"]["query"]["world_cartridge"] == "lerms-terrarium"
+    assert cartridge["defaultRoute"]["query"]["world_chamber"] == "lerms-underhill"
+    assert any(bridge["repo"] == "lerms" and bridge["role"] == "game-law" for bridge in cartridge["sourceBridges"])
+    assert any(binding["id"] == "mushfinger-motion-agency" for binding in cartridge["affordanceBindings"])
+    assert any(basin["id"] == "little-body-variants" for basin in cartridge["generationBasins"])
+    assert cartridge["witnessCount"] == 1
+    assert index["errors"] == []
+
+
 def test_volume_only_scene_save_name_uses_scene_fallback():
     data = {
         "schema": "kaminos.scene.v1",

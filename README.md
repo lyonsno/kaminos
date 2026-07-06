@@ -3,7 +3,7 @@
 Kaminos is a browser-native spatial forge for generated worlds, assets,
 materials, motion, and living work. It gives route outputs and world-state
 fragments a place to take shape with lineage, spatial context, visible process,
-and operator-smokable evidence.
+and operator-smokable routes.
 
 Kaminos has two connected public faces:
 
@@ -46,7 +46,7 @@ inspectable beside the flame.
 This kiln language is a product target as well as an interface contract. Live
 compute earns full burn. Cached work earns residual warmth. Fixture and
 fallback routes carry weaker heat. Failure has its own collapse. The creative
-loop gains texture for inference latency, route truth gains a body, and every
+loop gains texture for inference latency, route state gains a body, and every
 visible phase says something real about the work being done.
 
 ## World Chambers, Benches, And Cartridges

@@ -78,6 +78,13 @@ FORGE_HOST_DIAULOS_REGISTRY_PATH = Path(os.environ.get(
     "KAMINOS_FORGE_HOST_DIAULOS_REGISTRY",
     os.path.expanduser("~/.local/state/epistaxis/directive-state/epistaxis/metadosis/diaulos-registry/diauloi.json"),
 )).expanduser()
+WORLD_CARTRIDGE_INDEX_SCHEMA = "kaminos.world-cartridges.index.v0"
+WORLD_CARTRIDGE_MANIFEST_SCHEMA = "kaminos.world-cartridge.manifest.v0"
+WORLD_CARTRIDGE_DISCOVERY_ROUTE = "/api/world-cartridges"
+WORLD_CARTRIDGES_DIR = Path(os.environ.get(
+    "KAMINOS_WORLD_CARTRIDGES_DIR",
+    str(ROOT / "worlds"),
+)).expanduser()
 ASSET_ROOTS = [
     {
         "id": "splat-inbox",
@@ -239,6 +246,62 @@ def pipeline_manifest_payload():
         **document,
         "manifestPath": str(PIPELINE_MANIFEST_PATH),
         "manifestSha256": _sha256_file(PIPELINE_MANIFEST_PATH),
+    }
+
+
+def _world_cartridge_summary(manifest, cartridge_dir):
+    authority = manifest.get("authority") or {}
+    if manifest.get("schema") != WORLD_CARTRIDGE_MANIFEST_SCHEMA:
+        raise ValueError(f"world cartridge manifest schema mismatch: {manifest.get('schema') or 'missing'}")
+    if not manifest.get("id"):
+        raise ValueError("world cartridge manifest missing id")
+    if not authority.get("fixtureIdentity"):
+        raise ValueError("world cartridge manifest missing fixture identity")
+    if authority.get("displayAuthority") == "live_cartridge":
+        raise ValueError("fixture cartridge cannot claim live display authority")
+    return {
+        "schema": WORLD_CARTRIDGE_MANIFEST_SCHEMA,
+        "id": manifest.get("id"),
+        "slug": manifest.get("slug") or manifest.get("id"),
+        "title": manifest.get("title"),
+        "summary": manifest.get("summary") or {},
+        "authority": authority,
+        "defaultChamber": manifest.get("defaultChamber"),
+        "defaultRoute": manifest.get("defaultRoute") or {},
+        "graduation": manifest.get("graduation") or {},
+        "sourceBridges": manifest.get("sourceBridges") or [],
+        "affordanceBindings": manifest.get("affordanceBindings") or [],
+        "generationBasins": manifest.get("generationBasins") or [],
+        "witnessCount": len(manifest.get("witnesses") or []),
+        "path": cartridge_dir.name,
+    }
+
+
+def build_world_cartridge_index(root_dir=WORLD_CARTRIDGES_DIR):
+    root_dir = Path(root_dir).expanduser()
+    cartridges = []
+    errors = []
+    if not root_dir.exists():
+        return {
+            "schema": WORLD_CARTRIDGE_INDEX_SCHEMA,
+            "discoveryRoute": WORLD_CARTRIDGE_DISCOVERY_ROUTE,
+            "rootDir": str(root_dir),
+            "cartridges": cartridges,
+            "errors": [{"path": str(root_dir), "error": "world cartridges root missing"}],
+        }
+    for cartridge_dir in sorted(path for path in root_dir.iterdir() if path.is_dir()):
+        manifest_path = cartridge_dir / "world.json"
+        try:
+            manifest = json.loads(manifest_path.read_text())
+            cartridges.append(_world_cartridge_summary(manifest, cartridge_dir))
+        except Exception as error:
+            errors.append({"path": str(cartridge_dir), "error": str(error)})
+    return {
+        "schema": WORLD_CARTRIDGE_INDEX_SCHEMA,
+        "discoveryRoute": WORLD_CARTRIDGE_DISCOVERY_ROUTE,
+        "rootDir": str(root_dir),
+        "cartridges": cartridges,
+        "errors": errors,
     }
 
 
@@ -946,6 +1009,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_splat_correction_get(parse_qs(parsed.query))
         elif parsed.path == "/api/forge-host/registry":
             self.handle_forge_host_registry()
+        elif parsed.path == WORLD_CARTRIDGE_DISCOVERY_ROUTE:
+            self.handle_world_cartridges()
         elif parsed.path == "/api/roots":
             self.handle_roots()
         elif parsed.path.startswith("/api/read"):
@@ -979,6 +1044,9 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
 
     def handle_forge_host_registry(self):
         self.send_json(build_forge_host_registry_snapshot())
+
+    def handle_world_cartridges(self):
+        self.send_json(build_world_cartridge_index())
 
     def handle_pipeline_manifest(self):
         try:

@@ -32,7 +32,7 @@ world inhabitants. The terrarium presents gentle handles first:
 - select visual and behavioral variants;
 - introduce terrain, props, weather, material, or light;
 - watch creatures move, gather, avoid, desire, fight, idle, or nest;
-- capture a moment as a smoke, specimen, or seed for a deeper edit;
+- capture a moment as a smoke, seed, or deeper edit;
 - open maker controls when curiosity becomes technical.
 
 Taste is a creative tool in this surface. A user can steer by preference,

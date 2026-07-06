@@ -1,0 +1,150 @@
+{
+  "schema": "kaminos.world-cartridge.manifest.v0",
+  "id": "lerms-terrarium",
+  "slug": "lerms-terrarium",
+  "title": "LERMS Terrarium",
+  "summary": {
+    "tagline": "A Kaminos-hosted little-world cartridge for terrain, bodies, hand surfaces, props, goins, motion, and creature interaction basins.",
+    "creatureFamilies": ["red-lerms", "goins"],
+    "surfaces": ["terrain-preview", "motion-agency", "hand-surface", "finger-fluid", "forge-host-smoke-offers"]
+  },
+  "audience": ["operator", "agent-smoke-builders", "taste-first-creature-makers", "technical-world-builders"],
+  "authority": {
+    "fixtureIdentity": "lerms-terrarium.fixture.v0",
+    "displayAuthority": "fixture_cartridge",
+    "statusColor": "#7fd9bd",
+    "provenance": "kaminos:minion-lerms-world-cartridge-0705"
+  },
+  "lineage": {
+    "origin": "Kaminos world-cartridge scaffold slice",
+    "sourceDocs": [
+      "docs/world-cartridges.md",
+      "docs/smoke-workbench-for-agents.md",
+      "metadosis/kaminos-many-handled-bastard-bench-affordance-muster_2026-07-05.md"
+    ]
+  },
+  "defaultChamber": "lerms-underhill",
+  "defaultRoute": {
+    "tab": "worlds",
+    "query": {
+      "world_cartridge": "lerms-terrarium",
+      "world_chamber": "lerms-underhill",
+      "posture": "inspect",
+      "bench": "terrain-preview"
+    }
+  },
+  "sourceBridges": [
+    {
+      "id": "lerms-game-law",
+      "repo": "lerms",
+      "role": "game-law",
+      "surface": "domain-native runtime, gameplay loop, creature semantics, saves, and progression"
+    },
+    {
+      "id": "underhill-composer",
+      "repo": "lerms",
+      "role": "terrain-and-first-vertical",
+      "surface": "lerms-underhill chamber receipts and first vertical frame summaries"
+    },
+    {
+      "id": "hand-state-runtime",
+      "repo": "shared-runtime-candidate",
+      "role": "hand-state",
+      "surface": "WiLoR and hand-surface state stream once extracted"
+    }
+  ],
+  "affordanceBindings": [
+    {
+      "id": "world-chamber-lerms-underhill",
+      "kind": "world-chamber",
+      "owner": "kaminos",
+      "route": "world_chamber=lerms-underhill&posture=inspect&bench=terrain-preview"
+    },
+    {
+      "id": "mushfinger-motion-agency",
+      "kind": "actor-motion",
+      "owner": "mushfinger-clayfucker",
+      "route": "kaminos_motion_agency=1&kaminos_generated_pose_temporal=1"
+    },
+    {
+      "id": "palm-hand-surface-runtime",
+      "kind": "state-stream",
+      "owner": "palm-daddy",
+      "route": "hand-state.frame.v0"
+    },
+    {
+      "id": "molten-asset-candidates",
+      "kind": "asset-generation",
+      "owner": "molten-heartfucker",
+      "route": "generated assets into Kaminos asset routes"
+    },
+    {
+      "id": "minion-forge-host-smoke-offers",
+      "kind": "operator-smoke",
+      "owner": "minion-spawnfucker",
+      "route": "forge-host smoke offers and capture"
+    }
+  ],
+  "generationBasins": [
+    {
+      "id": "little-body-variants",
+      "kind": "creature-visuals",
+      "inputs": ["orb bodies", "lamellar bands", "red lerm body language", "motion takes"]
+    },
+    {
+      "id": "underhill-terrain-props",
+      "kind": "terrain-and-props",
+      "inputs": ["Hill terrain", "goins", "little docks", "carrier props"]
+    },
+    {
+      "id": "finger-fluid-interactions",
+      "kind": "interaction-fluid",
+      "inputs": ["hand state", "finger-fluid emitters", "terrain collisions", "creature reactions"]
+    }
+  ],
+  "sceneRecipes": [
+    {
+      "id": "underhill-preview",
+      "label": "Underhill Preview",
+      "chamber": "lerms-underhill",
+      "posture": "inspect",
+      "bench": "terrain-preview"
+    },
+    {
+      "id": "motion-agency-creature-pass",
+      "label": "Motion Agency Creature Pass",
+      "chamber": "lerms-underhill",
+      "posture": "inhabit",
+      "affordances": ["mushfinger-motion-agency", "world-chamber-lerms-underhill"]
+    }
+  ],
+  "graduation": {
+    "currentMode": "remain_in_kaminos_terrarium",
+    "modes": [
+      "remain_in_kaminos_terrarium",
+      "port_domain_native",
+      "extract_shared_runtime",
+      "ship_kaminos_backed_shell",
+      "archive_prototype"
+    ],
+    "notes": [
+      "Kaminos keeps the terrarium cartridge and smoke composition surface.",
+      "LERMS receives domain-native ports for gameplay systems that prove their shape.",
+      "Repeated cross-project needs become shared runtime candidates."
+    ]
+  },
+  "witnesses": [
+    {
+      "schema": "kaminos.world-cartridge.witness.v0",
+      "id": "lerms-terrarium-underhill-fixture",
+      "route": "world_cartridge=lerms-terrarium&world_chamber=lerms-underhill&posture=inspect&bench=terrain-preview",
+      "surface": "worlds tab / LERMS Underhill chamber",
+      "authority": "fixture_cartridge"
+    }
+  ],
+  "files": {
+    "composition": "composition.js",
+    "graduation": "graduation.md",
+    "witnesses": "witnesses/"
+  }
+}

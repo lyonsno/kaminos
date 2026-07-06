@@ -103,19 +103,19 @@ hosted scene. The chamber becomes a shared place where the pieces can meet.
 
 ## Workbench/Kiln Surfaces
 
-A **Workbench/Kiln** surface is where specimens and world fragments become
+A **Workbench/Kiln** surface is where generated pieces and world fragments become
 inspectable. It is the operational layer between raw source payloads and
 inhabited scene/world presence.
 
-Workbench/Kiln surfaces can stage assets, condition specimens, expose route
+Workbench/Kiln surfaces can stage assets, condition generated pieces, expose route
 state, show witness receipts, and prepare promotion into a chamber, cartridge,
 or scene. They make the operator's normal actions cheap: open the evidence,
 change camera, inspect provenance, capture a screenshot or filmstrip, and route
 a note back to the producer with the observed evidence attached.
 
 This is where the kiln metaphor becomes operational. A bench can show whether a
-specimen is live, cached, fixture, fallback, stale, failed, or promoted. Those
-states stay visible beside the specimen.
+generated piece is live, cached, fixture, fallback, stale, failed, or promoted.
+Those states stay visible beside the visible object.
 
 ## Promotion And Graduation
 
@@ -208,7 +208,7 @@ authority, freshness, downgrades, and display state machine-readable.
 ## Operator Smoke Capture
 
 The return path matters as much as the opening path. When an operator smokes a
-specimen or cartridge scene, Kaminos can produce operator smoke capture
+generated piece or cartridge scene, Kaminos can produce operator smoke capture
 evidence: screenshots, filmstrips, camera identity, active route, source
 authority, payload schema, timestamp, and an optional operator note.
 
@@ -222,7 +222,7 @@ That lets a producer receive:
 - and the operator's note anchored to that evidence.
 
 This is the beginning of a shared visual conversation: the operator and the
-producer can talk about the same specimen.
+producer can talk about the same visible object.
 
 For example, a motion take can export a filmstrip with prompt, route, model,
 source frame range, camera preset, reference skeleton mode, authority,
@@ -256,7 +256,7 @@ architecture.
 
 The long-term direction is that source lanes and diauloi can become embodied
 stations in Kaminos. An operator could walk up to a station, see what it is
-working on, open its Smoke Offers, inspect the specimen on a bench, capture
+working on, open its Smoke Offers, inspect the visible object on a bench, capture
 evidence, and route the observation back. The kiln and cartridge layers give
 that future agent forge an honest spatial substrate.
 
