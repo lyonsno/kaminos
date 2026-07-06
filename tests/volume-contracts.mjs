@@ -2068,6 +2068,9 @@ assert.match(renderPairDataset, /dryRun/, 'render-pair dataset supports a dry ru
 assert.match(renderPairDataset, /failurePhase/, 'render-pair dataset records the phase when capture or validation fails');
 assert.match(renderPairDataset, /frame-locked-render-scale-set-v0/, 'render-pair dataset must expose frame-locked same-state pair authority for supervised residual training');
 assert.match(renderPairDataset, /sameStateCaptureId/, 'render-pair dataset records a same-state capture identity shared by low/high scales');
+assert.match(renderPairDataset, /featureCapture/, 'render-pair dataset records same-state residual feature captures when requested');
+assert.match(renderPairDataset, /featurePath/, 'render-pair dataset exposes feature image paths for feature-aware residual training');
+assert.match(renderPairDataset, /shader-material-authority-residual-feature-v0/, 'render-pair dataset preserves shader/material feature authority for feature images');
 assert.match(renderPairDataset, /baseFrameCount/, 'render-pair dataset records the frozen source frame count');
 assert.match(renderPairDataset, /baseSimStepCount/, 'render-pair dataset records the frozen source sim-step count');
 assert.match(renderPairDataset, /--render-scale-set/, 'render-pair dataset asks the witness for a same-state render-scale set');
@@ -2080,6 +2083,10 @@ assert.match(renderPairCorpus, /shared-headful-cdp-browser-v0/, 'render-pair cor
 assert.match(renderPairCorpus, /corpus-owned-shared-headful-cdp-browser/, 'render-pair corpus can hold one headful browser across all variant/frame child captures');
 assert.match(renderPairCorpus, /cleanupCorpusWitnessBrowserSession/, 'render-pair corpus closes its shared witness browser once after all captures');
 assert.match(renderPairCorpus, /--keep-witness-browser-open/, 'render-pair corpus keeps child dataset browsers open for corpus-level cleanup');
+const controlledStepVariantStart = renderPairCorpus.indexOf('function runControlledStepVariant');
+const controlledStepVariantSummaryStart = renderPairCorpus.indexOf('const summary = {', controlledStepVariantStart);
+const controlledStepVariantCommandBlock = renderPairCorpus.slice(controlledStepVariantStart, controlledStepVariantSummaryStart);
+assert.match(controlledStepVariantCommandBlock, /--render-scale-feature-captures/, 'render-pair corpus forwards requested feature captures through controlled-step witness captures');
 assert.match(fieldSliceWitness, /sampleRenderScaleSet/, 'volume witness invokes the browser-side same-state render-scale set API');
 assert.match(fieldSliceWitness, /renderFrozenScaleToCanvas/, 'volume witness renders each same-state scale to the visible canvas before image capture');
 assert.match(fieldSliceWitness, /imageAuthority/, 'volume witness preserves screenshot authority for frozen-state scale images');

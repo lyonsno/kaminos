@@ -18,6 +18,7 @@ MODEL_ARTIFACT_SCHEMA = "kaminos.volume.residual-upscale-model-artifact.v0"
 MODEL_ARTIFACT_AUTHORITY = "offline-mlx-residual-upscaler-weights-v0"
 PAIR_AUTHORITY = "frame-locked-render-scale-set-v0"
 IMAGE_AUTHORITY = "cdp-canvas-clip-capture-after-render-only-frozen-sim-state"
+FEATURE_INPUT_AUTHORITY = "shader-material-authority-residual-feature-v0"
 
 
 def constrain_residual_color(residual, residualColorMode, chromaResidualScale):
@@ -160,6 +161,7 @@ def parse_args():
     parser.add_argument("--batch-size", type=int, default=4)
     parser.add_argument("--patch-size", type=int, default=96)
     parser.add_argument("--model-arch", dest="modelArch", choices=["tiny-conv", "direct-residual", "hybrid-residual", "gated-detail-residual"], default="tiny-conv")
+    parser.add_argument("--feature-input-mode", dest="featureInputMode", choices=["rgb", "feature-rgba"], default="rgb", help="Model input source: low RGB only, or low RGB plus shader/material residual feature RGBA.")
     parser.add_argument("--hidden-channels", type=int, default=16)
     parser.add_argument("--detail-residual-gate", dest="detailResidualGate", type=float, default=2.0, help="Fixed multiplier for the hidden detail residual in gated-detail-residual probes.")
     parser.add_argument("--learning-rate", type=float, default=1e-3)
@@ -222,13 +224,16 @@ def make_model(model_arch, hidden_channels, input_channels, detail_gate, residua
     raise ValueError(f"unsupported model architecture: {model_arch}")
 
 
-def model_config(model_arch, hidden_channels, input_channels, condition_render_scale, scale_channel, detail_gate, residual_output_limit, residual_application_mask_mode, residual_mask_feather_radius, residual_color_mode, chroma_residual_scale):
+def model_config(model_arch, hidden_channels, input_channels, condition_render_scale, scale_channel, feature_input_mode, detail_gate, residual_output_limit, residual_application_mask_mode, residual_mask_feather_radius, residual_color_mode, chroma_residual_scale):
     return {
         "modelArch": model_arch,
         "hiddenChannels": hidden_channels,
         "inputChannels": input_channels,
         "conditionRenderScale": condition_render_scale,
         "scaleChannel": scale_channel,
+        "featureInputMode": feature_input_mode,
+        "featureInputAuthority": feature_input_authority(feature_input_mode),
+        "featureInputChannels": feature_input_channels(feature_input_mode),
         "detailGate": detail_gate if model_arch == "gated-detail-residual" else None,
         "residualOutputLimit": residual_output_limit,
         "residualApplicationMaskMode": residual_application_mask_mode,
@@ -269,6 +274,9 @@ def save_model_artifact(model, model_dir, config, args, corpus, metrics, effecti
             "learningRate": args.learning_rate,
             "lossMode": args.loss_mode,
             "modelConfigSource": model_config_source,
+            "featureInputMode": config.get("featureInputMode"),
+            "featureInputAuthority": config.get("featureInputAuthority"),
+            "featureInputChannels": config.get("featureInputChannels"),
             "foregroundThreshold": args.foregroundThreshold,
             "foregroundProbability": args.foregroundProbability,
             "foregroundLossWeight": args.foregroundLossWeight,
@@ -297,6 +305,7 @@ def save_model_artifact(model, model_dir, config, args, corpus, metrics, effecti
             "corpusSchema": corpus.get("schema"),
             "pairAuthority": corpus.get("pairAuthority"),
             "imageAuthority": corpus.get("imageAuthority"),
+            "featureInputAuthority": config.get("featureInputAuthority"),
             "lowRenderScale": args.low_render_scale,
         },
         "metricsAtSave": {
@@ -372,6 +381,21 @@ def load_image(path):
     return np.asarray(image, dtype=np.float32) / 255.0
 
 
+def load_feature_image(path, target_height, target_width):
+    image = Image.open(path).convert("RGBA")
+    if image.size != (target_width, target_height):
+        image = image.resize((target_width, target_height), Image.Resampling.BILINEAR)
+    return np.asarray(image, dtype=np.float32) / 255.0
+
+
+def feature_input_channels(featureInputMode):
+    return 4 if featureInputMode == "feature-rgba" else 0
+
+
+def feature_input_authority(featureInputMode):
+    return FEATURE_INPUT_AUTHORITY if featureInputMode == "feature-rgba" else "off"
+
+
 def psnr_from_mse(mse):
     if mse <= 0:
         return float("inf")
@@ -398,7 +422,8 @@ def assert_pair(pair, corpus_path):
 
 
 def load_pairs(corpus_path, low_render_scale):
-    corpus = json.loads(Path(corpus_path).read_text())
+    raw_corpus = json.loads(Path(corpus_path).read_text())
+    corpus = raw_corpus.get("dataset") if isinstance(raw_corpus.get("dataset"), dict) else raw_corpus
     if corpus.get("pairAuthority") != PAIR_AUTHORITY:
         raise ValueError(f"corpus lacks {PAIR_AUTHORITY}: {corpus_path}")
     pairs = []
@@ -504,7 +529,7 @@ def edge_band_mask(low_image, high_image, edgeBandMode, edgeBandThreshold, edgeB
     return mask, signal
 
 
-def load_pair_arrays(pairs, foregroundThreshold, edgeBandMode, edgeBandThreshold, edgeBandDilate):
+def load_pair_arrays(pairs, foregroundThreshold, edgeBandMode, edgeBandThreshold, edgeBandDilate, featureInputMode):
     loaded = []
     for pair in pairs:
         low_path = Path(pair["low"]["path"])
@@ -513,6 +538,17 @@ def load_pair_arrays(pairs, foregroundThreshold, edgeBandMode, edgeBandThreshold
         high_image = load_image(high_path)
         if low_image.shape != high_image.shape:
             raise ValueError(f"loaded image shape mismatch: {low_path} vs {high_path}")
+        feature_image = None
+        feature_path = None
+        feature_capture = pair.get("low", {}).get("featureCapture") or {}
+        if featureInputMode == "feature-rgba":
+            feature_path = pair.get("low", {}).get("featurePath") or feature_capture.get("path")
+            if not feature_path:
+                raise ValueError(f"pair lacks featurePath for --feature-input-mode=feature-rgba: {pair.get('pairId')}")
+            feature_authority = pair.get("low", {}).get("featureAuthority") or feature_capture.get("featureAuthority")
+            if feature_authority != FEATURE_INPUT_AUTHORITY:
+                raise ValueError(f"pair feature authority is not {FEATURE_INPUT_AUTHORITY}: {pair.get('pairId')} got {feature_authority!r}")
+            feature_image = load_feature_image(feature_path, low_image.shape[0], low_image.shape[1])
         foreground = foreground_pixels(low_image, high_image, foregroundThreshold)
         edge_mask, edge_signal = edge_band_mask(low_image, high_image, edgeBandMode, edgeBandThreshold, edgeBandDilate)
         target_edge_mask, target_edge_signal = edge_band_mask(low_image, high_image, "difference-gradient", edgeBandThreshold, edgeBandDilate)
@@ -522,6 +558,11 @@ def load_pair_arrays(pairs, foregroundThreshold, edgeBandMode, edgeBandThreshold
             "id": f"{pair.get('variantId')}::{pair.get('pairId')}",
             "low": low_image,
             "high": high_image,
+            "feature": feature_image,
+            "featurePath": str(feature_path) if feature_path else None,
+            "featureInputMode": featureInputMode,
+            "featureInputAuthority": feature_input_authority(featureInputMode),
+            "featureInputChannels": feature_input_channels(featureInputMode),
             "foreground": foreground,
             "foregroundPixels": int(foreground.shape[0]),
             "edgeBandMask": edge_mask.astype(np.float32)[..., None],
@@ -581,14 +622,19 @@ def split_pairs(loaded):
     return loaded[:-eval_count], loaded[-eval_count:]
 
 
-def model_input_from_rgb(low_patch, low_render_scale, conditionRenderScale):
-    if not conditionRenderScale:
-        return low_patch
+def model_input_from_rgb(low_patch, low_render_scale, conditionRenderScale, feature_patch=None, featureInputMode="rgb"):
+    input_parts = [low_patch]
+    if featureInputMode == "feature-rgba":
+        if feature_patch is None:
+            raise ValueError("feature-rgba model input requires a feature_patch")
+        input_parts.append(feature_patch)
     scaleChannel = np.full((*low_patch.shape[:2], 1), float(low_render_scale), dtype=np.float32)
-    return np.concatenate([low_patch, scaleChannel], axis=2)
+    if conditionRenderScale:
+        input_parts.append(scaleChannel)
+    return np.concatenate(input_parts, axis=2)
 
 
-def sample_patch_batch(items, rng, batch_size, patch_size, foregroundProbability, edgeSamplingProbability, conditionRenderScale):
+def sample_patch_batch(items, rng, batch_size, patch_size, foregroundProbability, edgeSamplingProbability, conditionRenderScale, featureInputMode):
     lows = []
     highs = []
     edge_masks = []
@@ -612,7 +658,8 @@ def sample_patch_batch(items, rng, batch_size, patch_size, foregroundProbability
             top = int(rng.integers(0, max(1, height - crop_height + 1)))
             left = int(rng.integers(0, max(1, width - crop_width + 1)))
         low_patch = item["low"][top:top + crop_height, left:left + crop_width, :]
-        lows.append(model_input_from_rgb(low_patch, item["lowRenderScale"], conditionRenderScale))
+        feature_patch = item["feature"][top:top + crop_height, left:left + crop_width, :] if featureInputMode == "feature-rgba" else None
+        lows.append(model_input_from_rgb(low_patch, item["lowRenderScale"], conditionRenderScale, feature_patch, featureInputMode))
         highs.append(item["high"][top:top + crop_height, left:left + crop_width, :])
         edge_masks.append(item.get("edgeBandMask", np.zeros((*item["low"].shape[:2], 1), dtype=np.float32))[top:top + crop_height, left:left + crop_width, :])
         target_edge_masks.append(item.get("targetEdgeBandMask", item.get("edgeBandMask", np.zeros((*item["low"].shape[:2], 1), dtype=np.float32)))[top:top + crop_height, left:left + crop_width, :])
@@ -624,7 +671,7 @@ def sample_patch_batch(items, rng, batch_size, patch_size, foregroundProbability
     )
 
 
-def sample_temporal_pair_batch(temporal_pairs, rng, batch_size, patch_size, foregroundProbability, conditionRenderScale):
+def sample_temporal_pair_batch(temporal_pairs, rng, batch_size, patch_size, foregroundProbability, conditionRenderScale, featureInputMode):
     previous_lows = []
     current_lows = []
     previous_highs = []
@@ -647,8 +694,8 @@ def sample_temporal_pair_batch(temporal_pairs, rng, batch_size, patch_size, fore
             top = int(rng.integers(0, max(1, height - crop_height + 1)))
             left = int(rng.integers(0, max(1, width - crop_width + 1)))
         region = (top, left, crop_height, crop_width)
-        _previous_low_rgb, previous_high, previous_model_input, previous_mask = crop_item_arrays(previous_item, region, conditionRenderScale)
-        _current_low_rgb, current_high, current_model_input, current_mask = crop_item_arrays(current_item, region, conditionRenderScale)
+        _previous_low_rgb, previous_high, previous_model_input, previous_mask = crop_item_arrays(previous_item, region, conditionRenderScale, featureInputMode)
+        _current_low_rgb, current_high, current_model_input, current_mask = crop_item_arrays(current_item, region, conditionRenderScale, featureInputMode)
         previous_lows.append(previous_model_input)
         current_lows.append(current_model_input)
         previous_highs.append(previous_high)
@@ -810,11 +857,12 @@ def crop_region(item, crop_size, previewMode):
     return top, left, crop_height, crop_width, focus
 
 
-def crop_item_arrays(item, region, conditionRenderScale):
+def crop_item_arrays(item, region, conditionRenderScale, featureInputMode="rgb"):
     top, left, crop_height, crop_width = region
     low_patch = item["low"][top:top + crop_height, left:left + crop_width, :]
     high_patch = item["high"][top:top + crop_height, left:left + crop_width, :]
-    model_input = model_input_from_rgb(low_patch, item["lowRenderScale"], conditionRenderScale)
+    feature_patch = item["feature"][top:top + crop_height, left:left + crop_width, :] if featureInputMode == "feature-rgba" else None
+    model_input = model_input_from_rgb(low_patch, item["lowRenderScale"], conditionRenderScale, feature_patch, featureInputMode)
     edge_mask = item.get("edgeBandMask", np.zeros((*item["low"].shape[:2], 1), dtype=np.float32))[top:top + crop_height, left:left + crop_width, :]
     return low_patch, high_patch, model_input, edge_mask
 
@@ -923,7 +971,7 @@ def empty_temporal_metrics(temporalEvalScope, residualContinuationMode, residual
     }
 
 
-def temporal_sequence_metrics(model, loaded, train_items, eval_items, out_dir, crop_size, previewMode, conditionRenderScale, temporalEvalScope, residualContinuationMode, residualContinuationAlpha, residualApplicationMaskMode, residualMaskFeatherRadius):
+def temporal_sequence_metrics(model, loaded, train_items, eval_items, out_dir, crop_size, previewMode, conditionRenderScale, featureInputMode, temporalEvalScope, residualContinuationMode, residualContinuationAlpha, residualApplicationMaskMode, residualMaskFeatherRadius):
     scoped_items = temporal_scope_items(temporalEvalScope, loaded, train_items, eval_items)
     groups = temporal_groups(scoped_items)
     continuation_active = residualContinuationMode == "ema"
@@ -957,7 +1005,7 @@ def temporal_sequence_metrics(model, loaded, train_items, eval_items, out_dir, c
         region = (top, left, crop_height, crop_width)
         rendered = []
         for item in group:
-            low_patch, high_patch, model_input, residual_mask = crop_item_arrays(item, region, conditionRenderScale)
+            low_patch, high_patch, model_input, residual_mask = crop_item_arrays(item, region, conditionRenderScale, featureInputMode)
             pred_patch = predict_patch(model, model_input, residual_mask, residualApplicationMaskMode, residualMaskFeatherRadius)
             rendered.append((item, low_patch, high_patch, pred_patch))
         if not temporal_sequence_preview_written:
@@ -1098,7 +1146,7 @@ def temporal_sequence_metrics(model, loaded, train_items, eval_items, out_dir, c
     return metrics
 
 
-def evaluate_model(model, items, rng, batch_size, patch_size, eval_patches, foregroundProbability, edgeSamplingProbability, conditionRenderScale, foregroundThreshold, foregroundLossWeight, differenceLossWeight, residualApplicationMaskMode, residualMaskFeatherRadius):
+def evaluate_model(model, items, rng, batch_size, patch_size, eval_patches, foregroundProbability, edgeSamplingProbability, conditionRenderScale, featureInputMode, foregroundThreshold, foregroundLossWeight, differenceLossWeight, residualApplicationMaskMode, residualMaskFeatherRadius):
     baseline_losses = []
     model_losses = []
     weighted_baseline_losses = []
@@ -1114,7 +1162,7 @@ def evaluate_model(model, items, rng, batch_size, patch_size, eval_patches, fore
     compared_patches = 0
     batches = max(1, math.ceil(eval_patches / batch_size))
     for _ in range(batches):
-        low_batch, high_batch, edge_mask_batch, target_edge_mask_batch = sample_patch_batch(items, rng, batch_size, patch_size, foregroundProbability, edgeSamplingProbability, conditionRenderScale)
+        low_batch, high_batch, edge_mask_batch, target_edge_mask_batch = sample_patch_batch(items, rng, batch_size, patch_size, foregroundProbability, edgeSamplingProbability, conditionRenderScale, featureInputMode)
         low_rgb = rgb_channels(low_batch)
         prediction = model(low_batch, residual_application_mask(edge_mask_batch, residualApplicationMaskMode, residualMaskFeatherRadius))
         baseline_loss = mse_value(low_rgb, high_batch)
@@ -1197,13 +1245,14 @@ def evaluate_model(model, items, rng, batch_size, patch_size, eval_patches, fore
     }
 
 
-def make_preview(model, eval_item, out_path, diagnostic_out_path, preview_size, previewMode, conditionRenderScale, residualApplicationMaskMode, residualMaskFeatherRadius):
+def make_preview(model, eval_item, out_path, diagnostic_out_path, preview_size, previewMode, conditionRenderScale, featureInputMode, residualApplicationMaskMode, residualMaskFeatherRadius):
     low = eval_item["low"]
     high = eval_item["high"]
     top, left, crop_height, crop_width, previewFocus = crop_region(eval_item, preview_size, previewMode)
     low_patch = low[top:top + crop_height, left:left + crop_width, :]
     high_patch = high[top:top + crop_height, left:left + crop_width, :]
-    model_input = model_input_from_rgb(low_patch, eval_item["lowRenderScale"], conditionRenderScale)
+    feature_patch = eval_item["feature"][top:top + crop_height, left:left + crop_width, :] if featureInputMode == "feature-rgba" else None
+    model_input = model_input_from_rgb(low_patch, eval_item["lowRenderScale"], conditionRenderScale, feature_patch, featureInputMode)
     edge_mask = eval_item.get("edgeBandMask", np.zeros((*low.shape[:2], 1), dtype=np.float32))[top:top + crop_height, left:left + crop_width, :]
     pred_patch = predict_patch(model, model_input, edge_mask, residualApplicationMaskMode, residualMaskFeatherRadius)
     diff_patch = np.clip(np.abs(pred_patch - high_patch) * 4.0, 0.0, 1.0)
@@ -1218,7 +1267,7 @@ def make_preview(model, eval_item, out_path, diagnostic_out_path, preview_size, 
     return previewFocus
 
 
-def make_preview_frames(model, eval_items, out_dir, preview_size, previewMode, conditionRenderScale, residualApplicationMaskMode, residualMaskFeatherRadius, previewFrameCount, primary_preview_path, primary_diagnostic_preview_path, primary_preview_focus):
+def make_preview_frames(model, eval_items, out_dir, preview_size, previewMode, conditionRenderScale, featureInputMode, residualApplicationMaskMode, residualMaskFeatherRadius, previewFrameCount, primary_preview_path, primary_diagnostic_preview_path, primary_preview_focus):
     frame_count = min(max(1, int(previewFrameCount)), len(eval_items))
     frames = [{
         "index": 0,
@@ -1238,6 +1287,7 @@ def make_preview_frames(model, eval_items, out_dir, preview_size, previewMode, c
             preview_size,
             previewMode,
             conditionRenderScale,
+            featureInputMode,
             residualApplicationMaskMode,
             residualMaskFeatherRadius,
         )
@@ -1319,7 +1369,7 @@ def main():
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     corpus, pairs = load_pairs(args.corpus_manifest, args.low_render_scale)
-    loaded = load_pair_arrays(pairs, args.foregroundThreshold, args.edgeBandMode, args.edgeBandThreshold, args.edgeBandDilate)
+    loaded = load_pair_arrays(pairs, args.foregroundThreshold, args.edgeBandMode, args.edgeBandThreshold, args.edgeBandDilate, args.featureInputMode)
     train_items, eval_items = split_pairs(loaded)
     rng = np.random.default_rng(args.seed)
     mx.random.seed(args.seed)
@@ -1338,6 +1388,7 @@ def main():
         hiddenChannels = int(loaded_config["hiddenChannels"])
         input_channels = int(loaded_config["inputChannels"])
         conditionRenderScale = bool(loaded_config["conditionRenderScale"])
+        featureInputMode = loaded_config.get("featureInputMode", args.featureInputMode)
         scaleChannel = loaded_config.get("scaleChannel")
         loaded_detail_gate = loaded_config.get("detailGate")
         detailGate = float(loaded_detail_gate) if loaded_detail_gate is not None else args.detailResidualGate
@@ -1351,7 +1402,8 @@ def main():
         modelArch = args.modelArch
         hiddenChannels = args.hidden_channels
         conditionRenderScale = args.conditionRenderScale
-        input_channels = 4 if conditionRenderScale else 3
+        featureInputMode = args.featureInputMode
+        input_channels = 3 + feature_input_channels(featureInputMode) + (1 if conditionRenderScale else 0)
         scaleChannel = "lowRenderScale" if conditionRenderScale else None
         detailGate = args.detailResidualGate
         residualOutputLimit = args.residualOutputLimit
@@ -1371,6 +1423,7 @@ def main():
         input_channels,
         conditionRenderScale,
         scaleChannel,
+        featureInputMode,
         detailGate,
         residualOutputLimit,
         residualApplicationMaskMode,
@@ -1466,6 +1519,7 @@ def main():
             args.foregroundProbability,
             args.edgeSamplingProbability,
             conditionRenderScale,
+            featureInputMode,
         )
         if activeTemporalLossWeight > 0 or activeResidualTemporalLossWeight > 0:
             previous_low_batch, current_low_batch, previous_high_batch, current_high_batch, previous_mask_batch, current_mask_batch = sample_temporal_pair_batch(
@@ -1475,6 +1529,7 @@ def main():
                 args.patch_size,
                 args.foregroundProbability,
                 conditionRenderScale,
+                featureInputMode,
             )
         else:
             previous_low_batch = low_batch
@@ -1517,6 +1572,7 @@ def main():
         args.foregroundProbability,
         args.edgeSamplingProbability,
         conditionRenderScale,
+        featureInputMode,
         args.foregroundThreshold,
         args.foregroundLossWeight,
         args.differenceLossWeight,
@@ -1525,7 +1581,7 @@ def main():
     )
     preview_path = out_dir / "residual-preview-low-model-target-diff.png"
     diagnostic_preview_path = out_dir / "residual-preview-low-model-target-targetres-modelres-error-mask.png"
-    previewFocus = make_preview(model, eval_items[0], preview_path, diagnostic_preview_path, args.preview_size, args.preview_mode, conditionRenderScale, residualApplicationMaskMode, residualMaskFeatherRadius)
+    previewFocus = make_preview(model, eval_items[0], preview_path, diagnostic_preview_path, args.preview_size, args.preview_mode, conditionRenderScale, featureInputMode, residualApplicationMaskMode, residualMaskFeatherRadius)
     previewFrames = make_preview_frames(
         model,
         eval_items,
@@ -1533,6 +1589,7 @@ def main():
         args.preview_size,
         args.preview_mode,
         conditionRenderScale,
+        featureInputMode,
         residualApplicationMaskMode,
         residualMaskFeatherRadius,
         args.previewFrameCount,
@@ -1551,6 +1608,7 @@ def main():
             args.temporalCropSize or args.preview_size,
             args.preview_mode,
             conditionRenderScale,
+            featureInputMode,
             args.temporalEvalScope,
             args.residualContinuationMode,
             args.residualContinuationAlpha,
@@ -1632,6 +1690,13 @@ def main():
         "residualApplicationMaskAuthority": residual_application_mask_authority(residualApplicationMaskMode, args.edgeBandMode),
         "residualSmoothnessLossWeight": args.residualSmoothnessLossWeight,
         "conditionRenderScale": conditionRenderScale,
+        "featureInputMode": featureInputMode,
+        "featureInputAuthority": feature_input_authority(featureInputMode),
+        "featureInputChannels": feature_input_channels(featureInputMode),
+        "featurePaths": {
+            item["id"]: item.get("featurePath")
+            for item in loaded
+        },
         "temporalLossWeight": args.temporalLossWeight,
         "activeTemporalLossWeight": activeTemporalLossWeight,
         "residualTemporalLossWeight": args.residualTemporalLossWeight,
@@ -1657,6 +1722,9 @@ def main():
         "temporalEvalScope": args.temporalEvalScope,
         "inputChannels": input_channels,
         "scaleChannel": scaleChannel,
+        "featureInputMode": featureInputMode,
+        "featureInputAuthority": feature_input_authority(featureInputMode),
+        "featureInputChannels": feature_input_channels(featureInputMode),
         "foregroundPixels": {
             item["id"]: item["foregroundPixels"]
             for item in loaded

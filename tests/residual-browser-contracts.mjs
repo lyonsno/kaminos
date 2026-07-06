@@ -39,6 +39,21 @@ assert.match(
   /output\.bias/,
   'browser residual exporter must preserve the direct residual convolution bias',
 );
+assert.doesNotMatch(
+  exporter,
+  /requires exactly 3 input channels/,
+  'browser residual exporter must not reject feature-aware direct-residual artifacts with more than RGB input channels',
+);
+assert.match(
+  exporter,
+  /feature-rgba/,
+  'browser residual exporter must preserve feature-rgba model input identity for shader/material feature-aware residuals',
+);
+assert.match(
+  exporter,
+  /shader-material-authority-residual-feature-v0/,
+  'browser residual exporter must preserve shader/material feature authority',
+);
 
 assert.match(
   core,
@@ -124,6 +139,21 @@ assert.match(
   core,
   /debugFeatureView/,
   'browser residual shader must branch to a direct feature-plane visualization instead of inferring through final RGB',
+);
+assert.match(
+  core,
+  /browserResidualInputChannels/,
+  'browser residual runtime must preserve the model input channel count for RGB-only and feature-aware residuals',
+);
+assert.match(
+  core,
+  /residualDataHeaderFloats/,
+  'browser residual runtime must pack residual metadata separately from variable-length 3x3xC weights',
+);
+assert.match(
+  core,
+  /feature\.a/,
+  'browser residual shader must be able to consume the smoke-authority feature channel as model input',
 );
 assert.match(
   html,

@@ -132,6 +132,7 @@ const fullScreenshot = args.has('--full-screenshot')
 const renderScaleSet = parseNumberList(args.get('--render-scale-set')).map(clampRenderScale);
 const renderScaleSetDir = resolve(args.get('--render-scale-set-dir') || dirname(out));
 const renderScaleSetPrefix = String(args.get('--render-scale-set-prefix') || 'same-state-render-scale-set');
+const renderScaleFeatureCaptures = args.has('--render-scale-feature-captures') && !['0', 'false', 'no'].includes(String(args.get('--render-scale-feature-captures') || '1').toLowerCase());
 const controlledStepSequenceRequested = args.has('--controlled-step-sequence') && !['0', 'false', 'no'].includes(String(args.get('--controlled-step-sequence') || '1').toLowerCase());
 const controlledStepFrames = Math.max(1, Math.floor(Number(args.get('--controlled-step-frames') || 1)));
 const controlledStepDeltaMs = Math.max(0, Number(args.get('--controlled-step-delta-ms') || 220));
@@ -2838,9 +2839,10 @@ async function main() {
         selector: '#fps-counter',
       };
       const renderScaleSetEval = await wsRequest(ws, 'Runtime.evaluate', {
-        expression: `window.__kaminosVolumePrototype.sampleRenderScaleSet(${JSON.stringify({
+          expression: `window.__kaminosVolumePrototype.sampleRenderScaleSet(${JSON.stringify({
           renderScales: renderScaleSet,
           includeRgba: false,
+          includeFeatureRgba: renderScaleFeatureCaptures,
           resumeRenderLoop: false,
         })})`,
         awaitPromise: true,
@@ -2859,9 +2861,11 @@ async function main() {
       for (let index = 0; index < scaleSet.samples.length; index += 1) {
         const scaleSample = scaleSet.samples[index];
         const renderScale = clampRenderScale(scaleSample.requestedRenderScale ?? scaleSample.renderScale);
+        const shouldCaptureFeature = renderScaleFeatureCaptures && scaleSample.role !== 'high';
         const slug = `${renderScaleSetPrefix}-${String(index + 1).padStart(2, '0')}-${scaleSlug(renderScale)}`;
         const imagePath = resolve(renderScaleSetDir, `${slug}.png`);
         const previewPath = resolve(renderScaleSetDir, `${slug}.preview.png`);
+        const featurePath = resolve(renderScaleSetDir, `${slug}.feature.png`);
         const captureReportPath = resolve(renderScaleSetDir, `${slug}.json`);
         if (scaleSample.preview?.rgba && Number.isFinite(scaleSample.preview.width) && Number.isFinite(scaleSample.preview.height)) {
           writeRgbaPng(previewPath, scaleSample.preview.width, scaleSample.preview.height, scaleSample.preview.rgba);
@@ -2873,6 +2877,7 @@ async function main() {
             sameStateCaptureId: scaleSet.sameStateCaptureId,
             baseFrameCount: scaleSet.baseFrameCount,
             baseSimStepCount: scaleSet.baseSimStepCount,
+            includeFeatureRgba: shouldCaptureFeature,
             restoreControls: false,
             resumeRenderLoop: false,
           })})`,
@@ -2912,6 +2917,10 @@ async function main() {
         const imageBuffer = Buffer.from(scaleShot.data, 'base64');
         writeFileSync(imagePath, imageBuffer);
         const imageMetrics = measureScreenshot(imageBuffer);
+        const featureCapture = canvasCapture.featureCapture || null;
+        if (featureCapture?.rgba && Number.isFinite(featureCapture.width) && Number.isFinite(featureCapture.height)) {
+          writeRgbaPng(featurePath, featureCapture.width, featureCapture.height, featureCapture.rgba);
+        }
         const { image, preview, simReadback, majorantReadback, ...sampleReport } = scaleSample;
         const captureReport = {
           ...sampleReport,
@@ -2932,6 +2941,16 @@ async function main() {
             height: preview.height,
           } : null,
           canvasCapture,
+          featureCapture: featureCapture ? {
+            path: featurePath,
+            width: featureCapture.width,
+            height: featureCapture.height,
+            featureAuthority: featureCapture.featureAuthority,
+            imageAuthority: featureCapture.imageAuthority,
+            inputChannels: featureCapture.inputChannels,
+            channelLayout: featureCapture.channelLayout,
+            source: featureCapture.source,
+          } : null,
           simReadback: simReadback ? {
             grid: simReadback.grid,
             densityMean: simReadback.densityMean,
@@ -2974,6 +2993,17 @@ async function main() {
           imageWidth: imageMetrics.width,
           imageHeight: imageMetrics.height,
           image: imagePath,
+          feature: featureCapture ? featurePath : null,
+          featureCapture: featureCapture ? {
+            path: featurePath,
+            width: featureCapture.width,
+            height: featureCapture.height,
+            featureAuthority: featureCapture.featureAuthority,
+            imageAuthority: featureCapture.imageAuthority,
+            inputChannels: featureCapture.inputChannels,
+            channelLayout: featureCapture.channelLayout,
+            source: featureCapture.source,
+          } : null,
           preview: previewPath,
           report: captureReportPath,
         });
@@ -3045,6 +3075,7 @@ async function main() {
             stepDeltaMs: controlledStepDeltaMs,
             renderScales: renderScaleSet,
             includeRgba: false,
+            includeFeatureRgba: renderScaleFeatureCaptures,
             resumeRenderLoop: false,
           })})`,
           awaitPromise: true,
@@ -3079,8 +3110,10 @@ async function main() {
         for (let index = 0; index < scaleSet.samples.length; index += 1) {
           const scaleSample = scaleSet.samples[index];
           const renderScale = clampRenderScale(scaleSample.requestedRenderScale ?? scaleSample.renderScale);
+          const shouldCaptureFeature = renderScaleFeatureCaptures && scaleSample.role !== 'high';
           const slug = `${controlledStepPrefix}-${frameSlug}-${String(index + 1).padStart(2, '0')}-${scaleSlug(renderScale)}`;
           const imagePath = resolve(frameDir, `${slug}.png`);
+          const featurePath = resolve(frameDir, `${slug}.feature.png`);
           const captureReportPath = resolve(frameDir, `${slug}.json`);
           const canvasEval = await wsRequest(ws, 'Runtime.evaluate', {
             expression: `window.__kaminosVolumePrototype.renderFrozenScaleToCanvas(${JSON.stringify({
@@ -3089,6 +3122,7 @@ async function main() {
               sameStateCaptureId: scaleSet.sameStateCaptureId,
               baseFrameCount: scaleSet.baseFrameCount,
               baseSimStepCount: scaleSet.baseSimStepCount,
+              includeFeatureRgba: shouldCaptureFeature,
               restoreControls: false,
               resumeRenderLoop: false,
             })})`,
@@ -3130,6 +3164,10 @@ async function main() {
           const imageBuffer = Buffer.from(scaleShot.data, 'base64');
           writeFileSync(imagePath, imageBuffer);
           const imageMetrics = measureScreenshot(imageBuffer);
+          const featureCapture = canvasCapture.featureCapture || null;
+          if (featureCapture?.rgba && Number.isFinite(featureCapture.width) && Number.isFinite(featureCapture.height)) {
+            writeRgbaPng(featurePath, featureCapture.width, featureCapture.height, featureCapture.rgba);
+          }
           const { image, preview, simReadback, majorantReadback, ...sampleReport } = scaleSample;
           const captureReport = {
             ...sampleReport,
@@ -3151,6 +3189,16 @@ async function main() {
               metrics: imageMetrics,
             },
             canvasCapture,
+            featureCapture: featureCapture ? {
+              path: featurePath,
+              width: featureCapture.width,
+              height: featureCapture.height,
+              featureAuthority: featureCapture.featureAuthority,
+              imageAuthority: featureCapture.imageAuthority,
+              inputChannels: featureCapture.inputChannels,
+              channelLayout: featureCapture.channelLayout,
+              source: featureCapture.source,
+            } : null,
             simReadback: simReadback ? {
               grid: simReadback.grid,
               densityMean: simReadback.densityMean,
@@ -3199,6 +3247,17 @@ async function main() {
             imageWidth: imageMetrics.width,
             imageHeight: imageMetrics.height,
             image: imagePath,
+            feature: featureCapture ? featurePath : null,
+            featureCapture: featureCapture ? {
+              path: featurePath,
+              width: featureCapture.width,
+              height: featureCapture.height,
+              featureAuthority: featureCapture.featureAuthority,
+              imageAuthority: featureCapture.imageAuthority,
+              inputChannels: featureCapture.inputChannels,
+              channelLayout: featureCapture.channelLayout,
+              source: featureCapture.source,
+            } : null,
             report: captureReportPath,
           });
         }
