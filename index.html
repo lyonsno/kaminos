@@ -15098,13 +15098,13 @@ async function initKaminosVolumeRoute() {
   const routeCanonicalMacroPreset = params.get('volume_canonical_preset');
   const shouldApplyDefaultVolumeSmokeTallPreset =
     params.get('kaminos_volume_smoke') === '1' &&
-    !routeVolumeScene &&
+    (!routeVolumeScene || routeVolumeScene === 'tall_plume') &&
     !routeTallPlumeOperatorPreset &&
     !routeCanonicalMacroPreset;
   if (shouldApplyDefaultVolumeSmokeTallPreset) {
     applyTallPlumeOperatorPreset(DEFAULT_VOLUME_SMOKE_TALL_PRESET, { keepBudgetPreset: true });
   }
-  if (routeVolumeScene) {
+  if (routeVolumeScene && !(shouldApplyDefaultVolumeSmokeTallPreset && routeVolumeScene === 'tall_plume')) {
     applyVolumeScenePreset(routeVolumeScene, { keepBudgetPreset: true });
   }
   if (routeTallPlumeOperatorPreset) {

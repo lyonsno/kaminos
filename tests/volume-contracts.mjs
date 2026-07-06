@@ -33,6 +33,8 @@ assert.match(index, /pyro_contrast_warm_cap_small_flame_0702/, 'Volume tab pins 
 assert.match(index, /pyro_material_bonfire_family_0702/, 'Volume tab pins the operator-found Pyro material bonfire family basin by stable route identity');
 assert.match(index, /DEFAULT_VOLUME_SMOKE_TALL_PRESET\s*=\s*'pyro_material_bonfire_family_0702'/, 'bare smoke routes default to the operator-found Pyro bonfire family basin');
 assert.match(index, /kaminos_volume_smoke'\)\s*===\s*'1'[\s\S]*DEFAULT_VOLUME_SMOKE_TALL_PRESET/, 'bare smoke routes apply the current Pyro basin when no explicit scene or preset is routed');
+assert.match(index, /!routeVolumeScene\s*\|\|\s*routeVolumeScene === 'tall_plume'/, 'smoke routes with explicit tall_plume scene must still apply the Pyro basin instead of plain tall-plume mechanics');
+assert.match(index, /routeVolumeScene && !\(shouldApplyDefaultVolumeSmokeTallPreset && routeVolumeScene === 'tall_plume'\)/, 'explicit tall_plume route must not immediately overwrite the Pyro basin with the plain scene preset');
 assert.match(index, /pyro_material_bonfire_family_0702:[\s\S]*resolution:\s*96/, 'Pyro material bonfire basin keeps a conservative default grid while preserving the look controls');
 assert.match(index, /pyro_material_bonfire_family_0702:[\s\S]*fire:\s*0\.00/, 'Pyro material bonfire basin lets Pyro own the visible flame instead of stacking old stock fire');
 assert.match(index, /pyro_material_bonfire_family_0702:[\s\S]*pyroMaterialGain:\s*0\.65/, 'Pyro material bonfire basin preserves the recovered material gain');
@@ -1488,6 +1490,7 @@ assert.match(witness, /operator_memory_fire_0701/, 'witness recognizes the 2026-
 assert.match(witness, /pyro_material_bonfire_family_0702/, 'witness recognizes the 2026-07-02 operator-found Pyro material bonfire family basin');
 assert.match(witness, /DEFAULT_VOLUME_SMOKE_TALL_PRESET\s*=\s*'pyro_material_bonfire_family_0702'/, 'witness mirrors the bare smoke route default Pyro basin');
 assert.match(witness, /kaminos_volume_smoke'\)\s*===\s*'1'[\s\S]*DEFAULT_VOLUME_SMOKE_TALL_PRESET/, 'witness expects bare smoke routes to boot into the default Pyro basin');
+assert.match(witness, /!routeParams\.has\('volume_scene'\)\s*\|\|\s*routeParams\.get\('volume_scene'\) === 'tall_plume'/, 'witness expects explicit tall_plume smoke routes to preserve the default Pyro basin');
 assert.match(witness, /expectedDetailScaleArtifactQuarantine/, 'witness verifies the tall-plume detail-scale artifact quarantine state');
 assert.match(witness, /detailScaleArtifactQuarantine/, 'witness records the effective detail-scale artifact quarantine state');
 assert.match(witness, /expectedReactionFuelScale/, 'witness verifies tall-plume reaction fuel route identity');

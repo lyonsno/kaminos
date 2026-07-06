@@ -697,7 +697,7 @@ function canonicalSourceDefaults(mode) {
 }
 const shouldApplyDefaultVolumeSmokeTallPreset =
   routeParams.get('kaminos_volume_smoke') === '1' &&
-  !routeParams.has('volume_scene') &&
+  (!routeParams.has('volume_scene') || routeParams.get('volume_scene') === 'tall_plume') &&
   !routeParams.has('volume_tall_preset') &&
   !routeParams.has('volume_canonical_preset');
 const requestedTallPlumePreset = routeParams.get('volume_tall_preset') || (shouldApplyDefaultVolumeSmokeTallPreset ? DEFAULT_VOLUME_SMOKE_TALL_PRESET : '');
