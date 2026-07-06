@@ -2040,7 +2040,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
 
 <script type="module">
 import * as THREE from 'three';
-import { pass, mrt, normalView, vec3, vec4, mix, float, uniform, texture, packNormalToRGB, unpackRGBToNormal, sample, positionView, convertToTexture, uv, distance, smoothstep, dot, abs } from 'three/tsl';
+import { pass, mrt, normalView, vec2, vec3, vec4, mix, float, uniform, texture, packNormalToRGB, unpackRGBToNormal, sample, positionView, convertToTexture, uv, distance, smoothstep, dot, abs } from 'three/tsl';
 import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
 import { createKaminosVolumePrototype } from './volume-core.js?v=pyro-palette-flame-paint-0703';
@@ -2139,6 +2139,8 @@ let aoPass = null, aoIntensity = null, renderPipeline = null, scenePass = null;
 let fireReceiverLightGainNode = null;
 let fireReceiverLightCenterNode = null;
 let fireReceiverLightRadiusNode = null;
+let fireReceiverLightEnergySampleCenterNode = null;
+let fireReceiverLightEnergySampleRadiusNode = null;
 let fireReceiverLightDebugState = null;
 let backdropMesh = null;
 let currentMesh = null;
@@ -2157,6 +2159,19 @@ let currentSceneFile = null; // filename of last saved/loaded scene (for overwri
 let volumePrototype = null;
 let volumeBridge = null;
 let volumeSceneContext = null;
+const fireReceiverVolumeEnergyPlaceholderCanvas = document.createElement('canvas');
+fireReceiverVolumeEnergyPlaceholderCanvas.width = 1;
+fireReceiverVolumeEnergyPlaceholderCanvas.height = 1;
+fireReceiverVolumeEnergyPlaceholderCanvas.getContext('2d')?.clearRect(0, 0, 1, 1);
+const fireReceiverVolumeEnergyTexture = new THREE.CanvasTexture(fireReceiverVolumeEnergyPlaceholderCanvas);
+fireReceiverVolumeEnergyTexture.colorSpace = THREE.SRGBColorSpace;
+fireReceiverVolumeEnergyTexture.generateMipmaps = false;
+fireReceiverVolumeEnergyTexture.minFilter = THREE.LinearFilter;
+fireReceiverVolumeEnergyTexture.magFilter = THREE.LinearFilter;
+fireReceiverVolumeEnergyTexture.userData.kaminosReceiverEnergy = {
+  identity: 'volume-receiver-fire-energy-canvas-texture-v0',
+  sourceTexture: 'placeholder',
+};
 let motionAgencyState = null;
 let motionDecisionState = null;
 let motionPhraseControlState = null;
@@ -8110,6 +8125,11 @@ async function initScene() {
     VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.center[1]
   ));
   fireReceiverLightRadiusNode = uniform(VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.radius);
+  fireReceiverLightEnergySampleCenterNode = uniform(new THREE.Vector2(
+    VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.sampleCenter[0],
+    VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.sampleCenter[1]
+  ));
+  fireReceiverLightEnergySampleRadiusNode = uniform(VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.sampleRadius);
   const receiverUv = uv();
   const receiverDepth = prePassDepth.sample(receiverUv).x;
   const receiverNormal = prePassNormal.sample(receiverUv).rgb.normalize();
@@ -8119,7 +8139,27 @@ async function initScene() {
   const receiverDepthMask = float(1.0).sub(smoothstep(float(0.995), float(1.0), receiverDepth));
   const receiverNormalMask = smoothstep(float(0.05), float(0.82), abs(dot(receiverNormal, vec3(0.0, 0.0, 1.0))));
   const receiverMask = receiverLobe.mul(receiverVerticalFalloff).mul(receiverDepthMask).mul(receiverNormalMask);
-  const receiverLight = vec3(1.0, 0.36, 0.07).mul(receiverMask.mul(fireReceiverLightGainNode));
+  const volumeFireTexture = texture(fireReceiverVolumeEnergyTexture);
+  const volumeEnergyFromSample = (sampleUv) => {
+    const sampleColor = volumeFireTexture.sample(sampleUv).rgb;
+    const warmSignal = sampleColor.r.sub(sampleColor.b.mul(0.58));
+    const luminanceSignal = dot(sampleColor, vec3(0.42, 0.34, 0.08));
+    return smoothstep(float(0.055), float(0.78), luminanceSignal.add(warmSignal.mul(0.64)));
+  };
+  const energyCenter = fireReceiverLightEnergySampleCenterNode;
+  const energyR = fireReceiverLightEnergySampleRadiusNode;
+  const volumeFireEnergy = volumeEnergyFromSample(energyCenter)
+    .add(volumeEnergyFromSample(energyCenter.add(vec2(energyR.mul(0.34), 0.0))))
+    .add(volumeEnergyFromSample(energyCenter.add(vec2(energyR.mul(-0.34), 0.0))))
+    .add(volumeEnergyFromSample(energyCenter.add(vec2(0.0, energyR.mul(0.28)))))
+    .add(volumeEnergyFromSample(energyCenter.add(vec2(0.0, energyR.mul(-0.28)))))
+    .add(volumeEnergyFromSample(energyCenter.add(vec2(energyR.mul(0.58), energyR.mul(0.16)))))
+    .add(volumeEnergyFromSample(energyCenter.add(vec2(energyR.mul(-0.58), energyR.mul(0.16)))))
+    .add(volumeEnergyFromSample(energyCenter.add(vec2(energyR.mul(0.42), energyR.mul(-0.30)))))
+    .add(volumeEnergyFromSample(energyCenter.add(vec2(energyR.mul(-0.42), energyR.mul(-0.30)))))
+    .mul(float(1.0 / VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.volumeEnergySamples));
+  const receiverEnergy = float(0.12).add(volumeFireEnergy.mul(1.42));
+  const receiverLight = vec3(1.0, 0.36, 0.07).mul(receiverMask.mul(fireReceiverLightGainNode).mul(receiverEnergy));
   const sceneOutput = scenePass.mul(vec4(vec3(aoOutput), 1));
   renderPipeline.outputNode = sceneOutput.add(vec4(receiverLight, 0));
   window.kaminosAODebugState = () => ({
@@ -15310,12 +15350,17 @@ const VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT = Object.freeze({
   routeAuthority: 'three-tsl-render-pipeline-depth-normal-receiver-light-v0',
   depthAuthority: 'three-tsl-prepass-depth-v0',
   normalAuthority: 'three-tsl-prepass-packed-normal-v0',
-  energyAuthority: 'uploaded-control-fire-envelope-no-readback-v0',
+  energyAuthority: 'rendered-volume-canvas-fire-energy-v15-no-readback-v0',
+  fallbackEnergyAuthority: 'uploaded-control-fire-envelope-no-readback-v0',
   envelopeModel: 'uploaded-control-fire-envelope-v05-no-readback-v0',
+  volumeEnergySamplingAuthority: 'three-tsl-render-pipeline-volume-texture-sample-v0',
   maskAuthority: 'screen-space-depth-normal-receiver-mask-v0',
   cadence: 'per-render-frame-gpu-tsl',
   center: [0.42, 0.62],
   radius: 0.31,
+  sampleCenter: [0.44, 0.64],
+  sampleRadius: 0.30,
+  volumeEnergySamples: 9,
   gainScale: 0.34,
   maxGain: 0.58,
   receiverWindow: 'depth+packed-normal+screen-lobe-v0',
@@ -15612,10 +15657,20 @@ function createVolumeBrickWallContext() {
     depthAuthority: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.depthAuthority,
     normalAuthority: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.normalAuthority,
     energyAuthority: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.energyAuthority,
+    fallbackEnergyAuthority: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.fallbackEnergyAuthority,
     maskAuthority: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.maskAuthority,
     cadence: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.cadence,
     enabled: false,
     gain: 0,
+    volumeEnergy: {
+      identity: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.energyAuthority,
+      sourceTexture: fireReceiverVolumeEnergyTexture.userData.kaminosReceiverEnergy?.sourceTexture || 'placeholder',
+      samplingAuthority: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.volumeEnergySamplingAuthority,
+      sampleCenter: [...VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.sampleCenter],
+      sampleRadius: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.sampleRadius,
+      sampleCount: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.volumeEnergySamples,
+      cpuReadbackAuthority: false,
+    },
     center: [...VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.center],
     radius: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.radius,
     gainScale: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.gainScale,
@@ -15757,6 +15812,11 @@ function createVolumeBrickWallContext() {
       VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.center[1]
     );
     if (fireReceiverLightRadiusNode) fireReceiverLightRadiusNode.value = VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.radius;
+    if (fireReceiverLightEnergySampleCenterNode) fireReceiverLightEnergySampleCenterNode.value.set(
+      VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.sampleCenter[0],
+      VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.sampleCenter[1]
+    );
+    if (fireReceiverLightEnergySampleRadiusNode) fireReceiverLightEnergySampleRadiusNode.value = VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.sampleRadius;
     const glowOpacity = 0;
     const glowScale = 0.86 + clampVolumeValue(glowEnergy, 0, 1.4) * 0.32;
     wallGlow.visible = false;
@@ -15773,6 +15833,7 @@ function createVolumeBrickWallContext() {
       depthAuthority: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.depthAuthority,
       normalAuthority: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.normalAuthority,
       energyAuthority: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.energyAuthority,
+      fallbackEnergyAuthority: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.fallbackEnergyAuthority,
       envelopeModel: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.envelopeModel,
       maskAuthority: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.maskAuthority,
       cadence: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.cadence,
@@ -15781,7 +15842,20 @@ function createVolumeBrickWallContext() {
       gain: receiverEnabled ? receiverGain : 0,
       rawEnvelope: glowEnergy,
       envelopeInputs: receiverEnvelopeInputs,
+      volumeEnergy: {
+        identity: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.energyAuthority,
+        sourceTexture: fireReceiverVolumeEnergyTexture.userData.kaminosReceiverEnergy?.sourceTexture || null,
+        samplingAuthority: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.volumeEnergySamplingAuthority,
+        sampleCenter: [...VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.sampleCenter],
+        sampleRadius: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.sampleRadius,
+        sampleCount: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.volumeEnergySamples,
+        cpuReadbackAuthority: false,
+        fallbackScalar: glowEnergy,
+        fallbackEnergyAuthority: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.fallbackEnergyAuthority,
+      },
       center: [...VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.center],
+      sampleCenter: [...VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.sampleCenter],
+      sampleRadius: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.sampleRadius,
       radius: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.radius,
       gainScale: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.gainScale,
       maxGain: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.maxGain,
@@ -15789,7 +15863,7 @@ function createVolumeBrickWallContext() {
       liveCpuReadback: false,
       cpuReadbackAuthority: false,
       threeLightSupport: 'removed',
-      drive: 'control-sim-envelope-uploaded-as-gpu-uniform-no-readback-v05',
+      drive: 'rendered-volume-canvas-energy-modulated-by-uploaded-envelope-v15',
     };
     fireReceiverLightDebugState = lastReceiverLight;
     lastWallAttachedGlow = {
@@ -16041,11 +16115,21 @@ function createVolumeSceneContextRouter() {
 }
 
 function createVolumeMainRendererBridge() {
-  const sourceTexture = new THREE.CanvasTexture(volumePrototype.canvasElement());
+  const sourceCanvas = volumePrototype.canvasElement();
+  const sourceTexture = fireReceiverVolumeEnergyTexture;
+  sourceTexture.image = sourceCanvas;
   sourceTexture.colorSpace = THREE.SRGBColorSpace;
   sourceTexture.generateMipmaps = false;
   sourceTexture.minFilter = THREE.LinearFilter;
   sourceTexture.magFilter = THREE.LinearFilter;
+  sourceTexture.userData.kaminosReceiverEnergy = {
+    identity: 'volume-receiver-fire-energy-canvas-texture-v0',
+    sourceTexture: sourceCanvas?.id || null,
+    energyAuthority: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.energyAuthority,
+    samplingAuthority: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.volumeEnergySamplingAuthority,
+    cpuReadbackAuthority: false,
+  };
+  sourceTexture.needsUpdate = true;
 
   const material = new THREE.MeshBasicMaterial({
     map: sourceTexture,
@@ -16080,14 +16164,15 @@ function createVolumeMainRendererBridge() {
       const sceneContextActive = volumeSceneContext?.debugState?.()?.visible === true;
       mesh.visible = active && !sceneContextActive;
       if (!active) return false;
-      if (sceneContextActive) return false;
       const requestedFilter = state.volumeReconstructionStyle === 'nearest-css-upscale' ? THREE.NearestFilter : THREE.LinearFilter;
       if (sourceTexture.magFilter !== requestedFilter || sourceTexture.minFilter !== requestedFilter) {
         sourceTexture.magFilter = requestedFilter;
         sourceTexture.minFilter = requestedFilter;
         sourceTexture.userData.volumeReconstructionStyle = state.volumeReconstructionStyle;
       }
+      sourceTexture.userData.kaminosReceiverEnergy.sourceTexture = volumePrototype?.canvasElement?.()?.id || null;
       sourceTexture.needsUpdate = true;
+      if (sceneContextActive) return false;
       const distance = Math.max(0.2, (camera.near || 0.1) * 2.5);
       camera.getWorldDirection(direction);
       mesh.position.copy(camera.position).addScaledVector(direction, distance);
@@ -16106,6 +16191,7 @@ function createVolumeMainRendererBridge() {
         composition: mesh.userData.kaminosVolumeBridge.composition,
         sceneContextBridgeBypass: volumeSceneContext?.debugState?.()?.visible === true,
         sceneContext: volumeSceneContext?.debugState?.() || null,
+        receiverEnergyTexture: sourceTexture.userData.kaminosReceiverEnergy || null,
         volumeReconstructionStyle: volumePrototype?.debugState?.()?.volumeReconstructionStyle || null,
         textureFilter: sourceTexture.magFilter === THREE.NearestFilter ? 'nearest' : 'linear',
       };

@@ -1472,9 +1472,14 @@ async function main() {
       assert.equal(volumeSceneContext?.receiverLight?.routeAuthority, 'three-tsl-render-pipeline-depth-normal-receiver-light-v0', 'brick-wall screen-space receiver light did not expose render-pipeline route authority');
       assert.equal(volumeSceneContext?.receiverLight?.depthAuthority, 'three-tsl-prepass-depth-v0', 'brick-wall screen-space receiver light did not expose depth prepass authority');
       assert.equal(volumeSceneContext?.receiverLight?.normalAuthority, 'three-tsl-prepass-packed-normal-v0', 'brick-wall screen-space receiver light did not expose normal prepass authority');
-      assert.equal(volumeSceneContext?.receiverLight?.energyAuthority, 'uploaded-control-fire-envelope-no-readback-v0', 'brick-wall screen-space receiver light must disclose uploaded no-readback envelope authority');
+      assert.equal(volumeSceneContext?.receiverLight?.energyAuthority, 'rendered-volume-canvas-fire-energy-v15-no-readback-v0', 'brick-wall screen-space receiver light must disclose rendered-volume texture fire-energy authority');
+      assert.equal(volumeSceneContext?.receiverLight?.fallbackEnergyAuthority, 'uploaded-control-fire-envelope-no-readback-v0', 'brick-wall screen-space receiver light must keep the uploaded envelope only as explicit fallback authority');
+      assert.equal(volumeSceneContext?.receiverLight?.volumeEnergy?.sourceTexture, 'kaminos-volume-canvas', 'brick-wall screen-space receiver light did not sample the native volume canvas texture');
+      assert.equal(volumeSceneContext?.receiverLight?.volumeEnergy?.samplingAuthority, 'three-tsl-render-pipeline-volume-texture-sample-v0', 'brick-wall screen-space receiver light did not expose TSL volume texture sample authority');
+      assert.equal(volumeSceneContext?.receiverLight?.volumeEnergy?.cpuReadbackAuthority, false, 'brick-wall volume texture fire-energy sampling must not claim CPU readback authority');
+      assert.ok((volumeSceneContext?.receiverLight?.volumeEnergy?.sampleCount ?? 0) >= 5, 'brick-wall volume texture fire-energy sampling did not expose enough fixed samples for the fire body');
       assert.equal(volumeSceneContext?.receiverLight?.envelopeModel, 'uploaded-control-fire-envelope-v05-no-readback-v0', 'brick-wall screen-space receiver light did not expose the v0.5 no-readback envelope model');
-      assert.equal(volumeSceneContext?.receiverLight?.drive, 'control-sim-envelope-uploaded-as-gpu-uniform-no-readback-v05', 'brick-wall screen-space receiver light did not report the v0.5 uploaded-uniform drive');
+      assert.equal(volumeSceneContext?.receiverLight?.drive, 'rendered-volume-canvas-energy-modulated-by-uploaded-envelope-v15', 'brick-wall screen-space receiver light did not report the v1.5 rendered-volume energy drive');
       assert.equal(volumeSceneContext?.receiverLight?.envelopeInputs?.cpuReadbackAuthority, false, 'brick-wall receiver envelope inputs must not claim CPU readback authority');
       assert.ok(Number.isFinite(volumeSceneContext?.receiverLight?.envelopeInputs?.fireControl), 'brick-wall receiver envelope inputs did not expose fireControl');
       assert.ok(Number.isFinite(volumeSceneContext?.receiverLight?.envelopeInputs?.radianceControl), 'brick-wall receiver envelope inputs did not expose radianceControl');
