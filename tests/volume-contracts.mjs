@@ -2005,6 +2005,30 @@ assert.match(fieldResidualRenderStill, /selected-patch-difference-focused-not-fu
 assert.match(fieldResidualRenderStill, /focusedContactSheet/, 'field residual render-still harness writes a focused contact sheet for visual inspection');
 assert.match(fieldResidualRenderStill, /failurePhase/, 'field residual render-still harness writes failure-phase reports when rendering fails');
 
+const fullGridFieldExportPath = join(root, 'volume-full-grid-field-export.mjs');
+assert.ok(existsSync(fullGridFieldExportPath), 'volume full-grid field export harness exists');
+const fullGridFieldExport = existsSync(fullGridFieldExportPath) ? readFileSync(fullGridFieldExportPath, 'utf8') : '';
+assert.match(core, /FULL_FIELD_EXPORT_IDENTITY\s*=\s*'kaminos\.volume\.full-field-export\.v0'/, 'volume core names a stable full-grid field export schema');
+assert.match(core, /beginDebugFullFieldExport/, 'volume prototype exposes a debug-only full-grid export session hook');
+assert.match(core, /readDebugFullFieldExportChunk/, 'volume prototype exposes chunk reads so 192-grid buffers do not ride one CDP payload');
+assert.match(core, /releaseDebugFullFieldExport/, 'volume prototype can release full-grid CPU buffers after sidecar export');
+assert.match(core, /fullFieldExportSession/, 'debug state preserves full-grid export session identity and status');
+assert.match(fullGridFieldExport, /kaminos\.volume\.full-grid-field-export\.v0/, 'full-grid field export harness writes a stable manifest schema');
+assert.match(fullGridFieldExport, /full-grid-fluid-front-buffer-sidecars-v0/, 'full-grid export labels complete fluid/front binary sidecars rather than selected tile coverage');
+assert.match(fullGridFieldExport, /beginDebugFullFieldExport/, 'full-grid export harness starts from the live simulator full-buffer readback hook');
+assert.match(fullGridFieldExport, /readDebugFullFieldExportChunk/, 'full-grid export harness drains browser buffers through explicit chunks');
+assert.match(fullGridFieldExport, /releaseDebugFullFieldExport/, 'full-grid export harness releases browser-held buffers after export');
+assert.match(fullGridFieldExport, /fluid\.f32/, 'full-grid export harness writes the complete fluid buffer sidecar');
+assert.match(fullGridFieldExport, /front\.f32/, 'full-grid export harness writes the complete front-topology buffer sidecar');
+assert.match(fullGridFieldExport, /sha256/, 'full-grid export harness records sidecar checksums');
+assert.match(fullGridFieldExport, /failurePhase/, 'full-grid export harness writes failure-phase reports when replay, chunking, or verification fails');
+assert.match(fullGridFieldExport, /completeFieldCoverage/, 'full-grid export manifest states complete field coverage explicitly');
+assert.match(fullGridFieldExport, /deterministicReplay/, 'full-grid export manifest preserves deterministic replay controls and effective identity');
+assert.match(fullGridFieldExport, /effectiveRoute/, 'full-grid export manifest preserves route identity from the simulator');
+assert.match(fullGridFieldExport, /prototypeIdentity/, 'full-grid export manifest preserves prototype identity from the simulator');
+assert.match(fullGridFieldExport, /fluidChannelOrder/, 'full-grid export manifest records fluid channel order');
+assert.match(fullGridFieldExport, /frontChannelOrder/, 'full-grid export manifest records front channel order');
+
 const dynamicTextureProofPath = join(root, 'volume-dynamic-texture-proof.mjs');
 assert.ok(existsSync(dynamicTextureProofPath), 'dynamic texture proof harness exists');
 const dynamicTextureProof = existsSync(dynamicTextureProofPath) ? readFileSync(dynamicTextureProofPath, 'utf8') : '';

@@ -3,6 +3,7 @@ const PROTOTYPE_IDENTITY = 'kaminos-volume-prototype-v0';
 const FRONT_FIELD_IDENTITY = 'combustion-front-topology-sidecar-v0';
 const DETERMINISTIC_REPLAY_IDENTITY = 'deterministic-replay-same-route-controls-fixed-step-v0';
 const FIELD_TILE_EXPORT_IDENTITY = 'kaminos.volume.field-tile-export.v0';
+const FULL_FIELD_EXPORT_IDENTITY = 'kaminos.volume.full-field-export.v0';
 const DEBUG_FIELD_TILE_PATCH_IDENTITY = 'debug-field-tile-patch-render-override-v0';
 const DEFAULT_GRID_SIZE = 96;
 const SUPPORTED_GRID_SIZES = [32, 48, 64, 96, 128, 160, 192];
@@ -4027,6 +4028,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     pressureDivergencePasses: 0,
     pressureJacobiInlineDivergencePasses: 0,
     fullGridPassBreakdown: null,
+    fullFieldExportSession: null,
     frontFieldIdentity: FRONT_FIELD_IDENTITY,
     frontFieldBytes: frontFieldBufferBytes(gridSize),
     frontFieldReadIndex: 0,
@@ -6290,6 +6292,245 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     render(performance.now());
   }
 
+  let debugFullFieldExportSession = null;
+
+  async function copyFullFieldBuffersForDebugExport() {
+    const fluidBytes = fluidBufferBytes(gridSize);
+    const frontBytes = frontFieldBufferBytes(gridSize);
+    const readback = device.createBuffer({
+      label: 'kaminos full-field fluid export readback',
+      size: fluidBytes,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+    });
+    const frontReadback = device.createBuffer({
+      label: `kaminos ${FRONT_FIELD_IDENTITY} full-field export readback`,
+      size: frontBytes,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+    });
+    const encoder = device.createCommandEncoder({ label: 'kaminos full-field export readback encoder' });
+    encoder.copyBufferToBuffer(fluidBuffers[currentFluid], 0, readback, 0, fluidBytes);
+    encoder.copyBufferToBuffer(frontBuffers[currentFront], 0, frontReadback, 0, frontBytes);
+    device.queue.submit([encoder.finish()]);
+    await Promise.all([
+      readback.mapAsync(GPUMapMode.READ),
+      frontReadback.mapAsync(GPUMapMode.READ),
+    ]);
+    const fluid = new Float32Array(readback.getMappedRange()).slice();
+    const front = new Float32Array(frontReadback.getMappedRange()).slice();
+    readback.unmap();
+    readback.destroy();
+    frontReadback.unmap();
+    frontReadback.destroy();
+    return { fluid, front, fluidBytes, frontBytes };
+  }
+
+  function fullFieldExportDescriptorFor(values, kind, byteLength) {
+    return {
+      kind,
+      dtype: 'float32',
+      byteOrder: 'little-endian',
+      floatCount: values.length,
+      byteLength,
+      shape: kind === 'fluid'
+        ? [gridSize, gridSize, gridSize, FLUID_COMPONENTS]
+        : [gridSize, gridSize, gridSize, 1],
+      channelOrder: kind === 'fluid' ? FIELD_TILE_CHANNELS.slice(0, FLUID_COMPONENTS) : ['frontTopology'],
+    };
+  }
+
+  function fullFieldExportPublicSession(session) {
+    if (!session) return null;
+    return {
+      schema: FULL_FIELD_EXPORT_IDENTITY,
+      identity: 'full-grid-fluid-front-buffer-sidecars-v0',
+      authority: 'debug-full-grid-webgpu-copy-buffer-readback',
+      status: session.status,
+      sessionId: session.sessionId,
+      createdAtMs: session.createdAtMs,
+      grid: session.grid,
+      cellCount: session.cellCount,
+      completeFieldCoverage: true,
+      routeIdentity: ROUTE_IDENTITY,
+      prototypeIdentity: PROTOTYPE_IDENTITY,
+      effectiveRoute: state.effectiveRoute,
+      backend: state.backend,
+      simGridLabel: state.simGridLabel,
+      frontFieldIdentity: state.frontFieldIdentity,
+      deterministicReplay: session.deterministicReplay,
+      fluidComponents: FLUID_COMPONENTS,
+      fluidChannelOrder: FIELD_TILE_CHANNELS.slice(0, FLUID_COMPONENTS),
+      frontChannelOrder: ['frontTopology'],
+      fluid: session.fluidDescriptor,
+      front: session.frontDescriptor,
+    };
+  }
+
+  function encodeFloat32ChunkBase64(values, startFloat, floatCount) {
+    const byteStart = startFloat * Float32Array.BYTES_PER_ELEMENT;
+    const byteLength = floatCount * Float32Array.BYTES_PER_ELEMENT;
+    const bytes = new Uint8Array(values.buffer, values.byteOffset + byteStart, byteLength);
+    let binary = '';
+    const batch = 0x8000;
+    for (let i = 0; i < bytes.length; i += batch) {
+      binary += String.fromCharCode(...bytes.subarray(i, Math.min(bytes.length, i + batch)));
+    }
+    return btoa(binary);
+  }
+
+  async function beginDebugFullFieldExport(options = {}) {
+    if (!device) {
+      const failed = {
+        schema: FULL_FIELD_EXPORT_IDENTITY,
+        identity: 'full-grid-fluid-front-buffer-sidecars-v0',
+        status: 'failed',
+        failurePhase: 'inactive',
+        reason: 'inactive',
+        routeIdentity: ROUTE_IDENTITY,
+        prototypeIdentity: PROTOTYPE_IDENTITY,
+        effectiveRoute: state.effectiveRoute,
+        backend: state.backend,
+      };
+      state.fullFieldExportSession = failed;
+      return { ok: false, ...failed };
+    }
+    const wasActiveBeforeExport = state.active;
+    if (debugFullFieldExportSession) {
+      debugFullFieldExportSession.status = 'released';
+      debugFullFieldExportSession = null;
+    }
+    const deterministicOptions = options.deterministicReplay || (
+      Number.isFinite(Number(options.steps)) || Number.isFinite(Number(options.replaySteps))
+        ? options
+        : null
+    );
+    let replaySample = null;
+    if (deterministicOptions) {
+      replaySample = await sampleDeterministicReplayFrame({
+        ...deterministicOptions,
+        fieldTileExport: null,
+      });
+      if (replaySample?.ok !== true) {
+        const failed = {
+          schema: FULL_FIELD_EXPORT_IDENTITY,
+          identity: 'full-grid-fluid-front-buffer-sidecars-v0',
+          status: 'failed',
+          failurePhase: 'deterministic-replay',
+          reason: replaySample?.reason || 'sample-failed',
+          deterministicReplay: replaySample?.deterministicReplay || null,
+          routeIdentity: ROUTE_IDENTITY,
+          prototypeIdentity: PROTOTYPE_IDENTITY,
+          effectiveRoute: state.effectiveRoute,
+          backend: state.backend,
+        };
+        state.fullFieldExportSession = failed;
+        return { ok: false, ...failed };
+      }
+    }
+    if (state.active) {
+      state.active = false;
+      canvas.classList.remove('active');
+      cancelAnimationFrame(raf);
+    }
+    let captured = null;
+    try {
+      captured = await copyFullFieldBuffersForDebugExport();
+    } finally {
+      if (wasActiveBeforeExport) {
+        state.active = true;
+        canvas.classList.add('active');
+        cancelAnimationFrame(raf);
+        raf = requestAnimationFrame(render);
+      }
+    }
+    const session = {
+      status: 'captured',
+      sessionId: `full-field-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`,
+      createdAtMs: performance.now(),
+      grid: gridSize,
+      cellCount: gridCellCount(gridSize),
+      deterministicReplay: replaySample?.deterministicReplay || (state.deterministicReplay ? { ...state.deterministicReplay } : null),
+      fluid: captured.fluid,
+      front: captured.front,
+      fluidDescriptor: fullFieldExportDescriptorFor(captured.fluid, 'fluid', captured.fluidBytes),
+      frontDescriptor: fullFieldExportDescriptorFor(captured.front, 'front', captured.frontBytes),
+    };
+    debugFullFieldExportSession = session;
+    state.fullFieldExportSession = fullFieldExportPublicSession(session);
+    return { ok: true, ...state.fullFieldExportSession };
+  }
+
+  function readDebugFullFieldExportChunk(options = {}) {
+    const session = debugFullFieldExportSession;
+    if (!session || session.status !== 'captured') {
+      return {
+        ok: false,
+        schema: FULL_FIELD_EXPORT_IDENTITY,
+        status: 'failed',
+        failurePhase: 'chunk-read',
+        reason: 'no-active-full-field-export-session',
+      };
+    }
+    const requestedSessionId = String(options.sessionId || '');
+    if (requestedSessionId && requestedSessionId !== session.sessionId) {
+      return {
+        ok: false,
+        schema: FULL_FIELD_EXPORT_IDENTITY,
+        status: 'failed',
+        failurePhase: 'chunk-read',
+        reason: 'session-id-mismatch',
+        sessionId: session.sessionId,
+        requestedSessionId,
+      };
+    }
+    const kind = String(options.kind || 'fluid') === 'front' ? 'front' : 'fluid';
+    const values = kind === 'front' ? session.front : session.fluid;
+    const startFloat = Math.max(0, Math.min(values.length, Math.floor(Number(options.startFloat) || 0)));
+    const requestedFloatCount = Math.floor(Number(options.floatCount) || Math.min(262144, values.length - startFloat));
+    const floatCount = Math.max(0, Math.min(values.length - startFloat, requestedFloatCount));
+    const base64 = encodeFloat32ChunkBase64(values, startFloat, floatCount);
+    return {
+      ok: true,
+      schema: FULL_FIELD_EXPORT_IDENTITY,
+      identity: 'full-grid-fluid-front-buffer-sidecars-v0',
+      sessionId: session.sessionId,
+      kind,
+      dtype: 'float32',
+      startFloat,
+      floatCount,
+      byteOffset: startFloat * Float32Array.BYTES_PER_ELEMENT,
+      byteLength: floatCount * Float32Array.BYTES_PER_ELEMENT,
+      isFinal: startFloat + floatCount >= values.length,
+      base64,
+    };
+  }
+
+  function releaseDebugFullFieldExport(options = {}) {
+    const session = debugFullFieldExportSession;
+    const requestedSessionId = String(options.sessionId || '');
+    if (session && (!requestedSessionId || requestedSessionId === session.sessionId)) {
+      session.status = 'released';
+      state.fullFieldExportSession = {
+        ...fullFieldExportPublicSession(session),
+        status: 'released',
+      };
+      debugFullFieldExportSession = null;
+      return {
+        ok: true,
+        schema: FULL_FIELD_EXPORT_IDENTITY,
+        identity: 'full-grid-fluid-front-buffer-sidecars-v0',
+        status: 'released',
+        sessionId: requestedSessionId || session.sessionId,
+      };
+    }
+    return {
+      ok: true,
+      schema: FULL_FIELD_EXPORT_IDENTITY,
+      identity: 'full-grid-fluid-front-buffer-sidecars-v0',
+      status: 'already-released',
+      sessionId: requestedSessionId || null,
+    };
+  }
+
   async function sampleSimReadback(fieldTileExportOptions = null) {
     const readback = device.createBuffer({
       label: 'kaminos fluid simReadback',
@@ -8073,6 +8314,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       return canvas;
     },
     applyDebugFieldTilePatch,
+    beginDebugFullFieldExport,
+    readDebugFullFieldExportChunk,
+    releaseDebugFullFieldExport,
     sampleFrame,
     sampleDeterministicReplayFrame,
     dispose() {
