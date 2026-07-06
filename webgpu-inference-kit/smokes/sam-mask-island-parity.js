@@ -6,6 +6,7 @@ import {
   SAM3_DETR_ENCODER_PHASE_PROGRAM_ROUTE_ID,
   SAM3_DETR_DECODER_PHASE_PROGRAM_ROUTE_ID,
   SAM3_SCORING_PHASE_PROGRAM_ROUTE_ID,
+  SAM3_SELECTION_POSTPROCESS_PHASE_PROGRAM_ROUTE_ID,
   createRouteInvocationRequest,
   createSam3MaskDecoderIslandRouteDefinition,
   createSam3MaskProjectionCpuOracle,
@@ -19,6 +20,8 @@ import {
   createSam3DetrDecoderPhaseProgramRouteDefinition,
   createSam3ScoringPhaseProgramCpuOracle,
   createSam3ScoringPhaseProgramRouteDefinition,
+  createSam3SelectionPostprocessPhaseProgramCpuOracle,
+  createSam3SelectionPostprocessPhaseProgramRouteDefinition,
   runSam3MaskDecoderIslandRoute,
   runSam3MaskTailPhaseProgramRoute,
   runSam3PixelDecoderPhaseProgramRoute,
@@ -26,6 +29,7 @@ import {
   runSam3DetrEncoderPhaseProgramRoute,
   runSam3DetrDecoderPhaseProgramRoute,
   runSam3ScoringPhaseProgramRoute,
+  runSam3SelectionPostprocessPhaseProgramRoute,
 } from '../src/index.js';
 
 const SUPPORTED_ROUTE_IDS = new Set([
@@ -36,6 +40,7 @@ const SUPPORTED_ROUTE_IDS = new Set([
   SAM3_DETR_ENCODER_PHASE_PROGRAM_ROUTE_ID,
   SAM3_DETR_DECODER_PHASE_PROGRAM_ROUTE_ID,
   SAM3_SCORING_PHASE_PROGRAM_ROUTE_ID,
+  SAM3_SELECTION_POSTPROCESS_PHASE_PROGRAM_ROUTE_ID,
 ]);
 const PIXEL_DECODER_WEIGHT_ROLE_EXAMPLES = ['pixel-decoder-stage-0-conv-weight'];
 
@@ -679,7 +684,8 @@ async function loadDetrDecoderPayload(manifest) {
 }
 
 async function loadDetrStackPayload(manifest) {
-  const includeStackScoring = manifest.mode === 'mlx-detr-stack-scoring-export' || manifest.boundary === 'sam3-detector-detr-encoder-decoder-scoring-mask-tail-phase-program';
+  const includeStackSelection = manifest.mode === 'mlx-detr-stack-selection-export' || manifest.boundary === 'sam3-detector-detr-encoder-decoder-scoring-selection-mask-tail-phase-program';
+  const includeStackScoring = includeStackSelection || manifest.mode === 'mlx-detr-stack-scoring-export' || manifest.boundary === 'sam3-detector-detr-encoder-decoder-scoring-mask-tail-phase-program';
   const encoderSrcTensor = tensorByRole(manifest, 'encoder-src');
   const encoderPosTensor = tensorByRole(manifest, 'encoder-pos');
   const promptTensor = tensorByRole(manifest, 'prompt-features');
@@ -690,6 +696,12 @@ async function loadDetrStackPayload(manifest) {
   const expectedReferenceBoxesTensor = tensorByRole(manifest, 'expected-reference-boxes');
   const expectedPresenceLogitsTensor = tensorByRole(manifest, 'expected-presence-logits');
   const expectedPredLogitsTensor = includeStackScoring ? tensorByRole(manifest, 'expected-pred-logits') : null;
+  const expectedSelectionScoresTensor = includeStackSelection ? tensorByRole(manifest, 'expected-selection-scores') : null;
+  const expectedSelectionBoxesTensor = includeStackSelection ? tensorByRole(manifest, 'expected-selection-boxes') : null;
+  const expectedSelectionKeepTensor = includeStackSelection ? tensorByRole(manifest, 'expected-selection-keep') : null;
+  const expectedSelectedIndexTensor = includeStackSelection ? tensorByRole(manifest, 'expected-selected-index') : null;
+  const expectedSelectedScoreTensor = includeStackSelection ? tensorByRole(manifest, 'expected-selected-score') : null;
+  const expectedSelectedBoxTensor = includeStackSelection ? tensorByRole(manifest, 'expected-selected-box') : null;
   const pixelEmbedTensor = tensorByRole(manifest, 'pixel-embed');
   const expectedMaskEmbeddingsTensor = tensorByRole(manifest, 'expected-mask-embeddings');
   const expectedUpscaledTensor = tensorByRole(manifest, 'expected-upscaled-embedding');
@@ -763,6 +775,12 @@ async function loadDetrStackPayload(manifest) {
   const expectedReferenceBoxes = await fetchArray(resolveManifestFile(expectedReferenceBoxesTensor.file), Float32Array);
   const expectedPresenceLogits = await fetchArray(resolveManifestFile(expectedPresenceLogitsTensor.file), Float32Array);
   const expectedPredLogits = expectedPredLogitsTensor ? await fetchArray(resolveManifestFile(expectedPredLogitsTensor.file), Float32Array) : null;
+  const expectedSelectionScores = expectedSelectionScoresTensor ? await fetchArray(resolveManifestFile(expectedSelectionScoresTensor.file), Float32Array) : null;
+  const expectedSelectionBoxes = expectedSelectionBoxesTensor ? await fetchArray(resolveManifestFile(expectedSelectionBoxesTensor.file), Float32Array) : null;
+  const expectedSelectionKeep = expectedSelectionKeepTensor ? await fetchArray(resolveManifestFile(expectedSelectionKeepTensor.file), Uint32Array) : null;
+  const expectedSelectedIndex = expectedSelectedIndexTensor ? await fetchArray(resolveManifestFile(expectedSelectedIndexTensor.file), Uint32Array) : null;
+  const expectedSelectedScore = expectedSelectedScoreTensor ? await fetchArray(resolveManifestFile(expectedSelectedScoreTensor.file), Float32Array) : null;
+  const expectedSelectedBox = expectedSelectedBoxTensor ? await fetchArray(resolveManifestFile(expectedSelectedBoxTensor.file), Float32Array) : null;
   const pixelEmbed = await fetchArray(resolveManifestFile(pixelEmbedTensor.file), Float32Array);
   const expectedMaskEmbeddings = await fetchArray(resolveManifestFile(expectedMaskEmbeddingsTensor.file), Float32Array);
   const expectedUpscaledEmbedding = await fetchArray(resolveManifestFile(expectedUpscaledTensor.file), Float32Array);
@@ -830,16 +848,24 @@ async function loadDetrStackPayload(manifest) {
   const decoderShape = { batch: manifest.shape.batch, queryTokens: manifest.shape.queryTokens, promptTokens: manifest.shape.promptTokens, spatialTokens: manifest.shape.spatialTokens, channels: manifest.shape.channels, heads: manifest.shape.heads, layerCount: manifest.shape.layerCount, mlpHidden: manifest.shape.mlpHidden, sineFeatures: manifest.shape.sineFeatures, height: manifest.shape.height, width: manifest.shape.width };
   const maskTailShape = { batch: manifest.shape.batch, maskTokens: manifest.shape.maskTokens, channels: manifest.shape.channels, height: manifest.shape.maskHeight, width: manifest.shape.maskWidth };
   const scoringShape = { layerCount: manifest.shape.layerCount, batch: manifest.shape.batch, queryTokens: manifest.shape.queryTokens, promptTokens: manifest.shape.promptTokens, channels: manifest.shape.channels, mlpHidden: manifest.shape.mlpHidden };
+  const selectionShape = { layerCount: manifest.shape.layerCount, batch: manifest.shape.batch, queryTokens: manifest.shape.queryTokens, imageHeight: manifest.sourceImage?.resolution?.[1] || manifest.shape.maskHeight, imageWidth: manifest.sourceImage?.resolution?.[0] || manifest.shape.maskWidth, scoreThreshold: manifest.postprocess?.scoreThreshold ?? 0.5 };
   const maskOracle = createSam3MaskTailPhaseProgramCpuOracle({ lastHs: expectedLastHs, pixelEmbed, weights: tailWeights, shape: maskTailShape });
   const scoringOracle = includeStackScoring ? createSam3ScoringPhaseProgramCpuOracle({ hiddenStates: expectedDecoderHiddenStates, promptFeatures, promptMask, weights: scoringWeights, shape: scoringShape }) : null;
+  const selectionOracle = includeStackSelection ? createSam3SelectionPostprocessPhaseProgramCpuOracle({ predLogits: expectedPredLogits, referenceBoxes: expectedReferenceBoxes, presenceLogits: expectedPresenceLogits, shape: selectionShape }) : null;
   return {
-    routeKind: includeStackScoring ? 'detr-encoder-detr-decoder-scoring-mask-tail-composition' : 'detr-encoder-detr-decoder-mask-tail-composition',
+    routeKind: includeStackSelection ? 'detr-encoder-detr-decoder-scoring-selection-mask-tail-composition' : includeStackScoring ? 'detr-encoder-detr-decoder-scoring-mask-tail-composition' : 'detr-encoder-detr-decoder-mask-tail-composition',
     expectedEncoderHiddenStates,
     expectedDecoderHiddenStates,
     expectedLastHs,
     expectedReferenceBoxes,
     expectedPresenceLogits,
     expectedPredLogits,
+    expectedSelectionScores,
+    expectedSelectionBoxes,
+    expectedSelectionKeep,
+    expectedSelectedIndex,
+    expectedSelectedScore,
+    expectedSelectedBox,
     expectedMaskEmbeddings,
     expectedUpscaledEmbedding,
     expectedLogits,
@@ -850,6 +876,12 @@ async function loadDetrStackPayload(manifest) {
       upscaledEmbeddingMaxAbsDiff: maxAbsDiff(expectedUpscaledEmbedding, maskOracle.upscaledEmbedding),
       logitsMaxAbsDiff: maxAbsDiff(expectedLogits, maskOracle.maskLogits),
       predLogitsMaxAbsDiff: scoringOracle ? maxAbsDiff(expectedPredLogits, scoringOracle.predLogits) : undefined,
+      selectionScoresMaxAbsDiff: selectionOracle ? maxAbsDiff(expectedSelectionScores, selectionOracle.scores) : undefined,
+      selectionBoxesMaxAbsDiff: selectionOracle ? maxAbsDiff(expectedSelectionBoxes, selectionOracle.boxes) : undefined,
+      selectionKeepMismatchCount: selectionOracle ? mismatchCount(expectedSelectionKeep, selectionOracle.keep) : undefined,
+      selectedIndexMaxAbsDiff: selectionOracle ? maxAbsDiff(expectedSelectedIndex, selectionOracle.selectedIndex) : undefined,
+      selectedScoreMaxAbsDiff: selectionOracle ? maxAbsDiff(expectedSelectedScore, selectionOracle.selectedScore) : undefined,
+      selectedBoxMaxAbsDiff: selectionOracle ? maxAbsDiff(expectedSelectedBox, selectionOracle.selectedBox) : undefined,
       binaryMismatchCount: mismatchCount(expectedBinary, maskOracle.binaryMask),
     },
     tensorIdentity: {
@@ -863,6 +895,12 @@ async function loadDetrStackPayload(manifest) {
       expectedReferenceBoxesSha256: expectedReferenceBoxesTensor.sha256,
       expectedPresenceLogitsSha256: expectedPresenceLogitsTensor.sha256,
       expectedPredLogitsSha256: expectedPredLogitsTensor?.sha256,
+      expectedSelectionScoresSha256: expectedSelectionScoresTensor?.sha256,
+      expectedSelectionBoxesSha256: expectedSelectionBoxesTensor?.sha256,
+      expectedSelectionKeepSha256: expectedSelectionKeepTensor?.sha256,
+      expectedSelectedIndexSha256: expectedSelectedIndexTensor?.sha256,
+      expectedSelectedScoreSha256: expectedSelectedScoreTensor?.sha256,
+      expectedSelectedBoxSha256: expectedSelectedBoxTensor?.sha256,
       pixelEmbedSha256: pixelEmbedTensor.sha256,
       expectedMaskEmbeddingsSha256: expectedMaskEmbeddingsTensor.sha256,
       expectedUpscaledEmbeddingSha256: expectedUpscaledTensor.sha256,
@@ -914,6 +952,15 @@ async function loadDetrStackPayload(manifest) {
       let scoringOutput = null;
       let scoringTensorSha256 = null;
       let gpuPredLogits = null;
+      let selectionResult = null;
+      let selectionOutput = null;
+      let selectionTensorSha256 = null;
+      let gpuSelectionScores = null;
+      let gpuSelectionBoxes = null;
+      let gpuSelectionKeep = null;
+      let gpuSelectedIndex = null;
+      let gpuSelectedScore = null;
+      let gpuSelectedBox = null;
       if (includeStackScoring) {
         scoringTensorSha256 = await aggregateTensorBundleSha256('sam3-scoring-composed-tensors', [
           { role: 'hidden-states', artifactId: decoderHiddenStatesOutput.artifactId, sha256: decoderHiddenStatesOutput.sha256, shape: decoderHiddenStatesOutput.shape },
@@ -937,6 +984,39 @@ async function loadDetrStackPayload(manifest) {
         gpuPredLogits = new Float32Array(scoringResult.debugReadback.predLogits);
         scoringOutput = scoringResult.receipt.outputs.find(output => output.role === 'pred-logits');
         if (!scoringOutput?.sha256 || !scoringOutput?.artifactId) throw new Error('DETR stack scoring pred-logits output identity missing');
+      }
+      if (includeStackSelection) {
+        selectionTensorSha256 = await aggregateTensorBundleSha256('sam3-selection-composed-tensors', [
+          { role: 'pred-logits', artifactId: scoringOutput.artifactId, sha256: scoringOutput.sha256, shape: scoringOutput.shape },
+          { role: 'reference-boxes', artifactId: referenceBoxesOutput.artifactId, sha256: referenceBoxesOutput.sha256, shape: referenceBoxesOutput.shape },
+          { role: 'presence-logits', artifactId: presenceLogitsOutput.artifactId, sha256: presenceLogitsOutput.sha256, shape: presenceLogitsOutput.shape },
+        ]);
+        const selectionRoute = createSam3SelectionPostprocessPhaseProgramRouteDefinition({ model: { revision: manifest.model?.id || 'mlx-reference-selection', dtype: 'fp32' }, kernel: { profile: 'sam3-selection-postprocess-phase-program-v0', commit: params.get('commit') || null } });
+        const selectionRequest = createRouteInvocationRequest(selectionRoute, {
+          requestId: `sam-browser-detr-stack-selection-${Date.now()}`,
+          inputs: {
+            'source-image': { artifactId: manifest.sourceImage?.artifactId || 'image:synthetic', sha256: manifest.sourceImage?.sha256 || 'sha256:synthetic-image', shape: sourceImageShape(manifest) },
+            'sam3-selection-tensors': { artifactId: 'sam3-selection-tensors:browser-detr-stack-composition', sha256: selectionTensorSha256 },
+          },
+          outputs: {
+            'selection-scores': { artifactId: 'sam3-selection-scores:browser-detr-stack-composition', shape: [manifest.shape.batch, manifest.shape.queryTokens] },
+            'selection-boxes': { artifactId: 'sam3-selection-boxes:browser-detr-stack-composition', shape: [manifest.shape.batch, manifest.shape.queryTokens, 4] },
+            'selection-keep': { artifactId: 'sam3-selection-keep:browser-detr-stack-composition', shape: [manifest.shape.batch, manifest.shape.queryTokens] },
+            'selected-index': { artifactId: 'sam3-selected-index:browser-detr-stack-composition', shape: [manifest.shape.batch] },
+            'selected-score': { artifactId: 'sam3-selected-score:browser-detr-stack-composition', shape: [manifest.shape.batch] },
+            'selected-box': { artifactId: 'sam3-selected-box:browser-detr-stack-composition', shape: [manifest.shape.batch, 4] },
+          },
+          routeConfig: { upstream: manifest.claims?.upstream || 'mlx-reference-detr-stack', promptHash: manifest.prompt?.sha256, composedFrom: scoringResult.receipt?.effectiveRouteId, scoringOutput, referenceBoxesOutput, presenceLogitsOutput },
+        });
+        selectionResult = await runSam3SelectionPostprocessPhaseProgramRoute({ request: selectionRequest, route: selectionRoute, device, queue: device.queue, adapterName: adapter.info?.description || adapter.info?.device || 'browser-webgpu-adapter', browser: navigator.userAgent, kernel: selectionRoute.kernel, model: { revision: selectionRoute.model.revision, weightsHash: 'none', dtype: 'fp32' }, tensors: { predLogits: gpuPredLogits, referenceBoxes: gpuReferenceBoxes, presenceLogits: gpuPresenceLogits, shape: selectionShape }, includeReadback: true });
+        gpuSelectionScores = new Float32Array(selectionResult.debugReadback.scores);
+        gpuSelectionBoxes = new Float32Array(selectionResult.debugReadback.boxes);
+        gpuSelectionKeep = new Uint32Array(selectionResult.debugReadback.keep);
+        gpuSelectedIndex = new Uint32Array(selectionResult.debugReadback.selectedIndex);
+        gpuSelectedScore = new Float32Array(selectionResult.debugReadback.selectedScore);
+        gpuSelectedBox = new Float32Array(selectionResult.debugReadback.selectedBox);
+        selectionOutput = selectionResult.receipt.outputs.find(output => output.role === 'selected-index');
+        if (!selectionOutput?.sha256 || !selectionOutput?.artifactId) throw new Error('DETR stack selection output identity missing');
       }
       const downstreamTensorSha256 = await aggregateTensorBundleSha256('sam3-mask-tail-composed-tensors', [
         { role: 'last-hs', artifactId: lastHsOutput.artifactId, sha256: lastHsOutput.sha256, shape: lastHsOutput.shape },
@@ -963,7 +1043,7 @@ async function loadDetrStackPayload(manifest) {
         routeReceipt: encoderResult.receipt,
         midstreamRouteReceipt: decoderResult.receipt,
         downstreamRouteReceipt: tailResult.receipt,
-        compositionRouteReceipts: includeStackScoring ? [encoderResult.receipt, decoderResult.receipt, scoringResult.receipt, tailResult.receipt] : [encoderResult.receipt, decoderResult.receipt, tailResult.receipt],
+        compositionRouteReceipts: includeStackSelection ? [encoderResult.receipt, decoderResult.receipt, scoringResult.receipt, selectionResult.receipt, tailResult.receipt] : includeStackScoring ? [encoderResult.receipt, decoderResult.receipt, scoringResult.receipt, tailResult.receipt] : [encoderResult.receipt, decoderResult.receipt, tailResult.receipt],
         backend: tailResult.backend,
         debugReadback: {
           encoderHiddenStates: Array.from(gpuEncoderHiddenStates),
@@ -972,6 +1052,12 @@ async function loadDetrStackPayload(manifest) {
           referenceBoxes: Array.from(gpuReferenceBoxes),
           presenceLogits: Array.from(gpuPresenceLogits),
           predLogits: gpuPredLogits ? Array.from(gpuPredLogits) : undefined,
+          selectionScores: gpuSelectionScores ? Array.from(gpuSelectionScores) : undefined,
+          selectionBoxes: gpuSelectionBoxes ? Array.from(gpuSelectionBoxes) : undefined,
+          selectionKeep: gpuSelectionKeep ? Array.from(gpuSelectionKeep) : undefined,
+          selectedIndex: gpuSelectedIndex ? Array.from(gpuSelectedIndex) : undefined,
+          selectedScore: gpuSelectedScore ? Array.from(gpuSelectedScore) : undefined,
+          selectedBox: gpuSelectedBox ? Array.from(gpuSelectedBox) : undefined,
           maskLogits: tailResult.debugReadback.maskLogits,
           binaryMask: tailResult.debugReadback.binaryMask,
         },
@@ -988,6 +1074,9 @@ async function loadDetrStackPayload(manifest) {
           scoringRouteId: scoringResult?.receipt?.effectiveRouteId,
           scoringTensorSha256,
           scoringOutput,
+          selectionRouteId: selectionResult?.receipt?.effectiveRouteId,
+          selectionTensorSha256,
+          selectionOutput,
           downstreamTensorSha256,
         },
       };
@@ -1811,7 +1900,7 @@ async function main() {
       throw new Error('oracle packet must preserve explicit static-weight or reference-weight identity');
     }
 
-    const payload = manifest.mode === 'mlx-detr-stack-export' || manifest.mode === 'mlx-detr-stack-scoring-export' || manifest.boundary === 'sam3-detector-detr-encoder-decoder-mask-tail-phase-program' || manifest.boundary === 'sam3-detector-detr-encoder-decoder-scoring-mask-tail-phase-program'
+    const payload = manifest.mode === 'mlx-detr-stack-export' || manifest.mode === 'mlx-detr-stack-scoring-export' || manifest.mode === 'mlx-detr-stack-selection-export' || manifest.boundary === 'sam3-detector-detr-encoder-decoder-mask-tail-phase-program' || manifest.boundary === 'sam3-detector-detr-encoder-decoder-scoring-mask-tail-phase-program' || manifest.boundary === 'sam3-detector-detr-encoder-decoder-scoring-selection-mask-tail-phase-program'
       ? await loadDetrStackPayload(manifest)
       : manifest.routeId === SAM3_DETR_DECODER_PHASE_PROGRAM_ROUTE_ID
       ? await loadDetrDecoderPayload(manifest)
@@ -2112,6 +2201,12 @@ async function main() {
       pixelEmbedMaxAbsDiff: result.debugReadback.pixelEmbed ? maxAbsDiff(payload.expectedPixelEmbed || [], new Float32Array(result.debugReadback.pixelEmbed)) : undefined,
       maskLogitsMaxAbsDiff: gpuLogits ? maxAbsDiff(expectedLogits, gpuLogits) : undefined,
       predLogitsMaxAbsDiff: gpuPredLogits ? maxAbsDiff(expectedPredLogits, gpuPredLogits) : undefined,
+      selectionScoresMaxAbsDiff: result.debugReadback.selectionScores ? maxAbsDiff(payload.expectedSelectionScores || [], new Float32Array(result.debugReadback.selectionScores)) : undefined,
+      selectionBoxesMaxAbsDiff: result.debugReadback.selectionBoxes ? maxAbsDiff(payload.expectedSelectionBoxes || [], new Float32Array(result.debugReadback.selectionBoxes)) : undefined,
+      selectionKeepMismatchCount: result.debugReadback.selectionKeep ? mismatchCount(payload.expectedSelectionKeep || [], new Uint32Array(result.debugReadback.selectionKeep)) : undefined,
+      selectedIndexMaxAbsDiff: result.debugReadback.selectedIndex ? maxAbsDiff(payload.expectedSelectedIndex || [], new Uint32Array(result.debugReadback.selectedIndex)) : undefined,
+      selectedScoreMaxAbsDiff: result.debugReadback.selectedScore ? maxAbsDiff(payload.expectedSelectedScore || [], new Float32Array(result.debugReadback.selectedScore)) : undefined,
+      selectedBoxMaxAbsDiff: result.debugReadback.selectedBox ? maxAbsDiff(payload.expectedSelectedBox || [], new Float32Array(result.debugReadback.selectedBox)) : undefined,
       binaryMismatchCount: gpuBinary ? mismatchCount(expectedBinary, gpuBinary) : 0,
       expectedElementCount: expectedLogits?.length ?? expectedPredLogits?.length,
       gpuElementCount: gpuLogits?.length ?? gpuPredLogits?.length,
@@ -2124,6 +2219,12 @@ async function main() {
     const gpuDecoderHiddenStatesTolerance = manifest.tolerances?.decoderHiddenStatesMaxAbsDiff ?? gpuLastHsTolerance;
     const gpuPromptFpnTolerance = manifest.tolerances?.promptFpnMaxAbsDiff ?? 0.00001;
     const gpuPixelTolerance = manifest.tolerances?.pixelEmbedMaxAbsDiff ?? 0.00001;
+    const selectionScoresTolerance = manifest.tolerances?.selectionScoresMaxAbsDiff ?? 0.00001;
+    const selectionBoxesTolerance = manifest.tolerances?.selectionBoxesMaxAbsDiff ?? 0.0001;
+    const selectionKeepTolerance = manifest.tolerances?.selectionKeepMismatchCount ?? 0;
+    const selectedIndexTolerance = manifest.tolerances?.selectedIndexMaxAbsDiff ?? 0;
+    const selectedScoreTolerance = manifest.tolerances?.selectedScoreMaxAbsDiff ?? 0.00001;
+    const selectedBoxTolerance = manifest.tolerances?.selectedBoxMaxAbsDiff ?? 0.0001;
     const debugReadbackSamples = {
       lastHs: result.debugReadback.lastHs ? Array.from(new Float32Array(result.debugReadback.lastHs).slice(0, 16)) : undefined,
       expectedLastHs: payload.expectedLastHs ? Array.from(payload.expectedLastHs.slice(0, 16)) : undefined,
@@ -2135,6 +2236,10 @@ async function main() {
       expectedPresenceLogits: payload.expectedPresenceLogits ? Array.from(payload.expectedPresenceLogits.slice(0, 8)) : undefined,
       predLogits: result.debugReadback.predLogits ? Array.from(new Float32Array(result.debugReadback.predLogits).slice(0, 16)) : undefined,
       expectedPredLogits: payload.expectedPredLogits ? Array.from(payload.expectedPredLogits.slice(0, 16)) : undefined,
+      selectedIndex: result.debugReadback.selectedIndex ? Array.from(new Uint32Array(result.debugReadback.selectedIndex).slice(0, 8)) : undefined,
+      expectedSelectedIndex: payload.expectedSelectedIndex ? Array.from(payload.expectedSelectedIndex.slice(0, 8)) : undefined,
+      selectedScore: result.debugReadback.selectedScore ? Array.from(new Float32Array(result.debugReadback.selectedScore).slice(0, 8)) : undefined,
+      expectedSelectedScore: payload.expectedSelectedScore ? Array.from(payload.expectedSelectedScore.slice(0, 8)) : undefined,
     };
     state.parity = parity;
     state.debugReadbackSamples = debugReadbackSamples;
@@ -2153,6 +2258,12 @@ async function main() {
       || (parity.pixelEmbedMaxAbsDiff ?? 0) > gpuPixelTolerance
       || (parity.maskLogitsMaxAbsDiff ?? 0) > gpuTolerance
       || (parity.predLogitsMaxAbsDiff ?? 0) > scoringTolerance
+      || (parity.selectionScoresMaxAbsDiff ?? 0) > selectionScoresTolerance
+      || (parity.selectionBoxesMaxAbsDiff ?? 0) > selectionBoxesTolerance
+      || (parity.selectionKeepMismatchCount ?? 0) > selectionKeepTolerance
+      || (parity.selectedIndexMaxAbsDiff ?? 0) > selectedIndexTolerance
+      || (parity.selectedScoreMaxAbsDiff ?? 0) > selectedScoreTolerance
+      || (parity.selectedBoxMaxAbsDiff ?? 0) > selectedBoxTolerance
       || parity.binaryMismatchCount > binaryTolerance
     ) {
       throw new Error(`WebGPU parity mismatch: ${JSON.stringify(parity)}`);

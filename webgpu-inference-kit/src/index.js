@@ -178,6 +178,14 @@ export {
 } from './sam-scoring-phase-program.js';
 
 export {
+  SAM3_SELECTION_POSTPROCESS_PHASE_PROGRAM_ROUTE_ID,
+  createSam3SelectionPostprocessPhaseProgramCpuOracle,
+  createSam3SelectionPostprocessPhaseProgramRouteDefinition,
+  createSam3SelectionPostprocessPhaseProgramRouteReceipt,
+  runSam3SelectionPostprocessPhaseProgramRoute,
+} from './sam-selection-postprocess-phase-program.js';
+
+export {
   createWebGpuRouteSchemaContract,
 } from './route-schema-contract.js';
 
