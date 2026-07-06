@@ -86,6 +86,7 @@ def run_reference(model, image, prompt, resolution):
     input_ids = mx.array(text["input_ids"])
     attention_mask = mx.array(text["attention_mask"])
     det = model.detector_model
+    patch_embeddings = det.vision_encoder.backbone.embeddings(pixel_values)
     fpn_features = det.vision_encoder(pixel_values)
     fpn_pos = [det._pos_enc(feat) for feat in fpn_features]
     fpn_trimmed = fpn_features[:-1]
@@ -122,6 +123,7 @@ def run_reference(model, image, prompt, resolution):
 
     mx.eval(
         src,
+        patch_embeddings,
         pos_flat,
         *fpn_trimmed,
         encoded,
@@ -151,6 +153,7 @@ def run_reference(model, image, prompt, resolution):
     selected = int(np.lexsort((np.arange(scores.size), -scores, np.abs(positive_area - target_area)))[0])
     return {
         "encoder_src": np.array(src, dtype=np.float32),
+        "patch_embeddings": np.array(patch_embeddings, dtype=np.float32),
         "encoder_pos": np.array(pos_flat, dtype=np.float32),
         "encoder_hidden_states": np.array(encoded, dtype=np.float32),
         "backbone_features": backbone_features,

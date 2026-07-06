@@ -21,6 +21,8 @@ DETECTOR_STACK_SCHEMA = "kaminos.sam3-detector-stack-real-boundary-packet.v0"
 DETECTOR_STACK_BOUNDARY = "sam3-detector-stack-browser-local-detector-mask-phase-program"
 DETECTOR_STACK_PREPROCESS_SCHEMA = "kaminos.sam3-detector-stack-image-preprocess-real-boundary-packet.v0"
 DETECTOR_STACK_PREPROCESS_BOUNDARY = "sam3-browser-local-image-preprocess-detector-stack-phase-program"
+DETECTOR_STACK_PATCH_EMBED_SCHEMA = "kaminos.sam3-detector-stack-image-patch-embed-real-boundary-packet.v0"
+DETECTOR_STACK_PATCH_EMBED_BOUNDARY = "sam3-browser-local-image-preprocess-patch-embed-detector-stack-phase-program"
 
 
 def load_tool_module(filename: str, name: str):
@@ -47,6 +49,7 @@ def parse_args():
     parser.add_argument("--include-selection", action="store_true", help="Also export SAM3 score threshold/object-selection postprocess expectations.")
     parser.add_argument("--detector-stack", action="store_true", help="Export the canonical detector-stack witness packet with DETR, scoring, selection, and mask-tail expectations.")
     parser.add_argument("--image-preprocess-ingress", action="store_true", help="Export detector-stack packet expectations for browser-local source-image to normalized pixel-values ingress.")
+    parser.add_argument("--image-patch-embed-ingress", action="store_true", help="Export detector-stack packet expectations for browser-local normalized pixel-values to SAM3 patch embeddings ingress.")
     parser.add_argument("--score-threshold", type=float, default=0.5)
     return parser.parse_args()
 
@@ -107,8 +110,10 @@ def main():
     source_image.save(source_path)
     expected_pixel_values = (np.array(source_image).astype(np.float32) / 255.0 - 0.5) / 0.5
     ref = encoder_tool.run_reference(model, image, args.prompt, args.resolution)
-    include_selection = args.include_selection or args.detector_stack or args.image_preprocess_ingress
+    include_selection = args.include_selection or args.detector_stack or args.image_preprocess_ingress or args.image_patch_embed_ingress
     include_scoring = args.include_scoring or include_selection
+    include_image_preprocess = args.image_preprocess_ingress or args.image_patch_embed_ingress
+    include_image_patch_embed = args.image_patch_embed_ingress
     shape = {
         "batch": int(ref["last_hs"].shape[0]),
         "channels": int(ref["last_hs"].shape[2]),
@@ -127,10 +132,17 @@ def main():
         "imageHeight": args.resolution,
         "imageWidth": args.resolution,
         "imageChannels": 3,
+        "patchSize": int(model.detector_model.vision_encoder.backbone.config.patch_size),
+        "patchHeight": int(args.resolution // model.detector_model.vision_encoder.backbone.config.patch_size),
+        "patchWidth": int(args.resolution // model.detector_model.vision_encoder.backbone.config.patch_size),
+        "patchTokens": int(ref["patch_embeddings"].shape[1]),
+        "visionHiddenSize": int(ref["patch_embeddings"].shape[2]),
     }
     params = dict(encoder_tool.flatten(model.parameters()))
     tensor_entries = []
     encoder_tool.add_tensor(tensor_entries, out_dir, "expected-pixel-values", "expected-pixel-values.f32.bin", expected_pixel_values, [shape["batch"], shape["imageHeight"], shape["imageWidth"], shape["imageChannels"]], "B,H,W,C")
+    if include_image_patch_embed:
+        encoder_tool.add_tensor(tensor_entries, out_dir, "expected-patch-embeddings", "expected-patch-embeddings.f32.bin", ref["patch_embeddings"], [shape["batch"], shape["patchTokens"], shape["visionHiddenSize"]], "B,N,C")
     encoder_tool.add_tensor(tensor_entries, out_dir, "encoder-src", "encoder-src.f32.bin", ref["encoder_src"], [shape["batch"], shape["spatialTokens"], shape["channels"]], "B,S,C")
     encoder_tool.add_tensor(tensor_entries, out_dir, "encoder-pos", "encoder-pos.f32.bin", ref["encoder_pos"], [shape["batch"], shape["spatialTokens"], shape["channels"]], "B,S,C")
     encoder_tool.add_tensor(tensor_entries, out_dir, "prompt-features", "prompt-features.f32.bin", ref["prompt_features"], [shape["batch"], shape["promptTokens"], shape["channels"]], "B,T,C")
@@ -160,6 +172,8 @@ def main():
     encoder_tool.add_detr_encoder_weights(weight_entries, out_dir, params, shape["layerCount"])
     decoder_tool.add_decoder_layer_weights(weight_entries, out_dir, params, shape["layerCount"])
     decoder_tool.add_decoder_shared_weights(weight_entries, out_dir, params)
+    if include_image_patch_embed:
+        encoder_tool.add_weight(weight_entries, out_dir, params, "patch-embed-projection-weight", "detector_model.vision_encoder.backbone.embeddings.patch_embeddings.projection.weight", "patch-embed-projection-weight.f32.bin", "out,kH,kW,in")
     if include_scoring:
         scoring_tool.add_scoring_weights(weight_entries, out_dir, params)
     decoder_tool.add_mask_tail_weights(weight_entries, out_dir, params)
@@ -169,10 +183,10 @@ def main():
         "framework": {"name": "mlx-vlm", "root": str(Path(os.environ.get("KAMINOS_MLX_VLM_ROOT", Path.cwd())).resolve()), "execution": "uv-run"},
     }
     manifest = {
-        "schema": DETECTOR_STACK_PREPROCESS_SCHEMA if args.image_preprocess_ingress else DETECTOR_STACK_SCHEMA if args.detector_stack else SELECTION_SCHEMA if include_selection else SCORING_SCHEMA if include_scoring else SCHEMA,
+        "schema": DETECTOR_STACK_PATCH_EMBED_SCHEMA if include_image_patch_embed else DETECTOR_STACK_PREPROCESS_SCHEMA if args.image_preprocess_ingress else DETECTOR_STACK_SCHEMA if args.detector_stack else SELECTION_SCHEMA if include_selection else SCORING_SCHEMA if include_scoring else SCHEMA,
         "routeId": ROUTE_ID,
-        "mode": "mlx-detector-stack-preprocess-export" if args.image_preprocess_ingress else "mlx-detector-stack-export" if args.detector_stack else "mlx-detr-stack-selection-export" if include_selection else "mlx-detr-stack-scoring-export" if include_scoring else "mlx-detr-stack-export",
-        "boundary": DETECTOR_STACK_PREPROCESS_BOUNDARY if args.image_preprocess_ingress else DETECTOR_STACK_BOUNDARY if args.detector_stack else SELECTION_BOUNDARY if include_selection else SCORING_BOUNDARY if include_scoring else BOUNDARY,
+        "mode": "mlx-detector-stack-patch-embed-export" if include_image_patch_embed else "mlx-detector-stack-preprocess-export" if args.image_preprocess_ingress else "mlx-detector-stack-export" if args.detector_stack else "mlx-detr-stack-selection-export" if include_selection else "mlx-detr-stack-scoring-export" if include_scoring else "mlx-detr-stack-export",
+        "boundary": DETECTOR_STACK_PATCH_EMBED_BOUNDARY if include_image_patch_embed else DETECTOR_STACK_PREPROCESS_BOUNDARY if args.image_preprocess_ingress else DETECTOR_STACK_BOUNDARY if args.detector_stack else SELECTION_BOUNDARY if include_selection else SCORING_BOUNDARY if include_scoring else BOUNDARY,
         "createdAt": datetime.now(timezone.utc).isoformat(),
         "reference": reference,
         "model": {"id": args.model, "role": "mlx-reference-upstream"},
@@ -180,24 +194,32 @@ def main():
         "sourceImage": {"artifactId": f"image:{image_path.name}:sam3-reference-source", "file": "source-image.png", "path": str(source_path), "sha256": encoder_tool.sha256_file(source_path), "originalPath": str(image_path), "resolution": [args.resolution, args.resolution]},
         "staticWeights": {"artifactId": f"sam3-weights:{args.model}:detr-stack-reference-upstream", "sha256": weights_sha, "role": "reference-upstream", "reason": "weights exported for browser DETR encoder, DETR decoder, dot-product scoring, selection postprocess, and downstream mask-tail phase-program execution" if include_selection else "weights exported for browser DETR encoder, DETR decoder, dot-product scoring, and downstream mask-tail phase-program execution" if include_scoring else "weights exported for browser DETR encoder, DETR decoder, and downstream mask-tail phase-program execution"},
         "shape": shape,
-        "claims": {"fullSam3BrowserExecution": False, "upstream": "mlx-vlm-sam3-detector-reference", "browserExecutedStages": [*(["image-preprocess"] if args.image_preprocess_ingress else []), "detr-encoder", "detr-decoder", *(['dot-product-scoring'] if include_scoring else []), *(['score-threshold', 'box-postprocess', 'object-selection'] if include_selection else []), "mask-embedder", "instance-projection", "decode-mask", "threshold-mask"]},
+        "claims": {"fullSam3BrowserExecution": False, "upstream": "mlx-vlm-sam3-detector-reference", "browserExecutedStages": [*(["image-preprocess"] if include_image_preprocess else []), *(["image-patch-embed"] if include_image_patch_embed else []), "detr-encoder", "detr-decoder", *(['dot-product-scoring'] if include_scoring else []), *(['score-threshold', 'box-postprocess', 'object-selection'] if include_selection else []), "mask-embedder", "instance-projection", "decode-mask", "threshold-mask"]},
         "upstreamBoundaries": [
-            {"role": "source-image", "owner": "browser-served-source-image" if args.image_preprocess_ingress else "mlx-vlm-reference", "status": "browser-local-ingress" if args.image_preprocess_ingress else "mlx-owned", "nextBrowserIsland": "image-preprocess-and-vision-encoder"},
+            {"role": "source-image", "owner": "browser-served-source-image" if include_image_preprocess else "mlx-vlm-reference", "status": "browser-local-ingress" if include_image_preprocess else "mlx-owned", "nextBrowserIsland": "image-preprocess-and-vision-encoder"},
+            {"role": "patch-embeddings", "owner": "browser-local-route" if include_image_patch_embed else "mlx-vlm-reference", "status": "browser-local-ingress" if include_image_patch_embed else "mlx-owned", "nextBrowserIsland": "sam3-vit-backbone"},
             {"role": "encoder-src", "owner": "mlx-vlm-reference", "status": "mlx-owned", "nextBrowserIsland": "image-text-detr-encoder-inputs"},
             {"role": "encoder-pos", "owner": "mlx-vlm-reference", "status": "mlx-owned", "nextBrowserIsland": "image-text-detr-encoder-inputs"},
             {"role": "prompt-features", "owner": "mlx-vlm-reference", "status": "mlx-owned", "nextBrowserIsland": "text-token-prompt-encoder"},
             {"role": "prompt-mask", "owner": "mlx-vlm-reference", "status": "mlx-owned", "nextBrowserIsland": "text-token-prompt-encoder"},
             {"role": "pixel-embed", "owner": "mlx-vlm-reference", "status": "mlx-owned", "nextBrowserIsland": "image-encoder-pixel-embedding"},
-        ] if (args.detector_stack or args.image_preprocess_ingress) else None,
+        ] if (args.detector_stack or include_image_preprocess) else None,
         "postprocess": {"scoreThreshold": args.score_threshold, "nms": False} if include_selection else None,
         "imagePreprocess": {
             "boundary": "sam3-source-image-to-normalized-pixel-values-phase-program",
             "source": "browser-served-source-image",
             "normalization": {"mean": [0.5, 0.5, 0.5], "std": [0.5, 0.5, 0.5], "layout": "B,H,W,C"},
-            "browserExecuted": bool(args.image_preprocess_ingress),
+            "browserExecuted": bool(include_image_preprocess),
             "claim": "browser-local image byte to normalized pixel-values ingress only; resize/original-image ownership and ViT/FPN execution remain outside this boundary",
         },
-        "tolerances": {"pixelValuesMaxAbsDiff": 0.000001, "encoderHiddenStatesMaxAbsDiff": 0.0003, "lastHsMaxAbsDiff": 0.0006, "decoderHiddenStatesMaxAbsDiff": 0.0006, "referenceBoxesMaxAbsDiff": 0.0006, "presenceLogitsMaxAbsDiff": 0.0006, "predLogitsMaxAbsDiff": 0.0005, "selectedIndexMaxAbsDiff": 0, "selectedScoreMaxAbsDiff": 0.00001, "selectedBoxMaxAbsDiff": 0.0001, "selectionScoresMaxAbsDiff": 0.00001, "selectionBoxesMaxAbsDiff": 0.0002, "selectionKeepMismatchCount": 0, "maskEmbeddingsMaxAbsDiff": 0.0001, "upscaledEmbeddingMaxAbsDiff": 0.0001, "webGpuLogitsMaxAbsDiff": 0.001, "cpuOracleBinaryMismatchCount": 8, "binaryMismatchCount": 8},
+        "imagePatchEmbed": {
+            "boundary": "sam3-normalized-pixel-values-to-patch-embeddings-phase-program",
+            "source": "browser-local-normalized-pixel-values",
+            "projection": {"weightLayout": "out,kH,kW,in", "patchSize": shape["patchSize"], "stride": shape["patchSize"], "layout": "B,N,C"},
+            "browserExecuted": bool(include_image_patch_embed),
+            "claim": "browser-local SAM3 patch projection ingress only; position embeddings, layer norm, ViT blocks, FPN neck, and text encoder remain outside this boundary",
+        } if include_image_patch_embed else None,
+        "tolerances": {"pixelValuesMaxAbsDiff": 0.000001, "patchEmbeddingsMaxAbsDiff": 0.0005, "imagePatchEmbedCpuMaxAbsDiff": 0.000002, "encoderHiddenStatesMaxAbsDiff": 0.0003, "lastHsMaxAbsDiff": 0.0006, "decoderHiddenStatesMaxAbsDiff": 0.0006, "referenceBoxesMaxAbsDiff": 0.0006, "presenceLogitsMaxAbsDiff": 0.0006, "predLogitsMaxAbsDiff": 0.0005, "selectedIndexMaxAbsDiff": 0, "selectedScoreMaxAbsDiff": 0.00001, "selectedBoxMaxAbsDiff": 0.0001, "selectionScoresMaxAbsDiff": 0.00001, "selectionBoxesMaxAbsDiff": 0.0002, "selectionKeepMismatchCount": 0, "maskEmbeddingsMaxAbsDiff": 0.0001, "upscaledEmbeddingMaxAbsDiff": 0.0001, "webGpuLogitsMaxAbsDiff": 0.001, "cpuOracleBinaryMismatchCount": 8, "binaryMismatchCount": 8},
         "visualization": {"selectedMaskIndex": int(ref["selected"]), "selectedMaskScore": float(ref["scores"][ref["selected"]]), "presenceLogits": [float(x) for x in ref["presence"]]},
         "tensors": tensor_entries,
         "weights": weight_entries,

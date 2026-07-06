@@ -146,6 +146,14 @@ export {
 } from './sam-image-preprocess-phase-program.js';
 
 export {
+  SAM3_IMAGE_PATCH_EMBED_PHASE_PROGRAM_ROUTE_ID,
+  createSam3ImagePatchEmbedPhaseProgramCpuOracle,
+  createSam3ImagePatchEmbedPhaseProgramRouteDefinition,
+  createSam3ImagePatchEmbedPhaseProgramRouteReceipt,
+  runSam3ImagePatchEmbedPhaseProgramRoute,
+} from './sam-image-patch-embed-phase-program.js';
+
+export {
   SAM3_PIXEL_DECODER_PHASE_PROGRAM_ROUTE_ID,
   createSam3PixelDecoderPhaseProgramCpuOracle,
   createSam3PixelDecoderPhaseProgramRouteDefinition,

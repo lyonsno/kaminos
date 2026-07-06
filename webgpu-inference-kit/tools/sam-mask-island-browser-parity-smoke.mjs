@@ -14,9 +14,11 @@ const DETR_DECODER_PHASE_PROGRAM_ROUTE_ID = 'sam3.detr-decoder.phase-program.web
 const SCORING_PHASE_PROGRAM_ROUTE_ID = 'sam3.scoring.phase-program.webgpu-local.v0';
 const SELECTION_POSTPROCESS_PHASE_PROGRAM_ROUTE_ID = 'sam3.selection-postprocess.phase-program.webgpu-local.v0';
 const IMAGE_PREPROCESS_PHASE_PROGRAM_ROUTE_ID = 'sam3.image-preprocess.phase-program.webgpu-local.v0';
+const IMAGE_PATCH_EMBED_PHASE_PROGRAM_ROUTE_ID = 'sam3.image-patch-embed.phase-program.webgpu-local.v0';
 const DETR_STACK_SCORING_PHASE_PROGRAM_ROUTE_ID = DETR_ENCODER_PHASE_PROGRAM_ROUTE_ID;
 const DETECTOR_STACK_PACKET_MODE = 'mlx-detector-stack-export';
 const DETECTOR_STACK_PREPROCESS_PACKET_MODE = 'mlx-detector-stack-preprocess-export';
+const DETECTOR_STACK_PATCH_EMBED_PACKET_MODE = 'mlx-detector-stack-patch-embed-export';
 
 const args = new Map();
 for (let i = 2; i < process.argv.length; i += 2) {
@@ -40,6 +42,8 @@ const packetTool = resolve(args.get('--packet-tool') || (
     : packetMode === DETECTOR_STACK_PACKET_MODE
     ? join(packageRoot, 'tools/sam-detr-stack-mlx-packet.py')
     : packetMode === DETECTOR_STACK_PREPROCESS_PACKET_MODE
+    ? join(packageRoot, 'tools/sam-detr-stack-mlx-packet.py')
+    : packetMode === DETECTOR_STACK_PATCH_EMBED_PACKET_MODE
     ? join(packageRoot, 'tools/sam-detr-stack-mlx-packet.py')
     : packetMode === 'mlx-detr-stack-selection-export'
     ? join(packageRoot, 'tools/sam-detr-stack-mlx-packet.py')
@@ -69,6 +73,8 @@ const requestedRouteId = args.get('--route-id') || (
     : packetMode === DETECTOR_STACK_PACKET_MODE
     ? DETR_STACK_SCORING_PHASE_PROGRAM_ROUTE_ID
     : packetMode === DETECTOR_STACK_PREPROCESS_PACKET_MODE
+    ? DETR_STACK_SCORING_PHASE_PROGRAM_ROUTE_ID
+    : packetMode === DETECTOR_STACK_PATCH_EMBED_PACKET_MODE
     ? DETR_STACK_SCORING_PHASE_PROGRAM_ROUTE_ID
     : packetMode === 'mlx-detr-stack-selection-export'
     ? DETR_STACK_SCORING_PHASE_PROGRAM_ROUTE_ID
@@ -148,6 +154,27 @@ function imagePreprocessReport(state) {
   };
 }
 
+function imagePatchEmbedReport(state) {
+  const imagePatchEmbedEvidence = state?.imagePatchEmbedEvidence || null;
+  if (!imagePatchEmbedEvidence) return null;
+  return {
+    schema: state.tensorPacket?.schema || null,
+    mode: state.tensorPacket?.mode || null,
+    boundary: imagePatchEmbedEvidence.boundary || state.tensorPacket?.boundary || null,
+    routeKind: imagePatchEmbedEvidence.routeKind || state.tensorPacket?.routeKind || null,
+    receipt: imagePatchEmbedEvidence.receipt || null,
+    receiptChain: imagePatchEmbedEvidence.receiptChain || [],
+    source: imagePatchEmbedEvidence.source || null,
+    projection: imagePatchEmbedEvidence.projection || null,
+    patchEmbeddingsTensorSha256: imagePatchEmbedEvidence.patchEmbeddingsTensorSha256 || null,
+    patchEmbeddingsOutput: imagePatchEmbedEvidence.patchEmbeddingsOutput || null,
+    patchProjectionWeightSha256: imagePatchEmbedEvidence.patchProjectionWeightSha256 || null,
+    parity: imagePatchEmbedEvidence.parity || null,
+    debugReadbackSample: imagePatchEmbedEvidence.debugReadbackSample || [],
+    nonClaims: imagePatchEmbedEvidence.nonClaims || {},
+  };
+}
+
 function assertDetectorStackEvidence(state) {
   const report = detectorStackReport(state);
   if (!report) throw new Error('canonical detectorStack report missing');
@@ -184,6 +211,20 @@ function assertImagePreprocessEvidence(state) {
   if (!report.pixelValuesTensorSha256 || !report.pixelValuesOutput?.sha256 || !report.pixelValuesOutput?.artifactId) throw new Error('imagePreprocess pixel-values edge identity missing');
   if (report.parity?.pixelValuesMaxAbsDiff > 0.000001 || report.parity?.imagePreprocessCpuMaxAbsDiff > 0.000001) throw new Error('imagePreprocess pixel-values parity mismatch');
   if (report.nonClaims?.originalImageResize !== true || report.nonClaims?.browserLocalVisionEncoder !== true || report.nonClaims?.browserLocalTextEncoder !== true || report.nonClaims?.fullSam3BrowserExecution !== true) throw new Error('imagePreprocess bounded non-claims missing');
+  return report;
+}
+
+function assertImagePatchEmbedEvidence(state) {
+  const report = imagePatchEmbedReport(state);
+  if (!report) throw new Error('imagePatchEmbed report missing');
+  if (report.mode !== DETECTOR_STACK_PATCH_EMBED_PACKET_MODE) throw new Error('imagePatchEmbed packet mode mismatch');
+  if (report.schema !== 'kaminos.sam3-detector-stack-image-patch-embed-real-boundary-packet.v0') throw new Error('imagePatchEmbed schema mismatch');
+  if (report.routeKind !== 'image-patch-embed-detector-stack-composition') throw new Error('imagePatchEmbed route kind mismatch');
+  if (report.receipt?.effectiveRouteId !== IMAGE_PATCH_EMBED_PHASE_PROGRAM_ROUTE_ID) throw new Error('imagePatchEmbed route receipt identity mismatch');
+  if (!Array.isArray(report.receiptChain) || report.receiptChain.length !== 7 || report.receiptChain[0] !== IMAGE_PREPROCESS_PHASE_PROGRAM_ROUTE_ID || report.receiptChain[1] !== IMAGE_PATCH_EMBED_PHASE_PROGRAM_ROUTE_ID) throw new Error('imagePatchEmbed composition receipt chain mismatch');
+  if (!report.patchEmbeddingsTensorSha256 || !report.patchEmbeddingsOutput?.sha256 || !report.patchEmbeddingsOutput?.artifactId || !report.patchProjectionWeightSha256) throw new Error('imagePatchEmbed edge identity missing');
+  if (report.parity?.patchEmbeddingsMaxAbsDiff > 0.0005 || report.parity?.imagePatchEmbedCpuMaxAbsDiff > 0.000002) throw new Error('imagePatchEmbed parity mismatch');
+  if (report.nonClaims?.originalImageResize !== true || report.nonClaims?.browserLocalViTBlocks !== true || report.nonClaims?.browserLocalFpnNeck !== true || report.nonClaims?.browserLocalTextEncoder !== true || report.nonClaims?.fullSam3BrowserExecution !== true) throw new Error('imagePatchEmbed bounded non-claims missing');
   return report;
 }
 
@@ -229,6 +270,7 @@ function writeReport(extra = {}) {
     parity: lastState?.parity || null,
     detectorStack: detectorStackReport(lastState),
     imagePreprocess: imagePreprocessReport(lastState),
+    imagePatchEmbed: imagePatchEmbedReport(lastState),
     ...extra,
   }, null, 2));
 }
@@ -322,8 +364,9 @@ function generateOraclePacket() {
   if (isPython && packetMode === 'mlx-detr-stack-scoring-export') packetArgs.push('--include-scoring');
   if (isPython && packetMode === DETECTOR_STACK_PACKET_MODE) packetArgs.push('--detector-stack');
   if (isPython && packetMode === DETECTOR_STACK_PREPROCESS_PACKET_MODE) packetArgs.push('--image-preprocess-ingress');
+  if (isPython && packetMode === DETECTOR_STACK_PATCH_EMBED_PACKET_MODE) packetArgs.push('--image-patch-embed-ingress');
   if (isPython && packetMode === 'mlx-detr-stack-selection-export') packetArgs.push('--include-selection');
-  if (isPython && (packetMode === 'mlx-detr-stack-selection-export' || packetMode === DETECTOR_STACK_PACKET_MODE || packetMode === DETECTOR_STACK_PREPROCESS_PACKET_MODE) && scoreThreshold != null) packetArgs.push('--score-threshold', scoreThreshold);
+  if (isPython && (packetMode === 'mlx-detr-stack-selection-export' || packetMode === DETECTOR_STACK_PACKET_MODE || packetMode === DETECTOR_STACK_PREPROCESS_PACKET_MODE || packetMode === DETECTOR_STACK_PATCH_EMBED_PACKET_MODE) && scoreThreshold != null) packetArgs.push('--score-threshold', scoreThreshold);
   const proc = spawnSync(command, packetArgs, {
     cwd: isPython ? mlxVlmRoot : packageRoot,
     encoding: 'utf8',
@@ -480,21 +523,41 @@ async function main() {
       if (!predLogitsOutput?.sha256 || !predLogitsOutput?.artifactId) throw new Error('SAM3 scoring pred-logits output identity missing');
       if (lastState.parity?.predLogitsMaxAbsDiff > 0.0005) throw new Error('SAM3 scoring pred-logits parity exceeds tolerance');
       if (lastState.parity?.expectedElementCount !== lastState.parity?.gpuElementCount) throw new Error('SAM3 scoring element count mismatch');
-    } else if (packetMode === 'mlx-detr-stack-selection-export' || packetMode === DETECTOR_STACK_PACKET_MODE || packetMode === DETECTOR_STACK_PREPROCESS_PACKET_MODE) {
+    } else if (packetMode === 'mlx-detr-stack-selection-export' || packetMode === DETECTOR_STACK_PACKET_MODE || packetMode === DETECTOR_STACK_PREPROCESS_PACKET_MODE || packetMode === DETECTOR_STACK_PATCH_EMBED_PACKET_MODE) {
       if (!lastState.tensorPacket?.expectedSelectionScoresSha256 || !lastState.tensorPacket?.expectedSelectionBoxesSha256 || !lastState.tensorPacket?.expectedSelectionKeepSha256 || !lastState.tensorPacket?.expectedSelectedIndexSha256 || !lastState.tensorPacket?.expectedSelectedScoreSha256 || !lastState.tensorPacket?.expectedSelectedBoxSha256) {
         throw new Error('DETR stack selection tensorPacket identity missing');
+      }
+      if (packetMode === DETECTOR_STACK_PATCH_EMBED_PACKET_MODE && (!lastState.tensorPacket?.expectedPixelValuesSha256 || !lastState.tensorPacket?.expectedPatchEmbeddingsSha256 || !lastState.tensorPacket?.patchProjectionWeightSha256)) {
+        throw new Error('imagePatchEmbed detector stack tensorPacket identity missing');
+      }
+      if (packetMode === DETECTOR_STACK_PATCH_EMBED_PACKET_MODE && (!Array.isArray(lastState.compositionRouteReceipts) || lastState.compositionRouteReceipts.length !== 7)) {
+        throw new Error('imagePatchEmbed detector stack composition receipt chain missing');
       }
       if (packetMode === DETECTOR_STACK_PREPROCESS_PACKET_MODE && (!Array.isArray(lastState.compositionRouteReceipts) || lastState.compositionRouteReceipts.length !== 6)) {
         throw new Error('imagePreprocess detector stack composition receipt chain missing');
       }
-      if (packetMode !== DETECTOR_STACK_PREPROCESS_PACKET_MODE && (!Array.isArray(lastState.compositionRouteReceipts) || lastState.compositionRouteReceipts.length !== 5)) {
+      if (packetMode !== DETECTOR_STACK_PREPROCESS_PACKET_MODE && packetMode !== DETECTOR_STACK_PATCH_EMBED_PACKET_MODE && (!Array.isArray(lastState.compositionRouteReceipts) || lastState.compositionRouteReceipts.length !== 5)) {
         throw new Error('DETR stack selection composition receipt chain missing');
       }
-      const receiptOffset = packetMode === DETECTOR_STACK_PREPROCESS_PACKET_MODE ? 1 : 0;
-      const imagePreprocessReceipt = packetMode === DETECTOR_STACK_PREPROCESS_PACKET_MODE ? lastState.compositionRouteReceipts[0] : null;
+      const receiptOffset = packetMode === DETECTOR_STACK_PATCH_EMBED_PACKET_MODE ? 2 : packetMode === DETECTOR_STACK_PREPROCESS_PACKET_MODE ? 1 : 0;
+      const imagePreprocessReceipt = packetMode === DETECTOR_STACK_PREPROCESS_PACKET_MODE || packetMode === DETECTOR_STACK_PATCH_EMBED_PACKET_MODE ? lastState.compositionRouteReceipts[0] : null;
+      const imagePatchEmbedReceipt = packetMode === DETECTOR_STACK_PATCH_EMBED_PACKET_MODE ? lastState.compositionRouteReceipts[1] : null;
       const [encoderReceipt, decoderReceipt, scoringReceipt, selectionReceipt, tailReceipt] = lastState.compositionRouteReceipts.slice(receiptOffset);
       const compositionEdge = lastState.compositionEdge;
-      if (packetMode === DETECTOR_STACK_PREPROCESS_PACKET_MODE && imagePreprocessReceipt.effectiveRouteId !== IMAGE_PREPROCESS_PHASE_PROGRAM_ROUTE_ID) throw new Error('imagePreprocess receipt identity mismatch');
+      if ((packetMode === DETECTOR_STACK_PREPROCESS_PACKET_MODE || packetMode === DETECTOR_STACK_PATCH_EMBED_PACKET_MODE) && imagePreprocessReceipt.effectiveRouteId !== IMAGE_PREPROCESS_PHASE_PROGRAM_ROUTE_ID) throw new Error('imagePreprocess receipt identity mismatch');
+      if (packetMode === DETECTOR_STACK_PATCH_EMBED_PACKET_MODE && imagePatchEmbedReceipt.effectiveRouteId !== IMAGE_PATCH_EMBED_PHASE_PROGRAM_ROUTE_ID) throw new Error('imagePatchEmbed receipt identity mismatch');
+      if (packetMode === DETECTOR_STACK_PATCH_EMBED_PACKET_MODE) {
+        const patchInput = imagePatchEmbedReceipt.inputs?.find(input => input.role === 'pixel-values');
+        if (patchInput?.sha256 !== compositionEdge?.pixelValuesOutput?.sha256) throw new Error('imagePatchEmbed pixel-values input does not match preprocess output');
+        const patchOutput = imagePatchEmbedReceipt.outputs?.find(output => output.role === 'patch-embeddings');
+        if (
+          patchOutput?.artifactId !== compositionEdge?.patchEmbeddingsOutput?.artifactId
+          || patchOutput?.sha256 !== compositionEdge?.patchEmbeddingsOutput?.sha256
+          || JSON.stringify(patchOutput?.shape) !== JSON.stringify(compositionEdge?.patchEmbeddingsOutput?.shape)
+        ) {
+          throw new Error('imagePatchEmbed output identity does not match composition edge');
+        }
+      }
       if (encoderReceipt.effectiveRouteId !== DETR_STACK_SCORING_PHASE_PROGRAM_ROUTE_ID) throw new Error('DETR stack selection encoder receipt identity mismatch');
       if (decoderReceipt.effectiveRouteId !== DETR_DECODER_PHASE_PROGRAM_ROUTE_ID) throw new Error('DETR stack selection decoder receipt identity mismatch');
       if (scoringReceipt.effectiveRouteId !== SCORING_PHASE_PROGRAM_ROUTE_ID) throw new Error('DETR stack selection scoring receipt identity mismatch');
@@ -520,6 +583,7 @@ async function main() {
       if (lastState.parity?.binaryMismatchCount > 8) throw new Error('DETR stack selection binary mask parity exceeds tolerance');
       if (packetMode === DETECTOR_STACK_PACKET_MODE) assertDetectorStackEvidence(lastState);
       if (packetMode === DETECTOR_STACK_PREPROCESS_PACKET_MODE) assertImagePreprocessEvidence(lastState);
+      if (packetMode === DETECTOR_STACK_PATCH_EMBED_PACKET_MODE) assertImagePatchEmbedEvidence(lastState);
     } else if (packetMode === 'mlx-detr-stack-scoring-export') {
       if (!lastState.tensorPacket?.encoderSrcSha256 || !lastState.tensorPacket?.encoderPosSha256 || !lastState.tensorPacket?.expectedEncoderHiddenStatesSha256 || !lastState.tensorPacket?.expectedDecoderHiddenStatesSha256 || !lastState.tensorPacket?.expectedLastHsSha256 || !lastState.tensorPacket?.expectedReferenceBoxesSha256 || !lastState.tensorPacket?.expectedPresenceLogitsSha256 || !lastState.tensorPacket?.expectedPredLogitsSha256 || !lastState.tensorPacket?.pixelEmbedSha256 || !lastState.tensorPacket?.weightsSha256) {
         throw new Error('DETR stack scoring tensorPacket identity missing');
