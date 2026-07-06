@@ -12,6 +12,7 @@ const PROMPT_FPN_PHASE_PROGRAM_ROUTE_ID = 'sam3.prompt-fpn.phase-program.webgpu-
 const DETR_ENCODER_PHASE_PROGRAM_ROUTE_ID = 'sam3.detr-encoder.phase-program.webgpu-local.v0';
 const DETR_DECODER_PHASE_PROGRAM_ROUTE_ID = 'sam3.detr-decoder.phase-program.webgpu-local.v0';
 const SCORING_PHASE_PROGRAM_ROUTE_ID = 'sam3.scoring.phase-program.webgpu-local.v0';
+const DETR_STACK_SCORING_PHASE_PROGRAM_ROUTE_ID = DETR_ENCODER_PHASE_PROGRAM_ROUTE_ID;
 
 const args = new Map();
 for (let i = 2; i < process.argv.length; i += 2) {
@@ -32,6 +33,8 @@ const packetTool = resolve(args.get('--packet-tool') || (
     ? join(packageRoot, 'tools/sam-prompt-fpn-mlx-packet.py')
     : packetMode === 'mlx-scoring-export'
     ? join(packageRoot, 'tools/sam-scoring-mlx-packet.py')
+    : packetMode === 'mlx-detr-stack-scoring-export'
+    ? join(packageRoot, 'tools/sam-detr-stack-mlx-packet.py')
     : packetMode === 'mlx-detr-stack-export'
     ? join(packageRoot, 'tools/sam-detr-stack-mlx-packet.py')
     : packetMode === 'mlx-detr-decoder-export'
@@ -53,6 +56,8 @@ const requestedRouteId = args.get('--route-id') || (
     ? PROMPT_FPN_PHASE_PROGRAM_ROUTE_ID
     : packetMode === 'mlx-scoring-export'
     ? SCORING_PHASE_PROGRAM_ROUTE_ID
+    : packetMode === 'mlx-detr-stack-scoring-export'
+    ? DETR_STACK_SCORING_PHASE_PROGRAM_ROUTE_ID
     : packetMode === 'mlx-detr-stack-export'
     ? DETR_ENCODER_PHASE_PROGRAM_ROUTE_ID
     : packetMode === 'mlx-detr-decoder-export'
@@ -214,6 +219,7 @@ function generateOraclePacket() {
         '--prompt', prompt,
         '--model', model,
       ];
+  if (isPython && packetMode === 'mlx-detr-stack-scoring-export') packetArgs.push('--include-scoring');
   const proc = spawnSync(command, packetArgs, {
     cwd: isPython ? mlxVlmRoot : packageRoot,
     encoding: 'utf8',
@@ -370,6 +376,46 @@ async function main() {
       if (!predLogitsOutput?.sha256 || !predLogitsOutput?.artifactId) throw new Error('SAM3 scoring pred-logits output identity missing');
       if (lastState.parity?.predLogitsMaxAbsDiff > 0.0005) throw new Error('SAM3 scoring pred-logits parity exceeds tolerance');
       if (lastState.parity?.expectedElementCount !== lastState.parity?.gpuElementCount) throw new Error('SAM3 scoring element count mismatch');
+    } else if (packetMode === 'mlx-detr-stack-scoring-export') {
+      if (!lastState.tensorPacket?.encoderSrcSha256 || !lastState.tensorPacket?.encoderPosSha256 || !lastState.tensorPacket?.expectedEncoderHiddenStatesSha256 || !lastState.tensorPacket?.expectedDecoderHiddenStatesSha256 || !lastState.tensorPacket?.expectedLastHsSha256 || !lastState.tensorPacket?.expectedReferenceBoxesSha256 || !lastState.tensorPacket?.expectedPresenceLogitsSha256 || !lastState.tensorPacket?.expectedPredLogitsSha256 || !lastState.tensorPacket?.pixelEmbedSha256 || !lastState.tensorPacket?.weightsSha256) {
+        throw new Error('DETR stack scoring tensorPacket identity missing');
+      }
+      if (!Array.isArray(lastState.compositionRouteReceipts) || lastState.compositionRouteReceipts.length !== 4) {
+        throw new Error('DETR stack scoring composition receipt chain missing');
+      }
+      const [encoderReceipt, decoderReceipt, scoringReceipt, tailReceipt] = lastState.compositionRouteReceipts;
+      const compositionEdge = lastState.compositionEdge;
+      if (encoderReceipt.effectiveRouteId !== DETR_STACK_SCORING_PHASE_PROGRAM_ROUTE_ID) throw new Error('DETR stack scoring encoder receipt identity mismatch');
+      if (decoderReceipt.effectiveRouteId !== DETR_DECODER_PHASE_PROGRAM_ROUTE_ID) throw new Error('DETR stack scoring decoder receipt identity mismatch');
+      if (scoringReceipt.effectiveRouteId !== SCORING_PHASE_PROGRAM_ROUTE_ID) throw new Error('DETR stack scoring receipt identity mismatch');
+      if (tailReceipt.effectiveRouteId !== MASK_TAIL_PHASE_PROGRAM_ROUTE_ID) throw new Error('DETR stack scoring mask-tail receipt identity mismatch');
+      const decoderHiddenStatesOutput = decoderReceipt.outputs?.find(output => output.role === 'decoder-hidden-states');
+      if (
+        decoderHiddenStatesOutput?.artifactId !== compositionEdge?.decoderHiddenStatesOutput?.artifactId
+        || decoderHiddenStatesOutput?.sha256 !== compositionEdge?.decoderHiddenStatesOutput?.sha256
+        || JSON.stringify(decoderHiddenStatesOutput?.shape) !== JSON.stringify(compositionEdge?.decoderHiddenStatesOutput?.shape)
+      ) {
+        throw new Error('DETR stack scoring decoder-hidden-states output identity does not match composition edge');
+      }
+      const scoringInput = scoringReceipt.inputs?.find(input => input.role === 'sam3-scoring-tensors');
+      if (scoringInput?.sha256 !== compositionEdge?.scoringTensorSha256) throw new Error('DETR stack scoringTensorSha256 does not match scoring receipt input');
+      const scoringOutput = scoringReceipt.outputs?.find(output => output.role === 'pred-logits');
+      if (
+        scoringOutput?.artifactId !== compositionEdge?.scoringOutput?.artifactId
+        || scoringOutput?.sha256 !== compositionEdge?.scoringOutput?.sha256
+        || JSON.stringify(scoringOutput?.shape) !== JSON.stringify(compositionEdge?.scoringOutput?.shape)
+      ) {
+        throw new Error('DETR stack scoring output identity does not match composition edge');
+      }
+      const downstreamTensorInput = tailReceipt.inputs?.find(input => input.role === 'sam3-mask-tail-tensors');
+      if (downstreamTensorInput?.sha256 !== compositionEdge?.downstreamTensorSha256) throw new Error('DETR stack scoring downstreamTensorSha256 does not match mask-tail receipt input');
+      if (lastState.parity?.encoderHiddenStatesMaxAbsDiff > 0.0003) throw new Error('DETR stack scoring encoder parity exceeds tolerance');
+      if (lastState.parity?.decoderHiddenStatesMaxAbsDiff > 0.0006) throw new Error('DETR stack scoring decoder hidden-state parity exceeds tolerance');
+      if (lastState.parity?.lastHsMaxAbsDiff > 0.0006) throw new Error('DETR stack scoring last-hs parity exceeds tolerance');
+      if (lastState.parity?.referenceBoxesMaxAbsDiff > 0.0006) throw new Error('DETR stack scoring reference-box parity exceeds tolerance');
+      if (lastState.parity?.presenceLogitsMaxAbsDiff > 0.0006) throw new Error('DETR stack scoring presence parity exceeds tolerance');
+      if (lastState.parity?.predLogitsMaxAbsDiff > 0.0005) throw new Error('DETR stack scoring pred-logits parity exceeds tolerance');
+      if (lastState.parity?.binaryMismatchCount > 8) throw new Error('DETR stack scoring binary mask parity exceeds tolerance');
     } else if (packetMode === 'mlx-detr-stack-export') {
       if (!lastState.tensorPacket?.encoderSrcSha256 || !lastState.tensorPacket?.encoderPosSha256 || !lastState.tensorPacket?.expectedEncoderHiddenStatesSha256 || !lastState.tensorPacket?.expectedLastHsSha256 || !lastState.tensorPacket?.expectedReferenceBoxesSha256 || !lastState.tensorPacket?.expectedPresenceLogitsSha256 || !lastState.tensorPacket?.pixelEmbedSha256 || !lastState.tensorPacket?.weightsSha256) {
         throw new Error('DETR stack tensorPacket identity missing');

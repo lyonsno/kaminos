@@ -26,6 +26,7 @@ const DEFAULT_KERNEL_PROFILE = 'sam3-detr-decoder-phase-program-v0';
 const INPUT_ROLES = ['source-image', 'sam3-detr-decoder-tensors', 'sam3-detr-decoder-weights'];
 const OUTPUT_ROLES = [
   { key: 'lastHs', role: 'last-hs', required: true },
+  { key: 'decoderHiddenStates', role: 'decoder-hidden-states', required: false },
   { key: 'referenceBoxes', role: 'reference-boxes', required: true },
   { key: 'presenceLogits', role: 'presence-logits', required: true },
 ];
@@ -1118,11 +1119,22 @@ async function sha256Hex(buffer) {
 }
 
 function outputArtifacts(request, hashes, shape) {
-  return {
+  const artifacts = {
     lastHs: { artifactId: roleArtifact(request.outputs, 'last-hs').artifactId, sha256: hashes.lastHs, shape: [shape.batch, shape.queryTokens, shape.channels] },
     referenceBoxes: { artifactId: roleArtifact(request.outputs, 'reference-boxes').artifactId, sha256: hashes.referenceBoxes, shape: [shape.batch, shape.queryTokens, 4] },
     presenceLogits: { artifactId: roleArtifact(request.outputs, 'presence-logits').artifactId, sha256: hashes.presenceLogits, shape: [shape.layerCount, shape.batch, 1] },
   };
+  const decoderHiddenStatesOutput = Array.isArray(request.outputs)
+    ? request.outputs.find(output => output?.role === 'decoder-hidden-states')
+    : request.outputs?.['decoder-hidden-states'];
+  if (hashes.decoderHiddenStates && decoderHiddenStatesOutput) {
+    artifacts.decoderHiddenStates = {
+      artifactId: decoderHiddenStatesOutput.artifactId,
+      sha256: hashes.decoderHiddenStates,
+      shape: [shape.layerCount, shape.batch, shape.queryTokens, shape.channels],
+    };
+  }
+  return artifacts;
 }
 
 function initialHidden(queryEmbed, presenceToken, shape) {
@@ -1474,7 +1486,7 @@ export async function runSam3DetrDecoderPhaseProgramRoute(input = {}) {
       { name: `detr-decoder-box-head-2-${layerIndex}`, kernel: k('BoxHead2'), dispatch: [workgroups(queryTotal)], yieldAfter: true },
       { name: `detr-decoder-box-head-3-${layerIndex}`, kernel: k('BoxHead3'), dispatch: [workgroups(boxTotal)], yieldAfter: true },
       { name: `detr-decoder-box-refinement-${layerIndex}`, kernel: k('BoxRefine'), dispatch: [workgroups(boxTotal)], yieldAfter: true },
-      ...(input.includeIntermediateReadback === true && layerIndex === 0
+      ...((input.includeIntermediateReadback === true && layerIndex === 0) || input.includeAllHiddenStatesReadback === true
         ? [{
             name: `debug-detr-decoder-layer-${layerIndex}-outputs`,
             readbacks: [
@@ -1508,8 +1520,17 @@ export async function runSam3DetrDecoderPhaseProgramRoute(input = {}) {
   const presenceParts = tensors.presenceLogits.map((_, index) => new Float32Array(run.outputs[`presenceLogits${index}`]));
   const presenceLogits = new Float32Array(shape.layerCount * shape.batch);
   for (let layerIndex = 0; layerIndex < shape.layerCount; layerIndex += 1) presenceLogits.set(presenceParts[layerIndex], layerIndex * shape.batch);
+  let decoderHiddenStates = null;
+  if (input.includeAllHiddenStatesReadback === true) {
+    decoderHiddenStates = new Float32Array(shape.layerCount * shape.batch * shape.queryTokens * shape.channels);
+    const layerSize = shape.batch * shape.queryTokens * shape.channels;
+    for (let layerIndex = 0; layerIndex < shape.layerCount; layerIndex += 1) {
+      decoderHiddenStates.set(new Float32Array(run.outputs[`lastHsLayer${layerIndex}`]), layerIndex * layerSize);
+    }
+  }
   const outputs = outputArtifacts(input.request, {
     lastHs: await sha256Hex(lastHs),
+    decoderHiddenStates: decoderHiddenStates ? await sha256Hex(decoderHiddenStates.buffer) : null,
     referenceBoxes: await sha256Hex(referenceBoxes),
     presenceLogits: await sha256Hex(presenceLogits.buffer),
   }, shape);
@@ -1532,9 +1553,13 @@ export async function runSam3DetrDecoderPhaseProgramRoute(input = {}) {
       referenceBoxes: Array.from(new Float32Array(referenceBoxes)),
       presenceLogits: Array.from(presenceLogits),
     };
+    if (decoderHiddenStates) {
+      authoritative.debugReadback.decoderHiddenStates = Array.from(decoderHiddenStates);
+    }
     if (input.includeIntermediateReadback === true) {
       authoritative.debugReadback.intermediate = {};
-      for (let layerIndex = 0; layerIndex < 1; layerIndex += 1) {
+      const debugLayerCount = input.includeAllHiddenStatesReadback === true ? shape.layerCount : 1;
+      for (let layerIndex = 0; layerIndex < debugLayerCount; layerIndex += 1) {
         authoritative.debugReadback.intermediate[`lastHsLayer${layerIndex}`] = Array.from(new Float32Array(run.outputs[`lastHsLayer${layerIndex}`]));
         authoritative.debugReadback.intermediate[`referenceBoxesLayer${layerIndex}`] = Array.from(new Float32Array(run.outputs[`referenceBoxesLayer${layerIndex}`]));
       }
