@@ -29,6 +29,7 @@ def parse_args():
     parser.add_argument("--batch-size", default="2")
     parser.add_argument("--patch-size", default="64")
     parser.add_argument("--model-arch", default="tiny-conv")
+    parser.add_argument("--feature-input-mode", default="rgb")
     parser.add_argument("--hidden-channels", default="16")
     parser.add_argument("--detail-residual-gate", default="2.0")
     parser.add_argument("--learning-rate", default="0.001")
@@ -114,6 +115,8 @@ def build_child_command(args):
         str(args.patch_size),
         "--model-arch",
         str(args.model_arch),
+        "--feature-input-mode",
+        str(args.feature_input_mode),
         "--hidden-channels",
         str(args.hidden_channels),
         "--detail-residual-gate",
@@ -253,6 +256,9 @@ def main():
             final_receipt["edgeBandDeltaPsnr"] = report.get("edgeBandDeltaPsnr")
             final_receipt["targetEdgeBandDeltaPsnr"] = report.get("targetEdgeBandDeltaPsnr")
             final_receipt["edgeBandAuthority"] = report.get("edgeBandAuthority")
+            final_receipt["featureInputMode"] = report.get("featureInputMode")
+            final_receipt["featureInputAuthority"] = report.get("featureInputAuthority")
+            final_receipt["featureInputChannels"] = report.get("featureInputChannels")
             final_receipt["outsideEdgeResidualMse"] = report.get("outsideEdgeResidualMse")
             final_receipt["residualOutputLimit"] = report.get("residualOutputLimit")
             final_receipt["residualColorMode"] = report.get("residualColorMode")

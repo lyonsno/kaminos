@@ -361,6 +361,9 @@ function renderScaleSetForCorpus(corpus) {
 function captureToPairEndpoint(capture) {
   return {
     path: capture.image,
+    featurePath: capture.feature || capture.featurePath || null,
+    featureCapture: capture.featureCapture || null,
+    featureAuthority: capture.featureCapture?.featureAuthority || capture.featureAuthority || null,
     report: capture.report,
     requestedRenderScale: capture.requestedRenderScale,
     renderScale: capture.renderScale,
@@ -422,6 +425,9 @@ function runControlledStepVariant({ variant, index, corpus, cwd }) {
     '--controlled-step-dir', controlledStepDir,
     '--controlled-step-prefix', variant.id,
   ];
+  if (corpus.featureCaptures) {
+    command.push('--render-scale-feature-captures', '1');
+  }
   if (corpus.reuseWitnessBrowser) {
     command.push(
       '--reuse-browser', '1',
@@ -681,6 +687,9 @@ function runVariant({ variant, index, args, corpus, cwd }) {
       '--window-size', corpus.windowSize,
       '--evidence-mode', corpus.evidenceMode,
     ];
+    if (corpus.featureCaptures) {
+      command.push('--feature-captures', '1');
+    }
     if (corpus.reuseWitnessBrowser) {
       command.push(
         '--reuse-witness-browser', '1',
@@ -819,6 +828,7 @@ const activeSequenceAuthority = sequenceMode === 'controlled-step'
   : (temporalSequenceMode ? SEQUENCE_AUTHORITY : null);
 const controlledStepDeltaMs = nonNegativeNumber(args.get('--controlled-step-delta-ms'), frameStrideMs);
 const variants = loadVariants(args, settleMs);
+const featureCaptures = args.has('--feature-captures') || args.has('--render-scale-feature-captures');
 const reuseWitnessBrowser = args.has('--reuse-witness-browser') || !args.has('--no-reuse-witness-browser');
 const witnessBrowserSession = {
   identity: 'shared-headful-cdp-browser-v0',
@@ -854,6 +864,14 @@ const corpus = {
   dryRun: args.has('--dry-run'),
   keepGoing: args.has('--keep-going'),
   pairAuthority: PAIR_AUTHORITY,
+  featureCaptures,
+  featureCapture: featureCaptures ? {
+    requested: true,
+    featureAuthority: 'shader-material-authority-residual-feature-v0',
+    imageAuthority: 'gpu-feature-texture-rgba8-readback-frozen-sim-state',
+    inputChannels: 4,
+    channelLayout: 'radiance-fire-interface-smoke',
+  } : null,
   imageAuthority: IMAGE_AUTHORITY,
   sequenceAuthority: activeSequenceAuthority,
   sequenceMode,

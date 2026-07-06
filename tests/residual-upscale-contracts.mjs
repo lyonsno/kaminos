@@ -140,3 +140,33 @@ assert.match(
   /--preview-frame-count/,
   'Greenroom wrapper must pass preview frame count through to the MLX trainer',
 );
+assert.match(
+  trainer,
+  /--feature-input-mode/,
+  'residual trainer must expose feature-input mode for shader/material-authority feature channels',
+);
+assert.match(
+  trainer,
+  /feature-rgba/,
+  'residual trainer must support low RGB plus residual feature RGBA as a 7-channel model input',
+);
+assert.match(
+  trainer,
+  /shader-material-authority-residual-feature-v0/,
+  'residual trainer must preserve shader/material feature authority instead of treating feature inputs as screen-space proxies',
+);
+assert.match(
+  trainer,
+  /featureInputChannels/,
+  'residual trainer reports must preserve the effective feature input channel count',
+);
+assert.match(
+  trainer,
+  /featurePath/,
+  'residual trainer must load per-pair feature images from the corpus rather than synthesizing hidden proxy features',
+);
+assert.match(
+  greenroomRunner,
+  /--feature-input-mode/,
+  'Greenroom wrapper must pass feature-input mode through to the MLX trainer',
+);
