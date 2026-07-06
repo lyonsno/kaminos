@@ -27,15 +27,20 @@ assert.match(smokeJs, /navigator\.gpu/, 'browser smoke must require a real brows
 assert.match(smokeJs, /requestAdapter/, 'browser smoke must request an effective adapter');
 assert.match(smokeJs, /runSam3MaskDecoderIslandRoute/, 'browser smoke must run the package route runner');
 assert.match(smokeJs, /runSam3MaskTailPhaseProgramRoute/, 'browser smoke must run the mask-tail phase-program route runner');
+assert.match(smokeJs, /runSam3PixelDecoderPhaseProgramRoute/, 'browser smoke must run the pixel-decoder phase-program route runner');
 assert.match(smokeJs, /createSam3MaskProjectionCpuOracle/, 'browser smoke must compare against the CPU oracle');
 assert.match(smokeJs, /createSam3MaskTailPhaseProgramCpuOracle/, 'browser smoke must compare mask-tail packets against the CPU oracle');
+assert.match(smokeJs, /createSam3PixelDecoderPhaseProgramCpuOracle/, 'browser smoke must compare pixel-decoder packets against the CPU oracle');
 assert.match(smokeJs, /samMaskIslandParitySmokeState/, 'browser smoke must expose an explicit debug state hook');
 assert.match(smokeJs, /fullSam3BrowserExecution:\s*false/, 'browser smoke must preserve the bounded island claim');
 assert.match(smokeJs, /manifest\.staticWeights/, 'browser smoke must preserve synthetic static-weight identity');
 assert.doesNotMatch(smokeJs, /weightsHash:\s*embeddingTensor\.sha256/, 'browser smoke must not pretend the input embedding is a weights hash');
 assert.match(smokeJs, /SAM3_MASK_TAIL_PHASE_PROGRAM_ROUTE_ID/, 'browser smoke must route by manifest route identity');
+assert.match(smokeJs, /SAM3_PIXEL_DECODER_PHASE_PROGRAM_ROUTE_ID/, 'browser smoke must route pixel-decoder manifests by route identity');
 assert.match(smokeJs, /sam3-mask-tail-tensors/, 'browser smoke must preserve mask-tail tensor input identity');
+assert.match(smokeJs, /sam3-pixel-decoder-tensors/, 'browser smoke must preserve pixel-decoder tensor input identity');
 assert.match(smokeJs, /mask-embedder-layer-0-weight/, 'browser smoke must load real mask embedder weights for mask-tail');
+assert.match(smokeJs, /pixel-decoder-stage-0-conv-weight/, 'browser smoke must load real pixel-decoder weights');
 assert.match(smokeJs, /sourceImage/, 'browser smoke must preserve source image identity');
 assert.match(smokeJs, /sourceImageShape/, 'browser smoke must derive source artifact shape through a named helper');
 assert.match(smokeJs, /manifest\.sourceImage\?\.resolution/, 'browser smoke must use sourceImage.resolution for source artifact shape when present');
@@ -59,8 +64,11 @@ assert.match(witness, /backendIdentity/, 'witness must preserve browser backend 
 assert.match(witness, /tensorPacket/, 'witness must preserve tensor packet identity');
 assert.match(witness, /--packet-tool/, 'witness must allow a real boundary packet exporter');
 assert.match(witness, /mlx-mask-tail-export/, 'witness must allow a real mask-tail packet exporter');
+assert.match(witness, /mlx-pixel-decoder-export/, 'witness must allow a real pixel-decoder packet exporter');
 assert.match(witness, /MASK_TAIL_PHASE_PROGRAM_ROUTE_ID/, 'witness must preserve mask-tail route identity');
+assert.match(witness, /PIXEL_DECODER_PHASE_PROGRAM_ROUTE_ID/, 'witness must preserve pixel-decoder route identity');
 assert.match(witness, /lastHsSha256/, 'witness must preserve mask-tail tensor identity');
+assert.match(witness, /expectedPixelEmbedSha256/, 'witness must preserve pixel-decoder tensor identity');
 assert.match(witness, /sourceImage/, 'witness report must preserve source image identity');
 
 assert.equal(join(new URL('.', root).pathname, 'smokes').includes('webgpu-inference-kit'), true);

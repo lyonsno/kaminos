@@ -138,6 +138,14 @@ export {
 } from './sam-mask-tail-phase-program.js';
 
 export {
+  SAM3_PIXEL_DECODER_PHASE_PROGRAM_ROUTE_ID,
+  createSam3PixelDecoderPhaseProgramCpuOracle,
+  createSam3PixelDecoderPhaseProgramRouteDefinition,
+  createSam3PixelDecoderPhaseProgramRouteReceipt,
+  runSam3PixelDecoderPhaseProgramRoute,
+} from './sam-pixel-decoder-phase-program.js';
+
+export {
   createWebGpuRouteSchemaContract,
 } from './route-schema-contract.js';
 
