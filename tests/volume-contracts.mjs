@@ -5,6 +5,9 @@ import { join } from 'node:path';
 const root = new URL('..', import.meta.url).pathname;
 const index = readFileSync(join(root, 'index.html'), 'utf8');
 const volumeWitness = readFileSync(join(root, 'volume-witness.mjs'), 'utf8');
+const corePath = join(root, 'volume-core.js');
+assert.ok(existsSync(corePath), 'volume-core.js exists');
+const core = readFileSync(corePath, 'utf8');
 
 assert.match(index, /data-tab="volume"/, 'sidebar exposes a Volume tab');
 assert.match(index, /id="tab-volume"/, 'Volume tab content is present');
@@ -196,6 +199,64 @@ assert.match(index, /id="volume-pyro-radiance-rise"/, 'Pyro cockpit exposes a ra
 assert.match(index, /Radiance rise/i, 'Pyro radiance rise slider describes low flame light versus higher wake permission');
 assert.match(index, /id="volume-pyro-radiance-fire-lock"/, 'Pyro cockpit exposes a radiance live-fire lock');
 assert.match(index, /Radiance fire lock/i, 'Pyro radiance fire-lock slider describes whether current raw fire authority is required');
+for (const [id, copy] of [
+  ['volume-pyro-flow-bite', 'Flow bite'],
+  ['volume-pyro-flow-border', 'Flow border'],
+  ['volume-pyro-flow-teeth', 'Flow teeth'],
+  ['volume-pyro-flow-rise', 'Flow rise'],
+  ['volume-pyro-flow-fire-lock', 'Flow fire lock'],
+  ['volume-pyro-flow-luma', 'Flow luma'],
+]) {
+  assert.match(index, new RegExp(`id="${id}"`), `Pyro cockpit exposes topology/flow carrier control ${id}`);
+  assert.match(index, new RegExp(copy, 'i'), `Pyro cockpit labels ${copy} for topology/flow carrier tuning`);
+}
+for (const [id, label] of [
+  ['volume-pyro-flow-cool-color', 'Flow cool'],
+  ['volume-pyro-flow-hot-color', 'Flow hot'],
+]) {
+  assert.match(index, new RegExp(`id="${id}"[^>]+type="color"|type="color"[^>]+id="${id}"`), `Pyro cockpit exposes editable flow carrier swatch ${id}`);
+  assert.match(index, new RegExp(label, 'i'), `Pyro cockpit labels the ${label} editable endpoint`);
+}
+assert.match(index, /Flow only/i, 'Pyro carrier isolate selector can show Flow alone');
+assert.match(index, /\['normal', 'border', 'bite', 'fold', 'wake', 'radiance', 'flow', 'all'\]\.includes\(routePyroCarrierView\)/, 'Pyro carrier-view URL route accepts the Flow isolate mode');
+for (const param of [
+  'volume_pyro_flow_bite',
+  'volume_pyro_flow_border',
+  'volume_pyro_flow_teeth',
+  'volume_pyro_flow_rise',
+  'volume_pyro_flow_fire_lock',
+  'volume_pyro_flow_luma',
+  'volume_pyro_flow_cool_color',
+  'volume_pyro_flow_hot_color',
+]) {
+  assert.match(index, new RegExp(param), `Pyro basin URLs preserve ${param}`);
+}
+for (const field of [
+  'pyroFlowBite',
+  'pyroFlowBorder',
+  'pyroFlowTeeth',
+  'pyroFlowRise',
+  'pyroFlowFireLock',
+  'pyroFlowLuma',
+  'pyroFlowCoolColor',
+  'pyroFlowHotColor',
+]) {
+  assert.match(index, new RegExp(`'${field}'`), `Pyro look library preserves ${field}`);
+}
+for (const routeName of [
+  'routePyroFlowBite',
+  'routePyroFlowBorder',
+  'routePyroFlowTeeth',
+  'routePyroFlowRise',
+  'routePyroFlowFireLock',
+  'routePyroFlowLuma',
+  'routePyroFlowCoolColor',
+  'routePyroFlowHotColor',
+]) {
+  assert.match(index, new RegExp(routeName), `Pyro route parser accepts ${routeName}`);
+}
+assert.match(core, /pyroFlowSignal[\s\S]*combustionFrontTopology[\s\S]*fireLick/, 'Pyro shader derives Flow carrier from combustion-front topology and live fire-lick breakup');
+assert.match(core, /flowSignalMax/, 'Pyro renderer debug state exposes flow carrier max for route evidence');
 assert.match(index, /volume_pyro_radiance_gate/, 'Pyro basin URLs preserve radiance gate');
 assert.match(index, /volume_pyro_radiance_spill/, 'Pyro basin URLs preserve radiance spill');
 assert.match(index, /volume_pyro_radiance_warmth/, 'Pyro basin URLs preserve radiance warmth');
@@ -280,8 +341,9 @@ assert.match(index, /Bite only/i, 'Pyro carrier isolate selector can show Bite a
 assert.match(index, /Fold only/i, 'Pyro carrier isolate selector can show Fold alone');
 assert.match(index, /Wake only/i, 'Pyro carrier isolate selector can show Wake alone');
 assert.match(index, /Radiance only/i, 'Pyro carrier isolate selector can show Radiance alone');
+assert.match(index, /Flow only/i, 'Pyro carrier isolate selector can show Flow alone');
 assert.match(index, /All carriers/i, 'Pyro carrier selector can expose all carriers without implying forced loud paint');
-assert.match(index, /\['normal', 'border', 'bite', 'fold', 'wake', 'radiance', 'all'\]\.includes\(routePyroCarrierView\)/, 'Pyro carrier-view URL route accepts the Wake and Radiance isolate modes');
+assert.match(index, /\['normal', 'border', 'bite', 'fold', 'wake', 'radiance', 'flow', 'all'\]\.includes\(routePyroCarrierView\)/, 'Pyro carrier-view URL route accepts the Wake, Radiance, and Flow isolate modes');
 assert.match(index, /Math\.min\(10,\s*routePyroRadiance\)/, 'Pyro radiance URL route accepts the same loud range as the cockpit slider');
 assert.match(index, /id="volume-pyro-overdrive"/, 'Pyro cockpit exposes a diagnostic overdrive slider');
 assert.match(index, /Continuous carrier gain/i, 'Pyro overdrive slider describes a reachable normal-mode gain, not a fake diagnostic mode');
@@ -572,9 +634,6 @@ assert.match(index, /params\.has\('volume_flow_debug'\)/, 'missing flow-debug ro
 assert.match(index, /rotateSpeed\s*=\s*-\d/, 'viewport orbit drag uses object-turntable rotation direction');
 assert.match(index, /screenSpacePanning\s*=\s*true/, 'viewport pan tracks screen-space pointer movement');
 
-const corePath = join(root, 'volume-core.js');
-assert.ok(existsSync(corePath), 'volume-core.js exists');
-const core = existsSync(corePath) ? readFileSync(corePath, 'utf8') : '';
 assert.match(core, /export function createKaminosVolumePrototype/, 'volume module exports createKaminosVolumePrototype');
 assert.match(core, /kaminos-volume-prototype-v0/, 'volume module exposes stable witness identity');
 assert.match(core, /native-3d-compute-fluid-raymarch-v0/, 'volume module records compute-backed fluid route identity');
@@ -977,7 +1036,7 @@ assert.match(core, /uniforms\[203\]\s*=\s*pyroRadianceChroma/, 'CPU uploads Radi
 assert.match(core, /uniforms\[212\]\s*=\s*pyroFlamePaint/, 'CPU uploads flame paint gain into the Pyro luma uniform block');
 assert.match(core, /uniforms\[213\]\s*=\s*pyroFlameLuma/, 'CPU uploads flame luminance into the Pyro luma uniform block');
 assert.match(core, /writePyroPaletteUniform/, 'CPU uploads editable Pyro palette color endpoints');
-assert.match(core, /uniforms\.set\(previousViewProj\.elements,\s*260\)/, 'previous view-projection matrix shifts after Bite-stack and palette uniforms');
+assert.match(core, /uniforms\.set\(previousViewProj\.elements,\s*276\)/, 'previous view-projection matrix shifts after Bite-stack, flow, and palette uniforms');
 assert.match(core, /paletteShape/, 'debug state exposes editable Pyro palette shape');
 assert.match(core, /lumaShape/, 'debug state exposes independent Pyro luma shape');
 assert.match(core, /radianceShape/, 'debug state exposes Pyro radiance gate/spill/warmth shape');
