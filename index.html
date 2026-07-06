@@ -5435,6 +5435,11 @@ function smokeChamberTargetExtension(pathname) {
   return match ? match[1].toLowerCase() : '';
 }
 
+function normalizeForgeHostDocumentPath(pathname) {
+  const normalized = String(pathname || '/').replace(/\/+$/, '') || '/';
+  return normalized === '/index.html' ? '/' : normalized;
+}
+
 function resolveForgeHostSmokeChamberInlineHost(chamber) {
   const targetUrl = String(chamber?.targetUrl || '').trim();
   if (!targetUrl) {
@@ -5477,10 +5482,12 @@ function resolveForgeHostSmokeChamberInlineHost(chamber) {
     };
   }
   const current = new URL(window.location.href);
-  const recursive = effective.origin === current.origin
-    && effective.pathname === current.pathname
+  const sameForgeDocument = effective.origin === current.origin
+    && normalizeForgeHostDocumentPath(effective.pathname) === normalizeForgeHostDocumentPath(current.pathname);
+  const sameForgeOffer = effective.origin === current.origin
     && effective.searchParams.has('kaminos_forge_host')
     && effective.searchParams.get('forge_host_smoke_offer') === chamber?.sourceOffer?.id;
+  const recursive = sameForgeDocument && sameForgeOffer;
   if (recursive) {
     return {
       kind: 'route-card',
