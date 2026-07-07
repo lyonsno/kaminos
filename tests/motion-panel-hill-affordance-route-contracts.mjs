@@ -42,10 +42,15 @@ assert.match(index, /id="motion-panel-hill-route-profile-control"/, 'operator ca
 assert.match(index, /id="motion-panel-hill-route-fixture-control"/, 'operator can choose Hill route fixture without editing URL params');
 assert.match(index, /id="motion-panel-hill-terrain-overlay-control"/, 'operator can choose Hill terrain overlay without editing URL params');
 assert.match(index, /function refreshMotionPanelHillRouteControlsFromInputs/, 'operator Hill controls recompose the mounted route from cached packet/data');
+assert.match(index, /profile-split/, 'operator can select a route fixture tuned to make static Hill profile choices visibly diverge');
 assert.match(index, /listMotionTerrainRouteCostProfiles/, 'browser can enumerate static Hill steering profiles for comparison instead of exposing only the current profile');
 assert.match(index, /motionPanelHillRouteProfileComparison/, 'Path World debug exposes all available static-Hill steering profile identities');
 assert.match(index, /motion-panel-hill-profile-ghost-route/, 'Path World renders low-authority comparison routes for non-selected Hill steering profiles');
 assert.match(index, /id="motion-panel-hill-route-profile-family"/, 'Path World panel visibly names the active route profile as one member of a profile family');
+assert.match(index, /id="motion-panel-hill-route-profile-spread"/, 'Path World panel visibly summarizes how far the static steering profiles diverge');
+assert.match(index, /routePlan\?\.evidence\?\.routeProfileComparison/, 'Path World profile-spread readout uses route-plan comparison evidence instead of falling back to an empty profile list');
+assert.match(index, /mostDivergentProfiles/, 'Path World debug names the profile pair that diverges most on the current fixture');
+assert.match(index, /meaningfulDivergence/, 'Path World debug distinguishes dramatic profile separation from incidental route jitter');
 assert.match(index, /frozen-source-snapshot/, 'browser route evidence labels static Hill packet planning as a frozen source snapshot');
 assert.match(index, /dynamicContinuity/, 'browser route evidence avoids silently claiming dynamic topology continuity');
 assert.match(index, /hillTerrainSurface/, 'Path World debug exposes the mounted Hill terrain surface evidence');

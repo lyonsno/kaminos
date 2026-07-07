@@ -530,6 +530,7 @@ input[type="range"]:disabled::-webkit-slider-thumb { background: #555; cursor: n
           <span class="slider-label">Fixture</span>
           <select id="motion-panel-hill-route-fixture-control" class="select-input">
             <option value="meadow-cross">Meadow cross</option>
+            <option value="profile-split">Profile split</option>
             <option value="ridge-run">Ridge run</option>
             <option value="north-meadow">North meadow</option>
             <option value="diagonal">Diagonal bounds</option>
@@ -565,6 +566,7 @@ input[type="range"]:disabled::-webkit-slider-thumb { background: #555; cursor: n
         <div class="field"><span class="field-key">Progress</span><span class="field-val" id="motion-panel-route-progress">0.00</span></div>
         <div class="field"><span class="field-key">Profile</span><span class="field-val" id="motion-panel-hill-route-profile">none</span></div>
         <div class="field"><span class="field-key">Profile Set</span><span class="field-val" id="motion-panel-hill-route-profile-family">none</span></div>
+        <div class="field"><span class="field-key">Profile Spread</span><span class="field-val" id="motion-panel-hill-route-profile-spread">none</span></div>
         <div class="field"><span class="field-key">Fixture</span><span class="field-val" id="motion-panel-hill-route-fixture">none</span></div>
         <div class="field"><span class="field-key">Terrain</span><span class="field-val" id="motion-panel-hill-terrain-overlay">none</span></div>
         <div class="field"><span class="field-key">Trigger</span><span class="field-val" id="motion-panel-path-world-trigger-state">no world</span></div>
@@ -4044,7 +4046,9 @@ function motionPanelPathWorldReadout() {
   const routeConductor = actor?.routeConductor || pathWorld?.routeConductor || motionTemporalState?.lastRouteConductor || null;
   const routePlan = actor?.pathWorldRoutePlan || pathWorld?.routePlan || motionTemporalState?.pathWorld?.routePlan || null;
   const routeCostProfile = routePlan?.cost?.profile || null;
-  const routeProfileComparison = pathWorld?.routeProfileComparison || motionPanelHillRouteProfileComparison(routeCostProfile?.id || 'cautious-lerm');
+  const routeProfileComparison = pathWorld?.routeProfileComparison
+    || routePlan?.evidence?.routeProfileComparison
+    || motionPanelHillRouteProfileComparison(routeCostProfile?.id || 'cautious-lerm');
   const hillTerrainSurface = actor?.hillTerrainSurface || pathWorld?.hillTerrainSurface || motionTemporalState?.pathWorld?.hillTerrainSurface || null;
   const hillTerrainFrame = actor?.hillTerrainFrame || pathWorld?.hillTerrainFrame || motionTemporalState?.pathWorld?.hillTerrainFrame || null;
   const hillTerrainCarrier = actor?.hillTerrainCarrier || motionTemporalState?.lastHillTerrainCarrier || null;
@@ -4118,6 +4122,11 @@ function updateMotionPanelPathWorldReadout() {
   setField('motion-panel-route-progress', readout.routeProgress == null ? '0.00' : readout.routeProgress.toFixed(2), readout.active);
   setField('motion-panel-hill-route-profile', readout.pathWorldRouteCostProfile?.id || 'none', !!readout.pathWorldRouteCostProfile);
   setField('motion-panel-hill-route-profile-family', `${readout.motionPanelHillRouteProfileComparison?.profileCount || 0} static profiles`, !!readout.motionPanelHillRouteProfileComparison?.profileCount);
+  const profileDivergence = readout.motionPanelHillRouteProfileComparison?.divergence || null;
+  const profileSpreadLabel = profileDivergence?.pairCount
+    ? `${profileDivergence.maxAverageSeparation.toFixed(2)} avg / ${profileDivergence.maxPointSeparation.toFixed(2)} max`
+    : 'none';
+  setField('motion-panel-hill-route-profile-spread', profileSpreadLabel, !!profileDivergence?.meaningfulDivergence);
   setField('motion-panel-hill-route-fixture', readout.pathWorldRouteFixture?.id || 'none', !!readout.pathWorldRouteFixture);
   setField('motion-panel-hill-terrain-overlay', readout.terrainOverlayMode || 'none', !!readout.terrainOverlayMode);
   const triggerLabel = readout.triggerDistance == null
@@ -5275,6 +5284,13 @@ const MOTION_PANEL_HILL_ROUTE_FIXTURES = {
     goal: [0.88, 0.44],
     reason: 'crosses the growth/route-pressure field instead of only proving two endpoints',
   },
+  'profile-split': {
+    id: 'profile-split',
+    label: 'Profile split',
+    start: [0.18, 0.2],
+    goal: [0.78, 0.78],
+    reason: 'tuned frozen-Hill route where ridge-runner visibly separates from cautious/meadow steering',
+  },
   'ridge-run': {
     id: 'ridge-run',
     label: 'Ridge run',
@@ -5348,6 +5364,51 @@ function motionPanelHillRouteControlsFromInputs(fallback = {}) {
   };
 }
 
+function motionPanelRoutePointDistanceXZ(a = [0, 0, 0], b = [0, 0, 0]) {
+  return Math.hypot(Number(a[0] || 0) - Number(b[0] || 0), Number(a[2] || 0) - Number(b[2] || 0));
+}
+
+function motionPanelRouteDivergenceSummary(routes = []) {
+  const planned = routes.filter(route => route.status === 'planned' && Array.isArray(route.routePoints) && route.routePoints.length > 1);
+  const pairs = [];
+  for (let i = 0; i < planned.length; i++) {
+    for (let j = i + 1; j < planned.length; j++) {
+      const a = planned[i];
+      const b = planned[j];
+      const sampleCount = Math.max(a.routePoints.length, b.routePoints.length, 2);
+      let total = 0;
+      let max = 0;
+      for (let sample = 0; sample < sampleCount; sample++) {
+        const aIndex = Math.min(a.routePoints.length - 1, Math.round(sample * (a.routePoints.length - 1) / Math.max(1, sampleCount - 1)));
+        const bIndex = Math.min(b.routePoints.length - 1, Math.round(sample * (b.routePoints.length - 1) / Math.max(1, sampleCount - 1)));
+        const distance = motionPanelRoutePointDistanceXZ(a.routePoints[aIndex], b.routePoints[bIndex]);
+        total += distance;
+        max = Math.max(max, distance);
+      }
+      pairs.push({
+        schema: 'kaminos.motion-panel-hill-route-profile-divergence-pair.v0',
+        profiles: [a.profileId, b.profileId],
+        averageSeparation: Number((total / sampleCount).toFixed(5)),
+        maxSeparation: Number(max.toFixed(5)),
+      });
+    }
+  }
+  const strongest = pairs.slice().sort((a, b) => {
+    const aScore = a.averageSeparation * 2 + a.maxSeparation;
+    const bScore = b.averageSeparation * 2 + b.maxSeparation;
+    return bScore - aScore;
+  })[0] || null;
+  return {
+    schema: 'kaminos.motion-panel-hill-route-profile-divergence-summary.v0',
+    pairCount: pairs.length,
+    pairs,
+    mostDivergentProfiles: strongest?.profiles || [],
+    maxAverageSeparation: strongest?.averageSeparation || 0,
+    maxPointSeparation: strongest?.maxSeparation || 0,
+    meaningfulDivergence: !!strongest && (strongest.averageSeparation >= 0.5 || strongest.maxSeparation >= 1.5),
+  };
+}
+
 function motionPanelHillRouteProfileComparison(activeProfile = 'cautious-lerm', routeContext = {}) {
   const activeId = typeof activeProfile === 'string' ? activeProfile : activeProfile?.id;
   const profiles = listMotionTerrainRouteCostProfiles();
@@ -5390,6 +5451,7 @@ function motionPanelHillRouteProfileComparison(activeProfile = 'cautious-lerm', 
       }
     })
     : [];
+  const divergence = motionPanelRouteDivergenceSummary(routes);
   return {
     schema: 'kaminos.motion-panel-hill-route-profile-comparison.v0',
     route: 'hill-native-route-world',
@@ -5400,6 +5462,9 @@ function motionPanelHillRouteProfileComparison(activeProfile = 'cautious-lerm', 
     profileCount: profiles.length,
     profiles,
     routes,
+    divergence,
+    mostDivergentProfiles: divergence.mostDivergentProfiles,
+    meaningfulDivergence: divergence.meaningfulDivergence,
   };
 }
 
