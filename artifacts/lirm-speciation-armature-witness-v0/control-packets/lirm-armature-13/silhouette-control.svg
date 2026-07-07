@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="356" height="286" viewBox="0 0 356 286" role="img" aria-label="lirm-armature-13 silhouette-svg control" data-control-map="silhouette-svg">
+  <style>[data-layer="semantic-map"]{display:none}</style>
+  <rect width="100%" height="100%" fill="#07130f"/>
+  <text x="18" y="22" fill="#eef6d6" font-size="13" font-family="Menlo, Monaco, monospace">lirm-armature-13 silhouette-svg control</text>
+  
+    <g class="candidate" data-candidate-id="lirm-armature-13" transform="translate(0 0)">
+      <title class="candidate-title">lirm-armature-13: flop / segments 11 / limb pairs 2 / shell plates 5 / terminal mouth</title>
+      <rect x="24" y="40" width="308" height="220" rx="9" fill="rgba(16,22,18,0.92)" stroke="rgba(167,210,144,0.22)" stroke-width="1"/>
+      <text x="31" y="55" fill="rgba(235,244,216,0.9)" font-size="10" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">lirm-armature-13</text>
+      <text x="31" y="252" fill="rgba(235,244,216,0.75)" font-size="10" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">lineage 14 flop</text>
+      <g data-layer="silhouette" opacity="1">
+        <path d="M 64.4 187.28 C 115.52 215.76, 223.44 215.76, 291.6 187.28" fill="none" stroke="hsla(80, 18%, 13%, 0.72)" stroke-width="13" stroke-linecap="round" opacity="0.5"/>
+        <ellipse cx="64.68" cy="140.82" rx="36.26" ry="17.53" fill="hsla(60, 47%, 33%, 0.93)" opacity="0.74"/><ellipse cx="84.56" cy="144.03" rx="38.8" ry="18.68" fill="hsla(60, 47%, 33%, 0.93)" opacity="0.79"/><ellipse cx="104.73" cy="145.81" rx="41.34" ry="19.75" fill="hsla(60, 47%, 33%, 0.93)" opacity="0.83"/><ellipse cx="124.89" cy="145.63" rx="43.88" ry="20.67" fill="hsla(60, 47%, 33%, 0.93)" opacity="0.87"/><ellipse cx="145.06" cy="143.31" rx="46.41" ry="21.38" fill="hsla(60, 47%, 33%, 0.93)" opacity="0.9"/><ellipse cx="164.94" cy="139.22" rx="48.95" ry="21.82" fill="hsla(60, 47%, 33%, 0.93)" opacity="0.91"/><ellipse cx="185.1" cy="134.24" rx="48.44" ry="21.98" fill="hsla(60, 47%, 33%, 0.93)" opacity="0.92"/><ellipse cx="205.26" cy="129.96" rx="45.91" ry="21.82" fill="hsla(60, 47%, 33%, 0.93)" opacity="0.91"/><ellipse cx="225.43" cy="127.47" rx="43.37" ry="21.38" fill="hsla(60, 47%, 33%, 0.93)" opacity="0.9"/><ellipse cx="245.59" cy="127.65" rx="40.83" ry="20.67" fill="hsla(60, 47%, 33%, 0.93)" opacity="0.87"/><ellipse cx="265.47" cy="130.5" rx="38.29" ry="19.75" fill="hsla(60, 47%, 33%, 0.93)" opacity="0.83"/><ellipse cx="285.64" cy="135.84" rx="35.76" ry="18.68" fill="hsla(60, 47%, 33%, 0.93)" opacity="0.79"/><ellipse cx="305.8" cy="142.25" rx="33.22" ry="17.53" fill="hsla(60, 47%, 33%, 0.93)" opacity="0.74"/>
+        <ellipse cx="305.8" cy="142.25" rx="32.33" ry="16.74" fill="hsla(17, 50%, 46%, 0.95)" opacity="0.96"/>
+      </g>
+      <g data-layer="semantic-map">
+        <polyline points="64.68,140.82 84.56,144.03 104.73,145.81 124.89,145.63 145.06,143.31 164.94,139.22 185.1,134.24 205.26,129.96 225.43,127.47 245.59,127.65 265.47,130.5 285.64,135.84 305.8,142.25" fill="none" stroke="hsla(203, 70%, 62%, 0.75)" stroke-width="2" stroke-linecap="round" stroke-dasharray="4 4" opacity="0.82"/>
+        <line x1="145.06" y1="143.31" x2="121.42" y2="127.66" stroke="hsla(31, 42%, 44%, 0.86)" stroke-width="5" stroke-linecap="round" opacity="0.78"/><line x1="145.06" y1="143.31" x2="161.45" y2="156.15" stroke="hsla(31, 42%, 44%, 0.86)" stroke-width="4" stroke-linecap="round" opacity="0.66"/><line x1="225.43" y1="127.47" x2="201.79" y2="143.12" stroke="hsla(31, 42%, 44%, 0.86)" stroke-width="5" stroke-linecap="round" opacity="0.78"/><line x1="225.43" y1="127.47" x2="241.82" y2="114.63" stroke="hsla(31, 42%, 44%, 0.86)" stroke-width="4" stroke-linecap="round" opacity="0.66"/>
+        <rect x="84.99" y="123.68" width="39.48" height="13" rx="4" fill="hsla(217, 18%, 39%, 0.92)" stroke="rgba(232,221,181,0.5)" stroke-width="1" transform="rotate(-2.48 104.73 130.68)"/><rect x="125.32" y="121.18" width="39.48" height="13" rx="4" fill="hsla(217, 18%, 39%, 0.92)" stroke="rgba(232,221,181,0.5)" stroke-width="1" transform="rotate(2.48 145.06 128.18)"/><rect x="165.36" y="112.11" width="39.48" height="13" rx="4" fill="hsla(217, 18%, 39%, 0.92)" stroke="rgba(232,221,181,0.5)" stroke-width="1" transform="rotate(-2.48 185.1 119.11)"/><rect x="205.69" y="105.34" width="39.48" height="13" rx="4" fill="hsla(217, 18%, 39%, 0.92)" stroke="rgba(232,221,181,0.5)" stroke-width="1" transform="rotate(2.48 225.43 112.34)"/><rect x="245.73" y="108.37" width="39.48" height="13" rx="4" fill="hsla(217, 18%, 39%, 0.92)" stroke="rgba(232,221,181,0.5)" stroke-width="1" transform="rotate(-2.48 265.47 115.37)"/>
+        <ellipse cx="164.94" cy="160.58" rx="28.74" ry="18.69" fill="hsla(96, 45%, 56%, 0.72)" opacity="0.52"/>
+        
+        <circle cx="315.74" cy="143.67" r="13.92" fill="hsla(352, 62%, 22%, 0.95)" stroke="rgba(255,172,97,0.75)" stroke-width="1"><title>terminal mouth</title></circle>
+        <circle cx="104.73" cy="169.84" r="7.38" fill="hsla(285, 70%, 58%, 0.8)" opacity="0.75"><title>fore-brace</title></circle><circle cx="164.94" cy="165.03" r="7.38" fill="hsla(285, 70%, 58%, 0.8)" opacity="0.75"><title>fore-brace</title></circle><circle cx="225.43" cy="151.5" r="7.38" fill="hsla(285, 70%, 58%, 0.8)" opacity="0.75"><title>belly-crawl</title></circle><circle cx="285.64" cy="161.65" r="7.38" fill="hsla(285, 70%, 58%, 0.8)" opacity="0.75"><title>tail-drag</title></circle>
+      </g>
+    </g>
+  
+</svg>

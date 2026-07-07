@@ -1,0 +1,680 @@
+{
+  "schema": "kaminos.lirm-speciation-armature-control-packet.v0",
+  "route": "kaminos/lirm-speciation-armature/control-packet-v0",
+  "sourceWitnessId": "lirm-speciation-armature-64073572",
+  "sourceWitnessRoute": "kaminos/lirm-speciation-armature/contact-sheet-v0",
+  "candidateId": "lirm-armature-15",
+  "seed": "molten-lirm-seed-0707:15",
+  "lineage": {
+    "rootSeed": "molten-lirm-seed-0707",
+    "parentId": "root-soft-crawling-hoard-thief",
+    "generation": 3,
+    "siblingIndex": 0,
+    "phase": 0.625,
+    "mutationPath": [
+      "segments:5",
+      "axis:low-crawl",
+      "limbs:4",
+      "contact:broad-belly",
+      "armor:4-plates",
+      "asymmetry:visible"
+    ]
+  },
+  "motionAffordance": {
+    "primary": "crawl",
+    "confidence": 0.761,
+    "secondary": [
+      "inch",
+      "drag"
+    ]
+  },
+  "semanticHandles": [
+    {
+      "id": "lirm-armature-15:axis",
+      "kind": "axis",
+      "label": "axial body curve",
+      "strength": 0.606,
+      "region": {
+        "samples": [
+          {
+            "x": 0.222,
+            "y": 0.538
+          },
+          {
+            "x": 0.299,
+            "y": 0.454
+          },
+          {
+            "x": 0.376,
+            "y": 0.405
+          },
+          {
+            "x": 0.453,
+            "y": 0.443
+          },
+          {
+            "x": 0.53,
+            "y": 0.534
+          },
+          {
+            "x": 0.607,
+            "y": 0.591
+          },
+          {
+            "x": 0.684,
+            "y": 0.565
+          }
+        ]
+      },
+      "futureUse": [
+        "silhouette_conditioning",
+        "motion_spine_guess"
+      ]
+    },
+    {
+      "id": "lirm-armature-15:head",
+      "kind": "head",
+      "label": "head / desire orientation",
+      "strength": 1.209,
+      "region": {
+        "x": 0.684,
+        "y": 0.565,
+        "radius": 0.116
+      },
+      "futureUse": [
+        "orientation",
+        "attention",
+        "appetite"
+      ]
+    },
+    {
+      "id": "lirm-armature-15:mouth",
+      "kind": "mouth",
+      "label": "terminal mouth concentration",
+      "strength": 0.47,
+      "region": {
+        "x": 0.737,
+        "y": 0.573,
+        "radius": 0.038,
+        "placement": "terminal_front_cap"
+      },
+      "futureUse": [
+        "hoard_theft",
+        "bite_pose",
+        "face_prompt"
+      ]
+    },
+    {
+      "id": "lirm-armature-15:belly-contact",
+      "kind": "belly_contact",
+      "label": "belly contact patch",
+      "strength": 0.671,
+      "region": {
+        "x": 0.453,
+        "y": 0.563,
+        "width": 0.671,
+        "height": 0.095
+      },
+      "futureUse": [
+        "crawl_contact",
+        "terrain_desire",
+        "shadow_anchor"
+      ]
+    },
+    {
+      "id": "lirm-armature-15:locomotion",
+      "kind": "locomotion",
+      "label": "motion affordance field",
+      "strength": 0.729,
+      "region": {
+        "contactCount": 6,
+        "primary": "crawl"
+      },
+      "futureUse": [
+        "motion_transposition",
+        "swarm_readability"
+      ]
+    },
+    {
+      "id": "lirm-armature-15:limb-bud-0",
+      "kind": "limb_bud",
+      "label": "paired limb bud 1",
+      "strength": 0.327,
+      "region": {
+        "x": 0.299,
+        "y": 0.454,
+        "t": 0.2,
+        "side": "paired",
+        "length": 0.101
+      },
+      "futureUse": [
+        "step",
+        "brace",
+        "drag",
+        "gesture"
+      ]
+    },
+    {
+      "id": "lirm-armature-15:limb-bud-1",
+      "kind": "limb_bud",
+      "label": "paired limb bud 2",
+      "strength": 0.343,
+      "region": {
+        "x": 0.376,
+        "y": 0.405,
+        "t": 0.4,
+        "side": "paired",
+        "length": 0.101
+      },
+      "futureUse": [
+        "step",
+        "brace",
+        "drag",
+        "gesture"
+      ]
+    },
+    {
+      "id": "lirm-armature-15:limb-bud-2",
+      "kind": "limb_bud",
+      "label": "paired limb bud 3",
+      "strength": 0.358,
+      "region": {
+        "x": 0.53,
+        "y": 0.534,
+        "t": 0.6,
+        "side": "paired",
+        "length": 0.101
+      },
+      "futureUse": [
+        "step",
+        "brace",
+        "drag",
+        "gesture"
+      ]
+    },
+    {
+      "id": "lirm-armature-15:limb-bud-3",
+      "kind": "limb_bud",
+      "label": "paired limb bud 4",
+      "strength": 0.373,
+      "region": {
+        "x": 0.607,
+        "y": 0.591,
+        "t": 0.8,
+        "side": "paired",
+        "length": 0.101
+      },
+      "futureUse": [
+        "step",
+        "brace",
+        "drag",
+        "gesture"
+      ]
+    },
+    {
+      "id": "lirm-armature-15:shell-plate-0",
+      "kind": "shell_plate",
+      "label": "dorsal shell plate 1",
+      "strength": 0.658,
+      "region": {
+        "x": 0.299,
+        "y": 0.369,
+        "t": 0.2,
+        "width": 0.143
+      },
+      "futureUse": [
+        "material_region",
+        "occlusion_read",
+        "trellis_detail_hook"
+      ]
+    },
+    {
+      "id": "lirm-armature-15:shell-plate-1",
+      "kind": "shell_plate",
+      "label": "dorsal shell plate 2",
+      "strength": 0.658,
+      "region": {
+        "x": 0.376,
+        "y": 0.32,
+        "t": 0.4,
+        "width": 0.143
+      },
+      "futureUse": [
+        "material_region",
+        "occlusion_read",
+        "trellis_detail_hook"
+      ]
+    },
+    {
+      "id": "lirm-armature-15:shell-plate-2",
+      "kind": "shell_plate",
+      "label": "dorsal shell plate 3",
+      "strength": 0.658,
+      "region": {
+        "x": 0.53,
+        "y": 0.449,
+        "t": 0.6,
+        "width": 0.143
+      },
+      "futureUse": [
+        "material_region",
+        "occlusion_read",
+        "trellis_detail_hook"
+      ]
+    },
+    {
+      "id": "lirm-armature-15:shell-plate-3",
+      "kind": "shell_plate",
+      "label": "dorsal shell plate 4",
+      "strength": 0.658,
+      "region": {
+        "x": 0.607,
+        "y": 0.506,
+        "t": 0.8,
+        "width": 0.143
+      },
+      "futureUse": [
+        "material_region",
+        "occlusion_read",
+        "trellis_detail_hook"
+      ]
+    },
+    {
+      "id": "lirm-armature-15:tail-drag",
+      "kind": "tail_drag",
+      "label": "tail drag memory",
+      "strength": 0.7,
+      "region": {
+        "x": 0.222,
+        "y": 0.618,
+        "length": 0.167
+      },
+      "futureUse": [
+        "trail",
+        "panic_turn",
+        "swarm_spacing"
+      ]
+    }
+  ],
+  "contactPoints": [
+    {
+      "id": "contact-0",
+      "t": 0.083,
+      "x": 0.299,
+      "y": 0.589,
+      "radius": 0.03,
+      "role": "fore-brace"
+    },
+    {
+      "id": "contact-1",
+      "t": 0.25,
+      "x": 0.376,
+      "y": 0.55,
+      "radius": 0.03,
+      "role": "fore-brace"
+    },
+    {
+      "id": "contact-2",
+      "t": 0.417,
+      "x": 0.453,
+      "y": 0.578,
+      "radius": 0.03,
+      "role": "belly-crawl"
+    },
+    {
+      "id": "contact-3",
+      "t": 0.583,
+      "x": 0.53,
+      "y": 0.679,
+      "radius": 0.03,
+      "role": "belly-crawl"
+    },
+    {
+      "id": "contact-4",
+      "t": 0.75,
+      "x": 0.607,
+      "y": 0.726,
+      "radius": 0.03,
+      "role": "belly-crawl"
+    },
+    {
+      "id": "contact-5",
+      "t": 0.917,
+      "x": 0.684,
+      "y": 0.71,
+      "radius": 0.03,
+      "role": "tail-drag"
+    }
+  ],
+  "proxyPrimitives": [
+    {
+      "kind": "metaball",
+      "role": "body_mass",
+      "center": {
+        "x": -0.556,
+        "y": -0.076,
+        "z": 0
+      },
+      "radius": 0.136,
+      "falloff": "smooth_union"
+    },
+    {
+      "kind": "metaball",
+      "role": "body_mass",
+      "center": {
+        "x": -0.402,
+        "y": 0.092,
+        "z": 0
+      },
+      "radius": 0.156,
+      "falloff": "smooth_union"
+    },
+    {
+      "kind": "metaball",
+      "role": "body_mass",
+      "center": {
+        "x": -0.248,
+        "y": 0.19,
+        "z": 0
+      },
+      "radius": 0.171,
+      "falloff": "smooth_union"
+    },
+    {
+      "kind": "metaball",
+      "role": "body_mass",
+      "center": {
+        "x": -0.094,
+        "y": 0.114,
+        "z": 0
+      },
+      "radius": 0.176,
+      "falloff": "smooth_union"
+    },
+    {
+      "kind": "metaball",
+      "role": "body_mass",
+      "center": {
+        "x": 0.06,
+        "y": -0.068,
+        "z": 0
+      },
+      "radius": 0.171,
+      "falloff": "smooth_union"
+    },
+    {
+      "kind": "metaball",
+      "role": "body_mass",
+      "center": {
+        "x": 0.214,
+        "y": -0.182,
+        "z": 0
+      },
+      "radius": 0.156,
+      "falloff": "smooth_union"
+    },
+    {
+      "kind": "metaball",
+      "role": "body_mass",
+      "center": {
+        "x": 0.368,
+        "y": -0.13,
+        "z": 0
+      },
+      "radius": 0.136,
+      "falloff": "smooth_union"
+    },
+    {
+      "kind": "sphere",
+      "role": "head_orientation",
+      "center": {
+        "x": 0.368,
+        "y": -0.13,
+        "z": 0.02
+      },
+      "radius": 0.157,
+      "materialHint": "soft_head_mass"
+    },
+    {
+      "kind": "sphere",
+      "role": "terminal_mouth",
+      "center": {
+        "x": 0.474,
+        "y": -0.146,
+        "z": 0.055
+      },
+      "radius": 0.038,
+      "materialHint": "mouth_dark_wet_terminal"
+    },
+    {
+      "kind": "capsule",
+      "role": "limb_bud",
+      "center": {
+        "x": -0.402,
+        "y": 0.092,
+        "z": -0.015
+      },
+      "radius": 0.024,
+      "length": 0.172,
+      "side": "paired",
+      "t": 0.2,
+      "materialHint": "brace_drag_nub"
+    },
+    {
+      "kind": "capsule",
+      "role": "limb_bud",
+      "center": {
+        "x": -0.248,
+        "y": 0.19,
+        "z": -0.015
+      },
+      "radius": 0.024,
+      "length": 0.172,
+      "side": "paired",
+      "t": 0.4,
+      "materialHint": "brace_drag_nub"
+    },
+    {
+      "kind": "capsule",
+      "role": "limb_bud",
+      "center": {
+        "x": 0.06,
+        "y": -0.068,
+        "z": -0.015
+      },
+      "radius": 0.024,
+      "length": 0.172,
+      "side": "paired",
+      "t": 0.6,
+      "materialHint": "brace_drag_nub"
+    },
+    {
+      "kind": "capsule",
+      "role": "limb_bud",
+      "center": {
+        "x": 0.214,
+        "y": -0.182,
+        "z": -0.015
+      },
+      "radius": 0.025,
+      "length": 0.172,
+      "side": "paired",
+      "t": 0.8,
+      "materialHint": "brace_drag_nub"
+    },
+    {
+      "kind": "box",
+      "role": "shell_plate",
+      "center": {
+        "x": -0.402,
+        "y": 0.262,
+        "z": 0.075
+      },
+      "size": {
+        "x": 0.2,
+        "y": 0.052,
+        "z": 0.044
+      },
+      "t": 0.2,
+      "materialHint": "dorsal_plate"
+    },
+    {
+      "kind": "box",
+      "role": "shell_plate",
+      "center": {
+        "x": -0.248,
+        "y": 0.36,
+        "z": 0.075
+      },
+      "size": {
+        "x": 0.2,
+        "y": 0.052,
+        "z": 0.044
+      },
+      "t": 0.4,
+      "materialHint": "dorsal_plate"
+    },
+    {
+      "kind": "box",
+      "role": "shell_plate",
+      "center": {
+        "x": 0.06,
+        "y": 0.102,
+        "z": 0.075
+      },
+      "size": {
+        "x": 0.2,
+        "y": 0.052,
+        "z": 0.044
+      },
+      "t": 0.6,
+      "materialHint": "dorsal_plate"
+    },
+    {
+      "kind": "box",
+      "role": "shell_plate",
+      "center": {
+        "x": 0.214,
+        "y": -0.012,
+        "z": 0.075
+      },
+      "size": {
+        "x": 0.2,
+        "y": 0.052,
+        "z": 0.044
+      },
+      "t": 0.8,
+      "materialHint": "dorsal_plate"
+    },
+    {
+      "kind": "sphere",
+      "role": "contact_point",
+      "contactRole": "fore-brace",
+      "center": {
+        "x": -0.402,
+        "y": -0.178,
+        "z": -0.08
+      },
+      "radius": 0.042,
+      "materialHint": "ground_contact_marker"
+    },
+    {
+      "kind": "sphere",
+      "role": "contact_point",
+      "contactRole": "fore-brace",
+      "center": {
+        "x": -0.248,
+        "y": -0.1,
+        "z": -0.08
+      },
+      "radius": 0.042,
+      "materialHint": "ground_contact_marker"
+    },
+    {
+      "kind": "sphere",
+      "role": "contact_point",
+      "contactRole": "belly-crawl",
+      "center": {
+        "x": -0.094,
+        "y": -0.156,
+        "z": -0.08
+      },
+      "radius": 0.042,
+      "materialHint": "ground_contact_marker"
+    },
+    {
+      "kind": "sphere",
+      "role": "contact_point",
+      "contactRole": "belly-crawl",
+      "center": {
+        "x": 0.06,
+        "y": -0.358,
+        "z": -0.08
+      },
+      "radius": 0.042,
+      "materialHint": "ground_contact_marker"
+    },
+    {
+      "kind": "sphere",
+      "role": "contact_point",
+      "contactRole": "belly-crawl",
+      "center": {
+        "x": 0.214,
+        "y": -0.452,
+        "z": -0.08
+      },
+      "radius": 0.042,
+      "materialHint": "ground_contact_marker"
+    },
+    {
+      "kind": "sphere",
+      "role": "contact_point",
+      "contactRole": "tail-drag",
+      "center": {
+        "x": 0.368,
+        "y": -0.42,
+        "z": -0.08
+      },
+      "radius": 0.042,
+      "materialHint": "ground_contact_marker"
+    }
+  ],
+  "conditioningMaps": [
+    {
+      "kind": "semantic-svg",
+      "path": "control-packets/lirm-armature-15/semantic-control.svg",
+      "effectiveSource": "local-procedural-svg"
+    },
+    {
+      "kind": "silhouette-svg",
+      "path": "control-packets/lirm-armature-15/silhouette-control.svg",
+      "effectiveSource": "local-procedural-svg"
+    },
+    {
+      "kind": "proxy-primitives-json",
+      "path": "control-packets/lirm-armature-15/proxy-primitives.json",
+      "effectiveSource": "local-procedural-proxy-primitives"
+    }
+  ],
+  "promptContract": {
+    "subject": "small crawling hoard thief creature",
+    "preserve": [
+      "axis curve",
+      "belly contact",
+      "terminal front mouth",
+      "head orientation",
+      "contact points"
+    ],
+    "allowMutation": [
+      "surface material",
+      "micro anatomy",
+      "gross-cute balance",
+      "skin/shell texture"
+    ]
+  },
+  "falseClosureGuards": {
+    "finishedCreatureClaim": "forbidden",
+    "generatorFiringClaim": "not_yet_fired",
+    "proxyGeometryClaim": "control_primitives_only"
+  }
+}

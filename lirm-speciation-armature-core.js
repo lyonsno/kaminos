@@ -4,7 +4,9 @@ import { join } from 'node:path';
 export const LIRM_SPECIATION_ARMATURE_WITNESS_SCHEMA = 'kaminos.lirm-speciation-armature-witness.v0';
 export const LIRM_SPECIATION_ARMATURE_CANDIDATE_SCHEMA = 'kaminos.lirm-speciation-armature-candidate.v0';
 export const LIRM_SPECIATION_ARMATURE_RECEIPT_SCHEMA = 'kaminos.lirm-speciation-armature-receipt.v0';
+export const LIRM_SPECIATION_ARMATURE_CONTROL_PACKET_SCHEMA = 'kaminos.lirm-speciation-armature-control-packet.v0';
 export const LIRM_SPECIATION_ARMATURE_ROUTE = 'kaminos/lirm-speciation-armature/contact-sheet-v0';
+export const LIRM_SPECIATION_ARMATURE_CONTROL_PACKET_ROUTE = 'kaminos/lirm-speciation-armature/control-packet-v0';
 export const LIRM_SPECIATION_ARMATURE_WRITE_RESULT_SCHEMA = 'kaminos.lirm-speciation-armature-write-result.v0';
 
 const ROOT_PARENT_ID = 'root-soft-crawling-hoard-thief';
@@ -108,9 +110,14 @@ function createSemanticHandles(candidateId, params, axisSamples) {
     {
       id: `${candidateId}:mouth`,
       kind: 'mouth',
-      label: 'mouth concentration',
+      label: 'terminal mouth concentration',
       strength: params.mouthIntensity,
-      region: { x: head.x, y: round(head.y + 0.015), radius: round(0.026 + params.mouthIntensity * 0.025) },
+      region: {
+        x: round(clamp(head.x + (0.035 + params.headBias * 0.028), 0.05, 0.985)),
+        y: round(head.y + 0.008),
+        radius: round(0.026 + params.mouthIntensity * 0.025),
+        placement: 'terminal_front_cap',
+      },
       futureUse: ['hoard_theft', 'bite_pose', 'face_prompt'],
     },
     {
@@ -311,10 +318,10 @@ function createCandidate(seed, index, candidateCount) {
       acceptsSamIsolation: true,
       acceptsTrellisProbe: true,
       acceptsSharpProbe: true,
-      controlMaps: ['silhouette', 'semantic-map', 'axis-depth-cue', 'contact-points'],
+      controlMaps: ['silhouette', 'semantic-map', 'axis-depth-cue', 'contact-points', 'proxy-primitives'],
       promptPacket: {
         subject: 'small crawling hoard thief creature',
-        preserve: ['body axis', 'belly contact patch', 'head/mouth orientation', 'limb bud count'],
+        preserve: ['body axis', 'belly contact patch', 'head orientation', 'terminal front mouth', 'limb bud count'],
         mutate: ['surface material', 'gross-cute balance', 'shell/soft tissue texture'],
       },
     },
@@ -351,6 +358,13 @@ function renderCandidateSvg(candidate, index, columns, cellWidth, cellHeight, le
   const axis = candidate.bodyPlan.axisSamples;
   const axisPoints = axis.map(point => `${toX(point.x)},${toY(point.y)}`).join(' ');
   const candidateLabel = xml(`${candidate.label} ${candidate.motionAffordance.primary}`);
+  const candidateTitle = [
+    `${candidate.id}: ${candidate.motionAffordance.primary}`,
+    `segments ${candidate.bodyPlan.segmentCount}`,
+    `limb pairs ${candidate.bodyPlan.limbPairCount}`,
+    `shell plates ${candidate.bodyPlan.shellPlateCount}`,
+    `terminal mouth`,
+  ].join(' / ');
   const bodyWidth = (0.07 + candidate.bodyPlan.contactWidth * 0.055) * candidate.bodyPlan.bulkScale;
   const segmentEllipses = axis.map((point, sampleIndex) => {
     const t = sampleIndex / Math.max(1, axis.length - 1);
@@ -396,6 +410,7 @@ function renderCandidateSvg(candidate, index, columns, cellWidth, cellHeight, le
 
   return `
     <g class="candidate" data-candidate-id="${candidate.id}" transform="translate(0 0)">
+      <title class="candidate-title">${xml(candidateTitle)}</title>
       <rect x="${x0 + 6}" y="${y0 + 6}" width="${cellWidth - 12}" height="${cellHeight - 12}" rx="9" fill="rgba(16,22,18,0.92)" stroke="rgba(167,210,144,0.22)" stroke-width="1"/>
       <text x="${x0 + 13}" y="${y0 + 21}" fill="rgba(235,244,216,0.9)" font-size="10" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">${candidate.id}</text>
       <text x="${x0 + 13}" y="${y0 + cellHeight - 14}" fill="rgba(235,244,216,0.75)" font-size="10" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">${candidateLabel}</text>
@@ -410,11 +425,35 @@ function renderCandidateSvg(candidate, index, columns, cellWidth, cellHeight, le
         ${shellPlates}
         ${bellyRect}
         ${sensory}
-        <circle cx="${toX(mouth.region.x)}" cy="${toY(mouth.region.y)}" r="${round(mouth.region.radius * w, 2)}" fill="${colors.mouth}" stroke="rgba(255,172,97,0.75)" stroke-width="1"/>
+        <circle cx="${toX(mouth.region.x)}" cy="${toY(mouth.region.y)}" r="${round(mouth.region.radius * w, 2)}" fill="${colors.mouth}" stroke="rgba(255,172,97,0.75)" stroke-width="1"><title>terminal mouth</title></circle>
         ${contacts}
       </g>
     </g>
   `;
+}
+
+function renderLegendSvg(x, y) {
+  const items = [
+    { label: 'body mass', mark: '<ellipse cx="0" cy="0" rx="8" ry="5" fill="rgba(143,151,71,0.95)"/>' },
+    { label: 'axis handle', mark: '<line x1="-9" y1="0" x2="9" y2="0" stroke="rgba(81,188,223,0.9)" stroke-width="2" stroke-dasharray="3 3"/>' },
+    { label: 'shell plate', mark: '<rect x="-7" y="-5" width="14" height="10" rx="3" fill="rgba(82,93,121,0.94)"/>' },
+    { label: 'limb bud', mark: '<line x1="-7" y1="4" x2="8" y2="-4" stroke="rgba(158,104,57,0.9)" stroke-width="4" stroke-linecap="round"/>' },
+    { label: 'contact point', mark: '<circle cx="0" cy="0" r="5" fill="rgba(190,81,220,0.85)"/>' },
+    { label: 'head orientation', mark: '<ellipse cx="0" cy="0" rx="7" ry="6" fill="rgba(153,77,42,0.95)"/>' },
+    { label: 'terminal mouth', mark: '<circle cx="0" cy="0" r="5" fill="rgba(92,19,34,0.95)" stroke="rgba(255,172,97,0.8)" stroke-width="1"/>' },
+    { label: 'sensory nub', mark: '<circle cx="0" cy="0" r="4" fill="rgba(255,230,165,0.9)"/>' },
+    { label: 'belly contact', mark: '<ellipse cx="0" cy="0" rx="8" ry="4" fill="rgba(111,191,96,0.72)"/>' },
+  ];
+  const itemWidth = 112;
+  return `<g data-layer="legend" transform="translate(${x} ${y})" font-family="Menlo, Monaco, monospace">
+    <rect x="-8" y="-16" width="${itemWidth * items.length + 12}" height="33" rx="8" fill="rgba(16,22,18,0.74)" stroke="rgba(167,210,144,0.18)"/>
+    ${items.map((item, index) => (
+      `<g transform="translate(${index * itemWidth + 8} 0)">
+        ${item.mark}
+        <text x="14" y="4" fill="rgba(235,244,216,0.78)" font-size="9">${xml(item.label)}</text>
+      </g>`
+    )).join('')}
+  </g>`;
 }
 
 function renderContactSheetSvg(witness) {
@@ -423,7 +462,7 @@ function renderContactSheetSvg(witness) {
   const cellWidth = 204;
   const cellHeight = 166;
   const margin = 22;
-  const topMargin = 84;
+  const topMargin = 126;
   const width = columns * cellWidth + margin * 2;
   const height = topMargin + rows * cellHeight + margin;
   const title = 'Do not prompt for the creature. Grow the lineage until the creature becomes selectable.';
@@ -434,8 +473,140 @@ function renderContactSheetSvg(witness) {
   <rect width="100%" height="100%" fill="#07130f"/>
   <text x="${margin}" y="32" fill="#eef6d6" font-size="18" font-family="Menlo, Monaco, monospace">${xml(title)}</text>
   <text x="${margin}" y="55" fill="rgba(238,246,214,0.68)" font-size="12" font-family="Menlo, Monaco, monospace">seed=${xml(witness.seed)} route=${xml(witness.route)} candidates=${witness.candidates.length} columns=${columns}</text>
+  ${renderLegendSvg(margin + 6, 88)}
   ${body}
 </svg>`;
+}
+
+function renderCandidateControlSvg(candidate, mode = 'semantic-svg') {
+  const title = `${candidate.id} ${mode} control`;
+  const body = renderCandidateSvg(candidate, 0, 1, 320, 232, 18, 34);
+  const hideLayer = mode === 'silhouette-svg'
+    ? '[data-layer="semantic-map"]{display:none}'
+    : '';
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="356" height="286" viewBox="0 0 356 286" role="img" aria-label="${xml(title)}" data-control-map="${xml(mode)}">
+  <style>${hideLayer}</style>
+  <rect width="100%" height="100%" fill="#07130f"/>
+  <text x="18" y="22" fill="#eef6d6" font-size="13" font-family="Menlo, Monaco, monospace">${xml(title)}</text>
+  ${body}
+</svg>`;
+}
+
+function proxyPoint(region, z = 0) {
+  return {
+    x: round((region.x - 0.5) * 2),
+    y: round((0.5 - region.y) * 2),
+    z: round(z),
+  };
+}
+
+function createProxyPrimitives(candidate) {
+  const primitives = [];
+  const width = 0.09 + candidate.bodyPlan.contactWidth * 0.08;
+  for (const sample of candidate.bodyPlan.axisSamples) {
+    primitives.push({
+      kind: 'metaball',
+      role: 'body_mass',
+      center: proxyPoint(sample),
+      radius: round(width * candidate.bodyPlan.bulkScale * (0.82 + Math.sin(sample.t * Math.PI) * 0.24)),
+      falloff: 'smooth_union',
+    });
+  }
+
+  const head = candidate.semanticHandles.find(handle => handle.kind === 'head');
+  const mouth = candidate.semanticHandles.find(handle => handle.kind === 'mouth');
+  primitives.push({
+    kind: 'sphere',
+    role: 'head_orientation',
+    center: proxyPoint(head.region, 0.02),
+    radius: round(head.region.radius * 1.35),
+    materialHint: 'soft_head_mass',
+  });
+  primitives.push({
+    kind: 'sphere',
+    role: 'terminal_mouth',
+    center: proxyPoint(mouth.region, 0.055),
+    radius: mouth.region.radius,
+    materialHint: 'mouth_dark_wet_terminal',
+  });
+
+  for (const handle of candidate.semanticHandles.filter(item => item.kind === 'limb_bud')) {
+    primitives.push({
+      kind: 'capsule',
+      role: 'limb_bud',
+      center: proxyPoint(handle.region, -0.015),
+      radius: round(0.018 + handle.strength * 0.018),
+      length: round(handle.region.length * 1.7),
+      side: handle.region.side,
+      t: handle.region.t,
+      materialHint: 'brace_drag_nub',
+    });
+  }
+
+  for (const handle of candidate.semanticHandles.filter(item => item.kind === 'shell_plate')) {
+    primitives.push({
+      kind: 'box',
+      role: 'shell_plate',
+      center: proxyPoint(handle.region, 0.075),
+      size: {
+        x: round(handle.region.width * 1.4),
+        y: 0.052,
+        z: round(0.018 + candidate.bodyPlan.armorPressure * 0.04),
+      },
+      t: handle.region.t,
+      materialHint: 'dorsal_plate',
+    });
+  }
+
+  for (const point of candidate.contactPoints) {
+    primitives.push({
+      kind: 'sphere',
+      role: 'contact_point',
+      contactRole: point.role,
+      center: proxyPoint(point, -0.08),
+      radius: round(point.radius * 1.4),
+      materialHint: 'ground_contact_marker',
+    });
+  }
+
+  return primitives;
+}
+
+export function createLirmSpeciationArmatureControlPacket({ witness, candidate, candidateId } = {}) {
+  const selectedCandidate = candidate || witness?.candidates?.find(item => item.id === candidateId);
+  if (!witness || !selectedCandidate) {
+    throw new Error('createLirmSpeciationArmatureControlPacket requires a witness and candidate or candidateId');
+  }
+  const candidateDir = `control-packets/${selectedCandidate.id}`;
+  const proxyPrimitives = createProxyPrimitives(selectedCandidate);
+  return {
+    schema: LIRM_SPECIATION_ARMATURE_CONTROL_PACKET_SCHEMA,
+    route: LIRM_SPECIATION_ARMATURE_CONTROL_PACKET_ROUTE,
+    sourceWitnessId: witness.witnessId,
+    sourceWitnessRoute: witness.route,
+    candidateId: selectedCandidate.id,
+    seed: selectedCandidate.seed,
+    lineage: selectedCandidate.lineage,
+    motionAffordance: selectedCandidate.motionAffordance,
+    semanticHandles: selectedCandidate.semanticHandles,
+    contactPoints: selectedCandidate.contactPoints,
+    proxyPrimitives,
+    conditioningMaps: [
+      { kind: 'semantic-svg', path: `${candidateDir}/semantic-control.svg`, effectiveSource: 'local-procedural-svg' },
+      { kind: 'silhouette-svg', path: `${candidateDir}/silhouette-control.svg`, effectiveSource: 'local-procedural-svg' },
+      { kind: 'proxy-primitives-json', path: `${candidateDir}/proxy-primitives.json`, effectiveSource: 'local-procedural-proxy-primitives' },
+    ],
+    promptContract: {
+      subject: 'small crawling hoard thief creature',
+      preserve: ['axis curve', 'belly contact', 'terminal front mouth', 'head orientation', 'contact points'],
+      allowMutation: ['surface material', 'micro anatomy', 'gross-cute balance', 'skin/shell texture'],
+    },
+    falseClosureGuards: {
+      finishedCreatureClaim: 'forbidden',
+      generatorFiringClaim: 'not_yet_fired',
+      proxyGeometryClaim: 'control_primitives_only',
+    },
+  };
 }
 
 export function createLirmSpeciationArmatureWitness(options = {}) {
@@ -484,6 +655,7 @@ export function createLirmSpeciationArmatureWitness(options = {}) {
         promptOnlyLirmAttempt: 'not_used',
         finishedCreatureClaim: 'forbidden',
         generatorFiringClaim: 'not_yet_fired',
+        proxyGeometryClaim: 'control_primitives_only',
         visualEvidence: 'contact_sheet_only',
       },
       outputInventory: {},
@@ -521,6 +693,19 @@ export async function writeLirmSpeciationArmatureWitness(options = {}) {
       },
     },
   };
+  const controlPacketPaths = [];
+  for (const candidate of witness.candidates) {
+    const candidateDirName = join('control-packets', candidate.id);
+    const candidateDir = join(outDir, candidateDirName);
+    const packet = createLirmSpeciationArmatureControlPacket({ witness, candidate });
+    await mkdir(candidateDir, { recursive: true });
+    await writeFile(join(candidateDir, 'packet.json'), `${JSON.stringify(packet, null, 2)}\n`);
+    await writeFile(join(candidateDir, 'proxy-primitives.json'), `${JSON.stringify(packet.proxyPrimitives, null, 2)}\n`);
+    await writeFile(join(candidateDir, 'semantic-control.svg'), renderCandidateControlSvg(candidate, 'semantic-svg'));
+    await writeFile(join(candidateDir, 'silhouette-control.svg'), renderCandidateControlSvg(candidate, 'silhouette-svg'));
+    controlPacketPaths.push(`${candidateDirName}/packet.json`);
+  }
+  receiptWitness.receipt.outputInventory.controlPackets = controlPacketPaths;
   await writeFile(contactSheetPath, witness.contactSheet.svg);
   await writeFile(receiptPath, `${JSON.stringify(receiptWitness, null, 2)}\n`);
   return {
@@ -531,5 +716,6 @@ export async function writeLirmSpeciationArmatureWitness(options = {}) {
     receiptPath,
     contactSheetPath,
     candidateCount: receiptWitness.candidates.length,
+    controlPacketCount: controlPacketPaths.length,
   };
 }
