@@ -26,8 +26,8 @@ const DEFAULT_KERNEL_PROFILE = 'sam3-image-fpn-neck-phase-program-v0';
 const REQUIRED_STAGES = [
   'load-image-fpn-neck-tensors',
   'fpn-neck-transpose-conv-0-scale0',
-  'fpn-neck-transpose-conv-0-scale1',
   'fpn-neck-gelu-0',
+  'fpn-neck-transpose-conv-0-scale1',
   'fpn-neck-proj1-0',
   'fpn-neck-proj2-0',
   'fpn-neck-transpose-conv-1',

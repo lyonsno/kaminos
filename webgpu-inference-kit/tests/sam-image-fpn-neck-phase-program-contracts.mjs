@@ -56,6 +56,13 @@ const route = createSam3ImageFpnNeckPhaseProgramRouteDefinition({
 assert.equal(route.routeId, SAM3_IMAGE_FPN_NECK_PHASE_PROGRAM_ROUTE_ID);
 assert.deepEqual(route.requiredInputRoles, ['source-image', 'vit-backbone-hidden-states', 'sam3-image-fpn-neck-weights']);
 assert.deepEqual(route.requiredOutputRoles, ['fpn-neck-feature-0', 'fpn-neck-feature-1', 'fpn-neck-feature-2']);
+const level0StageOffset = route.requiredStages.indexOf('fpn-neck-transpose-conv-0-scale0');
+assert.notEqual(level0StageOffset, -1, 'route must advertise the first level-0 FPN transpose-conv stage');
+assert.deepEqual(
+  route.requiredStages.slice(level0StageOffset, level0StageOffset + 3),
+  ['fpn-neck-transpose-conv-0-scale0', 'fpn-neck-gelu-0', 'fpn-neck-transpose-conv-0-scale1'],
+  'route required-stage metadata must preserve level-0 FPN execution order',
+);
 assert.equal(validateRouteDefinition(route).ok, true);
 
 const hiddenStates = new Float32Array([1, 2, 3, 4]);
