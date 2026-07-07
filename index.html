@@ -12355,6 +12355,16 @@ const SHARP_SPN_LOWRES_BLOCK_LABELS = [
   'fuse-lowres',
 ];
 window.__kaminosSharpSpnLowresBlockLabels = SHARP_SPN_LOWRES_BLOCK_LABELS;
+const SHARP_MONODEPTH_PHASE_LABELS = [
+  'project-feature',
+  'fusion-resnet1',
+  'fusion-skip-add',
+  'fusion-resnet2',
+  'fusion-out-conv',
+  'head-conv0',
+  'head-final',
+];
+window.__kaminosSharpMonodepthPhaseLabels = SHARP_MONODEPTH_PHASE_LABELS;
 
 const KILN_ROUTE_BENCH_ROUTES = [
   {
@@ -13110,6 +13120,41 @@ function sharpBreathingRoomSpnFusionCoverage(result) {
   };
 }
 
+function sharpBreathingRoomMonodepthPhaseLabels(result) {
+  const labels = [];
+  for (const event of sharpBreathingRoomSchedulerEvents(result)) {
+    const label = event.details?.phase
+      || event.details?.label
+      || event.phaseLabel
+      || event.label
+      || event.name
+      || null;
+    const phaseText = [
+      event.phase,
+      event.boundary,
+      event.stage,
+      event.routePhase,
+      event.kind,
+    ].filter(Boolean).join(' ').toLowerCase();
+    if (!label) continue;
+    if (!phaseText.includes('monodepth-phase') && !SHARP_MONODEPTH_PHASE_LABELS.includes(label)) continue;
+    if (!labels.includes(label)) labels.push(label);
+  }
+  return labels;
+}
+
+function sharpBreathingRoomMonodepthPhaseCoverage(result) {
+  const observed = sharpBreathingRoomMonodepthPhaseLabels(result);
+  const missing = SHARP_MONODEPTH_PHASE_LABELS.filter(label => !observed.includes(label));
+  return {
+    schema: 'kaminos.sharp-monodepth-phase-coverage.v0',
+    requiredLabels: [...SHARP_MONODEPTH_PHASE_LABELS],
+    observedLabels: observed,
+    missingMonodepthPhaseLabels: missing,
+    status: missing.length ? 'missing-labels' : 'complete',
+  };
+}
+
 function sharpBreathingRoomArtifactSha256(result, artifact = pipelinePrimaryRunArtifact(result)) {
   const adapterReport = sharpBreathingRoomAdapterReport(result);
   return artifact?.sha256
@@ -13124,6 +13169,7 @@ function sharpBreathingRoomComparisonRunEvidence(run, step = {}) {
   const schedulerEvidence = pipelineRunSchedulerEvidence(run);
   const adapterReport = sharpBreathingRoomAdapterReport(run);
   const coverage = sharpBreathingRoomSpnFusionCoverage(run);
+  const monodepthCoverage = sharpBreathingRoomMonodepthPhaseCoverage(run);
   return {
     schema: 'kaminos.sharp-breathing-room-comparison-run-evidence.v0',
     profileId: step.profileId || run?.profileId || null,
@@ -13152,6 +13198,10 @@ function sharpBreathingRoomComparisonRunEvidence(run, step = {}) {
     requiredSpnFusionBlocks: coverage.requiredBlocks,
     missingSpnFusionBlocks: coverage.missingSpnFusionBlocks,
     spnFusionCoverage: coverage,
+    monodepthPhaseLabels: monodepthCoverage.observedLabels,
+    requiredMonodepthPhaseLabels: monodepthCoverage.requiredLabels,
+    missingMonodepthPhaseLabels: monodepthCoverage.missingMonodepthPhaseLabels,
+    monodepthPhaseCoverage: monodepthCoverage,
     error: run?.ok === false ? pipelineRunFailureSummary(run) : null,
   };
 }
@@ -13194,6 +13244,14 @@ function sharpBreathingRoomComparisonSummaryText(state = null) {
     const requiredCount = coverage.requiredBlocks?.length || SHARP_SPN_LOWRES_BLOCK_LABELS.length;
     parts.push(`SPN lowres labels: ${observedCount}/${requiredCount}${coverage.missingSpnFusionBlocks?.length ? ` missing ${coverage.missingSpnFusionBlocks.join(', ')}` : ''}`);
   }
+  const monodepthCoverage = state?.monodepthPhaseCoverage
+    || runs.find(run => run.profileId === 'cooperative-spn-gaussian')?.monodepthPhaseCoverage
+    || null;
+  if (monodepthCoverage) {
+    const observedCount = monodepthCoverage.observedLabels?.length || 0;
+    const requiredCount = monodepthCoverage.requiredLabels?.length || SHARP_MONODEPTH_PHASE_LABELS.length;
+    parts.push(`monodepth labels: ${observedCount}/${requiredCount}${monodepthCoverage.missingMonodepthPhaseLabels?.length ? ` missing ${monodepthCoverage.missingMonodepthPhaseLabels.join(', ')}` : ''}`);
+  }
   return parts.join(' | ');
 }
 
@@ -13206,9 +13264,12 @@ function refreshSharpBreathingRoomComparisonSummary(state = null) {
   summary.textContent = text;
   const outputStatus = currentState?.outputEquivalence?.status || null;
   const coverageStatus = currentState?.lowresFusionCoverage?.status || null;
+  const monodepthCoverageStatus = currentState?.monodepthPhaseCoverage?.status || null;
   summary.dataset.status = outputStatus === 'hash-missing' || outputStatus === 'hash-mismatch'
     ? outputStatus
-    : (coverageStatus || currentState?.status || 'idle');
+    : (coverageStatus === 'missing-labels' || monodepthCoverageStatus === 'missing-labels'
+      ? 'missing-labels'
+      : (monodepthCoverageStatus || coverageStatus || currentState?.status || 'idle'));
 }
 
 function pipelineGraphSchedulerEvidenceState(evidence) {
@@ -16620,6 +16681,9 @@ async function runSharpBreathingRoomComparison() {
     comparisonState.lowresFusionCoverage = comparisonState.comparisonRuns
       .find(entry => entry.profileId === 'cooperative-spn-gaussian')?.spnFusionCoverage
       || null;
+    comparisonState.monodepthPhaseCoverage = comparisonState.comparisonRuns
+      .find(entry => entry.profileId === 'cooperative-spn-gaussian')?.monodepthPhaseCoverage
+      || null;
     window.__kaminosSharpBreathingRoomComparisonState = comparisonState;
     renderKilnRouteBench();
     if (!run?.ok) {
@@ -16641,12 +16705,19 @@ async function runSharpBreathingRoomComparison() {
   comparisonState.lowresFusionCoverage = comparisonState.comparisonRuns
     .find(entry => entry.profileId === 'cooperative-spn-gaussian')?.spnFusionCoverage
     || null;
+  comparisonState.monodepthPhaseCoverage = comparisonState.comparisonRuns
+    .find(entry => entry.profileId === 'cooperative-spn-gaussian')?.monodepthPhaseCoverage
+    || null;
   window.__kaminosSharpBreathingRoomComparisonState = comparisonState;
   const coverage = comparisonState.lowresFusionCoverage;
   const labelSummary = coverage
     ? ` SPN lowres labels: ${coverage.observedBlocks.length}/${coverage.requiredBlocks.length}${coverage.missingSpnFusionBlocks.length ? ` missing ${coverage.missingSpnFusionBlocks.join(', ')}` : ''}.`
     : ' SPN lowres labels were not found in friendly telemetry.';
-  setKilnRouteBenchStatus(`Default then friendly comparison finished. Hashes, durations, scheduler configs, and lowres SPN labels are captured below.${labelSummary}`, 'complete', {
+  const monodepthCoverage = comparisonState.monodepthPhaseCoverage;
+  const monodepthLabelSummary = monodepthCoverage
+    ? ` Monodepth labels: ${monodepthCoverage.observedLabels.length}/${monodepthCoverage.requiredLabels.length}${monodepthCoverage.missingMonodepthPhaseLabels.length ? ` missing ${monodepthCoverage.missingMonodepthPhaseLabels.join(', ')}` : ''}.`
+    : ' Monodepth labels were not found in friendly telemetry.';
+  setKilnRouteBenchStatus(`Default then friendly comparison finished. Hashes, durations, scheduler configs, SPN lowres labels, and monodepth labels are captured below.${labelSummary}${monodepthLabelSummary}`, 'complete', {
     routeId: route.id,
     source,
     comparisonRuns: comparisonState.comparisonRuns,

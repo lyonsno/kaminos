@@ -130,6 +130,26 @@ for (const label of [
 }
 assert.match(
   index,
+  /const SHARP_MONODEPTH_PHASE_LABELS\s*=\s*\[/,
+  'Comparison smoke must name the monodepth phase labels Cranial asked Wake to verify',
+);
+for (const label of [
+  'project-feature',
+  'fusion-resnet1',
+  'fusion-skip-add',
+  'fusion-resnet2',
+  'fusion-out-conv',
+  'head-conv0',
+  'head-final',
+]) {
+  assert.match(
+    index,
+    new RegExp(label),
+    `Comparison smoke must preserve the ${label} monodepth scheduler label in live evidence`,
+  );
+}
+assert.match(
+  index,
   /function sharpBreathingRoomComparisonRunEvidence\(/,
   'Comparison smoke must summarize each live run through a dedicated evidence object',
 );
@@ -157,6 +177,11 @@ assert.match(
   index,
   /lowresFusionCoverage/,
   'Comparison smoke must expose SPN lowres coverage on the comparison state instead of hiding it in raw reports',
+);
+assert.match(
+  index,
+  /monodepthPhaseCoverage/,
+  'Comparison smoke must expose monodepth phase coverage on the comparison state instead of hiding it in raw reports',
 );
 assert.match(
   index,
