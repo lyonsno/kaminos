@@ -8,6 +8,7 @@ import { spawn } from 'node:child_process';
 const SCHEMA = 'kaminos.volume.full-grid-field-residual-render-still.v0';
 const APPLICATION_SCHEMA = 'kaminos.volume.full-grid-field-residual-application.v0';
 const LIMITATION = 'full-grid-buffer-render-override-not-selected-tiles';
+const TEMPORAL_STRIP_IDENTITY = 'full-grid-field-residual-temporal-dynamics-strip-v0';
 
 const args = new Map();
 for (let index = 2; index < process.argv.length; index += 1) {
@@ -31,6 +32,8 @@ const userDataDir = String(args.get('--user-data-dir') || mkdtempSync('/tmp/kami
 const windowSize = String(args.get('--window-size') || '1024,1024');
 const settleMs = Number(args.get('--settle-ms') || 2500);
 const chunkBytes = Math.max(4096, Math.floor(Number(args.get('--chunk-bytes') || 262144)));
+const temporalStripFrameCount = Math.max(0, Math.floor(Number(args.get('--temporal-strip-frame-count') || 0)));
+const temporalStripStepMs = Math.max(0, Number(args.get('--temporal-strip-step-ms') || (1000 / 60)));
 
 function utcNow() {
   return new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
@@ -161,6 +164,33 @@ async function captureNoAdvance(ws, replay) {
   return sample;
 }
 
+async function captureTemporalDynamicsStrip(ws, replay, roleName, frameCount) {
+  const frames = [];
+  const finalTimeMs = replay.startTimeMs + Math.max(0, replay.steps - 1) * replay.timeStepMs;
+  for (let frameIndex = 0; frameIndex < frameCount; frameIndex += 1) {
+    const request = {
+      allowInactive: true,
+      advanceSim: frameIndex > 0,
+      nowMs: finalTimeMs + frameIndex * temporalStripStepMs,
+    };
+    const sample = await evaluate(
+      ws,
+      `window.__kaminosVolumePrototype.sampleFrame(${JSON.stringify(request)})`,
+      `sampleFrame-temporal-dynamics-${roleName}-${frameIndex}`,
+    );
+    if (sample?.ok !== true) throw new Error(`temporal dynamics sample failed for ${roleName}/${frameIndex}: ${JSON.stringify(sample)}`);
+    frames.push({
+      frameIndex,
+      role: roleName,
+      sample,
+      width: sample.preview.width,
+      height: sample.preview.height,
+      rgba: sample.preview.rgba,
+    });
+  }
+  return frames;
+}
+
 function crc32(buffer) {
   let crc = 0xFFFFFFFF;
   for (const byte of buffer) {
@@ -206,6 +236,47 @@ function pasteRgba(target, targetWidth, source, sourceWidth, sourceHeight, offse
     const src = y * sourceWidth * 4;
     target.set(source.slice(src, src + sourceWidth * 4), dst);
   }
+}
+
+function htmlEscape(value) {
+  return String(value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;');
+}
+
+function fileName(path) {
+  return String(path).split('/').pop();
+}
+
+function writeTemporalStripViewer(path, temporalStrip, report) {
+  const imageName = fileName(temporalStrip.contactSheet.path);
+  const rows = temporalStrip.rows.map(row => `<tr><td>${htmlEscape(row.role)}</td><td>${htmlEscape(row.label)}</td><td>${row.frames.map(frame => `#${frame.frameIndex}`).join(', ')}</td></tr>`).join('\n');
+  const html = `<!doctype html>
+<meta charset="utf-8">
+<title>Kaminos full-grid residual temporal dynamics strip</title>
+<style>
+body { margin: 24px; background: #090b0c; color: #dfe8e8; font: 14px/1.45 system-ui, sans-serif; }
+img { max-width: 100%; image-rendering: auto; border: 1px solid #2c3436; }
+table { border-collapse: collapse; margin: 16px 0; }
+td, th { border: 1px solid #30383a; padding: 6px 10px; }
+.muted { color: #91a0a3; }
+code { color: #ffd08a; }
+</style>
+<h1>Full-grid residual temporal dynamics strip</h1>
+<p><strong>Rows:</strong> truthHigh, lowUpsampled, predictedHigh. <strong>Columns:</strong> initialized field at frame 0, then simulator-advanced frames. This is not per-frame model prediction.</p>
+<p class="muted">Identity: <code>${htmlEscape(temporalStrip.identity)}</code>. Application: <code>${htmlEscape(report.applicationManifest)}</code>.</p>
+<img src="${htmlEscape(imageName)}" alt="Rows are truthHigh, lowUpsampled, predictedHigh; columns are temporal dynamics frames">
+<table>
+<thead><tr><th>Role</th><th>Label</th><th>Frames</th></tr></thead>
+<tbody>
+${rows}
+</tbody>
+</table>
+<p class="muted">${htmlEscape(temporalStrip.limitation)}</p>
+`;
+  writeFileSync(path, html);
 }
 
 function resolveRolePath(descriptor) {
@@ -370,6 +441,56 @@ function buildByteIdenticalOverrideSanity(application, outputs) {
   };
 }
 
+function sampleMetrics(sample) {
+  return {
+    simGrid: sample.simGrid,
+    simStepCount: sample.simStepCount,
+    frameCount: sample.frameCount,
+    fireLikePixels: sample.fireLikePixels,
+    smokeLikePixels: sample.smokeLikePixels,
+    fireEdgeEnergy: sample.fireEdgeEnergy,
+    fullFieldBufferRenderOverride: sample.fullFieldBufferRenderOverride,
+  };
+}
+
+function buildTemporalStrip(temporalRows, outDir) {
+  if (!temporalRows.length) return null;
+  const frameWidth = temporalRows[0].frames[0].width;
+  const frameHeight = temporalRows[0].frames[0].height;
+  const frameCount = temporalRows[0].frames.length;
+  const stripWidth = frameWidth * frameCount;
+  const stripHeight = frameHeight * temporalRows.length;
+  const sheet = new Uint8Array(stripWidth * stripHeight * 4);
+  temporalRows.forEach((row, rowIndex) => {
+    row.frames.forEach((frame, frameIndex) => {
+      pasteRgba(sheet, stripWidth, frame.rgba, frame.width, frame.height, frameWidth * frameIndex, frameHeight * rowIndex);
+    });
+  });
+  const contactSheet = resolve(outDir, 'temporal-dynamics-strip.png');
+  writeRgbaPng(contactSheet, stripWidth, stripHeight, Array.from(sheet));
+  return {
+    identity: TEMPORAL_STRIP_IDENTITY,
+    authority: 'initialized-full-grid-field-then-simulator-advanced-dynamics-v0',
+    frameCount,
+    stepMs: temporalStripStepMs,
+    rowOrder: temporalRows.map(row => row.role),
+    columnOrder: Array.from({ length: frameCount }, (_, index) => `frame-${index}`),
+    limitation: 'Temporal strip initializes each role from a complete field buffer and advances simulator dynamics after frame 0; it is not a per-frame residual model prediction or held-out temporal proof.',
+    contactSheet: {
+      path: contactSheet,
+      sha256: sha256File(contactSheet),
+    },
+    rows: temporalRows.map(row => ({
+      role: row.role,
+      label: row.label,
+      frames: row.frames.map(frame => ({
+        frameIndex: frame.frameIndex,
+        sample: sampleMetrics(frame.sample),
+      })),
+    })),
+  };
+}
+
 function failureReport(phase, error, evidence = {}) {
   return {
     schema: SCHEMA,
@@ -407,9 +528,16 @@ async function main() {
 
     const frames = [];
     const outputs = [];
+    const temporalRows = [];
     phase = 'truthHigh';
     const truthReplay = await captureReplay(ws, replay);
-    const truthSample = await captureNoAdvance(ws, replay);
+    const truthTemporalFrames = temporalStripFrameCount > 1
+      ? await captureTemporalDynamicsStrip(ws, replay, 'truthHigh', temporalStripFrameCount)
+      : [];
+    if (truthTemporalFrames.length) {
+      temporalRows.push({ role: 'truthHigh', label: 'true high-grid replay initialized state', frames: truthTemporalFrames });
+    }
+    const truthSample = truthTemporalFrames[0]?.sample || await captureNoAdvance(ws, replay);
     const truthPng = resolve(outDir, 'truthHigh.full-grid-render.png');
     writeRgbaPng(truthPng, truthSample.preview.width, truthSample.preview.height, truthSample.preview.rgba);
     frames.push({ role: 'truthHigh', width: truthSample.preview.width, height: truthSample.preview.height, rgba: truthSample.preview.rgba });
@@ -431,7 +559,17 @@ async function main() {
       phase = roleName;
       await captureReplay(ws, replay);
       const override = await applyFullGridRole(ws, application, roleName, application.roles[roleName]);
-      const sample = await captureNoAdvance(ws, replay);
+      const roleTemporalFrames = temporalStripFrameCount > 1
+        ? await captureTemporalDynamicsStrip(ws, replay, roleName, temporalStripFrameCount)
+        : [];
+      if (roleTemporalFrames.length) {
+        temporalRows.push({
+          role: roleName,
+          label: roleName === 'lowUpsampled' ? 'low-grid upsampled field initialized state' : 'model predicted high-grid field initialized state',
+          frames: roleTemporalFrames,
+        });
+      }
+      const sample = roleTemporalFrames[0]?.sample || await captureNoAdvance(ws, replay);
       const png = resolve(outDir, `${roleName}.full-grid-render.png`);
       writeRgbaPng(png, sample.preview.width, sample.preview.height, sample.preview.rgba);
       frames.push({ role: roleName, width: sample.preview.width, height: sample.preview.height, rgba: sample.preview.rgba });
@@ -458,6 +596,7 @@ async function main() {
     frames.forEach((frame, index) => pasteRgba(sheet, width, frame.rgba, frame.width, frame.height, frame.width * index, 0));
     const contactSheet = resolve(outDir, 'contactSheet.png');
     writeRgbaPng(contactSheet, width, height, Array.from(sheet));
+    const temporalStrip = buildTemporalStrip(temporalRows, outDir);
 
     phase = 'write-report';
     const report = {
@@ -489,6 +628,15 @@ async function main() {
         columnOrder: frames.map(frame => frame.role),
       },
     };
+    if (temporalStrip) {
+      const temporalStripViewer = resolve(outDir, 'temporal-dynamics-strip.html');
+      writeTemporalStripViewer(temporalStripViewer, temporalStrip, report);
+      report.temporalStrip = temporalStrip;
+      report.temporalStripViewer = {
+        path: temporalStripViewer,
+        sha256: sha256File(temporalStripViewer),
+      };
+    }
     writeJson(manifestOut, report);
     ws.close();
     await closeBrowser(browser);

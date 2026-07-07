@@ -2083,6 +2083,10 @@ assert.match(fullGridResidualRender, /fire-signature-passed-exact-pixel-mismatch
 assert.match(fullGridResidualRender, /sidecarBytesMatchTruth/, 'full-grid residual render-still records when predicted sidecars match truth bytes');
 assert.match(fullGridResidualRender, /state\?\.active[\s\S]*state\.width\s*>\s*0[\s\S]*state\.height\s*>\s*0[\s\S]*state\.frameCount\s*>\s*0/, 'full-grid residual render-still accepts one initialized activation-pumped frame instead of waiting forever for parked RAF');
 assert.match(fullGridResidualRender, /contactSheet/, 'full-grid residual render-still writes an inspectable contact sheet');
+assert.match(fullGridResidualRender, /--temporal-strip-frame-count/, 'full-grid residual render-still can request a temporal dynamics strip');
+assert.match(fullGridResidualRender, /full-grid-field-residual-temporal-dynamics-strip-v0/, 'full-grid residual temporal strip names its dynamics-strip authority');
+assert.match(fullGridResidualRender, /temporalStripViewer/, 'full-grid residual temporal strip writes a labeled visual viewer');
+assert.match(fullGridResidualRender, /advanceSim:\s*frameIndex > 0/, 'full-grid temporal strip advances simulator dynamics after the initialized frame');
 assert.match(fullGridResidualRender, /failurePhase/, 'full-grid residual render-still writes failure-phase reports when rendering fails');
 
 const dynamicTextureProofPath = join(root, 'volume-dynamic-texture-proof.mjs');
