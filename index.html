@@ -10551,6 +10551,108 @@ function volumeControlRow(id) {
   return document.getElementById(id)?.closest('.slider-row') || null;
 }
 
+function volumeControlCluster(id) {
+  const row = volumeControlRow(id);
+  if (!row) return [];
+  const nodes = [row];
+  const help = row.nextElementSibling;
+  if (help?.classList?.contains('slider-help')) nodes.push(help);
+  return nodes;
+}
+
+function moveVolumeControlClusterBefore(id, beforeId) {
+  const before = volumeControlRow(beforeId);
+  const nodes = volumeControlCluster(id);
+  if (!before || !nodes.length) return false;
+  for (const node of nodes) before.parentNode.insertBefore(node, before);
+  return true;
+}
+
+function moveVolumeControlClusterAfter(id, afterId) {
+  const afterNodes = volumeControlCluster(afterId);
+  const nodes = volumeControlCluster(id);
+  if (!afterNodes.length || !nodes.length) return false;
+  const parent = afterNodes[afterNodes.length - 1].parentNode;
+  let insertBefore = afterNodes[afterNodes.length - 1].nextSibling;
+  for (const node of nodes) {
+    parent.insertBefore(node, insertBefore);
+  }
+  return true;
+}
+
+const PYRO_CARRIER_WORKBENCH_PINNED_IDS = [
+  'volume-look-freeze',
+];
+
+const FLOW_FIRST_PYRO_CONTROL_IDS = [
+  'volume-pyro-flow-bite',
+  'volume-pyro-flow-border',
+  'volume-pyro-flow-teeth',
+  'volume-pyro-flow-rise',
+  'volume-pyro-flow-fire-lock',
+  'volume-pyro-flow-luma',
+  'volume-pyro-flow-radiance',
+  'volume-pyro-flow-spikes',
+  'volume-pyro-flow-cool-color',
+  'volume-pyro-flow-hot-color',
+];
+
+const LEGACY_PYRO_CONTROL_IDS = [
+  'volume-pyro-edge-bite',
+  'volume-pyro-bite-border',
+  'volume-pyro-bite-teeth',
+  'volume-pyro-bite-wake',
+  'volume-pyro-bite-height',
+  'volume-pyro-bite-fire-lock',
+  'volume-pyro-bite-core',
+  'volume-pyro-bite-core-cut',
+  'volume-pyro-bite-rim',
+  'volume-pyro-bite-rim-cut',
+  'volume-pyro-bite-after',
+  'volume-pyro-bite-after-cut',
+  'volume-pyro-bite-heat',
+  'volume-pyro-bite-chroma',
+  'volume-pyro-bite-luma',
+  'volume-pyro-bite-ember-color',
+  'volume-pyro-bite-hot-color',
+  'volume-pyro-smoke-fold',
+  'volume-pyro-fold-border',
+  'volume-pyro-fold-wake',
+  'volume-pyro-wake-lift',
+  'volume-pyro-wake-warmth',
+  'volume-pyro-wake-luma',
+  'volume-pyro-wake-shadow-color',
+  'volume-pyro-wake-ember-color',
+  'volume-pyro-radiance',
+  'volume-pyro-radiance-gate',
+  'volume-pyro-radiance-spill',
+  'volume-pyro-radiance-warmth',
+  'volume-pyro-radiance-hue',
+  'volume-pyro-radiance-chroma',
+  'volume-pyro-radiance-luma',
+  'volume-pyro-radiance-cool-color',
+  'volume-pyro-radiance-warm-color',
+  'volume-pyro-radiance-source',
+  'volume-pyro-radiance-height',
+  'volume-pyro-radiance-border',
+  'volume-pyro-radiance-teeth',
+  'volume-pyro-radiance-rise',
+  'volume-pyro-radiance-fire-lock',
+];
+
+function moveVolumePyroFreezeIntoCarrierWorkbench() {
+  for (const id of PYRO_CARRIER_WORKBENCH_PINNED_IDS) {
+    moveVolumeControlClusterBefore(id, FLOW_FIRST_PYRO_CONTROL_IDS[0]);
+  }
+}
+
+function moveVolumePyroLegacyControlsBelowFlow() {
+  let afterId = FLOW_FIRST_PYRO_CONTROL_IDS[FLOW_FIRST_PYRO_CONTROL_IDS.length - 1];
+  for (const id of LEGACY_PYRO_CONTROL_IDS) {
+    if (moveVolumeControlClusterAfter(id, afterId)) afterId = id;
+  }
+}
+
 function syncCanonicalVolumeControlVisibility(volumeScene) {
   const canonical = volumeScene === 'canonical_plume';
   for (const id of CANONICAL_VOLUME_HIDDEN_CONTROLS) {
@@ -15869,7 +15971,9 @@ async function initKaminosVolumeRoute() {
     refreshVolumeReadout();
     saveVolumeBasinSnapshot(event?.target?.id || 'control-change');
   };
-  for (const id of ['volume-scene', 'volume-density', 'volume-fire', 'volume-radiance', 'volume-absorption', 'volume-glow', 'volume-smoke', 'volume-curl', 'volume-microdetail', 'volume-interface-shred', 'volume-fire-licks', 'volume-projection', 'volume-speed', 'volume-steps', 'volume-adaptive-rays', 'volume-occupancy-skip', 'volume-majorant-skip', 'volume-majorant-smooth', 'volume-majorant-guard', 'volume-temporal-accum', 'volume-temporal-jitter', 'volume-history-clamp', 'volume-fire-scale', 'volume-detail-scale', 'volume-plume-height', 'volume-wind-strength', 'volume-wind-angle', 'volume-wind-height', 'volume-render-scale', 'volume-input-radius', 'volume-flow-rate', 'volume-resolution', 'volume-majorant-grid', 'volume-grid-overlay', 'volume-flow-debug', 'volume-look-freeze', 'volume-pyro-compare', 'volume-pyro-detail', 'volume-pyro-material-gain', 'volume-pyro-interface-focus', 'volume-pyro-edge-bite', 'volume-pyro-bite-border', 'volume-pyro-bite-teeth', 'volume-pyro-bite-wake', 'volume-pyro-bite-height', 'volume-pyro-bite-fire-lock', 'volume-pyro-bite-core', 'volume-pyro-bite-core-cut', 'volume-pyro-bite-rim', 'volume-pyro-bite-rim-cut', 'volume-pyro-bite-after', 'volume-pyro-bite-after-cut', 'volume-pyro-fire-mode', 'volume-pyro-flame-paint', 'volume-pyro-stock-mix', 'volume-pyro-flame-luma', 'volume-pyro-flame-core-color', 'volume-pyro-flame-edge-color', 'volume-pyro-bite-heat', 'volume-pyro-bite-chroma', 'volume-pyro-bite-luma', 'volume-pyro-bite-ember-color', 'volume-pyro-bite-hot-color', 'volume-pyro-smoke-fold', 'volume-pyro-fold-border', 'volume-pyro-fold-wake', 'volume-pyro-wake-lift', 'volume-pyro-wake-warmth', 'volume-pyro-wake-luma', 'volume-pyro-wake-shadow-color', 'volume-pyro-wake-ember-color', 'volume-pyro-radiance', 'volume-pyro-radiance-gate', 'volume-pyro-radiance-spill', 'volume-pyro-radiance-warmth', 'volume-pyro-radiance-hue', 'volume-pyro-radiance-chroma', 'volume-pyro-radiance-luma', 'volume-pyro-radiance-cool-color', 'volume-pyro-radiance-warm-color', 'volume-pyro-radiance-source', 'volume-pyro-radiance-height', 'volume-pyro-radiance-border', 'volume-pyro-radiance-teeth', 'volume-pyro-radiance-rise', 'volume-pyro-radiance-fire-lock', 'volume-pyro-flow-bite', 'volume-pyro-flow-border', 'volume-pyro-flow-teeth', 'volume-pyro-flow-rise', 'volume-pyro-flow-fire-lock', 'volume-pyro-flow-luma', 'volume-pyro-flow-cool-color', 'volume-pyro-flow-hot-color', 'volume-pyro-diagnostic-paint', 'volume-pyro-carrier-view', 'volume-pyro-overdrive', 'volume-pressure-mode', 'volume-pressure-tier-overlay', 'volume-pressure-tier-lower-max', 'volume-pressure-tier-hero-min', 'volume-pressure-tier-hero-max', 'volume-canonical-spread', 'volume-canonical-centerline', 'volume-canonical-body-balance']) {
+  moveVolumePyroFreezeIntoCarrierWorkbench();
+  moveVolumePyroLegacyControlsBelowFlow();
+  for (const id of ['volume-scene', 'volume-density', 'volume-fire', 'volume-radiance', 'volume-absorption', 'volume-glow', 'volume-smoke', 'volume-curl', 'volume-microdetail', 'volume-interface-shred', 'volume-fire-licks', 'volume-projection', 'volume-speed', 'volume-steps', 'volume-adaptive-rays', 'volume-occupancy-skip', 'volume-majorant-skip', 'volume-majorant-smooth', 'volume-majorant-guard', 'volume-temporal-accum', 'volume-temporal-jitter', 'volume-history-clamp', 'volume-fire-scale', 'volume-detail-scale', 'volume-plume-height', 'volume-wind-strength', 'volume-wind-angle', 'volume-wind-height', 'volume-render-scale', 'volume-input-radius', 'volume-flow-rate', 'volume-resolution', 'volume-majorant-grid', 'volume-grid-overlay', 'volume-flow-debug', 'volume-look-freeze', 'volume-pyro-compare', 'volume-pyro-detail', 'volume-pyro-material-gain', 'volume-pyro-interface-focus', 'volume-pyro-edge-bite', 'volume-pyro-bite-border', 'volume-pyro-bite-teeth', 'volume-pyro-bite-wake', 'volume-pyro-bite-height', 'volume-pyro-bite-fire-lock', 'volume-pyro-bite-core', 'volume-pyro-bite-core-cut', 'volume-pyro-bite-rim', 'volume-pyro-bite-rim-cut', 'volume-pyro-bite-after', 'volume-pyro-bite-after-cut', 'volume-pyro-fire-mode', 'volume-pyro-flame-paint', 'volume-pyro-stock-mix', 'volume-pyro-flame-luma', 'volume-pyro-flame-core-color', 'volume-pyro-flame-edge-color', 'volume-pyro-bite-heat', 'volume-pyro-bite-chroma', 'volume-pyro-bite-luma', 'volume-pyro-bite-ember-color', 'volume-pyro-bite-hot-color', 'volume-pyro-smoke-fold', 'volume-pyro-fold-border', 'volume-pyro-fold-wake', 'volume-pyro-wake-lift', 'volume-pyro-wake-warmth', 'volume-pyro-wake-luma', 'volume-pyro-wake-shadow-color', 'volume-pyro-wake-ember-color', 'volume-pyro-radiance', 'volume-pyro-radiance-gate', 'volume-pyro-radiance-spill', 'volume-pyro-radiance-warmth', 'volume-pyro-radiance-hue', 'volume-pyro-radiance-chroma', 'volume-pyro-radiance-luma', 'volume-pyro-radiance-cool-color', 'volume-pyro-radiance-warm-color', 'volume-pyro-radiance-source', 'volume-pyro-radiance-height', 'volume-pyro-radiance-border', 'volume-pyro-radiance-teeth', 'volume-pyro-radiance-rise', 'volume-pyro-radiance-fire-lock', 'volume-pyro-flow-bite', 'volume-pyro-flow-border', 'volume-pyro-flow-teeth', 'volume-pyro-flow-rise', 'volume-pyro-flow-fire-lock', 'volume-pyro-flow-luma', 'volume-pyro-flow-radiance', 'volume-pyro-flow-spikes', 'volume-pyro-flow-cool-color', 'volume-pyro-flow-hot-color', 'volume-pyro-diagnostic-paint', 'volume-pyro-carrier-view', 'volume-pyro-overdrive', 'volume-pressure-mode', 'volume-pressure-tier-overlay', 'volume-pressure-tier-lower-max', 'volume-pressure-tier-hero-min', 'volume-pressure-tier-hero-max', 'volume-canonical-spread', 'volume-canonical-centerline', 'volume-canonical-body-balance']) {
     document.getElementById(id).addEventListener('input', syncControls);
     document.getElementById(id).addEventListener('change', syncControls);
   }

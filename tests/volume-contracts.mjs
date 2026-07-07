@@ -263,6 +263,16 @@ for (const routeName of [
 ]) {
   assert.match(index, new RegExp(routeName), `Pyro route parser accepts ${routeName}`);
 }
+const volumeSyncControlLoop = index.match(/for \(const id of \[([\s\S]*?'volume-canonical-body-balance'[\s\S]*?)\]\) \{\s*document\.getElementById\(id\)\.addEventListener\('input', syncControls\)/);
+assert.ok(volumeSyncControlLoop, 'Volume cockpit has one explicit syncControls listener list for slider/select controls');
+for (const id of ['volume-pyro-flow-radiance', 'volume-pyro-flow-spikes']) {
+  assert.match(volumeSyncControlLoop[1], new RegExp(`'${id}'`), `Flow control ${id} triggers syncControls instead of becoming a stale display-only knob`);
+}
+assert.match(index, /moveVolumePyroLegacyControlsBelowFlow/, 'Pyro cockpit explicitly demotes legacy Bite/Fold/Wake/Radiance controls below the Flow-first tuning surface');
+assert.match(index, /FLOW_FIRST_PYRO_CONTROL_IDS[\s\S]*volume-pyro-flow-bite[\s\S]*volume-pyro-flow-radiance[\s\S]*volume-pyro-flow-spikes/, 'Pyro cockpit treats Flow as the primary carrier control group');
+assert.match(index, /LEGACY_PYRO_CONTROL_IDS[\s\S]*volume-pyro-edge-bite[\s\S]*volume-pyro-smoke-fold[\s\S]*volume-pyro-radiance/, 'Pyro cockpit keeps legacy Bite/Fold/Wake/Radiance controls available as a demoted group');
+assert.match(index, /moveVolumePyroFreezeIntoCarrierWorkbench/, 'Pyro cockpit explicitly moves Look Freeze into the carrier-tuning workbench');
+assert.match(index, /PYRO_CARRIER_WORKBENCH_PINNED_IDS[\s\S]*volume-look-freeze/, 'Pyro Freeze is pinned near the carrier controls instead of stranded in the generic route controls');
 assert.match(core, /pyroFlowSignal[\s\S]*combustionFrontTopology[\s\S]*fireLick/, 'Pyro shader derives Flow carrier from combustion-front topology and live fire-lick breakup');
 assert.match(core, /pyroFlowRadianceBoost[\s\S]*pyroFlowSignal/, 'Pyro shader exposes Flow radiance as a sparse additive term derived from the live Flow carrier');
 assert.match(core, /pyroFlowSpikeSignal[\s\S]*pyroFlowSignal/, 'Pyro shader exposes Flow spikes as a separate topology/filament term derived from the live Flow carrier');
