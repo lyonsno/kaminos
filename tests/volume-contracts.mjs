@@ -2045,6 +2045,15 @@ assert.match(fullGridResidualApply, /truthHigh/, 'full-grid residual application
 assert.match(fullGridResidualApply, /completeFieldCoverage/, 'full-grid residual application manifest states complete field coverage explicitly');
 assert.match(fullGridResidualApply, /fitOnSamePairVisualDiagnostic/, 'full-grid residual application labels same-pair fitted visuals separately from held-out proof');
 assert.match(fullGridResidualApply, /failurePhase/, 'full-grid residual application writes failure-phase reports for corrupt sidecars or model failures');
+
+const fullGridChannelGraftPath = join(root, 'volume-full-grid-field-channel-graft.py');
+assert.ok(existsSync(fullGridChannelGraftPath), 'volume full-grid field channel graft diagnostic exists');
+const fullGridChannelGraft = existsSync(fullGridChannelGraftPath) ? readFileSync(fullGridChannelGraftPath, 'utf8') : '';
+assert.match(fullGridChannelGraft, /kaminos\.volume\.full-grid-field-channel-graft\.v0/, 'full-grid channel graft writes a stable diagnostic manifest schema');
+assert.match(fullGridChannelGraft, /full-grid-channel-graft-diagnostic-v0/, 'full-grid channel graft names controlled truth-channel substitution');
+assert.match(fullGridChannelGraft, /graftedFluidChannels/, 'full-grid channel graft records which fluid channels were copied from truth');
+assert.match(fullGridChannelGraft, /graftedFrontTopology/, 'full-grid channel graft records whether front topology was copied from truth');
+assert.match(fullGridChannelGraft, /controlled-truth-channel-graft-not-learned-prediction/, 'full-grid channel graft labels outputs as diagnostic substitution rather than learned prediction');
 assert.match(core, /FULL_FIELD_BUFFER_OVERRIDE_IDENTITY\s*=\s*'debug-full-field-buffer-render-override-v0'/, 'volume core names full-buffer render override separately from tile patch override');
 assert.match(core, /beginDebugFullFieldBufferOverride/, 'volume prototype can begin a complete full-field buffer render override');
 assert.match(core, /writeDebugFullFieldBufferOverrideChunk/, 'volume prototype can receive full-field override chunks without selected tile boundaries');
