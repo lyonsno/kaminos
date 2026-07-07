@@ -24,6 +24,9 @@ MLP_IDENTITY = "single-channel-mlp-residual-v0"
 REFINEMENT_IDENTITY = "scalar-head-refinement-composition-mlp-v0"
 REFINEMENT_FEATURE_IDENTITY = "scalar-head-plus-low-context-refinement-features-v0"
 LOW_NEIGHBOR_CONTEXT_IDENTITY = "low-grid-six-neighbor-context-v0"
+STANDARD_MLP_LOSS_IDENTITY = "standard-mlp-mse-v0"
+STANDARD_REFINEMENT_LOSS_IDENTITY = "standard-refinement-mse-v0"
+RESIDUAL_COMPLETION_WEIGHTING_IDENTITY = "residual-completion-source-divergence-weighting-v0"
 ASSEMBLED_APPLICATION_IDENTITY = "scalar-head-assembled-full-grid-application-v0"
 SUPPORT_GATED_APPLICATION_IDENTITY = "support-gated-scalar-head-assembled-full-grid-application-v0"
 SUPPORT_GATED_REFINED_APPLICATION_IDENTITY = "support-gated-scalar-head-refined-full-grid-application-v0"
@@ -105,6 +108,14 @@ def parse_args() -> argparse.Namespace:
         default="none",
         help="Optional single-grid local context for refinement; low-neighbor appends six-neighbor low-grid deltas without a second time grid.",
     )
+    parser.add_argument(
+        "--refinement-loss-mode",
+        choices=["standard", "residual-completion"],
+        default="standard",
+        help="Training pressure for the second-stage refinement head. residual-completion weights cells where truth materially diverges from low.",
+    )
+    parser.add_argument("--refinement-residual-weight-strength", type=float, default=3.0, help="Extra normalized loss weight for residual-completion refinement samples with strong truth-low divergence.")
+    parser.add_argument("--refinement-residual-weight-quantile", type=float, default=0.75, help="Residual magnitude quantile used as the residual-completion loss weight scale.")
     parser.add_argument("--gradient-pairs", type=int, default=30_000, help="Maximum adjacent x-neighbor pairs for gradient energy metrics.")
     parser.add_argument("--application-out-dir", help="Optional output directory for complete scalar-head assembled full-grid application sidecars.")
     parser.add_argument(
@@ -345,6 +356,48 @@ def build_refinement_features(
     ], axis=1).astype(np.float32, copy=False)
 
 
+def refinement_sample_weights(
+    low: np.ndarray,
+    truth: np.ndarray,
+    args: argparse.Namespace,
+) -> tuple[np.ndarray | None, dict[str, Any]]:
+    if args.refinement_loss_mode == "standard":
+        return None, {
+            "identity": STANDARD_REFINEMENT_LOSS_IDENTITY,
+            "refinementLossMode": args.refinement_loss_mode,
+            "description": "Unweighted second-stage correction MSE.",
+        }
+    residual_abs = np.abs(truth.astype(np.float32, copy=False) - low.astype(np.float32, copy=False))
+    quantile = min(0.999, max(0.001, float(args.refinement_residual_weight_quantile)))
+    scale = float(np.quantile(residual_abs.astype(np.float64), quantile))
+    if scale < 1.0e-8:
+        scale = float(np.max(residual_abs))
+    if scale < 1.0e-8:
+        weights = np.ones_like(residual_abs, dtype=np.float32)
+    else:
+        strength = max(0.0, float(args.refinement_residual_weight_strength))
+        opportunity = np.clip(residual_abs / np.float32(scale), 0.0, 1.0)
+        weights = (1.0 + np.float32(strength) * opportunity).astype(np.float32)
+    raw_mean = float(np.mean(weights))
+    if raw_mean > 1.0e-8:
+        weights = (weights / np.float32(raw_mean)).astype(np.float32)
+    return weights, {
+        "identity": RESIDUAL_COMPLETION_WEIGHTING_IDENTITY,
+        "refinementLossMode": args.refinement_loss_mode,
+        "sourceSignal": "abs(truthHigh - lowUpsampled)",
+        "runtimeTruthInput": False,
+        "strength": float(args.refinement_residual_weight_strength),
+        "scaleQuantile": quantile,
+        "scale": scale,
+        "meanNormalized": True,
+        "minWeight": float(np.min(weights)),
+        "maxWeight": float(np.max(weights)),
+        "meanWeight": float(np.mean(weights)),
+        "residualAbsMean": float(np.mean(residual_abs)),
+        "residualAbsP95": float(np.quantile(residual_abs.astype(np.float64), 0.95)),
+    }
+
+
 def fit_ridge_scalar(train_features: np.ndarray, train_residual: np.ndarray, test_features: np.ndarray, ridge: float) -> tuple[np.ndarray, dict[str, Any]]:
     weights = _APPLY.fit_ridge(train_features, train_residual.reshape(-1, 1), ridge)
     prediction = _APPLY.predict_residual(test_features, weights).reshape(-1)
@@ -361,6 +414,8 @@ def train_scalar_mlp(
     test_features: np.ndarray,
     args: argparse.Namespace,
     rng: np.random.Generator,
+    sample_weights: np.ndarray | None = None,
+    training_objective: dict[str, Any] | None = None,
 ) -> tuple[np.ndarray, dict[str, Any], dict[str, Any]]:
     feature_count = train_features.shape[1]
     hidden_width = max(1, int(args.hidden_width))
@@ -369,6 +424,19 @@ def train_scalar_mlp(
     if target_std < 1.0e-7:
         target_std = 1.0
     y = ((train_residual.astype(np.float32) - np.float32(target_mean)) / np.float32(target_std)).reshape(-1, 1)
+    weights = None
+    if sample_weights is not None:
+        weights = np.asarray(sample_weights, dtype=np.float32).reshape(-1)
+        if weights.shape[0] != train_features.shape[0]:
+            raise ProbeFailure("model-train", "MLP sample weight length mismatch.", {
+                "weightCount": int(weights.shape[0]),
+                "featureRows": int(train_features.shape[0]),
+            })
+        weight_mean = float(np.mean(weights))
+        if weight_mean <= 1.0e-8:
+            weights = np.ones_like(weights, dtype=np.float32)
+        else:
+            weights = (weights / np.float32(weight_mean)).astype(np.float32)
     w1 = (rng.normal(0.0, math.sqrt(2.0 / max(1, feature_count)), size=(feature_count, hidden_width))).astype(np.float32)
     b1 = np.zeros((1, hidden_width), dtype=np.float32)
     w2 = (rng.normal(0.0, math.sqrt(2.0 / max(1, hidden_width)), size=(hidden_width, 1))).astype(np.float32)
@@ -398,10 +466,20 @@ def train_scalar_mlp(
             out = h1 @ w2 + b2
             err = out - yb
             rows = max(1, xb.shape[0])
-            loss = float(np.mean(err * err))
+            if weights is None:
+                loss = float(np.mean(err * err))
+                grad_out = (2.0 / rows) * err
+            else:
+                wb = weights[batch].reshape(-1, 1)
+                weight_sum = float(np.sum(wb))
+                if weight_sum <= 1.0e-8:
+                    loss = float(np.mean(err * err))
+                    grad_out = (2.0 / rows) * err
+                else:
+                    loss = float(np.sum(wb * err * err) / weight_sum)
+                    grad_out = (2.0 / weight_sum) * wb * err
             total_loss += loss * rows
             total_rows += rows
-            grad_out = (2.0 / rows) * err
             grad_w2 = h1.T @ grad_out + np.float32(args.weight_decay) * w2
             grad_b2 = np.sum(grad_out, axis=0, keepdims=True)
             grad_h1 = grad_out @ w2.T
@@ -429,6 +507,10 @@ def train_scalar_mlp(
         "targetResidualMean": target_mean,
         "targetResidualStd": target_std,
         "finalTrainStandardizedMse": final_loss,
+        "trainingObjective": training_objective or {
+            "identity": STANDARD_MLP_LOSS_IDENTITY,
+            "refinementLossMode": "standard",
+        },
     }
     state = {
         "w1": w1,
@@ -993,6 +1075,8 @@ def write_scalar_head_application(
             "scalarHeadModelIdentity": MLP_IDENTITY,
             "refinementModelIdentity": REFINEMENT_IDENTITY if args.application_prediction_source == "refinement" else None,
             "refinementLocalContextIdentity": LOW_NEIGHBOR_CONTEXT_IDENTITY if args.application_prediction_source == "refinement" and args.refinement_local_context == "low-neighbor" else None,
+            "refinementLossMode": args.refinement_loss_mode if args.application_prediction_source == "refinement" else None,
+            "refinementLossIdentity": RESIDUAL_COMPLETION_WEIGHTING_IDENTITY if args.application_prediction_source == "refinement" and args.refinement_loss_mode == "residual-completion" else (STANDARD_REFINEMENT_LOSS_IDENTITY if args.application_prediction_source == "refinement" else None),
             "supportGate": support_gate,
             "supportGateDiagnostics": support_gate_diagnostics,
             "postprocess": {
@@ -1278,6 +1362,7 @@ def main() -> int:
                         "featureCount": int(train_refinement_features.shape[1]),
                         "zeroStdFeatureCount": int(np.count_nonzero(refinement_feature_std == 1.0)),
                     }
+                    refinement_weights, refinement_loss_report = refinement_sample_weights(train_low, train_truth, args)
                     refinement_rng = np.random.default_rng(int(args.seed) + channel_index * 130363 + 911)
                     refinement_residual, refinement_report, refinement_state = train_scalar_mlp(
                         train_refinement_features_std,
@@ -1285,6 +1370,8 @@ def main() -> int:
                         test_refinement_features_std,
                         args,
                         refinement_rng,
+                        sample_weights=refinement_weights,
+                        training_objective=refinement_loss_report,
                     )
                     refinement_head_states[channel_index] = {
                         "model": refinement_state,
@@ -1309,6 +1396,8 @@ def main() -> int:
                             "featureCount": int(train_refinement_features.shape[1]),
                             "featureStandardization": refinement_standardization,
                         },
+                        "refinementLossMode": args.refinement_loss_mode,
+                        "refinementLoss": refinement_loss_report,
                         "metrics": refinement_metrics,
                         "improvementVsLowUpsampled": improvement_vs(low_metrics, refinement_metrics),
                         "improvementVsScalarHead": improvement_vs(mlp_metrics, refinement_metrics),
@@ -1436,6 +1525,10 @@ def main() -> int:
                 "refinementHead": args.refinement_head,
                 "refinementIdentity": REFINEMENT_IDENTITY if args.refinement_head != "none" else None,
                 "refinementLocalContext": args.refinement_local_context,
+                "refinementLossMode": args.refinement_loss_mode,
+                "refinementLossIdentity": RESIDUAL_COMPLETION_WEIGHTING_IDENTITY if args.refinement_loss_mode == "residual-completion" else STANDARD_REFINEMENT_LOSS_IDENTITY,
+                "refinementResidualWeightStrength": float(args.refinement_residual_weight_strength),
+                "refinementResidualWeightQuantile": float(args.refinement_residual_weight_quantile),
                 "linearRidgeInterferenceNote": "Ridge output columns are already independent for a fixed design matrix; scalar ridge is included as a baseline, while scalar MLP heads are the nonlinear output-capacity discriminator.",
                 "hiddenWidth": int(args.hidden_width),
                 "epochs": int(args.epochs),

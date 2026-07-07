@@ -2204,6 +2204,9 @@ assert.match(fullGridPerChannelProbe, /--refinement-head/, 'full-grid per-channe
 assert.match(fullGridPerChannelProbe, /scalar-head-refinement-composition-mlp-v0/, 'full-grid per-channel probe names the refinement/composition head identity');
 assert.match(fullGridPerChannelProbe, /--refinement-local-context/, 'full-grid per-channel probe can append local low-grid context for refinement without requiring a second time grid');
 assert.match(fullGridPerChannelProbe, /low-grid-six-neighbor-context-v0/, 'full-grid per-channel probe names the single-grid local-neighbor context identity');
+assert.match(fullGridPerChannelProbe, /--refinement-loss-mode/, 'full-grid per-channel probe can switch refinement loss pressure without narrowing inputs');
+assert.match(fullGridPerChannelProbe, /residual-completion-source-divergence-weighting-v0/, 'full-grid per-channel refinement names residual-completion source-divergence weighting');
+assert.match(fullGridPerChannelProbe, /refinementLossMode/, 'full-grid per-channel reports the effective refinement loss mode for consumers');
 assert.match(fullGridPerChannelProbe, /inSupportImprovementVsScalarHead/, 'full-grid per-channel refinement reports in-support improvement versus the scalar head');
 assert.match(fullGridPerChannelProbe, /failurePhase/, 'full-grid per-channel probe writes failure-phase reports for corrupt sidecars or training failures');
 
