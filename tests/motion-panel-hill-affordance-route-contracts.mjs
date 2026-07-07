@@ -22,6 +22,13 @@ assert.match(index, /function normalizeMotionPanelHillTerrainOverlayMode/, 'brow
 assert.match(index, /function motionPanelHillRouteFixtureEndpoints/, 'browser resolves fixture-relative Hill endpoints from source world bounds');
 assert.match(index, /function motionPanelHillTerrainOverlayScalar/, 'browser computes per-sample Hill terrain overlay scalars');
 assert.match(index, /sampleMotionTerrainRouteCostBreakdown/, 'browser uses the same route-cost sampler as the planner for cost visualization');
+assert.match(index, /semantic-styles/, 'browser has a categorical semantic terrain overlay, not only scalar route cost');
+assert.match(index, /material-class/, 'browser can visualize Hill material classes');
+assert.match(index, /region-class/, 'browser can visualize Hill region classes');
+assert.match(index, /motion-affordance/, 'browser can visualize motion/asset affordance channels');
+assert.match(index, /terrain-form/, 'browser can visualize ridge/valley/flow terrain form channels');
+assert.match(index, /phase-topology/, 'browser can visualize topology/phase channels');
+assert.match(index, /motionPanelHillCategoricalColor/, 'browser maps categorical Hill channels to stable debug colors');
 assert.match(index, /terrain-affordance-route-plan/, 'Path World evidence names terrain affordance route authority');
 assert.match(index, /hill-motion-affordance-grid/, 'Path World evidence preserves Hill grid route source identity');
 assert.match(index, /pathWorldRoutePlan/, 'Path World debug exposes the route plan evidence');
@@ -31,6 +38,10 @@ assert.match(index, /terrainOverlayMode/, 'Path World debug exposes the effectiv
 assert.match(index, /id="motion-panel-hill-route-profile"/, 'Path World panel visibly names the active Hill route profile');
 assert.match(index, /id="motion-panel-hill-route-fixture"/, 'Path World panel visibly names the active Hill route fixture');
 assert.match(index, /id="motion-panel-hill-terrain-overlay"/, 'Path World panel visibly names the active Hill terrain overlay');
+assert.match(index, /id="motion-panel-hill-route-profile-control"/, 'operator can choose Hill route profile without editing URL params');
+assert.match(index, /id="motion-panel-hill-route-fixture-control"/, 'operator can choose Hill route fixture without editing URL params');
+assert.match(index, /id="motion-panel-hill-terrain-overlay-control"/, 'operator can choose Hill terrain overlay without editing URL params');
+assert.match(index, /function refreshMotionPanelHillRouteControlsFromInputs/, 'operator Hill controls recompose the mounted route from cached packet/data');
 assert.match(index, /frozen-source-snapshot/, 'browser route evidence labels static Hill packet planning as a frozen source snapshot');
 assert.match(index, /dynamicContinuity/, 'browser route evidence avoids silently claiming dynamic topology continuity');
 assert.match(index, /hillTerrainSurface/, 'Path World debug exposes the mounted Hill terrain surface evidence');

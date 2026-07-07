@@ -519,6 +519,41 @@ input[type="range"]:disabled::-webkit-slider-thumb { background: #555; cursor: n
         <div class="motion-panel-section-subtitle" id="motion-panel-path-world-mode">route -> wall trigger -> reaction cliplet</div>
         <div class="field"><span class="field-key">Source</span><span class="field-val" id="motion-panel-path-world-active-source">inactive</span></div>
         <div class="slider-row">
+          <span class="slider-label">Profile</span>
+          <select id="motion-panel-hill-route-profile-control" class="select-input">
+            <option value="cautious-lerm">Cautious lerm</option>
+            <option value="meadow">Meadow seeker</option>
+            <option value="ridge-runner">Ridge runner</option>
+          </select>
+        </div>
+        <div class="slider-row">
+          <span class="slider-label">Fixture</span>
+          <select id="motion-panel-hill-route-fixture-control" class="select-input">
+            <option value="meadow-cross">Meadow cross</option>
+            <option value="ridge-run">Ridge run</option>
+            <option value="north-meadow">North meadow</option>
+            <option value="diagonal">Diagonal bounds</option>
+          </select>
+        </div>
+        <div class="slider-row">
+          <span class="slider-label">Terrain</span>
+          <select id="motion-panel-hill-terrain-overlay-control" class="select-input">
+            <option value="semantic-styles" selected>Semantic styles</option>
+            <option value="material-class">Material class</option>
+            <option value="region-class">Region class</option>
+            <option value="motion-affordance">Motion affordance</option>
+            <option value="terrain-form">Terrain form</option>
+            <option value="phase-topology">Phase topology</option>
+            <option value="route-cost">Route cost</option>
+            <option value="route-pressure">Route pressure</option>
+            <option value="slope">Slope</option>
+            <option value="dirty-shock">Dirty/shock</option>
+            <option value="growth">Growth</option>
+            <option value="topology">Topology scalar</option>
+            <option value="composite">Composite scalar</option>
+          </select>
+        </div>
+        <div class="slider-row">
           <span class="slider-label">Route</span>
           <select id="motion-panel-route-mode" class="select-input">
             <option value="one-shot-hold" selected>One-shot hold</option>
@@ -1127,6 +1162,9 @@ let motionOutputMapState = null;
 let motionTemporalState = null;
 let motionPanelHillAffordanceRoutePlan = null;
 let motionPanelHillAffordanceSource = null;
+let motionPanelHillAffordanceLastPacket = null;
+let motionPanelHillAffordanceLastData = null;
+let motionPanelHillAffordanceLastOptions = null;
 let generatedPoseTemporalRegistryPromise = null;
 const VOLUME_PRIMITIVE_SCHEMA = 'kaminos.volume-primitives.v0';
 const LAMELLAR_PLACEHOLDER_CONTRACT = 'temporary-aesthetic-composition-primitive-not-final-lamellar-topology';
@@ -5194,6 +5232,12 @@ function motionPanelHillWorldFromGrid(source, column, row, height = 0) {
 }
 
 const MOTION_PANEL_HILL_TERRAIN_OVERLAY_MODES = new Set([
+  'semantic-styles',
+  'material-class',
+  'region-class',
+  'motion-affordance',
+  'terrain-form',
+  'phase-topology',
   'route-cost',
   'route-pressure',
   'slope',
@@ -5202,6 +5246,11 @@ const MOTION_PANEL_HILL_TERRAIN_OVERLAY_MODES = new Set([
   'topology',
   'composite',
 ]);
+
+const MOTION_PANEL_HILL_CATEGORY_PALETTE = [
+  0x3e8f58, 0xd8b65a, 0x657fc4, 0x9a6fc8, 0xd77356,
+  0x58a7a9, 0xa9c85e, 0xc0649d, 0x7f8f43, 0x4f6d98,
+];
 
 const MOTION_PANEL_HILL_ROUTE_FIXTURES = {
   diagonal: {
@@ -5234,7 +5283,7 @@ const MOTION_PANEL_HILL_ROUTE_FIXTURES = {
   },
 };
 
-function normalizeMotionPanelHillTerrainOverlayMode(value, fallback = 'route-cost') {
+function normalizeMotionPanelHillTerrainOverlayMode(value, fallback = 'semantic-styles') {
   const mode = String(value || '').trim().toLowerCase();
   return MOTION_PANEL_HILL_TERRAIN_OVERLAY_MODES.has(mode) ? mode : fallback;
 }
@@ -5275,9 +5324,98 @@ function motionPanelHillRouteFixtureEndpoints(source, fixtureInput = 'meadow-cro
   };
 }
 
+function motionPanelSetSelectValueIfPresent(id, value) {
+  const el = document.getElementById(id);
+  if (!el) return null;
+  const next = String(value || '');
+  if ([...el.options].some(option => option.value === next)) el.value = next;
+  return el.value;
+}
+
+function motionPanelHillRouteControlsFromInputs(fallback = {}) {
+  return {
+    costProfile: document.getElementById('motion-panel-hill-route-profile-control')?.value || fallback.costProfile || 'cautious-lerm',
+    routeFixture: document.getElementById('motion-panel-hill-route-fixture-control')?.value || fallback.routeFixture || fallback.fixture || 'meadow-cross',
+    terrainOverlayMode: document.getElementById('motion-panel-hill-terrain-overlay-control')?.value || fallback.terrainOverlayMode || fallback.overlayMode || 'semantic-styles',
+  };
+}
+
+function syncMotionPanelHillRouteControls(options = {}) {
+  const profileId = typeof options.costProfile === 'string' ? options.costProfile : options.costProfile?.id;
+  motionPanelSetSelectValueIfPresent('motion-panel-hill-route-profile-control', profileId || 'cautious-lerm');
+  motionPanelSetSelectValueIfPresent('motion-panel-hill-route-fixture-control', options.routeFixture || options.fixture || 'meadow-cross');
+  motionPanelSetSelectValueIfPresent('motion-panel-hill-terrain-overlay-control', options.terrainOverlayMode || options.overlayMode || 'semantic-styles');
+}
+
+async function refreshMotionPanelHillRouteControlsFromInputs() {
+  if (!motionPanelHillAffordanceLastPacket || !motionPanelHillAffordanceLastData) {
+    setMotionPanelTemporalStatus('Load a Hill terrain packet before changing Hill controls', '#f0b85a');
+    return null;
+  }
+  const controls = motionPanelHillRouteControlsFromInputs(motionPanelHillAffordanceLastOptions || {});
+  return window.kaminosPreviewHillMotionAffordanceRoutePlan(
+    motionPanelHillAffordanceLastPacket,
+    motionPanelHillAffordanceLastData,
+    {
+      ...(motionPanelHillAffordanceLastOptions || {}),
+      ...controls,
+      id: motionPanelHillAffordanceLastOptions?.id || 'ui-hill-motion-affordance-route',
+      start: null,
+      goal: null,
+    },
+  );
+}
+
 function motionPanelHillTerrainOverlayScalar(source, index, overlayMode = 'route-cost', costProfile = 'cautious-lerm') {
   const mode = normalizeMotionPanelHillTerrainOverlayMode(overlayMode);
   const scalar = name => Math.max(0, Math.min(1, motionPanelHillChannelValue(source, name, index)));
+  const raw = name => Number(motionPanelHillChannelValue(source, name, index));
+  if (mode === 'semantic-styles') {
+    return {
+      mode,
+      value: scalar('assetHint'),
+      label: 'semantic styles',
+      materialClass: Math.round(raw('materialClass')),
+      regionClass: Math.round(raw('regionClass')),
+      motionHint: scalar('motionHint'),
+      assetHint: scalar('assetHint'),
+      growth: scalar('growthPotential'),
+    };
+  }
+  if (mode === 'material-class') return { mode, value: raw('materialClass'), label: 'material class', materialClass: Math.round(raw('materialClass')) };
+  if (mode === 'region-class') return { mode, value: raw('regionClass'), label: 'region class', regionClass: Math.round(raw('regionClass')) };
+  if (mode === 'motion-affordance') {
+    return {
+      mode,
+      value: Math.max(scalar('motionHint'), scalar('assetHint')),
+      label: 'motion affordance',
+      motionHint: scalar('motionHint'),
+      assetHint: scalar('assetHint'),
+      routePressure: scalar('routePressure'),
+    };
+  }
+  if (mode === 'terrain-form') {
+    return {
+      mode,
+      value: Math.max(scalar('ridgeStrength'), scalar('valleyStrength'), scalar('flowAccumulation'), scalar('ditchPotential')),
+      label: 'terrain form',
+      ridge: scalar('ridgeStrength'),
+      valley: scalar('valleyStrength'),
+      flow: scalar('flowAccumulation'),
+      ditch: scalar('ditchPotential'),
+    };
+  }
+  if (mode === 'phase-topology') {
+    return {
+      mode,
+      value: Math.max(scalar('phaseAmount'), scalar('topologyAmount'), scalar('dirty')),
+      label: 'phase topology',
+      phase: scalar('phaseAmount'),
+      topology: scalar('topologyAmount'),
+      dirty: scalar('dirty'),
+      wetness: scalar('wetness'),
+    };
+  }
   if (mode === 'route-cost') {
     const breakdown = sampleMotionTerrainRouteCostBreakdown(source, index, costProfile);
     const value = Math.max(0, Math.min(1, Number(breakdown.total || 0) / 14));
@@ -5299,9 +5437,32 @@ function motionPanelHillTerrainOverlayScalar(source, index, overlayMode = 'route
   };
 }
 
+function motionPanelHillCategoricalColor(color, category, lightnessNudge = 0) {
+  const index = Math.abs(Math.round(Number(category) || 0)) % MOTION_PANEL_HILL_CATEGORY_PALETTE.length;
+  color.setHex(MOTION_PANEL_HILL_CATEGORY_PALETTE[index]);
+  const hsl = {};
+  color.getHSL(hsl);
+  color.setHSL(hsl.h, Math.min(0.78, hsl.s + 0.1), Math.max(0.18, Math.min(0.58, hsl.l + lightnessNudge)));
+  return color;
+}
+
 function motionPanelHillTerrainOverlayColor(color, overlay) {
   const value = Math.max(0, Math.min(1, Number(overlay?.value || 0)));
-  if (overlay.mode === 'route-cost') color.setHSL(0.36 - value * 0.34, 0.72, 0.22 + value * 0.18);
+  if (overlay.mode === 'semantic-styles') {
+    motionPanelHillCategoricalColor(color, overlay.materialClass + overlay.regionClass * 2, (Number(overlay.growth || 0) - 0.35) * 0.18);
+    const hsl = {};
+    color.getHSL(hsl);
+    color.setHSL(
+      (hsl.h + Number(overlay.motionHint || 0) * 0.06) % 1,
+      Math.min(0.84, hsl.s + Number(overlay.assetHint || 0) * 0.18),
+      Math.max(0.18, Math.min(0.62, hsl.l + Number(overlay.assetHint || 0) * 0.14)),
+    );
+  } else if (overlay.mode === 'material-class') motionPanelHillCategoricalColor(color, overlay.materialClass, 0.02);
+  else if (overlay.mode === 'region-class') motionPanelHillCategoricalColor(color, overlay.regionClass + 3, 0.04);
+  else if (overlay.mode === 'motion-affordance') color.setRGB(0.12 + Number(overlay.assetHint || 0) * 0.72, 0.28 + Number(overlay.routePressure || 0) * 0.42, 0.78 - Number(overlay.motionHint || 0) * 0.34);
+  else if (overlay.mode === 'terrain-form') color.setRGB(0.18 + Number(overlay.ridge || 0) * 0.72, 0.24 + Number(overlay.flow || 0) * 0.48, 0.24 + Number(overlay.valley || 0) * 0.7 + Number(overlay.ditch || 0) * 0.25);
+  else if (overlay.mode === 'phase-topology') color.setRGB(0.18 + Number(overlay.dirty || 0) * 0.65 + Number(overlay.phase || 0) * 0.25, 0.2 + Number(overlay.wetness || 0) * 0.45, 0.32 + Number(overlay.topology || 0) * 0.62);
+  else if (overlay.mode === 'route-cost') color.setHSL(0.36 - value * 0.34, 0.72, 0.22 + value * 0.18);
   else if (overlay.mode === 'route-pressure') color.setHSL(0.48, 0.38 + value * 0.42, 0.16 + value * 0.32);
   else if (overlay.mode === 'slope') color.setHSL(0.17 - value * 0.08, 0.34 + value * 0.42, 0.18 + value * 0.26);
   else if (overlay.mode === 'dirty-shock') color.setHSL(0.02, 0.5 + value * 0.32, 0.16 + value * 0.34);
@@ -5317,20 +5478,29 @@ function motionPanelHillTerrainOverlayColor(color, overlay) {
   return color;
 }
 
+function motionPanelHillTerrainOverlayChannels(overlayMode) {
+  if (overlayMode === 'route-cost') return ['routePressure', 'slope', 'dirty', 'shock', 'heightDelta', 'surfaceVelocity', 'topologyAmount', 'growthPotential', 'ridgeStrength', 'valleyStrength'];
+  if (overlayMode === 'semantic-styles') return ['materialClass', 'regionClass', 'motionHint', 'assetHint', 'growthPotential'];
+  if (overlayMode === 'material-class') return ['materialClass'];
+  if (overlayMode === 'region-class') return ['regionClass'];
+  if (overlayMode === 'motion-affordance') return ['motionHint', 'assetHint', 'routePressure'];
+  if (overlayMode === 'terrain-form') return ['ridgeStrength', 'valleyStrength', 'flowAccumulation', 'ditchPotential'];
+  if (overlayMode === 'phase-topology') return ['phaseAmount', 'topologyAmount', 'dirty', 'wetness'];
+  return [overlayMode];
+}
+
 function createMotionPanelHillTerrainSurface(source, routePlan = null, options = {}) {
   const frame = createMotionPanelHillTerrainFrame(source);
   const costProfile = normalizeMotionTerrainRouteCostProfile(
     options.costProfile || routePlan?.cost?.profile || 'cautious-lerm',
     options.costWeights || {},
   );
-  const overlayMode = normalizeMotionPanelHillTerrainOverlayMode(options.terrainOverlayMode || options.overlayMode || routePlan?.evidence?.terrainOverlayMode || 'route-cost');
+  const overlayMode = normalizeMotionPanelHillTerrainOverlayMode(options.terrainOverlayMode || options.overlayMode || routePlan?.evidence?.terrainOverlayMode || 'semantic-styles');
   const overlayLegend = {
     schema: 'kaminos.motion-panel-hill-terrain-overlay-legend.v0',
     mode: overlayMode,
     costProfile: costProfile.id,
-    channels: overlayMode === 'route-cost'
-      ? ['routePressure', 'slope', 'dirty', 'shock', 'heightDelta', 'surfaceVelocity', 'topologyAmount', 'growthPotential', 'ridgeStrength', 'valleyStrength']
-      : [overlayMode],
+    channels: motionPanelHillTerrainOverlayChannels(overlayMode),
   };
   const grid = source?.grid || {};
   const cols = Math.max(1, Number(grid.columns) || 1);
@@ -8700,8 +8870,17 @@ window.kaminosPreviewMotionServerResult = async function(result, options = {}) {
 window.kaminosPreviewHillMotionAffordanceRoutePlan = async function(packet, data, options = {}) {
   const source = decodeHillMotionAffordancePacket({ packet, data });
   const costProfile = normalizeMotionTerrainRouteCostProfile(options.costProfile || 'cautious-lerm', options.costWeights || {});
-  const terrainOverlayMode = normalizeMotionPanelHillTerrainOverlayMode(options.terrainOverlayMode || options.overlayMode || 'route-cost');
+  const terrainOverlayMode = normalizeMotionPanelHillTerrainOverlayMode(options.terrainOverlayMode || options.overlayMode || 'semantic-styles');
   const routeFixture = motionPanelHillRouteFixtureEndpoints(source, options.routeFixture || options.fixture || 'meadow-cross');
+  motionPanelHillAffordanceLastPacket = packet;
+  motionPanelHillAffordanceLastData = data;
+  motionPanelHillAffordanceLastOptions = {
+    ...options,
+    costProfile: costProfile.id,
+    terrainOverlayMode,
+    routeFixture: routeFixture.id,
+  };
+  syncMotionPanelHillRouteControls(motionPanelHillAffordanceLastOptions);
   const start = options.start || routeFixture.start;
   const goal = options.goal || routeFixture.goal;
   const routePlan = createMotionRoutePlanFromTerrainAffordance(source, {
@@ -8735,7 +8914,7 @@ window.kaminosPreviewHillMotionAffordanceRoutePlan = async function(packet, data
   const frame = frameMotionPanelPathWorld();
   updateMotionPanelPathWorldReadout();
   setMotionPanelTemporalStatus(`Hill route plan installed: ${routePlan.routePoints.length} points`, '#66bb6a');
-  setInfo('Hill of Hills terrain route mounted into Path World');
+  setInfo(`Hill terrain ${terrainOverlayMode} overlay mounted into Path World`);
   return {
     schema: 'kaminos.motion-panel-hill-affordance-route-preview.v0',
     ok: true,
@@ -9181,7 +9360,7 @@ async function previewHillMotionAffordanceRouteFromParams(params = new URLSearch
   return window.kaminosPreviewHillMotionAffordanceRoutePlan(packet, data, {
     id: params.get('kaminos_hill_affordance_id') || 'url-hill-motion-affordance-route',
     costProfile: params.get('kaminos_hill_route_profile') || 'cautious-lerm',
-    terrainOverlayMode: params.get('kaminos_hill_terrain_overlay') || 'route-cost',
+    terrainOverlayMode: params.get('kaminos_hill_terrain_overlay') || 'semantic-styles',
     routeFixture: params.get('kaminos_hill_route_fixture') || 'meadow-cross',
   });
 }
@@ -9217,6 +9396,9 @@ function initKaminosMotionAgencyRoute() {
   };
   document.getElementById('motion-panel-cliplet-playback')?.addEventListener('change', resetMotionClipletSelection);
   document.getElementById('motion-panel-route-mode')?.addEventListener('change', resetMotionClipletSelection);
+  for (const id of ['motion-panel-hill-route-profile-control', 'motion-panel-hill-route-fixture-control', 'motion-panel-hill-terrain-overlay-control']) {
+    document.getElementById(id)?.addEventListener('change', () => void refreshMotionPanelHillRouteControlsFromInputs());
+  }
   document.querySelectorAll('input[name="motion-panel-cliplet-interrupt"]').forEach(input => {
     input.addEventListener('change', resetMotionClipletSelection);
   });
