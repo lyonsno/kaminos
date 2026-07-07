@@ -206,6 +206,8 @@ for (const [id, copy] of [
   ['volume-pyro-flow-rise', 'Flow rise'],
   ['volume-pyro-flow-fire-lock', 'Flow fire lock'],
   ['volume-pyro-flow-luma', 'Flow luma'],
+  ['volume-pyro-flow-radiance', 'Flow radiance'],
+  ['volume-pyro-flow-spikes', 'Flow spikes'],
 ]) {
   assert.match(index, new RegExp(`id="${id}"`), `Pyro cockpit exposes topology/flow carrier control ${id}`);
   assert.match(index, new RegExp(copy, 'i'), `Pyro cockpit labels ${copy} for topology/flow carrier tuning`);
@@ -226,6 +228,8 @@ for (const param of [
   'volume_pyro_flow_rise',
   'volume_pyro_flow_fire_lock',
   'volume_pyro_flow_luma',
+  'volume_pyro_flow_radiance',
+  'volume_pyro_flow_spikes',
   'volume_pyro_flow_cool_color',
   'volume_pyro_flow_hot_color',
 ]) {
@@ -238,6 +242,8 @@ for (const field of [
   'pyroFlowRise',
   'pyroFlowFireLock',
   'pyroFlowLuma',
+  'pyroFlowRadiance',
+  'pyroFlowSpikes',
   'pyroFlowCoolColor',
   'pyroFlowHotColor',
 ]) {
@@ -250,13 +256,19 @@ for (const routeName of [
   'routePyroFlowRise',
   'routePyroFlowFireLock',
   'routePyroFlowLuma',
+  'routePyroFlowRadiance',
+  'routePyroFlowSpikes',
   'routePyroFlowCoolColor',
   'routePyroFlowHotColor',
 ]) {
   assert.match(index, new RegExp(routeName), `Pyro route parser accepts ${routeName}`);
 }
 assert.match(core, /pyroFlowSignal[\s\S]*combustionFrontTopology[\s\S]*fireLick/, 'Pyro shader derives Flow carrier from combustion-front topology and live fire-lick breakup');
+assert.match(core, /pyroFlowRadianceBoost[\s\S]*pyroFlowSignal/, 'Pyro shader exposes Flow radiance as a sparse additive term derived from the live Flow carrier');
+assert.match(core, /pyroFlowSpikeSignal[\s\S]*pyroFlowSignal/, 'Pyro shader exposes Flow spikes as a separate topology/filament term derived from the live Flow carrier');
 assert.match(core, /flowSignalMax/, 'Pyro renderer debug state exposes flow carrier max for route evidence');
+assert.match(core, /flowRadianceMax/, 'Pyro renderer debug state exposes Flow radiance gain for route evidence');
+assert.match(core, /flowSpikeMax/, 'Pyro renderer debug state exposes Flow spike gain for route evidence');
 assert.match(index, /volume_pyro_radiance_gate/, 'Pyro basin URLs preserve radiance gate');
 assert.match(index, /volume_pyro_radiance_spill/, 'Pyro basin URLs preserve radiance spill');
 assert.match(index, /volume_pyro_radiance_warmth/, 'Pyro basin URLs preserve radiance warmth');

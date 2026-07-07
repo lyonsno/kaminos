@@ -1570,6 +1570,18 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
     </div>
     <span class="slider-help">Flow luma: brightness gain for the topology carrier after color is chosen.</span>
     <div class="slider-row">
+      <span class="slider-label">Flow Radiance</span>
+      <input type="range" id="volume-pyro-flow-radiance" min="0" max="4" step="0.05" value="0">
+      <span class="slider-val" id="volume-pyro-flow-radiance-val">0.00</span>
+    </div>
+    <span class="slider-help">Flow radiance: sparse topology light; 0 is pigment only, high values make creases emit.</span>
+    <div class="slider-row">
+      <span class="slider-label">Flow Spikes</span>
+      <input type="range" id="volume-pyro-flow-spikes" min="0" max="1" step="0.05" value="0.35">
+      <span class="slider-val" id="volume-pyro-flow-spikes-val">0.35</span>
+    </div>
+    <span class="slider-help">Flow spikes: soft crease wash at 0, sharper filament teeth at 1.</span>
+    <div class="slider-row">
       <span class="slider-label">Flow cool</span>
       <input type="color" id="volume-pyro-flow-cool-color" value="#2aa7b8">
       <span class="slider-val" id="volume-pyro-flow-cool-color-val">#2aa7b8</span>
@@ -9638,6 +9650,7 @@ const PYRO_LOOK_FIELDS = [
   'pyroRadianceSource', 'pyroRadianceHeight', 'pyroRadianceBorder', 'pyroRadianceTeeth',
   'pyroRadianceRise', 'pyroRadianceFireLock', 'pyroFlowBite', 'pyroFlowBorder',
   'pyroFlowTeeth', 'pyroFlowRise', 'pyroFlowFireLock', 'pyroFlowLuma',
+  'pyroFlowRadiance', 'pyroFlowSpikes',
   'pyroFlowCoolColor', 'pyroFlowHotColor', 'pyroDiagnosticPaint', 'pyroCarrierView',
   'pyroOverdrive',
 ];
@@ -10689,6 +10702,8 @@ const VOLUME_BASIN_ROUTE_FIELDS = [
   ['pyroFlowRise', 'volume_pyro_flow_rise'],
   ['pyroFlowFireLock', 'volume_pyro_flow_fire_lock'],
   ['pyroFlowLuma', 'volume_pyro_flow_luma'],
+  ['pyroFlowRadiance', 'volume_pyro_flow_radiance'],
+  ['pyroFlowSpikes', 'volume_pyro_flow_spikes'],
   ['pyroFlowCoolColor', 'volume_pyro_flow_cool_color'],
   ['pyroFlowHotColor', 'volume_pyro_flow_hot_color'],
   ['pyroDiagnosticPaint', 'volume_pyro_diagnostic_paint'],
@@ -14965,6 +14980,8 @@ function readVolumeControls() {
     pyroFlowRise: parseFloat(document.getElementById('volume-pyro-flow-rise').value),
     pyroFlowFireLock: parseFloat(document.getElementById('volume-pyro-flow-fire-lock').value),
     pyroFlowLuma: parseFloat(document.getElementById('volume-pyro-flow-luma').value),
+    pyroFlowRadiance: parseFloat(document.getElementById('volume-pyro-flow-radiance').value),
+    pyroFlowSpikes: parseFloat(document.getElementById('volume-pyro-flow-spikes').value),
     pyroFlowCoolColor: normalizeVolumeHexColor(document.getElementById('volume-pyro-flow-cool-color').value, '#2aa7b8'),
     pyroFlowHotColor: normalizeVolumeHexColor(document.getElementById('volume-pyro-flow-hot-color').value, '#ff7a36'),
     pyroDiagnosticPaint: parseFloat(document.getElementById('volume-pyro-diagnostic-paint').value),
@@ -15101,6 +15118,8 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-pyro-flow-rise-val').textContent = c.pyroFlowRise.toFixed(2);
   document.getElementById('volume-pyro-flow-fire-lock-val').textContent = c.pyroFlowFireLock.toFixed(2);
   document.getElementById('volume-pyro-flow-luma-val').textContent = c.pyroFlowLuma.toFixed(2);
+  document.getElementById('volume-pyro-flow-radiance-val').textContent = c.pyroFlowRadiance.toFixed(2);
+  document.getElementById('volume-pyro-flow-spikes-val').textContent = c.pyroFlowSpikes.toFixed(2);
   document.getElementById('volume-pyro-flow-cool-color-val').textContent = c.pyroFlowCoolColor;
   document.getElementById('volume-pyro-flow-hot-color-val').textContent = c.pyroFlowHotColor;
   document.getElementById('volume-pyro-diagnostic-paint-val').textContent = c.pyroDiagnosticPaint.toFixed(2);
@@ -15669,6 +15688,14 @@ async function initKaminosVolumeRoute() {
   const routePyroFlowLuma = Number(params.get('volume_pyro_flow_luma'));
   if (params.has('volume_pyro_flow_luma') && Number.isFinite(routePyroFlowLuma)) {
     document.getElementById('volume-pyro-flow-luma').value = String(Math.max(0, Math.min(3, routePyroFlowLuma)));
+  }
+  const routePyroFlowRadiance = Number(params.get('volume_pyro_flow_radiance'));
+  if (params.has('volume_pyro_flow_radiance') && Number.isFinite(routePyroFlowRadiance)) {
+    document.getElementById('volume-pyro-flow-radiance').value = String(Math.max(0, Math.min(4, routePyroFlowRadiance)));
+  }
+  const routePyroFlowSpikes = Number(params.get('volume_pyro_flow_spikes'));
+  if (params.has('volume_pyro_flow_spikes') && Number.isFinite(routePyroFlowSpikes)) {
+    document.getElementById('volume-pyro-flow-spikes').value = String(Math.max(0, Math.min(1, routePyroFlowSpikes)));
   }
   const routePyroFlowCoolColor = normalizeVolumeHexColor(params.get('volume_pyro_flow_cool_color'), '');
   if (routePyroFlowCoolColor) {
