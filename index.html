@@ -2137,6 +2137,8 @@ let sceneRaycaster, scenePointerNdc;
 let postProcessing = null;
 let aoPass = null, aoIntensity = null, renderPipeline = null, scenePass = null;
 let fireReceiverLightGainNode = null;
+let fireReceiverLightFallbackEnergyNode = null;
+let fireReceiverLightDebugNode = null;
 let fireReceiverLightCenterNode = null;
 let fireReceiverLightRadiusNode = null;
 let fireReceiverLightEnergySampleCenterNode = null;
@@ -8120,6 +8122,8 @@ async function initScene() {
   aoIntensity = uniform(document.getElementById('ao-toggle').checked ? parseFloat(document.getElementById('ao-intensity').value) : 0);
   const aoOutput = mix(float(1.0), denoisePass.r, aoIntensity);
   fireReceiverLightGainNode = uniform(0);
+  fireReceiverLightFallbackEnergyNode = uniform(0);
+  fireReceiverLightDebugNode = uniform(0);
   fireReceiverLightCenterNode = uniform(new THREE.Vector2(
     VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.center[0],
     VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.center[1]
@@ -8138,7 +8142,8 @@ async function initScene() {
   const receiverVerticalFalloff = float(1.0).sub(smoothstep(float(0.80), float(0.98), receiverUv.y));
   const receiverDepthMask = float(1.0).sub(smoothstep(float(0.995), float(1.0), receiverDepth));
   const receiverNormalMask = smoothstep(float(0.05), float(0.82), abs(dot(receiverNormal, vec3(0.0, 0.0, 1.0))));
-  const receiverMask = receiverLobe.mul(receiverVerticalFalloff).mul(receiverDepthMask).mul(receiverNormalMask);
+  const receiverSoftNormalMask = mix(float(0.34), float(1.0), receiverNormalMask);
+  const receiverMask = receiverLobe.mul(receiverVerticalFalloff).mul(receiverDepthMask).mul(receiverSoftNormalMask);
   const volumeFireTexture = texture(fireReceiverVolumeEnergyTexture);
   const volumeEnergyFromSample = (sampleUv) => {
     const sampleColor = volumeFireTexture.sample(sampleUv).rgb;
@@ -8169,9 +8174,13 @@ async function initScene() {
   const foregroundReceiverVisibility = float(1.0).sub(
     foregroundVolumeOcclusion.mul(float(VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.foregroundOcclusionStrength))
   );
-  const receiverEnergy = volumeFireEnergy.mul(float(1.56));
+  const receiverEnergy = volumeFireEnergy.mul(float(1.40)).add(fireReceiverLightFallbackEnergyNode.mul(float(0.68)));
   const receiverLight = vec3(1.0, 0.36, 0.07).mul(
     receiverMask.mul(fireReceiverLightGainNode).mul(receiverEnergy).mul(foregroundReceiverVisibility)
+  ).add(
+    vec3(1.0, 0.20, 0.03).mul(
+      receiverLobe.mul(receiverVerticalFalloff).mul(receiverDepthMask).mul(fireReceiverLightDebugNode).mul(float(0.55))
+    )
   );
   const sceneOutput = scenePass.mul(vec4(vec3(aoOutput), 1));
   renderPipeline.outputNode = sceneOutput.add(vec4(receiverLight, 0));
@@ -10359,6 +10368,7 @@ let routedVolumeFireLightProxy = 1;
 let routedVolumeFireLightGain = 1;
 let routedVolumeGpuWallWashReach = 1.15;
 let routedVolumeGpuWallWashDebug = 0;
+let routedVolumeReceiverLightDebug = 0;
 const DEFAULT_BONFIRE_ABLATION_CONTROLS = {
   bonfireRecenter: 1,
   bonfireLateralDamping: 1,
@@ -15088,6 +15098,7 @@ function readVolumeControls() {
     fireLightGain: routedVolumeFireLightGain,
     gpuWallWashReach: routedVolumeGpuWallWashReach,
     gpuWallWashDebug: routedVolumeGpuWallWashDebug,
+    receiverLightDebug: routedVolumeReceiverLightDebug,
     majorantCadence: routedVolumeMajorantCadence,
     simCadence: routedVolumeSimCadence,
     pressureIterations: pressureConfig.pressureIterations,
@@ -15366,10 +15377,12 @@ const VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT = Object.freeze({
   energyAuthority: 'rendered-volume-canvas-fire-energy-v15-no-readback-v0',
   scalarDriveAuthority: 'rendered-volume-canvas-energy-route-gain-v16',
   fallbackEnergyAuthority: 'uploaded-control-fire-envelope-no-readback-v0',
+  visibleFallbackFloorAuthority: 'uploaded-control-fire-envelope-visible-floor-when-volume-texture-dark-v0',
   envelopeModel: 'uploaded-control-fire-envelope-v05-no-readback-v0',
   volumeEnergySamplingAuthority: 'three-tsl-render-pipeline-volume-texture-sample-v0',
   foregroundOcclusionAuthority: 'volume-foreground-occluded-receiver-light-v0',
-  maskAuthority: 'screen-space-depth-normal-receiver-mask-v0',
+  maskAuthority: 'receiver-surface-depth-soft-normal-mask-v1',
+  debugAuthority: 'route-toggled-receiver-surface-debug-v0',
   cadence: 'per-render-frame-gpu-tsl',
   center: [0.42, 0.62],
   radius: 0.31,
@@ -15378,7 +15391,7 @@ const VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT = Object.freeze({
   volumeEnergySamples: 9,
   foregroundOcclusionStrength: 0.86,
   gainScale: 0.34,
-  maxGain: 0.58,
+  maxGain: 1.15,
   receiverWindow: 'depth+packed-normal+screen-lobe-v0',
 });
 
@@ -15675,6 +15688,7 @@ function createVolumeBrickWallContext() {
     energyAuthority: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.energyAuthority,
     scalarDriveAuthority: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.scalarDriveAuthority,
     fallbackEnergyAuthority: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.fallbackEnergyAuthority,
+    visibleFallbackFloorAuthority: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.visibleFallbackFloorAuthority,
     foregroundOcclusionAuthority: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.foregroundOcclusionAuthority,
     maskAuthority: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.maskAuthority,
     cadence: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.cadence,
@@ -15696,6 +15710,8 @@ function createVolumeBrickWallContext() {
     gainScale: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.gainScale,
     maxGain: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.maxGain,
     receiverWindow: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.receiverWindow,
+    debugAuthority: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.debugAuthority,
+    debugMode: 0,
     cpuReadbackAuthority: false,
     threeLightSupport: 'removed',
   };
@@ -15820,6 +15836,8 @@ function createVolumeBrickWallContext() {
     const receiverEnvelopeInputs = computeReceiverEnvelope(volumeState, routeGain);
     const { fireControl, radianceControl, glowControl } = receiverEnvelopeInputs;
     const fallbackEnvelope = receiverEnvelopeInputs.rawEnvelope;
+    const fallbackEnergyFloor = clampVolumeValue(fallbackEnvelope, 0, 1.35);
+    const receiverDebugMode = clampVolumeValue(controlsState.receiverLightDebug ?? routedVolumeReceiverLightDebug ?? 0, 0, 1);
     const receiverGain = clampVolumeValue(
       routeGain * VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.gainScale,
       0,
@@ -15827,6 +15845,8 @@ function createVolumeBrickWallContext() {
     );
     const receiverEnabled = group.visible && receiverGain > 0.006 && lastFireLightProbe.sourceAuthority;
     if (fireReceiverLightGainNode) fireReceiverLightGainNode.value = receiverEnabled ? receiverGain : 0;
+    if (fireReceiverLightFallbackEnergyNode) fireReceiverLightFallbackEnergyNode.value = receiverEnabled ? fallbackEnergyFloor : 0;
+    if (fireReceiverLightDebugNode) fireReceiverLightDebugNode.value = receiverEnabled ? receiverDebugMode : 0;
     if (fireReceiverLightCenterNode) fireReceiverLightCenterNode.value.set(
       VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.center[0],
       VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.center[1]
@@ -15855,15 +15875,18 @@ function createVolumeBrickWallContext() {
       energyAuthority: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.energyAuthority,
       scalarDriveAuthority: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.scalarDriveAuthority,
       fallbackEnergyAuthority: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.fallbackEnergyAuthority,
+      visibleFallbackFloorAuthority: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.visibleFallbackFloorAuthority,
       foregroundOcclusionAuthority: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.foregroundOcclusionAuthority,
       envelopeModel: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.envelopeModel,
       maskAuthority: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.maskAuthority,
+      debugAuthority: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.debugAuthority,
       cadence: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.cadence,
       mode: lastFireLightProbe.mode,
       enabled: receiverEnabled,
       gain: receiverEnabled ? receiverGain : 0,
       rawEnvelope: receiverEnabled ? receiverGain : 0,
       fallbackEnvelope,
+      fallbackEnergyFloor: receiverEnabled ? fallbackEnergyFloor : 0,
       envelopeInputs: receiverEnvelopeInputs,
       volumeEnergy: {
         identity: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.energyAuthority,
@@ -15876,6 +15899,7 @@ function createVolumeBrickWallContext() {
         scalarDriveAuthority: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.scalarDriveAuthority,
         fallbackScalar: fallbackEnvelope,
         fallbackEnergyAuthority: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.fallbackEnergyAuthority,
+        visibleFallbackFloorAuthority: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.visibleFallbackFloorAuthority,
       },
       foregroundOcclusionStrength: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.foregroundOcclusionStrength,
       center: [...VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.center],
@@ -15885,6 +15909,7 @@ function createVolumeBrickWallContext() {
       gainScale: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.gainScale,
       maxGain: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.maxGain,
       receiverWindow: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.receiverWindow,
+      debugMode: receiverEnabled ? receiverDebugMode : 0,
       liveCpuReadback: false,
       cpuReadbackAuthority: false,
       threeLightSupport: 'removed',
@@ -16319,6 +16344,10 @@ async function initKaminosVolumeRoute() {
   const routeGpuWallWashDebug = Number(params.get('volume_gpu_wall_wash_debug'));
   if (params.has('volume_gpu_wall_wash_debug') && Number.isFinite(routeGpuWallWashDebug)) {
     routedVolumeGpuWallWashDebug = clampVolumeValue(routeGpuWallWashDebug, 0, 1);
+  }
+  const routeReceiverLightDebug = Number(params.get('volume_receiver_light_debug'));
+  if (params.has('volume_receiver_light_debug') && Number.isFinite(routeReceiverLightDebug)) {
+    routedVolumeReceiverLightDebug = clampVolumeValue(routeReceiverLightDebug, 0, 1);
   }
   const routeResolution = parseInt(params.get('volume_resolution') || '', 10);
   if ([32, 48, 64, 96, 128, 160].includes(routeResolution)) {

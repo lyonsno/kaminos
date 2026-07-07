@@ -46,6 +46,10 @@ assert.match(index, /rendered-volume-canvas-energy-route-gain-v16/, 'screen-spac
 assert.match(index, /three-tsl-render-pipeline-volume-texture-sample-v0/, 'screen-space fire receiver light must disclose the TSL volume texture sample authority');
 assert.match(index, /volumeEnergySamples/, 'screen-space fire receiver light must expose the rendered-volume fire-energy sampling model');
 assert.match(index, /fallbackEnergyAuthority/, 'screen-space fire receiver light must keep the old uploaded envelope only as an explicit fallback authority');
+assert.match(index, /fireReceiverLightFallbackEnergyNode/, 'screen-space fire receiver light must upload an explicit fallback energy floor when rendered-volume sampling goes visually dark');
+assert.match(index, /visibleFallbackFloorAuthority/, 'screen-space fire receiver light must disclose the authority for any visible fallback floor');
+assert.match(index, /volume_receiver_light_debug/, 'screen-space fire receiver light must expose a receiver-mask debug route for wall-light smoke');
+assert.match(index, /receiver-surface-depth-soft-normal-mask-v1/, 'screen-space fire receiver light must disclose its depth plus soft-normal receiver surface mask');
 assert.match(index, /volume-foreground-occluded-receiver-light-v0/, 'screen-space fire receiver light must disclose foreground-volume occlusion so wall light cannot bleach the overlaid fire body');
 assert.match(index, /foregroundOcclusionAuthority/, 'screen-space fire receiver light debug must expose foreground-volume occlusion authority');
 assert.doesNotMatch(index, /const glowEnergy = receiverEnvelopeInputs\.rawEnvelope;[\s\S]{0,500}fireReceiverLightGainNode\)\s*fireReceiverLightGainNode\.value = receiverEnabled \? receiverGain : 0;/, 'rendered-volume receiver light must not upload the old control-envelope scalar as the live light gain');
