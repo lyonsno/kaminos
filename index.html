@@ -2137,7 +2137,6 @@ let sceneRaycaster, scenePointerNdc;
 let postProcessing = null;
 let aoPass = null, aoIntensity = null, renderPipeline = null, scenePass = null;
 let fireReceiverLightGainNode = null;
-let fireReceiverLightFallbackEnergyNode = null;
 let fireReceiverLightDebugNode = null;
 let fireReceiverLightCenterNode = null;
 let fireReceiverLightRadiusNode = null;
@@ -8122,7 +8121,6 @@ async function initScene() {
   aoIntensity = uniform(document.getElementById('ao-toggle').checked ? parseFloat(document.getElementById('ao-intensity').value) : 0);
   const aoOutput = mix(float(1.0), denoisePass.r, aoIntensity);
   fireReceiverLightGainNode = uniform(0);
-  fireReceiverLightFallbackEnergyNode = uniform(0);
   fireReceiverLightDebugNode = uniform(0);
   fireReceiverLightCenterNode = uniform(new THREE.Vector2(
     VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.center[0],
@@ -8174,11 +8172,7 @@ async function initScene() {
   const foregroundReceiverVisibility = float(1.0).sub(
     foregroundVolumeOcclusion.mul(float(VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.foregroundOcclusionStrength))
   );
-  const renderedFireDominance = smoothstep(float(0.035), float(0.24), volumeFireEnergy);
-  const fallbackGuardEnergy = fireReceiverLightFallbackEnergyNode
-    .mul(float(0.18))
-    .mul(float(1.0).sub(renderedFireDominance));
-  const receiverEnergy = volumeFireEnergy.mul(float(1.68)).add(fallbackGuardEnergy);
+  const receiverEnergy = volumeFireEnergy.mul(float(2.80));
   const receiverLight = vec3(1.0, 0.36, 0.07).mul(
     receiverMask.mul(fireReceiverLightGainNode).mul(receiverEnergy).mul(foregroundReceiverVisibility)
   ).add(
@@ -15380,9 +15374,8 @@ const VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT = Object.freeze({
   normalAuthority: 'three-tsl-prepass-packed-normal-v0',
   energyAuthority: 'rendered-volume-canvas-fire-energy-v15-no-readback-v0',
   scalarDriveAuthority: 'rendered-volume-canvas-energy-route-gain-v16',
-  fallbackEnergyAuthority: 'uploaded-control-fire-envelope-no-readback-v0',
-  visibleFallbackFloorAuthority: 'uploaded-control-fire-envelope-visible-floor-when-volume-texture-dark-v0',
-  fallbackFloorRole: 'guard-not-cadence-author',
+  couplingModel: 'rendered-fire-energy-only-no-envelope-fallback-v0',
+  fallbackEnergyRole: 'debug-metadata-only-not-radiance',
   envelopeModel: 'uploaded-control-fire-envelope-v05-no-readback-v0',
   volumeEnergySamplingAuthority: 'three-tsl-render-pipeline-volume-texture-sample-v0',
   foregroundOcclusionAuthority: 'volume-foreground-occluded-receiver-light-v0',
@@ -15692,8 +15685,8 @@ function createVolumeBrickWallContext() {
     normalAuthority: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.normalAuthority,
     energyAuthority: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.energyAuthority,
     scalarDriveAuthority: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.scalarDriveAuthority,
-    fallbackEnergyAuthority: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.fallbackEnergyAuthority,
-    visibleFallbackFloorAuthority: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.visibleFallbackFloorAuthority,
+    couplingModel: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.couplingModel,
+    fallbackEnergyRole: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.fallbackEnergyRole,
     foregroundOcclusionAuthority: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.foregroundOcclusionAuthority,
     maskAuthority: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.maskAuthority,
     cadence: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.cadence,
@@ -15708,14 +15701,15 @@ function createVolumeBrickWallContext() {
       sampleCount: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.volumeEnergySamples,
       cpuReadbackAuthority: false,
       scalarDriveAuthority: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.scalarDriveAuthority,
-      fallbackFloorRole: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.fallbackFloorRole,
+      couplingModel: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.couplingModel,
+      fallbackEnergyRole: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.fallbackEnergyRole,
       renderedFireEnergy: {
         authority: 'gpu-tsl-volume-texture-node-not-cpu-readable-v0',
         cpuVisibleScalar: null,
       },
-      fallbackGuardEnergy: 0,
       receiverLightEnergy: {
         authority: 'gpu-tsl-receiver-energy-node-not-cpu-readable-v0',
+        model: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.couplingModel,
         cpuVisibleScalar: null,
       },
     },
@@ -15851,7 +15845,6 @@ function createVolumeBrickWallContext() {
     const receiverEnvelopeInputs = computeReceiverEnvelope(volumeState, routeGain);
     const { fireControl, radianceControl, glowControl } = receiverEnvelopeInputs;
     const fallbackEnvelope = receiverEnvelopeInputs.rawEnvelope;
-    const fallbackEnergyFloor = clampVolumeValue(fallbackEnvelope, 0, 1.35);
     const receiverDebugMode = clampVolumeValue(controlsState.receiverLightDebug ?? routedVolumeReceiverLightDebug ?? 0, 0, 1);
     const receiverGain = clampVolumeValue(
       routeGain * VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.gainScale,
@@ -15859,7 +15852,6 @@ function createVolumeBrickWallContext() {
       VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.maxGain
     );
     const receiverEnabled = group.visible && receiverGain > 0.006 && lastFireLightProbe.sourceAuthority;
-    const fallbackGuardEnergy = receiverEnabled ? fallbackEnergyFloor * 0.18 : 0;
     const renderedFireEnergy = {
       authority: 'gpu-tsl-volume-texture-node-not-cpu-readable-v0',
       primaryCadenceDriver: true,
@@ -15867,12 +15859,10 @@ function createVolumeBrickWallContext() {
     };
     const receiverLightEnergy = {
       authority: 'gpu-tsl-receiver-energy-node-not-cpu-readable-v0',
-      model: 'rendered-fire-energy-primary-fallback-floor-guard-v0',
+      model: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.couplingModel,
       cpuVisibleScalar: null,
-      fallbackGuardEnergy,
     };
     if (fireReceiverLightGainNode) fireReceiverLightGainNode.value = receiverEnabled ? receiverGain : 0;
-    if (fireReceiverLightFallbackEnergyNode) fireReceiverLightFallbackEnergyNode.value = receiverEnabled ? fallbackEnergyFloor : 0;
     if (fireReceiverLightDebugNode) fireReceiverLightDebugNode.value = receiverEnabled ? receiverDebugMode : 0;
     if (fireReceiverLightCenterNode) fireReceiverLightCenterNode.value.set(
       VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.center[0],
@@ -15901,9 +15891,8 @@ function createVolumeBrickWallContext() {
       normalAuthority: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.normalAuthority,
       energyAuthority: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.energyAuthority,
       scalarDriveAuthority: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.scalarDriveAuthority,
-      fallbackEnergyAuthority: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.fallbackEnergyAuthority,
-      visibleFallbackFloorAuthority: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.visibleFallbackFloorAuthority,
-      fallbackFloorRole: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.fallbackFloorRole,
+      couplingModel: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.couplingModel,
+      fallbackEnergyRole: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.fallbackEnergyRole,
       foregroundOcclusionAuthority: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.foregroundOcclusionAuthority,
       envelopeModel: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.envelopeModel,
       maskAuthority: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.maskAuthority,
@@ -15914,11 +15903,8 @@ function createVolumeBrickWallContext() {
       gain: receiverEnabled ? receiverGain : 0,
       rawEnvelope: receiverEnabled ? receiverGain : 0,
       fallbackEnvelope,
-      fallbackEnergyFloor: receiverEnabled ? fallbackEnergyFloor : 0,
       renderedFireEnergy,
-      fallbackGuardEnergy,
       receiverLightEnergy,
-      couplingModel: receiverLightEnergy.model,
       envelopeInputs: receiverEnvelopeInputs,
       volumeEnergy: {
         identity: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.energyAuthority,
@@ -15929,12 +15915,10 @@ function createVolumeBrickWallContext() {
         sampleCount: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.volumeEnergySamples,
         cpuReadbackAuthority: false,
         scalarDriveAuthority: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.scalarDriveAuthority,
-        fallbackScalar: fallbackEnvelope,
-        fallbackEnergyAuthority: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.fallbackEnergyAuthority,
-        visibleFallbackFloorAuthority: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.visibleFallbackFloorAuthority,
-        fallbackFloorRole: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.fallbackFloorRole,
+        fallbackEnvelope,
+        fallbackEnergyRole: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.fallbackEnergyRole,
+        couplingModel: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.couplingModel,
         renderedFireEnergy,
-        fallbackGuardEnergy,
         receiverLightEnergy,
       },
       foregroundOcclusionStrength: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.foregroundOcclusionStrength,
