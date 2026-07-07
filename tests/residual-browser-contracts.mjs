@@ -142,6 +142,11 @@ assert.match(
 );
 assert.match(
   core,
+  /sourceUv\s*=\s*vec2<f32>\(\s*in\.uv\.x\s*,\s*1\.0\s*-\s*in\.uv\.y\s*\)/,
+  'browser residual postprocess must flip source texture Y so residual-on preserves the live canvas orientation',
+);
+assert.match(
+  core,
   /browserResidualInputChannels/,
   'browser residual runtime must preserve the model input channel count for RGB-only and feature-aware residuals',
 );

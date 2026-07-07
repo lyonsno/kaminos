@@ -4707,7 +4707,8 @@ fn debugFeatureView(feature: vec4<f32>) -> vec3<f32> {
 fn fs(in: VertexOut) -> @location(0) vec4<f32> {
   let dims = vec2<f32>(textureDimensions(sourceFrame));
   let texel = 1.0 / max(dims, vec2<f32>(1.0));
-  let uv = clamp(in.uv, vec2<f32>(0.0), vec2<f32>(1.0));
+  let sourceUv = vec2<f32>(in.uv.x, 1.0 - in.uv.y);
+  let uv = clamp(sourceUv, vec2<f32>(0.0), vec2<f32>(1.0));
   let center = textureSampleLevel(sourceFrame, sourceSampler, uv, 0.0).rgb;
   let feature = textureSampleLevel(sourceFeature, sourceSampler, uv, 0.0);
   let inputChannels = browserResidualInputChannels();
