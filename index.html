@@ -16098,8 +16098,6 @@ function initOrbShellRoute() {
       if (orbShellCompositionWitness.debugState?.().active) {
         if (readOrbShellLawControls().viewMode === 'curve-on-sphere') {
           orbShellCompositionWitness.enableMacroMorphologyInventoryWitness();
-        } else {
-          frameOrbShellCompositionCamera();
         }
       }
     }
@@ -16282,7 +16280,6 @@ function initOrbShellCompositionRoute() {
     const active = !orbShellCompositionWitness.debugState().active;
     orbShellCompositionWitness.setVariation(readOrbShellCompositionControls());
     orbShellCompositionWitness.setActive(active);
-    if (active) frameOrbShellCompositionCamera();
     updateOrbShellCompositionReadout();
     setInfo(active ? orbShellCompositionStatusText(orbShellCompositionWitness.debugState()) : 'Orb Shell Macro Grounding disabled');
   });
@@ -16361,7 +16358,6 @@ function initOrbShellCompositionRoute() {
         const witnessState = orbShellCompositionWitness.enableMacroMorphologyInventoryWitness();
         setInfo(`Orb Shell Law View — curve on sphere: ${witnessState.visibleCurveCount} early sphere curves visible`);
       } else {
-        frameOrbShellCompositionCamera();
         setInfo(orbShellCompositionStatusText(orbShellCompositionWitness.debugState()));
       }
     }

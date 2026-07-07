@@ -52,3 +52,56 @@ assert.ok(
   lowerRecord.pathologyClasses.includes('curvature-width-cap-applied'),
   'morphology inventory reports the applied cap as active diagnostic pressure',
 );
+
+const capOffFixture = createTargetOrbShellCompositionFixture({
+  variantId: 'wide-cup',
+  variationSeed: 6,
+  variationLeafCount: 11,
+  lawControls: {
+    curvatureWidthCap: { enabled: true, strength: 0 },
+    apertureOrbitCapture: { enabled: true, strength: 1 },
+  },
+});
+const capFullFixture = createTargetOrbShellCompositionFixture({
+  variantId: 'wide-cup',
+  variationSeed: 6,
+  variationLeafCount: 11,
+  lawControls: {
+    curvatureWidthCap: { enabled: true, strength: 1 },
+    apertureOrbitCapture: { enabled: true, strength: 1 },
+  },
+});
+
+function pointDistance(a, b) {
+  return Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+}
+
+function maxSideWallDelta(leftFixture, rightFixture, parentAssemblage) {
+  const leftWalls = leftFixture.liveMacroSideWallPlan.sideWalls.filter(wall => wall.parentAssemblage === parentAssemblage);
+  const rightWalls = rightFixture.liveMacroSideWallPlan.sideWalls.filter(wall => wall.parentAssemblage === parentAssemblage);
+  assert.equal(leftWalls.length, rightWalls.length, 'fixtures expose comparable sidewall counts');
+  let maxDelta = 0;
+  for (let wallIndex = 0; wallIndex < leftWalls.length; wallIndex += 1) {
+    assert.equal(leftWalls[wallIndex].outerSurfaceEdge.length, rightWalls[wallIndex].outerSurfaceEdge.length, 'sidewall samples remain comparable across cap strengths');
+    for (let sampleIndex = 0; sampleIndex < leftWalls[wallIndex].outerSurfaceEdge.length; sampleIndex += 1) {
+      maxDelta = Math.max(maxDelta, pointDistance(
+        leftWalls[wallIndex].outerSurfaceEdge[sampleIndex].point,
+        rightWalls[wallIndex].outerSurfaceEdge[sampleIndex].point,
+      ));
+    }
+  }
+  return maxDelta;
+}
+
+const capOffLower = capOffFixture.macroAssemblages.find(assemblage => assemblage.id === 'lower-socket-keel');
+const capFullLower = capFullFixture.macroAssemblages.find(assemblage => assemblage.id === 'lower-socket-keel');
+assert.equal(capOffLower.macroPromotedBody.curvatureWidthCapLaw.controlStrength, 0, 'cap-off fixture preserves zero control strength');
+assert.equal(capFullLower.macroPromotedBody.curvatureWidthCapLaw.controlStrength, 1, 'cap-full fixture preserves full control strength');
+assert.ok(
+  capFullLower.macroPromotedBody.curvatureWidthCapLaw.widthScale < capOffLower.macroPromotedBody.curvatureWidthCapLaw.widthScale,
+  'cap strength changes the effective law width scale',
+);
+assert.ok(
+  maxSideWallDelta(capOffFixture, capFullFixture, 'lower-socket-keel') > 0.01,
+  'cap strength must change generated live sidewall geometry, not only law metadata',
+);

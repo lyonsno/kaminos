@@ -1768,6 +1768,22 @@ function promotedBodySideScale(promoted, side, cutSample) {
     : cutSample?.rightScale ?? 1;
 }
 
+function curvatureWidthCapEffectAt(assemblage) {
+  const law = assemblage.curvatureWidthCapLaw || assemblage.macroPromotedBody?.curvatureWidthCapLaw;
+  if (!law?.capApplied) {
+    return {
+      widthScale: 1,
+      lawId: law?.id || null,
+      capApplied: false,
+    };
+  }
+  return {
+    widthScale: clamp(law.widthScale ?? 1, 0, 1),
+    lawId: law.id,
+    capApplied: true,
+  };
+}
+
 function continueTerminalPoint(prev2, prev1) {
   const tangent = normalizePoint(subtractPoints(prev1, prev2));
   const length = pointDistance(prev1, prev2);
@@ -2130,7 +2146,8 @@ function macroPromotedBodyEdgeSamples(assemblage, targetEdge, rowCount = 72) {
     const lowerSocket = lowerSocketAnatomyEffectAt(assemblage, t);
     const sharedSeam = sharedSocketSeamEffectAt(assemblage, t);
     const roleEffect = lowerSocketFamilyRoleEffectAt(assemblage, t);
-    const widthScale = interlock.widthScale * lowerSocket.widthScale * sharedSeam.widthScale * roleEffect.widthScale;
+    const curvatureCap = curvatureWidthCapEffectAt(assemblage);
+    const widthScale = interlock.widthScale * lowerSocket.widthScale * sharedSeam.widthScale * roleEffect.widthScale * curvatureCap.widthScale;
     const leftWidth = body.widthProfile.mid * scale * terminalScale * promotedBodySideScale(promoted, 'left', nearestCut) * widthScale;
     const rightWidth = body.widthProfile.mid * scale * terminalScale * promotedBodySideScale(promoted, 'right', nearestCut) * widthScale;
     const sideWidth = sideSign < 0 ? leftWidth : rightWidth;
@@ -2150,6 +2167,8 @@ function macroPromotedBodyEdgeSamples(assemblage, targetEdge, rowCount = 72) {
       sideAxis,
       tangent,
       thickness: pointDistance(outer, inner),
+      curvatureWidthCapLawId: curvatureCap.lawId,
+      curvatureWidthCapApplied: curvatureCap.capApplied,
     };
   });
   const pathLawSamples = applyLowerSocketRenderedEdgePathLaw(assemblage, samples);
@@ -2376,7 +2395,8 @@ function macroFamilySurfaceSample(assemblage, t, normalizedV, liftBias = 0.018) 
   const lowerSocket = lowerSocketAnatomyEffectAt(assemblage, t);
   const sharedSeam = sharedSocketSeamEffectAt(assemblage, t);
   const roleEffect = lowerSocketFamilyRoleEffectAt(assemblage, t);
-  const widthScale = interlock.widthScale * lowerSocket.widthScale * sharedSeam.widthScale * roleEffect.widthScale;
+  const curvatureCap = curvatureWidthCapEffectAt(assemblage);
+  const widthScale = interlock.widthScale * lowerSocket.widthScale * sharedSeam.widthScale * roleEffect.widthScale * curvatureCap.widthScale;
   const leftWidth = body.widthProfile.mid * scale * terminalScale * promotedBodySideScale(promoted, 'left', nearestCut) * widthScale;
   const rightWidth = body.widthProfile.mid * scale * terminalScale * promotedBodySideScale(promoted, 'right', nearestCut) * widthScale;
   const sideWidth = normalizedV < 0 ? leftWidth : rightWidth;
@@ -6079,14 +6099,6 @@ export function applyControlledOrbShellVariation(composition, descriptor) {
     assemblage.spine.control.surfaceRoll = field.surfaceRoll;
     assemblage.spine.control.phaseLag = field.phaseLag;
   }
-  if (next.lawControls.curvatureWidthCap.enabled) {
-    attachCurvatureWidthCapLaws(next, next.lawControls.curvatureWidthCap);
-  } else {
-    for (const assemblage of next.macroAssemblages || []) {
-      assemblage.curvatureWidthCapLaw = null;
-      if (assemblage.macroPromotedBody) assemblage.macroPromotedBody.curvatureWidthCapLaw = null;
-    }
-  }
   next.apertureOrbitCaptureLaw = next.lawControls.apertureOrbitCapture.enabled
     ? createApertureOrbitCaptureLaw(next, next.lawControls.apertureOrbitCapture)
     : null;
@@ -6130,6 +6142,14 @@ export function applyControlledOrbShellVariation(composition, descriptor) {
   for (const assemblage of next.macroAssemblages) {
     assemblage.expandedRegionProxy = next.expandedMacroRegionProxyPlan.expandedRegions.find(region => region.parentAssemblage === assemblage.id);
     assemblage.cleanProxySurfacePolicy = next.cleanProxySurfacePolicy;
+  }
+  if (next.lawControls.curvatureWidthCap.enabled) {
+    attachCurvatureWidthCapLaws(next, next.lawControls.curvatureWidthCap);
+  } else {
+    for (const assemblage of next.macroAssemblages || []) {
+      assemblage.curvatureWidthCapLaw = null;
+      if (assemblage.macroPromotedBody) assemblage.macroPromotedBody.curvatureWidthCapLaw = null;
+    }
   }
   next.macroContactMap = createMacroContactMap(next);
   next.liveMacroSideWallPlan = createLiveMacroSideWallPlan(next);
@@ -6586,7 +6606,8 @@ function makeMacroPromotedBodyGeometry(THREE, assemblage) {
     const lowerSocket = lowerSocketAnatomyEffectAt(assemblage, t);
     const sharedSeam = sharedSocketSeamEffectAt(assemblage, t);
     const roleEffect = lowerSocketFamilyRoleEffectAt(assemblage, t);
-    const widthScale = interlock.widthScale * lowerSocket.widthScale * sharedSeam.widthScale * roleEffect.widthScale;
+    const curvatureCap = curvatureWidthCapEffectAt(assemblage);
+    const widthScale = interlock.widthScale * lowerSocket.widthScale * sharedSeam.widthScale * roleEffect.widthScale * curvatureCap.widthScale;
     const leftWidth = body.widthProfile.mid * scale * terminalScale * promotedBodySideScale(promoted, 'left', nearestCut) * widthScale;
     const rightWidth = body.widthProfile.mid * scale * terminalScale * promotedBodySideScale(promoted, 'right', nearestCut) * widthScale;
     const lift = body.thicknessProfile.mid * (0.85 + 0.75 * profile) + interlock.normalLiftDelta + lowerSocket.normalLiftDelta + sharedSeam.normalLiftDelta + roleEffect.normalLiftDelta;

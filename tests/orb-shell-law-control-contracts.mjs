@@ -19,6 +19,20 @@ assert.match(index, /orb_shell_law_view/, 'law view mode must be URL-addressable
 assert.match(index, /orb_shell_law_curvature_width_cap/, 'curvature-width-cap toggle must be URL-addressable');
 assert.match(index, /orb_shell_law_aperture_orbit_capture/, 'aperture-orbit-capture toggle must be URL-addressable');
 assert.match(index, /function hydrateOrbShellLawControlsFromParams[\s\S]*updateOrbShellLawReadout\(\)/, 'route hydration must immediately refresh the visible law-control readout');
+const syncControlsBlock = index.match(/const syncControls = \(\) => \{[\s\S]*?\n  \};/)?.[0] || '';
+assert.ok(syncControlsBlock, 'Orb Shell UI must expose the live syncControls block');
+assert.doesNotMatch(syncControlsBlock, /frameOrbShellCompositionCamera\(/, 'live operator control changes must not reset the composition camera');
+assert.match(index, /orb-shell-composition-frame'\)\.addEventListener\('click', frameOrbShellCompositionCamera\)/, 'explicit composition Frame button remains the only default camera-frame operator action');
+assert.doesNotMatch(
+  index,
+  /orbShellCompositionWitness\.setActive\(active\);[\s\S]{0,120}if \(active\) frameOrbShellCompositionCamera\(\)/,
+  'composition enable/disable must not reset the operator camera',
+);
+assert.doesNotMatch(
+  index,
+  /else \{\s*frameOrbShellCompositionCamera\(\);\s*setInfo\(orbShellCompositionStatusText\(orbShellCompositionWitness\.debugState\(\)\)\);\s*\}/,
+  'default composition route must not frame the operator camera unless a witness route or Frame button asks for it',
+);
 
 assert.match(core, /OrbShellLawControls/, 'composition core must name the law-control schema');
 assert.match(core, /normalizeOrbShellLawControls/, 'composition core must normalize law controls in one place');
