@@ -61,6 +61,11 @@ const hostSurfaceWitnessSource = read(hostSurfaceWitnessPath);
 assert.ok(existsSync(hostCorePath), 'Kaminos must ship the Glove Well host adapter core in this branch');
 assert.match(indexSource, /id="glove-well-host-operator-panel"/, 'Kaminos app shell must expose the Glove Well host operator panel');
 assert.match(runtimeSource, /function gloveWellHostRouteFromParams/, 'Kaminos runtime must parse Glove Well host route params');
+assert.match(
+  runtimeSource,
+  /function activateKaminosGloveWellHostRouteFromParams/,
+  'Glove Well route activation must be re-runnable separately from one-time event listener wiring',
+);
 assert.match(runtimeSource, /window\.kaminosGloveWellHostDebugState/, 'Kaminos runtime must expose Glove Well host debug state for witnesses');
 assert.match(runtimeSource, /window\.kaminosStartGloveWellHostLive/, 'Kaminos runtime must expose live Glove Well polling control');
 assert.match(indexSource, /kaminos_glove_well_host/, 'Kaminos app shell must recognize native Glove Well host-only routes');
@@ -76,6 +81,11 @@ assert.match(
   sceneWitnessSource,
   /kaminosGloveWellHostDebugState/,
   'scene witness must read native Glove Well host state, not only the Forge Host route card',
+);
+assert.doesNotMatch(
+  sceneWitnessSource,
+  /effectiveUrl\s*=\s*await evaluate\(ws,\s*'location\.href'\)/,
+  'scene witness must not block on page Runtime.evaluate before it records route evidence',
 );
 assert.match(
   hostSurfaceWitnessSource,

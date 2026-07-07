@@ -2318,6 +2318,7 @@ let gloveWellHostState = {
   error: null,
 };
 let gloveWellHostRouteInitialized = false;
+let gloveWellHostRouteActivationKey = null;
 let volumePrimitives = [];
 let sceneObjects = [];
 let sceneImportStatus = null;
@@ -10090,10 +10091,40 @@ function initKaminosFingerJuiceHostRoute() {
   }
 }
 
+function gloveWellHostRouteActivationKeyFromRoute(route) {
+  return JSON.stringify({
+    url: route?.url || null,
+    mode: route?.mode || null,
+    live: route?.live === true,
+    pollMs: route?.pollMs || null,
+  });
+}
+
+function activateKaminosGloveWellHostRouteFromParams(params = new URLSearchParams(window.location.search)) {
+  if (params.get('kaminos_glove_well_host') !== '1') return false;
+  const route = gloveWellHostRouteFromParams(params);
+  const activationKey = gloveWellHostRouteActivationKeyFromRoute(route);
+  setActiveTab('glove-well-host');
+  if (activationKey === gloveWellHostRouteActivationKey && gloveWellHostState.status !== 'idle') {
+    drawGloveWellHostPreview();
+    return true;
+  }
+  gloveWellHostRouteActivationKey = activationKey;
+  if (route.live) {
+    startGloveWellHostLive(route);
+  } else {
+    loadGloveWellHostPacket(route).catch(error => console.error('Glove Well host route load failed:', error));
+  }
+  return true;
+}
+
 function initKaminosGloveWellHostRoute() {
-  if (gloveWellHostRouteInitialized) return;
-  gloveWellHostRouteInitialized = true;
   const params = new URLSearchParams(window.location.search);
+  if (gloveWellHostRouteInitialized) {
+    activateKaminosGloveWellHostRouteFromParams(params);
+    return;
+  }
+  gloveWellHostRouteInitialized = true;
   document.getElementById('glove-well-host-load').addEventListener('click', () => {
     loadGloveWellHostPacket(gloveWellHostRouteFromParams()).catch(error => console.error('Glove Well host load failed:', error));
   });
@@ -10111,15 +10142,7 @@ function initKaminosGloveWellHostRoute() {
   window.addEventListener('resize', drawGloveWellHostPreview);
   updateGloveWellHostReadout();
   drawGloveWellHostPreview();
-  if (params.get('kaminos_glove_well_host') === '1') {
-    const route = gloveWellHostRouteFromParams(params);
-    setActiveTab('glove-well-host');
-    if (route.live) {
-      startGloveWellHostLive(route);
-    } else {
-      loadGloveWellHostPacket(route).catch(error => console.error('Glove Well host route load failed:', error));
-    }
-  }
+  activateKaminosGloveWellHostRouteFromParams(params);
 }
 
 function worldChamberReceiptSourceLabel(receiptSource) {

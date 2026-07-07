@@ -48,7 +48,8 @@ assert.match(witness, /fixture offer claimed live display authority/, 'Forge Hos
 assert.match(witness, /live registry scene used fallback authority/, 'Forge Host live witness fails loud on fallback/live false authority');
 assert.match(witness, /smoke chamber routed fallback as live/, 'Forge Host chamber witness fails loud on fallback/live false authority');
 assert.match(witness, /Forge Host route-open overclaimed live display state/, 'Forge Host route-open witness fails loud when a waiting gap route claims live display');
-assert.match(witness, /did not keep recursive Forge Host target as a downgraded route card/, 'Forge Host witness rejects recursive inline chamber embeds');
+assert.match(indexHtml, /recursive_forge_host_route/, 'Forge Host inline host resolver rejects recursive chamber embeds');
+assert.match(indexHtml, /data-forge-chamber-host-recursive/, 'Forge Host route cards expose recursive downgrade state to witnesses');
 assert.match(witness, /requestedUrl:\s*url/, 'witness report records requested URL');
 assert.match(witness, /effectiveUrl:/, 'witness report records effective browser URL');
 assert.match(witness, /effectiveServerRoots:/, 'witness report records effective server root identity');
