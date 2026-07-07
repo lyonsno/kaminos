@@ -416,7 +416,8 @@ function pyroCarrierViewModeValue(value) {
   if (mode === 'fold') return 3;
   if (mode === 'wake') return 4;
   if (mode === 'radiance') return 5;
-  if (mode === 'all') return 6;
+  if (mode === 'flow') return 6;
+  if (mode === 'all') return 7;
   return 0;
 }
 
@@ -680,6 +681,8 @@ struct Uniforms {
   pyro_luma_controls2: vec4<f32>,
   pyro_bite_stack_controls: vec4<f32>,
   pyro_bite_stack_controls2: vec4<f32>,
+  pyro_flow_controls: vec4<f32>,
+  pyro_flow_controls2: vec4<f32>,
   pyro_palette_flame: vec4<f32>,
   pyro_palette_flame_edge: vec4<f32>,
   pyro_palette_bite: vec4<f32>,
@@ -688,6 +691,8 @@ struct Uniforms {
   pyro_palette_wake_ember: vec4<f32>,
   pyro_palette_radiance: vec4<f32>,
   pyro_palette_radiance_warm: vec4<f32>,
+  pyro_palette_flow: vec4<f32>,
+  pyro_palette_flow_hot: vec4<f32>,
   previousViewProj: mat4x4<f32>,
 };
 
@@ -2183,8 +2188,50 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   var bonfireDetailBreakup = breakup;
   let smokeSourceFalloff = 1.0 / max(0.0048, scaledSmokeSourceRadius * scaledSmokeSourceRadius);
   let fireSourceFalloff = 1.0 / max(0.0036, scaledSourceRadius * scaledSourceRadius);
-  let columnSource = exp(-sourceRadial * sourceRadial * smokeSourceFalloff) * sourceBand * breakup * inputFlow;
+  let tallPlumeSmokeDebandAngle = atan2(sourceCenter.z, sourceCenter.x);
+  let tallPlumeSmokeDebandWarp = sourceCenter.xz
+    + vec2<f32>(
+      sin(sourceCenter.z * 8.7 + sourceCenter.y * 4.9 + time * 0.23),
+      cos(sourceCenter.x * 7.9 - sourceCenter.y * 4.3 - time * 0.19)
+    ) * scaledSmokeSourceRadius * 0.28;
+  let tallPlumeSmokeDebandBasis = clamp(
+    0.78
+      + 0.11 * sin(length(tallPlumeSmokeDebandWarp) * 22.0 - sourceCenter.y * 6.4 + time * 0.42)
+      + 0.08 * cos(tallPlumeSmokeDebandAngle * 5.0 + sourceCenter.y * 7.2 - time * 0.31)
+      + 0.07 * (hash31(floor(vec3<f32>(
+        tallPlumeSmokeDebandWarp.x * 11.0,
+        sourceCenter.y * 9.0,
+        tallPlumeSmokeDebandWarp.y * 11.0
+      ))) - 0.5),
+    0.46,
+    1.16
+  );
+  let tallPlumeSmokeSourceBreakup = tallPlumeSmokeDebandBasis;
+  let columnSource = exp(-sourceRadial * sourceRadial * smokeSourceFalloff) * sourceBand * mix(breakup, tallPlumeSmokeSourceBreakup, tallPlumeScene) * inputFlow;
   let tallPlumeEmitterBand = smoothstep(-0.25, -0.10, sourceCenter.y) * (1.0 - smoothstep(0.12, 0.40, sourceCenter.y));
+  let tallPlumeSourceWidthGate = tallPlumeScene * smoothstep(0.095, 0.180, scaledSourceRadius);
+  let tallPlumeSourceRadial01 = clamp(sourceRadial / max(scaledSourceRadius, 0.001), 0.0, 3.0);
+  let tallPlumeFrontPacketDensity = mix(1.0, 2.25, tallPlumeSourceWidthGate);
+  let tallPlumeSourceAngle = tallPlumeSmokeDebandAngle;
+  let tallPlumeAnnularFrontRadius = mix(0.70, 0.86, tallPlumeSourceWidthGate);
+  let tallPlumeAnnularFrontWidth = 0.18 - tallPlumeSourceWidthGate * 0.035;
+  let tallPlumeAnnularFrontBand = exp(
+    -pow(abs(tallPlumeSourceRadial01 - tallPlumeAnnularFrontRadius), 2.0)
+      / max(0.0025, tallPlumeAnnularFrontWidth * tallPlumeAnnularFrontWidth)
+  );
+  let tallPlumeFrontPacketBreakup = clamp(
+    0.72
+      + (breakup - 0.64) * 0.38
+      + 0.16 * sin(tallPlumeSourceAngle * (4.0 + tallPlumeFrontPacketDensity * 2.0) + sourceRadial * (23.0 + tallPlumeFrontPacketDensity * 7.0) - time * 1.45)
+      + 0.12 * cos(tallPlumeSourceAngle * (7.0 + tallPlumeFrontPacketDensity) - p.y * 13.0 + time * 1.10),
+    0.36,
+    1.34
+  );
+  let tallPlumeInteriorFireRelief = mix(
+    1.0,
+    mix(0.62, 1.08, smoothstep(0.34, 0.94, tallPlumeSourceRadial01)),
+    tallPlumeSourceWidthGate
+  );
   let tallPlumeEmitterBreakup = clamp(
     0.70
       + (breakup - 0.64) * 0.62
@@ -2193,10 +2240,17 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     0.28,
     1.18
   );
+  let tallPlumeAnnularFrontBirth = tallPlumeSourceWidthGate
+    * tallPlumeEmitterBand
+    * tallPlumeAnnularFrontBand
+    * tallPlumeFrontPacketBreakup
+    * inputFlow;
   let tallPlumeCombustionSource = exp(-sourceRadial * sourceRadial * smokeSourceFalloff * 1.22)
     * tallPlumeEmitterBand
     * tallPlumeEmitterBreakup
-    * inputFlow;
+    * inputFlow
+    * tallPlumeInteriorFireRelief
+    + tallPlumeAnnularFrontBirth * 0.34;
   let canonicalSourceCell = vec2<f32>(
     sin(p.x * 8.1 + p.z * 2.7 + canonicalPhaseTime * 0.43),
     cos(p.z * 7.6 - p.x * 3.2 - canonicalPhaseTime * 0.39)
@@ -2334,7 +2388,9 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     * tallPlumeEmitterBand
     * inputFlow
     * sourceScaleCompensation
-    * (0.52 + 0.48 * tallPlumeEmitterBreakup);
+    * tallPlumeInteriorFireRelief
+    * (0.52 + 0.48 * tallPlumeEmitterBreakup)
+    + tallPlumeAnnularFrontBirth * sourceScaleCompensation * 0.22;
   let bonfireCoreHeat = clamp(
     bonfireReferenceSourceModel.x * 0.92
       + bonfireReactionProgress * 0.18
@@ -2585,13 +2641,16 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     bonfireLickBirth = bonfireRadialFireLickBreakup(cellI, p * detailDomain, time, fireLickOperatorGain, heat, fuel, flame, flameDetail, source);
   }
   let lickBirth = mix(columnLickBirth, bonfireLickBirth, bonfireScene);
+  let tallPlumeAnnularFrontContribution = tallPlumeAnnularFrontBirth * (0.34 + fireLickOperatorGain * 0.025);
   let columnCombustionFrontBirth = clamp(
-    (lickBirth.y * 0.34 + interfaceEnergy * source * 0.62 + fireBirth * 0.12) * (0.36 + fireLickOperatorGain * 0.07),
+    (lickBirth.y * 0.34 + interfaceEnergy * source * 0.62 + fireBirth * 0.12) * (0.36 + fireLickOperatorGain * 0.07)
+      + tallPlumeAnnularFrontContribution,
     0.0,
-    1.35
+    1.55
   );
   let combustionFrontBirth = mix(columnCombustionFrontBirth, bonfireCombustionFrontBirth, bonfireScene);
-  combustionFrontTopology = max(combustionFrontTopology, mix(columnCombustionFrontBirth * 0.32, bonfireFrontTopologyBirth + bonfireCombustionFrontBirth * 0.18, bonfireScene));
+  let columnFrontTopologyBirth = max(columnCombustionFrontBirth * 0.32, tallPlumeAnnularFrontBirth * 0.42);
+  combustionFrontTopology = max(combustionFrontTopology, mix(columnFrontTopologyBirth, bonfireFrontTopologyBirth + bonfireCombustionFrontBirth * 0.18, bonfireScene));
   let externalInjection = applyExternalEmitterInjection(externalEmitterInfluence(p, time));
   let confinement = vorticityConfinement(cellI, 0.034 + curl * 0.044);
   let bonfireReferenceFrontContact = clamp(
@@ -3200,7 +3259,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
   let pyroEdgeBite = clamp(u.pyro_carrier_controls.y, 0.0, 1.0);
   let pyroSmokeFold = clamp(u.pyro_carrier_controls.z, 0.0, 1.0);
   let pyroDiagnosticPaint = clamp(u.pyro_carrier_controls.w, 0.0, 1.0);
-  let pyroCarrierViewMode = clamp(u.pyro_diagnostic_controls.x, 0.0, 6.0);
+  let pyroCarrierViewMode = clamp(u.pyro_diagnostic_controls.x, 0.0, 7.0);
   let pyroCarrierOverdrive = clamp(u.pyro_diagnostic_controls.y, 1.0, 8.0);
   let pyroBiteBorderFocus = clamp(u.pyro_diagnostic_controls.z, 0.0, 1.0);
   let pyroFoldBorderFocus = clamp(u.pyro_diagnostic_controls.w, 0.0, 1.0);
@@ -3238,6 +3297,14 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
   let pyroBiteRimCut = clamp(u.pyro_bite_stack_controls.w, 0.0, 1.0);
   let pyroBiteAfter = clamp(u.pyro_bite_stack_controls2.x, 0.0, 1.0);
   let pyroBiteAfterCut = clamp(u.pyro_bite_stack_controls2.y, 0.0, 1.0);
+  let pyroFlowBite = clamp(u.pyro_flow_controls.x, 0.0, 3.0);
+  let pyroFlowBorder = clamp(u.pyro_flow_controls.y, 0.0, 1.0);
+  let pyroFlowTeeth = clamp(u.pyro_flow_controls.z, 0.0, 1.0);
+  let pyroFlowRise = clamp(u.pyro_flow_controls.w, 0.0, 1.0);
+  let pyroFlowFireLock = clamp(u.pyro_flow_controls2.x, 0.0, 1.0);
+  let pyroFlowLuma = clamp(u.pyro_flow_controls2.y, 0.0, 3.0);
+  let pyroFlowRadiance = clamp(u.pyro_flow_controls2.z, 0.0, 4.0);
+  let pyroFlowSpikes = clamp(u.pyro_flow_controls2.w, 0.0, 1.0);
   let pyroFlameCoreColor = u.pyro_palette_flame.rgb;
   let pyroFlameEdgeColor = u.pyro_palette_flame_edge.rgb;
   let pyroBiteEmberEndpoint = u.pyro_palette_bite.rgb;
@@ -3246,6 +3313,8 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
   let pyroWakeEmberEndpoint = u.pyro_palette_wake_ember.rgb;
   let pyroRadianceCoolEndpoint = u.pyro_palette_radiance.rgb;
   let pyroRadianceWarmEndpoint = u.pyro_palette_radiance_warm.rgb;
+  let pyroFlowCoolEndpoint = u.pyro_palette_flow.rgb;
+  let pyroFlowHotEndpoint = u.pyro_palette_flow_hot.rgb;
   let canonicalSmokeContent = 1.0 - minimalPlumeRenderScene * step(0.5, canonicalContentMode) * (1.0 - step(1.5, canonicalContentMode));
   let canonicalFireContent = minimalPlumeRenderScene * step(0.5, canonicalContentMode);
   let canonicalFireRenderContent = mix(1.0, canonicalFireContent, minimalPlumeRenderScene);
@@ -3500,12 +3569,14 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     let pyroFoldView = 1.0 - step(0.5, abs(pyroCarrierViewMode - 3.0));
     let pyroWakeView = 1.0 - step(0.5, abs(pyroCarrierViewMode - 4.0));
     let pyroRadianceView = 1.0 - step(0.5, abs(pyroCarrierViewMode - 5.0));
-    let pyroAllView = 1.0 - step(0.5, abs(pyroCarrierViewMode - 6.0));
+    let pyroFlowView = 1.0 - step(0.5, abs(pyroCarrierViewMode - 6.0));
+    let pyroAllView = 1.0 - step(0.5, abs(pyroCarrierViewMode - 7.0));
     let pyroBorderMask = clamp(pyroNormalView + pyroBorderView + pyroAllView, 0.0, 1.0);
     let pyroBiteMask = clamp(pyroNormalView + pyroBiteView + pyroAllView, 0.0, 1.0);
     let pyroFoldMask = clamp(pyroNormalView + pyroFoldView + pyroAllView, 0.0, 1.0);
     let pyroWakeMask = clamp(pyroNormalView + pyroWakeView + pyroAllView, 0.0, 1.0);
     let pyroRadianceMask = clamp(pyroNormalView + pyroRadianceView + pyroAllView, 0.0, 1.0);
+    let pyroFlowMask = clamp(pyroNormalView + pyroFlowView + pyroAllView, 0.0, 1.0);
     let pyroMemoryPattern = 0.5 + 0.5 * sin(
       p.y * 31.0
         + p.x * 17.0
@@ -3616,6 +3687,74 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
       * pyroCarrierOverdrive
       * (0.40 + pyroMemoryPattern * 0.60)
       * pyroStackedBiteEvent;
+    let pyroFlowTopology = smoothstep(
+      mix(0.0006, 0.006, pyroFlowTeeth),
+      mix(0.025, 0.16, pyroFlowTeeth),
+      combustionFrontTopology * (0.68 + pyroFlowTeeth * 0.62)
+        + fireLick * 0.34
+        + combustionFront * 0.24
+        + interfaceShred * 0.18
+        + curlDebug * (0.28 + pyroFlowTeeth * 0.34)
+        + divDebug * 0.18
+    );
+    let pyroFlowShear = smoothstep(
+      0.015,
+      0.17,
+      curlDebug * (0.78 + pyroFlowTeeth * 0.62) + divDebug * 0.48 + velMag * 0.025
+    );
+    let pyroFlowFront = mix(pyroRawCurrentFire, max(pyroRawCurrentFire * 0.28, pyroInterfaceSignal), pyroFlowBorder);
+    let pyroFlowLiveCarrier = pyroMaterialGain
+      * pyroMaterialEnergy
+      * pyroLiveAuthority
+      * (0.18 + pyroSpatialEnergy * 0.58 + pyroSmokeAuthority * 0.24)
+      * smoothstep(0.006, 0.22, density + smoke * 0.28 + rawExtinction * 0.24 + microSmoke * 0.28)
+      * smoothstep(0.001, 0.045, combustionFrontTopology * 0.58 + fireLick * 0.34 + interfaceShred * 0.22 + curlDebug * 0.72 + divDebug * 0.28);
+    let pyroFlowHeightGate = 1.0 - smoothstep(
+      mix(0.24, 0.92, pyroFlowRise),
+      mix(0.46, 1.16, pyroFlowRise),
+      y
+    );
+    let pyroFlowFireGate = mix(1.0, max(pyroRawCurrentFire, pyroFireEventCarrier), pyroFlowFireLock);
+    let pyroFlowCarrierShape = max(
+      mix(pyroFlowFront, max(pyroFlowFront, pyroFlowShear), pyroFlowTeeth),
+      pyroFlowLiveCarrier * pyroFlowShear * (0.22 + pyroFlowTeeth * 0.36)
+    );
+    let pyroFlowSignal = clamp(
+      max(pyroBaseCarrier, pyroFlowLiveCarrier)
+        * pyroFlowMask
+        * pyroFlowBite
+        * pyroCarrierOverdrive
+        * pyroFlowFireGate
+        * pyroFlowHeightGate
+        * pyroFlowCarrierShape
+        * max(pyroFlowTopology, pyroFlowShear * (0.18 + pyroFlowTeeth * 0.22))
+        * (0.22 + pyroMemoryPattern * 0.16 + pyroFlowShear * 0.30 + combustionFrontTopology * 0.06 + fireLick * 0.05),
+      0.0,
+      4.0
+    );
+    let pyroFlowSpikeMask = smoothstep(
+      mix(0.24, 0.10, pyroFlowSpikes),
+      mix(0.92, 0.52, pyroFlowSpikes),
+      pyroFlowTopology * (0.64 + pyroFlowSpikes * 0.52)
+        + pyroFlowShear * (0.18 + pyroFlowSpikes * 0.36)
+        + pyroMemoryPattern * (0.10 + pyroFlowSpikes * 0.28)
+        + fireLick * (0.10 + pyroFlowSpikes * 0.20)
+    );
+    let pyroFlowSpikeSignal = clamp(
+      pyroFlowSignal
+        * pyroFlowSpikes
+        * pyroFlowSpikeMask
+        * (0.22 + combustionFrontTopology * 0.28 + fireLick * 0.18 + pyroFlowShear * 0.14),
+      0.0,
+      3.0
+    );
+    let pyroFlowRadianceBoost = clamp(
+      pyroFlowSignal
+        * pyroFlowRadiance
+        * (0.055 + pyroFlowSpikeSignal * 0.13 + pyroFlowShear * 0.055 + combustionFrontTopology * 0.060 + fireLick * 0.035),
+      0.0,
+      3.5
+    );
     let pyroFoldWakeSignal = clamp(
       smoothstep(0.02, 0.62, smoke + rawExtinction + microSmoke * 0.24)
         * mix(
@@ -3759,6 +3898,12 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
       0.0,
       4.0
     );
+    let pyroFlowAlphaBoost = clamp(
+      pyroFlowSignal * (0.18 + pyroFlowShear * 0.32 + pyroRawFireMix * 0.14 + fireMix * 0.08)
+        + pyroFlowSpikeSignal * (0.10 + pyroFlowTeeth * 0.12),
+      0.0,
+      2.8
+    );
     let pyroBiteAlphaBoost = clamp(pyroEdgeBreakup * (0.40 + fireMix * 0.80), 0.0, 2.4);
     let pyroFoldExtinctionBoost = clamp(pyroSmokeFoldSignal * (0.34 + smoke * 0.85 + rawExtinction * 0.55), 0.0, 2.8);
     let pyroWakeAlphaBoost = clamp(pyroWakeSignal * (0.22 + smoke * 0.62 + rawExtinction * 0.36), 0.0, 2.1);
@@ -3774,7 +3919,9 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
         + pyroFoldExtinctionBoost * rayStepOpacity * 0.060
         + pyroWakeAlphaBoost * rayStepOpacity * 0.045
         + pyroOwnedFireAlphaBoost * rayStepOpacity * 0.070
-        + pyroRadianceAlphaBoost * rayStepOpacity * 0.130,
+        + pyroRadianceAlphaBoost * rayStepOpacity * 0.130
+        + pyroFlowAlphaBoost * rayStepOpacity * 0.075
+        + pyroFlowRadianceBoost * rayStepOpacity * 0.045,
       0.0,
       0.28
     );
@@ -3801,6 +3948,34 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
       local,
       pyroFlamePaintColor,
       clamp(pyroFlamePaintSignal * mix(0.28, 0.92, 1.0 - pyroStockMix), 0.0, 0.95)
+    );
+    let pyroFlowHeat = clamp(pyroFlowTopology + pyroRawFireMix * 0.28 + pyroFlowShear * 0.22, 0.0, 1.0);
+    let pyroFlowColor = mix(
+      pyroFlowCoolEndpoint * (0.44 + smoke * 0.18 + pyroFlowShear * 0.10),
+      pyroFlowHotEndpoint * (0.52 + pyroRawFireMix * 0.30 + fireLick * 0.14 + combustionFront * 0.10),
+      smoothstep(0.18, 0.88, pyroFlowHeat)
+    );
+    let pyroFlowColorLuma = max(dot(pyroFlowColor, vec3<f32>(0.2126, 0.7152, 0.0722)), 0.001);
+    let pyroFlowTargetLuma = max(
+      dot(local, vec3<f32>(0.2126, 0.7152, 0.0722)),
+      max(
+        pyroRawCurrentFire * (0.28 + rawTemp * 0.42 + fireLick * 0.18),
+        pyroFlowSignal * (0.10 + pyroFlowShear * 0.10 + combustionFrontTopology * 0.06)
+      )
+    );
+    let pyroFlowLumaColor = pyroFlowColor * (pyroFlowTargetLuma / pyroFlowColorLuma) * pyroFlowLuma;
+    let pyroFlowSpikeColor = mix(
+      pyroFlowLumaColor,
+      pyroFlowHotEndpoint * (0.84 + pyroFlowHeat * 0.32),
+      clamp(pyroFlowSpikes * 0.75 + pyroFlowSpikeSignal * 0.18, 0.0, 1.0)
+    );
+    local = mix(
+      local,
+      local
+        + pyroFlowLumaColor * pyroFlowAlphaBoost * (0.18 + pyroFlowShear * 0.10)
+        + pyroFlowSpikeColor * pyroFlowSpikeSignal * (0.13 + pyroFlowTeeth * 0.12)
+        + pyroFlowHotEndpoint * pyroFlowRadianceBoost * (0.16 + pyroFlowHeat * 0.10),
+      clamp(pyroFlowAlphaBoost * 0.22 + pyroFlowSpikeSignal * 0.11 + pyroFlowRadianceBoost * 0.12, 0.0, 0.74)
     );
     let pyroFoldColor = vec3<f32>(0.18, 0.28, 0.31);
     local = mix(
@@ -3844,8 +4019,9 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
       vec3<f32>(0.10, 0.78, 1.0) * clamp(pyroBorderDiagnostic, 0.0, 1.0)
       + vec3<f32>(1.0, 0.12, 0.03) * clamp(pyroBiteAlphaBoost, 0.0, 1.0)
       + vec3<f32>(0.28, 0.72, 1.05) * clamp(pyroFoldExtinctionBoost, 0.0, 1.0)
-      + vec3<f32>(1.0, 0.72, 0.18) * clamp(pyroRadianceBoost, 0.0, 1.0);
-    let pyroDiagnosticSignal = clamp(max(max(pyroBorderDiagnostic, pyroRadianceBoost), max(pyroBiteAlphaBoost, pyroFoldExtinctionBoost)), 0.0, 1.0);
+      + vec3<f32>(1.0, 0.72, 0.18) * clamp(pyroRadianceBoost, 0.0, 1.0)
+      + vec3<f32>(0.18, 0.95, 1.0) * clamp(max(max(pyroFlowAlphaBoost, pyroFlowRadianceBoost), pyroFlowSpikeSignal), 0.0, 1.0);
+    let pyroDiagnosticSignal = clamp(max(max(max(pyroBorderDiagnostic, max(pyroRadianceBoost, pyroFlowRadianceBoost)), max(pyroBiteAlphaBoost, pyroFoldExtinctionBoost)), max(pyroFlowAlphaBoost, pyroFlowSpikeSignal)), 0.0, 1.0);
     let pyroDiagnosticPaintAlpha = clamp(pyroDiagnosticPaint * pyroDiagnosticSignal * (0.72 + pyroCarrierOverdrive * 0.055), 0.0, 1.0);
     alpha = clamp(alpha + pyroDiagnosticPaintAlpha * rayStepOpacity * 0.16, 0.0, 0.42);
     local = mix(local, pyroDiagnosticColor * (0.96 + pyroCarrierOverdrive * 0.045), clamp(pyroDiagnosticPaintAlpha * 1.28, 0.0, 1.0));
@@ -3887,7 +4063,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   const invViewProj = new THREE.Matrix4();
   const viewProj = new THREE.Matrix4();
   const previousViewProj = new THREE.Matrix4();
-  const uniforms = new Float32Array(276);
+  const uniforms = new Float32Array(292);
   let controlsSnapshot = applyRuntimeQualityControls(getControls());
   let gridSize = normalizeGridSize(controlsSnapshot.resolution);
   let majorantGridSize = normalizeMajorantGridSize(controlsSnapshot.majorantGrid);
@@ -5409,6 +5585,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const pyroRadianceLuma = Math.max(0, Math.min(3, controlsSnapshot.pyroRadianceLuma ?? 1));
     const pyroRadianceRise = Math.max(0, Math.min(1, controlsSnapshot.pyroRadianceRise ?? 0.45));
     const pyroRadianceFireLock = Math.max(0, Math.min(1, controlsSnapshot.pyroRadianceFireLock ?? 0.65));
+    const pyroFlowBite = pyroCompareMuted ? 0 : Math.max(0, Math.min(3, controlsSnapshot.pyroFlowBite ?? 0));
+    const pyroFlowBorder = Math.max(0, Math.min(1, controlsSnapshot.pyroFlowBorder ?? 0.55));
+    const pyroFlowTeeth = Math.max(0, Math.min(1, controlsSnapshot.pyroFlowTeeth ?? 0.55));
+    const pyroFlowRise = Math.max(0, Math.min(1, controlsSnapshot.pyroFlowRise ?? 0.50));
+    const pyroFlowFireLock = Math.max(0, Math.min(1, controlsSnapshot.pyroFlowFireLock ?? 0.55));
+    const pyroFlowLuma = Math.max(0, Math.min(3, controlsSnapshot.pyroFlowLuma ?? 1));
+    const pyroFlowRadiance = Math.max(0, Math.min(4, controlsSnapshot.pyroFlowRadiance ?? 0));
+    const pyroFlowSpikes = Math.max(0, Math.min(1, controlsSnapshot.pyroFlowSpikes ?? 0.35));
     const pyroDiagnosticPaint = pyroCompareMuted ? 0 : Math.max(0, Math.min(1, controlsSnapshot.pyroDiagnosticPaint ?? 0));
     uniforms[184] = pyroInterfaceFocus;
     uniforms[185] = pyroEdgeBite;
@@ -5456,15 +5640,25 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     uniforms[225] = pyroBiteAfterCut;
     uniforms[226] = 0;
     uniforms[227] = 0;
-    writePyroPaletteUniform(uniforms, 228, controlsSnapshot.pyroFlameCoreColor, '#fff4b8');
-    writePyroPaletteUniform(uniforms, 232, controlsSnapshot.pyroFlameEdgeColor, '#ff8a24');
-    writePyroPaletteUniform(uniforms, 236, controlsSnapshot.pyroBiteEmberColor, '#e65a1a');
-    writePyroPaletteUniform(uniforms, 240, controlsSnapshot.pyroBiteHotColor, '#fff4b8');
-    writePyroPaletteUniform(uniforms, 244, controlsSnapshot.pyroWakeShadowColor, '#384c50');
-    writePyroPaletteUniform(uniforms, 248, controlsSnapshot.pyroWakeEmberColor, '#b06a2a');
-    writePyroPaletteUniform(uniforms, 252, controlsSnapshot.pyroRadianceCoolColor, '#7aa8b8');
-    writePyroPaletteUniform(uniforms, 256, controlsSnapshot.pyroRadianceWarmColor, '#d18438');
-    uniforms.set(previousViewProj.elements, 260);
+    uniforms[228] = pyroFlowBite;
+    uniforms[229] = pyroFlowBorder;
+    uniforms[230] = pyroFlowTeeth;
+    uniforms[231] = pyroFlowRise;
+    uniforms[232] = pyroFlowFireLock;
+    uniforms[233] = pyroFlowLuma;
+    uniforms[234] = pyroFlowRadiance;
+    uniforms[235] = pyroFlowSpikes;
+    writePyroPaletteUniform(uniforms, 236, controlsSnapshot.pyroFlameCoreColor, '#fff4b8');
+    writePyroPaletteUniform(uniforms, 240, controlsSnapshot.pyroFlameEdgeColor, '#ff8a24');
+    writePyroPaletteUniform(uniforms, 244, controlsSnapshot.pyroBiteEmberColor, '#e65a1a');
+    writePyroPaletteUniform(uniforms, 248, controlsSnapshot.pyroBiteHotColor, '#fff4b8');
+    writePyroPaletteUniform(uniforms, 252, controlsSnapshot.pyroWakeShadowColor, '#384c50');
+    writePyroPaletteUniform(uniforms, 256, controlsSnapshot.pyroWakeEmberColor, '#b06a2a');
+    writePyroPaletteUniform(uniforms, 260, controlsSnapshot.pyroRadianceCoolColor, '#7aa8b8');
+    writePyroPaletteUniform(uniforms, 264, controlsSnapshot.pyroRadianceWarmColor, '#d18438');
+    writePyroPaletteUniform(uniforms, 268, controlsSnapshot.pyroFlowCoolColor, '#2aa7b8');
+    writePyroPaletteUniform(uniforms, 272, controlsSnapshot.pyroFlowHotColor, '#ff7a36');
+    uniforms.set(previousViewProj.elements, 276);
     device.queue.writeBuffer(uniformBuffer, 0, uniforms);
     state.gridOverlay = controlsSnapshot.gridOverlay || 0;
     state.lookFreeze = lookFreeze;
@@ -5546,6 +5740,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           wakeEmber: controlsSnapshot.pyroWakeEmberColor || '#b06a2a',
           radianceCool: controlsSnapshot.pyroRadianceCoolColor || '#7aa8b8',
           radianceWarm: controlsSnapshot.pyroRadianceWarmColor || '#d18438',
+          flowCool: controlsSnapshot.pyroFlowCoolColor || '#2aa7b8',
+          flowHot: controlsSnapshot.pyroFlowHotColor || '#ff7a36',
         },
         radianceHue: pyroRadianceHue,
         radianceChroma: pyroRadianceChroma,
@@ -5555,6 +5751,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         radianceTeeth: pyroRadianceTeeth,
         radianceRise: pyroRadianceRise,
         radianceFireLock: pyroRadianceFireLock,
+        flowBite: pyroFlowBite,
+        flowBorder: pyroFlowBorder,
+        flowTeeth: pyroFlowTeeth,
+        flowRise: pyroFlowRise,
+        flowFireLock: pyroFlowFireLock,
+        flowLuma: pyroFlowLuma,
+        flowRadiance: pyroFlowRadiance,
+        flowSpikes: pyroFlowSpikes,
         diagnosticPaint: pyroDiagnosticPaint,
       },
       carrierDebug: {
@@ -5566,14 +5770,18 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         biteSignalMax: pyroMaterialGain * pyroMaterialLiveAuthority * pyroEdgeBite * pyroCarrierOverdrive * Math.max(1, pyroBiteCore + pyroBiteRim + pyroBiteAfter),
         foldSignalMax: pyroMaterialGain * pyroMaterialSmokeAuthority * pyroSmokeFold * pyroCarrierOverdrive,
         radianceSignalMax: pyroMaterialGain * pyroMaterialLiveAuthority * pyroMaterialSmokeAuthority * pyroContrastRadiance * pyroCarrierOverdrive,
+        flowSignalMax: pyroMaterialGain * pyroMaterialLiveAuthority * pyroFlowBite * pyroCarrierOverdrive,
+        flowRadianceMax: pyroMaterialGain * pyroMaterialLiveAuthority * pyroFlowBite * pyroFlowRadiance * pyroCarrierOverdrive,
+        flowSpikeMax: pyroMaterialGain * pyroMaterialLiveAuthority * pyroFlowBite * pyroFlowSpikes * pyroCarrierOverdrive,
         biteShape: `${pyroBiteTeeth.toFixed(2)}t/${pyroBiteWake.toFixed(2)}w/${pyroBiteHeight.toFixed(2)}h/${pyroBiteFireLock.toFixed(2)}f`,
         biteStack: `${pyroBiteCore.toFixed(2)}c/${pyroBiteRim.toFixed(2)}r/${pyroBiteAfter.toFixed(2)}a`,
         biteCuts: `${pyroBiteCoreCut.toFixed(2)}c/${pyroBiteRimCut.toFixed(2)}r/${pyroBiteAfterCut.toFixed(2)}a`,
         foldShape: `${pyroFoldWake.toFixed(2)}w/${pyroWakeLift.toFixed(2)}l/${pyroWakeWarmth.toFixed(2)}a`,
         radianceShape: `${pyroRadianceGate.toFixed(2)}g/${pyroRadianceSpill.toFixed(2)}s/${pyroRadianceBorder.toFixed(2)}b/${pyroRadianceTeeth.toFixed(2)}t/${pyroRadianceRise.toFixed(2)}r/${pyroRadianceFireLock.toFixed(2)}f/${controlsSnapshot.pyroRadianceSource || 'fire'}/${pyroRadianceHeight.toFixed(2)}h`,
+        flowShape: `${pyroFlowBorder.toFixed(2)}b/${pyroFlowTeeth.toFixed(2)}t/${pyroFlowRise.toFixed(2)}r/${pyroFlowFireLock.toFixed(2)}f/${pyroFlowLuma.toFixed(2)}l/${pyroFlowRadiance.toFixed(2)}rad/${pyroFlowSpikes.toFixed(2)}sp`,
         colorShape: `${pyroBiteHeat.toFixed(2)}bh/${pyroBiteChroma.toFixed(2)}bc/${pyroRadianceHue.toFixed(2)}rh/${pyroRadianceChroma.toFixed(2)}rc`,
-        lumaShape: `${pyroFlamePaint.toFixed(2)}fp/${pyroStockMix.toFixed(2)}sm/${pyroFlameLuma.toFixed(2)}fl/${pyroBiteLuma.toFixed(2)}bl/${pyroWakeLuma.toFixed(2)}wl/${pyroRadianceLuma.toFixed(2)}rl`,
-        paletteShape: `${controlsSnapshot.pyroFlameCoreColor || '#fff4b8'}/${controlsSnapshot.pyroFlameEdgeColor || '#ff8a24'}/${controlsSnapshot.pyroBiteEmberColor || '#e65a1a'}/${controlsSnapshot.pyroRadianceWarmColor || '#d18438'}`,
+        lumaShape: `${pyroFlamePaint.toFixed(2)}fp/${pyroStockMix.toFixed(2)}sm/${pyroFlameLuma.toFixed(2)}fl/${pyroBiteLuma.toFixed(2)}bl/${pyroWakeLuma.toFixed(2)}wl/${pyroRadianceLuma.toFixed(2)}rl/${pyroFlowLuma.toFixed(2)}flw/${pyroFlowRadiance.toFixed(2)}fr`,
+        paletteShape: `${controlsSnapshot.pyroFlameCoreColor || '#fff4b8'}/${controlsSnapshot.pyroFlameEdgeColor || '#ff8a24'}/${controlsSnapshot.pyroBiteEmberColor || '#e65a1a'}/${controlsSnapshot.pyroRadianceWarmColor || '#d18438'}/${controlsSnapshot.pyroFlowHotColor || '#ff7a36'}`,
       },
       spatialMemory: {
         identity: 'pyro-material-memory-spatial-coupling-v0',

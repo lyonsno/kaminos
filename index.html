@@ -1535,6 +1535,66 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
     </div>
     <span class="slider-help">Radiance fire lock: contrast can ride wake at 0, current raw flame authority gates it at 1.</span>
     <div class="slider-row">
+      <span class="slider-label">Flow Bite</span>
+      <input type="range" id="volume-pyro-flow-bite" min="0" max="3" step="0.05" value="0">
+      <span class="slider-val" id="volume-pyro-flow-bite-val">0.00</span>
+    </div>
+    <span class="slider-help">Flow bite: lets curl/front topology paint living wrinkles into flame edges.</span>
+    <div class="slider-row">
+      <span class="slider-label">Flow Border</span>
+      <input type="range" id="volume-pyro-flow-border" min="0" max="1" step="0.05" value="0.55">
+      <span class="slider-val" id="volume-pyro-flow-border-val">0.55</span>
+    </div>
+    <span class="slider-help">Flow border: broad flame body at 0, flame/smoke seam topology at 1.</span>
+    <div class="slider-row">
+      <span class="slider-label">Flow Teeth</span>
+      <input type="range" id="volume-pyro-flow-teeth" min="0" max="1" step="0.05" value="0.55">
+      <span class="slider-val" id="volume-pyro-flow-teeth-val">0.55</span>
+    </div>
+    <span class="slider-help">Flow teeth: smooth topology wash at 0, curl/shred filigree at 1.</span>
+    <div class="slider-row">
+      <span class="slider-label">Flow Rise</span>
+      <input type="range" id="volume-pyro-flow-rise" min="0" max="1" step="0.05" value="0.50">
+      <span class="slider-val" id="volume-pyro-flow-rise-val">0.50</span>
+    </div>
+    <span class="slider-help">Flow rise: lower flame carrier at 0, lets topology climb the plume at 1.</span>
+    <div class="slider-row">
+      <span class="slider-label">Flow Fire Lock</span>
+      <input type="range" id="volume-pyro-flow-fire-lock" min="0" max="1" step="0.05" value="0.55">
+      <span class="slider-val" id="volume-pyro-flow-fire-lock-val">0.55</span>
+    </div>
+    <span class="slider-help">Flow fire lock: topology can wander at 0, raw flame authority gates it at 1.</span>
+    <div class="slider-row">
+      <span class="slider-label">Flow Luma</span>
+      <input type="range" id="volume-pyro-flow-luma" min="0" max="3" step="0.05" value="1">
+      <span class="slider-val" id="volume-pyro-flow-luma-val">1.00</span>
+    </div>
+    <span class="slider-help">Flow luma: brightness gain for the topology carrier after color is chosen.</span>
+    <div class="slider-row">
+      <span class="slider-label">Flow Radiance</span>
+      <input type="range" id="volume-pyro-flow-radiance" min="0" max="4" step="0.05" value="0">
+      <span class="slider-val" id="volume-pyro-flow-radiance-val">0.00</span>
+    </div>
+    <span class="slider-help">Flow radiance: sparse topology light; 0 is pigment only, high values make creases emit.</span>
+    <div class="slider-row">
+      <span class="slider-label">Flow Spikes</span>
+      <input type="range" id="volume-pyro-flow-spikes" min="0" max="1" step="0.05" value="0.35">
+      <span class="slider-val" id="volume-pyro-flow-spikes-val">0.35</span>
+    </div>
+    <span class="slider-help">Flow spikes: soft crease wash at 0, sharper filament teeth at 1.</span>
+    <div class="slider-row">
+      <span class="slider-label">Flow cool</span>
+      <input type="color" id="volume-pyro-flow-cool-color" value="#2aa7b8">
+      <span class="slider-val" id="volume-pyro-flow-cool-color-val">#2aa7b8</span>
+    </div>
+    <span class="slider-help">Flow cool endpoint: the colder curl/smoke side of the topology carrier.</span>
+    <div class="slider-row">
+      <span class="slider-label">Flow hot</span>
+      <input type="color" id="volume-pyro-flow-hot-color" value="#ff7a36">
+      <span class="slider-val" id="volume-pyro-flow-hot-color-val">#ff7a36</span>
+    </div>
+    <span class="slider-help">Flow hot endpoint: the combustion-front side of the topology carrier.</span>
+    <div class="slider-row">
       <span class="slider-label">Diag Paint</span>
       <input type="range" id="volume-pyro-diagnostic-paint" min="0" max="1" step="0.05" value="0">
       <span class="slider-val" id="volume-pyro-diagnostic-paint-val">0.00</span>
@@ -1549,6 +1609,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
         <option value="fold">Fold only</option>
         <option value="wake">Wake only</option>
         <option value="radiance">Radiance only</option>
+        <option value="flow">Flow only</option>
         <option value="all">All carriers</option>
       </select>
       <span class="slider-val" id="volume-pyro-carrier-view-val">normal</span>
@@ -9588,7 +9649,10 @@ const PYRO_LOOK_FIELDS = [
   'pyroRadianceGate', 'pyroRadianceSpill', 'pyroRadianceWarmth', 'pyroRadianceHue',
   'pyroRadianceChroma', 'pyroRadianceLuma', 'pyroRadianceCoolColor', 'pyroRadianceWarmColor',
   'pyroRadianceSource', 'pyroRadianceHeight', 'pyroRadianceBorder', 'pyroRadianceTeeth',
-  'pyroRadianceRise', 'pyroRadianceFireLock', 'pyroDiagnosticPaint', 'pyroCarrierView',
+  'pyroRadianceRise', 'pyroRadianceFireLock', 'pyroFlowBite', 'pyroFlowBorder',
+  'pyroFlowTeeth', 'pyroFlowRise', 'pyroFlowFireLock', 'pyroFlowLuma',
+  'pyroFlowRadiance', 'pyroFlowSpikes',
+  'pyroFlowCoolColor', 'pyroFlowHotColor', 'pyroDiagnosticPaint', 'pyroCarrierView',
   'pyroOverdrive',
 ];
 const FIRESIM_LOOK_FIELDS = [
@@ -9936,9 +10000,321 @@ const TALL_PLUME_OPERATOR_PRESETS = {
     canonicalCenterline: 1.00,
     canonicalBodyBalance: 0.00,
   },
+  pyro_flow_small_bonfire_gamut_0707: {
+    label: 'pyro flow small bonfire gamut 0707',
+    volumeScene: 'tall_plume',
+    density: 6.00,
+    fire: 0.00,
+    radiance: 3.00,
+    absorption: 2.00,
+    glow: 2.50,
+    smoke: 0.10,
+    curl: 1.15,
+    microdetail: 2.50,
+    interfaceShred: 4.50,
+    fireLicks: 5.00,
+    projection: 1.50,
+    speed: 3.95,
+    raySteps: 160,
+    adaptiveRays: 0.00,
+    occupancySkip: 0.20,
+    majorantSkip: 1.00,
+    majorantSmooth: 1.00,
+    majorantGuard: 1.00,
+    temporalAccum: 0.00,
+    temporalJitter: 0.00,
+    historyClamp: 1.00,
+    fireScale: 0.35,
+    detailScale: 0.45,
+    plumeHeight: 1.00,
+    windStrength: 0.00,
+    windAngle: -65,
+    windHeight: 0.20,
+    renderScale: 0.55,
+    inputRadius: 0.19,
+    flowRate: 0.85,
+    resolution: 160,
+    majorantGrid: 48,
+    pyroDynamicDetail: 1,
+    pyroMaterialGain: 0.20,
+    pyroInterfaceFocus: 0.00,
+    pyroEdgeBite: 0.00,
+    pyroBiteBorder: 0.00,
+    pyroBiteTeeth: 0.00,
+    pyroBiteWake: 0.00,
+    pyroBiteHeight: 0.00,
+    pyroBiteFireLock: 1.00,
+    pyroBiteCore: 0.00,
+    pyroBiteCoreCut: 1.00,
+    pyroBiteRim: 0.00,
+    pyroBiteRimCut: 1.00,
+    pyroBiteAfter: 0.00,
+    pyroBiteAfterCut: 1.00,
+    pyroFireMode: 'pyro-owned',
+    pyroFlamePaint: 0.00,
+    pyroStockMix: 1.00,
+    pyroFlameLuma: 0.95,
+    pyroFlameCoreColor: '#ffae00',
+    pyroFlameEdgeColor: '#ff4d00',
+    pyroBiteHeat: 0.00,
+    pyroBiteChroma: 0.00,
+    pyroBiteLuma: 0.00,
+    pyroBiteEmberColor: '#ff6600',
+    pyroBiteHotColor: '#ff4000',
+    pyroSmokeFold: 0.00,
+    pyroFoldBorder: 0.00,
+    pyroFoldWake: 0.00,
+    pyroWakeLift: 0.00,
+    pyroWakeWarmth: 0.00,
+    pyroWakeLuma: 0.00,
+    pyroWakeShadowColor: '#384c50',
+    pyroWakeEmberColor: '#b06a2a',
+    pyroFlowBite: 3.00,
+    pyroFlowBorder: 1.00,
+    pyroFlowTeeth: 0.00,
+    pyroFlowRise: 1.00,
+    pyroFlowFireLock: 1.00,
+    pyroFlowLuma: 3.00,
+    pyroFlowRadiance: 4.00,
+    pyroFlowSpikes: 1.00,
+    pyroFlowCoolColor: '#ff6400',
+    pyroFlowHotColor: '#ff320f',
+    pyroRadiance: 0.00,
+    pyroRadianceGate: 0.15,
+    pyroRadianceSpill: 0.00,
+    pyroRadianceWarmth: 0.00,
+    pyroRadianceHue: 0.00,
+    pyroRadianceChroma: 1.00,
+    pyroRadianceLuma: 3.00,
+    pyroRadianceCoolColor: '#eb0000',
+    pyroRadianceWarmColor: '#ffcd75',
+    pyroRadianceSource: 'fire',
+    pyroRadianceHeight: 0.00,
+    pyroRadianceBorder: 0.00,
+    pyroRadianceTeeth: 0.00,
+    pyroRadianceRise: 0.00,
+    pyroRadianceFireLock: 1.00,
+    pyroDiagnosticPaint: 0.00,
+    pyroCarrierView: 'normal',
+    pyroOverdrive: 8.00,
+    pressureMode: 'global-p3',
+    pressureTierOverlay: 0.00,
+    pressureTierLowerMax: 0.50,
+    pressureTierHeroMin: 0.05,
+    pressureTierHeroMax: 0.22,
+    canonicalSpread: 1.00,
+    canonicalCenterline: 1.00,
+    canonicalBodyBalance: 0.00,
+  },
+  exploding_yellow_fireball_0706: {
+    label: 'exploding yellow fireball 0706',
+    volumeScene: 'tall_plume',
+    density: 6.00,
+    fire: 0.00,
+    radiance: 3.00,
+    absorption: 1.05,
+    glow: 0.50,
+    smoke: 2.15,
+    curl: 4.00,
+    microdetail: 2.50,
+    interfaceShred: 5.00,
+    fireLicks: 5.00,
+    projection: 1.50,
+    speed: 3.70,
+    raySteps: 160,
+    adaptiveRays: 0.05,
+    occupancySkip: 0.05,
+    majorantSkip: 0.95,
+    majorantSmooth: 0.00,
+    majorantGuard: 1.00,
+    temporalAccum: 0.00,
+    temporalJitter: 0.00,
+    historyClamp: 1.00,
+    fireScale: 0.65,
+    detailScale: 0.45,
+    plumeHeight: 1.30,
+    windStrength: 1.50,
+    windAngle: -65,
+    windHeight: -0.80,
+    renderScale: 1.00,
+    inputRadius: 0.13,
+    flowRate: 0.30,
+    resolution: 96,
+    majorantGrid: 48,
+    pyroDynamicDetail: 1,
+    pyroMaterialGain: 1.50,
+    pyroInterfaceFocus: 0.00,
+    pyroEdgeBite: 0.55,
+    pyroBiteBorder: 1.00,
+    pyroBiteTeeth: 0.35,
+    pyroBiteWake: 0.35,
+    pyroBiteHeight: 0.60,
+    pyroBiteFireLock: 1.00,
+    pyroBiteCore: 0.15,
+    pyroBiteCoreCut: 0.90,
+    pyroBiteRim: 1.00,
+    pyroBiteRimCut: 1.00,
+    pyroBiteAfter: 1.00,
+    pyroBiteAfterCut: 0.00,
+    pyroFireMode: 'pyro-owned',
+    pyroFlamePaint: 0.00,
+    pyroStockMix: 1.00,
+    pyroFlameLuma: 3.00,
+    pyroFlameCoreColor: '#ff4d00',
+    pyroFlameEdgeColor: '#ff4d00',
+    pyroBiteHeat: 1.00,
+    pyroBiteChroma: 0.65,
+    pyroBiteLuma: 3.00,
+    pyroBiteEmberColor: '#ff6600',
+    pyroBiteHotColor: '#ff4000',
+    pyroSmokeFold: 0.05,
+    pyroFoldBorder: 0.00,
+    pyroFoldWake: 0.00,
+    pyroWakeLift: 0.00,
+    pyroWakeWarmth: 0.00,
+    pyroWakeLuma: 3.00,
+    pyroWakeShadowColor: '#384c50',
+    pyroWakeEmberColor: '#b06a2a',
+    pyroRadiance: 4.30,
+    pyroRadianceGate: 0.45,
+    pyroRadianceSpill: 0.00,
+    pyroRadianceWarmth: 1.00,
+    pyroRadianceHue: 1.00,
+    pyroRadianceChroma: 0.15,
+    pyroRadianceLuma: 2.50,
+    pyroRadianceCoolColor: '#ff6b6b',
+    pyroRadianceWarmColor: '#ff0000',
+    pyroRadianceSource: 'fire',
+    pyroRadianceHeight: 1.00,
+    pyroRadianceBorder: 0.70,
+    pyroRadianceTeeth: 0.55,
+    pyroRadianceRise: 1.00,
+    pyroRadianceFireLock: 0.00,
+    pyroDiagnosticPaint: 0.00,
+    pyroCarrierView: 'normal',
+    pyroOverdrive: 8.00,
+    pressureMode: 'global-p3',
+    pressureTierOverlay: 0.00,
+    pressureTierLowerMax: 0.50,
+    pressureTierHeroMin: 0.05,
+    pressureTierHeroMax: 0.22,
+    canonicalSpread: 1.00,
+    canonicalCenterline: 1.00,
+    canonicalBodyBalance: 0.00,
+  },
 };
 
-const DEFAULT_VOLUME_SMOKE_TALL_PRESET = 'pyro_material_bonfire_family_0702';
+const DEFAULT_VOLUME_SMOKE_TALL_PRESET = 'pyro_flow_small_bonfire_gamut_0707';
+
+const BUILT_IN_VOLUME_LOOK_LIBRARY = {
+  identity: VOLUME_LOOK_LIBRARY_IDENTITY,
+  version: 1,
+  updatedAt: '2026-07-06T08:21:46.551Z',
+  pyro: [
+    {
+      name: 'Pyro_Flow_small_bonfire_gamut_0707',
+      kind: 'pyro',
+      savedAt: '2026-07-07T19:43:04.135Z',
+      updatedAt: '2026-07-07T19:43:04.135Z',
+      fields: [...PYRO_LOOK_FIELDS],
+      controls: Object.fromEntries(
+        PYRO_LOOK_FIELDS
+          .filter(key => TALL_PLUME_OPERATOR_PRESETS.pyro_flow_small_bonfire_gamut_0707[key] !== undefined)
+          .map(key => [key, TALL_PLUME_OPERATOR_PRESETS.pyro_flow_small_bonfire_gamut_0707[key]])
+      ),
+      sourceBacked: true,
+      flowCarrierAuthored: true,
+    },
+    {
+      name: 'exploding-yellow-fireball',
+      kind: 'pyro',
+      savedAt: '2026-07-06T08:21:46.551Z',
+      updatedAt: '2026-07-06T08:21:46.551Z',
+      fields: [...PYRO_LOOK_FIELDS],
+      controls: Object.fromEntries(
+        PYRO_LOOK_FIELDS
+          .filter(key => TALL_PLUME_OPERATOR_PRESETS.exploding_yellow_fireball_0706[key] !== undefined)
+          .map(key => [key, TALL_PLUME_OPERATOR_PRESETS.exploding_yellow_fireball_0706[key]])
+      ),
+      sourceBacked: true,
+      biteStackAuthored: true,
+    },
+    {
+      name: 'Bonfire_a_la_ruffles',
+      kind: 'pyro',
+      savedAt: '2026-07-07T08:53:39.573Z',
+      updatedAt: '2026-07-07T08:53:39.573Z',
+      fields: [...PYRO_LOOK_FIELDS],
+      controls: {
+        pyroDynamicDetail: 1,
+        pyroMaterialGain: 0.85,
+        pyroInterfaceFocus: 0.25,
+        pyroEdgeBite: 0,
+        pyroBiteBorder: 1,
+        pyroBiteTeeth: 1,
+        pyroBiteWake: 0,
+        pyroBiteHeight: 1,
+        pyroBiteFireLock: 1,
+        pyroBiteCore: 1,
+        pyroBiteCoreCut: 0.15,
+        pyroBiteRim: 1,
+        pyroBiteRimCut: 1,
+        pyroBiteAfter: 1,
+        pyroBiteAfterCut: 0,
+        pyroFireMode: 'pyro-owned',
+        pyroFlamePaint: 0,
+        pyroStockMix: 1,
+        pyroFlameLuma: 0.95,
+        pyroFlameCoreColor: '#ff4d00',
+        pyroFlameEdgeColor: '#ff4d00',
+        pyroBiteHeat: 0.25,
+        pyroBiteChroma: 0.55,
+        pyroBiteLuma: 0,
+        pyroBiteEmberColor: '#ff6600',
+        pyroBiteHotColor: '#ff4000',
+        pyroSmokeFold: 0,
+        pyroFoldBorder: 0.45,
+        pyroFoldWake: 0.65,
+        pyroWakeLift: 0,
+        pyroWakeWarmth: 0,
+        pyroWakeLuma: 0,
+        pyroWakeShadowColor: '#384c50',
+        pyroWakeEmberColor: '#b06a2a',
+        pyroRadiance: 1.25,
+        pyroRadianceGate: 1,
+        pyroRadianceSpill: 1,
+        pyroRadianceWarmth: 0,
+        pyroRadianceHue: 0,
+        pyroRadianceChroma: 0,
+        pyroRadianceLuma: 1,
+        pyroRadianceCoolColor: '#eb0000',
+        pyroRadianceWarmColor: '#ffcd75',
+        pyroRadianceSource: 'fire',
+        pyroRadianceHeight: 0,
+        pyroRadianceBorder: 0,
+        pyroRadianceTeeth: 0,
+        pyroRadianceRise: 0,
+        pyroRadianceFireLock: 1,
+        pyroFlowBite: 0.95,
+        pyroFlowBorder: 0,
+        pyroFlowTeeth: 0,
+        pyroFlowRise: 1,
+        pyroFlowFireLock: 1,
+        pyroFlowLuma: 3,
+        pyroFlowRadiance: 0,
+        pyroFlowSpikes: 0,
+        pyroFlowCoolColor: '#ff8800',
+        pyroFlowHotColor: '#ff230a',
+        pyroDiagnosticPaint: 0,
+        pyroCarrierView: 'normal',
+        pyroOverdrive: 8,
+      },
+      sourceBacked: true,
+      biteStackAuthored: true,
+    },
+  ],
+  firesim: [],
+};
 
 const CANONICAL_VOLUME_MACRO_PRESETS = {
   macro_foothold_0621: {
@@ -10369,6 +10745,118 @@ function volumeControlRow(id) {
   return document.getElementById(id)?.closest('.slider-row') || null;
 }
 
+function volumeControlCluster(id) {
+  const row = volumeControlRow(id);
+  if (!row) return [];
+  const nodes = [row];
+  const help = row.nextElementSibling;
+  if (help?.classList?.contains('slider-help')) nodes.push(help);
+  return nodes;
+}
+
+function moveVolumeControlClusterBefore(id, beforeId) {
+  const before = volumeControlRow(beforeId);
+  const nodes = volumeControlCluster(id);
+  if (!before || !nodes.length) return false;
+  for (const node of nodes) before.parentNode.insertBefore(node, before);
+  return true;
+}
+
+function moveVolumeControlClusterAfter(id, afterId) {
+  const afterNodes = volumeControlCluster(afterId);
+  const nodes = volumeControlCluster(id);
+  if (!afterNodes.length || !nodes.length) return false;
+  const parent = afterNodes[afterNodes.length - 1].parentNode;
+  let insertBefore = afterNodes[afterNodes.length - 1].nextSibling;
+  for (const node of nodes) {
+    parent.insertBefore(node, insertBefore);
+  }
+  return true;
+}
+
+const PYRO_CARRIER_WORKBENCH_PINNED_IDS = [
+  'volume-look-freeze',
+];
+
+const FLOW_FIRST_PYRO_CONTROL_IDS = [
+  'volume-pyro-flow-bite',
+  'volume-pyro-flow-border',
+  'volume-pyro-flow-teeth',
+  'volume-pyro-flow-rise',
+  'volume-pyro-flow-fire-lock',
+  'volume-pyro-flow-luma',
+  'volume-pyro-flow-radiance',
+  'volume-pyro-flow-spikes',
+  'volume-pyro-flow-cool-color',
+  'volume-pyro-flow-hot-color',
+];
+
+const PYRO_RADIANCE_CONTROL_IDS = [
+  'volume-pyro-radiance',
+  'volume-pyro-radiance-gate',
+  'volume-pyro-radiance-spill',
+  'volume-pyro-radiance-warmth',
+  'volume-pyro-radiance-hue',
+  'volume-pyro-radiance-chroma',
+  'volume-pyro-radiance-luma',
+  'volume-pyro-radiance-cool-color',
+  'volume-pyro-radiance-warm-color',
+  'volume-pyro-radiance-source',
+  'volume-pyro-radiance-height',
+  'volume-pyro-radiance-border',
+  'volume-pyro-radiance-teeth',
+  'volume-pyro-radiance-rise',
+  'volume-pyro-radiance-fire-lock',
+];
+
+const LEGACY_PYRO_CONTROL_IDS = [
+  'volume-pyro-edge-bite',
+  'volume-pyro-bite-border',
+  'volume-pyro-bite-teeth',
+  'volume-pyro-bite-wake',
+  'volume-pyro-bite-height',
+  'volume-pyro-bite-fire-lock',
+  'volume-pyro-bite-core',
+  'volume-pyro-bite-core-cut',
+  'volume-pyro-bite-rim',
+  'volume-pyro-bite-rim-cut',
+  'volume-pyro-bite-after',
+  'volume-pyro-bite-after-cut',
+  'volume-pyro-bite-heat',
+  'volume-pyro-bite-chroma',
+  'volume-pyro-bite-luma',
+  'volume-pyro-bite-ember-color',
+  'volume-pyro-bite-hot-color',
+  'volume-pyro-smoke-fold',
+  'volume-pyro-fold-border',
+  'volume-pyro-fold-wake',
+  'volume-pyro-wake-lift',
+  'volume-pyro-wake-warmth',
+  'volume-pyro-wake-luma',
+  'volume-pyro-wake-shadow-color',
+  'volume-pyro-wake-ember-color',
+];
+
+function moveVolumePyroFreezeIntoCarrierWorkbench() {
+  for (const id of PYRO_CARRIER_WORKBENCH_PINNED_IDS) {
+    moveVolumeControlClusterBefore(id, FLOW_FIRST_PYRO_CONTROL_IDS[0]);
+  }
+}
+
+function moveVolumePyroRadianceControlsBelowFlow() {
+  let afterId = FLOW_FIRST_PYRO_CONTROL_IDS[FLOW_FIRST_PYRO_CONTROL_IDS.length - 1];
+  for (const id of PYRO_RADIANCE_CONTROL_IDS) {
+    if (moveVolumeControlClusterAfter(id, afterId)) afterId = id;
+  }
+}
+
+function moveVolumePyroLegacyControlsBelowRadiance() {
+  let afterId = PYRO_RADIANCE_CONTROL_IDS[PYRO_RADIANCE_CONTROL_IDS.length - 1];
+  for (const id of LEGACY_PYRO_CONTROL_IDS) {
+    if (moveVolumeControlClusterAfter(id, afterId)) afterId = id;
+  }
+}
+
 function syncCanonicalVolumeControlVisibility(volumeScene) {
   const canonical = volumeScene === 'canonical_plume';
   for (const id of CANONICAL_VOLUME_HIDDEN_CONTROLS) {
@@ -10514,6 +11002,16 @@ const VOLUME_BASIN_ROUTE_FIELDS = [
   ['pyroRadianceTeeth', 'volume_pyro_radiance_teeth'],
   ['pyroRadianceRise', 'volume_pyro_radiance_rise'],
   ['pyroRadianceFireLock', 'volume_pyro_radiance_fire_lock'],
+  ['pyroFlowBite', 'volume_pyro_flow_bite'],
+  ['pyroFlowBorder', 'volume_pyro_flow_border'],
+  ['pyroFlowTeeth', 'volume_pyro_flow_teeth'],
+  ['pyroFlowRise', 'volume_pyro_flow_rise'],
+  ['pyroFlowFireLock', 'volume_pyro_flow_fire_lock'],
+  ['pyroFlowLuma', 'volume_pyro_flow_luma'],
+  ['pyroFlowRadiance', 'volume_pyro_flow_radiance'],
+  ['pyroFlowSpikes', 'volume_pyro_flow_spikes'],
+  ['pyroFlowCoolColor', 'volume_pyro_flow_cool_color'],
+  ['pyroFlowHotColor', 'volume_pyro_flow_hot_color'],
   ['pyroDiagnosticPaint', 'volume_pyro_diagnostic_paint'],
   ['pyroCarrierView', 'volume_pyro_carrier_view'],
   ['pyroOverdrive', 'volume_pyro_overdrive'],
@@ -10641,12 +11139,32 @@ function normalizeVolumeLookEntry(entry, kind) {
   };
 }
 
+function cloneVolumeLookLibraryEntry(entry) {
+  return {
+    ...entry,
+    fields: Array.isArray(entry.fields) ? [...entry.fields] : [],
+    controls: entry.controls && typeof entry.controls === 'object' ? { ...entry.controls } : {},
+  };
+}
+
+function mergeVolumeLookLibraryWithBuiltIns(library = normalizeVolumeLookLibrary()) {
+  const normalized = normalizeVolumeLookLibrary(library);
+  const builtIns = normalizeVolumeLookLibrary(BUILT_IN_VOLUME_LOOK_LIBRARY);
+  for (const kind of ['pyro', 'firesim']) {
+    const byName = new Map();
+    for (const entry of builtIns[kind] || []) byName.set(entry.name, cloneVolumeLookLibraryEntry(entry));
+    for (const entry of normalized[kind] || []) byName.set(entry.name, cloneVolumeLookLibraryEntry(entry));
+    normalized[kind] = [...byName.values()];
+  }
+  return normalized;
+}
+
 function readVolumeLookLibrary() {
   try {
     const parsed = JSON.parse(localStorage.getItem(KAMINOS_VOLUME_LOOK_LIBRARY_STORAGE_KEY));
-    return normalizeVolumeLookLibrary(parsed);
+    return mergeVolumeLookLibraryWithBuiltIns(parsed);
   } catch {
-    return normalizeVolumeLookLibrary();
+    return mergeVolumeLookLibraryWithBuiltIns();
   }
 }
 
@@ -14762,6 +15280,16 @@ function readVolumeControls() {
     pyroRadianceTeeth: parseFloat(document.getElementById('volume-pyro-radiance-teeth').value),
     pyroRadianceRise: parseFloat(document.getElementById('volume-pyro-radiance-rise').value),
     pyroRadianceFireLock: parseFloat(document.getElementById('volume-pyro-radiance-fire-lock').value),
+    pyroFlowBite: parseFloat(document.getElementById('volume-pyro-flow-bite').value),
+    pyroFlowBorder: parseFloat(document.getElementById('volume-pyro-flow-border').value),
+    pyroFlowTeeth: parseFloat(document.getElementById('volume-pyro-flow-teeth').value),
+    pyroFlowRise: parseFloat(document.getElementById('volume-pyro-flow-rise').value),
+    pyroFlowFireLock: parseFloat(document.getElementById('volume-pyro-flow-fire-lock').value),
+    pyroFlowLuma: parseFloat(document.getElementById('volume-pyro-flow-luma').value),
+    pyroFlowRadiance: parseFloat(document.getElementById('volume-pyro-flow-radiance').value),
+    pyroFlowSpikes: parseFloat(document.getElementById('volume-pyro-flow-spikes').value),
+    pyroFlowCoolColor: normalizeVolumeHexColor(document.getElementById('volume-pyro-flow-cool-color').value, '#2aa7b8'),
+    pyroFlowHotColor: normalizeVolumeHexColor(document.getElementById('volume-pyro-flow-hot-color').value, '#ff7a36'),
     pyroDiagnosticPaint: parseFloat(document.getElementById('volume-pyro-diagnostic-paint').value),
     pyroCarrierView: document.getElementById('volume-pyro-carrier-view').value,
     pyroOverdrive: parseFloat(document.getElementById('volume-pyro-overdrive').value),
@@ -14890,6 +15418,16 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-pyro-radiance-teeth-val').textContent = c.pyroRadianceTeeth.toFixed(2);
   document.getElementById('volume-pyro-radiance-rise-val').textContent = c.pyroRadianceRise.toFixed(2);
   document.getElementById('volume-pyro-radiance-fire-lock-val').textContent = c.pyroRadianceFireLock.toFixed(2);
+  document.getElementById('volume-pyro-flow-bite-val').textContent = c.pyroFlowBite.toFixed(2);
+  document.getElementById('volume-pyro-flow-border-val').textContent = c.pyroFlowBorder.toFixed(2);
+  document.getElementById('volume-pyro-flow-teeth-val').textContent = c.pyroFlowTeeth.toFixed(2);
+  document.getElementById('volume-pyro-flow-rise-val').textContent = c.pyroFlowRise.toFixed(2);
+  document.getElementById('volume-pyro-flow-fire-lock-val').textContent = c.pyroFlowFireLock.toFixed(2);
+  document.getElementById('volume-pyro-flow-luma-val').textContent = c.pyroFlowLuma.toFixed(2);
+  document.getElementById('volume-pyro-flow-radiance-val').textContent = c.pyroFlowRadiance.toFixed(2);
+  document.getElementById('volume-pyro-flow-spikes-val').textContent = c.pyroFlowSpikes.toFixed(2);
+  document.getElementById('volume-pyro-flow-cool-color-val').textContent = c.pyroFlowCoolColor;
+  document.getElementById('volume-pyro-flow-hot-color-val').textContent = c.pyroFlowHotColor;
   document.getElementById('volume-pyro-diagnostic-paint-val').textContent = c.pyroDiagnosticPaint.toFixed(2);
   document.getElementById('volume-pyro-carrier-view-val').textContent = c.pyroCarrierView;
   document.getElementById('volume-pyro-overdrive-val').textContent = c.pyroOverdrive.toFixed(2);
@@ -14997,8 +15535,9 @@ function refreshVolumeReadout() {
     Number.isFinite(pyroCarrierDebug.biteSignalMax) ? pyroCarrierDebug.biteSignalMax.toFixed(2) : '0.00',
     Number.isFinite(pyroCarrierDebug.foldSignalMax) ? pyroCarrierDebug.foldSignalMax.toFixed(2) : '0.00',
     Number.isFinite(pyroCarrierDebug.radianceSignalMax) ? pyroCarrierDebug.radianceSignalMax.toFixed(2) : '0.00',
+    Number.isFinite(pyroCarrierDebug.flowSignalMax) ? pyroCarrierDebug.flowSignalMax.toFixed(2) : '0.00',
   ].join('/');
-  const pyroCarrierShape = [pyroCarrierDebug.biteShape, pyroCarrierDebug.foldShape].filter(Boolean).join(' / ');
+  const pyroCarrierShape = [pyroCarrierDebug.biteShape, pyroCarrierDebug.foldShape, pyroCarrierDebug.flowShape].filter(Boolean).join(' / ');
   document.getElementById('volume-pyro-carrier-state').textContent = `${pyroCarrierDebug.view || 'normal'} / ${pyroCarrierDrive}x / ${pyroCarrierLevels}${pyroCarrierShape ? ` / ${pyroCarrierShape}` : ''}`;
   paintVolumePyroDynamicAtlas(pyroDetail);
   document.getElementById('volume-toggle').textContent = s.active ? 'Disable' : 'Enable';
@@ -15432,6 +15971,46 @@ async function initKaminosVolumeRoute() {
   if (params.has('volume_pyro_radiance_fire_lock') && Number.isFinite(routePyroRadianceFireLock)) {
     document.getElementById('volume-pyro-radiance-fire-lock').value = String(Math.max(0, Math.min(1, routePyroRadianceFireLock)));
   }
+  const routePyroFlowBite = Number(params.get('volume_pyro_flow_bite'));
+  if (params.has('volume_pyro_flow_bite') && Number.isFinite(routePyroFlowBite)) {
+    document.getElementById('volume-pyro-flow-bite').value = String(Math.max(0, Math.min(3, routePyroFlowBite)));
+  }
+  const routePyroFlowBorder = Number(params.get('volume_pyro_flow_border'));
+  if (params.has('volume_pyro_flow_border') && Number.isFinite(routePyroFlowBorder)) {
+    document.getElementById('volume-pyro-flow-border').value = String(Math.max(0, Math.min(1, routePyroFlowBorder)));
+  }
+  const routePyroFlowTeeth = Number(params.get('volume_pyro_flow_teeth'));
+  if (params.has('volume_pyro_flow_teeth') && Number.isFinite(routePyroFlowTeeth)) {
+    document.getElementById('volume-pyro-flow-teeth').value = String(Math.max(0, Math.min(1, routePyroFlowTeeth)));
+  }
+  const routePyroFlowRise = Number(params.get('volume_pyro_flow_rise'));
+  if (params.has('volume_pyro_flow_rise') && Number.isFinite(routePyroFlowRise)) {
+    document.getElementById('volume-pyro-flow-rise').value = String(Math.max(0, Math.min(1, routePyroFlowRise)));
+  }
+  const routePyroFlowFireLock = Number(params.get('volume_pyro_flow_fire_lock'));
+  if (params.has('volume_pyro_flow_fire_lock') && Number.isFinite(routePyroFlowFireLock)) {
+    document.getElementById('volume-pyro-flow-fire-lock').value = String(Math.max(0, Math.min(1, routePyroFlowFireLock)));
+  }
+  const routePyroFlowLuma = Number(params.get('volume_pyro_flow_luma'));
+  if (params.has('volume_pyro_flow_luma') && Number.isFinite(routePyroFlowLuma)) {
+    document.getElementById('volume-pyro-flow-luma').value = String(Math.max(0, Math.min(3, routePyroFlowLuma)));
+  }
+  const routePyroFlowRadiance = Number(params.get('volume_pyro_flow_radiance'));
+  if (params.has('volume_pyro_flow_radiance') && Number.isFinite(routePyroFlowRadiance)) {
+    document.getElementById('volume-pyro-flow-radiance').value = String(Math.max(0, Math.min(4, routePyroFlowRadiance)));
+  }
+  const routePyroFlowSpikes = Number(params.get('volume_pyro_flow_spikes'));
+  if (params.has('volume_pyro_flow_spikes') && Number.isFinite(routePyroFlowSpikes)) {
+    document.getElementById('volume-pyro-flow-spikes').value = String(Math.max(0, Math.min(1, routePyroFlowSpikes)));
+  }
+  const routePyroFlowCoolColor = normalizeVolumeHexColor(params.get('volume_pyro_flow_cool_color'), '');
+  if (routePyroFlowCoolColor) {
+    document.getElementById('volume-pyro-flow-cool-color').value = routePyroFlowCoolColor;
+  }
+  const routePyroFlowHotColor = normalizeVolumeHexColor(params.get('volume_pyro_flow_hot_color'), '');
+  if (routePyroFlowHotColor) {
+    document.getElementById('volume-pyro-flow-hot-color').value = routePyroFlowHotColor;
+  }
   const routePyroDiagnosticPaint = Number(params.get('volume_pyro_diagnostic_paint'));
   const routePyroDebugTint = Number(params.get('volume_pyro_debug_tint'));
   if (params.has('volume_pyro_diagnostic_paint') && Number.isFinite(routePyroDiagnosticPaint)) {
@@ -15440,7 +16019,7 @@ async function initKaminosVolumeRoute() {
     document.getElementById('volume-pyro-diagnostic-paint').value = String(Math.max(0, Math.min(1, routePyroDebugTint)));
   }
   const routePyroCarrierView = params.get('volume_pyro_carrier_view');
-  if (['normal', 'border', 'bite', 'fold', 'wake', 'radiance', 'all'].includes(routePyroCarrierView)) {
+  if (['normal', 'border', 'bite', 'fold', 'wake', 'radiance', 'flow', 'all'].includes(routePyroCarrierView)) {
     document.getElementById('volume-pyro-carrier-view').value = routePyroCarrierView;
   }
   const routePyroOverdrive = Number(params.get('volume_pyro_overdrive'));
@@ -15596,7 +16175,10 @@ async function initKaminosVolumeRoute() {
     refreshVolumeReadout();
     saveVolumeBasinSnapshot(event?.target?.id || 'control-change');
   };
-  for (const id of ['volume-scene', 'volume-density', 'volume-fire', 'volume-radiance', 'volume-absorption', 'volume-glow', 'volume-smoke', 'volume-curl', 'volume-microdetail', 'volume-interface-shred', 'volume-fire-licks', 'volume-projection', 'volume-speed', 'volume-steps', 'volume-adaptive-rays', 'volume-occupancy-skip', 'volume-majorant-skip', 'volume-majorant-smooth', 'volume-majorant-guard', 'volume-temporal-accum', 'volume-temporal-jitter', 'volume-history-clamp', 'volume-fire-scale', 'volume-detail-scale', 'volume-plume-height', 'volume-wind-strength', 'volume-wind-angle', 'volume-wind-height', 'volume-render-scale', 'volume-input-radius', 'volume-flow-rate', 'volume-resolution', 'volume-majorant-grid', 'volume-grid-overlay', 'volume-flow-debug', 'volume-look-freeze', 'volume-pyro-compare', 'volume-pyro-detail', 'volume-pyro-material-gain', 'volume-pyro-interface-focus', 'volume-pyro-edge-bite', 'volume-pyro-bite-border', 'volume-pyro-bite-teeth', 'volume-pyro-bite-wake', 'volume-pyro-bite-height', 'volume-pyro-bite-fire-lock', 'volume-pyro-bite-core', 'volume-pyro-bite-core-cut', 'volume-pyro-bite-rim', 'volume-pyro-bite-rim-cut', 'volume-pyro-bite-after', 'volume-pyro-bite-after-cut', 'volume-pyro-fire-mode', 'volume-pyro-flame-paint', 'volume-pyro-stock-mix', 'volume-pyro-flame-luma', 'volume-pyro-flame-core-color', 'volume-pyro-flame-edge-color', 'volume-pyro-bite-heat', 'volume-pyro-bite-chroma', 'volume-pyro-bite-luma', 'volume-pyro-bite-ember-color', 'volume-pyro-bite-hot-color', 'volume-pyro-smoke-fold', 'volume-pyro-fold-border', 'volume-pyro-fold-wake', 'volume-pyro-wake-lift', 'volume-pyro-wake-warmth', 'volume-pyro-wake-luma', 'volume-pyro-wake-shadow-color', 'volume-pyro-wake-ember-color', 'volume-pyro-radiance', 'volume-pyro-radiance-gate', 'volume-pyro-radiance-spill', 'volume-pyro-radiance-warmth', 'volume-pyro-radiance-hue', 'volume-pyro-radiance-chroma', 'volume-pyro-radiance-luma', 'volume-pyro-radiance-cool-color', 'volume-pyro-radiance-warm-color', 'volume-pyro-radiance-source', 'volume-pyro-radiance-height', 'volume-pyro-radiance-border', 'volume-pyro-radiance-teeth', 'volume-pyro-radiance-rise', 'volume-pyro-radiance-fire-lock', 'volume-pyro-diagnostic-paint', 'volume-pyro-carrier-view', 'volume-pyro-overdrive', 'volume-pressure-mode', 'volume-pressure-tier-overlay', 'volume-pressure-tier-lower-max', 'volume-pressure-tier-hero-min', 'volume-pressure-tier-hero-max', 'volume-canonical-spread', 'volume-canonical-centerline', 'volume-canonical-body-balance']) {
+  moveVolumePyroFreezeIntoCarrierWorkbench();
+  moveVolumePyroRadianceControlsBelowFlow();
+  moveVolumePyroLegacyControlsBelowRadiance();
+  for (const id of ['volume-scene', 'volume-density', 'volume-fire', 'volume-radiance', 'volume-absorption', 'volume-glow', 'volume-smoke', 'volume-curl', 'volume-microdetail', 'volume-interface-shred', 'volume-fire-licks', 'volume-projection', 'volume-speed', 'volume-steps', 'volume-adaptive-rays', 'volume-occupancy-skip', 'volume-majorant-skip', 'volume-majorant-smooth', 'volume-majorant-guard', 'volume-temporal-accum', 'volume-temporal-jitter', 'volume-history-clamp', 'volume-fire-scale', 'volume-detail-scale', 'volume-plume-height', 'volume-wind-strength', 'volume-wind-angle', 'volume-wind-height', 'volume-render-scale', 'volume-input-radius', 'volume-flow-rate', 'volume-resolution', 'volume-majorant-grid', 'volume-grid-overlay', 'volume-flow-debug', 'volume-look-freeze', 'volume-pyro-compare', 'volume-pyro-detail', 'volume-pyro-material-gain', 'volume-pyro-interface-focus', 'volume-pyro-edge-bite', 'volume-pyro-bite-border', 'volume-pyro-bite-teeth', 'volume-pyro-bite-wake', 'volume-pyro-bite-height', 'volume-pyro-bite-fire-lock', 'volume-pyro-bite-core', 'volume-pyro-bite-core-cut', 'volume-pyro-bite-rim', 'volume-pyro-bite-rim-cut', 'volume-pyro-bite-after', 'volume-pyro-bite-after-cut', 'volume-pyro-fire-mode', 'volume-pyro-flame-paint', 'volume-pyro-stock-mix', 'volume-pyro-flame-luma', 'volume-pyro-flame-core-color', 'volume-pyro-flame-edge-color', 'volume-pyro-bite-heat', 'volume-pyro-bite-chroma', 'volume-pyro-bite-luma', 'volume-pyro-bite-ember-color', 'volume-pyro-bite-hot-color', 'volume-pyro-smoke-fold', 'volume-pyro-fold-border', 'volume-pyro-fold-wake', 'volume-pyro-wake-lift', 'volume-pyro-wake-warmth', 'volume-pyro-wake-luma', 'volume-pyro-wake-shadow-color', 'volume-pyro-wake-ember-color', 'volume-pyro-radiance', 'volume-pyro-radiance-gate', 'volume-pyro-radiance-spill', 'volume-pyro-radiance-warmth', 'volume-pyro-radiance-hue', 'volume-pyro-radiance-chroma', 'volume-pyro-radiance-luma', 'volume-pyro-radiance-cool-color', 'volume-pyro-radiance-warm-color', 'volume-pyro-radiance-source', 'volume-pyro-radiance-height', 'volume-pyro-radiance-border', 'volume-pyro-radiance-teeth', 'volume-pyro-radiance-rise', 'volume-pyro-radiance-fire-lock', 'volume-pyro-flow-bite', 'volume-pyro-flow-border', 'volume-pyro-flow-teeth', 'volume-pyro-flow-rise', 'volume-pyro-flow-fire-lock', 'volume-pyro-flow-luma', 'volume-pyro-flow-radiance', 'volume-pyro-flow-spikes', 'volume-pyro-flow-cool-color', 'volume-pyro-flow-hot-color', 'volume-pyro-diagnostic-paint', 'volume-pyro-carrier-view', 'volume-pyro-overdrive', 'volume-pressure-mode', 'volume-pressure-tier-overlay', 'volume-pressure-tier-lower-max', 'volume-pressure-tier-hero-min', 'volume-pressure-tier-hero-max', 'volume-canonical-spread', 'volume-canonical-centerline', 'volume-canonical-body-balance']) {
     document.getElementById(id).addEventListener('input', syncControls);
     document.getElementById(id).addEventListener('change', syncControls);
   }
