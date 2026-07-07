@@ -2187,6 +2187,8 @@ assert.match(fullGridPerChannelProbe, /supportLocalized/, 'full-grid per-channel
 assert.match(fullGridPerChannelProbe, /fullInputChannels/, 'full-grid per-channel probe records that inputs remain the complete low field state');
 assert.match(fullGridPerChannelProbe, /--application-out-dir/, 'full-grid per-channel probe can assemble scalar heads into complete full-grid application sidecars');
 assert.match(fullGridPerChannelProbe, /scalar-head-assembled-full-grid-application-v0/, 'full-grid per-channel probe names the assembled scalar-head application artifact');
+assert.match(fullGridPerChannelProbe, /--application-prediction-source/, 'full-grid per-channel probe can choose scalar or refined predictions for full-grid application sidecars');
+assert.match(fullGridPerChannelProbe, /scalar-head-refined-full-grid-application-v0/, 'full-grid per-channel probe names the refined scalar-head application artifact separately');
 assert.match(fullGridPerChannelProbe, /scalarHeadAssemblyBase/, 'full-grid per-channel probe reports whether assembly starts from low-upsampled or comparison sidecars');
 assert.match(fullGridPerChannelProbe, /--scalar-head-support-gate/, 'full-grid per-channel probe exposes an explicit support gate control for scalar-head assembly');
 assert.match(fullGridPerChannelProbe, /support-gated-scalar-head-assembled-full-grid-application-v0/, 'support-gated scalar-head assembly has a distinct application identity from naive scalar assembly');
@@ -2198,6 +2200,11 @@ assert.match(fullGridPerChannelProbe, /inSupportError/, 'support-gated scalar as
 assert.match(fullGridPerChannelProbe, /--visual-preview-dir/, 'full-grid per-channel probe can write offline per-channel visual decomposition previews');
 assert.match(fullGridPerChannelProbe, /full-grid-per-channel-visual-preview-v0/, 'full-grid per-channel visual previews carry a stable identity');
 assert.match(fullGridPerChannelProbe, /offline-channel-preview-not-renderer-state/, 'full-grid per-channel previews explicitly avoid pretending to be renderer evidence');
+assert.match(fullGridPerChannelProbe, /--refinement-head/, 'full-grid per-channel probe can train an explicit second-stage refinement head');
+assert.match(fullGridPerChannelProbe, /scalar-head-refinement-composition-mlp-v0/, 'full-grid per-channel probe names the refinement/composition head identity');
+assert.match(fullGridPerChannelProbe, /--refinement-local-context/, 'full-grid per-channel probe can append local low-grid context for refinement without requiring a second time grid');
+assert.match(fullGridPerChannelProbe, /low-grid-six-neighbor-context-v0/, 'full-grid per-channel probe names the single-grid local-neighbor context identity');
+assert.match(fullGridPerChannelProbe, /inSupportImprovementVsScalarHead/, 'full-grid per-channel refinement reports in-support improvement versus the scalar head');
 assert.match(fullGridPerChannelProbe, /failurePhase/, 'full-grid per-channel probe writes failure-phase reports for corrupt sidecars or training failures');
 
 const fullGridChannelGraftPath = join(root, 'volume-full-grid-field-channel-graft.py');

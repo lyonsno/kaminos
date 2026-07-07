@@ -21,9 +21,14 @@ REPORT_SCHEMA = "kaminos.volume.full-grid-field-per-channel-probe.v0"
 PROBE_IDENTITY = "full-input-single-output-channel-probe-v0"
 RIDGE_IDENTITY = "single-channel-ridge-residual-v0"
 MLP_IDENTITY = "single-channel-mlp-residual-v0"
+REFINEMENT_IDENTITY = "scalar-head-refinement-composition-mlp-v0"
+REFINEMENT_FEATURE_IDENTITY = "scalar-head-plus-low-context-refinement-features-v0"
+LOW_NEIGHBOR_CONTEXT_IDENTITY = "low-grid-six-neighbor-context-v0"
 ASSEMBLED_APPLICATION_IDENTITY = "scalar-head-assembled-full-grid-application-v0"
 SUPPORT_GATED_APPLICATION_IDENTITY = "support-gated-scalar-head-assembled-full-grid-application-v0"
+SUPPORT_GATED_REFINED_APPLICATION_IDENTITY = "support-gated-scalar-head-refined-full-grid-application-v0"
 PREDICTED_SUPPORT_GATE_IDENTITY = "first-stage-scalar-prediction-support-gate-v0"
+REFINED_APPLICATION_IDENTITY = "scalar-head-refined-full-grid-application-v0"
 VISUAL_PREVIEW_IDENTITY = "full-grid-per-channel-visual-preview-v0"
 VISUAL_PREVIEW_AUTHORITY = "offline-channel-preview-not-renderer-state"
 FIELD_AUTHORITY = "complete-webgpu-fluid-front-buffer-readback-sidecars"
@@ -88,8 +93,26 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--learning-rate", type=float, default=2.0e-3, help="Adam learning rate for single-channel-mlp-residual-v0.")
     parser.add_argument("--batch-size", type=int, default=1024, help="MLP minibatch size.")
     parser.add_argument("--weight-decay", type=float, default=1.0e-5, help="MLP L2 weight decay.")
+    parser.add_argument(
+        "--refinement-head",
+        choices=["none", "mlp"],
+        default="none",
+        help="Optional second-stage composition head that refines scalar-head predictions instead of replacing support cleanup.",
+    )
+    parser.add_argument(
+        "--refinement-local-context",
+        choices=["none", "low-neighbor"],
+        default="none",
+        help="Optional single-grid local context for refinement; low-neighbor appends six-neighbor low-grid deltas without a second time grid.",
+    )
     parser.add_argument("--gradient-pairs", type=int, default=30_000, help="Maximum adjacent x-neighbor pairs for gradient energy metrics.")
     parser.add_argument("--application-out-dir", help="Optional output directory for complete scalar-head assembled full-grid application sidecars.")
+    parser.add_argument(
+        "--application-prediction-source",
+        choices=["scalar", "refinement"],
+        default="scalar",
+        help="Prediction source for --application-out-dir: scalar heads only, or scalar heads plus refinement correction.",
+    )
     parser.add_argument(
         "--scalar-head-support-gate",
         choices=["none", "predicted"],
@@ -243,6 +266,83 @@ def standardize_features(train_features: np.ndarray, test_features: np.ndarray) 
         "featureCount": int(train_features.shape[1]),
         "zeroStdFeatureCount": int(np.count_nonzero(std == 1.0)),
     }
+
+
+def low_neighbor_context_features(
+    low_fluid: np.ndarray,
+    low_front: np.ndarray,
+    high_cell_indexes: np.ndarray,
+    low_grid: int,
+    high_grid: int,
+) -> np.ndarray:
+    x = high_cell_indexes % high_grid
+    y = (high_cell_indexes // high_grid) % high_grid
+    z = high_cell_indexes // (high_grid * high_grid)
+    ratio = high_grid / low_grid
+    lx = np.minimum(low_grid - 1, np.floor(x / ratio).astype(np.int64))
+    ly = np.minimum(low_grid - 1, np.floor(y / ratio).astype(np.int64))
+    lz = np.minimum(low_grid - 1, np.floor(z / ratio).astype(np.int64))
+
+    def sample(cx: np.ndarray, cy: np.ndarray, cz: np.ndarray) -> np.ndarray:
+        indexes = cx + cy * low_grid + cz * low_grid * low_grid
+        return np.concatenate([low_fluid[indexes], low_front[indexes, None]], axis=1).astype(np.float32, copy=False)
+
+    center = sample(lx, ly, lz)
+    neighbors = np.stack([
+        sample(np.maximum(0, lx - 1), ly, lz),
+        sample(np.minimum(low_grid - 1, lx + 1), ly, lz),
+        sample(lx, np.maximum(0, ly - 1), lz),
+        sample(lx, np.minimum(low_grid - 1, ly + 1), lz),
+        sample(lx, ly, np.maximum(0, lz - 1)),
+        sample(lx, ly, np.minimum(low_grid - 1, lz + 1)),
+    ], axis=0)
+    deltas = neighbors - center.reshape(1, center.shape[0], center.shape[1])
+    mean_delta = np.mean(deltas, axis=0)
+    max_abs_delta = np.max(np.abs(deltas), axis=0)
+    return np.concatenate([mean_delta, max_abs_delta], axis=1).astype(np.float32, copy=False)
+
+
+def refinement_local_context(
+    args: argparse.Namespace,
+    low_fluid: np.ndarray,
+    low_front: np.ndarray,
+    indexes: np.ndarray,
+    low_grid: int,
+    high_grid: int,
+) -> tuple[np.ndarray, dict[str, Any]]:
+    if args.refinement_local_context == "none":
+        return np.zeros((indexes.shape[0], 0), dtype=np.float32), {
+            "identity": "no-refinement-local-context-v0",
+            "featureCount": 0,
+        }
+    context = low_neighbor_context_features(low_fluid, low_front, indexes, low_grid, high_grid)
+    return context, {
+        "identity": LOW_NEIGHBOR_CONTEXT_IDENTITY,
+        "featureCount": int(context.shape[1]),
+        "channelOrder": ALL_CHANNELS,
+        "featureOrder": ["sixNeighborMeanDeltaByChannel", "sixNeighborMaxAbsDeltaByChannel"],
+        "productionNote": "Single current low-grid neighborhood only; does not require a previous/second time grid.",
+    }
+
+
+def build_refinement_features(
+    base_features: np.ndarray,
+    low_channel: np.ndarray,
+    scalar_prediction: np.ndarray,
+    scalar_residual: np.ndarray,
+    local_context: np.ndarray,
+) -> np.ndarray:
+    scalar_pack = np.stack([
+        low_channel.astype(np.float32, copy=False),
+        scalar_prediction.astype(np.float32, copy=False),
+        scalar_residual.astype(np.float32, copy=False),
+        np.abs(scalar_residual.astype(np.float32, copy=False)),
+    ], axis=1)
+    return np.concatenate([
+        base_features.astype(np.float32, copy=False),
+        scalar_pack,
+        local_context.astype(np.float32, copy=False),
+    ], axis=1).astype(np.float32, copy=False)
 
 
 def fit_ridge_scalar(train_features: np.ndarray, train_residual: np.ndarray, test_features: np.ndarray, ridge: float) -> tuple[np.ndarray, dict[str, Any]]:
@@ -626,6 +726,7 @@ def write_scalar_head_application(
     comparison_fluid: np.ndarray | None,
     comparison_front: np.ndarray | None,
     channel_states: dict[int, dict[str, Any]],
+    refinement_states: dict[int, dict[str, Any]],
     feature_mean: np.ndarray,
     feature_std: np.ndarray,
     channel_reports: list[dict[str, Any]],
@@ -637,6 +738,13 @@ def write_scalar_head_application(
         raise ProbeFailure("application-write", "--application-out-dir requires scalar MLP heads; rerun with --model mlp or --model both.")
     if args.scalar_head_assembly_base == "comparisonApplication" and (comparison_fluid is None or comparison_front is None):
         raise ProbeFailure("application-write", "comparisonApplication assembly base requires --comparison-application-manifest.")
+    if args.application_prediction_source == "refinement":
+        missing = [ALL_CHANNELS[index] for index in channel_states.keys() if index not in refinement_states]
+        if missing:
+            raise ProbeFailure("application-write", "--application-prediction-source refinement requires trained refinement heads for every scalar channel.", {
+                "missingRefinementChannels": missing,
+                "refinementHead": args.refinement_head,
+            })
     out_dir = Path(args.application_out_dir).resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
     manifest_out = out_dir / "manifest.json"
@@ -690,12 +798,21 @@ def write_scalar_head_application(
     first_stage_global_error = empty_error_accumulator()
     chunks = []
     replacement_stats = {ALL_CHANNELS[index]: {"sum": 0.0, "sumAbsResidual": 0.0, "count": 0} for index in target_indexes}
+    application_identity = REFINED_APPLICATION_IDENTITY if args.application_prediction_source == "refinement" else ASSEMBLED_APPLICATION_IDENTITY
+    app_identity = application_identity
+    if gate_enabled:
+        app_identity = SUPPORT_GATED_REFINED_APPLICATION_IDENTITY if args.application_prediction_source == "refinement" else SUPPORT_GATED_APPLICATION_IDENTITY
     for z0 in range(0, high_grid, chunk_z):
         z1 = min(high_grid, z0 + chunk_z)
         indexes = np.arange(z0 * high_grid * high_grid, z1 * high_grid * high_grid, dtype=np.int64)
         low_chunk, x, y, z = _APPLY.low_values_for_high_cells(low_fluid, low_front, indexes, low_grid, high_grid)
         features = _APPLY.build_features(low_chunk, x, y, z, high_grid)
         features_std = ((features - feature_mean.reshape(1, -1)) / feature_std.reshape(1, -1)).astype(np.float32)
+        refinement_context_chunk = None
+        if args.application_prediction_source == "refinement":
+            refinement_context_chunk, _context_report = refinement_local_context(
+                args, low_fluid, low_front, indexes, low_grid, high_grid
+            )
         first_stage, base = build_predicted_chunk(
             args,
             low_chunk,
@@ -708,6 +825,25 @@ def write_scalar_head_application(
             indexes,
         )
         predicted = np.array(first_stage, dtype=np.float32, copy=True)
+        if args.application_prediction_source == "refinement":
+            assert refinement_context_chunk is not None
+            for channel_index in target_indexes:
+                scalar_values = first_stage[:, channel_index]
+                scalar_residual = scalar_values - low_chunk[:, channel_index]
+                refinement_state = refinement_states[channel_index]
+                refinement_features = build_refinement_features(
+                    features_std,
+                    low_chunk[:, channel_index],
+                    scalar_values,
+                    scalar_residual,
+                    refinement_context_chunk,
+                )
+                refinement_features_std = (
+                    (refinement_features - refinement_state["featureMean"].reshape(1, -1))
+                    / refinement_state["featureStd"].reshape(1, -1)
+                ).astype(np.float32)
+                refined_values = scalar_values + predict_scalar_mlp(refinement_features_std, refinement_state["model"])
+                predicted[:, channel_index] = clamp_channel_values(refined_values, channel_index, channel_max)
         if gate_enabled:
             assert gate_scores is not None
             gate_mask = gate_scores[indexes] > float(support_gate["threshold"])
@@ -852,8 +988,11 @@ def write_scalar_head_application(
             "identity": app_identity,
             "sourceProbeIdentity": PROBE_IDENTITY,
             "scalarHeadAssemblyBase": args.scalar_head_assembly_base,
+            "applicationPredictionSource": args.application_prediction_source,
             "scalarHeadChannels": [ALL_CHANNELS[index] for index in target_indexes],
             "scalarHeadModelIdentity": MLP_IDENTITY,
+            "refinementModelIdentity": REFINEMENT_IDENTITY if args.application_prediction_source == "refinement" else None,
+            "refinementLocalContextIdentity": LOW_NEIGHBOR_CONTEXT_IDENTITY if args.application_prediction_source == "refinement" and args.refinement_local_context == "low-neighbor" else None,
             "supportGate": support_gate,
             "supportGateDiagnostics": support_gate_diagnostics,
             "postprocess": {
@@ -871,7 +1010,7 @@ def write_scalar_head_application(
                 for report in channel_reports
                 if report["channelIndex"] in target_indexes
             ],
-            "limitation": "Independent scalar-head assembly from same-pair fitted channel heads; support-gated runs derive runtime support from first-stage predictions, while truth support is diagnostics-only.",
+            "limitation": "Same-pair fitted scalar/refinement head assembly; support-gated runs derive runtime support from first-stage predictions, while truth support is diagnostics-only.",
         },
         "supportGateDiagnostics": support_gate_diagnostics,
         "roles": roles,
@@ -898,6 +1037,7 @@ def write_scalar_head_application(
         "manifest": str(manifest_out),
         "manifestSha256": sha256_file(manifest_out),
         "scalarHeadAssemblyBase": args.scalar_head_assembly_base,
+        "applicationPredictionSource": args.application_prediction_source,
         "supportGate": support_gate,
         "supportGateDiagnostics": support_gate_diagnostics,
         "targetChannels": [ALL_CHANNELS[index] for index in target_indexes],
@@ -1001,6 +1141,11 @@ def main() -> int:
     evidence: dict[str, Any] = {}
     try:
         target_indexes = parse_target_channels(args.target_channel_list)
+        if args.refinement_head != "none" and args.model == "ridge":
+            raise ProbeFailure("args", "--refinement-head requires scalar MLP heads; use --model mlp or --model both.", {
+                "model": args.model,
+                "refinementHead": args.refinement_head,
+            })
         phase = "manifest-read"
         pair_path = Path(args.pair_manifest).resolve()
         pair = read_json(pair_path)
@@ -1043,10 +1188,25 @@ def main() -> int:
         train_features = _APPLY.build_features(low_train, x_train, y_train, z_train, high_grid)
         test_features = _APPLY.build_features(low_test, x_test, y_test, z_test, high_grid)
         train_features_std, test_features_std, feature_standardization = standardize_features(train_features, test_features)
+        refinement_train_context = np.zeros((train_indexes.shape[0], 0), dtype=np.float32)
+        refinement_test_context = np.zeros((test_indexes.shape[0], 0), dtype=np.float32)
+        refinement_context_report = {
+            "identity": "no-refinement-local-context-v0",
+            "featureCount": 0,
+        }
+        if args.refinement_head != "none":
+            phase = "refinement-context"
+            refinement_train_context, refinement_context_report = refinement_local_context(
+                args, low_fluid, low_front, train_indexes, low_grid, high_grid
+            )
+            refinement_test_context, _unused_context_report = refinement_local_context(
+                args, low_fluid, low_front, test_indexes, low_grid, high_grid
+            )
 
         phase = "channel-train"
         channel_reports = []
         scalar_head_states: dict[int, dict[str, Any]] = {}
+        refinement_head_states: dict[int, dict[str, Any]] = {}
         for channel_index in target_indexes:
             channel_name = ALL_CHANNELS[channel_index]
             train_truth = channel_values(high_fluid, high_front, train_indexes, channel_index)
@@ -1076,13 +1236,87 @@ def main() -> int:
                 scalar_head_states[channel_index] = mlp_state
                 mlp_prediction = test_low + mlp_residual
                 mlp_metrics = scalar_metrics(mlp_prediction, test_truth)
+                mlp_support = support_localized_metrics(test_low, test_truth, mlp_prediction)
                 models["mlp"] = {
                     **mlp_report,
                     "metrics": mlp_metrics,
                     "improvementVsLowUpsampled": improvement_vs(low_metrics, mlp_metrics),
-                    "supportLocalized": support_localized_metrics(test_low, test_truth, mlp_prediction),
+                    "supportLocalized": mlp_support,
                     "gradientEnergyRecovery": gradient_energy_from_values(test_low, test_truth, mlp_prediction),
                 }
+                if args.refinement_head == "mlp":
+                    train_scalar_residual = predict_scalar_mlp(train_features_std, mlp_state)
+                    train_scalar_prediction = train_low + train_scalar_residual
+                    train_refinement_target = train_truth - train_scalar_prediction
+                    train_refinement_features = build_refinement_features(
+                        train_features_std,
+                        train_low,
+                        train_scalar_prediction,
+                        train_scalar_residual,
+                        refinement_train_context,
+                    )
+                    test_refinement_features = build_refinement_features(
+                        test_features_std,
+                        test_low,
+                        mlp_prediction,
+                        mlp_residual,
+                        refinement_test_context,
+                    )
+                    refinement_feature_mean = np.mean(train_refinement_features, axis=0, dtype=np.float64).astype(np.float32)
+                    refinement_feature_std = np.std(train_refinement_features, axis=0, dtype=np.float64).astype(np.float32)
+                    refinement_feature_std = np.where(refinement_feature_std < np.float32(1.0e-6), np.float32(1.0), refinement_feature_std)
+                    train_refinement_features_std = (
+                        (train_refinement_features - refinement_feature_mean.reshape(1, -1))
+                        / refinement_feature_std.reshape(1, -1)
+                    ).astype(np.float32)
+                    test_refinement_features_std = (
+                        (test_refinement_features - refinement_feature_mean.reshape(1, -1))
+                        / refinement_feature_std.reshape(1, -1)
+                    ).astype(np.float32)
+                    refinement_standardization = {
+                        "identity": "train-feature-standardization-v0",
+                        "featureCount": int(train_refinement_features.shape[1]),
+                        "zeroStdFeatureCount": int(np.count_nonzero(refinement_feature_std == 1.0)),
+                    }
+                    refinement_rng = np.random.default_rng(int(args.seed) + channel_index * 130363 + 911)
+                    refinement_residual, refinement_report, refinement_state = train_scalar_mlp(
+                        train_refinement_features_std,
+                        train_refinement_target,
+                        test_refinement_features_std,
+                        args,
+                        refinement_rng,
+                    )
+                    refinement_head_states[channel_index] = {
+                        "model": refinement_state,
+                        "featureMean": refinement_feature_mean,
+                        "featureStd": refinement_feature_std,
+                    }
+                    refinement_prediction = mlp_prediction + refinement_residual
+                    refinement_metrics = scalar_metrics(refinement_prediction, test_truth)
+                    refinement_support = support_localized_metrics(test_low, test_truth, refinement_prediction)
+                    in_support_improvement = None
+                    if mlp_support.get("metrics") and refinement_support.get("metrics"):
+                        in_support_improvement = improvement_vs(mlp_support["metrics"], refinement_support["metrics"])
+                    models["refinementMlp"] = {
+                        **refinement_report,
+                        "identity": REFINEMENT_IDENTITY,
+                        "compositionSourceModel": MLP_IDENTITY,
+                        "featureModel": {
+                            "identity": REFINEMENT_FEATURE_IDENTITY,
+                            "baseFeatureIdentity": "full-low-field-plus-spatial-rbf-features-v0",
+                            "localContext": refinement_context_report,
+                            "scalarFeatureOrder": ["lowChannel", "scalarHeadPrediction", "scalarHeadResidual", "absScalarHeadResidual"],
+                            "featureCount": int(train_refinement_features.shape[1]),
+                            "featureStandardization": refinement_standardization,
+                        },
+                        "metrics": refinement_metrics,
+                        "improvementVsLowUpsampled": improvement_vs(low_metrics, refinement_metrics),
+                        "improvementVsScalarHead": improvement_vs(mlp_metrics, refinement_metrics),
+                        "supportLocalized": refinement_support,
+                        "inSupportImprovementVsScalarHead": in_support_improvement,
+                        "gradientEnergyRecovery": gradient_energy_from_values(test_low, test_truth, refinement_prediction),
+                        "limitation": "Second-stage same-pair diagnostic correction; not a support gate and not held-out production proof.",
+                    }
             comparison_metrics = None
             if comparison_fluid is not None and comparison_front is not None:
                 comparison_values = channel_values(comparison_fluid, comparison_front, test_indexes, channel_index)
@@ -1153,6 +1387,7 @@ def main() -> int:
             comparison_fluid,
             comparison_front,
             scalar_head_states,
+            refinement_head_states,
             feature_mean,
             feature_std,
             channel_reports,
@@ -1198,6 +1433,9 @@ def main() -> int:
                 "model": args.model,
                 "ridgeIdentity": RIDGE_IDENTITY,
                 "mlpIdentity": MLP_IDENTITY,
+                "refinementHead": args.refinement_head,
+                "refinementIdentity": REFINEMENT_IDENTITY if args.refinement_head != "none" else None,
+                "refinementLocalContext": args.refinement_local_context,
                 "linearRidgeInterferenceNote": "Ridge output columns are already independent for a fixed design matrix; scalar ridge is included as a baseline, while scalar MLP heads are the nonlinear output-capacity discriminator.",
                 "hiddenWidth": int(args.hidden_width),
                 "epochs": int(args.epochs),
@@ -1226,6 +1464,11 @@ def main() -> int:
                 "source": "volume-full-grid-field-residual-apply.py build_features",
                 "featureCount": int(train_features.shape[1]),
                 "featureStandardization": feature_standardization,
+                "refinementFeatureModel": {
+                    "identity": REFINEMENT_FEATURE_IDENTITY if args.refinement_head != "none" else "no-refinement-head-v0",
+                    "localContext": refinement_context_report,
+                    "phaseCueDecision": "Previous/second time grid input deferred; this route uses current low-grid local context only.",
+                },
             },
             "comparisonApplicationManifest": comparison_report,
             "scalarHeadApplication": assembled_application,
