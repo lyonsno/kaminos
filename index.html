@@ -4869,14 +4869,16 @@ function updateBehaviorReadoutTexture(readout, text, phase) {
   readout.lastText = nextText;
 }
 
-function updateWorldSpaceBehaviorReadout(readout, behaviorState, rootPosition, displayedFacing, effort = 0) {
+function updateWorldSpaceBehaviorReadout(readout, behaviorState, rootPosition, displayedFacing, effort = 0, displayScale = 1) {
   if (!readout || !behaviorState || !rootPosition) return null;
   const stateLabel = behaviorState.state || 'observing';
+  const safeDisplayScale = Math.max(0.2, Math.min(1.2, Number(displayScale) || 1));
   updateBehaviorReadoutTexture(readout, stateLabel, behaviorState.phase);
   readout.group.visible = true;
   readout.group.position.set(rootPosition.x, 0.012, rootPosition.z);
   const yaw = Math.atan2(displayedFacing?.x || 0, displayedFacing?.z || 1);
   readout.group.rotation.set(0, yaw, 0);
+  readout.group.scale.setScalar(safeDisplayScale);
   const pulse = 1 + Math.max(0, Math.min(1, Number(effort) || 0)) * 0.08;
   readout.ring.scale.setScalar(pulse);
   readout.ring.material.opacity = 0.48 + Math.max(0, Math.min(1, Number(effort) || 0)) * 0.28;
@@ -4891,6 +4893,7 @@ function updateWorldSpaceBehaviorReadout(readout, behaviorState, rootPosition, d
     text: String(stateLabel).replace(/-/g, ' '),
     worldPosition: readout.group.position.toArray().map(value => Number(value.toFixed(5))),
     yaw: Number(yaw.toFixed(5)),
+    displayScale: Number(safeDisplayScale.toFixed(5)),
     ringObjectName: readout.ring.name,
     labelObjectName: readout.label.name,
   };
@@ -5731,6 +5734,12 @@ function motionPanelHillCarrierFollowEnabled(pathWorldOrSample = null, params = 
   if (['0', 'false', 'off', 'no'].includes(String(requested || '').toLowerCase())) return false;
   if (['1', 'true', 'on', 'yes'].includes(String(requested || '').toLowerCase())) return true;
   return motionPanelPathWorldIsHillNativeCarrier(pathWorldOrSample);
+}
+
+const MOTION_PANEL_HILL_ACTOR_DISPLAY_SCALE = 0.5;
+
+function motionPanelHillActorDisplayScale(hillTerrainCarrier = null) {
+  return hillTerrainCarrier ? MOTION_PANEL_HILL_ACTOR_DISPLAY_SCALE : 1;
 }
 
 function createMotionPanelHillTerrainCarrier(pathWorldSample, displayGrounding, temporalSample = null, options = {}) {
@@ -7984,6 +7993,7 @@ function updateGeneratedPoseTemporalFrame(nowSeconds = performance.now() / 1000)
     pathTriggerRequested: pathTriggerMode,
     pathTriggerSuppressedByCarrierFollower,
   });
+  const actorDisplayScale = motionPanelHillActorDisplayScale(hillTerrainCarrier);
   const fallbackRootPosition = hillTerrainCarrier
     ? motionPanelVector3FromArray(hillTerrainCarrier.groundedRoot)
     : new THREE.Vector3(...displayGrounding.root).add(pathWorldSample
@@ -8088,6 +8098,7 @@ function updateGeneratedPoseTemporalFrame(nowSeconds = performance.now() / 1000)
   state.lastAttentionTargetEvidence = attentionTarget.evidence;
   const displayedFacing = attention.clone().sub(rootPosition).normalize();
   visual.group.position.copy(rootPosition);
+  visual.group.scale.setScalar(actorDisplayScale);
   visual.group.lookAt(attention);
   visual.group.rotation.z += hillTerrainCarrier
     ? Number(hillTerrainCarrier.expressiveBodyRoll || 0)
@@ -8100,7 +8111,7 @@ function updateGeneratedPoseTemporalFrame(nowSeconds = performance.now() / 1000)
     1 + displayCompression * 0.46 + groundedCompression * 0.26,
   );
   visual.group.updateMatrixWorld(true);
-  const faceCueWorld = rootPosition.clone().add(displayedFacing.multiplyScalar(0.22 + sample.effort * 0.02));
+  const faceCueWorld = rootPosition.clone().add(displayedFacing.multiplyScalar((0.22 + sample.effort * 0.02) * actorDisplayScale));
   visual.eye.position.copy(visual.group.worldToLocal(faceCueWorld));
   visual.body.material.emissive.copy(visual.baseColor).multiplyScalar(0.12 + sample.effort * 0.22 + compression * 0.24);
   visual.target.position.copy(attention);
@@ -8160,6 +8171,7 @@ function updateGeneratedPoseTemporalFrame(nowSeconds = performance.now() / 1000)
     rootPosition,
     displayedFacing,
     sample.effort,
+    actorDisplayScale,
   );
   state.lastBehaviorReadout = behaviorReadout;
   const sourceGhost = state.sourceGhost
@@ -8239,6 +8251,7 @@ function updateGeneratedPoseTemporalFrame(nowSeconds = performance.now() / 1000)
     routeTangent: carrierPathFollower?.routeTangent || null,
     carrierHeading: carrierPathFollower?.carrierHeading || null,
     airborneGrant: carrierPathFollower?.airborneGrant ?? null,
+    actorDisplayScale: Number(actorDisplayScale.toFixed(5)),
     pathTriggerSuppressedByCarrierFollower,
     groundingAuthority: carrierPathFollower?.groundingAuthority || hillTerrainCarrier?.groundingAuthority || (pathWorldSample ? pathWorldRouteAuthority : null),
     terrainCarrierRoot: hillTerrainCarrier?.terrainCarrierRoot || null,

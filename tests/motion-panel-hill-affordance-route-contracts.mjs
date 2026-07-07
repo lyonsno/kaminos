@@ -62,6 +62,8 @@ assert.match(index, /expressiveRootOffset/, 'Hill carrier evidence records bound
 assert.match(index, /groundingAuthority:\s*'hill-terrain-carrier'/, 'Hill carrier evidence names terrain carrier as grounding authority');
 assert.match(index, /kaminos_hill_carrier_follow/, 'Hill smoke links can explicitly request carrier path following');
 assert.match(index, /function motionPanelHillCarrierFollowEnabled/, 'browser has a Hill carrier follower mode gate');
+assert.match(index, /MOTION_PANEL_HILL_ACTOR_DISPLAY_SCALE\s*=\s*0\.5/, 'Hill carrier actor renders at half scale so terrain context remains legible');
+assert.match(index, /function motionPanelHillActorDisplayScale/, 'browser resolves Hill-specific actor display scale without changing non-Hill motion smokes');
 assert.match(index, /function createMotionPanelCarrierPathFollower/, 'browser creates explicit carrier path follower evidence');
 assert.match(index, /carrierPathFollower/, 'actor/debug evidence exposes carrier path follower state');
 assert.match(index, /terrainContact/, 'carrier path follower records the authoritative terrain contact');
@@ -73,6 +75,7 @@ assert.match(index, /motion-panel-path-world-mode/, 'Path World panel exposes th
 assert.match(index, /terrain route -> carrier contact -> local affect/, 'operator readout distinguishes Hill carrier following from wall-trigger reaction mode');
 assert.match(index, /suppressed-by-carrier/, 'operator readout names path trigger suppression when carrier following owns travel');
 assert.match(index, /hill-carrier-follow/, 'operator readout names the carrier-follow reason instead of generic path-trigger state');
+assert.match(index, /actorDisplayScale/, 'actor/debug evidence records the effective Hill display scale');
 
 assert.match(liveWitness, /--hill-affordance-packet/, 'live witness accepts a Hill affordance packet path');
 assert.match(liveWitness, /--hill-affordance-data/, 'live witness accepts a Hill affordance data path');
@@ -91,6 +94,7 @@ assert.match(liveWitness, /terrainOverlayMode/, 'live witness records the effect
 assert.match(liveWitness, /hillTerrainCarrier/, 'live witness records Hill terrain carrier evidence');
 assert.match(liveWitness, /groundingAuthority/, 'live witness records carrier grounding authority');
 assert.match(liveWitness, /carrierPathFollower/, 'live witness records carrier path follower evidence');
+assert.match(liveWitness, /actorDisplayScale/, 'live witness records the effective Hill actor display scale per frame');
 assert.match(liveWitness, /airborneGrant/, 'live witness records whether carrier following allowed airborne motion');
 assert.match(liveWitness, /routePhase/, 'live witness records route conductor phase evidence');
 assert.match(liveWitness, /routePlaybackMode/, 'live witness records route conductor playback mode evidence');
