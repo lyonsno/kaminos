@@ -68,6 +68,11 @@ assert.match(index, /VOLUME_LOOK_LIBRARY_IDENTITY/, 'Volume cockpit has a stable
 assert.match(index, /KAMINOS_VOLUME_LOOK_LIBRARY_STORAGE_KEY/, 'Volume cockpit stores the editable JSON look library under a stable browser key');
 assert.match(index, /BUILT_IN_VOLUME_LOOK_LIBRARY/, 'Volume cockpit carries source-backed looks so fresh ports are not empty');
 assert.match(index, /exploding-jellow-fireball-motherfucker/, 'Source-backed look library exposes the operator-saved exploding jellow Pyro look');
+assert.match(index, /Bonfire_a_la_ruffles/, 'Source-backed look library exposes the operator-saved Bonfire a la Ruffles Pyro look');
+assert.match(index, /Bonfire_a_la_ruffles[\s\S]*pyroFlowBite:\s*0\.95/, 'Bonfire a la Ruffles preserves the Flow carrier gain');
+assert.match(index, /Bonfire_a_la_ruffles[\s\S]*pyroRadiance:\s*1\.25/, 'Bonfire a la Ruffles preserves the old Radiance carrier gain');
+assert.match(index, /Bonfire_a_la_ruffles[\s\S]*pyroRadianceCoolColor:\s*'#eb0000'/, 'Bonfire a la Ruffles preserves the operator-tuned Radiance cool color');
+assert.match(index, /Bonfire_a_la_ruffles[\s\S]*pyroFlowHotColor:\s*'#ff230a'/, 'Bonfire a la Ruffles preserves the operator-tuned Flow hot color');
 assert.match(index, /mergeVolumeLookLibraryWithBuiltIns/, 'Volume cockpit merges source-backed looks with browser-local saved looks');
 const readVolumeLookLibraryFn = index.match(/function readVolumeLookLibrary\(\) \{([\s\S]*?)\n\}/)?.[1] || '';
 assert.match(readVolumeLookLibraryFn, /mergeVolumeLookLibraryWithBuiltIns/, 'Reading the look library includes source-backed looks before refreshing the dropdown');
@@ -268,9 +273,13 @@ assert.ok(volumeSyncControlLoop, 'Volume cockpit has one explicit syncControls l
 for (const id of ['volume-pyro-flow-radiance', 'volume-pyro-flow-spikes']) {
   assert.match(volumeSyncControlLoop[1], new RegExp(`'${id}'`), `Flow control ${id} triggers syncControls instead of becoming a stale display-only knob`);
 }
-assert.match(index, /moveVolumePyroLegacyControlsBelowFlow/, 'Pyro cockpit explicitly demotes legacy Bite/Fold/Wake/Radiance controls below the Flow-first tuning surface');
+assert.match(index, /moveVolumePyroRadianceControlsBelowFlow/, 'Pyro cockpit keeps old Radiance directly below Flow instead of burying it under demoted Bite/Fold/Wake controls');
+assert.match(index, /moveVolumePyroLegacyControlsBelowRadiance/, 'Pyro cockpit explicitly demotes legacy Bite/Fold/Wake controls below the still-useful Radiance surface');
 assert.match(index, /FLOW_FIRST_PYRO_CONTROL_IDS[\s\S]*volume-pyro-flow-bite[\s\S]*volume-pyro-flow-radiance[\s\S]*volume-pyro-flow-spikes/, 'Pyro cockpit treats Flow as the primary carrier control group');
-assert.match(index, /LEGACY_PYRO_CONTROL_IDS[\s\S]*volume-pyro-edge-bite[\s\S]*volume-pyro-smoke-fold[\s\S]*volume-pyro-radiance/, 'Pyro cockpit keeps legacy Bite/Fold/Wake/Radiance controls available as a demoted group');
+assert.match(index, /PYRO_RADIANCE_CONTROL_IDS[\s\S]*volume-pyro-radiance[\s\S]*volume-pyro-radiance-fire-lock/, 'Pyro cockpit keeps the old Radiance controls together as the second carrier group');
+assert.match(index, /LEGACY_PYRO_CONTROL_IDS[\s\S]*volume-pyro-edge-bite[\s\S]*volume-pyro-smoke-fold[\s\S]*volume-pyro-wake-ember-color/, 'Pyro cockpit keeps legacy Bite/Fold/Wake controls available as a demoted group');
+const legacyPyroControlIds = index.match(/const LEGACY_PYRO_CONTROL_IDS = \[([\s\S]*?)\];/)?.[1] || '';
+assert.doesNotMatch(legacyPyroControlIds, /volume-pyro-radiance/, 'Demoted Bite/Fold/Wake controls must not bury the still-useful Radiance controls');
 assert.match(index, /moveVolumePyroFreezeIntoCarrierWorkbench/, 'Pyro cockpit explicitly moves Look Freeze into the carrier-tuning workbench');
 assert.match(index, /PYRO_CARRIER_WORKBENCH_PINNED_IDS[\s\S]*volume-look-freeze/, 'Pyro Freeze is pinned near the carrier controls instead of stranded in the generic route controls');
 assert.match(core, /pyroFlowSignal[\s\S]*combustionFrontTopology[\s\S]*fireLick/, 'Pyro shader derives Flow carrier from combustion-front topology and live fire-lick breakup');
