@@ -953,6 +953,8 @@ async function loadDetrStackPayload(manifest) {
   const expectedFpnNeckFeature0Tensor = includeImageFpnNeck ? tensorByRole(manifest, 'expected-fpn-neck-feature-0') : null;
   const expectedFpnNeckFeature1Tensor = includeImageFpnNeck ? tensorByRole(manifest, 'expected-fpn-neck-feature-1') : null;
   const expectedFpnNeckFeature2Tensor = includeImageFpnNeck ? tensorByRole(manifest, 'expected-fpn-neck-feature-2') : null;
+  const expectedPromptFpnTensor = includeImageFpnNeck ? tensorByRole(manifest, 'expected-prompt-fpn-feature') : null;
+  const expectedPixelEmbedTensor = includeImageFpnNeck ? tensorByRole(manifest, 'expected-pixel-embed') : null;
   const encoderSrcTensor = tensorByRole(manifest, 'encoder-src');
   const encoderPosTensor = tensorByRole(manifest, 'encoder-pos');
   const promptTensor = tensorByRole(manifest, 'prompt-features');
@@ -1035,6 +1037,30 @@ async function loadDetrStackPayload(manifest) {
   const vitPrefixWeightRoles = includeImageVitPrefix ? ['vit-position-embeddings', 'vit-backbone-layernorm-weight', 'vit-backbone-layernorm-bias'] : [];
   const vitBlockStackShapeForRoles = includeImageVitBlockStack ? imageVitBlockStackShape(manifest) : null;
   const fpnNeckWeightRoles = includeImageFpnNeck ? imageFpnNeckWeightRoles() : [];
+  const promptWeightRoles = includeImageFpnNeck ? [
+    'prompt-cross-attn-norm-weight',
+    'prompt-cross-attn-norm-bias',
+    'prompt-cross-attn-q-weight',
+    'prompt-cross-attn-q-bias',
+    'prompt-cross-attn-k-weight',
+    'prompt-cross-attn-k-bias',
+    'prompt-cross-attn-v-weight',
+    'prompt-cross-attn-v-bias',
+    'prompt-cross-attn-o-weight',
+    'prompt-cross-attn-o-bias',
+  ] : [];
+  const pixelWeightRoles = [];
+  if (includeImageFpnNeck) {
+    const levels = manifest.shape.levels || manifest.shape.fpnNeckLevels;
+    for (let stage = 0; stage < levels.length - 1; stage += 1) {
+      pixelWeightRoles.push(
+        `pixel-decoder-stage-${stage}-conv-weight`,
+        `pixel-decoder-stage-${stage}-conv-bias`,
+        `pixel-decoder-stage-${stage}-norm-weight`,
+        `pixel-decoder-stage-${stage}-norm-bias`,
+      );
+    }
+  }
   const vitFirstBlockWeightRoles = includeImageVitFirstBlock ? [
     'vit-block0-layernorm1-weight',
     'vit-block0-layernorm1-bias',
@@ -1054,7 +1080,7 @@ async function loadDetrStackPayload(manifest) {
     'vit-block0-mlp-fc2-bias',
   ] : [];
   const vitBlockStackWeightRoles = includeImageVitBlockStack ? imageVitBlockStackWeightRoles(vitBlockStackShapeForRoles.startLayerIndex, vitBlockStackShapeForRoles.endLayerIndex) : [];
-  const weightsByRole = Object.fromEntries([...encoderRoles, ...decoderLayerRoles, ...decoderSharedRoles, ...patchEmbedWeightRoles, ...vitPrefixWeightRoles, ...vitFirstBlockWeightRoles, ...vitBlockStackWeightRoles, ...fpnNeckWeightRoles, ...(includeStackScoring ? scoringWeightRoles : []), ...tailWeightRoles].map(role => [role, weightByRole(manifest, role)]));
+  const weightsByRole = Object.fromEntries([...encoderRoles, ...decoderLayerRoles, ...decoderSharedRoles, ...patchEmbedWeightRoles, ...vitPrefixWeightRoles, ...vitFirstBlockWeightRoles, ...vitBlockStackWeightRoles, ...fpnNeckWeightRoles, ...promptWeightRoles, ...pixelWeightRoles, ...(includeStackScoring ? scoringWeightRoles : []), ...tailWeightRoles].map(role => [role, weightByRole(manifest, role)]));
   const encoderSrc = await fetchArray(resolveManifestFile(encoderSrcTensor.file), Float32Array);
   const encoderPos = await fetchArray(resolveManifestFile(encoderPosTensor.file), Float32Array);
   const promptFeatures = await fetchArray(resolveManifestFile(promptTensor.file), Float32Array);
@@ -1081,6 +1107,8 @@ async function loadDetrStackPayload(manifest) {
   const expectedFpnNeckFeature0 = expectedFpnNeckFeature0Tensor ? await fetchArray(resolveManifestFile(expectedFpnNeckFeature0Tensor.file), Float32Array) : null;
   const expectedFpnNeckFeature1 = expectedFpnNeckFeature1Tensor ? await fetchArray(resolveManifestFile(expectedFpnNeckFeature1Tensor.file), Float32Array) : null;
   const expectedFpnNeckFeature2 = expectedFpnNeckFeature2Tensor ? await fetchArray(resolveManifestFile(expectedFpnNeckFeature2Tensor.file), Float32Array) : null;
+  const expectedPromptFpnFeature = expectedPromptFpnTensor ? await fetchArray(resolveManifestFile(expectedPromptFpnTensor.file), Float32Array) : null;
+  const expectedBrowserPixelEmbed = expectedPixelEmbedTensor ? await fetchArray(resolveManifestFile(expectedPixelEmbedTensor.file), Float32Array) : null;
   const patchProjectionWeight = includeImagePatchEmbed ? await fetchArray(resolveManifestFile(weightsByRole['patch-embed-projection-weight'].file), Float32Array) : null;
   const vitPrefixWeights = includeImageVitPrefix ? {
     positionEmbeddings: await fetchArray(resolveManifestFile(weightsByRole['vit-position-embeddings'].file), Float32Array),
@@ -1107,6 +1135,26 @@ async function loadDetrStackPayload(manifest) {
   } : null;
   const vitBlockStackWeights = includeImageVitBlockStack ? await loadImageVitBlockStackWeights(manifest, weightsByRole, vitBlockStackShapeForRoles) : null;
   const fpnNeckWeights = includeImageFpnNeck ? await loadImageFpnNeckWeights(weightsByRole) : null;
+  const promptWeights = includeImageFpnNeck ? {
+    layerNormWeight: await fetchArray(resolveManifestFile(weightsByRole['prompt-cross-attn-norm-weight'].file), Float32Array),
+    layerNormBias: await fetchArray(resolveManifestFile(weightsByRole['prompt-cross-attn-norm-bias'].file), Float32Array),
+    qWeight: await fetchArray(resolveManifestFile(weightsByRole['prompt-cross-attn-q-weight'].file), Float32Array),
+    qBias: await fetchArray(resolveManifestFile(weightsByRole['prompt-cross-attn-q-bias'].file), Float32Array),
+    kWeight: await fetchArray(resolveManifestFile(weightsByRole['prompt-cross-attn-k-weight'].file), Float32Array),
+    kBias: await fetchArray(resolveManifestFile(weightsByRole['prompt-cross-attn-k-bias'].file), Float32Array),
+    vWeight: await fetchArray(resolveManifestFile(weightsByRole['prompt-cross-attn-v-weight'].file), Float32Array),
+    vBias: await fetchArray(resolveManifestFile(weightsByRole['prompt-cross-attn-v-bias'].file), Float32Array),
+    oWeight: await fetchArray(resolveManifestFile(weightsByRole['prompt-cross-attn-o-weight'].file), Float32Array),
+    oBias: await fetchArray(resolveManifestFile(weightsByRole['prompt-cross-attn-o-bias'].file), Float32Array),
+  } : null;
+  const pixelWeights = includeImageFpnNeck ? {
+    stages: await Promise.all(Array.from({ length: (manifest.shape.levels || manifest.shape.fpnNeckLevels).length - 1 }, async (_, stage) => ({
+      convWeight: await fetchArray(resolveManifestFile(weightsByRole[`pixel-decoder-stage-${stage}-conv-weight`].file), Float32Array),
+      convBias: await fetchArray(resolveManifestFile(weightsByRole[`pixel-decoder-stage-${stage}-conv-bias`].file), Float32Array),
+      normWeight: await fetchArray(resolveManifestFile(weightsByRole[`pixel-decoder-stage-${stage}-norm-weight`].file), Float32Array),
+      normBias: await fetchArray(resolveManifestFile(weightsByRole[`pixel-decoder-stage-${stage}-norm-bias`].file), Float32Array),
+    }))),
+  } : null;
   const pixelEmbed = await fetchArray(resolveManifestFile(pixelEmbedTensor.file), Float32Array);
   const expectedMaskEmbeddings = await fetchArray(resolveManifestFile(expectedMaskEmbeddingsTensor.file), Float32Array);
   const expectedUpscaledEmbedding = await fetchArray(resolveManifestFile(expectedUpscaledTensor.file), Float32Array);
@@ -1180,12 +1228,17 @@ async function loadDetrStackPayload(manifest) {
   const vitFirstBlockShape = includeImageVitFirstBlock ? imageVitFirstBlockShape(manifest) : null;
   const vitBlockStackShape = includeImageVitBlockStack ? imageVitBlockStackShape(manifest) : null;
   const fpnNeckShape = includeImageFpnNeck ? imageFpnNeckShape(manifest) : null;
-  const maskOracle = createSam3MaskTailPhaseProgramCpuOracle({ lastHs: expectedLastHs, pixelEmbed, weights: tailWeights, shape: maskTailShape });
+  const promptShape = includeImageFpnNeck ? { batch: manifest.shape.batch, spatialTokens: manifest.shape.spatialTokens, promptTokens: manifest.shape.promptTokens, channels: manifest.shape.channels, heads: manifest.shape.heads, height: manifest.shape.height, width: manifest.shape.width } : null;
+  const pixelShape = includeImageFpnNeck ? { batch: manifest.shape.batch, channels: manifest.shape.channels, groups: manifest.shape.groups || 8, levels: manifest.shape.levels || manifest.shape.fpnNeckLevels } : null;
+  const effectiveExpectedPixelEmbed = expectedBrowserPixelEmbed || pixelEmbed;
+  const maskOracle = createSam3MaskTailPhaseProgramCpuOracle({ lastHs: expectedLastHs, pixelEmbed: effectiveExpectedPixelEmbed, weights: tailWeights, shape: maskTailShape });
   const patchEmbedOracle = includeImagePatchEmbed ? createSam3ImagePatchEmbedPhaseProgramCpuOracle({ pixelValues: expectedPixelValues, weights: { projection: patchProjectionWeight }, shape: patchEmbedShape }) : null;
   const vitPrefixOracle = includeImageVitPrefix ? createSam3ImageVitPrefixPhaseProgramCpuOracle({ patchEmbeddings: expectedPatchEmbeddings, weights: vitPrefixWeights, shape: vitPrefixShape }) : null;
   const vitFirstBlockOracle = includeImageVitFirstBlock ? createSam3ImageVitFirstBlockPhaseProgramCpuOracle({ hiddenStates: expectedVitPrefixHiddenStates, weights: vitFirstBlockWeights, shape: vitFirstBlockShape }) : null;
   const vitBlockStackOracle = includeImageVitBlockStack ? createSam3ImageVitBlockStackPhaseProgramCpuOracle({ hiddenStates: expectedVitPrefixHiddenStates, weights: vitBlockStackWeights, shape: vitBlockStackShape }) : null;
   const fpnNeckOracle = includeImageFpnNeck ? createSam3ImageFpnNeckPhaseProgramCpuOracle({ backboneHiddenStates: expectedVitBackboneHiddenStates, weights: fpnNeckWeights, shape: fpnNeckShape }) : null;
+  const promptFpnOracle = includeImageFpnNeck ? createSam3PromptFpnPhaseProgramCpuOracle({ encoderHiddenStates: expectedEncoderHiddenStates, promptFeatures, promptMask, weights: promptWeights, shape: promptShape }) : null;
+  const pixelDecoderOracle = includeImageFpnNeck ? createSam3PixelDecoderPhaseProgramCpuOracle({ features: [expectedFpnNeckFeature0, expectedFpnNeckFeature1, expectedPromptFpnFeature], weights: pixelWeights, shape: pixelShape }) : null;
   const scoringOracle = includeStackScoring ? createSam3ScoringPhaseProgramCpuOracle({ hiddenStates: expectedDecoderHiddenStates, promptFeatures, promptMask, weights: scoringWeights, shape: scoringShape }) : null;
   const selectionOracle = includeStackSelection ? createSam3SelectionPostprocessPhaseProgramCpuOracle({ predLogits: expectedPredLogits, referenceBoxes: expectedReferenceBoxes, presenceLogits: expectedPresenceLogits, shape: selectionShape }) : null;
   return {
@@ -1318,6 +1371,20 @@ async function loadDetrStackPayload(manifest) {
         fullSam3BrowserExecution: true,
       },
     } : null,
+    browserPromptFpnPixelEvidence: includeImageFpnNeck ? {
+      packetMode: manifest.mode,
+      schema: manifest.schema,
+      boundary: 'sam3-browser-local-prompt-fpn-pixel-decoder',
+      routeKind: 'image-fpn-neck-prompt-fpn-pixel-decoder-composition',
+      promptTensorOwner: 'mlx-vlm-reference',
+      fpnTensorOwner: 'browser-local-image-fpn-neck',
+      pixelEmbedOwner: 'browser-local-pixel-decoder',
+      nonClaims: {
+        browserLocalTextEncoder: true,
+        level3FpnNeck: true,
+        fullSam3BrowserExecution: true,
+      },
+    } : null,
     expectedPixelValues,
     expectedPatchEmbeddings,
     expectedVitPrefixHiddenStates,
@@ -1328,6 +1395,8 @@ async function loadDetrStackPayload(manifest) {
     expectedFpnNeckFeature0,
     expectedFpnNeckFeature1,
     expectedFpnNeckFeature2,
+    expectedPromptFpnFeature,
+    expectedPixelEmbed: effectiveExpectedPixelEmbed,
     expectedEncoderSrc: encoderSrc,
     expectedEncoderPos: encoderPos,
     expectedEncoderHiddenStates,
@@ -1358,6 +1427,8 @@ async function loadDetrStackPayload(manifest) {
       fpnNeckFeature0MaxAbsDiff: fpnNeckOracle ? maxAbsDiff(expectedFpnNeckFeature0, fpnNeckOracle.fpnNeckFeatures[0]) : undefined,
       fpnNeckFeature1MaxAbsDiff: fpnNeckOracle ? maxAbsDiff(expectedFpnNeckFeature1, fpnNeckOracle.fpnNeckFeatures[1]) : undefined,
       fpnNeckFeature2MaxAbsDiff: fpnNeckOracle ? maxAbsDiff(expectedFpnNeckFeature2, fpnNeckOracle.fpnNeckFeatures[2]) : undefined,
+      promptFpnMaxAbsDiff: promptFpnOracle ? maxAbsDiff(expectedPromptFpnFeature, promptFpnOracle.promptFpnFeature) : undefined,
+      pixelEmbedMaxAbsDiff: pixelDecoderOracle ? maxAbsDiff(effectiveExpectedPixelEmbed, pixelDecoderOracle.pixelEmbed) : undefined,
       upscaledEmbeddingMaxAbsDiff: maxAbsDiff(expectedUpscaledEmbedding, maskOracle.upscaledEmbedding),
       logitsMaxAbsDiff: maxAbsDiff(expectedLogits, maskOracle.maskLogits),
       predLogitsMaxAbsDiff: scoringOracle ? maxAbsDiff(expectedPredLogits, scoringOracle.predLogits) : undefined,
@@ -1396,6 +1467,8 @@ async function loadDetrStackPayload(manifest) {
       expectedFpnNeckFeature0Sha256: expectedFpnNeckFeature0Tensor?.sha256,
       expectedFpnNeckFeature1Sha256: expectedFpnNeckFeature1Tensor?.sha256,
       expectedFpnNeckFeature2Sha256: expectedFpnNeckFeature2Tensor?.sha256,
+      expectedPromptFpnFeatureSha256: expectedPromptFpnTensor?.sha256,
+      expectedPixelEmbedSha256: expectedPixelEmbedTensor?.sha256,
       patchProjectionWeightSha256: weightsByRole['patch-embed-projection-weight']?.sha256,
       positionEmbeddingsSha256: weightsByRole['vit-position-embeddings']?.sha256,
       backboneLayerNormWeightSha256: weightsByRole['vit-backbone-layernorm-weight']?.sha256,
@@ -1403,6 +1476,8 @@ async function loadDetrStackPayload(manifest) {
       firstBlockWeightsSha256: includeImageVitFirstBlock ? await aggregateTensorBundleSha256('sam3-image-vit-first-block-weights', vitFirstBlockWeightRoles.map(role => ({ role, sha256: weightsByRole[role].sha256 }))) : undefined,
       blockStackWeightsSha256: includeImageVitBlockStack ? await aggregateTensorBundleSha256('sam3-image-vit-block-stack-weights', vitBlockStackWeightRoles.map(role => ({ role, sha256: weightsByRole[role].sha256 }))) : undefined,
       fpnNeckWeightsSha256: includeImageFpnNeck ? await aggregateTensorBundleSha256('sam3-image-fpn-neck-weights', fpnNeckWeightRoles.map(role => ({ role, sha256: weightsByRole[role].sha256 }))) : undefined,
+      promptFpnWeightsSha256: includeImageFpnNeck ? await aggregateTensorBundleSha256('sam3-prompt-fpn-weights', promptWeightRoles.map(role => ({ role, sha256: weightsByRole[role].sha256 }))) : undefined,
+      pixelDecoderWeightsSha256: includeImageFpnNeck ? await aggregateTensorBundleSha256('sam3-pixel-decoder-weights', pixelWeightRoles.map(role => ({ role, sha256: weightsByRole[role].sha256 }))) : undefined,
       pixelEmbedSha256: pixelEmbedTensor.sha256,
       expectedMaskEmbeddingsSha256: expectedMaskEmbeddingsTensor.sha256,
       expectedUpscaledEmbeddingSha256: expectedUpscaledTensor.sha256,
@@ -1696,6 +1771,60 @@ async function loadDetrStackPayload(manifest) {
       const gpuEncoderHiddenStates = new Float32Array(encoderResult.debugReadback.encoderHiddenStates);
       const detrEncoderOutput = encoderResult.receipt.outputs.find(output => output.role === 'encoder-hidden-states');
       if (!detrEncoderOutput?.sha256 || !detrEncoderOutput?.artifactId) throw new Error('DETR encoder output identity missing for decoder composition');
+      let promptResult = null;
+      let pixelResult = null;
+      let gpuPromptFpnFeature = null;
+      let gpuPixelEmbed = null;
+      let promptFpnOutput = null;
+      let pixelEmbedOutput = null;
+      let promptFpnTensorSha256 = null;
+      let pixelTensorSha256 = null;
+      if (includeImageFpnNeck) {
+        promptFpnTensorSha256 = await aggregateTensorBundleSha256('sam3-prompt-fpn-tensors:browser-image-fpn-detector-stack', [
+          { role: 'encoder-hidden-states', artifactId: detrEncoderOutput.artifactId, sha256: detrEncoderOutput.sha256, shape: detrEncoderOutput.shape },
+          { role: 'prompt-features', sha256: promptTensor.sha256 },
+          { role: 'prompt-mask', sha256: promptMaskTensor.sha256 },
+        ]);
+        const promptRoute = createSam3PromptFpnPhaseProgramRouteDefinition({ model: { revision: manifest.model?.id || 'mlx-reference-prompt-fpn', dtype: 'fp32' }, kernel: { profile: 'sam3-prompt-fpn-phase-program-v0', commit: params.get('commit') || null } });
+        const promptRequest = createRouteInvocationRequest(promptRoute, {
+          requestId: `sam-browser-image-fpn-prompt-${Date.now()}`,
+          inputs: {
+            'source-image': { artifactId: manifest.sourceImage?.artifactId || 'image:synthetic', sha256: manifest.sourceImage?.sha256 || 'sha256:synthetic-image', shape: sourceImageShape(manifest) },
+            'sam3-prompt-fpn-tensors': { artifactId: 'sam3-prompt-fpn-tensors:browser-image-fpn-detector-stack-composition', sha256: promptFpnTensorSha256 },
+            'sam3-prompt-fpn-weights': { artifactId: manifest.staticWeights.artifactId, sha256: manifest.staticWeights.sha256 },
+          },
+          outputs: {
+            'prompt-fpn-feature': { artifactId: 'sam3-prompt-fpn-feature:browser-image-fpn-detector-stack-composition', shape: [manifest.shape.batch, manifest.shape.height, manifest.shape.width, manifest.shape.channels] },
+          },
+          routeConfig: { upstream: manifest.claims?.upstream || 'mlx-reference-detr-stack', promptHash: manifest.prompt?.sha256, composedFrom: encoderResult.receipt?.effectiveRouteId, detrEncoderOutput, browserFpnDetrIngress: browserFpnDetrIngressEvidence },
+        });
+        promptResult = await runSam3PromptFpnPhaseProgramRoute({ request: promptRequest, route: promptRoute, device, queue: device.queue, adapterName: adapter.info?.description || adapter.info?.device || 'browser-webgpu-adapter', browser: navigator.userAgent, kernel: promptRoute.kernel, model: { revision: promptRoute.model.revision, weightsHash: manifest.staticWeights.sha256, dtype: 'fp32' }, tensors: { encoderHiddenStates: gpuEncoderHiddenStates, promptFeatures, promptMask, weights: promptWeights, shape: promptShape }, includeReadback: true });
+        gpuPromptFpnFeature = new Float32Array(promptResult.debugReadback.promptFpnFeature);
+        promptFpnOutput = promptResult.receipt.outputs.find(output => output.role === 'prompt-fpn-feature');
+        if (!promptFpnOutput?.sha256 || !promptFpnOutput?.artifactId) throw new Error('image-FPN detector-stack prompt-FPN output identity missing');
+        pixelTensorSha256 = await aggregateTensorBundleSha256('sam3-pixel-decoder-tensors:browser-image-fpn-detector-stack', [
+          { role: 'fpn-neck-feature-0', artifactId: fpnNeckFeature0Output.artifactId, sha256: fpnNeckFeature0Output.sha256, shape: fpnNeckFeature0Output.shape },
+          { role: 'fpn-neck-feature-1', artifactId: fpnNeckFeature1Output.artifactId, sha256: fpnNeckFeature1Output.sha256, shape: fpnNeckFeature1Output.shape },
+          { role: 'prompt-fpn-feature', artifactId: promptFpnOutput.artifactId, sha256: promptFpnOutput.sha256, shape: promptFpnOutput.shape },
+        ]);
+        const pixelRoute = createSam3PixelDecoderPhaseProgramRouteDefinition({ stageCount: pixelShape.levels.length - 1, model: { revision: manifest.model?.id || 'mlx-reference-pixel-decoder', dtype: 'fp32' }, kernel: { profile: 'sam3-pixel-decoder-phase-program-v0', commit: params.get('commit') || null } });
+        const pixelRequest = createRouteInvocationRequest(pixelRoute, {
+          requestId: `sam-browser-image-fpn-pixel-${Date.now()}`,
+          inputs: {
+            'source-image': { artifactId: manifest.sourceImage?.artifactId || 'image:synthetic', sha256: manifest.sourceImage?.sha256 || 'sha256:synthetic-image', shape: sourceImageShape(manifest) },
+            'sam3-pixel-decoder-tensors': { artifactId: 'sam3-pixel-decoder-tensors:browser-image-fpn-detector-stack-composition', sha256: pixelTensorSha256 },
+            'sam3-pixel-decoder-weights': { artifactId: manifest.staticWeights.artifactId, sha256: manifest.staticWeights.sha256 },
+          },
+          outputs: {
+            'pixel-embed': { artifactId: 'sam3-pixel-embed:browser-image-fpn-detector-stack-composition', shape: [manifest.shape.batch, manifest.shape.maskHeight, manifest.shape.maskWidth, manifest.shape.channels] },
+          },
+          routeConfig: { upstream: manifest.claims?.upstream || 'mlx-reference-detr-stack', promptHash: manifest.prompt?.sha256, composedFrom: promptResult.receipt?.effectiveRouteId, promptFpnOutput },
+        });
+        pixelResult = await runSam3PixelDecoderPhaseProgramRoute({ request: pixelRequest, route: pixelRoute, device, queue: device.queue, adapterName: adapter.info?.description || adapter.info?.device || 'browser-webgpu-adapter', browser: navigator.userAgent, kernel: pixelRoute.kernel, model: { revision: pixelRoute.model.revision, weightsHash: manifest.staticWeights.sha256, dtype: 'fp32' }, tensors: { features: [gpuFpnNeckFeature0, gpuFpnNeckFeature1, gpuPromptFpnFeature], weights: pixelWeights, shape: pixelShape }, includeReadback: true });
+        gpuPixelEmbed = new Float32Array(pixelResult.debugReadback.pixelEmbed);
+        pixelEmbedOutput = pixelResult.receipt.outputs.find(output => output.role === 'pixel-embed');
+        if (!pixelEmbedOutput?.sha256 || !pixelEmbedOutput?.artifactId) throw new Error('image-FPN detector-stack pixel-decoder output identity missing');
+      }
       const decoderTensorSha256 = await aggregateTensorBundleSha256('sam3-detr-decoder-composed-tensors', [
         { role: 'encoder-hidden-states', artifactId: detrEncoderOutput.artifactId, sha256: detrEncoderOutput.sha256, shape: detrEncoderOutput.shape },
         { role: 'encoder-pos', sha256: effectiveEncoderPosSha256 },
@@ -1801,9 +1930,11 @@ async function loadDetrStackPayload(manifest) {
         selectionOutput = selectionResult.receipt.outputs.find(output => output.role === 'selected-index');
         if (!selectionOutput?.sha256 || !selectionOutput?.artifactId) throw new Error('DETR stack selection output identity missing');
       }
+      const effectivePixelEmbed = gpuPixelEmbed || pixelEmbed;
+      const effectivePixelEmbedOutput = pixelEmbedOutput || { artifactId: pixelEmbedTensor.artifactId || 'sam3-pixel-embed:mlx-reference-detector-stack', sha256: pixelEmbedTensor.sha256, shape: pixelEmbedTensor.shape };
       const downstreamTensorSha256 = await aggregateTensorBundleSha256('sam3-mask-tail-composed-tensors', [
         { role: 'last-hs', artifactId: lastHsOutput.artifactId, sha256: lastHsOutput.sha256, shape: lastHsOutput.shape },
-        { role: 'pixel-embed', sha256: pixelEmbedTensor.sha256 },
+        { role: 'pixel-embed', artifactId: effectivePixelEmbedOutput.artifactId, sha256: effectivePixelEmbedOutput.sha256, shape: effectivePixelEmbedOutput.shape },
       ]);
       const maskRoute = createSam3MaskTailPhaseProgramRouteDefinition({ model: { revision: manifest.model?.id || 'mlx-reference-mask-tail', dtype: 'fp32' }, kernel: { profile: 'sam3-mask-tail-phase-program-v0', commit: params.get('commit') || null } });
       const maskRequest = createRouteInvocationRequest(maskRoute, {
@@ -1817,16 +1948,16 @@ async function loadDetrStackPayload(manifest) {
           'mask-logits': { artifactId: 'sam3-mask-logits:browser-detr-stack-composition', shape: [manifest.shape.batch, manifest.shape.maskTokens, manifest.shape.maskHeight, manifest.shape.maskWidth] },
           'mask-binary': { artifactId: 'sam3-mask-binary:browser-detr-stack-composition', shape: [manifest.shape.batch, manifest.shape.maskTokens, manifest.shape.maskHeight, manifest.shape.maskWidth] },
         },
-        routeConfig: { upstream: manifest.claims?.upstream || 'mlx-reference-detr-stack', promptHash: manifest.prompt?.sha256, composedFrom: decoderResult.receipt?.effectiveRouteId, lastHsOutput },
+        routeConfig: { upstream: manifest.claims?.upstream || 'mlx-reference-detr-stack', promptHash: manifest.prompt?.sha256, composedFrom: pixelResult?.receipt?.effectiveRouteId || decoderResult.receipt?.effectiveRouteId, lastHsOutput, pixelEmbedOutput },
       });
-      const tailResult = await runSam3MaskTailPhaseProgramRoute({ request: maskRequest, route: maskRoute, device, queue: device.queue, adapterName: adapter.info?.description || adapter.info?.device || 'browser-webgpu-adapter', browser: navigator.userAgent, kernel: maskRoute.kernel, model: { revision: maskRoute.model.revision, weightsHash: manifest.staticWeights.sha256, dtype: 'fp32' }, tensors: { lastHs: gpuLastHs, pixelEmbed, weights: tailWeights, shape: maskTailShape }, includeReadback: true });
+      const tailResult = await runSam3MaskTailPhaseProgramRoute({ request: maskRequest, route: maskRoute, device, queue: device.queue, adapterName: adapter.info?.description || adapter.info?.device || 'browser-webgpu-adapter', browser: navigator.userAgent, kernel: maskRoute.kernel, model: { revision: maskRoute.model.revision, weightsHash: manifest.staticWeights.sha256, dtype: 'fp32' }, tensors: { lastHs: gpuLastHs, pixelEmbed: effectivePixelEmbed, weights: tailWeights, shape: maskTailShape }, includeReadback: true });
       return {
         ...tailResult,
         receipt: encoderResult.receipt,
         routeReceipt: encoderResult.receipt,
         midstreamRouteReceipt: decoderResult.receipt,
         downstreamRouteReceipt: tailResult.receipt,
-        compositionRouteReceipts: includeImageFpnNeck ? [imagePreprocessResult.receipt, imagePatchEmbedResult.receipt, imageVitPrefixResult.receipt, imageVitBlockStackResult.receipt, imageFpnNeckResult.receipt, encoderResult.receipt, decoderResult.receipt, scoringResult.receipt, selectionResult.receipt, tailResult.receipt] : includeImageVitBlockStack ? [imagePreprocessResult.receipt, imagePatchEmbedResult.receipt, imageVitPrefixResult.receipt, imageVitBlockStackResult.receipt, encoderResult.receipt, decoderResult.receipt, scoringResult.receipt, selectionResult.receipt, tailResult.receipt] : includeImageVitFirstBlock ? [imagePreprocessResult.receipt, imagePatchEmbedResult.receipt, imageVitPrefixResult.receipt, imageVitFirstBlockResult.receipt, encoderResult.receipt, decoderResult.receipt, scoringResult.receipt, selectionResult.receipt, tailResult.receipt] : includeImageVitPrefix ? [imagePreprocessResult.receipt, imagePatchEmbedResult.receipt, imageVitPrefixResult.receipt, encoderResult.receipt, decoderResult.receipt, scoringResult.receipt, selectionResult.receipt, tailResult.receipt] : includeImagePatchEmbed ? [imagePreprocessResult.receipt, imagePatchEmbedResult.receipt, encoderResult.receipt, decoderResult.receipt, scoringResult.receipt, selectionResult.receipt, tailResult.receipt] : includeImagePreprocess ? [imagePreprocessResult.receipt, encoderResult.receipt, decoderResult.receipt, scoringResult.receipt, selectionResult.receipt, tailResult.receipt] : includeStackSelection ? [encoderResult.receipt, decoderResult.receipt, scoringResult.receipt, selectionResult.receipt, tailResult.receipt] : includeStackScoring ? [encoderResult.receipt, decoderResult.receipt, scoringResult.receipt, tailResult.receipt] : [encoderResult.receipt, decoderResult.receipt, tailResult.receipt],
+        compositionRouteReceipts: includeImageFpnNeck ? [imagePreprocessResult.receipt, imagePatchEmbedResult.receipt, imageVitPrefixResult.receipt, imageVitBlockStackResult.receipt, imageFpnNeckResult.receipt, encoderResult.receipt, promptResult.receipt, pixelResult.receipt, decoderResult.receipt, scoringResult.receipt, selectionResult.receipt, tailResult.receipt] : includeImageVitBlockStack ? [imagePreprocessResult.receipt, imagePatchEmbedResult.receipt, imageVitPrefixResult.receipt, imageVitBlockStackResult.receipt, encoderResult.receipt, decoderResult.receipt, scoringResult.receipt, selectionResult.receipt, tailResult.receipt] : includeImageVitFirstBlock ? [imagePreprocessResult.receipt, imagePatchEmbedResult.receipt, imageVitPrefixResult.receipt, imageVitFirstBlockResult.receipt, encoderResult.receipt, decoderResult.receipt, scoringResult.receipt, selectionResult.receipt, tailResult.receipt] : includeImageVitPrefix ? [imagePreprocessResult.receipt, imagePatchEmbedResult.receipt, imageVitPrefixResult.receipt, encoderResult.receipt, decoderResult.receipt, scoringResult.receipt, selectionResult.receipt, tailResult.receipt] : includeImagePatchEmbed ? [imagePreprocessResult.receipt, imagePatchEmbedResult.receipt, encoderResult.receipt, decoderResult.receipt, scoringResult.receipt, selectionResult.receipt, tailResult.receipt] : includeImagePreprocess ? [imagePreprocessResult.receipt, encoderResult.receipt, decoderResult.receipt, scoringResult.receipt, selectionResult.receipt, tailResult.receipt] : includeStackSelection ? [encoderResult.receipt, decoderResult.receipt, scoringResult.receipt, selectionResult.receipt, tailResult.receipt] : includeStackScoring ? [encoderResult.receipt, decoderResult.receipt, scoringResult.receipt, tailResult.receipt] : [encoderResult.receipt, decoderResult.receipt, tailResult.receipt],
         backend: tailResult.backend,
         debugReadback: {
           pixelValues: gpuPixelValues ? Array.from(gpuPixelValues) : undefined,
@@ -1847,6 +1978,8 @@ async function loadDetrStackPayload(manifest) {
           encoderSrc: includeImageFpnNeck ? Array.from(effectiveEncoderSrc) : undefined,
           encoderPos: includeImageFpnNeck ? Array.from(effectiveEncoderPos) : undefined,
           encoderHiddenStates: Array.from(gpuEncoderHiddenStates),
+          promptFpnFeature: gpuPromptFpnFeature ? Array.from(gpuPromptFpnFeature) : undefined,
+          pixelEmbed: gpuPixelEmbed ? Array.from(gpuPixelEmbed) : undefined,
           decoderHiddenStates: gpuDecoderHiddenStates ? Array.from(gpuDecoderHiddenStates) : undefined,
           lastHs: Array.from(gpuLastHs),
           referenceBoxes: Array.from(gpuReferenceBoxes),
@@ -1897,6 +2030,12 @@ async function loadDetrStackPayload(manifest) {
           detrImageIngressTensorSha256,
           effectiveEncoderSrcSha256,
           effectiveEncoderPosSha256,
+          promptFpnRouteId: promptResult?.receipt?.effectiveRouteId,
+          promptFpnTensorSha256,
+          promptFpnOutput,
+          pixelDecoderRouteId: pixelResult?.receipt?.effectiveRouteId,
+          pixelTensorSha256,
+          pixelEmbedOutput,
           midstreamRouteId: decoderResult.receipt.effectiveRouteId,
           downstreamRouteId: tailResult.receipt.effectiveRouteId,
           detrEncoderOutput,
@@ -3254,6 +3393,27 @@ async function main() {
       debugReadbackSamples: {
         encoderSrc: debugReadbackSamples.encoderSrc,
         encoderPos: debugReadbackSamples.encoderPos,
+      },
+    } : null;
+    state.browserPromptFpnPixelEvidence = payload.browserPromptFpnPixelEvidence ? {
+      ...payload.browserPromptFpnPixelEvidence,
+      receiptChain: (result.compositionRouteReceipts || []).map(receipt => receipt.effectiveRouteId),
+      promptReceipt: result.compositionRouteReceipts?.find(receipt => receipt.effectiveRouteId === SAM3_PROMPT_FPN_PHASE_PROGRAM_ROUTE_ID) || null,
+      pixelReceipt: result.compositionRouteReceipts?.find(receipt => receipt.effectiveRouteId === SAM3_PIXEL_DECODER_PHASE_PROGRAM_ROUTE_ID) || null,
+      promptFpnTensorSha256: result.compositionEdge?.promptFpnTensorSha256 || null,
+      promptFpnOutput: result.compositionEdge?.promptFpnOutput || null,
+      pixelTensorSha256: result.compositionEdge?.pixelTensorSha256 || null,
+      pixelEmbedOutput: result.compositionEdge?.pixelEmbedOutput || null,
+      downstreamTensorSha256: result.compositionEdge?.downstreamTensorSha256 || null,
+      parity: {
+        promptFpnMaxAbsDiff: parity.promptFpnMaxAbsDiff,
+        pixelEmbedMaxAbsDiff: parity.pixelEmbedMaxAbsDiff,
+        maskLogitsMaxAbsDiff: parity.maskLogitsMaxAbsDiff,
+        binaryMismatchCount: parity.binaryMismatchCount,
+      },
+      debugReadbackSamples: {
+        promptFpnFeature: result.debugReadback.promptFpnFeature ? Array.from(new Float32Array(result.debugReadback.promptFpnFeature).slice(0, 16)) : undefined,
+        pixelEmbed: result.debugReadback.pixelEmbed ? Array.from(new Float32Array(result.debugReadback.pixelEmbed).slice(0, 16)) : undefined,
       },
     } : null;
     if (

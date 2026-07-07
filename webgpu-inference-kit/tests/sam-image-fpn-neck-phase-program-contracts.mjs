@@ -27,8 +27,11 @@ assert.match(stackExporter, /mlx-detector-stack-image-fpn-neck-export/, 'detecto
 assert.match(stackExporter, /expected-fpn-neck-feature-0/, 'detector-stack packet must export expected FPN-neck feature level 0');
 assert.match(stackExporter, /expected-fpn-neck-feature-1/, 'detector-stack packet must export expected FPN-neck feature level 1');
 assert.match(stackExporter, /expected-fpn-neck-feature-2/, 'detector-stack packet must export expected FPN-neck feature level 2');
+assert.match(stackExporter, /expected-prompt-fpn-feature/, 'image-FPN detector-stack packet must export expected prompt-FPN feature for browser prompt-FPN composition');
+assert.match(stackExporter, /expected-pixel-embed/, 'image-FPN detector-stack packet must export expected pixel embed for browser pixel-decoder composition');
 assert.match(stackExporter, /fpn-neck-layer0-scale0-weight/, 'detector-stack packet must export level-0 FPN transpose-conv weights');
 assert.match(stackExporter, /fpn-neck-layer2-proj2-weight/, 'detector-stack packet must export level-2 FPN projection weights');
+assert.match(stackExporter, /encoder_tool\.add_downstream_weights\(weight_entries, out_dir, params, len\(ref\["composed_features"\]\)\)/, 'image-FPN detector-stack packet must export prompt cross-attention, pixel-decoder, and mask-tail weights through the reviewed downstream helper');
 assert.match(stackExporter, /image-fpn-neck-detector-stack-composition/, 'detector-stack packet must preserve FPN-neck composition route kind');
 assert.match(stackExporter, /browser-derived-from-fpn-neck-feature-2/, 'detector-stack packet metadata must mark encoder-src as browser-derived from FPN level 2 in image-FPN mode');
 assert.match(stackExporter, /browser-position-embedding-sine-from-fpn-level-2-shape/, 'detector-stack packet metadata must mark encoder-pos as browser-computed from FPN level-2 shape in image-FPN mode');
@@ -40,18 +43,28 @@ assert.match(stackExporter, /"binaryMismatchCount": 8/, 'legacy detector-stack p
 assert.match(stackExporter, /"selectionBoxesMaxAbsDiff": 0\.0002/, 'legacy detector-stack packet budget must keep tight selection-box tolerance');
 assert.match(stackExporter, /"binaryMismatchCount": 64/, 'image-FPN packet budget must carry the measured Gate N binary mismatch tolerance');
 assert.match(stackExporter, /"selectionBoxesMaxAbsDiff": 0\.006/, 'image-FPN packet budget must carry the measured Gate N selection-box tolerance');
+assert.match(stackExporter, /"promptFpnMaxAbsDiff": 0\.001/, 'image-FPN packet budget must carry the measured browser prompt-FPN tolerance');
+assert.match(stackExporter, /"pixelEmbedMaxAbsDiff": 0\.0015/, 'image-FPN packet budget must carry the measured browser pixel-decoder tolerance');
 assert.match(stackExporter, /"toleranceBudgetSource": tolerance_budget_source/, 'detector-stack packet must surface the effective tolerance budget source');
 
 assert.match(witness, /mlx-detector-stack-image-fpn-neck-export/, 'witness must allow detector-stack packet mode with browser-local image FPN-neck ingress');
 assert.match(witness, /IMAGE_FPN_NECK_PHASE_PROGRAM_ROUTE_ID/, 'witness must preserve SAM3 image FPN-neck route identity');
 assert.match(witness, /imageFpnNeckReport/, 'witness must emit compact imageFpnNeck report evidence');
 assert.match(witness, /fpnNeckFeature0MaxAbsDiff/, 'witness must assert FPN-neck level-0 parity');
-assert.match(witness, /receiptChain\.length !== 10/, 'witness must reject receipt chains that skip FPN-neck ingress');
+assert.match(witness, /receiptChain\.length !== 12/, 'witness must reject image-FPN detector-stack receipt chains that skip browser prompt-FPN or pixel-decoder composition');
+assert.match(witness, /lastState\.compositionRouteReceipts\.length !== 12/, 'witness terminal detector-stack guard must accept the full 12-route image-FPN prompt/pixel chain');
+assert.doesNotMatch(witness, /lastState\.compositionRouteReceipts\.length !== 10/, 'witness terminal detector-stack guard must not retain the stale ten-route image-FPN chain');
+assert.match(witness, /promptFpnReceipt,\s*\n\s*pixelDecoderReceipt,\s*\n\s*decoderReceipt/, 'witness terminal detector-stack guard must account for prompt-FPN and pixel-decoder receipts before decoder');
+assert.match(witness, /promptFpnOutput\?\.artifactId !== compositionEdge\?\.promptFpnOutput\?\.artifactId/, 'witness terminal detector-stack guard must bind prompt-FPN receipt output to the composition edge');
+assert.match(witness, /pixelDecoderOutput\?\.artifactId !== compositionEdge\?\.pixelEmbedOutput\?\.artifactId/, 'witness terminal detector-stack guard must bind pixel-decoder receipt output to the composition edge');
 assert.match(witness, /effectiveToleranceBudgetSource/, 'witness report must preserve the effective tolerance budget source');
-assert.match(witness, /browser-fpn-detr-image-ingress/, 'witness must recognize the Gate N image-FPN tolerance budget source');
+assert.match(witness, /browser-fpn-prompt-pixel-detector-stack/, 'witness must recognize the image-FPN prompt/pixel tolerance budget source');
 assert.match(witness, /sam3-detr-encoder-tensors/, 'witness must inspect the DETR encoder tensor input receipt');
 assert.match(witness, /detrEncoderInput\?\.artifactId !== 'sam3-detr-encoder-tensors:browser-fpn-image-ingress-composition'/, 'witness must assert the DETR encoder input artifact comes from browser FPN image ingress composition');
 assert.match(witness, /detrEncoderInput\?\.sha256 !== ingress\.detrImageIngressTensorSha256/, 'witness must assert the DETR encoder input hash equals the browser FPN ingress aggregate');
+assert.match(witness, /browserPromptFpnPixelEvidence/, 'witness report must preserve browser prompt-FPN and pixel-decoder evidence at top level');
+assert.match(witness, /PROMPT_FPN_PHASE_PROGRAM_ROUTE_ID/, 'witness must assert image-FPN detector-stack prompt-FPN route receipt identity');
+assert.match(witness, /PIXEL_DECODER_PHASE_PROGRAM_ROUTE_ID/, 'witness must assert image-FPN detector-stack pixel-decoder route receipt identity');
 
 assert.match(smokeJs, /runSam3ImageFpnNeckPhaseProgramRoute/, 'browser smoke must execute image FPN-neck route');
 assert.match(smokeJs, /image-fpn-neck-detector-stack-composition/, 'browser smoke must expose detector-stack composition with browser-local FPN-neck ingress');
@@ -62,6 +75,10 @@ assert.match(smokeJs, /createSam3DetrImageIngressFromFpnFeatures/, 'browser smok
 assert.match(smokeJs, /browserFpnDetrIngressEvidence/, 'browser smoke state must expose FPN-derived DETR ingress evidence');
 assert.match(smokeJs, /detrImageIngressTensorSha256/, 'browser smoke must receipt-bind DETR encoder tensors to the FPN-derived image ingress');
 assert.match(smokeJs, /encoderSrcSource: 'browser-fpn-neck-feature-2'/, 'browser smoke must advertise browser FPN level 2 as the DETR encoder source owner');
+assert.match(smokeJs, /sam3-prompt-fpn-tensors:browser-image-fpn-detector-stack-composition/, 'browser smoke must receipt-bind DETR encoder output into browser prompt-FPN for image-FPN detector-stack mode');
+assert.match(smokeJs, /sam3-pixel-decoder-tensors:browser-image-fpn-detector-stack-composition/, 'browser smoke must receipt-bind browser FPN and prompt-FPN outputs into pixel decoder for image-FPN detector-stack mode');
+assert.match(smokeJs, /sam3-pixel-embed:browser-image-fpn-detector-stack-composition/, 'browser smoke must expose browser-produced pixel embed before mask-tail in image-FPN detector-stack mode');
+assert.match(smokeJs, /browserPromptFpnPixelEvidence/, 'browser smoke state must expose browser prompt-FPN and pixel-decoder evidence');
 
 const {
   SAM3_IMAGE_FPN_NECK_PHASE_PROGRAM_ROUTE_ID,
