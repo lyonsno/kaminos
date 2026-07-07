@@ -74,6 +74,11 @@ h2 { font-size: 11px; font-weight: 600; margin: 18px 0 8px; color: #666; text-tr
     .kiln-route-bench-actions .comparison { grid-column: 1 / -1; }
     .sharp-breathing-room-status { min-height: 30px; color: #d8c37a; font-size: 11px; line-height: 1.35; margin-top: 7px; }
     .sharp-breathing-room-source { color: #888; font: 10px 'SF Mono', monospace; overflow-wrap: anywhere; margin-top: 5px; }
+    .sharp-breathing-room-comparison-summary { color: #9fb9c5; font: 10px 'SF Mono', monospace; line-height: 1.35; overflow-wrap: anywhere; margin-top: 7px; }
+    .sharp-breathing-room-comparison-summary[data-status="complete"] { color: #9fc58f; }
+    .sharp-breathing-room-comparison-summary[data-status="missing-labels"],
+    .sharp-breathing-room-comparison-summary[data-status="hash-missing"],
+    .sharp-breathing-room-comparison-summary[data-status="hash-mismatch"] { color: #d89a77; }
     .sharp-breathing-room-source-preview { border: 1px solid #2d2d2d; border-radius: 7px; background: #141414; min-height: 150px; margin: 8px 0; overflow: hidden; display: flex; align-items: center; justify-content: center; }
     .sharp-breathing-room-source-preview img { display: block; width: 100%; max-height: 240px; object-fit: contain; background: #101010; }
     .sharp-breathing-room-source-preview.empty { color: #666; font-size: 11px; padding: 14px; text-align: center; }
@@ -2318,6 +2323,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
       </div>
       <div class="sharp-breathing-room-source" id="sharp-breathing-room-source-summary">Select an image asset below or paste an image source.</div>
       <div class="sharp-breathing-room-status" id="sharp-breathing-room-status">Choose an image, pick a route, and cook it into an asset. Friendly gives SHARP more room when the box is busy; default is the comparison path.</div>
+      <div class="sharp-breathing-room-comparison-summary" id="sharp-breathing-room-comparison-summary" hidden></div>
     </div>
     <h2>Image Generation</h2>
     <p style="font-size: 11px; color: #666; margin-bottom: 12px;">Generate test images to feed through the MoGe + SuperMat pipeline.</p>
@@ -12340,6 +12346,16 @@ const sharpBreathingRoomProfileLabels = {
   'cooperative-spn-gaussian': 'Friendly',
 };
 
+const SHARP_SPN_LOWRES_BLOCK_LABELS = [
+  'upsample-lowres',
+  'readback-x2-upsampled',
+  'readback-lowres',
+  'cpu-concat-lowres',
+  'concat-upload',
+  'fuse-lowres',
+];
+window.__kaminosSharpSpnLowresBlockLabels = SHARP_SPN_LOWRES_BLOCK_LABELS;
+
 const KILN_ROUTE_BENCH_ROUTES = [
   {
     id: 'sharp-image-to-splat-live-v0',
@@ -12409,6 +12425,7 @@ function setKilnRouteBenchStatus(message, kind = 'idle', extra = {}) {
     status.dataset.status = kind;
     status.dataset.kilnRouteId = route.id;
   }
+  refreshSharpBreathingRoomComparisonSummary(extra.comparisonState || window.__kaminosSharpBreathingRoomComparisonState || kilnRouteBenchState);
   if (message) setInfo(message);
 }
 
@@ -12526,16 +12543,19 @@ async function beginSharpBreathingRoomKilnFire({ profileId, source, pipelineId }
   }
 }
 
-function endSharpBreathingRoomKilnFire(phase = 'complete') {
+function endSharpBreathingRoomKilnFire(phase = 'complete', options = {}) {
   const fireState = window.__kaminosSharpBreathingRoomKilnFireState || null;
   if (!fireState) return null;
+  const forceInactive = options.forceInactive === true;
   fireState.phase = phase;
   fireState.finishedAt = new Date().toISOString();
-  if (fireState.activatedByRun && volumePrototype) {
+  if ((fireState.activatedByRun || forceInactive) && volumePrototype) {
     volumePrototype.setActive(false);
     fireState.volumeReleased = true;
+    fireState.forcedRelease = forceInactive && !fireState.activatedByRun;
   } else {
     fireState.volumeReleased = false;
+    fireState.forcedRelease = false;
   }
   fireState.volumeDebugState = volumePrototype?.debugState?.() || null;
   window.__kaminosSharpBreathingRoomKilnFireState = fireState;
@@ -12604,6 +12624,7 @@ function renderKilnRouteBench() {
     comparisonButton.disabled = running;
     comparisonButton.textContent = running ? 'Running comparison' : 'Run comparison';
   }
+  refreshSharpBreathingRoomComparisonSummary(window.__kaminosSharpBreathingRoomComparisonState || kilnRouteBenchState);
 }
 
 function renderSharpBreathingRoomHarness() {
@@ -13000,6 +13021,185 @@ function pipelineRunSchedulerEvidence(result) {
   const reportEvidence = result.report?.document?.pipelineScheduler;
   if (reportEvidence?.schema === 'kaminos.pipeline-scheduler-composition.v0') return reportEvidence;
   return null;
+}
+
+function finiteKilnEvidenceNumber(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function sharpBreathingRoomRunStage(result) {
+  const stages = result?.report?.document?.stages || [];
+  return stages.find(stage => stage?.id === 'run-sharp-image-to-splat')
+    || stages.find(stage => stage?.effectiveRoute?.adapterReport || stage?.effectiveRoute?.pipelineScheduler)
+    || stages[0]
+    || null;
+}
+
+function sharpBreathingRoomAdapterReport(result) {
+  return sharpBreathingRoomRunStage(result)?.effectiveRoute?.adapterReport || null;
+}
+
+function sharpBreathingRoomRunDurationMs(result) {
+  const stage = sharpBreathingRoomRunStage(result);
+  return finiteKilnEvidenceNumber(
+    stage?.durationMs
+    ?? stage?.effectiveRoute?.durationMs
+    ?? result?.report?.document?.durationMs
+    ?? result?.durationMs
+    ?? null,
+  );
+}
+
+function sharpBreathingRoomSchedulerEvents(result) {
+  const evidence = pipelineRunSchedulerEvidence(result);
+  const adapterReport = sharpBreathingRoomAdapterReport(result);
+  const candidates = [
+    evidence?.schedulerVerification?.eventTrace?.events,
+    evidence?.eventTrace?.events,
+    evidence?.scheduler?.schedulerVerification?.eventTrace?.events,
+    adapterReport?.pipelineScheduler?.schedulerVerification?.eventTrace?.events,
+    adapterReport?.breathingRoom?.schedulerVerification?.eventTrace?.events,
+    adapterReport?.breathingRoom?.telemetry?.events,
+  ];
+  const events = [];
+  for (const candidate of candidates) {
+    if (!Array.isArray(candidate)) continue;
+    for (const event of candidate) if (event && typeof event === 'object') events.push(event);
+  }
+  return events;
+}
+
+function sharpBreathingRoomSpnFusionBlocks(result) {
+  const blocks = [];
+  for (const event of sharpBreathingRoomSchedulerEvents(result)) {
+    const block = event.details?.block || event.block || event.label || event.name || null;
+    const phaseText = [
+      event.phase,
+      event.boundary,
+      event.stage,
+      event.routePhase,
+      event.kind,
+    ].filter(Boolean).join(' ').toLowerCase();
+    if (!block) continue;
+    if (!phaseText.includes('spn-fusion') && !SHARP_SPN_LOWRES_BLOCK_LABELS.includes(block)) continue;
+    if (!blocks.includes(block)) blocks.push(block);
+  }
+  return blocks;
+}
+
+function sharpBreathingRoomSpnFusionCoverage(result) {
+  const observed = sharpBreathingRoomSpnFusionBlocks(result);
+  const missing = SHARP_SPN_LOWRES_BLOCK_LABELS.filter(block => !observed.includes(block));
+  return {
+    schema: 'kaminos.sharp-spn-lowres-fusion-coverage.v0',
+    requiredBlocks: [...SHARP_SPN_LOWRES_BLOCK_LABELS],
+    observedBlocks: observed,
+    missingSpnFusionBlocks: missing,
+    status: missing.length ? 'missing-labels' : 'complete',
+  };
+}
+
+function sharpBreathingRoomArtifactSha256(result, artifact = pipelinePrimaryRunArtifact(result)) {
+  const adapterReport = sharpBreathingRoomAdapterReport(result);
+  return artifact?.sha256
+    || result?.report?.document?.artifacts?.splat?.sha256
+    || adapterReport?.output?.sha256
+    || adapterReport?.outputs?.splat?.sha256
+    || null;
+}
+
+function sharpBreathingRoomComparisonRunEvidence(run, step = {}) {
+  const artifact = pipelinePrimaryRunArtifact(run);
+  const schedulerEvidence = pipelineRunSchedulerEvidence(run);
+  const adapterReport = sharpBreathingRoomAdapterReport(run);
+  const coverage = sharpBreathingRoomSpnFusionCoverage(run);
+  return {
+    schema: 'kaminos.sharp-breathing-room-comparison-run-evidence.v0',
+    profileId: step.profileId || run?.profileId || null,
+    label: step.label || sharpBreathingRoomProfileLabels[step.profileId || run?.profileId] || null,
+    ok: run?.ok === true,
+    runId: run ? pipelineRunDisplayId(run) : null,
+    report: run?.report?.path || null,
+    artifact: artifact?.path || null,
+    artifactSha256: sharpBreathingRoomArtifactSha256(run, artifact),
+    artifactBytes: finiteKilnEvidenceNumber(artifact?.bytes ?? adapterReport?.outputBytes ?? adapterReport?.output?.bytes ?? null),
+    durationMs: sharpBreathingRoomRunDurationMs(run),
+    requestedScheduler: schedulerEvidence?.requestedScheduler
+      || schedulerEvidence?.scheduler?.requestedScheduler
+      || adapterReport?.breathingRoom?.requestedScheduler
+      || null,
+    effectiveScheduler: schedulerEvidence?.effectiveScheduler
+      || schedulerEvidence?.scheduler?.effectiveScheduler
+      || adapterReport?.breathingRoom?.effectiveScheduler
+      || null,
+    schedulerVerificationStatus: schedulerEvidence?.schedulerVerification?.status
+      || schedulerEvidence?.verificationState
+      || adapterReport?.breathingRoom?.status
+      || null,
+    schedulerEventCount: sharpBreathingRoomSchedulerEvents(run).length,
+    spnFusionBlocks: coverage.observedBlocks,
+    requiredSpnFusionBlocks: coverage.requiredBlocks,
+    missingSpnFusionBlocks: coverage.missingSpnFusionBlocks,
+    spnFusionCoverage: coverage,
+    error: run?.ok === false ? pipelineRunFailureSummary(run) : null,
+  };
+}
+
+function sharpBreathingRoomOutputEquivalence(comparisonRuns = []) {
+  const baseline = comparisonRuns.find(run => run.profileId === 'baseline-default') || comparisonRuns[0] || null;
+  const friendly = comparisonRuns.find(run => run.profileId === 'cooperative-spn-gaussian') || comparisonRuns[1] || null;
+  const baselineHash = baseline?.artifactSha256 || null;
+  const friendlyHash = friendly?.artifactSha256 || null;
+  if (!baselineHash || !friendlyHash) {
+    return {
+      status: 'hash-missing',
+      baselineSha256: baselineHash,
+      friendlySha256: friendlyHash,
+    };
+  }
+  return {
+    status: baselineHash === friendlyHash ? 'same-output' : 'hash-mismatch',
+    baselineSha256: baselineHash,
+    friendlySha256: friendlyHash,
+  };
+}
+
+function sharpBreathingRoomComparisonSummaryText(state = null) {
+  const runs = state?.comparisonRuns || kilnRouteBenchState.comparisonRuns || [];
+  if (!runs.length) return '';
+  const parts = runs.map(run => {
+    const duration = Number.isFinite(run.durationMs) ? `${Math.round(run.durationMs / 1000)}s` : 'duration unknown';
+    const hash = run.artifactSha256 ? run.artifactSha256.slice(0, 12) : 'no hash';
+    const status = run.ok ? 'finished' : 'failed';
+    return `${run.label || run.profileId}: ${status}, ${duration}, ${hash}`;
+  });
+  const equivalence = state?.outputEquivalence || sharpBreathingRoomOutputEquivalence(runs);
+  if (equivalence?.status) parts.push(`outputs: ${equivalence.status}`);
+  const coverage = state?.lowresFusionCoverage
+    || runs.find(run => run.profileId === 'cooperative-spn-gaussian')?.spnFusionCoverage
+    || null;
+  if (coverage) {
+    const observedCount = coverage.observedBlocks?.length || 0;
+    const requiredCount = coverage.requiredBlocks?.length || SHARP_SPN_LOWRES_BLOCK_LABELS.length;
+    parts.push(`SPN lowres labels: ${observedCount}/${requiredCount}${coverage.missingSpnFusionBlocks?.length ? ` missing ${coverage.missingSpnFusionBlocks.join(', ')}` : ''}`);
+  }
+  return parts.join(' | ');
+}
+
+function refreshSharpBreathingRoomComparisonSummary(state = null) {
+  const summary = document.getElementById('sharp-breathing-room-comparison-summary');
+  if (!summary) return;
+  const currentState = state || window.__kaminosSharpBreathingRoomComparisonState || kilnRouteBenchState;
+  const text = sharpBreathingRoomComparisonSummaryText(currentState);
+  summary.hidden = !text;
+  summary.textContent = text;
+  const outputStatus = currentState?.outputEquivalence?.status || null;
+  const coverageStatus = currentState?.lowresFusionCoverage?.status || null;
+  summary.dataset.status = outputStatus === 'hash-missing' || outputStatus === 'hash-mismatch'
+    ? outputStatus
+    : (coverageStatus || currentState?.status || 'idle');
 }
 
 function pipelineGraphSchedulerEvidenceState(evidence) {
@@ -16350,7 +16550,7 @@ async function runKilnRouteBenchRoute(routeId, profileId) {
     });
     throw err;
   } finally {
-    endSharpBreathingRoomKilnFire('complete');
+    endSharpBreathingRoomKilnFire('complete', { forceInactive: true });
     sharpBreathingRoomRunningProfileId = null;
     renderKilnRouteBench();
   }
@@ -16406,16 +16606,13 @@ async function runSharpBreathingRoomComparison() {
         error: err?.message || String(err),
       };
     }
-    comparisonState.comparisonRuns.push({
-      profileId: step.profileId,
-      label: step.label,
-      ok: run?.ok === true,
-      runId: run ? pipelineRunDisplayId(run) : null,
-      report: run?.report?.path || null,
-      artifact: pipelinePrimaryRunArtifact(run)?.path || null,
-      error: run?.ok === false ? pipelineRunFailureSummary(run) : null,
-    });
+    comparisonState.comparisonRuns.push(sharpBreathingRoomComparisonRunEvidence(run, step));
+    comparisonState.outputEquivalence = sharpBreathingRoomOutputEquivalence(comparisonState.comparisonRuns);
+    comparisonState.lowresFusionCoverage = comparisonState.comparisonRuns
+      .find(entry => entry.profileId === 'cooperative-spn-gaussian')?.spnFusionCoverage
+      || null;
     window.__kaminosSharpBreathingRoomComparisonState = comparisonState;
+    renderKilnRouteBench();
     if (!run?.ok) {
       comparisonState.status = 'failed';
       comparisonState.finishedAt = new Date().toISOString();
@@ -16424,17 +16621,27 @@ async function runSharpBreathingRoomComparison() {
         source,
         result: run,
         comparisonRuns: comparisonState.comparisonRuns,
+        comparisonState,
       });
       return comparisonState;
     }
   }
   comparisonState.status = 'complete';
   comparisonState.finishedAt = new Date().toISOString();
+  comparisonState.outputEquivalence = sharpBreathingRoomOutputEquivalence(comparisonState.comparisonRuns);
+  comparisonState.lowresFusionCoverage = comparisonState.comparisonRuns
+    .find(entry => entry.profileId === 'cooperative-spn-gaussian')?.spnFusionCoverage
+    || null;
   window.__kaminosSharpBreathingRoomComparisonState = comparisonState;
-  setKilnRouteBenchStatus('Default then friendly comparison finished. Check the two run reports for route timing, scheduler proof, and flame behavior.', 'complete', {
+  const coverage = comparisonState.lowresFusionCoverage;
+  const labelSummary = coverage
+    ? ` SPN lowres labels: ${coverage.observedBlocks.length}/${coverage.requiredBlocks.length}${coverage.missingSpnFusionBlocks.length ? ` missing ${coverage.missingSpnFusionBlocks.join(', ')}` : ''}.`
+    : ' SPN lowres labels were not found in friendly telemetry.';
+  setKilnRouteBenchStatus(`Default then friendly comparison finished. Hashes, durations, scheduler configs, and lowres SPN labels are captured below.${labelSummary}`, 'complete', {
     routeId: route.id,
     source,
     comparisonRuns: comparisonState.comparisonRuns,
+    comparisonState,
     result: comparisonState.comparisonRuns.at(-1) || null,
   });
   return comparisonState;
