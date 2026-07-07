@@ -42,6 +42,11 @@ assert.match(
 );
 assert.match(
   trainer,
+  /--smoke-residual-energy-loss-weight/,
+  'residual trainer must expose smoke residual energy loss so nonzero smoke residuals can be penalized directly',
+);
+assert.match(
+  trainer,
   /--smoke-mask-threshold/,
   'residual trainer must expose a smoke mask threshold for visible cool-smoke region targeting',
 );
@@ -54,6 +59,11 @@ assert.match(
   trainer,
   /def smoke_residual_dc_loss_value\(/,
   'residual trainer must implement residual DC suppression on smoke regions to fight haze/fade',
+);
+assert.match(
+  trainer,
+  /def smoke_residual_energy_loss_value\(/,
+  'residual trainer must implement residual energy suppression on smoke regions to preserve smoke when detail is not learnable',
 );
 assert.match(
   trainer,
@@ -79,6 +89,11 @@ assert.match(
   trainer,
   /"smokeResidualDcLossWeight":/,
   'model artifacts and reports must preserve smoke residual DC loss weight',
+);
+assert.match(
+  trainer,
+  /"smokeResidualEnergyLossWeight":/,
+  'model artifacts and reports must preserve smoke residual energy loss weight',
 );
 assert.match(
   trainer,
@@ -174,6 +189,11 @@ assert.match(
   greenroomRunner,
   /--smoke-residual-dc-loss-weight/,
   'Greenroom wrapper must pass smoke residual DC loss weight through to the MLX trainer',
+);
+assert.match(
+  greenroomRunner,
+  /--smoke-residual-energy-loss-weight/,
+  'Greenroom wrapper must pass smoke residual energy loss weight through to the MLX trainer',
 );
 assert.match(
   greenroomRunner,

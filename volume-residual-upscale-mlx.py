@@ -197,6 +197,7 @@ def parse_args():
     parser.add_argument("--residual-smoothness-loss-weight", dest="residualSmoothnessLossWeight", type=float, default=0.0, help="Optional smoothness loss on the applied residual to suppress ringing artifacts.")
     parser.add_argument("--smoke-structure-loss-weight", dest="smokeStructureLossWeight", type=float, default=0.0, help="Optional smoke-region gradient/detail loss weight to reward structure instead of broad smoke wash.")
     parser.add_argument("--smoke-residual-dc-loss-weight", dest="smokeResidualDcLossWeight", type=float, default=0.0, help="Optional smoke-region residual mean penalty to suppress broad haze/fade shifts.")
+    parser.add_argument("--smoke-residual-energy-loss-weight", dest="smokeResidualEnergyLossWeight", type=float, default=0.0, help="Optional smoke-region residual energy penalty to preserve smoke when detail targets are not learnable.")
     parser.add_argument("--smoke-mask-threshold", dest="smokeMaskThreshold", type=float, default=0.025, help="Visible cool-smoke threshold for smoke-specific residual losses.")
     parser.add_argument("--condition-render-scale", dest="conditionRenderScale", action="store_true")
     parser.add_argument("--temporal-eval", dest="temporalEval", action="store_true")
@@ -307,6 +308,7 @@ def save_model_artifact(model, model_dir, config, args, corpus, metrics, effecti
             "residualSmoothnessLossWeight": args.residualSmoothnessLossWeight,
             "smokeStructureLossWeight": args.smokeStructureLossWeight,
             "smokeResidualDcLossWeight": args.smokeResidualDcLossWeight,
+            "smokeResidualEnergyLossWeight": args.smokeResidualEnergyLossWeight,
             "smokeMaskThreshold": args.smokeMaskThreshold,
             "temporalLossWeight": args.temporalLossWeight,
             "residualTemporalLossWeight": args.residualTemporalLossWeight,
@@ -868,6 +870,12 @@ def smoke_residual_dc_loss_value(prediction, low_batch, target, smokeMaskThresho
     normalizer = mx.maximum(mx.sum(smoke_mask, axis=(1, 2), keepdims=True), 1e-6)
     mean_residual = mx.sum(residual * smoke_mask, axis=(1, 2), keepdims=True) / normalizer
     return mx.mean(mx.square(mean_residual))
+
+
+def smoke_residual_energy_loss_value(prediction, low_batch, target, smokeMaskThreshold):
+    smoke_mask = smoke_region_mask(low_batch, target, smokeMaskThreshold)
+    residual = prediction - rgb_channels(low_batch)
+    return masked_mse_value(residual, mx.zeros_like(residual), smoke_mask)
 
 
 def chroma_residual_loss_value(prediction, low_batch, edge_mask):
@@ -1458,6 +1466,7 @@ def main():
         ("--residual-smoothness-loss-weight", args.residualSmoothnessLossWeight),
         ("--smoke-structure-loss-weight", args.smokeStructureLossWeight),
         ("--smoke-residual-dc-loss-weight", args.smokeResidualDcLossWeight),
+        ("--smoke-residual-energy-loss-weight", args.smokeResidualEnergyLossWeight),
         ("--smoke-mask-threshold", args.smokeMaskThreshold),
         ("--chroma-residual-loss-weight", args.chromaResidualLossWeight),
     ]:
@@ -1587,6 +1596,13 @@ def main():
             )
         if args.smokeResidualDcLossWeight > 0:
             total_loss = total_loss + float(args.smokeResidualDcLossWeight) * smoke_residual_dc_loss_value(
+                prediction,
+                low_batch,
+                high_batch,
+                args.smokeMaskThreshold,
+            )
+        if args.smokeResidualEnergyLossWeight > 0:
+            total_loss = total_loss + float(args.smokeResidualEnergyLossWeight) * smoke_residual_energy_loss_value(
                 prediction,
                 low_batch,
                 high_batch,
@@ -1808,6 +1824,7 @@ def main():
         "residualSmoothnessLossWeight": args.residualSmoothnessLossWeight,
         "smokeStructureLossWeight": args.smokeStructureLossWeight,
         "smokeResidualDcLossWeight": args.smokeResidualDcLossWeight,
+        "smokeResidualEnergyLossWeight": args.smokeResidualEnergyLossWeight,
         "smokeMaskThreshold": args.smokeMaskThreshold,
         "conditionRenderScale": conditionRenderScale,
         "featureInputMode": featureInputMode,
@@ -1887,6 +1904,7 @@ def main():
         "residualSmoothnessLossWeight": args.residualSmoothnessLossWeight,
         "smokeStructureLossWeight": args.smokeStructureLossWeight,
         "smokeResidualDcLossWeight": args.smokeResidualDcLossWeight,
+        "smokeResidualEnergyLossWeight": args.smokeResidualEnergyLossWeight,
         "smokeMaskThreshold": args.smokeMaskThreshold,
         "learningRate": args.learning_rate,
         "evalPatches": args.eval_patches,
