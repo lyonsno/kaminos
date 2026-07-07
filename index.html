@@ -8,6 +8,11 @@
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #111; color: #e0e0e0; display: flex; height: 100vh; overflow: hidden; }
+body[data-kaminos-embed-mode] { display: block; background: #050807; }
+body[data-kaminos-embed-mode] #sidebar { display: none; }
+body[data-kaminos-embed-mode] #viewport { position: fixed; inset: 0; width: 100vw; height: 100vh; background: #050807; }
+body[data-kaminos-embed-mode] #info-bar,
+body[data-kaminos-embed-mode] #viewport-drop-overlay { display: none; }
 
 /* Sidebar */
 #sidebar { width: 380px; background: #1a1a1a; border-right: 1px solid #2a2a2a; overflow-y: auto; padding: 16px; flex-shrink: 0; }
@@ -506,9 +511,20 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
 #glove-well-host-overlay { position: absolute; top: 16px; left: 16px; min-width: 360px; max-width: min(620px, calc(100% - 32px)); background: rgba(4,9,8,0.8); border: 1px solid #3f5a4e; border-radius: 8px; padding: 10px 12px; color: #c2e2d2; box-shadow: 0 10px 30px rgba(0,0,0,0.35); }
 #glove-well-host-overlay-title { font: 11px 'SF Mono', monospace; color: #9ed8bd; text-transform: uppercase; letter-spacing: 0.8px; }
 #glove-well-host-overlay-body { margin-top: 5px; font: 10px 'SF Mono', monospace; color: #e0f2e8; overflow-wrap: anywhere; }
+body[data-kaminos-embed-mode="glove-well-host"] #glove-well-host-operator-panel:not([hidden]) { display: block; z-index: 40; }
+body[data-kaminos-embed-mode="glove-well-host"] #glove-well-host-overlay { top: 8px; left: 8px; min-width: 0; max-width: calc(100% - 16px); padding: 8px 9px; border-radius: 6px; }
+body[data-kaminos-embed-mode="glove-well-host"] #glove-well-host-overlay-title { font-size: 9px; }
+body[data-kaminos-embed-mode="glove-well-host"] #glove-well-host-overlay-body { font-size: 9px; line-height: 1.35; max-height: 4.2em; overflow: hidden; }
 </style>
 </head>
 <body>
+<script>
+(() => {
+  const params = new URLSearchParams(window.location.search);
+  const embedMode = params.get('kaminos_embed');
+  if (embedMode) document.body.dataset.kaminosEmbedMode = embedMode;
+})();
+</script>
 
 <div id="sidebar">
   <h1>Kaminos</h1>
@@ -5538,6 +5554,14 @@ function normalizeForgeHostDocumentPath(pathname) {
   return normalized === '/index.html' ? '/' : normalized;
 }
 
+function firstPartyKaminosEmbedTarget(effective) {
+  if (!effective || effective.origin !== window.location.origin) return null;
+  if (normalizeForgeHostDocumentPath(effective.pathname) !== normalizeForgeHostDocumentPath(window.location.pathname)) return null;
+  if (effective.searchParams.get('kaminos_glove_well_host') === '1') return 'glove-well-host';
+  if (effective.searchParams.get('kaminos_finger_juice_host') === '1') return 'finger-juice-host';
+  return null;
+}
+
 function resolveForgeHostSmokeChamberInlineHost(chamber) {
   const targetUrl = String(chamber?.targetUrl || '').trim();
   if (!targetUrl) {
@@ -5595,6 +5619,30 @@ function resolveForgeHostSmokeChamberInlineHost(chamber) {
       effectiveUrl: effective.href,
     };
   }
+  const firstPartyEmbedTarget = firstPartyKaminosEmbedTarget(effective);
+  if (firstPartyEmbedTarget) {
+    const embedMode = effective.searchParams.get('kaminos_embed') || '';
+    if (embedMode === firstPartyEmbedTarget) {
+      return {
+        kind: 'iframe',
+        reason: 'first_party_embed_target',
+        recursive: false,
+        firstParty: true,
+        embedMode,
+        targetUrl,
+        effectiveUrl: effective.href,
+      };
+    }
+    return {
+      kind: 'route-card',
+      reason: 'first_party_kaminos_route_requires_embed_mode',
+      recursive: false,
+      firstParty: true,
+      requiredEmbedMode: firstPartyEmbedTarget,
+      targetUrl,
+      effectiveUrl: effective.href,
+    };
+  }
   const extension = smokeChamberTargetExtension(effective.pathname);
   if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'avif'].includes(extension)) {
     return {
@@ -5637,7 +5685,7 @@ function renderForgeHostSmokeChamberInlineHost(inlineHost) {
   `;
   if (inlineHost.kind === 'iframe') {
     return `
-      <div class="forge-chamber-host" data-forge-chamber-host-kind="iframe" data-forge-chamber-host-reason="${escapeHtml(inlineHost.reason)}">
+      <div class="forge-chamber-host" data-forge-chamber-host-kind="iframe" data-forge-chamber-host-reason="${escapeHtml(inlineHost.reason)}" data-forge-chamber-host-embed-mode="${escapeHtml(inlineHost.embedMode || '')}">
         ${head}
         <iframe data-forge-chamber-inline-frame="true" src="${escapeHtml(effectiveUrl)}" loading="eager" title="Smoke Chamber Target"></iframe>
       </div>
@@ -9763,6 +9811,12 @@ function gloveWellHostColor(color, alpha = 1) {
   return raw;
 }
 
+function ensureGloveWellCompactEmbedVisible() {
+  if (document.body?.dataset?.kaminosEmbedMode !== 'glove-well-host') return;
+  const panel = document.getElementById('glove-well-host-operator-panel');
+  if (panel) panel.hidden = false;
+}
+
 function drawGloveWellPrimitive(ctx, primitive, width, height) {
   const alpha = primitive.alpha ?? 1;
   ctx.save();
@@ -9810,6 +9864,7 @@ function drawGloveWellPrimitive(ctx, primitive, width, height) {
 }
 
 function drawGloveWellHostPreview() {
+  ensureGloveWellCompactEmbedVisible();
   const canvas = document.getElementById('glove-well-host-canvas');
   if (!canvas) return;
   const rect = canvas.getBoundingClientRect();
@@ -9849,7 +9904,12 @@ function drawGloveWellHostPreview() {
 }
 
 function kaminosGloveWellHostDebugState() {
-  return gloveWellHostState;
+  const embedMode = document.body?.dataset?.kaminosEmbedMode || null;
+  return {
+    ...gloveWellHostState,
+    embedMode,
+    compactEmbed: embedMode === 'glove-well-host',
+  };
 }
 
 async function loadGloveWellHostPacket(route = gloveWellHostRouteFromParams()) {
@@ -10105,6 +10165,7 @@ function activateKaminosGloveWellHostRouteFromParams(params = new URLSearchParam
   const route = gloveWellHostRouteFromParams(params);
   const activationKey = gloveWellHostRouteActivationKeyFromRoute(route);
   setActiveTab('glove-well-host');
+  ensureGloveWellCompactEmbedVisible();
   if (activationKey === gloveWellHostRouteActivationKey && gloveWellHostState.status !== 'idle') {
     drawGloveWellHostPreview();
     return true;

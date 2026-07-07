@@ -537,8 +537,14 @@ async function runForgeHostSmokeOfferRouteOpenScenario(ws) {
       if (state.smokeChamberInlineHost?.kind !== 'iframe' || state.smokeChamberInlineHost?.recursive) {
         throw new Error('Forge Host route-open did not route Glove Emitter to a native Glove Well iframe: ' + JSON.stringify(state.smokeChamberInlineHost));
       }
+      if (state.smokeChamberInlineHost?.reason !== 'first_party_embed_target' || state.smokeChamberInlineHost?.embedMode !== 'glove-well-host') {
+        throw new Error('Forge Host route-open did not use compact first-party embed mode for Glove Well: ' + JSON.stringify(state.smokeChamberInlineHost));
+      }
       if (!/kaminos_glove_well_host=1/.test(state.smokeChamberInlineHost?.effectiveUrl || '')) {
         throw new Error('Forge Host route-open inline host lost native Glove Well route: ' + JSON.stringify(state.smokeChamberInlineHost));
+      }
+      if (!/kaminos_embed=glove-well-host/.test(state.smokeChamberInlineHost?.effectiveUrl || '')) {
+        throw new Error('Forge Host route-open inline host lost compact embed route: ' + JSON.stringify(state.smokeChamberInlineHost));
       }
       const sourceRoleStation = state.stations.find(station => /glove/i.test([
         station['dia' + 'ulos'],
@@ -558,6 +564,9 @@ async function runForgeHostSmokeOfferRouteOpenScenario(ws) {
       if (!/kaminos_glove_well_host=1/.test(iframe.getAttribute('src') || '')) {
         throw new Error('Forge Host route-open iframe src lost native Glove Well route: ' + iframe.outerHTML);
       }
+      if (!/kaminos_embed=glove-well-host/.test(iframe.getAttribute('src') || '')) {
+        throw new Error('Forge Host route-open iframe src lost compact embed route: ' + iframe.outerHTML);
+      }
       let gloveWellHostState = null;
       for (let i = 0; i < 240; i++) {
         try {
@@ -571,6 +580,9 @@ async function runForgeHostSmokeOfferRouteOpenScenario(ws) {
       }
       if (!gloveWellHostState || gloveWellHostState.route !== 'kaminos/glove-well-host') {
         throw new Error('Forge Host route-open could not read native Glove Well host state: ' + JSON.stringify({ gloveWellHostState }));
+      }
+      if (gloveWellHostState.embedMode !== 'glove-well-host' || gloveWellHostState.compactEmbed !== true) {
+        throw new Error('Forge Host route-open child Glove Well host did not enter compact embed mode: ' + JSON.stringify({ gloveWellHostState }));
       }
       if (typeof window.kaminosCaptureForgeHostSmokeReceipt !== 'function') {
         throw new Error('Forge Host route-open did not expose receipt capture API');

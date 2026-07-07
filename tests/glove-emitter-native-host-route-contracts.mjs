@@ -52,6 +52,11 @@ assert.notEqual(
 );
 assert.match(offer.targetUrl || '', /glove_well_host_live=(1|true)/, 'targetUrl must preserve live Glove Well polling intent');
 assert.match(offer.targetUrl || '', /glove_well_host_(url|path)=/, 'targetUrl must carry the source-owned Glove Well packet route');
+assert.equal(
+  target.searchParams.get('kaminos_embed'),
+  'glove-well-host',
+  'Glove Emitter first-party target must opt into compact chamber embedding instead of rendering the full Kaminos shell inside the Smoke Chamber',
+);
 
 const indexSource = read(indexPath);
 const runtimeSource = existsSync(mainPath) ? read(mainPath) : indexSource;
@@ -69,6 +74,8 @@ assert.match(
 assert.match(runtimeSource, /window\.kaminosGloveWellHostDebugState/, 'Kaminos runtime must expose Glove Well host debug state for witnesses');
 assert.match(runtimeSource, /window\.kaminosStartGloveWellHostLive/, 'Kaminos runtime must expose live Glove Well polling control');
 assert.match(indexSource, /kaminos_glove_well_host/, 'Kaminos app shell must recognize native Glove Well host-only routes');
+assert.match(indexSource, /first_party_embed_target/, 'Forge Host chamber must distinguish compact first-party embeds from generic browser iframes');
+assert.match(indexSource, /kaminos_embed/, 'Kaminos first-party smoke targets must expose an embed-mode query contract');
 assert.match(indexSource, /function captureForgeHostInlineHostState/, 'Forge Host receipt capture must inspect embedded native host state');
 assert.match(indexSource, /embeddedHost/, 'Forge Host receipt must carry embedded native host state evidence');
 assert.match(indexSource, /kaminosGloveWellHostDebugState/, 'Forge Host receipt must know how to read Glove Well host iframe state');
