@@ -16,10 +16,12 @@ import numpy as np
 
 SCHEMA = "kaminos.volume.full-grid-field-residual-application.v0"
 MODEL_IDENTITY = "full-grid-local-ridge-residual-v0"
+TWO_HEAD_MODEL_IDENTITY = "full-grid-flame-support-two-head-rbf-v0"
 APPLICATION_AUTHORITY = "fitOnSamePairVisualDiagnostic"
 FIELD_AUTHORITY = "complete-webgpu-fluid-front-buffer-readback-sidecars"
 BALANCED_PROFILE = "balanced-full-field-ridge-v0"
 FLAME_CARRIER_PROFILE = "flame-carrier-weighted-full-field-ridge-v0"
+FLAME_SUPPORT_TWO_HEAD_PROFILE = "flame-support-two-head-full-field-rbf-v0"
 FLUID_CHANNELS = [
     "velocityX",
     "velocityY",
@@ -39,6 +41,8 @@ FLUID_CHANNELS = [
     "emberFleck",
 ]
 FRONT_CHANNELS = ["frontTopology"]
+FIRE_CARRIER_CHANNEL_INDEXES = [5, 6, 8, 9, 10, 11, 14, 15]
+VISIBLE_FIRE_SUPPORT_INDEXES = [8, 9, 10, 11, 14, 15]
 
 
 class ApplyFailure(RuntimeError):
@@ -58,7 +62,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--chunk-z", type=int, default=4, help="High-grid z slices per application chunk.")
     parser.add_argument(
         "--profile",
-        choices=[BALANCED_PROFILE, FLAME_CARRIER_PROFILE],
+        choices=[BALANCED_PROFILE, FLAME_CARRIER_PROFILE, FLAME_SUPPORT_TWO_HEAD_PROFILE],
         default=BALANCED_PROFILE,
         help="Sampling/weighting profile for the same-pair full-grid visual diagnostic.",
     )
@@ -126,6 +130,10 @@ def sidecar_descriptor(path: Path, shape: list[int], channel_order: list[str]) -
         "shape": shape,
         "channelOrder": channel_order,
     }
+
+
+def is_flame_profile(profile: str) -> bool:
+    return profile in (FLAME_CARRIER_PROFILE, FLAME_SUPPORT_TWO_HEAD_PROFILE)
 
 
 def feature_count() -> int:
@@ -209,7 +217,7 @@ def choose_train_indexes(
     rng: np.random.Generator,
     args: argparse.Namespace,
 ) -> tuple[np.ndarray, dict[str, Any]]:
-    if args.profile != FLAME_CARRIER_PROFILE:
+    if not is_flame_profile(args.profile):
         indexes = rng.choice(high_cells, size=train_count, replace=False)
         return indexes, {
             "profile": BALANCED_PROFILE,
@@ -234,7 +242,7 @@ def choose_train_indexes(
     if indexes.shape[0] > train_count:
         indexes = rng.choice(indexes, size=train_count, replace=False)
     return indexes.astype(np.int64, copy=False), {
-        "profile": FLAME_CARRIER_PROFILE,
+        "profile": args.profile,
         "threshold": float(threshold),
         "flameSupportCount": int(support.shape[0]),
         "flameSupportFraction": float(support.shape[0] / max(1, high_cells)),
@@ -245,14 +253,14 @@ def choose_train_indexes(
 
 
 def sample_weights(high_train: np.ndarray, args: argparse.Namespace) -> tuple[np.ndarray | None, dict[str, Any]]:
-    if args.profile != FLAME_CARRIER_PROFILE:
+    if not is_flame_profile(args.profile):
         return None, {"profile": BALANCED_PROFILE, "weighted": False}
     score = flame_carrier_score(high_train[:, :len(FLUID_CHANNELS)])
     max_score = float(np.max(score)) if score.size else 0.0
     normalized = score / max(max_score, 1e-6)
     weights = 1.0 + max(0.0, float(args.flame_row_weight)) * normalized
     return weights.astype(np.float64), {
-        "profile": FLAME_CARRIER_PROFILE,
+        "profile": args.profile,
         "weighted": True,
         "flameRowWeight": float(args.flame_row_weight),
         "weightMin": float(np.min(weights)),
@@ -286,15 +294,57 @@ def predict_residual(features: np.ndarray, weights: np.ndarray) -> np.ndarray:
     return (design @ weights).astype(np.float32)
 
 
+def fit_support_head(features: np.ndarray, support_labels: np.ndarray, ridge: float, positive_weight: float) -> np.ndarray:
+    labels = support_labels.astype(np.float64).reshape(-1, 1)
+    weights = np.where(support_labels > 0.5, max(1.0, positive_weight), 1.0).astype(np.float64)
+    return fit_ridge(features, labels, ridge, weights)
+
+
+def predict_support_score(features: np.ndarray, weights: np.ndarray) -> np.ndarray:
+    return predict_residual(features, weights).reshape(-1)
+
+
+def support_localization_report(
+    predicted_scores: np.ndarray,
+    truth_scores: np.ndarray,
+    predicted_threshold: float,
+    truth_threshold: float,
+) -> dict[str, Any]:
+    predicted_mask = predicted_scores >= np.float32(predicted_threshold)
+    truth_mask = truth_scores > np.float32(truth_threshold)
+    predicted_count = int(np.count_nonzero(predicted_mask))
+    truth_count = int(np.count_nonzero(truth_mask))
+    true_positive = int(np.count_nonzero(predicted_mask & truth_mask))
+    false_positive = int(max(0, predicted_count - true_positive))
+    false_negative = int(max(0, truth_count - true_positive))
+    union = int(np.count_nonzero(predicted_mask | truth_mask))
+    return {
+        "identity": "full-grid-flame-support-localization-metrics-v0",
+        "predictedSupportCount": predicted_count,
+        "truthSupportCount": truth_count,
+        "truePositiveSupportCount": true_positive,
+        "falsePositiveSupportCount": false_positive,
+        "falseNegativeSupportCount": false_negative,
+        "supportPrecision": float(true_positive / max(1, predicted_count)),
+        "supportRecall": float(true_positive / max(1, truth_count)),
+        "supportJaccard": float(true_positive / max(1, union)),
+        "predictedThreshold": float(predicted_threshold),
+        "truthThreshold": float(truth_threshold),
+        "predictedScoreMax": float(np.max(predicted_scores)),
+        "predictedScoreMean": float(np.mean(predicted_scores)),
+        "predictedScoreP99": float(np.quantile(predicted_scores, 0.99)),
+    }
+
+
 def profile_channel_scales(args: argparse.Namespace) -> np.ndarray:
     scales = np.ones(len(FLUID_CHANNELS) + len(FRONT_CHANNELS), dtype=np.float32)
-    if args.profile != FLAME_CARRIER_PROFILE:
+    if not is_flame_profile(args.profile):
         return scales
     smoke_scale = np.float32(max(0.0, float(args.smoke_residual_scale)))
     fire_scale = np.float32(max(0.0, float(args.fire_residual_scale)))
     for index in [3, 4, 7, 12, 13, 16]:
         scales[index] = smoke_scale
-    for index in [5, 6, 8, 9, 10, 11, 14, 15]:
+    for index in FIRE_CARRIER_CHANNEL_INDEXES:
         scales[index] = fire_scale
     return scales
 
@@ -305,20 +355,27 @@ def postprocess_prediction(
     channel_max: np.ndarray,
     args: argparse.Namespace,
     flame_threshold: float | None = None,
+    support_scores: np.ndarray | None = None,
+    flame_value_residual: np.ndarray | None = None,
 ) -> np.ndarray:
-    if args.profile != FLAME_CARRIER_PROFILE:
+    if not is_flame_profile(args.profile):
         return predicted.astype("<f4", copy=False)
     scales = profile_channel_scales(args).reshape(1, -1)
     shaped = low_values + (predicted - low_values) * scales
+    if args.profile == FLAME_SUPPORT_TWO_HEAD_PROFILE and flame_value_residual is not None:
+        fire_indexes = FIRE_CARRIER_CHANNEL_INDEXES
+        fire_values = low_values[:, fire_indexes] + flame_value_residual * np.float32(max(0.0, float(args.fire_residual_scale)))
+        fire_max = channel_max[fire_indexes].reshape(1, -1) * 1.05
+        shaped[:, fire_indexes] = np.minimum(np.maximum(fire_values, 0), fire_max)
     # Scalar material/fire channels are nonnegative storage fields; unbounded negative
     # residuals are useful numerically but produce nonsense in renderer diagnostics.
     shaped[:, 3:] = np.maximum(shaped[:, 3:], 0)
     shaped[:, 3:] = np.minimum(shaped[:, 3:], channel_max.reshape(1, -1)[:, 3:] * 1.05)
     if flame_threshold is not None:
-        score = flame_carrier_score(shaped[:, :len(FLUID_CHANNELS)])
+        score = support_scores if support_scores is not None else flame_carrier_score(shaped[:, :len(FLUID_CHANNELS)])
         mask = score < float(flame_threshold)
-        fire_indexes = [8, 9, 10, 11, 14, 15]
-        shaped[np.ix_(mask, fire_indexes)] = 0
+        gated_indexes = FIRE_CARRIER_CHANNEL_INDEXES if args.profile == FLAME_SUPPORT_TWO_HEAD_PROFILE else VISIBLE_FIRE_SUPPORT_INDEXES
+        shaped[np.ix_(mask, gated_indexes)] = 0
     return shaped.astype("<f4", copy=False)
 
 
@@ -393,6 +450,48 @@ def main() -> int:
 
         phase = "model-fit"
         weights = fit_ridge(features, residual, float(args.ridge), row_weights)
+        support_head_weights: np.ndarray | None = None
+        flame_value_weights: np.ndarray | None = None
+        two_head_report: dict[str, Any] | None = None
+        truth_support_threshold = float(sampling_report.get("threshold") or 0.00005)
+        if args.profile == FLAME_SUPPORT_TWO_HEAD_PROFILE:
+            train_scores = flame_carrier_score(high_train[:, :len(FLUID_CHANNELS)])
+            support_labels = (train_scores > truth_support_threshold).astype(np.float32)
+            support_rows = np.flatnonzero(support_labels > 0.5)
+            if support_rows.shape[0] < 8:
+                raise ApplyFailure("model-fit", "Too few flame-support rows for two-head flame support predictor.", {
+                    "supportRows": int(support_rows.shape[0]),
+                    "truthSupportThreshold": truth_support_threshold,
+                })
+            support_head_weights = fit_support_head(
+                features,
+                support_labels,
+                max(float(args.ridge), 1.0e-5),
+                max(1.0, float(args.flame_row_weight)),
+            )
+            flame_value_weights = fit_ridge(
+                features[support_rows],
+                residual[np.ix_(support_rows, FIRE_CARRIER_CHANNEL_INDEXES)],
+                max(float(args.ridge), 1.0e-5),
+                None,
+            )
+            two_head_report = {
+                "identity": TWO_HEAD_MODEL_IDENTITY,
+                "profile": FLAME_SUPPORT_TWO_HEAD_PROFILE,
+                "supportHead": {
+                    "identity": "rbf-ridge-flame-support-score-head-v0",
+                    "positiveTrainRows": int(support_rows.shape[0]),
+                    "negativeTrainRows": int(support_labels.shape[0] - support_rows.shape[0]),
+                    "positiveRowWeight": float(max(1.0, float(args.flame_row_weight))),
+                    "truthSupportThreshold": truth_support_threshold,
+                },
+                "valueHead": {
+                    "identity": "support-conditioned-fire-carrier-ridge-head-v0",
+                    "targetChannelIndexes": FIRE_CARRIER_CHANNEL_INDEXES,
+                    "targetChannels": [FLUID_CHANNELS[index] for index in FIRE_CARRIER_CHANNEL_INDEXES],
+                    "trainRows": int(support_rows.shape[0]),
+                },
+            }
         channel_max = np.concatenate([
             np.max(high_fluid, axis=0),
             np.array([float(np.max(high_front))], dtype=np.float32),
@@ -409,8 +508,9 @@ def main() -> int:
         chunk_z = max(1, min(high_grid, int(args.chunk_z)))
         chunk_summaries = []
         flame_gate_report: dict[str, Any] | None = None
+        support_localization: dict[str, Any] | None = None
         flame_threshold: float | None = None
-        if args.profile == FLAME_CARRIER_PROFILE:
+        if is_flame_profile(args.profile):
             phase = "flame-support-gate"
             predicted_scores = np.empty(high_cells, dtype=np.float32)
             cursor = 0
@@ -420,14 +520,38 @@ def main() -> int:
                 low_chunk, x, y, z = low_values_for_high_cells(low_fluid, low_front, indexes, low_grid, high_grid)
                 chunk_features = build_features(low_chunk, x, y, z, high_grid)
                 raw_predicted = low_chunk + predict_residual(chunk_features, weights)
-                shaped = postprocess_prediction(raw_predicted, low_chunk, channel_max, args, None)
+                if args.profile == FLAME_SUPPORT_TWO_HEAD_PROFILE:
+                    if support_head_weights is None or flame_value_weights is None:
+                        raise ApplyFailure("flame-support-gate", "Two-head profile missing fitted support/value heads.")
+                    support_score = predict_support_score(chunk_features, support_head_weights)
+                    flame_value_residual = predict_residual(chunk_features, flame_value_weights)
+                    shaped = postprocess_prediction(
+                        raw_predicted,
+                        low_chunk,
+                        channel_max,
+                        args,
+                        None,
+                        support_score,
+                        flame_value_residual,
+                    )
+                    score = support_score
+                else:
+                    shaped = postprocess_prediction(raw_predicted, low_chunk, channel_max, args, None)
+                    score = flame_carrier_score(shaped[:, :len(FLUID_CHANNELS)])
                 count = indexes.shape[0]
-                predicted_scores[cursor:cursor + count] = flame_carrier_score(shaped[:, :len(FLUID_CHANNELS)])
+                predicted_scores[cursor:cursor + count] = score
                 cursor += count
             support_count = int((sampling_report.get("flameSupportCount") or 0) * max(0.0, float(args.flame_sparsity_multiplier)))
             support_count = max(1, min(high_cells, support_count))
             quantile = max(0.0, min(1.0, 1.0 - support_count / max(1, high_cells)))
             flame_threshold = float(np.quantile(predicted_scores, quantile))
+            truth_scores = flame_carrier_score(high_fluid)
+            support_localization = support_localization_report(
+                predicted_scores,
+                truth_scores,
+                flame_threshold,
+                truth_support_threshold,
+            )
             flame_gate_report = {
                 "identity": "predicted-flame-support-sparsity-gate-v0",
                 "truthFlameSupportCount": sampling_report.get("flameSupportCount"),
@@ -444,7 +568,22 @@ def main() -> int:
             low_chunk, x, y, z = low_values_for_high_cells(low_fluid, low_front, indexes, low_grid, high_grid)
             chunk_features = build_features(low_chunk, x, y, z, high_grid)
             raw_predicted = low_chunk + predict_residual(chunk_features, weights)
-            predicted = postprocess_prediction(raw_predicted, low_chunk, channel_max, args, flame_threshold)
+            if args.profile == FLAME_SUPPORT_TWO_HEAD_PROFILE:
+                if support_head_weights is None or flame_value_weights is None:
+                    raise ApplyFailure("sidecar-write", "Two-head profile missing fitted support/value heads.")
+                support_score = predict_support_score(chunk_features, support_head_weights)
+                flame_value_residual = predict_residual(chunk_features, flame_value_weights)
+                predicted = postprocess_prediction(
+                    raw_predicted,
+                    low_chunk,
+                    channel_max,
+                    args,
+                    flame_threshold,
+                    support_score,
+                    flame_value_residual,
+                )
+            else:
+                predicted = postprocess_prediction(raw_predicted, low_chunk, channel_max, args, flame_threshold)
             low_chunk = low_chunk.astype("<f4", copy=False)
             with low_up_fluid_path.open("ab") as handle:
                 low_chunk[:, :len(FLUID_CHANNELS)].tofile(handle)
@@ -498,19 +637,21 @@ def main() -> int:
             "highGrid": high_grid,
             "gridScaleRatio": pair.get("gridScaleRatio"),
             "model": {
-                "identity": MODEL_IDENTITY,
+                "identity": TWO_HEAD_MODEL_IDENTITY if args.profile == FLAME_SUPPORT_TWO_HEAD_PROFILE else MODEL_IDENTITY,
                 "profile": args.profile,
                 "ridge": float(args.ridge),
                 "seed": int(args.seed),
                 "trainSampleCount": int(train_count),
                 "featureCount": int(feature_count()),
                 "spatialBasis": "fourier-xyz-plus-4x8x4-rbf-v0",
+                "twoHead": two_head_report,
                 "sampling": sampling_report,
                 "rowWeighting": weighting_report,
                 "postprocess": {
                     "channelResidualScales": profile_channel_scales(args).tolist(),
                     "channelMaxClamp": channel_max.tolist(),
                     "flameSupportGate": flame_gate_report,
+                    "supportLocalization": support_localization,
                 },
                 "inputChannels": [*FLUID_CHANNELS, *FRONT_CHANNELS],
                 "targetChannels": [*FLUID_CHANNELS, *FRONT_CHANNELS],
@@ -547,7 +688,7 @@ def main() -> int:
         print(json.dumps({
             "ok": True,
             "manifest": str(manifest_out),
-            "model": MODEL_IDENTITY,
+            "model": manifest["model"]["identity"],
             "lowGrid": low_grid,
             "highGrid": high_grid,
             "roles": list(manifest["roles"].keys()),

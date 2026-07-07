@@ -2034,6 +2034,11 @@ assert.ok(existsSync(fullGridResidualApplyPath), 'volume full-grid field residua
 const fullGridResidualApply = existsSync(fullGridResidualApplyPath) ? readFileSync(fullGridResidualApplyPath, 'utf8') : '';
 assert.match(fullGridResidualApply, /kaminos\.volume\.full-grid-field-residual-application\.v0/, 'full-grid residual application writes a stable manifest schema');
 assert.match(fullGridResidualApply, /full-grid-local-ridge-residual-v0/, 'full-grid residual application names its first complete-field model identity');
+assert.match(fullGridResidualApply, /full-grid-flame-support-two-head-rbf-v0/, 'full-grid residual application names a support-localized two-head flame predictor');
+assert.match(fullGridResidualApply, /flame-support-two-head-full-field-rbf-v0/, 'full-grid residual application exposes the two-head flame-support profile');
+assert.match(fullGridResidualApply, /supportLocalization/, 'full-grid residual application reports flame support localization before relying on render output');
+assert.match(fullGridResidualApply, /predictedSupportCount/, 'full-grid residual application records predicted hot-support count for full-grid diagnostics');
+assert.match(fullGridResidualApply, /supportJaccard/, 'full-grid residual application records overlap quality between predicted and truth flame support');
 assert.match(fullGridResidualApply, /lowUpsampled/, 'full-grid residual application writes a complete low-upsampled comparison field');
 assert.match(fullGridResidualApply, /predictedHigh/, 'full-grid residual application writes a complete predicted high-grid field');
 assert.match(fullGridResidualApply, /truthHigh/, 'full-grid residual application preserves the complete truth-high sidecar reference');
