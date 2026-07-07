@@ -48,6 +48,11 @@ assert.match(index, /volumeEnergySamples/, 'screen-space fire receiver light mus
 assert.match(index, /fallbackEnergyAuthority/, 'screen-space fire receiver light must keep the old uploaded envelope only as an explicit fallback authority');
 assert.match(index, /fireReceiverLightFallbackEnergyNode/, 'screen-space fire receiver light must upload an explicit fallback energy floor when rendered-volume sampling goes visually dark');
 assert.match(index, /visibleFallbackFloorAuthority/, 'screen-space fire receiver light must disclose the authority for any visible fallback floor');
+assert.match(index, /fallbackFloorRole:\s*'guard-not-cadence-author'/, 'screen-space fire receiver light must disclose that the fallback floor is a guard, not the cadence author');
+assert.match(index, /renderedFireEnergy/, 'screen-space fire receiver light debug must expose the rendered-fire energy side of the coupling');
+assert.match(index, /receiverLightEnergy/, 'screen-space fire receiver light debug must expose the final receiver-light energy side of the coupling');
+assert.match(index, /fallbackGuardEnergy/, 'screen-space fire receiver light debug must expose the bounded fallback guard contribution separately');
+assert.doesNotMatch(index, /const receiverEnergy = volumeFireEnergy\.mul\(float\(1\.40\)\)\.add\(fireReceiverLightFallbackEnergyNode\.mul\(float\(0\.68\)\)\)/, 'screen-space fire receiver light must not add a large fallback floor directly into the receiver cadence');
 assert.match(index, /volume_receiver_light_debug/, 'screen-space fire receiver light must expose a receiver-mask debug route for wall-light smoke');
 assert.match(index, /receiver-surface-depth-soft-normal-mask-v1/, 'screen-space fire receiver light must disclose its depth plus soft-normal receiver surface mask');
 assert.match(index, /volume-foreground-occluded-receiver-light-v0/, 'screen-space fire receiver light must disclose foreground-volume occlusion so wall light cannot bleach the overlaid fire body');
