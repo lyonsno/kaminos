@@ -34,6 +34,7 @@ import {
   createSam3PixelDecoderPhaseProgramRouteDefinition,
   createSam3PromptFpnPhaseProgramCpuOracle,
   createSam3PromptFpnPhaseProgramRouteDefinition,
+  createSam3DetrImageIngressFromFpnFeatures,
   createSam3DetrEncoderPhaseProgramRouteDefinition,
   createSam3DetrDecoderPhaseProgramRouteDefinition,
   createSam3ScoringPhaseProgramCpuOracle,
@@ -98,6 +99,7 @@ const state = {
   imageVitFirstBlockEvidence: null,
   imageVitBlockStackEvidence: null,
   imageFpnNeckEvidence: null,
+  browserFpnDetrIngressEvidence: null,
   parity: null,
   debugReadbackSamples: null,
   sourceImage: null,
@@ -416,6 +418,13 @@ async function aggregateTensorBundleSha256(kind, entries) {
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(canonical));
   const bytes = new Uint8Array(digest);
   return `sha256:${Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('')}`;
+}
+
+async function sha256TypedArray(values) {
+  const bytes = new Uint8Array(values.buffer, values.byteOffset, values.byteLength);
+  const copy = bytes.slice();
+  const digest = await crypto.subtle.digest('SHA-256', copy);
+  return `sha256:${Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('')}`;
 }
 
 function drawBinaryPanel(ctx, values, shape, x, y, width, height, colors) {
@@ -1291,8 +1300,21 @@ async function loadDetrStackPayload(manifest) {
       projection: manifest.imageFpnNeck?.projection || null,
       nonClaims: {
         level3FpnNeck: true,
-        browserProducedDetrFpnInputs: true,
         browserLocalTextEncoder: true,
+        fullSam3BrowserExecution: true,
+      },
+    } : null,
+    browserFpnDetrIngressEvidence: includeImageFpnNeck ? {
+      packetMode: manifest.mode,
+      schema: manifest.schema,
+      boundary: 'sam3-browser-local-fpn-neck-detr-image-ingress',
+      routeKind: 'image-fpn-neck-detr-image-ingress-composition',
+      encoderSrcSource: 'browser-fpn-neck-feature-2',
+      encoderPosSource: 'browser-position-embedding-sine',
+      textTensorOwner: 'mlx-vlm-reference',
+      nonClaims: {
+        browserLocalTextEncoder: true,
+        level3FpnNeck: true,
         fullSam3BrowserExecution: true,
       },
     } : null,
@@ -1306,6 +1328,8 @@ async function loadDetrStackPayload(manifest) {
     expectedFpnNeckFeature0,
     expectedFpnNeckFeature1,
     expectedFpnNeckFeature2,
+    expectedEncoderSrc: encoderSrc,
+    expectedEncoderPos: encoderPos,
     expectedEncoderHiddenStates,
     expectedDecoderHiddenStates,
     expectedLastHs,
@@ -1427,6 +1451,13 @@ async function loadDetrStackPayload(manifest) {
       let fpnNeckFeature2TensorSha256 = null;
       let fpnNeckWeightsSha256 = null;
       let imageFpnNeckCpuMaxAbsDiff = undefined;
+      let browserFpnDetrIngress = null;
+      let browserFpnDetrIngressEvidence = null;
+      let effectiveEncoderSrc = encoderSrc;
+      let effectiveEncoderPos = encoderPos;
+      let effectiveEncoderSrcSha256 = encoderSrcTensor.sha256;
+      let effectiveEncoderPosSha256 = encoderPosTensor.sha256;
+      let detrImageIngressTensorSha256 = null;
       if (includeImagePreprocess) {
         const preprocessShape = imagePreprocessShape(manifest);
         const rgba = rgbaFromSourceImage(sourceImage, preprocessShape);
@@ -1618,14 +1649,56 @@ async function loadDetrStackPayload(manifest) {
         fpnNeckFeature1Output = imageFpnNeckResult.receipt.outputs.find(output => output.role === 'fpn-neck-feature-1');
         fpnNeckFeature2Output = imageFpnNeckResult.receipt.outputs.find(output => output.role === 'fpn-neck-feature-2');
         if (!fpnNeckFeature0Output?.sha256 || !fpnNeckFeature1Output?.sha256 || !fpnNeckFeature2Output?.sha256) throw new Error('SAM3 image FPN-neck output identity missing');
+        browserFpnDetrIngress = createSam3DetrImageIngressFromFpnFeatures({
+          fpnNeckFeatures: [gpuFpnNeckFeature0, gpuFpnNeckFeature1, gpuFpnNeckFeature2],
+          levels: fpnNeckShape.levels.map(level => ({ ...level, batch: fpnNeckShape.batch })),
+          sourceLevel: 2,
+          channels: manifest.shape.channels,
+        });
+        effectiveEncoderSrc = browserFpnDetrIngress.encoderSrc;
+        effectiveEncoderPos = browserFpnDetrIngress.encoderPos;
+        effectiveEncoderSrcSha256 = fpnNeckFeature2Output.sha256;
+        effectiveEncoderPosSha256 = await sha256TypedArray(effectiveEncoderPos);
+        detrImageIngressTensorSha256 = await aggregateTensorBundleSha256('sam3-detr-encoder-tensors:browser-fpn-image-ingress', [
+          { role: 'encoder-src', artifactId: fpnNeckFeature2Output.artifactId, sha256: effectiveEncoderSrcSha256, shape: fpnNeckFeature2Output.shape },
+          { role: 'encoder-pos', artifactId: 'sam3-detr-encoder-pos:browser-position-embedding-sine', sha256: effectiveEncoderPosSha256, shape: [browserFpnDetrIngress.shape.batch, browserFpnDetrIngress.shape.spatialTokens, browserFpnDetrIngress.shape.channels] },
+          { role: 'prompt-features', sha256: promptTensor.sha256 },
+          { role: 'prompt-mask', sha256: promptMaskTensor.sha256 },
+        ]);
+        browserFpnDetrIngressEvidence = {
+          encoderSrcSource: 'browser-fpn-neck-feature-2',
+          encoderSrcOutput: fpnNeckFeature2Output,
+          encoderSrcSha256: effectiveEncoderSrcSha256,
+          encoderPosSource: 'browser-position-embedding-sine',
+          encoderPosSha256: effectiveEncoderPosSha256,
+          detrImageIngressTensorSha256,
+          shape: browserFpnDetrIngress.shape,
+          positionEncoding: browserFpnDetrIngress.positionEncoding,
+          parity: {
+            encoderSrcMaxAbsDiff: maxAbsDiff(encoderSrc, effectiveEncoderSrc),
+            encoderPosMaxAbsDiff: maxAbsDiff(encoderPos, effectiveEncoderPos),
+          },
+        };
       }
-      const encoderResult = await runSam3DetrEncoderPhaseProgramRoute({ request, route, device, queue: device.queue, adapterName: adapter.info?.description || adapter.info?.device || 'browser-webgpu-adapter', browser: navigator.userAgent, kernel: route.kernel, model: { revision: route.model.revision, weightsHash: manifest.staticWeights.sha256, dtype: 'fp32' }, tensors: { encoderSrc, encoderPos, promptFeatures, promptMask, layers: encoderWeights.layers, shape: encoderShape }, includeReadback: true });
+      const encoderRequest = includeImageFpnNeck ? createRouteInvocationRequest(route, {
+        requestId: `sam-browser-detr-stack-encoder-${Date.now()}`,
+        inputs: {
+          'source-image': { artifactId: manifest.sourceImage?.artifactId || 'image:synthetic', sha256: manifest.sourceImage?.sha256 || 'sha256:synthetic-image', shape: sourceImageShape(manifest) },
+          'sam3-detr-encoder-tensors': { artifactId: 'sam3-detr-encoder-tensors:browser-fpn-image-ingress-composition', sha256: detrImageIngressTensorSha256 },
+          'sam3-detr-encoder-weights': { artifactId: manifest.staticWeights.artifactId, sha256: manifest.staticWeights.sha256 },
+        },
+        outputs: {
+          'encoder-hidden-states': { artifactId: 'sam3-encoder-hidden-states:browser-fpn-image-ingress-composition', shape: [manifest.shape.batch, manifest.shape.spatialTokens, manifest.shape.channels] },
+        },
+        routeConfig: { upstream: manifest.claims?.upstream || 'mlx-reference-detr-stack', promptHash: manifest.prompt?.sha256, browserFpnDetrIngress: browserFpnDetrIngressEvidence },
+      }) : request;
+      const encoderResult = await runSam3DetrEncoderPhaseProgramRoute({ request: encoderRequest, route, device, queue: device.queue, adapterName: adapter.info?.description || adapter.info?.device || 'browser-webgpu-adapter', browser: navigator.userAgent, kernel: route.kernel, model: { revision: route.model.revision, weightsHash: manifest.staticWeights.sha256, dtype: 'fp32' }, tensors: { encoderSrc: effectiveEncoderSrc, encoderPos: effectiveEncoderPos, promptFeatures, promptMask, layers: encoderWeights.layers, shape: encoderShape }, includeReadback: true });
       const gpuEncoderHiddenStates = new Float32Array(encoderResult.debugReadback.encoderHiddenStates);
       const detrEncoderOutput = encoderResult.receipt.outputs.find(output => output.role === 'encoder-hidden-states');
       if (!detrEncoderOutput?.sha256 || !detrEncoderOutput?.artifactId) throw new Error('DETR encoder output identity missing for decoder composition');
       const decoderTensorSha256 = await aggregateTensorBundleSha256('sam3-detr-decoder-composed-tensors', [
         { role: 'encoder-hidden-states', artifactId: detrEncoderOutput.artifactId, sha256: detrEncoderOutput.sha256, shape: detrEncoderOutput.shape },
-        { role: 'encoder-pos', sha256: encoderPosTensor.sha256 },
+        { role: 'encoder-pos', sha256: effectiveEncoderPosSha256 },
         { role: 'prompt-features', sha256: promptTensor.sha256 },
         { role: 'prompt-mask', sha256: promptMaskTensor.sha256 },
       ]);
@@ -1643,9 +1716,9 @@ async function loadDetrStackPayload(manifest) {
           ...(includeStackScoring ? { 'decoder-hidden-states': { artifactId: 'sam3-decoder-hidden-states:browser-detr-stack-composition', shape: [manifest.shape.layerCount, manifest.shape.batch, manifest.shape.queryTokens, manifest.shape.channels] } } : {}),
           'presence-logits': { artifactId: 'sam3-presence-logits:browser-detr-stack-composition', shape: [manifest.shape.layerCount, manifest.shape.batch, 1] },
         },
-        routeConfig: { upstream: manifest.claims?.upstream || 'mlx-reference-detr-stack', promptHash: manifest.prompt?.sha256, composedFrom: encoderResult.receipt?.effectiveRouteId, detrEncoderOutput },
+        routeConfig: { upstream: manifest.claims?.upstream || 'mlx-reference-detr-stack', promptHash: manifest.prompt?.sha256, composedFrom: encoderResult.receipt?.effectiveRouteId, detrEncoderOutput, browserFpnDetrIngress: browserFpnDetrIngressEvidence },
       });
-      const decoderResult = await runSam3DetrDecoderPhaseProgramRoute({ request: decoderRequest, route: decoderRoute, device, queue: device.queue, adapterName: adapter.info?.description || adapter.info?.device || 'browser-webgpu-adapter', browser: navigator.userAgent, kernel: decoderRoute.kernel, model: { revision: decoderRoute.model.revision, weightsHash: manifest.staticWeights.sha256, dtype: 'fp32' }, tensors: { visionFeatures: gpuEncoderHiddenStates, visionPosEncoding: encoderPos, promptFeatures, promptMask, shape: decoderShape, ...decoderWeights }, includeReadback: true, includeAllHiddenStatesReadback: includeStackScoring });
+      const decoderResult = await runSam3DetrDecoderPhaseProgramRoute({ request: decoderRequest, route: decoderRoute, device, queue: device.queue, adapterName: adapter.info?.description || adapter.info?.device || 'browser-webgpu-adapter', browser: navigator.userAgent, kernel: decoderRoute.kernel, model: { revision: decoderRoute.model.revision, weightsHash: manifest.staticWeights.sha256, dtype: 'fp32' }, tensors: { visionFeatures: gpuEncoderHiddenStates, visionPosEncoding: effectiveEncoderPos, promptFeatures, promptMask, shape: decoderShape, ...decoderWeights }, includeReadback: true, includeAllHiddenStatesReadback: includeStackScoring });
       const gpuLastHs = new Float32Array(decoderResult.debugReadback.lastHs);
       const gpuDecoderHiddenStates = includeStackScoring ? new Float32Array(decoderResult.debugReadback.decoderHiddenStates) : null;
       const gpuReferenceBoxes = new Float32Array(decoderResult.debugReadback.referenceBoxes);
@@ -1771,6 +1844,8 @@ async function loadDetrStackPayload(manifest) {
           fpnNeckFeature1: gpuFpnNeckFeature1 ? Array.from(gpuFpnNeckFeature1) : undefined,
           fpnNeckFeature2: gpuFpnNeckFeature2 ? Array.from(gpuFpnNeckFeature2) : undefined,
           imageFpnNeckCpuMaxAbsDiff,
+          encoderSrc: includeImageFpnNeck ? Array.from(effectiveEncoderSrc) : undefined,
+          encoderPos: includeImageFpnNeck ? Array.from(effectiveEncoderPos) : undefined,
           encoderHiddenStates: Array.from(gpuEncoderHiddenStates),
           decoderHiddenStates: gpuDecoderHiddenStates ? Array.from(gpuDecoderHiddenStates) : undefined,
           lastHs: Array.from(gpuLastHs),
@@ -1818,6 +1893,10 @@ async function loadDetrStackPayload(manifest) {
           fpnNeckFeature1Output,
           fpnNeckFeature2Output,
           fpnNeckWeightsSha256,
+          browserFpnDetrIngressEvidence,
+          detrImageIngressTensorSha256,
+          effectiveEncoderSrcSha256,
+          effectiveEncoderPosSha256,
           midstreamRouteId: decoderResult.receipt.effectiveRouteId,
           downstreamRouteId: tailResult.receipt.effectiveRouteId,
           detrEncoderOutput,
@@ -2967,6 +3046,8 @@ async function main() {
       fpnNeckFeature1MaxAbsDiff: result.debugReadback.fpnNeckFeature1 ? maxAbsDiff(payload.expectedFpnNeckFeature1 || [], new Float32Array(result.debugReadback.fpnNeckFeature1)) : undefined,
       fpnNeckFeature2MaxAbsDiff: result.debugReadback.fpnNeckFeature2 ? maxAbsDiff(payload.expectedFpnNeckFeature2 || [], new Float32Array(result.debugReadback.fpnNeckFeature2)) : undefined,
       imageFpnNeckCpuMaxAbsDiff: result.debugReadback.imageFpnNeckCpuMaxAbsDiff,
+      encoderSrcMaxAbsDiff: result.debugReadback.encoderSrc ? maxAbsDiff(payload.expectedEncoderSrc || [], new Float32Array(result.debugReadback.encoderSrc)) : undefined,
+      encoderPosMaxAbsDiff: result.debugReadback.encoderPos ? maxAbsDiff(payload.expectedEncoderPos || [], new Float32Array(result.debugReadback.encoderPos)) : undefined,
       promptFpnMaxAbsDiff: result.debugReadback.promptFpnFeature ? maxAbsDiff(payload.expectedPromptFpnFeature || [], new Float32Array(result.debugReadback.promptFpnFeature)) : undefined,
       pixelEmbedMaxAbsDiff: result.debugReadback.pixelEmbed ? maxAbsDiff(payload.expectedPixelEmbed || [], new Float32Array(result.debugReadback.pixelEmbed)) : undefined,
       maskLogitsMaxAbsDiff: gpuLogits ? maxAbsDiff(expectedLogits, gpuLogits) : undefined,
@@ -2999,6 +3080,8 @@ async function main() {
     const gpuVitFirstGlobalTolerance = manifest.tolerances?.vitFirstGlobalHiddenStatesMaxAbsDiff ?? gpuVitBlockStackTolerance;
     const gpuFpnNeckTolerance = Math.max(manifest.tolerances?.fpnNeckFeature0MaxAbsDiff ?? 0.02, manifest.tolerances?.fpnNeckFeature1MaxAbsDiff ?? 0.02, manifest.tolerances?.fpnNeckFeature2MaxAbsDiff ?? 0.02);
     const gpuFpnNeckCpuTolerance = manifest.tolerances?.imageFpnNeckCpuMaxAbsDiff ?? gpuFpnNeckTolerance;
+    const gpuEncoderSrcTolerance = manifest.tolerances?.encoderSrcMaxAbsDiff ?? gpuFpnNeckTolerance;
+    const gpuEncoderPosTolerance = manifest.tolerances?.encoderPosMaxAbsDiff ?? 0.00001;
     const gpuPromptFpnTolerance = manifest.tolerances?.promptFpnMaxAbsDiff ?? 0.00001;
     const gpuPixelTolerance = manifest.tolerances?.pixelEmbedMaxAbsDiff ?? 0.00001;
     const selectionScoresTolerance = manifest.tolerances?.selectionScoresMaxAbsDiff ?? 0.00001;
@@ -3029,6 +3112,10 @@ async function main() {
       expectedVitFirstGlobalHiddenStates: payload.expectedVitFirstGlobalHiddenStates ? Array.from(payload.expectedVitFirstGlobalHiddenStates.slice(0, 16)) : undefined,
       fpnNeckFeature0: result.debugReadback.fpnNeckFeature0 ? Array.from(new Float32Array(result.debugReadback.fpnNeckFeature0).slice(0, 16)) : undefined,
       expectedFpnNeckFeature0: payload.expectedFpnNeckFeature0 ? Array.from(payload.expectedFpnNeckFeature0.slice(0, 16)) : undefined,
+      encoderSrc: result.debugReadback.encoderSrc ? Array.from(new Float32Array(result.debugReadback.encoderSrc).slice(0, 16)) : undefined,
+      expectedEncoderSrc: payload.expectedEncoderSrc ? Array.from(payload.expectedEncoderSrc.slice(0, 16)) : undefined,
+      encoderPos: result.debugReadback.encoderPos ? Array.from(new Float32Array(result.debugReadback.encoderPos).slice(0, 16)) : undefined,
+      expectedEncoderPos: payload.expectedEncoderPos ? Array.from(payload.expectedEncoderPos.slice(0, 16)) : undefined,
       predLogits: result.debugReadback.predLogits ? Array.from(new Float32Array(result.debugReadback.predLogits).slice(0, 16)) : undefined,
       expectedPredLogits: payload.expectedPredLogits ? Array.from(payload.expectedPredLogits.slice(0, 16)) : undefined,
       selectedIndex: result.debugReadback.selectedIndex ? Array.from(new Uint32Array(result.debugReadback.selectedIndex).slice(0, 8)) : undefined,
@@ -3151,6 +3238,24 @@ async function main() {
       },
       debugReadbackSample: debugReadbackSamples.fpnNeckFeature0,
     } : null;
+    state.browserFpnDetrIngressEvidence = payload.browserFpnDetrIngressEvidence ? {
+      ...payload.browserFpnDetrIngressEvidence,
+      receiptChain: (result.compositionRouteReceipts || []).map(receipt => receipt.effectiveRouteId),
+      encoderReceipt: result.routeReceipt || result.receipt || null,
+      edge: result.compositionEdge?.browserFpnDetrIngressEvidence || null,
+      detrImageIngressTensorSha256: result.compositionEdge?.detrImageIngressTensorSha256 || null,
+      effectiveEncoderSrcSha256: result.compositionEdge?.effectiveEncoderSrcSha256 || null,
+      effectiveEncoderPosSha256: result.compositionEdge?.effectiveEncoderPosSha256 || null,
+      parity: {
+        encoderSrcMaxAbsDiff: parity.encoderSrcMaxAbsDiff,
+        encoderPosMaxAbsDiff: parity.encoderPosMaxAbsDiff,
+        encoderHiddenStatesMaxAbsDiff: parity.encoderHiddenStatesMaxAbsDiff,
+      },
+      debugReadbackSamples: {
+        encoderSrc: debugReadbackSamples.encoderSrc,
+        encoderPos: debugReadbackSamples.encoderPos,
+      },
+    } : null;
     if (
       (parity.encoderHiddenStatesMaxAbsDiff ?? 0) > gpuEncoderTolerance
       || (parity.decoderHiddenStatesMaxAbsDiff ?? 0) > gpuDecoderHiddenStatesTolerance
@@ -3172,6 +3277,8 @@ async function main() {
       || (parity.fpnNeckFeature1MaxAbsDiff ?? 0) > gpuFpnNeckTolerance
       || (parity.fpnNeckFeature2MaxAbsDiff ?? 0) > gpuFpnNeckTolerance
       || (parity.imageFpnNeckCpuMaxAbsDiff ?? 0) > gpuFpnNeckCpuTolerance
+      || (parity.encoderSrcMaxAbsDiff ?? 0) > gpuEncoderSrcTolerance
+      || (parity.encoderPosMaxAbsDiff ?? 0) > gpuEncoderPosTolerance
       || (parity.promptFpnMaxAbsDiff ?? 0) > gpuPromptFpnTolerance
       || (parity.pixelEmbedMaxAbsDiff ?? 0) > gpuPixelTolerance
       || (parity.maskLogitsMaxAbsDiff ?? 0) > gpuTolerance

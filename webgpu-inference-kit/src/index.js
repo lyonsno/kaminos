@@ -210,6 +210,11 @@ export {
 } from './sam-detr-encoder-phase-program.js';
 
 export {
+  createSam3DetrImageIngressFromFpnFeatures,
+  createSam3PositionEmbeddingSine,
+} from './sam-detr-image-ingress.js';
+
+export {
   SAM3_DETR_DECODER_PHASE_PROGRAM_ROUTE_ID,
   createSam3DetrDecoderPhaseProgramCpuOracle,
   createSam3DetrDecoderPhaseProgramRouteDefinition,

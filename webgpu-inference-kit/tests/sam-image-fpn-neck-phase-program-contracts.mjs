@@ -30,6 +30,10 @@ assert.match(stackExporter, /expected-fpn-neck-feature-2/, 'detector-stack packe
 assert.match(stackExporter, /fpn-neck-layer0-scale0-weight/, 'detector-stack packet must export level-0 FPN transpose-conv weights');
 assert.match(stackExporter, /fpn-neck-layer2-proj2-weight/, 'detector-stack packet must export level-2 FPN projection weights');
 assert.match(stackExporter, /image-fpn-neck-detector-stack-composition/, 'detector-stack packet must preserve FPN-neck composition route kind');
+assert.match(stackExporter, /browser-derived-from-fpn-neck-feature-2/, 'detector-stack packet metadata must mark encoder-src as browser-derived from FPN level 2 in image-FPN mode');
+assert.match(stackExporter, /browser-position-embedding-sine-from-fpn-level-2-shape/, 'detector-stack packet metadata must mark encoder-pos as browser-computed from FPN level-2 shape in image-FPN mode');
+assert.match(stackExporter, /encoderSrcMaxAbsDiff/, 'detector-stack packet tolerances must include FPN-derived encoder source parity');
+assert.match(stackExporter, /encoderPosMaxAbsDiff/, 'detector-stack packet tolerances must include browser position parity');
 
 assert.match(witness, /mlx-detector-stack-image-fpn-neck-export/, 'witness must allow detector-stack packet mode with browser-local image FPN-neck ingress');
 assert.match(witness, /IMAGE_FPN_NECK_PHASE_PROGRAM_ROUTE_ID/, 'witness must preserve SAM3 image FPN-neck route identity');
@@ -42,9 +46,15 @@ assert.match(smokeJs, /image-fpn-neck-detector-stack-composition/, 'browser smok
 assert.match(smokeJs, /imageFpnNeckEvidence/, 'browser smoke state must preserve FPN-neck evidence');
 assert.match(smokeJs, /fpnNeckFeature0MaxAbsDiff/, 'browser smoke must preserve FPN-neck level-0 parity');
 assert.match(smokeJs, /fpnNeckFeature0Output/, 'browser smoke must preserve FPN-neck output identity as an ingress edge');
+assert.match(smokeJs, /createSam3DetrImageIngressFromFpnFeatures/, 'browser smoke must construct DETR image ingress from browser-produced FPN features');
+assert.match(smokeJs, /browserFpnDetrIngressEvidence/, 'browser smoke state must expose FPN-derived DETR ingress evidence');
+assert.match(smokeJs, /detrImageIngressTensorSha256/, 'browser smoke must receipt-bind DETR encoder tensors to the FPN-derived image ingress');
+assert.match(smokeJs, /encoderSrcSource: 'browser-fpn-neck-feature-2'/, 'browser smoke must advertise browser FPN level 2 as the DETR encoder source owner');
 
 const {
   SAM3_IMAGE_FPN_NECK_PHASE_PROGRAM_ROUTE_ID,
+  createSam3DetrImageIngressFromFpnFeatures,
+  createSam3PositionEmbeddingSine,
   createSam3ImageFpnNeckPhaseProgramCpuOracle,
   createSam3ImageFpnNeckPhaseProgramRouteDefinition,
   validateRouteDefinition,
@@ -112,10 +122,44 @@ assert.deepEqual(Array.from(oracle.fpnNeckFeatures[0]), Array.from(hiddenStates)
 assert.deepEqual(Array.from(oracle.fpnNeckFeatures[1]), Array.from(hiddenStates, value => value * 2), 'level-1 FPN neck should apply level-local projection');
 assert.deepEqual(Array.from(oracle.fpnNeckFeatures[2]), Array.from(hiddenStates, value => value * 3), 'level-2 FPN neck should apply level-local projection');
 
+const detrIngress = createSam3DetrImageIngressFromFpnFeatures({
+  fpnNeckFeatures: [
+    new Float32Array([1, 2, 3, 4]),
+    new Float32Array([10, 11, 12, 13]),
+    new Float32Array([20, 21, 22, 23, 24, 25, 26, 27]),
+  ],
+  levels: [
+    { level: 0, batch: 1, height: 1, width: 1 },
+    { level: 1, batch: 1, height: 1, width: 1 },
+    { level: 2, batch: 1, height: 1, width: 2 },
+  ],
+  channels: 4,
+});
+assert.equal(detrIngress.encoderSrcSource, 'browser-fpn-neck-feature-2');
+assert.deepEqual(Array.from(detrIngress.encoderSrc), [20, 21, 22, 23, 24, 25, 26, 27], 'DETR encoder source must be the row-major browser FPN level-2 tensor');
+assert.deepEqual(detrIngress.shape, { batch: 1, height: 1, width: 2, channels: 4, spatialTokens: 2 });
+
+const expectedPos = createSam3PositionEmbeddingSine({ batch: 1, height: 1, width: 2, channels: 4 });
+assert.equal(detrIngress.encoderPos.length, expectedPos.length);
+for (let index = 0; index < expectedPos.length; index += 1) {
+  assert.ok(Math.abs(detrIngress.encoderPos[index] - expectedPos[index]) < 1e-7, `DETR ingress position value ${index} must match PositionEmbeddingSine`);
+}
+const yAngle = (1 / (1 + 1e-6)) * Math.PI * 2;
+const x0Angle = (1 / (2 + 1e-6)) * Math.PI * 2;
+assert.ok(Math.abs(detrIngress.encoderPos[0] - Math.sin(yAngle)) < 1e-7, 'position encoding must put y sine first');
+assert.ok(Math.abs(detrIngress.encoderPos[1] - Math.cos(yAngle)) < 1e-7, 'position encoding must put y cosine second');
+assert.ok(Math.abs(detrIngress.encoderPos[2] - Math.sin(x0Angle)) < 1e-7, 'position encoding must put x sine after y channels');
+assert.ok(Math.abs(detrIngress.encoderPos[3] - Math.cos(x0Angle)) < 1e-7, 'position encoding must put x cosine after y channels');
+
 assert.throws(() => createSam3ImageFpnNeckPhaseProgramCpuOracle({
   backboneHiddenStates: hiddenStates,
   weights,
   shape: { batch: 1, backboneHeight: 2, backboneWidth: 2, backboneChannels: 1, fpnHiddenSize: 1, levels: [{ level: 0, scaleFactor: 1, height: 2, width: 2 }] },
 }), /shape\.levels/);
+assert.throws(() => createSam3DetrImageIngressFromFpnFeatures({
+  fpnNeckFeatures: [new Float32Array([1])],
+  levels: [{ level: 0, batch: 1, height: 1, width: 1 }],
+  channels: 4,
+}), /requested DETR source level/);
 
 console.log('sam image FPN-neck phase-program contracts passed');

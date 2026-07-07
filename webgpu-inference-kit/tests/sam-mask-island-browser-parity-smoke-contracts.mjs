@@ -120,6 +120,12 @@ assert.match(witness, /encoderTensorSha256/, 'witness must assert DETR output co
 assert.match(witness, /decoderTensorSha256/, 'witness must assert DETR encoder output composition into the DETR decoder tensor input');
 assert.match(witness, /lastHsOutput/, 'witness must assert DETR decoder last-hs output composition into the mask-tail tensor input');
 assert.match(witness, /compositionRouteReceipts/, 'witness report must preserve the full composed route receipt chain');
+assert.match(witness, /packetManifest\s*=\s*JSON\.parse/, 'witness must load the generated packet manifest for routed tolerances');
+assert.match(witness, /manifestTolerance\('binaryMismatchCount',\s*8\)/, 'witness must use packet binary mismatch tolerance for detector-stack modes');
+assert.match(witness, /manifestTolerance\('selectedBoxMaxAbsDiff',\s*0\.0001\)/, 'witness must use packet selected-box tolerance for detector-stack modes');
+assert.match(witness, /manifestTolerance\('webGpuLogitsMaxAbsDiff',\s*0\.0001\)/, 'witness must use packet mask-logits tolerance for detector-stack modes');
+assert.match(witness, /browserFpnDetrIngressEvidence:\s*lastState\?\.browserFpnDetrIngressEvidence/, 'witness report must preserve browser FPN-derived DETR ingress evidence at top level');
+assert.match(witness, /imageFpnNeck browser DETR ingress evidence missing/, 'witness must assert browser FPN-derived DETR ingress evidence for image-FPN-neck packets');
 
 assert.equal(join(new URL('.', root).pathname, 'smokes').includes('webgpu-inference-kit'), true);
 

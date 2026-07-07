@@ -131,9 +131,14 @@ let stderr = '';
 let browserVersion = null;
 let primaryOutputWritten = false;
 let lastState = null;
+let packetManifest = null;
 let server = null;
 let chromeProcess = null;
 const consoleEvents = [];
+
+function manifestTolerance(name, fallback) {
+  return packetManifest?.tolerances?.[name] ?? fallback;
+}
 
 function detectorStackReport(state) {
   const detectorStackEvidence = state?.detectorStackEvidence || null;
@@ -416,7 +421,9 @@ function assertImageFpnNeckEvidence(state) {
   if (!report.fpnNeckFeature0TensorSha256 || !report.fpnNeckFeature0Output?.sha256 || !report.fpnNeckFeature0Output?.artifactId || !report.fpnNeckFeature1Output?.sha256 || !report.fpnNeckFeature2Output?.sha256 || !report.fpnNeckWeightsSha256) throw new Error('imageFpnNeck edge identity missing');
   if (report.projection?.weightLayout !== 'out,kH,kW,in' || report.projection?.proj1 !== '1x1 Conv2d' || report.projection?.proj2 !== '3x3 Conv2d padding=1') throw new Error('imageFpnNeck reference boundary metadata missing');
   if (report.parity?.fpnNeckFeature0MaxAbsDiff > 0.02 || report.parity?.fpnNeckFeature1MaxAbsDiff > 0.02 || report.parity?.fpnNeckFeature2MaxAbsDiff > 0.02 || report.parity?.imageFpnNeckCpuMaxAbsDiff > 0.02) throw new Error('imageFpnNeck parity mismatch');
-  if (report.nonClaims?.level3FpnNeck !== true || report.nonClaims?.browserProducedDetrFpnInputs !== true || report.nonClaims?.browserLocalTextEncoder !== true || report.nonClaims?.fullSam3BrowserExecution !== true) throw new Error('imageFpnNeck bounded non-claims missing');
+  const ingress = state?.browserFpnDetrIngressEvidence;
+  if (report.nonClaims?.level3FpnNeck !== true || report.nonClaims?.browserLocalTextEncoder !== true || report.nonClaims?.fullSam3BrowserExecution !== true) throw new Error('imageFpnNeck bounded non-claims missing');
+  if (ingress?.edge?.encoderSrcSource !== 'browser-fpn-neck-feature-2' || !ingress.detrImageIngressTensorSha256 || !ingress.effectiveEncoderSrcSha256 || !ingress.effectiveEncoderPosSha256) throw new Error('imageFpnNeck browser DETR ingress evidence missing');
   return report;
 }
 
@@ -459,7 +466,10 @@ function writeReport(extra = {}) {
     midstreamRouteReceipt: lastState?.midstreamRouteReceipt || null,
     downstreamRouteReceipt: lastState?.downstreamRouteReceipt || null,
     compositionRouteReceipts: lastState?.compositionRouteReceipts || null,
+    compositionEdge: lastState?.compositionEdge || null,
+    browserFpnDetrIngressEvidence: lastState?.browserFpnDetrIngressEvidence || null,
     parity: lastState?.parity || null,
+    tolerances: packetManifest?.tolerances || null,
     detectorStack: detectorStackReport(lastState),
     imagePreprocess: imagePreprocessReport(lastState),
     imagePatchEmbed: imagePatchEmbedReport(lastState),
@@ -652,6 +662,7 @@ async function main() {
   try {
     phase = 'generate_oracle_packet';
     generateOraclePacket();
+    packetManifest = JSON.parse(readFileSync(join(oracleDir, 'tensor-manifest.json'), 'utf8'));
 
     phase = 'start_server';
     await startServer();
@@ -855,13 +866,13 @@ async function main() {
       ) {
         throw new Error('DETR stack selection output identity does not match composition edge');
       }
-      if (lastState.parity?.predLogitsMaxAbsDiff > 0.0005) throw new Error('DETR stack selection pred-logits parity exceeds tolerance');
-      if (lastState.parity?.selectionScoresMaxAbsDiff > 0.00001) throw new Error('DETR stack selection scores parity exceeds tolerance');
-      if (lastState.parity?.selectionBoxesMaxAbsDiff > 0.0002) throw new Error('DETR stack selection boxes parity exceeds tolerance');
-      if (lastState.parity?.selectionKeepMismatchCount > 0) throw new Error('DETR stack selection keep mask mismatch');
-      if (lastState.parity?.selectedIndexMaxAbsDiff > 0) throw new Error('DETR stack selected index parity exceeds tolerance');
-      if (lastState.parity?.selectedScoreMaxAbsDiff > 0.00001) throw new Error('DETR stack selected score parity exceeds tolerance');
-      if (lastState.parity?.selectedBoxMaxAbsDiff > 0.0001) throw new Error('DETR stack selected box parity exceeds tolerance');
+      if (lastState.parity?.predLogitsMaxAbsDiff > manifestTolerance('predLogitsMaxAbsDiff', 0.0005)) throw new Error('DETR stack selection pred-logits parity exceeds tolerance');
+      if (lastState.parity?.selectionScoresMaxAbsDiff > manifestTolerance('selectionScoresMaxAbsDiff', 0.00001)) throw new Error('DETR stack selection scores parity exceeds tolerance');
+      if (lastState.parity?.selectionBoxesMaxAbsDiff > manifestTolerance('selectionBoxesMaxAbsDiff', 0.0002)) throw new Error('DETR stack selection boxes parity exceeds tolerance');
+      if (lastState.parity?.selectionKeepMismatchCount > manifestTolerance('selectionKeepMismatchCount', 0)) throw new Error('DETR stack selection keep mask mismatch');
+      if (lastState.parity?.selectedIndexMaxAbsDiff > manifestTolerance('selectedIndexMaxAbsDiff', 0)) throw new Error('DETR stack selected index parity exceeds tolerance');
+      if (lastState.parity?.selectedScoreMaxAbsDiff > manifestTolerance('selectedScoreMaxAbsDiff', 0.00001)) throw new Error('DETR stack selected score parity exceeds tolerance');
+      if (lastState.parity?.selectedBoxMaxAbsDiff > manifestTolerance('selectedBoxMaxAbsDiff', 0.0001)) throw new Error('DETR stack selected box parity exceeds tolerance');
       if (packetMode === DETECTOR_STACK_VIT_PREFIX_PACKET_MODE && lastState.parity?.vitPrefixHiddenStatesMaxAbsDiff > 0.0007) throw new Error('imageVitPrefix detector stack hidden-state parity exceeds tolerance');
       if (packetMode === DETECTOR_STACK_VIT_PREFIX_PACKET_MODE && lastState.parity?.imageVitPrefixCpuMaxAbsDiff > 0.0007) throw new Error('imageVitPrefix CPU oracle parity exceeds tolerance');
       if (packetMode === DETECTOR_STACK_VIT_FIRST_BLOCK_PACKET_MODE && lastState.parity?.vitFirstBlockHiddenStatesMaxAbsDiff > 0.0025) throw new Error('imageVitFirstBlock detector stack hidden-state parity exceeds tolerance');
@@ -871,7 +882,7 @@ async function main() {
       if (isVitBlockStackPacketMode(packetMode) && lastState.parity?.vitFirstGlobalHiddenStatesMaxAbsDiff > 0.01) throw new Error('imageVitBlockStack first-global parity exceeds tolerance');
       if ((packetMode === DETECTOR_STACK_VIT_BACKBONE_PACKET_MODE || packetMode === DETECTOR_STACK_IMAGE_FPN_NECK_PACKET_MODE) && lastState.parity?.vitBackboneHiddenStatesMaxAbsDiff > 0.01) throw new Error('imageVitBlockStack full-backbone parity exceeds tolerance');
       if (packetMode === DETECTOR_STACK_IMAGE_FPN_NECK_PACKET_MODE && (lastState.parity?.fpnNeckFeature0MaxAbsDiff > 0.02 || lastState.parity?.fpnNeckFeature1MaxAbsDiff > 0.02 || lastState.parity?.fpnNeckFeature2MaxAbsDiff > 0.02 || lastState.parity?.imageFpnNeckCpuMaxAbsDiff > 0.02)) throw new Error('imageFpnNeck parity exceeds tolerance');
-      if (lastState.parity?.binaryMismatchCount > 8) throw new Error('DETR stack selection binary mask parity exceeds tolerance');
+      if (lastState.parity?.binaryMismatchCount > manifestTolerance('binaryMismatchCount', 8)) throw new Error('DETR stack selection binary mask parity exceeds tolerance');
       if (packetMode === DETECTOR_STACK_PACKET_MODE) assertDetectorStackEvidence(lastState);
       if (packetMode === DETECTOR_STACK_PREPROCESS_PACKET_MODE) assertImagePreprocessEvidence(lastState);
       if (packetMode === DETECTOR_STACK_PATCH_EMBED_PACKET_MODE) assertImagePatchEmbedEvidence(lastState);
@@ -1079,7 +1090,7 @@ async function main() {
     } else if (!lastState.tensorPacket?.hyperInputSha256) {
       throw new Error('tensorPacket identity missing');
     }
-    if (lastState.parity?.maskLogitsMaxAbsDiff > 0.0001) throw new Error('mask logits parity exceeds tolerance');
+    if (lastState.parity?.maskLogitsMaxAbsDiff > manifestTolerance('webGpuLogitsMaxAbsDiff', 0.0001)) throw new Error('mask logits parity exceeds tolerance');
     if (lastState.claims?.fullSam3BrowserExecution !== false) throw new Error('smoke overclaimed full SAM3 browser execution');
 
     phase = 'capture_screenshot';
