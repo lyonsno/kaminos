@@ -6,6 +6,7 @@ import { spawnSync } from 'node:child_process';
 
 import {
   SHARP_BREATHING_ROOM_COMPARISON_SCHEMA,
+  SHARP_SPN_LOWRES_BLOCK_LABELS,
   createSharpBreathingRoomComparison,
   sharpBreathingRoomComparisonProfiles,
 } from '../lib/sharp-breathing-room-comparison.mjs';
@@ -15,7 +16,15 @@ const manifestPath = join(root, 'pipelines', 'asset-pipelines.json');
 const witnessPath = join(root, 'pipeline-witness.mjs');
 const runnerPath = join(root, 'scripts', 'run-sharp-breathing-room-comparison.mjs');
 
-function schedulerVerification({ status = 'verified', timingAuthority = 'browser-wall-clock', boundaryAssertions = true } = {}) {
+function schedulerVerification({ status = 'verified', timingAuthority = 'browser-wall-clock', boundaryAssertions = true, lowresBlocks = true } = {}) {
+  const lowresEvents = lowresBlocks
+    ? SHARP_SPN_LOWRES_BLOCK_LABELS.map(block => ({
+        phase: 'spn-fusion',
+        boundary: 'spn-lowres-fusion',
+        kind: 'js-yield-end',
+        details: { block },
+      }))
+    : [];
   return {
     schema: 'kaminos.webgpu-scheduler-verification-receipt.v0',
     status,
@@ -32,6 +41,7 @@ function schedulerVerification({ status = 'verified', timingAuthority = 'browser
             { phase: 'spn', boundary: 'spn-patch-chunk', kind: 'queue-work-done-end' },
             { phase: 'spn', boundary: 'spn-patch-chunk', kind: 'js-yield-start' },
             { phase: 'spn', boundary: 'spn-patch-chunk', kind: 'js-yield-end' },
+            ...lowresEvents,
           ]
         : [],
     },
@@ -168,6 +178,8 @@ assert.equal(valid.outputEquivalence.sha256, 'a'.repeat(64));
 assert.equal(valid.schedulerComparison.baseline.status, 'verified');
 assert.equal(valid.schedulerComparison.cooperative.status, 'verified');
 assert.equal(valid.schedulerComparison.cooperative.unsupportedFields.includes('vitBlockChunkSize'), true);
+assert.equal(valid.schedulerComparison.cooperative.spnFusionCoverage.status, 'complete');
+assert.deepEqual(valid.schedulerComparison.cooperative.spnFusionCoverage.missingSpnFusionBlocks, []);
 assert.equal(valid.timingComparison.adapterInferenceDurationMs.baseline, 120000);
 assert.equal(valid.timingComparison.adapterInferenceDurationMs.cooperative, 118000);
 assert.equal(valid.timingComparison.frameP95Ms.baseline, 124.1);
@@ -212,6 +224,21 @@ const proxyOnly = createSharpBreathingRoomComparison({
 assert.equal(proxyOnly.status, 'invalid');
 assert.ok(proxyOnly.downgrades.includes('cooperative-scheduler-proof-proxy-only'));
 assert.equal(proxyOnly.falseClosureChecks.proxyOnlySchedulerProof, true);
+
+const missingLowresBlocks = createSharpBreathingRoomComparison({
+  runs: [
+    routeRun({ profileId: 'baseline-default', schedulerMode: 'default' }),
+    routeRun({
+      profileId: 'cooperative-spn-gaussian',
+      schedulerMode: 'cooperative',
+      scheduler: schedulerVerification({ lowresBlocks: false }),
+    }),
+  ],
+});
+assert.equal(missingLowresBlocks.status, 'invalid');
+assert.ok(missingLowresBlocks.downgrades.includes('cooperative-spn-lowres-labels-missing'));
+assert.equal(missingLowresBlocks.falseClosureChecks.spnLowresLabelsMissing, true);
+assert.deepEqual(missingLowresBlocks.schedulerComparison.cooperative.spnFusionCoverage.missingSpnFusionBlocks, SHARP_SPN_LOWRES_BLOCK_LABELS);
 
 const missingFlameTiming = createSharpBreathingRoomComparison({
   runs: [
@@ -288,7 +315,8 @@ writeFileSync(report, JSON.stringify({
         { phase: 'gaussian', boundary: 'gaussian-phase', kind: 'queue-work-done-start' },
         { phase: 'gaussian', boundary: 'gaussian-phase', kind: 'queue-work-done-end' },
         { phase: 'gaussian', boundary: 'gaussian-phase', kind: 'js-yield-start' },
-        { phase: 'gaussian', boundary: 'gaussian-phase', kind: 'js-yield-end' }
+        { phase: 'gaussian', boundary: 'gaussian-phase', kind: 'js-yield-end' },
+        ...${JSON.stringify(SHARP_SPN_LOWRES_BLOCK_LABELS)}.map(block => ({ phase: 'spn-fusion', boundary: 'spn-lowres-fusion', kind: 'js-yield-end', details: { block } }))
       ] : [],
       boundaryAssertions: isCooperative ? [
         { field: 'phaseChunkSize.spnPatch', status: 'verified', observedBoundary: 'spn-patch-chunk', observedCount: 1, observedQueueWaitCount: 1, observedYieldCount: 1 },

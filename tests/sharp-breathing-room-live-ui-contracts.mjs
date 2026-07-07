@@ -111,6 +111,60 @@ assert.match(
 );
 assert.match(
   index,
+  /const SHARP_SPN_LOWRES_BLOCK_LABELS\s*=\s*\[/,
+  'Comparison smoke must name the SPN lowres block labels Cranial asked Wake to verify',
+);
+for (const label of [
+  'upsample-lowres',
+  'readback-x2-upsampled',
+  'readback-lowres',
+  'cpu-concat-lowres',
+  'concat-upload',
+  'fuse-lowres',
+]) {
+  assert.match(
+    index,
+    new RegExp(label),
+    `Comparison smoke must preserve the ${label} scheduler block label in live evidence`,
+  );
+}
+assert.match(
+  index,
+  /function sharpBreathingRoomComparisonRunEvidence\(/,
+  'Comparison smoke must summarize each live run through a dedicated evidence object',
+);
+assert.match(
+  index,
+  /durationMs/,
+  'Comparison smoke must preserve per-run duration evidence for Cranial route comparison',
+);
+assert.match(
+  index,
+  /effectiveScheduler/,
+  'Comparison smoke must preserve the effective scheduler config for each run',
+);
+assert.match(
+  index,
+  /artifactSha256/,
+  'Comparison smoke must preserve output hashes so default/friendly artifact equivalence is visible',
+);
+assert.match(
+  index,
+  /missingSpnFusionBlocks/,
+  'Comparison smoke must fail loud when friendly telemetry does not include the expected SPN lowres labels',
+);
+assert.match(
+  index,
+  /lowresFusionCoverage/,
+  'Comparison smoke must expose SPN lowres coverage on the comparison state instead of hiding it in raw reports',
+);
+assert.match(
+  index,
+  /outputEquivalence/,
+  'Comparison smoke must compare default/friendly output hashes instead of implying success from completion alone',
+);
+assert.match(
+  index,
   /Default then friendly/,
   'Comparison status must explain that the two runs are sequential, not simultaneous SHARP contention',
 );
@@ -233,4 +287,9 @@ assert.match(
   index,
   /window\.__kaminosSharpBreathingRoomKilnFireState/,
   'Kiln-fire activation must expose debug state so smokes can prove the run button actually ignited the furnace',
+);
+assert.match(
+  index,
+  /endSharpBreathingRoomKilnFire\('complete',\s*\{\s*forceInactive:\s*true\s*\}\)/,
+  'A finished SHARP smoke must release the furnace even when the volume renderer was already active before the run',
 );
