@@ -60,6 +60,7 @@ def parse_args():
     parser.add_argument("--residual-smoothness-loss-weight", default="0")
     parser.add_argument("--smoke-structure-loss-weight", default="0")
     parser.add_argument("--smoke-residual-dc-loss-weight", default="0")
+    parser.add_argument("--smoke-residual-energy-loss-weight", default="0")
     parser.add_argument("--smoke-mask-threshold", default="0.025")
     parser.add_argument("--condition-render-scale", default="false")
     parser.add_argument("--temporal-eval", default="true")
@@ -180,6 +181,8 @@ def build_child_command(args):
         str(args.smoke_structure_loss_weight),
         "--smoke-residual-dc-loss-weight",
         str(args.smoke_residual_dc_loss_weight),
+        "--smoke-residual-energy-loss-weight",
+        str(args.smoke_residual_energy_loss_weight),
         "--smoke-mask-threshold",
         str(args.smoke_mask_threshold),
         "--temporal-eval-scope",
