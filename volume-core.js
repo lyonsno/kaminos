@@ -6,6 +6,7 @@ const FIELD_TILE_EXPORT_IDENTITY = 'kaminos.volume.field-tile-export.v0';
 const FULL_FIELD_EXPORT_IDENTITY = 'kaminos.volume.full-field-export.v0';
 const DEBUG_FIELD_TILE_PATCH_IDENTITY = 'debug-field-tile-patch-render-override-v0';
 const FULL_FIELD_BUFFER_OVERRIDE_IDENTITY = 'debug-full-field-buffer-render-override-v0';
+const PYRO_FULL_FIELD_OVERRIDE_RENDER_STATE_REFRESH_STEPS = 4;
 const DEFAULT_GRID_SIZE = 96;
 const SUPPORTED_GRID_SIZES = [32, 48, 64, 96, 128, 160, 192];
 const FLUID_SLOTS_PER_CELL = 4;
@@ -4970,6 +4971,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.frontFieldReadIndex = currentFront;
     state.frontFieldWriteIndex = 1 - currentFront;
     state.frontFieldProjectionPassthrough = false;
+    state.fullFieldBufferRenderOverride = null;
     state.majorantGrid = majorantGridSize;
     state.majorantBuilt = false;
     state.majorantFrameCount = 0;
@@ -5329,7 +5331,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const lookFreeze = normalizeLookFreeze(controlsSnapshot.lookFreeze) && lookFreezeCanPin(state) ? 1 : 0;
     const pyroCompareMode = normalizePyroCompareMode(controlsSnapshot.pyroCompareMode);
     const frozenPyroDetail = lookFreeze && state.pyroDynamicDetail?.materialMemory ? state.pyroDynamicDetail : null;
-    const pyroDetailForRender = frozenPyroDetail || updatePyroDynamicDetailState({ inputKind: 'control-proxy' });
+    const overridePyroDetail = state.fullFieldBufferRenderOverride?.status === 'applied'
+      && state.fullFieldBufferRenderOverride?.overrideRenderStateRefresh?.status === 'refreshed'
+      && state.pyroDynamicDetail?.materialMemory
+      ? state.pyroDynamicDetail
+      : null;
+    const pyroDetailForRender = frozenPyroDetail || overridePyroDetail || updatePyroDynamicDetailState({ inputKind: 'control-proxy' });
     if (frozenPyroDetail) {
       state.pyroDynamicDetail = {
         ...frozenPyroDetail,
@@ -7597,12 +7604,50 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       });
     }
     await device.queue.onSubmittedWorkDone?.();
+    const overrideRenderStateRefresh = await sampleSimReadback(null);
+    let overridePyroDynamicDetail = null;
+    for (let refreshStep = 0; refreshStep < PYRO_FULL_FIELD_OVERRIDE_RENDER_STATE_REFRESH_STEPS; refreshStep += 1) {
+      overridePyroDynamicDetail = updatePyroDynamicDetailState({
+        simReadback: overrideRenderStateRefresh,
+        inputKind: 'full-field-buffer-override',
+      });
+    }
     resetTemporalHistory('debug-full-field-buffer-render-override');
     const receipt = {
       ...session,
       status: 'applied',
       completedAtFrameCount: state.frameCount,
       completedAtSimStepCount: state.simStepCount,
+      overrideRenderStateRefresh: {
+        identity: 'full-field-buffer-override-render-state-refresh-v0',
+        status: 'refreshed',
+        inputKind: 'full-field-buffer-override',
+        source: 'uploaded-fluid-front-current-buffers-before-render',
+        refreshSteps: PYRO_FULL_FIELD_OVERRIDE_RENDER_STATE_REFRESH_STEPS,
+        refreshPolicy: 'static-uploaded-field-pyro-memory-warm-start-v0',
+        simReadback: {
+          grid: overrideRenderStateRefresh.grid,
+          smokeMean: overrideRenderStateRefresh.smokeMean,
+          densityMean: overrideRenderStateRefresh.densityMean,
+          extinctionMean: overrideRenderStateRefresh.extinctionMean,
+          fireLayerMean: overrideRenderStateRefresh.fireLayerMean,
+          radianceMean: overrideRenderStateRefresh.radianceMean,
+          combustionFrontMean: overrideRenderStateRefresh.combustionFrontMean,
+          frontTopologyMean: overrideRenderStateRefresh.frontTopologyMean,
+          liveVoxelRatio: overrideRenderStateRefresh.liveVoxelRatio,
+          fireRisingBodyRatio: overrideRenderStateRefresh.fireRisingBodyRatio,
+          frontTopologyRisingBodyRatio: overrideRenderStateRefresh.frontTopologyRisingBodyRatio,
+        },
+        pyroDynamicDetail: {
+          identity: overridePyroDynamicDetail.identity,
+          resetGate: overridePyroDynamicDetail.resetGate,
+          resetReasons: overridePyroDynamicDetail.resetReasons,
+          liveFireAuthority: overridePyroDynamicDetail.liveFireAuthority,
+          smokeAuthority: overridePyroDynamicDetail.smokeAuthority,
+          stateEnergy: overridePyroDynamicDetail.stateEnergy,
+          materialShaderReadiness: overridePyroDynamicDetail.materialMemory?.shaderReadiness || 'blocked-reset',
+        },
+      },
     };
     debugFullFieldBufferOverrideSession = null;
     state.fullFieldBufferRenderOverride = receipt;
@@ -7926,6 +7971,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         simCostLedger: state.simCostLedger ? { ...state.simCostLedger } : null,
         timing: { ...state.timing },
         fieldTilePatchRenderOverride: state.fieldTilePatchRenderOverride ? { ...state.fieldTilePatchRenderOverride } : null,
+        fullFieldBufferRenderOverride: state.fullFieldBufferRenderOverride ? { ...state.fullFieldBufferRenderOverride } : null,
         effectiveRoute: state.effectiveRoute,
         prototypeIdentity: state.prototypeIdentity,
         backend: state.backend,
@@ -8254,6 +8300,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       simCostLedger: state.simCostLedger ? { ...state.simCostLedger } : null,
       timing: { ...state.timing },
       fieldTilePatchRenderOverride: state.fieldTilePatchRenderOverride ? { ...state.fieldTilePatchRenderOverride } : null,
+      fullFieldBufferRenderOverride: state.fullFieldBufferRenderOverride ? { ...state.fullFieldBufferRenderOverride } : null,
       simReadback,
       majorantReadback,
       effectiveRoute: state.effectiveRoute,
@@ -8453,7 +8500,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           state.error = null;
           canvas.classList.add('active');
           cancelAnimationFrame(raf);
-          raf = requestAnimationFrame(render);
+          raf = 0;
+          render(performance.now());
           emitStatus({ phase: 'active' });
         } catch (err) {
           state.active = false;

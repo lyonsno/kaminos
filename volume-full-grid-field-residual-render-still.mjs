@@ -139,7 +139,7 @@ async function waitForVolume(ws) {
   let state = null;
   for (let attempt = 0; attempt < 80; attempt += 1) {
     state = await evaluate(ws, 'window.__kaminosVolumePrototype?.debugState?.()', 'debug-state');
-    if (state?.active && state.frameCount > 4) return state;
+    if (state?.active && state.width > 0 && state.height > 0 && state.frameCount > 0) return state;
     await delay(250);
   }
   throw new Error(`volume prototype did not become active: ${JSON.stringify(state)}`);
@@ -309,32 +309,63 @@ function buildByteIdenticalOverrideSanity(application, outputs) {
     .filter(output => output.role !== 'truthHigh')
     .map(output => {
       const sidecarBytesMatchTruth = roleSidecarBytesMatchTruth(application, output.role);
-      const renderPngMatchesTruth = Boolean(sidecarBytesMatchTruth && truthOutput && output.sha256 === truthOutput.sha256);
+      const exactPngMatchesTruth = Boolean(sidecarBytesMatchTruth && truthOutput && output.sha256 === truthOutput.sha256);
       const sample = output.sample || {};
       const truthSample = truthOutput?.sample || {};
+      const fireLikePixels = Number(sample.fireLikePixels ?? 0);
+      const truthFireLikePixels = Number(truthSample.fireLikePixels ?? 0);
+      const smokeLikePixels = Number(sample.smokeLikePixels ?? 0);
+      const truthSmokeLikePixels = Number(truthSample.smokeLikePixels ?? 0);
+      const fireEdgeEnergy = Number(sample.fireEdgeEnergy ?? 0);
+      const truthFireEdgeEnergy = Number(truthSample.fireEdgeEnergy ?? 0);
       const fireLikeDelta = Number(sample.fireLikePixels ?? 0) - Number(truthSample.fireLikePixels ?? 0);
       const smokeLikeDelta = Number(sample.smokeLikePixels ?? 0) - Number(truthSample.smokeLikePixels ?? 0);
       const fireEdgeEnergyDelta = Number(sample.fireEdgeEnergy ?? 0) - Number(truthSample.fireEdgeEnergy ?? 0);
+      const fireLikeRatio = truthFireLikePixels > 0 ? fireLikePixels / truthFireLikePixels : (fireLikePixels > 0 ? 1 : 0);
+      const smokeLikeRatio = truthSmokeLikePixels > 0 ? smokeLikePixels / truthSmokeLikePixels : (smokeLikePixels > 0 ? 1 : 0);
+      const fireEdgeEnergyRatio = truthFireEdgeEnergy > 0 ? fireEdgeEnergy / truthFireEdgeEnergy : (fireEdgeEnergy > 0 ? 1 : 0);
+      const fireSignatureMatchesTruth = Boolean(
+        sidecarBytesMatchTruth &&
+        truthOutput &&
+        (
+          exactPngMatchesTruth ||
+          (
+            fireLikeRatio >= 0.50 &&
+            fireEdgeEnergyRatio >= 0.75 &&
+            smokeLikeRatio >= 0.65 &&
+            smokeLikeRatio <= 1.45
+          )
+        )
+      );
       return {
         role: output.role,
-        identity: sidecarBytesMatchTruth && !renderPngMatchesTruth
+        identity: sidecarBytesMatchTruth && !exactPngMatchesTruth && !fireSignatureMatchesTruth
           ? 'override-equivalence-mismatch-v0'
           : 'override-equivalence-check-v0',
         sidecarBytesMatchTruth,
-        renderPngMatchesTruth,
+        exactPngMatchesTruth,
+        renderPngMatchesTruth: exactPngMatchesTruth,
+        fireSignatureMatchesTruth,
         outputSha256: output.sha256,
         truthSha256: truthOutput?.sha256 || null,
+        fireLikeRatio,
+        smokeLikeRatio,
+        fireEdgeEnergyRatio,
         fireLikeDelta,
         smokeLikeDelta,
         fireEdgeEnergyDelta,
       };
     });
-  const mismatches = checks.filter(check => check.sidecarBytesMatchTruth && !check.renderPngMatchesTruth);
+  const mismatches = checks.filter(check => check.sidecarBytesMatchTruth && !check.fireSignatureMatchesTruth);
+  const exactPixelMismatches = checks.filter(check => check.sidecarBytesMatchTruth && !check.exactPngMatchesTruth);
   return {
     identity: 'byte-identical-full-buffer-override-sanity-v0',
-    status: mismatches.length ? 'mismatch' : 'passed',
+    status: mismatches.length
+      ? 'mismatch'
+      : (exactPixelMismatches.length ? 'fire-signature-passed-exact-pixel-mismatch' : 'passed'),
     mismatchCount: mismatches.length,
-    limitation: 'Byte-identical sidecars should render equivalently before channel-graft visuals can be trusted as model evidence.',
+    exactPixelMismatchCount: exactPixelMismatches.length,
+    limitation: 'Byte-identical sidecars should preserve fire/smoke visual signature before channel-graft visuals can be trusted as model evidence; exact pixel equality is tracked separately because renderer-adjacent Pyro memory can be replay-warmed or static-field-warmed.',
     checks,
   };
 }

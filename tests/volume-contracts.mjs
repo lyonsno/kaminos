@@ -882,6 +882,7 @@ assert.match(core, /normalizePyroCompareMode\(controlsSnapshot\.pyroCompareMode\
 assert.match(core, /pyroCompareMuted\s*=\s*pyroCompareMode\s*===\s*'base'/, 'Base compare mode mutes Pyro material carriers');
 assert.match(core, /lookFreezeCanPin\(state\)/, 'Look-lab freeze waits for an initialized sim frame before pinning');
 assert.match(core, /pumpLookLabFrozenFrame\(\)/, 'Frozen look-lab controls force a redraw even when the browser parks RAF');
+assert.match(core, /async setActive\(active\)[\s\S]*canvas\.classList\.add\('active'\)[\s\S]*render\(performance\.now\(\)\)/, 'Volume activation pumps an immediate frame so headful witnesses cannot stall at a zero-sized canvas while waiting for RAF');
 assert.match(core, /if \(lookFreeze\)[\s\S]*state\.lookFreezeFrame[\s\S]*else[\s\S]*encodeSim\(encoder\)[\s\S]*encodeMajorant\(encoder\)/, 'Look-lab freeze skips sim and majorant passes while live mode keeps stepping');
 assert.match(core, /uniforms\[85\]\s*=\s*pyroMaterialEnergy/, 'CPU uploads reset-gated Pyro material-memory energy into the WGSL uniform block');
 assert.match(core, /uniforms\[88\s*\+\s*memoryIndex\s*\*\s*4\]\s*=\s*sample\[0\]/, 'CPU uploads each Pyro material-memory atlas cell into the uniform block');
@@ -2055,10 +2056,13 @@ assert.match(fullGridChannelGraft, /graftedFluidChannels/, 'full-grid channel gr
 assert.match(fullGridChannelGraft, /graftedFrontTopology/, 'full-grid channel graft records whether front topology was copied from truth');
 assert.match(fullGridChannelGraft, /controlled-truth-channel-graft-not-learned-prediction/, 'full-grid channel graft labels outputs as diagnostic substitution rather than learned prediction');
 assert.match(core, /FULL_FIELD_BUFFER_OVERRIDE_IDENTITY\s*=\s*'debug-full-field-buffer-render-override-v0'/, 'volume core names full-buffer render override separately from tile patch override');
+assert.match(core, /PYRO_FULL_FIELD_OVERRIDE_RENDER_STATE_REFRESH_STEPS\s*=\s*4/, 'full-buffer override warms renderer-adjacent Pyro memory over multiple static-field refresh steps instead of one underpowered snapshot update');
 assert.match(core, /beginDebugFullFieldBufferOverride/, 'volume prototype can begin a complete full-field buffer render override');
 assert.match(core, /writeDebugFullFieldBufferOverrideChunk/, 'volume prototype can receive full-field override chunks without selected tile boundaries');
 assert.match(core, /finishDebugFullFieldBufferOverride/, 'volume prototype can finalize full-field buffer override receipts');
 assert.match(core, /fullFieldBufferRenderOverride/, 'debug state preserves full-field buffer render override identity and status');
+assert.match(core, /overrideRenderStateRefresh/, 'full-buffer override receipts expose renderer-adjacent state refresh evidence');
+assert.match(core, /updatePyroDynamicDetailState\(\{\s*simReadback:\s*overrideRenderStateRefresh[\s\S]*inputKind:\s*'full-field-buffer-override'/, 'full-buffer overrides refresh Pyro render-coupled state from uploaded fields before visual sampling');
 
 const fullGridResidualRenderPath = join(root, 'volume-full-grid-field-residual-render-still.mjs');
 assert.ok(existsSync(fullGridResidualRenderPath), 'volume full-grid residual render-still harness exists');
@@ -2074,7 +2078,10 @@ assert.match(fullGridResidualRender, /truthHigh/, 'full-grid residual render-sti
 assert.match(fullGridResidualRender, /full-grid-buffer-render-override-not-selected-tiles/, 'full-grid residual render-still says visuals come from full-buffer override rather than selected tiles');
 assert.match(fullGridResidualRender, /byteIdenticalOverrideSanity/, 'full-grid residual render-still reports byte-identical override equivalence checks');
 assert.match(fullGridResidualRender, /override-equivalence-mismatch-v0/, 'full-grid residual render-still names byte-identical sidecar render mismatches');
+assert.match(fullGridResidualRender, /fireSignatureMatchesTruth/, 'full-grid residual render-still distinguishes fire-signature equivalence from exact PNG equality');
+assert.match(fullGridResidualRender, /fire-signature-passed-exact-pixel-mismatch/, 'full-grid residual render-still can pass byte-identical fire signature while preserving exact-pixel mismatch evidence');
 assert.match(fullGridResidualRender, /sidecarBytesMatchTruth/, 'full-grid residual render-still records when predicted sidecars match truth bytes');
+assert.match(fullGridResidualRender, /state\?\.active[\s\S]*state\.width\s*>\s*0[\s\S]*state\.height\s*>\s*0[\s\S]*state\.frameCount\s*>\s*0/, 'full-grid residual render-still accepts one initialized activation-pumped frame instead of waiting forever for parked RAF');
 assert.match(fullGridResidualRender, /contactSheet/, 'full-grid residual render-still writes an inspectable contact sheet');
 assert.match(fullGridResidualRender, /failurePhase/, 'full-grid residual render-still writes failure-phase reports when rendering fails');
 
