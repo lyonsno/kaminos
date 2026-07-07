@@ -94,6 +94,9 @@ def run_reference(model, image, prompt, resolution):
     vit_prefix_hidden_states = backbone.layer_norm(
         (patch_embeddings + pos).reshape(patch_embeddings.shape[0], patch_h, patch_w, -1)
     )
+    vit_first_block_hidden_states = backbone.layers[0](
+        vit_prefix_hidden_states, backbone._rope_window_cos, backbone._rope_window_sin
+    )
     fpn_features = det.vision_encoder(pixel_values)
     fpn_pos = [det._pos_enc(feat) for feat in fpn_features]
     fpn_trimmed = fpn_features[:-1]
@@ -143,6 +146,7 @@ def run_reference(model, image, prompt, resolution):
         instance_embed,
         mask_embeddings,
         vit_prefix_hidden_states,
+        vit_first_block_hidden_states,
         all_logits,
         pred_logits,
         ref_boxes,
@@ -163,6 +167,7 @@ def run_reference(model, image, prompt, resolution):
         "encoder_src": np.array(src, dtype=np.float32),
         "patch_embeddings": np.array(patch_embeddings, dtype=np.float32),
         "vit_prefix_hidden_states": np.array(vit_prefix_hidden_states, dtype=np.float32),
+        "vit_first_block_hidden_states": np.array(vit_first_block_hidden_states, dtype=np.float32),
         "encoder_pos": np.array(pos_flat, dtype=np.float32),
         "encoder_hidden_states": np.array(encoded, dtype=np.float32),
         "backbone_features": backbone_features,

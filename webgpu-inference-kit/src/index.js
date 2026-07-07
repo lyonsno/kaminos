@@ -162,6 +162,14 @@ export {
 } from './sam-image-vit-prefix-phase-program.js';
 
 export {
+  SAM3_IMAGE_VIT_FIRST_BLOCK_PHASE_PROGRAM_ROUTE_ID,
+  createSam3ImageVitFirstBlockPhaseProgramCpuOracle,
+  createSam3ImageVitFirstBlockPhaseProgramRouteDefinition,
+  createSam3ImageVitFirstBlockPhaseProgramRouteReceipt,
+  runSam3ImageVitFirstBlockPhaseProgramRoute,
+} from './sam-image-vit-first-block-phase-program.js';
+
+export {
   SAM3_PIXEL_DECODER_PHASE_PROGRAM_ROUTE_ID,
   createSam3PixelDecoderPhaseProgramCpuOracle,
   createSam3PixelDecoderPhaseProgramRouteDefinition,
