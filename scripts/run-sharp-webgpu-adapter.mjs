@@ -511,31 +511,39 @@ function compactServerErrorTail() {
 
 function detectSharpPageLoadFailure() {
   const serverError = compactServerErrorTail();
+  const browserModuleError = [...browserLogs]
+    .reverse()
+    .find(entry => entry?.type === 'pageerror' && /does not provide an export|Failed to resolve module specifier|Failed to load module script|Importing a module script failed/i.test(entry.text || ''));
   const scriptFailure = [...browserLifecycleEvents]
     .reverse()
     .find(event => event.type === 'requestfailed' && event.resourceType === 'script');
-  if (!scriptFailure && !/Failed to resolve import|Pre-transform error|Internal server error/i.test(serverError)) {
+  const serverModuleError = /Failed to resolve import|Pre-transform error|Internal server error/i.test(serverError);
+  if (!scriptFailure && !serverModuleError && !browserModuleError) {
     return null;
   }
-  if (!/Failed to resolve import|Pre-transform error|Internal server error/i.test(serverError)) return null;
+  if (!serverModuleError && !browserModuleError) return null;
   const importMatch = serverError.match(/Failed to resolve import "([^"]+)" from "([^"]+)"/);
+  const exportMatch = (browserModuleError?.text || '').match(/module ['"]([^'"]+)['"] does not provide an export named ['"]([^'"]+)['"]/);
   return {
     schema: 'kaminos.sharp-webgpu-adapter-failure.v0',
     phase,
     classification: 'sharp-webgpu-page-load-failed',
     errorCauseClassification: 'browser-page-load-error',
-    operatorMessage: importMatch
-      ? `SHARP-WebGPU could not load ${importMatch[1]} from ${importMatch[2]}; inference never started.`
-      : 'SHARP-WebGPU served its app page with a module load error; inference never started.',
+    operatorMessage: exportMatch
+      ? `SHARP-WebGPU loaded a stale module dependency: ${exportMatch[1]} does not provide ${exportMatch[2]}; inference never started.`
+      : (importMatch
+        ? `SHARP-WebGPU could not load ${importMatch[1]} from ${importMatch[2]}; inference never started.`
+        : 'SHARP-WebGPU served its app page with a module load error; inference never started.'),
     error: 'SHARP-WebGPU page failed to load its app module before inference started',
     requestedScheduler,
+    browserModuleError: browserModuleError || null,
     failedRequest: scriptFailure || null,
     serverErrorTail: serverError,
     lastBrowserMilestone: lastSharpBrowserMilestone(),
     browserLogTail: browserLogs.slice(-20),
     browserLifecycleTail: browserLifecycleEvents.slice(-20),
     nextExpectedMilestone: 'Loaded SHARP app module and weights',
-    operatorHint: 'Run npm install in the SHARP-WebGPU checkout or restore the missing package before rerunning the route.',
+    operatorHint: 'Refresh the SHARP-WebGPU dependency install or restore the missing package/export before rerunning the route.',
   };
 }
 

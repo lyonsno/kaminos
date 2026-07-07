@@ -61,6 +61,8 @@ assert.match(wrapperSource, /errorCauseClassification/, 'wrapper failure reports
 assert.match(wrapperSource, /function detectSharpPageLoadFailure\(/, 'wrapper must detect Vite/module page-load failures before pretending inference is running');
 assert.match(wrapperSource, /sharp-webgpu-page-load-failed/, 'wrapper must classify SHARP page-load failures distinctly from model inference failures');
 assert.match(wrapperSource, /Failed to resolve import/, 'wrapper must preserve Vite import resolution errors in page-load failure reports');
+assert.match(wrapperSource, /does not provide an export/, 'wrapper must treat stale module export page errors as page-load failures before waiting for model output');
+assert.match(wrapperSource, /browserLogs[\s\S]*pageerror/, 'wrapper page-load failure detection must inspect browser page errors, not only Vite stderr');
 assert.match(wrapperSource, /timed out\|ms exceeded/, 'wrapper timeout classifier must match ProtocolError timeout wording from Puppeteer');
 assert.match(wrapperSource, /browserLifecycleEvents/, 'wrapper reports must preserve browser lifecycle events alongside console logs');
 assert.match(wrapperSource, /page\.on\('close'/, 'wrapper must record page close events');
