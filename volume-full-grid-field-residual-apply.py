@@ -18,6 +18,8 @@ SCHEMA = "kaminos.volume.full-grid-field-residual-application.v0"
 MODEL_IDENTITY = "full-grid-local-ridge-residual-v0"
 APPLICATION_AUTHORITY = "fitOnSamePairVisualDiagnostic"
 FIELD_AUTHORITY = "complete-webgpu-fluid-front-buffer-readback-sidecars"
+BALANCED_PROFILE = "balanced-full-field-ridge-v0"
+FLAME_CARRIER_PROFILE = "flame-carrier-weighted-full-field-ridge-v0"
 FLUID_CHANNELS = [
     "velocityX",
     "velocityY",
@@ -54,6 +56,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--ridge", type=float, default=1e-3, help="Ridge regularization strength.")
     parser.add_argument("--seed", type=int, default=1337, help="Deterministic training sample seed.")
     parser.add_argument("--chunk-z", type=int, default=4, help="High-grid z slices per application chunk.")
+    parser.add_argument(
+        "--profile",
+        choices=[BALANCED_PROFILE, FLAME_CARRIER_PROFILE],
+        default=BALANCED_PROFILE,
+        help="Sampling/weighting profile for the same-pair full-grid visual diagnostic.",
+    )
+    parser.add_argument("--flame-sample-fraction", type=float, default=0.65, help="Training sample fraction reserved for flame-support cells under the flame-carrier profile.")
+    parser.add_argument("--flame-row-weight", type=float, default=45.0, help="Extra ridge row weight for flame-support cells under the flame-carrier profile.")
+    parser.add_argument("--flame-sparsity-multiplier", type=float, default=1.25, help="Keep this multiple of truth flame-support cells after predicted flame support ranking.")
+    parser.add_argument("--smoke-residual-scale", type=float, default=0.25, help="Residual scale for smoke/detail scalar channels under the flame-carrier profile.")
+    parser.add_argument("--fire-residual-scale", type=float, default=1.0, help="Residual scale for flame carrier channels under the flame-carrier profile.")
     return parser.parse_args()
 
 
@@ -180,14 +193,90 @@ def low_values_for_high_cells(
     return low_values, x.astype(np.int64), y.astype(np.int64), z.astype(np.int64)
 
 
-def fit_ridge(features: np.ndarray, residual: np.ndarray, ridge: float) -> np.ndarray:
+def flame_carrier_score(fluid: np.ndarray) -> np.ndarray:
+    flame = np.maximum(fluid[:, 8], fluid[:, 10])
+    ember = np.maximum(fluid[:, 9], fluid[:, 15])
+    front = fluid[:, 11]
+    lick = fluid[:, 14]
+    heat = fluid[:, 5] * 0.08
+    return np.maximum.reduce([flame, ember * 0.65, front * 1.2, lick * 0.85, heat]).astype(np.float32, copy=False)
+
+
+def choose_train_indexes(
+    high_fluid: np.memmap,
+    high_cells: int,
+    train_count: int,
+    rng: np.random.Generator,
+    args: argparse.Namespace,
+) -> tuple[np.ndarray, dict[str, Any]]:
+    if args.profile != FLAME_CARRIER_PROFILE:
+        indexes = rng.choice(high_cells, size=train_count, replace=False)
+        return indexes, {
+            "profile": BALANCED_PROFILE,
+            "trainSampleCount": int(train_count),
+            "flameSupportCount": None,
+            "flameSampleCount": 0,
+        }
+    score = flame_carrier_score(high_fluid)
+    threshold = max(0.00005, float(np.quantile(score, 0.985)) * 0.25)
+    support = np.flatnonzero(score > threshold)
+    desired_flame = min(support.shape[0], max(1, int(train_count * max(0, min(1, float(args.flame_sample_fraction))))))
+    flame_indexes = rng.choice(support, size=desired_flame, replace=False) if desired_flame > 0 else np.array([], dtype=np.int64)
+    remaining = max(0, train_count - flame_indexes.shape[0])
+    if remaining > 0:
+        random_indexes = rng.choice(high_cells, size=remaining, replace=False)
+        indexes = np.unique(np.concatenate([flame_indexes, random_indexes]).astype(np.int64, copy=False))
+        if indexes.shape[0] < train_count:
+            fill = rng.choice(high_cells, size=train_count - indexes.shape[0], replace=False)
+            indexes = np.unique(np.concatenate([indexes, fill]).astype(np.int64, copy=False))
+    else:
+        indexes = flame_indexes
+    if indexes.shape[0] > train_count:
+        indexes = rng.choice(indexes, size=train_count, replace=False)
+    return indexes.astype(np.int64, copy=False), {
+        "profile": FLAME_CARRIER_PROFILE,
+        "threshold": float(threshold),
+        "flameSupportCount": int(support.shape[0]),
+        "flameSupportFraction": float(support.shape[0] / max(1, high_cells)),
+        "requestedFlameSampleFraction": float(args.flame_sample_fraction),
+        "flameSampleCount": int(flame_indexes.shape[0]),
+        "actualTrainSampleCount": int(indexes.shape[0]),
+    }
+
+
+def sample_weights(high_train: np.ndarray, args: argparse.Namespace) -> tuple[np.ndarray | None, dict[str, Any]]:
+    if args.profile != FLAME_CARRIER_PROFILE:
+        return None, {"profile": BALANCED_PROFILE, "weighted": False}
+    score = flame_carrier_score(high_train[:, :len(FLUID_CHANNELS)])
+    max_score = float(np.max(score)) if score.size else 0.0
+    normalized = score / max(max_score, 1e-6)
+    weights = 1.0 + max(0.0, float(args.flame_row_weight)) * normalized
+    return weights.astype(np.float64), {
+        "profile": FLAME_CARRIER_PROFILE,
+        "weighted": True,
+        "flameRowWeight": float(args.flame_row_weight),
+        "weightMin": float(np.min(weights)),
+        "weightMean": float(np.mean(weights)),
+        "weightMax": float(np.max(weights)),
+        "nonzeroFlameRows": int(np.count_nonzero(score > 0.00005)),
+    }
+
+
+def fit_ridge(features: np.ndarray, residual: np.ndarray, ridge: float, weights: np.ndarray | None = None) -> np.ndarray:
     ones = np.ones((features.shape[0], 1), dtype=np.float32)
     design = np.concatenate([features, ones], axis=1).astype(np.float64)
     target = residual.astype(np.float64)
-    normal = design.T @ design
+    if weights is not None:
+        sqrt_weights = np.sqrt(weights).reshape(-1, 1)
+        design_weighted = design * sqrt_weights
+        target_weighted = target * sqrt_weights
+    else:
+        design_weighted = design
+        target_weighted = target
+    normal = design_weighted.T @ design_weighted
     regularizer = np.eye(normal.shape[0], dtype=np.float64) * float(ridge)
     regularizer[-1, -1] = 0.0
-    rhs = design.T @ target
+    rhs = design_weighted.T @ target_weighted
     return np.linalg.solve(normal + regularizer, rhs)
 
 
@@ -195,6 +284,42 @@ def predict_residual(features: np.ndarray, weights: np.ndarray) -> np.ndarray:
     ones = np.ones((features.shape[0], 1), dtype=np.float32)
     design = np.concatenate([features, ones], axis=1).astype(np.float64)
     return (design @ weights).astype(np.float32)
+
+
+def profile_channel_scales(args: argparse.Namespace) -> np.ndarray:
+    scales = np.ones(len(FLUID_CHANNELS) + len(FRONT_CHANNELS), dtype=np.float32)
+    if args.profile != FLAME_CARRIER_PROFILE:
+        return scales
+    smoke_scale = np.float32(max(0.0, float(args.smoke_residual_scale)))
+    fire_scale = np.float32(max(0.0, float(args.fire_residual_scale)))
+    for index in [3, 4, 7, 12, 13, 16]:
+        scales[index] = smoke_scale
+    for index in [5, 6, 8, 9, 10, 11, 14, 15]:
+        scales[index] = fire_scale
+    return scales
+
+
+def postprocess_prediction(
+    predicted: np.ndarray,
+    low_values: np.ndarray,
+    channel_max: np.ndarray,
+    args: argparse.Namespace,
+    flame_threshold: float | None = None,
+) -> np.ndarray:
+    if args.profile != FLAME_CARRIER_PROFILE:
+        return predicted.astype("<f4", copy=False)
+    scales = profile_channel_scales(args).reshape(1, -1)
+    shaped = low_values + (predicted - low_values) * scales
+    # Scalar material/fire channels are nonnegative storage fields; unbounded negative
+    # residuals are useful numerically but produce nonsense in renderer diagnostics.
+    shaped[:, 3:] = np.maximum(shaped[:, 3:], 0)
+    shaped[:, 3:] = np.minimum(shaped[:, 3:], channel_max.reshape(1, -1)[:, 3:] * 1.05)
+    if flame_threshold is not None:
+        score = flame_carrier_score(shaped[:, :len(FLUID_CHANNELS)])
+        mask = score < float(flame_threshold)
+        fire_indexes = [8, 9, 10, 11, 14, 15]
+        shaped[np.ix_(mask, fire_indexes)] = 0
+    return shaped.astype("<f4", copy=False)
 
 
 def write_failure(out_path: Path, phase: str, error: Exception, evidence: dict[str, Any] | None = None) -> None:
@@ -257,16 +382,21 @@ def main() -> int:
         phase = "train-sample"
         rng = np.random.default_rng(int(args.seed))
         train_count = min(max(1, int(args.train_samples)), high_cells)
-        train_indexes = rng.choice(high_cells, size=train_count, replace=False)
+        train_indexes, sampling_report = choose_train_indexes(high_fluid, high_cells, train_count, rng, args)
         low_train, x_train, y_train, z_train = low_values_for_high_cells(
             low_fluid, low_front, train_indexes, low_grid, high_grid
         )
         features = build_features(low_train, x_train, y_train, z_train, high_grid)
         high_train = np.concatenate([high_fluid[train_indexes], high_front[train_indexes, None]], axis=1)
         residual = high_train.astype(np.float32) - low_train.astype(np.float32)
+        row_weights, weighting_report = sample_weights(high_train, args)
 
         phase = "model-fit"
-        weights = fit_ridge(features, residual, float(args.ridge))
+        weights = fit_ridge(features, residual, float(args.ridge), row_weights)
+        channel_max = np.concatenate([
+            np.max(high_fluid, axis=0),
+            np.array([float(np.max(high_front))], dtype=np.float32),
+        ]).astype(np.float32, copy=False)
 
         phase = "sidecar-write"
         low_up_fluid_path = out_dir / "lowUpsampled-fluid.f32"
@@ -278,13 +408,43 @@ def main() -> int:
 
         chunk_z = max(1, min(high_grid, int(args.chunk_z)))
         chunk_summaries = []
+        flame_gate_report: dict[str, Any] | None = None
+        flame_threshold: float | None = None
+        if args.profile == FLAME_CARRIER_PROFILE:
+            phase = "flame-support-gate"
+            predicted_scores = np.empty(high_cells, dtype=np.float32)
+            cursor = 0
+            for z0 in range(0, high_grid, chunk_z):
+                z1 = min(high_grid, z0 + chunk_z)
+                indexes = np.arange(z0 * high_grid * high_grid, z1 * high_grid * high_grid, dtype=np.int64)
+                low_chunk, x, y, z = low_values_for_high_cells(low_fluid, low_front, indexes, low_grid, high_grid)
+                chunk_features = build_features(low_chunk, x, y, z, high_grid)
+                raw_predicted = low_chunk + predict_residual(chunk_features, weights)
+                shaped = postprocess_prediction(raw_predicted, low_chunk, channel_max, args, None)
+                count = indexes.shape[0]
+                predicted_scores[cursor:cursor + count] = flame_carrier_score(shaped[:, :len(FLUID_CHANNELS)])
+                cursor += count
+            support_count = int((sampling_report.get("flameSupportCount") or 0) * max(0.0, float(args.flame_sparsity_multiplier)))
+            support_count = max(1, min(high_cells, support_count))
+            quantile = max(0.0, min(1.0, 1.0 - support_count / max(1, high_cells)))
+            flame_threshold = float(np.quantile(predicted_scores, quantile))
+            flame_gate_report = {
+                "identity": "predicted-flame-support-sparsity-gate-v0",
+                "truthFlameSupportCount": sampling_report.get("flameSupportCount"),
+                "flameSparsityMultiplier": float(args.flame_sparsity_multiplier),
+                "keptPredictedSupportTarget": support_count,
+                "threshold": flame_threshold,
+                "predictedScoreMax": float(np.max(predicted_scores)),
+                "predictedScoreMean": float(np.mean(predicted_scores)),
+                "predictedScoreP99": float(np.quantile(predicted_scores, 0.99)),
+            }
         for z0 in range(0, high_grid, chunk_z):
             z1 = min(high_grid, z0 + chunk_z)
             indexes = np.arange(z0 * high_grid * high_grid, z1 * high_grid * high_grid, dtype=np.int64)
             low_chunk, x, y, z = low_values_for_high_cells(low_fluid, low_front, indexes, low_grid, high_grid)
             chunk_features = build_features(low_chunk, x, y, z, high_grid)
-            predicted = low_chunk + predict_residual(chunk_features, weights)
-            predicted = predicted.astype("<f4", copy=False)
+            raw_predicted = low_chunk + predict_residual(chunk_features, weights)
+            predicted = postprocess_prediction(raw_predicted, low_chunk, channel_max, args, flame_threshold)
             low_chunk = low_chunk.astype("<f4", copy=False)
             with low_up_fluid_path.open("ab") as handle:
                 low_chunk[:, :len(FLUID_CHANNELS)].tofile(handle)
@@ -339,11 +499,19 @@ def main() -> int:
             "gridScaleRatio": pair.get("gridScaleRatio"),
             "model": {
                 "identity": MODEL_IDENTITY,
+                "profile": args.profile,
                 "ridge": float(args.ridge),
                 "seed": int(args.seed),
                 "trainSampleCount": int(train_count),
                 "featureCount": int(feature_count()),
                 "spatialBasis": "fourier-xyz-plus-4x8x4-rbf-v0",
+                "sampling": sampling_report,
+                "rowWeighting": weighting_report,
+                "postprocess": {
+                    "channelResidualScales": profile_channel_scales(args).tolist(),
+                    "channelMaxClamp": channel_max.tolist(),
+                    "flameSupportGate": flame_gate_report,
+                },
                 "inputChannels": [*FLUID_CHANNELS, *FRONT_CHANNELS],
                 "targetChannels": [*FLUID_CHANNELS, *FRONT_CHANNELS],
                 "limitation": "Same-pair fitted full-grid visual diagnostic; not held-out proof and not final nonlinear architecture.",
