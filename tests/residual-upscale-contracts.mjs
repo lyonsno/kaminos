@@ -32,6 +32,36 @@ assert.match(
 );
 assert.match(
   trainer,
+  /--smoke-structure-loss-weight/,
+  'residual trainer must expose smoke-structure loss so smoke detail can be rewarded separately from broad RGB MSE',
+);
+assert.match(
+  trainer,
+  /--smoke-residual-dc-loss-weight/,
+  'residual trainer must expose smoke residual DC loss so broad haze/fade residuals can be penalized',
+);
+assert.match(
+  trainer,
+  /--smoke-mask-threshold/,
+  'residual trainer must expose a smoke mask threshold for visible cool-smoke region targeting',
+);
+assert.match(
+  trainer,
+  /def smoke_structure_loss_value\(/,
+  'residual trainer must implement a smoke high-pass/gradient structure loss, not merely report a knob',
+);
+assert.match(
+  trainer,
+  /def smoke_residual_dc_loss_value\(/,
+  'residual trainer must implement residual DC suppression on smoke regions to fight haze/fade',
+);
+assert.match(
+  trainer,
+  /def smoke_region_mask\(/,
+  'residual trainer must derive a smoke-region mask instead of applying smoke losses globally',
+);
+assert.match(
+  trainer,
   /"residualMaskFeatherRadius":/,
   'model artifacts and reports must preserve the effective residual mask feather radius',
 );
@@ -39,6 +69,21 @@ assert.match(
   trainer,
   /"residualSmoothnessLossWeight":/,
   'model artifacts and reports must preserve the residual smoothness loss weight',
+);
+assert.match(
+  trainer,
+  /"smokeStructureLossWeight":/,
+  'model artifacts and reports must preserve smoke structure loss weight',
+);
+assert.match(
+  trainer,
+  /"smokeResidualDcLossWeight":/,
+  'model artifacts and reports must preserve smoke residual DC loss weight',
+);
+assert.match(
+  trainer,
+  /"smokeMaskThreshold":/,
+  'model artifacts and reports must preserve the smoke mask threshold',
 );
 assert.match(
   trainer,
@@ -119,6 +164,21 @@ assert.match(
   greenroomRunner,
   /--residual-smoothness-loss-weight/,
   'Greenroom wrapper must pass residual smoothness weight through to the MLX trainer',
+);
+assert.match(
+  greenroomRunner,
+  /--smoke-structure-loss-weight/,
+  'Greenroom wrapper must pass smoke structure loss weight through to the MLX trainer',
+);
+assert.match(
+  greenroomRunner,
+  /--smoke-residual-dc-loss-weight/,
+  'Greenroom wrapper must pass smoke residual DC loss weight through to the MLX trainer',
+);
+assert.match(
+  greenroomRunner,
+  /--smoke-mask-threshold/,
+  'Greenroom wrapper must pass smoke mask threshold through to the MLX trainer',
 );
 assert.match(
   greenroomRunner,
