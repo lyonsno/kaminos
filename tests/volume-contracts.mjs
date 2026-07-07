@@ -2063,6 +2063,13 @@ assert.match(fullGridPerChannelProbe, /fullInputChannels/, 'full-grid per-channe
 assert.match(fullGridPerChannelProbe, /--application-out-dir/, 'full-grid per-channel probe can assemble scalar heads into complete full-grid application sidecars');
 assert.match(fullGridPerChannelProbe, /scalar-head-assembled-full-grid-application-v0/, 'full-grid per-channel probe names the assembled scalar-head application artifact');
 assert.match(fullGridPerChannelProbe, /scalarHeadAssemblyBase/, 'full-grid per-channel probe reports whether assembly starts from low-upsampled or comparison sidecars');
+assert.match(fullGridPerChannelProbe, /--scalar-head-support-gate/, 'full-grid per-channel probe exposes an explicit support gate control for scalar-head assembly');
+assert.match(fullGridPerChannelProbe, /support-gated-scalar-head-assembled-full-grid-application-v0/, 'support-gated scalar-head assembly has a distinct application identity from naive scalar assembly');
+assert.match(fullGridPerChannelProbe, /first-stage-scalar-prediction-support-gate-v0/, 'support-gated scalar assembly names the first-stage predicted-support gate identity');
+assert.match(fullGridPerChannelProbe, /supportGateRuntimeUsesTruthSupport["']?\s*:\s*False/, 'support-gated scalar assembly records that runtime application does not use truth support');
+assert.match(fullGridPerChannelProbe, /supportGateDiagnostics/, 'support-gated scalar assembly reports support precision, recall, Jaccard, and false-support mass diagnostics');
+assert.match(fullGridPerChannelProbe, /falseSupportMassOutsideTruthSupport/, 'support-gated scalar assembly reports false-support mass outside truth support');
+assert.match(fullGridPerChannelProbe, /inSupportError/, 'support-gated scalar assembly reports in-support RMSE and MAE against truth');
 assert.match(fullGridPerChannelProbe, /--visual-preview-dir/, 'full-grid per-channel probe can write offline per-channel visual decomposition previews');
 assert.match(fullGridPerChannelProbe, /full-grid-per-channel-visual-preview-v0/, 'full-grid per-channel visual previews carry a stable identity');
 assert.match(fullGridPerChannelProbe, /offline-channel-preview-not-renderer-state/, 'full-grid per-channel previews explicitly avoid pretending to be renderer evidence');
@@ -2098,6 +2105,8 @@ assert.match(fullGridResidualRender, /predictedHigh/, 'full-grid residual render
 assert.match(fullGridResidualRender, /truthHigh/, 'full-grid residual render-still renders the deterministic true-high baseline');
 assert.match(fullGridResidualRender, /full-grid-buffer-render-override-not-selected-tiles/, 'full-grid residual render-still says visuals come from full-buffer override rather than selected tiles');
 assert.match(fullGridResidualRender, /byteIdenticalOverrideSanity/, 'full-grid residual render-still reports byte-identical override equivalence checks');
+assert.match(fullGridResidualRender, /renderComparisonMetrics/, 'full-grid residual render-still reports global pixel metrics for rendered roles against truth');
+assert.match(fullGridResidualRender, /redBlueCorrelation/, 'full-grid residual render-still reports red/blue diagnostic correlation for flow-debug comparison');
 assert.match(fullGridResidualRender, /override-equivalence-mismatch-v0/, 'full-grid residual render-still names byte-identical sidecar render mismatches');
 assert.match(fullGridResidualRender, /fireSignatureMatchesTruth/, 'full-grid residual render-still distinguishes fire-signature equivalence from exact PNG equality');
 assert.match(fullGridResidualRender, /fire-signature-passed-exact-pixel-mismatch/, 'full-grid residual render-still can pass byte-identical fire signature while preserving exact-pixel mismatch evidence');

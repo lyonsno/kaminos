@@ -22,6 +22,8 @@ PROBE_IDENTITY = "full-input-single-output-channel-probe-v0"
 RIDGE_IDENTITY = "single-channel-ridge-residual-v0"
 MLP_IDENTITY = "single-channel-mlp-residual-v0"
 ASSEMBLED_APPLICATION_IDENTITY = "scalar-head-assembled-full-grid-application-v0"
+SUPPORT_GATED_APPLICATION_IDENTITY = "support-gated-scalar-head-assembled-full-grid-application-v0"
+PREDICTED_SUPPORT_GATE_IDENTITY = "first-stage-scalar-prediction-support-gate-v0"
 VISUAL_PREVIEW_IDENTITY = "full-grid-per-channel-visual-preview-v0"
 VISUAL_PREVIEW_AUTHORITY = "offline-channel-preview-not-renderer-state"
 FIELD_AUTHORITY = "complete-webgpu-fluid-front-buffer-readback-sidecars"
@@ -88,6 +90,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--weight-decay", type=float, default=1.0e-5, help="MLP L2 weight decay.")
     parser.add_argument("--gradient-pairs", type=int, default=30_000, help="Maximum adjacent x-neighbor pairs for gradient energy metrics.")
     parser.add_argument("--application-out-dir", help="Optional output directory for complete scalar-head assembled full-grid application sidecars.")
+    parser.add_argument(
+        "--scalar-head-support-gate",
+        choices=["none", "predicted"],
+        default="none",
+        help="Optional trust gate for scalar-head assembly. 'predicted' derives support from first-stage scalar predictions; truth support remains diagnostics-only.",
+    )
+    parser.add_argument("--support-gate-threshold-quantile", type=float, default=0.985, help="Predicted support-score quantile used by --scalar-head-support-gate predicted.")
+    parser.add_argument("--support-gate-threshold-scale", type=float, default=0.25, help="Scale applied to the predicted support-score quantile threshold.")
+    parser.add_argument("--support-gate-min-threshold", type=float, default=0.00005, help="Floor for the predicted support gate threshold.")
     parser.add_argument(
         "--scalar-head-assembly-base",
         choices=["lowUpsampled", "comparisonApplication"],
@@ -184,6 +195,7 @@ def verify_application_sidecars(manifest_path: Path, high_grid: int) -> tuple[np
         "sha256": sha256_file(manifest_path),
         "model": manifest.get("model"),
         "role": "predictedHigh",
+        "roleDescriptors": role,
     }
 
 
@@ -393,6 +405,145 @@ def improvement_vs(base: dict[str, float], model: dict[str, float]) -> dict[str,
     }
 
 
+def support_threshold_from_score(score: np.ndarray, quantile: float = 0.985, scale: float = 0.25, minimum: float = 0.00005) -> float:
+    if score.size == 0:
+        return float(minimum)
+    q = max(0.0, min(1.0, float(quantile)))
+    return max(float(minimum), float(np.quantile(score, q)) * float(scale))
+
+
+def empty_error_accumulator() -> dict[str, Any]:
+    return {"count": 0, "sumAbs": 0.0, "sumSq": 0.0, "maxAbs": 0.0}
+
+
+def update_error_accumulator(acc: dict[str, Any], prediction: np.ndarray, truth: np.ndarray) -> None:
+    if prediction.size == 0:
+        return
+    err = prediction.astype(np.float64, copy=False) - truth.astype(np.float64, copy=False)
+    abs_err = np.abs(err)
+    acc["count"] += int(err.size)
+    acc["sumAbs"] += float(np.sum(abs_err))
+    acc["sumSq"] += float(np.sum(err * err))
+    acc["maxAbs"] = max(float(acc["maxAbs"]), float(np.max(abs_err)) if abs_err.size else 0.0)
+
+
+def finalize_error_accumulator(acc: dict[str, Any]) -> dict[str, Any] | None:
+    count = int(acc["count"])
+    if count <= 0:
+        return None
+    mse = float(acc["sumSq"] / count)
+    return {
+        "valueCount": count,
+        "mse": mse,
+        "rmse": float(math.sqrt(mse)),
+        "mae": float(acc["sumAbs"] / count),
+        "maxAbs": float(acc["maxAbs"]),
+    }
+
+
+def target_values_from_field(field: np.ndarray, target_indexes: list[int]) -> np.ndarray:
+    return field[:, target_indexes].astype(np.float32, copy=False)
+
+
+def support_score_from_full_field(field: np.ndarray) -> np.ndarray:
+    return _APPLY.flame_carrier_score(field[:, :len(FLUID_CHANNELS)])
+
+
+def build_predicted_chunk(
+    args: argparse.Namespace,
+    low_chunk: np.ndarray,
+    features_std: np.ndarray,
+    channel_states: dict[int, dict[str, Any]],
+    target_indexes: list[int],
+    channel_max: np.ndarray,
+    comparison_fluid: np.ndarray | None,
+    comparison_front: np.ndarray | None,
+    indexes: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray]:
+    if args.scalar_head_assembly_base == "comparisonApplication":
+        assert comparison_fluid is not None and comparison_front is not None
+        base = np.concatenate([
+            np.asarray(comparison_fluid[indexes], dtype=np.float32),
+            np.asarray(comparison_front[indexes], dtype=np.float32).reshape(-1, 1),
+        ], axis=1)
+    else:
+        base = np.array(low_chunk, dtype=np.float32, copy=True)
+    predicted = np.array(base, dtype=np.float32, copy=True)
+    for channel_index in target_indexes:
+        state = channel_states[channel_index]
+        residual = predict_scalar_mlp(features_std, state)
+        values = clamp_channel_values(low_chunk[:, channel_index] + residual, channel_index, channel_max)
+        predicted[:, channel_index] = values
+    return predicted, base
+
+
+def derive_predicted_support_gate(
+    args: argparse.Namespace,
+    low_fluid: np.ndarray,
+    low_front: np.ndarray,
+    comparison_fluid: np.ndarray | None,
+    comparison_front: np.ndarray | None,
+    channel_states: dict[int, dict[str, Any]],
+    feature_mean: np.ndarray,
+    feature_std: np.ndarray,
+    target_indexes: list[int],
+    channel_max: np.ndarray,
+    low_grid: int,
+    high_grid: int,
+    chunk_z: int,
+) -> dict[str, Any]:
+    high_cells = high_grid ** 3
+    if args.scalar_head_support_gate == "none":
+        return {
+            "identity": "no-scalar-head-support-gate-v0",
+            "mode": "none",
+            "enabled": False,
+            "supportGateRuntimeUsesTruthSupport": False,
+        }
+    scores = np.empty(high_cells, dtype=np.float32)
+    for z0 in range(0, high_grid, chunk_z):
+        z1 = min(high_grid, z0 + chunk_z)
+        indexes = np.arange(z0 * high_grid * high_grid, z1 * high_grid * high_grid, dtype=np.int64)
+        low_chunk, x, y, z = _APPLY.low_values_for_high_cells(low_fluid, low_front, indexes, low_grid, high_grid)
+        features = _APPLY.build_features(low_chunk, x, y, z, high_grid)
+        features_std = ((features - feature_mean.reshape(1, -1)) / feature_std.reshape(1, -1)).astype(np.float32)
+        predicted, _base = build_predicted_chunk(
+            args,
+            low_chunk,
+            features_std,
+            channel_states,
+            target_indexes,
+            channel_max,
+            comparison_fluid,
+            comparison_front,
+            indexes,
+        )
+        scores[indexes] = support_score_from_full_field(predicted)
+    threshold = support_threshold_from_score(
+        scores,
+        float(args.support_gate_threshold_quantile),
+        float(args.support_gate_threshold_scale),
+        float(args.support_gate_min_threshold),
+    )
+    predicted_support = scores > threshold
+    return {
+        "identity": PREDICTED_SUPPORT_GATE_IDENTITY,
+        "mode": "predicted",
+        "enabled": True,
+        "supportGateRuntimeUsesTruthSupport": False,
+        "scoreSource": "first-stage scalar-head predicted field",
+        "threshold": float(threshold),
+        "thresholdQuantile": float(args.support_gate_threshold_quantile),
+        "thresholdScale": float(args.support_gate_threshold_scale),
+        "minThreshold": float(args.support_gate_min_threshold),
+        "predictedSupportCountBeforeGate": int(np.count_nonzero(predicted_support)),
+        "predictedSupportFractionBeforeGate": float(np.count_nonzero(predicted_support) / max(1, high_cells)),
+        "scoreMean": float(np.mean(scores)),
+        "scoreMax": float(np.max(scores)) if scores.size else 0.0,
+        "scores": scores,
+    }
+
+
 def write_png_rgb(path: Path, rgb: np.ndarray) -> None:
     if rgb.dtype != np.uint8 or rgb.ndim != 3 or rgb.shape[2] != 3:
         raise ProbeFailure("visual-preview-write", "PNG payload must be uint8 RGB.", {"shape": list(rgb.shape), "dtype": str(rgb.dtype)})
@@ -478,6 +629,7 @@ def write_scalar_head_application(
     feature_mean: np.ndarray,
     feature_std: np.ndarray,
     channel_reports: list[dict[str, Any]],
+    comparison_report: dict[str, Any] | None,
 ) -> dict[str, Any] | None:
     if not args.application_out_dir:
         return None
@@ -505,6 +657,37 @@ def write_scalar_head_application(
         path.write_bytes(b"")
 
     chunk_z = max(1, min(high_grid, int(args.assembly_chunk_z)))
+    support_gate = derive_predicted_support_gate(
+        args,
+        low_fluid,
+        low_front,
+        comparison_fluid,
+        comparison_front,
+        channel_states,
+        feature_mean,
+        feature_std,
+        target_indexes,
+        channel_max,
+        low_grid,
+        high_grid,
+        chunk_z,
+    )
+    gate_scores = support_gate.pop("scores", None)
+    gate_enabled = bool(support_gate.get("enabled"))
+    app_identity = SUPPORT_GATED_APPLICATION_IDENTITY if gate_enabled else ASSEMBLED_APPLICATION_IDENTITY
+    truth_support_score = _APPLY.flame_carrier_score(high_fluid)
+    truth_support_threshold = support_threshold_from_score(truth_support_score)
+    truth_support_mask = truth_support_score > truth_support_threshold
+    gate_count = 0
+    true_positive_count = 0
+    false_positive_count = 0
+    false_negative_count = 0
+    first_stage_false_support_mass = 0.0
+    gated_false_support_mass = 0.0
+    in_support_error = empty_error_accumulator()
+    global_error = empty_error_accumulator()
+    first_stage_in_support_error = empty_error_accumulator()
+    first_stage_global_error = empty_error_accumulator()
     chunks = []
     replacement_stats = {ALL_CHANNELS[index]: {"sum": 0.0, "sumAbsResidual": 0.0, "count": 0} for index in target_indexes}
     for z0 in range(0, high_grid, chunk_z):
@@ -513,18 +696,47 @@ def write_scalar_head_application(
         low_chunk, x, y, z = _APPLY.low_values_for_high_cells(low_fluid, low_front, indexes, low_grid, high_grid)
         features = _APPLY.build_features(low_chunk, x, y, z, high_grid)
         features_std = ((features - feature_mean.reshape(1, -1)) / feature_std.reshape(1, -1)).astype(np.float32)
-        if args.scalar_head_assembly_base == "comparisonApplication":
-            assert comparison_fluid is not None and comparison_front is not None
-            predicted = np.concatenate([
-                np.asarray(comparison_fluid[indexes], dtype=np.float32),
-                np.asarray(comparison_front[indexes], dtype=np.float32).reshape(-1, 1),
-            ], axis=1)
+        first_stage, base = build_predicted_chunk(
+            args,
+            low_chunk,
+            features_std,
+            channel_states,
+            target_indexes,
+            channel_max,
+            comparison_fluid,
+            comparison_front,
+            indexes,
+        )
+        predicted = np.array(first_stage, dtype=np.float32, copy=True)
+        if gate_enabled:
+            assert gate_scores is not None
+            gate_mask = gate_scores[indexes] > float(support_gate["threshold"])
+            for channel_index in target_indexes:
+                predicted[~gate_mask, channel_index] = base[~gate_mask, channel_index]
         else:
-            predicted = np.array(low_chunk, dtype=np.float32, copy=True)
-        for channel_index, state in channel_states.items():
-            residual = predict_scalar_mlp(features_std, state)
-            values = clamp_channel_values(low_chunk[:, channel_index] + residual, channel_index, channel_max)
-            predicted[:, channel_index] = values
+            gate_mask = np.ones(indexes.shape[0], dtype=bool)
+
+        chunk_truth_support = truth_support_mask[indexes]
+        gate_count += int(np.count_nonzero(gate_mask))
+        true_positive_count += int(np.count_nonzero(gate_mask & chunk_truth_support))
+        false_positive_count += int(np.count_nonzero(gate_mask & ~chunk_truth_support))
+        false_negative_count += int(np.count_nonzero(~gate_mask & chunk_truth_support))
+        first_stage_score = support_score_from_full_field(first_stage)
+        gated_score = support_score_from_full_field(predicted)
+        first_stage_false_support_mass += float(np.sum(first_stage_score[~chunk_truth_support]))
+        gated_false_support_mass += float(np.sum(gated_score[~chunk_truth_support]))
+
+        truth_field = np.concatenate([
+            np.asarray(high_fluid[indexes], dtype=np.float32),
+            np.asarray(high_front[indexes], dtype=np.float32).reshape(-1, 1),
+        ], axis=1)
+        update_error_accumulator(global_error, target_values_from_field(predicted, target_indexes), target_values_from_field(truth_field, target_indexes))
+        update_error_accumulator(first_stage_global_error, target_values_from_field(first_stage, target_indexes), target_values_from_field(truth_field, target_indexes))
+        if np.any(chunk_truth_support):
+            update_error_accumulator(in_support_error, target_values_from_field(predicted[chunk_truth_support], target_indexes), target_values_from_field(truth_field[chunk_truth_support], target_indexes))
+            update_error_accumulator(first_stage_in_support_error, target_values_from_field(first_stage[chunk_truth_support], target_indexes), target_values_from_field(truth_field[chunk_truth_support], target_indexes))
+        for channel_index in target_indexes:
+            values = predicted[:, channel_index]
             stats = replacement_stats[ALL_CHANNELS[channel_index]]
             stats["sum"] += float(np.sum(values))
             stats["sumAbsResidual"] += float(np.sum(np.abs(values - low_chunk[:, channel_index])))
@@ -537,7 +749,12 @@ def write_scalar_head_application(
             predicted[:, :len(FLUID_CHANNELS)].astype("<f4", copy=False).tofile(handle)
         with predicted_front_path.open("ab") as handle:
             predicted[:, len(FLUID_CHANNELS)].astype("<f4", copy=False).tofile(handle)
-        chunks.append({"zStart": z0, "zEnd": z1, "cellCount": int(indexes.shape[0])})
+        chunks.append({
+            "zStart": z0,
+            "zEnd": z1,
+            "cellCount": int(indexes.shape[0]),
+            "supportGateAppliedCount": int(np.count_nonzero(gate_mask)),
+        })
 
     expected_fluid_bytes = high_cells * len(FLUID_CHANNELS) * 4
     expected_front_bytes = high_cells * 4
@@ -563,11 +780,60 @@ def write_scalar_head_application(
             "mean": float(stats["sum"] / count),
             "meanAbsResidualFromLow": float(stats["sumAbsResidual"] / count),
         })
+    support_precision = float(true_positive_count / max(1, true_positive_count + false_positive_count))
+    support_recall = float(true_positive_count / max(1, true_positive_count + false_negative_count))
+    support_jaccard = float(true_positive_count / max(1, true_positive_count + false_positive_count + false_negative_count))
+    support_gate_diagnostics = {
+        **support_gate,
+        "diagnosticTruthSupportIdentity": "truth-flame-carrier-support-diagnostics-only-v0",
+        "diagnosticTruthSupportThreshold": float(truth_support_threshold),
+        "diagnosticTruthSupportCount": int(np.count_nonzero(truth_support_mask)),
+        "diagnosticTruthSupportFraction": float(np.count_nonzero(truth_support_mask) / max(1, high_cells)),
+        "predictedSupportCount": int(gate_count),
+        "truePositiveSupportCount": int(true_positive_count),
+        "falsePositiveSupportCount": int(false_positive_count),
+        "falseNegativeSupportCount": int(false_negative_count),
+        "supportPrecision": support_precision,
+        "supportRecall": support_recall,
+        "supportJaccard": support_jaccard,
+        "falseSupportMassOutsideTruthSupport": float(gated_false_support_mass),
+        "firstStageFalseSupportMassOutsideTruthSupport": float(first_stage_false_support_mass),
+        "falseSupportMassReductionVsFirstStage": float((first_stage_false_support_mass - gated_false_support_mass) / max(first_stage_false_support_mass, 1.0e-12)),
+        "inSupportError": finalize_error_accumulator(in_support_error),
+        "globalTargetChannelError": finalize_error_accumulator(global_error),
+        "firstStageInSupportError": finalize_error_accumulator(first_stage_in_support_error),
+        "firstStageGlobalTargetChannelError": finalize_error_accumulator(first_stage_global_error),
+    }
+    roles = {
+        "lowUpsampled": {
+            "role": "lowUpsampled",
+            "fluid": sidecar_descriptor(low_up_fluid_path, high_shape_fluid, FLUID_CHANNELS),
+            "front": sidecar_descriptor(low_up_front_path, high_shape_front, FRONT_CHANNELS),
+        },
+        "predictedHigh": {
+            "role": "predictedHigh",
+            "fluid": sidecar_descriptor(predicted_fluid_path, high_shape_fluid, FLUID_CHANNELS),
+            "front": sidecar_descriptor(predicted_front_path, high_shape_front, FRONT_CHANNELS),
+        },
+        "truthHigh": {
+            "role": "truthHigh",
+            "fluid": pair["high"]["fluid"],
+            "front": pair["high"]["front"],
+        },
+    }
+    if comparison_report and comparison_report.get("roleDescriptors"):
+        roles["naiveScalar"] = {
+            "role": "naiveScalar",
+            "sourceApplicationManifest": comparison_report["path"],
+            "sourceApplicationManifestSha256": comparison_report["sha256"],
+            "fluid": comparison_report["roleDescriptors"]["fluid"],
+            "front": comparison_report["roleDescriptors"]["front"],
+        }
     manifest = {
         "schema": APPLICATION_SCHEMA,
         "status": "captured",
         "failurePhase": None,
-        "identity": ASSEMBLED_APPLICATION_IDENTITY,
+        "identity": app_identity,
         "applicationAuthority": "same-pair-scalar-head-assembled-field-diagnostic",
         "fieldAuthority": FIELD_AUTHORITY,
         "completeFieldCoverage": True,
@@ -583,11 +849,13 @@ def write_scalar_head_application(
         "highGrid": high_grid,
         "gridScaleRatio": pair.get("gridScaleRatio"),
         "model": {
-            "identity": ASSEMBLED_APPLICATION_IDENTITY,
+            "identity": app_identity,
             "sourceProbeIdentity": PROBE_IDENTITY,
             "scalarHeadAssemblyBase": args.scalar_head_assembly_base,
             "scalarHeadChannels": [ALL_CHANNELS[index] for index in target_indexes],
             "scalarHeadModelIdentity": MLP_IDENTITY,
+            "supportGate": support_gate,
+            "supportGateDiagnostics": support_gate_diagnostics,
             "postprocess": {
                 "nonnegativeClampForChannelIndexAtLeast": 3,
                 "channelMaxClampMultiplier": 1.05,
@@ -603,25 +871,10 @@ def write_scalar_head_application(
                 for report in channel_reports
                 if report["channelIndex"] in target_indexes
             ],
-            "limitation": "Naive independent scalar-head assembly from same-pair fitted channel heads; incoherent render output is route-local evidence, not a field-residual-program disproof.",
+            "limitation": "Independent scalar-head assembly from same-pair fitted channel heads; support-gated runs derive runtime support from first-stage predictions, while truth support is diagnostics-only.",
         },
-        "roles": {
-            "lowUpsampled": {
-                "role": "lowUpsampled",
-                "fluid": sidecar_descriptor(low_up_fluid_path, high_shape_fluid, FLUID_CHANNELS),
-                "front": sidecar_descriptor(low_up_front_path, high_shape_front, FRONT_CHANNELS),
-            },
-            "predictedHigh": {
-                "role": "predictedHigh",
-                "fluid": sidecar_descriptor(predicted_fluid_path, high_shape_fluid, FLUID_CHANNELS),
-                "front": sidecar_descriptor(predicted_front_path, high_shape_front, FRONT_CHANNELS),
-            },
-            "truthHigh": {
-                "role": "truthHigh",
-                "fluid": pair["high"]["fluid"],
-                "front": pair["high"]["front"],
-            },
-        },
+        "supportGateDiagnostics": support_gate_diagnostics,
+        "roles": roles,
         "applicationChunks": {
             "chunkZ": chunk_z,
             "chunks": chunks,
@@ -633,17 +886,22 @@ def write_scalar_head_application(
         ],
     }
     write_json(manifest_out, manifest)
+    return_roles = {
+        "lowUpsampled": manifest["roles"]["lowUpsampled"],
+        "predictedHigh": manifest["roles"]["predictedHigh"],
+        "truthHigh": manifest["roles"]["truthHigh"],
+    }
+    if "naiveScalar" in manifest["roles"]:
+        return_roles["naiveScalar"] = manifest["roles"]["naiveScalar"]
     return {
-        "identity": ASSEMBLED_APPLICATION_IDENTITY,
+        "identity": app_identity,
         "manifest": str(manifest_out),
         "manifestSha256": sha256_file(manifest_out),
         "scalarHeadAssemblyBase": args.scalar_head_assembly_base,
+        "supportGate": support_gate,
+        "supportGateDiagnostics": support_gate_diagnostics,
         "targetChannels": [ALL_CHANNELS[index] for index in target_indexes],
-        "roles": {
-            "lowUpsampled": manifest["roles"]["lowUpsampled"],
-            "predictedHigh": manifest["roles"]["predictedHigh"],
-            "truthHigh": manifest["roles"]["truthHigh"],
-        },
+        "roles": return_roles,
     }
 
 
@@ -898,6 +1156,7 @@ def main() -> int:
             feature_mean,
             feature_std,
             channel_reports,
+            comparison_report,
         )
         phase = "visual-preview-write"
         visual_previews = write_channel_previews(
@@ -943,6 +1202,14 @@ def main() -> int:
                 "hiddenWidth": int(args.hidden_width),
                 "epochs": int(args.epochs),
                 "learningRate": float(args.learning_rate),
+                "supportGate": {
+                    "mode": args.scalar_head_support_gate,
+                    "identity": PREDICTED_SUPPORT_GATE_IDENTITY if args.scalar_head_support_gate == "predicted" else "no-scalar-head-support-gate-v0",
+                    "thresholdQuantile": float(args.support_gate_threshold_quantile),
+                    "thresholdScale": float(args.support_gate_threshold_scale),
+                    "minThreshold": float(args.support_gate_min_threshold),
+                    "supportGateRuntimeUsesTruthSupport": False,
+                },
             },
             "sampling": {
                 "identity": "full-grid-mixed-random-plus-flame-support-sampling-v0",

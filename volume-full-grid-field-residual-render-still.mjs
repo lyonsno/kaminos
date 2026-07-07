@@ -238,6 +238,87 @@ function pasteRgba(target, targetWidth, source, sourceWidth, sourceHeight, offse
   }
 }
 
+function renderedRoleMetrics(truthFrame, frame) {
+  if (!truthFrame || !frame || truthFrame.width !== frame.width || truthFrame.height !== frame.height) {
+    return {
+      status: 'skipped',
+      reason: 'frame-shape-mismatch',
+      truthShape: truthFrame ? [truthFrame.width, truthFrame.height] : null,
+      roleShape: frame ? [frame.width, frame.height] : null,
+    };
+  }
+  let sumAbs = 0;
+  let sumSq = 0;
+  let maskedAbs = 0;
+  let maskedChannels = 0;
+  let rbAbs = 0;
+  let rbTruthSum = 0;
+  let rbRoleSum = 0;
+  let rbTruthSq = 0;
+  let rbRoleSq = 0;
+  let rbCross = 0;
+  const pixels = truthFrame.width * truthFrame.height;
+  const channels = pixels * 3;
+  for (let offset = 0; offset < pixels * 4; offset += 4) {
+    const tr = Number(truthFrame.rgba[offset]) / 255;
+    const tg = Number(truthFrame.rgba[offset + 1]) / 255;
+    const tb = Number(truthFrame.rgba[offset + 2]) / 255;
+    const rr = Number(frame.rgba[offset]) / 255;
+    const rg = Number(frame.rgba[offset + 1]) / 255;
+    const rb = Number(frame.rgba[offset + 2]) / 255;
+    const diffs = [rr - tr, rg - tg, rb - tb];
+    for (const diff of diffs) {
+      sumAbs += Math.abs(diff);
+      sumSq += diff * diff;
+    }
+    const truthSignal = Math.max(tr, tg, tb);
+    if (truthSignal > 0.08) {
+      maskedAbs += Math.abs(rr - tr) + Math.abs(rg - tg) + Math.abs(rb - tb);
+      maskedChannels += 3;
+    }
+    const truthRedBlue = tr - tb;
+    const roleRedBlue = rr - rb;
+    const redBlueDiff = roleRedBlue - truthRedBlue;
+    rbAbs += Math.abs(redBlueDiff);
+    rbTruthSum += truthRedBlue;
+    rbRoleSum += roleRedBlue;
+    rbTruthSq += truthRedBlue * truthRedBlue;
+    rbRoleSq += roleRedBlue * roleRedBlue;
+    rbCross += truthRedBlue * roleRedBlue;
+  }
+  const rbNumerator = rbCross - (rbTruthSum * rbRoleSum) / Math.max(1, pixels);
+  const rbTruthVar = rbTruthSq - (rbTruthSum * rbTruthSum) / Math.max(1, pixels);
+  const rbRoleVar = rbRoleSq - (rbRoleSum * rbRoleSum) / Math.max(1, pixels);
+  const redBlueCorrelation = rbTruthVar > 1e-12 && rbRoleVar > 1e-12
+    ? rbNumerator / Math.sqrt(rbTruthVar * rbRoleVar)
+    : null;
+  return {
+    status: 'computed',
+    mae: sumAbs / Math.max(1, channels),
+    rmse: Math.sqrt(sumSq / Math.max(1, channels)),
+    maskedMae: maskedChannels > 0 ? maskedAbs / maskedChannels : null,
+    truthSignalMaskThreshold: 0.08,
+    truthSignalMaskedChannelCount: maskedChannels,
+    redBlueMae: rbAbs / Math.max(1, pixels),
+    redBlueCorrelation,
+  };
+}
+
+function renderComparisonMetrics(frames) {
+  const truthFrame = frames.find(frame => frame.role === 'truthHigh');
+  return {
+    identity: 'rendered-role-pixel-comparison-metrics-v0',
+    baselineRole: 'truthHigh',
+    limitation: 'Pixel metrics compare rendered witness PNG buffers for this route and are diagnostic only; field sidecar metrics remain the field-truth authority.',
+    roles: frames
+      .filter(frame => frame.role !== 'truthHigh')
+      .map(frame => ({
+        role: frame.role,
+        metrics: renderedRoleMetrics(truthFrame, frame),
+      })),
+  };
+}
+
 function htmlEscape(value) {
   return String(value)
     .replaceAll('&', '&amp;')
@@ -265,9 +346,9 @@ td, th { border: 1px solid #30383a; padding: 6px 10px; }
 code { color: #ffd08a; }
 </style>
 <h1>Full-grid residual temporal dynamics strip</h1>
-<p><strong>Rows:</strong> truthHigh, lowUpsampled, predictedHigh. <strong>Columns:</strong> initialized field at frame 0, then simulator-advanced frames. This is not per-frame model prediction.</p>
+<p><strong>Rows:</strong> ${htmlEscape(temporalStrip.rowOrder.join(', '))}. <strong>Columns:</strong> initialized field at frame 0, then simulator-advanced frames. This is not per-frame model prediction.</p>
 <p class="muted">Identity: <code>${htmlEscape(temporalStrip.identity)}</code>. Application: <code>${htmlEscape(report.applicationManifest)}</code>.</p>
-<img src="${htmlEscape(imageName)}" alt="Rows are truthHigh, lowUpsampled, predictedHigh; columns are temporal dynamics frames">
+<img src="${htmlEscape(imageName)}" alt="Rows are ${htmlEscape(temporalStrip.rowOrder.join(', '))}; columns are temporal dynamics frames">
 <table>
 <thead><tr><th>Role</th><th>Label</th><th>Frames</th></tr></thead>
 <tbody>
@@ -453,6 +534,17 @@ function sampleMetrics(sample) {
   };
 }
 
+function renderRoleOrder(application) {
+  return ['lowUpsampled', 'naiveScalar', 'predictedHigh'].filter(roleName => application.roles?.[roleName]);
+}
+
+function roleRenderLabel(roleName) {
+  if (roleName === 'lowUpsampled') return 'low-grid upsampled field initialized state';
+  if (roleName === 'naiveScalar') return 'naive scalar-head assembled field initialized state';
+  if (roleName === 'predictedHigh') return 'model predicted high-grid field initialized state';
+  return `${roleName} initialized state`;
+}
+
 function buildTemporalStrip(temporalRows, outDir) {
   if (!temporalRows.length) return null;
   const frameWidth = temporalRows[0].frames[0].width;
@@ -555,7 +647,7 @@ async function main() {
       replay: truthReplay.deterministicReplay,
     });
 
-    for (const roleName of ['lowUpsampled', 'predictedHigh']) {
+    for (const roleName of renderRoleOrder(application)) {
       phase = roleName;
       await captureReplay(ws, replay);
       const override = await applyFullGridRole(ws, application, roleName, application.roles[roleName]);
@@ -565,7 +657,7 @@ async function main() {
       if (roleTemporalFrames.length) {
         temporalRows.push({
           role: roleName,
-          label: roleName === 'lowUpsampled' ? 'low-grid upsampled field initialized state' : 'model predicted high-grid field initialized state',
+          label: roleRenderLabel(roleName),
           frames: roleTemporalFrames,
         });
       }
@@ -621,6 +713,7 @@ async function main() {
       highGrid: application.highGrid,
       model: application.model,
       outputs,
+      renderComparisonMetrics: renderComparisonMetrics(frames),
       byteIdenticalOverrideSanity: buildByteIdenticalOverrideSanity(application, outputs),
       contactSheet: {
         path: contactSheet,
