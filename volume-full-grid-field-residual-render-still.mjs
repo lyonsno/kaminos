@@ -292,6 +292,53 @@ function replayForApplication(application) {
   };
 }
 
+function roleSidecarBytesMatchTruth(application, roleName) {
+  const truth = application.roles?.truthHigh;
+  const role = application.roles?.[roleName];
+  return Boolean(
+    truth?.fluid?.sha256 &&
+    truth?.front?.sha256 &&
+    role?.fluid?.sha256 === truth.fluid.sha256 &&
+    role?.front?.sha256 === truth.front.sha256
+  );
+}
+
+function buildByteIdenticalOverrideSanity(application, outputs) {
+  const truthOutput = outputs.find(output => output.role === 'truthHigh') || null;
+  const checks = outputs
+    .filter(output => output.role !== 'truthHigh')
+    .map(output => {
+      const sidecarBytesMatchTruth = roleSidecarBytesMatchTruth(application, output.role);
+      const renderPngMatchesTruth = Boolean(sidecarBytesMatchTruth && truthOutput && output.sha256 === truthOutput.sha256);
+      const sample = output.sample || {};
+      const truthSample = truthOutput?.sample || {};
+      const fireLikeDelta = Number(sample.fireLikePixels ?? 0) - Number(truthSample.fireLikePixels ?? 0);
+      const smokeLikeDelta = Number(sample.smokeLikePixels ?? 0) - Number(truthSample.smokeLikePixels ?? 0);
+      const fireEdgeEnergyDelta = Number(sample.fireEdgeEnergy ?? 0) - Number(truthSample.fireEdgeEnergy ?? 0);
+      return {
+        role: output.role,
+        identity: sidecarBytesMatchTruth && !renderPngMatchesTruth
+          ? 'override-equivalence-mismatch-v0'
+          : 'override-equivalence-check-v0',
+        sidecarBytesMatchTruth,
+        renderPngMatchesTruth,
+        outputSha256: output.sha256,
+        truthSha256: truthOutput?.sha256 || null,
+        fireLikeDelta,
+        smokeLikeDelta,
+        fireEdgeEnergyDelta,
+      };
+    });
+  const mismatches = checks.filter(check => check.sidecarBytesMatchTruth && !check.renderPngMatchesTruth);
+  return {
+    identity: 'byte-identical-full-buffer-override-sanity-v0',
+    status: mismatches.length ? 'mismatch' : 'passed',
+    mismatchCount: mismatches.length,
+    limitation: 'Byte-identical sidecars should render equivalently before channel-graft visuals can be trusted as model evidence.',
+    checks,
+  };
+}
+
 function failureReport(phase, error, evidence = {}) {
   return {
     schema: SCHEMA,
@@ -404,6 +451,7 @@ async function main() {
       highGrid: application.highGrid,
       model: application.model,
       outputs,
+      byteIdenticalOverrideSanity: buildByteIdenticalOverrideSanity(application, outputs),
       contactSheet: {
         path: contactSheet,
         sha256: sha256File(contactSheet),

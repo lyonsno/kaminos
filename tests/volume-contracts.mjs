@@ -2072,6 +2072,9 @@ assert.match(fullGridResidualRender, /lowUpsampled/, 'full-grid residual render-
 assert.match(fullGridResidualRender, /predictedHigh/, 'full-grid residual render-still renders the complete predicted high field');
 assert.match(fullGridResidualRender, /truthHigh/, 'full-grid residual render-still renders the deterministic true-high baseline');
 assert.match(fullGridResidualRender, /full-grid-buffer-render-override-not-selected-tiles/, 'full-grid residual render-still says visuals come from full-buffer override rather than selected tiles');
+assert.match(fullGridResidualRender, /byteIdenticalOverrideSanity/, 'full-grid residual render-still reports byte-identical override equivalence checks');
+assert.match(fullGridResidualRender, /override-equivalence-mismatch-v0/, 'full-grid residual render-still names byte-identical sidecar render mismatches');
+assert.match(fullGridResidualRender, /sidecarBytesMatchTruth/, 'full-grid residual render-still records when predicted sidecars match truth bytes');
 assert.match(fullGridResidualRender, /contactSheet/, 'full-grid residual render-still writes an inspectable contact sheet');
 assert.match(fullGridResidualRender, /failurePhase/, 'full-grid residual render-still writes failure-phase reports when rendering fails');
 
