@@ -2060,6 +2060,12 @@ assert.match(fullGridPerChannelProbe, /channelLearnability/, 'full-grid per-chan
 assert.match(fullGridPerChannelProbe, /gradientEnergyRecovery/, 'full-grid per-channel probe reports gradient energy recovery for carrier/detail targets');
 assert.match(fullGridPerChannelProbe, /supportLocalized/, 'full-grid per-channel probe reports support-localized error separately from global error');
 assert.match(fullGridPerChannelProbe, /fullInputChannels/, 'full-grid per-channel probe records that inputs remain the complete low field state');
+assert.match(fullGridPerChannelProbe, /--application-out-dir/, 'full-grid per-channel probe can assemble scalar heads into complete full-grid application sidecars');
+assert.match(fullGridPerChannelProbe, /scalar-head-assembled-full-grid-application-v0/, 'full-grid per-channel probe names the assembled scalar-head application artifact');
+assert.match(fullGridPerChannelProbe, /scalarHeadAssemblyBase/, 'full-grid per-channel probe reports whether assembly starts from low-upsampled or comparison sidecars');
+assert.match(fullGridPerChannelProbe, /--visual-preview-dir/, 'full-grid per-channel probe can write offline per-channel visual decomposition previews');
+assert.match(fullGridPerChannelProbe, /full-grid-per-channel-visual-preview-v0/, 'full-grid per-channel visual previews carry a stable identity');
+assert.match(fullGridPerChannelProbe, /offline-channel-preview-not-renderer-state/, 'full-grid per-channel previews explicitly avoid pretending to be renderer evidence');
 assert.match(fullGridPerChannelProbe, /failurePhase/, 'full-grid per-channel probe writes failure-phase reports for corrupt sidecars or training failures');
 
 const fullGridChannelGraftPath = join(root, 'volume-full-grid-field-channel-graft.py');

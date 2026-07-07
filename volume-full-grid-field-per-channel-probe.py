@@ -8,7 +8,9 @@ import hashlib
 import importlib.util
 import json
 import math
+import struct
 import sys
+import zlib
 from pathlib import Path
 from typing import Any
 
@@ -19,6 +21,9 @@ REPORT_SCHEMA = "kaminos.volume.full-grid-field-per-channel-probe.v0"
 PROBE_IDENTITY = "full-input-single-output-channel-probe-v0"
 RIDGE_IDENTITY = "single-channel-ridge-residual-v0"
 MLP_IDENTITY = "single-channel-mlp-residual-v0"
+ASSEMBLED_APPLICATION_IDENTITY = "scalar-head-assembled-full-grid-application-v0"
+VISUAL_PREVIEW_IDENTITY = "full-grid-per-channel-visual-preview-v0"
+VISUAL_PREVIEW_AUTHORITY = "offline-channel-preview-not-renderer-state"
 FIELD_AUTHORITY = "complete-webgpu-fluid-front-buffer-readback-sidecars"
 APPLICATION_SCHEMA = "kaminos.volume.full-grid-field-residual-application.v0"
 
@@ -82,6 +87,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--batch-size", type=int, default=1024, help="MLP minibatch size.")
     parser.add_argument("--weight-decay", type=float, default=1.0e-5, help="MLP L2 weight decay.")
     parser.add_argument("--gradient-pairs", type=int, default=30_000, help="Maximum adjacent x-neighbor pairs for gradient energy metrics.")
+    parser.add_argument("--application-out-dir", help="Optional output directory for complete scalar-head assembled full-grid application sidecars.")
+    parser.add_argument(
+        "--scalar-head-assembly-base",
+        choices=["lowUpsampled", "comparisonApplication"],
+        default="lowUpsampled",
+        help="Complete field used as the base before replacing selected target channels with scalar-head predictions.",
+    )
+    parser.add_argument("--assembly-chunk-z", type=int, default=4, help="High-grid z slices per scalar-head assembly chunk.")
+    parser.add_argument("--visual-preview-dir", help="Optional directory for offline per-channel truth/low/pred/error decomposition PNGs.")
+    parser.add_argument("--visual-preview-slice-y", type=int, help="Optional y slice for per-channel previews; defaults to highGrid//2.")
     parser.add_argument("--seed", type=int, default=7331, help="Deterministic sample/model seed.")
     return parser.parse_args()
 
@@ -234,7 +249,7 @@ def train_scalar_mlp(
     test_features: np.ndarray,
     args: argparse.Namespace,
     rng: np.random.Generator,
-) -> tuple[np.ndarray, dict[str, Any]]:
+) -> tuple[np.ndarray, dict[str, Any], dict[str, Any]]:
     feature_count = train_features.shape[1]
     hidden_width = max(1, int(args.hidden_width))
     target_mean = float(np.mean(train_residual))
@@ -292,7 +307,7 @@ def train_scalar_mlp(
         final_loss = total_loss / max(1, total_rows)
     test_output = np.tanh(test_features @ w1 + b1) @ w2 + b2
     test_residual = (test_output.reshape(-1) * np.float32(target_std) + np.float32(target_mean)).astype(np.float32)
-    return test_residual, {
+    report = {
         "identity": MLP_IDENTITY,
         "hiddenWidth": hidden_width,
         "epochs": epochs,
@@ -303,6 +318,20 @@ def train_scalar_mlp(
         "targetResidualStd": target_std,
         "finalTrainStandardizedMse": final_loss,
     }
+    state = {
+        "w1": w1,
+        "b1": b1,
+        "w2": w2,
+        "b2": b2,
+        "targetMean": np.float32(target_mean),
+        "targetStd": np.float32(target_std),
+    }
+    return test_residual, report, state
+
+
+def predict_scalar_mlp(features: np.ndarray, state: dict[str, Any]) -> np.ndarray:
+    output = np.tanh(features @ state["w1"] + state["b1"]) @ state["w2"] + state["b2"]
+    return (output.reshape(-1) * state["targetStd"] + state["targetMean"]).astype(np.float32)
 
 
 def scalar_metrics(prediction: np.ndarray, truth: np.ndarray) -> dict[str, float]:
@@ -364,6 +393,349 @@ def improvement_vs(base: dict[str, float], model: dict[str, float]) -> dict[str,
     }
 
 
+def write_png_rgb(path: Path, rgb: np.ndarray) -> None:
+    if rgb.dtype != np.uint8 or rgb.ndim != 3 or rgb.shape[2] != 3:
+        raise ProbeFailure("visual-preview-write", "PNG payload must be uint8 RGB.", {"shape": list(rgb.shape), "dtype": str(rgb.dtype)})
+    height, width, _channels = rgb.shape
+    rows = b"".join(b"\x00" + rgb[y].tobytes() for y in range(height))
+
+    def chunk(kind: bytes, payload: bytes) -> bytes:
+        return struct.pack(">I", len(payload)) + kind + payload + struct.pack(">I", zlib.crc32(kind + payload) & 0xFFFFFFFF)
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(b"".join([
+        b"\x89PNG\r\n\x1a\n",
+        chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)),
+        chunk(b"IDAT", zlib.compress(rows, level=6)),
+        chunk(b"IEND", b""),
+    ]))
+
+
+def heat_rgb(values: np.ndarray) -> np.ndarray:
+    clipped = np.clip(values.astype(np.float64), 0.0, 1.0)
+    red = np.clip(3.0 * clipped, 0.0, 1.0)
+    green = np.clip(3.0 * clipped - 0.85, 0.0, 1.0)
+    blue = np.clip(3.0 * clipped - 2.0, 0.0, 1.0) * 0.75
+    floor = 0.03 + 0.05 * clipped
+    return np.asarray(np.round(np.stack([
+        np.maximum(red, floor),
+        np.maximum(green, floor),
+        np.maximum(blue, floor),
+    ], axis=-1) * 255.0), dtype=np.uint8)
+
+
+def signed_error_rgb(error: np.ndarray, scale: float) -> np.ndarray:
+    if scale <= 0:
+        return np.zeros((*error.shape, 3), dtype=np.uint8)
+    normalized = np.clip(error.astype(np.float64) / scale, -1.0, 1.0)
+    red = np.clip(normalized, 0.0, 1.0)
+    blue = np.clip(-normalized, 0.0, 1.0)
+    green = np.clip(1.0 - np.abs(normalized), 0.0, 1.0) * 0.35
+    floor = np.full_like(red, 0.03)
+    return np.asarray(np.round(np.stack([
+        np.maximum(red, floor),
+        np.maximum(green, floor),
+        np.maximum(blue, floor),
+    ], axis=-1) * 255.0), dtype=np.uint8)
+
+
+def normalize_abs(values: np.ndarray, scale: float) -> np.ndarray:
+    if scale <= 0:
+        return np.zeros_like(values, dtype=np.float64)
+    return np.clip(np.abs(values.astype(np.float64)) / scale, 0.0, 1.0)
+
+
+def sidecar_descriptor(path: Path, shape: list[int], channel_order: list[str]) -> dict[str, Any]:
+    return {
+        "path": str(path),
+        "sha256": sha256_file(path),
+        "dtype": "float32",
+        "byteOrder": "little-endian",
+        "floatCount": int(math.prod(shape)),
+        "byteLength": path.stat().st_size,
+        "shape": shape,
+        "channelOrder": channel_order,
+    }
+
+
+def clamp_channel_values(values: np.ndarray, channel_index: int, channel_max: np.ndarray) -> np.ndarray:
+    if channel_index >= 3:
+        return np.minimum(np.maximum(values, 0), np.float32(channel_max[channel_index] * 1.05))
+    return values
+
+
+def write_scalar_head_application(
+    args: argparse.Namespace,
+    pair: dict[str, Any],
+    pair_path: Path,
+    low_fluid: np.ndarray,
+    low_front: np.ndarray,
+    high_fluid: np.ndarray,
+    high_front: np.ndarray,
+    comparison_fluid: np.ndarray | None,
+    comparison_front: np.ndarray | None,
+    channel_states: dict[int, dict[str, Any]],
+    feature_mean: np.ndarray,
+    feature_std: np.ndarray,
+    channel_reports: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    if not args.application_out_dir:
+        return None
+    if not channel_states:
+        raise ProbeFailure("application-write", "--application-out-dir requires scalar MLP heads; rerun with --model mlp or --model both.")
+    if args.scalar_head_assembly_base == "comparisonApplication" and (comparison_fluid is None or comparison_front is None):
+        raise ProbeFailure("application-write", "comparisonApplication assembly base requires --comparison-application-manifest.")
+    out_dir = Path(args.application_out_dir).resolve()
+    out_dir.mkdir(parents=True, exist_ok=True)
+    manifest_out = out_dir / "manifest.json"
+    low_grid = int(pair["lowGrid"])
+    high_grid = int(pair["highGrid"])
+    high_cells = high_grid ** 3
+    target_indexes = sorted(channel_states.keys())
+    channel_max = np.concatenate([
+        np.max(high_fluid, axis=0),
+        np.array([float(np.max(high_front))], dtype=np.float32),
+    ]).astype(np.float32, copy=False)
+
+    low_up_fluid_path = out_dir / "lowUpsampled-fluid.f32"
+    low_up_front_path = out_dir / "lowUpsampled-front.f32"
+    predicted_fluid_path = out_dir / "predictedHigh-fluid.f32"
+    predicted_front_path = out_dir / "predictedHigh-front.f32"
+    for path in [low_up_fluid_path, low_up_front_path, predicted_fluid_path, predicted_front_path]:
+        path.write_bytes(b"")
+
+    chunk_z = max(1, min(high_grid, int(args.assembly_chunk_z)))
+    chunks = []
+    replacement_stats = {ALL_CHANNELS[index]: {"sum": 0.0, "sumAbsResidual": 0.0, "count": 0} for index in target_indexes}
+    for z0 in range(0, high_grid, chunk_z):
+        z1 = min(high_grid, z0 + chunk_z)
+        indexes = np.arange(z0 * high_grid * high_grid, z1 * high_grid * high_grid, dtype=np.int64)
+        low_chunk, x, y, z = _APPLY.low_values_for_high_cells(low_fluid, low_front, indexes, low_grid, high_grid)
+        features = _APPLY.build_features(low_chunk, x, y, z, high_grid)
+        features_std = ((features - feature_mean.reshape(1, -1)) / feature_std.reshape(1, -1)).astype(np.float32)
+        if args.scalar_head_assembly_base == "comparisonApplication":
+            assert comparison_fluid is not None and comparison_front is not None
+            predicted = np.concatenate([
+                np.asarray(comparison_fluid[indexes], dtype=np.float32),
+                np.asarray(comparison_front[indexes], dtype=np.float32).reshape(-1, 1),
+            ], axis=1)
+        else:
+            predicted = np.array(low_chunk, dtype=np.float32, copy=True)
+        for channel_index, state in channel_states.items():
+            residual = predict_scalar_mlp(features_std, state)
+            values = clamp_channel_values(low_chunk[:, channel_index] + residual, channel_index, channel_max)
+            predicted[:, channel_index] = values
+            stats = replacement_stats[ALL_CHANNELS[channel_index]]
+            stats["sum"] += float(np.sum(values))
+            stats["sumAbsResidual"] += float(np.sum(np.abs(values - low_chunk[:, channel_index])))
+            stats["count"] += int(values.shape[0])
+        with low_up_fluid_path.open("ab") as handle:
+            low_chunk[:, :len(FLUID_CHANNELS)].astype("<f4", copy=False).tofile(handle)
+        with low_up_front_path.open("ab") as handle:
+            low_chunk[:, len(FLUID_CHANNELS)].astype("<f4", copy=False).tofile(handle)
+        with predicted_fluid_path.open("ab") as handle:
+            predicted[:, :len(FLUID_CHANNELS)].astype("<f4", copy=False).tofile(handle)
+        with predicted_front_path.open("ab") as handle:
+            predicted[:, len(FLUID_CHANNELS)].astype("<f4", copy=False).tofile(handle)
+        chunks.append({"zStart": z0, "zEnd": z1, "cellCount": int(indexes.shape[0])})
+
+    expected_fluid_bytes = high_cells * len(FLUID_CHANNELS) * 4
+    expected_front_bytes = high_cells * 4
+    for path, expected in [
+        (low_up_fluid_path, expected_fluid_bytes),
+        (predicted_fluid_path, expected_fluid_bytes),
+        (low_up_front_path, expected_front_bytes),
+        (predicted_front_path, expected_front_bytes),
+    ]:
+        if path.stat().st_size != expected:
+            raise ProbeFailure("application-write", "assembled sidecar byte length mismatch", {
+                "path": str(path),
+                "actualBytes": path.stat().st_size,
+                "expectedBytes": expected,
+            })
+    high_shape_fluid = [high_grid, high_grid, high_grid, len(FLUID_CHANNELS)]
+    high_shape_front = [high_grid, high_grid, high_grid, 1]
+    replacement_report = []
+    for channel, stats in replacement_stats.items():
+        count = max(1, int(stats["count"]))
+        replacement_report.append({
+            "channel": channel,
+            "mean": float(stats["sum"] / count),
+            "meanAbsResidualFromLow": float(stats["sumAbsResidual"] / count),
+        })
+    manifest = {
+        "schema": APPLICATION_SCHEMA,
+        "status": "captured",
+        "failurePhase": None,
+        "identity": ASSEMBLED_APPLICATION_IDENTITY,
+        "applicationAuthority": "same-pair-scalar-head-assembled-field-diagnostic",
+        "fieldAuthority": FIELD_AUTHORITY,
+        "completeFieldCoverage": True,
+        "fitOnSamePairVisualDiagnostic": True,
+        "pairManifest": str(pair_path),
+        "pairManifestSha256": sha256_file(pair_path),
+        "routeIdentity": pair.get("routeIdentity"),
+        "effectiveRoute": pair.get("effectiveRoute"),
+        "prototypeIdentity": pair.get("prototypeIdentity"),
+        "backend": pair.get("backend"),
+        "deterministicReplay": pair.get("deterministicReplay"),
+        "lowGrid": low_grid,
+        "highGrid": high_grid,
+        "gridScaleRatio": pair.get("gridScaleRatio"),
+        "model": {
+            "identity": ASSEMBLED_APPLICATION_IDENTITY,
+            "sourceProbeIdentity": PROBE_IDENTITY,
+            "scalarHeadAssemblyBase": args.scalar_head_assembly_base,
+            "scalarHeadChannels": [ALL_CHANNELS[index] for index in target_indexes],
+            "scalarHeadModelIdentity": MLP_IDENTITY,
+            "postprocess": {
+                "nonnegativeClampForChannelIndexAtLeast": 3,
+                "channelMaxClampMultiplier": 1.05,
+                "replacementStats": replacement_report,
+            },
+            "channelReports": [
+                {
+                    "channel": report["channel"],
+                    "bestProbeModel": report["bestProbeModel"],
+                    "mlpMetrics": report["models"].get("mlp", {}).get("metrics"),
+                    "supportLocalized": report["models"].get("mlp", {}).get("supportLocalized"),
+                }
+                for report in channel_reports
+                if report["channelIndex"] in target_indexes
+            ],
+            "limitation": "Naive independent scalar-head assembly from same-pair fitted channel heads; incoherent render output is route-local evidence, not a field-residual-program disproof.",
+        },
+        "roles": {
+            "lowUpsampled": {
+                "role": "lowUpsampled",
+                "fluid": sidecar_descriptor(low_up_fluid_path, high_shape_fluid, FLUID_CHANNELS),
+                "front": sidecar_descriptor(low_up_front_path, high_shape_front, FRONT_CHANNELS),
+            },
+            "predictedHigh": {
+                "role": "predictedHigh",
+                "fluid": sidecar_descriptor(predicted_fluid_path, high_shape_fluid, FLUID_CHANNELS),
+                "front": sidecar_descriptor(predicted_front_path, high_shape_front, FRONT_CHANNELS),
+            },
+            "truthHigh": {
+                "role": "truthHigh",
+                "fluid": pair["high"]["fluid"],
+                "front": pair["high"]["front"],
+            },
+        },
+        "applicationChunks": {
+            "chunkZ": chunk_z,
+            "chunks": chunks,
+        },
+        "limitations": [
+            "Same-pair fitted scalar-head assembly, not held-out learning proof.",
+            "Low/high source pair is separate deterministic replay, not literal cross-grid state transfer.",
+            "Independent scalar heads may violate cross-channel consistency; render output must be judged as route-local.",
+        ],
+    }
+    write_json(manifest_out, manifest)
+    return {
+        "identity": ASSEMBLED_APPLICATION_IDENTITY,
+        "manifest": str(manifest_out),
+        "manifestSha256": sha256_file(manifest_out),
+        "scalarHeadAssemblyBase": args.scalar_head_assembly_base,
+        "targetChannels": [ALL_CHANNELS[index] for index in target_indexes],
+        "roles": {
+            "lowUpsampled": manifest["roles"]["lowUpsampled"],
+            "predictedHigh": manifest["roles"]["predictedHigh"],
+            "truthHigh": manifest["roles"]["truthHigh"],
+        },
+    }
+
+
+def write_channel_previews(
+    args: argparse.Namespace,
+    high_grid: int,
+    low_fluid: np.ndarray,
+    low_front: np.ndarray,
+    high_fluid: np.ndarray,
+    high_front: np.ndarray,
+    channel_states: dict[int, dict[str, Any]],
+    feature_mean: np.ndarray,
+    feature_std: np.ndarray,
+    low_grid: int,
+) -> list[dict[str, Any]]:
+    if not args.visual_preview_dir:
+        return []
+    if not channel_states:
+        raise ProbeFailure("visual-preview-write", "--visual-preview-dir requires scalar MLP heads; rerun with --model mlp or --model both.")
+    preview_dir = Path(args.visual_preview_dir).resolve()
+    preview_dir.mkdir(parents=True, exist_ok=True)
+    y = int(args.visual_preview_slice_y) if args.visual_preview_slice_y is not None else high_grid // 2
+    y = max(0, min(high_grid - 1, y))
+    x = np.tile(np.arange(high_grid, dtype=np.int64), high_grid)
+    z = np.repeat(np.arange(high_grid, dtype=np.int64), high_grid)
+    indexes = x + y * high_grid + z * high_grid * high_grid
+    low_values, fx, fy, fz = _APPLY.low_values_for_high_cells(low_fluid, low_front, indexes, low_grid, high_grid)
+    features = _APPLY.build_features(low_values, fx, fy, fz, high_grid)
+    features_std = ((features - feature_mean.reshape(1, -1)) / feature_std.reshape(1, -1)).astype(np.float32)
+    previews = []
+    for channel_index, state in channel_states.items():
+        channel = ALL_CHANNELS[channel_index]
+        truth = channel_values(high_fluid, high_front, indexes, channel_index).reshape(high_grid, high_grid)
+        low = low_values[:, channel_index].reshape(high_grid, high_grid)
+        pred = (low_values[:, channel_index] + predict_scalar_mlp(features_std, state)).reshape(high_grid, high_grid)
+        error = pred - truth
+        field_scale = max(float(np.max(np.abs(truth))), float(np.max(np.abs(low))), float(np.max(np.abs(pred))), 1.0e-9)
+        error_scale = max(float(np.max(np.abs(error))), 1.0e-9)
+        row_gap = np.full((3, high_grid, 3), 48, dtype=np.uint8)
+        sheet = np.concatenate([
+            heat_rgb(normalize_abs(truth, field_scale)),
+            row_gap,
+            heat_rgb(normalize_abs(low, field_scale)),
+            row_gap,
+            heat_rgb(normalize_abs(pred, field_scale)),
+            row_gap,
+            signed_error_rgb(error, error_scale),
+        ], axis=0)
+        png_path = preview_dir / f"{channel}.channel-preview.png"
+        sidecar_path = preview_dir / f"{channel}.channel-preview.json"
+        write_png_rgb(png_path, sheet)
+        sidecar = {
+            "schema": REPORT_SCHEMA,
+            "identity": VISUAL_PREVIEW_IDENTITY,
+            "status": "written",
+            "visualPreviewAuthority": VISUAL_PREVIEW_AUTHORITY,
+            "channel": channel,
+            "channelIndex": int(channel_index),
+            "slice": {"axis": "y", "index": y},
+            "rowOrder": ["truthHigh", "lowUpsampled", "scalarHeadPredicted", "signedErrorPredMinusTruth"],
+            "normalization": {
+                "sharedAbsFieldMax": field_scale,
+                "signedErrorAbsMax": error_scale,
+            },
+            "limitation": "Offline per-channel slice preview; not raymarched renderer evidence and not a standalone physical-channel render.",
+            "png": {
+                "path": str(png_path),
+                "sha256": sha256_file(png_path),
+            },
+        }
+        write_json(sidecar_path, sidecar)
+        previews.append({
+            "channel": channel,
+            "path": str(png_path),
+            "sha256": sha256_file(png_path),
+            "sidecar": str(sidecar_path),
+            "authority": VISUAL_PREVIEW_AUTHORITY,
+            "rowOrder": sidecar["rowOrder"],
+        })
+    index_path = preview_dir / "manifest.json"
+    write_json(index_path, {
+        "schema": REPORT_SCHEMA,
+        "identity": VISUAL_PREVIEW_IDENTITY,
+        "status": "written",
+        "visualPreviewAuthority": VISUAL_PREVIEW_AUTHORITY,
+        "slice": {"axis": "y", "index": y},
+        "channels": previews,
+        "limitation": "Offline channel decomposition previews only; compare structure, not physical renderer output.",
+    })
+    return previews
+
+
 def main() -> int:
     args = parse_args()
     out_path = Path(args.out).resolve()
@@ -416,6 +788,7 @@ def main() -> int:
 
         phase = "channel-train"
         channel_reports = []
+        scalar_head_states: dict[int, dict[str, Any]] = {}
         for channel_index in target_indexes:
             channel_name = ALL_CHANNELS[channel_index]
             train_truth = channel_values(high_fluid, high_front, train_indexes, channel_index)
@@ -441,7 +814,8 @@ def main() -> int:
                 }
             if args.model in ("mlp", "both"):
                 model_rng = np.random.default_rng(int(args.seed) + channel_index * 104729 + 17)
-                mlp_residual, mlp_report = train_scalar_mlp(train_features_std, train_residual, test_features_std, args, model_rng)
+                mlp_residual, mlp_report, mlp_state = train_scalar_mlp(train_features_std, train_residual, test_features_std, args, model_rng)
+                scalar_head_states[channel_index] = mlp_state
                 mlp_prediction = test_low + mlp_residual
                 mlp_metrics = scalar_metrics(mlp_prediction, test_truth)
                 models["mlp"] = {
@@ -506,6 +880,39 @@ def main() -> int:
             key=lambda item: item["bestRmseReductionVsLow"],
             reverse=True,
         )
+        feature_mean = np.mean(train_features, axis=0, dtype=np.float64).astype(np.float32)
+        feature_std = np.std(train_features, axis=0, dtype=np.float64).astype(np.float32)
+        feature_std = np.where(feature_std < np.float32(1.0e-6), np.float32(1.0), feature_std)
+        phase = "application-write"
+        assembled_application = write_scalar_head_application(
+            args,
+            pair,
+            pair_path,
+            low_fluid,
+            low_front,
+            high_fluid,
+            high_front,
+            comparison_fluid,
+            comparison_front,
+            scalar_head_states,
+            feature_mean,
+            feature_std,
+            channel_reports,
+        )
+        phase = "visual-preview-write"
+        visual_previews = write_channel_previews(
+            args,
+            high_grid,
+            low_fluid,
+            low_front,
+            high_fluid,
+            high_front,
+            scalar_head_states,
+            feature_mean,
+            feature_std,
+            low_grid,
+        )
+        phase = "report-write"
         payload = {
             "schema": REPORT_SCHEMA,
             "status": "captured",
@@ -554,6 +961,8 @@ def main() -> int:
                 "featureStandardization": feature_standardization,
             },
             "comparisonApplicationManifest": comparison_report,
+            "scalarHeadApplication": assembled_application,
+            "visualPreviews": visual_previews,
             "channelLearnability": {
                 "identity": "channelLearnability-ranking-v0",
                 "rankedBy": "best per-channel probe RMSE reduction vs lowUpsampled",
