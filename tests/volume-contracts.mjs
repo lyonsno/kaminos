@@ -35,7 +35,8 @@ assert.match(index, /operator_memory_fire_0701/, 'Volume tab exposes the operato
 assert.match(index, /pyro_contrast_warm_cap_small_flame_0702/, 'Volume tab pins the operator-found Pyro contrast warm-cap small-flame basin by stable route identity');
 assert.match(index, /pyro_material_bonfire_family_0702/, 'Volume tab pins the operator-found Pyro material bonfire family basin by stable route identity');
 assert.match(index, /exploding_jellow_fireball_motherfucker_0706/, 'Volume tab pins the operator-found exploding jellow fireball Pyro look by stable route identity');
-assert.match(index, /DEFAULT_VOLUME_SMOKE_TALL_PRESET\s*=\s*'exploding_jellow_fireball_motherfucker_0706'/, 'bare smoke routes default to the operator-found exploding jellow fireball basin');
+assert.match(index, /pyro_flow_small_bonfire_gamut_0707/, 'Volume tab pins the operator-found Pyro Flow small-bonfire gamut basin by stable route identity');
+assert.match(index, /DEFAULT_VOLUME_SMOKE_TALL_PRESET\s*=\s*'pyro_flow_small_bonfire_gamut_0707'/, 'bare smoke routes default to the operator-found Pyro Flow small-bonfire gamut basin');
 assert.match(index, /kaminos_volume_smoke'\)\s*===\s*'1'[\s\S]*DEFAULT_VOLUME_SMOKE_TALL_PRESET/, 'bare smoke routes apply the current Pyro basin when no explicit scene or preset is routed');
 assert.match(index, /!routeVolumeScene\s*\|\|\s*routeVolumeScene === 'tall_plume'/, 'smoke routes with explicit tall_plume scene must still apply the Pyro basin instead of plain tall-plume mechanics');
 assert.match(index, /routeVolumeScene && !\(shouldApplyDefaultVolumeSmokeTallPreset && routeVolumeScene === 'tall_plume'\)/, 'explicit tall_plume route must not immediately overwrite the Pyro basin with the plain scene preset');
@@ -55,6 +56,16 @@ assert.match(index, /exploding_jellow_fireball_motherfucker_0706:[\s\S]*pyroBite
 assert.match(index, /exploding_jellow_fireball_motherfucker_0706:[\s\S]*pyroRadianceCoolColor:\s*'#ff6b6b'/, 'Exploding jellow fireball basin preserves the operator-tuned radiance cool color');
 assert.match(index, /exploding_jellow_fireball_motherfucker_0706:[\s\S]*pyroFireMode:\s*'pyro-owned'/, 'Exploding jellow fireball basin preserves Pyro-owned flame display mode');
 assert.match(index, /exploding_jellow_fireball_motherfucker_0706:[\s\S]*pressureMode:\s*'global-p3'/, 'Exploding jellow fireball basin preserves the Full P3 pressure solve for training pickup');
+assert.match(index, /pyro_flow_small_bonfire_gamut_0707:[\s\S]*density:\s*6\.00/, 'Pyro Flow small-bonfire gamut basin preserves the high-density live basin');
+assert.match(index, /pyro_flow_small_bonfire_gamut_0707:[\s\S]*fire:\s*0\.00/, 'Pyro Flow small-bonfire gamut basin lets Pyro own the visible flame');
+assert.match(index, /pyro_flow_small_bonfire_gamut_0707:[\s\S]*inputRadius:\s*0\.19/, 'Pyro Flow small-bonfire gamut basin preserves the operator-tuned input radius');
+assert.match(index, /pyro_flow_small_bonfire_gamut_0707:[\s\S]*flowRate:\s*0\.85/, 'Pyro Flow small-bonfire gamut basin preserves the operator-tuned flow rate');
+assert.match(index, /pyro_flow_small_bonfire_gamut_0707:[\s\S]*pyroFlowBite:\s*3\.00/, 'Pyro Flow small-bonfire gamut basin preserves the loud Flow carrier gain');
+assert.match(index, /pyro_flow_small_bonfire_gamut_0707:[\s\S]*pyroFlowRadiance:\s*4\.00/, 'Pyro Flow small-bonfire gamut basin preserves the Flow radiance gain');
+assert.match(index, /pyro_flow_small_bonfire_gamut_0707:[\s\S]*pyroFlowSpikes:\s*1\.00/, 'Pyro Flow small-bonfire gamut basin preserves the Flow spike gain');
+assert.match(index, /pyro_flow_small_bonfire_gamut_0707:[\s\S]*pyroFlowCoolColor:\s*'#ff6400'/, 'Pyro Flow small-bonfire gamut basin preserves the operator-tuned Flow cool color');
+assert.match(index, /pyro_flow_small_bonfire_gamut_0707:[\s\S]*pyroFlowHotColor:\s*'#ff320f'/, 'Pyro Flow small-bonfire gamut basin preserves the operator-tuned Flow hot color');
+assert.match(index, /pyro_flow_small_bonfire_gamut_0707:[\s\S]*pressureMode:\s*'global-p3'/, 'Pyro Flow small-bonfire gamut basin preserves the Full P3 pressure solve for training pickup');
 assert.match(index, /id="volume-basin-bonfire-family"/, 'Volume cockpit exposes a one-click Pyro material bonfire family basin action');
 assert.match(index, /KAMINOS_VOLUME_BASIN_STORAGE_KEY/, 'Volume cockpit has a durable localStorage key for last-basin recovery');
 assert.match(index, /saveVolumeBasinSnapshot/, 'Volume cockpit autosaves current basin controls on slider changes');
@@ -1596,7 +1607,8 @@ assert.match(witness, /operator_fire_0622/, 'witness recognizes the 2026-06-22 t
 assert.match(witness, /operator_memory_fire_0701/, 'witness recognizes the 2026-07-01 operator-found Pyro-memory tall-plume baseline preset');
 assert.match(witness, /pyro_material_bonfire_family_0702/, 'witness recognizes the 2026-07-02 operator-found Pyro material bonfire family basin');
 assert.match(witness, /exploding_jellow_fireball_motherfucker_0706/, 'witness recognizes the 2026-07-06 operator-found exploding jellow fireball Pyro basin');
-assert.match(witness, /DEFAULT_VOLUME_SMOKE_TALL_PRESET\s*=\s*'exploding_jellow_fireball_motherfucker_0706'/, 'witness mirrors the bare smoke route default exploding jellow Pyro basin');
+assert.match(witness, /pyro_flow_small_bonfire_gamut_0707/, 'witness recognizes the 2026-07-07 operator-found Pyro Flow small-bonfire gamut basin');
+assert.match(witness, /DEFAULT_VOLUME_SMOKE_TALL_PRESET\s*=\s*'pyro_flow_small_bonfire_gamut_0707'/, 'witness mirrors the bare smoke route default Pyro Flow small-bonfire gamut basin');
 assert.match(witness, /kaminos_volume_smoke'\)\s*===\s*'1'[\s\S]*DEFAULT_VOLUME_SMOKE_TALL_PRESET/, 'witness expects bare smoke routes to boot into the default Pyro basin');
 assert.match(witness, /!routeParams\.has\('volume_scene'\)\s*\|\|\s*routeParams\.get\('volume_scene'\) === 'tall_plume'/, 'witness expects explicit tall_plume smoke routes to preserve the default Pyro basin');
 assert.match(witness, /expectedDetailScaleArtifactQuarantine/, 'witness verifies the tall-plume detail-scale artifact quarantine state');
