@@ -10697,6 +10697,9 @@ async function endSharpBreathingRoomKilnFire(phase = 'complete', options = {}) {
   fireState.finishedAt = new Date().toISOString();
   if ((fireState.activatedByRun || forceInactive) && volumePrototype) {
     await volumePrototype.setActive(false);
+    volumeBridge?.forceHidden?.('sharp-breathing-room-release');
+    window._kaminosDirty?.();
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     fireState.volumeReleased = true;
     fireState.forcedRelease = forceInactive && !fireState.activatedByRun;
   } else {
@@ -10704,6 +10707,7 @@ async function endSharpBreathingRoomKilnFire(phase = 'complete', options = {}) {
     fireState.forcedRelease = false;
   }
   fireState.volumeDebugState = volumePrototype?.debugState?.() || null;
+  fireState.volumeBridgeDebugState = volumeBridge?.debugState?.() || null;
   window.__kaminosSharpBreathingRoomKilnFireState = fireState;
   refreshVolumeReadout();
   return fireState;
@@ -10715,6 +10719,7 @@ window.kaminosSharpBreathingRoomKilnFireDebug = {
   state: () => ({
     fire: window.__kaminosSharpBreathingRoomKilnFireState || null,
     volume: volumePrototype?.debugState?.() || null,
+    bridge: volumeBridge?.debugState?.() || null,
   }),
 };
 
@@ -15268,10 +15273,17 @@ function createVolumeMainRendererBridge() {
       mesh.scale.set(height * camera.aspect, height, 1);
       return true;
     },
+    forceHidden(reason = 'manual-release') {
+      mesh.visible = false;
+      mesh.userData.kaminosVolumeBridge.lastForceHiddenReason = reason;
+      sourceTexture.needsUpdate = false;
+      return true;
+    },
     debugState() {
       return {
         identity: 'volume-main-renderer-bridge-v0',
         visible: mesh.visible,
+        lastForceHiddenReason: mesh.userData.kaminosVolumeBridge.lastForceHiddenReason || null,
         textureSource: volumePrototype?.canvasElement?.()?.id || null,
         meshName: mesh.name,
         renderOrder: mesh.renderOrder,
