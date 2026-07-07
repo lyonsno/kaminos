@@ -140,6 +140,10 @@ function manifestTolerance(name, fallback) {
   return packetManifest?.tolerances?.[name] ?? fallback;
 }
 
+function effectiveToleranceBudgetSource() {
+  return packetManifest?.toleranceBudgetSource || null;
+}
+
 function detectorStackReport(state) {
   const detectorStackEvidence = state?.detectorStackEvidence || null;
   if (!detectorStackEvidence) return null;
@@ -424,6 +428,11 @@ function assertImageFpnNeckEvidence(state) {
   const ingress = state?.browserFpnDetrIngressEvidence;
   if (report.nonClaims?.level3FpnNeck !== true || report.nonClaims?.browserLocalTextEncoder !== true || report.nonClaims?.fullSam3BrowserExecution !== true) throw new Error('imageFpnNeck bounded non-claims missing');
   if (ingress?.edge?.encoderSrcSource !== 'browser-fpn-neck-feature-2' || !ingress.detrImageIngressTensorSha256 || !ingress.effectiveEncoderSrcSha256 || !ingress.effectiveEncoderPosSha256) throw new Error('imageFpnNeck browser DETR ingress evidence missing');
+  if (effectiveToleranceBudgetSource() !== 'browser-fpn-detr-image-ingress') throw new Error('imageFpnNeck tolerance budget source mismatch');
+  const encoderReceipt = state?.compositionRouteReceipts?.find(receipt => receipt?.effectiveRouteId === DETR_STACK_SCORING_PHASE_PROGRAM_ROUTE_ID);
+  const detrEncoderInput = encoderReceipt?.inputs?.find(input => input.role === 'sam3-detr-encoder-tensors');
+  if (detrEncoderInput?.artifactId !== 'sam3-detr-encoder-tensors:browser-fpn-image-ingress-composition') throw new Error('imageFpnNeck DETR encoder input artifact is not browser FPN image ingress');
+  if (detrEncoderInput?.sha256 !== ingress.detrImageIngressTensorSha256) throw new Error('imageFpnNeck DETR encoder input hash does not match browser FPN ingress aggregate');
   return report;
 }
 
@@ -470,6 +479,7 @@ function writeReport(extra = {}) {
     browserFpnDetrIngressEvidence: lastState?.browserFpnDetrIngressEvidence || null,
     parity: lastState?.parity || null,
     tolerances: packetManifest?.tolerances || null,
+    effectiveToleranceBudgetSource: effectiveToleranceBudgetSource(),
     detectorStack: detectorStackReport(lastState),
     imagePreprocess: imagePreprocessReport(lastState),
     imagePatchEmbed: imagePatchEmbedReport(lastState),
