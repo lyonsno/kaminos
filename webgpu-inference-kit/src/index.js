@@ -178,6 +178,14 @@ export {
 } from './sam-image-vit-block-stack-phase-program.js';
 
 export {
+  SAM3_IMAGE_FPN_NECK_PHASE_PROGRAM_ROUTE_ID,
+  createSam3ImageFpnNeckPhaseProgramCpuOracle,
+  createSam3ImageFpnNeckPhaseProgramRouteDefinition,
+  createSam3ImageFpnNeckPhaseProgramRouteReceipt,
+  runSam3ImageFpnNeckPhaseProgramRoute,
+} from './sam-image-fpn-neck-phase-program.js';
+
+export {
   SAM3_PIXEL_DECODER_PHASE_PROGRAM_ROUTE_ID,
   createSam3PixelDecoderPhaseProgramCpuOracle,
   createSam3PixelDecoderPhaseProgramRouteDefinition,

@@ -111,15 +111,19 @@ def run_reference(model, image, prompt, resolution):
         global_rope_cos = backbone._rope_global_cos
         global_rope_sin = backbone._rope_global_sin
     vit_block_stack_hidden_states = vit_prefix_hidden_states
+    vit_backbone_hidden_states = vit_prefix_hidden_states
     vit_pre_first_global_hidden_states = None
     vit_first_global_hidden_states = None
-    for layer_index, layer in enumerate(backbone.layers[: first_global_layer_index + 1]):
+    for layer_index, layer in enumerate(backbone.layers):
         if layer_index == first_global_layer_index:
-            vit_pre_first_global_hidden_states = vit_block_stack_hidden_states
-            vit_block_stack_hidden_states = layer(vit_block_stack_hidden_states, global_rope_cos, global_rope_sin)
-            vit_first_global_hidden_states = vit_block_stack_hidden_states
+            vit_pre_first_global_hidden_states = vit_backbone_hidden_states
+        if layer_index in global_attn_indexes:
+            vit_backbone_hidden_states = layer(vit_backbone_hidden_states, global_rope_cos, global_rope_sin)
         else:
-            vit_block_stack_hidden_states = layer(vit_block_stack_hidden_states, backbone._rope_window_cos, backbone._rope_window_sin)
+            vit_backbone_hidden_states = layer(vit_backbone_hidden_states, backbone._rope_window_cos, backbone._rope_window_sin)
+        if layer_index == first_global_layer_index:
+            vit_first_global_hidden_states = vit_backbone_hidden_states
+            vit_block_stack_hidden_states = vit_backbone_hidden_states
     fpn_features = det.vision_encoder(pixel_values)
     fpn_pos = [det._pos_enc(feat) for feat in fpn_features]
     fpn_trimmed = fpn_features[:-1]
@@ -173,6 +177,7 @@ def run_reference(model, image, prompt, resolution):
         vit_pre_first_global_hidden_states,
         vit_first_global_hidden_states,
         vit_block_stack_hidden_states,
+        vit_backbone_hidden_states,
         all_logits,
         pred_logits,
         ref_boxes,
@@ -199,6 +204,8 @@ def run_reference(model, image, prompt, resolution):
         "vit_block_stack_hidden_states": np.array(vit_block_stack_hidden_states, dtype=np.float32),
         "vit_block_stack_start_layer_index": 0,
         "vit_block_stack_end_layer_index": first_global_layer_index,
+        "vit_backbone_hidden_states": np.array(vit_backbone_hidden_states, dtype=np.float32),
+        "vit_backbone_final_layer_index": len(backbone.layers) - 1,
         "vit_block_stack_global_attn_indexes": global_attn_indexes,
         "vit_block_stack_first_global_layer_index": first_global_layer_index,
         "encoder_pos": np.array(pos_flat, dtype=np.float32),

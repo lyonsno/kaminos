@@ -421,9 +421,12 @@ function normalizeShape(shape = {}) {
     ropeTheta: shape.ropeTheta ?? 10000,
     startLayerIndex: shape.startLayerIndex ?? 0,
     endLayerIndex: shape.endLayerIndex ?? shape.firstGlobalLayerIndex ?? 0,
+    finalLayerIndex: shape.finalLayerIndex ?? shape.endLayerIndex ?? null,
+    fullBackbone: shape.fullBackbone === true,
     globalAttnIndexes: shape.globalAttnIndexes ?? shape.global_attn_indexes ?? [7, 15, 23, 31],
     firstGlobalLayerIndex: shape.firstGlobalLayerIndex ?? (shape.globalAttnIndexes ?? shape.global_attn_indexes ?? [7, 15, 23, 31])[0],
   };
+  if (out.finalLayerIndex == null) out.finalLayerIndex = out.endLayerIndex;
   out.headDim = out.hiddenSize / out.numHeads;
   out.tokenCount = out.batch * out.height * out.width;
   out.totalValues = out.tokenCount * out.hiddenSize;
@@ -442,6 +445,7 @@ function normalizeShape(shape = {}) {
   }
   if (!Number.isInteger(out.startLayerIndex) || out.startLayerIndex < 0) throw new Error('shape.startLayerIndex must be a non-negative integer');
   if (out.startLayerIndex < 0 || out.endLayerIndex < out.startLayerIndex) throw new Error('shape layer range must be valid');
+  if (!Number.isInteger(out.finalLayerIndex) || out.finalLayerIndex < out.endLayerIndex) throw new Error('shape.finalLayerIndex must be an integer >= shape.endLayerIndex');
   if (!Array.isArray(out.globalAttnIndexes) || out.globalAttnIndexes.length === 0 || !out.globalAttnIndexes.every(value => Number.isInteger(value) && value >= 0)) throw new Error('shape.globalAttnIndexes must be non-empty integer array');
   if (!Number.isInteger(out.headDim) || out.headDim % 4 !== 0) throw new Error('shape.hiddenSize / shape.numHeads must be divisible by 4 for SAM3 axial RoPE');
   if (out.layerNormEps !== 0.000001) throw new Error('shape.layerNormEps must be 0.000001 until the WebGPU block-stack shader accepts configurable epsilon');
@@ -701,7 +705,7 @@ export function createSam3ImageVitBlockStackPhaseProgramCpuOracle(input) {
   }
   return {
     shape,
-    layerRange: { startLayerIndex: shape.startLayerIndex, endLayerIndex: shape.endLayerIndex, layerCount: shape.layerCount, firstGlobalLayerIndex: shape.firstGlobalLayerIndex },
+    layerRange: { startLayerIndex: shape.startLayerIndex, endLayerIndex: shape.endLayerIndex, layerCount: shape.layerCount, firstGlobalLayerIndex: shape.firstGlobalLayerIndex, finalLayerIndex: shape.finalLayerIndex, fullBackbone: shape.fullBackbone },
     layerModes,
     layerCheckpoints,
     windowPartition: { originalHeight: shape.height, originalWidth: shape.width, windowSize: shape.windowSize, globalWindowSize: shape.globalWindowSize },
@@ -948,12 +952,12 @@ export async function runSam3ImageVitBlockStackPhaseProgramRoute(input = {}) {
       { name: 'vit-block-stack-gelu-mlp', kernel: 'mlpFc2', dispatch: [workgroups(shape.totalValues)], metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
       { name: 'vit-block-stack-gelu-mlp', kernel: 'residualMlp', dispatch: [workgroups(shape.totalValues)], yieldAfter: true, metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
     ],
-    metadata: { routeId: SAM3_IMAGE_VIT_BLOCK_STACK_PHASE_PROGRAM_ROUTE_ID, layout: 'B,H,W,C', referenceBoundary: 'SAM3 image ViT contiguous block stack through first global attention' },
+    metadata: { routeId: SAM3_IMAGE_VIT_BLOCK_STACK_PHASE_PROGRAM_ROUTE_ID, layout: 'B,H,W,C', referenceBoundary: shape.fullBackbone ? 'SAM3 image ViT contiguous full backbone' : 'SAM3 image ViT contiguous block stack through first global attention' },
   });
 
   await runtime.runStage('vit-block-stack-layer-range', async stage => {
-    await stage.yieldToBrowser({ reason: 'sam3-image-vit-block-stack-layer-range-established', metadata: { startLayerIndex: shape.startLayerIndex, endLayerIndex: shape.endLayerIndex, firstGlobalLayerIndex: shape.firstGlobalLayerIndex } });
-  }, { startLayerIndex: shape.startLayerIndex, endLayerIndex: shape.endLayerIndex, firstGlobalLayerIndex: shape.firstGlobalLayerIndex, global_attn_indexes: shape.globalAttnIndexes });
+    await stage.yieldToBrowser({ reason: 'sam3-image-vit-block-stack-layer-range-established', metadata: { startLayerIndex: shape.startLayerIndex, endLayerIndex: shape.endLayerIndex, firstGlobalLayerIndex: shape.firstGlobalLayerIndex, finalLayerIndex: shape.finalLayerIndex, fullBackbone: shape.fullBackbone } });
+  }, { startLayerIndex: shape.startLayerIndex, endLayerIndex: shape.endLayerIndex, firstGlobalLayerIndex: shape.firstGlobalLayerIndex, finalLayerIndex: shape.finalLayerIndex, fullBackbone: shape.fullBackbone, global_attn_indexes: shape.globalAttnIndexes });
 
   let inputTensorName = 'hiddenA';
   let outputTensorName = 'hiddenB';
