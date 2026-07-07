@@ -34,10 +34,10 @@ function schedulerVerification({
     : [];
   const monodepthEvents = monodepthLabels
     ? SHARP_MONODEPTH_PHASE_LABELS.map(label => ({
-        phase: 'monodepth-phase',
+        phase: label,
         boundary: 'monodepth-phase',
         kind: 'js-yield-end',
-        details: { phase: label },
+        label: label.startsWith('fusion-') ? 'decoder.fusions.1' : undefined,
       }))
     : [];
   return {
@@ -353,7 +353,7 @@ writeFileSync(report, JSON.stringify({
         { phase: 'gaussian', boundary: 'gaussian-phase', kind: 'js-yield-start' },
         { phase: 'gaussian', boundary: 'gaussian-phase', kind: 'js-yield-end' },
         ...${JSON.stringify(SHARP_SPN_LOWRES_BLOCK_LABELS)}.map(block => ({ phase: 'spn-fusion', boundary: 'spn-lowres-fusion', kind: 'js-yield-end', details: { block } })),
-        ...${JSON.stringify(SHARP_MONODEPTH_PHASE_LABELS)}.map(label => ({ phase: 'monodepth-phase', boundary: 'monodepth-phase', kind: 'js-yield-end', details: { phase: label } }))
+        ...${JSON.stringify(SHARP_MONODEPTH_PHASE_LABELS)}.map(label => ({ phase: label, boundary: 'monodepth-phase', kind: 'js-yield-end', label: label.startsWith('fusion-') ? 'decoder.fusions.1' : undefined }))
       ] : [],
       boundaryAssertions: isCooperative ? [
         { field: 'phaseChunkSize.spnPatch', status: 'verified', observedBoundary: 'spn-patch-chunk', observedCount: 1, observedQueueWaitCount: 1, observedYieldCount: 1 },
