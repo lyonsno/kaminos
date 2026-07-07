@@ -85,6 +85,18 @@ canvas { display: block; }
 .hybrid-splat-viewport-status.error { border-color: rgba(105,48,48,0.9); background: rgba(32,18,18,0.88); color: #efb0b0; }
 #hybrid-splat-renderer-controls-popover { border: 1px solid rgba(54,70,74,0.92); border-radius: 8px; background: rgba(17,20,21,0.94); backdrop-filter: blur(10px); padding: 10px 11px; box-shadow: 0 12px 34px rgba(0,0,0,0.38); }
 #hybrid-splat-renderer-controls-popover[hidden] { display: none; }
+.selected-splat-bake-layer-button.active { background: #1a4d3a; border-color: #2d8b62; color: #ddfff1; }
+#selected-splat-bake-layer-panel { border: 1px solid rgba(54,74,66,0.92); border-radius: 8px; background: rgba(15,20,18,0.94); backdrop-filter: blur(10px); padding: 10px 11px; box-shadow: 0 12px 34px rgba(0,0,0,0.34); }
+#selected-splat-bake-layer-panel[hidden] { display: none; }
+.selected-splat-bake-layer-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.selected-splat-bake-layer-title { color: #d9eee6; font-size: 11px; font-weight: 700; }
+.selected-splat-bake-layer-meta { color: #758a82; font: 9px 'SF Mono', monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.selected-splat-bake-layer-empty { color: #6c7772; font-size: 10px; line-height: 1.35; }
+.selected-splat-bake-layer-list { display: flex; flex-direction: column; gap: 7px; }
+.selected-splat-bake-layer-row { display: grid; grid-template-columns: 18px minmax(0, 1fr) 96px 40px; gap: 7px; align-items: center; padding: 7px; border: 1px solid rgba(255,255,255,0.06); border-radius: 6px; background: rgba(255,255,255,0.025); }
+.selected-splat-bake-layer-name { color: #cbd7d3; font-size: 10px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.selected-splat-bake-layer-route { color: #687670; font: 8px 'SF Mono', monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 2px; }
+.selected-splat-bake-layer-value { color: #a6b9b1; font: 9px 'SF Mono', monospace; text-align: right; }
 .hybrid-control-title { color: #d6e6ea; font-size: 11px; font-weight: 700; margin-bottom: 7px; }
 .hybrid-control-section { margin-top: 9px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.06); }
 .hybrid-control-section:first-of-type { margin-top: 0; padding-top: 0; border-top: none; }
@@ -1892,9 +1904,11 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
     <div class="hybrid-splat-viewport-actions">
       <button type="button" class="tb-btn primary" id="hybrid-splat-viewport-start-button" onclick="toggleHybridSplatViewportRenderer()">Start Scene</button>
       <button type="button" class="tb-btn" id="hybrid-splat-viewport-reload-button" onclick="reloadHybridSplatSceneRenderer()">Reload</button>
+      <button type="button" class="tb-btn selected-splat-bake-layer-button" id="selected-splat-bake-layer-button" onclick="createSelectedSplatViewBakeLayer()">Bake View</button>
       <button type="button" id="hybrid-splat-renderer-controls-toggle" aria-haspopup="menu" aria-expanded="false" aria-controls="hybrid-splat-renderer-controls-popover" class="tb-btn hybrid-splat-dropdown-trigger" onclick="toggleHybridSplatRendererControlsPopover()">Renderer</button>
     </div>
     <div class="hybrid-splat-viewport-status" id="hybrid-splat-viewport-status">Select a splat</div>
+    <div id="selected-splat-bake-layer-panel" data-splat-bake-layer-schema="kaminos.splat-bake-layer.v0" hidden></div>
     <div id="hybrid-splat-renderer-controls-popover" role="menu" hidden>
       <div class="hybrid-control-title">Hybrid Renderer</div>
       <div class="hybrid-control-section">
@@ -2240,6 +2254,10 @@ let transformGizmoDragging = false;
 let splatCorrectionMode = null;
 const SPLAT_CROP_TARGET_MIN_SIZE = 0.02;
 const SCENE_OBJECT_POINT_PICK_THRESHOLD = 0.025;
+const SELECTED_SPLAT_BAKE_LAYER_SCHEMA = 'kaminos.splat-bake-layer.v0';
+const SELECTED_SPLAT_BAKE_LAYER_RECEIPT_SCHEMA = 'kaminos.splat-bake-layer.receipt.v0';
+const SELECTED_SPLAT_VIEW_BAKE_LAYER_ROUTE = 'selected-splat-view-bake-layer-v0';
+const SELECTED_SPLAT_VIEW_BAKE_LAYER_CRUCIBLE_KIND = 'selected-splat-view-bake-layer-crucible-v0';
 const DEFAULT_HYBRID_SPLAT_OVERLAY_MODULE_URL = '/vendor/meshsplat-renderer/splatOverlay.js';
 const HYBRID_SPLAT_OVERLAY_PACKAGE_ROUTE = '/vendor/meshsplat-renderer/';
 const HYBRID_SPLAT_OVERLAY_MODULE_URL_PARAMS = [
@@ -2288,6 +2306,7 @@ let hybridSplatOverlayState = {
 };
 let hybridSplatDepthProxyDebugEnabled = true;
 const hybridSplatOverlayHiddenPreviewObjects = new Set();
+let selectedSplatBakeLayerSequence = 0;
 
 function hideHybridSplatPreviewObject(record) {
   const visualRoot = record?.type === 'splat' ? (splatVisualRootFor(record.object) || record.object) : null;
@@ -3297,6 +3316,7 @@ async function toggleHybridSplatViewportRenderer() {
 function updateHybridSplatViewportControls(entry) {
   const controls = document.getElementById('hybrid-splat-viewport-controls');
   if (!controls) return;
+  renderSelectedSplatBakeLayerPanel(entry?.type === 'splat' ? entry : null);
   const isSplat = entry?.type === 'splat';
   const sceneSplats = sceneSplatRecords();
   const hasSceneSplatSource = sceneSplats.length > 0;
@@ -4341,6 +4361,224 @@ function selectedSplatRecord(id = activeSceneObjectId) {
   return entry?.type === 'splat' ? entry : null;
 }
 
+function selectedSplatArmatureRef(record) {
+  return {
+    schema: 'kaminos.splat-armature-ref.v0',
+    objectId: record?.id || null,
+    source: record?.source || null,
+    fileName: record?.fileName || record?.label || null,
+    splatProvenance: record?.splat?.provenance || null,
+    sceneTransform: record ? splatSceneTransformState(record) : null,
+  };
+}
+
+function selectedSplatViewBakeLayerCameraSnapshot() {
+  if (!camera) return null;
+  camera.updateMatrixWorld?.();
+  const viewport = currentHybridOverlayViewport();
+  return {
+    schema: 'kaminos.splat-bake-layer.camera.v0',
+    position: camera.position.toArray(),
+    target: controls?.target?.toArray?.() || null,
+    projectionMatrix: Array.from(camera.projectionMatrix.elements),
+    matrixWorldInverse: Array.from(camera.matrixWorldInverse.elements),
+    viewport,
+    capturedAt: new Date().toISOString(),
+  };
+}
+
+function ensureSelectedSplatBakeLayerList(record) {
+  if (!record) return [];
+  if (!Array.isArray(record.splatBakeLayers)) record.splatBakeLayers = [];
+  return record.splatBakeLayers;
+}
+
+function selectedSplatViewBakeLayerReceipt(record, draft = {}) {
+  const now = draft.createdAt || new Date().toISOString();
+  const armatureRef = draft.armatureRef || selectedSplatArmatureRef(record);
+  return {
+    schema: SELECTED_SPLAT_BAKE_LAYER_RECEIPT_SCHEMA,
+    receiptId: draft.receiptId || `receipt-${draft.layerId || 'unassigned'}`,
+    crucible: draft.crucible || {
+      id: `crucible-${record?.id || 'unselected'}`,
+      kind: SELECTED_SPLAT_VIEW_BAKE_LAYER_CRUCIBLE_KIND,
+      intent: 'operator-selected-view-bake-layer',
+    },
+    armatureRef,
+    firing: draft.firing || {
+      id: `firing-${draft.layerId || 'unassigned'}`,
+      route: SELECTED_SPLAT_VIEW_BAKE_LAYER_ROUTE,
+      status: 'complete',
+      requestedConfig: draft.requestedConfig || {},
+      effectiveConfig: draft.effectiveConfig || {},
+    },
+    handleRefs: {
+      selectedObjectId: record?.id || null,
+      selectedSource: record?.source || null,
+      activeSceneObjectId,
+    },
+    witness: {
+      camera: draft.camera || selectedSplatViewBakeLayerCameraSnapshot(),
+      rendererControls: draft.rendererControls || hybridSplatRendererControlsPayload(),
+      sourceIdentity: record?.source || null,
+    },
+    outputs: {
+      layerId: draft.layerId || null,
+      shardRefs: draft.shardRefs || [],
+      castRef: draft.castRef || null,
+      artifactAuthority: 'candidate-layer-record-only',
+    },
+    failurePhase: null,
+    graduationStatus: 'candidate',
+    createdAt: now,
+  };
+}
+
+function createSelectedSplatViewBakeLayer(options = {}) {
+  const record = selectedSplatRecord();
+  if (!record) {
+    setInfo('Select a splat before baking a view layer');
+    return null;
+  }
+  const layers = ensureSelectedSplatBakeLayerList(record);
+  const now = new Date().toISOString();
+  const layerId = `splat-view-layer-${Date.now().toString(36)}-${++selectedSplatBakeLayerSequence}`;
+  const requestedConfig = {
+    route: SELECTED_SPLAT_VIEW_BAKE_LAYER_ROUTE,
+    channelIntent: options.channelIntent || ['albedo', 'roughness', 'metalness', 'emissive', 'normal', 'ao'],
+    inputFrame: 'current-kaminos-camera',
+    operatorDriven: true,
+  };
+  const effectiveConfig = {
+    ...requestedConfig,
+    layerContributionMode: 'candidate-parameter-layer',
+    backendRoute: options.backendRoute || 'browser-receipt-local-v0',
+    renderedIntoSplat: false,
+  };
+  const cameraSnapshot = selectedSplatViewBakeLayerCameraSnapshot();
+  const rendererControls = hybridSplatRendererControlsPayload();
+  const armatureRef = selectedSplatArmatureRef(record);
+  const crucible = {
+    id: `crucible-${record.id}`,
+    kind: SELECTED_SPLAT_VIEW_BAKE_LAYER_CRUCIBLE_KIND,
+    station: 'Bake Workbench',
+    intent: 'selected-splat-current-view-candidate-layer',
+  };
+  const firing = {
+    id: `firing-${layerId}`,
+    route: SELECTED_SPLAT_VIEW_BAKE_LAYER_ROUTE,
+    status: 'complete',
+    requestedConfig,
+    effectiveConfig,
+  };
+  const receipt = selectedSplatViewBakeLayerReceipt(record, {
+    layerId,
+    receiptId: `receipt-${layerId}`,
+    armatureRef,
+    crucible,
+    firing,
+    requestedConfig,
+    effectiveConfig,
+    camera: cameraSnapshot,
+    rendererControls,
+    createdAt: now,
+  });
+  const layer = {
+    schema: SELECTED_SPLAT_BAKE_LAYER_SCHEMA,
+    id: layerId,
+    label: options.label || `View Bake ${layers.length + 1}`,
+    status: 'candidate',
+    enabled: options.enabled !== false,
+    strength: Number.isFinite(Number(options.strength)) ? Math.max(0, Math.min(1, Number(options.strength))) : 1,
+    route: SELECTED_SPLAT_VIEW_BAKE_LAYER_ROUTE,
+    crucibleKind: SELECTED_SPLAT_VIEW_BAKE_LAYER_CRUCIBLE_KIND,
+    targetObjectId: record.id,
+    armatureRef,
+    camera: cameraSnapshot,
+    requestedConfig,
+    effectiveConfig,
+    receipt,
+    createdAt: now,
+    updatedAt: now,
+  };
+  layers.push(layer);
+  renderSelectedSplatBakeLayerPanel(record);
+  window._kaminosDirty?.();
+  setInfo(`Bake layer captured: ${layer.label}`);
+  return layer;
+}
+
+function findSelectedSplatBakeLayer(layerId) {
+  for (const record of sceneObjects) {
+    const layer = ensureSelectedSplatBakeLayerList(record).find(candidate => candidate.id === layerId);
+    if (layer) return { record, layer };
+  }
+  return { record: null, layer: null };
+}
+
+function setSelectedSplatBakeLayerControls(layerId, controls = {}) {
+  const found = findSelectedSplatBakeLayer(layerId);
+  if (!found.layer) throw new Error(`Unknown splat bake layer: ${layerId}`);
+  if (typeof controls.enabled === 'boolean') found.layer.enabled = controls.enabled;
+  if (Number.isFinite(Number(controls.strength))) {
+    found.layer.strength = Math.max(0, Math.min(1, Number(controls.strength)));
+  }
+  found.layer.updatedAt = new Date().toISOString();
+  renderSelectedSplatBakeLayerPanel(selectedSplatRecord() || found.record);
+  window._kaminosDirty?.();
+  return found.layer;
+}
+
+function selectedSplatBakeLayerDebugState(id = activeSceneObjectId) {
+  const record = selectedSplatRecord(id) || selectedSplatRecord() || sceneObjects.find(entry => entry.type === 'splat') || null;
+  const layers = record ? ensureSelectedSplatBakeLayerList(record) : [];
+  return {
+    schema: 'kaminos.splat-bake-layer.debug.v0',
+    selectedObjectId: activeSceneObjectId || null,
+    targetObjectId: record?.id || null,
+    route: SELECTED_SPLAT_VIEW_BAKE_LAYER_ROUTE,
+    crucibleKind: SELECTED_SPLAT_VIEW_BAKE_LAYER_CRUCIBLE_KIND,
+    layerCount: layers.length,
+    layers: layers.map(layer => JSON.parse(JSON.stringify(layer))),
+  };
+}
+
+function renderSelectedSplatBakeLayerPanel(entry = selectedSplatRecord()) {
+  const button = document.getElementById('selected-splat-bake-layer-button');
+  const panel = document.getElementById('selected-splat-bake-layer-panel');
+  if (!button || !panel) return;
+  const isSplat = entry?.type === 'splat';
+  button.hidden = !isSplat;
+  button.disabled = !isSplat;
+  if (!isSplat) {
+    panel.hidden = true;
+    panel.innerHTML = '';
+    button.classList.remove('active');
+    return;
+  }
+  const layers = ensureSelectedSplatBakeLayerList(entry);
+  panel.hidden = false;
+  button.classList.toggle('active', layers.length > 0);
+  const rows = layers.map(layer => `
+    <div class="selected-splat-bake-layer-row" data-selected-splat-bake-layer-id="${escapeHtml(layer.id)}">
+      <input type="checkbox" ${layer.enabled ? 'checked' : ''} aria-label="Enable ${escapeHtml(layer.label)}" onchange="setSelectedSplatBakeLayerControls('${escapeHtml(layer.id)}', { enabled: this.checked })">
+      <span>
+        <div class="selected-splat-bake-layer-name">${escapeHtml(layer.label)}</div>
+        <div class="selected-splat-bake-layer-route">${escapeHtml(layer.route)} · ${escapeHtml(layer.receipt?.graduationStatus || layer.status)}</div>
+      </span>
+      <input type="range" min="0" max="1" step="0.01" value="${Number(layer.strength).toFixed(2)}" aria-label="Strength ${escapeHtml(layer.label)}" onchange="setSelectedSplatBakeLayerControls('${escapeHtml(layer.id)}', { strength: this.value })">
+      <span class="selected-splat-bake-layer-value">${Number(layer.strength).toFixed(2)}</span>
+    </div>
+  `).join('');
+  panel.innerHTML = `
+    <div class="selected-splat-bake-layer-head">
+      <div class="selected-splat-bake-layer-title">Bake Layers</div>
+      <div class="selected-splat-bake-layer-meta">${escapeHtml(entry.label || entry.fileName || entry.id)}</div>
+    </div>
+    ${layers.length ? `<div class="selected-splat-bake-layer-list">${rows}</div>` : '<div class="selected-splat-bake-layer-empty">No view bakes captured for this splat.</div>'}
+  `;
+}
+
 function splatCorrectionTransformTarget() {
   if (!splatCorrectionMode) return null;
   return splatCorrectionMode.editMode === 'crop'
@@ -5187,6 +5425,11 @@ window.kaminosHybridSplatRendererModuleDebugState = () => hybridSplatOverlayStat
 window.kaminosHybridSplatRendererControlsDebugState = () => hybridSplatOverlayState.rendererControlsTelemetry;
 window.kaminosPublishHybridSplatRendererControls = publishHybridSplatRendererControls;
 window.kaminosSyncHybridSplatSceneRendererMembership = syncHybridSplatSceneRendererMembership;
+window.kaminosCreateSelectedSplatViewBakeLayer = createSelectedSplatViewBakeLayer;
+window.kaminosSetSelectedSplatBakeLayerControls = setSelectedSplatBakeLayerControls;
+window.kaminosSelectedSplatBakeLayerDebugState = selectedSplatBakeLayerDebugState;
+window.createSelectedSplatViewBakeLayer = createSelectedSplatViewBakeLayer;
+window.setSelectedSplatBakeLayerControls = setSelectedSplatBakeLayerControls;
 window.toggleHybridSplatViewportRenderer = toggleHybridSplatViewportRenderer;
 window.toggleHybridSplatRendererControlsPopover = toggleHybridSplatRendererControlsPopover;
 window.startHybridSplatSceneRenderer = startHybridSplatSceneRenderer;
@@ -5583,6 +5826,7 @@ window.kaminosSceneObjectDebugState = function() {
     transform: sceneObjectTransformState(record.object),
     sceneTransform: record.sceneTransform ? cloneTransformState(record.sceneTransform) : null,
     splat: record.splat || null,
+    splatBakeLayers: Array.isArray(record.splatBakeLayers) ? JSON.parse(JSON.stringify(record.splatBakeLayers)) : [],
     image: record.image || null,
     renderRoute: record.renderRoute || null,
     renderCapabilities: record.renderCapabilities || null,

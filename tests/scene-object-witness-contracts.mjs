@@ -210,6 +210,16 @@ assert.match(witness, /sparse false-positive frame/, 'Real splat crop witness re
 assert.match(witness, /hybrid splat overlay did not expose visible UI/, 'Hybrid Renderer witness requires a visible selected-splat control surface');
 assert.match(witness, /hybrid splat overlay did not load selected splat source/, 'Hybrid Renderer witness proves the overlay consumed the selected splat route');
 assert.match(witness, /hybrid splat overlay did not record dual-canvas capability/, 'Hybrid Renderer witness proves dual-canvas overlay status is explicit');
+assert.match(witness, /selected-splat-bake-layer/, 'witness supports a selected-splat view bake-layer scenario');
+assert.match(witness, /runSelectedSplatBakeLayerScenario/, 'witness has a dedicated selected-splat bake-layer flow');
+assert.match(witness, /selected splat bake layer did not expose viewport UI/, 'selected-splat bake-layer witness requires the viewport-local affordance');
+assert.match(witness, /selected splat bake layer did not create a layer/, 'selected-splat bake-layer witness proves a layer was created on the selected armature');
+assert.match(witness, /selected splat bake layer did not preserve receipt identity/, 'selected-splat bake-layer witness proves route and receipt identity');
+assert.match(witness, /selected splat bake layer did not preserve current camera/, 'selected-splat bake-layer witness proves current camera capture is load-bearing');
+assert.match(witness, /selected splat bake layer controls did not update/, 'selected-splat bake-layer witness proves enable and strength controls are reversible layer state');
+assert.match(witness, /kaminosSelectedSplatBakeLayerDebugState/, 'selected-splat bake-layer witness reads explicit debug state rather than inferring from DOM');
+assert.match(witness, /kaminosCreateSelectedSplatViewBakeLayer/, 'selected-splat bake-layer witness creates layers through the browser API');
+assert.match(witness, /kaminosSetSelectedSplatBakeLayerControls/, 'selected-splat bake-layer witness tunes layers through the browser API');
 assert.match(witness, /hybrid splat overlay did not report renderer crop application/, 'Hybrid Renderer witness requires renderer-reported crop sidecar application');
 assert.match(witness, /hybrid splat overlay did not receive model matrix/, 'Hybrid Renderer witness proves Kaminos sends objectWorldMatrix through the renderer API');
 assert.match(witness, /hybrid splat overlay did not receive viewport identity/, 'Hybrid Renderer witness proves Kaminos sends viewport identity through the renderer API');

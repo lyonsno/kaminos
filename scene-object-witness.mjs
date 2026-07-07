@@ -3814,6 +3814,111 @@ async function runHybridSplatOverlayScenario(ws) {
   }
 }
 
+async function runSelectedSplatBakeLayerScenario(ws) {
+  phase = 'scenario-selected-splat-bake-layer';
+  lastEvidence.selectedSplatBakeLayer = await evaluate(ws, `
+    (async () => {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      const rowState = () => [...document.querySelectorAll('[data-scene-object-id]')].map(row => ({
+        id: row.dataset.sceneObjectId,
+        active: row.classList.contains('active'),
+        pressed: row.getAttribute('aria-pressed'),
+        label: row.querySelector('[data-scene-object-name]')?.value?.trim() || row.querySelector('.scene-object-name')?.textContent?.trim() || null,
+      }));
+      const waitForAssetRows = async () => {
+        for (let i = 0; i < 100; i++) {
+          const rows = [...document.querySelectorAll('#splat-assets-list .gr-entry')];
+          if (rows.length) return rows;
+          await wait(125);
+        }
+        return [...document.querySelectorAll('#splat-assets-list .gr-entry')];
+      };
+      const waitForSceneRows = async count => {
+        for (let i = 0; i < 120; i++) {
+          const rows = rowState();
+          if (rows.length >= count) return rows;
+          await wait(125);
+        }
+        return rowState();
+      };
+      document.querySelector('[data-tab="greenroom"]')?.click();
+      if (window.grBrowseSplatAssets) await window.grBrowseSplatAssets();
+      const beforeRows = rowState();
+      const assetData = await fetch('/api/assets?kind=splat').then(resp => resp.json());
+      const assetRows = await waitForAssetRows();
+      const assetEntry = (assetData.entries || [])[0] || null;
+      const actionRow = assetRows.find(row => row.dataset.assetSource === assetEntry?.source
+        && [...row.querySelectorAll('button')].some(button => button.textContent.trim() === 'Import Splat'))
+        || assetRows.find(row => [...row.querySelectorAll('button')]
+        .some(button => button.textContent.trim() === 'Import Splat'));
+      const actionButton = actionRow ? [...actionRow.querySelectorAll('button')]
+        .find(button => button.textContent.trim() === 'Import Splat') : null;
+      if (actionButton) actionButton.click();
+      await waitForSceneRows(beforeRows.length + 1);
+      const splatObject = (window.kaminosSceneObjectDebugState?.() || []).find(record => record.type === 'splat') || null;
+      if (splatObject?.id) window.selectSceneObject?.(splatObject.id);
+      await wait(250);
+      const bakeButton = document.getElementById('selected-splat-bake-layer-button');
+      const bakePanelBefore = document.getElementById('selected-splat-bake-layer-panel');
+      const beforeDebug = window.kaminosSelectedSplatBakeLayerDebugState?.(splatObject?.id) || null;
+      const cameraBefore = window.kaminosCameraDebugState?.() || null;
+      const layer = await window.kaminosCreateSelectedSplatViewBakeLayer?.({ label: 'Witness View Bake', strength: 1 });
+      await wait(100);
+      const afterCreateDebug = window.kaminosSelectedSplatBakeLayerDebugState?.(splatObject?.id) || null;
+      const createdLayer = afterCreateDebug?.layers?.[0] || null;
+      const tunedLayer = createdLayer
+        ? window.kaminosSetSelectedSplatBakeLayerControls?.(createdLayer.id, { enabled: false, strength: 0.37 })
+        : null;
+      await wait(100);
+      const afterTuneDebug = window.kaminosSelectedSplatBakeLayerDebugState?.(splatObject?.id) || null;
+      const bakePanelAfter = document.getElementById('selected-splat-bake-layer-panel');
+      return {
+        actionExposed: !!actionButton,
+        assetRowCount: assetRows.length,
+        splatObject,
+        bakeButtonVisible: !!bakeButton
+          && !bakeButton.hidden
+          && getComputedStyle(bakeButton).display !== 'none'
+          && getComputedStyle(bakeButton).visibility !== 'hidden',
+        bakePanelVisibleBefore: !!bakePanelBefore && !bakePanelBefore.hidden,
+        bakePanelVisibleAfter: !!bakePanelAfter && !bakePanelAfter.hidden,
+        beforeDebug,
+        cameraBefore,
+        layer,
+        tunedLayer,
+        afterCreateDebug,
+        afterTuneDebug,
+        panelText: bakePanelAfter?.textContent || null,
+      };
+    })()
+  `, { timeoutMs: 60000 });
+
+  if (!lastEvidence.selectedSplatBakeLayer.actionExposed || !lastEvidence.selectedSplatBakeLayer.splatObject) {
+    throw new Error(`selected splat bake layer could not import a splat fixture: ${JSON.stringify(lastEvidence.selectedSplatBakeLayer)}`);
+  }
+  if (!lastEvidence.selectedSplatBakeLayer.bakeButtonVisible || !lastEvidence.selectedSplatBakeLayer.bakePanelVisibleBefore) {
+    throw new Error(`selected splat bake layer did not expose viewport UI: ${JSON.stringify(lastEvidence.selectedSplatBakeLayer)}`);
+  }
+  const layer = lastEvidence.selectedSplatBakeLayer.afterCreateDebug?.layers?.[0] || null;
+  if (!layer || layer.schema !== 'kaminos.splat-bake-layer.v0' || layer.targetObjectId !== lastEvidence.selectedSplatBakeLayer.splatObject.id) {
+    throw new Error(`selected splat bake layer did not create a layer: ${JSON.stringify(lastEvidence.selectedSplatBakeLayer)}`);
+  }
+  if (layer.receipt?.schema !== 'kaminos.splat-bake-layer.receipt.v0'
+      || layer.receipt?.firing?.route !== 'selected-splat-view-bake-layer-v0'
+      || layer.receipt?.crucible?.kind !== 'selected-splat-view-bake-layer-crucible-v0'
+      || layer.receipt?.graduationStatus !== 'candidate') {
+    throw new Error(`selected splat bake layer did not preserve receipt identity: ${JSON.stringify(lastEvidence.selectedSplatBakeLayer)}`);
+  }
+  const camera = layer.receipt?.witness?.camera;
+  if (!camera?.position?.length || !camera?.projectionMatrix?.length || !camera?.viewport?.width) {
+    throw new Error(`selected splat bake layer did not preserve current camera: ${JSON.stringify(lastEvidence.selectedSplatBakeLayer)}`);
+  }
+  const tuned = lastEvidence.selectedSplatBakeLayer.afterTuneDebug?.layers?.[0] || null;
+  if (!tuned || tuned.enabled !== false || Math.abs(Number(tuned.strength) - 0.37) > 0.001) {
+    throw new Error(`selected splat bake layer controls did not update: ${JSON.stringify(lastEvidence.selectedSplatBakeLayer)}`);
+  }
+}
+
 async function runRealHybridSplatOverlayScenario(ws) {
   phase = 'scenario-real-hybrid-splat-overlay';
   lastEvidence.realHybridSplatOverlay = await evaluate(ws, `
@@ -5595,6 +5700,8 @@ try {
     await runGreenroomSplatHandoffScenario(ws);
   } else if (scenario === 'hybrid-splat-overlay') {
     await runHybridSplatOverlayScenario(ws);
+  } else if (scenario === 'selected-splat-bake-layer') {
+    await runSelectedSplatBakeLayerScenario(ws);
   } else if (scenario === 'real-hybrid-splat-overlay') {
     await runRealHybridSplatOverlayScenario(ws);
   } else if (scenario === 'hybrid-host-depth-occluder') {

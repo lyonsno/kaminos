@@ -308,6 +308,18 @@ assert.match(index, /id="hybrid-splat-viewport-controls"/, 'Hybrid Renderer expo
 assert.match(index, /id="hybrid-splat-viewport-start-button"/, 'Hybrid Renderer viewport controls include a Start Hybrid action');
 assert.match(index, /id="hybrid-splat-renderer-controls-popover"/, 'Hybrid Renderer material/AO/normal controls are available from a viewport popover');
 assert.match(index, /viewportEventHitsInteractiveOverlay[\s\S]*#hybrid-splat-viewport-controls/, 'Hybrid Renderer viewport controls must not bubble into empty-viewport selection clearing');
+assert.match(index, /id="selected-splat-bake-layer-button"/, 'selected splats expose a viewport-local Bake View affordance instead of hiding the first bake tool in the left rail');
+assert.match(index, /id="selected-splat-bake-layer-panel"/, 'selected splats expose a viewport-local candidate layer stack');
+assert.match(index, /function createSelectedSplatViewBakeLayer\(/, 'Kaminos can create a selected-splat view bake layer from the current camera');
+assert.match(index, /function selectedSplatViewBakeLayerReceipt\(/, 'selected-splat view bakes produce a schema-stamped firing receipt');
+assert.match(index, /kaminos\.splat-bake-layer\.v0/, 'candidate bake layers preserve explicit splat bake-layer schema identity');
+assert.match(index, /kaminos\.splat-bake-layer\.receipt\.v0/, 'candidate bake layer receipts preserve explicit receipt schema identity');
+assert.match(index, /selected-splat-view-bake-layer-v0/, 'candidate bake layers preserve route identity for the first operator-driven view bake');
+assert.match(index, /selected-splat-view-bake-layer-crucible-v0/, 'candidate bake layers identify the crucible kind rather than masquerading as exported splat assets');
+assert.match(index, /function setSelectedSplatBakeLayerControls\(/, 'candidate bake layers can be enabled and strength-tuned without rebaking');
+assert.match(index, /window\.kaminosCreateSelectedSplatViewBakeLayer/, 'browser witnesses can create selected-splat view bake layers without DOM inference');
+assert.match(index, /window\.kaminosSetSelectedSplatBakeLayerControls/, 'browser witnesses can tune selected-splat bake layers without DOM inference');
+assert.match(index, /window\.kaminosSelectedSplatBakeLayerDebugState/, 'browser witnesses can inspect selected-splat bake layers and receipts without DOM inference');
 assert.match(index, /function publishHybridSplatRendererControls\(/, 'Kaminos publishes renderer-control slider state through the overlay setRendererControls API');
 assert.match(index, /rendererControlsTelemetry/, 'Hybrid Renderer debug state exposes renderer-control telemetry for smoke evidence');
 assert.match(index, /id="hybrid-splat-overlay-host"/, 'Hybrid Renderer overlay has a named viewport host for dual-canvas composition');
