@@ -11,6 +11,7 @@ import {
   SAM3_IMAGE_PATCH_EMBED_PHASE_PROGRAM_ROUTE_ID,
   SAM3_IMAGE_VIT_PREFIX_PHASE_PROGRAM_ROUTE_ID,
   SAM3_IMAGE_VIT_FIRST_BLOCK_PHASE_PROGRAM_ROUTE_ID,
+  SAM3_IMAGE_VIT_BLOCK_STACK_PHASE_PROGRAM_ROUTE_ID,
   createRouteInvocationRequest,
   createSam3MaskDecoderIslandRouteDefinition,
   createSam3MaskProjectionCpuOracle,
@@ -22,6 +23,8 @@ import {
   createSam3ImageVitPrefixPhaseProgramRouteDefinition,
   createSam3ImageVitFirstBlockPhaseProgramCpuOracle,
   createSam3ImageVitFirstBlockPhaseProgramRouteDefinition,
+  createSam3ImageVitBlockStackPhaseProgramCpuOracle,
+  createSam3ImageVitBlockStackPhaseProgramRouteDefinition,
   createSam3MaskTailPhaseProgramCpuOracle,
   createSam3MaskTailPhaseProgramRouteDefinition,
   createSam3PixelDecoderPhaseProgramCpuOracle,
@@ -46,6 +49,7 @@ import {
   runSam3ImagePatchEmbedPhaseProgramRoute,
   runSam3ImageVitPrefixPhaseProgramRoute,
   runSam3ImageVitFirstBlockPhaseProgramRoute,
+  runSam3ImageVitBlockStackPhaseProgramRoute,
 } from '../src/index.js';
 
 const SUPPORTED_ROUTE_IDS = new Set([
@@ -61,6 +65,7 @@ const SUPPORTED_ROUTE_IDS = new Set([
   SAM3_IMAGE_PATCH_EMBED_PHASE_PROGRAM_ROUTE_ID,
   SAM3_IMAGE_VIT_PREFIX_PHASE_PROGRAM_ROUTE_ID,
   SAM3_IMAGE_VIT_FIRST_BLOCK_PHASE_PROGRAM_ROUTE_ID,
+  SAM3_IMAGE_VIT_BLOCK_STACK_PHASE_PROGRAM_ROUTE_ID,
 ]);
 const PIXEL_DECODER_WEIGHT_ROLE_EXAMPLES = ['pixel-decoder-stage-0-conv-weight'];
 
@@ -86,6 +91,7 @@ const state = {
   imagePatchEmbedEvidence: null,
   imageVitPrefixEvidence: null,
   imageVitFirstBlockEvidence: null,
+  imageVitBlockStackEvidence: null,
   parity: null,
   debugReadbackSamples: null,
   sourceImage: null,
@@ -232,6 +238,78 @@ function imageVitFirstBlockShape(manifest) {
     layerNormEps: manifest.shape.visionLayerNormEps,
     ropeTheta: manifest.shape.visionRopeTheta,
   };
+}
+
+function imageVitBlockStackShape(manifest) {
+  return {
+    batch: manifest.shape.batch || 1,
+    height: manifest.shape.patchHeight,
+    width: manifest.shape.patchWidth,
+    hiddenSize: manifest.shape.visionHiddenSize,
+    numHeads: manifest.shape.visionHeads,
+    windowSize: manifest.shape.visionWindowSize,
+    intermediateSize: manifest.shape.visionMlpHidden,
+    layerNormEps: manifest.shape.visionLayerNormEps,
+    ropeTheta: manifest.shape.visionRopeTheta,
+    startLayerIndex: manifest.shape.vitBlockStackStartLayerIndex ?? 0,
+    endLayerIndex: manifest.shape.vitBlockStackEndLayerIndex ?? manifest.shape.firstGlobalLayerIndex,
+    firstGlobalLayerIndex: manifest.shape.firstGlobalLayerIndex,
+    globalAttnIndexes: manifest.shape.globalAttnIndexes,
+  };
+}
+
+function imageVitBlockStackWeightRoles(startLayerIndex, endLayerIndex) {
+  const suffixes = [
+    'layernorm1-weight',
+    'layernorm1-bias',
+    'q-proj-weight',
+    'q-proj-bias',
+    'k-proj-weight',
+    'k-proj-bias',
+    'v-proj-weight',
+    'v-proj-bias',
+    'o-proj-weight',
+    'o-proj-bias',
+    'layernorm2-weight',
+    'layernorm2-bias',
+    'mlp-fc1-weight',
+    'mlp-fc1-bias',
+    'mlp-fc2-weight',
+    'mlp-fc2-bias',
+  ];
+  const roles = [];
+  for (let layerIndex = startLayerIndex; layerIndex <= endLayerIndex; layerIndex += 1) {
+    for (const suffix of suffixes) roles.push(`vit-block-stack-layer${layerIndex}-${suffix}`);
+  }
+  return roles;
+}
+
+async function loadImageVitBlockStackWeights(manifest, weightsByRole, shape) {
+  const globalAttnIndexes = shape.globalAttnIndexes || [];
+  const layers = [];
+  for (let layerIndex = shape.startLayerIndex; layerIndex <= shape.endLayerIndex; layerIndex += 1) {
+    layers.push({
+      layerIndex,
+      isGlobal: globalAttnIndexes.includes(layerIndex),
+      layerNorm1Weight: await fetchArray(resolveManifestFile(weightsByRole[`vit-block-stack-layer${layerIndex}-layernorm1-weight`].file), Float32Array),
+      layerNorm1Bias: await fetchArray(resolveManifestFile(weightsByRole[`vit-block-stack-layer${layerIndex}-layernorm1-bias`].file), Float32Array),
+      qProjWeight: await fetchArray(resolveManifestFile(weightsByRole[`vit-block-stack-layer${layerIndex}-q-proj-weight`].file), Float32Array),
+      qProjBias: await fetchArray(resolveManifestFile(weightsByRole[`vit-block-stack-layer${layerIndex}-q-proj-bias`].file), Float32Array),
+      kProjWeight: await fetchArray(resolveManifestFile(weightsByRole[`vit-block-stack-layer${layerIndex}-k-proj-weight`].file), Float32Array),
+      kProjBias: await fetchArray(resolveManifestFile(weightsByRole[`vit-block-stack-layer${layerIndex}-k-proj-bias`].file), Float32Array),
+      vProjWeight: await fetchArray(resolveManifestFile(weightsByRole[`vit-block-stack-layer${layerIndex}-v-proj-weight`].file), Float32Array),
+      vProjBias: await fetchArray(resolveManifestFile(weightsByRole[`vit-block-stack-layer${layerIndex}-v-proj-bias`].file), Float32Array),
+      oProjWeight: await fetchArray(resolveManifestFile(weightsByRole[`vit-block-stack-layer${layerIndex}-o-proj-weight`].file), Float32Array),
+      oProjBias: await fetchArray(resolveManifestFile(weightsByRole[`vit-block-stack-layer${layerIndex}-o-proj-bias`].file), Float32Array),
+      layerNorm2Weight: await fetchArray(resolveManifestFile(weightsByRole[`vit-block-stack-layer${layerIndex}-layernorm2-weight`].file), Float32Array),
+      layerNorm2Bias: await fetchArray(resolveManifestFile(weightsByRole[`vit-block-stack-layer${layerIndex}-layernorm2-bias`].file), Float32Array),
+      mlpFc1Weight: await fetchArray(resolveManifestFile(weightsByRole[`vit-block-stack-layer${layerIndex}-mlp-fc1-weight`].file), Float32Array),
+      mlpFc1Bias: await fetchArray(resolveManifestFile(weightsByRole[`vit-block-stack-layer${layerIndex}-mlp-fc1-bias`].file), Float32Array),
+      mlpFc2Weight: await fetchArray(resolveManifestFile(weightsByRole[`vit-block-stack-layer${layerIndex}-mlp-fc2-weight`].file), Float32Array),
+      mlpFc2Bias: await fetchArray(resolveManifestFile(weightsByRole[`vit-block-stack-layer${layerIndex}-mlp-fc2-bias`].file), Float32Array),
+    });
+  }
+  return { layers };
 }
 
 function rgbaFromSourceImage(sourceImage, shape) {
@@ -765,8 +843,9 @@ async function loadDetrDecoderPayload(manifest) {
 }
 
 async function loadDetrStackPayload(manifest) {
-  const includeImageVitFirstBlock = manifest.mode === 'mlx-detector-stack-vit-first-block-export' || manifest.boundary === 'sam3-browser-local-image-preprocess-patch-embed-vit-prefix-first-block-detector-stack-phase-program';
-  const includeImageVitPrefix = includeImageVitFirstBlock || manifest.mode === 'mlx-detector-stack-vit-prefix-export' || manifest.boundary === 'sam3-browser-local-image-preprocess-patch-embed-vit-prefix-detector-stack-phase-program';
+  const includeImageVitBlockStack = manifest.mode === 'mlx-detector-stack-vit-block-stack-export' || manifest.boundary === 'sam3-browser-local-image-preprocess-patch-embed-vit-prefix-block-stack-first-global-detector-stack-phase-program';
+  const includeImageVitFirstBlock = !includeImageVitBlockStack && (manifest.mode === 'mlx-detector-stack-vit-first-block-export' || manifest.boundary === 'sam3-browser-local-image-preprocess-patch-embed-vit-prefix-first-block-detector-stack-phase-program');
+  const includeImageVitPrefix = includeImageVitBlockStack || includeImageVitFirstBlock || manifest.mode === 'mlx-detector-stack-vit-prefix-export' || manifest.boundary === 'sam3-browser-local-image-preprocess-patch-embed-vit-prefix-detector-stack-phase-program';
   const includeImagePatchEmbed = includeImageVitPrefix || manifest.mode === 'mlx-detector-stack-patch-embed-export' || manifest.boundary === 'sam3-browser-local-image-preprocess-patch-embed-detector-stack-phase-program';
   const includeImagePreprocess = includeImagePatchEmbed || manifest.mode === 'mlx-detector-stack-preprocess-export' || manifest.boundary === 'sam3-browser-local-image-preprocess-detector-stack-phase-program';
   const includeDetectorStack = includeImagePreprocess || includeImagePatchEmbed || manifest.mode === 'mlx-detector-stack-export' || manifest.boundary === 'sam3-detector-stack-browser-local-detector-mask-phase-program';
@@ -776,6 +855,8 @@ async function loadDetrStackPayload(manifest) {
   const expectedPatchEmbeddingsTensor = includeImagePatchEmbed ? tensorByRole(manifest, 'expected-patch-embeddings') : null;
   const expectedVitPrefixTensor = includeImageVitPrefix ? tensorByRole(manifest, 'expected-vit-prefix-hidden-states') : null;
   const expectedVitFirstBlockTensor = includeImageVitFirstBlock ? tensorByRole(manifest, 'expected-vit-first-block-hidden-states') : null;
+  const expectedVitFirstGlobalTensor = includeImageVitBlockStack ? tensorByRole(manifest, 'expected-vit-first-global-hidden-states') : null;
+  const expectedVitBlockStackTensor = includeImageVitBlockStack ? tensorByRole(manifest, 'expected-vit-block-stack-hidden-states') : null;
   const encoderSrcTensor = tensorByRole(manifest, 'encoder-src');
   const encoderPosTensor = tensorByRole(manifest, 'encoder-pos');
   const promptTensor = tensorByRole(manifest, 'prompt-features');
@@ -856,6 +937,7 @@ async function loadDetrStackPayload(manifest) {
   ];
   const patchEmbedWeightRoles = includeImagePatchEmbed ? ['patch-embed-projection-weight'] : [];
   const vitPrefixWeightRoles = includeImageVitPrefix ? ['vit-position-embeddings', 'vit-backbone-layernorm-weight', 'vit-backbone-layernorm-bias'] : [];
+  const vitBlockStackShapeForRoles = includeImageVitBlockStack ? imageVitBlockStackShape(manifest) : null;
   const vitFirstBlockWeightRoles = includeImageVitFirstBlock ? [
     'vit-block0-layernorm1-weight',
     'vit-block0-layernorm1-bias',
@@ -874,7 +956,8 @@ async function loadDetrStackPayload(manifest) {
     'vit-block0-mlp-fc2-weight',
     'vit-block0-mlp-fc2-bias',
   ] : [];
-  const weightsByRole = Object.fromEntries([...encoderRoles, ...decoderLayerRoles, ...decoderSharedRoles, ...patchEmbedWeightRoles, ...vitPrefixWeightRoles, ...vitFirstBlockWeightRoles, ...(includeStackScoring ? scoringWeightRoles : []), ...tailWeightRoles].map(role => [role, weightByRole(manifest, role)]));
+  const vitBlockStackWeightRoles = includeImageVitBlockStack ? imageVitBlockStackWeightRoles(vitBlockStackShapeForRoles.startLayerIndex, vitBlockStackShapeForRoles.endLayerIndex) : [];
+  const weightsByRole = Object.fromEntries([...encoderRoles, ...decoderLayerRoles, ...decoderSharedRoles, ...patchEmbedWeightRoles, ...vitPrefixWeightRoles, ...vitFirstBlockWeightRoles, ...vitBlockStackWeightRoles, ...(includeStackScoring ? scoringWeightRoles : []), ...tailWeightRoles].map(role => [role, weightByRole(manifest, role)]));
   const encoderSrc = await fetchArray(resolveManifestFile(encoderSrcTensor.file), Float32Array);
   const encoderPos = await fetchArray(resolveManifestFile(encoderPosTensor.file), Float32Array);
   const promptFeatures = await fetchArray(resolveManifestFile(promptTensor.file), Float32Array);
@@ -895,6 +978,8 @@ async function loadDetrStackPayload(manifest) {
   const expectedPatchEmbeddings = expectedPatchEmbeddingsTensor ? await fetchArray(resolveManifestFile(expectedPatchEmbeddingsTensor.file), Float32Array) : null;
   const expectedVitPrefixHiddenStates = expectedVitPrefixTensor ? await fetchArray(resolveManifestFile(expectedVitPrefixTensor.file), Float32Array) : null;
   const expectedVitFirstBlockHiddenStates = expectedVitFirstBlockTensor ? await fetchArray(resolveManifestFile(expectedVitFirstBlockTensor.file), Float32Array) : null;
+  const expectedVitFirstGlobalHiddenStates = expectedVitFirstGlobalTensor ? await fetchArray(resolveManifestFile(expectedVitFirstGlobalTensor.file), Float32Array) : null;
+  const expectedVitBlockStackHiddenStates = expectedVitBlockStackTensor ? await fetchArray(resolveManifestFile(expectedVitBlockStackTensor.file), Float32Array) : null;
   const patchProjectionWeight = includeImagePatchEmbed ? await fetchArray(resolveManifestFile(weightsByRole['patch-embed-projection-weight'].file), Float32Array) : null;
   const vitPrefixWeights = includeImageVitPrefix ? {
     positionEmbeddings: await fetchArray(resolveManifestFile(weightsByRole['vit-position-embeddings'].file), Float32Array),
@@ -919,6 +1004,7 @@ async function loadDetrStackPayload(manifest) {
     mlpFc2Weight: await fetchArray(resolveManifestFile(weightsByRole['vit-block0-mlp-fc2-weight'].file), Float32Array),
     mlpFc2Bias: await fetchArray(resolveManifestFile(weightsByRole['vit-block0-mlp-fc2-bias'].file), Float32Array),
   } : null;
+  const vitBlockStackWeights = includeImageVitBlockStack ? await loadImageVitBlockStackWeights(manifest, weightsByRole, vitBlockStackShapeForRoles) : null;
   const pixelEmbed = await fetchArray(resolveManifestFile(pixelEmbedTensor.file), Float32Array);
   const expectedMaskEmbeddings = await fetchArray(resolveManifestFile(expectedMaskEmbeddingsTensor.file), Float32Array);
   const expectedUpscaledEmbedding = await fetchArray(resolveManifestFile(expectedUpscaledTensor.file), Float32Array);
@@ -990,19 +1076,21 @@ async function loadDetrStackPayload(manifest) {
   const patchEmbedShape = includeImagePatchEmbed ? imagePatchEmbedShape(manifest) : null;
   const vitPrefixShape = includeImageVitPrefix ? imageVitPrefixShape(manifest) : null;
   const vitFirstBlockShape = includeImageVitFirstBlock ? imageVitFirstBlockShape(manifest) : null;
+  const vitBlockStackShape = includeImageVitBlockStack ? imageVitBlockStackShape(manifest) : null;
   const maskOracle = createSam3MaskTailPhaseProgramCpuOracle({ lastHs: expectedLastHs, pixelEmbed, weights: tailWeights, shape: maskTailShape });
   const patchEmbedOracle = includeImagePatchEmbed ? createSam3ImagePatchEmbedPhaseProgramCpuOracle({ pixelValues: expectedPixelValues, weights: { projection: patchProjectionWeight }, shape: patchEmbedShape }) : null;
   const vitPrefixOracle = includeImageVitPrefix ? createSam3ImageVitPrefixPhaseProgramCpuOracle({ patchEmbeddings: expectedPatchEmbeddings, weights: vitPrefixWeights, shape: vitPrefixShape }) : null;
   const vitFirstBlockOracle = includeImageVitFirstBlock ? createSam3ImageVitFirstBlockPhaseProgramCpuOracle({ hiddenStates: expectedVitPrefixHiddenStates, weights: vitFirstBlockWeights, shape: vitFirstBlockShape }) : null;
+  const vitBlockStackOracle = includeImageVitBlockStack ? createSam3ImageVitBlockStackPhaseProgramCpuOracle({ hiddenStates: expectedVitPrefixHiddenStates, weights: vitBlockStackWeights, shape: vitBlockStackShape }) : null;
   const scoringOracle = includeStackScoring ? createSam3ScoringPhaseProgramCpuOracle({ hiddenStates: expectedDecoderHiddenStates, promptFeatures, promptMask, weights: scoringWeights, shape: scoringShape }) : null;
   const selectionOracle = includeStackSelection ? createSam3SelectionPostprocessPhaseProgramCpuOracle({ predLogits: expectedPredLogits, referenceBoxes: expectedReferenceBoxes, presenceLogits: expectedPresenceLogits, shape: selectionShape }) : null;
   return {
-    routeKind: includeImageVitFirstBlock ? 'image-vit-first-block-detector-stack-composition' : includeImageVitPrefix ? 'image-vit-prefix-detector-stack-composition' : includeImagePatchEmbed ? 'image-patch-embed-detector-stack-composition' : includeImagePreprocess ? 'image-preprocess-detector-stack-composition' : includeDetectorStack ? 'detector-stack-browser-local-composition' : includeStackSelection ? 'detr-encoder-detr-decoder-scoring-selection-mask-tail-composition' : includeStackScoring ? 'detr-encoder-detr-decoder-scoring-mask-tail-composition' : 'detr-encoder-detr-decoder-mask-tail-composition',
+    routeKind: includeImageVitBlockStack ? 'image-vit-block-stack-detector-stack-composition' : includeImageVitFirstBlock ? 'image-vit-first-block-detector-stack-composition' : includeImageVitPrefix ? 'image-vit-prefix-detector-stack-composition' : includeImagePatchEmbed ? 'image-patch-embed-detector-stack-composition' : includeImagePreprocess ? 'image-preprocess-detector-stack-composition' : includeDetectorStack ? 'detector-stack-browser-local-composition' : includeStackSelection ? 'detr-encoder-detr-decoder-scoring-selection-mask-tail-composition' : includeStackScoring ? 'detr-encoder-detr-decoder-scoring-mask-tail-composition' : 'detr-encoder-detr-decoder-mask-tail-composition',
     detectorStackEvidence: includeDetectorStack ? {
       packetMode: manifest.mode,
       schema: manifest.schema,
       boundary: manifest.boundary,
-      routeKind: includeImageVitFirstBlock ? 'image-vit-first-block-detector-stack-composition' : includeImageVitPrefix ? 'image-vit-prefix-detector-stack-composition' : includeImagePatchEmbed ? 'image-patch-embed-detector-stack-composition' : includeImagePreprocess ? 'image-preprocess-detector-stack-composition' : 'detector-stack-browser-local-composition',
+      routeKind: includeImageVitBlockStack ? 'image-vit-block-stack-detector-stack-composition' : includeImageVitFirstBlock ? 'image-vit-first-block-detector-stack-composition' : includeImageVitPrefix ? 'image-vit-prefix-detector-stack-composition' : includeImagePatchEmbed ? 'image-patch-embed-detector-stack-composition' : includeImagePreprocess ? 'image-preprocess-detector-stack-composition' : 'detector-stack-browser-local-composition',
       upstreamBoundaries: manifest.upstreamBoundaries || [],
       nonClaims: {
         fullSam3BrowserExecution: true,
@@ -1074,10 +1162,33 @@ async function loadDetrStackPayload(manifest) {
         fullSam3BrowserExecution: true,
       },
     } : null,
+    imageVitBlockStackEvidence: includeImageVitBlockStack ? {
+      packetMode: manifest.mode,
+      schema: manifest.schema,
+      boundary: manifest.imageVitBlockStack?.boundary || manifest.boundary,
+      routeKind: 'image-vit-block-stack-detector-stack-composition',
+      source: manifest.imageVitBlockStack?.source || 'browser-local-vit-prefix-hidden-states',
+      layerRange: manifest.imageVitBlockStack?.layerRange || null,
+      windowPartition: manifest.imageVitBlockStack?.windowPartition || null,
+      globalAttention: manifest.imageVitBlockStack?.globalAttention || null,
+      rope: manifest.imageVitBlockStack?.rope || null,
+      layerNorm: manifest.imageVitBlockStack?.layerNorm || null,
+      mlp: manifest.imageVitBlockStack?.mlp || null,
+      firstGlobalLayerIndex: vitBlockStackShape.firstGlobalLayerIndex,
+      nonClaims: {
+        remainingViTBlocks: true,
+        browserLocalFpnNeck: true,
+        browserProducedDetrFpnInputs: true,
+        browserLocalTextEncoder: true,
+        fullSam3BrowserExecution: true,
+      },
+    } : null,
     expectedPixelValues,
     expectedPatchEmbeddings,
     expectedVitPrefixHiddenStates,
     expectedVitFirstBlockHiddenStates,
+    expectedVitFirstGlobalHiddenStates,
+    expectedVitBlockStackHiddenStates,
     expectedEncoderHiddenStates,
     expectedDecoderHiddenStates,
     expectedLastHs,
@@ -1100,6 +1211,8 @@ async function loadDetrStackPayload(manifest) {
       patchEmbeddingsMaxAbsDiff: patchEmbedOracle ? maxAbsDiff(expectedPatchEmbeddings, patchEmbedOracle.patchEmbeddings) : undefined,
       vitPrefixHiddenStatesMaxAbsDiff: vitPrefixOracle ? maxAbsDiff(expectedVitPrefixHiddenStates, vitPrefixOracle.vitPrefixHiddenStates) : undefined,
       vitFirstBlockHiddenStatesMaxAbsDiff: vitFirstBlockOracle ? maxAbsDiff(expectedVitFirstBlockHiddenStates, vitFirstBlockOracle.vitFirstBlockHiddenStates) : undefined,
+      vitFirstGlobalHiddenStatesMaxAbsDiff: vitBlockStackOracle ? maxAbsDiff(expectedVitFirstGlobalHiddenStates, vitBlockStackOracle.layerCheckpoints.find(entry => entry.layerIndex === vitBlockStackShape.firstGlobalLayerIndex)?.hiddenStates || vitBlockStackOracle.vitBlockStackHiddenStates) : undefined,
+      vitBlockStackHiddenStatesMaxAbsDiff: vitBlockStackOracle ? maxAbsDiff(expectedVitBlockStackHiddenStates, vitBlockStackOracle.vitBlockStackHiddenStates) : undefined,
       upscaledEmbeddingMaxAbsDiff: maxAbsDiff(expectedUpscaledEmbedding, maskOracle.upscaledEmbedding),
       logitsMaxAbsDiff: maxAbsDiff(expectedLogits, maskOracle.maskLogits),
       predLogitsMaxAbsDiff: scoringOracle ? maxAbsDiff(expectedPredLogits, scoringOracle.predLogits) : undefined,
@@ -1132,11 +1245,14 @@ async function loadDetrStackPayload(manifest) {
       expectedPatchEmbeddingsSha256: expectedPatchEmbeddingsTensor?.sha256,
       expectedVitPrefixHiddenStatesSha256: expectedVitPrefixTensor?.sha256,
       expectedVitFirstBlockHiddenStatesSha256: expectedVitFirstBlockTensor?.sha256,
+      expectedVitFirstGlobalHiddenStatesSha256: expectedVitFirstGlobalTensor?.sha256,
+      expectedVitBlockStackHiddenStatesSha256: expectedVitBlockStackTensor?.sha256,
       patchProjectionWeightSha256: weightsByRole['patch-embed-projection-weight']?.sha256,
       positionEmbeddingsSha256: weightsByRole['vit-position-embeddings']?.sha256,
       backboneLayerNormWeightSha256: weightsByRole['vit-backbone-layernorm-weight']?.sha256,
       backboneLayerNormBiasSha256: weightsByRole['vit-backbone-layernorm-bias']?.sha256,
       firstBlockWeightsSha256: includeImageVitFirstBlock ? await aggregateTensorBundleSha256('sam3-image-vit-first-block-weights', vitFirstBlockWeightRoles.map(role => ({ role, sha256: weightsByRole[role].sha256 }))) : undefined,
+      blockStackWeightsSha256: includeImageVitBlockStack ? await aggregateTensorBundleSha256('sam3-image-vit-block-stack-weights', vitBlockStackWeightRoles.map(role => ({ role, sha256: weightsByRole[role].sha256 }))) : undefined,
       pixelEmbedSha256: pixelEmbedTensor.sha256,
       expectedMaskEmbeddingsSha256: expectedMaskEmbeddingsTensor.sha256,
       expectedUpscaledEmbeddingSha256: expectedUpscaledTensor.sha256,
@@ -1166,6 +1282,13 @@ async function loadDetrStackPayload(manifest) {
       let vitFirstBlockHiddenStatesTensorSha256 = null;
       let firstBlockWeightsSha256 = null;
       let imageVitFirstBlockCpuMaxAbsDiff = undefined;
+      let imageVitBlockStackResult = null;
+      let gpuVitBlockStackHiddenStates = null;
+      let vitBlockStackHiddenStatesOutput = null;
+      let vitBlockStackHiddenStatesTensorSha256 = null;
+      let blockStackWeightsSha256 = null;
+      let imageVitBlockStackCpuMaxAbsDiff = undefined;
+      let vitFirstGlobalHiddenStatesMaxAbsDiff = undefined;
       if (includeImagePreprocess) {
         const preprocessShape = imagePreprocessShape(manifest);
         const rgba = rgbaFromSourceImage(sourceImage, preprocessShape);
@@ -1285,6 +1408,37 @@ async function loadDetrStackPayload(manifest) {
         gpuVitFirstBlockHiddenStates = new Float32Array(imageVitFirstBlockResult.debugReadback.vitFirstBlockHiddenStates);
         vitFirstBlockHiddenStatesOutput = imageVitFirstBlockResult.receipt.outputs.find(output => output.role === 'vit-first-block-hidden-states');
         if (!vitFirstBlockHiddenStatesOutput?.sha256 || !vitFirstBlockHiddenStatesOutput?.artifactId) throw new Error('SAM3 image ViT first-block output identity missing');
+      }
+      if (includeImageVitBlockStack) {
+        const blockStackCpuOracle = createSam3ImageVitBlockStackPhaseProgramCpuOracle({ hiddenStates: gpuVitPrefixHiddenStates, weights: vitBlockStackWeights, shape: vitBlockStackShape });
+        imageVitBlockStackCpuMaxAbsDiff = maxAbsDiff(expectedVitBlockStackHiddenStates, blockStackCpuOracle.vitBlockStackHiddenStates);
+        const firstGlobalCheckpoint = blockStackCpuOracle.layerCheckpoints.find(entry => entry.layerIndex === vitBlockStackShape.firstGlobalLayerIndex);
+        vitFirstGlobalHiddenStatesMaxAbsDiff = maxAbsDiff(expectedVitFirstGlobalHiddenStates, firstGlobalCheckpoint?.hiddenStates || blockStackCpuOracle.vitBlockStackHiddenStates);
+        blockStackWeightsSha256 = await aggregateTensorBundleSha256('sam3-image-vit-block-stack-weights', vitBlockStackWeightRoles.map(role => ({ role, sha256: weightsByRole[role].sha256 })));
+        vitBlockStackHiddenStatesTensorSha256 = await aggregateTensorBundleSha256('sam3-image-vit-block-stack-composed-tensors', [
+          { role: 'vit-prefix-hidden-states', artifactId: vitPrefixHiddenStatesOutput.artifactId, sha256: vitPrefixHiddenStatesOutput.sha256, shape: vitPrefixHiddenStatesOutput.shape },
+          ...vitBlockStackWeightRoles.map(role => ({ role, sha256: weightsByRole[role].sha256 })),
+        ]);
+        const imageVitBlockStackRoute = createSam3ImageVitBlockStackPhaseProgramRouteDefinition({
+          model: { revision: manifest.model?.id || 'mlx-reference-image-vit-block-stack', dtype: 'fp32' },
+          kernel: { profile: 'sam3-image-vit-block-stack-phase-program-v0', commit: params.get('commit') || null },
+        });
+        const imageVitBlockStackRequest = createRouteInvocationRequest(imageVitBlockStackRoute, {
+          requestId: `sam-browser-image-vit-block-stack-${Date.now()}`,
+          inputs: {
+            'source-image': { artifactId: manifest.sourceImage?.artifactId || 'image:synthetic', sha256: manifest.sourceImage?.sha256 || 'sha256:synthetic-image', shape: sourceImageShape(manifest) },
+            'vit-prefix-hidden-states': { artifactId: vitPrefixHiddenStatesOutput.artifactId, sha256: vitPrefixHiddenStatesOutput.sha256, shape: vitPrefixHiddenStatesOutput.shape },
+            'sam3-image-vit-block-stack-weights': { artifactId: manifest.staticWeights.artifactId, sha256: blockStackWeightsSha256 },
+          },
+          outputs: {
+            'vit-block-stack-hidden-states': { artifactId: 'sam3-vit-block-stack-hidden-states:browser-detector-stack-composition', shape: [vitBlockStackShape.batch, vitBlockStackShape.height, vitBlockStackShape.width, vitBlockStackShape.hiddenSize] },
+          },
+          routeConfig: { upstream: manifest.claims?.upstream || 'mlx-reference-detr-stack', imageVitBlockStack: manifest.imageVitBlockStack || null, composedFrom: imageVitPrefixResult.receipt?.effectiveRouteId, vitPrefixHiddenStatesOutput, firstGlobalLayerIndex: vitBlockStackShape.firstGlobalLayerIndex },
+        });
+        imageVitBlockStackResult = await runSam3ImageVitBlockStackPhaseProgramRoute({ request: imageVitBlockStackRequest, route: imageVitBlockStackRoute, device, queue: device.queue, adapterName: adapter.info?.description || adapter.info?.device || 'browser-webgpu-adapter', browser: navigator.userAgent, kernel: imageVitBlockStackRoute.kernel, model: { revision: imageVitBlockStackRoute.model.revision, weightsHash: imageVitBlockStackRequest.inputs.find(input => input.role === 'sam3-image-vit-block-stack-weights')?.sha256, dtype: 'fp32' }, tensors: { hiddenStates: gpuVitPrefixHiddenStates, weights: vitBlockStackWeights, shape: vitBlockStackShape }, includeReadback: true });
+        gpuVitBlockStackHiddenStates = new Float32Array(imageVitBlockStackResult.debugReadback.vitBlockStackHiddenStates);
+        vitBlockStackHiddenStatesOutput = imageVitBlockStackResult.receipt.outputs.find(output => output.role === 'vit-block-stack-hidden-states');
+        if (!vitBlockStackHiddenStatesOutput?.sha256 || !vitBlockStackHiddenStatesOutput?.artifactId) throw new Error('SAM3 image ViT block-stack output identity missing');
       }
       const encoderResult = await runSam3DetrEncoderPhaseProgramRoute({ request, route, device, queue: device.queue, adapterName: adapter.info?.description || adapter.info?.device || 'browser-webgpu-adapter', browser: navigator.userAgent, kernel: route.kernel, model: { revision: route.model.revision, weightsHash: manifest.staticWeights.sha256, dtype: 'fp32' }, tensors: { encoderSrc, encoderPos, promptFeatures, promptMask, layers: encoderWeights.layers, shape: encoderShape }, includeReadback: true });
       const gpuEncoderHiddenStates = new Float32Array(encoderResult.debugReadback.encoderHiddenStates);
@@ -1420,7 +1574,7 @@ async function loadDetrStackPayload(manifest) {
         routeReceipt: encoderResult.receipt,
         midstreamRouteReceipt: decoderResult.receipt,
         downstreamRouteReceipt: tailResult.receipt,
-        compositionRouteReceipts: includeImageVitFirstBlock ? [imagePreprocessResult.receipt, imagePatchEmbedResult.receipt, imageVitPrefixResult.receipt, imageVitFirstBlockResult.receipt, encoderResult.receipt, decoderResult.receipt, scoringResult.receipt, selectionResult.receipt, tailResult.receipt] : includeImageVitPrefix ? [imagePreprocessResult.receipt, imagePatchEmbedResult.receipt, imageVitPrefixResult.receipt, encoderResult.receipt, decoderResult.receipt, scoringResult.receipt, selectionResult.receipt, tailResult.receipt] : includeImagePatchEmbed ? [imagePreprocessResult.receipt, imagePatchEmbedResult.receipt, encoderResult.receipt, decoderResult.receipt, scoringResult.receipt, selectionResult.receipt, tailResult.receipt] : includeImagePreprocess ? [imagePreprocessResult.receipt, encoderResult.receipt, decoderResult.receipt, scoringResult.receipt, selectionResult.receipt, tailResult.receipt] : includeStackSelection ? [encoderResult.receipt, decoderResult.receipt, scoringResult.receipt, selectionResult.receipt, tailResult.receipt] : includeStackScoring ? [encoderResult.receipt, decoderResult.receipt, scoringResult.receipt, tailResult.receipt] : [encoderResult.receipt, decoderResult.receipt, tailResult.receipt],
+        compositionRouteReceipts: includeImageVitBlockStack ? [imagePreprocessResult.receipt, imagePatchEmbedResult.receipt, imageVitPrefixResult.receipt, imageVitBlockStackResult.receipt, encoderResult.receipt, decoderResult.receipt, scoringResult.receipt, selectionResult.receipt, tailResult.receipt] : includeImageVitFirstBlock ? [imagePreprocessResult.receipt, imagePatchEmbedResult.receipt, imageVitPrefixResult.receipt, imageVitFirstBlockResult.receipt, encoderResult.receipt, decoderResult.receipt, scoringResult.receipt, selectionResult.receipt, tailResult.receipt] : includeImageVitPrefix ? [imagePreprocessResult.receipt, imagePatchEmbedResult.receipt, imageVitPrefixResult.receipt, encoderResult.receipt, decoderResult.receipt, scoringResult.receipt, selectionResult.receipt, tailResult.receipt] : includeImagePatchEmbed ? [imagePreprocessResult.receipt, imagePatchEmbedResult.receipt, encoderResult.receipt, decoderResult.receipt, scoringResult.receipt, selectionResult.receipt, tailResult.receipt] : includeImagePreprocess ? [imagePreprocessResult.receipt, encoderResult.receipt, decoderResult.receipt, scoringResult.receipt, selectionResult.receipt, tailResult.receipt] : includeStackSelection ? [encoderResult.receipt, decoderResult.receipt, scoringResult.receipt, selectionResult.receipt, tailResult.receipt] : includeStackScoring ? [encoderResult.receipt, decoderResult.receipt, scoringResult.receipt, tailResult.receipt] : [encoderResult.receipt, decoderResult.receipt, tailResult.receipt],
         backend: tailResult.backend,
         debugReadback: {
           pixelValues: gpuPixelValues ? Array.from(gpuPixelValues) : undefined,
@@ -1431,6 +1585,9 @@ async function loadDetrStackPayload(manifest) {
           imageVitPrefixCpuMaxAbsDiff,
           vitFirstBlockHiddenStates: gpuVitFirstBlockHiddenStates ? Array.from(gpuVitFirstBlockHiddenStates) : undefined,
           imageVitFirstBlockCpuMaxAbsDiff,
+          vitBlockStackHiddenStates: gpuVitBlockStackHiddenStates ? Array.from(gpuVitBlockStackHiddenStates) : undefined,
+          imageVitBlockStackCpuMaxAbsDiff,
+          vitFirstGlobalHiddenStatesMaxAbsDiff,
           encoderHiddenStates: Array.from(gpuEncoderHiddenStates),
           decoderHiddenStates: gpuDecoderHiddenStates ? Array.from(gpuDecoderHiddenStates) : undefined,
           lastHs: Array.from(gpuLastHs),
@@ -1465,6 +1622,11 @@ async function loadDetrStackPayload(manifest) {
           vitFirstBlockHiddenStatesTensorSha256,
           vitFirstBlockHiddenStatesOutput,
           firstBlockWeightsSha256,
+          imageVitBlockStackRouteId: imageVitBlockStackResult?.receipt?.effectiveRouteId,
+          vitBlockStackHiddenStatesTensorSha256,
+          vitBlockStackHiddenStatesOutput,
+          blockStackWeightsSha256,
+          firstGlobalLayerIndex: vitBlockStackShape?.firstGlobalLayerIndex,
           midstreamRouteId: decoderResult.receipt.effectiveRouteId,
           downstreamRouteId: tailResult.receipt.effectiveRouteId,
           detrEncoderOutput,
@@ -2302,7 +2464,7 @@ async function main() {
       throw new Error('oracle packet must preserve explicit static-weight or reference-weight identity');
     }
 
-    const payload = manifest.mode === 'mlx-detr-stack-export' || manifest.mode === 'mlx-detr-stack-scoring-export' || manifest.mode === 'mlx-detr-stack-selection-export' || manifest.mode === 'mlx-detector-stack-export' || manifest.mode === 'mlx-detector-stack-preprocess-export' || manifest.mode === 'mlx-detector-stack-patch-embed-export' || manifest.mode === 'mlx-detector-stack-vit-prefix-export' || manifest.mode === 'mlx-detector-stack-vit-first-block-export' || manifest.boundary === 'sam3-detector-detr-encoder-decoder-mask-tail-phase-program' || manifest.boundary === 'sam3-detector-detr-encoder-decoder-scoring-mask-tail-phase-program' || manifest.boundary === 'sam3-detector-detr-encoder-decoder-scoring-selection-mask-tail-phase-program' || manifest.boundary === 'sam3-detector-stack-browser-local-detector-mask-phase-program' || manifest.boundary === 'sam3-browser-local-image-preprocess-detector-stack-phase-program' || manifest.boundary === 'sam3-browser-local-image-preprocess-patch-embed-detector-stack-phase-program' || manifest.boundary === 'sam3-browser-local-image-preprocess-patch-embed-vit-prefix-detector-stack-phase-program' || manifest.boundary === 'sam3-browser-local-image-preprocess-patch-embed-vit-prefix-first-block-detector-stack-phase-program'
+    const payload = manifest.mode === 'mlx-detr-stack-export' || manifest.mode === 'mlx-detr-stack-scoring-export' || manifest.mode === 'mlx-detr-stack-selection-export' || manifest.mode === 'mlx-detector-stack-export' || manifest.mode === 'mlx-detector-stack-preprocess-export' || manifest.mode === 'mlx-detector-stack-patch-embed-export' || manifest.mode === 'mlx-detector-stack-vit-prefix-export' || manifest.mode === 'mlx-detector-stack-vit-first-block-export' || manifest.mode === 'mlx-detector-stack-vit-block-stack-export' || manifest.boundary === 'sam3-detector-detr-encoder-decoder-mask-tail-phase-program' || manifest.boundary === 'sam3-detector-detr-encoder-decoder-scoring-mask-tail-phase-program' || manifest.boundary === 'sam3-detector-detr-encoder-decoder-scoring-selection-mask-tail-phase-program' || manifest.boundary === 'sam3-detector-stack-browser-local-detector-mask-phase-program' || manifest.boundary === 'sam3-browser-local-image-preprocess-detector-stack-phase-program' || manifest.boundary === 'sam3-browser-local-image-preprocess-patch-embed-detector-stack-phase-program' || manifest.boundary === 'sam3-browser-local-image-preprocess-patch-embed-vit-prefix-detector-stack-phase-program' || manifest.boundary === 'sam3-browser-local-image-preprocess-patch-embed-vit-prefix-first-block-detector-stack-phase-program' || manifest.boundary === 'sam3-browser-local-image-preprocess-patch-embed-vit-prefix-block-stack-first-global-detector-stack-phase-program'
       ? await loadDetrStackPayload(manifest)
       : manifest.routeId === SAM3_DETR_DECODER_PHASE_PROGRAM_ROUTE_ID
       ? await loadDetrDecoderPayload(manifest)
@@ -2606,6 +2768,9 @@ async function main() {
       imageVitPrefixCpuMaxAbsDiff: result.debugReadback.imageVitPrefixCpuMaxAbsDiff,
       vitFirstBlockHiddenStatesMaxAbsDiff: result.debugReadback.vitFirstBlockHiddenStates ? maxAbsDiff(payload.expectedVitFirstBlockHiddenStates || [], new Float32Array(result.debugReadback.vitFirstBlockHiddenStates)) : undefined,
       imageVitFirstBlockCpuMaxAbsDiff: result.debugReadback.imageVitFirstBlockCpuMaxAbsDiff,
+      vitBlockStackHiddenStatesMaxAbsDiff: result.debugReadback.vitBlockStackHiddenStates ? maxAbsDiff(payload.expectedVitBlockStackHiddenStates || [], new Float32Array(result.debugReadback.vitBlockStackHiddenStates)) : undefined,
+      imageVitBlockStackCpuMaxAbsDiff: result.debugReadback.imageVitBlockStackCpuMaxAbsDiff,
+      vitFirstGlobalHiddenStatesMaxAbsDiff: result.debugReadback.vitFirstGlobalHiddenStatesMaxAbsDiff,
       promptFpnMaxAbsDiff: result.debugReadback.promptFpnFeature ? maxAbsDiff(payload.expectedPromptFpnFeature || [], new Float32Array(result.debugReadback.promptFpnFeature)) : undefined,
       pixelEmbedMaxAbsDiff: result.debugReadback.pixelEmbed ? maxAbsDiff(payload.expectedPixelEmbed || [], new Float32Array(result.debugReadback.pixelEmbed)) : undefined,
       maskLogitsMaxAbsDiff: gpuLogits ? maxAbsDiff(expectedLogits, gpuLogits) : undefined,
@@ -2633,6 +2798,9 @@ async function main() {
     const gpuVitPrefixCpuTolerance = manifest.tolerances?.imageVitPrefixCpuMaxAbsDiff ?? 0.0007;
     const gpuVitFirstBlockTolerance = manifest.tolerances?.vitFirstBlockHiddenStatesMaxAbsDiff ?? 0.0025;
     const gpuVitFirstBlockCpuTolerance = manifest.tolerances?.imageVitFirstBlockCpuMaxAbsDiff ?? 0.0025;
+    const gpuVitBlockStackTolerance = manifest.tolerances?.vitBlockStackHiddenStatesMaxAbsDiff ?? 0.01;
+    const gpuVitBlockStackCpuTolerance = manifest.tolerances?.imageVitBlockStackCpuMaxAbsDiff ?? 0.01;
+    const gpuVitFirstGlobalTolerance = manifest.tolerances?.vitFirstGlobalHiddenStatesMaxAbsDiff ?? gpuVitBlockStackTolerance;
     const gpuPromptFpnTolerance = manifest.tolerances?.promptFpnMaxAbsDiff ?? 0.00001;
     const gpuPixelTolerance = manifest.tolerances?.pixelEmbedMaxAbsDiff ?? 0.00001;
     const selectionScoresTolerance = manifest.tolerances?.selectionScoresMaxAbsDiff ?? 0.00001;
@@ -2658,6 +2826,9 @@ async function main() {
       expectedVitPrefixHiddenStates: payload.expectedVitPrefixHiddenStates ? Array.from(payload.expectedVitPrefixHiddenStates.slice(0, 16)) : undefined,
       vitFirstBlockHiddenStates: result.debugReadback.vitFirstBlockHiddenStates ? Array.from(new Float32Array(result.debugReadback.vitFirstBlockHiddenStates).slice(0, 16)) : undefined,
       expectedVitFirstBlockHiddenStates: payload.expectedVitFirstBlockHiddenStates ? Array.from(payload.expectedVitFirstBlockHiddenStates.slice(0, 16)) : undefined,
+      vitBlockStackHiddenStates: result.debugReadback.vitBlockStackHiddenStates ? Array.from(new Float32Array(result.debugReadback.vitBlockStackHiddenStates).slice(0, 16)) : undefined,
+      expectedVitBlockStackHiddenStates: payload.expectedVitBlockStackHiddenStates ? Array.from(payload.expectedVitBlockStackHiddenStates.slice(0, 16)) : undefined,
+      expectedVitFirstGlobalHiddenStates: payload.expectedVitFirstGlobalHiddenStates ? Array.from(payload.expectedVitFirstGlobalHiddenStates.slice(0, 16)) : undefined,
       predLogits: result.debugReadback.predLogits ? Array.from(new Float32Array(result.debugReadback.predLogits).slice(0, 16)) : undefined,
       expectedPredLogits: payload.expectedPredLogits ? Array.from(payload.expectedPredLogits.slice(0, 16)) : undefined,
       selectedIndex: result.debugReadback.selectedIndex ? Array.from(new Uint32Array(result.debugReadback.selectedIndex).slice(0, 8)) : undefined,
@@ -2745,18 +2916,20 @@ async function main() {
       },
       debugReadbackSample: debugReadbackSamples.vitFirstBlockHiddenStates,
     } : null;
-    state.imageVitFirstBlockEvidence = payload.imageVitFirstBlockEvidence ? {
-      ...payload.imageVitFirstBlockEvidence,
-      receipt: result.compositionRouteReceipts?.find(receipt => receipt.effectiveRouteId === SAM3_IMAGE_VIT_FIRST_BLOCK_PHASE_PROGRAM_ROUTE_ID) || null,
+    state.imageVitBlockStackEvidence = payload.imageVitBlockStackEvidence ? {
+      ...payload.imageVitBlockStackEvidence,
+      receipt: result.compositionRouteReceipts?.find(receipt => receipt.effectiveRouteId === SAM3_IMAGE_VIT_BLOCK_STACK_PHASE_PROGRAM_ROUTE_ID) || null,
       receiptChain: (result.compositionRouteReceipts || []).map(receipt => receipt.effectiveRouteId),
-      vitFirstBlockHiddenStatesTensorSha256: result.compositionEdge?.vitFirstBlockHiddenStatesTensorSha256 || null,
-      vitFirstBlockHiddenStatesOutput: result.compositionEdge?.vitFirstBlockHiddenStatesOutput || null,
-      firstBlockWeightsSha256: result.compositionEdge?.firstBlockWeightsSha256 || null,
+      vitBlockStackHiddenStatesTensorSha256: result.compositionEdge?.vitBlockStackHiddenStatesTensorSha256 || null,
+      vitBlockStackHiddenStatesOutput: result.compositionEdge?.vitBlockStackHiddenStatesOutput || null,
+      blockStackWeightsSha256: result.compositionEdge?.blockStackWeightsSha256 || null,
+      firstGlobalLayerIndex: result.compositionEdge?.firstGlobalLayerIndex ?? payload.imageVitBlockStackEvidence.firstGlobalLayerIndex,
       parity: {
-        vitFirstBlockHiddenStatesMaxAbsDiff: parity.vitFirstBlockHiddenStatesMaxAbsDiff,
-        imageVitFirstBlockCpuMaxAbsDiff: parity.imageVitFirstBlockCpuMaxAbsDiff,
+        vitBlockStackHiddenStatesMaxAbsDiff: parity.vitBlockStackHiddenStatesMaxAbsDiff,
+        imageVitBlockStackCpuMaxAbsDiff: parity.imageVitBlockStackCpuMaxAbsDiff,
+        vitFirstGlobalHiddenStatesMaxAbsDiff: parity.vitFirstGlobalHiddenStatesMaxAbsDiff,
       },
-      debugReadbackSample: debugReadbackSamples.vitFirstBlockHiddenStates,
+      debugReadbackSample: debugReadbackSamples.vitBlockStackHiddenStates,
     } : null;
     if (
       (parity.encoderHiddenStatesMaxAbsDiff ?? 0) > gpuEncoderTolerance
@@ -2772,6 +2945,9 @@ async function main() {
       || (parity.imageVitPrefixCpuMaxAbsDiff ?? 0) > gpuVitPrefixCpuTolerance
       || (parity.vitFirstBlockHiddenStatesMaxAbsDiff ?? 0) > gpuVitFirstBlockTolerance
       || (parity.imageVitFirstBlockCpuMaxAbsDiff ?? 0) > gpuVitFirstBlockCpuTolerance
+      || (parity.vitBlockStackHiddenStatesMaxAbsDiff ?? 0) > gpuVitBlockStackTolerance
+      || (parity.imageVitBlockStackCpuMaxAbsDiff ?? 0) > gpuVitBlockStackCpuTolerance
+      || (parity.vitFirstGlobalHiddenStatesMaxAbsDiff ?? 0) > gpuVitFirstGlobalTolerance
       || (parity.promptFpnMaxAbsDiff ?? 0) > gpuPromptFpnTolerance
       || (parity.pixelEmbedMaxAbsDiff ?? 0) > gpuPixelTolerance
       || (parity.maskLogitsMaxAbsDiff ?? 0) > gpuTolerance

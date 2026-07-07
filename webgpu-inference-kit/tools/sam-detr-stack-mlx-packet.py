@@ -27,6 +27,9 @@ DETECTOR_STACK_VIT_PREFIX_SCHEMA = "kaminos.sam3-detector-stack-image-vit-prefix
 DETECTOR_STACK_VIT_PREFIX_BOUNDARY = "sam3-browser-local-image-preprocess-patch-embed-vit-prefix-detector-stack-phase-program"
 DETECTOR_STACK_VIT_FIRST_BLOCK_SCHEMA = "kaminos.sam3-detector-stack-image-vit-first-block-real-boundary-packet.v0"
 DETECTOR_STACK_VIT_FIRST_BLOCK_BOUNDARY = "sam3-browser-local-image-preprocess-patch-embed-vit-prefix-first-block-detector-stack-phase-program"
+DETECTOR_STACK_VIT_BLOCK_STACK_SCHEMA = "kaminos.sam3-detector-stack-image-vit-block-stack-real-boundary-packet.v0"
+DETECTOR_STACK_VIT_BLOCK_STACK_BOUNDARY = "sam3-browser-local-image-preprocess-patch-embed-vit-prefix-block-stack-first-global-detector-stack-phase-program"
+DETECTOR_STACK_VIT_BLOCK_STACK_FIRST_GLOBAL_Q_WEIGHT_ROLE = "vit-block-stack-layer7-q-proj-weight"
 
 
 def load_tool_module(filename: str, name: str):
@@ -56,6 +59,7 @@ def parse_args():
     parser.add_argument("--image-patch-embed-ingress", action="store_true", help="Export detector-stack packet expectations for browser-local normalized pixel-values to SAM3 patch embeddings ingress.")
     parser.add_argument("--image-vit-prefix-ingress", action="store_true", help="Export detector-stack packet expectations for browser-local patch embeddings through SAM3 ViT position tiling and backbone layer norm ingress.")
     parser.add_argument("--image-vit-first-block-ingress", action="store_true", help="Export detector-stack packet expectations for browser-local SAM3 first ViT block ingress after ViT prefix.")
+    parser.add_argument("--image-vit-block-stack-ingress", action="store_true", help="Export detector-stack packet expectations for browser-local SAM3 ViT block-stack ingress through the first global-attention layer.")
     parser.add_argument("--score-threshold", type=float, default=0.5)
     return parser.parse_args()
 
@@ -104,6 +108,32 @@ def selection_reference(ref, resolution, threshold):
     }
 
 
+def add_vit_block_weights(weight_entries, out_dir, params, start_layer, end_layer):
+    for layer in range(start_layer, end_layer + 1):
+        base = f"detector_model.vision_encoder.backbone.layers.{layer}"
+        prefix = f"vit-block-stack-layer{layer}"
+        specs = [
+            (f"{prefix}-layernorm1-weight", f"{base}.layer_norm1.weight", f"{prefix}-layernorm1-weight.f32.bin", "channels"),
+            (f"{prefix}-layernorm1-bias", f"{base}.layer_norm1.bias", f"{prefix}-layernorm1-bias.f32.bin", "channels"),
+            (f"{prefix}-q-proj-weight", f"{base}.attention.q_proj.weight", f"{prefix}-q-proj-weight.f32.bin", "out,in"),
+            (f"{prefix}-q-proj-bias", f"{base}.attention.q_proj.bias", f"{prefix}-q-proj-bias.f32.bin", "out"),
+            (f"{prefix}-k-proj-weight", f"{base}.attention.k_proj.weight", f"{prefix}-k-proj-weight.f32.bin", "out,in"),
+            (f"{prefix}-k-proj-bias", f"{base}.attention.k_proj.bias", f"{prefix}-k-proj-bias.f32.bin", "out"),
+            (f"{prefix}-v-proj-weight", f"{base}.attention.v_proj.weight", f"{prefix}-v-proj-weight.f32.bin", "out,in"),
+            (f"{prefix}-v-proj-bias", f"{base}.attention.v_proj.bias", f"{prefix}-v-proj-bias.f32.bin", "out"),
+            (f"{prefix}-o-proj-weight", f"{base}.attention.o_proj.weight", f"{prefix}-o-proj-weight.f32.bin", "out,in"),
+            (f"{prefix}-o-proj-bias", f"{base}.attention.o_proj.bias", f"{prefix}-o-proj-bias.f32.bin", "out"),
+            (f"{prefix}-layernorm2-weight", f"{base}.layer_norm2.weight", f"{prefix}-layernorm2-weight.f32.bin", "channels"),
+            (f"{prefix}-layernorm2-bias", f"{base}.layer_norm2.bias", f"{prefix}-layernorm2-bias.f32.bin", "channels"),
+            (f"{prefix}-mlp-fc1-weight", f"{base}.mlp.fc1.weight", f"{prefix}-mlp-fc1-weight.f32.bin", "out,in"),
+            (f"{prefix}-mlp-fc1-bias", f"{base}.mlp.fc1.bias", f"{prefix}-mlp-fc1-bias.f32.bin", "out"),
+            (f"{prefix}-mlp-fc2-weight", f"{base}.mlp.fc2.weight", f"{prefix}-mlp-fc2-weight.f32.bin", "out,in"),
+            (f"{prefix}-mlp-fc2-bias", f"{base}.mlp.fc2.bias", f"{prefix}-mlp-fc2-bias.f32.bin", "out"),
+        ]
+        for spec in specs:
+            encoder_tool.add_weight(weight_entries, out_dir, params, *spec)
+
+
 def main():
     args = parse_args()
     out_dir = Path(args.out_dir)
@@ -116,12 +146,13 @@ def main():
     source_image.save(source_path)
     expected_pixel_values = (np.array(source_image).astype(np.float32) / 255.0 - 0.5) / 0.5
     ref = encoder_tool.run_reference(model, image, args.prompt, args.resolution)
-    include_selection = args.include_selection or args.detector_stack or args.image_preprocess_ingress or args.image_patch_embed_ingress or args.image_vit_prefix_ingress or args.image_vit_first_block_ingress
+    include_selection = args.include_selection or args.detector_stack or args.image_preprocess_ingress or args.image_patch_embed_ingress or args.image_vit_prefix_ingress or args.image_vit_first_block_ingress or args.image_vit_block_stack_ingress
     include_scoring = args.include_scoring or include_selection
-    include_image_preprocess = args.image_preprocess_ingress or args.image_patch_embed_ingress or args.image_vit_prefix_ingress or args.image_vit_first_block_ingress
-    include_image_patch_embed = args.image_patch_embed_ingress or args.image_vit_prefix_ingress or args.image_vit_first_block_ingress
-    include_image_vit_prefix = args.image_vit_prefix_ingress or args.image_vit_first_block_ingress
-    include_image_vit_first_block = args.image_vit_first_block_ingress
+    include_image_preprocess = args.image_preprocess_ingress or args.image_patch_embed_ingress or args.image_vit_prefix_ingress or args.image_vit_first_block_ingress or args.image_vit_block_stack_ingress
+    include_image_patch_embed = args.image_patch_embed_ingress or args.image_vit_prefix_ingress or args.image_vit_first_block_ingress or args.image_vit_block_stack_ingress
+    include_image_vit_prefix = args.image_vit_prefix_ingress or args.image_vit_first_block_ingress or args.image_vit_block_stack_ingress
+    include_image_vit_first_block = args.image_vit_first_block_ingress or args.image_vit_block_stack_ingress
+    include_image_vit_block_stack = args.image_vit_block_stack_ingress
     shape = {
         "batch": int(ref["last_hs"].shape[0]),
         "channels": int(ref["last_hs"].shape[2]),
@@ -152,6 +183,10 @@ def main():
         "visionLayerNormEps": float(model.detector_model.vision_encoder.backbone.config.layer_norm_eps),
         "visionRopeTheta": float(model.detector_model.vision_encoder.backbone.config.rope_theta),
         "pretrainGridSize": int(model.detector_model.vision_encoder.backbone.config.pretrain_image_size // model.detector_model.vision_encoder.backbone.config.patch_size),
+        "vitBlockStackStartLayerIndex": int(ref["vit_block_stack_start_layer_index"]),
+        "vitBlockStackEndLayerIndex": int(ref["vit_block_stack_end_layer_index"]),
+        "firstGlobalLayerIndex": int(ref["vit_block_stack_first_global_layer_index"]),
+        "globalAttnIndexes": [int(value) for value in ref["vit_block_stack_global_attn_indexes"]],
     }
     params = dict(encoder_tool.flatten(model.parameters()))
     tensor_entries = []
@@ -162,6 +197,10 @@ def main():
         encoder_tool.add_tensor(tensor_entries, out_dir, "expected-vit-prefix-hidden-states", "expected-vit-prefix-hidden-states.f32.bin", ref["vit_prefix_hidden_states"], [shape["batch"], shape["patchHeight"], shape["patchWidth"], shape["visionHiddenSize"]], "B,H,W,C")
     if include_image_vit_first_block:
         encoder_tool.add_tensor(tensor_entries, out_dir, "expected-vit-first-block-hidden-states", "expected-vit-first-block-hidden-states.f32.bin", ref["vit_first_block_hidden_states"], [shape["batch"], shape["patchHeight"], shape["patchWidth"], shape["visionHiddenSize"]], "B,H,W,C")
+    if include_image_vit_block_stack:
+        encoder_tool.add_tensor(tensor_entries, out_dir, "expected-vit-pre-first-global-hidden-states", "expected-vit-pre-first-global-hidden-states.f32.bin", ref["vit_pre_first_global_hidden_states"], [shape["batch"], shape["patchHeight"], shape["patchWidth"], shape["visionHiddenSize"]], "B,H,W,C")
+        encoder_tool.add_tensor(tensor_entries, out_dir, "expected-vit-first-global-hidden-states", "expected-vit-first-global-hidden-states.f32.bin", ref["vit_first_global_hidden_states"], [shape["batch"], shape["patchHeight"], shape["patchWidth"], shape["visionHiddenSize"]], "B,H,W,C")
+        encoder_tool.add_tensor(tensor_entries, out_dir, "expected-vit-block-stack-hidden-states", "expected-vit-block-stack-hidden-states.f32.bin", ref["vit_block_stack_hidden_states"], [shape["batch"], shape["patchHeight"], shape["patchWidth"], shape["visionHiddenSize"]], "B,H,W,C")
     encoder_tool.add_tensor(tensor_entries, out_dir, "encoder-src", "encoder-src.f32.bin", ref["encoder_src"], [shape["batch"], shape["spatialTokens"], shape["channels"]], "B,S,C")
     encoder_tool.add_tensor(tensor_entries, out_dir, "encoder-pos", "encoder-pos.f32.bin", ref["encoder_pos"], [shape["batch"], shape["spatialTokens"], shape["channels"]], "B,S,C")
     encoder_tool.add_tensor(tensor_entries, out_dir, "prompt-features", "prompt-features.f32.bin", ref["prompt_features"], [shape["batch"], shape["promptTokens"], shape["channels"]], "B,T,C")
@@ -214,6 +253,8 @@ def main():
         encoder_tool.add_weight(weight_entries, out_dir, params, "vit-block0-mlp-fc1-bias", "detector_model.vision_encoder.backbone.layers.0.mlp.fc1.bias", "vit-block0-mlp-fc1-bias.f32.bin", "out")
         encoder_tool.add_weight(weight_entries, out_dir, params, "vit-block0-mlp-fc2-weight", "detector_model.vision_encoder.backbone.layers.0.mlp.fc2.weight", "vit-block0-mlp-fc2-weight.f32.bin", "out,in")
         encoder_tool.add_weight(weight_entries, out_dir, params, "vit-block0-mlp-fc2-bias", "detector_model.vision_encoder.backbone.layers.0.mlp.fc2.bias", "vit-block0-mlp-fc2-bias.f32.bin", "out")
+    if include_image_vit_block_stack:
+        add_vit_block_weights(weight_entries, out_dir, params, shape["vitBlockStackStartLayerIndex"], shape["vitBlockStackEndLayerIndex"])
     if include_scoring:
         scoring_tool.add_scoring_weights(weight_entries, out_dir, params)
     decoder_tool.add_mask_tail_weights(weight_entries, out_dir, params)
@@ -223,23 +264,24 @@ def main():
         "framework": {"name": "mlx-vlm", "root": str(Path(os.environ.get("KAMINOS_MLX_VLM_ROOT", Path.cwd())).resolve()), "execution": "uv-run"},
     }
     manifest = {
-        "schema": DETECTOR_STACK_VIT_FIRST_BLOCK_SCHEMA if include_image_vit_first_block else DETECTOR_STACK_VIT_PREFIX_SCHEMA if include_image_vit_prefix else DETECTOR_STACK_PATCH_EMBED_SCHEMA if include_image_patch_embed else DETECTOR_STACK_PREPROCESS_SCHEMA if args.image_preprocess_ingress else DETECTOR_STACK_SCHEMA if args.detector_stack else SELECTION_SCHEMA if include_selection else SCORING_SCHEMA if include_scoring else SCHEMA,
+        "schema": DETECTOR_STACK_VIT_BLOCK_STACK_SCHEMA if include_image_vit_block_stack else DETECTOR_STACK_VIT_FIRST_BLOCK_SCHEMA if include_image_vit_first_block else DETECTOR_STACK_VIT_PREFIX_SCHEMA if include_image_vit_prefix else DETECTOR_STACK_PATCH_EMBED_SCHEMA if include_image_patch_embed else DETECTOR_STACK_PREPROCESS_SCHEMA if args.image_preprocess_ingress else DETECTOR_STACK_SCHEMA if args.detector_stack else SELECTION_SCHEMA if include_selection else SCORING_SCHEMA if include_scoring else SCHEMA,
         "routeId": ROUTE_ID,
-        "mode": "mlx-detector-stack-vit-first-block-export" if include_image_vit_first_block else "mlx-detector-stack-vit-prefix-export" if include_image_vit_prefix else "mlx-detector-stack-patch-embed-export" if include_image_patch_embed else "mlx-detector-stack-preprocess-export" if args.image_preprocess_ingress else "mlx-detector-stack-export" if args.detector_stack else "mlx-detr-stack-selection-export" if include_selection else "mlx-detr-stack-scoring-export" if include_scoring else "mlx-detr-stack-export",
-        "boundary": DETECTOR_STACK_VIT_FIRST_BLOCK_BOUNDARY if include_image_vit_first_block else DETECTOR_STACK_VIT_PREFIX_BOUNDARY if include_image_vit_prefix else DETECTOR_STACK_PATCH_EMBED_BOUNDARY if include_image_patch_embed else DETECTOR_STACK_PREPROCESS_BOUNDARY if args.image_preprocess_ingress else DETECTOR_STACK_BOUNDARY if args.detector_stack else SELECTION_BOUNDARY if include_selection else SCORING_BOUNDARY if include_scoring else BOUNDARY,
+        "mode": "mlx-detector-stack-vit-block-stack-export" if include_image_vit_block_stack else "mlx-detector-stack-vit-first-block-export" if include_image_vit_first_block else "mlx-detector-stack-vit-prefix-export" if include_image_vit_prefix else "mlx-detector-stack-patch-embed-export" if include_image_patch_embed else "mlx-detector-stack-preprocess-export" if args.image_preprocess_ingress else "mlx-detector-stack-export" if args.detector_stack else "mlx-detr-stack-selection-export" if include_selection else "mlx-detr-stack-scoring-export" if include_scoring else "mlx-detr-stack-export",
+        "boundary": DETECTOR_STACK_VIT_BLOCK_STACK_BOUNDARY if include_image_vit_block_stack else DETECTOR_STACK_VIT_FIRST_BLOCK_BOUNDARY if include_image_vit_first_block else DETECTOR_STACK_VIT_PREFIX_BOUNDARY if include_image_vit_prefix else DETECTOR_STACK_PATCH_EMBED_BOUNDARY if include_image_patch_embed else DETECTOR_STACK_PREPROCESS_BOUNDARY if args.image_preprocess_ingress else DETECTOR_STACK_BOUNDARY if args.detector_stack else SELECTION_BOUNDARY if include_selection else SCORING_BOUNDARY if include_scoring else BOUNDARY,
         "createdAt": datetime.now(timezone.utc).isoformat(),
         "reference": reference,
         "model": {"id": args.model, "role": "mlx-reference-upstream"},
         "prompt": {"text": args.prompt, "sha256": encoder_tool.sha256_bytes(args.prompt.encode("utf-8"))},
         "sourceImage": {"artifactId": f"image:{image_path.name}:sam3-reference-source", "file": "source-image.png", "path": str(source_path), "sha256": encoder_tool.sha256_file(source_path), "originalPath": str(image_path), "resolution": [args.resolution, args.resolution]},
-        "staticWeights": {"artifactId": f"sam3-weights:{args.model}:detr-stack-reference-upstream", "sha256": weights_sha, "role": "reference-upstream", "reason": "weights exported for browser image ViT first-block ingress, DETR encoder, DETR decoder, dot-product scoring, selection postprocess, and downstream mask-tail phase-program execution" if include_image_vit_first_block else "weights exported for browser image ViT-prefix ingress, DETR encoder, DETR decoder, dot-product scoring, selection postprocess, and downstream mask-tail phase-program execution" if include_image_vit_prefix else "weights exported for browser DETR encoder, DETR decoder, dot-product scoring, selection postprocess, and downstream mask-tail phase-program execution" if include_selection else "weights exported for browser DETR encoder, DETR decoder, dot-product scoring, and downstream mask-tail phase-program execution" if include_scoring else "weights exported for browser DETR encoder, DETR decoder, and downstream mask-tail phase-program execution"},
+        "staticWeights": {"artifactId": f"sam3-weights:{args.model}:detr-stack-reference-upstream", "sha256": weights_sha, "role": "reference-upstream", "reason": "weights exported for browser image ViT block-stack ingress through first global-attention layer, DETR encoder, DETR decoder, dot-product scoring, selection postprocess, and downstream mask-tail phase-program execution" if include_image_vit_block_stack else "weights exported for browser image ViT first-block ingress, DETR encoder, DETR decoder, dot-product scoring, selection postprocess, and downstream mask-tail phase-program execution" if include_image_vit_first_block else "weights exported for browser image ViT-prefix ingress, DETR encoder, DETR decoder, dot-product scoring, selection postprocess, and downstream mask-tail phase-program execution" if include_image_vit_prefix else "weights exported for browser DETR encoder, DETR decoder, dot-product scoring, selection postprocess, and downstream mask-tail phase-program execution" if include_selection else "weights exported for browser DETR encoder, DETR decoder, dot-product scoring, and downstream mask-tail phase-program execution" if include_scoring else "weights exported for browser DETR encoder, DETR decoder, and downstream mask-tail phase-program execution"},
         "shape": shape,
-        "claims": {"fullSam3BrowserExecution": False, "upstream": "mlx-vlm-sam3-detector-reference", "browserExecutedStages": [*(["image-preprocess"] if include_image_preprocess else []), *(["image-patch-embed"] if include_image_patch_embed else []), *(["image-vit-prefix"] if include_image_vit_prefix else []), *(["image-vit-first-block"] if include_image_vit_first_block else []), "detr-encoder", "detr-decoder", *(['dot-product-scoring'] if include_scoring else []), *(['score-threshold', 'box-postprocess', 'object-selection'] if include_selection else []), "mask-embedder", "instance-projection", "decode-mask", "threshold-mask"]},
+        "claims": {"fullSam3BrowserExecution": False, "upstream": "mlx-vlm-sam3-detector-reference", "browserExecutedStages": [*(["image-preprocess"] if include_image_preprocess else []), *(["image-patch-embed"] if include_image_patch_embed else []), *(["image-vit-prefix"] if include_image_vit_prefix else []), *(["image-vit-first-block"] if include_image_vit_first_block and not include_image_vit_block_stack else []), *(["image-vit-block-stack"] if include_image_vit_block_stack else []), "detr-encoder", "detr-decoder", *(['dot-product-scoring'] if include_scoring else []), *(['score-threshold', 'box-postprocess', 'object-selection'] if include_selection else []), "mask-embedder", "instance-projection", "decode-mask", "threshold-mask"]},
         "upstreamBoundaries": [
             {"role": "source-image", "owner": "browser-served-source-image" if include_image_preprocess else "mlx-vlm-reference", "status": "browser-local-ingress" if include_image_preprocess else "mlx-owned", "nextBrowserIsland": "image-preprocess-and-vision-encoder"},
             {"role": "patch-embeddings", "owner": "browser-local-route" if include_image_patch_embed else "mlx-vlm-reference", "status": "browser-local-ingress" if include_image_patch_embed else "mlx-owned", "nextBrowserIsland": "sam3-vit-prefix" if include_image_vit_prefix else "sam3-vit-backbone"},
             {"role": "vit-prefix-hidden-states", "owner": "browser-local-route" if include_image_vit_prefix else "mlx-vlm-reference", "status": "browser-local-ingress" if include_image_vit_prefix else "mlx-owned", "nextBrowserIsland": "sam3-vit-block-0"},
             {"role": "vit-first-block-hidden-states", "owner": "browser-local-route" if include_image_vit_first_block else "mlx-vlm-reference", "status": "browser-local-ingress" if include_image_vit_first_block else "mlx-owned", "nextBrowserIsland": "sam3-vit-block-1"},
+            {"role": "vit-block-stack-hidden-states", "owner": "browser-local-route" if include_image_vit_block_stack else "mlx-vlm-reference", "status": "browser-local-ingress-through-first-global" if include_image_vit_block_stack else "mlx-owned", "nextBrowserIsland": "sam3-remaining-vit-blocks-or-fpn-neck"},
             {"role": "encoder-src", "owner": "mlx-vlm-reference", "status": "mlx-owned", "nextBrowserIsland": "image-text-detr-encoder-inputs"},
             {"role": "encoder-pos", "owner": "mlx-vlm-reference", "status": "mlx-owned", "nextBrowserIsland": "image-text-detr-encoder-inputs"},
             {"role": "prompt-features", "owner": "mlx-vlm-reference", "status": "mlx-owned", "nextBrowserIsland": "text-token-prompt-encoder"},
@@ -279,7 +321,19 @@ def main():
             "browserExecuted": bool(include_image_vit_first_block),
             "claim": "browser-local SAM3 first ViT block only: LN1, window partition/pad/crop, QKV/O projection, pairwise RoPE attention, residuals, LN2, and GELU MLP; remaining ViT blocks, FPN neck, and text encoder remain outside this boundary",
         } if include_image_vit_first_block else None,
-        "tolerances": {"pixelValuesMaxAbsDiff": 0.000001, "patchEmbeddingsMaxAbsDiff": 0.0005, "imagePatchEmbedCpuMaxAbsDiff": 0.000003, "vitPrefixHiddenStatesMaxAbsDiff": 0.0007, "imageVitPrefixCpuMaxAbsDiff": 0.0007, "vitFirstBlockHiddenStatesMaxAbsDiff": 0.0025, "imageVitFirstBlockCpuMaxAbsDiff": 0.0025, "encoderHiddenStatesMaxAbsDiff": 0.0003, "lastHsMaxAbsDiff": 0.0006, "decoderHiddenStatesMaxAbsDiff": 0.0006, "referenceBoxesMaxAbsDiff": 0.0006, "presenceLogitsMaxAbsDiff": 0.0006, "predLogitsMaxAbsDiff": 0.0005, "selectedIndexMaxAbsDiff": 0, "selectedScoreMaxAbsDiff": 0.00001, "selectedBoxMaxAbsDiff": 0.0001, "selectionScoresMaxAbsDiff": 0.00001, "selectionBoxesMaxAbsDiff": 0.0002, "selectionKeepMismatchCount": 0, "maskEmbeddingsMaxAbsDiff": 0.0001, "upscaledEmbeddingMaxAbsDiff": 0.0001, "webGpuLogitsMaxAbsDiff": 0.001, "cpuOracleBinaryMismatchCount": 8, "binaryMismatchCount": 8},
+        "imageVitBlockStack": {
+            "boundary": "sam3-vit-prefix-hidden-states-to-vit-block-stack-first-global-phase-program",
+            "source": "browser-local-vit-prefix-hidden-states",
+            "layerRange": {"startLayerIndex": shape["vitBlockStackStartLayerIndex"], "endLayerIndex": shape["vitBlockStackEndLayerIndex"], "firstGlobalLayerIndex": shape["firstGlobalLayerIndex"], "globalAttnIndexes": shape["globalAttnIndexes"]},
+            "windowPartition": {"windowSize": shape["visionWindowSize"], "rule": "MLX window partition/pad/crop for non-global layers", "targetGridSize": [shape["patchHeight"], shape["patchWidth"]], "layout": "B,H,W,C"},
+            "globalAttention": {"rule": "MLX global attention at first global_attn_indexes layer", "firstGlobalLayerIndex": shape["firstGlobalLayerIndex"], "targetGridSize": [shape["patchHeight"], shape["patchWidth"]]},
+            "rope": {"rule": "SAM3 2D axial pairwise RoPE; window RoPE for non-global layers, actual-grid global RoPE for global layers", "theta": shape["visionRopeTheta"], "headDim": shape["visionHeadDim"]},
+            "layerNorm": {"eps": shape["visionLayerNormEps"], "layout": "B,H,W,C"},
+            "mlp": {"activation": "gelu", "intermediateSize": shape["visionMlpHidden"]},
+            "browserExecuted": bool(include_image_vit_block_stack),
+            "claim": "browser-local contiguous SAM3 ViT block stack from block 0 through the first global-attention block only; remaining ViT blocks, FPN neck, browser-produced DETR/FPN inputs, and text encoder remain outside this boundary",
+        } if include_image_vit_block_stack else None,
+        "tolerances": {"pixelValuesMaxAbsDiff": 0.000001, "patchEmbeddingsMaxAbsDiff": 0.0005, "imagePatchEmbedCpuMaxAbsDiff": 0.000003, "vitPrefixHiddenStatesMaxAbsDiff": 0.0007, "imageVitPrefixCpuMaxAbsDiff": 0.0007, "vitFirstBlockHiddenStatesMaxAbsDiff": 0.0025, "imageVitFirstBlockCpuMaxAbsDiff": 0.0025, "vitBlockStackHiddenStatesMaxAbsDiff": 0.01, "imageVitBlockStackCpuMaxAbsDiff": 0.01, "vitFirstGlobalHiddenStatesMaxAbsDiff": 0.01, "encoderHiddenStatesMaxAbsDiff": 0.0003, "lastHsMaxAbsDiff": 0.0006, "decoderHiddenStatesMaxAbsDiff": 0.0006, "referenceBoxesMaxAbsDiff": 0.0006, "presenceLogitsMaxAbsDiff": 0.0006, "predLogitsMaxAbsDiff": 0.0005, "selectedIndexMaxAbsDiff": 0, "selectedScoreMaxAbsDiff": 0.00001, "selectedBoxMaxAbsDiff": 0.0001, "selectionScoresMaxAbsDiff": 0.00001, "selectionBoxesMaxAbsDiff": 0.0002, "selectionKeepMismatchCount": 0, "maskEmbeddingsMaxAbsDiff": 0.0001, "upscaledEmbeddingMaxAbsDiff": 0.0001, "webGpuLogitsMaxAbsDiff": 0.001, "cpuOracleBinaryMismatchCount": 8, "binaryMismatchCount": 8},
         "visualization": {"selectedMaskIndex": int(ref["selected"]), "selectedMaskScore": float(ref["scores"][ref["selected"]]), "presenceLogits": [float(x) for x in ref["presence"]]},
         "tensors": tensor_entries,
         "weights": weight_entries,

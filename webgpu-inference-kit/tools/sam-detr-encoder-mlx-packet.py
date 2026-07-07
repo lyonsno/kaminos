@@ -11,6 +11,7 @@ import numpy as np
 from PIL import Image
 
 from mlx_vlm.models.sam3.config import ModelConfig
+from mlx_vlm.models.sam3.position import compute_axial_cis
 from mlx_vlm.models.sam3.processing_sam3 import Sam3Processor
 from mlx_vlm.models.sam3.sam3 import Model
 from mlx_vlm.utils import get_model_path
@@ -97,6 +98,28 @@ def run_reference(model, image, prompt, resolution):
     vit_first_block_hidden_states = backbone.layers[0](
         vit_prefix_hidden_states, backbone._rope_window_cos, backbone._rope_window_sin
     )
+    global_attn_indexes = list(backbone.config.global_attn_indexes)
+    first_global_layer_index = int(global_attn_indexes[0])
+    if patch_h != backbone.feat_size or patch_w != backbone.feat_size:
+        global_rope_cos, global_rope_sin = compute_axial_cis(
+            backbone.config.hidden_size // backbone.config.num_attention_heads,
+            patch_h,
+            patch_w,
+            theta=backbone.config.rope_theta,
+        )
+    else:
+        global_rope_cos = backbone._rope_global_cos
+        global_rope_sin = backbone._rope_global_sin
+    vit_block_stack_hidden_states = vit_prefix_hidden_states
+    vit_pre_first_global_hidden_states = None
+    vit_first_global_hidden_states = None
+    for layer_index, layer in enumerate(backbone.layers[: first_global_layer_index + 1]):
+        if layer_index == first_global_layer_index:
+            vit_pre_first_global_hidden_states = vit_block_stack_hidden_states
+            vit_block_stack_hidden_states = layer(vit_block_stack_hidden_states, global_rope_cos, global_rope_sin)
+            vit_first_global_hidden_states = vit_block_stack_hidden_states
+        else:
+            vit_block_stack_hidden_states = layer(vit_block_stack_hidden_states, backbone._rope_window_cos, backbone._rope_window_sin)
     fpn_features = det.vision_encoder(pixel_values)
     fpn_pos = [det._pos_enc(feat) for feat in fpn_features]
     fpn_trimmed = fpn_features[:-1]
@@ -147,6 +170,9 @@ def run_reference(model, image, prompt, resolution):
         mask_embeddings,
         vit_prefix_hidden_states,
         vit_first_block_hidden_states,
+        vit_pre_first_global_hidden_states,
+        vit_first_global_hidden_states,
+        vit_block_stack_hidden_states,
         all_logits,
         pred_logits,
         ref_boxes,
@@ -168,6 +194,13 @@ def run_reference(model, image, prompt, resolution):
         "patch_embeddings": np.array(patch_embeddings, dtype=np.float32),
         "vit_prefix_hidden_states": np.array(vit_prefix_hidden_states, dtype=np.float32),
         "vit_first_block_hidden_states": np.array(vit_first_block_hidden_states, dtype=np.float32),
+        "vit_pre_first_global_hidden_states": np.array(vit_pre_first_global_hidden_states, dtype=np.float32),
+        "vit_first_global_hidden_states": np.array(vit_first_global_hidden_states, dtype=np.float32),
+        "vit_block_stack_hidden_states": np.array(vit_block_stack_hidden_states, dtype=np.float32),
+        "vit_block_stack_start_layer_index": 0,
+        "vit_block_stack_end_layer_index": first_global_layer_index,
+        "vit_block_stack_global_attn_indexes": global_attn_indexes,
+        "vit_block_stack_first_global_layer_index": first_global_layer_index,
         "encoder_pos": np.array(pos_flat, dtype=np.float32),
         "encoder_hidden_states": np.array(encoded, dtype=np.float32),
         "backbone_features": backbone_features,

@@ -170,6 +170,14 @@ export {
 } from './sam-image-vit-first-block-phase-program.js';
 
 export {
+  SAM3_IMAGE_VIT_BLOCK_STACK_PHASE_PROGRAM_ROUTE_ID,
+  createSam3ImageVitBlockStackPhaseProgramCpuOracle,
+  createSam3ImageVitBlockStackPhaseProgramRouteDefinition,
+  createSam3ImageVitBlockStackPhaseProgramRouteReceipt,
+  runSam3ImageVitBlockStackPhaseProgramRoute,
+} from './sam-image-vit-block-stack-phase-program.js';
+
+export {
   SAM3_PIXEL_DECODER_PHASE_PROGRAM_ROUTE_ID,
   createSam3PixelDecoderPhaseProgramCpuOracle,
   createSam3PixelDecoderPhaseProgramRouteDefinition,
