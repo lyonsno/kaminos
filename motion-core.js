@@ -345,6 +345,17 @@ export function normalizeMotionTerrainRouteCostProfile(profile = 'cautious-lerm'
   };
 }
 
+export function listMotionTerrainRouteCostProfiles() {
+  return Object.values(MOTION_TERRAIN_ROUTE_COST_PROFILES).map(profile => ({
+    id: profile.id,
+    label: profile.label,
+    staticFieldMode: 'frozen-source-snapshot',
+    dynamicContinuity: 'not-claimed',
+    semanticBasis: [...profile.semanticBasis],
+    weights: { ...profile.weights },
+  }));
+}
+
 function motionTerrainRouteCostBreakdown(source, index, weights, profileId = null) {
   const routePressure = hillChannelScalar(source, 'routePressure', index, 0);
   const slope = hillChannelScalar(source, 'slope', index, 0);

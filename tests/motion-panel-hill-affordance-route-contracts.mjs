@@ -42,6 +42,10 @@ assert.match(index, /id="motion-panel-hill-route-profile-control"/, 'operator ca
 assert.match(index, /id="motion-panel-hill-route-fixture-control"/, 'operator can choose Hill route fixture without editing URL params');
 assert.match(index, /id="motion-panel-hill-terrain-overlay-control"/, 'operator can choose Hill terrain overlay without editing URL params');
 assert.match(index, /function refreshMotionPanelHillRouteControlsFromInputs/, 'operator Hill controls recompose the mounted route from cached packet/data');
+assert.match(index, /listMotionTerrainRouteCostProfiles/, 'browser can enumerate static Hill steering profiles for comparison instead of exposing only the current profile');
+assert.match(index, /motionPanelHillRouteProfileComparison/, 'Path World debug exposes all available static-Hill steering profile identities');
+assert.match(index, /motion-panel-hill-profile-ghost-route/, 'Path World renders low-authority comparison routes for non-selected Hill steering profiles');
+assert.match(index, /id="motion-panel-hill-route-profile-family"/, 'Path World panel visibly names the active route profile as one member of a profile family');
 assert.match(index, /frozen-source-snapshot/, 'browser route evidence labels static Hill packet planning as a frozen source snapshot');
 assert.match(index, /dynamicContinuity/, 'browser route evidence avoids silently claiming dynamic topology continuity');
 assert.match(index, /hillTerrainSurface/, 'Path World debug exposes the mounted Hill terrain surface evidence');
@@ -76,6 +80,9 @@ assert.match(index, /terrain route -> carrier contact -> local affect/, 'operato
 assert.match(index, /suppressed-by-carrier/, 'operator readout names path trigger suppression when carrier following owns travel');
 assert.match(index, /hill-carrier-follow/, 'operator readout names the carrier-follow reason instead of generic path-trigger state');
 assert.match(index, /actorDisplayScale/, 'actor/debug evidence records the effective Hill display scale');
+assert.match(index, /function motionPanelHillArrivalAttentionTarget/, 'Hill carrier mode has explicit destination-arrival attention instead of reusing route tangent at the hold phase');
+assert.match(index, /arrival-gaze/, 'Hill arrival behavior evidence names arrival gaze so destination hold cannot masquerade as ordinary route following');
+assert.match(index, /destination-inspect/, 'Hill arrival behavior labels the end state as destination inspection instead of letting the actor nose into terrain');
 
 assert.match(liveWitness, /--hill-affordance-packet/, 'live witness accepts a Hill affordance packet path');
 assert.match(liveWitness, /--hill-affordance-data/, 'live witness accepts a Hill affordance data path');
@@ -95,6 +102,7 @@ assert.match(liveWitness, /hillTerrainCarrier/, 'live witness records Hill terra
 assert.match(liveWitness, /groundingAuthority/, 'live witness records carrier grounding authority');
 assert.match(liveWitness, /carrierPathFollower/, 'live witness records carrier path follower evidence');
 assert.match(liveWitness, /actorDisplayScale/, 'live witness records the effective Hill actor display scale per frame');
+assert.match(liveWitness, /arrivalBehavior/, 'live witness records Hill arrival behavior evidence per frame');
 assert.match(liveWitness, /airborneGrant/, 'live witness records whether carrier following allowed airborne motion');
 assert.match(liveWitness, /routePhase/, 'live witness records route conductor phase evidence');
 assert.match(liveWitness, /routePlaybackMode/, 'live witness records route conductor playback mode evidence');

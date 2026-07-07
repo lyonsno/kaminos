@@ -564,6 +564,7 @@ input[type="range"]:disabled::-webkit-slider-thumb { background: #555; cursor: n
         <div class="field"><span class="field-key">Phase</span><span class="field-val" id="motion-panel-route-phase">inactive</span></div>
         <div class="field"><span class="field-key">Progress</span><span class="field-val" id="motion-panel-route-progress">0.00</span></div>
         <div class="field"><span class="field-key">Profile</span><span class="field-val" id="motion-panel-hill-route-profile">none</span></div>
+        <div class="field"><span class="field-key">Profile Set</span><span class="field-val" id="motion-panel-hill-route-profile-family">none</span></div>
         <div class="field"><span class="field-key">Fixture</span><span class="field-val" id="motion-panel-hill-route-fixture">none</span></div>
         <div class="field"><span class="field-key">Terrain</span><span class="field-val" id="motion-panel-hill-terrain-overlay">none</span></div>
         <div class="field"><span class="field-key">Trigger</span><span class="field-val" id="motion-panel-path-world-trigger-state">no world</span></div>
@@ -1097,6 +1098,7 @@ import {
   generatedPoseClipletForSourceFrame,
   generatedPoseTemporalClipById,
   interpolateGeneratedPoseTemporalSample,
+  listMotionTerrainRouteCostProfiles,
   motionClipById,
   motionPhraseBodyScale,
   mapGeneratedPoseTemporalGroundedDisplaySample,
@@ -4042,6 +4044,7 @@ function motionPanelPathWorldReadout() {
   const routeConductor = actor?.routeConductor || pathWorld?.routeConductor || motionTemporalState?.lastRouteConductor || null;
   const routePlan = actor?.pathWorldRoutePlan || pathWorld?.routePlan || motionTemporalState?.pathWorld?.routePlan || null;
   const routeCostProfile = routePlan?.cost?.profile || null;
+  const routeProfileComparison = pathWorld?.routeProfileComparison || motionPanelHillRouteProfileComparison(routeCostProfile?.id || 'cautious-lerm');
   const hillTerrainSurface = actor?.hillTerrainSurface || pathWorld?.hillTerrainSurface || motionTemporalState?.pathWorld?.hillTerrainSurface || null;
   const hillTerrainFrame = actor?.hillTerrainFrame || pathWorld?.hillTerrainFrame || motionTemporalState?.pathWorld?.hillTerrainFrame || null;
   const hillTerrainCarrier = actor?.hillTerrainCarrier || motionTemporalState?.lastHillTerrainCarrier || null;
@@ -4080,6 +4083,7 @@ function motionPanelPathWorldReadout() {
     worldId: pathWorld?.pathWorldId || interrupt?.pathWorldId || motionTemporalState?.pathWorld?.id || null,
     routePlan,
     pathWorldRouteCostProfile: routeCostProfile,
+    motionPanelHillRouteProfileComparison: routeProfileComparison,
     pathWorldRouteFixture: routePlan?.evidence?.routeFixture || pathWorld?.pathWorldRouteFixture || null,
     terrainOverlayMode: hillTerrainSurface?.terrainOverlayMode || pathWorld?.terrainOverlayMode || routePlan?.evidence?.terrainOverlayMode || null,
     staticFieldMode: routePlan?.evidence?.staticFieldMode || routeCostProfile?.staticFieldMode || null,
@@ -4113,6 +4117,7 @@ function updateMotionPanelPathWorldReadout() {
   setField('motion-panel-route-phase', readout.routePhase, readout.active);
   setField('motion-panel-route-progress', readout.routeProgress == null ? '0.00' : readout.routeProgress.toFixed(2), readout.active);
   setField('motion-panel-hill-route-profile', readout.pathWorldRouteCostProfile?.id || 'none', !!readout.pathWorldRouteCostProfile);
+  setField('motion-panel-hill-route-profile-family', `${readout.motionPanelHillRouteProfileComparison?.profileCount || 0} static profiles`, !!readout.motionPanelHillRouteProfileComparison?.profileCount);
   setField('motion-panel-hill-route-fixture', readout.pathWorldRouteFixture?.id || 'none', !!readout.pathWorldRouteFixture);
   setField('motion-panel-hill-terrain-overlay', readout.terrainOverlayMode || 'none', !!readout.terrainOverlayMode);
   const triggerLabel = readout.triggerDistance == null
@@ -5343,6 +5348,61 @@ function motionPanelHillRouteControlsFromInputs(fallback = {}) {
   };
 }
 
+function motionPanelHillRouteProfileComparison(activeProfile = 'cautious-lerm', routeContext = {}) {
+  const activeId = typeof activeProfile === 'string' ? activeProfile : activeProfile?.id;
+  const profiles = listMotionTerrainRouteCostProfiles();
+  const source = routeContext.source || null;
+  const start = routeContext.start || null;
+  const goal = routeContext.goal || null;
+  const routes = source && start && goal
+    ? profiles.map(profile => {
+      try {
+        const plan = createMotionRoutePlanFromTerrainAffordance(source, {
+          id: `${routeContext.id || 'hill-profile-comparison'}-${profile.id}`,
+          start,
+          goal,
+          actorRadius: routeContext.actorRadius || 0.17,
+          costProfile: profile.id,
+        });
+        return {
+          schema: 'kaminos.motion-panel-hill-route-profile-comparison-route.v0',
+          profileId: profile.id,
+          label: profile.label,
+          active: profile.id === activeId,
+          status: 'planned',
+          costTotal: plan.cost.total,
+          routeLength: plan.cost.routeLength,
+          visitedCount: plan.cost.visitedCount,
+          routePointCount: plan.routePoints.length,
+          routePoints: plan.routePoints.map(point => point.world),
+          semanticBasis: [...profile.semanticBasis],
+        };
+      } catch (error) {
+        return {
+          schema: 'kaminos.motion-panel-hill-route-profile-comparison-route.v0',
+          profileId: profile.id,
+          label: profile.label,
+          active: profile.id === activeId,
+          status: 'failed',
+          error: String(error?.message || error),
+          semanticBasis: [...profile.semanticBasis],
+        };
+      }
+    })
+    : [];
+  return {
+    schema: 'kaminos.motion-panel-hill-route-profile-comparison.v0',
+    route: 'hill-native-route-world',
+    mode: 'static-hill-steering-profiles',
+    planningAuthority: 'comparison-only-not-active-route',
+    activeProfileId: activeId || 'cautious-lerm',
+    activeLabel: profiles.find(profile => profile.id === activeId)?.label || activeId || 'Cautious lerm',
+    profileCount: profiles.length,
+    profiles,
+    routes,
+  };
+}
+
 function syncMotionPanelHillRouteControls(options = {}) {
   const profileId = typeof options.costProfile === 'string' ? options.costProfile : options.costProfile?.id;
   motionPanelSetSelectValueIfPresent('motion-panel-hill-route-profile-control', profileId || 'cautious-lerm');
@@ -5615,6 +5675,36 @@ function createMotionPanelHillNativePathWorld(routePlan, terrainSource, options 
   route.name = 'generated-pose-temporal-hill-native-route';
   route.renderOrder = 28;
   group.add(route);
+  const routeProfileComparison = routePlan?.evidence?.routeProfileComparison
+    || motionPanelHillRouteProfileComparison(routePlan?.cost?.profile?.id || options.costProfile || 'cautious-lerm');
+  const ghostColors = [0x88d6ff, 0xff8ac8, 0x9cff8a, 0xd8b8ff];
+  for (const comparisonRoute of routeProfileComparison.routes || []) {
+    if (comparisonRoute.active || comparisonRoute.status !== 'planned' || !Array.isArray(comparisonRoute.routePoints) || comparisonRoute.routePoints.length < 2) continue;
+    const ghostGeometry = new THREE.BufferGeometry().setFromPoints(
+      comparisonRoute.routePoints.map(point => {
+        const displayPoint = motionPanelHillDisplayPoint(terrainSurface.frame, point);
+        return new THREE.Vector3(displayPoint[0], Number(displayPoint[1] || 0) + 0.052, displayPoint[2]);
+      }),
+    );
+    const ghostRoute = new THREE.Line(
+      ghostGeometry,
+      new THREE.LineBasicMaterial({
+        color: ghostColors[(routeProfileComparison.routes.indexOf(comparisonRoute)) % ghostColors.length],
+        transparent: true,
+        opacity: 0.32,
+        depthTest: false,
+      }),
+    );
+    ghostRoute.name = `motion-panel-hill-profile-ghost-route-${comparisonRoute.profileId}`;
+    ghostRoute.renderOrder = 27;
+    ghostRoute.userData = {
+      schema: 'kaminos.motion-panel-hill-profile-ghost-route.v0',
+      authority: 'comparison-only-not-active-route',
+      profileId: comparisonRoute.profileId,
+      active: false,
+    };
+    group.add(ghostRoute);
+  }
   const startPoint = safeRoutePoints[0];
   const goalPoint = safeRoutePoints[safeRoutePoints.length - 1];
   const goal = new THREE.Mesh(
@@ -5657,6 +5747,7 @@ function createMotionPanelHillNativePathWorld(routePlan, terrainSource, options 
     routeAuthority: 'terrain-affordance-route-plan',
     routeSource: routePlan?.evidence?.routeSource || 'hill-motion-affordance-grid',
     reason: 'hill-native-route-world',
+    routeProfileComparison,
     group,
     routeLine: route,
     wall: null,
@@ -5821,6 +5912,34 @@ function createMotionPanelCarrierPathFollower(pathWorldSample, hillTerrainCarrie
     pathTriggerSuppressedByCarrierFollower: !!options.pathTriggerSuppressedByCarrierFollower,
     pathTriggerRequested: !!options.pathTriggerRequested,
     groundingAuthority: hillTerrainCarrier.groundingAuthority || 'hill-terrain-carrier',
+  };
+}
+
+function motionPanelHillArrivalAttentionTarget(pathWorldSample, rootPosition, pathWorld = null) {
+  if (!pathWorldSample || pathWorldSample.routePhase !== 'holding') return null;
+  const routePoints = Array.isArray(pathWorld?.routePoints) ? pathWorld.routePoints : [];
+  const goalPoint = routePoints[routePoints.length - 1] || pathWorldSample.root || [0, 0, 0];
+  const previousPoint = routePoints[Math.max(0, routePoints.length - 4)] || routePoints[Math.max(0, routePoints.length - 2)] || goalPoint;
+  const routeTangent = normalizeMotionPanelPathWorldXZ([
+    Number(goalPoint[0] || 0) - Number(previousPoint[0] || 0),
+    0,
+    Number(goalPoint[2] || 0) - Number(previousPoint[2] || 0),
+  ], pathWorldSample.facing || [0, 0, 1]);
+  const root = rootPosition || motionPanelVector3FromArray(pathWorldSample.root);
+  const target = new THREE.Vector3(
+    Number(goalPoint[0] || 0) + routeTangent[0] * 0.28,
+    Number(goalPoint[1] || 0) + 0.42,
+    Number(goalPoint[2] || 0) + routeTangent[2] * 0.28,
+  );
+  const rootToTarget = target.clone().sub(root);
+  if (rootToTarget.lengthSq() < 0.02) target.add(new THREE.Vector3(routeTangent[0] * 0.35, 0.18, routeTangent[2] * 0.35));
+  return {
+    schema: 'kaminos.motion-panel-hill-arrival-behavior.v0',
+    mode: 'arrival-gaze',
+    state: 'destination-inspect',
+    reason: 'goal-hold',
+    target: target.toArray().map(value => Number(value.toFixed(5))),
+    routeTangent,
   };
 }
 
@@ -8083,12 +8202,17 @@ function updateGeneratedPoseTemporalFrame(nowSeconds = performance.now() / 1000)
     && pathWorldEncounterSemantics
     && ['obstacle', 'obstacle-then-route'].includes(semanticAttentionMode)
     && ['triggered', 'reaction', 'cooldown'].includes(pathWorldInterruptEnvelope?.interrupt?.phase || '');
+  const arrivalBehavior = hillTerrainCarrier
+    ? motionPanelHillArrivalAttentionTarget(pathWorldSample, rootPosition, state.pathWorld)
+    : null;
   const sampleAttention = shouldAttendObstacle
     ? new THREE.Vector3(
       Number(pathWorldSample.trigger?.center?.[0] || 0),
       Number(pathWorldSample.trigger?.center?.[1] || 0) + 0.08,
       Number(pathWorldSample.trigger?.center?.[2] || 0),
     )
+    : arrivalBehavior
+      ? motionPanelVector3FromArray(arrivalBehavior.target)
     : pathWorldSample
       ? new THREE.Vector3(...pathWorldSample.attention)
       : new THREE.Vector3(...displayGrounding.attention);
@@ -8164,7 +8288,13 @@ function updateGeneratedPoseTemporalFrame(nowSeconds = performance.now() / 1000)
     target: state.lastAttentionTargetContext,
     anchor: state.anchorContext,
   });
+  if (arrivalBehavior) {
+    behaviorState.state = arrivalBehavior.state;
+    behaviorState.phase = arrivalBehavior.mode;
+    behaviorState.reason = arrivalBehavior.reason;
+  }
   state.lastBehaviorState = behaviorState;
+  state.lastArrivalBehavior = arrivalBehavior;
   const behaviorReadout = updateWorldSpaceBehaviorReadout(
     visual.behaviorReadout,
     behaviorState,
@@ -8245,6 +8375,7 @@ function updateGeneratedPoseTemporalFrame(nowSeconds = performance.now() / 1000)
     pathWorldSteeringMemory,
     pathWorldRootConstraint,
     pathWorldRouteAuthority,
+    arrivalBehavior,
     hillTerrainCarrier,
     carrierPathFollower,
     terrainContact: carrierPathFollower?.terrainContact || null,
@@ -8902,6 +9033,13 @@ window.kaminosPreviewHillMotionAffordanceRoutePlan = async function(packet, data
     goal,
     actorRadius: options.actorRadius || 0.17,
     costProfile,
+  });
+  routePlan.evidence.routeProfileComparison = motionPanelHillRouteProfileComparison(costProfile.id, {
+    id: routePlan.id,
+    source,
+    start,
+    goal,
+    actorRadius: options.actorRadius || 0.17,
   });
   routePlan.evidence.routeFixture = {
     schema: 'kaminos.motion-panel-hill-route-fixture.v0',
@@ -9762,6 +9900,7 @@ window.kaminosGeneratedPoseTemporalDebugState = function() {
     pathWorldRouteAuthority: state?.lastPathWorldRouteAuthority || (state?.lastPathWorld ? 'world-path' : null),
     pathWorldRoutePlan: state?.pathWorld?.routePlan || state?.lastPathWorld?.routePlan || null,
     pathWorldRouteCostProfile: (state?.pathWorld?.routePlan || state?.lastPathWorld?.routePlan || null)?.cost?.profile || null,
+    motionPanelHillRouteProfileComparison: state?.pathWorld?.routeProfileComparison || state?.lastPathWorld?.routeProfileComparison || null,
     pathWorldRouteFixture: (state?.pathWorld?.routePlan || state?.lastPathWorld?.routePlan || null)?.evidence?.routeFixture || state?.lastPathWorld?.pathWorldRouteFixture || null,
     terrainOverlayMode: state?.lastPathWorld?.terrainOverlayMode || state?.pathWorld?.hillTerrainSurface?.terrainOverlayMode || null,
     staticFieldMode: (state?.pathWorld?.routePlan || state?.lastPathWorld?.routePlan || null)?.evidence?.staticFieldMode || null,
@@ -9782,6 +9921,7 @@ window.kaminosGeneratedPoseTemporalDebugState = function() {
     groundingAuthority: state?.lastHillTerrainCarrier?.groundingAuthority || state?.lastActors?.[0]?.groundingAuthority || null,
     attentionTargetMode: motionAttentionTargetModeFromInputs(),
     attentionTargetEvidence: state?.lastAttentionTargetEvidence || selectedSceneObjectMotionAttentionTarget(),
+    arrivalBehavior: state?.lastArrivalBehavior || state?.lastActors?.[0]?.arrivalBehavior || null,
     behaviorState: state?.lastBehaviorState || null,
     behaviorReadout: state?.lastBehaviorReadout || null,
     sourceGhost: state?.lastSourceGhost || {
