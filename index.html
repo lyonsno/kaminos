@@ -13123,7 +13123,10 @@ function sharpBreathingRoomSpnFusionCoverage(result) {
 function sharpBreathingRoomMonodepthPhaseLabels(result) {
   const labels = [];
   for (const event of sharpBreathingRoomSchedulerEvents(result)) {
-    const label = event.details?.phase
+    const boundary = event.boundary || event.phase || null;
+    const label = (boundary === 'monodepth-phase' && SHARP_MONODEPTH_PHASE_LABELS.includes(event.phase)
+      ? event.phase
+      : event.details?.phase)
       || event.details?.label
       || event.phaseLabel
       || event.label
