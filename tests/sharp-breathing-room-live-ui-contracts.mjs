@@ -330,6 +330,16 @@ assert.match(
 );
 assert.match(
   index,
+  /volumeBridge\?\.forceHidden\?\.\('sharp-breathing-room-release'\)/,
+  'Kiln-fire release must force-hide the main-renderer bridge so a stale flame frame cannot remain over the loaded splat',
+);
+assert.match(
+  index,
+  /window\._kaminosDirty\?\.\(\)/,
+  'Kiln-fire release must dirty the main renderer after hiding the bridge so the cleared scene is painted',
+);
+assert.match(
+  index,
   /await endSharpBreathingRoomKilnFire\('complete',\s*\{\s*forceInactive:\s*true\s*\}\)/,
   'A finished SHARP smoke must release the furnace even when the volume renderer was already active before the run',
 );
