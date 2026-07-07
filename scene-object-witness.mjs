@@ -190,6 +190,19 @@ function normalizeUrlForWitness(value) {
   }
 }
 
+async function refreshTargetUrl(openedTarget) {
+  try {
+    const targets = await cdpFetch('/json/list', { timeoutMs: 1000 });
+    const current = targets.find(candidate => (
+      candidate.webSocketDebuggerUrl === openedTarget?.webSocketDebuggerUrl
+      || candidate.id === openedTarget?.id
+    ));
+    return current?.url || openedTarget?.url || url;
+  } catch {
+    return openedTarget?.url || url;
+  }
+}
+
 async function fetchServerRoots(baseUrl) {
   const resp = await fetch(new URL('/api/roots', baseUrl));
   const roots = await resp.json();
@@ -4912,7 +4925,7 @@ try {
   await wsRequest(ws, 'Page.enable');
   await wsRequest(ws, 'Page.bringToFront');
   await delay(settleMs);
-  effectiveUrl = await evaluate(ws, 'location.href');
+  effectiveUrl = await refreshTargetUrl(target);
   const requestedHref = normalizeUrlForWitness(url);
   const effectiveHref = normalizeUrlForWitness(effectiveUrl);
   if (requestedHref !== effectiveHref) {
