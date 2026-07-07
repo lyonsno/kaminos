@@ -484,7 +484,7 @@
           "id": "glove-emitter-native-host-smoke-offer",
           "label": "Glove Emitter Native Host Gap Route",
           "route": "index.html?kaminos_forge_host=live&world_chamber=lerms-underhill&world_cartridge=lerms-terrarium&world_crucible=glove-emitter&forge_host_smoke_offer=glove-emitter-native-host-smoke-offer",
-          "targetUrl": "index.html?kaminos_glove_well_host=1&glove_well_host_url=http%3A%2F%2F127.0.0.1%3A5176%2F__lerms%2Fglove-well-host-packet%2Flive&glove_well_host_live=1&glove_well_host_poll_ms=750",
+          "targetUrl": "index.html?kaminos_glove_well_host=1&kaminos_embed=glove-well-host&glove_well_host_url=http%3A%2F%2F127.0.0.1%3A5176%2F__lerms%2Fglove-well-host-packet%2Flive&glove_well_host_live=1&glove_well_host_poll_ms=750",
           "targetSurface": "kaminos/glove-well-host",
           "sourceRole": "glove-well-source",
           "authority": "gap_report_route",
