@@ -6,6 +6,7 @@ import { spawnSync } from 'node:child_process';
 
 import {
   SHARP_BREATHING_ROOM_COMPARISON_SCHEMA,
+  SHARP_MONODEPTH_PHASE_LABELS,
   SHARP_SPN_LOWRES_BLOCK_LABELS,
   createSharpBreathingRoomComparison,
   sharpBreathingRoomComparisonProfiles,
@@ -16,13 +17,27 @@ const manifestPath = join(root, 'pipelines', 'asset-pipelines.json');
 const witnessPath = join(root, 'pipeline-witness.mjs');
 const runnerPath = join(root, 'scripts', 'run-sharp-breathing-room-comparison.mjs');
 
-function schedulerVerification({ status = 'verified', timingAuthority = 'browser-wall-clock', boundaryAssertions = true, lowresBlocks = true } = {}) {
+function schedulerVerification({
+  status = 'verified',
+  timingAuthority = 'browser-wall-clock',
+  boundaryAssertions = true,
+  lowresBlocks = true,
+  monodepthLabels = true,
+} = {}) {
   const lowresEvents = lowresBlocks
     ? SHARP_SPN_LOWRES_BLOCK_LABELS.map(block => ({
         phase: 'spn-fusion',
         boundary: 'spn-lowres-fusion',
         kind: 'js-yield-end',
         details: { block },
+      }))
+    : [];
+  const monodepthEvents = monodepthLabels
+    ? SHARP_MONODEPTH_PHASE_LABELS.map(label => ({
+        phase: 'monodepth-phase',
+        boundary: 'monodepth-phase',
+        kind: 'js-yield-end',
+        details: { phase: label },
       }))
     : [];
   return {
@@ -42,6 +57,7 @@ function schedulerVerification({ status = 'verified', timingAuthority = 'browser
             { phase: 'spn', boundary: 'spn-patch-chunk', kind: 'js-yield-start' },
             { phase: 'spn', boundary: 'spn-patch-chunk', kind: 'js-yield-end' },
             ...lowresEvents,
+            ...monodepthEvents,
           ]
         : [],
     },
@@ -180,6 +196,8 @@ assert.equal(valid.schedulerComparison.cooperative.status, 'verified');
 assert.equal(valid.schedulerComparison.cooperative.unsupportedFields.includes('vitBlockChunkSize'), true);
 assert.equal(valid.schedulerComparison.cooperative.spnFusionCoverage.status, 'complete');
 assert.deepEqual(valid.schedulerComparison.cooperative.spnFusionCoverage.missingSpnFusionBlocks, []);
+assert.equal(valid.schedulerComparison.cooperative.monodepthPhaseCoverage.status, 'complete');
+assert.deepEqual(valid.schedulerComparison.cooperative.monodepthPhaseCoverage.missingMonodepthPhaseLabels, []);
 assert.equal(valid.timingComparison.adapterInferenceDurationMs.baseline, 120000);
 assert.equal(valid.timingComparison.adapterInferenceDurationMs.cooperative, 118000);
 assert.equal(valid.timingComparison.frameP95Ms.baseline, 124.1);
@@ -239,6 +257,24 @@ assert.equal(missingLowresBlocks.status, 'invalid');
 assert.ok(missingLowresBlocks.downgrades.includes('cooperative-spn-lowres-labels-missing'));
 assert.equal(missingLowresBlocks.falseClosureChecks.spnLowresLabelsMissing, true);
 assert.deepEqual(missingLowresBlocks.schedulerComparison.cooperative.spnFusionCoverage.missingSpnFusionBlocks, SHARP_SPN_LOWRES_BLOCK_LABELS);
+
+const missingMonodepthLabels = createSharpBreathingRoomComparison({
+  runs: [
+    routeRun({ profileId: 'baseline-default', schedulerMode: 'default' }),
+    routeRun({
+      profileId: 'cooperative-spn-gaussian',
+      schedulerMode: 'cooperative',
+      scheduler: schedulerVerification({ monodepthLabels: false }),
+    }),
+  ],
+});
+assert.equal(missingMonodepthLabels.status, 'invalid');
+assert.ok(missingMonodepthLabels.downgrades.includes('cooperative-monodepth-phase-labels-missing'));
+assert.equal(missingMonodepthLabels.falseClosureChecks.monodepthPhaseLabelsMissing, true);
+assert.deepEqual(
+  missingMonodepthLabels.schedulerComparison.cooperative.monodepthPhaseCoverage.missingMonodepthPhaseLabels,
+  SHARP_MONODEPTH_PHASE_LABELS,
+);
 
 const missingFlameTiming = createSharpBreathingRoomComparison({
   runs: [
@@ -316,7 +352,8 @@ writeFileSync(report, JSON.stringify({
         { phase: 'gaussian', boundary: 'gaussian-phase', kind: 'queue-work-done-end' },
         { phase: 'gaussian', boundary: 'gaussian-phase', kind: 'js-yield-start' },
         { phase: 'gaussian', boundary: 'gaussian-phase', kind: 'js-yield-end' },
-        ...${JSON.stringify(SHARP_SPN_LOWRES_BLOCK_LABELS)}.map(block => ({ phase: 'spn-fusion', boundary: 'spn-lowres-fusion', kind: 'js-yield-end', details: { block } }))
+        ...${JSON.stringify(SHARP_SPN_LOWRES_BLOCK_LABELS)}.map(block => ({ phase: 'spn-fusion', boundary: 'spn-lowres-fusion', kind: 'js-yield-end', details: { block } })),
+        ...${JSON.stringify(SHARP_MONODEPTH_PHASE_LABELS)}.map(label => ({ phase: 'monodepth-phase', boundary: 'monodepth-phase', kind: 'js-yield-end', details: { phase: label } }))
       ] : [],
       boundaryAssertions: isCooperative ? [
         { field: 'phaseChunkSize.spnPatch', status: 'verified', observedBoundary: 'spn-patch-chunk', observedCount: 1, observedQueueWaitCount: 1, observedYieldCount: 1 },
