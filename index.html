@@ -12543,14 +12543,14 @@ async function beginSharpBreathingRoomKilnFire({ profileId, source, pipelineId }
   }
 }
 
-function endSharpBreathingRoomKilnFire(phase = 'complete', options = {}) {
+async function endSharpBreathingRoomKilnFire(phase = 'complete', options = {}) {
   const fireState = window.__kaminosSharpBreathingRoomKilnFireState || null;
   if (!fireState) return null;
   const forceInactive = options.forceInactive === true;
   fireState.phase = phase;
   fireState.finishedAt = new Date().toISOString();
   if ((fireState.activatedByRun || forceInactive) && volumePrototype) {
-    volumePrototype.setActive(false);
+    await volumePrototype.setActive(false);
     fireState.volumeReleased = true;
     fireState.forcedRelease = forceInactive && !fireState.activatedByRun;
   } else {
@@ -12562,6 +12562,15 @@ function endSharpBreathingRoomKilnFire(phase = 'complete', options = {}) {
   refreshVolumeReadout();
   return fireState;
 }
+
+window.kaminosSharpBreathingRoomKilnFireDebug = {
+  begin: beginSharpBreathingRoomKilnFire,
+  end: endSharpBreathingRoomKilnFire,
+  state: () => ({
+    fire: window.__kaminosSharpBreathingRoomKilnFireState || null,
+    volume: volumePrototype?.debugState?.() || null,
+  }),
+};
 
 function sharpBreathingRoomSelectedSource() {
   return kilnRouteBenchSelectedSource(selectedKilnRouteBenchRoute('sharp-image-to-splat-live-v0'));
@@ -16550,7 +16559,7 @@ async function runKilnRouteBenchRoute(routeId, profileId) {
     });
     throw err;
   } finally {
-    endSharpBreathingRoomKilnFire('complete', { forceInactive: true });
+    await endSharpBreathingRoomKilnFire('complete', { forceInactive: true });
     sharpBreathingRoomRunningProfileId = null;
     renderKilnRouteBench();
   }

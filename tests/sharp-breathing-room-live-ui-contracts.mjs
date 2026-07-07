@@ -290,6 +290,21 @@ assert.match(
 );
 assert.match(
   index,
-  /endSharpBreathingRoomKilnFire\('complete',\s*\{\s*forceInactive:\s*true\s*\}\)/,
+  /window\.kaminosSharpBreathingRoomKilnFireDebug/,
+  'Kiln-fire activation must expose a narrow debug handle so witnesses can prove release without running SHARP inference',
+);
+assert.match(
+  index,
+  /async function endSharpBreathingRoomKilnFire\(/,
+  'Kiln-fire release must be async so route completion waits for the volume renderer to actually stop',
+);
+assert.match(
+  index,
+  /await volumePrototype\.setActive\(false\)/,
+  'Kiln-fire release must await the renderer deactivate path instead of firing and immediately showing the splat behind the flame',
+);
+assert.match(
+  index,
+  /await endSharpBreathingRoomKilnFire\('complete',\s*\{\s*forceInactive:\s*true\s*\}\)/,
   'A finished SHARP smoke must release the furnace even when the volume renderer was already active before the run',
 );
