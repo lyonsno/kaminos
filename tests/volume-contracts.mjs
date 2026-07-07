@@ -2113,6 +2113,8 @@ assert.match(fullGridResidualRender, /fire-signature-passed-exact-pixel-mismatch
 assert.match(fullGridResidualRender, /sidecarBytesMatchTruth/, 'full-grid residual render-still records when predicted sidecars match truth bytes');
 assert.match(fullGridResidualRender, /state\?\.active[\s\S]*state\.width\s*>\s*0[\s\S]*state\.height\s*>\s*0[\s\S]*state\.frameCount\s*>\s*0/, 'full-grid residual render-still accepts one initialized activation-pumped frame instead of waiting forever for parked RAF');
 assert.match(fullGridResidualRender, /contactSheet/, 'full-grid residual render-still writes an inspectable contact sheet');
+assert.match(fullGridResidualRender, /drawLabelText/, 'full-grid residual render-still burns visible text labels into contact sheets and strips');
+assert.match(fullGridResidualRender, /visibleRasterLabels/, 'full-grid residual render-still manifests record visible raster label metadata');
 assert.match(fullGridResidualRender, /--temporal-strip-frame-count/, 'full-grid residual render-still can request a temporal dynamics strip');
 assert.match(fullGridResidualRender, /full-grid-field-residual-temporal-dynamics-strip-v0/, 'full-grid residual temporal strip names its dynamics-strip authority');
 assert.match(fullGridResidualRender, /temporalStripViewer/, 'full-grid residual temporal strip writes a labeled visual viewer');

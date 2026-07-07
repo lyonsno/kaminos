@@ -238,6 +238,114 @@ function pasteRgba(target, targetWidth, source, sourceWidth, sourceHeight, offse
   }
 }
 
+const LABEL_FONT = {
+  A: ['01110', '10001', '10001', '11111', '10001', '10001', '10001'],
+  B: ['11110', '10001', '10001', '11110', '10001', '10001', '11110'],
+  C: ['01111', '10000', '10000', '10000', '10000', '10000', '01111'],
+  D: ['11110', '10001', '10001', '10001', '10001', '10001', '11110'],
+  E: ['11111', '10000', '10000', '11110', '10000', '10000', '11111'],
+  F: ['11111', '10000', '10000', '11110', '10000', '10000', '10000'],
+  G: ['01111', '10000', '10000', '10011', '10001', '10001', '01110'],
+  H: ['10001', '10001', '10001', '11111', '10001', '10001', '10001'],
+  I: ['11111', '00100', '00100', '00100', '00100', '00100', '11111'],
+  J: ['00111', '00010', '00010', '00010', '10010', '10010', '01100'],
+  K: ['10001', '10010', '10100', '11000', '10100', '10010', '10001'],
+  L: ['10000', '10000', '10000', '10000', '10000', '10000', '11111'],
+  M: ['10001', '11011', '10101', '10101', '10001', '10001', '10001'],
+  N: ['10001', '11001', '10101', '10011', '10001', '10001', '10001'],
+  O: ['01110', '10001', '10001', '10001', '10001', '10001', '01110'],
+  P: ['11110', '10001', '10001', '11110', '10000', '10000', '10000'],
+  Q: ['01110', '10001', '10001', '10001', '10101', '10010', '01101'],
+  R: ['11110', '10001', '10001', '11110', '10100', '10010', '10001'],
+  S: ['01111', '10000', '10000', '01110', '00001', '00001', '11110'],
+  T: ['11111', '00100', '00100', '00100', '00100', '00100', '00100'],
+  U: ['10001', '10001', '10001', '10001', '10001', '10001', '01110'],
+  V: ['10001', '10001', '10001', '10001', '10001', '01010', '00100'],
+  W: ['10001', '10001', '10001', '10101', '10101', '10101', '01010'],
+  X: ['10001', '10001', '01010', '00100', '01010', '10001', '10001'],
+  Y: ['10001', '10001', '01010', '00100', '00100', '00100', '00100'],
+  Z: ['11111', '00001', '00010', '00100', '01000', '10000', '11111'],
+  0: ['01110', '10001', '10011', '10101', '11001', '10001', '01110'],
+  1: ['00100', '01100', '00100', '00100', '00100', '00100', '01110'],
+  2: ['01110', '10001', '00001', '00010', '00100', '01000', '11111'],
+  3: ['11110', '00001', '00001', '01110', '00001', '00001', '11110'],
+  4: ['00010', '00110', '01010', '10010', '11111', '00010', '00010'],
+  5: ['11111', '10000', '10000', '11110', '00001', '00001', '11110'],
+  6: ['01110', '10000', '10000', '11110', '10001', '10001', '01110'],
+  7: ['11111', '00001', '00010', '00100', '01000', '01000', '01000'],
+  8: ['01110', '10001', '10001', '01110', '10001', '10001', '01110'],
+  9: ['01110', '10001', '10001', '01111', '00001', '00001', '01110'],
+  '-': ['00000', '00000', '00000', '11111', '00000', '00000', '00000'],
+  ':': ['00000', '00100', '00100', '00000', '00100', '00100', '00000'],
+};
+
+function drawRect(rgba, width, height, x, y, rectWidth, rectHeight, color) {
+  const [r, g, b, a] = color;
+  const x0 = Math.max(0, Math.floor(x));
+  const y0 = Math.max(0, Math.floor(y));
+  const x1 = Math.min(width, Math.ceil(x + rectWidth));
+  const y1 = Math.min(height, Math.ceil(y + rectHeight));
+  for (let py = y0; py < y1; py += 1) {
+    for (let px = x0; px < x1; px += 1) {
+      const offset = (py * width + px) * 4;
+      rgba[offset] = r;
+      rgba[offset + 1] = g;
+      rgba[offset + 2] = b;
+      rgba[offset + 3] = a;
+    }
+  }
+}
+
+function drawLabelText(rgba, width, height, text, x, y, options = {}) {
+  const scale = Math.max(1, Math.floor(Number(options.scale || 2)));
+  const color = options.color || [232, 244, 244, 255];
+  const shadow = options.shadow || [0, 0, 0, 255];
+  const normalized = String(text || '').toUpperCase();
+  let cursor = Math.floor(x);
+  const top = Math.floor(y);
+  for (const char of normalized) {
+    if (char === ' ') {
+      cursor += 4 * scale;
+      continue;
+    }
+    const glyph = LABEL_FONT[char] || LABEL_FONT['-'];
+    for (let gy = 0; gy < glyph.length; gy += 1) {
+      for (let gx = 0; gx < glyph[gy].length; gx += 1) {
+        if (glyph[gy][gx] !== '1') continue;
+        drawRect(rgba, width, height, cursor + gx * scale + 1, top + gy * scale + 1, scale, scale, shadow);
+        drawRect(rgba, width, height, cursor + gx * scale, top + gy * scale, scale, scale, color);
+      }
+    }
+    cursor += 6 * scale;
+  }
+  return { text, x: Math.floor(x), y: top, scale };
+}
+
+function buildLabeledContactSheet(frames) {
+  const frameWidth = frames[0].width;
+  const frameHeight = frames[0].height;
+  const labelHeight = 24;
+  const width = frameWidth * frames.length;
+  const height = frameHeight + labelHeight;
+  const sheet = new Uint8Array(width * height * 4);
+  drawRect(sheet, width, height, 0, 0, width, height, [0, 0, 0, 255]);
+  const labels = [];
+  frames.forEach((frame, index) => {
+    const offsetX = frameWidth * index;
+    pasteRgba(sheet, width, frame.rgba, frame.width, frame.height, offsetX, labelHeight);
+    labels.push(drawLabelText(sheet, width, height, frame.role, offsetX + 8, 6, { scale: 2 }));
+  });
+  return {
+    rgba: sheet,
+    width,
+    height,
+    visibleRasterLabels: {
+      identity: 'visible-raster-role-labels-v0',
+      columnLabels: labels,
+    },
+  };
+}
+
 function renderedRoleMetrics(truthFrame, frame) {
   if (!truthFrame || !frame || truthFrame.width !== frame.width || truthFrame.height !== frame.height) {
     return {
@@ -550,12 +658,21 @@ function buildTemporalStrip(temporalRows, outDir) {
   const frameWidth = temporalRows[0].frames[0].width;
   const frameHeight = temporalRows[0].frames[0].height;
   const frameCount = temporalRows[0].frames.length;
-  const stripWidth = frameWidth * frameCount;
-  const stripHeight = frameHeight * temporalRows.length;
+  const labelWidth = 220;
+  const labelHeight = 24;
+  const stripWidth = labelWidth + frameWidth * frameCount;
+  const stripHeight = labelHeight + frameHeight * temporalRows.length;
   const sheet = new Uint8Array(stripWidth * stripHeight * 4);
+  drawRect(sheet, stripWidth, stripHeight, 0, 0, stripWidth, stripHeight, [0, 0, 0, 255]);
+  const rowLabels = [];
+  const columnLabels = [];
+  for (let frameIndex = 0; frameIndex < frameCount; frameIndex += 1) {
+    columnLabels.push(drawLabelText(sheet, stripWidth, stripHeight, `frame-${frameIndex}`, labelWidth + frameWidth * frameIndex + 8, 6, { scale: 2 }));
+  }
   temporalRows.forEach((row, rowIndex) => {
+    rowLabels.push(drawLabelText(sheet, stripWidth, stripHeight, row.role, 8, labelHeight + frameHeight * rowIndex + 8, { scale: 2 }));
     row.frames.forEach((frame, frameIndex) => {
-      pasteRgba(sheet, stripWidth, frame.rgba, frame.width, frame.height, frameWidth * frameIndex, frameHeight * rowIndex);
+      pasteRgba(sheet, stripWidth, frame.rgba, frame.width, frame.height, labelWidth + frameWidth * frameIndex, labelHeight + frameHeight * rowIndex);
     });
   });
   const contactSheet = resolve(outDir, 'temporal-dynamics-strip.png');
@@ -567,6 +684,13 @@ function buildTemporalStrip(temporalRows, outDir) {
     stepMs: temporalStripStepMs,
     rowOrder: temporalRows.map(row => row.role),
     columnOrder: Array.from({ length: frameCount }, (_, index) => `frame-${index}`),
+    visibleRasterLabels: {
+      identity: 'visible-raster-row-column-labels-v0',
+      rowLabels,
+      columnLabels,
+      labelWidth,
+      labelHeight,
+    },
     limitation: 'Temporal strip initializes each role from a complete field buffer and advances simulator dynamics after frame 0; it is not a per-frame residual model prediction or held-out temporal proof.',
     contactSheet: {
       path: contactSheet,
@@ -682,12 +806,9 @@ async function main() {
     }
 
     phase = 'contactSheet';
-    const width = frames[0].width * frames.length;
-    const height = frames[0].height;
-    const sheet = new Uint8Array(width * height * 4);
-    frames.forEach((frame, index) => pasteRgba(sheet, width, frame.rgba, frame.width, frame.height, frame.width * index, 0));
+    const sheet = buildLabeledContactSheet(frames);
     const contactSheet = resolve(outDir, 'contactSheet.png');
-    writeRgbaPng(contactSheet, width, height, Array.from(sheet));
+    writeRgbaPng(contactSheet, sheet.width, sheet.height, Array.from(sheet.rgba));
     const temporalStrip = buildTemporalStrip(temporalRows, outDir);
 
     phase = 'write-report';
@@ -719,6 +840,7 @@ async function main() {
         path: contactSheet,
         sha256: sha256File(contactSheet),
         columnOrder: frames.map(frame => frame.role),
+        visibleRasterLabels: sheet.visibleRasterLabels,
       },
     };
     if (temporalStrip) {
