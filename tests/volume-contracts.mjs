@@ -2047,6 +2047,21 @@ assert.match(fullGridResidualApply, /completeFieldCoverage/, 'full-grid residual
 assert.match(fullGridResidualApply, /fitOnSamePairVisualDiagnostic/, 'full-grid residual application labels same-pair fitted visuals separately from held-out proof');
 assert.match(fullGridResidualApply, /failurePhase/, 'full-grid residual application writes failure-phase reports for corrupt sidecars or model failures');
 
+const fullGridPerChannelProbePath = join(root, 'volume-full-grid-field-per-channel-probe.py');
+assert.ok(existsSync(fullGridPerChannelProbePath), 'volume full-grid per-channel residual probe exists');
+const fullGridPerChannelProbe = existsSync(fullGridPerChannelProbePath) ? readFileSync(fullGridPerChannelProbePath, 'utf8') : '';
+assert.match(fullGridPerChannelProbe, /kaminos\.volume\.full-grid-field-per-channel-probe\.v0/, 'full-grid per-channel probe writes a stable report schema');
+assert.match(fullGridPerChannelProbe, /full-input-single-output-channel-probe-v0/, 'full-grid per-channel probe names the full-input single-output diagnostic');
+assert.match(fullGridPerChannelProbe, /--target-channel-list/, 'full-grid per-channel probe can train explicit target channel subsets');
+assert.match(fullGridPerChannelProbe, /single-channel-mlp-residual-v0/, 'full-grid per-channel probe exposes scalar nonlinear residual heads');
+assert.match(fullGridPerChannelProbe, /single-channel-ridge-residual-v0/, 'full-grid per-channel probe exposes a linear baseline while labeling its limited interference value');
+assert.match(fullGridPerChannelProbe, /comparisonApplicationManifest/, 'full-grid per-channel probe can compare against an existing all-channel application manifest');
+assert.match(fullGridPerChannelProbe, /channelLearnability/, 'full-grid per-channel probe reports channel learnability rankings');
+assert.match(fullGridPerChannelProbe, /gradientEnergyRecovery/, 'full-grid per-channel probe reports gradient energy recovery for carrier/detail targets');
+assert.match(fullGridPerChannelProbe, /supportLocalized/, 'full-grid per-channel probe reports support-localized error separately from global error');
+assert.match(fullGridPerChannelProbe, /fullInputChannels/, 'full-grid per-channel probe records that inputs remain the complete low field state');
+assert.match(fullGridPerChannelProbe, /failurePhase/, 'full-grid per-channel probe writes failure-phase reports for corrupt sidecars or training failures');
+
 const fullGridChannelGraftPath = join(root, 'volume-full-grid-field-channel-graft.py');
 assert.ok(existsSync(fullGridChannelGraftPath), 'volume full-grid field channel graft diagnostic exists');
 const fullGridChannelGraft = existsSync(fullGridChannelGraftPath) ? readFileSync(fullGridChannelGraftPath, 'utf8') : '';
