@@ -14,6 +14,7 @@ export const ORB_SHELL_SOCKET_TONGUE_REPRODUCTION_MODE = 'socket-tongue-reproduc
 export const ORB_SHELL_SOCKET_TONGUE_POST_STRIP_HONESTY_MODE = 'socket-tongue-post-strip-honesty-preservation-v0';
 export const ORB_SHELL_MACRO_MORPHOLOGY_INVENTORY_MODE = 'macro-curve-vs-promoted-body-diagnostic-v0';
 export const ORB_SHELL_PROCEDURAL_ARCHITECTURE_INVENTORY_MODE = 'curve-first-semantic-architecture-xray-v0';
+export const ORB_SHELL_LAW_CONTROLS_SCHEMA = 'OrbShellLawControls';
 
 const TAU = Math.PI * 2;
 const MACRO_VARIATION_IDS = [
@@ -63,6 +64,43 @@ function clone(value) {
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
+}
+
+function normalizedBoolean(value, defaultValue = true) {
+  if (value === undefined || value === null) return defaultValue;
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value !== 0;
+  return ['1', 'true', 'on', 'yes', 'enabled'].includes(String(value).toLowerCase());
+}
+
+function normalizedUnit(value, defaultValue = 1) {
+  const number = Number(value);
+  return Number.isFinite(number) ? clamp(number, 0, 1) : defaultValue;
+}
+
+export function normalizeOrbShellLawControls(input = {}) {
+  const curvature = input.curvatureWidthCap || {};
+  const aperture = input.apertureOrbitCapture || {};
+  const viewMode = input.viewMode === 'curve-on-sphere' ? 'curve-on-sphere' : 'geometry';
+  return {
+    schema: ORB_SHELL_LAW_CONTROLS_SCHEMA,
+    mode: 'operator-visible-procedural-law-controls-v0',
+    viewMode,
+    curvatureWidthCap: {
+      id: 'curvature-width-cap',
+      label: 'Curvature width cap',
+      enabled: normalizedBoolean(input.curvatureWidthCapEnabled ?? curvature.enabled, true),
+      strength: normalizedUnit(input.curvatureWidthCapStrength ?? curvature.strength, 1),
+      lawSchema: 'CurvatureWidthCapLaw',
+    },
+    apertureOrbitCapture: {
+      id: 'aperture-orbit-capture',
+      label: 'Aperture orbit capture',
+      enabled: normalizedBoolean(input.apertureOrbitCaptureEnabled ?? aperture.enabled, true),
+      strength: normalizedUnit(input.apertureOrbitCaptureStrength ?? aperture.strength, 1),
+      lawSchema: 'ApertureOrbitCaptureLaw',
+    },
+  };
 }
 
 function smoothStep(edge0, edge1, value) {
@@ -2552,10 +2590,11 @@ function defaultApertureOrbitRoleSpec(assemblage) {
   };
 }
 
-function createApertureOrbitCaptureLaw(composition) {
+function createApertureOrbitCaptureLaw(composition, controls = composition.lawControls?.apertureOrbitCapture) {
   const sourceApertureId = composition.AperturePressure?.primaryVoids?.[0]?.id || 'primary-front-teardrop-void';
   const orbitLanes = createApertureOrbitLanes(composition);
   const laneById = new Map(orbitLanes.map(lane => [lane.id, lane]));
+  const controlStrength = normalizedUnit(controls?.strength, 1);
   const terminalRoles = composition.macroAssemblages.map(assemblage => {
     const spec = defaultApertureOrbitRoleSpec(assemblage);
     const lane = laneById.get(spec.targetLaneId) || orbitLanes[0];
@@ -2575,10 +2614,11 @@ function createApertureOrbitCaptureLaw(composition) {
       targetPoint: target.point,
       targetTangent: target.tangent,
       targetNormal: normalizePoint(target.point),
-      pointBlend: spec.pointBlend,
-      tangentBlend: spec.tangentBlend,
-      radialDelta: spec.radialDelta || 0,
-      counterCurveOffset: spec.counterCurveOffset || 0,
+      pointBlend: spec.pointBlend * controlStrength,
+      tangentBlend: spec.tangentBlend * controlStrength,
+      radialDelta: (spec.radialDelta || 0) * controlStrength,
+      counterCurveOffset: (spec.counterCurveOffset || 0) * controlStrength,
+      controlStrength,
       overlayGeometryIds: [
         `${id}-target-point`,
         `${id}-target-tangent`,
@@ -2595,6 +2635,7 @@ function createApertureOrbitCaptureLaw(composition) {
     orbitLanes,
     terminalRoles,
     terminalRoleCount: terminalRoles.length,
+    controlStrength,
     semanticPrimitive: 'macro-terminal-destiny-around-aperture',
     captureContract: 'each-live-macro-declares-a-positive-aperture-relative-terminal-role',
     failureModes: [
@@ -2659,15 +2700,17 @@ function applyApertureOrbitCapturePoint(assemblage, t, point) {
 function createApertureOrbitCaptureWitnessPlan(composition) {
   const law = composition.apertureOrbitCaptureLaw;
   if (!law) {
+    const disabledByControls = composition.lawControls?.apertureOrbitCapture?.enabled === false;
     return {
       schema: 'ApertureOrbitCaptureWitnessPlan',
       mode: ORB_SHELL_APERTURE_ORBIT_CAPTURE_MODE,
       id: 'primary-front-aperture-orbit-capture-witness-plan',
+      status: disabledByControls ? 'disabled-by-law-controls' : 'missing-aperture-orbit-capture-law',
       measuredLawId: null,
       sampleCount: 0,
       samples: [],
       overlayGeometryIds: [],
-      failureModes: ['missing-aperture-orbit-capture-law'],
+      failureModes: [disabledByControls ? 'disabled-by-law-controls' : 'missing-aperture-orbit-capture-law'],
     };
   }
   const laneById = new Map(law.orbitLanes.map(lane => [lane.id, lane]));
@@ -5301,13 +5344,14 @@ function curveMorphologyMetrics(points) {
   };
 }
 
-function createCurvatureWidthCapLaw(assemblage) {
+function createCurvatureWidthCapLaw(assemblage, controls = {}) {
   const earlySphereCurve = createMacroSphereCurveDecomposition(assemblage);
   const sourceCurveMetrics = curveMorphologyMetrics(earlySphereCurve.samples.map(sample => sample.point));
   const body = assemblage.territoryBodyOccupancy;
   const promoted = assemblage.macroPromotedBody;
   const expanded = assemblage.expandedRegionProxy;
   const curvatureRadiusWidthRatio = 0.22;
+  const controlStrength = normalizedUnit(controls.strength, 1);
   const uncappedPeakSideWidth = (body?.widthProfile?.mid || 0.16)
     * (promoted?.promotedBodyScale || 1.22)
     * (expanded?.coverageScale || 1);
@@ -5315,7 +5359,8 @@ function createCurvatureWidthCapLaw(assemblage) {
   const curvatureLimitedSideWidth = Number.isFinite(minimumCurvatureRadius)
     ? minimumCurvatureRadius * curvatureRadiusWidthRatio
     : uncappedPeakSideWidth;
-  const maxSideWidth = Math.min(uncappedPeakSideWidth, curvatureLimitedSideWidth);
+  const fullyCappedSideWidth = Math.min(uncappedPeakSideWidth, curvatureLimitedSideWidth);
+  const maxSideWidth = uncappedPeakSideWidth + (fullyCappedSideWidth - uncappedPeakSideWidth) * controlStrength;
   const widthScale = uncappedPeakSideWidth > 1e-6
     ? clamp(maxSideWidth / uncappedPeakSideWidth, 0, 1)
     : 1;
@@ -5330,17 +5375,19 @@ function createCurvatureWidthCapLaw(assemblage) {
     maximumCurvature: sourceCurveMetrics.maximumCurvature,
     uncappedPeakSideWidth,
     curvatureLimitedSideWidth,
+    fullyCappedSideWidth,
     maxSideWidth,
     widthScale,
-    capApplied: widthScale < 0.995,
+    controlStrength,
+    capApplied: controlStrength > 0 && widthScale < 0.995,
     visualIntent: 'prevent a wide promoted macrostrip from crimping across a tighter source curve than it can physically carry',
   };
 }
 
-function attachCurvatureWidthCapLaws(composition) {
+function attachCurvatureWidthCapLaws(composition, controls = composition.lawControls?.curvatureWidthCap) {
   for (const assemblage of composition.macroAssemblages || []) {
     if (!assemblage.macroPromotedBody) continue;
-    const law = createCurvatureWidthCapLaw(assemblage);
+    const law = createCurvatureWidthCapLaw(assemblage, controls || {});
     assemblage.curvatureWidthCapLaw = law;
     assemblage.macroPromotedBody.curvatureWidthCapLaw = law;
   }
@@ -5973,6 +6020,7 @@ function applyControlledAperturePressureVariation(composition, frontParameters) 
 
 export function applyControlledOrbShellVariation(composition, descriptor) {
   const next = clone(composition);
+  next.lawControls = normalizeOrbShellLawControls(next.lawControls);
   next.controlledVariation = descriptor;
   next.effectiveVariation = descriptor;
   const macroParameters = descriptor.effectiveParameters.macroAssemblages;
@@ -6031,9 +6079,18 @@ export function applyControlledOrbShellVariation(composition, descriptor) {
     assemblage.spine.control.surfaceRoll = field.surfaceRoll;
     assemblage.spine.control.phaseLag = field.phaseLag;
   }
-  attachCurvatureWidthCapLaws(next);
-  next.apertureOrbitCaptureLaw = createApertureOrbitCaptureLaw(next);
-  attachApertureOrbitCaptureLaw(next);
+  if (next.lawControls.curvatureWidthCap.enabled) {
+    attachCurvatureWidthCapLaws(next, next.lawControls.curvatureWidthCap);
+  } else {
+    for (const assemblage of next.macroAssemblages || []) {
+      assemblage.curvatureWidthCapLaw = null;
+      if (assemblage.macroPromotedBody) assemblage.macroPromotedBody.curvatureWidthCapLaw = null;
+    }
+  }
+  next.apertureOrbitCaptureLaw = next.lawControls.apertureOrbitCapture.enabled
+    ? createApertureOrbitCaptureLaw(next, next.lawControls.apertureOrbitCapture)
+    : null;
+  if (next.apertureOrbitCaptureLaw) attachApertureOrbitCaptureLaw(next);
   next.macroInterlockGraph = createMacroInterlockGraph(next);
   attachMacroInterlockEffects(next);
   next.lowerSocketEquatorialSocketJointLaw = createLowerSocketEquatorialSocketJointLaw(next);
@@ -6100,6 +6157,7 @@ export function applyControlledOrbShellVariation(composition, descriptor) {
 
 export function createTargetOrbShellCompositionFixture(options = {}) {
   const controlledVariation = createControlledOrbShellVariationDescriptor(options);
+  const lawControls = normalizeOrbShellLawControls(options.lawControls);
   const sphericalClosureAnchors = [
     {
       id: 'crown-closure-anchor',
@@ -6277,6 +6335,7 @@ export function createTargetOrbShellCompositionFixture(options = {}) {
     schema: 'OrbShellComposition',
     identity: ORB_SHELL_COMPOSITION_IDENTITY,
     baselineDisposition: ORB_SHELL_COMPOSITION_BASELINE,
+    lawControls,
     sourceAttractor: 'evil_orb_outer_shell_source_image',
     stableFamilyIdentity: [
       'three-to-five-major-macro-thrusts',
@@ -8197,6 +8256,7 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
       variationSeed: composition.effectiveVariation.variationSeed,
       variationLeafCount: composition.effectiveVariation.variationLeafCount,
       uiControlSource: composition.effectiveVariation.uiControlSource,
+      lawControls: composition.lawControls,
       macroAssemblageCount: composition.macroAssemblages.length,
       MacroAssemblageCountLaw: composition.macroAssemblageCountLaw,
       macroAssemblageCountLaw: composition.macroAssemblageCountLaw,
@@ -8348,6 +8408,7 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
         variantId: next.variantId ?? variationOptions.variantId,
         variationSeed: next.variationSeed ?? variationOptions.variationSeed,
         variationLeafCount: next.variationLeafCount ?? variationOptions.variationLeafCount,
+        lawControls: normalizeOrbShellLawControls(next.lawControls ?? variationOptions.lawControls),
         uiControlSource: next.uiControlSource ?? variationOptions.uiControlSource,
       };
       composition = createTargetOrbShellCompositionFixture(variationOptions);
@@ -9050,6 +9111,7 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
         variationSeed: composition.effectiveVariation.variationSeed,
         variationLeafCount: composition.effectiveVariation.variationLeafCount,
         uiControlSource: composition.effectiveVariation.uiControlSource,
+        lawControls: composition.lawControls,
         controlledVariation: composition.controlledVariation,
         effectiveVariation: composition.effectiveVariation,
         macroAssemblageCount: composition.macroAssemblages.length,

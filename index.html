@@ -1781,6 +1781,31 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
       <input type="range" id="orb-shell-layer-count" min="1" max="1" step="1" value="1" disabled>
       <span class="slider-val" id="orb-shell-layer-count-val">1 outer</span>
     </div>
+    <div class="panel">
+      <div class="field"><span class="field-key">Law View</span><span class="field-val" id="orb-shell-law-view-val">geometry</span></div>
+      <select class="gen-input" id="orb-shell-law-view-mode" aria-label="Orb shell law view mode">
+        <option value="geometry">Geometry</option>
+        <option value="curve-on-sphere">Curve on sphere</option>
+      </select>
+      <label class="import-mode" for="orb-shell-law-curvature-width-cap-enabled">
+        <input type="checkbox" id="orb-shell-law-curvature-width-cap-enabled" checked>
+        Curvature width cap
+      </label>
+      <div class="slider-row">
+        <span class="slider-label">Cap Strength</span>
+        <input type="range" id="orb-shell-law-curvature-width-cap-strength" min="0" max="1" step="0.05" value="1">
+        <span class="slider-val" id="orb-shell-law-curvature-width-cap-strength-val">1.00</span>
+      </div>
+      <label class="import-mode" for="orb-shell-law-aperture-orbit-capture-enabled">
+        <input type="checkbox" id="orb-shell-law-aperture-orbit-capture-enabled" checked>
+        Aperture orbit capture
+      </label>
+      <div class="slider-row">
+        <span class="slider-label">Orbit Strength</span>
+        <input type="range" id="orb-shell-law-aperture-orbit-capture-strength" min="0" max="1" step="0.05" value="1">
+        <span class="slider-val" id="orb-shell-law-aperture-orbit-capture-strength-val">1.00</span>
+      </div>
+    </div>
     <div class="panel volume-readout">
       <div class="field"><span class="field-key">Leaves</span><span class="field-val" id="orb-shell-leaves">0</span></div>
       <div class="field"><span class="field-key">Apertures</span><span class="field-val" id="orb-shell-apertures">0</span></div>
@@ -1803,6 +1828,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
       <div class="field"><span class="field-key">Bands</span><span class="field-val" id="orb-shell-composition-bands">0</span></div>
       <div class="field"><span class="field-key">Families</span><span class="field-val" id="orb-shell-composition-families">none</span></div>
       <div class="field"><span class="field-key">Failures</span><span class="field-val" id="orb-shell-composition-failures">none</span></div>
+      <div class="field"><span class="field-key">Laws</span><span class="field-val" id="orb-shell-composition-laws">default</span></div>
     </div>
   </div>
 
@@ -15968,8 +15994,58 @@ function readOrbShellControls() {
   };
 }
 
+function readOrbShellLawControls() {
+  const viewMode = document.getElementById('orb-shell-law-view-mode')?.value === 'curve-on-sphere'
+    ? 'curve-on-sphere'
+    : 'geometry';
+  const curvatureStrength = Number(document.getElementById('orb-shell-law-curvature-width-cap-strength')?.value ?? 1);
+  const orbitStrength = Number(document.getElementById('orb-shell-law-aperture-orbit-capture-strength')?.value ?? 1);
+  return {
+    schema: 'OrbShellLawControls',
+    viewMode,
+    curvatureWidthCap: {
+      enabled: !!document.getElementById('orb-shell-law-curvature-width-cap-enabled')?.checked,
+      strength: Number.isFinite(curvatureStrength) ? Math.max(0, Math.min(1, curvatureStrength)) : 1,
+    },
+    apertureOrbitCapture: {
+      enabled: !!document.getElementById('orb-shell-law-aperture-orbit-capture-enabled')?.checked,
+      strength: Number.isFinite(orbitStrength) ? Math.max(0, Math.min(1, orbitStrength)) : 1,
+    },
+  };
+}
+
+function hydrateOrbShellLawControlsFromParams(params) {
+  const viewMode = params.get('orb_shell_law_view');
+  if (viewMode === 'curve-on-sphere' || viewMode === 'geometry') {
+    document.getElementById('orb-shell-law-view-mode').value = viewMode;
+  }
+  if (params.has('orb_shell_law_curvature_width_cap')) {
+    document.getElementById('orb-shell-law-curvature-width-cap-enabled').checked = parseBooleanRouteFlag(params.get('orb_shell_law_curvature_width_cap'), true);
+  }
+  if (params.has('orb_shell_law_curvature_width_cap_strength')) {
+    const value = Number(params.get('orb_shell_law_curvature_width_cap_strength'));
+    if (Number.isFinite(value)) document.getElementById('orb-shell-law-curvature-width-cap-strength').value = String(Math.max(0, Math.min(1, value)));
+  }
+  if (params.has('orb_shell_law_aperture_orbit_capture')) {
+    document.getElementById('orb-shell-law-aperture-orbit-capture-enabled').checked = parseBooleanRouteFlag(params.get('orb_shell_law_aperture_orbit_capture'), true);
+  }
+  if (params.has('orb_shell_law_aperture_orbit_capture_strength')) {
+    const value = Number(params.get('orb_shell_law_aperture_orbit_capture_strength'));
+    if (Number.isFinite(value)) document.getElementById('orb-shell-law-aperture-orbit-capture-strength').value = String(Math.max(0, Math.min(1, value)));
+  }
+  updateOrbShellLawReadout();
+}
+
+function updateOrbShellLawReadout() {
+  const laws = readOrbShellLawControls();
+  document.getElementById('orb-shell-law-view-val').textContent = laws.viewMode;
+  document.getElementById('orb-shell-law-curvature-width-cap-strength-val').textContent = laws.curvatureWidthCap.strength.toFixed(2);
+  document.getElementById('orb-shell-law-aperture-orbit-capture-strength-val').textContent = laws.apertureOrbitCapture.strength.toFixed(2);
+}
+
 function updateOrbShellReadout() {
   const c = readOrbShellControls();
+  updateOrbShellLawReadout();
   document.getElementById('orb-shell-seed-val').textContent = String(Number.isFinite(c.seed) ? c.seed : 17);
   document.getElementById('orb-shell-leaf-count-val').textContent = String(c.leafCount);
   document.getElementById('orb-shell-aperture-count-val').textContent = String(c.apertureCount);
@@ -16019,11 +16095,27 @@ function initOrbShellRoute() {
     orbShellWitness.setControls(readOrbShellControls());
     if (orbShellCompositionWitness) {
       orbShellCompositionWitness.setVariation(readOrbShellCompositionControls());
+      if (orbShellCompositionWitness.debugState?.().active) {
+        if (readOrbShellLawControls().viewMode === 'curve-on-sphere') {
+          orbShellCompositionWitness.enableMacroMorphologyInventoryWitness();
+        } else {
+          frameOrbShellCompositionCamera();
+        }
+      }
     }
     updateOrbShellReadout();
     updateOrbShellCompositionReadout();
   };
-  for (const id of ['orb-shell-seed', 'orb-shell-leaf-count', 'orb-shell-aperture-count']) {
+  for (const id of [
+    'orb-shell-seed',
+    'orb-shell-leaf-count',
+    'orb-shell-aperture-count',
+    'orb-shell-law-view-mode',
+    'orb-shell-law-curvature-width-cap-enabled',
+    'orb-shell-law-curvature-width-cap-strength',
+    'orb-shell-law-aperture-orbit-capture-enabled',
+    'orb-shell-law-aperture-orbit-capture-strength',
+  ]) {
     document.getElementById(id).addEventListener('input', syncControls);
     document.getElementById(id).addEventListener('change', syncControls);
   }
@@ -16057,6 +16149,8 @@ function updateOrbShellCompositionReadout() {
   document.getElementById('orb-shell-composition-bands').textContent = String(state?.bandMemberCount ?? 0);
   document.getElementById('orb-shell-composition-families').textContent = Object.values(state?.inverseProceduralHypotheses || {}).flat().slice(0, 3).join(',') || 'none';
   document.getElementById('orb-shell-composition-failures').textContent = state?.forbiddenFailureClasses?.slice(0, 3).join(',') || 'none';
+  const laws = state?.lawControls || readOrbShellLawControls();
+  document.getElementById('orb-shell-composition-laws').textContent = `${laws.viewMode || 'geometry'} / cap:${laws.curvatureWidthCap?.enabled ? laws.curvatureWidthCap.strength?.toFixed?.(2) ?? 1 : 'off'} / orbit:${laws.apertureOrbitCapture?.enabled ? laws.apertureOrbitCapture.strength?.toFixed?.(2) ?? 1 : 'off'}`;
   document.getElementById('orb-shell-composition-toggle').textContent = state?.active ? 'Disable' : 'Enable';
   document.getElementById('orb-shell-composition-toggle').classList.toggle('active', !!state?.active);
 }
@@ -16083,6 +16177,7 @@ function readOrbShellCompositionControls() {
     variantId: params.get('orb_shell_variant') || witnessState?.variantId || 'baseline',
     variationSeed,
     variationLeafCount,
+    lawControls: readOrbShellLawControls(),
     uiControlSource: 'orb-shell-ui-seed-leaves-coupled-to-composition-variation',
   };
 }
@@ -16161,6 +16256,7 @@ function applyOrbShellCompositionRenderEffectPolicy(params) {
 function initOrbShellCompositionRoute() {
   const params = new URLSearchParams(window.location.search);
   const orbShellFocus = params.get('orb_shell_focus');
+  hydrateOrbShellLawControlsFromParams(params);
   const requestedVariationSeed = Number(params.get('orb_shell_variation_seed') || 0);
   if (params.has('orb_shell_variation_seed') && Number.isFinite(requestedVariationSeed)) {
     document.getElementById('orb-shell-seed').value = String(Math.max(0, Math.min(99999, Math.round(requestedVariationSeed))));
@@ -16261,8 +16357,13 @@ function initOrbShellCompositionRoute() {
       setInfo(`Spatial Truth ${witnessState.diagnosticPass}: ${witnessState.visibleMeshCount} meshes / ${viewState.effectiveViewId} / env ${spatialTruthRoutePolicy.envMapIntensity.toFixed(2)} exp ${spatialTruthRoutePolicy.exposure.toFixed(2)}`);
     } else {
       setOrbShellSemanticLegend(null);
-      frameOrbShellCompositionCamera();
-      setInfo(orbShellCompositionStatusText(orbShellCompositionWitness.debugState()));
+      if (readOrbShellLawControls().viewMode === 'curve-on-sphere') {
+        const witnessState = orbShellCompositionWitness.enableMacroMorphologyInventoryWitness();
+        setInfo(`Orb Shell Law View — curve on sphere: ${witnessState.visibleCurveCount} early sphere curves visible`);
+      } else {
+        frameOrbShellCompositionCamera();
+        setInfo(orbShellCompositionStatusText(orbShellCompositionWitness.debugState()));
+      }
     }
   }
   updateOrbShellCompositionReadout();
