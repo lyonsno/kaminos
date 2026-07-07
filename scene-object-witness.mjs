@@ -358,7 +358,7 @@ async function runForgeHostInlineChamberHostScenario(ws) {
         hostText: hostPanel.textContent.trim(),
       };
     })()
-  `, { timeoutMs: 25000 });
+  `, { timeoutMs: 45000 });
 }
 
 async function runForgeHostLiveRegistryScenario(ws) {
@@ -411,7 +411,7 @@ async function runForgeHostLiveRegistryScenario(ws) {
         openedOffer: opened,
       };
     })()
-  `, { timeoutMs: 25000 });
+  `, { timeoutMs: 45000 });
 }
 
 async function runForgeHostSmokeChamberRoutingScenario(ws) {
@@ -521,8 +521,11 @@ async function runForgeHostSmokeOfferRouteOpenScenario(ws) {
       if (!state.stations.some(station => station.smokeOffers?.some(offer => offer.id === 'glove-emitter-native-host-smoke-offer'))) {
         throw new Error('Forge Host route-open did not expose the cartridge smoke offer on a station row: ' + JSON.stringify(state.stations));
       }
-      if (state.smokeChamberInlineHost?.kind !== 'route-card' || !state.smokeChamberInlineHost?.recursive) {
-        throw new Error('Forge Host route-open did not keep recursive Forge Host target as a downgraded route card: ' + JSON.stringify(state.smokeChamberInlineHost));
+      if (state.smokeChamberInlineHost?.kind !== 'iframe' || state.smokeChamberInlineHost?.recursive) {
+        throw new Error('Forge Host route-open did not route Glove Emitter to a native Glove Well iframe: ' + JSON.stringify(state.smokeChamberInlineHost));
+      }
+      if (!/kaminos_glove_well_host=1/.test(state.smokeChamberInlineHost?.effectiveUrl || '')) {
+        throw new Error('Forge Host route-open inline host lost native Glove Well route: ' + JSON.stringify(state.smokeChamberInlineHost));
       }
       const sourceRoleStation = state.stations.find(station => /glove/i.test([
         station['dia' + 'ulos'],
@@ -533,11 +536,65 @@ async function runForgeHostSmokeOfferRouteOpenScenario(ws) {
         throw new Error('Forge Host route-open did not prefer the visible glove station for glove-well-source: ' + JSON.stringify({ selectedActorId: state.selectedActorId, sourceRoleStation }));
       }
       panel.scrollIntoView({ block: 'center' });
-      await wait(150);
+      const hostPanel = document.querySelector('[data-forge-chamber-host-kind]');
+      if (!hostPanel || hostPanel.dataset.forgeChamberHostKind !== 'iframe') {
+        throw new Error('Forge Host route-open DOM did not expose Glove Well iframe host kind: ' + (hostPanel?.outerHTML || 'missing'));
+      }
+      const iframe = hostPanel.querySelector('iframe[data-forge-chamber-inline-frame="true"]');
+      if (!iframe) throw new Error('Forge Host route-open did not render a Glove Well iframe');
+      if (!/kaminos_glove_well_host=1/.test(iframe.getAttribute('src') || '')) {
+        throw new Error('Forge Host route-open iframe src lost native Glove Well route: ' + iframe.outerHTML);
+      }
+      let gloveWellHostState = null;
+      for (let i = 0; i < 240; i++) {
+        try {
+          const debug = iframe.contentWindow?.kaminosGloveWellHostDebugState;
+          gloveWellHostState = typeof debug === 'function' ? debug() : null;
+        } catch (error) {
+          gloveWellHostState = { status: 'unreadable_iframe', error: String(error?.message || error) };
+        }
+        if (gloveWellHostState?.route === 'kaminos/glove-well-host' && gloveWellHostState?.status !== 'loading') break;
+        await wait(125);
+      }
+      if (!gloveWellHostState || gloveWellHostState.route !== 'kaminos/glove-well-host') {
+        throw new Error('Forge Host route-open could not read native Glove Well host state: ' + JSON.stringify({ gloveWellHostState }));
+      }
+      if (typeof window.kaminosCaptureForgeHostSmokeReceipt !== 'function') {
+        throw new Error('Forge Host route-open did not expose receipt capture API');
+      }
+      const receipt = await window.kaminosCaptureForgeHostSmokeReceipt({
+        disposition: 'observed',
+        operatorNote: 'witness-glove-emitter-native-host',
+        includeScreenshot: true,
+      });
+      if (receipt.schema !== 'kaminos.forge-host.smoke-receipt.v0') {
+        throw new Error('Forge Host route-open receipt schema mismatch: ' + JSON.stringify(receipt));
+      }
+      if (receipt.sourceOffer?.id !== 'glove-emitter-native-host-smoke-offer') {
+        throw new Error('Forge Host route-open receipt lost Glove Emitter offer identity: ' + JSON.stringify(receipt));
+      }
+      if (receipt.inlineHost?.kind !== 'iframe' || !/kaminos_glove_well_host=1/.test(receipt.inlineHost?.effectiveUrl || '')) {
+        throw new Error('Forge Host route-open receipt lost Glove Well inline host identity: ' + JSON.stringify(receipt.inlineHost));
+      }
+      if (receipt.capture?.kind !== 'viewport_png_data_url' || !/^data:image\\/png;base64,/.test(receipt.capture?.dataUrl || '')) {
+        throw new Error('Forge Host route-open receipt did not include viewport PNG data URL: ' + JSON.stringify(receipt.capture));
+      }
+      const receiptForReport = {
+        ...receipt,
+        capture: {
+          ...receipt.capture,
+          dataUrlPrefix: receipt.capture.dataUrl.slice(0, 32),
+          dataUrlLength: receipt.capture.dataUrl.length,
+          dataUrl: '[redacted-by-witness-after-prefix-and-length-check]',
+        },
+      };
       return {
         selectedActorId: state.selectedActorId,
         openedOffer: state.lastOpenedOffer,
         chamber,
+        inlineHost: state.smokeChamberInlineHost,
+        gloveWellHostState,
+        receipt: receiptForReport,
         stationOffers: state.stations.map(station => ({
           actorId: station.actorId,
           sourceId: station['dia' + 'ulos'],
@@ -546,7 +603,13 @@ async function runForgeHostSmokeOfferRouteOpenScenario(ws) {
         })),
       };
     })()
-  `, { timeoutMs: 25000 });
+  `, { timeoutMs: 45000 });
+}
+
+async function runForgeHostGloveEmitterNativeHostSmokeScenario(ws) {
+  phase = 'scenario-forge-host-glove-emitter-native-host-smoke';
+  await runForgeHostSmokeOfferRouteOpenScenario(ws);
+  lastEvidence.forgeHostGloveEmitterNativeHostSmoke = lastEvidence.forgeHostSmokeOfferRouteOpen;
 }
 
 function assertClickedSelection(evidence, phaseLabel, clickedId, otherId) {
@@ -4923,6 +4986,8 @@ try {
     await runForgeHostSmokeChamberRoutingScenario(ws);
   } else if (scenario === 'forge-host-smoke-offer-route-open') {
     await runForgeHostSmokeOfferRouteOpenScenario(ws);
+  } else if (scenario === 'forge-host-glove-emitter-native-host-smoke') {
+    await runForgeHostGloveEmitterNativeHostSmokeScenario(ws);
   } else if (scenario === 'viewport-click-select-deselect') {
     await runViewportClickSelectDeselectScenario(ws);
   } else if (scenario === 'splat-viewport-empty-deselect') {

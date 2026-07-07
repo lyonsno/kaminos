@@ -221,6 +221,7 @@ async function main() {
 
     phase = 'measure_visual_activity';
     visualActivity = await evaluate(ws, `(() => {
+      const expectedHostId = ${JSON.stringify(expectedHostId)};
       const actorObjects = [...(window.__kaminosLermsPreviewActorsGroup?.children || [])].map(child => ({
         name: child.name,
         position: child.position ? [Number(child.position.x.toFixed(3)), Number(child.position.y.toFixed(3)), Number(child.position.z.toFixed(3))] : null,
@@ -233,7 +234,11 @@ async function main() {
           actorVisualCount: window.__kaminosLermsPreviewActorVisuals?.actorVisualCount || 0,
         };
       }
-      const canvas = document.getElementById('finger-juice-host-canvas') || document.querySelector('canvas');
+      const canvas = (expectedHostId === 'glove-well'
+        ? document.getElementById('glove-well-host-canvas')
+        : null)
+        || document.getElementById('finger-juice-host-canvas')
+        || document.querySelector('canvas');
       if (canvas && canvas.width && canvas.height) {
         const ctx = canvas.getContext('2d');
         if (ctx) {
