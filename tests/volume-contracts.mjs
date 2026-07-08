@@ -299,6 +299,11 @@ assert.match(index, /PYRO_CARRIER_WORKBENCH_PINNED_IDS[\s\S]*volume-look-freeze/
 assert.match(core, /pyroFlowSignal[\s\S]*combustionFrontTopology[\s\S]*fireLick/, 'Pyro shader derives Flow carrier from combustion-front topology and live fire-lick breakup');
 assert.match(core, /pyroFlowRadianceBoost[\s\S]*pyroFlowSignal/, 'Pyro shader exposes Flow radiance as a sparse additive term derived from the live Flow carrier');
 assert.match(core, /pyroFlowSpikeSignal[\s\S]*pyroFlowSignal/, 'Pyro shader exposes Flow spikes as a separate topology/filament term derived from the live Flow carrier');
+assert.match(core, /reactionSurfaceGainIdentity:\s*'flow-topology-coupled-radiance-gain-v0'/, 'Pyro debug state names the flow-topology-coupled radiance gain model');
+assert.match(core, /surfaceGainModel:\s*'thermal-emission-times-reaction-surface-gain-v0'/, 'Pyro debug state labels topology as a thermal emission multiplier, not color authority');
+assert.match(core, /let reactionSurfaceGain = clamp\(\s*1\.0[\s\S]*curlActivity[\s\S]*interfaceSurfaceActivity[\s\S]*fireLickSurfaceActivity[\s\S]*frontTopologySurfaceActivity[\s\S]*divActivityDamped/, 'Pyro shader builds reactionSurfaceGain from curl/interface/fire-lick/front topology with damped divergence');
+assert.match(core, /let radianceEmission = fireRadianceEmission\([^;]+reactionSurfaceGain/, 'stock thermal fire radiance is multiplied by reactionSurfaceGain');
+assert.match(core, /pyroFlowRadianceBoost[\s\S]*reactionSurfaceGain/, 'Flow radiance uses topology as scalar surface gain rather than standalone debug chroma');
 assert.match(core, /flowSignalMax/, 'Pyro renderer debug state exposes flow carrier max for route evidence');
 assert.match(core, /flowRadianceMax/, 'Pyro renderer debug state exposes Flow radiance gain for route evidence');
 assert.match(core, /flowSpikeMax/, 'Pyro renderer debug state exposes Flow spike gain for route evidence');

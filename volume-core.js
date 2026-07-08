@@ -3568,8 +3568,32 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
       vec3<f32>(0.28, 0.38, 0.42) * 0.62,
       canonicalSmokeOnlyRender
     );
+    let curlActivity = smoothstep(0.006, 0.16, curlDebug);
+    let interfaceSurfaceActivity = smoothstep(0.006, 0.36, interfaceShred + microSmoke * 0.18 + smoke * 0.08 + rawExtinction * 0.06);
+    let fireLickSurfaceActivity = smoothstep(0.006, 0.42, quenchedFireLick + fireLick * 0.24 + emberFleck * 0.08);
+    let frontTopologySurfaceActivity = smoothstep(0.0008, 0.072, combustionFrontTopology + combustionFront * 0.30);
+    let divActivityDamped = smoothstep(0.004, 0.12, divDebug)
+      * smoothstep(0.012, 0.46, rawTemp + heat * 0.20 + flameDetail * 0.35 + quenchedFireLick * 0.20);
+    let fireEmissionAuthority = smoothstep(
+      0.014,
+      0.58,
+      rawTemp + renderTemp * 0.32 + flameDetail * 0.46 + quenchedFireLick * 0.34 + combustionFront * 0.20 + heat * 0.12
+    ) * flameBodyAuthority * canonicalFireRenderContent;
+    let reactionSurfaceGain = clamp(
+      1.0
+        + fireEmissionAuthority
+          * (
+            0.40 * curlActivity
+            + 0.50 * interfaceSurfaceActivity
+            + 0.40 * fireLickSurfaceActivity
+            + 0.20 * frontTopologySurfaceActivity
+            + 0.15 * divActivityDamped
+          ),
+      1.0,
+      2.65
+    );
     let flameCol = fireColor(renderTemp) * (0.22 + renderTemp * 0.82 + fireFilament * 0.82 * flameBodyAuthority + quenchedFireLick * 0.32 + shredFilament * 0.10) * bonfireTransportedFireLumaShaper;
-    let radianceEmission = fireRadianceEmission(renderTemp, quenchedFlameDetail, quenchedFireLick, quenchedEmberFleck, radianceGain, glowGain) * mix(1.0, bonfireFireRenderBreakup * bonfireTransportedFireLumaShaper, bonfireRenderScene) * flameBodyAuthority;
+    let radianceEmission = fireRadianceEmission(renderTemp, quenchedFlameDetail, quenchedFireLick, quenchedEmberFleck, radianceGain, glowGain) * reactionSurfaceGain * mix(1.0, bonfireFireRenderBreakup * bonfireTransportedFireLumaShaper, bonfireRenderScene) * flameBodyAuthority;
     let smokeBacklight = fireColor(renderTemp * 0.72) * smokeAlpha * glowGain * smoothstep(0.16, 1.25, renderTemp) * (0.13 + fireFilament * 0.10 * flameBodyAuthority);
     let fireMix = smoothstep(0.005, 0.052, fireAlpha) * smoothstep(0.08, 0.70, renderTemp);
     let pyroOwnedFireMode = step(1.5, pyroFireMode);
@@ -3726,6 +3750,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     let pyroFlowRadianceBoost = clamp(
       pyroFlowSignal
         * pyroFlowRadiance
+        * reactionSurfaceGain
         * (0.055 + pyroFlowSpikeSignal * 0.13 + pyroFlowShear * 0.055 + combustionFrontTopology * 0.060 + fireLick * 0.035),
       0.0,
       3.5
@@ -5729,6 +5754,19 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         flowSignalMax: pyroMaterialGain * pyroMaterialLiveAuthority * pyroFlowBite * pyroCarrierOverdrive,
         flowRadianceMax: pyroMaterialGain * pyroMaterialLiveAuthority * pyroFlowBite * pyroFlowRadiance * pyroCarrierOverdrive,
         flowSpikeMax: pyroMaterialGain * pyroMaterialLiveAuthority * pyroFlowBite * pyroFlowSpikes * pyroCarrierOverdrive,
+        reactionSurfaceGainIdentity: 'flow-topology-coupled-radiance-gain-v0',
+        surfaceGainModel: 'thermal-emission-times-reaction-surface-gain-v0',
+        surfaceGainAuthority: 'topology-multiplies-fire-emission-not-color-authority',
+        surfaceGainInputs: ['curlActivity', 'interfaceSurfaceActivity', 'fireLickSurfaceActivity', 'frontTopologySurfaceActivity', 'divActivityDamped'],
+        surfaceGainMax: Math.min(
+          2.65,
+          1
+            + 0.40 * Math.min(1, (controlsSnapshot.curl ?? 0) / 5)
+            + 0.50 * Math.min(1, (controlsSnapshot.interfaceShred ?? 0) / 5)
+            + 0.40 * Math.min(1, (controlsSnapshot.fireLicks ?? 0) / 5)
+            + 0.20
+            + 0.15 * Math.min(1, (controlsSnapshot.projection ?? 0) / 1),
+        ),
         biteShape: `${pyroBiteTeeth.toFixed(2)}t/${pyroBiteWake.toFixed(2)}w/${pyroBiteHeight.toFixed(2)}h/${pyroBiteFireLock.toFixed(2)}f`,
         biteStack: `${pyroBiteCore.toFixed(2)}c/${pyroBiteRim.toFixed(2)}r/${pyroBiteAfter.toFixed(2)}a`,
         biteCuts: `${pyroBiteCoreCut.toFixed(2)}c/${pyroBiteRimCut.toFixed(2)}r/${pyroBiteAfterCut.toFixed(2)}a`,
