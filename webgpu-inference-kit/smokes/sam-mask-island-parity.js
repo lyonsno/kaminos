@@ -1460,7 +1460,7 @@ async function loadDetrStackPayload(manifest) {
       encoderPosSource: 'browser-position-embedding-sine',
       textTensorOwner: 'browser-local-prompt-text-ingress',
       nonClaims: {
-        browserLocalTextEncoder: true,
+        browserTokenizer: true,
         level3FpnNeck: true,
         fullSam3BrowserExecution: true,
       },
@@ -1489,7 +1489,7 @@ async function loadDetrStackPayload(manifest) {
       fpnTensorOwner: 'browser-local-image-fpn-neck',
       pixelEmbedOwner: 'browser-local-pixel-decoder',
       nonClaims: {
-        browserLocalTextEncoder: true,
+        browserTokenizer: true,
         level3FpnNeck: true,
         fullSam3BrowserExecution: true,
       },

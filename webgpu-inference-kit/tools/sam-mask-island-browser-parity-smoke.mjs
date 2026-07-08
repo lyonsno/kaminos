@@ -453,6 +453,8 @@ function assertImageFpnNeckEvidence(state) {
   const ingress = state?.browserFpnDetrIngressEvidence;
   if (report.nonClaims?.level3FpnNeck !== true || report.nonClaims?.fullSam3BrowserExecution !== true) throw new Error('imageFpnNeck bounded non-claims missing');
   if (ingress?.edge?.encoderSrcSource !== 'browser-fpn-neck-feature-2' || !ingress.detrImageIngressTensorSha256 || !ingress.effectiveEncoderSrcSha256 || !ingress.effectiveEncoderPosSha256) throw new Error('imageFpnNeck browser DETR ingress evidence missing');
+  if ((ingress?.textTensorOwner === 'browser-local-prompt-text-ingress' && ingress.nonClaims?.browserLocalTextEncoder === true) || (ingress?.edge?.textTensorOwner === 'browser-local-prompt-text-ingress' && ingress.edge?.nonClaims?.browserLocalTextEncoder === true)) throw new Error('imageFpnNeck text ingress evidence still non-claims browser-local text encoder');
+  if (ingress?.textTensorOwner === 'browser-local-prompt-text-ingress' && ingress.nonClaims?.browserTokenizer !== true) throw new Error('imageFpnNeck text ingress evidence missing tokenizer non-claim');
   if (effectiveToleranceBudgetSource() !== 'browser-fpn-prompt-text-pixel-detector-stack') throw new Error('imageFpnNeck tolerance budget source mismatch');
   const promptText = browserPromptTextReport(state);
   if (!promptText?.promptTextTensorSha256 || !promptText.promptTextWeightsSha256 || !promptText.promptFeaturesOutput?.sha256 || !promptText.promptMaskOutput?.sha256) throw new Error('imageFpnNeck browser prompt/text evidence missing');
@@ -465,6 +467,8 @@ function assertImageFpnNeckEvidence(state) {
   if (detrEncoderInput?.sha256 !== ingress.detrImageIngressTensorSha256) throw new Error('imageFpnNeck DETR encoder input hash does not match browser FPN ingress aggregate');
   const promptPixel = state?.browserPromptFpnPixelEvidence;
   if (!promptPixel?.promptFpnTensorSha256 || !promptPixel.promptFpnOutput?.sha256 || !promptPixel.pixelTensorSha256 || !promptPixel.pixelEmbedOutput?.sha256 || !promptPixel.downstreamTensorSha256) throw new Error('imageFpnNeck browser prompt-FPN/pixel evidence missing');
+  if (promptPixel.promptTensorOwner === 'browser-local-prompt-text-ingress' && promptPixel.nonClaims?.browserLocalTextEncoder === true) throw new Error('imageFpnNeck prompt-FPN/pixel evidence still non-claims browser-local text encoder');
+  if (promptPixel.promptTensorOwner === 'browser-local-prompt-text-ingress' && promptPixel.nonClaims?.browserTokenizer !== true) throw new Error('imageFpnNeck prompt-FPN/pixel evidence missing tokenizer non-claim');
   if (promptPixel.promptReceipt?.effectiveRouteId !== PROMPT_FPN_PHASE_PROGRAM_ROUTE_ID) throw new Error('imageFpnNeck prompt-FPN route receipt identity mismatch');
   if (promptPixel.pixelReceipt?.effectiveRouteId !== PIXEL_DECODER_PHASE_PROGRAM_ROUTE_ID) throw new Error('imageFpnNeck pixel-decoder route receipt identity mismatch');
   const pixelReceiptOutput = promptPixel.pixelReceipt?.outputs?.find(output => output.role === 'pixel-embed');
