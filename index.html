@@ -8136,32 +8136,84 @@ async function initScene() {
   const receiverDepth = prePassDepth.sample(receiverUv).x;
   const receiverNormal = prePassNormal.sample(receiverUv).rgb.normalize();
   const receiverDistance = distance(receiverUv, fireReceiverLightCenterNode);
-  const receiverLobe = float(1.0).sub(smoothstep(fireReceiverLightRadiusNode.mul(0.18), fireReceiverLightRadiusNode, receiverDistance));
+  const receiverContactLobe = float(1.0).sub(smoothstep(fireReceiverLightRadiusNode.mul(0.18), fireReceiverLightRadiusNode, receiverDistance));
+  const receiverWallWashBandX = smoothstep(float(0.34), float(0.52), receiverUv.x)
+    .mul(float(1.0).sub(smoothstep(float(0.96), float(1.08), receiverUv.x)));
+  const receiverWallWashBandY = smoothstep(float(0.14), float(0.32), receiverUv.y)
+    .mul(float(1.0).sub(smoothstep(float(0.86), float(0.99), receiverUv.y)));
+  const receiverWallWashLobe = receiverWallWashBandX.mul(receiverWallWashBandY).mul(float(0.78));
+  const receiverLobe = receiverContactLobe.add(receiverWallWashLobe);
   const receiverVerticalFalloff = float(1.0).sub(smoothstep(float(0.80), float(0.98), receiverUv.y));
   const receiverDepthMask = float(1.0).sub(smoothstep(float(0.995), float(1.0), receiverDepth));
   const receiverNormalMask = smoothstep(float(0.05), float(0.82), abs(dot(receiverNormal, vec3(0.0, 0.0, 1.0))));
   const receiverSoftNormalMask = mix(float(0.34), float(1.0), receiverNormalMask);
-  const receiverMask = receiverLobe.mul(receiverVerticalFalloff).mul(receiverDepthMask).mul(receiverSoftNormalMask);
+  const receiverSurfaceMask = receiverVerticalFalloff.mul(receiverDepthMask);
+  const receiverContactMask = receiverContactLobe.mul(receiverSurfaceMask).mul(receiverSoftNormalMask);
+  const receiverWallWashNormalMask = mix(float(0.74), float(1.0), receiverNormalMask);
+  const receiverWallWashMask = receiverWallWashLobe.mul(receiverSurfaceMask).mul(receiverWallWashNormalMask);
+  const receiverMask = receiverContactMask.add(receiverWallWashMask);
   const volumeFireTexture = texture(fireReceiverVolumeEnergyTexture);
   const volumeEnergyFromSample = (sampleUv) => {
     const sampleColor = volumeFireTexture.sample(sampleUv).rgb;
-    const warmSignal = sampleColor.r.sub(sampleColor.b.mul(0.58));
-    const luminanceSignal = dot(sampleColor, vec3(0.42, 0.34, 0.08));
-    return smoothstep(float(0.055), float(0.78), luminanceSignal.add(warmSignal.mul(0.64)));
+    const warmSignal = sampleColor.r.sub(sampleColor.b.mul(0.34));
+    const luminanceSignal = dot(sampleColor, vec3(0.58, 0.34, 0.14));
+    const colorSignal = sampleColor.r.mul(float(0.62)).add(sampleColor.g.mul(float(0.30)));
+    return smoothstep(float(0.0), float(0.012), luminanceSignal.add(warmSignal.mul(0.86)).add(colorSignal.mul(0.58)));
   };
   const energyCenter = fireReceiverLightEnergySampleCenterNode;
   const energyR = fireReceiverLightEnergySampleRadiusNode;
-  const volumeFireEnergy = volumeEnergyFromSample(energyCenter)
-    .add(volumeEnergyFromSample(energyCenter.add(vec2(energyR.mul(0.34), 0.0))))
-    .add(volumeEnergyFromSample(energyCenter.add(vec2(energyR.mul(-0.34), 0.0))))
-    .add(volumeEnergyFromSample(energyCenter.add(vec2(0.0, energyR.mul(0.28)))))
-    .add(volumeEnergyFromSample(energyCenter.add(vec2(0.0, energyR.mul(-0.28)))))
-    .add(volumeEnergyFromSample(energyCenter.add(vec2(energyR.mul(0.58), energyR.mul(0.16)))))
-    .add(volumeEnergyFromSample(energyCenter.add(vec2(energyR.mul(-0.58), energyR.mul(0.16)))))
-    .add(volumeEnergyFromSample(energyCenter.add(vec2(energyR.mul(0.42), energyR.mul(-0.30)))))
-    .add(volumeEnergyFromSample(energyCenter.add(vec2(energyR.mul(-0.42), energyR.mul(-0.30)))))
-    .mul(float(1.0 / VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.volumeEnergySamples));
+  const volumeEnergyFootprint = (energyBase, footprintRadius) => {
+    const footprintCenter = volumeEnergyFromSample(energyBase);
+    const footprintNear = volumeEnergyFromSample(energyBase.add(vec2(footprintRadius.mul(0.42), 0.0)))
+      .add(volumeEnergyFromSample(energyBase.add(vec2(footprintRadius.mul(-0.42), 0.0))))
+      .add(volumeEnergyFromSample(energyBase.add(vec2(0.0, footprintRadius.mul(0.26)))))
+      .add(volumeEnergyFromSample(energyBase.add(vec2(0.0, footprintRadius.mul(-0.30)))));
+    const footprintOuter = volumeEnergyFromSample(energyBase.add(vec2(footprintRadius.mul(0.72), footprintRadius.mul(0.16))))
+      .add(volumeEnergyFromSample(energyBase.add(vec2(footprintRadius.mul(-0.72), footprintRadius.mul(0.16)))))
+      .add(volumeEnergyFromSample(energyBase.add(vec2(footprintRadius.mul(0.72), footprintRadius.mul(-0.20)))))
+      .add(volumeEnergyFromSample(energyBase.add(vec2(footprintRadius.mul(-0.72), footprintRadius.mul(-0.20)))));
+    return footprintCenter.mul(float(0.20))
+      .add(footprintNear.mul(float(0.10)))
+      .add(footprintOuter.mul(float(0.075)));
+  };
+  const volumeFireEnergyLowerLeft = volumeEnergyFootprint(vec2(0.55, 0.66), energyR.mul(0.82));
+  const volumeFireEnergyLowerCenter = volumeEnergyFootprint(energyCenter, energyR);
+  const volumeFireEnergyLowerRight = volumeEnergyFootprint(vec2(0.66, 0.56), energyR.mul(0.82));
+  const volumeFireEnergyUpperTongue = volumeEnergyFootprint(vec2(0.59, 0.50), energyR.mul(0.62));
+  const fixedVolumeFireEnergy = volumeFireEnergyLowerLeft.mul(float(0.78))
+    .add(volumeFireEnergyLowerCenter)
+    .add(volumeFireEnergyLowerRight.mul(float(0.78)))
+    .add(volumeFireEnergyUpperTongue.mul(float(0.55)))
+    .mul(float(1.0));
+  const localVolumeFireEnergy = volumeEnergyFromSample(receiverUv.add(vec2(0.0, 0.10))).mul(float(0.46))
+    .add(volumeEnergyFromSample(receiverUv.add(vec2(0.0, -0.10))).mul(float(0.40)))
+    .add(volumeEnergyFromSample(receiverUv.add(vec2(-0.045, 0.14))).mul(float(0.62)))
+    .add(volumeEnergyFromSample(receiverUv.add(vec2(0.055, 0.14))).mul(float(0.52)))
+    .add(volumeEnergyFromSample(receiverUv.add(vec2(-0.055, -0.14))).mul(float(0.50)))
+    .add(volumeEnergyFromSample(receiverUv.add(vec2(0.065, -0.14))).mul(float(0.38)))
+    .add(volumeEnergyFromSample(receiverUv.add(vec2(-0.085, 0.20))).mul(float(0.45)))
+    .add(volumeEnergyFromSample(receiverUv.add(vec2(0.025, 0.22))).mul(float(0.58)))
+    .add(volumeEnergyFromSample(receiverUv.add(vec2(0.105, 0.18))).mul(float(0.35)))
+    .add(volumeEnergyFromSample(receiverUv.add(vec2(-0.145, 0.28))).mul(float(0.42)))
+    .add(volumeEnergyFromSample(receiverUv.add(vec2(-0.145, -0.28))).mul(float(0.32)))
+    .add(volumeEnergyFromSample(receiverUv.add(vec2(0.015, 0.32))).mul(float(0.36)))
+    .add(volumeEnergyFromSample(receiverUv.add(vec2(0.015, -0.32))).mul(float(0.28)));
+  const wideLocalVolumeFireEnergy = volumeEnergyFromSample(receiverUv.add(vec2(-0.20, -0.16))).mul(float(0.78))
+    .add(volumeEnergyFromSample(receiverUv.add(vec2(-0.28, -0.14))).mul(float(0.68)))
+    .add(volumeEnergyFromSample(receiverUv.add(vec2(-0.34, -0.08))).mul(float(0.58)))
+    .add(volumeEnergyFromSample(receiverUv.add(vec2(-0.42, -0.04))).mul(float(0.42)))
+    .add(volumeEnergyFromSample(receiverUv.add(vec2(-0.20, 0.16))).mul(float(0.62)))
+    .add(volumeEnergyFromSample(receiverUv.add(vec2(-0.30, 0.10))).mul(float(0.50)))
+    .add(volumeEnergyFromSample(receiverUv.add(vec2(-0.38, 0.04))).mul(float(0.34)))
+    .add(volumeEnergyFromSample(receiverUv.add(vec2(-0.14, -0.30))).mul(float(0.52)))
+    .add(volumeEnergyFromSample(receiverUv.add(vec2(-0.26, -0.28))).mul(float(0.44)))
+    .add(volumeEnergyFromSample(receiverUv.add(vec2(-0.12, 0.30))).mul(float(0.44)))
+    .add(volumeEnergyFromSample(receiverUv.add(vec2(0.18, -0.16))).mul(float(0.42)))
+    .add(volumeEnergyFromSample(receiverUv.add(vec2(0.24, -0.10))).mul(float(0.32)))
+    .add(volumeEnergyFromSample(receiverUv.add(vec2(0.18, 0.16))).mul(float(0.30)));
+  const volumeFireEnergy = fixedVolumeFireEnergy.mul(float(1.35)).add(localVolumeFireEnergy.mul(float(1.05))).add(wideLocalVolumeFireEnergy.mul(float(1.95)));
   const foregroundVolumeColor = volumeFireTexture.sample(receiverUv).rgb;
+  const volumeEnergyCenterColor = volumeFireTexture.sample(energyCenter).rgb;
   const foregroundWarmSignal = foregroundVolumeColor.r.sub(foregroundVolumeColor.b.mul(0.52));
   const foregroundLuminanceSignal = dot(foregroundVolumeColor, vec3(0.40, 0.33, 0.08));
   const foregroundVolumeOcclusion = smoothstep(
@@ -8172,13 +8224,74 @@ async function initScene() {
   const foregroundReceiverVisibility = float(1.0).sub(
     foregroundVolumeOcclusion.mul(float(VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.foregroundOcclusionStrength))
   );
-  const receiverEnergy = volumeFireEnergy.mul(float(2.80));
+  const receiverWallWashVisibility = mix(float(0.72), float(1.0), foregroundReceiverVisibility);
+  const receiverLightMask = receiverContactMask.mul(foregroundReceiverVisibility)
+    .add(receiverWallWashMask.mul(receiverWallWashVisibility));
+  const receiverEnergySignal = smoothstep(float(0.0), float(0.0025), volumeFireEnergy);
+  const receiverEnergy = receiverEnergySignal.mul(float(7.20))
+    .add(volumeFireEnergy.mul(float(1600.0)))
+    .add(volumeFireEnergy.mul(volumeFireEnergy).mul(float(5200.0)));
+  const receiverDebugBand = (center) => {
+    const delta = abs(fireReceiverLightDebugNode.sub(float(center)));
+    return float(1.0).sub(smoothstep(float(0.06), float(0.16), delta));
+  };
+  const receiverMaskDebug = receiverDebugBand(1.0);
+  const receiverEnergyDebug = receiverDebugBand(2.0);
+  const sampleWindowDebug = receiverDebugBand(3.0);
+  const rawTextureDebug = receiverDebugBand(4.0);
+  const localProbeDebug = receiverDebugBand(5.0);
+  const sampleWindowRingFor = (sampleCenter, sampleRadius) => {
+    const sampleWindowDistance = distance(receiverUv, sampleCenter);
+    return float(1.0).sub(smoothstep(float(0.004), float(0.012), abs(sampleWindowDistance.sub(sampleRadius))));
+  };
+  const sampleWindowCenterFor = sampleCenter => {
+    const sampleWindowDistance = distance(receiverUv, sampleCenter);
+    return float(1.0).sub(smoothstep(float(0.0), float(0.022), sampleWindowDistance));
+  };
+  const sampleWindowRing = sampleWindowRingFor(vec2(0.55, 0.66), energyR.mul(0.82))
+    .add(sampleWindowRingFor(energyCenter, energyR))
+    .add(sampleWindowRingFor(vec2(0.66, 0.56), energyR.mul(0.82)))
+    .add(sampleWindowRingFor(vec2(0.59, 0.50), energyR.mul(0.62)));
+  const sampleWindowCenter = sampleWindowCenterFor(vec2(0.55, 0.66))
+    .add(sampleWindowCenterFor(energyCenter))
+    .add(sampleWindowCenterFor(vec2(0.66, 0.56)))
+    .add(sampleWindowCenterFor(vec2(0.59, 0.50)));
   const receiverLight = vec3(1.0, 0.36, 0.07).mul(
-    receiverMask.mul(fireReceiverLightGainNode).mul(receiverEnergy).mul(foregroundReceiverVisibility)
+    receiverLightMask.mul(fireReceiverLightGainNode).mul(receiverEnergy).mul(float(3.0))
   ).add(
     vec3(1.0, 0.20, 0.03).mul(
-      receiverLobe.mul(receiverVerticalFalloff).mul(receiverDepthMask).mul(fireReceiverLightDebugNode).mul(float(0.55))
+      receiverLightMask.mul(receiverMaskDebug).mul(float(0.55))
     )
+  ).add(
+    foregroundVolumeColor.mul(receiverEnergyDebug).mul(float(1.65))
+  ).add(
+    volumeEnergyCenterColor.mul(receiverEnergyDebug).mul(receiverLobe).mul(float(2.0))
+  ).add(
+    vec3(0.12, 0.62, 1.0).mul(
+      receiverVerticalFalloff.mul(receiverDepthMask).mul(volumeFireEnergy).mul(receiverEnergyDebug).mul(float(12.0))
+    )
+  ).add(
+    vec3(1.0, 0.36, 0.07).mul(
+      receiverLightMask.mul(receiverEnergy).mul(receiverEnergyDebug).mul(float(0.45))
+    )
+  ).add(
+    vec3(1.0, 0.08, 0.72).mul(
+      receiverVerticalFalloff.mul(receiverDepthMask).mul(localVolumeFireEnergy).mul(receiverEnergyDebug).mul(float(3.8))
+    )
+  ).add(
+    vec3(1.0, 0.0, 0.85).mul(
+      wideLocalVolumeFireEnergy.mul(localProbeDebug).mul(float(7.5))
+    )
+  ).add(
+    vec3(0.08, 0.92, 1.0).mul(
+      localVolumeFireEnergy.mul(localProbeDebug).mul(float(2.2))
+    )
+  ).add(
+    vec3(0.06, 1.0, 0.28).mul(sampleWindowRing.mul(sampleWindowDebug).mul(float(0.78)))
+  ).add(
+    vec3(1.0, 0.08, 0.72).mul(sampleWindowCenter.mul(sampleWindowDebug).mul(float(0.95)))
+  ).add(
+    foregroundVolumeColor.mul(rawTextureDebug).mul(float(2.8))
   );
   const sceneOutput = scenePass.mul(vec4(vec3(aoOutput), 1));
   renderPipeline.outputNode = sceneOutput.add(vec4(receiverLight, 0));
@@ -15355,7 +15468,7 @@ const VOLUME_BRICK_WALL_FIRE_LIGHT_PROXY = Object.freeze({
 const VOLUME_BRICK_WALL_GPU_WASH = Object.freeze({
   identity: 'volume-gpu-brick-wall-wash-v0',
   authority: 'webgpu-fragment-live-fire-wall-wash-v0',
-  source: 'fragment-shader-live-fire-meter-no-color-write-v0',
+  source: 'fragment-shader-live-fire-visible-wall-wash-v2',
   cadence: 'per-render-frame-gpu-fragment',
 });
 const VOLUME_BRICK_WALL_GLOW_PROXY = Object.freeze({
@@ -15372,24 +15485,32 @@ const VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT = Object.freeze({
   routeAuthority: 'three-tsl-render-pipeline-depth-normal-receiver-light-v0',
   depthAuthority: 'three-tsl-prepass-depth-v0',
   normalAuthority: 'three-tsl-prepass-packed-normal-v0',
-  energyAuthority: 'rendered-volume-canvas-fire-energy-v15-no-readback-v0',
-  scalarDriveAuthority: 'rendered-volume-canvas-energy-route-gain-v16',
+  energyAuthority: 'rendered-volume-canvas-fire-energy-v21-visible-wide-gather-local-probe-no-readback-v0',
+  scalarDriveAuthority: 'rendered-volume-canvas-visible-wide-gather-local-energy-route-gain-v26-positive-fire-energy-expansion',
   couplingModel: 'rendered-fire-energy-only-no-envelope-fallback-v0',
   fallbackEnergyRole: 'debug-metadata-only-not-radiance',
+  estimatorIdentity: 'rendered-fire-visible-multi-footprint-plus-wide-gather-receiver-local-screen-energy-v7',
   envelopeModel: 'uploaded-control-fire-envelope-v05-no-readback-v0',
   volumeEnergySamplingAuthority: 'three-tsl-render-pipeline-volume-texture-sample-v0',
   foregroundOcclusionAuthority: 'volume-foreground-occluded-receiver-light-v0',
-  maskAuthority: 'receiver-surface-depth-soft-normal-mask-v1',
-  debugAuthority: 'route-toggled-receiver-surface-debug-v0',
+  maskAuthority: 'receiver-surface-depth-soft-normal-mask-v3-split-contact-wall-wash-honest-production-mask',
+  debugAuthority: 'route-toggled-receiver-surface-debug-v0+receiver-energy-debug-v0+receiver-sample-window-debug-v0+receiver-raw-volume-texture-debug-v0+receiver-local-probe-debug-v0',
   cadence: 'per-render-frame-gpu-tsl',
   center: [0.42, 0.62],
   radius: 0.31,
-  sampleCenter: [0.44, 0.64],
-  sampleRadius: 0.30,
-  volumeEnergySamples: 9,
-  foregroundOcclusionStrength: 0.86,
-  gainScale: 0.34,
-  maxGain: 1.15,
+  sampleCenter: [0.61, 0.61],
+  sampleRadius: 0.19,
+  sampleFootprints: [
+    [0.55, 0.66],
+    [0.61, 0.61],
+    [0.66, 0.56],
+    [0.59, 0.50],
+  ],
+  volumeEnergySamples: 49,
+  localProbeAuthority: 'receiver-wide-gather-local-offset-fire-probe-v2',
+  foregroundOcclusionStrength: 0.42,
+  gainScale: 0.78,
+  maxGain: 2.8,
   receiverWindow: 'depth+packed-normal+screen-lobe-v0',
 });
 
@@ -15696,8 +15817,10 @@ function createVolumeBrickWallContext() {
       identity: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.energyAuthority,
       sourceTexture: fireReceiverVolumeEnergyTexture.userData.kaminosReceiverEnergy?.sourceTexture || 'placeholder',
       samplingAuthority: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.volumeEnergySamplingAuthority,
+      localProbeAuthority: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.localProbeAuthority,
       sampleCenter: [...VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.sampleCenter],
       sampleRadius: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.sampleRadius,
+      sampleFootprints: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.sampleFootprints.map(footprint => [...footprint]),
       sampleCount: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.volumeEnergySamples,
       cpuReadbackAuthority: false,
       scalarDriveAuthority: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.scalarDriveAuthority,
@@ -15845,7 +15968,7 @@ function createVolumeBrickWallContext() {
     const receiverEnvelopeInputs = computeReceiverEnvelope(volumeState, routeGain);
     const { fireControl, radianceControl, glowControl } = receiverEnvelopeInputs;
     const fallbackEnvelope = receiverEnvelopeInputs.rawEnvelope;
-    const receiverDebugMode = clampVolumeValue(controlsState.receiverLightDebug ?? routedVolumeReceiverLightDebug ?? 0, 0, 1);
+    const receiverDebugMode = clampVolumeValue(controlsState.receiverLightDebug ?? routedVolumeReceiverLightDebug ?? 0, 0, 5);
     const receiverGain = clampVolumeValue(
       routeGain * VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.gainScale,
       0,
@@ -15910,8 +16033,10 @@ function createVolumeBrickWallContext() {
         identity: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.energyAuthority,
         sourceTexture: fireReceiverVolumeEnergyTexture.userData.kaminosReceiverEnergy?.sourceTexture || null,
         samplingAuthority: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.volumeEnergySamplingAuthority,
+        localProbeAuthority: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.localProbeAuthority,
         sampleCenter: [...VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.sampleCenter],
         sampleRadius: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.sampleRadius,
+        sampleFootprints: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.sampleFootprints.map(footprint => [...footprint]),
         sampleCount: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.volumeEnergySamples,
         cpuReadbackAuthority: false,
         scalarDriveAuthority: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.scalarDriveAuthority,
@@ -15925,6 +16050,7 @@ function createVolumeBrickWallContext() {
       center: [...VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.center],
       sampleCenter: [...VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.sampleCenter],
       sampleRadius: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.sampleRadius,
+      sampleFootprints: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.sampleFootprints.map(footprint => [...footprint]),
       radius: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.radius,
       gainScale: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.gainScale,
       maxGain: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.maxGain,
@@ -16367,7 +16493,7 @@ async function initKaminosVolumeRoute() {
   }
   const routeReceiverLightDebug = Number(params.get('volume_receiver_light_debug'));
   if (params.has('volume_receiver_light_debug') && Number.isFinite(routeReceiverLightDebug)) {
-    routedVolumeReceiverLightDebug = clampVolumeValue(routeReceiverLightDebug, 0, 1);
+    routedVolumeReceiverLightDebug = clampVolumeValue(routeReceiverLightDebug, 0, 5);
   }
   const routeResolution = parseInt(params.get('volume_resolution') || '', 10);
   if ([32, 48, 64, 96, 128, 160].includes(routeResolution)) {
