@@ -35,7 +35,7 @@ DETECTOR_STACK_IMAGE_FPN_NECK_SCHEMA = "kaminos.sam3-detector-stack-image-fpn-ne
 DETECTOR_STACK_IMAGE_FPN_NECK_BOUNDARY = "sam3-browser-local-image-preprocess-patch-embed-vit-prefix-full-backbone-fpn-neck-detector-stack-phase-program"
 DETECTOR_STACK_VIT_BLOCK_STACK_FIRST_GLOBAL_Q_WEIGHT_ROLE = "vit-block-stack-layer7-q-proj-weight"
 DETECTOR_STACK_VIT_BACKBONE_FINAL_Q_WEIGHT_ROLE = "vit-block-stack-layer31-q-proj-weight"
-FPN_NECK_FEATURE_ROLES = ["expected-fpn-neck-feature-0", "expected-fpn-neck-feature-1", "expected-fpn-neck-feature-2"]
+FPN_NECK_FEATURE_ROLES = ["expected-fpn-neck-feature-0", "expected-fpn-neck-feature-1", "expected-fpn-neck-feature-2", "expected-fpn-neck-feature-3"]
 
 
 def load_tool_module(filename: str, name: str):
@@ -162,6 +162,10 @@ def add_fpn_neck_weights(weight_entries, out_dir, params):
         ("fpn-neck-layer2-proj1-bias", "detector_model.vision_encoder.neck.fpn_layers.2.proj1.bias", "fpn-neck-layer2-proj1-bias.f32.bin", "out"),
         ("fpn-neck-layer2-proj2-weight", "detector_model.vision_encoder.neck.fpn_layers.2.proj2.weight", "fpn-neck-layer2-proj2-weight.f32.bin", "out,kH,kW,in"),
         ("fpn-neck-layer2-proj2-bias", "detector_model.vision_encoder.neck.fpn_layers.2.proj2.bias", "fpn-neck-layer2-proj2-bias.f32.bin", "out"),
+        ("fpn-neck-layer3-proj1-weight", "detector_model.vision_encoder.neck.fpn_layers.3.proj1.weight", "fpn-neck-layer3-proj1-weight.f32.bin", "out,kH,kW,in"),
+        ("fpn-neck-layer3-proj1-bias", "detector_model.vision_encoder.neck.fpn_layers.3.proj1.bias", "fpn-neck-layer3-proj1-bias.f32.bin", "out"),
+        ("fpn-neck-layer3-proj2-weight", "detector_model.vision_encoder.neck.fpn_layers.3.proj2.weight", "fpn-neck-layer3-proj2-weight.f32.bin", "out,kH,kW,in"),
+        ("fpn-neck-layer3-proj2-bias", "detector_model.vision_encoder.neck.fpn_layers.3.proj2.bias", "fpn-neck-layer3-proj2-bias.f32.bin", "out"),
     ]
     for spec in specs:
         encoder_tool.add_weight(weight_entries, out_dir, params, *spec)
@@ -256,10 +260,10 @@ def main():
         "vitBlockStackFullBackbone": bool(include_image_vit_full_backbone),
         "firstGlobalLayerIndex": int(ref["vit_block_stack_first_global_layer_index"]),
         "globalAttnIndexes": [int(value) for value in ref["vit_block_stack_global_attn_indexes"]],
-        "fpnHiddenSize": int(ref["backbone_features"][0].shape[3]),
+        "fpnHiddenSize": int(ref["fpn_neck_features"][0].shape[3]),
         "fpnNeckLevels": [
-            {"level": int(index), "scaleFactor": float([4.0, 2.0, 1.0][index]), "height": int(feature.shape[1]), "width": int(feature.shape[2])}
-            for index, feature in enumerate(ref["backbone_features"])
+            {"level": int(index), "scaleFactor": float([4.0, 2.0, 1.0, 0.5][index]), "height": int(feature.shape[1]), "width": int(feature.shape[2])}
+            for index, feature in enumerate(ref["fpn_neck_features"])
         ],
         "groups": 8,
         "textHiddenSize": int(model.detector_model.text_encoder.text_model.config.hidden_size),
@@ -291,7 +295,7 @@ def main():
         if include_image_vit_full_backbone:
             encoder_tool.add_tensor(tensor_entries, out_dir, "expected-vit-backbone-hidden-states", "expected-vit-backbone-hidden-states.f32.bin", ref["vit_backbone_hidden_states"], [shape["batch"], shape["patchHeight"], shape["patchWidth"], shape["visionHiddenSize"]], "B,H,W,C")
     if include_image_fpn_neck:
-        for index, feature in enumerate(ref["backbone_features"]):
+        for index, feature in enumerate(ref["fpn_neck_features"]):
             encoder_tool.add_tensor(tensor_entries, out_dir, FPN_NECK_FEATURE_ROLES[index], f"{FPN_NECK_FEATURE_ROLES[index]}.f32.bin", feature, [shape["batch"], shape["fpnNeckLevels"][index]["height"], shape["fpnNeckLevels"][index]["width"], shape["fpnHiddenSize"]], "B,H,W,C")
         encoder_tool.add_tensor(tensor_entries, out_dir, "prompt-input-ids", "prompt-input-ids.u32.bin", ref["prompt_input_ids"], [shape["batch"], shape["promptTokens"]], "B,T", "uint32")
         encoder_tool.add_tensor(tensor_entries, out_dir, "prompt-attention-mask", "prompt-attention-mask.f32.bin", ref["prompt_mask"], [shape["batch"], shape["promptTokens"]], "B,T")
@@ -417,8 +421,8 @@ def main():
         "selectedBoxMaxAbsDiff": 0.004,
         "selectionScoresMaxAbsDiff": 0.00002,
         "selectionBoxesMaxAbsDiff": 0.006,
-        "cpuOracleBinaryMismatchCount": 64,
-        "binaryMismatchCount": 64,
+        "cpuOracleBinaryMismatchCount": 96,
+        "binaryMismatchCount": 96,
     }
     detector_stack_tolerances = gate_n_image_fpn_tolerances if include_image_fpn_neck else legacy_detector_stack_tolerances
     tolerance_budget_source = "browser-fpn-prompt-text-pixel-detector-stack" if include_image_fpn_neck else "legacy-mlx-image-ingress"
@@ -501,10 +505,10 @@ def main():
             "source": "browser-local-vit-backbone-hidden-states",
             "routeKind": "image-fpn-neck-detector-stack-composition",
             "levels": shape["fpnNeckLevels"],
-            "scaleLayers": {"level0": ["transpose-conv-2x", "gelu", "transpose-conv-2x"], "level1": ["transpose-conv-2x"], "level2": ["identity-scale"]},
+            "scaleLayers": {"level0": ["transpose-conv-2x", "gelu", "transpose-conv-2x"], "level1": ["transpose-conv-2x"], "level2": ["identity-scale"], "level3": ["max-pool-2x-downsample"]},
             "projection": {"proj1": "1x1 Conv2d", "proj2": "3x3 Conv2d padding=1", "weightLayout": "out,kH,kW,in", "layout": "B,H,W,C"},
             "browserExecuted": bool(include_image_fpn_neck),
-            "claim": "browser-local SAM3 FPN neck for detector-consumed levels 0, 1, and 2 from browser-local full ViT backbone; the browser smoke derives DETR encoder source/position from level 2 while level 3 remains outside this boundary",
+            "claim": "browser-local SAM3 FPN neck for levels 0, 1, 2, and 3 from browser-local full ViT backbone; the browser smoke derives DETR encoder source/position from reference-trimmed level 2 while level 3 is produced but not detector-consumed",
         } if include_image_fpn_neck else None,
         "promptTextIngress": {
             "boundary": "sam3-prompt-input-ids-to-projected-text-features-phase-program",

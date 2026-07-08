@@ -183,6 +183,7 @@ def run_reference(model, image, prompt, resolution):
         ref_boxes,
         presence_logits,
     )
+    fpn_neck_features = [np.array(feat, dtype=np.float32) for feat in fpn_features]
     backbone_features = [np.array(feat, dtype=np.float32) for feat in fpn_trimmed]
     composed_features = [np.array(feat, dtype=np.float32) for feat in feats_for_fpn]
     pixel = np.array(pixel_embed, dtype=np.float32)
@@ -211,6 +212,7 @@ def run_reference(model, image, prompt, resolution):
         "encoder_pos": np.array(pos_flat, dtype=np.float32),
         "encoder_hidden_states": np.array(encoded, dtype=np.float32),
         "backbone_features": backbone_features,
+        "fpn_neck_features": fpn_neck_features,
         "composed_features": composed_features,
         "prompt_input_ids": np.array(input_ids, dtype=np.uint32),
         "prompt_features": np.array(inputs_embeds, dtype=np.float32),

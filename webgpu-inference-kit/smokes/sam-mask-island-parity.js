@@ -331,6 +331,10 @@ function imageFpnNeckWeightRoles() {
     'fpn-neck-layer2-proj1-bias',
     'fpn-neck-layer2-proj2-weight',
     'fpn-neck-layer2-proj2-bias',
+    'fpn-neck-layer3-proj1-weight',
+    'fpn-neck-layer3-proj1-bias',
+    'fpn-neck-layer3-proj2-weight',
+    'fpn-neck-layer3-proj2-bias',
   ];
 }
 
@@ -444,6 +448,12 @@ async function loadImageFpnNeckWeights(weightsByRole) {
         scaleLayers: [],
         proj1: await conv('fpn-neck-layer2-proj1', 1, 1, 0, 1024, 256),
         proj2: await conv('fpn-neck-layer2-proj2', 3, 1, 1, 256, 256),
+      },
+      {
+        level: 3,
+        scaleLayers: [],
+        proj1: await conv('fpn-neck-layer3-proj1', 1, 1, 0, 1024, 256),
+        proj2: await conv('fpn-neck-layer3-proj2', 3, 1, 1, 256, 256),
       },
     ],
   };
@@ -1035,6 +1045,7 @@ async function loadDetrStackPayload(manifest) {
   const expectedFpnNeckFeature0Tensor = includeImageFpnNeck ? tensorByRole(manifest, 'expected-fpn-neck-feature-0') : null;
   const expectedFpnNeckFeature1Tensor = includeImageFpnNeck ? tensorByRole(manifest, 'expected-fpn-neck-feature-1') : null;
   const expectedFpnNeckFeature2Tensor = includeImageFpnNeck ? tensorByRole(manifest, 'expected-fpn-neck-feature-2') : null;
+  const expectedFpnNeckFeature3Tensor = includeImageFpnNeck ? tensorByRole(manifest, 'expected-fpn-neck-feature-3') : null;
   const promptInputIdsTensor = includeImageFpnNeck ? tensorByRole(manifest, 'prompt-input-ids') : null;
   const promptAttentionMaskTensor = includeImageFpnNeck ? tensorByRole(manifest, 'prompt-attention-mask') : null;
   const expectedPromptFeaturesTensor = includeImageFpnNeck ? tensorByRole(manifest, 'expected-prompt-features') : null;
@@ -1195,6 +1206,7 @@ async function loadDetrStackPayload(manifest) {
   const expectedFpnNeckFeature0 = expectedFpnNeckFeature0Tensor ? await fetchArray(resolveManifestFile(expectedFpnNeckFeature0Tensor.file), Float32Array) : null;
   const expectedFpnNeckFeature1 = expectedFpnNeckFeature1Tensor ? await fetchArray(resolveManifestFile(expectedFpnNeckFeature1Tensor.file), Float32Array) : null;
   const expectedFpnNeckFeature2 = expectedFpnNeckFeature2Tensor ? await fetchArray(resolveManifestFile(expectedFpnNeckFeature2Tensor.file), Float32Array) : null;
+  const expectedFpnNeckFeature3 = expectedFpnNeckFeature3Tensor ? await fetchArray(resolveManifestFile(expectedFpnNeckFeature3Tensor.file), Float32Array) : null;
   const promptInputIds = promptInputIdsTensor ? await fetchArray(resolveManifestFile(promptInputIdsTensor.file), Uint32Array) : null;
   const promptAttentionMask = promptAttentionMaskTensor ? await fetchArray(resolveManifestFile(promptAttentionMaskTensor.file), Float32Array) : null;
   const expectedPromptFeatures = expectedPromptFeaturesTensor ? await fetchArray(resolveManifestFile(expectedPromptFeaturesTensor.file), Float32Array) : promptFeatures;
@@ -1446,7 +1458,7 @@ async function loadDetrStackPayload(manifest) {
       scaleLayers: manifest.imageFpnNeck?.scaleLayers || null,
       projection: manifest.imageFpnNeck?.projection || null,
       nonClaims: {
-        level3FpnNeck: true,
+        level3DetectorConsumption: true,
         browserLocalTextEncoder: true,
         fullSam3BrowserExecution: true,
       },
@@ -1461,7 +1473,7 @@ async function loadDetrStackPayload(manifest) {
       textTensorOwner: 'browser-local-prompt-text-ingress',
       nonClaims: {
         browserTokenizer: true,
-        level3FpnNeck: true,
+        level3DetectorConsumption: true,
         fullSam3BrowserExecution: true,
       },
     } : null,
@@ -1476,7 +1488,7 @@ async function loadDetrStackPayload(manifest) {
       promptMaskOwner: 'browser-local-prompt-text-ingress',
       nonClaims: {
         browserTokenizer: true,
-        level3FpnNeck: true,
+        level3DetectorConsumption: true,
         fullSam3BrowserExecution: true,
       },
     } : null,
@@ -1490,7 +1502,7 @@ async function loadDetrStackPayload(manifest) {
       pixelEmbedOwner: 'browser-local-pixel-decoder',
       nonClaims: {
         browserTokenizer: true,
-        level3FpnNeck: true,
+        level3DetectorConsumption: true,
         fullSam3BrowserExecution: true,
       },
     } : null,
@@ -1504,6 +1516,7 @@ async function loadDetrStackPayload(manifest) {
     expectedFpnNeckFeature0,
     expectedFpnNeckFeature1,
     expectedFpnNeckFeature2,
+    expectedFpnNeckFeature3,
     expectedPromptFeatures,
     expectedPromptMask,
     expectedPromptFpnFeature,
@@ -1538,6 +1551,7 @@ async function loadDetrStackPayload(manifest) {
       fpnNeckFeature0MaxAbsDiff: fpnNeckOracle ? maxAbsDiff(expectedFpnNeckFeature0, fpnNeckOracle.fpnNeckFeatures[0]) : undefined,
       fpnNeckFeature1MaxAbsDiff: fpnNeckOracle ? maxAbsDiff(expectedFpnNeckFeature1, fpnNeckOracle.fpnNeckFeatures[1]) : undefined,
       fpnNeckFeature2MaxAbsDiff: fpnNeckOracle ? maxAbsDiff(expectedFpnNeckFeature2, fpnNeckOracle.fpnNeckFeatures[2]) : undefined,
+      fpnNeckFeature3MaxAbsDiff: fpnNeckOracle ? maxAbsDiff(expectedFpnNeckFeature3, fpnNeckOracle.fpnNeckFeatures[3]) : undefined,
       promptTextMaxAbsDiff: promptTextOracle ? maxAbsDiff(expectedPromptFeatures, promptTextOracle.promptFeatures) : undefined,
       promptMaskMaxAbsDiff: promptTextOracle ? maxAbsDiff(expectedPromptMask, promptTextOracle.promptMask) : undefined,
       promptFpnMaxAbsDiff: promptFpnOracle ? maxAbsDiff(expectedPromptFpnFeature, promptFpnOracle.promptFpnFeature) : undefined,
@@ -1580,6 +1594,7 @@ async function loadDetrStackPayload(manifest) {
       expectedFpnNeckFeature0Sha256: expectedFpnNeckFeature0Tensor?.sha256,
       expectedFpnNeckFeature1Sha256: expectedFpnNeckFeature1Tensor?.sha256,
       expectedFpnNeckFeature2Sha256: expectedFpnNeckFeature2Tensor?.sha256,
+      expectedFpnNeckFeature3Sha256: expectedFpnNeckFeature3Tensor?.sha256,
       promptInputIdsSha256: promptInputIdsTensor?.sha256,
       promptAttentionMaskSha256: promptAttentionMaskTensor?.sha256,
       expectedPromptFeaturesSha256: expectedPromptFeaturesTensor?.sha256,
@@ -1636,12 +1651,15 @@ async function loadDetrStackPayload(manifest) {
       let gpuFpnNeckFeature0 = null;
       let gpuFpnNeckFeature1 = null;
       let gpuFpnNeckFeature2 = null;
+      let gpuFpnNeckFeature3 = null;
       let fpnNeckFeature0Output = null;
       let fpnNeckFeature1Output = null;
       let fpnNeckFeature2Output = null;
+      let fpnNeckFeature3Output = null;
       let fpnNeckFeature0TensorSha256 = null;
       let fpnNeckFeature1TensorSha256 = null;
       let fpnNeckFeature2TensorSha256 = null;
+      let fpnNeckFeature3TensorSha256 = null;
       let fpnNeckWeightsSha256 = null;
       let imageFpnNeckCpuMaxAbsDiff = undefined;
       let browserFpnDetrIngress = null;
@@ -1827,6 +1845,7 @@ async function loadDetrStackPayload(manifest) {
           maxAbsDiff(expectedFpnNeckFeature0, fpnCpuOracle.fpnNeckFeatures[0]),
           maxAbsDiff(expectedFpnNeckFeature1, fpnCpuOracle.fpnNeckFeatures[1]),
           maxAbsDiff(expectedFpnNeckFeature2, fpnCpuOracle.fpnNeckFeatures[2]),
+          maxAbsDiff(expectedFpnNeckFeature3, fpnCpuOracle.fpnNeckFeatures[3]),
         );
         fpnNeckWeightsSha256 = await aggregateTensorBundleSha256('sam3-image-fpn-neck-weights', fpnNeckWeightRoles.map(role => ({ role, sha256: weightsByRole[role].sha256 })));
         fpnNeckFeature0TensorSha256 = await aggregateTensorBundleSha256('sam3-image-fpn-neck-feature0-composed-tensors', [
@@ -1835,6 +1854,7 @@ async function loadDetrStackPayload(manifest) {
         ]);
         fpnNeckFeature1TensorSha256 = fpnNeckFeature0TensorSha256;
         fpnNeckFeature2TensorSha256 = fpnNeckFeature0TensorSha256;
+        fpnNeckFeature3TensorSha256 = fpnNeckFeature0TensorSha256;
         const imageFpnNeckRoute = createSam3ImageFpnNeckPhaseProgramRouteDefinition({
           model: { revision: manifest.model?.id || 'mlx-reference-image-fpn-neck', dtype: 'fp32' },
           kernel: { profile: 'sam3-image-fpn-neck-phase-program-v0', commit: params.get('commit') || null },
@@ -1850,6 +1870,7 @@ async function loadDetrStackPayload(manifest) {
             'fpn-neck-feature-0': { artifactId: 'sam3-fpn-neck-feature-0:browser-detector-stack-composition', shape: [fpnNeckShape.batch, fpnNeckShape.levels[0].height, fpnNeckShape.levels[0].width, fpnNeckShape.fpnHiddenSize] },
             'fpn-neck-feature-1': { artifactId: 'sam3-fpn-neck-feature-1:browser-detector-stack-composition', shape: [fpnNeckShape.batch, fpnNeckShape.levels[1].height, fpnNeckShape.levels[1].width, fpnNeckShape.fpnHiddenSize] },
             'fpn-neck-feature-2': { artifactId: 'sam3-fpn-neck-feature-2:browser-detector-stack-composition', shape: [fpnNeckShape.batch, fpnNeckShape.levels[2].height, fpnNeckShape.levels[2].width, fpnNeckShape.fpnHiddenSize] },
+            'fpn-neck-feature-3': { artifactId: 'sam3-fpn-neck-feature-3:browser-detector-stack-composition', shape: [fpnNeckShape.batch, fpnNeckShape.levels[3].height, fpnNeckShape.levels[3].width, fpnNeckShape.fpnHiddenSize] },
           },
           routeConfig: { upstream: manifest.claims?.upstream || 'mlx-reference-detr-stack', imageFpnNeck: manifest.imageFpnNeck || null, composedFrom: imageVitBlockStackResult.receipt?.effectiveRouteId, vitBlockStackHiddenStatesOutput },
         });
@@ -1857,12 +1878,14 @@ async function loadDetrStackPayload(manifest) {
         gpuFpnNeckFeature0 = new Float32Array(imageFpnNeckResult.debugReadback.fpnNeckFeature0);
         gpuFpnNeckFeature1 = new Float32Array(imageFpnNeckResult.debugReadback.fpnNeckFeature1);
         gpuFpnNeckFeature2 = new Float32Array(imageFpnNeckResult.debugReadback.fpnNeckFeature2);
+        gpuFpnNeckFeature3 = new Float32Array(imageFpnNeckResult.debugReadback.fpnNeckFeature3);
         fpnNeckFeature0Output = imageFpnNeckResult.receipt.outputs.find(output => output.role === 'fpn-neck-feature-0');
         fpnNeckFeature1Output = imageFpnNeckResult.receipt.outputs.find(output => output.role === 'fpn-neck-feature-1');
         fpnNeckFeature2Output = imageFpnNeckResult.receipt.outputs.find(output => output.role === 'fpn-neck-feature-2');
-        if (!fpnNeckFeature0Output?.sha256 || !fpnNeckFeature1Output?.sha256 || !fpnNeckFeature2Output?.sha256) throw new Error('SAM3 image FPN-neck output identity missing');
+        fpnNeckFeature3Output = imageFpnNeckResult.receipt.outputs.find(output => output.role === 'fpn-neck-feature-3');
+        if (!fpnNeckFeature0Output?.sha256 || !fpnNeckFeature1Output?.sha256 || !fpnNeckFeature2Output?.sha256 || !fpnNeckFeature3Output?.sha256) throw new Error('SAM3 image FPN-neck output identity missing');
         browserFpnDetrIngress = createSam3DetrImageIngressFromFpnFeatures({
-          fpnNeckFeatures: [gpuFpnNeckFeature0, gpuFpnNeckFeature1, gpuFpnNeckFeature2],
+          fpnNeckFeatures: [gpuFpnNeckFeature0, gpuFpnNeckFeature1, gpuFpnNeckFeature2, gpuFpnNeckFeature3],
           levels: fpnNeckShape.levels.map(level => ({ ...level, batch: fpnNeckShape.batch })),
           sourceLevel: 2,
           channels: manifest.shape.channels,
@@ -1919,6 +1942,8 @@ async function loadDetrStackPayload(manifest) {
           encoderPosSource: 'browser-position-embedding-sine',
           encoderPosSha256: effectiveEncoderPosSha256,
           detrImageIngressTensorSha256,
+          fpnLevels: [0, 1, 2, 3],
+          detectorConsumedLevel: 2,
           shape: browserFpnDetrIngress.shape,
           positionEncoding: browserFpnDetrIngress.positionEncoding,
           parity: {
@@ -2155,6 +2180,7 @@ async function loadDetrStackPayload(manifest) {
           fpnNeckFeature0: gpuFpnNeckFeature0 ? Array.from(gpuFpnNeckFeature0) : undefined,
           fpnNeckFeature1: gpuFpnNeckFeature1 ? Array.from(gpuFpnNeckFeature1) : undefined,
           fpnNeckFeature2: gpuFpnNeckFeature2 ? Array.from(gpuFpnNeckFeature2) : undefined,
+          fpnNeckFeature3: gpuFpnNeckFeature3 ? Array.from(gpuFpnNeckFeature3) : undefined,
           imageFpnNeckCpuMaxAbsDiff,
           encoderSrc: includeImageFpnNeck ? Array.from(effectiveEncoderSrc) : undefined,
           encoderPos: includeImageFpnNeck ? Array.from(effectiveEncoderPos) : undefined,
@@ -2207,9 +2233,11 @@ async function loadDetrStackPayload(manifest) {
           fpnNeckFeature0TensorSha256,
           fpnNeckFeature1TensorSha256,
           fpnNeckFeature2TensorSha256,
+          fpnNeckFeature3TensorSha256,
           fpnNeckFeature0Output,
           fpnNeckFeature1Output,
           fpnNeckFeature2Output,
+          fpnNeckFeature3Output,
           fpnNeckWeightsSha256,
           browserFpnDetrIngressEvidence,
           promptTextRouteId: promptTextResult?.receipt?.effectiveRouteId,
@@ -3374,6 +3402,7 @@ async function main() {
       fpnNeckFeature0MaxAbsDiff: result.debugReadback.fpnNeckFeature0 ? maxAbsDiff(payload.expectedFpnNeckFeature0 || [], new Float32Array(result.debugReadback.fpnNeckFeature0)) : undefined,
       fpnNeckFeature1MaxAbsDiff: result.debugReadback.fpnNeckFeature1 ? maxAbsDiff(payload.expectedFpnNeckFeature1 || [], new Float32Array(result.debugReadback.fpnNeckFeature1)) : undefined,
       fpnNeckFeature2MaxAbsDiff: result.debugReadback.fpnNeckFeature2 ? maxAbsDiff(payload.expectedFpnNeckFeature2 || [], new Float32Array(result.debugReadback.fpnNeckFeature2)) : undefined,
+      fpnNeckFeature3MaxAbsDiff: result.debugReadback.fpnNeckFeature3 ? maxAbsDiff(payload.expectedFpnNeckFeature3 || [], new Float32Array(result.debugReadback.fpnNeckFeature3)) : undefined,
       imageFpnNeckCpuMaxAbsDiff: result.debugReadback.imageFpnNeckCpuMaxAbsDiff,
       encoderSrcMaxAbsDiff: result.debugReadback.encoderSrc ? maxAbsDiff(payload.expectedEncoderSrc || [], new Float32Array(result.debugReadback.encoderSrc)) : undefined,
       encoderPosMaxAbsDiff: result.debugReadback.encoderPos ? maxAbsDiff(payload.expectedEncoderPos || [], new Float32Array(result.debugReadback.encoderPos)) : undefined,
@@ -3409,7 +3438,7 @@ async function main() {
     const gpuVitBlockStackTolerance = manifest.tolerances?.vitBlockStackHiddenStatesMaxAbsDiff ?? 0.01;
     const gpuVitBlockStackCpuTolerance = manifest.tolerances?.imageVitBlockStackCpuMaxAbsDiff ?? 0.01;
     const gpuVitFirstGlobalTolerance = manifest.tolerances?.vitFirstGlobalHiddenStatesMaxAbsDiff ?? gpuVitBlockStackTolerance;
-    const gpuFpnNeckTolerance = Math.max(manifest.tolerances?.fpnNeckFeature0MaxAbsDiff ?? 0.02, manifest.tolerances?.fpnNeckFeature1MaxAbsDiff ?? 0.02, manifest.tolerances?.fpnNeckFeature2MaxAbsDiff ?? 0.02);
+    const gpuFpnNeckTolerance = Math.max(manifest.tolerances?.fpnNeckFeature0MaxAbsDiff ?? 0.02, manifest.tolerances?.fpnNeckFeature1MaxAbsDiff ?? 0.02, manifest.tolerances?.fpnNeckFeature2MaxAbsDiff ?? 0.02, manifest.tolerances?.fpnNeckFeature3MaxAbsDiff ?? 0.02);
     const gpuFpnNeckCpuTolerance = manifest.tolerances?.imageFpnNeckCpuMaxAbsDiff ?? gpuFpnNeckTolerance;
     const gpuEncoderSrcTolerance = manifest.tolerances?.encoderSrcMaxAbsDiff ?? gpuFpnNeckTolerance;
     const gpuEncoderPosTolerance = manifest.tolerances?.encoderPosMaxAbsDiff ?? 0.00001;
@@ -3445,6 +3474,8 @@ async function main() {
       expectedVitFirstGlobalHiddenStates: payload.expectedVitFirstGlobalHiddenStates ? Array.from(payload.expectedVitFirstGlobalHiddenStates.slice(0, 16)) : undefined,
       fpnNeckFeature0: result.debugReadback.fpnNeckFeature0 ? Array.from(new Float32Array(result.debugReadback.fpnNeckFeature0).slice(0, 16)) : undefined,
       expectedFpnNeckFeature0: payload.expectedFpnNeckFeature0 ? Array.from(payload.expectedFpnNeckFeature0.slice(0, 16)) : undefined,
+      fpnNeckFeature3: result.debugReadback.fpnNeckFeature3 ? Array.from(new Float32Array(result.debugReadback.fpnNeckFeature3).slice(0, 16)) : undefined,
+      expectedFpnNeckFeature3: payload.expectedFpnNeckFeature3 ? Array.from(payload.expectedFpnNeckFeature3.slice(0, 16)) : undefined,
       encoderSrc: result.debugReadback.encoderSrc ? Array.from(new Float32Array(result.debugReadback.encoderSrc).slice(0, 16)) : undefined,
       expectedEncoderSrc: payload.expectedEncoderSrc ? Array.from(payload.expectedEncoderSrc.slice(0, 16)) : undefined,
       encoderPos: result.debugReadback.encoderPos ? Array.from(new Float32Array(result.debugReadback.encoderPos).slice(0, 16)) : undefined,
@@ -3563,14 +3594,17 @@ async function main() {
       fpnNeckFeature0TensorSha256: result.compositionEdge?.fpnNeckFeature0TensorSha256 || null,
       fpnNeckFeature1TensorSha256: result.compositionEdge?.fpnNeckFeature1TensorSha256 || null,
       fpnNeckFeature2TensorSha256: result.compositionEdge?.fpnNeckFeature2TensorSha256 || null,
+      fpnNeckFeature3TensorSha256: result.compositionEdge?.fpnNeckFeature3TensorSha256 || null,
       fpnNeckFeature0Output: result.compositionEdge?.fpnNeckFeature0Output || null,
       fpnNeckFeature1Output: result.compositionEdge?.fpnNeckFeature1Output || null,
       fpnNeckFeature2Output: result.compositionEdge?.fpnNeckFeature2Output || null,
+      fpnNeckFeature3Output: result.compositionEdge?.fpnNeckFeature3Output || null,
       fpnNeckWeightsSha256: result.compositionEdge?.fpnNeckWeightsSha256 || null,
       parity: {
         fpnNeckFeature0MaxAbsDiff: parity.fpnNeckFeature0MaxAbsDiff,
         fpnNeckFeature1MaxAbsDiff: parity.fpnNeckFeature1MaxAbsDiff,
         fpnNeckFeature2MaxAbsDiff: parity.fpnNeckFeature2MaxAbsDiff,
+        fpnNeckFeature3MaxAbsDiff: parity.fpnNeckFeature3MaxAbsDiff,
         imageFpnNeckCpuMaxAbsDiff: parity.imageFpnNeckCpuMaxAbsDiff,
       },
       debugReadbackSample: debugReadbackSamples.fpnNeckFeature0,
@@ -3651,6 +3685,7 @@ async function main() {
       || (parity.fpnNeckFeature0MaxAbsDiff ?? 0) > gpuFpnNeckTolerance
       || (parity.fpnNeckFeature1MaxAbsDiff ?? 0) > gpuFpnNeckTolerance
       || (parity.fpnNeckFeature2MaxAbsDiff ?? 0) > gpuFpnNeckTolerance
+      || (parity.fpnNeckFeature3MaxAbsDiff ?? 0) > gpuFpnNeckTolerance
       || (parity.imageFpnNeckCpuMaxAbsDiff ?? 0) > gpuFpnNeckCpuTolerance
       || (parity.encoderSrcMaxAbsDiff ?? 0) > gpuEncoderSrcTolerance
       || (parity.encoderPosMaxAbsDiff ?? 0) > gpuEncoderPosTolerance

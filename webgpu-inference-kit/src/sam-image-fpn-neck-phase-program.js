@@ -35,6 +35,9 @@ const REQUIRED_STAGES = [
   'fpn-neck-proj2-1',
   'fpn-neck-proj1-2',
   'fpn-neck-proj2-2',
+  'fpn-neck-maxpool-3',
+  'fpn-neck-proj1-3',
+  'fpn-neck-proj2-3',
   'readback-fpn-neck-features',
 ];
 const INPUT_ROLES = ['source-image', 'vit-backbone-hidden-states', 'sam3-image-fpn-neck-weights'];
@@ -42,6 +45,7 @@ const OUTPUT_ROLES = [
   { key: 'fpnNeckFeature0', role: 'fpn-neck-feature-0', required: true },
   { key: 'fpnNeckFeature1', role: 'fpn-neck-feature-1', required: true },
   { key: 'fpnNeckFeature2', role: 'fpn-neck-feature-2', required: true },
+  { key: 'fpnNeckFeature3', role: 'fpn-neck-feature-3', required: true },
 ];
 
 const TRANSPOSE_CONV2D_WGSL = `
@@ -164,6 +168,46 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
 }
 `;
 
+const MAXPOOL2D_WGSL = `
+struct FpnPoolDims {
+  batch: u32,
+  input_height: u32,
+  input_width: u32,
+  channels: u32,
+  output_height: u32,
+  output_width: u32,
+  total_output: u32,
+};
+
+@group(0) @binding(0) var<storage, read> input_values: array<f32>;
+@group(0) @binding(1) var<storage, read_write> output_values: array<f32>;
+@group(0) @binding(2) var<uniform> dims: FpnPoolDims;
+
+@compute @workgroup_size(64)
+fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+  let index = gid.x;
+  if (index >= dims.total_output) { return; }
+  let channel = index % dims.channels;
+  let out_x = (index / dims.channels) % dims.output_width;
+  let out_y = (index / (dims.channels * dims.output_width)) % dims.output_height;
+  let batch = index / (dims.channels * dims.output_width * dims.output_height);
+  let in_y0 = out_y * 2u;
+  let in_x0 = out_x * 2u;
+  var max_value = -3.4028234663852886e38;
+  for (var dy = 0u; dy < 2u; dy = dy + 1u) {
+    let in_y = in_y0 + dy;
+    if (in_y >= dims.input_height) { continue; }
+    for (var dx = 0u; dx < 2u; dx = dx + 1u) {
+      let in_x = in_x0 + dx;
+      if (in_x >= dims.input_width) { continue; }
+      let input_index = ((batch * dims.input_height + in_y) * dims.input_width + in_x) * dims.channels + channel;
+      max_value = max(max_value, input_values[input_index]);
+    }
+  }
+  output_values[index] = max_value;
+}
+`;
+
 function createDefaultScheduler() {
   return createWebGpuRouteSchedulerProfile({
     requestedScheduler: { mode: 'cooperative', yieldMs: 0, waitForSubmittedWorkDone: true, phaseChunkSize: Object.fromEntries(REQUIRED_STAGES.map(stage => [stage, 1])) },
@@ -172,7 +216,7 @@ function createDefaultScheduler() {
     breathability: {
       spans: REQUIRED_STAGES.map(stage => ({ name: `${stage}-phase`, stage, kind: stage === 'readback-fpn-neck-features' ? 'readback-bound' : 'gpu-submit-bound', interruptible: false, canYieldBefore: true, canYieldAfter: true })),
       checkpoints: REQUIRED_STAGES.map(stage => ({ name: `after-${stage}`, kind: stage === 'readback-fpn-neck-features' ? 'readback' : 'stage-boundary', afterStage: stage, yieldable: true, waitsForSubmittedWorkDone: stage !== 'readback-fpn-neck-features' })),
-      notes: 'SAM3 image FPN-neck phase program cooperates between transpose-conv, GELU, projection-conv, and readback boundaries for detector-consumed levels 0..2.',
+      notes: 'SAM3 image FPN-neck phase program cooperates between transpose-conv, GELU, max-pool, projection-conv, and readback boundaries for FPN levels 0..3.',
     },
   });
 }
@@ -211,9 +255,9 @@ function normalizeShape(shape = {}) {
   for (const key of ['batch', 'backboneHeight', 'backboneWidth', 'backboneChannels', 'fpnHiddenSize']) {
     if (!Number.isInteger(out[key]) || out[key] <= 0) throw new Error(`shape.${key} must be a positive integer`);
   }
-  if (!Array.isArray(out.levels) || out.levels.length !== 3) throw new Error('shape.levels must describe exactly detector-consumed FPN levels 0, 1, and 2');
+  if (!Array.isArray(out.levels) || out.levels.length !== 4) throw new Error('shape.levels must describe exactly FPN levels 0, 1, 2, and 3');
   out.levels = out.levels.map((level, index) => {
-    if (!Number.isInteger(level.level) || level.level !== index) throw new Error('shape.levels must be ordered levels 0, 1, and 2');
+    if (!Number.isInteger(level.level) || level.level !== index) throw new Error('shape.levels must be ordered levels 0, 1, 2, and 3');
     if (!Number.isInteger(level.height) || level.height <= 0) throw new Error(`shape.levels[${index}].height must be a positive integer`);
     if (!Number.isInteger(level.width) || level.width <= 0) throw new Error(`shape.levels[${index}].width must be a positive integer`);
     return { level: index, scaleFactor: Number(level.scaleFactor), height: level.height, width: level.width };
@@ -245,10 +289,10 @@ function normalizeConvSpec(spec, name) {
 }
 
 function normalizeWeights(weights = {}, shape) {
-  if (!Array.isArray(weights.levels) || weights.levels.length !== 3) throw new Error('weights.levels must contain detector-consumed FPN levels 0, 1, and 2');
+  if (!Array.isArray(weights.levels) || weights.levels.length !== 4) throw new Error('weights.levels must contain FPN levels 0, 1, 2, and 3');
   return {
     levels: weights.levels.map((level, index) => {
-      if (!level || level.level !== index) throw new Error('weights.levels must be ordered levels 0, 1, and 2');
+      if (!level || level.level !== index) throw new Error('weights.levels must be ordered levels 0, 1, 2, and 3');
       const scaleLayers = (level.scaleLayers || []).map((spec, scaleIndex) => normalizeConvSpec(spec, `weights.levels[${index}].scaleLayers[${scaleIndex}]`));
       const proj1 = normalizeConvSpec(level.proj1, `weights.levels[${index}].proj1`);
       const proj2 = normalizeConvSpec(level.proj2, `weights.levels[${index}].proj2`);
@@ -335,6 +379,31 @@ function conv2d(input, inShape, spec) {
   return { data: out, shape: { batch: inShape.batch, height: outHeight, width: outWidth, channels: spec.outChannels } };
 }
 
+function maxPool2dStride2(input, inShape) {
+  const outHeight = Math.floor(inShape.height / 2);
+  const outWidth = Math.floor(inShape.width / 2);
+  const out = new Float32Array(inShape.batch * outHeight * outWidth * inShape.channels);
+  for (let batch = 0; batch < inShape.batch; batch += 1) {
+    for (let outY = 0; outY < outHeight; outY += 1) {
+      for (let outX = 0; outX < outWidth; outX += 1) {
+        for (let channel = 0; channel < inShape.channels; channel += 1) {
+          let maxValue = -Infinity;
+          for (let dy = 0; dy < 2; dy += 1) {
+            for (let dx = 0; dx < 2; dx += 1) {
+              const inY = outY * 2 + dy;
+              const inX = outX * 2 + dx;
+              const value = input[((batch * inShape.height + inY) * inShape.width + inX) * inShape.channels + channel];
+              if (value > maxValue) maxValue = value;
+            }
+          }
+          out[((batch * outHeight + outY) * outWidth + outX) * inShape.channels + channel] = maxValue;
+        }
+      }
+    }
+  }
+  return { data: out, shape: { batch: inShape.batch, height: outHeight, width: outWidth, channels: inShape.channels } };
+}
+
 function applyGelu(input) {
   const out = new Float32Array(input.length);
   for (let index = 0; index < input.length; index += 1) out[index] = gelu(input[index]);
@@ -352,6 +421,11 @@ export function createSam3ImageFpnNeckPhaseProgramCpuOracle(input) {
       const scaled = convTranspose2d(current, currentShape, scaleLayer);
       current = scaleLayer.activation === 'gelu' ? applyGelu(scaled.data) : scaled.data;
       currentShape = scaled.shape;
+    }
+    if (levelWeights.scaleLayers.length === 0 && shape.levels[levelWeights.level]?.scaleFactor <= 0.5) {
+      const pooled = maxPool2dStride2(current, currentShape);
+      current = pooled.data;
+      currentShape = pooled.shape;
     }
     const proj1 = conv2d(current, currentShape, levelWeights.proj1);
     const proj2 = conv2d(proj1.data, proj1.shape, levelWeights.proj2);
@@ -375,6 +449,7 @@ function outputArtifacts(request, hashes, shape) {
     fpnNeckFeature0: { artifactId: roleArtifact(request.outputs, 'fpn-neck-feature-0').artifactId, sha256: hashes.fpnNeckFeature0, shape: [shape.batch, shape.levels[0].height, shape.levels[0].width, shape.fpnHiddenSize] },
     fpnNeckFeature1: { artifactId: roleArtifact(request.outputs, 'fpn-neck-feature-1').artifactId, sha256: hashes.fpnNeckFeature1, shape: [shape.batch, shape.levels[1].height, shape.levels[1].width, shape.fpnHiddenSize] },
     fpnNeckFeature2: { artifactId: roleArtifact(request.outputs, 'fpn-neck-feature-2').artifactId, sha256: hashes.fpnNeckFeature2, shape: [shape.batch, shape.levels[2].height, shape.levels[2].width, shape.fpnHiddenSize] },
+    fpnNeckFeature3: { artifactId: roleArtifact(request.outputs, 'fpn-neck-feature-3').artifactId, sha256: hashes.fpnNeckFeature3, shape: [shape.batch, shape.levels[3].height, shape.levels[3].width, shape.fpnHiddenSize] },
   };
 }
 
@@ -440,6 +515,18 @@ function convDimsValues(shape, inShape, spec, outShape) {
   };
 }
 
+function poolDimsValues(shape, inShape, outShape) {
+  return {
+    batch: shape.batch,
+    input_height: inShape.height,
+    input_width: inShape.width,
+    channels: inShape.channels,
+    output_height: outShape.height,
+    output_width: outShape.width,
+    total_output: shape.batch * outShape.height * outShape.width * outShape.channels,
+  };
+}
+
 function transposeConv2dOutShape(inShape, spec) {
   return {
     height: (inShape.height - 1) * spec.stride - (2 * spec.padding) + spec.kernelSize,
@@ -479,6 +566,7 @@ export async function runSam3ImageFpnNeckPhaseProgramRoute(input = {}) {
   const level0Scale0Shape = transposeConv2dOutShape(backboneShape, weights.levels[0].scaleLayers[0]);
   const level0Scale1Shape = transposeConv2dOutShape(level0Scale0Shape, weights.levels[0].scaleLayers[1]);
   const level1Scale0Shape = transposeConv2dOutShape(backboneShape, weights.levels[1].scaleLayers[0]);
+  const level3PoolShape = { height: Math.floor(backboneShape.height / 2), width: Math.floor(backboneShape.width / 2), channels: shape.backboneChannels };
   await runtime.runStage('load-image-fpn-neck-tensors', async stage => {
     const usage = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst | WEBGPU_BUFFER_USAGE.copySrc;
     const readonlyUsage = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst;
@@ -497,6 +585,9 @@ export async function runSam3ImageFpnNeckPhaseProgramRoute(input = {}) {
       level1Feature: tensor('sam3.image-fpn-neck.level1.feature', [shape.batch, shape.levels[1].height, shape.levels[1].width, shape.fpnHiddenSize]),
       level2Proj1: tensor('sam3.image-fpn-neck.level2.proj1', [shape.batch, shape.levels[2].height, shape.levels[2].width, shape.fpnHiddenSize]),
       level2Feature: tensor('sam3.image-fpn-neck.level2.feature', [shape.batch, shape.levels[2].height, shape.levels[2].width, shape.fpnHiddenSize]),
+      level3Pool: tensor('sam3.image-fpn-neck.level3.maxpool', [shape.batch, shape.levels[3].height, shape.levels[3].width, shape.backboneChannels]),
+      level3Proj1: tensor('sam3.image-fpn-neck.level3.proj1', [shape.batch, shape.levels[3].height, shape.levels[3].width, shape.fpnHiddenSize]),
+      level3Feature: tensor('sam3.image-fpn-neck.level3.feature', [shape.batch, shape.levels[3].height, shape.levels[3].width, shape.fpnHiddenSize]),
       convDims: stage.createUniformBuffer({
         label: 'sam3.image-fpn-neck.conv-dims',
         schema: [
@@ -515,6 +606,19 @@ export async function runSam3ImageFpnNeckPhaseProgramRoute(input = {}) {
         ],
         values: convDimsValues(shape, backboneShape, weights.levels[0].scaleLayers[0], level0Scale0Shape),
       }),
+      poolDims: stage.createUniformBuffer({
+        label: 'sam3.image-fpn-neck.pool-dims',
+        schema: [
+          { name: 'batch', type: 'u32' },
+          { name: 'input_height', type: 'u32' },
+          { name: 'input_width', type: 'u32' },
+          { name: 'channels', type: 'u32' },
+          { name: 'output_height', type: 'u32' },
+          { name: 'output_width', type: 'u32' },
+          { name: 'total_output', type: 'u32' },
+        ],
+        values: poolDimsValues(shape, backboneShape, level3PoolShape),
+      }),
     };
     for (const level of weights.levels) {
       for (const [index, scaleLayer] of level.scaleLayers.entries()) {
@@ -532,7 +636,7 @@ export async function runSam3ImageFpnNeckPhaseProgramRoute(input = {}) {
     }
     stage.uploadTensor(tensors.backbone, backboneHiddenStates);
     await stage.yieldToBrowser({ reason: 'after-sam3-image-fpn-neck-upload' });
-  }, { shape, detectorConsumedLevels: [0, 1, 2], referenceBoundary: 'MLX FPNLayer scale_layers -> proj1 -> proj2 for levels 0..2' });
+  }, { shape, fpnLevels: [0, 1, 2, 3], detectorConsumedLevels: [0, 1, 2], referenceBoundary: 'MLX FPNLayer scale_layers/max-pool -> proj1 -> proj2 for levels 0..3' });
 
   const bindTensor = (resource, access = 'read-only-storage') => ({ name: resource.replace(/^tensor:/, ''), resource, visibility: WEBGPU_SHADER_STAGE.compute, access });
   const bindUniform = resource => ({ name: resource.replace(/^uniform:/, ''), resource, visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' });
@@ -540,8 +644,9 @@ export async function runSam3ImageFpnNeckPhaseProgramRoute(input = {}) {
     transposeConv2d: { code: TRANSPOSE_CONV2D_WGSL, bindings: [bindTensor('tensor:input'), bindTensor('tensor:weight'), bindTensor('tensor:bias'), bindTensor('tensor:output', 'storage'), bindUniform('uniform:convDims')] },
     conv2d: { code: CONV2D_WGSL, bindings: [bindTensor('tensor:input'), bindTensor('tensor:weight'), bindTensor('tensor:bias'), bindTensor('tensor:output', 'storage'), bindUniform('uniform:convDims')] },
     gelu: { code: GELU_WGSL, bindings: [bindTensor('tensor:input'), bindTensor('tensor:output', 'storage')] },
+    maxpool2d: { code: MAXPOOL2D_WGSL, bindings: [bindTensor('tensor:input'), bindTensor('tensor:output', 'storage'), bindUniform('uniform:poolDims')] },
   };
-  const metadata = { routeId: SAM3_IMAGE_FPN_NECK_PHASE_PROGRAM_ROUTE_ID, layout: 'B,H,W,C', detectorConsumedLevels: [0, 1, 2] };
+  const metadata = { routeId: SAM3_IMAGE_FPN_NECK_PHASE_PROGRAM_ROUTE_ID, layout: 'B,H,W,C', fpnLevels: [0, 1, 2, 3], detectorConsumedLevels: [0, 1, 2] };
   const runKernel = async ({ name, kernel, inputTensor, outputTensor, weightTensor, biasTensor, inShape, outShape, spec }) => {
     tensors.convDims.update(convDimsValues(shape, inShape, spec, outShape));
     const single = runtime.defineProgram({
@@ -565,6 +670,18 @@ export async function runSam3ImageFpnNeckPhaseProgramRoute(input = {}) {
     });
     await runtime.runProgram(single);
   };
+  const runPool = async ({ name, inputTensor, outputTensor, inShape, outShape }) => {
+    tensors.poolDims.update(poolDimsValues(shape, inShape, outShape));
+    const single = runtime.defineProgram({
+      name: `sam3.image-fpn-neck.${name}`,
+      tensors: { ...tensors, input: tensors[inputTensor], output: tensors[outputTensor] },
+      uniforms: { convDims: tensors.convDims, poolDims: tensors.poolDims },
+      kernels,
+      phases: [{ name, kernel: 'maxpool2d', dispatch: [workgroups(shape.batch * outShape.height * outShape.width * outShape.channels)], yieldAfter: true }],
+      metadata,
+    });
+    await runtime.runProgram(single);
+  };
 
   await runKernel({ name: 'fpn-neck-transpose-conv-0-scale0', kernel: 'transposeConv2d', inputTensor: 'backbone', outputTensor: 'level0Scale0', weightTensor: 'level0Scale0Weight', biasTensor: 'level0Scale0Bias', inShape: backboneShape, outShape: level0Scale0Shape, spec: weights.levels[0].scaleLayers[0] });
   await runGelu({ name: 'fpn-neck-gelu-0', inputTensor: 'level0Scale0', outputTensor: 'level0Gelu', total: shape.batch * level0Scale0Shape.height * level0Scale0Shape.width * level0Scale0Shape.channels });
@@ -576,16 +693,21 @@ export async function runSam3ImageFpnNeckPhaseProgramRoute(input = {}) {
   await runKernel({ name: 'fpn-neck-proj2-1', kernel: 'conv2d', inputTensor: 'level1Proj1', outputTensor: 'level1Feature', weightTensor: 'level1Proj2Weight', biasTensor: 'level1Proj2Bias', inShape: { height: shape.levels[1].height, width: shape.levels[1].width, channels: shape.fpnHiddenSize }, outShape: { height: shape.levels[1].height, width: shape.levels[1].width, channels: shape.fpnHiddenSize }, spec: weights.levels[1].proj2 });
   await runKernel({ name: 'fpn-neck-proj1-2', kernel: 'conv2d', inputTensor: 'backbone', outputTensor: 'level2Proj1', weightTensor: 'level2Proj1Weight', biasTensor: 'level2Proj1Bias', inShape: backboneShape, outShape: { height: shape.levels[2].height, width: shape.levels[2].width, channels: shape.fpnHiddenSize }, spec: weights.levels[2].proj1 });
   await runKernel({ name: 'fpn-neck-proj2-2', kernel: 'conv2d', inputTensor: 'level2Proj1', outputTensor: 'level2Feature', weightTensor: 'level2Proj2Weight', biasTensor: 'level2Proj2Bias', inShape: { height: shape.levels[2].height, width: shape.levels[2].width, channels: shape.fpnHiddenSize }, outShape: { height: shape.levels[2].height, width: shape.levels[2].width, channels: shape.fpnHiddenSize }, spec: weights.levels[2].proj2 });
+  await runPool({ name: 'fpn-neck-maxpool-3', inputTensor: 'backbone', outputTensor: 'level3Pool', inShape: backboneShape, outShape: level3PoolShape });
+  await runKernel({ name: 'fpn-neck-proj1-3', kernel: 'conv2d', inputTensor: 'level3Pool', outputTensor: 'level3Proj1', weightTensor: 'level3Proj1Weight', biasTensor: 'level3Proj1Bias', inShape: level3PoolShape, outShape: { height: shape.levels[3].height, width: shape.levels[3].width, channels: shape.fpnHiddenSize }, spec: weights.levels[3].proj1 });
+  await runKernel({ name: 'fpn-neck-proj2-3', kernel: 'conv2d', inputTensor: 'level3Proj1', outputTensor: 'level3Feature', weightTensor: 'level3Proj2Weight', biasTensor: 'level3Proj2Bias', inShape: { height: shape.levels[3].height, width: shape.levels[3].width, channels: shape.fpnHiddenSize }, outShape: { height: shape.levels[3].height, width: shape.levels[3].width, channels: shape.fpnHiddenSize }, spec: weights.levels[3].proj2 });
 
   const readback = await runtime.runStage('readback-fpn-neck-features', async stage => ({
     fpnNeckFeature0: await stage.readTensor(tensors.level0Feature),
     fpnNeckFeature1: await stage.readTensor(tensors.level1Feature),
     fpnNeckFeature2: await stage.readTensor(tensors.level2Feature),
-  }), { outputs: oracleShapes, outputRoles: ['fpn-neck-feature-0', 'fpn-neck-feature-1', 'fpn-neck-feature-2'] });
+    fpnNeckFeature3: await stage.readTensor(tensors.level3Feature),
+  }), { outputs: oracleShapes, outputRoles: ['fpn-neck-feature-0', 'fpn-neck-feature-1', 'fpn-neck-feature-2', 'fpn-neck-feature-3'] });
   const outputs = outputArtifacts(input.request, {
     fpnNeckFeature0: await sha256Hex(readback.fpnNeckFeature0),
     fpnNeckFeature1: await sha256Hex(readback.fpnNeckFeature1),
     fpnNeckFeature2: await sha256Hex(readback.fpnNeckFeature2),
+    fpnNeckFeature3: await sha256Hex(readback.fpnNeckFeature3),
   }, shape);
   const receipt = createSam3ImageFpnNeckPhaseProgramRouteReceipt({
     sourceImage,
@@ -605,6 +727,7 @@ export async function runSam3ImageFpnNeckPhaseProgramRoute(input = {}) {
       fpnNeckFeature0: Array.from(new Float32Array(readback.fpnNeckFeature0)),
       fpnNeckFeature1: Array.from(new Float32Array(readback.fpnNeckFeature1)),
       fpnNeckFeature2: Array.from(new Float32Array(readback.fpnNeckFeature2)),
+      fpnNeckFeature3: Array.from(new Float32Array(readback.fpnNeckFeature3)),
     };
   }
   return authoritative;

@@ -302,9 +302,11 @@ function imageFpnNeckReport(state) {
     fpnNeckFeature0TensorSha256: imageFpnNeckEvidence.fpnNeckFeature0TensorSha256 || null,
     fpnNeckFeature1TensorSha256: imageFpnNeckEvidence.fpnNeckFeature1TensorSha256 || null,
     fpnNeckFeature2TensorSha256: imageFpnNeckEvidence.fpnNeckFeature2TensorSha256 || null,
+    fpnNeckFeature3TensorSha256: imageFpnNeckEvidence.fpnNeckFeature3TensorSha256 || null,
     fpnNeckFeature0Output: imageFpnNeckEvidence.fpnNeckFeature0Output || null,
     fpnNeckFeature1Output: imageFpnNeckEvidence.fpnNeckFeature1Output || null,
     fpnNeckFeature2Output: imageFpnNeckEvidence.fpnNeckFeature2Output || null,
+    fpnNeckFeature3Output: imageFpnNeckEvidence.fpnNeckFeature3Output || null,
     fpnNeckWeightsSha256: imageFpnNeckEvidence.fpnNeckWeightsSha256 || null,
     parity: imageFpnNeckEvidence.parity || null,
     debugReadbackSample: imageFpnNeckEvidence.debugReadbackSample || [],
@@ -447,11 +449,11 @@ function assertImageFpnNeckEvidence(state) {
   if (report.routeKind !== 'image-fpn-neck-detector-stack-composition') throw new Error('imageFpnNeck route kind mismatch');
   if (report.receipt?.effectiveRouteId !== IMAGE_FPN_NECK_PHASE_PROGRAM_ROUTE_ID) throw new Error('imageFpnNeck route receipt identity mismatch');
   if (!Array.isArray(report.receiptChain) || report.receiptChain.length !== 13 || report.receiptChain[0] !== IMAGE_PREPROCESS_PHASE_PROGRAM_ROUTE_ID || report.receiptChain[1] !== IMAGE_PATCH_EMBED_PHASE_PROGRAM_ROUTE_ID || report.receiptChain[2] !== IMAGE_VIT_PREFIX_PHASE_PROGRAM_ROUTE_ID || report.receiptChain[3] !== IMAGE_VIT_BLOCK_STACK_PHASE_PROGRAM_ROUTE_ID || report.receiptChain[4] !== IMAGE_FPN_NECK_PHASE_PROGRAM_ROUTE_ID || report.receiptChain[5] !== PROMPT_TEXT_INGRESS_PHASE_PROGRAM_ROUTE_ID || report.receiptChain[7] !== PROMPT_FPN_PHASE_PROGRAM_ROUTE_ID || report.receiptChain[8] !== PIXEL_DECODER_PHASE_PROGRAM_ROUTE_ID) throw new Error('imageFpnNeck composition receipt chain mismatch');
-  if (!report.fpnNeckFeature0TensorSha256 || !report.fpnNeckFeature0Output?.sha256 || !report.fpnNeckFeature0Output?.artifactId || !report.fpnNeckFeature1Output?.sha256 || !report.fpnNeckFeature2Output?.sha256 || !report.fpnNeckWeightsSha256) throw new Error('imageFpnNeck edge identity missing');
+  if (!report.fpnNeckFeature0TensorSha256 || !report.fpnNeckFeature3TensorSha256 || !report.fpnNeckFeature0Output?.sha256 || !report.fpnNeckFeature0Output?.artifactId || !report.fpnNeckFeature1Output?.sha256 || !report.fpnNeckFeature2Output?.sha256 || !report.fpnNeckFeature3Output?.sha256 || !report.fpnNeckWeightsSha256) throw new Error('imageFpnNeck edge identity missing');
   if (report.projection?.weightLayout !== 'out,kH,kW,in' || report.projection?.proj1 !== '1x1 Conv2d' || report.projection?.proj2 !== '3x3 Conv2d padding=1') throw new Error('imageFpnNeck reference boundary metadata missing');
-  if (report.parity?.fpnNeckFeature0MaxAbsDiff > 0.02 || report.parity?.fpnNeckFeature1MaxAbsDiff > 0.02 || report.parity?.fpnNeckFeature2MaxAbsDiff > 0.02 || report.parity?.imageFpnNeckCpuMaxAbsDiff > 0.02) throw new Error('imageFpnNeck parity mismatch');
+  if (report.parity?.fpnNeckFeature0MaxAbsDiff > 0.02 || report.parity?.fpnNeckFeature1MaxAbsDiff > 0.02 || report.parity?.fpnNeckFeature2MaxAbsDiff > 0.02 || report.parity?.fpnNeckFeature3MaxAbsDiff > 0.02 || report.parity?.imageFpnNeckCpuMaxAbsDiff > 0.02) throw new Error('imageFpnNeck parity mismatch');
   const ingress = state?.browserFpnDetrIngressEvidence;
-  if (report.nonClaims?.level3FpnNeck !== true || report.nonClaims?.fullSam3BrowserExecution !== true) throw new Error('imageFpnNeck bounded non-claims missing');
+  if (report.nonClaims?.level3DetectorConsumption !== true || report.nonClaims?.fullSam3BrowserExecution !== true) throw new Error('imageFpnNeck bounded non-claims missing');
   if (ingress?.edge?.encoderSrcSource !== 'browser-fpn-neck-feature-2' || !ingress.detrImageIngressTensorSha256 || !ingress.effectiveEncoderSrcSha256 || !ingress.effectiveEncoderPosSha256) throw new Error('imageFpnNeck browser DETR ingress evidence missing');
   if ((ingress?.textTensorOwner === 'browser-local-prompt-text-ingress' && ingress.nonClaims?.browserLocalTextEncoder === true) || (ingress?.edge?.textTensorOwner === 'browser-local-prompt-text-ingress' && ingress.edge?.nonClaims?.browserLocalTextEncoder === true)) throw new Error('imageFpnNeck text ingress evidence still non-claims browser-local text encoder');
   if (ingress?.textTensorOwner === 'browser-local-prompt-text-ingress' && ingress.nonClaims?.browserTokenizer !== true) throw new Error('imageFpnNeck text ingress evidence missing tokenizer non-claim');
@@ -808,7 +810,7 @@ async function main() {
         throw new Error('imageVitBlockStack detector stack tensorPacket identity missing');
       }
       if ((packetMode === DETECTOR_STACK_VIT_BACKBONE_PACKET_MODE || packetMode === DETECTOR_STACK_IMAGE_FPN_NECK_PACKET_MODE) && !lastState.tensorPacket?.expectedVitBackboneHiddenStatesSha256) throw new Error('imageVitBlockStack full-backbone tensorPacket identity missing');
-      if (packetMode === DETECTOR_STACK_IMAGE_FPN_NECK_PACKET_MODE && (!lastState.tensorPacket?.expectedFpnNeckFeature0Sha256 || !lastState.tensorPacket?.expectedFpnNeckFeature1Sha256 || !lastState.tensorPacket?.expectedFpnNeckFeature2Sha256 || !lastState.tensorPacket?.promptInputIdsSha256 || !lastState.tensorPacket?.promptAttentionMaskSha256 || !lastState.tensorPacket?.expectedPromptFeaturesSha256 || !lastState.tensorPacket?.expectedPromptMaskSha256 || !lastState.tensorPacket?.expectedPromptFpnFeatureSha256 || !lastState.tensorPacket?.expectedPixelEmbedSha256 || !lastState.tensorPacket?.fpnNeckWeightsSha256 || !lastState.tensorPacket?.promptTextWeightsSha256 || !lastState.tensorPacket?.promptFpnWeightsSha256 || !lastState.tensorPacket?.pixelDecoderWeightsSha256)) {
+      if (packetMode === DETECTOR_STACK_IMAGE_FPN_NECK_PACKET_MODE && (!lastState.tensorPacket?.expectedFpnNeckFeature0Sha256 || !lastState.tensorPacket?.expectedFpnNeckFeature1Sha256 || !lastState.tensorPacket?.expectedFpnNeckFeature2Sha256 || !lastState.tensorPacket?.expectedFpnNeckFeature3Sha256 || !lastState.tensorPacket?.promptInputIdsSha256 || !lastState.tensorPacket?.promptAttentionMaskSha256 || !lastState.tensorPacket?.expectedPromptFeaturesSha256 || !lastState.tensorPacket?.expectedPromptMaskSha256 || !lastState.tensorPacket?.expectedPromptFpnFeatureSha256 || !lastState.tensorPacket?.expectedPixelEmbedSha256 || !lastState.tensorPacket?.fpnNeckWeightsSha256 || !lastState.tensorPacket?.promptTextWeightsSha256 || !lastState.tensorPacket?.promptFpnWeightsSha256 || !lastState.tensorPacket?.pixelDecoderWeightsSha256)) {
         throw new Error('imageFpnNeck detector stack tensorPacket identity missing');
       }
       if (packetMode === DETECTOR_STACK_IMAGE_FPN_NECK_PACKET_MODE && (!Array.isArray(lastState.compositionRouteReceipts) || lastState.compositionRouteReceipts.length !== 13)) {
@@ -916,7 +918,7 @@ async function main() {
       if (packetMode === DETECTOR_STACK_IMAGE_FPN_NECK_PACKET_MODE) {
         const fpnInput = imageFpnNeckReceipt.inputs?.find(input => input.role === 'vit-backbone-hidden-states');
         if (fpnInput?.sha256 !== compositionEdge?.vitBlockStackHiddenStatesOutput?.sha256) throw new Error('imageFpnNeck input does not match full-backbone output');
-        for (const level of [0, 1, 2]) {
+        for (const level of [0, 1, 2, 3]) {
           const fpnOutput = imageFpnNeckReceipt.outputs?.find(output => output.role === `fpn-neck-feature-${level}`);
           const edgeOutput = compositionEdge?.[`fpnNeckFeature${level}Output`];
           if (
@@ -987,7 +989,7 @@ async function main() {
       if (isVitBlockStackPacketMode(packetMode) && lastState.parity?.imageVitBlockStackCpuMaxAbsDiff > 0.01) throw new Error('imageVitBlockStack CPU oracle parity exceeds tolerance');
       if (isVitBlockStackPacketMode(packetMode) && lastState.parity?.vitFirstGlobalHiddenStatesMaxAbsDiff > 0.01) throw new Error('imageVitBlockStack first-global parity exceeds tolerance');
       if ((packetMode === DETECTOR_STACK_VIT_BACKBONE_PACKET_MODE || packetMode === DETECTOR_STACK_IMAGE_FPN_NECK_PACKET_MODE) && lastState.parity?.vitBackboneHiddenStatesMaxAbsDiff > 0.01) throw new Error('imageVitBlockStack full-backbone parity exceeds tolerance');
-      if (packetMode === DETECTOR_STACK_IMAGE_FPN_NECK_PACKET_MODE && (lastState.parity?.fpnNeckFeature0MaxAbsDiff > 0.02 || lastState.parity?.fpnNeckFeature1MaxAbsDiff > 0.02 || lastState.parity?.fpnNeckFeature2MaxAbsDiff > 0.02 || lastState.parity?.imageFpnNeckCpuMaxAbsDiff > 0.02)) throw new Error('imageFpnNeck parity exceeds tolerance');
+      if (packetMode === DETECTOR_STACK_IMAGE_FPN_NECK_PACKET_MODE && (lastState.parity?.fpnNeckFeature0MaxAbsDiff > 0.02 || lastState.parity?.fpnNeckFeature1MaxAbsDiff > 0.02 || lastState.parity?.fpnNeckFeature2MaxAbsDiff > 0.02 || lastState.parity?.fpnNeckFeature3MaxAbsDiff > 0.02 || lastState.parity?.imageFpnNeckCpuMaxAbsDiff > 0.02)) throw new Error('imageFpnNeck parity exceeds tolerance');
       if (lastState.parity?.binaryMismatchCount > manifestTolerance('binaryMismatchCount', 8)) throw new Error('DETR stack selection binary mask parity exceeds tolerance');
       if (packetMode === DETECTOR_STACK_PACKET_MODE) assertDetectorStackEvidence(lastState);
       if (packetMode === DETECTOR_STACK_PREPROCESS_PACKET_MODE) assertImagePreprocessEvidence(lastState);
