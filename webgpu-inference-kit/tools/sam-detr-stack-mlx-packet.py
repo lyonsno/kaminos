@@ -167,6 +167,38 @@ def add_fpn_neck_weights(weight_entries, out_dir, params):
         encoder_tool.add_weight(weight_entries, out_dir, params, *spec)
 
 
+def add_prompt_text_weights(weight_entries, out_dir, params, layer_count):
+    encoder_tool.add_weight(weight_entries, out_dir, params, "prompt-token-embedding-weight", "detector_model.text_encoder.text_model.embeddings.token_embedding.weight", "prompt-token-embedding-weight.f32.bin", "vocab,hidden")
+    encoder_tool.add_weight(weight_entries, out_dir, params, "prompt-position-embedding-weight", "detector_model.text_encoder.text_model.embeddings.position_embedding.weight", "prompt-position-embedding-weight.f32.bin", "positions,hidden")
+    for layer in range(layer_count):
+        base = f"detector_model.text_encoder.text_model.encoder.layers.{layer}"
+        prefix = f"prompt-text-layer-{layer}"
+        specs = [
+            (f"{prefix}-layernorm1-weight", f"{base}.layer_norm1.weight", f"{prefix}-layernorm1-weight.f32.bin", "hidden"),
+            (f"{prefix}-layernorm1-bias", f"{base}.layer_norm1.bias", f"{prefix}-layernorm1-bias.f32.bin", "hidden"),
+            (f"{prefix}-q-weight", f"{base}.self_attn.q_proj.weight", f"{prefix}-q-weight.f32.bin", "out,in"),
+            (f"{prefix}-q-bias", f"{base}.self_attn.q_proj.bias", f"{prefix}-q-bias.f32.bin", "out"),
+            (f"{prefix}-k-weight", f"{base}.self_attn.k_proj.weight", f"{prefix}-k-weight.f32.bin", "out,in"),
+            (f"{prefix}-k-bias", f"{base}.self_attn.k_proj.bias", f"{prefix}-k-bias.f32.bin", "out"),
+            (f"{prefix}-v-weight", f"{base}.self_attn.v_proj.weight", f"{prefix}-v-weight.f32.bin", "out,in"),
+            (f"{prefix}-v-bias", f"{base}.self_attn.v_proj.bias", f"{prefix}-v-bias.f32.bin", "out"),
+            (f"{prefix}-o-weight", f"{base}.self_attn.out_proj.weight", f"{prefix}-o-weight.f32.bin", "out,in"),
+            (f"{prefix}-o-bias", f"{base}.self_attn.out_proj.bias", f"{prefix}-o-bias.f32.bin", "out"),
+            (f"{prefix}-layernorm2-weight", f"{base}.layer_norm2.weight", f"{prefix}-layernorm2-weight.f32.bin", "hidden"),
+            (f"{prefix}-layernorm2-bias", f"{base}.layer_norm2.bias", f"{prefix}-layernorm2-bias.f32.bin", "hidden"),
+            (f"{prefix}-fc1-weight", f"{base}.mlp.fc1.weight", f"{prefix}-fc1-weight.f32.bin", "out,in"),
+            (f"{prefix}-fc1-bias", f"{base}.mlp.fc1.bias", f"{prefix}-fc1-bias.f32.bin", "out"),
+            (f"{prefix}-fc2-weight", f"{base}.mlp.fc2.weight", f"{prefix}-fc2-weight.f32.bin", "out,in"),
+            (f"{prefix}-fc2-bias", f"{base}.mlp.fc2.bias", f"{prefix}-fc2-bias.f32.bin", "out"),
+        ]
+        for spec in specs:
+            encoder_tool.add_weight(weight_entries, out_dir, params, *spec)
+    encoder_tool.add_weight(weight_entries, out_dir, params, "prompt-text-final-layernorm-weight", "detector_model.text_encoder.text_model.final_layer_norm.weight", "prompt-text-final-layernorm-weight.f32.bin", "hidden")
+    encoder_tool.add_weight(weight_entries, out_dir, params, "prompt-text-final-layernorm-bias", "detector_model.text_encoder.text_model.final_layer_norm.bias", "prompt-text-final-layernorm-bias.f32.bin", "hidden")
+    encoder_tool.add_weight(weight_entries, out_dir, params, "prompt-text-projection-weight", "detector_model.text_projection.weight", "prompt-text-projection-weight.f32.bin", "out,in")
+    encoder_tool.add_weight(weight_entries, out_dir, params, "prompt-text-projection-bias", "detector_model.text_projection.bias", "prompt-text-projection-bias.f32.bin", "out")
+
+
 def main():
     args = parse_args()
     out_dir = Path(args.out_dir)
@@ -230,6 +262,13 @@ def main():
             for index, feature in enumerate(ref["backbone_features"])
         ],
         "groups": 8,
+        "textHiddenSize": int(model.detector_model.text_encoder.text_model.config.hidden_size),
+        "textHeads": int(model.detector_model.text_encoder.text_model.config.num_attention_heads),
+        "textHeadDim": int(model.detector_model.text_encoder.text_model.config.hidden_size // model.detector_model.text_encoder.text_model.config.num_attention_heads),
+        "textIntermediateSize": int(model.detector_model.text_encoder.text_model.config.intermediate_size),
+        "textLayerCount": int(model.detector_model.text_encoder.text_model.config.num_hidden_layers),
+        "textVocabSize": int(model.detector_model.text_encoder.text_model.config.vocab_size),
+        "textMaxPositionEmbeddings": int(model.detector_model.text_encoder.text_model.config.max_position_embeddings),
         "levels": [
             {"height": int(feature.shape[1]), "width": int(feature.shape[2])}
             for feature in ref["backbone_features"]
@@ -254,6 +293,10 @@ def main():
     if include_image_fpn_neck:
         for index, feature in enumerate(ref["backbone_features"]):
             encoder_tool.add_tensor(tensor_entries, out_dir, FPN_NECK_FEATURE_ROLES[index], f"{FPN_NECK_FEATURE_ROLES[index]}.f32.bin", feature, [shape["batch"], shape["fpnNeckLevels"][index]["height"], shape["fpnNeckLevels"][index]["width"], shape["fpnHiddenSize"]], "B,H,W,C")
+        encoder_tool.add_tensor(tensor_entries, out_dir, "prompt-input-ids", "prompt-input-ids.u32.bin", ref["prompt_input_ids"], [shape["batch"], shape["promptTokens"]], "B,T", "uint32")
+        encoder_tool.add_tensor(tensor_entries, out_dir, "prompt-attention-mask", "prompt-attention-mask.f32.bin", ref["prompt_mask"], [shape["batch"], shape["promptTokens"]], "B,T")
+        encoder_tool.add_tensor(tensor_entries, out_dir, "expected-prompt-features", "expected-prompt-features.f32.bin", ref["prompt_features"], [shape["batch"], shape["promptTokens"], shape["channels"]], "B,T,C")
+        encoder_tool.add_tensor(tensor_entries, out_dir, "expected-prompt-mask", "expected-prompt-mask.f32.bin", ref["prompt_mask"], [shape["batch"], shape["promptTokens"]], "B,T")
         encoder_tool.add_tensor(tensor_entries, out_dir, "expected-prompt-fpn-feature", "expected-prompt-fpn-feature.f32.bin", ref["prompt_fpn_feature"], [shape["batch"], shape["height"], shape["width"], shape["channels"]], "B,H,W,C")
         encoder_tool.add_tensor(tensor_entries, out_dir, "expected-pixel-embed", "expected-pixel-embed.f32.bin", ref["pixel"], [shape["batch"], shape["maskHeight"], shape["maskWidth"], shape["channels"]], "B,H,W,C")
     encoder_tool.add_tensor(tensor_entries, out_dir, "encoder-src", "encoder-src.f32.bin", ref["encoder_src"], [shape["batch"], shape["spatialTokens"], shape["channels"]], "B,S,C")
@@ -311,6 +354,7 @@ def main():
     if include_image_vit_block_stack:
         add_vit_block_weights(weight_entries, out_dir, params, shape["vitBlockStackStartLayerIndex"], shape["vitBlockStackEndLayerIndex"])
     if include_image_fpn_neck:
+        add_prompt_text_weights(weight_entries, out_dir, params, shape["textLayerCount"])
         add_fpn_neck_weights(weight_entries, out_dir, params)
         encoder_tool.add_downstream_weights(weight_entries, out_dir, params, len(ref["composed_features"]))
     if include_scoring:
@@ -337,6 +381,8 @@ def main():
         "fpnNeckFeature1MaxAbsDiff": 0.02,
         "fpnNeckFeature2MaxAbsDiff": 0.02,
         "imageFpnNeckCpuMaxAbsDiff": 0.02,
+        "promptTextMaxAbsDiff": 0.0005,
+        "promptMaskMaxAbsDiff": 0,
         "promptFpnMaxAbsDiff": 0.0003,
         "pixelEmbedMaxAbsDiff": 0.0005,
         "encoderSrcMaxAbsDiff": 0.0003,
@@ -364,14 +410,18 @@ def main():
         "encoderSrcMaxAbsDiff": 0.02,
         "encoderHiddenStatesMaxAbsDiff": 0.001,
         "promptFpnMaxAbsDiff": 0.001,
+        "promptTextMaxAbsDiff": 0.001,
+        "promptMaskMaxAbsDiff": 0,
         "pixelEmbedMaxAbsDiff": 0.0015,
-        "selectedBoxMaxAbsDiff": 0.003,
+        "selectedScoreMaxAbsDiff": 0.00002,
+        "selectedBoxMaxAbsDiff": 0.004,
+        "selectionScoresMaxAbsDiff": 0.00002,
         "selectionBoxesMaxAbsDiff": 0.006,
         "cpuOracleBinaryMismatchCount": 64,
         "binaryMismatchCount": 64,
     }
     detector_stack_tolerances = gate_n_image_fpn_tolerances if include_image_fpn_neck else legacy_detector_stack_tolerances
-    tolerance_budget_source = "browser-fpn-prompt-pixel-detector-stack" if include_image_fpn_neck else "legacy-mlx-image-ingress"
+    tolerance_budget_source = "browser-fpn-prompt-text-pixel-detector-stack" if include_image_fpn_neck else "legacy-mlx-image-ingress"
     manifest = {
         "schema": DETECTOR_STACK_IMAGE_FPN_NECK_SCHEMA if include_image_fpn_neck else DETECTOR_STACK_VIT_BACKBONE_SCHEMA if include_image_vit_full_backbone else DETECTOR_STACK_VIT_BLOCK_STACK_SCHEMA if include_image_vit_block_stack else DETECTOR_STACK_VIT_FIRST_BLOCK_SCHEMA if include_image_vit_first_block else DETECTOR_STACK_VIT_PREFIX_SCHEMA if include_image_vit_prefix else DETECTOR_STACK_PATCH_EMBED_SCHEMA if include_image_patch_embed else DETECTOR_STACK_PREPROCESS_SCHEMA if args.image_preprocess_ingress else DETECTOR_STACK_SCHEMA if args.detector_stack else SELECTION_SCHEMA if include_selection else SCORING_SCHEMA if include_scoring else SCHEMA,
         "routeId": ROUTE_ID,
@@ -382,9 +432,9 @@ def main():
         "model": {"id": args.model, "role": "mlx-reference-upstream"},
         "prompt": {"text": args.prompt, "sha256": encoder_tool.sha256_bytes(args.prompt.encode("utf-8"))},
         "sourceImage": {"artifactId": f"image:{image_path.name}:sam3-reference-source", "file": "source-image.png", "path": str(source_path), "sha256": encoder_tool.sha256_file(source_path), "originalPath": str(image_path), "resolution": [args.resolution, args.resolution]},
-        "staticWeights": {"artifactId": f"sam3-weights:{args.model}:detr-stack-reference-upstream", "sha256": weights_sha, "role": "reference-upstream", "reason": "weights exported for browser image ViT full-backbone plus detector-consumed FPN-neck ingress, DETR encoder, prompt-FPN, pixel-decoder, DETR decoder, dot-product scoring, selection postprocess, and downstream mask-tail phase-program execution" if include_image_fpn_neck else "weights exported for browser image ViT full-backbone ingress through the final transformer layer, DETR encoder, DETR decoder, dot-product scoring, selection postprocess, and downstream mask-tail phase-program execution" if include_image_vit_full_backbone else "weights exported for browser image ViT block-stack ingress through first global-attention layer, DETR encoder, DETR decoder, dot-product scoring, selection postprocess, and downstream mask-tail phase-program execution" if include_image_vit_block_stack else "weights exported for browser image ViT first-block ingress, DETR encoder, DETR decoder, dot-product scoring, selection postprocess, and downstream mask-tail phase-program execution" if include_image_vit_first_block else "weights exported for browser image ViT-prefix ingress, DETR encoder, DETR decoder, dot-product scoring, selection postprocess, and downstream mask-tail phase-program execution" if include_image_vit_prefix else "weights exported for browser DETR encoder, DETR decoder, dot-product scoring, selection postprocess, and downstream mask-tail phase-program execution" if include_selection else "weights exported for browser DETR encoder, DETR decoder, dot-product scoring, and downstream mask-tail phase-program execution" if include_scoring else "weights exported for browser DETR encoder, DETR decoder, and downstream mask-tail phase-program execution"},
+        "staticWeights": {"artifactId": f"sam3-weights:{args.model}:detr-stack-reference-upstream", "sha256": weights_sha, "role": "reference-upstream", "reason": "weights exported for browser prompt/text ingress, image ViT full-backbone plus detector-consumed FPN-neck ingress, DETR encoder, prompt-FPN, pixel-decoder, DETR decoder, dot-product scoring, selection postprocess, and downstream mask-tail phase-program execution" if include_image_fpn_neck else "weights exported for browser image ViT full-backbone ingress through the final transformer layer, DETR encoder, DETR decoder, dot-product scoring, selection postprocess, and downstream mask-tail phase-program execution" if include_image_vit_full_backbone else "weights exported for browser image ViT block-stack ingress through first global-attention layer, DETR encoder, DETR decoder, dot-product scoring, selection postprocess, and downstream mask-tail phase-program execution" if include_image_vit_block_stack else "weights exported for browser image ViT first-block ingress, DETR encoder, DETR decoder, dot-product scoring, selection postprocess, and downstream mask-tail phase-program execution" if include_image_vit_first_block else "weights exported for browser image ViT-prefix ingress, DETR encoder, DETR decoder, dot-product scoring, selection postprocess, and downstream mask-tail phase-program execution" if include_image_vit_prefix else "weights exported for browser DETR encoder, DETR decoder, dot-product scoring, selection postprocess, and downstream mask-tail phase-program execution" if include_selection else "weights exported for browser DETR encoder, DETR decoder, dot-product scoring, and downstream mask-tail phase-program execution" if include_scoring else "weights exported for browser DETR encoder, DETR decoder, and downstream mask-tail phase-program execution"},
         "shape": shape,
-        "claims": {"fullSam3BrowserExecution": False, "upstream": "mlx-vlm-sam3-detector-reference", "browserExecutedStages": [*(["image-preprocess"] if include_image_preprocess else []), *(["image-patch-embed"] if include_image_patch_embed else []), *(["image-vit-prefix"] if include_image_vit_prefix else []), *(["image-vit-first-block"] if include_image_vit_first_block and not include_image_vit_block_stack else []), *(["image-vit-backbone"] if include_image_vit_full_backbone else ["image-vit-block-stack"] if include_image_vit_block_stack else []), *(["image-fpn-neck"] if include_image_fpn_neck else []), "detr-encoder", *(["prompt-cross-attention-fpn", "pixel-decoder"] if include_image_fpn_neck else []), "detr-decoder", *(['dot-product-scoring'] if include_scoring else []), *(['score-threshold', 'box-postprocess', 'object-selection'] if include_selection else []), "mask-embedder", "instance-projection", "decode-mask", "threshold-mask"]},
+        "claims": {"fullSam3BrowserExecution": False, "upstream": "mlx-vlm-sam3-detector-reference", "browserExecutedStages": [*(["image-preprocess"] if include_image_preprocess else []), *(["image-patch-embed"] if include_image_patch_embed else []), *(["image-vit-prefix"] if include_image_vit_prefix else []), *(["image-vit-first-block"] if include_image_vit_first_block and not include_image_vit_block_stack else []), *(["image-vit-backbone"] if include_image_vit_full_backbone else ["image-vit-block-stack"] if include_image_vit_block_stack else []), *(["image-fpn-neck"] if include_image_fpn_neck else []), *(["prompt-text-ingress"] if include_image_fpn_neck else []), "detr-encoder", *(["prompt-cross-attention-fpn", "pixel-decoder"] if include_image_fpn_neck else []), "detr-decoder", *(['dot-product-scoring'] if include_scoring else []), *(['score-threshold', 'box-postprocess', 'object-selection'] if include_selection else []), "mask-embedder", "instance-projection", "decode-mask", "threshold-mask"]},
         "upstreamBoundaries": [
             {"role": "source-image", "owner": "browser-served-source-image" if include_image_preprocess else "mlx-vlm-reference", "status": "browser-local-ingress" if include_image_preprocess else "mlx-owned", "nextBrowserIsland": "image-preprocess-and-vision-encoder"},
             {"role": "patch-embeddings", "owner": "browser-local-route" if include_image_patch_embed else "mlx-vlm-reference", "status": "browser-local-ingress" if include_image_patch_embed else "mlx-owned", "nextBrowserIsland": "sam3-vit-prefix" if include_image_vit_prefix else "sam3-vit-backbone"},
@@ -394,8 +444,8 @@ def main():
             {"role": "fpn-neck-features", "owner": "browser-local-route" if include_image_fpn_neck else "mlx-vlm-reference", "status": "browser-local-detector-consumed-levels-0-2" if include_image_fpn_neck else "mlx-owned", "nextBrowserIsland": "image-text-detr-encoder-inputs"},
             {"role": "encoder-src", "owner": "browser-local-composition" if include_image_fpn_neck else "mlx-vlm-reference", "status": "browser-derived-from-fpn-neck-feature-2" if include_image_fpn_neck else "mlx-owned", "referenceTensor": "encoder-src"},
             {"role": "encoder-pos", "owner": "browser-local-composition" if include_image_fpn_neck else "mlx-vlm-reference", "status": "browser-position-embedding-sine-from-fpn-level-2-shape" if include_image_fpn_neck else "mlx-owned", "referenceTensor": "encoder-pos"},
-            {"role": "prompt-features", "owner": "mlx-vlm-reference", "status": "mlx-owned", "nextBrowserIsland": "text-token-prompt-encoder"},
-            {"role": "prompt-mask", "owner": "mlx-vlm-reference", "status": "mlx-owned", "nextBrowserIsland": "text-token-prompt-encoder"},
+            {"role": "prompt-features", "owner": "browser-local-route" if include_image_fpn_neck else "mlx-vlm-reference", "status": "browser-derived-from-prompt-text-ingress" if include_image_fpn_neck else "mlx-owned", "referenceTensor": "expected-prompt-features" if include_image_fpn_neck else None, "nextBrowserIsland": None if include_image_fpn_neck else "text-token-prompt-encoder"},
+            {"role": "prompt-mask", "owner": "browser-local-route" if include_image_fpn_neck else "mlx-vlm-reference", "status": "browser-copied-from-prompt-attention-mask" if include_image_fpn_neck else "mlx-owned", "referenceTensor": "expected-prompt-mask" if include_image_fpn_neck else None, "nextBrowserIsland": None if include_image_fpn_neck else "text-token-prompt-encoder"},
             {"role": "pixel-embed", "owner": "browser-local-route" if include_image_fpn_neck else "mlx-vlm-reference", "status": "browser-derived-from-prompt-fpn-pixel-decoder" if include_image_fpn_neck else "mlx-owned", "referenceTensor": "expected-pixel-embed" if include_image_fpn_neck else None, "nextBrowserIsland": None if include_image_fpn_neck else "image-encoder-pixel-embedding"},
         ] if (args.detector_stack or include_image_preprocess) else None,
         "postprocess": {"scoreThreshold": args.score_threshold, "nms": False} if include_selection else None,
@@ -454,7 +504,15 @@ def main():
             "scaleLayers": {"level0": ["transpose-conv-2x", "gelu", "transpose-conv-2x"], "level1": ["transpose-conv-2x"], "level2": ["identity-scale"]},
             "projection": {"proj1": "1x1 Conv2d", "proj2": "3x3 Conv2d padding=1", "weightLayout": "out,kH,kW,in", "layout": "B,H,W,C"},
             "browserExecuted": bool(include_image_fpn_neck),
-            "claim": "browser-local SAM3 FPN neck for detector-consumed levels 0, 1, and 2 from browser-local full ViT backbone; the browser smoke derives DETR encoder source/position from level 2 while level 3 and text encoder remain outside this boundary",
+            "claim": "browser-local SAM3 FPN neck for detector-consumed levels 0, 1, and 2 from browser-local full ViT backbone; the browser smoke derives DETR encoder source/position from level 2 while level 3 remains outside this boundary",
+        } if include_image_fpn_neck else None,
+        "promptTextIngress": {
+            "boundary": "sam3-prompt-input-ids-to-projected-text-features-phase-program",
+            "source": "exported-sam3-processor-input-ids-attention-mask",
+            "routeKind": "prompt-text-ingress-detector-stack-composition",
+            "textEncoder": {"type": "CLIP causal text encoder", "layers": shape["textLayerCount"], "hiddenSize": shape["textHiddenSize"], "heads": shape["textHeads"], "intermediateSize": shape["textIntermediateSize"], "projection": "detector_model.text_projection"},
+            "browserExecuted": bool(include_image_fpn_neck),
+            "claim": "browser-local SAM3 prompt/text ingress from exported processor input ids through CLIP text encoder and detector text projection; tokenizer/string normalization remains packet-preprocessed and full SAM3 tracking remains outside this boundary",
         } if include_image_fpn_neck else None,
         "tolerances": detector_stack_tolerances,
         "visualization": {"selectedMaskIndex": int(ref["selected"]), "selectedMaskScore": float(ref["scores"][ref["selected"]]), "presenceLogits": [float(x) for x in ref["presence"]]},

@@ -202,6 +202,14 @@ export {
 } from './sam-prompt-fpn-phase-program.js';
 
 export {
+  SAM3_PROMPT_TEXT_INGRESS_PHASE_PROGRAM_ROUTE_ID,
+  createSam3PromptTextIngressPhaseProgramCpuOracle,
+  createSam3PromptTextIngressPhaseProgramRouteDefinition,
+  createSam3PromptTextIngressPhaseProgramRouteReceipt,
+  runSam3PromptTextIngressPhaseProgramRoute,
+} from './sam-prompt-text-ingress-phase-program.js';
+
+export {
   SAM3_DETR_ENCODER_PHASE_PROGRAM_ROUTE_ID,
   createSam3DetrEncoderPhaseProgramCpuOracle,
   createSam3DetrEncoderPhaseProgramRouteDefinition,

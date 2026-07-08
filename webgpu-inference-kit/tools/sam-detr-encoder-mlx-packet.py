@@ -212,6 +212,7 @@ def run_reference(model, image, prompt, resolution):
         "encoder_hidden_states": np.array(encoded, dtype=np.float32),
         "backbone_features": backbone_features,
         "composed_features": composed_features,
+        "prompt_input_ids": np.array(input_ids, dtype=np.uint32),
         "prompt_features": np.array(inputs_embeds, dtype=np.float32),
         "prompt_mask": np.array(attention_mask, dtype=np.float32),
         "prompt_fpn_feature": np.array(prompt_fpn_feature, dtype=np.float32),

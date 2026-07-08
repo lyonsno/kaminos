@@ -8,6 +8,7 @@ const REPORT_SCHEMA = 'kaminos.sam3-mask-island.browser-parity-smoke.v0';
 const MASK_DECODER_ISLAND_ROUTE_ID = 'sam3.mask-decoder-island.webgpu-local.v0';
 const MASK_TAIL_PHASE_PROGRAM_ROUTE_ID = 'sam3.mask-tail.phase-program.webgpu-local.v0';
 const PIXEL_DECODER_PHASE_PROGRAM_ROUTE_ID = 'sam3.pixel-decoder.phase-program.webgpu-local.v0';
+const PROMPT_TEXT_INGRESS_PHASE_PROGRAM_ROUTE_ID = 'sam3.prompt-text-ingress.phase-program.webgpu-local.v0';
 const PROMPT_FPN_PHASE_PROGRAM_ROUTE_ID = 'sam3.prompt-fpn.phase-program.webgpu-local.v0';
 const DETR_ENCODER_PHASE_PROGRAM_ROUTE_ID = 'sam3.detr-encoder.phase-program.webgpu-local.v0';
 const DETR_DECODER_PHASE_PROGRAM_ROUTE_ID = 'sam3.detr-decoder.phase-program.webgpu-local.v0';
@@ -311,6 +312,30 @@ function imageFpnNeckReport(state) {
   };
 }
 
+function browserPromptTextReport(state) {
+  const evidence = state?.browserPromptTextEvidence || null;
+  if (!evidence) return null;
+  return {
+    schema: state.tensorPacket?.schema || null,
+    mode: state.tensorPacket?.mode || null,
+    boundary: evidence.boundary || null,
+    routeKind: evidence.routeKind || null,
+    receipt: evidence.receipt || null,
+    receiptChain: evidence.receiptChain || [],
+    source: evidence.source || null,
+    textEncoder: evidence.textEncoder || null,
+    promptFeaturesOwner: evidence.promptFeaturesOwner || null,
+    promptMaskOwner: evidence.promptMaskOwner || null,
+    promptTextTensorSha256: evidence.promptTextTensorSha256 || null,
+    promptTextWeightsSha256: evidence.promptTextWeightsSha256 || null,
+    promptFeaturesOutput: evidence.promptFeaturesOutput || null,
+    promptMaskOutput: evidence.promptMaskOutput || null,
+    parity: evidence.parity || null,
+    debugReadbackSamples: evidence.debugReadbackSamples || {},
+    nonClaims: evidence.nonClaims || {},
+  };
+}
+
 function assertDetectorStackEvidence(state) {
   const report = detectorStackReport(state);
   if (!report) throw new Error('canonical detectorStack report missing');
@@ -399,7 +424,7 @@ function assertImageVitBlockStackEvidence(state) {
   if (!report) throw new Error('imageVitBlockStack report missing');
   if (!isVitBlockStackPacketMode(report.mode)) throw new Error('imageVitBlockStack packet mode mismatch');
   const isFullBackbone = report.mode === DETECTOR_STACK_VIT_BACKBONE_PACKET_MODE || report.mode === DETECTOR_STACK_IMAGE_FPN_NECK_PACKET_MODE;
-  const expectedChainLength = report.mode === DETECTOR_STACK_IMAGE_FPN_NECK_PACKET_MODE ? 12 : 9;
+  const expectedChainLength = report.mode === DETECTOR_STACK_IMAGE_FPN_NECK_PACKET_MODE ? 13 : 9;
   const expectedSchema = report.mode === DETECTOR_STACK_IMAGE_FPN_NECK_PACKET_MODE ? 'kaminos.sam3-detector-stack-image-fpn-neck-real-boundary-packet.v0' : isFullBackbone ? 'kaminos.sam3-detector-stack-image-vit-backbone-real-boundary-packet.v0' : 'kaminos.sam3-detector-stack-image-vit-block-stack-real-boundary-packet.v0';
   if (report.schema !== expectedSchema) throw new Error('imageVitBlockStack schema mismatch');
   if (report.routeKind !== (isFullBackbone ? 'image-vit-backbone-detector-stack-composition' : 'image-vit-block-stack-detector-stack-composition')) throw new Error('imageVitBlockStack route kind mismatch');
@@ -421,14 +446,19 @@ function assertImageFpnNeckEvidence(state) {
   if (report.schema !== 'kaminos.sam3-detector-stack-image-fpn-neck-real-boundary-packet.v0') throw new Error('imageFpnNeck schema mismatch');
   if (report.routeKind !== 'image-fpn-neck-detector-stack-composition') throw new Error('imageFpnNeck route kind mismatch');
   if (report.receipt?.effectiveRouteId !== IMAGE_FPN_NECK_PHASE_PROGRAM_ROUTE_ID) throw new Error('imageFpnNeck route receipt identity mismatch');
-  if (!Array.isArray(report.receiptChain) || report.receiptChain.length !== 12 || report.receiptChain[0] !== IMAGE_PREPROCESS_PHASE_PROGRAM_ROUTE_ID || report.receiptChain[1] !== IMAGE_PATCH_EMBED_PHASE_PROGRAM_ROUTE_ID || report.receiptChain[2] !== IMAGE_VIT_PREFIX_PHASE_PROGRAM_ROUTE_ID || report.receiptChain[3] !== IMAGE_VIT_BLOCK_STACK_PHASE_PROGRAM_ROUTE_ID || report.receiptChain[4] !== IMAGE_FPN_NECK_PHASE_PROGRAM_ROUTE_ID || report.receiptChain[6] !== PROMPT_FPN_PHASE_PROGRAM_ROUTE_ID || report.receiptChain[7] !== PIXEL_DECODER_PHASE_PROGRAM_ROUTE_ID) throw new Error('imageFpnNeck composition receipt chain mismatch');
+  if (!Array.isArray(report.receiptChain) || report.receiptChain.length !== 13 || report.receiptChain[0] !== IMAGE_PREPROCESS_PHASE_PROGRAM_ROUTE_ID || report.receiptChain[1] !== IMAGE_PATCH_EMBED_PHASE_PROGRAM_ROUTE_ID || report.receiptChain[2] !== IMAGE_VIT_PREFIX_PHASE_PROGRAM_ROUTE_ID || report.receiptChain[3] !== IMAGE_VIT_BLOCK_STACK_PHASE_PROGRAM_ROUTE_ID || report.receiptChain[4] !== IMAGE_FPN_NECK_PHASE_PROGRAM_ROUTE_ID || report.receiptChain[5] !== PROMPT_TEXT_INGRESS_PHASE_PROGRAM_ROUTE_ID || report.receiptChain[7] !== PROMPT_FPN_PHASE_PROGRAM_ROUTE_ID || report.receiptChain[8] !== PIXEL_DECODER_PHASE_PROGRAM_ROUTE_ID) throw new Error('imageFpnNeck composition receipt chain mismatch');
   if (!report.fpnNeckFeature0TensorSha256 || !report.fpnNeckFeature0Output?.sha256 || !report.fpnNeckFeature0Output?.artifactId || !report.fpnNeckFeature1Output?.sha256 || !report.fpnNeckFeature2Output?.sha256 || !report.fpnNeckWeightsSha256) throw new Error('imageFpnNeck edge identity missing');
   if (report.projection?.weightLayout !== 'out,kH,kW,in' || report.projection?.proj1 !== '1x1 Conv2d' || report.projection?.proj2 !== '3x3 Conv2d padding=1') throw new Error('imageFpnNeck reference boundary metadata missing');
   if (report.parity?.fpnNeckFeature0MaxAbsDiff > 0.02 || report.parity?.fpnNeckFeature1MaxAbsDiff > 0.02 || report.parity?.fpnNeckFeature2MaxAbsDiff > 0.02 || report.parity?.imageFpnNeckCpuMaxAbsDiff > 0.02) throw new Error('imageFpnNeck parity mismatch');
   const ingress = state?.browserFpnDetrIngressEvidence;
-  if (report.nonClaims?.level3FpnNeck !== true || report.nonClaims?.browserLocalTextEncoder !== true || report.nonClaims?.fullSam3BrowserExecution !== true) throw new Error('imageFpnNeck bounded non-claims missing');
+  if (report.nonClaims?.level3FpnNeck !== true || report.nonClaims?.fullSam3BrowserExecution !== true) throw new Error('imageFpnNeck bounded non-claims missing');
   if (ingress?.edge?.encoderSrcSource !== 'browser-fpn-neck-feature-2' || !ingress.detrImageIngressTensorSha256 || !ingress.effectiveEncoderSrcSha256 || !ingress.effectiveEncoderPosSha256) throw new Error('imageFpnNeck browser DETR ingress evidence missing');
-  if (effectiveToleranceBudgetSource() !== 'browser-fpn-prompt-pixel-detector-stack') throw new Error('imageFpnNeck tolerance budget source mismatch');
+  if (effectiveToleranceBudgetSource() !== 'browser-fpn-prompt-text-pixel-detector-stack') throw new Error('imageFpnNeck tolerance budget source mismatch');
+  const promptText = browserPromptTextReport(state);
+  if (!promptText?.promptTextTensorSha256 || !promptText.promptTextWeightsSha256 || !promptText.promptFeaturesOutput?.sha256 || !promptText.promptMaskOutput?.sha256) throw new Error('imageFpnNeck browser prompt/text evidence missing');
+  if (promptText.receipt?.effectiveRouteId !== PROMPT_TEXT_INGRESS_PHASE_PROGRAM_ROUTE_ID) throw new Error('imageFpnNeck prompt/text ingress receipt identity mismatch');
+  if (promptText.promptFeaturesOwner !== 'browser-local-prompt-text-ingress' || promptText.promptMaskOwner !== 'browser-local-prompt-text-ingress') throw new Error('imageFpnNeck prompt/text owner mismatch');
+  if (promptText.parity?.promptTextMaxAbsDiff > 0.001 || promptText.parity?.promptMaskMaxAbsDiff > 0) throw new Error('imageFpnNeck prompt/text parity mismatch');
   const encoderReceipt = state?.compositionRouteReceipts?.find(receipt => receipt?.effectiveRouteId === DETR_STACK_SCORING_PHASE_PROGRAM_ROUTE_ID);
   const detrEncoderInput = encoderReceipt?.inputs?.find(input => input.role === 'sam3-detr-encoder-tensors');
   if (detrEncoderInput?.artifactId !== 'sam3-detr-encoder-tensors:browser-fpn-image-ingress-composition') throw new Error('imageFpnNeck DETR encoder input artifact is not browser FPN image ingress');
@@ -486,6 +516,7 @@ function writeReport(extra = {}) {
     compositionRouteReceipts: lastState?.compositionRouteReceipts || null,
     compositionEdge: lastState?.compositionEdge || null,
     browserFpnDetrIngressEvidence: lastState?.browserFpnDetrIngressEvidence || null,
+    browserPromptTextEvidence: lastState?.browserPromptTextEvidence || null,
     browserPromptFpnPixelEvidence: lastState?.browserPromptFpnPixelEvidence || null,
     parity: lastState?.parity || null,
     tolerances: packetManifest?.tolerances || null,
@@ -497,6 +528,7 @@ function writeReport(extra = {}) {
     imageVitFirstBlock: imageVitFirstBlockReport(lastState),
     imageVitBlockStack: imageVitBlockStackReport(lastState),
     imageFpnNeck: imageFpnNeckReport(lastState),
+    browserPromptText: browserPromptTextReport(lastState),
     ...extra,
   }, null, 2));
 }
@@ -772,10 +804,10 @@ async function main() {
         throw new Error('imageVitBlockStack detector stack tensorPacket identity missing');
       }
       if ((packetMode === DETECTOR_STACK_VIT_BACKBONE_PACKET_MODE || packetMode === DETECTOR_STACK_IMAGE_FPN_NECK_PACKET_MODE) && !lastState.tensorPacket?.expectedVitBackboneHiddenStatesSha256) throw new Error('imageVitBlockStack full-backbone tensorPacket identity missing');
-      if (packetMode === DETECTOR_STACK_IMAGE_FPN_NECK_PACKET_MODE && (!lastState.tensorPacket?.expectedFpnNeckFeature0Sha256 || !lastState.tensorPacket?.expectedFpnNeckFeature1Sha256 || !lastState.tensorPacket?.expectedFpnNeckFeature2Sha256 || !lastState.tensorPacket?.expectedPromptFpnFeatureSha256 || !lastState.tensorPacket?.expectedPixelEmbedSha256 || !lastState.tensorPacket?.fpnNeckWeightsSha256 || !lastState.tensorPacket?.promptFpnWeightsSha256 || !lastState.tensorPacket?.pixelDecoderWeightsSha256)) {
+      if (packetMode === DETECTOR_STACK_IMAGE_FPN_NECK_PACKET_MODE && (!lastState.tensorPacket?.expectedFpnNeckFeature0Sha256 || !lastState.tensorPacket?.expectedFpnNeckFeature1Sha256 || !lastState.tensorPacket?.expectedFpnNeckFeature2Sha256 || !lastState.tensorPacket?.promptInputIdsSha256 || !lastState.tensorPacket?.promptAttentionMaskSha256 || !lastState.tensorPacket?.expectedPromptFeaturesSha256 || !lastState.tensorPacket?.expectedPromptMaskSha256 || !lastState.tensorPacket?.expectedPromptFpnFeatureSha256 || !lastState.tensorPacket?.expectedPixelEmbedSha256 || !lastState.tensorPacket?.fpnNeckWeightsSha256 || !lastState.tensorPacket?.promptTextWeightsSha256 || !lastState.tensorPacket?.promptFpnWeightsSha256 || !lastState.tensorPacket?.pixelDecoderWeightsSha256)) {
         throw new Error('imageFpnNeck detector stack tensorPacket identity missing');
       }
-      if (packetMode === DETECTOR_STACK_IMAGE_FPN_NECK_PACKET_MODE && (!Array.isArray(lastState.compositionRouteReceipts) || lastState.compositionRouteReceipts.length !== 12)) {
+      if (packetMode === DETECTOR_STACK_IMAGE_FPN_NECK_PACKET_MODE && (!Array.isArray(lastState.compositionRouteReceipts) || lastState.compositionRouteReceipts.length !== 13)) {
         throw new Error('imageFpnNeck detector stack composition receipt chain missing');
       }
       if ((packetMode === DETECTOR_STACK_VIT_FIRST_BLOCK_PACKET_MODE || (isVitBlockStackPacketMode(packetMode) && packetMode !== DETECTOR_STACK_IMAGE_FPN_NECK_PACKET_MODE)) && (!Array.isArray(lastState.compositionRouteReceipts) || lastState.compositionRouteReceipts.length !== 9)) {
@@ -802,6 +834,7 @@ async function main() {
       const imageFpnNeckReceipt = packetMode === DETECTOR_STACK_IMAGE_FPN_NECK_PACKET_MODE ? lastState.compositionRouteReceipts[4] : null;
       const downstreamReceipts = lastState.compositionRouteReceipts.slice(receiptOffset);
       const [
+        promptTextReceipt,
         encoderReceipt,
         promptFpnReceipt,
         pixelDecoderReceipt,
@@ -812,6 +845,7 @@ async function main() {
       ] = packetMode === DETECTOR_STACK_IMAGE_FPN_NECK_PACKET_MODE
         ? downstreamReceipts
         : [
+          null,
           downstreamReceipts[0],
           null,
           null,
@@ -888,6 +922,17 @@ async function main() {
           ) {
             throw new Error(`imageFpnNeck feature ${level} output identity does not match composition edge`);
           }
+        }
+        if (promptTextReceipt?.effectiveRouteId !== PROMPT_TEXT_INGRESS_PHASE_PROGRAM_ROUTE_ID) throw new Error('imageFpnNeck prompt/text receipt identity mismatch');
+        const promptFeaturesOutput = promptTextReceipt.outputs?.find(output => output.role === 'prompt-features');
+        const promptMaskOutput = promptTextReceipt.outputs?.find(output => output.role === 'prompt-mask');
+        if (
+          promptFeaturesOutput?.artifactId !== compositionEdge?.promptFeaturesOutput?.artifactId
+          || promptFeaturesOutput?.sha256 !== compositionEdge?.promptFeaturesOutput?.sha256
+          || promptMaskOutput?.artifactId !== compositionEdge?.promptMaskOutput?.artifactId
+          || promptMaskOutput?.sha256 !== compositionEdge?.promptMaskOutput?.sha256
+        ) {
+          throw new Error('imageFpnNeck prompt/text output identity does not match composition edge');
         }
         if (promptFpnReceipt?.effectiveRouteId !== PROMPT_FPN_PHASE_PROGRAM_ROUTE_ID) throw new Error('imageFpnNeck prompt-FPN receipt identity mismatch');
         if (pixelDecoderReceipt?.effectiveRouteId !== PIXEL_DECODER_PHASE_PROGRAM_ROUTE_ID) throw new Error('imageFpnNeck pixel-decoder receipt identity mismatch');

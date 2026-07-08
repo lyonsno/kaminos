@@ -51,14 +51,15 @@ assert.match(witness, /mlx-detector-stack-image-fpn-neck-export/, 'witness must 
 assert.match(witness, /IMAGE_FPN_NECK_PHASE_PROGRAM_ROUTE_ID/, 'witness must preserve SAM3 image FPN-neck route identity');
 assert.match(witness, /imageFpnNeckReport/, 'witness must emit compact imageFpnNeck report evidence');
 assert.match(witness, /fpnNeckFeature0MaxAbsDiff/, 'witness must assert FPN-neck level-0 parity');
-assert.match(witness, /receiptChain\.length !== 12/, 'witness must reject image-FPN detector-stack receipt chains that skip browser prompt-FPN or pixel-decoder composition');
-assert.match(witness, /lastState\.compositionRouteReceipts\.length !== 12/, 'witness terminal detector-stack guard must accept the full 12-route image-FPN prompt/pixel chain');
+assert.match(witness, /expectedChainLength = report\.mode === DETECTOR_STACK_IMAGE_FPN_NECK_PACKET_MODE \? 13 : 9/, 'witness shared ViT-block evidence guard must accept the 13-route image-FPN prompt/text chain');
+assert.match(witness, /receiptChain\.length !== 13/, 'witness must reject image-FPN detector-stack receipt chains that skip browser prompt/text, prompt-FPN, or pixel-decoder composition');
+assert.match(witness, /lastState\.compositionRouteReceipts\.length !== 13/, 'witness terminal detector-stack guard must accept the full 13-route image-FPN prompt/text prompt/pixel chain');
 assert.doesNotMatch(witness, /lastState\.compositionRouteReceipts\.length !== 10/, 'witness terminal detector-stack guard must not retain the stale ten-route image-FPN chain');
 assert.match(witness, /promptFpnReceipt,\s*\n\s*pixelDecoderReceipt,\s*\n\s*decoderReceipt/, 'witness terminal detector-stack guard must account for prompt-FPN and pixel-decoder receipts before decoder');
 assert.match(witness, /promptFpnOutput\?\.artifactId !== compositionEdge\?\.promptFpnOutput\?\.artifactId/, 'witness terminal detector-stack guard must bind prompt-FPN receipt output to the composition edge');
 assert.match(witness, /pixelDecoderOutput\?\.artifactId !== compositionEdge\?\.pixelEmbedOutput\?\.artifactId/, 'witness terminal detector-stack guard must bind pixel-decoder receipt output to the composition edge');
 assert.match(witness, /effectiveToleranceBudgetSource/, 'witness report must preserve the effective tolerance budget source');
-assert.match(witness, /browser-fpn-prompt-pixel-detector-stack/, 'witness must recognize the image-FPN prompt/pixel tolerance budget source');
+assert.match(witness, /browser-fpn-prompt-text-pixel-detector-stack/, 'witness must recognize the image-FPN prompt/text prompt/pixel tolerance budget source');
 assert.match(witness, /sam3-detr-encoder-tensors/, 'witness must inspect the DETR encoder tensor input receipt');
 assert.match(witness, /detrEncoderInput\?\.artifactId !== 'sam3-detr-encoder-tensors:browser-fpn-image-ingress-composition'/, 'witness must assert the DETR encoder input artifact comes from browser FPN image ingress composition');
 assert.match(witness, /detrEncoderInput\?\.sha256 !== ingress\.detrImageIngressTensorSha256/, 'witness must assert the DETR encoder input hash equals the browser FPN ingress aggregate');
