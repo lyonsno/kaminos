@@ -7,6 +7,7 @@ import { spawn } from 'node:child_process';
 
 const SCHEMA = 'kaminos.volume.full-grid-field-residual-render-still.v0';
 const APPLICATION_SCHEMA = 'kaminos.volume.full-grid-field-residual-application.v0';
+const CHANNEL_ABLATION_SCHEMA = 'kaminos.volume.full-grid-field-channel-ablation-matrix.v0';
 const LIMITATION = 'full-grid-buffer-render-override-not-selected-tiles';
 const TEMPORAL_STRIP_IDENTITY = 'full-grid-field-residual-temporal-dynamics-strip-v0';
 
@@ -333,7 +334,7 @@ function buildLabeledContactSheet(frames) {
   frames.forEach((frame, index) => {
     const offsetX = frameWidth * index;
     pasteRgba(sheet, width, frame.rgba, frame.width, frame.height, offsetX, labelHeight);
-    labels.push(drawLabelText(sheet, width, height, frame.role, offsetX + 8, 6, { scale: 2 }));
+    labels.push(drawLabelText(sheet, width, height, frame.displayLabel || frame.role, offsetX + 8, 6, { scale: 2 }));
   });
   return {
     rgba: sheet,
@@ -643,6 +644,10 @@ function sampleMetrics(sample) {
 }
 
 function renderRoleOrder(application) {
+  const ablationRoleOrder = application.channelAblationMatrix?.ablationRoleOrder;
+  if (Array.isArray(ablationRoleOrder)) {
+    return ablationRoleOrder.filter(roleName => roleName !== 'truthHigh' && application.roles?.[roleName]);
+  }
   return ['lowUpsampled', 'naiveScalar', 'predictedHigh'].filter(roleName => application.roles?.[roleName]);
 }
 
@@ -651,6 +656,11 @@ function roleRenderLabel(roleName) {
   if (roleName === 'naiveScalar') return 'naive scalar-head assembled field initialized state';
   if (roleName === 'predictedHigh') return 'model predicted high-grid field initialized state';
   return `${roleName} initialized state`;
+}
+
+function displayLabelForRole(application, roleName) {
+  const role = application.roles?.[roleName];
+  return String(role?.displayLabel || roleName);
 }
 
 function buildTemporalStrip(temporalRows, outDir) {
@@ -729,7 +739,9 @@ async function main() {
     mkdirSync(outDir, { recursive: true });
     phase = 'application-read';
     const application = readJson(applicationManifestPath);
-    if (application.schema !== APPLICATION_SCHEMA) throw new Error(`application schema mismatch: ${application.schema}`);
+    if (application.schema !== APPLICATION_SCHEMA && application.diagnosticSchema !== CHANNEL_ABLATION_SCHEMA) {
+      throw new Error(`application schema mismatch: ${application.schema}`);
+    }
     const route = routeForApplication(application);
     const replay = replayForApplication(application);
     evidence = { route, replay, highGrid: application.highGrid };
@@ -788,7 +800,13 @@ async function main() {
       const sample = roleTemporalFrames[0]?.sample || await captureNoAdvance(ws, replay);
       const png = resolve(outDir, `${roleName}.full-grid-render.png`);
       writeRgbaPng(png, sample.preview.width, sample.preview.height, sample.preview.rgba);
-      frames.push({ role: roleName, width: sample.preview.width, height: sample.preview.height, rgba: sample.preview.rgba });
+      frames.push({
+        role: roleName,
+        displayLabel: displayLabelForRole(application, roleName),
+        width: sample.preview.width,
+        height: sample.preview.height,
+        rgba: sample.preview.rgba,
+      });
       outputs.push({
         role: roleName,
         path: png,

@@ -2218,6 +2218,20 @@ assert.match(fullGridChannelGraft, /full-grid-channel-graft-diagnostic-v0/, 'ful
 assert.match(fullGridChannelGraft, /graftedFluidChannels/, 'full-grid channel graft records which fluid channels were copied from truth');
 assert.match(fullGridChannelGraft, /graftedFrontTopology/, 'full-grid channel graft records whether front topology was copied from truth');
 assert.match(fullGridChannelGraft, /controlled-truth-channel-graft-not-learned-prediction/, 'full-grid channel graft labels outputs as diagnostic substitution rather than learned prediction');
+
+const fullGridChannelAblationPath = join(root, 'volume-full-grid-field-channel-ablation-matrix.py');
+assert.ok(existsSync(fullGridChannelAblationPath), 'volume full-grid field channel ablation matrix diagnostic exists');
+const fullGridChannelAblation = existsSync(fullGridChannelAblationPath) ? readFileSync(fullGridChannelAblationPath, 'utf8') : '';
+assert.match(fullGridChannelAblation, /kaminos\.volume\.full-grid-field-channel-ablation-matrix\.v0/, 'full-grid channel ablation matrix writes a stable diagnostic manifest schema');
+assert.match(fullGridChannelAblation, /full-grid-channel-ablation-matrix-diagnostic-v0/, 'full-grid channel ablation matrix names controlled low-channel substitution');
+assert.match(fullGridChannelAblation, /controlled-low-channel-ablation-not-learned-prediction/, 'full-grid channel ablation labels outputs as diagnostic composition rather than learned prediction');
+assert.match(fullGridChannelAblation, /predictedAll/, 'full-grid channel ablation preserves the unmodified predicted role as predictedAll');
+assert.match(fullGridChannelAblation, /fireOnlyPredicted/, 'full-grid channel ablation can preserve fire/front carriers while reverting smoke-ish carriers to low');
+assert.match(fullGridChannelAblation, /displayLabel/, 'full-grid channel ablation gives long variants short raster labels for legible contact sheets');
+assert.match(fullGridChannelAblation, /variantChannelMap/, 'full-grid channel ablation records exact low/predicted channel provenance for every variant');
+assert.match(fullGridChannelAblation, /baseApplicationManifestSha256/, 'full-grid channel ablation records the source application checksum');
+assert.match(fullGridChannelAblation, /failurePhase/, 'full-grid channel ablation writes failure-phase reports for corrupt sidecars or composition failures');
+assert.match(fullGridChannelAblation, /truthHigh/, 'full-grid channel ablation preserves the complete truth-high sidecar reference for render comparison');
 assert.match(core, /FULL_FIELD_BUFFER_OVERRIDE_IDENTITY\s*=\s*'debug-full-field-buffer-render-override-v0'/, 'volume core names full-buffer render override separately from tile patch override');
 assert.match(core, /PYRO_FULL_FIELD_OVERRIDE_RENDER_STATE_REFRESH_STEPS\s*=\s*4/, 'full-buffer override warms renderer-adjacent Pyro memory over multiple static-field refresh steps instead of one underpowered snapshot update');
 assert.match(core, /beginDebugFullFieldBufferOverride/, 'volume prototype can begin a complete full-field buffer render override');
@@ -2238,6 +2252,9 @@ assert.match(fullGridResidualRender, /finishDebugFullFieldBufferOverride/, 'full
 assert.match(fullGridResidualRender, /lowUpsampled/, 'full-grid residual render-still renders the complete low-upsampled field');
 assert.match(fullGridResidualRender, /predictedHigh/, 'full-grid residual render-still renders the complete predicted high field');
 assert.match(fullGridResidualRender, /truthHigh/, 'full-grid residual render-still renders the deterministic true-high baseline');
+assert.match(fullGridResidualRender, /channelAblationMatrix/, 'full-grid residual render-still can render explicit channel-ablation role orders');
+assert.match(fullGridResidualRender, /ablationRoleOrder/, 'full-grid residual render-still preserves ablation role order rather than silently collapsing to predictedHigh');
+assert.match(fullGridResidualRender, /displayLabelForRole/, 'full-grid residual render-still uses short display labels for long diagnostic role names');
 assert.match(fullGridResidualRender, /full-grid-buffer-render-override-not-selected-tiles/, 'full-grid residual render-still says visuals come from full-buffer override rather than selected tiles');
 assert.match(fullGridResidualRender, /byteIdenticalOverrideSanity/, 'full-grid residual render-still reports byte-identical override equivalence checks');
 assert.match(fullGridResidualRender, /renderComparisonMetrics/, 'full-grid residual render-still reports global pixel metrics for rendered roles against truth');
