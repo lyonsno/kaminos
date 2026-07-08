@@ -2287,6 +2287,20 @@ assert.match(rgbAlphaCleanup, /displayLabel/, 'RGB alpha cleanup gives long vari
 assert.match(rgbAlphaCleanup, /alphaRmse/, 'RGB alpha cleanup reports alpha prediction error against oracle alpha');
 assert.match(rgbAlphaCleanup, /renderComparisonMetrics/, 'RGB alpha cleanup reports rendered RGB metrics against truth');
 assert.match(rgbAlphaCleanup, /failurePhase/, 'RGB alpha cleanup writes failure-phase reports for corrupt manifests or images');
+
+const rgbPollutionLiftPath = join(root, 'volume-render-rgb-pollution-lift-diagnostic.py');
+assert.ok(existsSync(rgbPollutionLiftPath), 'volume render RGB pollution-vs-lift diagnostic exists');
+const rgbPollutionLift = existsSync(rgbPollutionLiftPath) ? readFileSync(rgbPollutionLiftPath, 'utf8') : '';
+assert.match(rgbPollutionLift, /kaminos\.volume\.render-rgb-pollution-lift-diagnostic\.v0/, 'RGB pollution-vs-lift diagnostic writes a stable manifest schema');
+assert.match(rgbPollutionLift, /render-space-pollution-vs-lift-v0/, 'RGB pollution-vs-lift diagnostic names its evidence identity');
+assert.match(rgbPollutionLift, /usefulLiftMap/, 'RGB pollution-vs-lift diagnostic writes a useful-lift map');
+assert.match(rgbPollutionLift, /falsePollutionMap/, 'RGB pollution-vs-lift diagnostic writes a false-pollution map');
+assert.match(rgbPollutionLift, /retainedLiftMap/, 'RGB pollution-vs-lift diagnostic writes a retained-lift cleanup map');
+assert.match(rgbPollutionLift, /removedPollutionMap/, 'RGB pollution-vs-lift diagnostic writes a removed-pollution cleanup map');
+assert.match(rgbPollutionLift, /lowCollapseMap/, 'RGB pollution-vs-lift diagnostic writes a low-collapse guard map');
+assert.match(rgbPollutionLift, /pollutionLiftMetrics/, 'RGB pollution-vs-lift diagnostic reports pollution/lift metric aggregates');
+assert.match(rgbPollutionLift, /visibleRasterLabels/, 'RGB pollution-vs-lift diagnostic burns and manifests visible contact-sheet labels');
+assert.match(rgbPollutionLift, /failurePhase/, 'RGB pollution-vs-lift diagnostic writes failure-phase reports for corrupt manifests or images');
 const sourceScaleProbePath = join(root, 'volume-source-scale-probe.mjs');
 assert.ok(existsSync(sourceScaleProbePath), 'source-scale blobbiness probe exists');
 const sourceScaleProbe = existsSync(sourceScaleProbePath) ? readFileSync(sourceScaleProbePath, 'utf8') : '';
