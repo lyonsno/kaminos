@@ -2107,14 +2107,14 @@ function applyLowerSocketCenterlinePathLaw(assemblage, points) {
   return next;
 }
 
-function macroPromotedBodyCenterlinePoints(assemblage, rowCount = 72, radius = 1.045) {
+function macroPromotedBodyCenterlinePoints(assemblage, rowCount = 72, radius = 1.045, options = {}) {
   const rawPoints = [];
   for (let row = 0; row < rowCount; row++) {
     const t = row / (rowCount - 1);
     rawPoints.push(sampleSpinePoint(assemblage, {
       siblingOffset: 0,
       layerIntervals: assemblage.layerItinerary.intervals,
-    }, t, radius));
+    }, t, radius, options));
   }
   return applyLowerSocketCenterlinePathLaw(assemblage, rawPoints);
 }
@@ -2707,7 +2707,7 @@ function applyApertureOrbitCapturePoint(assemblage, t, point) {
     let refusal = normalizePoint(crossPoints(localNormal, role.targetTangent));
     if (Math.hypot(...refusal) < 1e-8) refusal = normalizePoint(crossPoints(localNormal, [0, 1, 0]));
     if (dotPoints(refusal, subtractPoints(point, role.targetPoint)) < 0) refusal = scalePoint(refusal, -1);
-    next = addScaledPoint(next, refusal, (role.counterCurveOffset || 0.06) * blend);
+    next = addScaledPoint(next, refusal, (role.counterCurveOffset ?? 0.06) * blend);
   }
   const radialDelta = (role.radialDelta || 0) * blend;
   if (Math.abs(radialDelta) > 1e-6) {
@@ -5274,6 +5274,72 @@ function createMacroSphereCurveDecomposition(assemblage, sampleCount = 48, radiu
   };
 }
 
+function lawImpactPointDeltaMetrics(basePoints, affectedPoints) {
+  const count = Math.min(basePoints.length, affectedPoints.length);
+  const deltas = [];
+  for (let index = 0; index < count; index++) {
+    deltas.push(pointDistance(basePoints[index], affectedPoints[index]));
+  }
+  const maxPointDelta = Math.max(0, ...deltas);
+  const maxIndex = deltas.findIndex(delta => delta === maxPointDelta);
+  const meanPointDelta = deltas.length
+    ? deltas.reduce((sum, delta) => sum + delta, 0) / deltas.length
+    : 0;
+  return {
+    schema: 'MacroLawImpactPointDeltaMetrics',
+    sampleCount: count,
+    maxPointDelta,
+    maxPointDeltaT: count > 1 && maxIndex >= 0 ? maxIndex / (count - 1) : 0,
+    meanPointDelta,
+  };
+}
+
+function createMacroLawImpactCurveDecomposition(assemblage, sampleCount = 48, radius = 1.045) {
+  const basePoints = macroPromotedBodyCenterlinePoints(assemblage, sampleCount, radius, {
+    apertureOrbitCapture: false,
+  });
+  const affectedPoints = macroPromotedBodyCenterlinePoints(assemblage, sampleCount, radius, {
+    apertureOrbitCapture: true,
+  });
+  const baseSamples = basePoints.map((point, index) => ({
+    t: index / (basePoints.length - 1),
+    point,
+  }));
+  const affectedSamples = affectedPoints.map((point, index) => ({
+    t: index / (affectedPoints.length - 1),
+    point,
+    basePoint: basePoints[index],
+    pointDelta: pointDistance(basePoints[index], point),
+  }));
+  const role = assemblage.apertureOrbitCapture || assemblage.macroPromotedBody?.apertureOrbitCapture || null;
+  const deltaMetrics = lawImpactPointDeltaMetrics(basePoints, affectedPoints);
+  return {
+    schema: 'MacroLawImpactCurveDecomposition',
+    mode: 'base-promoted-vs-aperture-orbit-affected-centerline-v0',
+    id: `${assemblage.id}-law-impact-curve`,
+    parentAssemblage: assemblage.id,
+    generationStage: 'post-promotion-rule-impact-centerline',
+    ruleFamily: 'ApertureOrbitCaptureLaw',
+    activeRuleId: role?.id || null,
+    apertureOrbitCaptureControlStrength: role?.controlStrength ?? 0,
+    basePromotedCurve: {
+      schema: 'MacroLawImpactCurveStage',
+      stage: 'post-promotion-before-aperture-orbit-capture',
+      sampleCount,
+      samples: baseSamples,
+    },
+    apertureOrbitCaptureCurve: {
+      schema: 'MacroLawImpactCurveStage',
+      stage: 'post-promotion-after-aperture-orbit-capture',
+      visualOverlayId: `${assemblage.id}-aperture-orbit-law-impact-curve-line`,
+      sampleCount,
+      samples: affectedSamples,
+    },
+    apertureOrbitCaptureDeltaMetrics: deltaMetrics,
+    visualIntent: 'show whether aperture orbit capture bends the source curve into a crimp before mesh sidewalls are involved',
+  };
+}
+
 function triangleCircumradius(a, b, c) {
   const ab = pointDistance(a, b);
   const bc = pointDistance(b, c);
@@ -5454,6 +5520,7 @@ function createMacroMorphologyInventoryRecord(composition, assemblage) {
   const sideWalls = (composition.liveMacroSideWallPlan?.sideWalls || []).filter(wall => wall.parentAssemblage === assemblage.id);
   const substrips = (composition.macroFamilySubstripPlan?.substrips || []).filter(strip => strip.parentAssemblage === assemblage.id);
   const earlySphereCurve = createMacroSphereCurveDecomposition(assemblage);
+  const lawImpactCurve = createMacroLawImpactCurveDecomposition(assemblage);
   const promotedPoints = macroPromotedBodyCenterlinePoints(assemblage, 48, 1.045);
   const promotedCenterline = {
     schema: 'MacroPromotedCenterlineDecomposition',
@@ -5507,6 +5574,7 @@ function createMacroMorphologyInventoryRecord(composition, assemblage) {
     role: assemblage.role,
     renderClassComparison,
     earlySphereCurve,
+    lawImpactCurve,
     promotedCenterline,
     sourceCurveMetrics,
     promotedCenterlineMetrics,
@@ -5539,11 +5607,13 @@ function createMacroMorphologyInventory(composition) {
   return {
     schema: 'OrbShellMorphologyInventory',
     mode: ORB_SHELL_MACRO_MORPHOLOGY_INVENTORY_MODE,
-    visualDecompositionMode: 'early-macro-curves-as-lines-on-reference-sphere',
+    visualDecompositionMode: 'source-curve-plus-law-impact-curve',
     referenceSphereRadius: 1.045,
     sourceStage: 'post-variation-pre-promotion-sphere-line',
     comparedStages: [
       'post-variation-pre-promotion-sphere-line',
+      'post-promotion-before-aperture-orbit-capture',
+      'post-promotion-after-aperture-orbit-capture',
       'post-promotion-post-anatomy-centerline',
       'live-sidewall-outer-edges',
       'parent-owned-substrip-centerlines',
@@ -5551,6 +5621,7 @@ function createMacroMorphologyInventory(composition) {
     records,
     recordCount: records.length,
     curveDecompositions: records.map(record => record.earlySphereCurve),
+    lawImpactCurveDecompositions: records.map(record => record.lawImpactCurve),
     pathologyClassCounts,
     failurePressure: [
       'do-not-spot-fix-lower-socket-before-source-curve-inventory',
@@ -6417,7 +6488,7 @@ export function createTargetOrbShellCompositionFixture(options = {}) {
   return applyControlledOrbShellVariation(composition, controlledVariation);
 }
 
-function sampleSpinePoint(assemblage, bandMember, t, radius = 1.04) {
+function sampleSpinePoint(assemblage, bandMember, t, radius = 1.04, options = {}) {
   const control = assemblage.spine.control;
   const torsion = assemblage.macroTorsionField;
   const anatomyT = lowerSocketAnatomyParametricT(assemblage, t);
@@ -6446,7 +6517,9 @@ function sampleSpinePoint(assemblage, bandMember, t, radius = 1.04) {
   const lowerSocket = lowerSocketAnatomyEffectAt(assemblage, t);
   const sharedSeam = sharedSocketSeamEffectAt(assemblage, t);
   const point = spherePoint(lat, lon, radius + layerBias - interlock.depthInset - lowerSocket.radialInset + sharedSeam.radialDelta + roleEffect.radialDelta);
-  return applyApertureOrbitCapturePoint(assemblage, t, point);
+  return options.apertureOrbitCapture === false
+    ? point
+    : applyApertureOrbitCapturePoint(assemblage, t, point);
 }
 
 function sampleSpine(THREE, assemblage, bandMember, t, radius = 1.04) {
@@ -7398,6 +7471,7 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
   const macroMorphologyRiskCurveMaterial = new THREE.MeshBasicMaterial({ color: 0xffd166, transparent: true, opacity: 0.98, depthWrite: false, depthTest: false });
   const macroMorphologyOffenderCurveMaterial = new THREE.MeshBasicMaterial({ color: 0xff4f7a, transparent: true, opacity: 1, depthWrite: false, depthTest: false });
   const macroMorphologySubstripCurveMaterial = new THREE.MeshBasicMaterial({ color: 0x9bc53d, transparent: true, opacity: 0.95, depthWrite: false, depthTest: false });
+  const macroMorphologyLawImpactCurveMaterial = new THREE.MeshBasicMaterial({ color: 0xff7a25, transparent: true, opacity: 0.98, depthWrite: false, depthTest: false });
   const spatialTruthMaterialPolicy = {
     schema: 'SpatialTruthMaterialPolicy',
     mode: 'env-lit-neutral-clay-spatial-truth-v1',
@@ -7547,6 +7621,7 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
     macroMorphologyRiskCurveMaterial,
     macroMorphologyOffenderCurveMaterial,
     macroMorphologySubstripCurveMaterial,
+    macroMorphologyLawImpactCurveMaterial,
     spatialTruthClayMaterial,
     spatialTruthNormalMaterial,
     spatialTruthDepthMaterial,
@@ -7998,6 +8073,20 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
       curveMesh.userData.MacroMorphologyInventoryRecord = record;
       curveMesh.userData.MacroSphereCurveDecomposition = record.earlySphereCurve;
       group.add(curveMesh);
+
+      const lawImpactCurve = record.lawImpactCurve?.apertureOrbitCaptureCurve;
+      if (lawImpactCurve) {
+        const lawImpactMesh = new THREE.Mesh(
+          makeMacroSphereCurveLineGeometry(THREE, lawImpactCurve, 0.0048),
+          macroMorphologyLawImpactCurveMaterial,
+        );
+        lawImpactMesh.name = lawImpactCurve.visualOverlayId;
+        lawImpactMesh.visible = false;
+        lawImpactMesh.userData.OrbShellMorphologyInventory = composition.macroMorphologyInventory;
+        lawImpactMesh.userData.MacroMorphologyInventoryRecord = record;
+        lawImpactMesh.userData.MacroLawImpactCurveDecomposition = record.lawImpactCurve;
+        group.add(lawImpactMesh);
+      }
     }
 
     for (const assemblage of composition.macroAssemblages) {
@@ -8756,7 +8845,7 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
         visibleOverlayIds,
       };
     },
-    enableMacroMorphologyInventoryWitness() {
+    enableMacroMorphologyInventoryWitness(options = {}) {
       scene.children.forEach(child => {
         if (child !== group) {
           child.userData.macroMorphologyInventoryWitnessHidden = true;
@@ -8766,43 +8855,54 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
       let visibleCount = 0;
       let hiddenCount = 0;
       const visibleCurveIds = [];
+      const visibleLawImpactCurveIds = [];
       const visibleReferenceIds = [];
       const visibleRecords = [];
       group?.traverse(child => {
         if (!child.isMesh) return;
         const curve = child.userData?.MacroSphereCurveDecomposition;
+        const lawImpactCurve = child.userData?.MacroLawImpactCurveDecomposition;
         const record = child.userData?.MacroMorphologyInventoryRecord;
         const isReferenceSphere = !!child.userData?.MacroMorphologyReferenceSphere;
         const isAperture = !!child.userData?.AperturePressure;
-        child.visible = !!curve || isReferenceSphere || isAperture;
+        child.visible = !!curve || !!lawImpactCurve || isReferenceSphere || isAperture;
         if (child.visible) {
           visibleCount += 1;
           if (curve) visibleCurveIds.push(child.name);
+          if (lawImpactCurve) visibleLawImpactCurveIds.push(child.name);
           if (isReferenceSphere) visibleReferenceIds.push(child.name);
           if (record) {
             visibleRecords.push({
               parentAssemblage: record.parentAssemblage,
               visualOverlayId: record.earlySphereCurve.visualOverlayId,
+              lawImpactVisualOverlayId: record.lawImpactCurve?.apertureOrbitCaptureCurve?.visualOverlayId || null,
               renderClassComparison: record.renderClassComparison,
               pathologyClasses: record.pathologyClasses,
               sourceCurveMetrics: record.sourceCurveMetrics,
               promotedCenterlineMetrics: record.promotedCenterlineMetrics,
+              lawImpactCurve: record.lawImpactCurve,
             });
           }
         } else {
           hiddenCount += 1;
         }
       });
-      this.frameMacroMorphologyInventory();
+      if (options.frame !== false) this.frameMacroMorphologyInventory();
+      else {
+        controls.update();
+        onDirty?.();
+      }
       return {
         schema: 'MacroMorphologyInventoryWitnessState',
         mode: 'macro-morphology-inventory-isolated-v0',
-        visualDecompositionMode: composition.macroMorphologyInventory?.visualDecompositionMode,
+        visualDecompositionMode: 'source-curve-plus-law-impact-curve',
         inventory: composition.macroMorphologyInventory,
         visibleCount,
         hiddenCount,
         visibleCurveCount: visibleCurveIds.length,
         visibleCurveIds,
+        visibleLawImpactCurveCount: visibleLawImpactCurveIds.length,
+        visibleLawImpactCurveIds,
         visibleReferenceIds,
         visibleRecords,
         pathologyClassCounts: composition.macroMorphologyInventory?.pathologyClassCounts || {},

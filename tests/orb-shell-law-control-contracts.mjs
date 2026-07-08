@@ -33,9 +33,26 @@ assert.doesNotMatch(
   /else \{\s*frameOrbShellCompositionCamera\(\);\s*setInfo\(orbShellCompositionStatusText\(orbShellCompositionWitness\.debugState\(\)\)\);\s*\}/,
   'default composition route must not frame the operator camera unless a witness route or Frame button asks for it',
 );
+assert.match(
+  index,
+  /enableMacroMorphologyInventoryWitness\(\{\s*frame:\s*false\s*\}\)/,
+  'curve-on-sphere live setting changes must refresh the curve witness without moving the operator camera',
+);
+assert.match(
+  core,
+  /enableMacroMorphologyInventoryWitness\(options = \{\}\)/,
+  'morphology witness activation must accept options so operator refresh can disable framing',
+);
+assert.match(
+  core,
+  /if \(options\.frame !== false\) this\.frameMacroMorphologyInventory\(\)/,
+  'morphology witness must frame only when the caller did not opt out',
+);
 
 assert.match(core, /OrbShellLawControls/, 'composition core must name the law-control schema');
 assert.match(core, /normalizeOrbShellLawControls/, 'composition core must normalize law controls in one place');
+assert.match(core, /MacroLawImpactCurveDecomposition/, 'composition core must name law-impact curve decomposition records');
+assert.match(core, /macroMorphologyLawImpactCurveMaterial/, 'curve witness must render law-affected curves with a distinct material');
 assert.match(witness, /lawControls:\s*state\.lawControls/, 'visual witness reports must preserve effective law-control identity');
 assert.match(witness, /disabled-by-law-controls/, 'visual witness must distinguish intentionally disabled laws from missing laws');
 assert.match(witness, /lawControls\?\.apertureOrbitCapture\?\.enabled === false/, 'visual witness must branch on effective aperture capture controls');
@@ -82,12 +99,44 @@ const disabledFixture = createTargetOrbShellCompositionFixture({
     apertureOrbitCapture: { enabled: false, strength: 1 },
   },
 });
+const zeroOrbitFixture = createTargetOrbShellCompositionFixture({
+  variantId: 'wide-cup',
+  variationSeed: 6,
+  variationLeafCount: 11,
+  lawControls: {
+    viewMode: 'curve-on-sphere',
+    curvatureWidthCap: { enabled: true, strength: 1 },
+    apertureOrbitCapture: { enabled: true, strength: 0 },
+  },
+});
 
 assert.equal(enabledFixture.lawControls.schema, 'OrbShellLawControls', 'fixture exposes normalized law controls');
 assert.equal(disabledFixture.lawControls.viewMode, 'curve-on-sphere', 'fixture preserves requested law view mode');
 assert.ok(enabledFixture.apertureOrbitCaptureLaw, 'enabled fixture creates aperture orbit capture law');
 assert.equal(disabledFixture.apertureOrbitCaptureLaw, null, 'disabled fixture does not create aperture orbit capture law');
 assert.equal(disabledFixture.apertureOrbitCaptureWitnessPlan?.status, 'disabled-by-law-controls', 'disabled fixture reports why orbit capture witness is absent');
+
+const lawImpactRecords = enabledFixture.macroMorphologyInventory.records
+  .filter(record => record.lawImpactCurve?.schema === 'MacroLawImpactCurveDecomposition');
+assert.equal(
+  lawImpactRecords.length,
+  enabledFixture.macroAssemblages.length,
+  'morphology inventory exposes a law-impact curve for every macro family',
+);
+assert.ok(
+  lawImpactRecords.every(record => record.lawImpactCurve.apertureOrbitCaptureCurve?.visualOverlayId?.endsWith('-law-impact-curve-line')),
+  'law-impact curves carry stable visual overlay ids for curve-on-sphere rendering',
+);
+assert.ok(
+  lawImpactRecords.some(record => record.lawImpactCurve.apertureOrbitCaptureDeltaMetrics?.maxPointDelta > 0.02),
+  'at least one law-impact curve shows visible aperture orbit displacement before meshing',
+);
+assert.ok(
+  zeroOrbitFixture.macroMorphologyInventory.records.every(record => (
+    record.lawImpactCurve.apertureOrbitCaptureDeltaMetrics.maxPointDelta < 1e-6
+  )),
+  'orbit strength zero must produce no law-impact curve displacement',
+);
 
 const enabledLower = enabledFixture.macroAssemblages.find(assemblage => assemblage.id === 'lower-socket-keel');
 const disabledLower = disabledFixture.macroAssemblages.find(assemblage => assemblage.id === 'lower-socket-keel');

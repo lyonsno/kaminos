@@ -16097,7 +16097,7 @@ function initOrbShellRoute() {
       orbShellCompositionWitness.setVariation(readOrbShellCompositionControls());
       if (orbShellCompositionWitness.debugState?.().active) {
         if (readOrbShellLawControls().viewMode === 'curve-on-sphere') {
-          orbShellCompositionWitness.enableMacroMorphologyInventoryWitness();
+          orbShellCompositionWitness.enableMacroMorphologyInventoryWitness({ frame: false });
         }
       }
     }
