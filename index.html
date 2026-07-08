@@ -25,6 +25,9 @@ h2 { font-size: 11px; font-weight: 600; margin: 18px 0 8px; color: #666; text-tr
 .field-val.present { color: #66bb6a; }
 .field-val.missing { color: #ef5350; }
 .field-val.hash { color: #555; font-size: 9px; }
+.orb-shell-law-debug-legend { display: flex; justify-content: flex-end; gap: 5px; max-width: 230px; overflow: visible; white-space: normal; }
+.law-debug-chip { display: inline-flex; align-items: center; gap: 3px; color: #999; }
+.law-debug-swatch { width: 7px; height: 7px; border-radius: 50%; display: inline-block; box-shadow: 0 0 8px rgba(255,255,255,0.2); }
 
 .btn { display: inline-block; padding: 6px 14px; background: #252525; border: 1px solid #333; border-radius: 6px; color: #bbb; font-size: 11px; cursor: pointer; margin: 2px; transition: all 0.15s; }
 .btn:hover { background: #333; color: #fff; border-color: #444; }
@@ -1787,6 +1790,14 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
         <option value="geometry">Geometry</option>
         <option value="curve-on-sphere">Curve on sphere</option>
       </select>
+      <div class="field"><span class="field-key">Law Debug</span><span class="field-val" id="orb-shell-law-debug-val">all-law-impact</span></div>
+      <select class="gen-input" id="orb-shell-law-debug-mode" aria-label="Orb shell law debug mode">
+        <option value="all-law-impact">All law impact</option>
+        <option value="orbit-delta">Orbit delta</option>
+        <option value="cap-envelope">Cap envelope</option>
+        <option value="none">None</option>
+      </select>
+      <div class="field"><span class="field-key">Debug Key</span><span class="field-val orb-shell-law-debug-legend" id="orb-shell-law-debug-legend"></span></div>
       <label class="import-mode" for="orb-shell-law-curvature-width-cap-enabled">
         <input type="checkbox" id="orb-shell-law-curvature-width-cap-enabled" checked>
         Curvature width cap
@@ -15998,11 +16009,21 @@ function readOrbShellLawControls() {
   const viewMode = document.getElementById('orb-shell-law-view-mode')?.value === 'curve-on-sphere'
     ? 'curve-on-sphere'
     : 'geometry';
+  const requestedDebugMode = document.getElementById('orb-shell-law-debug-mode')?.value;
+  const debugMode = [
+    'none',
+    'orbit-delta',
+    'cap-envelope',
+    'all-law-impact',
+  ].includes(requestedDebugMode)
+    ? requestedDebugMode
+    : 'all-law-impact';
   const curvatureStrength = Number(document.getElementById('orb-shell-law-curvature-width-cap-strength')?.value ?? 1);
   const orbitStrength = Number(document.getElementById('orb-shell-law-aperture-orbit-capture-strength')?.value ?? 1);
   return {
     schema: 'OrbShellLawControls',
     viewMode,
+    debugMode,
     curvatureWidthCap: {
       enabled: !!document.getElementById('orb-shell-law-curvature-width-cap-enabled')?.checked,
       strength: Number.isFinite(curvatureStrength) ? Math.max(0, Math.min(1, curvatureStrength)) : 1,
@@ -16018,6 +16039,10 @@ function hydrateOrbShellLawControlsFromParams(params) {
   const viewMode = params.get('orb_shell_law_view');
   if (viewMode === 'curve-on-sphere' || viewMode === 'geometry') {
     document.getElementById('orb-shell-law-view-mode').value = viewMode;
+  }
+  const debugMode = params.get('orb_shell_law_debug');
+  if (['none', 'orbit-delta', 'cap-envelope', 'all-law-impact'].includes(debugMode)) {
+    document.getElementById('orb-shell-law-debug-mode').value = debugMode;
   }
   if (params.has('orb_shell_law_curvature_width_cap')) {
     document.getElementById('orb-shell-law-curvature-width-cap-enabled').checked = parseBooleanRouteFlag(params.get('orb_shell_law_curvature_width_cap'), true);
@@ -16036,9 +16061,41 @@ function hydrateOrbShellLawControlsFromParams(params) {
   updateOrbShellLawReadout();
 }
 
+function orbShellLawDebugLegendText(debugMode = 'all-law-impact') {
+  if (debugMode === 'orbit-delta') return 'cyan source / orange law / pink delta';
+  if (debugMode === 'cap-envelope') return 'cyan pre-cap / yellow post-cap';
+  if (debugMode === 'none') return 'cyan source / blue aperture';
+  return 'cyan source / orange law / pink delta / yellow cap';
+}
+
+function orbShellLawDebugLegendEntries(debugMode = 'all-law-impact') {
+  const entries = {
+    source: { label: 'src', color: '#9be8ff' },
+    law: { label: 'law', color: '#ffb24a' },
+    delta: { label: 'delta', color: '#ff6aa6' },
+    preCap: { label: 'pre', color: '#9be8ff' },
+    postCap: { label: 'post', color: '#fff06a' },
+    aperture: { label: 'ap', color: '#4fc3e6' },
+  };
+  if (debugMode === 'orbit-delta') return [entries.source, entries.law, entries.delta];
+  if (debugMode === 'cap-envelope') return [entries.preCap, entries.postCap];
+  if (debugMode === 'none') return [entries.source, entries.aperture];
+  return [entries.source, entries.law, entries.delta, entries.postCap];
+}
+
+function renderOrbShellLawDebugLegend(debugMode = 'all-law-impact') {
+  return orbShellLawDebugLegendEntries(debugMode)
+    .map(entry => `<span class="law-debug-chip"><span class="law-debug-swatch" style="background:${entry.color}"></span>${entry.label}</span>`)
+    .join('');
+}
+
 function updateOrbShellLawReadout() {
   const laws = readOrbShellLawControls();
   document.getElementById('orb-shell-law-view-val').textContent = laws.viewMode;
+  document.getElementById('orb-shell-law-debug-val').textContent = laws.debugMode;
+  const legend = document.getElementById('orb-shell-law-debug-legend');
+  legend.title = orbShellLawDebugLegendText(laws.debugMode);
+  legend.innerHTML = renderOrbShellLawDebugLegend(laws.debugMode);
   document.getElementById('orb-shell-law-curvature-width-cap-strength-val').textContent = laws.curvatureWidthCap.strength.toFixed(2);
   document.getElementById('orb-shell-law-aperture-orbit-capture-strength-val').textContent = laws.apertureOrbitCapture.strength.toFixed(2);
 }
@@ -16109,6 +16166,7 @@ function initOrbShellRoute() {
     'orb-shell-leaf-count',
     'orb-shell-aperture-count',
     'orb-shell-law-view-mode',
+    'orb-shell-law-debug-mode',
     'orb-shell-law-curvature-width-cap-enabled',
     'orb-shell-law-curvature-width-cap-strength',
     'orb-shell-law-aperture-orbit-capture-enabled',
@@ -16148,7 +16206,7 @@ function updateOrbShellCompositionReadout() {
   document.getElementById('orb-shell-composition-families').textContent = Object.values(state?.inverseProceduralHypotheses || {}).flat().slice(0, 3).join(',') || 'none';
   document.getElementById('orb-shell-composition-failures').textContent = state?.forbiddenFailureClasses?.slice(0, 3).join(',') || 'none';
   const laws = state?.lawControls || readOrbShellLawControls();
-  document.getElementById('orb-shell-composition-laws').textContent = `${laws.viewMode || 'geometry'} / cap:${laws.curvatureWidthCap?.enabled ? laws.curvatureWidthCap.strength?.toFixed?.(2) ?? 1 : 'off'} / orbit:${laws.apertureOrbitCapture?.enabled ? laws.apertureOrbitCapture.strength?.toFixed?.(2) ?? 1 : 'off'}`;
+  document.getElementById('orb-shell-composition-laws').textContent = `${laws.viewMode || 'geometry'} / ${laws.debugMode || 'all-law-impact'} / cap:${laws.curvatureWidthCap?.enabled ? laws.curvatureWidthCap.strength?.toFixed?.(2) ?? 1 : 'off'} / orbit:${laws.apertureOrbitCapture?.enabled ? laws.apertureOrbitCapture.strength?.toFixed?.(2) ?? 1 : 'off'}`;
   document.getElementById('orb-shell-composition-toggle').textContent = state?.active ? 'Disable' : 'Enable';
   document.getElementById('orb-shell-composition-toggle').classList.toggle('active', !!state?.active);
 }

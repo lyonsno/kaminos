@@ -13,9 +13,13 @@ assert.match(index, /id="orb-shell-law-curvature-width-cap-enabled"/, 'Orb Shell
 assert.match(index, /id="orb-shell-law-curvature-width-cap-strength"/, 'Orb Shell UI must expose a curvature-width-cap strength slider');
 assert.match(index, /id="orb-shell-law-aperture-orbit-capture-enabled"/, 'Orb Shell UI must expose an aperture-orbit-capture toggle');
 assert.match(index, /id="orb-shell-law-aperture-orbit-capture-strength"/, 'Orb Shell UI must expose an aperture-orbit-capture strength slider');
+assert.match(index, /id="orb-shell-law-debug-mode"/, 'Orb Shell UI must expose a law debug-mode selector');
+assert.match(index, /id="orb-shell-law-debug-legend"/, 'Orb Shell UI must expose a law debug color legend');
+assert.match(index, /function orbShellLawDebugLegendText\(/, 'Orb Shell UI must derive law debug legend text from active debug mode');
 assert.match(index, /function readOrbShellLawControls\(\)/, 'Orb Shell UI must read law controls through a named reader');
 assert.match(index, /lawControls:\s*readOrbShellLawControls\(\)/, 'composition controls must pass lawControls into the fixture/witness variation payload');
 assert.match(index, /orb_shell_law_view/, 'law view mode must be URL-addressable for smoke/replay');
+assert.match(index, /orb_shell_law_debug/, 'law debug mode must be URL-addressable for smoke/replay');
 assert.match(index, /orb_shell_law_curvature_width_cap/, 'curvature-width-cap toggle must be URL-addressable');
 assert.match(index, /orb_shell_law_aperture_orbit_capture/, 'aperture-orbit-capture toggle must be URL-addressable');
 assert.match(index, /function hydrateOrbShellLawControlsFromParams[\s\S]*updateOrbShellLawReadout\(\)/, 'route hydration must immediately refresh the visible law-control readout');
@@ -52,8 +56,18 @@ assert.match(
 assert.match(core, /OrbShellLawControls/, 'composition core must name the law-control schema');
 assert.match(core, /normalizeOrbShellLawControls/, 'composition core must normalize law controls in one place');
 assert.match(core, /MacroLawImpactCurveDecomposition/, 'composition core must name law-impact curve decomposition records');
+assert.match(core, /MacroLawDebugDecomposition/, 'composition core must name law-specific debug decomposition records');
+assert.match(core, /MacroLawOrbitDisplacementVector/, 'orbit debug must expose displacement vectors instead of only a post-law curve');
+assert.match(core, /MacroLawCapEnvelopeRail/, 'cap debug must expose width-envelope rails instead of pretending cap moves the centerline');
 assert.match(core, /macroMorphologyLawImpactCurveMaterial/, 'curve witness must render law-affected curves with a distinct material');
+assert.match(core, /macroMorphologyOrbitDeltaVectorMaterial/, 'curve witness must render orbit displacement ticks with a distinct material');
+assert.match(core, /macroMorphologyCapEnvelopeMaterial/, 'curve witness must render cap envelope rails with a distinct material');
+assert.match(core, /inventory:\s*compactMacroMorphologyInventory\(\)/, 'morphology witness return payload must use compact inventory evidence');
+assert.doesNotMatch(core, /inventory:\s*composition\.macroMorphologyInventory/, 'morphology witness return payload must not ship full nested inventory through CDP');
+assert.match(core, /visibleOrbitDisplacementVectorCount/, 'morphology witness report must expose visible orbit displacement vector count');
+assert.match(core, /visibleCapEnvelopeRailCount/, 'morphology witness report must expose visible cap envelope rail count');
 assert.match(witness, /lawControls:\s*state\.lawControls/, 'visual witness reports must preserve effective law-control identity');
+assert.match(witness, /new URL\(url\)\.searchParams\.get\('orb_shell_focus'\)/, 'visual witness focus must default from the route URL when --focus is omitted');
 assert.match(witness, /disabled-by-law-controls/, 'visual witness must distinguish intentionally disabled laws from missing laws');
 assert.match(witness, /lawControls\?\.apertureOrbitCapture\?\.enabled === false/, 'visual witness must branch on effective aperture capture controls');
 
@@ -70,10 +84,12 @@ assert.equal(defaults.apertureOrbitCapture.enabled, true, 'aperture orbit captur
 
 const clamped = normalizeOrbShellLawControls({
   viewMode: 'curve-on-sphere',
+  debugMode: 'cap-envelope',
   curvatureWidthCap: { enabled: false, strength: 2 },
   apertureOrbitCapture: { enabled: false, strength: -1 },
 });
 assert.equal(clamped.viewMode, 'curve-on-sphere', 'curve-on-sphere view survives normalization');
+assert.equal(clamped.debugMode, 'cap-envelope', 'cap-envelope debug mode survives normalization');
 assert.equal(clamped.curvatureWidthCap.enabled, false, 'curvature cap disabled flag survives normalization');
 assert.equal(clamped.curvatureWidthCap.strength, 1, 'curvature cap strength clamps high inputs');
 assert.equal(clamped.apertureOrbitCapture.enabled, false, 'aperture capture disabled flag survives normalization');
@@ -85,6 +101,7 @@ const enabledFixture = createTargetOrbShellCompositionFixture({
   variationLeafCount: 11,
   lawControls: {
     viewMode: 'geometry',
+    debugMode: 'all-law-impact',
     curvatureWidthCap: { enabled: true, strength: 1 },
     apertureOrbitCapture: { enabled: true, strength: 1 },
   },
@@ -95,6 +112,7 @@ const disabledFixture = createTargetOrbShellCompositionFixture({
   variationLeafCount: 11,
   lawControls: {
     viewMode: 'curve-on-sphere',
+    debugMode: 'all-law-impact',
     curvatureWidthCap: { enabled: false, strength: 1 },
     apertureOrbitCapture: { enabled: false, strength: 1 },
   },
@@ -105,12 +123,14 @@ const zeroOrbitFixture = createTargetOrbShellCompositionFixture({
   variationLeafCount: 11,
   lawControls: {
     viewMode: 'curve-on-sphere',
+    debugMode: 'orbit-delta',
     curvatureWidthCap: { enabled: true, strength: 1 },
     apertureOrbitCapture: { enabled: true, strength: 0 },
   },
 });
 
 assert.equal(enabledFixture.lawControls.schema, 'OrbShellLawControls', 'fixture exposes normalized law controls');
+assert.equal(enabledFixture.lawControls.debugMode, 'all-law-impact', 'fixture preserves requested law debug mode');
 assert.equal(disabledFixture.lawControls.viewMode, 'curve-on-sphere', 'fixture preserves requested law view mode');
 assert.ok(enabledFixture.apertureOrbitCaptureLaw, 'enabled fixture creates aperture orbit capture law');
 assert.equal(disabledFixture.apertureOrbitCaptureLaw, null, 'disabled fixture does not create aperture orbit capture law');
@@ -136,6 +156,22 @@ assert.ok(
     record.lawImpactCurve.apertureOrbitCaptureDeltaMetrics.maxPointDelta < 1e-6
   )),
   'orbit strength zero must produce no law-impact curve displacement',
+);
+assert.ok(
+  lawImpactRecords.every(record => record.lawDebugDecomposition?.schema === 'MacroLawDebugDecomposition'),
+  'morphology inventory exposes law-specific debug decomposition for every macro family',
+);
+assert.ok(
+  lawImpactRecords.some(record => record.lawDebugDecomposition.orbitDisplacementVectors?.some(vector => vector.schema === 'MacroLawOrbitDisplacementVector' && vector.length > 0.02)),
+  'orbit debug exposes visible displacement vectors where orbit capture moves a curve',
+);
+assert.ok(
+  lawImpactRecords.every(record => record.lawDebugDecomposition.capEnvelopeRails?.some(rail => rail.schema === 'MacroLawCapEnvelopeRail' && rail.stage === 'pre-cap-envelope')),
+  'cap debug exposes pre-cap envelope rails for every macro family',
+);
+assert.ok(
+  lawImpactRecords.some(record => record.lawDebugDecomposition.capEnvelopeDeltaMetrics?.maxRailDelta > 0.02),
+  'cap debug exposes visible envelope difference where curvature cap narrows a family',
 );
 
 const enabledLower = enabledFixture.macroAssemblages.find(assemblage => assemblage.id === 'lower-socket-keel');

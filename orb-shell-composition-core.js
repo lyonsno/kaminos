@@ -78,6 +78,18 @@ function normalizedUnit(value, defaultValue = 1) {
   return Number.isFinite(number) ? clamp(number, 0, 1) : defaultValue;
 }
 
+function normalizedLawDebugMode(value) {
+  const mode = String(value || '').trim();
+  return [
+    'none',
+    'orbit-delta',
+    'cap-envelope',
+    'all-law-impact',
+  ].includes(mode)
+    ? mode
+    : 'all-law-impact';
+}
+
 export function normalizeOrbShellLawControls(input = {}) {
   const curvature = input.curvatureWidthCap || {};
   const aperture = input.apertureOrbitCapture || {};
@@ -86,6 +98,7 @@ export function normalizeOrbShellLawControls(input = {}) {
     schema: ORB_SHELL_LAW_CONTROLS_SCHEMA,
     mode: 'operator-visible-procedural-law-controls-v0',
     viewMode,
+    debugMode: normalizedLawDebugMode(input.debugMode),
     curvatureWidthCap: {
       id: 'curvature-width-cap',
       label: 'Curvature width cap',
@@ -5340,6 +5353,165 @@ function createMacroLawImpactCurveDecomposition(assemblage, sampleCount = 48, ra
   };
 }
 
+function createMacroLawOrbitDisplacementVectors(lawImpactCurve, stride = 6) {
+  const affectedSamples = lawImpactCurve?.apertureOrbitCaptureCurve?.samples || [];
+  const vectors = [];
+  for (let index = 0; index < affectedSamples.length; index += stride) {
+    const sample = affectedSamples[index];
+    if (!sample?.basePoint || !sample?.point) continue;
+    const length = pointDistance(sample.basePoint, sample.point);
+    if (length < 1e-5) continue;
+    vectors.push({
+      schema: 'MacroLawOrbitDisplacementVector',
+      mode: 'pre-to-post-aperture-orbit-centerline-delta-v0',
+      id: `${lawImpactCurve.parentAssemblage}-orbit-displacement-vector-${String(index).padStart(2, '0')}`,
+      parentAssemblage: lawImpactCurve.parentAssemblage,
+      lawImpactCurveId: lawImpactCurve.id,
+      t: sample.t,
+      startPoint: sample.basePoint,
+      endPoint: sample.point,
+      length,
+      visualOverlayId: `${lawImpactCurve.parentAssemblage}-orbit-displacement-vector-${String(index).padStart(2, '0')}`,
+    });
+  }
+  return vectors;
+}
+
+function capEnvelopeRailSamples(assemblage, sideSign, capWidthScale, sampleCount = 48, radius = 1.045) {
+  const body = assemblage.territoryBodyOccupancy;
+  const promoted = assemblage.macroPromotedBody;
+  const cutProfile = body.boundaryCutProfile || [];
+  const centerline = macroPromotedBodyCenterlinePoints(assemblage, sampleCount, radius);
+  return centerline.map((center, index) => {
+    const t = index / (sampleCount - 1);
+    const prev = centerline[Math.max(0, index - 1)];
+    const next = centerline[Math.min(sampleCount - 1, index + 1)];
+    const normal = normalizePoint(center);
+    const tangent = normalizePoint(subtractPoints(next, prev));
+    let side = normalizePoint(crossPoints(normal, tangent));
+    if (Math.hypot(...side) < 1e-8) side = [1, 0, 0];
+    const frame = torsionSurfaceFramePoints(assemblage, side, normal, t, 1);
+    const profile = Math.pow(Math.sin(Math.PI * t), 0.34);
+    const terminalScale = 0.52 + 0.48 * profile;
+    const nearestCut = nearestCutProfileSample(cutProfile, t);
+    const expanded = assemblage.expandedRegionProxy;
+    const scale = (promoted?.promotedBodyScale || 1.22) * (expanded?.coverageScale || 1);
+    const interlock = macroInterlockEffectAt(assemblage, t);
+    const lowerSocket = lowerSocketAnatomyEffectAt(assemblage, t);
+    const sharedSeam = sharedSocketSeamEffectAt(assemblage, t);
+    const roleEffect = lowerSocketFamilyRoleEffectAt(assemblage, t);
+    const nonCapWidthScale = interlock.widthScale * lowerSocket.widthScale * sharedSeam.widthScale * roleEffect.widthScale;
+    const sideName = sideSign < 0 ? 'left' : 'right';
+    const sideWidth = body.widthProfile.mid
+      * scale
+      * terminalScale
+      * promotedBodySideScale(promoted, sideName, nearestCut)
+      * nonCapWidthScale
+      * capWidthScale;
+    const lift = body.thicknessProfile.mid * (0.85 + 0.75 * profile)
+      + interlock.normalLiftDelta
+      + lowerSocket.normalLiftDelta
+      + sharedSeam.normalLiftDelta
+      + roleEffect.normalLiftDelta;
+    const point = addScaledPoint(
+      addScaledPoint(center, frame.side, sideSign * sideWidth),
+      frame.normal,
+      lift * 0.82,
+    );
+    return {
+      t,
+      point,
+      centerPoint: center,
+      side: sideName,
+      sideWidth,
+      capWidthScale,
+    };
+  });
+}
+
+function createMacroLawCapEnvelopeRails(assemblage, sampleCount = 48, radius = 1.045) {
+  const curvatureCap = curvatureWidthCapEffectAt(assemblage);
+  const capScale = curvatureCap.capApplied ? curvatureCap.widthScale : 1;
+  const rails = [];
+  for (const [sideName, sideSign] of [['left', -1], ['right', 1]]) {
+    rails.push({
+      schema: 'MacroLawCapEnvelopeRail',
+      mode: 'curvature-width-cap-envelope-rail-v0',
+      id: `${assemblage.id}-${sideName}-pre-cap-envelope-rail`,
+      parentAssemblage: assemblage.id,
+      ruleFamily: 'CurvatureWidthCapLaw',
+      activeRuleId: curvatureCap.lawId,
+      stage: 'pre-cap-envelope',
+      side: sideName,
+      capApplied: false,
+      capWidthScale: 1,
+      visualOverlayId: `${assemblage.id}-${sideName}-pre-cap-envelope-rail`,
+      samples: capEnvelopeRailSamples(assemblage, sideSign, 1, sampleCount, radius),
+    });
+    rails.push({
+      schema: 'MacroLawCapEnvelopeRail',
+      mode: 'curvature-width-cap-envelope-rail-v0',
+      id: `${assemblage.id}-${sideName}-post-cap-envelope-rail`,
+      parentAssemblage: assemblage.id,
+      ruleFamily: 'CurvatureWidthCapLaw',
+      activeRuleId: curvatureCap.lawId,
+      stage: 'post-cap-envelope',
+      side: sideName,
+      capApplied: curvatureCap.capApplied,
+      capWidthScale: capScale,
+      visualOverlayId: `${assemblage.id}-${sideName}-post-cap-envelope-rail`,
+      samples: capEnvelopeRailSamples(assemblage, sideSign, capScale, sampleCount, radius),
+    });
+  }
+  return rails;
+}
+
+function capEnvelopeDeltaMetrics(rails) {
+  let maxRailDelta = 0;
+  let meanRailDelta = 0;
+  let deltaCount = 0;
+  for (const side of ['left', 'right']) {
+    const pre = rails.find(rail => rail.side === side && rail.stage === 'pre-cap-envelope');
+    const post = rails.find(rail => rail.side === side && rail.stage === 'post-cap-envelope');
+    const count = Math.min(pre?.samples?.length || 0, post?.samples?.length || 0);
+    for (let index = 0; index < count; index++) {
+      const delta = pointDistance(pre.samples[index].point, post.samples[index].point);
+      maxRailDelta = Math.max(maxRailDelta, delta);
+      meanRailDelta += delta;
+      deltaCount += 1;
+    }
+  }
+  return {
+    schema: 'MacroLawCapEnvelopeDeltaMetrics',
+    mode: 'pre-vs-post-curvature-width-cap-rail-delta-v0',
+    sampleCount: deltaCount,
+    maxRailDelta,
+    meanRailDelta: deltaCount ? meanRailDelta / deltaCount : 0,
+  };
+}
+
+function createMacroLawDebugDecomposition(assemblage, lawImpactCurve) {
+  const orbitDisplacementVectors = createMacroLawOrbitDisplacementVectors(lawImpactCurve);
+  const capEnvelopeRails = createMacroLawCapEnvelopeRails(assemblage);
+  return {
+    schema: 'MacroLawDebugDecomposition',
+    mode: 'law-specific-visual-predicates-v0',
+    id: `${assemblage.id}-law-debug-decomposition`,
+    parentAssemblage: assemblage.id,
+    lawImpactCurveId: lawImpactCurve?.id || null,
+    debugFamilies: [
+      'orbit-delta',
+      'cap-envelope',
+    ],
+    orbitDisplacementVectors,
+    orbitDisplacementVectorCount: orbitDisplacementVectors.length,
+    capEnvelopeRails,
+    capEnvelopeRailCount: capEnvelopeRails.length,
+    capEnvelopeDeltaMetrics: capEnvelopeDeltaMetrics(capEnvelopeRails),
+    visualIntent: 'separate displacement laws from envelope laws so toggles change the correct diagnostic surface',
+  };
+}
+
 function triangleCircumradius(a, b, c) {
   const ab = pointDistance(a, b);
   const bc = pointDistance(b, c);
@@ -5521,6 +5693,7 @@ function createMacroMorphologyInventoryRecord(composition, assemblage) {
   const substrips = (composition.macroFamilySubstripPlan?.substrips || []).filter(strip => strip.parentAssemblage === assemblage.id);
   const earlySphereCurve = createMacroSphereCurveDecomposition(assemblage);
   const lawImpactCurve = createMacroLawImpactCurveDecomposition(assemblage);
+  const lawDebugDecomposition = createMacroLawDebugDecomposition(assemblage, lawImpactCurve);
   const promotedPoints = macroPromotedBodyCenterlinePoints(assemblage, 48, 1.045);
   const promotedCenterline = {
     schema: 'MacroPromotedCenterlineDecomposition',
@@ -5575,6 +5748,7 @@ function createMacroMorphologyInventoryRecord(composition, assemblage) {
     renderClassComparison,
     earlySphereCurve,
     lawImpactCurve,
+    lawDebugDecomposition,
     promotedCenterline,
     sourceCurveMetrics,
     promotedCenterlineMetrics,
@@ -5622,6 +5796,7 @@ function createMacroMorphologyInventory(composition) {
     recordCount: records.length,
     curveDecompositions: records.map(record => record.earlySphereCurve),
     lawImpactCurveDecompositions: records.map(record => record.lawImpactCurve),
+    lawDebugDecompositions: records.map(record => record.lawDebugDecomposition),
     pathologyClassCounts,
     failurePressure: [
       'do-not-spot-fix-lower-socket-before-source-curve-inventory',
@@ -6849,6 +7024,24 @@ function makeMacroSphereCurveLineGeometry(THREE, decomposition, radius = 0.0065)
   return new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points), Math.max(16, points.length * 2), radius, 8, false);
 }
 
+function makeMacroLawOrbitDisplacementVectorGeometry(THREE, vector, radius = 0.0034) {
+  return new THREE.TubeGeometry(
+    new THREE.CatmullRomCurve3([
+      new THREE.Vector3(...vector.startPoint),
+      new THREE.Vector3(...vector.endPoint),
+    ]),
+    1,
+    radius,
+    6,
+    false,
+  );
+}
+
+function makeMacroLawCapEnvelopeRailGeometry(THREE, rail, radius = 0.0038) {
+  const points = (rail.samples || []).map(sample => new THREE.Vector3(...sample.point));
+  return new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points), Math.max(16, points.length * 2), radius, 7, false);
+}
+
 function makeSeamGapHintGeometry(THREE, gap) {
   const points = seamGapSeedPoints(gap.id, 1.085).map(point => new THREE.Vector3(...point));
   const radius = gap.type === 'lower-socket-join' ? 0.004 : 0.006;
@@ -7472,6 +7665,9 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
   const macroMorphologyOffenderCurveMaterial = new THREE.MeshBasicMaterial({ color: 0xff4f7a, transparent: true, opacity: 1, depthWrite: false, depthTest: false });
   const macroMorphologySubstripCurveMaterial = new THREE.MeshBasicMaterial({ color: 0x9bc53d, transparent: true, opacity: 0.95, depthWrite: false, depthTest: false });
   const macroMorphologyLawImpactCurveMaterial = new THREE.MeshBasicMaterial({ color: 0xff7a25, transparent: true, opacity: 0.98, depthWrite: false, depthTest: false });
+  const macroMorphologyOrbitDeltaVectorMaterial = new THREE.MeshBasicMaterial({ color: 0xff4f7a, transparent: true, opacity: 0.98, depthWrite: false, depthTest: false });
+  const macroMorphologyCapEnvelopeMaterial = new THREE.MeshBasicMaterial({ color: 0x63d7ff, transparent: true, opacity: 0.9, depthWrite: false, depthTest: false });
+  const macroMorphologyCapEnvelopePostMaterial = new THREE.MeshBasicMaterial({ color: 0xfde74c, transparent: true, opacity: 0.9, depthWrite: false, depthTest: false });
   const spatialTruthMaterialPolicy = {
     schema: 'SpatialTruthMaterialPolicy',
     mode: 'env-lit-neutral-clay-spatial-truth-v1',
@@ -7622,6 +7818,9 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
     macroMorphologyOffenderCurveMaterial,
     macroMorphologySubstripCurveMaterial,
     macroMorphologyLawImpactCurveMaterial,
+    macroMorphologyOrbitDeltaVectorMaterial,
+    macroMorphologyCapEnvelopeMaterial,
+    macroMorphologyCapEnvelopePostMaterial,
     spatialTruthClayMaterial,
     spatialTruthNormalMaterial,
     spatialTruthDepthMaterial,
@@ -7947,6 +8146,8 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
       || mesh.userData?.MacroContactSample
       || mesh.userData?.MacroMorphologyReferenceSphere
       || mesh.userData?.MacroSphereCurveDecomposition
+      || mesh.userData?.MacroLawOrbitDisplacementVector
+      || mesh.userData?.MacroLawCapEnvelopeRail
     );
   }
 
@@ -8015,6 +8216,50 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
       meshCount: meshes.length,
     };
     return spatialTruthLastState.depthRange;
+  }
+
+  function compactMacroMorphologyInventory() {
+    const inventory = composition.macroMorphologyInventory;
+    if (!inventory) return null;
+    return {
+      schema: inventory.schema,
+      mode: inventory.mode,
+      referenceSphereRadius: inventory.referenceSphereRadius,
+      visualDecompositionMode: inventory.visualDecompositionMode,
+      recordCount: inventory.recordCount,
+      stressCaseId: inventory.stressCaseId,
+      comparedStages: inventory.comparedStages,
+      pathologyClassCounts: inventory.pathologyClassCounts || {},
+      curveDecompositions: (inventory.curveDecompositions || []).map(curve => ({
+        schema: curve.schema,
+        id: curve.id,
+        parentAssemblage: curve.parentAssemblage,
+        generationStage: curve.generationStage,
+        visualOverlayId: curve.visualOverlayId,
+        maxAbsRadiusError: curve.maxAbsRadiusError,
+        sampleCount: curve.sampleCount,
+        sourceControl: curve.sourceControl,
+      })),
+      lawImpactCurveSummaries: (inventory.lawImpactCurveDecompositions || []).map(curve => ({
+        schema: curve.schema,
+        id: curve.id,
+        parentAssemblage: curve.parentAssemblage,
+        ruleFamily: curve.ruleFamily,
+        activeRuleId: curve.activeRuleId,
+        apertureOrbitCaptureControlStrength: curve.apertureOrbitCaptureControlStrength,
+        apertureOrbitCaptureDeltaMetrics: curve.apertureOrbitCaptureDeltaMetrics,
+        visualOverlayId: curve.apertureOrbitCaptureCurve?.visualOverlayId || null,
+      })),
+      lawDebugSummaries: (inventory.lawDebugDecompositions || []).map(debug => ({
+        schema: debug.schema,
+        id: debug.id,
+        parentAssemblage: debug.parentAssemblage,
+        debugFamilies: debug.debugFamilies,
+        orbitDisplacementVectorCount: debug.orbitDisplacementVectorCount,
+        capEnvelopeRailCount: debug.capEnvelopeRailCount,
+        capEnvelopeDeltaMetrics: debug.capEnvelopeDeltaMetrics,
+      })),
+    };
   }
 
   function setSpatialTruthMaterialPolicy(options = {}) {
@@ -8086,6 +8331,36 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
         lawImpactMesh.userData.MacroMorphologyInventoryRecord = record;
         lawImpactMesh.userData.MacroLawImpactCurveDecomposition = record.lawImpactCurve;
         group.add(lawImpactMesh);
+      }
+
+      for (const vector of record.lawDebugDecomposition?.orbitDisplacementVectors || []) {
+        const vectorMesh = new THREE.Mesh(
+          makeMacroLawOrbitDisplacementVectorGeometry(THREE, vector),
+          macroMorphologyOrbitDeltaVectorMaterial,
+        );
+        vectorMesh.name = vector.visualOverlayId;
+        vectorMesh.visible = false;
+        vectorMesh.userData.OrbShellMorphologyInventory = composition.macroMorphologyInventory;
+        vectorMesh.userData.MacroMorphologyInventoryRecord = record;
+        vectorMesh.userData.MacroLawDebugDecomposition = record.lawDebugDecomposition;
+        vectorMesh.userData.MacroLawOrbitDisplacementVector = vector;
+        group.add(vectorMesh);
+      }
+
+      for (const rail of record.lawDebugDecomposition?.capEnvelopeRails || []) {
+        const railMesh = new THREE.Mesh(
+          makeMacroLawCapEnvelopeRailGeometry(THREE, rail),
+          rail.stage === 'post-cap-envelope'
+            ? macroMorphologyCapEnvelopePostMaterial
+            : macroMorphologyCapEnvelopeMaterial,
+        );
+        railMesh.name = rail.visualOverlayId;
+        railMesh.visible = false;
+        railMesh.userData.OrbShellMorphologyInventory = composition.macroMorphologyInventory;
+        railMesh.userData.MacroMorphologyInventoryRecord = record;
+        railMesh.userData.MacroLawDebugDecomposition = record.lawDebugDecomposition;
+        railMesh.userData.MacroLawCapEnvelopeRail = rail;
+        group.add(railMesh);
       }
     }
 
@@ -8856,31 +9131,54 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
       let hiddenCount = 0;
       const visibleCurveIds = [];
       const visibleLawImpactCurveIds = [];
+      const visibleOrbitDisplacementVectorIds = [];
+      const visibleCapEnvelopeRailIds = [];
       const visibleReferenceIds = [];
       const visibleRecords = [];
+      const visibleRecordIds = new Set();
+      const debugMode = composition.lawControls?.debugMode || 'all-law-impact';
       group?.traverse(child => {
         if (!child.isMesh) return;
         const curve = child.userData?.MacroSphereCurveDecomposition;
         const lawImpactCurve = child.userData?.MacroLawImpactCurveDecomposition;
+        const orbitDisplacementVector = child.userData?.MacroLawOrbitDisplacementVector;
+        const capEnvelopeRail = child.userData?.MacroLawCapEnvelopeRail;
         const record = child.userData?.MacroMorphologyInventoryRecord;
         const isReferenceSphere = !!child.userData?.MacroMorphologyReferenceSphere;
         const isAperture = !!child.userData?.AperturePressure;
-        child.visible = !!curve || !!lawImpactCurve || isReferenceSphere || isAperture;
+        const showOrbitDebug = debugMode === 'orbit-delta' || debugMode === 'all-law-impact';
+        const showCapDebug = debugMode === 'cap-envelope' || debugMode === 'all-law-impact';
+        child.visible = !!curve
+          || (showOrbitDebug && !!lawImpactCurve)
+          || (showOrbitDebug && !!orbitDisplacementVector)
+          || (showCapDebug && !!capEnvelopeRail)
+          || isReferenceSphere
+          || isAperture;
         if (child.visible) {
           visibleCount += 1;
           if (curve) visibleCurveIds.push(child.name);
           if (lawImpactCurve) visibleLawImpactCurveIds.push(child.name);
+          if (orbitDisplacementVector) visibleOrbitDisplacementVectorIds.push(child.name);
+          if (capEnvelopeRail) visibleCapEnvelopeRailIds.push(child.name);
           if (isReferenceSphere) visibleReferenceIds.push(child.name);
-          if (record) {
+          if (record && !visibleRecordIds.has(record.id)) {
+            visibleRecordIds.add(record.id);
             visibleRecords.push({
               parentAssemblage: record.parentAssemblage,
               visualOverlayId: record.earlySphereCurve.visualOverlayId,
               lawImpactVisualOverlayId: record.lawImpactCurve?.apertureOrbitCaptureCurve?.visualOverlayId || null,
+              lawDebugSummary: {
+                schema: 'MacroLawDebugSummary',
+                debugDecompositionId: record.lawDebugDecomposition?.id || null,
+                orbitDisplacementVectorCount: record.lawDebugDecomposition?.orbitDisplacementVectorCount || 0,
+                capEnvelopeRailCount: record.lawDebugDecomposition?.capEnvelopeRailCount || 0,
+                capEnvelopeDeltaMetrics: record.lawDebugDecomposition?.capEnvelopeDeltaMetrics || null,
+              },
               renderClassComparison: record.renderClassComparison,
               pathologyClasses: record.pathologyClasses,
               sourceCurveMetrics: record.sourceCurveMetrics,
               promotedCenterlineMetrics: record.promotedCenterlineMetrics,
-              lawImpactCurve: record.lawImpactCurve,
+              lawImpactCurveMetrics: record.lawImpactCurve?.apertureOrbitCaptureDeltaMetrics || null,
             });
           }
         } else {
@@ -8895,16 +9193,29 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
       return {
         schema: 'MacroMorphologyInventoryWitnessState',
         mode: 'macro-morphology-inventory-isolated-v0',
-        visualDecompositionMode: 'source-curve-plus-law-impact-curve',
-        inventory: composition.macroMorphologyInventory,
+        visualDecompositionMode: 'source-curve-plus-law-specific-debug-predicates',
+        lawDebugMode: debugMode,
+        inventory: compactMacroMorphologyInventory(),
         visibleCount,
         hiddenCount,
         visibleCurveCount: visibleCurveIds.length,
         visibleCurveIds,
         visibleLawImpactCurveCount: visibleLawImpactCurveIds.length,
         visibleLawImpactCurveIds,
+        visibleOrbitDisplacementVectorCount: visibleOrbitDisplacementVectorIds.length,
+        visibleOrbitDisplacementVectorIds,
+        visibleCapEnvelopeRailCount: visibleCapEnvelopeRailIds.length,
+        visibleCapEnvelopeRailIds,
         visibleReferenceIds,
         visibleRecords,
+        colorLegend: [
+          { role: 'source-curve', color: '#9be8ff' },
+          { role: 'post-orbit-capture-curve', color: '#ffb24a' },
+          { role: 'orbit-displacement-vector', color: '#ff6aa6' },
+          { role: 'pre-cap-envelope-rail', color: '#9be8ff' },
+          { role: 'post-cap-envelope-rail', color: '#fff06a' },
+          { role: 'aperture-reference', color: '#4fc3e6' },
+        ],
         pathologyClassCounts: composition.macroMorphologyInventory?.pathologyClassCounts || {},
         diagnosticQuestion: [
           'do early sphere curves already squiggle',
@@ -9224,6 +9535,7 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
       };
     },
     debugState() {
+      const compactMorphologyInventory = compactMacroMorphologyInventory();
       return {
         identity: ORB_SHELL_COMPOSITION_IDENTITY,
         active,
@@ -9276,9 +9588,9 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
         macroClosestContactIds: composition.macroContactMap?.closestContactIds || [],
         macroGeometryCoherenceWatch: composition.macroContactMap?.geometryCoherenceWatch || [],
         macroGeometryCoherenceWatchCount: composition.macroContactMap?.geometryCoherenceWatchCount || 0,
-        OrbShellMorphologyInventory: composition.macroMorphologyInventory,
-        macroMorphologyInventory: composition.macroMorphologyInventory,
-        MacroSphereCurveDecomposition: composition.macroMorphologyInventory?.curveDecompositions || [],
+        OrbShellMorphologyInventory: compactMorphologyInventory,
+        macroMorphologyInventory: compactMorphologyInventory,
+        MacroSphereCurveDecomposition: compactMorphologyInventory?.curveDecompositions || [],
         macroMorphologyRecordCount: composition.macroMorphologyInventory?.recordCount || 0,
         macroMorphologyPathologyClassCounts: composition.macroMorphologyInventory?.pathologyClassCounts || {},
         OrbShellProceduralArchitectureInventory: composition.proceduralArchitectureInventory,
