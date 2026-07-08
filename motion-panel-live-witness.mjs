@@ -4,6 +4,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, dirname, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { spawn } from 'node:child_process';
+import { assertHillRouteOverlayEvidence } from './motion-panel-live-witness-evidence.mjs';
 
 const args = new Map();
 const BOOLEAN_ARGS = new Set(['--export-current-view', '--export-selected-cliplet', '--focus-phrase-preview', '--focus-take-shelf', '--promote-take']);
@@ -456,7 +457,7 @@ async function installHillAffordanceRoutePlan(ws) {
   }
   const packet = JSON.parse(readFileSync(resolve(hillAffordancePacketPath), 'utf8'));
   const data = JSON.parse(readFileSync(resolve(hillAffordanceDataPath), 'utf8'));
-  return evaluate(ws, `(async () => {
+  const evidence = await evaluate(ws, `(async () => {
     if (typeof window.kaminosPreviewHillMotionAffordanceRoutePlan !== 'function') throw new Error('missing window.kaminosPreviewHillMotionAffordanceRoutePlan');
     const result = await window.kaminosPreviewHillMotionAffordanceRoutePlan(${JSON.stringify(packet)}, ${JSON.stringify(data)}, {
       id: 'witness-hill-motion-affordance-route',
@@ -495,6 +496,13 @@ async function installHillAffordanceRoutePlan(ws) {
     ok: false,
     error: String(error?.message || error),
   }))`, { timeoutMs: 60000 });
+  if (evidence?.ok) {
+    evidence.overlayEvidenceGate = assertHillRouteOverlayEvidence(evidence, {
+      hillTerrainOverlay,
+      hillRouteProfile,
+    });
+  }
+  return evidence;
 }
 
 async function resetWitnessMotionClock(ws) {

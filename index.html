@@ -5655,7 +5655,7 @@ function motionPanelHillTerrainOverlayScalar(source, index, overlayMode = 'route
   if (mode === 'route-cost') {
     const breakdown = sampleMotionTerrainRouteCostBreakdown(source, index, costProfile);
     const rawTotal = Number(breakdown.total || 0);
-    const value = motionPanelHillTerrainOverlayNormalization
+    const value = normalization?.method === 'profile-quantile-range-v0'
       ? normalizeMotionPanelHillTerrainOverlayValue(rawTotal, normalization)
       : Math.max(0, Math.min(1, rawTotal / 14));
     return { mode, value, rawTotal, label: 'route cost', breakdown };
