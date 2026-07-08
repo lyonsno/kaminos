@@ -44,6 +44,8 @@ H = load_alpha_helpers()
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--render-manifest", required=True, help="Render manifest with truthHigh/lowUpsampled/predicted role PNGs.")
+    parser.add_argument("--truth-role", default="truthHigh", help="Truth render role to use for diagnostics.")
+    parser.add_argument("--low-role", default="lowUpsampled", help="Low/baseline render role to compare against.")
     parser.add_argument("--predicted-role", default="predictedAll", help="Predicted render role to score.")
     parser.add_argument("--cleanup-image", help="Optional cleaned RGB PNG to score against predicted residuals.")
     parser.add_argument("--cleanup-manifest", help="Optional RGB alpha cleanup manifest; uses outputs.rgbAlphaCleaned.path.")
@@ -54,6 +56,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--residual-threshold", type=float, default=0.035, help="Minimum predicted-vs-low residual magnitude to classify.")
     parser.add_argument("--clean-low-threshold", type=float, default=0.08, help="Low-vs-truth error threshold for clean-region pollution.")
     parser.add_argument("--retention-min", type=float, default=0.35, help="Minimum cleaned residual retention on useful-lift pixels.")
+    parser.add_argument("--body-norm-threshold", type=float, default=0.10, help="RGB norm threshold for high-norm curl/divergence body preservation diagnostics.")
+    parser.add_argument("--outside-norm-threshold", type=float, default=0.047, help="RGB norm threshold for broad weak-support outside-noise diagnostics.")
     return parser.parse_args()
 
 
@@ -62,7 +66,12 @@ def utc_now() -> str:
 
 
 def role_output(render_manifest: dict[str, Any], role: str) -> dict[str, Any]:
-    for output in render_manifest.get("outputs", []):
+    outputs = render_manifest.get("outputs", [])
+    if isinstance(outputs, dict):
+        output = outputs.get(role)
+        if isinstance(output, dict):
+            return output
+    for output in outputs if isinstance(outputs, list) else []:
         if output.get("role") == role:
             return output
     raise DiagnosticFailure("manifest-read", "Render manifest missing required role.", {"role": role})
@@ -101,6 +110,16 @@ def rgb_float(path: Path) -> tuple[np.ndarray, np.ndarray]:
 
 def l2_rgb(a: np.ndarray, b: np.ndarray) -> np.ndarray:
     return np.sqrt(np.sum(np.square(a - b), axis=2))
+
+
+def rgb_norm(rgb: np.ndarray) -> np.ndarray:
+    return np.sqrt(np.sum(np.square(rgb), axis=2))
+
+
+def masked_mean(values: np.ndarray, mask: np.ndarray) -> float | None:
+    if not np.any(mask):
+        return None
+    return float(np.mean(values[mask]))
 
 
 def scalar_map(values: np.ndarray, mask: np.ndarray, scale: float) -> np.ndarray:
@@ -181,8 +200,8 @@ def main() -> int:
         phase = "manifest-read"
         render_manifest_path = Path(args.render_manifest)
         render_manifest = H.read_json(render_manifest_path)
-        truth_path = image_path_from_role(render_manifest, "truthHigh")
-        low_path = image_path_from_role(render_manifest, "lowUpsampled")
+        truth_path = image_path_from_role(render_manifest, args.truth_role)
+        low_path = image_path_from_role(render_manifest, args.low_role)
         pred_path = image_path_from_role(render_manifest, args.predicted_role)
         cleanup_path = cleanup_path_from_args(args)
 
@@ -205,11 +224,60 @@ def main() -> int:
         low_err = l2_rgb(low, truth)
         pred_err = l2_rgb(pred, truth)
         pred_delta = l2_rgb(pred, low)
+        truth_norm = rgb_norm(truth)
+        low_norm = rgb_norm(low)
+        pred_norm = rgb_norm(pred)
         improvement = low_err - pred_err
         pollution = pred_err - low_err
         useful_lift = (improvement > args.improvement_margin) & (pred_delta > args.residual_threshold)
         false_pollution = (pollution > args.improvement_margin) & (pred_delta > args.residual_threshold)
         clean_region_pollution = false_pollution & (low_err <= args.clean_low_threshold)
+        truth_body = truth_norm > args.body_norm_threshold
+        low_body = low_norm > args.body_norm_threshold
+        predicted_body = pred_norm > args.body_norm_threshold
+        body_union = truth_body | predicted_body
+        diagnostic_column = truth_body | low_body
+        outside_truth_body = ~truth_body
+        outside_diagnostic_column = ~diagnostic_column
+        outside_weak_support = outside_truth_body & (pred_norm > args.outside_norm_threshold)
+        outside_column_weak_support = outside_diagnostic_column & (pred_norm > args.outside_norm_threshold)
+
+        outsideNoiseMetrics: dict[str, Any] = {
+            "bodyNormThreshold": float(args.body_norm_threshold),
+            "outsideNormThreshold": float(args.outside_norm_threshold),
+            "truthBodyPixelCount": count(truth_body),
+            "predictedBodyPixelCount": count(predicted_body),
+            "bodyUnionPixelCount": count(body_union),
+            "outsideWeakSupportPixelCount": count(outside_weak_support),
+            "outsideWeakSupportPixelRate": safe_rate(count(outside_weak_support), int(truth.shape[0] * truth.shape[1])),
+            "outsidePredictedNormMass": masked_sum(pred_norm, outside_weak_support),
+            "outsideLowNormMass": masked_sum(low_norm, outside_weak_support),
+            "cleanupPresent": cleanup is not None,
+        }
+        outsideColumnNoiseMetrics: dict[str, Any] = {
+            "bodyNormThreshold": float(args.body_norm_threshold),
+            "outsideNormThreshold": float(args.outside_norm_threshold),
+            "truthBodyPixelCount": count(truth_body),
+            "lowBodyPixelCount": count(low_body),
+            "diagnosticColumnPixelCount": count(diagnostic_column),
+            "outsideColumnWeakSupportPixelCount": count(outside_column_weak_support),
+            "outsideColumnWeakSupportPixelRate": safe_rate(count(outside_column_weak_support), int(truth.shape[0] * truth.shape[1])),
+            "outsideColumnPredictedNormMass": masked_sum(pred_norm, outside_column_weak_support),
+            "outsideColumnLowNormMass": masked_sum(low_norm, outside_column_weak_support),
+            "outsideColumnTruthNormMass": masked_sum(truth_norm, outside_column_weak_support),
+            "cleanupPresent": cleanup is not None,
+        }
+        structurePreservationMetrics: dict[str, Any] = {
+            "bodyNormThreshold": float(args.body_norm_threshold),
+            "truthBodyPixelCount": count(truth_body),
+            "predictedBodyPixelCount": count(predicted_body),
+            "bodyUnionPixelCount": count(body_union),
+            "predictedBodyPredictedNormMass": masked_sum(pred_norm, predicted_body),
+            "predictedBodyLowNormMass": masked_sum(low_norm, predicted_body),
+            "truthBodyPredictedNormMass": masked_sum(pred_norm, truth_body),
+            "truthBodyLowNormMass": masked_sum(low_norm, truth_body),
+            "cleanupPresent": cleanup is not None,
+        }
 
         cleanup_metrics: dict[str, Any] = {"cleanupPresent": cleanup is not None}
         removed_pollution = np.zeros_like(false_pollution, dtype=bool)
@@ -219,10 +287,42 @@ def main() -> int:
         if cleanup is not None:
             cleanup_err = l2_rgb(cleanup, truth)
             cleanup_delta = l2_rgb(cleanup, low)
+            cleanup_norm = rgb_norm(cleanup)
             residual_retention = cleanup_delta / np.maximum(pred_delta, 1.0e-6)
             removed_pollution = false_pollution & ((pred_err - cleanup_err) > args.improvement_margin)
             retained_lift = useful_lift & ((low_err - cleanup_err) > args.improvement_margin) & (residual_retention >= args.retention_min)
             low_collapse = useful_lift & ((cleanup_err - pred_err) > args.improvement_margin)
+            outside_cleanup_mass = masked_sum(cleanup_norm, outside_weak_support)
+            outside_pred_mass = masked_sum(pred_norm, outside_weak_support)
+            body_pred_mass = masked_sum(pred_norm, predicted_body)
+            body_cleanup_mass = masked_sum(cleanup_norm, predicted_body)
+            pred_cleanup_dot = np.sum(pred * cleanup, axis=2)
+            pred_cleanup_cosine = pred_cleanup_dot / np.maximum(pred_norm * cleanup_norm, 1.0e-6)
+            structurePreservationMetrics.update({
+                "predictedBodyCleanupNormMass": body_cleanup_mass,
+                "bodyNormRetentionRate": safe_rate(body_cleanup_mass, body_pred_mass),
+                "predictedBodyCleanupMeanNorm": masked_mean(cleanup_norm, predicted_body),
+                "predictedBodyPredictedMeanNorm": masked_mean(pred_norm, predicted_body),
+                "predictedBodyCleanupVsPredictedCosineMean": masked_mean(pred_cleanup_cosine, predicted_body),
+                "truthBodyCleanupNormMass": masked_sum(cleanup_norm, truth_body),
+                "bodyErrorDeltaMassVsPredicted": masked_sum(cleanup_err - pred_err, predicted_body),
+            })
+            outsideNoiseMetrics.update({
+                "outsideCleanupNormMass": outside_cleanup_mass,
+                "outsideWeakSupportReductionMass": outside_pred_mass - outside_cleanup_mass,
+                "outsideWeakSupportReductionRate": safe_rate(outside_pred_mass - outside_cleanup_mass, outside_pred_mass),
+                "outsideCleanupMeanNorm": masked_mean(cleanup_norm, outside_weak_support),
+                "outsidePredictedMeanNorm": masked_mean(pred_norm, outside_weak_support),
+            })
+            outside_column_pred_mass = masked_sum(pred_norm, outside_column_weak_support)
+            outside_column_cleanup_mass = masked_sum(cleanup_norm, outside_column_weak_support)
+            outsideColumnNoiseMetrics.update({
+                "outsideColumnCleanupNormMass": outside_column_cleanup_mass,
+                "outsideColumnWeakSupportReductionMass": outside_column_pred_mass - outside_column_cleanup_mass,
+                "outsideColumnWeakSupportReductionRate": safe_rate(outside_column_pred_mass - outside_column_cleanup_mass, outside_column_pred_mass),
+                "outsideColumnCleanupMeanNorm": masked_mean(cleanup_norm, outside_column_weak_support),
+                "outsideColumnPredictedMeanNorm": masked_mean(pred_norm, outside_column_weak_support),
+            })
             removed_mass = masked_sum(pred_err - cleanup_err, false_pollution & (cleanup_err < pred_err))
             pollution_mass = masked_sum(pollution, false_pollution)
             retained_mass = masked_sum(low_err - cleanup_err, retained_lift)
@@ -275,8 +375,8 @@ def main() -> int:
         H.write_png_rgba(collapse_path, collapse_rgba)
 
         frames = [
-            ("truthHigh", "truth", truth_rgba),
-            ("lowUpsampled", "low", low_rgba),
+            (args.truth_role, "truth", truth_rgba),
+            (args.low_role, "low", low_rgba),
             (args.predicted_role, "pred", pred_rgba),
         ]
         if cleanup_rgba is not None:
@@ -335,14 +435,19 @@ def main() -> int:
             "renderManifest": str(render_manifest_path),
             "renderManifestSha256": H.sha256_file(render_manifest_path),
             "predictedRole": args.predicted_role,
+            "truthRole": args.truth_role,
+            "lowRole": args.low_role,
             "sourceImages": {
-                "truthHigh": {"path": str(truth_path), "sha256": H.sha256_file(truth_path)},
-                "lowUpsampled": {"path": str(low_path), "sha256": H.sha256_file(low_path)},
+                args.truth_role: {"path": str(truth_path), "sha256": H.sha256_file(truth_path)},
+                args.low_role: {"path": str(low_path), "sha256": H.sha256_file(low_path)},
                 args.predicted_role: {"path": str(pred_path), "sha256": H.sha256_file(pred_path)},
             },
             "cleanup": cleanup_metrics,
             "mapIdentity": MAP_IDENTITY,
             "pollutionLiftMetrics": pollution_lift_metrics,
+            "outsideNoiseMetrics": outsideNoiseMetrics,
+            "outsideColumnNoiseMetrics": outsideColumnNoiseMetrics,
+            "structurePreservationMetrics": structurePreservationMetrics,
             "outputs": outputs,
         }
         H.write_json(out_path, manifest)

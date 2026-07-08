@@ -75,6 +75,8 @@ class CleanupFailure(RuntimeError):
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--render-manifest", required=True, help="Full-grid render-still manifest with truth/low/predicted role PNGs.")
+    parser.add_argument("--truth-role", default="truthHigh", help="Truth render role to use for oracle labels and metrics.")
+    parser.add_argument("--low-role", default="lowUpsampled", help="Low/baseline render role to blend from.")
     parser.add_argument("--predicted-role", default="predictedAll", help="Predicted render role to clean.")
     parser.add_argument("--out-dir", required=True, help="Output directory.")
     parser.add_argument("--out", help="Output manifest path. Defaults to <out-dir>/manifest.json.")
@@ -214,7 +216,12 @@ def rgba_from_gray(values: np.ndarray) -> np.ndarray:
 
 
 def role_output(render_manifest: dict[str, Any], role: str) -> dict[str, Any]:
-    for output in render_manifest.get("outputs", []):
+    outputs = render_manifest.get("outputs", [])
+    if isinstance(outputs, dict):
+        output = outputs.get(role)
+        if isinstance(output, dict):
+            return output
+    for output in outputs if isinstance(outputs, list) else []:
         if output.get("role") == role:
             return output
     raise CleanupFailure("manifest-read", "Render manifest missing required role.", {"role": role})
@@ -352,8 +359,8 @@ def main() -> int:
         phase = "manifest-read"
         render_manifest_path = Path(args.render_manifest).resolve()
         render_manifest = read_json(render_manifest_path)
-        truth_output = role_output(render_manifest, "truthHigh")
-        low_output = role_output(render_manifest, "lowUpsampled")
+        truth_output = role_output(render_manifest, args.truth_role)
+        low_output = role_output(render_manifest, args.low_role)
         pred_output = role_output(render_manifest, args.predicted_role)
         evidence = {
             "renderManifest": str(render_manifest_path),
@@ -417,8 +424,8 @@ def main() -> int:
         write_png_rgba(oracle_blend_path, rgba_from_rgb_float(oracle_blend))
         write_png_rgba(cleaned_path, rgba_from_rgb_float(cleaned))
         sheet = contact_sheet([
-            ("truthHigh", "truth", truth_rgba),
-            ("lowUpsampled", "low", low_rgba),
+            (args.truth_role, "truth", truth_rgba),
+            (args.low_role, "low", low_rgba),
             (args.predicted_role, "pred", pred_rgba),
             ("oracleAlphaBlend", "oracleBlend", rgba_from_rgb_float(oracle_blend)),
             ("rgbAlphaCleaned", "rgbClean", rgba_from_rgb_float(cleaned)),
@@ -428,7 +435,7 @@ def main() -> int:
         alpha_error = test_alpha - test_oracle
         alpha_mse = float(np.mean(np.square(alpha_error)))
         render_metrics = {
-            "lowUpsampled": image_metrics(low, truth),
+            args.low_role: image_metrics(low, truth),
             args.predicted_role: image_metrics(pred, truth),
             "oracleAlphaBlend": image_metrics(oracle_blend, truth),
             "rgbAlphaCleaned": image_metrics(cleaned, truth),
@@ -443,12 +450,14 @@ def main() -> int:
             "renderManifest": str(render_manifest_path),
             "renderManifestSha256": sha256_file(render_manifest_path),
             "predictedRole": args.predicted_role,
+            "truthRole": args.truth_role,
+            "lowRole": args.low_role,
             "limitation": LIMITATION,
             "oracleAlpha": {
                 "identity": ORACLE_ALPHA_IDENTITY,
-                "formula": "clip(dot(truthHigh-lowUpsampled, predicted-lowUpsampled) / dot(predicted-lowUpsampled, predicted-lowUpsampled), 0, 1)",
-                "sourceTruthRole": "truthHigh",
-                "sourceLowRole": "lowUpsampled",
+                "formula": "clip(dot(truth-low, predicted-low) / dot(predicted-low, predicted-low), 0, 1)",
+                "sourceTruthRole": args.truth_role,
+                "sourceLowRole": args.low_role,
                 "sourcePredictedRole": args.predicted_role,
                 "alphaMean": float(np.mean(oracle)),
                 "alphaP95": float(np.quantile(oracle, 0.95)),
@@ -474,8 +483,8 @@ def main() -> int:
             },
             "renderComparisonMetrics": render_metrics,
             "sourceImages": {
-                "truthHigh": {"path": str(truth_path), "sha256": sha256_file(truth_path)},
-                "lowUpsampled": {"path": str(low_path), "sha256": sha256_file(low_path)},
+                args.truth_role: {"path": str(truth_path), "sha256": sha256_file(truth_path)},
+                args.low_role: {"path": str(low_path), "sha256": sha256_file(low_path)},
                 args.predicted_role: {"path": str(pred_path), "sha256": sha256_file(pred_path)},
             },
             "outputs": {
