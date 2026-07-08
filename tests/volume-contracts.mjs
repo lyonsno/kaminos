@@ -2329,6 +2329,24 @@ assert.match(rgbConservativeFirewall, /firewallMetrics/, 'RGB conservative firew
 assert.match(rgbConservativeFirewall, /renderComparisonMetrics/, 'RGB conservative firewall reports rendered RGB metrics against truth');
 assert.match(rgbConservativeFirewall, /visibleRasterLabels/, 'RGB conservative firewall burns and manifests visible contact-sheet labels');
 assert.match(rgbConservativeFirewall, /failurePhase/, 'RGB conservative firewall writes failure-phase reports for corrupt manifests or images');
+
+const rgbSoftProtectedAlphaPath = join(root, 'volume-render-rgb-soft-protected-alpha.py');
+assert.ok(existsSync(rgbSoftProtectedAlphaPath), 'volume render RGB soft protected alpha diagnostic exists');
+const rgbSoftProtectedAlpha = existsSync(rgbSoftProtectedAlphaPath) ? readFileSync(rgbSoftProtectedAlphaPath, 'utf8') : '';
+assert.match(rgbSoftProtectedAlpha, /kaminos\.volume\.render-rgb-soft-protected-alpha\.v0/, 'RGB soft protected alpha writes a stable manifest schema');
+assert.match(rgbSoftProtectedAlpha, /render-space-soft-protected-alpha-v0/, 'RGB soft protected alpha names its evidence identity');
+assert.match(rgbSoftProtectedAlpha, /soft-protected-alpha-from-low-pred-energy-v0/, 'RGB soft protected alpha derives protection masks without truth support at application time');
+assert.match(rgbSoftProtectedAlpha, /--truth-role/, 'RGB soft protected alpha can target derived manifests with custom truth role names');
+assert.match(rgbSoftProtectedAlpha, /--low-role/, 'RGB soft protected alpha can target derived manifests with custom low/baseline role names');
+assert.match(rgbSoftProtectedAlpha, /outputs\.get\(role\)/, 'RGB soft protected alpha reads object-style role output manifests as well as list-style outputs');
+assert.match(rgbSoftProtectedAlpha, /softProtectedAlpha/, 'RGB soft protected alpha writes the soft body-protected composition');
+assert.match(rgbSoftProtectedAlpha, /editAlphaMap/, 'RGB soft protected alpha writes the effective edit alpha map');
+assert.match(rgbSoftProtectedAlpha, /protectedBodyMap/, 'RGB soft protected alpha writes the protected body mask visual');
+assert.match(rgbSoftProtectedAlpha, /diagnosticColumnMap/, 'RGB soft protected alpha writes the diagnostic column mask visual');
+assert.match(rgbSoftProtectedAlpha, /softProtectedMetrics/, 'RGB soft protected alpha reports composition/protection metric aggregates');
+assert.match(rgbSoftProtectedAlpha, /renderComparisonMetrics/, 'RGB soft protected alpha reports rendered RGB metrics against truth');
+assert.match(rgbSoftProtectedAlpha, /visibleRasterLabels/, 'RGB soft protected alpha burns and manifests visible contact-sheet labels');
+assert.match(rgbSoftProtectedAlpha, /failurePhase/, 'RGB soft protected alpha writes failure-phase reports for corrupt manifests or images');
 const sourceScaleProbePath = join(root, 'volume-source-scale-probe.mjs');
 assert.ok(existsSync(sourceScaleProbePath), 'source-scale blobbiness probe exists');
 const sourceScaleProbe = existsSync(sourceScaleProbePath) ? readFileSync(sourceScaleProbePath, 'utf8') : '';
