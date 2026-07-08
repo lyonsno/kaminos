@@ -167,6 +167,8 @@ def parse_args():
     parser.add_argument("--patch-size", type=int, default=96)
     parser.add_argument("--model-arch", dest="modelArch", choices=["tiny-conv", "direct-residual", "hybrid-residual", "gated-detail-residual"], default="tiny-conv")
     parser.add_argument("--feature-input-mode", dest="featureInputMode", choices=["rgb", "feature-rgba", "aux-rgba", "aux-rgb", "aux-red-cyan-abs", "aux-opponent-gradient"], default="rgb", help="Model input source: low RGB only, low RGB plus shader/material residual feature RGBA, raw Flow Debug RGB/RGBA, or normalized Flow Debug derived carriers.")
+    parser.add_argument("--material-focus", dest="materialFocus", choices=["off", "fire-interface", "smoke"], default="off", help="Optional specialist supervision mask derived from shader/material feature RGBA: fire/interface or smoke.")
+    parser.add_argument("--outside-material-residual-weight", dest="outsideMaterialResidualWeight", type=float, default=1.0, help="Penalty on residual energy outside the selected material-focus mask.")
     parser.add_argument("--hidden-channels", type=int, default=16)
     parser.add_argument("--detail-residual-gate", dest="detailResidualGate", type=float, default=2.0, help="Fixed multiplier for the hidden detail residual in gated-detail-residual probes.")
     parser.add_argument("--learning-rate", type=float, default=1e-3)
@@ -453,6 +455,14 @@ def feature_input_authority(featureInputMode):
     return "off"
 
 
+def material_mask_authority(materialFocus, featureInputMode):
+    if materialFocus == "off":
+        return "off"
+    if featureInputMode == "feature-rgba":
+        return FEATURE_INPUT_AUTHORITY
+    return "unavailable-without-feature-rgba"
+
+
 def uses_feature_image(featureInputMode):
     return featureInputMode in IMAGE_FEATURE_INPUT_MODES
 
@@ -708,6 +718,56 @@ def model_input_from_rgb(low_patch, low_render_scale, conditionRenderScale, feat
     return np.concatenate(input_parts, axis=2)
 
 
+def material_focus_mask(model_input_batch, materialFocus):
+    if materialFocus == "off":
+        return None
+    if model_input_batch.shape[3] < 7:
+        raise ValueError("--material-focus requires --feature-input-mode=feature-rgba so fire/smoke authority channels are present")
+    radiance = model_input_batch[..., 3:4]
+    fire = model_input_batch[..., 4:5]
+    interface = model_input_batch[..., 5:6]
+    smoke = model_input_batch[..., 6:7]
+    fire_authority = mx.maximum(radiance, mx.maximum(fire * 0.88, interface * 0.72))
+    smoke_authority = mx.clip(smoke, 0.0, 1.0)
+    if materialFocus == "fire-interface":
+        return mx.clip(fire_authority, 0.0, 1.0)
+    if materialFocus == "smoke":
+        fire_exclusion = 1.0 - mx.clip((fire_authority - 0.08) / 0.32, 0.0, 1.0)
+        return mx.clip(smoke_authority * fire_exclusion, 0.0, 1.0)
+    raise ValueError(f"unsupported material focus: {materialFocus}")
+
+
+def np_material_focus_masks(feature_image):
+    if feature_image is None or feature_image.shape[2] < 4:
+        shape = feature_image.shape[:2] if feature_image is not None else (0, 0)
+        return {
+            "fire": np.zeros((*shape, 1), dtype=np.float32),
+            "smoke": np.zeros((*shape, 1), dtype=np.float32),
+        }
+    radiance = feature_image[..., 0:1]
+    fire = feature_image[..., 1:2]
+    interface = feature_image[..., 2:3]
+    smoke = np.clip(feature_image[..., 3:4], 0.0, 1.0)
+    fire_authority = np.maximum(radiance, np.maximum(fire * 0.88, interface * 0.72))
+    fire_mask = np.clip(fire_authority, 0.0, 1.0).astype(np.float32)
+    fire_exclusion = 1.0 - np.clip((fire_authority - 0.08) / 0.32, 0.0, 1.0)
+    smoke_mask = np.clip(smoke * fire_exclusion, 0.0, 1.0).astype(np.float32)
+    return {"fire": fire_mask, "smoke": smoke_mask}
+
+
+def material_coverage_summary(items):
+    fire_coverages = {}
+    smoke_coverages = {}
+    for item in items:
+        masks = np_material_focus_masks(item.get("feature"))
+        fire_coverages[item["id"]] = float(np.mean(masks["fire"])) if masks["fire"].size else 0.0
+        smoke_coverages[item["id"]] = float(np.mean(masks["smoke"])) if masks["smoke"].size else 0.0
+    return {
+        "materialFireCoverage": fire_coverages,
+        "materialSmokeCoverage": smoke_coverages,
+    }
+
+
 def sample_patch_batch(items, rng, batch_size, patch_size, foregroundProbability, edgeSamplingProbability, conditionRenderScale, featureInputMode):
     lows = []
     highs = []
@@ -895,6 +955,17 @@ def edge_band_loss_value(prediction, target, low_batch, edge_mask, edgeLossWeigh
         outside_mask = 1.0 - mx.clip(edge_mask, 0.0, 1.0)
         total = total + float(outsideEdgeResidualWeight) * masked_mse_value(prediction - low_rgb, mx.zeros_like(prediction), outside_mask)
     return total
+
+
+def material_focus_loss_value(prediction, target, low_batch, materialFocus, outsideMaterialResidualWeight):
+    material_mask = material_focus_mask(low_batch, materialFocus)
+    if material_mask is None:
+        return mse_value(prediction, target)
+    residual = prediction - rgb_channels(low_batch)
+    material_loss = masked_mse_value(prediction, target, material_mask)
+    outside_mask = 1.0 - mx.clip(material_mask, 0.0, 1.0)
+    outside_loss = masked_mse_value(residual, mx.zeros_like(residual), outside_mask)
+    return material_loss + max(0.0, float(outsideMaterialResidualWeight)) * outside_loss
 
 
 def temporal_loss_value(model_instance, previous_low_batch, current_low_batch, previous_high_batch, current_high_batch, previous_mask_batch, current_mask_batch, residualApplicationMaskMode, residualMaskFeatherRadius):
@@ -1469,9 +1540,12 @@ def main():
         ("--smoke-residual-energy-loss-weight", args.smokeResidualEnergyLossWeight),
         ("--smoke-mask-threshold", args.smokeMaskThreshold),
         ("--chroma-residual-loss-weight", args.chromaResidualLossWeight),
+        ("--outside-material-residual-weight", args.outsideMaterialResidualWeight),
     ]:
         if value < 0:
             raise ValueError(f"{label} must be non-negative")
+    if args.materialFocus != "off" and args.featureInputMode != "feature-rgba":
+        raise ValueError("--material-focus requires --feature-input-mode=feature-rgba")
     if args.edgeSamplingProbability > 1:
         raise ValueError("--edge-sampling-probability must be between 0 and 1")
     if args.residualContinuationAlpha < 0 or args.residualContinuationAlpha > 1:
@@ -1560,7 +1634,15 @@ def main():
 
     def loss_fn(model_instance, low_batch, high_batch, edge_mask_batch, previous_low_batch, current_low_batch, previous_high_batch, current_high_batch, previous_mask_batch, current_mask_batch):
         prediction = model_instance(low_batch, residual_application_mask(edge_mask_batch, residualApplicationMaskMode, residualMaskFeatherRadius))
-        if args.loss_mode == "weighted":
+        if args.materialFocus != "off":
+            still_loss = material_focus_loss_value(
+                prediction,
+                high_batch,
+                low_batch,
+                args.materialFocus,
+                args.outsideMaterialResidualWeight,
+            )
+        elif args.loss_mode == "weighted":
             still_loss = weighted_mse_value(
                 prediction,
                 high_batch,
@@ -1764,6 +1846,7 @@ def main():
             effectiveMaxSteps,
             modelConfigSource,
         )
+    materialCoverage = material_coverage_summary(loaded)
     report = {
         "schema": SCHEMA,
         "createdAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
@@ -1826,6 +1909,9 @@ def main():
         "smokeResidualDcLossWeight": args.smokeResidualDcLossWeight,
         "smokeResidualEnergyLossWeight": args.smokeResidualEnergyLossWeight,
         "smokeMaskThreshold": args.smokeMaskThreshold,
+        "materialFocus": args.materialFocus,
+        "materialMaskAuthority": material_mask_authority(args.materialFocus, featureInputMode),
+        "outsideMaterialResidualWeight": args.outsideMaterialResidualWeight,
         "conditionRenderScale": conditionRenderScale,
         "featureInputMode": featureInputMode,
         "featureInputAuthority": feature_input_authority(featureInputMode),
@@ -1890,6 +1976,7 @@ def main():
             item["id"]: item["targetEdgeBandSignalMax"]
             for item in loaded
         },
+        **materialCoverage,
         "batchSize": args.batch_size,
         "patchSize": args.patch_size,
         "hiddenChannels": hiddenChannels,
@@ -1906,6 +1993,9 @@ def main():
         "smokeResidualDcLossWeight": args.smokeResidualDcLossWeight,
         "smokeResidualEnergyLossWeight": args.smokeResidualEnergyLossWeight,
         "smokeMaskThreshold": args.smokeMaskThreshold,
+        "materialFocus": args.materialFocus,
+        "materialMaskAuthority": material_mask_authority(args.materialFocus, featureInputMode),
+        "outsideMaterialResidualWeight": args.outsideMaterialResidualWeight,
         "learningRate": args.learning_rate,
         "evalPatches": args.eval_patches,
         "durationSeconds": duration_seconds,

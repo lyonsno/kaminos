@@ -1,0 +1,130 @@
+{
+  "bbox": [
+    550,
+    304,
+    1264,
+    1746
+  ],
+  "rows": [
+    {
+      "name": "rs010-frontbite-direct-gain1",
+      "files": {
+        "crop-off": "rs010-frontbite-direct-gain1__crop-off.png",
+        "crop-on": "rs010-frontbite-direct-gain1__crop-on.png",
+        "crop-ref": "rs010-frontbite-direct-gain1__crop-ref.png",
+        "abs-on-off-x12": "rs010-frontbite-direct-gain1__abs-on-off-x12.png",
+        "signed-on-off-x12": "rs010-frontbite-direct-gain1__signed-on-off-x12.png",
+        "luma-on-off-x18": "rs010-frontbite-direct-gain1__luma-on-off-x18.png",
+        "abs-on-ref-x12": "rs010-frontbite-direct-gain1__abs-on-ref-x12.png"
+      },
+      "meanAbsVsOff": 1.1307832718170634,
+      "meanAbsVsRef": 1.198860252004582,
+      "linearMeanAbsVsRef": 0.42472667684867
+    },
+    {
+      "name": "rs010-frontbite-direct-gain2",
+      "files": {
+        "crop-off": "rs010-frontbite-direct-gain2__crop-off.png",
+        "crop-on": "rs010-frontbite-direct-gain2__crop-on.png",
+        "crop-ref": "rs010-frontbite-direct-gain2__crop-ref.png",
+        "abs-on-off-x12": "rs010-frontbite-direct-gain2__abs-on-off-x12.png",
+        "signed-on-off-x12": "rs010-frontbite-direct-gain2__signed-on-off-x12.png",
+        "luma-on-off-x18": "rs010-frontbite-direct-gain2__luma-on-off-x18.png",
+        "abs-on-ref-x12": "rs010-frontbite-direct-gain2__abs-on-ref-x12.png"
+      },
+      "meanAbsVsOff": 2.034628569004285,
+      "meanAbsVsRef": 2.0555970260065335,
+      "linearMeanAbsVsRef": 0.42472667684867
+    },
+    {
+      "name": "rs010-highlimit-direct-gain1",
+      "files": {
+        "crop-off": "rs010-highlimit-direct-gain1__crop-off.png",
+        "crop-on": "rs010-highlimit-direct-gain1__crop-on.png",
+        "crop-ref": "rs010-highlimit-direct-gain1__crop-ref.png",
+        "abs-on-off-x12": "rs010-highlimit-direct-gain1__abs-on-off-x12.png",
+        "signed-on-off-x12": "rs010-highlimit-direct-gain1__signed-on-off-x12.png",
+        "luma-on-off-x18": "rs010-highlimit-direct-gain1__luma-on-off-x18.png",
+        "abs-on-ref-x12": "rs010-highlimit-direct-gain1__abs-on-ref-x12.png"
+      },
+      "meanAbsVsOff": 0.8160263671460694,
+      "meanAbsVsRef": 0.9472419498536337,
+      "linearMeanAbsVsRef": 0.42472667684867
+    },
+    {
+      "name": "rs010-highlimit-direct-gain2",
+      "files": {
+        "crop-off": "rs010-highlimit-direct-gain2__crop-off.png",
+        "crop-on": "rs010-highlimit-direct-gain2__crop-on.png",
+        "crop-ref": "rs010-highlimit-direct-gain2__crop-ref.png",
+        "abs-on-off-x12": "rs010-highlimit-direct-gain2__abs-on-off-x12.png",
+        "signed-on-off-x12": "rs010-highlimit-direct-gain2__signed-on-off-x12.png",
+        "luma-on-off-x18": "rs010-highlimit-direct-gain2__luma-on-off-x18.png",
+        "abs-on-ref-x12": "rs010-highlimit-direct-gain2__abs-on-ref-x12.png"
+      },
+      "meanAbsVsOff": 1.5153020660981715,
+      "meanAbsVsRef": 1.6053418395485979,
+      "linearMeanAbsVsRef": 0.42472667684867
+    },
+    {
+      "name": "rs010-highlimit-smoke-energy-2p0-gain1",
+      "files": {
+        "crop-off": "rs010-highlimit-smoke-energy-2p0-gain1__crop-off.png",
+        "crop-on": "rs010-highlimit-smoke-energy-2p0-gain1__crop-on.png",
+        "crop-ref": "rs010-highlimit-smoke-energy-2p0-gain1__crop-ref.png",
+        "abs-on-off-x12": "rs010-highlimit-smoke-energy-2p0-gain1__abs-on-off-x12.png",
+        "signed-on-off-x12": "rs010-highlimit-smoke-energy-2p0-gain1__signed-on-off-x12.png",
+        "luma-on-off-x18": "rs010-highlimit-smoke-energy-2p0-gain1__luma-on-off-x18.png",
+        "abs-on-ref-x12": "rs010-highlimit-smoke-energy-2p0-gain1__abs-on-ref-x12.png"
+      },
+      "meanAbsVsOff": 0.7798230876925035,
+      "meanAbsVsRef": 0.9169843239574053,
+      "linearMeanAbsVsRef": 0.42472667684867
+    },
+    {
+      "name": "rs010-highlimit-smoke-energy-2p0-gain2",
+      "files": {
+        "crop-off": "rs010-highlimit-smoke-energy-2p0-gain2__crop-off.png",
+        "crop-on": "rs010-highlimit-smoke-energy-2p0-gain2__crop-on.png",
+        "crop-ref": "rs010-highlimit-smoke-energy-2p0-gain2__crop-ref.png",
+        "abs-on-off-x12": "rs010-highlimit-smoke-energy-2p0-gain2__abs-on-off-x12.png",
+        "signed-on-off-x12": "rs010-highlimit-smoke-energy-2p0-gain2__signed-on-off-x12.png",
+        "luma-on-off-x18": "rs010-highlimit-smoke-energy-2p0-gain2__luma-on-off-x18.png",
+        "abs-on-ref-x12": "rs010-highlimit-smoke-energy-2p0-gain2__abs-on-ref-x12.png"
+      },
+      "meanAbsVsOff": 1.4419302320648255,
+      "meanAbsVsRef": 1.537154978575368,
+      "linearMeanAbsVsRef": 0.42472667684867
+    },
+    {
+      "name": "rs010-smoke-structure-routed-gain1",
+      "files": {
+        "crop-off": "rs010-smoke-structure-routed-gain1__crop-off.png",
+        "crop-on": "rs010-smoke-structure-routed-gain1__crop-on.png",
+        "crop-ref": "rs010-smoke-structure-routed-gain1__crop-ref.png",
+        "abs-on-off-x12": "rs010-smoke-structure-routed-gain1__abs-on-off-x12.png",
+        "signed-on-off-x12": "rs010-smoke-structure-routed-gain1__signed-on-off-x12.png",
+        "luma-on-off-x18": "rs010-smoke-structure-routed-gain1__luma-on-off-x18.png",
+        "abs-on-ref-x12": "rs010-smoke-structure-routed-gain1__abs-on-ref-x12.png"
+      },
+      "meanAbsVsOff": 0.7863428577489288,
+      "meanAbsVsRef": 0.8664740571040686,
+      "linearMeanAbsVsRef": 0.42472667684867
+    },
+    {
+      "name": "rs010-smoke-structure-routed-gain2",
+      "files": {
+        "crop-off": "rs010-smoke-structure-routed-gain2__crop-off.png",
+        "crop-on": "rs010-smoke-structure-routed-gain2__crop-on.png",
+        "crop-ref": "rs010-smoke-structure-routed-gain2__crop-ref.png",
+        "abs-on-off-x12": "rs010-smoke-structure-routed-gain2__abs-on-off-x12.png",
+        "signed-on-off-x12": "rs010-smoke-structure-routed-gain2__signed-on-off-x12.png",
+        "luma-on-off-x18": "rs010-smoke-structure-routed-gain2__luma-on-off-x18.png",
+        "abs-on-ref-x12": "rs010-smoke-structure-routed-gain2__abs-on-ref-x12.png"
+      },
+      "meanAbsVsOff": 1.554768147299648,
+      "meanAbsVsRef": 1.5730477069280047,
+      "linearMeanAbsVsRef": 0.42472667684867
+    }
+  ]
+}

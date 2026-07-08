@@ -1,0 +1,77 @@
+<!doctype html><meta charset="utf-8"><title>Kaminos residual delta inspection</title>
+<style>
+body{margin:0;background:#0b0d0f;color:#e8ecef;font:14px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif} header{position:sticky;top:0;background:#111820;padding:12px 16px;z-index:2;border-bottom:1px solid #2a3440} .row{padding:18px 16px;border-bottom:1px solid #24303a}.name{font-size:18px;font-weight:700;margin-bottom:4px}.metrics{color:#b7c4cf;margin-bottom:10px}.strip{display:flex;gap:12px;overflow:auto;align-items:flex-start}.tile{flex:0 0 auto;background:#151a20;border:1px solid #303944;padding:8px}.tile img{display:block;image-rendering:auto;max-width:none}.cap{margin-bottom:6px;color:#f1cf8a;font-weight:600}.note{color:#b7c4cf;max-width:1100px;line-height:1.45} a{color:#8fd3ff}
+</style>
+<header><h1>Same-state residual delta inspection</h1><div class="note">All rows use the same frozen sim/render phase. Diff images are cropped to the plume region. <b>abs(on-off)x12</b> shows magnitude of residual movement; <b>luma signed</b> encodes red = brighter than low-scale off, cyan = darker. Scalar warning: every current on candidate moves farther from the native reference than linear on this support frame, but the visible deltas are real and diagnostically useful.</div><p><a href="montage.png">Open compact montage</a> · <a href="../index.html">previous toggle sheet</a></p></header>
+<section class="row"><div class="name">rs010-frontbite-direct-gain1</div><div class="metrics">meanAbs vs off 1.131; meanAbs vs native 1.199; linear/off vs native 0.425</div><div class="strip">
+<div class="tile"><div class="cap">0.10 linear off</div><a href="rs010-frontbite-direct-gain1__crop-off.png"><img src="rs010-frontbite-direct-gain1__crop-off.png"/></a></div>
+<div class="tile"><div class="cap">residual on</div><a href="rs010-frontbite-direct-gain1__crop-on.png"><img src="rs010-frontbite-direct-gain1__crop-on.png"/></a></div>
+<div class="tile"><div class="cap">1.00 native ref</div><a href="rs010-frontbite-direct-gain1__crop-ref.png"><img src="rs010-frontbite-direct-gain1__crop-ref.png"/></a></div>
+<div class="tile"><div class="cap">abs(on-off) ×12</div><a href="rs010-frontbite-direct-gain1__abs-on-off-x12.png"><img src="rs010-frontbite-direct-gain1__abs-on-off-x12.png"/></a></div>
+<div class="tile"><div class="cap">signed RGB ×12</div><a href="rs010-frontbite-direct-gain1__signed-on-off-x12.png"><img src="rs010-frontbite-direct-gain1__signed-on-off-x12.png"/></a></div>
+<div class="tile"><div class="cap">luma signed ×18</div><a href="rs010-frontbite-direct-gain1__luma-on-off-x18.png"><img src="rs010-frontbite-direct-gain1__luma-on-off-x18.png"/></a></div>
+<div class="tile"><div class="cap">abs(on-ref) ×12</div><a href="rs010-frontbite-direct-gain1__abs-on-ref-x12.png"><img src="rs010-frontbite-direct-gain1__abs-on-ref-x12.png"/></a></div>
+</div></section>
+<section class="row"><div class="name">rs010-frontbite-direct-gain2</div><div class="metrics">meanAbs vs off 2.035; meanAbs vs native 2.056; linear/off vs native 0.425</div><div class="strip">
+<div class="tile"><div class="cap">0.10 linear off</div><a href="rs010-frontbite-direct-gain2__crop-off.png"><img src="rs010-frontbite-direct-gain2__crop-off.png"/></a></div>
+<div class="tile"><div class="cap">residual on</div><a href="rs010-frontbite-direct-gain2__crop-on.png"><img src="rs010-frontbite-direct-gain2__crop-on.png"/></a></div>
+<div class="tile"><div class="cap">1.00 native ref</div><a href="rs010-frontbite-direct-gain2__crop-ref.png"><img src="rs010-frontbite-direct-gain2__crop-ref.png"/></a></div>
+<div class="tile"><div class="cap">abs(on-off) ×12</div><a href="rs010-frontbite-direct-gain2__abs-on-off-x12.png"><img src="rs010-frontbite-direct-gain2__abs-on-off-x12.png"/></a></div>
+<div class="tile"><div class="cap">signed RGB ×12</div><a href="rs010-frontbite-direct-gain2__signed-on-off-x12.png"><img src="rs010-frontbite-direct-gain2__signed-on-off-x12.png"/></a></div>
+<div class="tile"><div class="cap">luma signed ×18</div><a href="rs010-frontbite-direct-gain2__luma-on-off-x18.png"><img src="rs010-frontbite-direct-gain2__luma-on-off-x18.png"/></a></div>
+<div class="tile"><div class="cap">abs(on-ref) ×12</div><a href="rs010-frontbite-direct-gain2__abs-on-ref-x12.png"><img src="rs010-frontbite-direct-gain2__abs-on-ref-x12.png"/></a></div>
+</div></section>
+<section class="row"><div class="name">rs010-highlimit-direct-gain1</div><div class="metrics">meanAbs vs off 0.816; meanAbs vs native 0.947; linear/off vs native 0.425</div><div class="strip">
+<div class="tile"><div class="cap">0.10 linear off</div><a href="rs010-highlimit-direct-gain1__crop-off.png"><img src="rs010-highlimit-direct-gain1__crop-off.png"/></a></div>
+<div class="tile"><div class="cap">residual on</div><a href="rs010-highlimit-direct-gain1__crop-on.png"><img src="rs010-highlimit-direct-gain1__crop-on.png"/></a></div>
+<div class="tile"><div class="cap">1.00 native ref</div><a href="rs010-highlimit-direct-gain1__crop-ref.png"><img src="rs010-highlimit-direct-gain1__crop-ref.png"/></a></div>
+<div class="tile"><div class="cap">abs(on-off) ×12</div><a href="rs010-highlimit-direct-gain1__abs-on-off-x12.png"><img src="rs010-highlimit-direct-gain1__abs-on-off-x12.png"/></a></div>
+<div class="tile"><div class="cap">signed RGB ×12</div><a href="rs010-highlimit-direct-gain1__signed-on-off-x12.png"><img src="rs010-highlimit-direct-gain1__signed-on-off-x12.png"/></a></div>
+<div class="tile"><div class="cap">luma signed ×18</div><a href="rs010-highlimit-direct-gain1__luma-on-off-x18.png"><img src="rs010-highlimit-direct-gain1__luma-on-off-x18.png"/></a></div>
+<div class="tile"><div class="cap">abs(on-ref) ×12</div><a href="rs010-highlimit-direct-gain1__abs-on-ref-x12.png"><img src="rs010-highlimit-direct-gain1__abs-on-ref-x12.png"/></a></div>
+</div></section>
+<section class="row"><div class="name">rs010-highlimit-direct-gain2</div><div class="metrics">meanAbs vs off 1.515; meanAbs vs native 1.605; linear/off vs native 0.425</div><div class="strip">
+<div class="tile"><div class="cap">0.10 linear off</div><a href="rs010-highlimit-direct-gain2__crop-off.png"><img src="rs010-highlimit-direct-gain2__crop-off.png"/></a></div>
+<div class="tile"><div class="cap">residual on</div><a href="rs010-highlimit-direct-gain2__crop-on.png"><img src="rs010-highlimit-direct-gain2__crop-on.png"/></a></div>
+<div class="tile"><div class="cap">1.00 native ref</div><a href="rs010-highlimit-direct-gain2__crop-ref.png"><img src="rs010-highlimit-direct-gain2__crop-ref.png"/></a></div>
+<div class="tile"><div class="cap">abs(on-off) ×12</div><a href="rs010-highlimit-direct-gain2__abs-on-off-x12.png"><img src="rs010-highlimit-direct-gain2__abs-on-off-x12.png"/></a></div>
+<div class="tile"><div class="cap">signed RGB ×12</div><a href="rs010-highlimit-direct-gain2__signed-on-off-x12.png"><img src="rs010-highlimit-direct-gain2__signed-on-off-x12.png"/></a></div>
+<div class="tile"><div class="cap">luma signed ×18</div><a href="rs010-highlimit-direct-gain2__luma-on-off-x18.png"><img src="rs010-highlimit-direct-gain2__luma-on-off-x18.png"/></a></div>
+<div class="tile"><div class="cap">abs(on-ref) ×12</div><a href="rs010-highlimit-direct-gain2__abs-on-ref-x12.png"><img src="rs010-highlimit-direct-gain2__abs-on-ref-x12.png"/></a></div>
+</div></section>
+<section class="row"><div class="name">rs010-highlimit-smoke-energy-2p0-gain1</div><div class="metrics">meanAbs vs off 0.780; meanAbs vs native 0.917; linear/off vs native 0.425</div><div class="strip">
+<div class="tile"><div class="cap">0.10 linear off</div><a href="rs010-highlimit-smoke-energy-2p0-gain1__crop-off.png"><img src="rs010-highlimit-smoke-energy-2p0-gain1__crop-off.png"/></a></div>
+<div class="tile"><div class="cap">residual on</div><a href="rs010-highlimit-smoke-energy-2p0-gain1__crop-on.png"><img src="rs010-highlimit-smoke-energy-2p0-gain1__crop-on.png"/></a></div>
+<div class="tile"><div class="cap">1.00 native ref</div><a href="rs010-highlimit-smoke-energy-2p0-gain1__crop-ref.png"><img src="rs010-highlimit-smoke-energy-2p0-gain1__crop-ref.png"/></a></div>
+<div class="tile"><div class="cap">abs(on-off) ×12</div><a href="rs010-highlimit-smoke-energy-2p0-gain1__abs-on-off-x12.png"><img src="rs010-highlimit-smoke-energy-2p0-gain1__abs-on-off-x12.png"/></a></div>
+<div class="tile"><div class="cap">signed RGB ×12</div><a href="rs010-highlimit-smoke-energy-2p0-gain1__signed-on-off-x12.png"><img src="rs010-highlimit-smoke-energy-2p0-gain1__signed-on-off-x12.png"/></a></div>
+<div class="tile"><div class="cap">luma signed ×18</div><a href="rs010-highlimit-smoke-energy-2p0-gain1__luma-on-off-x18.png"><img src="rs010-highlimit-smoke-energy-2p0-gain1__luma-on-off-x18.png"/></a></div>
+<div class="tile"><div class="cap">abs(on-ref) ×12</div><a href="rs010-highlimit-smoke-energy-2p0-gain1__abs-on-ref-x12.png"><img src="rs010-highlimit-smoke-energy-2p0-gain1__abs-on-ref-x12.png"/></a></div>
+</div></section>
+<section class="row"><div class="name">rs010-highlimit-smoke-energy-2p0-gain2</div><div class="metrics">meanAbs vs off 1.442; meanAbs vs native 1.537; linear/off vs native 0.425</div><div class="strip">
+<div class="tile"><div class="cap">0.10 linear off</div><a href="rs010-highlimit-smoke-energy-2p0-gain2__crop-off.png"><img src="rs010-highlimit-smoke-energy-2p0-gain2__crop-off.png"/></a></div>
+<div class="tile"><div class="cap">residual on</div><a href="rs010-highlimit-smoke-energy-2p0-gain2__crop-on.png"><img src="rs010-highlimit-smoke-energy-2p0-gain2__crop-on.png"/></a></div>
+<div class="tile"><div class="cap">1.00 native ref</div><a href="rs010-highlimit-smoke-energy-2p0-gain2__crop-ref.png"><img src="rs010-highlimit-smoke-energy-2p0-gain2__crop-ref.png"/></a></div>
+<div class="tile"><div class="cap">abs(on-off) ×12</div><a href="rs010-highlimit-smoke-energy-2p0-gain2__abs-on-off-x12.png"><img src="rs010-highlimit-smoke-energy-2p0-gain2__abs-on-off-x12.png"/></a></div>
+<div class="tile"><div class="cap">signed RGB ×12</div><a href="rs010-highlimit-smoke-energy-2p0-gain2__signed-on-off-x12.png"><img src="rs010-highlimit-smoke-energy-2p0-gain2__signed-on-off-x12.png"/></a></div>
+<div class="tile"><div class="cap">luma signed ×18</div><a href="rs010-highlimit-smoke-energy-2p0-gain2__luma-on-off-x18.png"><img src="rs010-highlimit-smoke-energy-2p0-gain2__luma-on-off-x18.png"/></a></div>
+<div class="tile"><div class="cap">abs(on-ref) ×12</div><a href="rs010-highlimit-smoke-energy-2p0-gain2__abs-on-ref-x12.png"><img src="rs010-highlimit-smoke-energy-2p0-gain2__abs-on-ref-x12.png"/></a></div>
+</div></section>
+<section class="row"><div class="name">rs010-smoke-structure-routed-gain1</div><div class="metrics">meanAbs vs off 0.786; meanAbs vs native 0.866; linear/off vs native 0.425</div><div class="strip">
+<div class="tile"><div class="cap">0.10 linear off</div><a href="rs010-smoke-structure-routed-gain1__crop-off.png"><img src="rs010-smoke-structure-routed-gain1__crop-off.png"/></a></div>
+<div class="tile"><div class="cap">residual on</div><a href="rs010-smoke-structure-routed-gain1__crop-on.png"><img src="rs010-smoke-structure-routed-gain1__crop-on.png"/></a></div>
+<div class="tile"><div class="cap">1.00 native ref</div><a href="rs010-smoke-structure-routed-gain1__crop-ref.png"><img src="rs010-smoke-structure-routed-gain1__crop-ref.png"/></a></div>
+<div class="tile"><div class="cap">abs(on-off) ×12</div><a href="rs010-smoke-structure-routed-gain1__abs-on-off-x12.png"><img src="rs010-smoke-structure-routed-gain1__abs-on-off-x12.png"/></a></div>
+<div class="tile"><div class="cap">signed RGB ×12</div><a href="rs010-smoke-structure-routed-gain1__signed-on-off-x12.png"><img src="rs010-smoke-structure-routed-gain1__signed-on-off-x12.png"/></a></div>
+<div class="tile"><div class="cap">luma signed ×18</div><a href="rs010-smoke-structure-routed-gain1__luma-on-off-x18.png"><img src="rs010-smoke-structure-routed-gain1__luma-on-off-x18.png"/></a></div>
+<div class="tile"><div class="cap">abs(on-ref) ×12</div><a href="rs010-smoke-structure-routed-gain1__abs-on-ref-x12.png"><img src="rs010-smoke-structure-routed-gain1__abs-on-ref-x12.png"/></a></div>
+</div></section>
+<section class="row"><div class="name">rs010-smoke-structure-routed-gain2</div><div class="metrics">meanAbs vs off 1.555; meanAbs vs native 1.573; linear/off vs native 0.425</div><div class="strip">
+<div class="tile"><div class="cap">0.10 linear off</div><a href="rs010-smoke-structure-routed-gain2__crop-off.png"><img src="rs010-smoke-structure-routed-gain2__crop-off.png"/></a></div>
+<div class="tile"><div class="cap">residual on</div><a href="rs010-smoke-structure-routed-gain2__crop-on.png"><img src="rs010-smoke-structure-routed-gain2__crop-on.png"/></a></div>
+<div class="tile"><div class="cap">1.00 native ref</div><a href="rs010-smoke-structure-routed-gain2__crop-ref.png"><img src="rs010-smoke-structure-routed-gain2__crop-ref.png"/></a></div>
+<div class="tile"><div class="cap">abs(on-off) ×12</div><a href="rs010-smoke-structure-routed-gain2__abs-on-off-x12.png"><img src="rs010-smoke-structure-routed-gain2__abs-on-off-x12.png"/></a></div>
+<div class="tile"><div class="cap">signed RGB ×12</div><a href="rs010-smoke-structure-routed-gain2__signed-on-off-x12.png"><img src="rs010-smoke-structure-routed-gain2__signed-on-off-x12.png"/></a></div>
+<div class="tile"><div class="cap">luma signed ×18</div><a href="rs010-smoke-structure-routed-gain2__luma-on-off-x18.png"><img src="rs010-smoke-structure-routed-gain2__luma-on-off-x18.png"/></a></div>
+<div class="tile"><div class="cap">abs(on-ref) ×12</div><a href="rs010-smoke-structure-routed-gain2__abs-on-ref-x12.png"><img src="rs010-smoke-structure-routed-gain2__abs-on-ref-x12.png"/></a></div>
+</div></section>

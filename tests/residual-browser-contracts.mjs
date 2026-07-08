@@ -80,6 +80,13 @@ assert.match(
   /encodeBrowserResidualPass/,
   'volume runtime must route the raymarched frame through an explicit residual pass',
 );
+const frozenRenderFunctionMatch = core.match(/async function renderFrozenScaleToCanvas\(options = \{\}\) \{[\s\S]*?\n  \}\n\n  return \{/);
+assert.ok(frozenRenderFunctionMatch, 'volume runtime must expose the frozen same-state canvas render witness');
+assert.match(
+  frozenRenderFunctionMatch[0],
+  /browserResidualCanApply\(\)[\s\S]*encodeBrowserResidualSourcePass[\s\S]*encodeBrowserResidualPass[\s\S]*recordBrowserResidualCost\(\{ applied: residualApplied/,
+  'frozen same-state canvas render must apply browser residual pass when the residual model is loaded, not only report loaded state',
+);
 assert.match(
   core,
   /GPUTextureUsage\.TEXTURE_BINDING/,

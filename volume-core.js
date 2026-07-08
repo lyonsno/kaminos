@@ -9759,9 +9759,26 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       const encoder = device.createCommandEncoder({ label: 'kaminos frozen render-scale canvas capture' });
       encodeMajorant(encoder, { force: true });
       const currentTexture = context.getCurrentTexture();
-      encodeDraw(encoder, currentTexture.createView(), 'kaminos frozen render-scale canvas pass');
+      let residualApplied = false;
       let featureCaptureSourcePassApplied = false;
-      if (options.includeFeatureRgba === true) {
+      let sourcePassEncodeMs = null;
+      let residualPassEncodeMs = null;
+      if (browserResidualCanApply()) {
+        ensureFrameTexture();
+        ensureBrowserResidualFeatureTexture();
+        const sourcePassStart = performance.now();
+        encodeBrowserResidualSourcePass(encoder, frameTexture.createView(), browserResidualFeatureTexture.createView());
+        sourcePassEncodeMs = performance.now() - sourcePassStart;
+        featureCaptureSourcePassApplied = true;
+        const residualPassStart = performance.now();
+        residualApplied = encodeBrowserResidualPass(encoder, currentTexture.createView());
+        residualPassEncodeMs = performance.now() - residualPassStart;
+        recordBrowserResidualCost({ applied: residualApplied, sourcePassEncodeMs, residualPassEncodeMs });
+      } else {
+        encodeDraw(encoder, currentTexture.createView(), 'kaminos frozen render-scale canvas pass');
+        recordBrowserResidualCost({ applied: false });
+      }
+      if (options.includeFeatureRgba === true && !featureCaptureSourcePassApplied) {
         ensureFrameTexture();
         ensureBrowserResidualFeatureTexture();
         encodeBrowserResidualSourcePass(encoder, frameTexture.createView(), browserResidualFeatureTexture.createView());
@@ -9785,6 +9802,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         sampleAuthority: 'render-only-frozen-sim-state',
         imageAuthority: 'cdp-canvas-clip-capture-after-render-only-frozen-sim-state',
         controlOverrides,
+        residualApplied,
+        residualSourcePassEncodeMs: sourcePassEncodeMs,
+        residualPassEncodeMs,
         featureCapture: featureCapture ? {
           ...featureCapture,
           featureAuthority: BROWSER_RESIDUAL_FEATURE_AUTHORITY,

@@ -30,6 +30,8 @@ def parse_args():
     parser.add_argument("--patch-size", default="64")
     parser.add_argument("--model-arch", default="tiny-conv")
     parser.add_argument("--feature-input-mode", default="rgb")
+    parser.add_argument("--material-focus", default="off")
+    parser.add_argument("--outside-material-residual-weight", default="1.0")
     parser.add_argument("--hidden-channels", default="16")
     parser.add_argument("--detail-residual-gate", default="2.0")
     parser.add_argument("--learning-rate", default="0.001")
@@ -121,6 +123,10 @@ def build_child_command(args):
         str(args.model_arch),
         "--feature-input-mode",
         str(args.feature_input_mode),
+        "--material-focus",
+        str(args.material_focus),
+        "--outside-material-residual-weight",
+        str(args.outside_material_residual_weight),
         "--hidden-channels",
         str(args.hidden_channels),
         "--detail-residual-gate",
@@ -271,6 +277,9 @@ def main():
             final_receipt["featureInputMode"] = report.get("featureInputMode")
             final_receipt["featureInputAuthority"] = report.get("featureInputAuthority")
             final_receipt["featureInputChannels"] = report.get("featureInputChannels")
+            final_receipt["materialFocus"] = report.get("materialFocus")
+            final_receipt["materialMaskAuthority"] = report.get("materialMaskAuthority")
+            final_receipt["outsideMaterialResidualWeight"] = report.get("outsideMaterialResidualWeight")
             final_receipt["outsideEdgeResidualMse"] = report.get("outsideEdgeResidualMse")
             final_receipt["residualOutputLimit"] = report.get("residualOutputLimit")
             final_receipt["residualColorMode"] = report.get("residualColorMode")
