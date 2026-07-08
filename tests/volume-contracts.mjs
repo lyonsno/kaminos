@@ -86,6 +86,8 @@ assert.match(bonfireLookBlock, /flowCarrierAuthored:\s*true/, 'Bonfire a la Ruff
 assert.doesNotMatch(bonfireLookBlock, /pyroFlowBite:\s*0\.95/, 'Bonfire a la Ruffles must not preserve the stale low Flow carrier gain');
 assert.doesNotMatch(bonfireLookBlock, /pyroRadiance:\s*1\.25/, 'Bonfire a la Ruffles must not preserve the stale old Radiance carrier gain');
 assert.match(index, /mergeVolumeLookLibraryWithBuiltIns/, 'Volume cockpit merges source-backed looks with browser-local saved looks');
+const mergeVolumeLookLibraryFn = index.match(/function mergeVolumeLookLibraryWithBuiltIns\(library = normalizeVolumeLookLibrary\(\)\) \{([\s\S]*?)\n\}/)?.[1] || '';
+assert.match(mergeVolumeLookLibraryFn, /existing\?\.sourceBacked[\s\S]*continue/, 'Source-backed looks override stale same-name browser-local look shadows');
 const readVolumeLookLibraryFn = index.match(/function readVolumeLookLibrary\(\) \{([\s\S]*?)\n\}/)?.[1] || '';
 assert.match(readVolumeLookLibraryFn, /mergeVolumeLookLibraryWithBuiltIns/, 'Reading the look library includes source-backed looks before refreshing the dropdown');
 assert.match(index, /PYRO_LOOK_FIELDS/, 'Volume cockpit defines a Pyro-only look field list');

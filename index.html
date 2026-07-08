@@ -11093,7 +11093,11 @@ function mergeVolumeLookLibraryWithBuiltIns(library = normalizeVolumeLookLibrary
   for (const kind of ['pyro', 'firesim']) {
     const byName = new Map();
     for (const entry of builtIns[kind] || []) byName.set(entry.name, cloneVolumeLookLibraryEntry(entry));
-    for (const entry of normalized[kind] || []) byName.set(entry.name, cloneVolumeLookLibraryEntry(entry));
+    for (const entry of normalized[kind] || []) {
+      const existing = byName.get(entry.name);
+      if (existing?.sourceBacked) continue;
+      byName.set(entry.name, cloneVolumeLookLibraryEntry(entry));
+    }
     normalized[kind] = [...byName.values()];
   }
   return normalized;
