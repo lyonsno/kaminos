@@ -2272,6 +2272,21 @@ assert.match(fullGridResidualRender, /full-grid-field-residual-temporal-dynamics
 assert.match(fullGridResidualRender, /temporalStripViewer/, 'full-grid residual temporal strip writes a labeled visual viewer');
 assert.match(fullGridResidualRender, /advanceSim:\s*frameIndex > 0/, 'full-grid temporal strip advances simulator dynamics after the initialized frame');
 assert.match(fullGridResidualRender, /failurePhase/, 'full-grid residual render-still writes failure-phase reports when rendering fails');
+
+const rgbAlphaCleanupPath = join(root, 'volume-render-rgb-alpha-cleanup.py');
+assert.ok(existsSync(rgbAlphaCleanupPath), 'volume render RGB alpha cleanup diagnostic exists');
+const rgbAlphaCleanup = existsSync(rgbAlphaCleanupPath) ? readFileSync(rgbAlphaCleanupPath, 'utf8') : '';
+assert.match(rgbAlphaCleanup, /kaminos\.volume\.render-rgb-alpha-cleanup\.v0/, 'RGB alpha cleanup writes a stable diagnostic manifest schema');
+assert.match(rgbAlphaCleanup, /render-space-alpha-trust-cleanup-v0/, 'RGB alpha cleanup names the render-space alpha trust diagnostic');
+assert.match(rgbAlphaCleanup, /oracle-alpha-projection-from-truth-v0/, 'RGB alpha cleanup derives oracle alpha from truth/low/predicted RGB for training labels');
+assert.match(rgbAlphaCleanup, /local-neighborhood-rgb-alpha-features-v0/, 'RGB alpha cleanup uses local neighborhood features instead of only scalar per-pixel RGB');
+assert.match(rgbAlphaCleanup, /rgbAlphaCleaned/, 'RGB alpha cleanup writes the alpha-composed cleaned RGB artifact');
+assert.match(rgbAlphaCleanup, /oracleAlphaBlend/, 'RGB alpha cleanup writes the oracle alpha blend as an upper-bound diagnostic');
+assert.match(rgbAlphaCleanup, /predictedAlphaMap/, 'RGB alpha cleanup writes a predicted alpha map visual');
+assert.match(rgbAlphaCleanup, /displayLabel/, 'RGB alpha cleanup gives long variants short raster labels for legible contact sheets');
+assert.match(rgbAlphaCleanup, /alphaRmse/, 'RGB alpha cleanup reports alpha prediction error against oracle alpha');
+assert.match(rgbAlphaCleanup, /renderComparisonMetrics/, 'RGB alpha cleanup reports rendered RGB metrics against truth');
+assert.match(rgbAlphaCleanup, /failurePhase/, 'RGB alpha cleanup writes failure-phase reports for corrupt manifests or images');
 const sourceScaleProbePath = join(root, 'volume-source-scale-probe.mjs');
 assert.ok(existsSync(sourceScaleProbePath), 'source-scale blobbiness probe exists');
 const sourceScaleProbe = existsSync(sourceScaleProbePath) ? readFileSync(sourceScaleProbePath, 'utf8') : '';
