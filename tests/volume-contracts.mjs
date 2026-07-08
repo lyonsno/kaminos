@@ -2347,6 +2347,24 @@ assert.match(rgbSoftProtectedAlpha, /softProtectedMetrics/, 'RGB soft protected 
 assert.match(rgbSoftProtectedAlpha, /renderComparisonMetrics/, 'RGB soft protected alpha reports rendered RGB metrics against truth');
 assert.match(rgbSoftProtectedAlpha, /visibleRasterLabels/, 'RGB soft protected alpha burns and manifests visible contact-sheet labels');
 assert.match(rgbSoftProtectedAlpha, /failurePhase/, 'RGB soft protected alpha writes failure-phase reports for corrupt manifests or images');
+
+const rgbSoftTemporalStripPath = join(root, 'volume-render-rgb-soft-protected-alpha-temporal-strip.py');
+assert.ok(existsSync(rgbSoftTemporalStripPath), 'volume render RGB soft protected alpha temporal strip diagnostic exists');
+const rgbSoftTemporalStrip = existsSync(rgbSoftTemporalStripPath) ? readFileSync(rgbSoftTemporalStripPath, 'utf8') : '';
+assert.match(rgbSoftTemporalStrip, /kaminos\.volume\.render-rgb-soft-protected-alpha-temporal-strip\.v0/, 'RGB soft protected temporal strip writes a stable manifest schema');
+assert.match(rgbSoftTemporalStrip, /render-space-soft-protected-alpha-temporal-strip-v0/, 'RGB soft protected temporal strip names its evidence identity');
+assert.match(rgbSoftTemporalStrip, /--strip-manifest/, 'RGB soft protected temporal strip can consume existing temporal strip manifests');
+assert.match(rgbSoftTemporalStrip, /full-grid-field-residual-temporal-dynamics-strip-v0/, 'RGB soft protected temporal strip records the source strip authority');
+assert.match(rgbSoftTemporalStrip, /body075/, 'RGB soft protected temporal strip preserves the body075 cleanup setting identity');
+assert.match(rgbSoftTemporalStrip, /body055/, 'RGB soft protected temporal strip preserves the body055 conservative sibling identity');
+assert.match(rgbSoftTemporalStrip, /perFrameMetrics/, 'RGB soft protected temporal strip records per-frame cleanup metrics');
+assert.match(rgbSoftTemporalStrip, /temporalStabilityMetrics/, 'RGB soft protected temporal strip records temporal stability and flicker metrics');
+assert.match(rgbSoftTemporalStrip, /worstFrame/, 'RGB soft protected temporal strip names worst-frame evidence instead of mean-only closure');
+assert.match(rgbSoftTemporalStrip, /alphaDeltaMean/, 'RGB soft protected temporal strip measures frame-to-frame alpha/edit-map deltas');
+assert.match(rgbSoftTemporalStrip, /outsideColumnWeakSupportReductionRate/, 'RGB soft protected temporal strip preserves outside-column weak haze reduction metrics');
+assert.match(rgbSoftTemporalStrip, /predictedBodySoftVsPredictedCosineMean/, 'RGB soft protected temporal strip preserves protected-body cosine metrics');
+assert.match(rgbSoftTemporalStrip, /visibleRasterLabels/, 'RGB soft protected temporal strip burns and manifests visible row/column labels');
+assert.match(rgbSoftTemporalStrip, /failurePhase/, 'RGB soft protected temporal strip writes failure-phase reports for corrupt manifests or missing strip geometry');
 const sourceScaleProbePath = join(root, 'volume-source-scale-probe.mjs');
 assert.ok(existsSync(sourceScaleProbePath), 'source-scale blobbiness probe exists');
 const sourceScaleProbe = existsSync(sourceScaleProbePath) ? readFileSync(sourceScaleProbePath, 'utf8') : '';
