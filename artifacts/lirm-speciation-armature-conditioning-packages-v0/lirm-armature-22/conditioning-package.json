@@ -1,0 +1,131 @@
+{
+  "schema": "kaminos.lirm-speciation-armature-conditioning-package.v0",
+  "route": "kaminos/lirm-speciation-armature/conditioning-package-v0",
+  "sourceWitnessId": "lirm-speciation-armature-64073572",
+  "sourceWitnessRoute": "kaminos/lirm-speciation-armature/contact-sheet-v0",
+  "candidateId": "lirm-armature-22",
+  "seed": "molten-lirm-seed-0707:22",
+  "sourceProxyRender": {
+    "schema": "kaminos.lirm-speciation-armature-proxy-render-bundle.v0",
+    "route": "kaminos/lirm-speciation-armature/proxy-render-v0",
+    "candidateId": "lirm-armature-22",
+    "camera": {
+      "projection": "orthographic",
+      "view": "front-three-quarter",
+      "coordinateFrame": "normalized-proxy-primitives",
+      "note": "software SVG projection of packet proxy primitives, not mesh render"
+    },
+    "proxyPrimitiveCount": 21
+  },
+  "sourceImages": [
+    {
+      "kind": "clay",
+      "path": "source-maps/clay-control.svg",
+      "sourceProxyPath": "lirm-armature-22/clay-control.svg",
+      "requiredFor": [
+        "imagegen_conditioning",
+        "trellis_clay_probe"
+      ],
+      "effectiveSource": "local-procedural-proxy-render"
+    },
+    {
+      "kind": "depth",
+      "path": "source-maps/depth-control.svg",
+      "sourceProxyPath": "lirm-armature-22/depth-control.svg",
+      "requiredFor": [
+        "imagegen_conditioning",
+        "depth_control"
+      ],
+      "effectiveSource": "local-procedural-proxy-render"
+    },
+    {
+      "kind": "normal",
+      "path": "source-maps/normal-control.svg",
+      "sourceProxyPath": "lirm-armature-22/normal-control.svg",
+      "requiredFor": [
+        "imagegen_conditioning",
+        "normal_control"
+      ],
+      "effectiveSource": "local-procedural-proxy-render"
+    },
+    {
+      "kind": "mask",
+      "path": "source-maps/mask-control.svg",
+      "sourceProxyPath": "lirm-armature-22/mask-control.svg",
+      "requiredFor": [
+        "imagegen_conditioning",
+        "sam3_isolation",
+        "alpha_cutout"
+      ],
+      "effectiveSource": "local-procedural-proxy-render"
+    },
+    {
+      "kind": "semantic",
+      "path": "source-maps/semantic-control.svg",
+      "sourceProxyPath": "lirm-armature-22/semantic-control.svg",
+      "requiredFor": [
+        "imagegen_conditioning",
+        "semantic_control"
+      ],
+      "effectiveSource": "local-procedural-proxy-render"
+    }
+  ],
+  "prompt": {
+    "positive": "small crawling hoard-thief creature, invertebrate body plan, wet clay and keratin material, anxious semi-cute gross creature design; primary motion affordance: inch; preserve the axial body curve, the belly contact patch, the terminal front mouth, the head orientation, the crawl contact points, the small brace-drag limb nubs; source candidate lirm-armature-22, lineage segments:11 / axis:arched / limbs:2 / contact:broad-belly / temper:gross-cute; three-quarter studio render, isolated body, readable silhouette, sculptural volume, no text",
+    "negative": "centered eye, humanoid face, two-legged mascot, flat icon, logo, text labels, finished glossy toy, background scenery, extra disconnected bodies",
+    "preserve": [
+      "axis curve",
+      "belly contact",
+      "terminal front mouth",
+      "head orientation",
+      "contact points"
+    ],
+    "allowMutation": [
+      "surface material",
+      "micro anatomy",
+      "gross-cute balance",
+      "skin/shell texture"
+    ]
+  },
+  "routeCandidates": [
+    {
+      "route": "imagegen_img2img_depth_normal",
+      "status": "requires_registered_imagegen_route",
+      "inputs": [
+        "clay",
+        "depth",
+        "normal",
+        "mask",
+        "semantic"
+      ],
+      "purpose": "test whether imagegen preserves proxy body identity before mesh/splat routes"
+    },
+    {
+      "route": "trellis2mlx_fast_clay_probe",
+      "status": "registered_greenroom_route_but_queue_blocked_by_existing_pixal3d_job",
+      "inputs": [
+        "clay",
+        "mask"
+      ],
+      "purpose": "cheap 3D sanity probe from the clay proxy source, not depth-normal conditioning"
+    },
+    {
+      "route": "world_tracing_masked_probe",
+      "status": "registered_greenroom_route",
+      "inputs": [
+        "clay",
+        "mask"
+      ],
+      "purpose": "optional splat-ish/object reconstruction experiment if mesh route is blocked"
+    }
+  ],
+  "conditioningPanel": {
+    "path": "conditioning-panel.svg"
+  },
+  "falseClosureGuards": {
+    "finishedCreatureClaim": "forbidden",
+    "generatorFiringClaim": "not_yet_fired",
+    "conditioningClaim": "source_package_only",
+    "greenroomClaim": "gpu_routes_require_greenroom_receipt"
+  }
+}

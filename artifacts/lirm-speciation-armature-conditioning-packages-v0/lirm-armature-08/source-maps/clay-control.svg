@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="320" height="240" viewBox="0 0 320 240" role="img" aria-label="lirm-armature-08 clay proxy control" data-proxy-render="clay">
+  <rect width="100%" height="100%" fill="#07130f"/>
+  <g data-layer="proxy-primitives" data-candidate-id="lirm-armature-08" data-primitive-count="24">
+    <ellipse cx="201.91" cy="159.95" rx="5.51" ry="5.51" fill="rgb(103, 111, 72)" stroke="rgba(8,13,10,0.28)" stroke-width="1" opacity="0.9"><title>contact point</title></ellipse>
+    <ellipse cx="218.91" cy="142.07" rx="22.32" ry="14.55" fill="rgb(103, 111, 72)" stroke="rgba(8,13,10,0.28)" stroke-width="1" opacity="0.84"><title>body mass</title></ellipse>
+    <ellipse cx="228.87" cy="143.53" rx="6.18" ry="6.18" fill="rgb(75, 22, 30)" stroke="rgba(255,176,100,0.85)" stroke-width="1" opacity="0.9"><title>terminal mouth</title></ellipse>
+    <ellipse cx="219.74" cy="142.07" rx="18.01" ry="18.01" fill="rgb(136, 76, 42)" stroke="rgba(8,13,10,0.28)" stroke-width="1" opacity="0.9"><title>head orientation</title></ellipse>
+    <ellipse cx="205.25" cy="133.68" rx="24.49" ry="15.97" fill="rgb(104, 112, 73)" stroke="rgba(8,13,10,0.28)" stroke-width="1" opacity="0.84"><title>body mass</title></ellipse>
+    <ellipse cx="174.61" cy="126.2" rx="5.51" ry="5.51" fill="rgb(105, 113, 73)" stroke="rgba(8,13,10,0.28)" stroke-width="1" opacity="0.9"><title>contact point</title></ellipse>
+    <ellipse cx="191.6" cy="117.99" rx="26.49" ry="17.27" fill="rgb(91, 98, 63)" stroke="rgba(8,13,10,0.28)" stroke-width="1" opacity="0.84"><title>body mass</title></ellipse>
+    <rect x="196.29" y="114.75" width="24.2" height="6.86" rx="4" fill="rgb(91, 98, 63)" stroke="rgba(8,13,10,0.28)" stroke-width="1" opacity="0.9" transform="rotate(11.42 208.39 118.18)"><title>shell plate</title></rect>
+    <line x1="165.55" y1="101.4" x2="189.11" y2="101.4" stroke="rgb(92, 99, 64)" stroke-width="4.54" stroke-linecap="round" opacity="0.9" transform="rotate(4.01 177.33 101.4)"><title>limb bud</title></line>
+    <ellipse cx="177.95" cy="101.4" rx="27.94" ry="18.21" fill="rgb(92, 99, 64)" stroke="rgba(8,13,10,0.28)" stroke-width="1" opacity="0.84"><title>body mass</title></ellipse>
+    <ellipse cx="164.3" cy="91" rx="28.85" ry="18.81" fill="rgb(93, 100, 65)" stroke="rgba(8,13,10,0.28)" stroke-width="1" opacity="0.84"><title>body mass</title></ellipse>
+    <rect x="168.98" y="82.46" width="24.2" height="6.86" rx="4" fill="rgb(93, 100, 65)" stroke="rgba(8,13,10,0.28)" stroke-width="1" opacity="0.9" transform="rotate(6.85 181.08 85.89)"><title>shell plate</title></rect>
+    <ellipse cx="133.85" cy="127.84" rx="5.51" ry="5.51" fill="rgb(108, 116, 75)" stroke="rgba(8,13,10,0.28)" stroke-width="1" opacity="0.9"><title>contact point</title></ellipse>
+    <ellipse cx="150.84" cy="91.18" rx="28.85" ry="18.81" fill="rgb(94, 101, 65)" stroke="rgba(8,13,10,0.28)" stroke-width="1" opacity="0.84"><title>body mass</title></ellipse>
+    <rect x="155.33" y="72.06" width="24.2" height="6.86" rx="4" fill="rgb(94, 101, 66)" stroke="rgba(8,13,10,0.28)" stroke-width="1" opacity="0.9" transform="rotate(2.27 167.43 75.49)"><title>shell plate</title></rect>
+    <line x1="124.78" y1="101.58" x2="148.34" y2="101.58" stroke="rgb(95, 102, 66)" stroke-width="4.37" stroke-linecap="round" opacity="0.9" transform="rotate(-4.01 136.56 101.58)"><title>limb bud</title></line>
+    <ellipse cx="137.19" cy="101.58" rx="27.94" ry="18.21" fill="rgb(95, 102, 66)" stroke="rgba(8,13,10,0.28)" stroke-width="1" opacity="0.84"><title>body mass</title></ellipse>
+    <rect x="141.87" y="72.25" width="24.2" height="6.86" rx="4" fill="rgb(95, 102, 66)" stroke="rgba(8,13,10,0.28)" stroke-width="1" opacity="0.9" transform="rotate(-2.27 153.97 75.68)"><title>shell plate</title></rect>
+    <ellipse cx="106.54" cy="157.76" rx="5.51" ry="5.51" fill="rgb(110, 118, 77)" stroke="rgba(8,13,10,0.28)" stroke-width="1" opacity="0.9"><title>contact point</title></ellipse>
+    <ellipse cx="123.53" cy="117.81" rx="26.49" ry="17.27" fill="rgb(96, 103, 67)" stroke="rgba(8,13,10,0.28)" stroke-width="1" opacity="0.84"><title>body mass</title></ellipse>
+    <rect x="128.22" y="82.64" width="24.2" height="6.86" rx="4" fill="rgb(96, 103, 67)" stroke="rgba(8,13,10,0.28)" stroke-width="1" opacity="0.9" transform="rotate(-6.85 140.32 86.07)"><title>shell plate</title></rect>
+    <ellipse cx="109.88" cy="132.95" rx="24.49" ry="15.97" fill="rgb(111, 120, 78)" stroke="rgba(8,13,10,0.28)" stroke-width="1" opacity="0.84"><title>body mass</title></ellipse>
+    <ellipse cx="96.23" cy="140.61" rx="22.32" ry="14.55" fill="rgb(112, 121, 78)" stroke="rgba(8,13,10,0.28)" stroke-width="1" opacity="0.84"><title>body mass</title></ellipse>
+    <rect x="100.92" y="114.02" width="24.2" height="6.86" rx="4" fill="rgb(98, 105, 68)" stroke="rgba(8,13,10,0.28)" stroke-width="1" opacity="0.9" transform="rotate(-11.42 113.02 117.45)"><title>shell plate</title></rect>
+  </g>
+  <text x="12" y="20" fill="rgba(238,246,214,0.72)" font-size="12" font-family="Menlo, Monaco, monospace">lirm-armature-08 clay proxy control</text>
+</svg>

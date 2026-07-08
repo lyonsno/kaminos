@@ -7,11 +7,15 @@ export const LIRM_SPECIATION_ARMATURE_RECEIPT_SCHEMA = 'kaminos.lirm-speciation-
 export const LIRM_SPECIATION_ARMATURE_CONTROL_PACKET_SCHEMA = 'kaminos.lirm-speciation-armature-control-packet.v0';
 export const LIRM_SPECIATION_ARMATURE_PROXY_RENDER_BUNDLE_SCHEMA = 'kaminos.lirm-speciation-armature-proxy-render-bundle.v0';
 export const LIRM_SPECIATION_ARMATURE_PROXY_RENDER_WITNESS_SCHEMA = 'kaminos.lirm-speciation-armature-proxy-render-witness.v0';
+export const LIRM_SPECIATION_ARMATURE_CONDITIONING_PACKAGE_SCHEMA = 'kaminos.lirm-speciation-armature-conditioning-package.v0';
+export const LIRM_SPECIATION_ARMATURE_CONDITIONING_PACKAGE_WITNESS_SCHEMA = 'kaminos.lirm-speciation-armature-conditioning-package-witness.v0';
 export const LIRM_SPECIATION_ARMATURE_ROUTE = 'kaminos/lirm-speciation-armature/contact-sheet-v0';
 export const LIRM_SPECIATION_ARMATURE_CONTROL_PACKET_ROUTE = 'kaminos/lirm-speciation-armature/control-packet-v0';
 export const LIRM_SPECIATION_ARMATURE_PROXY_RENDER_ROUTE = 'kaminos/lirm-speciation-armature/proxy-render-v0';
+export const LIRM_SPECIATION_ARMATURE_CONDITIONING_PACKAGE_ROUTE = 'kaminos/lirm-speciation-armature/conditioning-package-v0';
 export const LIRM_SPECIATION_ARMATURE_WRITE_RESULT_SCHEMA = 'kaminos.lirm-speciation-armature-write-result.v0';
 export const LIRM_SPECIATION_ARMATURE_PROXY_RENDER_WRITE_RESULT_SCHEMA = 'kaminos.lirm-speciation-armature-proxy-render-write-result.v0';
+export const LIRM_SPECIATION_ARMATURE_CONDITIONING_PACKAGE_WRITE_RESULT_SCHEMA = 'kaminos.lirm-speciation-armature-conditioning-package-write-result.v0';
 
 const ROOT_PARENT_ID = 'root-soft-crawling-hoard-thief';
 const DEFAULT_SEED = 'molten-lirm-speciation-armature-v0';
@@ -818,6 +822,215 @@ export async function writeLirmSpeciationArmatureProxyRenderWitness(options = {}
     receiptPath,
     candidateIds,
     bundleCount: bundles.length,
+  };
+}
+
+function createConditioningPrompt(candidate, packet) {
+  const hasShell = candidate.semanticHandles.some(handle => handle.kind === 'shell_plate');
+  const limbCount = candidate.semanticHandles.filter(handle => handle.kind === 'limb_bud').length;
+  const motion = candidate.motionAffordance.primary;
+  const preserve = [
+    'the axial body curve',
+    'the belly contact patch',
+    'the terminal front mouth',
+    'the head orientation',
+    'the crawl contact points',
+  ];
+  if (hasShell) preserve.push('the dorsal shell or plate rhythm');
+  if (limbCount > 0) preserve.push('the small brace-drag limb nubs');
+  return {
+    positive: [
+      'small crawling hoard-thief creature, invertebrate body plan, wet clay and keratin material, anxious semi-cute gross creature design',
+      `primary motion affordance: ${motion}`,
+      `preserve ${preserve.join(', ')}`,
+      `source candidate ${candidate.id}, lineage ${candidate.lineage.mutationPath.join(' / ')}`,
+      'three-quarter studio render, isolated body, readable silhouette, sculptural volume, no text',
+    ].join('; '),
+    negative: [
+      'centered eye',
+      'humanoid face',
+      'two-legged mascot',
+      'flat icon',
+      'logo',
+      'text labels',
+      'finished glossy toy',
+      'background scenery',
+      'extra disconnected bodies',
+    ].join(', '),
+    preserve: packet.promptContract.preserve,
+    allowMutation: packet.promptContract.allowMutation,
+  };
+}
+
+function renderConditioningPanelSvg({ candidate, sourceImages, prompt }) {
+  const panelWidth = 720;
+  const panelHeight = 560;
+  const cellW = 220;
+  const cellH = 170;
+  const gap = 16;
+  const startX = 24;
+  const startY = 48;
+  const panels = sourceImages.map((source, index) => {
+    const col = index % 3;
+    const row = Math.floor(index / 3);
+    const x = startX + col * (cellW + gap);
+    const y = startY + row * (cellH + gap);
+    return `<g data-panel-kind="${xml(source.kind)}">
+      <rect x="${x}" y="${y}" width="${cellW}" height="${cellH}" rx="8" fill="#07130f" stroke="rgba(238,246,214,0.22)"/>
+      <image href="${xml(source.path)}" x="${x + 8}" y="${y + 22}" width="${cellW - 16}" height="${cellH - 34}" preserveAspectRatio="xMidYMid meet" data-source-kind="${xml(source.kind)}"/>
+      <text x="${x + 10}" y="${y + 16}" fill="rgba(238,246,214,0.76)" font-size="11" font-family="Menlo, Monaco, monospace">${xml(source.kind)}</text>
+    </g>`;
+  }).join('\n    ');
+  const promptText = prompt.positive.length > 320 ? `${prompt.positive.slice(0, 317)}...` : prompt.positive;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${panelWidth}" height="${panelHeight}" viewBox="0 0 ${panelWidth} ${panelHeight}" role="img" aria-label="${xml(candidate.id)} conditioning package" data-conditioning-panel="lirm-speciation-armature" data-candidate-id="${xml(candidate.id)}">
+  <rect width="100%" height="100%" fill="#04100c"/>
+  <text x="24" y="28" fill="rgba(238,246,214,0.9)" font-size="15" font-family="Menlo, Monaco, monospace">${xml(candidate.id)} proxy conditioning package</text>
+  <g data-layer="source-map-grid">
+    ${panels}
+  </g>
+  <g data-layer="prompt-contract">
+    <rect x="24" y="420" width="672" height="112" rx="8" fill="rgba(238,246,214,0.08)" stroke="rgba(238,246,214,0.2)"/>
+    <text x="38" y="444" fill="rgba(238,246,214,0.84)" font-size="12" font-family="Menlo, Monaco, monospace">prompt</text>
+    <foreignObject x="38" y="456" width="642" height="58">
+      <div xmlns="http://www.w3.org/1999/xhtml" style="color:rgba(238,246,214,0.78);font:11px Menlo, Monaco, monospace;line-height:1.35;">${xml(promptText)}</div>
+    </foreignObject>
+    <text x="38" y="520" fill="rgba(238,246,214,0.52)" font-size="10" font-family="Menlo, Monaco, monospace">source package only; no generator firing has occurred</text>
+  </g>
+</svg>`;
+}
+
+export function createLirmSpeciationArmatureConditioningPackage({ witness, candidate, candidateId } = {}) {
+  const selectedCandidate = candidate || witness?.candidates?.find(item => item.id === candidateId);
+  if (!witness || !selectedCandidate) {
+    throw new Error('createLirmSpeciationArmatureConditioningPackage requires a witness and candidate or candidateId');
+  }
+  const proxyBundle = createLirmSpeciationArmatureProxyRenderBundle({ witness, candidate: selectedCandidate });
+  const packet = createLirmSpeciationArmatureControlPacket({ witness, candidate: selectedCandidate });
+  const sourceImages = proxyBundle.renderMaps.map(map => ({
+    kind: map.kind,
+    path: `source-maps/${map.kind}-control.svg`,
+    sourceProxyPath: map.path,
+    requiredFor: map.kind === 'mask'
+      ? ['imagegen_conditioning', 'sam3_isolation', 'alpha_cutout']
+      : ['imagegen_conditioning', map.kind === 'clay' ? 'trellis_clay_probe' : `${map.kind}_control`],
+    effectiveSource: 'local-procedural-proxy-render',
+  }));
+  const prompt = createConditioningPrompt(selectedCandidate, packet);
+  return {
+    schema: LIRM_SPECIATION_ARMATURE_CONDITIONING_PACKAGE_SCHEMA,
+    route: LIRM_SPECIATION_ARMATURE_CONDITIONING_PACKAGE_ROUTE,
+    sourceWitnessId: witness.witnessId,
+    sourceWitnessRoute: witness.route,
+    candidateId: selectedCandidate.id,
+    seed: selectedCandidate.seed,
+    sourceProxyRender: {
+      schema: proxyBundle.schema,
+      route: proxyBundle.route,
+      candidateId: proxyBundle.candidateId,
+      camera: proxyBundle.camera,
+      proxyPrimitiveCount: proxyBundle.proxyPrimitiveCount,
+    },
+    sourceImages,
+    prompt,
+    routeCandidates: [
+      {
+        route: 'imagegen_img2img_depth_normal',
+        status: 'requires_registered_imagegen_route',
+        inputs: ['clay', 'depth', 'normal', 'mask', 'semantic'],
+        purpose: 'test whether imagegen preserves proxy body identity before mesh/splat routes',
+      },
+      {
+        route: 'trellis2mlx_fast_clay_probe',
+        status: 'registered_greenroom_route_but_queue_blocked_by_existing_pixal3d_job',
+        inputs: ['clay', 'mask'],
+        purpose: 'cheap 3D sanity probe from the clay proxy source, not depth-normal conditioning',
+      },
+      {
+        route: 'world_tracing_masked_probe',
+        status: 'registered_greenroom_route',
+        inputs: ['clay', 'mask'],
+        purpose: 'optional splat-ish/object reconstruction experiment if mesh route is blocked',
+      },
+    ],
+    conditioningPanel: {
+      path: 'conditioning-panel.svg',
+      svg: renderConditioningPanelSvg({ candidate: selectedCandidate, sourceImages, prompt }),
+    },
+    falseClosureGuards: {
+      finishedCreatureClaim: 'forbidden',
+      generatorFiringClaim: 'not_yet_fired',
+      conditioningClaim: 'source_package_only',
+      greenroomClaim: 'gpu_routes_require_greenroom_receipt',
+    },
+  };
+}
+
+export async function writeLirmSpeciationArmatureConditioningPackages(options = {}) {
+  const outDir = options.outDir || join(process.cwd(), 'artifacts', 'lirm-speciation-armature-conditioning-packages-v0');
+  const seed = String(options.seed || DEFAULT_SEED);
+  const candidateCount = Math.max(1, Number(options.candidateCount || DEFAULT_CANDIDATE_COUNT));
+  const columns = Math.max(1, Number(options.columns || DEFAULT_COLUMNS));
+  const witness = options.witness || createLirmSpeciationArmatureWitness({ seed, candidateCount, columns });
+  const candidateIds = options.candidateIds || ['lirm-armature-08', 'lirm-armature-11', 'lirm-armature-16', 'lirm-armature-22', 'lirm-armature-24'];
+  await mkdir(outDir, { recursive: true });
+  const packages = [];
+  const outputPackages = [];
+  for (const candidateId of candidateIds) {
+    const pkg = createLirmSpeciationArmatureConditioningPackage({ witness, candidateId });
+    const proxyBundle = createLirmSpeciationArmatureProxyRenderBundle({ witness, candidateId });
+    const candidateDir = join(outDir, candidateId);
+    const sourceMapDir = join(candidateDir, 'source-maps');
+    await mkdir(sourceMapDir, { recursive: true });
+    for (const map of proxyBundle.renderMaps) {
+      await writeFile(join(sourceMapDir, `${map.kind}-control.svg`), map.svg);
+    }
+    await writeFile(join(candidateDir, 'conditioning-panel.svg'), pkg.conditioningPanel.svg);
+    const packageJson = {
+      ...pkg,
+      conditioningPanel: { path: pkg.conditioningPanel.path },
+    };
+    await writeFile(join(candidateDir, 'conditioning-package.json'), `${JSON.stringify(packageJson, null, 2)}\n`);
+    packages.push(pkg);
+    outputPackages.push({
+      candidateId,
+      package: `${candidateId}/conditioning-package.json`,
+      panel: `${candidateId}/conditioning-panel.svg`,
+      sourceMaps: pkg.sourceImages.map(image => ({ kind: image.kind, path: `${candidateId}/${image.path}` })),
+    });
+  }
+  const receipt = {
+    schema: LIRM_SPECIATION_ARMATURE_CONDITIONING_PACKAGE_WITNESS_SCHEMA,
+    route: LIRM_SPECIATION_ARMATURE_CONDITIONING_PACKAGE_ROUTE,
+    seed,
+    sourceWitnessId: witness.witnessId,
+    candidateIds,
+    packages: packages.map(pkg => ({
+      schema: pkg.schema,
+      candidateId: pkg.candidateId,
+      sourceImages: pkg.sourceImages.map(image => ({ kind: image.kind, path: image.path })),
+      routeCandidates: pkg.routeCandidates,
+    })),
+    falseClosureGuards: {
+      finishedCreatureClaim: 'forbidden',
+      generatorFiringClaim: 'not_yet_fired',
+      conditioningClaim: 'source_package_only',
+      greenroomClaim: 'gpu_routes_require_greenroom_receipt',
+    },
+    outputInventory: {
+      receipt: 'receipt.json',
+      packages: outputPackages,
+    },
+  };
+  const receiptPath = join(outDir, 'receipt.json');
+  await writeFile(receiptPath, `${JSON.stringify(receipt, null, 2)}\n`);
+  return {
+    schema: LIRM_SPECIATION_ARMATURE_CONDITIONING_PACKAGE_WRITE_RESULT_SCHEMA,
+    route: LIRM_SPECIATION_ARMATURE_CONDITIONING_PACKAGE_ROUTE,
+    outDir,
+    seed,
+    receiptPath,
+    candidateIds,
+    packageCount: packages.length,
   };
 }
 

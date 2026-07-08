@@ -1,0 +1,451 @@
+{
+  "schema": "kaminos.lirm-speciation-armature-conditioning-package-witness.v0",
+  "route": "kaminos/lirm-speciation-armature/conditioning-package-v0",
+  "seed": "molten-lirm-seed-0707",
+  "sourceWitnessId": "lirm-speciation-armature-64073572",
+  "candidateIds": [
+    "lirm-armature-08",
+    "lirm-armature-11",
+    "lirm-armature-16",
+    "lirm-armature-22",
+    "lirm-armature-24"
+  ],
+  "packages": [
+    {
+      "schema": "kaminos.lirm-speciation-armature-conditioning-package.v0",
+      "candidateId": "lirm-armature-08",
+      "sourceImages": [
+        {
+          "kind": "clay",
+          "path": "source-maps/clay-control.svg"
+        },
+        {
+          "kind": "depth",
+          "path": "source-maps/depth-control.svg"
+        },
+        {
+          "kind": "normal",
+          "path": "source-maps/normal-control.svg"
+        },
+        {
+          "kind": "mask",
+          "path": "source-maps/mask-control.svg"
+        },
+        {
+          "kind": "semantic",
+          "path": "source-maps/semantic-control.svg"
+        }
+      ],
+      "routeCandidates": [
+        {
+          "route": "imagegen_img2img_depth_normal",
+          "status": "requires_registered_imagegen_route",
+          "inputs": [
+            "clay",
+            "depth",
+            "normal",
+            "mask",
+            "semantic"
+          ],
+          "purpose": "test whether imagegen preserves proxy body identity before mesh/splat routes"
+        },
+        {
+          "route": "trellis2mlx_fast_clay_probe",
+          "status": "registered_greenroom_route_but_queue_blocked_by_existing_pixal3d_job",
+          "inputs": [
+            "clay",
+            "mask"
+          ],
+          "purpose": "cheap 3D sanity probe from the clay proxy source, not depth-normal conditioning"
+        },
+        {
+          "route": "world_tracing_masked_probe",
+          "status": "registered_greenroom_route",
+          "inputs": [
+            "clay",
+            "mask"
+          ],
+          "purpose": "optional splat-ish/object reconstruction experiment if mesh route is blocked"
+        }
+      ]
+    },
+    {
+      "schema": "kaminos.lirm-speciation-armature-conditioning-package.v0",
+      "candidateId": "lirm-armature-11",
+      "sourceImages": [
+        {
+          "kind": "clay",
+          "path": "source-maps/clay-control.svg"
+        },
+        {
+          "kind": "depth",
+          "path": "source-maps/depth-control.svg"
+        },
+        {
+          "kind": "normal",
+          "path": "source-maps/normal-control.svg"
+        },
+        {
+          "kind": "mask",
+          "path": "source-maps/mask-control.svg"
+        },
+        {
+          "kind": "semantic",
+          "path": "source-maps/semantic-control.svg"
+        }
+      ],
+      "routeCandidates": [
+        {
+          "route": "imagegen_img2img_depth_normal",
+          "status": "requires_registered_imagegen_route",
+          "inputs": [
+            "clay",
+            "depth",
+            "normal",
+            "mask",
+            "semantic"
+          ],
+          "purpose": "test whether imagegen preserves proxy body identity before mesh/splat routes"
+        },
+        {
+          "route": "trellis2mlx_fast_clay_probe",
+          "status": "registered_greenroom_route_but_queue_blocked_by_existing_pixal3d_job",
+          "inputs": [
+            "clay",
+            "mask"
+          ],
+          "purpose": "cheap 3D sanity probe from the clay proxy source, not depth-normal conditioning"
+        },
+        {
+          "route": "world_tracing_masked_probe",
+          "status": "registered_greenroom_route",
+          "inputs": [
+            "clay",
+            "mask"
+          ],
+          "purpose": "optional splat-ish/object reconstruction experiment if mesh route is blocked"
+        }
+      ]
+    },
+    {
+      "schema": "kaminos.lirm-speciation-armature-conditioning-package.v0",
+      "candidateId": "lirm-armature-16",
+      "sourceImages": [
+        {
+          "kind": "clay",
+          "path": "source-maps/clay-control.svg"
+        },
+        {
+          "kind": "depth",
+          "path": "source-maps/depth-control.svg"
+        },
+        {
+          "kind": "normal",
+          "path": "source-maps/normal-control.svg"
+        },
+        {
+          "kind": "mask",
+          "path": "source-maps/mask-control.svg"
+        },
+        {
+          "kind": "semantic",
+          "path": "source-maps/semantic-control.svg"
+        }
+      ],
+      "routeCandidates": [
+        {
+          "route": "imagegen_img2img_depth_normal",
+          "status": "requires_registered_imagegen_route",
+          "inputs": [
+            "clay",
+            "depth",
+            "normal",
+            "mask",
+            "semantic"
+          ],
+          "purpose": "test whether imagegen preserves proxy body identity before mesh/splat routes"
+        },
+        {
+          "route": "trellis2mlx_fast_clay_probe",
+          "status": "registered_greenroom_route_but_queue_blocked_by_existing_pixal3d_job",
+          "inputs": [
+            "clay",
+            "mask"
+          ],
+          "purpose": "cheap 3D sanity probe from the clay proxy source, not depth-normal conditioning"
+        },
+        {
+          "route": "world_tracing_masked_probe",
+          "status": "registered_greenroom_route",
+          "inputs": [
+            "clay",
+            "mask"
+          ],
+          "purpose": "optional splat-ish/object reconstruction experiment if mesh route is blocked"
+        }
+      ]
+    },
+    {
+      "schema": "kaminos.lirm-speciation-armature-conditioning-package.v0",
+      "candidateId": "lirm-armature-22",
+      "sourceImages": [
+        {
+          "kind": "clay",
+          "path": "source-maps/clay-control.svg"
+        },
+        {
+          "kind": "depth",
+          "path": "source-maps/depth-control.svg"
+        },
+        {
+          "kind": "normal",
+          "path": "source-maps/normal-control.svg"
+        },
+        {
+          "kind": "mask",
+          "path": "source-maps/mask-control.svg"
+        },
+        {
+          "kind": "semantic",
+          "path": "source-maps/semantic-control.svg"
+        }
+      ],
+      "routeCandidates": [
+        {
+          "route": "imagegen_img2img_depth_normal",
+          "status": "requires_registered_imagegen_route",
+          "inputs": [
+            "clay",
+            "depth",
+            "normal",
+            "mask",
+            "semantic"
+          ],
+          "purpose": "test whether imagegen preserves proxy body identity before mesh/splat routes"
+        },
+        {
+          "route": "trellis2mlx_fast_clay_probe",
+          "status": "registered_greenroom_route_but_queue_blocked_by_existing_pixal3d_job",
+          "inputs": [
+            "clay",
+            "mask"
+          ],
+          "purpose": "cheap 3D sanity probe from the clay proxy source, not depth-normal conditioning"
+        },
+        {
+          "route": "world_tracing_masked_probe",
+          "status": "registered_greenroom_route",
+          "inputs": [
+            "clay",
+            "mask"
+          ],
+          "purpose": "optional splat-ish/object reconstruction experiment if mesh route is blocked"
+        }
+      ]
+    },
+    {
+      "schema": "kaminos.lirm-speciation-armature-conditioning-package.v0",
+      "candidateId": "lirm-armature-24",
+      "sourceImages": [
+        {
+          "kind": "clay",
+          "path": "source-maps/clay-control.svg"
+        },
+        {
+          "kind": "depth",
+          "path": "source-maps/depth-control.svg"
+        },
+        {
+          "kind": "normal",
+          "path": "source-maps/normal-control.svg"
+        },
+        {
+          "kind": "mask",
+          "path": "source-maps/mask-control.svg"
+        },
+        {
+          "kind": "semantic",
+          "path": "source-maps/semantic-control.svg"
+        }
+      ],
+      "routeCandidates": [
+        {
+          "route": "imagegen_img2img_depth_normal",
+          "status": "requires_registered_imagegen_route",
+          "inputs": [
+            "clay",
+            "depth",
+            "normal",
+            "mask",
+            "semantic"
+          ],
+          "purpose": "test whether imagegen preserves proxy body identity before mesh/splat routes"
+        },
+        {
+          "route": "trellis2mlx_fast_clay_probe",
+          "status": "registered_greenroom_route_but_queue_blocked_by_existing_pixal3d_job",
+          "inputs": [
+            "clay",
+            "mask"
+          ],
+          "purpose": "cheap 3D sanity probe from the clay proxy source, not depth-normal conditioning"
+        },
+        {
+          "route": "world_tracing_masked_probe",
+          "status": "registered_greenroom_route",
+          "inputs": [
+            "clay",
+            "mask"
+          ],
+          "purpose": "optional splat-ish/object reconstruction experiment if mesh route is blocked"
+        }
+      ]
+    }
+  ],
+  "falseClosureGuards": {
+    "finishedCreatureClaim": "forbidden",
+    "generatorFiringClaim": "not_yet_fired",
+    "conditioningClaim": "source_package_only",
+    "greenroomClaim": "gpu_routes_require_greenroom_receipt"
+  },
+  "outputInventory": {
+    "receipt": "receipt.json",
+    "packages": [
+      {
+        "candidateId": "lirm-armature-08",
+        "package": "lirm-armature-08/conditioning-package.json",
+        "panel": "lirm-armature-08/conditioning-panel.svg",
+        "sourceMaps": [
+          {
+            "kind": "clay",
+            "path": "lirm-armature-08/source-maps/clay-control.svg"
+          },
+          {
+            "kind": "depth",
+            "path": "lirm-armature-08/source-maps/depth-control.svg"
+          },
+          {
+            "kind": "normal",
+            "path": "lirm-armature-08/source-maps/normal-control.svg"
+          },
+          {
+            "kind": "mask",
+            "path": "lirm-armature-08/source-maps/mask-control.svg"
+          },
+          {
+            "kind": "semantic",
+            "path": "lirm-armature-08/source-maps/semantic-control.svg"
+          }
+        ]
+      },
+      {
+        "candidateId": "lirm-armature-11",
+        "package": "lirm-armature-11/conditioning-package.json",
+        "panel": "lirm-armature-11/conditioning-panel.svg",
+        "sourceMaps": [
+          {
+            "kind": "clay",
+            "path": "lirm-armature-11/source-maps/clay-control.svg"
+          },
+          {
+            "kind": "depth",
+            "path": "lirm-armature-11/source-maps/depth-control.svg"
+          },
+          {
+            "kind": "normal",
+            "path": "lirm-armature-11/source-maps/normal-control.svg"
+          },
+          {
+            "kind": "mask",
+            "path": "lirm-armature-11/source-maps/mask-control.svg"
+          },
+          {
+            "kind": "semantic",
+            "path": "lirm-armature-11/source-maps/semantic-control.svg"
+          }
+        ]
+      },
+      {
+        "candidateId": "lirm-armature-16",
+        "package": "lirm-armature-16/conditioning-package.json",
+        "panel": "lirm-armature-16/conditioning-panel.svg",
+        "sourceMaps": [
+          {
+            "kind": "clay",
+            "path": "lirm-armature-16/source-maps/clay-control.svg"
+          },
+          {
+            "kind": "depth",
+            "path": "lirm-armature-16/source-maps/depth-control.svg"
+          },
+          {
+            "kind": "normal",
+            "path": "lirm-armature-16/source-maps/normal-control.svg"
+          },
+          {
+            "kind": "mask",
+            "path": "lirm-armature-16/source-maps/mask-control.svg"
+          },
+          {
+            "kind": "semantic",
+            "path": "lirm-armature-16/source-maps/semantic-control.svg"
+          }
+        ]
+      },
+      {
+        "candidateId": "lirm-armature-22",
+        "package": "lirm-armature-22/conditioning-package.json",
+        "panel": "lirm-armature-22/conditioning-panel.svg",
+        "sourceMaps": [
+          {
+            "kind": "clay",
+            "path": "lirm-armature-22/source-maps/clay-control.svg"
+          },
+          {
+            "kind": "depth",
+            "path": "lirm-armature-22/source-maps/depth-control.svg"
+          },
+          {
+            "kind": "normal",
+            "path": "lirm-armature-22/source-maps/normal-control.svg"
+          },
+          {
+            "kind": "mask",
+            "path": "lirm-armature-22/source-maps/mask-control.svg"
+          },
+          {
+            "kind": "semantic",
+            "path": "lirm-armature-22/source-maps/semantic-control.svg"
+          }
+        ]
+      },
+      {
+        "candidateId": "lirm-armature-24",
+        "package": "lirm-armature-24/conditioning-package.json",
+        "panel": "lirm-armature-24/conditioning-panel.svg",
+        "sourceMaps": [
+          {
+            "kind": "clay",
+            "path": "lirm-armature-24/source-maps/clay-control.svg"
+          },
+          {
+            "kind": "depth",
+            "path": "lirm-armature-24/source-maps/depth-control.svg"
+          },
+          {
+            "kind": "normal",
+            "path": "lirm-armature-24/source-maps/normal-control.svg"
+          },
+          {
+            "kind": "mask",
+            "path": "lirm-armature-24/source-maps/mask-control.svg"
+          },
+          {
+            "kind": "semantic",
+            "path": "lirm-armature-24/source-maps/semantic-control.svg"
+          }
+        ]
+      }
+    ]
+  }
+}

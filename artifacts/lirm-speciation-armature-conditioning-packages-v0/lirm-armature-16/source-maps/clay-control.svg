@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="320" height="240" viewBox="0 0 320 240" role="img" aria-label="lirm-armature-16 clay proxy control" data-proxy-render="clay">
+  <rect width="100%" height="100%" fill="#07130f"/>
+  <g data-layer="proxy-primitives" data-candidate-id="lirm-armature-16" data-primitive-count="21">
+    <ellipse cx="210.89" cy="150.1" rx="5.24" ry="5.24" fill="rgb(103, 110, 71)" stroke="rgba(8,13,10,0.28)" stroke-width="1" opacity="0.9"><title>contact point</title></ellipse>
+    <ellipse cx="225.08" cy="129.85" rx="27.76" ry="18.1" fill="rgb(103, 111, 72)" stroke="rgba(8,13,10,0.28)" stroke-width="1" opacity="0.84"><title>body mass</title></ellipse>
+    <ellipse cx="236.16" cy="131.31" rx="4.97" ry="4.97" fill="rgb(75, 22, 30)" stroke="rgba(255,176,100,0.85)" stroke-width="1" opacity="0.9"><title>terminal mouth</title></ellipse>
+    <ellipse cx="225.91" cy="129.85" rx="19.35" ry="19.35" fill="rgb(135, 76, 42)" stroke="rgba(8,13,10,0.28)" stroke-width="1" opacity="0.9"><title>head orientation</title></ellipse>
+    <ellipse cx="214.23" cy="123.83" rx="29.76" ry="19.4" fill="rgb(104, 112, 72)" stroke="rgba(8,13,10,0.28)" stroke-width="1" opacity="0.84"><title>body mass</title></ellipse>
+    <ellipse cx="203.38" cy="117.63" rx="31.75" ry="20.7" fill="rgb(90, 97, 63)" stroke="rgba(8,13,10,0.28)" stroke-width="1" opacity="0.84"><title>body mass</title></ellipse>
+    <ellipse cx="178.54" cy="137.33" rx="5.24" ry="5.24" fill="rgb(105, 113, 73)" stroke="rgba(8,13,10,0.28)" stroke-width="1" opacity="0.9"><title>contact point</title></ellipse>
+    <ellipse cx="192.54" cy="113.25" rx="33.38" ry="21.76" fill="rgb(91, 98, 63)" stroke="rgba(8,13,10,0.28)" stroke-width="1" opacity="0.84"><title>body mass</title></ellipse>
+    <line x1="167.55" y1="112.52" x2="194.95" y2="112.52" stroke="rgb(91, 98, 64)" stroke-width="5.07" stroke-linecap="round" opacity="0.9" transform="rotate(4.01 181.25 112.52)"><title>limb bud</title></line>
+    <ellipse cx="181.88" cy="112.52" rx="34.66" ry="22.59" fill="rgb(92, 99, 64)" stroke="rgba(8,13,10,0.28)" stroke-width="1" opacity="0.84"><title>body mass</title></ellipse>
+    <ellipse cx="171.03" cy="115.8" rx="35.56" ry="23.18" fill="rgb(92, 99, 64)" stroke="rgba(8,13,10,0.28)" stroke-width="1" opacity="0.84"><title>body mass</title></ellipse>
+    <ellipse cx="146" cy="156.48" rx="5.24" ry="5.24" fill="rgb(107, 115, 75)" stroke="rgba(8,13,10,0.28)" stroke-width="1" opacity="0.9"><title>contact point</title></ellipse>
+    <ellipse cx="160.19" cy="122.37" rx="35.74" ry="23.3" fill="rgb(108, 116, 75)" stroke="rgba(8,13,10,0.28)" stroke-width="1" opacity="0.84"><title>body mass</title></ellipse>
+    <ellipse cx="149.34" cy="130.21" rx="35.56" ry="23.18" fill="rgb(109, 117, 76)" stroke="rgba(8,13,10,0.28)" stroke-width="1" opacity="0.84"><title>body mass</title></ellipse>
+    <line x1="124.17" y1="137.51" x2="151.57" y2="137.51" stroke="rgb(109, 117, 76)" stroke-width="5.07" stroke-linecap="round" opacity="0.9" transform="rotate(-4.01 137.87 137.51)"><title>limb bud</title></line>
+    <ellipse cx="138.49" cy="137.51" rx="34.66" ry="22.59" fill="rgb(109, 118, 76)" stroke="rgba(8,13,10,0.28)" stroke-width="1" opacity="0.84"><title>body mass</title></ellipse>
+    <ellipse cx="113.65" cy="166.33" rx="5.24" ry="5.24" fill="rgb(110, 118, 76)" stroke="rgba(8,13,10,0.28)" stroke-width="1" opacity="0.9"><title>contact point</title></ellipse>
+    <ellipse cx="127.84" cy="141.71" rx="33.38" ry="21.76" fill="rgb(110, 118, 77)" stroke="rgba(8,13,10,0.28)" stroke-width="1" opacity="0.84"><title>body mass</title></ellipse>
+    <ellipse cx="116.99" cy="141.52" rx="31.75" ry="20.7" fill="rgb(111, 119, 77)" stroke="rgba(8,13,10,0.28)" stroke-width="1" opacity="0.84"><title>body mass</title></ellipse>
+    <ellipse cx="106.14" cy="136.23" rx="29.76" ry="19.4" fill="rgb(112, 120, 78)" stroke="rgba(8,13,10,0.28)" stroke-width="1" opacity="0.84"><title>body mass</title></ellipse>
+    <ellipse cx="95.3" cy="126.75" rx="27.76" ry="18.1" fill="rgb(112, 121, 78)" stroke="rgba(8,13,10,0.28)" stroke-width="1" opacity="0.84"><title>body mass</title></ellipse>
+  </g>
+  <text x="12" y="20" fill="rgba(238,246,214,0.72)" font-size="12" font-family="Menlo, Monaco, monospace">lirm-armature-16 clay proxy control</text>
+</svg>
