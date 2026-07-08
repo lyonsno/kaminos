@@ -17,23 +17,28 @@
       "sourceImages": [
         {
           "kind": "clay",
-          "path": "source-maps/clay-control.svg"
+          "path": "source-maps/clay-control.svg",
+          "rasterPath": "source-maps/clay-control.png"
         },
         {
           "kind": "depth",
-          "path": "source-maps/depth-control.svg"
+          "path": "source-maps/depth-control.svg",
+          "rasterPath": "source-maps/depth-control.png"
         },
         {
           "kind": "normal",
-          "path": "source-maps/normal-control.svg"
+          "path": "source-maps/normal-control.svg",
+          "rasterPath": "source-maps/normal-control.png"
         },
         {
           "kind": "mask",
-          "path": "source-maps/mask-control.svg"
+          "path": "source-maps/mask-control.svg",
+          "rasterPath": "source-maps/mask-control.png"
         },
         {
           "kind": "semantic",
-          "path": "source-maps/semantic-control.svg"
+          "path": "source-maps/semantic-control.svg",
+          "rasterPath": "source-maps/semantic-control.png"
         }
       ],
       "routeCandidates": [
@@ -75,23 +80,28 @@
       "sourceImages": [
         {
           "kind": "clay",
-          "path": "source-maps/clay-control.svg"
+          "path": "source-maps/clay-control.svg",
+          "rasterPath": "source-maps/clay-control.png"
         },
         {
           "kind": "depth",
-          "path": "source-maps/depth-control.svg"
+          "path": "source-maps/depth-control.svg",
+          "rasterPath": "source-maps/depth-control.png"
         },
         {
           "kind": "normal",
-          "path": "source-maps/normal-control.svg"
+          "path": "source-maps/normal-control.svg",
+          "rasterPath": "source-maps/normal-control.png"
         },
         {
           "kind": "mask",
-          "path": "source-maps/mask-control.svg"
+          "path": "source-maps/mask-control.svg",
+          "rasterPath": "source-maps/mask-control.png"
         },
         {
           "kind": "semantic",
-          "path": "source-maps/semantic-control.svg"
+          "path": "source-maps/semantic-control.svg",
+          "rasterPath": "source-maps/semantic-control.png"
         }
       ],
       "routeCandidates": [
@@ -133,23 +143,28 @@
       "sourceImages": [
         {
           "kind": "clay",
-          "path": "source-maps/clay-control.svg"
+          "path": "source-maps/clay-control.svg",
+          "rasterPath": "source-maps/clay-control.png"
         },
         {
           "kind": "depth",
-          "path": "source-maps/depth-control.svg"
+          "path": "source-maps/depth-control.svg",
+          "rasterPath": "source-maps/depth-control.png"
         },
         {
           "kind": "normal",
-          "path": "source-maps/normal-control.svg"
+          "path": "source-maps/normal-control.svg",
+          "rasterPath": "source-maps/normal-control.png"
         },
         {
           "kind": "mask",
-          "path": "source-maps/mask-control.svg"
+          "path": "source-maps/mask-control.svg",
+          "rasterPath": "source-maps/mask-control.png"
         },
         {
           "kind": "semantic",
-          "path": "source-maps/semantic-control.svg"
+          "path": "source-maps/semantic-control.svg",
+          "rasterPath": "source-maps/semantic-control.png"
         }
       ],
       "routeCandidates": [
@@ -191,23 +206,28 @@
       "sourceImages": [
         {
           "kind": "clay",
-          "path": "source-maps/clay-control.svg"
+          "path": "source-maps/clay-control.svg",
+          "rasterPath": "source-maps/clay-control.png"
         },
         {
           "kind": "depth",
-          "path": "source-maps/depth-control.svg"
+          "path": "source-maps/depth-control.svg",
+          "rasterPath": "source-maps/depth-control.png"
         },
         {
           "kind": "normal",
-          "path": "source-maps/normal-control.svg"
+          "path": "source-maps/normal-control.svg",
+          "rasterPath": "source-maps/normal-control.png"
         },
         {
           "kind": "mask",
-          "path": "source-maps/mask-control.svg"
+          "path": "source-maps/mask-control.svg",
+          "rasterPath": "source-maps/mask-control.png"
         },
         {
           "kind": "semantic",
-          "path": "source-maps/semantic-control.svg"
+          "path": "source-maps/semantic-control.svg",
+          "rasterPath": "source-maps/semantic-control.png"
         }
       ],
       "routeCandidates": [
@@ -249,23 +269,28 @@
       "sourceImages": [
         {
           "kind": "clay",
-          "path": "source-maps/clay-control.svg"
+          "path": "source-maps/clay-control.svg",
+          "rasterPath": "source-maps/clay-control.png"
         },
         {
           "kind": "depth",
-          "path": "source-maps/depth-control.svg"
+          "path": "source-maps/depth-control.svg",
+          "rasterPath": "source-maps/depth-control.png"
         },
         {
           "kind": "normal",
-          "path": "source-maps/normal-control.svg"
+          "path": "source-maps/normal-control.svg",
+          "rasterPath": "source-maps/normal-control.png"
         },
         {
           "kind": "mask",
-          "path": "source-maps/mask-control.svg"
+          "path": "source-maps/mask-control.svg",
+          "rasterPath": "source-maps/mask-control.png"
         },
         {
           "kind": "semantic",
-          "path": "source-maps/semantic-control.svg"
+          "path": "source-maps/semantic-control.svg",
+          "rasterPath": "source-maps/semantic-control.png"
         }
       ],
       "routeCandidates": [
@@ -318,23 +343,28 @@
         "sourceMaps": [
           {
             "kind": "clay",
-            "path": "lirm-armature-08/source-maps/clay-control.svg"
+            "path": "lirm-armature-08/source-maps/clay-control.svg",
+            "rasterPath": "lirm-armature-08/source-maps/clay-control.png"
           },
           {
             "kind": "depth",
-            "path": "lirm-armature-08/source-maps/depth-control.svg"
+            "path": "lirm-armature-08/source-maps/depth-control.svg",
+            "rasterPath": "lirm-armature-08/source-maps/depth-control.png"
           },
           {
             "kind": "normal",
-            "path": "lirm-armature-08/source-maps/normal-control.svg"
+            "path": "lirm-armature-08/source-maps/normal-control.svg",
+            "rasterPath": "lirm-armature-08/source-maps/normal-control.png"
           },
           {
             "kind": "mask",
-            "path": "lirm-armature-08/source-maps/mask-control.svg"
+            "path": "lirm-armature-08/source-maps/mask-control.svg",
+            "rasterPath": "lirm-armature-08/source-maps/mask-control.png"
           },
           {
             "kind": "semantic",
-            "path": "lirm-armature-08/source-maps/semantic-control.svg"
+            "path": "lirm-armature-08/source-maps/semantic-control.svg",
+            "rasterPath": "lirm-armature-08/source-maps/semantic-control.png"
           }
         ]
       },
@@ -345,23 +375,28 @@
         "sourceMaps": [
           {
             "kind": "clay",
-            "path": "lirm-armature-11/source-maps/clay-control.svg"
+            "path": "lirm-armature-11/source-maps/clay-control.svg",
+            "rasterPath": "lirm-armature-11/source-maps/clay-control.png"
           },
           {
             "kind": "depth",
-            "path": "lirm-armature-11/source-maps/depth-control.svg"
+            "path": "lirm-armature-11/source-maps/depth-control.svg",
+            "rasterPath": "lirm-armature-11/source-maps/depth-control.png"
           },
           {
             "kind": "normal",
-            "path": "lirm-armature-11/source-maps/normal-control.svg"
+            "path": "lirm-armature-11/source-maps/normal-control.svg",
+            "rasterPath": "lirm-armature-11/source-maps/normal-control.png"
           },
           {
             "kind": "mask",
-            "path": "lirm-armature-11/source-maps/mask-control.svg"
+            "path": "lirm-armature-11/source-maps/mask-control.svg",
+            "rasterPath": "lirm-armature-11/source-maps/mask-control.png"
           },
           {
             "kind": "semantic",
-            "path": "lirm-armature-11/source-maps/semantic-control.svg"
+            "path": "lirm-armature-11/source-maps/semantic-control.svg",
+            "rasterPath": "lirm-armature-11/source-maps/semantic-control.png"
           }
         ]
       },
@@ -372,23 +407,28 @@
         "sourceMaps": [
           {
             "kind": "clay",
-            "path": "lirm-armature-16/source-maps/clay-control.svg"
+            "path": "lirm-armature-16/source-maps/clay-control.svg",
+            "rasterPath": "lirm-armature-16/source-maps/clay-control.png"
           },
           {
             "kind": "depth",
-            "path": "lirm-armature-16/source-maps/depth-control.svg"
+            "path": "lirm-armature-16/source-maps/depth-control.svg",
+            "rasterPath": "lirm-armature-16/source-maps/depth-control.png"
           },
           {
             "kind": "normal",
-            "path": "lirm-armature-16/source-maps/normal-control.svg"
+            "path": "lirm-armature-16/source-maps/normal-control.svg",
+            "rasterPath": "lirm-armature-16/source-maps/normal-control.png"
           },
           {
             "kind": "mask",
-            "path": "lirm-armature-16/source-maps/mask-control.svg"
+            "path": "lirm-armature-16/source-maps/mask-control.svg",
+            "rasterPath": "lirm-armature-16/source-maps/mask-control.png"
           },
           {
             "kind": "semantic",
-            "path": "lirm-armature-16/source-maps/semantic-control.svg"
+            "path": "lirm-armature-16/source-maps/semantic-control.svg",
+            "rasterPath": "lirm-armature-16/source-maps/semantic-control.png"
           }
         ]
       },
@@ -399,23 +439,28 @@
         "sourceMaps": [
           {
             "kind": "clay",
-            "path": "lirm-armature-22/source-maps/clay-control.svg"
+            "path": "lirm-armature-22/source-maps/clay-control.svg",
+            "rasterPath": "lirm-armature-22/source-maps/clay-control.png"
           },
           {
             "kind": "depth",
-            "path": "lirm-armature-22/source-maps/depth-control.svg"
+            "path": "lirm-armature-22/source-maps/depth-control.svg",
+            "rasterPath": "lirm-armature-22/source-maps/depth-control.png"
           },
           {
             "kind": "normal",
-            "path": "lirm-armature-22/source-maps/normal-control.svg"
+            "path": "lirm-armature-22/source-maps/normal-control.svg",
+            "rasterPath": "lirm-armature-22/source-maps/normal-control.png"
           },
           {
             "kind": "mask",
-            "path": "lirm-armature-22/source-maps/mask-control.svg"
+            "path": "lirm-armature-22/source-maps/mask-control.svg",
+            "rasterPath": "lirm-armature-22/source-maps/mask-control.png"
           },
           {
             "kind": "semantic",
-            "path": "lirm-armature-22/source-maps/semantic-control.svg"
+            "path": "lirm-armature-22/source-maps/semantic-control.svg",
+            "rasterPath": "lirm-armature-22/source-maps/semantic-control.png"
           }
         ]
       },
@@ -426,23 +471,28 @@
         "sourceMaps": [
           {
             "kind": "clay",
-            "path": "lirm-armature-24/source-maps/clay-control.svg"
+            "path": "lirm-armature-24/source-maps/clay-control.svg",
+            "rasterPath": "lirm-armature-24/source-maps/clay-control.png"
           },
           {
             "kind": "depth",
-            "path": "lirm-armature-24/source-maps/depth-control.svg"
+            "path": "lirm-armature-24/source-maps/depth-control.svg",
+            "rasterPath": "lirm-armature-24/source-maps/depth-control.png"
           },
           {
             "kind": "normal",
-            "path": "lirm-armature-24/source-maps/normal-control.svg"
+            "path": "lirm-armature-24/source-maps/normal-control.svg",
+            "rasterPath": "lirm-armature-24/source-maps/normal-control.png"
           },
           {
             "kind": "mask",
-            "path": "lirm-armature-24/source-maps/mask-control.svg"
+            "path": "lirm-armature-24/source-maps/mask-control.svg",
+            "rasterPath": "lirm-armature-24/source-maps/mask-control.png"
           },
           {
             "kind": "semantic",
-            "path": "lirm-armature-24/source-maps/semantic-control.svg"
+            "path": "lirm-armature-24/source-maps/semantic-control.svg",
+            "rasterPath": "lirm-armature-24/source-maps/semantic-control.png"
           }
         ]
       }

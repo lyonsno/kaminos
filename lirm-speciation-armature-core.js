@@ -1,4 +1,5 @@
 import { mkdir, writeFile } from 'node:fs/promises';
+import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 
 export const LIRM_SPECIATION_ARMATURE_WITNESS_SCHEMA = 'kaminos.lirm-speciation-armature-witness.v0';
@@ -899,6 +900,15 @@ function renderConditioningPanelSvg({ candidate, sourceImages, prompt }) {
 </svg>`;
 }
 
+function rasterizeSvgWithSips(svgPath, pngPath) {
+  const result = spawnSync('sips', ['-s', 'format', 'png', svgPath, '--out', pngPath], {
+    encoding: 'utf8',
+  });
+  if (result.status !== 0) {
+    throw new Error(`sips failed rasterizing ${svgPath}: ${(result.stderr || result.stdout || '').trim()}`);
+  }
+}
+
 export function createLirmSpeciationArmatureConditioningPackage({ witness, candidate, candidateId } = {}) {
   const selectedCandidate = candidate || witness?.candidates?.find(item => item.id === candidateId);
   if (!witness || !selectedCandidate) {
@@ -909,6 +919,7 @@ export function createLirmSpeciationArmatureConditioningPackage({ witness, candi
   const sourceImages = proxyBundle.renderMaps.map(map => ({
     kind: map.kind,
     path: `source-maps/${map.kind}-control.svg`,
+    rasterPath: `source-maps/${map.kind}-control.png`,
     sourceProxyPath: map.path,
     requiredFor: map.kind === 'mask'
       ? ['imagegen_conditioning', 'sam3_isolation', 'alpha_cutout']
@@ -982,7 +993,10 @@ export async function writeLirmSpeciationArmatureConditioningPackages(options = 
     const sourceMapDir = join(candidateDir, 'source-maps');
     await mkdir(sourceMapDir, { recursive: true });
     for (const map of proxyBundle.renderMaps) {
-      await writeFile(join(sourceMapDir, `${map.kind}-control.svg`), map.svg);
+      const svgPath = join(sourceMapDir, `${map.kind}-control.svg`);
+      const pngPath = join(sourceMapDir, `${map.kind}-control.png`);
+      await writeFile(svgPath, map.svg);
+      rasterizeSvgWithSips(svgPath, pngPath);
     }
     await writeFile(join(candidateDir, 'conditioning-panel.svg'), pkg.conditioningPanel.svg);
     const packageJson = {
@@ -995,7 +1009,11 @@ export async function writeLirmSpeciationArmatureConditioningPackages(options = 
       candidateId,
       package: `${candidateId}/conditioning-package.json`,
       panel: `${candidateId}/conditioning-panel.svg`,
-      sourceMaps: pkg.sourceImages.map(image => ({ kind: image.kind, path: `${candidateId}/${image.path}` })),
+      sourceMaps: pkg.sourceImages.map(image => ({
+        kind: image.kind,
+        path: `${candidateId}/${image.path}`,
+        rasterPath: `${candidateId}/${image.rasterPath}`,
+      })),
     });
   }
   const receipt = {
@@ -1007,7 +1025,7 @@ export async function writeLirmSpeciationArmatureConditioningPackages(options = 
     packages: packages.map(pkg => ({
       schema: pkg.schema,
       candidateId: pkg.candidateId,
-      sourceImages: pkg.sourceImages.map(image => ({ kind: image.kind, path: image.path })),
+      sourceImages: pkg.sourceImages.map(image => ({ kind: image.kind, path: image.path, rasterPath: image.rasterPath })),
       routeCandidates: pkg.routeCandidates,
     })),
     falseClosureGuards: {

@@ -28,6 +28,8 @@ assert.equal(pkg.sourceProxyRender.route, 'kaminos/lirm-speciation-armature/prox
 assert.equal(pkg.sourceImages.length, 5);
 assert.deepEqual(pkg.sourceImages.map(item => item.kind), ['clay', 'depth', 'normal', 'mask', 'semantic']);
 assert.ok(pkg.sourceImages.every(item => item.requiredFor.includes('imagegen_conditioning')), 'source maps should be useful to image conditioning routes');
+assert.ok(pkg.sourceImages.every(item => item.path.endsWith('.svg')), 'source image path should keep SVG control source');
+assert.ok(pkg.sourceImages.every(item => item.rasterPath.endsWith('.png')), 'source images need PNG raster path for ML routes');
 assert.match(pkg.prompt.positive, /small crawling hoard-thief creature/);
 assert.match(pkg.prompt.positive, /terminal front mouth/);
 assert.match(pkg.prompt.negative, /centered eye/);
@@ -53,6 +55,7 @@ assert.ok(existsSync(join(outDir, 'lirm-armature-22', 'conditioning-package.json
 assert.ok(existsSync(join(outDir, 'lirm-armature-22', 'conditioning-panel.svg')), 'writer must emit composite conditioning panel');
 for (const kind of ['clay', 'depth', 'normal', 'mask', 'semantic']) {
   assert.ok(existsSync(join(outDir, 'lirm-armature-22', 'source-maps', `${kind}-control.svg`)), `writer must emit ${kind} source map`);
+  assert.ok(existsSync(join(outDir, 'lirm-armature-22', 'source-maps', `${kind}-control.png`)), `writer must emit ${kind} PNG source map`);
 }
 
 const receipt = JSON.parse(readFileSync(join(outDir, 'receipt.json'), 'utf8'));

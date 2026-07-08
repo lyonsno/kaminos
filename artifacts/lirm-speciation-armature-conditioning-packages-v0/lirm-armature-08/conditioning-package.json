@@ -21,6 +21,7 @@
     {
       "kind": "clay",
       "path": "source-maps/clay-control.svg",
+      "rasterPath": "source-maps/clay-control.png",
       "sourceProxyPath": "lirm-armature-08/clay-control.svg",
       "requiredFor": [
         "imagegen_conditioning",
@@ -31,6 +32,7 @@
     {
       "kind": "depth",
       "path": "source-maps/depth-control.svg",
+      "rasterPath": "source-maps/depth-control.png",
       "sourceProxyPath": "lirm-armature-08/depth-control.svg",
       "requiredFor": [
         "imagegen_conditioning",
@@ -41,6 +43,7 @@
     {
       "kind": "normal",
       "path": "source-maps/normal-control.svg",
+      "rasterPath": "source-maps/normal-control.png",
       "sourceProxyPath": "lirm-armature-08/normal-control.svg",
       "requiredFor": [
         "imagegen_conditioning",
@@ -51,6 +54,7 @@
     {
       "kind": "mask",
       "path": "source-maps/mask-control.svg",
+      "rasterPath": "source-maps/mask-control.png",
       "sourceProxyPath": "lirm-armature-08/mask-control.svg",
       "requiredFor": [
         "imagegen_conditioning",
@@ -62,6 +66,7 @@
     {
       "kind": "semantic",
       "path": "source-maps/semantic-control.svg",
+      "rasterPath": "source-maps/semantic-control.png",
       "sourceProxyPath": "lirm-armature-08/semantic-control.svg",
       "requiredFor": [
         "imagegen_conditioning",
