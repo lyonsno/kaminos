@@ -1,0 +1,70 @@
+<!doctype html><meta charset="utf-8"><title>Kaminos post-freeze residual A/B</title><style>
+    body{margin:0;background:#111;color:#eee;font:14px system-ui;padding:18px} h1{font-size:20px;margin:0 0 10px} .meta{color:#aaa;margin-bottom:14px}.grid{display:grid;grid-template-columns:repeat(2,minmax(320px,1fr));gap:14px}.card{background:#1b1b1b;border:1px solid #333;border-radius:10px;padding:10px}.card img{width:100%;height:auto;image-rendering:auto;background:#000}.label{font-weight:700;margin-bottom:6px}.state{font:12px ui-monospace,monospace;color:#bbb;white-space:pre-wrap} .toolbar{position:sticky;top:0;background:#111;padding:8px 0 12px;margin-bottom:10px}.solo .card{display:none}.solo .card.active{display:block}.solo .grid{display:block}.buttons button{margin-right:8px;margin-bottom:6px}</style>
+    <h1>Kaminos post-freeze official residual A/B</h1><div class="meta">Same frozen sim/render phase. Commit bee1e57. Model artifacts/residual-latest-fire-0707/browser-feature-rs010-frontbite-feature-rgba.json. Pinned sim 127, render phase 127 @ 3443.899999976158ms.</div>
+    <p class="meta"><a href="/artifacts/residual-latest-fire-0708/post-freeze-official-smoke/receipt.json">receipt.json</a> · <a href="/artifacts/residual-latest-fire-0708/post-freeze-official-smoke/pixel_delta_summary.json">pixel_delta_summary.json</a> · <a href="/?kaminos_volume_smoke=1&volume_scene=tall_plume&volume_tall_preset=pyro_flow_small_bonfire_gamut_0707&volume_resolution=160&volume_majorant_grid=48&volume_pressure_mode=global-p3&volume_temporal_accum=0&volume_temporal_jitter=0&volume_render_scale=0.10&volume_residual_mode=webgpu-direct-residual&volume_residual_model_url=artifacts/residual-latest-fire-0707/browser-feature-rs010-frontbite-feature-rgba.json&volume_residual_strength=1">open live residual route</a></p>
+    <div class="toolbar"><div class="buttons"><button onclick="document.body.classList.toggle('solo')">toggle solo/grid</button><button onclick="document.querySelectorAll('.card').forEach((el,j)=>el.classList.toggle('active',j===0))">1</button><button onclick="document.querySelectorAll('.card').forEach((el,j)=>el.classList.toggle('active',j===1))">2</button><button onclick="document.querySelectorAll('.card').forEach((el,j)=>el.classList.toggle('active',j===2))">3</button><button onclick="document.querySelectorAll('.card').forEach((el,j)=>el.classList.toggle('active',j===3))">4</button><button onclick="document.querySelectorAll('.card').forEach(el=>el.classList.add('active'))">all</button></div></div>
+    <div class="grid"><section class="card active"><div class="label">1. 0.10 linear-css-upscale / residual off</div><img src="01_low_rs010_linear_off.png"><div class="state">{
+  "frameCount": 248,
+  "simStepCount": 127,
+  "lookFreeze": 1,
+  "lookFreezeFrame": 127,
+  "renderPhaseTimeMs": 3443.899999976158,
+  "renderPhaseFrame": 127,
+  "renderPhaseAuthority": "look-freeze-pinned-render-phase",
+  "renderScale": 0.1,
+  "volumeReconstructionStyle": "linear-css-upscale",
+  "volumeResidualMode": "off",
+  "volumeResidualStatus": "off",
+  "volumeResidualStrength": 1,
+  "volumeResidualAuthority": "off",
+  "volumeResidualModelError": null,
+  "backend": "WebGPU:apple"
+}</div></section><section class="card active"><div class="label">2. 0.10 browser feature-RGBA residual / strength 1</div><img src="02_low_rs010_feature_rgba_residual_on.png"><div class="state">{
+  "frameCount": 346,
+  "simStepCount": 127,
+  "lookFreeze": 1,
+  "lookFreezeFrame": 127,
+  "renderPhaseTimeMs": 3443.899999976158,
+  "renderPhaseFrame": 127,
+  "renderPhaseAuthority": "look-freeze-pinned-render-phase",
+  "renderScale": 0.1,
+  "volumeReconstructionStyle": "webgpu-direct-residual",
+  "volumeResidualMode": "webgpu-direct-residual",
+  "volumeResidualStatus": "loaded",
+  "volumeResidualStrength": 1,
+  "volumeResidualAuthority": "browser-webgpu-direct-residual-v0",
+  "volumeResidualModelError": null,
+  "backend": "WebGPU:apple"
+}</div></section><section class="card active"><div class="label">3. 0.10 browser feature-RGBA residual / strength 1.5</div><img src="03_low_rs010_feature_rgba_residual_gain150.png"><div class="state">{
+  "frameCount": 436,
+  "simStepCount": 127,
+  "lookFreeze": 1,
+  "lookFreezeFrame": 127,
+  "renderPhaseTimeMs": 3443.899999976158,
+  "renderPhaseFrame": 127,
+  "renderPhaseAuthority": "look-freeze-pinned-render-phase",
+  "renderScale": 0.1,
+  "volumeReconstructionStyle": "webgpu-direct-residual",
+  "volumeResidualMode": "webgpu-direct-residual",
+  "volumeResidualStatus": "loaded",
+  "volumeResidualStrength": 1.5,
+  "volumeResidualAuthority": "browser-webgpu-direct-residual-v0",
+  "volumeResidualModelError": null,
+  "backend": "WebGPU:apple"
+}</div></section><section class="card active"><div class="label">4. 1.00 native reference / residual off</div><img src="04_ref_rs100_native_off.png"><div class="state">{
+  "frameCount": 466,
+  "simStepCount": 127,
+  "lookFreeze": 1,
+  "lookFreezeFrame": 127,
+  "renderPhaseTimeMs": 3443.899999976158,
+  "renderPhaseFrame": 127,
+  "renderPhaseAuthority": "look-freeze-pinned-render-phase",
+  "renderScale": 1,
+  "volumeReconstructionStyle": "native-resolution",
+  "volumeResidualMode": "off",
+  "volumeResidualStatus": "off",
+  "volumeResidualStrength": 1,
+  "volumeResidualAuthority": "off",
+  "volumeResidualModelError": null,
+  "backend": "WebGPU:apple"
+}</div></section></div>
