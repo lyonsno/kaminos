@@ -27,6 +27,7 @@ const REQUIRED_STAGES = [
   'load-selection-tensors',
   'selection-score-threshold',
   'selection-box-cxcywh-to-xyxy',
+  'selection-box-nms',
   'selection-argmax',
   'readback-selection',
 ];
@@ -49,7 +50,7 @@ struct SelectionDims {
   image_width: u32,
   total_queries: u32,
   score_threshold: f32,
-  _pad: u32,
+  nms_iou_threshold: f32,
 };
 
 @group(0) @binding(0) var<storage, read> pred_logits: array<f32>;
@@ -95,6 +96,74 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
 }
 `;
 
+const NMS_WGSL = `
+struct SelectionDims {
+  layer_count: u32,
+  batch: u32,
+  query_tokens: u32,
+  image_height: u32,
+  image_width: u32,
+  total_queries: u32,
+  score_threshold: f32,
+  nms_iou_threshold: f32,
+};
+
+@group(0) @binding(0) var<storage, read> scores: array<f32>;
+@group(0) @binding(1) var<storage, read> boxes: array<f32>;
+@group(0) @binding(2) var<storage, read_write> keep: array<u32>;
+@group(0) @binding(3) var<uniform> dims: SelectionDims;
+
+fn box_iou(base_a: u32, base_b: u32) -> f32 {
+  let x1 = max(boxes[base_a + 0u], boxes[base_b + 0u]);
+  let y1 = max(boxes[base_a + 1u], boxes[base_b + 1u]);
+  let x2 = min(boxes[base_a + 2u], boxes[base_b + 2u]);
+  let y2 = min(boxes[base_a + 3u], boxes[base_b + 3u]);
+  let inter_w = max(0.0, x2 - x1);
+  let inter_h = max(0.0, y2 - y1);
+  let inter = inter_w * inter_h;
+  let area_a = max(0.0, boxes[base_a + 2u] - boxes[base_a + 0u]) * max(0.0, boxes[base_a + 3u] - boxes[base_a + 1u]);
+  let area_b = max(0.0, boxes[base_b + 2u] - boxes[base_b + 0u]) * max(0.0, boxes[base_b + 3u] - boxes[base_b + 1u]);
+  return inter / max(area_a + area_b - inter, 0.000001);
+}
+
+@compute @workgroup_size(1)
+fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+  let batch = gid.x;
+  if (batch >= dims.batch) { return; }
+  let offset = batch * dims.query_tokens;
+
+  if (dims.nms_iou_threshold < 1.0) {
+    for (var iter = 0u; iter < dims.query_tokens; iter = iter + 1u) {
+      var best_query = dims.query_tokens;
+      var best_score = -1.0;
+      for (var query = 0u; query < dims.query_tokens; query = query + 1u) {
+        let index = offset + query;
+        let score = scores[index];
+        if (keep[index] == 1u && (score > best_score || (score == best_score && query < best_query))) {
+          best_score = score;
+          best_query = query;
+        }
+      }
+      if (best_query >= dims.query_tokens) { break; }
+      let best_index = offset + best_query;
+      keep[best_index] = 2u;
+      let best_box_base = best_index * 4u;
+      for (var query = 0u; query < dims.query_tokens; query = query + 1u) {
+        let index = offset + query;
+        if (keep[index] == 1u && box_iou(best_box_base, index * 4u) > dims.nms_iou_threshold) {
+          keep[index] = 0u;
+        }
+      }
+    }
+  }
+
+  for (var query = 0u; query < dims.query_tokens; query = query + 1u) {
+    let index = offset + query;
+    keep[index] = select(keep[index], 1u, keep[index] == 2u);
+  }
+}
+`;
+
 const SELECT_WGSL = `
 struct SelectionDims {
   layer_count: u32,
@@ -104,7 +173,7 @@ struct SelectionDims {
   image_width: u32,
   total_queries: u32,
   score_threshold: f32,
-  _pad: u32,
+  nms_iou_threshold: f32,
 };
 
 @group(0) @binding(0) var<storage, read> scores: array<f32>;
@@ -148,7 +217,7 @@ function createDefaultScheduler() {
     breathability: {
       spans: REQUIRED_STAGES.map(stage => ({ name: `${stage}-phase`, stage, kind: stage === 'readback-selection' ? 'readback-bound' : 'gpu-submit-bound', interruptible: false, canYieldBefore: true, canYieldAfter: true })),
       checkpoints: REQUIRED_STAGES.map(stage => ({ name: `after-${stage}`, kind: stage === 'readback-selection' ? 'readback' : 'stage-boundary', afterStage: stage, yieldable: true, waitsForSubmittedWorkDone: stage !== 'readback-selection' })),
-      notes: 'SAM3 selection postprocess phase program cooperates between score thresholding, box conversion, argmax, and readback boundaries.',
+      notes: 'SAM3 selection postprocess phase program cooperates between score thresholding, box conversion, box NMS, argmax, and readback boundaries.',
     },
   });
 }
@@ -183,11 +252,13 @@ function normalizeShape(shape = {}) {
     imageHeight: shape.imageHeight,
     imageWidth: shape.imageWidth,
     scoreThreshold: shape.scoreThreshold,
+    nmsIouThreshold: shape.nmsIouThreshold ?? 1,
   };
   for (const key of ['layerCount', 'batch', 'queryTokens', 'imageHeight', 'imageWidth']) {
     if (!Number.isInteger(out[key]) || out[key] <= 0) throw new Error(`shape.${key} must be a positive integer`);
   }
   if (typeof out.scoreThreshold !== 'number' || !Number.isFinite(out.scoreThreshold)) throw new Error('shape.scoreThreshold must be finite');
+  if (typeof out.nmsIouThreshold !== 'number' || !Number.isFinite(out.nmsIouThreshold) || out.nmsIouThreshold < 0) throw new Error('shape.nmsIouThreshold must be finite and non-negative');
   return out;
 }
 
@@ -211,6 +282,19 @@ function sigmoid(value) {
 
 function clipPixel(value, maxValue) {
   return Math.min(Math.max(value, 0), maxValue);
+}
+
+function boxIou(boxes, a, b) {
+  const aBase = a * 4;
+  const bBase = b * 4;
+  const x1 = Math.max(boxes[aBase], boxes[bBase]);
+  const y1 = Math.max(boxes[aBase + 1], boxes[bBase + 1]);
+  const x2 = Math.min(boxes[aBase + 2], boxes[bBase + 2]);
+  const y2 = Math.min(boxes[aBase + 3], boxes[bBase + 3]);
+  const inter = Math.max(0, x2 - x1) * Math.max(0, y2 - y1);
+  const areaA = Math.max(0, boxes[aBase + 2] - boxes[aBase]) * Math.max(0, boxes[aBase + 3] - boxes[aBase + 1]);
+  const areaB = Math.max(0, boxes[bBase + 2] - boxes[bBase]) * Math.max(0, boxes[bBase + 3] - boxes[bBase + 1]);
+  return inter / Math.max(areaA + areaB - inter, 1e-6);
 }
 
 export function createSam3SelectionPostprocessPhaseProgramCpuOracle(input) {
@@ -241,6 +325,39 @@ export function createSam3SelectionPostprocessPhaseProgramCpuOracle(input) {
       boxes[boxBase + 1] = clipPixel((cy - height / 2) * shape.imageHeight, shape.imageHeight);
       boxes[boxBase + 2] = clipPixel((cx + width / 2) * shape.imageWidth, shape.imageWidth);
       boxes[boxBase + 3] = clipPixel((cy + height / 2) * shape.imageHeight, shape.imageHeight);
+      if (keep[index] && score > bestScore) {
+        bestScore = score;
+        bestIndex = q;
+      }
+    }
+    if (shape.nmsIouThreshold < 1) {
+      const remaining = new Set();
+      for (let q = 0; q < shape.queryTokens; q += 1) {
+        if (keep[b * shape.queryTokens + q]) remaining.add(q);
+      }
+      const kept = [];
+      while (remaining.size > 0) {
+        let best = null;
+        for (const q of remaining) {
+          const score = scores[b * shape.queryTokens + q];
+          if (best === null || score > scores[b * shape.queryTokens + best] || (score === scores[b * shape.queryTokens + best] && q < best)) best = q;
+        }
+        kept.push(best);
+        remaining.delete(best);
+        for (const q of Array.from(remaining)) {
+          if (boxIou(boxes, b * shape.queryTokens + best, b * shape.queryTokens + q) > shape.nmsIouThreshold) {
+            remaining.delete(q);
+            keep[b * shape.queryTokens + q] = 0;
+          }
+        }
+      }
+      for (const q of kept) keep[b * shape.queryTokens + q] = 1;
+    }
+    bestIndex = 0;
+    bestScore = -1;
+    for (let q = 0; q < shape.queryTokens; q += 1) {
+      const index = b * shape.queryTokens + q;
+      const score = scores[index];
       if (keep[index] && score > bestScore) {
         bestScore = score;
         bestIndex = q;
@@ -367,7 +484,7 @@ export async function runSam3SelectionPostprocessPhaseProgramRoute(input = {}) {
           { name: 'image_width', type: 'u32' },
           { name: 'total_queries', type: 'u32' },
           { name: 'score_threshold', type: 'f32' },
-          { name: '_pad', type: 'u32' },
+          { name: 'nms_iou_threshold', type: 'f32' },
         ],
         values: {
           layer_count: shape.layerCount,
@@ -377,7 +494,7 @@ export async function runSam3SelectionPostprocessPhaseProgramRoute(input = {}) {
           image_width: shape.imageWidth,
           total_queries: totalQueries,
           score_threshold: shape.scoreThreshold,
-          _pad: 0,
+          nms_iou_threshold: shape.nmsIouThreshold,
         },
       }),
     };
@@ -414,6 +531,15 @@ export async function runSam3SelectionPostprocessPhaseProgramRoute(input = {}) {
           { name: 'dims', resource: 'uniform:dims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' },
         ],
       },
+      boxNms: {
+        code: NMS_WGSL,
+        bindings: [
+          { name: 'scores', resource: 'tensor:scores', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' },
+          { name: 'boxes', resource: 'tensor:boxes', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' },
+          { name: 'keep', resource: 'tensor:keep', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' },
+          { name: 'dims', resource: 'uniform:dims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' },
+        ],
+      },
       select: {
         code: SELECT_WGSL,
         bindings: [
@@ -430,6 +556,7 @@ export async function runSam3SelectionPostprocessPhaseProgramRoute(input = {}) {
     phases: [
       { name: 'selection-score-threshold', kernel: 'postprocess', dispatch: [workgroups(totalQueries)], yieldAfter: true },
       { name: 'selection-box-cxcywh-to-xyxy', kernel: 'postprocess', dispatch: [workgroups(totalQueries)], yieldAfter: true },
+      { name: 'selection-box-nms', kernel: 'boxNms', dispatch: [shape.batch], yieldAfter: true },
       { name: 'selection-argmax', kernel: 'select', dispatch: [shape.batch], yieldAfter: true },
       { name: 'readback-selection', readbacks: [
         { name: 'scores', tensor: 'scores' },

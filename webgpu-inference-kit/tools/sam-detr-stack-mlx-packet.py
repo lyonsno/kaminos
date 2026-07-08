@@ -69,6 +69,7 @@ def parse_args():
     parser.add_argument("--image-vit-full-backbone-ingress", action="store_true", help="Export detector-stack packet expectations for browser-local SAM3 full ViT backbone ingress through the final transformer layer.")
     parser.add_argument("--image-fpn-neck-ingress", action="store_true", help="Export detector-stack packet expectations for browser-local SAM3 full ViT backbone through detector-consumed FPN-neck features.")
     parser.add_argument("--score-threshold", type=float, default=0.5)
+    parser.add_argument("--nms-iou-threshold", type=float, default=0.5)
     return parser.parse_args()
 
 
@@ -76,7 +77,18 @@ def sigmoid(x):
     return 1.0 / (1.0 + np.exp(-x))
 
 
-def selection_reference(ref, resolution, threshold):
+def box_iou(boxes, a, b):
+    x1 = max(float(boxes[a, 0]), float(boxes[b, 0]))
+    y1 = max(float(boxes[a, 1]), float(boxes[b, 1]))
+    x2 = min(float(boxes[a, 2]), float(boxes[b, 2]))
+    y2 = min(float(boxes[a, 3]), float(boxes[b, 3]))
+    inter = max(0.0, x2 - x1) * max(0.0, y2 - y1)
+    area_a = max(0.0, float(boxes[a, 2] - boxes[a, 0])) * max(0.0, float(boxes[a, 3] - boxes[a, 1]))
+    area_b = max(0.0, float(boxes[b, 2] - boxes[b, 0])) * max(0.0, float(boxes[b, 3] - boxes[b, 1]))
+    return inter / max(area_a + area_b - inter, 1e-6)
+
+
+def selection_reference(ref, resolution, threshold, nms_iou_threshold):
     logits = ref["all_pred_logits"]
     boxes_cxcywh = ref["reference_boxes"]
     presence = ref["presence_logits_full"]
@@ -96,6 +108,20 @@ def selection_reference(ref, resolution, threshold):
     )
     boxes = np.clip(boxes, 0, resolution).astype(np.float32)
     keep = (scores > threshold).astype(np.uint32)
+    if nms_iou_threshold < 1.0:
+        for batch in range(scores.shape[0]):
+            candidates = set(int(value) for value in np.where(keep[batch] == 1)[0])
+            kept = []
+            while candidates:
+                local = max(candidates, key=lambda query: (float(scores[batch, query]), -query))
+                kept.append(local)
+                candidates.remove(local)
+                for query in list(candidates):
+                    if box_iou(boxes[batch], local, query) > nms_iou_threshold:
+                        candidates.remove(query)
+                        keep[batch, query] = 0
+            for query in kept:
+                keep[batch, query] = 1
     selected_index = np.zeros((scores.shape[0],), dtype=np.uint32)
     selected_score = np.zeros((scores.shape[0],), dtype=np.float32)
     selected_box = np.zeros((scores.shape[0], 4), dtype=np.float32)
@@ -315,7 +341,7 @@ def main():
     if include_scoring:
         encoder_tool.add_tensor(tensor_entries, out_dir, "expected-pred-logits", "expected-pred-logits.f32.bin", ref["all_pred_logits"], [shape["layerCount"], shape["batch"], shape["queryTokens"], 1], "L,B,Q,1")
     if include_selection:
-        selection = selection_reference(ref, args.resolution, args.score_threshold)
+        selection = selection_reference(ref, args.resolution, args.score_threshold, args.nms_iou_threshold)
         encoder_tool.add_tensor(tensor_entries, out_dir, "expected-selection-scores", "expected-selection-scores.f32.bin", selection["scores"], [shape["batch"], shape["queryTokens"]], "B,Q")
         encoder_tool.add_tensor(tensor_entries, out_dir, "expected-selection-boxes", "expected-selection-boxes.f32.bin", selection["boxes"], [shape["batch"], shape["queryTokens"], 4], "B,Q,4")
         encoder_tool.add_tensor(tensor_entries, out_dir, "expected-selection-keep", "expected-selection-keep.u32.bin", selection["keep"], [shape["batch"], shape["queryTokens"]], "B,Q", "uint32")
@@ -438,7 +464,7 @@ def main():
         "sourceImage": {"artifactId": f"image:{image_path.name}:sam3-reference-source", "file": "source-image.png", "path": str(source_path), "sha256": encoder_tool.sha256_file(source_path), "originalPath": str(image_path), "resolution": [args.resolution, args.resolution]},
         "staticWeights": {"artifactId": f"sam3-weights:{args.model}:detr-stack-reference-upstream", "sha256": weights_sha, "role": "reference-upstream", "reason": "weights exported for browser prompt/text ingress, image ViT full-backbone plus detector-consumed FPN-neck ingress, DETR encoder, prompt-FPN, pixel-decoder, DETR decoder, dot-product scoring, selection postprocess, and downstream mask-tail phase-program execution" if include_image_fpn_neck else "weights exported for browser image ViT full-backbone ingress through the final transformer layer, DETR encoder, DETR decoder, dot-product scoring, selection postprocess, and downstream mask-tail phase-program execution" if include_image_vit_full_backbone else "weights exported for browser image ViT block-stack ingress through first global-attention layer, DETR encoder, DETR decoder, dot-product scoring, selection postprocess, and downstream mask-tail phase-program execution" if include_image_vit_block_stack else "weights exported for browser image ViT first-block ingress, DETR encoder, DETR decoder, dot-product scoring, selection postprocess, and downstream mask-tail phase-program execution" if include_image_vit_first_block else "weights exported for browser image ViT-prefix ingress, DETR encoder, DETR decoder, dot-product scoring, selection postprocess, and downstream mask-tail phase-program execution" if include_image_vit_prefix else "weights exported for browser DETR encoder, DETR decoder, dot-product scoring, selection postprocess, and downstream mask-tail phase-program execution" if include_selection else "weights exported for browser DETR encoder, DETR decoder, dot-product scoring, and downstream mask-tail phase-program execution" if include_scoring else "weights exported for browser DETR encoder, DETR decoder, and downstream mask-tail phase-program execution"},
         "shape": shape,
-        "claims": {"fullSam3BrowserExecution": False, "upstream": "mlx-vlm-sam3-detector-reference", "browserExecutedStages": [*(["image-preprocess"] if include_image_preprocess else []), *(["image-patch-embed"] if include_image_patch_embed else []), *(["image-vit-prefix"] if include_image_vit_prefix else []), *(["image-vit-first-block"] if include_image_vit_first_block and not include_image_vit_block_stack else []), *(["image-vit-backbone"] if include_image_vit_full_backbone else ["image-vit-block-stack"] if include_image_vit_block_stack else []), *(["image-fpn-neck"] if include_image_fpn_neck else []), *(["prompt-text-ingress"] if include_image_fpn_neck else []), "detr-encoder", *(["prompt-cross-attention-fpn", "pixel-decoder"] if include_image_fpn_neck else []), "detr-decoder", *(['dot-product-scoring'] if include_scoring else []), *(['score-threshold', 'box-postprocess', 'object-selection'] if include_selection else []), "mask-embedder", "instance-projection", "decode-mask", "threshold-mask"]},
+        "claims": {"fullSam3BrowserExecution": False, "upstream": "mlx-vlm-sam3-detector-reference", "browserExecutedStages": [*(["image-preprocess"] if include_image_preprocess else []), *(["image-patch-embed"] if include_image_patch_embed else []), *(["image-vit-prefix"] if include_image_vit_prefix else []), *(["image-vit-first-block"] if include_image_vit_first_block and not include_image_vit_block_stack else []), *(["image-vit-backbone"] if include_image_vit_full_backbone else ["image-vit-block-stack"] if include_image_vit_block_stack else []), *(["image-fpn-neck"] if include_image_fpn_neck else []), *(["prompt-text-ingress"] if include_image_fpn_neck else []), "detr-encoder", *(["prompt-cross-attention-fpn", "pixel-decoder"] if include_image_fpn_neck else []), "detr-decoder", *(['dot-product-scoring'] if include_scoring else []), *(['selection-score-threshold', 'selection-box-cxcywh-to-xyxy', 'selection-box-nms', 'selection-argmax'] if include_selection else []), "mask-embedder", "instance-projection", "decode-mask", "threshold-mask"]},
         "upstreamBoundaries": [
             {"role": "source-image", "owner": "browser-served-source-image" if include_image_preprocess else "mlx-vlm-reference", "status": "browser-local-ingress" if include_image_preprocess else "mlx-owned", "nextBrowserIsland": "image-preprocess-and-vision-encoder"},
             {"role": "patch-embeddings", "owner": "browser-local-route" if include_image_patch_embed else "mlx-vlm-reference", "status": "browser-local-ingress" if include_image_patch_embed else "mlx-owned", "nextBrowserIsland": "sam3-vit-prefix" if include_image_vit_prefix else "sam3-vit-backbone"},
@@ -452,7 +478,7 @@ def main():
             {"role": "prompt-mask", "owner": "browser-local-route" if include_image_fpn_neck else "mlx-vlm-reference", "status": "browser-copied-from-prompt-attention-mask" if include_image_fpn_neck else "mlx-owned", "referenceTensor": "expected-prompt-mask" if include_image_fpn_neck else None, "nextBrowserIsland": None if include_image_fpn_neck else "text-token-prompt-encoder"},
             {"role": "pixel-embed", "owner": "browser-local-route" if include_image_fpn_neck else "mlx-vlm-reference", "status": "browser-derived-from-prompt-fpn-pixel-decoder" if include_image_fpn_neck else "mlx-owned", "referenceTensor": "expected-pixel-embed" if include_image_fpn_neck else None, "nextBrowserIsland": None if include_image_fpn_neck else "image-encoder-pixel-embedding"},
         ] if (args.detector_stack or include_image_preprocess) else None,
-        "postprocess": {"scoreThreshold": args.score_threshold, "nms": False} if include_selection else None,
+        "postprocess": {"scoreThreshold": args.score_threshold, "nms": True, "nmsIouThreshold": args.nms_iou_threshold, "nmsKind": "mlx-vlm-greedy-box-nms"} if include_selection else None,
         "toleranceBudgetSource": tolerance_budget_source,
         "imagePreprocess": {
             "boundary": "sam3-source-image-to-normalized-pixel-values-phase-program",

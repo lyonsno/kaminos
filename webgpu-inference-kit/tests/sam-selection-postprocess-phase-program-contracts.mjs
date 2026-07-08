@@ -16,11 +16,16 @@ assert.match(routeSource, /defineProgram/, 'selection route must use the phase-p
 assert.match(routeSource, /runProgram/, 'selection route must execute through runProgram');
 assert.match(routeSource, /selection-score-threshold/, 'selection route must include score-threshold phase metadata');
 assert.match(routeSource, /selection-box-cxcywh-to-xyxy/, 'selection route must include box conversion phase metadata');
+assert.match(routeSource, /selection-box-nms/, 'selection route must include MLX-VLM/SAM3 result box-NMS phase metadata');
+assert.match(routeSource, /nmsIouThreshold/, 'selection route must carry an explicit NMS IoU threshold in shape metadata');
 assert.match(routeSource, /selection-argmax/, 'selection route must include selected-object argmax phase metadata');
 
 assert.match(stackExporter, /--include-selection/, 'DETR stack exporter must expose an explicit selection-inclusion switch');
 assert.match(stackExporter, /expected-selection-scores/, 'DETR stack selection packet must export expected postprocess scores');
 assert.match(stackExporter, /expected-selected-index/, 'DETR stack selection packet must export expected selected index');
+assert.match(stackExporter, /"nms": True/, 'DETR stack selection packet must claim browser/result box NMS only when the expected keep mask includes NMS suppression');
+assert.match(stackExporter, /"nmsIouThreshold": args\.nms_iou_threshold/, 'DETR stack selection packet must record the effective NMS IoU threshold');
+assert.match(stackExporter, /'selection-box-nms'/, 'DETR stack selection packet must expose browser-owned selection box NMS in executed-stage claims');
 
 assert.match(witness, /mlx-detr-stack-selection-export/, 'witness must allow a real DETR stack -> scoring -> selection packet mode');
 assert.match(witness, /SELECTION_POSTPROCESS_PHASE_PROGRAM_ROUTE_ID/, 'witness must preserve SAM3 selection route identity');
@@ -34,6 +39,7 @@ assert.match(smokeJs, /selectedIndexMaxAbsDiff/, 'browser smoke must report sele
 assert.match(smokeJs, /selectedScoreMaxAbsDiff/, 'browser smoke must report selected score parity');
 assert.match(smokeJs, /selectedBoxMaxAbsDiff/, 'browser smoke must report selected box parity');
 assert.match(smokeJs, /selectionKeepMismatchCount/, 'browser smoke must report explicit selection keep-mask parity');
+assert.match(smokeJs, /nmsIouThreshold/, 'browser smoke must pass the packet NMS IoU threshold into selection postprocess');
 
 const {
   SAM3_SELECTION_POSTPROCESS_PHASE_PROGRAM_ROUTE_ID,
@@ -54,11 +60,24 @@ const oracle = createSam3SelectionPostprocessPhaseProgramCpuOracle({
   predLogits: new Float32Array([-4, 4, 3]),
   referenceBoxes: new Float32Array([0.5, 0.5, 0.2, 0.2, 0.5, 0.5, 0.4, 0.4, 0.25, 0.25, 0.2, 0.2]),
   presenceLogits: new Float32Array([2]),
-  shape: { layerCount: 1, batch: 1, queryTokens: 3, imageHeight: 100, imageWidth: 200, scoreThreshold: 0.5 },
+  shape: { layerCount: 1, batch: 1, queryTokens: 3, imageHeight: 100, imageWidth: 200, scoreThreshold: 0.5, nmsIouThreshold: 0.5 },
 });
 assert.equal(oracle.selectedIndex[0], 1);
 assert.ok(oracle.keep[1] === 1 && oracle.keep[0] === 0, 'selection threshold must keep only scores above threshold');
 assert.ok(Math.abs(oracle.boxes[4] - 60) < 0.00001 && Math.abs(oracle.boxes[6] - 140) < 0.00001, 'selection box conversion must scale x by image width');
+
+const nmsOracle = createSam3SelectionPostprocessPhaseProgramCpuOracle({
+  predLogits: new Float32Array([6, 5, 4]),
+  referenceBoxes: new Float32Array([
+    0.5, 0.5, 0.4, 0.4,
+    0.52, 0.52, 0.4, 0.4,
+    0.1, 0.1, 0.1, 0.1,
+  ]),
+  presenceLogits: new Float32Array([6]),
+  shape: { layerCount: 1, batch: 1, queryTokens: 3, imageHeight: 100, imageWidth: 100, scoreThreshold: 0.5, nmsIouThreshold: 0.5 },
+});
+assert.deepEqual(Array.from(nmsOracle.keep), [1, 0, 1], 'selection NMS must suppress lower-scored overlapping detections while preserving separated detections');
+assert.equal(nmsOracle.selectedIndex[0], 0, 'selection NMS must preserve the highest-scored kept detection as selected');
 
 const landscapeClamp = createSam3SelectionPostprocessPhaseProgramCpuOracle({
   predLogits: new Float32Array([10]),
