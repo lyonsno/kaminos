@@ -2386,6 +2386,26 @@ assert.match(diagnosticRgbContextAblation, /outsideWeakSupportMass/, 'diagnostic
 assert.match(diagnosticRgbContextAblation, /inSupportRmse/, 'diagnostic RGB context ablation reports in-support RMSE against truth');
 assert.match(diagnosticRgbContextAblation, /visibleRasterLabels/, 'diagnostic RGB context ablation burns and manifests visible contact-sheet labels');
 assert.match(diagnosticRgbContextAblation, /failurePhase/, 'diagnostic RGB context ablation writes failure-phase reports for corrupt manifests or training/render failures');
+
+const scalarTransportProxyPath = join(root, 'volume-scalar-derived-transport-proxy.py');
+assert.ok(existsSync(scalarTransportProxyPath), 'volume scalar-derived transport proxy harness exists');
+const scalarTransportProxy = existsSync(scalarTransportProxyPath) ? readFileSync(scalarTransportProxyPath, 'utf8') : '';
+assert.match(scalarTransportProxy, /kaminos\.volume\.scalar-derived-transport-proxy\.v0/, 'scalar-derived transport proxy writes a stable manifest schema');
+assert.match(scalarTransportProxy, /scalar-derived-transport-transposition-proxy-v0/, 'scalar-derived transport proxy names the transposition evidence identity');
+assert.match(scalarTransportProxy, /--motion-manifest/, 'scalar-derived transport proxy can consume the temporal velocity-closure motion manifest');
+assert.match(scalarTransportProxy, /carrierChannelList/, 'scalar-derived transport proxy records the scalar carriers used for transport');
+assert.match(scalarTransportProxy, /framePairIdentity/, 'scalar-derived transport proxy records the source frame-pair identity');
+assert.match(scalarTransportProxy, /multi-carrier-normal-flow-least-squares-v0/, 'scalar-derived transport proxy names the multi-carrier normal-flow solve');
+assert.match(scalarTransportProxy, /truthHighScalarTransport/, 'scalar-derived transport proxy reports truth-high scalar-derived transport');
+assert.match(scalarTransportProxy, /lowUpsampledScalarTransport/, 'scalar-derived transport proxy reports low-upsampled scalar-derived transport');
+assert.match(scalarTransportProxy, /predictedHighScalarTransport/, 'scalar-derived transport proxy has an explicit predicted-high role path instead of silently omitting it');
+assert.match(scalarTransportProxy, /truthVelocityDebug/, 'scalar-derived transport proxy compares against truth high velocity debug');
+assert.match(scalarTransportProxy, /lowVelocityDebug/, 'scalar-derived transport proxy includes low-upsampled velocity debug baseline');
+assert.match(scalarTransportProxy, /fitGain/, 'scalar-derived transport proxy records velocity-unit fit gain for proxy comparisons');
+assert.match(scalarTransportProxy, /meanVectorCosine/, 'scalar-derived transport proxy reports vector cosine against truth velocity');
+assert.match(scalarTransportProxy, /debugRgbCorrelation/, 'scalar-derived transport proxy reports debug RGB correlation against truth velocity debug');
+assert.match(scalarTransportProxy, /visibleRasterLabels/, 'scalar-derived transport proxy burns and manifests visible contact-sheet labels');
+assert.match(scalarTransportProxy, /failurePhase/, 'scalar-derived transport proxy writes failure-phase reports for missing/corrupt frame manifests');
 const sourceScaleProbePath = join(root, 'volume-source-scale-probe.mjs');
 assert.ok(existsSync(sourceScaleProbePath), 'source-scale blobbiness probe exists');
 const sourceScaleProbe = existsSync(sourceScaleProbePath) ? readFileSync(sourceScaleProbePath, 'utf8') : '';
