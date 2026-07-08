@@ -3923,6 +3923,23 @@ async function runSelectedSplatBakeLayerScenario(ws) {
   if (!camera?.position?.length || !camera?.projectionMatrix?.length || !camera?.viewport?.width) {
     throw new Error(`selected splat bake layer did not preserve current camera: ${JSON.stringify(lastEvidence.selectedSplatBakeLayer)}`);
   }
+  if (layer.receipt?.firing?.pipelineId !== 'selected-splat-view-bake-layer-v0'
+      || layer.receipt?.firing?.status !== 'complete'
+      || layer.pipelineRun?.ok !== true
+      || layer.pipelineRun?.pipelineId !== 'selected-splat-view-bake-layer-v0') {
+    throw new Error(`selected splat bake layer did not fire backend pipeline: ${JSON.stringify(lastEvidence.selectedSplatBakeLayer)}`);
+  }
+  if (layer.receipt?.firing?.requestContext?.schema !== 'kaminos.selected-splat-view-bake-request.v0'
+      || layer.receipt?.firing?.requestContext?.camera?.schema !== 'kaminos.splat-bake-layer.camera.v0'
+      || layer.receipt?.firing?.requestContext?.rendererControls?.schema !== 'hybrid-render.splat-renderer-controls.v0') {
+    throw new Error(`selected splat bake layer did not preserve pipeline request context: ${JSON.stringify(lastEvidence.selectedSplatBakeLayer)}`);
+  }
+  if (!layer.receipt?.outputs?.receiptRef?.path
+      || layer.receipt?.outputs?.artifactAuthority !== 'pipeline-receipt-only'
+      || !Array.isArray(layer.receipt?.outputs?.shardRefs)
+      || !layer.receipt.outputs.shardRefs.some(ref => ref.id === 'layerReceipt')) {
+    throw new Error(`selected splat bake layer did not preserve pipeline output receipt: ${JSON.stringify(lastEvidence.selectedSplatBakeLayer)}`);
+  }
   const tuned = lastEvidence.selectedSplatBakeLayer.afterTuneDebug?.layers?.[0] || null;
   if (!tuned || tuned.enabled !== false || Math.abs(Number(tuned.strength) - 0.37) > 0.001) {
     throw new Error(`selected splat bake layer controls did not update: ${JSON.stringify(lastEvidence.selectedSplatBakeLayer)}`);

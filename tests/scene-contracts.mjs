@@ -320,6 +320,12 @@ assert.match(index, /selected-splat-view-bake-layer-crucible-v0/, 'candidate bak
 assert.match(index, /function selectedSplatBakeLayerPreviewContribution\(/, 'candidate bake layers compute a selected-splat preview contribution instead of only recording receipts');
 assert.match(index, /function applySelectedSplatBakeLayerPreview\(/, 'candidate bake layers are coupled to the visible selected-splat preview path');
 assert.match(index, /function setSelectedSplatBakeLayerControls\(/, 'candidate bake layers can be enabled and strength-tuned without rebaking');
+assert.match(index, /SELECTED_SPLAT_VIEW_BAKE_LAYER_PIPELINE_ID\s*=\s*'selected-splat-view-bake-layer-v0'/, 'selected-splat Bake View must name the backend pipeline route it fires');
+assert.match(index, /async function runSelectedSplatViewBakeLayerPipeline\(/, 'selected-splat Bake View must route through an explicit async pipeline firing helper');
+assert.match(index, /\/api\/run-pipeline/, 'selected-splat Bake View must call the server pipeline endpoint instead of remaining browser-local');
+assert.match(index, /requestContext:\s*selectedSplatViewBakeLayerPipelineRequestContext/, 'selected-splat Bake View must send current camera/control context to the pipeline witness');
+assert.match(index, /selectedSplatViewBakeLayerPipelineOutputRefs/, 'selected-splat Bake View must preserve returned pipeline artifact refs on the layer receipt');
+assert.match(index, /pipelineResultSummary/, 'selected-splat Bake View must store effective route/result identity on the candidate layer');
 assert.match(index, /window\.kaminosCreateSelectedSplatViewBakeLayer/, 'browser witnesses can create selected-splat view bake layers without DOM inference');
 assert.match(index, /window\.kaminosSetSelectedSplatBakeLayerControls/, 'browser witnesses can tune selected-splat bake layers without DOM inference');
 assert.match(index, /window\.kaminosSelectedSplatBakeLayerDebugState/, 'browser witnesses can inspect selected-splat bake layers and receipts without DOM inference');

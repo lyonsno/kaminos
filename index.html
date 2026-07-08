@@ -2258,6 +2258,7 @@ const SELECTED_SPLAT_BAKE_LAYER_SCHEMA = 'kaminos.splat-bake-layer.v0';
 const SELECTED_SPLAT_BAKE_LAYER_RECEIPT_SCHEMA = 'kaminos.splat-bake-layer.receipt.v0';
 const SELECTED_SPLAT_BAKE_LAYER_PREVIEW_CONTRIBUTION_SCHEMA = 'kaminos.splat-bake-layer.preview-contribution.v0';
 const SELECTED_SPLAT_VIEW_BAKE_LAYER_ROUTE = 'selected-splat-view-bake-layer-v0';
+const SELECTED_SPLAT_VIEW_BAKE_LAYER_PIPELINE_ID = 'selected-splat-view-bake-layer-v0';
 const SELECTED_SPLAT_VIEW_BAKE_LAYER_CRUCIBLE_KIND = 'selected-splat-view-bake-layer-crucible-v0';
 const DEFAULT_HYBRID_SPLAT_OVERLAY_MODULE_URL = '/vendor/meshsplat-renderer/splatOverlay.js';
 const HYBRID_SPLAT_OVERLAY_PACKAGE_ROUTE = '/vendor/meshsplat-renderer/';
@@ -4495,7 +4496,7 @@ function selectedSplatViewBakeLayerReceipt(record, draft = {}) {
     firing: draft.firing || {
       id: `firing-${draft.layerId || 'unassigned'}`,
       route: SELECTED_SPLAT_VIEW_BAKE_LAYER_ROUTE,
-      status: 'complete',
+      status: 'pending',
       requestedConfig: draft.requestedConfig || {},
       effectiveConfig: draft.effectiveConfig || {},
     },
@@ -4521,7 +4522,114 @@ function selectedSplatViewBakeLayerReceipt(record, draft = {}) {
   };
 }
 
-function createSelectedSplatViewBakeLayer(options = {}) {
+function selectedSplatViewBakeLayerPipelineSource(record) {
+  const source = record?.source || record?.splat?.source || record?.splat?.provenance?.source || null;
+  if (!source) return null;
+  return {
+    source,
+    label: record?.label || record?.fileName || record?.id || 'selected splat',
+    kind: 'splat',
+    graphNodeId: null,
+  };
+}
+
+function selectedSplatViewBakeLayerPipelineRequestContext(record, layer) {
+  return {
+    schema: 'kaminos.selected-splat-view-bake-request.v0',
+    layerId: layer?.id || null,
+    targetObjectId: record?.id || null,
+    route: SELECTED_SPLAT_VIEW_BAKE_LAYER_ROUTE,
+    crucibleKind: SELECTED_SPLAT_VIEW_BAKE_LAYER_CRUCIBLE_KIND,
+    armatureRef: layer?.armatureRef || selectedSplatArmatureRef(record),
+    camera: layer?.camera || selectedSplatViewBakeLayerCameraSnapshot(),
+    rendererControls: layer?.receipt?.witness?.rendererControls || hybridSplatRendererControlsPayload(),
+    requestedConfig: layer?.requestedConfig || {},
+    effectiveConfig: layer?.effectiveConfig || {},
+    previewContribution: selectedSplatBakeLayerPreviewContribution(record),
+    requestedAt: new Date().toISOString(),
+  };
+}
+
+function selectedSplatViewBakeLayerPipelineArtifactRecords(result) {
+  const bundleArtifacts = result?.bundle?.document?.artifacts;
+  if (Array.isArray(bundleArtifacts)) return bundleArtifacts;
+  const reportArtifacts = result?.report?.document?.artifacts;
+  if (!reportArtifacts || typeof reportArtifacts !== 'object') return [];
+  return Object.entries(reportArtifacts).map(([id, artifact]) => ({
+    id,
+    role: artifact?.role || id,
+    status: artifact?.status || null,
+    path: artifact?.path || null,
+    bytes: artifact?.bytes ?? null,
+    sha256: artifact?.sha256 || null,
+  }));
+}
+
+function selectedSplatViewBakeLayerPipelineOutputRefs(result) {
+  return selectedSplatViewBakeLayerPipelineArtifactRecords(result)
+    .filter(artifact => artifact?.id !== 'input' && artifact?.path)
+    .map(artifact => ({
+      id: artifact.id,
+      role: artifact.role || artifact.id,
+      status: artifact.status || null,
+      path: artifact.path,
+      bytes: artifact.bytes ?? null,
+      sha256: artifact.sha256 || null,
+    }));
+}
+
+function pipelineResultSummary(result) {
+  return {
+    schema: 'kaminos.pipeline-result-summary.v0',
+    ok: result?.ok === true,
+    pipelineId: result?.pipelineId || null,
+    source: result?.source || null,
+    exitCode: result?.exitCode ?? null,
+    effectiveRouteConfig: result?.report?.document?.effectiveRouteConfig || null,
+    reportPath: result?.report?.path || null,
+    bundlePath: result?.bundle?.path || null,
+    artifactRefs: selectedSplatViewBakeLayerPipelineOutputRefs(result),
+  };
+}
+
+async function runSelectedSplatViewBakeLayerPipeline(record, layer) {
+  const sourceOverride = selectedSplatViewBakeLayerPipelineSource(record);
+  if (!sourceOverride?.source) throw new Error('Selected splat has no pipeline-readable source');
+  layer.receipt.firing.status = 'running';
+  layer.receipt.firing.pipelineId = SELECTED_SPLAT_VIEW_BAKE_LAYER_PIPELINE_ID;
+  layer.receipt.firing.startedAt = new Date().toISOString();
+  renderSelectedSplatBakeLayerPanel(record);
+  const result = await runSelectedPipeline({
+    sourceOverride,
+    pipelineId: SELECTED_SPLAT_VIEW_BAKE_LAYER_PIPELINE_ID,
+    clientRunId: `selected-view-bake-${layer.id}`,
+    requestContext: selectedSplatViewBakeLayerPipelineRequestContext(record, layer),
+  });
+  const summary = pipelineResultSummary(result);
+  const outputRefs = selectedSplatViewBakeLayerPipelineOutputRefs(result);
+  const receiptRef = outputRefs.find(ref => ref.id === 'layerReceipt') || null;
+  layer.pipelineRun = summary;
+  layer.receipt.firing.status = result?.ok ? 'complete' : 'failed';
+  layer.receipt.firing.completedAt = new Date().toISOString();
+  layer.receipt.firing.pipelineId = SELECTED_SPLAT_VIEW_BAKE_LAYER_PIPELINE_ID;
+  layer.receipt.firing.pipelineResult = summary;
+  layer.receipt.firing.requestContext = selectedSplatViewBakeLayerPipelineRequestContext(record, layer);
+  layer.receipt.outputs = {
+    ...layer.receipt.outputs,
+    shardRefs: outputRefs,
+    receiptRef,
+    artifactAuthority: result?.ok ? 'pipeline-receipt-only' : 'candidate-layer-record-only',
+  };
+  layer.status = result?.ok ? 'candidate' : 'failed';
+  layer.receipt.failurePhase = result?.ok ? null : 'pipeline-run';
+  layer.updatedAt = new Date().toISOString();
+  renderSelectedSplatBakeLayerPanel(record);
+  publishHybridSplatRendererControls(hybridSplatOverlayState.handle);
+  window._kaminosDirty?.();
+  return result;
+}
+
+async function createSelectedSplatViewBakeLayer(options = {}) {
   const record = selectedSplatRecord();
   if (!record) {
     setInfo('Select a splat before baking a view layer');
@@ -4539,7 +4647,8 @@ function createSelectedSplatViewBakeLayer(options = {}) {
   const effectiveConfig = {
     ...requestedConfig,
     layerContributionMode: 'candidate-parameter-layer',
-    backendRoute: options.backendRoute || 'browser-receipt-local-v0',
+    backendRoute: options.backendRoute || 'kaminos-pipeline-witness-v0',
+    pipelineId: SELECTED_SPLAT_VIEW_BAKE_LAYER_PIPELINE_ID,
     renderedIntoSplat: false,
   };
   const cameraSnapshot = selectedSplatViewBakeLayerCameraSnapshot();
@@ -4554,7 +4663,8 @@ function createSelectedSplatViewBakeLayer(options = {}) {
   const firing = {
     id: `firing-${layerId}`,
     route: SELECTED_SPLAT_VIEW_BAKE_LAYER_ROUTE,
-    status: 'complete',
+    pipelineId: SELECTED_SPLAT_VIEW_BAKE_LAYER_PIPELINE_ID,
+    status: 'pending',
     requestedConfig,
     effectiveConfig,
   };
@@ -4593,7 +4703,19 @@ function createSelectedSplatViewBakeLayer(options = {}) {
   publishHybridSplatRendererControls(hybridSplatOverlayState.handle);
   renderSelectedSplatBakeLayerPanel(record);
   window._kaminosDirty?.();
-  setInfo(`Bake layer captured: ${layer.label}`);
+  setInfo(`Bake layer queued: ${layer.label}`);
+  try {
+    const result = await runSelectedSplatViewBakeLayerPipeline(record, layer);
+    setInfo(result?.ok ? `Bake layer pipeline receipt written: ${layer.label}` : `Bake layer pipeline failed: ${layer.label}`);
+  } catch (err) {
+    layer.status = 'failed';
+    layer.updatedAt = new Date().toISOString();
+    layer.receipt.failurePhase = 'pipeline-run';
+    layer.receipt.firing.status = 'failed';
+    layer.receipt.firing.error = err?.message || String(err);
+    renderSelectedSplatBakeLayerPanel(record);
+    setInfo(`Bake layer pipeline failed: ${err?.message || String(err)}`);
+  }
   return layer;
 }
 
@@ -4671,7 +4793,7 @@ function renderSelectedSplatBakeLayerPanel(entry = selectedSplatRecord()) {
       <input type="checkbox" ${layer.enabled ? 'checked' : ''} aria-label="Enable ${escapeHtml(layer.label)}" onchange="setSelectedSplatBakeLayerControls('${escapeHtml(layer.id)}', { enabled: this.checked })">
       <span>
         <div class="selected-splat-bake-layer-name">${escapeHtml(layer.label)}</div>
-        <div class="selected-splat-bake-layer-route">${escapeHtml(layer.route)} · ${escapeHtml(layer.receipt?.graduationStatus || layer.status)}</div>
+        <div class="selected-splat-bake-layer-route">${escapeHtml(layer.route)} · ${escapeHtml(layer.receipt?.firing?.status || layer.status)} · ${escapeHtml(layer.receipt?.graduationStatus || 'candidate')}</div>
       </span>
       <input type="range" min="0" max="1" step="0.01" value="${Number(layer.strength).toFixed(2)}" aria-label="Strength ${escapeHtml(layer.label)}" onchange="setSelectedSplatBakeLayerControls('${escapeHtml(layer.id)}', { strength: this.value })">
       <span class="selected-splat-bake-layer-value">${Number(layer.strength).toFixed(2)}</span>
@@ -15660,6 +15782,7 @@ async function runSelectedPipeline(options = {}) {
       source: source.source,
       clientRunId: options.clientRunId || null,
       streamProgress: true,
+      requestContext: options.requestContext || null,
     }),
   });
   const result = await readPipelineRunStream(response, options.onProgress);

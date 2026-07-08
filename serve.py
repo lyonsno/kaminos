@@ -328,6 +328,27 @@ def _default_pipeline_out_dir(pipeline_id):
     return (KAMINOS_PIPELINE_RUNS_DIR / f"{stamp}-{os.getpid()}-{safe}").resolve()
 
 
+def _write_pipeline_request_context(payload, out_dir, pipeline_id, source):
+    request_context = payload.get("requestContext")
+    if request_context is None:
+        request_context = payload.get("context")
+    if request_context is None:
+        return None
+    if not isinstance(request_context, dict):
+        raise ValueError("requestContext must be an object")
+    request_context_path = out_dir / "pipeline-request-context.json"
+    request_context_path.write_text(json.dumps({
+        **request_context,
+        "pipelineRequest": {
+            "schema": "kaminos.pipeline-request-context-envelope.v0",
+            "pipelineId": pipeline_id,
+            "source": source,
+            "writtenAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        },
+    }, indent=2) + "\n")
+    return request_context_path
+
+
 def run_pipeline_witness(payload):
     pipeline_id = str(payload.get("pipelineId") or payload.get("pipeline_id") or "").strip()
     if not pipeline_id:
@@ -337,6 +358,7 @@ def run_pipeline_witness(payload):
     out_dir = Path(out_dir_raw).expanduser() if out_dir_raw else _default_pipeline_out_dir(pipeline_id)
     out_dir.mkdir(parents=True, exist_ok=True)
     report_path = out_dir / "pipeline-witness.json"
+    request_context_path = _write_pipeline_request_context(payload, out_dir, pipeline_id, source)
     command = [
         os.environ.get("KAMINOS_NODE", "node"),
         str(PIPELINE_WITNESS_PATH),
@@ -346,6 +368,8 @@ def run_pipeline_witness(payload):
         "--out-dir", str(out_dir),
         "--report", str(report_path),
     ]
+    if request_context_path:
+        command.extend(["--request-context", str(request_context_path)])
     timeout = int(os.environ.get("KAMINOS_PIPELINE_WITNESS_TIMEOUT", "360"))
     proc = subprocess.run(command, cwd=ROOT, capture_output=True, text=True, timeout=timeout)
     report = json.loads(report_path.read_text()) if report_path.exists() else None
@@ -404,6 +428,7 @@ def run_pipeline_witness_stream(handler, payload):
     out_dir = Path(out_dir_raw).expanduser() if out_dir_raw else _default_pipeline_out_dir(pipeline_id)
     out_dir.mkdir(parents=True, exist_ok=True)
     report_path = out_dir / "pipeline-witness.json"
+    request_context_path = _write_pipeline_request_context(payload, out_dir, pipeline_id, source)
     command = [
         os.environ.get("KAMINOS_NODE", "node"),
         str(PIPELINE_WITNESS_PATH),
@@ -413,6 +438,8 @@ def run_pipeline_witness_stream(handler, payload):
         "--out-dir", str(out_dir),
         "--report", str(report_path),
     ]
+    if request_context_path:
+        command.extend(["--request-context", str(request_context_path)])
     timeout = int(os.environ.get("KAMINOS_PIPELINE_WITNESS_TIMEOUT", "360"))
     proc = subprocess.Popen(
         command,

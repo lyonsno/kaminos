@@ -101,6 +101,56 @@
       ]
     },
     {
+      "id": "selected-splat-view-bake-layer-v0",
+      "label": "Selected Splat: Current View Bake Layer Receipt",
+      "routeId": "selected-splat.view-bake-layer.v0",
+      "description": "Captures the selected splat, current Kaminos camera, and renderer controls as a route-local candidate bake-layer receipt. This route records a pipeline firing and request context only; it does not claim a model-baked material shard, persisted crucible cast, or monotonic improvement.",
+      "artifacts": {
+        "input": {
+          "role": "selected-splat",
+          "required": true
+        },
+        "requestContext": {
+          "role": "selected-view-bake-request",
+          "schema": "kaminos.selected-splat-view-bake-request.v0",
+          "pathTemplate": "artifacts/selected-view-bake.request.json"
+        },
+        "layerReceipt": {
+          "role": "selected-view-bake-layer-receipt",
+          "schema": "kaminos.selected-splat-view-bake-layer.pipeline-receipt.v0",
+          "pathTemplate": "artifacts/selected-view-bake.layer-receipt.json"
+        }
+      },
+      "stages": [
+        {
+          "id": "capture-selected-view-request-context",
+          "label": "Capture Selected View Request Context",
+          "statusMode": "selected-view-bake-request-context",
+          "route": {
+            "id": "local.selected-view-bake-request-context.v0",
+            "tool": "pipeline-witness.mjs",
+            "realModel": false,
+            "effectiveBackend": "local-request-context"
+          },
+          "inputArtifact": "input",
+          "outputArtifact": "requestContext"
+        },
+        {
+          "id": "write-selected-view-bake-layer-receipt",
+          "label": "Write Selected View Bake Layer Receipt",
+          "statusMode": "selected-view-bake-receipt",
+          "route": {
+            "id": "local.selected-view-bake-layer-receipt.v0",
+            "tool": "pipeline-witness.mjs",
+            "realModel": false,
+            "effectiveBackend": "local-receipt-writer"
+          },
+          "inputArtifact": "requestContext",
+          "outputArtifact": "layerReceipt"
+        }
+      ]
+    },
+    {
       "id": "sharp-image-to-splat-live-v0",
       "label": "SHARP Image To Visible Splat",
       "routeId": "adapter.sharp-image-to-splat-live.v0",

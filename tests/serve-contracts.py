@@ -577,6 +577,57 @@ def test_pipeline_run_resolves_api_read_source_and_returns_bundle():
         assert any(artifact["id"] == "sidecar" for artifact in result["bundle"]["document"]["artifacts"])
 
 
+def test_selected_view_bake_pipeline_run_forwards_request_context():
+    with TemporaryDirectory(dir="/tmp") as tmp:
+        root = Path(tmp)
+        source_root = root / "splats"
+        source_root.mkdir()
+        source = source_root / "selected-source.ply"
+        source.write_text("ply\nformat ascii 1.0\nelement vertex 1\nproperty float x\nproperty float y\nproperty float z\nend_header\n0 0 0\n")
+        out_dir = root / "selected-view-pipeline-run"
+
+        previous_browse = dict(BROWSE_ROOTS)
+        BROWSE_ROOTS["selected-view-test"] = source_root
+        try:
+            result = serve.run_pipeline_witness({
+                "pipelineId": "selected-splat-view-bake-layer-v0",
+                "source": "/api/read?root=selected-view-test&path=selected-source.ply",
+                "outDir": str(out_dir),
+                "requestContext": {
+                    "schema": "kaminos.selected-splat-view-bake-request.v0",
+                    "layerId": "layer-server-contract",
+                    "targetObjectId": "splat-server-contract",
+                    "camera": {
+                        "schema": "kaminos.splat-bake-layer.camera.v0",
+                        "position": [1, 2, 3],
+                        "viewport": {"width": 320, "height": 240},
+                    },
+                    "rendererControls": {
+                        "schema": "hybrid-render.splat-renderer-controls.v0",
+                    },
+                },
+            })
+        finally:
+            BROWSE_ROOTS.clear()
+            BROWSE_ROOTS.update(previous_browse)
+
+        assert result["schema"] == "kaminos.pipeline-run-result.v0"
+        assert result["ok"] is True
+        assert "--request-context" in result["command"]
+        assert result["report"]["document"]["effectivePipelineId"] == "selected-splat-view-bake-layer-v0"
+        assert result["report"]["document"]["artifacts"]["requestContext"]["path"] == str(out_dir / "artifacts" / "selected-view-bake.request.json")
+        assert result["report"]["document"]["artifacts"]["layerReceipt"]["path"] == str(out_dir / "artifacts" / "selected-view-bake.layer-receipt.json")
+        request_context = json.loads((out_dir / "artifacts" / "selected-view-bake.request.json").read_text())
+        assert request_context["schema"] == "kaminos.selected-splat-view-bake-request.v0"
+        assert request_context["layerId"] == "layer-server-contract"
+        assert request_context["pipelineRequest"]["pipelineId"] == "selected-splat-view-bake-layer-v0"
+        layer_receipt = json.loads((out_dir / "artifacts" / "selected-view-bake.layer-receipt.json").read_text())
+        assert layer_receipt["schema"] == "kaminos.selected-splat-view-bake-layer.pipeline-receipt.v0"
+        assert layer_receipt["pipeline"]["routeId"] == "selected-splat.view-bake-layer.v0"
+        assert layer_receipt["requestContext"]["layerId"] == "layer-server-contract"
+        assert layer_receipt["outputAuthority"] == "pipeline-receipt-only"
+
+
 def test_pipeline_run_rejects_sources_outside_declared_roots():
     with TemporaryDirectory(dir="/tmp") as tmp:
         outside = Path(tmp) / "outside.ply"
@@ -635,5 +686,6 @@ if __name__ == "__main__":
     test_pipeline_manifest_endpoint_payload_is_route_identified()
     test_image_asset_index_declares_local_image_roots()
     test_pipeline_run_resolves_api_read_source_and_returns_bundle()
+    test_selected_view_bake_pipeline_run_forwards_request_context()
     test_pipeline_run_rejects_sources_outside_declared_roots()
     test_pipeline_run_rejects_excluded_api_read_roots()

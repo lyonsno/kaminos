@@ -33,6 +33,7 @@ const inputPath = args.get('--input') ? resolve(args.get('--input')) : null;
 const outDir = args.get('--out-dir') ? resolve(args.get('--out-dir')) : null;
 const reportPath = args.get('--report') ? resolve(args.get('--report')) : (outDir ? join(outDir, 'pipeline-witness.json') : resolve('/tmp/kaminos-pipeline-witness.json'));
 const bundleIndexPath = outDir ? join(outDir, 'pipeline-run.index.json') : null;
+const requestContextPath = args.get('--request-context') ? resolve(args.get('--request-context')) : null;
 
 let phase = 'initializing';
 let manifest = null;
@@ -381,6 +382,71 @@ function makePreparedSidecar(outputPath) {
       stageMode: 'prepared-artifact',
       truthBoundary: 'prepared artifact sidecar; points at an existing local artifact and does not claim model generation or hybrid render proof',
     },
+  });
+}
+
+function readSelectedViewBakeRequestContext() {
+  if (!requestContextPath) throw new Error('missing --request-context for selected-view bake route');
+  if (!existsSync(requestContextPath)) throw new Error(`request context artifact does not exist: ${requestContextPath}`);
+  const context = readJson(requestContextPath);
+  if (context?.schema !== 'kaminos.selected-splat-view-bake-request.v0') {
+    throw new Error(`unsupported selected-view bake request context schema: ${context?.schema || 'missing'}`);
+  }
+  return context;
+}
+
+function makeSelectedViewBakeRequestContext(outputPath) {
+  const context = readSelectedViewBakeRequestContext();
+  const inputEvidence = fileEvidence(inputPath);
+  writeJson(outputPath, {
+    ...context,
+    source: {
+      ...(context.source || {}),
+      inputPath,
+      inputSha256: inputEvidence.sha256,
+      inputBytes: inputEvidence.bytes,
+    },
+    pipeline: {
+      id: pipeline.id,
+      routeId: pipeline.routeId,
+      manifestPath,
+      manifestSha256,
+    },
+    status: {
+      stageMode: 'selected-view-bake-request-context',
+      truthBoundary: 'operator-selected current-view request context only; no model-baked shard or cast has been produced',
+    },
+    capturedBy: {
+      tool: 'pipeline-witness.mjs',
+      requestContextPath,
+    },
+  });
+}
+
+function makeSelectedViewBakeLayerReceipt(outputPath) {
+  const contextPath = artifactPathFor('requestContext');
+  const context = readJson(contextPath);
+  const inputEvidence = fileEvidence(inputPath);
+  writeJson(outputPath, {
+    schema: 'kaminos.selected-splat-view-bake-layer.pipeline-receipt.v0',
+    pipeline: {
+      id: pipeline.id,
+      routeId: pipeline.routeId,
+      manifestPath,
+      manifestSha256,
+    },
+    source: {
+      inputPath,
+      inputSha256: inputEvidence.sha256,
+      inputBytes: inputEvidence.bytes,
+    },
+    requestContext: context,
+    outputAuthority: 'pipeline-receipt-only',
+    status: {
+      stageMode: 'selected-view-bake-receipt',
+      truthBoundary: 'route-local Bake View receipt; no material shard, persisted crucible cast, or renderer-quality proof is claimed',
+    },
+    createdAt: new Date().toISOString(),
   });
 }
 
@@ -1173,6 +1239,12 @@ async function runStage(stage) {
   } else if (stage.statusMode === 'prepared-artifact' && stage.outputArtifact === 'sidecar') {
     status = 'real';
     makePreparedSidecar(outputPath);
+  } else if (stage.statusMode === 'selected-view-bake-request-context' && stage.outputArtifact === 'requestContext') {
+    status = 'real';
+    makeSelectedViewBakeRequestContext(outputPath);
+  } else if (stage.statusMode === 'selected-view-bake-receipt' && stage.outputArtifact === 'layerReceipt') {
+    status = 'real';
+    makeSelectedViewBakeLayerReceipt(outputPath);
   } else if (stage.outputArtifact === 'splat') {
     fixtureSource = makeFixturePly(outputPath);
     effectiveRoute.fixtureSource = fixtureSource.path;

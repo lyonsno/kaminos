@@ -216,6 +216,9 @@ assert.match(witness, /selected splat bake layer did not expose viewport UI/, 's
 assert.match(witness, /selected splat bake layer did not create a layer/, 'selected-splat bake-layer witness proves a layer was created on the selected armature');
 assert.match(witness, /selected splat bake layer did not preserve receipt identity/, 'selected-splat bake-layer witness proves route and receipt identity');
 assert.match(witness, /selected splat bake layer did not preserve current camera/, 'selected-splat bake-layer witness proves current camera capture is load-bearing');
+assert.match(witness, /selected splat bake layer did not fire backend pipeline/, 'selected-splat bake-layer witness proves Bake View runs the backend pipeline route');
+assert.match(witness, /selected splat bake layer did not preserve pipeline request context/, 'selected-splat bake-layer witness proves camera/control context reaches the pipeline receipt');
+assert.match(witness, /selected splat bake layer did not preserve pipeline output receipt/, 'selected-splat bake-layer witness proves returned pipeline artifacts are retained on the layer');
 assert.match(witness, /selected splat bake layer controls did not update/, 'selected-splat bake-layer witness proves enable and strength controls are reversible layer state');
 assert.match(witness, /selected splat bake layer did not couple to point-cloud material/, 'selected-splat bake-layer witness proves Bake View has a visible preview contribution');
 assert.match(witness, /selected splat bake layer did not expose preview contribution telemetry/, 'selected-splat bake-layer witness proves the preview contribution has inspectable route identity');

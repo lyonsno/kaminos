@@ -43,6 +43,14 @@ assert.match(preparedPipeline.label, /Write.*Sidecar|Sidecar.*Write/i, 'prepared
 assert.match(preparedPipeline.description, /does not generate a new splat/i, 'prepared route description must not imply a new visual asset is produced');
 assert.match(preparedPipeline.description, /Load Source/i, 'prepared route description must point the operator at loading the source asset after the run');
 
+const selectedViewBakePipeline = manifest.pipelines.find(pipeline => pipeline.id === 'selected-splat-view-bake-layer-v0');
+assert.ok(selectedViewBakePipeline, 'manifest must include a selected-splat current-view bake-layer route');
+assert.equal(selectedViewBakePipeline.routeId, 'selected-splat.view-bake-layer.v0');
+assert.equal(selectedViewBakePipeline.artifacts?.requestContext?.schema, 'kaminos.selected-splat-view-bake-request.v0', 'selected-view bake route must declare request context as a first-class artifact');
+assert.equal(selectedViewBakePipeline.artifacts?.layerReceipt?.schema, 'kaminos.selected-splat-view-bake-layer.pipeline-receipt.v0', 'selected-view bake route must declare its layer receipt artifact');
+assert.ok(selectedViewBakePipeline.stages.some(stage => stage.statusMode === 'selected-view-bake-request-context' && stage.outputArtifact === 'requestContext'), 'selected-view bake route must preserve request context through the witness');
+assert.ok(selectedViewBakePipeline.stages.some(stage => stage.statusMode === 'selected-view-bake-receipt' && stage.outputArtifact === 'layerReceipt'), 'selected-view bake route must write a layer receipt artifact');
+
 const tempRoot = mkdtempSync(join(tmpdir(), 'kaminos-pipeline-contract-'));
 try {
   const inputPath = join(tempRoot, 'evil-orb-source.fixture');
@@ -225,6 +233,47 @@ try {
   const preparedBundle = JSON.parse(readFileSync(preparedReport.bundleIndex.path, 'utf8'));
   assert.ok(preparedBundle.artifacts.some(artifact => artifact.id === 'inspection' && artifact.role === 'prepared-artifact-inspection'), 'prepared bundle must list inspection artifact');
   assert.ok(preparedBundle.artifacts.some(artifact => artifact.id === 'sidecar' && artifact.role === 'kaminos-import-sidecar'), 'prepared bundle must list import sidecar');
+
+  const selectedViewContextPath = join(tempRoot, 'selected-view-request-context.json');
+  const selectedViewOutDir = join(tempRoot, 'selected-view-out');
+  const selectedViewReportPath = join(tempRoot, 'reports', 'selected-view-bake.json');
+  writeFileSync(selectedViewContextPath, JSON.stringify({
+    schema: 'kaminos.selected-splat-view-bake-request.v0',
+    layerId: 'layer-contract',
+    targetObjectId: 'splat-contract',
+    camera: { schema: 'kaminos.splat-bake-layer.camera.v0', position: [1, 2, 3], viewport: { width: 640, height: 480 } },
+    rendererControls: { schema: 'hybrid-render.splat-renderer-controls.v0', material: { roughness: { contrast: 1.25 } } },
+  }, null, 2));
+
+  const selectedViewBake = spawnSync(process.execPath, [
+    witnessPath,
+    '--manifest', manifestPath,
+    '--pipeline-id', 'selected-splat-view-bake-layer-v0',
+    '--input', preparedInputPath,
+    '--out-dir', selectedViewOutDir,
+    '--report', selectedViewReportPath,
+    '--request-context', selectedViewContextPath,
+  ], { encoding: 'utf8' });
+
+  assert.equal(selectedViewBake.status, 0, selectedViewBake.stderr || selectedViewBake.stdout);
+  const selectedViewReport = JSON.parse(readFileSync(selectedViewReportPath, 'utf8'));
+  assert.equal(selectedViewReport.ok, true);
+  assert.equal(selectedViewReport.effectiveRouteConfig.routeId, 'selected-splat.view-bake-layer.v0');
+  assert.equal(selectedViewReport.artifacts.requestContext.status, 'real');
+  assert.equal(selectedViewReport.artifacts.layerReceipt.status, 'real');
+  assert.ok(selectedViewReport.artifacts.requestContext.path.startsWith(selectedViewOutDir), 'selected-view request context artifact must be caller-rooted');
+  assert.ok(selectedViewReport.artifacts.layerReceipt.path.startsWith(selectedViewOutDir), 'selected-view layer receipt artifact must be caller-rooted');
+  const selectedViewRequestContext = JSON.parse(readFileSync(selectedViewReport.artifacts.requestContext.path, 'utf8'));
+  assert.equal(selectedViewRequestContext.schema, 'kaminos.selected-splat-view-bake-request.v0');
+  assert.equal(selectedViewRequestContext.layerId, 'layer-contract');
+  assert.equal(selectedViewRequestContext.camera.position[2], 3);
+  const selectedViewLayerReceipt = JSON.parse(readFileSync(selectedViewReport.artifacts.layerReceipt.path, 'utf8'));
+  assert.equal(selectedViewLayerReceipt.schema, 'kaminos.selected-splat-view-bake-layer.pipeline-receipt.v0');
+  assert.equal(selectedViewLayerReceipt.pipeline.id, 'selected-splat-view-bake-layer-v0');
+  assert.equal(selectedViewLayerReceipt.pipeline.routeId, 'selected-splat.view-bake-layer.v0');
+  assert.equal(selectedViewLayerReceipt.source.inputPath, preparedInputPath);
+  assert.equal(selectedViewLayerReceipt.requestContext.layerId, 'layer-contract');
+  assert.equal(selectedViewLayerReceipt.outputAuthority, 'pipeline-receipt-only');
 
   const liveMissingOutDir = join(tempRoot, 'live-missing-out');
   const liveMissingReportPath = join(tempRoot, 'reports', 'live-missing.json');
