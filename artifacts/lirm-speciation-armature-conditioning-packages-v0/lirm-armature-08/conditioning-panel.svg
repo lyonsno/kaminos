@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="720" height="560" viewBox="0 0 720 560" role="img" aria-label="lirm-armature-08 conditioning package" data-conditioning-panel="lirm-speciation-armature" data-candidate-id="lirm-armature-08">
   <rect width="100%" height="100%" fill="#04100c"/>
-  <text x="24" y="28" fill="rgba(238,246,214,0.9)" font-size="15" font-family="Menlo, Monaco, monospace">lirm-armature-08 proxy conditioning package</text>
+  <text x="24" y="28" fill="rgba(238,246,214,0.9)" font-size="15" font-family="Menlo, Monaco, monospace">lirm-armature-08 implicit body conditioning package</text>
   <g data-layer="source-map-grid">
     <g data-panel-kind="clay">
       <rect x="24" y="48" width="220" height="170" rx="8" fill="#07130f" stroke="rgba(238,246,214,0.22)"/>

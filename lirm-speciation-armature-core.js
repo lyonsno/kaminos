@@ -8,14 +8,18 @@ export const LIRM_SPECIATION_ARMATURE_RECEIPT_SCHEMA = 'kaminos.lirm-speciation-
 export const LIRM_SPECIATION_ARMATURE_CONTROL_PACKET_SCHEMA = 'kaminos.lirm-speciation-armature-control-packet.v0';
 export const LIRM_SPECIATION_ARMATURE_PROXY_RENDER_BUNDLE_SCHEMA = 'kaminos.lirm-speciation-armature-proxy-render-bundle.v0';
 export const LIRM_SPECIATION_ARMATURE_PROXY_RENDER_WITNESS_SCHEMA = 'kaminos.lirm-speciation-armature-proxy-render-witness.v0';
+export const LIRM_SPECIATION_ARMATURE_IMPLICIT_BODY_BUNDLE_SCHEMA = 'kaminos.lirm-speciation-armature-implicit-body-bundle.v0';
+export const LIRM_SPECIATION_ARMATURE_IMPLICIT_BODY_WITNESS_SCHEMA = 'kaminos.lirm-speciation-armature-implicit-body-witness.v0';
 export const LIRM_SPECIATION_ARMATURE_CONDITIONING_PACKAGE_SCHEMA = 'kaminos.lirm-speciation-armature-conditioning-package.v0';
 export const LIRM_SPECIATION_ARMATURE_CONDITIONING_PACKAGE_WITNESS_SCHEMA = 'kaminos.lirm-speciation-armature-conditioning-package-witness.v0';
 export const LIRM_SPECIATION_ARMATURE_ROUTE = 'kaminos/lirm-speciation-armature/contact-sheet-v0';
 export const LIRM_SPECIATION_ARMATURE_CONTROL_PACKET_ROUTE = 'kaminos/lirm-speciation-armature/control-packet-v0';
 export const LIRM_SPECIATION_ARMATURE_PROXY_RENDER_ROUTE = 'kaminos/lirm-speciation-armature/proxy-render-v0';
+export const LIRM_SPECIATION_ARMATURE_IMPLICIT_BODY_ROUTE = 'kaminos/lirm-speciation-armature/implicit-body-v0';
 export const LIRM_SPECIATION_ARMATURE_CONDITIONING_PACKAGE_ROUTE = 'kaminos/lirm-speciation-armature/conditioning-package-v0';
 export const LIRM_SPECIATION_ARMATURE_WRITE_RESULT_SCHEMA = 'kaminos.lirm-speciation-armature-write-result.v0';
 export const LIRM_SPECIATION_ARMATURE_PROXY_RENDER_WRITE_RESULT_SCHEMA = 'kaminos.lirm-speciation-armature-proxy-render-write-result.v0';
+export const LIRM_SPECIATION_ARMATURE_IMPLICIT_BODY_WRITE_RESULT_SCHEMA = 'kaminos.lirm-speciation-armature-implicit-body-write-result.v0';
 export const LIRM_SPECIATION_ARMATURE_CONDITIONING_PACKAGE_WRITE_RESULT_SCHEMA = 'kaminos.lirm-speciation-armature-conditioning-package-write-result.v0';
 
 const ROOT_PARENT_ID = 'root-soft-crawling-hoard-thief';
@@ -826,6 +830,356 @@ export async function writeLirmSpeciationArmatureProxyRenderWitness(options = {}
   };
 }
 
+const vec3 = (x = 0, y = 0, z = 0) => ({ x, y, z });
+const add3 = (a, b) => vec3(a.x + b.x, a.y + b.y, a.z + b.z);
+const sub3 = (a, b) => vec3(a.x - b.x, a.y - b.y, a.z - b.z);
+const mul3 = (a, s) => vec3(a.x * s, a.y * s, a.z * s);
+const dot3 = (a, b) => a.x * b.x + a.y * b.y + a.z * b.z;
+const len3 = a => Math.hypot(a.x, a.y, a.z);
+const norm3 = a => {
+  const length = len3(a) || 1;
+  return vec3(a.x / length, a.y / length, a.z / length);
+};
+const abs3 = a => vec3(Math.abs(a.x), Math.abs(a.y), Math.abs(a.z));
+const max3 = (a, b) => vec3(Math.max(a.x, b.x), Math.max(a.y, b.y), Math.max(a.z, b.z));
+
+function rotateY(point, angle) {
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  return {
+    x: point.x * cos - point.z * sin,
+    y: point.y,
+    z: point.x * sin + point.z * cos,
+  };
+}
+
+function smoothMin(a, b, k) {
+  const h = clamp(0.5 + 0.5 * (b - a) / k, 0, 1);
+  return (b * (1 - h)) + (a * h) - (k * h * (1 - h));
+}
+
+function primitiveAxis(primitive) {
+  const side = primitive.side === 'right' ? 1 : primitive.side === 'left' ? -1 : 0;
+  const forward = primitive.t ? (primitive.t - 0.5) * 0.28 : 0;
+  return norm3(vec3(forward, side || 0.3, 0.18));
+}
+
+function createImplicitPrimitives(candidate) {
+  const packet = createLirmSpeciationArmatureControlPacket({ witness: { candidates: [candidate], witnessId: 'inline' }, candidate });
+  return packet.proxyPrimitives.map((primitive, index) => {
+    const center = vec3(primitive.center.x, primitive.center.y, primitive.center.z);
+    if (primitive.kind === 'capsule') {
+      const axis = primitiveAxis(primitive);
+      const halfLength = (primitive.length || primitive.radius || 0.08) * 0.48;
+      return {
+        ...primitive,
+        index,
+        implicitKind: 'capsule',
+        center,
+        radius: Math.max(0.018, primitive.radius || 0.025),
+        endpoints: {
+          a: sub3(center, mul3(axis, halfLength)),
+          b: add3(center, mul3(axis, halfLength)),
+        },
+      };
+    }
+    if (primitive.kind === 'box') {
+      return {
+        ...primitive,
+        index,
+        implicitKind: 'rounded_box',
+        center,
+        radius: Math.max(0.012, primitive.size?.z || 0.025),
+        halfSize: {
+          x: Math.max(0.035, (primitive.size?.x || 0.08) * 0.52),
+          y: Math.max(0.018, (primitive.size?.y || 0.05) * 0.72),
+          z: Math.max(0.012, (primitive.size?.z || 0.03) * 1.2),
+        },
+      };
+    }
+    return {
+      ...primitive,
+      index,
+      implicitKind: 'sphere',
+      center,
+      radius: Math.max(0.018, primitive.radius || 0.04),
+    };
+  });
+}
+
+function sdSphere(point, primitive) {
+  return len3(sub3(point, primitive.center)) - primitive.radius;
+}
+
+function sdCapsule(point, primitive) {
+  const pa = sub3(point, primitive.endpoints.a);
+  const ba = sub3(primitive.endpoints.b, primitive.endpoints.a);
+  const h = clamp(dot3(pa, ba) / Math.max(dot3(ba, ba), 0.00001), 0, 1);
+  return len3(sub3(pa, mul3(ba, h))) - primitive.radius;
+}
+
+function sdRoundedBox(point, primitive) {
+  const q = sub3(abs3(sub3(point, primitive.center)), primitive.halfSize);
+  const outside = len3(max3(q, vec3(0, 0, 0)));
+  const inside = Math.min(Math.max(q.x, Math.max(q.y, q.z)), 0);
+  return outside + inside - primitive.radius;
+}
+
+function primitiveDistance(point, primitive) {
+  if (primitive.implicitKind === 'capsule') return sdCapsule(point, primitive);
+  if (primitive.implicitKind === 'rounded_box') return sdRoundedBox(point, primitive);
+  return sdSphere(point, primitive);
+}
+
+function evaluateImplicitField(point, primitives) {
+  let fieldDistance = Infinity;
+  let closestDistance = Infinity;
+  let closestPrimitive = primitives[0];
+  for (const primitive of primitives) {
+    const distance = primitiveDistance(point, primitive);
+    if (distance < closestDistance) {
+      closestDistance = distance;
+      closestPrimitive = primitive;
+    }
+    fieldDistance = fieldDistance === Infinity ? distance : smoothMin(fieldDistance, distance, 0.075);
+  }
+  return { distance: fieldDistance, closestDistance, primitive: closestPrimitive };
+}
+
+function implicitNormal(point, primitives) {
+  const e = 0.006;
+  const dx = evaluateImplicitField(vec3(point.x + e, point.y, point.z), primitives).distance
+    - evaluateImplicitField(vec3(point.x - e, point.y, point.z), primitives).distance;
+  const dy = evaluateImplicitField(vec3(point.x, point.y + e, point.z), primitives).distance
+    - evaluateImplicitField(vec3(point.x, point.y - e, point.z), primitives).distance;
+  const dz = evaluateImplicitField(vec3(point.x, point.y, point.z + e), primitives).distance
+    - evaluateImplicitField(vec3(point.x, point.y, point.z - e), primitives).distance;
+  return norm3(vec3(dx, dy, dz));
+}
+
+function raymarchImplicitPixel({ pixelX, pixelY, width, height, primitives }) {
+  const screenX = ((pixelX + 0.5) / width - 0.5) * 2.65;
+  const screenY = (0.5 - (pixelY + 0.5) / height) * 2.05;
+  const cameraYaw = 0.42;
+  const origin = rotateY(vec3(screenX, screenY, 1.46), cameraYaw);
+  const direction = norm3(rotateY(vec3(0, 0, -1), cameraYaw));
+  let travel = 0;
+  const maxTravel = 3.0;
+  for (let step = 0; step < 88 && travel < maxTravel; step += 1) {
+    const point = add3(origin, mul3(direction, travel));
+    const field = evaluateImplicitField(point, primitives);
+    if (field.distance < 0.0065) {
+      const normal = implicitNormal(point, primitives);
+      return {
+        hit: true,
+        point,
+        travel,
+        depth01: clamp(travel / maxTravel, 0, 1),
+        normal,
+        primitive: field.primitive,
+      };
+    }
+    travel += clamp(field.distance * 0.62, 0.008, 0.08);
+  }
+  return { hit: false };
+}
+
+function rgbFill(r, g, b) {
+  return `rgb(${Math.round(clamp(r, 0, 255))},${Math.round(clamp(g, 0, 255))},${Math.round(clamp(b, 0, 255))})`;
+}
+
+function implicitClayFill(hit) {
+  const roleBase = {
+    body_mass: [126, 151, 88],
+    head_orientation: [178, 94, 58],
+    terminal_mouth: [82, 22, 36],
+    limb_bud: [157, 102, 62],
+    shell_plate: [86, 94, 122],
+    contact_point: [183, 87, 205],
+  };
+  const base = roleBase[hit.primitive.role] || [128, 137, 93];
+  const lightDir = norm3(vec3(-0.45, 0.64, 0.62));
+  const rimDir = norm3(vec3(0.7, -0.1, 0.32));
+  const diffuse = clamp(dot3(hit.normal, lightDir), 0, 1);
+  const rim = Math.pow(clamp(dot3(hit.normal, rimDir), 0, 1), 2.6);
+  const shade = 0.38 + diffuse * 0.58 + rim * 0.28;
+  return rgbFill(base[0] * shade, base[1] * shade, base[2] * shade);
+}
+
+function implicitDepthFill(hit) {
+  const level = 244 - hit.depth01 * 216;
+  return rgbFill(level, level, level);
+}
+
+function implicitNormalFill(hit) {
+  return rgbFill(
+    (hit.normal.x * 0.5 + 0.5) * 255,
+    ((-hit.normal.y) * 0.5 + 0.5) * 255,
+    (hit.normal.z * 0.5 + 0.5) * 255,
+  );
+}
+
+function implicitMapFill(hit, kind) {
+  if (kind === 'depth') return implicitDepthFill(hit);
+  if (kind === 'normal') return implicitNormalFill(hit);
+  if (kind === 'mask') return 'rgb(255,255,255)';
+  if (kind === 'semantic') return semanticFill(hit.primitive.role).replaceAll(' ', '');
+  return implicitClayFill(hit);
+}
+
+function renderImplicitMapsSvg({ candidate, primitives }) {
+  const pixelWidth = 192;
+  const pixelHeight = 144;
+  const displayWidth = 320;
+  const displayHeight = 240;
+  const mapKinds = ['clay', 'depth', 'normal', 'mask', 'semantic'];
+  const rectsByKind = Object.fromEntries(mapKinds.map(kind => [kind, []]));
+  for (let y = 0; y < pixelHeight; y += 1) {
+    for (let x = 0; x < pixelWidth; x += 1) {
+      const hit = raymarchImplicitPixel({ pixelX: x, pixelY: y, width: pixelWidth, height: pixelHeight, primitives });
+      if (!hit.hit) continue;
+      for (const kind of mapKinds) {
+        rectsByKind[kind].push(`<rect x="${x}" y="${y}" width="1" height="1" fill="${implicitMapFill(hit, kind)}"/>`);
+      }
+    }
+  }
+  const backgrounds = {
+    clay: '#07130f',
+    depth: 'rgb(16,16,16)',
+    normal: 'rgb(128,128,255)',
+    mask: '#000000',
+    semantic: '#07130f',
+  };
+  const attrs = {
+    clay: '',
+    depth: ' data-depth-source="ray-surface-hit" data-depth-range="near-white far-black"',
+    normal: ' data-normal-source="field-gradient" data-normal-encoding="rgb-object-space"',
+    mask: ' data-mask-mode="surface-hit-silhouette"',
+    semantic: '',
+  };
+  return mapKinds.map(kind => {
+    const title = `${candidate.id} ${kind} implicit 3D control`;
+    return {
+      kind,
+      path: `${candidate.id}/${kind}-implicit.svg`,
+      svg: `<svg xmlns="http://www.w3.org/2000/svg" width="${displayWidth}" height="${displayHeight}" viewBox="0 0 ${pixelWidth} ${pixelHeight}" role="img" aria-label="${xml(title)}" data-implicit-render="${xml(kind)}" data-render-mode="raymarched-implicit-field" data-field-kind="smooth-sdf-metaball"${attrs[kind]}>
+  <metadata>candidate=${xml(candidate.id)}; terminal mouth is a semantic surface primitive; pixels are ray hits against an implicit 3D field</metadata>
+  <rect width="100%" height="100%" fill="${backgrounds[kind]}"/>
+  <g data-layer="implicit-surface-pixels" data-candidate-id="${xml(candidate.id)}" data-pixel-grid="${pixelWidth}x${pixelHeight}" data-primitive-count="${primitives.length}" style="shape-rendering:crispEdges">
+    ${rectsByKind[kind].join('\n    ')}
+  </g>
+</svg>`,
+    };
+  });
+}
+
+export function createLirmSpeciationArmatureImplicitBodyBundle({ witness, candidate, candidateId } = {}) {
+  const selectedCandidate = candidate || witness?.candidates?.find(item => item.id === candidateId);
+  if (!witness || !selectedCandidate) {
+    throw new Error('createLirmSpeciationArmatureImplicitBodyBundle requires a witness and candidate or candidateId');
+  }
+  const implicitPrimitives = createImplicitPrimitives(selectedCandidate);
+  const renderMaps = renderImplicitMapsSvg({ candidate: selectedCandidate, primitives: implicitPrimitives });
+  return {
+    schema: LIRM_SPECIATION_ARMATURE_IMPLICIT_BODY_BUNDLE_SCHEMA,
+    route: LIRM_SPECIATION_ARMATURE_IMPLICIT_BODY_ROUTE,
+    sourceWitnessId: witness.witnessId,
+    sourceWitnessRoute: witness.route,
+    candidateId: selectedCandidate.id,
+    seed: selectedCandidate.seed,
+    renderMode: 'raymarched-implicit-field',
+    fieldModel: {
+      kind: 'smooth-sdf-metaball',
+      surfaceThreshold: 0.0065,
+      smoothUnionK: 0.075,
+      primitiveSources: ['body_mass_axis_samples', 'terminal_mouth_handle', 'head_handle', 'limb_buds', 'shell_plates', 'contact_points'],
+    },
+    camera: {
+      projection: 'orthographic',
+      view: 'front-three-quarter',
+      coordinateFrame: 'normalized-implicit-body',
+      raySource: 'software-sdf-raymarch',
+    },
+    implicitPrimitiveCount: implicitPrimitives.length,
+    semanticHandles: selectedCandidate.semanticHandles,
+    contactPoints: selectedCandidate.contactPoints,
+    renderMaps,
+    falseClosureGuards: {
+      finishedCreatureClaim: 'forbidden',
+      generatorFiringClaim: 'not_yet_fired',
+      implicitBodyClaim: 'raymarched_control_surface_only',
+      projectionProxyClaim: 'superseded_by_implicit_surface',
+    },
+  };
+}
+
+export async function writeLirmSpeciationArmatureImplicitBodyWitness(options = {}) {
+  const outDir = options.outDir || join(process.cwd(), 'artifacts', 'lirm-speciation-armature-implicit-bodies-v0');
+  const seed = String(options.seed || DEFAULT_SEED);
+  const candidateCount = Math.max(1, Number(options.candidateCount || DEFAULT_CANDIDATE_COUNT));
+  const columns = Math.max(1, Number(options.columns || DEFAULT_COLUMNS));
+  const witness = options.witness || createLirmSpeciationArmatureWitness({ seed, candidateCount, columns });
+  const candidateIds = options.candidateIds || ['lirm-armature-08', 'lirm-armature-11', 'lirm-armature-16', 'lirm-armature-22', 'lirm-armature-24'];
+  await mkdir(outDir, { recursive: true });
+  const bundles = [];
+  const outputBundles = [];
+  for (const candidateId of candidateIds) {
+    const bundle = createLirmSpeciationArmatureImplicitBodyBundle({ witness, candidateId });
+    const candidateDir = join(outDir, candidateId);
+    await mkdir(candidateDir, { recursive: true });
+    await writeFile(join(candidateDir, 'bundle.json'), `${JSON.stringify({ ...bundle, renderMaps: bundle.renderMaps.map(map => ({ kind: map.kind, path: map.path })) }, null, 2)}\n`);
+    for (const map of bundle.renderMaps) {
+      const svgPath = join(outDir, map.path);
+      const pngPath = svgPath.replace(/\.svg$/, '.png');
+      await writeFile(svgPath, map.svg);
+      rasterizeSvgWithSips(svgPath, pngPath);
+    }
+    bundles.push(bundle);
+    outputBundles.push({
+      candidateId,
+      bundle: `${candidateId}/bundle.json`,
+      maps: bundle.renderMaps.map(map => ({ kind: map.kind, path: map.path, rasterPath: map.path.replace(/\.svg$/, '.png') })),
+    });
+  }
+  const receipt = {
+    schema: LIRM_SPECIATION_ARMATURE_IMPLICIT_BODY_WITNESS_SCHEMA,
+    route: LIRM_SPECIATION_ARMATURE_IMPLICIT_BODY_ROUTE,
+    seed,
+    sourceWitnessId: witness.witnessId,
+    candidateIds,
+    bundles: bundles.map(bundle => ({
+      schema: bundle.schema,
+      candidateId: bundle.candidateId,
+      renderMode: bundle.renderMode,
+      fieldModel: bundle.fieldModel,
+      camera: bundle.camera,
+      implicitPrimitiveCount: bundle.implicitPrimitiveCount,
+      renderMaps: bundle.renderMaps.map(map => ({ kind: map.kind, path: map.path })),
+    })),
+    falseClosureGuards: {
+      finishedCreatureClaim: 'forbidden',
+      generatorFiringClaim: 'not_yet_fired',
+      implicitBodyClaim: 'raymarched_control_surface_only',
+      projectionProxyClaim: 'superseded_by_implicit_surface',
+    },
+    outputInventory: {
+      receipt: 'receipt.json',
+      bundles: outputBundles,
+    },
+  };
+  const receiptPath = join(outDir, 'receipt.json');
+  await writeFile(receiptPath, `${JSON.stringify(receipt, null, 2)}\n`);
+  return {
+    schema: LIRM_SPECIATION_ARMATURE_IMPLICIT_BODY_WRITE_RESULT_SCHEMA,
+    route: LIRM_SPECIATION_ARMATURE_IMPLICIT_BODY_ROUTE,
+    outDir,
+    seed,
+    receiptPath,
+    candidateIds,
+    bundleCount: bundles.length,
+  };
+}
+
 function createConditioningPrompt(candidate, packet) {
   const hasShell = candidate.semanticHandles.some(handle => handle.kind === 'shell_plate');
   const limbCount = candidate.semanticHandles.filter(handle => handle.kind === 'limb_bud').length;
@@ -885,7 +1239,7 @@ function renderConditioningPanelSvg({ candidate, sourceImages, prompt }) {
   const promptText = prompt.positive.length > 320 ? `${prompt.positive.slice(0, 317)}...` : prompt.positive;
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${panelWidth}" height="${panelHeight}" viewBox="0 0 ${panelWidth} ${panelHeight}" role="img" aria-label="${xml(candidate.id)} conditioning package" data-conditioning-panel="lirm-speciation-armature" data-candidate-id="${xml(candidate.id)}">
   <rect width="100%" height="100%" fill="#04100c"/>
-  <text x="24" y="28" fill="rgba(238,246,214,0.9)" font-size="15" font-family="Menlo, Monaco, monospace">${xml(candidate.id)} proxy conditioning package</text>
+  <text x="24" y="28" fill="rgba(238,246,214,0.9)" font-size="15" font-family="Menlo, Monaco, monospace">${xml(candidate.id)} implicit body conditioning package</text>
   <g data-layer="source-map-grid">
     ${panels}
   </g>
@@ -915,16 +1269,18 @@ export function createLirmSpeciationArmatureConditioningPackage({ witness, candi
     throw new Error('createLirmSpeciationArmatureConditioningPackage requires a witness and candidate or candidateId');
   }
   const proxyBundle = createLirmSpeciationArmatureProxyRenderBundle({ witness, candidate: selectedCandidate });
+  const implicitBundle = createLirmSpeciationArmatureImplicitBodyBundle({ witness, candidate: selectedCandidate });
   const packet = createLirmSpeciationArmatureControlPacket({ witness, candidate: selectedCandidate });
-  const sourceImages = proxyBundle.renderMaps.map(map => ({
+  const sourceImages = implicitBundle.renderMaps.map(map => ({
     kind: map.kind,
     path: `source-maps/${map.kind}-control.svg`,
     rasterPath: `source-maps/${map.kind}-control.png`,
-    sourceProxyPath: map.path,
+    sourceImplicitPath: map.path,
+    sourceProxyPath: proxyBundle.renderMaps.find(proxyMap => proxyMap.kind === map.kind)?.path,
     requiredFor: map.kind === 'mask'
       ? ['imagegen_conditioning', 'sam3_isolation', 'alpha_cutout']
       : ['imagegen_conditioning', map.kind === 'clay' ? 'trellis_clay_probe' : `${map.kind}_control`],
-    effectiveSource: 'local-procedural-proxy-render',
+    effectiveSource: 'local-procedural-implicit-body-raymarch',
   }));
   const prompt = createConditioningPrompt(selectedCandidate, packet);
   return {
@@ -941,6 +1297,16 @@ export function createLirmSpeciationArmatureConditioningPackage({ witness, candi
       camera: proxyBundle.camera,
       proxyPrimitiveCount: proxyBundle.proxyPrimitiveCount,
     },
+    sourceImplicitBody: {
+      schema: implicitBundle.schema,
+      route: implicitBundle.route,
+      candidateId: implicitBundle.candidateId,
+      camera: implicitBundle.camera,
+      renderMode: implicitBundle.renderMode,
+      fieldModel: implicitBundle.fieldModel,
+      implicitPrimitiveCount: implicitBundle.implicitPrimitiveCount,
+    },
+    preferredSourceRoute: LIRM_SPECIATION_ARMATURE_IMPLICIT_BODY_ROUTE,
     sourceImages,
     prompt,
     routeCandidates: [
@@ -948,13 +1314,13 @@ export function createLirmSpeciationArmatureConditioningPackage({ witness, candi
         route: 'imagegen_img2img_depth_normal',
         status: 'requires_registered_imagegen_route',
         inputs: ['clay', 'depth', 'normal', 'mask', 'semantic'],
-        purpose: 'test whether imagegen preserves proxy body identity before mesh/splat routes',
+        purpose: 'test whether imagegen preserves implicit 3D body identity before mesh/splat routes',
       },
       {
         route: 'trellis2mlx_fast_clay_probe',
         status: 'registered_greenroom_route_but_queue_blocked_by_existing_pixal3d_job',
         inputs: ['clay', 'mask'],
-        purpose: 'cheap 3D sanity probe from the clay proxy source, not depth-normal conditioning',
+        purpose: 'cheap 3D sanity probe from the implicit clay source, not depth-normal conditioning',
       },
       {
         route: 'world_tracing_masked_probe',
@@ -988,11 +1354,11 @@ export async function writeLirmSpeciationArmatureConditioningPackages(options = 
   const outputPackages = [];
   for (const candidateId of candidateIds) {
     const pkg = createLirmSpeciationArmatureConditioningPackage({ witness, candidateId });
-    const proxyBundle = createLirmSpeciationArmatureProxyRenderBundle({ witness, candidateId });
+    const implicitBundle = createLirmSpeciationArmatureImplicitBodyBundle({ witness, candidateId });
     const candidateDir = join(outDir, candidateId);
     const sourceMapDir = join(candidateDir, 'source-maps');
     await mkdir(sourceMapDir, { recursive: true });
-    for (const map of proxyBundle.renderMaps) {
+    for (const map of implicitBundle.renderMaps) {
       const svgPath = join(sourceMapDir, `${map.kind}-control.svg`);
       const pngPath = join(sourceMapDir, `${map.kind}-control.png`);
       await writeFile(svgPath, map.svg);
@@ -1025,6 +1391,8 @@ export async function writeLirmSpeciationArmatureConditioningPackages(options = 
     packages: packages.map(pkg => ({
       schema: pkg.schema,
       candidateId: pkg.candidateId,
+      preferredSourceRoute: pkg.preferredSourceRoute,
+      sourceImplicitBody: pkg.sourceImplicitBody,
       sourceImages: pkg.sourceImages.map(image => ({ kind: image.kind, path: image.path, rasterPath: image.rasterPath })),
       routeCandidates: pkg.routeCandidates,
     })),

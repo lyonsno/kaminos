@@ -17,62 +17,94 @@
     },
     "proxyPrimitiveCount": 24
   },
+  "sourceImplicitBody": {
+    "schema": "kaminos.lirm-speciation-armature-implicit-body-bundle.v0",
+    "route": "kaminos/lirm-speciation-armature/implicit-body-v0",
+    "candidateId": "lirm-armature-08",
+    "camera": {
+      "projection": "orthographic",
+      "view": "front-three-quarter",
+      "coordinateFrame": "normalized-implicit-body",
+      "raySource": "software-sdf-raymarch"
+    },
+    "renderMode": "raymarched-implicit-field",
+    "fieldModel": {
+      "kind": "smooth-sdf-metaball",
+      "surfaceThreshold": 0.0065,
+      "smoothUnionK": 0.075,
+      "primitiveSources": [
+        "body_mass_axis_samples",
+        "terminal_mouth_handle",
+        "head_handle",
+        "limb_buds",
+        "shell_plates",
+        "contact_points"
+      ]
+    },
+    "implicitPrimitiveCount": 24
+  },
+  "preferredSourceRoute": "kaminos/lirm-speciation-armature/implicit-body-v0",
   "sourceImages": [
     {
       "kind": "clay",
       "path": "source-maps/clay-control.svg",
       "rasterPath": "source-maps/clay-control.png",
+      "sourceImplicitPath": "lirm-armature-08/clay-implicit.svg",
       "sourceProxyPath": "lirm-armature-08/clay-control.svg",
       "requiredFor": [
         "imagegen_conditioning",
         "trellis_clay_probe"
       ],
-      "effectiveSource": "local-procedural-proxy-render"
+      "effectiveSource": "local-procedural-implicit-body-raymarch"
     },
     {
       "kind": "depth",
       "path": "source-maps/depth-control.svg",
       "rasterPath": "source-maps/depth-control.png",
+      "sourceImplicitPath": "lirm-armature-08/depth-implicit.svg",
       "sourceProxyPath": "lirm-armature-08/depth-control.svg",
       "requiredFor": [
         "imagegen_conditioning",
         "depth_control"
       ],
-      "effectiveSource": "local-procedural-proxy-render"
+      "effectiveSource": "local-procedural-implicit-body-raymarch"
     },
     {
       "kind": "normal",
       "path": "source-maps/normal-control.svg",
       "rasterPath": "source-maps/normal-control.png",
+      "sourceImplicitPath": "lirm-armature-08/normal-implicit.svg",
       "sourceProxyPath": "lirm-armature-08/normal-control.svg",
       "requiredFor": [
         "imagegen_conditioning",
         "normal_control"
       ],
-      "effectiveSource": "local-procedural-proxy-render"
+      "effectiveSource": "local-procedural-implicit-body-raymarch"
     },
     {
       "kind": "mask",
       "path": "source-maps/mask-control.svg",
       "rasterPath": "source-maps/mask-control.png",
+      "sourceImplicitPath": "lirm-armature-08/mask-implicit.svg",
       "sourceProxyPath": "lirm-armature-08/mask-control.svg",
       "requiredFor": [
         "imagegen_conditioning",
         "sam3_isolation",
         "alpha_cutout"
       ],
-      "effectiveSource": "local-procedural-proxy-render"
+      "effectiveSource": "local-procedural-implicit-body-raymarch"
     },
     {
       "kind": "semantic",
       "path": "source-maps/semantic-control.svg",
       "rasterPath": "source-maps/semantic-control.png",
+      "sourceImplicitPath": "lirm-armature-08/semantic-implicit.svg",
       "sourceProxyPath": "lirm-armature-08/semantic-control.svg",
       "requiredFor": [
         "imagegen_conditioning",
         "semantic_control"
       ],
-      "effectiveSource": "local-procedural-proxy-render"
+      "effectiveSource": "local-procedural-implicit-body-raymarch"
     }
   ],
   "prompt": {
@@ -103,7 +135,7 @@
         "mask",
         "semantic"
       ],
-      "purpose": "test whether imagegen preserves proxy body identity before mesh/splat routes"
+      "purpose": "test whether imagegen preserves implicit 3D body identity before mesh/splat routes"
     },
     {
       "route": "trellis2mlx_fast_clay_probe",
@@ -112,7 +144,7 @@
         "clay",
         "mask"
       ],
-      "purpose": "cheap 3D sanity probe from the clay proxy source, not depth-normal conditioning"
+      "purpose": "cheap 3D sanity probe from the implicit clay source, not depth-normal conditioning"
     },
     {
       "route": "world_tracing_masked_probe",

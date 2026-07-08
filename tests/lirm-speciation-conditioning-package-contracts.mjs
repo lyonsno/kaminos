@@ -25,11 +25,14 @@ assert.equal(pkg.schema, 'kaminos.lirm-speciation-armature-conditioning-package.
 assert.equal(pkg.route, 'kaminos/lirm-speciation-armature/conditioning-package-v0');
 assert.equal(pkg.candidateId, 'lirm-armature-22');
 assert.equal(pkg.sourceProxyRender.route, 'kaminos/lirm-speciation-armature/proxy-render-v0');
+assert.equal(pkg.sourceImplicitBody.route, 'kaminos/lirm-speciation-armature/implicit-body-v0');
+assert.equal(pkg.preferredSourceRoute, 'kaminos/lirm-speciation-armature/implicit-body-v0');
 assert.equal(pkg.sourceImages.length, 5);
 assert.deepEqual(pkg.sourceImages.map(item => item.kind), ['clay', 'depth', 'normal', 'mask', 'semantic']);
 assert.ok(pkg.sourceImages.every(item => item.requiredFor.includes('imagegen_conditioning')), 'source maps should be useful to image conditioning routes');
 assert.ok(pkg.sourceImages.every(item => item.path.endsWith('.svg')), 'source image path should keep SVG control source');
 assert.ok(pkg.sourceImages.every(item => item.rasterPath.endsWith('.png')), 'source images need PNG raster path for ML routes');
+assert.ok(pkg.sourceImages.every(item => item.effectiveSource === 'local-procedural-implicit-body-raymarch'), 'conditioning should prefer implicit 3D source maps');
 assert.match(pkg.prompt.positive, /small crawling hoard-thief creature/);
 assert.match(pkg.prompt.positive, /terminal front mouth/);
 assert.match(pkg.prompt.negative, /centered eye/);
@@ -63,3 +66,4 @@ assert.equal(receipt.schema, 'kaminos.lirm-speciation-armature-conditioning-pack
 assert.equal(receipt.falseClosureGuards.generatorFiringClaim, 'not_yet_fired');
 assert.equal(receipt.outputInventory.packages[1].candidateId, 'lirm-armature-22');
 assert.equal(receipt.outputInventory.packages[1].panel, 'lirm-armature-22/conditioning-panel.svg');
+assert.equal(receipt.packages[1].preferredSourceRoute, 'kaminos/lirm-speciation-armature/implicit-body-v0');
