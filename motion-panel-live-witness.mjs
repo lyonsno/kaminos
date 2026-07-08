@@ -477,6 +477,12 @@ async function installHillAffordanceRoutePlan(ws) {
       pathWorldActiveSource: state.pathWorldActiveSource || null,
       pathWorldRouteAuthority: state.pathWorldRouteAuthority || null,
       hillTerrainSurface: state.hillTerrainSurface || null,
+      terrainOverlayLegend: state.hillTerrainSurface?.overlayLegend || result?.hillTerrainSurface?.overlayLegend || null,
+      overlayColorFingerprint: state.hillTerrainSurface?.overlayColorFingerprint
+        || state.hillTerrainSurface?.overlayLegend?.overlayColorFingerprint
+        || result?.hillTerrainSurface?.overlayColorFingerprint
+        || result?.hillTerrainSurface?.overlayLegend?.overlayColorFingerprint
+        || null,
       hillTerrainFrame: state.hillTerrainFrame || null,
       pathWorldRouteFixture: state.pathWorldRouteFixture || result?.pathWorldRouteFixture || null,
       terrainOverlayMode: state.terrainOverlayMode || result?.terrainOverlayMode || state.hillTerrainSurface?.terrainOverlayMode || null,
@@ -687,6 +693,14 @@ async function captureFrame(ws, index) {
       dynamicContinuity: actor?.dynamicContinuity || state?.dynamicContinuity || state?.pathWorldRoutePlan?.evidence?.dynamicContinuity || state?.pathWorld?.routePlan?.evidence?.dynamicContinuity || null,
       pathWorldActiveSource: actor?.pathWorldActiveSource || state?.pathWorldActiveSource || null,
       hillTerrainSurface: actor?.hillTerrainSurface || state?.hillTerrainSurface || state?.pathWorld?.hillTerrainSurface || null,
+      terrainOverlayLegend: actor?.hillTerrainSurface?.overlayLegend || state?.hillTerrainSurface?.overlayLegend || state?.pathWorld?.hillTerrainSurface?.overlayLegend || null,
+      overlayColorFingerprint: actor?.hillTerrainSurface?.overlayColorFingerprint
+        || actor?.hillTerrainSurface?.overlayLegend?.overlayColorFingerprint
+        || state?.hillTerrainSurface?.overlayColorFingerprint
+        || state?.hillTerrainSurface?.overlayLegend?.overlayColorFingerprint
+        || state?.pathWorld?.hillTerrainSurface?.overlayColorFingerprint
+        || state?.pathWorld?.hillTerrainSurface?.overlayLegend?.overlayColorFingerprint
+        || null,
       hillTerrainFrame: actor?.hillTerrainFrame || state?.hillTerrainFrame || state?.pathWorld?.hillTerrainFrame || null,
       hillTerrainCarrier: actor?.hillTerrainCarrier || state?.hillTerrainCarrier || null,
       carrierPathFollower: actor?.carrierPathFollower || state?.carrierPathFollower || null,

@@ -539,19 +539,23 @@ input[type="range"]:disabled::-webkit-slider-thumb { background: #555; cursor: n
         <div class="slider-row">
           <span class="slider-label">Terrain</span>
           <select id="motion-panel-hill-terrain-overlay-control" class="select-input">
-            <option value="semantic-styles" selected>Semantic styles</option>
-            <option value="material-class">Material class</option>
-            <option value="region-class">Region class</option>
-            <option value="motion-affordance">Motion affordance</option>
-            <option value="terrain-form">Terrain form</option>
-            <option value="phase-topology">Phase topology</option>
-            <option value="route-cost">Route cost</option>
-            <option value="route-pressure">Route pressure</option>
-            <option value="slope">Slope</option>
-            <option value="dirty-shock">Dirty/shock</option>
-            <option value="growth">Growth</option>
-            <option value="topology">Topology scalar</option>
-            <option value="composite">Composite scalar</option>
+            <optgroup label="Hill source fields">
+              <option value="semantic-styles" selected>Semantic styles</option>
+              <option value="material-class">Material class</option>
+              <option value="region-class">Region class</option>
+              <option value="motion-affordance">Motion affordance</option>
+              <option value="terrain-form">Terrain form</option>
+              <option value="phase-topology">Phase topology</option>
+              <option value="route-pressure">Route pressure</option>
+              <option value="slope">Slope</option>
+              <option value="dirty-shock">Dirty/shock</option>
+              <option value="growth">Growth</option>
+              <option value="topology">Topology scalar</option>
+              <option value="composite">Composite scalar</option>
+            </optgroup>
+            <optgroup label="Active profile pricing">
+              <option value="route-cost">Active route cost</option>
+            </optgroup>
           </select>
         </div>
         <div class="slider-row">
@@ -569,6 +573,7 @@ input[type="range"]:disabled::-webkit-slider-thumb { background: #555; cursor: n
         <div class="field"><span class="field-key">Profile Spread</span><span class="field-val" id="motion-panel-hill-route-profile-spread">none</span></div>
         <div class="field"><span class="field-key">Fixture</span><span class="field-val" id="motion-panel-hill-route-fixture">none</span></div>
         <div class="field"><span class="field-key">Terrain</span><span class="field-val" id="motion-panel-hill-terrain-overlay">none</span></div>
+        <div class="field"><span class="field-key">Overlay Basis</span><span class="field-val" id="motion-panel-hill-terrain-overlay-basis">none</span></div>
         <div class="field"><span class="field-key">Trigger</span><span class="field-val" id="motion-panel-path-world-trigger-state">no world</span></div>
         <div class="field"><span class="field-key">Obstacle</span><span class="field-val" id="motion-panel-path-world-obstacle">none</span></div>
         <div class="field"><span class="field-key">Reason</span><span class="field-val" id="motion-panel-path-world-reason">waiting</span></div>
@@ -4090,6 +4095,8 @@ function motionPanelPathWorldReadout() {
     motionPanelHillRouteProfileComparison: routeProfileComparison,
     pathWorldRouteFixture: routePlan?.evidence?.routeFixture || pathWorld?.pathWorldRouteFixture || null,
     terrainOverlayMode: hillTerrainSurface?.terrainOverlayMode || pathWorld?.terrainOverlayMode || routePlan?.evidence?.terrainOverlayMode || null,
+    terrainOverlayLegend: hillTerrainSurface?.overlayLegend || null,
+    terrainOverlayBasis: hillTerrainSurface?.overlayLegend?.basisLabel || hillTerrainSurface?.overlayAuthority || null,
     staticFieldMode: routePlan?.evidence?.staticFieldMode || routeCostProfile?.staticFieldMode || null,
     dynamicContinuity: routePlan?.evidence?.dynamicContinuity || routeCostProfile?.dynamicContinuity || null,
     routeSource: pathWorld?.routeSource || routePlan?.evidence?.routeSource || null,
@@ -4129,6 +4136,7 @@ function updateMotionPanelPathWorldReadout() {
   setField('motion-panel-hill-route-profile-spread', profileSpreadLabel, !!profileDivergence?.meaningfulDivergence);
   setField('motion-panel-hill-route-fixture', readout.pathWorldRouteFixture?.id || 'none', !!readout.pathWorldRouteFixture);
   setField('motion-panel-hill-terrain-overlay', readout.terrainOverlayMode || 'none', !!readout.terrainOverlayMode);
+  setField('motion-panel-hill-terrain-overlay-basis', readout.terrainOverlayBasis || 'none', !!readout.terrainOverlayBasis);
   const triggerLabel = readout.triggerDistance == null
     ? readout.triggerState
     : `${readout.triggerState} ${readout.triggerDistance.toFixed(2)}/${readout.triggerRadius?.toFixed(2) ?? '?'}`;
@@ -5312,6 +5320,106 @@ function normalizeMotionPanelHillTerrainOverlayMode(value, fallback = 'semantic-
   return MOTION_PANEL_HILL_TERRAIN_OVERLAY_MODES.has(mode) ? mode : fallback;
 }
 
+function motionPanelHillTerrainOverlayAuthority(overlayMode = 'semantic-styles') {
+  const mode = normalizeMotionPanelHillTerrainOverlayMode(overlayMode);
+  if (mode === 'route-cost') {
+    return {
+      schema: 'kaminos.motion-panel-hill-terrain-overlay-authority.v0',
+      mode,
+      overlayAuthority: 'active-profile-priced',
+      basisLabel: 'profile-priced',
+      profileSensitive: true,
+      source: 'browser route-cost sampler + active cost profile',
+    };
+  }
+  return {
+    schema: 'kaminos.motion-panel-hill-terrain-overlay-authority.v0',
+    mode,
+    overlayAuthority: 'source-owned-hill-field',
+    basisLabel: 'source-owned',
+    profileSensitive: false,
+    source: 'Hill motion-affordance packet field',
+  };
+}
+
+function motionPanelHillQuantile(sortedValues, quantile) {
+  if (!sortedValues.length) return 0;
+  const q = Math.max(0, Math.min(1, Number(quantile) || 0));
+  const position = (sortedValues.length - 1) * q;
+  const lo = Math.floor(position);
+  const hi = Math.ceil(position);
+  if (lo === hi) return sortedValues[lo];
+  const t = position - lo;
+  return sortedValues[lo] * (1 - t) + sortedValues[hi] * t;
+}
+
+function motionPanelHillTerrainOverlayNormalization(source, overlayMode = 'semantic-styles', costProfile = 'cautious-lerm') {
+  const mode = normalizeMotionPanelHillTerrainOverlayMode(overlayMode);
+  const authority = motionPanelHillTerrainOverlayAuthority(mode);
+  const grid = source?.grid || {};
+  const cols = Math.max(1, Number(grid.columns) || 1);
+  const rows = Math.max(1, Number(grid.rows) || 1);
+  const sampleCount = cols * rows;
+  if (mode !== 'route-cost') {
+    return {
+      schema: 'kaminos.motion-panel-hill-terrain-overlay-normalization.v0',
+      method: 'source-scalar-clamp-v0',
+      mode,
+      overlayAuthority: authority.overlayAuthority,
+      profileSensitive: false,
+      sampleCount,
+      range: { min: 0, max: 1 },
+    };
+  }
+  const profile = normalizeMotionTerrainRouteCostProfile(costProfile);
+  const totals = [];
+  for (let index = 0; index < sampleCount; index++) {
+    const breakdown = sampleMotionTerrainRouteCostBreakdown(source, index, profile);
+    const total = Number(breakdown?.total);
+    if (Number.isFinite(total)) totals.push(total);
+  }
+  totals.sort((a, b) => a - b);
+  const min = totals[0] || 0;
+  const max = totals[totals.length - 1] || min;
+  const p05 = motionPanelHillQuantile(totals, 0.05);
+  const p10 = motionPanelHillQuantile(totals, 0.10);
+  const p50 = motionPanelHillQuantile(totals, 0.50);
+  const p90 = motionPanelHillQuantile(totals, 0.90);
+  const p95 = motionPanelHillQuantile(totals, 0.95);
+  const low = (p90 - p10) >= 0.0001 ? p10 : min;
+  const high = (p90 - p10) >= 0.0001 ? p90 : max;
+  return {
+    schema: 'kaminos.motion-panel-hill-terrain-overlay-normalization.v0',
+    method: 'profile-quantile-range-v0',
+    mode,
+    overlayAuthority: authority.overlayAuthority,
+    profileSensitive: true,
+    costProfile: profile.id,
+    sampleCount: totals.length,
+    range: {
+      min: Number(min.toFixed(5)),
+      p05: Number(p05.toFixed(5)),
+      p10: Number(p10.toFixed(5)),
+      p50: Number(p50.toFixed(5)),
+      p90: Number(p90.toFixed(5)),
+      p95: Number(p95.toFixed(5)),
+      max: Number(max.toFixed(5)),
+      low: Number(low.toFixed(5)),
+      high: Number(high.toFixed(5)),
+    },
+  };
+}
+
+function normalizeMotionPanelHillTerrainOverlayValue(rawValue, normalization) {
+  const value = Number(rawValue);
+  if (!Number.isFinite(value)) return 0;
+  if (normalization?.method !== 'profile-quantile-range-v0') return Math.max(0, Math.min(1, value));
+  const low = Number(normalization.range?.low);
+  const high = Number(normalization.range?.high);
+  if (!Number.isFinite(low) || !Number.isFinite(high) || Math.abs(high - low) < 0.0001) return 0;
+  return Math.max(0, Math.min(1, (value - low) / (high - low)));
+}
+
 function normalizeMotionPanelHillRouteFixture(value, fallback = 'meadow-cross') {
   const id = String(value || '').trim().toLowerCase();
   return MOTION_PANEL_HILL_ROUTE_FIXTURES[id] || MOTION_PANEL_HILL_ROUTE_FIXTURES[fallback] || MOTION_PANEL_HILL_ROUTE_FIXTURES.diagonal;
@@ -5494,7 +5602,7 @@ async function refreshMotionPanelHillRouteControlsFromInputs() {
   );
 }
 
-function motionPanelHillTerrainOverlayScalar(source, index, overlayMode = 'route-cost', costProfile = 'cautious-lerm') {
+function motionPanelHillTerrainOverlayScalar(source, index, overlayMode = 'route-cost', costProfile = 'cautious-lerm', normalization = null) {
   const mode = normalizeMotionPanelHillTerrainOverlayMode(overlayMode);
   const scalar = name => Math.max(0, Math.min(1, motionPanelHillChannelValue(source, name, index)));
   const raw = name => Number(motionPanelHillChannelValue(source, name, index));
@@ -5546,8 +5654,11 @@ function motionPanelHillTerrainOverlayScalar(source, index, overlayMode = 'route
   }
   if (mode === 'route-cost') {
     const breakdown = sampleMotionTerrainRouteCostBreakdown(source, index, costProfile);
-    const value = Math.max(0, Math.min(1, Number(breakdown.total || 0) / 14));
-    return { mode, value, label: 'route cost', breakdown };
+    const rawTotal = Number(breakdown.total || 0);
+    const value = motionPanelHillTerrainOverlayNormalization
+      ? normalizeMotionPanelHillTerrainOverlayValue(rawTotal, normalization)
+      : Math.max(0, Math.min(1, rawTotal / 14));
+    return { mode, value, rawTotal, label: 'route cost', breakdown };
   }
   if (mode === 'route-pressure') return { mode, value: scalar('routePressure'), label: 'route pressure' };
   if (mode === 'slope') return { mode, value: scalar('slope'), label: 'slope' };
@@ -5617,6 +5728,21 @@ function motionPanelHillTerrainOverlayChannels(overlayMode) {
   return [overlayMode];
 }
 
+function motionPanelHillOverlayFingerprintStep(hash, color, overlay) {
+  let next = hash >>> 0;
+  const parts = [
+    Math.round(Math.max(0, Math.min(1, color.r)) * 255),
+    Math.round(Math.max(0, Math.min(1, color.g)) * 255),
+    Math.round(Math.max(0, Math.min(1, color.b)) * 255),
+    Math.round(Math.max(0, Math.min(1, Number(overlay?.value || 0))) * 65535) & 255,
+  ];
+  for (const part of parts) {
+    next ^= part & 255;
+    next = Math.imul(next, 16777619) >>> 0;
+  }
+  return next >>> 0;
+}
+
 function createMotionPanelHillTerrainSurface(source, routePlan = null, options = {}) {
   const frame = createMotionPanelHillTerrainFrame(source);
   const costProfile = normalizeMotionTerrainRouteCostProfile(
@@ -5624,11 +5750,17 @@ function createMotionPanelHillTerrainSurface(source, routePlan = null, options =
     options.costWeights || {},
   );
   const overlayMode = normalizeMotionPanelHillTerrainOverlayMode(options.terrainOverlayMode || options.overlayMode || routePlan?.evidence?.terrainOverlayMode || 'semantic-styles');
+  const overlayAuthority = motionPanelHillTerrainOverlayAuthority(overlayMode);
+  const overlayNormalization = motionPanelHillTerrainOverlayNormalization(source, overlayMode, costProfile);
   const overlayLegend = {
     schema: 'kaminos.motion-panel-hill-terrain-overlay-legend.v0',
     mode: overlayMode,
+    overlayAuthority: overlayAuthority.overlayAuthority,
+    basisLabel: overlayAuthority.basisLabel,
+    profileSensitive: overlayAuthority.profileSensitive,
     costProfile: costProfile.id,
     channels: motionPanelHillTerrainOverlayChannels(overlayMode),
+    normalization: overlayNormalization,
   };
   const grid = source?.grid || {};
   const cols = Math.max(1, Number(grid.columns) || 1);
@@ -5637,17 +5769,21 @@ function createMotionPanelHillTerrainSurface(source, routePlan = null, options =
   const colors = [];
   const indices = [];
   const color = new THREE.Color();
+  let overlayColorFingerprintHash = 2166136261;
   for (let row = 0; row < rows; row++) {
     for (let column = 0; column < cols; column++) {
       const index = row * cols + column;
       const world = motionPanelHillWorldFromGrid(source, column, row, motionPanelHillChannelValue(source, 'height', index));
       const point = motionPanelHillDisplayPoint(frame, world);
       positions.push(point[0], point[1], point[2]);
-      const overlay = motionPanelHillTerrainOverlayScalar(source, index, overlayMode, costProfile);
+      const overlay = motionPanelHillTerrainOverlayScalar(source, index, overlayMode, costProfile, overlayNormalization);
       motionPanelHillTerrainOverlayColor(color, overlay);
+      overlayColorFingerprintHash = motionPanelHillOverlayFingerprintStep(overlayColorFingerprintHash, color, overlay);
       colors.push(color.r, color.g, color.b);
     }
   }
+  const overlayColorFingerprint = `fnv1a-${overlayColorFingerprintHash.toString(16).padStart(8, '0')}`;
+  overlayLegend.overlayColorFingerprint = overlayColorFingerprint;
   for (let row = 0; row < rows - 1; row++) {
     for (let column = 0; column < cols - 1; column++) {
       const a = row * cols + column;
@@ -5688,6 +5824,9 @@ function createMotionPanelHillTerrainSurface(source, routePlan = null, options =
     sourceRef: source?.sourceRef || null,
     routePlanId: routePlan?.id || null,
     terrainOverlayMode: overlayMode,
+    overlayAuthority: overlayAuthority.overlayAuthority,
+    overlayLegend,
+    overlayColorFingerprint,
     costProfile: costProfile.id,
   };
   group.add(mesh);
@@ -5711,7 +5850,9 @@ function createMotionPanelHillTerrainSurface(source, routePlan = null, options =
       grid: { columns: cols, rows, sampleCount: cols * rows },
       triangleCount: indices.length / 3,
       terrainOverlayMode: overlayMode,
+      overlayAuthority: overlayAuthority.overlayAuthority,
       overlayLegend,
+      overlayColorFingerprint,
       costProfile,
       checksums: source?.checksums || null,
       displayTransform: frame.displayTransform,

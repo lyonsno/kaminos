@@ -41,6 +41,14 @@ assert.match(index, /id="motion-panel-hill-terrain-overlay"/, 'Path World panel 
 assert.match(index, /id="motion-panel-hill-route-profile-control"/, 'operator can choose Hill route profile without editing URL params');
 assert.match(index, /id="motion-panel-hill-route-fixture-control"/, 'operator can choose Hill route fixture without editing URL params');
 assert.match(index, /id="motion-panel-hill-terrain-overlay-control"/, 'operator can choose Hill terrain overlay without editing URL params');
+assert.match(index, /<optgroup label="Hill source fields">/, 'terrain overlay chooser separates source-owned Hill fields from active profile pricing');
+assert.match(index, /<optgroup label="Active profile pricing">/, 'terrain overlay chooser has an explicit profile-sensitive pricing group');
+assert.match(index, /Active route cost/, 'terrain overlay chooser names route cost as active profile pricing instead of a static Hill field');
+assert.match(index, /id="motion-panel-hill-terrain-overlay-basis"/, 'Path World panel visibly names whether the overlay is source-owned or profile-priced');
+assert.match(index, /motionPanelHillTerrainOverlayAuthority/, 'browser can classify terrain overlays by evidence authority');
+assert.match(index, /motionPanelHillTerrainOverlayNormalization/, 'browser computes explicit overlay normalization evidence before rendering Hill terrain');
+assert.match(index, /profile-quantile-range-v0/, 'route-cost overlay uses profile-local quantile normalization instead of a fixed clamp');
+assert.match(index, /overlayColorFingerprint/, 'terrain surface evidence carries a deterministic color fingerprint for visual profile-difference witnesses');
 assert.match(index, /function refreshMotionPanelHillRouteControlsFromInputs/, 'operator Hill controls recompose the mounted route from cached packet/data');
 assert.match(index, /profile-split/, 'operator can select a route fixture tuned to make static Hill profile choices visibly diverge');
 assert.match(index, /listMotionTerrainRouteCostProfiles/, 'browser can enumerate static Hill steering profiles for comparison instead of exposing only the current profile');
@@ -100,6 +108,8 @@ assert.match(liveWitness, /pathWorldRouteCostProfile/, 'live witness report carr
 assert.match(liveWitness, /staticFieldMode/, 'live witness carries static field mode evidence');
 assert.match(liveWitness, /dynamicContinuity/, 'live witness carries dynamic continuity non-claim evidence');
 assert.match(liveWitness, /hillTerrainSurface/, 'live witness records Hill terrain surface evidence');
+assert.match(liveWitness, /terrainOverlayLegend/, 'live witness records effective terrain overlay authority and normalization evidence');
+assert.match(liveWitness, /overlayColorFingerprint/, 'live witness records a terrain overlay color fingerprint so profile changes cannot silently look static');
 assert.match(liveWitness, /hillTerrainFrame/, 'live witness records Hill terrain frame evidence');
 assert.match(liveWitness, /pathWorldRouteFixture/, 'live witness records the effective Hill route fixture');
 assert.match(liveWitness, /terrainOverlayMode/, 'live witness records the effective Hill terrain overlay mode');
