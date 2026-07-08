@@ -22,7 +22,7 @@ const windowSize = args.get('--window-size') || '1280,960';
 const fullScreenshot = args.has('--full-screenshot')
   ? resolve(args.get('--full-screenshot') || out.replace(/\.png$/i, '.full.png'))
   : '';
-const VALID_EVIDENCE_MODES = new Set(['fire-volume', 'performance', 'pyro-material', 'no-fire-volume']);
+const VALID_EVIDENCE_MODES = new Set(['fire-volume', 'performance', 'pyro-material', 'no-fire-volume', 'receiver-light-isolate']);
 const evidenceMode = args.get('--evidence-mode') || 'fire-volume';
 if (!VALID_EVIDENCE_MODES.has(evidenceMode)) {
   throw new Error(`Unknown witness evidence mode: ${evidenceMode}`);
@@ -30,9 +30,14 @@ if (!VALID_EVIDENCE_MODES.has(evidenceMode)) {
 const expectsPerformanceVolumeEvidence = evidenceMode === 'performance';
 const expectsPyroMaterialEvidence = evidenceMode === 'pyro-material';
 const expectsNoFireVolumeEvidence = evidenceMode === 'no-fire-volume';
+const expectsReceiverLightIsolateEvidence = evidenceMode === 'receiver-light-isolate';
 const visualEvidenceMode = expectsNoFireVolumeEvidence
   ? 'no-fire-volume-signal'
-  : (expectsPyroMaterialEvidence ? 'pyro-material-coupled-volume-signal' : (expectsPerformanceVolumeEvidence ? 'performance-volume-signal' : 'fire-volume'));
+  : (
+    expectsReceiverLightIsolateEvidence
+      ? 'receiver-light-isolate-layer'
+      : (expectsPyroMaterialEvidence ? 'pyro-material-coupled-volume-signal' : (expectsPerformanceVolumeEvidence ? 'performance-volume-signal' : 'fire-volume'))
+  );
 const TALL_PLUME_PRESSURE_ITERATION_STRATEGY_PRESSURE2 = 'tall-plume-pressure2-v0';
 const TALL_PLUME_PRESSURE_ITERATION_STRATEGY_INACTIVE = 'inactive';
 const TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY = 'tall-plume-spatial-pressure-tiers-v0';
@@ -830,6 +835,11 @@ const requestedVolumeFireLightGain = Number(routeParams.get('volume_fire_light_g
 const expectedVolumeFireLightGain = routeParams.has('volume_fire_light_gain') && Number.isFinite(requestedVolumeFireLightGain)
   ? Math.max(0, Math.min(4, requestedVolumeFireLightGain))
   : 1;
+const requestedVolumeReceiverLightIsolate = Number(routeParams.get('volume_receiver_light_isolate'));
+const expectedVolumeReceiverLightIsolate = routeParams.has('volume_receiver_light_isolate') && Number.isFinite(requestedVolumeReceiverLightIsolate)
+  ? Math.max(0, Math.min(2, requestedVolumeReceiverLightIsolate))
+  : 0;
+const expectsReceiverLightIsolate = expectedVolumeReceiverLightIsolate >= 0.5;
 const expectsCanonicalPlumeProof = expectedVolumeScene === 'canonical_plume';
 const fieldSliceOut = args.has('--field-slice')
   ? resolve(args.get('--field-slice') || out.replace(/\.png$/i, '.field-slice.png'))
@@ -1495,6 +1505,18 @@ async function main() {
       assert.ok(Number.isFinite(volumeSceneContext?.receiverLight?.envelopeInputs?.lifecycleDamping), 'brick-wall receiver envelope inputs did not expose lifecycle damping');
       assert.ok(Number.isFinite(volumeSceneContext?.receiverLight?.envelopeInputs?.visibleFireProxy), 'brick-wall receiver envelope inputs did not expose the visible-fire proxy');
       assert.equal(volumeSceneContext?.receiverLight?.cpuReadbackAuthority, false, 'brick-wall screen-space receiver light must not derive authority from CPU readback');
+      assert.equal(volumeSceneContext?.receiverLight?.isolateAuthority, 'receiver-layer-only-black-scene-witness-v0', 'brick-wall screen-space receiver light did not expose receiver-only witness authority');
+      assert.equal(volumeSceneContext?.receiverLight?.wallWashIsolateAuthority, 'receiver-wall-wash-only-black-scene-witness-v0', 'brick-wall screen-space receiver light did not expose wall-wash-only witness authority');
+      assert.equal(volumeSceneContext?.receiverLight?.overlaySuppressionAuthority, 'receiver-isolate-suppresses-foreground-volume-canvas-v0', 'brick-wall screen-space receiver light did not expose foreground volume-canvas suppression authority');
+      if (expectedVolumeReceiverLightIsolate >= 1.5) {
+        assert.equal(volumeSceneContext?.receiverLight?.isolateMode, 2, 'brick-wall wall-wash-only witness route did not activate isolate mode 2');
+        assert.equal(volumeSceneContext?.receiverLight?.outputMode, 'receiver-wall-wash-only', 'brick-wall wall-wash-only witness route did not switch to the wall-wash-only output layer');
+      } else if (expectedVolumeReceiverLightIsolate > 0.5) {
+        assert.equal(volumeSceneContext?.receiverLight?.isolateMode, 1, 'brick-wall receiver-only witness route did not activate isolate mode 1');
+        assert.equal(volumeSceneContext?.receiverLight?.outputMode, 'receiver-layer-only', 'brick-wall receiver-only witness route did not switch to the receiver-only output layer');
+      } else {
+        assert.equal(['receiver-layer-only', 'receiver-wall-wash-only'].includes(volumeSceneContext?.receiverLight?.outputMode), false, 'brick-wall receiver-only output must not be active unless the isolate route requested it');
+      }
       assert.equal(volumeSceneContext?.wallAttachedGlow?.identity, 'volume-scene-fire-wall-glow-proxy-v0', 'brick-wall scene context did not expose wall-attached glow identity');
       assert.equal(volumeSceneContext?.wallAttachedGlow?.authority, 'scene-space-wall-attached-proxy-no-cpu-readback-v0', 'brick-wall scene context did not expose wall-attached glow authority');
       assert.equal(volumeSceneContext?.wallAttachedGlow?.energyAuthority, 'control-and-frame-cadence-proxy-not-fire-frame-readback-v0', 'brick-wall scene context must disclose that wall glow energy is not a fire-frame readback');
@@ -1561,8 +1583,12 @@ async function main() {
       const compositor = compositorEval.result.value;
       assert.equal(compositor?.bridge?.sceneContextBridgeBypass, true, `scene-context route must declare the direct native-canvas composition path: ${JSON.stringify(compositor)}`);
       assert.equal(compositor?.bridge?.visible, false, `scene-context route must not rely on the fragile Three CanvasTexture bridge: ${JSON.stringify(compositor)}`);
-      assert.equal(compositor?.rawCanvas?.operatorVisible, true, `scene-context route must keep the native WebGPU volume canvas operator-visible as a screen-blended volume layer: ${JSON.stringify(compositor)}`);
-      assert.equal(compositor?.rawCanvas?.mixBlendMode, 'screen', `scene-context native volume canvas must screen-blend over the rendered backdrop: ${JSON.stringify(compositor)}`);
+      if (expectsReceiverLightIsolate) {
+        assert.equal(compositor?.rawCanvas?.operatorVisible, false, `receiver-isolate route must suppress the foreground native WebGPU volume canvas so the witness is receiver-only: ${JSON.stringify(compositor)}`);
+      } else {
+        assert.equal(compositor?.rawCanvas?.operatorVisible, true, `scene-context route must keep the native WebGPU volume canvas operator-visible as a screen-blended volume layer: ${JSON.stringify(compositor)}`);
+        assert.equal(compositor?.rawCanvas?.mixBlendMode, 'screen', `scene-context native volume canvas must screen-blend over the rendered backdrop: ${JSON.stringify(compositor)}`);
+      }
     }
     assert.ok(
       state.frameCount > 5,
@@ -2429,17 +2455,35 @@ async function main() {
     const expectsNoFireMainRendererVolume = expectsNoFireVolumeEvidence ||
       expectsFuelStarvedTallPlume ||
       (expectsCanonicalPlumeProof && !expectsCanonicalFireEvidence);
-    if ((expectsVolumeStoneSceneContext || expectsVolumeBrickWallSceneContext) && mainRendererMetrics.backdropMidtonePixels < 1200) {
+    if (!expectsReceiverLightIsolateEvidence && (expectsVolumeStoneSceneContext || expectsVolumeBrickWallSceneContext) && mainRendererMetrics.backdropMidtonePixels < 1200) {
       throw new Error(`main renderer screenshot missing ${expectedVolumeSceneContext} scene-context backdrop signal: ${JSON.stringify(mainRendererMetrics)}`);
     }
-    if ((expectsVolumeStoneSceneContext || expectsVolumeBrickWallSceneContext) && viewportRendererMetrics.backdropMidtonePixels < 1200) {
+    if (!expectsReceiverLightIsolateEvidence && (expectsVolumeStoneSceneContext || expectsVolumeBrickWallSceneContext) && viewportRendererMetrics.backdropMidtonePixels < 1200) {
       throw new Error(`operator viewport screenshot missing ${expectedVolumeSceneContext} scene-context backdrop signal: ${JSON.stringify(viewportRendererMetrics)}`);
     }
     const mainRendererFireSignalPixels =
       mainRendererMetrics.fireLikePixels +
       (mainRendererMetrics.warmLikePixels ?? 0) +
       (mainRendererMetrics.whiteHotLikePixels ?? 0);
-    if (expectsSnuffVisualEvidence) {
+    if (expectsReceiverLightIsolateEvidence) {
+      if (!expectsReceiverLightIsolate) {
+        throw new Error('receiver-light-isolate evidence mode requires volume_receiver_light_isolate >= 0.5');
+      }
+      const viewportWarmSignal =
+        viewportRendererMetrics.fireLikePixels +
+        (viewportRendererMetrics.warmLikePixels ?? 0) +
+        (viewportRendererMetrics.whiteHotLikePixels ?? 0);
+      if (expectedVolumeFireLightProxy > 0.001 && expectedVolumeFireLightGain > 0.001) {
+        if (viewportRendererMetrics.litPixels < 8000 || viewportWarmSignal < 3000 || viewportRendererMetrics.meanLuma < 2) {
+          throw new Error(`receiver-isolate route must show receiver light when fire light is enabled: ${JSON.stringify({
+            viewportRendererMetrics,
+            viewportWarmSignal,
+          })}`);
+        }
+      } else if (viewportRendererMetrics.litPixels > 7000 || viewportRendererMetrics.meanLuma > 2.0) {
+        throw new Error(`receiver-isolate zero-light route must stay dark: ${JSON.stringify(viewportRendererMetrics)}`);
+      }
+    } else if (expectsSnuffVisualEvidence) {
       if (mainRendererMetrics.litPixels < 1500 || mainRendererMetrics.smokeLikePixels < 1500 || mainRendererMetrics.meanLuma < 8) {
         throw new Error(`main renderer screenshot missing bridged snuff vapor volume: ${JSON.stringify(mainRendererMetrics)}`);
       }
@@ -2471,7 +2515,11 @@ async function main() {
       (sample.simReadback?.smokeWeight ?? 0) > 20 &&
       (canonicalFieldSlice?.xyActivePixelRatio ?? 0) > 0.001 &&
       (canonicalFieldSlice?.xyMax ?? 0) > 0.005;
-    if (canonicalPassiveBottomNonRiseProof) {
+    if (expectsReceiverLightIsolateEvidence) {
+      if (!expectsReceiverLightIsolate) {
+        throw new Error('receiver-light-isolate evidence mode requires an active receiver isolate route');
+      }
+    } else if (canonicalPassiveBottomNonRiseProof) {
       if (!canonicalPassiveBottomFieldProof) {
         throw new Error(`passive bottom-source proof did not leave live smoke in the field readback: ${JSON.stringify({
           smokeWeight: sample.simReadback?.smokeWeight,
@@ -2600,6 +2648,7 @@ async function main() {
       visualEvidenceMode,
       noFireEvidenceMode: expectsNoFireVolumeEvidence ? 'no-fire-volume-signal' : null,
       pyroMaterialEvidenceMode: expectsPyroMaterialEvidence ? 'pyro-material-coupled-volume-signal' : null,
+      receiverLightIsolateEvidenceMode: expectsReceiverLightIsolateEvidence ? 'receiver-light-isolate-layer' : null,
       pyroRawCarrierPaintEvidence,
       performanceVisualWarnings,
       effectiveRoute: state.effectiveRoute,

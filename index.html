@@ -437,6 +437,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
 #kaminos-volume-canvas { position: absolute; left: -10000px; top: -10000px; width: 1px; height: 1px; opacity: 0; pointer-events: none; background: #050607; }
 #kaminos-volume-canvas.active { left: 0; top: 0; width: 100%; height: 100%; opacity: 1; z-index: 3; }
 #viewport.volume-scene-context-active #kaminos-volume-canvas.active { opacity: 1; mix-blend-mode: screen; }
+#viewport.volume-receiver-light-isolate-active #kaminos-volume-canvas.active { opacity: 0; }
 
 /* Motion agency */
 .motion-readout { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 8px; }
@@ -2138,6 +2139,7 @@ let postProcessing = null;
 let aoPass = null, aoIntensity = null, renderPipeline = null, scenePass = null;
 let fireReceiverLightGainNode = null;
 let fireReceiverLightDebugNode = null;
+let fireReceiverLightIsolateNode = null;
 let fireReceiverLightCenterNode = null;
 let fireReceiverLightRadiusNode = null;
 let fireReceiverLightEnergySampleCenterNode = null;
@@ -8122,6 +8124,7 @@ async function initScene() {
   const aoOutput = mix(float(1.0), denoisePass.r, aoIntensity);
   fireReceiverLightGainNode = uniform(0);
   fireReceiverLightDebugNode = uniform(0);
+  fireReceiverLightIsolateNode = uniform(0);
   fireReceiverLightCenterNode = uniform(new THREE.Vector2(
     VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.center[0],
     VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.center[1]
@@ -8145,9 +8148,10 @@ async function initScene() {
   const receiverLobe = receiverContactLobe.add(receiverWallWashLobe);
   const receiverVerticalFalloff = float(1.0).sub(smoothstep(float(0.80), float(0.98), receiverUv.y));
   const receiverDepthMask = float(1.0).sub(smoothstep(float(0.995), float(1.0), receiverDepth));
+  const receiverHasGeometry = smoothstep(float(0.0005), float(0.015), receiverDepth);
   const receiverNormalMask = smoothstep(float(0.05), float(0.82), abs(dot(receiverNormal, vec3(0.0, 0.0, 1.0))));
   const receiverSoftNormalMask = mix(float(0.34), float(1.0), receiverNormalMask);
-  const receiverSurfaceMask = receiverVerticalFalloff.mul(receiverDepthMask);
+  const receiverSurfaceMask = receiverVerticalFalloff.mul(receiverDepthMask).mul(receiverHasGeometry);
   const receiverContactMask = receiverContactLobe.mul(receiverSurfaceMask).mul(receiverSoftNormalMask);
   const receiverWallWashNormalMask = mix(float(0.74), float(1.0), receiverNormalMask);
   const receiverWallWashMask = receiverWallWashLobe.mul(receiverSurfaceMask).mul(receiverWallWashNormalMask);
@@ -8231,10 +8235,19 @@ async function initScene() {
   const receiverEnergy = receiverEnergySignal.mul(float(7.20))
     .add(volumeFireEnergy.mul(float(1600.0)))
     .add(volumeFireEnergy.mul(volumeFireEnergy).mul(float(5200.0)));
+  const receiverWallWashOnlyLight = vec3(1.0, 0.36, 0.07).mul(
+    receiverWallWashMask.mul(receiverWallWashVisibility).mul(fireReceiverLightGainNode).mul(fixedVolumeFireEnergy).mul(float(18.0))
+  );
   const receiverDebugBand = (center) => {
     const delta = abs(fireReceiverLightDebugNode.sub(float(center)));
     return float(1.0).sub(smoothstep(float(0.06), float(0.16), delta));
   };
+  const receiverIsolateBand = (center) => {
+    const delta = abs(fireReceiverLightIsolateNode.sub(float(center)));
+    return float(1.0).sub(smoothstep(float(0.06), float(0.16), delta));
+  };
+  const receiverProductionIsolate = receiverIsolateBand(1.0);
+  const receiverWallWashIsolate = receiverIsolateBand(2.0);
   const receiverMaskDebug = receiverDebugBand(1.0);
   const receiverEnergyDebug = receiverDebugBand(2.0);
   const sampleWindowDebug = receiverDebugBand(3.0);
@@ -8294,7 +8307,8 @@ async function initScene() {
     foregroundVolumeColor.mul(rawTextureDebug).mul(float(2.8))
   );
   const sceneOutput = scenePass.mul(vec4(vec3(aoOutput), 1));
-  renderPipeline.outputNode = sceneOutput.add(vec4(receiverLight, 0));
+  const receiverOnlyOutput = vec4(receiverLight.mul(receiverProductionIsolate).add(receiverWallWashOnlyLight.mul(receiverWallWashIsolate)), 1);
+  renderPipeline.outputNode = mix(sceneOutput.add(vec4(receiverLight, 0)), receiverOnlyOutput, receiverProductionIsolate.add(receiverWallWashIsolate));
   window.kaminosAODebugState = () => ({
     route: 'three-tsl-render-pipeline-gtao-compute',
     hasRenderPipeline: !!renderPipeline,
@@ -10480,6 +10494,7 @@ let routedVolumeFireLightGain = 1;
 let routedVolumeGpuWallWashReach = 1.15;
 let routedVolumeGpuWallWashDebug = 0;
 let routedVolumeReceiverLightDebug = 0;
+let routedVolumeReceiverLightIsolate = 0;
 const DEFAULT_BONFIRE_ABLATION_CONTROLS = {
   bonfireRecenter: 1,
   bonfireLateralDamping: 1,
@@ -15210,6 +15225,7 @@ function readVolumeControls() {
     gpuWallWashReach: routedVolumeGpuWallWashReach,
     gpuWallWashDebug: routedVolumeGpuWallWashDebug,
     receiverLightDebug: routedVolumeReceiverLightDebug,
+    receiverLightIsolate: routedVolumeReceiverLightIsolate,
     majorantCadence: routedVolumeMajorantCadence,
     simCadence: routedVolumeSimCadence,
     pressureIterations: pressureConfig.pressureIterations,
@@ -15494,6 +15510,9 @@ const VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT = Object.freeze({
   volumeEnergySamplingAuthority: 'three-tsl-render-pipeline-volume-texture-sample-v0',
   foregroundOcclusionAuthority: 'volume-foreground-occluded-receiver-light-v0',
   maskAuthority: 'receiver-surface-depth-soft-normal-mask-v3-split-contact-wall-wash-honest-production-mask',
+  isolateAuthority: 'receiver-layer-only-black-scene-witness-v0',
+  wallWashIsolateAuthority: 'receiver-wall-wash-only-black-scene-witness-v0',
+  overlaySuppressionAuthority: 'receiver-isolate-suppresses-foreground-volume-canvas-v0',
   debugAuthority: 'route-toggled-receiver-surface-debug-v0+receiver-energy-debug-v0+receiver-sample-window-debug-v0+receiver-raw-volume-texture-debug-v0+receiver-local-probe-debug-v0',
   cadence: 'per-render-frame-gpu-tsl',
   center: [0.42, 0.62],
@@ -15843,7 +15862,11 @@ function createVolumeBrickWallContext() {
     maxGain: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.maxGain,
     receiverWindow: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.receiverWindow,
     debugAuthority: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.debugAuthority,
+    isolateAuthority: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.isolateAuthority,
+    wallWashIsolateAuthority: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.wallWashIsolateAuthority,
     debugMode: 0,
+    isolateMode: 0,
+    outputMode: 'scene-composite',
     cpuReadbackAuthority: false,
     threeLightSupport: 'removed',
   };
@@ -15969,6 +15992,7 @@ function createVolumeBrickWallContext() {
     const { fireControl, radianceControl, glowControl } = receiverEnvelopeInputs;
     const fallbackEnvelope = receiverEnvelopeInputs.rawEnvelope;
     const receiverDebugMode = clampVolumeValue(controlsState.receiverLightDebug ?? routedVolumeReceiverLightDebug ?? 0, 0, 5);
+    const receiverIsolateMode = clampVolumeValue(controlsState.receiverLightIsolate ?? routedVolumeReceiverLightIsolate ?? 0, 0, 2);
     const receiverGain = clampVolumeValue(
       routeGain * VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.gainScale,
       0,
@@ -15987,6 +16011,8 @@ function createVolumeBrickWallContext() {
     };
     if (fireReceiverLightGainNode) fireReceiverLightGainNode.value = receiverEnabled ? receiverGain : 0;
     if (fireReceiverLightDebugNode) fireReceiverLightDebugNode.value = receiverEnabled ? receiverDebugMode : 0;
+    if (fireReceiverLightIsolateNode) fireReceiverLightIsolateNode.value = group.visible ? receiverIsolateMode : 0;
+    viewport.classList.toggle('volume-receiver-light-isolate-active', group.visible && receiverIsolateMode >= 0.5);
     if (fireReceiverLightCenterNode) fireReceiverLightCenterNode.value.set(
       VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.center[0],
       VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.center[1]
@@ -16020,6 +16046,9 @@ function createVolumeBrickWallContext() {
       envelopeModel: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.envelopeModel,
       maskAuthority: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.maskAuthority,
       debugAuthority: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.debugAuthority,
+      isolateAuthority: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.isolateAuthority,
+      wallWashIsolateAuthority: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.wallWashIsolateAuthority,
+      overlaySuppressionAuthority: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.overlaySuppressionAuthority,
       cadence: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.cadence,
       mode: lastFireLightProbe.mode,
       enabled: receiverEnabled,
@@ -16056,6 +16085,10 @@ function createVolumeBrickWallContext() {
       maxGain: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.maxGain,
       receiverWindow: VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT.receiverWindow,
       debugMode: receiverEnabled ? receiverDebugMode : 0,
+      isolateMode: group.visible ? receiverIsolateMode : 0,
+      outputMode: group.visible && receiverIsolateMode >= 1.5
+        ? 'receiver-wall-wash-only'
+        : (group.visible && receiverIsolateMode >= 0.5 ? 'receiver-layer-only' : 'scene-composite'),
       liveCpuReadback: false,
       cpuReadbackAuthority: false,
       threeLightSupport: 'removed',
@@ -16189,6 +16222,8 @@ function createVolumeBrickWallContext() {
         groundPlane.visible = previousGroundPlaneVisible;
         previousGroundPlaneVisible = null;
         if (fireReceiverLightGainNode) fireReceiverLightGainNode.value = 0;
+        if (fireReceiverLightIsolateNode) fireReceiverLightIsolateNode.value = 0;
+        viewport.classList.remove('volume-receiver-light-isolate-active');
       }
       window._kaminosDirty?.();
       return group.visible ? 'brick_wall' : effectiveContext;
@@ -16494,6 +16529,10 @@ async function initKaminosVolumeRoute() {
   const routeReceiverLightDebug = Number(params.get('volume_receiver_light_debug'));
   if (params.has('volume_receiver_light_debug') && Number.isFinite(routeReceiverLightDebug)) {
     routedVolumeReceiverLightDebug = clampVolumeValue(routeReceiverLightDebug, 0, 5);
+  }
+  const routeReceiverLightIsolate = Number(params.get('volume_receiver_light_isolate'));
+  if (params.has('volume_receiver_light_isolate') && Number.isFinite(routeReceiverLightIsolate)) {
+    routedVolumeReceiverLightIsolate = clampVolumeValue(routeReceiverLightIsolate, 0, 2);
   }
   const routeResolution = parseInt(params.get('volume_resolution') || '', 10);
   if ([32, 48, 64, 96, 128, 160].includes(routeResolution)) {
