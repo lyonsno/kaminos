@@ -43,3 +43,21 @@ assert.match(
   /--material-focus/,
   'GPU Greenroom residual runner must forward material-focus to the MLX trainer',
 );
+
+assert.match(
+  trainer,
+  /--eval-pair-count/,
+  'residual trainer must expose explicit eval pair count for support-scaling experiments',
+);
+
+assert.match(
+  trainer,
+  /--eval-selection[\s\S]*choices=\["tail", "even"\]/,
+  'residual trainer must expose stable eval selection modes so larger corpora can hold out representative pairs',
+);
+
+assert.match(
+  runner,
+  /--eval-pair-count/,
+  'GPU Greenroom residual runner must forward explicit eval pair count',
+);

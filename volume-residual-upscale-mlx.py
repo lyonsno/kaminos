@@ -165,6 +165,8 @@ def parse_args():
     parser.add_argument("--max-steps", dest="maxSteps", type=int, default=120, help="Bounded training steps for contention control.")
     parser.add_argument("--batch-size", type=int, default=4)
     parser.add_argument("--patch-size", type=int, default=96)
+    parser.add_argument("--eval-pair-count", dest="evalPairCount", type=int, default=0, help="Optional exact eval pair count for support-scaling experiments; 0 keeps the default split.")
+    parser.add_argument("--eval-selection", dest="evalSelection", choices=["tail", "even"], default="tail", help="Eval holdout selection when --eval-pair-count is set.")
     parser.add_argument("--model-arch", dest="modelArch", choices=["tiny-conv", "direct-residual", "hybrid-residual", "gated-detail-residual"], default="tiny-conv")
     parser.add_argument("--feature-input-mode", dest="featureInputMode", choices=["rgb", "feature-rgba", "aux-rgba", "aux-rgb", "aux-red-cyan-abs", "aux-opponent-gradient"], default="rgb", help="Model input source: low RGB only, low RGB plus shader/material residual feature RGBA, raw Flow Debug RGB/RGBA, or normalized Flow Debug derived carriers.")
     parser.add_argument("--material-focus", dest="materialFocus", choices=["off", "fire-interface", "smoke"], default="off", help="Optional specialist supervision mask derived from shader/material feature RGBA: fire/interface or smoke.")
@@ -678,7 +680,29 @@ def has_temporal_sequence_metadata(items):
     return any(item.get("temporalSequenceId") and item.get("temporalFrameIndex") is not None for item in items)
 
 
-def split_pairs(loaded):
+def split_pairs(loaded, evalPairCount=0, evalSelection="tail"):
+    requested_eval_count = max(0, int(evalPairCount or 0))
+    if requested_eval_count > 0:
+        if len(loaded) == 1:
+            return loaded, loaded
+        eval_count = max(1, min(requested_eval_count, len(loaded) - 1))
+        if evalSelection == "even":
+            eval_indices = sorted({
+                int(round(position))
+                for position in np.linspace(0, len(loaded) - 1, eval_count + 2)[1:-1]
+            })
+            while len(eval_indices) < eval_count:
+                for candidate in range(len(loaded) - 1, -1, -1):
+                    if candidate not in eval_indices:
+                        eval_indices.append(candidate)
+                        break
+            eval_indices = sorted(eval_indices[:eval_count])
+        else:
+            eval_indices = list(range(len(loaded) - eval_count, len(loaded)))
+        eval_set = set(eval_indices)
+        train_items = [item for index, item in enumerate(loaded) if index not in eval_set]
+        eval_items = [item for index, item in enumerate(loaded) if index in eval_set]
+        return train_items, eval_items
     if has_temporal_sequence_metadata(loaded):
         train_items = []
         eval_items = []
@@ -1526,6 +1550,8 @@ def main():
         raise ValueError("--residual-mask-feather-radius must be non-negative")
     if args.previewFrameCount < 1:
         raise ValueError("--preview-frame-count must be at least 1")
+    if args.evalPairCount < 0:
+        raise ValueError("--eval-pair-count must be non-negative")
     if args.chromaResidualScale < 0:
         raise ValueError("--chroma-residual-scale must be non-negative")
     for label, value in [
@@ -1556,7 +1582,7 @@ def main():
     out_dir.mkdir(parents=True, exist_ok=True)
     corpus, pairs = load_pairs(args.corpus_manifest, args.low_render_scale)
     loaded = load_pair_arrays(pairs, args.foregroundThreshold, args.edgeBandMode, args.edgeBandThreshold, args.edgeBandDilate, args.featureInputMode)
-    train_items, eval_items = split_pairs(loaded)
+    train_items, eval_items = split_pairs(loaded, args.evalPairCount, args.evalSelection)
     rng = np.random.default_rng(args.seed)
     mx.random.seed(args.seed)
 
@@ -1871,6 +1897,8 @@ def main():
         "selectedPairCount": len(loaded),
         "trainPairCount": len(train_items),
         "evalPairCount": len(eval_items),
+        "requestedEvalPairCount": args.evalPairCount,
+        "evalSelection": args.evalSelection,
         "trainPairs": [item["id"] for item in train_items],
         "evalPairs": [item["id"] for item in eval_items],
         "temporalSequenceCount": len({

@@ -28,6 +28,8 @@ def parse_args():
     parser.add_argument("--max-steps", default="40")
     parser.add_argument("--batch-size", default="2")
     parser.add_argument("--patch-size", default="64")
+    parser.add_argument("--eval-pair-count", default="0")
+    parser.add_argument("--eval-selection", default="tail")
     parser.add_argument("--model-arch", default="tiny-conv")
     parser.add_argument("--feature-input-mode", default="rgb")
     parser.add_argument("--material-focus", default="off")
@@ -119,6 +121,10 @@ def build_child_command(args):
         str(args.batch_size),
         "--patch-size",
         str(args.patch_size),
+        "--eval-pair-count",
+        str(args.eval_pair_count),
+        "--eval-selection",
+        str(args.eval_selection),
         "--model-arch",
         str(args.model_arch),
         "--feature-input-mode",
