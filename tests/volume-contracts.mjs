@@ -2406,6 +2406,28 @@ assert.match(scalarTransportProxy, /meanVectorCosine/, 'scalar-derived transport
 assert.match(scalarTransportProxy, /debugRgbCorrelation/, 'scalar-derived transport proxy reports debug RGB correlation against truth velocity debug');
 assert.match(scalarTransportProxy, /visibleRasterLabels/, 'scalar-derived transport proxy burns and manifests visible contact-sheet labels');
 assert.match(scalarTransportProxy, /failurePhase/, 'scalar-derived transport proxy writes failure-phase reports for missing/corrupt frame manifests');
+
+const scalarHistoryFlowDecoderPath = join(root, 'volume-scalar-history-flow-decoder.py');
+assert.ok(existsSync(scalarHistoryFlowDecoderPath), 'volume scalar-history flow decoder harness exists');
+const scalarHistoryFlowDecoder = existsSync(scalarHistoryFlowDecoderPath) ? readFileSync(scalarHistoryFlowDecoderPath, 'utf8') : '';
+assert.match(scalarHistoryFlowDecoder, /kaminos\.volume\.scalar-history-flow-decoder\.v0/, 'scalar-history flow decoder writes a stable manifest schema');
+assert.match(scalarHistoryFlowDecoder, /scalar-history-flow-transposition-decoder-v0/, 'scalar-history flow decoder names the supervised transposition evidence identity');
+assert.match(scalarHistoryFlowDecoder, /--motion-manifest/, 'scalar-history flow decoder can consume the temporal velocity-closure motion manifest');
+assert.match(scalarHistoryFlowDecoder, /noLowVelocityInputPolicy/, 'scalar-history flow decoder records that low velocity is excluded from inputs');
+assert.match(scalarHistoryFlowDecoder, /excludedLowVelocityInputs/, 'scalar-history flow decoder explicitly names excluded low velocity inputs');
+assert.match(scalarHistoryFlowDecoder, /scalarHistoryFeatureIdentity/, 'scalar-history flow decoder records its scalar-history feature identity');
+assert.match(scalarHistoryFlowDecoder, /carrierChannelList/, 'scalar-history flow decoder records the scalar carrier list');
+assert.match(scalarHistoryFlowDecoder, /trainFramePairIdentity/, 'scalar-history flow decoder records the train frame-pair identity');
+assert.match(scalarHistoryFlowDecoder, /testFramePairIdentities/, 'scalar-history flow decoder records held-out test frame-pair identities');
+assert.match(scalarHistoryFlowDecoder, /diagnosticRgbTargetIdentity/, 'scalar-history flow decoder records the derived diagnostic RGB target identity');
+assert.match(scalarHistoryFlowDecoder, /meanTargetBaseline/, 'scalar-history flow decoder reports a mean target baseline');
+assert.match(scalarHistoryFlowDecoder, /positionOnlyBaseline/, 'scalar-history flow decoder reports a position-only no-velocity baseline');
+assert.match(scalarHistoryFlowDecoder, /truthHighScalarHistoryDecoder/, 'scalar-history flow decoder reports the scalar-history decoder role');
+assert.match(scalarHistoryFlowDecoder, /frameHoldoutMetrics/, 'scalar-history flow decoder reports held-out frame metrics');
+assert.match(scalarHistoryFlowDecoder, /debugRgbCorrelation/, 'scalar-history flow decoder reports debug RGB correlation');
+assert.match(scalarHistoryFlowDecoder, /sourceChecksums/, 'scalar-history flow decoder records source sidecar checksums');
+assert.match(scalarHistoryFlowDecoder, /visibleRasterLabels/, 'scalar-history flow decoder burns and manifests visible contact-sheet labels');
+assert.match(scalarHistoryFlowDecoder, /failurePhase/, 'scalar-history flow decoder writes failure-phase reports for missing/corrupt frame manifests');
 const sourceScaleProbePath = join(root, 'volume-source-scale-probe.mjs');
 assert.ok(existsSync(sourceScaleProbePath), 'source-scale blobbiness probe exists');
 const sourceScaleProbe = existsSync(sourceScaleProbePath) ? readFileSync(sourceScaleProbePath, 'utf8') : '';
