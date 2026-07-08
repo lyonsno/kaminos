@@ -507,6 +507,25 @@ function lookFreezeCanPin(state) {
   return (state?.simStepCount || 0) > 0;
 }
 
+function updateRenderPhaseState(now, state, lookFreeze) {
+  const liveTimeMs = Number.isFinite(Number(now)) ? Number(now) : performance.now();
+  const liveFrame = Number.isFinite(Number(state?.frameCount)) ? Number(state.frameCount) : 0;
+  if (lookFreeze) {
+    if (typeof state.lookFreezeRenderTimeMs !== 'number' || !Number.isFinite(state.lookFreezeRenderTimeMs)) state.lookFreezeRenderTimeMs = liveTimeMs;
+    if (typeof state.lookFreezeRenderFrame !== 'number' || !Number.isFinite(state.lookFreezeRenderFrame)) state.lookFreezeRenderFrame = liveFrame;
+  } else {
+    state.lookFreezeRenderTimeMs = null;
+    state.lookFreezeRenderFrame = null;
+  }
+  const renderPhaseTimeMs = lookFreeze ? state.lookFreezeRenderTimeMs : liveTimeMs;
+  const renderPhaseFrame = lookFreeze ? state.lookFreezeRenderFrame : liveFrame;
+  const renderPhaseAuthority = lookFreeze ? 'look-freeze-pinned-render-phase' : 'live-render-phase';
+  state.renderPhaseTimeMs = renderPhaseTimeMs;
+  state.renderPhaseFrame = renderPhaseFrame;
+  state.renderPhaseAuthority = renderPhaseAuthority;
+  return { renderPhaseTimeMs, renderPhaseFrame, renderPhaseAuthority };
+}
+
 function pyroCarrierViewModeValue(value) {
   const mode = String(value || 'normal').toLowerCase();
   if (mode === 'border') return 1;
@@ -4837,7 +4856,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     lookFreeze: normalizeLookFreeze(controlsSnapshot.lookFreeze),
     lookFreezeFrame: null,
     lookFreezeTimeSeconds: null,
+    lookFreezeRenderTimeMs: null,
+    lookFreezeRenderFrame: null,
     lookFreezeSkippedFrames: 0,
+    renderPhaseTimeMs: null,
+    renderPhaseFrame: 0,
+    renderPhaseAuthority: 'live-render-phase',
     pyroCompareMode: normalizePyroCompareMode(controlsSnapshot.pyroCompareMode),
     pyroCompareMuted: false,
     simGrid: gridSize,
@@ -6709,7 +6733,6 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const lookFreeze = normalizeLookFreeze(controlsSnapshot.lookFreeze) && lookFreezeCanPin(state) ? 1 : 0;
     if (lookFreeze) {
       if (state.lookFreezeFrame === null) state.lookFreezeFrame = state.frameCount;
-      if (state.lookFreezeTimeSeconds === null) state.lookFreezeTimeSeconds = now * 0.001;
     } else {
       state.lookFreezeTimeSeconds = null;
     }
@@ -6719,11 +6742,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       previousViewProj.copy(viewProj);
       previousViewProjReady = true;
     }
+    const { renderPhaseTimeMs, renderPhaseFrame } = updateRenderPhaseState(now, state, lookFreeze);
     uniforms.set(invViewProj.elements, 0);
     uniforms[16] = camera.position.x;
     uniforms[17] = camera.position.y;
     uniforms[18] = camera.position.z;
-    uniforms[19] = lookFreeze ? (state.lookFreezeTimeSeconds ?? now * 0.001) : now * 0.001;
+    uniforms[19] = renderPhaseTimeMs * 0.001;
     uniforms[20] = state.width;
     uniforms[21] = state.height;
     uniforms[22] = controlsSnapshot.raySteps;
@@ -6755,8 +6779,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     uniforms[44] = lookFreeze ? 0 : (historyValid ? requestedTemporalAccum : 0);
     uniforms[45] = lookFreeze ? 0 : (controlsSnapshot.temporalJitter ?? 0.85);
     uniforms[46] = controlsSnapshot.historyClamp ?? 0.70;
-    const temporalFrameIndex = lookFreeze ? (state.lookFreezeFrame ?? state.frameCount) : state.frameCount;
-    uniforms[47] = temporalFrameIndex % 4096;
+    uniforms[47] = renderPhaseFrame % 4096;
     uniforms[48] = controlsSnapshot.fireScale ?? 0.86;
     uniforms[49] = controlsSnapshot.detailScale ?? 1.75;
     uniforms[50] = controlsSnapshot.plumeHeight ?? 1.45;
@@ -9355,6 +9378,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       smokeBounds,
       frameCount: state.frameCount,
       simStepCount: state.simStepCount,
+      renderPhaseTimeMs: state.renderPhaseTimeMs,
+      renderPhaseFrame: state.renderPhaseFrame,
+      renderPhaseAuthority: state.renderPhaseAuthority,
+      lookFreezeRenderTimeMs: state.lookFreezeRenderTimeMs,
+      lookFreezeRenderFrame: state.lookFreezeRenderFrame,
       simGrid: state.simGrid,
       simGridLabel: state.simGridLabel,
       frontFieldIdentity: state.frontFieldIdentity,
@@ -9492,6 +9520,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       baseFrameCount,
       baseSimStepCount,
       sampleNowMs: sampleNow,
+      renderPhaseTimeMs: state.renderPhaseTimeMs,
+      renderPhaseFrame: state.renderPhaseFrame,
+      renderPhaseAuthority: state.renderPhaseAuthority,
+      lookFreezeRenderTimeMs: state.lookFreezeRenderTimeMs,
+      lookFreezeRenderFrame: state.lookFreezeRenderFrame,
       preview: {
         width: previewWidth,
         height: previewHeight,
@@ -9859,7 +9892,16 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       state.quenchVaporStrength = snuffQuenchVaporStrength(controlsSnapshot);
       state.snuffVisualModel = state.quenchVaporStrength > 0 ? 'quench-vapor-v0' : 'inactive';
       state.flameQuenchModel = state.quenchVaporStrength > 0 ? 'quench-flame-body-v0' : 'inactive';
-      updatePyroDynamicDetailState({ inputKind: 'control-proxy' });
+      const controlsLookFreeze = normalizeLookFreeze(controlsSnapshot.lookFreeze) && lookFreezeCanPin(state) ? 1 : 0;
+      if (!controlsLookFreeze) updatePyroDynamicDetailState({ inputKind: 'control-proxy' });
+      else if (state.pyroDynamicDetail) {
+        state.pyroDynamicDetail = {
+          ...state.pyroDynamicDetail,
+          frozen: true,
+          freezeFrame: state.lookFreezeFrame ?? state.frameCount,
+          lastInputKind: 'look-lab-frozen-control-change',
+        };
+      }
       state.runtimeQualityRequested = normalizeRuntimeQuality(controlsSnapshot.runtimeQualityRequested);
       state.runtimeQualityEffective = normalizeRuntimeQuality(controlsSnapshot.runtimeQualityEffective || controlsSnapshot.runtimeQualityRequested);
       state.gpuPressure = clampFinite(controlsSnapshot.gpuPressure, 0, 1, 0);

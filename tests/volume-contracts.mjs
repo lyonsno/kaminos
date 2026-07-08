@@ -426,6 +426,12 @@ assert.doesNotMatch(volumeWitness, /`\/tmp\/kaminos-volume-witness-profile-\$\{p
 assert.match(volumeWitness, /mkdtempSync\([^)]*kaminos-volume-witness-profile-/, 'Volume witness default profile must be fresh per run so stale localStorage cannot shadow the requested route');
 assert.doesNotMatch(volumeWitness, /Number\(args\.get\('--debug-port'\) \|\| 9433\)/, 'Volume witness must not reuse one fixed default Chrome debug port across runs');
 assert.match(volumeWitness, /randomInt\(/, 'Volume witness default debug port must be randomized so stale Chrome targets cannot shadow the requested route');
+assert.match(volumeWitness, /--freeze-integrity-probe/, 'Volume witness can run a live look-freeze integrity probe');
+assert.match(volumeWitness, /--freeze-integrity-probe-only/, 'Volume witness can isolate freeze integrity from broader visual evidence gates');
+assert.match(volumeWitness, /look-freeze-render-phase-integrity-probe-v0/, 'Freeze integrity probe writes a stable predicate identity');
+assert.match(volumeWitness, /renderPhaseTimeFrozen/, 'Freeze integrity probe verifies renderer time stays pinned during frozen control scrubs');
+assert.match(volumeWitness, /renderPhaseFinite/, 'Freeze integrity probe rejects null or non-finite pinned renderer phases');
+assert.match(volumeWitness, /pyroDynamicDetailPhaseFrozen/, 'Freeze integrity probe verifies Pyro material memory does not advance during frozen control scrubs');
 assert.match(index, /routePyroRadianceGate/, 'Pyro route parser accepts radiance gate');
 assert.match(index, /routePyroRadianceSpill/, 'Pyro route parser accepts radiance spill');
 assert.match(index, /routePyroRadianceWarmth/, 'Pyro route parser accepts radiance warmth');
@@ -1145,6 +1151,13 @@ assert.match(core, /pyroCompareMuted\s*=\s*pyroCompareMode\s*===\s*'base'/, 'Bas
 assert.match(core, /lookFreezeCanPin\(state\)/, 'Look-lab freeze waits for an initialized sim frame before pinning');
 assert.match(core, /pumpLookLabFrozenFrame\(\)/, 'Frozen look-lab controls force a redraw even when the browser parks RAF');
 assert.match(core, /if \(lookFreeze\)[\s\S]*state\.lookFreezeFrame[\s\S]*else[\s\S]*encodeSim\(encoder\)[\s\S]*encodeMajorant\(encoder\)/, 'Look-lab freeze skips sim and majorant passes while live mode keeps stepping');
+assert.match(core, /lookFreezeRenderTimeMs/, 'Look-lab freeze pins renderer time as well as sim stepping so radiance probes do not crawl');
+assert.match(core, /lookFreezeRenderFrame/, 'Look-lab freeze pins temporal-frame shader input as well as sim stepping');
+assert.match(core, /typeof state\.lookFreezeRenderTimeMs !== 'number'/, 'Look-lab freeze render-time pin treats null as unpinned rather than finite zero');
+assert.match(core, /uniforms\[19\]\s*=\s*renderPhaseTimeMs\s*\*\s*0\.001/, 'Renderer time uniform uses the freeze-aware render phase instead of raw RAF time');
+assert.match(core, /uniforms\[47\]\s*=\s*renderPhaseFrame\s*%\s*4096/, 'Temporal frame uniform uses the freeze-aware render frame instead of raw frameCount');
+assert.match(core, /const renderPhaseAuthority\s*=\s*lookFreeze\s*\?\s*'look-freeze-pinned-render-phase'/, 'Debug state reports whether render phase is live or look-freeze pinned');
+assert.match(core, /setControls\(next\)[\s\S]*const controlsLookFreeze[\s\S]*if \(!controlsLookFreeze\) updatePyroDynamicDetailState\(\{ inputKind: 'control-proxy' \}\)/, 'Look-lab freeze prevents control scrubbing from advancing Pyro material-memory state');
 assert.match(core, /uniforms\[85\]\s*=\s*pyroMaterialEnergy/, 'CPU uploads reset-gated Pyro material-memory energy into the WGSL uniform block');
 assert.match(core, /uniforms\[88\s*\+\s*memoryIndex\s*\*\s*4\]\s*=\s*sample\[0\]/, 'CPU uploads each Pyro material-memory atlas cell into the uniform block');
 assert.match(core, /samplePyroMaterialMemoryCell\(p\)/, 'shader samples Pyro material memory spatially from the current raymarch position');

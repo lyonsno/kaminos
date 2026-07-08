@@ -143,6 +143,8 @@ const controlledStepFrames = Math.max(1, Math.floor(Number(args.get('--controlle
 const controlledStepDeltaMs = Math.max(0, Number(args.get('--controlled-step-delta-ms') || 220));
 const controlledStepDir = resolve(args.get('--controlled-step-dir') || renderScaleSetDir);
 const controlledStepPrefix = String(args.get('--controlled-step-prefix') || 'controlled-step-sequence');
+const freezeIntegrityProbeRequested = args.has('--freeze-integrity-probe') && !['0', 'false', 'no'].includes(String(args.get('--freeze-integrity-probe') || '1').toLowerCase());
+const freezeIntegrityProbeOnly = freezeIntegrityProbeRequested && args.has('--freeze-integrity-probe-only') && !['0', 'false', 'no'].includes(String(args.get('--freeze-integrity-probe-only') || '1').toLowerCase());
 const VALID_EVIDENCE_MODES = new Set(['fire-volume', 'performance', 'pyro-material', 'no-fire-volume']);
 const evidenceMode = args.get('--evidence-mode') || 'fire-volume';
 if (!VALID_EVIDENCE_MODES.has(evidenceMode)) {
@@ -1954,6 +1956,131 @@ async function main() {
     assert.equal(state.frontFieldIdentity, 'combustion-front-topology-sidecar-v0', 'front topology sidecar identity did not reach debug state');
     assert.equal(state.frontFieldBytes, expectedGrid * expectedGrid * expectedGrid * 4, 'front topology sidecar byte cost does not match one scalar per cell');
     assert.ok(Math.abs((state.controls?.gridOverlay || 0) - expectedGridOverlay) < 0.001, 'fluid grid overlay did not apply route/debug state');
+    let freezeIntegrityProbe = null;
+    if (freezeIntegrityProbeRequested) {
+      phase = 'freeze-integrity-probe';
+      const freezeProbeEval = await wsRequest(ws, 'Runtime.evaluate', {
+        expression: `(${async function runFreezeIntegrityProbe() {
+          const delay = ms => new Promise(resolveDelay => setTimeout(resolveDelay, ms));
+          const prototype = window.__kaminosVolumePrototype;
+          if (!prototype?.debugState || !prototype?.setControls) {
+            return { ok: false, reason: 'missing-volume-prototype-control-surface' };
+          }
+          let state = prototype.debugState();
+          prototype.setControls({ ...(state.controls || {}), lookFreeze: 0 });
+          await delay(160);
+          state = prototype.debugState();
+          prototype.setControls({ ...(state.controls || {}), lookFreeze: 1 });
+          await delay(260);
+          const pinned = prototype.debugState();
+          const baseControls = { ...(pinned.controls || {}) };
+          const residualStrengths = [0, 2, 0.25, 1.75, 1];
+          const steps = [];
+          for (const volumeResidualStrength of residualStrengths) {
+            prototype.setControls({
+              ...baseControls,
+              lookFreeze: 1,
+              volumeResidualStrength,
+            });
+            await delay(140);
+            const stepState = prototype.debugState();
+            steps.push({
+              volumeResidualStrength,
+              frameCount: stepState.frameCount,
+              simStepCount: stepState.simStepCount,
+              lookFreeze: stepState.lookFreeze,
+              lookFreezeFrame: stepState.lookFreezeFrame,
+              lookFreezeSkippedFrames: stepState.lookFreezeSkippedFrames,
+              renderPhaseTimeMs: stepState.renderPhaseTimeMs,
+              renderPhaseFrame: stepState.renderPhaseFrame,
+              renderPhaseAuthority: stepState.renderPhaseAuthority,
+              lookFreezeRenderTimeMs: stepState.lookFreezeRenderTimeMs,
+              lookFreezeRenderFrame: stepState.lookFreezeRenderFrame,
+              pyroDynamicDetailStatePhase: stepState.pyroDynamicDetail?.statePhase ?? null,
+              pyroDynamicDetailLastInputKind: stepState.pyroDynamicDetail?.lastInputKind ?? null,
+              volumeResidualMode: stepState.volumeResidualMode,
+              volumeResidualStatus: stepState.volumeResidualStatus,
+              volumeResidualAuthority: stepState.volumeResidualAuthority,
+            });
+          }
+          const firstStep = steps[0] || {};
+          const allEqual = (key) => steps.every(entry => Object.is(entry[key], firstStep[key]));
+          const simStepFrozen = steps.length > 0 && steps.every(entry => entry.simStepCount === pinned.simStepCount);
+          const renderPhaseTimeFrozen = steps.length > 0 && allEqual('renderPhaseTimeMs');
+          const renderPhaseFrameFrozen = steps.length > 0 && allEqual('renderPhaseFrame');
+          const renderPhaseFinite = steps.length > 0
+            && Number.isFinite(pinned.renderPhaseTimeMs)
+            && Number.isFinite(pinned.lookFreezeRenderTimeMs)
+            && Number.isFinite(pinned.renderPhaseFrame)
+            && Number.isFinite(pinned.lookFreezeRenderFrame)
+            && steps.every(entry => Number.isFinite(entry.renderPhaseTimeMs) && Number.isFinite(entry.lookFreezeRenderTimeMs) && Number.isFinite(entry.renderPhaseFrame) && Number.isFinite(entry.lookFreezeRenderFrame));
+          const renderPhasePinned = steps.length > 0 && steps.every(entry => entry.renderPhaseAuthority === 'look-freeze-pinned-render-phase');
+          const frameCounterAdvanced = steps.length > 0 && steps[steps.length - 1].frameCount > pinned.frameCount;
+          const pyroDynamicDetailPhaseFrozen = steps.length === 0 || allEqual('pyroDynamicDetailStatePhase');
+          return {
+            ok: simStepFrozen && renderPhaseTimeFrozen && renderPhaseFrameFrozen && renderPhaseFinite && renderPhasePinned && frameCounterAdvanced && pyroDynamicDetailPhaseFrozen,
+            identity: 'look-freeze-render-phase-integrity-probe-v0',
+            predicate: 'control-scrub-under-look-freeze-must-not-advance-sim-render-phase-or-pyro-material-memory',
+            pinned: {
+              frameCount: pinned.frameCount,
+              simStepCount: pinned.simStepCount,
+              renderPhaseTimeMs: pinned.renderPhaseTimeMs,
+              renderPhaseFrame: pinned.renderPhaseFrame,
+              renderPhaseAuthority: pinned.renderPhaseAuthority,
+              lookFreezeRenderTimeMs: pinned.lookFreezeRenderTimeMs,
+              lookFreezeRenderFrame: pinned.lookFreezeRenderFrame,
+              pyroDynamicDetailStatePhase: pinned.pyroDynamicDetail?.statePhase ?? null,
+              pyroDynamicDetailLastInputKind: pinned.pyroDynamicDetail?.lastInputKind ?? null,
+            },
+            steps,
+            verdicts: {
+              simStepFrozen,
+              renderPhaseTimeFrozen,
+              renderPhaseFrameFrozen,
+              renderPhaseFinite,
+              renderPhasePinned,
+              frameCounterAdvanced,
+              pyroDynamicDetailPhaseFrozen,
+            },
+          };
+        }})()`,
+        awaitPromise: true,
+        returnByValue: true,
+      });
+      freezeIntegrityProbe = freezeProbeEval.result.value;
+      assert.ok(freezeIntegrityProbe?.ok, `freeze integrity probe failed: ${JSON.stringify(freezeIntegrityProbe)}`);
+      if (freezeIntegrityProbeOnly) {
+        const postProbeStateEval = await wsRequest(ws, 'Runtime.evaluate', {
+          expression: 'window.__kaminosVolumePrototype?.debugState?.()',
+          returnByValue: true,
+        });
+        const postProbeState = postProbeStateEval.result.value;
+        const report = {
+          requestedRoute: url,
+          settleMs,
+          windowSize,
+          evidenceMode,
+          visualEvidenceMode,
+          effectiveRoute: postProbeState?.effectiveRoute || state.effectiveRoute,
+          prototypeIdentity: postProbeState?.prototypeIdentity || state.prototypeIdentity,
+          backend: postProbeState?.backend || state.backend,
+          freezeIntegrityProbe,
+          state: postProbeState,
+          browserSession: {
+            identity: browserSession.identity,
+            mode: browserSession.mode,
+            port: browserSession.port,
+            userDataDir: browserSession.userDataDir,
+            keepBrowserOpen: browserSession.keepBrowserOpen,
+          },
+        };
+        writeFileSync(reportPath, JSON.stringify(report, null, 2));
+        ws.close();
+        closeBrowserSession(browserSession);
+        console.log(JSON.stringify(report, null, 2));
+        return;
+      }
+    }
     assert.ok(Math.abs((state.controls?.raySteps ?? 0) - expectedRaySteps) < 0.001, 'ray-step route/control did not apply');
     assert.ok(Math.abs((state.controls?.adaptiveRays ?? 0) - expectedAdaptiveRays) < 0.001, 'adaptive raymarch route/control did not apply');
     if (rayBudgetPreset && !routeParams.has('volume_steps') && !routeParams.has('volume_adaptive_rays')) {
@@ -3651,6 +3778,7 @@ async function main() {
       fieldSliceScreenshot: fieldSliceOut || null,
       renderScaleSet: renderScaleSetReport,
       controlledStepSequence: controlledStepSequenceReport,
+      freezeIntegrityProbe,
       metrics,
       mainRendererMetrics,
       browserSession: {
