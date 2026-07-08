@@ -1,0 +1,17 @@
+{
+  "schema": "kaminos.volume.residual-greenroom-runner.v0",
+  "phase": "route-proof-before-child",
+  "createdAt": "2026-07-08T22:41:45Z",
+  "python": "/private/tmp/kaminos-mlx-residual-venv/bin/python",
+  "cwd": "/private/tmp/kaminos-kaminos-desperate-latest-fire-0707",
+  "script": "/private/tmp/kaminos-kaminos-desperate-latest-fire-0707/volume-residual-greenroom-runner.py",
+  "corpusManifest": "/private/tmp/kaminos-latest-fire-expanded-corpus-0707/corpus-manifest.json",
+  "outDir": "/private/tmp/kaminos-kaminos-desperate-latest-fire-0707/artifacts/residual-latest-fire-0708/material-fire-push-greenroom/fire-focus-tinyconv-teacher-rs010",
+  "pid": 32504,
+  "env": {
+    "PYTHONPATH": ".",
+    "MLX_METAL_DEBUG": null
+  },
+  "mlxAvailable": true,
+  "mlxDefaultDevice": "Device(gpu, 0)"
+}

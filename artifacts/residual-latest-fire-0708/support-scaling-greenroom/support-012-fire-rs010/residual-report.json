@@ -1,0 +1,674 @@
+{
+  "schema": "kaminos.volume.residual-upscale-mlx.v0",
+  "createdAt": "2026-07-08T22:59:47Z",
+  "corpusManifest": "/private/tmp/kaminos-support-scaling-corpus-12-rs010/corpus-manifest.json",
+  "corpusSchema": "kaminos.volume.frame-locked-pair-corpus.v0",
+  "pairAuthority": "frame-locked-render-scale-set-v0",
+  "imageAuthority": "cdp-canvas-clip-capture-after-render-only-frozen-sim-state",
+  "lowRenderScale": 0.1,
+  "requestedModelArch": "direct-residual",
+  "modelArch": "direct-residual",
+  "modelConfigSource": "cli",
+  "modelArtifactSchema": "kaminos.volume.residual-upscale-model-artifact.v0",
+  "modelArtifactAuthority": "offline-mlx-residual-upscaler-weights-v0",
+  "requestedSaveModelDir": "/private/tmp/kaminos-kaminos-desperate-latest-fire-0707/artifacts/residual-latest-fire-0708/support-scaling-greenroom/support-012-fire-rs010/model",
+  "requestedLoadModelDir": null,
+  "savedModelArtifact": {
+    "schema": "kaminos.volume.residual-upscale-model-artifact.v0",
+    "authority": "offline-mlx-residual-upscaler-weights-v0",
+    "manifestPath": "/private/tmp/kaminos-kaminos-desperate-latest-fire-0707/artifacts/residual-latest-fire-0708/support-scaling-greenroom/support-012-fire-rs010/model/model-artifact.json",
+    "manifestSha256": "ce14a09e7f92c35bc5987c96e39a4a446121c488904264b079e9fdd4ed9153e4",
+    "weightsPath": "/private/tmp/kaminos-kaminos-desperate-latest-fire-0707/artifacts/residual-latest-fire-0708/support-scaling-greenroom/support-012-fire-rs010/model/weights.safetensors",
+    "weightsSha256": "6550557e2ad0b00c290fc572f7f409d88c8f1054c5c2f5f66124e9558d061df5",
+    "model": {
+      "modelArch": "direct-residual",
+      "hiddenChannels": 16,
+      "inputChannels": 7,
+      "conditionRenderScale": false,
+      "scaleChannel": null,
+      "featureInputMode": "feature-rgba",
+      "featureInputAuthority": "shader-material-authority-residual-feature-v0",
+      "featureInputChannels": 4,
+      "detailGate": null,
+      "residualOutputLimit": 0.35,
+      "residualApplicationMaskMode": "off",
+      "residualMaskFeatherRadius": 0,
+      "residualColorMode": "rgb",
+      "chromaResidualScale": 1.0
+    }
+  },
+  "loadedModelArtifact": null,
+  "evalOnly": false,
+  "trainingSkipped": false,
+  "seed": 630,
+  "seededRandomGenerators": [
+    "numpy.default_rng",
+    "mlx.core.random"
+  ],
+  "selectedPairCount": 12,
+  "trainPairCount": 10,
+  "evalPairCount": 2,
+  "requestedEvalPairCount": 2,
+  "evalSelection": "even",
+  "trainPairs": [
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-001-pair-001-rs010-to-rs100",
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-002-pair-001-rs010-to-rs100",
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-003-pair-001-rs010-to-rs100",
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-004-pair-001-rs010-to-rs100",
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-006-pair-001-rs010-to-rs100",
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-007-pair-001-rs010-to-rs100",
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-009-pair-001-rs010-to-rs100",
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-010-pair-001-rs010-to-rs100",
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-011-pair-001-rs010-to-rs100",
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-012-pair-001-rs010-to-rs100"
+  ],
+  "evalPairs": [
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-005-pair-001-rs010-to-rs100",
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-008-pair-001-rs010-to-rs100"
+  ],
+  "temporalSequenceCount": 1,
+  "temporalTrainPairCount": 9,
+  "temporalEvalPairCount": 1,
+  "temporalSelectedPairCount": 11,
+  "maxSteps": 2000,
+  "effectiveMaxSteps": 2000,
+  "sleepMs": 0.0,
+  "lossMode": "weighted",
+  "foregroundThreshold": 0.025,
+  "foregroundProbability": 0.98,
+  "foregroundLossWeight": 2.5,
+  "differenceLossWeight": 0.35,
+  "edgeBandMode": "difference-gradient",
+  "edgeBandAuthority": "target-derived-low-high",
+  "edgeBandThreshold": 0.022,
+  "edgeBandDilate": 2,
+  "edgeSamplingProbability": 0.9,
+  "edgeLossWeight": 1.6,
+  "edgeGradientLossWeight": 2.2,
+  "outsideEdgeResidualWeight": 0.0,
+  "residualOutputLimit": 0.35,
+  "residualColorMode": "rgb",
+  "chromaResidualScale": 1.0,
+  "chromaResidualLossWeight": 0.05,
+  "residualApplicationMaskMode": "off",
+  "residualMaskFeatherRadius": 0,
+  "residualApplicationMaskAuthority": "off",
+  "residualSmoothnessLossWeight": 0.02,
+  "smokeStructureLossWeight": 0.0,
+  "smokeResidualDcLossWeight": 0.0,
+  "smokeResidualEnergyLossWeight": 0.0,
+  "smokeMaskThreshold": 0.025,
+  "materialFocus": "fire-interface",
+  "materialMaskAuthority": "shader-material-authority-residual-feature-v0",
+  "outsideMaterialResidualWeight": 0.0,
+  "conditionRenderScale": false,
+  "featureInputMode": "feature-rgba",
+  "featureInputAuthority": "shader-material-authority-residual-feature-v0",
+  "featureInputChannels": 4,
+  "featurePaths": {
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-001-pair-001-rs010-to-rs100": "/tmp/kaminos-support-scaling-corpus-12-rs010/support-12-flow-basin-default/controlled-step-frames/frame-001/support-12-flow-basin-default-frame-001-01-rs010.feature.png",
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-002-pair-001-rs010-to-rs100": "/tmp/kaminos-support-scaling-corpus-12-rs010/support-12-flow-basin-default/controlled-step-frames/frame-002/support-12-flow-basin-default-frame-002-01-rs010.feature.png",
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-003-pair-001-rs010-to-rs100": "/tmp/kaminos-support-scaling-corpus-12-rs010/support-12-flow-basin-default/controlled-step-frames/frame-003/support-12-flow-basin-default-frame-003-01-rs010.feature.png",
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-004-pair-001-rs010-to-rs100": "/tmp/kaminos-support-scaling-corpus-12-rs010/support-12-flow-basin-default/controlled-step-frames/frame-004/support-12-flow-basin-default-frame-004-01-rs010.feature.png",
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-005-pair-001-rs010-to-rs100": "/tmp/kaminos-support-scaling-corpus-12-rs010/support-12-flow-basin-default/controlled-step-frames/frame-005/support-12-flow-basin-default-frame-005-01-rs010.feature.png",
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-006-pair-001-rs010-to-rs100": "/tmp/kaminos-support-scaling-corpus-12-rs010/support-12-flow-basin-default/controlled-step-frames/frame-006/support-12-flow-basin-default-frame-006-01-rs010.feature.png",
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-007-pair-001-rs010-to-rs100": "/tmp/kaminos-support-scaling-corpus-12-rs010/support-12-flow-basin-default/controlled-step-frames/frame-007/support-12-flow-basin-default-frame-007-01-rs010.feature.png",
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-008-pair-001-rs010-to-rs100": "/tmp/kaminos-support-scaling-corpus-12-rs010/support-12-flow-basin-default/controlled-step-frames/frame-008/support-12-flow-basin-default-frame-008-01-rs010.feature.png",
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-009-pair-001-rs010-to-rs100": "/tmp/kaminos-support-scaling-corpus-12-rs010/support-12-flow-basin-default/controlled-step-frames/frame-009/support-12-flow-basin-default-frame-009-01-rs010.feature.png",
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-010-pair-001-rs010-to-rs100": "/tmp/kaminos-support-scaling-corpus-12-rs010/support-12-flow-basin-default/controlled-step-frames/frame-010/support-12-flow-basin-default-frame-010-01-rs010.feature.png",
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-011-pair-001-rs010-to-rs100": "/tmp/kaminos-support-scaling-corpus-12-rs010/support-12-flow-basin-default/controlled-step-frames/frame-011/support-12-flow-basin-default-frame-011-01-rs010.feature.png",
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-012-pair-001-rs010-to-rs100": "/tmp/kaminos-support-scaling-corpus-12-rs010/support-12-flow-basin-default/controlled-step-frames/frame-012/support-12-flow-basin-default-frame-012-01-rs010.feature.png"
+  },
+  "temporalLossWeight": 0.0,
+  "activeTemporalLossWeight": 0.0,
+  "residualTemporalLossWeight": 0.0,
+  "activeResidualTemporalLossWeight": 0.0,
+  "residualContinuationMode": "none",
+  "residualContinuationEffectiveMode": "none",
+  "residualContinuationAlpha": 1.0,
+  "temporalLossPairCount": 9,
+  "temporalLossPairs": [
+    {
+      "previous": "support-12-flow-basin-default::support-12-flow-basin-default-frame-001-pair-001-rs010-to-rs100",
+      "current": "support-12-flow-basin-default::support-12-flow-basin-default-frame-002-pair-001-rs010-to-rs100",
+      "lowRenderScale": 0.1
+    },
+    {
+      "previous": "support-12-flow-basin-default::support-12-flow-basin-default-frame-002-pair-001-rs010-to-rs100",
+      "current": "support-12-flow-basin-default::support-12-flow-basin-default-frame-003-pair-001-rs010-to-rs100",
+      "lowRenderScale": 0.1
+    },
+    {
+      "previous": "support-12-flow-basin-default::support-12-flow-basin-default-frame-003-pair-001-rs010-to-rs100",
+      "current": "support-12-flow-basin-default::support-12-flow-basin-default-frame-004-pair-001-rs010-to-rs100",
+      "lowRenderScale": 0.1
+    },
+    {
+      "previous": "support-12-flow-basin-default::support-12-flow-basin-default-frame-004-pair-001-rs010-to-rs100",
+      "current": "support-12-flow-basin-default::support-12-flow-basin-default-frame-006-pair-001-rs010-to-rs100",
+      "lowRenderScale": 0.1
+    },
+    {
+      "previous": "support-12-flow-basin-default::support-12-flow-basin-default-frame-006-pair-001-rs010-to-rs100",
+      "current": "support-12-flow-basin-default::support-12-flow-basin-default-frame-007-pair-001-rs010-to-rs100",
+      "lowRenderScale": 0.1
+    },
+    {
+      "previous": "support-12-flow-basin-default::support-12-flow-basin-default-frame-007-pair-001-rs010-to-rs100",
+      "current": "support-12-flow-basin-default::support-12-flow-basin-default-frame-009-pair-001-rs010-to-rs100",
+      "lowRenderScale": 0.1
+    },
+    {
+      "previous": "support-12-flow-basin-default::support-12-flow-basin-default-frame-009-pair-001-rs010-to-rs100",
+      "current": "support-12-flow-basin-default::support-12-flow-basin-default-frame-010-pair-001-rs010-to-rs100",
+      "lowRenderScale": 0.1
+    },
+    {
+      "previous": "support-12-flow-basin-default::support-12-flow-basin-default-frame-010-pair-001-rs010-to-rs100",
+      "current": "support-12-flow-basin-default::support-12-flow-basin-default-frame-011-pair-001-rs010-to-rs100",
+      "lowRenderScale": 0.1
+    },
+    {
+      "previous": "support-12-flow-basin-default::support-12-flow-basin-default-frame-011-pair-001-rs010-to-rs100",
+      "current": "support-12-flow-basin-default::support-12-flow-basin-default-frame-012-pair-001-rs010-to-rs100",
+      "lowRenderScale": 0.1
+    }
+  ],
+  "temporalLossFallback": null,
+  "previewMode": "foreground",
+  "previewFrameCount": 2,
+  "fullFramePreview": false,
+  "previewFocus": {
+    "mode": "foreground",
+    "centerY": 1012.0767286750853,
+    "centerX": 901.1911896272879,
+    "foregroundPixels": 982501,
+    "top": 820,
+    "left": 709,
+    "height": 384,
+    "width": 384
+  },
+  "temporalEval": true,
+  "temporalEvalScope": "selected",
+  "inputChannels": 7,
+  "scaleChannel": null,
+  "foregroundPixels": {
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-001-pair-001-rs010-to-rs100": 939574,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-002-pair-001-rs010-to-rs100": 949614,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-003-pair-001-rs010-to-rs100": 959987,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-004-pair-001-rs010-to-rs100": 970951,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-005-pair-001-rs010-to-rs100": 982501,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-006-pair-001-rs010-to-rs100": 994101,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-007-pair-001-rs010-to-rs100": 1006541,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-008-pair-001-rs010-to-rs100": 1018677,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-009-pair-001-rs010-to-rs100": 1031860,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-010-pair-001-rs010-to-rs100": 1045165,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-011-pair-001-rs010-to-rs100": 1058177,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-012-pair-001-rs010-to-rs100": 1071541
+  },
+  "edgeBandPixels": {
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-001-pair-001-rs010-to-rs100": 244107,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-002-pair-001-rs010-to-rs100": 219655,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-003-pair-001-rs010-to-rs100": 220783,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-004-pair-001-rs010-to-rs100": 258607,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-005-pair-001-rs010-to-rs100": 269669,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-006-pair-001-rs010-to-rs100": 258320,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-007-pair-001-rs010-to-rs100": 235322,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-008-pair-001-rs010-to-rs100": 207439,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-009-pair-001-rs010-to-rs100": 226077,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-010-pair-001-rs010-to-rs100": 249631,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-011-pair-001-rs010-to-rs100": 225684,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-012-pair-001-rs010-to-rs100": 204119
+  },
+  "edgeBandCoverage": {
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-001-pair-001-rs010-to-rs100": 0.07767182130584192,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-002-pair-001-rs010-to-rs100": 0.06989149802723686,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-003-pair-001-rs010-to-rs100": 0.07025041364388443,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-004-pair-001-rs010-to-rs100": 0.082285541555301,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-005-pair-001-rs010-to-rs100": 0.08580533282423317,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-006-pair-001-rs010-to-rs100": 0.08219422171312206,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-007-pair-001-rs010-to-rs100": 0.07487654320987654,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-008-pair-001-rs010-to-rs100": 0.06600451826396844,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-009-pair-001-rs010-to-rs100": 0.07193489881634212,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-010-pair-001-rs010-to-rs100": 0.07942948962708413,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-011-pair-001-rs010-to-rs100": 0.0718098510882016,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-012-pair-001-rs010-to-rs100": 0.06494813542064401
+  },
+  "edgeBandSignalMax": {
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-001-pair-001-rs010-to-rs100": 0.2823529541492462,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-002-pair-001-rs010-to-rs100": 0.29019609093666077,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-003-pair-001-rs010-to-rs100": 0.27450984716415405,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-004-pair-001-rs010-to-rs100": 0.2588235139846802,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-005-pair-001-rs010-to-rs100": 0.30588239431381226,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-006-pair-001-rs010-to-rs100": 0.25882354378700256,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-007-pair-001-rs010-to-rs100": 0.2352941334247589,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-008-pair-001-rs010-to-rs100": 0.27843138575553894,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-009-pair-001-rs010-to-rs100": 0.3450980484485626,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-010-pair-001-rs010-to-rs100": 0.21176472306251526,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-011-pair-001-rs010-to-rs100": 0.2392157018184662,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-012-pair-001-rs010-to-rs100": 0.2588235139846802
+  },
+  "targetEdgeBandPixels": {
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-001-pair-001-rs010-to-rs100": 244107,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-002-pair-001-rs010-to-rs100": 219655,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-003-pair-001-rs010-to-rs100": 220783,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-004-pair-001-rs010-to-rs100": 258607,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-005-pair-001-rs010-to-rs100": 269669,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-006-pair-001-rs010-to-rs100": 258320,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-007-pair-001-rs010-to-rs100": 235322,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-008-pair-001-rs010-to-rs100": 207439,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-009-pair-001-rs010-to-rs100": 226077,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-010-pair-001-rs010-to-rs100": 249631,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-011-pair-001-rs010-to-rs100": 225684,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-012-pair-001-rs010-to-rs100": 204119
+  },
+  "targetEdgeBandCoverage": {
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-001-pair-001-rs010-to-rs100": 0.07767182130584192,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-002-pair-001-rs010-to-rs100": 0.06989149802723686,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-003-pair-001-rs010-to-rs100": 0.07025041364388443,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-004-pair-001-rs010-to-rs100": 0.082285541555301,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-005-pair-001-rs010-to-rs100": 0.08580533282423317,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-006-pair-001-rs010-to-rs100": 0.08219422171312206,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-007-pair-001-rs010-to-rs100": 0.07487654320987654,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-008-pair-001-rs010-to-rs100": 0.06600451826396844,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-009-pair-001-rs010-to-rs100": 0.07193489881634212,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-010-pair-001-rs010-to-rs100": 0.07942948962708413,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-011-pair-001-rs010-to-rs100": 0.0718098510882016,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-012-pair-001-rs010-to-rs100": 0.06494813542064401
+  },
+  "targetEdgeBandSignalMax": {
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-001-pair-001-rs010-to-rs100": 0.2823529541492462,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-002-pair-001-rs010-to-rs100": 0.29019609093666077,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-003-pair-001-rs010-to-rs100": 0.27450984716415405,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-004-pair-001-rs010-to-rs100": 0.2588235139846802,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-005-pair-001-rs010-to-rs100": 0.30588239431381226,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-006-pair-001-rs010-to-rs100": 0.25882354378700256,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-007-pair-001-rs010-to-rs100": 0.2352941334247589,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-008-pair-001-rs010-to-rs100": 0.27843138575553894,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-009-pair-001-rs010-to-rs100": 0.3450980484485626,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-010-pair-001-rs010-to-rs100": 0.21176472306251526,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-011-pair-001-rs010-to-rs100": 0.2392157018184662,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-012-pair-001-rs010-to-rs100": 0.2588235139846802
+  },
+  "materialFireCoverage": {
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-001-pair-001-rs010-to-rs100": 0.05667292699217796,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-002-pair-001-rs010-to-rs100": 0.05711693316698074,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-003-pair-001-rs010-to-rs100": 0.05806855484843254,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-004-pair-001-rs010-to-rs100": 0.059557899832725525,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-005-pair-001-rs010-to-rs100": 0.06106073781847954,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-006-pair-001-rs010-to-rs100": 0.06227567791938782,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-007-pair-001-rs010-to-rs100": 0.06310845911502838,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-008-pair-001-rs010-to-rs100": 0.06399988383054733,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-009-pair-001-rs010-to-rs100": 0.06488610804080963,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-010-pair-001-rs010-to-rs100": 0.06596807390451431,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-011-pair-001-rs010-to-rs100": 0.06673397123813629,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-012-pair-001-rs010-to-rs100": 0.0676548033952713
+  },
+  "materialSmokeCoverage": {
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-001-pair-001-rs010-to-rs100": 0.012066506780683994,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-002-pair-001-rs010-to-rs100": 0.012420383282005787,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-003-pair-001-rs010-to-rs100": 0.012619941495358944,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-004-pair-001-rs010-to-rs100": 0.012679768726229668,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-005-pair-001-rs010-to-rs100": 0.012741909362375736,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-006-pair-001-rs010-to-rs100": 0.012880601920187473,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-007-pair-001-rs010-to-rs100": 0.013146445155143738,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-008-pair-001-rs010-to-rs100": 0.013463188894093037,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-009-pair-001-rs010-to-rs100": 0.013742219656705856,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-010-pair-001-rs010-to-rs100": 0.013931562192738056,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-011-pair-001-rs010-to-rs100": 0.014261739328503609,
+    "support-12-flow-basin-default::support-12-flow-basin-default-frame-012-pair-001-rs010-to-rs100": 0.014555715955793858
+  },
+  "batchSize": 4,
+  "patchSize": 96,
+  "hiddenChannels": 16,
+  "detailGate": null,
+  "learningRate": 0.001,
+  "evalPatches": 128,
+  "durationSeconds": 31.591471195220947,
+  "device": "Device(gpu, 0)",
+  "trainingLosses": [
+    {
+      "step": 1,
+      "loss": 0.0007617708761245012
+    },
+    {
+      "step": 200,
+      "loss": 0.0012883975869044662
+    },
+    {
+      "step": 400,
+      "loss": 0.0009580323239788413
+    },
+    {
+      "step": 600,
+      "loss": 0.0006498798029497266
+    },
+    {
+      "step": 800,
+      "loss": 0.0007332513341680169
+    },
+    {
+      "step": 1000,
+      "loss": 0.001242265454493463
+    },
+    {
+      "step": 1200,
+      "loss": 0.0013205143623054028
+    },
+    {
+      "step": 1400,
+      "loss": 0.0010682297870516777
+    },
+    {
+      "step": 1600,
+      "loss": 0.0019608845468610525
+    },
+    {
+      "step": 1800,
+      "loss": 0.0012100152671337128
+    },
+    {
+      "step": 2000,
+      "loss": 0.0008281096816062927
+    }
+  ],
+  "temporalTrainingLosses": [],
+  "residualTemporalTrainingLosses": [],
+  "baselineMse": 0.00022349089340423234,
+  "modelMse": 0.0002279533559885749,
+  "baselinePsnr": 36.50740168392743,
+  "modelPsnr": 36.42154009618673,
+  "deltaPsnr": -0.08586158774069474,
+  "weightedBaselineMse": 0.00023647925490877242,
+  "weightedModelMse": 0.0002393383683738648,
+  "weightedBaselinePsnr": 36.262069516441926,
+  "weightedModelPsnr": 36.20987673984391,
+  "weightedDeltaPsnr": -0.052192776598019464,
+  "edgeBandBaselineMse": 0.000495751643939002,
+  "edgeBandModelMse": 0.0004746276276819117,
+  "edgeBandBaselinePsnr": 33.04735836976511,
+  "edgeBandModelPsnr": 33.23646985460057,
+  "edgeBandDeltaPsnr": 0.1891114848354647,
+  "edgeBandEvalCoverage": 0.39334021881222725,
+  "targetEdgeBandBaselineMse": 0.000495751643939002,
+  "targetEdgeBandModelMse": 0.0004746276276819117,
+  "targetEdgeBandBaselinePsnr": 33.04735836976511,
+  "targetEdgeBandModelPsnr": 33.23646985460057,
+  "targetEdgeBandDeltaPsnr": 0.1891114848354647,
+  "targetEdgeBandEvalCoverage": 0.39334021881222725,
+  "outsideEdgeResidualMse": 3.253942233527596e-05,
+  "improvedPatchFraction": 0.3828125,
+  "temporalPairCount": 11,
+  "temporalBaselineDeltaMse": 0.00019195369201373649,
+  "temporalModelDeltaMse": 0.0001922212355897169,
+  "temporalBaselineDeltaPsnr": 37.16803530299518,
+  "temporalModelDeltaPsnr": 37.161986354500506,
+  "temporalDeltaPsnr": -0.006048948494672857,
+  "temporalFlickerAmplification": 1.045024831314552,
+  "temporalPairs": [
+    {
+      "previous": "support-12-flow-basin-default::support-12-flow-basin-default-frame-001-pair-001-rs010-to-rs100",
+      "current": "support-12-flow-basin-default::support-12-flow-basin-default-frame-002-pair-001-rs010-to-rs100",
+      "lowRenderScale": 0.1,
+      "temporalSequenceId": "support-12-flow-basin-default",
+      "previousTemporalFrameIndex": 0,
+      "currentTemporalFrameIndex": 1,
+      "baselineDeltaMse": 0.00024687658878974617,
+      "modelDeltaMse": 0.0002484243013896048,
+      "temporalDeltaPsnr": -0.027141692767827408,
+      "temporalFlickerAmplification": 1.0439156052595122
+    },
+    {
+      "previous": "support-12-flow-basin-default::support-12-flow-basin-default-frame-002-pair-001-rs010-to-rs100",
+      "current": "support-12-flow-basin-default::support-12-flow-basin-default-frame-003-pair-001-rs010-to-rs100",
+      "lowRenderScale": 0.1,
+      "temporalSequenceId": "support-12-flow-basin-default",
+      "previousTemporalFrameIndex": 1,
+      "currentTemporalFrameIndex": 2,
+      "baselineDeltaMse": 0.00020801700884476304,
+      "modelDeltaMse": 0.00021421450946945697,
+      "temporalDeltaPsnr": -0.12750036518222885,
+      "temporalFlickerAmplification": 1.0557428882988904
+    },
+    {
+      "previous": "support-12-flow-basin-default::support-12-flow-basin-default-frame-003-pair-001-rs010-to-rs100",
+      "current": "support-12-flow-basin-default::support-12-flow-basin-default-frame-004-pair-001-rs010-to-rs100",
+      "lowRenderScale": 0.1,
+      "temporalSequenceId": "support-12-flow-basin-default",
+      "previousTemporalFrameIndex": 2,
+      "currentTemporalFrameIndex": 3,
+      "baselineDeltaMse": 0.00020644582400564104,
+      "modelDeltaMse": 0.0002054714859696105,
+      "temporalDeltaPsnr": 0.02054540615236533,
+      "temporalFlickerAmplification": 1.0437197515102048
+    },
+    {
+      "previous": "support-12-flow-basin-default::support-12-flow-basin-default-frame-004-pair-001-rs010-to-rs100",
+      "current": "support-12-flow-basin-default::support-12-flow-basin-default-frame-005-pair-001-rs010-to-rs100",
+      "lowRenderScale": 0.1,
+      "temporalSequenceId": "support-12-flow-basin-default",
+      "previousTemporalFrameIndex": 3,
+      "currentTemporalFrameIndex": 4,
+      "baselineDeltaMse": 0.00021142706100363284,
+      "modelDeltaMse": 0.00021105061750859022,
+      "temporalDeltaPsnr": 0.007739456270826395,
+      "temporalFlickerAmplification": 1.0411566671572974
+    },
+    {
+      "previous": "support-12-flow-basin-default::support-12-flow-basin-default-frame-005-pair-001-rs010-to-rs100",
+      "current": "support-12-flow-basin-default::support-12-flow-basin-default-frame-006-pair-001-rs010-to-rs100",
+      "lowRenderScale": 0.1,
+      "temporalSequenceId": "support-12-flow-basin-default",
+      "previousTemporalFrameIndex": 4,
+      "currentTemporalFrameIndex": 5,
+      "baselineDeltaMse": 0.00023832410806789994,
+      "modelDeltaMse": 0.0002371723676333204,
+      "temporalDeltaPsnr": 0.02103887280338057,
+      "temporalFlickerAmplification": 1.0417843421222108
+    },
+    {
+      "previous": "support-12-flow-basin-default::support-12-flow-basin-default-frame-006-pair-001-rs010-to-rs100",
+      "current": "support-12-flow-basin-default::support-12-flow-basin-default-frame-007-pair-001-rs010-to-rs100",
+      "lowRenderScale": 0.1,
+      "temporalSequenceId": "support-12-flow-basin-default",
+      "previousTemporalFrameIndex": 5,
+      "currentTemporalFrameIndex": 6,
+      "baselineDeltaMse": 0.00021285359980538487,
+      "modelDeltaMse": 0.00020778199541382492,
+      "temporalDeltaPsnr": 0.1047308675797538,
+      "temporalFlickerAmplification": 1.0448961973152666
+    },
+    {
+      "previous": "support-12-flow-basin-default::support-12-flow-basin-default-frame-007-pair-001-rs010-to-rs100",
+      "current": "support-12-flow-basin-default::support-12-flow-basin-default-frame-008-pair-001-rs010-to-rs100",
+      "lowRenderScale": 0.1,
+      "temporalSequenceId": "support-12-flow-basin-default",
+      "previousTemporalFrameIndex": 6,
+      "currentTemporalFrameIndex": 7,
+      "baselineDeltaMse": 0.00016644416609779,
+      "modelDeltaMse": 0.00017271774413529783,
+      "temporalDeltaPsnr": -0.16068379398746657,
+      "temporalFlickerAmplification": 1.0422001170064517
+    },
+    {
+      "previous": "support-12-flow-basin-default::support-12-flow-basin-default-frame-008-pair-001-rs010-to-rs100",
+      "current": "support-12-flow-basin-default::support-12-flow-basin-default-frame-009-pair-001-rs010-to-rs100",
+      "lowRenderScale": 0.1,
+      "temporalSequenceId": "support-12-flow-basin-default",
+      "previousTemporalFrameIndex": 7,
+      "currentTemporalFrameIndex": 8,
+      "baselineDeltaMse": 0.00015436367539223284,
+      "modelDeltaMse": 0.00015434937085956335,
+      "temporalDeltaPsnr": 0.00040246952206501874,
+      "temporalFlickerAmplification": 1.0437046879042895
+    },
+    {
+      "previous": "support-12-flow-basin-default::support-12-flow-basin-default-frame-009-pair-001-rs010-to-rs100",
+      "current": "support-12-flow-basin-default::support-12-flow-basin-default-frame-010-pair-001-rs010-to-rs100",
+      "lowRenderScale": 0.1,
+      "temporalSequenceId": "support-12-flow-basin-default",
+      "previousTemporalFrameIndex": 8,
+      "currentTemporalFrameIndex": 9,
+      "baselineDeltaMse": 0.00015034091484267265,
+      "modelDeltaMse": 0.0001494994357926771,
+      "temporalDeltaPsnr": 0.024376350061587004,
+      "temporalFlickerAmplification": 1.0420134400120087
+    },
+    {
+      "previous": "support-12-flow-basin-default::support-12-flow-basin-default-frame-010-pair-001-rs010-to-rs100",
+      "current": "support-12-flow-basin-default::support-12-flow-basin-default-frame-011-pair-001-rs010-to-rs100",
+      "lowRenderScale": 0.1,
+      "temporalSequenceId": "support-12-flow-basin-default",
+      "previousTemporalFrameIndex": 9,
+      "currentTemporalFrameIndex": 10,
+      "baselineDeltaMse": 0.0001497363846283406,
+      "modelDeltaMse": 0.0001496489712735638,
+      "temporalDeltaPsnr": 0.002536071852183852,
+      "temporalFlickerAmplification": 1.047623037853458
+    },
+    {
+      "previous": "support-12-flow-basin-default::support-12-flow-basin-default-frame-011-pair-001-rs010-to-rs100",
+      "current": "support-12-flow-basin-default::support-12-flow-basin-default-frame-012-pair-001-rs010-to-rs100",
+      "lowRenderScale": 0.1,
+      "temporalSequenceId": "support-12-flow-basin-default",
+      "previousTemporalFrameIndex": 10,
+      "currentTemporalFrameIndex": 11,
+      "baselineDeltaMse": 0.00016666128067299724,
+      "modelDeltaMse": 0.00016410279204137623,
+      "temporalDeltaPsnr": 0.06718744552666323,
+      "temporalFlickerAmplification": 1.0485164100204836
+    }
+  ],
+  "temporalPreview": "/private/tmp/kaminos-kaminos-desperate-latest-fire-0707/artifacts/residual-latest-fire-0708/support-scaling-greenroom/support-012-fire-rs010/temporal-preview-low0-low1-model0-model1-target0-target1-delta-diff.png",
+  "temporalPreviewFocus": {
+    "mode": "foreground",
+    "centerY": 1028.5479046887206,
+    "centerX": 900.5331394866184,
+    "foregroundPixels": 939574,
+    "top": 836,
+    "left": 708,
+    "height": 384,
+    "width": 384
+  },
+  "temporalSequencePreview": "/private/tmp/kaminos-kaminos-desperate-latest-fire-0707/artifacts/residual-latest-fire-0708/support-scaling-greenroom/support-012-fire-rs010/temporal-sequence-preview-low-model-target-error-mask.png",
+  "temporalSequenceFrames": [
+    {
+      "item": "support-12-flow-basin-default::support-12-flow-basin-default-frame-001-pair-001-rs010-to-rs100",
+      "temporalSequenceId": "support-12-flow-basin-default",
+      "temporalFrameIndex": 0,
+      "lowRenderScale": 0.1
+    },
+    {
+      "item": "support-12-flow-basin-default::support-12-flow-basin-default-frame-002-pair-001-rs010-to-rs100",
+      "temporalSequenceId": "support-12-flow-basin-default",
+      "temporalFrameIndex": 1,
+      "lowRenderScale": 0.1
+    },
+    {
+      "item": "support-12-flow-basin-default::support-12-flow-basin-default-frame-003-pair-001-rs010-to-rs100",
+      "temporalSequenceId": "support-12-flow-basin-default",
+      "temporalFrameIndex": 2,
+      "lowRenderScale": 0.1
+    },
+    {
+      "item": "support-12-flow-basin-default::support-12-flow-basin-default-frame-004-pair-001-rs010-to-rs100",
+      "temporalSequenceId": "support-12-flow-basin-default",
+      "temporalFrameIndex": 3,
+      "lowRenderScale": 0.1
+    },
+    {
+      "item": "support-12-flow-basin-default::support-12-flow-basin-default-frame-005-pair-001-rs010-to-rs100",
+      "temporalSequenceId": "support-12-flow-basin-default",
+      "temporalFrameIndex": 4,
+      "lowRenderScale": 0.1
+    },
+    {
+      "item": "support-12-flow-basin-default::support-12-flow-basin-default-frame-006-pair-001-rs010-to-rs100",
+      "temporalSequenceId": "support-12-flow-basin-default",
+      "temporalFrameIndex": 5,
+      "lowRenderScale": 0.1
+    },
+    {
+      "item": "support-12-flow-basin-default::support-12-flow-basin-default-frame-007-pair-001-rs010-to-rs100",
+      "temporalSequenceId": "support-12-flow-basin-default",
+      "temporalFrameIndex": 6,
+      "lowRenderScale": 0.1
+    },
+    {
+      "item": "support-12-flow-basin-default::support-12-flow-basin-default-frame-008-pair-001-rs010-to-rs100",
+      "temporalSequenceId": "support-12-flow-basin-default",
+      "temporalFrameIndex": 7,
+      "lowRenderScale": 0.1
+    },
+    {
+      "item": "support-12-flow-basin-default::support-12-flow-basin-default-frame-009-pair-001-rs010-to-rs100",
+      "temporalSequenceId": "support-12-flow-basin-default",
+      "temporalFrameIndex": 8,
+      "lowRenderScale": 0.1
+    },
+    {
+      "item": "support-12-flow-basin-default::support-12-flow-basin-default-frame-010-pair-001-rs010-to-rs100",
+      "temporalSequenceId": "support-12-flow-basin-default",
+      "temporalFrameIndex": 9,
+      "lowRenderScale": 0.1
+    },
+    {
+      "item": "support-12-flow-basin-default::support-12-flow-basin-default-frame-011-pair-001-rs010-to-rs100",
+      "temporalSequenceId": "support-12-flow-basin-default",
+      "temporalFrameIndex": 10,
+      "lowRenderScale": 0.1
+    },
+    {
+      "item": "support-12-flow-basin-default::support-12-flow-basin-default-frame-012-pair-001-rs010-to-rs100",
+      "temporalSequenceId": "support-12-flow-basin-default",
+      "temporalFrameIndex": 11,
+      "lowRenderScale": 0.1
+    }
+  ],
+  "residualContinuationAuthority": null,
+  "continuationStillBaselinePsnr": null,
+  "continuationStillRawModelPsnr": null,
+  "continuationStillModelPsnr": null,
+  "continuationStillDeltaPsnr": null,
+  "continuationStillVsRawDeltaPsnr": null,
+  "continuationTemporalModelDeltaPsnr": null,
+  "continuationTemporalDeltaPsnr": null,
+  "continuationFlickerAmplification": null,
+  "continuationPreview": null,
+  "preview": "/private/tmp/kaminos-kaminos-desperate-latest-fire-0707/artifacts/residual-latest-fire-0708/support-scaling-greenroom/support-012-fire-rs010/residual-preview-low-model-target-diff.png",
+  "diagnosticPreview": "/private/tmp/kaminos-kaminos-desperate-latest-fire-0707/artifacts/residual-latest-fire-0708/support-scaling-greenroom/support-012-fire-rs010/residual-preview-low-model-target-targetres-modelres-error-mask.png",
+  "previewFrames": [
+    {
+      "index": 0,
+      "item": "support-12-flow-basin-default::support-12-flow-basin-default-frame-005-pair-001-rs010-to-rs100",
+      "preview": "/private/tmp/kaminos-kaminos-desperate-latest-fire-0707/artifacts/residual-latest-fire-0708/support-scaling-greenroom/support-012-fire-rs010/residual-preview-low-model-target-diff.png",
+      "diagnosticPreview": "/private/tmp/kaminos-kaminos-desperate-latest-fire-0707/artifacts/residual-latest-fire-0708/support-scaling-greenroom/support-012-fire-rs010/residual-preview-low-model-target-targetres-modelres-error-mask.png",
+      "previewFocus": {
+        "mode": "foreground",
+        "centerY": 1012.0767286750853,
+        "centerX": 901.1911896272879,
+        "foregroundPixels": 982501,
+        "top": 820,
+        "left": 709,
+        "height": 384,
+        "width": 384
+      }
+    },
+    {
+      "index": 1,
+      "item": "support-12-flow-basin-default::support-12-flow-basin-default-frame-008-pair-001-rs010-to-rs100",
+      "preview": "/private/tmp/kaminos-kaminos-desperate-latest-fire-0707/artifacts/residual-latest-fire-0708/support-scaling-greenroom/support-012-fire-rs010/residual-preview-frame-001-low-model-target-diff.png",
+      "diagnosticPreview": "/private/tmp/kaminos-kaminos-desperate-latest-fire-0707/artifacts/residual-latest-fire-0708/support-scaling-greenroom/support-012-fire-rs010/residual-preview-frame-001-low-model-target-targetres-modelres-error-mask.png",
+      "previewFocus": {
+        "mode": "foreground",
+        "centerY": 1000.2712694995568,
+        "centerX": 901.3258903460077,
+        "foregroundPixels": 1018677,
+        "top": 808,
+        "left": 709,
+        "height": 384,
+        "width": 384
+      }
+    }
+  ]
+}

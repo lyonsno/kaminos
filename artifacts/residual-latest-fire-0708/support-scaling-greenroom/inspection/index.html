@@ -1,0 +1,148 @@
+<!doctype html><meta charset="utf-8"><title>Kaminos support-scaling residual inspection</title>
+<style>
+body{font-family:system-ui;background:#101010;color:#eee;margin:18px} .job{border:1px solid #444;background:#181818;margin:18px 0;padding:14px} pre{color:#cfe;background:#080808;padding:10px;overflow:auto} img{max-width:100%;border:1px solid #333;background:#000} h3{margin-top:18px;color:#ddd} table{border-collapse:collapse} td,th{border:1px solid #444;padding:6px 8px} th{background:#222}
+</style>
+<h1>Kaminos residual support-scaling inspection</h1>
+<p>Columns are trainer preview columns; click images for full resolution.</p>
+<table><thead><tr><th>train/eval</th><th>arch</th><th>lr</th><th>ΔPSNR</th><th>wΔPSNR</th><th>edge Δ</th><th>temporal Δ</th><th>improved</th><th>sec</th></tr></thead><tbody>
+<tr><td>5/1</td><td>direct-residual</td><td>0.001</td><td>-0.23017038708297832</td><td>-0.20154721051262925</td><td>0.17322691606722884</td><td>-0.0750146504293383</td><td>0.3828125</td><td>27.999547958374023</td></tr>
+<tr><td>10/2</td><td>direct-residual</td><td>0.001</td><td>-0.08586158774069474</td><td>-0.052192776598019464</td><td>0.1891114848354647</td><td>-0.006048948494672857</td><td>0.3828125</td><td>31.591471195220947</td></tr>
+<tr><td>50/5</td><td>direct-residual</td><td>0.001</td><td>0.003059047547893101</td><td>0.025576944238736132</td><td>0.24366923260427598</td><td>-0.006009802934514141</td><td>0.515625</td><td>37.819032192230225</td></tr>
+<tr><td>50/5</td><td>gated-detail-residual</td><td>0.001</td><td>-0.08173801248680235</td><td>-0.018191550959592462</td><td>0.22510794849264215</td><td>-0.0001826266568656365</td><td>0.3875</td><td>82.97780561447144</td></tr>
+<tr><td>50/5</td><td>direct-residual</td><td>0.004</td><td>-0.17620419913084362</td><td>-0.10079820318241417</td><td>0.10880020854610706</td><td>-0.00039023629113899005</td><td>0.28125</td><td>76.04488015174866</td></tr>
+</tbody></table>
+<section class="job">
+<h2>support-006-fire-rs010</h2>
+<pre>{
+  &quot;trainPairCount&quot;: 5,
+  &quot;evalPairCount&quot;: 1,
+  &quot;modelArch&quot;: &quot;direct-residual&quot;,
+  &quot;learningRate&quot;: 0.001,
+  &quot;hiddenChannels&quot;: 16,
+  &quot;detailGate&quot;: null,
+  &quot;baselinePsnr&quot;: 35.59418477286537,
+  &quot;modelPsnr&quot;: 35.36401438578239,
+  &quot;deltaPsnr&quot;: -0.23017038708297832,
+  &quot;weightedDeltaPsnr&quot;: -0.20154721051262925,
+  &quot;edgeBandDeltaPsnr&quot;: 0.17322691606722884,
+  &quot;temporalDeltaPsnr&quot;: -0.0750146504293383,
+  &quot;improvedPatchFraction&quot;: 0.3828125,
+  &quot;durationSeconds&quot;: 27.999547958374023,
+  &quot;requestedEvalPairCount&quot;: 1,
+  &quot;evalSelection&quot;: &quot;even&quot;,
+  &quot;residualOutputLimit&quot;: 0.35,
+  &quot;device&quot;: &quot;Device(gpu, 0)&quot;
+}</pre>
+<h3>residual-preview-low-model-target-diff.png</h3><a href="support-006-fire-rs010-residual-preview-low-model-target-diff.png"><img src="support-006-fire-rs010-residual-preview-low-model-target-diff.png"></a>
+<h3>residual-preview-low-model-target-targetres-modelres-error-mask.png</h3><a href="support-006-fire-rs010-residual-preview-low-model-target-targetres-modelres-error-mask.png"><img src="support-006-fire-rs010-residual-preview-low-model-target-targetres-modelres-error-mask.png"></a>
+<h3>temporal-sequence-preview-low-model-target-error-mask.png</h3><a href="support-006-fire-rs010-temporal-sequence-preview-low-model-target-error-mask.png"><img src="support-006-fire-rs010-temporal-sequence-preview-low-model-target-error-mask.png"></a>
+<h3>temporal-preview-low0-low1-model0-model1-target0-target1-delta-diff.png</h3><a href="support-006-fire-rs010-temporal-preview-low0-low1-model0-model1-target0-target1-delta-diff.png"><img src="support-006-fire-rs010-temporal-preview-low0-low1-model0-model1-target0-target1-delta-diff.png"></a>
+</section>
+<section class="job">
+<h2>support-012-fire-rs010</h2>
+<pre>{
+  &quot;trainPairCount&quot;: 10,
+  &quot;evalPairCount&quot;: 2,
+  &quot;modelArch&quot;: &quot;direct-residual&quot;,
+  &quot;learningRate&quot;: 0.001,
+  &quot;hiddenChannels&quot;: 16,
+  &quot;detailGate&quot;: null,
+  &quot;baselinePsnr&quot;: 36.50740168392743,
+  &quot;modelPsnr&quot;: 36.42154009618673,
+  &quot;deltaPsnr&quot;: -0.08586158774069474,
+  &quot;weightedDeltaPsnr&quot;: -0.052192776598019464,
+  &quot;edgeBandDeltaPsnr&quot;: 0.1891114848354647,
+  &quot;temporalDeltaPsnr&quot;: -0.006048948494672857,
+  &quot;improvedPatchFraction&quot;: 0.3828125,
+  &quot;durationSeconds&quot;: 31.591471195220947,
+  &quot;requestedEvalPairCount&quot;: 2,
+  &quot;evalSelection&quot;: &quot;even&quot;,
+  &quot;residualOutputLimit&quot;: 0.35,
+  &quot;device&quot;: &quot;Device(gpu, 0)&quot;
+}</pre>
+<h3>residual-preview-low-model-target-diff.png</h3><a href="support-012-fire-rs010-residual-preview-low-model-target-diff.png"><img src="support-012-fire-rs010-residual-preview-low-model-target-diff.png"></a>
+<h3>residual-preview-low-model-target-targetres-modelres-error-mask.png</h3><a href="support-012-fire-rs010-residual-preview-low-model-target-targetres-modelres-error-mask.png"><img src="support-012-fire-rs010-residual-preview-low-model-target-targetres-modelres-error-mask.png"></a>
+<h3>temporal-sequence-preview-low-model-target-error-mask.png</h3><a href="support-012-fire-rs010-temporal-sequence-preview-low-model-target-error-mask.png"><img src="support-012-fire-rs010-temporal-sequence-preview-low-model-target-error-mask.png"></a>
+<h3>temporal-preview-low0-low1-model0-model1-target0-target1-delta-diff.png</h3><a href="support-012-fire-rs010-temporal-preview-low0-low1-model0-model1-target0-target1-delta-diff.png"><img src="support-012-fire-rs010-temporal-preview-low0-low1-model0-model1-target0-target1-delta-diff.png"></a>
+</section>
+<section class="job">
+<h2>support-055-fire-rs010</h2>
+<pre>{
+  &quot;trainPairCount&quot;: 50,
+  &quot;evalPairCount&quot;: 5,
+  &quot;modelArch&quot;: &quot;direct-residual&quot;,
+  &quot;learningRate&quot;: 0.001,
+  &quot;hiddenChannels&quot;: 16,
+  &quot;detailGate&quot;: null,
+  &quot;baselinePsnr&quot;: 35.49929371467972,
+  &quot;modelPsnr&quot;: 35.502352762227616,
+  &quot;deltaPsnr&quot;: 0.003059047547893101,
+  &quot;weightedDeltaPsnr&quot;: 0.025576944238736132,
+  &quot;edgeBandDeltaPsnr&quot;: 0.24366923260427598,
+  &quot;temporalDeltaPsnr&quot;: -0.006009802934514141,
+  &quot;improvedPatchFraction&quot;: 0.515625,
+  &quot;durationSeconds&quot;: 37.819032192230225,
+  &quot;requestedEvalPairCount&quot;: 5,
+  &quot;evalSelection&quot;: &quot;even&quot;,
+  &quot;residualOutputLimit&quot;: 0.35,
+  &quot;device&quot;: &quot;Device(gpu, 0)&quot;
+}</pre>
+<h3>residual-preview-low-model-target-diff.png</h3><a href="support-055-fire-rs010-residual-preview-low-model-target-diff.png"><img src="support-055-fire-rs010-residual-preview-low-model-target-diff.png"></a>
+<h3>residual-preview-low-model-target-targetres-modelres-error-mask.png</h3><a href="support-055-fire-rs010-residual-preview-low-model-target-targetres-modelres-error-mask.png"><img src="support-055-fire-rs010-residual-preview-low-model-target-targetres-modelres-error-mask.png"></a>
+<h3>temporal-sequence-preview-low-model-target-error-mask.png</h3><a href="support-055-fire-rs010-temporal-sequence-preview-low-model-target-error-mask.png"><img src="support-055-fire-rs010-temporal-sequence-preview-low-model-target-error-mask.png"></a>
+<h3>temporal-preview-low0-low1-model0-model1-target0-target1-delta-diff.png</h3><a href="support-055-fire-rs010-temporal-preview-low0-low1-model0-model1-target0-target1-delta-diff.png"><img src="support-055-fire-rs010-temporal-preview-low0-low1-model0-model1-target0-target1-delta-diff.png"></a>
+</section>
+<section class="job">
+<h2>support-055-fire-aggressive-gated-rs010</h2>
+<pre>{
+  &quot;trainPairCount&quot;: 50,
+  &quot;evalPairCount&quot;: 5,
+  &quot;modelArch&quot;: &quot;gated-detail-residual&quot;,
+  &quot;learningRate&quot;: 0.001,
+  &quot;hiddenChannels&quot;: 32,
+  &quot;detailGate&quot;: 4.0,
+  &quot;baselinePsnr&quot;: 35.27138063321215,
+  &quot;modelPsnr&quot;: 35.189642620725344,
+  &quot;deltaPsnr&quot;: -0.08173801248680235,
+  &quot;weightedDeltaPsnr&quot;: -0.018191550959592462,
+  &quot;edgeBandDeltaPsnr&quot;: 0.22510794849264215,
+  &quot;temporalDeltaPsnr&quot;: -0.0001826266568656365,
+  &quot;improvedPatchFraction&quot;: 0.3875,
+  &quot;durationSeconds&quot;: 82.97780561447144,
+  &quot;requestedEvalPairCount&quot;: 5,
+  &quot;evalSelection&quot;: &quot;even&quot;,
+  &quot;residualOutputLimit&quot;: 0.8,
+  &quot;device&quot;: &quot;Device(gpu, 0)&quot;
+}</pre>
+<h3>residual-preview-low-model-target-diff.png</h3><a href="support-055-fire-aggressive-gated-rs010-residual-preview-low-model-target-diff.png"><img src="support-055-fire-aggressive-gated-rs010-residual-preview-low-model-target-diff.png"></a>
+<h3>residual-preview-low-model-target-targetres-modelres-error-mask.png</h3><a href="support-055-fire-aggressive-gated-rs010-residual-preview-low-model-target-targetres-modelres-error-mask.png"><img src="support-055-fire-aggressive-gated-rs010-residual-preview-low-model-target-targetres-modelres-error-mask.png"></a>
+<h3>temporal-sequence-preview-low-model-target-error-mask.png</h3><a href="support-055-fire-aggressive-gated-rs010-temporal-sequence-preview-low-model-target-error-mask.png"><img src="support-055-fire-aggressive-gated-rs010-temporal-sequence-preview-low-model-target-error-mask.png"></a>
+<h3>temporal-preview-low0-low1-model0-model1-target0-target1-delta-diff.png</h3><a href="support-055-fire-aggressive-gated-rs010-temporal-preview-low0-low1-model0-model1-target0-target1-delta-diff.png"><img src="support-055-fire-aggressive-gated-rs010-temporal-preview-low0-low1-model0-model1-target0-target1-delta-diff.png"></a>
+</section>
+<section class="job">
+<h2>support-055-fire-direct-hotlr-rs010</h2>
+<pre>{
+  &quot;trainPairCount&quot;: 50,
+  &quot;evalPairCount&quot;: 5,
+  &quot;modelArch&quot;: &quot;direct-residual&quot;,
+  &quot;learningRate&quot;: 0.004,
+  &quot;hiddenChannels&quot;: 16,
+  &quot;detailGate&quot;: null,
+  &quot;baselinePsnr&quot;: 35.27138063321215,
+  &quot;modelPsnr&quot;: 35.0951764340813,
+  &quot;deltaPsnr&quot;: -0.17620419913084362,
+  &quot;weightedDeltaPsnr&quot;: -0.10079820318241417,
+  &quot;edgeBandDeltaPsnr&quot;: 0.10880020854610706,
+  &quot;temporalDeltaPsnr&quot;: -0.00039023629113899005,
+  &quot;improvedPatchFraction&quot;: 0.28125,
+  &quot;durationSeconds&quot;: 76.04488015174866,
+  &quot;requestedEvalPairCount&quot;: 5,
+  &quot;evalSelection&quot;: &quot;even&quot;,
+  &quot;residualOutputLimit&quot;: 1.0,
+  &quot;device&quot;: &quot;Device(gpu, 0)&quot;
+}</pre>
+<h3>residual-preview-low-model-target-diff.png</h3><a href="support-055-fire-direct-hotlr-rs010-residual-preview-low-model-target-diff.png"><img src="support-055-fire-direct-hotlr-rs010-residual-preview-low-model-target-diff.png"></a>
+<h3>residual-preview-low-model-target-targetres-modelres-error-mask.png</h3><a href="support-055-fire-direct-hotlr-rs010-residual-preview-low-model-target-targetres-modelres-error-mask.png"><img src="support-055-fire-direct-hotlr-rs010-residual-preview-low-model-target-targetres-modelres-error-mask.png"></a>
+<h3>temporal-sequence-preview-low-model-target-error-mask.png</h3><a href="support-055-fire-direct-hotlr-rs010-temporal-sequence-preview-low-model-target-error-mask.png"><img src="support-055-fire-direct-hotlr-rs010-temporal-sequence-preview-low-model-target-error-mask.png"></a>
+<h3>temporal-preview-low0-low1-model0-model1-target0-target1-delta-diff.png</h3><a href="support-055-fire-direct-hotlr-rs010-temporal-preview-low0-low1-model0-model1-target0-target1-delta-diff.png"><img src="support-055-fire-direct-hotlr-rs010-temporal-preview-low0-low1-model0-model1-target0-target1-delta-diff.png"></a>
+</section>
