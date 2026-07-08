@@ -1,0 +1,24 @@
+{
+  "name": "clay-control",
+  "job_type": "mflux_flux2_edit",
+  "job_id": "e33a118ebb27",
+  "input_path": "/private/tmp/kaminos-molten-lirm-speciation-armature-0707/artifacts/lirm-speciation-armature-conditioning-packages-v0/lirm-armature-24/source-maps/clay-control.png",
+  "input_name": "clay-control.png",
+  "params": {
+    "seed": "43",
+    "steps": "8",
+    "guidance": "1.0",
+    "width": "512",
+    "height": "512",
+    "model": "flux2-klein-9b",
+    "quantize": "4",
+    "mlx_cache_limit_gb": "48"
+  },
+  "output_files": [
+    "output.metadata.json",
+    "output.png",
+    "prompt.txt"
+  ],
+  "created_at": 1783500602.746557,
+  "duration_s": 32.0
+}

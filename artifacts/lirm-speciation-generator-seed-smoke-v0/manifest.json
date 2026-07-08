@@ -1,0 +1,66 @@
+{
+  "schema": "kaminos.lirm_speciation_generator_seed_smoke.v0",
+  "created": "2026-07-08",
+  "source": {
+    "candidateId": "lirm-armature-24",
+    "preferredSourceRoute": "kaminos/lirm-speciation-armature/implicit-body-v0",
+    "inputImage": "../lirm-speciation-armature-conditioning-packages-v0/lirm-armature-24/source-maps/clay-control.png",
+    "sourceContract": "implicit 3D clay/control render from a smooth SDF body over spheres, capsules, and rounded boxes"
+  },
+  "attempts": [
+    {
+      "name": "mflux-img2img-lirm-24-seed42",
+      "jobId": "e374c29f8568",
+      "jobType": "mflux_img2img",
+      "status": "failed",
+      "route": "z-image-turbo img2img",
+      "outputDir": "mflux-img2img-lirm-24-seed42",
+      "failurePhase": "execution",
+      "failureSummary": "Local Tongyi-MAI/Z-Image-Turbo cache was missing text_encoder_2 safetensors; no image was produced."
+    },
+    {
+      "name": "mflux-flux2-edit-lirm-24-seed42",
+      "jobId": "4e77f565e815",
+      "jobType": "mflux_flux2_edit",
+      "status": "done",
+      "route": "flux2-klein-9b edit",
+      "durationSeconds": 33.7,
+      "params": {
+        "seed": "42",
+        "steps": "8",
+        "guidance": "1.0",
+        "width": "512",
+        "height": "512",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "mlx_cache_limit_gb": "48"
+      },
+      "outputDir": "mflux-flux2-edit-lirm-24-seed42",
+      "outputImage": "mflux-flux2-edit-lirm-24-seed42/output.png",
+      "visualVerdict": "Body-plan scaffold survived strongly: curled tube, shell plates, orange terminal cap, and contact nubs remained. Prompt language invited a cute eye/tongue face despite the no-eye clause."
+    },
+    {
+      "name": "mflux-flux2-edit-lirm-24-noface-seed43",
+      "jobId": "e33a118ebb27",
+      "jobType": "mflux_flux2_edit",
+      "status": "done",
+      "route": "flux2-klein-9b edit",
+      "durationSeconds": 32.0,
+      "params": {
+        "seed": "43",
+        "steps": "8",
+        "guidance": "1.0",
+        "width": "512",
+        "height": "512",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "mlx_cache_limit_gb": "48"
+      },
+      "outputDir": "mflux-flux2-edit-lirm-24-noface-seed43",
+      "outputImage": "mflux-flux2-edit-lirm-24-noface-seed43/output.png",
+      "visualVerdict": "Best hit in this smoke. The curled body, plates, terminal cap, and contact nubs survived while the front became a terminal pore/opening instead of an eye. This is a plausible next input for isolation or image-to-3D probing."
+    }
+  ],
+  "overallVerdict": "Flux 2 edit can elaborate the implicit 3D LIRM control without destroying the body plan. The scaffold is strong enough to continue; face/eye collapse is prompt-sensitive and can be reduced by faceless terminal-mouth wording.",
+  "nextDefault": "Run a tiny candidate/seed fanout using no-face wording, then test SAM3 isolation and cheap Trellis/Sharp only on hits that preserve body identity."
+}
