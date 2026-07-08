@@ -65,6 +65,16 @@ h2 { font-size: 11px; font-weight: 600; margin: 18px 0 8px; color: #666; text-tr
 .gen-preview { width: 100%; border-radius: 6px; margin-top: 8px; display: none; }
 .api-key-input { width: 100%; padding: 6px 10px; background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 4px; color: #888; font-size: 10px; font-family: 'SF Mono', monospace; outline: none; margin-bottom: 6px; }
 .api-key-input:focus { border-color: #444; }
+.kiln-route-bench-summary { color: #cfcfcf; font-size: 12px; line-height: 1.45; margin-bottom: 10px; }
+.kiln-route-bench-route-card { border-top: 1px solid #2b3336; padding-top: 8px; display: flex; flex-direction: column; gap: 6px; }
+.kiln-route-bench-state { color: #8fc7d6; font: 9px 'SF Mono', monospace; text-transform: uppercase; letter-spacing: 0.7px; }
+.kiln-route-bench-source { color: #cfcfcf; font-size: 10px; line-height: 1.3; overflow-wrap: anywhere; }
+.kiln-route-bench-evidence { color: #666; font: 9px 'SF Mono', monospace; line-height: 1.25; overflow-wrap: anywhere; }
+.kiln-route-bench-actions { display: flex; align-items: flex-start; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+.kiln-route-bench-actions .moge-route-source-selector { flex: 1 1 100%; min-width: 0; }
+.kiln-route-bench-actions .moge-route-source-inputs select { min-width: 0; }
+.kiln-route-bench-actions [data-greenroom-moge-runner-mode] { display: flex; align-items: center; gap: 5px; min-height: 25px; }
+.kiln-route-bench-outputs { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
 
 /* Viewport */
 #viewport { flex: 1; position: relative; background: #111; }
@@ -1052,6 +1062,19 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 
   <!-- Generate Tab -->
   <div class="tab-content" id="tab-generate">
+    <h2>Kiln Route Bench</h2>
+    <div class="panel" id="kiln-route-bench-panel" data-kiln-route-bench="generate">
+      <div class="kiln-route-bench-summary" id="kiln-route-bench-primary-copy">Choose an image, pick a route, and cook it into an asset.</div>
+      <div class="field"><span class="field-key">Route</span><span class="field-val" id="kiln-route-bench-route-label">MoGE depth, normal, pointmap</span></div>
+      <div class="field"><span class="field-key">Source</span><span class="field-val" id="kiln-route-bench-source-label">No image selected</span></div>
+      <div class="kiln-route-bench-route-card" data-kiln-route-bench-route-id="moge.depth-normal.webgpu-local.v0" id="kiln-route-bench-moge-card">
+        <div class="kiln-route-bench-state" id="kiln-route-bench-status">Route state has not loaded yet.</div>
+        <div class="kiln-route-bench-source" id="kiln-route-bench-source-summary">Select or import an image, then run MoGE through Greenroom.</div>
+        <div class="kiln-route-bench-evidence" id="kiln-route-bench-source-evidence">route:moge.depth-normal.webgpu-local.v0</div>
+        <div class="kiln-route-bench-actions" id="kiln-route-bench-actions"></div>
+        <div class="kiln-route-bench-outputs" id="kiln-route-bench-outputs"></div>
+      </div>
+    </div>
     <h2>Image Generation</h2>
     <p style="font-size: 11px; color: #666; margin-bottom: 12px;">Generate test images to feed through the MoGe + SuperMat pipeline.</p>
     <div class="panel">
@@ -9218,6 +9241,20 @@ const WEBGPU_INFERENCE_KIT_MODULE_URL = '/vendor/@kaminos/webgpu-inference-kit/s
 const MOGE_WEBGPU_MODULE_BASE_URL_ENV = 'KAMINOS_MOGE_WEBGPU_MODULE_BASE_URL';
 const BROWSER_WEBGPU_DIRECT_RUN_ENV = 'KAMINOS_BROWSER_WEBGPU_DIRECT_RUN';
 const BROWSER_WEBGPU_GREENROOM_JOB_TYPE = 'kaminos-moge-webgpu-browser-preview';
+const KILN_ROUTE_BENCH_ROUTES = [
+  {
+    id: 'moge.depth-normal.webgpu-local.v0',
+    pipelineId: 'moge.depth-normal.webgpu-local.v0',
+    title: 'MoGE depth, normal, pointmap',
+    actionTitle: 'MoGE',
+    sourceKind: 'image',
+    outputKind: 'depth-normal-pointmap',
+    primaryCopy: 'Choose an image, pick a route, and cook it into an asset.',
+    idleCopy: 'MoGE runs through Greenroom and returns depth, normal, and pointmap outputs.',
+    missingSourceCopy: 'Select or import a real image before running MoGE.',
+    runner: runMogeGreenroomKilnRouteBenchRoute,
+  },
+];
 const MOGE_WEBGPU_MODULE_BASE_URL_PARAMS = [
   'moge_webgpu_module_base_url',
   'mogeWebGpuModuleBaseUrl',
@@ -9247,6 +9284,21 @@ let greenroomRouteJobState = {
   summary: {},
   loadedAt: null,
   error: null,
+};
+let kilnRouteBenchState = {
+  schema: 'kaminos.kiln-route-bench-state.v0',
+  selectedRouteId: 'moge.depth-normal.webgpu-local.v0',
+  sourceKind: 'image',
+  status: 'idle',
+  message: 'Choose an image, pick a route, and cook it into an asset.',
+  runningRouteId: null,
+  source: null,
+  result: null,
+  updatedAt: null,
+};
+window.__kaminosKilnRouteBenchState = {
+  ...kilnRouteBenchState,
+  selectedRouteId: 'moge.depth-normal.webgpu-local.v0',
 };
 const browserWebGpuRouteSourceSelectionByJobId = new Map();
 const mogeSourceImageSelectionByJobId = new Map();
@@ -10426,6 +10478,7 @@ function renderMogeRouteSourceSelector(container, row) {
         select.value = 'scratch';
       }
       refresh();
+      renderKilnRouteBench(greenroomRouteJobState.rows || []);
     };
     imagePicker.onclick = event => event.stopPropagation();
     sourceInputs.appendChild(imagePicker);
@@ -10819,6 +10872,148 @@ function renderMogeRouteOperatorPanel(rows = []) {
   }
 }
 
+function selectedKilnRouteBenchRoute(routeId = kilnRouteBenchState.selectedRouteId) {
+  return KILN_ROUTE_BENCH_ROUTES.find(route => route.id === routeId || route.pipelineId === routeId) || KILN_ROUTE_BENCH_ROUTES[0];
+}
+
+function kilnRouteBenchMogeRow(rows = greenroomRouteJobState.rows || []) {
+  return selectMogePreviewActionRow(rows) || selectMogeLatestResultRow(rows) || selectMogeOperatorRouteRow(rows);
+}
+
+function setKilnRouteBenchStatus(message, kind = 'idle', extra = {}) {
+  const route = selectedKilnRouteBenchRoute(extra.routeId);
+  kilnRouteBenchState = {
+    ...kilnRouteBenchState,
+    selectedRouteId: route.id,
+    sourceKind: route.sourceKind,
+    status: kind,
+    message: message || '',
+    ...extra,
+    updatedAt: new Date().toISOString(),
+  };
+  window.__kaminosKilnRouteBenchState = kilnRouteBenchState;
+  const status = document.getElementById('kiln-route-bench-status');
+  if (status) {
+    status.textContent = message || '';
+    status.dataset.status = kind;
+    status.dataset.kilnRouteId = route.id;
+  }
+  if (message) setInfo(message);
+}
+
+function kilnRouteBenchSelectedSource(route = selectedKilnRouteBenchRoute(), row = kilnRouteBenchMogeRow()) {
+  if (route.sourceKind !== 'image' || !row) return null;
+  const candidate = mogeRouteFirstCandidate(row, mogeRouteSourceSelectionMode(row));
+  if (!candidate) return null;
+  return {
+    kind: candidate.kind || mogeRouteEffectiveSourceKind(row),
+    label: candidate.label || candidate.name || candidate.path || 'Selected image',
+    source: candidate.url || candidate.source || candidate.path || '',
+    url: candidate.url || candidate.source || '',
+    identity: candidate.identity || null,
+  };
+}
+
+function renderKilnRouteBench(rows = greenroomRouteJobState.rows || []) {
+  const panel = document.getElementById('kiln-route-bench-panel');
+  if (!panel) return;
+  const route = selectedKilnRouteBenchRoute('moge.depth-normal.webgpu-local.v0');
+  const row = kilnRouteBenchMogeRow(rows);
+  const source = kilnRouteBenchSelectedSource(route, row);
+  kilnRouteBenchState = {
+    ...kilnRouteBenchState,
+    selectedRouteId: route.id,
+    sourceKind: route.sourceKind,
+    source,
+    rowId: row?.route_job?.id || row?.job_id || null,
+    rowStatus: row ? routeJobStatus(row) : null,
+  };
+  window.__kaminosKilnRouteBenchState = kilnRouteBenchState;
+
+  const routeLabel = document.getElementById('kiln-route-bench-route-label');
+  const primaryCopy = document.getElementById('kiln-route-bench-primary-copy');
+  const sourceLabel = document.getElementById('kiln-route-bench-source-label');
+  const status = document.getElementById('kiln-route-bench-status');
+  const sourceSummary = document.getElementById('kiln-route-bench-source-summary');
+  const sourceEvidence = document.getElementById('kiln-route-bench-source-evidence');
+  const actions = document.getElementById('kiln-route-bench-actions');
+  const outputs = document.getElementById('kiln-route-bench-outputs');
+
+  if (routeLabel) {
+    routeLabel.textContent = route.title;
+    routeLabel.title = route.id;
+  }
+  if (primaryCopy) primaryCopy.textContent = route.primaryCopy;
+  if (sourceLabel) sourceLabel.textContent = source?.label || 'No image selected';
+  if (status) {
+    status.textContent = row ? `${routeJobStatus(row)} / ${route.id}` : 'MoGE route state is not indexed yet.';
+    status.dataset.status = row ? routeJobStatus(row) : 'missing';
+    status.dataset.kilnRouteId = route.id;
+  }
+  if (sourceSummary) sourceSummary.textContent = row ? mogeRouteEffectiveSourceSentence(row) : route.idleCopy;
+  if (sourceEvidence) {
+    const parts = [
+      `route:${route.id}`,
+      row ? mogeRouteSourceEvidenceText(row) : null,
+      row?.route_job?.id || row?.job_id || null,
+    ].filter(Boolean);
+    sourceEvidence.textContent = parts.join('  ');
+  }
+
+  if (actions) {
+    actions.innerHTML = '';
+    if (row) {
+      renderMogeRouteSourceSelector(actions, row);
+      renderMogeGreenroomRunnerModeControl(actions);
+      renderMogePreviewRunProgress(actions);
+      renderBrowserWebGpuPreviewActionButton(actions, row);
+    } else {
+      const refresh = document.createElement('button');
+      refresh.type = 'button';
+      refresh.className = 'btn';
+      refresh.textContent = 'Refresh';
+      refresh.onclick = () => grBrowseRouteJobs().catch(error => setKilnRouteBenchStatus(`MoGE route refresh failed: ${error.message || error}`, 'error', { routeId: route.id }));
+      actions.appendChild(refresh);
+    }
+  }
+  if (outputs) {
+    outputs.innerHTML = '';
+    const latest = selectMogeLatestResultRow(rows);
+    if (latest) {
+      renderRouteJobLinkButton(outputs, 'Receipt', latest.receipt_link, 'Open browser WebGPU receipt');
+      for (const link of (latest.output_links || []).slice(0, 3)) {
+        renderRouteJobOutputButton(outputs, link);
+      }
+    }
+  }
+}
+
+async function runMogeGreenroomKilnRouteBenchRoute(routeId = 'moge.depth-normal.webgpu-local.v0') {
+  const route = selectedKilnRouteBenchRoute(routeId);
+  const row = kilnRouteBenchMogeRow();
+  if (!row) {
+    setKilnRouteBenchStatus('MoGE route state is not indexed yet; refresh Greenroom route state first.', 'error', { routeId: route.id });
+    return null;
+  }
+  if (!mogeRouteHasRealSourceCandidate(row)) {
+    setKilnRouteBenchStatus(route.missingSourceCopy, 'error', { routeId: route.id, rowId: row.route_job?.id || row.job_id || null });
+    return null;
+  }
+  setKilnRouteBenchStatus('MoGE preview queueing through Greenroom.', 'running', { routeId: route.id, rowId: row.route_job?.id || row.job_id || null });
+  const result = await queueBrowserWebGpuPreviewRoute(row);
+  setKilnRouteBenchStatus('MoGE Greenroom route result is available.', 'complete', { routeId: route.id, result, runningRouteId: null });
+  renderKilnRouteBench(greenroomRouteJobState.rows || []);
+  return result;
+}
+
+async function runKilnRouteBenchRoute(routeId, profileId = 'preview') {
+  const route = selectedKilnRouteBenchRoute(routeId);
+  if (route.id === 'moge.depth-normal.webgpu-local.v0') {
+    return runMogeGreenroomKilnRouteBenchRoute(route.id, profileId);
+  }
+  throw new Error(`No kiln route runner is registered for ${route.id}`);
+}
+
 function renderBrowserWebGpuPreviewActionButton(container, row) {
   if (!routeJobCanRunBrowserWebGpuPreview(row)) return;
   const hasRealSource = mogeRouteHasRealSourceCandidate(row);
@@ -11045,6 +11240,7 @@ async function grBrowseRouteJobs() {
   }
   const rows = data.rows || [];
   renderGreenroomCockpit(data);
+  renderKilnRouteBench(rows);
   const summary = data.summary || {};
   const summaryText = Object.keys(summary).length
     ? Object.entries(summary).map(([status, count]) => `${status}:${count}`).join('  ')
@@ -11316,7 +11512,10 @@ function mogeSelectedSourceImageCandidate(row = {}) {
 async function grBrowseMogeSourceImages(options = {}) {
   const data = await grFetchApi('assets', { kind: 'image' });
   mogeSourceImageAssets = Array.isArray(data.entries) ? data.entries : [];
-  if (options.render !== false) renderMogeRouteOperatorPanel(greenroomRouteJobState.rows || []);
+  if (options.render !== false) {
+    renderMogeRouteOperatorPanel(greenroomRouteJobState.rows || []);
+    renderKilnRouteBench(greenroomRouteJobState.rows || []);
+  }
   return mogeSourceImageAssets;
 }
 
@@ -11337,6 +11536,7 @@ async function uploadMogeSourceImage(file, row = {}) {
   setMogeRouteSourceSelectionMode(row, 'scratch');
   setInfo(`MoGE source image: ${uploaded.entry.display?.title || uploaded.entry.name || file.name}`);
   renderMogeRouteOperatorPanel(greenroomRouteJobState.rows || []);
+  renderKilnRouteBench(greenroomRouteJobState.rows || []);
   return uploaded;
 }
 
@@ -12479,6 +12679,7 @@ window.kaminosSelectMogeSourceImageForRoute = async function(row = {}, selector 
   mogeSourceImageSelectionByJobId.set(key, selected);
   setMogeRouteSourceSelectionMode(row, 'scratch');
   renderMogeRouteOperatorPanel(greenroomRouteJobState.rows || []);
+  renderKilnRouteBench(greenroomRouteJobState.rows || []);
   return {
     key,
     selected,
@@ -12792,6 +12993,7 @@ async function grBrowseScratch() {
   }
   if (greenroomRouteJobState?.rows?.length) {
     renderMogeRouteOperatorPanel(greenroomRouteJobState.rows);
+    renderKilnRouteBench(greenroomRouteJobState.rows);
   }
 }
 
