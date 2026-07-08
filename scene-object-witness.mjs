@@ -3861,16 +3861,21 @@ async function runSelectedSplatBakeLayerScenario(ws) {
       const bakeButton = document.getElementById('selected-splat-bake-layer-button');
       const bakePanelBefore = document.getElementById('selected-splat-bake-layer-panel');
       const beforeDebug = window.kaminosSelectedSplatBakeLayerDebugState?.(splatObject?.id) || null;
+      const beforePreview = window.kaminosSelectedSplatBakeLayerPreviewDebugState?.(splatObject?.id) || null;
       const cameraBefore = window.kaminosCameraDebugState?.() || null;
       const layer = await window.kaminosCreateSelectedSplatViewBakeLayer?.({ label: 'Witness View Bake', strength: 1 });
       await wait(100);
       const afterCreateDebug = window.kaminosSelectedSplatBakeLayerDebugState?.(splatObject?.id) || null;
+      const afterCreatePreview = window.kaminosSelectedSplatBakeLayerPreviewDebugState?.(splatObject?.id) || null;
+      const afterCreateRendererControls = window.kaminosPublishHybridSplatRendererControls?.() || null;
       const createdLayer = afterCreateDebug?.layers?.[0] || null;
       const tunedLayer = createdLayer
         ? window.kaminosSetSelectedSplatBakeLayerControls?.(createdLayer.id, { enabled: false, strength: 0.37 })
         : null;
       await wait(100);
       const afterTuneDebug = window.kaminosSelectedSplatBakeLayerDebugState?.(splatObject?.id) || null;
+      const afterTunePreview = window.kaminosSelectedSplatBakeLayerPreviewDebugState?.(splatObject?.id) || null;
+      const afterTuneRendererControls = window.kaminosPublishHybridSplatRendererControls?.() || null;
       const bakePanelAfter = document.getElementById('selected-splat-bake-layer-panel');
       return {
         actionExposed: !!actionButton,
@@ -3883,11 +3888,16 @@ async function runSelectedSplatBakeLayerScenario(ws) {
         bakePanelVisibleBefore: !!bakePanelBefore && !bakePanelBefore.hidden,
         bakePanelVisibleAfter: !!bakePanelAfter && !bakePanelAfter.hidden,
         beforeDebug,
+        beforePreview,
         cameraBefore,
         layer,
         tunedLayer,
         afterCreateDebug,
+        afterCreatePreview,
+        afterCreateRendererControls,
         afterTuneDebug,
+        afterTunePreview,
+        afterTuneRendererControls,
         panelText: bakePanelAfter?.textContent || null,
       };
     })()
@@ -3916,6 +3926,28 @@ async function runSelectedSplatBakeLayerScenario(ws) {
   const tuned = lastEvidence.selectedSplatBakeLayer.afterTuneDebug?.layers?.[0] || null;
   if (!tuned || tuned.enabled !== false || Math.abs(Number(tuned.strength) - 0.37) > 0.001) {
     throw new Error(`selected splat bake layer controls did not update: ${JSON.stringify(lastEvidence.selectedSplatBakeLayer)}`);
+  }
+  const beforePreview = lastEvidence.selectedSplatBakeLayer.beforePreview;
+  const afterCreatePreview = lastEvidence.selectedSplatBakeLayer.afterCreatePreview;
+  const afterTunePreview = lastEvidence.selectedSplatBakeLayer.afterTunePreview;
+  const beforeSize = Number(beforePreview?.pointCloudMaterial?.included?.size || 0);
+  const afterCreateSize = Number(afterCreatePreview?.pointCloudMaterial?.included?.size || 0);
+  const afterTuneSize = Number(afterTunePreview?.pointCloudMaterial?.included?.size || 0);
+  if (afterCreatePreview?.contribution?.schema !== 'kaminos.splat-bake-layer.preview-contribution.v0'
+      || Number(afterCreatePreview?.contribution?.strength || 0) <= 0.99
+      || Number(afterCreatePreview?.contribution?.appliedMaterialCount || 0) < 1
+      || !(afterCreateSize > beforeSize)) {
+    throw new Error(`selected splat bake layer did not couple to point-cloud material: ${JSON.stringify(lastEvidence.selectedSplatBakeLayer)}`);
+  }
+  if (Number(afterTunePreview?.contribution?.strength || 0) > 0.001
+      || Math.abs(afterTuneSize - beforeSize) > Math.max(0.000001, beforeSize * 0.001)) {
+    throw new Error(`selected splat bake layer controls did not remove preview contribution: ${JSON.stringify(lastEvidence.selectedSplatBakeLayer)}`);
+  }
+  const telemetryPreview = lastEvidence.selectedSplatBakeLayer.afterCreateRendererControls?.controls?.candidateLayerPreview;
+  if (telemetryPreview?.schema !== 'kaminos.splat-bake-layer.preview-contribution.v0'
+      || telemetryPreview?.targetObjectId !== lastEvidence.selectedSplatBakeLayer.splatObject.id
+      || Number(telemetryPreview?.strength || 0) <= 0.99) {
+    throw new Error(`selected splat bake layer did not expose preview contribution telemetry: ${JSON.stringify(lastEvidence.selectedSplatBakeLayer)}`);
   }
 }
 

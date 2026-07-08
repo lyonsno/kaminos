@@ -2256,6 +2256,7 @@ const SPLAT_CROP_TARGET_MIN_SIZE = 0.02;
 const SCENE_OBJECT_POINT_PICK_THRESHOLD = 0.025;
 const SELECTED_SPLAT_BAKE_LAYER_SCHEMA = 'kaminos.splat-bake-layer.v0';
 const SELECTED_SPLAT_BAKE_LAYER_RECEIPT_SCHEMA = 'kaminos.splat-bake-layer.receipt.v0';
+const SELECTED_SPLAT_BAKE_LAYER_PREVIEW_CONTRIBUTION_SCHEMA = 'kaminos.splat-bake-layer.preview-contribution.v0';
 const SELECTED_SPLAT_VIEW_BAKE_LAYER_ROUTE = 'selected-splat-view-bake-layer-v0';
 const SELECTED_SPLAT_VIEW_BAKE_LAYER_CRUCIBLE_KIND = 'selected-splat-view-bake-layer-crucible-v0';
 const DEFAULT_HYBRID_SPLAT_OVERLAY_MODULE_URL = '/vendor/meshsplat-renderer/splatOverlay.js';
@@ -3200,12 +3201,17 @@ function hybridControlCheckbox(id, fallback) {
 }
 
 function hybridSplatRendererControlsPayload() {
+  const candidateLayerPreview = selectedSplatBakeLayerPreviewContribution();
+  const previewStrength = Number(candidateLayerPreview?.strength || 0);
+  const roughnessContrast = hybridControlNumber('hybrid-control-roughness-contrast', 1);
+  const albedoContrast = hybridControlNumber('hybrid-control-albedo-contrast', 1);
+  const albedoBrightness = Math.min(0.18, previewStrength * 0.18);
   return {
     schema: 'hybrid-render.splat-renderer-controls.v0',
     material: {
       roughness: {
-        contrast: hybridControlNumber('hybrid-control-roughness-contrast', 1),
-        brightness: 0,
+        contrast: roughnessContrast + previewStrength * 0.12,
+        brightness: -previewStrength * 0.08,
         gamma: 1,
       },
       metalness: {
@@ -3214,8 +3220,8 @@ function hybridSplatRendererControlsPayload() {
         gamma: 1,
       },
       albedo: {
-        contrast: hybridControlNumber('hybrid-control-albedo-contrast', 1),
-        brightness: 0,
+        contrast: albedoContrast + previewStrength * 0.08,
+        brightness: albedoBrightness,
         gamma: 1,
       },
     },
@@ -3234,6 +3240,16 @@ function hybridSplatRendererControlsPayload() {
       thickness: 1.81,
       slices: 3,
       steps: 4,
+    },
+    candidateLayerPreview: {
+      ...candidateLayerPreview,
+      rendererControlScope: previewStrength > 0 ? 'renderer-global-preview-control-delta' : 'none',
+      materialCurveDeltas: {
+        roughnessContrast: previewStrength * 0.12,
+        roughnessBrightness: -previewStrength * 0.08,
+        albedoContrast: previewStrength * 0.08,
+        albedoBrightness,
+      },
     },
   };
 }
@@ -4393,6 +4409,77 @@ function ensureSelectedSplatBakeLayerList(record) {
   return record.splatBakeLayers;
 }
 
+function selectedSplatBakeLayerPreviewContribution(record = selectedSplatRecord()) {
+  const layers = record ? ensureSelectedSplatBakeLayerList(record) : [];
+  const enabledLayers = layers.filter(layer => layer?.enabled !== false);
+  const strength = Math.max(0, Math.min(1, enabledLayers.reduce((total, layer) => {
+    const value = Number(layer?.strength);
+    return total + (Number.isFinite(value) ? value : 0);
+  }, 0)));
+  return {
+    schema: SELECTED_SPLAT_BAKE_LAYER_PREVIEW_CONTRIBUTION_SCHEMA,
+    route: SELECTED_SPLAT_VIEW_BAKE_LAYER_ROUTE,
+    targetObjectId: record?.id || null,
+    activeLayerCount: enabledLayers.length,
+    layerCount: layers.length,
+    strength,
+    layerIds: enabledLayers.map(layer => layer.id),
+    previewPath: 'selected-splat-point-cloud-material',
+    artifactAuthority: 'candidate-layer-preview-only',
+  };
+}
+
+function selectedSplatPointCloudPreviewMaterialState(record) {
+  const preview = record?.object?.userData?.kaminosSplatPointCloudPreview || null;
+  const materialState = material => material ? {
+    size: Number(material.size),
+    opacity: Number(material.opacity),
+    previewStrength: Number(material.userData?.kaminosSplatBakeLayerPreviewStrength || 0),
+    baseSize: Number(material.userData?.kaminosSplatBakeLayerPreviewBaseSize ?? material.size),
+    baseOpacity: Number(material.userData?.kaminosSplatBakeLayerPreviewBaseOpacity ?? material.opacity),
+  } : null;
+  return {
+    included: materialState(preview?.includedMaterial),
+    excluded: materialState(preview?.excludedMaterial),
+  };
+}
+
+function applySelectedSplatBakeLayerPreview(record = selectedSplatRecord()) {
+  const contribution = selectedSplatBakeLayerPreviewContribution(record);
+  const preview = record?.object?.userData?.kaminosSplatPointCloudPreview || null;
+  const materials = [preview?.includedMaterial, preview?.excludedMaterial].filter(Boolean);
+  const pointSizeFactor = 1 + contribution.strength * 0.7;
+  let appliedMaterialCount = 0;
+  for (const material of materials) {
+    material.userData ||= {};
+    if (!Number.isFinite(material.userData.kaminosSplatBakeLayerPreviewBaseSize)) {
+      material.userData.kaminosSplatBakeLayerPreviewBaseSize = Number(material.size) || 0.02;
+    }
+    if (!Number.isFinite(material.userData.kaminosSplatBakeLayerPreviewBaseOpacity)) {
+      material.userData.kaminosSplatBakeLayerPreviewBaseOpacity = Number(material.opacity) || 1;
+    }
+    const baseSize = material.userData.kaminosSplatBakeLayerPreviewBaseSize;
+    const baseOpacity = material.userData.kaminosSplatBakeLayerPreviewBaseOpacity;
+    material.size = baseSize * pointSizeFactor;
+    material.opacity = Math.min(1, baseOpacity + contribution.strength * 0.08);
+    material.userData.kaminosSplatBakeLayerPreviewStrength = contribution.strength;
+    material.needsUpdate = true;
+    appliedMaterialCount += 1;
+  }
+  const applied = {
+    ...contribution,
+    appliedMaterialCount,
+    pointCloudMaterial: selectedSplatPointCloudPreviewMaterialState(record),
+  };
+  if (record) {
+    record.splatBakeLayerPreviewContribution = applied;
+    if (record.object?.userData?.kaminosSceneObject) {
+      record.object.userData.kaminosSceneObject.splatBakeLayerPreviewContribution = applied;
+    }
+  }
+  return applied;
+}
+
 function selectedSplatViewBakeLayerReceipt(record, draft = {}) {
   const now = draft.createdAt || new Date().toISOString();
   const armatureRef = draft.armatureRef || selectedSplatArmatureRef(record);
@@ -4502,6 +4589,8 @@ function createSelectedSplatViewBakeLayer(options = {}) {
     updatedAt: now,
   };
   layers.push(layer);
+  applySelectedSplatBakeLayerPreview(record);
+  publishHybridSplatRendererControls(hybridSplatOverlayState.handle);
   renderSelectedSplatBakeLayerPanel(record);
   window._kaminosDirty?.();
   setInfo(`Bake layer captured: ${layer.label}`);
@@ -4524,6 +4613,8 @@ function setSelectedSplatBakeLayerControls(layerId, controls = {}) {
     found.layer.strength = Math.max(0, Math.min(1, Number(controls.strength)));
   }
   found.layer.updatedAt = new Date().toISOString();
+  applySelectedSplatBakeLayerPreview(found.record);
+  publishHybridSplatRendererControls(hybridSplatOverlayState.handle);
   renderSelectedSplatBakeLayerPanel(selectedSplatRecord() || found.record);
   window._kaminosDirty?.();
   return found.layer;
@@ -4532,6 +4623,7 @@ function setSelectedSplatBakeLayerControls(layerId, controls = {}) {
 function selectedSplatBakeLayerDebugState(id = activeSceneObjectId) {
   const record = selectedSplatRecord(id) || selectedSplatRecord() || sceneObjects.find(entry => entry.type === 'splat') || null;
   const layers = record ? ensureSelectedSplatBakeLayerList(record) : [];
+  const previewContribution = record ? applySelectedSplatBakeLayerPreview(record) : selectedSplatBakeLayerPreviewContribution(null);
   return {
     schema: 'kaminos.splat-bake-layer.debug.v0',
     selectedObjectId: activeSceneObjectId || null,
@@ -4539,7 +4631,21 @@ function selectedSplatBakeLayerDebugState(id = activeSceneObjectId) {
     route: SELECTED_SPLAT_VIEW_BAKE_LAYER_ROUTE,
     crucibleKind: SELECTED_SPLAT_VIEW_BAKE_LAYER_CRUCIBLE_KIND,
     layerCount: layers.length,
+    previewContribution,
     layers: layers.map(layer => JSON.parse(JSON.stringify(layer))),
+  };
+}
+
+function selectedSplatBakeLayerPreviewDebugState(id = activeSceneObjectId) {
+  const record = selectedSplatRecord(id) || selectedSplatRecord() || sceneObjects.find(entry => entry.type === 'splat') || null;
+  const contribution = record ? applySelectedSplatBakeLayerPreview(record) : selectedSplatBakeLayerPreviewContribution(null);
+  return {
+    schema: 'kaminos.splat-bake-layer.preview-debug.v0',
+    selectedObjectId: activeSceneObjectId || null,
+    targetObjectId: record?.id || null,
+    contribution,
+    pointCloudMaterial: selectedSplatPointCloudPreviewMaterialState(record),
+    rendererControlsTelemetry: hybridSplatOverlayState.rendererControlsTelemetry,
   };
 }
 
@@ -4557,6 +4663,7 @@ function renderSelectedSplatBakeLayerPanel(entry = selectedSplatRecord()) {
     return;
   }
   const layers = ensureSelectedSplatBakeLayerList(entry);
+  applySelectedSplatBakeLayerPreview(entry);
   panel.hidden = false;
   button.classList.toggle('active', layers.length > 0);
   const rows = layers.map(layer => `
@@ -5428,6 +5535,7 @@ window.kaminosSyncHybridSplatSceneRendererMembership = syncHybridSplatSceneRende
 window.kaminosCreateSelectedSplatViewBakeLayer = createSelectedSplatViewBakeLayer;
 window.kaminosSetSelectedSplatBakeLayerControls = setSelectedSplatBakeLayerControls;
 window.kaminosSelectedSplatBakeLayerDebugState = selectedSplatBakeLayerDebugState;
+window.kaminosSelectedSplatBakeLayerPreviewDebugState = selectedSplatBakeLayerPreviewDebugState;
 window.createSelectedSplatViewBakeLayer = createSelectedSplatViewBakeLayer;
 window.setSelectedSplatBakeLayerControls = setSelectedSplatBakeLayerControls;
 window.toggleHybridSplatViewportRenderer = toggleHybridSplatViewportRenderer;

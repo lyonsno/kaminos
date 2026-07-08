@@ -217,6 +217,8 @@ assert.match(witness, /selected splat bake layer did not create a layer/, 'selec
 assert.match(witness, /selected splat bake layer did not preserve receipt identity/, 'selected-splat bake-layer witness proves route and receipt identity');
 assert.match(witness, /selected splat bake layer did not preserve current camera/, 'selected-splat bake-layer witness proves current camera capture is load-bearing');
 assert.match(witness, /selected splat bake layer controls did not update/, 'selected-splat bake-layer witness proves enable and strength controls are reversible layer state');
+assert.match(witness, /selected splat bake layer did not couple to point-cloud material/, 'selected-splat bake-layer witness proves Bake View has a visible preview contribution');
+assert.match(witness, /selected splat bake layer did not expose preview contribution telemetry/, 'selected-splat bake-layer witness proves the preview contribution has inspectable route identity');
 assert.match(witness, /kaminosSelectedSplatBakeLayerDebugState/, 'selected-splat bake-layer witness reads explicit debug state rather than inferring from DOM');
 assert.match(witness, /kaminosCreateSelectedSplatViewBakeLayer/, 'selected-splat bake-layer witness creates layers through the browser API');
 assert.match(witness, /kaminosSetSelectedSplatBakeLayerControls/, 'selected-splat bake-layer witness tunes layers through the browser API');
