@@ -2365,6 +2365,27 @@ assert.match(rgbSoftTemporalStrip, /outsideColumnWeakSupportReductionRate/, 'RGB
 assert.match(rgbSoftTemporalStrip, /predictedBodySoftVsPredictedCosineMean/, 'RGB soft protected temporal strip preserves protected-body cosine metrics');
 assert.match(rgbSoftTemporalStrip, /visibleRasterLabels/, 'RGB soft protected temporal strip burns and manifests visible row/column labels');
 assert.match(rgbSoftTemporalStrip, /failurePhase/, 'RGB soft protected temporal strip writes failure-phase reports for corrupt manifests or missing strip geometry');
+
+const diagnosticRgbContextAblationPath = join(root, 'volume-full-grid-diagnostic-rgb-context-ablation.py');
+assert.ok(existsSync(diagnosticRgbContextAblationPath), 'volume full-grid diagnostic RGB context ablation exists');
+const diagnosticRgbContextAblation = existsSync(diagnosticRgbContextAblationPath) ? readFileSync(diagnosticRgbContextAblationPath, 'utf8') : '';
+assert.match(diagnosticRgbContextAblation, /kaminos\.volume\.diagnostic-rgb-context-ablation\.v0/, 'diagnostic RGB context ablation writes a stable manifest schema');
+assert.match(diagnosticRgbContextAblation, /derived-flow-diagnostic-rgb-context-conditioning-ablation-v0/, 'diagnostic RGB context ablation names its evidence identity');
+assert.match(diagnosticRgbContextAblation, /sameCellCurrentFeatureSet/, 'diagnostic RGB context ablation preserves the current same-cell full input feature baseline');
+assert.match(diagnosticRgbContextAblation, /localGeometrySixNeighbor/, 'diagnostic RGB context ablation can append six-neighbor low-grid geometry context');
+assert.match(diagnosticRgbContextAblation, /globalBasinSummary/, 'diagnostic RGB context ablation can append compact global low-grid basin context');
+assert.match(diagnosticRgbContextAblation, /ALL_CHANNELS/, 'diagnostic RGB context ablation preserves the full low-grid input channel list');
+assert.match(diagnosticRgbContextAblation, /diagnosticRgbTargetIdentity/, 'diagnostic RGB context ablation records the derived RGB target identity');
+assert.match(diagnosticRgbContextAblation, /featureRegimeIdentities/, 'diagnostic RGB context ablation records requested and effective feature regime identities');
+assert.match(diagnosticRgbContextAblation, /routeIdentity/, 'diagnostic RGB context ablation preserves pair route/effective identity in the manifest');
+assert.match(diagnosticRgbContextAblation, /sidecarChecksums/, 'diagnostic RGB context ablation records sidecar checksums for source fields and derived RGB outputs');
+assert.match(diagnosticRgbContextAblation, /supportPrecision/, 'diagnostic RGB context ablation reports predicted support precision against truth support diagnostics');
+assert.match(diagnosticRgbContextAblation, /supportRecall/, 'diagnostic RGB context ablation reports predicted support recall against truth support diagnostics');
+assert.match(diagnosticRgbContextAblation, /supportJaccard/, 'diagnostic RGB context ablation reports predicted support Jaccard against truth support diagnostics');
+assert.match(diagnosticRgbContextAblation, /outsideWeakSupportMass/, 'diagnostic RGB context ablation reports false weak-support mass outside the truth support');
+assert.match(diagnosticRgbContextAblation, /inSupportRmse/, 'diagnostic RGB context ablation reports in-support RMSE against truth');
+assert.match(diagnosticRgbContextAblation, /visibleRasterLabels/, 'diagnostic RGB context ablation burns and manifests visible contact-sheet labels');
+assert.match(diagnosticRgbContextAblation, /failurePhase/, 'diagnostic RGB context ablation writes failure-phase reports for corrupt manifests or training/render failures');
 const sourceScaleProbePath = join(root, 'volume-source-scale-probe.mjs');
 assert.ok(existsSync(sourceScaleProbePath), 'source-scale blobbiness probe exists');
 const sourceScaleProbe = existsSync(sourceScaleProbePath) ? readFileSync(sourceScaleProbePath, 'utf8') : '';
