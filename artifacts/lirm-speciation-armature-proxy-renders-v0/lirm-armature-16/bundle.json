@@ -1,0 +1,292 @@
+{
+  "schema": "kaminos.lirm-speciation-armature-proxy-render-bundle.v0",
+  "route": "kaminos/lirm-speciation-armature/proxy-render-v0",
+  "sourceWitnessId": "lirm-speciation-armature-64073572",
+  "sourceWitnessRoute": "kaminos/lirm-speciation-armature/contact-sheet-v0",
+  "candidateId": "lirm-armature-16",
+  "seed": "molten-lirm-seed-0707:16",
+  "camera": {
+    "projection": "orthographic",
+    "view": "front-three-quarter",
+    "coordinateFrame": "normalized-proxy-primitives",
+    "note": "software SVG projection of packet proxy primitives, not mesh render"
+  },
+  "proxyPrimitiveCount": 21,
+  "semanticHandles": [
+    {
+      "id": "lirm-armature-16:axis",
+      "kind": "axis",
+      "label": "axial body curve",
+      "strength": 0.614,
+      "region": {
+        "samples": [
+          {
+            "x": 0.154,
+            "y": 0.537
+          },
+          {
+            "x": 0.212,
+            "y": 0.589
+          },
+          {
+            "x": 0.27,
+            "y": 0.618
+          },
+          {
+            "x": 0.328,
+            "y": 0.619
+          },
+          {
+            "x": 0.385,
+            "y": 0.596
+          },
+          {
+            "x": 0.443,
+            "y": 0.556
+          },
+          {
+            "x": 0.501,
+            "y": 0.513
+          },
+          {
+            "x": 0.559,
+            "y": 0.477
+          },
+          {
+            "x": 0.617,
+            "y": 0.459
+          },
+          {
+            "x": 0.674,
+            "y": 0.463
+          },
+          {
+            "x": 0.732,
+            "y": 0.487
+          },
+          {
+            "x": 0.79,
+            "y": 0.521
+          },
+          {
+            "x": 0.848,
+            "y": 0.554
+          }
+        ]
+      },
+      "futureUse": [
+        "silhouette_conditioning",
+        "motion_spine_guess"
+      ]
+    },
+    {
+      "id": "lirm-armature-16:head",
+      "kind": "head",
+      "label": "head / desire orientation",
+      "strength": 0.971,
+      "region": {
+        "x": 0.848,
+        "y": 0.554,
+        "radius": 0.107
+      },
+      "futureUse": [
+        "orientation",
+        "attention",
+        "appetite"
+      ]
+    },
+    {
+      "id": "lirm-armature-16:mouth",
+      "kind": "mouth",
+      "label": "terminal mouth concentration",
+      "strength": 0.452,
+      "region": {
+        "x": 0.895,
+        "y": 0.562,
+        "radius": 0.037,
+        "placement": "terminal_front_cap"
+      },
+      "futureUse": [
+        "hoard_theft",
+        "bite_pose",
+        "face_prompt"
+      ]
+    },
+    {
+      "id": "lirm-armature-16:belly-contact",
+      "kind": "belly_contact",
+      "label": "belly contact patch",
+      "strength": 0.528,
+      "region": {
+        "x": 0.443,
+        "y": 0.676,
+        "width": 0.528,
+        "height": 0.104
+      },
+      "futureUse": [
+        "crawl_contact",
+        "terrain_desire",
+        "shadow_anchor"
+      ]
+    },
+    {
+      "id": "lirm-armature-16:locomotion",
+      "kind": "locomotion",
+      "label": "motion affordance field",
+      "strength": 0.47,
+      "region": {
+        "contactCount": 4,
+        "primary": "inch"
+      },
+      "futureUse": [
+        "motion_transposition",
+        "swarm_readability"
+      ]
+    },
+    {
+      "id": "lirm-armature-16:limb-bud-0",
+      "kind": "limb_bud",
+      "label": "paired limb bud 1",
+      "strength": 0.598,
+      "region": {
+        "x": 0.385,
+        "y": 0.596,
+        "t": 0.333,
+        "side": "paired",
+        "length": 0.126
+      },
+      "futureUse": [
+        "step",
+        "brace",
+        "drag",
+        "gesture"
+      ]
+    },
+    {
+      "id": "lirm-armature-16:limb-bud-1",
+      "kind": "limb_bud",
+      "label": "paired limb bud 2",
+      "strength": 0.627,
+      "region": {
+        "x": 0.617,
+        "y": 0.459,
+        "t": 0.667,
+        "side": "paired",
+        "length": 0.126
+      },
+      "futureUse": [
+        "step",
+        "brace",
+        "drag",
+        "gesture"
+      ]
+    },
+    {
+      "id": "lirm-armature-16:sensory-nub-0",
+      "kind": "sensory_nub",
+      "label": "sensory nub 1",
+      "strength": 0.652,
+      "region": {
+        "x": 0.818,
+        "y": 0.474,
+        "radius": 0.018
+      },
+      "futureUse": [
+        "readability",
+        "cute_gross_threshold"
+      ]
+    },
+    {
+      "id": "lirm-armature-16:sensory-nub-1",
+      "kind": "sensory_nub",
+      "label": "sensory nub 2",
+      "strength": 0.652,
+      "region": {
+        "x": 0.863,
+        "y": 0.456,
+        "radius": 0.018
+      },
+      "futureUse": [
+        "readability",
+        "cute_gross_threshold"
+      ]
+    },
+    {
+      "id": "lirm-armature-16:tail-drag",
+      "kind": "tail_drag",
+      "label": "tail drag memory",
+      "strength": 0.767,
+      "region": {
+        "x": 0.154,
+        "y": 0.617,
+        "length": 0.157
+      },
+      "futureUse": [
+        "trail",
+        "panic_turn",
+        "swarm_spacing"
+      ]
+    }
+  ],
+  "contactPoints": [
+    {
+      "id": "contact-0",
+      "t": 0.125,
+      "x": 0.27,
+      "y": 0.754,
+      "radius": 0.028,
+      "role": "fore-brace"
+    },
+    {
+      "id": "contact-1",
+      "t": 0.375,
+      "x": 0.443,
+      "y": 0.7,
+      "radius": 0.028,
+      "role": "fore-brace"
+    },
+    {
+      "id": "contact-2",
+      "t": 0.625,
+      "x": 0.617,
+      "y": 0.595,
+      "radius": 0.028,
+      "role": "belly-crawl"
+    },
+    {
+      "id": "contact-3",
+      "t": 0.875,
+      "x": 0.79,
+      "y": 0.665,
+      "radius": 0.028,
+      "role": "tail-drag"
+    }
+  ],
+  "renderMaps": [
+    {
+      "kind": "clay",
+      "path": "lirm-armature-16/clay-control.svg"
+    },
+    {
+      "kind": "depth",
+      "path": "lirm-armature-16/depth-control.svg"
+    },
+    {
+      "kind": "normal",
+      "path": "lirm-armature-16/normal-control.svg"
+    },
+    {
+      "kind": "mask",
+      "path": "lirm-armature-16/mask-control.svg"
+    },
+    {
+      "kind": "semantic",
+      "path": "lirm-armature-16/semantic-control.svg"
+    }
+  ],
+  "falseClosureGuards": {
+    "finishedCreatureClaim": "forbidden",
+    "generatorFiringClaim": "not_yet_fired",
+    "proxyRenderClaim": "depth_normal_conditioning_witness_only"
+  }
+}

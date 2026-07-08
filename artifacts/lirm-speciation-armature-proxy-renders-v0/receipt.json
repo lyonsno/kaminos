@@ -1,0 +1,320 @@
+{
+  "schema": "kaminos.lirm-speciation-armature-proxy-render-witness.v0",
+  "route": "kaminos/lirm-speciation-armature/proxy-render-v0",
+  "seed": "molten-lirm-seed-0707",
+  "sourceWitnessId": "lirm-speciation-armature-64073572",
+  "candidateIds": [
+    "lirm-armature-08",
+    "lirm-armature-11",
+    "lirm-armature-16",
+    "lirm-armature-22",
+    "lirm-armature-24"
+  ],
+  "bundles": [
+    {
+      "schema": "kaminos.lirm-speciation-armature-proxy-render-bundle.v0",
+      "candidateId": "lirm-armature-08",
+      "camera": {
+        "projection": "orthographic",
+        "view": "front-three-quarter",
+        "coordinateFrame": "normalized-proxy-primitives",
+        "note": "software SVG projection of packet proxy primitives, not mesh render"
+      },
+      "proxyPrimitiveCount": 24,
+      "renderMaps": [
+        {
+          "kind": "clay",
+          "path": "lirm-armature-08/clay-control.svg"
+        },
+        {
+          "kind": "depth",
+          "path": "lirm-armature-08/depth-control.svg"
+        },
+        {
+          "kind": "normal",
+          "path": "lirm-armature-08/normal-control.svg"
+        },
+        {
+          "kind": "mask",
+          "path": "lirm-armature-08/mask-control.svg"
+        },
+        {
+          "kind": "semantic",
+          "path": "lirm-armature-08/semantic-control.svg"
+        }
+      ]
+    },
+    {
+      "schema": "kaminos.lirm-speciation-armature-proxy-render-bundle.v0",
+      "candidateId": "lirm-armature-11",
+      "camera": {
+        "projection": "orthographic",
+        "view": "front-three-quarter",
+        "coordinateFrame": "normalized-proxy-primitives",
+        "note": "software SVG projection of packet proxy primitives, not mesh render"
+      },
+      "proxyPrimitiveCount": 22,
+      "renderMaps": [
+        {
+          "kind": "clay",
+          "path": "lirm-armature-11/clay-control.svg"
+        },
+        {
+          "kind": "depth",
+          "path": "lirm-armature-11/depth-control.svg"
+        },
+        {
+          "kind": "normal",
+          "path": "lirm-armature-11/normal-control.svg"
+        },
+        {
+          "kind": "mask",
+          "path": "lirm-armature-11/mask-control.svg"
+        },
+        {
+          "kind": "semantic",
+          "path": "lirm-armature-11/semantic-control.svg"
+        }
+      ]
+    },
+    {
+      "schema": "kaminos.lirm-speciation-armature-proxy-render-bundle.v0",
+      "candidateId": "lirm-armature-16",
+      "camera": {
+        "projection": "orthographic",
+        "view": "front-three-quarter",
+        "coordinateFrame": "normalized-proxy-primitives",
+        "note": "software SVG projection of packet proxy primitives, not mesh render"
+      },
+      "proxyPrimitiveCount": 21,
+      "renderMaps": [
+        {
+          "kind": "clay",
+          "path": "lirm-armature-16/clay-control.svg"
+        },
+        {
+          "kind": "depth",
+          "path": "lirm-armature-16/depth-control.svg"
+        },
+        {
+          "kind": "normal",
+          "path": "lirm-armature-16/normal-control.svg"
+        },
+        {
+          "kind": "mask",
+          "path": "lirm-armature-16/mask-control.svg"
+        },
+        {
+          "kind": "semantic",
+          "path": "lirm-armature-16/semantic-control.svg"
+        }
+      ]
+    },
+    {
+      "schema": "kaminos.lirm-speciation-armature-proxy-render-bundle.v0",
+      "candidateId": "lirm-armature-22",
+      "camera": {
+        "projection": "orthographic",
+        "view": "front-three-quarter",
+        "coordinateFrame": "normalized-proxy-primitives",
+        "note": "software SVG projection of packet proxy primitives, not mesh render"
+      },
+      "proxyPrimitiveCount": 21,
+      "renderMaps": [
+        {
+          "kind": "clay",
+          "path": "lirm-armature-22/clay-control.svg"
+        },
+        {
+          "kind": "depth",
+          "path": "lirm-armature-22/depth-control.svg"
+        },
+        {
+          "kind": "normal",
+          "path": "lirm-armature-22/normal-control.svg"
+        },
+        {
+          "kind": "mask",
+          "path": "lirm-armature-22/mask-control.svg"
+        },
+        {
+          "kind": "semantic",
+          "path": "lirm-armature-22/semantic-control.svg"
+        }
+      ]
+    },
+    {
+      "schema": "kaminos.lirm-speciation-armature-proxy-render-bundle.v0",
+      "candidateId": "lirm-armature-24",
+      "camera": {
+        "projection": "orthographic",
+        "view": "front-three-quarter",
+        "coordinateFrame": "normalized-proxy-primitives",
+        "note": "software SVG projection of packet proxy primitives, not mesh render"
+      },
+      "proxyPrimitiveCount": 23,
+      "renderMaps": [
+        {
+          "kind": "clay",
+          "path": "lirm-armature-24/clay-control.svg"
+        },
+        {
+          "kind": "depth",
+          "path": "lirm-armature-24/depth-control.svg"
+        },
+        {
+          "kind": "normal",
+          "path": "lirm-armature-24/normal-control.svg"
+        },
+        {
+          "kind": "mask",
+          "path": "lirm-armature-24/mask-control.svg"
+        },
+        {
+          "kind": "semantic",
+          "path": "lirm-armature-24/semantic-control.svg"
+        }
+      ]
+    }
+  ],
+  "falseClosureGuards": {
+    "finishedCreatureClaim": "forbidden",
+    "generatorFiringClaim": "not_yet_fired",
+    "proxyRenderClaim": "depth_normal_conditioning_witness_only"
+  },
+  "outputInventory": {
+    "receipt": "receipt.json",
+    "bundles": [
+      {
+        "candidateId": "lirm-armature-08",
+        "bundle": "lirm-armature-08/bundle.json",
+        "maps": [
+          {
+            "kind": "clay",
+            "path": "lirm-armature-08/clay-control.svg"
+          },
+          {
+            "kind": "depth",
+            "path": "lirm-armature-08/depth-control.svg"
+          },
+          {
+            "kind": "normal",
+            "path": "lirm-armature-08/normal-control.svg"
+          },
+          {
+            "kind": "mask",
+            "path": "lirm-armature-08/mask-control.svg"
+          },
+          {
+            "kind": "semantic",
+            "path": "lirm-armature-08/semantic-control.svg"
+          }
+        ]
+      },
+      {
+        "candidateId": "lirm-armature-11",
+        "bundle": "lirm-armature-11/bundle.json",
+        "maps": [
+          {
+            "kind": "clay",
+            "path": "lirm-armature-11/clay-control.svg"
+          },
+          {
+            "kind": "depth",
+            "path": "lirm-armature-11/depth-control.svg"
+          },
+          {
+            "kind": "normal",
+            "path": "lirm-armature-11/normal-control.svg"
+          },
+          {
+            "kind": "mask",
+            "path": "lirm-armature-11/mask-control.svg"
+          },
+          {
+            "kind": "semantic",
+            "path": "lirm-armature-11/semantic-control.svg"
+          }
+        ]
+      },
+      {
+        "candidateId": "lirm-armature-16",
+        "bundle": "lirm-armature-16/bundle.json",
+        "maps": [
+          {
+            "kind": "clay",
+            "path": "lirm-armature-16/clay-control.svg"
+          },
+          {
+            "kind": "depth",
+            "path": "lirm-armature-16/depth-control.svg"
+          },
+          {
+            "kind": "normal",
+            "path": "lirm-armature-16/normal-control.svg"
+          },
+          {
+            "kind": "mask",
+            "path": "lirm-armature-16/mask-control.svg"
+          },
+          {
+            "kind": "semantic",
+            "path": "lirm-armature-16/semantic-control.svg"
+          }
+        ]
+      },
+      {
+        "candidateId": "lirm-armature-22",
+        "bundle": "lirm-armature-22/bundle.json",
+        "maps": [
+          {
+            "kind": "clay",
+            "path": "lirm-armature-22/clay-control.svg"
+          },
+          {
+            "kind": "depth",
+            "path": "lirm-armature-22/depth-control.svg"
+          },
+          {
+            "kind": "normal",
+            "path": "lirm-armature-22/normal-control.svg"
+          },
+          {
+            "kind": "mask",
+            "path": "lirm-armature-22/mask-control.svg"
+          },
+          {
+            "kind": "semantic",
+            "path": "lirm-armature-22/semantic-control.svg"
+          }
+        ]
+      },
+      {
+        "candidateId": "lirm-armature-24",
+        "bundle": "lirm-armature-24/bundle.json",
+        "maps": [
+          {
+            "kind": "clay",
+            "path": "lirm-armature-24/clay-control.svg"
+          },
+          {
+            "kind": "depth",
+            "path": "lirm-armature-24/depth-control.svg"
+          },
+          {
+            "kind": "normal",
+            "path": "lirm-armature-24/normal-control.svg"
+          },
+          {
+            "kind": "mask",
+            "path": "lirm-armature-24/mask-control.svg"
+          },
+          {
+            "kind": "semantic",
+            "path": "lirm-armature-24/semantic-control.svg"
+          }
+        ]
+      }
+    ]
+  }
+}

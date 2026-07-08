@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="320" height="240" viewBox="0 0 320 240" role="img" aria-label="lirm-armature-11 normal proxy control" data-proxy-render="normal" data-normal-encoding="rgb-object-space">
+  <rect width="100%" height="100%" fill="rgb(128,128,255)"/>
+  <g data-layer="proxy-primitives" data-candidate-id="lirm-armature-11" data-primitive-count="22">
+    <ellipse cx="221.17" cy="135.69" rx="5.11" ry="5.11" fill="rgb(233, 158, 192)" stroke="rgba(8,13,10,0.28)" stroke-width="1" opacity="0.9"><title>contact point</title></ellipse>
+    <ellipse cx="224.52" cy="111.43" rx="25.58" ry="16.68" fill="rgb(231, 112, 200)" stroke="rgba(8,13,10,0.28)" stroke-width="1" opacity="0.84"><title>body mass</title></ellipse>
+    <ellipse cx="203.41" cy="158.3" rx="5.11" ry="5.11" fill="rgb(200, 200, 204)" stroke="rgba(8,13,10,0.28)" stroke-width="1" opacity="0.9"><title>contact point</title></ellipse>
+    <ellipse cx="236.35" cy="112.89" rx="5.91" ry="5.91" fill="rgb(236, 116, 193)" stroke="rgba(8,13,10,0.28)" stroke-width="1" opacity="0.9"><title>terminal mouth</title></ellipse>
+    <ellipse cx="225.35" cy="111.43" rx="20.56" ry="20.56" fill="rgb(230, 112, 201)" stroke="rgba(8,13,10,0.28)" stroke-width="1" opacity="0.9"><title>head orientation</title></ellipse>
+    <line x1="195.24" y1="131.49" x2="217" y2="131.49" stroke="rgb(211, 151, 221)" stroke-width="4.37" stroke-linecap="round" opacity="0.9" transform="rotate(7.99 206.12 131.49)"><title>limb bud</title></line>
+    <ellipse cx="206.75" cy="131.49" rx="28.85" ry="18.81" fill="rgb(211, 150, 221)" stroke="rgba(8,13,10,0.28)" stroke-width="1" opacity="0.84"><title>body mass</title></ellipse>
+    <ellipse cx="185.64" cy="171.8" rx="5.11" ry="5.11" fill="rgb(167, 217, 209)" stroke="rgba(8,13,10,0.28)" stroke-width="1" opacity="0.9"><title>contact point</title></ellipse>
+    <line x1="177.48" y1="147.54" x2="199.24" y2="147.54" stroke="rgb(177, 182, 232)" stroke-width="4.19" stroke-linecap="round" opacity="0.9" transform="rotate(4.01 188.36 147.54)"><title>limb bud</title></line>
+    <ellipse cx="188.99" cy="147.54" rx="31.57" ry="20.58" fill="rgb(177, 181, 232)" stroke="rgba(8,13,10,0.28)" stroke-width="1" opacity="0.84"><title>body mass</title></ellipse>
+    <ellipse cx="167.88" cy="176.54" rx="5.11" ry="5.11" fill="rgb(139, 219, 216)" stroke="rgba(8,13,10,0.28)" stroke-width="1" opacity="0.9"><title>contact point</title></ellipse>
+    <line x1="159.71" y1="149.73" x2="181.47" y2="149.73" stroke="rgb(145, 184, 241)" stroke-width="4.19" stroke-linecap="round" opacity="0.9" transform="rotate(0 170.59 149.73)"><title>limb bud</title></line>
+    <ellipse cx="171.22" cy="149.73" rx="33.02" ry="21.53" fill="rgb(146, 183, 241)" stroke="rgba(8,13,10,0.28)" stroke-width="1" opacity="0.84"><title>body mass</title></ellipse>
+    <ellipse cx="150.3" cy="161.59" rx="5.11" ry="5.11" fill="rgb(113, 198, 232)" stroke="rgba(8,13,10,0.28)" stroke-width="1" opacity="0.9"><title>contact point</title></ellipse>
+    <ellipse cx="153.64" cy="137.33" rx="33.02" ry="21.53" fill="rgb(117, 159, 251)" stroke="rgba(8,13,10,0.28)" stroke-width="1" opacity="0.84"><title>body mass</title></ellipse>
+    <ellipse cx="132.54" cy="146.08" rx="5.11" ry="5.11" fill="rgb(87, 170, 241)" stroke="rgba(8,13,10,0.28)" stroke-width="1" opacity="0.9"><title>contact point</title></ellipse>
+    <line x1="124.37" y1="119.27" x2="146.13" y2="119.27" stroke="rgb(91, 126, 250)" stroke-width="4.19" stroke-linecap="round" opacity="0.9" transform="rotate(-4.01 135.25 119.27)"><title>limb bud</title></line>
+    <ellipse cx="135.88" cy="119.27" rx="31.57" ry="20.58" fill="rgb(93, 126, 250)" stroke="rgba(8,13,10,0.28)" stroke-width="1" opacity="0.84"><title>body mass</title></ellipse>
+    <ellipse cx="114.77" cy="131.49" rx="5.11" ry="5.11" fill="rgb(68, 144, 239)" stroke="rgba(8,13,10,0.28)" stroke-width="1" opacity="0.9"><title>contact point</title></ellipse>
+    <line x1="106.61" y1="107.23" x2="128.37" y2="107.23" stroke="rgb(74, 109, 242)" stroke-width="4.19" stroke-linecap="round" opacity="0.9" transform="rotate(-7.99 117.49 107.23)"><title>limb bud</title></line>
+    <ellipse cx="118.11" cy="107.23" rx="28.85" ry="18.81" fill="rgb(75, 110, 242)" stroke="rgba(8,13,10,0.28)" stroke-width="1" opacity="0.84"><title>body mass</title></ellipse>
+    <ellipse cx="100.35" cy="107.05" rx="25.58" ry="16.68" fill="rgb(63, 112, 236)" stroke="rgba(8,13,10,0.28)" stroke-width="1" opacity="0.84"><title>body mass</title></ellipse>
+  </g>
+  <text x="12" y="20" fill="rgba(238,246,214,0.72)" font-size="12" font-family="Menlo, Monaco, monospace">lirm-armature-11 normal proxy control</text>
+</svg>

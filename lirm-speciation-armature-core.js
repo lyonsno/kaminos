@@ -5,9 +5,13 @@ export const LIRM_SPECIATION_ARMATURE_WITNESS_SCHEMA = 'kaminos.lirm-speciation-
 export const LIRM_SPECIATION_ARMATURE_CANDIDATE_SCHEMA = 'kaminos.lirm-speciation-armature-candidate.v0';
 export const LIRM_SPECIATION_ARMATURE_RECEIPT_SCHEMA = 'kaminos.lirm-speciation-armature-receipt.v0';
 export const LIRM_SPECIATION_ARMATURE_CONTROL_PACKET_SCHEMA = 'kaminos.lirm-speciation-armature-control-packet.v0';
+export const LIRM_SPECIATION_ARMATURE_PROXY_RENDER_BUNDLE_SCHEMA = 'kaminos.lirm-speciation-armature-proxy-render-bundle.v0';
+export const LIRM_SPECIATION_ARMATURE_PROXY_RENDER_WITNESS_SCHEMA = 'kaminos.lirm-speciation-armature-proxy-render-witness.v0';
 export const LIRM_SPECIATION_ARMATURE_ROUTE = 'kaminos/lirm-speciation-armature/contact-sheet-v0';
 export const LIRM_SPECIATION_ARMATURE_CONTROL_PACKET_ROUTE = 'kaminos/lirm-speciation-armature/control-packet-v0';
+export const LIRM_SPECIATION_ARMATURE_PROXY_RENDER_ROUTE = 'kaminos/lirm-speciation-armature/proxy-render-v0';
 export const LIRM_SPECIATION_ARMATURE_WRITE_RESULT_SCHEMA = 'kaminos.lirm-speciation-armature-write-result.v0';
+export const LIRM_SPECIATION_ARMATURE_PROXY_RENDER_WRITE_RESULT_SCHEMA = 'kaminos.lirm-speciation-armature-proxy-render-write-result.v0';
 
 const ROOT_PARENT_ID = 'root-soft-crawling-hoard-thief';
 const DEFAULT_SEED = 'molten-lirm-speciation-armature-v0';
@@ -606,6 +610,214 @@ export function createLirmSpeciationArmatureControlPacket({ witness, candidate, 
       generatorFiringClaim: 'not_yet_fired',
       proxyGeometryClaim: 'control_primitives_only',
     },
+  };
+}
+
+function rotateForProxyCamera(point) {
+  const angle = -0.42;
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  const x = point.x * cos - point.z * sin;
+  const z = point.x * sin + point.z * cos;
+  return { x, y: point.y, z };
+}
+
+function projectProxyPoint(point, width = 320, height = 240) {
+  const rotated = rotateForProxyCamera(point);
+  return {
+    x: round(width * (0.5 + rotated.x * 0.32), 2),
+    y: round(height * (0.5 - rotated.y * 0.38), 2),
+    z: round(rotated.z),
+    depth01: round(clamp(0.52 + rotated.z * 0.42, 0, 1)),
+  };
+}
+
+function depthFill(depth01) {
+  const level = Math.round(28 + depth01 * 210);
+  return `rgb(${level}, ${level}, ${level})`;
+}
+
+function normalFill(point) {
+  const normal = rotateForProxyCamera(point);
+  const length = Math.hypot(normal.x, normal.y, normal.z + 0.72) || 1;
+  const r = Math.round(clamp((normal.x / length) * 0.5 + 0.5, 0, 1) * 255);
+  const g = Math.round(clamp((-normal.y / length) * 0.5 + 0.5, 0, 1) * 255);
+  const b = Math.round(clamp(((normal.z + 0.72) / length) * 0.5 + 0.5, 0, 1) * 255);
+  return `rgb(${r}, ${g}, ${b})`;
+}
+
+function semanticFill(role) {
+  const palette = {
+    body_mass: 'rgba(117,164,70,0.92)',
+    head_orientation: 'rgba(180,91,53,0.96)',
+    terminal_mouth: 'rgba(92,19,34,0.96)',
+    limb_bud: 'rgba(163,105,58,0.88)',
+    shell_plate: 'rgba(91,101,128,0.92)',
+    contact_point: 'rgba(190,81,220,0.82)',
+  };
+  return palette[role] || 'rgba(215,220,185,0.84)';
+}
+
+function humanProxyRole(role) {
+  return String(role).replaceAll('_', ' ');
+}
+
+function clayFill(primitive, depth01) {
+  const warm = primitive.role === 'terminal_mouth' ? [96, 28, 38] : primitive.role === 'head_orientation' ? [173, 97, 54] : [132, 142, 92];
+  const light = 0.58 + depth01 * 0.3 + (primitive.center.y < 0 ? 0.08 : -0.03);
+  const channel = value => Math.round(clamp(value * light, 16, 245));
+  return `rgb(${channel(warm[0])}, ${channel(warm[1])}, ${channel(warm[2])})`;
+}
+
+function proxyPrimitiveDepth(primitive) {
+  return projectProxyPoint(primitive.center).depth01;
+}
+
+function renderProxyPrimitiveSvg(primitive, kind, width, height) {
+  const projected = projectProxyPoint(primitive.center, width, height);
+  const baseRadius = Math.max(2.5, (primitive.radius || 0.04) * width * 0.42);
+  const depth = projected.depth01;
+  const fillByKind = {
+    clay: clayFill(primitive, depth),
+    depth: depthFill(depth),
+    normal: normalFill(primitive.center),
+    mask: 'rgb(255,255,255)',
+    semantic: semanticFill(primitive.role),
+  };
+  const fill = fillByKind[kind] || fillByKind.clay;
+  const opacity = kind === 'mask' ? 1 : primitive.role === 'body_mass' ? 0.84 : 0.9;
+  const stroke = primitive.role === 'terminal_mouth' && kind === 'clay' ? 'rgba(255,176,100,0.85)' : 'rgba(8,13,10,0.28)';
+  if (primitive.kind === 'capsule') {
+    const length = (primitive.length || 0.08) * width * 0.4;
+    const tilt = primitive.t ? (primitive.t - 0.5) * 24 : 0;
+    return `<line x1="${round(projected.x - length / 2, 2)}" y1="${round(projected.y, 2)}" x2="${round(projected.x + length / 2, 2)}" y2="${round(projected.y, 2)}" stroke="${fill}" stroke-width="${round(baseRadius * 1.3, 2)}" stroke-linecap="round" opacity="${opacity}" transform="rotate(${round(tilt, 2)} ${projected.x} ${projected.y})"><title>${xml(humanProxyRole(primitive.role))}</title></line>`;
+  }
+  if (primitive.kind === 'box') {
+    const sizeX = Math.max(8, (primitive.size?.x || 0.08) * width * 0.38);
+    const sizeY = Math.max(5, (primitive.size?.y || 0.04) * height * 0.55);
+    const tilt = primitive.t ? (primitive.t - 0.5) * 32 : 0;
+    return `<rect x="${round(projected.x - sizeX / 2, 2)}" y="${round(projected.y - sizeY / 2, 2)}" width="${round(sizeX, 2)}" height="${round(sizeY, 2)}" rx="4" fill="${fill}" stroke="${stroke}" stroke-width="1" opacity="${opacity}" transform="rotate(${round(tilt, 2)} ${projected.x} ${projected.y})"><title>${xml(humanProxyRole(primitive.role))}</title></rect>`;
+  }
+  const rx = baseRadius * (primitive.kind === 'metaball' ? 1.35 : 1);
+  const ry = baseRadius * (primitive.kind === 'metaball' ? 0.88 : 1);
+  return `<ellipse cx="${projected.x}" cy="${projected.y}" rx="${round(rx, 2)}" ry="${round(ry, 2)}" fill="${fill}" stroke="${stroke}" stroke-width="1" opacity="${opacity}"><title>${xml(humanProxyRole(primitive.role))}</title></ellipse>`;
+}
+
+function renderProxyMapSvg({ candidate, packet, kind }) {
+  const width = 320;
+  const height = 240;
+  const background = kind === 'mask' ? '#000000' : kind === 'normal' ? 'rgb(128,128,255)' : kind === 'depth' ? 'rgb(16,16,16)' : '#07130f';
+  const sorted = [...packet.proxyPrimitives].sort((a, b) => proxyPrimitiveDepth(a) - proxyPrimitiveDepth(b));
+  const body = sorted.map(primitive => renderProxyPrimitiveSvg(primitive, kind, width, height)).join('\n    ');
+  const title = `${candidate.id} ${kind} proxy control`;
+  const depthRange = kind === 'depth' ? ' data-depth-range="near-white far-black"' : '';
+  const normalEncoding = kind === 'normal' ? ' data-normal-encoding="rgb-object-space"' : '';
+  const maskMode = kind === 'mask' ? ' data-mask-mode="silhouette"' : '';
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-label="${xml(title)}" data-proxy-render="${xml(kind)}"${depthRange}${normalEncoding}${maskMode}>
+  <rect width="100%" height="100%" fill="${background}"/>
+  <g data-layer="proxy-primitives" data-candidate-id="${xml(candidate.id)}" data-primitive-count="${packet.proxyPrimitives.length}">
+    ${body}
+  </g>
+  <text x="12" y="20" fill="${kind === 'mask' || kind === 'depth' ? 'rgba(255,255,255,0.68)' : 'rgba(238,246,214,0.72)'}" font-size="12" font-family="Menlo, Monaco, monospace">${xml(title)}</text>
+</svg>`;
+}
+
+export function createLirmSpeciationArmatureProxyRenderBundle({ witness, candidate, candidateId } = {}) {
+  const selectedCandidate = candidate || witness?.candidates?.find(item => item.id === candidateId);
+  if (!witness || !selectedCandidate) {
+    throw new Error('createLirmSpeciationArmatureProxyRenderBundle requires a witness and candidate or candidateId');
+  }
+  const packet = createLirmSpeciationArmatureControlPacket({ witness, candidate: selectedCandidate });
+  const candidateDir = selectedCandidate.id;
+  const mapKinds = ['clay', 'depth', 'normal', 'mask', 'semantic'];
+  const renderMaps = mapKinds.map(kind => ({
+    kind,
+    path: `${candidateDir}/${kind}-control.svg`,
+    svg: renderProxyMapSvg({ candidate: selectedCandidate, packet, kind }),
+  }));
+  return {
+    schema: LIRM_SPECIATION_ARMATURE_PROXY_RENDER_BUNDLE_SCHEMA,
+    route: LIRM_SPECIATION_ARMATURE_PROXY_RENDER_ROUTE,
+    sourceWitnessId: witness.witnessId,
+    sourceWitnessRoute: witness.route,
+    candidateId: selectedCandidate.id,
+    seed: selectedCandidate.seed,
+    camera: {
+      projection: 'orthographic',
+      view: 'front-three-quarter',
+      coordinateFrame: 'normalized-proxy-primitives',
+      note: 'software SVG projection of packet proxy primitives, not mesh render',
+    },
+    proxyPrimitiveCount: packet.proxyPrimitives.length,
+    semanticHandles: selectedCandidate.semanticHandles,
+    contactPoints: selectedCandidate.contactPoints,
+    renderMaps,
+    falseClosureGuards: {
+      finishedCreatureClaim: 'forbidden',
+      generatorFiringClaim: 'not_yet_fired',
+      proxyRenderClaim: 'depth_normal_conditioning_witness_only',
+    },
+  };
+}
+
+export async function writeLirmSpeciationArmatureProxyRenderWitness(options = {}) {
+  const outDir = options.outDir || join(process.cwd(), 'artifacts', 'lirm-speciation-armature-proxy-renders-v0');
+  const seed = String(options.seed || DEFAULT_SEED);
+  const candidateCount = Math.max(1, Number(options.candidateCount || DEFAULT_CANDIDATE_COUNT));
+  const columns = Math.max(1, Number(options.columns || DEFAULT_COLUMNS));
+  const witness = options.witness || createLirmSpeciationArmatureWitness({ seed, candidateCount, columns });
+  const candidateIds = options.candidateIds || ['lirm-armature-08', 'lirm-armature-11', 'lirm-armature-16', 'lirm-armature-22', 'lirm-armature-24'];
+  await mkdir(outDir, { recursive: true });
+  const bundles = [];
+  const outputBundles = [];
+  for (const candidateId of candidateIds) {
+    const bundle = createLirmSpeciationArmatureProxyRenderBundle({ witness, candidateId });
+    const candidateDir = join(outDir, candidateId);
+    await mkdir(candidateDir, { recursive: true });
+    await writeFile(join(candidateDir, 'bundle.json'), `${JSON.stringify({ ...bundle, renderMaps: bundle.renderMaps.map(map => ({ kind: map.kind, path: map.path })) }, null, 2)}\n`);
+    for (const map of bundle.renderMaps) {
+      await writeFile(join(outDir, map.path), map.svg);
+    }
+    bundles.push(bundle);
+    outputBundles.push({
+      candidateId,
+      bundle: `${candidateId}/bundle.json`,
+      maps: bundle.renderMaps.map(map => ({ kind: map.kind, path: map.path })),
+    });
+  }
+  const receipt = {
+    schema: LIRM_SPECIATION_ARMATURE_PROXY_RENDER_WITNESS_SCHEMA,
+    route: LIRM_SPECIATION_ARMATURE_PROXY_RENDER_ROUTE,
+    seed,
+    sourceWitnessId: witness.witnessId,
+    candidateIds,
+    bundles: bundles.map(bundle => ({
+      schema: bundle.schema,
+      candidateId: bundle.candidateId,
+      camera: bundle.camera,
+      proxyPrimitiveCount: bundle.proxyPrimitiveCount,
+      renderMaps: bundle.renderMaps.map(map => ({ kind: map.kind, path: map.path })),
+    })),
+    falseClosureGuards: {
+      finishedCreatureClaim: 'forbidden',
+      generatorFiringClaim: 'not_yet_fired',
+      proxyRenderClaim: 'depth_normal_conditioning_witness_only',
+    },
+    outputInventory: {
+      receipt: 'receipt.json',
+      bundles: outputBundles,
+    },
+  };
+  const receiptPath = join(outDir, 'receipt.json');
+  await writeFile(receiptPath, `${JSON.stringify(receipt, null, 2)}\n`);
+  return {
+    schema: LIRM_SPECIATION_ARMATURE_PROXY_RENDER_WRITE_RESULT_SCHEMA,
+    route: LIRM_SPECIATION_ARMATURE_PROXY_RENDER_ROUTE,
+    outDir,
+    seed,
+    receiptPath,
+    candidateIds,
+    bundleCount: bundles.length,
   };
 }
 
