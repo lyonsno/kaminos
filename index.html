@@ -6039,11 +6039,120 @@ function motionPanelHillActorDisplayScale(hillTerrainCarrier = null) {
   return hillTerrainCarrier ? MOTION_PANEL_HILL_ACTOR_DISPLAY_SCALE : 1;
 }
 
+function motionPanelRoundedVector3(vector) {
+  return vector.toArray().map(value => Number(value.toFixed(5)));
+}
+
+function createMotionPanelHillCarrierSmoothing(pathWorldSample, runtime = {}, options = {}) {
+  if (!pathWorldSample) return null;
+  const rawRoot = motionPanelVector3FromArray(pathWorldSample.root);
+  const rawHeading = motionPanelVector3FromArray(normalizeMotionPanelPathWorldXZ(pathWorldSample.facing, [0, 0, 1]), [0, 0, 1]).setY(0);
+  if (rawHeading.lengthSq() < 0.0001) rawHeading.set(0, 0, 1);
+  rawHeading.normalize();
+
+  const elapsedTime = Math.max(0, Number(options.elapsedTime || 0));
+  const previousElapsedTime = Number.isFinite(runtime.lastElapsedTime) ? runtime.lastElapsedTime : elapsedTime;
+  const dt = Math.max(0.016, Math.min(0.12, elapsedTime - previousElapsedTime || 0.016));
+  const progress = Number(pathWorldSample.progress ?? 0);
+  const previousProgress = Number.isFinite(runtime.lastProgress) ? runtime.lastProgress : progress;
+  const shouldReset = !runtime.root
+    || pathWorldSample.routePhase === 'enter'
+    || progress + 0.04 < previousProgress
+    || elapsedTime + 0.04 < previousElapsedTime;
+  const positionAlpha = shouldReset ? 1 : Math.max(0.06, Math.min(0.38, 1 - Math.exp(-dt * 5.2)));
+  const headingAlpha = shouldReset ? 1 : Math.max(0.08, Math.min(0.46, 1 - Math.exp(-dt * 7.4)));
+  const previousRoot = shouldReset ? rawRoot.clone() : motionPanelVector3FromArray(runtime.root, rawRoot.toArray());
+  const previousHeading = shouldReset ? rawHeading.clone() : motionPanelVector3FromArray(runtime.heading, rawHeading.toArray()).setY(0);
+  if (previousHeading.lengthSq() < 0.0001) previousHeading.copy(rawHeading);
+  previousHeading.normalize();
+
+  const smoothedRoot = previousRoot.lerp(rawRoot, positionAlpha);
+  const smoothedHeading = previousHeading.lerp(rawHeading, headingAlpha);
+  if (smoothedHeading.lengthSq() < 0.0001) smoothedHeading.copy(rawHeading);
+  smoothedHeading.normalize();
+  const smoothedAttention = smoothedRoot.clone().add(smoothedHeading.clone().multiplyScalar(0.72)).add(new THREE.Vector3(0, 0.34, 0));
+
+  runtime.root = motionPanelRoundedVector3(smoothedRoot);
+  runtime.heading = motionPanelRoundedVector3(smoothedHeading);
+  runtime.lastElapsedTime = elapsedTime;
+  runtime.lastProgress = progress;
+
+  const pathWorldSampleWithSmoothing = {
+    ...pathWorldSample,
+    root: runtime.root,
+    facing: runtime.heading,
+    attention: motionPanelRoundedVector3(smoothedAttention),
+    carrierSmoothing: null,
+  };
+  const evidence = {
+    schema: 'kaminos.motion-panel-hill-carrier-smoothing.v0',
+    mode: 'hill-carrier-cadence-smoothing-v0',
+    carrierAuthority: 'terrain-route',
+    routeAuthority: pathWorldSample.routeAuthority || pathWorldSample.activeSource || 'terrain-affordance-route-plan',
+    rawCarrierRoot: motionPanelRoundedVector3(rawRoot),
+    smoothedCarrierRoot: runtime.root,
+    rawRouteTangent: motionPanelRoundedVector3(rawHeading),
+    smoothedCarrierHeading: runtime.heading,
+    smoothedAttention: motionPanelRoundedVector3(smoothedAttention),
+    smoothingAlpha: {
+      position: Number(positionAlpha.toFixed(5)),
+      heading: Number(headingAlpha.toFixed(5)),
+    },
+    routeProgress: Number(progress.toFixed(5)),
+    routePhase: pathWorldSample.routePhase || null,
+    routeLookahead: {
+      mode: 'damped-route-tangent',
+      dt: Number(dt.toFixed(5)),
+    },
+    resetThisFrame: shouldReset,
+  };
+  pathWorldSampleWithSmoothing.carrierSmoothing = evidence;
+  return {
+    schema: 'kaminos.motion-panel-hill-carrier-smoothing-result.v0',
+    sample: pathWorldSampleWithSmoothing,
+    evidence,
+  };
+}
+
+function createMotionPanelHillCarrierCadence(pathWorldSample, temporalSample = null, displayGrounding = null, options = {}) {
+  if (!pathWorldSample) return null;
+  const effort = Math.max(0, Math.min(1.4, Number(options.effort ?? temporalSample?.effort ?? 0)));
+  const compression = Math.max(0, Math.min(1.2, Number(temporalSample?.bowCompression || displayGrounding?.groundedCompression || 0)));
+  const chestRoot = Array.isArray(temporalSample?.chestRoot) ? temporalSample.chestRoot : [0, 0, 0];
+  const headRoot = Array.isArray(temporalSample?.headRoot) ? temporalSample.headRoot : [0, 0, 0];
+  const sourceFrame = temporalSample?.sourceFrame ?? null;
+  const sourceTime = temporalSample?.time ?? null;
+  const phase = Number.isFinite(sourceTime) ? sourceTime * Math.PI * 2.0 : Number(sourceFrame || 0) * 0.17;
+  const cadenceAmount = Math.max(0.12, Math.min(0.62, 0.18 + effort * 0.18 + compression * 0.2));
+  const localWobble = new THREE.Vector3(
+    Math.max(-0.018, Math.min(0.018, Number(chestRoot[0] || 0) * 0.045 + Math.sin(phase) * 0.006 * cadenceAmount)),
+    Math.max(-0.006, Math.min(0.012, Math.sin(phase * 2.0) * 0.01 * cadenceAmount)),
+    Math.max(-0.018, Math.min(0.018, Number(headRoot[2] || 0) * 0.035 + Math.cos(phase * 0.75) * 0.006 * cadenceAmount)),
+  );
+  return {
+    schema: 'kaminos.motion-panel-hill-carrier-cadence.v0',
+    mode: 'bounded-generated-temporal-cadence',
+    cadenceSource: `generated-pose-temporal:${sourceFrame ?? 'interpolated'}`,
+    cadenceAmount: Number(cadenceAmount.toFixed(5)),
+    contactPolicy: 'terrain-clamped-local-affect',
+    localRootOffset: motionPanelRoundedVector3(localWobble),
+    bodyRoll: Number(Math.max(-0.36, Math.min(0.36, Number(chestRoot[0] || 0) * 1.15)).toFixed(5)),
+    compressionBoost: Number(Math.max(0, Math.min(0.18, compression * 0.12 + cadenceAmount * 0.035)).toFixed(5)),
+    sourceFrame,
+    sourceTime,
+    airborneGrant: false,
+    airborneSuppressed: true,
+    travelAuthority: 'hill-terrain-carrier',
+  };
+}
+
 function createMotionPanelHillTerrainCarrier(pathWorldSample, displayGrounding, temporalSample = null, options = {}) {
   const hillFrame = pathWorldSample?.hillTerrainFrame || null;
   if (hillFrame?.displayTransform?.kind !== 'hill-native-route-world') return null;
   const terrainRoot = motionPanelVector3FromArray(pathWorldSample.root);
   const rawExpressiveRoot = motionPanelVector3FromArray(displayGrounding?.root, [0, 0.18, 0]);
+  const cadence = options.carrierCadence || null;
+  const cadenceOffset = motionPanelVector3FromArray(cadence?.localRootOffset, [0, 0, 0]);
   const centerClearance = Math.max(0.08, Number(options.centerClearance ?? 0.18));
   const bounds = {
     horizontal: Math.max(0.02, Number(options.horizontal ?? 0.1)),
@@ -6054,12 +6163,12 @@ function createMotionPanelHillTerrainCarrier(pathWorldSample, displayGrounding, 
   const baseExpressiveY = Number(displayGrounding?.sourceVerticalPolicy?.minCenterY ?? centerClearance);
   const terrainCarrierRoot = terrainRoot.clone().add(new THREE.Vector3(0, centerClearance, 0));
   const expressiveRootOffset = new THREE.Vector3(
-    Math.max(-bounds.horizontal, Math.min(bounds.horizontal, rawExpressiveRoot.x)),
-    Math.max(-bounds.downward, Math.min(bounds.upward, rawExpressiveRoot.y - baseExpressiveY)),
-    Math.max(-bounds.horizontal, Math.min(bounds.horizontal, rawExpressiveRoot.z)),
+    Math.max(-bounds.horizontal, Math.min(bounds.horizontal, rawExpressiveRoot.x + cadenceOffset.x)),
+    Math.max(-bounds.downward, Math.min(bounds.upward, rawExpressiveRoot.y - baseExpressiveY + cadenceOffset.y)),
+    Math.max(-bounds.horizontal, Math.min(bounds.horizontal, rawExpressiveRoot.z + cadenceOffset.z)),
   );
   const groundedRoot = terrainCarrierRoot.clone().add(expressiveRootOffset);
-  const rawBodyRoll = Number(temporalSample?.chestRoot?.[0] || 0) * 1.8;
+  const rawBodyRoll = Number(temporalSample?.chestRoot?.[0] || 0) * 1.8 + Number(cadence?.bodyRoll || 0);
   const expressiveBodyRoll = Math.max(-bounds.roll, Math.min(bounds.roll, rawBodyRoll));
   return {
     schema: 'kaminos.motion-panel-hill-terrain-carrier.v0',
@@ -6080,6 +6189,11 @@ function createMotionPanelHillTerrainCarrier(pathWorldSample, displayGrounding, 
     },
     rawBodyRoll: Number(rawBodyRoll.toFixed(5)),
     expressiveBodyRoll: Number(expressiveBodyRoll.toFixed(5)),
+    carrierSmoothing: pathWorldSample.carrierSmoothing || null,
+    carrierCadence: cadence,
+    cadenceSource: cadence?.cadenceSource || null,
+    contactPolicy: cadence?.contactPolicy || 'terrain-clamped-local-affect',
+    airborneSuppressed: cadence?.airborneSuppressed ?? true,
     carrierFrame: {
       schema: hillFrame.schema || null,
       sourceRef: hillFrame.sourceRef || null,
@@ -6110,10 +6224,17 @@ function createMotionPanelCarrierPathFollower(pathWorldSample, hillTerrainCarrie
     terrainCarrierRoot: hillTerrainCarrier.terrainCarrierRoot || null,
     groundedRoot: hillTerrainCarrier.groundedRoot || null,
     routeTangent,
-    carrierHeading: routeTangent,
+    carrierHeading: pathWorldSample.carrierSmoothing?.smoothedCarrierHeading || routeTangent,
+    smoothedCarrierRoot: pathWorldSample.carrierSmoothing?.smoothedCarrierRoot || hillTerrainCarrier.terrainCarrierRoot || null,
+    smoothedCarrierHeading: pathWorldSample.carrierSmoothing?.smoothedCarrierHeading || routeTangent,
+    carrierSmoothing: pathWorldSample.carrierSmoothing || hillTerrainCarrier.carrierSmoothing || null,
+    carrierCadence: hillTerrainCarrier.carrierCadence || null,
+    cadenceSource: hillTerrainCarrier.cadenceSource || null,
     expressiveRootOffset: expressiveOffset.toArray().map(value => Number(value.toFixed(5))),
     expressiveBounds: hillTerrainCarrier.expressiveBounds || null,
     airborneGrant: false,
+    airborneSuppressed: hillTerrainCarrier.airborneSuppressed ?? true,
+    contactPolicy: hillTerrainCarrier.contactPolicy || 'terrain-clamped-local-affect',
     steeringDisabledByCarrierFollower: !!pathWorldSample.steeringDisabledByCarrierFollower,
     pathTriggerSuppressedByCarrierFollower: !!options.pathTriggerSuppressedByCarrierFollower,
     pathTriggerRequested: !!options.pathTriggerRequested,
@@ -8250,13 +8371,22 @@ function updateGeneratedPoseTemporalFrame(nowSeconds = performance.now() / 1000)
       routeMode: routePlaybackMode,
     }
     : state.pathWorld;
-  const pathWorldSample = state.pathWorld
+  const rawPathWorldSample = state.pathWorld
     ? sampleMotionPanelPathWorld(effectivePathWorld, elapsedTime, state.duration, {
       pathWorldSteeringMemoryRuntime: state.pathWorldSteeringMemoryRuntime || (state.pathWorldSteeringMemoryRuntime = {}),
       disableSteering: hillCarrierFollowRequested,
     })
     : null;
-  const hillCarrierFollowMode = motionPanelHillCarrierFollowEnabled(pathWorldSample || state.pathWorld);
+  const hillCarrierFollowMode = motionPanelHillCarrierFollowEnabled(rawPathWorldSample || state.pathWorld);
+  const carrierSmoothingResult = hillCarrierFollowMode && rawPathWorldSample
+    ? createMotionPanelHillCarrierSmoothing(
+      rawPathWorldSample,
+      state.hillCarrierSmoothingRuntime || (state.hillCarrierSmoothingRuntime = {}),
+      { elapsedTime },
+    )
+    : null;
+  if (!hillCarrierFollowMode) state.hillCarrierSmoothingRuntime = null;
+  const pathWorldSample = carrierSmoothingResult?.sample || rawPathWorldSample;
   const pathTriggerSuppressedByCarrierFollower = !!(pathTriggerMode && hillCarrierFollowMode);
   const effectivePathTriggerMode = pathTriggerMode && !hillCarrierFollowMode;
   const clipletInterruptTimeline = !pathWorldSample && effectivePathTriggerMode
@@ -8301,6 +8431,11 @@ function updateGeneratedPoseTemporalFrame(nowSeconds = performance.now() / 1000)
     minCenterY: 0.18,
   };
   const displayGrounding = mapGeneratedPoseTemporalGroundedDisplaySample(sample, displayGroundingOptions);
+  const carrierCadence = hillCarrierFollowMode
+    ? createMotionPanelHillCarrierCadence(pathWorldSample, temporalSample, displayGrounding, {
+      effort: sample.effort,
+    })
+    : null;
   const hillTerrainCarrier = createMotionPanelHillTerrainCarrier(
     pathWorldSample,
     displayGrounding,
@@ -8311,6 +8446,7 @@ function updateGeneratedPoseTemporalFrame(nowSeconds = performance.now() / 1000)
         downward: 0.025,
         upward: 0.055,
         roll: 0.42,
+        carrierCadence,
       }
       : {},
   );
@@ -8434,11 +8570,12 @@ function updateGeneratedPoseTemporalFrame(nowSeconds = performance.now() / 1000)
     ? Number(hillTerrainCarrier.expressiveBodyRoll || 0)
     : (temporalSample?.chestRoot?.[0] || 0) * 1.8;
   const displayCompression = Math.max(compression, Number(displayGrounding.groundedCompression || 0));
+  const carrierCadenceCompression = Number(carrierCadence?.compressionBoost || 0);
   const groundedCompression = Number(displayGrounding.groundedCompression || 0);
   visual.body.scale.set(
-    1 + displayCompression * 0.18 + groundedCompression * 0.18,
-    Math.max(0.42, 1.14 - displayCompression * 0.34 - groundedCompression * 0.28),
-    1 + displayCompression * 0.46 + groundedCompression * 0.26,
+    1 + displayCompression * 0.18 + groundedCompression * 0.18 + carrierCadenceCompression * 0.55,
+    Math.max(0.42, 1.14 - displayCompression * 0.34 - groundedCompression * 0.28 - carrierCadenceCompression * 0.42),
+    1 + displayCompression * 0.46 + groundedCompression * 0.26 + carrierCadenceCompression * 0.72,
   );
   visual.group.updateMatrixWorld(true);
   const faceCueWorld = rootPosition.clone().add(displayedFacing.multiplyScalar((0.22 + sample.effort * 0.02) * actorDisplayScale));
@@ -8486,6 +8623,8 @@ function updateGeneratedPoseTemporalFrame(nowSeconds = performance.now() / 1000)
   state.lastPathWorldRootConstraint = pathWorldRootConstraint;
   state.lastHillTerrainCarrier = hillTerrainCarrier;
   state.lastCarrierPathFollower = carrierPathFollower;
+  state.lastCarrierSmoothing = carrierSmoothingResult?.evidence || hillTerrainCarrier?.carrierSmoothing || null;
+  state.lastCarrierCadence = carrierCadence || hillTerrainCarrier?.carrierCadence || null;
   state.lastDisplayGrounding = displayGrounding;
   const behaviorState = buildGeneratedPoseTemporalBehaviorState({
     track: state.track,
@@ -8584,10 +8723,15 @@ function updateGeneratedPoseTemporalFrame(nowSeconds = performance.now() / 1000)
     arrivalBehavior,
     hillTerrainCarrier,
     carrierPathFollower,
+    carrierSmoothing: carrierSmoothingResult?.evidence || hillTerrainCarrier?.carrierSmoothing || null,
+    carrierCadence: carrierCadence || hillTerrainCarrier?.carrierCadence || null,
+    cadenceSource: carrierCadence?.cadenceSource || hillTerrainCarrier?.cadenceSource || null,
     terrainContact: carrierPathFollower?.terrainContact || null,
     routeTangent: carrierPathFollower?.routeTangent || null,
     carrierHeading: carrierPathFollower?.carrierHeading || null,
     airborneGrant: carrierPathFollower?.airborneGrant ?? null,
+    airborneSuppressed: carrierPathFollower?.airborneSuppressed ?? carrierCadence?.airborneSuppressed ?? null,
+    contactPolicy: carrierPathFollower?.contactPolicy || carrierCadence?.contactPolicy || null,
     actorDisplayScale: Number(actorDisplayScale.toFixed(5)),
     pathTriggerSuppressedByCarrierFollower,
     groundingAuthority: carrierPathFollower?.groundingAuthority || hillTerrainCarrier?.groundingAuthority || (pathWorldSample ? pathWorldRouteAuthority : null),

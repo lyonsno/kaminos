@@ -719,11 +719,16 @@ async function captureFrame(ws, index) {
       hillTerrainFrame: actor?.hillTerrainFrame || state?.hillTerrainFrame || state?.pathWorld?.hillTerrainFrame || null,
       hillTerrainCarrier: actor?.hillTerrainCarrier || state?.hillTerrainCarrier || null,
       carrierPathFollower: actor?.carrierPathFollower || state?.carrierPathFollower || null,
+      carrierSmoothing: actor?.carrierSmoothing || state?.carrierSmoothing || state?.carrierPathFollower?.carrierSmoothing || state?.hillTerrainCarrier?.carrierSmoothing || null,
+      carrierCadence: actor?.carrierCadence || state?.carrierCadence || state?.carrierPathFollower?.carrierCadence || state?.hillTerrainCarrier?.carrierCadence || null,
+      cadenceSource: actor?.cadenceSource || state?.cadenceSource || state?.carrierPathFollower?.cadenceSource || state?.hillTerrainCarrier?.cadenceSource || null,
       arrivalBehavior: actor?.arrivalBehavior || state?.arrivalBehavior || state?.lastArrivalBehavior || null,
       terrainContact: actor?.terrainContact || state?.terrainContact || state?.carrierPathFollower?.terrainContact || null,
       routeTangent: actor?.routeTangent || state?.routeTangent || state?.carrierPathFollower?.routeTangent || null,
       carrierHeading: actor?.carrierHeading || state?.carrierHeading || state?.carrierPathFollower?.carrierHeading || null,
       airborneGrant: actor?.airborneGrant ?? state?.airborneGrant ?? state?.carrierPathFollower?.airborneGrant ?? null,
+      airborneSuppressed: actor?.airborneSuppressed ?? state?.airborneSuppressed ?? state?.carrierPathFollower?.airborneSuppressed ?? state?.carrierCadence?.airborneSuppressed ?? null,
+      contactPolicy: actor?.contactPolicy || state?.contactPolicy || state?.carrierPathFollower?.contactPolicy || state?.carrierCadence?.contactPolicy || null,
       pathTriggerSuppressedByCarrierFollower: !!(
         actor?.pathTriggerSuppressedByCarrierFollower
         || state?.pathTriggerSuppressedByCarrierFollower
@@ -1173,6 +1178,10 @@ try {
         lastFrameDebug: {
           actorRoot: capturedFrame.debug?.actorRoot || null,
           carrierPathFollower: capturedFrame.debug?.carrierPathFollower || null,
+          carrierSmoothing: capturedFrame.debug?.carrierSmoothing || null,
+          carrierCadence: capturedFrame.debug?.carrierCadence || null,
+          cadenceSource: capturedFrame.debug?.cadenceSource || null,
+          airborneSuppressed: capturedFrame.debug?.airborneSuppressed ?? null,
           pathWorldRouteAuthority: capturedFrame.debug?.pathWorldRouteAuthority || null,
           pathTriggerSuppressedByCarrierFollower: capturedFrame.debug?.pathTriggerSuppressedByCarrierFollower ?? null,
         },
