@@ -80,10 +80,11 @@ assert.match(index, /KAMINOS_VOLUME_LOOK_LIBRARY_STORAGE_KEY/, 'Volume cockpit s
 assert.match(index, /BUILT_IN_VOLUME_LOOK_LIBRARY/, 'Volume cockpit carries source-backed looks so fresh ports are not empty');
 assert.match(index, /exploding-jellow-fireball-motherfucker/, 'Source-backed look library exposes the operator-saved exploding jellow Pyro look');
 assert.match(index, /Bonfire_a_la_ruffles/, 'Source-backed look library exposes the operator-saved Bonfire a la Ruffles Pyro look');
-assert.match(index, /Bonfire_a_la_ruffles[\s\S]*pyroFlowBite:\s*0\.95/, 'Bonfire a la Ruffles preserves the Flow carrier gain');
-assert.match(index, /Bonfire_a_la_ruffles[\s\S]*pyroRadiance:\s*1\.25/, 'Bonfire a la Ruffles preserves the old Radiance carrier gain');
-assert.match(index, /Bonfire_a_la_ruffles[\s\S]*pyroRadianceCoolColor:\s*'#eb0000'/, 'Bonfire a la Ruffles preserves the operator-tuned Radiance cool color');
-assert.match(index, /Bonfire_a_la_ruffles[\s\S]*pyroFlowHotColor:\s*'#ff230a'/, 'Bonfire a la Ruffles preserves the operator-tuned Flow hot color');
+const bonfireLookBlock = index.match(/name:\s*'Bonfire_a_la_ruffles'[\s\S]*?sourceBacked:\s*true,[\s\S]*?\},\n\s*\],\n\s*firesim:/)?.[0] || '';
+assert.match(bonfireLookBlock, /TALL_PLUME_OPERATOR_PRESETS\.pyro_flow_small_bonfire_gamut_0707/, 'Bonfire a la Ruffles aliases the current Pyro Flow small-bonfire basin instead of pinning stale copied controls');
+assert.match(bonfireLookBlock, /flowCarrierAuthored:\s*true/, 'Bonfire a la Ruffles is marked as a Flow-authored source-backed look');
+assert.doesNotMatch(bonfireLookBlock, /pyroFlowBite:\s*0\.95/, 'Bonfire a la Ruffles must not preserve the stale low Flow carrier gain');
+assert.doesNotMatch(bonfireLookBlock, /pyroRadiance:\s*1\.25/, 'Bonfire a la Ruffles must not preserve the stale old Radiance carrier gain');
 assert.match(index, /mergeVolumeLookLibraryWithBuiltIns/, 'Volume cockpit merges source-backed looks with browser-local saved looks');
 const readVolumeLookLibraryFn = index.match(/function readVolumeLookLibrary\(\) \{([\s\S]*?)\n\}/)?.[1] || '';
 assert.match(readVolumeLookLibraryFn, /mergeVolumeLookLibraryWithBuiltIns/, 'Reading the look library includes source-backed looks before refreshing the dropdown');
