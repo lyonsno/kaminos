@@ -693,6 +693,13 @@ async function captureFrame(ws, index) {
       dynamicContinuity: actor?.dynamicContinuity || state?.dynamicContinuity || state?.pathWorldRoutePlan?.evidence?.dynamicContinuity || state?.pathWorld?.routePlan?.evidence?.dynamicContinuity || null,
       pathWorldActiveSource: actor?.pathWorldActiveSource || state?.pathWorldActiveSource || null,
       hillTerrainSurface: actor?.hillTerrainSurface || state?.hillTerrainSurface || state?.pathWorld?.hillTerrainSurface || null,
+      terrainOverlayMode: actor?.hillTerrainSurface?.terrainOverlayMode
+        || actor?.hillTerrainSurface?.overlayLegend?.mode
+        || state?.hillTerrainSurface?.terrainOverlayMode
+        || state?.hillTerrainSurface?.overlayLegend?.mode
+        || state?.pathWorld?.hillTerrainSurface?.terrainOverlayMode
+        || state?.pathWorld?.hillTerrainSurface?.overlayLegend?.mode
+        || null,
       terrainOverlayLegend: actor?.hillTerrainSurface?.overlayLegend || state?.hillTerrainSurface?.overlayLegend || state?.pathWorld?.hillTerrainSurface?.overlayLegend || null,
       overlayColorFingerprint: actor?.hillTerrainSurface?.overlayColorFingerprint
         || actor?.hillTerrainSurface?.overlayLegend?.overlayColorFingerprint
