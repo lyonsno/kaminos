@@ -122,6 +122,17 @@ export {
 } from './sf3d-route.js';
 
 export {
+  PYRO_RGB_INTERMEDIATE_DECODER_KERNEL_PROFILE,
+  PYRO_RGB_INTERMEDIATE_DECODER_MODEL_ID,
+  PYRO_RGB_INTERMEDIATE_DECODER_OUTPUT_ROLES,
+  PYRO_RGB_INTERMEDIATE_DECODER_REQUIRED_STAGES,
+  PYRO_RGB_INTERMEDIATE_DECODER_ROUTE_ID,
+  createPyroRgbIntermediateDecoderPhaseProgram,
+  createPyroRgbIntermediateDecoderRouteDefinition,
+  createPyroRgbIntermediateDecoderRouteReceipt,
+} from './pyro-rgb-decoder-route.js';
+
+export {
   createWebGpuRouteSchemaContract,
 } from './route-schema-contract.js';
 
