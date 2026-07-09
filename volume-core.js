@@ -12,9 +12,12 @@ const TRUTH_ORACLE_ACTIVITY_CUE_AUTHORITY = 'truth-high-diagnostic-activity-proj
 const LEARNED_ACTIVITY_CUE_AUTHORITY = 'learned-diagnostic-rgb-norm-scalar-activity-cue-v0';
 const LIVE_LOW_SELF_ACTIVITY_CUE_AUTHORITY = 'live-low-self-current-field-scalar-activity-cue-v0';
 const LIVE_HIGH_PROJECTED_ACTIVITY_CUE_AUTHORITY = 'live-high-projected-current-field-scalar-activity-cue-v0';
+const GPU_LOW_SELF_ACTIVITY_CUE_AUTHORITY = 'gpu-low-self-current-field-scalar-activity-cue-v0';
 const PROCEDURAL_ACTIVITY_CUE_AUTHORITY = 'procedural-receiver-activity-proxy-no-truth-v0';
 const SCALAR_ACTIVITY_RECEIVER_HOOK_IDENTITY = 'scalar-activity-receiver-hook-controls-v0';
 const SCALAR_ACTIVITY_CUE_EXPORT_IDENTITY = 'current-field-scalar-activity-cue-export-v0';
+const GPU_SCALAR_ACTIVITY_CUE_PROJECTION_IDENTITY = 'gpu-live-low-self-scalar-activity-projection-v0';
+const GPU_SCALAR_ACTIVITY_CUE_PROJECTION_READBACK_POLICY = 'no-cpu-readback-live-gpu-cue-projection-v0';
 const DEFAULT_GRID_SIZE = 96;
 const SUPPORTED_GRID_SIZES = [32, 48, 64, 96, 128, 160, 192];
 const FLUID_SLOTS_PER_CELL = 4;
@@ -82,7 +85,14 @@ function normalizeScalarActivityCueAuthority(value) {
   if (candidate === LEARNED_ACTIVITY_CUE_AUTHORITY) return LEARNED_ACTIVITY_CUE_AUTHORITY;
   if (candidate === LIVE_LOW_SELF_ACTIVITY_CUE_AUTHORITY) return LIVE_LOW_SELF_ACTIVITY_CUE_AUTHORITY;
   if (candidate === LIVE_HIGH_PROJECTED_ACTIVITY_CUE_AUTHORITY) return LIVE_HIGH_PROJECTED_ACTIVITY_CUE_AUTHORITY;
+  if (candidate === GPU_LOW_SELF_ACTIVITY_CUE_AUTHORITY) return GPU_LOW_SELF_ACTIVITY_CUE_AUTHORITY;
   return TRUTH_ORACLE_ACTIVITY_CUE_AUTHORITY;
+}
+
+function normalizeScalarActivitySourceMode(value) {
+  const candidate = String(value || '').trim();
+  if (candidate === 'lowSelfGpu') return 'lowSelfGpu';
+  return 'procedural';
 }
 
 function normalizeMajorantGridSize(value) {
@@ -406,6 +416,7 @@ function smoothstepFinite(edge0, edge1, value) {
 function normalizeScalarActivityReceiverControls(snapshot = {}) {
   return {
     enabled: clampFinite(snapshot.oracleActivityCue, 0, 1, 0),
+    sourceMode: normalizeScalarActivitySourceMode(snapshot.oracleActivitySource),
     display: clampFinite(snapshot.oracleActivityDisplay, 0, 1, 0),
     curlNoiseGain: clampFinite(snapshot.oracleActivityCurlNoise, 0, 3, 0),
     vorticityGain: clampFinite(snapshot.oracleActivityVorticity, 0, 3, 0),
@@ -769,6 +780,7 @@ struct ExternalEmitterInfluence {
 @group(1) @binding(0) var<storage, read_write> majorantDst: array<vec4<f32>>;
 @group(2) @binding(0) var<storage, read> pressureSrc: array<vec4<f32>>;
 @group(2) @binding(1) var<storage, read_write> pressureDst: array<vec4<f32>>;
+@group(3) @binding(0) var<storage, read_write> scalarActivityCueDst: array<f32>;
 
 struct VSOut {
   @builtin(position) pos: vec4<f32>,
@@ -1195,6 +1207,14 @@ fn rawTruthOracleActivityCueAtCell(c: vec3<i32>) -> f32 {
 
 fn truthOracleActivityCueAtCell(c: vec3<i32>) -> f32 {
   return rawTruthOracleActivityCueAtCell(c) * clamp(u.oracle_activity_controls.x, 0.0, 1.0);
+}
+
+@compute @workgroup_size(4, 4, 4)
+fn csProjectLowSelfScalarActivityCue(@builtin(global_invocation_id) gid: vec3<u32>) {
+  if (any(gid >= vec3<u32>(GRID))) {
+    return;
+  }
+  scalarActivityCueDst[index3(gid)] = proceduralReceiverActivityCue(vec3<i32>(gid));
 }
 
 fn oracleActivityCurlNoiseForce(c: vec3<i32>, p: vec3<f32>, time: f32, cue: f32, gain: f32) -> vec3<f32> {
@@ -4251,6 +4271,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     externalEmitterAgeMs: null,
     externalEmitterFrameId: null,
     scalarActivityReceiver: null,
+    scalarActivityCueProjection: null,
     temporalAccumEffective: 0,
     temporalReprojectionConfidence: 0,
     temporalHistoryWeight: 0,
@@ -4558,15 +4579,18 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let pressureProjectPipeline = null;
   let pressureProjectTieredPipeline = null;
   let majorantComputePipeline = null;
+  let scalarActivityCueProjectionPipeline = null;
   let bindGroups = [];
   let majorantFrontBindGroups = [];
   let pressureWriteBindGroup = null;
   let pressureJacobiBindGroups = [];
   let pressureReadBindGroups = [];
   let majorantWriteBindGroup = null;
+  let scalarActivityCueWriteBindGroup = null;
   let bindGroupLayout = null;
   let majorantFluidBindGroupLayout = null;
   let majorantWriteBindGroupLayout = null;
+  let scalarActivityCueWriteBindGroupLayout = null;
   let pressureWriteBindGroupLayout = null;
   let pressureJacobiBindGroupLayout = null;
   let pressureReadBindGroupLayout = null;
@@ -4578,6 +4602,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let pressureJacobiTieredPipelineLayout = null;
   let pressureProjectPipelineLayout = null;
   let pressureProjectTieredPipelineLayout = null;
+  let scalarActivityCueProjectionPipelineLayout = null;
   let shader = null;
   let uniformBuffer = null;
   let externalEmitterBuffer = null;
@@ -4607,6 +4632,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   };
   let lastRafNow = 0;
   let queueProbePending = false;
+  let scalarActivityCueProjectionFrameCount = 0;
+  let scalarActivityCueProjectionLastFrame = -1;
 
   function pushTimingSample(name, value, maxSamples = 120) {
     if (!Number.isFinite(value)) return;
@@ -4733,15 +4760,78 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     return target;
   }
 
+  function scalarActivityCueProjectionDebug(overrides = {}) {
+    const sourceMode = normalizeScalarActivitySourceMode(overrides.sourceMode ?? controlsSnapshot.oracleActivitySource);
+    const status = overrides.status || 'inactive';
+    return {
+      identity: GPU_SCALAR_ACTIVITY_CUE_PROJECTION_IDENTITY,
+      sourceMode,
+      status,
+      cueAuthority: status === 'projected' ? GPU_LOW_SELF_ACTIVITY_CUE_AUTHORITY : PROCEDURAL_ACTIVITY_CUE_AUTHORITY,
+      projectionIdentity: 'same-grid-gpu-current-field-procedural-activity-v0',
+      readbackPolicy: GPU_SCALAR_ACTIVITY_CUE_PROJECTION_READBACK_POLICY,
+      sourceGrid: gridSize,
+      receiverGrid: gridSize,
+      cadence: 1,
+      frameCount: scalarActivityCueProjectionFrameCount,
+      lastProjectionFrame: scalarActivityCueProjectionLastFrame,
+      lowFrameCount: state.frameCount,
+      failurePhase: null,
+      ...overrides,
+    };
+  }
+
+  function isGpuScalarActivityCueProjectionRequested() {
+    return normalizeScalarActivitySourceMode(controlsSnapshot.oracleActivitySource) === 'lowSelfGpu';
+  }
+
+  function isExternalScalarActivityCueActive() {
+    return (oracleActivityCueUpload.status === 'uploaded' || oracleActivityCueUpload.status === 'gpu-projected')
+      && oracleActivityCueUpload.externalCueCellCount > 0;
+  }
+
+  function prepareScalarActivityCueProjectionState() {
+    if (!isGpuScalarActivityCueProjectionRequested()) {
+      if (oracleActivityCueUpload.status === 'gpu-projected') {
+        oracleActivityCueUpload = {
+          status: 'none',
+          requestedCueAuthority: TRUTH_ORACLE_ACTIVITY_CUE_AUTHORITY,
+          effectiveCueAuthority: PROCEDURAL_ACTIVITY_CUE_AUTHORITY,
+          grid: null,
+          receiverGrid: gridSize,
+          externalCueCellCount: 0,
+          frameId: null,
+          uploadedAtMs: null,
+        };
+      }
+      state.scalarActivityCueProjection = scalarActivityCueProjectionDebug({ status: 'inactive' });
+      return false;
+    }
+    oracleActivityCueUpload = {
+      status: 'gpu-projected',
+      requestedCueAuthority: GPU_LOW_SELF_ACTIVITY_CUE_AUTHORITY,
+      effectiveCueAuthority: GPU_LOW_SELF_ACTIVITY_CUE_AUTHORITY,
+      grid: gridSize,
+      receiverGrid: gridSize,
+      externalCueCellCount: gridCellCount(gridSize),
+      frameId: `gpu-low-self-${state.frameCount}`,
+      uploadedAtMs: performance.now(),
+      projectedAtMs: performance.now(),
+    };
+    state.scalarActivityCueProjection = scalarActivityCueProjectionDebug({ status: 'scheduled' });
+    return true;
+  }
+
   function scalarActivityReceiverDebug() {
     const controls = normalizeScalarActivityReceiverControls(controlsSnapshot);
-    const externalCueActive = oracleActivityCueUpload.status === 'uploaded' && oracleActivityCueUpload.externalCueCellCount > 0;
+    const externalCueActive = isExternalScalarActivityCueActive();
     return {
       identity: TRUTH_ORACLE_ACTIVITY_RECEIVER_IDENTITY,
       hookIdentity: SCALAR_ACTIVITY_RECEIVER_HOOK_IDENTITY,
       requestedCueAuthority: oracleActivityCueUpload.requestedCueAuthority || TRUTH_ORACLE_ACTIVITY_CUE_AUTHORITY,
       effectiveCueAuthority: externalCueActive ? oracleActivityCueUpload.effectiveCueAuthority : PROCEDURAL_ACTIVITY_CUE_AUTHORITY,
       enabled: controls.enabled,
+      sourceMode: controls.sourceMode,
       display: controls.display,
       curlNoiseGain: controls.curlNoiseGain,
       vorticityGain: controls.vorticityGain,
@@ -4752,6 +4842,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       receiverGrid: gridSize,
       frameId: oracleActivityCueUpload.frameId,
       uploadedAtMs: oracleActivityCueUpload.uploadedAtMs,
+      projectedAtMs: oracleActivityCueUpload.projectedAtMs || null,
     };
   }
 
@@ -4778,6 +4869,26 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
     });
     device.queue.writeBuffer(oracleActivityCueBuffer, 0, new Float32Array(gridCellCount(gridSize)));
+    if (scalarActivityCueWriteBindGroupLayout) {
+      scalarActivityCueWriteBindGroup = device.createBindGroup({
+        label: `kaminos scalar activity cue write bind group ${gridSize}^3`,
+        layout: scalarActivityCueWriteBindGroupLayout,
+        entries: [
+          { binding: 0, resource: { buffer: oracleActivityCueBuffer } },
+        ],
+      });
+    }
+  }
+
+  function rebuildScalarActivityCueWriteBindGroup() {
+    if (!device || !oracleActivityCueBuffer || !scalarActivityCueWriteBindGroupLayout) return;
+    scalarActivityCueWriteBindGroup = device.createBindGroup({
+      label: `kaminos scalar activity cue write bind group ${gridSize}^3`,
+      layout: scalarActivityCueWriteBindGroupLayout,
+      entries: [
+        { binding: 0, resource: { buffer: oracleActivityCueBuffer } },
+      ],
+    });
   }
 
   function writeOracleActivityCueBuffer(values) {
@@ -4965,6 +5076,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     for (const buffer of pressureBuffers) buffer.destroy();
     oracleActivityCueBuffer?.destroy();
     oracleActivityCueBuffer = null;
+    scalarActivityCueWriteBindGroup = null;
     fluidBuffers = [];
     frontBuffers = [];
     pressureBuffers = [];
@@ -5215,6 +5327,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       return buffer;
     });
     ensureOracleActivityCueBuffer();
+    rebuildScalarActivityCueWriteBindGroup();
     if (oracleActivityCueSourceValues && oracleActivityCueSourceGrid) {
       const resampledCue = resampleScalarActivityCue(oracleActivityCueSourceValues, oracleActivityCueSourceGrid, gridSize);
       writeOracleActivityCueBuffer(resampledCue);
@@ -5277,6 +5390,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       label: `kaminos coarse majorant compute pipeline ${gridSize}^3 to ${majorantGridSize}^3`,
       layout: majorantPipelineLayout,
       compute: { module: shader, entryPoint: 'csMajorant', constants: majorantPipelineConstants },
+    });
+    scalarActivityCueProjectionPipeline = device.createComputePipeline({
+      label: `kaminos gpu low-self scalar activity cue projection pipeline ${gridSize}^3`,
+      layout: scalarActivityCueProjectionPipelineLayout,
+      compute: { module: shader, entryPoint: 'csProjectLowSelfScalarActivityCue', constants: computePipelineConstants },
     });
     ensureTemporalHistoryTexture();
     rebuildFluidBindGroups();
@@ -5540,6 +5658,17 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         },
       ],
     });
+    scalarActivityCueWriteBindGroupLayout = device.createBindGroupLayout({
+      label: 'kaminos scalar activity cue write bind group layout',
+      entries: [
+        {
+          binding: 0,
+          visibility: GPUShaderStage.COMPUTE,
+          buffer: { type: 'storage' },
+        },
+      ],
+    });
+    rebuildScalarActivityCueWriteBindGroup();
     emptyBindGroupLayout = device.createBindGroupLayout({
       label: 'kaminos empty bind group layout',
       entries: [],
@@ -5571,6 +5700,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     pressureProjectTieredPipelineLayout = device.createPipelineLayout({
       label: 'kaminos tiered pressure projection pipeline layout',
       bindGroupLayouts: [bindGroupLayout, emptyBindGroupLayout, pressureJacobiBindGroupLayout],
+    });
+    scalarActivityCueProjectionPipelineLayout = device.createPipelineLayout({
+      label: 'kaminos scalar activity cue projection pipeline layout',
+      bindGroupLayouts: [majorantFluidBindGroupLayout, emptyBindGroupLayout, emptyBindGroupLayout, scalarActivityCueWriteBindGroupLayout],
     });
     device.pushErrorScope('validation');
     rebuildFluidState(controlsSnapshot.resolution, controlsSnapshot.majorantGrid);
@@ -5867,7 +6000,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     writePyroPaletteUniform(uniforms, 268, controlsSnapshot.pyroFlowCoolColor, '#2aa7b8');
     writePyroPaletteUniform(uniforms, 272, controlsSnapshot.pyroFlowHotColor, '#ff7a36');
     const scalarActivityReceiver = normalizeScalarActivityReceiverControls(controlsSnapshot);
-    const externalCueActive = oracleActivityCueUpload.status === 'uploaded' && oracleActivityCueUpload.externalCueCellCount > 0;
+    const externalCueActive = isExternalScalarActivityCueActive();
     uniforms[276] = scalarActivityReceiver.enabled;
     uniforms[277] = scalarActivityReceiver.curlNoiseGain;
     uniforms[278] = scalarActivityReceiver.vorticityGain;
@@ -6286,6 +6419,44 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     return state.simCostLedger;
   }
 
+  function encodeScalarActivityCueProjection(encoder) {
+    const sourceMode = normalizeScalarActivitySourceMode(controlsSnapshot.oracleActivitySource);
+    if (sourceMode !== 'lowSelfGpu') {
+      state.scalarActivityCueProjection = scalarActivityCueProjectionDebug({ sourceMode, status: 'inactive' });
+      return;
+    }
+    if (!scalarActivityCueProjectionPipeline || !scalarActivityCueWriteBindGroup || majorantFrontBindGroups.length !== 2) {
+      state.scalarActivityCueProjection = scalarActivityCueProjectionDebug({
+        sourceMode,
+        status: 'failed',
+        failurePhase: 'missing-gpu-projection-bindings',
+      });
+      return;
+    }
+    const pass = encoder.beginComputePass({ label: 'kaminos scalar activity cue projection pass lowSelfGpu' });
+    pass.setPipeline(scalarActivityCueProjectionPipeline);
+    pass.setBindGroup(0, majorantFrontBindGroups[currentFluid]);
+    pass.setBindGroup(3, scalarActivityCueWriteBindGroup);
+    const workgroups = Math.ceil(gridSize / 4);
+    pass.dispatchWorkgroups(workgroups, workgroups, workgroups);
+    pass.end();
+    scalarActivityCueProjectionFrameCount += 1;
+    scalarActivityCueProjectionLastFrame = state.frameCount;
+    oracleActivityCueUpload = {
+      ...oracleActivityCueUpload,
+      status: 'gpu-projected',
+      requestedCueAuthority: GPU_LOW_SELF_ACTIVITY_CUE_AUTHORITY,
+      effectiveCueAuthority: GPU_LOW_SELF_ACTIVITY_CUE_AUTHORITY,
+      grid: gridSize,
+      receiverGrid: gridSize,
+      externalCueCellCount: gridCellCount(gridSize),
+      frameId: `gpu-low-self-${state.frameCount}`,
+      projectedAtMs: performance.now(),
+      uploadedAtMs: performance.now(),
+    };
+    state.scalarActivityCueProjection = scalarActivityCueProjectionDebug({ sourceMode, status: 'projected' });
+  }
+
   function encodeSim(encoder) {
     const pass = encoder.beginComputePass({ label: 'kaminos fluid sim pass' });
     pass.setPipeline(computePipeline);
@@ -6465,6 +6636,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     try {
       const cpuStart = performance.now();
       controls?.update?.();
+      prepareScalarActivityCueProjectionState();
       updateUniforms(now);
       const encoder = device.createCommandEncoder({ label: 'kaminos compute fluid frame' });
       const lookFreeze = normalizeLookFreeze(controlsSnapshot.lookFreeze) && lookFreezeCanPin(state) ? 1 : 0;
@@ -6476,6 +6648,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       } else {
         state.lookFreezeFrame = null;
         state.lookFreezeSkippedFrames = 0;
+        encodeScalarActivityCueProjection(encoder);
         encodeSim(encoder);
         encodeMajorant(encoder);
       }
@@ -8428,6 +8601,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     if ((!state.active && !sampleOptions.allowInactive) || !device) {
       return { ok: false, reason: 'inactive', ...state, deterministicReplay };
     }
+    prepareScalarActivityCueProjectionState();
     updateUniforms(Number.isFinite(Number(sampleOptions.nowMs)) ? Number(sampleOptions.nowMs) : performance.now());
     ensureFrameTexture();
     const bytesPerPixel = 4;
@@ -8440,7 +8614,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     });
     device.pushErrorScope('validation');
     const encoder = device.createCommandEncoder({ label: 'kaminos volume witness readback encoder' });
-    if (sampleOptions.advanceSim !== false) encodeSim(encoder);
+    if (sampleOptions.advanceSim !== false) {
+      encodeScalarActivityCueProjection(encoder);
+      encodeSim(encoder);
+    }
     encodeMajorant(encoder, { force: true });
     encodeDraw(encoder, frameTexture.createView(), 'kaminos volume one-off readback pass', readbackPipeline);
     encoder.copyTextureToBuffer(
@@ -8949,8 +9126,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     };
     for (let step = 0; step < replay.steps; step += 1) {
       const nowMs = replay.startTimeMs + step * replay.timeStepMs;
+      prepareScalarActivityCueProjectionState();
       updateUniforms(nowMs);
       const encoder = device.createCommandEncoder({ label: `kaminos deterministic replay step ${step + 1}/${replay.steps}` });
+      encodeScalarActivityCueProjection(encoder);
       encodeSim(encoder);
       if (step === replay.steps - 1) encodeMajorant(encoder, { force: true });
       device.queue.submit([encoder.finish()]);
@@ -9173,6 +9352,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         ...state,
         controls: { ...controlsSnapshot },
         scalarActivityReceiver: scalarActivityReceiverDebug(),
+        scalarActivityCueProjection: state.scalarActivityCueProjection ? { ...state.scalarActivityCueProjection } : scalarActivityCueProjectionDebug(),
         scalarActivityCueExport: state.scalarActivityCueExport ? { ...state.scalarActivityCueExport } : null,
         pyroDynamicDetail: clonePyroDynamicDetail(),
         pyroMaterialRendererCoupling: state.pyroMaterialRendererCoupling ? { ...state.pyroMaterialRendererCoupling } : null,

@@ -577,11 +577,14 @@ assert.match(index, /id="volume-flow-rate"[^>]+value="0\.15"/, 'smoke route defa
 assert.match(index, /id="volume-projection"/, 'Volume tab exposes a pressure/projection control');
 assert.match(index, /id="volume-flow-debug"/, 'Volume tab exposes a flow diagnostic overlay control');
 assert.match(index, /id="volume-oracle-activity-cue"/, 'Volume tab exposes a truth-oracle scalar activity receiver master toggle');
+assert.match(index, /id="volume-oracle-activity-source"/, 'Volume tab exposes scalar activity cue source mode for GPU-native live projection');
+assert.match(index, /lowSelfGpu/, 'Volume tab can select GPU-native low-self scalar activity cue projection');
 assert.match(index, /id="volume-oracle-activity-display"/, 'Volume tab exposes an inert scalar activity display control');
 assert.match(index, /id="volume-oracle-activity-curl-noise"/, 'Volume tab exposes a scalar activity curl-noise receiver gain');
 assert.match(index, /id="volume-oracle-activity-vorticity"/, 'Volume tab exposes a scalar activity vorticity receiver gain');
 assert.match(index, /id="volume-oracle-activity-material"/, 'Volume tab exposes a scalar activity material/interface receiver gain');
 assert.match(index, /volume_oracle_activity_cue/, 'Basin URLs preserve scalar activity receiver master toggle');
+assert.match(index, /volume_oracle_activity_source/, 'Basin URLs preserve scalar activity cue source mode');
 assert.match(index, /volume_oracle_activity_curl_noise/, 'Basin URLs preserve scalar activity curl-noise receiver gain');
 assert.match(index, /volume_oracle_activity_vorticity/, 'Basin URLs preserve scalar activity vorticity receiver gain');
 assert.match(index, /volume_oracle_activity_material/, 'Basin URLs preserve scalar activity material receiver gain');
@@ -606,9 +609,16 @@ assert.match(core, /externalCueCellCount/, 'scalar activity receiver debug state
 assert.match(core, /SCALAR_ACTIVITY_CUE_EXPORT_IDENTITY\s*=\s*'current-field-scalar-activity-cue-export-v0'/, 'volume core names the current-field scalar activity cue export route');
 assert.match(core, /LIVE_LOW_SELF_ACTIVITY_CUE_AUTHORITY\s*=\s*'live-low-self-current-field-scalar-activity-cue-v0'/, 'volume core names low-self live scalar activity cue authority separately from truth and learned cues');
 assert.match(core, /LIVE_HIGH_PROJECTED_ACTIVITY_CUE_AUTHORITY\s*=\s*'live-high-projected-current-field-scalar-activity-cue-v0'/, 'volume core names high-projected live scalar activity cue authority separately from truth and learned cues');
+assert.match(core, /GPU_LOW_SELF_ACTIVITY_CUE_AUTHORITY\s*=\s*'gpu-low-self-current-field-scalar-activity-cue-v0'/, 'volume core names GPU-native low-self scalar activity cue authority separately from CPU readback live cue authorities');
+assert.match(core, /GPU_SCALAR_ACTIVITY_CUE_PROJECTION_IDENTITY\s*=\s*'gpu-live-low-self-scalar-activity-projection-v0'/, 'volume core names the GPU-native low-self scalar activity cue projection identity');
+assert.match(core, /GPU_SCALAR_ACTIVITY_CUE_PROJECTION_READBACK_POLICY\s*=\s*'no-cpu-readback-live-gpu-cue-projection-v0'/, 'volume core names the no-readback policy for live GPU cue projection');
 assert.match(core, /exportCurrentScalarActivityCue/, 'volume prototype exposes a current-field scalar activity cue export API for live oracle receiver experiments');
 assert.match(core, /projectionIdentity:\s*'max-source-cell-to-target-grid-v0'/, 'current-field cue export records the high-to-low projection policy');
 assert.match(core, /cueTemporalMode:\s*'readback-cadence-held-between-uploads'/, 'current-field cue export records that readback cadence can hold cues between uploads');
+assert.match(core, /csProjectLowSelfScalarActivityCue/, 'WGSL exposes a GPU-native low-self scalar cue projection pass');
+assert.match(core, /scalarActivityCueProjectionPipeline/, 'volume core creates a dedicated scalar activity cue projection pipeline instead of using CPU readback');
+assert.match(core, /encodeScalarActivityCueProjection/, 'volume core schedules scalar activity cue projection in the frame compute path');
+assert.match(core, /scalarActivityCueProjection/, 'debug state reports GPU cue projection identity, source mode, frame counters, cadence, and readback policy');
 assert.match(index, /id="volume-pyro-detail"/, 'Volume tab exposes the Pyro dynamic detail debug toggle');
 assert.match(index, /id="volume-pyro-material-gain"/, 'Volume tab exposes an opt-in Pyro material-memory renderer gain');
 assert.match(index, /id="volume-pyro-dynamic-atlas"/, 'Volume tab exposes an inspectable Pyro dynamic detail atlas canvas');
@@ -2492,6 +2502,8 @@ assert.match(scalarActivityCueReceiverWitness, /uploadedCueSha256/, 'scalar acti
 assert.match(scalarActivityCueReceiverWitness, /volume_oracle_activity_vorticity/, 'scalar activity cue receiver witness drives receiver hook gains through public URL controls');
 assert.match(scalarActivityCueReceiverWitness, /volume_oracle_activity_curl_noise/, 'scalar activity cue receiver witness drives curl receiver hook gain through public URL controls');
 assert.match(scalarActivityCueReceiverWitness, /failurePhase/, 'scalar activity cue receiver witness writes failure phase before presenting smoke evidence');
+assert.match(volumeWitness, /scalarActivityReceiver:\s*sample\.scalarActivityReceiver \|\| state\.scalarActivityReceiver/, 'volume witness report preserves scalar activity receiver source/cue identity');
+assert.match(volumeWitness, /scalarActivityCueProjection:\s*sample\.scalarActivityCueProjection \|\| state\.scalarActivityCueProjection/, 'volume witness report preserves GPU scalar activity cue projection identity and no-readback policy');
 
 const dualOracleWorkbenchPath = join(root, 'volume-dual-oracle-workbench.html');
 assert.ok(existsSync(dualOracleWorkbenchPath), 'dual-live scalar activity oracle receiver workbench exists');
