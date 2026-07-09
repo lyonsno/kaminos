@@ -54,6 +54,11 @@ assert.match(
   /shader-material-authority-residual-feature-v0/,
   'browser residual exporter must preserve shader/material feature authority',
 );
+assert.match(
+  exporter,
+  /residualApplyScale/,
+  'browser residual exporter must preserve the MLX residual apply scale so browser previews match offline residual metrics',
+);
 
 assert.match(
   core,
@@ -161,6 +166,16 @@ assert.match(
   core,
   /residualDataHeaderFloats/,
   'browser residual runtime must pack residual metadata separately from variable-length 3x3xC weights',
+);
+assert.match(
+  core,
+  /residualApplyScale/,
+  'browser residual runtime must apply exported residual scale instead of implicitly using raw MLX residual logits',
+);
+assert.match(
+  core,
+  /limitedResidual\s*\*\s*residualApplyScale[\s\S]*\*\s*mask[\s\S]*\*\s*shaderAuthorityMask[\s\S]*\*\s*strength/,
+  'browser residual shader must multiply learned residuals by the exported apply scale before edge/material/strength masks',
 );
 assert.match(
   core,

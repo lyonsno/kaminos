@@ -1,0 +1,18 @@
+{
+  "schema": "kaminos.volume.residual-greenroom-runner.v0",
+  "phase": "route-proof-before-child",
+  "createdAt": "2026-07-09T04:29:46Z",
+  "python": "/private/tmp/kaminos-mlx-residual-venv/bin/python",
+  "cwd": "/private/tmp/kaminos-kaminos-desperate-latest-fire-0707",
+  "script": "/private/tmp/kaminos-kaminos-desperate-latest-fire-0707/volume-residual-greenroom-runner.py",
+  "corpusManifest": "/private/tmp/kaminos-support-scaling-corpus-12-rs010/corpus-manifest.json",
+  "outDir": "/private/tmp/kaminos-kaminos-desperate-latest-fire-0707/artifacts/residual-latest-fire-0709/apply-scale-contract-probe",
+  "pid": 33027,
+  "env": {
+    "PYTHONPATH": ".",
+    "MLX_METAL_DEBUG": null
+  },
+  "mlxAvailable": false,
+  "mlxDefaultDevice": null,
+  "mlxImportError": "ModuleNotFoundError(\"No module named 'mlx'\")"
+}

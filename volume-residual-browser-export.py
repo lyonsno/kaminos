@@ -24,6 +24,13 @@ def as_float_list(value):
     return [float(item) for item in mx.array(value).reshape(-1).tolist()]
 
 
+def first_present_float(default, *values):
+    for value in values:
+        if value is not None:
+            return float(value)
+    return float(default)
+
+
 def parse_args():
     parser = argparse.ArgumentParser(description="Export Kaminos direct-residual MLX weights for the browser WebGPU one-pass route.")
     parser.add_argument("--model-artifact", required=True, help="Path to model/model-artifact.json from volume-residual-upscale-mlx.py.")
@@ -77,7 +84,8 @@ def main():
         "kernelSize": 3,
         "weightLayout": "mlx-conv2d-out-y-x-in",
         "lowRenderScale": source.get("lowRenderScale"),
-        "residualOutputLimit": float(model.get("residualOutputLimit") or training.get("residualOutputLimit") or 0.0),
+        "residualOutputLimit": first_present_float(0.0, model.get("residualOutputLimit"), training.get("residualOutputLimit")),
+        "residualApplyScale": first_present_float(0.25, model.get("residualApplyScale"), training.get("residualApplyScale")),
         "residualApplicationMaskMode": model.get("residualApplicationMaskMode"),
         "residualMaskFeatherRadius": int(model.get("residualMaskFeatherRadius") or training.get("residualMaskFeatherRadius") or 0),
         "residualApplicationMaskAuthority": training.get("residualApplicationMaskAuthority"),

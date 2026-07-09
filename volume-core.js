@@ -4758,16 +4758,17 @@ fn fs(in: VertexOut) -> @location(0) vec4<f32> {
   let residualLimit = residualData[residualParamsOffset + 0u];
   let edgeThreshold = residualData[residualParamsOffset + 1u];
   let strength = residualData[residualParamsOffset + 2u];
+  let residualApplyScale = residualData[residualParamsOffset + 3u];
   let signal = edgeSignal(uv, texel, center);
   let mask = smoothstep(edgeThreshold * 0.35, max(edgeThreshold * 1.85, edgeThreshold + 0.0001), signal);
-  if (residualData[residualParamsOffset + 3u] > 0.5) {
+  if (residualData[residualParamsOffset + 4u] > 0.5) {
     return vec4<f32>(debugFeatureView(feature), 1.0);
   }
   let fireAuthority = max(feature.r, max(feature.g * 0.88, feature.b * 0.72));
   let smokeCrunchGuard = 1.0 - smoothstep(0.30, 0.82, feature.a) * (1.0 - smoothstep(0.08, 0.34, fireAuthority));
   let shaderAuthorityMask = clamp(mix(0.18, 1.0, fireAuthority) * smokeCrunchGuard, 0.0, 1.0);
   let limitedResidual = clamp(residual, vec3<f32>(-residualLimit), vec3<f32>(residualLimit));
-  return vec4<f32>(clamp(center + limitedResidual * mask * shaderAuthorityMask * strength, vec3<f32>(0.0), vec3<f32>(1.0)), 1.0);
+  return vec4<f32>(clamp(center + limitedResidual * residualApplyScale * mask * shaderAuthorityMask * strength, vec3<f32>(0.0), vec3<f32>(1.0)), 1.0);
 }
 `;
 
@@ -6594,6 +6595,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     if (inputChannels === 3 && featureInputMode === 'feature-rgba') throw new Error('browser residual feature-rgba model must carry 7 input channels');
     const residualLimit = Number(model.residualOutputLimit);
     if (!(residualLimit > 0)) throw new Error('browser residual residualOutputLimit must be positive');
+    const residualApplyScale = Number.isFinite(Number(model.residualApplyScale))
+      ? Math.max(0, Number(model.residualApplyScale))
+      : 1.0;
     return {
       ...model,
       url,
@@ -6601,6 +6605,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       featureInputMode,
       browserResidualInputChannels: inputChannels,
       residualOutputLimit: residualLimit,
+      residualApplyScale,
       edgeBandThreshold: Math.max(0.0001, Number(model.edgeBandThreshold) || 0.015),
       residualWeights: [...kernel.data.map(Number), ...bias.data.map(Number)],
     };
@@ -6673,7 +6678,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const inputChannels = browserResidualModel.inputChannels || 3;
     const weightCount = 27 * inputChannels;
     const biasCount = 3;
-    const paramCount = 4;
+    const paramCount = 5;
     const data = new Float32Array(residualDataHeaderFloats + weightCount + biasCount + paramCount);
     data[0] = inputChannels;
     data.set(browserResidualModel.residualWeights.slice(0, weightCount + biasCount), residualDataHeaderFloats);
@@ -6681,7 +6686,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     data[paramsOffset + 0] = browserResidualModel.residualOutputLimit;
     data[paramsOffset + 1] = browserResidualModel.edgeBandThreshold;
     data[paramsOffset + 2] = normalizeBrowserResidualStrength(controlsSnapshot.volumeResidualStrength);
-    data[paramsOffset + 3] = normalizeBrowserResidualFeatureDebug(controlsSnapshot.volumeResidualFeatureDebug);
+    data[paramsOffset + 3] = browserResidualModel.residualApplyScale;
+    data[paramsOffset + 4] = normalizeBrowserResidualFeatureDebug(controlsSnapshot.volumeResidualFeatureDebug);
     if (!browserResidualBuffer || browserResidualBufferSize !== data.byteLength) {
       browserResidualBuffer?.destroy();
       browserResidualBuffer = device.createBuffer({

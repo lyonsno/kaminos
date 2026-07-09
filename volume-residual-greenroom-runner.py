@@ -56,6 +56,7 @@ def parse_args():
     parser.add_argument("--edge-gradient-loss-weight", default="0")
     parser.add_argument("--outside-edge-residual-weight", default="0")
     parser.add_argument("--residual-output-limit", default="0")
+    parser.add_argument("--residual-apply-scale", default="0.25")
     parser.add_argument("--residual-color-mode", default="rgb")
     parser.add_argument("--chroma-residual-scale", default="1.0")
     parser.add_argument("--chroma-residual-loss-weight", default="0")
@@ -177,6 +178,8 @@ def build_child_command(args):
         str(args.outside_edge_residual_weight),
         "--residual-output-limit",
         str(args.residual_output_limit),
+        "--residual-apply-scale",
+        str(args.residual_apply_scale),
         "--residual-color-mode",
         str(args.residual_color_mode),
         "--chroma-residual-scale",
@@ -288,6 +291,7 @@ def main():
             final_receipt["outsideMaterialResidualWeight"] = report.get("outsideMaterialResidualWeight")
             final_receipt["outsideEdgeResidualMse"] = report.get("outsideEdgeResidualMse")
             final_receipt["residualOutputLimit"] = report.get("residualOutputLimit")
+            final_receipt["residualApplyScale"] = report.get("residualApplyScale")
             final_receipt["residualColorMode"] = report.get("residualColorMode")
             final_receipt["chromaResidualScale"] = report.get("chromaResidualScale")
             final_receipt["chromaResidualLossWeight"] = report.get("chromaResidualLossWeight")
