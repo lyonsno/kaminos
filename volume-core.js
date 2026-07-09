@@ -705,6 +705,7 @@ struct Uniforms {
   topology_shell_controls: vec4<f32>,
   topology_shell_carriers: vec4<f32>,
   topology_shell_shape: vec4<f32>,
+  topology_shell_transport: vec4<f32>,
   topology_shell_light: vec4<f32>,
   previousViewProj: mat4x4<f32>,
 };
@@ -3338,8 +3339,9 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
   let shellEdgeGain = clamp(u.topology_shell_carriers.w, 0.0, 2.0);
   let shellCoreSuppress = clamp(u.topology_shell_shape.x, 0.0, 1.0);
   let shellBiteGain = clamp(u.topology_shell_shape.y, 0.0, 2.0);
-  let shellDivergenceGain = clamp(u.topology_shell_shape.z, 0.0, 1.0);
-  let shellSmokeCoupling = clamp(u.topology_shell_shape.w, 0.0, 2.0);
+  let shellCurlGain = clamp(u.topology_shell_shape.z, 0.0, 2.0);
+  let shellDivergenceGain = clamp(u.topology_shell_shape.w, 0.0, 1.0);
+  let shellSmokeCoupling = clamp(u.topology_shell_transport.x, 0.0, 2.0);
   let shellLuma = clamp(u.topology_shell_light.x, 0.0, 5.0);
   let shellExposure = clamp(u.topology_shell_light.y, 0.0, 4.0);
   let shellSoftClip = clamp(u.topology_shell_light.z, 0.2, 4.0);
@@ -3564,43 +3566,20 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     let inspectRenderMode = 1.0 - step(0.5, abs(fireRenderMode - 2.0));
     let fireVisualAuthority = shellAmount * canonicalFireRenderContent * flameBodyAuthority;
     let curlActivity = smoothstep(0.006, 0.16, curlDebug);
-    let thermalSupport = smoothstep(
-      0.018 * shellWidth,
-      0.62 * shellWidth,
-      rawTemp + renderTemp * 0.20 + heat * 0.20 + ember * 0.12
-    );
-    let reactionSupport = smoothstep(
-      0.004 * shellWidth,
-      0.30 * shellWidth,
-      flameDetail * 0.72 + quenchedFireLick * 0.44 + combustionFront * 0.34 + fuel * heat * 0.28
-    );
-    let frontSupport = smoothstep(
-      0.001 * shellWidth,
-      0.088 * shellWidth,
-      combustionFrontTopology * 1.08 + combustionFront * 0.54 + quenchedFireLick * 0.12
-    );
-    let edgeSupport = smoothstep(
-      0.004 * shellWidth,
-      0.24 * shellWidth,
-      interfaceShred * 0.58 + microSmoke * 0.18 + rawExtinction * 0.08 + curlDebug * 0.42
-    );
+    let thermalSupport = smoothstep(0.018, 0.62, rawTemp + renderTemp * 0.20 + heat * 0.20 + ember * 0.12);
+    let reactionSupport = smoothstep(0.004, 0.30, flameDetail * 0.72 + quenchedFireLick * 0.44 + combustionFront * 0.34 + fuel * heat * 0.28);
+    let frontSupport = smoothstep(0.001, 0.088, combustionFrontTopology * 1.08 + combustionFront * 0.54 + quenchedFireLick * 0.12);
+    let edgeSupport = smoothstep(0.004, 0.24, interfaceShred * 0.58 + microSmoke * 0.18 + rawExtinction * 0.08 + curlDebug * 0.42);
+    let curlSupport = curlActivity * smoothstep(0.010, 0.52, rawTemp + heat * 0.16 + flameDetail * 0.28 + combustionFront * 0.16);
     let divSupport = smoothstep(0.010, 0.18, divDebug)
       * smoothstep(0.010, 0.46, rawTemp + heat * 0.18 + flameDetail * 0.32);
-    let shellCarrierGainSum = max(
-      0.001,
-      shellThermalGain + shellReactionGain + shellFrontGain + shellEdgeGain + shellDivergenceGain
-    );
-    let shellCarrier = clamp(
-      (
-        shellThermalGain * thermalSupport
-        + shellReactionGain * reactionSupport
-        + shellFrontGain * frontSupport
-        + shellEdgeGain * edgeSupport
-        + shellDivergenceGain * divSupport
-      ) / shellCarrierGainSum * 1.65,
-      0.0,
-      1.65
-    );
+    let shellCarrierRaw = shellThermalGain * thermalSupport
+      + shellReactionGain * reactionSupport
+      + shellFrontGain * frontSupport
+      + shellEdgeGain * edgeSupport
+      + shellCurlGain * curlSupport
+      + shellDivergenceGain * divSupport;
+    let shellCarrier = clamp(1.0 - exp(-max(0.0, shellCarrierRaw) * (0.52 + shellWidth * 0.62)), 0.0, 1.65);
     let shellCoreBody = smoothstep(
       0.26,
       1.18,
@@ -3633,7 +3612,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
       + frontSupport * inspectFrontMask
       + edgeSupport * inspectEdgeMask
       + shellCoreBody * inspectCoreMask
-      + curlActivity * inspectCurlMask
+      + curlSupport * inspectCurlMask
       + divSupport * inspectDivMask;
     let inspectAlpha = clamp(inspectSignal * rayStepOpacity * 0.55, 0.0, 0.28);
     let fireAlpha = stockRenderMode * stockFireAlpha + shellRenderMode * shellAlpha + inspectRenderMode * inspectAlpha;
@@ -3705,8 +3684,9 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
       * mix(1.0, bonfireFireRenderBreakup * bonfireTransportedFireLumaShaper, bonfireRenderScene)
       * flameBodyAuthority;
     let shellTemperature = clamp((rawTemp + thermalSupport * 0.42 + reactionSupport * 0.28 + frontSupport * 0.18 + shellBiteGain * edgeSupport * 0.10) * shellHeatGain, 0.0, 2.4);
-    let shellHeatChroma = smoothstep(0.65, 3.50, shellHeatGain);
-    let shellRampColor = mix(fireColor(shellTemperature), vec3<f32>(1.0, 0.42, 0.10), shellHeatChroma * 0.42);
+    let shellWarmth = smoothstep(0.10, 1.85, shellTemperature);
+    let shellHotCore = mix(vec3<f32>(1.75, 0.16, 0.018), vec3<f32>(2.80, 0.68, 0.055), shellWarmth);
+    let shellRampColor = mix(shellHotCore, vec3<f32>(3.20, 0.92, 0.10), smoothstep(2.35, 3.80, shellHeatGain) * 0.18);
     let shellBaseColor = shellRampColor * (0.24 + shellMask * 0.92 + frontSupport * 0.22 + edgeSupport * 0.12);
     let shellLit = shellBaseColor * shellLuma * shellExposure;
     let shellColor = shellLit / (vec3<f32>(1.0) + shellLit / shellSoftClip);
@@ -3722,7 +3702,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     ) * (0.24 + inspectSignal * 1.85);
     let radianceEmission = baseRadianceEmission * stockRenderMode;
     let smokeBacklight = fireColor(renderTemp * 0.72) * smokeAlpha * glowGain * stockRenderMode * smoothstep(0.16, 1.25, renderTemp) * (0.13 + fireFilament * 0.10 * flameBodyAuthority);
-    let shellSmokeBacklight = shellColor * shellRenderMode * smokeAlpha * shellSmokeCoupling * shellAlpha * 0.46;
+    let shellSmokeBacklight = shellColor * shellRenderMode * smokeAlpha * shellSmokeCoupling * shellAlpha * 0.26;
     let fireMix = smoothstep(0.005, 0.052, fireAlpha) * smoothstep(0.08, 0.70, renderTemp);
     let pyroOwnedFireMode = step(1.5, pyroFireMode);
     let pyroHybridFireMode = step(0.5, pyroFireMode) * (1.0 - pyroOwnedFireMode);
@@ -4054,7 +4034,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     );
     var local = smokeCol;
     local = mix(local, flameCol * 0.30 + radianceEmission * 0.70, stockRenderMode * fireMix * pyroStockFireVisibility);
-    local = mix(local, shellColor, shellRenderMode * smoothstep(0.002, 0.060, shellAlpha));
+    local = local + shellColor * shellRenderMode * smoothstep(0.002, 0.060, shellAlpha) * 0.92;
     local = mix(local, inspectColor, inspectRenderMode * smoothstep(0.002, 0.060, inspectAlpha));
     let pyroFlamePaintSignal = clamp(
       pyroBaseCarrier
@@ -4193,7 +4173,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   const invViewProj = new THREE.Matrix4();
   const viewProj = new THREE.Matrix4();
   const previousViewProj = new THREE.Matrix4();
-  const uniforms = new Float32Array(308);
+  const uniforms = new Float32Array(312);
   let controlsSnapshot = applyRuntimeQualityControls(getControls());
   let gridSize = normalizeGridSize(controlsSnapshot.resolution);
   let majorantGridSize = normalizeMajorantGridSize(controlsSnapshot.majorantGrid);
@@ -5781,21 +5761,25 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const shellInspectModeName = normalizeShellInspectMode(controlsSnapshot.shellInspectMode);
     uniforms[276] = fireRenderModeValue(fireRenderModeName);
     uniforms[277] = shellInspectModeValue(shellInspectModeName);
-    uniforms[278] = Math.max(0, Math.min(2, controlsSnapshot.shellAmount ?? 2));
-    uniforms[279] = Math.max(0.05, Math.min(2, controlsSnapshot.shellWidth ?? 1.10));
-    uniforms[280] = Math.max(0, Math.min(2, controlsSnapshot.shellThermal ?? 1.60));
-    uniforms[281] = Math.max(0, Math.min(2, controlsSnapshot.shellReaction ?? 1.80));
-    uniforms[282] = Math.max(0, Math.min(2, controlsSnapshot.shellFront ?? 1.80));
-    uniforms[283] = Math.max(0, Math.min(2, controlsSnapshot.shellEdge ?? 1.50));
-    uniforms[284] = Math.max(0, Math.min(1, controlsSnapshot.shellCoreSuppress ?? 0.75));
-    uniforms[285] = Math.max(0, Math.min(2, controlsSnapshot.shellBite ?? 1.20));
-    uniforms[286] = Math.max(0, Math.min(1, controlsSnapshot.shellDivergence ?? 0.20));
-    uniforms[287] = Math.max(0, Math.min(2, controlsSnapshot.shellSmoke ?? 0.55));
-    uniforms[288] = Math.max(0, Math.min(5, controlsSnapshot.shellLuma ?? 3.20));
-    uniforms[289] = Math.max(0, Math.min(4, controlsSnapshot.shellExposure ?? 2.40));
-    uniforms[290] = Math.max(0.2, Math.min(4, controlsSnapshot.shellSoftClip ?? 2.60));
-    uniforms[291] = Math.max(0, Math.min(4, controlsSnapshot.shellHeat ?? 3.20));
-    uniforms.set(previousViewProj.elements, 292);
+    uniforms[278] = Math.max(0, Math.min(2, controlsSnapshot.shellAmount ?? 1.10));
+    uniforms[279] = Math.max(0.05, Math.min(2, controlsSnapshot.shellWidth ?? 0.90));
+    uniforms[280] = Math.max(0, Math.min(2, controlsSnapshot.shellThermal ?? 0.85));
+    uniforms[281] = Math.max(0, Math.min(2, controlsSnapshot.shellReaction ?? 1.10));
+    uniforms[282] = Math.max(0, Math.min(2, controlsSnapshot.shellFront ?? 1.25));
+    uniforms[283] = Math.max(0, Math.min(2, controlsSnapshot.shellEdge ?? 0.85));
+    uniforms[284] = Math.max(0, Math.min(1, controlsSnapshot.shellCoreSuppress ?? 0.55));
+    uniforms[285] = Math.max(0, Math.min(2, controlsSnapshot.shellBite ?? 0.80));
+    uniforms[286] = Math.max(0, Math.min(2, controlsSnapshot.shellCurl ?? 0.25));
+    uniforms[287] = Math.max(0, Math.min(1, controlsSnapshot.shellDivergence ?? 0.00));
+    uniforms[288] = Math.max(0, Math.min(2, controlsSnapshot.shellSmoke ?? 0.25));
+    uniforms[289] = 0;
+    uniforms[290] = 0;
+    uniforms[291] = 0;
+    uniforms[292] = Math.max(0, Math.min(5, controlsSnapshot.shellLuma ?? 1.35));
+    uniforms[293] = Math.max(0, Math.min(4, controlsSnapshot.shellExposure ?? 1.15));
+    uniforms[294] = Math.max(0.2, Math.min(4, controlsSnapshot.shellSoftClip ?? 1.60));
+    uniforms[295] = Math.max(0, Math.min(4, controlsSnapshot.shellHeat ?? 1.65));
+    uniforms.set(previousViewProj.elements, 296);
     device.queue.writeBuffer(uniformBuffer, 0, uniforms);
     state.gridOverlay = controlsSnapshot.gridOverlay || 0;
     state.lookFreeze = lookFreeze;
@@ -5813,12 +5797,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       edge: uniforms[283],
       coreSuppress: uniforms[284],
       bite: uniforms[285],
-      divergence: uniforms[286],
-      smoke: uniforms[287],
-      luma: uniforms[288],
-      exposure: uniforms[289],
-      softClip: uniforms[290],
-      heat: uniforms[291],
+      curl: uniforms[286],
+      divergence: uniforms[287],
+      smoke: uniforms[288],
+      luma: uniforms[292],
+      exposure: uniforms[293],
+      softClip: uniforms[294],
+      heat: uniforms[295],
     };
     state.volumeScene = normalizeVolumeScene(controlsSnapshot.volumeScene);
     state.bonfireReferenceConfinement = bonfireReferenceConfinementDebug(controlsSnapshot.volumeScene);
@@ -5930,10 +5915,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         flowRadianceMax: pyroMaterialGain * pyroMaterialLiveAuthority * pyroFlowBite * pyroFlowRadiance * pyroCarrierOverdrive,
         flowSpikeMax: pyroMaterialGain * pyroMaterialLiveAuthority * pyroFlowBite * pyroFlowSpikes * pyroCarrierOverdrive,
         topologyShellIdentity: 'topology-lab-thin-reaction-shell-v0',
+        topologyShellMixIdentity: 'topology-lab-monotonic-carrier-mix-v0',
         topologyShellMode: fireRenderModeName,
         topologyShellInspectMode: shellInspectModeName,
         topologyShellAuthority: 'shell-controls-visible-fire-render-authority-stock-fire-bypassed-in-shell-mode',
-        topologyShellInputs: ['thermalSupport', 'reactionSupport', 'frontSupport', 'edgeSupport', 'coreSuppression', 'curlActivity', 'divergenceStress'],
+        topologyShellInputs: ['thermalSupport', 'reactionSupport', 'frontSupport', 'edgeSupport', 'curlSupport', 'coreSuppression', 'divergenceStress'],
         topologyShellControls: state.topologyShellControls,
         legacyPyroBackedOff: controlsSnapshot.legacyPyroBackedOff === true,
         biteShape: `${pyroBiteTeeth.toFixed(2)}t/${pyroBiteWake.toFixed(2)}w/${pyroBiteHeight.toFixed(2)}h/${pyroBiteFireLock.toFixed(2)}f`,

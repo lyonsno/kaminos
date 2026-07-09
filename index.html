@@ -1234,7 +1234,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
     </div>
     <div class="volume-control-section" data-volume-control-section="topology-shell">
       <div class="volume-control-section-title">Topology Lab Shell</div>
-      <span class="slider-help">Stock fire emission is bypassed in shell mode; the sim keeps running, while these controls decide how carriers become visible flame.</span>
+      <span class="slider-help">Shell mode bypasses stock fire emission. Carrier sliders add raw support; shape sliders cut or thicken the resulting mask.</span>
       <div class="slider-row">
         <span class="slider-label">Fire Render</span>
         <select id="volume-fire-render-mode" class="select-input">
@@ -1260,74 +1260,79 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
         <span class="slider-val" id="volume-shell-inspect-mode-val">shell</span>
       </div>
       <div class="slider-row">
-        <span class="slider-label">Shell Amount</span>
-        <input type="range" id="volume-shell-amount" min="0" max="2" step="0.05" value="2.00">
-        <span class="slider-val" id="volume-shell-amount-val">2.00</span>
+        <span class="slider-label">Emission Gain</span>
+        <input type="range" id="volume-shell-amount" min="0" max="2" step="0.05" value="1.10">
+        <span class="slider-val" id="volume-shell-amount-val">1.10</span>
       </div>
       <div class="slider-row">
-        <span class="slider-label">Shell Width</span>
-        <input type="range" id="volume-shell-width" min="0.05" max="2" step="0.05" value="1.10">
-        <span class="slider-val" id="volume-shell-width-val">1.10</span>
+        <span class="slider-label">Mask Thick</span>
+        <input type="range" id="volume-shell-width" min="0.05" max="2" step="0.05" value="0.90">
+        <span class="slider-val" id="volume-shell-width-val">0.90</span>
       </div>
       <div class="slider-row">
         <span class="slider-label">Thermal Carrier</span>
-        <input type="range" id="volume-shell-thermal" min="0" max="2" step="0.05" value="1.60">
-        <span class="slider-val" id="volume-shell-thermal-val">1.60</span>
+        <input type="range" id="volume-shell-thermal" min="0" max="2" step="0.05" value="0.85">
+        <span class="slider-val" id="volume-shell-thermal-val">0.85</span>
       </div>
       <div class="slider-row">
         <span class="slider-label">Reaction Carrier</span>
-        <input type="range" id="volume-shell-reaction" min="0" max="2" step="0.05" value="1.80">
-        <span class="slider-val" id="volume-shell-reaction-val">1.80</span>
+        <input type="range" id="volume-shell-reaction" min="0" max="2" step="0.05" value="1.10">
+        <span class="slider-val" id="volume-shell-reaction-val">1.10</span>
       </div>
       <div class="slider-row">
         <span class="slider-label">Front Carrier</span>
-        <input type="range" id="volume-shell-front" min="0" max="2" step="0.05" value="1.80">
-        <span class="slider-val" id="volume-shell-front-val">1.80</span>
+        <input type="range" id="volume-shell-front" min="0" max="2" step="0.05" value="1.25">
+        <span class="slider-val" id="volume-shell-front-val">1.25</span>
       </div>
       <div class="slider-row">
         <span class="slider-label">Edge Carrier</span>
-        <input type="range" id="volume-shell-edge" min="0" max="2" step="0.05" value="1.50">
-        <span class="slider-val" id="volume-shell-edge-val">1.50</span>
+        <input type="range" id="volume-shell-edge" min="0" max="2" step="0.05" value="0.85">
+        <span class="slider-val" id="volume-shell-edge-val">0.85</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Curl Carrier</span>
+        <input type="range" id="volume-shell-curl" min="0" max="2" step="0.05" value="0.25">
+        <span class="slider-val" id="volume-shell-curl-val">0.25</span>
       </div>
       <div class="slider-row">
         <span class="slider-label">Core Suppress</span>
-        <input type="range" id="volume-shell-core-suppress" min="0" max="1" step="0.05" value="0.75">
-        <span class="slider-val" id="volume-shell-core-suppress-val">0.75</span>
+        <input type="range" id="volume-shell-core-suppress" min="0" max="1" step="0.05" value="0.55">
+        <span class="slider-val" id="volume-shell-core-suppress-val">0.55</span>
       </div>
       <div class="slider-row">
         <span class="slider-label">Edge Bite</span>
-        <input type="range" id="volume-shell-bite" min="0" max="2" step="0.05" value="1.20">
-        <span class="slider-val" id="volume-shell-bite-val">1.20</span>
+        <input type="range" id="volume-shell-bite" min="0" max="2" step="0.05" value="0.80">
+        <span class="slider-val" id="volume-shell-bite-val">0.80</span>
       </div>
       <div class="slider-row">
         <span class="slider-label">Color Heat</span>
-        <input type="range" id="volume-shell-heat" min="0" max="4" step="0.05" value="3.20">
-        <span class="slider-val" id="volume-shell-heat-val">3.20</span>
+        <input type="range" id="volume-shell-heat" min="0" max="4" step="0.05" value="1.65">
+        <span class="slider-val" id="volume-shell-heat-val">1.65</span>
       </div>
       <div class="slider-row">
         <span class="slider-label">Div Stress</span>
-        <input type="range" id="volume-shell-divergence" min="0" max="1" step="0.05" value="0.20">
-        <span class="slider-val" id="volume-shell-divergence-val">0.20</span>
+        <input type="range" id="volume-shell-divergence" min="0" max="1" step="0.05" value="0.00">
+        <span class="slider-val" id="volume-shell-divergence-val">0.00</span>
       </div>
       <div class="slider-row">
         <span class="slider-label">Shell Luma</span>
-        <input type="range" id="volume-shell-luma" min="0" max="5" step="0.05" value="3.20">
-        <span class="slider-val" id="volume-shell-luma-val">3.20</span>
+        <input type="range" id="volume-shell-luma" min="0" max="5" step="0.05" value="1.35">
+        <span class="slider-val" id="volume-shell-luma-val">1.35</span>
       </div>
       <div class="slider-row">
         <span class="slider-label">Exposure</span>
-        <input type="range" id="volume-shell-exposure" min="0" max="4" step="0.05" value="2.40">
-        <span class="slider-val" id="volume-shell-exposure-val">2.40</span>
+        <input type="range" id="volume-shell-exposure" min="0" max="4" step="0.05" value="1.15">
+        <span class="slider-val" id="volume-shell-exposure-val">1.15</span>
       </div>
       <div class="slider-row">
         <span class="slider-label">Soft Clip</span>
-        <input type="range" id="volume-shell-soft-clip" min="0.2" max="4" step="0.05" value="2.60">
-        <span class="slider-val" id="volume-shell-soft-clip-val">2.60</span>
+        <input type="range" id="volume-shell-soft-clip" min="0.2" max="4" step="0.05" value="1.60">
+        <span class="slider-val" id="volume-shell-soft-clip-val">1.60</span>
       </div>
       <div class="slider-row">
         <span class="slider-label">Smoke Coupling</span>
-        <input type="range" id="volume-shell-smoke" min="0" max="2" step="0.05" value="0.55">
-        <span class="slider-val" id="volume-shell-smoke-val">0.55</span>
+        <input type="range" id="volume-shell-smoke" min="0" max="2" step="0.05" value="0.25">
+        <span class="slider-val" id="volume-shell-smoke-val">0.25</span>
       </div>
     </div>
     <div class="slider-row">
@@ -9758,7 +9763,7 @@ const FIRESIM_LOOK_FIELDS = [
   'detailScale', 'plumeHeight', 'windStrength', 'windAngle', 'windHeight', 'inputRadius',
   'flowRate', 'fireRenderMode', 'shellInspectMode', 'shellAmount', 'shellWidth',
   'shellThermal', 'shellReaction', 'shellFront', 'shellEdge', 'shellCoreSuppress',
-  'shellBite', 'shellHeat', 'shellDivergence', 'shellLuma', 'shellExposure',
+  'shellBite', 'shellCurl', 'shellHeat', 'shellDivergence', 'shellLuma', 'shellExposure',
   'shellSoftClip', 'shellSmoke',
 ];
 
@@ -11018,6 +11023,7 @@ const VOLUME_BASIN_ROUTE_FIELDS = [
   ['shellEdge', 'volume_shell_edge'],
   ['shellCoreSuppress', 'volume_shell_core_suppress'],
   ['shellBite', 'volume_shell_bite'],
+  ['shellCurl', 'volume_shell_curl'],
   ['shellHeat', 'volume_shell_heat'],
   ['shellDivergence', 'volume_shell_divergence'],
   ['shellLuma', 'volume_shell_luma'],
@@ -15388,6 +15394,7 @@ function readVolumeControls() {
     shellEdge: parseFloat(document.getElementById('volume-shell-edge').value),
     shellCoreSuppress: parseFloat(document.getElementById('volume-shell-core-suppress').value),
     shellBite: parseFloat(document.getElementById('volume-shell-bite').value),
+    shellCurl: parseFloat(document.getElementById('volume-shell-curl').value),
     shellHeat: parseFloat(document.getElementById('volume-shell-heat').value),
     shellDivergence: parseFloat(document.getElementById('volume-shell-divergence').value),
     shellLuma: parseFloat(document.getElementById('volume-shell-luma').value),
@@ -15542,6 +15549,7 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-shell-edge-val').textContent = c.shellEdge.toFixed(2);
   document.getElementById('volume-shell-core-suppress-val').textContent = c.shellCoreSuppress.toFixed(2);
   document.getElementById('volume-shell-bite-val').textContent = c.shellBite.toFixed(2);
+  document.getElementById('volume-shell-curl-val').textContent = c.shellCurl.toFixed(2);
   document.getElementById('volume-shell-heat-val').textContent = c.shellHeat.toFixed(2);
   document.getElementById('volume-shell-divergence-val').textContent = c.shellDivergence.toFixed(2);
   document.getElementById('volume-shell-luma-val').textContent = c.shellLuma.toFixed(2);
@@ -15941,6 +15949,7 @@ async function initKaminosVolumeRoute() {
     ['volume_shell_edge', 'volume-shell-edge', 0, 2],
     ['volume_shell_core_suppress', 'volume-shell-core-suppress', 0, 1],
     ['volume_shell_bite', 'volume-shell-bite', 0, 2],
+    ['volume_shell_curl', 'volume-shell-curl', 0, 2],
     ['volume_shell_heat', 'volume-shell-heat', 0, 4],
     ['volume_shell_divergence', 'volume-shell-divergence', 0, 1],
     ['volume_shell_luma', 'volume-shell-luma', 0, 5],
@@ -16393,7 +16402,7 @@ async function initKaminosVolumeRoute() {
   moveVolumePyroRadianceControlsBelowFlow();
   moveVolumePyroLegacyControlsBelowRadiance();
   hideVolumeLegacyPyroSurfaceForTopologyBranch();
-  for (const id of ['volume-scene', 'volume-density', 'volume-fire', 'volume-radiance', 'volume-absorption', 'volume-glow', 'volume-smoke', 'volume-curl', 'volume-microdetail', 'volume-interface-shred', 'volume-fire-licks', 'volume-projection', 'volume-speed', 'volume-steps', 'volume-adaptive-rays', 'volume-occupancy-skip', 'volume-majorant-skip', 'volume-majorant-smooth', 'volume-majorant-guard', 'volume-temporal-accum', 'volume-temporal-jitter', 'volume-history-clamp', 'volume-fire-scale', 'volume-detail-scale', 'volume-plume-height', 'volume-wind-strength', 'volume-wind-angle', 'volume-wind-height', 'volume-render-scale', 'volume-input-radius', 'volume-flow-rate', 'volume-fire-render-mode', 'volume-shell-inspect-mode', 'volume-shell-amount', 'volume-shell-width', 'volume-shell-thermal', 'volume-shell-reaction', 'volume-shell-front', 'volume-shell-edge', 'volume-shell-core-suppress', 'volume-shell-bite', 'volume-shell-heat', 'volume-shell-divergence', 'volume-shell-luma', 'volume-shell-exposure', 'volume-shell-soft-clip', 'volume-shell-smoke', 'volume-resolution', 'volume-majorant-grid', 'volume-grid-overlay', 'volume-flow-debug', 'volume-look-freeze', 'volume-pyro-compare', 'volume-pyro-detail', 'volume-pyro-material-gain', 'volume-pyro-interface-focus', 'volume-pyro-edge-bite', 'volume-pyro-bite-border', 'volume-pyro-bite-teeth', 'volume-pyro-bite-wake', 'volume-pyro-bite-height', 'volume-pyro-bite-fire-lock', 'volume-pyro-bite-core', 'volume-pyro-bite-core-cut', 'volume-pyro-bite-rim', 'volume-pyro-bite-rim-cut', 'volume-pyro-bite-after', 'volume-pyro-bite-after-cut', 'volume-pyro-fire-mode', 'volume-pyro-flame-paint', 'volume-pyro-stock-mix', 'volume-pyro-flame-luma', 'volume-pyro-flame-core-color', 'volume-pyro-flame-edge-color', 'volume-pyro-bite-heat', 'volume-pyro-bite-chroma', 'volume-pyro-bite-luma', 'volume-pyro-bite-ember-color', 'volume-pyro-bite-hot-color', 'volume-pyro-smoke-fold', 'volume-pyro-fold-border', 'volume-pyro-fold-wake', 'volume-pyro-wake-lift', 'volume-pyro-wake-warmth', 'volume-pyro-wake-luma', 'volume-pyro-wake-shadow-color', 'volume-pyro-wake-ember-color', 'volume-pyro-radiance', 'volume-pyro-radiance-gate', 'volume-pyro-radiance-spill', 'volume-pyro-radiance-warmth', 'volume-pyro-radiance-hue', 'volume-pyro-radiance-chroma', 'volume-pyro-radiance-luma', 'volume-pyro-radiance-cool-color', 'volume-pyro-radiance-warm-color', 'volume-pyro-radiance-source', 'volume-pyro-radiance-height', 'volume-pyro-radiance-border', 'volume-pyro-radiance-teeth', 'volume-pyro-radiance-rise', 'volume-pyro-radiance-fire-lock', 'volume-pyro-flow-bite', 'volume-pyro-flow-border', 'volume-pyro-flow-teeth', 'volume-pyro-flow-rise', 'volume-pyro-flow-fire-lock', 'volume-pyro-flow-luma', 'volume-pyro-flow-radiance', 'volume-pyro-flow-spikes', 'volume-pyro-flow-cool-color', 'volume-pyro-flow-hot-color', 'volume-pyro-diagnostic-paint', 'volume-pyro-carrier-view', 'volume-pyro-overdrive', 'volume-pressure-mode', 'volume-pressure-tier-overlay', 'volume-pressure-tier-lower-max', 'volume-pressure-tier-hero-min', 'volume-pressure-tier-hero-max', 'volume-canonical-spread', 'volume-canonical-centerline', 'volume-canonical-body-balance']) {
+  for (const id of ['volume-scene', 'volume-density', 'volume-fire', 'volume-radiance', 'volume-absorption', 'volume-glow', 'volume-smoke', 'volume-curl', 'volume-microdetail', 'volume-interface-shred', 'volume-fire-licks', 'volume-projection', 'volume-speed', 'volume-steps', 'volume-adaptive-rays', 'volume-occupancy-skip', 'volume-majorant-skip', 'volume-majorant-smooth', 'volume-majorant-guard', 'volume-temporal-accum', 'volume-temporal-jitter', 'volume-history-clamp', 'volume-fire-scale', 'volume-detail-scale', 'volume-plume-height', 'volume-wind-strength', 'volume-wind-angle', 'volume-wind-height', 'volume-render-scale', 'volume-input-radius', 'volume-flow-rate', 'volume-fire-render-mode', 'volume-shell-inspect-mode', 'volume-shell-amount', 'volume-shell-width', 'volume-shell-thermal', 'volume-shell-reaction', 'volume-shell-front', 'volume-shell-edge', 'volume-shell-core-suppress', 'volume-shell-bite', 'volume-shell-curl', 'volume-shell-heat', 'volume-shell-divergence', 'volume-shell-luma', 'volume-shell-exposure', 'volume-shell-soft-clip', 'volume-shell-smoke', 'volume-resolution', 'volume-majorant-grid', 'volume-grid-overlay', 'volume-flow-debug', 'volume-look-freeze', 'volume-pyro-compare', 'volume-pyro-detail', 'volume-pyro-material-gain', 'volume-pyro-interface-focus', 'volume-pyro-edge-bite', 'volume-pyro-bite-border', 'volume-pyro-bite-teeth', 'volume-pyro-bite-wake', 'volume-pyro-bite-height', 'volume-pyro-bite-fire-lock', 'volume-pyro-bite-core', 'volume-pyro-bite-core-cut', 'volume-pyro-bite-rim', 'volume-pyro-bite-rim-cut', 'volume-pyro-bite-after', 'volume-pyro-bite-after-cut', 'volume-pyro-fire-mode', 'volume-pyro-flame-paint', 'volume-pyro-stock-mix', 'volume-pyro-flame-luma', 'volume-pyro-flame-core-color', 'volume-pyro-flame-edge-color', 'volume-pyro-bite-heat', 'volume-pyro-bite-chroma', 'volume-pyro-bite-luma', 'volume-pyro-bite-ember-color', 'volume-pyro-bite-hot-color', 'volume-pyro-smoke-fold', 'volume-pyro-fold-border', 'volume-pyro-fold-wake', 'volume-pyro-wake-lift', 'volume-pyro-wake-warmth', 'volume-pyro-wake-luma', 'volume-pyro-wake-shadow-color', 'volume-pyro-wake-ember-color', 'volume-pyro-radiance', 'volume-pyro-radiance-gate', 'volume-pyro-radiance-spill', 'volume-pyro-radiance-warmth', 'volume-pyro-radiance-hue', 'volume-pyro-radiance-chroma', 'volume-pyro-radiance-luma', 'volume-pyro-radiance-cool-color', 'volume-pyro-radiance-warm-color', 'volume-pyro-radiance-source', 'volume-pyro-radiance-height', 'volume-pyro-radiance-border', 'volume-pyro-radiance-teeth', 'volume-pyro-radiance-rise', 'volume-pyro-radiance-fire-lock', 'volume-pyro-flow-bite', 'volume-pyro-flow-border', 'volume-pyro-flow-teeth', 'volume-pyro-flow-rise', 'volume-pyro-flow-fire-lock', 'volume-pyro-flow-luma', 'volume-pyro-flow-radiance', 'volume-pyro-flow-spikes', 'volume-pyro-flow-cool-color', 'volume-pyro-flow-hot-color', 'volume-pyro-diagnostic-paint', 'volume-pyro-carrier-view', 'volume-pyro-overdrive', 'volume-pressure-mode', 'volume-pressure-tier-overlay', 'volume-pressure-tier-lower-max', 'volume-pressure-tier-hero-min', 'volume-pressure-tier-hero-max', 'volume-canonical-spread', 'volume-canonical-centerline', 'volume-canonical-body-balance']) {
     document.getElementById(id).addEventListener('input', syncControls);
     document.getElementById(id).addEventListener('change', syncControls);
   }
