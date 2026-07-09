@@ -1232,42 +1232,102 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
       <input type="range" id="volume-flow-debug" min="0" max="1" step="0.05" value="0">
       <span class="slider-val" id="volume-flow-debug-val">0.00</span>
     </div>
-    <div class="volume-control-section" data-volume-control-section="topology-radiance">
-      <div class="volume-control-section-title">Topology Radiance</div>
+    <div class="volume-control-section" data-volume-control-section="topology-shell">
+      <div class="volume-control-section-title">Topology Lab Shell</div>
+      <span class="slider-help">Stock fire emission is bypassed in shell mode; the sim keeps running, while these controls decide how carriers become visible flame.</span>
       <div class="slider-row">
-        <span class="slider-label">Topo Amount</span>
-        <input type="range" id="volume-topology-radiance-amount" min="0" max="1" step="0.05" value="0">
-        <span class="slider-val" id="volume-topology-radiance-amount-val">0.00</span>
+        <span class="slider-label">Fire Render</span>
+        <select id="volume-fire-render-mode" class="select-input">
+          <option value="shell" selected>shell lab</option>
+          <option value="inspect">carrier inspect</option>
+          <option value="off">fire off</option>
+          <option value="stock">stock legacy</option>
+        </select>
+        <span class="slider-val" id="volume-fire-render-mode-val">shell</span>
       </div>
       <div class="slider-row">
-        <span class="slider-label">Topo Max</span>
-        <input type="range" id="volume-topology-radiance-max" min="1" max="3" step="0.05" value="2.25">
-        <span class="slider-val" id="volume-topology-radiance-max-val">2.25</span>
+        <span class="slider-label">Inspect</span>
+        <select id="volume-shell-inspect-mode" class="select-input">
+          <option value="shell" selected>shell</option>
+          <option value="thermal">thermal</option>
+          <option value="reaction">reaction</option>
+          <option value="front">front</option>
+          <option value="edge">edge</option>
+          <option value="core">core</option>
+          <option value="curl">curl</option>
+          <option value="divergence">divergence</option>
+        </select>
+        <span class="slider-val" id="volume-shell-inspect-mode-val">shell</span>
       </div>
       <div class="slider-row">
-        <span class="slider-label">Curl Surface</span>
-        <input type="range" id="volume-topology-radiance-curl" min="0" max="1.5" step="0.05" value="0.40">
-        <span class="slider-val" id="volume-topology-radiance-curl-val">0.40</span>
+        <span class="slider-label">Shell Amount</span>
+        <input type="range" id="volume-shell-amount" min="0" max="2" step="0.05" value="2.00">
+        <span class="slider-val" id="volume-shell-amount-val">2.00</span>
       </div>
       <div class="slider-row">
-        <span class="slider-label">Interface Surface</span>
-        <input type="range" id="volume-topology-radiance-interface" min="0" max="1.5" step="0.05" value="0.50">
-        <span class="slider-val" id="volume-topology-radiance-interface-val">0.50</span>
+        <span class="slider-label">Shell Width</span>
+        <input type="range" id="volume-shell-width" min="0.05" max="2" step="0.05" value="1.10">
+        <span class="slider-val" id="volume-shell-width-val">1.10</span>
       </div>
       <div class="slider-row">
-        <span class="slider-label">Lick Surface</span>
-        <input type="range" id="volume-topology-radiance-licks" min="0" max="1.5" step="0.05" value="0.40">
-        <span class="slider-val" id="volume-topology-radiance-licks-val">0.40</span>
+        <span class="slider-label">Thermal Carrier</span>
+        <input type="range" id="volume-shell-thermal" min="0" max="2" step="0.05" value="1.60">
+        <span class="slider-val" id="volume-shell-thermal-val">1.60</span>
       </div>
       <div class="slider-row">
-        <span class="slider-label">Front Surface</span>
-        <input type="range" id="volume-topology-radiance-front" min="0" max="1.5" step="0.05" value="0.20">
-        <span class="slider-val" id="volume-topology-radiance-front-val">0.20</span>
+        <span class="slider-label">Reaction Carrier</span>
+        <input type="range" id="volume-shell-reaction" min="0" max="2" step="0.05" value="1.80">
+        <span class="slider-val" id="volume-shell-reaction-val">1.80</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Front Carrier</span>
+        <input type="range" id="volume-shell-front" min="0" max="2" step="0.05" value="1.80">
+        <span class="slider-val" id="volume-shell-front-val">1.80</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Edge Carrier</span>
+        <input type="range" id="volume-shell-edge" min="0" max="2" step="0.05" value="1.50">
+        <span class="slider-val" id="volume-shell-edge-val">1.50</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Core Suppress</span>
+        <input type="range" id="volume-shell-core-suppress" min="0" max="1" step="0.05" value="0.75">
+        <span class="slider-val" id="volume-shell-core-suppress-val">0.75</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Edge Bite</span>
+        <input type="range" id="volume-shell-bite" min="0" max="2" step="0.05" value="1.20">
+        <span class="slider-val" id="volume-shell-bite-val">1.20</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Color Heat</span>
+        <input type="range" id="volume-shell-heat" min="0" max="4" step="0.05" value="3.20">
+        <span class="slider-val" id="volume-shell-heat-val">3.20</span>
       </div>
       <div class="slider-row">
         <span class="slider-label">Div Stress</span>
-        <input type="range" id="volume-topology-radiance-strain" min="0" max="1.5" step="0.05" value="0.15">
-        <span class="slider-val" id="volume-topology-radiance-strain-val">0.15</span>
+        <input type="range" id="volume-shell-divergence" min="0" max="1" step="0.05" value="0.20">
+        <span class="slider-val" id="volume-shell-divergence-val">0.20</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Shell Luma</span>
+        <input type="range" id="volume-shell-luma" min="0" max="5" step="0.05" value="3.20">
+        <span class="slider-val" id="volume-shell-luma-val">3.20</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Exposure</span>
+        <input type="range" id="volume-shell-exposure" min="0" max="4" step="0.05" value="2.40">
+        <span class="slider-val" id="volume-shell-exposure-val">2.40</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Soft Clip</span>
+        <input type="range" id="volume-shell-soft-clip" min="0.2" max="4" step="0.05" value="2.60">
+        <span class="slider-val" id="volume-shell-soft-clip-val">2.60</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Smoke Coupling</span>
+        <input type="range" id="volume-shell-smoke" min="0" max="2" step="0.05" value="0.55">
+        <span class="slider-val" id="volume-shell-smoke-val">0.55</span>
       </div>
     </div>
     <div class="slider-row">
@@ -9696,9 +9756,10 @@ const FIRESIM_LOOK_FIELDS = [
   'volumeScene', 'density', 'fire', 'radiance', 'absorption', 'glow', 'smoke', 'curl',
   'microdetail', 'interfaceShred', 'fireLicks', 'projection', 'speed', 'fireScale',
   'detailScale', 'plumeHeight', 'windStrength', 'windAngle', 'windHeight', 'inputRadius',
-  'flowRate', 'topologyRadianceAmount', 'topologyRadianceMax', 'topologyRadianceCurl',
-  'topologyRadianceInterface', 'topologyRadianceLicks', 'topologyRadianceFront',
-  'topologyRadianceStrain',
+  'flowRate', 'fireRenderMode', 'shellInspectMode', 'shellAmount', 'shellWidth',
+  'shellThermal', 'shellReaction', 'shellFront', 'shellEdge', 'shellCoreSuppress',
+  'shellBite', 'shellHeat', 'shellDivergence', 'shellLuma', 'shellExposure',
+  'shellSoftClip', 'shellSmoke',
 ];
 
 const VOLUME_SCENE_PRESETS = {
@@ -10947,13 +11008,22 @@ const VOLUME_BASIN_ROUTE_FIELDS = [
   ['windHeight', 'volume_wind_height'],
   ['inputRadius', 'volume_input_radius'],
   ['flowRate', 'volume_flow_rate'],
-  ['topologyRadianceAmount', 'volume_topology_radiance_amount'],
-  ['topologyRadianceMax', 'volume_topology_radiance_max'],
-  ['topologyRadianceCurl', 'volume_topology_radiance_curl'],
-  ['topologyRadianceInterface', 'volume_topology_radiance_interface'],
-  ['topologyRadianceLicks', 'volume_topology_radiance_licks'],
-  ['topologyRadianceFront', 'volume_topology_radiance_front'],
-  ['topologyRadianceStrain', 'volume_topology_radiance_strain'],
+  ['fireRenderMode', 'volume_fire_render_mode'],
+  ['shellInspectMode', 'volume_shell_inspect'],
+  ['shellAmount', 'volume_shell_amount'],
+  ['shellWidth', 'volume_shell_width'],
+  ['shellThermal', 'volume_shell_thermal'],
+  ['shellReaction', 'volume_shell_reaction'],
+  ['shellFront', 'volume_shell_front'],
+  ['shellEdge', 'volume_shell_edge'],
+  ['shellCoreSuppress', 'volume_shell_core_suppress'],
+  ['shellBite', 'volume_shell_bite'],
+  ['shellHeat', 'volume_shell_heat'],
+  ['shellDivergence', 'volume_shell_divergence'],
+  ['shellLuma', 'volume_shell_luma'],
+  ['shellExposure', 'volume_shell_exposure'],
+  ['shellSoftClip', 'volume_shell_soft_clip'],
+  ['shellSmoke', 'volume_shell_smoke'],
   ['raySteps', 'volume_steps'],
   ['adaptiveRays', 'volume_adaptive_rays'],
   ['occupancySkip', 'volume_occupancy_skip'],
@@ -15308,13 +15378,22 @@ function readVolumeControls() {
     renderScale: parseFloat(document.getElementById('volume-render-scale').value),
     inputRadius: parseFloat(document.getElementById('volume-input-radius').value),
     flowRate: parseFloat(document.getElementById('volume-flow-rate').value),
-    topologyRadianceAmount: parseFloat(document.getElementById('volume-topology-radiance-amount').value),
-    topologyRadianceMax: parseFloat(document.getElementById('volume-topology-radiance-max').value),
-    topologyRadianceCurl: parseFloat(document.getElementById('volume-topology-radiance-curl').value),
-    topologyRadianceInterface: parseFloat(document.getElementById('volume-topology-radiance-interface').value),
-    topologyRadianceLicks: parseFloat(document.getElementById('volume-topology-radiance-licks').value),
-    topologyRadianceFront: parseFloat(document.getElementById('volume-topology-radiance-front').value),
-    topologyRadianceStrain: parseFloat(document.getElementById('volume-topology-radiance-strain').value),
+    fireRenderMode: document.getElementById('volume-fire-render-mode').value,
+    shellInspectMode: document.getElementById('volume-shell-inspect-mode').value,
+    shellAmount: parseFloat(document.getElementById('volume-shell-amount').value),
+    shellWidth: parseFloat(document.getElementById('volume-shell-width').value),
+    shellThermal: parseFloat(document.getElementById('volume-shell-thermal').value),
+    shellReaction: parseFloat(document.getElementById('volume-shell-reaction').value),
+    shellFront: parseFloat(document.getElementById('volume-shell-front').value),
+    shellEdge: parseFloat(document.getElementById('volume-shell-edge').value),
+    shellCoreSuppress: parseFloat(document.getElementById('volume-shell-core-suppress').value),
+    shellBite: parseFloat(document.getElementById('volume-shell-bite').value),
+    shellHeat: parseFloat(document.getElementById('volume-shell-heat').value),
+    shellDivergence: parseFloat(document.getElementById('volume-shell-divergence').value),
+    shellLuma: parseFloat(document.getElementById('volume-shell-luma').value),
+    shellExposure: parseFloat(document.getElementById('volume-shell-exposure').value),
+    shellSoftClip: parseFloat(document.getElementById('volume-shell-soft-clip').value),
+    shellSmoke: parseFloat(document.getElementById('volume-shell-smoke').value),
     resolution: parseInt(document.getElementById('volume-resolution').value, 10),
     majorantGrid: parseInt(document.getElementById('volume-majorant-grid').value, 10),
     gridOverlay: parseFloat(document.getElementById('volume-grid-overlay').value),
@@ -15453,13 +15532,22 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-render-scale-val').textContent = c.renderScale.toFixed(2);
   document.getElementById('volume-input-radius-val').textContent = c.inputRadius.toFixed(2);
   document.getElementById('volume-flow-rate-val').textContent = c.flowRate.toFixed(2);
-  document.getElementById('volume-topology-radiance-amount-val').textContent = c.topologyRadianceAmount.toFixed(2);
-  document.getElementById('volume-topology-radiance-max-val').textContent = c.topologyRadianceMax.toFixed(2);
-  document.getElementById('volume-topology-radiance-curl-val').textContent = c.topologyRadianceCurl.toFixed(2);
-  document.getElementById('volume-topology-radiance-interface-val').textContent = c.topologyRadianceInterface.toFixed(2);
-  document.getElementById('volume-topology-radiance-licks-val').textContent = c.topologyRadianceLicks.toFixed(2);
-  document.getElementById('volume-topology-radiance-front-val').textContent = c.topologyRadianceFront.toFixed(2);
-  document.getElementById('volume-topology-radiance-strain-val').textContent = c.topologyRadianceStrain.toFixed(2);
+  document.getElementById('volume-fire-render-mode-val').textContent = c.fireRenderMode;
+  document.getElementById('volume-shell-inspect-mode-val').textContent = c.shellInspectMode;
+  document.getElementById('volume-shell-amount-val').textContent = c.shellAmount.toFixed(2);
+  document.getElementById('volume-shell-width-val').textContent = c.shellWidth.toFixed(2);
+  document.getElementById('volume-shell-thermal-val').textContent = c.shellThermal.toFixed(2);
+  document.getElementById('volume-shell-reaction-val').textContent = c.shellReaction.toFixed(2);
+  document.getElementById('volume-shell-front-val').textContent = c.shellFront.toFixed(2);
+  document.getElementById('volume-shell-edge-val').textContent = c.shellEdge.toFixed(2);
+  document.getElementById('volume-shell-core-suppress-val').textContent = c.shellCoreSuppress.toFixed(2);
+  document.getElementById('volume-shell-bite-val').textContent = c.shellBite.toFixed(2);
+  document.getElementById('volume-shell-heat-val').textContent = c.shellHeat.toFixed(2);
+  document.getElementById('volume-shell-divergence-val').textContent = c.shellDivergence.toFixed(2);
+  document.getElementById('volume-shell-luma-val').textContent = c.shellLuma.toFixed(2);
+  document.getElementById('volume-shell-exposure-val').textContent = c.shellExposure.toFixed(2);
+  document.getElementById('volume-shell-soft-clip-val').textContent = c.shellSoftClip.toFixed(2);
+  document.getElementById('volume-shell-smoke-val').textContent = c.shellSmoke.toFixed(2);
   document.getElementById('volume-resolution-val').textContent = `${c.resolution}^3`;
   document.getElementById('volume-majorant-grid-val').textContent = `${c.majorantGrid}^3`;
   document.getElementById('volume-grid-overlay-val').textContent = c.gridOverlay.toFixed(2);
@@ -15836,14 +15924,29 @@ async function initKaminosVolumeRoute() {
   if (params.has('volume_flow_rate') && Number.isFinite(routeFlowRate)) {
     document.getElementById('volume-flow-rate').value = String(Math.max(0, Math.min(2.5, routeFlowRate)));
   }
+  const routeFireRenderMode = (params.get('volume_fire_render_mode') || '').toLowerCase().replace(/-/g, '_');
+  if (['shell', 'inspect', 'off', 'stock'].includes(routeFireRenderMode)) {
+    document.getElementById('volume-fire-render-mode').value = routeFireRenderMode;
+  }
+  const routeShellInspectMode = (params.get('volume_shell_inspect') || '').toLowerCase().replace(/-/g, '_');
+  if (['shell', 'thermal', 'reaction', 'front', 'edge', 'core', 'curl', 'divergence'].includes(routeShellInspectMode)) {
+    document.getElementById('volume-shell-inspect-mode').value = routeShellInspectMode;
+  }
   for (const [param, id, min, max] of [
-    ['volume_topology_radiance_amount', 'volume-topology-radiance-amount', 0, 1],
-    ['volume_topology_radiance_max', 'volume-topology-radiance-max', 1, 3],
-    ['volume_topology_radiance_curl', 'volume-topology-radiance-curl', 0, 1.5],
-    ['volume_topology_radiance_interface', 'volume-topology-radiance-interface', 0, 1.5],
-    ['volume_topology_radiance_licks', 'volume-topology-radiance-licks', 0, 1.5],
-    ['volume_topology_radiance_front', 'volume-topology-radiance-front', 0, 1.5],
-    ['volume_topology_radiance_strain', 'volume-topology-radiance-strain', 0, 1.5],
+    ['volume_shell_amount', 'volume-shell-amount', 0, 2],
+    ['volume_shell_width', 'volume-shell-width', 0.05, 2],
+    ['volume_shell_thermal', 'volume-shell-thermal', 0, 2],
+    ['volume_shell_reaction', 'volume-shell-reaction', 0, 2],
+    ['volume_shell_front', 'volume-shell-front', 0, 2],
+    ['volume_shell_edge', 'volume-shell-edge', 0, 2],
+    ['volume_shell_core_suppress', 'volume-shell-core-suppress', 0, 1],
+    ['volume_shell_bite', 'volume-shell-bite', 0, 2],
+    ['volume_shell_heat', 'volume-shell-heat', 0, 4],
+    ['volume_shell_divergence', 'volume-shell-divergence', 0, 1],
+    ['volume_shell_luma', 'volume-shell-luma', 0, 5],
+    ['volume_shell_exposure', 'volume-shell-exposure', 0, 4],
+    ['volume_shell_soft_clip', 'volume-shell-soft-clip', 0.2, 4],
+    ['volume_shell_smoke', 'volume-shell-smoke', 0, 2],
   ]) {
     const routed = Number(params.get(param));
     if (params.has(param) && Number.isFinite(routed)) {
@@ -16290,7 +16393,7 @@ async function initKaminosVolumeRoute() {
   moveVolumePyroRadianceControlsBelowFlow();
   moveVolumePyroLegacyControlsBelowRadiance();
   hideVolumeLegacyPyroSurfaceForTopologyBranch();
-  for (const id of ['volume-scene', 'volume-density', 'volume-fire', 'volume-radiance', 'volume-absorption', 'volume-glow', 'volume-smoke', 'volume-curl', 'volume-microdetail', 'volume-interface-shred', 'volume-fire-licks', 'volume-projection', 'volume-speed', 'volume-steps', 'volume-adaptive-rays', 'volume-occupancy-skip', 'volume-majorant-skip', 'volume-majorant-smooth', 'volume-majorant-guard', 'volume-temporal-accum', 'volume-temporal-jitter', 'volume-history-clamp', 'volume-fire-scale', 'volume-detail-scale', 'volume-plume-height', 'volume-wind-strength', 'volume-wind-angle', 'volume-wind-height', 'volume-render-scale', 'volume-input-radius', 'volume-flow-rate', 'volume-topology-radiance-amount', 'volume-topology-radiance-max', 'volume-topology-radiance-curl', 'volume-topology-radiance-interface', 'volume-topology-radiance-licks', 'volume-topology-radiance-front', 'volume-topology-radiance-strain', 'volume-resolution', 'volume-majorant-grid', 'volume-grid-overlay', 'volume-flow-debug', 'volume-look-freeze', 'volume-pyro-compare', 'volume-pyro-detail', 'volume-pyro-material-gain', 'volume-pyro-interface-focus', 'volume-pyro-edge-bite', 'volume-pyro-bite-border', 'volume-pyro-bite-teeth', 'volume-pyro-bite-wake', 'volume-pyro-bite-height', 'volume-pyro-bite-fire-lock', 'volume-pyro-bite-core', 'volume-pyro-bite-core-cut', 'volume-pyro-bite-rim', 'volume-pyro-bite-rim-cut', 'volume-pyro-bite-after', 'volume-pyro-bite-after-cut', 'volume-pyro-fire-mode', 'volume-pyro-flame-paint', 'volume-pyro-stock-mix', 'volume-pyro-flame-luma', 'volume-pyro-flame-core-color', 'volume-pyro-flame-edge-color', 'volume-pyro-bite-heat', 'volume-pyro-bite-chroma', 'volume-pyro-bite-luma', 'volume-pyro-bite-ember-color', 'volume-pyro-bite-hot-color', 'volume-pyro-smoke-fold', 'volume-pyro-fold-border', 'volume-pyro-fold-wake', 'volume-pyro-wake-lift', 'volume-pyro-wake-warmth', 'volume-pyro-wake-luma', 'volume-pyro-wake-shadow-color', 'volume-pyro-wake-ember-color', 'volume-pyro-radiance', 'volume-pyro-radiance-gate', 'volume-pyro-radiance-spill', 'volume-pyro-radiance-warmth', 'volume-pyro-radiance-hue', 'volume-pyro-radiance-chroma', 'volume-pyro-radiance-luma', 'volume-pyro-radiance-cool-color', 'volume-pyro-radiance-warm-color', 'volume-pyro-radiance-source', 'volume-pyro-radiance-height', 'volume-pyro-radiance-border', 'volume-pyro-radiance-teeth', 'volume-pyro-radiance-rise', 'volume-pyro-radiance-fire-lock', 'volume-pyro-flow-bite', 'volume-pyro-flow-border', 'volume-pyro-flow-teeth', 'volume-pyro-flow-rise', 'volume-pyro-flow-fire-lock', 'volume-pyro-flow-luma', 'volume-pyro-flow-radiance', 'volume-pyro-flow-spikes', 'volume-pyro-flow-cool-color', 'volume-pyro-flow-hot-color', 'volume-pyro-diagnostic-paint', 'volume-pyro-carrier-view', 'volume-pyro-overdrive', 'volume-pressure-mode', 'volume-pressure-tier-overlay', 'volume-pressure-tier-lower-max', 'volume-pressure-tier-hero-min', 'volume-pressure-tier-hero-max', 'volume-canonical-spread', 'volume-canonical-centerline', 'volume-canonical-body-balance']) {
+  for (const id of ['volume-scene', 'volume-density', 'volume-fire', 'volume-radiance', 'volume-absorption', 'volume-glow', 'volume-smoke', 'volume-curl', 'volume-microdetail', 'volume-interface-shred', 'volume-fire-licks', 'volume-projection', 'volume-speed', 'volume-steps', 'volume-adaptive-rays', 'volume-occupancy-skip', 'volume-majorant-skip', 'volume-majorant-smooth', 'volume-majorant-guard', 'volume-temporal-accum', 'volume-temporal-jitter', 'volume-history-clamp', 'volume-fire-scale', 'volume-detail-scale', 'volume-plume-height', 'volume-wind-strength', 'volume-wind-angle', 'volume-wind-height', 'volume-render-scale', 'volume-input-radius', 'volume-flow-rate', 'volume-fire-render-mode', 'volume-shell-inspect-mode', 'volume-shell-amount', 'volume-shell-width', 'volume-shell-thermal', 'volume-shell-reaction', 'volume-shell-front', 'volume-shell-edge', 'volume-shell-core-suppress', 'volume-shell-bite', 'volume-shell-heat', 'volume-shell-divergence', 'volume-shell-luma', 'volume-shell-exposure', 'volume-shell-soft-clip', 'volume-shell-smoke', 'volume-resolution', 'volume-majorant-grid', 'volume-grid-overlay', 'volume-flow-debug', 'volume-look-freeze', 'volume-pyro-compare', 'volume-pyro-detail', 'volume-pyro-material-gain', 'volume-pyro-interface-focus', 'volume-pyro-edge-bite', 'volume-pyro-bite-border', 'volume-pyro-bite-teeth', 'volume-pyro-bite-wake', 'volume-pyro-bite-height', 'volume-pyro-bite-fire-lock', 'volume-pyro-bite-core', 'volume-pyro-bite-core-cut', 'volume-pyro-bite-rim', 'volume-pyro-bite-rim-cut', 'volume-pyro-bite-after', 'volume-pyro-bite-after-cut', 'volume-pyro-fire-mode', 'volume-pyro-flame-paint', 'volume-pyro-stock-mix', 'volume-pyro-flame-luma', 'volume-pyro-flame-core-color', 'volume-pyro-flame-edge-color', 'volume-pyro-bite-heat', 'volume-pyro-bite-chroma', 'volume-pyro-bite-luma', 'volume-pyro-bite-ember-color', 'volume-pyro-bite-hot-color', 'volume-pyro-smoke-fold', 'volume-pyro-fold-border', 'volume-pyro-fold-wake', 'volume-pyro-wake-lift', 'volume-pyro-wake-warmth', 'volume-pyro-wake-luma', 'volume-pyro-wake-shadow-color', 'volume-pyro-wake-ember-color', 'volume-pyro-radiance', 'volume-pyro-radiance-gate', 'volume-pyro-radiance-spill', 'volume-pyro-radiance-warmth', 'volume-pyro-radiance-hue', 'volume-pyro-radiance-chroma', 'volume-pyro-radiance-luma', 'volume-pyro-radiance-cool-color', 'volume-pyro-radiance-warm-color', 'volume-pyro-radiance-source', 'volume-pyro-radiance-height', 'volume-pyro-radiance-border', 'volume-pyro-radiance-teeth', 'volume-pyro-radiance-rise', 'volume-pyro-radiance-fire-lock', 'volume-pyro-flow-bite', 'volume-pyro-flow-border', 'volume-pyro-flow-teeth', 'volume-pyro-flow-rise', 'volume-pyro-flow-fire-lock', 'volume-pyro-flow-luma', 'volume-pyro-flow-radiance', 'volume-pyro-flow-spikes', 'volume-pyro-flow-cool-color', 'volume-pyro-flow-hot-color', 'volume-pyro-diagnostic-paint', 'volume-pyro-carrier-view', 'volume-pyro-overdrive', 'volume-pressure-mode', 'volume-pressure-tier-overlay', 'volume-pressure-tier-lower-max', 'volume-pressure-tier-hero-min', 'volume-pressure-tier-hero-max', 'volume-canonical-spread', 'volume-canonical-centerline', 'volume-canonical-body-balance']) {
     document.getElementById(id).addEventListener('input', syncControls);
     document.getElementById(id).addEventListener('change', syncControls);
   }
