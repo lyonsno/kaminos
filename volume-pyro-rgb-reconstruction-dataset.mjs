@@ -40,6 +40,11 @@ function integerParam(value, fallback) {
   return Math.max(1, number);
 }
 
+function nonnegativeIntegerParam(value, fallback) {
+  const number = Math.round(finiteNumber(value, fallback));
+  return Math.max(0, number);
+}
+
 function boolParam(value, fallback) {
   if (value === true) return true;
   if (value === false) return false;
@@ -125,7 +130,7 @@ function buildRoutes(args) {
   };
 }
 
-function makeCapturePlan({ role, route, outDir, debugPort, settleMs, windowSize, evidenceMode }) {
+function makeCapturePlan({ role, route, outDir, debugPort, settleMs, windowSize, evidenceMode, deterministicReplay }) {
   const slug = role.replace(/[^a-z0-9_-]/gi, '-');
   const out = resolve(outDir, `${slug}.png`);
   const report = resolve(outDir, `${slug}.json`);
@@ -144,6 +149,13 @@ function makeCapturePlan({ role, route, outDir, debugPort, settleMs, windowSize,
     '--window-size', windowSize,
     '--evidence-mode', evidenceMode,
   ];
+  if (deterministicReplay.steps > 0) {
+    command.push(
+      '--deterministic-replay-steps', String(deterministicReplay.steps),
+      '--deterministic-replay-time-step-ms', String(deterministicReplay.timeStepMs),
+      '--deterministic-replay-start-ms', String(deterministicReplay.startMs),
+    );
+  }
   return {
     role,
     requestedRoute: route,
@@ -153,6 +165,7 @@ function makeCapturePlan({ role, route, outDir, debugPort, settleMs, windowSize,
     stdout,
     stderr,
     command,
+    deterministicReplay,
   };
 }
 
@@ -264,6 +277,11 @@ const settleMs = finiteNumber(args.get('--settle-ms'), 5000);
 const windowSize = String(args.get('--window-size') || '960,720');
 const debugPort = integerParam(args.get('--debug-port'), 9800);
 const evidenceMode = String(args.get('--evidence-mode') || 'performance');
+const deterministicReplay = {
+  steps: nonnegativeIntegerParam(args.get('--deterministic-replay-steps'), 0),
+  timeStepMs: finiteNumber(args.get('--deterministic-replay-time-step-ms'), 1000 / 60),
+  startMs: finiteNumber(args.get('--deterministic-replay-start-ms'), 1000),
+};
 const dryRun = args.has('--dry-run');
 const createdAt = new Date().toISOString();
 const routes = buildRoutes(args);
@@ -277,6 +295,7 @@ const lowCarrierInput = makeCapturePlan({
   settleMs,
   windowSize,
   evidenceMode,
+  deterministicReplay,
 });
 const rgbTarget = makeCapturePlan({
   role: RGB_TARGET_ROLE,
@@ -286,6 +305,7 @@ const rgbTarget = makeCapturePlan({
   settleMs,
   windowSize,
   evidenceMode,
+  deterministicReplay,
 });
 
 const manifest = {
@@ -318,6 +338,7 @@ const manifest = {
   settleMs,
   windowSize,
   evidenceMode,
+  deterministicReplay,
   captures: {
     [LOW_CARRIER_INPUT_ROLE]: lowCarrierInput,
     [RGB_TARGET_ROLE]: rgbTarget,

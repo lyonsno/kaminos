@@ -1983,6 +1983,8 @@ assert.match(pyroRgbReconstructionDataset, /volume_resolution/, 'Pyro RGB recons
 assert.match(pyroRgbReconstructionDataset, /volume_flow_debug/, 'Pyro RGB reconstruction dataset can capture debug-flow carrier imagery by route');
 assert.match(pyroRgbReconstructionDataset, /volume_pyro_flow_bite/, 'Pyro RGB reconstruction dataset preserves Pyro flow carrier controls');
 assert.match(pyroRgbReconstructionDataset, /volume_pyro_flow_radiance/, 'Pyro RGB reconstruction dataset preserves Pyro flow radiance controls');
+assert.match(pyroRgbReconstructionDataset, /deterministic-replay-steps/, 'Pyro RGB reconstruction dataset can request deterministic replay-aligned captures');
+assert.match(pyroRgbReconstructionDataset, /deterministicReplay/, 'Pyro RGB reconstruction dataset records deterministic replay capture controls');
 assert.match(pyroRgbReconstructionDataset, /effectiveRoute/, 'Pyro RGB reconstruction dataset records effective route identity from each witness');
 assert.match(pyroRgbReconstructionDataset, /prototypeIdentity/, 'Pyro RGB reconstruction dataset records effective prototype identity from each witness');
 assert.match(pyroRgbReconstructionDataset, /controls/, 'Pyro RGB reconstruction dataset preserves effective route controls from each witness');
@@ -1991,6 +1993,25 @@ assert.match(pyroRgbReconstructionDataset, /hiddenScalarActivitySource/, 'Pyro R
 assert.match(pyroRgbReconstructionDataset, /timing/, 'Pyro RGB reconstruction dataset records timing evidence from each witness');
 assert.match(pyroRgbReconstructionDataset, /dryRun/, 'Pyro RGB reconstruction dataset supports a dry run manifest without spending browser/GPU time');
 assert.match(pyroRgbReconstructionDataset, /failurePhase/, 'Pyro RGB reconstruction dataset records the phase when capture or validation fails');
+
+const pyroRgbReconstructionDecoderPath = join(root, 'volume-pyro-rgb-reconstruction-decoder.py');
+assert.ok(existsSync(pyroRgbReconstructionDecoderPath), 'volume Pyro RGB reconstruction decoder evaluator exists');
+const pyroRgbReconstructionDecoder = existsSync(pyroRgbReconstructionDecoderPath) ? readFileSync(pyroRgbReconstructionDecoderPath, 'utf8') : '';
+assert.match(pyroRgbReconstructionDecoder, /kaminos\.volume\.pyro-rgb-reconstruction-decoder\.v0/, 'Pyro RGB reconstruction decoder writes a stable diagnostic manifest schema');
+assert.match(pyroRgbReconstructionDecoder, /carrier-to-rgb-local-neighborhood-decoder-v0/, 'Pyro RGB reconstruction decoder names the local-neighborhood decoder identity');
+assert.match(pyroRgbReconstructionDecoder, /--dataset-manifest/, 'Pyro RGB reconstruction decoder consumes the capture dataset manifest');
+assert.match(pyroRgbReconstructionDecoder, /lowCarrierInput/, 'Pyro RGB reconstruction decoder reads the low/debug-flow carrier input role');
+assert.match(pyroRgbReconstructionDecoder, /rgbTarget/, 'Pyro RGB reconstruction decoder reads the RGB target role');
+assert.match(pyroRgbReconstructionDecoder, /sequential-route-captures-not-frame-locked/, 'Pyro RGB reconstruction decoder preserves sequential non-frame-locked pair authority');
+assert.match(pyroRgbReconstructionDecoder, /rawCarrierResizeBaseline/, 'Pyro RGB reconstruction decoder reports a raw carrier resize baseline');
+assert.match(pyroRgbReconstructionDecoder, /globalColorLinearBaseline/, 'Pyro RGB reconstruction decoder reports a global color-linear baseline');
+assert.match(pyroRgbReconstructionDecoder, /localNeighborhoodRgbDecoder/, 'Pyro RGB reconstruction decoder reports the local-neighborhood decoder output');
+assert.match(pyroRgbReconstructionDecoder, /heldOutPixelMetrics/, 'Pyro RGB reconstruction decoder reports held-out pixel metrics instead of only train error');
+assert.match(pyroRgbReconstructionDecoder, /gridGhostMetrics/, 'Pyro RGB reconstruction decoder records grid-ghost/high-frequency artifact pressure');
+assert.match(pyroRgbReconstructionDecoder, /sourceRouteIdentity/, 'Pyro RGB reconstruction decoder preserves source route identity from the capture manifest');
+assert.match(pyroRgbReconstructionDecoder, /sourceChecksums/, 'Pyro RGB reconstruction decoder records input/target checksums');
+assert.match(pyroRgbReconstructionDecoder, /visibleRasterLabels/, 'Pyro RGB reconstruction decoder burns visible labels into the contact sheet');
+assert.match(pyroRgbReconstructionDecoder, /failurePhase/, 'Pyro RGB reconstruction decoder writes failure-phase reports for corrupt manifests or images');
 
 const fieldPairDatasetPath = join(root, 'volume-field-pair-dataset.mjs');
 assert.ok(existsSync(fieldPairDatasetPath), 'volume field-space pair dataset extractor exists');
