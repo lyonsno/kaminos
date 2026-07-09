@@ -117,6 +117,12 @@ assert.match(index, /id="volume-pyro-compare"/, 'Volume look lab exposes a same-
 assert.match(index, /Base only/, 'Pyro compare selector can mute Pyro carriers against the same frozen sim');
 assert.match(index, /volume_look_freeze/, 'Basin URLs preserve look-lab freeze state');
 assert.match(index, /volume_pyro_compare/, 'Basin URLs preserve Pyro compare mode');
+assert.match(index, /volume_oracle_activity_cue_url/, 'Basin URLs can load a scalar activity cue payload by URL instead of requiring an invisible DevTools upload');
+assert.match(index, /volume_oracle_activity_cue_grid/, 'Basin cue URL loading preserves the source cue grid identity');
+assert.match(index, /volume_oracle_activity_cue_authority/, 'Basin cue URL loading preserves learned/truth cue authority identity');
+assert.match(index, /route-loaded-scalar-activity-cue-v0/, 'Basin cue URL loading carries a stable route-loaded cue identity');
+assert.match(index, /arrayBuffer\(\)[\s\S]*Float32Array/, 'Basin cue URL loading fetches binary float32 cue data rather than pretending URL params contain the cue');
+assert.match(index, /setTruthOracleActivityCue\(\{[\s\S]*cueAuthority[\s\S]*frameId/, 'Basin cue URL loading uses the receiver upload API with authority and frame identity');
 assert.match(index, /id="volume-look-lab-state"/, 'Volume readout exposes effective look-lab freeze/compare state');
 assert.match(index, /Volume route controls loaded; renderer failed/, 'Volume route still hydrates basin controls when renderer activation fails');
 assert.match(index, /initKaminosVolumeRoute\(\)\.catch/, 'Volume route initializes from the scene-init fallback path for setup diagnostics');

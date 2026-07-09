@@ -11053,6 +11053,13 @@ const VOLUME_BASIN_ROUTE_FIELDS = [
   ['pressureTierHeroMin', 'volume_pressure_tier_hero_min'],
   ['pressureTierHeroMax', 'volume_pressure_tier_hero_max'],
 ];
+const ROUTE_LOADED_SCALAR_ACTIVITY_CUE_IDENTITY = 'route-loaded-scalar-activity-cue-v0';
+const VOLUME_BASIN_SOURCE_ROUTE_PARAMS = [
+  'volume_oracle_activity_cue_url',
+  'volume_oracle_activity_cue_grid',
+  'volume_oracle_activity_cue_authority',
+  'volume_oracle_activity_cue_frame_id',
+];
 
 function formatVolumeBasinRouteValue(value) {
   if (typeof value === 'number') return Number.isInteger(value) ? String(value) : value.toFixed(4).replace(/0+$/, '').replace(/\.$/, '');
@@ -11067,8 +11074,64 @@ function buildVolumeBasinUrl(controlsSnapshot = readVolumeControls()) {
     if (controlsSnapshot[key] === undefined || controlsSnapshot[key] === null) continue;
     url.searchParams.set(param, formatVolumeBasinRouteValue(controlsSnapshot[key]));
   }
+  const sourceParams = new URLSearchParams(window.location.search);
+  for (const param of VOLUME_BASIN_SOURCE_ROUTE_PARAMS) {
+    if (sourceParams.has(param)) url.searchParams.set(param, sourceParams.get(param));
+  }
   url.searchParams.set('volume_quality_reason', 'pyro-contrast-basin-copied-0702');
   return url.toString();
+}
+
+function scalarActivityCueRouteRequestFromParams(params = new URLSearchParams(window.location.search)) {
+  const cueUrl = params.get('volume_oracle_activity_cue_url') || '';
+  if (!cueUrl) return null;
+  const routedGrid = Number(params.get('volume_oracle_activity_cue_grid') || params.get('volume_resolution') || 96);
+  const grid = Number.isFinite(routedGrid) ? Math.max(1, Math.round(routedGrid)) : 96;
+  return {
+    identity: ROUTE_LOADED_SCALAR_ACTIVITY_CUE_IDENTITY,
+    url: cueUrl,
+    grid,
+    cueAuthority: params.get('volume_oracle_activity_cue_authority') || 'route-loaded-scalar-activity-cue-v0',
+    frameId: params.get('volume_oracle_activity_cue_frame_id') || `route-loaded-scalar-activity-cue-${grid}`,
+  };
+}
+
+async function loadRouteScalarActivityCue(volumePrototype, request) {
+  if (!volumePrototype || !request?.url) return null;
+  window.__kaminosVolumeRouteCueLoad = {
+    identity: ROUTE_LOADED_SCALAR_ACTIVITY_CUE_IDENTITY,
+    status: 'loading',
+    requestedUrl: request.url,
+    requestedGrid: request.grid,
+    requestedCueAuthority: request.cueAuthority,
+    requestedFrameId: request.frameId,
+  };
+  const response = await fetch(request.url);
+  if (!response.ok) throw new Error(`scalar activity cue URL returned ${response.status}: ${request.url}`);
+  const buffer = await response.arrayBuffer();
+  const expectedBytes = request.grid * request.grid * request.grid * 4;
+  if (buffer.byteLength !== expectedBytes) {
+    throw new Error(`scalar activity cue byte length mismatch: expected ${expectedBytes} for ${request.grid}^3 float32, got ${buffer.byteLength}`);
+  }
+  const values = new Float32Array(buffer);
+  const receiverState = volumePrototype.setTruthOracleActivityCue({
+    grid: request.grid,
+    cueAuthority: request.cueAuthority,
+    frameId: request.frameId,
+    values,
+  });
+  window.__kaminosVolumeRouteCueLoad = {
+    identity: ROUTE_LOADED_SCALAR_ACTIVITY_CUE_IDENTITY,
+    status: 'uploaded',
+    requestedUrl: request.url,
+    requestedGrid: request.grid,
+    requestedCueAuthority: request.cueAuthority,
+    requestedFrameId: request.frameId,
+    byteLength: buffer.byteLength,
+    valueCount: values.length,
+    receiverState,
+  };
+  return window.__kaminosVolumeRouteCueLoad;
 }
 
 function saveVolumeBasinSnapshot(reason = 'control-change') {
@@ -16191,6 +16254,10 @@ async function initKaminosVolumeRoute() {
     document.getElementById('volume-pyro-compare').value = routePyroCompare;
   }
   const routeExternalEmitters = params.get('volume_external_emitters') || '';
+  const routeScalarActivityCueRequest = scalarActivityCueRouteRequestFromParams(params);
+  if (routeScalarActivityCueRequest) {
+    document.title = `Kaminos ${routeScalarActivityCueRequest.frameId}`;
+  }
   updateVolumeControlLabels();
   volumePrototype = createKaminosVolumePrototype({
     THREE,
@@ -16343,6 +16410,10 @@ async function initKaminosVolumeRoute() {
     if (camera && controls) frameVolumeCamera();
     try {
       await volumePrototype.setActive(true);
+      if (routeScalarActivityCueRequest) {
+        const loadedCue = await loadRouteScalarActivityCue(volumePrototype, routeScalarActivityCueRequest);
+        console.info('Volume route scalar activity cue loaded:', loadedCue);
+      }
       refreshSyntheticExternalEmitters();
       if (routeExternalEmitters === 'synthetic_hand_trails') {
         syntheticEmitterTimer = window.setInterval(refreshSyntheticExternalEmitters, 100);
