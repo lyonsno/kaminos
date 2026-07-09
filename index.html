@@ -2041,7 +2041,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
 
 <script type="module">
 import * as THREE from 'three';
-import { pass, mrt, normalView, vec2, vec3, vec4, mix, float, uniform, texture, packNormalToRGB, unpackRGBToNormal, sample, positionView, convertToTexture, uv, distance, smoothstep, dot, abs } from 'three/tsl';
+import { pass, mrt, normalView, vec2, vec3, vec4, mix, float, uniform, texture, packNormalToRGB, unpackRGBToNormal, sample, positionView, convertToTexture, uv, distance, length, smoothstep, dot, abs } from 'three/tsl';
 import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
 import { createKaminosVolumePrototype } from './volume-core.js?v=pyro-palette-flame-paint-0703';
@@ -8140,11 +8140,10 @@ async function initScene() {
   const receiverNormal = prePassNormal.sample(receiverUv).rgb.normalize();
   const receiverDistance = distance(receiverUv, fireReceiverLightCenterNode);
   const receiverContactLobe = float(1.0).sub(smoothstep(fireReceiverLightRadiusNode.mul(0.18), fireReceiverLightRadiusNode, receiverDistance));
-  const receiverWallWashBandX = smoothstep(float(0.34), float(0.52), receiverUv.x)
-    .mul(float(1.0).sub(smoothstep(float(0.96), float(1.08), receiverUv.x)));
-  const receiverWallWashBandY = smoothstep(float(0.14), float(0.32), receiverUv.y)
-    .mul(float(1.0).sub(smoothstep(float(0.86), float(0.99), receiverUv.y)));
-  const receiverWallWashLobe = receiverWallWashBandX.mul(receiverWallWashBandY).mul(float(0.78));
+  const receiverWallWashCenter = vec2(0.43, 0.58);
+  const receiverWallWashDelta = receiverUv.sub(receiverWallWashCenter).mul(vec2(2.45, 2.0));
+  const receiverWallWashDistance = length(receiverWallWashDelta);
+  const receiverWallWashLobe = float(1.0).sub(smoothstep(float(0.04), float(0.27), receiverWallWashDistance)).mul(float(1.1));
   const receiverLobe = receiverContactLobe.add(receiverWallWashLobe);
   const receiverVerticalFalloff = float(1.0).sub(smoothstep(float(0.80), float(0.98), receiverUv.y));
   const receiverDepthMask = float(1.0).sub(smoothstep(float(0.995), float(1.0), receiverDepth));
@@ -8231,12 +8230,12 @@ async function initScene() {
   const receiverWallWashVisibility = mix(float(0.72), float(1.0), foregroundReceiverVisibility);
   const receiverLightMask = receiverContactMask.mul(foregroundReceiverVisibility)
     .add(receiverWallWashMask.mul(receiverWallWashVisibility));
-  const receiverEnergySignal = smoothstep(float(0.0), float(0.0025), volumeFireEnergy);
-  const receiverEnergy = receiverEnergySignal.mul(float(7.20))
-    .add(volumeFireEnergy.mul(float(1600.0)))
-    .add(volumeFireEnergy.mul(volumeFireEnergy).mul(float(5200.0)));
+  const receiverEnergySignal = smoothstep(float(0.0), float(0.18), volumeFireEnergy);
+  const receiverEnergy = receiverEnergySignal.mul(float(0.32))
+    .add(volumeFireEnergy.mul(float(0.035)))
+    .add(volumeFireEnergy.mul(volumeFireEnergy).mul(float(0.003)));
   const receiverWallWashOnlyLight = vec3(1.0, 0.36, 0.07).mul(
-    receiverWallWashMask.mul(receiverWallWashVisibility).mul(fireReceiverLightGainNode).mul(fixedVolumeFireEnergy).mul(float(18.0))
+    receiverWallWashMask.mul(receiverWallWashVisibility).mul(fireReceiverLightGainNode).mul(receiverEnergy).mul(float(2.35))
   );
   const receiverDebugBand = (center) => {
     const delta = abs(fireReceiverLightDebugNode.sub(float(center)));
@@ -8270,7 +8269,7 @@ async function initScene() {
     .add(sampleWindowCenterFor(vec2(0.66, 0.56)))
     .add(sampleWindowCenterFor(vec2(0.59, 0.50)));
   const receiverLight = vec3(1.0, 0.36, 0.07).mul(
-    receiverLightMask.mul(fireReceiverLightGainNode).mul(receiverEnergy).mul(float(3.0))
+    receiverLightMask.mul(fireReceiverLightGainNode).mul(receiverEnergy).mul(float(2.35))
   ).add(
     vec3(1.0, 0.20, 0.03).mul(
       receiverLightMask.mul(receiverMaskDebug).mul(float(0.55))
@@ -15502,7 +15501,7 @@ const VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT = Object.freeze({
   depthAuthority: 'three-tsl-prepass-depth-v0',
   normalAuthority: 'three-tsl-prepass-packed-normal-v0',
   energyAuthority: 'rendered-volume-canvas-fire-energy-v21-visible-wide-gather-local-probe-no-readback-v0',
-  scalarDriveAuthority: 'rendered-volume-canvas-visible-wide-gather-local-energy-route-gain-v26-positive-fire-energy-expansion',
+  scalarDriveAuthority: 'rendered-volume-canvas-visible-wide-gather-local-energy-route-gain-v27-bounded-positive-fire-energy-expansion',
   couplingModel: 'rendered-fire-energy-only-no-envelope-fallback-v0',
   fallbackEnergyRole: 'debug-metadata-only-not-radiance',
   estimatorIdentity: 'rendered-fire-visible-multi-footprint-plus-wide-gather-receiver-local-screen-energy-v7',
@@ -15511,7 +15510,7 @@ const VOLUME_SCREEN_SPACE_FIRE_RECEIVER_LIGHT = Object.freeze({
   foregroundOcclusionAuthority: 'volume-foreground-occluded-receiver-light-v0',
   maskAuthority: 'receiver-surface-depth-soft-normal-mask-v3-split-contact-wall-wash-honest-production-mask',
   isolateAuthority: 'receiver-layer-only-black-scene-witness-v0',
-  wallWashIsolateAuthority: 'receiver-wall-wash-only-black-scene-witness-v0',
+  wallWashIsolateAuthority: 'receiver-wall-wash-only-production-energy-black-scene-witness-v1',
   overlaySuppressionAuthority: 'receiver-isolate-suppresses-foreground-volume-canvas-v0',
   debugAuthority: 'route-toggled-receiver-surface-debug-v0+receiver-energy-debug-v0+receiver-sample-window-debug-v0+receiver-raw-volume-texture-debug-v0+receiver-local-probe-debug-v0',
   cadence: 'per-render-frame-gpu-tsl',

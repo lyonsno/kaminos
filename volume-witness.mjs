@@ -1496,7 +1496,7 @@ async function main() {
       assert.equal(volumeSceneContext?.receiverLight?.volumeEnergy?.localProbeAuthority, 'receiver-wide-gather-local-offset-fire-probe-v2', 'brick-wall volume texture fire-energy sampling did not expose the receiver-local probe authority');
       assert.equal(volumeSceneContext?.receiverLight?.foregroundOcclusionAuthority, 'volume-foreground-occluded-receiver-light-v0', 'brick-wall screen-space receiver light must attenuate under the foreground volume so it cannot bleach the fire body');
       assert.equal(volumeSceneContext?.receiverLight?.envelopeModel, 'uploaded-control-fire-envelope-v05-no-readback-v0', 'brick-wall screen-space receiver light did not expose the v0.5 no-readback envelope model');
-      assert.equal(volumeSceneContext?.receiverLight?.drive, 'rendered-volume-canvas-visible-wide-gather-local-energy-route-gain-v26-positive-fire-energy-expansion', 'brick-wall screen-space receiver light must report route gain plus positive-fire expanded local rendered-volume texture energy drive');
+      assert.equal(volumeSceneContext?.receiverLight?.drive, 'rendered-volume-canvas-visible-wide-gather-local-energy-route-gain-v27-bounded-positive-fire-energy-expansion', 'brick-wall screen-space receiver light must report route gain plus positive-fire expanded local rendered-volume texture energy drive');
       assert.equal(volumeSceneContext?.receiverLight?.envelopeInputs?.cpuReadbackAuthority, false, 'brick-wall receiver envelope inputs must not claim CPU readback authority');
       assert.ok(Number.isFinite(volumeSceneContext?.receiverLight?.envelopeInputs?.fireControl), 'brick-wall receiver envelope inputs did not expose fireControl');
       assert.ok(Number.isFinite(volumeSceneContext?.receiverLight?.envelopeInputs?.radianceControl), 'brick-wall receiver envelope inputs did not expose radianceControl');
@@ -1506,7 +1506,7 @@ async function main() {
       assert.ok(Number.isFinite(volumeSceneContext?.receiverLight?.envelopeInputs?.visibleFireProxy), 'brick-wall receiver envelope inputs did not expose the visible-fire proxy');
       assert.equal(volumeSceneContext?.receiverLight?.cpuReadbackAuthority, false, 'brick-wall screen-space receiver light must not derive authority from CPU readback');
       assert.equal(volumeSceneContext?.receiverLight?.isolateAuthority, 'receiver-layer-only-black-scene-witness-v0', 'brick-wall screen-space receiver light did not expose receiver-only witness authority');
-      assert.equal(volumeSceneContext?.receiverLight?.wallWashIsolateAuthority, 'receiver-wall-wash-only-black-scene-witness-v0', 'brick-wall screen-space receiver light did not expose wall-wash-only witness authority');
+      assert.equal(volumeSceneContext?.receiverLight?.wallWashIsolateAuthority, 'receiver-wall-wash-only-production-energy-black-scene-witness-v1', 'brick-wall screen-space receiver light did not expose production-energy wall-wash-only witness authority');
       assert.equal(volumeSceneContext?.receiverLight?.overlaySuppressionAuthority, 'receiver-isolate-suppresses-foreground-volume-canvas-v0', 'brick-wall screen-space receiver light did not expose foreground volume-canvas suppression authority');
       if (expectedVolumeReceiverLightIsolate >= 1.5) {
         assert.equal(volumeSceneContext?.receiverLight?.isolateMode, 2, 'brick-wall wall-wash-only witness route did not activate isolate mode 2');
@@ -2465,6 +2465,27 @@ async function main() {
       mainRendererMetrics.fireLikePixels +
       (mainRendererMetrics.warmLikePixels ?? 0) +
       (mainRendererMetrics.whiteHotLikePixels ?? 0);
+    const viewportFireSignalPixels =
+      viewportRendererMetrics.fireLikePixels +
+      (viewportRendererMetrics.warmLikePixels ?? 0) +
+      (viewportRendererMetrics.whiteHotLikePixels ?? 0);
+    const rawFireSignalPixels =
+      Number(metrics.fireLikePixels || 0) +
+      Number(metrics.emissiveLikePixels || 0) +
+      Number(metrics.whiteHotLikePixels || 0);
+    if (
+      !expectsReceiverLightIsolateEvidence &&
+      !expectsNoFireMainRendererVolume &&
+      (expectsVolumeStoneSceneContext || expectsVolumeBrickWallSceneContext) &&
+      rawFireSignalPixels > 80 &&
+      viewportFireSignalPixels < 80
+    ) {
+      throw new Error(`operator viewport screenshot missing direct-overlay fire volume: ${JSON.stringify({
+        viewportRendererMetrics,
+        viewportFireSignalPixels,
+        rawFireSignalPixels,
+      })}`);
+    }
     if (expectsReceiverLightIsolateEvidence) {
       if (!expectsReceiverLightIsolate) {
         throw new Error('receiver-light-isolate evidence mode requires volume_receiver_light_isolate >= 0.5');
