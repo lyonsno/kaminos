@@ -5,6 +5,9 @@ import { join } from 'node:path';
 const root = new URL('..', import.meta.url).pathname;
 const index = readFileSync(join(root, 'index.html'), 'utf8');
 const volumeWitness = readFileSync(join(root, 'volume-witness.mjs'), 'utf8');
+const corePath = join(root, 'volume-core.js');
+assert.ok(existsSync(corePath), 'volume-core.js exists');
+const core = readFileSync(corePath, 'utf8');
 
 assert.match(index, /data-tab="volume"/, 'sidebar exposes a Volume tab');
 assert.match(index, /id="tab-volume"/, 'Volume tab content is present');
@@ -31,7 +34,9 @@ assert.match(index, /id="volume-canonical-motion-mode-state"/, 'Volume tab expos
 assert.match(index, /operator_memory_fire_0701/, 'Volume tab exposes the operator tall-plume Pyro-memory baseline preset');
 assert.match(index, /pyro_contrast_warm_cap_small_flame_0702/, 'Volume tab pins the operator-found Pyro contrast warm-cap small-flame basin by stable route identity');
 assert.match(index, /pyro_material_bonfire_family_0702/, 'Volume tab pins the operator-found Pyro material bonfire family basin by stable route identity');
-assert.match(index, /DEFAULT_VOLUME_SMOKE_TALL_PRESET\s*=\s*'pyro_material_bonfire_family_0702'/, 'bare smoke routes default to the operator-found Pyro bonfire family basin');
+assert.match(index, /exploding_jellow_fireball_basin_0706/, 'Volume tab pins the operator-found exploding jellow fireball Pyro look by stable route identity');
+assert.match(index, /pyro_flow_small_bonfire_gamut_0707/, 'Volume tab pins the operator-found Pyro Flow small-bonfire gamut basin by stable route identity');
+assert.match(index, /DEFAULT_VOLUME_SMOKE_TALL_PRESET\s*=\s*'pyro_flow_small_bonfire_gamut_0707'/, 'bare smoke routes default to the operator-found Pyro Flow small-bonfire gamut basin');
 assert.match(index, /kaminos_volume_smoke'\)\s*===\s*'1'[\s\S]*DEFAULT_VOLUME_SMOKE_TALL_PRESET/, 'bare smoke routes apply the current Pyro basin when no explicit scene or preset is routed');
 assert.match(index, /!routeVolumeScene\s*\|\|\s*routeVolumeScene === 'tall_plume'/, 'smoke routes with explicit tall_plume scene must still apply the Pyro basin instead of plain tall-plume mechanics');
 assert.match(index, /routeVolumeScene && !\(shouldApplyDefaultVolumeSmokeTallPreset && routeVolumeScene === 'tall_plume'\)/, 'explicit tall_plume route must not immediately overwrite the Pyro basin with the plain scene preset');
@@ -45,6 +50,22 @@ assert.match(index, /pyro_material_bonfire_family_0702:[\s\S]*pyroFireMode:\s*'p
 assert.match(index, /pyro_material_bonfire_family_0702:[\s\S]*pyroRadianceSource:\s*'fire'/, 'Pyro material bonfire basin pins the rebuilt radiance source to fire');
 assert.match(index, /pyro_material_bonfire_family_0702:[\s\S]*pyroRadianceFireLock:\s*0\.00/, 'Pyro material bonfire basin preserves the recovered radiance fire-lock state');
 assert.match(index, /pyro_material_bonfire_family_0702:[\s\S]*pressureMode:\s*'global-p3'/, 'Pyro material bonfire basin preserves the Full P3 pressure solve');
+assert.match(index, /exploding_jellow_fireball_basin_0706:[\s\S]*fire:\s*0\.00/, 'Exploding jellow fireball basin keeps Pyro-owned visible flame authority');
+assert.match(index, /exploding_jellow_fireball_basin_0706:[\s\S]*pyroMaterialGain:\s*1\.50/, 'Exploding jellow fireball basin preserves the operator-tuned high material gain');
+assert.match(index, /exploding_jellow_fireball_basin_0706:[\s\S]*pyroBiteHotColor:\s*'#ff4000'/, 'Exploding jellow fireball basin preserves the operator-tuned bite hot color');
+assert.match(index, /exploding_jellow_fireball_basin_0706:[\s\S]*pyroRadianceCoolColor:\s*'#ff6b6b'/, 'Exploding jellow fireball basin preserves the operator-tuned radiance cool color');
+assert.match(index, /exploding_jellow_fireball_basin_0706:[\s\S]*pyroFireMode:\s*'pyro-owned'/, 'Exploding jellow fireball basin preserves Pyro-owned flame display mode');
+assert.match(index, /exploding_jellow_fireball_basin_0706:[\s\S]*pressureMode:\s*'global-p3'/, 'Exploding jellow fireball basin preserves the Full P3 pressure solve for training pickup');
+assert.match(index, /pyro_flow_small_bonfire_gamut_0707:[\s\S]*density:\s*6\.00/, 'Pyro Flow small-bonfire gamut basin preserves the high-density live basin');
+assert.match(index, /pyro_flow_small_bonfire_gamut_0707:[\s\S]*fire:\s*0\.00/, 'Pyro Flow small-bonfire gamut basin lets Pyro own the visible flame');
+assert.match(index, /pyro_flow_small_bonfire_gamut_0707:[\s\S]*inputRadius:\s*0\.19/, 'Pyro Flow small-bonfire gamut basin preserves the operator-tuned input radius');
+assert.match(index, /pyro_flow_small_bonfire_gamut_0707:[\s\S]*flowRate:\s*0\.85/, 'Pyro Flow small-bonfire gamut basin preserves the operator-tuned flow rate');
+assert.match(index, /pyro_flow_small_bonfire_gamut_0707:[\s\S]*pyroFlowBite:\s*3\.00/, 'Pyro Flow small-bonfire gamut basin preserves the loud Flow carrier gain');
+assert.match(index, /pyro_flow_small_bonfire_gamut_0707:[\s\S]*pyroFlowRadiance:\s*4\.00/, 'Pyro Flow small-bonfire gamut basin preserves the Flow radiance gain');
+assert.match(index, /pyro_flow_small_bonfire_gamut_0707:[\s\S]*pyroFlowSpikes:\s*1\.00/, 'Pyro Flow small-bonfire gamut basin preserves the Flow spike gain');
+assert.match(index, /pyro_flow_small_bonfire_gamut_0707:[\s\S]*pyroFlowCoolColor:\s*'#ff6400'/, 'Pyro Flow small-bonfire gamut basin preserves the operator-tuned Flow cool color');
+assert.match(index, /pyro_flow_small_bonfire_gamut_0707:[\s\S]*pyroFlowHotColor:\s*'#ff320f'/, 'Pyro Flow small-bonfire gamut basin preserves the operator-tuned Flow hot color');
+assert.match(index, /pyro_flow_small_bonfire_gamut_0707:[\s\S]*pressureMode:\s*'global-p3'/, 'Pyro Flow small-bonfire gamut basin preserves the Full P3 pressure solve for training pickup');
 assert.match(index, /id="volume-basin-bonfire-family"/, 'Volume cockpit exposes a one-click Pyro material bonfire family basin action');
 assert.match(index, /KAMINOS_VOLUME_BASIN_STORAGE_KEY/, 'Volume cockpit has a durable localStorage key for last-basin recovery');
 assert.match(index, /saveVolumeBasinSnapshot/, 'Volume cockpit autosaves current basin controls on slider changes');
@@ -56,6 +77,19 @@ assert.match(index, /id="volume-basin-slot"/, 'Volume cockpit exposes named loca
 assert.match(index, /KAMINOS_VOLUME_BASIN_SLOT_STORAGE_PREFIX/, 'Volume cockpit stores basin slots under a stable localStorage prefix');
 assert.match(index, /VOLUME_LOOK_LIBRARY_IDENTITY/, 'Volume cockpit has a stable JSON look-library identity');
 assert.match(index, /KAMINOS_VOLUME_LOOK_LIBRARY_STORAGE_KEY/, 'Volume cockpit stores the editable JSON look library under a stable browser key');
+assert.match(index, /BUILT_IN_VOLUME_LOOK_LIBRARY/, 'Volume cockpit carries source-backed looks so fresh ports are not empty');
+assert.match(index, /exploding-jellow-fireball-basin/, 'Source-backed look library exposes the operator-saved exploding jellow Pyro look');
+assert.match(index, /Bonfire_a_la_ruffles/, 'Source-backed look library exposes the operator-saved Bonfire a la Ruffles Pyro look');
+const bonfireLookBlock = index.match(/name:\s*'Bonfire_a_la_ruffles'[\s\S]*?sourceBacked:\s*true,[\s\S]*?\},\n\s*\],\n\s*firesim:/)?.[0] || '';
+assert.match(bonfireLookBlock, /TALL_PLUME_OPERATOR_PRESETS\.pyro_flow_small_bonfire_gamut_0707/, 'Bonfire a la Ruffles aliases the current Pyro Flow small-bonfire basin instead of pinning stale copied controls');
+assert.match(bonfireLookBlock, /flowCarrierAuthored:\s*true/, 'Bonfire a la Ruffles is marked as a Flow-authored source-backed look');
+assert.doesNotMatch(bonfireLookBlock, /pyroFlowBite:\s*0\.95/, 'Bonfire a la Ruffles must not preserve the stale low Flow carrier gain');
+assert.doesNotMatch(bonfireLookBlock, /pyroRadiance:\s*1\.25/, 'Bonfire a la Ruffles must not preserve the stale old Radiance carrier gain');
+assert.match(index, /mergeVolumeLookLibraryWithBuiltIns/, 'Volume cockpit merges source-backed looks with browser-local saved looks');
+const mergeVolumeLookLibraryFn = index.match(/function mergeVolumeLookLibraryWithBuiltIns\(library = normalizeVolumeLookLibrary\(\)\) \{([\s\S]*?)\n\}/)?.[1] || '';
+assert.match(mergeVolumeLookLibraryFn, /existing\?\.sourceBacked[\s\S]*continue/, 'Source-backed looks override stale same-name browser-local look shadows');
+const readVolumeLookLibraryFn = index.match(/function readVolumeLookLibrary\(\) \{([\s\S]*?)\n\}/)?.[1] || '';
+assert.match(readVolumeLookLibraryFn, /mergeVolumeLookLibraryWithBuiltIns/, 'Reading the look library includes source-backed looks before refreshing the dropdown');
 assert.match(index, /PYRO_LOOK_FIELDS/, 'Volume cockpit defines a Pyro-only look field list');
 assert.match(index, /FIRESIM_LOOK_FIELDS/, 'Volume cockpit defines a FireSim look field list separate from render expense');
 assert.match(index, /id="volume-look-library-kind"/, 'Volume cockpit exposes a Pyro/FireSim library selector');
@@ -184,6 +218,90 @@ assert.match(index, /id="volume-pyro-radiance-rise"/, 'Pyro cockpit exposes a ra
 assert.match(index, /Radiance rise/i, 'Pyro radiance rise slider describes low flame light versus higher wake permission');
 assert.match(index, /id="volume-pyro-radiance-fire-lock"/, 'Pyro cockpit exposes a radiance live-fire lock');
 assert.match(index, /Radiance fire lock/i, 'Pyro radiance fire-lock slider describes whether current raw fire authority is required');
+for (const [id, copy] of [
+  ['volume-pyro-flow-bite', 'Flow bite'],
+  ['volume-pyro-flow-border', 'Flow border'],
+  ['volume-pyro-flow-teeth', 'Flow teeth'],
+  ['volume-pyro-flow-rise', 'Flow rise'],
+  ['volume-pyro-flow-fire-lock', 'Flow fire lock'],
+  ['volume-pyro-flow-luma', 'Flow luma'],
+  ['volume-pyro-flow-radiance', 'Flow radiance'],
+  ['volume-pyro-flow-spikes', 'Flow spikes'],
+]) {
+  assert.match(index, new RegExp(`id="${id}"`), `Pyro cockpit exposes topology/flow carrier control ${id}`);
+  assert.match(index, new RegExp(copy, 'i'), `Pyro cockpit labels ${copy} for topology/flow carrier tuning`);
+}
+for (const [id, label] of [
+  ['volume-pyro-flow-cool-color', 'Flow cool'],
+  ['volume-pyro-flow-hot-color', 'Flow hot'],
+]) {
+  assert.match(index, new RegExp(`id="${id}"[^>]+type="color"|type="color"[^>]+id="${id}"`), `Pyro cockpit exposes editable flow carrier swatch ${id}`);
+  assert.match(index, new RegExp(label, 'i'), `Pyro cockpit labels the ${label} editable endpoint`);
+}
+assert.match(index, /Flow only/i, 'Pyro carrier isolate selector can show Flow alone');
+assert.match(index, /\['normal', 'border', 'bite', 'fold', 'wake', 'radiance', 'flow', 'all'\]\.includes\(routePyroCarrierView\)/, 'Pyro carrier-view URL route accepts the Flow isolate mode');
+for (const param of [
+  'volume_pyro_flow_bite',
+  'volume_pyro_flow_border',
+  'volume_pyro_flow_teeth',
+  'volume_pyro_flow_rise',
+  'volume_pyro_flow_fire_lock',
+  'volume_pyro_flow_luma',
+  'volume_pyro_flow_radiance',
+  'volume_pyro_flow_spikes',
+  'volume_pyro_flow_cool_color',
+  'volume_pyro_flow_hot_color',
+]) {
+  assert.match(index, new RegExp(param), `Pyro basin URLs preserve ${param}`);
+}
+for (const field of [
+  'pyroFlowBite',
+  'pyroFlowBorder',
+  'pyroFlowTeeth',
+  'pyroFlowRise',
+  'pyroFlowFireLock',
+  'pyroFlowLuma',
+  'pyroFlowRadiance',
+  'pyroFlowSpikes',
+  'pyroFlowCoolColor',
+  'pyroFlowHotColor',
+]) {
+  assert.match(index, new RegExp(`'${field}'`), `Pyro look library preserves ${field}`);
+}
+for (const routeName of [
+  'routePyroFlowBite',
+  'routePyroFlowBorder',
+  'routePyroFlowTeeth',
+  'routePyroFlowRise',
+  'routePyroFlowFireLock',
+  'routePyroFlowLuma',
+  'routePyroFlowRadiance',
+  'routePyroFlowSpikes',
+  'routePyroFlowCoolColor',
+  'routePyroFlowHotColor',
+]) {
+  assert.match(index, new RegExp(routeName), `Pyro route parser accepts ${routeName}`);
+}
+const volumeSyncControlLoop = index.match(/for \(const id of \[([\s\S]*?'volume-canonical-body-balance'[\s\S]*?)\]\) \{\s*document\.getElementById\(id\)\.addEventListener\('input', syncControls\)/);
+assert.ok(volumeSyncControlLoop, 'Volume cockpit has one explicit syncControls listener list for slider/select controls');
+for (const id of ['volume-pyro-flow-radiance', 'volume-pyro-flow-spikes']) {
+  assert.match(volumeSyncControlLoop[1], new RegExp(`'${id}'`), `Flow control ${id} triggers syncControls instead of becoming a stale display-only knob`);
+}
+assert.match(index, /moveVolumePyroRadianceControlsBelowFlow/, 'Pyro cockpit keeps old Radiance directly below Flow instead of burying it under demoted Bite/Fold/Wake controls');
+assert.match(index, /moveVolumePyroLegacyControlsBelowRadiance/, 'Pyro cockpit explicitly demotes legacy Bite/Fold/Wake controls below the still-useful Radiance surface');
+assert.match(index, /FLOW_FIRST_PYRO_CONTROL_IDS[\s\S]*volume-pyro-flow-bite[\s\S]*volume-pyro-flow-radiance[\s\S]*volume-pyro-flow-spikes/, 'Pyro cockpit treats Flow as the primary carrier control group');
+assert.match(index, /PYRO_RADIANCE_CONTROL_IDS[\s\S]*volume-pyro-radiance[\s\S]*volume-pyro-radiance-fire-lock/, 'Pyro cockpit keeps the old Radiance controls together as the second carrier group');
+assert.match(index, /LEGACY_PYRO_CONTROL_IDS[\s\S]*volume-pyro-edge-bite[\s\S]*volume-pyro-smoke-fold[\s\S]*volume-pyro-wake-ember-color/, 'Pyro cockpit keeps legacy Bite/Fold/Wake controls available as a demoted group');
+const legacyPyroControlIds = index.match(/const LEGACY_PYRO_CONTROL_IDS = \[([\s\S]*?)\];/)?.[1] || '';
+assert.doesNotMatch(legacyPyroControlIds, /volume-pyro-radiance/, 'Demoted Bite/Fold/Wake controls must not bury the still-useful Radiance controls');
+assert.match(index, /moveVolumePyroFreezeIntoCarrierWorkbench/, 'Pyro cockpit explicitly moves Look Freeze into the carrier-tuning workbench');
+assert.match(index, /PYRO_CARRIER_WORKBENCH_PINNED_IDS[\s\S]*volume-look-freeze/, 'Pyro Freeze is pinned near the carrier controls instead of stranded in the generic route controls');
+assert.match(core, /pyroFlowSignal[\s\S]*combustionFrontTopology[\s\S]*fireLick/, 'Pyro shader derives Flow carrier from combustion-front topology and live fire-lick breakup');
+assert.match(core, /pyroFlowRadianceBoost[\s\S]*pyroFlowSignal/, 'Pyro shader exposes Flow radiance as a sparse additive term derived from the live Flow carrier');
+assert.match(core, /pyroFlowSpikeSignal[\s\S]*pyroFlowSignal/, 'Pyro shader exposes Flow spikes as a separate topology/filament term derived from the live Flow carrier');
+assert.match(core, /flowSignalMax/, 'Pyro renderer debug state exposes flow carrier max for route evidence');
+assert.match(core, /flowRadianceMax/, 'Pyro renderer debug state exposes Flow radiance gain for route evidence');
+assert.match(core, /flowSpikeMax/, 'Pyro renderer debug state exposes Flow spike gain for route evidence');
 assert.match(index, /volume_pyro_radiance_gate/, 'Pyro basin URLs preserve radiance gate');
 assert.match(index, /volume_pyro_radiance_spill/, 'Pyro basin URLs preserve radiance spill');
 assert.match(index, /volume_pyro_radiance_warmth/, 'Pyro basin URLs preserve radiance warmth');
@@ -268,8 +386,9 @@ assert.match(index, /Bite only/i, 'Pyro carrier isolate selector can show Bite a
 assert.match(index, /Fold only/i, 'Pyro carrier isolate selector can show Fold alone');
 assert.match(index, /Wake only/i, 'Pyro carrier isolate selector can show Wake alone');
 assert.match(index, /Radiance only/i, 'Pyro carrier isolate selector can show Radiance alone');
+assert.match(index, /Flow only/i, 'Pyro carrier isolate selector can show Flow alone');
 assert.match(index, /All carriers/i, 'Pyro carrier selector can expose all carriers without implying forced loud paint');
-assert.match(index, /\['normal', 'border', 'bite', 'fold', 'wake', 'radiance', 'all'\]\.includes\(routePyroCarrierView\)/, 'Pyro carrier-view URL route accepts the Wake and Radiance isolate modes');
+assert.match(index, /\['normal', 'border', 'bite', 'fold', 'wake', 'radiance', 'flow', 'all'\]\.includes\(routePyroCarrierView\)/, 'Pyro carrier-view URL route accepts the Wake, Radiance, and Flow isolate modes');
 assert.match(index, /Math\.min\(10,\s*routePyroRadiance\)/, 'Pyro radiance URL route accepts the same loud range as the cockpit slider');
 assert.match(index, /id="volume-pyro-overdrive"/, 'Pyro cockpit exposes a diagnostic overdrive slider');
 assert.match(index, /Continuous carrier gain/i, 'Pyro overdrive slider describes a reachable normal-mode gain, not a fake diagnostic mode');
@@ -450,6 +569,30 @@ assert.match(index, /id="volume-input-radius"[^>]+value="0\.12"/, 'smoke route d
 assert.match(index, /id="volume-flow-rate"[^>]+value="0\.15"/, 'smoke route defaults to the accepted input flow rate');
 assert.match(index, /id="volume-projection"/, 'Volume tab exposes a pressure/projection control');
 assert.match(index, /id="volume-flow-debug"/, 'Volume tab exposes a flow diagnostic overlay control');
+assert.match(index, /id="volume-oracle-activity-cue"/, 'Volume tab exposes a truth-oracle scalar activity receiver master toggle');
+assert.match(index, /id="volume-oracle-activity-display"/, 'Volume tab exposes an inert scalar activity display control');
+assert.match(index, /id="volume-oracle-activity-curl-noise"/, 'Volume tab exposes a scalar activity curl-noise receiver gain');
+assert.match(index, /id="volume-oracle-activity-vorticity"/, 'Volume tab exposes a scalar activity vorticity receiver gain');
+assert.match(index, /id="volume-oracle-activity-material"/, 'Volume tab exposes a scalar activity material/interface receiver gain');
+assert.match(index, /volume_oracle_activity_cue/, 'Basin URLs preserve scalar activity receiver master toggle');
+assert.match(index, /volume_oracle_activity_curl_noise/, 'Basin URLs preserve scalar activity curl-noise receiver gain');
+assert.match(index, /volume_oracle_activity_vorticity/, 'Basin URLs preserve scalar activity vorticity receiver gain');
+assert.match(index, /volume_oracle_activity_material/, 'Basin URLs preserve scalar activity material receiver gain');
+assert.match(core, /TRUTH_ORACLE_ACTIVITY_RECEIVER_IDENTITY\s*=\s*'truth-oracle-scalar-activity-receiver-v0'/, 'volume core names the truth-oracle scalar activity receiver route');
+assert.match(core, /TRUTH_ORACLE_ACTIVITY_CUE_AUTHORITY\s*=\s*'truth-high-diagnostic-activity-projected-to-receiver-grid-v0'/, 'volume core preserves truth-derived cue authority separately from learned/product inputs');
+assert.match(core, /oracle_activity_controls:\s*vec4<f32>/, 'fluid uniforms carry scalar activity receiver hook controls');
+assert.match(core, /oracle_activity_controls2:\s*vec4<f32>/, 'fluid uniforms carry scalar activity cue source/display controls');
+assert.match(core, /truthOracleActivityCueAtCell/, 'fluid shader samples a named scalar activity cue field');
+assert.match(core, /oracleActivityCurlNoiseForce/, 'fluid shader exposes scalar activity gated curl-noise force hook');
+assert.match(core, /oracleActivityVorticityConfinement/, 'fluid shader exposes scalar activity gated vorticity confinement hook');
+assert.match(core, /oracleActivityMaterialBirth/, 'fluid shader exposes scalar activity gated material/interface birth hook');
+assert.match(core, /setTruthOracleActivityCue/, 'volume prototype exposes a public API for feeding projected truth activity cue buffers');
+assert.match(core, /function normalizeScalarActivityCueGridSize/, 'truth-oracle cue source grids use a dedicated positive-integer normalizer instead of supported receiver-grid snapping');
+assert.match(core, /sourceGrid\s*=\s*normalizeScalarActivityCueGridSize/, 'truth-oracle cue upload preserves source-grid identity before resampling to the receiver grid');
+assert.match(core, /scalarActivityReceiver/, 'debug state reports scalar activity receiver identity, cue authority, toggles, gains, and effective source');
+assert.match(core, /requestedCueAuthority/, 'scalar activity receiver debug state distinguishes requested cue authority');
+assert.match(core, /effectiveCueAuthority/, 'scalar activity receiver debug state distinguishes effective cue authority');
+assert.match(core, /externalCueCellCount/, 'scalar activity receiver debug state reports whether an external cue buffer is actually present');
 assert.match(index, /id="volume-pyro-detail"/, 'Volume tab exposes the Pyro dynamic detail debug toggle');
 assert.match(index, /id="volume-pyro-material-gain"/, 'Volume tab exposes an opt-in Pyro material-memory renderer gain');
 assert.match(index, /id="volume-pyro-dynamic-atlas"/, 'Volume tab exposes an inspectable Pyro dynamic detail atlas canvas');
@@ -560,9 +703,6 @@ assert.match(index, /params\.has\('volume_flow_debug'\)/, 'missing flow-debug ro
 assert.match(index, /rotateSpeed\s*=\s*-\d/, 'viewport orbit drag uses object-turntable rotation direction');
 assert.match(index, /screenSpacePanning\s*=\s*true/, 'viewport pan tracks screen-space pointer movement');
 
-const corePath = join(root, 'volume-core.js');
-assert.ok(existsSync(corePath), 'volume-core.js exists');
-const core = existsSync(corePath) ? readFileSync(corePath, 'utf8') : '';
 assert.match(core, /export function createKaminosVolumePrototype/, 'volume module exports createKaminosVolumePrototype');
 assert.match(core, /kaminos-volume-prototype-v0/, 'volume module exposes stable witness identity');
 assert.match(core, /native-3d-compute-fluid-raymarch-v0/, 'volume module records compute-backed fluid route identity');
@@ -965,7 +1105,7 @@ assert.match(core, /uniforms\[203\]\s*=\s*pyroRadianceChroma/, 'CPU uploads Radi
 assert.match(core, /uniforms\[212\]\s*=\s*pyroFlamePaint/, 'CPU uploads flame paint gain into the Pyro luma uniform block');
 assert.match(core, /uniforms\[213\]\s*=\s*pyroFlameLuma/, 'CPU uploads flame luminance into the Pyro luma uniform block');
 assert.match(core, /writePyroPaletteUniform/, 'CPU uploads editable Pyro palette color endpoints');
-assert.match(core, /uniforms\.set\(previousViewProj\.elements,\s*260\)/, 'previous view-projection matrix shifts after Bite-stack and palette uniforms');
+assert.match(core, /uniforms\.set\(previousViewProj\.elements,\s*284\)/, 'previous view-projection matrix shifts after Bite-stack, flow, palette, and scalar activity receiver uniforms');
 assert.match(core, /paletteShape/, 'debug state exposes editable Pyro palette shape');
 assert.match(core, /lumaShape/, 'debug state exposes independent Pyro luma shape');
 assert.match(core, /radianceShape/, 'debug state exposes Pyro radiance gate/spill/warmth shape');
@@ -1027,6 +1167,16 @@ assert.match(core, /tallPlumeSourceSlabRelief/, 'tall plume high-flow source sla
 assert.match(core, /tallPlumeEmitterBand/, 'tall plume has a named compact emitter band for combustion source birth');
 assert.match(core, /tallPlumeCombustionSource/, 'tall plume combustion source is separated from the broad smoke source column');
 assert.match(core, /tallPlumeEmitterFireBirth/, 'tall plume fire birth is separated from the broad column fire source');
+assert.match(core, /tallPlumeSourceWidthGate/, 'tall plume source birth must explicitly know when the emitter is wide enough to need extra front topology');
+assert.match(core, /tallPlumeFrontPacketDensity/, 'tall plume source width must scale front packet density instead of only scaling the hot body');
+assert.match(core, /tallPlumeAnnularFrontBirth/, 'tall plume wide-source birth must add an annular combustion-front carrier');
+assert.match(core, /tallPlumeInteriorFireRelief/, 'tall plume wide-source birth must relieve the interior so broad sources do not become solid hot plugs');
+assert.match(core, /let columnFrontTopologyBirth = max\(columnCombustionFrontBirth \* 0\.32, tallPlumeAnnularFrontBirth \* 0\.42\);/, 'tall plume annular source birth must feed combustion front topology, not only visible flame color');
+assert.match(core, /tallPlumeSmokeDebandWarp/, 'tall plume smoke source must warp away from the old planar breakup carrier');
+assert.match(core, /tallPlumeSmokeDebandBasis/, 'tall plume smoke source must use a named de-banded scalar basis');
+assert.match(core, /tallPlumeSmokeSourceBreakup/, 'tall plume smoke source must expose the de-banded breakup selected for smoke density birth');
+assert.match(core, /let columnSource = exp\(-sourceRadial \* sourceRadial \* smokeSourceFalloff\) \* sourceBand \* mix\(breakup, tallPlumeSmokeSourceBreakup, tallPlumeScene\) \* inputFlow;/, 'tall plume smoke birth must swap the old planar breakup out of the density source');
+assert.doesNotMatch(core, /let columnSource = exp\(-sourceRadial \* sourceRadial \* smokeSourceFalloff\) \* sourceBand \* breakup \* inputFlow;/, 'tall plume smoke birth must not bake the old planar breakup directly into density');
 assert.match(core, /tallPlumeLiveReactionCarrier/, 'tall plume reaction is driven by compact combustion carrier rather than broad smoke source');
 assert.doesNotMatch(core, /let tallPlumeLiveFlameSurvival = tallPlumeReactionSurvival \* tallPlumeFuelSurvival \* tallPlumeFlameContourSurvival;/, 'tall plume live flame survival must not bypass front topology and tip taper');
 assert.match(core, /fireBirth \* 0\.024 \* tallPlumeRawSourceFireRelief/, 'tall plume flame storage must downweight raw source birth at high flow');
@@ -1483,7 +1633,9 @@ assert.match(witness, /TALL_PLUME_OPERATOR_PRESETS/, 'witness knows named tall-p
 assert.match(witness, /operator_fire_0622/, 'witness recognizes the 2026-06-22 tall-plume fire/smoke wind foothold preset');
 assert.match(witness, /operator_memory_fire_0701/, 'witness recognizes the 2026-07-01 operator-found Pyro-memory tall-plume baseline preset');
 assert.match(witness, /pyro_material_bonfire_family_0702/, 'witness recognizes the 2026-07-02 operator-found Pyro material bonfire family basin');
-assert.match(witness, /DEFAULT_VOLUME_SMOKE_TALL_PRESET\s*=\s*'pyro_material_bonfire_family_0702'/, 'witness mirrors the bare smoke route default Pyro basin');
+assert.match(witness, /exploding_jellow_fireball_basin_0706/, 'witness recognizes the 2026-07-06 operator-found exploding jellow fireball Pyro basin');
+assert.match(witness, /pyro_flow_small_bonfire_gamut_0707/, 'witness recognizes the 2026-07-07 operator-found Pyro Flow small-bonfire gamut basin');
+assert.match(witness, /DEFAULT_VOLUME_SMOKE_TALL_PRESET\s*=\s*'pyro_flow_small_bonfire_gamut_0707'/, 'witness mirrors the bare smoke route default Pyro Flow small-bonfire gamut basin');
 assert.match(witness, /kaminos_volume_smoke'\)\s*===\s*'1'[\s\S]*DEFAULT_VOLUME_SMOKE_TALL_PRESET/, 'witness expects bare smoke routes to boot into the default Pyro basin');
 assert.match(witness, /!routeParams\.has\('volume_scene'\)\s*\|\|\s*routeParams\.get\('volume_scene'\) === 'tall_plume'/, 'witness expects explicit tall_plume smoke routes to preserve the default Pyro basin');
 assert.match(witness, /expectedDetailScaleArtifactQuarantine/, 'witness verifies the tall-plume detail-scale artifact quarantine state');
@@ -1779,6 +1931,22 @@ assert.match(renderPairDataset, /prototypeIdentity/, 'render-pair dataset record
 assert.match(renderPairDataset, /renderPixelRatio/, 'render-pair dataset records low/high internal-to-display pixel ratio');
 assert.match(renderPairDataset, /dryRun/, 'render-pair dataset supports a dry run manifest without spending browser/GPU time');
 assert.match(renderPairDataset, /failurePhase/, 'render-pair dataset records the phase when capture or validation fails');
+
+const sourceScaleProbePath = join(root, 'volume-source-scale-probe.mjs');
+assert.ok(existsSync(sourceScaleProbePath), 'source-scale blobbiness probe exists');
+const sourceScaleProbe = existsSync(sourceScaleProbePath) ? readFileSync(sourceScaleProbePath, 'utf8') : '';
+assert.match(sourceScaleProbe, /kaminos\.volume\.source-scale-blobbiness-probe\.v0/, 'source-scale probe writes a stable manifest schema identity');
+assert.match(sourceScaleProbe, /volume-witness\.mjs/, 'source-scale probe captures frames through the witness instead of bypassing route validation');
+assert.match(sourceScaleProbe, /volume_input_radius/, 'source-scale probe varies source radius through the public route parameter');
+assert.match(sourceScaleProbe, /volume_fire_scale/, 'source-scale probe varies fire scale through the public route parameter');
+assert.match(sourceScaleProbe, /effectiveRouteIdentity/, 'source-scale probe records effective route identity from each witness');
+assert.match(sourceScaleProbe, /sourceRadius/, 'source-scale probe records the requested source radius');
+assert.match(sourceScaleProbe, /perimeterAreaRatio/, 'source-scale probe reports flame boundary complexity');
+assert.match(sourceScaleProbe, /boundaryGradientEnergy/, 'source-scale probe reports boundary gradient energy');
+assert.match(sourceScaleProbe, /localMaxCount/, 'source-scale probe reports interior lobe/local-maximum count');
+assert.match(sourceScaleProbe, /saturationFraction/, 'source-scale probe reports whiteout/saturation fraction');
+assert.match(sourceScaleProbe, /complexityCollapseRatio/, 'source-scale probe reports large-source complexity collapse ratios');
+assert.match(sourceScaleProbe, /failurePhase/, 'source-scale probe records the failure phase before pretending to produce evidence');
 
 const dynamicTextureProofPath = join(root, 'volume-dynamic-texture-proof.mjs');
 assert.ok(existsSync(dynamicTextureProofPath), 'dynamic texture proof harness exists');
