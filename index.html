@@ -434,6 +434,9 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
 .ray-budget-readout { color: #888; font: 10px 'SF Mono', monospace; margin: 6px 0 4px; }
 .ray-budget-presets { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
 .ray-budget-presets .btn { margin: 0; padding: 5px 0; text-align: center; }
+.reaction-front-atlas-wrap { margin: 8px 0 4px; border: 1px solid #303030; border-radius: 6px; background: #070707; overflow: hidden; }
+#volume-reaction-atlas-canvas { width: 100%; aspect-ratio: 5 / 2; display: block; image-rendering: pixelated; }
+.reaction-front-atlas-state { color: #71848a; font: 9px 'SF Mono', monospace; margin: 5px 0 0; min-height: 13px; }
 #kaminos-volume-canvas { position: absolute; left: -10000px; top: -10000px; width: 1px; height: 1px; opacity: 0; pointer-events: none; background: #050607; }
 #kaminos-volume-canvas.active { left: 0; top: 0; width: 100%; height: 100%; opacity: 1; z-index: 3; }
 
@@ -1027,6 +1030,122 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
       <span class="slider-val" id="volume-pyro-compare-val">live</span>
     </div>
     <span class="slider-help">Same-frame A/B: Live Pyro uses contrast carriers; Base only mutes them without moving the sim.</span>
+    <div class="volume-control-section" data-volume-control-section="reaction-front-extractor">
+      <div class="volume-control-section-title">Reaction Front Extractor</div>
+      <span class="slider-help">CPU atlas only: thresholds and structural gates shape the debug shell candidate without changing rendered fire.</span>
+      <div class="slider-row">
+        <span class="slider-label">Heat min</span>
+        <input type="range" id="volume-reaction-heat-min" min="0" max="0.2" step="0.002" value="0.026">
+        <span class="slider-val" id="volume-reaction-heat-min-val">0.026</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Heat max</span>
+        <input type="range" id="volume-reaction-heat-max" min="0.04" max="1.2" step="0.01" value="0.42">
+        <span class="slider-val" id="volume-reaction-heat-max-val">0.42</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Fuel min</span>
+        <input type="range" id="volume-reaction-fuel-min" min="0" max="0.03" step="0.0005" value="0.0015">
+        <span class="slider-val" id="volume-reaction-fuel-min-val">0.0015</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Fuel max</span>
+        <input type="range" id="volume-reaction-fuel-max" min="0.005" max="0.18" step="0.002" value="0.055">
+        <span class="slider-val" id="volume-reaction-fuel-max-val">0.055</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Flame min</span>
+        <input type="range" id="volume-reaction-flame-min" min="0" max="0.04" step="0.0005" value="0.0035">
+        <span class="slider-val" id="volume-reaction-flame-min-val">0.0035</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Flame max</span>
+        <input type="range" id="volume-reaction-flame-max" min="0.02" max="0.35" step="0.005" value="0.12">
+        <span class="slider-val" id="volume-reaction-flame-max-val">0.12</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Front min</span>
+        <input type="range" id="volume-reaction-front-min" min="0" max="0.04" step="0.0005" value="0.0015">
+        <span class="slider-val" id="volume-reaction-front-min-val">0.0015</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Front max</span>
+        <input type="range" id="volume-reaction-front-max" min="0.01" max="0.25" step="0.002" value="0.075">
+        <span class="slider-val" id="volume-reaction-front-max-val">0.075</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Gradient min</span>
+        <input type="range" id="volume-reaction-gradient-min" min="0" max="0.12" step="0.002" value="0.018">
+        <span class="slider-val" id="volume-reaction-gradient-min-val">0.018</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Gradient max</span>
+        <input type="range" id="volume-reaction-gradient-max" min="0.03" max="0.6" step="0.005" value="0.18">
+        <span class="slider-val" id="volume-reaction-gradient-max-val">0.18</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Core min</span>
+        <input type="range" id="volume-reaction-core-min" min="0" max="0.7" step="0.005" value="0.18">
+        <span class="slider-val" id="volume-reaction-core-min-val">0.18</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Core max</span>
+        <input type="range" id="volume-reaction-core-max" min="0.15" max="1.6" step="0.01" value="0.95">
+        <span class="slider-val" id="volume-reaction-core-max-val">0.95</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Core reject</span>
+        <input type="range" id="volume-reaction-core-reject" min="0" max="1" step="0.01" value="0.82">
+        <span class="slider-val" id="volume-reaction-core-reject-val">0.82</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Topology</span>
+        <input type="range" id="volume-reaction-topology-gain" min="0" max="2.5" step="0.02" value="0.44">
+        <span class="slider-val" id="volume-reaction-topology-gain-val">0.44</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Stretch erode</span>
+        <input type="range" id="volume-reaction-stretch-erode" min="0" max="1" step="0.01" value="0">
+        <span class="slider-val" id="volume-reaction-stretch-erode-val">0.00</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Div min</span>
+        <input type="range" id="volume-reaction-divergence-min" min="0" max="0.08" step="0.001" value="0.004">
+        <span class="slider-val" id="volume-reaction-divergence-min-val">0.004</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Div max</span>
+        <input type="range" id="volume-reaction-divergence-max" min="0.01" max="0.2" step="0.002" value="0.07">
+        <span class="slider-val" id="volume-reaction-divergence-max-val">0.070</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Div gate</span>
+        <input type="range" id="volume-reaction-divergence-gain" min="0" max="1" step="0.01" value="0">
+        <span class="slider-val" id="volume-reaction-divergence-gain-val">0.00</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Curl warp</span>
+        <input type="range" id="volume-reaction-curl-warp" min="0" max="3" step="0.05" value="0">
+        <span class="slider-val" id="volume-reaction-curl-warp-val">0.00</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Shell gamma</span>
+        <input type="range" id="volume-reaction-shell-gamma" min="0.35" max="3" step="0.05" value="1">
+        <span class="slider-val" id="volume-reaction-shell-gamma-val">1.00</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Shell contrast</span>
+        <input type="range" id="volume-reaction-shell-contrast" min="0.25" max="5" step="0.05" value="1">
+        <span class="slider-val" id="volume-reaction-shell-contrast-val">1.00</span>
+      </div>
+      <div class="volume-actions">
+        <button class="btn" id="volume-reaction-atlas-capture">Capture Atlas</button>
+      </div>
+      <div class="reaction-front-atlas-wrap">
+        <canvas id="volume-reaction-atlas-canvas" width="640" height="256"></canvas>
+      </div>
+      <div class="reaction-front-atlas-state" id="volume-reaction-atlas-state">atlas not captured</div>
+    </div>
     <div class="volume-control-section" data-volume-control-section="visual-tuning">
       <div class="volume-control-section-title">Visual Tuning</div>
     <div class="slider-row" data-volume-visual-cost-knob="occupied-volume">
@@ -10991,6 +11110,34 @@ function applyTallPlumeOperatorPreset(name, options = {}) {
   return true;
 }
 
+const REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS = [
+  { key: 'reactionHeatMin', id: 'volume-reaction-heat-min', param: 'volume_reaction_heat_min', min: 0, max: 0.2, decimals: 3 },
+  { key: 'reactionHeatMax', id: 'volume-reaction-heat-max', param: 'volume_reaction_heat_max', min: 0.04, max: 1.2, decimals: 2 },
+  { key: 'reactionFuelMin', id: 'volume-reaction-fuel-min', param: 'volume_reaction_fuel_min', min: 0, max: 0.03, decimals: 4 },
+  { key: 'reactionFuelMax', id: 'volume-reaction-fuel-max', param: 'volume_reaction_fuel_max', min: 0.005, max: 0.18, decimals: 3 },
+  { key: 'reactionFlameMin', id: 'volume-reaction-flame-min', param: 'volume_reaction_flame_min', min: 0, max: 0.04, decimals: 4 },
+  { key: 'reactionFlameMax', id: 'volume-reaction-flame-max', param: 'volume_reaction_flame_max', min: 0.02, max: 0.35, decimals: 3 },
+  { key: 'reactionFrontMin', id: 'volume-reaction-front-min', param: 'volume_reaction_front_min', min: 0, max: 0.04, decimals: 4 },
+  { key: 'reactionFrontMax', id: 'volume-reaction-front-max', param: 'volume_reaction_front_max', min: 0.01, max: 0.25, decimals: 3 },
+  { key: 'reactionGradientMin', id: 'volume-reaction-gradient-min', param: 'volume_reaction_gradient_min', min: 0, max: 0.12, decimals: 3 },
+  { key: 'reactionGradientMax', id: 'volume-reaction-gradient-max', param: 'volume_reaction_gradient_max', min: 0.03, max: 0.6, decimals: 3 },
+  { key: 'reactionCoreMin', id: 'volume-reaction-core-min', param: 'volume_reaction_core_min', min: 0, max: 0.7, decimals: 2 },
+  { key: 'reactionCoreMax', id: 'volume-reaction-core-max', param: 'volume_reaction_core_max', min: 0.15, max: 1.6, decimals: 2 },
+  { key: 'reactionCoreReject', id: 'volume-reaction-core-reject', param: 'volume_reaction_core_reject', min: 0, max: 1, decimals: 2 },
+  { key: 'reactionTopologyGain', id: 'volume-reaction-topology-gain', param: 'volume_reaction_topology_gain', min: 0, max: 2.5, decimals: 2 },
+  { key: 'reactionStretchErode', id: 'volume-reaction-stretch-erode', param: 'volume_reaction_stretch_erode', min: 0, max: 1, decimals: 2 },
+  { key: 'reactionDivergenceMin', id: 'volume-reaction-divergence-min', param: 'volume_reaction_divergence_min', min: 0, max: 0.08, decimals: 3 },
+  { key: 'reactionDivergenceMax', id: 'volume-reaction-divergence-max', param: 'volume_reaction_divergence_max', min: 0.01, max: 0.2, decimals: 3 },
+  { key: 'reactionDivergenceGain', id: 'volume-reaction-divergence-gain', param: 'volume_reaction_divergence_gain', min: 0, max: 1, decimals: 2 },
+  { key: 'reactionCurlWarp', id: 'volume-reaction-curl-warp', param: 'volume_reaction_curl_warp', min: 0, max: 3, decimals: 2 },
+  { key: 'reactionShellGamma', id: 'volume-reaction-shell-gamma', param: 'volume_reaction_shell_gamma', min: 0.35, max: 3, decimals: 2 },
+  { key: 'reactionShellContrast', id: 'volume-reaction-shell-contrast', param: 'volume_reaction_shell_contrast', min: 0.25, max: 5, decimals: 2 },
+];
+
+function clampVolumeControlValue(value, field) {
+  return Math.max(field.min, Math.min(field.max, value));
+}
+
 const VOLUME_BASIN_ROUTE_FIELDS = [
   ['volumeScene', 'volume_scene'],
   ['density', 'volume_density'],
@@ -11111,6 +11258,7 @@ const VOLUME_BASIN_ROUTE_FIELDS = [
   ['pressureTierLowerMax', 'volume_pressure_tier_lower_max'],
   ['pressureTierHeroMin', 'volume_pressure_tier_hero_min'],
   ['pressureTierHeroMax', 'volume_pressure_tier_hero_max'],
+  ...REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS.map(field => [field.key, field.param]),
 ];
 
 function formatVolumeBasinRouteValue(value) {
@@ -11171,6 +11319,15 @@ function restoreVolumeBasinSnapshot() {
   refreshVolumeReadout();
   setInfo(`Restored volume basin from ${snapshot.savedAt || 'local storage'}`);
   return true;
+}
+
+function syncReactionFrontExtractorLabels(controlsSnapshot) {
+  for (const field of REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS) {
+    const label = document.getElementById(`${field.id}-val`);
+    const value = controlsSnapshot[field.key];
+    if (!label || !Number.isFinite(value)) continue;
+    label.textContent = value.toFixed(field.decimals);
+  }
 }
 
 function selectedVolumeBasinSlot() {
@@ -15406,6 +15563,27 @@ function readVolumeControls() {
     gridOverlay: parseFloat(document.getElementById('volume-grid-overlay').value),
     flowDebug: parseFloat(document.getElementById('volume-flow-debug').value),
     lookFreeze: parseFloat(document.getElementById('volume-look-freeze').value),
+    reactionHeatMin: parseFloat(document.getElementById('volume-reaction-heat-min').value),
+    reactionHeatMax: parseFloat(document.getElementById('volume-reaction-heat-max').value),
+    reactionFuelMin: parseFloat(document.getElementById('volume-reaction-fuel-min').value),
+    reactionFuelMax: parseFloat(document.getElementById('volume-reaction-fuel-max').value),
+    reactionFlameMin: parseFloat(document.getElementById('volume-reaction-flame-min').value),
+    reactionFlameMax: parseFloat(document.getElementById('volume-reaction-flame-max').value),
+    reactionFrontMin: parseFloat(document.getElementById('volume-reaction-front-min').value),
+    reactionFrontMax: parseFloat(document.getElementById('volume-reaction-front-max').value),
+    reactionGradientMin: parseFloat(document.getElementById('volume-reaction-gradient-min').value),
+    reactionGradientMax: parseFloat(document.getElementById('volume-reaction-gradient-max').value),
+    reactionCoreMin: parseFloat(document.getElementById('volume-reaction-core-min').value),
+    reactionCoreMax: parseFloat(document.getElementById('volume-reaction-core-max').value),
+    reactionCoreReject: parseFloat(document.getElementById('volume-reaction-core-reject').value),
+    reactionTopologyGain: parseFloat(document.getElementById('volume-reaction-topology-gain').value),
+    reactionStretchErode: parseFloat(document.getElementById('volume-reaction-stretch-erode').value),
+    reactionDivergenceMin: parseFloat(document.getElementById('volume-reaction-divergence-min').value),
+    reactionDivergenceMax: parseFloat(document.getElementById('volume-reaction-divergence-max').value),
+    reactionDivergenceGain: parseFloat(document.getElementById('volume-reaction-divergence-gain').value),
+    reactionCurlWarp: parseFloat(document.getElementById('volume-reaction-curl-warp').value),
+    reactionShellGamma: parseFloat(document.getElementById('volume-reaction-shell-gamma').value),
+    reactionShellContrast: parseFloat(document.getElementById('volume-reaction-shell-contrast').value),
     pyroCompareMode: document.getElementById('volume-pyro-compare').value,
     pyroDynamicDetail: parseFloat(document.getElementById('volume-pyro-detail').value),
     pyroMaterialGain: parseFloat(document.getElementById('volume-pyro-material-gain').value),
@@ -15561,6 +15739,7 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-grid-overlay-val').textContent = c.gridOverlay.toFixed(2);
   document.getElementById('volume-flow-debug-val').textContent = c.flowDebug.toFixed(2);
   document.getElementById('volume-look-freeze-val').textContent = c.lookFreeze >= 0.5 ? 'frozen' : 'live';
+  syncReactionFrontExtractorLabels(c);
   document.getElementById('volume-pyro-compare-val').textContent = c.pyroCompareMode === 'base' ? 'base' : 'live';
   document.getElementById('volume-pyro-detail-val').textContent = c.pyroDynamicDetail >= 0.5 ? 'on' : 'off';
   document.getElementById('volume-pyro-material-gain-val').textContent = c.pyroMaterialGain.toFixed(2);
@@ -15674,6 +15853,46 @@ function paintVolumePyroDynamicAtlas(detail) {
   ctx.lineWidth = 1;
   ctx.strokeRect(0.5, 0.5, width - 1, height - 1);
 }
+
+async function captureVolumeReactionAtlas() {
+  const canvas = document.getElementById('volume-reaction-atlas-canvas');
+  const stateEl = document.getElementById('volume-reaction-atlas-state');
+  if (!canvas || !volumePrototype?.sampleFrame) return null;
+  try {
+    if (stateEl) stateEl.textContent = 'capturing atlas...';
+    const sample = await volumePrototype.sampleFrame();
+    const atlas = sample?.simReadback?.reactionFrontAtlas;
+    if (!sample?.ok || !atlas?.rgba || !atlas.width || !atlas.height) {
+      const reason = sample?.reason || 'missing reactionFrontAtlas';
+      if (stateEl) stateEl.textContent = `capture failed: ${reason}`;
+      setInfo(`Reaction front atlas capture failed: ${reason}`);
+      return null;
+    }
+    canvas.width = atlas.width;
+    canvas.height = atlas.height;
+    const ctx = canvas.getContext('2d');
+    const imageData = new ImageData(new Uint8ClampedArray(atlas.rgba), atlas.width, atlas.height);
+    ctx.putImageData(imageData, 0, 0);
+    window.__kaminosVolumeReactionFrontAtlasLast = {
+      capturedAt: new Date().toISOString(),
+      sampleFrame: sample.frameCount,
+      simStepCount: sample.simStepCount,
+      effectiveRoute: sample.effectiveRoute,
+      atlas,
+    };
+    if (stateEl) {
+      const shellMax = atlas.stageStats?.shellCandidate?.max;
+      stateEl.textContent = `captured frame ${sample.frameCount ?? '--'} / shell max ${Number.isFinite(shellMax) ? shellMax.toFixed(3) : '--'}`;
+    }
+    setInfo('Reaction front atlas captured from sampleFrame');
+    return atlas;
+  } catch (error) {
+    if (stateEl) stateEl.textContent = `capture failed: ${error?.message || error}`;
+    setInfo(`Reaction front atlas capture failed: ${error?.message || error}`);
+    return null;
+  }
+}
+window.__kaminosCaptureVolumeReactionAtlas = captureVolumeReactionAtlas;
 
 function refreshVolumeReadout() {
   if (!volumePrototype) return;
@@ -16347,6 +16566,11 @@ async function initKaminosVolumeRoute() {
   if (params.has('volume_look_freeze') && Number.isFinite(routeLookFreeze)) {
     document.getElementById('volume-look-freeze').value = String(Math.max(0, Math.min(1, Math.round(routeLookFreeze))));
   }
+  for (const field of REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS) {
+    const routeValue = Number(params.get(field.param));
+    if (!params.has(field.param) || !Number.isFinite(routeValue)) continue;
+    document.getElementById(field.id).value = clampVolumeControlValue(routeValue, field).toFixed(field.decimals);
+  }
   const routePyroCompare = params.get('volume_pyro_compare');
   if (['live', 'base'].includes(routePyroCompare)) {
     document.getElementById('volume-pyro-compare').value = routePyroCompare;
@@ -16406,6 +16630,10 @@ async function initKaminosVolumeRoute() {
     document.getElementById(id).addEventListener('input', syncControls);
     document.getElementById(id).addEventListener('change', syncControls);
   }
+  for (const field of REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS) {
+    document.getElementById(field.id)?.addEventListener('input', syncControls);
+    document.getElementById(field.id)?.addEventListener('change', syncControls);
+  }
   const applyBudgetControls = () => {
     updateVolumeControlLabels();
     volumePrototype.setControls(readVolumeControls());
@@ -16448,6 +16676,7 @@ async function initKaminosVolumeRoute() {
   });
   document.getElementById('volume-basin-copy')?.addEventListener('click', () => void copyVolumeBasinUrl());
   document.getElementById('volume-basin-restore')?.addEventListener('click', () => restoreVolumeBasinSnapshot());
+  document.getElementById('volume-reaction-atlas-capture')?.addEventListener('click', () => void captureVolumeReactionAtlas());
   document.getElementById('volume-basin-slot-save')?.addEventListener('click', () => saveVolumeBasinSlot());
   document.getElementById('volume-basin-slot-load')?.addEventListener('click', () => restoreVolumeBasinSlot());
   document.getElementById('volume-look-library-kind')?.addEventListener('change', () => refreshVolumeLookLibraryList());

@@ -353,6 +353,44 @@ function smoothstep01(edge0, edge1, value) {
   return t * t * (3 - 2 * t);
 }
 
+function normalizeReactionFrontAtlasControls(controls = {}) {
+  const orderedPair = (minValue, maxValue, minFallback, maxFallback, lo, hi) => {
+    const a = clampFinite(minValue, lo, hi, minFallback);
+    const b = clampFinite(maxValue, lo, hi, maxFallback);
+    return a <= b ? [a, b] : [b, a];
+  };
+  const [heatMin, heatMax] = orderedPair(controls.reactionHeatMin, controls.reactionHeatMax, 0.026, 0.42, 0, 1.2);
+  const [fuelMin, fuelMax] = orderedPair(controls.reactionFuelMin, controls.reactionFuelMax, 0.0015, 0.055, 0, 0.18);
+  const [flameMin, flameMax] = orderedPair(controls.reactionFlameMin, controls.reactionFlameMax, 0.0035, 0.12, 0, 0.35);
+  const [frontMin, frontMax] = orderedPair(controls.reactionFrontMin, controls.reactionFrontMax, 0.0015, 0.075, 0, 0.25);
+  const [gradientMin, gradientMax] = orderedPair(controls.reactionGradientMin, controls.reactionGradientMax, 0.018, 0.18, 0, 0.6);
+  const [coreMin, coreMax] = orderedPair(controls.reactionCoreMin, controls.reactionCoreMax, 0.18, 0.95, 0, 1.6);
+  const [divergenceMin, divergenceMax] = orderedPair(controls.reactionDivergenceMin, controls.reactionDivergenceMax, 0.004, 0.07, 0, 0.2);
+  return {
+    heatMin,
+    heatMax,
+    fuelMin,
+    fuelMax,
+    flameMin,
+    flameMax,
+    frontMin,
+    frontMax,
+    gradientMin,
+    gradientMax,
+    coreMin,
+    coreMax,
+    coreReject: clampFinite(controls.reactionCoreReject, 0, 1, 0.82),
+    topologyGain: clampFinite(controls.reactionTopologyGain, 0, 2.5, 0.44),
+    stretchErode: clampFinite(controls.reactionStretchErode, 0, 1, 0),
+    divergenceMin,
+    divergenceMax,
+    divergenceGain: clampFinite(controls.reactionDivergenceGain, 0, 1, 0),
+    curlWarp: clampFinite(controls.reactionCurlWarp, 0, 3, 0),
+    shellGamma: clampFinite(controls.reactionShellGamma, 0.35, 3, 1),
+    shellContrast: clampFinite(controls.reactionShellContrast, 0.25, 5, 1),
+  };
+}
+
 function pyroHexColorToRgb(value, fallback) {
   const raw = String(value || fallback || '#ffffff').trim();
   const normalized = /^#[0-9a-f]{6}$/i.test(raw)
@@ -6736,6 +6774,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       const coreReject = new Float32Array(cellCount);
       const topologyWrinkle = new Float32Array(cellCount);
       const shellCandidate = new Float32Array(cellCount);
+      const reactionFrontAtlasControls = normalizeReactionFrontAtlasControls(controlsSnapshot);
       const colorMaps = {
         heatSupport: [255, 122, 34],
         fuelSupport: [84, 190, 108],
@@ -6749,6 +6788,19 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         shellCandidate: [255, 224, 158],
       };
       const indexAt = (x, y, z) => clampIndex(x) + clampIndex(y) * gridSize + clampIndex(z) * gridSize * gridSize;
+      const flowTopologyAt = (x, y, z) => {
+        const vx0 = velocityAt(x - 1, y, z);
+        const vx1 = velocityAt(x + 1, y, z);
+        const vy0 = velocityAt(x, y - 1, z);
+        const vy1 = velocityAt(x, y + 1, z);
+        const vz0 = velocityAt(x, y, z - 1);
+        const vz1 = velocityAt(x, y, z + 1);
+        const curlX = ((vy1[2] - vy0[2]) - (vz1[1] - vz0[1])) * 0.5;
+        const curlY = ((vz1[0] - vz0[0]) - (vx1[2] - vx0[2])) * 0.5;
+        const curlZ = ((vx1[1] - vx0[1]) - (vy1[0] - vy0[0])) * 0.5;
+        const div = Math.abs(((vx1[0] - vx0[0]) + (vy1[1] - vy0[1]) + (vz1[2] - vz0[2])) * 0.5);
+        return { curlX, curlY, curlZ, curlMag: Math.hypot(curlX, curlY, curlZ), div };
+      };
       for (let cell = 0; cell < cellCount; cell += 1) {
         const i = cell * FLUID_COMPONENTS;
         const heat = Math.max(0, data[i + 5]);
@@ -6760,13 +6812,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         const interfaceShred = Math.max(0, data[i + 13]);
         const fireLick = Math.max(0, data[i + 14]);
         const frontTopology = Math.max(0, frontData[cell]);
-        const heatSupportValue = smoothstep01(0.026, 0.42, heat + flame * 0.20 + visibleFireCarrier * 0.12 + ember * 0.08);
-        const fuelSupportValue = smoothstep01(0.0015, 0.055, fuel);
-        const flameSupportValue = smoothstep01(0.0035, 0.12, flame + visibleFireCarrier * 0.72 + fireLick * 0.36 + ember * 0.20);
-        const combustionFrontSupportValue = smoothstep01(0.0015, 0.075, combustionFront * 0.72 + frontTopology * 1.18);
+        const heatSupportValue = smoothstep01(reactionFrontAtlasControls.heatMin, reactionFrontAtlasControls.heatMax, heat + flame * 0.20 + visibleFireCarrier * 0.12 + ember * 0.08);
+        const fuelSupportValue = smoothstep01(reactionFrontAtlasControls.fuelMin, reactionFrontAtlasControls.fuelMax, fuel);
+        const flameSupportValue = smoothstep01(reactionFrontAtlasControls.flameMin, reactionFrontAtlasControls.flameMax, flame + visibleFireCarrier * 0.72 + fireLick * 0.36 + ember * 0.20);
+        const combustionFrontSupportValue = smoothstep01(reactionFrontAtlasControls.frontMin, reactionFrontAtlasControls.frontMax, combustionFront * 0.72 + frontTopology * 1.18);
         const reactionPotentialValue = heatSupportValue * Math.max(flameSupportValue, combustionFrontSupportValue) * (0.18 + fuelSupportValue * 0.82);
-        const coreBody = smoothstep01(0.18, 0.95, heat * 0.66 + visibleFireCarrier * 0.56 + flame * 0.44 + ember * 0.22);
-        const coreRejectValue = 1 - coreBody * 0.82;
+        const coreBody = smoothstep01(reactionFrontAtlasControls.coreMin, reactionFrontAtlasControls.coreMax, heat * 0.66 + visibleFireCarrier * 0.56 + flame * 0.44 + ember * 0.22);
+        const coreRejectValue = 1 - coreBody * reactionFrontAtlasControls.coreReject;
         const topologyWrinkleValue = Math.max(0, Math.min(1, interfaceShred * 0.64 + fireLick * 0.58 + frontTopology * 0.86 + combustionFront * 0.22));
         heatSupport[cell] = heatSupportValue;
         fuelSupport[cell] = fuelSupportValue;
@@ -6780,14 +6832,28 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         for (let y = 0; y < gridSize; y += 1) {
           for (let x = 0; x < gridSize; x += 1) {
             const cell = indexAt(x, y, z);
-            const dx = (reactionPotential[indexAt(x + 1, y, z)] - reactionPotential[indexAt(x - 1, y, z)]) * 0.5;
-            const dy = (reactionPotential[indexAt(x, y + 1, z)] - reactionPotential[indexAt(x, y - 1, z)]) * 0.5;
-            const dz = (reactionPotential[indexAt(x, y, z + 1)] - reactionPotential[indexAt(x, y, z - 1)]) * 0.5;
+            const flowTopology = flowTopologyAt(x, y, z);
+            const curlWarpScale = reactionFrontAtlasControls.curlWarp * 24;
+            const warpX = Math.max(-2, Math.min(2, Math.round(flowTopology.curlX * curlWarpScale)));
+            const warpY = Math.max(-2, Math.min(2, Math.round(flowTopology.curlY * curlWarpScale)));
+            const warpZ = Math.max(-2, Math.min(2, Math.round(flowTopology.curlZ * curlWarpScale)));
+            const wx = x + warpX;
+            const wy = y + warpY;
+            const wz = z + warpZ;
+            const dx = (reactionPotential[indexAt(wx + 1, wy, wz)] - reactionPotential[indexAt(wx - 1, wy, wz)]) * 0.5;
+            const dy = (reactionPotential[indexAt(wx, wy + 1, wz)] - reactionPotential[indexAt(wx, wy - 1, wz)]) * 0.5;
+            const dz = (reactionPotential[indexAt(wx, wy, wz + 1)] - reactionPotential[indexAt(wx, wy, wz - 1)]) * 0.5;
             const gradientMagnitudeValue = Math.max(0, Math.min(1, Math.hypot(dx, dy, dz) * 7.5));
-            const narrowFrontCandidateValue = reactionPotential[cell] * smoothstep01(0.018, 0.18, gradientMagnitudeValue) * coreReject[cell];
+            const gradientGate = smoothstep01(reactionFrontAtlasControls.gradientMin, reactionFrontAtlasControls.gradientMax, gradientMagnitudeValue);
+            const stretchActivity = smoothstep01(0.006, 0.08, flowTopology.curlMag + flowTopology.div * 0.65);
+            const stretchGate = 1 - reactionFrontAtlasControls.stretchErode * stretchActivity;
+            const divergenceActivity = smoothstep01(reactionFrontAtlasControls.divergenceMin, reactionFrontAtlasControls.divergenceMax, flowTopology.div);
+            const divergenceGate = 1 - reactionFrontAtlasControls.divergenceGain + divergenceActivity * reactionFrontAtlasControls.divergenceGain;
+            const narrowFrontCandidateValue = reactionPotential[cell] * gradientGate * coreReject[cell] * stretchGate * divergenceGate;
+            const shellRaw = Math.max(0, Math.min(1, narrowFrontCandidateValue * (0.68 + topologyWrinkle[cell] * reactionFrontAtlasControls.topologyGain) * reactionFrontAtlasControls.shellContrast));
             gradientMagnitude[cell] = gradientMagnitudeValue;
             narrowFrontCandidate[cell] = narrowFrontCandidateValue;
-            shellCandidate[cell] = Math.max(0, Math.min(1, narrowFrontCandidateValue * (0.68 + topologyWrinkle[cell] * 0.44)));
+            shellCandidate[cell] = Math.pow(shellRaw, reactionFrontAtlasControls.shellGamma);
           }
         }
       }
@@ -6935,6 +7001,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         labelOverlay: true,
         columns,
         rows,
+        controls: reactionFrontAtlasControls,
         panels: stages.map(stage => ({ key: stage.key, label: stage.label, atlasLabel: stage.atlasLabel })),
         stageStats,
         sourceY,

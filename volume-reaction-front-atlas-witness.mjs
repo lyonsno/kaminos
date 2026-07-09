@@ -23,6 +23,7 @@ let phase = 'initializing';
 let primaryOutputWritten = false;
 let lastDebugState = null;
 let sampleSummary = null;
+let uiCaptureSummary = null;
 const consoleEvents = [];
 
 function delay(ms) {
@@ -46,6 +47,7 @@ function writeReport(report = {}) {
     atlasPng: primaryOutputWritten ? out : null,
     consoleEvents,
     lastDebugState,
+    uiCaptureSummary,
     sampleSummary,
     ...report,
   }, null, 2));
@@ -237,6 +239,23 @@ async function main() {
     assert.equal(lastDebugState.active, true, 'volume route is not active');
     assert.ok(lastDebugState.frameCount >= minFrames, `volume route rendered ${lastDebugState.frameCount || 0} frames`);
 
+    phase = 'ui-capture';
+    uiCaptureSummary = await evaluate(ws, `window.__kaminosCaptureVolumeReactionAtlas().then(atlas => ({
+      ok: !!atlas,
+      width: atlas?.width || 0,
+      height: atlas?.height || 0,
+      controls: atlas?.controls || null,
+      shellMax: atlas?.stageStats?.shellCandidate?.max ?? null,
+      canvasWidth: document.getElementById('volume-reaction-atlas-canvas')?.width || 0,
+      canvasHeight: document.getElementById('volume-reaction-atlas-canvas')?.height || 0,
+      stateText: document.getElementById('volume-reaction-atlas-state')?.textContent || ''
+    }))`);
+    assert.equal(uiCaptureSummary?.ok, true, 'reaction-front UI atlas capture did not return an atlas');
+    assert.equal(uiCaptureSummary.width, 640, 'reaction-front UI atlas capture width mismatch');
+    assert.equal(uiCaptureSummary.height, 256, 'reaction-front UI atlas capture height mismatch');
+    assert.equal(uiCaptureSummary.canvasWidth, 640, 'reaction-front UI atlas canvas width mismatch');
+    assert.equal(uiCaptureSummary.canvasHeight, 256, 'reaction-front UI atlas canvas height mismatch');
+
     phase = 'sample-frame';
     const sample = await evaluate(ws, 'window.__kaminosVolumePrototype.sampleFrame()');
     assert.equal(sample?.ok, true, `sampleFrame failed: ${sample?.reason || 'unknown'}`);
@@ -258,6 +277,7 @@ async function main() {
       atlasWidth: reactionFrontAtlas.width,
       atlasHeight: reactionFrontAtlas.height,
       labelOverlay: reactionFrontAtlas.labelOverlay === true,
+      controls: reactionFrontAtlas.controls,
       panels: panelKeys,
       stageStats: reactionFrontAtlas.stageStats,
     };
