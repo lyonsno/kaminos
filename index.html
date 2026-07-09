@@ -1034,6 +1034,22 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
       <div class="volume-control-section-title">Reaction Front Extractor</div>
       <span class="slider-help">CPU atlas only: thresholds and structural gates shape the debug shell candidate without changing rendered fire.</span>
       <div class="slider-row">
+        <span class="slider-label">Reaction live</span>
+        <select id="volume-reaction-live-view" class="select-input">
+          <option value="off" selected>off</option>
+          <option value="shell">shell</option>
+          <option value="thermal">thermal</option>
+          <option value="reaction">reaction</option>
+          <option value="front">front</option>
+          <option value="edge">edge</option>
+          <option value="core">core</option>
+          <option value="curl">curl</option>
+          <option value="divergence">divergence</option>
+        </select>
+        <span class="slider-val" id="volume-reaction-live-view-val">off</span>
+      </div>
+      <span class="slider-help">reaction-live-view-shader-inspect-v0: full-size primary viewer of live shader-side support fields; atlas threshold sliders remain CPU-capture controls until parity uniforms land.</span>
+      <div class="slider-row">
         <span class="slider-label">Heat min</span>
         <input type="range" id="volume-reaction-heat-min" min="0" max="0.2" step="0.002" value="0.026">
         <span class="slider-val" id="volume-reaction-heat-min-val">0.026</span>
@@ -11134,6 +11150,13 @@ const REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS = [
   { key: 'reactionShellContrast', id: 'volume-reaction-shell-contrast', param: 'volume_reaction_shell_contrast', min: 0.25, max: 5, decimals: 2 },
 ];
 
+const REACTION_FRONT_LIVE_VIEW_VALUES = new Set(['off', 'shell', 'thermal', 'reaction', 'front', 'edge', 'core', 'curl', 'divergence']);
+
+function normalizeReactionFrontLiveView(value) {
+  const mode = String(value || 'off').toLowerCase().replace(/-/g, '_');
+  return REACTION_FRONT_LIVE_VIEW_VALUES.has(mode) ? mode : 'off';
+}
+
 function clampVolumeControlValue(value, field) {
   return Math.max(field.min, Math.min(field.max, value));
 }
@@ -11258,6 +11281,7 @@ const VOLUME_BASIN_ROUTE_FIELDS = [
   ['pressureTierLowerMax', 'volume_pressure_tier_lower_max'],
   ['pressureTierHeroMin', 'volume_pressure_tier_hero_min'],
   ['pressureTierHeroMax', 'volume_pressure_tier_hero_max'],
+  ['reactionLiveView', 'volume_reaction_live_view'],
   ...REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS.map(field => [field.key, field.param]),
 ];
 
@@ -11322,6 +11346,9 @@ function restoreVolumeBasinSnapshot() {
 }
 
 function syncReactionFrontExtractorLabels(controlsSnapshot) {
+  const liveView = normalizeReactionFrontLiveView(controlsSnapshot.reactionLiveView);
+  const liveViewLabel = document.getElementById('volume-reaction-live-view-val');
+  if (liveViewLabel) liveViewLabel.textContent = liveView;
   for (const field of REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS) {
     const label = document.getElementById(`${field.id}-val`);
     const value = controlsSnapshot[field.key];
@@ -15509,6 +15536,7 @@ function backOffVolumeLegacyPyroControls(controls) {
 function readVolumeControls() {
   const volumeScene = document.getElementById('volume-scene').value;
   const pressureConfig = volumePressureConfigForMode(document.getElementById('volume-pressure-mode').value, volumeScene);
+  const reactionLiveView = normalizeReactionFrontLiveView(document.getElementById('volume-reaction-live-view')?.value);
   return backOffVolumeLegacyPyroControls(applyVolumeRuntimeQualityLadder({
     volumeScene,
     density: parseFloat(document.getElementById('volume-density').value),
@@ -15541,8 +15569,10 @@ function readVolumeControls() {
     renderScale: parseFloat(document.getElementById('volume-render-scale').value),
     inputRadius: parseFloat(document.getElementById('volume-input-radius').value),
     flowRate: parseFloat(document.getElementById('volume-flow-rate').value),
-    fireRenderMode: document.getElementById('volume-fire-render-mode').value,
-    shellInspectMode: document.getElementById('volume-shell-inspect-mode').value,
+    reactionLiveView,
+    reactionLiveViewIdentity: 'reaction-live-view-shader-inspect-v0',
+    fireRenderMode: reactionLiveView !== 'off' ? 'inspect' : document.getElementById('volume-fire-render-mode').value,
+    shellInspectMode: reactionLiveView !== 'off' ? reactionLiveView : document.getElementById('volume-shell-inspect-mode').value,
     shellAmount: parseFloat(document.getElementById('volume-shell-amount').value),
     shellWidth: parseFloat(document.getElementById('volume-shell-width').value),
     shellThermal: parseFloat(document.getElementById('volume-shell-thermal').value),
@@ -16566,6 +16596,9 @@ async function initKaminosVolumeRoute() {
   if (params.has('volume_look_freeze') && Number.isFinite(routeLookFreeze)) {
     document.getElementById('volume-look-freeze').value = String(Math.max(0, Math.min(1, Math.round(routeLookFreeze))));
   }
+  if (params.has('volume_reaction_live_view')) {
+    document.getElementById('volume-reaction-live-view').value = normalizeReactionFrontLiveView(params.get('volume_reaction_live_view'));
+  }
   for (const field of REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS) {
     const routeValue = Number(params.get(field.param));
     if (!params.has(field.param) || !Number.isFinite(routeValue)) continue;
@@ -16630,6 +16663,8 @@ async function initKaminosVolumeRoute() {
     document.getElementById(id).addEventListener('input', syncControls);
     document.getElementById(id).addEventListener('change', syncControls);
   }
+  document.getElementById('volume-reaction-live-view')?.addEventListener('input', syncControls);
+  document.getElementById('volume-reaction-live-view')?.addEventListener('change', syncControls);
   for (const field of REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS) {
     document.getElementById(field.id)?.addEventListener('input', syncControls);
     document.getElementById(field.id)?.addEventListener('change', syncControls);

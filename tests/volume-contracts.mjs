@@ -712,6 +712,10 @@ assert.match(core, /heatSupport[\s\S]*fuelSupport[\s\S]*reactionPotential[\s\S]*
 assert.match(core, /labelOverlay:\s*true/, 'reaction-front atlas PNG declares visible panel labels for operator smoke');
 assert.match(core, /drawAtlasLabel/, 'reaction-front atlas draws panel labels into the PNG pixels instead of relying only on report metadata');
 assert.match(index, /data-volume-control-section="reaction-front-extractor"/, 'reaction-front extractor controls are grouped away from legacy pyro controls');
+assert.match(index, /id="volume-reaction-live-view"/, 'reaction-front extractor exposes a primary-viewer live inspect selector');
+assert.match(index, /volume_reaction_live_view/, 'reaction-front live inspect selector is routeable through basin URLs');
+assert.match(index, /reactionLiveView[\s\S]*fireRenderMode:\s*reactionLiveView !== 'off' \? 'inspect'/, 'reaction-front live inspect selector overrides the primary renderer into inspect mode');
+assert.match(index, /reaction-live-view-shader-inspect-v0/, 'reaction-front live inspect labels its shader-side approximation boundary');
 assert.match(index, /id="volume-reaction-heat-min"[\s\S]*id="volume-reaction-shell-contrast"/, 'reaction-front extractor exposes threshold and shaping sliders');
 assert.match(index, /volume_reaction_heat_min[\s\S]*volume_reaction_shell_contrast/, 'reaction-front extractor controls are copyable and routeable through basin URLs');
 assert.match(index, /reactionHeatMin:\s*parseFloat\(document\.getElementById\('volume-reaction-heat-min'\)\.value\)/, 'reaction-front heat threshold reaches the runtime controls object');
