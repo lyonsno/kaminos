@@ -714,6 +714,7 @@ assert.match(core, /drawAtlasLabel/, 'reaction-front atlas draws panel labels in
 assert.match(index, /data-volume-control-section="reaction-front-extractor"/, 'reaction-front extractor controls are grouped away from legacy pyro controls');
 assert.match(index, /id="volume-reaction-live-view"/, 'reaction-front extractor exposes a primary-viewer live inspect selector');
 assert.match(index, /<option value="boundary">boundary<\/option>/, 'reaction-front live inspect selector exposes the derived boundary candidate in the primary viewer');
+assert.match(index, /<option value="boundary_fire">boundary-fire<\/option>/, 'reaction-front live inspect selector exposes the boundary-fire sheet radiance mode separately from scalar boundary inspect');
 assert.match(index, /volume_reaction_live_view/, 'reaction-front live inspect selector is routeable through basin URLs');
 assert.match(index, /reactionLiveView[\s\S]*fireRenderMode:\s*reactionLiveView !== 'off' \? 'inspect'/, 'reaction-front live inspect selector overrides the primary renderer into inspect mode');
 assert.match(index, /reaction-live-view-shader-inspect-v0/, 'reaction-front live inspect labels its shader-side approximation boundary');
@@ -721,11 +722,19 @@ assert.match(index, /reaction-boundary-live-controls-v0/, 'reaction-front live b
 assert.match(index, /id="volume-reaction-boundary-gradient"[\s\S]*id="volume-reaction-boundary-opacity"/, 'reaction-front extractor exposes live boundary gradient, support, topology, and display sliders for the primary viewer');
 assert.match(index, /volume_reaction_boundary_gradient[\s\S]*volume_reaction_boundary_opacity/, 'reaction-front live boundary controls are copyable and routeable through basin URLs');
 assert.match(index, /reactionBoundaryControls:\s*\{[\s\S]*gradientGain[\s\S]*supportThermal[\s\S]*displayOpacity/, 'reaction-front live boundary controls reach the runtime controls object as a grouped contract');
-assert.match(core, /shellInspectModeValue[\s\S]*mode === 'boundary'[\s\S]*return 8/, 'volume shader routing maps the derived boundary inspect mode to its own mode id');
-assert.match(core, /let shellInspectMode = clamp\(u\.topology_shell_controls\.y,\s*0\.0,\s*8\.0\)/, 'shader inspect mode clamp includes the derived boundary inspect mode');
+assert.match(index, /reaction-boundary-fire-controls-v0/, 'reaction-front boundary-fire controls declare a stable sheet-radiance identity');
+assert.match(index, /id="volume-reaction-boundary-fire-ridge"[\s\S]*id="volume-reaction-boundary-fire-luma"/, 'reaction-front extractor exposes ridge, tip, erosion, and fuel-color sliders for boundary-fire');
+assert.match(index, /volume_reaction_boundary_fire_ridge[\s\S]*volume_reaction_boundary_fire_luma/, 'reaction-front boundary-fire controls are copyable and routeable through basin URLs');
+assert.match(index, /reactionBoundaryFireControls:\s*\{[\s\S]*ridgeGain[\s\S]*tipBreakup[\s\S]*cleanBlue[\s\S]*fireLuma/, 'reaction-front boundary-fire controls reach the runtime controls object as a grouped contract');
+assert.match(core, /shellInspectModeValue[\s\S]*mode === 'boundary'[\s\S]*return 8[\s\S]*mode === 'boundary_fire'[\s\S]*return 9/, 'volume shader routing maps boundary and boundary-fire inspect modes to distinct mode ids');
+assert.match(core, /let shellInspectMode = clamp\(u\.topology_shell_controls\.y,\s*0\.0,\s*9\.0\)/, 'shader inspect mode clamp includes boundary-fire');
+assert.match(core, /boundary_fire_structure:\s*vec4<f32>[\s\S]*boundary_fire_color:\s*vec4<f32>[\s\S]*boundary_fire_display:\s*vec4<f32>/, 'shader carries dedicated boundary-fire uniforms instead of stealing unrelated controls');
 assert.match(core, /fn liveBoundarySupportAt/, 'shader computes live boundary support from sampled carriers instead of trusting a named front field');
 assert.match(core, /inspectBoundaryMask[\s\S]*boundaryCandidate/, 'shader primary-view inspect path includes a derived boundary candidate signal');
+assert.match(core, /boundaryFireRidge[\s\S]*boundaryFireTipGate[\s\S]*boundaryFireErosion/, 'shader boundary-fire mode derives ridge, dynamic tip, and topology erosion terms');
+assert.match(core, /cleanFuelColor[\s\S]*sootMaturity[\s\S]*sootThermalColor[\s\S]*boundaryFireColor/, 'shader boundary-fire color mixes clean fuel color toward soot-rich thermal color');
 assert.match(core, /reactionBoundaryControls/, 'renderer debug state exposes effective live boundary controls for witness reports');
+assert.match(core, /reactionBoundaryFireControls/, 'renderer debug state exposes effective boundary-fire controls for witness reports');
 assert.match(index, /id="volume-reaction-heat-min"[\s\S]*id="volume-reaction-shell-contrast"/, 'reaction-front extractor exposes threshold and shaping sliders');
 assert.match(index, /volume_reaction_heat_min[\s\S]*volume_reaction_shell_contrast/, 'reaction-front extractor controls are copyable and routeable through basin URLs');
 assert.match(index, /reactionHeatMin:\s*parseFloat\(document\.getElementById\('volume-reaction-heat-min'\)\.value\)/, 'reaction-front heat threshold reaches the runtime controls object');
@@ -1131,7 +1140,7 @@ assert.match(core, /uniforms\[203\]\s*=\s*pyroRadianceChroma/, 'CPU uploads Radi
 assert.match(core, /uniforms\[212\]\s*=\s*pyroFlamePaint/, 'CPU uploads flame paint gain into the Pyro luma uniform block');
 assert.match(core, /uniforms\[213\]\s*=\s*pyroFlameLuma/, 'CPU uploads flame luminance into the Pyro luma uniform block');
 assert.match(core, /writePyroPaletteUniform/, 'CPU uploads editable Pyro palette color endpoints');
-assert.match(core, /uniforms\.set\(previousViewProj\.elements,\s*296\)/, 'previous view-projection matrix shifts after Bite-stack, flow, palette, and topology-shell lab uniforms');
+assert.match(core, /uniforms\.set\(previousViewProj\.elements,\s*308\)/, 'previous view-projection matrix shifts after Bite-stack, flow, palette, topology-shell lab, and boundary-fire uniforms');
 assert.match(core, /paletteShape/, 'debug state exposes editable Pyro palette shape');
 assert.match(core, /lumaShape/, 'debug state exposes independent Pyro luma shape');
 assert.match(core, /radianceShape/, 'debug state exposes Pyro radiance gate/spill/warmth shape');

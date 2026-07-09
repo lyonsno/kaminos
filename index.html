@@ -1046,6 +1046,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
           <option value="curl">curl</option>
           <option value="divergence">divergence</option>
           <option value="boundary">boundary</option>
+          <option value="boundary_fire">boundary-fire</option>
         </select>
         <span class="slider-val" id="volume-reaction-live-view-val">off</span>
       </div>
@@ -1121,6 +1122,53 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
         <span class="slider-label">Boundary opacity</span>
         <input type="range" id="volume-reaction-boundary-opacity" min="0" max="3" step="0.05" value="0.70">
         <span class="slider-val" id="volume-reaction-boundary-opacity-val">0.70</span>
+      </div>
+      <div class="volume-control-section-title">Boundary fire</div>
+      <span class="slider-help">reaction-boundary-fire-controls-v0: shades the boundary sheet as clean-to-sooty hydrocarbon radiance. Smoke tint/extinction still comes from the raymarch.</span>
+      <div class="slider-row">
+        <span class="slider-label">Ridge select</span>
+        <input type="range" id="volume-reaction-boundary-fire-ridge" min="0" max="2" step="0.02" value="1.76">
+        <span class="slider-val" id="volume-reaction-boundary-fire-ridge-val">1.76</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Ridge cut</span>
+        <input type="range" id="volume-reaction-boundary-fire-ridge-cut" min="0" max="0.55" step="0.005" value="0.040">
+        <span class="slider-val" id="volume-reaction-boundary-fire-ridge-cut-val">0.040</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Tip breakup</span>
+        <input type="range" id="volume-reaction-boundary-fire-tip" min="0" max="2" step="0.02" value="1.80">
+        <span class="slider-val" id="volume-reaction-boundary-fire-tip-val">1.80</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Topology erode</span>
+        <input type="range" id="volume-reaction-boundary-fire-erosion" min="0" max="1" step="0.01" value="0.55">
+        <span class="slider-val" id="volume-reaction-boundary-fire-erosion-val">0.55</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Clean blue</span>
+        <input type="range" id="volume-reaction-boundary-fire-clean-blue" min="0" max="2" step="0.02" value="0.90">
+        <span class="slider-val" id="volume-reaction-boundary-fire-clean-blue-val">0.90</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Soot yield</span>
+        <input type="range" id="volume-reaction-boundary-fire-soot" min="0" max="2" step="0.02" value="0.72">
+        <span class="slider-val" id="volume-reaction-boundary-fire-soot-val">0.72</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Soot yellowing</span>
+        <input type="range" id="volume-reaction-boundary-fire-yellow" min="0" max="2" step="0.02" value="0.86">
+        <span class="slider-val" id="volume-reaction-boundary-fire-yellow-val">0.86</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Thermal warmth</span>
+        <input type="range" id="volume-reaction-boundary-fire-warmth" min="0" max="2" step="0.02" value="0.92">
+        <span class="slider-val" id="volume-reaction-boundary-fire-warmth-val">0.92</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Fire luma</span>
+        <input type="range" id="volume-reaction-boundary-fire-luma" min="0" max="5" step="0.05" value="1.05">
+        <span class="slider-val" id="volume-reaction-boundary-fire-luma-val">1.05</span>
       </div>
       <div class="volume-control-section-title">Atlas capture</div>
       <div class="slider-row">
@@ -11215,6 +11263,15 @@ const REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS = [
   { key: 'reactionBoundaryContrast', id: 'volume-reaction-boundary-contrast', param: 'volume_reaction_boundary_contrast', min: 0.25, max: 5, decimals: 2 },
   { key: 'reactionBoundaryGamma', id: 'volume-reaction-boundary-gamma', param: 'volume_reaction_boundary_gamma', min: 0.35, max: 3, decimals: 2 },
   { key: 'reactionBoundaryOpacity', id: 'volume-reaction-boundary-opacity', param: 'volume_reaction_boundary_opacity', min: 0, max: 3, decimals: 2 },
+  { key: 'reactionBoundaryFireRidge', id: 'volume-reaction-boundary-fire-ridge', param: 'volume_reaction_boundary_fire_ridge', min: 0, max: 2, decimals: 2 },
+  { key: 'reactionBoundaryFireRidgeCut', id: 'volume-reaction-boundary-fire-ridge-cut', param: 'volume_reaction_boundary_fire_ridge_cut', min: 0, max: 0.55, decimals: 3 },
+  { key: 'reactionBoundaryFireTip', id: 'volume-reaction-boundary-fire-tip', param: 'volume_reaction_boundary_fire_tip', min: 0, max: 2, decimals: 2 },
+  { key: 'reactionBoundaryFireErosion', id: 'volume-reaction-boundary-fire-erosion', param: 'volume_reaction_boundary_fire_erosion', min: 0, max: 1, decimals: 2 },
+  { key: 'reactionBoundaryFireCleanBlue', id: 'volume-reaction-boundary-fire-clean-blue', param: 'volume_reaction_boundary_fire_clean_blue', min: 0, max: 2, decimals: 2 },
+  { key: 'reactionBoundaryFireSoot', id: 'volume-reaction-boundary-fire-soot', param: 'volume_reaction_boundary_fire_soot', min: 0, max: 2, decimals: 2 },
+  { key: 'reactionBoundaryFireYellow', id: 'volume-reaction-boundary-fire-yellow', param: 'volume_reaction_boundary_fire_yellow', min: 0, max: 2, decimals: 2 },
+  { key: 'reactionBoundaryFireWarmth', id: 'volume-reaction-boundary-fire-warmth', param: 'volume_reaction_boundary_fire_warmth', min: 0, max: 2, decimals: 2 },
+  { key: 'reactionBoundaryFireLuma', id: 'volume-reaction-boundary-fire-luma', param: 'volume_reaction_boundary_fire_luma', min: 0, max: 5, decimals: 2 },
   { key: 'reactionHeatMin', id: 'volume-reaction-heat-min', param: 'volume_reaction_heat_min', min: 0, max: 0.2, decimals: 3 },
   { key: 'reactionHeatMax', id: 'volume-reaction-heat-max', param: 'volume_reaction_heat_max', min: 0.04, max: 1.2, decimals: 2 },
   { key: 'reactionFuelMin', id: 'volume-reaction-fuel-min', param: 'volume_reaction_fuel_min', min: 0, max: 0.03, decimals: 4 },
@@ -11238,7 +11295,7 @@ const REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS = [
   { key: 'reactionShellContrast', id: 'volume-reaction-shell-contrast', param: 'volume_reaction_shell_contrast', min: 0.25, max: 5, decimals: 2 },
 ];
 
-const REACTION_FRONT_LIVE_VIEW_VALUES = new Set(['off', 'shell', 'thermal', 'reaction', 'front', 'edge', 'core', 'curl', 'divergence', 'boundary']);
+const REACTION_FRONT_LIVE_VIEW_VALUES = new Set(['off', 'shell', 'thermal', 'reaction', 'front', 'edge', 'core', 'curl', 'divergence', 'boundary', 'boundary_fire']);
 
 function normalizeReactionFrontLiveView(value) {
   const mode = String(value || 'off').toLowerCase().replace(/-/g, '_');
@@ -15642,6 +15699,18 @@ function readVolumeControls() {
     displayGamma: parseFloat(document.getElementById('volume-reaction-boundary-gamma').value),
     displayOpacity: parseFloat(document.getElementById('volume-reaction-boundary-opacity').value),
   };
+  const reactionBoundaryFireControls = {
+    identity: 'reaction-boundary-fire-controls-v0',
+    ridgeGain: parseFloat(document.getElementById('volume-reaction-boundary-fire-ridge').value),
+    ridgeCut: parseFloat(document.getElementById('volume-reaction-boundary-fire-ridge-cut').value),
+    tipBreakup: parseFloat(document.getElementById('volume-reaction-boundary-fire-tip').value),
+    topologyErosion: parseFloat(document.getElementById('volume-reaction-boundary-fire-erosion').value),
+    cleanBlue: parseFloat(document.getElementById('volume-reaction-boundary-fire-clean-blue').value),
+    sootYield: parseFloat(document.getElementById('volume-reaction-boundary-fire-soot').value),
+    sootYellowing: parseFloat(document.getElementById('volume-reaction-boundary-fire-yellow').value),
+    thermalWarmth: parseFloat(document.getElementById('volume-reaction-boundary-fire-warmth').value),
+    fireLuma: parseFloat(document.getElementById('volume-reaction-boundary-fire-luma').value),
+  };
   return backOffVolumeLegacyPyroControls(applyVolumeRuntimeQualityLadder({
     volumeScene,
     density: parseFloat(document.getElementById('volume-density').value),
@@ -15693,6 +15762,18 @@ function readVolumeControls() {
       displayGamma: reactionBoundaryControls.displayGamma,
       displayOpacity: reactionBoundaryControls.displayOpacity,
     },
+    reactionBoundaryFireControls: {
+      identity: reactionBoundaryFireControls.identity,
+      ridgeGain: reactionBoundaryFireControls.ridgeGain,
+      ridgeCut: reactionBoundaryFireControls.ridgeCut,
+      tipBreakup: reactionBoundaryFireControls.tipBreakup,
+      topologyErosion: reactionBoundaryFireControls.topologyErosion,
+      cleanBlue: reactionBoundaryFireControls.cleanBlue,
+      sootYield: reactionBoundaryFireControls.sootYield,
+      sootYellowing: reactionBoundaryFireControls.sootYellowing,
+      thermalWarmth: reactionBoundaryFireControls.thermalWarmth,
+      fireLuma: reactionBoundaryFireControls.fireLuma,
+    },
     reactionBoundaryGradient: reactionBoundaryControls.gradientGain,
     reactionBoundarySupportThermal: reactionBoundaryControls.supportThermal,
     reactionBoundarySupportReaction: reactionBoundaryControls.supportReaction,
@@ -15707,6 +15788,15 @@ function readVolumeControls() {
     reactionBoundaryContrast: reactionBoundaryControls.displayContrast,
     reactionBoundaryGamma: reactionBoundaryControls.displayGamma,
     reactionBoundaryOpacity: reactionBoundaryControls.displayOpacity,
+    reactionBoundaryFireRidge: reactionBoundaryFireControls.ridgeGain,
+    reactionBoundaryFireRidgeCut: reactionBoundaryFireControls.ridgeCut,
+    reactionBoundaryFireTip: reactionBoundaryFireControls.tipBreakup,
+    reactionBoundaryFireErosion: reactionBoundaryFireControls.topologyErosion,
+    reactionBoundaryFireCleanBlue: reactionBoundaryFireControls.cleanBlue,
+    reactionBoundaryFireSoot: reactionBoundaryFireControls.sootYield,
+    reactionBoundaryFireYellow: reactionBoundaryFireControls.sootYellowing,
+    reactionBoundaryFireWarmth: reactionBoundaryFireControls.thermalWarmth,
+    reactionBoundaryFireLuma: reactionBoundaryFireControls.fireLuma,
     fireRenderMode: reactionLiveView !== 'off' ? 'inspect' : document.getElementById('volume-fire-render-mode').value,
     shellInspectMode: reactionLiveView !== 'off' ? reactionLiveView : document.getElementById('volume-shell-inspect-mode').value,
     shellAmount: parseFloat(document.getElementById('volume-shell-amount').value),
