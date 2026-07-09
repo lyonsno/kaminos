@@ -2078,6 +2078,20 @@ assert.match(fullGridPerChannelProbe, /refinementLossMode/, 'full-grid per-chann
 assert.match(fullGridPerChannelProbe, /inSupportImprovementVsScalarHead/, 'full-grid per-channel refinement reports in-support improvement versus the scalar head');
 assert.match(fullGridPerChannelProbe, /failurePhase/, 'full-grid per-channel probe writes failure-phase reports for corrupt sidecars or training failures');
 
+const rgbCarrierInputComplementPath = join(root, 'volume-rgb-carrier-input-complement.py');
+assert.ok(existsSync(rgbCarrierInputComplementPath), 'volume RGB carrier input complement packer exists');
+const rgbCarrierInputComplement = existsSync(rgbCarrierInputComplementPath) ? readFileSync(rgbCarrierInputComplementPath, 'utf8') : '';
+assert.match(rgbCarrierInputComplement, /kaminos\.volume\.rgb-carrier-input-complement\.v0/, 'RGB carrier input complement writes a stable manifest schema');
+assert.match(rgbCarrierInputComplement, /rgb-carrier-input-complement-plane-pack-v0/, 'RGB carrier input complement names a stable plane-pack identity');
+assert.match(rgbCarrierInputComplement, /supportCuePack/, 'RGB carrier input complement emits a support cue pack for trust/background cleanup');
+assert.match(rgbCarrierInputComplement, /fireDetailResidualPack/, 'RGB carrier input complement emits a fire/detail residual pack for compact core and breakup recovery');
+assert.match(rgbCarrierInputComplement, /geometryContextPack/, 'RGB carrier input complement emits a geometry/context pack for plume/source-relative conditioning');
+assert.match(rgbCarrierInputComplement, /expectedVisualFailureAttacked/, 'RGB carrier input complement records which decoder failure each candidate attacks');
+assert.match(rgbCarrierInputComplement, /visualFalsificationCriteria/, 'RGB carrier input complement records visual falsification criteria for each candidate');
+assert.match(rgbCarrierInputComplement, /decoderLoadShape/, 'RGB carrier input complement records how decoder lanes should load each plane pack');
+assert.match(rgbCarrierInputComplement, /sourcePairAuthority/, 'RGB carrier input complement preserves sequential/frame-lock caveats from source datasets');
+assert.match(rgbCarrierInputComplement, /failurePhase/, 'RGB carrier input complement writes failure-phase reports for missing or corrupt sources');
+
 const fullGridChannelGraftPath = join(root, 'volume-full-grid-field-channel-graft.py');
 assert.ok(existsSync(fullGridChannelGraftPath), 'volume full-grid field channel graft diagnostic exists');
 const fullGridChannelGraft = existsSync(fullGridChannelGraftPath) ? readFileSync(fullGridChannelGraftPath, 'utf8') : '';
