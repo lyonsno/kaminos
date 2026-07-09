@@ -27,6 +27,7 @@ TARGET_IDENTITY = "rgb-derived-intermediate-fire-detail-maps-v0"
 BASELINE_MEAN_ROLE = "baselineMeanMaps"
 BASELINE_LINEAR_ROLE = "baselineCarrierLinearMaps"
 DECODER_ROLE = "webgpuTiny3x3IntermediateDecoder"
+ARCHITECTURE_MATRIX_IDENTITY = "architectureMatrix"
 OUTPUT_ROLES = [
     "hot-core",
     "fire-body",
@@ -34,6 +35,12 @@ OUTPUT_ROLES = [
     "edge-breakup",
     "radiance-gain",
     "confidence-alpha",
+]
+ARCHITECTURE_MATRIX_DEFAULT = [
+    {"variantId": "linear-k3", "family": "linear-logistic", "kernelSize": 3, "hiddenChannels": 0},
+    {"variantId": "linear-k5", "family": "linear-logistic", "kernelSize": 5, "hiddenChannels": 0},
+    {"variantId": "elm-k3-h16", "family": "elm-relu-logistic", "kernelSize": 3, "hiddenChannels": 16},
+    {"variantId": "elm-k5-h16", "family": "elm-relu-logistic", "kernelSize": 5, "hiddenChannels": 16},
 ]
 
 
@@ -69,6 +76,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--ridge", type=float, default=1.0e-3, help="Ridge regularization.")
     parser.add_argument("--seed", type=int, default=730709, help="Deterministic pixel split seed.")
     parser.add_argument("--logit-epsilon", type=float, default=1.0e-4, help="Target clamp before logit solve.")
+    parser.add_argument("--architecture-matrix", action="store_true", help="Run the default support-width/depth architectureMatrix.")
     return parser.parse_args()
 
 
@@ -251,30 +259,41 @@ def sigmoid(values: np.ndarray) -> np.ndarray:
     return 1.0 / (1.0 + np.exp(-np.clip(values, -60.0, 60.0)))
 
 
-def sampled_conv_features(planes: np.ndarray, indices: np.ndarray, h: int, w: int) -> np.ndarray:
+def validate_kernel_size(kernel_size: int) -> int:
+    kernel_size = int(kernel_size)
+    if kernel_size < 1 or kernel_size % 2 != 1:
+        raise ExportFailure("training", "kernelSize must be a positive odd integer.", {"kernelSize": kernel_size})
+    return kernel_size
+
+
+def sampled_conv_features(planes: np.ndarray, indices: np.ndarray, h: int, w: int, kernel_size: int = 3) -> np.ndarray:
+    kernel_size = validate_kernel_size(kernel_size)
+    radius = kernel_size // 2
     channels = planes.shape[0]
-    padded = np.pad(planes, ((0, 0), (1, 1), (1, 1)), mode="reflect")
+    padded = np.pad(planes, ((0, 0), (radius, radius), (radius, radius)), mode="reflect")
     ys = indices // w
     xs = indices % w
-    features = np.empty((indices.size, channels * 9), dtype=np.float32)
+    features = np.empty((indices.size, channels * kernel_size * kernel_size), dtype=np.float32)
     offset = 0
     for channel in range(channels):
-      for ky in range(3):
-        for kx in range(3):
-          features[:, offset] = padded[channel, ys + ky, xs + kx]
-          offset += 1
+        for ky in range(kernel_size):
+            for kx in range(kernel_size):
+                features[:, offset] = padded[channel, ys + ky, xs + kx]
+                offset += 1
     return features
 
 
-def all_conv_features(planes: np.ndarray) -> np.ndarray:
+def all_conv_features(planes: np.ndarray, kernel_size: int = 3) -> np.ndarray:
+    kernel_size = validate_kernel_size(kernel_size)
+    radius = kernel_size // 2
     channels, h, w = planes.shape
-    padded = np.pad(planes, ((0, 0), (1, 1), (1, 1)), mode="reflect")
+    padded = np.pad(planes, ((0, 0), (radius, radius), (radius, radius)), mode="reflect")
     chunks = []
     for channel in range(channels):
-        for ky in range(3):
-            for kx in range(3):
+        for ky in range(kernel_size):
+            for kx in range(kernel_size):
                 chunks.append(padded[channel, ky:ky + h, kx:kx + w])
-    return np.stack(chunks, axis=2).reshape(-1, channels * 9).astype(np.float32)
+    return np.stack(chunks, axis=2).reshape(-1, channels * kernel_size * kernel_size).astype(np.float32)
 
 
 def solve_ridge(features: np.ndarray, targets: np.ndarray, ridge: float) -> tuple[np.ndarray, np.ndarray]:
@@ -295,11 +314,118 @@ def apply_decoder_features(features: np.ndarray, weights: np.ndarray, bias: np.n
     return out
 
 
-def cpu_mirror_apply(planes: np.ndarray, weights: np.ndarray, bias: np.ndarray) -> np.ndarray:
+def cpu_mirror_apply(planes: np.ndarray, weights: np.ndarray, bias: np.ndarray, kernel_size: int = 3) -> np.ndarray:
     channels, h, w = planes.shape
-    features = all_conv_features(planes)
-    flat = apply_decoder_features(features, weights.reshape(weights.shape[0], channels * 9), bias)
+    features = all_conv_features(planes, kernel_size)
+    flat = apply_decoder_features(features, weights.reshape(weights.shape[0], channels * kernel_size * kernel_size), bias)
     return flat.T.reshape(weights.shape[0], h, w).astype(np.float32)
+
+
+def relu(values: np.ndarray) -> np.ndarray:
+    return np.maximum(values, 0.0)
+
+
+def variant_seed(seed: int, variant_id: str) -> int:
+    return int(seed) + sum((index + 1) * ord(char) for index, char in enumerate(variant_id))
+
+
+def hidden_projection(feature_count: int, hidden_channels: int, seed: int, variant_id: str) -> tuple[np.ndarray, np.ndarray]:
+    rng = np.random.default_rng(variant_seed(seed, variant_id))
+    scale = 1.0 / np.sqrt(max(feature_count, 1))
+    weights = rng.normal(0.0, scale, size=(feature_count, hidden_channels)).astype(np.float32)
+    bias = rng.normal(0.0, 0.05, size=(hidden_channels,)).astype(np.float32)
+    return weights, bias
+
+
+def apply_hidden_features(features: np.ndarray, weights: np.ndarray, bias: np.ndarray, chunk: int = 250000) -> np.ndarray:
+    out = np.empty((features.shape[0], weights.shape[1]), dtype=np.float32)
+    for start in range(0, features.shape[0], chunk):
+        stop = min(start + chunk, features.shape[0])
+        out[start:stop] = relu(features[start:stop].astype(np.float64) @ weights.astype(np.float64) + bias)
+    return out
+
+
+def train_linear_variant(
+    planes: np.ndarray,
+    maps: np.ndarray,
+    train_indices: np.ndarray,
+    kernel_size: int,
+    epsilon: float,
+    ridge: float,
+) -> dict[str, Any]:
+    channels, h, w = planes.shape
+    train_features = sampled_conv_features(planes, train_indices, h, w, kernel_size)
+    train_targets = logit(maps.reshape(maps.shape[0], -1).T[train_indices], epsilon)
+    flat_weights, bias = solve_ridge(train_features, train_targets, ridge)
+    weights = flat_weights.reshape(len(OUTPUT_ROLES), channels, kernel_size, kernel_size)
+    predicted = cpu_mirror_apply(planes, weights, bias, kernel_size)
+    return {
+        "predicted": predicted,
+        "weights": weights,
+        "bias": bias,
+        "featureCount": int(train_features.shape[1]),
+        "trainableParameterCount": int(weights.size + bias.size),
+        "routeTensorCompatible": kernel_size == 3,
+    }
+
+
+def train_elm_variant(
+    planes: np.ndarray,
+    maps: np.ndarray,
+    train_indices: np.ndarray,
+    kernel_size: int,
+    hidden_channels: int,
+    epsilon: float,
+    ridge: float,
+    seed: int,
+    variant_id: str,
+) -> dict[str, Any]:
+    _channels, h, w = planes.shape
+    train_features = sampled_conv_features(planes, train_indices, h, w, kernel_size)
+    hidden_weights, hidden_bias = hidden_projection(train_features.shape[1], hidden_channels, seed, variant_id)
+    train_hidden = apply_hidden_features(train_features, hidden_weights, hidden_bias)
+    train_targets = logit(maps.reshape(maps.shape[0], -1).T[train_indices], epsilon)
+    output_weights, output_bias = solve_ridge(train_hidden, train_targets, ridge)
+    all_features = all_conv_features(planes, kernel_size)
+    all_hidden = apply_hidden_features(all_features, hidden_weights, hidden_bias)
+    flat = apply_decoder_features(all_hidden, output_weights, output_bias)
+    predicted = flat.T.reshape(maps.shape).astype(np.float32)
+    return {
+        "predicted": predicted,
+        "hiddenWeights": hidden_weights,
+        "hiddenBias": hidden_bias,
+        "outputWeights": output_weights,
+        "outputBias": output_bias,
+        "featureCount": int(train_features.shape[1]),
+        "trainableParameterCount": int(hidden_weights.size + hidden_bias.size + output_weights.size + output_bias.size),
+        "routeTensorCompatible": False,
+    }
+
+
+def train_architecture_variant(
+    spec: dict[str, Any],
+    planes: np.ndarray,
+    maps: np.ndarray,
+    train_indices: np.ndarray,
+    test_indices: np.ndarray,
+    epsilon: float,
+    ridge: float,
+    seed: int,
+) -> dict[str, Any]:
+    variant_id = spec["variantId"]
+    kernel_size = int(spec["kernelSize"])
+    hidden_channels = int(spec.get("hiddenChannels", 0))
+    if spec["family"] == "linear-logistic":
+        result = train_linear_variant(planes, maps, train_indices, kernel_size, epsilon, ridge)
+    elif spec["family"] == "elm-relu-logistic":
+        result = train_elm_variant(planes, maps, train_indices, kernel_size, hidden_channels, epsilon, ridge, seed, variant_id)
+    else:
+        raise ExportFailure("training", "Unsupported architecture matrix family.", {"variantId": variant_id, "family": spec["family"]})
+    return {
+        **spec,
+        **result,
+        "metrics": metrics_for(result["predicted"], maps, test_indices),
+    }
 
 
 def solve_linear_baseline(planes: np.ndarray, maps: np.ndarray, train_indices: np.ndarray, epsilon: float, ridge: float) -> np.ndarray:
@@ -469,6 +595,60 @@ def rgb_contact_sheet(frames: list[tuple[str, str, np.ndarray]], out_path: Path)
     }
 
 
+def matrix_proxy_rgb_contact_sheet(
+    raw_resized: np.ndarray,
+    target_rgb: np.ndarray,
+    target_proxy: np.ndarray,
+    variants: list[dict[str, Any]],
+    out_path: Path,
+) -> dict[str, Any]:
+    frames = [
+        ("carrierInput", "CARRIER", raw_resized),
+        ("rgbTarget", "TARGET", target_rgb),
+        ("targetMapProxyRgb", "MAPTGT", target_proxy),
+    ]
+    for variant in variants:
+        frames.append((variant["variantId"], variant["variantId"].upper()[:10], proxy_rgb_from_maps(variant["predicted"])))
+    sheet = rgb_contact_sheet(frames, out_path)
+    sheet["identity"] = "matrixProxyRgbContactSheet"
+    sheet["architectureMatrix"] = [variant["variantId"] for variant in variants]
+    return sheet
+
+
+def matrix_map_contact_sheet(target: np.ndarray, variants: list[dict[str, Any]], out_path: Path) -> dict[str, Any]:
+    selected_roles = ["hot-core", "fire-body", "edge-breakup", "radiance-gain"]
+    selected_indices = [OUTPUT_ROLES.index(role) for role in selected_roles]
+    h, w = target.shape[1:]
+    label_h = 24
+    columns = [("target", "TARGET", target)]
+    columns.extend((variant["variantId"], variant["variantId"].upper()[:10], variant["predicted"]) for variant in variants)
+    sheet = np.zeros((len(selected_roles) * (h + label_h), len(columns) * w, 4), dtype=np.uint8)
+    sheet[:, :, 3] = 255
+    labels = []
+    for row_index, (role, role_index) in enumerate(zip(selected_roles, selected_indices)):
+        y0 = row_index * (h + label_h)
+        for col_index, (column_role, display, maps) in enumerate(columns):
+            x0 = col_index * w
+            sheet[y0 + label_h:y0 + label_h + h, x0:x0 + w, :] = H.rgba_from_gray(maps[role_index])
+            short = f"{display}-{role[:4].upper()}"
+            label = H.draw_label(sheet, short, x0 + 8, y0 + 6, 2)
+            label["role"] = f"{column_role}:{role}"
+            label["displayLabel"] = short
+            labels.append(label)
+    H.write_png_rgba(out_path, sheet)
+    return {
+        "identity": "matrixMapContactSheet",
+        "path": str(out_path),
+        "sha256": H.sha256_file(out_path),
+        "rowOrder": selected_roles,
+        "columnOrder": [column[0] for column in columns],
+        "visibleRasterLabels": {
+            "identity": "visible-raster-role-labels-v0",
+            "labels": labels,
+        },
+    }
+
+
 def write_failure(out_path: Path | None, out_dir: Path | None, phase: str, message: str, evidence: dict[str, Any]) -> None:
     target = out_path or ((out_dir / "manifest.json") if out_dir is not None else None)
     if target is None:
@@ -505,19 +685,44 @@ def main() -> int:
         planes, carrier_names = carrier_planes(raw_resized)
         maps = target_maps(target_rgb, raw_resized)
         train_indices, test_indices = split_indices(h * w, args.train_samples, args.test_samples, args.seed)
-        train_features = sampled_conv_features(planes, train_indices, h, w)
-        train_targets = logit(maps.reshape(maps.shape[0], -1).T[train_indices], float(args.logit_epsilon))
-        flat_weights, bias = solve_ridge(train_features, train_targets, float(args.ridge))
-        weights = flat_weights.reshape(len(OUTPUT_ROLES), planes.shape[0], 3, 3)
-        predicted = cpu_mirror_apply(planes, weights, bias)
+        matrix_specs = ARCHITECTURE_MATRIX_DEFAULT if args.architecture_matrix else [ARCHITECTURE_MATRIX_DEFAULT[0]]
+        variants = [
+            train_architecture_variant(
+                spec,
+                planes,
+                maps,
+                train_indices,
+                test_indices,
+                float(args.logit_epsilon),
+                float(args.ridge),
+                int(args.seed),
+            )
+            for spec in matrix_specs
+        ]
+        baseline_variant = next((variant for variant in variants if variant["variantId"] == "linear-k3"), variants[0])
+        weights = baseline_variant["weights"]
+        bias = baseline_variant["bias"]
+        predicted = baseline_variant["predicted"]
         baseline_mean = mean_baseline(maps, train_indices)
         baseline_linear = solve_linear_baseline(planes, maps, train_indices, float(args.logit_epsilon), float(args.ridge))
 
         phase = "metrics"
+        variant_metrics = {variant["variantId"]: variant["metrics"] for variant in variants}
+        best_metric_variant = min(
+            variants,
+            key=lambda variant: variant["metrics"]["heldOutPixelMetrics"]["rmse"],
+        )
         metrics = {
             BASELINE_MEAN_ROLE: metrics_for(baseline_mean, maps, test_indices),
             BASELINE_LINEAR_ROLE: metrics_for(baseline_linear, maps, test_indices),
             DECODER_ROLE: metrics_for(predicted, maps, test_indices),
+            "variantMetrics": variant_metrics,
+            "bestMetricVariant": {
+                "variantId": best_metric_variant["variantId"],
+                "metric": "heldOutPixelMetrics.rmse",
+                "value": best_metric_variant["metrics"]["heldOutPixelMetrics"]["rmse"],
+                "visualTruthWarning": "Metric-selected best variant is not visual truth; inspect matrix contact sheets.",
+            },
         }
         metrics["improvementSummary"] = improvement_summary(metrics)
 
@@ -552,6 +757,19 @@ def main() -> int:
                 ("predictedMapProxyRgb", "MAPPRED", proxy_predicted),
             ], out_dir / "pyro-rgb-intermediate-decoder-proxy-rgb-contact.png"),
         }
+        if args.architecture_matrix:
+            contact_sheets["matrixProxyRgbContactSheet"] = matrix_proxy_rgb_contact_sheet(
+                raw_resized,
+                target_rgb,
+                proxy_target,
+                variants,
+                out_dir / "pyro-rgb-intermediate-decoder-matrix-proxy-rgb-contact.png",
+            )
+            contact_sheets["matrixMapContactSheet"] = matrix_map_contact_sheet(
+                maps,
+                variants,
+                out_dir / "pyro-rgb-intermediate-decoder-matrix-map-contact.png",
+            )
 
         phase = "manifest-write"
         manifest = {
@@ -573,6 +791,25 @@ def main() -> int:
             "featureIdentity": FEATURE_IDENTITY,
             "targetIdentity": TARGET_IDENTITY,
             "carrierPlaneNames": carrier_names,
+            "architectureMatrix": {
+                "identity": ARCHITECTURE_MATRIX_IDENTITY,
+                "enabled": bool(args.architecture_matrix),
+                "variants": [
+                    {
+                        "variantId": variant["variantId"],
+                        "family": variant["family"],
+                        "kernelSize": int(variant["kernelSize"]),
+                        "hiddenChannels": int(variant.get("hiddenChannels", 0)),
+                        "featureCount": int(variant["featureCount"]),
+                        "trainableParameterCount": int(variant["trainableParameterCount"]),
+                        "routeTensorCompatible": bool(variant["routeTensorCompatible"]),
+                    }
+                    for variant in variants
+                ],
+                "baselineExportVariant": baseline_variant["variantId"],
+                "bestMetricVariant": metrics["bestMetricVariant"],
+                "candidateBoundary": "Hidden variants are CPU-mirror architecture candidates until a matching WebGPU phase-program route profile lands.",
+            },
             "roles": {
                 "input": LOW_CARRIER_INPUT_ROLE,
                 "target": RGB_TARGET_ROLE,

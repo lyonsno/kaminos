@@ -2035,6 +2035,17 @@ assert.match(pyroRgbIntermediateDecoderExport, /baselineCarrierLinearMaps/, 'Pyr
 assert.match(pyroRgbIntermediateDecoderExport, /visibleRasterLabels/, 'Pyro RGB intermediate decoder exporter burns visible labels into map contact sheets');
 assert.match(pyroRgbIntermediateDecoderExport, /sourceChecksums/, 'Pyro RGB intermediate decoder exporter records source and tensor checksums');
 assert.match(pyroRgbIntermediateDecoderExport, /failurePhase/, 'Pyro RGB intermediate decoder exporter writes failure-phase reports for corrupt manifests or images');
+assert.match(pyroRgbIntermediateDecoderExport, /architectureMatrix/, 'Pyro RGB intermediate decoder exporter can run a comparable architecture matrix');
+assert.match(pyroRgbIntermediateDecoderExport, /linear-k3/, 'Pyro RGB intermediate decoder matrix includes the current linear 3x3 baseline');
+assert.match(pyroRgbIntermediateDecoderExport, /linear-k5/, 'Pyro RGB intermediate decoder matrix includes a wider linear 5x5 variant');
+assert.match(pyroRgbIntermediateDecoderExport, /elm-k3-h16/, 'Pyro RGB intermediate decoder matrix includes a shallow nonlinear 3x3 hidden variant');
+assert.match(pyroRgbIntermediateDecoderExport, /elm-k5-h16/, 'Pyro RGB intermediate decoder matrix includes a shallow nonlinear 5x5 hidden variant');
+assert.match(pyroRgbIntermediateDecoderExport, /kernelSize/, 'Pyro RGB intermediate decoder matrix records per-variant kernel size');
+assert.match(pyroRgbIntermediateDecoderExport, /hiddenChannels/, 'Pyro RGB intermediate decoder matrix records per-variant hidden-channel count');
+assert.match(pyroRgbIntermediateDecoderExport, /variantMetrics/, 'Pyro RGB intermediate decoder matrix reports comparable held-out metrics per variant');
+assert.match(pyroRgbIntermediateDecoderExport, /bestMetricVariant/, 'Pyro RGB intermediate decoder matrix records the metric-selected best variant without making it visual truth');
+assert.match(pyroRgbIntermediateDecoderExport, /matrixProxyRgbContactSheet/, 'Pyro RGB intermediate decoder matrix writes a visible proxy RGB comparison sheet');
+assert.match(pyroRgbIntermediateDecoderExport, /matrixMapContactSheet/, 'Pyro RGB intermediate decoder matrix writes a visible map comparison sheet');
 
 const fieldPairDatasetPath = join(root, 'volume-field-pair-dataset.mjs');
 assert.ok(existsSync(fieldPairDatasetPath), 'volume field-space pair dataset extractor exists');
