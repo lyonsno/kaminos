@@ -1,0 +1,608 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kaminos Dual Oracle Receiver Workbench</title>
+  <link rel="icon" href="data:,">
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #090b0c;
+      color: #e8edf0;
+    }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      overflow: hidden;
+      background: #080a0b;
+    }
+    #shell {
+      display: grid;
+      grid-template-columns: minmax(360px, 1fr) minmax(300px, 420px);
+      height: 100vh;
+    }
+    #stage {
+      display: grid;
+      grid-template-rows: minmax(0, 1fr) 220px;
+      min-width: 0;
+      border-right: 1px solid #243036;
+    }
+    .viewport {
+      position: relative;
+      min-width: 0;
+      min-height: 0;
+      background: #000;
+    }
+    #low-view canvas,
+    #high-view canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+    #high-view {
+      border-top: 1px solid #243036;
+    }
+    .label {
+      position: absolute;
+      top: 10px;
+      left: 12px;
+      z-index: 4;
+      padding: 5px 7px;
+      border: 1px solid rgba(210, 232, 239, 0.18);
+      background: rgba(4, 8, 10, 0.70);
+      color: #dbe9ed;
+      font-size: 12px;
+      line-height: 1.35;
+      max-width: calc(100% - 24px);
+      pointer-events: none;
+    }
+    #controls {
+      overflow: auto;
+      padding: 14px 14px 18px;
+      background: #0d1113;
+    }
+    h1 {
+      margin: 0 0 12px;
+      font-size: 15px;
+      font-weight: 650;
+      letter-spacing: 0;
+    }
+    .row {
+      display: grid;
+      grid-template-columns: 112px 1fr 56px;
+      gap: 8px;
+      align-items: center;
+      min-height: 32px;
+      margin: 7px 0;
+      font-size: 12px;
+    }
+    .row label {
+      color: #a8b7bd;
+    }
+    select,
+    input,
+    button {
+      font: inherit;
+      color: #edf6f8;
+      background: #141b1f;
+      border: 1px solid #314047;
+      border-radius: 4px;
+      min-height: 28px;
+    }
+    input[type="range"] {
+      width: 100%;
+      accent-color: #6ee6ff;
+    }
+    button {
+      cursor: pointer;
+      padding: 0 10px;
+    }
+    button.primary {
+      background: #173340;
+      border-color: #4a8291;
+    }
+    #status {
+      margin-top: 12px;
+      padding: 10px;
+      background: #070a0c;
+      border: 1px solid #27343a;
+      border-radius: 4px;
+      white-space: pre-wrap;
+      font-family: "SF Mono", Menlo, Consolas, monospace;
+      font-size: 11px;
+      line-height: 1.45;
+      color: #b8c7cc;
+    }
+  </style>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "./lib/three.webgpu.js",
+      "three/webgpu": "./lib/three.webgpu.js",
+      "three/tsl": "./lib/three.tsl.js"
+    }
+  }
+  </script>
+</head>
+<body>
+  <div id="shell">
+    <main id="stage">
+      <div class="viewport" id="low-view">
+        <div class="label" id="low-label"></div>
+      </div>
+      <div class="viewport" id="high-view">
+        <div class="label" id="high-label"></div>
+      </div>
+    </main>
+    <aside id="controls">
+      <h1>Dual Live Oracle Receiver</h1>
+      <div class="row">
+        <label for="low-grid">Low grid</label>
+        <select id="low-grid"></select>
+        <span></span>
+      </div>
+      <div class="row">
+        <label for="high-grid">High grid</label>
+        <select id="high-grid"></select>
+        <span></span>
+      </div>
+      <div class="row">
+        <label for="source-mode">Cue source</label>
+        <select id="source-mode"></select>
+        <span></span>
+      </div>
+      <div class="row">
+        <label for="cadence">Cadence</label>
+        <select id="cadence">
+          <option value="4">4 frames</option>
+          <option value="8" selected>8 frames</option>
+          <option value="16">16 frames</option>
+          <option value="32">32 frames</option>
+        </select>
+        <span></span>
+      </div>
+      <div class="row">
+        <label for="vorticity">Vorticity</label>
+        <input id="vorticity" type="range" min="0" max="1.2" step="0.01" value="0.20">
+        <span id="vorticity-value">0.20</span>
+      </div>
+      <div class="row">
+        <label for="curl-noise">Curl noise</label>
+        <input id="curl-noise" type="range" min="0" max="1.2" step="0.01" value="0.00">
+        <span id="curl-noise-value">0.00</span>
+      </div>
+      <div class="row">
+        <label for="material">Material</label>
+        <input id="material" type="range" min="0" max="1.2" step="0.01" value="0.00">
+        <span id="material-value">0.00</span>
+      </div>
+      <div class="row">
+        <label for="cue-floor">Cue floor</label>
+        <input id="cue-floor" type="range" min="0" max="0.8" step="0.01" value="0.10">
+        <span id="cue-floor-value">0.10</span>
+      </div>
+      <div class="row">
+        <label for="cue-gamma">Cue gamma</label>
+        <input id="cue-gamma" type="range" min="0.4" max="3.0" step="0.05" value="1.25">
+        <span id="cue-gamma-value">1.25</span>
+      </div>
+      <div class="row">
+        <label></label>
+        <button class="primary" id="restart">Restart sims</button>
+        <span></span>
+      </div>
+      <div id="status">Starting...</div>
+    </aside>
+  </div>
+  <script type="module">
+    import * as THREE from 'three';
+    import { createKaminosVolumePrototype } from './volume-core.js?v=dual-oracle-workbench-0708';
+
+    const routeIdentity = 'dual-live-oracle-receiver-workbench-v0';
+    const lowGridOptions = [64, 96, 128];
+    const highGridOptions = [128, 160, 192];
+    const sourceModes = ['none', 'lowSelf', 'highProjected'];
+    const authorityBySourceMode = {
+      none: 'procedural-receiver-activity-proxy-no-truth-v0',
+      lowSelf: 'live-low-self-current-field-scalar-activity-cue-v0',
+      highProjected: 'live-high-projected-current-field-scalar-activity-cue-v0',
+    };
+    const params = new URLSearchParams(window.location.search);
+    const controlsById = Object.fromEntries([
+      'low-grid',
+      'high-grid',
+      'source-mode',
+      'cadence',
+      'vorticity',
+      'curl-noise',
+      'material',
+      'cue-floor',
+      'cue-gamma',
+    ].map(id => [id, document.getElementById(id)]));
+    const lowLabel = document.getElementById('low-label');
+    const highLabel = document.getElementById('high-label');
+    const statusNode = document.getElementById('status');
+
+    function fillOptions(select, values, selected) {
+      select.innerHTML = '';
+      for (const value of values) {
+        const option = document.createElement('option');
+        option.value = String(value);
+        option.textContent = String(value);
+        if (String(value) === String(selected)) option.selected = true;
+        select.appendChild(option);
+      }
+    }
+
+    fillOptions(controlsById['low-grid'], lowGridOptions, params.get('low_grid') || 96);
+    fillOptions(controlsById['high-grid'], highGridOptions, params.get('high_grid') || 160);
+    fillOptions(controlsById['source-mode'], sourceModes, params.get('source_mode') || 'highProjected');
+    controlsById.cadence.value = params.get('cadence') || '8';
+    controlsById.vorticity.value = params.get('vorticity') || '0.20';
+    controlsById['curl-noise'].value = params.get('curl_noise') || '0.00';
+    controlsById.material.value = params.get('material') || '0.00';
+    controlsById['cue-floor'].value = params.get('cue_floor') || '0.10';
+    controlsById['cue-gamma'].value = params.get('cue_gamma') || '1.25';
+
+    function numericControl(id, fallback = 0) {
+      const value = Number(controlsById[id]?.value);
+      return Number.isFinite(value) ? value : fallback;
+    }
+
+    function selectControl(id, fallback) {
+      return controlsById[id]?.value || fallback;
+    }
+
+    function baseVolumeControls({ resolution, receiver = false, hiddenSource = false } = {}) {
+      return {
+        volumeScene: 'tall_plume',
+        resolution,
+        majorantGrid: resolution >= 128 ? 48 : 32,
+        renderScale: hiddenSource ? 0.45 : 0.72,
+        raySteps: hiddenSource ? 56 : 96,
+        adaptiveRays: 0.72,
+        occupancySkip: 0.42,
+        majorantSkip: 0.72,
+        majorantSmooth: 0.86,
+        majorantGuard: 0.76,
+        temporalAccum: 0.18,
+        temporalJitter: 0.75,
+        historyClamp: 0.68,
+        density: 6.0,
+        fire: 0.0,
+        radiance: 3.0,
+        absorption: 2.0,
+        glow: 2.5,
+        smoke: 0.10,
+        curl: 1.15,
+        microdetail: 2.50,
+        interfaceShred: 4.50,
+        fireLicks: 5.0,
+        projection: 1.50,
+        speed: 3.95,
+        inputRadius: 0.19,
+        flowRate: 0.85,
+        fireScale: 0.35,
+        detailScale: 0.45,
+        plumeHeight: 1.00,
+        windStrength: 0,
+        windAngle: -65,
+        windHeight: 0.20,
+        pressureMode: 'global-p3',
+        pressureStrategy: 'global',
+        pressureIterations: 3,
+        pressureTierOverlay: 0,
+        runtimeQualityRequested: 'live_high',
+        runtimeQualityEffective: 'live_high',
+        runtimeQualityReason: 'dual-live-oracle-workbench',
+        gpuPressure: 0,
+        lookFreeze: 0,
+        pyroCompareMode: 'pyro',
+        pyroDynamicDetail: 1,
+        pyroMaterialGain: 0.20,
+        pyroInterfaceFocus: 0.00,
+        pyroEdgeBite: 0.00,
+        pyroBiteBorder: 0.00,
+        pyroBiteTeeth: 0.00,
+        pyroBiteWake: 0.00,
+        pyroBiteHeight: 0.00,
+        pyroBiteFireLock: 1.00,
+        pyroBiteCore: 0.00,
+        pyroBiteCoreCut: 1.00,
+        pyroBiteRim: 0.00,
+        pyroBiteRimCut: 1.00,
+        pyroBiteAfter: 0.00,
+        pyroBiteAfterCut: 1.00,
+        pyroFireMode: 'pyro-owned',
+        pyroFlamePaint: 0.00,
+        pyroStockMix: 1.00,
+        pyroFlameLuma: 0.95,
+        pyroFlameCoreColor: '#ffae00',
+        pyroFlameEdgeColor: '#ff4d00',
+        pyroBiteHeat: 0.00,
+        pyroBiteChroma: 0.00,
+        pyroBiteLuma: 0.00,
+        pyroBiteEmberColor: '#ff6600',
+        pyroBiteHotColor: '#ff4000',
+        pyroSmokeFold: 0.00,
+        pyroFoldBorder: 0.00,
+        pyroFoldWake: 0.00,
+        pyroWakeLift: 0.00,
+        pyroWakeWarmth: 0.00,
+        pyroWakeLuma: 0.00,
+        pyroWakeShadowColor: '#384c50',
+        pyroWakeEmberColor: '#b06a2a',
+        pyroFlowBite: 3.0,
+        pyroFlowBorder: 1.00,
+        pyroFlowTeeth: 0.00,
+        pyroFlowRise: 1.00,
+        pyroFlowFireLock: 1.00,
+        pyroFlowLuma: 3.00,
+        pyroFlowRadiance: 4.0,
+        pyroFlowSpikes: 1.0,
+        pyroFlowCoolColor: '#ff6400',
+        pyroFlowHotColor: '#ff320f',
+        pyroRadiance: 0.00,
+        pyroRadianceGate: 0.15,
+        pyroRadianceSpill: 0.00,
+        pyroRadianceWarmth: 0.00,
+        pyroRadianceHue: 0.00,
+        pyroRadianceChroma: 1.00,
+        pyroRadianceLuma: 3.00,
+        pyroRadianceCoolColor: '#eb0000',
+        pyroRadianceWarmColor: '#ffcd75',
+        pyroRadianceSource: 'fire',
+        pyroRadianceHeight: 0.00,
+        pyroRadianceBorder: 0.00,
+        pyroRadianceTeeth: 0.00,
+        pyroRadianceRise: 0.00,
+        pyroRadianceFireLock: 1.00,
+        pyroDiagnosticPaint: 0.00,
+        pyroCarrierView: 'normal',
+        pyroOverdrive: 8.00,
+        canonicalSpread: 1.00,
+        canonicalCenterline: 1.00,
+        canonicalBodyBalance: 0.00,
+        oracleActivityCue: receiver ? 1 : 0,
+        oracleActivityDisplay: 0,
+        oracleActivityCurlNoise: receiver ? numericControl('curl-noise', 0) : 0,
+        oracleActivityVorticity: receiver ? numericControl('vorticity', 0.2) : 0,
+        oracleActivityMaterial: receiver ? numericControl('material', 0) : 0,
+        flowDebug: 0,
+        gridOverlay: 0,
+      };
+    }
+
+    function createCamera(view) {
+      const camera = new THREE.PerspectiveCamera(45, Math.max(0.1, view.clientWidth / Math.max(1, view.clientHeight)), 0.01, 100);
+      camera.position.set(0, 0.2, 4.1);
+      camera.lookAt(0, 0.15, 0);
+      return camera;
+    }
+
+    function createPrototype(name, view, controls) {
+      const camera = createCamera(view);
+      const prototype = createKaminosVolumePrototype({
+        THREE,
+        viewport: view,
+        camera,
+        controls: null,
+        getControls: () => controls,
+        onStatus: () => {},
+      });
+      prototype.canvasElement().id = `${name}-volume-canvas`;
+      prototype.canvasElement().dataset.dualOracleRole = name;
+      return { name, view, camera, controls, prototype };
+    }
+
+    let low = null;
+    let high = null;
+    let inFlight = false;
+    let raf = 0;
+    const workbenchState = {
+      routeIdentity,
+      status: 'starting',
+      sourceMode: selectControl('source-mode', 'highProjected'),
+      lowGrid: Number(selectControl('low-grid', 96)),
+      highGrid: Number(selectControl('high-grid', 160)),
+      cueAuthority: authorityBySourceMode.highProjected,
+      cueUpdateCount: 0,
+      heldCueFrameCount: 0,
+      droppedCueCount: 0,
+      lastCueAgeMs: null,
+      lastCueUploadedAtMs: null,
+      lastCueFrameId: null,
+      lastCueExport: null,
+      lastReceiverState: null,
+      projectionIdentity: 'max-source-cell-to-target-grid-v0',
+      cueTemporalMode: 'readback-cadence-held-between-uploads',
+      failurePhase: null,
+      error: null,
+    };
+
+    function syncReadouts() {
+      for (const id of ['vorticity', 'curl-noise', 'material', 'cue-floor', 'cue-gamma']) {
+        const out = document.getElementById(`${id}-value`);
+        if (out) out.textContent = Number(controlsById[id].value).toFixed(id === 'cue-gamma' ? 2 : 2);
+      }
+    }
+
+    function updatePrototypeControls() {
+      if (!low || !high) return;
+      const sourceMode = selectControl('source-mode', 'highProjected');
+      low.controls = baseVolumeControls({
+        resolution: Number(selectControl('low-grid', 96)),
+        receiver: sourceMode !== 'none',
+        hiddenSource: false,
+      });
+      high.controls = baseVolumeControls({
+        resolution: Number(selectControl('high-grid', 160)),
+        receiver: false,
+        hiddenSource: true,
+      });
+      low.prototype.setControls(low.controls);
+      high.prototype.setControls(high.controls);
+      workbenchState.sourceMode = sourceMode;
+      workbenchState.lowGrid = low.controls.resolution;
+      workbenchState.highGrid = high.controls.resolution;
+      workbenchState.cueAuthority = authorityBySourceMode[sourceMode] || authorityBySourceMode.none;
+    }
+
+    async function resetPrototypes() {
+      cancelAnimationFrame(raf);
+      if (low?.prototype) low.prototype.dispose();
+      if (high?.prototype) high.prototype.dispose();
+      const lowView = document.getElementById('low-view');
+      const highView = document.getElementById('high-view');
+      low = createPrototype('lowReceiver', lowView, baseVolumeControls({
+        resolution: Number(selectControl('low-grid', 96)),
+        receiver: selectControl('source-mode', 'highProjected') !== 'none',
+      }));
+      high = createPrototype('highSource', highView, baseVolumeControls({
+        resolution: Number(selectControl('high-grid', 160)),
+        receiver: false,
+        hiddenSource: true,
+      }));
+      workbenchState.status = 'activating';
+      try {
+        await Promise.all([
+          low.prototype.setActive(true),
+          high.prototype.setActive(true),
+        ]);
+        workbenchState.status = 'running';
+        workbenchState.failurePhase = null;
+        workbenchState.error = null;
+      } catch (error) {
+        workbenchState.status = 'failed';
+        workbenchState.failurePhase = 'prototype-activation';
+        workbenchState.error = error?.message || String(error);
+      }
+      updatePrototypeControls();
+      raf = requestAnimationFrame(loop);
+    }
+
+    async function updateCueIfDue() {
+      if (!low || !high || inFlight) return;
+      const cadence = Math.max(1, Number(selectControl('cadence', 8)) || 8);
+      const frameCount = low.prototype.debugState()?.frameCount || 0;
+      const sourceMode = selectControl('source-mode', 'highProjected');
+      if (sourceMode === 'none') {
+        if (workbenchState.cueAuthority !== authorityBySourceMode.none || workbenchState.lastReceiverState?.externalCueStatus === 'uploaded') {
+          workbenchState.lastReceiverState = low.prototype.setTruthOracleActivityCue({
+            values: [],
+            grid: workbenchState.lowGrid,
+            cueAuthority: authorityBySourceMode.none,
+            frameId: 'none-cleared',
+          });
+        }
+        return;
+      }
+      if (frameCount % cadence !== 0) {
+        workbenchState.heldCueFrameCount += 1;
+        return;
+      }
+      inFlight = true;
+      try {
+        const sourcePrototype = sourceMode === 'lowSelf' ? low.prototype : high.prototype;
+        const exportReceipt = await sourcePrototype.exportCurrentScalarActivityCue({
+          targetGrid: workbenchState.lowGrid,
+          cueFloor: numericControl('cue-floor', 0.10),
+          cueGamma: numericControl('cue-gamma', 1.25),
+        });
+        if (!exportReceipt?.ok) {
+          workbenchState.status = 'failed';
+          workbenchState.failurePhase = exportReceipt?.failurePhase || 'cue-export';
+          workbenchState.error = exportReceipt?.reason || 'cue export failed';
+          return;
+        }
+        const frameId = `${sourceMode}-${exportReceipt.frameId}-to-${workbenchState.lowGrid}`;
+        const receiverState = low.prototype.setTruthOracleActivityCue({
+          values: exportReceipt.values,
+          grid: exportReceipt.targetGrid,
+          cueAuthority: authorityBySourceMode[sourceMode],
+          frameId,
+        });
+        workbenchState.status = 'running';
+        workbenchState.failurePhase = null;
+        workbenchState.error = null;
+        workbenchState.cueUpdateCount += 1;
+        workbenchState.lastCueUploadedAtMs = performance.now();
+        workbenchState.lastCueFrameId = frameId;
+        workbenchState.lastCueExport = {
+          ...exportReceipt,
+          values: undefined,
+        };
+        workbenchState.lastReceiverState = receiverState;
+        workbenchState.projectionIdentity = exportReceipt.projectionIdentity;
+        workbenchState.cueTemporalMode = exportReceipt.cueTemporalMode;
+      } catch (error) {
+        workbenchState.status = 'failed';
+        workbenchState.failurePhase = 'cue-export-or-upload';
+        workbenchState.error = error?.message || String(error);
+      } finally {
+        inFlight = false;
+      }
+    }
+
+    function renderStatus() {
+      const now = performance.now();
+      workbenchState.lastCueAgeMs = workbenchState.lastCueUploadedAtMs == null ? null : Math.max(0, now - workbenchState.lastCueUploadedAtMs);
+      const lowState = low?.prototype.debugState?.() || null;
+      const highState = high?.prototype.debugState?.() || null;
+      lowLabel.textContent = `lowReceiver ${workbenchState.lowGrid}^3 | source ${workbenchState.sourceMode} | ${workbenchState.cueAuthority}`;
+      highLabel.textContent = `highSource ${workbenchState.highGrid}^3 | source sim only | readback cue exporter`;
+      statusNode.textContent = JSON.stringify({
+        routeIdentity,
+        status: workbenchState.status,
+        sourceMode: workbenchState.sourceMode,
+        gridPair: `${workbenchState.highGrid}->${workbenchState.lowGrid}`,
+        cueAuthority: workbenchState.cueAuthority,
+        cueUpdateCount: workbenchState.cueUpdateCount,
+        heldCueFrameCount: workbenchState.heldCueFrameCount,
+        droppedCueCount: workbenchState.droppedCueCount,
+        lastCueAgeMs: workbenchState.lastCueAgeMs == null ? null : Math.round(workbenchState.lastCueAgeMs),
+        lastCueFrameId: workbenchState.lastCueFrameId,
+        projectionIdentity: workbenchState.projectionIdentity,
+        cueTemporalMode: workbenchState.cueTemporalMode,
+        receiver: workbenchState.lastReceiverState,
+        lastCueExport: workbenchState.lastCueExport,
+        lowFrameCount: lowState?.frameCount,
+        highFrameCount: highState?.frameCount,
+        lowBackend: lowState?.backend,
+        highBackend: highState?.backend,
+        failurePhase: workbenchState.failurePhase,
+        error: workbenchState.error,
+      }, null, 2);
+    }
+
+    function loop() {
+      syncReadouts();
+      updatePrototypeControls();
+      updateCueIfDue();
+      renderStatus();
+      raf = requestAnimationFrame(loop);
+    }
+
+    for (const input of Object.values(controlsById)) {
+      input.addEventListener('input', () => {
+        syncReadouts();
+        if (input.id === 'low-grid' || input.id === 'high-grid') resetPrototypes();
+      });
+    }
+    document.getElementById('restart').addEventListener('click', resetPrototypes);
+    window.__kaminosDualOracleWorkbench = {
+      routeIdentity,
+      debugState: () => ({
+        ...workbenchState,
+        low: low?.prototype.debugState?.() || null,
+        high: high?.prototype.debugState?.() || null,
+      }),
+      restart: resetPrototypes,
+    };
+    syncReadouts();
+    resetPrototypes();
+  </script>
+</body>
+</html>

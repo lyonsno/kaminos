@@ -603,6 +603,12 @@ assert.match(core, /scalarActivityReceiver/, 'debug state reports scalar activit
 assert.match(core, /requestedCueAuthority/, 'scalar activity receiver debug state distinguishes requested cue authority');
 assert.match(core, /effectiveCueAuthority/, 'scalar activity receiver debug state distinguishes effective cue authority');
 assert.match(core, /externalCueCellCount/, 'scalar activity receiver debug state reports whether an external cue buffer is actually present');
+assert.match(core, /SCALAR_ACTIVITY_CUE_EXPORT_IDENTITY\s*=\s*'current-field-scalar-activity-cue-export-v0'/, 'volume core names the current-field scalar activity cue export route');
+assert.match(core, /LIVE_LOW_SELF_ACTIVITY_CUE_AUTHORITY\s*=\s*'live-low-self-current-field-scalar-activity-cue-v0'/, 'volume core names low-self live scalar activity cue authority separately from truth and learned cues');
+assert.match(core, /LIVE_HIGH_PROJECTED_ACTIVITY_CUE_AUTHORITY\s*=\s*'live-high-projected-current-field-scalar-activity-cue-v0'/, 'volume core names high-projected live scalar activity cue authority separately from truth and learned cues');
+assert.match(core, /exportCurrentScalarActivityCue/, 'volume prototype exposes a current-field scalar activity cue export API for live oracle receiver experiments');
+assert.match(core, /projectionIdentity:\s*'max-source-cell-to-target-grid-v0'/, 'current-field cue export records the high-to-low projection policy');
+assert.match(core, /cueTemporalMode:\s*'readback-cadence-held-between-uploads'/, 'current-field cue export records that readback cadence can hold cues between uploads');
 assert.match(index, /id="volume-pyro-detail"/, 'Volume tab exposes the Pyro dynamic detail debug toggle');
 assert.match(index, /id="volume-pyro-material-gain"/, 'Volume tab exposes an opt-in Pyro material-memory renderer gain');
 assert.match(index, /id="volume-pyro-dynamic-atlas"/, 'Volume tab exposes an inspectable Pyro dynamic detail atlas canvas');
@@ -2486,6 +2492,29 @@ assert.match(scalarActivityCueReceiverWitness, /uploadedCueSha256/, 'scalar acti
 assert.match(scalarActivityCueReceiverWitness, /volume_oracle_activity_vorticity/, 'scalar activity cue receiver witness drives receiver hook gains through public URL controls');
 assert.match(scalarActivityCueReceiverWitness, /volume_oracle_activity_curl_noise/, 'scalar activity cue receiver witness drives curl receiver hook gain through public URL controls');
 assert.match(scalarActivityCueReceiverWitness, /failurePhase/, 'scalar activity cue receiver witness writes failure phase before presenting smoke evidence');
+
+const dualOracleWorkbenchPath = join(root, 'volume-dual-oracle-workbench.html');
+assert.ok(existsSync(dualOracleWorkbenchPath), 'dual-live scalar activity oracle receiver workbench exists');
+const dualOracleWorkbench = existsSync(dualOracleWorkbenchPath) ? readFileSync(dualOracleWorkbenchPath, 'utf8') : '';
+assert.match(dualOracleWorkbench, /dual-live-oracle-receiver-workbench-v0/, 'dual-live workbench carries a stable route identity');
+assert.match(dualOracleWorkbench, /lowGridOptions\s*=\s*\[64,\s*96,\s*128\]/, 'dual-live workbench offers the low receiver grid sweep');
+assert.match(dualOracleWorkbench, /highGridOptions\s*=\s*\[128,\s*160,\s*192\]/, 'dual-live workbench offers the high source grid sweep');
+assert.match(dualOracleWorkbench, /sourceModes\s*=\s*\['none',\s*'lowSelf',\s*'highProjected'\]/, 'dual-live workbench distinguishes no cue, low self cue, and high projected source cue');
+assert.match(dualOracleWorkbench, /exportCurrentScalarActivityCue/, 'dual-live workbench exports live current-field cue data instead of replaying a static uploaded cue');
+assert.match(dualOracleWorkbench, /setTruthOracleActivityCue/, 'dual-live workbench injects exported cue data through the existing scalar activity receiver API');
+assert.match(dualOracleWorkbench, /cueUpdateCount/, 'dual-live workbench reports live cue update count');
+assert.match(dualOracleWorkbench, /lastCueAgeMs/, 'dual-live workbench reports cue staleness instead of making held cues look fresh');
+assert.match(dualOracleWorkbench, /projectionIdentity/, 'dual-live workbench reports the cue projection identity');
+assert.match(dualOracleWorkbench, /failurePhase/, 'dual-live workbench reports failure phase for source/export/upload failures');
+
+const dualOracleWorkbenchWitnessPath = join(root, 'volume-dual-oracle-workbench-witness.mjs');
+assert.ok(existsSync(dualOracleWorkbenchWitnessPath), 'dual-live scalar activity oracle receiver workbench witness exists');
+const dualOracleWorkbenchWitness = existsSync(dualOracleWorkbenchWitnessPath) ? readFileSync(dualOracleWorkbenchWitnessPath, 'utf8') : '';
+assert.match(dualOracleWorkbenchWitness, /kaminos\.volume\.dual-oracle-workbench-witness\.v0/, 'dual-live workbench witness writes a stable manifest schema');
+assert.match(dualOracleWorkbenchWitness, /dual-live-oracle-receiver-workbench-v0/, 'dual-live workbench witness records the effective route identity');
+assert.match(dualOracleWorkbenchWitness, /cueUpdateCount/, 'dual-live workbench witness requires and reports cue updates');
+assert.match(dualOracleWorkbenchWitness, /lastCueAgeMs/, 'dual-live workbench witness records cue staleness');
+assert.match(dualOracleWorkbenchWitness, /failurePhase/, 'dual-live workbench witness writes failure phase before presenting smoke evidence');
 
 const sourceScaleProbePath = join(root, 'volume-source-scale-probe.mjs');
 assert.ok(existsSync(sourceScaleProbePath), 'source-scale blobbiness probe exists');
