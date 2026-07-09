@@ -9,6 +9,7 @@ const FULL_FIELD_BUFFER_OVERRIDE_IDENTITY = 'debug-full-field-buffer-render-over
 const PYRO_FULL_FIELD_OVERRIDE_RENDER_STATE_REFRESH_STEPS = 4;
 const TRUTH_ORACLE_ACTIVITY_RECEIVER_IDENTITY = 'truth-oracle-scalar-activity-receiver-v0';
 const TRUTH_ORACLE_ACTIVITY_CUE_AUTHORITY = 'truth-high-diagnostic-activity-projected-to-receiver-grid-v0';
+const LEARNED_ACTIVITY_CUE_AUTHORITY = 'learned-diagnostic-rgb-norm-scalar-activity-cue-v0';
 const PROCEDURAL_ACTIVITY_CUE_AUTHORITY = 'procedural-receiver-activity-proxy-no-truth-v0';
 const SCALAR_ACTIVITY_RECEIVER_HOOK_IDENTITY = 'scalar-activity-receiver-hook-controls-v0';
 const DEFAULT_GRID_SIZE = 96;
@@ -70,6 +71,13 @@ function normalizeScalarActivityCueGridSize(value, fallback = DEFAULT_GRID_SIZE)
   const requested = Math.round(Number(value));
   if (Number.isFinite(requested) && requested > 0) return requested;
   return fallback;
+}
+
+function normalizeScalarActivityCueAuthority(value) {
+  const candidate = String(value || '').trim();
+  if (candidate === TRUTH_ORACLE_ACTIVITY_CUE_AUTHORITY) return TRUTH_ORACLE_ACTIVITY_CUE_AUTHORITY;
+  if (candidate === LEARNED_ACTIVITY_CUE_AUTHORITY) return LEARNED_ACTIVITY_CUE_AUTHORITY;
+  return TRUTH_ORACLE_ACTIVITY_CUE_AUTHORITY;
 }
 
 function normalizeMajorantGridSize(value) {
@@ -4719,8 +4727,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     return {
       identity: TRUTH_ORACLE_ACTIVITY_RECEIVER_IDENTITY,
       hookIdentity: SCALAR_ACTIVITY_RECEIVER_HOOK_IDENTITY,
-      requestedCueAuthority: TRUTH_ORACLE_ACTIVITY_CUE_AUTHORITY,
-      effectiveCueAuthority: externalCueActive ? TRUTH_ORACLE_ACTIVITY_CUE_AUTHORITY : PROCEDURAL_ACTIVITY_CUE_AUTHORITY,
+      requestedCueAuthority: oracleActivityCueUpload.requestedCueAuthority || TRUTH_ORACLE_ACTIVITY_CUE_AUTHORITY,
+      effectiveCueAuthority: externalCueActive ? oracleActivityCueUpload.effectiveCueAuthority : PROCEDURAL_ACTIVITY_CUE_AUTHORITY,
       enabled: controls.enabled,
       display: controls.display,
       curlNoiseGain: controls.curlNoiseGain,
@@ -8901,13 +8909,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     setTruthOracleActivityCue(payload = {}) {
       const source = payload && typeof payload === 'object' ? payload : {};
       const sourceGrid = normalizeScalarActivityCueGridSize(source.grid || source.sourceGrid || gridSize, gridSize);
+      const cueAuthority = normalizeScalarActivityCueAuthority(source.cueAuthority || source.authority || source.sourceAuthority || TRUTH_ORACLE_ACTIVITY_CUE_AUTHORITY);
       const values = source.values || source.data || source.activity || [];
       if (!values || Number(values.length) <= 0) {
         oracleActivityCueSourceValues = null;
         oracleActivityCueSourceGrid = null;
         oracleActivityCueUpload = {
           status: 'cleared',
-          requestedCueAuthority: TRUTH_ORACLE_ACTIVITY_CUE_AUTHORITY,
+          requestedCueAuthority: cueAuthority,
           effectiveCueAuthority: PROCEDURAL_ACTIVITY_CUE_AUTHORITY,
           grid: null,
           receiverGrid: gridSize,
@@ -8929,8 +8938,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       writeOracleActivityCueBuffer(resampledCue);
       oracleActivityCueUpload = {
         status: 'uploaded',
-        requestedCueAuthority: TRUTH_ORACLE_ACTIVITY_CUE_AUTHORITY,
-        effectiveCueAuthority: TRUTH_ORACLE_ACTIVITY_CUE_AUTHORITY,
+        requestedCueAuthority: cueAuthority,
+        effectiveCueAuthority: cueAuthority,
         grid: sourceGrid,
         receiverGrid: gridSize,
         externalCueCellCount: resampledCue.length,

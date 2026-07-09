@@ -581,6 +581,7 @@ assert.match(index, /volume_oracle_activity_vorticity/, 'Basin URLs preserve sca
 assert.match(index, /volume_oracle_activity_material/, 'Basin URLs preserve scalar activity material receiver gain');
 assert.match(core, /TRUTH_ORACLE_ACTIVITY_RECEIVER_IDENTITY\s*=\s*'truth-oracle-scalar-activity-receiver-v0'/, 'volume core names the truth-oracle scalar activity receiver route');
 assert.match(core, /TRUTH_ORACLE_ACTIVITY_CUE_AUTHORITY\s*=\s*'truth-high-diagnostic-activity-projected-to-receiver-grid-v0'/, 'volume core preserves truth-derived cue authority separately from learned/product inputs');
+assert.match(core, /LEARNED_ACTIVITY_CUE_AUTHORITY\s*=\s*'learned-diagnostic-rgb-norm-scalar-activity-cue-v0'/, 'volume core names learned scalar activity cue authority separately from truth oracle input');
 assert.match(core, /oracle_activity_controls:\s*vec4<f32>/, 'fluid uniforms carry scalar activity receiver hook controls');
 assert.match(core, /oracle_activity_controls2:\s*vec4<f32>/, 'fluid uniforms carry scalar activity cue source/display controls');
 assert.match(core, /truthOracleActivityCueAtCell/, 'fluid shader samples a named scalar activity cue field');
@@ -590,6 +591,8 @@ assert.match(core, /oracleActivityMaterialBirth/, 'fluid shader exposes scalar a
 assert.match(core, /setTruthOracleActivityCue/, 'volume prototype exposes a public API for feeding projected truth activity cue buffers');
 assert.match(core, /function normalizeScalarActivityCueGridSize/, 'truth-oracle cue source grids use a dedicated positive-integer normalizer instead of supported receiver-grid snapping');
 assert.match(core, /sourceGrid\s*=\s*normalizeScalarActivityCueGridSize/, 'truth-oracle cue upload preserves source-grid identity before resampling to the receiver grid');
+assert.match(core, /cueAuthority\s*=\s*normalizeScalarActivityCueAuthority/, 'scalar activity cue upload normalizes payload cue authority instead of forcing truth authority');
+assert.match(core, /oracleActivityCueUpload\.effectiveCueAuthority/, 'scalar activity receiver debug state reports the uploaded cue authority');
 assert.match(core, /scalarActivityReceiver/, 'debug state reports scalar activity receiver identity, cue authority, toggles, gains, and effective source');
 assert.match(core, /requestedCueAuthority/, 'scalar activity receiver debug state distinguishes requested cue authority');
 assert.match(core, /effectiveCueAuthority/, 'scalar activity receiver debug state distinguishes effective cue authority');
@@ -2452,6 +2455,32 @@ assert.match(scalarHistoryFlowDecoder, /debugRgbCorrelation/, 'scalar-history fl
 assert.match(scalarHistoryFlowDecoder, /sourceChecksums/, 'scalar-history flow decoder records source sidecar checksums');
 assert.match(scalarHistoryFlowDecoder, /visibleRasterLabels/, 'scalar-history flow decoder burns and manifests visible contact-sheet labels');
 assert.match(scalarHistoryFlowDecoder, /failurePhase/, 'scalar-history flow decoder writes failure-phase reports for missing/corrupt frame manifests');
+
+const learnedScalarActivityCuePath = join(root, 'volume-learned-scalar-activity-cue.py');
+assert.ok(existsSync(learnedScalarActivityCuePath), 'volume learned scalar activity cue exporter exists');
+const learnedScalarActivityCue = existsSync(learnedScalarActivityCuePath) ? readFileSync(learnedScalarActivityCuePath, 'utf8') : '';
+assert.match(learnedScalarActivityCue, /kaminos\.volume\.learned-scalar-activity-cue\.v0/, 'learned scalar activity cue exporter writes a stable manifest schema');
+assert.match(learnedScalarActivityCue, /learned-diagnostic-rgb-norm-scalar-activity-cue-v0/, 'learned scalar activity cue exporter names the predicted cue identity');
+assert.match(learnedScalarActivityCue, /truth-oracle-diagnostic-rgb-norm-scalar-activity-cue-v0/, 'learned scalar activity cue exporter writes a truth-oracle ceiling cue');
+assert.match(learnedScalarActivityCue, /low-derived-diagnostic-rgb-norm-scalar-activity-cue-v0/, 'learned scalar activity cue exporter writes a low-derived baseline cue');
+assert.match(learnedScalarActivityCue, /cueNormalizationIdentity/, 'learned scalar activity cue exporter records the cue normalization contract');
+assert.match(learnedScalarActivityCue, /sourcePredictionRegime/, 'learned scalar activity cue exporter records the source prediction regime');
+assert.match(learnedScalarActivityCue, /receiverGrid/, 'learned scalar activity cue exporter records the receiver grid for upload');
+assert.match(learnedScalarActivityCue, /writeFloat32Cue/, 'learned scalar activity cue exporter writes binary float32 cue payloads');
+assert.match(learnedScalarActivityCue, /sourceChecksums/, 'learned scalar activity cue exporter records low/high field source checksums');
+assert.match(learnedScalarActivityCue, /failurePhase/, 'learned scalar activity cue exporter writes failure phase before pretending to produce cue evidence');
+
+const scalarActivityCueReceiverWitnessPath = join(root, 'volume-scalar-activity-cue-receiver-witness.mjs');
+assert.ok(existsSync(scalarActivityCueReceiverWitnessPath), 'volume scalar activity cue receiver witness exists');
+const scalarActivityCueReceiverWitness = existsSync(scalarActivityCueReceiverWitnessPath) ? readFileSync(scalarActivityCueReceiverWitnessPath, 'utf8') : '';
+assert.match(scalarActivityCueReceiverWitness, /kaminos\.volume\.scalar-activity-cue-receiver-witness\.v0/, 'scalar activity cue receiver witness writes a stable manifest schema');
+assert.match(scalarActivityCueReceiverWitness, /setTruthOracleActivityCue/, 'scalar activity cue receiver witness uploads cue payloads through the browser receiver API');
+assert.match(scalarActivityCueReceiverWitness, /effectiveCueAuthority/, 'scalar activity cue receiver witness records the effective cue authority after upload');
+assert.match(scalarActivityCueReceiverWitness, /uploadedCueSha256/, 'scalar activity cue receiver witness records uploaded cue checksum identity');
+assert.match(scalarActivityCueReceiverWitness, /volume_oracle_activity_vorticity/, 'scalar activity cue receiver witness drives receiver hook gains through public URL controls');
+assert.match(scalarActivityCueReceiverWitness, /volume_oracle_activity_curl_noise/, 'scalar activity cue receiver witness drives curl receiver hook gain through public URL controls');
+assert.match(scalarActivityCueReceiverWitness, /failurePhase/, 'scalar activity cue receiver witness writes failure phase before presenting smoke evidence');
+
 const sourceScaleProbePath = join(root, 'volume-source-scale-probe.mjs');
 assert.ok(existsSync(sourceScaleProbePath), 'source-scale blobbiness probe exists');
 const sourceScaleProbe = existsSync(sourceScaleProbePath) ? readFileSync(sourceScaleProbePath, 'utf8') : '';
