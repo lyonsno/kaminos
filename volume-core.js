@@ -4207,6 +4207,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     simStepCount: 0,
     lookFreeze: normalizeLookFreeze(controlsSnapshot.lookFreeze),
     lookFreezeFrame: null,
+    lookFreezeTimeSeconds: null,
     lookFreezeSkippedFrames: 0,
     pyroCompareMode: normalizePyroCompareMode(controlsSnapshot.pyroCompareMode),
     pyroCompareMuted: false,
@@ -5534,6 +5535,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     camera.updateMatrixWorld();
     maybeResetTemporalHistoryForCamera();
     ensureTemporalHistoryTexture();
+    const lookFreeze = normalizeLookFreeze(controlsSnapshot.lookFreeze) && lookFreezeCanPin(state) ? 1 : 0;
+    if (lookFreeze) {
+      if (state.lookFreezeFrame === null) state.lookFreezeFrame = state.frameCount;
+      if (state.lookFreezeTimeSeconds === null) state.lookFreezeTimeSeconds = now * 0.001;
+    } else {
+      state.lookFreezeTimeSeconds = null;
+    }
     viewProj.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
     invViewProj.copy(viewProj).invert();
     if (!previousViewProjReady) {
@@ -5544,7 +5552,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     uniforms[16] = camera.position.x;
     uniforms[17] = camera.position.y;
     uniforms[18] = camera.position.z;
-    uniforms[19] = now * 0.001;
+    uniforms[19] = lookFreeze ? (state.lookFreezeTimeSeconds ?? now * 0.001) : now * 0.001;
     uniforms[20] = state.width;
     uniforms[21] = state.height;
     uniforms[22] = controlsSnapshot.raySteps;
@@ -5573,10 +5581,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const bonfireAblation = normalizeBonfireAblationControls(controlsSnapshot);
     const baseTemporalAccum = Math.max(0, Math.min(0.85, controlsSnapshot.temporalAccum ?? 0.25));
     const requestedTemporalAccum = Math.max(0, Math.min(0.85, baseTemporalAccum * bonfireAblation.temporal));
-    uniforms[44] = historyValid ? requestedTemporalAccum : 0;
-    uniforms[45] = controlsSnapshot.temporalJitter ?? 0.85;
+    uniforms[44] = lookFreeze ? 0 : (historyValid ? requestedTemporalAccum : 0);
+    uniforms[45] = lookFreeze ? 0 : (controlsSnapshot.temporalJitter ?? 0.85);
     uniforms[46] = controlsSnapshot.historyClamp ?? 0.70;
-    uniforms[47] = state.frameCount % 4096;
+    const temporalFrameIndex = lookFreeze ? (state.lookFreezeFrame ?? state.frameCount) : state.frameCount;
+    uniforms[47] = temporalFrameIndex % 4096;
     uniforms[48] = controlsSnapshot.fireScale ?? 0.86;
     uniforms[49] = controlsSnapshot.detailScale ?? 1.75;
     uniforms[50] = controlsSnapshot.plumeHeight ?? 1.45;
@@ -5616,7 +5625,6 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     uniforms[81] = sourcePrimitive.position[1];
     uniforms[82] = sourcePrimitive.position[2];
     uniforms[83] = volumePrimitives.length > 0 ? 1 : 0;
-    const lookFreeze = normalizeLookFreeze(controlsSnapshot.lookFreeze) && lookFreezeCanPin(state) ? 1 : 0;
     const pyroCompareMode = normalizePyroCompareMode(controlsSnapshot.pyroCompareMode);
     const frozenPyroDetail = lookFreeze && state.pyroDynamicDetail?.materialMemory ? state.pyroDynamicDetail : null;
     const pyroDetailForRender = frozenPyroDetail || updatePyroDynamicDetailState({ inputKind: 'control-proxy' });
@@ -7577,8 +7585,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     });
     device.pushErrorScope('validation');
     const encoder = device.createCommandEncoder({ label: 'kaminos volume witness readback encoder' });
-    encodeSim(encoder);
-    encodeMajorant(encoder, { force: true });
+    const sampleLookFreeze = normalizeLookFreeze(controlsSnapshot.lookFreeze) && lookFreezeCanPin(state) ? 1 : 0;
+    if (!sampleLookFreeze) {
+      encodeSim(encoder);
+      encodeMajorant(encoder, { force: true });
+    } else {
+      state.majorantBuiltThisFrame = false;
+    }
     encodeDraw(encoder, frameTexture.createView(), 'kaminos volume one-off readback pass', readbackPipeline);
     encoder.copyTextureToBuffer(
       { texture: frameTexture },

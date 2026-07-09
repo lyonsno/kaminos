@@ -119,7 +119,7 @@ for (const forbidden of ['raySteps', 'adaptiveRays', 'occupancySkip', 'majorantS
   assert.doesNotMatch(fireSimLookFields[1], new RegExp(`'${forbidden}'`), `FireSim look presets must not save ${forbidden} expense/solve state`);
 }
 assert.match(index, /id="volume-look-freeze"/, 'Volume look lab exposes a freeze control');
-assert.match(index, /stops fluid steps/i, 'Volume freeze control explains that only sim stepping stops');
+assert.match(index, /pixel-stable pin for sim steps, shader time, temporal jitter, and history blending/i, 'Volume freeze control explains the pixel-stable temporal pinning contract');
 assert.match(index, /id="volume-pyro-compare"/, 'Volume look lab exposes a same-frame Pyro compare selector');
 assert.match(index, /Base only/, 'Pyro compare selector can mute Pyro carriers against the same frozen sim');
 assert.match(index, /volume_look_freeze/, 'Basin URLs preserve look-lab freeze state');
@@ -450,6 +450,13 @@ assert.match(index, /temporalAccum/, 'Volume controls carry temporal accumulatio
 assert.match(index, /id="volume-temporal-jitter"/, 'Volume tab exposes temporal ray jitter control');
 assert.match(index, /volume_temporal_jitter/, 'URL route can override temporal ray jitter strength');
 assert.match(index, /temporalJitter/, 'Volume controls carry temporal ray jitter strength into the renderer');
+assert.match(index, /Look lab freeze:[^<]*(pixel-stable|pins temporal)/i, 'Freeze help text must promise pixel-stable temporal pinning only when the renderer actually pins it');
+assert.match(core, /const lookFreeze = normalizeLookFreeze\(controlsSnapshot\.lookFreeze\)[\s\S]*?const baseTemporalAccum/, 'lookFreeze must be resolved before temporal uniforms are written');
+assert.match(core, /uniforms\[19\]\s*=\s*lookFreeze\s*\?\s*\(state\.lookFreezeTimeSeconds[\s\S]*:\s*now \* 0\.001/, 'look freeze pins shader time instead of letting frozen frames animate');
+assert.match(core, /uniforms\[44\]\s*=\s*lookFreeze\s*\?\s*0\s*:\s*\(historyValid \? requestedTemporalAccum : 0\)/, 'look freeze disables temporal history blending instead of accumulating crawl');
+assert.match(core, /uniforms\[45\]\s*=\s*lookFreeze\s*\?\s*0\s*:\s*\(controlsSnapshot\.temporalJitter \?\? 0\.85\)/, 'look freeze disables temporal ray jitter');
+assert.match(core, /const temporalFrameIndex = lookFreeze[\s\S]*state\.lookFreezeFrame[\s\S]*state\.frameCount[\s\S]*uniforms\[47\]\s*=\s*temporalFrameIndex % 4096/, 'look freeze pins shader frame index to the freeze frame');
+assert.match(core, /const sampleLookFreeze = normalizeLookFreeze\(controlsSnapshot\.lookFreeze\)[\s\S]*if \(!sampleLookFreeze\) \{[\s\S]*encodeSim\(encoder\)[\s\S]*encodeMajorant\(encoder, \{ force: true \}\)/, 'sampleFrame must not advance sim/majorant while look freeze is active');
 assert.match(index, /id="volume-history-clamp"/, 'Volume tab exposes temporal history clamp control');
 assert.match(index, /volume_history_clamp/, 'URL route can override temporal history clamp strength');
 assert.match(index, /historyClamp/, 'Volume controls carry temporal history clamp strength into the renderer');
