@@ -1045,10 +1045,84 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
           <option value="core">core</option>
           <option value="curl">curl</option>
           <option value="divergence">divergence</option>
+          <option value="boundary">boundary</option>
         </select>
         <span class="slider-val" id="volume-reaction-live-view-val">off</span>
       </div>
       <span class="slider-help">reaction-live-view-shader-inspect-v0: full-size primary viewer of live shader-side support fields; atlas threshold sliders remain CPU-capture controls until parity uniforms land.</span>
+      <div class="volume-control-section-title">Boundary live</div>
+      <span class="slider-help">reaction-boundary-live-controls-v0: derived primary-view candidate = support mix * local support gradient * core rejection * topology breakup. It is inspect-only; it does not emit fire.</span>
+      <div class="slider-row">
+        <span class="slider-label">Boundary gradient</span>
+        <input type="range" id="volume-reaction-boundary-gradient" min="0" max="4" step="0.05" value="2.60">
+        <span class="slider-val" id="volume-reaction-boundary-gradient-val">2.60</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Support heat</span>
+        <input type="range" id="volume-reaction-boundary-support-thermal" min="0" max="2" step="0.02" value="0.10">
+        <span class="slider-val" id="volume-reaction-boundary-support-thermal-val">0.10</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Support reaction</span>
+        <input type="range" id="volume-reaction-boundary-support-reaction" min="0" max="2" step="0.02" value="0.26">
+        <span class="slider-val" id="volume-reaction-boundary-support-reaction-val">0.26</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Support front</span>
+        <input type="range" id="volume-reaction-boundary-support-front" min="0" max="2" step="0.02" value="1.60">
+        <span class="slider-val" id="volume-reaction-boundary-support-front-val">1.60</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Support interface</span>
+        <input type="range" id="volume-reaction-boundary-support-interface" min="0" max="2" step="0.02" value="1.46">
+        <span class="slider-val" id="volume-reaction-boundary-support-interface-val">1.46</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Boundary cut</span>
+        <input type="range" id="volume-reaction-boundary-cut" min="0" max="0.55" step="0.005" value="0.30">
+        <span class="slider-val" id="volume-reaction-boundary-cut-val">0.300</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Boundary soft</span>
+        <input type="range" id="volume-reaction-boundary-softness" min="0.005" max="0.45" step="0.005" value="0.08">
+        <span class="slider-val" id="volume-reaction-boundary-softness-val">0.080</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Core reject live</span>
+        <input type="range" id="volume-reaction-boundary-core-reject" min="0" max="1" step="0.01" value="0.92">
+        <span class="slider-val" id="volume-reaction-boundary-core-reject-val">0.92</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Topology break</span>
+        <input type="range" id="volume-reaction-boundary-topology" min="0" max="2.5" step="0.02" value="0.90">
+        <span class="slider-val" id="volume-reaction-boundary-topology-val">0.90</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Curl break</span>
+        <input type="range" id="volume-reaction-boundary-curl" min="0" max="2" step="0.02" value="0.70">
+        <span class="slider-val" id="volume-reaction-boundary-curl-val">0.70</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Div break</span>
+        <input type="range" id="volume-reaction-boundary-divergence" min="0" max="1" step="0.01" value="0.05">
+        <span class="slider-val" id="volume-reaction-boundary-divergence-val">0.05</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Boundary contrast</span>
+        <input type="range" id="volume-reaction-boundary-contrast" min="0.25" max="5" step="0.05" value="1.35">
+        <span class="slider-val" id="volume-reaction-boundary-contrast-val">1.35</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Boundary gamma</span>
+        <input type="range" id="volume-reaction-boundary-gamma" min="0.35" max="3" step="0.05" value="1.05">
+        <span class="slider-val" id="volume-reaction-boundary-gamma-val">1.05</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Boundary opacity</span>
+        <input type="range" id="volume-reaction-boundary-opacity" min="0" max="3" step="0.05" value="0.70">
+        <span class="slider-val" id="volume-reaction-boundary-opacity-val">0.70</span>
+      </div>
+      <div class="volume-control-section-title">Atlas capture</div>
       <div class="slider-row">
         <span class="slider-label">Heat min</span>
         <input type="range" id="volume-reaction-heat-min" min="0" max="0.2" step="0.002" value="0.026">
@@ -11127,6 +11201,20 @@ function applyTallPlumeOperatorPreset(name, options = {}) {
 }
 
 const REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS = [
+  { key: 'reactionBoundaryGradient', id: 'volume-reaction-boundary-gradient', param: 'volume_reaction_boundary_gradient', min: 0, max: 4, decimals: 2 },
+  { key: 'reactionBoundarySupportThermal', id: 'volume-reaction-boundary-support-thermal', param: 'volume_reaction_boundary_support_thermal', min: 0, max: 2, decimals: 2 },
+  { key: 'reactionBoundarySupportReaction', id: 'volume-reaction-boundary-support-reaction', param: 'volume_reaction_boundary_support_reaction', min: 0, max: 2, decimals: 2 },
+  { key: 'reactionBoundarySupportFront', id: 'volume-reaction-boundary-support-front', param: 'volume_reaction_boundary_support_front', min: 0, max: 2, decimals: 2 },
+  { key: 'reactionBoundarySupportInterface', id: 'volume-reaction-boundary-support-interface', param: 'volume_reaction_boundary_support_interface', min: 0, max: 2, decimals: 2 },
+  { key: 'reactionBoundaryCut', id: 'volume-reaction-boundary-cut', param: 'volume_reaction_boundary_cut', min: 0, max: 0.55, decimals: 3 },
+  { key: 'reactionBoundarySoftness', id: 'volume-reaction-boundary-softness', param: 'volume_reaction_boundary_softness', min: 0.005, max: 0.45, decimals: 3 },
+  { key: 'reactionBoundaryCoreReject', id: 'volume-reaction-boundary-core-reject', param: 'volume_reaction_boundary_core_reject', min: 0, max: 1, decimals: 2 },
+  { key: 'reactionBoundaryTopology', id: 'volume-reaction-boundary-topology', param: 'volume_reaction_boundary_topology', min: 0, max: 2.5, decimals: 2 },
+  { key: 'reactionBoundaryCurl', id: 'volume-reaction-boundary-curl', param: 'volume_reaction_boundary_curl', min: 0, max: 2, decimals: 2 },
+  { key: 'reactionBoundaryDivergence', id: 'volume-reaction-boundary-divergence', param: 'volume_reaction_boundary_divergence', min: 0, max: 1, decimals: 2 },
+  { key: 'reactionBoundaryContrast', id: 'volume-reaction-boundary-contrast', param: 'volume_reaction_boundary_contrast', min: 0.25, max: 5, decimals: 2 },
+  { key: 'reactionBoundaryGamma', id: 'volume-reaction-boundary-gamma', param: 'volume_reaction_boundary_gamma', min: 0.35, max: 3, decimals: 2 },
+  { key: 'reactionBoundaryOpacity', id: 'volume-reaction-boundary-opacity', param: 'volume_reaction_boundary_opacity', min: 0, max: 3, decimals: 2 },
   { key: 'reactionHeatMin', id: 'volume-reaction-heat-min', param: 'volume_reaction_heat_min', min: 0, max: 0.2, decimals: 3 },
   { key: 'reactionHeatMax', id: 'volume-reaction-heat-max', param: 'volume_reaction_heat_max', min: 0.04, max: 1.2, decimals: 2 },
   { key: 'reactionFuelMin', id: 'volume-reaction-fuel-min', param: 'volume_reaction_fuel_min', min: 0, max: 0.03, decimals: 4 },
@@ -11150,7 +11238,7 @@ const REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS = [
   { key: 'reactionShellContrast', id: 'volume-reaction-shell-contrast', param: 'volume_reaction_shell_contrast', min: 0.25, max: 5, decimals: 2 },
 ];
 
-const REACTION_FRONT_LIVE_VIEW_VALUES = new Set(['off', 'shell', 'thermal', 'reaction', 'front', 'edge', 'core', 'curl', 'divergence']);
+const REACTION_FRONT_LIVE_VIEW_VALUES = new Set(['off', 'shell', 'thermal', 'reaction', 'front', 'edge', 'core', 'curl', 'divergence', 'boundary']);
 
 function normalizeReactionFrontLiveView(value) {
   const mode = String(value || 'off').toLowerCase().replace(/-/g, '_');
@@ -15537,6 +15625,23 @@ function readVolumeControls() {
   const volumeScene = document.getElementById('volume-scene').value;
   const pressureConfig = volumePressureConfigForMode(document.getElementById('volume-pressure-mode').value, volumeScene);
   const reactionLiveView = normalizeReactionFrontLiveView(document.getElementById('volume-reaction-live-view')?.value);
+  const reactionBoundaryControls = {
+    identity: 'reaction-boundary-live-controls-v0',
+    gradientGain: parseFloat(document.getElementById('volume-reaction-boundary-gradient').value),
+    supportThermal: parseFloat(document.getElementById('volume-reaction-boundary-support-thermal').value),
+    supportReaction: parseFloat(document.getElementById('volume-reaction-boundary-support-reaction').value),
+    supportFront: parseFloat(document.getElementById('volume-reaction-boundary-support-front').value),
+    supportInterface: parseFloat(document.getElementById('volume-reaction-boundary-support-interface').value),
+    cut: parseFloat(document.getElementById('volume-reaction-boundary-cut').value),
+    softness: parseFloat(document.getElementById('volume-reaction-boundary-softness').value),
+    coreReject: parseFloat(document.getElementById('volume-reaction-boundary-core-reject').value),
+    topologyGain: parseFloat(document.getElementById('volume-reaction-boundary-topology').value),
+    curlGain: parseFloat(document.getElementById('volume-reaction-boundary-curl').value),
+    divergenceGain: parseFloat(document.getElementById('volume-reaction-boundary-divergence').value),
+    displayContrast: parseFloat(document.getElementById('volume-reaction-boundary-contrast').value),
+    displayGamma: parseFloat(document.getElementById('volume-reaction-boundary-gamma').value),
+    displayOpacity: parseFloat(document.getElementById('volume-reaction-boundary-opacity').value),
+  };
   return backOffVolumeLegacyPyroControls(applyVolumeRuntimeQualityLadder({
     volumeScene,
     density: parseFloat(document.getElementById('volume-density').value),
@@ -15571,6 +15676,37 @@ function readVolumeControls() {
     flowRate: parseFloat(document.getElementById('volume-flow-rate').value),
     reactionLiveView,
     reactionLiveViewIdentity: 'reaction-live-view-shader-inspect-v0',
+    reactionBoundaryControls: {
+      identity: reactionBoundaryControls.identity,
+      gradientGain: reactionBoundaryControls.gradientGain,
+      supportThermal: reactionBoundaryControls.supportThermal,
+      supportReaction: reactionBoundaryControls.supportReaction,
+      supportFront: reactionBoundaryControls.supportFront,
+      supportInterface: reactionBoundaryControls.supportInterface,
+      cut: reactionBoundaryControls.cut,
+      softness: reactionBoundaryControls.softness,
+      coreReject: reactionBoundaryControls.coreReject,
+      topologyGain: reactionBoundaryControls.topologyGain,
+      curlGain: reactionBoundaryControls.curlGain,
+      divergenceGain: reactionBoundaryControls.divergenceGain,
+      displayContrast: reactionBoundaryControls.displayContrast,
+      displayGamma: reactionBoundaryControls.displayGamma,
+      displayOpacity: reactionBoundaryControls.displayOpacity,
+    },
+    reactionBoundaryGradient: reactionBoundaryControls.gradientGain,
+    reactionBoundarySupportThermal: reactionBoundaryControls.supportThermal,
+    reactionBoundarySupportReaction: reactionBoundaryControls.supportReaction,
+    reactionBoundarySupportFront: reactionBoundaryControls.supportFront,
+    reactionBoundarySupportInterface: reactionBoundaryControls.supportInterface,
+    reactionBoundaryCut: reactionBoundaryControls.cut,
+    reactionBoundarySoftness: reactionBoundaryControls.softness,
+    reactionBoundaryCoreReject: reactionBoundaryControls.coreReject,
+    reactionBoundaryTopology: reactionBoundaryControls.topologyGain,
+    reactionBoundaryCurl: reactionBoundaryControls.curlGain,
+    reactionBoundaryDivergence: reactionBoundaryControls.divergenceGain,
+    reactionBoundaryContrast: reactionBoundaryControls.displayContrast,
+    reactionBoundaryGamma: reactionBoundaryControls.displayGamma,
+    reactionBoundaryOpacity: reactionBoundaryControls.displayOpacity,
     fireRenderMode: reactionLiveView !== 'off' ? 'inspect' : document.getElementById('volume-fire-render-mode').value,
     shellInspectMode: reactionLiveView !== 'off' ? reactionLiveView : document.getElementById('volume-shell-inspect-mode').value,
     shellAmount: parseFloat(document.getElementById('volume-shell-amount').value),

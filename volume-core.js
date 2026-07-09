@@ -467,7 +467,7 @@ function fireRenderModeValue(value) {
 
 function normalizeShellInspectMode(value) {
   const mode = String(value || 'shell').toLowerCase().replace(/-/g, '_');
-  if (['thermal', 'reaction', 'front', 'edge', 'core', 'curl', 'divergence'].includes(mode)) return mode;
+  if (['thermal', 'reaction', 'front', 'edge', 'core', 'curl', 'divergence', 'boundary'].includes(mode)) return mode;
   return 'shell';
 }
 
@@ -480,6 +480,7 @@ function shellInspectModeValue(value) {
   if (mode === 'core') return 5;
   if (mode === 'curl') return 6;
   if (mode === 'divergence') return 7;
+  if (mode === 'boundary') return 8;
   return 0;
 }
 
@@ -1965,6 +1966,33 @@ fn emissiveTemperature(fireLayer: vec4<f32>, material: vec4<f32>, microLayer: ve
   );
 }
 
+fn liveBoundarySupportAt(p: vec3<f32>, supportWeights: vec4<f32>) -> f32 {
+  let velocityDensity = sampleWorldVelocity(p);
+  let material = sampleWorldMaterial(p);
+  let fireLayer = sampleWorldFireLayer(p);
+  let microLayer = sampleWorldMicrodetail(p);
+  let frontTopology = sampleWorldFrontField(p);
+  let velMag = length(velocityDensity.xyz);
+  let rawTemp = emissiveTemperature(fireLayer, material, microLayer, velMag);
+  let heat = material.y;
+  let fuel = material.z;
+  let smoke = material.x;
+  let flame = fireLayer.x;
+  let ember = fireLayer.y;
+  let flameDetail = fireLayer.z;
+  let combustionFront = fireLayer.w;
+  let microSmoke = microLayer.x;
+  let interfaceShred = microLayer.y;
+  let fireLick = microLayer.z;
+  let materialDetail = microLayer.w;
+  let thermalSupport = smoothstep(0.018, 0.62, rawTemp + flame * 0.16 + heat * 0.24 + ember * 0.12);
+  let reactionSupport = smoothstep(0.004, 0.30, flameDetail * 0.72 + fireLick * 0.44 + combustionFront * 0.34 + fuel * heat * 0.28);
+  let frontSupport = smoothstep(0.001, 0.088, frontTopology * 1.08 + combustionFront * 0.54 + fireLick * 0.12);
+  let interfaceSupport = smoothstep(0.004, 0.24, interfaceShred * 0.58 + microSmoke * 0.18 + smoke * 0.08 + materialDetail * 0.06);
+  let weightSum = max(0.001, dot(supportWeights, vec4<f32>(1.0)));
+  return clamp(dot(vec4<f32>(thermalSupport, reactionSupport, frontSupport, interfaceSupport), supportWeights) / weightSum, 0.0, 1.35);
+}
+
 fn fireRadianceEmission(temp: f32, flameDetail: f32, fireLick: f32, emberFleck: f32, radianceGain: f32, glowGain: f32) -> vec3<f32> {
   let core = smoothstep(0.16, 1.18, temp);
   let whiteCore = smoothstep(1.06, 2.10, temp);
@@ -3376,7 +3404,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
   let pyroFlowCoolEndpoint = u.pyro_palette_flow.rgb;
   let pyroFlowHotEndpoint = u.pyro_palette_flow_hot.rgb;
   let fireRenderMode = clamp(u.topology_shell_controls.x, 0.0, 3.0);
-  let shellInspectMode = clamp(u.topology_shell_controls.y, 0.0, 7.0);
+  let shellInspectMode = clamp(u.topology_shell_controls.y, 0.0, 8.0);
   let shellAmount = clamp(u.topology_shell_controls.z, 0.0, 2.0);
   let shellWidth = clamp(u.topology_shell_controls.w, 0.05, 2.0);
   let shellThermalGain = clamp(u.topology_shell_carriers.x, 0.0, 2.0);
@@ -3388,10 +3416,16 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
   let shellCurlGain = clamp(u.topology_shell_shape.z, 0.0, 2.0);
   let shellDivergenceGain = clamp(u.topology_shell_shape.w, 0.0, 1.0);
   let shellSmokeCoupling = clamp(u.topology_shell_transport.x, 0.0, 2.0);
+  let boundaryGradientGain = clamp(u.topology_shell_transport.x, 0.0, 4.0);
+  let boundaryCut = clamp(u.topology_shell_transport.y, 0.0, 0.55);
+  let boundarySoftness = clamp(u.topology_shell_transport.z, 0.005, 0.45);
+  let boundaryOpacity = clamp(u.topology_shell_transport.w, 0.0, 3.0);
   let shellLuma = clamp(u.topology_shell_light.x, 0.0, 5.0);
   let shellExposure = clamp(u.topology_shell_light.y, 0.0, 4.0);
   let shellSoftClip = clamp(u.topology_shell_light.z, 0.2, 4.0);
   let shellHeatGain = clamp(u.topology_shell_light.w, 0.0, 4.0);
+  let boundaryContrast = clamp(u.topology_shell_light.x, 0.25, 5.0);
+  let boundaryGamma = clamp(u.topology_shell_light.y, 0.35, 3.0);
   let canonicalSmokeContent = 1.0 - minimalPlumeRenderScene * step(0.5, canonicalContentMode) * (1.0 - step(1.5, canonicalContentMode));
   let canonicalFireContent = minimalPlumeRenderScene * step(0.5, canonicalContentMode);
   let canonicalFireRenderContent = mix(1.0, canonicalFireContent, minimalPlumeRenderScene);
@@ -3651,6 +3685,33 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     let inspectCoreMask = 1.0 - step(0.5, abs(shellInspectMode - 5.0));
     let inspectCurlMask = 1.0 - step(0.5, abs(shellInspectMode - 6.0));
     let inspectDivMask = 1.0 - step(0.5, abs(shellInspectMode - 7.0));
+    let inspectBoundaryMask = 1.0 - step(0.5, abs(shellInspectMode - 8.0));
+    var boundaryCandidate = 0.0;
+    if (inspectBoundaryMask > 0.5) {
+      let boundarySupportWeights = vec4<f32>(shellThermalGain, shellReactionGain, shellFrontGain, shellEdgeGain);
+      let boundaryCellStep = 2.0 / f32(GRID);
+      let boundaryDx = vec3<f32>(boundaryCellStep, 0.0, 0.0);
+      let boundaryDy = vec3<f32>(0.0, boundaryCellStep, 0.0);
+      let boundaryDz = vec3<f32>(0.0, 0.0, boundaryCellStep);
+      let boundarySupport = liveBoundarySupportAt(p, boundarySupportWeights);
+      let boundaryGradient = length(vec3<f32>(
+        liveBoundarySupportAt(p + boundaryDx, boundarySupportWeights) - liveBoundarySupportAt(p - boundaryDx, boundarySupportWeights),
+        liveBoundarySupportAt(p + boundaryDy, boundarySupportWeights) - liveBoundarySupportAt(p - boundaryDy, boundarySupportWeights),
+        liveBoundarySupportAt(p + boundaryDz, boundarySupportWeights) - liveBoundarySupportAt(p - boundaryDz, boundarySupportWeights)
+      )) * (0.5 / boundaryCellStep);
+      let boundaryGradientGate = smoothstep(boundaryCut, boundaryCut + boundarySoftness, boundaryGradient * boundaryGradientGain);
+      let boundaryCoreGate = clamp(mix(1.0, 1.0 - shellCoreBody, shellCoreSuppress), 0.0, 1.0);
+      let boundaryTopology = clamp(
+        1.0
+          + shellBiteGain * (edgeSupport * 0.50 + frontSupport * 0.24)
+          + shellCurlGain * curlActivity
+          + shellDivergenceGain * divSupport,
+        0.0,
+        3.5
+      );
+      let boundaryRaw = clamp(boundarySupport * boundaryGradientGate * boundaryCoreGate * boundaryTopology, 0.0, 2.0);
+      boundaryCandidate = clamp(pow(clamp(boundaryRaw * boundaryContrast, 0.0, 1.8), boundaryGamma) * boundaryOpacity, 0.0, 1.65);
+    }
     let inspectSignal =
       shellMask * inspectShellMask
       + thermalSupport * inspectThermalMask
@@ -3659,7 +3720,8 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
       + edgeSupport * inspectEdgeMask
       + shellCoreBody * inspectCoreMask
       + curlSupport * inspectCurlMask
-      + divSupport * inspectDivMask;
+      + divSupport * inspectDivMask
+      + boundaryCandidate * inspectBoundaryMask;
     let inspectAlpha = clamp(inspectSignal * rayStepOpacity * 0.55, 0.0, 0.28);
     let fireAlpha = stockRenderMode * stockFireAlpha + shellRenderMode * shellAlpha + inspectRenderMode * inspectAlpha;
     var alpha = clamp(smokeAlpha + fireAlpha, 0.0, 0.18);
@@ -3745,6 +3807,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
       + vec3<f32>(0.86, 0.28, 1.0) * inspectCoreMask
       + vec3<f32>(0.10, 0.78, 1.0) * inspectCurlMask
       + vec3<f32>(1.0, 0.18, 0.08) * inspectDivMask
+      + vec3<f32>(0.95, 0.86, 0.52) * inspectBoundaryMask
     ) * (0.24 + inspectSignal * 1.85);
     let radianceEmission = baseRadianceEmission * stockRenderMode;
     let smokeBacklight = fireColor(renderTemp * 0.72) * smokeAlpha * glowGain * stockRenderMode * smoothstep(0.16, 1.25, renderTemp) * (0.13 + fireFilament * 0.10 * flameBodyAuthority);
@@ -5813,24 +5876,43 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     writePyroPaletteUniform(uniforms, 272, controlsSnapshot.pyroFlowHotColor, '#ff7a36');
     const fireRenderModeName = normalizeFireRenderMode(controlsSnapshot.fireRenderMode);
     const shellInspectModeName = normalizeShellInspectMode(controlsSnapshot.shellInspectMode);
+    const boundaryInspectActive = shellInspectModeName === 'boundary';
+    const boundaryControls = controlsSnapshot.reactionBoundaryControls || {};
+    const boundaryUniforms = {
+      identity: boundaryControls.identity || 'reaction-boundary-live-controls-v0',
+      gradientGain: Math.max(0, Math.min(4, boundaryControls.gradientGain ?? controlsSnapshot.reactionBoundaryGradient ?? 2.60)),
+      supportThermal: Math.max(0, Math.min(2, boundaryControls.supportThermal ?? controlsSnapshot.reactionBoundarySupportThermal ?? 0.10)),
+      supportReaction: Math.max(0, Math.min(2, boundaryControls.supportReaction ?? controlsSnapshot.reactionBoundarySupportReaction ?? 0.26)),
+      supportFront: Math.max(0, Math.min(2, boundaryControls.supportFront ?? controlsSnapshot.reactionBoundarySupportFront ?? 1.60)),
+      supportInterface: Math.max(0, Math.min(2, boundaryControls.supportInterface ?? controlsSnapshot.reactionBoundarySupportInterface ?? 1.46)),
+      cut: Math.max(0, Math.min(0.55, boundaryControls.cut ?? controlsSnapshot.reactionBoundaryCut ?? 0.30)),
+      softness: Math.max(0.005, Math.min(0.45, boundaryControls.softness ?? controlsSnapshot.reactionBoundarySoftness ?? 0.08)),
+      coreReject: Math.max(0, Math.min(1, boundaryControls.coreReject ?? controlsSnapshot.reactionBoundaryCoreReject ?? 0.92)),
+      topologyGain: Math.max(0, Math.min(2.5, boundaryControls.topologyGain ?? controlsSnapshot.reactionBoundaryTopology ?? 0.90)),
+      curlGain: Math.max(0, Math.min(2, boundaryControls.curlGain ?? controlsSnapshot.reactionBoundaryCurl ?? 0.70)),
+      divergenceGain: Math.max(0, Math.min(1, boundaryControls.divergenceGain ?? controlsSnapshot.reactionBoundaryDivergence ?? 0.05)),
+      displayContrast: Math.max(0.25, Math.min(5, boundaryControls.displayContrast ?? controlsSnapshot.reactionBoundaryContrast ?? 1.35)),
+      displayGamma: Math.max(0.35, Math.min(3, boundaryControls.displayGamma ?? controlsSnapshot.reactionBoundaryGamma ?? 1.05)),
+      displayOpacity: Math.max(0, Math.min(3, boundaryControls.displayOpacity ?? controlsSnapshot.reactionBoundaryOpacity ?? 0.70)),
+    };
     uniforms[276] = fireRenderModeValue(fireRenderModeName);
     uniforms[277] = shellInspectModeValue(shellInspectModeName);
     uniforms[278] = Math.max(0, Math.min(2, controlsSnapshot.shellAmount ?? 1.10));
     uniforms[279] = Math.max(0.05, Math.min(2, controlsSnapshot.shellWidth ?? 0.90));
-    uniforms[280] = Math.max(0, Math.min(2, controlsSnapshot.shellThermal ?? 0.85));
-    uniforms[281] = Math.max(0, Math.min(2, controlsSnapshot.shellReaction ?? 1.10));
-    uniforms[282] = Math.max(0, Math.min(2, controlsSnapshot.shellFront ?? 1.25));
-    uniforms[283] = Math.max(0, Math.min(2, controlsSnapshot.shellEdge ?? 0.85));
-    uniforms[284] = Math.max(0, Math.min(1, controlsSnapshot.shellCoreSuppress ?? 0.55));
-    uniforms[285] = Math.max(0, Math.min(2, controlsSnapshot.shellBite ?? 0.80));
-    uniforms[286] = Math.max(0, Math.min(2, controlsSnapshot.shellCurl ?? 0.25));
-    uniforms[287] = Math.max(0, Math.min(1, controlsSnapshot.shellDivergence ?? 0.00));
-    uniforms[288] = Math.max(0, Math.min(2, controlsSnapshot.shellSmoke ?? 0.25));
-    uniforms[289] = 0;
-    uniforms[290] = 0;
-    uniforms[291] = 0;
-    uniforms[292] = Math.max(0, Math.min(5, controlsSnapshot.shellLuma ?? 1.35));
-    uniforms[293] = Math.max(0, Math.min(4, controlsSnapshot.shellExposure ?? 1.15));
+    uniforms[280] = boundaryInspectActive ? boundaryUniforms.supportThermal : Math.max(0, Math.min(2, controlsSnapshot.shellThermal ?? 0.85));
+    uniforms[281] = boundaryInspectActive ? boundaryUniforms.supportReaction : Math.max(0, Math.min(2, controlsSnapshot.shellReaction ?? 1.10));
+    uniforms[282] = boundaryInspectActive ? boundaryUniforms.supportFront : Math.max(0, Math.min(2, controlsSnapshot.shellFront ?? 1.25));
+    uniforms[283] = boundaryInspectActive ? boundaryUniforms.supportInterface : Math.max(0, Math.min(2, controlsSnapshot.shellEdge ?? 0.85));
+    uniforms[284] = boundaryInspectActive ? boundaryUniforms.coreReject : Math.max(0, Math.min(1, controlsSnapshot.shellCoreSuppress ?? 0.55));
+    uniforms[285] = boundaryInspectActive ? boundaryUniforms.topologyGain : Math.max(0, Math.min(2, controlsSnapshot.shellBite ?? 0.80));
+    uniforms[286] = boundaryInspectActive ? boundaryUniforms.curlGain : Math.max(0, Math.min(2, controlsSnapshot.shellCurl ?? 0.25));
+    uniforms[287] = boundaryInspectActive ? boundaryUniforms.divergenceGain : Math.max(0, Math.min(1, controlsSnapshot.shellDivergence ?? 0.00));
+    uniforms[288] = boundaryInspectActive ? boundaryUniforms.gradientGain : Math.max(0, Math.min(2, controlsSnapshot.shellSmoke ?? 0.25));
+    uniforms[289] = boundaryInspectActive ? boundaryUniforms.cut : 0;
+    uniforms[290] = boundaryInspectActive ? boundaryUniforms.softness : 0;
+    uniforms[291] = boundaryInspectActive ? boundaryUniforms.displayOpacity : 0;
+    uniforms[292] = boundaryInspectActive ? boundaryUniforms.displayContrast : Math.max(0, Math.min(5, controlsSnapshot.shellLuma ?? 1.35));
+    uniforms[293] = boundaryInspectActive ? boundaryUniforms.displayGamma : Math.max(0, Math.min(4, controlsSnapshot.shellExposure ?? 1.15));
     uniforms[294] = Math.max(0.2, Math.min(4, controlsSnapshot.shellSoftClip ?? 1.60));
     uniforms[295] = Math.max(0, Math.min(4, controlsSnapshot.shellHeat ?? 1.65));
     uniforms.set(previousViewProj.elements, 296);
@@ -5858,6 +5940,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       exposure: uniforms[293],
       softClip: uniforms[294],
       heat: uniforms[295],
+    };
+    state.reactionBoundaryControls = {
+      ...boundaryUniforms,
+      active: boundaryInspectActive,
     };
     state.volumeScene = normalizeVolumeScene(controlsSnapshot.volumeScene);
     state.bonfireReferenceConfinement = bonfireReferenceConfinementDebug(controlsSnapshot.volumeScene);
