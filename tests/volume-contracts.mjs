@@ -1970,6 +1970,28 @@ assert.match(renderPairDataset, /renderPixelRatio/, 'render-pair dataset records
 assert.match(renderPairDataset, /dryRun/, 'render-pair dataset supports a dry run manifest without spending browser/GPU time');
 assert.match(renderPairDataset, /failurePhase/, 'render-pair dataset records the phase when capture or validation fails');
 
+const pyroRgbReconstructionDatasetPath = join(root, 'volume-pyro-rgb-reconstruction-dataset.mjs');
+assert.ok(existsSync(pyroRgbReconstructionDatasetPath), 'volume Pyro RGB reconstruction dataset extractor exists');
+const pyroRgbReconstructionDataset = existsSync(pyroRgbReconstructionDatasetPath) ? readFileSync(pyroRgbReconstructionDatasetPath, 'utf8') : '';
+assert.match(pyroRgbReconstructionDataset, /kaminos\.volume\.pyro-rgb-reconstruction-dataset\.v0/, 'Pyro RGB reconstruction dataset writes a stable dataset schema identity');
+assert.match(pyroRgbReconstructionDataset, /debug-flow-pyro-fire-authority-carrier-v0/, 'Pyro RGB reconstruction dataset names the debug-flow fire-authority carrier identity');
+assert.match(pyroRgbReconstructionDataset, /lowCarrierInput/, 'Pyro RGB reconstruction dataset records the low/debug-flow carrier input role');
+assert.match(pyroRgbReconstructionDataset, /rgbTarget/, 'Pyro RGB reconstruction dataset records the higher-resolution RGB target/reference role');
+assert.match(pyroRgbReconstructionDataset, /volume-witness\.mjs/, 'Pyro RGB reconstruction dataset captures frames through the witness instead of bypassing route validation');
+assert.match(pyroRgbReconstructionDataset, /sequential-route-captures-not-frame-locked/, 'Pyro RGB reconstruction dataset refuses to claim frame-locked supervised authority');
+assert.match(pyroRgbReconstructionDataset, /volume_resolution/, 'Pyro RGB reconstruction dataset varies simulation grid resolution through the public route parameter');
+assert.match(pyroRgbReconstructionDataset, /volume_flow_debug/, 'Pyro RGB reconstruction dataset can capture debug-flow carrier imagery by route');
+assert.match(pyroRgbReconstructionDataset, /volume_pyro_flow_bite/, 'Pyro RGB reconstruction dataset preserves Pyro flow carrier controls');
+assert.match(pyroRgbReconstructionDataset, /volume_pyro_flow_radiance/, 'Pyro RGB reconstruction dataset preserves Pyro flow radiance controls');
+assert.match(pyroRgbReconstructionDataset, /effectiveRoute/, 'Pyro RGB reconstruction dataset records effective route identity from each witness');
+assert.match(pyroRgbReconstructionDataset, /prototypeIdentity/, 'Pyro RGB reconstruction dataset records effective prototype identity from each witness');
+assert.match(pyroRgbReconstructionDataset, /controls/, 'Pyro RGB reconstruction dataset preserves effective route controls from each witness');
+assert.match(pyroRgbReconstructionDataset, /scalarActivityCueProjection/, 'Pyro RGB reconstruction dataset preserves scalar cue projection identity when present');
+assert.match(pyroRgbReconstructionDataset, /hiddenScalarActivitySource/, 'Pyro RGB reconstruction dataset preserves hidden-source cue identity when present');
+assert.match(pyroRgbReconstructionDataset, /timing/, 'Pyro RGB reconstruction dataset records timing evidence from each witness');
+assert.match(pyroRgbReconstructionDataset, /dryRun/, 'Pyro RGB reconstruction dataset supports a dry run manifest without spending browser/GPU time');
+assert.match(pyroRgbReconstructionDataset, /failurePhase/, 'Pyro RGB reconstruction dataset records the phase when capture or validation fails');
+
 const fieldPairDatasetPath = join(root, 'volume-field-pair-dataset.mjs');
 assert.ok(existsSync(fieldPairDatasetPath), 'volume field-space pair dataset extractor exists');
 const fieldPairDataset = existsSync(fieldPairDatasetPath) ? readFileSync(fieldPairDatasetPath, 'utf8') : '';
