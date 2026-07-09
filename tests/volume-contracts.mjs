@@ -2013,6 +2013,29 @@ assert.match(pyroRgbReconstructionDecoder, /sourceChecksums/, 'Pyro RGB reconstr
 assert.match(pyroRgbReconstructionDecoder, /visibleRasterLabels/, 'Pyro RGB reconstruction decoder burns visible labels into the contact sheet');
 assert.match(pyroRgbReconstructionDecoder, /failurePhase/, 'Pyro RGB reconstruction decoder writes failure-phase reports for corrupt manifests or images');
 
+const pyroRgbIntermediateDecoderExportPath = join(root, 'volume-pyro-rgb-intermediate-decoder-export.py');
+assert.ok(existsSync(pyroRgbIntermediateDecoderExportPath), 'volume Pyro RGB intermediate decoder weight exporter exists');
+const pyroRgbIntermediateDecoderExport = existsSync(pyroRgbIntermediateDecoderExportPath) ? readFileSync(pyroRgbIntermediateDecoderExportPath, 'utf8') : '';
+assert.match(pyroRgbIntermediateDecoderExport, /kaminos\.volume\.pyro-rgb-intermediate-decoder-export\.v0/, 'Pyro RGB intermediate decoder exporter writes a stable manifest schema');
+assert.match(pyroRgbIntermediateDecoderExport, /pyro\.rgb-intermediate-decoder\.webgpu-local\.v0/, 'Pyro RGB intermediate decoder exporter records the WebGPU route id');
+assert.match(pyroRgbIntermediateDecoderExport, /tiny-3x3-carrier-decoder-wgsl-v0/, 'Pyro RGB intermediate decoder exporter preserves the kernel profile identity');
+assert.match(pyroRgbIntermediateDecoderExport, /hot-core/, 'Pyro RGB intermediate decoder exporter emits the hot-core intermediate map role');
+assert.match(pyroRgbIntermediateDecoderExport, /fire-body/, 'Pyro RGB intermediate decoder exporter emits the fire-body intermediate map role');
+assert.match(pyroRgbIntermediateDecoderExport, /smoke-body/, 'Pyro RGB intermediate decoder exporter emits the smoke-body intermediate map role');
+assert.match(pyroRgbIntermediateDecoderExport, /edge-breakup/, 'Pyro RGB intermediate decoder exporter emits the edge-breakup intermediate map role');
+assert.match(pyroRgbIntermediateDecoderExport, /radiance-gain/, 'Pyro RGB intermediate decoder exporter emits the radiance-gain intermediate map role');
+assert.match(pyroRgbIntermediateDecoderExport, /confidence-alpha/, 'Pyro RGB intermediate decoder exporter emits the confidence-alpha intermediate map role');
+assert.match(pyroRgbIntermediateDecoderExport, /decoderWeights/, 'Pyro RGB intermediate decoder exporter writes route-shaped decoderWeights tensor metadata');
+assert.match(pyroRgbIntermediateDecoderExport, /decoderBias/, 'Pyro RGB intermediate decoder exporter writes route-shaped decoderBias tensor metadata');
+assert.match(pyroRgbIntermediateDecoderExport, /carrierPlanes/, 'Pyro RGB intermediate decoder exporter writes route-shaped carrierPlanes tensor metadata');
+assert.match(pyroRgbIntermediateDecoderExport, /intermediateFields/, 'Pyro RGB intermediate decoder exporter writes route-shaped intermediateFields tensor metadata');
+assert.match(pyroRgbIntermediateDecoderExport, /heldOutPixelMetrics/, 'Pyro RGB intermediate decoder exporter reports held-out map metrics instead of only train error');
+assert.match(pyroRgbIntermediateDecoderExport, /baselineMeanMaps/, 'Pyro RGB intermediate decoder exporter reports a mean-map baseline');
+assert.match(pyroRgbIntermediateDecoderExport, /baselineCarrierLinearMaps/, 'Pyro RGB intermediate decoder exporter reports a carrier-linear baseline');
+assert.match(pyroRgbIntermediateDecoderExport, /visibleRasterLabels/, 'Pyro RGB intermediate decoder exporter burns visible labels into map contact sheets');
+assert.match(pyroRgbIntermediateDecoderExport, /sourceChecksums/, 'Pyro RGB intermediate decoder exporter records source and tensor checksums');
+assert.match(pyroRgbIntermediateDecoderExport, /failurePhase/, 'Pyro RGB intermediate decoder exporter writes failure-phase reports for corrupt manifests or images');
+
 const fieldPairDatasetPath = join(root, 'volume-field-pair-dataset.mjs');
 assert.ok(existsSync(fieldPairDatasetPath), 'volume field-space pair dataset extractor exists');
 const fieldPairDataset = existsSync(fieldPairDatasetPath) ? readFileSync(fieldPairDatasetPath, 'utf8') : '';
