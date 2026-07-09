@@ -1,0 +1,261 @@
+{
+  "schema": "kaminos.residual.support-scaling-comparison.v0",
+  "createdAt": "2026-07-09T05:43:00Z",
+  "controlRun": "artifacts/residual-latest-fire-0709/support-scaling-greenroom/support-050-sameeval-fire-rs010",
+  "expandedRun": "artifacts/residual-latest-fire-0709/support-scaling-greenroom/support-165-fire-rs010",
+  "controlJobId": "329f215ad54a",
+  "expandedJobId": "2afb27f9dab3",
+  "failedInvalidControlJobId": "80724bd448dc",
+  "invalidControlReason": "argument failure: residual_application_mask_mode=fire-interface is invalid; corrected run uses off, matching expanded baseline report",
+  "controlTrainPairCount": 50,
+  "controlEvalPairCount": 20,
+  "expandedTrainPairCount": 145,
+  "expandedEvalPairCount": 20,
+  "evalIdentityProof": {
+    "support050EvalMatchesSubsetTail": true,
+    "support165EvalMatchesSourceReport": true,
+    "sourceEvalLoadedIdsFrom165": [
+      "support-220-default-late::support-220-default-late-frame-009-pair-001-rs010-to-rs100",
+      "support-220-default-mid::support-220-default-mid-frame-006-pair-001-rs010-to-rs100",
+      "support-220-thin-fast::support-220-thin-fast-frame-002-pair-001-rs010-to-rs100",
+      "support-220-thin-fast::support-220-thin-fast-frame-010-pair-001-rs010-to-rs100",
+      "support-220-topup-fat-fast-mid::support-220-topup-fat-fast-mid-frame-007-pair-001-rs010-to-rs100",
+      "support-220-topup-fat-mid-soft::support-220-topup-fat-mid-soft-frame-004-pair-001-rs010-to-rs100",
+      "support-220-topup-fat-slow-hard::support-220-topup-fat-slow-hard-frame-001-pair-001-rs010-to-rs100",
+      "support-220-topup-fat-slow-hard::support-220-topup-fat-slow-hard-frame-008-pair-001-rs010-to-rs100",
+      "support-220-topup-mid-fast-soft::support-220-topup-mid-fast-soft-frame-005-pair-001-rs010-to-rs100",
+      "support-220-topup-mid-mid-hard::support-220-topup-mid-mid-hard-frame-002-pair-001-rs010-to-rs100",
+      "support-220-topup-mid-mid-hard::support-220-topup-mid-mid-hard-frame-010-pair-001-rs010-to-rs100",
+      "support-220-topup-thin-mid-soft::support-220-topup-thin-mid-soft-frame-007-pair-001-rs010-to-rs100",
+      "support-220-topup-tight-fast-hard::support-220-topup-tight-fast-hard-frame-004-pair-001-rs010-to-rs100",
+      "support-220-topup-tight-fast-hard::support-220-topup-tight-fast-hard-frame-011-pair-001-rs010-to-rs100",
+      "support-220-topup-wide-fast-hard::support-220-topup-wide-fast-hard-frame-008-pair-001-rs010-to-rs100",
+      "support-220-topup-wide-mid-mid::support-220-topup-wide-mid-mid-frame-005-pair-001-rs010-to-rs100",
+      "support-220-topup-wide-slow-soft::support-220-topup-wide-slow-soft-frame-002-pair-001-rs010-to-rs100",
+      "support-220-topup-wide-slow-soft::support-220-topup-wide-slow-soft-frame-010-pair-001-rs010-to-rs100",
+      "support-220-wide-smoky::support-220-wide-smoky-frame-006-pair-001-rs010-to-rs100",
+      "support-220-wide-soft::support-220-wide-soft-frame-003-pair-001-rs010-to-rs100"
+    ],
+    "subsetEvalLoadedIdsIn050": [
+      "zz-subset-sameeval-000::zz-subset-sameeval-000-rs010-to-rs100",
+      "zz-subset-sameeval-001::zz-subset-sameeval-001-rs010-to-rs100",
+      "zz-subset-sameeval-002::zz-subset-sameeval-002-rs010-to-rs100",
+      "zz-subset-sameeval-003::zz-subset-sameeval-003-rs010-to-rs100",
+      "zz-subset-sameeval-004::zz-subset-sameeval-004-rs010-to-rs100",
+      "zz-subset-sameeval-005::zz-subset-sameeval-005-rs010-to-rs100",
+      "zz-subset-sameeval-006::zz-subset-sameeval-006-rs010-to-rs100",
+      "zz-subset-sameeval-007::zz-subset-sameeval-007-rs010-to-rs100",
+      "zz-subset-sameeval-008::zz-subset-sameeval-008-rs010-to-rs100",
+      "zz-subset-sameeval-009::zz-subset-sameeval-009-rs010-to-rs100",
+      "zz-subset-sameeval-010::zz-subset-sameeval-010-rs010-to-rs100",
+      "zz-subset-sameeval-011::zz-subset-sameeval-011-rs010-to-rs100",
+      "zz-subset-sameeval-012::zz-subset-sameeval-012-rs010-to-rs100",
+      "zz-subset-sameeval-013::zz-subset-sameeval-013-rs010-to-rs100",
+      "zz-subset-sameeval-014::zz-subset-sameeval-014-rs010-to-rs100",
+      "zz-subset-sameeval-015::zz-subset-sameeval-015-rs010-to-rs100",
+      "zz-subset-sameeval-016::zz-subset-sameeval-016-rs010-to-rs100",
+      "zz-subset-sameeval-017::zz-subset-sameeval-017-rs010-to-rs100",
+      "zz-subset-sameeval-018::zz-subset-sameeval-018-rs010-to-rs100",
+      "zz-subset-sameeval-019::zz-subset-sameeval-019-rs010-to-rs100"
+    ],
+    "mapping": [
+      {
+        "role": "eval",
+        "subsetLoadedId": "zz-subset-sameeval-000::zz-subset-sameeval-000-rs010-to-rs100",
+        "sourceLoadedId": "support-220-default-late::support-220-default-late-frame-009-pair-001-rs010-to-rs100"
+      },
+      {
+        "role": "eval",
+        "subsetLoadedId": "zz-subset-sameeval-001::zz-subset-sameeval-001-rs010-to-rs100",
+        "sourceLoadedId": "support-220-default-mid::support-220-default-mid-frame-006-pair-001-rs010-to-rs100"
+      },
+      {
+        "role": "eval",
+        "subsetLoadedId": "zz-subset-sameeval-002::zz-subset-sameeval-002-rs010-to-rs100",
+        "sourceLoadedId": "support-220-thin-fast::support-220-thin-fast-frame-002-pair-001-rs010-to-rs100"
+      },
+      {
+        "role": "eval",
+        "subsetLoadedId": "zz-subset-sameeval-003::zz-subset-sameeval-003-rs010-to-rs100",
+        "sourceLoadedId": "support-220-thin-fast::support-220-thin-fast-frame-010-pair-001-rs010-to-rs100"
+      },
+      {
+        "role": "eval",
+        "subsetLoadedId": "zz-subset-sameeval-004::zz-subset-sameeval-004-rs010-to-rs100",
+        "sourceLoadedId": "support-220-topup-fat-fast-mid::support-220-topup-fat-fast-mid-frame-007-pair-001-rs010-to-rs100"
+      },
+      {
+        "role": "eval",
+        "subsetLoadedId": "zz-subset-sameeval-005::zz-subset-sameeval-005-rs010-to-rs100",
+        "sourceLoadedId": "support-220-topup-fat-mid-soft::support-220-topup-fat-mid-soft-frame-004-pair-001-rs010-to-rs100"
+      },
+      {
+        "role": "eval",
+        "subsetLoadedId": "zz-subset-sameeval-006::zz-subset-sameeval-006-rs010-to-rs100",
+        "sourceLoadedId": "support-220-topup-fat-slow-hard::support-220-topup-fat-slow-hard-frame-001-pair-001-rs010-to-rs100"
+      },
+      {
+        "role": "eval",
+        "subsetLoadedId": "zz-subset-sameeval-007::zz-subset-sameeval-007-rs010-to-rs100",
+        "sourceLoadedId": "support-220-topup-fat-slow-hard::support-220-topup-fat-slow-hard-frame-008-pair-001-rs010-to-rs100"
+      },
+      {
+        "role": "eval",
+        "subsetLoadedId": "zz-subset-sameeval-008::zz-subset-sameeval-008-rs010-to-rs100",
+        "sourceLoadedId": "support-220-topup-mid-fast-soft::support-220-topup-mid-fast-soft-frame-005-pair-001-rs010-to-rs100"
+      },
+      {
+        "role": "eval",
+        "subsetLoadedId": "zz-subset-sameeval-009::zz-subset-sameeval-009-rs010-to-rs100",
+        "sourceLoadedId": "support-220-topup-mid-mid-hard::support-220-topup-mid-mid-hard-frame-002-pair-001-rs010-to-rs100"
+      },
+      {
+        "role": "eval",
+        "subsetLoadedId": "zz-subset-sameeval-010::zz-subset-sameeval-010-rs010-to-rs100",
+        "sourceLoadedId": "support-220-topup-mid-mid-hard::support-220-topup-mid-mid-hard-frame-010-pair-001-rs010-to-rs100"
+      },
+      {
+        "role": "eval",
+        "subsetLoadedId": "zz-subset-sameeval-011::zz-subset-sameeval-011-rs010-to-rs100",
+        "sourceLoadedId": "support-220-topup-thin-mid-soft::support-220-topup-thin-mid-soft-frame-007-pair-001-rs010-to-rs100"
+      },
+      {
+        "role": "eval",
+        "subsetLoadedId": "zz-subset-sameeval-012::zz-subset-sameeval-012-rs010-to-rs100",
+        "sourceLoadedId": "support-220-topup-tight-fast-hard::support-220-topup-tight-fast-hard-frame-004-pair-001-rs010-to-rs100"
+      },
+      {
+        "role": "eval",
+        "subsetLoadedId": "zz-subset-sameeval-013::zz-subset-sameeval-013-rs010-to-rs100",
+        "sourceLoadedId": "support-220-topup-tight-fast-hard::support-220-topup-tight-fast-hard-frame-011-pair-001-rs010-to-rs100"
+      },
+      {
+        "role": "eval",
+        "subsetLoadedId": "zz-subset-sameeval-014::zz-subset-sameeval-014-rs010-to-rs100",
+        "sourceLoadedId": "support-220-topup-wide-fast-hard::support-220-topup-wide-fast-hard-frame-008-pair-001-rs010-to-rs100"
+      },
+      {
+        "role": "eval",
+        "subsetLoadedId": "zz-subset-sameeval-015::zz-subset-sameeval-015-rs010-to-rs100",
+        "sourceLoadedId": "support-220-topup-wide-mid-mid::support-220-topup-wide-mid-mid-frame-005-pair-001-rs010-to-rs100"
+      },
+      {
+        "role": "eval",
+        "subsetLoadedId": "zz-subset-sameeval-016::zz-subset-sameeval-016-rs010-to-rs100",
+        "sourceLoadedId": "support-220-topup-wide-slow-soft::support-220-topup-wide-slow-soft-frame-002-pair-001-rs010-to-rs100"
+      },
+      {
+        "role": "eval",
+        "subsetLoadedId": "zz-subset-sameeval-017::zz-subset-sameeval-017-rs010-to-rs100",
+        "sourceLoadedId": "support-220-topup-wide-slow-soft::support-220-topup-wide-slow-soft-frame-010-pair-001-rs010-to-rs100"
+      },
+      {
+        "role": "eval",
+        "subsetLoadedId": "zz-subset-sameeval-018::zz-subset-sameeval-018-rs010-to-rs100",
+        "sourceLoadedId": "support-220-wide-smoky::support-220-wide-smoky-frame-006-pair-001-rs010-to-rs100"
+      },
+      {
+        "role": "eval",
+        "subsetLoadedId": "zz-subset-sameeval-019::zz-subset-sameeval-019-rs010-to-rs100",
+        "sourceLoadedId": "support-220-wide-soft::support-220-wide-soft-frame-003-pair-001-rs010-to-rs100"
+      }
+    ],
+    "note": "050 subset stamps IDs to control trainer sort/tail selection while preserving original source image paths; mapping binds each 050 eval image path to the 165 eval source loaded id."
+  },
+  "metrics": [
+    {
+      "metric": "baselinePsnr",
+      "support050": 35.58486229930135,
+      "support165": 34.813572981882324,
+      "delta_165_minus_050": -0.7712893174190256
+    },
+    {
+      "metric": "modelPsnr",
+      "support050": 34.98790655622203,
+      "support165": 34.70288211613317,
+      "delta_165_minus_050": -0.2850244400888613
+    },
+    {
+      "metric": "deltaPsnr",
+      "support050": -0.5969557430793202,
+      "support165": -0.11069086574915588,
+      "delta_165_minus_050": 0.4862648773301643
+    },
+    {
+      "metric": "weightedBaselinePsnr",
+      "support050": 35.30908432581599,
+      "support165": 34.579461039243526,
+      "delta_165_minus_050": -0.7296232865724619
+    },
+    {
+      "metric": "weightedModelPsnr",
+      "support050": 34.772544604499174,
+      "support165": 34.50144127672078,
+      "delta_165_minus_050": -0.2711033277783912
+    },
+    {
+      "metric": "weightedDeltaPsnr",
+      "support050": -0.5365397213168137,
+      "support165": -0.07801976252274301,
+      "delta_165_minus_050": 0.4585199587940707
+    },
+    {
+      "metric": "edgeBandBaselinePsnr",
+      "support050": 27.426636501747673,
+      "support165": 31.64967410781155,
+      "delta_165_minus_050": 4.223037606063876
+    },
+    {
+      "metric": "edgeBandModelPsnr",
+      "support050": 27.588500711206105,
+      "support165": 31.840452125554734,
+      "delta_165_minus_050": 4.251951414348628
+    },
+    {
+      "metric": "edgeBandDeltaPsnr",
+      "support050": 0.16186420945843238,
+      "support165": 0.1907780177431846,
+      "delta_165_minus_050": 0.028913808284752207
+    },
+    {
+      "metric": "temporalBaselinePsnr",
+      "support050": null,
+      "support165": null,
+      "delta_165_minus_050": null
+    },
+    {
+      "metric": "temporalModelPsnr",
+      "support050": null,
+      "support165": null,
+      "delta_165_minus_050": null
+    },
+    {
+      "metric": "temporalDeltaPsnr",
+      "support050": -0.018052240126074537,
+      "support165": -0.00781314341340078,
+      "delta_165_minus_050": 0.010239096712673756
+    },
+    {
+      "metric": "improvedPatchFraction",
+      "support050": 0.25,
+      "support165": 0.4140625,
+      "delta_165_minus_050": 0.1640625
+    },
+    {
+      "metric": "durationSeconds",
+      "support050": 19.97501492500305,
+      "support165": 12.441566944122314,
+      "delta_165_minus_050": -7.533447980880737
+    }
+  ],
+  "metricSummary": {
+    "deltaPsnr_050": -0.5969557430793202,
+    "deltaPsnr_165": -0.11069086574915588,
+    "weightedDeltaPsnr_050": -0.5365397213168137,
+    "weightedDeltaPsnr_165": -0.07801976252274301,
+    "edgeBandDeltaPsnr_050": 0.16186420945843238,
+    "edgeBandDeltaPsnr_165": 0.1907780177431846,
+    "improvedPatchFraction_050": 0.25,
+    "improvedPatchFraction_165": 0.4140625
+  }
+}
