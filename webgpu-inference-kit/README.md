@@ -1,10 +1,8 @@
 # @kaminos/webgpu-inference-kit
 
-Runtime helpers for browser WebGPU inference ports, with route receipts and scheduler profiles.
+Runtime primitives for browser-native WebGPU model ports: device setup, tensors, uniforms, kernels, phase programs, profiling, and cooperative scheduling.
 
-Use this package when you are porting a model to browser WebGPU and you do not want to rebuild the same boring runtime shell again: device acquisition, adapter/feature identity, shader and pipeline caching, buffer upload/readback helpers, stage timing, cooperative yield hooks, scheduler/backpressure metadata, route envelopes, and receipt validation.
-
-The evidence pieces are not the product center. They are the safety layer that keeps a composed pipeline from mistaking a stub, fallback, stale cache, fixture, partial run, or wrong route for live model output.
+Use this package when you are porting a model to browser WebGPU and want to start from a real runtime shell instead of rebuilding the same chores again: adapter and device acquisition, shader and pipeline caching, GPU tensor allocation, uniform packing, buffer upload/readback helpers, compute-kernel dispatch, multi-phase programs, stage timing, and cooperative yield hooks for long browser inference routes.
 
 ## Install
 
@@ -133,7 +131,7 @@ The runtime helpers are the lowest useful layer. Route helpers sit above them so
 - `createKimodoTextToMotionRouteDefinition(input)` and `createKimodoTextToMotionRouteReceipt(input)` define the Kimodo text-prompt to SOMA77 joints/motion-clip route.
 - `createSf3dImageToMeshRouteDefinition(input)` and `createSf3dImageToMeshRouteReceipt(input)` define the Stable Fast 3D source-image to mesh/albedo/normal route.
 
-These route definitions are not meant to trap future ports into MoGE/SHARP/Kimodo/SF3D. They are examples of the current shared grammar: route id, input roles, output roles, backend kind, model identity, kernel/stage identity, scheduler posture, and output artifacts.
+These route definitions show the current shared grammar for browser-native model routes: route id, input roles, output roles, backend kind, model identity, kernel/stage identity, scheduler posture, and output artifacts. New ports can follow that grammar while adding their own route definitions.
 
 ## Scheduler And Breathability Layer
 
@@ -150,6 +148,8 @@ This is the layer that should help SHARP, SF3D, Kimodo, image generators, and fu
 
 Receipts answer: did this output actually come from the route, backend, model, and kernel the consumer thinks it did?
 
+The receipt and evidence pieces are the runtime safety layer. They keep a composed browser pipeline from mistaking a stub, fallback, stale cache, fixture, partial run, or wrong route for live model output while leaving the package centered on the runtime primitives above.
+
 - `createWebGpuLocalRouteReceipt(input)`, `createWebGpuRouteReceiptFromArtifacts(input)`, `createRouteReceiptArtifacts(input)`, `finishAndValidateRouteProfile(input)`, `validateRouteReceipt(receipt)`, and `assertAuthoritativeRouteReceipt(receipt)` construct and validate route receipts.
 - `classifyWebGpuRouteReceiptEvidence(receipt)` and `classifyWebGpuRouteWorkerResultEvidence(result)` distinguish authoritative live WebGPU output from fallback, cached, partial, stale, invalid, and route-mismatched output.
 - `createWebGpuRouteSchemaContract(input)` gives route repos a compact conformance object for tests.
@@ -162,12 +162,12 @@ This layer matters because composition without identity is how a browser pipelin
 2. Keep extracting runtime chores only when at least two real routes need them or one port exposes a clearly reusable primitive.
 3. Keep route receipts and scheduler verification strict enough that downstream systems can compose outputs without false authority.
 4. Use MoGE, SHARP, Kimodo, SF3D, and SAM-style segmentation/image-generation ports to discover the next runtime primitives: bind-group layout helpers, uniform packing, tensor views, buffer pools, command submission patterns, tiled attention, and cooperative phase splitting.
-5. Avoid becoming a generic ONNX, LLM, or universal tensor runtime until a concrete browser WebGPU route exposes an advantage we can actually own.
+5. Stay grounded in browser-native WebGPU routes where Kaminos can own useful runtime leverage: direct kernels, route composition, spatial outputs, interactive scheduling, and honest local execution.
 
-## Non-Goals
+## Focus Boundaries
 
-- Generic ONNX import parity.
-- Competing with mature browser LLM runtimes without a concrete route-level advantage.
-- Kaminos graph, scene, library, or promotion ownership.
-- Hidden caps below adapter/device capacity without measured justification.
-- Treating fallback, stale output, fixture data, partial output, or missing backend identity as successful live inference.
+- Browser-native WebGPU model ports with direct runtime leverage.
+- Route definitions and profiles that let ports compose inside Kaminos.
+- Cooperative scheduling and breathability surfaces for long-running browser inference.
+- Adapter/device capacity preservation unless measurement proves a narrower limit performs better.
+- Strict distinction between live inference, cached results, fixtures, fallbacks, partial outputs, and route mismatches.

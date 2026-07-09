@@ -6,6 +6,12 @@ The current prototype includes realtime volumetric fire and smoke running direct
 
 The broader architecture is documented in [Spatial Asset Kiln](docs/spatial-asset-kiln.md). The short version: Kaminos is becoming a place where generated artifacts can enter World Chambers, sit on Workbench/Kiln surfaces, expose Preview Benches for smoke, and advertise Smoke Offers that an operator can open, inspect, capture, and route back into the work.
 
+## Browser-Native Inference Runtime
+
+Kaminos includes [`@kaminos/webgpu-inference-kit`](webgpu-inference-kit/README.md), a shared runtime substrate for browser-local WebGPU model ports. The kit gives route authors the recurring pieces that every serious port needs: WebGPU device setup, tensors, uniform buffers, shader and pipeline caches, compute-kernel dispatch, phase programs, readback helpers, stage profiling, and cooperative yield boundaries for long-running inference.
+
+The kit is where SHARP, SF3D, MoGE, Kimodo, SAM-style segmentation, image generation, and future browser-native model routes can converge on common runtime primitives instead of carrying one-off shells. Its route receipts and scheduler profiles support composition, but the center of the package is the runtime that lets a port run useful model work locally in the browser.
+
 ## Asset Kiln
 
 Creative inference has an awkward rhythm: the operator forms a hypothesis about a generator, commits an experiment, then waits during the exact moment when curiosity is sharpest. Kaminos turns that wait into visible material transformation.
