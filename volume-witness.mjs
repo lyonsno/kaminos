@@ -2627,6 +2627,7 @@ async function main() {
       externalEmitterFrameId: sample.externalEmitterFrameId,
       scalarActivityReceiver: sample.scalarActivityReceiver || state.scalarActivityReceiver || null,
       scalarActivityCueProjection: sample.scalarActivityCueProjection || state.scalarActivityCueProjection || null,
+      hiddenScalarActivitySource: sample.hiddenScalarActivitySource || state.hiddenScalarActivitySource || null,
       volumePrimitiveCount: sample.volumePrimitiveCount,
       volumePrimitiveIds: sample.volumePrimitiveIds,
       volumePrimitives: sample.volumePrimitives,

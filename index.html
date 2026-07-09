@@ -1243,8 +1243,17 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
       <select id="volume-oracle-activity-source" class="select-input">
         <option value="procedural" selected>Procedural</option>
         <option value="lowSelfGpu">Low self GPU</option>
+        <option value="highProjectedGpu">High projected GPU</option>
       </select>
       <span class="slider-val" id="volume-oracle-activity-source-val">procedural</span>
+    </div>
+    <div class="slider-row">
+      <span class="slider-label">Cue Source Grid</span>
+      <select id="volume-oracle-activity-source-grid" class="select-input">
+        <option value="128">128^3</option>
+        <option value="160" selected>160^3</option>
+      </select>
+      <span class="slider-val" id="volume-oracle-activity-source-grid-val">160^3</span>
     </div>
     <div class="slider-row">
       <span class="slider-label">Cue Display</span>
@@ -9692,7 +9701,7 @@ const FIRESIM_LOOK_FIELDS = [
   'volumeScene', 'density', 'fire', 'radiance', 'absorption', 'glow', 'smoke', 'curl',
   'microdetail', 'interfaceShred', 'fireLicks', 'projection', 'speed', 'fireScale',
   'detailScale', 'plumeHeight', 'windStrength', 'windAngle', 'windHeight', 'inputRadius',
-  'flowRate', 'oracleActivityCue', 'oracleActivitySource', 'oracleActivityDisplay', 'oracleActivityCurlNoise',
+  'flowRate', 'oracleActivityCue', 'oracleActivitySource', 'oracleActivitySourceGrid', 'oracleActivityDisplay', 'oracleActivityCurlNoise',
   'oracleActivityVorticity', 'oracleActivityMaterial',
 ];
 
@@ -10988,6 +10997,7 @@ const VOLUME_BASIN_ROUTE_FIELDS = [
   ['flowDebug', 'volume_flow_debug'],
   ['oracleActivityCue', 'volume_oracle_activity_cue'],
   ['oracleActivitySource', 'volume_oracle_activity_source'],
+  ['oracleActivitySourceGrid', 'volume_oracle_activity_source_grid'],
   ['oracleActivityDisplay', 'volume_oracle_activity_display'],
   ['oracleActivityCurlNoise', 'volume_oracle_activity_curl_noise'],
   ['oracleActivityVorticity', 'volume_oracle_activity_vorticity'],
@@ -15335,6 +15345,7 @@ function readVolumeControls() {
     flowDebug: parseFloat(document.getElementById('volume-flow-debug').value),
     oracleActivityCue: parseFloat(document.getElementById('volume-oracle-activity-cue').value),
     oracleActivitySource: document.getElementById('volume-oracle-activity-source').value,
+    oracleActivitySourceGrid: parseInt(document.getElementById('volume-oracle-activity-source-grid').value, 10),
     oracleActivityDisplay: parseFloat(document.getElementById('volume-oracle-activity-display').value),
     oracleActivityCurlNoise: parseFloat(document.getElementById('volume-oracle-activity-curl-noise').value),
     oracleActivityVorticity: parseFloat(document.getElementById('volume-oracle-activity-vorticity').value),
@@ -15478,7 +15489,8 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-grid-overlay-val').textContent = c.gridOverlay.toFixed(2);
   document.getElementById('volume-flow-debug-val').textContent = c.flowDebug.toFixed(2);
   document.getElementById('volume-oracle-activity-cue-val').textContent = c.oracleActivityCue >= 0.5 ? 'on' : 'off';
-  document.getElementById('volume-oracle-activity-source-val').textContent = c.oracleActivitySource === 'lowSelfGpu' ? 'lowSelfGpu' : 'procedural';
+  document.getElementById('volume-oracle-activity-source-val').textContent = c.oracleActivitySource === 'highProjectedGpu' ? 'highProjectedGpu' : (c.oracleActivitySource === 'lowSelfGpu' ? 'lowSelfGpu' : 'procedural');
+  document.getElementById('volume-oracle-activity-source-grid-val').textContent = `${c.oracleActivitySourceGrid || 160}^3`;
   document.getElementById('volume-oracle-activity-display-val').textContent = c.oracleActivityDisplay.toFixed(2);
   document.getElementById('volume-oracle-activity-curl-noise-val').textContent = c.oracleActivityCurlNoise.toFixed(2);
   document.getElementById('volume-oracle-activity-vorticity-val').textContent = c.oracleActivityVorticity.toFixed(2);
@@ -15913,7 +15925,13 @@ async function initKaminosVolumeRoute() {
   }
   const routeOracleActivitySource = params.get('volume_oracle_activity_source');
   if (routeOracleActivitySource) {
-    document.getElementById('volume-oracle-activity-source').value = routeOracleActivitySource === 'lowSelfGpu' ? 'lowSelfGpu' : 'procedural';
+    document.getElementById('volume-oracle-activity-source').value = routeOracleActivitySource === 'highProjectedGpu'
+      ? 'highProjectedGpu'
+      : (routeOracleActivitySource === 'lowSelfGpu' ? 'lowSelfGpu' : 'procedural');
+  }
+  const routeOracleActivitySourceGrid = Number(params.get('volume_oracle_activity_source_grid'));
+  if (params.has('volume_oracle_activity_source_grid') && Number.isFinite(routeOracleActivitySourceGrid)) {
+    document.getElementById('volume-oracle-activity-source-grid').value = routeOracleActivitySourceGrid >= 144 ? '160' : '128';
   }
   const routeOracleActivityDisplay = Number(params.get('volume_oracle_activity_display'));
   if (params.has('volume_oracle_activity_display') && Number.isFinite(routeOracleActivityDisplay)) {
@@ -16322,7 +16340,7 @@ async function initKaminosVolumeRoute() {
   moveVolumePyroFreezeIntoCarrierWorkbench();
   moveVolumePyroRadianceControlsBelowFlow();
   moveVolumePyroLegacyControlsBelowRadiance();
-  for (const id of ['volume-scene', 'volume-density', 'volume-fire', 'volume-radiance', 'volume-absorption', 'volume-glow', 'volume-smoke', 'volume-curl', 'volume-microdetail', 'volume-interface-shred', 'volume-fire-licks', 'volume-projection', 'volume-speed', 'volume-steps', 'volume-adaptive-rays', 'volume-occupancy-skip', 'volume-majorant-skip', 'volume-majorant-smooth', 'volume-majorant-guard', 'volume-temporal-accum', 'volume-temporal-jitter', 'volume-history-clamp', 'volume-fire-scale', 'volume-detail-scale', 'volume-plume-height', 'volume-wind-strength', 'volume-wind-angle', 'volume-wind-height', 'volume-render-scale', 'volume-input-radius', 'volume-flow-rate', 'volume-resolution', 'volume-majorant-grid', 'volume-grid-overlay', 'volume-flow-debug', 'volume-oracle-activity-cue', 'volume-oracle-activity-source', 'volume-oracle-activity-display', 'volume-oracle-activity-curl-noise', 'volume-oracle-activity-vorticity', 'volume-oracle-activity-material', 'volume-look-freeze', 'volume-pyro-compare', 'volume-pyro-detail', 'volume-pyro-material-gain', 'volume-pyro-interface-focus', 'volume-pyro-edge-bite', 'volume-pyro-bite-border', 'volume-pyro-bite-teeth', 'volume-pyro-bite-wake', 'volume-pyro-bite-height', 'volume-pyro-bite-fire-lock', 'volume-pyro-bite-core', 'volume-pyro-bite-core-cut', 'volume-pyro-bite-rim', 'volume-pyro-bite-rim-cut', 'volume-pyro-bite-after', 'volume-pyro-bite-after-cut', 'volume-pyro-fire-mode', 'volume-pyro-flame-paint', 'volume-pyro-stock-mix', 'volume-pyro-flame-luma', 'volume-pyro-flame-core-color', 'volume-pyro-flame-edge-color', 'volume-pyro-bite-heat', 'volume-pyro-bite-chroma', 'volume-pyro-bite-luma', 'volume-pyro-bite-ember-color', 'volume-pyro-bite-hot-color', 'volume-pyro-smoke-fold', 'volume-pyro-fold-border', 'volume-pyro-fold-wake', 'volume-pyro-wake-lift', 'volume-pyro-wake-warmth', 'volume-pyro-wake-luma', 'volume-pyro-wake-shadow-color', 'volume-pyro-wake-ember-color', 'volume-pyro-radiance', 'volume-pyro-radiance-gate', 'volume-pyro-radiance-spill', 'volume-pyro-radiance-warmth', 'volume-pyro-radiance-hue', 'volume-pyro-radiance-chroma', 'volume-pyro-radiance-luma', 'volume-pyro-radiance-cool-color', 'volume-pyro-radiance-warm-color', 'volume-pyro-radiance-source', 'volume-pyro-radiance-height', 'volume-pyro-radiance-border', 'volume-pyro-radiance-teeth', 'volume-pyro-radiance-rise', 'volume-pyro-radiance-fire-lock', 'volume-pyro-flow-bite', 'volume-pyro-flow-border', 'volume-pyro-flow-teeth', 'volume-pyro-flow-rise', 'volume-pyro-flow-fire-lock', 'volume-pyro-flow-luma', 'volume-pyro-flow-radiance', 'volume-pyro-flow-spikes', 'volume-pyro-flow-cool-color', 'volume-pyro-flow-hot-color', 'volume-pyro-diagnostic-paint', 'volume-pyro-carrier-view', 'volume-pyro-overdrive', 'volume-pressure-mode', 'volume-pressure-tier-overlay', 'volume-pressure-tier-lower-max', 'volume-pressure-tier-hero-min', 'volume-pressure-tier-hero-max', 'volume-canonical-spread', 'volume-canonical-centerline', 'volume-canonical-body-balance']) {
+  for (const id of ['volume-scene', 'volume-density', 'volume-fire', 'volume-radiance', 'volume-absorption', 'volume-glow', 'volume-smoke', 'volume-curl', 'volume-microdetail', 'volume-interface-shred', 'volume-fire-licks', 'volume-projection', 'volume-speed', 'volume-steps', 'volume-adaptive-rays', 'volume-occupancy-skip', 'volume-majorant-skip', 'volume-majorant-smooth', 'volume-majorant-guard', 'volume-temporal-accum', 'volume-temporal-jitter', 'volume-history-clamp', 'volume-fire-scale', 'volume-detail-scale', 'volume-plume-height', 'volume-wind-strength', 'volume-wind-angle', 'volume-wind-height', 'volume-render-scale', 'volume-input-radius', 'volume-flow-rate', 'volume-resolution', 'volume-majorant-grid', 'volume-grid-overlay', 'volume-flow-debug', 'volume-oracle-activity-cue', 'volume-oracle-activity-source', 'volume-oracle-activity-source-grid', 'volume-oracle-activity-display', 'volume-oracle-activity-curl-noise', 'volume-oracle-activity-vorticity', 'volume-oracle-activity-material', 'volume-look-freeze', 'volume-pyro-compare', 'volume-pyro-detail', 'volume-pyro-material-gain', 'volume-pyro-interface-focus', 'volume-pyro-edge-bite', 'volume-pyro-bite-border', 'volume-pyro-bite-teeth', 'volume-pyro-bite-wake', 'volume-pyro-bite-height', 'volume-pyro-bite-fire-lock', 'volume-pyro-bite-core', 'volume-pyro-bite-core-cut', 'volume-pyro-bite-rim', 'volume-pyro-bite-rim-cut', 'volume-pyro-bite-after', 'volume-pyro-bite-after-cut', 'volume-pyro-fire-mode', 'volume-pyro-flame-paint', 'volume-pyro-stock-mix', 'volume-pyro-flame-luma', 'volume-pyro-flame-core-color', 'volume-pyro-flame-edge-color', 'volume-pyro-bite-heat', 'volume-pyro-bite-chroma', 'volume-pyro-bite-luma', 'volume-pyro-bite-ember-color', 'volume-pyro-bite-hot-color', 'volume-pyro-smoke-fold', 'volume-pyro-fold-border', 'volume-pyro-fold-wake', 'volume-pyro-wake-lift', 'volume-pyro-wake-warmth', 'volume-pyro-wake-luma', 'volume-pyro-wake-shadow-color', 'volume-pyro-wake-ember-color', 'volume-pyro-radiance', 'volume-pyro-radiance-gate', 'volume-pyro-radiance-spill', 'volume-pyro-radiance-warmth', 'volume-pyro-radiance-hue', 'volume-pyro-radiance-chroma', 'volume-pyro-radiance-luma', 'volume-pyro-radiance-cool-color', 'volume-pyro-radiance-warm-color', 'volume-pyro-radiance-source', 'volume-pyro-radiance-height', 'volume-pyro-radiance-border', 'volume-pyro-radiance-teeth', 'volume-pyro-radiance-rise', 'volume-pyro-radiance-fire-lock', 'volume-pyro-flow-bite', 'volume-pyro-flow-border', 'volume-pyro-flow-teeth', 'volume-pyro-flow-rise', 'volume-pyro-flow-fire-lock', 'volume-pyro-flow-luma', 'volume-pyro-flow-radiance', 'volume-pyro-flow-spikes', 'volume-pyro-flow-cool-color', 'volume-pyro-flow-hot-color', 'volume-pyro-diagnostic-paint', 'volume-pyro-carrier-view', 'volume-pyro-overdrive', 'volume-pressure-mode', 'volume-pressure-tier-overlay', 'volume-pressure-tier-lower-max', 'volume-pressure-tier-hero-min', 'volume-pressure-tier-hero-max', 'volume-canonical-spread', 'volume-canonical-centerline', 'volume-canonical-body-balance']) {
     document.getElementById(id).addEventListener('input', syncControls);
     document.getElementById(id).addEventListener('change', syncControls);
   }

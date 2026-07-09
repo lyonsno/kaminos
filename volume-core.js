@@ -13,12 +13,16 @@ const LEARNED_ACTIVITY_CUE_AUTHORITY = 'learned-diagnostic-rgb-norm-scalar-activ
 const LIVE_LOW_SELF_ACTIVITY_CUE_AUTHORITY = 'live-low-self-current-field-scalar-activity-cue-v0';
 const LIVE_HIGH_PROJECTED_ACTIVITY_CUE_AUTHORITY = 'live-high-projected-current-field-scalar-activity-cue-v0';
 const GPU_LOW_SELF_ACTIVITY_CUE_AUTHORITY = 'gpu-low-self-current-field-scalar-activity-cue-v0';
+const GPU_HIGH_PROJECTED_ACTIVITY_CUE_AUTHORITY = 'gpu-high-projected-current-field-scalar-activity-cue-v0';
 const PROCEDURAL_ACTIVITY_CUE_AUTHORITY = 'procedural-receiver-activity-proxy-no-truth-v0';
 const SCALAR_ACTIVITY_RECEIVER_HOOK_IDENTITY = 'scalar-activity-receiver-hook-controls-v0';
 const SCALAR_ACTIVITY_CUE_EXPORT_IDENTITY = 'current-field-scalar-activity-cue-export-v0';
 const GPU_SCALAR_ACTIVITY_CUE_PROJECTION_IDENTITY = 'gpu-live-low-self-scalar-activity-projection-v0';
+const GPU_HIGH_PROJECTED_SCALAR_ACTIVITY_CUE_PROJECTION_IDENTITY = 'gpu-live-high-source-scalar-activity-projection-v0';
+const GPU_HIDDEN_SCALAR_ACTIVITY_SOURCE_IDENTITY = 'gpu-live-hidden-scalar-activity-source-sim-v0';
 const GPU_SCALAR_ACTIVITY_CUE_PROJECTION_READBACK_POLICY = 'no-cpu-readback-live-gpu-cue-projection-v0';
 const DEFAULT_GRID_SIZE = 96;
+const DEFAULT_SCALAR_ACTIVITY_SOURCE_GRID_SIZE = 160;
 const SUPPORTED_GRID_SIZES = [32, 48, 64, 96, 128, 160, 192];
 const FLUID_SLOTS_PER_CELL = 4;
 const FLUID_COMPONENTS = FLUID_SLOTS_PER_CELL * 4;
@@ -86,13 +90,20 @@ function normalizeScalarActivityCueAuthority(value) {
   if (candidate === LIVE_LOW_SELF_ACTIVITY_CUE_AUTHORITY) return LIVE_LOW_SELF_ACTIVITY_CUE_AUTHORITY;
   if (candidate === LIVE_HIGH_PROJECTED_ACTIVITY_CUE_AUTHORITY) return LIVE_HIGH_PROJECTED_ACTIVITY_CUE_AUTHORITY;
   if (candidate === GPU_LOW_SELF_ACTIVITY_CUE_AUTHORITY) return GPU_LOW_SELF_ACTIVITY_CUE_AUTHORITY;
+  if (candidate === GPU_HIGH_PROJECTED_ACTIVITY_CUE_AUTHORITY) return GPU_HIGH_PROJECTED_ACTIVITY_CUE_AUTHORITY;
   return TRUTH_ORACLE_ACTIVITY_CUE_AUTHORITY;
 }
 
 function normalizeScalarActivitySourceMode(value) {
   const candidate = String(value || '').trim();
   if (candidate === 'lowSelfGpu') return 'lowSelfGpu';
+  if (candidate === 'highProjectedGpu') return 'highProjectedGpu';
   return 'procedural';
+}
+
+function normalizeScalarActivitySourceGridSize(value) {
+  const requested = normalizeGridSize(value);
+  return requested >= 64 ? requested : DEFAULT_SCALAR_ACTIVITY_SOURCE_GRID_SIZE;
 }
 
 function normalizeMajorantGridSize(value) {
@@ -417,6 +428,7 @@ function normalizeScalarActivityReceiverControls(snapshot = {}) {
   return {
     enabled: clampFinite(snapshot.oracleActivityCue, 0, 1, 0),
     sourceMode: normalizeScalarActivitySourceMode(snapshot.oracleActivitySource),
+    sourceGrid: normalizeScalarActivitySourceGridSize(snapshot.oracleActivitySourceGrid),
     display: clampFinite(snapshot.oracleActivityDisplay, 0, 1, 0),
     curlNoiseGain: clampFinite(snapshot.oracleActivityCurlNoise, 0, 3, 0),
     vorticityGain: clampFinite(snapshot.oracleActivityVorticity, 0, 3, 0),
@@ -700,6 +712,7 @@ function normalizeExternalEmitters(payload = {}, nowMs = externalEmitterNowMs())
 const WGSL = /* wgsl */`
 override GRID: u32 = 64u;
 override MAJORANT_GRID: u32 = 24u;
+override TARGET_GRID: u32 = 64u;
 const SLOTS_PER_CELL: u32 = 4u;
 const MAX_EXTERNAL_EMITTERS_WGSL: u32 = 32u;
 
@@ -984,6 +997,10 @@ fn index3(c: vec3<u32>) -> u32 {
   return c.x + c.y * GRID + c.z * GRID * GRID;
 }
 
+fn targetIndex3(c: vec3<u32>) -> u32 {
+  return c.x + c.y * TARGET_GRID + c.z * TARGET_GRID * TARGET_GRID;
+}
+
 fn clampCell(c: vec3<i32>) -> vec3<u32> {
   return vec3<u32>(clamp(c, vec3<i32>(0), vec3<i32>(i32(GRID) - 1)));
 }
@@ -1215,6 +1232,19 @@ fn csProjectLowSelfScalarActivityCue(@builtin(global_invocation_id) gid: vec3<u3
     return;
   }
   scalarActivityCueDst[index3(gid)] = proceduralReceiverActivityCue(vec3<i32>(gid));
+}
+
+@compute @workgroup_size(4, 4, 4)
+fn csProjectHighProjectedScalarActivityCue(@builtin(global_invocation_id) gid: vec3<u32>) {
+  if (any(gid >= vec3<u32>(TARGET_GRID))) {
+    return;
+  }
+  let sourceCell = vec3<i32>(clamp(
+    floor((vec3<f32>(gid) + vec3<f32>(0.5)) * f32(GRID) / f32(TARGET_GRID)),
+    vec3<f32>(0.0),
+    vec3<f32>(f32(GRID) - 1.0)
+  ));
+  scalarActivityCueDst[targetIndex3(gid)] = proceduralReceiverActivityCue(sourceCell);
 }
 
 fn oracleActivityCurlNoiseForce(c: vec3<i32>, p: vec3<f32>, time: f32, cue: f32, gain: f32) -> vec3<f32> {
@@ -4272,6 +4302,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     externalEmitterFrameId: null,
     scalarActivityReceiver: null,
     scalarActivityCueProjection: null,
+    hiddenScalarActivitySource: null,
     temporalAccumEffective: 0,
     temporalReprojectionConfidence: 0,
     temporalHistoryWeight: 0,
@@ -4634,6 +4665,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let queueProbePending = false;
   let scalarActivityCueProjectionFrameCount = 0;
   let scalarActivityCueProjectionLastFrame = -1;
+  let hiddenScalarActivitySourceState = null;
 
   function pushTimingSample(name, value, maxSamples = 120) {
     if (!Number.isFinite(value)) return;
@@ -4760,29 +4792,204 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     return target;
   }
 
+  function destroyHiddenScalarActivitySourceState() {
+    if (!hiddenScalarActivitySourceState) return;
+    for (const buffer of hiddenScalarActivitySourceState.fluidBuffers || []) buffer.destroy();
+    for (const buffer of hiddenScalarActivitySourceState.frontBuffers || []) buffer.destroy();
+    hiddenScalarActivitySourceState.majorantBuffer?.destroy();
+    hiddenScalarActivitySourceState.oracleActivityCueBuffer?.destroy();
+    hiddenScalarActivitySourceState = null;
+    state.hiddenScalarActivitySource = {
+      identity: GPU_HIDDEN_SCALAR_ACTIVITY_SOURCE_IDENTITY,
+      status: 'inactive',
+      sourceMode: normalizeScalarActivitySourceMode(controlsSnapshot.oracleActivitySource),
+      failurePhase: null,
+    };
+  }
+
+  function hiddenScalarActivitySourceDebug(overrides = {}) {
+    const source = hiddenScalarActivitySourceState;
+    return {
+      identity: GPU_HIDDEN_SCALAR_ACTIVITY_SOURCE_IDENTITY,
+      sourceMode: normalizeScalarActivitySourceMode(controlsSnapshot.oracleActivitySource),
+      status: source ? 'active' : 'inactive',
+      gridSize: source?.gridSize ?? normalizeScalarActivitySourceGridSize(controlsSnapshot.oracleActivitySourceGrid),
+      receiverGrid: gridSize,
+      frameCount: source?.frameCount ?? 0,
+      lastStepFrame: source?.lastStepFrame ?? -1,
+      projectionIdentity: GPU_HIGH_PROJECTED_SCALAR_ACTIVITY_CUE_PROJECTION_IDENTITY,
+      cueAuthority: GPU_HIGH_PROJECTED_ACTIVITY_CUE_AUTHORITY,
+      temporalMode: 'hidden-source-steps-every-receiver-frame-v0',
+      pressureProjection: 'not-run-hidden-source-first-pass-v0',
+      failurePhase: null,
+      ...overrides,
+    };
+  }
+
+  function rebuildHiddenScalarActivitySourceBindGroups(source) {
+    if (!device || !bindGroupLayout || !majorantFluidBindGroupLayout || !uniformBuffer || !externalEmitterBuffer || !historyTexture || !historySampler || !source) return;
+    source.bindGroups = [
+      device.createBindGroup({
+        label: `kaminos hidden scalar activity source bind group ${source.gridSize}^3 A to B`,
+        layout: bindGroupLayout,
+        entries: [
+          { binding: 0, resource: { buffer: uniformBuffer } },
+          { binding: 1, resource: { buffer: source.fluidBuffers[0] } },
+          { binding: 2, resource: { buffer: source.fluidBuffers[1] } },
+          { binding: 3, resource: { buffer: source.majorantBuffer } },
+          { binding: 4, resource: historyTexture.createView() },
+          { binding: 5, resource: historySampler },
+          { binding: 6, resource: { buffer: externalEmitterBuffer } },
+          { binding: 7, resource: { buffer: source.frontBuffers[0] } },
+          { binding: 8, resource: { buffer: source.frontBuffers[1] } },
+          { binding: 9, resource: { buffer: source.oracleActivityCueBuffer } },
+        ],
+      }),
+      device.createBindGroup({
+        label: `kaminos hidden scalar activity source bind group ${source.gridSize}^3 B to A`,
+        layout: bindGroupLayout,
+        entries: [
+          { binding: 0, resource: { buffer: uniformBuffer } },
+          { binding: 1, resource: { buffer: source.fluidBuffers[1] } },
+          { binding: 2, resource: { buffer: source.fluidBuffers[0] } },
+          { binding: 3, resource: { buffer: source.majorantBuffer } },
+          { binding: 4, resource: historyTexture.createView() },
+          { binding: 5, resource: historySampler },
+          { binding: 6, resource: { buffer: externalEmitterBuffer } },
+          { binding: 7, resource: { buffer: source.frontBuffers[1] } },
+          { binding: 8, resource: { buffer: source.frontBuffers[0] } },
+          { binding: 9, resource: { buffer: source.oracleActivityCueBuffer } },
+        ],
+      }),
+    ];
+    source.majorantFrontBindGroups = [
+      device.createBindGroup({
+        label: `kaminos hidden scalar source fluid-front read bind group ${source.gridSize}^3 A`,
+        layout: majorantFluidBindGroupLayout,
+        entries: [
+          { binding: 1, resource: { buffer: source.fluidBuffers[0] } },
+          { binding: 7, resource: { buffer: source.frontBuffers[0] } },
+        ],
+      }),
+      device.createBindGroup({
+        label: `kaminos hidden scalar source fluid-front read bind group ${source.gridSize}^3 B`,
+        layout: majorantFluidBindGroupLayout,
+        entries: [
+          { binding: 1, resource: { buffer: source.fluidBuffers[1] } },
+          { binding: 7, resource: { buffer: source.frontBuffers[1] } },
+        ],
+      }),
+    ];
+  }
+
+  function ensureHiddenScalarActivitySourceState() {
+    if (normalizeScalarActivitySourceMode(controlsSnapshot.oracleActivitySource) !== 'highProjectedGpu') {
+      destroyHiddenScalarActivitySourceState();
+      return null;
+    }
+    const sourceGrid = normalizeScalarActivitySourceGridSize(controlsSnapshot.oracleActivitySourceGrid);
+    if (
+      hiddenScalarActivitySourceState &&
+      hiddenScalarActivitySourceState.gridSize === sourceGrid &&
+      hiddenScalarActivitySourceState.receiverGrid === gridSize
+    ) {
+      return hiddenScalarActivitySourceState;
+    }
+    destroyHiddenScalarActivitySourceState();
+    if (!device || !pipelineLayout || !scalarActivityCueProjectionPipelineLayout || !bindGroupLayout || !majorantFluidBindGroupLayout) {
+      state.hiddenScalarActivitySource = hiddenScalarActivitySourceDebug({ status: 'failed', failurePhase: 'missing-hidden-source-bindings' });
+      return null;
+    }
+    const initialFluid = makeInitialFluid(sourceGrid);
+    const source = {
+      identity: GPU_HIDDEN_SCALAR_ACTIVITY_SOURCE_IDENTITY,
+      gridSize: sourceGrid,
+      receiverGrid: gridSize,
+      frameCount: 0,
+      lastStepFrame: -1,
+      currentFluid: 0,
+      currentFront: 0,
+      bindGroups: [],
+      majorantFrontBindGroups: [],
+      fluidBuffers: [0, 1].map(i => {
+        const buffer = device.createBuffer({
+          label: `kaminos hidden scalar activity source fluid state ${sourceGrid}^3 ${i}`,
+          size: fluidBufferBytes(sourceGrid),
+          usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
+        });
+        device.queue.writeBuffer(buffer, 0, initialFluid);
+        return buffer;
+      }),
+      frontBuffers: [0, 1].map(i => {
+        const buffer = device.createBuffer({
+          label: `kaminos hidden scalar activity source ${FRONT_FIELD_IDENTITY} ${sourceGrid}^3 ${i}`,
+          size: frontFieldBufferBytes(sourceGrid),
+          usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
+        });
+        device.queue.writeBuffer(buffer, 0, new Float32Array(gridCellCount(sourceGrid)));
+        return buffer;
+      }),
+      majorantBuffer: device.createBuffer({
+        label: `kaminos hidden scalar activity source inert majorant buffer ${sourceGrid}^3`,
+        size: majorantBufferBytes(majorantGridSize),
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+      }),
+      oracleActivityCueBuffer: device.createBuffer({
+        label: `kaminos hidden scalar activity source inert oracle cue ${sourceGrid}^3`,
+        size: scalarActivityCueBufferBytes(sourceGrid),
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+      }),
+      computePipeline: device.createComputePipeline({
+        label: `kaminos hidden scalar activity source sim compute pipeline ${sourceGrid}^3`,
+        layout: pipelineLayout,
+        compute: { module: shader, entryPoint: 'cs', constants: { GRID: sourceGrid } },
+      }),
+      projectionPipeline: device.createComputePipeline({
+        label: `kaminos high-projected scalar activity cue projection pipeline ${sourceGrid}^3 to ${gridSize}^3`,
+        layout: scalarActivityCueProjectionPipelineLayout,
+        compute: {
+          module: shader,
+          entryPoint: 'csProjectHighProjectedScalarActivityCue',
+          constants: { GRID: sourceGrid, TARGET_GRID: gridSize },
+        },
+      }),
+    };
+    device.queue.writeBuffer(source.majorantBuffer, 0, new Float32Array(majorantGridSize * majorantGridSize * majorantGridSize * 4));
+    device.queue.writeBuffer(source.oracleActivityCueBuffer, 0, new Float32Array(gridCellCount(sourceGrid)));
+    hiddenScalarActivitySourceState = source;
+    rebuildHiddenScalarActivitySourceBindGroups(source);
+    state.hiddenScalarActivitySource = hiddenScalarActivitySourceDebug({ status: 'created' });
+    return source;
+  }
+
   function scalarActivityCueProjectionDebug(overrides = {}) {
     const sourceMode = normalizeScalarActivitySourceMode(overrides.sourceMode ?? controlsSnapshot.oracleActivitySource);
     const status = overrides.status || 'inactive';
+    const highProjected = sourceMode === 'highProjectedGpu';
     return {
-      identity: GPU_SCALAR_ACTIVITY_CUE_PROJECTION_IDENTITY,
+      identity: highProjected ? GPU_HIGH_PROJECTED_SCALAR_ACTIVITY_CUE_PROJECTION_IDENTITY : GPU_SCALAR_ACTIVITY_CUE_PROJECTION_IDENTITY,
       sourceMode,
       status,
-      cueAuthority: status === 'projected' ? GPU_LOW_SELF_ACTIVITY_CUE_AUTHORITY : PROCEDURAL_ACTIVITY_CUE_AUTHORITY,
-      projectionIdentity: 'same-grid-gpu-current-field-procedural-activity-v0',
+      cueAuthority: status === 'projected'
+        ? (highProjected ? GPU_HIGH_PROJECTED_ACTIVITY_CUE_AUTHORITY : GPU_LOW_SELF_ACTIVITY_CUE_AUTHORITY)
+        : PROCEDURAL_ACTIVITY_CUE_AUTHORITY,
+      projectionIdentity: highProjected ? 'source-grid-to-receiver-grid-gpu-procedural-activity-v0' : 'same-grid-gpu-current-field-procedural-activity-v0',
       readbackPolicy: GPU_SCALAR_ACTIVITY_CUE_PROJECTION_READBACK_POLICY,
-      sourceGrid: gridSize,
+      sourceGrid: highProjected && hiddenScalarActivitySourceState ? hiddenScalarActivitySourceState.gridSize : gridSize,
       receiverGrid: gridSize,
       cadence: 1,
       frameCount: scalarActivityCueProjectionFrameCount,
       lastProjectionFrame: scalarActivityCueProjectionLastFrame,
       lowFrameCount: state.frameCount,
+      hiddenSourceFrameCount: hiddenScalarActivitySourceState?.frameCount ?? 0,
       failurePhase: null,
       ...overrides,
     };
   }
 
   function isGpuScalarActivityCueProjectionRequested() {
-    return normalizeScalarActivitySourceMode(controlsSnapshot.oracleActivitySource) === 'lowSelfGpu';
+    const sourceMode = normalizeScalarActivitySourceMode(controlsSnapshot.oracleActivitySource);
+    return sourceMode === 'lowSelfGpu' || sourceMode === 'highProjectedGpu';
   }
 
   function isExternalScalarActivityCueActive() {
@@ -4792,6 +4999,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
 
   function prepareScalarActivityCueProjectionState() {
     if (!isGpuScalarActivityCueProjectionRequested()) {
+      destroyHiddenScalarActivitySourceState();
       if (oracleActivityCueUpload.status === 'gpu-projected') {
         oracleActivityCueUpload = {
           status: 'none',
@@ -4807,18 +5015,27 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       state.scalarActivityCueProjection = scalarActivityCueProjectionDebug({ status: 'inactive' });
       return false;
     }
+    const sourceMode = normalizeScalarActivitySourceMode(controlsSnapshot.oracleActivitySource);
+    const sourceGrid = sourceMode === 'highProjectedGpu'
+      ? normalizeScalarActivitySourceGridSize(controlsSnapshot.oracleActivitySourceGrid)
+      : gridSize;
+    const cueAuthority = sourceMode === 'highProjectedGpu'
+      ? GPU_HIGH_PROJECTED_ACTIVITY_CUE_AUTHORITY
+      : GPU_LOW_SELF_ACTIVITY_CUE_AUTHORITY;
     oracleActivityCueUpload = {
       status: 'gpu-projected',
-      requestedCueAuthority: GPU_LOW_SELF_ACTIVITY_CUE_AUTHORITY,
-      effectiveCueAuthority: GPU_LOW_SELF_ACTIVITY_CUE_AUTHORITY,
-      grid: gridSize,
+      requestedCueAuthority: cueAuthority,
+      effectiveCueAuthority: cueAuthority,
+      grid: sourceGrid,
       receiverGrid: gridSize,
       externalCueCellCount: gridCellCount(gridSize),
-      frameId: `gpu-low-self-${state.frameCount}`,
+      frameId: sourceMode === 'highProjectedGpu'
+        ? `gpu-high-projected-${sourceGrid}-to-${gridSize}-${state.frameCount}`
+        : `gpu-low-self-${state.frameCount}`,
       uploadedAtMs: performance.now(),
       projectedAtMs: performance.now(),
     };
-    state.scalarActivityCueProjection = scalarActivityCueProjectionDebug({ status: 'scheduled' });
+    state.scalarActivityCueProjection = scalarActivityCueProjectionDebug({ sourceMode, status: 'scheduled' });
     return true;
   }
 
@@ -4832,6 +5049,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       effectiveCueAuthority: externalCueActive ? oracleActivityCueUpload.effectiveCueAuthority : PROCEDURAL_ACTIVITY_CUE_AUTHORITY,
       enabled: controls.enabled,
       sourceMode: controls.sourceMode,
+      sourceGrid: controls.sourceMode === 'highProjectedGpu' ? controls.sourceGrid : gridSize,
       display: controls.display,
       curlNoiseGain: controls.curlNoiseGain,
       vorticityGain: controls.vorticityGain,
@@ -5071,6 +5289,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   }
 
   function destroyFluidState() {
+    destroyHiddenScalarActivitySourceState();
     for (const buffer of fluidBuffers) buffer.destroy();
     for (const buffer of frontBuffers) buffer.destroy();
     for (const buffer of pressureBuffers) buffer.destroy();
@@ -6421,8 +6640,66 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
 
   function encodeScalarActivityCueProjection(encoder) {
     const sourceMode = normalizeScalarActivitySourceMode(controlsSnapshot.oracleActivitySource);
-    if (sourceMode !== 'lowSelfGpu') {
+    if (sourceMode !== 'lowSelfGpu' && sourceMode !== 'highProjectedGpu') {
       state.scalarActivityCueProjection = scalarActivityCueProjectionDebug({ sourceMode, status: 'inactive' });
+      return;
+    }
+    if (sourceMode === 'highProjectedGpu') {
+      const source = ensureHiddenScalarActivitySourceState();
+      if (!source || !source.computePipeline || !source.projectionPipeline || source.bindGroups.length !== 2 || source.majorantFrontBindGroups.length !== 2 || !scalarActivityCueWriteBindGroup) {
+        state.scalarActivityCueProjection = scalarActivityCueProjectionDebug({
+          sourceMode,
+          status: 'failed',
+          failurePhase: 'missing-hidden-source-gpu-projection-bindings',
+        });
+        state.hiddenScalarActivitySource = hiddenScalarActivitySourceDebug({
+          status: 'failed',
+          failurePhase: 'missing-hidden-source-gpu-projection-bindings',
+        });
+        return;
+      }
+      {
+        const pass = encoder.beginComputePass({ label: 'kaminos hidden scalar activity source sim pass highProjectedGpu' });
+        pass.setPipeline(source.computePipeline);
+        pass.setBindGroup(0, source.bindGroups[source.currentFluid]);
+        const sourceWorkgroups = Math.ceil(source.gridSize / 4);
+        pass.dispatchWorkgroups(sourceWorkgroups, sourceWorkgroups, sourceWorkgroups);
+        pass.end();
+        source.currentFluid = 1 - source.currentFluid;
+        source.currentFront = 1 - source.currentFront;
+        source.frameCount += 1;
+        source.lastStepFrame = state.frameCount;
+      }
+      {
+        const pass = encoder.beginComputePass({ label: 'kaminos scalar activity cue projection pass highProjectedGpu' });
+        pass.setPipeline(source.projectionPipeline);
+        pass.setBindGroup(0, source.majorantFrontBindGroups[source.currentFluid]);
+        pass.setBindGroup(3, scalarActivityCueWriteBindGroup);
+        const targetWorkgroups = Math.ceil(gridSize / 4);
+        pass.dispatchWorkgroups(targetWorkgroups, targetWorkgroups, targetWorkgroups);
+        pass.end();
+      }
+      scalarActivityCueProjectionFrameCount += 1;
+      scalarActivityCueProjectionLastFrame = state.frameCount;
+      oracleActivityCueUpload = {
+        ...oracleActivityCueUpload,
+        status: 'gpu-projected',
+        requestedCueAuthority: GPU_HIGH_PROJECTED_ACTIVITY_CUE_AUTHORITY,
+        effectiveCueAuthority: GPU_HIGH_PROJECTED_ACTIVITY_CUE_AUTHORITY,
+        grid: source.gridSize,
+        receiverGrid: gridSize,
+        externalCueCellCount: gridCellCount(gridSize),
+        frameId: `gpu-high-projected-${source.gridSize}-to-${gridSize}-${state.frameCount}`,
+        projectedAtMs: performance.now(),
+        uploadedAtMs: performance.now(),
+      };
+      state.hiddenScalarActivitySource = hiddenScalarActivitySourceDebug({ status: 'stepped' });
+      state.scalarActivityCueProjection = scalarActivityCueProjectionDebug({
+        sourceMode,
+        status: 'projected',
+        sourceGrid: hiddenScalarActivitySourceState.gridSize,
+        receiverGrid: gridSize,
+      });
       return;
     }
     if (!scalarActivityCueProjectionPipeline || !scalarActivityCueWriteBindGroup || majorantFrontBindGroups.length !== 2) {
@@ -9353,6 +9630,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         controls: { ...controlsSnapshot },
         scalarActivityReceiver: scalarActivityReceiverDebug(),
         scalarActivityCueProjection: state.scalarActivityCueProjection ? { ...state.scalarActivityCueProjection } : scalarActivityCueProjectionDebug(),
+        hiddenScalarActivitySource: state.hiddenScalarActivitySource ? { ...state.hiddenScalarActivitySource } : hiddenScalarActivitySourceDebug(),
         scalarActivityCueExport: state.scalarActivityCueExport ? { ...state.scalarActivityCueExport } : null,
         pyroDynamicDetail: clonePyroDynamicDetail(),
         pyroMaterialRendererCoupling: state.pyroMaterialRendererCoupling ? { ...state.pyroMaterialRendererCoupling } : null,
