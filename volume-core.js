@@ -668,6 +668,8 @@ struct Uniforms {
   pyro_palette_radiance_warm: vec4<f32>,
   pyro_palette_flow: vec4<f32>,
   pyro_palette_flow_hot: vec4<f32>,
+  topology_radiance_controls: vec4<f32>,
+  topology_radiance_gains: vec4<f32>,
   previousViewProj: mat4x4<f32>,
 };
 
@@ -3290,6 +3292,13 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
   let pyroRadianceWarmEndpoint = u.pyro_palette_radiance_warm.rgb;
   let pyroFlowCoolEndpoint = u.pyro_palette_flow.rgb;
   let pyroFlowHotEndpoint = u.pyro_palette_flow_hot.rgb;
+  let topologyRadianceAmount = clamp(u.topology_radiance_controls.x, 0.0, 1.0);
+  let topologyRadianceMaxGain = clamp(u.topology_radiance_controls.y, 1.0, 3.0);
+  let topologyRadianceCurlGain = clamp(u.topology_radiance_controls.z, 0.0, 1.5);
+  let topologyRadianceInterfaceGain = clamp(u.topology_radiance_controls.w, 0.0, 1.5);
+  let topologyRadianceLickGain = clamp(u.topology_radiance_gains.x, 0.0, 1.5);
+  let topologyRadianceFrontGain = clamp(u.topology_radiance_gains.y, 0.0, 1.5);
+  let topologyRadianceStrainGain = clamp(u.topology_radiance_gains.z, 0.0, 1.5);
   let canonicalSmokeContent = 1.0 - minimalPlumeRenderScene * step(0.5, canonicalContentMode) * (1.0 - step(1.5, canonicalContentMode));
   let canonicalFireContent = minimalPlumeRenderScene * step(0.5, canonicalContentMode);
   let canonicalFireRenderContent = mix(1.0, canonicalFireContent, minimalPlumeRenderScene);
@@ -3581,19 +3590,26 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     ) * flameBodyAuthority * canonicalFireRenderContent;
     let reactionSurfaceGain = clamp(
       1.0
-        + fireEmissionAuthority
+        + topologyRadianceAmount
+          * fireEmissionAuthority
           * (
-            0.40 * curlActivity
-            + 0.50 * interfaceSurfaceActivity
-            + 0.40 * fireLickSurfaceActivity
-            + 0.20 * frontTopologySurfaceActivity
-            + 0.15 * divActivityDamped
+            topologyRadianceCurlGain * curlActivity
+            + topologyRadianceInterfaceGain * interfaceSurfaceActivity
+            + topologyRadianceLickGain * fireLickSurfaceActivity
+            + topologyRadianceFrontGain * frontTopologySurfaceActivity
+            + topologyRadianceStrainGain * divActivityDamped
           ),
       1.0,
-      2.65
+      topologyRadianceMaxGain
     );
     let flameCol = fireColor(renderTemp) * (0.22 + renderTemp * 0.82 + fireFilament * 0.82 * flameBodyAuthority + quenchedFireLick * 0.32 + shredFilament * 0.10) * bonfireTransportedFireLumaShaper;
-    let radianceEmission = fireRadianceEmission(renderTemp, quenchedFlameDetail, quenchedFireLick, quenchedEmberFleck, radianceGain, glowGain) * reactionSurfaceGain * mix(1.0, bonfireFireRenderBreakup * bonfireTransportedFireLumaShaper, bonfireRenderScene) * flameBodyAuthority;
+    let baseRadianceEmission = fireRadianceEmission(renderTemp, quenchedFlameDetail, quenchedFireLick, quenchedEmberFleck, radianceGain, glowGain)
+      * mix(1.0, bonfireFireRenderBreakup * bonfireTransportedFireLumaShaper, bonfireRenderScene)
+      * flameBodyAuthority;
+    let topologyRadianceEmission = fireRadianceEmission(renderTemp, quenchedFlameDetail, quenchedFireLick, quenchedEmberFleck, 1.0, 1.0)
+      * (reactionSurfaceGain - 1.0)
+      * flameBodyAuthority;
+    let radianceEmission = baseRadianceEmission + topologyRadianceEmission;
     let smokeBacklight = fireColor(renderTemp * 0.72) * smokeAlpha * glowGain * smoothstep(0.16, 1.25, renderTemp) * (0.13 + fireFilament * 0.10 * flameBodyAuthority);
     let fireMix = smoothstep(0.005, 0.052, fireAlpha) * smoothstep(0.08, 0.70, renderTemp);
     let pyroOwnedFireMode = step(1.5, pyroFireMode);
@@ -3750,7 +3766,6 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     let pyroFlowRadianceBoost = clamp(
       pyroFlowSignal
         * pyroFlowRadiance
-        * reactionSurfaceGain
         * (0.055 + pyroFlowSpikeSignal * 0.13 + pyroFlowShear * 0.055 + combustionFrontTopology * 0.060 + fireLick * 0.035),
       0.0,
       3.5
@@ -4063,7 +4078,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   const invViewProj = new THREE.Matrix4();
   const viewProj = new THREE.Matrix4();
   const previousViewProj = new THREE.Matrix4();
-  const uniforms = new Float32Array(292);
+  const uniforms = new Float32Array(300);
   let controlsSnapshot = applyRuntimeQualityControls(getControls());
   let gridSize = normalizeGridSize(controlsSnapshot.resolution);
   let majorantGridSize = normalizeMajorantGridSize(controlsSnapshot.majorantGrid);
@@ -5639,12 +5654,21 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     writePyroPaletteUniform(uniforms, 264, controlsSnapshot.pyroRadianceWarmColor, '#d18438');
     writePyroPaletteUniform(uniforms, 268, controlsSnapshot.pyroFlowCoolColor, '#2aa7b8');
     writePyroPaletteUniform(uniforms, 272, controlsSnapshot.pyroFlowHotColor, '#ff7a36');
-    uniforms.set(previousViewProj.elements, 276);
+    uniforms[276] = Math.max(0, Math.min(1, controlsSnapshot.topologyRadianceAmount ?? 0));
+    uniforms[277] = Math.max(1, Math.min(3, controlsSnapshot.topologyRadianceMax ?? 2.25));
+    uniforms[278] = Math.max(0, Math.min(1.5, controlsSnapshot.topologyRadianceCurl ?? 0.40));
+    uniforms[279] = Math.max(0, Math.min(1.5, controlsSnapshot.topologyRadianceInterface ?? 0.50));
+    uniforms[280] = Math.max(0, Math.min(1.5, controlsSnapshot.topologyRadianceLicks ?? 0.40));
+    uniforms[281] = Math.max(0, Math.min(1.5, controlsSnapshot.topologyRadianceFront ?? 0.20));
+    uniforms[282] = Math.max(0, Math.min(1.5, controlsSnapshot.topologyRadianceStrain ?? 0.15));
+    uniforms[283] = 0;
+    uniforms.set(previousViewProj.elements, 284);
     device.queue.writeBuffer(uniformBuffer, 0, uniforms);
     state.gridOverlay = controlsSnapshot.gridOverlay || 0;
     state.lookFreeze = lookFreeze;
     state.pyroCompareMode = pyroCompareMode;
     state.pyroCompareMuted = pyroCompareMuted;
+    state.legacyPyroBackedOff = controlsSnapshot.legacyPyroBackedOff === true;
     state.volumeScene = normalizeVolumeScene(controlsSnapshot.volumeScene);
     state.bonfireReferenceConfinement = bonfireReferenceConfinementDebug(controlsSnapshot.volumeScene);
     state.minimalPlumeProof = minimalPlumeProofDebug(controlsSnapshot.volumeScene);
@@ -5755,18 +5779,33 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         flowRadianceMax: pyroMaterialGain * pyroMaterialLiveAuthority * pyroFlowBite * pyroFlowRadiance * pyroCarrierOverdrive,
         flowSpikeMax: pyroMaterialGain * pyroMaterialLiveAuthority * pyroFlowBite * pyroFlowSpikes * pyroCarrierOverdrive,
         reactionSurfaceGainIdentity: 'flow-topology-coupled-radiance-gain-v0',
-        surfaceGainModel: 'thermal-emission-times-reaction-surface-gain-v0',
+        surfaceGainModel: 'optional-thermal-topology-radiance-delta-v1',
         surfaceGainAuthority: 'topology-multiplies-fire-emission-not-color-authority',
+        surfaceGainMode: controlsSnapshot.topologyRadianceAmount > 0 ? 'explicit-topology-radiance' : 'neutral',
+        surfaceGainAmount: Math.max(0, Math.min(1, controlsSnapshot.topologyRadianceAmount ?? 0)),
         surfaceGainInputs: ['curlActivity', 'interfaceSurfaceActivity', 'fireLickSurfaceActivity', 'frontTopologySurfaceActivity', 'divActivityDamped'],
         surfaceGainMax: Math.min(
-          2.65,
+          Math.max(1, Math.min(3, controlsSnapshot.topologyRadianceMax ?? 2.25)),
           1
-            + 0.40 * Math.min(1, (controlsSnapshot.curl ?? 0) / 5)
-            + 0.50 * Math.min(1, (controlsSnapshot.interfaceShred ?? 0) / 5)
-            + 0.40 * Math.min(1, (controlsSnapshot.fireLicks ?? 0) / 5)
-            + 0.20
-            + 0.15 * Math.min(1, (controlsSnapshot.projection ?? 0) / 1),
+            + Math.max(0, Math.min(1, controlsSnapshot.topologyRadianceAmount ?? 0))
+              * (
+                Math.max(0, Math.min(1.5, controlsSnapshot.topologyRadianceCurl ?? 0.40))
+                + Math.max(0, Math.min(1.5, controlsSnapshot.topologyRadianceInterface ?? 0.50))
+                + Math.max(0, Math.min(1.5, controlsSnapshot.topologyRadianceLicks ?? 0.40))
+                + Math.max(0, Math.min(1.5, controlsSnapshot.topologyRadianceFront ?? 0.20))
+                + Math.max(0, Math.min(1.5, controlsSnapshot.topologyRadianceStrain ?? 0.15))
+              ),
         ),
+        topologyRadianceControls: {
+          amount: controlsSnapshot.topologyRadianceAmount ?? 0,
+          max: controlsSnapshot.topologyRadianceMax ?? 2.25,
+          curl: controlsSnapshot.topologyRadianceCurl ?? 0.40,
+          interface: controlsSnapshot.topologyRadianceInterface ?? 0.50,
+          licks: controlsSnapshot.topologyRadianceLicks ?? 0.40,
+          front: controlsSnapshot.topologyRadianceFront ?? 0.20,
+          strain: controlsSnapshot.topologyRadianceStrain ?? 0.15,
+        },
+        legacyPyroBackedOff: controlsSnapshot.legacyPyroBackedOff === true,
         biteShape: `${pyroBiteTeeth.toFixed(2)}t/${pyroBiteWake.toFixed(2)}w/${pyroBiteHeight.toFixed(2)}h/${pyroBiteFireLock.toFixed(2)}f`,
         biteStack: `${pyroBiteCore.toFixed(2)}c/${pyroBiteRim.toFixed(2)}r/${pyroBiteAfter.toFixed(2)}a`,
         biteCuts: `${pyroBiteCoreCut.toFixed(2)}c/${pyroBiteRimCut.toFixed(2)}r/${pyroBiteAfterCut.toFixed(2)}a`,
