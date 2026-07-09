@@ -40,7 +40,13 @@ assert.match(index, /pyro_contrast_warm_cap_small_flame_0702/, 'Volume tab pins 
 assert.match(index, /pyro_material_bonfire_family_0702/, 'Volume tab pins the operator-found Pyro material bonfire family basin by stable route identity');
 assert.match(index, /exploding_jellow_fireball_motherfucker_0706/, 'Volume tab pins the operator-found exploding jellow fireball Pyro look by stable route identity');
 assert.match(index, /pyro_flow_small_bonfire_gamut_0707/, 'Volume tab pins the operator-found Pyro Flow small-bonfire gamut basin by stable route identity');
-assert.match(index, /DEFAULT_VOLUME_SMOKE_TALL_PRESET\s*=\s*'pyro_flow_small_bonfire_gamut_0707'/, 'bare smoke routes default to the operator-found Pyro Flow small-bonfire gamut basin');
+assert.match(index, /DEFAULT_VOLUME_SMOKE_TALL_PRESET\s*=\s*'boundary_fire_bonfire_a_la_ruffles_0709'/, 'bare smoke routes default to the operator-found Boundary Fire Bonfire_a_la_ruffles basin');
+assert.match(index, /boundary_fire_bonfire_a_la_ruffles_0709:[\s\S]*reactionLiveView:\s*'boundary_fire'/, 'Boundary Fire Bonfire_a_la_ruffles basin activates boundary-fire as the default live fire view');
+assert.match(index, /boundary_fire_bonfire_a_la_ruffles_0709:[\s\S]*reactionBoundaryFireRidge:\s*2\.00[\s\S]*reactionBoundaryFireLuma:\s*5\.00/, 'Boundary Fire Bonfire_a_la_ruffles basin preserves the operator-tuned ridge and luma extremes');
+assert.match(index, /boundary_fire_bonfire_a_la_ruffles_0709:[\s\S]*reactionBoundaryFireCleanBlue:\s*0\.14[\s\S]*reactionBoundaryFireSoot:\s*0\.78[\s\S]*reactionBoundaryFireYellow:\s*0\.22[\s\S]*reactionBoundaryFireWarmth:\s*0\.68/, 'Boundary Fire Bonfire_a_la_ruffles basin preserves the operator-tuned fuel color values');
+assert.match(index, /boundary_fire_bonfire_a_la_ruffles_0709:[\s\S]*density:\s*4\.65[\s\S]*fire:\s*3\.50[\s\S]*radiance:\s*0\.00[\s\S]*absorption:\s*0\.00[\s\S]*glow:\s*0\.00/, 'Boundary Fire Bonfire_a_la_ruffles basin preserves the operator-tuned transport and fire gains');
+assert.match(index, /boundary_fire_bonfire_a_la_ruffles_0709:[\s\S]*raySteps:\s*160[\s\S]*adaptiveRays:\s*0\.30[\s\S]*occupancySkip:\s*1\.00[\s\S]*majorantSkip:\s*0\.95[\s\S]*resolution:\s*128/, 'Boundary Fire Bonfire_a_la_ruffles basin preserves the operator-tuned simulation and ray budget');
+assert.match(index, /name:\s*'Bonfire_a_la_ruffles'[\s\S]*TALL_PLUME_OPERATOR_PRESETS\.boundary_fire_bonfire_a_la_ruffles_0709/, 'built-in Bonfire_a_la_ruffles look library entry points at the Boundary Fire basin, not the stale Pyro Flow basin');
 assert.match(index, /kaminos_volume_smoke'\)\s*===\s*'1'[\s\S]*DEFAULT_VOLUME_SMOKE_TALL_PRESET/, 'bare smoke routes apply the current Pyro basin when no explicit scene or preset is routed');
 assert.match(index, /!routeVolumeScene\s*\|\|\s*routeVolumeScene === 'tall_plume'/, 'smoke routes with explicit tall_plume scene must still apply the Pyro basin instead of plain tall-plume mechanics');
 assert.match(index, /routeVolumeScene && !\(shouldApplyDefaultVolumeSmokeTallPreset && routeVolumeScene === 'tall_plume'\)/, 'explicit tall_plume route must not immediately overwrite the Pyro basin with the plain scene preset');
@@ -85,8 +91,8 @@ assert.match(index, /BUILT_IN_VOLUME_LOOK_LIBRARY/, 'Volume cockpit carries sour
 assert.match(index, /exploding-jellow-fireball-motherfucker/, 'Source-backed look library exposes the operator-saved exploding jellow Pyro look');
 assert.match(index, /Bonfire_a_la_ruffles/, 'Source-backed look library exposes the operator-saved Bonfire a la Ruffles Pyro look');
 const bonfireLookBlock = index.match(/name:\s*'Bonfire_a_la_ruffles'[\s\S]*?sourceBacked:\s*true,[\s\S]*?\},\n\s*\],\n\s*firesim:/)?.[0] || '';
-assert.match(bonfireLookBlock, /TALL_PLUME_OPERATOR_PRESETS\.pyro_flow_small_bonfire_gamut_0707/, 'Bonfire a la Ruffles aliases the current Pyro Flow small-bonfire basin instead of pinning stale copied controls');
-assert.match(bonfireLookBlock, /flowCarrierAuthored:\s*true/, 'Bonfire a la Ruffles is marked as a Flow-authored source-backed look');
+assert.match(bonfireLookBlock, /TALL_PLUME_OPERATOR_PRESETS\.boundary_fire_bonfire_a_la_ruffles_0709/, 'Bonfire a la Ruffles aliases the current Boundary Fire basin instead of the stale Pyro Flow controls');
+assert.match(bonfireLookBlock, /boundaryFireAuthored:\s*true/, 'Bonfire a la Ruffles is marked as a Boundary Fire-authored source-backed look');
 assert.doesNotMatch(bonfireLookBlock, /pyroFlowBite:\s*0\.95/, 'Bonfire a la Ruffles must not preserve the stale low Flow carrier gain');
 assert.doesNotMatch(bonfireLookBlock, /pyroRadiance:\s*1\.25/, 'Bonfire a la Ruffles must not preserve the stale old Radiance carrier gain');
 assert.match(index, /mergeVolumeLookLibraryWithBuiltIns/, 'Volume cockpit merges source-backed looks with browser-local saved looks');
