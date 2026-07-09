@@ -9,6 +9,7 @@ from pathlib import Path
 
 
 SCHEMA = "kaminos.volume.residual-greenroom-runner.v0"
+MODEL_ARCHITECTURES = ["tiny-conv", "direct-residual", "hybrid-residual", "gated-detail-residual", "small-unet"]
 
 
 def truthy(value):
@@ -30,7 +31,7 @@ def parse_args():
     parser.add_argument("--patch-size", default="64")
     parser.add_argument("--eval-pair-count", default="0")
     parser.add_argument("--eval-selection", default="tail")
-    parser.add_argument("--model-arch", default="tiny-conv")
+    parser.add_argument("--model-arch", default="tiny-conv", choices=MODEL_ARCHITECTURES)
     parser.add_argument("--feature-input-mode", default="rgb")
     parser.add_argument("--material-focus", default="off")
     parser.add_argument("--outside-material-residual-weight", default="1.0")

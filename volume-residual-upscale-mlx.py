@@ -161,6 +161,80 @@ class GatedDetailResidualUpscaler(nn.Module):
         return apply_limited_residual(base_image, direct_residual + detail_residual, self.residualOutputLimit, residualApplicationMask, self.residualColorMode, self.chromaResidualScale, self.residualApplyScale)
 
 
+def match_spatial_shape(tensor, reference):
+    target_height = int(reference.shape[1])
+    target_width = int(reference.shape[2])
+    height = int(tensor.shape[1])
+    width = int(tensor.shape[2])
+    if height < target_height or width < target_width:
+        pad_height = max(0, target_height - height)
+        pad_width = max(0, target_width - width)
+        top_pad = pad_height // 2
+        bottom_pad = pad_height - top_pad
+        left_pad = pad_width // 2
+        right_pad = pad_width - left_pad
+        tensor = mx.pad(tensor, [(0, 0), (top_pad, bottom_pad), (left_pad, right_pad), (0, 0)])
+    height = int(tensor.shape[1])
+    width = int(tensor.shape[2])
+    top = max(0, (height - target_height) // 2)
+    left = max(0, (width - target_width) // 2)
+    return tensor[:, top:top + target_height, left:left + target_width, :]
+
+
+class SmallUNetResidualUpscaler(nn.Module):
+    def __init__(self, hidden_channels, input_channels, residual_output_limit, residual_color_mode, chroma_residual_scale, residual_apply_scale):
+        super().__init__()
+        self.unetDepth = 2
+        self.receptiveField = "two-level-encoder-decoder-skip"
+        self.residualOutputLimit = float(residual_output_limit)
+        self.residualColorMode = residual_color_mode
+        self.chromaResidualScale = float(chroma_residual_scale)
+        self.residualApplyScale = float(residual_apply_scale)
+        mid_channels = max(4, int(hidden_channels) * 2)
+        bottleneck_channels = max(8, int(hidden_channels) * 4)
+        self.enc1_a = nn.Conv2d(input_channels, hidden_channels, kernel_size=3, padding=1)
+        self.enc1_b = nn.Conv2d(hidden_channels, hidden_channels, kernel_size=3, padding=1)
+        self.pool1 = nn.MaxPool2d(kernel_size=2, stride=2)
+        self.enc2_a = nn.Conv2d(hidden_channels, mid_channels, kernel_size=3, padding=1)
+        self.enc2_b = nn.Conv2d(mid_channels, mid_channels, kernel_size=3, padding=1)
+        self.pool2 = nn.MaxPool2d(kernel_size=2, stride=2)
+        self.bottleneck_a = nn.Conv2d(mid_channels, bottleneck_channels, kernel_size=3, padding=1)
+        self.bottleneck_b = nn.Conv2d(bottleneck_channels, bottleneck_channels, kernel_size=3, padding=1)
+        self.up2 = nn.ConvTranspose2d(bottleneck_channels, mid_channels, kernel_size=2, stride=2)
+        self.dec2_a = nn.Conv2d(mid_channels + mid_channels, mid_channels, kernel_size=3, padding=1)
+        self.dec2_b = nn.Conv2d(mid_channels, mid_channels, kernel_size=3, padding=1)
+        self.up1 = nn.ConvTranspose2d(mid_channels, hidden_channels, kernel_size=2, stride=2)
+        self.dec1_a = nn.Conv2d(hidden_channels + hidden_channels, hidden_channels, kernel_size=3, padding=1)
+        self.dec1_b = nn.Conv2d(hidden_channels, hidden_channels, kernel_size=3, padding=1)
+        self.output = nn.Conv2d(hidden_channels, 3, kernel_size=3, padding=1)
+        self.output.weight = mx.zeros_like(self.output.weight)
+        self.output.bias = mx.zeros_like(self.output.bias)
+
+    def __call__(self, image, residualApplicationMask=None):
+        base_image = image[..., :3]
+        skip1 = nn.relu(self.enc1_a(image))
+        skip1 = nn.relu(self.enc1_b(skip1))
+        hidden = self.pool1(skip1)
+        skip2 = nn.relu(self.enc2_a(hidden))
+        skip2 = nn.relu(self.enc2_b(skip2))
+        hidden = self.pool2(skip2)
+        hidden = nn.relu(self.bottleneck_a(hidden))
+        hidden = nn.relu(self.bottleneck_b(hidden))
+        hidden = self.up2(hidden)
+        hidden = match_spatial_shape(hidden, skip2)
+        hidden = mx.concatenate([hidden, skip2], axis=3)
+        hidden = nn.relu(self.dec2_a(hidden))
+        hidden = nn.relu(self.dec2_b(hidden))
+        hidden = self.up1(hidden)
+        hidden = match_spatial_shape(hidden, skip1)
+        hidden = mx.concatenate([hidden, skip1], axis=3)
+        hidden = nn.relu(self.dec1_a(hidden))
+        hidden = nn.relu(self.dec1_b(hidden))
+        residual = self.output(hidden)
+        residual = match_spatial_shape(residual, base_image)
+        return apply_limited_residual(base_image, residual, self.residualOutputLimit, residualApplicationMask, self.residualColorMode, self.chromaResidualScale, self.residualApplyScale)
+
+
 def parse_args():
     parser = argparse.ArgumentParser(description="Tiny MLX residual-upscale smoke for Kaminos frame-locked render pairs.")
     parser.add_argument("--corpus-manifest", required=True, help="Path to corpus-manifest.json from frame-locked render-pair captures.")
@@ -171,7 +245,7 @@ def parse_args():
     parser.add_argument("--patch-size", type=int, default=96)
     parser.add_argument("--eval-pair-count", dest="evalPairCount", type=int, default=0, help="Optional exact eval pair count for support-scaling experiments; 0 keeps the default split.")
     parser.add_argument("--eval-selection", dest="evalSelection", choices=["tail", "even"], default="tail", help="Eval holdout selection when --eval-pair-count is set.")
-    parser.add_argument("--model-arch", dest="modelArch", choices=["tiny-conv", "direct-residual", "hybrid-residual", "gated-detail-residual"], default="tiny-conv")
+    parser.add_argument("--model-arch", dest="modelArch", choices=["tiny-conv", "direct-residual", "hybrid-residual", "gated-detail-residual", "small-unet"], default="tiny-conv")
     parser.add_argument("--feature-input-mode", dest="featureInputMode", choices=["rgb", "feature-rgba", "aux-rgba", "aux-rgb", "aux-red-cyan-abs", "aux-opponent-gradient"], default="rgb", help="Model input source: low RGB only, low RGB plus shader/material residual feature RGBA, raw Flow Debug RGB/RGBA, or normalized Flow Debug derived carriers.")
     parser.add_argument("--material-focus", dest="materialFocus", choices=["off", "fire-interface", "smoke"], default="off", help="Optional specialist supervision mask derived from shader/material feature RGBA: fire/interface or smoke.")
     parser.add_argument("--outside-material-residual-weight", dest="outsideMaterialResidualWeight", type=float, default=1.0, help="Penalty on residual energy outside the selected material-focus mask.")
@@ -239,6 +313,8 @@ def make_model(model_arch, hidden_channels, input_channels, detail_gate, residua
         return HybridResidualUpscaler(hidden_channels, input_channels, residual_output_limit, residual_color_mode, chroma_residual_scale, residual_apply_scale)
     if model_arch == "gated-detail-residual":
         return GatedDetailResidualUpscaler(hidden_channels, input_channels, detail_gate, residual_output_limit, residual_color_mode, chroma_residual_scale, residual_apply_scale)
+    if model_arch == "small-unet":
+        return SmallUNetResidualUpscaler(hidden_channels, input_channels, residual_output_limit, residual_color_mode, chroma_residual_scale, residual_apply_scale)
     raise ValueError(f"unsupported model architecture: {model_arch}")
 
 
@@ -253,6 +329,8 @@ def model_config(model_arch, hidden_channels, input_channels, condition_render_s
         "featureInputAuthority": feature_input_authority(feature_input_mode),
         "featureInputChannels": feature_input_channels(feature_input_mode),
         "detailGate": detail_gate if model_arch == "gated-detail-residual" else None,
+        "unetDepth": 2 if model_arch == "small-unet" else None,
+        "receptiveField": "two-level-encoder-decoder-skip" if model_arch == "small-unet" else "local-3x3-stack",
         "residualOutputLimit": residual_output_limit,
         "residualApplyScale": residual_apply_scale,
         "residualApplicationMaskMode": residual_application_mask_mode,
