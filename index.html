@@ -17451,19 +17451,11 @@ function frameVolumeCamera() {
 }
 
 function createVolumeMainRendererBridge() {
-  const sourceTexture = new THREE.CanvasTexture(volumePrototype.canvasElement());
-  sourceTexture.colorSpace = THREE.SRGBColorSpace;
-  sourceTexture.generateMipmaps = false;
-  sourceTexture.minFilter = THREE.LinearFilter;
-  sourceTexture.magFilter = THREE.LinearFilter;
-
   const material = new THREE.MeshBasicMaterial({
-    map: sourceTexture,
     transparent: true,
-    opacity: 1,
+    opacity: 0,
     depthTest: false,
     depthWrite: false,
-    blending: THREE.AdditiveBlending,
     toneMapped: false,
     side: THREE.DoubleSide,
   });
@@ -17474,33 +17466,27 @@ function createVolumeMainRendererBridge() {
   mesh.userData.kaminosVolumeBridge = {
     identity: 'volume-main-renderer-bridge-v0',
     source: 'native-webgpu-volume-canvas',
-    composition: 'three-canvas-texture-additive-plane',
+    composition: 'dom-webgpu-canvas-no-copy',
+    lastSuppressedReason: 'inactive',
   };
   scene.add(mesh);
 
-  const direction = new THREE.Vector3();
   return {
     identity: 'volume-main-renderer-bridge-v0',
     mesh,
-    texture: sourceTexture,
     update() {
       const state = volumePrototype.debugState();
       const active = !!state.active;
-      mesh.visible = active;
-      if (!active) return false;
-      sourceTexture.needsUpdate = true;
-      const distance = Math.max(0.2, (camera.near || 0.1) * 2.5);
-      camera.getWorldDirection(direction);
-      mesh.position.copy(camera.position).addScaledVector(direction, distance);
-      mesh.quaternion.copy(camera.quaternion);
-      const height = 2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) * 0.5) * distance;
-      mesh.scale.set(height * camera.aspect, height, 1);
-      return true;
+      mesh.visible = false;
+      mesh.userData.kaminosVolumeBridge.lastSuppressedReason = active
+        ? 'dom-webgpu-canvas-direct-overlay'
+        : 'inactive';
+      return false;
     },
     forceHidden(reason = 'manual-release') {
       mesh.visible = false;
       mesh.userData.kaminosVolumeBridge.lastForceHiddenReason = reason;
-      sourceTexture.needsUpdate = false;
+      mesh.userData.kaminosVolumeBridge.lastSuppressedReason = reason;
       return true;
     },
     debugState() {
@@ -17508,6 +17494,7 @@ function createVolumeMainRendererBridge() {
         identity: 'volume-main-renderer-bridge-v0',
         visible: mesh.visible,
         lastForceHiddenReason: mesh.userData.kaminosVolumeBridge.lastForceHiddenReason || null,
+        lastSuppressedReason: mesh.userData.kaminosVolumeBridge.lastSuppressedReason || null,
         textureSource: volumePrototype?.canvasElement?.()?.id || null,
         meshName: mesh.name,
         renderOrder: mesh.renderOrder,
@@ -17516,7 +17503,6 @@ function createVolumeMainRendererBridge() {
     },
     dispose() {
       scene.remove(mesh);
-      sourceTexture.dispose();
       material.dispose();
       mesh.geometry.dispose();
     },

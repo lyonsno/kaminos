@@ -1,4 +1,5 @@
 from http import HTTPStatus
+from io import BytesIO
 import json
 import os
 from pathlib import Path
@@ -135,6 +136,32 @@ def test_pipeline_witness_env_for_payload_preserves_requested_scheduler_profile(
     assert profile["operatorLabel"] == "Friendly"
     assert json.loads(env["KAMINOS_SHARP_WEBGPU_SCHEDULER"])["mode"] == "cooperative"
     assert json.loads(env["KAMINOS_SHARP_WEBGPU_SCHEDULER"])["gaussianPhaseYieldMs"] == 4
+
+
+def test_image_inbox_webp_read_serves_bytes_without_json_fallback():
+    with TemporaryDirectory(dir="/tmp") as tmp:
+        root = Path(tmp)
+        webp_bytes = b"RIFF\x10\x00\x00\x00WEBPVP8Xfixture"
+        (root / "sample.webp").write_bytes(webp_bytes)
+
+        previous = BROWSE_ROOTS["image-inbox"]
+        BROWSE_ROOTS["image-inbox"] = root
+        try:
+            handler = KaminosHandler.__new__(KaminosHandler)
+            handler.wfile = BytesIO()
+            responses = []
+            headers = []
+            handler.send_response = lambda status: responses.append(status)
+            handler.send_header = lambda name, value: headers.append((name, value))
+            handler.end_headers = lambda: None
+
+            handler.handle_read({"root": ["image-inbox"], "path": ["sample.webp"]})
+        finally:
+            BROWSE_ROOTS["image-inbox"] = previous
+
+    assert responses == [200]
+    assert ("Content-Type", "image/webp") in headers
+    assert handler.wfile.getvalue() == webp_bytes
 
 
 def test_volume_only_scene_save_name_uses_scene_fallback():
@@ -595,6 +622,53 @@ def test_pipeline_run_resolves_api_read_source_and_returns_bundle():
         assert result["report"]["document"]["effectivePipelineId"] == "prepared-splat-import-sidecar-v0"
         assert result["bundle"]["document"]["registryScope"] == "run-local"
         assert any(artifact["id"] == "sidecar" for artifact in result["bundle"]["document"]["artifacts"])
+
+
+def test_pipeline_run_writes_failure_report_when_child_exits_before_report():
+    with TemporaryDirectory(dir="/tmp") as tmp:
+        root = Path(tmp)
+        source_root = root / "images"
+        source_root.mkdir()
+        source = source_root / "source.png"
+        source.write_bytes(b"\x89PNG\r\n\x1a\n")
+        out_dir = root / "pipeline-run"
+        fake_node = root / "fake-node"
+        fake_node.write_text(
+            "#!/bin/sh\n"
+            "echo 'synthetic child import failure before report' >&2\n"
+            "exit 37\n"
+        )
+        fake_node.chmod(0o755)
+
+        previous_browse = dict(BROWSE_ROOTS)
+        previous_node = os.environ.get("KAMINOS_NODE")
+        BROWSE_ROOTS["pipeline-test-images"] = source_root
+        os.environ["KAMINOS_NODE"] = str(fake_node)
+        try:
+            result = serve.run_pipeline_witness({
+                "pipelineId": "sharp-image-to-splat-live-v0",
+                "source": "/api/read?root=pipeline-test-images&path=source.png",
+                "outDir": str(out_dir),
+            })
+        finally:
+            BROWSE_ROOTS.clear()
+            BROWSE_ROOTS.update(previous_browse)
+            if previous_node is None:
+                os.environ.pop("KAMINOS_NODE", None)
+            else:
+                os.environ["KAMINOS_NODE"] = previous_node
+
+        report_path = out_dir / "pipeline-witness.json"
+        assert result["ok"] is False
+        assert result["exitCode"] == 37
+        assert result["report"]["path"] == str(report_path)
+        assert report_path.exists(), "server wrapper must not point at a missing report"
+        assert result["report"]["document"]["schema"] == "kaminos.pipeline-witness.v0"
+        assert result["report"]["document"]["ok"] is False
+        assert result["report"]["document"]["phase"] == "subprocess-exit-before-report"
+        assert result["report"]["document"]["effectiveRouteConfig"]["routeId"] == "sharp-image-to-splat-live-v0"
+        assert result["report"]["document"]["exitCode"] == 37
+        assert "synthetic child import failure before report" in result["report"]["document"]["stderrTail"]
 
 
 def test_pipeline_run_rejects_sources_outside_declared_roots():

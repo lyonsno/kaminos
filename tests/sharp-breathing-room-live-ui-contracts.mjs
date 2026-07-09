@@ -335,6 +335,16 @@ assert.match(
 );
 assert.match(
   index,
+  /composition:\s*'dom-webgpu-canvas-no-copy'/,
+  'The volume bridge must name the no-copy DOM overlay path so fire visibility does not depend on a WebGPU canvas texture upload',
+);
+assert.doesNotMatch(
+  index,
+  /sourceTexture\.needsUpdate\s*=\s*true/,
+  'The volume bridge must not upload the WebGPU volume canvas through a Three CanvasTexture during live inference',
+);
+assert.match(
+  index,
   /window\._kaminosDirty\?\.\(\)/,
   'Kiln-fire release must dirty the main renderer after hiding the bridge so the cleared scene is painted',
 );

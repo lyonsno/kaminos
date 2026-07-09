@@ -13,7 +13,7 @@ import time
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs, urlencode
 
-PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8090
+PORT = int(sys.argv[1]) if len(sys.argv) > 1 and str(sys.argv[1]).isdigit() else 8090
 ROOT = Path(__file__).parent.resolve()
 VOLUME_CAPTURE_DIR = ROOT / "artifacts" / "volume-captures"
 
@@ -363,6 +363,69 @@ def _default_pipeline_out_dir(pipeline_id):
     return (KAMINOS_PIPELINE_RUNS_DIR / f"{stamp}-{os.getpid()}-{safe}").resolve()
 
 
+def write_pipeline_subprocess_failure_report(
+    *,
+    report_path,
+    pipeline_id,
+    source,
+    command,
+    exit_code,
+    stdout_tail="",
+    stderr_tail="",
+    scheduler_profile=None,
+    phase="subprocess-exit-before-report",
+):
+    report_path = Path(report_path)
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    source_path = source.get("path") if isinstance(source, dict) else None
+    source_document = {
+        "source": source.get("source") if isinstance(source, dict) else None,
+        "path": source_path,
+    }
+    try:
+        source_stat = Path(source_path).stat() if source_path else None
+    except OSError:
+        source_stat = None
+    if source_stat:
+        source_document["bytes"] = source_stat.st_size
+    report = {
+        "schema": "kaminos.pipeline-witness.v0",
+        "ok": False,
+        "requestedPipelineId": pipeline_id,
+        "effectivePipelineId": None,
+        "phase": phase,
+        "error": (stderr_tail or stdout_tail or f"pipeline witness exited {exit_code} before writing a report").strip().splitlines()[0],
+        "failureAuthority": "kaminos.serve.py-subprocess-wrapper.v0",
+        "effectiveRouteConfig": {
+            "routeId": pipeline_id,
+            "manifestPath": str(PIPELINE_MANIFEST_PATH),
+            "manifestSha256": None,
+            "outputRoot": str(report_path.parent),
+            "stageCount": 0,
+        },
+        "artifacts": {
+            "input": {
+                "role": "source-image",
+                "status": "requested",
+                **source_document,
+            },
+        },
+        "stages": [],
+        "lastTrustworthyEvidence": {
+            "source": source_document,
+            "command": command,
+            "exitCode": exit_code,
+            "schedulerProfileId": scheduler_profile.get("id") if isinstance(scheduler_profile, dict) else None,
+        },
+        "command": command,
+        "exitCode": exit_code,
+        "stdoutTail": stdout_tail,
+        "stderrTail": stderr_tail,
+    }
+    report_path.write_text(json.dumps(report, indent=2))
+    return report
+
+
 def resolve_sharp_scheduler_profile(profile_id):
     requested = str(profile_id or "").strip()
     if not requested:
@@ -402,6 +465,17 @@ def run_pipeline_witness(payload):
     timeout = int(os.environ.get("KAMINOS_PIPELINE_WITNESS_TIMEOUT", "360"))
     proc = subprocess.run(command, cwd=ROOT, capture_output=True, text=True, timeout=timeout, env={**os.environ, **env_patch})
     report = json.loads(report_path.read_text()) if report_path.exists() else None
+    if report is None and proc.returncode != 0:
+        report = write_pipeline_subprocess_failure_report(
+            report_path=report_path,
+            pipeline_id=pipeline_id,
+            source=source,
+            command=command,
+            exit_code=proc.returncode,
+            stdout_tail=proc.stdout[-4000:],
+            stderr_tail=proc.stderr[-4000:],
+            scheduler_profile=scheduler_profile,
+        )
     bundle_path = Path(report["bundleIndex"]["path"]) if report and report.get("bundleIndex") else None
     bundle = json.loads(bundle_path.read_text()) if bundle_path and bundle_path.exists() else None
     return {
@@ -516,6 +590,17 @@ def run_pipeline_witness_stream(handler, payload):
             break
 
     report = json.loads(report_path.read_text()) if report_path.exists() else None
+    if report is None and proc.returncode != 0:
+        report = write_pipeline_subprocess_failure_report(
+            report_path=report_path,
+            pipeline_id=pipeline_id,
+            source=source,
+            command=command,
+            exit_code=proc.returncode,
+            stdout_tail="".join(stdout_chunks)[-4000:],
+            stderr_tail="".join(stderr_chunks)[-4000:],
+            scheduler_profile=scheduler_profile,
+        )
     bundle_path = Path(report["bundleIndex"]["path"]) if report and report.get("bundleIndex") else None
     bundle = json.loads(bundle_path.read_text()) if bundle_path and bundle_path.exists() else None
     result = {
@@ -1498,10 +1583,11 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
 
         # For images, serve directly
         ext = target.suffix.lower()
-        if ext in (".png", ".jpg", ".jpeg", ".exr", ".glb", ".gltf", ".ply", ".spz"):
+        if ext in (".png", ".jpg", ".jpeg", ".webp", ".exr", ".glb", ".gltf", ".ply", ".spz"):
             self.send_response(200)
             content_types = {
                 ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+                ".webp": "image/webp",
                 ".glb": "model/gltf-binary", ".gltf": "model/gltf+json",
                 ".exr": "application/octet-stream", ".ply": "application/octet-stream", ".spz": "application/octet-stream",
             }
