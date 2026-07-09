@@ -651,13 +651,18 @@ async function focusMotionPanelTakeShelf(ws) {
 async function captureFrame(ws, index) {
   const debug = await evaluate(ws, `(() => {
     const state = window.kaminosGeneratedPoseTemporalDebugState?.();
-    const actor = state?.actors?.[0] || null;
+    const actors = Array.isArray(state?.actors) ? state.actors : [];
+    const actor = actors[0] || null;
     const sourceGhost = actor?.sourceGhost || state?.sourceGhost || null;
     const canvas = document.querySelector('canvas');
     const rect = canvas?.getBoundingClientRect();
     return {
       index: ${index},
       route: state?.route || null,
+      actorCount: actors.length,
+      actorIds: actors.map(actor => actor.id),
+      actors,
+      hillMultiActor: state?.hillMultiActor || null,
       status: document.getElementById('motion-panel-temporal-status')?.textContent || null,
       info: document.getElementById('info')?.textContent || null,
       envLoadingDisplay: getComputedStyle(document.getElementById('env-loading')).display,

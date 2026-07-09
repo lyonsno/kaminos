@@ -85,6 +85,12 @@ assert.match(index, /function createMotionPanelCarrierPathFollower/, 'browser cr
 assert.match(index, /function createMotionPanelHillCarrierSmoothing/, 'Hill carrier follow applies a named smoothing layer between route samples and rendered actor pose');
 assert.match(index, /function createMotionPanelHillCarrierCadence/, 'Hill carrier follow applies a named bounded cadence layer from generated temporal evidence');
 assert.match(index, /hill-carrier-cadence-smoothing-v0/, 'Hill carrier follow evidence names the cadence smoothing slice');
+assert.match(index, /function motionPanelHillMultiActorEnabled/, 'Hill smoke has an explicit multi-actor mode gate instead of silently cloning the default actor');
+assert.match(index, /kaminos_hill_multi_actor/, 'Hill smoke links can explicitly request multiple terrain-carried actors');
+assert.match(index, /function createMotionPanelHillMultiActorConfigs/, 'Hill multi-actor smoke builds stable per-actor identities and offsets');
+assert.match(index, /hill-multi-actor-smoke-v0/, 'Hill multi-actor evidence names the smoke slice');
+assert.match(index, /multiActorIndex/, 'actor evidence records per-actor multi-actor index');
+assert.match(index, /routePhaseOffset/, 'actor evidence records per-actor route phase offset');
 assert.match(index, /carrierPathFollower/, 'actor/debug evidence exposes carrier path follower state');
 assert.match(index, /terrainContact/, 'carrier path follower records the authoritative terrain contact');
 assert.match(index, /routeTangent/, 'carrier path follower records route tangent evidence');
@@ -130,6 +136,9 @@ assert.match(liveWitness, /carrierSmoothing/, 'live witness records Hill carrier
 assert.match(liveWitness, /carrierCadence/, 'live witness records Hill carrier cadence evidence per frame');
 assert.match(liveWitness, /cadenceSource/, 'live witness records the generated temporal cadence source per frame');
 assert.match(liveWitness, /airborneSuppressed/, 'live witness records whether generated cadence was prevented from owning airborne travel');
+assert.match(liveWitness, /actorCount/, 'live witness records how many generated temporal actors were captured');
+assert.match(liveWitness, /actorIds/, 'live witness records unique actor ids for multi-actor smoke');
+assert.match(liveWitness, /actors\.length/, 'live witness derives actor-count evidence from captured actors, not a single-actor constant');
 assert.match(liveWitness, /actorDisplayScale/, 'live witness records the effective Hill actor display scale per frame');
 assert.match(liveWitness, /arrivalBehavior/, 'live witness records Hill arrival behavior evidence per frame');
 assert.match(liveWitness, /airborneGrant/, 'live witness records whether carrier following allowed airborne motion');

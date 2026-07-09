@@ -6039,6 +6039,90 @@ function motionPanelHillActorDisplayScale(hillTerrainCarrier = null) {
   return hillTerrainCarrier ? MOTION_PANEL_HILL_ACTOR_DISPLAY_SCALE : 1;
 }
 
+function motionPanelHillMultiActorEnabled(params = new URLSearchParams(window.location.search)) {
+  const requested = params.get('kaminos_hill_multi_actor');
+  return ['1', 'true', 'on', 'yes'].includes(String(requested || '').toLowerCase());
+}
+
+function createMotionPanelHillMultiActorConfigs(params = new URLSearchParams(window.location.search)) {
+  if (!motionPanelHillMultiActorEnabled(params)) return [];
+  return [
+    {
+      id: 'hill-orb-prime',
+      label: 'Hill Orb Prime',
+      color: '#f0b184',
+      routePhaseOffset: 0,
+      cadenceTimeOffset: 0,
+      routeSpacingOffset: [0, 0, 0],
+      scale: 1,
+    },
+    {
+      id: 'hill-orb-meadow',
+      label: 'Meadow Seeker',
+      color: '#a9e7d3',
+      routePhaseOffset: 0.18,
+      cadenceTimeOffset: 0.31,
+      routeSpacingOffset: [-0.14, 0, 0.08],
+      scale: 0.88,
+    },
+    {
+      id: 'hill-orb-ridge',
+      label: 'Ridge Runner',
+      color: '#d8c1ff',
+      routePhaseOffset: 0.36,
+      cadenceTimeOffset: 0.64,
+      routeSpacingOffset: [0.13, 0, -0.07],
+      scale: 0.8,
+    },
+  ].map((config, index) => ({
+    ...config,
+    multiActorIndex: index,
+    schema: 'kaminos.motion-panel-hill-multi-actor-config.v0',
+  }));
+}
+
+function makeGeneratedPoseTemporalActorVisual({ id, label, color }) {
+  const visual = makeMotionDecisionVisual({
+    id,
+    label,
+    color,
+    origin: [0, 0, 0],
+    plan: null,
+  });
+  const compressionRing = new THREE.Mesh(
+    new THREE.TorusGeometry(0.28, 0.01, 8, 72),
+    new THREE.MeshBasicMaterial({ color: new THREE.Color(color), transparent: true, opacity: 0.46 })
+  );
+  compressionRing.name = `${id}-compression-ring`;
+  compressionRing.rotation.x = -Math.PI / 2;
+  visual.group.add(compressionRing);
+  visual.compressionRing = compressionRing;
+  return visual;
+}
+
+function offsetMotionPanelPathWorldSample(pathWorldSample, routeSpacingOffset = [0, 0, 0]) {
+  if (!pathWorldSample) return null;
+  const offset = motionPanelVector3FromArray(routeSpacingOffset);
+  if (offset.lengthSq() <= 0.000001) return pathWorldSample;
+  const offsetArray = offset.toArray().map(value => Number(value.toFixed(5)));
+  const offsetPoint = point => motionPanelVector3FromArray(point).add(offset).toArray().map(value => Number(value.toFixed(5)));
+  return {
+    ...pathWorldSample,
+    root: offsetPoint(pathWorldSample.root),
+    attention: offsetPoint(pathWorldSample.attention || pathWorldSample.root),
+    trigger: pathWorldSample.trigger
+      ? {
+        ...pathWorldSample.trigger,
+        center: Array.isArray(pathWorldSample.trigger.center)
+          ? offsetPoint(pathWorldSample.trigger.center)
+          : pathWorldSample.trigger.center,
+      }
+      : pathWorldSample.trigger,
+    routeSpacingOffset: offsetArray,
+    displayOffsetAuthority: 'hill-multi-actor-smoke-spacing',
+  };
+}
+
 function motionPanelRoundedVector3(vector) {
   return vector.toArray().map(value => Number(value.toFixed(5)));
 }
@@ -8022,22 +8106,31 @@ async function createGeneratedPoseTemporalScene({ force = false, clipId = null, 
     terrainSource: motionPanelHillAffordanceSource,
   });
   root.add(pathWorld.group);
-
-  const visual = makeMotionDecisionVisual({
+  const hillMultiActorConfigs = createMotionPanelHillMultiActorConfigs(params);
+  const primaryActorConfig = hillMultiActorConfigs[0] || {
     id: `generated-pose-temporal-${harness.registryClipId || harness.track.id}`,
     label: harness.track.label || 'Kimodo Temporal Clip',
     color: '#f0b184',
-    origin: [0, 0, 0],
-    plan: null,
+    routePhaseOffset: 0,
+    cadenceTimeOffset: 0,
+    routeSpacingOffset: [0, 0, 0],
+    scale: 1,
+    multiActorIndex: 0,
+  };
+
+  const visual = makeGeneratedPoseTemporalActorVisual({
+    id: primaryActorConfig.id,
+    label: primaryActorConfig.label,
+    color: primaryActorConfig.color,
   });
-  const compressionRing = new THREE.Mesh(
-    new THREE.TorusGeometry(0.28, 0.01, 8, 72),
-    new THREE.MeshBasicMaterial({ color: 0xf0d28a, transparent: true, opacity: 0.46 })
-  );
-  compressionRing.name = 'generated-pose-temporal-compression-ring';
-  compressionRing.rotation.x = -Math.PI / 2;
-  visual.group.add(compressionRing);
-  visual.compressionRing = compressionRing;
+  const actorVisuals = [visual];
+  for (const config of hillMultiActorConfigs.slice(1)) {
+    actorVisuals.push(makeGeneratedPoseTemporalActorVisual({
+      id: config.id,
+      label: config.label,
+      color: config.color,
+    }));
+  }
   const interruptTrigger = new THREE.Mesh(
     new THREE.TorusGeometry(0.18, 0.006, 8, 96),
     new THREE.MeshBasicMaterial({ color: 0xf0d28a, transparent: true, opacity: 0.0, depthTest: false })
@@ -8050,8 +8143,11 @@ async function createGeneratedPoseTemporalScene({ force = false, clipId = null, 
   visual.interruptTrigger = interruptTrigger;
   visual.track = harness.track;
   visual.behaviorReadout = createWorldSpaceBehaviorReadout({ color: '#f0d28a' });
-  root.add(visual.group);
-  root.add(visual.target);
+  for (const actorVisual of actorVisuals) {
+    actorVisual.track = harness.track;
+    root.add(actorVisual.group);
+    root.add(actorVisual.target);
+  }
   root.add(visual.behaviorReadout.group);
   const sourceGhost = sourceResult
     ? createMotionSourceGhostVisual(sourceResult, {
@@ -8077,6 +8173,21 @@ async function createGeneratedPoseTemporalScene({ force = false, clipId = null, 
     registryClipId: harness.registryClipId,
     registrySource: harness.registrySource,
     visual,
+    actorVisuals,
+    hillMultiActorMode: hillMultiActorConfigs.length > 1,
+    hillMultiActorConfigs,
+    hillMultiActorEvidence: hillMultiActorConfigs.length > 1
+      ? {
+        schema: 'kaminos.motion-panel-hill-multi-actor-smoke.v0',
+        mode: 'hill-multi-actor-smoke-v0',
+        actorCount: hillMultiActorConfigs.length,
+        actorIds: hillMultiActorConfigs.map(config => config.id),
+        routePhaseOffsets: hillMultiActorConfigs.map(config => Number(config.routePhaseOffset || 0)),
+        cadenceTimeOffsets: hillMultiActorConfigs.map(config => Number(config.cadenceTimeOffset || 0)),
+        routeSpacingAuthority: 'hill-multi-actor-smoke-spacing',
+      }
+      : null,
+    hillMultiActorSmoothingRuntimes: {},
     sourceResult,
     sourceOrientationRemap,
     sourceGhost,
@@ -8667,9 +8778,21 @@ function updateGeneratedPoseTemporalFrame(nowSeconds = performance.now() / 1000)
       sourceFrameSharedWithOrb: false,
     };
   state.lastSourceGhost = sourceGhost;
-  state.lastActors = [{
+  const primaryActorConfig = state.hillMultiActorConfigs?.[0] || {
+    multiActorIndex: 0,
+    routePhaseOffset: 0,
+    cadenceTimeOffset: 0,
+    routeSpacingOffset: [0, 0, 0],
+    scale: 1,
+  };
+  const primaryActor = {
     id: visual.id,
     label: visual.label,
+    multiActorMode: state.hillMultiActorMode ? 'hill-multi-actor-smoke-v0' : null,
+    multiActorIndex: primaryActorConfig.multiActorIndex ?? 0,
+    routePhaseOffset: Number(primaryActorConfig.routePhaseOffset || 0),
+    cadenceTimeOffset: Number(primaryActorConfig.cadenceTimeOffset || 0),
+    routeSpacingOffset: primaryActorConfig.routeSpacingOffset || [0, 0, 0],
     intent: state.track.intent,
     behaviorState,
     behaviorReadout,
@@ -8748,7 +8871,166 @@ function updateGeneratedPoseTemporalFrame(nowSeconds = performance.now() / 1000)
     verticalDisplayScale: Number(verticalDisplayScale.toFixed(5)),
     color: visual.color,
     sampler: temporalSample?.sampler ?? null,
-  }];
+  };
+  const nextActors = [primaryActor];
+  if (state.hillMultiActorMode && state.pathWorld && state.actorVisuals?.length > 1) {
+    const durationForRoute = Math.max(2.4, Number(state.duration || 6));
+    for (let index = 1; index < state.actorVisuals.length; index++) {
+      const actorVisual = state.actorVisuals[index];
+      const actorConfig = state.hillMultiActorConfigs[index] || {};
+      const actorElapsedTime = elapsedTime + durationForRoute * Number(actorConfig.routePhaseOffset || 0);
+      const actorLocalTime = (localTime + durationForRoute * Number(actorConfig.cadenceTimeOffset || 0)) % Math.max(0.1, state.duration || durationForRoute);
+      const actorRawPathWorldSample = sampleMotionPanelPathWorld(effectivePathWorld, actorElapsedTime, state.duration, {
+        pathWorldSteeringMemoryRuntime: {},
+        disableSteering: true,
+      });
+      const actorOffsetPathWorldSample = offsetMotionPanelPathWorldSample(actorRawPathWorldSample, actorConfig.routeSpacingOffset || [0, 0, 0]);
+      const actorSmoothingRuntime = state.hillMultiActorSmoothingRuntimes[actorConfig.id]
+        || (state.hillMultiActorSmoothingRuntimes[actorConfig.id] = {});
+      const actorCarrierSmoothingResult = actorOffsetPathWorldSample
+        ? createMotionPanelHillCarrierSmoothing(actorOffsetPathWorldSample, actorSmoothingRuntime, { elapsedTime: actorElapsedTime })
+        : null;
+      const actorPathWorldSample = actorCarrierSmoothingResult?.sample || actorOffsetPathWorldSample;
+      const actorSample = sampleGeneratedPoseTemporalMotion(state.track, actorLocalTime);
+      const actorTemporalSample = actorSample.temporalSample || interpolateGeneratedPoseTemporalSample(state.track, actorLocalTime);
+      const actorDisplayGrounding = mapGeneratedPoseTemporalGroundedDisplaySample(actorSample, displayGroundingOptions);
+      const actorCarrierCadence = createMotionPanelHillCarrierCadence(actorPathWorldSample, actorTemporalSample, actorDisplayGrounding, {
+        effort: actorSample.effort,
+      });
+      const actorHillTerrainCarrier = createMotionPanelHillTerrainCarrier(actorPathWorldSample, actorDisplayGrounding, actorTemporalSample, {
+        horizontal: 0.055,
+        downward: 0.025,
+        upward: 0.055,
+        roll: 0.42,
+        carrierCadence: actorCarrierCadence,
+      });
+      const actorCarrierPathFollower = createMotionPanelCarrierPathFollower(actorPathWorldSample, actorHillTerrainCarrier, {
+        pathTriggerRequested: pathTriggerMode,
+        pathTriggerSuppressedByCarrierFollower,
+      });
+      const actorDisplayScale = motionPanelHillActorDisplayScale(actorHillTerrainCarrier) * Number(actorConfig.scale || 1);
+      const actorRootPosition = actorHillTerrainCarrier
+        ? motionPanelVector3FromArray(actorHillTerrainCarrier.groundedRoot)
+        : new THREE.Vector3(...actorDisplayGrounding.root).add(actorPathWorldSample
+          ? new THREE.Vector3(...actorPathWorldSample.root)
+          : new THREE.Vector3(0, 0, 0));
+      const actorArrivalBehavior = actorHillTerrainCarrier
+        ? motionPanelHillArrivalAttentionTarget(actorPathWorldSample, actorRootPosition, state.pathWorld)
+        : null;
+      const actorAttentionPosition = actorArrivalBehavior
+        ? motionPanelVector3FromArray(actorArrivalBehavior.target)
+        : actorPathWorldSample
+          ? new THREE.Vector3(...actorPathWorldSample.attention)
+          : new THREE.Vector3(...actorDisplayGrounding.attention);
+      const actorDisplayedFacing = actorAttentionPosition.clone().sub(actorRootPosition).normalize();
+      const actorCompression = Number(actorTemporalSample?.bowCompression || 0);
+      const actorGroundedCompression = Number(actorDisplayGrounding.groundedCompression || 0);
+      const actorDisplayCompression = Math.max(actorCompression, actorGroundedCompression);
+      const actorCadenceCompression = Number(actorCarrierCadence?.compressionBoost || 0);
+      actorVisual.group.position.copy(actorRootPosition);
+      actorVisual.group.scale.setScalar(actorDisplayScale);
+      actorVisual.group.lookAt(actorAttentionPosition);
+      actorVisual.group.rotation.z += Number(actorHillTerrainCarrier?.expressiveBodyRoll || 0);
+      actorVisual.body.scale.set(
+        1 + actorDisplayCompression * 0.18 + actorGroundedCompression * 0.18 + actorCadenceCompression * 0.55,
+        Math.max(0.42, 1.14 - actorDisplayCompression * 0.34 - actorGroundedCompression * 0.28 - actorCadenceCompression * 0.42),
+        1 + actorDisplayCompression * 0.46 + actorGroundedCompression * 0.26 + actorCadenceCompression * 0.72,
+      );
+      actorVisual.group.updateMatrixWorld(true);
+      const actorFaceCueWorld = actorRootPosition.clone().add(actorDisplayedFacing.multiplyScalar((0.22 + actorSample.effort * 0.02) * actorDisplayScale));
+      actorVisual.eye.position.copy(actorVisual.group.worldToLocal(actorFaceCueWorld));
+      actorVisual.body.material.emissive.copy(actorVisual.baseColor).multiplyScalar(0.12 + actorSample.effort * 0.22 + actorCompression * 0.24);
+      actorVisual.target.position.copy(actorAttentionPosition);
+      actorVisual.target.material.opacity = 0.28 + actorDisplayCompression * 0.52;
+      actorVisual.target.scale.setScalar(0.58 + actorDisplayCompression * 0.9);
+      actorVisual.compressionRing.scale.setScalar(0.7 + actorDisplayCompression * 1.5 + actorGroundedCompression * 0.38);
+      actorVisual.compressionRing.material.opacity = 0.14 + actorDisplayCompression * 0.46;
+      for (let trailIndex = 0; trailIndex < actorVisual.trail.length; trailIndex++) {
+        const trailTime = Math.max(0, actorLocalTime - (trailIndex + 1) * 0.12);
+        const trailSample = sampleGeneratedPoseTemporalMotion(state.track, trailTime);
+        const trailDisplayGrounding = mapGeneratedPoseTemporalGroundedDisplaySample(trailSample, displayGroundingOptions);
+        const dot = actorVisual.trail[trailIndex];
+        dot.visible = true;
+        dot.position.set(
+          trailDisplayGrounding.root[0] - actorDisplayGrounding.root[0],
+          trailDisplayGrounding.root[1] - actorDisplayGrounding.root[1],
+          trailDisplayGrounding.root[2] - actorDisplayGrounding.root[2],
+        );
+        dot.material.opacity = Math.max(0.035, 0.26 - trailIndex * 0.026);
+      }
+      const actorBehaviorState = buildGeneratedPoseTemporalBehaviorState({
+        track: state.track,
+        sample: actorSample,
+        temporalSample: actorTemporalSample,
+        target: state.lastAttentionTargetContext,
+        anchor: state.anchorContext,
+      });
+      if (actorArrivalBehavior) {
+        actorBehaviorState.state = actorArrivalBehavior.state;
+        actorBehaviorState.phase = actorArrivalBehavior.mode;
+        actorBehaviorState.reason = actorArrivalBehavior.reason;
+      }
+      nextActors.push({
+        id: actorVisual.id,
+        label: actorVisual.label,
+        multiActorMode: 'hill-multi-actor-smoke-v0',
+        multiActorIndex: actorConfig.multiActorIndex ?? index,
+        routePhaseOffset: Number(actorConfig.routePhaseOffset || 0),
+        cadenceTimeOffset: Number(actorConfig.cadenceTimeOffset || 0),
+        routeSpacingOffset: actorConfig.routeSpacingOffset || [0, 0, 0],
+        displayOffsetAuthority: actorPathWorldSample?.displayOffsetAuthority || null,
+        intent: state.track.intent,
+        behaviorState: actorBehaviorState,
+        behaviorStateLabel: actorBehaviorState.state,
+        phase: actorSample.phase,
+        root: actorRootPosition.toArray().map(value => Number(value.toFixed(5))),
+        rawRoot: actorDisplayGrounding.rawRoot,
+        facing: actorSample.facing.map(value => Number(value.toFixed(5))),
+        displayFacing: actorDisplayedFacing.toArray().map(value => Number(value.toFixed(5))),
+        attention: actorAttentionPosition.toArray().map(value => Number(value.toFixed(5))),
+        rawAttention: actorDisplayGrounding.rawAttention,
+        effort: Number(actorSample.effort.toFixed(5)),
+        scale: Number(actorSample.scale.toFixed(5)),
+        bowCompression: Number(actorCompression.toFixed(5)),
+        displayCompression: Number(actorDisplayCompression.toFixed(5)),
+        grounding: actorDisplayGrounding,
+        sourceVerticalPolicy: actorDisplayGrounding.sourceVerticalPolicy,
+        pathWorld: actorPathWorldSample,
+        routeConductor: actorPathWorldSample?.routeConductor || null,
+        routePlaybackMode: actorPathWorldSample?.routePlaybackMode || actorPathWorldSample?.routeMode || null,
+        routePhase: actorPathWorldSample?.routePhase || null,
+        routeProgress: actorPathWorldSample?.progress ?? null,
+        routeDirection: actorPathWorldSample?.direction || null,
+        pathWorldRouteAuthority: actorPathWorldSample ? (actorPathWorldSample.routeAuthority || actorPathWorldSample.activeSource || 'terrain-affordance-route-plan') : null,
+        arrivalBehavior: actorArrivalBehavior,
+        hillTerrainCarrier: actorHillTerrainCarrier,
+        carrierPathFollower: actorCarrierPathFollower,
+        carrierSmoothing: actorCarrierSmoothingResult?.evidence || actorHillTerrainCarrier?.carrierSmoothing || null,
+        carrierCadence: actorCarrierCadence || actorHillTerrainCarrier?.carrierCadence || null,
+        cadenceSource: actorCarrierCadence?.cadenceSource || actorHillTerrainCarrier?.cadenceSource || null,
+        terrainContact: actorCarrierPathFollower?.terrainContact || null,
+        routeTangent: actorCarrierPathFollower?.routeTangent || null,
+        carrierHeading: actorCarrierPathFollower?.carrierHeading || null,
+        airborneGrant: actorCarrierPathFollower?.airborneGrant ?? null,
+        airborneSuppressed: actorCarrierPathFollower?.airborneSuppressed ?? actorCarrierCadence?.airborneSuppressed ?? null,
+        contactPolicy: actorCarrierPathFollower?.contactPolicy || actorCarrierCadence?.contactPolicy || null,
+        actorDisplayScale: Number(actorDisplayScale.toFixed(5)),
+        pathTriggerSuppressedByCarrierFollower,
+        groundingAuthority: actorCarrierPathFollower?.groundingAuthority || actorHillTerrainCarrier?.groundingAuthority || null,
+        terrainCarrierRoot: actorHillTerrainCarrier?.terrainCarrierRoot || null,
+        expressiveRootOffset: actorHillTerrainCarrier?.expressiveRootOffset || null,
+        pathWorldRoutePlan: actorPathWorldSample?.routePlan || state.pathWorld?.routePlan || null,
+        pathWorldActiveSource: actorPathWorldSample ? 'terrain-affordance-route-plan' : null,
+        sourceFrame: actorTemporalSample?.sourceFrame ?? null,
+        sourceTime: actorTemporalSample?.time ?? null,
+        sourceBracket: actorTemporalSample?.bracket ?? null,
+        sourceInterpolation: actorTemporalSample?.interpolation ?? null,
+        color: actorVisual.color,
+        sampler: actorTemporalSample?.sampler ?? null,
+      });
+    }
+  }
+  state.lastActors = nextActors;
   updateMotionAgencyReadout();
   return true;
 }
@@ -10205,7 +10487,9 @@ window.kaminosGeneratedPoseTemporalDebugState = function() {
     schema: 'kaminos.generated-pose-temporal-debug.v0',
     route: MOTION_ROUTE_IDENTITY,
     active: !!state?.active,
-    actorCount: state?.active ? 1 : 0,
+    actorCount: state?.lastActors?.length || (state?.active ? 1 : 0),
+    actorIds: (state?.lastActors || []).map(actor => actor.id),
+    hillMultiActor: state?.hillMultiActorEvidence || null,
     fallbackCount: 0,
     frameCount: state?.frameCount || 0,
     maxEffort: Number(state?.maxEffort || harness.metrics.maxEffort || 0),
