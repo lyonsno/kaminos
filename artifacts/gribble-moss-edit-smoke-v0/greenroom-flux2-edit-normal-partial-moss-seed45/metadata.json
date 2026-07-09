@@ -1,0 +1,21 @@
+{
+  "name": "gribble-normal-front-tight-512",
+  "job_type": "mflux_flux2_edit_promptfile",
+  "job_id": "741f2ecb1bfa",
+  "input_path": "/private/tmp/kaminos-molten-lirm-speciation-armature-0707/artifacts/gribble-moss-edit-smoke-v0/source/gribble-normal-front-tight-512.png",
+  "input_name": "gribble-normal-front-tight-512.png",
+  "params": {
+    "seed": "45",
+    "steps": "8",
+    "guidance": "1.0",
+    "width": "512",
+    "height": "512",
+    "model": "flux2-klein-9b",
+    "quantize": "4",
+    "mlx_cache_limit_gb": "48",
+    "prompt_file": "/private/tmp/kaminos-molten-lirm-speciation-armature-0707/artifacts/gribble-moss-edit-smoke-v0/prompts/normal-partial-moss.txt"
+  },
+  "output_files": [],
+  "created_at": 1783574491.465615,
+  "duration_s": 3.0
+}

@@ -1,0 +1,62 @@
+{
+  "schema": "kaminos.gribble-moss-edit-smoke.v0",
+  "created_at": "2026-07-09T01:40:00-04:00",
+  "author_surface": "codex-local-smoke",
+  "purpose": "Test whether a gribble-box structure/control image can drive a production-ish partial moss/lichen material edit while preserving hard-surface objectness.",
+  "route": {
+    "queue": "GPU Greenroom",
+    "working_route": "mflux_flux2_edit_promptfile",
+    "model": "flux2-klein-9b",
+    "quantize": 4,
+    "size": [512, 512],
+    "steps": 8,
+    "guidance": 1.0,
+    "live_config_note": "Added mflux_flux2_edit_promptfile to /Users/noahlyons/.local/state/gpu-greenroom/job_types.json because the existing mflux_flux2_edit route hardcoded {output_dir}/prompt.txt and the queue/output lifecycle deleted or missed prompt files before inference.",
+    "route_failure_note": "Jobs 00eb9fdc8008 and 9f837f68b3c3, then 4e2118da3e37 and 741f2ecb1bfa, exited 0 with output_files=[] while stdout reported missing prompt files. Those are false-done route failures and not visual smokes."
+  },
+  "sources": {
+    "accepted_clay_control": "source/gribble-clay-front-tight-512.png",
+    "accepted_normal_control": "source/gribble-normal-front-tight-512.png",
+    "source_limitations": [
+      "Controls are cropped Kaminos witness screenshots, not clean renderer exports.",
+      "Both accepted controls still contain a small central transform gizmo.",
+      "Original GLB render route was not available locally through Blender/trimesh/PIL; QuickLook thumbnailing hung and was aborted.",
+      "Earlier centered/crop candidates in source/ are retained as rejected source-selection evidence."
+    ],
+    "rejected_or_limited_candidates": [
+      "source/gribble-render-current-default.png",
+      "source/gribble-render-edgeaxis.png",
+      "source/gribble-render-native-combined.png",
+      "source/gribble-clay-front-centered-512.png",
+      "source/gribble-normal-front-centered-512.png",
+      "source/gribble-clay-front-crop-512.png",
+      "source/gribble-normal-front-crop-512.png"
+    ]
+  },
+  "jobs": [
+    {
+      "name": "clay_control_partial_moss",
+      "job_id": "6e3a84dac60b",
+      "input": "source/gribble-clay-front-tight-512.png",
+      "prompt": "prompts/clay-partial-moss.txt",
+      "output": "greenroom-flux2-edit-clay-partial-moss-seed46/output.png",
+      "metadata": "greenroom-flux2-edit-clay-partial-moss-seed46/metadata.json",
+      "seed": 46,
+      "duration_s": 86.7,
+      "visual_verdict": "Hit. Preserves square gribble-box silhouette and panel grammar, removes the transform gizmo, converts clay into dark gunmetal, and adds moss/lichen in localized seams/corners without blanket-covering the object. Some front-panel detail is simplified compared with the control."
+    },
+    {
+      "name": "normal_control_partial_moss",
+      "job_id": "c8d47c3293de",
+      "input": "source/gribble-normal-front-tight-512.png",
+      "prompt": "prompts/normal-partial-moss.txt",
+      "output": "greenroom-flux2-edit-normal-partial-moss-seed47/output.png",
+      "metadata": "greenroom-flux2-edit-normal-partial-moss-seed47/metadata.json",
+      "seed": 47,
+      "duration_s": 81.4,
+      "visual_verdict": "Stronger hit. Preserves objectness and layered hard-surface structure very well, turns the normal-control colors into believable dark metal, removes the transform gizmo, and keeps moss mostly on edges, corners, seams, top ridge, side crevice, and lower growth. This is the better first production-beauty discriminator."
+    }
+  ],
+  "takeaway": "Flux 2 edit can be driven by a gribble-box control image into a production-adjacent localized moss/lichen material treatment while preserving objectness. The normal-map control produced the best balance of structure preservation and material synthesis. Next useful discriminator is a clean no-gizmo clay/depth/normal render from the GLB, because the present run succeeded despite witness contamination rather than proving clean render integration.",
+  "next_default": "Build or route a clean GLB-to-control render capture, then rerun a 2x2 matrix: clay vs normal, sparse moss vs heavier lichen, with same seeds and promptfile Greenroom route."
+}

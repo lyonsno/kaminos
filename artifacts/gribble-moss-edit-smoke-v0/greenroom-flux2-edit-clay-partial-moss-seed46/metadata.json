@@ -1,0 +1,24 @@
+{
+  "name": "gribble-clay-front-tight-512",
+  "job_type": "mflux_flux2_edit_promptfile",
+  "job_id": "6e3a84dac60b",
+  "input_path": "/private/tmp/kaminos-molten-lirm-speciation-armature-0707/artifacts/gribble-moss-edit-smoke-v0/source/gribble-clay-front-tight-512.png",
+  "input_name": "gribble-clay-front-tight-512.png",
+  "params": {
+    "seed": "46",
+    "steps": "8",
+    "guidance": "1.0",
+    "width": "512",
+    "height": "512",
+    "model": "flux2-klein-9b",
+    "quantize": "4",
+    "mlx_cache_limit_gb": "48",
+    "prompt_file": "/private/tmp/kaminos-molten-lirm-speciation-armature-0707/artifacts/gribble-moss-edit-smoke-v0/prompts/clay-partial-moss.txt"
+  },
+  "output_files": [
+    "output.metadata.json",
+    "output.png"
+  ],
+  "created_at": 1783575455.521481,
+  "duration_s": 86.7
+}

@@ -1,0 +1,29 @@
+{
+  "job_id": "c8d47c3293de",
+  "status": "done",
+  "job_type": "mflux_flux2_edit_promptfile",
+  "input_path": "/private/tmp/kaminos-molten-lirm-speciation-armature-0707/artifacts/gribble-moss-edit-smoke-v0/source/gribble-normal-front-tight-512.png",
+  "output_dir": "/private/tmp/kaminos-molten-lirm-speciation-armature-0707/artifacts/gribble-moss-edit-smoke-v0/greenroom-flux2-edit-normal-partial-moss-seed47",
+  "params": {
+    "seed": "47",
+    "steps": "8",
+    "guidance": "1.0",
+    "width": "512",
+    "height": "512",
+    "model": "flux2-klein-9b",
+    "quantize": "4",
+    "mlx_cache_limit_gb": "48",
+    "prompt_file": "/private/tmp/kaminos-molten-lirm-speciation-armature-0707/artifacts/gribble-moss-edit-smoke-v0/prompts/normal-partial-moss.txt"
+  },
+  "submitted_at": 1783575367.7330382,
+  "started_at": 1783575455.526635,
+  "finished_at": 1783575536.9431748,
+  "exit_code": 0,
+  "failure_phase": null,
+  "error_message": null,
+  "effective_route": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-lirm-speciation-armature-0707/artifacts/gribble-moss-edit-smoke-v0/source/gribble-normal-front-tight-512.png --prompt-file /private/tmp/kaminos-molten-lirm-speciation-armature-0707/artifacts/gribble-moss-edit-smoke-v0/prompts/normal-partial-moss.txt --output /private/tmp/kaminos-molten-lirm-speciation-armature-0707/artifacts/gribble-moss-edit-smoke-v0/greenroom-flux2-edit-normal-partial-moss-seed47/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 47 --mlx-cache-limit-gb 48",
+  "pid": 10971,
+  "warnings": [
+    "volatile_output"
+  ]
+}
