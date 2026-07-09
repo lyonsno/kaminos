@@ -1,6 +1,8 @@
 const ROUTE_IDENTITY = 'native-3d-compute-fluid-raymarch-v0';
 const PROTOTYPE_IDENTITY = 'kaminos-volume-prototype-v0';
 const FRONT_FIELD_IDENTITY = 'combustion-front-topology-sidecar-v0';
+const REACTION_FRONT_STAGE_IDENTITY = 'reaction-front-stage-fields-v0';
+const REACTION_FRONT_ATLAS_SCHEMA = 'kaminos.volume.reaction-front-atlas.v0';
 const DEFAULT_GRID_SIZE = 96;
 const SUPPORTED_GRID_SIZES = [32, 48, 64, 96, 128, 160];
 const FLUID_SLOTS_PER_CELL = 4;
@@ -343,6 +345,12 @@ function clampFinite(value, min, max, fallback) {
   const number = Number(value);
   if (!Number.isFinite(number)) return fallback;
   return Math.max(min, Math.min(max, number));
+}
+
+function smoothstep01(edge0, edge1, value) {
+  if (edge0 === edge1) return value >= edge1 ? 1 : 0;
+  const t = clampFinite((value - edge0) / (edge1 - edge0), 0, 1, 0);
+  return t * t * (3 - 2 * t);
 }
 
 function pyroHexColorToRgb(value, fallback) {
@@ -6708,6 +6716,162 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         rgba: Array.from(rgba),
       };
     };
+    const buildReactionFrontAtlas = () => {
+      const cellCount = gridSize * gridSize * gridSize;
+      const heatSupport = new Float32Array(cellCount);
+      const fuelSupport = new Float32Array(cellCount);
+      const flameSupport = new Float32Array(cellCount);
+      const combustionFrontSupport = new Float32Array(cellCount);
+      const reactionPotential = new Float32Array(cellCount);
+      const gradientMagnitude = new Float32Array(cellCount);
+      const narrowFrontCandidate = new Float32Array(cellCount);
+      const coreReject = new Float32Array(cellCount);
+      const topologyWrinkle = new Float32Array(cellCount);
+      const shellCandidate = new Float32Array(cellCount);
+      const colorMaps = {
+        heatSupport: [255, 122, 34],
+        fuelSupport: [84, 190, 108],
+        flameSupport: [255, 184, 70],
+        combustionFrontSupport: [255, 225, 96],
+        reactionPotential: [255, 151, 58],
+        gradientMagnitude: [78, 204, 220],
+        narrowFrontCandidate: [246, 112, 188],
+        coreReject: [104, 139, 230],
+        topologyWrinkle: [178, 134, 245],
+        shellCandidate: [255, 224, 158],
+      };
+      const indexAt = (x, y, z) => clampIndex(x) + clampIndex(y) * gridSize + clampIndex(z) * gridSize * gridSize;
+      for (let cell = 0; cell < cellCount; cell += 1) {
+        const i = cell * FLUID_COMPONENTS;
+        const heat = Math.max(0, data[i + 5]);
+        const fuel = Math.max(0, data[i + 6]);
+        const flame = Math.max(0, data[i + 8]);
+        const ember = Math.max(0, data[i + 9]);
+        const visibleFireCarrier = Math.max(0, data[i + 10]);
+        const combustionFront = Math.max(0, data[i + 11]);
+        const interfaceShred = Math.max(0, data[i + 13]);
+        const fireLick = Math.max(0, data[i + 14]);
+        const frontTopology = Math.max(0, frontData[cell]);
+        const heatSupportValue = smoothstep01(0.026, 0.42, heat + flame * 0.20 + visibleFireCarrier * 0.12 + ember * 0.08);
+        const fuelSupportValue = smoothstep01(0.0015, 0.055, fuel);
+        const flameSupportValue = smoothstep01(0.0035, 0.12, flame + visibleFireCarrier * 0.72 + fireLick * 0.36 + ember * 0.20);
+        const combustionFrontSupportValue = smoothstep01(0.0015, 0.075, combustionFront * 0.72 + frontTopology * 1.18);
+        const reactionPotentialValue = heatSupportValue * Math.max(flameSupportValue, combustionFrontSupportValue) * (0.18 + fuelSupportValue * 0.82);
+        const coreBody = smoothstep01(0.18, 0.95, heat * 0.66 + visibleFireCarrier * 0.56 + flame * 0.44 + ember * 0.22);
+        const coreRejectValue = 1 - coreBody * 0.82;
+        const topologyWrinkleValue = Math.max(0, Math.min(1, interfaceShred * 0.64 + fireLick * 0.58 + frontTopology * 0.86 + combustionFront * 0.22));
+        heatSupport[cell] = heatSupportValue;
+        fuelSupport[cell] = fuelSupportValue;
+        flameSupport[cell] = flameSupportValue;
+        combustionFrontSupport[cell] = combustionFrontSupportValue;
+        reactionPotential[cell] = reactionPotentialValue;
+        coreReject[cell] = coreRejectValue;
+        topologyWrinkle[cell] = topologyWrinkleValue;
+      }
+      for (let z = 0; z < gridSize; z += 1) {
+        for (let y = 0; y < gridSize; y += 1) {
+          for (let x = 0; x < gridSize; x += 1) {
+            const cell = indexAt(x, y, z);
+            const dx = (reactionPotential[indexAt(x + 1, y, z)] - reactionPotential[indexAt(x - 1, y, z)]) * 0.5;
+            const dy = (reactionPotential[indexAt(x, y + 1, z)] - reactionPotential[indexAt(x, y - 1, z)]) * 0.5;
+            const dz = (reactionPotential[indexAt(x, y, z + 1)] - reactionPotential[indexAt(x, y, z - 1)]) * 0.5;
+            const gradientMagnitudeValue = Math.max(0, Math.min(1, Math.hypot(dx, dy, dz) * 7.5));
+            const narrowFrontCandidateValue = reactionPotential[cell] * smoothstep01(0.018, 0.18, gradientMagnitudeValue) * coreReject[cell];
+            gradientMagnitude[cell] = gradientMagnitudeValue;
+            narrowFrontCandidate[cell] = narrowFrontCandidateValue;
+            shellCandidate[cell] = Math.max(0, Math.min(1, narrowFrontCandidateValue * (0.68 + topologyWrinkle[cell] * 0.44)));
+          }
+        }
+      }
+      const stages = [
+        { key: 'heatSupport', label: 'Heat support', values: heatSupport },
+        { key: 'fuelSupport', label: 'Fuel support', values: fuelSupport },
+        { key: 'flameSupport', label: 'Flame carrier', values: flameSupport },
+        { key: 'combustionFrontSupport', label: 'Combustion front', values: combustionFrontSupport },
+        { key: 'reactionPotential', label: 'Reaction potential', values: reactionPotential },
+        { key: 'gradientMagnitude', label: 'Potential gradient', values: gradientMagnitude },
+        { key: 'narrowFrontCandidate', label: 'Narrow front candidate', values: narrowFrontCandidate },
+        { key: 'coreReject', label: 'Core/body reject', values: coreReject },
+        { key: 'topologyWrinkle', label: 'Topology wrinkle', values: topologyWrinkle },
+        { key: 'shellCandidate', label: 'Shell candidate', values: shellCandidate },
+      ];
+      const panelSize = 128;
+      const columns = 5;
+      const rows = 2;
+      const width = panelSize * columns;
+      const height = panelSize * rows;
+      const rgba = new Uint8Array(width * height * 4);
+      const stageStats = {};
+      const stageValueAt = (stage, x, y, z) => stage.values[indexAt(x, y, z)];
+      for (const stage of stages) {
+        let sum = 0;
+        let max = 0;
+        let active = 0;
+        for (let i = 0; i < stage.values.length; i += 1) {
+          const value = stage.values[i];
+          sum += value;
+          max = Math.max(max, value);
+          if (value > 0.08) active += 1;
+        }
+        stageStats[stage.key] = {
+          mean: sum / Math.max(1, stage.values.length),
+          max,
+          activeVoxelRatio: active / Math.max(1, stage.values.length),
+        };
+      }
+      for (let stageIndex = 0; stageIndex < stages.length; stageIndex += 1) {
+        const stage = stages[stageIndex];
+        const panelX = (stageIndex % columns) * panelSize;
+        const panelY = Math.floor(stageIndex / columns) * panelSize;
+        const color = colorMaps[stage.key] || [255, 255, 255];
+        for (let py = 0; py < panelSize; py += 1) {
+          const gy = clampIndex(Math.round((1 - py / Math.max(1, panelSize - 1)) * (gridSize - 1)));
+          for (let px = 0; px < panelSize; px += 1) {
+            const gx = clampIndex(Math.round(px / Math.max(1, panelSize - 1) * (gridSize - 1)));
+            let projected = 0;
+            for (let gz = 0; gz < gridSize; gz += 1) {
+              projected = Math.max(projected, stageValueAt(stage, gx, gy, gz));
+            }
+            const shaped = Math.sqrt(Math.max(0, Math.min(1, projected)));
+            const dst = ((panelY + py) * width + panelX + px) * 4;
+            rgba[dst] = Math.round(10 + color[0] * shaped);
+            rgba[dst + 1] = Math.round(12 + color[1] * shaped);
+            rgba[dst + 2] = Math.round(14 + color[2] * shaped);
+            rgba[dst + 3] = 255;
+          }
+        }
+        for (let borderX = 0; borderX < panelSize; borderX += 1) {
+          const dst = (panelY * width + panelX + borderX) * 4;
+          rgba[dst] = 54;
+          rgba[dst + 1] = 54;
+          rgba[dst + 2] = 54;
+        }
+        for (let borderY = 0; borderY < panelSize; borderY += 1) {
+          const dst = ((panelY + borderY) * width + panelX) * 4;
+          rgba[dst] = 54;
+          rgba[dst + 1] = 54;
+          rgba[dst + 2] = 54;
+        }
+      }
+      return {
+        schema: REACTION_FRONT_ATLAS_SCHEMA,
+        identity: 'reaction-front-atlas-max-z-projection-v0',
+        stageIdentity: REACTION_FRONT_STAGE_IDENTITY,
+        frontFieldIdentity: state.frontFieldIdentity,
+        backend: 'cpu-fluid-buffer-readback',
+        mode: 'reaction-front-stage-max-z-projection',
+        coordinateSpace: 'simulation-grid',
+        width,
+        height,
+        panelSize,
+        columns,
+        rows,
+        panels: stages.map(stage => ({ key: stage.key, label: stage.label })),
+        stageStats,
+        sourceY,
+        rgba: Array.from(rgba),
+      };
+    };
     let samples = 0;
     for (const cell of sampleCells) {
       const i = cell * FLUID_COMPONENTS;
@@ -6884,6 +7048,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       samples += 1;
     }
     const canonicalSmokeFieldSlice = isCanonicalReadbackScene ? buildCanonicalSmokeFieldSlice() : null;
+    const reactionFrontAtlas = buildReactionFrontAtlas();
     readback.unmap();
     readback.destroy();
     frontReadback.unmap();
@@ -7172,6 +7337,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       plumeFieldColumnCoherence,
       plumeFieldBinCenterSpread: coherentBinCenterSpread,
       canonicalSmokeFieldSlice,
+      reactionFrontStageIdentity: REACTION_FRONT_STAGE_IDENTITY,
+      reactionFrontAtlas,
       emissionDetailCurlContact,
       emissionDetailVerticalCoherence,
       emissionDetailBodyBreadth,
