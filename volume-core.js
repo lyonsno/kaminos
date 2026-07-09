@@ -6784,16 +6784,16 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         }
       }
       const stages = [
-        { key: 'heatSupport', label: 'Heat support', values: heatSupport },
-        { key: 'fuelSupport', label: 'Fuel support', values: fuelSupport },
-        { key: 'flameSupport', label: 'Flame carrier', values: flameSupport },
-        { key: 'combustionFrontSupport', label: 'Combustion front', values: combustionFrontSupport },
-        { key: 'reactionPotential', label: 'Reaction potential', values: reactionPotential },
-        { key: 'gradientMagnitude', label: 'Potential gradient', values: gradientMagnitude },
-        { key: 'narrowFrontCandidate', label: 'Narrow front candidate', values: narrowFrontCandidate },
-        { key: 'coreReject', label: 'Core/body reject', values: coreReject },
-        { key: 'topologyWrinkle', label: 'Topology wrinkle', values: topologyWrinkle },
-        { key: 'shellCandidate', label: 'Shell candidate', values: shellCandidate },
+        { key: 'heatSupport', label: 'Heat support', atlasLabel: 'HEAT', values: heatSupport },
+        { key: 'fuelSupport', label: 'Fuel support', atlasLabel: 'FUEL', values: fuelSupport },
+        { key: 'flameSupport', label: 'Flame carrier', atlasLabel: 'FLAME', values: flameSupport },
+        { key: 'combustionFrontSupport', label: 'Combustion front', atlasLabel: 'FRONT', values: combustionFrontSupport },
+        { key: 'reactionPotential', label: 'Reaction potential', atlasLabel: 'POT', values: reactionPotential },
+        { key: 'gradientMagnitude', label: 'Potential gradient', atlasLabel: 'GRAD', values: gradientMagnitude },
+        { key: 'narrowFrontCandidate', label: 'Narrow front candidate', atlasLabel: 'NARROW', values: narrowFrontCandidate },
+        { key: 'coreReject', label: 'Core/body reject', atlasLabel: 'CORE', values: coreReject },
+        { key: 'topologyWrinkle', label: 'Topology wrinkle', atlasLabel: 'WRINKLE', values: topologyWrinkle },
+        { key: 'shellCandidate', label: 'Shell candidate', atlasLabel: 'SHELL', values: shellCandidate },
       ];
       const panelSize = 128;
       const columns = 5;
@@ -6801,8 +6801,67 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       const width = panelSize * columns;
       const height = panelSize * rows;
       const rgba = new Uint8Array(width * height * 4);
+      const atlasFont = {
+        A: ['111', '101', '111', '101', '101'],
+        C: ['111', '100', '100', '100', '111'],
+        D: ['110', '101', '101', '101', '110'],
+        E: ['111', '100', '110', '100', '111'],
+        F: ['111', '100', '110', '100', '100'],
+        G: ['111', '100', '101', '101', '111'],
+        H: ['101', '101', '111', '101', '101'],
+        I: ['111', '010', '010', '010', '111'],
+        K: ['101', '101', '110', '101', '101'],
+        L: ['100', '100', '100', '100', '111'],
+        M: ['101', '111', '111', '101', '101'],
+        N: ['101', '111', '111', '111', '101'],
+        O: ['111', '101', '101', '101', '111'],
+        P: ['111', '101', '111', '100', '100'],
+        R: ['111', '101', '111', '110', '101'],
+        S: ['111', '100', '111', '001', '111'],
+        T: ['111', '010', '010', '010', '010'],
+        U: ['101', '101', '101', '101', '111'],
+        W: ['101', '101', '111', '111', '101'],
+      };
       const stageStats = {};
       const stageValueAt = (stage, x, y, z) => stage.values[indexAt(x, y, z)];
+      const setAtlasPixel = (x, y, r, g, b) => {
+        if (x < 0 || y < 0 || x >= width || y >= height) return;
+        const dst = (y * width + x) * 4;
+        rgba[dst] = r;
+        rgba[dst + 1] = g;
+        rgba[dst + 2] = b;
+        rgba[dst + 3] = 255;
+      };
+      const drawAtlasLabel = (panelX, panelY, text) => {
+        const scale = 2;
+        const bandHeight = 15;
+        for (let y = 1; y < bandHeight; y += 1) {
+          for (let x = 1; x < panelSize - 1; x += 1) {
+            setAtlasPixel(panelX + x, panelY + y, 4, 5, 6);
+          }
+        }
+        let cursorX = panelX + 5;
+        const cursorY = panelY + 4;
+        for (const char of text) {
+          if (char === ' ') {
+            cursorX += 4 * scale;
+            continue;
+          }
+          const glyph = atlasFont[char];
+          if (!glyph) continue;
+          for (let gy = 0; gy < glyph.length; gy += 1) {
+            for (let gx = 0; gx < glyph[gy].length; gx += 1) {
+              if (glyph[gy][gx] !== '1') continue;
+              for (let sy = 0; sy < scale; sy += 1) {
+                for (let sx = 0; sx < scale; sx += 1) {
+                  setAtlasPixel(cursorX + gx * scale + sx, cursorY + gy * scale + sy, 236, 240, 232);
+                }
+              }
+            }
+          }
+          cursorX += 4 * scale;
+        }
+      };
       for (const stage of stages) {
         let sum = 0;
         let max = 0;
@@ -6852,6 +6911,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           rgba[dst + 1] = 54;
           rgba[dst + 2] = 54;
         }
+        drawAtlasLabel(panelX, panelY, stage.atlasLabel);
       }
       return {
         schema: REACTION_FRONT_ATLAS_SCHEMA,
@@ -6864,9 +6924,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         width,
         height,
         panelSize,
+        labelOverlay: true,
         columns,
         rows,
-        panels: stages.map(stage => ({ key: stage.key, label: stage.label })),
+        panels: stages.map(stage => ({ key: stage.key, label: stage.label, atlasLabel: stage.atlasLabel })),
         stageStats,
         sourceY,
         rgba: Array.from(rgba),

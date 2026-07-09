@@ -257,6 +257,7 @@ async function main() {
       atlasMode: reactionFrontAtlas.mode,
       atlasWidth: reactionFrontAtlas.width,
       atlasHeight: reactionFrontAtlas.height,
+      labelOverlay: reactionFrontAtlas.labelOverlay === true,
       panels: panelKeys,
       stageStats: reactionFrontAtlas.stageStats,
     };

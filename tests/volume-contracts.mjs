@@ -702,6 +702,8 @@ assert.match(core, /REACTION_FRONT_ATLAS_SCHEMA\s*=\s*'kaminos\.volume\.reaction
 assert.match(core, /buildReactionFrontAtlas/, 'reaction-front atlas is built from the CPU fluid/front readback path');
 assert.match(core, /reactionFrontAtlas/, 'sampleFrame sim readback exposes the reaction-front atlas for future live debug viewers');
 assert.match(core, /heatSupport[\s\S]*fuelSupport[\s\S]*reactionPotential[\s\S]*gradientMagnitude[\s\S]*narrowFrontCandidate[\s\S]*shellCandidate/, 'reaction-front atlas stages keep source support, potential, gradient, narrow-front, and shell-candidate fields distinct');
+assert.match(core, /labelOverlay:\s*true/, 'reaction-front atlas PNG declares visible panel labels for operator smoke');
+assert.match(core, /drawAtlasLabel/, 'reaction-front atlas draws panel labels into the PNG pixels instead of relying only on report metadata');
 assert.match(reactionFrontAtlasWitness, /kaminos\.volume-reaction-front-atlas-witness\.v0/, 'reaction-front atlas witness declares its schema');
 assert.match(reactionFrontAtlasWitness, /reactionFrontAtlas/, 'reaction-front atlas witness consumes sampleFrame sim readback atlas data');
 assert.match(reactionFrontAtlasWitness, /failure_phase/, 'reaction-front atlas witness writes failure phase for false-closure diagnosis');
