@@ -253,6 +253,9 @@ def parse_args():
     parser.add_argument("--fourier-coordinate-frequencies", dest="fourierCoordinateFrequencies", type=int, default=4, help="Number of powers-of-two xy Fourier coordinate frequencies when --coordinate-input-mode=fourier.")
     parser.add_argument("--material-focus", dest="materialFocus", choices=["off", "fire-interface", "smoke"], default="off", help="Optional specialist supervision mask derived from shader/material feature RGBA: fire/interface or smoke.")
     parser.add_argument("--outside-material-residual-weight", dest="outsideMaterialResidualWeight", type=float, default=1.0, help="Penalty on residual energy outside the selected material-focus mask.")
+    parser.add_argument("--material-sampling-mode", dest="materialSamplingMode", choices=["off", "fire-interface", "smoke", "balanced"], default="off", help="Optional crop sampler that centers patches on shader-material fire/interface, smoke, or alternating material support before generic edge/foreground fallback.")
+    parser.add_argument("--material-sampling-probability", dest="materialSamplingProbability", type=float, default=0.0, help="Probability of using material-support crop sampling for each patch.")
+    parser.add_argument("--material-sampling-threshold", dest="materialSamplingThreshold", type=float, default=0.05, help="Minimum shader-material feature value counted as fire/smoke crop support.")
     parser.add_argument("--hidden-channels", type=int, default=16)
     parser.add_argument("--detail-residual-gate", dest="detailResidualGate", type=float, default=2.0, help="Fixed multiplier for the hidden detail residual in gated-detail-residual probes.")
     parser.add_argument("--learning-rate", type=float, default=1e-3)
@@ -386,6 +389,10 @@ def save_model_artifact(model, model_dir, config, args, corpus, metrics, effecti
             "coordinateInputAuthority": config.get("coordinateInputAuthority"),
             "coordinateInputChannels": config.get("coordinateInputChannels"),
             "fourierCoordinateFrequencies": config.get("fourierCoordinateFrequencies"),
+            "materialSamplingMode": args.materialSamplingMode,
+            "materialSamplingProbability": args.materialSamplingProbability,
+            "materialSamplingThreshold": args.materialSamplingThreshold,
+            "materialSamplingAuthority": material_sampling_authority(args.materialSamplingMode),
             "foregroundThreshold": args.foregroundThreshold,
             "foregroundProbability": args.foregroundProbability,
             "foregroundLossWeight": args.foregroundLossWeight,
@@ -601,6 +608,12 @@ def material_mask_authority(materialFocus, featureInputMode):
     return "unavailable-without-feature-rgba"
 
 
+def material_sampling_authority(materialSamplingMode):
+    if materialSamplingMode == "off":
+        return "off"
+    return FEATURE_INPUT_AUTHORITY
+
+
 def uses_feature_image(featureInputMode):
     return featureInputMode in IMAGE_FEATURE_INPUT_MODES
 
@@ -738,7 +751,7 @@ def edge_band_mask(low_image, high_image, edgeBandMode, edgeBandThreshold, edgeB
     return mask, signal
 
 
-def load_pair_arrays(pairs, foregroundThreshold, edgeBandMode, edgeBandThreshold, edgeBandDilate, featureInputMode):
+def load_pair_arrays(pairs, foregroundThreshold, edgeBandMode, edgeBandThreshold, edgeBandDilate, featureInputMode, materialSamplingThreshold=0.05):
     loaded = []
     for pair in pairs:
         low_path = Path(pair["low"]["path"])
@@ -750,14 +763,19 @@ def load_pair_arrays(pairs, foregroundThreshold, edgeBandMode, edgeBandThreshold
         feature_image = None
         feature_path = None
         feature_capture = pair.get("low", {}).get("featureCapture") or {}
+        material_feature_path = pair.get("low", {}).get("featurePath") or feature_capture.get("path")
+        material_feature_authority = pair.get("low", {}).get("featureAuthority") or feature_capture.get("featureAuthority")
+        material_feature_image = None
+        if material_feature_path and material_feature_authority == FEATURE_INPUT_AUTHORITY:
+            material_feature_image = load_feature_image(material_feature_path, low_image.shape[0], low_image.shape[1])
         if featureInputMode == "feature-rgba":
-            feature_path = pair.get("low", {}).get("featurePath") or feature_capture.get("path")
+            feature_path = material_feature_path
             if not feature_path:
                 raise ValueError(f"pair lacks featurePath for --feature-input-mode=feature-rgba: {pair.get('pairId')}")
-            feature_authority = pair.get("low", {}).get("featureAuthority") or feature_capture.get("featureAuthority")
+            feature_authority = material_feature_authority
             if feature_authority != FEATURE_INPUT_AUTHORITY:
                 raise ValueError(f"pair feature authority is not {FEATURE_INPUT_AUTHORITY}: {pair.get('pairId')} got {feature_authority!r}")
-            feature_image = load_feature_image(feature_path, low_image.shape[0], low_image.shape[1])
+            feature_image = material_feature_image
         elif featureInputMode in {"aux-rgba", "aux-rgb"} | FLOW_DEBUG_DERIVED_INPUT_MODES:
             auxiliary_captures = pair.get("low", {}).get("auxiliaryCaptures") or {}
             flow_debug_capture = auxiliary_captures.get("flowDebug") or {}
@@ -774,6 +792,9 @@ def load_pair_arrays(pairs, foregroundThreshold, edgeBandMode, edgeBandThreshold
         foreground = foreground_pixels(low_image, high_image, foregroundThreshold)
         edge_mask, edge_signal = edge_band_mask(low_image, high_image, edgeBandMode, edgeBandThreshold, edgeBandDilate)
         target_edge_mask, target_edge_signal = edge_band_mask(low_image, high_image, "difference-gradient", edgeBandThreshold, edgeBandDilate)
+        material_masks = np_material_focus_masks(material_feature_image)
+        material_fire_pixels = np.argwhere(material_masks["fire"][..., 0] > float(materialSamplingThreshold))
+        material_smoke_pixels = np.argwhere(material_masks["smoke"][..., 0] > float(materialSamplingThreshold))
         edge_pixels = np.argwhere(edge_mask)
         target_edge_pixels = np.argwhere(target_edge_mask)
         loaded.append({
@@ -785,6 +806,14 @@ def load_pair_arrays(pairs, foregroundThreshold, edgeBandMode, edgeBandThreshold
             "featureInputMode": featureInputMode,
             "featureInputAuthority": feature_input_authority(featureInputMode),
             "featureInputChannels": feature_input_channels(featureInputMode),
+            "materialFeatureAuthority": material_feature_authority if material_feature_image is not None else None,
+            "materialFeaturePath": str(material_feature_path) if material_feature_image is not None else None,
+            "materialFireMask": material_masks["fire"].astype(np.float32),
+            "materialSmokeMask": material_masks["smoke"].astype(np.float32),
+            "materialFire": material_fire_pixels,
+            "materialSmoke": material_smoke_pixels,
+            "materialFirePixels": int(material_fire_pixels.shape[0]),
+            "materialSmokePixels": int(material_smoke_pixels.shape[0]),
             "foreground": foreground,
             "foregroundPixels": int(foreground.shape[0]),
             "edgeBandMask": edge_mask.astype(np.float32)[..., None],
@@ -940,7 +969,29 @@ def material_coverage_summary(items):
     }
 
 
-def sample_patch_batch(items, rng, batch_size, patch_size, foregroundProbability, edgeSamplingProbability, conditionRenderScale, featureInputMode, coordinateInputMode="off", fourierCoordinateFrequencies=4):
+def material_sampling_pixels(item, rng, materialSamplingMode):
+    if materialSamplingMode == "off":
+        return None
+    fire = item.get("materialFire")
+    smoke = item.get("materialSmoke")
+    fire_available = fire is not None and fire.shape[0] > 0
+    smoke_available = smoke is not None and smoke.shape[0] > 0
+    if materialSamplingMode == "fire-interface":
+        return fire if fire_available else None
+    if materialSamplingMode == "smoke":
+        return smoke if smoke_available else None
+    if materialSamplingMode == "balanced":
+        if fire_available and smoke_available:
+            return fire if rng.random() < 0.5 else smoke
+        if fire_available:
+            return fire
+        if smoke_available:
+            return smoke
+        return None
+    raise ValueError(f"unsupported material sampling mode: {materialSamplingMode}")
+
+
+def sample_patch_batch(items, rng, batch_size, patch_size, foregroundProbability, edgeSamplingProbability, conditionRenderScale, featureInputMode, coordinateInputMode="off", fourierCoordinateFrequencies=4, materialSamplingMode="off", materialSamplingProbability=0.0):
     lows = []
     highs = []
     edge_masks = []
@@ -952,7 +1003,12 @@ def sample_patch_batch(items, rng, batch_size, patch_size, foregroundProbability
         crop_width = min(patch_size, width)
         foreground = item.get("foreground")
         edge_band = item.get("edgeBand")
-        if edge_band is not None and edge_band.shape[0] and rng.random() < edgeSamplingProbability:
+        material_pixels = material_sampling_pixels(item, rng, materialSamplingMode) if rng.random() < materialSamplingProbability else None
+        if material_pixels is not None and material_pixels.shape[0]:
+            center_y, center_x = material_pixels[int(rng.integers(0, material_pixels.shape[0]))]
+            top = int(np.clip(center_y - crop_height // 2, 0, max(0, height - crop_height)))
+            left = int(np.clip(center_x - crop_width // 2, 0, max(0, width - crop_width)))
+        elif edge_band is not None and edge_band.shape[0] and rng.random() < edgeSamplingProbability:
             center_y, center_x = edge_band[int(rng.integers(0, edge_band.shape[0]))]
             top = int(np.clip(center_y - crop_height // 2, 0, max(0, height - crop_height)))
             left = int(np.clip(center_x - crop_width // 2, 0, max(0, width - crop_width)))
@@ -1498,7 +1554,7 @@ def temporal_sequence_metrics(model, loaded, train_items, eval_items, out_dir, c
     return metrics
 
 
-def evaluate_model(model, items, rng, batch_size, patch_size, eval_patches, foregroundProbability, edgeSamplingProbability, conditionRenderScale, featureInputMode, coordinateInputMode, fourierCoordinateFrequencies, foregroundThreshold, foregroundLossWeight, differenceLossWeight, residualApplicationMaskMode, residualMaskFeatherRadius):
+def evaluate_model(model, items, rng, batch_size, patch_size, eval_patches, foregroundProbability, edgeSamplingProbability, conditionRenderScale, featureInputMode, coordinateInputMode, fourierCoordinateFrequencies, materialSamplingMode, materialSamplingProbability, foregroundThreshold, foregroundLossWeight, differenceLossWeight, residualApplicationMaskMode, residualMaskFeatherRadius):
     baseline_losses = []
     model_losses = []
     weighted_baseline_losses = []
@@ -1514,7 +1570,7 @@ def evaluate_model(model, items, rng, batch_size, patch_size, eval_patches, fore
     compared_patches = 0
     batches = max(1, math.ceil(eval_patches / batch_size))
     for _ in range(batches):
-        low_batch, high_batch, edge_mask_batch, target_edge_mask_batch = sample_patch_batch(items, rng, batch_size, patch_size, foregroundProbability, edgeSamplingProbability, conditionRenderScale, featureInputMode, coordinateInputMode, fourierCoordinateFrequencies)
+        low_batch, high_batch, edge_mask_batch, target_edge_mask_batch = sample_patch_batch(items, rng, batch_size, patch_size, foregroundProbability, edgeSamplingProbability, conditionRenderScale, featureInputMode, coordinateInputMode, fourierCoordinateFrequencies, materialSamplingMode, materialSamplingProbability)
         low_rgb = rgb_channels(low_batch)
         prediction = model(low_batch, residual_application_mask(edge_mask_batch, residualApplicationMaskMode, residualMaskFeatherRadius))
         baseline_loss = mse_value(low_rgb, high_batch)
@@ -1722,11 +1778,15 @@ def main():
         ("--smoke-mask-threshold", args.smokeMaskThreshold),
         ("--chroma-residual-loss-weight", args.chromaResidualLossWeight),
         ("--outside-material-residual-weight", args.outsideMaterialResidualWeight),
+        ("--material-sampling-probability", args.materialSamplingProbability),
+        ("--material-sampling-threshold", args.materialSamplingThreshold),
     ]:
         if value < 0:
             raise ValueError(f"{label} must be non-negative")
     if args.materialFocus != "off" and args.featureInputMode != "feature-rgba":
         raise ValueError("--material-focus requires --feature-input-mode=feature-rgba")
+    if args.materialSamplingMode != "off" and args.materialSamplingProbability > 0 and args.materialSamplingProbability > 1:
+        raise ValueError("--material-sampling-probability must be between 0 and 1")
     if args.edgeSamplingProbability > 1:
         raise ValueError("--edge-sampling-probability must be between 0 and 1")
     if args.residualContinuationAlpha < 0 or args.residualContinuationAlpha > 1:
@@ -1736,7 +1796,7 @@ def main():
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     corpus, pairs = load_pairs(args.corpus_manifest, args.low_render_scale)
-    loaded = load_pair_arrays(pairs, args.foregroundThreshold, args.edgeBandMode, args.edgeBandThreshold, args.edgeBandDilate, args.featureInputMode)
+    loaded = load_pair_arrays(pairs, args.foregroundThreshold, args.edgeBandMode, args.edgeBandThreshold, args.edgeBandDilate, args.featureInputMode, args.materialSamplingThreshold)
     train_items, eval_items = split_pairs(loaded, args.evalPairCount, args.evalSelection)
     rng = np.random.default_rng(args.seed)
     mx.random.seed(args.seed)
@@ -1927,6 +1987,8 @@ def main():
             featureInputMode,
             coordinateInputMode,
             fourierCoordinateFrequencies,
+            args.materialSamplingMode,
+            args.materialSamplingProbability,
         )
         if activeTemporalLossWeight > 0 or activeResidualTemporalLossWeight > 0:
             previous_low_batch, current_low_batch, previous_high_batch, current_high_batch, previous_mask_batch, current_mask_batch = sample_temporal_pair_batch(
@@ -1984,6 +2046,8 @@ def main():
         featureInputMode,
         coordinateInputMode,
         fourierCoordinateFrequencies,
+        args.materialSamplingMode,
+        args.materialSamplingProbability,
         args.foregroundThreshold,
         args.foregroundLossWeight,
         args.differenceLossWeight,
@@ -2144,6 +2208,13 @@ def main():
             for previous_item, current_item in temporal_loss_pairs
         ],
         "temporalLossFallback": temporalLossFallback,
+        "materialSamplingMode": args.materialSamplingMode,
+        "materialSamplingProbability": args.materialSamplingProbability,
+        "materialSamplingThreshold": args.materialSamplingThreshold,
+        "materialSamplingAuthority": material_sampling_authority(args.materialSamplingMode),
+        "materialFeatureAuthority": FEATURE_INPUT_AUTHORITY if any(item.get("materialFeatureAuthority") == FEATURE_INPUT_AUTHORITY for item in loaded) else None,
+        "materialFirePixels": {item["id"]: item.get("materialFirePixels", 0) for item in loaded},
+        "materialSmokePixels": {item["id"]: item.get("materialSmokePixels", 0) for item in loaded},
         "previewMode": args.preview_mode,
         "previewFrameCount": args.previewFrameCount,
         "fullFramePreview": args.preview_mode == "full-frame",

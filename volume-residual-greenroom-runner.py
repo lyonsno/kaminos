@@ -37,6 +37,9 @@ def parse_args():
     parser.add_argument("--fourier-coordinate-frequencies", default="4")
     parser.add_argument("--material-focus", default="off")
     parser.add_argument("--outside-material-residual-weight", default="1.0")
+    parser.add_argument("--material-sampling-mode", default="off")
+    parser.add_argument("--material-sampling-probability", default="0")
+    parser.add_argument("--material-sampling-threshold", default="0.05")
     parser.add_argument("--hidden-channels", default="16")
     parser.add_argument("--detail-residual-gate", default="2.0")
     parser.add_argument("--learning-rate", default="0.001")
@@ -141,6 +144,12 @@ def build_child_command(args):
         str(args.material_focus),
         "--outside-material-residual-weight",
         str(args.outside_material_residual_weight),
+        "--material-sampling-mode",
+        str(args.material_sampling_mode),
+        "--material-sampling-probability",
+        str(args.material_sampling_probability),
+        "--material-sampling-threshold",
+        str(args.material_sampling_threshold),
         "--hidden-channels",
         str(args.hidden_channels),
         "--detail-residual-gate",
@@ -296,6 +305,9 @@ def main():
             final_receipt["materialFocus"] = report.get("materialFocus")
             final_receipt["materialMaskAuthority"] = report.get("materialMaskAuthority")
             final_receipt["outsideMaterialResidualWeight"] = report.get("outsideMaterialResidualWeight")
+            final_receipt["materialSamplingMode"] = report.get("materialSamplingMode")
+            final_receipt["materialSamplingProbability"] = report.get("materialSamplingProbability")
+            final_receipt["materialSamplingAuthority"] = report.get("materialSamplingAuthority")
             final_receipt["outsideEdgeResidualMse"] = report.get("outsideEdgeResidualMse")
             final_receipt["residualOutputLimit"] = report.get("residualOutputLimit")
             final_receipt["residualApplyScale"] = report.get("residualApplyScale")

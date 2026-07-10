@@ -39,9 +39,45 @@ assert.match(
 );
 
 assert.match(
+  trainer,
+  /--material-sampling-mode[\s\S]*choices=\["off", "fire-interface", "smoke", "balanced"\]/,
+  'residual trainer must expose explicit material-balanced crop sampling instead of relying on loss weights to find tiny fire/interface regions',
+);
+
+assert.match(
+  trainer,
+  /--material-sampling-probability/,
+  'residual trainer must expose a material sampling probability so material crops can be scheduled without hijacking every batch',
+);
+
+assert.match(
+  trainer,
+  /materialFeatureAuthority[\s\S]*materialFirePixels[\s\S]*materialSmokePixels/,
+  'loaded residual items must keep shader-material feature authority and fire/smoke crop-support counts separate from the model input mode',
+);
+
+assert.match(
+  trainer,
+  /sample_patch_batch\([\s\S]*materialSamplingMode[\s\S]*materialSamplingProbability/,
+  'patch sampling must receive material sampling knobs directly so fire/interface crops are selected before generic foreground/edge fallback',
+);
+
+assert.match(
   runner,
   /--material-focus/,
   'GPU Greenroom residual runner must forward material-focus to the MLX trainer',
+);
+
+assert.match(
+  runner,
+  /--material-sampling-mode/,
+  'GPU Greenroom residual runner must forward material sampling mode to the MLX trainer',
+);
+
+assert.match(
+  runner,
+  /--material-sampling-probability/,
+  'GPU Greenroom residual runner must forward material sampling probability to the MLX trainer',
 );
 
 assert.match(
