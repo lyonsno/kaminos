@@ -1,0 +1,300 @@
+[
+  {
+    "kind": "metaball",
+    "role": "body_mass",
+    "center": {
+      "x": -0.872,
+      "y": 0.146,
+      "z": 0
+    },
+    "radius": 0.239,
+    "falloff": "smooth_union"
+  },
+  {
+    "kind": "metaball",
+    "role": "body_mass",
+    "center": {
+      "x": -0.692,
+      "y": 0.216,
+      "z": 0
+    },
+    "radius": 0.249,
+    "falloff": "smooth_union"
+  },
+  {
+    "kind": "metaball",
+    "role": "body_mass",
+    "center": {
+      "x": -0.51,
+      "y": 0.2,
+      "z": 0
+    },
+    "radius": 0.259,
+    "falloff": "smooth_union"
+  },
+  {
+    "kind": "metaball",
+    "role": "body_mass",
+    "center": {
+      "x": -0.33,
+      "y": 0.112,
+      "z": 0
+    },
+    "radius": 0.28,
+    "falloff": "smooth_union"
+  },
+  {
+    "kind": "metaball",
+    "role": "body_mass",
+    "center": {
+      "x": -0.148,
+      "y": 0.002,
+      "z": 0
+    },
+    "radius": 0.297,
+    "falloff": "smooth_union"
+  },
+  {
+    "kind": "metaball",
+    "role": "body_mass",
+    "center": {
+      "x": 0.032,
+      "y": -0.08,
+      "z": 0
+    },
+    "radius": 0.293,
+    "falloff": "smooth_union"
+  },
+  {
+    "kind": "metaball",
+    "role": "body_mass",
+    "center": {
+      "x": 0.214,
+      "y": -0.094,
+      "z": 0
+    },
+    "radius": 0.272,
+    "falloff": "smooth_union"
+  },
+  {
+    "kind": "metaball",
+    "role": "body_mass",
+    "center": {
+      "x": 0.394,
+      "y": -0.04,
+      "z": 0
+    },
+    "radius": 0.256,
+    "falloff": "smooth_union"
+  },
+  {
+    "kind": "metaball",
+    "role": "body_mass",
+    "center": {
+      "x": 0.576,
+      "y": 0.05,
+      "z": 0
+    },
+    "radius": 0.254,
+    "falloff": "smooth_union"
+  },
+  {
+    "kind": "metaball",
+    "role": "body_mass",
+    "center": {
+      "x": 0.756,
+      "y": 0.122,
+      "z": 0
+    },
+    "radius": 0.25,
+    "falloff": "smooth_union"
+  },
+  {
+    "kind": "sphere",
+    "role": "head_orientation",
+    "center": {
+      "x": 0.756,
+      "y": 0.122,
+      "z": 0.02
+    },
+    "radius": 0.09,
+    "materialHint": "soft_head_mass"
+  },
+  {
+    "kind": "sphere",
+    "role": "terminal_mouth",
+    "center": {
+      "x": 0.868,
+      "y": 0.106,
+      "z": 0.055
+    },
+    "radius": 0.043,
+    "materialHint": "mouth_dark_wet_terminal"
+  },
+  {
+    "kind": "capsule",
+    "role": "limb_bud",
+    "center": {
+      "x": -0.51,
+      "y": 0.2,
+      "z": -0.015
+    },
+    "radius": 0.027,
+    "length": 0.197,
+    "side": "paired",
+    "t": 0.25,
+    "materialHint": "brace_drag_nub"
+  },
+  {
+    "kind": "capsule",
+    "role": "limb_bud",
+    "center": {
+      "x": 0.032,
+      "y": -0.08,
+      "z": -0.015
+    },
+    "radius": 0.027,
+    "length": 0.197,
+    "side": "paired",
+    "t": 0.5,
+    "materialHint": "brace_drag_nub"
+  },
+  {
+    "kind": "capsule",
+    "role": "limb_bud",
+    "center": {
+      "x": 0.394,
+      "y": -0.04,
+      "z": -0.015
+    },
+    "radius": 0.028,
+    "length": 0.197,
+    "side": "paired",
+    "t": 0.75,
+    "materialHint": "brace_drag_nub"
+  },
+  {
+    "kind": "box",
+    "role": "shell_plate",
+    "center": {
+      "x": -0.51,
+      "y": 0.37,
+      "z": 0.075
+    },
+    "size": {
+      "x": 0.232,
+      "y": 0.062,
+      "z": 0.056
+    },
+    "t": 0.2,
+    "materialHint": "dorsal_plate"
+  },
+  {
+    "kind": "box",
+    "role": "shell_plate",
+    "center": {
+      "x": -0.148,
+      "y": 0.172,
+      "z": 0.075
+    },
+    "size": {
+      "x": 0.232,
+      "y": 0.062,
+      "z": 0.056
+    },
+    "t": 0.4,
+    "materialHint": "dorsal_plate"
+  },
+  {
+    "kind": "box",
+    "role": "shell_plate",
+    "center": {
+      "x": 0.032,
+      "y": 0.09,
+      "z": 0.075
+    },
+    "size": {
+      "x": 0.232,
+      "y": 0.062,
+      "z": 0.056
+    },
+    "t": 0.6,
+    "materialHint": "dorsal_plate"
+  },
+  {
+    "kind": "box",
+    "role": "shell_plate",
+    "center": {
+      "x": 0.394,
+      "y": 0.13,
+      "z": 0.075
+    },
+    "size": {
+      "x": 0.232,
+      "y": 0.062,
+      "z": 0.056
+    },
+    "t": 0.8,
+    "materialHint": "dorsal_plate"
+  },
+  {
+    "kind": "sphere",
+    "role": "contact_point",
+    "contactRole": "fore-brace",
+    "center": {
+      "x": -0.692,
+      "y": -0.056,
+      "z": -0.08
+    },
+    "radius": 0.043,
+    "materialHint": "ground_contact_marker"
+  },
+  {
+    "kind": "sphere",
+    "role": "contact_point",
+    "contactRole": "fore-brace",
+    "center": {
+      "x": -0.33,
+      "y": -0.176,
+      "z": -0.08
+    },
+    "radius": 0.043,
+    "materialHint": "ground_contact_marker"
+  },
+  {
+    "kind": "sphere",
+    "role": "contact_point",
+    "contactRole": "belly-crawl",
+    "center": {
+      "x": 0.032,
+      "y": -0.352,
+      "z": -0.08
+    },
+    "radius": 0.043,
+    "materialHint": "ground_contact_marker"
+  },
+  {
+    "kind": "sphere",
+    "role": "contact_point",
+    "contactRole": "belly-crawl",
+    "center": {
+      "x": 0.214,
+      "y": -0.382,
+      "z": -0.08
+    },
+    "radius": 0.043,
+    "materialHint": "ground_contact_marker"
+  },
+  {
+    "kind": "sphere",
+    "role": "contact_point",
+    "contactRole": "tail-drag",
+    "center": {
+      "x": 0.576,
+      "y": -0.222,
+      "z": -0.08
+    },
+    "radius": 0.043,
+    "materialHint": "ground_contact_marker"
+  }
+]

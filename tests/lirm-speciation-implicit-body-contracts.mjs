@@ -26,11 +26,22 @@ assert.equal(bundle.route, 'kaminos/lirm-speciation-armature/implicit-body-v0');
 assert.equal(bundle.sourceWitnessId, witness.witnessId);
 assert.equal(bundle.candidateId, 'lirm-armature-22');
 assert.equal(bundle.renderMode, 'raymarched-implicit-field');
+assert.equal(bundle.gestalt.kind, witness.candidates.find(item => item.id === 'lirm-armature-22').bodyPlan.gestalt.kind);
+assert.equal(bundle.silhouette.class, witness.candidates.find(item => item.id === 'lirm-armature-22').bodyPlan.silhouette.class);
 assert.equal(bundle.fieldModel.kind, 'smooth-sdf-metaball');
 assert.equal(bundle.fieldModel.surfaceThreshold > 0, true, 'implicit body must name a positive surface threshold');
+assert.ok(bundle.fieldModel.primitiveSources.includes('gestalt_body_plan'), 'implicit field should declare gestalt body plan as a primitive source');
 assert.equal(bundle.implicitPrimitiveCount > 12, true, 'implicit body needs enough 3D primitives to carry body structure');
 assert.equal(bundle.camera.projection, 'orthographic');
 assert.equal(bundle.camera.coordinateFrame, 'normalized-implicit-body');
+assert.equal(bundle.trellisSource.kind, 'trellis-clay');
+assert.equal(bundle.trellisSource.path, 'lirm-armature-22/trellis-source.svg');
+assert.equal(bundle.trellisSource.rasterPath, 'lirm-armature-22/trellis-source.png');
+assert.equal(bundle.trellisSource.effectiveSource, 'tight-cropped-transparent-implicit-clay');
+assert.equal(bundle.trellisSource.framing.background, 'transparent');
+assert.equal(bundle.trellisSource.framing.crop, 'tight-surface-bounds');
+assert.match(bundle.trellisSource.svg, /data-trellis-source="implicit-clay-tight"/);
+assert.doesNotMatch(bundle.trellisSource.svg, /<rect width="100%" height="100%" fill="#07130f"\/>/);
 assert.equal(bundle.falseClosureGuards.finishedCreatureClaim, 'forbidden');
 assert.equal(bundle.falseClosureGuards.generatorFiringClaim, 'not_yet_fired');
 assert.equal(bundle.falseClosureGuards.implicitBodyClaim, 'raymarched_control_surface_only');
@@ -67,6 +78,8 @@ for (const kind of ['clay', 'depth', 'normal', 'mask', 'semantic']) {
   assert.ok(existsSync(join(outDir, 'lirm-armature-22', `${kind}-implicit.svg`)), `writer must emit ${kind} SVG`);
   assert.ok(existsSync(join(outDir, 'lirm-armature-22', `${kind}-implicit.png`)), `writer must emit ${kind} PNG`);
 }
+assert.ok(existsSync(join(outDir, 'lirm-armature-22', 'trellis-source.svg')), 'writer must emit Trellis source SVG');
+assert.ok(existsSync(join(outDir, 'lirm-armature-22', 'trellis-source.png')), 'writer must emit Trellis source PNG');
 
 const receipt = JSON.parse(readFileSync(join(outDir, 'receipt.json'), 'utf8'));
 assert.equal(receipt.schema, 'kaminos.lirm-speciation-armature-implicit-body-witness.v0');
@@ -79,3 +92,5 @@ assert.deepEqual(
   receipt.outputInventory.bundles[1].maps.map(item => item.kind),
   ['clay', 'depth', 'normal', 'mask', 'semantic'],
 );
+assert.equal(receipt.outputInventory.bundles[1].trellisSource.kind, 'trellis-clay');
+assert.equal(receipt.outputInventory.bundles[1].trellisSource.rasterPath, 'lirm-armature-22/trellis-source.png');

@@ -1,0 +1,1891 @@
+{
+  "schema": "kaminos.lirm-speciation-armature-conditioning-package-witness.v0",
+  "route": "kaminos/lirm-speciation-armature/conditioning-package-v0",
+  "seed": "molten-lirm-seed-0707",
+  "sourceWitnessId": "lirm-speciation-armature-64073572",
+  "candidateIds": [
+    "lirm-armature-00",
+    "lirm-armature-01",
+    "lirm-armature-02",
+    "lirm-armature-03",
+    "lirm-armature-04",
+    "lirm-armature-05",
+    "lirm-armature-06",
+    "lirm-armature-07",
+    "lirm-armature-16",
+    "lirm-armature-22",
+    "lirm-armature-24"
+  ],
+  "packages": [
+    {
+      "schema": "kaminos.lirm-speciation-armature-conditioning-package.v0",
+      "candidateId": "lirm-armature-00",
+      "gestalt": {
+        "kind": "lirm-pillbug-dome",
+        "label": "pillbug dome",
+        "priorHooks": [
+          "pillbug",
+          "armored larva",
+          "domed shell",
+          "compact oval"
+        ],
+        "source": "seeded_gestalt_archetype_v0"
+      },
+      "silhouette": {
+        "class": "armored-oval-dome",
+        "gestaltPressure": 0.807,
+        "headScale": 0.759,
+        "bellyScale": 1.202,
+        "tailScale": 0.822,
+        "widthScale": 1.191,
+        "heightScale": 1.192,
+        "dorsalLift": -0.08,
+        "mouthOffset": 0.052,
+        "outlineWords": [
+          "pillbug",
+          "armored larva",
+          "domed shell",
+          "compact oval"
+        ]
+      },
+      "preferredSourceRoute": "kaminos/lirm-speciation-armature/implicit-body-v0",
+      "sourceImplicitBody": {
+        "schema": "kaminos.lirm-speciation-armature-implicit-body-bundle.v0",
+        "route": "kaminos/lirm-speciation-armature/implicit-body-v0",
+        "candidateId": "lirm-armature-00",
+        "camera": {
+          "projection": "orthographic",
+          "view": "front-three-quarter",
+          "coordinateFrame": "normalized-implicit-body",
+          "raySource": "software-sdf-raymarch"
+        },
+        "renderMode": "raymarched-implicit-field",
+        "fieldModel": {
+          "kind": "smooth-sdf-metaball",
+          "surfaceThreshold": 0.0065,
+          "smoothUnionK": 0.075,
+          "primitiveSources": [
+            "gestalt_body_plan",
+            "body_mass_axis_samples",
+            "terminal_mouth_handle",
+            "head_handle",
+            "limb_buds",
+            "shell_plates",
+            "contact_points"
+          ]
+        },
+        "implicitPrimitiveCount": 24
+      },
+      "sourceImages": [
+        {
+          "kind": "clay",
+          "path": "source-maps/clay-control.svg",
+          "rasterPath": "source-maps/clay-control.png"
+        },
+        {
+          "kind": "depth",
+          "path": "source-maps/depth-control.svg",
+          "rasterPath": "source-maps/depth-control.png"
+        },
+        {
+          "kind": "normal",
+          "path": "source-maps/normal-control.svg",
+          "rasterPath": "source-maps/normal-control.png"
+        },
+        {
+          "kind": "mask",
+          "path": "source-maps/mask-control.svg",
+          "rasterPath": "source-maps/mask-control.png"
+        },
+        {
+          "kind": "semantic",
+          "path": "source-maps/semantic-control.svg",
+          "rasterPath": "source-maps/semantic-control.png"
+        }
+      ],
+      "trellisSource": {
+        "kind": "trellis-clay",
+        "path": "trellis-source.svg",
+        "rasterPath": "trellis-source.png",
+        "effectiveSource": "tight-cropped-transparent-implicit-clay",
+        "framing": {
+          "background": "transparent",
+          "crop": "tight-surface-bounds",
+          "sourcePixelGrid": "256x192",
+          "displayedPixels": "512x512"
+        }
+      },
+      "routeCandidates": [
+        {
+          "route": "imagegen_img2img_depth_normal",
+          "status": "requires_registered_imagegen_route",
+          "inputs": [
+            "clay",
+            "depth",
+            "normal",
+            "mask",
+            "semantic"
+          ],
+          "purpose": "test whether imagegen preserves implicit 3D body identity before mesh/splat routes"
+        },
+        {
+          "route": "trellis2mlx_fast_clay_probe",
+          "status": "registered_greenroom_route_but_queue_blocked_by_existing_pixal3d_job",
+          "inputs": [
+            "trellisSource",
+            "mask"
+          ],
+          "purpose": "cheap 3D sanity probe from the tight transparent implicit clay source, not depth-normal conditioning"
+        },
+        {
+          "route": "world_tracing_masked_probe",
+          "status": "registered_greenroom_route",
+          "inputs": [
+            "clay",
+            "mask"
+          ],
+          "purpose": "optional splat-ish/object reconstruction experiment if mesh route is blocked"
+        }
+      ]
+    },
+    {
+      "schema": "kaminos.lirm-speciation-armature-conditioning-package.v0",
+      "candidateId": "lirm-armature-01",
+      "gestalt": {
+        "kind": "lirm-thread-centipede",
+        "label": "thread centipede",
+        "priorHooks": [
+          "centipede",
+          "thin segmented body",
+          "many tiny legs",
+          "threadlike crawler"
+        ],
+        "source": "seeded_gestalt_archetype_v0"
+      },
+      "silhouette": {
+        "class": "long-many-legged-thread",
+        "gestaltPressure": 0.803,
+        "headScale": 0.86,
+        "bellyScale": 0.69,
+        "tailScale": 0.617,
+        "widthScale": 0.673,
+        "heightScale": 0.819,
+        "dorsalLift": 0,
+        "mouthOffset": 0.06,
+        "outlineWords": [
+          "centipede",
+          "thin segmented body",
+          "many tiny legs",
+          "threadlike crawler"
+        ]
+      },
+      "preferredSourceRoute": "kaminos/lirm-speciation-armature/implicit-body-v0",
+      "sourceImplicitBody": {
+        "schema": "kaminos.lirm-speciation-armature-implicit-body-bundle.v0",
+        "route": "kaminos/lirm-speciation-armature/implicit-body-v0",
+        "candidateId": "lirm-armature-01",
+        "camera": {
+          "projection": "orthographic",
+          "view": "front-three-quarter",
+          "coordinateFrame": "normalized-implicit-body",
+          "raySource": "software-sdf-raymarch"
+        },
+        "renderMode": "raymarched-implicit-field",
+        "fieldModel": {
+          "kind": "smooth-sdf-metaball",
+          "surfaceThreshold": 0.0065,
+          "smoothUnionK": 0.075,
+          "primitiveSources": [
+            "gestalt_body_plan",
+            "body_mass_axis_samples",
+            "terminal_mouth_handle",
+            "head_handle",
+            "limb_buds",
+            "shell_plates",
+            "contact_points"
+          ]
+        },
+        "implicitPrimitiveCount": 33
+      },
+      "sourceImages": [
+        {
+          "kind": "clay",
+          "path": "source-maps/clay-control.svg",
+          "rasterPath": "source-maps/clay-control.png"
+        },
+        {
+          "kind": "depth",
+          "path": "source-maps/depth-control.svg",
+          "rasterPath": "source-maps/depth-control.png"
+        },
+        {
+          "kind": "normal",
+          "path": "source-maps/normal-control.svg",
+          "rasterPath": "source-maps/normal-control.png"
+        },
+        {
+          "kind": "mask",
+          "path": "source-maps/mask-control.svg",
+          "rasterPath": "source-maps/mask-control.png"
+        },
+        {
+          "kind": "semantic",
+          "path": "source-maps/semantic-control.svg",
+          "rasterPath": "source-maps/semantic-control.png"
+        }
+      ],
+      "trellisSource": {
+        "kind": "trellis-clay",
+        "path": "trellis-source.svg",
+        "rasterPath": "trellis-source.png",
+        "effectiveSource": "tight-cropped-transparent-implicit-clay",
+        "framing": {
+          "background": "transparent",
+          "crop": "tight-surface-bounds",
+          "sourcePixelGrid": "256x192",
+          "displayedPixels": "512x512"
+        }
+      },
+      "routeCandidates": [
+        {
+          "route": "imagegen_img2img_depth_normal",
+          "status": "requires_registered_imagegen_route",
+          "inputs": [
+            "clay",
+            "depth",
+            "normal",
+            "mask",
+            "semantic"
+          ],
+          "purpose": "test whether imagegen preserves implicit 3D body identity before mesh/splat routes"
+        },
+        {
+          "route": "trellis2mlx_fast_clay_probe",
+          "status": "registered_greenroom_route_but_queue_blocked_by_existing_pixal3d_job",
+          "inputs": [
+            "trellisSource",
+            "mask"
+          ],
+          "purpose": "cheap 3D sanity probe from the tight transparent implicit clay source, not depth-normal conditioning"
+        },
+        {
+          "route": "world_tracing_masked_probe",
+          "status": "registered_greenroom_route",
+          "inputs": [
+            "clay",
+            "mask"
+          ],
+          "purpose": "optional splat-ish/object reconstruction experiment if mesh route is blocked"
+        }
+      ]
+    },
+    {
+      "schema": "kaminos.lirm-speciation-armature-conditioning-package.v0",
+      "candidateId": "lirm-armature-02",
+      "gestalt": {
+        "kind": "lirm-comma-grub",
+        "label": "comma grub",
+        "priorHooks": [
+          "curled grub",
+          "comma body",
+          "asymmetric larva",
+          "fat bend"
+        ],
+        "source": "seeded_gestalt_archetype_v0"
+      },
+      "silhouette": {
+        "class": "curled-comma-grub",
+        "gestaltPressure": 0.836,
+        "headScale": 1.016,
+        "bellyScale": 1.292,
+        "tailScale": 0.556,
+        "widthScale": 1.096,
+        "heightScale": 0.932,
+        "dorsalLift": 0.05,
+        "mouthOffset": 0.075,
+        "outlineWords": [
+          "curled grub",
+          "comma body",
+          "asymmetric larva",
+          "fat bend"
+        ]
+      },
+      "preferredSourceRoute": "kaminos/lirm-speciation-armature/implicit-body-v0",
+      "sourceImplicitBody": {
+        "schema": "kaminos.lirm-speciation-armature-implicit-body-bundle.v0",
+        "route": "kaminos/lirm-speciation-armature/implicit-body-v0",
+        "candidateId": "lirm-armature-02",
+        "camera": {
+          "projection": "orthographic",
+          "view": "front-three-quarter",
+          "coordinateFrame": "normalized-implicit-body",
+          "raySource": "software-sdf-raymarch"
+        },
+        "renderMode": "raymarched-implicit-field",
+        "fieldModel": {
+          "kind": "smooth-sdf-metaball",
+          "surfaceThreshold": 0.0065,
+          "smoothUnionK": 0.075,
+          "primitiveSources": [
+            "gestalt_body_plan",
+            "body_mass_axis_samples",
+            "terminal_mouth_handle",
+            "head_handle",
+            "limb_buds",
+            "shell_plates",
+            "contact_points"
+          ]
+        },
+        "implicitPrimitiveCount": 16
+      },
+      "sourceImages": [
+        {
+          "kind": "clay",
+          "path": "source-maps/clay-control.svg",
+          "rasterPath": "source-maps/clay-control.png"
+        },
+        {
+          "kind": "depth",
+          "path": "source-maps/depth-control.svg",
+          "rasterPath": "source-maps/depth-control.png"
+        },
+        {
+          "kind": "normal",
+          "path": "source-maps/normal-control.svg",
+          "rasterPath": "source-maps/normal-control.png"
+        },
+        {
+          "kind": "mask",
+          "path": "source-maps/mask-control.svg",
+          "rasterPath": "source-maps/mask-control.png"
+        },
+        {
+          "kind": "semantic",
+          "path": "source-maps/semantic-control.svg",
+          "rasterPath": "source-maps/semantic-control.png"
+        }
+      ],
+      "trellisSource": {
+        "kind": "trellis-clay",
+        "path": "trellis-source.svg",
+        "rasterPath": "trellis-source.png",
+        "effectiveSource": "tight-cropped-transparent-implicit-clay",
+        "framing": {
+          "background": "transparent",
+          "crop": "tight-surface-bounds",
+          "sourcePixelGrid": "256x192",
+          "displayedPixels": "512x512"
+        }
+      },
+      "routeCandidates": [
+        {
+          "route": "imagegen_img2img_depth_normal",
+          "status": "requires_registered_imagegen_route",
+          "inputs": [
+            "clay",
+            "depth",
+            "normal",
+            "mask",
+            "semantic"
+          ],
+          "purpose": "test whether imagegen preserves implicit 3D body identity before mesh/splat routes"
+        },
+        {
+          "route": "trellis2mlx_fast_clay_probe",
+          "status": "registered_greenroom_route_but_queue_blocked_by_existing_pixal3d_job",
+          "inputs": [
+            "trellisSource",
+            "mask"
+          ],
+          "purpose": "cheap 3D sanity probe from the tight transparent implicit clay source, not depth-normal conditioning"
+        },
+        {
+          "route": "world_tracing_masked_probe",
+          "status": "registered_greenroom_route",
+          "inputs": [
+            "clay",
+            "mask"
+          ],
+          "purpose": "optional splat-ish/object reconstruction experiment if mesh route is blocked"
+        }
+      ]
+    },
+    {
+      "schema": "kaminos.lirm-speciation-armature-conditioning-package.v0",
+      "candidateId": "lirm-armature-03",
+      "gestalt": {
+        "kind": "lirm-trilobite-flat",
+        "label": "trilobite flatback",
+        "priorHooks": [
+          "trilobite",
+          "flat armored back",
+          "side plates",
+          "ancient arthropod"
+        ],
+        "source": "seeded_gestalt_archetype_v0"
+      },
+      "silhouette": {
+        "class": "flat-wide-side-plates",
+        "gestaltPressure": 0.929,
+        "headScale": 0.828,
+        "bellyScale": 1.202,
+        "tailScale": 0.737,
+        "widthScale": 1.419,
+        "heightScale": 0.553,
+        "dorsalLift": -0.02,
+        "mouthOffset": 0.056,
+        "outlineWords": [
+          "trilobite",
+          "flat armored back",
+          "side plates",
+          "ancient arthropod"
+        ]
+      },
+      "preferredSourceRoute": "kaminos/lirm-speciation-armature/implicit-body-v0",
+      "sourceImplicitBody": {
+        "schema": "kaminos.lirm-speciation-armature-implicit-body-bundle.v0",
+        "route": "kaminos/lirm-speciation-armature/implicit-body-v0",
+        "candidateId": "lirm-armature-03",
+        "camera": {
+          "projection": "orthographic",
+          "view": "front-three-quarter",
+          "coordinateFrame": "normalized-implicit-body",
+          "raySource": "software-sdf-raymarch"
+        },
+        "renderMode": "raymarched-implicit-field",
+        "fieldModel": {
+          "kind": "smooth-sdf-metaball",
+          "surfaceThreshold": 0.0065,
+          "smoothUnionK": 0.075,
+          "primitiveSources": [
+            "gestalt_body_plan",
+            "body_mass_axis_samples",
+            "terminal_mouth_handle",
+            "head_handle",
+            "limb_buds",
+            "shell_plates",
+            "contact_points"
+          ]
+        },
+        "implicitPrimitiveCount": 34
+      },
+      "sourceImages": [
+        {
+          "kind": "clay",
+          "path": "source-maps/clay-control.svg",
+          "rasterPath": "source-maps/clay-control.png"
+        },
+        {
+          "kind": "depth",
+          "path": "source-maps/depth-control.svg",
+          "rasterPath": "source-maps/depth-control.png"
+        },
+        {
+          "kind": "normal",
+          "path": "source-maps/normal-control.svg",
+          "rasterPath": "source-maps/normal-control.png"
+        },
+        {
+          "kind": "mask",
+          "path": "source-maps/mask-control.svg",
+          "rasterPath": "source-maps/mask-control.png"
+        },
+        {
+          "kind": "semantic",
+          "path": "source-maps/semantic-control.svg",
+          "rasterPath": "source-maps/semantic-control.png"
+        }
+      ],
+      "trellisSource": {
+        "kind": "trellis-clay",
+        "path": "trellis-source.svg",
+        "rasterPath": "trellis-source.png",
+        "effectiveSource": "tight-cropped-transparent-implicit-clay",
+        "framing": {
+          "background": "transparent",
+          "crop": "tight-surface-bounds",
+          "sourcePixelGrid": "256x192",
+          "displayedPixels": "512x512"
+        }
+      },
+      "routeCandidates": [
+        {
+          "route": "imagegen_img2img_depth_normal",
+          "status": "requires_registered_imagegen_route",
+          "inputs": [
+            "clay",
+            "depth",
+            "normal",
+            "mask",
+            "semantic"
+          ],
+          "purpose": "test whether imagegen preserves implicit 3D body identity before mesh/splat routes"
+        },
+        {
+          "route": "trellis2mlx_fast_clay_probe",
+          "status": "registered_greenroom_route_but_queue_blocked_by_existing_pixal3d_job",
+          "inputs": [
+            "trellisSource",
+            "mask"
+          ],
+          "purpose": "cheap 3D sanity probe from the tight transparent implicit clay source, not depth-normal conditioning"
+        },
+        {
+          "route": "world_tracing_masked_probe",
+          "status": "registered_greenroom_route",
+          "inputs": [
+            "clay",
+            "mask"
+          ],
+          "purpose": "optional splat-ish/object reconstruction experiment if mesh route is blocked"
+        }
+      ]
+    },
+    {
+      "schema": "kaminos.lirm-speciation-armature-conditioning-package.v0",
+      "candidateId": "lirm-armature-04",
+      "gestalt": {
+        "kind": "lirm-larval-quad",
+        "label": "larval quadruped",
+        "priorHooks": [
+          "stub-legged larva",
+          "small quadruped",
+          "ground beast",
+          "brace feet"
+        ],
+        "source": "seeded_gestalt_archetype_v0"
+      },
+      "silhouette": {
+        "class": "stub-legged-ground-beast",
+        "gestaltPressure": 0.719,
+        "headScale": 1.21,
+        "bellyScale": 1.08,
+        "tailScale": 0.609,
+        "widthScale": 0.908,
+        "heightScale": 1.122,
+        "dorsalLift": 0.09,
+        "mouthOffset": 0.07,
+        "outlineWords": [
+          "stub-legged larva",
+          "small quadruped",
+          "ground beast",
+          "brace feet"
+        ]
+      },
+      "preferredSourceRoute": "kaminos/lirm-speciation-armature/implicit-body-v0",
+      "sourceImplicitBody": {
+        "schema": "kaminos.lirm-speciation-armature-implicit-body-bundle.v0",
+        "route": "kaminos/lirm-speciation-armature/implicit-body-v0",
+        "candidateId": "lirm-armature-04",
+        "camera": {
+          "projection": "orthographic",
+          "view": "front-three-quarter",
+          "coordinateFrame": "normalized-implicit-body",
+          "raySource": "software-sdf-raymarch"
+        },
+        "renderMode": "raymarched-implicit-field",
+        "fieldModel": {
+          "kind": "smooth-sdf-metaball",
+          "surfaceThreshold": 0.0065,
+          "smoothUnionK": 0.075,
+          "primitiveSources": [
+            "gestalt_body_plan",
+            "body_mass_axis_samples",
+            "terminal_mouth_handle",
+            "head_handle",
+            "limb_buds",
+            "shell_plates",
+            "contact_points"
+          ]
+        },
+        "implicitPrimitiveCount": 23
+      },
+      "sourceImages": [
+        {
+          "kind": "clay",
+          "path": "source-maps/clay-control.svg",
+          "rasterPath": "source-maps/clay-control.png"
+        },
+        {
+          "kind": "depth",
+          "path": "source-maps/depth-control.svg",
+          "rasterPath": "source-maps/depth-control.png"
+        },
+        {
+          "kind": "normal",
+          "path": "source-maps/normal-control.svg",
+          "rasterPath": "source-maps/normal-control.png"
+        },
+        {
+          "kind": "mask",
+          "path": "source-maps/mask-control.svg",
+          "rasterPath": "source-maps/mask-control.png"
+        },
+        {
+          "kind": "semantic",
+          "path": "source-maps/semantic-control.svg",
+          "rasterPath": "source-maps/semantic-control.png"
+        }
+      ],
+      "trellisSource": {
+        "kind": "trellis-clay",
+        "path": "trellis-source.svg",
+        "rasterPath": "trellis-source.png",
+        "effectiveSource": "tight-cropped-transparent-implicit-clay",
+        "framing": {
+          "background": "transparent",
+          "crop": "tight-surface-bounds",
+          "sourcePixelGrid": "256x192",
+          "displayedPixels": "512x512"
+        }
+      },
+      "routeCandidates": [
+        {
+          "route": "imagegen_img2img_depth_normal",
+          "status": "requires_registered_imagegen_route",
+          "inputs": [
+            "clay",
+            "depth",
+            "normal",
+            "mask",
+            "semantic"
+          ],
+          "purpose": "test whether imagegen preserves implicit 3D body identity before mesh/splat routes"
+        },
+        {
+          "route": "trellis2mlx_fast_clay_probe",
+          "status": "registered_greenroom_route_but_queue_blocked_by_existing_pixal3d_job",
+          "inputs": [
+            "trellisSource",
+            "mask"
+          ],
+          "purpose": "cheap 3D sanity probe from the tight transparent implicit clay source, not depth-normal conditioning"
+        },
+        {
+          "route": "world_tracing_masked_probe",
+          "status": "registered_greenroom_route",
+          "inputs": [
+            "clay",
+            "mask"
+          ],
+          "purpose": "optional splat-ish/object reconstruction experiment if mesh route is blocked"
+        }
+      ]
+    },
+    {
+      "schema": "kaminos.lirm-speciation-armature-conditioning-package.v0",
+      "candidateId": "lirm-armature-05",
+      "gestalt": {
+        "kind": "lirm-shell-kite",
+        "label": "shell kite",
+        "priorHooks": [
+          "wide shell",
+          "diamond silhouette",
+          "raylike crawler",
+          "thin underbody"
+        ],
+        "source": "seeded_gestalt_archetype_v0"
+      },
+      "silhouette": {
+        "class": "wide-diamond-shell",
+        "gestaltPressure": 0.794,
+        "headScale": 0.728,
+        "bellyScale": 1.525,
+        "tailScale": 0.743,
+        "widthScale": 1.792,
+        "heightScale": 0.479,
+        "dorsalLift": -0.03,
+        "mouthOffset": 0.05,
+        "outlineWords": [
+          "wide shell",
+          "diamond silhouette",
+          "raylike crawler",
+          "thin underbody"
+        ]
+      },
+      "preferredSourceRoute": "kaminos/lirm-speciation-armature/implicit-body-v0",
+      "sourceImplicitBody": {
+        "schema": "kaminos.lirm-speciation-armature-implicit-body-bundle.v0",
+        "route": "kaminos/lirm-speciation-armature/implicit-body-v0",
+        "candidateId": "lirm-armature-05",
+        "camera": {
+          "projection": "orthographic",
+          "view": "front-three-quarter",
+          "coordinateFrame": "normalized-implicit-body",
+          "raySource": "software-sdf-raymarch"
+        },
+        "renderMode": "raymarched-implicit-field",
+        "fieldModel": {
+          "kind": "smooth-sdf-metaball",
+          "surfaceThreshold": 0.0065,
+          "smoothUnionK": 0.075,
+          "primitiveSources": [
+            "gestalt_body_plan",
+            "body_mass_axis_samples",
+            "terminal_mouth_handle",
+            "head_handle",
+            "limb_buds",
+            "shell_plates",
+            "contact_points"
+          ]
+        },
+        "implicitPrimitiveCount": 20
+      },
+      "sourceImages": [
+        {
+          "kind": "clay",
+          "path": "source-maps/clay-control.svg",
+          "rasterPath": "source-maps/clay-control.png"
+        },
+        {
+          "kind": "depth",
+          "path": "source-maps/depth-control.svg",
+          "rasterPath": "source-maps/depth-control.png"
+        },
+        {
+          "kind": "normal",
+          "path": "source-maps/normal-control.svg",
+          "rasterPath": "source-maps/normal-control.png"
+        },
+        {
+          "kind": "mask",
+          "path": "source-maps/mask-control.svg",
+          "rasterPath": "source-maps/mask-control.png"
+        },
+        {
+          "kind": "semantic",
+          "path": "source-maps/semantic-control.svg",
+          "rasterPath": "source-maps/semantic-control.png"
+        }
+      ],
+      "trellisSource": {
+        "kind": "trellis-clay",
+        "path": "trellis-source.svg",
+        "rasterPath": "trellis-source.png",
+        "effectiveSource": "tight-cropped-transparent-implicit-clay",
+        "framing": {
+          "background": "transparent",
+          "crop": "tight-surface-bounds",
+          "sourcePixelGrid": "256x192",
+          "displayedPixels": "512x512"
+        }
+      },
+      "routeCandidates": [
+        {
+          "route": "imagegen_img2img_depth_normal",
+          "status": "requires_registered_imagegen_route",
+          "inputs": [
+            "clay",
+            "depth",
+            "normal",
+            "mask",
+            "semantic"
+          ],
+          "purpose": "test whether imagegen preserves implicit 3D body identity before mesh/splat routes"
+        },
+        {
+          "route": "trellis2mlx_fast_clay_probe",
+          "status": "registered_greenroom_route_but_queue_blocked_by_existing_pixal3d_job",
+          "inputs": [
+            "trellisSource",
+            "mask"
+          ],
+          "purpose": "cheap 3D sanity probe from the tight transparent implicit clay source, not depth-normal conditioning"
+        },
+        {
+          "route": "world_tracing_masked_probe",
+          "status": "registered_greenroom_route",
+          "inputs": [
+            "clay",
+            "mask"
+          ],
+          "purpose": "optional splat-ish/object reconstruction experiment if mesh route is blocked"
+        }
+      ]
+    },
+    {
+      "schema": "kaminos.lirm-speciation-armature-conditioning-package.v0",
+      "candidateId": "lirm-armature-06",
+      "gestalt": {
+        "kind": "lirm-slug-loaf",
+        "label": "slug loaf",
+        "priorHooks": [
+          "slug",
+          "soft loaf body",
+          "low crawling belly",
+          "wet clay"
+        ],
+        "source": "seeded_gestalt_archetype_v0"
+      },
+      "silhouette": {
+        "class": "broad-belly-loaf",
+        "gestaltPressure": 0.865,
+        "headScale": 0.853,
+        "bellyScale": 1.4,
+        "tailScale": 0.744,
+        "widthScale": 1.379,
+        "heightScale": 0.758,
+        "dorsalLift": -0.04,
+        "mouthOffset": 0.06,
+        "outlineWords": [
+          "slug",
+          "soft loaf body",
+          "low crawling belly",
+          "wet clay"
+        ]
+      },
+      "preferredSourceRoute": "kaminos/lirm-speciation-armature/implicit-body-v0",
+      "sourceImplicitBody": {
+        "schema": "kaminos.lirm-speciation-armature-implicit-body-bundle.v0",
+        "route": "kaminos/lirm-speciation-armature/implicit-body-v0",
+        "candidateId": "lirm-armature-06",
+        "camera": {
+          "projection": "orthographic",
+          "view": "front-three-quarter",
+          "coordinateFrame": "normalized-implicit-body",
+          "raySource": "software-sdf-raymarch"
+        },
+        "renderMode": "raymarched-implicit-field",
+        "fieldModel": {
+          "kind": "smooth-sdf-metaball",
+          "surfaceThreshold": 0.0065,
+          "smoothUnionK": 0.075,
+          "primitiveSources": [
+            "gestalt_body_plan",
+            "body_mass_axis_samples",
+            "terminal_mouth_handle",
+            "head_handle",
+            "limb_buds",
+            "shell_plates",
+            "contact_points"
+          ]
+        },
+        "implicitPrimitiveCount": 16
+      },
+      "sourceImages": [
+        {
+          "kind": "clay",
+          "path": "source-maps/clay-control.svg",
+          "rasterPath": "source-maps/clay-control.png"
+        },
+        {
+          "kind": "depth",
+          "path": "source-maps/depth-control.svg",
+          "rasterPath": "source-maps/depth-control.png"
+        },
+        {
+          "kind": "normal",
+          "path": "source-maps/normal-control.svg",
+          "rasterPath": "source-maps/normal-control.png"
+        },
+        {
+          "kind": "mask",
+          "path": "source-maps/mask-control.svg",
+          "rasterPath": "source-maps/mask-control.png"
+        },
+        {
+          "kind": "semantic",
+          "path": "source-maps/semantic-control.svg",
+          "rasterPath": "source-maps/semantic-control.png"
+        }
+      ],
+      "trellisSource": {
+        "kind": "trellis-clay",
+        "path": "trellis-source.svg",
+        "rasterPath": "trellis-source.png",
+        "effectiveSource": "tight-cropped-transparent-implicit-clay",
+        "framing": {
+          "background": "transparent",
+          "crop": "tight-surface-bounds",
+          "sourcePixelGrid": "256x192",
+          "displayedPixels": "512x512"
+        }
+      },
+      "routeCandidates": [
+        {
+          "route": "imagegen_img2img_depth_normal",
+          "status": "requires_registered_imagegen_route",
+          "inputs": [
+            "clay",
+            "depth",
+            "normal",
+            "mask",
+            "semantic"
+          ],
+          "purpose": "test whether imagegen preserves implicit 3D body identity before mesh/splat routes"
+        },
+        {
+          "route": "trellis2mlx_fast_clay_probe",
+          "status": "registered_greenroom_route_but_queue_blocked_by_existing_pixal3d_job",
+          "inputs": [
+            "trellisSource",
+            "mask"
+          ],
+          "purpose": "cheap 3D sanity probe from the tight transparent implicit clay source, not depth-normal conditioning"
+        },
+        {
+          "route": "world_tracing_masked_probe",
+          "status": "registered_greenroom_route",
+          "inputs": [
+            "clay",
+            "mask"
+          ],
+          "purpose": "optional splat-ish/object reconstruction experiment if mesh route is blocked"
+        }
+      ]
+    },
+    {
+      "schema": "kaminos.lirm-speciation-armature-conditioning-package.v0",
+      "candidateId": "lirm-armature-07",
+      "gestalt": {
+        "kind": "lirm-tadpole-pouch",
+        "label": "tadpole pouch",
+        "priorHooks": [
+          "tadpole",
+          "pouch body",
+          "front-heavy larva",
+          "thin tail"
+        ],
+        "source": "seeded_gestalt_archetype_v0"
+      },
+      "silhouette": {
+        "class": "big-head-taper-tail",
+        "gestaltPressure": 0.737,
+        "headScale": 1.739,
+        "bellyScale": 1.136,
+        "tailScale": 0.44,
+        "widthScale": 1.089,
+        "heightScale": 1.026,
+        "dorsalLift": 0.04,
+        "mouthOffset": 0.085,
+        "outlineWords": [
+          "tadpole",
+          "pouch body",
+          "front-heavy larva",
+          "thin tail"
+        ]
+      },
+      "preferredSourceRoute": "kaminos/lirm-speciation-armature/implicit-body-v0",
+      "sourceImplicitBody": {
+        "schema": "kaminos.lirm-speciation-armature-implicit-body-bundle.v0",
+        "route": "kaminos/lirm-speciation-armature/implicit-body-v0",
+        "candidateId": "lirm-armature-07",
+        "camera": {
+          "projection": "orthographic",
+          "view": "front-three-quarter",
+          "coordinateFrame": "normalized-implicit-body",
+          "raySource": "software-sdf-raymarch"
+        },
+        "renderMode": "raymarched-implicit-field",
+        "fieldModel": {
+          "kind": "smooth-sdf-metaball",
+          "surfaceThreshold": 0.0065,
+          "smoothUnionK": 0.075,
+          "primitiveSources": [
+            "gestalt_body_plan",
+            "body_mass_axis_samples",
+            "terminal_mouth_handle",
+            "head_handle",
+            "limb_buds",
+            "shell_plates",
+            "contact_points"
+          ]
+        },
+        "implicitPrimitiveCount": 15
+      },
+      "sourceImages": [
+        {
+          "kind": "clay",
+          "path": "source-maps/clay-control.svg",
+          "rasterPath": "source-maps/clay-control.png"
+        },
+        {
+          "kind": "depth",
+          "path": "source-maps/depth-control.svg",
+          "rasterPath": "source-maps/depth-control.png"
+        },
+        {
+          "kind": "normal",
+          "path": "source-maps/normal-control.svg",
+          "rasterPath": "source-maps/normal-control.png"
+        },
+        {
+          "kind": "mask",
+          "path": "source-maps/mask-control.svg",
+          "rasterPath": "source-maps/mask-control.png"
+        },
+        {
+          "kind": "semantic",
+          "path": "source-maps/semantic-control.svg",
+          "rasterPath": "source-maps/semantic-control.png"
+        }
+      ],
+      "trellisSource": {
+        "kind": "trellis-clay",
+        "path": "trellis-source.svg",
+        "rasterPath": "trellis-source.png",
+        "effectiveSource": "tight-cropped-transparent-implicit-clay",
+        "framing": {
+          "background": "transparent",
+          "crop": "tight-surface-bounds",
+          "sourcePixelGrid": "256x192",
+          "displayedPixels": "512x512"
+        }
+      },
+      "routeCandidates": [
+        {
+          "route": "imagegen_img2img_depth_normal",
+          "status": "requires_registered_imagegen_route",
+          "inputs": [
+            "clay",
+            "depth",
+            "normal",
+            "mask",
+            "semantic"
+          ],
+          "purpose": "test whether imagegen preserves implicit 3D body identity before mesh/splat routes"
+        },
+        {
+          "route": "trellis2mlx_fast_clay_probe",
+          "status": "registered_greenroom_route_but_queue_blocked_by_existing_pixal3d_job",
+          "inputs": [
+            "trellisSource",
+            "mask"
+          ],
+          "purpose": "cheap 3D sanity probe from the tight transparent implicit clay source, not depth-normal conditioning"
+        },
+        {
+          "route": "world_tracing_masked_probe",
+          "status": "registered_greenroom_route",
+          "inputs": [
+            "clay",
+            "mask"
+          ],
+          "purpose": "optional splat-ish/object reconstruction experiment if mesh route is blocked"
+        }
+      ]
+    },
+    {
+      "schema": "kaminos.lirm-speciation-armature-conditioning-package.v0",
+      "candidateId": "lirm-armature-16",
+      "gestalt": {
+        "kind": "lirm-pillbug-dome",
+        "label": "pillbug dome",
+        "priorHooks": [
+          "pillbug",
+          "armored larva",
+          "domed shell",
+          "compact oval"
+        ],
+        "source": "seeded_gestalt_archetype_v0"
+      },
+      "silhouette": {
+        "class": "armored-oval-dome",
+        "gestaltPressure": 0.714,
+        "headScale": 0.71,
+        "bellyScale": 1.258,
+        "tailScale": 0.866,
+        "widthScale": 1.239,
+        "heightScale": 1.122,
+        "dorsalLift": -0.08,
+        "mouthOffset": 0.052,
+        "outlineWords": [
+          "pillbug",
+          "armored larva",
+          "domed shell",
+          "compact oval"
+        ]
+      },
+      "preferredSourceRoute": "kaminos/lirm-speciation-armature/implicit-body-v0",
+      "sourceImplicitBody": {
+        "schema": "kaminos.lirm-speciation-armature-implicit-body-bundle.v0",
+        "route": "kaminos/lirm-speciation-armature/implicit-body-v0",
+        "candidateId": "lirm-armature-16",
+        "camera": {
+          "projection": "orthographic",
+          "view": "front-three-quarter",
+          "coordinateFrame": "normalized-implicit-body",
+          "raySource": "software-sdf-raymarch"
+        },
+        "renderMode": "raymarched-implicit-field",
+        "fieldModel": {
+          "kind": "smooth-sdf-metaball",
+          "surfaceThreshold": 0.0065,
+          "smoothUnionK": 0.075,
+          "primitiveSources": [
+            "gestalt_body_plan",
+            "body_mass_axis_samples",
+            "terminal_mouth_handle",
+            "head_handle",
+            "limb_buds",
+            "shell_plates",
+            "contact_points"
+          ]
+        },
+        "implicitPrimitiveCount": 20
+      },
+      "sourceImages": [
+        {
+          "kind": "clay",
+          "path": "source-maps/clay-control.svg",
+          "rasterPath": "source-maps/clay-control.png"
+        },
+        {
+          "kind": "depth",
+          "path": "source-maps/depth-control.svg",
+          "rasterPath": "source-maps/depth-control.png"
+        },
+        {
+          "kind": "normal",
+          "path": "source-maps/normal-control.svg",
+          "rasterPath": "source-maps/normal-control.png"
+        },
+        {
+          "kind": "mask",
+          "path": "source-maps/mask-control.svg",
+          "rasterPath": "source-maps/mask-control.png"
+        },
+        {
+          "kind": "semantic",
+          "path": "source-maps/semantic-control.svg",
+          "rasterPath": "source-maps/semantic-control.png"
+        }
+      ],
+      "trellisSource": {
+        "kind": "trellis-clay",
+        "path": "trellis-source.svg",
+        "rasterPath": "trellis-source.png",
+        "effectiveSource": "tight-cropped-transparent-implicit-clay",
+        "framing": {
+          "background": "transparent",
+          "crop": "tight-surface-bounds",
+          "sourcePixelGrid": "256x192",
+          "displayedPixels": "512x512"
+        }
+      },
+      "routeCandidates": [
+        {
+          "route": "imagegen_img2img_depth_normal",
+          "status": "requires_registered_imagegen_route",
+          "inputs": [
+            "clay",
+            "depth",
+            "normal",
+            "mask",
+            "semantic"
+          ],
+          "purpose": "test whether imagegen preserves implicit 3D body identity before mesh/splat routes"
+        },
+        {
+          "route": "trellis2mlx_fast_clay_probe",
+          "status": "registered_greenroom_route_but_queue_blocked_by_existing_pixal3d_job",
+          "inputs": [
+            "trellisSource",
+            "mask"
+          ],
+          "purpose": "cheap 3D sanity probe from the tight transparent implicit clay source, not depth-normal conditioning"
+        },
+        {
+          "route": "world_tracing_masked_probe",
+          "status": "registered_greenroom_route",
+          "inputs": [
+            "clay",
+            "mask"
+          ],
+          "purpose": "optional splat-ish/object reconstruction experiment if mesh route is blocked"
+        }
+      ]
+    },
+    {
+      "schema": "kaminos.lirm-speciation-armature-conditioning-package.v0",
+      "candidateId": "lirm-armature-22",
+      "gestalt": {
+        "kind": "lirm-slug-loaf",
+        "label": "slug loaf",
+        "priorHooks": [
+          "slug",
+          "soft loaf body",
+          "low crawling belly",
+          "wet clay"
+        ],
+        "source": "seeded_gestalt_archetype_v0"
+      },
+      "silhouette": {
+        "class": "broad-belly-loaf",
+        "gestaltPressure": 0.852,
+        "headScale": 0.837,
+        "bellyScale": 1.369,
+        "tailScale": 0.741,
+        "widthScale": 1.39,
+        "heightScale": 0.751,
+        "dorsalLift": -0.04,
+        "mouthOffset": 0.06,
+        "outlineWords": [
+          "slug",
+          "soft loaf body",
+          "low crawling belly",
+          "wet clay"
+        ]
+      },
+      "preferredSourceRoute": "kaminos/lirm-speciation-armature/implicit-body-v0",
+      "sourceImplicitBody": {
+        "schema": "kaminos.lirm-speciation-armature-implicit-body-bundle.v0",
+        "route": "kaminos/lirm-speciation-armature/implicit-body-v0",
+        "candidateId": "lirm-armature-22",
+        "camera": {
+          "projection": "orthographic",
+          "view": "front-three-quarter",
+          "coordinateFrame": "normalized-implicit-body",
+          "raySource": "software-sdf-raymarch"
+        },
+        "renderMode": "raymarched-implicit-field",
+        "fieldModel": {
+          "kind": "smooth-sdf-metaball",
+          "surfaceThreshold": 0.0065,
+          "smoothUnionK": 0.075,
+          "primitiveSources": [
+            "gestalt_body_plan",
+            "body_mass_axis_samples",
+            "terminal_mouth_handle",
+            "head_handle",
+            "limb_buds",
+            "shell_plates",
+            "contact_points"
+          ]
+        },
+        "implicitPrimitiveCount": 21
+      },
+      "sourceImages": [
+        {
+          "kind": "clay",
+          "path": "source-maps/clay-control.svg",
+          "rasterPath": "source-maps/clay-control.png"
+        },
+        {
+          "kind": "depth",
+          "path": "source-maps/depth-control.svg",
+          "rasterPath": "source-maps/depth-control.png"
+        },
+        {
+          "kind": "normal",
+          "path": "source-maps/normal-control.svg",
+          "rasterPath": "source-maps/normal-control.png"
+        },
+        {
+          "kind": "mask",
+          "path": "source-maps/mask-control.svg",
+          "rasterPath": "source-maps/mask-control.png"
+        },
+        {
+          "kind": "semantic",
+          "path": "source-maps/semantic-control.svg",
+          "rasterPath": "source-maps/semantic-control.png"
+        }
+      ],
+      "trellisSource": {
+        "kind": "trellis-clay",
+        "path": "trellis-source.svg",
+        "rasterPath": "trellis-source.png",
+        "effectiveSource": "tight-cropped-transparent-implicit-clay",
+        "framing": {
+          "background": "transparent",
+          "crop": "tight-surface-bounds",
+          "sourcePixelGrid": "256x192",
+          "displayedPixels": "512x512"
+        }
+      },
+      "routeCandidates": [
+        {
+          "route": "imagegen_img2img_depth_normal",
+          "status": "requires_registered_imagegen_route",
+          "inputs": [
+            "clay",
+            "depth",
+            "normal",
+            "mask",
+            "semantic"
+          ],
+          "purpose": "test whether imagegen preserves implicit 3D body identity before mesh/splat routes"
+        },
+        {
+          "route": "trellis2mlx_fast_clay_probe",
+          "status": "registered_greenroom_route_but_queue_blocked_by_existing_pixal3d_job",
+          "inputs": [
+            "trellisSource",
+            "mask"
+          ],
+          "purpose": "cheap 3D sanity probe from the tight transparent implicit clay source, not depth-normal conditioning"
+        },
+        {
+          "route": "world_tracing_masked_probe",
+          "status": "registered_greenroom_route",
+          "inputs": [
+            "clay",
+            "mask"
+          ],
+          "purpose": "optional splat-ish/object reconstruction experiment if mesh route is blocked"
+        }
+      ]
+    },
+    {
+      "schema": "kaminos.lirm-speciation-armature-conditioning-package.v0",
+      "candidateId": "lirm-armature-24",
+      "gestalt": {
+        "kind": "lirm-pillbug-dome",
+        "label": "pillbug dome",
+        "priorHooks": [
+          "pillbug",
+          "armored larva",
+          "domed shell",
+          "compact oval"
+        ],
+        "source": "seeded_gestalt_archetype_v0"
+      },
+      "silhouette": {
+        "class": "armored-oval-dome",
+        "gestaltPressure": 0.799,
+        "headScale": 0.726,
+        "bellyScale": 1.249,
+        "tailScale": 0.898,
+        "widthScale": 1.299,
+        "heightScale": 1.173,
+        "dorsalLift": -0.08,
+        "mouthOffset": 0.052,
+        "outlineWords": [
+          "pillbug",
+          "armored larva",
+          "domed shell",
+          "compact oval"
+        ]
+      },
+      "preferredSourceRoute": "kaminos/lirm-speciation-armature/implicit-body-v0",
+      "sourceImplicitBody": {
+        "schema": "kaminos.lirm-speciation-armature-implicit-body-bundle.v0",
+        "route": "kaminos/lirm-speciation-armature/implicit-body-v0",
+        "candidateId": "lirm-armature-24",
+        "camera": {
+          "projection": "orthographic",
+          "view": "front-three-quarter",
+          "coordinateFrame": "normalized-implicit-body",
+          "raySource": "software-sdf-raymarch"
+        },
+        "renderMode": "raymarched-implicit-field",
+        "fieldModel": {
+          "kind": "smooth-sdf-metaball",
+          "surfaceThreshold": 0.0065,
+          "smoothUnionK": 0.075,
+          "primitiveSources": [
+            "gestalt_body_plan",
+            "body_mass_axis_samples",
+            "terminal_mouth_handle",
+            "head_handle",
+            "limb_buds",
+            "shell_plates",
+            "contact_points"
+          ]
+        },
+        "implicitPrimitiveCount": 29
+      },
+      "sourceImages": [
+        {
+          "kind": "clay",
+          "path": "source-maps/clay-control.svg",
+          "rasterPath": "source-maps/clay-control.png"
+        },
+        {
+          "kind": "depth",
+          "path": "source-maps/depth-control.svg",
+          "rasterPath": "source-maps/depth-control.png"
+        },
+        {
+          "kind": "normal",
+          "path": "source-maps/normal-control.svg",
+          "rasterPath": "source-maps/normal-control.png"
+        },
+        {
+          "kind": "mask",
+          "path": "source-maps/mask-control.svg",
+          "rasterPath": "source-maps/mask-control.png"
+        },
+        {
+          "kind": "semantic",
+          "path": "source-maps/semantic-control.svg",
+          "rasterPath": "source-maps/semantic-control.png"
+        }
+      ],
+      "trellisSource": {
+        "kind": "trellis-clay",
+        "path": "trellis-source.svg",
+        "rasterPath": "trellis-source.png",
+        "effectiveSource": "tight-cropped-transparent-implicit-clay",
+        "framing": {
+          "background": "transparent",
+          "crop": "tight-surface-bounds",
+          "sourcePixelGrid": "256x192",
+          "displayedPixels": "512x512"
+        }
+      },
+      "routeCandidates": [
+        {
+          "route": "imagegen_img2img_depth_normal",
+          "status": "requires_registered_imagegen_route",
+          "inputs": [
+            "clay",
+            "depth",
+            "normal",
+            "mask",
+            "semantic"
+          ],
+          "purpose": "test whether imagegen preserves implicit 3D body identity before mesh/splat routes"
+        },
+        {
+          "route": "trellis2mlx_fast_clay_probe",
+          "status": "registered_greenroom_route_but_queue_blocked_by_existing_pixal3d_job",
+          "inputs": [
+            "trellisSource",
+            "mask"
+          ],
+          "purpose": "cheap 3D sanity probe from the tight transparent implicit clay source, not depth-normal conditioning"
+        },
+        {
+          "route": "world_tracing_masked_probe",
+          "status": "registered_greenroom_route",
+          "inputs": [
+            "clay",
+            "mask"
+          ],
+          "purpose": "optional splat-ish/object reconstruction experiment if mesh route is blocked"
+        }
+      ]
+    }
+  ],
+  "falseClosureGuards": {
+    "finishedCreatureClaim": "forbidden",
+    "generatorFiringClaim": "not_yet_fired",
+    "conditioningClaim": "source_package_only",
+    "greenroomClaim": "gpu_routes_require_greenroom_receipt"
+  },
+  "outputInventory": {
+    "receipt": "receipt.json",
+    "packages": [
+      {
+        "candidateId": "lirm-armature-00",
+        "package": "lirm-armature-00/conditioning-package.json",
+        "panel": "lirm-armature-00/conditioning-panel.svg",
+        "sourceMaps": [
+          {
+            "kind": "clay",
+            "path": "lirm-armature-00/source-maps/clay-control.svg",
+            "rasterPath": "lirm-armature-00/source-maps/clay-control.png"
+          },
+          {
+            "kind": "depth",
+            "path": "lirm-armature-00/source-maps/depth-control.svg",
+            "rasterPath": "lirm-armature-00/source-maps/depth-control.png"
+          },
+          {
+            "kind": "normal",
+            "path": "lirm-armature-00/source-maps/normal-control.svg",
+            "rasterPath": "lirm-armature-00/source-maps/normal-control.png"
+          },
+          {
+            "kind": "mask",
+            "path": "lirm-armature-00/source-maps/mask-control.svg",
+            "rasterPath": "lirm-armature-00/source-maps/mask-control.png"
+          },
+          {
+            "kind": "semantic",
+            "path": "lirm-armature-00/source-maps/semantic-control.svg",
+            "rasterPath": "lirm-armature-00/source-maps/semantic-control.png"
+          }
+        ],
+        "trellisSource": {
+          "kind": "trellis-clay",
+          "path": "lirm-armature-00/trellis-source.svg",
+          "rasterPath": "lirm-armature-00/trellis-source.png",
+          "effectiveSource": "tight-cropped-transparent-implicit-clay"
+        }
+      },
+      {
+        "candidateId": "lirm-armature-01",
+        "package": "lirm-armature-01/conditioning-package.json",
+        "panel": "lirm-armature-01/conditioning-panel.svg",
+        "sourceMaps": [
+          {
+            "kind": "clay",
+            "path": "lirm-armature-01/source-maps/clay-control.svg",
+            "rasterPath": "lirm-armature-01/source-maps/clay-control.png"
+          },
+          {
+            "kind": "depth",
+            "path": "lirm-armature-01/source-maps/depth-control.svg",
+            "rasterPath": "lirm-armature-01/source-maps/depth-control.png"
+          },
+          {
+            "kind": "normal",
+            "path": "lirm-armature-01/source-maps/normal-control.svg",
+            "rasterPath": "lirm-armature-01/source-maps/normal-control.png"
+          },
+          {
+            "kind": "mask",
+            "path": "lirm-armature-01/source-maps/mask-control.svg",
+            "rasterPath": "lirm-armature-01/source-maps/mask-control.png"
+          },
+          {
+            "kind": "semantic",
+            "path": "lirm-armature-01/source-maps/semantic-control.svg",
+            "rasterPath": "lirm-armature-01/source-maps/semantic-control.png"
+          }
+        ],
+        "trellisSource": {
+          "kind": "trellis-clay",
+          "path": "lirm-armature-01/trellis-source.svg",
+          "rasterPath": "lirm-armature-01/trellis-source.png",
+          "effectiveSource": "tight-cropped-transparent-implicit-clay"
+        }
+      },
+      {
+        "candidateId": "lirm-armature-02",
+        "package": "lirm-armature-02/conditioning-package.json",
+        "panel": "lirm-armature-02/conditioning-panel.svg",
+        "sourceMaps": [
+          {
+            "kind": "clay",
+            "path": "lirm-armature-02/source-maps/clay-control.svg",
+            "rasterPath": "lirm-armature-02/source-maps/clay-control.png"
+          },
+          {
+            "kind": "depth",
+            "path": "lirm-armature-02/source-maps/depth-control.svg",
+            "rasterPath": "lirm-armature-02/source-maps/depth-control.png"
+          },
+          {
+            "kind": "normal",
+            "path": "lirm-armature-02/source-maps/normal-control.svg",
+            "rasterPath": "lirm-armature-02/source-maps/normal-control.png"
+          },
+          {
+            "kind": "mask",
+            "path": "lirm-armature-02/source-maps/mask-control.svg",
+            "rasterPath": "lirm-armature-02/source-maps/mask-control.png"
+          },
+          {
+            "kind": "semantic",
+            "path": "lirm-armature-02/source-maps/semantic-control.svg",
+            "rasterPath": "lirm-armature-02/source-maps/semantic-control.png"
+          }
+        ],
+        "trellisSource": {
+          "kind": "trellis-clay",
+          "path": "lirm-armature-02/trellis-source.svg",
+          "rasterPath": "lirm-armature-02/trellis-source.png",
+          "effectiveSource": "tight-cropped-transparent-implicit-clay"
+        }
+      },
+      {
+        "candidateId": "lirm-armature-03",
+        "package": "lirm-armature-03/conditioning-package.json",
+        "panel": "lirm-armature-03/conditioning-panel.svg",
+        "sourceMaps": [
+          {
+            "kind": "clay",
+            "path": "lirm-armature-03/source-maps/clay-control.svg",
+            "rasterPath": "lirm-armature-03/source-maps/clay-control.png"
+          },
+          {
+            "kind": "depth",
+            "path": "lirm-armature-03/source-maps/depth-control.svg",
+            "rasterPath": "lirm-armature-03/source-maps/depth-control.png"
+          },
+          {
+            "kind": "normal",
+            "path": "lirm-armature-03/source-maps/normal-control.svg",
+            "rasterPath": "lirm-armature-03/source-maps/normal-control.png"
+          },
+          {
+            "kind": "mask",
+            "path": "lirm-armature-03/source-maps/mask-control.svg",
+            "rasterPath": "lirm-armature-03/source-maps/mask-control.png"
+          },
+          {
+            "kind": "semantic",
+            "path": "lirm-armature-03/source-maps/semantic-control.svg",
+            "rasterPath": "lirm-armature-03/source-maps/semantic-control.png"
+          }
+        ],
+        "trellisSource": {
+          "kind": "trellis-clay",
+          "path": "lirm-armature-03/trellis-source.svg",
+          "rasterPath": "lirm-armature-03/trellis-source.png",
+          "effectiveSource": "tight-cropped-transparent-implicit-clay"
+        }
+      },
+      {
+        "candidateId": "lirm-armature-04",
+        "package": "lirm-armature-04/conditioning-package.json",
+        "panel": "lirm-armature-04/conditioning-panel.svg",
+        "sourceMaps": [
+          {
+            "kind": "clay",
+            "path": "lirm-armature-04/source-maps/clay-control.svg",
+            "rasterPath": "lirm-armature-04/source-maps/clay-control.png"
+          },
+          {
+            "kind": "depth",
+            "path": "lirm-armature-04/source-maps/depth-control.svg",
+            "rasterPath": "lirm-armature-04/source-maps/depth-control.png"
+          },
+          {
+            "kind": "normal",
+            "path": "lirm-armature-04/source-maps/normal-control.svg",
+            "rasterPath": "lirm-armature-04/source-maps/normal-control.png"
+          },
+          {
+            "kind": "mask",
+            "path": "lirm-armature-04/source-maps/mask-control.svg",
+            "rasterPath": "lirm-armature-04/source-maps/mask-control.png"
+          },
+          {
+            "kind": "semantic",
+            "path": "lirm-armature-04/source-maps/semantic-control.svg",
+            "rasterPath": "lirm-armature-04/source-maps/semantic-control.png"
+          }
+        ],
+        "trellisSource": {
+          "kind": "trellis-clay",
+          "path": "lirm-armature-04/trellis-source.svg",
+          "rasterPath": "lirm-armature-04/trellis-source.png",
+          "effectiveSource": "tight-cropped-transparent-implicit-clay"
+        }
+      },
+      {
+        "candidateId": "lirm-armature-05",
+        "package": "lirm-armature-05/conditioning-package.json",
+        "panel": "lirm-armature-05/conditioning-panel.svg",
+        "sourceMaps": [
+          {
+            "kind": "clay",
+            "path": "lirm-armature-05/source-maps/clay-control.svg",
+            "rasterPath": "lirm-armature-05/source-maps/clay-control.png"
+          },
+          {
+            "kind": "depth",
+            "path": "lirm-armature-05/source-maps/depth-control.svg",
+            "rasterPath": "lirm-armature-05/source-maps/depth-control.png"
+          },
+          {
+            "kind": "normal",
+            "path": "lirm-armature-05/source-maps/normal-control.svg",
+            "rasterPath": "lirm-armature-05/source-maps/normal-control.png"
+          },
+          {
+            "kind": "mask",
+            "path": "lirm-armature-05/source-maps/mask-control.svg",
+            "rasterPath": "lirm-armature-05/source-maps/mask-control.png"
+          },
+          {
+            "kind": "semantic",
+            "path": "lirm-armature-05/source-maps/semantic-control.svg",
+            "rasterPath": "lirm-armature-05/source-maps/semantic-control.png"
+          }
+        ],
+        "trellisSource": {
+          "kind": "trellis-clay",
+          "path": "lirm-armature-05/trellis-source.svg",
+          "rasterPath": "lirm-armature-05/trellis-source.png",
+          "effectiveSource": "tight-cropped-transparent-implicit-clay"
+        }
+      },
+      {
+        "candidateId": "lirm-armature-06",
+        "package": "lirm-armature-06/conditioning-package.json",
+        "panel": "lirm-armature-06/conditioning-panel.svg",
+        "sourceMaps": [
+          {
+            "kind": "clay",
+            "path": "lirm-armature-06/source-maps/clay-control.svg",
+            "rasterPath": "lirm-armature-06/source-maps/clay-control.png"
+          },
+          {
+            "kind": "depth",
+            "path": "lirm-armature-06/source-maps/depth-control.svg",
+            "rasterPath": "lirm-armature-06/source-maps/depth-control.png"
+          },
+          {
+            "kind": "normal",
+            "path": "lirm-armature-06/source-maps/normal-control.svg",
+            "rasterPath": "lirm-armature-06/source-maps/normal-control.png"
+          },
+          {
+            "kind": "mask",
+            "path": "lirm-armature-06/source-maps/mask-control.svg",
+            "rasterPath": "lirm-armature-06/source-maps/mask-control.png"
+          },
+          {
+            "kind": "semantic",
+            "path": "lirm-armature-06/source-maps/semantic-control.svg",
+            "rasterPath": "lirm-armature-06/source-maps/semantic-control.png"
+          }
+        ],
+        "trellisSource": {
+          "kind": "trellis-clay",
+          "path": "lirm-armature-06/trellis-source.svg",
+          "rasterPath": "lirm-armature-06/trellis-source.png",
+          "effectiveSource": "tight-cropped-transparent-implicit-clay"
+        }
+      },
+      {
+        "candidateId": "lirm-armature-07",
+        "package": "lirm-armature-07/conditioning-package.json",
+        "panel": "lirm-armature-07/conditioning-panel.svg",
+        "sourceMaps": [
+          {
+            "kind": "clay",
+            "path": "lirm-armature-07/source-maps/clay-control.svg",
+            "rasterPath": "lirm-armature-07/source-maps/clay-control.png"
+          },
+          {
+            "kind": "depth",
+            "path": "lirm-armature-07/source-maps/depth-control.svg",
+            "rasterPath": "lirm-armature-07/source-maps/depth-control.png"
+          },
+          {
+            "kind": "normal",
+            "path": "lirm-armature-07/source-maps/normal-control.svg",
+            "rasterPath": "lirm-armature-07/source-maps/normal-control.png"
+          },
+          {
+            "kind": "mask",
+            "path": "lirm-armature-07/source-maps/mask-control.svg",
+            "rasterPath": "lirm-armature-07/source-maps/mask-control.png"
+          },
+          {
+            "kind": "semantic",
+            "path": "lirm-armature-07/source-maps/semantic-control.svg",
+            "rasterPath": "lirm-armature-07/source-maps/semantic-control.png"
+          }
+        ],
+        "trellisSource": {
+          "kind": "trellis-clay",
+          "path": "lirm-armature-07/trellis-source.svg",
+          "rasterPath": "lirm-armature-07/trellis-source.png",
+          "effectiveSource": "tight-cropped-transparent-implicit-clay"
+        }
+      },
+      {
+        "candidateId": "lirm-armature-16",
+        "package": "lirm-armature-16/conditioning-package.json",
+        "panel": "lirm-armature-16/conditioning-panel.svg",
+        "sourceMaps": [
+          {
+            "kind": "clay",
+            "path": "lirm-armature-16/source-maps/clay-control.svg",
+            "rasterPath": "lirm-armature-16/source-maps/clay-control.png"
+          },
+          {
+            "kind": "depth",
+            "path": "lirm-armature-16/source-maps/depth-control.svg",
+            "rasterPath": "lirm-armature-16/source-maps/depth-control.png"
+          },
+          {
+            "kind": "normal",
+            "path": "lirm-armature-16/source-maps/normal-control.svg",
+            "rasterPath": "lirm-armature-16/source-maps/normal-control.png"
+          },
+          {
+            "kind": "mask",
+            "path": "lirm-armature-16/source-maps/mask-control.svg",
+            "rasterPath": "lirm-armature-16/source-maps/mask-control.png"
+          },
+          {
+            "kind": "semantic",
+            "path": "lirm-armature-16/source-maps/semantic-control.svg",
+            "rasterPath": "lirm-armature-16/source-maps/semantic-control.png"
+          }
+        ],
+        "trellisSource": {
+          "kind": "trellis-clay",
+          "path": "lirm-armature-16/trellis-source.svg",
+          "rasterPath": "lirm-armature-16/trellis-source.png",
+          "effectiveSource": "tight-cropped-transparent-implicit-clay"
+        }
+      },
+      {
+        "candidateId": "lirm-armature-22",
+        "package": "lirm-armature-22/conditioning-package.json",
+        "panel": "lirm-armature-22/conditioning-panel.svg",
+        "sourceMaps": [
+          {
+            "kind": "clay",
+            "path": "lirm-armature-22/source-maps/clay-control.svg",
+            "rasterPath": "lirm-armature-22/source-maps/clay-control.png"
+          },
+          {
+            "kind": "depth",
+            "path": "lirm-armature-22/source-maps/depth-control.svg",
+            "rasterPath": "lirm-armature-22/source-maps/depth-control.png"
+          },
+          {
+            "kind": "normal",
+            "path": "lirm-armature-22/source-maps/normal-control.svg",
+            "rasterPath": "lirm-armature-22/source-maps/normal-control.png"
+          },
+          {
+            "kind": "mask",
+            "path": "lirm-armature-22/source-maps/mask-control.svg",
+            "rasterPath": "lirm-armature-22/source-maps/mask-control.png"
+          },
+          {
+            "kind": "semantic",
+            "path": "lirm-armature-22/source-maps/semantic-control.svg",
+            "rasterPath": "lirm-armature-22/source-maps/semantic-control.png"
+          }
+        ],
+        "trellisSource": {
+          "kind": "trellis-clay",
+          "path": "lirm-armature-22/trellis-source.svg",
+          "rasterPath": "lirm-armature-22/trellis-source.png",
+          "effectiveSource": "tight-cropped-transparent-implicit-clay"
+        }
+      },
+      {
+        "candidateId": "lirm-armature-24",
+        "package": "lirm-armature-24/conditioning-package.json",
+        "panel": "lirm-armature-24/conditioning-panel.svg",
+        "sourceMaps": [
+          {
+            "kind": "clay",
+            "path": "lirm-armature-24/source-maps/clay-control.svg",
+            "rasterPath": "lirm-armature-24/source-maps/clay-control.png"
+          },
+          {
+            "kind": "depth",
+            "path": "lirm-armature-24/source-maps/depth-control.svg",
+            "rasterPath": "lirm-armature-24/source-maps/depth-control.png"
+          },
+          {
+            "kind": "normal",
+            "path": "lirm-armature-24/source-maps/normal-control.svg",
+            "rasterPath": "lirm-armature-24/source-maps/normal-control.png"
+          },
+          {
+            "kind": "mask",
+            "path": "lirm-armature-24/source-maps/mask-control.svg",
+            "rasterPath": "lirm-armature-24/source-maps/mask-control.png"
+          },
+          {
+            "kind": "semantic",
+            "path": "lirm-armature-24/source-maps/semantic-control.svg",
+            "rasterPath": "lirm-armature-24/source-maps/semantic-control.png"
+          }
+        ],
+        "trellisSource": {
+          "kind": "trellis-clay",
+          "path": "lirm-armature-24/trellis-source.svg",
+          "rasterPath": "lirm-armature-24/trellis-source.png",
+          "effectiveSource": "tight-cropped-transparent-implicit-clay"
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,247 @@
+[
+  {
+    "kind": "metaball",
+    "role": "body_mass",
+    "center": {
+      "x": -0.63,
+      "y": -0.05,
+      "z": 0
+    },
+    "radius": 0.214,
+    "falloff": "smooth_union"
+  },
+  {
+    "kind": "metaball",
+    "role": "body_mass",
+    "center": {
+      "x": -0.484,
+      "y": 0.066,
+      "z": 0
+    },
+    "radius": 0.227,
+    "falloff": "smooth_union"
+  },
+  {
+    "kind": "metaball",
+    "role": "body_mass",
+    "center": {
+      "x": -0.338,
+      "y": 0.176,
+      "z": 0
+    },
+    "radius": 0.239,
+    "falloff": "smooth_union"
+  },
+  {
+    "kind": "metaball",
+    "role": "body_mass",
+    "center": {
+      "x": -0.194,
+      "y": 0.244,
+      "z": 0
+    },
+    "radius": 0.261,
+    "falloff": "smooth_union"
+  },
+  {
+    "kind": "metaball",
+    "role": "body_mass",
+    "center": {
+      "x": -0.048,
+      "y": 0.246,
+      "z": 0
+    },
+    "radius": 0.283,
+    "falloff": "smooth_union"
+  },
+  {
+    "kind": "metaball",
+    "role": "body_mass",
+    "center": {
+      "x": 0.098,
+      "y": 0.186,
+      "z": 0
+    },
+    "radius": 0.289,
+    "falloff": "smooth_union"
+  },
+  {
+    "kind": "metaball",
+    "role": "body_mass",
+    "center": {
+      "x": 0.244,
+      "y": 0.084,
+      "z": 0
+    },
+    "radius": 0.276,
+    "falloff": "smooth_union"
+  },
+  {
+    "kind": "metaball",
+    "role": "body_mass",
+    "center": {
+      "x": 0.39,
+      "y": -0.022,
+      "z": 0
+    },
+    "radius": 0.255,
+    "falloff": "smooth_union"
+  },
+  {
+    "kind": "metaball",
+    "role": "body_mass",
+    "center": {
+      "x": 0.534,
+      "y": -0.102,
+      "z": 0
+    },
+    "radius": 0.243,
+    "falloff": "smooth_union"
+  },
+  {
+    "kind": "metaball",
+    "role": "body_mass",
+    "center": {
+      "x": 0.68,
+      "y": -0.132,
+      "z": 0
+    },
+    "radius": 0.242,
+    "falloff": "smooth_union"
+  },
+  {
+    "kind": "metaball",
+    "role": "body_mass",
+    "center": {
+      "x": 0.826,
+      "y": -0.112,
+      "z": 0
+    },
+    "radius": 0.237,
+    "falloff": "smooth_union"
+  },
+  {
+    "kind": "sphere",
+    "role": "head_orientation",
+    "center": {
+      "x": 0.826,
+      "y": -0.112,
+      "z": 0.02
+    },
+    "radius": 0.117,
+    "materialHint": "soft_head_mass"
+  },
+  {
+    "kind": "sphere",
+    "role": "terminal_mouth",
+    "center": {
+      "x": 0.964,
+      "y": -0.128,
+      "z": 0.055
+    },
+    "radius": 0.045,
+    "materialHint": "mouth_dark_wet_terminal"
+  },
+  {
+    "kind": "capsule",
+    "role": "limb_bud",
+    "center": {
+      "x": -0.194,
+      "y": 0.244,
+      "z": -0.015
+    },
+    "radius": 0.024,
+    "length": 0.175,
+    "side": "paired",
+    "t": 0.25,
+    "materialHint": "brace_drag_nub"
+  },
+  {
+    "kind": "capsule",
+    "role": "limb_bud",
+    "center": {
+      "x": 0.098,
+      "y": 0.186,
+      "z": -0.015
+    },
+    "radius": 0.025,
+    "length": 0.175,
+    "side": "paired",
+    "t": 0.5,
+    "materialHint": "brace_drag_nub"
+  },
+  {
+    "kind": "capsule",
+    "role": "limb_bud",
+    "center": {
+      "x": 0.534,
+      "y": -0.102,
+      "z": -0.015
+    },
+    "radius": 0.025,
+    "length": 0.175,
+    "side": "paired",
+    "t": 0.75,
+    "materialHint": "brace_drag_nub"
+  },
+  {
+    "kind": "sphere",
+    "role": "contact_point",
+    "contactRole": "fore-brace",
+    "center": {
+      "x": -0.484,
+      "y": -0.206,
+      "z": -0.08
+    },
+    "radius": 0.049,
+    "materialHint": "ground_contact_marker"
+  },
+  {
+    "kind": "sphere",
+    "role": "contact_point",
+    "contactRole": "fore-brace",
+    "center": {
+      "x": -0.194,
+      "y": -0.044,
+      "z": -0.08
+    },
+    "radius": 0.049,
+    "materialHint": "ground_contact_marker"
+  },
+  {
+    "kind": "sphere",
+    "role": "contact_point",
+    "contactRole": "belly-crawl",
+    "center": {
+      "x": 0.098,
+      "y": -0.086,
+      "z": -0.08
+    },
+    "radius": 0.049,
+    "materialHint": "ground_contact_marker"
+  },
+  {
+    "kind": "sphere",
+    "role": "contact_point",
+    "contactRole": "belly-crawl",
+    "center": {
+      "x": 0.39,
+      "y": -0.31,
+      "z": -0.08
+    },
+    "radius": 0.049,
+    "materialHint": "ground_contact_marker"
+  },
+  {
+    "kind": "sphere",
+    "role": "contact_point",
+    "contactRole": "tail-drag",
+    "center": {
+      "x": 0.68,
+      "y": -0.404,
+      "z": -0.08
+    },
+    "radius": 0.049,
+    "materialHint": "ground_contact_marker"
+  }
+]

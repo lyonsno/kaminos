@@ -27,6 +27,73 @@ const DEFAULT_SEED = 'molten-lirm-speciation-armature-v0';
 const DEFAULT_CANDIDATE_COUNT = 25;
 const DEFAULT_COLUMNS = 5;
 
+const GESTALT_ARCHETYPES = [
+  {
+    kind: 'lirm-slug-loaf',
+    label: 'slug loaf',
+    silhouetteClass: 'broad-belly-loaf',
+    priorHooks: ['slug', 'soft loaf body', 'low crawling belly', 'wet clay'],
+    mods: { segments: -1, limbs: -2, armor: -0.26, curve: -0.03, head: -0.08, contact: 0.18, belly: 0.18, bulk: 0.28, length: 0.08 },
+    silhouette: { headScale: 0.82, bellyScale: 1.45, tailScale: 0.72, widthScale: 1.32, heightScale: 0.72, dorsalLift: -0.04, mouthOffset: 0.06 },
+  },
+  {
+    kind: 'lirm-tadpole-pouch',
+    label: 'tadpole pouch',
+    silhouetteClass: 'big-head-taper-tail',
+    priorHooks: ['tadpole', 'pouch body', 'front-heavy larva', 'thin tail'],
+    mods: { segments: -2, limbs: -1, armor: -0.18, curve: 0.02, head: 0.26, contact: -0.02, belly: 0.1, bulk: 0.16, length: -0.02 },
+    silhouette: { headScale: 1.72, bellyScale: 1.12, tailScale: 0.42, widthScale: 1.05, heightScale: 1.02, dorsalLift: 0.04, mouthOffset: 0.085 },
+  },
+  {
+    kind: 'lirm-pillbug-dome',
+    label: 'pillbug dome',
+    silhouetteClass: 'armored-oval-dome',
+    priorHooks: ['pillbug', 'armored larva', 'domed shell', 'compact oval'],
+    mods: { segments: 1, limbs: -2, armor: 0.24, curve: -0.015, head: -0.02, contact: 0.08, belly: -0.02, bulk: 0.2, length: -0.1 },
+    silhouette: { headScale: 0.74, bellyScale: 1.25, tailScale: 0.86, widthScale: 1.24, heightScale: 1.14, dorsalLift: -0.08, mouthOffset: 0.052 },
+  },
+  {
+    kind: 'lirm-thread-centipede',
+    label: 'thread centipede',
+    silhouetteClass: 'long-many-legged-thread',
+    priorHooks: ['centipede', 'thin segmented body', 'many tiny legs', 'threadlike crawler'],
+    mods: { segments: 3, limbs: 3, armor: -0.08, curve: 0.015, head: -0.05, contact: -0.12, belly: -0.04, bulk: -0.2, length: 0.16 },
+    silhouette: { headScale: 0.82, bellyScale: 0.7, tailScale: 0.62, widthScale: 0.66, heightScale: 0.78, dorsalLift: 0.0, mouthOffset: 0.06 },
+  },
+  {
+    kind: 'lirm-comma-grub',
+    label: 'comma grub',
+    silhouetteClass: 'curled-comma-grub',
+    priorHooks: ['curled grub', 'comma body', 'asymmetric larva', 'fat bend'],
+    mods: { segments: 1, limbs: 0, armor: -0.05, curve: 0.07, head: 0.08, contact: 0.04, belly: 0.14, bulk: 0.12, length: 0.04, asymmetry: 0.08 },
+    silhouette: { headScale: 1.08, bellyScale: 1.34, tailScale: 0.58, widthScale: 1.06, heightScale: 0.92, dorsalLift: 0.05, mouthOffset: 0.075 },
+  },
+  {
+    kind: 'lirm-trilobite-flat',
+    label: 'trilobite flatback',
+    silhouetteClass: 'flat-wide-side-plates',
+    priorHooks: ['trilobite', 'flat armored back', 'side plates', 'ancient arthropod'],
+    mods: { segments: 2, limbs: 2, armor: 0.18, curve: -0.02, head: -0.03, contact: 0.1, belly: -0.12, bulk: 0.04, length: 0.02 },
+    silhouette: { headScale: 0.88, bellyScale: 1.18, tailScale: 0.78, widthScale: 1.46, heightScale: 0.56, dorsalLift: -0.02, mouthOffset: 0.056 },
+  },
+  {
+    kind: 'lirm-larval-quad',
+    label: 'larval quadruped',
+    silhouetteClass: 'stub-legged-ground-beast',
+    priorHooks: ['stub-legged larva', 'small quadruped', 'ground beast', 'brace feet'],
+    mods: { segments: -1, limbs: 1, armor: 0.04, curve: 0.005, head: 0.12, contact: 0.02, belly: 0.0, bulk: 0.08, length: -0.04 },
+    silhouette: { headScale: 1.16, bellyScale: 1.05, tailScale: 0.64, widthScale: 0.95, heightScale: 1.08, dorsalLift: 0.09, mouthOffset: 0.07 },
+  },
+  {
+    kind: 'lirm-shell-kite',
+    label: 'shell kite',
+    silhouetteClass: 'wide-diamond-shell',
+    priorHooks: ['wide shell', 'diamond silhouette', 'raylike crawler', 'thin underbody'],
+    mods: { segments: -2, limbs: 0, armor: 0.16, curve: -0.035, head: -0.04, contact: 0.12, belly: -0.08, bulk: -0.02, length: -0.12 },
+    silhouette: { headScale: 0.72, bellyScale: 1.55, tailScale: 0.72, widthScale: 1.72, heightScale: 0.5, dorsalLift: -0.03, mouthOffset: 0.05 },
+  },
+];
+
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 const round = (value, digits = 3) => Number(value.toFixed(digits));
 
@@ -53,6 +120,39 @@ function mulberry32(seed) {
 function candidateRng(seed, index) {
   const mixed = hashSeed(`${seed}:${index}:lirm-speciation`);
   return mulberry32(mixed);
+}
+
+function selectGestalt(seed, index) {
+  const offset = hashSeed(`${seed}:gestalt-offset`) % GESTALT_ARCHETYPES.length;
+  return GESTALT_ARCHETYPES[(index + offset) % GESTALT_ARCHETYPES.length];
+}
+
+function gestaltSilhouette(archetype, rng) {
+  const pressure = 0.7 + rng() * 0.24;
+  return {
+    class: archetype.silhouetteClass,
+    gestaltPressure: round(pressure),
+    headScale: round(archetype.silhouette.headScale * (0.94 + rng() * 0.12)),
+    bellyScale: round(archetype.silhouette.bellyScale * (0.94 + rng() * 0.12)),
+    tailScale: round(archetype.silhouette.tailScale * (0.94 + rng() * 0.12)),
+    widthScale: round(archetype.silhouette.widthScale * (0.94 + rng() * 0.12)),
+    heightScale: round(archetype.silhouette.heightScale * (0.94 + rng() * 0.12)),
+    dorsalLift: round(archetype.silhouette.dorsalLift),
+    mouthOffset: round(archetype.silhouette.mouthOffset),
+    outlineWords: archetype.priorHooks,
+  };
+}
+
+function applyMod(value, mod, min, max, digits = 3) {
+  return round(clamp(value + (mod || 0), min, max), digits);
+}
+
+function segmentRadiusScale(t, silhouette) {
+  const head = silhouette.headScale * Math.exp(-Math.pow((t - 1) / 0.24, 2));
+  const belly = silhouette.bellyScale * Math.exp(-Math.pow((t - 0.48) / 0.34, 2));
+  const tail = silhouette.tailScale * Math.exp(-Math.pow(t / 0.22, 2));
+  const baseline = 0.55;
+  return clamp((baseline + head * 0.38 + belly * 0.42 + tail * 0.28) * silhouette.widthScale, 0.34, 2.25);
 }
 
 function xml(value) {
@@ -87,6 +187,8 @@ function makeAxisSamples({ curveAmplitude, curvePhase, headBias, segmentCount, a
 
 function buildMutationPath(params) {
   const path = [
+    `gestalt:${params.gestalt.kind}`,
+    `silhouette:${params.silhouette.class}`,
     `segments:${params.segmentCount}`,
     `axis:${params.curveAmplitude > 0.09 ? 'arched' : 'low-crawl'}`,
     `limbs:${params.limbPairCount}`,
@@ -104,6 +206,21 @@ function createSemanticHandles(candidateId, params, axisSamples) {
   const belly = axisSamples[Math.floor(axisSamples.length * 0.45)];
   const tail = axisSamples[0];
   const handles = [
+    {
+      id: `${candidateId}:gestalt`,
+      kind: 'gestalt_silhouette',
+      label: `${params.gestalt.label} / ${params.silhouette.class}`,
+      strength: params.silhouette.gestaltPressure,
+      region: {
+        class: params.silhouette.class,
+        headScale: params.silhouette.headScale,
+        bellyScale: params.silhouette.bellyScale,
+        tailScale: params.silhouette.tailScale,
+        widthScale: params.silhouette.widthScale,
+        heightScale: params.silhouette.heightScale,
+      },
+      futureUse: ['imagegen_prior_hook', 'trellis_prior_assay', 'whole_body_selection'],
+    },
     {
       id: `${candidateId}:axis`,
       kind: 'axis',
@@ -126,7 +243,7 @@ function createSemanticHandles(candidateId, params, axisSamples) {
       label: 'terminal mouth concentration',
       strength: params.mouthIntensity,
       region: {
-        x: round(clamp(head.x + (0.035 + params.headBias * 0.028), 0.05, 0.985)),
+        x: round(clamp(head.x + params.silhouette.mouthOffset + params.headBias * 0.012, 0.05, 0.985)),
         y: round(head.y + 0.008),
         radius: round(0.026 + params.mouthIntensity * 0.025),
         placement: 'terminal_front_cap',
@@ -241,26 +358,40 @@ function createCandidate(seed, index, candidateCount) {
   const rng = candidateRng(seed, index);
   const candidateId = `lirm-armature-${String(index).padStart(2, '0')}`;
   const phase = candidateCount <= 1 ? 0 : index / (candidateCount - 1);
-  const segmentCount = 5 + ((index * 3 + Math.floor(rng() * 5)) % 7);
-  const limbPairCount = 1 + ((index + Math.floor(rng() * 6)) % 5);
-  const armorPressure = round(clamp((index % 3 === 0 ? 0.62 : 0.24) + rng() * 0.42 + Math.sin(index * 1.7) * 0.08, 0.05, 0.95));
-  const shellPlateCount = armorPressure > 0.55 ? 2 + ((index + Math.floor(rng() * 4)) % 5) : 0;
-  const curveAmplitude = round(0.035 + rng() * 0.105 + (index % 5 === 2 ? 0.035 : 0));
+  const archetype = selectGestalt(seed, index);
+  const gestalt = {
+    kind: archetype.kind,
+    label: archetype.label,
+    priorHooks: archetype.priorHooks,
+    source: 'seeded_gestalt_archetype_v0',
+  };
+  const silhouette = gestaltSilhouette(archetype, rng);
+  const mods = archetype.mods;
+  const baseSegmentCount = 5 + ((index * 3 + Math.floor(rng() * 5)) % 7);
+  const segmentCount = Math.max(5, Math.min(13, baseSegmentCount + Math.round(mods.segments || 0)));
+  const baseLimbPairCount = 1 + ((index + Math.floor(rng() * 6)) % 5);
+  const limbPairCount = Math.max(0, Math.min(8, baseLimbPairCount + Math.round(mods.limbs || 0)));
+  const armorPressure = applyMod((index % 3 === 0 ? 0.62 : 0.24) + rng() * 0.42 + Math.sin(index * 1.7) * 0.08, mods.armor, 0.05, 0.95);
+  const shellPlateBias = ['lirm-pillbug-dome', 'lirm-trilobite-flat', 'lirm-shell-kite'].includes(archetype.kind) ? 2 : 0;
+  const shellPlateCount = armorPressure > 0.55 ? Math.min(8, 2 + shellPlateBias + ((index + Math.floor(rng() * 4)) % 5)) : shellPlateBias;
+  const curveAmplitude = applyMod(0.035 + rng() * 0.105 + (index % 5 === 2 ? 0.035 : 0), mods.curve, 0.01, 0.18);
   const curvePhase = round((rng() * Math.PI * 2) + index * 0.23);
-  const headBias = round(0.15 + rng() * 0.74);
-  const contactWidth = round(0.42 + rng() * 0.43);
-  const bellyDrop = round(0.35 + rng() * 0.58);
+  const headBias = applyMod(0.15 + rng() * 0.74, mods.head, 0.08, 0.96);
+  const contactWidth = applyMod(0.42 + rng() * 0.43, mods.contact, 0.28, 0.92);
+  const bellyDrop = applyMod(0.35 + rng() * 0.58, mods.belly, 0.18, 0.96);
   const mouthIntensity = round(0.38 + rng() * 0.55);
   const limbScale = round(0.36 + rng() * 0.48);
   const cuteGrossBlend = round(0.18 + rng() * 0.78);
-  const asymmetry = round(index % 2 === 0 ? 0.05 + rng() * 0.07 : 0.11 + rng() * 0.13);
+  const asymmetry = applyMod(index % 2 === 0 ? 0.05 + rng() * 0.07 : 0.11 + rng() * 0.13, mods.asymmetry, 0.03, 0.28);
   const sensoryNubCount = cuteGrossBlend > 0.48 ? 1 + ((index + Math.floor(rng() * 3)) % 3) : 0;
-  const bodyLength = round(clamp(0.52 + rng() * 0.38 + (segmentCount - 7) * 0.035, 0.46, 0.92));
+  const bodyLength = applyMod(clamp(0.52 + rng() * 0.38 + (segmentCount - 7) * 0.035, 0.46, 0.92), mods.length, 0.38, 0.97);
   const bodyCenter = round(0.5 + (rng() - 0.5) * 0.11);
-  const postureLift = round((index % 5 === 3 ? -0.055 : 0) + (index % 5 === 1 ? 0.045 : 0) + (rng() - 0.5) * 0.055);
-  const bulkScale = round(clamp(0.72 + rng() * 0.74 + (bellyDrop - 0.5) * 0.28, 0.62, 1.55));
+  const postureLift = round((index % 5 === 3 ? -0.055 : 0) + (index % 5 === 1 ? 0.045 : 0) + (rng() - 0.5) * 0.055 + silhouette.dorsalLift);
+  const bulkScale = applyMod(clamp(0.72 + rng() * 0.74 + (bellyDrop - 0.5) * 0.28, 0.62, 1.55), mods.bulk, 0.42, 1.85);
 
   const params = {
+    gestalt,
+    silhouette,
     segmentCount,
     limbPairCount,
     armorPressure,
@@ -301,6 +432,8 @@ function createCandidate(seed, index, candidateCount) {
     },
     bodyPlan: {
       family: 'small-ground-hoard-thief',
+      gestalt,
+      silhouette,
       axialCurve: curveAmplitude > 0.105 ? 'arched-inchworm' : 'low-belly-crawler',
       segmentCount,
       axisSamples,
@@ -331,10 +464,10 @@ function createCandidate(seed, index, candidateCount) {
       acceptsSamIsolation: true,
       acceptsTrellisProbe: true,
       acceptsSharpProbe: true,
-      controlMaps: ['silhouette', 'semantic-map', 'axis-depth-cue', 'contact-points', 'proxy-primitives'],
+      controlMaps: ['silhouette', 'gestalt-silhouette', 'semantic-map', 'axis-depth-cue', 'contact-points', 'proxy-primitives'],
       promptPacket: {
-        subject: 'small crawling hoard thief creature',
-        preserve: ['body axis', 'belly contact patch', 'head orientation', 'terminal front mouth', 'limb bud count'],
+        subject: `small crawling hoard thief creature, ${gestalt.label}`,
+        preserve: ['whole silhouette gestalt', 'body axis', 'belly contact patch', 'head orientation', 'terminal front mouth', 'limb bud count'],
         mutate: ['surface material', 'gross-cute balance', 'shell/soft tissue texture'],
       },
     },
@@ -370,9 +503,10 @@ function renderCandidateSvg(candidate, index, columns, cellWidth, cellHeight, le
   const toY = y => round(y0 + pad + y * h, 2);
   const axis = candidate.bodyPlan.axisSamples;
   const axisPoints = axis.map(point => `${toX(point.x)},${toY(point.y)}`).join(' ');
-  const candidateLabel = xml(`${candidate.label} ${candidate.motionAffordance.primary}`);
+  const candidateLabel = xml(`${candidate.bodyPlan.gestalt.label} ${candidate.motionAffordance.primary}`);
   const candidateTitle = [
-    `${candidate.id}: ${candidate.motionAffordance.primary}`,
+    `${candidate.id}: ${candidate.bodyPlan.gestalt.label} / ${candidate.motionAffordance.primary}`,
+    `silhouette ${candidate.bodyPlan.silhouette.class}`,
     `segments ${candidate.bodyPlan.segmentCount}`,
     `limb pairs ${candidate.bodyPlan.limbPairCount}`,
     `shell plates ${candidate.bodyPlan.shellPlateCount}`,
@@ -381,8 +515,9 @@ function renderCandidateSvg(candidate, index, columns, cellWidth, cellHeight, le
   const bodyWidth = (0.07 + candidate.bodyPlan.contactWidth * 0.055) * candidate.bodyPlan.bulkScale;
   const segmentEllipses = axis.map((point, sampleIndex) => {
     const t = sampleIndex / Math.max(1, axis.length - 1);
-    const rx = round((0.058 + bodyWidth * (1.1 - Math.abs(t - 0.45))) * w, 2);
-    const ry = round((0.047 + bodyWidth * 0.48 + Math.sin(t * Math.PI) * 0.025) * h, 2);
+    const profile = segmentRadiusScale(t, candidate.bodyPlan.silhouette);
+    const rx = round((0.038 + bodyWidth * profile) * w, 2);
+    const ry = round((0.035 + bodyWidth * profile * 0.42 * candidate.bodyPlan.silhouette.heightScale + Math.sin(t * Math.PI) * 0.018) * h, 2);
     const opacity = round(0.74 + Math.sin(t * Math.PI) * 0.18, 2);
     return `<ellipse cx="${toX(point.x)}" cy="${toY(point.y)}" rx="${rx}" ry="${ry}" fill="${colors.body}" opacity="${opacity}"/>`;
   }).join('');
@@ -430,7 +565,7 @@ function renderCandidateSvg(candidate, index, columns, cellWidth, cellHeight, le
       <g data-layer="silhouette" opacity="1">
         <path d="M ${toX(0.1)} ${toY(0.76)} C ${toX(0.28)} ${toY(0.92)}, ${toX(0.66)} ${toY(0.92)}, ${toX(0.9)} ${toY(0.76)}" fill="none" stroke="${colors.shadow}" stroke-width="13" stroke-linecap="round" opacity="0.5"/>
         ${segmentEllipses}
-        <ellipse cx="${toX(head.region.x)}" cy="${toY(head.region.y)}" rx="${round(head.region.radius * w * 1.15, 2)}" ry="${round(head.region.radius * h * 0.95, 2)}" fill="${colors.head}" opacity="0.96"/>
+        <ellipse cx="${toX(head.region.x)}" cy="${toY(head.region.y)}" rx="${round(head.region.radius * w * candidate.bodyPlan.silhouette.headScale * 1.05, 2)}" ry="${round(head.region.radius * h * candidate.bodyPlan.silhouette.heightScale, 2)}" fill="${colors.head}" opacity="0.96"/>
       </g>
       <g data-layer="semantic-map">
         <polyline points="${axisPoints}" fill="none" stroke="${colors.axis}" stroke-width="2" stroke-linecap="round" stroke-dasharray="4 4" opacity="0.82"/>
@@ -517,11 +652,12 @@ function createProxyPrimitives(candidate) {
   const primitives = [];
   const width = 0.09 + candidate.bodyPlan.contactWidth * 0.08;
   for (const sample of candidate.bodyPlan.axisSamples) {
+    const profile = segmentRadiusScale(sample.t, candidate.bodyPlan.silhouette);
     primitives.push({
       kind: 'metaball',
       role: 'body_mass',
       center: proxyPoint(sample),
-      radius: round(width * candidate.bodyPlan.bulkScale * (0.82 + Math.sin(sample.t * Math.PI) * 0.24)),
+      radius: round(width * candidate.bodyPlan.bulkScale * profile),
       falloff: 'smooth_union',
     });
   }
@@ -532,7 +668,7 @@ function createProxyPrimitives(candidate) {
     kind: 'sphere',
     role: 'head_orientation',
     center: proxyPoint(head.region, 0.02),
-    radius: round(head.region.radius * 1.35),
+    radius: round(head.region.radius * 1.15 * candidate.bodyPlan.silhouette.headScale),
     materialHint: 'soft_head_mass',
   });
   primitives.push({
@@ -563,7 +699,7 @@ function createProxyPrimitives(candidate) {
       center: proxyPoint(handle.region, 0.075),
       size: {
         x: round(handle.region.width * 1.4),
-        y: 0.052,
+        y: round(0.052 * candidate.bodyPlan.silhouette.widthScale),
         z: round(0.018 + candidate.bodyPlan.armorPressure * 0.04),
       },
       t: handle.region.t,
@@ -599,6 +735,8 @@ export function createLirmSpeciationArmatureControlPacket({ witness, candidate, 
     sourceWitnessRoute: witness.route,
     candidateId: selectedCandidate.id,
     seed: selectedCandidate.seed,
+    gestalt: selectedCandidate.bodyPlan.gestalt,
+    silhouette: selectedCandidate.bodyPlan.silhouette,
     lineage: selectedCandidate.lineage,
     motionAffordance: selectedCandidate.motionAffordance,
     semanticHandles: selectedCandidate.semanticHandles,
@@ -611,7 +749,7 @@ export function createLirmSpeciationArmatureControlPacket({ witness, candidate, 
     ],
     promptContract: {
       subject: 'small crawling hoard thief creature',
-      preserve: ['axis curve', 'belly contact', 'terminal front mouth', 'head orientation', 'contact points'],
+      preserve: ['whole silhouette gestalt', 'axis curve', 'belly contact', 'terminal front mouth', 'head orientation', 'contact points'],
       allowMutation: ['surface material', 'micro anatomy', 'gross-cute balance', 'skin/shell texture'],
     },
     falseClosureGuards: {
@@ -751,6 +889,8 @@ export function createLirmSpeciationArmatureProxyRenderBundle({ witness, candida
     sourceWitnessRoute: witness.route,
     candidateId: selectedCandidate.id,
     seed: selectedCandidate.seed,
+    gestalt: selectedCandidate.bodyPlan.gestalt,
+    silhouette: selectedCandidate.bodyPlan.silhouette,
     camera: {
       projection: 'orthographic',
       view: 'front-three-quarter',
@@ -1006,6 +1146,24 @@ function implicitClayFill(hit) {
   return rgbFill(base[0] * shade, base[1] * shade, base[2] * shade);
 }
 
+function implicitTrellisClayFill(hit) {
+  const roleBase = {
+    body_mass: [142, 132, 106],
+    head_orientation: [154, 124, 92],
+    terminal_mouth: [70, 38, 35],
+    limb_bud: [118, 93, 66],
+    shell_plate: [96, 93, 84],
+    contact_point: [112, 88, 104],
+  };
+  const base = roleBase[hit.primitive.role] || [138, 126, 102];
+  const lightDir = norm3(vec3(-0.36, 0.7, 0.62));
+  const rimDir = norm3(vec3(0.62, -0.08, 0.38));
+  const diffuse = clamp(dot3(hit.normal, lightDir), 0, 1);
+  const rim = Math.pow(clamp(dot3(hit.normal, rimDir), 0, 1), 2.2);
+  const shade = 0.48 + diffuse * 0.5 + rim * 0.22;
+  return rgbFill(base[0] * shade, base[1] * shade, base[2] * shade);
+}
+
 function implicitDepthFill(hit) {
   const level = 244 - hit.depth01 * 216;
   return rgbFill(level, level, level);
@@ -1073,6 +1231,56 @@ function renderImplicitMapsSvg({ candidate, primitives }) {
   });
 }
 
+function renderImplicitTrellisSourceSvg({ candidate, primitives }) {
+  const pixelWidth = 256;
+  const pixelHeight = 192;
+  const displaySize = 512;
+  const rects = [];
+  let minX = pixelWidth;
+  let minY = pixelHeight;
+  let maxX = -1;
+  let maxY = -1;
+  for (let y = 0; y < pixelHeight; y += 1) {
+    for (let x = 0; x < pixelWidth; x += 1) {
+      const hit = raymarchImplicitPixel({ pixelX: x, pixelY: y, width: pixelWidth, height: pixelHeight, primitives });
+      if (!hit.hit) continue;
+      minX = Math.min(minX, x);
+      minY = Math.min(minY, y);
+      maxX = Math.max(maxX, x + 1);
+      maxY = Math.max(maxY, y + 1);
+      rects.push(`<rect x="${x}" y="${y}" width="1" height="1" fill="${implicitTrellisClayFill(hit)}"/>`);
+    }
+  }
+  const pad = 12;
+  const cropX = Math.max(0, minX - pad);
+  const cropY = Math.max(0, minY - pad);
+  const cropW = Math.min(pixelWidth, maxX + pad) - cropX;
+  const cropH = Math.min(pixelHeight, maxY + pad) - cropY;
+  const viewBox = maxX >= 0
+    ? `${cropX} ${cropY} ${Math.max(cropW, 1)} ${Math.max(cropH, 1)}`
+    : `0 0 ${pixelWidth} ${pixelHeight}`;
+  const title = `${candidate.id} tight transparent implicit clay Trellis source`;
+  return {
+    kind: 'trellis-clay',
+    path: `${candidate.id}/trellis-source.svg`,
+    rasterPath: `${candidate.id}/trellis-source.png`,
+    effectiveSource: 'tight-cropped-transparent-implicit-clay',
+    requiredFor: ['trellis_clay_probe', 'trellis_prior_assay', 'sam3_isolation'],
+    framing: {
+      background: 'transparent',
+      crop: 'tight-surface-bounds',
+      sourcePixelGrid: `${pixelWidth}x${pixelHeight}`,
+      displayedPixels: `${displaySize}x${displaySize}`,
+    },
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="${displaySize}" height="${displaySize}" viewBox="${viewBox}" role="img" aria-label="${xml(title)}" data-trellis-source="implicit-clay-tight" data-background="transparent" data-crop="tight-surface-bounds" data-render-mode="raymarched-implicit-field" data-field-kind="smooth-sdf-metaball">
+  <metadata>candidate=${xml(candidate.id)}; tight transparent crop for Trellis mesh probing; not a depth/normal/control map</metadata>
+  <g data-layer="implicit-trellis-source-pixels" data-candidate-id="${xml(candidate.id)}" data-pixel-grid="${pixelWidth}x${pixelHeight}" data-primitive-count="${primitives.length}" style="shape-rendering:crispEdges">
+    ${rects.join('\n    ')}
+  </g>
+</svg>`,
+  };
+}
+
 export function createLirmSpeciationArmatureImplicitBodyBundle({ witness, candidate, candidateId } = {}) {
   const selectedCandidate = candidate || witness?.candidates?.find(item => item.id === candidateId);
   if (!witness || !selectedCandidate) {
@@ -1080,6 +1288,7 @@ export function createLirmSpeciationArmatureImplicitBodyBundle({ witness, candid
   }
   const implicitPrimitives = createImplicitPrimitives(selectedCandidate);
   const renderMaps = renderImplicitMapsSvg({ candidate: selectedCandidate, primitives: implicitPrimitives });
+  const trellisSource = renderImplicitTrellisSourceSvg({ candidate: selectedCandidate, primitives: implicitPrimitives });
   return {
     schema: LIRM_SPECIATION_ARMATURE_IMPLICIT_BODY_BUNDLE_SCHEMA,
     route: LIRM_SPECIATION_ARMATURE_IMPLICIT_BODY_ROUTE,
@@ -1087,12 +1296,14 @@ export function createLirmSpeciationArmatureImplicitBodyBundle({ witness, candid
     sourceWitnessRoute: witness.route,
     candidateId: selectedCandidate.id,
     seed: selectedCandidate.seed,
+    gestalt: selectedCandidate.bodyPlan.gestalt,
+    silhouette: selectedCandidate.bodyPlan.silhouette,
     renderMode: 'raymarched-implicit-field',
     fieldModel: {
       kind: 'smooth-sdf-metaball',
       surfaceThreshold: 0.0065,
       smoothUnionK: 0.075,
-      primitiveSources: ['body_mass_axis_samples', 'terminal_mouth_handle', 'head_handle', 'limb_buds', 'shell_plates', 'contact_points'],
+      primitiveSources: ['gestalt_body_plan', 'body_mass_axis_samples', 'terminal_mouth_handle', 'head_handle', 'limb_buds', 'shell_plates', 'contact_points'],
     },
     camera: {
       projection: 'orthographic',
@@ -1104,6 +1315,7 @@ export function createLirmSpeciationArmatureImplicitBodyBundle({ witness, candid
     semanticHandles: selectedCandidate.semanticHandles,
     contactPoints: selectedCandidate.contactPoints,
     renderMaps,
+    trellisSource,
     falseClosureGuards: {
       finishedCreatureClaim: 'forbidden',
       generatorFiringClaim: 'not_yet_fired',
@@ -1134,11 +1346,19 @@ export async function writeLirmSpeciationArmatureImplicitBodyWitness(options = {
       await writeFile(svgPath, map.svg);
       rasterizeSvgWithSips(svgPath, pngPath);
     }
+    await writeFile(join(outDir, bundle.trellisSource.path), bundle.trellisSource.svg);
+    rasterizeSvgWithSips(join(outDir, bundle.trellisSource.path), join(outDir, bundle.trellisSource.rasterPath));
     bundles.push(bundle);
     outputBundles.push({
       candidateId,
       bundle: `${candidateId}/bundle.json`,
       maps: bundle.renderMaps.map(map => ({ kind: map.kind, path: map.path, rasterPath: map.path.replace(/\.svg$/, '.png') })),
+      trellisSource: {
+        kind: bundle.trellisSource.kind,
+        path: bundle.trellisSource.path,
+        rasterPath: bundle.trellisSource.rasterPath,
+        effectiveSource: bundle.trellisSource.effectiveSource,
+      },
     });
   }
   const receipt = {
@@ -1155,6 +1375,13 @@ export async function writeLirmSpeciationArmatureImplicitBodyWitness(options = {
       camera: bundle.camera,
       implicitPrimitiveCount: bundle.implicitPrimitiveCount,
       renderMaps: bundle.renderMaps.map(map => ({ kind: map.kind, path: map.path })),
+      trellisSource: {
+        kind: bundle.trellisSource.kind,
+        path: bundle.trellisSource.path,
+        rasterPath: bundle.trellisSource.rasterPath,
+        effectiveSource: bundle.trellisSource.effectiveSource,
+        framing: bundle.trellisSource.framing,
+      },
     })),
     falseClosureGuards: {
       finishedCreatureClaim: 'forbidden',
@@ -1195,7 +1422,8 @@ function createConditioningPrompt(candidate, packet) {
   if (limbCount > 0) preserve.push('the small brace-drag limb nubs');
   return {
     positive: [
-      'small crawling hoard-thief creature, invertebrate body plan, wet clay and keratin material, anxious semi-cute gross creature design',
+      `small crawling hoard-thief creature, ${candidate.bodyPlan.gestalt.label}, ${candidate.bodyPlan.silhouette.class}, invertebrate body plan, wet clay and keratin material, anxious semi-cute gross creature design`,
+      `model-prior hooks: ${candidate.bodyPlan.gestalt.priorHooks.join(', ')}`,
       `primary motion affordance: ${motion}`,
       `preserve ${preserve.join(', ')}`,
       `source candidate ${candidate.id}, lineage ${candidate.lineage.mutationPath.join(' / ')}`,
@@ -1271,6 +1499,12 @@ export function createLirmSpeciationArmatureConditioningPackage({ witness, candi
   const proxyBundle = createLirmSpeciationArmatureProxyRenderBundle({ witness, candidate: selectedCandidate });
   const implicitBundle = createLirmSpeciationArmatureImplicitBodyBundle({ witness, candidate: selectedCandidate });
   const packet = createLirmSpeciationArmatureControlPacket({ witness, candidate: selectedCandidate });
+  const trellisSource = {
+    ...implicitBundle.trellisSource,
+    path: 'trellis-source.svg',
+    rasterPath: 'trellis-source.png',
+    sourceImplicitPath: implicitBundle.trellisSource.path,
+  };
   const sourceImages = implicitBundle.renderMaps.map(map => ({
     kind: map.kind,
     path: `source-maps/${map.kind}-control.svg`,
@@ -1290,6 +1524,8 @@ export function createLirmSpeciationArmatureConditioningPackage({ witness, candi
     sourceWitnessRoute: witness.route,
     candidateId: selectedCandidate.id,
     seed: selectedCandidate.seed,
+    gestalt: selectedCandidate.bodyPlan.gestalt,
+    silhouette: selectedCandidate.bodyPlan.silhouette,
     sourceProxyRender: {
       schema: proxyBundle.schema,
       route: proxyBundle.route,
@@ -1308,6 +1544,7 @@ export function createLirmSpeciationArmatureConditioningPackage({ witness, candi
     },
     preferredSourceRoute: LIRM_SPECIATION_ARMATURE_IMPLICIT_BODY_ROUTE,
     sourceImages,
+    trellisSource,
     prompt,
     routeCandidates: [
       {
@@ -1319,8 +1556,8 @@ export function createLirmSpeciationArmatureConditioningPackage({ witness, candi
       {
         route: 'trellis2mlx_fast_clay_probe',
         status: 'registered_greenroom_route_but_queue_blocked_by_existing_pixal3d_job',
-        inputs: ['clay', 'mask'],
-        purpose: 'cheap 3D sanity probe from the implicit clay source, not depth-normal conditioning',
+        inputs: ['trellisSource', 'mask'],
+        purpose: 'cheap 3D sanity probe from the tight transparent implicit clay source, not depth-normal conditioning',
       },
       {
         route: 'world_tracing_masked_probe',
@@ -1364,10 +1601,16 @@ export async function writeLirmSpeciationArmatureConditioningPackages(options = 
       await writeFile(svgPath, map.svg);
       rasterizeSvgWithSips(svgPath, pngPath);
     }
+    await writeFile(join(candidateDir, pkg.trellisSource.path), pkg.trellisSource.svg);
+    rasterizeSvgWithSips(join(candidateDir, pkg.trellisSource.path), join(candidateDir, pkg.trellisSource.rasterPath));
     await writeFile(join(candidateDir, 'conditioning-panel.svg'), pkg.conditioningPanel.svg);
     const packageJson = {
       ...pkg,
       conditioningPanel: { path: pkg.conditioningPanel.path },
+      trellisSource: {
+        ...pkg.trellisSource,
+        svg: undefined,
+      },
     };
     await writeFile(join(candidateDir, 'conditioning-package.json'), `${JSON.stringify(packageJson, null, 2)}\n`);
     packages.push(pkg);
@@ -1380,6 +1623,12 @@ export async function writeLirmSpeciationArmatureConditioningPackages(options = 
         path: `${candidateId}/${image.path}`,
         rasterPath: `${candidateId}/${image.rasterPath}`,
       })),
+      trellisSource: {
+        kind: pkg.trellisSource.kind,
+        path: `${candidateId}/${pkg.trellisSource.path}`,
+        rasterPath: `${candidateId}/${pkg.trellisSource.rasterPath}`,
+        effectiveSource: pkg.trellisSource.effectiveSource,
+      },
     });
   }
   const receipt = {
@@ -1388,12 +1637,21 @@ export async function writeLirmSpeciationArmatureConditioningPackages(options = 
     seed,
     sourceWitnessId: witness.witnessId,
     candidateIds,
-    packages: packages.map(pkg => ({
-      schema: pkg.schema,
-      candidateId: pkg.candidateId,
-      preferredSourceRoute: pkg.preferredSourceRoute,
-      sourceImplicitBody: pkg.sourceImplicitBody,
+      packages: packages.map(pkg => ({
+        schema: pkg.schema,
+        candidateId: pkg.candidateId,
+        gestalt: pkg.gestalt,
+        silhouette: pkg.silhouette,
+        preferredSourceRoute: pkg.preferredSourceRoute,
+        sourceImplicitBody: pkg.sourceImplicitBody,
       sourceImages: pkg.sourceImages.map(image => ({ kind: image.kind, path: image.path, rasterPath: image.rasterPath })),
+      trellisSource: {
+        kind: pkg.trellisSource.kind,
+        path: pkg.trellisSource.path,
+        rasterPath: pkg.trellisSource.rasterPath,
+        effectiveSource: pkg.trellisSource.effectiveSource,
+        framing: pkg.trellisSource.framing,
+      },
       routeCandidates: pkg.routeCandidates,
     })),
     falseClosureGuards: {
@@ -1426,6 +1684,15 @@ export function createLirmSpeciationArmatureWitness(options = {}) {
   const columns = Math.max(1, Number(options.columns || DEFAULT_COLUMNS));
   const rows = Math.ceil(candidateCount / columns);
   const candidates = Array.from({ length: candidateCount }, (_, index) => createCandidate(seed, index, candidateCount));
+  const gestaltKinds = [...new Set(candidates.map(candidate => candidate.bodyPlan.gestalt.kind))];
+  const silhouetteClasses = [...new Set(candidates.map(candidate => candidate.bodyPlan.silhouette.class))];
+  const gestaltAssay = {
+    kind: 'silhouette_gestalt_v0',
+    archetypeSource: 'seeded_gestalt_archetype_v0',
+    gestaltKinds,
+    silhouetteClasses,
+    candidateCount,
+  };
   const baseWitness = {
     schema: LIRM_SPECIATION_ARMATURE_WITNESS_SCHEMA,
     route: LIRM_SPECIATION_ARMATURE_ROUTE,
@@ -1435,6 +1702,7 @@ export function createLirmSpeciationArmatureWitness(options = {}) {
     candidateFamily: {
       rootParentId: ROOT_PARENT_ID,
       family: 'small-ground-hoard-thief',
+      gestaltAssay,
       intendedUse: ['lirms_body_plan_selection', 'imagegen_conditioning', 'sam3_isolation', 'trellis_probe', 'motion_affordance_preview'],
     },
     candidates,
@@ -1461,7 +1729,8 @@ export function createLirmSpeciationArmatureWitness(options = {}) {
       rootParentId: ROOT_PARENT_ID,
       requestedCandidateCount: candidateCount,
       effectiveCandidateCount: candidateCount,
-      controlMaps: ['silhouette', 'semantic-map', 'axis-depth-cue', 'contact-points'],
+      gestaltAssay,
+      controlMaps: ['silhouette', 'gestalt-silhouette', 'semantic-map', 'axis-depth-cue', 'contact-points'],
       falseClosureGuards: {
         promptOnlyLirmAttempt: 'not_used',
         finishedCreatureClaim: 'forbidden',
@@ -1485,10 +1754,12 @@ export function createLirmSpeciationArmatureWitness(options = {}) {
 export async function writeLirmSpeciationArmatureWitness(options = {}) {
   const outDir = options.outDir || join(process.cwd(), 'artifacts', 'lirm-speciation-armature-witness-v0');
   const contactSheetName = options.contactSheetName || 'contact-sheet.svg';
+  const contactSheetRasterName = options.contactSheetRasterName || contactSheetName.replace(/\.svg$/i, '.png');
   const receiptName = options.receiptName || 'receipt.json';
   await mkdir(outDir, { recursive: true });
   const witness = createLirmSpeciationArmatureWitness(options);
   const contactSheetPath = join(outDir, contactSheetName);
+  const contactSheetRasterPath = join(outDir, contactSheetRasterName);
   const receiptPath = join(outDir, receiptName);
   const receiptWitness = {
     ...witness,
@@ -1500,6 +1771,7 @@ export async function writeLirmSpeciationArmatureWitness(options = {}) {
       ...witness.receipt,
       outputInventory: {
         contactSheet: contactSheetName,
+        contactSheetRaster: contactSheetRasterName,
         receipt: receiptName,
       },
     },
@@ -1518,6 +1790,7 @@ export async function writeLirmSpeciationArmatureWitness(options = {}) {
   }
   receiptWitness.receipt.outputInventory.controlPackets = controlPacketPaths;
   await writeFile(contactSheetPath, witness.contactSheet.svg);
+  rasterizeSvgWithSips(contactSheetPath, contactSheetRasterPath);
   await writeFile(receiptPath, `${JSON.stringify(receiptWitness, null, 2)}\n`);
   return {
     schema: LIRM_SPECIATION_ARMATURE_WRITE_RESULT_SCHEMA,
@@ -1526,6 +1799,7 @@ export async function writeLirmSpeciationArmatureWitness(options = {}) {
     seed: receiptWitness.seed,
     receiptPath,
     contactSheetPath,
+    contactSheetRasterPath,
     candidateCount: receiptWitness.candidates.length,
     controlPacketCount: controlPacketPaths.length,
   };

@@ -1,0 +1,18 @@
+{
+  "name": "trellis-source",
+  "job_type": "trellis2mlx_fast",
+  "job_id": "4595a555ca0e",
+  "input_path": "/private/tmp/kaminos-molten-lirm-speciation-armature-0707/artifacts/lirm-speciation-armature-gestalt-assay-v0/conditioning-packages/lirm-armature-22/trellis-source.png",
+  "input_name": "trellis-source.png",
+  "params": {
+    "seed": "71022",
+    "steps": "4",
+    "target_faces": "200000",
+    "texture_size": "1024"
+  },
+  "output_files": [
+    "output.glb"
+  ],
+  "created_at": 1783695255.742574,
+  "duration_s": 100.3
+}

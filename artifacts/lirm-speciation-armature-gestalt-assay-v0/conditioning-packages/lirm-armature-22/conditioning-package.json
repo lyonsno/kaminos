@@ -1,0 +1,216 @@
+{
+  "schema": "kaminos.lirm-speciation-armature-conditioning-package.v0",
+  "route": "kaminos/lirm-speciation-armature/conditioning-package-v0",
+  "sourceWitnessId": "lirm-speciation-armature-64073572",
+  "sourceWitnessRoute": "kaminos/lirm-speciation-armature/contact-sheet-v0",
+  "candidateId": "lirm-armature-22",
+  "seed": "molten-lirm-seed-0707:22",
+  "gestalt": {
+    "kind": "lirm-slug-loaf",
+    "label": "slug loaf",
+    "priorHooks": [
+      "slug",
+      "soft loaf body",
+      "low crawling belly",
+      "wet clay"
+    ],
+    "source": "seeded_gestalt_archetype_v0"
+  },
+  "silhouette": {
+    "class": "broad-belly-loaf",
+    "gestaltPressure": 0.852,
+    "headScale": 0.837,
+    "bellyScale": 1.369,
+    "tailScale": 0.741,
+    "widthScale": 1.39,
+    "heightScale": 0.751,
+    "dorsalLift": -0.04,
+    "mouthOffset": 0.06,
+    "outlineWords": [
+      "slug",
+      "soft loaf body",
+      "low crawling belly",
+      "wet clay"
+    ]
+  },
+  "sourceProxyRender": {
+    "schema": "kaminos.lirm-speciation-armature-proxy-render-bundle.v0",
+    "route": "kaminos/lirm-speciation-armature/proxy-render-v0",
+    "candidateId": "lirm-armature-22",
+    "camera": {
+      "projection": "orthographic",
+      "view": "front-three-quarter",
+      "coordinateFrame": "normalized-proxy-primitives",
+      "note": "software SVG projection of packet proxy primitives, not mesh render"
+    },
+    "proxyPrimitiveCount": 21
+  },
+  "sourceImplicitBody": {
+    "schema": "kaminos.lirm-speciation-armature-implicit-body-bundle.v0",
+    "route": "kaminos/lirm-speciation-armature/implicit-body-v0",
+    "candidateId": "lirm-armature-22",
+    "camera": {
+      "projection": "orthographic",
+      "view": "front-three-quarter",
+      "coordinateFrame": "normalized-implicit-body",
+      "raySource": "software-sdf-raymarch"
+    },
+    "renderMode": "raymarched-implicit-field",
+    "fieldModel": {
+      "kind": "smooth-sdf-metaball",
+      "surfaceThreshold": 0.0065,
+      "smoothUnionK": 0.075,
+      "primitiveSources": [
+        "gestalt_body_plan",
+        "body_mass_axis_samples",
+        "terminal_mouth_handle",
+        "head_handle",
+        "limb_buds",
+        "shell_plates",
+        "contact_points"
+      ]
+    },
+    "implicitPrimitiveCount": 21
+  },
+  "preferredSourceRoute": "kaminos/lirm-speciation-armature/implicit-body-v0",
+  "sourceImages": [
+    {
+      "kind": "clay",
+      "path": "source-maps/clay-control.svg",
+      "rasterPath": "source-maps/clay-control.png",
+      "sourceImplicitPath": "lirm-armature-22/clay-implicit.svg",
+      "sourceProxyPath": "lirm-armature-22/clay-control.svg",
+      "requiredFor": [
+        "imagegen_conditioning",
+        "trellis_clay_probe"
+      ],
+      "effectiveSource": "local-procedural-implicit-body-raymarch"
+    },
+    {
+      "kind": "depth",
+      "path": "source-maps/depth-control.svg",
+      "rasterPath": "source-maps/depth-control.png",
+      "sourceImplicitPath": "lirm-armature-22/depth-implicit.svg",
+      "sourceProxyPath": "lirm-armature-22/depth-control.svg",
+      "requiredFor": [
+        "imagegen_conditioning",
+        "depth_control"
+      ],
+      "effectiveSource": "local-procedural-implicit-body-raymarch"
+    },
+    {
+      "kind": "normal",
+      "path": "source-maps/normal-control.svg",
+      "rasterPath": "source-maps/normal-control.png",
+      "sourceImplicitPath": "lirm-armature-22/normal-implicit.svg",
+      "sourceProxyPath": "lirm-armature-22/normal-control.svg",
+      "requiredFor": [
+        "imagegen_conditioning",
+        "normal_control"
+      ],
+      "effectiveSource": "local-procedural-implicit-body-raymarch"
+    },
+    {
+      "kind": "mask",
+      "path": "source-maps/mask-control.svg",
+      "rasterPath": "source-maps/mask-control.png",
+      "sourceImplicitPath": "lirm-armature-22/mask-implicit.svg",
+      "sourceProxyPath": "lirm-armature-22/mask-control.svg",
+      "requiredFor": [
+        "imagegen_conditioning",
+        "sam3_isolation",
+        "alpha_cutout"
+      ],
+      "effectiveSource": "local-procedural-implicit-body-raymarch"
+    },
+    {
+      "kind": "semantic",
+      "path": "source-maps/semantic-control.svg",
+      "rasterPath": "source-maps/semantic-control.png",
+      "sourceImplicitPath": "lirm-armature-22/semantic-implicit.svg",
+      "sourceProxyPath": "lirm-armature-22/semantic-control.svg",
+      "requiredFor": [
+        "imagegen_conditioning",
+        "semantic_control"
+      ],
+      "effectiveSource": "local-procedural-implicit-body-raymarch"
+    }
+  ],
+  "trellisSource": {
+    "kind": "trellis-clay",
+    "path": "trellis-source.svg",
+    "rasterPath": "trellis-source.png",
+    "effectiveSource": "tight-cropped-transparent-implicit-clay",
+    "requiredFor": [
+      "trellis_clay_probe",
+      "trellis_prior_assay",
+      "sam3_isolation"
+    ],
+    "framing": {
+      "background": "transparent",
+      "crop": "tight-surface-bounds",
+      "sourcePixelGrid": "256x192",
+      "displayedPixels": "512x512"
+    },
+    "sourceImplicitPath": "lirm-armature-22/trellis-source.svg"
+  },
+  "prompt": {
+    "positive": "small crawling hoard-thief creature, slug loaf, broad-belly-loaf, invertebrate body plan, wet clay and keratin material, anxious semi-cute gross creature design; model-prior hooks: slug, soft loaf body, low crawling belly, wet clay; primary motion affordance: crawl; preserve the axial body curve, the belly contact patch, the terminal front mouth, the head orientation, the crawl contact points, the small brace-drag limb nubs; source candidate lirm-armature-22, lineage gestalt:lirm-slug-loaf / silhouette:broad-belly-loaf / segments:9 / axis:low-crawl / limbs:3 / contact:broad-belly / mouth:hungry / temper:gross-cute; three-quarter studio render, isolated body, readable silhouette, sculptural volume, no text",
+    "negative": "centered eye, humanoid face, two-legged mascot, flat icon, logo, text labels, finished glossy toy, background scenery, extra disconnected bodies",
+    "preserve": [
+      "whole silhouette gestalt",
+      "axis curve",
+      "belly contact",
+      "terminal front mouth",
+      "head orientation",
+      "contact points"
+    ],
+    "allowMutation": [
+      "surface material",
+      "micro anatomy",
+      "gross-cute balance",
+      "skin/shell texture"
+    ]
+  },
+  "routeCandidates": [
+    {
+      "route": "imagegen_img2img_depth_normal",
+      "status": "requires_registered_imagegen_route",
+      "inputs": [
+        "clay",
+        "depth",
+        "normal",
+        "mask",
+        "semantic"
+      ],
+      "purpose": "test whether imagegen preserves implicit 3D body identity before mesh/splat routes"
+    },
+    {
+      "route": "trellis2mlx_fast_clay_probe",
+      "status": "registered_greenroom_route_but_queue_blocked_by_existing_pixal3d_job",
+      "inputs": [
+        "trellisSource",
+        "mask"
+      ],
+      "purpose": "cheap 3D sanity probe from the tight transparent implicit clay source, not depth-normal conditioning"
+    },
+    {
+      "route": "world_tracing_masked_probe",
+      "status": "registered_greenroom_route",
+      "inputs": [
+        "clay",
+        "mask"
+      ],
+      "purpose": "optional splat-ish/object reconstruction experiment if mesh route is blocked"
+    }
+  ],
+  "conditioningPanel": {
+    "path": "conditioning-panel.svg"
+  },
+  "falseClosureGuards": {
+    "finishedCreatureClaim": "forbidden",
+    "generatorFiringClaim": "not_yet_fired",
+    "conditioningClaim": "source_package_only",
+    "greenroomClaim": "gpu_routes_require_greenroom_receipt"
+  }
+}

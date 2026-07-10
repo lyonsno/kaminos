@@ -62,6 +62,8 @@ const ids = new Set();
 let shellPlateCandidateCount = 0;
 let limbBudCandidateCount = 0;
 let asymmetryCandidateCount = 0;
+const gestaltKinds = new Set();
+const silhouetteClasses = new Set();
 for (const candidate of witness.candidates) {
   assert.match(candidate.id, /^lirm-armature-[0-9]{2}$/);
   assert.ok(!ids.has(candidate.id), `duplicate candidate id ${candidate.id}`);
@@ -70,7 +72,15 @@ for (const candidate of witness.candidates) {
   assert.equal(candidate.lineage.rootSeed, 'molten-lirm-seed-0707');
   assert.equal(candidate.lineage.parentId, 'root-soft-crawling-hoard-thief');
   assert.ok(candidate.lineage.mutationPath.length >= 3, 'candidate mutation path is too thin');
+  assert.ok(candidate.lineage.mutationPath.some(entry => entry.startsWith('gestalt:')), 'candidate mutation path must name the silhouette gestalt');
   assert.ok(candidate.bodyPlan.segmentCount >= 5, 'candidate needs segmented body evidence');
+  assert.equal(candidate.bodyPlan.gestalt.kind.startsWith('lirm-'), true, 'candidate needs an explicit LIRM gestalt kind');
+  assert.ok(candidate.bodyPlan.gestalt.label.length > 4, 'gestalt needs a readable label');
+  assert.ok(candidate.bodyPlan.gestalt.priorHooks.length >= 3, 'gestalt needs model-prior hooks for imagegen/Trellis routing');
+  assert.ok(candidate.bodyPlan.silhouette.class.length > 4, 'candidate needs a named silhouette class');
+  assert.ok(candidate.bodyPlan.silhouette.gestaltPressure > 0, 'silhouette must record nonzero gestalt pressure');
+  gestaltKinds.add(candidate.bodyPlan.gestalt.kind);
+  silhouetteClasses.add(candidate.bodyPlan.silhouette.class);
   assert.ok(candidate.bodyPlan.axisSamples.length >= 7, 'candidate needs axial curve samples');
   assert.ok(candidate.semanticHandles.some(handle => handle.kind === 'axis'), 'candidate missing axis handle');
   assert.ok(candidate.semanticHandles.some(handle => handle.kind === 'head'), 'candidate missing head handle');
@@ -83,6 +93,7 @@ for (const candidate of witness.candidates) {
   assert.ok(candidate.firingAffordances.acceptsSamIsolation, 'candidate should expose SAM isolation');
   assert.ok(candidate.firingAffordances.acceptsTrellisProbe, 'candidate should expose Trellis probe affordance');
   assert.ok(candidate.firingAffordances.controlMaps.includes('silhouette'), 'candidate missing silhouette control map');
+  assert.ok(candidate.firingAffordances.controlMaps.includes('gestalt-silhouette'), 'candidate missing gestalt silhouette control map');
   assert.ok(candidate.firingAffordances.controlMaps.includes('semantic-map'), 'candidate missing semantic-map control map');
   assert.ok(candidate.firingAffordances.controlMaps.includes('proxy-primitives'), 'candidate missing proxy primitive control map');
   const head = candidate.semanticHandles.find(handle => handle.kind === 'head');
@@ -96,6 +107,8 @@ for (const candidate of witness.candidates) {
   assert.equal(packet.sourceWitnessId, witness.witnessId);
   assert.equal(packet.falseClosureGuards.finishedCreatureClaim, 'forbidden');
   assert.equal(packet.falseClosureGuards.proxyGeometryClaim, 'control_primitives_only');
+  assert.equal(packet.gestalt.kind, candidate.bodyPlan.gestalt.kind, 'packet should preserve selected gestalt identity');
+  assert.equal(packet.silhouette.class, candidate.bodyPlan.silhouette.class, 'packet should preserve selected silhouette class');
   assert.ok(packet.proxyPrimitives.some(primitive => primitive.kind === 'metaball' && primitive.role === 'body_mass'), 'packet missing body metaball primitives');
   assert.ok(packet.proxyPrimitives.some(primitive => primitive.kind === 'sphere' && primitive.role === 'terminal_mouth'), 'packet missing terminal mouth proxy primitive');
   assert.ok(packet.conditioningMaps.some(map => map.kind === 'semantic-svg'), 'packet missing semantic SVG control map');
@@ -108,6 +121,11 @@ for (const candidate of witness.candidates) {
 assert.ok(shellPlateCandidateCount >= 5, 'lineage should expose multiple shell/plate variants');
 assert.ok(limbBudCandidateCount >= 10, 'lineage should expose limb-bud variants');
 assert.ok(asymmetryCandidateCount >= 10, 'lineage should preserve controlled asymmetry variants');
+assert.ok(gestaltKinds.size >= 6, `lineage should expose at least six gestalt basins, got ${gestaltKinds.size}`);
+assert.ok(silhouetteClasses.size >= 5, `lineage should expose at least five silhouette classes, got ${silhouetteClasses.size}`);
+assert.equal(witness.receipt.gestaltAssay.kind, 'silhouette_gestalt_v0');
+assert.ok(witness.receipt.gestaltAssay.gestaltKinds.length >= 6, 'receipt should summarize gestalt basin diversity');
+assert.ok(witness.receipt.gestaltAssay.silhouetteClasses.length >= 5, 'receipt should summarize silhouette class diversity');
 
 const outDir = await mkdtemp(join(tmpdir(), 'kaminos-lirm-speciation-contract-'));
 const writeResult = await writeLirmSpeciationArmatureWitness({
@@ -120,9 +138,11 @@ const writeResult = await writeLirmSpeciationArmatureWitness({
 assert.equal(writeResult.schema, 'kaminos.lirm-speciation-armature-write-result.v0');
 assert.equal(writeResult.receiptPath, join(outDir, 'receipt.json'));
 assert.equal(writeResult.contactSheetPath, join(outDir, 'contact-sheet.svg'));
+assert.equal(writeResult.contactSheetRasterPath, join(outDir, 'contact-sheet.png'));
 assert.ok(writeResult.controlPacketCount >= 25, 'writer should emit routeable packets for every witness candidate by default');
 assert.ok(existsSync(writeResult.receiptPath), 'writer must emit a JSON receipt');
 assert.ok(existsSync(writeResult.contactSheetPath), 'writer must emit an SVG contact sheet');
+assert.ok(existsSync(writeResult.contactSheetRasterPath), 'writer must emit a fresh PNG contact sheet for visual inspection');
 assert.ok(existsSync(join(outDir, 'control-packets', 'lirm-armature-00', 'packet.json')), 'writer must emit per-candidate control packet JSON');
 assert.ok(existsSync(join(outDir, 'control-packets', 'lirm-armature-00', 'semantic-control.svg')), 'writer must emit per-candidate semantic control SVG');
 assert.ok(existsSync(join(outDir, 'control-packets', 'lirm-armature-00', 'silhouette-control.svg')), 'writer must emit per-candidate silhouette control SVG');
@@ -133,6 +153,7 @@ const writtenSheet = readFileSync(writeResult.contactSheetPath, 'utf8');
 assert.equal(writtenReceipt.schema, 'kaminos.lirm-speciation-armature-witness.v0');
 assert.equal(writtenReceipt.contactSheet.path, 'contact-sheet.svg');
 assert.equal(writtenReceipt.receipt.outputInventory.contactSheet, 'contact-sheet.svg');
+assert.equal(writtenReceipt.receipt.outputInventory.contactSheetRaster, 'contact-sheet.png');
 assert.equal(writtenReceipt.receipt.outputInventory.receipt, 'receipt.json');
 assert.equal(writtenReceipt.receipt.outputInventory.controlPackets.length, 25);
 assert.equal(writtenReceipt.receipt.outputInventory.controlPackets[0], 'control-packets/lirm-armature-00/packet.json');

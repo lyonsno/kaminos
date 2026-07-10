@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="560" viewBox="0 0 720 560" role="img" aria-label="lirm-armature-00 conditioning package" data-conditioning-panel="lirm-speciation-armature" data-candidate-id="lirm-armature-00">
+  <rect width="100%" height="100%" fill="#04100c"/>
+  <text x="24" y="28" fill="rgba(238,246,214,0.9)" font-size="15" font-family="Menlo, Monaco, monospace">lirm-armature-00 implicit body conditioning package</text>
+  <g data-layer="source-map-grid">
+    <g data-panel-kind="clay">
+      <rect x="24" y="48" width="220" height="170" rx="8" fill="#07130f" stroke="rgba(238,246,214,0.22)"/>
+      <image href="source-maps/clay-control.svg" x="32" y="70" width="204" height="136" preserveAspectRatio="xMidYMid meet" data-source-kind="clay"/>
+      <text x="34" y="64" fill="rgba(238,246,214,0.76)" font-size="11" font-family="Menlo, Monaco, monospace">clay</text>
+    </g>
+    <g data-panel-kind="depth">
+      <rect x="260" y="48" width="220" height="170" rx="8" fill="#07130f" stroke="rgba(238,246,214,0.22)"/>
+      <image href="source-maps/depth-control.svg" x="268" y="70" width="204" height="136" preserveAspectRatio="xMidYMid meet" data-source-kind="depth"/>
+      <text x="270" y="64" fill="rgba(238,246,214,0.76)" font-size="11" font-family="Menlo, Monaco, monospace">depth</text>
+    </g>
+    <g data-panel-kind="normal">
+      <rect x="496" y="48" width="220" height="170" rx="8" fill="#07130f" stroke="rgba(238,246,214,0.22)"/>
+      <image href="source-maps/normal-control.svg" x="504" y="70" width="204" height="136" preserveAspectRatio="xMidYMid meet" data-source-kind="normal"/>
+      <text x="506" y="64" fill="rgba(238,246,214,0.76)" font-size="11" font-family="Menlo, Monaco, monospace">normal</text>
+    </g>
+    <g data-panel-kind="mask">
+      <rect x="24" y="234" width="220" height="170" rx="8" fill="#07130f" stroke="rgba(238,246,214,0.22)"/>
+      <image href="source-maps/mask-control.svg" x="32" y="256" width="204" height="136" preserveAspectRatio="xMidYMid meet" data-source-kind="mask"/>
+      <text x="34" y="250" fill="rgba(238,246,214,0.76)" font-size="11" font-family="Menlo, Monaco, monospace">mask</text>
+    </g>
+    <g data-panel-kind="semantic">
+      <rect x="260" y="234" width="220" height="170" rx="8" fill="#07130f" stroke="rgba(238,246,214,0.22)"/>
+      <image href="source-maps/semantic-control.svg" x="268" y="256" width="204" height="136" preserveAspectRatio="xMidYMid meet" data-source-kind="semantic"/>
+      <text x="270" y="250" fill="rgba(238,246,214,0.76)" font-size="11" font-family="Menlo, Monaco, monospace">semantic</text>
+    </g>
+  </g>
+  <g data-layer="prompt-contract">
+    <rect x="24" y="420" width="672" height="112" rx="8" fill="rgba(238,246,214,0.08)" stroke="rgba(238,246,214,0.2)"/>
+    <text x="38" y="444" fill="rgba(238,246,214,0.84)" font-size="12" font-family="Menlo, Monaco, monospace">prompt</text>
+    <foreignObject x="38" y="456" width="642" height="58">
+      <div xmlns="http://www.w3.org/1999/xhtml" style="color:rgba(238,246,214,0.78);font:11px Menlo, Monaco, monospace;line-height:1.35;">small crawling hoard-thief creature, pillbug dome, armored-oval-dome, invertebrate body plan, wet clay and keratin material, anxious semi-cute gross creature design; model-prior hooks: pillbug, armored larva, domed shell, compact oval; primary motion affordance: crawl; preserve the axial body curve, the belly contac...</div>
+    </foreignObject>
+    <text x="38" y="520" fill="rgba(238,246,214,0.52)" font-size="10" font-family="Menlo, Monaco, monospace">source package only; no generator firing has occurred</text>
+  </g>
+</svg>

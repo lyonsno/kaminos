@@ -1,0 +1,1099 @@
+{
+  "schema": "kaminos.lirm-speciation-armature-implicit-body-witness.v0",
+  "route": "kaminos/lirm-speciation-armature/implicit-body-v0",
+  "seed": "molten-lirm-seed-0707",
+  "sourceWitnessId": "lirm-speciation-armature-64073572",
+  "candidateIds": [
+    "lirm-armature-00",
+    "lirm-armature-01",
+    "lirm-armature-02",
+    "lirm-armature-03",
+    "lirm-armature-04",
+    "lirm-armature-05",
+    "lirm-armature-06",
+    "lirm-armature-07",
+    "lirm-armature-16",
+    "lirm-armature-22",
+    "lirm-armature-24"
+  ],
+  "bundles": [
+    {
+      "schema": "kaminos.lirm-speciation-armature-implicit-body-bundle.v0",
+      "candidateId": "lirm-armature-00",
+      "renderMode": "raymarched-implicit-field",
+      "fieldModel": {
+        "kind": "smooth-sdf-metaball",
+        "surfaceThreshold": 0.0065,
+        "smoothUnionK": 0.075,
+        "primitiveSources": [
+          "gestalt_body_plan",
+          "body_mass_axis_samples",
+          "terminal_mouth_handle",
+          "head_handle",
+          "limb_buds",
+          "shell_plates",
+          "contact_points"
+        ]
+      },
+      "camera": {
+        "projection": "orthographic",
+        "view": "front-three-quarter",
+        "coordinateFrame": "normalized-implicit-body",
+        "raySource": "software-sdf-raymarch"
+      },
+      "implicitPrimitiveCount": 24,
+      "renderMaps": [
+        {
+          "kind": "clay",
+          "path": "lirm-armature-00/clay-implicit.svg"
+        },
+        {
+          "kind": "depth",
+          "path": "lirm-armature-00/depth-implicit.svg"
+        },
+        {
+          "kind": "normal",
+          "path": "lirm-armature-00/normal-implicit.svg"
+        },
+        {
+          "kind": "mask",
+          "path": "lirm-armature-00/mask-implicit.svg"
+        },
+        {
+          "kind": "semantic",
+          "path": "lirm-armature-00/semantic-implicit.svg"
+        }
+      ],
+      "trellisSource": {
+        "kind": "trellis-clay",
+        "path": "lirm-armature-00/trellis-source.svg",
+        "rasterPath": "lirm-armature-00/trellis-source.png",
+        "effectiveSource": "tight-cropped-transparent-implicit-clay",
+        "framing": {
+          "background": "transparent",
+          "crop": "tight-surface-bounds",
+          "sourcePixelGrid": "256x192",
+          "displayedPixels": "512x512"
+        }
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-armature-implicit-body-bundle.v0",
+      "candidateId": "lirm-armature-01",
+      "renderMode": "raymarched-implicit-field",
+      "fieldModel": {
+        "kind": "smooth-sdf-metaball",
+        "surfaceThreshold": 0.0065,
+        "smoothUnionK": 0.075,
+        "primitiveSources": [
+          "gestalt_body_plan",
+          "body_mass_axis_samples",
+          "terminal_mouth_handle",
+          "head_handle",
+          "limb_buds",
+          "shell_plates",
+          "contact_points"
+        ]
+      },
+      "camera": {
+        "projection": "orthographic",
+        "view": "front-three-quarter",
+        "coordinateFrame": "normalized-implicit-body",
+        "raySource": "software-sdf-raymarch"
+      },
+      "implicitPrimitiveCount": 33,
+      "renderMaps": [
+        {
+          "kind": "clay",
+          "path": "lirm-armature-01/clay-implicit.svg"
+        },
+        {
+          "kind": "depth",
+          "path": "lirm-armature-01/depth-implicit.svg"
+        },
+        {
+          "kind": "normal",
+          "path": "lirm-armature-01/normal-implicit.svg"
+        },
+        {
+          "kind": "mask",
+          "path": "lirm-armature-01/mask-implicit.svg"
+        },
+        {
+          "kind": "semantic",
+          "path": "lirm-armature-01/semantic-implicit.svg"
+        }
+      ],
+      "trellisSource": {
+        "kind": "trellis-clay",
+        "path": "lirm-armature-01/trellis-source.svg",
+        "rasterPath": "lirm-armature-01/trellis-source.png",
+        "effectiveSource": "tight-cropped-transparent-implicit-clay",
+        "framing": {
+          "background": "transparent",
+          "crop": "tight-surface-bounds",
+          "sourcePixelGrid": "256x192",
+          "displayedPixels": "512x512"
+        }
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-armature-implicit-body-bundle.v0",
+      "candidateId": "lirm-armature-02",
+      "renderMode": "raymarched-implicit-field",
+      "fieldModel": {
+        "kind": "smooth-sdf-metaball",
+        "surfaceThreshold": 0.0065,
+        "smoothUnionK": 0.075,
+        "primitiveSources": [
+          "gestalt_body_plan",
+          "body_mass_axis_samples",
+          "terminal_mouth_handle",
+          "head_handle",
+          "limb_buds",
+          "shell_plates",
+          "contact_points"
+        ]
+      },
+      "camera": {
+        "projection": "orthographic",
+        "view": "front-three-quarter",
+        "coordinateFrame": "normalized-implicit-body",
+        "raySource": "software-sdf-raymarch"
+      },
+      "implicitPrimitiveCount": 16,
+      "renderMaps": [
+        {
+          "kind": "clay",
+          "path": "lirm-armature-02/clay-implicit.svg"
+        },
+        {
+          "kind": "depth",
+          "path": "lirm-armature-02/depth-implicit.svg"
+        },
+        {
+          "kind": "normal",
+          "path": "lirm-armature-02/normal-implicit.svg"
+        },
+        {
+          "kind": "mask",
+          "path": "lirm-armature-02/mask-implicit.svg"
+        },
+        {
+          "kind": "semantic",
+          "path": "lirm-armature-02/semantic-implicit.svg"
+        }
+      ],
+      "trellisSource": {
+        "kind": "trellis-clay",
+        "path": "lirm-armature-02/trellis-source.svg",
+        "rasterPath": "lirm-armature-02/trellis-source.png",
+        "effectiveSource": "tight-cropped-transparent-implicit-clay",
+        "framing": {
+          "background": "transparent",
+          "crop": "tight-surface-bounds",
+          "sourcePixelGrid": "256x192",
+          "displayedPixels": "512x512"
+        }
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-armature-implicit-body-bundle.v0",
+      "candidateId": "lirm-armature-03",
+      "renderMode": "raymarched-implicit-field",
+      "fieldModel": {
+        "kind": "smooth-sdf-metaball",
+        "surfaceThreshold": 0.0065,
+        "smoothUnionK": 0.075,
+        "primitiveSources": [
+          "gestalt_body_plan",
+          "body_mass_axis_samples",
+          "terminal_mouth_handle",
+          "head_handle",
+          "limb_buds",
+          "shell_plates",
+          "contact_points"
+        ]
+      },
+      "camera": {
+        "projection": "orthographic",
+        "view": "front-three-quarter",
+        "coordinateFrame": "normalized-implicit-body",
+        "raySource": "software-sdf-raymarch"
+      },
+      "implicitPrimitiveCount": 34,
+      "renderMaps": [
+        {
+          "kind": "clay",
+          "path": "lirm-armature-03/clay-implicit.svg"
+        },
+        {
+          "kind": "depth",
+          "path": "lirm-armature-03/depth-implicit.svg"
+        },
+        {
+          "kind": "normal",
+          "path": "lirm-armature-03/normal-implicit.svg"
+        },
+        {
+          "kind": "mask",
+          "path": "lirm-armature-03/mask-implicit.svg"
+        },
+        {
+          "kind": "semantic",
+          "path": "lirm-armature-03/semantic-implicit.svg"
+        }
+      ],
+      "trellisSource": {
+        "kind": "trellis-clay",
+        "path": "lirm-armature-03/trellis-source.svg",
+        "rasterPath": "lirm-armature-03/trellis-source.png",
+        "effectiveSource": "tight-cropped-transparent-implicit-clay",
+        "framing": {
+          "background": "transparent",
+          "crop": "tight-surface-bounds",
+          "sourcePixelGrid": "256x192",
+          "displayedPixels": "512x512"
+        }
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-armature-implicit-body-bundle.v0",
+      "candidateId": "lirm-armature-04",
+      "renderMode": "raymarched-implicit-field",
+      "fieldModel": {
+        "kind": "smooth-sdf-metaball",
+        "surfaceThreshold": 0.0065,
+        "smoothUnionK": 0.075,
+        "primitiveSources": [
+          "gestalt_body_plan",
+          "body_mass_axis_samples",
+          "terminal_mouth_handle",
+          "head_handle",
+          "limb_buds",
+          "shell_plates",
+          "contact_points"
+        ]
+      },
+      "camera": {
+        "projection": "orthographic",
+        "view": "front-three-quarter",
+        "coordinateFrame": "normalized-implicit-body",
+        "raySource": "software-sdf-raymarch"
+      },
+      "implicitPrimitiveCount": 23,
+      "renderMaps": [
+        {
+          "kind": "clay",
+          "path": "lirm-armature-04/clay-implicit.svg"
+        },
+        {
+          "kind": "depth",
+          "path": "lirm-armature-04/depth-implicit.svg"
+        },
+        {
+          "kind": "normal",
+          "path": "lirm-armature-04/normal-implicit.svg"
+        },
+        {
+          "kind": "mask",
+          "path": "lirm-armature-04/mask-implicit.svg"
+        },
+        {
+          "kind": "semantic",
+          "path": "lirm-armature-04/semantic-implicit.svg"
+        }
+      ],
+      "trellisSource": {
+        "kind": "trellis-clay",
+        "path": "lirm-armature-04/trellis-source.svg",
+        "rasterPath": "lirm-armature-04/trellis-source.png",
+        "effectiveSource": "tight-cropped-transparent-implicit-clay",
+        "framing": {
+          "background": "transparent",
+          "crop": "tight-surface-bounds",
+          "sourcePixelGrid": "256x192",
+          "displayedPixels": "512x512"
+        }
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-armature-implicit-body-bundle.v0",
+      "candidateId": "lirm-armature-05",
+      "renderMode": "raymarched-implicit-field",
+      "fieldModel": {
+        "kind": "smooth-sdf-metaball",
+        "surfaceThreshold": 0.0065,
+        "smoothUnionK": 0.075,
+        "primitiveSources": [
+          "gestalt_body_plan",
+          "body_mass_axis_samples",
+          "terminal_mouth_handle",
+          "head_handle",
+          "limb_buds",
+          "shell_plates",
+          "contact_points"
+        ]
+      },
+      "camera": {
+        "projection": "orthographic",
+        "view": "front-three-quarter",
+        "coordinateFrame": "normalized-implicit-body",
+        "raySource": "software-sdf-raymarch"
+      },
+      "implicitPrimitiveCount": 20,
+      "renderMaps": [
+        {
+          "kind": "clay",
+          "path": "lirm-armature-05/clay-implicit.svg"
+        },
+        {
+          "kind": "depth",
+          "path": "lirm-armature-05/depth-implicit.svg"
+        },
+        {
+          "kind": "normal",
+          "path": "lirm-armature-05/normal-implicit.svg"
+        },
+        {
+          "kind": "mask",
+          "path": "lirm-armature-05/mask-implicit.svg"
+        },
+        {
+          "kind": "semantic",
+          "path": "lirm-armature-05/semantic-implicit.svg"
+        }
+      ],
+      "trellisSource": {
+        "kind": "trellis-clay",
+        "path": "lirm-armature-05/trellis-source.svg",
+        "rasterPath": "lirm-armature-05/trellis-source.png",
+        "effectiveSource": "tight-cropped-transparent-implicit-clay",
+        "framing": {
+          "background": "transparent",
+          "crop": "tight-surface-bounds",
+          "sourcePixelGrid": "256x192",
+          "displayedPixels": "512x512"
+        }
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-armature-implicit-body-bundle.v0",
+      "candidateId": "lirm-armature-06",
+      "renderMode": "raymarched-implicit-field",
+      "fieldModel": {
+        "kind": "smooth-sdf-metaball",
+        "surfaceThreshold": 0.0065,
+        "smoothUnionK": 0.075,
+        "primitiveSources": [
+          "gestalt_body_plan",
+          "body_mass_axis_samples",
+          "terminal_mouth_handle",
+          "head_handle",
+          "limb_buds",
+          "shell_plates",
+          "contact_points"
+        ]
+      },
+      "camera": {
+        "projection": "orthographic",
+        "view": "front-three-quarter",
+        "coordinateFrame": "normalized-implicit-body",
+        "raySource": "software-sdf-raymarch"
+      },
+      "implicitPrimitiveCount": 16,
+      "renderMaps": [
+        {
+          "kind": "clay",
+          "path": "lirm-armature-06/clay-implicit.svg"
+        },
+        {
+          "kind": "depth",
+          "path": "lirm-armature-06/depth-implicit.svg"
+        },
+        {
+          "kind": "normal",
+          "path": "lirm-armature-06/normal-implicit.svg"
+        },
+        {
+          "kind": "mask",
+          "path": "lirm-armature-06/mask-implicit.svg"
+        },
+        {
+          "kind": "semantic",
+          "path": "lirm-armature-06/semantic-implicit.svg"
+        }
+      ],
+      "trellisSource": {
+        "kind": "trellis-clay",
+        "path": "lirm-armature-06/trellis-source.svg",
+        "rasterPath": "lirm-armature-06/trellis-source.png",
+        "effectiveSource": "tight-cropped-transparent-implicit-clay",
+        "framing": {
+          "background": "transparent",
+          "crop": "tight-surface-bounds",
+          "sourcePixelGrid": "256x192",
+          "displayedPixels": "512x512"
+        }
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-armature-implicit-body-bundle.v0",
+      "candidateId": "lirm-armature-07",
+      "renderMode": "raymarched-implicit-field",
+      "fieldModel": {
+        "kind": "smooth-sdf-metaball",
+        "surfaceThreshold": 0.0065,
+        "smoothUnionK": 0.075,
+        "primitiveSources": [
+          "gestalt_body_plan",
+          "body_mass_axis_samples",
+          "terminal_mouth_handle",
+          "head_handle",
+          "limb_buds",
+          "shell_plates",
+          "contact_points"
+        ]
+      },
+      "camera": {
+        "projection": "orthographic",
+        "view": "front-three-quarter",
+        "coordinateFrame": "normalized-implicit-body",
+        "raySource": "software-sdf-raymarch"
+      },
+      "implicitPrimitiveCount": 15,
+      "renderMaps": [
+        {
+          "kind": "clay",
+          "path": "lirm-armature-07/clay-implicit.svg"
+        },
+        {
+          "kind": "depth",
+          "path": "lirm-armature-07/depth-implicit.svg"
+        },
+        {
+          "kind": "normal",
+          "path": "lirm-armature-07/normal-implicit.svg"
+        },
+        {
+          "kind": "mask",
+          "path": "lirm-armature-07/mask-implicit.svg"
+        },
+        {
+          "kind": "semantic",
+          "path": "lirm-armature-07/semantic-implicit.svg"
+        }
+      ],
+      "trellisSource": {
+        "kind": "trellis-clay",
+        "path": "lirm-armature-07/trellis-source.svg",
+        "rasterPath": "lirm-armature-07/trellis-source.png",
+        "effectiveSource": "tight-cropped-transparent-implicit-clay",
+        "framing": {
+          "background": "transparent",
+          "crop": "tight-surface-bounds",
+          "sourcePixelGrid": "256x192",
+          "displayedPixels": "512x512"
+        }
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-armature-implicit-body-bundle.v0",
+      "candidateId": "lirm-armature-16",
+      "renderMode": "raymarched-implicit-field",
+      "fieldModel": {
+        "kind": "smooth-sdf-metaball",
+        "surfaceThreshold": 0.0065,
+        "smoothUnionK": 0.075,
+        "primitiveSources": [
+          "gestalt_body_plan",
+          "body_mass_axis_samples",
+          "terminal_mouth_handle",
+          "head_handle",
+          "limb_buds",
+          "shell_plates",
+          "contact_points"
+        ]
+      },
+      "camera": {
+        "projection": "orthographic",
+        "view": "front-three-quarter",
+        "coordinateFrame": "normalized-implicit-body",
+        "raySource": "software-sdf-raymarch"
+      },
+      "implicitPrimitiveCount": 20,
+      "renderMaps": [
+        {
+          "kind": "clay",
+          "path": "lirm-armature-16/clay-implicit.svg"
+        },
+        {
+          "kind": "depth",
+          "path": "lirm-armature-16/depth-implicit.svg"
+        },
+        {
+          "kind": "normal",
+          "path": "lirm-armature-16/normal-implicit.svg"
+        },
+        {
+          "kind": "mask",
+          "path": "lirm-armature-16/mask-implicit.svg"
+        },
+        {
+          "kind": "semantic",
+          "path": "lirm-armature-16/semantic-implicit.svg"
+        }
+      ],
+      "trellisSource": {
+        "kind": "trellis-clay",
+        "path": "lirm-armature-16/trellis-source.svg",
+        "rasterPath": "lirm-armature-16/trellis-source.png",
+        "effectiveSource": "tight-cropped-transparent-implicit-clay",
+        "framing": {
+          "background": "transparent",
+          "crop": "tight-surface-bounds",
+          "sourcePixelGrid": "256x192",
+          "displayedPixels": "512x512"
+        }
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-armature-implicit-body-bundle.v0",
+      "candidateId": "lirm-armature-22",
+      "renderMode": "raymarched-implicit-field",
+      "fieldModel": {
+        "kind": "smooth-sdf-metaball",
+        "surfaceThreshold": 0.0065,
+        "smoothUnionK": 0.075,
+        "primitiveSources": [
+          "gestalt_body_plan",
+          "body_mass_axis_samples",
+          "terminal_mouth_handle",
+          "head_handle",
+          "limb_buds",
+          "shell_plates",
+          "contact_points"
+        ]
+      },
+      "camera": {
+        "projection": "orthographic",
+        "view": "front-three-quarter",
+        "coordinateFrame": "normalized-implicit-body",
+        "raySource": "software-sdf-raymarch"
+      },
+      "implicitPrimitiveCount": 21,
+      "renderMaps": [
+        {
+          "kind": "clay",
+          "path": "lirm-armature-22/clay-implicit.svg"
+        },
+        {
+          "kind": "depth",
+          "path": "lirm-armature-22/depth-implicit.svg"
+        },
+        {
+          "kind": "normal",
+          "path": "lirm-armature-22/normal-implicit.svg"
+        },
+        {
+          "kind": "mask",
+          "path": "lirm-armature-22/mask-implicit.svg"
+        },
+        {
+          "kind": "semantic",
+          "path": "lirm-armature-22/semantic-implicit.svg"
+        }
+      ],
+      "trellisSource": {
+        "kind": "trellis-clay",
+        "path": "lirm-armature-22/trellis-source.svg",
+        "rasterPath": "lirm-armature-22/trellis-source.png",
+        "effectiveSource": "tight-cropped-transparent-implicit-clay",
+        "framing": {
+          "background": "transparent",
+          "crop": "tight-surface-bounds",
+          "sourcePixelGrid": "256x192",
+          "displayedPixels": "512x512"
+        }
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-armature-implicit-body-bundle.v0",
+      "candidateId": "lirm-armature-24",
+      "renderMode": "raymarched-implicit-field",
+      "fieldModel": {
+        "kind": "smooth-sdf-metaball",
+        "surfaceThreshold": 0.0065,
+        "smoothUnionK": 0.075,
+        "primitiveSources": [
+          "gestalt_body_plan",
+          "body_mass_axis_samples",
+          "terminal_mouth_handle",
+          "head_handle",
+          "limb_buds",
+          "shell_plates",
+          "contact_points"
+        ]
+      },
+      "camera": {
+        "projection": "orthographic",
+        "view": "front-three-quarter",
+        "coordinateFrame": "normalized-implicit-body",
+        "raySource": "software-sdf-raymarch"
+      },
+      "implicitPrimitiveCount": 29,
+      "renderMaps": [
+        {
+          "kind": "clay",
+          "path": "lirm-armature-24/clay-implicit.svg"
+        },
+        {
+          "kind": "depth",
+          "path": "lirm-armature-24/depth-implicit.svg"
+        },
+        {
+          "kind": "normal",
+          "path": "lirm-armature-24/normal-implicit.svg"
+        },
+        {
+          "kind": "mask",
+          "path": "lirm-armature-24/mask-implicit.svg"
+        },
+        {
+          "kind": "semantic",
+          "path": "lirm-armature-24/semantic-implicit.svg"
+        }
+      ],
+      "trellisSource": {
+        "kind": "trellis-clay",
+        "path": "lirm-armature-24/trellis-source.svg",
+        "rasterPath": "lirm-armature-24/trellis-source.png",
+        "effectiveSource": "tight-cropped-transparent-implicit-clay",
+        "framing": {
+          "background": "transparent",
+          "crop": "tight-surface-bounds",
+          "sourcePixelGrid": "256x192",
+          "displayedPixels": "512x512"
+        }
+      }
+    }
+  ],
+  "falseClosureGuards": {
+    "finishedCreatureClaim": "forbidden",
+    "generatorFiringClaim": "not_yet_fired",
+    "implicitBodyClaim": "raymarched_control_surface_only",
+    "projectionProxyClaim": "superseded_by_implicit_surface"
+  },
+  "outputInventory": {
+    "receipt": "receipt.json",
+    "bundles": [
+      {
+        "candidateId": "lirm-armature-00",
+        "bundle": "lirm-armature-00/bundle.json",
+        "maps": [
+          {
+            "kind": "clay",
+            "path": "lirm-armature-00/clay-implicit.svg",
+            "rasterPath": "lirm-armature-00/clay-implicit.png"
+          },
+          {
+            "kind": "depth",
+            "path": "lirm-armature-00/depth-implicit.svg",
+            "rasterPath": "lirm-armature-00/depth-implicit.png"
+          },
+          {
+            "kind": "normal",
+            "path": "lirm-armature-00/normal-implicit.svg",
+            "rasterPath": "lirm-armature-00/normal-implicit.png"
+          },
+          {
+            "kind": "mask",
+            "path": "lirm-armature-00/mask-implicit.svg",
+            "rasterPath": "lirm-armature-00/mask-implicit.png"
+          },
+          {
+            "kind": "semantic",
+            "path": "lirm-armature-00/semantic-implicit.svg",
+            "rasterPath": "lirm-armature-00/semantic-implicit.png"
+          }
+        ],
+        "trellisSource": {
+          "kind": "trellis-clay",
+          "path": "lirm-armature-00/trellis-source.svg",
+          "rasterPath": "lirm-armature-00/trellis-source.png",
+          "effectiveSource": "tight-cropped-transparent-implicit-clay"
+        }
+      },
+      {
+        "candidateId": "lirm-armature-01",
+        "bundle": "lirm-armature-01/bundle.json",
+        "maps": [
+          {
+            "kind": "clay",
+            "path": "lirm-armature-01/clay-implicit.svg",
+            "rasterPath": "lirm-armature-01/clay-implicit.png"
+          },
+          {
+            "kind": "depth",
+            "path": "lirm-armature-01/depth-implicit.svg",
+            "rasterPath": "lirm-armature-01/depth-implicit.png"
+          },
+          {
+            "kind": "normal",
+            "path": "lirm-armature-01/normal-implicit.svg",
+            "rasterPath": "lirm-armature-01/normal-implicit.png"
+          },
+          {
+            "kind": "mask",
+            "path": "lirm-armature-01/mask-implicit.svg",
+            "rasterPath": "lirm-armature-01/mask-implicit.png"
+          },
+          {
+            "kind": "semantic",
+            "path": "lirm-armature-01/semantic-implicit.svg",
+            "rasterPath": "lirm-armature-01/semantic-implicit.png"
+          }
+        ],
+        "trellisSource": {
+          "kind": "trellis-clay",
+          "path": "lirm-armature-01/trellis-source.svg",
+          "rasterPath": "lirm-armature-01/trellis-source.png",
+          "effectiveSource": "tight-cropped-transparent-implicit-clay"
+        }
+      },
+      {
+        "candidateId": "lirm-armature-02",
+        "bundle": "lirm-armature-02/bundle.json",
+        "maps": [
+          {
+            "kind": "clay",
+            "path": "lirm-armature-02/clay-implicit.svg",
+            "rasterPath": "lirm-armature-02/clay-implicit.png"
+          },
+          {
+            "kind": "depth",
+            "path": "lirm-armature-02/depth-implicit.svg",
+            "rasterPath": "lirm-armature-02/depth-implicit.png"
+          },
+          {
+            "kind": "normal",
+            "path": "lirm-armature-02/normal-implicit.svg",
+            "rasterPath": "lirm-armature-02/normal-implicit.png"
+          },
+          {
+            "kind": "mask",
+            "path": "lirm-armature-02/mask-implicit.svg",
+            "rasterPath": "lirm-armature-02/mask-implicit.png"
+          },
+          {
+            "kind": "semantic",
+            "path": "lirm-armature-02/semantic-implicit.svg",
+            "rasterPath": "lirm-armature-02/semantic-implicit.png"
+          }
+        ],
+        "trellisSource": {
+          "kind": "trellis-clay",
+          "path": "lirm-armature-02/trellis-source.svg",
+          "rasterPath": "lirm-armature-02/trellis-source.png",
+          "effectiveSource": "tight-cropped-transparent-implicit-clay"
+        }
+      },
+      {
+        "candidateId": "lirm-armature-03",
+        "bundle": "lirm-armature-03/bundle.json",
+        "maps": [
+          {
+            "kind": "clay",
+            "path": "lirm-armature-03/clay-implicit.svg",
+            "rasterPath": "lirm-armature-03/clay-implicit.png"
+          },
+          {
+            "kind": "depth",
+            "path": "lirm-armature-03/depth-implicit.svg",
+            "rasterPath": "lirm-armature-03/depth-implicit.png"
+          },
+          {
+            "kind": "normal",
+            "path": "lirm-armature-03/normal-implicit.svg",
+            "rasterPath": "lirm-armature-03/normal-implicit.png"
+          },
+          {
+            "kind": "mask",
+            "path": "lirm-armature-03/mask-implicit.svg",
+            "rasterPath": "lirm-armature-03/mask-implicit.png"
+          },
+          {
+            "kind": "semantic",
+            "path": "lirm-armature-03/semantic-implicit.svg",
+            "rasterPath": "lirm-armature-03/semantic-implicit.png"
+          }
+        ],
+        "trellisSource": {
+          "kind": "trellis-clay",
+          "path": "lirm-armature-03/trellis-source.svg",
+          "rasterPath": "lirm-armature-03/trellis-source.png",
+          "effectiveSource": "tight-cropped-transparent-implicit-clay"
+        }
+      },
+      {
+        "candidateId": "lirm-armature-04",
+        "bundle": "lirm-armature-04/bundle.json",
+        "maps": [
+          {
+            "kind": "clay",
+            "path": "lirm-armature-04/clay-implicit.svg",
+            "rasterPath": "lirm-armature-04/clay-implicit.png"
+          },
+          {
+            "kind": "depth",
+            "path": "lirm-armature-04/depth-implicit.svg",
+            "rasterPath": "lirm-armature-04/depth-implicit.png"
+          },
+          {
+            "kind": "normal",
+            "path": "lirm-armature-04/normal-implicit.svg",
+            "rasterPath": "lirm-armature-04/normal-implicit.png"
+          },
+          {
+            "kind": "mask",
+            "path": "lirm-armature-04/mask-implicit.svg",
+            "rasterPath": "lirm-armature-04/mask-implicit.png"
+          },
+          {
+            "kind": "semantic",
+            "path": "lirm-armature-04/semantic-implicit.svg",
+            "rasterPath": "lirm-armature-04/semantic-implicit.png"
+          }
+        ],
+        "trellisSource": {
+          "kind": "trellis-clay",
+          "path": "lirm-armature-04/trellis-source.svg",
+          "rasterPath": "lirm-armature-04/trellis-source.png",
+          "effectiveSource": "tight-cropped-transparent-implicit-clay"
+        }
+      },
+      {
+        "candidateId": "lirm-armature-05",
+        "bundle": "lirm-armature-05/bundle.json",
+        "maps": [
+          {
+            "kind": "clay",
+            "path": "lirm-armature-05/clay-implicit.svg",
+            "rasterPath": "lirm-armature-05/clay-implicit.png"
+          },
+          {
+            "kind": "depth",
+            "path": "lirm-armature-05/depth-implicit.svg",
+            "rasterPath": "lirm-armature-05/depth-implicit.png"
+          },
+          {
+            "kind": "normal",
+            "path": "lirm-armature-05/normal-implicit.svg",
+            "rasterPath": "lirm-armature-05/normal-implicit.png"
+          },
+          {
+            "kind": "mask",
+            "path": "lirm-armature-05/mask-implicit.svg",
+            "rasterPath": "lirm-armature-05/mask-implicit.png"
+          },
+          {
+            "kind": "semantic",
+            "path": "lirm-armature-05/semantic-implicit.svg",
+            "rasterPath": "lirm-armature-05/semantic-implicit.png"
+          }
+        ],
+        "trellisSource": {
+          "kind": "trellis-clay",
+          "path": "lirm-armature-05/trellis-source.svg",
+          "rasterPath": "lirm-armature-05/trellis-source.png",
+          "effectiveSource": "tight-cropped-transparent-implicit-clay"
+        }
+      },
+      {
+        "candidateId": "lirm-armature-06",
+        "bundle": "lirm-armature-06/bundle.json",
+        "maps": [
+          {
+            "kind": "clay",
+            "path": "lirm-armature-06/clay-implicit.svg",
+            "rasterPath": "lirm-armature-06/clay-implicit.png"
+          },
+          {
+            "kind": "depth",
+            "path": "lirm-armature-06/depth-implicit.svg",
+            "rasterPath": "lirm-armature-06/depth-implicit.png"
+          },
+          {
+            "kind": "normal",
+            "path": "lirm-armature-06/normal-implicit.svg",
+            "rasterPath": "lirm-armature-06/normal-implicit.png"
+          },
+          {
+            "kind": "mask",
+            "path": "lirm-armature-06/mask-implicit.svg",
+            "rasterPath": "lirm-armature-06/mask-implicit.png"
+          },
+          {
+            "kind": "semantic",
+            "path": "lirm-armature-06/semantic-implicit.svg",
+            "rasterPath": "lirm-armature-06/semantic-implicit.png"
+          }
+        ],
+        "trellisSource": {
+          "kind": "trellis-clay",
+          "path": "lirm-armature-06/trellis-source.svg",
+          "rasterPath": "lirm-armature-06/trellis-source.png",
+          "effectiveSource": "tight-cropped-transparent-implicit-clay"
+        }
+      },
+      {
+        "candidateId": "lirm-armature-07",
+        "bundle": "lirm-armature-07/bundle.json",
+        "maps": [
+          {
+            "kind": "clay",
+            "path": "lirm-armature-07/clay-implicit.svg",
+            "rasterPath": "lirm-armature-07/clay-implicit.png"
+          },
+          {
+            "kind": "depth",
+            "path": "lirm-armature-07/depth-implicit.svg",
+            "rasterPath": "lirm-armature-07/depth-implicit.png"
+          },
+          {
+            "kind": "normal",
+            "path": "lirm-armature-07/normal-implicit.svg",
+            "rasterPath": "lirm-armature-07/normal-implicit.png"
+          },
+          {
+            "kind": "mask",
+            "path": "lirm-armature-07/mask-implicit.svg",
+            "rasterPath": "lirm-armature-07/mask-implicit.png"
+          },
+          {
+            "kind": "semantic",
+            "path": "lirm-armature-07/semantic-implicit.svg",
+            "rasterPath": "lirm-armature-07/semantic-implicit.png"
+          }
+        ],
+        "trellisSource": {
+          "kind": "trellis-clay",
+          "path": "lirm-armature-07/trellis-source.svg",
+          "rasterPath": "lirm-armature-07/trellis-source.png",
+          "effectiveSource": "tight-cropped-transparent-implicit-clay"
+        }
+      },
+      {
+        "candidateId": "lirm-armature-16",
+        "bundle": "lirm-armature-16/bundle.json",
+        "maps": [
+          {
+            "kind": "clay",
+            "path": "lirm-armature-16/clay-implicit.svg",
+            "rasterPath": "lirm-armature-16/clay-implicit.png"
+          },
+          {
+            "kind": "depth",
+            "path": "lirm-armature-16/depth-implicit.svg",
+            "rasterPath": "lirm-armature-16/depth-implicit.png"
+          },
+          {
+            "kind": "normal",
+            "path": "lirm-armature-16/normal-implicit.svg",
+            "rasterPath": "lirm-armature-16/normal-implicit.png"
+          },
+          {
+            "kind": "mask",
+            "path": "lirm-armature-16/mask-implicit.svg",
+            "rasterPath": "lirm-armature-16/mask-implicit.png"
+          },
+          {
+            "kind": "semantic",
+            "path": "lirm-armature-16/semantic-implicit.svg",
+            "rasterPath": "lirm-armature-16/semantic-implicit.png"
+          }
+        ],
+        "trellisSource": {
+          "kind": "trellis-clay",
+          "path": "lirm-armature-16/trellis-source.svg",
+          "rasterPath": "lirm-armature-16/trellis-source.png",
+          "effectiveSource": "tight-cropped-transparent-implicit-clay"
+        }
+      },
+      {
+        "candidateId": "lirm-armature-22",
+        "bundle": "lirm-armature-22/bundle.json",
+        "maps": [
+          {
+            "kind": "clay",
+            "path": "lirm-armature-22/clay-implicit.svg",
+            "rasterPath": "lirm-armature-22/clay-implicit.png"
+          },
+          {
+            "kind": "depth",
+            "path": "lirm-armature-22/depth-implicit.svg",
+            "rasterPath": "lirm-armature-22/depth-implicit.png"
+          },
+          {
+            "kind": "normal",
+            "path": "lirm-armature-22/normal-implicit.svg",
+            "rasterPath": "lirm-armature-22/normal-implicit.png"
+          },
+          {
+            "kind": "mask",
+            "path": "lirm-armature-22/mask-implicit.svg",
+            "rasterPath": "lirm-armature-22/mask-implicit.png"
+          },
+          {
+            "kind": "semantic",
+            "path": "lirm-armature-22/semantic-implicit.svg",
+            "rasterPath": "lirm-armature-22/semantic-implicit.png"
+          }
+        ],
+        "trellisSource": {
+          "kind": "trellis-clay",
+          "path": "lirm-armature-22/trellis-source.svg",
+          "rasterPath": "lirm-armature-22/trellis-source.png",
+          "effectiveSource": "tight-cropped-transparent-implicit-clay"
+        }
+      },
+      {
+        "candidateId": "lirm-armature-24",
+        "bundle": "lirm-armature-24/bundle.json",
+        "maps": [
+          {
+            "kind": "clay",
+            "path": "lirm-armature-24/clay-implicit.svg",
+            "rasterPath": "lirm-armature-24/clay-implicit.png"
+          },
+          {
+            "kind": "depth",
+            "path": "lirm-armature-24/depth-implicit.svg",
+            "rasterPath": "lirm-armature-24/depth-implicit.png"
+          },
+          {
+            "kind": "normal",
+            "path": "lirm-armature-24/normal-implicit.svg",
+            "rasterPath": "lirm-armature-24/normal-implicit.png"
+          },
+          {
+            "kind": "mask",
+            "path": "lirm-armature-24/mask-implicit.svg",
+            "rasterPath": "lirm-armature-24/mask-implicit.png"
+          },
+          {
+            "kind": "semantic",
+            "path": "lirm-armature-24/semantic-implicit.svg",
+            "rasterPath": "lirm-armature-24/semantic-implicit.png"
+          }
+        ],
+        "trellisSource": {
+          "kind": "trellis-clay",
+          "path": "lirm-armature-24/trellis-source.svg",
+          "rasterPath": "lirm-armature-24/trellis-source.png",
+          "effectiveSource": "tight-cropped-transparent-implicit-clay"
+        }
+      }
+    ]
+  }
+}

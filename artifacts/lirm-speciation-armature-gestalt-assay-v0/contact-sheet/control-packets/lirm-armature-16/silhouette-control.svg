@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="356" height="286" viewBox="0 0 356 286" role="img" aria-label="lirm-armature-16 silhouette-svg control" data-control-map="silhouette-svg">
+  <style>[data-layer="semantic-map"]{display:none}</style>
+  <rect width="100%" height="100%" fill="#07130f"/>
+  <text x="18" y="22" fill="#eef6d6" font-size="13" font-family="Menlo, Monaco, monospace">lirm-armature-16 silhouette-svg control</text>
+  
+    <g class="candidate" data-candidate-id="lirm-armature-16" transform="translate(0 0)">
+      <title class="candidate-title">lirm-armature-16: pillbug dome / crawl / silhouette armored-oval-dome / segments 6 / limb pairs 0 / shell plates 7 / terminal mouth</title>
+      <rect x="24" y="40" width="308" height="220" rx="9" fill="rgba(16,22,18,0.92)" stroke="rgba(167,210,144,0.22)" stroke-width="1"/>
+      <text x="31" y="55" fill="rgba(235,244,216,0.9)" font-size="10" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">lirm-armature-16</text>
+      <text x="31" y="252" fill="rgba(235,244,216,0.75)" font-size="10" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">pillbug dome crawl</text>
+      <g data-layer="silhouette" opacity="1">
+        <path d="M 64.4 187.28 C 115.52 215.76, 223.44 215.76, 291.6 187.28" fill="none" stroke="hsla(80, 18%, 13%, 0.72)" stroke-width="13" stroke-linecap="round" opacity="0.5"/>
+        <ellipse cx="108.99" cy="144.74" rx="54.26" ry="19.07" fill="hsla(68, 47%, 35%, 0.93)" opacity="0.74"/><ellipse cx="127.45" cy="128.54" rx="56.39" ry="21.09" fill="hsla(68, 47%, 35%, 0.93)" opacity="0.82"/><ellipse cx="145.91" cy="120" rx="59.88" ry="23.23" fill="hsla(68, 47%, 35%, 0.93)" opacity="0.88"/><ellipse cx="164.37" cy="125.34" rx="64.74" ry="25.29" fill="hsla(68, 47%, 35%, 0.93)" opacity="0.92"/><ellipse cx="182.54" cy="139.93" rx="63.74" ry="24.99" fill="hsla(68, 47%, 35%, 0.93)" opacity="0.92"/><ellipse cx="201" cy="153.28" rx="58.27" ry="22.76" fill="hsla(68, 47%, 35%, 0.93)" opacity="0.88"/><ellipse cx="219.46" cy="155.77" rx="55.73" ry="20.89" fill="hsla(68, 47%, 35%, 0.93)" opacity="0.82"/><ellipse cx="237.92" cy="146.7" rx="54.58" ry="19.16" fill="hsla(68, 47%, 35%, 0.93)" opacity="0.74"/>
+        <ellipse cx="237.92" cy="146.7" rx="21.38" ry="20.17" fill="hsla(17, 50%, 44%, 0.95)" opacity="0.96"/>
+      </g>
+      <g data-layer="semantic-map">
+        <polyline points="108.99,144.74 127.45,128.54 145.91,120 164.37,125.34 182.54,139.93 201,153.28 219.46,155.77 237.92,146.7" fill="none" stroke="hsla(203, 70%, 62%, 0.75)" stroke-width="2" stroke-linecap="round" stroke-dasharray="4 4" opacity="0.82"/>
+        
+        <rect x="107.85" y="106.41" width="39.19" height="13" rx="4" fill="hsla(217, 18%, 38%, 0.92)" stroke="rgba(232,221,181,0.5)" stroke-width="1" transform="rotate(-1.12 127.45 113.41)"/><rect x="126.31" y="97.87" width="39.19" height="13" rx="4" fill="hsla(217, 18%, 38%, 0.92)" stroke="rgba(232,221,181,0.5)" stroke-width="1" transform="rotate(1.12 145.91 104.87)"/><rect x="144.77" y="103.21" width="39.19" height="13" rx="4" fill="hsla(217, 18%, 38%, 0.92)" stroke="rgba(232,221,181,0.5)" stroke-width="1" transform="rotate(-1.12 164.37 110.21)"/><rect x="162.94" y="117.8" width="39.19" height="13" rx="4" fill="hsla(217, 18%, 38%, 0.92)" stroke="rgba(232,221,181,0.5)" stroke-width="1" transform="rotate(1.12 182.54 124.8)"/><rect x="162.94" y="117.8" width="39.19" height="13" rx="4" fill="hsla(217, 18%, 38%, 0.92)" stroke="rgba(232,221,181,0.5)" stroke-width="1" transform="rotate(-1.12 182.54 124.8)"/><rect x="181.4" y="131.15" width="39.19" height="13" rx="4" fill="hsla(217, 18%, 38%, 0.92)" stroke="rgba(232,221,181,0.5)" stroke-width="1" transform="rotate(1.12 201 138.15)"/><rect x="199.86" y="133.64" width="39.19" height="13" rx="4" fill="hsla(217, 18%, 38%, 0.92)" stroke="rgba(232,221,181,0.5)" stroke-width="1" transform="rotate(-1.12 219.46 140.64)"/>
+        <ellipse cx="164.37" cy="146.7" rx="33.61" ry="16.38" fill="hsla(96, 45%, 56%, 0.72)" opacity="0.52"/>
+        
+        <circle cx="253.54" cy="148.12" r="11.93" fill="hsla(352, 62%, 22%, 0.95)" stroke="rgba(255,172,97,0.75)" stroke-width="1"><title>terminal mouth</title></circle>
+        <circle cx="127.45" cy="153.1" r="7.95" fill="hsla(285, 70%, 58%, 0.8)" opacity="0.75"><title>fore-brace</title></circle><circle cx="182.54" cy="165.21" r="7.95" fill="hsla(285, 70%, 58%, 0.8)" opacity="0.75"><title>fore-brace</title></circle><circle cx="219.46" cy="180.34" r="7.95" fill="hsla(285, 70%, 58%, 0.8)" opacity="0.75"><title>tail-drag</title></circle>
+      </g>
+    </g>
+  
+</svg>
