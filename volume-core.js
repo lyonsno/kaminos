@@ -2,7 +2,7 @@ const ROUTE_IDENTITY = 'native-3d-compute-fluid-raymarch-v0';
 const PROTOTYPE_IDENTITY = 'kaminos-volume-prototype-v0';
 const FRONT_FIELD_IDENTITY = 'combustion-front-topology-sidecar-v0';
 const BOUNDARY_SIDECAR_IDENTITY = 'baked-boundary-sidecar-v1';
-const BOUNDARY_SIDECAR_BAKE_AUTHORITY = 'band-limited-support-coverage-ridge-footprint-proximity-normal-v2';
+const BOUNDARY_SIDECAR_BAKE_AUTHORITY = 'band-limited-support-coverage-ridge-camera-footprint-proximity-normal-v3';
 const TEMPORAL_SIDECAR_IDENTITY = 'temporal-boundary-sidecar-history-v0';
 const TRUTH_ORACLE_ACTIVITY_RECEIVER_IDENTITY = 'truth-oracle-scalar-activity-receiver-v0';
 const TRUTH_ORACLE_ACTIVITY_CUE_AUTHORITY = 'truth-high-diagnostic-activity-projected-to-receiver-grid-v0';
@@ -2245,6 +2245,12 @@ fn adaptiveRayStepScale(interest: f32, adaptiveRays: f32) -> f32 {
   return mix(1.0, adaptiveScale, clamp(adaptiveRays, 0.0, 1.0));
 }
 
+fn boundaryFireAdaptiveClampScale(baseScale: f32, segmentCoverage: f32, boundaryImportance: f32, clampStrength: f32) -> f32 {
+  let segmentRisk = smoothstep(0.20, 1.28, segmentCoverage) * smoothstep(0.035, 0.74, boundaryImportance);
+  let clampedScale = mix(baseScale, min(baseScale, 0.82), clamp(segmentRisk * clampStrength, 0.0, 1.0));
+  return max(0.42, clampedScale);
+}
+
 fn raymarchOccupancySignal(
   density: f32,
   smoke: f32,
@@ -2356,11 +2362,30 @@ fn csBoundarySidecar(@builtin(global_invocation_id) gid: vec3<u32>) {
     0.0,
     1.8
   );
+  let boundarySidecarSegmentGain = clamp(u.boundary_sidecar_display.y, 0.0, 2.0);
+  let boundarySidecarCrossingGain = clamp(u.boundary_sidecar_display.z, 0.0, 2.0);
+  let boundarySidecarCell = vec3<f32>(f32(gid.x), f32(gid.y), f32(gid.z));
+  let boundarySidecarWorldP = ((boundarySidecarCell + vec3<f32>(0.5)) / f32(GRID)) * 2.0 - vec3<f32>(1.0);
+  let boundarySidecarViewDir = normalize(boundarySidecarWorldP - u.cameraPos_time.xyz + vec3<f32>(0.0001));
+  let boundarySidecarNormalConfidence = smoothstep(0.012, 0.22, boundarySidecarGradientLen);
+  let boundarySidecarGrazing = smoothstep(0.10, 0.94, 1.0 - abs(dot(boundarySidecarNormal, boundarySidecarViewDir))) * boundarySidecarNormalConfidence;
+  let boundarySidecarSegmentCoverage = clamp(
+    boundarySidecarSegmentGain
+      * (boundarySidecarCoverage * 0.42 + boundarySidecarProximity * 0.30 + boundarySidecarRidge * 0.34)
+      * (1.0 + boundarySidecarGrazing * boundarySidecarCrossingGain),
+    0.0,
+    2.4
+  );
+  let boundarySidecarCameraFootprintWidth = clamp(
+    boundarySidecarFootprintWidth + boundarySidecarSegmentCoverage * (0.26 + blur * 0.10),
+    0.06,
+    2.60
+  );
   boundarySidecarDst[index3(gid)] = vec4<f32>(
     boundarySidecarSupport,
     boundarySidecarCoverage,
     boundarySidecarRidge,
-    boundarySidecarFootprintWidth
+    boundarySidecarCameraFootprintWidth
   );
   boundarySidecarMetaDst[index3(gid)] = vec4<f32>(
     boundarySidecarProximity,
@@ -3892,7 +3917,14 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     let shredNoise = microFilamentNoise(detailP.zxy + vec3<f32>(0.13, -0.21, 0.09), microWarp.yzx * 1.21, detailCarrier + interfaceShred * 1.7, state.zxy, u.cameraPos_time.w * 1.17 + 1.3);
     let fireNoise = microFilamentNoise(detailP.yzx + vec3<f32>(-0.18, 0.07, 0.24), microWarp.zxy * 1.38, detailCarrier + fireLick * 2.1, state.yzx, u.cameraPos_time.w * 1.31 + 2.1);
     let interest = raymarchInterest(density, smoke, heat, temp, max(flame, combustionFrontTopology * 0.10), flameDetail, microTextureSignal, velMag, fireLick, interfaceShred) + boundaryFireSamplingImportance;
-    let localDt = min(dtBase * adaptiveRayStepScale(interest, adaptiveRays), max(0.0001, endT - t));
+    let boundaryFireAdaptiveClamp = clamp(u.boundary_sidecar_display.w, 0.0, 1.0);
+    let adaptiveScale = boundaryFireAdaptiveClampScale(
+      adaptiveRayStepScale(interest, adaptiveRays),
+      boundarySidecarSampleForSampling.w,
+      boundaryFireSamplingImportance,
+      boundaryFireAdaptiveClamp * boundaryFireRenderActive
+    );
+    let localDt = min(dtBase * adaptiveScale, max(0.0001, endT - t));
     let rayStepOpacity = localDt * 3.65;
     let curtainNoise = microFilamentNoise(
       detailP.xzy + vec3<f32>(0.31, -0.17, 0.23),
@@ -4061,10 +4093,16 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
           smoothstep(0.05, 0.25, boundarySidecarNormalLen)
         );
         let boundarySidecarFootprintWidth = boundarySidecarSample.w;
+        let boundarySidecarSegmentReconstruction = smoothstep(0.20, 1.85, boundarySidecarFootprintWidth)
+          * smoothstep(0.012, 0.78, max(boundarySidecarCoverage, boundarySidecarProximity));
         boundarySupportEffective = max(boundarySidecarSample.x, boundarySidecarProximity * 0.36);
-        boundaryGradientEffective = max(boundarySidecarCoverage, boundarySidecarSample.z * 0.55) * (1.0 + boundarySidecarFootprintWidth * 0.18) * boundarySidecarNormalViewGain;
+        boundaryGradientEffective = max(max(boundarySidecarCoverage, boundarySidecarSample.z * 0.55), boundarySidecarSegmentReconstruction * 0.52)
+          * (1.0 + boundarySidecarFootprintWidth * (0.18 + boundarySidecarSegmentReconstruction * 0.18))
+          * boundarySidecarNormalViewGain;
         boundaryFireRidgeEffective = boundarySidecarSample.z;
-        boundarySidecarStepFootprintWidth = boundarySidecarNormalViewGain * clamp(u.boundary_sidecar_controls.z, 0.0, 2.0) * max(dtBase * f32(GRID) * 0.046, boundarySidecarFootprintWidth * 0.036);
+        boundarySidecarStepFootprintWidth = boundarySidecarNormalViewGain
+          * clamp(u.boundary_sidecar_controls.z, 0.0, 2.0)
+          * max(dtBase * f32(GRID) * (0.046 + boundarySidecarSegmentReconstruction * 0.020), boundarySidecarFootprintWidth * (0.036 + boundarySidecarSegmentReconstruction * 0.014));
       } else {
         let boundarySupport = liveBoundarySupportAt(p, boundarySupportWeights);
         let boundarySupportPx = liveBoundarySupportAt(p + boundaryDx, boundarySupportWeights);
@@ -4098,10 +4136,19 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
             smoothstep(0.05, 0.25, boundarySidecarNormalLen)
           );
           let boundarySidecarFootprintWidth = boundarySidecarSample.w;
+          let boundarySidecarSegmentReconstruction = smoothstep(0.20, 1.85, boundarySidecarFootprintWidth)
+            * smoothstep(0.012, 0.78, max(boundarySidecarCoverage, boundarySidecarProximity));
           boundarySupportEffective = mix(boundarySupport, boundarySidecarSample.x, 0.5);
-          boundaryGradientEffective = mix(boundaryGradient, max(boundarySidecarCoverage, boundarySidecarProximity * 0.50) * boundarySidecarNormalViewGain, 0.5);
+          boundaryGradientEffective = mix(
+            boundaryGradient,
+            max(max(boundarySidecarCoverage, boundarySidecarProximity * 0.50), boundarySidecarSegmentReconstruction * 0.44) * boundarySidecarNormalViewGain,
+            0.5
+          );
           boundaryFireRidgeEffective = mix(boundaryFireRidge, boundarySidecarSample.z, 0.5);
-          boundarySidecarStepFootprintWidth = 0.5 * boundarySidecarNormalViewGain * clamp(u.boundary_sidecar_controls.z, 0.0, 2.0) * max(dtBase * f32(GRID) * 0.046, boundarySidecarFootprintWidth * 0.036);
+          boundarySidecarStepFootprintWidth = 0.5
+            * boundarySidecarNormalViewGain
+            * clamp(u.boundary_sidecar_controls.z, 0.0, 2.0)
+            * max(dtBase * f32(GRID) * (0.046 + boundarySidecarSegmentReconstruction * 0.020), boundarySidecarFootprintWidth * (0.036 + boundarySidecarSegmentReconstruction * 0.014));
         }
       }
       let boundaryGradientGate = smoothstep(boundaryCut, boundaryCut + boundarySoftness + boundarySidecarStepFootprintWidth, boundaryGradientEffective * boundaryGradientGain);
@@ -5362,6 +5409,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       blur: clampFinite(controls.blur ?? controlsSnapshot.boundarySidecarBlur, 0, 1, 0.45),
       stepWidth: clampFinite(controls.stepWidth ?? controlsSnapshot.boundarySidecarWidth, 0, 2, 0.75),
       ridgeGain: clampFinite(controls.ridgeGain ?? controlsSnapshot.boundarySidecarRidge, 0, 2, 1),
+      segmentGain: clampFinite(controls.segmentGain ?? controlsSnapshot.boundarySidecarSegment, 0, 2, 1),
+      crossingGain: clampFinite(controls.crossingGain ?? controlsSnapshot.boundarySidecarCrossing, 0, 2, 1),
+      adaptiveClamp: clampFinite(controls.adaptiveClamp ?? controlsSnapshot.boundarySidecarAdaptiveClamp, 0, 1, 0.75),
       grid: gridSize,
       bytes: boundarySidecarBufferBytes(gridSize),
       metaBytes: boundarySidecarMetaBufferBytes(gridSize),
@@ -6703,9 +6753,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     uniforms[310] = clampFinite(boundarySidecarControls.stepWidth ?? controlsSnapshot.boundarySidecarWidth, 0, 2, 0.75);
     uniforms[311] = clampFinite(boundarySidecarControls.ridgeGain ?? controlsSnapshot.boundarySidecarRidge, 0, 2, 1);
     uniforms[312] = boundarySidecarViewValue(boundarySidecarViewName);
-    uniforms[313] = 0;
-    uniforms[314] = 0;
-    uniforms[315] = 0;
+    uniforms[313] = clampFinite(boundarySidecarControls.segmentGain ?? controlsSnapshot.boundarySidecarSegment, 0, 2, 1);
+    uniforms[314] = clampFinite(boundarySidecarControls.crossingGain ?? controlsSnapshot.boundarySidecarCrossing, 0, 2, 1);
+    uniforms[315] = clampFinite(boundarySidecarControls.adaptiveClamp ?? controlsSnapshot.boundarySidecarAdaptiveClamp, 0, 1, 0.75);
     const scalarActivityReceiver = normalizeScalarActivityReceiverControls(controlsSnapshot);
     const externalCueActive = oracleActivityCueUpload.status === 'uploaded' && oracleActivityCueUpload.externalCueCellCount > 0;
     uniforms[316] = scalarActivityReceiver.enabled;

@@ -1164,6 +1164,21 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
         <span class="slider-val" id="volume-boundary-sidecar-ridge-val">1.00</span>
       </div>
       <div class="slider-row">
+        <span class="slider-label">Segment coverage</span>
+        <input type="range" id="volume-boundary-sidecar-segment" min="0" max="2" step="0.02" value="1.00">
+        <span class="slider-val" id="volume-boundary-sidecar-segment-val">1.00</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">View crossing</span>
+        <input type="range" id="volume-boundary-sidecar-crossing" min="0" max="2" step="0.02" value="1.00">
+        <span class="slider-val" id="volume-boundary-sidecar-crossing-val">1.00</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Adaptive clamp</span>
+        <input type="range" id="volume-boundary-sidecar-adaptive-clamp" min="0" max="1" step="0.02" value="0.75">
+        <span class="slider-val" id="volume-boundary-sidecar-adaptive-clamp-val">0.75</span>
+      </div>
+      <div class="slider-row">
         <span class="slider-label">Ridge select</span>
         <input type="range" id="volume-reaction-boundary-fire-ridge" min="0" max="2" step="0.02" value="1.76">
         <span class="slider-val" id="volume-reaction-boundary-fire-ridge-val">1.76</span>
@@ -10557,6 +10572,9 @@ const TALL_PLUME_OPERATOR_PRESETS = {
     boundarySidecarBlur: 1.00,
     boundarySidecarWidth: 2.00,
     boundarySidecarRidge: 2.00,
+    boundarySidecarSegment: 1.00,
+    boundarySidecarCrossing: 1.00,
+    boundarySidecarAdaptiveClamp: 0.75,
     reactionBoundaryFireRidge: 1.28,
     reactionBoundaryFireRidgeCut: 0.10,
     reactionBoundaryFireTip: 2.00,
@@ -11514,6 +11532,9 @@ const REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS = [
   { key: 'boundarySidecarBlur', id: 'volume-boundary-sidecar-blur', param: 'volume_boundary_sidecar_blur', min: 0, max: 1, decimals: 2 },
   { key: 'boundarySidecarWidth', id: 'volume-boundary-sidecar-width', param: 'volume_boundary_sidecar_width', min: 0, max: 2, decimals: 2 },
   { key: 'boundarySidecarRidge', id: 'volume-boundary-sidecar-ridge', param: 'volume_boundary_sidecar_ridge', min: 0, max: 2, decimals: 2 },
+  { key: 'boundarySidecarSegment', id: 'volume-boundary-sidecar-segment', param: 'volume_boundary_sidecar_segment', min: 0, max: 2, decimals: 2 },
+  { key: 'boundarySidecarCrossing', id: 'volume-boundary-sidecar-crossing', param: 'volume_boundary_sidecar_crossing', min: 0, max: 2, decimals: 2 },
+  { key: 'boundarySidecarAdaptiveClamp', id: 'volume-boundary-sidecar-adaptive-clamp', param: 'volume_boundary_sidecar_adaptive_clamp', min: 0, max: 1, decimals: 2 },
   { key: 'reactionHeatMin', id: 'volume-reaction-heat-min', param: 'volume_reaction_heat_min', min: 0, max: 0.2, decimals: 3 },
   { key: 'reactionHeatMax', id: 'volume-reaction-heat-max', param: 'volume_reaction_heat_max', min: 0.04, max: 1.2, decimals: 2 },
   { key: 'reactionFuelMin', id: 'volume-reaction-fuel-min', param: 'volume_reaction_fuel_min', min: 0, max: 0.03, decimals: 4 },
@@ -16019,12 +16040,15 @@ function readVolumeControls() {
     boundarySidecarView,
     boundarySidecarControls: {
       identity: 'baked-boundary-sidecar-v0',
-      authority: 'band-limited-support-coverage-ridge-proximity-footprint-v1',
+      authority: 'band-limited-support-coverage-ridge-camera-footprint-proximity-normal-v3',
       source: boundarySidecarSource,
       view: boundarySidecarView,
       blur: parseFloat(document.getElementById('volume-boundary-sidecar-blur').value),
       stepWidth: parseFloat(document.getElementById('volume-boundary-sidecar-width').value),
       ridgeGain: parseFloat(document.getElementById('volume-boundary-sidecar-ridge').value),
+      segmentGain: parseFloat(document.getElementById('volume-boundary-sidecar-segment').value),
+      crossingGain: parseFloat(document.getElementById('volume-boundary-sidecar-crossing').value),
+      adaptiveClamp: parseFloat(document.getElementById('volume-boundary-sidecar-adaptive-clamp').value),
     },
     reactionBoundaryControls: {
       identity: reactionBoundaryControls.identity,
@@ -16081,6 +16105,9 @@ function readVolumeControls() {
     boundarySidecarBlur: parseFloat(document.getElementById('volume-boundary-sidecar-blur').value),
     boundarySidecarWidth: parseFloat(document.getElementById('volume-boundary-sidecar-width').value),
     boundarySidecarRidge: parseFloat(document.getElementById('volume-boundary-sidecar-ridge').value),
+    boundarySidecarSegment: parseFloat(document.getElementById('volume-boundary-sidecar-segment').value),
+    boundarySidecarCrossing: parseFloat(document.getElementById('volume-boundary-sidecar-crossing').value),
+    boundarySidecarAdaptiveClamp: parseFloat(document.getElementById('volume-boundary-sidecar-adaptive-clamp').value),
     fireRenderMode: reactionLiveView !== 'off' ? 'inspect' : document.getElementById('volume-fire-render-mode').value,
     shellInspectMode: reactionLiveView !== 'off' ? reactionLiveView : document.getElementById('volume-shell-inspect-mode').value,
     shellAmount: parseFloat(document.getElementById('volume-shell-amount').value),

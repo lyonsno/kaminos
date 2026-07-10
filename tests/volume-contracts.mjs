@@ -58,6 +58,9 @@ assert.match(index, /BOUNDARY_SIDECAR_VIEW_VALUES\s*=\s*new Set\(\['off', 'suppo
 assert.match(index, /id="volume-boundary-sidecar-blur"/, 'Boundary Fire tuning exposes a sidecar blur/sample-efficiency control');
 assert.match(index, /id="volume-boundary-sidecar-width"/, 'Boundary Fire tuning exposes a sidecar step-footprint width control');
 assert.match(index, /id="volume-boundary-sidecar-ridge"/, 'Boundary Fire tuning exposes a baked ridge gain control');
+assert.match(index, /id="volume-boundary-sidecar-segment"/, 'Boundary Fire tuning exposes a baked segment coverage control');
+assert.match(index, /id="volume-boundary-sidecar-crossing"/, 'Boundary Fire tuning exposes a view-crossing reconstruction control');
+assert.match(index, /id="volume-boundary-sidecar-adaptive-clamp"/, 'Boundary Fire tuning exposes a local adaptive clamp control');
 assert.match(index, /boundarySidecarSource/, 'Volume controls carry the boundary sidecar source into the renderer');
 assert.match(index, /boundarySidecarView/, 'Volume controls carry the sidecar channel debug view into the renderer');
 assert.match(index, /!routeVolumeScene\s*\|\|\s*routeVolumeScene === 'tall_plume'/, 'smoke routes with explicit tall_plume scene must still apply the Pyro basin instead of plain tall-plume mechanics');
@@ -150,7 +153,7 @@ assert.match(index, /\.slider-row input\[type="range"\]\s*\{[^}]*min-height:\s*2
 assert.match(core, /topology-lab-monotonic-carrier-mix-v0/, 'Topology shell lab declares monotonic additive carrier-mix identity');
 assert.doesNotMatch(topologyShellLabBlock, /shellCarrierGainSum|\/\s*max\(\s*0\.001[\s\S]*shellThermalGain/, 'Topology shell carrier gains must not be normalized through a shared hidden denominator');
 assert.match(core, /BOUNDARY_SIDECAR_IDENTITY\s*=\s*'baked-boundary-sidecar-v1'/, 'Boundary sidecar bake carries the distance/normal reconstruction identity');
-assert.match(core, /BOUNDARY_SIDECAR_BAKE_AUTHORITY\s*=\s*'band-limited-support-coverage-ridge-footprint-proximity-normal-v2'/, 'Boundary sidecar bake names reconstructable sheet distance and normal authority');
+assert.match(core, /BOUNDARY_SIDECAR_BAKE_AUTHORITY\s*=\s*'band-limited-support-coverage-ridge-camera-footprint-proximity-normal-v3'/, 'Boundary sidecar bake names reconstructable sheet distance and normal authority');
 assert.match(core, /function boundarySidecarBufferBytes/, 'Boundary sidecar buffer size is explicit and grid-scaled');
 assert.match(core, /function boundarySidecarMetaBufferBytes/, 'Boundary sidecar meta buffer size is explicit and grid-scaled');
 assert.match(core, /function normalizeBoundarySidecarView/, 'Renderer normalizes sidecar channel debug views');
@@ -188,6 +191,9 @@ assert.match(core, /boundaryStructureSource:\s*boundarySidecarSourceName/, 'Debu
 assert.match(core, /boundarySidecarDebug/, 'Debug state exposes boundary sidecar bake identity and controls');
 assert.match(core, /channels:\s*\['support', 'coverage', 'ridge', 'footprint', 'proximity', 'normal'\]/, 'Debug state reports sidecar channel semantics');
 assert.match(core, /boundarySidecarMetaBytes/, 'Debug state exposes boundary sidecar meta memory cost');
+assert.match(core, /segmentGain/, 'Debug state exposes camera-aware segment coverage gain');
+assert.match(core, /crossingGain/, 'Debug state exposes camera-angle crossing reconstruction gain');
+assert.match(core, /adaptiveClamp/, 'Debug state exposes the boundary-fire local adaptive clamp');
 assert.match(core, /boundaryFireSamplingDebug/, 'Debug state reports boundary-fire sampling guard identity and active state');
 assert.match(core, /temporalSidecarIdentity/, 'Debug state reserves temporal sidecar reconstruction identity');
 assert.match(core, /uniforms\[312\]\s*=\s*boundarySidecarViewValue/, 'Uniform upload carries the sidecar debug view selector');
@@ -198,6 +204,10 @@ assert.match(core, /majorantOutputBricks/, 'sim-cost ledger distinguishes majora
 assert.match(core, /majorantEstimatedSourceCellVisitsPerBuild/, 'sim-cost ledger estimates majorant source-cell visits per bake');
 assert.match(core, /majorantRaymarchActive/, 'debug state reports whether majorant traversal can run');
 assert.match(core, /majorantBuildRequested/, 'debug state reports whether majorant construction can run');
+assert.match(core, /boundarySidecarViewDir/, 'Boundary sidecar bake computes a camera-aware view direction');
+assert.match(core, /boundarySidecarSegmentCoverage/, 'Boundary sidecar bake pre-solves segment coverage into the footprint channel');
+assert.match(core, /boundarySidecarSegmentReconstruction/, 'Boundary-fire raymarch reconstructs sheet coverage across a segment');
+assert.match(core, /boundaryFireAdaptiveClampScale/, 'Boundary-fire raymarch locally clamps adaptive step expansion near baked sheet crossings');
 assert.match(index, /id="volume-pyro-interface-focus"/, 'Pyro cockpit exposes an interface-focus slider');
 assert.match(index, /Border carrier/i, 'Pyro interface-focus slider describes the standalone border carrier');
 assert.match(index, /id="volume-pyro-edge-bite"/, 'Pyro cockpit exposes an edge-bite slider');
