@@ -1,0 +1,14 @@
+001 p3d01_house_obsidian_oracle group=pixal3d_transform intent=transform_identity seed=301 source=Pixal3D/assets/images/1_img.png
+002 p3d07_goblet_relic_machine group=pixal3d_transform intent=transform_identity seed=302 source=Pixal3D/assets/images/7_img.png
+003 p3d10_dessert_mechanical_stack group=pixal3d_transform intent=transform_good_miss seed=303 source=Pixal3D/assets/images/10_img.webp
+004 p3d11_cliff_house_volcanic_outpost group=pixal3d_transform intent=transform_identity seed=304 source=Pixal3D/assets/images/11_img.png
+005 p3d03_palm_bone_metal_tree group=pixal3d_transform intent=transform_good_miss seed=305 source=Pixal3D/assets/images/3_img.webp
+006 p3d06_crab_orange_walker_relic group=pixal3d_transform intent=transform_identity seed=306 source=Pixal3D/assets/images/6_img.png
+007 p3d06_crab_neighboring_device group=pixal3d_transform intent=transform_good_miss seed=307 source=Pixal3D/assets/images/6_img.png
+008 p3d00_turtle_bone_enamel_variant group=pixal3d_transform intent=transform_identity seed=308 source=Pixal3D/assets/images/0_img.png
+009 p3d00_turtle_sacred_engine_variant group=pixal3d_transform intent=transform_good_miss seed=309 source=Pixal3D/assets/images/0_img.png
+010 p3d13_radio_weathered_relic group=pixal3d_transform intent=transform_identity seed=310 source=Pixal3D/assets/images/s_13_img.jpg
+011 p3d15_chair_botanical_mech group=pixal3d_transform intent=transform_good_miss seed=311 source=Pixal3D/assets/images/s_15_img.png
+012 p3d20_object_dark_enamel group=pixal3d_transform intent=transform_identity seed=312 source=Pixal3D/assets/images/s_20_img.webp
+013 p3d05_island_insert_molten_shrine group=pixal3d_insert intent=insert_landscape seed=313 source=Pixal3D/assets/images/5_img.webp
+014 p3d11_cliff_house_insert_orb_gate group=pixal3d_insert intent=insert_scene seed=314 source=Pixal3D/assets/images/11_img.png

@@ -31,7 +31,7 @@
         512
       ],
       "source_ref": "Pixal3D/assets/images/1_img.png",
-      "status": "queued",
+      "status": "done",
       "steps": 8,
       "submit_returncode": 0,
       "submit_stderr": ""
@@ -53,7 +53,7 @@
         512
       ],
       "source_ref": "Pixal3D/assets/images/7_img.png",
-      "status": "queued",
+      "status": "done",
       "steps": 8,
       "submit_returncode": 0,
       "submit_stderr": ""
@@ -75,7 +75,7 @@
         512
       ],
       "source_ref": "Pixal3D/assets/images/10_img.webp",
-      "status": "queued",
+      "status": "done",
       "steps": 8,
       "submit_returncode": 0,
       "submit_stderr": ""
@@ -97,7 +97,7 @@
         512
       ],
       "source_ref": "Pixal3D/assets/images/11_img.png",
-      "status": "queued",
+      "status": "done",
       "steps": 8,
       "submit_returncode": 0,
       "submit_stderr": ""
@@ -119,7 +119,7 @@
         512
       ],
       "source_ref": "Pixal3D/assets/images/3_img.webp",
-      "status": "queued",
+      "status": "done",
       "steps": 8,
       "submit_returncode": 0,
       "submit_stderr": ""
@@ -141,7 +141,7 @@
         512
       ],
       "source_ref": "Pixal3D/assets/images/6_img.png",
-      "status": "queued",
+      "status": "done",
       "steps": 8,
       "submit_returncode": 0,
       "submit_stderr": ""
@@ -163,7 +163,7 @@
         512
       ],
       "source_ref": "Pixal3D/assets/images/6_img.png",
-      "status": "queued",
+      "status": "done",
       "steps": 8,
       "submit_returncode": 0,
       "submit_stderr": ""
@@ -185,7 +185,7 @@
         512
       ],
       "source_ref": "Pixal3D/assets/images/0_img.png",
-      "status": "queued",
+      "status": "done",
       "steps": 8,
       "submit_returncode": 0,
       "submit_stderr": ""
@@ -207,7 +207,7 @@
         512
       ],
       "source_ref": "Pixal3D/assets/images/0_img.png",
-      "status": "queued",
+      "status": "done",
       "steps": 8,
       "submit_returncode": 0,
       "submit_stderr": ""
@@ -229,7 +229,7 @@
         512
       ],
       "source_ref": "Pixal3D/assets/images/s_13_img.jpg",
-      "status": "queued",
+      "status": "done",
       "steps": 8,
       "submit_returncode": 0,
       "submit_stderr": ""
@@ -251,7 +251,7 @@
         512
       ],
       "source_ref": "Pixal3D/assets/images/s_15_img.png",
-      "status": "queued",
+      "status": "done",
       "steps": 8,
       "submit_returncode": 0,
       "submit_stderr": ""
@@ -273,7 +273,7 @@
         512
       ],
       "source_ref": "Pixal3D/assets/images/s_20_img.webp",
-      "status": "queued",
+      "status": "done",
       "steps": 8,
       "submit_returncode": 0,
       "submit_stderr": ""
@@ -295,7 +295,7 @@
         512
       ],
       "source_ref": "Pixal3D/assets/images/5_img.webp",
-      "status": "queued",
+      "status": "done",
       "steps": 8,
       "submit_returncode": 0,
       "submit_stderr": ""
@@ -317,7 +317,7 @@
         512
       ],
       "source_ref": "Pixal3D/assets/images/11_img.png",
-      "status": "queued",
+      "status": "done",
       "steps": 8,
       "submit_returncode": 0,
       "submit_stderr": ""
@@ -339,7 +339,7 @@
         512
       ],
       "source_ref": "Pixal3D/assets/images/17_img.png",
-      "status": "queued",
+      "status": "done",
       "steps": 8,
       "submit_returncode": 0,
       "submit_stderr": ""
@@ -361,7 +361,7 @@
         512
       ],
       "source_ref": "Pixal3D/assets/images/21_img.png",
-      "status": "queued",
+      "status": "done",
       "steps": 8,
       "submit_returncode": 0,
       "submit_stderr": ""
@@ -383,7 +383,7 @@
         512
       ],
       "source_ref": "Pixal3D/assets/images/9_img.png",
-      "status": "queued",
+      "status": "done",
       "steps": 8,
       "submit_returncode": 0,
       "submit_stderr": ""
@@ -405,7 +405,7 @@
         512
       ],
       "source_ref": "Pixal3D/assets/images/3_img.webp",
-      "status": "queued",
+      "status": "running",
       "steps": 8,
       "submit_returncode": 0,
       "submit_stderr": ""
@@ -427,7 +427,7 @@
         512
       ],
       "source_ref": "Pixal3D/assets/images/1_img.png",
-      "status": "queued",
+      "status": "pending",
       "steps": 8,
       "submit_returncode": 0,
       "submit_stderr": ""
@@ -449,7 +449,7 @@
         512
       ],
       "source_ref": "Pixal3D/assets/images/s_18_img.png",
-      "status": "queued",
+      "status": "pending",
       "steps": 8,
       "submit_returncode": 0,
       "submit_stderr": ""
@@ -471,7 +471,7 @@
         512
       ],
       "source_ref": "Pixal3D/assets/images/5_img.webp",
-      "status": "queued",
+      "status": "pending",
       "steps": 8,
       "submit_returncode": 0,
       "submit_stderr": ""
@@ -493,7 +493,7 @@
         512
       ],
       "source_ref": "Pixal3D/assets/images/0_img.png",
-      "status": "queued",
+      "status": "pending",
       "steps": 8,
       "submit_returncode": 0,
       "submit_stderr": ""
@@ -515,7 +515,7 @@
         512
       ],
       "source_ref": "Pixal3D/assets/images/0_img.png",
-      "status": "queued",
+      "status": "pending",
       "steps": 8,
       "submit_returncode": 0,
       "submit_stderr": ""
@@ -537,7 +537,7 @@
         512
       ],
       "source_ref": "Pixal3D/assets/images/6_img.png",
-      "status": "queued",
+      "status": "pending",
       "steps": 8,
       "submit_returncode": 0,
       "submit_stderr": ""
@@ -559,7 +559,7 @@
         512
       ],
       "source_ref": "Pixal3D/assets/images/1_img.png",
-      "status": "queued",
+      "status": "pending",
       "steps": 8,
       "submit_returncode": 0,
       "submit_stderr": ""
@@ -581,7 +581,7 @@
         512
       ],
       "source_ref": "Pixal3D/assets/images/7_img.png",
-      "status": "queued",
+      "status": "pending",
       "steps": 8,
       "submit_returncode": 0,
       "submit_stderr": ""
@@ -603,7 +603,7 @@
         512
       ],
       "source_ref": "Pixal3D/assets/images/11_img.png",
-      "status": "queued",
+      "status": "pending",
       "steps": 8,
       "submit_returncode": 0,
       "submit_stderr": ""
@@ -625,7 +625,7 @@
         512
       ],
       "source_ref": "Pixal3D/assets/images/3_img.webp",
-      "status": "queued",
+      "status": "pending",
       "steps": 8,
       "submit_returncode": 0,
       "submit_stderr": ""
@@ -647,7 +647,7 @@
         512
       ],
       "source_ref": "Pixal3D/assets/images/s_13_img.jpg",
-      "status": "queued",
+      "status": "pending",
       "steps": 8,
       "submit_returncode": 0,
       "submit_stderr": ""
@@ -669,7 +669,7 @@
         512
       ],
       "source_ref": "Pixal3D/assets/images/s_15_img.png",
-      "status": "queued",
+      "status": "pending",
       "steps": 8,
       "submit_returncode": 0,
       "submit_stderr": ""
@@ -691,7 +691,7 @@
         512
       ],
       "source_ref": "artifacts/lirm-speciation-armature-implicit-bodies-v0/lirm-armature-08/clay-implicit.png",
-      "status": "queued",
+      "status": "pending",
       "steps": 8,
       "submit_returncode": 0,
       "submit_stderr": ""
@@ -713,7 +713,7 @@
         512
       ],
       "source_ref": "artifacts/lirm-speciation-armature-implicit-bodies-v0/lirm-armature-11/clay-implicit.png",
-      "status": "queued",
+      "status": "pending",
       "steps": 8,
       "submit_returncode": 0,
       "submit_stderr": ""
@@ -735,7 +735,7 @@
         512
       ],
       "source_ref": "artifacts/lirm-speciation-armature-implicit-bodies-v0/lirm-armature-16/clay-implicit.png",
-      "status": "queued",
+      "status": "pending",
       "steps": 8,
       "submit_returncode": 0,
       "submit_stderr": ""
@@ -757,7 +757,7 @@
         512
       ],
       "source_ref": "artifacts/lirm-speciation-armature-implicit-bodies-v0/lirm-armature-22/clay-implicit.png",
-      "status": "queued",
+      "status": "pending",
       "steps": 8,
       "submit_returncode": 0,
       "submit_stderr": ""
@@ -779,7 +779,7 @@
         512
       ],
       "source_ref": "artifacts/lirm-speciation-armature-implicit-bodies-v0/lirm-armature-24/clay-implicit.png",
-      "status": "queued",
+      "status": "pending",
       "steps": 8,
       "submit_returncode": 0,
       "submit_stderr": ""
@@ -801,7 +801,7 @@
         512
       ],
       "source_ref": "artifacts/lirm-speciation-armature-implicit-bodies-v0/lirm-armature-08/normal-implicit.png",
-      "status": "queued",
+      "status": "pending",
       "steps": 8,
       "submit_returncode": 0,
       "submit_stderr": ""
@@ -823,7 +823,7 @@
         512
       ],
       "source_ref": "artifacts/lirm-speciation-armature-implicit-bodies-v0/lirm-armature-16/normal-implicit.png",
-      "status": "queued",
+      "status": "pending",
       "steps": 8,
       "submit_returncode": 0,
       "submit_stderr": ""
@@ -845,7 +845,7 @@
         512
       ],
       "source_ref": "artifacts/lirm-speciation-armature-implicit-bodies-v0/lirm-armature-24/normal-implicit.png",
-      "status": "queued",
+      "status": "pending",
       "steps": 8,
       "submit_returncode": 0,
       "submit_stderr": ""
@@ -867,7 +867,7 @@
         512
       ],
       "source_ref": "Pixal3D/assets/images/12_img.png",
-      "status": "queued",
+      "status": "pending",
       "steps": 8,
       "submit_returncode": 0,
       "submit_stderr": ""
@@ -889,7 +889,7 @@
         512
       ],
       "source_ref": "Pixal3D/assets/images/4_img.png",
-      "status": "queued",
+      "status": "pending",
       "steps": 8,
       "submit_returncode": 0,
       "submit_stderr": ""
@@ -926,10 +926,56 @@
         },
         "route": "trellis2mlx_fast_checkpoint",
         "status": "queued"
+      },
+      {
+        "greenroom_job": "1ca71a1756d8",
+        "greenroom_submit_receipt": "submitted; local path redacted, see input_ref/output_ref/greenroom_job",
+        "id": "turtle-sacred-engine-fast-seed364",
+        "input_ref": "artifacts/generator-basin-fanout-20260710/flux2/p3d00_turtle_sacred_engine_variant/output.png",
+        "output_ref": "artifacts/generator-basin-fanout-20260710/trellis/turtle-sacred-engine-fast-seed364",
+        "params": {
+          "seed": 364,
+          "steps": 8,
+          "target_faces": 250000,
+          "texture_size": 1024
+        },
+        "route": "trellis2mlx_fast_checkpoint",
+        "selection_reason": "first-batch strongest mechanical object basin; high Trellis plausibility",
+        "source_image_id": "p3d00_turtle_sacred_engine_variant",
+        "status": "pending"
+      },
+      {
+        "greenroom_job": "5b93d808777a",
+        "greenroom_submit_receipt": "submitted; local path redacted, see input_ref/output_ref/greenroom_job",
+        "id": "crab-orange-walker-fast-seed365",
+        "input_ref": "artifacts/generator-basin-fanout-20260710/flux2/p3d06_crab_orange_walker_relic/output.png",
+        "output_ref": "artifacts/generator-basin-fanout-20260710/trellis/crab-orange-walker-fast-seed365",
+        "params": {
+          "seed": 365,
+          "steps": 8,
+          "target_faces": 250000,
+          "texture_size": 1024
+        },
+        "route": "trellis2mlx_fast_checkpoint",
+        "selection_reason": "creature/posture analog; tests whether good-miss armature basin becomes meshable",
+        "source_image_id": "p3d06_crab_orange_walker_relic",
+        "status": "pending"
       }
     ],
     "first_queued_job": "785e25e4edb1",
     "first_queued_route": "trellis2mlx_source_native_combined_checkpoint",
-    "max_runs": 5
-  }
+    "max_runs": 5,
+    "remaining_nominal_runs": 2,
+    "selection_policy": "visual inspection first; hold remaining Trellis slots for later image batches unless a current candidate is clearly superior",
+    "spent_or_queued_runs": 3
+  },
+  "witnesses": [
+    {
+      "count": 14,
+      "id": "contact-batch-01",
+      "image": "artifacts/generator-basin-fanout-20260710/witness/contact-batch-01/contact.png",
+      "mapping": "artifacts/generator-basin-fanout-20260710/witness/contact-batch-01/mapping.txt",
+      "visual_read": "first batch has coherent transform basins; strongest early Trellis candidates are turtle sacred-engine and crab orange-walker"
+    }
+  ]
 }
