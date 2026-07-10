@@ -89,6 +89,13 @@ assert.match(witness, /requestedStrength/, 'orbit-strength sweep cells must pres
 assert.match(witness, /effectiveStrength/, 'orbit-strength sweep cells must preserve the effective slider strength observed after UI coupling');
 assert.match(witness, /lawImpactDeltaSummary/, 'orbit-strength sweep cells must preserve curve-level law-impact deltas for all families');
 assert.match(witness, /apertureOrbitAuthorityMetrics/, 'orbit-strength sweep cells must preserve local aperture-authority metrics for all families');
+assert.match(witness, /--dense-witness-pack-out/, 'headless witness must expose a dense parallax witness-pack output root');
+assert.match(witness, /DenseWitnessPack/, 'dense witness pack report must name the reusable evidence bundle');
+assert.match(witness, /DenseWitnessScoutSheet/, 'dense witness pack must include a scout sheet for broad parallax coverage');
+assert.match(witness, /DenseWitnessDeltaPairSheet/, 'dense witness pack must include paired strength-delta comparison sheets');
+assert.match(witness, /DenseWitnessHeroSheet/, 'dense witness pack must include larger hero/detail inspection sheets');
+assert.match(witness, /denseWitnessPackOut/, 'dense witness pack report must preserve the requested output root');
+assert.match(witness, /denseWitnessPackRouteIdentity/, 'dense witness pack report must preserve route/config identity separately from screenshots');
 assert.match(core, /frameMacroMorphologySurveyPose/, 'composition witness must expose macro-morphology survey camera framing');
 
 const {

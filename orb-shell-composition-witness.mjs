@@ -62,6 +62,37 @@ const orbitStrengthSweepTarget = (args.get('--orbit-strength-filmstrip-target') 
   .map(item => Number(item.trim()))
   .filter(Number.isFinite);
 const orbitStrengthSweepCellWidth = Number(args.get('--orbit-strength-filmstrip-cell-width') || 420);
+const denseWitnessPackOut = args.has('--dense-witness-pack-out') ? resolve(args.get('--dense-witness-pack-out')) : null;
+const denseWitnessPackStrengths = (args.get('--dense-witness-pack-strengths') || '0,1')
+  .split(',')
+  .map(item => Number(item.trim()))
+  .filter(Number.isFinite)
+  .map(value => Math.max(0, Math.min(1, value)));
+const denseWitnessPackScoutElevations = (args.get('--dense-witness-pack-scout-elevations') || '-35,-10,15,40')
+  .split(',')
+  .map(item => Number(item.trim()))
+  .filter(Number.isFinite);
+const denseWitnessPackScoutAzimuths = (args.get('--dense-witness-pack-scout-azimuths') || '0,45,90,135,180,225,270,315')
+  .split(',')
+  .map(item => Number(item.trim()))
+  .filter(Number.isFinite);
+const denseWitnessPackHeroPoses = (args.get('--dense-witness-pack-hero-poses') || '15:0,15:120,15:240,40:0,40:120,40:240')
+  .split(',')
+  .map(item => item.trim())
+  .filter(Boolean)
+  .map(item => {
+    const [elevationDeg, azimuthDeg] = item.split(':').map(part => Number(part.trim()));
+    return { elevationDeg, azimuthDeg };
+  })
+  .filter(pose => Number.isFinite(pose.elevationDeg) && Number.isFinite(pose.azimuthDeg));
+const denseWitnessPackDistance = Number(args.get('--dense-witness-pack-distance') || orbitStrengthSweepDistance);
+const denseWitnessPackTarget = (args.get('--dense-witness-pack-target') || orbitStrengthSweepTarget.join(','))
+  .split(',')
+  .map(item => Number(item.trim()))
+  .filter(Number.isFinite);
+const denseWitnessPackScoutCellWidth = Number(args.get('--dense-witness-pack-scout-cell-width') || 340);
+const denseWitnessPackDeltaCellWidth = Number(args.get('--dense-witness-pack-delta-cell-width') || 560);
+const denseWitnessPackHeroCellWidth = Number(args.get('--dense-witness-pack-hero-cell-width') || 620);
 const clipCanvas = args.has('--clip-canvas');
 const forceAoRaw = args.get('--force-ao');
 const forceAo = forceAoRaw === undefined ? null : !['0', 'false', 'off', 'no'].includes(String(forceAoRaw).toLowerCase());
@@ -95,6 +126,7 @@ let spatialTruthViewFrame = null;
 let spatialTruthContactSheet = null;
 let spatialTruthSurveyContactSheet = null;
 let orbitStrengthSweepFilmstrip = null;
+let denseWitnessPack = null;
 let materialTruthRoutePolicy = null;
 let materialTruthEnvPolicy = null;
 let preHdrWarmRoutePolicy = null;
@@ -378,6 +410,20 @@ function orbitStrengthCellPath(basePath, strength, elevation, azimuth) {
   return `${basePath}-strength${safeStrength}-el${safeElevation}-az${safeAzimuth}.png`;
 }
 
+function safeSheetToken(value) {
+  return String(value).replace(/[^a-z0-9_.-]+/gi, '-').replace(/\./g, 'p');
+}
+
+function denseWitnessPackSheetPath(kind, suffix = '') {
+  const safeSuffix = suffix ? `-${safeSheetToken(suffix)}` : '';
+  if (/\.png$/i.test(denseWitnessPackOut)) return denseWitnessPackOut.replace(/\.png$/i, `-${kind}${safeSuffix}.png`);
+  return `${denseWitnessPackOut}-${kind}${safeSuffix}.png`;
+}
+
+function denseWitnessPackCellPath(kind, strength, elevation, azimuth) {
+  return denseWitnessPackSheetPath(`${kind}-cell`, `strength${strength}-el${elevation}-az${azimuth}`);
+}
+
 async function applyOrbitStrengthSweepControl(ws, requestedStrength) {
   return evaluate(ws, `
     (() => {
@@ -435,15 +481,301 @@ async function applyOrbitStrengthSweepControl(ws, requestedStrength) {
   `);
 }
 
-async function frameMacroMorphologySurveyPose(ws, elevationDeg, azimuthDeg) {
+async function frameMacroMorphologySurveyPose(ws, elevationDeg, azimuthDeg, options = {}) {
+  const distance = Number.isFinite(options.distance) ? options.distance : orbitStrengthSweepDistance;
+  const target = Array.isArray(options.target) && options.target.length === 3 ? options.target : orbitStrengthSweepTarget;
   return evaluate(ws, `
     window.__kaminosOrbShellCompositionWitness?.frameMacroMorphologySurveyPose?.({
       elevationDeg: ${JSON.stringify(elevationDeg)},
       azimuthDeg: ${JSON.stringify(azimuthDeg)},
-      distance: ${JSON.stringify(orbitStrengthSweepDistance)},
-      target: ${JSON.stringify(orbitStrengthSweepTarget)}
+      distance: ${JSON.stringify(distance)},
+      target: ${JSON.stringify(target)}
     })
   `);
+}
+
+function assertDenseWitnessPackConfig() {
+  assert.ok(denseWitnessPackStrengths.length >= 2, '--dense-witness-pack-strengths must include at least two numeric strengths for delta comparison');
+  assert.ok(denseWitnessPackScoutElevations.length >= 1, '--dense-witness-pack-scout-elevations produced no numeric rows');
+  assert.ok(denseWitnessPackScoutAzimuths.length >= 1, '--dense-witness-pack-scout-azimuths produced no numeric columns');
+  assert.ok(denseWitnessPackHeroPoses.length >= 1, '--dense-witness-pack-hero-poses produced no valid elevation:azimuth pairs');
+  assert.ok(Number.isFinite(denseWitnessPackDistance) && denseWitnessPackDistance > 0, '--dense-witness-pack-distance must be positive');
+  assert.ok(denseWitnessPackTarget.length === 3, '--dense-witness-pack-target must be three comma-separated numbers');
+  assert.ok(Number.isFinite(denseWitnessPackScoutCellWidth) && denseWitnessPackScoutCellWidth >= 220, '--dense-witness-pack-scout-cell-width must be at least 220');
+  assert.ok(Number.isFinite(denseWitnessPackDeltaCellWidth) && denseWitnessPackDeltaCellWidth >= 260, '--dense-witness-pack-delta-cell-width must be at least 260');
+  assert.ok(Number.isFinite(denseWitnessPackHeroCellWidth) && denseWitnessPackHeroCellWidth >= 360, '--dense-witness-pack-hero-cell-width must be at least 360');
+}
+
+async function composeDenseWitnessScoutSheet(ws, captures, strength) {
+  const sheetPath = denseWitnessPackSheetPath('scout', `strength${strength}`);
+  const htmlPath = sheetPath.replace(/\.png$/i, '.html');
+  const columns = denseWitnessPackScoutAzimuths.length;
+  const gap = 10;
+  const padding = 20;
+  const width = Math.round((columns * denseWitnessPackScoutCellWidth) + ((columns - 1) * gap) + (padding * 2));
+  const rows = denseWitnessPackScoutElevations.length;
+  const html = `<!doctype html>
+    <meta charset="utf-8">
+    <style>
+      body { margin: 0; background: #050708; color: #dfe8ea; font: 13px system-ui, sans-serif; }
+      .sheet { width: ${width}px; padding: ${padding}px; display: grid; grid-template-columns: repeat(${columns}, ${denseWitnessPackScoutCellWidth}px); gap: ${gap}px; box-sizing: border-box; }
+      figure { margin: 0; background: #010304; border: 1px solid #26343a; overflow: hidden; }
+      img { display: block; width: ${denseWitnessPackScoutCellWidth}px; aspect-ratio: 16 / 11; object-fit: cover; background: #000; }
+      figcaption { padding: 6px 7px; font: 11px 'SF Mono', ui-monospace, monospace; color: #a9bdc3; display: flex; justify-content: space-between; }
+      .meta { grid-column: 1 / -1; font: 12px 'SF Mono', ui-monospace, monospace; color: #91a7ae; line-height: 1.45; }
+      .strength { color: #ffb24a; }
+      .pose { color: #8fd3ff; }
+    </style>
+    <div class="sheet">
+      <div class="meta">DenseWitnessScoutSheet | focus=${focus} | strength=${strength} | rows=${rows} | azimuths=${denseWitnessPackScoutAzimuths.join(',')} | elevations=${denseWitnessPackScoutElevations.join(',')} | distance=${denseWitnessPackDistance} | target=${denseWitnessPackTarget.join(',')}</div>
+      ${captures.map(capture => `
+        <figure>
+          <img src="${pathToFileURL(capture.path).href}">
+          <figcaption><span class="strength">orbit ${Number(capture.effectiveStrength).toFixed(2)} / el ${capture.elevationDeg}</span><span class="pose">az ${capture.azimuthDeg}</span></figcaption>
+        </figure>
+      `).join('')}
+    </div>`;
+  mkdirSync(dirname(htmlPath), { recursive: true });
+  writeFileSync(htmlPath, html);
+  await send(ws, 'Page.navigate', { url: pathToFileURL(htmlPath).href });
+  await delay(900);
+  const screenshot = await capturePng(ws, sheetPath, { format: 'png', captureBeyondViewport: true });
+  return {
+    schema: 'DenseWitnessScoutSheet',
+    strength,
+    htmlPath,
+    screenshot: { path: screenshot.path, stats: screenshot.stats },
+    captureCount: captures.length,
+  };
+}
+
+async function composeDenseWitnessDeltaPairSheet(ws, captures, baselineStrength, activeStrength) {
+  const sheetPath = denseWitnessPackSheetPath('delta', `strength${baselineStrength}-to-${activeStrength}`);
+  const htmlPath = sheetPath.replace(/\.png$/i, '.html');
+  const columns = denseWitnessPackScoutAzimuths.length;
+  const gap = 12;
+  const padding = 20;
+  const width = Math.round((columns * denseWitnessPackDeltaCellWidth) + ((columns - 1) * gap) + (padding * 2));
+  const captureByKey = new Map(captures.map(capture => [
+    `${capture.effectiveStrength}|${capture.elevationDeg}|${capture.azimuthDeg}`,
+    capture,
+  ]));
+  const pairs = [];
+  for (const elevationDeg of denseWitnessPackScoutElevations) {
+    for (const azimuthDeg of denseWitnessPackScoutAzimuths) {
+      const baseline = captureByKey.get(`${baselineStrength}|${elevationDeg}|${azimuthDeg}`);
+      const active = captureByKey.get(`${activeStrength}|${elevationDeg}|${azimuthDeg}`);
+      if (baseline && active) pairs.push({ elevationDeg, azimuthDeg, baseline, active });
+    }
+  }
+  const html = `<!doctype html>
+    <meta charset="utf-8">
+    <style>
+      body { margin: 0; background: #050708; color: #dfe8ea; font: 13px system-ui, sans-serif; }
+      .sheet { width: ${width}px; padding: ${padding}px; display: grid; grid-template-columns: repeat(${columns}, ${denseWitnessPackDeltaCellWidth}px); gap: ${gap}px; box-sizing: border-box; }
+      figure { margin: 0; background: #010304; border: 1px solid #26343a; overflow: hidden; }
+      .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; background: #091013; }
+      img { display: block; width: 100%; aspect-ratio: 16 / 11; object-fit: cover; background: #000; }
+      figcaption { padding: 6px 7px; font: 11px 'SF Mono', ui-monospace, monospace; color: #a9bdc3; display: flex; justify-content: space-between; }
+      .meta { grid-column: 1 / -1; font: 12px 'SF Mono', ui-monospace, monospace; color: #91a7ae; line-height: 1.45; }
+      .baseline { color: #9eb1b8; }
+      .active { color: #ffb24a; }
+      .pose { color: #8fd3ff; }
+    </style>
+    <div class="sheet">
+      <div class="meta">DenseWitnessDeltaPairSheet | focus=${focus} | baseline=${baselineStrength} | active=${activeStrength} | each cell is baseline left / active right | distance=${denseWitnessPackDistance} | target=${denseWitnessPackTarget.join(',')}</div>
+      ${pairs.map(pair => `
+        <figure>
+          <div class="pair">
+            <img src="${pathToFileURL(pair.baseline.path).href}">
+            <img src="${pathToFileURL(pair.active.path).href}">
+          </div>
+          <figcaption><span><span class="baseline">${Number(baselineStrength).toFixed(2)}</span> -> <span class="active">${Number(activeStrength).toFixed(2)}</span> / el ${pair.elevationDeg}</span><span class="pose">az ${pair.azimuthDeg}</span></figcaption>
+        </figure>
+      `).join('')}
+    </div>`;
+  mkdirSync(dirname(htmlPath), { recursive: true });
+  writeFileSync(htmlPath, html);
+  await send(ws, 'Page.navigate', { url: pathToFileURL(htmlPath).href });
+  await delay(900);
+  const screenshot = await capturePng(ws, sheetPath, { format: 'png', captureBeyondViewport: true });
+  return {
+    schema: 'DenseWitnessDeltaPairSheet',
+    baselineStrength,
+    activeStrength,
+    htmlPath,
+    screenshot: { path: screenshot.path, stats: screenshot.stats },
+    pairCount: pairs.length,
+  };
+}
+
+async function composeDenseWitnessHeroSheet(ws, captures, strength) {
+  const sheetPath = denseWitnessPackSheetPath('hero', `strength${strength}`);
+  const htmlPath = sheetPath.replace(/\.png$/i, '.html');
+  const columns = Math.min(3, Math.max(1, captures.length));
+  const gap = 14;
+  const padding = 22;
+  const width = Math.round((columns * denseWitnessPackHeroCellWidth) + ((columns - 1) * gap) + (padding * 2));
+  const html = `<!doctype html>
+    <meta charset="utf-8">
+    <style>
+      body { margin: 0; background: #050708; color: #dfe8ea; font: 14px system-ui, sans-serif; }
+      .sheet { width: ${width}px; padding: ${padding}px; display: grid; grid-template-columns: repeat(${columns}, ${denseWitnessPackHeroCellWidth}px); gap: ${gap}px; box-sizing: border-box; }
+      figure { margin: 0; background: #010304; border: 1px solid #26343a; overflow: hidden; }
+      img { display: block; width: ${denseWitnessPackHeroCellWidth}px; aspect-ratio: 16 / 11; object-fit: cover; background: #000; }
+      figcaption { padding: 7px 8px; font: 12px 'SF Mono', ui-monospace, monospace; color: #a9bdc3; display: flex; justify-content: space-between; }
+      .meta { grid-column: 1 / -1; font: 13px 'SF Mono', ui-monospace, monospace; color: #91a7ae; line-height: 1.45; }
+      .strength { color: #ffb24a; }
+      .pose { color: #8fd3ff; }
+    </style>
+    <div class="sheet">
+      <div class="meta">DenseWitnessHeroSheet | focus=${focus} | strength=${strength} | selected larger detail poses | distance=${denseWitnessPackDistance} | target=${denseWitnessPackTarget.join(',')}</div>
+      ${captures.map(capture => `
+        <figure>
+          <img src="${pathToFileURL(capture.path).href}">
+          <figcaption><span class="strength">orbit ${Number(capture.effectiveStrength).toFixed(2)} / el ${capture.elevationDeg}</span><span class="pose">az ${capture.azimuthDeg}</span></figcaption>
+        </figure>
+      `).join('')}
+    </div>`;
+  mkdirSync(dirname(htmlPath), { recursive: true });
+  writeFileSync(htmlPath, html);
+  await send(ws, 'Page.navigate', { url: pathToFileURL(htmlPath).href });
+  await delay(900);
+  const screenshot = await capturePng(ws, sheetPath, { format: 'png', captureBeyondViewport: true });
+  return {
+    schema: 'DenseWitnessHeroSheet',
+    strength,
+    htmlPath,
+    screenshot: { path: screenshot.path, stats: screenshot.stats },
+    captureCount: captures.length,
+  };
+}
+
+async function captureDenseWitnessPack(ws, captureOptions) {
+  if (!denseWitnessPackOut) return null;
+  assert.equal(focus, 'macro-morphology-inventory', '--dense-witness-pack-out is scoped to macro-morphology-inventory focus');
+  assertDenseWitnessPackConfig();
+  const captures = [];
+  const routeIdentity = {
+    schema: 'denseWitnessPackRouteIdentity',
+    requestedUrl: url,
+    focus,
+    diagnosticPass,
+    viewSet,
+    strengths: denseWitnessPackStrengths,
+    scoutElevations: denseWitnessPackScoutElevations,
+    scoutAzimuths: denseWitnessPackScoutAzimuths,
+    heroPoses: denseWitnessPackHeroPoses,
+    distance: denseWitnessPackDistance,
+    target: denseWitnessPackTarget,
+  };
+  const cellCount = denseWitnessPackStrengths.length * denseWitnessPackScoutElevations.length * denseWitnessPackScoutAzimuths.length;
+  const gridWarning = cellCount > 96
+    ? {
+        schema: 'MohelIndicator',
+        mode: 'uncapped-dense-witness-pack-large-output-warning',
+        cellCount,
+        reason: 'dense witness pack parallax grid is large; output was not capped because parallax coverage is evidence',
+      }
+    : null;
+  for (const requestedStrength of denseWitnessPackStrengths) {
+    const application = await applyOrbitStrengthSweepControl(ws, requestedStrength);
+    assert.equal(application?.schema, 'OrbitStrengthSweepLawControlApplication', 'dense witness pack control application missing schema');
+    assert.equal(application?.applied, true, 'dense witness pack control application failed');
+    await delay(240);
+    for (const elevationDeg of denseWitnessPackScoutElevations) {
+      for (const azimuthDeg of denseWitnessPackScoutAzimuths) {
+        const cell = await frameMacroMorphologySurveyPose(ws, elevationDeg, azimuthDeg, {
+          distance: denseWitnessPackDistance,
+          target: denseWitnessPackTarget,
+        });
+        assert.equal(cell?.schema, 'MacroMorphologySurveyCellFrame', 'dense witness scout cell framing failed');
+        await delay(240);
+        const cellPath = denseWitnessPackCellPath('scout', application.effectiveStrength, elevationDeg, azimuthDeg);
+        const capture = await capturePng(ws, cellPath, captureOptions);
+        captures.push({
+          schema: 'DenseWitnessPackCellCapture',
+          set: 'scout',
+          requestedStrength,
+          effectiveStrength: application.effectiveStrength,
+          elevationDeg,
+          azimuthDeg,
+          cameraPose: cell.cameraPose,
+          lawControls: application.lawControls,
+          lawImpactDeltaSummary: application.lawImpactDeltaSummary,
+          witnessSummary: application.witnessSummary,
+          path: capture.path,
+          stats: capture.stats,
+        });
+      }
+    }
+  }
+  const activeStrength = denseWitnessPackStrengths[denseWitnessPackStrengths.length - 1];
+  const activeApplication = await applyOrbitStrengthSweepControl(ws, activeStrength);
+  assert.equal(activeApplication?.applied, true, 'dense witness hero control application failed');
+  const heroCaptures = [];
+  for (const pose of denseWitnessPackHeroPoses) {
+    const cell = await frameMacroMorphologySurveyPose(ws, pose.elevationDeg, pose.azimuthDeg, {
+      distance: denseWitnessPackDistance,
+      target: denseWitnessPackTarget,
+    });
+    assert.equal(cell?.schema, 'MacroMorphologySurveyCellFrame', 'dense witness hero cell framing failed');
+    await delay(260);
+    const cellPath = denseWitnessPackCellPath('hero', activeApplication.effectiveStrength, pose.elevationDeg, pose.azimuthDeg);
+    const capture = await capturePng(ws, cellPath, captureOptions);
+    heroCaptures.push({
+      schema: 'DenseWitnessPackCellCapture',
+      set: 'hero',
+      requestedStrength: activeStrength,
+      effectiveStrength: activeApplication.effectiveStrength,
+      elevationDeg: pose.elevationDeg,
+      azimuthDeg: pose.azimuthDeg,
+      cameraPose: cell.cameraPose,
+      lawControls: activeApplication.lawControls,
+      lawImpactDeltaSummary: activeApplication.lawImpactDeltaSummary,
+      witnessSummary: activeApplication.witnessSummary,
+      path: capture.path,
+      stats: capture.stats,
+    });
+  }
+  const scoutSheets = [];
+  for (const strength of denseWitnessPackStrengths) {
+    scoutSheets.push(await composeDenseWitnessScoutSheet(
+      ws,
+      captures.filter(capture => Math.abs(capture.effectiveStrength - strength) < 1e-6),
+      strength,
+    ));
+  }
+  const baselineStrength = denseWitnessPackStrengths[0];
+  const deltaSheet = await composeDenseWitnessDeltaPairSheet(ws, captures, baselineStrength, activeStrength);
+  const heroSheet = await composeDenseWitnessHeroSheet(ws, heroCaptures, activeStrength);
+  return {
+    schema: 'DenseWitnessPack',
+    mode: 'orbit-law-parallax-scout-delta-hero-pack-v0',
+    denseWitnessPackOut,
+    denseWitnessPackRouteIdentity: routeIdentity,
+    scoutSheets,
+    deltaSheet,
+    heroSheet,
+    grid: {
+      schema: 'DenseWitnessPackGrid',
+      strengths: denseWitnessPackStrengths,
+      scoutElevations: denseWitnessPackScoutElevations,
+      scoutAzimuths: denseWitnessPackScoutAzimuths,
+      heroPoses: denseWitnessPackHeroPoses,
+      distance: denseWitnessPackDistance,
+      target: denseWitnessPackTarget,
+      scoutCellWidth: denseWitnessPackScoutCellWidth,
+      deltaCellWidth: denseWitnessPackDeltaCellWidth,
+      heroCellWidth: denseWitnessPackHeroCellWidth,
+      scoutCellCount: cellCount,
+      heroCellCount: heroCaptures.length,
+      gridWarning,
+    },
+    captures,
+    heroCaptures,
+    screenshot: heroSheet.screenshot,
+  };
 }
 
 async function captureOrbitStrengthSweepFilmstrip(ws, captureOptions) {
@@ -710,9 +1042,13 @@ async function main() {
     spatialTruthView,
     contactSheetOut,
     orbitStrengthFilmstripOut,
+    denseWitnessPackOut,
     orbitStrengthSweepStrengths,
     orbitStrengthSweepElevations,
     orbitStrengthSweepAzimuths,
+    denseWitnessPackStrengths,
+    denseWitnessPackScoutElevations,
+    denseWitnessPackScoutAzimuths,
     spatialTruthEnvMapIntensity,
     spatialTruthExposure,
     phase,
@@ -1243,6 +1579,15 @@ async function main() {
     assert.ok(state?.forbiddenFailureClasses?.includes('strip-soup'), 'failure class evidence missing');
     }
     await assertCompositionStructuralInvariants();
+    assert.ok(
+      !(orbitStrengthFilmstripOut && denseWitnessPackOut),
+      '--orbit-strength-filmstrip-out and --dense-witness-pack-out both compose the page after capture; run them as separate invocations',
+    );
+    if (denseWitnessPackOut) {
+      phase = 'dense-witness-pack';
+      const denseCaptureOptions = await canvasCaptureOptions(ws, 'dense-witness-pack');
+      denseWitnessPack = await captureDenseWitnessPack(ws, denseCaptureOptions);
+    }
     if (orbitStrengthFilmstripOut) {
       phase = 'orbit-strength-filmstrip';
       const filmstripCaptureOptions = await canvasCaptureOptions(ws, 'orbit-strength-filmstrip');
@@ -1405,6 +1750,7 @@ async function main() {
       spatialTruthContactSheet,
       spatialTruthSurveyContactSheet,
       orbitStrengthSweepFilmstrip,
+      denseWitnessPack,
       materialTruthRoutePolicy,
       materialTruthEnvPolicy,
       preHdrWarmRoutePolicy,
