@@ -33,11 +33,13 @@ SPARSE_STRUCTURAL_TARGET_FAMILY_IDENTITY = "sparse-structural-target-family-v0"
 BLOCK_BASELINE_IDENTITY = "block-upsample-copy-baseline-v0"
 RIDGE_IDENTITY = "local-linear-ridge-v0"
 MLP_IDENTITY = "local-context-mlp-v0"
+RIDGE_CLASSIFIER_IDENTITY = "ridge-calibrated-classifier-v0"
 STANDARD_MLP_LOSS_IDENTITY = "standard-mlp-mse-v0"
 SPARSE_POSITIVE_WEIGHTED_LOSS_IDENTITY = "sparse-positive-weighted-mse-v0"
 FEATURE_IDENTITY = "low-grid-3d-local-context-plus-high-subcell-v0"
 AUTHORITY = "offline-phase-aligned-sidecar-meta-probe-not-browser-witness-not-product-inference"
 DEFAULT_THRESHOLD_SWEEP = [1.0e-5, 3.0e-5, 1.0e-4, 3.0e-4, 1.0e-3, 3.0e-3, 1.0e-2, 3.0e-2, 1.0e-1]
+DEFAULT_CLASSIFIER_THRESHOLD_SWEEP = [0.05, 0.10, 0.15, 0.20, 0.25, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90, 0.95]
 
 
 class ProbeFailure(Exception):
@@ -73,6 +75,19 @@ def parse_args() -> argparse.Namespace:
         default=",".join(str(v) for v in DEFAULT_THRESHOLD_SWEEP),
         help="Comma-separated positive thresholds for support/ridge/proximity precision-recall-Jaccard calibration.",
     )
+    parser.add_argument(
+        "--ridge-classifier-mode",
+        choices=["none", "binary"],
+        default="none",
+        help="Optional ridge-specific calibrated binary classifier over the same local features.",
+    )
+    parser.add_argument("--ridge-classifier-target-threshold", type=float, default=0.1, help="Truth ridge magnitude threshold used as the binary classifier target.")
+    parser.add_argument(
+        "--ridge-classifier-threshold-sweep",
+        default=",".join(str(v) for v in DEFAULT_CLASSIFIER_THRESHOLD_SWEEP),
+        help="Comma-separated probability thresholds for ridge classifier precision-recall-Jaccard calibration.",
+    )
+    parser.add_argument("--ridge-classifier-positive-weight", type=float, default=0.0, help="BCE positive class weight; 0 means use the train-set negative/positive ratio.")
     parser.add_argument("--context-radius", type=int, default=1, help="Low-grid local context radius; 1 gives a 3x3x3 stencil.")
     parser.add_argument("--ridge", type=float, default=1.0e-3, help="Ridge regularization for local-linear-ridge-v0.")
     parser.add_argument("--hidden-width", type=int, default=64, help="Hidden width for local-context-mlp-v0.")
@@ -117,6 +132,14 @@ def parse_threshold_sweep(value: str) -> list[float]:
             raise ProbeFailure("args", "--threshold-sweep thresholds must be finite and positive.", {"threshold": raw})
         thresholds.append(threshold)
     return sorted(set(thresholds))
+
+
+def parse_classifier_threshold_sweep(value: str) -> list[float]:
+    thresholds = parse_threshold_sweep(value)
+    invalid = [threshold for threshold in thresholds if threshold >= 1.0]
+    if invalid:
+        raise ProbeFailure("args", "--ridge-classifier-threshold-sweep thresholds must be in (0, 1).", {"thresholds": invalid})
+    return thresholds
 
 
 def now_iso() -> str:
@@ -450,6 +473,77 @@ def predict_mlp(model: dict[str, np.ndarray], x: np.ndarray) -> np.ndarray:
     return (np.tanh(x @ model["w1"] + model["b1"]) @ model["w2"] + model["b2"]).astype(np.float32)
 
 
+def sigmoid(x: np.ndarray) -> np.ndarray:
+    return (1.0 / (1.0 + np.exp(-np.clip(x, -60.0, 60.0)))).astype(np.float32)
+
+
+def train_binary_mlp_classifier(
+    x: np.ndarray,
+    y: np.ndarray,
+    hidden_width: int,
+    epochs: int,
+    batch_size: int,
+    learning_rate: float,
+    weight_decay: float,
+    positive_weight: float,
+    rng: np.random.Generator,
+) -> tuple[dict[str, np.ndarray], list[dict[str, float]]]:
+    in_dim = x.shape[1]
+    w1 = (rng.normal(0.0, math.sqrt(2.0 / max(1, in_dim)), size=(in_dim, hidden_width))).astype(np.float32)
+    b1 = np.zeros((hidden_width,), dtype=np.float32)
+    w2 = (rng.normal(0.0, math.sqrt(2.0 / max(1, hidden_width)), size=(hidden_width, 1))).astype(np.float32)
+    b2 = np.zeros((1,), dtype=np.float32)
+    params = [w1, b1, w2, b2]
+    m = [np.zeros_like(p) for p in params]
+    v = [np.zeros_like(p) for p in params]
+    history = []
+    step = 0
+    n = x.shape[0]
+    batch_size = max(1, min(int(batch_size), n))
+    y = y.astype(np.float32).reshape((-1, 1))
+    pos_weight = float(positive_weight)
+    if not math.isfinite(pos_weight) or pos_weight <= 0.0:
+        raise ProbeFailure("args", "Binary classifier positive weight must be finite and positive.", {"positiveWeight": positive_weight})
+    eps = 1.0e-7
+    for epoch in range(int(epochs)):
+        order = rng.permutation(n)
+        losses = []
+        for start in range(0, n, batch_size):
+            step += 1
+            idx = order[start:start + batch_size]
+            xb = x[idx]
+            yb = y[idx]
+            h_pre = xb @ w1 + b1
+            h = np.tanh(h_pre)
+            logits = h @ w2 + b2
+            prob = sigmoid(logits)
+            weights = np.where(yb > 0.5, pos_weight, 1.0).astype(np.float32)
+            denom = max(1.0, float(np.sum(weights)))
+            loss = float(-np.sum(weights * (yb * np.log(prob + eps) + (1.0 - yb) * np.log(1.0 - prob + eps))) / denom)
+            losses.append(loss)
+            grad_logits = weights * (prob - yb) / denom
+            gw2 = h.T @ grad_logits + weight_decay * w2
+            gb2 = grad_logits.sum(axis=0)
+            gh = grad_logits @ w2.T
+            gh_pre = gh * (1.0 - h ** 2)
+            gw1 = xb.T @ gh_pre + weight_decay * w1
+            gb1 = gh_pre.sum(axis=0)
+            grads = [gw1.astype(np.float32), gb1.astype(np.float32), gw2.astype(np.float32), gb2.astype(np.float32)]
+            for i, (param, grad) in enumerate(zip(params, grads)):
+                m[i] = 0.9 * m[i] + 0.1 * grad
+                v[i] = 0.999 * v[i] + 0.001 * (grad * grad)
+                m_hat = m[i] / (1.0 - 0.9 ** step)
+                v_hat = v[i] / (1.0 - 0.999 ** step)
+                param -= learning_rate * m_hat / (np.sqrt(v_hat) + 1.0e-8)
+        if epoch == 0 or epoch == epochs - 1 or (epoch + 1) % max(1, epochs // 5) == 0:
+            history.append({"epoch": epoch + 1, "trainBinaryCrossEntropy": float(np.mean(losses))})
+    return {"w1": w1, "b1": b1, "w2": w2, "b2": b2}, history
+
+
+def predict_binary_mlp_classifier(model: dict[str, np.ndarray], x: np.ndarray) -> np.ndarray:
+    return sigmoid(np.tanh(x @ model["w1"] + model["b1"]) @ model["w2"] + model["b2"]).reshape((-1,)).astype(np.float32)
+
+
 def channel_metrics(pred: np.ndarray, truth: np.ndarray, channel_names: list[str]) -> dict[str, dict[str, float]]:
     result: dict[str, dict[str, float]] = {}
     for i, name in enumerate(channel_names):
@@ -528,6 +622,38 @@ def threshold_sweep(
     return sweep
 
 
+def binary_support_metrics(prob: np.ndarray, truth: np.ndarray, threshold: float) -> dict[str, float]:
+    p = prob >= threshold
+    t = truth.astype(bool)
+    tp = int(np.count_nonzero(p & t))
+    fp = int(np.count_nonzero(p & ~t))
+    fn = int(np.count_nonzero(~p & t))
+    precision = tp / max(1, tp + fp)
+    recall = tp / max(1, tp + fn)
+    return {
+        "threshold": float(threshold),
+        "precision": float(precision),
+        "recall": float(recall),
+        "jaccard": float(tp / max(1, tp + fp + fn)),
+        "predictedCount": int(np.count_nonzero(p)),
+        "truthCount": int(np.count_nonzero(t)),
+    }
+
+
+def binary_threshold_sweep(prob: np.ndarray, truth: np.ndarray, thresholds: list[float]) -> dict[str, Any]:
+    rows = [binary_support_metrics(prob, truth, threshold) for threshold in thresholds]
+    best = max(rows, key=lambda row: row["jaccard"])
+    return {
+        "thresholds": rows,
+        "bestJaccardThreshold": float(best["threshold"]),
+        "bestJaccard": float(best["jaccard"]),
+        "bestPrecision": float(best["precision"]),
+        "bestRecall": float(best["recall"]),
+        "bestPredictedCount": int(best["predictedCount"]),
+        "truthCountAtBestThreshold": int(best["truthCount"]),
+    }
+
+
 def percent_reduction(baseline: float, value: float) -> float:
     if not math.isfinite(baseline) or abs(baseline) < 1.0e-12:
         return 0.0
@@ -597,6 +723,17 @@ def main() -> int:
         target_indexes, selected_target_channels, target_family = parse_target_channels(args.target_channel_list)
         target_indexes_np = np.asarray(target_indexes, dtype=np.int64)
         thresholds = parse_threshold_sweep(args.threshold_sweep)
+        classifier_thresholds = parse_classifier_threshold_sweep(args.ridge_classifier_threshold_sweep)
+        ridge_classifier_enabled = args.ridge_classifier_mode == "binary"
+        if ridge_classifier_enabled and "ridge" not in selected_target_channels:
+            raise ProbeFailure("args", "--ridge-classifier-mode binary requires ridge in --target-channel-list for scalar baseline comparison.", {
+                "selectedTargetChannels": selected_target_channels,
+            })
+        ridge_classifier_target_threshold = float(args.ridge_classifier_target_threshold)
+        if ridge_classifier_enabled and (not math.isfinite(ridge_classifier_target_threshold) or ridge_classifier_target_threshold <= 0.0):
+            raise ProbeFailure("args", "--ridge-classifier-target-threshold must be finite and positive.", {
+                "ridgeClassifierTargetThreshold": args.ridge_classifier_target_threshold,
+            })
         loss_identity = (
             SPARSE_POSITIVE_WEIGHTED_LOSS_IDENTITY
             if args.sparse_loss_mode == "positive-weighted"
@@ -678,6 +815,13 @@ def main() -> int:
         block_test = low_block_values(low, test_idx, high_grid, low_grid)[:, target_indexes_np]
         ridge_model = fit_ridge(x_train, y_train, float(args.ridge))
         ridge_pred = predict_ridge(ridge_model, x_test) * y_std + y_mean
+        ridge_classifier_model = None
+        ridge_classifier_history: list[dict[str, float]] | None = None
+        ridge_classifier_train_labels = None
+        ridge_classifier_test_labels = None
+        ridge_classifier_positive_weight = None
+        ridge_classifier_pred = None
+        ridge_classifier_sweep = None
         mlp_model, history = train_mlp(
             x_train,
             y_train,
@@ -690,15 +834,49 @@ def main() -> int:
             mlp_sample_weights,
         )
         mlp_pred = predict_mlp(mlp_model, x_test) * y_std + y_mean
+        if ridge_classifier_enabled:
+            ridge_channel_index = CHANNEL_ORDER.index("ridge")
+            ridge_classifier_train_labels = (np.abs(y_train_full[:, ridge_channel_index]) > ridge_classifier_target_threshold).astype(np.float32)
+            ridge_classifier_test_labels = (np.abs(y_test_full[:, ridge_channel_index]) > ridge_classifier_target_threshold).astype(np.float32)
+            train_positive_count = int(np.count_nonzero(ridge_classifier_train_labels))
+            train_negative_count = int(ridge_classifier_train_labels.size - train_positive_count)
+            if train_positive_count <= 0:
+                raise ProbeFailure("ridge-classifier-train", "Ridge classifier target has no positive training samples.", {
+                    "ridgeClassifierTargetThreshold": ridge_classifier_target_threshold,
+                    "trainSamples": int(ridge_classifier_train_labels.size),
+                })
+            requested_positive_weight = float(args.ridge_classifier_positive_weight)
+            ridge_classifier_positive_weight = (
+                requested_positive_weight
+                if requested_positive_weight > 0.0
+                else float(train_negative_count / max(1, train_positive_count))
+            )
+            ridge_classifier_model, ridge_classifier_history = train_binary_mlp_classifier(
+                x_train,
+                ridge_classifier_train_labels,
+                int(args.hidden_width),
+                int(args.epochs),
+                int(args.batch_size),
+                float(args.learning_rate),
+                float(args.weight_decay),
+                ridge_classifier_positive_weight,
+                rng,
+            )
+            ridge_classifier_pred = predict_binary_mlp_classifier(ridge_classifier_model, x_test)
+            ridge_classifier_sweep = binary_threshold_sweep(ridge_classifier_pred, ridge_classifier_test_labels, classifier_thresholds)
         native_block_metrics = None
         native_ridge_metrics = None
         native_mlp_metrics = None
+        native_ridge_classifier_sweep = None
         if native_low is not None:
             native_x_raw = local_features(native_low, test_idx, high_grid, low_grid, int(args.context_radius))
             native_x = apply_standardize(native_x_raw, x_mean, x_std)
             native_block = low_block_values(native_low, test_idx, high_grid, low_grid)[:, target_indexes_np]
             native_ridge = predict_ridge(ridge_model, native_x) * y_std + y_mean
             native_mlp = predict_mlp(mlp_model, native_x) * y_std + y_mean
+            if ridge_classifier_enabled and ridge_classifier_model is not None and ridge_classifier_test_labels is not None:
+                native_ridge_classifier_pred = predict_binary_mlp_classifier(ridge_classifier_model, native_x)
+                native_ridge_classifier_sweep = binary_threshold_sweep(native_ridge_classifier_pred, ridge_classifier_test_labels, classifier_thresholds)
             native_block_metrics = channel_metrics(native_block, y_test_raw, selected_target_channels)
             native_ridge_metrics = channel_metrics(native_ridge, y_test_raw, selected_target_channels)
             native_mlp_metrics = channel_metrics(native_mlp, y_test_raw, selected_target_channels)
@@ -706,6 +884,25 @@ def main() -> int:
         ridge_metrics = channel_metrics(ridge_pred, y_test_raw, selected_target_channels)
         mlp_metrics = channel_metrics(mlp_pred, y_test_raw, selected_target_channels)
         mlp_threshold_sweep = threshold_sweep(mlp_pred, y_test_raw, selected_target_channels, thresholds)
+        ridge_classifier_report = None
+        if ridge_classifier_enabled and ridge_classifier_sweep is not None and ridge_classifier_train_labels is not None and ridge_classifier_test_labels is not None:
+            scalar_ridge_sweep = mlp_threshold_sweep["ridge"]
+            ridge_classifier_report = {
+                "identity": RIDGE_CLASSIFIER_IDENTITY,
+                "mode": str(args.ridge_classifier_mode),
+                "targetChannel": "ridge",
+                "targetTruthThreshold": ridge_classifier_target_threshold,
+                "probabilityThresholdSweep": ridge_classifier_sweep,
+                "scalarMlpRidgeReference": scalar_ridge_sweep,
+                "bestJaccardImprovementVsScalarMlp": float(ridge_classifier_sweep["bestJaccard"] - scalar_ridge_sweep["bestJaccard"]),
+                "bestPrecisionImprovementVsScalarMlp": float(ridge_classifier_sweep["bestPrecision"] - scalar_ridge_sweep["bestPrecision"]),
+                "bestRecallDeltaVsScalarMlp": float(ridge_classifier_sweep["bestRecall"] - scalar_ridge_sweep["bestRecall"]),
+                "trainPositiveCount": int(np.count_nonzero(ridge_classifier_train_labels)),
+                "trainNegativeCount": int(ridge_classifier_train_labels.size - np.count_nonzero(ridge_classifier_train_labels)),
+                "testPositiveCount": int(np.count_nonzero(ridge_classifier_test_labels)),
+                "testNegativeCount": int(ridge_classifier_test_labels.size - np.count_nonzero(ridge_classifier_test_labels)),
+                "positiveWeight": float(ridge_classifier_positive_weight) if ridge_classifier_positive_weight is not None else None,
+            }
         native_mlp_threshold_sweep = None
         if native_mlp_metrics is None:
             native_mlp_metrics = mlp_metrics
@@ -782,6 +979,21 @@ def main() -> int:
                     "inputFeatureCount": int(x_train.shape[1]),
                     "outputChannels": selected_target_channels,
                 },
+                "ridgeClassifier": {
+                    "identity": RIDGE_CLASSIFIER_IDENTITY,
+                    "mode": str(args.ridge_classifier_mode),
+                    "targetChannel": "ridge",
+                    "targetTruthThreshold": ridge_classifier_target_threshold,
+                    "probabilityThresholdSweep": classifier_thresholds,
+                    "positiveWeight": float(ridge_classifier_positive_weight) if ridge_classifier_positive_weight is not None else None,
+                    "hiddenWidth": int(args.hidden_width),
+                    "epochs": int(args.epochs),
+                    "batchSize": int(args.batch_size),
+                    "learningRate": float(args.learning_rate),
+                    "weightDecay": float(args.weight_decay),
+                    "trainingHistory": ridge_classifier_history,
+                    "inputFeatureCount": int(x_train.shape[1]),
+                } if ridge_classifier_enabled else None,
             },
             "phaseAlignedTeacher": {
                 "blockUpsampleCopyBaseline": {
@@ -805,6 +1017,7 @@ def main() -> int:
                     ],
                     "thresholdSweep": mlp_threshold_sweep,
                 },
+                "ridgeClassifier": ridge_classifier_report,
             },
             "nativeLowTransfer": {
                 "status": "computed" if native_block_metrics is not None else "not-requested",
@@ -827,6 +1040,11 @@ def main() -> int:
                     "global": global_metrics(native_mlp_metrics),
                     "thresholdSweep": native_mlp_threshold_sweep,
                 } if native_mlp_metrics else None,
+                "ridgeClassifier": {
+                    "identity": RIDGE_CLASSIFIER_IDENTITY,
+                    "authority": "native-low-input-through-phase-aligned-trained-ridge-classifier-compared-to-same-high-ridge-label",
+                    "probabilityThresholdSweep": native_ridge_classifier_sweep,
+                } if native_ridge_classifier_sweep else None,
             },
             "perChannelVerdicts": verdicts(block_metrics, ridge_metrics, mlp_metrics, native_mlp_metrics, selected_target_channels),
             "nonGoals": [

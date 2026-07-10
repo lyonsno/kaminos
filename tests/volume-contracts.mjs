@@ -2262,6 +2262,10 @@ assert.match(sidecarMetaProbe, /--sparse-loss-mode/, 'sidecar/meta probe can swi
 assert.match(sidecarMetaProbe, /sparse-positive-weighted-mse-v0/, 'sidecar/meta probe names sparse-positive weighted loss identity');
 assert.match(sidecarMetaProbe, /thresholdSweep/, 'sidecar/meta probe reports threshold sweeps for calibrated support/ridge/proximity masks');
 assert.match(sidecarMetaProbe, /bestJaccardThreshold/, 'sidecar/meta threshold sweep reports the best Jaccard threshold per sparse channel');
+assert.match(sidecarMetaProbe, /--ridge-classifier-mode/, 'sidecar/meta probe can run a ridge-specific calibrated classifier probe');
+assert.match(sidecarMetaProbe, /ridge-calibrated-classifier-v0/, 'sidecar/meta probe names a stable ridge calibrated classifier identity');
+assert.match(sidecarMetaProbe, /ridgeClassifier/, 'sidecar/meta probe reports ridge classifier metrics separately from scalar MLP metrics');
+assert.match(sidecarMetaProbe, /bestJaccardImprovementVsScalarMlp/, 'sidecar/meta ridge classifier reports calibrated Jaccard delta versus scalar MLP');
 assert.match(sidecarMetaProbe, /nativeLowTransfer/, 'sidecar/meta probe separates native-low transfer from phase-aligned teacher learnability');
 assert.match(sidecarMetaProbe, /perChannelVerdicts/, 'sidecar/meta probe emits per-channel verdicts instead of only a global score');
 assert.match(sidecarMetaProbe, /failurePhase/, 'sidecar/meta probe writes failure-phase reports for missing or mismatched corpus data');
