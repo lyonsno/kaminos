@@ -125,7 +125,7 @@ const fieldTileSpatialBinIds = String(args.get('--field-tile-spatial-bin-ids') |
 const fullScreenshot = args.has('--full-screenshot')
   ? resolve(args.get('--full-screenshot') || out.replace(/\.png$/i, '.full.png'))
   : '';
-const VALID_EVIDENCE_MODES = new Set(['fire-volume', 'performance', 'pyro-material', 'no-fire-volume']);
+const VALID_EVIDENCE_MODES = new Set(['fire-volume', 'performance', 'pyro-material', 'no-fire-volume', 'boundary-fire']);
 const evidenceMode = args.get('--evidence-mode') || 'fire-volume';
 if (!VALID_EVIDENCE_MODES.has(evidenceMode)) {
   throw new Error(`Unknown witness evidence mode: ${evidenceMode}`);
@@ -133,9 +133,14 @@ if (!VALID_EVIDENCE_MODES.has(evidenceMode)) {
 const expectsPerformanceVolumeEvidence = evidenceMode === 'performance';
 const expectsPyroMaterialEvidence = evidenceMode === 'pyro-material';
 const expectsNoFireVolumeEvidence = evidenceMode === 'no-fire-volume';
+const expectsBoundaryFireEvidence = evidenceMode === 'boundary-fire';
 const visualEvidenceMode = expectsNoFireVolumeEvidence
   ? 'no-fire-volume-signal'
-  : (expectsPyroMaterialEvidence ? 'pyro-material-coupled-volume-signal' : (expectsPerformanceVolumeEvidence ? 'performance-volume-signal' : 'fire-volume'));
+  : (
+    expectsBoundaryFireEvidence
+      ? 'boundary-fire-sidecar-signal'
+      : (expectsPyroMaterialEvidence ? 'pyro-material-coupled-volume-signal' : (expectsPerformanceVolumeEvidence ? 'performance-volume-signal' : 'fire-volume'))
+  );
 const TALL_PLUME_PRESSURE_ITERATION_STRATEGY_PRESSURE2 = 'tall-plume-pressure2-v0';
 const TALL_PLUME_PRESSURE_ITERATION_STRATEGY_INACTIVE = 'inactive';
 const TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY = 'tall-plume-spatial-pressure-tiers-v0';
@@ -353,6 +358,79 @@ function buildPyroRawCarrierPaintEvidence(sample = {}, state = {}) {
       frontTopologyMean,
       detailMean,
       radianceMean,
+    },
+  };
+}
+
+function buildBoundaryFireEvidence(sample = {}, state = {}) {
+  const sim = sample.simReadback || {};
+  const controls = state.controls || {};
+  const sidecar = state.boundarySidecarDebug || {};
+  const sidecarIdentity = state.boundarySidecarIdentity || sidecar.identity || null;
+  const sidecarSource = state.boundarySidecarSource || sidecar.source || controls.boundarySidecarSource || null;
+  const structureSource = state.boundaryStructureSource || null;
+  const thresholdIdentity = sidecar.thresholdIdentity || null;
+  const thresholds = sidecar.boundarySidecarThresholds || null;
+  const isBoundaryFireInspectRoute =
+    controls.reactionLiveView === 'boundary_fire' ||
+    controls.shellInspectMode === 'boundary_fire' ||
+    (controls.fireRenderMode === 'inspect' && controls.reactionLiveView === 'boundary_fire');
+  const hasActiveSidecar =
+    sidecarIdentity === 'baked-boundary-sidecar-v1' &&
+    sidecar.activeInRaymarch === true &&
+    sidecar.built === true &&
+    finiteNumber(sidecar.bytes) > 0 &&
+    finiteNumber(sidecar.metaBytes) > 0;
+  const hasCombustionFrontAuthority =
+    sim.frontFieldIdentity === 'combustion-front-topology-sidecar-v0' &&
+    finiteNumber(sim.frontFieldBytes) > 0 &&
+    Number.isFinite(sim.frontTopologyMean) &&
+    Number.isFinite(sim.combustionFrontMean);
+  const hasThresholdAuthority =
+    thresholdIdentity === 'calibrated-standard-mlp-sparse-cue-thresholds-v0' &&
+    thresholds?.identity === 'calibrated-standard-mlp-sparse-cue-thresholds-v0';
+  const acceptsBoundaryFireInspect =
+    isBoundaryFireInspectRoute &&
+    hasActiveSidecar &&
+    hasCombustionFrontAuthority &&
+    hasThresholdAuthority;
+  return {
+    identity: 'boundary-fire-sidecar-evidence-v0',
+    phase: acceptsBoundaryFireInspect
+      ? 'boundary-fire-inspect-sidecar-active'
+      : 'boundary-fire-inspect-sidecar-unproven',
+    acceptsBoundaryFireInspect,
+    isBoundaryFireInspectRoute,
+    hasActiveSidecar,
+    hasCombustionFrontAuthority,
+    hasThresholdAuthority,
+    sidecarIdentity,
+    sidecarSource,
+    structureSource,
+    thresholdIdentity,
+    thresholds,
+    activeInRaymarch: sidecar.activeInRaymarch ?? null,
+    built: sidecar.built ?? null,
+    builtThisFrame: sidecar.builtThisFrame ?? null,
+    bytes: sidecar.bytes ?? null,
+    metaBytes: sidecar.metaBytes ?? null,
+    controls: {
+      fireRenderMode: controls.fireRenderMode || null,
+      shellInspectMode: controls.shellInspectMode || null,
+      reactionLiveView: controls.reactionLiveView || null,
+      boundarySidecarSource: controls.boundarySidecarSource || null,
+      boundarySidecarSupportThreshold: controls.boundarySidecarSupportThreshold ?? null,
+      boundarySidecarRidgeThreshold: controls.boundarySidecarRidgeThreshold ?? null,
+      boundarySidecarProximityThreshold: controls.boundarySidecarProximityThreshold ?? null,
+    },
+    carriers: {
+      frontFieldIdentity: sim.frontFieldIdentity || null,
+      frontFieldBytes: sim.frontFieldBytes ?? null,
+      frontTopologyMean: sim.frontTopologyMean ?? null,
+      combustionFrontMean: sim.combustionFrontMean ?? null,
+      reactionMean: sim.reactionMean ?? null,
+      radianceMean: sim.radianceMean ?? null,
+      fireLayerMean: sim.fireLayerMean ?? null,
     },
   };
 }
@@ -2310,16 +2388,20 @@ async function main() {
       throw new Error(`GPU sim readback does not show transported material detail: ${JSON.stringify(sample.simReadback)}`);
     }
     const pyroRawCarrierPaintEvidence = buildPyroRawCarrierPaintEvidence(sample, state);
+    const boundaryFireEvidence = buildBoundaryFireEvidence(sample, state);
     const acceptsRawCarrierPyroPaint =
       expectsPyroMaterialEvidence &&
       pyroRawCarrierPaintEvidence.acceptsLowStockFireLayer;
-    if (!expectsCanonicalPlumeProof && !expectsFuelStarvedTallPlume && !expectsNoFireVolumeEvidence && (!Number.isFinite(sample.simReadback.fireLayerMean) || sample.simReadback.fireLayerMean <= 0.0005) && !acceptsRawCarrierPyroPaint) {
+    if (expectsBoundaryFireEvidence && !boundaryFireEvidence.acceptsBoundaryFireInspect) {
+      throw new Error(`boundary-fire inspect route did not expose active sidecar evidence: ${JSON.stringify(boundaryFireEvidence)}`);
+    }
+    if (!expectsCanonicalPlumeProof && !expectsFuelStarvedTallPlume && !expectsNoFireVolumeEvidence && !expectsBoundaryFireEvidence && (!Number.isFinite(sample.simReadback.fireLayerMean) || sample.simReadback.fireLayerMean <= 0.0005) && !acceptsRawCarrierPyroPaint) {
       throw new Error(`GPU sim readback does not show a transported fire layer or raw-carrier Pyro paint evidence: ${JSON.stringify({
         simReadback: sample.simReadback,
         pyroRawCarrierPaintEvidence,
       })}`);
     }
-    if (!expectsCanonicalPlumeProof && !expectsFuelStarvedTallPlume && !expectsNoFireVolumeEvidence && (!Number.isFinite(sample.simReadback.radianceMean) || sample.simReadback.radianceMean <= 0.0005)) {
+    if (!expectsCanonicalPlumeProof && !expectsFuelStarvedTallPlume && !expectsNoFireVolumeEvidence && !expectsBoundaryFireEvidence && (!Number.isFinite(sample.simReadback.radianceMean) || sample.simReadback.radianceMean <= 0.0005)) {
       throw new Error(`GPU sim readback does not show fire radiance evidence: ${JSON.stringify(sample.simReadback)}`);
     }
     if (expectedVolumeScene === 'tall_plume') {
@@ -2348,10 +2430,13 @@ async function main() {
           })}`);
         }
       } else if (
-        sample.simReadback.fuelMean <= 0.0005 ||
-        sample.simReadback.reactionMean <= 0.0005 ||
-        sample.simReadback.fuelConsumptionMean <= 0.00001 ||
-        sample.simReadback.fireFuelOverlapRatio <= 0.01
+        !expectsBoundaryFireEvidence &&
+        (
+          sample.simReadback.fuelMean <= 0.0005 ||
+          sample.simReadback.reactionMean <= 0.0005 ||
+          sample.simReadback.fuelConsumptionMean <= 0.00001 ||
+          sample.simReadback.fireFuelOverlapRatio <= 0.01
+        )
       ) {
         throw new Error(`tall plume fire was not supported by live fuel/reaction evidence: ${JSON.stringify(sample.simReadback)}`);
       }
@@ -2756,6 +2841,16 @@ async function main() {
       if (mainRendererMetrics.litPixels < 1500 || mainRendererMetrics.smokeLikePixels < 1500 || mainRendererMetrics.meanLuma < 8) {
         throw new Error(`main renderer screenshot missing bridged snuff vapor volume: ${JSON.stringify(mainRendererMetrics)}`);
       }
+    } else if (expectsBoundaryFireEvidence) {
+      if (!boundaryFireEvidence.acceptsBoundaryFireInspect) {
+        throw new Error(`boundary-fire inspect route lost sidecar evidence before main-renderer gate: ${JSON.stringify(boundaryFireEvidence)}`);
+      }
+      if (mainRendererMetrics.litPixels < 650 || mainRendererMetrics.meanLuma < 1.5) {
+        throw new Error(`main renderer screenshot missing bridged boundary-fire sidecar signal: ${JSON.stringify({
+          ...mainRendererMetrics,
+          boundaryFireEvidence,
+        })}`);
+      }
     } else if (expectsNoFireMainRendererVolume) {
       if (mainRendererMetrics.litPixels < 650 || mainRendererMetrics.meanLuma < 1.5) {
         throw new Error(`main renderer screenshot missing bridged no-fire volume signal: ${JSON.stringify(mainRendererMetrics)}`);
@@ -2779,6 +2874,23 @@ async function main() {
           smokeWeight: sample.simReadback?.smokeWeight,
           xyActivePixelRatio: canonicalFieldSlice?.xyActivePixelRatio,
           xyMax: canonicalFieldSlice?.xyMax,
+        })}`);
+      }
+    } else if (expectsBoundaryFireEvidence) {
+      const boundaryFireSignalPixels =
+        Number(metrics.litPixels || 0) +
+        Number(metrics.smokeLikePixels || 0) +
+        Number(metrics.fireLikePixels || 0) +
+        Number(metrics.emissiveLikePixels || 0) +
+        Number(metrics.volumeBounds?.pixelCount || 0);
+      if (!boundaryFireEvidence.acceptsBoundaryFireInspect) {
+        throw new Error(`boundary-fire inspect route lost sidecar evidence before visual gate: ${JSON.stringify(boundaryFireEvidence)}`);
+      }
+      if (metrics.litPixels < 650 || boundaryFireSignalPixels < 1000 || metrics.meanLuma < 1.2) {
+        throw new Error(`blank frame or missing boundary-fire sidecar signal: ${JSON.stringify({
+          ...metrics,
+          boundaryFireSignalPixels,
+          boundaryFireEvidence,
         })}`);
       }
     } else if (expectsNoFireVolumeEvidence) {
@@ -2894,8 +3006,10 @@ async function main() {
       evidenceMode,
       visualEvidenceMode,
       noFireEvidenceMode: expectsNoFireVolumeEvidence ? 'no-fire-volume-signal' : null,
+      boundaryFireEvidenceMode: expectsBoundaryFireEvidence ? 'boundary-fire-sidecar-signal' : null,
       pyroMaterialEvidenceMode: expectsPyroMaterialEvidence ? 'pyro-material-coupled-volume-signal' : null,
       pyroRawCarrierPaintEvidence,
+      boundaryFireEvidence,
       performanceVisualWarnings,
       effectiveRoute: state.effectiveRoute,
       prototypeIdentity: state.prototypeIdentity,
