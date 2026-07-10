@@ -340,10 +340,14 @@ const PRESSURE_SOURCE_STRATEGY_DISABLED = 'disabled';
 const TALL_PLUME_PRESSURE_ITERATION_STRATEGY_PRESSURE2 = 'tall-plume-pressure2-v0';
 const TALL_PLUME_PRESSURE_ITERATION_STRATEGY_INACTIVE = 'inactive';
 const TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY = 'tall-plume-spatial-pressure-tiers-v0';
+const TALL_PLUME_ACTIVITY_PRESSURE_TIER_STRATEGY = 'tall-plume-current-sim-activity-pressure-tiers-v0';
 const TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY_INACTIVE = 'inactive';
+const PRESSURE_TIER_MASK_ORDERING = 'current-sim-front-occupancy-before-pressure-projection-v0';
+const ACTIVITY_GATED_DETAIL_FORCE_STRATEGY = 'activity-gated-vorticity-detail-force-v0';
 const PRESSURE_PROJECTION_READ_STRATEGY_COMPOSITE = 'composite-pressure-tier-read-v0';
 const PRESSURE_PROJECTION_READ_STRATEGY_SINGLE_BUFFER = 'single-pressure-buffer-read-v0';
 const PRESSURE_STRATEGY_SPATIAL_TIERS = 'spatial_tiers';
+const PRESSURE_STRATEGY_ACTIVITY_TIERS = 'activity_tiers';
 const PRESSURE_STRATEGY_GLOBAL = 'global';
 const DEFAULT_PRESSURE_TIER_LOWER_MAX = 0.50;
 const DEFAULT_PRESSURE_TIER_HERO_MIN = 0.05;
@@ -584,6 +588,9 @@ function normalizePressureStrategy(value, scene) {
   if (normalizeVolumeScene(scene) === 'tall_plume' && requested === PRESSURE_STRATEGY_SPATIAL_TIERS) {
     return PRESSURE_STRATEGY_SPATIAL_TIERS;
   }
+  if (normalizeVolumeScene(scene) === 'tall_plume' && requested === PRESSURE_STRATEGY_ACTIVITY_TIERS) {
+    return PRESSURE_STRATEGY_ACTIVITY_TIERS;
+  }
   return PRESSURE_STRATEGY_GLOBAL;
 }
 
@@ -594,9 +601,10 @@ function tallPlumePressureIterationStrategy(scene, pressureIterations) {
 }
 
 function tallPlumePressureTierStrategy(scene, pressureStrategy) {
-  return normalizeVolumeScene(scene) === 'tall_plume' && pressureStrategy === PRESSURE_STRATEGY_SPATIAL_TIERS
-    ? TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY
-    : TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY_INACTIVE;
+  if (normalizeVolumeScene(scene) !== 'tall_plume') return TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY_INACTIVE;
+  if (pressureStrategy === PRESSURE_STRATEGY_SPATIAL_TIERS) return TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY;
+  if (pressureStrategy === PRESSURE_STRATEGY_ACTIVITY_TIERS) return TALL_PLUME_ACTIVITY_PRESSURE_TIER_STRATEGY;
+  return TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY_INACTIVE;
 }
 
 function normalizePressureTierControls(value = {}) {
@@ -615,10 +623,11 @@ function pressureTierDispatchMaxY(gridSize, tierWorkgroupsY) {
 
 function pressureTierDispatchPlan(gridSize, pressureStrategy, scene, pressureTierControls = {}) {
   const spatial = normalizeVolumeScene(scene) === 'tall_plume' && pressureStrategy === PRESSURE_STRATEGY_SPATIAL_TIERS;
+  const activity = normalizeVolumeScene(scene) === 'tall_plume' && pressureStrategy === PRESSURE_STRATEGY_ACTIVITY_TIERS;
   const tierControls = normalizePressureTierControls(pressureTierControls);
   const workgroups = Math.ceil(gridSize / 4);
   const fullCells = gridCellCount(gridSize);
-  if (!spatial) {
+  if (!spatial && !activity) {
     return {
       strategy: TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY_INACTIVE,
       projectionReadStrategy: PRESSURE_PROJECTION_READ_STRATEGY_SINGLE_BUFFER,
@@ -631,6 +640,34 @@ function pressureTierDispatchPlan(gridSize, pressureStrategy, scene, pressureTie
       requestedBounds: null,
       effectiveBounds: null,
       bufferOwnership: null,
+    };
+  }
+  if (activity) {
+    return {
+      strategy: TALL_PLUME_ACTIVITY_PRESSURE_TIER_STRATEGY,
+      projectionReadStrategy: PRESSURE_PROJECTION_READ_STRATEGY_COMPOSITE,
+      maxTierIterations: 3,
+      fullGridPasses: 3,
+      partialSlabPasses: 0,
+      equivalentPasses: 3,
+      dispatches: [
+        { tier: 1, label: 'full-volume-pressure1', workgroupsX: workgroups, workgroupsY: workgroups, workgroupsZ: workgroups, pressureBuffer: 'B', mask: 'global-floor' },
+        { tier: 2, label: 'activity-broad-pressure2', workgroupsX: workgroups, workgroupsY: workgroups, workgroupsZ: workgroups, pressureBuffer: 'A', mask: 'current-sim-broad-occupancy-front' },
+        { tier: 3, label: 'activity-core-pressure3', workgroupsX: workgroups, workgroupsY: workgroups, workgroupsZ: workgroups, pressureBuffer: 'B', mask: 'current-sim-core-front-ridge' },
+      ],
+      bounds: { pressure1: { mask: 'global-floor', buffer: 'B' }, pressure2: { mask: 'broad-activity', buffer: 'A' }, pressure3: { mask: 'core-activity', buffer: 'B' } },
+      requestedBounds: { pressure1: { mask: 'global-floor', buffer: 'B' }, pressure2: { mask: 'broad-activity', buffer: 'A' }, pressure3: { mask: 'core-activity', buffer: 'B' } },
+      effectiveBounds: { pressure1: { mask: 'global-floor', buffer: 'B' }, pressure2: { mask: 'full-dispatch-broad-mask', buffer: 'A' }, pressure3: { mask: 'full-dispatch-core-mask', buffer: 'B' } },
+      bufferOwnership: {
+        pressure1: 'B',
+        pressure2: 'A',
+        pressure3: 'B',
+        projectionCompositeBinding0: 'B',
+        projectionCompositeBinding1: 'A',
+      },
+      maskOrdering: PRESSURE_TIER_MASK_ORDERING,
+      maskSource: 'current-sim-front-occupancy',
+      dispatchEfficiency: 'full-grid-dispatch-with-cell-mask-prototype',
     };
   }
   const lowerWorkgroupsY = Math.max(1, Math.min(workgroups, Math.ceil(Math.ceil(gridSize * tierControls.lowerMax) / 4)));
@@ -821,6 +858,7 @@ struct Uniforms {
   boundary_sidecar_display: vec4<f32>,
   oracle_activity_controls: vec4<f32>,
   oracle_activity_controls2: vec4<f32>,
+  activity_tier_controls: vec4<f32>,
   previousViewProj: mat4x4<f32>,
 };
 
@@ -1361,7 +1399,58 @@ fn pressureTierHeroMax() -> f32 {
   return max(pressureTierHeroMin() + 0.01, clamp(u.pressure_tier_controls.z, 0.02, min(0.98, pressureTierLowerMax())));
 }
 
-fn pressureTierDebugOverlayColor(y: f32) -> vec4<f32> {
+fn pressureActivityTierMode() -> f32 {
+  return step(0.5, u.activity_tier_controls.x);
+}
+
+fn pressureActivityCueAtCell(c: vec3<i32>) -> f32 {
+  let velocityDensity = readSlot(c, 0u);
+  let material = readSlot(c, 1u);
+  let fireLayer = readSlot(c, 2u);
+  let microLayer = readSlot(c, 3u);
+  let front = readFrontField(c);
+  let velocityCue = smoothstep(0.012, 0.18, length(velocityDensity.xyz));
+  let densityCue = smoothstep(0.010, 0.36, velocityDensity.w + material.x * 0.74 + microLayer.x * 0.42);
+  let smokeCue = smoothstep(0.018, 0.58, material.x + microLayer.y * 0.38 + material.w * 0.22);
+  let thermalCue = smoothstep(0.020, 0.42, material.y + fireLayer.z * 0.35);
+  let frontCue = smoothstep(0.004, 0.17, front + fireLayer.x * 0.20 + microLayer.z * 0.28);
+  let flowCue = smoothstep(0.006, 0.12, curlMagnitudeAtCell(c) + abs(divergenceAtCell(c)) * 0.65);
+  return clamp(max(max(densityCue, smokeCue), max(max(thermalCue, frontCue), max(velocityCue * 0.72, flowCue * 0.64))), 0.0, 1.0);
+}
+
+fn pressureActivityDilatedCueAtCell(c: vec3<i32>) -> f32 {
+  var cue = pressureActivityCueAtCell(c);
+  cue = max(cue, pressureActivityCueAtCell(c + vec3<i32>(1, 0, 0)) * 0.82);
+  cue = max(cue, pressureActivityCueAtCell(c + vec3<i32>(-1, 0, 0)) * 0.82);
+  cue = max(cue, pressureActivityCueAtCell(c + vec3<i32>(0, 1, 0)) * 0.82);
+  cue = max(cue, pressureActivityCueAtCell(c + vec3<i32>(0, -1, 0)) * 0.82);
+  cue = max(cue, pressureActivityCueAtCell(c + vec3<i32>(0, 0, 1)) * 0.82);
+  cue = max(cue, pressureActivityCueAtCell(c + vec3<i32>(0, 0, -1)) * 0.82);
+  return clamp(cue, 0.0, 1.0);
+}
+
+fn pressureActivityMaskAtCell(c: vec3<i32>, core: f32) -> f32 {
+  let cue = pressureActivityDilatedCueAtCell(c);
+  let broad = smoothstep(0.13, 0.34, cue);
+  let focused = smoothstep(0.34, 0.62, cue);
+  return mix(broad, focused, clamp(core, 0.0, 1.0));
+}
+
+fn pressureTierCellMask(c: vec3<i32>, minY: f32, maxY: f32, tier: f32) -> f32 {
+  let y = pressureTierY(c);
+  let slabMask = step(minY, y) * step(y, maxY);
+  let activityMask = pressureActivityMaskAtCell(c, step(2.5, tier));
+  return mix(slabMask, activityMask, pressureActivityTierMode());
+}
+
+fn pressureTierDebugOverlayColor(y: f32, c: vec3<i32>) -> vec4<f32> {
+  if (pressureActivityTierMode() > 0.5) {
+    let broad = pressureActivityMaskAtCell(c, 0.0);
+    let core = pressureActivityMaskAtCell(c, 1.0);
+    let color = mix(vec3<f32>(0.05, 0.35, 0.52), vec3<f32>(0.04, 0.88, 0.90), broad);
+    let hot = mix(color, vec3<f32>(1.0, 0.56, 0.08), core);
+    return vec4<f32>(hot, clamp(u.pressure_tier_controls.w, 0.0, 1.0) * clamp(0.18 + broad * 0.34 + core * 0.28, 0.0, 0.76));
+  }
   let lowerMax = pressureTierLowerMax();
   let heroMin = pressureTierHeroMin();
   let heroMax = pressureTierHeroMax();
@@ -1400,6 +1489,15 @@ fn samplePyroMaterialMemoryCell(p: vec3<f32>) -> vec4<f32> {
 }
 
 fn pressureReadComposite(c: vec3<i32>) -> vec4<f32> {
+  if (pressureActivityTierMode() > 0.5) {
+    if (pressureActivityMaskAtCell(c, 1.0) > 0.001) {
+      return pressureRead(c);
+    }
+    if (pressureActivityMaskAtCell(c, 0.0) > 0.001) {
+      return pressureReadAlt(c);
+    }
+    return pressureRead(c);
+  }
   let y = pressureTierY(c);
   if (y >= pressureTierHeroMin() && y <= pressureTierHeroMax()) {
     return pressureRead(c);
@@ -1438,15 +1536,15 @@ fn csPressureJacobi(@builtin(global_invocation_id) gid: vec3<u32>) {
   pressureDst[index3(gid)] = vec4<f32>(div, pressure * 0.985, 0.0, 0.0);
 }
 
-fn pressureJacobiTiered(gid: vec3<u32>, minY: f32, maxY: f32) {
+fn pressureJacobiTiered(gid: vec3<u32>, minY: f32, maxY: f32, tier: f32) {
   if (any(gid >= vec3<u32>(GRID))) {
     return;
   }
-  let y = f32(gid.y) / max(1.0, f32(GRID - 1u));
-  if (y < minY || y > maxY) {
+  let c = vec3<i32>(gid);
+  let tierMask = pressureTierCellMask(c, minY, maxY, tier);
+  if (tierMask <= 0.001) {
     return;
   }
-  let c = vec3<i32>(gid);
   let div = divergenceAtCell(c);
   let neighborPressure =
     pressureRead(c + vec3<i32>(-1, 0, 0)).y +
@@ -1456,17 +1554,17 @@ fn pressureJacobiTiered(gid: vec3<u32>, minY: f32, maxY: f32) {
     pressureRead(c + vec3<i32>(0, 0, -1)).y +
     pressureRead(c + vec3<i32>(0, 0,  1)).y;
   let pressure = (neighborPressure - div) * (1.0 / 6.0);
-  pressureDst[index3(gid)] = vec4<f32>(div, pressure * 0.985, 0.0, 0.0);
+  pressureDst[index3(gid)] = vec4<f32>(div, mix(pressureRead(c).y, pressure * 0.985, tierMask), tierMask, 0.0);
 }
 
 @compute @workgroup_size(4, 4, 4)
 fn csPressureJacobiTieredLower(@builtin(global_invocation_id) gid: vec3<u32>) {
-  pressureJacobiTiered(gid, 0.0, pressureTierLowerMax());
+  pressureJacobiTiered(gid, 0.0, pressureTierLowerMax(), 2.0);
 }
 
 @compute @workgroup_size(4, 4, 4)
 fn csPressureJacobiTieredHero(@builtin(global_invocation_id) gid: vec3<u32>) {
-  pressureJacobiTiered(gid, pressureTierHeroMin(), pressureTierHeroMax());
+  pressureJacobiTiered(gid, pressureTierHeroMin(), pressureTierHeroMax(), 3.0);
 }
 
 @compute @workgroup_size(4, 4, 4)
@@ -2964,6 +3062,9 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let tallPlumeDetailP = p + tallPlumeDetailPhaseAnchor;
   let oracleActivityCurlNoise = oracleActivityCurlNoiseForce(cellI, tallPlumeDetailP, tallPlumeDetailTime, oracleActivityCue, clamp(u.oracle_activity_controls.y, 0.0, 3.0));
   let oracleActivityConfinement = oracleActivityVorticityConfinement(cellI, oracleActivityCue, clamp(u.oracle_activity_controls.z, 0.0, 3.0));
+  let activityForceMask = max(0.18, pressureActivityMaskAtCell(cellI, 0.0));
+  let activityVorticityGate = mix(1.0, activityForceMask, clamp(u.activity_tier_controls.y, 0.0, 1.0));
+  let activityDetailGate = mix(1.0, activityForceMask, clamp(u.activity_tier_controls.z, 0.0, 1.0));
   let rawDetailForce = turbulentDetailForce(tallPlumeDetailP * (0.82 + physicalDetailScale * 0.30), tallPlumeDetailTime) * rawDetailCarrier * (0.018 + curl * 0.010) * detailForceArtifactGain;
   let rawMicroForce = turbulentDetailForce(tallPlumeDetailP * (2.85 * tallPlumeTransportedDetailFrequency) + vec3<f32>(0.13, -0.27, 0.31), tallPlumeDetailTime * 2.4) * rawMicroCarrier * 0.026;
   let rawShredForce = interfaceShreddingForce(cellI, (p + tallPlumeDetailPhaseAnchor * 0.35) * detailDomain, tallPlumeDetailTime, shredOperatorGain, heat, smoke, flame, interfaceShred);
@@ -2990,14 +3091,14 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let projectionCorrection = vec3<f32>(0.0);
   let bonfireSwirlSymmetryGain = mix(1.0, max(explicitWindAuthority, 0.84), bonfireScene);
   vel = vel + (swirl * heat * (0.018 + 0.010 * curl) + swirl * source * 0.012) * bonfireSwirlSymmetryGain;
-  vel = vel + confinement * (0.35 + smoke * 0.34 + heat * 0.52);
+  vel = vel + confinement * (0.35 + smoke * 0.34 + heat * 0.52) * activityVorticityGate;
   vel = vel + oracleActivityCurlNoise;
-  vel = vel + oracleActivityConfinement * (0.22 + smoke * 0.24 + heat * 0.32 + flame * 0.20);
-  vel = vel + bonfireReferenceConfinement * bonfireScene * bonfireDetailForcesAblation;
-  vel = vel + detailForce;
-  vel = vel + microForce;
-  vel = vel + shredForce;
-  vel = vel + fineBreakup;
+  vel = vel + oracleActivityConfinement * (0.22 + smoke * 0.24 + heat * 0.32 + flame * 0.20) * activityVorticityGate;
+  vel = vel + bonfireReferenceConfinement * bonfireScene * bonfireDetailForcesAblation * activityVorticityGate;
+  vel = vel + detailForce * activityDetailGate;
+  vel = vel + microForce * activityDetailGate;
+  vel = vel + shredForce * activityDetailGate;
+  vel = vel + fineBreakup * activityDetailGate;
   vel = vel + heatExpansion;
   vel = vel + externalInjection.velocity.xyz * (0.18 + speed * 0.036);
   vel = vel + thermalBuoyancyForce(heat, smoke, fuel, speed) * plumeRiseScale * bonfireThermalRiseDirection * mix(1.0, canonicalBuoyancyLift, canonicalPlumeScene);
@@ -4548,7 +4649,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     let oracleDisplayCue = rawTruthOracleActivityCueAtCell(sampleCell);
     let oracleDisplayColor = mix(vec3<f32>(0.02, 0.08, 0.04), vec3<f32>(0.65, 1.0, 0.78), smoothstep(0.04, 0.72, oracleDisplayCue));
     local = mix(local, oracleDisplayColor, oracleDisplay * smoothstep(0.015, 0.72, oracleDisplayCue));
-    let pressureTierOverlay = pressureTierDebugOverlayColor(y);
+    let pressureTierOverlay = pressureTierDebugOverlayColor(y, sampleCell);
     local = mix(local, pressureTierOverlay.rgb, pressureTierOverlay.a);
     color = color + trans * (alpha * local + stockRenderMode * fireAlpha * pyroStockFireVisibility * radianceEmission * mix(0.82, 0.62, bonfireRenderScene) + smokeBacklight * pyroStockFireVisibility + shellSmokeBacklight + pyroRadianceColor * pyroRadianceBoost * pyroRadianceLuma * rayStepOpacity * mix(mix(0.080, 0.030, pyroRadianceSpill), mix(0.012, 0.030, pyroRadianceSpill), 1.0 - pyroRadianceFireSourceWeight));
     let extinctionStep = clamp(alpha * (0.46 + extinction * 0.16) + fireAlpha * 0.08, 0.0, 0.34);
@@ -4582,7 +4683,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   const invViewProj = new THREE.Matrix4();
   const viewProj = new THREE.Matrix4();
   const previousViewProj = new THREE.Matrix4();
-  const uniforms = new Float32Array(340);
+  const uniforms = new Float32Array(344);
   let controlsSnapshot = applyRuntimeQualityControls(getControls());
   let gridSize = normalizeGridSize(controlsSnapshot.resolution);
   let majorantGridSize = normalizeMajorantGridSize(controlsSnapshot.majorantGrid);
@@ -4738,6 +4839,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     pressureTierDispatches: [],
     pressureTierBounds: null,
     pressureTierBufferOwnership: null,
+    pressureTierMaskOrdering: null,
+    pressureTierMaskSource: null,
+    pressureTierDispatchEfficiency: null,
+    activityTierControls: null,
     volumePrimitiveCount: 0,
     volumePrimitiveIds: [],
     volumePrimitives: [],
@@ -6513,7 +6618,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     uniforms[321] = externalCueActive ? 1 : 0;
     uniforms[322] = oracleActivityCueUpload.grid || 0;
     uniforms[323] = oracleActivityCueUpload.externalCueCellCount || 0;
-    uniforms.set(previousViewProj.elements, 324);
+    const pressureStrategy = normalizePressureStrategy(controlsSnapshot.pressureStrategy, controlsSnapshot.volumeScene);
+    uniforms[324] = pressureStrategy === PRESSURE_STRATEGY_ACTIVITY_TIERS ? 1 : 0;
+    uniforms[325] = clampFinite(controlsSnapshot.activityVorticityGate, 0, 1, 0);
+    uniforms[326] = clampFinite(controlsSnapshot.activityDetailGate, 0, 1, 0);
+    uniforms[327] = 0;
+    uniforms.set(previousViewProj.elements, 328);
     device.queue.writeBuffer(uniformBuffer, 0, uniforms);
     state.gridOverlay = controlsSnapshot.gridOverlay || 0;
     state.lookFreeze = lookFreeze;
@@ -6551,6 +6661,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.boundaryStructureSource = boundarySidecarSourceName;
     state.boundarySidecarView = boundarySidecarViewName;
     state.boundarySidecarDebug = boundarySidecarDebug(boundarySidecarSourceName);
+    state.activityTierControls = {
+      identity: ACTIVITY_GATED_DETAIL_FORCE_STRATEGY,
+      pressureTierMaskOrdering: PRESSURE_TIER_MASK_ORDERING,
+      pressureActivityMode: uniforms[324],
+      vorticityGate: uniforms[325],
+      detailGate: uniforms[326],
+      maskSource: 'current-sim-front-occupancy-not-render-sidecar',
+    };
     state.volumeScene = normalizeVolumeScene(controlsSnapshot.volumeScene);
     state.bonfireReferenceConfinement = bonfireReferenceConfinementDebug(controlsSnapshot.volumeScene);
     state.minimalPlumeProof = minimalPlumeProofDebug(controlsSnapshot.volumeScene);
@@ -6769,7 +6887,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const tierPlan = pressureTierDispatchPlan(gridSize, pressureStrategy, scene, pressureTierControls);
     const pressureEnabled = state.pressureProjectionEnabled && pressureIterationRequested > 0;
     const pressureIterations = pressureEnabled ? state.pressureProjectionIterations : 0;
-    const spatialPressureEnabled = pressureEnabled && tierPlan.strategy === TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY;
+    const spatialPressureEnabled = pressureEnabled && tierPlan.strategy !== TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY_INACTIVE;
     const tallPlumePressureStrategy = spatialPressureEnabled
       ? TALL_PLUME_PRESSURE_ITERATION_STRATEGY_INACTIVE
       : tallPlumePressureIterationStrategy(scene, pressureIterationRequested);
@@ -6865,6 +6983,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.pressureTierDispatches = spatialPressureEnabled ? tierPlan.dispatches.map(dispatch => ({ ...dispatch })) : [];
     state.pressureTierBounds = spatialPressureEnabled ? { ...tierPlan.bounds } : null;
     state.pressureTierBufferOwnership = spatialPressureEnabled ? { ...tierPlan.bufferOwnership } : null;
+    state.pressureTierMaskOrdering = spatialPressureEnabled ? (tierPlan.maskOrdering || null) : null;
+    state.pressureTierMaskSource = spatialPressureEnabled ? (tierPlan.maskSource || 'height-slab') : null;
+    state.pressureTierDispatchEfficiency = spatialPressureEnabled ? (tierPlan.dispatchEfficiency || 'bounded-y-dispatch') : null;
     state.mainFluidKernelStrategy = mainFluidKernelStrategy;
     state.mainFluidLocalProjectionStrategy = mainFluidLocalProjectionStrategy;
     state.mainFluidLocalProjectionDivergenceEvaluationsPerCell = mainFluidLocalProjectionDivergenceEvaluationsPerCell;
@@ -6917,6 +7038,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       pressureTierDispatches: spatialPressureEnabled ? tierPlan.dispatches.map(dispatch => ({ ...dispatch })) : [],
       pressureTierBounds: spatialPressureEnabled ? { ...tierPlan.bounds } : null,
       pressureTierBufferOwnership: spatialPressureEnabled ? { ...tierPlan.bufferOwnership } : null,
+      pressureTierMaskOrdering: spatialPressureEnabled ? (tierPlan.maskOrdering || null) : null,
+      pressureTierMaskSource: spatialPressureEnabled ? (tierPlan.maskSource || 'height-slab') : null,
+      pressureTierDispatchEfficiency: spatialPressureEnabled ? (tierPlan.dispatchEfficiency || 'bounded-y-dispatch') : null,
+      activityForceGating: state.activityTierControls ? { ...state.activityTierControls } : null,
       mainFluidKernelStrategy,
       mainFluidLocalProjectionStrategy,
       mainFluidLocalProjectionDivergenceEvaluationsPerCell,
@@ -6996,7 +7121,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     if (
       !pressureJacobiPipeline ||
       !pressureProjectPipeline ||
-      (tierPlan.strategy === TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY && (!pressureJacobiTieredLowerPipeline || !pressureJacobiTieredHeroPipeline || !pressureProjectTieredPipeline)) ||
+      (tierPlan.strategy !== TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY_INACTIVE && (!pressureJacobiTieredLowerPipeline || !pressureJacobiTieredHeroPipeline || !pressureProjectTieredPipeline)) ||
       pressureJacobiBindGroups.length !== 2 ||
       pressureReadBindGroups.length !== 2 ||
       majorantFrontBindGroups.length !== 2
@@ -7025,25 +7150,25 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       pass.dispatchWorkgroups(workgroups, tierWorkgroupsY, workgroups);
       pass.end();
     };
-    if (tierPlan.strategy === TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY) {
+    if (tierPlan.strategy !== TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY_INACTIVE) {
       dispatchPressureTierPass(
         pressureJacobiPipeline,
         pressureJacobiBindGroups[0],
         workgroups,
-        'kaminos pressure spatial tier pass 1 full-volume pressure1'
+        `kaminos pressure tier pass 1 ${tierPlan.dispatches[0]?.label || 'full-volume-pressure1'}`
       );
       dispatchPressureTierPass(
         pressureJacobiTieredLowerPipeline,
         pressureJacobiBindGroups[1],
         tierPlan.dispatches[1].workgroupsY,
-        'kaminos pressure spatial tier pass 2 lower-plume pressure2',
+        `kaminos pressure tier pass 2 ${tierPlan.dispatches[1]?.label || 'pressure2'}`,
         bindGroups[currentFluid]
       );
       dispatchPressureTierPass(
         pressureJacobiTieredHeroPipeline,
         pressureJacobiBindGroups[0],
         tierPlan.dispatches[2].workgroupsY,
-        'kaminos pressure spatial tier pass 3 hero-fire-band pressure3',
+        `kaminos pressure tier pass 3 ${tierPlan.dispatches[2]?.label || 'pressure3'}`,
         bindGroups[currentFluid]
       );
       {
@@ -8495,6 +8620,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         pressureTierDispatches: state.pressureTierDispatches ? state.pressureTierDispatches.map(dispatch => ({ ...dispatch })) : [],
         pressureTierBounds: state.pressureTierBounds ? { ...state.pressureTierBounds } : null,
         pressureTierBufferOwnership: state.pressureTierBufferOwnership ? { ...state.pressureTierBufferOwnership } : null,
+        pressureTierMaskOrdering: state.pressureTierMaskOrdering,
+        pressureTierMaskSource: state.pressureTierMaskSource,
+        pressureTierDispatchEfficiency: state.pressureTierDispatchEfficiency,
+        activityTierControls: state.activityTierControls ? { ...state.activityTierControls } : null,
         mainFluidKernelStrategy: state.mainFluidKernelStrategy,
         mainFluidLocalProjectionStrategy: state.mainFluidLocalProjectionStrategy,
         mainFluidLocalProjectionDivergenceEvaluationsPerCell: state.mainFluidLocalProjectionDivergenceEvaluationsPerCell,
@@ -8821,6 +8950,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       pressureTierDispatches: state.pressureTierDispatches ? state.pressureTierDispatches.map(dispatch => ({ ...dispatch })) : [],
       pressureTierBounds: state.pressureTierBounds ? { ...state.pressureTierBounds } : null,
       pressureTierBufferOwnership: state.pressureTierBufferOwnership ? { ...state.pressureTierBufferOwnership } : null,
+      pressureTierMaskOrdering: state.pressureTierMaskOrdering,
+      pressureTierMaskSource: state.pressureTierMaskSource,
+      pressureTierDispatchEfficiency: state.pressureTierDispatchEfficiency,
+      activityTierControls: state.activityTierControls ? { ...state.activityTierControls } : null,
       mainFluidKernelStrategy: state.mainFluidKernelStrategy,
       mainFluidLocalProjectionStrategy: state.mainFluidLocalProjectionStrategy,
       mainFluidLocalProjectionDivergenceEvaluationsPerCell: state.mainFluidLocalProjectionDivergenceEvaluationsPerCell,

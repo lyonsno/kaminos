@@ -36,6 +36,7 @@ const visualEvidenceMode = expectsNoFireVolumeEvidence
 const TALL_PLUME_PRESSURE_ITERATION_STRATEGY_PRESSURE2 = 'tall-plume-pressure2-v0';
 const TALL_PLUME_PRESSURE_ITERATION_STRATEGY_INACTIVE = 'inactive';
 const TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY = 'tall-plume-spatial-pressure-tiers-v0';
+const TALL_PLUME_ACTIVITY_PRESSURE_TIER_STRATEGY = 'tall-plume-current-sim-activity-pressure-tiers-v0';
 const TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY_INACTIVE = 'inactive';
 const PRESSURE_PROJECTION_READ_STRATEGY_COMPOSITE = 'composite-pressure-tier-read-v0';
 const PRESSURE_PROJECTION_READ_STRATEGY_SINGLE_BUFFER = 'single-pressure-buffer-read-v0';
@@ -267,12 +268,14 @@ function expectedTallPlumePressureIterationStrategy(volumeScene, pressureIterati
 
 function normalizePressureStrategy(value, volumeScene) {
   const requested = String(value || 'global').toLowerCase();
-  return volumeScene === 'tall_plume' && requested === 'spatial_tiers' ? 'spatial_tiers' : 'global';
+  if (volumeScene === 'tall_plume' && requested === 'spatial_tiers') return 'spatial_tiers';
+  if (volumeScene === 'tall_plume' && requested === 'activity_tiers') return 'activity_tiers';
+  return 'global';
 }
 
 function normalizeVolumePressureMode(value) {
   const mode = String(value || 'auto').toLowerCase();
-  return ['auto', 'spatial-tiers', 'global-p3', 'global-p2', 'global-p1', 'routed-global'].includes(mode) ? mode : 'auto';
+  return ['auto', 'spatial-tiers', 'activity-tiers', 'global-p3', 'global-p2', 'global-p1', 'routed-global'].includes(mode) ? mode : 'auto';
 }
 
 function pressureConfigForMode(mode, volumeScene, fallbackStrategy, fallbackIterations) {
@@ -280,6 +283,8 @@ function pressureConfigForMode(mode, volumeScene, fallbackStrategy, fallbackIter
   switch (normalized) {
     case 'spatial-tiers':
       return { pressureStrategy: volumeScene === 'tall_plume' ? 'spatial_tiers' : 'global', pressureIterations: volumeScene === 'tall_plume' ? 3 : fallbackIterations };
+    case 'activity-tiers':
+      return { pressureStrategy: volumeScene === 'tall_plume' ? 'activity_tiers' : 'global', pressureIterations: volumeScene === 'tall_plume' ? 3 : fallbackIterations };
     case 'global-p3':
       return { pressureStrategy: 'global', pressureIterations: 3 };
     case 'global-p2':
@@ -292,9 +297,10 @@ function pressureConfigForMode(mode, volumeScene, fallbackStrategy, fallbackIter
 }
 
 function expectedTallPlumePressureTierStrategy(volumeScene, pressureStrategy) {
-  return volumeScene === 'tall_plume' && pressureStrategy === 'spatial_tiers'
-    ? TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY
-    : TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY_INACTIVE;
+  if (volumeScene !== 'tall_plume') return TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY_INACTIVE;
+  if (pressureStrategy === 'spatial_tiers') return TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY;
+  if (pressureStrategy === 'activity_tiers') return TALL_PLUME_ACTIVITY_PRESSURE_TIER_STRATEGY;
+  return TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY_INACTIVE;
 }
 
 const routeParams = new URL(url).searchParams;
@@ -1071,7 +1077,7 @@ const hasExplicitPressureRoute =
   routeParams.has('volume_pressure_iterations') ||
   routeParams.has('volume_pressure_strategy');
 let expectedPressureStrategy = normalizePressureStrategy(routeParams.get('volume_pressure_strategy') || scenePreset.pressureStrategy, expectedVolumeScene);
-let expectedSpatialPressureTiers = expectedPressureStrategy === 'spatial_tiers';
+let expectedSpatialPressureTiers = ['spatial_tiers', 'activity_tiers'].includes(expectedPressureStrategy);
 let expectedPressureIterations = expectedSpatialPressureTiers
   ? 3
   : routeParams.has('volume_pressure_iterations') && Number.isFinite(requestedPressureIterations)
@@ -1081,7 +1087,7 @@ if (routeParams.has('volume_pressure_mode') || (!hasExplicitPressureRoute && sce
   const pressureModeConfig = pressureConfigForMode(requestedPressureMode || scenePreset.pressureMode, expectedVolumeScene, expectedPressureStrategy, expectedPressureIterations);
   expectedPressureStrategy = pressureModeConfig.pressureStrategy;
   expectedPressureIterations = pressureModeConfig.pressureIterations;
-  expectedSpatialPressureTiers = expectedPressureStrategy === 'spatial_tiers';
+  expectedSpatialPressureTiers = ['spatial_tiers', 'activity_tiers'].includes(expectedPressureStrategy);
 }
 let expectedPressureProjectionIterations = expectedSpatialPressureTiers ? 3 : expectedPressureIterations;
 let expectedTallPlumePressureStrategy = expectedSpatialPressureTiers
@@ -1290,7 +1296,7 @@ if (expectedRuntimeQualityEffective === 'live_low') {
   expectedPressureStrategy = 'global';
   expectedPressureIterations = 0;
 }
-expectedSpatialPressureTiers = expectedPressureStrategy === 'spatial_tiers';
+expectedSpatialPressureTiers = ['spatial_tiers', 'activity_tiers'].includes(expectedPressureStrategy);
 expectedPressureProjectionIterations = expectedSpatialPressureTiers ? 3 : expectedPressureIterations;
 expectedTallPlumePressureStrategy = expectedSpatialPressureTiers
   ? TALL_PLUME_PRESSURE_ITERATION_STRATEGY_INACTIVE
