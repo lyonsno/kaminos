@@ -55,6 +55,8 @@ assert.match(index, /artifacts\/volume-captures/, 'Volume cockpit names the on-d
 assert.match(index, /saveVolumeAgentCapture/, 'Volume cockpit has a named capture writer path for agents');
 assert.match(index, /readVolumeDomControls/, 'Volume capture reads all live DOM volume controls, not only curated look fields');
 assert.match(index, /buildVolumeAgentCaptureRoute/, 'Volume capture serializes all live DOM controls into the replay route');
+assert.match(index, /window\.__kaminosExportLiveVolumeSettings\s*=\s*exportLiveVolumeSettingsToConsole/, 'Volume route exposes a console-paste live settings export helper for operator-found basins');
+assert.match(index, /navigator\.clipboard\.writeText\(JSON\.stringify\(exportPayload,\s*null,\s*2\)\)/, 'Live settings export copies a complete JSON payload without manual field transcription');
 assert.match(serve, /\/api\/volume-capture/, 'Local server exposes a volume capture write endpoint');
 assert.match(serve, /handle_volume_capture/, 'Local server handles durable volume capture writes explicitly');
 assert.match(serve, /volume-captures/, 'Local server writes volume captures under artifacts/volume-captures');
@@ -830,7 +832,8 @@ assert.match(core, /reactionBoundaryFireControls/, 'renderer debug state exposes
 assert.match(index, /id="volume-reaction-heat-min"[\s\S]*id="volume-reaction-shell-contrast"/, 'reaction-front extractor exposes threshold and shaping sliders');
 assert.match(index, /volume_reaction_heat_min[\s\S]*volume_reaction_shell_contrast/, 'reaction-front extractor controls are copyable and routeable through basin URLs');
 assert.match(index, /reactionHeatMin:\s*parseFloat\(document\.getElementById\('volume-reaction-heat-min'\)\.value\)/, 'reaction-front heat threshold reaches the runtime controls object');
-assert.match(index, /volume-reaction-atlas-canvas/, 'reaction-front atlas has an in-page visual capture surface for operator smoke');
+assert.match(index, /data-volume-control-section="reaction-front-atlas-capture"[^>]*hidden/, 'reaction-front atlas capture controls stay available to backend plumbing but are hidden from the operator interface');
+assert.match(index, /volume-reaction-atlas-canvas/, 'reaction-front atlas canvas remains in hidden DOM for backend and witness plumbing');
 assert.match(index, /captureVolumeReactionAtlas/, 'reaction-front atlas capture path can draw sampleFrame output without rewiring the renderer');
 assert.match(core, /normalizeReactionFrontAtlasControls/, 'reaction-front atlas has a normalized controls contract independent of legacy pyro controls');
 assert.match(core, /reactionFrontAtlasControls/, 'reaction-front atlas readback returns effective extractor controls');

@@ -1210,6 +1210,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
         <input type="range" id="volume-reaction-boundary-fire-luma" min="0" max="5" step="0.05" value="1.05">
         <span class="slider-val" id="volume-reaction-boundary-fire-luma-val">1.05</span>
       </div>
+      <div data-volume-control-section="reaction-front-atlas-capture" hidden>
       <div class="volume-control-section-title">Atlas capture</div>
       <div class="slider-row">
         <span class="slider-label">Heat min</span>
@@ -1323,6 +1324,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
         <canvas id="volume-reaction-atlas-canvas" width="640" height="256"></canvas>
       </div>
       <div class="reaction-front-atlas-state" id="volume-reaction-atlas-state">atlas not captured</div>
+      </div>
     </div>
     <div class="volume-control-section" data-volume-control-section="visual-tuning">
       <div class="volume-control-section-title">Physical Controls</div>
@@ -11815,6 +11817,39 @@ function buildVolumeAgentCapture(kind = 'view') {
     note: 'Replay with node volume-witness.mjs --capture <artifact>; captures write under artifacts/volume-captures.',
   };
 }
+
+function exportLiveVolumeSettingsToConsole(label = 'operator-live-basin') {
+  const domControls = readVolumeDomControls();
+  const controlsSnapshot = readVolumeControls();
+  const exportPayload = {
+    identity: 'kaminos-volume-live-settings-export-v1',
+    label: String(label || 'operator-live-basin'),
+    exportedAt: new Date().toISOString(),
+    href: window.location.href,
+    basinRoute: buildVolumeBasinUrl(controlsSnapshot),
+    agentCaptureRoute: buildVolumeAgentCaptureRoute(domControls),
+    camera: window.kaminosCameraDebugState?.() || null,
+    controls: controlsSnapshot,
+    domControls,
+    controlCount: Object.keys(domControls).length,
+    volumeDebugState: window.__kaminosVolumePrototype?.debugState?.() || null,
+    viewport: {
+      innerWidth: window.innerWidth,
+      innerHeight: window.innerHeight,
+      devicePixelRatio: window.devicePixelRatio || 1,
+    },
+  };
+  if (navigator.clipboard?.writeText) {
+    navigator.clipboard.writeText(JSON.stringify(exportPayload, null, 2))
+      .then(() => setInfo('Copied live volume settings JSON to clipboard'))
+      .catch(error => setInfo(`Live settings export logged; clipboard failed: ${error?.message || error}`));
+  } else {
+    setInfo('Live settings export logged; clipboard API unavailable');
+  }
+  console.log(JSON.stringify(exportPayload, null, 2));
+  return exportPayload;
+}
+window.__kaminosExportLiveVolumeSettings = exportLiveVolumeSettingsToConsole;
 
 async function saveVolumeAgentCapture(kind = 'view') {
   const state = document.getElementById('volume-agent-capture-state');
