@@ -1912,6 +1912,13 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
     <div id="hybrid-splat-renderer-controls-popover" role="menu" hidden>
       <div class="hybrid-control-title">Hybrid Renderer</div>
       <div class="hybrid-control-section">
+        <div class="hybrid-control-section-title">Preview</div>
+        <div class="hybrid-control-row binary">
+          <input type="checkbox" id="hybrid-control-preview-source-color" data-hybrid-renderer-control checked>
+          <label for="hybrid-control-preview-source-color">Source colors</label>
+        </div>
+      </div>
+      <div class="hybrid-control-section">
         <div class="hybrid-control-section-title">Normals</div>
         <div class="hybrid-control-row binary">
           <input type="checkbox" id="hybrid-control-normal-force-screen" data-hybrid-renderer-control>
@@ -3233,6 +3240,9 @@ function hybridSplatRendererControlsPayload() {
     normal: {
       forceScreenSpace: hybridControlCheckbox('hybrid-control-normal-force-screen', false),
     },
+    preview: {
+      sourceColor: hybridControlCheckbox('hybrid-control-preview-source-color', true),
+    },
     ao: {
       enabled: hybridControlCheckbox('hybrid-control-ao-enabled', true),
       radius: hybridControlNumber('hybrid-control-ao-radius', 0.15),
@@ -3304,6 +3314,14 @@ function publishHybridSplatRendererControls(handle = hybridSplatOverlayState.han
     };
   }
   return hybridSplatOverlayState.rendererControlsTelemetry;
+}
+
+function setHybridSourceColorPreviewEnabled(enabled) {
+  const input = document.getElementById('hybrid-control-preview-source-color');
+  if (input instanceof HTMLInputElement) {
+    input.checked = !!enabled;
+  }
+  return publishHybridSplatRendererControls();
 }
 
 function setHybridSplatRendererControlsPopoverOpen(open) {
@@ -4651,6 +4669,7 @@ async function createSelectedSplatViewBakeLayer(options = {}) {
     pipelineId: SELECTED_SPLAT_VIEW_BAKE_LAYER_PIPELINE_ID,
     renderedIntoSplat: false,
   };
+  setHybridSourceColorPreviewEnabled(true);
   const cameraSnapshot = selectedSplatViewBakeLayerCameraSnapshot();
   const rendererControls = hybridSplatRendererControlsPayload();
   const armatureRef = selectedSplatArmatureRef(record);
@@ -5653,6 +5672,7 @@ window.kaminosSetHybridSplatOverlayModuleUrl = setHybridSplatOverlayModuleUrl;
 window.kaminosHybridSplatRendererModuleDebugState = () => hybridSplatOverlayState.moduleIdentity;
 window.kaminosHybridSplatRendererControlsDebugState = () => hybridSplatOverlayState.rendererControlsTelemetry;
 window.kaminosPublishHybridSplatRendererControls = publishHybridSplatRendererControls;
+window.kaminosSetHybridSourceColorPreviewEnabled = setHybridSourceColorPreviewEnabled;
 window.kaminosSyncHybridSplatSceneRendererMembership = syncHybridSplatSceneRendererMembership;
 window.kaminosCreateSelectedSplatViewBakeLayer = createSelectedSplatViewBakeLayer;
 window.kaminosSetSelectedSplatBakeLayerControls = setSelectedSplatBakeLayerControls;
