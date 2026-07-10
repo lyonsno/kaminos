@@ -33,6 +33,8 @@ def parse_args():
     parser.add_argument("--eval-selection", default="tail")
     parser.add_argument("--model-arch", default="tiny-conv", choices=MODEL_ARCHITECTURES)
     parser.add_argument("--feature-input-mode", default="rgb")
+    parser.add_argument("--coordinate-input-mode", default="off")
+    parser.add_argument("--fourier-coordinate-frequencies", default="4")
     parser.add_argument("--material-focus", default="off")
     parser.add_argument("--outside-material-residual-weight", default="1.0")
     parser.add_argument("--hidden-channels", default="16")
@@ -131,6 +133,10 @@ def build_child_command(args):
         str(args.model_arch),
         "--feature-input-mode",
         str(args.feature_input_mode),
+        "--coordinate-input-mode",
+        str(args.coordinate_input_mode),
+        "--fourier-coordinate-frequencies",
+        str(args.fourier_coordinate_frequencies),
         "--material-focus",
         str(args.material_focus),
         "--outside-material-residual-weight",

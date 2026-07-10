@@ -24,6 +24,8 @@ FLOW_DEBUG_REDCYAN_ABS_INPUT_AUTHORITY = "flow-debug-derived-red-cyan-abs-v0"
 FLOW_DEBUG_OPPONENT_GRADIENT_INPUT_AUTHORITY = "flow-debug-derived-opponent-gradient-v0"
 IMAGE_FEATURE_INPUT_MODES = {"feature-rgba", "aux-rgba", "aux-rgb", "aux-red-cyan-abs", "aux-opponent-gradient"}
 FLOW_DEBUG_DERIVED_INPUT_MODES = {"aux-red-cyan-abs", "aux-opponent-gradient"}
+COORDINATE_INPUT_AUTHORITY = "offline-absolute-coordinate-conditioning-v0"
+FOURIER_COORDINATE_INPUT_AUTHORITY = "offline-fourier-coordinate-conditioning-v0"
 
 
 def constrain_residual_color(residual, residualColorMode, chromaResidualScale):
@@ -247,6 +249,8 @@ def parse_args():
     parser.add_argument("--eval-selection", dest="evalSelection", choices=["tail", "even"], default="tail", help="Eval holdout selection when --eval-pair-count is set.")
     parser.add_argument("--model-arch", dest="modelArch", choices=["tiny-conv", "direct-residual", "hybrid-residual", "gated-detail-residual", "small-unet"], default="tiny-conv")
     parser.add_argument("--feature-input-mode", dest="featureInputMode", choices=["rgb", "feature-rgba", "aux-rgba", "aux-rgb", "aux-red-cyan-abs", "aux-opponent-gradient"], default="rgb", help="Model input source: low RGB only, low RGB plus shader/material residual feature RGBA, raw Flow Debug RGB/RGBA, or normalized Flow Debug derived carriers.")
+    parser.add_argument("--coordinate-input-mode", dest="coordinateInputMode", choices=["off", "xy", "fourier"], default="off", help="Optional absolute screen-space coordinate conditioning for offline ceiling probes.")
+    parser.add_argument("--fourier-coordinate-frequencies", dest="fourierCoordinateFrequencies", type=int, default=4, help="Number of powers-of-two xy Fourier coordinate frequencies when --coordinate-input-mode=fourier.")
     parser.add_argument("--material-focus", dest="materialFocus", choices=["off", "fire-interface", "smoke"], default="off", help="Optional specialist supervision mask derived from shader/material feature RGBA: fire/interface or smoke.")
     parser.add_argument("--outside-material-residual-weight", dest="outsideMaterialResidualWeight", type=float, default=1.0, help="Penalty on residual energy outside the selected material-focus mask.")
     parser.add_argument("--hidden-channels", type=int, default=16)
@@ -318,7 +322,7 @@ def make_model(model_arch, hidden_channels, input_channels, detail_gate, residua
     raise ValueError(f"unsupported model architecture: {model_arch}")
 
 
-def model_config(model_arch, hidden_channels, input_channels, condition_render_scale, scale_channel, feature_input_mode, detail_gate, residual_output_limit, residual_application_mask_mode, residual_mask_feather_radius, residual_color_mode, chroma_residual_scale, residual_apply_scale):
+def model_config(model_arch, hidden_channels, input_channels, condition_render_scale, scale_channel, feature_input_mode, coordinate_input_mode, fourier_coordinate_frequencies, detail_gate, residual_output_limit, residual_application_mask_mode, residual_mask_feather_radius, residual_color_mode, chroma_residual_scale, residual_apply_scale):
     return {
         "modelArch": model_arch,
         "hiddenChannels": hidden_channels,
@@ -328,6 +332,10 @@ def model_config(model_arch, hidden_channels, input_channels, condition_render_s
         "featureInputMode": feature_input_mode,
         "featureInputAuthority": feature_input_authority(feature_input_mode),
         "featureInputChannels": feature_input_channels(feature_input_mode),
+        "coordinateInputMode": coordinate_input_mode,
+        "coordinateInputAuthority": coordinate_input_authority(coordinate_input_mode),
+        "coordinateInputChannels": coordinate_input_channels(coordinate_input_mode, fourier_coordinate_frequencies),
+        "fourierCoordinateFrequencies": fourier_coordinate_frequencies if coordinate_input_mode == "fourier" else 0,
         "detailGate": detail_gate if model_arch == "gated-detail-residual" else None,
         "unetDepth": 2 if model_arch == "small-unet" else None,
         "receptiveField": "two-level-encoder-decoder-skip" if model_arch == "small-unet" else "local-3x3-stack",
@@ -374,6 +382,10 @@ def save_model_artifact(model, model_dir, config, args, corpus, metrics, effecti
             "featureInputMode": config.get("featureInputMode"),
             "featureInputAuthority": config.get("featureInputAuthority"),
             "featureInputChannels": config.get("featureInputChannels"),
+            "coordinateInputMode": config.get("coordinateInputMode"),
+            "coordinateInputAuthority": config.get("coordinateInputAuthority"),
+            "coordinateInputChannels": config.get("coordinateInputChannels"),
+            "fourierCoordinateFrequencies": config.get("fourierCoordinateFrequencies"),
             "foregroundThreshold": args.foregroundThreshold,
             "foregroundProbability": args.foregroundProbability,
             "foregroundLossWeight": args.foregroundLossWeight,
@@ -540,6 +552,45 @@ def feature_input_authority(featureInputMode):
     if featureInputMode == "aux-opponent-gradient":
         return FLOW_DEBUG_OPPONENT_GRADIENT_INPUT_AUTHORITY
     return "off"
+
+
+def coordinate_input_channels(coordinateInputMode, fourierCoordinateFrequencies=4):
+    if coordinateInputMode == "xy":
+        return 2
+    if coordinateInputMode == "fourier":
+        return 2 + max(1, int(fourierCoordinateFrequencies)) * 4
+    return 0
+
+
+def coordinate_input_authority(coordinateInputMode):
+    if coordinateInputMode == "xy":
+        return COORDINATE_INPUT_AUTHORITY
+    if coordinateInputMode == "fourier":
+        return FOURIER_COORDINATE_INPUT_AUTHORITY
+    return "off"
+
+
+def coordinate_feature_image(top, left, height, width, full_height, full_width, coordinateInputMode, fourierCoordinateFrequencies=4):
+    if coordinateInputMode == "off":
+        return None
+    full_height = max(1, int(full_height))
+    full_width = max(1, int(full_width))
+    y = ((np.arange(int(height), dtype=np.float32) + float(top)) / max(1.0, float(full_height - 1))) * 2.0 - 1.0
+    x = ((np.arange(int(width), dtype=np.float32) + float(left)) / max(1.0, float(full_width - 1))) * 2.0 - 1.0
+    yy, xx = np.meshgrid(y, x, indexing="ij")
+    channels = [xx[..., None], yy[..., None]]
+    if coordinateInputMode == "fourier":
+        for frequency_index in range(max(1, int(fourierCoordinateFrequencies))):
+            frequency = float(2 ** frequency_index) * math.pi
+            channels.extend([
+                np.sin(xx * frequency)[..., None],
+                np.cos(xx * frequency)[..., None],
+                np.sin(yy * frequency)[..., None],
+                np.cos(yy * frequency)[..., None],
+            ])
+    elif coordinateInputMode != "xy":
+        raise ValueError(f"unsupported coordinate input mode: {coordinateInputMode}")
+    return np.concatenate(channels, axis=2).astype(np.float32)
 
 
 def material_mask_authority(materialFocus, featureInputMode):
@@ -815,12 +866,24 @@ def split_pairs(loaded, evalPairCount=0, evalSelection="tail"):
     return loaded[:-eval_count], loaded[-eval_count:]
 
 
-def model_input_from_rgb(low_patch, low_render_scale, conditionRenderScale, feature_patch=None, featureInputMode="rgb"):
+def model_input_from_rgb(low_patch, low_render_scale, conditionRenderScale, feature_patch=None, featureInputMode="rgb", top=0, left=0, height=None, width=None, full_height=None, full_width=None, coordinateInputMode="off", fourierCoordinateFrequencies=4):
     input_parts = [low_patch]
     if uses_feature_image(featureInputMode):
         if feature_patch is None:
             raise ValueError(f"{featureInputMode} model input requires a feature_patch")
         input_parts.append(feature_patch)
+    coordinate_features = coordinate_feature_image(
+        top,
+        left,
+        height if height is not None else low_patch.shape[0],
+        width if width is not None else low_patch.shape[1],
+        full_height if full_height is not None else low_patch.shape[0],
+        full_width if full_width is not None else low_patch.shape[1],
+        coordinateInputMode,
+        fourierCoordinateFrequencies,
+    )
+    if coordinate_features is not None:
+        input_parts.append(coordinate_features)
     scaleChannel = np.full((*low_patch.shape[:2], 1), float(low_render_scale), dtype=np.float32)
     if conditionRenderScale:
         input_parts.append(scaleChannel)
@@ -877,7 +940,7 @@ def material_coverage_summary(items):
     }
 
 
-def sample_patch_batch(items, rng, batch_size, patch_size, foregroundProbability, edgeSamplingProbability, conditionRenderScale, featureInputMode):
+def sample_patch_batch(items, rng, batch_size, patch_size, foregroundProbability, edgeSamplingProbability, conditionRenderScale, featureInputMode, coordinateInputMode="off", fourierCoordinateFrequencies=4):
     lows = []
     highs = []
     edge_masks = []
@@ -902,7 +965,7 @@ def sample_patch_batch(items, rng, batch_size, patch_size, foregroundProbability
             left = int(rng.integers(0, max(1, width - crop_width + 1)))
         low_patch = item["low"][top:top + crop_height, left:left + crop_width, :]
         feature_patch = item["feature"][top:top + crop_height, left:left + crop_width, :] if uses_feature_image(featureInputMode) else None
-        lows.append(model_input_from_rgb(low_patch, item["lowRenderScale"], conditionRenderScale, feature_patch, featureInputMode))
+        lows.append(model_input_from_rgb(low_patch, item["lowRenderScale"], conditionRenderScale, feature_patch, featureInputMode, top, left, crop_height, crop_width, height, width, coordinateInputMode, fourierCoordinateFrequencies))
         highs.append(item["high"][top:top + crop_height, left:left + crop_width, :])
         edge_masks.append(item.get("edgeBandMask", np.zeros((*item["low"].shape[:2], 1), dtype=np.float32))[top:top + crop_height, left:left + crop_width, :])
         target_edge_masks.append(item.get("targetEdgeBandMask", item.get("edgeBandMask", np.zeros((*item["low"].shape[:2], 1), dtype=np.float32)))[top:top + crop_height, left:left + crop_width, :])
@@ -914,7 +977,7 @@ def sample_patch_batch(items, rng, batch_size, patch_size, foregroundProbability
     )
 
 
-def sample_temporal_pair_batch(temporal_pairs, rng, batch_size, patch_size, foregroundProbability, conditionRenderScale, featureInputMode):
+def sample_temporal_pair_batch(temporal_pairs, rng, batch_size, patch_size, foregroundProbability, conditionRenderScale, featureInputMode, coordinateInputMode="off", fourierCoordinateFrequencies=4):
     previous_lows = []
     current_lows = []
     previous_highs = []
@@ -937,8 +1000,8 @@ def sample_temporal_pair_batch(temporal_pairs, rng, batch_size, patch_size, fore
             top = int(rng.integers(0, max(1, height - crop_height + 1)))
             left = int(rng.integers(0, max(1, width - crop_width + 1)))
         region = (top, left, crop_height, crop_width)
-        _previous_low_rgb, previous_high, previous_model_input, previous_mask = crop_item_arrays(previous_item, region, conditionRenderScale, featureInputMode)
-        _current_low_rgb, current_high, current_model_input, current_mask = crop_item_arrays(current_item, region, conditionRenderScale, featureInputMode)
+        _previous_low_rgb, previous_high, previous_model_input, previous_mask = crop_item_arrays(previous_item, region, conditionRenderScale, featureInputMode, coordinateInputMode, fourierCoordinateFrequencies)
+        _current_low_rgb, current_high, current_model_input, current_mask = crop_item_arrays(current_item, region, conditionRenderScale, featureInputMode, coordinateInputMode, fourierCoordinateFrequencies)
         previous_lows.append(previous_model_input)
         current_lows.append(current_model_input)
         previous_highs.append(previous_high)
@@ -1145,12 +1208,13 @@ def crop_region(item, crop_size, previewMode):
     return top, left, crop_height, crop_width, focus
 
 
-def crop_item_arrays(item, region, conditionRenderScale, featureInputMode="rgb"):
+def crop_item_arrays(item, region, conditionRenderScale, featureInputMode="rgb", coordinateInputMode="off", fourierCoordinateFrequencies=4):
     top, left, crop_height, crop_width = region
     low_patch = item["low"][top:top + crop_height, left:left + crop_width, :]
     high_patch = item["high"][top:top + crop_height, left:left + crop_width, :]
     feature_patch = item["feature"][top:top + crop_height, left:left + crop_width, :] if uses_feature_image(featureInputMode) else None
-    model_input = model_input_from_rgb(low_patch, item["lowRenderScale"], conditionRenderScale, feature_patch, featureInputMode)
+    full_height, full_width = item["low"].shape[:2]
+    model_input = model_input_from_rgb(low_patch, item["lowRenderScale"], conditionRenderScale, feature_patch, featureInputMode, top, left, crop_height, crop_width, full_height, full_width, coordinateInputMode, fourierCoordinateFrequencies)
     edge_mask = item.get("edgeBandMask", np.zeros((*item["low"].shape[:2], 1), dtype=np.float32))[top:top + crop_height, left:left + crop_width, :]
     return low_patch, high_patch, model_input, edge_mask
 
@@ -1259,7 +1323,7 @@ def empty_temporal_metrics(temporalEvalScope, residualContinuationMode, residual
     }
 
 
-def temporal_sequence_metrics(model, loaded, train_items, eval_items, out_dir, crop_size, previewMode, conditionRenderScale, featureInputMode, temporalEvalScope, residualContinuationMode, residualContinuationAlpha, residualApplicationMaskMode, residualMaskFeatherRadius):
+def temporal_sequence_metrics(model, loaded, train_items, eval_items, out_dir, crop_size, previewMode, conditionRenderScale, featureInputMode, coordinateInputMode, fourierCoordinateFrequencies, temporalEvalScope, residualContinuationMode, residualContinuationAlpha, residualApplicationMaskMode, residualMaskFeatherRadius):
     scoped_items = temporal_scope_items(temporalEvalScope, loaded, train_items, eval_items)
     groups = temporal_groups(scoped_items)
     continuation_active = residualContinuationMode == "ema"
@@ -1293,7 +1357,7 @@ def temporal_sequence_metrics(model, loaded, train_items, eval_items, out_dir, c
         region = (top, left, crop_height, crop_width)
         rendered = []
         for item in group:
-            low_patch, high_patch, model_input, residual_mask = crop_item_arrays(item, region, conditionRenderScale, featureInputMode)
+            low_patch, high_patch, model_input, residual_mask = crop_item_arrays(item, region, conditionRenderScale, featureInputMode, coordinateInputMode, fourierCoordinateFrequencies)
             pred_patch = predict_patch(model, model_input, residual_mask, residualApplicationMaskMode, residualMaskFeatherRadius)
             rendered.append((item, low_patch, high_patch, pred_patch))
         if not temporal_sequence_preview_written:
@@ -1434,7 +1498,7 @@ def temporal_sequence_metrics(model, loaded, train_items, eval_items, out_dir, c
     return metrics
 
 
-def evaluate_model(model, items, rng, batch_size, patch_size, eval_patches, foregroundProbability, edgeSamplingProbability, conditionRenderScale, featureInputMode, foregroundThreshold, foregroundLossWeight, differenceLossWeight, residualApplicationMaskMode, residualMaskFeatherRadius):
+def evaluate_model(model, items, rng, batch_size, patch_size, eval_patches, foregroundProbability, edgeSamplingProbability, conditionRenderScale, featureInputMode, coordinateInputMode, fourierCoordinateFrequencies, foregroundThreshold, foregroundLossWeight, differenceLossWeight, residualApplicationMaskMode, residualMaskFeatherRadius):
     baseline_losses = []
     model_losses = []
     weighted_baseline_losses = []
@@ -1450,7 +1514,7 @@ def evaluate_model(model, items, rng, batch_size, patch_size, eval_patches, fore
     compared_patches = 0
     batches = max(1, math.ceil(eval_patches / batch_size))
     for _ in range(batches):
-        low_batch, high_batch, edge_mask_batch, target_edge_mask_batch = sample_patch_batch(items, rng, batch_size, patch_size, foregroundProbability, edgeSamplingProbability, conditionRenderScale, featureInputMode)
+        low_batch, high_batch, edge_mask_batch, target_edge_mask_batch = sample_patch_batch(items, rng, batch_size, patch_size, foregroundProbability, edgeSamplingProbability, conditionRenderScale, featureInputMode, coordinateInputMode, fourierCoordinateFrequencies)
         low_rgb = rgb_channels(low_batch)
         prediction = model(low_batch, residual_application_mask(edge_mask_batch, residualApplicationMaskMode, residualMaskFeatherRadius))
         baseline_loss = mse_value(low_rgb, high_batch)
@@ -1533,14 +1597,15 @@ def evaluate_model(model, items, rng, batch_size, patch_size, eval_patches, fore
     }
 
 
-def make_preview(model, eval_item, out_path, diagnostic_out_path, preview_size, previewMode, conditionRenderScale, featureInputMode, residualApplicationMaskMode, residualMaskFeatherRadius):
+def make_preview(model, eval_item, out_path, diagnostic_out_path, preview_size, previewMode, conditionRenderScale, featureInputMode, coordinateInputMode, fourierCoordinateFrequencies, residualApplicationMaskMode, residualMaskFeatherRadius):
     low = eval_item["low"]
     high = eval_item["high"]
     top, left, crop_height, crop_width, previewFocus = crop_region(eval_item, preview_size, previewMode)
     low_patch = low[top:top + crop_height, left:left + crop_width, :]
     high_patch = high[top:top + crop_height, left:left + crop_width, :]
     feature_patch = eval_item["feature"][top:top + crop_height, left:left + crop_width, :] if uses_feature_image(featureInputMode) else None
-    model_input = model_input_from_rgb(low_patch, eval_item["lowRenderScale"], conditionRenderScale, feature_patch, featureInputMode)
+    full_height, full_width = low.shape[:2]
+    model_input = model_input_from_rgb(low_patch, eval_item["lowRenderScale"], conditionRenderScale, feature_patch, featureInputMode, top, left, crop_height, crop_width, full_height, full_width, coordinateInputMode, fourierCoordinateFrequencies)
     edge_mask = eval_item.get("edgeBandMask", np.zeros((*low.shape[:2], 1), dtype=np.float32))[top:top + crop_height, left:left + crop_width, :]
     pred_patch = predict_patch(model, model_input, edge_mask, residualApplicationMaskMode, residualMaskFeatherRadius)
     diff_patch = np.clip(np.abs(pred_patch - high_patch) * 4.0, 0.0, 1.0)
@@ -1555,7 +1620,7 @@ def make_preview(model, eval_item, out_path, diagnostic_out_path, preview_size, 
     return previewFocus
 
 
-def make_preview_frames(model, eval_items, out_dir, preview_size, previewMode, conditionRenderScale, featureInputMode, residualApplicationMaskMode, residualMaskFeatherRadius, previewFrameCount, primary_preview_path, primary_diagnostic_preview_path, primary_preview_focus):
+def make_preview_frames(model, eval_items, out_dir, preview_size, previewMode, conditionRenderScale, featureInputMode, coordinateInputMode, fourierCoordinateFrequencies, residualApplicationMaskMode, residualMaskFeatherRadius, previewFrameCount, primary_preview_path, primary_diagnostic_preview_path, primary_preview_focus):
     frame_count = min(max(1, int(previewFrameCount)), len(eval_items))
     frames = [{
         "index": 0,
@@ -1576,6 +1641,8 @@ def make_preview_frames(model, eval_items, out_dir, preview_size, previewMode, c
             previewMode,
             conditionRenderScale,
             featureInputMode,
+            coordinateInputMode,
+            fourierCoordinateFrequencies,
             residualApplicationMaskMode,
             residualMaskFeatherRadius,
         )
@@ -1639,6 +1706,8 @@ def main():
         raise ValueError("--eval-pair-count must be non-negative")
     if args.chromaResidualScale < 0:
         raise ValueError("--chroma-residual-scale must be non-negative")
+    if args.fourierCoordinateFrequencies < 1:
+        raise ValueError("--fourier-coordinate-frequencies must be at least 1")
     for label, value in [
         ("--edge-sampling-probability", args.edgeSamplingProbability),
         ("--edge-loss-weight", args.edgeLossWeight),
@@ -1687,6 +1756,8 @@ def main():
         input_channels = int(loaded_config["inputChannels"])
         conditionRenderScale = bool(loaded_config["conditionRenderScale"])
         featureInputMode = loaded_config.get("featureInputMode", args.featureInputMode)
+        coordinateInputMode = loaded_config.get("coordinateInputMode", "off")
+        fourierCoordinateFrequencies = int(loaded_config.get("fourierCoordinateFrequencies", args.fourierCoordinateFrequencies) or 0)
         scaleChannel = loaded_config.get("scaleChannel")
         loaded_detail_gate = loaded_config.get("detailGate")
         detailGate = float(loaded_detail_gate) if loaded_detail_gate is not None else args.detailResidualGate
@@ -1702,7 +1773,9 @@ def main():
         hiddenChannels = args.hidden_channels
         conditionRenderScale = args.conditionRenderScale
         featureInputMode = args.featureInputMode
-        input_channels = 3 + feature_input_channels(featureInputMode) + (1 if conditionRenderScale else 0)
+        coordinateInputMode = args.coordinateInputMode
+        fourierCoordinateFrequencies = args.fourierCoordinateFrequencies
+        input_channels = 3 + feature_input_channels(featureInputMode) + coordinate_input_channels(coordinateInputMode, fourierCoordinateFrequencies) + (1 if conditionRenderScale else 0)
         scaleChannel = "lowRenderScale" if conditionRenderScale else None
         detailGate = args.detailResidualGate
         residualOutputLimit = args.residualOutputLimit
@@ -1724,6 +1797,8 @@ def main():
         conditionRenderScale,
         scaleChannel,
         featureInputMode,
+        coordinateInputMode,
+        fourierCoordinateFrequencies,
         detailGate,
         residualOutputLimit,
         residualApplicationMaskMode,
@@ -1850,6 +1925,8 @@ def main():
             args.edgeSamplingProbability,
             conditionRenderScale,
             featureInputMode,
+            coordinateInputMode,
+            fourierCoordinateFrequencies,
         )
         if activeTemporalLossWeight > 0 or activeResidualTemporalLossWeight > 0:
             previous_low_batch, current_low_batch, previous_high_batch, current_high_batch, previous_mask_batch, current_mask_batch = sample_temporal_pair_batch(
@@ -1860,6 +1937,8 @@ def main():
                 args.foregroundProbability,
                 conditionRenderScale,
                 featureInputMode,
+                coordinateInputMode,
+                fourierCoordinateFrequencies,
             )
         else:
             previous_low_batch = low_batch
@@ -1903,6 +1982,8 @@ def main():
         args.edgeSamplingProbability,
         conditionRenderScale,
         featureInputMode,
+        coordinateInputMode,
+        fourierCoordinateFrequencies,
         args.foregroundThreshold,
         args.foregroundLossWeight,
         args.differenceLossWeight,
@@ -1911,7 +1992,7 @@ def main():
     )
     preview_path = out_dir / "residual-preview-low-model-target-diff.png"
     diagnostic_preview_path = out_dir / "residual-preview-low-model-target-targetres-modelres-error-mask.png"
-    previewFocus = make_preview(model, eval_items[0], preview_path, diagnostic_preview_path, args.preview_size, args.preview_mode, conditionRenderScale, featureInputMode, residualApplicationMaskMode, residualMaskFeatherRadius)
+    previewFocus = make_preview(model, eval_items[0], preview_path, diagnostic_preview_path, args.preview_size, args.preview_mode, conditionRenderScale, featureInputMode, coordinateInputMode, fourierCoordinateFrequencies, residualApplicationMaskMode, residualMaskFeatherRadius)
     previewFrames = make_preview_frames(
         model,
         eval_items,
@@ -1920,6 +2001,8 @@ def main():
         args.preview_mode,
         conditionRenderScale,
         featureInputMode,
+        coordinateInputMode,
+        fourierCoordinateFrequencies,
         residualApplicationMaskMode,
         residualMaskFeatherRadius,
         args.previewFrameCount,
@@ -1939,6 +2022,8 @@ def main():
             args.preview_mode,
             conditionRenderScale,
             featureInputMode,
+            coordinateInputMode,
+            fourierCoordinateFrequencies,
             args.temporalEvalScope,
             args.residualContinuationMode,
             args.residualContinuationAlpha,
@@ -2034,6 +2119,10 @@ def main():
         "featureInputMode": featureInputMode,
         "featureInputAuthority": feature_input_authority(featureInputMode),
         "featureInputChannels": feature_input_channels(featureInputMode),
+        "coordinateInputMode": coordinateInputMode,
+        "coordinateInputAuthority": coordinate_input_authority(coordinateInputMode),
+        "coordinateInputChannels": coordinate_input_channels(coordinateInputMode, fourierCoordinateFrequencies),
+        "fourierCoordinateFrequencies": fourierCoordinateFrequencies if coordinateInputMode == "fourier" else 0,
         "featurePaths": {
             item["id"]: item.get("featurePath")
             for item in loaded
@@ -2063,9 +2152,13 @@ def main():
         "temporalEvalScope": args.temporalEvalScope,
         "inputChannels": input_channels,
         "scaleChannel": scaleChannel,
-        "featureInputMode": featureInputMode,
-        "featureInputAuthority": feature_input_authority(featureInputMode),
-        "featureInputChannels": feature_input_channels(featureInputMode),
+            "featureInputMode": featureInputMode,
+            "featureInputAuthority": feature_input_authority(featureInputMode),
+            "featureInputChannels": feature_input_channels(featureInputMode),
+            "coordinateInputMode": coordinateInputMode,
+            "coordinateInputAuthority": coordinate_input_authority(coordinateInputMode),
+            "coordinateInputChannels": coordinate_input_channels(coordinateInputMode, fourierCoordinateFrequencies),
+            "fourierCoordinateFrequencies": fourierCoordinateFrequencies if coordinateInputMode == "fourier" else 0,
         "foregroundPixels": {
             item["id"]: item["foregroundPixels"]
             for item in loaded
