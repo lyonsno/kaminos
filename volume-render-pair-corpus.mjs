@@ -822,7 +822,7 @@ function runVariant({ variant, index, args, corpus, cwd }) {
 
 const args = parseArgs(process.argv.slice(2));
 const cwd = new URL('.', import.meta.url).pathname;
-const outRoot = resolve(args.get('--out-dir') || '/tmp/kaminos-frame-locked-pair-corpus');
+const outRoot = resolve(args.get('--out-dir') || args.get('--out-root') || '/tmp/kaminos-frame-locked-pair-corpus');
 const manifestPath = resolve(args.get('--manifest') || `${outRoot}/corpus-manifest.json`);
 const lowRenderScales = numberList(args.get('--low-render-scales') || args.get('--low-render-scale'), '0.10,0.15,0.18,0.25').map(clampRenderScale);
 const highRenderScale = clampRenderScale(args.get('--high-render-scale') || 1);
