@@ -1525,6 +1525,7 @@ assert.match(core, /ACTIVITY_PRESSURE_SPEND_MODEL\s*=\s*'base-midbody-activity-p
 assert.match(core, /ACTIVITY_PRESSURE_INACTIVE_SKIP_POLICY\s*=\s*'inactive-extra-tier-cell-early-out-v0'/, 'activity pressure tiers name the inactive-cell early-out policy');
 assert.match(core, /ACTIVE_PRESSURE_WORKGROUP_DISPATCH_STRATEGY\s*=\s*'gpu-built-active-pressure-workgroups-indirect-v0'/, 'activity pressure tiers name GPU-built indirect active workgroup dispatch');
 assert.match(core, /ACTIVE_PRESSURE_WORKGROUP_ACCOUNTING\s*=\s*'active-pressure-workgroup-counter-readback-v0'/, 'activity pressure tiers name active workgroup readback accounting');
+assert.match(core, /ACTIVITY_PRESSURE_P4_STRATEGY\s*=\s*'flame-lower-boundary-p4-active-workgroups-v0'/, 'activity pressure tiers name the tight flame/lower-boundary P4 strategy');
 assert.match(core, /PRESSURE_PROJECTION_READ_STRATEGY_COMPOSITE\s*=\s*'composite-pressure-tier-read-v0'/, 'volume core names composite tier pressure projection reads');
 assert.match(core, /PRESSURE_PROJECTION_READ_STRATEGY_SINGLE_BUFFER\s*=\s*'single-pressure-buffer-read-v0'/, 'volume core names single-buffer pressure projection reads');
 assert.match(core, /normalizeVolumeScene\(value\) === 'tall_plume' \? 2/, 'tall-plume default pressure iterations use pressure2 before the general non-bonfire default');
@@ -1532,6 +1533,7 @@ assert.match(core, /normalizePressureStrategy/, 'volume core normalizes pressure
 assert.match(core, /spatial_tiers/, 'volume core recognizes the spatial pressure tier route value');
 assert.match(core, /activity_tiers/, 'volume core recognizes the activity pressure tier route value');
 assert.match(index, /value="activity-tiers">Activity tiered/, 'Volume pressure selector exposes the activity-tier experiment separately from slab tiers');
+assert.match(index, /pressureEffectiveLabel:\s*'Activity P4'/, 'activity-tier route advertises the fourth pressure refinement tier');
 assert.match(index, /id="volume-activity-vorticity-gate"/, 'Volume controls expose opt-in activity gating for vorticity');
 assert.match(index, /id="volume-activity-detail-gate"/, 'Volume controls expose opt-in activity gating for detail forces');
 assert.match(core, /normalizePressureTierControls/, 'volume core normalizes pressure tier threshold controls');
@@ -1542,11 +1544,13 @@ const pressureActivityBlock = core.match(/fn pressureActivityCueAtCell[\s\S]*?fn
 assert.match(pressureActivityBlock, /readFrontField/, 'activity pressure mask consumes the sim-side front field');
 assert.match(pressureActivityBlock, /readSlot\(c,\s*0u\)/, 'activity pressure mask consumes broad density or velocity occupancy from the current sim buffer');
 assert.match(pressureActivityBlock, /pressureActivityBaseMidbodySpendAtCell/, 'activity pressure masks bias extra pressure toward base and midbody spend');
+assert.match(pressureActivityBlock, /pressureActivityP4MaskAtCell/, 'activity pressure path has a tight flame/lower-boundary P4 mask');
 assert.match(pressureActivityBlock, /tipDamp/, 'activity pressure spend damps tip-dominated support before extra pressure tiers');
 assert.match(pressureActivityBlock, /inactive-extra-tier-cell-early-out-v0/, 'activity pressure tier shader carries an explicit inactive-cell early-out policy');
 assert.match(pressureActivityBlock, /csBuildPressureActivityWorkgroups/, 'activity pressure path builds active pressure workgroups on the GPU before extra tier dispatch');
 assert.match(pressureActivityBlock, /csPressureJacobiActivityWorkgroupsLower/, 'activity pressure path has an indirect lower-tier active workgroup Jacobi entry point');
 assert.match(pressureActivityBlock, /csPressureJacobiActivityWorkgroupsHero/, 'activity pressure path has an indirect core-tier active workgroup Jacobi entry point');
+assert.match(pressureActivityBlock, /csPressureJacobiActivityWorkgroupsP4/, 'activity pressure path has an indirect P4 flame/lower-boundary workgroup Jacobi entry point');
 assert.doesNotMatch(pressureActivityBlock, /sampleWorldBoundarySidecar|boundarySidecar|BOUNDARY_SIDECAR/, 'activity pressure mask must not sample the render-side baked boundary sidecar');
 assert.match(core, /dispatchWorkgroupsIndirect/, 'activity pressure extra tiers use indirect dispatch for active workgroup lists');
 assert.match(core, /pressureActivityWorkgroupBuffer/, 'volume core allocates an active pressure workgroup buffer');
@@ -1555,11 +1559,14 @@ assert.match(core, /copyBufferToBuffer\(pressureActivityWorkgroupBuffer,\s*0,\s*
 assert.match(core, /GPUBufferUsage\.INDIRECT/, 'active pressure indirect args buffer can drive indirect dispatch');
 assert.match(core, /pressureTierWorkgroupAccounting/, 'debug state exposes active pressure workgroup accounting');
 assert.match(core, /activeExtraTierWorkgroups/, 'debug state reports active extra-tier pressure workgroups');
+assert.match(core, /p4ActiveWorkgroups/, 'debug state reports tight P4 active pressure workgroups');
 assert.match(core, /skippedExtraTierWorkgroups/, 'debug state reports skipped extra-tier pressure workgroups');
 assert.match(core, /gpu-built-active-pressure-workgroups-indirect-v0/, 'activity pressure dispatch efficiency says GPU-built indirect active workgroups');
+assert.match(core, /activity-flame-boundary-pressure4-indirect/, 'activity pressure dispatch plan names the P4 indirect refinement pass');
 assert.match(core, /spendModel:\s*ACTIVITY_PRESSURE_SPEND_MODEL/, 'activity tier debug state exposes the effective spend model');
 assert.match(core, /inactiveCellPolicy:\s*ACTIVITY_PRESSURE_INACTIVE_SKIP_POLICY/, 'activity tier debug state exposes the inactive-cell policy');
 assert.match(core, /dispatchStrategy:\s*ACTIVE_PRESSURE_WORKGROUP_DISPATCH_STRATEGY/, 'activity tier debug state exposes active pressure workgroup dispatch strategy');
+assert.match(core, /p4Strategy:\s*ACTIVITY_PRESSURE_P4_STRATEGY/, 'activity tier debug state exposes the P4 refinement strategy');
 assert.match(core, /skipAccounting:\s*ACTIVE_PRESSURE_WORKGROUP_ACCOUNTING/, 'activity tier debug state distinguishes active workgroup readback from fallback cell early-out accounting');
 assert.match(core, /pressureTierLowerMax/, 'volume core reads the operator-tuned lower pressure tier bound');
 assert.match(core, /pressureTierHeroMin/, 'volume core reads the operator-tuned hero pressure tier lower bound');

@@ -11229,7 +11229,7 @@ function volumePressureConfigForMode(mode, scene) {
     case 'spatial-tiers':
       return { pressureMode: 'spatial-tiers', pressureStrategy: 'spatial_tiers', pressureIterations: 3, effectivePressureIterations: 3, pressureEffectiveLabel: 'Tiered P3' };
     case 'activity-tiers':
-      return { pressureMode: 'activity-tiers', pressureStrategy: 'activity_tiers', pressureIterations: 3, effectivePressureIterations: 3, pressureEffectiveLabel: 'Activity P3' };
+      return { pressureMode: 'activity-tiers', pressureStrategy: 'activity_tiers', pressureIterations: 4, effectivePressureIterations: 4, pressureEffectiveLabel: 'Activity P4' };
     case 'global-p3':
       return { pressureMode: 'global-p3', pressureStrategy: 'global', pressureIterations: 3, effectivePressureIterations: 3, pressureEffectiveLabel: 'Full P3' };
     case 'global-p2':
@@ -11265,7 +11265,7 @@ function volumePressureConfigForMode(mode, scene) {
 function effectivePressureModeLabel(mode, effectiveIterations) {
   switch (normalizeVolumePressureMode(mode)) {
     case 'spatial-tiers': return 'Tiered P3';
-    case 'activity-tiers': return 'Activity P3';
+    case 'activity-tiers': return 'Activity P4';
     case 'global-p3': return 'Full P3';
     case 'global-p2': return 'Full P2';
     case 'global-p1': return 'Full P1';
