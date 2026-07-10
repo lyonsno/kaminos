@@ -3,6 +3,15 @@ const PROTOTYPE_IDENTITY = 'kaminos-volume-prototype-v0';
 const FRONT_FIELD_IDENTITY = 'combustion-front-topology-sidecar-v0';
 const BOUNDARY_SIDECAR_IDENTITY = 'baked-boundary-sidecar-v0';
 const BOUNDARY_SIDECAR_BAKE_AUTHORITY = 'band-limited-support-coverage-ridge-proximity-footprint-v1';
+const BOUNDARY_SIDECAR_EXPORT_SCHEMA = 'kaminos.volume.boundary-sidecar-export.v0';
+const BOUNDARY_SIDECAR_EXPORT_CHANNEL_ORDER = ['support', 'gradient', 'ridge', 'thickness'];
+const BOUNDARY_SIDECAR_RENDERER_RAW_CHANNEL_ORDER = ['support', 'coverage', 'ridge', 'footprint'];
+const BOUNDARY_SIDECAR_EXPORT_CHANNEL_MAPPING = {
+  support: 'support',
+  gradient: 'coverage',
+  ridge: 'ridge',
+  thickness: 'footprint',
+};
 const TRUTH_ORACLE_ACTIVITY_RECEIVER_IDENTITY = 'truth-oracle-scalar-activity-receiver-v0';
 const TRUTH_ORACLE_ACTIVITY_CUE_AUTHORITY = 'truth-high-diagnostic-activity-projected-to-receiver-grid-v0';
 const PROCEDURAL_ACTIVITY_CUE_AUTHORITY = 'procedural-receiver-activity-proxy-no-truth-v0';
@@ -5020,6 +5029,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let volumePrimitives = [];
   let majorantBuffer = null;
   let boundarySidecarBuffer = null;
+  let boundarySidecarExportSession = null;
   let fluidBuffers = [];
   let frontBuffers = [];
   let pressureBuffers = [];
@@ -5197,6 +5207,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     return {
       identity: BOUNDARY_SIDECAR_IDENTITY,
       authority: BOUNDARY_SIDECAR_BAKE_AUTHORITY,
+      exportSchema: BOUNDARY_SIDECAR_EXPORT_SCHEMA,
+      exportChannelOrder: [...BOUNDARY_SIDECAR_EXPORT_CHANNEL_ORDER],
+      rendererRawChannelOrder: [...BOUNDARY_SIDECAR_RENDERER_RAW_CHANNEL_ORDER],
+      channelMapping: { ...BOUNDARY_SIDECAR_EXPORT_CHANNEL_MAPPING },
       source: boundarySidecarSourceName,
       view,
       channels: ['support', 'coverage', 'ridge', 'proximity', 'footprint'],
@@ -5212,6 +5226,174 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       builtThisFrame: state.boundarySidecarBuiltThisFrame,
       frameCount: state.boundarySidecarFrameCount,
       lastBuiltFrame: state.boundarySidecarLastBuiltFrame,
+    };
+  }
+
+  function encodeBoundarySidecarExportBytes(bytes) {
+    let binary = '';
+    const chunkSize = 0x8000;
+    for (let i = 0; i < bytes.byteLength; i += chunkSize) {
+      const chunk = bytes.subarray(i, Math.min(bytes.byteLength, i + chunkSize));
+      binary += String.fromCharCode(...chunk);
+    }
+    return btoa(binary);
+  }
+
+  function boundarySidecarExportDescriptor(session = boundarySidecarExportSession) {
+    if (!session) return null;
+    return {
+      schema: session.schema,
+      identity: session.identity,
+      authority: session.authority,
+      sessionId: session.sessionId,
+      routeIdentity: session.routeIdentity,
+      effectiveRoute: session.effectiveRoute,
+      prototypeIdentity: session.prototypeIdentity,
+      backend: session.backend,
+      grid: session.grid,
+      cellCount: session.cellCount,
+      channelsPerCell: session.channelsPerCell,
+      channelOrder: [...session.channelOrder],
+      rendererRawChannelOrder: [...session.rendererRawChannelOrder],
+      channelMapping: { ...session.channelMapping },
+      floatCount: session.floatCount,
+      byteLength: session.byteLength,
+      frameCount: session.frameCount,
+      simStepCount: session.simStepCount,
+      boundarySidecarFrameCount: session.boundarySidecarFrameCount,
+      boundarySidecarDebug: session.boundarySidecarDebug,
+      controls: session.controls,
+    };
+  }
+
+  async function beginDebugBoundarySidecarExport(options = {}) {
+    if (!state.active || !device) {
+      return {
+        ok: false,
+        schema: BOUNDARY_SIDECAR_EXPORT_SCHEMA,
+        identity: BOUNDARY_SIDECAR_IDENTITY,
+        reason: 'inactive',
+        failurePhase: 'inactive',
+        effectiveRoute: state.effectiveRoute,
+        prototypeIdentity: state.prototypeIdentity,
+      };
+    }
+    releaseDebugBoundarySidecarExport();
+    const sessionId = `boundary-sidecar-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+    const bytes = boundarySidecarBufferBytes(gridSize);
+    const readback = device.createBuffer({
+      label: `kaminos ${BOUNDARY_SIDECAR_IDENTITY} export readback ${gridSize}^3`,
+      size: bytes,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+    });
+    updateUniforms(Number.isFinite(Number(options.timeMs)) ? Number(options.timeMs) : performance.now());
+    ensureBoundarySidecarBuffer();
+    device.pushErrorScope('validation');
+    const encoder = device.createCommandEncoder({ label: `kaminos ${BOUNDARY_SIDECAR_IDENTITY} export encoder` });
+    encodeBoundarySidecar(encoder, { forceBake: true });
+    encoder.copyBufferToBuffer(boundarySidecarBuffer, 0, readback, 0, bytes);
+    device.queue.submit([encoder.finish()]);
+    const validationError = await device.popErrorScope();
+    if (validationError) {
+      readback.destroy();
+      return {
+        ok: false,
+        schema: BOUNDARY_SIDECAR_EXPORT_SCHEMA,
+        identity: BOUNDARY_SIDECAR_IDENTITY,
+        reason: 'readback-validation',
+        failurePhase: 'readback-validation',
+        validationError: validationError.message || String(validationError),
+        effectiveRoute: state.effectiveRoute,
+        prototypeIdentity: state.prototypeIdentity,
+        boundarySidecarDebug: boundarySidecarDebug(),
+      };
+    }
+    await readback.mapAsync(GPUMapMode.READ);
+    const mapped = new Float32Array(readback.getMappedRange());
+    const data = new Float32Array(mapped.length);
+    data.set(mapped);
+    readback.unmap();
+    readback.destroy();
+    boundarySidecarExportSession = {
+      schema: BOUNDARY_SIDECAR_EXPORT_SCHEMA,
+      identity: BOUNDARY_SIDECAR_IDENTITY,
+      authority: BOUNDARY_SIDECAR_BAKE_AUTHORITY,
+      sessionId,
+      routeIdentity: ROUTE_IDENTITY,
+      effectiveRoute: state.effectiveRoute,
+      prototypeIdentity: PROTOTYPE_IDENTITY,
+      backend: state.backend,
+      grid: gridSize,
+      cellCount: gridCellCount(gridSize),
+      channelsPerCell: 4,
+      channelOrder: [...BOUNDARY_SIDECAR_EXPORT_CHANNEL_ORDER],
+      rendererRawChannelOrder: [...BOUNDARY_SIDECAR_RENDERER_RAW_CHANNEL_ORDER],
+      channelMapping: { ...BOUNDARY_SIDECAR_EXPORT_CHANNEL_MAPPING },
+      floatCount: data.length,
+      byteLength: data.byteLength,
+      frameCount: state.frameCount,
+      simStepCount: state.simStepCount,
+      boundarySidecarFrameCount: state.boundarySidecarFrameCount,
+      boundarySidecarDebug: boundarySidecarDebug(),
+      controls: {
+        boundarySidecarSource: normalizeBoundarySidecarSource(controlsSnapshot.boundarySidecarSource),
+        boundarySidecarView: normalizeBoundarySidecarView(controlsSnapshot.boundarySidecarView ?? controlsSnapshot.boundarySidecarControls?.view),
+        volumeScene: normalizeVolumeScene(controlsSnapshot.volumeScene),
+        lookFreeze: normalizeLookFreeze(controlsSnapshot.lookFreeze),
+      },
+      data,
+    };
+    return {
+      ok: true,
+      ...boundarySidecarExportDescriptor(boundarySidecarExportSession),
+    };
+  }
+
+  function readDebugBoundarySidecarExportChunk(payload = {}) {
+    const sessionId = String(payload.sessionId || '');
+    if (!boundarySidecarExportSession || boundarySidecarExportSession.sessionId !== sessionId) {
+      return {
+        ok: false,
+        schema: BOUNDARY_SIDECAR_EXPORT_SCHEMA,
+        identity: BOUNDARY_SIDECAR_IDENTITY,
+        reason: 'missing-session',
+      };
+    }
+    const startFloat = Math.max(0, Math.floor(Number(payload.startFloat) || 0));
+    const requestedFloats = Math.max(1, Math.floor(Number(payload.floatCount) || 65536));
+    const session = boundarySidecarExportSession;
+    const endFloat = Math.min(session.floatCount, startFloat + requestedFloats);
+    const floatCount = Math.max(0, endFloat - startFloat);
+    const bytes = new Uint8Array(session.data.buffer, startFloat * 4, floatCount * 4);
+    return {
+      ok: true,
+      schema: session.schema,
+      identity: session.identity,
+      sessionId: session.sessionId,
+      startFloat,
+      floatCount,
+      byteLength: bytes.byteLength,
+      base64: encodeBoundarySidecarExportBytes(bytes),
+    };
+  }
+
+  function releaseDebugBoundarySidecarExport(payload = {}) {
+    const sessionId = payload?.sessionId ? String(payload.sessionId) : null;
+    if (sessionId && boundarySidecarExportSession && boundarySidecarExportSession.sessionId !== sessionId) {
+      return {
+        ok: false,
+        schema: BOUNDARY_SIDECAR_EXPORT_SCHEMA,
+        identity: BOUNDARY_SIDECAR_IDENTITY,
+        reason: 'session-mismatch',
+      };
+    }
+    const released = boundarySidecarExportSession ? boundarySidecarExportDescriptor(boundarySidecarExportSession) : null;
+    boundarySidecarExportSession = null;
+    return {
+      ok: true,
+      schema: BOUNDARY_SIDECAR_EXPORT_SCHEMA,
+      identity: BOUNDARY_SIDECAR_IDENTITY,
+      released,
     };
   }
 
@@ -7117,13 +7299,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     updateSimCostLedger({ majorantBuiltThisFrame: true });
   }
 
-  function encodeBoundarySidecar(encoder) {
+  function encodeBoundarySidecar(encoder, options = {}) {
     const sourceName = normalizeBoundarySidecarSource(controlsSnapshot.boundarySidecarSource);
     const sidecarViewName = normalizeBoundarySidecarView(controlsSnapshot.boundarySidecarView ?? controlsSnapshot.boundarySidecarControls?.view);
     state.boundarySidecarSource = sourceName;
     state.boundarySidecarView = sidecarViewName;
     state.boundaryStructureSource = sourceName;
-    const shouldBakeBoundarySidecar = sourceName !== 'live' || sidecarViewName !== 'off';
+    const shouldBakeBoundarySidecar = options.forceBake === true || sourceName !== 'live' || sidecarViewName !== 'off';
     if (
       !shouldBakeBoundarySidecar ||
       !boundarySidecarBuildPipeline ||
@@ -9055,6 +9237,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     canvasElement() {
       return canvas;
     },
+    beginDebugBoundarySidecarExport,
+    readDebugBoundarySidecarExportChunk,
+    releaseDebugBoundarySidecarExport,
     sampleFrame,
     dispose() {
       this.setActive(false);
