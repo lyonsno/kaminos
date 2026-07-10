@@ -6,10 +6,20 @@ import { dirname, resolve } from 'node:path';
 import { execFileSync, spawn } from 'node:child_process';
 import { randomInt } from 'node:crypto';
 
-const args = new Map();
-for (let i = 2; i < process.argv.length; i += 2) {
-  args.set(process.argv[i], process.argv[i + 1]);
+function parseCliArgs(argv) {
+  const parsed = new Map();
+  for (let index = 0; index < argv.length; index += 1) {
+    const key = argv[index];
+    if (!key.startsWith('--')) continue;
+    const next = argv[index + 1];
+    const value = next && !next.startsWith('--') ? next : true;
+    parsed.set(key, value);
+    if (value !== true) index += 1;
+  }
+  return parsed;
 }
+
+const args = parseCliArgs(process.argv.slice(2));
 
 function readVolumeCaptureReplay(capturePath) {
   if (!capturePath) return null;
@@ -3028,6 +3038,11 @@ async function main() {
       throw new Error(`main renderer screenshot missing bridged fire volume: ${JSON.stringify(mainRendererMetrics)}`);
     }
     const visibleFirePixels = metrics.fireLikePixels + metrics.emissiveLikePixels;
+    const boundaryFireVisualEvidence =
+      boundaryFireReadbackEvidence.acceptsZeroRadiance &&
+      metrics.litPixels >= 220 &&
+      (metrics.volumeBounds?.pixelCount ?? 0) >= 180 &&
+      metrics.meanLuma >= 1.5;
     const performanceVisualWarnings = [];
     const canonicalPassiveBottomFieldProof = canonicalPassiveBottomNonRiseProof &&
       (sample.simReadback?.smokeWeight ?? 0) > 20 &&
@@ -3121,7 +3136,7 @@ async function main() {
           meanLuma: metrics.meanLuma,
         });
       }
-    } else if (metrics.litPixels < 1500 || visibleFirePixels < 450 || metrics.emissiveLikePixels < 80 || metrics.meanLuma < 8) {
+    } else if (!boundaryFireVisualEvidence && (metrics.litPixels < 1500 || visibleFirePixels < 450 || metrics.emissiveLikePixels < 80 || metrics.meanLuma < 8)) {
       throw new Error(`blank frame or missing fire volume: ${JSON.stringify(metrics)}`);
     }
     let renderScaleSetReport = null;

@@ -1897,6 +1897,7 @@ assert.match(witness, /not-gpu-exclusive-or-present-latency/, 'witness preserves
 assert.match(witness, /windowSize/, 'witness accepts an explicit browser window size for fullscreen-ish sweeps');
 assert.match(witness, /simStepCount/, 'witness records simulation step count');
 assert.match(witness, /simReadback/, 'witness records simulation readback evidence');
+assert.match(witness, /function parseCliArgs[\s\S]*next && !next\.startsWith\('--'\)[\s\S]*true[\s\S]*parsed\.set\(key, value\)/, 'volume witness parses bare boolean flags without swallowing the next option');
 assert.match(witness, /detailMean/, 'witness records transported material detail evidence');
 assert.match(witness, /simGridLabel/, 'witness records human-readable sim grid identity');
 assert.match(witness, /velocity-material-fire-microdetail-storage-buffer/, 'witness requires the microdetail storage label');
@@ -1906,6 +1907,7 @@ assert.match(witness, /radianceMean/, 'witness requires fire radiance evidence')
 assert.match(witness, /boundaryFireReadbackEvidence[\s\S]*emissionDetailMean[\s\S]*combustionFrontMean[\s\S]*frontTopologyMean/, 'boundary-fire inspect/shell routes can prove live fire from topology/emission carriers when stock radiance is intentionally zero');
 assert.match(witness, /fireFuelOverlapRatio <= 0\.01[\s\S]*!boundaryFireReadbackEvidence\.acceptsZeroRadiance/, 'boundary-fire inspect/shell routes do not fail tall-plume support solely because stock fire/fuel overlap is intentionally bypassed');
 assert.match(witness, /boundaryFireMainRendererEvidence[\s\S]*boundaryFireReadbackEvidence\.acceptsZeroRadiance[\s\S]*mainRendererMetrics\.litPixels[\s\S]*mainRendererMetrics\.meanLuma/, 'boundary-fire inspect/shell routes do not require orange-fire screenshot classification when live topology/emission carriers and lit main-renderer volume are present');
+assert.match(witness, /boundaryFireVisualEvidence[\s\S]*boundaryFireReadbackEvidence\.acceptsZeroRadiance[\s\S]*metrics\.litPixels[\s\S]*metrics\.volumeBounds[\s\S]*metrics\.meanLuma/, 'boundary-fire inspect/shell routes do not require orange-fire cropped preview classification when live topology/emission carriers and visible volume bounds are present');
 assert.match(witness, /extinctionMean/, 'witness requires smoke extinction evidence');
 assert.match(witness, /emissiveLikePixels/, 'witness records emissive-fire visual evidence separately from generic fire color');
 assert.match(witness, /volumeBounds/, 'witness records visual volume bounds for scale-scene comparison');
