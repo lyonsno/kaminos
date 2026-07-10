@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { closeSync, existsSync, mkdirSync, openSync, readFileSync, writeFileSync } from 'node:fs';
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
 
@@ -11,6 +11,8 @@ const CONTROLLED_STEP_SEQUENCE_AUTHORITY = 'controlled-step-sequence-v0';
 const HARD_LOW_SCALE_PRESET = 'hard-low-scale-v0';
 const RESIDUAL_FEATURE_IMAGE_AUTHORITY = 'gpu-feature-texture-rgba8-readback-frozen-sim-state-source-pass';
 const FLOW_DEBUG_AUXILIARY_AUTHORITY = 'flow-debug-interface-canvas-capture-v0';
+const CAPTURE_LEASE_SCHEMA = 'kaminos.volume.browser-capture-lease.v0';
+const DEFAULT_CAPTURE_LEASE_PATH = '/tmp/kaminos-render-pair-corpus-browser-capture.lock.json';
 const DEFAULT_BASE_URL = 'http://127.0.0.1:8097/?kaminos_volume_smoke=1&volume_scene=tall_plume&volume_tall_preset=operator_fire_0622&volume_resolution=128&volume_majorant_grid=48&volume_steps=148&volume_adaptive_rays=0.75&volume_density=3.05&volume_fire=0.50&volume_radiance=3&volume_absorption=0&volume_glow=2.5&volume_smoke=2.8&volume_curl=3.5&volume_microdetail=2.5&volume_interface_shred=0&volume_fire_licks=0&volume_projection=1.5&volume_speed=5&volume_fire_scale=0.59&volume_detail_scale=0.45&volume_plume_height=2.2&volume_wind_strength=0&volume_wind_angle=180&volume_wind_height=-0.8&volume_input_radius=0.11&volume_flow_rate=0.35&volume_reaction_fuel=1&volume_majorant_cadence=1&volume_pressure_iterations=2&volume_pressure_strategy=global&volume_sim_profile=1&volume_temporal_accum=0&volume_temporal_jitter=0&volume_history_clamp=1&volume_occupancy_skip=0.1&volume_majorant_skip=0&volume_majorant_smooth=0.1&volume_majorant_guard=0.3';
 
 function parseArgs(argv) {
@@ -147,6 +149,151 @@ async function cleanupCorpusWitnessBrowserSession(corpus) {
     cleanupStatus: browserCloseSent ? 'closed' : 'not-open-or-already-closed',
     closedAt: new Date().toISOString(),
     browserCloseSent,
+  };
+}
+
+function readJsonIfExists(path) {
+  if (!existsSync(path)) return null;
+  try {
+    return readJson(path);
+  } catch (error) {
+    return {
+      unreadable: true,
+      error: { name: error.name, message: error.message },
+      rawPath: path,
+    };
+  }
+}
+
+function processIsAlive(pid) {
+  const numericPid = Number(pid);
+  if (!Number.isInteger(numericPid) || numericPid <= 0) return false;
+  try {
+    process.kill(numericPid, 0);
+    return true;
+  } catch (error) {
+    return error.code === 'EPERM';
+  }
+}
+
+function acquireBrowserCaptureLease({ path, owner, corpus }) {
+  const resolvedPath = resolve(path);
+  const nonce = `${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const payload = {
+    schema: CAPTURE_LEASE_SCHEMA,
+    authority: 'single-browser-capture-lease-v0',
+    pid: process.pid,
+    nonce,
+    owner,
+    createdAt: new Date().toISOString(),
+    cwd: corpus.cwd,
+    manifestPath: corpus.manifestPath,
+    outRoot: corpus.outRoot,
+    debugPort: corpus.debugPort,
+    userDataDir: corpus.witnessBrowserSession?.userDataDir || null,
+  };
+  const staleHolders = [];
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      mkdirSync(dirname(resolvedPath), { recursive: true });
+      const fd = openSync(resolvedPath, 'wx');
+      try {
+        writeFileSync(fd, `${JSON.stringify(payload, null, 2)}\n`);
+      } finally {
+        closeSync(fd);
+      }
+      return {
+        ok: true,
+        path: resolvedPath,
+        nonce,
+        record: {
+          schema: CAPTURE_LEASE_SCHEMA,
+          authority: 'single-browser-capture-lease-v0',
+          path: resolvedPath,
+          status: 'acquired',
+          owner,
+          pid: process.pid,
+          nonce,
+          acquiredAt: payload.createdAt,
+          staleHolders,
+        },
+      };
+    } catch (error) {
+      if (error.code !== 'EEXIST') throw error;
+      const holder = readJsonIfExists(resolvedPath);
+      if (processIsAlive(holder?.pid)) {
+        return {
+          ok: false,
+          path: resolvedPath,
+          record: {
+            schema: CAPTURE_LEASE_SCHEMA,
+            authority: 'single-browser-capture-lease-v0',
+            path: resolvedPath,
+            status: 'blocked-live-holder',
+            owner,
+            pid: process.pid,
+            blockedAt: new Date().toISOString(),
+            holder,
+            staleHolders,
+          },
+          failure: {
+            code: 'browser-capture-lease-held',
+            failurePhase: 'capture-lease-acquire',
+            message: `browser capture lease is held by live pid ${holder?.pid ?? 'unknown'} at ${resolvedPath}`,
+            details: { path: resolvedPath, holder, owner },
+          },
+        };
+      }
+      staleHolders.push(holder || { missing: true });
+      try {
+        unlinkSync(resolvedPath);
+      } catch (unlinkError) {
+        if (unlinkError.code !== 'ENOENT') throw unlinkError;
+      }
+    }
+  }
+  return {
+    ok: false,
+    path: resolvedPath,
+    record: {
+      schema: CAPTURE_LEASE_SCHEMA,
+      authority: 'single-browser-capture-lease-v0',
+      path: resolvedPath,
+      status: 'failed-stale-reap',
+      owner,
+      pid: process.pid,
+      blockedAt: new Date().toISOString(),
+      staleHolders,
+    },
+    failure: {
+      code: 'browser-capture-lease-stale-reap-failed',
+      failurePhase: 'capture-lease-acquire',
+      message: `browser capture lease could not be acquired after stale reap at ${resolvedPath}`,
+      details: { path: resolvedPath, owner, staleHolders },
+    },
+  };
+}
+
+function releaseBrowserCaptureLease(lease) {
+  if (!lease?.ok || !lease.path) return null;
+  const holder = readJsonIfExists(lease.path);
+  const releasedAt = new Date().toISOString();
+  if (holder?.pid === process.pid && holder?.nonce === lease.nonce) {
+    try {
+      unlinkSync(lease.path);
+      return { status: 'released', releasedAt };
+    } catch (error) {
+      return {
+        status: error.code === 'ENOENT' ? 'missing-before-release' : 'release-failed',
+        releasedAt,
+        error: { name: error.name, message: error.message, code: error.code },
+      };
+    }
+  }
+  return {
+    status: holder ? 'not-owned-at-release' : 'missing-before-release',
+    releasedAt,
+    holder,
   };
 }
 
@@ -862,6 +1009,8 @@ const witnessBrowserSession = {
     : 'none',
   cleanupStatus: args.has('--dry-run') ? 'not-run-dry-run' : 'pending',
 };
+const captureLeasePath = resolve(args.get('--capture-lease-path') || DEFAULT_CAPTURE_LEASE_PATH);
+const captureLeaseOwner = String(args.get('--capture-lease-owner') || `volume-render-pair-corpus:${process.pid}`);
 const createdAt = new Date().toISOString();
 const corpus = {
   schema: CORPUS_SCHEMA,
@@ -907,6 +1056,11 @@ const corpus = {
   debugPort: Number(args.get('--debug-port') || 9800),
   reuseWitnessBrowser,
   witnessBrowserSession,
+  captureLease: {
+    requested: true,
+    path: captureLeasePath,
+    owner: captureLeaseOwner,
+  },
   settleMs,
   framesPerSequence,
   frameStrideMs,
@@ -923,29 +1077,75 @@ const corpus = {
   failures: [],
 };
 
-writeJson(manifestPath, corpus);
-for (let index = 0; index < variants.length; index += 1) {
-  runVariant({ variant: variants[index], index, args, corpus, cwd });
-  corpus.pairCount = corpus.pairs.length;
-  const temporalSummary = summarizeTemporalSequences(corpus);
-  corpus.temporalAdjacentPairCount = temporalSummary.temporalAdjacentPairCount;
-  corpus.temporalAdjacentPairs = temporalSummary.temporalAdjacentPairs;
-  corpus.temporalSequences = temporalSummary.temporalSequences;
-  corpus.updatedAt = new Date().toISOString();
-  corpus.status = corpus.failures.length ? (corpus.keepGoing ? 'partial' : 'failed') : (corpus.dryRun ? 'dry-run' : 'running');
-  writeJson(manifestPath, corpus);
-  if (corpus.failures.length && !corpus.keepGoing) break;
-}
-corpus.pairCount = corpus.pairs.length;
-corpus.updatedAt = new Date().toISOString();
-if (!corpus.failures.length) {
-  corpus.status = corpus.dryRun ? 'dry-run' : 'captured';
-} else if (corpus.keepGoing && corpus.pairs.length) {
-  corpus.status = 'partial';
-} else {
+let captureLease = null;
+let exitCode = 0;
+let emitted = false;
+
+try {
+  captureLease = acquireBrowserCaptureLease({
+    path: captureLeasePath,
+    owner: captureLeaseOwner,
+    corpus,
+  });
+  corpus.witnessBrowserSession.captureLease = captureLease.record;
+  corpus.captureLease = captureLease.record;
+  if (!captureLease.ok) {
+    corpus.status = 'failed';
+    corpus.failures.push(captureLease.failure);
+    corpus.updatedAt = new Date().toISOString();
+    writeJson(manifestPath, corpus);
+    console.error(captureLease.failure.message);
+    console.log(JSON.stringify(corpus, null, 2));
+    emitted = true;
+    exitCode = 1;
+  } else {
+    writeJson(manifestPath, corpus);
+    for (let index = 0; index < variants.length; index += 1) {
+      runVariant({ variant: variants[index], index, args, corpus, cwd });
+      corpus.pairCount = corpus.pairs.length;
+      const temporalSummary = summarizeTemporalSequences(corpus);
+      corpus.temporalAdjacentPairCount = temporalSummary.temporalAdjacentPairCount;
+      corpus.temporalAdjacentPairs = temporalSummary.temporalAdjacentPairs;
+      corpus.temporalSequences = temporalSummary.temporalSequences;
+      corpus.updatedAt = new Date().toISOString();
+      corpus.status = corpus.failures.length ? (corpus.keepGoing ? 'partial' : 'failed') : (corpus.dryRun ? 'dry-run' : 'running');
+      writeJson(manifestPath, corpus);
+      if (corpus.failures.length && !corpus.keepGoing) break;
+    }
+    corpus.pairCount = corpus.pairs.length;
+    corpus.updatedAt = new Date().toISOString();
+    if (!corpus.failures.length) {
+      corpus.status = corpus.dryRun ? 'dry-run' : 'captured';
+    } else if (corpus.keepGoing && corpus.pairs.length) {
+      corpus.status = 'partial';
+    } else {
+      corpus.status = 'failed';
+    }
+  }
+} catch (error) {
+  exitCode = 1;
   corpus.status = 'failed';
+  corpus.failures.push({
+    code: 'corpus-generator-error',
+    failurePhase: 'corpus-generator',
+    message: error.message,
+    details: { name: error.name, stack: error.stack },
+  });
+} finally {
+  if (captureLease?.ok) {
+    const release = releaseBrowserCaptureLease(captureLease);
+    if (release) {
+      corpus.witnessBrowserSession.captureLease = {
+        ...corpus.witnessBrowserSession.captureLease,
+        ...release,
+      };
+      corpus.captureLease = corpus.witnessBrowserSession.captureLease;
+    }
+  }
+  await cleanupCorpusWitnessBrowserSession(corpus);
+  corpus.updatedAt = new Date().toISOString();
+  writeJson(manifestPath, corpus);
 }
-await cleanupCorpusWitnessBrowserSession(corpus);
-writeJson(manifestPath, corpus);
-console.log(JSON.stringify(corpus, null, 2));
-if (corpus.failures.length && !corpus.keepGoing) process.exit(1);
+
+if (!emitted) console.log(JSON.stringify(corpus, null, 2));
+if (exitCode || (corpus.failures.length && !corpus.keepGoing)) process.exit(1);
