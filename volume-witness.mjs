@@ -2034,6 +2034,8 @@ async function main() {
     assert.equal(state.frontFieldBytes, expectedGrid * expectedGrid * expectedGrid * 4, 'front topology sidecar byte cost does not match one scalar per cell');
     assert.equal(state.smokeLifecycleRenderer?.identity, 'combustion-coupled-smoke-lifecycle-render-v0', 'smoke lifecycle renderer identity did not reach debug state');
     assert.equal(state.smokeLifecycleRenderer?.slotPolicy, 'existing-material-fire-micro-front-fields-no-new-channel-v0', 'smoke lifecycle renderer must report the existing-field slot policy');
+    assert.equal(state.smokeMorphologyForces?.identity, 'smoke-selective-vorticity-morphology-force-v0', 'smoke morphology force identity did not reach debug state');
+    assert.equal(state.smokeMorphologyForces?.slotPolicy, 'existing-material-fire-micro-front-fields-no-new-channel-v0', 'smoke morphology force must report the existing-field slot policy');
     assert.ok(Math.abs((state.controls?.gridOverlay || 0) - expectedGridOverlay) < 0.001, 'fluid grid overlay did not apply route/debug state');
     assert.ok(Math.abs((state.controls?.raySteps ?? 0) - expectedRaySteps) < 0.001, 'ray-step route/control did not apply');
     assert.ok(Math.abs((state.controls?.adaptiveRays ?? 0) - expectedAdaptiveRays) < 0.001, 'adaptive raymarch route/control did not apply');
@@ -3080,6 +3082,7 @@ async function main() {
       pyroDynamicDetail: sample.pyroDynamicDetail || state.pyroDynamicDetail || null,
       pyroMaterialRendererCoupling: sample.pyroMaterialRendererCoupling || state.pyroMaterialRendererCoupling || null,
       smokeLifecycleRenderer: sample.smokeLifecycleRenderer || state.smokeLifecycleRenderer || null,
+      smokeMorphologyForces: sample.smokeMorphologyForces || state.smokeMorphologyForces || null,
       boundaryFireShellEvidence,
       runtimeQualityRequested: sample.runtimeQualityRequested,
       runtimeQualityEffective: sample.runtimeQualityEffective,

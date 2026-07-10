@@ -985,6 +985,12 @@ assert.match(core, /let\s+tallPlumeDetailPhaseAnchor\s*=\s*transportedDetailPhas
 assert.match(core, /rawDetailForce\s*=\s*turbulentDetailForce\(tallPlumeDetailP\s*\*/, 'raw tall-plume detail force is phase-anchored before turbulence sampling');
 assert.match(core, /rawMicroForce\s*=\s*turbulentDetailForce\(tallPlumeDetailP\s*\*/, 'raw tall-plume micro force is phase-anchored before turbulence sampling');
 assert.match(core, /rawFineBreakup\s*=\s*fineScaleBreakup\(cellI,\s*tallPlumeDetailP,\s*tallPlumeDetailTime/, 'fine breakup samples the anchored tall-plume detail phase');
+assert.match(core, /SMOKE_MORPHOLOGY_FORCE_IDENTITY\s*=\s*'smoke-selective-vorticity-morphology-force-v0'/, 'smoke morphology force carries a stable prototype identity');
+assert.match(core, /fn smokeMorphologyRollForce/, 'fluid shader has a smoke-selective morphology force separate from generic vorticity confinement');
+assert.match(core, /smokeMorphologyAge[\s\S]*material\.x[\s\S]*microLayer\.x[\s\S]*heat[\s\S]*flame/, 'smoke morphology force derives age/cooling from existing smoke, micro, heat, and flame fields');
+assert.match(core, /smokeMorphologyRim[\s\S]*combustionFrontTopology[\s\S]*curlAtCell/, 'smoke morphology force is rim/front/curl gated instead of a whole-column noise blanket');
+assert.match(core, /vel\s*=\s*vel\s*\+\s*smokeMorphologyForce\s*\*\s*activityVorticityGate/, 'smoke morphology force injects into velocity through the existing activity vorticity gate');
+assert.match(core, /smokeMorphologyForces:\s*\{[\s\S]*identity:\s*SMOKE_MORPHOLOGY_FORCE_IDENTITY[\s\S]*slotPolicy:\s*'existing-material-fire-micro-front-fields-no-new-channel-v0'/, 'debug state reports smoke morphology force authority and no-new-channel slot policy');
 assert.match(core, /microDetailDomainWarp\([^)]*detailCoherenceGain/, 'raymarch microdetail warp accepts a scene-gated detail coherence gain');
 assert.match(core, /bonfireRadialFireLickBreakup/, 'bonfire fire-lick breakup uses radial source-local texture rather than one-sided directional combs');
 assert.match(core, /bonfireDetailLateralDamping/, 'bonfire detail forces damp non-wind lateral breakup so Shred/Fire Licks do not impersonate wind');
@@ -1103,6 +1109,7 @@ assert.match(core, /smokeLifecycleFromExistingFields/, 'fragment shader derives 
 assert.match(core, /smokeLifecycleSootAuthority[\s\S]*fuelConsumptionProxy[\s\S]*combustionFrontTopology[\s\S]*frontSupport/, 'smoke soot authority is coupled to consumption/front evidence, not a standalone fog ramp');
 assert.match(core, /smokeLifecycleCoolingAuthority[\s\S]*heat[\s\S]*renderTemp[\s\S]*y/, 'smoke cooling authority uses existing heat/flame/height fields to separate fresh hot smoke from older plume smoke');
 assert.match(core, /smokeLifecycleExtinctionBoost[\s\S]*rawExtinction[\s\S]*smokeLifecycleSootAuthority/, 'smoke extinction is boosted through the lifecycle ramp instead of only recoloring final smoke');
+assert.match(core, /smokeMorphologyCanopyBreakup[\s\S]*smokeLifecycleCoolingAuthority[\s\S]*smokeLifecycleMotionAuthority/, 'smoke canopy breakup is tied to lifecycle cooling/motion instead of anonymous alpha noise');
 assert.match(core, /smokeLifecycleRenderer:\s*\{[\s\S]*slotPolicy:\s*'existing-material-fire-micro-front-fields-no-new-channel-v0'/, 'debug state reports that this first smoke pass uses existing sim channels, not a hidden new slot');
 assert.match(core, /fireLayerMean/, 'sim readback reports separate fire layer evidence');
 assert.match(core, /combustionFrontMean/, 'sim readback reports transported combustion-front evidence separately from generic fire layer');
