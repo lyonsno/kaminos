@@ -1234,8 +1234,9 @@ fn boundarySidecarIntervalCoverage(sidecarSample: vec4<f32>, sidecarMeta: vec4<f
   let ridge = clamp(sidecarSample.z, 0.0, 1.8);
   let footprint = max(sidecarSample.w, 0.0);
   let proximity = clamp(sidecarMeta.x, 0.0, 1.8);
+  let coherentSheet = max(max(coverage * 0.96, proximity * 0.68), ridge * smoothstep(0.010, 0.72, coverage + proximity) * 0.74);
   let structure = clamp(
-    max(max(support * 0.70, coverage * 0.92), max(ridge * 0.74, proximity * 0.62)),
+    max(coherentSheet, support * smoothstep(0.008, 0.64, max(coverage, proximity)) * 0.54),
     0.0,
     1.8
   );
@@ -2262,24 +2263,62 @@ fn boundaryFireSamplingImportanceFromSignals(
   boundaryFireActive: f32
 ) -> f32 {
   let sidecarStructure = clamp(
-    max(max(sidecarSample.x * 0.74, sidecarSample.y * 0.92), max(sidecarSample.z * 1.16, sidecarMeta.x * 0.52))
-      + sidecarSample.w * 0.20,
+    max(max(sidecarSample.x * 0.30, sidecarSample.y * 0.46), max(sidecarSample.z * 0.52, sidecarMeta.x * 0.22))
+      + sidecarSample.w * 0.06,
     0.0,
-    1.6
+    1.0
   );
-  let lowerFireBody = smoothstep(
+  let visibleBoundaryBody = smoothstep(
     0.010,
-    0.62,
-    temp * 0.22
-      + heat * 0.16
-      + flame * 0.28
-      + flameDetail * 0.52
-      + fireLick * 0.38
-      + ember * 0.18
-      + combustionFront * 0.20
-      + combustionFrontTopology * 0.16
+    0.56,
+    temp * 0.20
+      + heat * 0.18
+      + flame * 0.32
+      + flameDetail * 0.58
+      + fireLick * 0.44
+      + ember * 0.16
+      + combustionFront * 0.22
+      + combustionFrontTopology * 0.18
   );
-  return clamp(boundaryFireActive * max(sidecarStructure, lowerFireBody * 0.78 + sidecarStructure * 0.38), 0.0, 1.7);
+  let protectedSidecar = sidecarStructure * (0.18 + 0.58 * visibleBoundaryBody);
+  return clamp(boundaryFireActive * max(visibleBoundaryBody * 1.06, protectedSidecar), 0.0, 1.35);
+}
+
+fn boundaryFireLookPreservationMask(
+  sidecarSample: vec4<f32>,
+  sidecarMeta: vec4<f32>,
+  temp: f32,
+  heat: f32,
+  flame: f32,
+  flameDetail: f32,
+  fireLick: f32,
+  ember: f32,
+  combustionFront: f32,
+  combustionFrontTopology: f32,
+  y: f32,
+  boundaryFireActive: f32
+) -> f32 {
+  let support = clamp(sidecarSample.x, 0.0, 1.8);
+  let coverage = clamp(sidecarSample.y, 0.0, 1.8);
+  let ridge = clamp(sidecarSample.z, 0.0, 1.8);
+  let proximity = clamp(sidecarMeta.x, 0.0, 1.8);
+  let materialBody = smoothstep(
+    0.020,
+    0.82,
+    temp * 0.30
+      + heat * 0.16
+      + flame * 0.22
+      + flameDetail * 0.46
+      + fireLick * 0.30
+      + ember * 0.12
+      + combustionFront * 0.20
+      + combustionFrontTopology * 0.18
+  );
+  let lowerBodyLift = materialBody * (1.0 - smoothstep(0.58, 0.92, y));
+  let coherentSheet = max(coverage * 0.96, max(proximity * 0.62, ridge * materialBody * 0.72));
+  let supportOnlyPenalty = smoothstep(0.18, 1.02, support) * (1.0 - smoothstep(0.10, 0.74, max(materialBody, max(coverage, proximity))));
+  let lookPreservation = max(coherentSheet * (0.50 + materialBody * 0.50), max(materialBody * 0.82, lowerBodyLift * 1.06));
+  return clamp(boundaryFireActive * lookPreservation * (1.0 - supportOnlyPenalty * 0.42), 0.0, 1.7);
 }
 
 fn adaptiveRayStepScale(interest: f32, adaptiveRays: f32) -> f32 {
@@ -2292,6 +2331,12 @@ fn boundaryFireAdaptiveClampScale(baseScale: f32, segmentCoverage: f32, boundary
   let segmentRisk = smoothstep(0.20, 1.28, segmentCoverage) * smoothstep(0.035, 0.74, boundaryImportance);
   let clampedScale = mix(baseScale, min(baseScale, 0.82), clamp(segmentRisk * clampStrength, 0.0, 1.0));
   return max(0.42, clampedScale);
+}
+
+fn boundaryFireLookPreservationClampScale(baseScale: f32, lookPreservation: f32, adaptiveRays: f32) -> f32 {
+  let preserve = smoothstep(0.12, 1.04, lookPreservation) * clamp(adaptiveRays, 0.0, 1.0);
+  let preservedCap = mix(1.04, 0.58, preserve);
+  return max(0.42, mix(baseScale, min(baseScale, preservedCap), preserve));
 }
 
 fn raymarchOccupancySignal(
@@ -3933,6 +3978,20 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
       combustionFrontTopology,
       boundaryFireRenderActive
     );
+    var boundaryFireLookPreservation = boundaryFireLookPreservationMask(
+      boundarySidecarSampleForSampling,
+      boundarySidecarMetaForSampling,
+      temp,
+      heat,
+      flame,
+      flameDetail,
+      fireLick,
+      ember,
+      combustionFront,
+      combustionFrontTopology,
+      y,
+      boundaryFireRenderActive
+    );
     let smoke = mix(
       (smokeDensity + microBodyContribution * 0.70) * smoothstep(0.03, 0.92, y) * u.fire_smoke_curl_speed.y,
       smokeDensity * canonicalSmokeContent * u.fire_smoke_curl_speed.y,
@@ -3950,7 +4009,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
       * (0.020 + flameDetail * 0.035 + interfaceShred * 0.025 + microSmoke * 0.016);
     let extinction = rawExtinction + tallPlumeTransitionWisps * absorptionGain * 0.34;
     let occupancy = raymarchOccupancySignal(density, smoke, heat, temp, flame, microTextureSignal, velMag, extinction) + tallPlumeTransitionWisps;
-    let boundaryProtectedOccupancy = max(occupancy, boundaryFireSamplingImportance * 0.96 + boundaryFirePreSkipImportance * 0.44);
+    let boundaryProtectedOccupancy = max(occupancy, max(boundaryFireSamplingImportance * 0.96, boundaryFireLookPreservation * 1.04) + boundaryFirePreSkipImportance * 0.44);
     let emptySpanScale = occupancySkipStepScale(boundaryProtectedOccupancy, occupancySkipStrength, adaptiveRays);
     if (emptySpanScale > 1.08) {
       t = t + min(dtBase * emptySpanScale, max(0.0001, endT - t));
@@ -3962,13 +4021,19 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     let filamentNoise = microFilamentNoise(detailP, microWarp, detailCarrier, state.xyz, u.cameraPos_time.w);
     let shredNoise = microFilamentNoise(detailP.zxy + vec3<f32>(0.13, -0.21, 0.09), microWarp.yzx * 1.21, detailCarrier + interfaceShred * 1.7, state.zxy, u.cameraPos_time.w * 1.17 + 1.3);
     let fireNoise = microFilamentNoise(detailP.yzx + vec3<f32>(-0.18, 0.07, 0.24), microWarp.zxy * 1.38, detailCarrier + fireLick * 2.1, state.yzx, u.cameraPos_time.w * 1.31 + 2.1);
-    let interest = raymarchInterest(density, smoke, heat, temp, max(flame, combustionFrontTopology * 0.10), flameDetail, microTextureSignal, velMag, fireLick, interfaceShred) + boundaryFireSamplingImportance;
+    let interest = raymarchInterest(density, smoke, heat, temp, max(flame, combustionFrontTopology * 0.10), flameDetail, microTextureSignal, velMag, fireLick, interfaceShred)
+      + boundaryFireSamplingImportance * 0.74
+      + boundaryFireLookPreservation * 0.88;
     let boundaryFireAdaptiveClamp = clamp(u.boundary_sidecar_display.w, 0.0, 1.0);
-    let adaptiveScale = boundaryFireAdaptiveClampScale(
-      adaptiveRayStepScale(interest, adaptiveRays),
-      boundarySidecarSampleForSampling.w,
-      boundaryFireSamplingImportance,
-      boundaryFireAdaptiveClamp * boundaryFireRenderActive
+    let adaptiveScale = boundaryFireLookPreservationClampScale(
+      boundaryFireAdaptiveClampScale(
+        adaptiveRayStepScale(interest, adaptiveRays),
+        boundarySidecarSampleForSampling.w,
+        max(boundaryFireSamplingImportance, boundaryFireLookPreservation),
+        boundaryFireAdaptiveClamp * boundaryFireRenderActive
+      ),
+      boundaryFireLookPreservation,
+      adaptiveRays
     );
     let localDt = min(dtBase * adaptiveScale, max(0.0001, endT - t));
     let rayStepOpacity = localDt * 3.65;
@@ -4151,6 +4216,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
         let boundarySidecarInterval = boundarySidecarIntervalCoverage(boundarySidecarSample, boundarySidecarMetaSample, localDt, dtBase, boundarySidecarNormalViewGain, adaptiveRays);
         boundarySidecarIntervalOpticalDepth = boundarySidecarInterval.y;
         let boundarySidecarIntervalSupport = boundarySidecarInterval.x;
+        boundaryFireLookPreservation = max(boundaryFireLookPreservation, boundarySidecarIntervalSupport * boundaryFireRenderActive * inspectBoundaryFireMask);
         boundarySupportEffective = max(max(boundarySidecarSample.x, boundarySidecarProximity * 0.36), boundarySidecarIntervalSupport * 0.24);
         boundaryGradientEffective = max(max(max(boundarySidecarCoverage, boundarySidecarSample.z * 0.55), boundarySidecarSegmentReconstruction * 0.52), boundarySidecarIntervalSupport * 0.72)
           * (1.0 + boundarySidecarFootprintWidth * (0.18 + boundarySidecarSegmentReconstruction * 0.18))
@@ -4209,6 +4275,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
           let boundarySidecarInterval = boundarySidecarIntervalCoverage(boundarySidecarSample, boundarySidecarMetaSample, localDt, dtBase, boundarySidecarNormalViewGain, adaptiveRays);
           boundarySidecarIntervalOpticalDepth = boundarySidecarInterval.y;
           let boundarySidecarIntervalSupport = boundarySidecarInterval.x;
+          boundaryFireLookPreservation = max(boundaryFireLookPreservation, boundarySidecarIntervalSupport * boundaryFireRenderActive * inspectBoundaryFireMask);
           boundarySupportEffective = mix(boundarySupport, boundarySidecarSample.x, 0.5);
           boundarySupportEffective = max(boundarySupportEffective, boundarySidecarIntervalSupport * 0.18);
           boundaryGradientEffective = mix(
@@ -5497,6 +5564,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       metaBytes: boundarySidecarMetaBufferBytes(gridSize),
       temporalSidecarIdentity: TEMPORAL_SIDECAR_IDENTITY,
       intervalReconstructionIdentity: 'single-frame-boundary-interval-reconstruction-v0',
+      lookPreservationIdentity: 'boundary-fire-adaptive-look-preservation-v0',
       built: state.boundarySidecarBuilt,
       builtThisFrame: state.boundarySidecarBuiltThisFrame,
       frameCount: state.boundarySidecarFrameCount,

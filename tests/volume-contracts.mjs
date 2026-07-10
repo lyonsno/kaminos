@@ -217,6 +217,16 @@ assert.match(core, /boundarySidecarIntervalOpticalDepth/, 'Boundary-fire raymarc
 assert.match(core, /boundaryCandidate\s*=\s*max\(\s*boundaryCandidate,\s*boundarySidecarIntervalCandidate/, 'Boundary-fire interval reconstruction contributes directly to visible fire opacity/luma, not only adaptive step softness');
 assert.match(core, /intervalReconstructionIdentity:\s*'single-frame-boundary-interval-reconstruction-v0'/, 'Debug state exposes the active single-frame interval reconstruction identity');
 assert.match(core, /boundaryFireAdaptiveClampScale/, 'Boundary-fire raymarch locally clamps adaptive step expansion near baked sheet crossings');
+assert.match(core, /fn boundaryFireLookPreservationMask/, 'Boundary-fire adaptive path has an explicit look-preservation mask separate from generic sampling interest');
+assert.match(core, /boundaryFireLookPreservationClampScale/, 'Boundary-fire adaptive path clamps step expansion against the accepted high-step look support');
+assert.match(core, /boundaryFireLookPreservationMask\(\s*boundarySidecarSampleForSampling/, 'Adaptive sampling derives look preservation from baked sidecar structure before step sizing');
+assert.match(core, /boundaryFireLookPreservation\s*=\s*max\(\s*boundaryFireLookPreservation,\s*boundarySidecarIntervalSupport/, 'Baked interval reconstruction lifts look-preservation confidence in the visible boundary-fire branch');
+assert.match(core, /sidecarSample\.x \* 0\.30/, 'Adaptive boundary-fire sampling demotes raw sidecar support so support sheets do not outrank visible flame body');
+assert.match(core, /sidecarSample\.z \* 0\.52/, 'Adaptive boundary-fire sampling demotes raw sidecar ridge so sparse upper-sheet flecks do not dominate adaptive density');
+assert.match(core, /visibleBoundaryBody/, 'Adaptive boundary-fire sampling uses visible fire body as the primary density budget anchor');
+assert.match(core, /protectedSidecar\s*=\s*sidecarStructure\s*\*\s*\(0\.18\s*\+\s*0\.58\s*\*\s*visibleBoundaryBody\)/, 'Adaptive boundary-fire sampling prevents raw support sheets from receiving full density unless visible fire body agrees');
+assert.match(core, /visibleBoundaryBody\s*\*\s*1\.06/, 'Adaptive boundary-fire sampling preserves body-dominant look while reducing steps');
+assert.match(core, /lookPreservationIdentity:\s*'boundary-fire-adaptive-look-preservation-v0'/, 'Debug state exposes the active adaptive look-preservation identity');
 assert.match(index, /id="volume-pyro-interface-focus"/, 'Pyro cockpit exposes an interface-focus slider');
 assert.match(index, /Border carrier/i, 'Pyro interface-focus slider describes the standalone border carrier');
 assert.match(index, /id="volume-pyro-edge-bite"/, 'Pyro cockpit exposes an edge-bite slider');
