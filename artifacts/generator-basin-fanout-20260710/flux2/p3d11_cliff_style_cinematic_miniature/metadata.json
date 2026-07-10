@@ -1,0 +1,24 @@
+{
+  "created_at": 1783667026.961934,
+  "duration_s": 73.6,
+  "input_name": "11_img.png",
+  "input_path": "Pixal3D/assets/images/11_img.png",
+  "job_id": "df5bee30ae9a",
+  "job_type": "mflux_flux2_edit_promptfile",
+  "name": "11_img",
+  "output_files": [
+    "output.metadata.json",
+    "output.png"
+  ],
+  "params": {
+    "guidance": "1.0",
+    "height": "512",
+    "mlx_cache_limit_gb": "48",
+    "model": "flux2-klein-9b",
+    "prompt_file": "artifacts/generator-basin-fanout-20260710/prompts/p3d11_cliff_style_cinematic_miniature.txt",
+    "quantize": "4",
+    "seed": "327",
+    "steps": "8",
+    "width": "512"
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "created_at": 1783667166.800948,
+  "duration_s": 70.7,
+  "input_name": "s_13_img.jpg",
+  "input_path": "Pixal3D/assets/images/s_13_img.jpg",
+  "job_id": "1969c7472c81",
+  "job_type": "mflux_flux2_edit_promptfile",
+  "name": "s_13_img",
+  "output_files": [
+    "output.metadata.json",
+    "output.png"
+  ],
+  "params": {
+    "guidance": "1.0",
+    "height": "512",
+    "mlx_cache_limit_gb": "48",
+    "model": "flux2-klein-9b",
+    "prompt_file": "artifacts/generator-basin-fanout-20260710/prompts/p3d13_radio_style_retro_scifi.txt",
+    "quantize": "4",
+    "seed": "329",
+    "steps": "8",
+    "width": "512"
+  }
+}

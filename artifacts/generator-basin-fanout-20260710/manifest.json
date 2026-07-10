@@ -405,7 +405,7 @@
         512
       ],
       "source_ref": "Pixal3D/assets/images/3_img.webp",
-      "status": "running",
+      "status": "done",
       "steps": 8,
       "submit_returncode": 0,
       "submit_stderr": ""
@@ -427,7 +427,7 @@
         512
       ],
       "source_ref": "Pixal3D/assets/images/1_img.png",
-      "status": "pending",
+      "status": "done",
       "steps": 8,
       "submit_returncode": 0,
       "submit_stderr": ""
@@ -449,7 +449,7 @@
         512
       ],
       "source_ref": "Pixal3D/assets/images/s_18_img.png",
-      "status": "pending",
+      "status": "done",
       "steps": 8,
       "submit_returncode": 0,
       "submit_stderr": ""
@@ -471,7 +471,7 @@
         512
       ],
       "source_ref": "Pixal3D/assets/images/5_img.webp",
-      "status": "pending",
+      "status": "done",
       "steps": 8,
       "submit_returncode": 0,
       "submit_stderr": ""
@@ -493,7 +493,7 @@
         512
       ],
       "source_ref": "Pixal3D/assets/images/0_img.png",
-      "status": "pending",
+      "status": "done",
       "steps": 8,
       "submit_returncode": 0,
       "submit_stderr": ""
@@ -515,7 +515,7 @@
         512
       ],
       "source_ref": "Pixal3D/assets/images/0_img.png",
-      "status": "pending",
+      "status": "done",
       "steps": 8,
       "submit_returncode": 0,
       "submit_stderr": ""
@@ -537,7 +537,7 @@
         512
       ],
       "source_ref": "Pixal3D/assets/images/6_img.png",
-      "status": "pending",
+      "status": "done",
       "steps": 8,
       "submit_returncode": 0,
       "submit_stderr": ""
@@ -559,7 +559,7 @@
         512
       ],
       "source_ref": "Pixal3D/assets/images/1_img.png",
-      "status": "pending",
+      "status": "done",
       "steps": 8,
       "submit_returncode": 0,
       "submit_stderr": ""
@@ -581,7 +581,7 @@
         512
       ],
       "source_ref": "Pixal3D/assets/images/7_img.png",
-      "status": "pending",
+      "status": "done",
       "steps": 8,
       "submit_returncode": 0,
       "submit_stderr": ""
@@ -603,7 +603,7 @@
         512
       ],
       "source_ref": "Pixal3D/assets/images/11_img.png",
-      "status": "pending",
+      "status": "done",
       "steps": 8,
       "submit_returncode": 0,
       "submit_stderr": ""
@@ -625,7 +625,7 @@
         512
       ],
       "source_ref": "Pixal3D/assets/images/3_img.webp",
-      "status": "pending",
+      "status": "done",
       "steps": 8,
       "submit_returncode": 0,
       "submit_stderr": ""
@@ -647,7 +647,7 @@
         512
       ],
       "source_ref": "Pixal3D/assets/images/s_13_img.jpg",
-      "status": "pending",
+      "status": "done",
       "steps": 8,
       "submit_returncode": 0,
       "submit_stderr": ""
@@ -669,7 +669,7 @@
         512
       ],
       "source_ref": "Pixal3D/assets/images/s_15_img.png",
-      "status": "pending",
+      "status": "running",
       "steps": 8,
       "submit_returncode": 0,
       "submit_stderr": ""
@@ -925,7 +925,7 @@
           "texture_size": 1024
         },
         "route": "trellis2mlx_fast_checkpoint",
-        "status": "queued"
+        "status": "pending"
       },
       {
         "greenroom_job": "1ca71a1756d8",
@@ -969,6 +969,28 @@
     "selection_policy": "visual inspection first; hold remaining Trellis slots for later image batches unless a current candidate is clearly superior",
     "spent_or_queued_runs": 3
   },
+  "visual_observations": [
+    {
+      "completed_outputs": 29,
+      "id": "batch-02-visual-read",
+      "mapping": "artifacts/generator-basin-fanout-20260710/witness/contact-batch-02/mapping.txt",
+      "takeaways": [
+        "Pixal3D object sources are strong basin scaffolds for Flux2 style/identity shifts.",
+        "Insertion prompts can add coherent molten/orb/relic objects into landscape and interior scenes instead of merely pasting symbols.",
+        "Good-miss creature/object basins are real: p3d06_crab_orange_walker_relic keeps source posture while inventing production-like body detail.",
+        "p3d00_turtle_style_clay_maquette is a low-risk Trellis candidate, held pending LIRM armature outputs."
+      ],
+      "trellis_hold": [
+        "p3d00_turtle_style_clay_maquette",
+        "later LIRM armature outputs"
+      ],
+      "trellis_now": [
+        "p3d00_turtle_sacred_engine_variant",
+        "p3d06_crab_orange_walker_relic"
+      ],
+      "witness": "artifacts/generator-basin-fanout-20260710/witness/contact-batch-02/contact.png"
+    }
+  ],
   "witnesses": [
     {
       "count": 14,
@@ -976,6 +998,13 @@
       "image": "artifacts/generator-basin-fanout-20260710/witness/contact-batch-01/contact.png",
       "mapping": "artifacts/generator-basin-fanout-20260710/witness/contact-batch-01/mapping.txt",
       "visual_read": "first batch has coherent transform basins; strongest early Trellis candidates are turtle sacred-engine and crab orange-walker"
+    },
+    {
+      "count": 29,
+      "id": "contact-batch-02",
+      "image": "artifacts/generator-basin-fanout-20260710/witness/contact-batch-02/contact.png",
+      "mapping": "artifacts/generator-basin-fanout-20260710/witness/contact-batch-02/mapping.txt",
+      "visual_read": "transform, insertion, and first style basins are coherent; remaining Trellis slots held for clay turtle or LIRM outputs"
     }
   ]
 }

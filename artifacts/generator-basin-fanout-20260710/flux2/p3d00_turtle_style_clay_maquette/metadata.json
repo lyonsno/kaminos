@@ -1,0 +1,24 @@
+{
+  "created_at": 1783666763.0759199,
+  "duration_s": 66.1,
+  "input_name": "0_img.png",
+  "input_path": "Pixal3D/assets/images/0_img.png",
+  "job_id": "91e79f7130a9",
+  "job_type": "mflux_flux2_edit_promptfile",
+  "name": "0_img",
+  "output_files": [
+    "output.metadata.json",
+    "output.png"
+  ],
+  "params": {
+    "guidance": "1.0",
+    "height": "512",
+    "mlx_cache_limit_gb": "48",
+    "model": "flux2-klein-9b",
+    "prompt_file": "artifacts/generator-basin-fanout-20260710/prompts/p3d00_turtle_style_clay_maquette.txt",
+    "quantize": "4",
+    "seed": "323",
+    "steps": "8",
+    "width": "512"
+  }
+}

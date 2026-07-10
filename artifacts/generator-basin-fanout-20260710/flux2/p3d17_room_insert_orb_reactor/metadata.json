@@ -1,0 +1,24 @@
+{
+  "created_at": 1783665936.998726,
+  "duration_s": 95.9,
+  "input_name": "17_img.png",
+  "input_path": "Pixal3D/assets/images/17_img.png",
+  "job_id": "71748b230deb",
+  "job_type": "mflux_flux2_edit_promptfile",
+  "name": "17_img",
+  "output_files": [
+    "output.metadata.json",
+    "output.png"
+  ],
+  "params": {
+    "guidance": "1.0",
+    "height": "512",
+    "mlx_cache_limit_gb": "48",
+    "model": "flux2-klein-9b",
+    "prompt_file": "artifacts/generator-basin-fanout-20260710/prompts/p3d17_room_insert_orb_reactor.txt",
+    "quantize": "4",
+    "seed": "315",
+    "steps": "8",
+    "width": "512"
+  }
+}

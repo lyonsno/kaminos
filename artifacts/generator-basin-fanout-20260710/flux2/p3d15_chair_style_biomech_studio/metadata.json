@@ -1,9 +1,9 @@
 {
-  "created_at": 1783665534.060392,
-  "duration_s": 61.9,
+  "created_at": 1783667236.180744,
+  "duration_s": 69.4,
   "input_name": "s_15_img.png",
   "input_path": "Pixal3D/assets/images/s_15_img.png",
-  "job_id": "0376e06e3ba4",
+  "job_id": "599177c98c0c",
   "job_type": "mflux_flux2_edit_promptfile",
   "name": "s_15_img",
   "output_files": [
@@ -15,9 +15,9 @@
     "height": "512",
     "mlx_cache_limit_gb": "48",
     "model": "flux2-klein-9b",
-    "prompt_file": "artifacts/generator-basin-fanout-20260710/prompts/p3d15_chair_botanical_mech.txt",
+    "prompt_file": "artifacts/generator-basin-fanout-20260710/prompts/p3d15_chair_style_biomech_studio.txt",
     "quantize": "4",
-    "seed": "311",
+    "seed": "330",
     "steps": "8",
     "width": "512"
   }

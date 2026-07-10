@@ -1,0 +1,24 @@
+{
+  "created_at": 1783666556.6232388,
+  "duration_s": 77.1,
+  "input_name": "s_18_img.png",
+  "input_path": "Pixal3D/assets/images/s_18_img.png",
+  "job_id": "e83b3afa0ea7",
+  "job_type": "mflux_flux2_edit_promptfile",
+  "name": "s_18_img",
+  "output_files": [
+    "output.metadata.json",
+    "output.png"
+  ],
+  "params": {
+    "guidance": "1.0",
+    "height": "512",
+    "mlx_cache_limit_gb": "48",
+    "model": "flux2-klein-9b",
+    "prompt_file": "artifacts/generator-basin-fanout-20260710/prompts/p3d18_underwater_insert_orange_ruin.txt",
+    "quantize": "4",
+    "seed": "320",
+    "steps": "8",
+    "width": "512"
+  }
+}

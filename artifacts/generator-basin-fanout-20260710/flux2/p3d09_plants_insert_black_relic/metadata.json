@@ -1,0 +1,24 @@
+{
+  "created_at": 1783666157.7952,
+  "duration_s": 129.3,
+  "input_name": "9_img.png",
+  "input_path": "Pixal3D/assets/images/9_img.png",
+  "job_id": "c2305518273f",
+  "job_type": "mflux_flux2_edit_promptfile",
+  "name": "9_img",
+  "output_files": [
+    "output.metadata.json",
+    "output.png"
+  ],
+  "params": {
+    "guidance": "1.0",
+    "height": "512",
+    "mlx_cache_limit_gb": "48",
+    "model": "flux2-klein-9b",
+    "prompt_file": "artifacts/generator-basin-fanout-20260710/prompts/p3d09_plants_insert_black_relic.txt",
+    "quantize": "4",
+    "seed": "317",
+    "steps": "8",
+    "width": "512"
+  }
+}

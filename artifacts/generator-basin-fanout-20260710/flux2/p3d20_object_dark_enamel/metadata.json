@@ -1,0 +1,24 @@
+{
+  "created_at": 1783665625.294513,
+  "duration_s": 91.2,
+  "input_name": "s_20_img.webp",
+  "input_path": "Pixal3D/assets/images/s_20_img.webp",
+  "job_id": "f20604dc72c4",
+  "job_type": "mflux_flux2_edit_promptfile",
+  "name": "s_20_img",
+  "output_files": [
+    "output.metadata.json",
+    "output.png"
+  ],
+  "params": {
+    "guidance": "1.0",
+    "height": "512",
+    "mlx_cache_limit_gb": "48",
+    "model": "flux2-klein-9b",
+    "prompt_file": "artifacts/generator-basin-fanout-20260710/prompts/p3d20_object_dark_enamel.txt",
+    "quantize": "4",
+    "seed": "312",
+    "steps": "8",
+    "width": "512"
+  }
+}
