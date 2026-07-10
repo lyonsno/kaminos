@@ -2043,6 +2043,11 @@ assert.match(phaseAlignedCorpus, /nativeLowDomainGap/, 'phase-aligned corpus man
 assert.match(phaseAlignedCorpus, /shellDetailTargets/, 'phase-aligned corpus manifest records shell/detail target vocabulary');
 assert.match(phaseAlignedCorpus, /box-average-linear-field-v0/, 'phase-aligned corpus packer names the box-average downsample operator');
 assert.match(phaseAlignedCorpus, /max-pool-support-field-v0/, 'phase-aligned corpus packer names support-preserving max-pool operators');
+assert.match(phaseAlignedCorpus, /kaminos\.volume\.boundary-sidecar-export\.v0/, 'phase-aligned corpus packer accepts exported boundary sidecar manifests');
+assert.match(phaseAlignedCorpus, /baked-boundary-sidecar-v0/, 'phase-aligned corpus packer preserves baked boundary sidecar identity');
+assert.match(phaseAlignedCorpus, /support[\s\S]*gradient[\s\S]*ridge[\s\S]*thickness/, 'phase-aligned corpus packer records boundary sidecar channel order support, gradient, ridge, thickness');
+assert.match(phaseAlignedCorpus, /boundarySidecarTargets/, 'phase-aligned corpus manifest maps boundary sidecar channels into teacher targets');
+assert.match(phaseAlignedCorpus, /resampling-kernel-with-recorded-filter-footprint-v0/, 'phase-aligned corpus packer refuses non-integer downsample pairs until a recorded-footprint resampler exists');
 assert.match(phaseAlignedCorpus, /failurePhase/, 'phase-aligned corpus packer writes failure-phase reports for missing/corrupt sources');
 
 {
@@ -2053,11 +2058,19 @@ assert.match(phaseAlignedCorpus, /failurePhase/, 'phase-aligned corpus packer wr
     const nativeFluid = [];
     const highFront = [];
     const nativeFront = [];
+    const highBoundary = [];
+    const nativeBoundary = [];
     for (let z = 0; z < 4; z += 1) {
       for (let y = 0; y < 4; y += 1) {
         for (let x = 0; x < 4; x += 1) {
           highFluid.push(x + y * 10 + z * 100, x + y + z);
           highFront.push(x === 1 && y === 1 && z === 1 ? 6 : x + y + z);
+          highBoundary.push(
+            x === 1 && y === 1 && z === 1 ? 6 : x + y + z,
+            x + y + z,
+            x === 1 && y === 1 && z === 1 ? 7 : x + y + z,
+            x + y + z,
+          );
         }
       }
     }
@@ -2066,6 +2079,12 @@ assert.match(phaseAlignedCorpus, /failurePhase/, 'phase-aligned corpus packer wr
         for (let x = 0; x < 2; x += 1) {
           nativeFluid.push(55.5 + x * 2 + y * 20 + z * 200 + 1, 1.5 + x * 2 + y * 2 + z * 2);
           nativeFront.push(x === 0 && y === 0 && z === 0 ? 6 : 0);
+          nativeBoundary.push(
+            x === 0 && y === 0 && z === 0 ? 6 : 0,
+            2.5 + x,
+            x === 0 && y === 0 && z === 0 ? 7 : 0,
+            3.5 + z,
+          );
         }
       }
     }
@@ -2073,6 +2092,8 @@ assert.match(phaseAlignedCorpus, /failurePhase/, 'phase-aligned corpus packer wr
     writeF32(join(fixtureDir, 'high-front.f32'), highFront);
     writeF32(join(fixtureDir, 'native-fluid.f32'), nativeFluid);
     writeF32(join(fixtureDir, 'native-front.f32'), nativeFront);
+    writeF32(join(fixtureDir, 'high-boundary.f32'), highBoundary);
+    writeF32(join(fixtureDir, 'native-boundary.f32'), nativeBoundary);
     const descriptor = (path, shape, channelOrder) => ({
       path,
       shape,
@@ -2111,11 +2132,35 @@ assert.match(phaseAlignedCorpus, /failurePhase/, 'phase-aligned corpus packer wr
     };
     writeFileSync(join(fixtureDir, 'high-manifest.json'), `${JSON.stringify(highManifest, null, 2)}\n`);
     writeFileSync(join(fixtureDir, 'native-manifest.json'), `${JSON.stringify(nativeManifest, null, 2)}\n`);
+    const highBoundaryManifest = {
+      schema: 'kaminos.volume.boundary-sidecar-export.v0',
+      identity: 'baked-boundary-sidecar-v0',
+      authority: 'band-limited-support-coverage-ridge-thickness-v0',
+      status: 'captured',
+      failurePhase: null,
+      grid: 4,
+      channelOrder: ['support', 'gradient', 'ridge', 'thickness'],
+      sidecars: {
+        boundary: descriptor(join(fixtureDir, 'high-boundary.f32'), [4, 4, 4, 4], ['support', 'gradient', 'ridge', 'thickness']),
+      },
+    };
+    const nativeBoundaryManifest = {
+      ...highBoundaryManifest,
+      identity: 'fixture-native-low-baked-boundary-sidecar-v0',
+      grid: 2,
+      sidecars: {
+        boundary: descriptor(join(fixtureDir, 'native-boundary.f32'), [2, 2, 2, 4], ['support', 'gradient', 'ridge', 'thickness']),
+      },
+    };
+    writeFileSync(join(fixtureDir, 'high-boundary-manifest.json'), `${JSON.stringify(highBoundaryManifest, null, 2)}\n`);
+    writeFileSync(join(fixtureDir, 'native-boundary-manifest.json'), `${JSON.stringify(nativeBoundaryManifest, null, 2)}\n`);
     const outDir = join(fixtureDir, 'out');
     execFileSync('python3', [
       phaseAlignedCorpusPath,
       '--high-manifest', join(fixtureDir, 'high-manifest.json'),
       '--native-low-manifest', join(fixtureDir, 'native-manifest.json'),
+      '--high-boundary-sidecar-manifest', join(fixtureDir, 'high-boundary-manifest.json'),
+      '--native-low-boundary-sidecar-manifest', join(fixtureDir, 'native-boundary-manifest.json'),
       '--target-grid', '2',
       '--out-dir', outDir,
     ], { stdio: 'pipe' });
@@ -2124,11 +2169,30 @@ assert.match(phaseAlignedCorpus, /failurePhase/, 'phase-aligned corpus packer wr
     assert.equal(manifest.status, 'captured', 'phase-aligned corpus smoke captures fixture data');
     assert.equal(manifest.downsampledHighInput.grid, 2, 'phase-aligned corpus smoke records target grid');
     assert.equal(manifest.nativeLowDomainGap.status, 'computed', 'phase-aligned corpus smoke computes native-low domain gap');
+    assert.equal(manifest.boundarySidecarTargets.identity, 'baked-boundary-sidecar-target-mapping-v0', 'phase-aligned corpus smoke maps baked boundary sidecar targets');
+    assert.deepEqual(manifest.boundarySidecarTargets.channelOrder, ['support', 'gradient', 'ridge', 'thickness'], 'phase-aligned corpus smoke preserves boundary sidecar channel order');
+    assert.equal(manifest.truthHighTarget.boundarySidecar.identity, 'baked-boundary-sidecar-v0', 'phase-aligned corpus smoke preserves truth boundary sidecar identity');
+    assert.equal(manifest.nativeLowDomainGap.boundarySidecar.status, 'computed', 'phase-aligned corpus smoke computes boundary sidecar native-low domain gap');
     assert.deepEqual(manifest.shellDetailTargets.channelGroups.hotCore.channels, ['heat', 'flame', 'visibleFireCarrier'], 'phase-aligned corpus smoke preserves hot-core target vocabulary');
     const readF32At = (path, index) => readFileSync(path).readFloatLE(index * 4);
     assert.equal(readF32At(manifest.downsampledHighInput.sidecars.fluid.path, 0), 55.5, 'phase-aligned corpus smoke box-averages the first density block');
     assert.equal(readF32At(manifest.downsampledHighInput.sidecars.fluid.path, 1), 1.5, 'phase-aligned corpus smoke box-averages the first heat block');
     assert.equal(readF32At(manifest.downsampledHighInput.sidecars.front.path, 0), 6, 'phase-aligned corpus smoke max-pools front support instead of averaging it away');
+    assert.equal(readF32At(manifest.downsampledHighInput.sidecars.boundary.path, 0), 6, 'phase-aligned corpus smoke max-pools boundary support');
+    assert.equal(readF32At(manifest.downsampledHighInput.sidecars.boundary.path, 1), 1.5, 'phase-aligned corpus smoke box-averages boundary gradient');
+    assert.equal(readF32At(manifest.downsampledHighInput.sidecars.boundary.path, 2), 7, 'phase-aligned corpus smoke max-pools boundary ridge');
+    assert.equal(readF32At(manifest.downsampledHighInput.sidecars.boundary.path, 3), 1.5, 'phase-aligned corpus smoke box-averages boundary thickness');
+    const nonIntegerOut = join(fixtureDir, 'non-integer-out');
+    assert.throws(() => execFileSync('python3', [
+      phaseAlignedCorpusPath,
+      '--high-manifest', join(fixtureDir, 'high-manifest.json'),
+      '--high-boundary-sidecar-manifest', join(fixtureDir, 'high-boundary-manifest.json'),
+      '--target-grid', '3',
+      '--out-dir', nonIntegerOut,
+    ], { stdio: 'pipe' }), /Command failed/, 'phase-aligned corpus smoke refuses non-integer downsample pairs');
+    const failedManifest = JSON.parse(readFileSync(join(nonIntegerOut, 'manifest.json'), 'utf8'));
+    assert.equal(failedManifest.status, 'failed', 'phase-aligned corpus non-integer smoke writes a failure manifest');
+    assert.equal(failedManifest.details.neededHook, 'resampling-kernel-with-recorded-filter-footprint-v0', 'phase-aligned corpus non-integer smoke names the recorded-footprint resampling hook');
   } finally {
     rmSync(fixtureDir, { recursive: true, force: true });
   }

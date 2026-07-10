@@ -24,18 +24,53 @@ import numpy as np
 SCHEMA = "kaminos.volume.phase-aligned-learned-probe-corpus.v0"
 IDENTITY = "phase-aligned-high-history-downsample-corpus-v0"
 FULL_GRID_EXPORT_SCHEMA = "kaminos.volume.full-grid-field-export.v0"
+BOUNDARY_SIDECAR_EXPORT_SCHEMA = "kaminos.volume.boundary-sidecar-export.v0"
+BOUNDARY_SIDECAR_IDENTITY = "baked-boundary-sidecar-v0"
+BOUNDARY_SIDECAR_AUTHORITY = "band-limited-support-coverage-ridge-thickness-v0"
 AUTHORITY = "offline-phase-aligned-field-corpus-contract-not-browser-witness-not-product-inference"
 BOX_AVERAGE_OPERATOR = "box-average-linear-field-v0"
 MAX_POOL_OPERATOR = "max-pool-support-field-v0"
 DOMAIN_GAP_IDENTITY = "native-low-vs-downsampled-high-domain-gap-v0"
 
 DEFAULT_TARGET_GRID = 128
+BOUNDARY_SIDECAR_CHANNEL_ORDER = ["support", "gradient", "ridge", "thickness"]
+BOUNDARY_MAX_POOL_CHANNELS = {"support", "ridge"}
 SUPPORT_CHANNELS = {
     "frontTopology",
     "shellAlpha",
     "shellEdge",
     "combustionFront",
     "visibleFireCarrier",
+}
+
+BOUNDARY_SIDECAR_TARGETS = {
+    "identity": "baked-boundary-sidecar-target-mapping-v0",
+    "sidecarIdentity": BOUNDARY_SIDECAR_IDENTITY,
+    "sidecarAuthority": BOUNDARY_SIDECAR_AUTHORITY,
+    "channelOrder": BOUNDARY_SIDECAR_CHANNEL_ORDER,
+    "channelRoles": {
+        "support": {
+            "downsampleOperator": MAX_POOL_OPERATOR,
+            "teacherTarget": "shellAlpha",
+            "reason": "Sparse support should survive block reduction instead of averaging away thin sheets.",
+        },
+        "gradient": {
+            "downsampleOperator": BOX_AVERAGE_OPERATOR,
+            "teacherTarget": "shellEdge",
+            "reason": "Gradient magnitude is a continuous local measurement; average preserves block-scale energy.",
+        },
+        "ridge": {
+            "downsampleOperator": MAX_POOL_OPERATOR,
+            "teacherTarget": "internalStreak",
+            "reason": "Ridge/Laplacian peaks carry thin breakup authority and should be support-preserved.",
+        },
+        "thickness": {
+            "downsampleOperator": BOX_AVERAGE_OPERATOR,
+            "teacherTarget": "confidenceAlpha",
+            "reason": "Thickness is a local footprint/coverage measurement; average gives the teacher a block footprint prior.",
+        },
+    },
+    "limitation": "Mapping is corpus-side target custody only; live/baked/mix renderer equivalence remains the browser witness lane's job.",
 }
 
 SHELL_DETAIL_TARGETS = {
@@ -83,6 +118,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--out-dir", required=True, help="Output directory for the corpus contract manifest and sidecars.")
     parser.add_argument("--target-grid", type=int, default=0, help="Production/source grid for downsampled-high inputs.")
     parser.add_argument("--native-low-manifest", help="Optional native-low full-grid export manifest for domain-gap controls.")
+    parser.add_argument("--high-boundary-sidecar-manifest", help="Optional exported high-resolution baked-boundary-sidecar-v0 manifest.")
+    parser.add_argument("--native-low-boundary-sidecar-manifest", help="Optional exported native-low baked-boundary-sidecar-v0 manifest for domain-gap controls.")
     parser.add_argument("--witness-manifest", help="Optional phase-aligned browser witness manifest to bind route/basin context.")
     parser.add_argument("--source-note", default="", help="Optional compact note for the manifest.")
     return parser.parse_args()
@@ -136,6 +173,29 @@ def verify_manifest(manifest: dict[str, Any], path: Path, role: str) -> None:
         })
 
 
+def verify_boundary_sidecar_manifest(manifest: dict[str, Any], path: Path, role: str) -> None:
+    if manifest.get("schema") != BOUNDARY_SIDECAR_EXPORT_SCHEMA:
+        raise CorpusFailure("manifest-validate", f"{role} boundary sidecar manifest schema mismatch.", {
+            "path": str(path),
+            "schema": manifest.get("schema"),
+            "expectedSchema": BOUNDARY_SIDECAR_EXPORT_SCHEMA,
+        })
+    if manifest.get("status") not in (None, "captured"):
+        raise CorpusFailure("manifest-validate", f"{role} boundary sidecar manifest is not captured.", {
+            "path": str(path),
+            "status": manifest.get("status"),
+            "failurePhase": manifest.get("failurePhase"),
+        })
+    desc = (manifest.get("sidecars") or {}).get("boundary")
+    order = channel_order(manifest, desc if isinstance(desc, dict) else {}, "boundary") if isinstance(desc, dict) else manifest.get("channelOrder")
+    if [str(value) for value in (order or [])] != BOUNDARY_SIDECAR_CHANNEL_ORDER:
+        raise CorpusFailure("manifest-validate", f"{role} boundary sidecar channel order mismatch.", {
+            "path": str(path),
+            "channelOrder": order,
+            "expectedChannelOrder": BOUNDARY_SIDECAR_CHANNEL_ORDER,
+        })
+
+
 def sidecar_descriptor(manifest: dict[str, Any], manifest_path: Path, kind: str) -> dict[str, Any]:
     desc = (manifest.get("sidecars") or {}).get(kind)
     if not isinstance(desc, dict):
@@ -179,6 +239,10 @@ def channel_order(manifest: dict[str, Any], desc: dict[str, Any], kind: str) -> 
     fallback = manifest.get(key)
     if isinstance(fallback, list) and fallback:
         return [str(value) for value in fallback]
+    if kind == "boundary":
+        fallback = manifest.get("channelOrder")
+        if isinstance(fallback, list) and fallback:
+            return [str(value) for value in fallback]
     return ["frontTopology"] if kind == "front" else []
 
 
@@ -245,6 +309,27 @@ def downsample_field(arr: np.ndarray, target_grid: int, operator: str) -> np.nda
     if operator == BOX_AVERAGE_OPERATOR:
         return view.mean(axis=(1, 3, 5)).astype(np.float32)
     raise CorpusFailure("downsample", f"Unknown downsample operator {operator}", {"operator": operator})
+
+
+def downsample_boundary_sidecar(arr: np.ndarray, target_grid: int, channel_order_value: list[str]) -> tuple[np.ndarray, dict[str, Any]]:
+    channels = []
+    operators = {}
+    for channel_index, channel in enumerate(channel_order_value):
+        operator = MAX_POOL_OPERATOR if channel in BOUNDARY_MAX_POOL_CHANNELS else BOX_AVERAGE_OPERATOR
+        channel_arr = arr[..., channel_index:channel_index + 1]
+        channels.append(downsample_field(channel_arr, target_grid, operator))
+        operators[channel] = {
+            "identity": operator,
+            "sourceGrid": int(arr.shape[0]),
+            "targetGrid": int(target_grid),
+            "factor": int(arr.shape[0]) // int(target_grid) if int(target_grid) else None,
+            "semantics": (
+                "max over each cubic source block to preserve sparse sheet/ridge authority"
+                if operator == MAX_POOL_OPERATOR
+                else "mean over each cubic source block for continuous gradient/thickness measurements"
+            ),
+        }
+    return np.concatenate(channels, axis=3).astype(np.float32), operators
 
 
 def choose_operator(kind: str, order: list[str]) -> str:
@@ -335,6 +420,44 @@ def write_domain_gap(out_dir: Path, native_manifest: dict[str, Any], native_mani
     return result
 
 
+def write_boundary_sidecar_domain_gap(
+    out_dir: Path,
+    native_manifest: dict[str, Any],
+    native_manifest_path: Path,
+    downsampled_boundary_desc: dict[str, Any],
+) -> dict[str, Any]:
+    native_boundary, native_desc = load_sidecar(native_manifest, native_manifest_path, "boundary")
+    ds_arr = np.memmap(downsampled_boundary_desc["path"], dtype="<f4", mode="r", shape=tuple(downsampled_boundary_desc["shape"]))
+    if list(native_boundary.shape) != list(ds_arr.shape):
+        raise CorpusFailure("domain-gap", "boundary native-low shape differs from downsampled-high.", {
+            "nativeShape": list(native_boundary.shape),
+            "downsampledShape": list(ds_arr.shape),
+        })
+    error = native_boundary.astype(np.float32) - np.asarray(ds_arr, dtype=np.float32)
+    gap_dir = out_dir / "domain-gap"
+    gap_desc = write_sidecar(
+        gap_dir / "native-minus-downsampled-high-boundary-sidecar.f32",
+        error,
+        native_desc.get("channelOrder", []),
+        "native-minus-downsampled-high",
+        native_desc,
+    )
+    return {
+        "identity": "native-low-vs-downsampled-high-boundary-sidecar-gap-v0",
+        "status": "computed",
+        "authority": "offline-domain-gap-between-native-low-and-phase-aligned-downsampled-high-boundary-sidecar",
+        "nativeLowManifest": str(native_manifest_path),
+        "sidecar": gap_desc,
+        "metrics": {
+            "global": stats(error),
+            "perChannel": per_channel_stats(error, native_desc.get("channelOrder", [])),
+            "nativeLow": descriptor_ref(native_desc),
+            "downsampledHigh": descriptor_ref(downsampled_boundary_desc),
+        },
+        "limitation": "Boundary sidecar gap is transfer-risk evidence only; renderer usefulness still needs live/baked/mix witness custody.",
+    }
+
+
 def source_identity(manifest: dict[str, Any], manifest_path: Path) -> dict[str, Any]:
     return {
         "manifestPath": str(manifest_path),
@@ -348,6 +471,8 @@ def source_identity(manifest: dict[str, Any], manifest_path: Path) -> dict[str, 
         "backend": manifest.get("backend"),
         "grid": manifest.get("grid"),
         "deterministicReplay": manifest.get("deterministicReplay"),
+        "authority": manifest.get("authority"),
+        "channelOrder": manifest.get("channelOrder"),
     }
 
 
@@ -415,6 +540,20 @@ def main() -> None:
         phase = "source-verify"
         high_fluid, high_fluid_desc = load_sidecar(high_manifest, high_manifest_path, "fluid")
         high_front, high_front_desc = load_sidecar(high_manifest, high_manifest_path, "front")
+        high_boundary_manifest = None
+        high_boundary_manifest_path = None
+        high_boundary = None
+        high_boundary_desc = None
+        if args.high_boundary_sidecar_manifest:
+            high_boundary_manifest_path = Path(args.high_boundary_sidecar_manifest).resolve()
+            high_boundary_manifest = read_json(high_boundary_manifest_path)
+            verify_boundary_sidecar_manifest(high_boundary_manifest, high_boundary_manifest_path, "high")
+            high_boundary, high_boundary_desc = load_sidecar(high_boundary_manifest, high_boundary_manifest_path, "boundary")
+            if int(high_boundary_manifest.get("grid") or high_boundary.shape[0]) != high_grid:
+                raise CorpusFailure("manifest-validate", "High boundary sidecar grid differs from high field grid.", {
+                    "highFieldGrid": high_grid,
+                    "highBoundaryGrid": int(high_boundary_manifest.get("grid") or high_boundary.shape[0]),
+                })
 
         phase = "downsample"
         downsample_dir = out_dir / "downsampled-high-input"
@@ -422,6 +561,13 @@ def main() -> None:
         front_operator = choose_operator("front", high_front_desc["channelOrder"])
         low_fluid = downsample_field(high_fluid, target_grid, fluid_operator)
         low_front = downsample_field(high_front, target_grid, front_operator)
+        boundary_downsample_operators = None
+        if high_boundary is not None and high_boundary_desc is not None:
+            low_boundary, boundary_downsample_operators = downsample_boundary_sidecar(
+                high_boundary,
+                target_grid,
+                high_boundary_desc["channelOrder"],
+            )
         downsampled_high = {
             "identity": "downsampled-high-input-v0",
             "grid": target_grid,
@@ -459,6 +605,23 @@ def main() -> None:
                 },
             },
         }
+        if high_boundary is not None and high_boundary_desc is not None and boundary_downsample_operators is not None:
+            downsampled_high["sidecars"]["boundary"] = write_sidecar(
+                downsample_dir / "downsampled-high-boundary-sidecar.f32",
+                low_boundary,
+                high_boundary_desc["channelOrder"],
+                "channel-specific-boundary-sidecar-downsample-v0",
+                high_boundary_desc,
+            )
+            downsampled_high["downsampleOperators"]["boundarySidecar"] = {
+                "identity": "channel-specific-boundary-sidecar-downsample-v0",
+                "sidecarIdentity": BOUNDARY_SIDECAR_IDENTITY,
+                "sourceGrid": high_grid,
+                "targetGrid": target_grid,
+                "factor": high_grid // target_grid,
+                "channels": boundary_downsample_operators,
+                "recordedFootprintHookForNonIntegerPairs": "resampling-kernel-with-recorded-filter-footprint-v0",
+            }
 
         native_gap: dict[str, Any] = {
             "identity": DOMAIN_GAP_IDENTITY,
@@ -474,9 +637,36 @@ def main() -> None:
             native_identity = source_identity(native_manifest, native_manifest_path)
             phase = "domain-gap"
             native_gap = write_domain_gap(out_dir, native_manifest, native_manifest_path, downsampled_high)
+        if args.native_low_boundary_sidecar_manifest:
+            if "boundary" not in downsampled_high["sidecars"]:
+                raise CorpusFailure("domain-gap", "Native-low boundary sidecar gap requested without a high boundary sidecar.", {
+                    "nativeLowBoundarySidecarManifest": args.native_low_boundary_sidecar_manifest,
+                })
+            phase = "native-low-boundary-manifest-read"
+            native_boundary_manifest_path = Path(args.native_low_boundary_sidecar_manifest).resolve()
+            native_boundary_manifest = read_json(native_boundary_manifest_path)
+            verify_boundary_sidecar_manifest(native_boundary_manifest, native_boundary_manifest_path, "native-low")
+            phase = "domain-gap"
+            native_gap["boundarySidecar"] = write_boundary_sidecar_domain_gap(
+                out_dir,
+                native_boundary_manifest,
+                native_boundary_manifest_path,
+                downsampled_high["sidecars"]["boundary"],
+            )
 
         phase = "manifest-write"
         witness_ref = copy_optional_manifest(args.witness_manifest, out_dir, "phase-aligned-witness")
+        boundary_sidecar_route = source_identity(high_boundary_manifest, high_boundary_manifest_path) if high_boundary_manifest is not None and high_boundary_manifest_path is not None else None
+        boundary_sidecar_target = None
+        if high_boundary_desc is not None:
+            boundary_sidecar_target = {
+                "identity": BOUNDARY_SIDECAR_IDENTITY,
+                "authority": high_boundary_manifest.get("authority") if high_boundary_manifest else BOUNDARY_SIDECAR_AUTHORITY,
+                "manifest": str(high_boundary_manifest_path),
+                "sidecar": descriptor_ref(high_boundary_desc),
+                "targetMapping": BOUNDARY_SIDECAR_TARGETS,
+                "limitation": "Exported renderer-structure target only; not proof that a learned model reproduces it.",
+            }
         report = {
             "schema": SCHEMA,
             "identity": IDENTITY,
@@ -488,6 +678,7 @@ def main() -> None:
             "route": {
                 "highRes": source_identity(high_manifest, high_manifest_path),
                 "nativeLow": native_identity,
+                "boundarySidecar": boundary_sidecar_route,
                 "witness": witness_ref,
             },
             "highResSingleHistory": {
@@ -507,12 +698,20 @@ def main() -> None:
                     "fluid": descriptor_ref(high_fluid_desc),
                     "front": descriptor_ref(high_front_desc),
                 },
+                "boundarySidecar": boundary_sidecar_target,
                 "shellDetailTargets": SHELL_DETAIL_TARGETS,
                 "limitation": "This contract references full high sidecars and target vocabulary; derived target maps may be emitted by later extractors.",
             },
             "shellDetailTargets": SHELL_DETAIL_TARGETS,
+            "boundarySidecarTargets": BOUNDARY_SIDECAR_TARGETS,
             "nativeLowDomainGap": native_gap,
             "teacherProbeRecommendations": [
+                {
+                    "identity": "teacher-boundary-sidecar-upper-bound-v0",
+                    "input": "downsampledHighInput including boundary sidecar when available",
+                    "target": "truthHighTarget.boundarySidecar support, gradient, ridge, thickness",
+                    "reason": "Tests the renderer's actual structure substrate before broad full-field reconstruction.",
+                },
                 {
                     "identity": "teacher-upper-bound-downsampled-high-to-shell-detail-v0",
                     "input": "downsampledHighInput",
