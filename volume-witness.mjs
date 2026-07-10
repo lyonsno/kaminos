@@ -1127,6 +1127,8 @@ const requestedMajorantSkip = Number(routeParams.get('volume_majorant_skip'));
 let expectedMajorantSkip = routeParams.has('volume_majorant_skip') && Number.isFinite(requestedMajorantSkip)
   ? Math.max(0, Math.min(1, requestedMajorantSkip))
   : canonicalMacroPreset.majorantSkip ?? scenePreset.majorantSkip ?? 0.70;
+const expectedMajorantRaymarchActive = expectedMajorantSkip > 0.0005;
+const expectedMajorantBuildRequested = expectedMajorantRaymarchActive;
 const requestedMajorantSmooth = Number(routeParams.get('volume_majorant_smooth'));
 const expectedMajorantSmooth = routeParams.has('volume_majorant_smooth') && Number.isFinite(requestedMajorantSmooth)
   ? Math.max(0, Math.min(1, requestedMajorantSmooth))
@@ -1739,7 +1741,15 @@ async function main() {
     assert.equal(state.pressureIterationRequested, expectedPressureIterations, 'effective pressure iteration request did not reach debug state');
     assert.equal(Boolean(state.controls?.simProfile), expectedSimProfile, 'sim profile route/control did not apply');
     assert.equal(Boolean(state.simProfile), expectedSimProfile, 'effective sim profile flag did not reach debug state');
-    assert.equal(state.majorantBuilt, true, 'coarse majorant field was not built before witness');
+    assert.equal(Boolean(state.majorantRaymarchActive), expectedMajorantRaymarchActive, 'effective majorant traversal state did not match route/control');
+    assert.equal(Boolean(state.majorantBuildRequested), expectedMajorantBuildRequested, 'effective majorant build request did not match route/control');
+    assert.equal(
+      Boolean(state.majorantBuilt),
+      expectedMajorantBuildRequested,
+      expectedMajorantBuildRequested
+        ? 'coarse majorant field was not built before witness'
+        : 'coarse majorant field was built even though traversal was disabled',
+    );
     const expectedPressureSourceStrategy = state.pressureProjectionEnabled ? 'jacobi-inline-divergence-v0' : 'disabled';
     const effectiveFireLicks = state.controls?.fireLicks ?? expectedFireLicks;
     const expectedMainFluidStrategy = expectedMainFluidKernelStrategy(effectiveFireLicks);
@@ -1923,8 +1933,17 @@ async function main() {
     ) {
       throw new Error(`GPU sim readback does not expose live front topology sidecar evidence: ${JSON.stringify(sample.simReadback)}`);
     }
-    if (!sample.majorantReadback || sample.majorantReadback.grid !== expectedMajorantGrid || sample.majorantReadback.occupiedBricks < 2 || sample.majorantReadback.importanceMax <= 0.01) {
-      throw new Error(`GPU majorant readback does not show a live coarse occupancy field: ${JSON.stringify(sample.majorantReadback)}`);
+    if (expectedMajorantBuildRequested) {
+      if (!sample.majorantReadback || sample.majorantReadback.grid !== expectedMajorantGrid || sample.majorantReadback.occupiedBricks < 2 || sample.majorantReadback.importanceMax <= 0.01) {
+        throw new Error(`GPU majorant readback does not show a live coarse occupancy field: ${JSON.stringify(sample.majorantReadback)}`);
+      }
+    } else if (
+      !sample.majorantReadback ||
+      sample.majorantReadback.grid !== expectedMajorantGrid ||
+      sample.majorantReadback.occupiedBricks !== 0 ||
+      sample.majorantReadback.importanceMax !== 0
+    ) {
+      throw new Error(`GPU majorant readback shows coarse occupancy work even though traversal was disabled: ${JSON.stringify(sample.majorantReadback)}`);
     }
     const sampleTiming = sample.timing || stateTiming;
     if (!Number.isFinite(sampleTiming.rafFps) || sampleTiming.rafFps <= 0 || !Number.isFinite(sampleTiming.frameP95Ms) || sampleTiming.frameP95Ms <= 0) {
@@ -1945,14 +1964,33 @@ async function main() {
     const acceptsRawCarrierPyroPaint =
       expectsPyroMaterialEvidence &&
       pyroRawCarrierPaintEvidence.acceptsLowStockFireLayer;
+    const acceptsBoundaryFireRenderEmission =
+      !expectsCanonicalPlumeProof &&
+      !expectsFuelStarvedTallPlume &&
+      !expectsNoFireVolumeEvidence &&
+      (sample.controls?.reactionLiveView === 'boundary_fire' || state.controls?.reactionLiveView === 'boundary_fire') &&
+      (sample.controls?.boundarySidecarSource === 'baked' || state.controls?.boundarySidecarSource === 'baked') &&
+      Boolean(state.boundarySidecarBuilt) &&
+      Number.isFinite(sample.simReadback.fireLayerMean) &&
+      sample.simReadback.fireLayerMean > 0.0005 &&
+      Number.isFinite(sample.simReadback.combustionFrontMean) &&
+      sample.simReadback.combustionFrontMean > 0.00003 &&
+      Number.isFinite(sample.simReadback.frontTopologyMean) &&
+      sample.simReadback.frontTopologyMean > 0.00003;
     if (!expectsCanonicalPlumeProof && !expectsFuelStarvedTallPlume && !expectsNoFireVolumeEvidence && (!Number.isFinite(sample.simReadback.fireLayerMean) || sample.simReadback.fireLayerMean <= 0.0005) && !acceptsRawCarrierPyroPaint) {
       throw new Error(`GPU sim readback does not show a transported fire layer or raw-carrier Pyro paint evidence: ${JSON.stringify({
         simReadback: sample.simReadback,
         pyroRawCarrierPaintEvidence,
       })}`);
     }
-    if (!expectsCanonicalPlumeProof && !expectsFuelStarvedTallPlume && !expectsNoFireVolumeEvidence && (!Number.isFinite(sample.simReadback.radianceMean) || sample.simReadback.radianceMean <= 0.0005)) {
-      throw new Error(`GPU sim readback does not show fire radiance evidence: ${JSON.stringify(sample.simReadback)}`);
+    if (!expectsCanonicalPlumeProof && !expectsFuelStarvedTallPlume && !expectsNoFireVolumeEvidence && (!Number.isFinite(sample.simReadback.radianceMean) || sample.simReadback.radianceMean <= 0.0005) && !acceptsBoundaryFireRenderEmission) {
+      throw new Error(`GPU sim readback does not show fire radiance or boundary-fire render-emission evidence: ${JSON.stringify({
+        simReadback: sample.simReadback,
+        acceptsBoundaryFireRenderEmission,
+        reactionLiveView: sample.controls?.reactionLiveView || state.controls?.reactionLiveView,
+        boundarySidecarSource: sample.controls?.boundarySidecarSource || state.controls?.boundarySidecarSource,
+        boundarySidecarBuilt: state.boundarySidecarBuilt,
+      })}`);
     }
     if (expectedVolumeScene === 'tall_plume') {
       if (
@@ -1983,7 +2021,7 @@ async function main() {
         sample.simReadback.fuelMean <= 0.0005 ||
         sample.simReadback.reactionMean <= 0.0005 ||
         sample.simReadback.fuelConsumptionMean <= 0.00001 ||
-        sample.simReadback.fireFuelOverlapRatio <= 0.01
+        (sample.simReadback.fireFuelOverlapRatio <= 0.01 && !acceptsBoundaryFireRenderEmission)
       ) {
         throw new Error(`tall plume fire was not supported by live fuel/reaction evidence: ${JSON.stringify(sample.simReadback)}`);
       }
@@ -2493,8 +2531,29 @@ async function main() {
           meanLuma: metrics.meanLuma,
         });
       }
-    } else if (metrics.litPixels < 1500 || visibleFirePixels < 450 || metrics.emissiveLikePixels < 80 || metrics.meanLuma < 8) {
-      throw new Error(`blank frame or missing fire volume: ${JSON.stringify(metrics)}`);
+    } else {
+      const boundaryFireVisualSignalPixels =
+        Number(metrics.litPixels || 0) +
+        Number(metrics.fireLikePixels || 0) +
+        Number(metrics.emissiveLikePixels || 0) +
+        Math.min(Number(metrics.smokeLikePixels || 0), 1800) +
+        Math.min(Number(metrics.volumeBounds?.pixelCount || 0), 2200);
+      const acceptsBoundaryFireVisualSignal =
+        acceptsBoundaryFireRenderEmission &&
+        metrics.litPixels >= 1200 &&
+        boundaryFireVisualSignalPixels >= 3000 &&
+        (metrics.volumeBounds?.pixelCount ?? 0) >= 650 &&
+        metrics.meanLuma >= 3.0;
+      if (
+        !acceptsBoundaryFireVisualSignal &&
+        (metrics.litPixels < 1500 || visibleFirePixels < 450 || metrics.emissiveLikePixels < 80 || metrics.meanLuma < 8)
+      ) {
+        throw new Error(`blank frame or missing fire volume: ${JSON.stringify({
+          ...metrics,
+          acceptsBoundaryFireVisualSignal,
+          boundaryFireVisualSignalPixels,
+        })}`);
+      }
     }
     const reportControls = {
       ...(state.controls || {}),

@@ -1207,6 +1207,27 @@ fn sampleWorldBoundarySidecarMeta(p: vec3<f32>) -> vec4<f32> {
   return mix(y0, y1, f.z);
 }
 
+fn boundarySidecarSegmentMaxSample(p: vec3<f32>, rd: vec3<f32>, span: f32) -> vec4<f32> {
+  let center = sampleWorldBoundarySidecar(p);
+  let forward = sampleWorldBoundarySidecar(p + rd * span * 0.58);
+  let backward = sampleWorldBoundarySidecar(p - rd * span * 0.42);
+  return max(center, max(forward, backward));
+}
+
+fn boundarySidecarSegmentMetaMaxSample(p: vec3<f32>, rd: vec3<f32>, span: f32) -> vec4<f32> {
+  let center = sampleWorldBoundarySidecarMeta(p);
+  let forward = sampleWorldBoundarySidecarMeta(p + rd * span * 0.58);
+  let backward = sampleWorldBoundarySidecarMeta(p - rd * span * 0.42);
+  var best = center;
+  if (forward.x > best.x) {
+    best = forward;
+  }
+  if (backward.x > best.x) {
+    best = backward;
+  }
+  return best;
+}
+
 fn majorantIndex(c: vec3<u32>) -> u32 {
   return c.x + c.y * MAJORANT_GRID + c.z * MAJORANT_GRID * MAJORANT_GRID;
 }
@@ -3789,8 +3810,11 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     var boundarySidecarMetaForSampling = vec4<f32>(0.0);
     var boundaryFirePreSkipImportance = 0.0;
     if (boundaryFireRenderActive > 0.5 && boundarySidecarSourceForSampling > 0.5) {
-      boundarySidecarSampleForSampling = sampleWorldBoundarySidecar(p);
-      boundarySidecarMetaForSampling = sampleWorldBoundarySidecarMeta(p);
+      let boundarySidecarSegmentProbeSpan = dtBase
+        * mix(0.72, 1.38, clamp(u.radiance_controls.w, 0.0, 1.0))
+        * (0.74 + clamp(u.boundary_sidecar_controls.z, 0.0, 2.0) * 0.28);
+      boundarySidecarSampleForSampling = boundarySidecarSegmentMaxSample(p, rd, boundarySidecarSegmentProbeSpan);
+      boundarySidecarMetaForSampling = boundarySidecarSegmentMetaMaxSample(p, rd, boundarySidecarSegmentProbeSpan);
       boundaryFirePreSkipImportance = clamp(
         max(max(boundarySidecarSampleForSampling.x, boundarySidecarSampleForSampling.y), max(boundarySidecarSampleForSampling.z, boundarySidecarMetaForSampling.x * 0.72))
           + boundarySidecarSampleForSampling.w * 0.18,
@@ -4079,8 +4103,13 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
       var boundaryFireRidgeEffective = 0.0;
       var boundarySidecarStepFootprintWidth = 0.0;
       if (boundarySidecarSource > 0.5 && boundarySidecarSource <= 1.5) {
-        let boundarySidecarSample = sampleWorldBoundarySidecar(p);
-        let boundarySidecarMetaSample = sampleWorldBoundarySidecarMeta(p);
+        let boundaryFireSegmentProbeSpanForShading = max(localDt, dtBase)
+          * mix(0.78, 1.46, adaptiveRays)
+          * (0.72 + clamp(u.boundary_sidecar_controls.z, 0.0, 2.0) * 0.32);
+        let boundaryFireSegmentSampleForShading = boundarySidecarSegmentMaxSample(p, rd, boundaryFireSegmentProbeSpanForShading);
+        let boundaryFireSegmentMetaForShading = boundarySidecarSegmentMetaMaxSample(p, rd, boundaryFireSegmentProbeSpanForShading);
+        let boundarySidecarSample = boundaryFireSegmentSampleForShading;
+        let boundarySidecarMetaSample = boundaryFireSegmentMetaForShading;
         boundarySidecarDebugSample = boundarySidecarSample;
         boundarySidecarDebugMetaSample = boundarySidecarMetaSample;
         let boundarySidecarCoverage = boundarySidecarSample.y;
@@ -4122,8 +4151,13 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
         boundaryGradientEffective = boundaryGradient;
         boundaryFireRidgeEffective = boundaryFireRidge;
         if (boundarySidecarSource > 1.5) {
-          let boundarySidecarSample = sampleWorldBoundarySidecar(p);
-          let boundarySidecarMetaSample = sampleWorldBoundarySidecarMeta(p);
+          let boundaryFireSegmentProbeSpanForShading = max(localDt, dtBase)
+            * mix(0.78, 1.46, adaptiveRays)
+            * (0.72 + clamp(u.boundary_sidecar_controls.z, 0.0, 2.0) * 0.32);
+          let boundaryFireSegmentSampleForShading = boundarySidecarSegmentMaxSample(p, rd, boundaryFireSegmentProbeSpanForShading);
+          let boundaryFireSegmentMetaForShading = boundarySidecarSegmentMetaMaxSample(p, rd, boundaryFireSegmentProbeSpanForShading);
+          let boundarySidecarSample = boundaryFireSegmentSampleForShading;
+          let boundarySidecarMetaSample = boundaryFireSegmentMetaForShading;
           boundarySidecarDebugSample = boundarySidecarSample;
           boundarySidecarDebugMetaSample = boundarySidecarMetaSample;
           let boundarySidecarCoverage = boundarySidecarSample.y;
@@ -8679,7 +8713,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const sampleLookFreeze = normalizeLookFreeze(controlsSnapshot.lookFreeze) && lookFreezeCanPin(state) ? 1 : 0;
     if (!sampleLookFreeze) {
       encodeSim(encoder);
-      encodeMajorant(encoder, { force: true });
+      encodeMajorant(encoder, { force: majorantRaymarchActive(controlsSnapshot) });
     } else {
       state.majorantBuiltThisFrame = false;
     }
