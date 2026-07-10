@@ -1,0 +1,56 @@
+{
+  "name": "pixal3d-source-basin-probes-v0",
+  "purpose": "Probe whether high-quality Pixal3D source images can be style-shifted through local imagegen while preserving objectness, then handed to Trellis as basin-survival candidates.",
+  "source_image_dir": "Pixal3D/assets/images (local source checkout)",
+  "contact_sheet": "artifacts/pixal3d-source-basin-probes-v0/pixal3d-assets-contact-sheet.png",
+  "image_edit_route": {
+    "greenroom_job_type": "mflux_flux2_edit_promptfile",
+    "model": "flux2-klein-9b",
+    "quantize": 4,
+    "size": [
+      512,
+      512
+    ],
+    "steps": 8,
+    "guidance": 1.0,
+    "mlx_cache_limit_gb": 48
+  },
+  "records": [
+    {
+      "id": "mech_crab_overgrown_gunmetal",
+      "source_image": "Pixal3D/assets/images/6_img.png",
+      "prompt_file": "artifacts/pixal3d-source-basin-probes-v0/prompts/mech-crab-overgrown-gunmetal.txt",
+      "flux2_greenroom_job": "3240477db4b7",
+      "flux2_output_image": "artifacts/pixal3d-source-basin-probes-v0/greenroom-flux2-edit-mech-crab-overgrown-seed61/output.png",
+      "flux2_status": "done"
+    },
+    {
+      "id": "turtle_ancient_armored_relic",
+      "source_image": "Pixal3D/assets/images/0_img.png",
+      "prompt_file": "artifacts/pixal3d-source-basin-probes-v0/prompts/turtle-ancient-armored-relic.txt",
+      "flux2_greenroom_job": "5c73ae158287",
+      "flux2_output_image": "artifacts/pixal3d-source-basin-probes-v0/greenroom-flux2-edit-turtle-relic-seed62/output.png",
+      "flux2_status": "done"
+    }
+  ],
+  "trellis_probe": {
+    "selected_record": "turtle_ancient_armored_relic",
+    "greenroom_job": "7e0759cb6a88",
+    "greenroom_job_type": "trellis2_official_512_seeded",
+    "input_image": "artifacts/pixal3d-source-basin-probes-v0/greenroom-flux2-edit-turtle-relic-seed62/output.png",
+    "output_dir": "artifacts/pixal3d-source-basin-probes-v0/greenroom-trellis-official512-turtle-relic-seed162",
+    "params": {
+      "seed": 162,
+      "steps": 8,
+      "target_faces": 200000,
+      "texture_size": 1024,
+      "pipeline_type": 512,
+      "shared_noise": ""
+    },
+    "status": "running"
+  },
+  "visual_read": {
+    "mech_crab_overgrown_gunmetal": "Flux edit preserved hard-surface material language but collapsed the source identity into a handled device; useful negative basin evidence.",
+    "turtle_ancient_armored_relic": "Flux edit preserved objectness and produced a strong armored creature-relic candidate with sparse moss, orange lights, and coherent material detail."
+  }
+}
