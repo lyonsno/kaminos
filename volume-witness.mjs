@@ -16,25 +16,9 @@ const out = resolve(args.get('--out') || '/tmp/kaminos-volume-witness.png');
 const reportPath = resolve(args.get('--report') || out.replace(/\.png$/i, '.json'));
 const port = Number(args.get('--debug-port') || randomInt(42000, 62000));
 const chrome = process.env.KAMINOS_CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
-const reuseBrowser = args.has('--reuse-browser');
-const keepBrowserOpen = args.has('--keep-browser-open');
 const userDataDir = args.get('--user-data-dir') || mkdtempSync('/tmp/kaminos-volume-witness-profile-');
 const settleMs = Number(args.get('--settle-ms') || 1500);
 const windowSize = args.get('--window-size') || '1280,960';
-const deterministicReplaySteps = Number(args.get('--deterministic-replay-steps') || 0);
-const deterministicReplayRequested = Number.isFinite(deterministicReplaySteps) && deterministicReplaySteps > 0;
-const deterministicReplayTimeStepMs = Number(args.get('--deterministic-replay-time-step-ms') || (1000 / 60));
-const deterministicReplayStartTimeMs = Number(args.get('--deterministic-replay-start-ms') || 1000);
-const fieldTileExportRequested = args.has('--field-tile-export');
-const fieldTileSize = Number(args.get('--field-tile-size') || 8);
-const fieldTileMaxCount = Number(args.get('--field-tile-max-count') || 8);
-const fieldTileMinCellEnergy = Number(args.get('--field-tile-min-cell-energy') || 0.015);
-const fieldTileSelectionPolicy = args.get('--field-tile-selection-policy') || 'selected-occupied-fluid-front-tiles';
-const fieldTileSpatialBins = Number(args.get('--field-tile-spatial-bins') || 4);
-const fieldTileSpatialBinIds = String(args.get('--field-tile-spatial-bin-ids') || '')
-  .split(',')
-  .map((entry) => entry.trim())
-  .filter(Boolean);
 const fullScreenshot = args.has('--full-screenshot')
   ? resolve(args.get('--full-screenshot') || out.replace(/\.png$/i, '.full.png'))
   : '';
@@ -685,7 +669,131 @@ const TALL_PLUME_OPERATOR_PRESETS = {
     canonicalCenterline: 1.00,
     canonicalBodyBalance: 0.00,
   },
-  exploding_yellow_fireball_0706: {
+  boundary_fire_bonfire_a_la_ruffles_0709: {
+    volumeScene: 'tall_plume',
+    pyroCompareMode: 'live',
+    reactionLiveView: 'boundary_fire',
+    reactionBoundaryGradient: 0.20,
+    reactionBoundarySupportThermal: 0.86,
+    reactionBoundarySupportReaction: 1.80,
+    reactionBoundarySupportFront: 1.08,
+    reactionBoundarySupportInterface: 0.24,
+    reactionBoundaryCut: 0.00,
+    reactionBoundarySoftness: 0.29,
+    reactionBoundaryCoreReject: 1.00,
+    reactionBoundaryTopology: 2.50,
+    reactionBoundaryCurl: 2.00,
+    reactionBoundaryDivergence: 1.00,
+    reactionBoundaryContrast: 0.65,
+    reactionBoundaryGamma: 2.65,
+    reactionBoundaryOpacity: 3.00,
+    reactionBoundaryFireRidge: 2.00,
+    reactionBoundaryFireRidgeCut: 0.21,
+    reactionBoundaryFireTip: 2.00,
+    reactionBoundaryFireErosion: 0.12,
+    reactionBoundaryFireCleanBlue: 0.14,
+    reactionBoundaryFireSoot: 0.78,
+    reactionBoundaryFireYellow: 0.22,
+    reactionBoundaryFireWarmth: 0.68,
+    reactionBoundaryFireLuma: 5.00,
+    reactionHeatMin: 0.00,
+    reactionFuelMax: 0.067,
+    reactionFlameMin: 0.031,
+    reactionFrontMax: 0.076,
+    reactionShellGamma: 1.55,
+    density: 4.65,
+    fire: 3.50,
+    radiance: 0.00,
+    absorption: 0.00,
+    glow: 0.00,
+    curl: 1.40,
+    microdetail: 0.85,
+    interfaceShred: 3.10,
+    fireLicks: 4.30,
+    projection: 1.50,
+    speed: 2.35,
+    fireScale: 0.35,
+    detailScale: 2.70,
+    plumeHeight: 1.85,
+    windStrength: 1.50,
+    windAngle: -65,
+    windHeight: -0.80,
+    inputRadius: 0.08,
+    flowRate: 0.45,
+    raySteps: 160,
+    adaptiveRays: 0.30,
+    occupancySkip: 1.00,
+    majorantSkip: 0.95,
+    majorantSmooth: 1.00,
+    majorantGuard: 1.00,
+    temporalAccum: 0.00,
+    temporalJitter: 0.00,
+    historyClamp: 1.00,
+    renderScale: 0.50,
+    resolution: 128,
+    majorantGrid: 48,
+    fireRenderMode: 'shell',
+    shellInspectMode: 'shell',
+    shellAmount: 0.00,
+    shellWidth: 0.05,
+    shellSoftClip: 0.20,
+    shellSmoke: 2.00,
+    pyroDynamicDetail: 1,
+    pyroMaterialGain: 0.20,
+    pyroInterfaceFocus: 0.00,
+    pyroFireMode: 'pyro-owned',
+    pyroFlameLuma: 0.95,
+    pyroFlameCoreColor: '#ffae00',
+    pyroFlameEdgeColor: '#ff4d00',
+    pyroFlowBite: 3.00,
+    pyroFlowBorder: 1.00,
+    pyroFlowTeeth: 0.00,
+    pyroFlowRise: 1.00,
+    pyroFlowFireLock: 1.00,
+    pyroFlowLuma: 3.00,
+    pyroFlowRadiance: 4.00,
+    pyroFlowSpikes: 1.00,
+    pyroFlowCoolColor: '#ff6400',
+    pyroFlowHotColor: '#ff320f',
+    pyroRadianceGate: 0.15,
+    pyroRadianceSpill: 0.00,
+    pyroRadianceWarmth: 0.00,
+    pyroRadianceHue: 0.00,
+    pyroRadianceChroma: 1.00,
+    pyroRadianceLuma: 3.00,
+    pyroRadianceCoolColor: '#eb0000',
+    pyroRadianceWarmColor: '#ffcd75',
+    pyroRadianceSource: 'fire',
+    pyroRadianceHeight: 0.00,
+    pyroRadianceBorder: 0.00,
+    pyroRadianceTeeth: 0.00,
+    pyroRadianceRise: 0.00,
+    pyroRadianceFireLock: 1.00,
+    pyroEdgeBite: 0.00,
+    pyroBiteBorder: 0.00,
+    pyroBiteTeeth: 0.00,
+    pyroBiteWake: 0.00,
+    pyroBiteHeight: 0.00,
+    pyroBiteFireLock: 1.00,
+    pyroBiteCoreCut: 1.00,
+    pyroBiteRimCut: 1.00,
+    pyroBiteAfterCut: 1.00,
+    pyroBiteHeat: 0.00,
+    pyroBiteChroma: 0.00,
+    pyroBiteLuma: 0.00,
+    pyroBiteEmberColor: '#ff6600',
+    pyroBiteHotColor: '#ff4000',
+    pyroSmokeFold: 0.00,
+    pyroFoldBorder: 0.00,
+    pyroFoldWake: 0.00,
+    pyroWakeLift: 0.00,
+    pyroWakeWarmth: 0.00,
+    pyroWakeLuma: 0.00,
+    pyroCarrierView: 'normal',
+    pyroOverdrive: 8.00,
+    pressureMode: 'global-p3',
+  },
+  exploding_jellow_fireball_basin_0706: {
     volumeScene: 'tall_plume',
     density: 6.00,
     fire: 0.00,
@@ -782,7 +890,7 @@ const TALL_PLUME_OPERATOR_PRESETS = {
   },
 };
 
-const DEFAULT_VOLUME_SMOKE_TALL_PRESET = 'pyro_flow_small_bonfire_gamut_0707';
+const DEFAULT_VOLUME_SMOKE_TALL_PRESET = 'boundary_fire_bonfire_a_la_ruffles_0709';
 const CANONICAL_VOLUME_MACRO_PRESETS = {
   macro_foothold_0621: {
     density: 0.45,
@@ -945,7 +1053,7 @@ const expectedCanonicalBuoyancy = routeParams.has('volume_canonical_buoyancy') &
 const canonicalPassiveBottomNonRiseProof = expectsCanonicalPlumeProof && expectedCanonicalSourceMode === 'passive_bottom';
 const expectsCanonicalSmokeRise = expectsCanonicalPlumeProof && !canonicalPassiveBottomNonRiseProof;
 const requestedGrid = Number(routeParams.get('volume_resolution'));
-const expectedGrid = [32, 48, 64, 96, 128, 160, 192].includes(requestedGrid)
+const expectedGrid = [32, 48, 64, 96, 128, 160].includes(requestedGrid)
   ? requestedGrid
   : canonicalMacroPreset.resolution ?? scenePreset.resolution ?? 96;
 const requestedMajorantGrid = Number(routeParams.get('volume_majorant_grid'));
@@ -1220,50 +1328,6 @@ async function waitForCdp() {
   throw new Error('Chrome DevTools endpoint did not open');
 }
 
-async function cdpAvailable() {
-  try {
-    await cdpFetch('/json/version');
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-async function attachOrLaunchSharedBrowser() {
-  if (reuseBrowser && await cdpAvailable()) {
-    return {
-      identity: 'attach-or-launch-shared-cdp-browser-v0',
-      mode: 'attached-existing',
-      port,
-      userDataDir,
-      keepBrowserOpen,
-      process: null,
-    };
-  }
-  const proc = spawn(chrome, [
-    `--remote-debugging-port=${port}`,
-    `--user-data-dir=${userDataDir}`,
-    '--no-first-run',
-    '--disable-background-timer-throttling',
-    '--disable-renderer-backgrounding',
-    `--window-size=${windowSize}`,
-    url,
-  ], { stdio: 'ignore' });
-  return {
-    identity: reuseBrowser ? 'attach-or-launch-shared-cdp-browser-v0' : 'per-capture-chrome-process-v0',
-    mode: reuseBrowser ? 'launched-shared' : 'launched-per-capture',
-    port,
-    userDataDir,
-    keepBrowserOpen,
-    process: proc,
-  };
-}
-
-function closeBrowserSession(browserSession) {
-  if (browserSession?.keepBrowserOpen) return;
-  browserSession?.process?.kill('SIGTERM');
-}
-
 function wsRequest(ws, method, params = {}) {
   const id = ws._nextId = (ws._nextId || 0) + 1;
   ws.send(JSON.stringify({ id, method, params }));
@@ -1431,7 +1495,15 @@ async function main() {
   mkdirSync(dirname(out), { recursive: true });
   mkdirSync(dirname(reportPath), { recursive: true });
 
-  const browserSession = await attachOrLaunchSharedBrowser();
+  const proc = spawn(chrome, [
+    `--remote-debugging-port=${port}`,
+    `--user-data-dir=${userDataDir}`,
+    '--no-first-run',
+    '--disable-background-timer-throttling',
+    '--disable-renderer-backgrounding',
+    `--window-size=${windowSize}`,
+    url,
+  ], { stdio: 'ignore' });
 
   let phase = 'launch';
   try {
@@ -1446,9 +1518,7 @@ async function main() {
     await wsRequest(ws, 'Page.enable');
     phase = 'load';
     await wsRequest(ws, 'Page.navigate', { url });
-    if (!reuseBrowser) {
-      await wsRequest(ws, 'Page.bringToFront');
-    }
+    await wsRequest(ws, 'Page.bringToFront');
     await delay(settleMs);
     if (expectedExternalEmitterMode === 'synthetic_hand_trails') {
       await wsRequest(ws, 'Runtime.evaluate', {
@@ -1744,82 +1814,14 @@ async function main() {
 
     phase = 'gpu-readback';
     const fullScreenshotPath = await captureViewportScreenshot(ws, fullScreenshot);
-    const fieldTileExport = fieldTileExportRequested ? {
-      enabled: true,
-      tileSize: fieldTileSize,
-      maxTiles: fieldTileMaxCount,
-      minCellEnergy: fieldTileMinCellEnergy,
-      selectionPolicy: fieldTileSelectionPolicy,
-      spatialBinCount: fieldTileSpatialBins,
-      spatialBinIds: fieldTileSpatialBinIds,
-    } : null;
-    const sampleOptions = {
-      ...(deterministicReplayRequested ? {
-        steps: deterministicReplaySteps,
-        timeStepMs: deterministicReplayTimeStepMs,
-        startTimeMs: deterministicReplayStartTimeMs,
-      } : {}),
-      ...(fieldTileExport ? { fieldTileExport } : {}),
-    };
-    const sampleExpression = deterministicReplayRequested
-      ? `window.__kaminosVolumePrototype.sampleDeterministicReplayFrame(${JSON.stringify(sampleOptions)})`
-      : `window.__kaminosVolumePrototype.sampleFrame(${JSON.stringify(sampleOptions)})`;
     const sampleEval = await wsRequest(ws, 'Runtime.evaluate', {
-      expression: sampleExpression,
+      expression: 'window.__kaminosVolumePrototype.sampleFrame()',
       awaitPromise: true,
       returnByValue: true,
     });
-    if (sampleEval.exceptionDetails) {
-      throw new Error(`GPU frame readback evaluation rejected: ${JSON.stringify({
-        exceptionDetails: sampleEval.exceptionDetails,
-        sampleExpression,
-      })}`);
-    }
-    if (sampleEval.result?.subtype === 'error') {
-      throw new Error(`GPU frame readback evaluation rejected: ${JSON.stringify({
-        result: sampleEval.result,
-        sampleExpression,
-      })}`);
-    }
     const sample = sampleEval.result.value;
     if (sample?.ok !== true) {
       throw new Error(`GPU frame readback failed: ${JSON.stringify(sample)}`);
-    }
-    if (deterministicReplayRequested) {
-      if (
-        sample.deterministicReplay?.identity !== 'deterministic-replay-same-route-controls-fixed-step-v0' ||
-        Number(sample.deterministicReplay?.steps) !== deterministicReplaySteps ||
-        Number(sample.deterministicReplay?.completedSteps) !== deterministicReplaySteps ||
-        Number(sample.simStepCount) !== deterministicReplaySteps
-      ) {
-        throw new Error(`deterministic replay did not report exact fixed-step authority: ${JSON.stringify(sample.deterministicReplay)}`);
-      }
-    }
-    if (fieldTileExportRequested) {
-      const tileExport = sample.simReadback?.fieldTileExport || null;
-      const expectedSelectionPolicy = fieldTileSelectionPolicy.includes('spatial')
-        ? 'spatial-binned-occupied-fluid-front-tiles'
-        : 'selected-occupied-fluid-front-tiles';
-      if (
-        tileExport?.schema !== 'kaminos.volume.field-tile-export.v0' ||
-        tileExport?.selectionPolicy !== expectedSelectionPolicy ||
-        !Array.isArray(tileExport.tiles) ||
-        tileExport.tiles.length < 1 ||
-        Number(tileExport.exportedTiles) !== tileExport.tiles.length ||
-        !Number.isFinite(Number(tileExport.droppedCandidateTiles))
-      ) {
-        throw new Error(`field tile export missing selected-tile authority: ${JSON.stringify(tileExport)}`);
-      }
-      if (expectedSelectionPolicy === 'spatial-binned-occupied-fluid-front-tiles') {
-        if (
-          Number(tileExport.spatialBinCount) !== Math.max(2, Math.min(8, Math.floor(fieldTileSpatialBins))) ||
-          !Array.isArray(tileExport.selectedSpatialBins) ||
-          tileExport.selectedSpatialBins.length !== tileExport.tiles.length ||
-          tileExport.tiles.some((tile) => !tile.spatialBinId)
-        ) {
-          throw new Error(`field tile export missing spatial-bin authority: ${JSON.stringify(tileExport)}`);
-        }
-      }
     }
     const samplePressureSourceStrategy = sample.pressureProjectionEnabled ? 'jacobi-inline-divergence-v0' : 'disabled';
     const sampleFireLicks = sample.controls?.fireLicks ?? effectiveFireLicks;
@@ -2523,7 +2525,6 @@ async function main() {
       captureBackend,
       frameCount: state.frameCount,
       simStepCount: sample.simStepCount,
-      deterministicReplay: sample.deterministicReplay || null,
       simGrid: sample.simGrid,
       simGridLabel: sample.simGridLabel,
       frontFieldIdentity: sample.frontFieldIdentity,
@@ -2625,9 +2626,6 @@ async function main() {
       externalEmitterCount: sample.externalEmitterCount,
       externalEmitterAgeMs: sample.externalEmitterAgeMs,
       externalEmitterFrameId: sample.externalEmitterFrameId,
-      scalarActivityReceiver: sample.scalarActivityReceiver || state.scalarActivityReceiver || null,
-      scalarActivityCueProjection: sample.scalarActivityCueProjection || state.scalarActivityCueProjection || null,
-      hiddenScalarActivitySource: sample.hiddenScalarActivitySource || state.hiddenScalarActivitySource || null,
       volumePrimitiveCount: sample.volumePrimitiveCount,
       volumePrimitiveIds: sample.volumePrimitiveIds,
       volumePrimitives: sample.volumePrimitives,
@@ -2711,17 +2709,10 @@ async function main() {
       fieldSliceScreenshot: fieldSliceOut || null,
       metrics,
       mainRendererMetrics,
-      browserSession: {
-        identity: browserSession.identity,
-        mode: browserSession.mode,
-        port: browserSession.port,
-        userDataDir: browserSession.userDataDir,
-        keepBrowserOpen: browserSession.keepBrowserOpen,
-      },
     };
     writeFileSync(reportPath, JSON.stringify(report, null, 2));
     ws.close();
-    closeBrowserSession(browserSession);
+    proc.kill('SIGTERM');
     console.log(JSON.stringify(report, null, 2));
   } catch (err) {
     let state = null;
@@ -2753,16 +2744,9 @@ async function main() {
       state,
       screenshot: out,
       fullScreenshot: fullScreenshot || null,
-      browserSession: {
-        identity: browserSession.identity,
-        mode: browserSession.mode,
-        port: browserSession.port,
-        userDataDir: browserSession.userDataDir,
-        keepBrowserOpen: browserSession.keepBrowserOpen,
-      },
     };
     writeFileSync(reportPath, JSON.stringify(report, null, 2));
-    closeBrowserSession(browserSession);
+    proc.kill('SIGTERM');
     console.error(JSON.stringify(report, null, 2));
     process.exit(1);
   }
