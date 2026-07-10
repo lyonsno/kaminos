@@ -967,9 +967,12 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
       <div class="field"><span class="field-key">Render</span><span class="field-val" id="volume-canonical-render-mode-state">default</span></div>
       <div class="field"><span class="field-key">Motion</span><span class="field-val" id="volume-canonical-motion-mode-state">animated</span></div>
       <div class="field"><span class="field-key">Content</span><span class="field-val" id="volume-canonical-content-mode-state">smoke</span></div>
+      <div class="field"><span class="field-key">Agent Capture</span><span class="field-val" id="volume-agent-capture-state">writes artifacts/volume-captures</span></div>
       <div class="volume-actions">
         <button class="btn" id="volume-toggle">Enable</button>
         <button class="btn" id="volume-fit-camera">Frame</button>
+        <button class="btn" id="volume-agent-camera-save">Save Agent Camera</button>
+        <button class="btn" id="volume-agent-view-save">Save Agent View + Settings</button>
         <button class="btn" id="volume-basin-copy">Copy Basin</button>
         <button class="btn" id="volume-basin-restore">Restore Last</button>
         <button class="btn" id="volume-basin-warm-cap">Warm Cap</button>
@@ -10537,8 +10540,10 @@ const TALL_PLUME_OPERATOR_PRESETS = {
     volumeScene: 'tall_plume',
     pyroCompareMode: 'live',
     reactionLiveView: 'boundary_fire',
-    reactionBoundaryGradient: 0.20,
-    reactionBoundarySupportThermal: 0.86,
+    boundarySidecarSource: 'baked',
+    boundarySidecarView: 'off',
+    reactionBoundaryGradient: 0.65,
+    reactionBoundarySupportThermal: 0.98,
     reactionBoundarySupportReaction: 1.80,
     reactionBoundarySupportFront: 1.08,
     reactionBoundarySupportInterface: 0.24,
@@ -10548,77 +10553,126 @@ const TALL_PLUME_OPERATOR_PRESETS = {
     reactionBoundaryTopology: 2.50,
     reactionBoundaryCurl: 2.00,
     reactionBoundaryDivergence: 1.00,
-    reactionBoundaryContrast: 0.65,
-    reactionBoundaryGamma: 2.65,
+    reactionBoundaryContrast: 1.00,
+    reactionBoundaryGamma: 2.45,
     reactionBoundaryOpacity: 3.00,
-    reactionBoundaryFireRidge: 2.00,
-    reactionBoundaryFireRidgeCut: 0.21,
+    boundarySidecarBlur: 1.00,
+    boundarySidecarWidth: 2.00,
+    boundarySidecarRidge: 2.00,
+    reactionBoundaryFireRidge: 1.28,
+    reactionBoundaryFireRidgeCut: 0.10,
     reactionBoundaryFireTip: 2.00,
-    reactionBoundaryFireErosion: 0.12,
-    reactionBoundaryFireCleanBlue: 0.14,
-    reactionBoundaryFireSoot: 0.78,
-    reactionBoundaryFireYellow: 0.22,
-    reactionBoundaryFireWarmth: 0.68,
+    reactionBoundaryFireErosion: 0.37,
+    reactionBoundaryFireCleanBlue: 0.64,
+    reactionBoundaryFireSoot: 0.64,
+    reactionBoundaryFireYellow: 1.02,
+    reactionBoundaryFireWarmth: 0.86,
     reactionBoundaryFireLuma: 5.00,
     reactionHeatMin: 0.00,
-    reactionFuelMax: 0.067,
-    reactionFlameMin: 0.031,
-    reactionFrontMax: 0.076,
+    reactionHeatMax: 0.42,
+    reactionFuelMin: 0.0015,
+    reactionFuelMax: 0.071,
+    reactionFlameMin: 0.030,
+    reactionFlameMax: 0.120,
+    reactionFrontMin: 0.0015,
+    reactionFrontMax: 0.080,
+    reactionGradientMin: 0.018,
+    reactionGradientMax: 0.180,
+    reactionCoreMin: 0.18,
+    reactionCoreMax: 0.95,
+    reactionCoreReject: 0.82,
+    reactionTopologyGain: 0.44,
+    reactionStretchErode: 0.00,
+    reactionDivergenceMin: 0.004,
+    reactionDivergenceMax: 0.070,
+    reactionDivergenceGain: 0.00,
+    reactionCurlWarp: 0.00,
     reactionShellGamma: 1.55,
-    density: 4.65,
+    reactionShellContrast: 1.00,
+    density: 6.00,
     fire: 3.50,
     radiance: 0.00,
-    absorption: 0.00,
+    absorption: 0.30,
     glow: 0.00,
-    curl: 1.40,
-    microdetail: 0.85,
-    interfaceShred: 3.10,
-    fireLicks: 4.30,
+    smoke: 2.80,
+    curl: 3.15,
+    microdetail: 1.15,
+    interfaceShred: 5.00,
+    fireLicks: 5.00,
     projection: 1.50,
-    speed: 2.35,
+    speed: 1.80,
     fireScale: 0.35,
-    detailScale: 2.70,
-    plumeHeight: 1.85,
+    detailScale: 1.00,
+    plumeHeight: 1.30,
     windStrength: 1.50,
     windAngle: -65,
     windHeight: -0.80,
     inputRadius: 0.08,
-    flowRate: 0.45,
-    raySteps: 160,
-    adaptiveRays: 0.30,
+    flowRate: 0.40,
+    raySteps: 132,
+    adaptiveRays: 1.00,
     occupancySkip: 1.00,
-    majorantSkip: 0.95,
+    majorantSkip: 0.00,
     majorantSmooth: 1.00,
     majorantGuard: 1.00,
     temporalAccum: 0.00,
-    temporalJitter: 0.00,
-    historyClamp: 1.00,
-    renderScale: 0.50,
+    temporalJitter: 0.40,
+    historyClamp: 0.00,
+    renderScale: 0.65,
     resolution: 128,
-    majorantGrid: 48,
+    majorantGrid: 24,
     fireRenderMode: 'shell',
     shellInspectMode: 'shell',
     shellAmount: 0.00,
     shellWidth: 0.05,
+    shellThermal: 0.85,
+    shellReaction: 1.10,
+    shellFront: 1.25,
+    shellEdge: 0.85,
+    shellCoreSuppress: 0.55,
+    shellBite: 0.80,
+    shellCurl: 0.25,
+    shellHeat: 1.65,
+    shellDivergence: 0.00,
+    shellLuma: 1.35,
+    shellExposure: 1.15,
     shellSoftClip: 0.20,
     shellSmoke: 2.00,
     pyroDynamicDetail: 1,
     pyroMaterialGain: 0.20,
     pyroInterfaceFocus: 0.00,
+    pyroEdgeBite: 0.00,
+    pyroBiteBorder: 0.00,
+    pyroBiteTeeth: 0.00,
+    pyroBiteWake: 0.00,
+    pyroBiteHeight: 0.00,
+    pyroBiteFireLock: 1.00,
+    pyroBiteCore: 0.00,
+    pyroBiteCoreCut: 1.00,
+    pyroBiteRim: 0.00,
+    pyroBiteRimCut: 1.00,
+    pyroBiteAfter: 0.00,
+    pyroBiteAfterCut: 1.00,
     pyroFireMode: 'pyro-owned',
+    pyroFlamePaint: 0.00,
+    pyroStockMix: 1.00,
     pyroFlameLuma: 0.95,
     pyroFlameCoreColor: '#ffae00',
     pyroFlameEdgeColor: '#ff4d00',
-    pyroFlowBite: 3.00,
-    pyroFlowBorder: 1.00,
-    pyroFlowTeeth: 0.00,
-    pyroFlowRise: 1.00,
-    pyroFlowFireLock: 1.00,
-    pyroFlowLuma: 3.00,
-    pyroFlowRadiance: 4.00,
-    pyroFlowSpikes: 1.00,
-    pyroFlowCoolColor: '#ff6400',
-    pyroFlowHotColor: '#ff320f',
+    pyroBiteHeat: 0.00,
+    pyroBiteChroma: 0.00,
+    pyroBiteLuma: 0.00,
+    pyroBiteEmberColor: '#ff6600',
+    pyroBiteHotColor: '#ff4000',
+    pyroSmokeFold: 0.00,
+    pyroFoldBorder: 0.00,
+    pyroFoldWake: 0.00,
+    pyroWakeLift: 0.00,
+    pyroWakeWarmth: 0.00,
+    pyroWakeLuma: 0.00,
+    pyroWakeShadowColor: '#384c50',
+    pyroWakeEmberColor: '#b06a2a',
+    pyroRadiance: 0.00,
     pyroRadianceGate: 0.15,
     pyroRadianceSpill: 0.00,
     pyroRadianceWarmth: 0.00,
@@ -10633,29 +10687,27 @@ const TALL_PLUME_OPERATOR_PRESETS = {
     pyroRadianceTeeth: 0.00,
     pyroRadianceRise: 0.00,
     pyroRadianceFireLock: 1.00,
-    pyroEdgeBite: 0.00,
-    pyroBiteBorder: 0.00,
-    pyroBiteTeeth: 0.00,
-    pyroBiteWake: 0.00,
-    pyroBiteHeight: 0.00,
-    pyroBiteFireLock: 1.00,
-    pyroBiteCoreCut: 1.00,
-    pyroBiteRimCut: 1.00,
-    pyroBiteAfterCut: 1.00,
-    pyroBiteHeat: 0.00,
-    pyroBiteChroma: 0.00,
-    pyroBiteLuma: 0.00,
-    pyroBiteEmberColor: '#ff6600',
-    pyroBiteHotColor: '#ff4000',
-    pyroSmokeFold: 0.00,
-    pyroFoldBorder: 0.00,
-    pyroFoldWake: 0.00,
-    pyroWakeLift: 0.00,
-    pyroWakeWarmth: 0.00,
-    pyroWakeLuma: 0.00,
+    pyroFlowBite: 3.00,
+    pyroFlowBorder: 1.00,
+    pyroFlowTeeth: 0.00,
+    pyroFlowRise: 1.00,
+    pyroFlowFireLock: 1.00,
+    pyroFlowLuma: 3.00,
+    pyroFlowRadiance: 4.00,
+    pyroFlowSpikes: 1.00,
+    pyroFlowCoolColor: '#ff6400',
+    pyroFlowHotColor: '#ff320f',
+    pyroDiagnosticPaint: 0.00,
     pyroCarrierView: 'normal',
     pyroOverdrive: 8.00,
     pressureMode: 'global-p3',
+    pressureTierOverlay: 0.00,
+    pressureTierLowerMax: 0.61,
+    pressureTierHeroMin: 0.00,
+    pressureTierHeroMax: 0.34,
+    canonicalSpread: 1.00,
+    canonicalCenterline: 1.00,
+    canonicalBodyBalance: 0.00,
   },
   exploding_jellow_fireball_basin_0706: {
     label: 'exploding jellow fireball basin 0706',
@@ -11657,6 +11709,98 @@ function buildVolumeBasinUrl(controlsSnapshot = readVolumeControls()) {
   }
   url.searchParams.set('volume_quality_reason', 'pyro-contrast-basin-copied-0702');
   return url.toString();
+}
+
+function volumeDomControlKeyFromId(id) {
+  return String(id || '').replace(/^volume-/, '').replace(/-([a-z])/g, (_, letter) => letter.toUpperCase());
+}
+
+function volumeDomControlParamFromId(id) {
+  return String(id || '').replaceAll('-', '_');
+}
+
+function readVolumeDomControlValue(el) {
+  if (!el) return null;
+  if (el.type === 'checkbox') return Boolean(el.checked);
+  if (el.type === 'color' || el.tagName === 'SELECT' || el.tagName === 'TEXTAREA') return el.value;
+  const numericValue = Number(el.value);
+  return Number.isFinite(numericValue) ? numericValue : el.value;
+}
+
+function readVolumeDomControls() {
+  const controls = {};
+  const fields = document.querySelectorAll('#sidebar input[id^="volume-"], #sidebar select[id^="volume-"], #sidebar textarea[id^="volume-"]');
+  for (const el of fields) {
+    const key = volumeDomControlKeyFromId(el.id);
+    controls[key] = {
+      id: el.id,
+      param: volumeDomControlParamFromId(el.id),
+      tagName: el.tagName,
+      type: el.type || el.tagName.toLowerCase(),
+      value: readVolumeDomControlValue(el),
+    };
+  }
+  return controls;
+}
+
+function buildVolumeAgentCaptureRoute(domControls = readVolumeDomControls()) {
+  const url = new URL(window.location.href);
+  url.search = '';
+  url.searchParams.set('kaminos_volume_smoke', '1');
+  for (const entry of Object.values(domControls)) {
+    if (!entry?.param || entry.tagName === 'TEXTAREA') continue;
+    if (entry.value === undefined || entry.value === null) continue;
+    url.searchParams.set(entry.param, formatVolumeBasinRouteValue(entry.value));
+  }
+  url.searchParams.set('volume_quality_reason', 'agent-view-capture');
+  return url.toString();
+}
+
+function buildVolumeAgentCapture(kind = 'view') {
+  const domControls = readVolumeDomControls();
+  const controlsSnapshot = kind === 'camera' ? null : readVolumeControls();
+  const debugState = window.__kaminosVolumePrototype?.debugState?.() || null;
+  return {
+    identity: 'kaminos-volume-agent-capture-v1',
+    kind,
+    savedAt: new Date().toISOString(),
+    href: window.location.href,
+    route: buildVolumeAgentCaptureRoute(domControls),
+    camera: window.kaminosCameraDebugState?.() || null,
+    domControls: kind === 'camera' ? {} : domControls,
+    controlCount: kind === 'camera' ? 0 : Object.keys(domControls).length,
+    controls: controlsSnapshot,
+    volumeDebugState: debugState,
+    viewport: {
+      innerWidth: window.innerWidth,
+      innerHeight: window.innerHeight,
+      devicePixelRatio: window.devicePixelRatio || 1,
+    },
+    note: 'Replay with node volume-witness.mjs --capture <artifact>; captures write under artifacts/volume-captures.',
+  };
+}
+
+async function saveVolumeAgentCapture(kind = 'view') {
+  const state = document.getElementById('volume-agent-capture-state');
+  const capture = buildVolumeAgentCapture(kind);
+  if (state) state.textContent = 'saving capture...';
+  try {
+    const response = await fetch('/api/volume-capture', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(capture),
+    });
+    const result = await response.json();
+    if (!response.ok || !result.ok) throw new Error(result.error || `capture save failed: ${response.status}`);
+    if (state) state.textContent = result.relativePath;
+    console.log(JSON.stringify(result, null, 2));
+    setInfo(`Volume capture saved: ${result.relativePath}`);
+    return result;
+  } catch (error) {
+    if (state) state.textContent = `capture failed: ${error.message || error}`;
+    setInfo(`Volume capture failed: ${error.message || error}`);
+    throw error;
+  }
 }
 
 function saveVolumeBasinSnapshot(reason = 'control-change') {
@@ -17211,6 +17355,8 @@ async function initKaminosVolumeRoute() {
   });
   document.getElementById('volume-basin-copy')?.addEventListener('click', () => void copyVolumeBasinUrl());
   document.getElementById('volume-basin-restore')?.addEventListener('click', () => restoreVolumeBasinSnapshot());
+  document.getElementById('volume-agent-camera-save')?.addEventListener('click', () => void saveVolumeAgentCapture('camera'));
+  document.getElementById('volume-agent-view-save')?.addEventListener('click', () => void saveVolumeAgentCapture('view'));
   document.getElementById('volume-reaction-atlas-capture')?.addEventListener('click', () => void captureVolumeReactionAtlas());
   document.getElementById('volume-basin-slot-save')?.addEventListener('click', () => saveVolumeBasinSlot());
   document.getElementById('volume-basin-slot-load')?.addEventListener('click', () => restoreVolumeBasinSlot());
