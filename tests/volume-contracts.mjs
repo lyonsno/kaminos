@@ -1822,6 +1822,8 @@ assert.match(witness, /volumeResidualMode/, 'witness records effective residual 
 assert.match(witness, /volumeResidualFeatureAuthority/, 'witness records residual feature-plane authority identity');
 assert.match(witness, /volumeResidualFeatureDebugMode/, 'witness records residual feature debug visualization identity');
 assert.match(witness, /volumeResidualCost/, 'witness records residual application cost evidence');
+assert.match(witness, /recoverIdentityFrameState[\s\S]*Page\.captureScreenshot[\s\S]*debugState/, 'witness forces a compositor read and rechecks debug state before failing slow/backgrounded volume identity');
+assert.match(witness, /function wsRequest[\s\S]*setInterval[\s\S]*clearInterval/, 'CDP websocket requests keep Node alive until each browser response resolves or rejects');
 assert.match(witness, /expectedExternalEmitterMode/, 'witness verifies external emitter route identity when requested');
 assert.match(witness, /externalEmitterMode/, 'witness records external emitter mode');
 assert.match(witness, /externalEmitterCount/, 'witness records effective external emitter count');
@@ -1901,6 +1903,9 @@ assert.match(witness, /velocity-material-fire-microdetail-storage-buffer/, 'witn
 assert.match(witness, /fireLayerMean/, 'witness requires transported fire layer evidence');
 assert.match(witness, /combustionFrontMean/, 'witness requires transported combustion-front evidence when bonfire fire is visible');
 assert.match(witness, /radianceMean/, 'witness requires fire radiance evidence');
+assert.match(witness, /boundaryFireReadbackEvidence[\s\S]*emissionDetailMean[\s\S]*combustionFrontMean[\s\S]*frontTopologyMean/, 'boundary-fire inspect/shell routes can prove live fire from topology/emission carriers when stock radiance is intentionally zero');
+assert.match(witness, /fireFuelOverlapRatio <= 0\.01[\s\S]*!boundaryFireReadbackEvidence\.acceptsZeroRadiance/, 'boundary-fire inspect/shell routes do not fail tall-plume support solely because stock fire/fuel overlap is intentionally bypassed');
+assert.match(witness, /boundaryFireMainRendererEvidence[\s\S]*boundaryFireReadbackEvidence\.acceptsZeroRadiance[\s\S]*mainRendererMetrics\.litPixels[\s\S]*mainRendererMetrics\.meanLuma/, 'boundary-fire inspect/shell routes do not require orange-fire screenshot classification when live topology/emission carriers and lit main-renderer volume are present');
 assert.match(witness, /extinctionMean/, 'witness requires smoke extinction evidence');
 assert.match(witness, /emissiveLikePixels/, 'witness records emissive-fire visual evidence separately from generic fire color');
 assert.match(witness, /volumeBounds/, 'witness records visual volume bounds for scale-scene comparison');
@@ -2122,6 +2127,7 @@ assert.match(fieldSliceWitness, /attach-or-launch-shared-cdp-browser-v0/, 'volum
 assert.match(fieldSliceWitness, /keepBrowserOpen/, 'volume witness can leave the shared browser alive for the dataset runner instead of killing it per capture');
 assert.match(fieldSliceWitness, /unref\(\)/, 'volume witness must detach kept-open Chrome so shared-browser corpus captures do not hang after writing reports');
 assert.match(core, /sampleRenderScaleSet/, 'volume core exposes a same-state multi-render-scale capture API');
+assert.match(core, /compactRenderScaleSample[\s\S]*reactionFrontAtlas[\s\S]*null[\s\S]*sampleRenderScaleSet[\s\S]*compactSamples/, 'controlled-step render-scale captures compact heavy sim readback atlases before returning over CDP');
 assert.match(core, /renderFrozenScaleToCanvas/, 'volume core exposes render-only frozen-state canvas capture');
 const renderFrozenScaleToCanvasStart = core.indexOf('async function renderFrozenScaleToCanvas');
 const renderFrozenScaleToCanvasEnd = core.indexOf('async function sampleRenderScaleSet', renderFrozenScaleToCanvasStart);

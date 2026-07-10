@@ -9544,6 +9544,33 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     };
   }
 
+  function compactRenderScaleSample(sample) {
+    if (!sample || typeof sample !== 'object') return sample;
+    const simReadback = sample.simReadback ? { ...sample.simReadback } : null;
+    if (simReadback?.reactionFrontAtlas) {
+      simReadback.reactionFrontAtlas = {
+        ...simReadback.reactionFrontAtlas,
+        rgba: null,
+      };
+    }
+    if (simReadback?.canonicalSmokeFieldSlice) {
+      simReadback.canonicalSmokeFieldSlice = {
+        ...simReadback.canonicalSmokeFieldSlice,
+        rgba: null,
+      };
+    }
+    return {
+      ...sample,
+      preview: sample.preview ? {
+        width: sample.preview.width,
+        height: sample.preview.height,
+        rgba: null,
+      } : null,
+      image: null,
+      simReadback,
+    };
+  }
+
   async function sampleRenderScaleSet(options = {}) {
     if (!state.active || !device) return { ok: false, reason: 'inactive', ...state };
     const requestedScales = Array.isArray(options.renderScales) ? options.renderScales : [];
@@ -9591,6 +9618,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         raf = requestAnimationFrame(render);
       }
     }
+    const returnedSamples = options.compactSamples === true
+      ? samples.map(sample => compactRenderScaleSample(sample))
+      : samples;
     return {
       ok: samples.every(sample => sample.ok === true),
       sampleSetAuthority: 'frame-locked-render-scale-set-v0',
@@ -9600,7 +9630,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       baseSimStepCount,
       fixedNowMs: fixedNow,
       renderScales,
-      samples,
+      samples: returnedSamples,
       effectiveRoute: state.effectiveRoute,
       prototypeIdentity: state.prototypeIdentity,
       backend: state.backend,
@@ -9665,6 +9695,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       renderScales,
       includeRgba: options.includeRgba === true,
       includeFeatureRgba: options.includeFeatureRgba === true,
+      compactSamples: options.compactSamples === true,
       now: controlledStepNowMs,
       sameStateCaptureId,
       resumeRenderLoop: false,

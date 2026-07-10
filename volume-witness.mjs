@@ -378,6 +378,47 @@ function buildPyroRawCarrierPaintEvidence(sample = {}, state = {}) {
   };
 }
 
+function buildBoundaryFireReadbackEvidence(sample = {}, state = {}) {
+  const sim = sample.simReadback || {};
+  const controls = sample.controls || state.controls || {};
+  const reactionLiveView = String(controls.reactionLiveView || state.reactionLiveView || '');
+  const shellInspectMode = String(controls.shellInspectMode || state.shellInspectMode || '');
+  const fireRenderMode = String(controls.fireRenderMode || state.fireRenderMode || '');
+  const emissionDetailMean = finiteNumber(sim.emissionDetailMean);
+  const combustionFrontMean = finiteNumber(sim.combustionFrontMean);
+  const frontTopologyMean = finiteNumber(sim.frontTopologyMean);
+  const fireLickMean = finiteNumber(sim.fireLickMean);
+  const radianceMean = finiteNumber(sim.radianceMean);
+  const expectsBoundaryFire =
+    reactionLiveView === 'boundary_fire' ||
+    shellInspectMode === 'boundary_fire' ||
+    fireRenderMode === 'boundary_fire';
+  const hasTopologyEmissionCarriers =
+    emissionDetailMean > 0.0005 &&
+    combustionFrontMean > 0.00025 &&
+    frontTopologyMean > 0.00003;
+  const hasBreakupCarrier = fireLickMean > 0.00025;
+  const acceptsZeroRadiance = expectsBoundaryFire && hasTopologyEmissionCarriers && hasBreakupCarrier;
+  return {
+    identity: 'boundary-fire-readback-evidence-v0',
+    phase: acceptsZeroRadiance
+      ? 'boundary-fire-topology-emission-carriers-live'
+      : (expectsBoundaryFire ? 'boundary-fire-carriers-insufficient' : 'not-boundary-fire-route'),
+    acceptsZeroRadiance,
+    expectsBoundaryFire,
+    reactionLiveView,
+    shellInspectMode,
+    fireRenderMode,
+    carriers: {
+      emissionDetailMean,
+      combustionFrontMean,
+      frontTopologyMean,
+      fireLickMean,
+      radianceMean,
+    },
+  };
+}
+
 function defaultPressureIterationsForScene(volumeScene) {
   if (volumeScene === 'tall_plume') return 2;
   return volumeScene === 'bonfire_plume' ? 8 : 4;
@@ -1499,16 +1540,34 @@ function closeBrowserSession(browserSession) {
 
 function wsRequest(ws, method, params = {}) {
   const id = ws._nextId = (ws._nextId || 0) + 1;
-  ws.send(JSON.stringify({ id, method, params }));
+  const keepAlive = setInterval(() => {}, 1000);
   return new Promise((resolveReq, rejectReq) => {
+    const cleanup = () => {
+      clearInterval(keepAlive);
+      ws.removeEventListener('message', onMessage);
+      ws.removeEventListener('close', onClose);
+      ws.removeEventListener('error', onError);
+    };
+    const settle = (fn, value) => {
+      cleanup();
+      fn(value);
+    };
     const onMessage = event => {
       const msg = JSON.parse(String(event.data));
       if (msg.id !== id) return;
-      ws.removeEventListener('message', onMessage);
-      if (msg.error) rejectReq(new Error(`${method}: ${msg.error.message}`));
-      else resolveReq(msg.result);
+      if (msg.error) settle(rejectReq, new Error(`${method}: ${msg.error.message}`));
+      else settle(resolveReq, msg.result);
     };
+    const onClose = () => settle(rejectReq, new Error(`${method}: WebSocket closed before CDP response ${id}`));
+    const onError = () => settle(rejectReq, new Error(`${method}: WebSocket error before CDP response ${id}`));
     ws.addEventListener('message', onMessage);
+    ws.addEventListener('close', onClose, { once: true });
+    ws.addEventListener('error', onError, { once: true });
+    try {
+      ws.send(JSON.stringify({ id, method, params }));
+    } catch (err) {
+      settle(rejectReq, err);
+    }
   });
 }
 
@@ -1806,6 +1865,49 @@ async function replayCaptureCamera(ws, capture = {}) {
   return cameraEval.result.value;
 }
 
+async function recoverIdentityFrameState(ws, state) {
+  const frameCount = Number(state?.frameCount || 0);
+  const displayWidth = Number(state?.displayWidth || 0);
+  const displayHeight = Number(state?.displayHeight || 0);
+  if (frameCount > 5 && displayWidth > 1 && displayHeight > 1) {
+    return { state, recovery: { attempted: false, reason: 'identity-state-already-sufficient' } };
+  }
+  const before = {
+    frameCount,
+    displayWidth,
+    displayHeight,
+    active: state?.active ?? null,
+    backend: state?.backend ?? null,
+  };
+  await wsRequest(ws, 'Page.captureScreenshot', {
+    format: 'png',
+    fromSurface: true,
+  });
+  await delay(500);
+  const recoveredEval = await wsRequest(ws, 'Runtime.evaluate', {
+    expression: 'window.__kaminosVolumePrototype?.debugState?.()',
+    returnByValue: true,
+  });
+  const recoveredState = recoveredEval.result.value || state;
+  return {
+    state: recoveredState,
+    recovery: {
+      identity: 'volume-witness-identity-frame-recovery-v0',
+      attempted: true,
+      trigger: 'insufficient-frame-count-or-dimensions-before-identity-assert',
+      mechanism: 'cdp-page-capture-screenshot-compositor-read-then-debugState-reread',
+      before,
+      after: {
+        frameCount: Number(recoveredState?.frameCount || 0),
+        displayWidth: Number(recoveredState?.displayWidth || 0),
+        displayHeight: Number(recoveredState?.displayHeight || 0),
+        active: recoveredState?.active ?? null,
+        backend: recoveredState?.backend ?? null,
+      },
+    },
+  };
+}
+
 async function main() {
   mkdirSync(dirname(out), { recursive: true });
   mkdirSync(dirname(reportPath), { recursive: true });
@@ -1815,6 +1917,7 @@ async function main() {
   const browserSession = await attachOrLaunchSharedBrowser();
 
   let phase = 'launch';
+  let identityFrameRecovery = null;
   try {
     await waitForCdp();
     phase = 'target';
@@ -1865,6 +1968,9 @@ async function main() {
       if (state?.frameCount > 8) break;
       await delay(250);
     }
+    const recoveredIdentity = await recoverIdentityFrameState(ws, state);
+    state = recoveredIdentity.state;
+    identityFrameRecovery = recoveredIdentity.recovery;
     assert.ok(state, 'missing volume debug state');
     assert.equal(state.effectiveRoute, 'native-3d-compute-fluid-raymarch-v0', 'wrong effective route');
     assert.equal(state.prototypeIdentity, 'kaminos-volume-prototype-v0', 'wrong prototype identity');
@@ -2453,6 +2559,7 @@ async function main() {
       throw new Error(`GPU sim readback does not show transported material detail: ${JSON.stringify(sample.simReadback)}`);
     }
     const pyroRawCarrierPaintEvidence = buildPyroRawCarrierPaintEvidence(sample, state);
+    const boundaryFireReadbackEvidence = buildBoundaryFireReadbackEvidence(sample, state);
     const acceptsRawCarrierPyroPaint =
       expectsPyroMaterialEvidence &&
       pyroRawCarrierPaintEvidence.acceptsLowStockFireLayer;
@@ -2462,8 +2569,11 @@ async function main() {
         pyroRawCarrierPaintEvidence,
       })}`);
     }
-    if (!expectsCanonicalPlumeProof && !expectsFuelStarvedTallPlume && !expectsNoFireVolumeEvidence && (!Number.isFinite(sample.simReadback.radianceMean) || sample.simReadback.radianceMean <= 0.0005)) {
-      throw new Error(`GPU sim readback does not show fire radiance evidence: ${JSON.stringify(sample.simReadback)}`);
+    if (!expectsCanonicalPlumeProof && !expectsFuelStarvedTallPlume && !expectsNoFireVolumeEvidence && (!Number.isFinite(sample.simReadback.radianceMean) || sample.simReadback.radianceMean <= 0.0005) && !boundaryFireReadbackEvidence.acceptsZeroRadiance) {
+      throw new Error(`GPU sim readback does not show fire radiance or boundary-fire topology/emission evidence: ${JSON.stringify({
+        simReadback: sample.simReadback,
+        boundaryFireReadbackEvidence,
+      })}`);
     }
     if (expectedVolumeScene === 'tall_plume') {
       if (
@@ -2494,7 +2604,10 @@ async function main() {
         sample.simReadback.fuelMean <= 0.0005 ||
         sample.simReadback.reactionMean <= 0.0005 ||
         sample.simReadback.fuelConsumptionMean <= 0.00001 ||
-        sample.simReadback.fireFuelOverlapRatio <= 0.01
+        (
+          sample.simReadback.fireFuelOverlapRatio <= 0.01 &&
+          !boundaryFireReadbackEvidence.acceptsZeroRadiance
+        )
       ) {
         throw new Error(`tall plume fire was not supported by live fuel/reaction evidence: ${JSON.stringify(sample.simReadback)}`);
       }
@@ -2892,6 +3005,10 @@ async function main() {
     const mainRendererBuffer = Buffer.from(pageShot.data, 'base64');
     writeFileSync(mainRendererScreenshot, mainRendererBuffer);
     const mainRendererMetrics = measureScreenshot(mainRendererBuffer);
+    const boundaryFireMainRendererEvidence =
+      boundaryFireReadbackEvidence.acceptsZeroRadiance &&
+      mainRendererMetrics.litPixels >= 1500 &&
+      mainRendererMetrics.meanLuma >= 8;
     const expectsNoFireMainRendererVolume = expectsNoFireVolumeEvidence ||
       expectsFuelStarvedTallPlume ||
       (expectsCanonicalPlumeProof && !expectsCanonicalFireEvidence);
@@ -2907,7 +3024,7 @@ async function main() {
       if (mainRendererMetrics.litPixels < 1500 || mainRendererMetrics.meanLuma < 8) {
         throw new Error(`main renderer screenshot missing bridged Pyro material volume: ${JSON.stringify(mainRendererMetrics)}`);
       }
-    } else if (mainRendererMetrics.litPixels < 1500 || mainRendererMetrics.fireLikePixels < 80 || mainRendererMetrics.meanLuma < 8) {
+    } else if (!boundaryFireMainRendererEvidence && (mainRendererMetrics.litPixels < 1500 || mainRendererMetrics.fireLikePixels < 80 || mainRendererMetrics.meanLuma < 8)) {
       throw new Error(`main renderer screenshot missing bridged fire volume: ${JSON.stringify(mainRendererMetrics)}`);
     }
     const visibleFirePixels = metrics.fireLikePixels + metrics.emissiveLikePixels;
@@ -3290,6 +3407,7 @@ async function main() {
             renderScales: renderScaleSet,
             includeRgba: false,
             includeFeatureRgba: renderScaleFeatureCaptures,
+            compactSamples: true,
             resumeRenderLoop: false,
           })})`,
           awaitPromise: true,
@@ -3577,6 +3695,8 @@ async function main() {
       noFireEvidenceMode: expectsNoFireVolumeEvidence ? 'no-fire-volume-signal' : null,
       pyroMaterialEvidenceMode: expectsPyroMaterialEvidence ? 'pyro-material-coupled-volume-signal' : null,
       pyroRawCarrierPaintEvidence,
+      boundaryFireReadbackEvidence,
+      boundaryFireMainRendererEvidence,
       performanceVisualWarnings,
       effectiveRoute: state.effectiveRoute,
       prototypeIdentity: state.prototypeIdentity,
@@ -3779,6 +3899,7 @@ async function main() {
       renderScaleSet: renderScaleSetReport,
       controlledStepSequence: controlledStepSequenceReport,
       freezeIntegrityProbe,
+      identityFrameRecovery,
       metrics,
       mainRendererMetrics,
       browserSession: {
