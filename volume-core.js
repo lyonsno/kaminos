@@ -7,6 +7,7 @@ const SMOKE_LIFECYCLE_RENDER_IDENTITY = 'combustion-coupled-smoke-lifecycle-rend
 const SMOKE_MORPHOLOGY_FORCE_IDENTITY = 'smoke-selective-vorticity-morphology-force-v0';
 const SMOKE_ARTIFACT_ASSAY_IDENTITY = 'smoke-artifact-assay-controls-v0';
 const EXPLOSION_PLUME_SMOKE_DYNAMICS_IDENTITY = 'explosion-plume-smoke-dynamics-v0';
+const FAR_SMOKE_RECEIVER_IDENTITY = 'far-smoke-overlap-render-receiver-v0';
 const TRUTH_ORACLE_ACTIVITY_RECEIVER_IDENTITY = 'truth-oracle-scalar-activity-receiver-v0';
 const TRUTH_ORACLE_ACTIVITY_CUE_AUTHORITY = 'truth-high-diagnostic-activity-projected-to-receiver-grid-v0';
 const PROCEDURAL_ACTIVITY_CUE_AUTHORITY = 'procedural-receiver-activity-proxy-no-truth-v0';
@@ -869,6 +870,7 @@ struct Uniforms {
   activity_tier_controls: vec4<f32>,
   smoke_artifact_assay_controls: vec4<f32>,
   explosion_plume_controls: vec4<f32>,
+  far_smoke_receiver_controls: vec4<f32>,
   previousViewProj: mat4x4<f32>,
 };
 
@@ -2538,6 +2540,66 @@ fn raymarchEarlyTermination(transmittance: f32) -> bool {
   return transmittance < 0.012;
 }
 
+fn farSmokeRaymarchExtent() -> f32 {
+  let receiverRange = clamp(u.far_smoke_receiver_controls.x, 0.0, 1.0);
+  let tallPlumeRenderScene = step(0.5, clamp(u.scene_controls.x, 0.0, 3.0)) * (1.0 - step(1.5, clamp(u.scene_controls.x, 0.0, 3.0)));
+  return 1.0 + receiverRange * tallPlumeRenderScene * 1.15;
+}
+
+fn farSmokeReceiverProbe(p: vec3<f32>) -> f32 {
+  let controls = clamp(u.far_smoke_receiver_controls, vec4<f32>(0.0), vec4<f32>(1.0));
+  let receiverRange = controls.x;
+  let overlap = controls.y;
+  let tallPlumeRenderScene = step(0.5, clamp(u.scene_controls.x, 0.0, 3.0)) * (1.0 - step(1.5, clamp(u.scene_controls.x, 0.0, 3.0)));
+  let startY = mix(0.86, 0.58, overlap);
+  let endY = farSmokeRaymarchExtent();
+  let vertical = smoothstep(startY, startY + 0.08, p.y) * (1.0 - smoothstep(endY - 0.18, endY + 0.04, p.y));
+  return clamp(receiverRange * tallPlumeRenderScene * vertical, 0.0, 1.0);
+}
+
+fn farSmokeReceiverSample(p: vec3<f32>, time: f32) -> vec4<f32> {
+  let controls = clamp(u.far_smoke_receiver_controls, vec4<f32>(0.0), vec4<f32>(1.0));
+  let receiverRange = controls.x;
+  let overlap = controls.y;
+  let receiverCarrier = controls.z;
+  let rimCurl = controls.w;
+  let startY = mix(0.86, 0.58, overlap);
+  let endY = farSmokeRaymarchExtent();
+  let t = clamp((p.y - startY) / max(0.08, endY - startY), 0.0, 1.0);
+  let overlapWeight = 1.0 - smoothstep(0.08, 0.48, t);
+  let windStrength = clamp(u.scene_controls.y, 0.0, 1.5);
+  let windAngle = u.scene_controls.z;
+  let windDir = vec2<f32>(cos(windAngle), sin(windAngle));
+  let windDrift = windDir * windStrength * receiverRange * t * t * 0.42;
+  let expansion = 0.10 + t * (0.26 + receiverRange * 0.52);
+  let sourceY = clamp(mix(p.y, mix(0.72, 0.94, overlap), smoothstep(0.12, 0.74, t)), -0.98, 0.98);
+  let lateral = (p.xz - windDrift) / (1.0 + expansion);
+  let sourceP = vec3<f32>(lateral.x, sourceY, lateral.y);
+  let velocityDensity = sampleWorldVelocity(sourceP);
+  let material = sampleWorldMaterial(sourceP);
+  let fireLayer = sampleWorldFireLayer(sourceP);
+  let microLayer = sampleWorldMicrodetail(sourceP);
+  let front = sampleWorldFrontField(sourceP);
+  let sampleCell = vec3<i32>(floor(clamp((sourceP * 0.5 + vec3<f32>(0.5)) * f32(GRID), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.0))));
+  let flowCue = smoothstep(0.006, 0.16, curlMagnitudeAtCell(sampleCell) + abs(divergenceAtCell(sampleCell)) * 0.52);
+  let smokeCue = smoothstep(0.012, 0.62, material.x + microLayer.x * 0.42 + microLayer.y * 0.28 + material.w * 0.18);
+  let heatCue = smoothstep(0.012, 0.44, material.y + fireLayer.z * 0.18 + fireLayer.x * 0.08);
+  let reactionRemnant = smoothstep(0.002, 0.11, front + fireLayer.w * 0.48 + fireLayer.z * 0.22);
+  let receiverSupport = clamp(max(smokeCue, max(heatCue * 0.62, max(reactionRemnant * 0.50, flowCue * 0.46))) * receiverCarrier, 0.0, 1.0);
+  let center = p.xz - windDrift;
+  let radius = length(center);
+  let bodyWidth = 0.20 + expansion * 0.92 + material.x * 0.12 + overlapWeight * 0.10;
+  let bodyMask = 1.0 - smoothstep(bodyWidth, bodyWidth + 0.28 + t * 0.18, radius);
+  let rimBand = smoothstep(bodyWidth * 0.54, bodyWidth + 0.08, radius) * (1.0 - smoothstep(bodyWidth + 0.08, bodyWidth + 0.34, radius));
+  let curlNoise = 0.5 + 0.5 * sin(dot(center, vec2<f32>(17.0, -13.0)) + p.y * 9.0 + time * 0.72);
+  let verticalDecay = exp(-t * mix(0.72, 1.38, receiverRange));
+  let supportBody = receiverSupport * bodyMask * verticalDecay * farSmokeReceiverProbe(p);
+  let density = supportBody * (0.20 + material.x * 0.62 + overlapWeight * 0.18);
+  let smoke = supportBody * (0.34 + material.x * 0.78 + microLayer.x * 0.34 + rimBand * rimCurl * (0.24 + curlNoise * 0.22));
+  let heat = supportBody * (material.y * 0.18 + heatCue * 0.10) * (0.45 + overlapWeight * 0.55);
+  return vec4<f32>(density, smoke, heat, receiverSupport);
+}
+
 fn microDetailDomainWarp(p: vec3<f32>, microLayer: vec4<f32>, fireLayer: vec4<f32>, material: vec4<f32>, velocity: vec3<f32>, time: f32, detailCoherenceGain: f32) -> vec3<f32> {
   let carrier = clamp(
     microLayer.x * 0.62
@@ -3879,7 +3941,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
   let farWorld = farWorldRaw.xyz / farWorldRaw.w;
   let ro = u.cameraPos_time.xyz;
   let rd = normalize(farWorld - nearWorld);
-  let hit = boxHit(ro, rd, vec3<f32>(1.0, 1.0, 1.0));
+  let hit = boxHit(ro, rd, vec3<f32>(1.0, farSmokeRaymarchExtent(), 1.0));
   if (hit.y <= max(hit.x, 0.0)) {
     return vec4<f32>(0.004, 0.005, 0.006, 1.0);
   }
@@ -4037,7 +4099,8 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     let guardedThreshold = mix(0.050, 0.100, majorantEdgeGuard);
     let majorantEmpty = 1.0 - smoothstep(0.004, guardedThreshold, guardedImportance + majorantEdge * majorantEdgeGuard * 0.24);
     let edgeDamping = 1.0 - smoothstep(0.012, 0.16, majorantEdge * majorantEdgeGuard);
-    let majorantSkipGate = majorantEmpty * majorantSkipStrength * edgeDamping;
+    let farReceiverProbe = farSmokeReceiverProbe(p);
+    let majorantSkipGate = majorantEmpty * majorantSkipStrength * edgeDamping * (1.0 - farReceiverProbe * 0.92);
     temporalMajorantEdge = max(temporalMajorantEdge, majorantEdge * (0.18 + majorantSkipGate));
     if (majorantSkipGate > 0.42) {
       let cellExit = majorantCellExitDistance(p, rd);
@@ -4050,6 +4113,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     let fireLayer = sampleWorldFireLayer(p);
     let microLayer = sampleWorldMicrodetail(p);
     let combustionFrontTopology = sampleWorldFrontField(p);
+    let farReceiver = farSmokeReceiverSample(p, u.cameraPos_time.w);
     let velMag = length(state.xyz);
     let smokeDensity = material.x;
     let heat = material.y;
@@ -4079,7 +4143,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
       (smokeDensity * 0.84 + heat * 0.28 + materialDetail * 0.14 + microBodyContribution) * u.viewport_steps_density.w,
       canonicalDebugSmokeDensity,
       canonicalSmokeOnlyRender
-    );
+    ) + farReceiver.x * u.viewport_steps_density.w;
     let y = clamp((p.y + 1.0) * 0.5, 0.0, 1.0);
     let fireGain = 0.42 + u.fire_smoke_curl_speed.x * 1.15;
     let rawTemp = emissiveTemperature(fireLayer, material, microLayer, velMag);
@@ -4100,8 +4164,9 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
       (smokeDensity + microBodyContribution * 0.70) * smoothstep(0.03, 0.92, y) * u.fire_smoke_curl_speed.y,
       smokeDensity * canonicalSmokeContent * u.fire_smoke_curl_speed.y,
       canonicalSmokeOnlyRender
-    );
-    let rawExtinction = smokeRadianceExtinction(smokeDensity, microSmoke, interfaceShred, materialDetail, absorptionGain);
+    ) + farReceiver.y * u.fire_smoke_curl_speed.y;
+    let rawExtinction = smokeRadianceExtinction(smokeDensity, microSmoke, interfaceShred, materialDetail, absorptionGain)
+      + farReceiver.y * (0.22 + absorptionGain * 0.32);
     let tallPlumeRenderTransitionContour = clamp(0.70 + microTextureSignal * 0.12 + velMag * 0.18 + materialDetail * 0.06, 0.44, 1.20);
     let tallPlumeRenderTransitionStagger = tallPlumeTransitionBandStagger(tallPlumeRenderTransitionContour, materialDetail, microSmoke, interfaceShred, flameDetail, combustionFrontTopology);
     let tallPlumeRenderTransitionBand = tallPlumeRenderScene
@@ -4112,7 +4177,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
       * smoothstep(0.54, 1.18, tallPlumeRenderTransitionStagger)
       * (0.020 + flameDetail * 0.035 + interfaceShred * 0.025 + microSmoke * 0.016);
     let baseExtinction = rawExtinction + tallPlumeTransitionWisps * absorptionGain * 0.34;
-    let occupancy = raymarchOccupancySignal(density, smoke, heat, temp, flame, microTextureSignal, velMag, baseExtinction) + tallPlumeTransitionWisps;
+    let occupancy = raymarchOccupancySignal(density, smoke, heat + farReceiver.z, temp, flame, microTextureSignal, velMag, baseExtinction) + tallPlumeTransitionWisps + farReceiver.w * 0.18;
     let emptySpanScale = occupancySkipStepScale(occupancy, occupancySkipStrength, adaptiveRays);
     if (emptySpanScale > 1.08) {
       t = t + min(dtBase * emptySpanScale, max(0.0001, endT - t));
@@ -5013,7 +5078,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   const invViewProj = new THREE.Matrix4();
   const viewProj = new THREE.Matrix4();
   const previousViewProj = new THREE.Matrix4();
-  const uniforms = new Float32Array(352);
+  const uniforms = new Float32Array(356);
   let controlsSnapshot = applyRuntimeQualityControls(getControls());
   let gridSize = normalizeGridSize(controlsSnapshot.resolution);
   let majorantGridSize = normalizeMajorantGridSize(controlsSnapshot.majorantGrid);
@@ -5122,6 +5187,19 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       capRoll: clampFinite(controlsSnapshot.smokePlumeCapRoll, 0, 1, 0.45),
       ageContrast: clampFinite(controlsSnapshot.smokePlumeAgeContrast, 0, 1, 0.35),
       target: 'large-fuel-rich-explosion-plume-smoke-structure-v0',
+    },
+    farSmokeReceiver: {
+      identity: FAR_SMOKE_RECEIVER_IDENTITY,
+      slotPolicy: 'single-grid-render-continuation-no-second-pressure-volume-v0',
+      authoritySource: 'upper-current-grid-smoke-activity-carrier-v0',
+      receiverKind: 'raymarch-extent-overlap-continuation-prototype',
+      pressurePlan: 'p2-p3-first-p4-assay-later-v0',
+      active: normalizeVolumeScene(controlsSnapshot.volumeScene) === 'tall_plume',
+      range: clampFinite(controlsSnapshot.farSmokeReceiverRange, 0, 1, 0.55),
+      overlap: clampFinite(controlsSnapshot.farSmokeReceiverOverlap, 0, 1, 0.45),
+      carrier: clampFinite(controlsSnapshot.farSmokeReceiverCarrier, 0, 1, 0.70),
+      rimCurl: clampFinite(controlsSnapshot.farSmokeReceiverRimCurl, 0, 1, 0.40),
+      target: 'large-tall-smoke-continuation-before-second-volume-solver-v0',
     },
     plumeHeight: 1.45,
     windStrength: normalizeWindStrength(controlsSnapshot.windStrength),
@@ -7000,7 +7078,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     uniforms[333] = clampFinite(controlsSnapshot.smokePlumeEntrainment, 0, 1, 0.55);
     uniforms[334] = clampFinite(controlsSnapshot.smokePlumeCapRoll, 0, 1, 0.45);
     uniforms[335] = clampFinite(controlsSnapshot.smokePlumeAgeContrast, 0, 1, 0.35);
-    uniforms.set(previousViewProj.elements, 336);
+    uniforms[336] = clampFinite(controlsSnapshot.farSmokeReceiverRange, 0, 1, 0.55);
+    uniforms[337] = clampFinite(controlsSnapshot.farSmokeReceiverOverlap, 0, 1, 0.45);
+    uniforms[338] = clampFinite(controlsSnapshot.farSmokeReceiverCarrier, 0, 1, 0.70);
+    uniforms[339] = clampFinite(controlsSnapshot.farSmokeReceiverRimCurl, 0, 1, 0.40);
+    uniforms.set(previousViewProj.elements, 340);
     device.queue.writeBuffer(uniformBuffer, 0, uniforms);
     state.gridOverlay = controlsSnapshot.gridOverlay || 0;
     state.lookFreeze = lookFreeze;
@@ -7075,6 +7157,29 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         'material.w transported detail',
         'fireLayer.x flame',
         'fireLayer.w combustion front',
+        'micro smoke/interface',
+        FRONT_FIELD_IDENTITY,
+        'curlAtCell',
+      ],
+    };
+    state.farSmokeReceiver = {
+      identity: FAR_SMOKE_RECEIVER_IDENTITY,
+      slotPolicy: 'single-grid-render-continuation-no-second-pressure-volume-v0',
+      authoritySource: 'upper-current-grid-smoke-activity-carrier-v0',
+      receiverKind: 'raymarch-extent-overlap-continuation-prototype',
+      pressurePlan: 'p2-p3-first-p4-assay-later-v0',
+      active: normalizeVolumeScene(controlsSnapshot.volumeScene) === 'tall_plume' && uniforms[336] > 0.001,
+      range: uniforms[336],
+      overlap: uniforms[337],
+      carrier: uniforms[338],
+      rimCurl: uniforms[339],
+      raymarchExtentY: 1 + uniforms[336] * 1.15,
+      target: 'large-tall-smoke-continuation-before-second-volume-solver-v0',
+      supportChannels: [
+        'material.x smoke density',
+        'material.y heat',
+        'material.w transported detail',
+        'fireLayer.w combustion front remnant',
         'micro smoke/interface',
         FRONT_FIELD_IDENTITY,
         'curlAtCell',
@@ -9031,6 +9136,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         smokeLifecycleRenderer: state.smokeLifecycleRenderer ? { ...state.smokeLifecycleRenderer } : null,
         smokeMorphologyForces: state.smokeMorphologyForces ? { ...state.smokeMorphologyForces } : null,
         smokeArtifactAssayControls: state.smokeArtifactAssayControls ? { ...state.smokeArtifactAssayControls } : null,
+        explosionPlumeSmokeDynamics: state.explosionPlumeSmokeDynamics ? { ...state.explosionPlumeSmokeDynamics } : null,
+        farSmokeReceiver: state.farSmokeReceiver ? { ...state.farSmokeReceiver } : null,
         plumeHeight: state.plumeHeight,
         bonfireAblation: { ...state.bonfireAblation },
         externalEmitterMode: state.externalEmitterMode,
@@ -9353,6 +9460,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       smokeLifecycleRenderer: state.smokeLifecycleRenderer ? { ...state.smokeLifecycleRenderer } : null,
       smokeMorphologyForces: state.smokeMorphologyForces ? { ...state.smokeMorphologyForces } : null,
       smokeArtifactAssayControls: state.smokeArtifactAssayControls ? { ...state.smokeArtifactAssayControls } : null,
+      explosionPlumeSmokeDynamics: state.explosionPlumeSmokeDynamics ? { ...state.explosionPlumeSmokeDynamics } : null,
+      farSmokeReceiver: state.farSmokeReceiver ? { ...state.farSmokeReceiver } : null,
       plumeHeight: state.plumeHeight,
       windStrength: state.windStrength,
       windAngle: state.windAngle,

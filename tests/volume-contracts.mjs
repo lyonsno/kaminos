@@ -77,6 +77,20 @@ for (const plumeControl of [
 }
 assert.match(index, /data-volume-control-section="explosion-plume-dynamics"[\s\S]*volume-smoke-plume-stem-focus[\s\S]*volume-smoke-plume-age-contrast/, 'explosion plume controls sit in their own top-of-volume section');
 assert.match(index, /EXPLOSION_PLUME_CONTROL_FIELDS[\s\S]*volume_smoke_plume_stem_focus[\s\S]*volume_smoke_plume_age_contrast/, 'explosion plume routes and listeners are table-driven');
+for (const receiverControl of [
+  ['farSmokeReceiverRange', 'volume-far-smoke-receiver-range', 'volume_far_smoke_receiver_range'],
+  ['farSmokeReceiverOverlap', 'volume-far-smoke-receiver-overlap', 'volume_far_smoke_receiver_overlap'],
+  ['farSmokeReceiverCarrier', 'volume-far-smoke-receiver-carrier', 'volume_far_smoke_receiver_carrier'],
+  ['farSmokeReceiverRimCurl', 'volume-far-smoke-receiver-rim-curl', 'volume_far_smoke_receiver_rim_curl'],
+]) {
+  const [key, id, param] = receiverControl;
+  assert.match(index, new RegExp(`id="${id}"[^>]+min="0"[^>]+max="1"`), `${key} far-smoke receiver slider exposes the full zero-to-one assay range`);
+  assert.match(index, new RegExp(`${param}`), `${key} far-smoke receiver slider is routable for exact operator smoke replay`);
+  assert.match(index, new RegExp(`${key}:\\s*parseFloat\\(document\\.getElementById\\('${id}'\\)\\.value\\)`), `${key} reaches readVolumeControls`);
+  assert.match(index, new RegExp(`${id}-val`), `${key} has a visible live value readout`);
+}
+assert.match(index, /data-volume-control-section="far-smoke-receiver"[\s\S]*volume-far-smoke-receiver-range[\s\S]*volume-far-smoke-receiver-rim-curl/, 'far smoke receiver controls sit in their own top-of-volume section');
+assert.match(index, /FAR_SMOKE_RECEIVER_CONTROL_FIELDS[\s\S]*volume_far_smoke_receiver_range[\s\S]*volume_far_smoke_receiver_rim_curl/, 'far smoke receiver routes and listeners are table-driven');
 assert.match(index, /boundary_fire_bonfire_a_la_ruffles_0709:[\s\S]*reactionLiveView:\s*'boundary_fire'/, 'Boundary Fire Bonfire_a_la_ruffles basin activates boundary-fire as the default live fire view');
 assert.match(index, /boundary_fire_bonfire_a_la_ruffles_0709:[\s\S]*boundarySidecarSource:\s*'baked'[\s\S]*boundarySidecarBlur:\s*1\.00[\s\S]*boundarySidecarWidth:\s*2\.00[\s\S]*boundarySidecarRidge:\s*2\.00/, 'Boundary Fire Bonfire_a_la_ruffles basin uses the promoted baked sidecar reconstruction path');
 assert.match(index, /boundary_fire_bonfire_a_la_ruffles_0709:[\s\S]*reactionBoundaryFireRidge:\s*1\.28[\s\S]*reactionBoundaryFireRidgeCut:\s*0\.10[\s\S]*reactionBoundaryFireLuma:\s*5\.00/, 'Boundary Fire Bonfire_a_la_ruffles basin preserves the promoted ridge and luma values');
@@ -1026,23 +1040,34 @@ assert.match(core, /SMOKE_ARTIFACT_ASSAY_IDENTITY\s*=\s*'smoke-artifact-assay-co
 assert.match(core, /smoke_artifact_assay_controls:\s*vec4<f32>/, 'fluid uniforms carry smoke artifact assay controls explicitly');
 assert.match(core, /EXPLOSION_PLUME_SMOKE_DYNAMICS_IDENTITY\s*=\s*'explosion-plume-smoke-dynamics-v0'/, 'volume core names the explosion plume smoke dynamics receipt');
 assert.match(core, /explosion_plume_controls:\s*vec4<f32>/, 'fluid uniforms carry explosion plume dynamics controls explicitly');
-assert.match(core, /const uniforms = new Float32Array\(352\)/, 'adding explosion plume controls shifts the uniform buffer deliberately');
-assert.match(core, /uniforms\.set\(previousViewProj\.elements,\s*336\)/, 'previous view-projection matrix starts after the explosion plume controls');
+assert.match(core, /FAR_SMOKE_RECEIVER_IDENTITY\s*=\s*'far-smoke-overlap-render-receiver-v0'/, 'volume core names the far-smoke receiver prototype receipt');
+assert.match(core, /far_smoke_receiver_controls:\s*vec4<f32>/, 'fluid uniforms carry far-smoke receiver controls explicitly');
+assert.match(core, /const uniforms = new Float32Array\(356\)/, 'adding far-smoke receiver controls shifts the uniform buffer deliberately');
+assert.match(core, /uniforms\.set\(previousViewProj\.elements,\s*340\)/, 'previous view-projection matrix starts after the far-smoke receiver controls');
 assert.match(core, /clampFinite\(controlsSnapshot\.smokeFineBreakupGain,\s*0,\s*1,\s*0\)/, 'Fine Breakup uses a zero fallback so missing routes do not re-enable the culprit');
 assert.match(core, /clampFinite\(controlsSnapshot\.smokeRenderProceduralGain,\s*0,\s*1,\s*0\)/, 'Render Breakup uses a zero fallback so missing routes do not re-enable the culprit');
 assert.match(core, /defaultPolicy:\s*'fine-and-render-breakup-default-zero-opt-in-reverse-assay-v0'/, 'smoke artifact assay receipt names the default-killed culprit policy');
 assert.match(core, /fn explosionPlumeSmokeForce/, 'fluid shader has an explosion-plume force separate from generic smoke morphology');
 assert.match(core, /explosionPlumeStem[\s\S]*explosionPlumeEntrainment[\s\S]*explosionPlumeCapRoll/, 'explosion plume force names stem, entrainment, and cap-roll terms explicitly');
+assert.match(core, /fn farSmokeReceiverSample/, 'raymarch shader has a named far-smoke render receiver sampler');
+assert.match(core, /farSmokeRaymarchExtent/, 'raymarch shader expands the smoke box from far-smoke receiver controls instead of hard-clipping at the cube');
+assert.match(core, /receiverSupport/, 'far-smoke receiver names its support term explicitly');
+assert.match(core, /overlapWeight/, 'far-smoke receiver names its overlap term explicitly');
+assert.match(core, /rimCurl/, 'far-smoke receiver names its rim-curl term explicitly');
 assert.match(core, /vel\s*=\s*vel\s*\+\s*explosionPlumeForce\s*\*\s*activityVorticityGate/, 'explosion plume dynamics inject into velocity through the existing activity vorticity gate');
 assert.match(core, /explosionPlumeSmokeDynamics:\s*\{[\s\S]*identity:\s*EXPLOSION_PLUME_SMOKE_DYNAMICS_IDENTITY[\s\S]*slotPolicy:\s*'existing-material-fire-micro-front-fields-no-new-channel-v0'/, 'debug state reports explosion plume dynamics authority and no-new-channel slot policy');
+assert.match(core, /farSmokeReceiver:\s*\{[\s\S]*identity:\s*FAR_SMOKE_RECEIVER_IDENTITY[\s\S]*slotPolicy:\s*'single-grid-render-continuation-no-second-pressure-volume-v0'/, 'debug state reports far-smoke receiver authority and first-slice single-grid policy');
+assert.match(core, /pressurePlan:\s*'p2-p3-first-p4-assay-later-v0'/, 'far-smoke receiver receipt preserves the P2/P3-first pressure posture');
 assert.match(core, /rawDetailForce[\s\S]*smokeArtifactDetailForceGain/, 'sim detail force can be killed independently by the assay control');
 assert.match(core, /rawFineBreakup[\s\S]*smokeArtifactFineBreakupGain/, 'fine breakup force can be killed independently by the assay control');
 assert.match(core, /smokeMorphologyGain = tallPlumeScene \* clamp\(u\.smoke_artifact_assay_controls\.z/, 'smoke morphology force can be killed independently by the assay control');
 assert.match(core, /smokeRenderProceduralGain[\s\S]*filamentNoise[\s\S]*curtainNoise[\s\S]*verticalPuffBreak/, 'render procedural smoke breakup can be killed independently by the assay control');
 assert.match(core, /smokeArtifactAssayControls[\s\S]*SMOKE_ARTIFACT_ASSAY_IDENTITY[\s\S]*detailForce[\s\S]*renderProcedural/, 'debug state reports effective smoke artifact assay gains');
 assert.match(core, /explosionPlumeSmokeDynamics[\s\S]*stemFocus[\s\S]*entrainment[\s\S]*capRoll[\s\S]*ageContrast/, 'debug state reports effective explosion plume dynamics gains');
+assert.match(core, /farSmokeReceiver[\s\S]*range[\s\S]*overlap[\s\S]*carrier[\s\S]*rimCurl/, 'debug state reports effective far-smoke receiver gains');
 assert.match(volumeWitness, /smokeArtifactAssayControls/, 'volume witness preserves smoke artifact assay receipts in reports');
 assert.match(volumeWitness, /explosionPlumeSmokeDynamics/, 'volume witness preserves explosion plume dynamics receipts in reports');
+assert.match(volumeWitness, /farSmokeReceiver/, 'volume witness preserves far-smoke receiver receipts in reports');
 assert.match(core, /microDetailDomainWarp\([^)]*detailCoherenceGain/, 'raymarch microdetail warp accepts a scene-gated detail coherence gain');
 assert.match(core, /bonfireRadialFireLickBreakup/, 'bonfire fire-lick breakup uses radial source-local texture rather than one-sided directional combs');
 assert.match(core, /bonfireDetailLateralDamping/, 'bonfire detail forces damp non-wind lateral breakup so Shred/Fire Licks do not impersonate wind');
@@ -1305,7 +1330,7 @@ assert.match(core, /uniforms\[203\]\s*=\s*pyroRadianceChroma/, 'CPU uploads Radi
 assert.match(core, /uniforms\[212\]\s*=\s*pyroFlamePaint/, 'CPU uploads flame paint gain into the Pyro luma uniform block');
 assert.match(core, /uniforms\[213\]\s*=\s*pyroFlameLuma/, 'CPU uploads flame luminance into the Pyro luma uniform block');
 assert.match(core, /writePyroPaletteUniform/, 'CPU uploads editable Pyro palette color endpoints');
-assert.match(core, /uniforms\.set\(previousViewProj\.elements,\s*336\)/, 'previous view-projection matrix shifts after Bite-stack, flow, palette, topology-shell lab, boundary-fire, boundary sidecar reconstruction, sidecar display, scalar activity receiver, activity-tier, smoke artifact assay, and explosion-plume uniforms');
+assert.match(core, /uniforms\.set\(previousViewProj\.elements,\s*340\)/, 'previous view-projection matrix shifts after Bite-stack, flow, palette, topology-shell lab, boundary-fire, boundary sidecar reconstruction, sidecar display, scalar activity receiver, activity-tier, smoke artifact assay, explosion-plume, and far-smoke receiver uniforms');
 assert.match(core, /paletteShape/, 'debug state exposes editable Pyro palette shape');
 assert.match(core, /lumaShape/, 'debug state exposes independent Pyro luma shape');
 assert.match(core, /radianceShape/, 'debug state exposes Pyro radiance gate/spill/warmth shape');

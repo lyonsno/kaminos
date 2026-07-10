@@ -2042,6 +2042,10 @@ async function main() {
     assert.equal(state.explosionPlumeSmokeDynamics?.identity, 'explosion-plume-smoke-dynamics-v0', 'explosion plume smoke dynamics identity did not reach debug state');
     assert.equal(state.explosionPlumeSmokeDynamics?.slotPolicy, 'existing-material-fire-micro-front-fields-no-new-channel-v0', 'explosion plume smoke dynamics must report the existing-field slot policy');
     assert.ok(Number.isFinite(state.explosionPlumeSmokeDynamics?.entrainment), 'explosion plume entrainment gain did not reach debug state');
+    assert.equal(state.farSmokeReceiver?.identity, 'far-smoke-overlap-render-receiver-v0', 'far smoke receiver identity did not reach debug state');
+    assert.equal(state.farSmokeReceiver?.slotPolicy, 'single-grid-render-continuation-no-second-pressure-volume-v0', 'far smoke receiver must report its first-slice single-grid policy');
+    assert.ok(Number.isFinite(state.farSmokeReceiver?.range), 'far smoke receiver range gain did not reach debug state');
+    assert.equal(state.farSmokeReceiver?.pressurePlan, 'p2-p3-first-p4-assay-later-v0', 'far smoke receiver did not preserve the P2/P3-first pressure plan');
     assert.ok(Math.abs((state.controls?.gridOverlay || 0) - expectedGridOverlay) < 0.001, 'fluid grid overlay did not apply route/debug state');
     assert.ok(Math.abs((state.controls?.raySteps ?? 0) - expectedRaySteps) < 0.001, 'ray-step route/control did not apply');
     assert.ok(Math.abs((state.controls?.adaptiveRays ?? 0) - expectedAdaptiveRays) < 0.001, 'adaptive raymarch route/control did not apply');
@@ -3091,6 +3095,7 @@ async function main() {
       smokeMorphologyForces: sample.smokeMorphologyForces || state.smokeMorphologyForces || null,
       smokeArtifactAssayControls: sample.smokeArtifactAssayControls || state.smokeArtifactAssayControls || null,
       explosionPlumeSmokeDynamics: sample.explosionPlumeSmokeDynamics || state.explosionPlumeSmokeDynamics || null,
+      farSmokeReceiver: sample.farSmokeReceiver || state.farSmokeReceiver || null,
       boundaryFireShellEvidence,
       runtimeQualityRequested: sample.runtimeQualityRequested,
       runtimeQualityEffective: sample.runtimeQualityEffective,

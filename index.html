@@ -1054,6 +1054,29 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
         <span class="slider-val" id="volume-smoke-plume-age-contrast-val">0.35</span>
       </div>
     </div>
+    <div class="volume-control-section" data-volume-control-section="far-smoke-receiver">
+      <div class="volume-control-section-title">Far Smoke Receiver</div>
+      <div class="slider-row">
+        <span class="slider-label">Range</span>
+        <input type="range" id="volume-far-smoke-receiver-range" min="0" max="1" step="0.05" value="0.55">
+        <span class="slider-val" id="volume-far-smoke-receiver-range-val">0.55</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Overlap</span>
+        <input type="range" id="volume-far-smoke-receiver-overlap" min="0" max="1" step="0.05" value="0.45">
+        <span class="slider-val" id="volume-far-smoke-receiver-overlap-val">0.45</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Carrier</span>
+        <input type="range" id="volume-far-smoke-receiver-carrier" min="0" max="1" step="0.05" value="0.70">
+        <span class="slider-val" id="volume-far-smoke-receiver-carrier-val">0.70</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Rim Curl</span>
+        <input type="range" id="volume-far-smoke-receiver-rim-curl" min="0" max="1" step="0.05" value="0.40">
+        <span class="slider-val" id="volume-far-smoke-receiver-rim-curl-val">0.40</span>
+      </div>
+    </div>
     <div class="slider-row">
       <span class="slider-label">Scene</span>
       <select id="volume-scene" class="select-input">
@@ -11853,6 +11876,12 @@ const EXPLOSION_PLUME_CONTROL_FIELDS = [
   { key: 'smokePlumeCapRoll', id: 'volume-smoke-plume-cap-roll', param: 'volume_smoke_plume_cap_roll', min: 0, max: 1, decimals: 2 },
   { key: 'smokePlumeAgeContrast', id: 'volume-smoke-plume-age-contrast', param: 'volume_smoke_plume_age_contrast', min: 0, max: 1, decimals: 2 },
 ];
+const FAR_SMOKE_RECEIVER_CONTROL_FIELDS = [
+  { key: 'farSmokeReceiverRange', id: 'volume-far-smoke-receiver-range', param: 'volume_far_smoke_receiver_range', min: 0, max: 1, decimals: 2 },
+  { key: 'farSmokeReceiverOverlap', id: 'volume-far-smoke-receiver-overlap', param: 'volume_far_smoke_receiver_overlap', min: 0, max: 1, decimals: 2 },
+  { key: 'farSmokeReceiverCarrier', id: 'volume-far-smoke-receiver-carrier', param: 'volume_far_smoke_receiver_carrier', min: 0, max: 1, decimals: 2 },
+  { key: 'farSmokeReceiverRimCurl', id: 'volume-far-smoke-receiver-rim-curl', param: 'volume_far_smoke_receiver_rim_curl', min: 0, max: 1, decimals: 2 },
+];
 
 function normalizeReactionFrontLiveView(value) {
   const mode = String(value || 'off').toLowerCase().replace(/-/g, '_');
@@ -12006,6 +12035,7 @@ const VOLUME_BASIN_ROUTE_FIELDS = [
   ['boundarySidecarView', 'volume_boundary_sidecar_view'],
   ...SMOKE_ARTIFACT_ASSAY_CONTROL_FIELDS.map(field => [field.key, field.param]),
   ...EXPLOSION_PLUME_CONTROL_FIELDS.map(field => [field.key, field.param]),
+  ...FAR_SMOKE_RECEIVER_CONTROL_FIELDS.map(field => [field.key, field.param]),
   ...REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS.map(field => [field.key, field.param]),
 ];
 
@@ -16642,6 +16672,10 @@ function readVolumeControls() {
     smokePlumeEntrainment: parseFloat(document.getElementById('volume-smoke-plume-entrainment').value),
     smokePlumeCapRoll: parseFloat(document.getElementById('volume-smoke-plume-cap-roll').value),
     smokePlumeAgeContrast: parseFloat(document.getElementById('volume-smoke-plume-age-contrast').value),
+    farSmokeReceiverRange: parseFloat(document.getElementById('volume-far-smoke-receiver-range').value),
+    farSmokeReceiverOverlap: parseFloat(document.getElementById('volume-far-smoke-receiver-overlap').value),
+    farSmokeReceiverCarrier: parseFloat(document.getElementById('volume-far-smoke-receiver-carrier').value),
+    farSmokeReceiverRimCurl: parseFloat(document.getElementById('volume-far-smoke-receiver-rim-curl').value),
     pressureMode: pressureConfig.pressureMode,
     pressureEffectiveLabel: pressureConfig.pressureEffectiveLabel,
     pressureTierOverlay: parseFloat(document.getElementById('volume-pressure-tier-overlay').value),
@@ -16813,6 +16847,10 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-smoke-plume-entrainment-val').textContent = c.smokePlumeEntrainment.toFixed(2);
   document.getElementById('volume-smoke-plume-cap-roll-val').textContent = c.smokePlumeCapRoll.toFixed(2);
   document.getElementById('volume-smoke-plume-age-contrast-val').textContent = c.smokePlumeAgeContrast.toFixed(2);
+  document.getElementById('volume-far-smoke-receiver-range-val').textContent = c.farSmokeReceiverRange.toFixed(2);
+  document.getElementById('volume-far-smoke-receiver-overlap-val').textContent = c.farSmokeReceiverOverlap.toFixed(2);
+  document.getElementById('volume-far-smoke-receiver-carrier-val').textContent = c.farSmokeReceiverCarrier.toFixed(2);
+  document.getElementById('volume-far-smoke-receiver-rim-curl-val').textContent = c.farSmokeReceiverRimCurl.toFixed(2);
   const pressureMode = normalizeVolumePressureMode(c.pressureMode);
   if (pressureMode !== document.getElementById('volume-pressure-mode').value) setVolumeControlValue('volume-pressure-mode', pressureMode);
   document.getElementById('volume-pressure-mode-val').textContent = c.pressureEffectiveLabel || effectivePressureModeLabel(pressureMode, c.pressureIterations ?? defaultVolumePressureIterationsForScene(c.volumeScene));
@@ -17276,6 +17314,12 @@ async function initKaminosVolumeRoute() {
       document.getElementById(field.id).value = String(Math.max(field.min, Math.min(field.max, routed)));
     }
   }
+  for (const field of FAR_SMOKE_RECEIVER_CONTROL_FIELDS) {
+    const routed = Number(params.get(field.param));
+    if (params.has(field.param) && Number.isFinite(routed)) {
+      document.getElementById(field.id).value = String(Math.max(field.min, Math.min(field.max, routed)));
+    }
+  }
   const routePyroDynamicDetail = Number(params.get('volume_pyro_detail'));
   if (params.has('volume_pyro_detail') && Number.isFinite(routePyroDynamicDetail)) {
     document.getElementById('volume-pyro-detail').value = String(Math.max(0, Math.min(1, Math.round(routePyroDynamicDetail))));
@@ -17692,6 +17736,10 @@ async function initKaminosVolumeRoute() {
     document.getElementById(field.id)?.addEventListener('change', syncControls);
   }
   for (const field of EXPLOSION_PLUME_CONTROL_FIELDS) {
+    document.getElementById(field.id)?.addEventListener('input', syncControls);
+    document.getElementById(field.id)?.addEventListener('change', syncControls);
+  }
+  for (const field of FAR_SMOKE_RECEIVER_CONTROL_FIELDS) {
     document.getElementById(field.id)?.addEventListener('input', syncControls);
     document.getElementById(field.id)?.addEventListener('change', syncControls);
   }
