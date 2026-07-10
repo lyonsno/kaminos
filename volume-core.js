@@ -9,6 +9,7 @@ const FULL_FIELD_BUFFER_OVERRIDE_IDENTITY = 'debug-full-field-buffer-render-over
 const PYRO_FULL_FIELD_OVERRIDE_RENDER_STATE_REFRESH_STEPS = 4;
 const BOUNDARY_SIDECAR_IDENTITY = 'baked-boundary-sidecar-v1';
 const BOUNDARY_SIDECAR_BAKE_AUTHORITY = 'band-limited-support-coverage-ridge-footprint-proximity-normal-v2';
+const BOUNDARY_SIDECAR_THRESHOLD_IDENTITY = 'calibrated-standard-mlp-sparse-cue-thresholds-v0';
 const TEMPORAL_SIDECAR_IDENTITY = 'temporal-boundary-sidecar-history-v0';
 const TRUTH_ORACLE_ACTIVITY_RECEIVER_IDENTITY = 'truth-oracle-scalar-activity-receiver-v0';
 const TRUTH_ORACLE_ACTIVITY_CUE_AUTHORITY = 'truth-high-diagnostic-activity-projected-to-receiver-grid-v0';
@@ -153,6 +154,16 @@ function boundarySidecarViewValue(value) {
   if (normalized === 'footprint') return 5;
   if (normalized === 'normal') return 6;
   return 0;
+}
+
+function boundarySidecarThresholdControls(controls = {}) {
+  return {
+    identity: BOUNDARY_SIDECAR_THRESHOLD_IDENTITY,
+    support: clampFinite(controls.supportThreshold ?? controls.boundarySidecarSupportThreshold, 0, 1, 0),
+    ridge: clampFinite(controls.ridgeThreshold ?? controls.boundarySidecarRidgeThreshold, 0, 1, 0),
+    proximity: clampFinite(controls.proximityThreshold ?? controls.boundarySidecarProximityThreshold, 0, 1, 0),
+    learnedCueFamily: 'standard-radius2-mlp-support-ridge-proximity-v0',
+  };
 }
 
 function normalizeWindStrength(value) {
@@ -1221,6 +1232,15 @@ fn sampleWorldBoundarySidecarMeta(p: vec3<f32>) -> vec4<f32> {
   let y0 = mix(x00, x10, f.y);
   let y1 = mix(x01, x11, f.y);
   return mix(y0, y1, f.z);
+}
+
+fn thresholdedSparseCue(value: f32, threshold: f32) -> f32 {
+  let cut = clamp(threshold, 0.0, 1.0);
+  if (cut <= 0.00001) {
+    return value;
+  }
+  let width = max(0.025, cut * 0.35);
+  return value * smoothstep(cut, cut + width, value);
 }
 
 fn majorantIndex(c: vec3<u32>) -> u32 {
@@ -3998,8 +4018,10 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
         let boundarySidecarMetaSample = sampleWorldBoundarySidecarMeta(p);
         boundarySidecarDebugSample = boundarySidecarSample;
         boundarySidecarDebugMetaSample = boundarySidecarMetaSample;
-        let boundarySidecarCoverage = boundarySidecarSample.y;
-        let boundarySidecarProximity = clamp(boundarySidecarMetaSample.x, 0.0, 1.8);
+        let boundarySidecarSupportThresholded = thresholdedSparseCue(boundarySidecarSample.x, u.boundary_sidecar_display.y);
+        let boundarySidecarRidgeThresholded = thresholdedSparseCue(boundarySidecarSample.z, u.boundary_sidecar_display.z);
+        let boundarySidecarProximity = clamp(thresholdedSparseCue(boundarySidecarMetaSample.x, u.boundary_sidecar_display.w), 0.0, 1.8);
+        let boundarySidecarCoverage = boundarySidecarSample.y * smoothstep(0.0, 0.0001 + max(u.boundary_sidecar_display.y, u.boundary_sidecar_display.w), max(boundarySidecarSupportThresholded, boundarySidecarProximity));
         let boundarySidecarNormalLen = length(boundarySidecarMetaSample.yzw);
         let boundarySidecarNormal = boundarySidecarMetaSample.yzw / max(boundarySidecarNormalLen, 0.0001);
         let boundarySidecarNormalViewGain = mix(
@@ -4008,9 +4030,9 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
           smoothstep(0.05, 0.25, boundarySidecarNormalLen)
         );
         let boundarySidecarFootprintWidth = boundarySidecarSample.w;
-        boundarySupportEffective = max(boundarySidecarSample.x, boundarySidecarProximity * 0.36);
-        boundaryGradientEffective = max(boundarySidecarCoverage, boundarySidecarSample.z * 0.55) * (1.0 + boundarySidecarFootprintWidth * 0.18) * boundarySidecarNormalViewGain;
-        boundaryFireRidgeEffective = boundarySidecarSample.z;
+        boundarySupportEffective = max(boundarySidecarSupportThresholded, boundarySidecarProximity * 0.36);
+        boundaryGradientEffective = max(boundarySidecarCoverage, boundarySidecarRidgeThresholded * 0.55) * (1.0 + boundarySidecarFootprintWidth * 0.18) * boundarySidecarNormalViewGain;
+        boundaryFireRidgeEffective = boundarySidecarRidgeThresholded;
         boundarySidecarStepFootprintWidth = boundarySidecarNormalViewGain * clamp(u.boundary_sidecar_controls.z, 0.0, 2.0) * max(dtBase * f32(GRID) * 0.046, boundarySidecarFootprintWidth * 0.036);
       } else {
         let boundarySupport = liveBoundarySupportAt(p, boundarySupportWeights);
@@ -4035,8 +4057,10 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
           let boundarySidecarMetaSample = sampleWorldBoundarySidecarMeta(p);
           boundarySidecarDebugSample = boundarySidecarSample;
           boundarySidecarDebugMetaSample = boundarySidecarMetaSample;
-          let boundarySidecarCoverage = boundarySidecarSample.y;
-          let boundarySidecarProximity = clamp(boundarySidecarMetaSample.x, 0.0, 1.8);
+          let boundarySidecarSupportThresholded = thresholdedSparseCue(boundarySidecarSample.x, u.boundary_sidecar_display.y);
+          let boundarySidecarRidgeThresholded = thresholdedSparseCue(boundarySidecarSample.z, u.boundary_sidecar_display.z);
+          let boundarySidecarProximity = clamp(thresholdedSparseCue(boundarySidecarMetaSample.x, u.boundary_sidecar_display.w), 0.0, 1.8);
+          let boundarySidecarCoverage = boundarySidecarSample.y * smoothstep(0.0, 0.0001 + max(u.boundary_sidecar_display.y, u.boundary_sidecar_display.w), max(boundarySidecarSupportThresholded, boundarySidecarProximity));
           let boundarySidecarNormalLen = length(boundarySidecarMetaSample.yzw);
           let boundarySidecarNormal = boundarySidecarMetaSample.yzw / max(boundarySidecarNormalLen, 0.0001);
           let boundarySidecarNormalViewGain = mix(
@@ -4045,9 +4069,9 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
             smoothstep(0.05, 0.25, boundarySidecarNormalLen)
           );
           let boundarySidecarFootprintWidth = boundarySidecarSample.w;
-          boundarySupportEffective = mix(boundarySupport, boundarySidecarSample.x, 0.5);
+          boundarySupportEffective = mix(boundarySupport, boundarySidecarSupportThresholded, 0.5);
           boundaryGradientEffective = mix(boundaryGradient, max(boundarySidecarCoverage, boundarySidecarProximity * 0.50) * boundarySidecarNormalViewGain, 0.5);
-          boundaryFireRidgeEffective = mix(boundaryFireRidge, boundarySidecarSample.z, 0.5);
+          boundaryFireRidgeEffective = mix(boundaryFireRidge, boundarySidecarRidgeThresholded, 0.5);
           boundarySidecarStepFootprintWidth = 0.5 * boundarySidecarNormalViewGain * clamp(u.boundary_sidecar_controls.z, 0.0, 2.0) * max(dtBase * f32(GRID) * 0.046, boundarySidecarFootprintWidth * 0.036);
         }
       }
@@ -5310,6 +5334,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       blur: clampFinite(controls.blur ?? controlsSnapshot.boundarySidecarBlur, 0, 1, 0.45),
       stepWidth: clampFinite(controls.stepWidth ?? controlsSnapshot.boundarySidecarWidth, 0, 2, 0.75),
       ridgeGain: clampFinite(controls.ridgeGain ?? controlsSnapshot.boundarySidecarRidge, 0, 2, 1),
+      thresholdIdentity: BOUNDARY_SIDECAR_THRESHOLD_IDENTITY,
+      boundarySidecarThresholds: boundarySidecarThresholdControls(controlsSnapshot.boundarySidecarControls || controlsSnapshot),
       grid: gridSize,
       bytes: boundarySidecarBufferBytes(gridSize),
       metaBytes: boundarySidecarMetaBufferBytes(gridSize),
@@ -6645,9 +6671,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     uniforms[310] = clampFinite(boundarySidecarControls.stepWidth ?? controlsSnapshot.boundarySidecarWidth, 0, 2, 0.75);
     uniforms[311] = clampFinite(boundarySidecarControls.ridgeGain ?? controlsSnapshot.boundarySidecarRidge, 0, 2, 1);
     uniforms[312] = boundarySidecarViewValue(boundarySidecarViewName);
-    uniforms[313] = 0;
-    uniforms[314] = 0;
-    uniforms[315] = 0;
+    const boundarySidecarThresholds = boundarySidecarThresholdControls(boundarySidecarControls);
+    uniforms[313] = boundarySidecarThresholds.support;
+    uniforms[314] = boundarySidecarThresholds.ridge;
+    uniforms[315] = boundarySidecarThresholds.proximity;
     const scalarActivityReceiver = normalizeScalarActivityReceiverControls(controlsSnapshot);
     const externalCueActive = oracleActivityCueUpload.status === 'uploaded' && oracleActivityCueUpload.externalCueCellCount > 0;
     uniforms[316] = scalarActivityReceiver.enabled;
