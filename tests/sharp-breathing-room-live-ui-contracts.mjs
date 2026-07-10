@@ -335,6 +335,21 @@ assert.match(
 );
 assert.match(
   index,
+  /async function confirmSharpBreathingRoomKilnFireReleased\(/,
+  'Kiln-fire release must confirm the visible volume canvas has actually left its active state before the smoke reports completion',
+);
+assert.match(
+  index,
+  /canvasElement\(\)\?\.classList\?\.contains\('active'\)/,
+  'Release confirmation must inspect the DOM canvas active class, not only the volume debug object',
+);
+assert.match(
+  index,
+  /await confirmSharpBreathingRoomKilnFireReleased\('sharp-breathing-room-release'\)/,
+  'Completed SHARP routes must wait for confirmed visible furnace release before returning control to the operator',
+);
+assert.match(
+  index,
   /composition:\s*'dom-webgpu-canvas-no-copy'/,
   'The volume bridge must name the no-copy DOM overlay path so fire visibility does not depend on a WebGPU canvas texture upload',
 );

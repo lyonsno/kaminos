@@ -12553,6 +12553,44 @@ async function beginSharpBreathingRoomKilnFire({ profileId, source, pipelineId }
   }
 }
 
+async function confirmSharpBreathingRoomKilnFireReleased(reason = 'sharp-breathing-room-release') {
+  const canvas = volumePrototype?.canvasElement?.() || null;
+  const releaseEvidence = {
+    schema: 'kaminos.sharp-breathing-room.kiln-fire-release-confirmation.v0',
+    reason,
+    attempts: [],
+    confirmed: false,
+    forcedCanvasClassRemoval: false,
+  };
+  const settleFrame = () => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    if (volumePrototype?.debugState?.().active === true || volumePrototype.canvasElement()?.classList?.contains('active')) {
+      await volumePrototype.setActive(false);
+    }
+    volumeBridge?.forceHidden?.(reason);
+    window._kaminosDirty?.();
+    await settleFrame();
+    const volumeActive = volumePrototype?.debugState?.().active === true;
+    const canvasActive = volumePrototype.canvasElement()?.classList?.contains('active') === true;
+    releaseEvidence.attempts.push({ attempt: attempt + 1, volumeActive, canvasActive });
+    if (!volumeActive && !canvasActive) {
+      releaseEvidence.confirmed = true;
+      return releaseEvidence;
+    }
+  }
+  if (canvas?.classList?.contains('active')) {
+    canvas.classList.remove('active');
+    releaseEvidence.forcedCanvasClassRemoval = true;
+    window._kaminosDirty?.();
+    await settleFrame();
+  }
+  const finalVolumeActive = volumePrototype?.debugState?.().active === true;
+  const finalCanvasActive = canvas?.classList?.contains('active') === true;
+  releaseEvidence.final = { volumeActive: finalVolumeActive, canvasActive: finalCanvasActive };
+  releaseEvidence.confirmed = !finalVolumeActive && !finalCanvasActive;
+  return releaseEvidence;
+}
+
 async function endSharpBreathingRoomKilnFire(phase = 'complete', options = {}) {
   const fireState = window.__kaminosSharpBreathingRoomKilnFireState || null;
   if (!fireState) return null;
@@ -12560,14 +12598,15 @@ async function endSharpBreathingRoomKilnFire(phase = 'complete', options = {}) {
   fireState.phase = phase;
   fireState.finishedAt = new Date().toISOString();
   if ((fireState.activatedByRun || forceInactive) && volumePrototype) {
-    await volumePrototype.setActive(false);
     volumeBridge?.forceHidden?.('sharp-breathing-room-release');
-    window._kaminosDirty?.();
-    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    const releaseConfirmation = await confirmSharpBreathingRoomKilnFireReleased('sharp-breathing-room-release');
     fireState.volumeReleased = true;
+    fireState.volumeReleaseConfirmed = releaseConfirmation.confirmed;
+    fireState.volumeReleaseConfirmation = releaseConfirmation;
     fireState.forcedRelease = forceInactive && !fireState.activatedByRun;
   } else {
     fireState.volumeReleased = false;
+    fireState.volumeReleaseConfirmed = false;
     fireState.forcedRelease = false;
   }
   fireState.volumeDebugState = volumePrototype?.debugState?.() || null;
