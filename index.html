@@ -82,6 +82,24 @@ h2 { font-size: 11px; font-weight: 600; margin: 18px 0 8px; color: #666; text-tr
     .sharp-breathing-room-source-preview { border: 1px solid #2d2d2d; border-radius: 7px; background: #141414; min-height: 150px; margin: 8px 0; overflow: hidden; display: flex; align-items: center; justify-content: center; }
     .sharp-breathing-room-source-preview img { display: block; width: 100%; max-height: 240px; object-fit: contain; background: #101010; }
     .sharp-breathing-room-source-preview.empty { color: #666; font-size: 11px; padding: 14px; text-align: center; }
+    .crucible-bench-panel { border-color: #34302a; background: #211f1b; }
+    .crucible-bench-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+    .crucible-bench-title { color: #f0e1b8; font-size: 13px; font-weight: 700; }
+    .crucible-bench-summary { color: #c8baa0; font-size: 11px; line-height: 1.4; margin-top: 3px; }
+    .crucible-bench-actions { display: flex; gap: 5px; flex-shrink: 0; }
+    .crucible-bench-name-row { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; margin-bottom: 9px; }
+    .crucible-bench-workspace { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+    .crucible-zone { min-height: 74px; border: 1px solid #36322b; border-radius: 7px; background: #191816; padding: 8px; overflow: hidden; }
+    .crucible-zone.primary { grid-column: 1 / -1; min-height: 92px; }
+    .crucible-zone-title { color: #d4c18d; font-size: 10px; font-weight: 700; letter-spacing: 0.7px; text-transform: uppercase; }
+    .crucible-zone-body { color: #8d8679; font-size: 10px; line-height: 1.35; margin-top: 5px; overflow-wrap: anywhere; }
+    .crucible-zone-body.present { color: #cbbf9c; }
+    .crucible-bench-switcher { border-top: 1px solid #34302a; margin-top: 10px; padding-top: 8px; }
+    .crucible-bench-switcher[hidden] { display: none; }
+    .crucible-bench-list { display: grid; gap: 5px; }
+    .crucible-bench-list .btn { width: 100%; text-align: left; margin: 0; }
+    .crucible-bench-list .btn.active { background: #57421f; border-color: #8b6a2f; }
+    .crucible-bench-note { color: #777; font-size: 10px; line-height: 1.35; margin-top: 7px; }
 
 /* Viewport */
 #viewport { flex: 1; position: relative; background: #111; }
@@ -2309,7 +2327,53 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
 
   <!-- Generate Tab -->
   <div class="tab-content" id="tab-generate">
-    <h2>Kiln Route Bench</h2>
+    <h2>Crucible Bench</h2>
+    <div class="panel crucible-bench-panel" id="crucible-bench-panel" data-crucible-bench="active">
+      <div class="crucible-bench-head">
+        <div>
+          <div class="crucible-bench-title" id="crucible-bench-title">Current crucible</div>
+          <div class="crucible-bench-summary" id="crucible-bench-summary">This crucible is holding the current source, firing, cast, and receipt while you work.</div>
+        </div>
+        <div class="crucible-bench-actions">
+          <button type="button" class="btn" id="crucible-bench-switch-button" onclick="toggleCrucibleBenchSwitcher()">Switch</button>
+          <button type="button" class="btn" id="crucible-bench-new-button" onclick="createNewCrucibleBenchCrucible()">New</button>
+        </div>
+      </div>
+      <div class="crucible-bench-name-row">
+        <input class="gen-input" id="crucible-bench-name-input" spellcheck="false" autocomplete="off" placeholder="Name this crucible when it earns one">
+      </div>
+      <div class="crucible-bench-workspace" id="crucible-bench-workspace">
+        <div class="crucible-zone primary" data-crucible-proxy-zone="source-plate">
+          <div class="crucible-zone-title">Source Plate</div>
+          <div class="crucible-zone-body" id="crucible-zone-source-plate">Choose an image below or paste one into the firing station.</div>
+        </div>
+        <div class="crucible-zone" data-crucible-proxy-zone="armature-bay">
+          <div class="crucible-zone-title">Armature Bay</div>
+          <div class="crucible-zone-body" id="crucible-zone-armature-bay">No armature pinned yet.</div>
+        </div>
+        <div class="crucible-zone" data-crucible-proxy-zone="firing-station">
+          <div class="crucible-zone-title">Firing Station</div>
+          <div class="crucible-zone-body" id="crucible-zone-firing-station">SHARP is the active firing route for this crucible.</div>
+        </div>
+        <div class="crucible-zone" data-crucible-proxy-zone="shard-tray">
+          <div class="crucible-zone-title">Shard Tray</div>
+          <div class="crucible-zone-body" id="crucible-zone-shard-tray">No reusable shards yet.</div>
+        </div>
+        <div class="crucible-zone" data-crucible-proxy-zone="cast-tray">
+          <div class="crucible-zone-title">Cast Tray</div>
+          <div class="crucible-zone-body" id="crucible-zone-cast-tray">No casts yet.</div>
+        </div>
+        <div class="crucible-zone" data-crucible-proxy-zone="receipt-tag">
+          <div class="crucible-zone-title">Receipt Tag</div>
+          <div class="crucible-zone-body" id="crucible-zone-receipt-tag">No firing receipt yet.</div>
+        </div>
+      </div>
+      <div class="crucible-bench-switcher" id="crucible-bench-switcher" hidden>
+        <div class="crucible-bench-list" id="crucible-bench-list"></div>
+        <div class="crucible-bench-note">Keep moving; unnamed crucibles stay here while you work.</div>
+      </div>
+    </div>
+    <h2>Firing Station</h2>
     <div class="panel" id="kiln-route-bench-panel" data-kiln-route-bench="generate">
       <div class="kiln-route-bench-summary" id="kiln-route-bench-primary-copy">Choose an image, pick a route, and cook it into an asset.</div>
       <div class="field"><span class="field-key">Route</span><span class="field-val" id="kiln-route-bench-route-label">SHARP image to splat</span></div>
@@ -12413,6 +12477,313 @@ let kilnRouteBenchState = {
 
 let sharpBreathingRoomRunningProfileId = null;
 
+const CRUCIBLE_BENCH_STORAGE_KEY = 'kaminosCrucibleBenchState';
+const CRUCIBLE_BENCH_PROXY_ZONES = [
+  { id: 'source-plate', title: 'Source Plate', accepts: ['image', 'splat', 'proxy-image'] },
+  { id: 'armature-bay', title: 'Armature Bay', accepts: ['geometry-proxy', 'generated-proxy-image'] },
+  { id: 'firing-station', title: 'Firing Station', accepts: ['pipeline-route'] },
+  { id: 'shard-tray', title: 'Shard Tray', accepts: ['segmented-shard', 'reusable-piece'] },
+  { id: 'cast-tray', title: 'Cast Tray', accepts: ['splat', 'mesh', 'material'] },
+  { id: 'receipt-tag', title: 'Receipt Tag', accepts: ['run-report', 'failure-report'] },
+];
+
+function crucibleBenchId(prefix = 'crucible') {
+  return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function createCrucibleBenchCrucible(options = {}) {
+  const now = new Date().toISOString();
+  const name = options.name || '';
+  return {
+    id: options.id || crucibleBenchId(),
+    name,
+    unnamed: !name,
+    createdAt: options.createdAt || now,
+    updatedAt: now,
+    source: null,
+    armatures: [],
+    firings: [],
+    shards: [],
+    casts: [],
+    receipts: [],
+  };
+}
+
+function createDefaultCrucibleBenchState() {
+  const crucible = createCrucibleBenchCrucible();
+  return {
+    schema: 'kaminos.crucible-bench-state.v0',
+    activeCrucibleId: crucible.id,
+    switcherOpen: false,
+    proxyZones: CRUCIBLE_BENCH_PROXY_ZONES,
+    crucibles: [crucible],
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+function crucibleBenchStorage() {
+  try {
+    return window.localStorage || null;
+  } catch (_err) {
+    return null;
+  }
+}
+
+function normalizeCrucibleBenchState(value) {
+  const fallback = createDefaultCrucibleBenchState();
+  if (!value || typeof value !== 'object') return fallback;
+  const crucibles = Array.isArray(value.crucibles) && value.crucibles.length
+    ? value.crucibles.map(entry => ({
+      ...createCrucibleBenchCrucible({
+        id: entry.id || crucibleBenchId(),
+        name: entry.name || '',
+        createdAt: entry.createdAt,
+      }),
+      ...entry,
+      unnamed: !entry.name,
+      firings: Array.isArray(entry.firings) ? entry.firings.slice(0, 12) : [],
+      shards: Array.isArray(entry.shards) ? entry.shards.slice(0, 12) : [],
+      casts: Array.isArray(entry.casts) ? entry.casts.slice(0, 12) : [],
+      receipts: Array.isArray(entry.receipts) ? entry.receipts.slice(0, 12) : [],
+    }))
+    : fallback.crucibles;
+  const activeCrucibleId = crucibles.some(entry => entry.id === value.activeCrucibleId)
+    ? value.activeCrucibleId
+    : crucibles[0].id;
+  return {
+    schema: 'kaminos.crucible-bench-state.v0',
+    activeCrucibleId,
+    switcherOpen: Boolean(value.switcherOpen),
+    proxyZones: CRUCIBLE_BENCH_PROXY_ZONES,
+    crucibles,
+    updatedAt: value.updatedAt || new Date().toISOString(),
+  };
+}
+
+function loadCrucibleBenchState() {
+  const storage = crucibleBenchStorage();
+  if (!storage) return createDefaultCrucibleBenchState();
+  try {
+    const raw = storage.getItem(CRUCIBLE_BENCH_STORAGE_KEY);
+    return normalizeCrucibleBenchState(raw ? JSON.parse(raw) : null);
+  } catch (_err) {
+    return createDefaultCrucibleBenchState();
+  }
+}
+
+let crucibleBenchState = loadCrucibleBenchState();
+window.__kaminosCrucibleBenchState = crucibleBenchState;
+
+function activeCrucibleBenchCrucible() {
+  let crucible = crucibleBenchState.crucibles.find(entry => entry.id === crucibleBenchState.activeCrucibleId);
+  if (!crucible) {
+    crucible = createCrucibleBenchCrucible();
+    crucibleBenchState.crucibles.unshift(crucible);
+    crucibleBenchState.activeCrucibleId = crucible.id;
+  }
+  return crucible;
+}
+
+function persistCrucibleBenchState() {
+  crucibleBenchState.updatedAt = new Date().toISOString();
+  window.__kaminosCrucibleBenchState = crucibleBenchState;
+  const storage = crucibleBenchStorage();
+  if (storage) {
+    try {
+      storage.setItem(CRUCIBLE_BENCH_STORAGE_KEY, JSON.stringify(crucibleBenchState));
+    } catch (_err) {
+      // Local persistence is a convenience; the visible bench state remains authoritative for this session.
+    }
+  }
+}
+
+function compactCrucibleBenchPath(value) {
+  if (!value) return '';
+  const text = String(value);
+  return text.length > 74 ? `...${text.slice(-71)}` : text;
+}
+
+function crucibleBenchSourceLabel(source) {
+  return source?.label || source?.name || source?.source?.split?.('/').pop?.() || source?.source || 'Selected source';
+}
+
+function renderCrucibleBench() {
+  const crucible = activeCrucibleBenchCrucible();
+  const currentSource = kilnRouteBenchSelectedSource(selectedKilnRouteBenchRoute());
+  crucible.source = currentSource || crucible.source || null;
+  persistCrucibleBenchState();
+  const title = document.getElementById('crucible-bench-title');
+  const summary = document.getElementById('crucible-bench-summary');
+  const nameInput = document.getElementById('crucible-bench-name-input');
+  const switcher = document.getElementById('crucible-bench-switcher');
+  const sourcePlate = document.getElementById('crucible-zone-source-plate');
+  const armatureBay = document.getElementById('crucible-zone-armature-bay');
+  const firingStation = document.getElementById('crucible-zone-firing-station');
+  const shardTray = document.getElementById('crucible-zone-shard-tray');
+  const castTray = document.getElementById('crucible-zone-cast-tray');
+  const receiptTag = document.getElementById('crucible-zone-receipt-tag');
+  if (title) title.textContent = crucible.name || 'Unnamed crucible';
+  if (summary) {
+    const castCount = crucible.casts.length;
+    const firingCount = crucible.firings.length;
+    summary.textContent = `This crucible is holding ${currentSource ? 'one source' : 'no source yet'}, ${firingCount} firing${firingCount === 1 ? '' : 's'}, and ${castCount} cast${castCount === 1 ? '' : 's'}.`;
+  }
+  if (nameInput && document.activeElement !== nameInput) {
+    nameInput.value = crucible.name || '';
+  }
+  if (switcher) switcher.hidden = !crucibleBenchState.switcherOpen;
+  if (sourcePlate) {
+    sourcePlate.classList.toggle('present', Boolean(currentSource?.source));
+    sourcePlate.textContent = currentSource?.source
+      ? `${crucibleBenchSourceLabel(currentSource)} - ${compactCrucibleBenchPath(currentSource.source)}`
+      : 'Choose an image below or paste one into the firing station.';
+  }
+  if (armatureBay) {
+    const lastArmature = crucible.armatures[0];
+    armatureBay.classList.toggle('present', Boolean(lastArmature));
+    armatureBay.textContent = lastArmature
+      ? `${lastArmature.label || 'Proxy armature'} - ${lastArmature.kind || 'proxy'}`
+      : 'No armature pinned yet.';
+  }
+  if (firingStation) {
+    const lastFiring = crucible.firings[0];
+    firingStation.classList.toggle('present', Boolean(lastFiring));
+    firingStation.textContent = lastFiring
+      ? `${lastFiring.profileLabel || lastFiring.profileId || 'Route'} - ${lastFiring.status || 'running'}`
+      : 'SHARP is the active firing route for this crucible.';
+  }
+  if (shardTray) {
+    shardTray.classList.toggle('present', crucible.shards.length > 0);
+    shardTray.textContent = crucible.shards.length
+      ? `${crucible.shards.length} shard${crucible.shards.length === 1 ? '' : 's'} kept for later casts.`
+      : 'No reusable shards yet.';
+  }
+  if (castTray) {
+    const lastCast = crucible.casts[0];
+    castTray.classList.toggle('present', Boolean(lastCast));
+    castTray.textContent = lastCast
+      ? `${lastCast.label || 'Generated cast'} - ${compactCrucibleBenchPath(lastCast.path || lastCast.assetId || '')}`
+      : 'No casts yet.';
+  }
+  if (receiptTag) {
+    const lastReceipt = crucible.receipts[0];
+    receiptTag.classList.toggle('present', Boolean(lastReceipt));
+    receiptTag.textContent = lastReceipt
+      ? `${lastReceipt.status || 'receipt'} - ${lastReceipt.message || lastReceipt.phase || 'last firing recorded'}`
+      : 'No firing receipt yet.';
+  }
+  renderCrucibleBenchList();
+}
+
+function renderCrucibleBenchList() {
+  const list = document.getElementById('crucible-bench-list');
+  if (!list) return;
+  list.innerHTML = '';
+  for (const crucible of crucibleBenchState.crucibles) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = `btn${crucible.id === crucibleBenchState.activeCrucibleId ? ' active' : ''}`;
+    button.textContent = `${crucible.name || 'Unnamed crucible'} - ${crucible.casts.length} cast${crucible.casts.length === 1 ? '' : 's'}`;
+    button.onclick = () => selectCrucibleBenchCrucible(crucible.id);
+    list.appendChild(button);
+  }
+}
+
+function selectCrucibleBenchCrucible(id) {
+  if (!crucibleBenchState.crucibles.some(entry => entry.id === id)) return null;
+  crucibleBenchState.activeCrucibleId = id;
+  crucibleBenchState.switcherOpen = false;
+  persistCrucibleBenchState();
+  renderCrucibleBench();
+  return activeCrucibleBenchCrucible();
+}
+
+function toggleCrucibleBenchSwitcher() {
+  crucibleBenchState.switcherOpen = !crucibleBenchState.switcherOpen;
+  persistCrucibleBenchState();
+  renderCrucibleBench();
+}
+
+function createNewCrucibleBenchCrucible() {
+  const crucible = createCrucibleBenchCrucible();
+  crucibleBenchState.crucibles.unshift(crucible);
+  crucibleBenchState.activeCrucibleId = crucible.id;
+  crucibleBenchState.switcherOpen = false;
+  persistCrucibleBenchState();
+  renderCrucibleBench();
+  return crucible;
+}
+
+function renameActiveCrucibleBenchCrucible(name) {
+  const crucible = activeCrucibleBenchCrucible();
+  crucible.name = String(name || '').trim();
+  crucible.unnamed = !crucible.name;
+  crucible.updatedAt = new Date().toISOString();
+  persistCrucibleBenchState();
+  renderCrucibleBench();
+}
+
+function crucibleBenchRecordFiring({ routeId, profileId, source, profileLabel }) {
+  const crucible = activeCrucibleBenchCrucible();
+  const firing = {
+    id: crucibleBenchId('firing'),
+    routeId,
+    profileId,
+    profileLabel,
+    source: source ? { ...source } : null,
+    status: 'running',
+    startedAt: new Date().toISOString(),
+  };
+  crucible.source = source || crucible.source || null;
+  crucible.firings.unshift(firing);
+  crucible.firings = crucible.firings.slice(0, 12);
+  persistCrucibleBenchState();
+  renderCrucibleBench();
+  return firing;
+}
+
+function crucibleBenchRecordCast({ firingId, run, artifact, record }) {
+  const crucible = activeCrucibleBenchCrucible();
+  const cast = {
+    id: crucibleBenchId('cast'),
+    firingId,
+    status: 'loaded',
+    label: record?.label || artifact?.path?.split?.('/').pop?.() || 'Generated splat',
+    path: artifact?.path || null,
+    assetId: record?.id || null,
+    runId: run?.runId || run?.clientRunId || null,
+    createdAt: new Date().toISOString(),
+  };
+  crucible.casts.unshift(cast);
+  crucible.casts = crucible.casts.slice(0, 12);
+  persistCrucibleBenchState();
+  renderCrucibleBench();
+  return cast;
+}
+
+function crucibleBenchRecordReceipt({ firingId, status, message, run, phase, error }) {
+  const crucible = activeCrucibleBenchCrucible();
+  const receipt = {
+    id: crucibleBenchId('receipt'),
+    firingId,
+    status,
+    message: compactErrorLine(message || error || ''),
+    phase: phase || run?.phase || run?.report?.document?.phase || null,
+    reportPath: run?.report?.path || null,
+    createdAt: new Date().toISOString(),
+  };
+  const firing = crucible.firings.find(entry => entry.id === firingId);
+  if (firing) {
+    firing.status = status;
+    firing.finishedAt = receipt.createdAt;
+  }
+  crucible.receipts.unshift(receipt);
+  crucible.receipts = crucible.receipts.slice(0, 12);
+  persistCrucibleBenchState();
+  renderCrucibleBench();
+  return receipt;
+}
+
 function selectedKilnRouteBenchRoute(routeId = kilnRouteBenchState.selectedRouteId) {
   return KILN_ROUTE_BENCH_ROUTES.find(route => route.id === routeId || route.pipelineId === routeId) || KILN_ROUTE_BENCH_ROUTES[0];
 }
@@ -12688,6 +13059,7 @@ function renderKilnRouteBench() {
     comparisonButton.textContent = running ? 'Running comparison' : 'Run comparison';
   }
   refreshSharpBreathingRoomComparisonSummary(window.__kaminosSharpBreathingRoomComparisonState || kilnRouteBenchState);
+  if (document.getElementById('crucible-bench-panel')) renderCrucibleBench();
 }
 
 function renderSharpBreathingRoomHarness() {
@@ -16603,6 +16975,7 @@ async function runKilnRouteBenchRoute(routeId, profileId) {
     runningProfileId: profileId,
     result: null,
   });
+  const crucibleFiring = crucibleBenchRecordFiring({ routeId: route.id, profileId, source, profileLabel });
   await beginSharpBreathingRoomKilnFire({ profileId, source, pipelineId });
   try {
     const run = await runSelectedPipeline({
@@ -16628,12 +17001,31 @@ async function runKilnRouteBenchRoute(routeId, profileId) {
       if (pipelineArtifactIsLoadableSplat(artifact)) {
         try {
           const record = await pipelineLoadRunSplatArtifact(run, artifact);
+          crucibleBenchRecordCast({
+            firingId: crucibleFiring.id,
+            run,
+            artifact,
+            record,
+          });
+          crucibleBenchRecordReceipt({
+            firingId: crucibleFiring.id,
+            status: 'complete',
+            message: `${profileLabel} finished and loaded a cast into the scene.`,
+            run,
+          });
           setKilnRouteBenchStatus(
             `${profileLabel} finished and loaded the generated splat into the scene: ${record?.label || artifact.path.split('/').pop() || 'pipeline output'}.`,
             'complete',
             { routeId: route.id, source, result: run, loadedRecord: record, runningProfileId: null },
           );
         } catch (loadErr) {
+          crucibleBenchRecordReceipt({
+            firingId: crucibleFiring.id,
+            status: 'load-failed',
+            message: `The firing finished, but Kaminos could not load the cast: ${loadErr.message || loadErr}`,
+            run,
+            error: loadErr?.message || String(loadErr),
+          });
           setKilnRouteBenchStatus(
             `${profileLabel} finished, but Kaminos could not load the generated splat into the scene. ${loadErr.message || loadErr}`,
             'error',
@@ -16641,6 +17033,14 @@ async function runKilnRouteBenchRoute(routeId, profileId) {
           );
         }
       } else {
+        crucibleBenchRecordReceipt({
+          firingId: crucibleFiring.id,
+          status: 'evidence-only',
+          message: artifact?.path
+            ? `${profileLabel} wrote an output that is not a loadable splat.`
+            : `${profileLabel} finished with evidence only.`,
+          run,
+        });
         setKilnRouteBenchStatus(
           artifact?.path
             ? `${profileLabel} finished and wrote an output, but that output is not a loadable splat.`
@@ -16650,6 +17050,14 @@ async function runKilnRouteBenchRoute(routeId, profileId) {
         );
       }
     } else {
+      crucibleBenchRecordReceipt({
+        firingId: crucibleFiring.id,
+        status: 'failed',
+        message: `${profileLabel} failed before producing a splat.`,
+        run,
+        phase: run?.phase,
+        error: pipelineRunFailureSummary(run),
+      });
       setKilnRouteBenchStatus(`${profileLabel} failed before producing a splat. ${pipelineRunFailureSummary(run)}`.trim(), 'error', {
         routeId: route.id,
         source,
@@ -16659,6 +17067,12 @@ async function runKilnRouteBenchRoute(routeId, profileId) {
     }
     return run;
   } catch (err) {
+    crucibleBenchRecordReceipt({
+      firingId: crucibleFiring.id,
+      status: 'failed',
+      message: `${profileLabel} failed before producing a splat.`,
+      error: err?.message || String(err),
+    });
     setKilnRouteBenchStatus(`${profileLabel} failed before producing a splat. ${err.message || err}`, 'error', {
       routeId: route.id,
       source,
@@ -16819,6 +17233,9 @@ function initPipelineDock() {
   document.getElementById('sharp-breathing-room-source-input')?.addEventListener('input', () => {
     renderSharpBreathingRoomHarness();
   });
+  document.getElementById('crucible-bench-name-input')?.addEventListener('input', event => {
+    renameActiveCrucibleBenchCrucible(event.target.value);
+  });
   document.getElementById('pipeline-refresh-button')?.addEventListener('click', () => loadPipelineManifest().catch(err => setInfo(err.message || String(err))));
   document.getElementById('pipeline-browser-refresh')?.addEventListener('click', () => loadPipelineAssetBrowser().catch(err => setInfo(err.message || String(err))));
   document.querySelectorAll('[data-pipeline-asset-palette]').forEach(button => {
@@ -16829,6 +17246,7 @@ function initPipelineDock() {
     renderPipelineDock();
   });
   ensureSharpBreathingRoomImageAssets().catch(err => setSharpBreathingRoomStatus(`Image assets could not be loaded for SHARP: ${err.message || err}`, 'error'));
+  renderCrucibleBench();
   renderPipelineAssetBrowser();
 }
 
@@ -16837,6 +17255,10 @@ window.loadPipelineAssetBrowser = loadPipelineAssetBrowser;
 window.runSelectedPipeline = runSelectedPipeline;
 window.runKilnRouteBenchRoute = runKilnRouteBenchRoute;
 window.renderKilnRouteBench = renderKilnRouteBench;
+window.renderCrucibleBench = renderCrucibleBench;
+window.toggleCrucibleBenchSwitcher = toggleCrucibleBenchSwitcher;
+window.createNewCrucibleBenchCrucible = createNewCrucibleBenchCrucible;
+window.selectCrucibleBenchCrucible = selectCrucibleBenchCrucible;
 window.runSharpBreathingRoomProfile = runSharpBreathingRoomProfile;
 window.runSharpBreathingRoomComparison = runSharpBreathingRoomComparison;
 window.selectPipelineGenerator = selectPipelineGenerator;
