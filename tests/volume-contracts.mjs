@@ -1547,6 +1547,8 @@ assert.match(core, /TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY\s*=\s*'tall-plume-
 assert.match(core, /TALL_PLUME_ACTIVITY_PRESSURE_TIER_STRATEGY\s*=\s*'tall-plume-current-sim-activity-pressure-tiers-v0'/, 'volume core names the current-sim activity pressure tier strategy');
 assert.match(core, /PRESSURE_TIER_MASK_ORDERING\s*=\s*'current-sim-front-occupancy-before-pressure-projection-v0'/, 'activity pressure tiers name the non-acausal current-sim ordering');
 assert.match(core, /ACTIVITY_GATED_DETAIL_FORCE_STRATEGY\s*=\s*'activity-gated-vorticity-detail-force-v0'/, 'volume core names the opt-in activity-gated vorticity/detail-force strategy');
+assert.match(core, /ACTIVITY_PRESSURE_SPEND_MODEL\s*=\s*'base-midbody-activity-pressure-spend-v0'/, 'activity pressure tiers name the base/midbody spend model');
+assert.match(core, /ACTIVITY_PRESSURE_INACTIVE_SKIP_POLICY\s*=\s*'inactive-extra-tier-cell-early-out-v0'/, 'activity pressure tiers name the inactive-cell early-out policy');
 assert.match(core, /PRESSURE_PROJECTION_READ_STRATEGY_COMPOSITE\s*=\s*'composite-pressure-tier-read-v0'/, 'volume core names composite tier pressure projection reads');
 assert.match(core, /PRESSURE_PROJECTION_READ_STRATEGY_SINGLE_BUFFER\s*=\s*'single-pressure-buffer-read-v0'/, 'volume core names single-buffer pressure projection reads');
 assert.match(core, /normalizeVolumeScene\(value\) === 'tall_plume' \? 2/, 'tall-plume default pressure iterations use pressure2 before the general non-bonfire default');
@@ -1563,7 +1565,14 @@ assert.match(core, /pressureActivityMaskAtCell/, 'WGSL has dilated current sim-s
 const pressureActivityBlock = core.match(/fn pressureActivityCueAtCell[\s\S]*?fn pressureReadComposite/)?.[0] || '';
 assert.match(pressureActivityBlock, /readFrontField/, 'activity pressure mask consumes the sim-side front field');
 assert.match(pressureActivityBlock, /readSlot\(c,\s*0u\)/, 'activity pressure mask consumes broad density or velocity occupancy from the current sim buffer');
+assert.match(pressureActivityBlock, /pressureActivityBaseMidbodySpendAtCell/, 'activity pressure masks bias extra pressure toward base and midbody spend');
+assert.match(pressureActivityBlock, /tipDamp/, 'activity pressure spend damps tip-dominated support before extra pressure tiers');
+assert.match(pressureActivityBlock, /inactive-extra-tier-cell-early-out-v0/, 'activity pressure tier shader carries an explicit inactive-cell early-out policy');
 assert.doesNotMatch(pressureActivityBlock, /sampleWorldBoundarySidecar|boundarySidecar|BOUNDARY_SIDECAR/, 'activity pressure mask must not sample the render-side baked boundary sidecar');
+assert.match(core, /full-grid-dispatch-with-base-midbody-cell-early-out-prototype/, 'activity pressure dispatch efficiency says full-grid dispatch with cell early-out, not true sparse acceleration');
+assert.match(core, /spendModel:\s*ACTIVITY_PRESSURE_SPEND_MODEL/, 'activity tier debug state exposes the effective spend model');
+assert.match(core, /inactiveCellPolicy:\s*ACTIVITY_PRESSURE_INACTIVE_SKIP_POLICY/, 'activity tier debug state exposes the inactive-cell policy');
+assert.match(core, /skipAccounting:\s*'shader-early-out-no-compact-count-yet'/, 'activity tier debug state distinguishes early-out from real sparse/compact accounting');
 assert.match(core, /pressureTierLowerMax/, 'volume core reads the operator-tuned lower pressure tier bound');
 assert.match(core, /pressureTierHeroMin/, 'volume core reads the operator-tuned hero pressure tier lower bound');
 assert.match(core, /pressureTierHeroMax/, 'volume core reads the operator-tuned hero pressure tier upper bound');

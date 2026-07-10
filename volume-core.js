@@ -344,6 +344,8 @@ const TALL_PLUME_ACTIVITY_PRESSURE_TIER_STRATEGY = 'tall-plume-current-sim-activ
 const TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY_INACTIVE = 'inactive';
 const PRESSURE_TIER_MASK_ORDERING = 'current-sim-front-occupancy-before-pressure-projection-v0';
 const ACTIVITY_GATED_DETAIL_FORCE_STRATEGY = 'activity-gated-vorticity-detail-force-v0';
+const ACTIVITY_PRESSURE_SPEND_MODEL = 'base-midbody-activity-pressure-spend-v0';
+const ACTIVITY_PRESSURE_INACTIVE_SKIP_POLICY = 'inactive-extra-tier-cell-early-out-v0';
 const PRESSURE_PROJECTION_READ_STRATEGY_COMPOSITE = 'composite-pressure-tier-read-v0';
 const PRESSURE_PROJECTION_READ_STRATEGY_SINGLE_BUFFER = 'single-pressure-buffer-read-v0';
 const PRESSURE_STRATEGY_SPATIAL_TIERS = 'spatial_tiers';
@@ -657,7 +659,7 @@ function pressureTierDispatchPlan(gridSize, pressureStrategy, scene, pressureTie
       ],
       bounds: { pressure1: { mask: 'global-floor', buffer: 'B' }, pressure2: { mask: 'broad-activity', buffer: 'A' }, pressure3: { mask: 'core-activity', buffer: 'B' } },
       requestedBounds: { pressure1: { mask: 'global-floor', buffer: 'B' }, pressure2: { mask: 'broad-activity', buffer: 'A' }, pressure3: { mask: 'core-activity', buffer: 'B' } },
-      effectiveBounds: { pressure1: { mask: 'global-floor', buffer: 'B' }, pressure2: { mask: 'full-dispatch-broad-mask', buffer: 'A' }, pressure3: { mask: 'full-dispatch-core-mask', buffer: 'B' } },
+      effectiveBounds: { pressure1: { mask: 'global-floor', buffer: 'B' }, pressure2: { mask: 'full-dispatch-base-midbody-broad-mask', buffer: 'A' }, pressure3: { mask: 'full-dispatch-base-midbody-core-mask', buffer: 'B' } },
       bufferOwnership: {
         pressure1: 'B',
         pressure2: 'A',
@@ -667,7 +669,9 @@ function pressureTierDispatchPlan(gridSize, pressureStrategy, scene, pressureTie
       },
       maskOrdering: PRESSURE_TIER_MASK_ORDERING,
       maskSource: 'current-sim-front-occupancy',
-      dispatchEfficiency: 'full-grid-dispatch-with-cell-mask-prototype',
+      spendModel: ACTIVITY_PRESSURE_SPEND_MODEL,
+      inactiveCellPolicy: ACTIVITY_PRESSURE_INACTIVE_SKIP_POLICY,
+      dispatchEfficiency: 'full-grid-dispatch-with-base-midbody-cell-early-out-prototype',
     };
   }
   const lowerWorkgroupsY = Math.max(1, Math.min(workgroups, Math.ceil(Math.ceil(gridSize * tierControls.lowerMax) / 4)));
@@ -1429,10 +1433,23 @@ fn pressureActivityDilatedCueAtCell(c: vec3<i32>) -> f32 {
   return clamp(cue, 0.0, 1.0);
 }
 
+fn pressureActivityBaseMidbodySpendAtCell(c: vec3<i32>) -> f32 {
+  let y = pressureTierY(c);
+  let liftedFromSourceFloor = smoothstep(0.035, 0.12, y);
+  let baseBand = liftedFromSourceFloor * (1.0 - smoothstep(0.30, 0.54, y));
+  let midbodyBand = smoothstep(0.16, 0.34, y) * (1.0 - smoothstep(0.52, 0.76, y));
+  let tipDamp = mix(1.0, 0.58, smoothstep(0.56, 0.92, y));
+  let lowerBodySpend = clamp(0.62 + baseBand * 0.58 + midbodyBand * 0.34, 0.32, 1.42);
+  return clamp(lowerBodySpend * tipDamp, 0.28, 1.35);
+}
+
 fn pressureActivityMaskAtCell(c: vec3<i32>, core: f32) -> f32 {
+  // inactive-extra-tier-cell-early-out-v0 consumes this shaped mask in extra pressure tiers.
   let cue = pressureActivityDilatedCueAtCell(c);
-  let broad = smoothstep(0.13, 0.34, cue);
-  let focused = smoothstep(0.34, 0.62, cue);
+  let spendWeight = pressureActivityBaseMidbodySpendAtCell(c);
+  let shapedCue = clamp(cue * spendWeight, 0.0, 1.0);
+  let broad = smoothstep(0.10, 0.30, shapedCue);
+  let focused = smoothstep(0.28, 0.54, shapedCue);
   return mix(broad, focused, clamp(core, 0.0, 1.0));
 }
 
@@ -1543,6 +1560,7 @@ fn pressureJacobiTiered(gid: vec3<u32>, minY: f32, maxY: f32, tier: f32) {
   let c = vec3<i32>(gid);
   let tierMask = pressureTierCellMask(c, minY, maxY, tier);
   if (tierMask <= 0.001) {
+    // inactive-extra-tier-cell-early-out-v0: still full-grid dispatch, no compacted sparse count yet.
     return;
   }
   let div = divergenceAtCell(c);
@@ -4841,6 +4859,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     pressureTierBufferOwnership: null,
     pressureTierMaskOrdering: null,
     pressureTierMaskSource: null,
+    pressureTierSpendModel: null,
+    pressureTierInactiveCellPolicy: null,
     pressureTierDispatchEfficiency: null,
     activityTierControls: null,
     volumePrimitiveCount: 0,
@@ -6663,11 +6683,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.boundarySidecarDebug = boundarySidecarDebug(boundarySidecarSourceName);
     state.activityTierControls = {
       identity: ACTIVITY_GATED_DETAIL_FORCE_STRATEGY,
+      spendModel: ACTIVITY_PRESSURE_SPEND_MODEL,
       pressureTierMaskOrdering: PRESSURE_TIER_MASK_ORDERING,
       pressureActivityMode: uniforms[324],
       vorticityGate: uniforms[325],
       detailGate: uniforms[326],
       maskSource: 'current-sim-front-occupancy-not-render-sidecar',
+      inactiveCellPolicy: ACTIVITY_PRESSURE_INACTIVE_SKIP_POLICY,
+      skipAccounting: 'shader-early-out-no-compact-count-yet',
     };
     state.volumeScene = normalizeVolumeScene(controlsSnapshot.volumeScene);
     state.bonfireReferenceConfinement = bonfireReferenceConfinementDebug(controlsSnapshot.volumeScene);
@@ -6985,6 +7008,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.pressureTierBufferOwnership = spatialPressureEnabled ? { ...tierPlan.bufferOwnership } : null;
     state.pressureTierMaskOrdering = spatialPressureEnabled ? (tierPlan.maskOrdering || null) : null;
     state.pressureTierMaskSource = spatialPressureEnabled ? (tierPlan.maskSource || 'height-slab') : null;
+    state.pressureTierSpendModel = spatialPressureEnabled ? (tierPlan.spendModel || null) : null;
+    state.pressureTierInactiveCellPolicy = spatialPressureEnabled ? (tierPlan.inactiveCellPolicy || null) : null;
     state.pressureTierDispatchEfficiency = spatialPressureEnabled ? (tierPlan.dispatchEfficiency || 'bounded-y-dispatch') : null;
     state.mainFluidKernelStrategy = mainFluidKernelStrategy;
     state.mainFluidLocalProjectionStrategy = mainFluidLocalProjectionStrategy;
@@ -7040,6 +7065,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       pressureTierBufferOwnership: spatialPressureEnabled ? { ...tierPlan.bufferOwnership } : null,
       pressureTierMaskOrdering: spatialPressureEnabled ? (tierPlan.maskOrdering || null) : null,
       pressureTierMaskSource: spatialPressureEnabled ? (tierPlan.maskSource || 'height-slab') : null,
+      pressureTierSpendModel: spatialPressureEnabled ? (tierPlan.spendModel || null) : null,
+      pressureTierInactiveCellPolicy: spatialPressureEnabled ? (tierPlan.inactiveCellPolicy || null) : null,
       pressureTierDispatchEfficiency: spatialPressureEnabled ? (tierPlan.dispatchEfficiency || 'bounded-y-dispatch') : null,
       activityForceGating: state.activityTierControls ? { ...state.activityTierControls } : null,
       mainFluidKernelStrategy,
@@ -8622,6 +8649,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         pressureTierBufferOwnership: state.pressureTierBufferOwnership ? { ...state.pressureTierBufferOwnership } : null,
         pressureTierMaskOrdering: state.pressureTierMaskOrdering,
         pressureTierMaskSource: state.pressureTierMaskSource,
+        pressureTierSpendModel: state.pressureTierSpendModel,
+        pressureTierInactiveCellPolicy: state.pressureTierInactiveCellPolicy,
         pressureTierDispatchEfficiency: state.pressureTierDispatchEfficiency,
         activityTierControls: state.activityTierControls ? { ...state.activityTierControls } : null,
         mainFluidKernelStrategy: state.mainFluidKernelStrategy,
@@ -8952,6 +8981,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       pressureTierBufferOwnership: state.pressureTierBufferOwnership ? { ...state.pressureTierBufferOwnership } : null,
       pressureTierMaskOrdering: state.pressureTierMaskOrdering,
       pressureTierMaskSource: state.pressureTierMaskSource,
+      pressureTierSpendModel: state.pressureTierSpendModel,
+      pressureTierInactiveCellPolicy: state.pressureTierInactiveCellPolicy,
       pressureTierDispatchEfficiency: state.pressureTierDispatchEfficiency,
       activityTierControls: state.activityTierControls ? { ...state.activityTierControls } : null,
       mainFluidKernelStrategy: state.mainFluidKernelStrategy,
