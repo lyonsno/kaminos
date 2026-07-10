@@ -559,6 +559,13 @@ input[type="range"]:disabled::-webkit-slider-thumb { background: #555; cursor: n
           </select>
         </div>
         <div class="slider-row">
+          <span class="slider-label">Material</span>
+          <select id="motion-panel-hill-terrain-material-control" class="select-input">
+            <option value="solid-semantic-surface-v0" selected>Solid</option>
+            <option value="semantic-xray-v0">Xray debug</option>
+          </select>
+        </div>
+        <div class="slider-row">
           <span class="slider-label">Route</span>
           <select id="motion-panel-route-mode" class="select-input">
             <option value="one-shot-hold" selected>One-shot hold</option>
@@ -573,6 +580,7 @@ input[type="range"]:disabled::-webkit-slider-thumb { background: #555; cursor: n
         <div class="field"><span class="field-key">Profile Spread</span><span class="field-val" id="motion-panel-hill-route-profile-spread">none</span></div>
         <div class="field"><span class="field-key">Fixture</span><span class="field-val" id="motion-panel-hill-route-fixture">none</span></div>
         <div class="field"><span class="field-key">Terrain</span><span class="field-val" id="motion-panel-hill-terrain-overlay">none</span></div>
+        <div class="field"><span class="field-key">Material</span><span class="field-val" id="motion-panel-hill-terrain-material">none</span></div>
         <div class="field"><span class="field-key">Overlay Basis</span><span class="field-val" id="motion-panel-hill-terrain-overlay-basis">none</span></div>
         <div class="field"><span class="field-key">Trigger</span><span class="field-val" id="motion-panel-path-world-trigger-state">no world</span></div>
         <div class="field"><span class="field-key">Obstacle</span><span class="field-val" id="motion-panel-path-world-obstacle">none</span></div>
@@ -4028,6 +4036,9 @@ function applyMotionPanelHillTerrainGroundPlaneSuppression(pathWorld = null, opt
         sourceRef: hillTerrainSurface.sourceRef || null,
         routePlanId: hillTerrainSurface.routePlanId || null,
         terrainOverlayMode: hillTerrainSurface.terrainOverlayMode || null,
+        terrainMaterialMode: hillTerrainSurface.terrainMaterialMode || null,
+        terrainMaterialEvidence: hillTerrainSurface.terrainMaterialEvidence || null,
+        wireOverlayVisible: hillTerrainSurface.wireOverlayVisible ?? null,
       }
       : null,
   };
@@ -4139,6 +4150,9 @@ function motionPanelPathWorldReadout() {
     routeSource: pathWorld?.routeSource || routePlan?.evidence?.routeSource || null,
     sourceRef: routePlan?.source?.sourceRef || null,
     hillTerrainSurface,
+    terrainMaterialMode: hillTerrainSurface?.terrainMaterialMode || null,
+    terrainMaterialEvidence: hillTerrainSurface?.terrainMaterialEvidence || null,
+    wireOverlayVisible: hillTerrainSurface?.wireOverlayVisible ?? null,
     hillTerrainFrame,
     hillTerrainCarrier,
     carrierPathFollower,
@@ -4173,6 +4187,7 @@ function updateMotionPanelPathWorldReadout() {
   setField('motion-panel-hill-route-profile-spread', profileSpreadLabel, !!profileDivergence?.meaningfulDivergence);
   setField('motion-panel-hill-route-fixture', readout.pathWorldRouteFixture?.id || 'none', !!readout.pathWorldRouteFixture);
   setField('motion-panel-hill-terrain-overlay', readout.terrainOverlayMode || 'none', !!readout.terrainOverlayMode);
+  setField('motion-panel-hill-terrain-material', readout.terrainMaterialMode || 'none', !!readout.terrainMaterialMode);
   setField('motion-panel-hill-terrain-overlay-basis', readout.terrainOverlayBasis || 'none', !!readout.terrainOverlayBasis);
   const triggerLabel = readout.triggerDistance == null
     ? readout.triggerState
@@ -5309,6 +5324,50 @@ const MOTION_PANEL_HILL_TERRAIN_OVERLAY_MODES = new Set([
   'composite',
 ]);
 
+const MOTION_PANEL_HILL_TERRAIN_MATERIAL_MODES = new Set([
+  'solid-semantic-surface-v0',
+  'semantic-xray-v0',
+]);
+
+function normalizeMotionPanelHillTerrainMaterialMode(value, fallback = 'solid-semantic-surface-v0') {
+  const mode = String(value || '').trim().toLowerCase();
+  if (mode === 'solid' || mode === 'solid-semantic-surface') return 'solid-semantic-surface-v0';
+  if (mode === 'xray' || mode === 'x-ray' || mode === 'semantic-xray') return 'semantic-xray-v0';
+  return MOTION_PANEL_HILL_TERRAIN_MATERIAL_MODES.has(mode) ? mode : fallback;
+}
+
+function motionPanelHillTerrainMaterialConfig(modeInput = 'solid-semantic-surface-v0', options = {}) {
+  const mode = normalizeMotionPanelHillTerrainMaterialMode(modeInput);
+  if (mode === 'semantic-xray-v0') {
+    return {
+      schema: 'kaminos.motion-panel-hill-terrain-material-evidence.v0',
+      terrainMaterialMode: 'semantic-xray-v0',
+      materialAuthority: 'explicit-debug-xray',
+      transparent: true,
+      opacity: Number(options.opacity ?? 0.62),
+      depthWrite: false,
+      depthTest: true,
+      side: 'DoubleSide',
+      wireOverlayVisible: true,
+      wireOverlayOpacity: Number(options.wireOpacity ?? 0.09),
+      reason: 'explicit debug material keeps the old translucent/wire terrain view available',
+    };
+  }
+  return {
+    schema: 'kaminos.motion-panel-hill-terrain-material-evidence.v0',
+    terrainMaterialMode: 'solid-semantic-surface-v0',
+    materialAuthority: 'default-solid-semantic-surface',
+    transparent: false,
+    opacity: 1,
+    depthWrite: true,
+    depthTest: true,
+    side: 'DoubleSide',
+    wireOverlayVisible: false,
+    wireOverlayOpacity: 0,
+    reason: 'default Hill smoke renders semantic terrain as the owning support surface',
+  };
+}
+
 const MOTION_PANEL_HILL_CATEGORY_PALETTE = [
   0x3e8f58, 0xd8b65a, 0x657fc4, 0x9a6fc8, 0xd77356,
   0x58a7a9, 0xa9c85e, 0xc0649d, 0x7f8f43, 0x4f6d98,
@@ -5506,6 +5565,7 @@ function motionPanelHillRouteControlsFromInputs(fallback = {}) {
     costProfile: document.getElementById('motion-panel-hill-route-profile-control')?.value || fallback.costProfile || 'cautious-lerm',
     routeFixture: document.getElementById('motion-panel-hill-route-fixture-control')?.value || fallback.routeFixture || fallback.fixture || 'meadow-cross',
     terrainOverlayMode: document.getElementById('motion-panel-hill-terrain-overlay-control')?.value || fallback.terrainOverlayMode || fallback.overlayMode || 'semantic-styles',
+    terrainMaterialMode: document.getElementById('motion-panel-hill-terrain-material-control')?.value || fallback.terrainMaterialMode || fallback.materialMode || 'solid-semantic-surface-v0',
   };
 }
 
@@ -5618,6 +5678,7 @@ function syncMotionPanelHillRouteControls(options = {}) {
   motionPanelSetSelectValueIfPresent('motion-panel-hill-route-profile-control', profileId || 'cautious-lerm');
   motionPanelSetSelectValueIfPresent('motion-panel-hill-route-fixture-control', options.routeFixture || options.fixture || 'meadow-cross');
   motionPanelSetSelectValueIfPresent('motion-panel-hill-terrain-overlay-control', options.terrainOverlayMode || options.overlayMode || 'semantic-styles');
+  motionPanelSetSelectValueIfPresent('motion-panel-hill-terrain-material-control', options.terrainMaterialMode || options.materialMode || 'solid-semantic-surface-v0');
 }
 
 async function refreshMotionPanelHillRouteControlsFromInputs() {
@@ -5787,6 +5848,8 @@ function createMotionPanelHillTerrainSurface(source, routePlan = null, options =
     options.costWeights || {},
   );
   const overlayMode = normalizeMotionPanelHillTerrainOverlayMode(options.terrainOverlayMode || options.overlayMode || routePlan?.evidence?.terrainOverlayMode || 'semantic-styles');
+  const terrainMaterialMode = normalizeMotionPanelHillTerrainMaterialMode(options.terrainMaterialMode || options.materialMode || routePlan?.evidence?.terrainMaterialMode || 'solid-semantic-surface-v0');
+  const terrainMaterialEvidence = motionPanelHillTerrainMaterialConfig(terrainMaterialMode, options);
   const overlayAuthority = motionPanelHillTerrainOverlayAuthority(overlayMode);
   const overlayNormalization = motionPanelHillTerrainOverlayNormalization(source, overlayMode, costProfile);
   const overlayLegend = {
@@ -5839,19 +5902,21 @@ function createMotionPanelHillTerrainSurface(source, routePlan = null, options =
     geometry,
     new THREE.MeshBasicMaterial({
       vertexColors: true,
-      transparent: true,
-      opacity: Number(options.opacity ?? 0.62),
+      transparent: terrainMaterialEvidence.transparent,
+      opacity: terrainMaterialEvidence.opacity,
       side: THREE.DoubleSide,
-      depthWrite: false,
+      depthWrite: terrainMaterialEvidence.depthWrite,
+      depthTest: terrainMaterialEvidence.depthTest,
     }),
   );
   mesh.name = 'motion-panel-hill-terrain-surface';
   mesh.renderOrder = 4;
   const wire = new THREE.LineSegments(
     new THREE.WireframeGeometry(geometry),
-    new THREE.LineBasicMaterial({ color: 0xd9f0a3, transparent: true, opacity: 0.09 }),
+    new THREE.LineBasicMaterial({ color: 0xd9f0a3, transparent: true, opacity: terrainMaterialEvidence.wireOverlayOpacity }),
   );
   wire.name = 'motion-panel-hill-terrain-wire';
+  wire.visible = terrainMaterialEvidence.wireOverlayVisible;
   wire.renderOrder = 5;
   const group = new THREE.Group();
   group.name = 'motion-panel-hill-terrain-surface-group';
@@ -5865,6 +5930,9 @@ function createMotionPanelHillTerrainSurface(source, routePlan = null, options =
     overlayLegend,
     overlayColorFingerprint,
     costProfile: costProfile.id,
+    terrainMaterialMode,
+    terrainMaterialEvidence,
+    wireOverlayVisible: terrainMaterialEvidence.wireOverlayVisible,
   };
   group.add(mesh);
   group.add(wire);
@@ -5891,6 +5959,9 @@ function createMotionPanelHillTerrainSurface(source, routePlan = null, options =
       overlayLegend,
       overlayColorFingerprint,
       costProfile,
+      terrainMaterialMode,
+      terrainMaterialEvidence,
+      wireOverlayVisible: terrainMaterialEvidence.wireOverlayVisible,
       checksums: source?.checksums || null,
       displayTransform: frame.displayTransform,
     },
@@ -9690,6 +9761,7 @@ window.kaminosPreviewHillMotionAffordanceRoutePlan = async function(packet, data
   const source = decodeHillMotionAffordancePacket({ packet, data });
   const costProfile = normalizeMotionTerrainRouteCostProfile(options.costProfile || 'cautious-lerm', options.costWeights || {});
   const terrainOverlayMode = normalizeMotionPanelHillTerrainOverlayMode(options.terrainOverlayMode || options.overlayMode || 'semantic-styles');
+  const terrainMaterialMode = normalizeMotionPanelHillTerrainMaterialMode(options.terrainMaterialMode || options.materialMode || 'solid-semantic-surface-v0');
   const routeFixture = motionPanelHillRouteFixtureEndpoints(source, options.routeFixture || options.fixture || 'meadow-cross');
   motionPanelHillAffordanceLastPacket = packet;
   motionPanelHillAffordanceLastData = data;
@@ -9697,6 +9769,7 @@ window.kaminosPreviewHillMotionAffordanceRoutePlan = async function(packet, data
     ...options,
     costProfile: costProfile.id,
     terrainOverlayMode,
+    terrainMaterialMode,
     routeFixture: routeFixture.id,
   };
   syncMotionPanelHillRouteControls(motionPanelHillAffordanceLastOptions);
@@ -9727,6 +9800,7 @@ window.kaminosPreviewHillMotionAffordanceRoutePlan = async function(packet, data
     goalSource: options.goal ? 'explicit-option' : 'fixture',
   };
   routePlan.evidence.terrainOverlayMode = terrainOverlayMode;
+  routePlan.evidence.terrainMaterialMode = terrainMaterialMode;
   const previousState = motionTemporalState;
   motionPanelHillAffordanceRoutePlan = routePlan;
   motionPanelHillAffordanceSource = source;
@@ -9740,7 +9814,7 @@ window.kaminosPreviewHillMotionAffordanceRoutePlan = async function(packet, data
   const frame = frameMotionPanelPathWorld();
   updateMotionPanelPathWorldReadout();
   setMotionPanelTemporalStatus(`Hill route plan installed: ${routePlan.routePoints.length} points`, '#66bb6a');
-  setInfo(`Hill terrain ${terrainOverlayMode} overlay mounted into Path World`);
+  setInfo(`Hill terrain ${terrainOverlayMode} overlay mounted as ${terrainMaterialMode}`);
   return {
     schema: 'kaminos.motion-panel-hill-affordance-route-preview.v0',
     ok: true,
@@ -9752,6 +9826,7 @@ window.kaminosPreviewHillMotionAffordanceRoutePlan = async function(packet, data
       costProfile: routePlan.cost?.profile || costProfile,
       pathWorldRouteFixture: routePlan.evidence.routeFixture,
       terrainOverlayMode,
+      terrainMaterialMode,
       staticFieldMode: routePlan.evidence?.staticFieldMode || 'frozen-source-snapshot',
       dynamicContinuity: routePlan.evidence?.dynamicContinuity || 'not-claimed',
       checksums: source.checksums,
@@ -9762,6 +9837,7 @@ window.kaminosPreviewHillMotionAffordanceRoutePlan = async function(packet, data
     hillTerrainFrame: state?.pathWorld?.hillTerrainFrame || null,
     pathWorldRouteFixture: routePlan.evidence.routeFixture,
     terrainOverlayMode,
+    terrainMaterialMode,
     frame,
   };
 };
@@ -10187,6 +10263,7 @@ async function previewHillMotionAffordanceRouteFromParams(params = new URLSearch
     id: params.get('kaminos_hill_affordance_id') || 'url-hill-motion-affordance-route',
     costProfile: params.get('kaminos_hill_route_profile') || 'cautious-lerm',
     terrainOverlayMode: params.get('kaminos_hill_terrain_overlay') || 'semantic-styles',
+    terrainMaterialMode: params.get('kaminos_hill_terrain_material') || 'solid-semantic-surface-v0',
     routeFixture: params.get('kaminos_hill_route_fixture') || 'meadow-cross',
   });
 }
@@ -10222,7 +10299,12 @@ function initKaminosMotionAgencyRoute() {
   };
   document.getElementById('motion-panel-cliplet-playback')?.addEventListener('change', resetMotionClipletSelection);
   document.getElementById('motion-panel-route-mode')?.addEventListener('change', resetMotionClipletSelection);
-  for (const id of ['motion-panel-hill-route-profile-control', 'motion-panel-hill-route-fixture-control', 'motion-panel-hill-terrain-overlay-control']) {
+  for (const id of [
+    'motion-panel-hill-route-profile-control',
+    'motion-panel-hill-route-fixture-control',
+    'motion-panel-hill-terrain-overlay-control',
+    'motion-panel-hill-terrain-material-control',
+  ]) {
     document.getElementById(id)?.addEventListener('change', () => void refreshMotionPanelHillRouteControlsFromInputs());
   }
   document.querySelectorAll('input[name="motion-panel-cliplet-interrupt"]').forEach(input => {
@@ -10580,6 +10662,9 @@ window.kaminosGeneratedPoseTemporalDebugState = function() {
     motionPanelHillRouteProfileComparison: state?.pathWorld?.routeProfileComparison || state?.lastPathWorld?.routeProfileComparison || null,
     pathWorldRouteFixture: (state?.pathWorld?.routePlan || state?.lastPathWorld?.routePlan || null)?.evidence?.routeFixture || state?.lastPathWorld?.pathWorldRouteFixture || null,
     terrainOverlayMode: state?.lastPathWorld?.terrainOverlayMode || state?.pathWorld?.hillTerrainSurface?.terrainOverlayMode || null,
+    terrainMaterialMode: state?.lastPathWorld?.hillTerrainSurface?.terrainMaterialMode || state?.pathWorld?.hillTerrainSurface?.terrainMaterialMode || null,
+    terrainMaterialEvidence: state?.lastPathWorld?.hillTerrainSurface?.terrainMaterialEvidence || state?.pathWorld?.hillTerrainSurface?.terrainMaterialEvidence || null,
+    wireOverlayVisible: state?.lastPathWorld?.hillTerrainSurface?.wireOverlayVisible ?? state?.pathWorld?.hillTerrainSurface?.wireOverlayVisible ?? null,
     staticFieldMode: (state?.pathWorld?.routePlan || state?.lastPathWorld?.routePlan || null)?.evidence?.staticFieldMode || null,
     dynamicContinuity: (state?.pathWorld?.routePlan || state?.lastPathWorld?.routePlan || null)?.evidence?.dynamicContinuity || null,
     pathWorldActiveSource: state?.lastPathWorldInterrupt?.activeSource || state?.lastPathWorldRouteAuthority || (state?.lastPathWorld ? 'world-path' : null),

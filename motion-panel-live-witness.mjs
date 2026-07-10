@@ -478,6 +478,9 @@ async function installHillAffordanceRoutePlan(ws) {
       pathWorldActiveSource: state.pathWorldActiveSource || null,
       pathWorldRouteAuthority: state.pathWorldRouteAuthority || null,
       hillTerrainSurface: state.hillTerrainSurface || null,
+      terrainMaterialMode: state.hillTerrainSurface?.terrainMaterialMode || result?.hillTerrainSurface?.terrainMaterialMode || null,
+      terrainMaterialEvidence: state.hillTerrainSurface?.terrainMaterialEvidence || result?.hillTerrainSurface?.terrainMaterialEvidence || null,
+      wireOverlayVisible: state.hillTerrainSurface?.wireOverlayVisible ?? result?.hillTerrainSurface?.wireOverlayVisible ?? null,
       terrainOverlayLegend: state.hillTerrainSurface?.overlayLegend || result?.hillTerrainSurface?.overlayLegend || null,
       overlayColorFingerprint: state.hillTerrainSurface?.overlayColorFingerprint
         || state.hillTerrainSurface?.overlayLegend?.overlayColorFingerprint
@@ -706,6 +709,21 @@ async function captureFrame(ws, index) {
       dynamicContinuity: actor?.dynamicContinuity || state?.dynamicContinuity || state?.pathWorldRoutePlan?.evidence?.dynamicContinuity || state?.pathWorld?.routePlan?.evidence?.dynamicContinuity || null,
       pathWorldActiveSource: actor?.pathWorldActiveSource || state?.pathWorldActiveSource || null,
       hillTerrainSurface: actor?.hillTerrainSurface || state?.hillTerrainSurface || state?.pathWorld?.hillTerrainSurface || null,
+      terrainMaterialMode: actor?.hillTerrainSurface?.terrainMaterialMode
+        || state?.terrainMaterialMode
+        || state?.hillTerrainSurface?.terrainMaterialMode
+        || state?.pathWorld?.hillTerrainSurface?.terrainMaterialMode
+        || null,
+      terrainMaterialEvidence: actor?.hillTerrainSurface?.terrainMaterialEvidence
+        || state?.terrainMaterialEvidence
+        || state?.hillTerrainSurface?.terrainMaterialEvidence
+        || state?.pathWorld?.hillTerrainSurface?.terrainMaterialEvidence
+        || null,
+      wireOverlayVisible: actor?.hillTerrainSurface?.wireOverlayVisible
+        ?? state?.wireOverlayVisible
+        ?? state?.hillTerrainSurface?.wireOverlayVisible
+        ?? state?.pathWorld?.hillTerrainSurface?.wireOverlayVisible
+        ?? null,
       terrainOverlayMode: actor?.hillTerrainSurface?.terrainOverlayMode
         || actor?.hillTerrainSurface?.overlayLegend?.mode
         || state?.hillTerrainSurface?.terrainOverlayMode
