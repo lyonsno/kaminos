@@ -244,6 +244,19 @@ const PERFORMANCE_MATRIX_SCENARIOS = [
     renderScale: 0.75,
   },
   {
+    id: 'activity-p4-dense-low-res',
+    label: 'Activity P4 Dense Low Res',
+    simGrid: 64,
+    majorantGrid: 32,
+    pressureStrategy: 'activity_tiers',
+    activityPressureP4Enabled: true,
+    activityPressureDispatchStrategy: 'dense',
+    activityVorticityGate: 1,
+    activityDetailGate: 1,
+    raySteps: 96,
+    renderScale: 0.75,
+  },
+  {
     id: 'activity-p3-low-res',
     label: 'Activity P3 Low Res',
     simGrid: 64,
@@ -439,6 +452,7 @@ function routeFor(run) {
   applyNumberParam(url, 'volume_pressure_iterations', run.pressureIterations);
   applyStringParam(url, 'volume_pressure_strategy', run.pressureStrategy);
   applyBooleanParam(url, 'volume_activity_pressure_p4', run.activityPressureP4Enabled);
+  applyStringParam(url, 'volume_activity_pressure_dispatch', run.activityPressureDispatchStrategy);
   applyNumberParam(url, 'volume_activity_vorticity_gate', run.activityVorticityGate);
   applyNumberParam(url, 'volume_activity_detail_gate', run.activityDetailGate);
   applyBooleanParam(url, 'volume_sim_profile', run.simProfile);
@@ -569,6 +583,7 @@ function effectiveConfig(witness) {
     pressureIterationDefault: witness.pressureIterationDefault ?? controls.pressureIterationDefault,
     pressureStrategy: witness.pressureStrategy ?? controls.pressureStrategy ?? witness.simCostLedger?.pressureStrategy,
     activityPressureP4Enabled: witness.activityTierControls?.activityPressureP4Enabled ?? controls.activityPressureP4Enabled,
+    activityPressureDispatchStrategy: witness.activityTierControls?.activityPressureDispatchStrategy ?? controls.activityPressureDispatchStrategy,
     activityTierControls: witness.activityTierControls,
     tallPlumePressureIterationStrategy: witness.tallPlumePressureIterationStrategy ?? witness.simCostLedger?.tallPlumePressureIterationStrategy,
     tallPlumePressureIterationTarget: witness.tallPlumePressureIterationTarget ?? witness.simCostLedger?.tallPlumePressureIterationTarget,

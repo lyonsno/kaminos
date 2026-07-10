@@ -11029,6 +11029,7 @@ let routedVolumePressureStrategy = 'global';
 let routedVolumePressureMode = 'auto';
 let routedVolumeActivityPressureP4Enabled = true;
 let routedVolumeActivityPressureReadbackCadence = undefined;
+let routedVolumeActivityPressureDispatchStrategy = undefined;
 let routedVolumeSimProfile = false;
 let routedVolumeLifecycleEffect = 'none';
 let routedVolumeLifecycleT = 0;
@@ -11708,6 +11709,7 @@ const VOLUME_BASIN_ROUTE_FIELDS = [
   ['pressureTierHeroMax', 'volume_pressure_tier_hero_max'],
   ['activityPressureP4Enabled', 'volume_activity_pressure_p4'],
   ['activityPressureReadbackCadence', 'volume_activity_pressure_readback_cadence'],
+  ['activityPressureDispatchStrategy', 'volume_activity_pressure_dispatch'],
   ['activityVorticityGate', 'volume_activity_vorticity_gate'],
   ['activityDetailGate', 'volume_activity_detail_gate'],
   ['reactionLiveView', 'volume_reaction_live_view'],
@@ -16224,6 +16226,7 @@ function readVolumeControls() {
     pressureTierHeroMax: parseFloat(document.getElementById('volume-pressure-tier-hero-max').value),
     activityPressureP4Enabled: routedVolumeActivityPressureP4Enabled,
     activityPressureReadbackCadence: routedVolumeActivityPressureReadbackCadence,
+    activityPressureDispatchStrategy: routedVolumeActivityPressureDispatchStrategy,
     activityVorticityGate: parseFloat(document.getElementById('volume-activity-vorticity-gate').value),
     activityDetailGate: parseFloat(document.getElementById('volume-activity-detail-gate').value),
     canonicalSpread: parseFloat(document.getElementById('volume-canonical-spread').value),
@@ -17087,6 +17090,10 @@ async function initKaminosVolumeRoute() {
   const routeActivityPressureReadbackCadence = Number(params.get('volume_activity_pressure_readback_cadence'));
   routedVolumeActivityPressureReadbackCadence = params.has('volume_activity_pressure_readback_cadence') && Number.isFinite(routeActivityPressureReadbackCadence)
     ? Math.max(1, Math.min(240, Math.round(routeActivityPressureReadbackCadence)))
+    : undefined;
+  const routeActivityPressureDispatch = String(params.get('volume_activity_pressure_dispatch') || '').toLowerCase();
+  routedVolumeActivityPressureDispatchStrategy = routeActivityPressureDispatch === 'dense' || routeActivityPressureDispatch === 'dense-masked' || routeActivityPressureDispatch === 'dense-full-grid-activity-pressure-masked-v0'
+    ? 'dense-full-grid-activity-pressure-masked-v0'
     : undefined;
   const routeActivityVorticityGate = Number(params.get('volume_activity_vorticity_gate'));
   if (params.has('volume_activity_vorticity_gate') && Number.isFinite(routeActivityVorticityGate)) {

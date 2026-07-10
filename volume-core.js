@@ -358,9 +358,11 @@ const ACTIVITY_GATED_DETAIL_FORCE_STRATEGY = 'activity-gated-vorticity-detail-fo
 const ACTIVITY_PRESSURE_SPEND_MODEL = 'base-midbody-activity-pressure-spend-v0';
 const ACTIVITY_PRESSURE_INACTIVE_SKIP_POLICY = 'inactive-extra-tier-cell-early-out-v0';
 const ACTIVE_PRESSURE_WORKGROUP_DISPATCH_STRATEGY = 'gpu-built-active-pressure-workgroups-indirect-v0';
+const ACTIVITY_PRESSURE_DENSE_DISPATCH_STRATEGY = 'dense-full-grid-activity-pressure-masked-v0';
 const ACTIVE_PRESSURE_WORKGROUP_ACCOUNTING = 'active-pressure-workgroup-counter-readback-v0';
 const ACTIVE_PRESSURE_WORKGROUP_READBACK_DEFAULT_CADENCE = 30;
 const ACTIVITY_PRESSURE_P4_STRATEGY = 'core-replay-p4-active-workgroups-v0';
+const ACTIVITY_PRESSURE_P4_DENSE_STRATEGY = 'core-replay-p4-dense-activity-mask-v0';
 const ACTIVITY_PRESSURE_P4_DISABLED_STRATEGY = 'activity-p4-disabled-comparison-p3-v0';
 const PRESSURE_PROJECTION_READ_STRATEGY_COMPOSITE = 'composite-pressure-tier-read-v0';
 const PRESSURE_PROJECTION_READ_STRATEGY_SINGLE_BUFFER = 'single-pressure-buffer-read-v0';
@@ -634,7 +636,19 @@ function normalizePressureTierControls(value = {}) {
   const activityPressureP4Enabled = value.activityPressureP4Enabled === false || value.activityPressureP4Enabled === 0 || value.activityPressureP4Enabled === '0' || value.activityPressureP4Enabled === 'false'
     ? 0
     : 1;
-  return { lowerMax, heroMin, heroMax, overlay, activityPressureP4Enabled };
+  const activityPressureDispatchStrategy = normalizeActivityPressureDispatchStrategy(value.activityPressureDispatchStrategy);
+  return { lowerMax, heroMin, heroMax, overlay, activityPressureP4Enabled, activityPressureDispatchStrategy };
+}
+
+function normalizeActivityPressureDispatchStrategy(value) {
+  const normalized = String(value || '').toLowerCase().replace(/_/g, '-');
+  if (normalized === 'dense' || normalized === 'dense-masked' || normalized === ACTIVITY_PRESSURE_DENSE_DISPATCH_STRATEGY) return ACTIVITY_PRESSURE_DENSE_DISPATCH_STRATEGY;
+  return ACTIVE_PRESSURE_WORKGROUP_DISPATCH_STRATEGY;
+}
+
+function activityPressureP4Strategy(activityPressureP4Enabled, activityPressureDenseDispatch = false) {
+  if (!activityPressureP4Enabled) return ACTIVITY_PRESSURE_P4_DISABLED_STRATEGY;
+  return activityPressureDenseDispatch ? ACTIVITY_PRESSURE_P4_DENSE_STRATEGY : ACTIVITY_PRESSURE_P4_STRATEGY;
 }
 
 function normalizeActivityPressureReadbackCadence(value, simProfile = false) {
@@ -673,14 +687,16 @@ function pressureTierDispatchPlan(gridSize, pressureStrategy, scene, pressureTie
   }
   if (activity) {
     const activityPressureP4Enabled = tierControls.activityPressureP4Enabled > 0.5;
+    const activityPressureDispatchStrategy = tierControls.activityPressureDispatchStrategy;
+    const activityPressureDenseDispatch = activityPressureDispatchStrategy === ACTIVITY_PRESSURE_DENSE_DISPATCH_STRATEGY;
     const activeWorkgroupPasses = activityPressureP4Enabled ? 3 : 2;
     const activityDispatches = [
       { tier: 1, label: 'full-volume-pressure1', workgroupsX: workgroups, workgroupsY: workgroups, workgroupsZ: workgroups, pressureBuffer: 'B', mask: 'global-floor' },
-      { tier: 2, label: 'activity-broad-pressure2-indirect', dispatch: 'indirect', indirectOffsetBytes: 0, candidateWorkgroups: fullWorkgroups, pressureBuffer: 'A', mask: 'current-sim-broad-occupancy-front' },
-      { tier: 3, label: 'activity-core-pressure3-indirect', dispatch: 'indirect', indirectOffsetBytes: 12, candidateWorkgroups: fullWorkgroups, pressureBuffer: 'B', mask: 'current-sim-core-front-ridge' },
+      { tier: 2, label: activityPressureDenseDispatch ? 'activity-broad-pressure2-dense-masked' : 'activity-broad-pressure2-indirect', dispatch: activityPressureDenseDispatch ? 'direct' : 'indirect', workgroupsX: workgroups, workgroupsY: workgroups, workgroupsZ: workgroups, indirectOffsetBytes: 0, candidateWorkgroups: fullWorkgroups, pressureBuffer: 'A', mask: 'current-sim-broad-occupancy-front' },
+      { tier: 3, label: activityPressureDenseDispatch ? 'activity-core-pressure3-dense-masked' : 'activity-core-pressure3-indirect', dispatch: activityPressureDenseDispatch ? 'direct' : 'indirect', workgroupsX: workgroups, workgroupsY: workgroups, workgroupsZ: workgroups, indirectOffsetBytes: 12, candidateWorkgroups: fullWorkgroups, pressureBuffer: 'B', mask: 'current-sim-core-front-ridge' },
     ];
     if (activityPressureP4Enabled) {
-      activityDispatches.push({ tier: 4, label: 'activity-core-pressure4-replay-indirect', dispatch: 'indirect', indirectOffsetBytes: 24, candidateWorkgroups: fullWorkgroups, pressureBuffer: 'A', mask: 'current-sim-core-front-ridge-replay' });
+      activityDispatches.push({ tier: 4, label: activityPressureDenseDispatch ? 'activity-core-pressure4-replay-dense-masked' : 'activity-core-pressure4-replay-indirect', dispatch: activityPressureDenseDispatch ? 'direct' : 'indirect', workgroupsX: workgroups, workgroupsY: workgroups, workgroupsZ: workgroups, indirectOffsetBytes: 24, candidateWorkgroups: fullWorkgroups, pressureBuffer: 'A', mask: 'current-sim-core-front-ridge-replay' });
     }
     return {
       strategy: TALL_PLUME_ACTIVITY_PRESSURE_TIER_STRATEGY,
@@ -689,11 +705,13 @@ function pressureTierDispatchPlan(gridSize, pressureStrategy, scene, pressureTie
       fullGridPasses: 1,
       partialSlabPasses: 0,
       equivalentPasses: 1 + activeWorkgroupPasses,
-      activeWorkgroupBuildPasses: 1,
-      activeWorkgroupPasses,
+      activeWorkgroupBuildPasses: activityPressureDenseDispatch ? 0 : 1,
+      activeWorkgroupPasses: activityPressureDenseDispatch ? 0 : activeWorkgroupPasses,
       activeWorkgroupCandidatePasses: activeWorkgroupPasses,
       activeWorkgroupCandidateWorkgroups: fullWorkgroups * activeWorkgroupPasses,
       activityPressureP4Enabled,
+      activityPressureDispatchStrategy,
+      activityPressureDenseDispatch,
       dispatches: activityDispatches,
       bounds: activityPressureP4Enabled
         ? { pressure1: { mask: 'global-floor', buffer: 'B' }, pressure2: { mask: 'broad-activity', buffer: 'A' }, pressure3: { mask: 'core-activity', buffer: 'B' }, pressure4: { mask: 'core-activity-replay', buffer: 'A' } }
@@ -702,8 +720,8 @@ function pressureTierDispatchPlan(gridSize, pressureStrategy, scene, pressureTie
         ? { pressure1: { mask: 'global-floor', buffer: 'B' }, pressure2: { mask: 'broad-activity', buffer: 'A' }, pressure3: { mask: 'core-activity', buffer: 'B' }, pressure4: { mask: 'core-activity-replay', buffer: 'A' } }
         : { pressure1: { mask: 'global-floor', buffer: 'B' }, pressure2: { mask: 'broad-activity', buffer: 'A' }, pressure3: { mask: 'core-activity', buffer: 'B' } },
       effectiveBounds: activityPressureP4Enabled
-        ? { pressure1: { mask: 'global-floor', buffer: 'B' }, pressure2: { mask: 'gpu-built-active-base-midbody-broad-workgroups', buffer: 'A' }, pressure3: { mask: 'gpu-built-active-base-midbody-core-workgroups', buffer: 'B' }, pressure4: { mask: 'gpu-built-active-base-midbody-core-workgroups-replay', buffer: 'A' } }
-        : { pressure1: { mask: 'global-floor', buffer: 'B' }, pressure2: { mask: 'gpu-built-active-base-midbody-broad-workgroups', buffer: 'A' }, pressure3: { mask: 'gpu-built-active-base-midbody-core-workgroups', buffer: 'B' } },
+        ? { pressure1: { mask: 'global-floor', buffer: 'B' }, pressure2: { mask: activityPressureDenseDispatch ? 'dense-full-grid-base-midbody-broad-mask' : 'gpu-built-active-base-midbody-broad-workgroups', buffer: 'A' }, pressure3: { mask: activityPressureDenseDispatch ? 'dense-full-grid-base-midbody-core-mask' : 'gpu-built-active-base-midbody-core-workgroups', buffer: 'B' }, pressure4: { mask: activityPressureDenseDispatch ? 'dense-full-grid-base-midbody-core-mask-replay' : 'gpu-built-active-base-midbody-core-workgroups-replay', buffer: 'A' } }
+        : { pressure1: { mask: 'global-floor', buffer: 'B' }, pressure2: { mask: activityPressureDenseDispatch ? 'dense-full-grid-base-midbody-broad-mask' : 'gpu-built-active-base-midbody-broad-workgroups', buffer: 'A' }, pressure3: { mask: activityPressureDenseDispatch ? 'dense-full-grid-base-midbody-core-mask' : 'gpu-built-active-base-midbody-core-workgroups', buffer: 'B' } },
       bufferOwnership: {
         pressure1: 'B',
         pressure2: 'A',
@@ -716,10 +734,10 @@ function pressureTierDispatchPlan(gridSize, pressureStrategy, scene, pressureTie
       maskSource: 'current-sim-front-occupancy',
       spendModel: ACTIVITY_PRESSURE_SPEND_MODEL,
       inactiveCellPolicy: ACTIVITY_PRESSURE_INACTIVE_SKIP_POLICY,
-      dispatchStrategy: ACTIVE_PRESSURE_WORKGROUP_DISPATCH_STRATEGY,
-      accounting: ACTIVE_PRESSURE_WORKGROUP_ACCOUNTING,
-      p4Strategy: activityPressureP4Enabled ? ACTIVITY_PRESSURE_P4_STRATEGY : ACTIVITY_PRESSURE_P4_DISABLED_STRATEGY,
-      dispatchEfficiency: ACTIVE_PRESSURE_WORKGROUP_DISPATCH_STRATEGY,
+      dispatchStrategy: activityPressureDispatchStrategy,
+      accounting: activityPressureDenseDispatch ? 'dense-dispatch-no-active-workgroup-readback' : ACTIVE_PRESSURE_WORKGROUP_ACCOUNTING,
+      p4Strategy: activityPressureP4Strategy(activityPressureP4Enabled, activityPressureDenseDispatch),
+      dispatchEfficiency: activityPressureDispatchStrategy,
     };
   }
   const lowerWorkgroupsY = Math.max(1, Math.min(workgroups, Math.ceil(Math.ceil(gridSize * tierControls.lowerMax) / 4)));
@@ -1719,6 +1737,11 @@ fn csPressureJacobiTieredLower(@builtin(global_invocation_id) gid: vec3<u32>) {
 @compute @workgroup_size(4, 4, 4)
 fn csPressureJacobiTieredHero(@builtin(global_invocation_id) gid: vec3<u32>) {
   pressureJacobiTiered(gid, pressureTierHeroMin(), pressureTierHeroMax(), 3.0);
+}
+
+@compute @workgroup_size(4, 4, 4)
+fn csPressureJacobiTieredP4(@builtin(global_invocation_id) gid: vec3<u32>) {
+  pressureJacobiTiered(gid, 0.0, 1.0, 4.0);
 }
 
 fn pressureJacobiActivityWorkgroup(activeIndex: u32, localId: vec3<u32>, tier: f32) {
@@ -5277,6 +5300,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let pressureJacobiPipeline = null;
   let pressureJacobiTieredLowerPipeline = null;
   let pressureJacobiTieredHeroPipeline = null;
+  let pressureJacobiTieredP4Pipeline = null;
   let pressureActivityWorkgroupBuildPipeline = null;
   let pressureJacobiActivityWorkgroupLowerPipeline = null;
   let pressureJacobiActivityWorkgroupHeroPipeline = null;
@@ -5449,7 +5473,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     return {
       identity: ACTIVE_PRESSURE_WORKGROUP_ACCOUNTING,
       dispatchStrategy: ACTIVE_PRESSURE_WORKGROUP_DISPATCH_STRATEGY,
-      p4Strategy: activityPressureP4Enabled ? ACTIVITY_PRESSURE_P4_STRATEGY : ACTIVITY_PRESSURE_P4_DISABLED_STRATEGY,
+      p4Strategy: tierPlan?.p4Strategy ?? activityPressureP4Strategy(activityPressureP4Enabled, false),
       activityPressureP4Enabled,
       source: previous?.readbackAvailable ? 'gpu-indirect-args-readback-cadenced' : 'pending-first-gpu-readback',
       readbackAvailable: previous?.readbackAvailable === true,
@@ -5484,7 +5508,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.pressureTierWorkgroupAccounting = {
       identity: ACTIVE_PRESSURE_WORKGROUP_ACCOUNTING,
       dispatchStrategy: ACTIVE_PRESSURE_WORKGROUP_DISPATCH_STRATEGY,
-      p4Strategy: activityPressureP4Enabled ? ACTIVITY_PRESSURE_P4_STRATEGY : ACTIVITY_PRESSURE_P4_DISABLED_STRATEGY,
+      p4Strategy: tierPlan.p4Strategy ?? activityPressureP4Strategy(activityPressureP4Enabled, false),
       activityPressureP4Enabled,
       source: 'gpu-indirect-args-readback-cadenced',
       readbackAvailable: true,
@@ -6209,6 +6233,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       label: `kaminos pressure tiered hero-band jacobi compute pipeline ${gridSize}^3`,
       layout: pressureJacobiTieredPipelineLayout,
       compute: { module: shader, entryPoint: 'csPressureJacobiTieredHero', constants: computePipelineConstants },
+    });
+    pressureJacobiTieredP4Pipeline = device.createComputePipeline({
+      label: `kaminos pressure tiered p4 replay jacobi compute pipeline ${gridSize}^3`,
+      layout: pressureJacobiTieredPipelineLayout,
+      compute: { module: shader, entryPoint: 'csPressureJacobiTieredP4', constants: computePipelineConstants },
     });
     pressureActivityWorkgroupBuildPipeline = device.createComputePipeline({
       label: `kaminos active pressure workgroup build compute pipeline ${gridSize}^3`,
@@ -7114,11 +7143,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       detailGate: uniforms[326],
       maskSource: 'current-sim-front-occupancy-not-render-sidecar',
       inactiveCellPolicy: ACTIVITY_PRESSURE_INACTIVE_SKIP_POLICY,
-      dispatchStrategy: ACTIVE_PRESSURE_WORKGROUP_DISPATCH_STRATEGY,
-      p4Strategy: pressureTierControls.activityPressureP4Enabled > 0.5 ? ACTIVITY_PRESSURE_P4_STRATEGY : ACTIVITY_PRESSURE_P4_DISABLED_STRATEGY,
+      dispatchStrategy: pressureTierControls.activityPressureDispatchStrategy,
+      p4Strategy: activityPressureP4Strategy(pressureTierControls.activityPressureP4Enabled > 0.5, pressureTierControls.activityPressureDispatchStrategy === ACTIVITY_PRESSURE_DENSE_DISPATCH_STRATEGY),
       activityPressureP4Enabled: pressureTierControls.activityPressureP4Enabled > 0.5,
+      activityPressureDispatchStrategy: pressureTierControls.activityPressureDispatchStrategy,
       readbackCadence: normalizeActivityPressureReadbackCadence(controlsSnapshot.activityPressureReadbackCadence, normalizeSimProfileFlag(controlsSnapshot.simProfile)),
-      skipAccounting: ACTIVE_PRESSURE_WORKGROUP_ACCOUNTING,
+      skipAccounting: pressureTierControls.activityPressureDispatchStrategy === ACTIVITY_PRESSURE_DENSE_DISPATCH_STRATEGY ? 'dense-dispatch-cell-mask-no-active-workgroup-readback' : ACTIVE_PRESSURE_WORKGROUP_ACCOUNTING,
     };
     state.volumeScene = normalizeVolumeScene(controlsSnapshot.volumeScene);
     state.bonfireReferenceConfinement = bonfireReferenceConfinementDebug(controlsSnapshot.volumeScene);
@@ -7591,11 +7621,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const pressureStrategy = normalizePressureStrategy(controlsSnapshot.pressureStrategy, controlsSnapshot.volumeScene);
     const tierPlan = pressureTierDispatchPlan(gridSize, pressureStrategy, controlsSnapshot.volumeScene, normalizePressureTierControls(controlsSnapshot));
     const activityPressureTiers = tierPlan.strategy === TALL_PLUME_ACTIVITY_PRESSURE_TIER_STRATEGY;
+    const activityPressureDenseDispatch = activityPressureTiers && tierPlan.dispatchStrategy === ACTIVITY_PRESSURE_DENSE_DISPATCH_STRATEGY;
     if (
       !pressureJacobiPipeline ||
       !pressureProjectPipeline ||
-      (tierPlan.strategy !== TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY_INACTIVE && (!pressureJacobiTieredLowerPipeline || !pressureJacobiTieredHeroPipeline || !pressureProjectTieredPipeline)) ||
-      (activityPressureTiers && (!pressureActivityWorkgroupBuildPipeline || !pressureJacobiActivityWorkgroupLowerPipeline || !pressureJacobiActivityWorkgroupHeroPipeline || !pressureJacobiActivityWorkgroupP4Pipeline || !pressureActivityWorkgroupBuffer || !pressureActivityIndirectArgsBuffer || !pressureActivityWorkgroupBindGroup || pressureActivityReadBindGroups.length !== 2)) ||
+      (tierPlan.strategy !== TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY_INACTIVE && (!pressureJacobiTieredLowerPipeline || !pressureJacobiTieredHeroPipeline || !pressureJacobiTieredP4Pipeline || !pressureProjectTieredPipeline)) ||
+      (activityPressureTiers && !activityPressureDenseDispatch && (!pressureActivityWorkgroupBuildPipeline || !pressureJacobiActivityWorkgroupLowerPipeline || !pressureJacobiActivityWorkgroupHeroPipeline || !pressureJacobiActivityWorkgroupP4Pipeline || !pressureActivityWorkgroupBuffer || !pressureActivityIndirectArgsBuffer || !pressureActivityWorkgroupBindGroup || pressureActivityReadBindGroups.length !== 2)) ||
       pressureJacobiBindGroups.length !== 2 ||
       pressureReadBindGroups.length !== 2 ||
       majorantFrontBindGroups.length !== 2
@@ -7631,7 +7662,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         workgroups,
         `kaminos pressure tier pass 1 ${tierPlan.dispatches[0]?.label || 'full-volume-pressure1'}`
       );
-      if (activityPressureTiers) {
+      if (activityPressureTiers && !activityPressureDenseDispatch) {
         preparePressureActivityWorkgroupBuffer();
         {
           const pass = encoder.beginComputePass({ label: 'kaminos active pressure workgroup build pass' });
@@ -7687,6 +7718,15 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           `kaminos pressure tier pass 3 ${tierPlan.dispatches[2]?.label || 'pressure3'}`,
           bindGroups[currentFluid]
         );
+        if (activityPressureDenseDispatch && tierPlan.activityPressureP4Enabled !== false) {
+          dispatchPressureTierPass(
+            pressureJacobiTieredP4Pipeline,
+            pressureJacobiBindGroups[1],
+            tierPlan.dispatches[3].workgroupsY,
+            `kaminos pressure tier pass 4 ${tierPlan.dispatches[3]?.label || 'activity-pressure4-dense-masked'}`,
+            bindGroups[currentFluid]
+          );
+        }
       }
       {
         const pass = encoder.beginComputePass({ label: 'kaminos tiered pressure projection pass' });
