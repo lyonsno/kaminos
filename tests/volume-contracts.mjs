@@ -63,6 +63,20 @@ assert.match(index, /SMOKE_ARTIFACT_ASSAY_CONTROL_FIELDS[\s\S]*volume_smoke_deta
 assert.match(index, /for \(const field of SMOKE_ARTIFACT_ASSAY_CONTROL_FIELDS\)/, 'smoke artifact assay routes and listeners are table-driven');
 assert.match(index, /id="volume-smoke-fine-breakup-gain"[^>]+value="0"/, 'Fine Breakup defaults off after the operator identified it as a smoke artifact culprit');
 assert.match(index, /id="volume-smoke-render-procedural-gain"[^>]+value="0"/, 'Render Breakup defaults off after the operator identified it as a smoke artifact culprit');
+for (const plumeControl of [
+  ['smokePlumeStemFocus', 'volume-smoke-plume-stem-focus', 'volume_smoke_plume_stem_focus'],
+  ['smokePlumeEntrainment', 'volume-smoke-plume-entrainment', 'volume_smoke_plume_entrainment'],
+  ['smokePlumeCapRoll', 'volume-smoke-plume-cap-roll', 'volume_smoke_plume_cap_roll'],
+  ['smokePlumeAgeContrast', 'volume-smoke-plume-age-contrast', 'volume_smoke_plume_age_contrast'],
+]) {
+  const [key, id, param] = plumeControl;
+  assert.match(index, new RegExp(`id="${id}"[^>]+min="0"[^>]+max="1"`), `${key} explosion-plume slider exposes the full zero-to-one assay range`);
+  assert.match(index, new RegExp(`${param}`), `${key} explosion-plume slider is routable for exact operator smoke replay`);
+  assert.match(index, new RegExp(`${key}:\\s*parseFloat\\(document\\.getElementById\\('${id}'\\)\\.value\\)`), `${key} reaches readVolumeControls`);
+  assert.match(index, new RegExp(`${id}-val`), `${key} has a visible live value readout`);
+}
+assert.match(index, /data-volume-control-section="explosion-plume-dynamics"[\s\S]*volume-smoke-plume-stem-focus[\s\S]*volume-smoke-plume-age-contrast/, 'explosion plume controls sit in their own top-of-volume section');
+assert.match(index, /EXPLOSION_PLUME_CONTROL_FIELDS[\s\S]*volume_smoke_plume_stem_focus[\s\S]*volume_smoke_plume_age_contrast/, 'explosion plume routes and listeners are table-driven');
 assert.match(index, /boundary_fire_bonfire_a_la_ruffles_0709:[\s\S]*reactionLiveView:\s*'boundary_fire'/, 'Boundary Fire Bonfire_a_la_ruffles basin activates boundary-fire as the default live fire view');
 assert.match(index, /boundary_fire_bonfire_a_la_ruffles_0709:[\s\S]*boundarySidecarSource:\s*'baked'[\s\S]*boundarySidecarBlur:\s*1\.00[\s\S]*boundarySidecarWidth:\s*2\.00[\s\S]*boundarySidecarRidge:\s*2\.00/, 'Boundary Fire Bonfire_a_la_ruffles basin uses the promoted baked sidecar reconstruction path');
 assert.match(index, /boundary_fire_bonfire_a_la_ruffles_0709:[\s\S]*reactionBoundaryFireRidge:\s*1\.28[\s\S]*reactionBoundaryFireRidgeCut:\s*0\.10[\s\S]*reactionBoundaryFireLuma:\s*5\.00/, 'Boundary Fire Bonfire_a_la_ruffles basin preserves the promoted ridge and luma values');
@@ -1010,17 +1024,25 @@ assert.match(core, /vel\s*=\s*vel\s*\+\s*smokeMorphologyForce\s*\*\s*activityVor
 assert.match(core, /smokeMorphologyForces:\s*\{[\s\S]*identity:\s*SMOKE_MORPHOLOGY_FORCE_IDENTITY[\s\S]*slotPolicy:\s*'existing-material-fire-micro-front-fields-no-new-channel-v0'/, 'debug state reports smoke morphology force authority and no-new-channel slot policy');
 assert.match(core, /SMOKE_ARTIFACT_ASSAY_IDENTITY\s*=\s*'smoke-artifact-assay-controls-v0'/, 'volume core names the smoke artifact assay control receipt');
 assert.match(core, /smoke_artifact_assay_controls:\s*vec4<f32>/, 'fluid uniforms carry smoke artifact assay controls explicitly');
-assert.match(core, /const uniforms = new Float32Array\(348\)/, 'adding assay controls shifts the uniform buffer deliberately');
-assert.match(core, /uniforms\.set\(previousViewProj\.elements,\s*332\)/, 'previous view-projection matrix starts after the assay controls');
+assert.match(core, /EXPLOSION_PLUME_SMOKE_DYNAMICS_IDENTITY\s*=\s*'explosion-plume-smoke-dynamics-v0'/, 'volume core names the explosion plume smoke dynamics receipt');
+assert.match(core, /explosion_plume_controls:\s*vec4<f32>/, 'fluid uniforms carry explosion plume dynamics controls explicitly');
+assert.match(core, /const uniforms = new Float32Array\(352\)/, 'adding explosion plume controls shifts the uniform buffer deliberately');
+assert.match(core, /uniforms\.set\(previousViewProj\.elements,\s*336\)/, 'previous view-projection matrix starts after the explosion plume controls');
 assert.match(core, /clampFinite\(controlsSnapshot\.smokeFineBreakupGain,\s*0,\s*1,\s*0\)/, 'Fine Breakup uses a zero fallback so missing routes do not re-enable the culprit');
 assert.match(core, /clampFinite\(controlsSnapshot\.smokeRenderProceduralGain,\s*0,\s*1,\s*0\)/, 'Render Breakup uses a zero fallback so missing routes do not re-enable the culprit');
 assert.match(core, /defaultPolicy:\s*'fine-and-render-breakup-default-zero-opt-in-reverse-assay-v0'/, 'smoke artifact assay receipt names the default-killed culprit policy');
+assert.match(core, /fn explosionPlumeSmokeForce/, 'fluid shader has an explosion-plume force separate from generic smoke morphology');
+assert.match(core, /explosionPlumeStem[\s\S]*explosionPlumeEntrainment[\s\S]*explosionPlumeCapRoll/, 'explosion plume force names stem, entrainment, and cap-roll terms explicitly');
+assert.match(core, /vel\s*=\s*vel\s*\+\s*explosionPlumeForce\s*\*\s*activityVorticityGate/, 'explosion plume dynamics inject into velocity through the existing activity vorticity gate');
+assert.match(core, /explosionPlumeSmokeDynamics:\s*\{[\s\S]*identity:\s*EXPLOSION_PLUME_SMOKE_DYNAMICS_IDENTITY[\s\S]*slotPolicy:\s*'existing-material-fire-micro-front-fields-no-new-channel-v0'/, 'debug state reports explosion plume dynamics authority and no-new-channel slot policy');
 assert.match(core, /rawDetailForce[\s\S]*smokeArtifactDetailForceGain/, 'sim detail force can be killed independently by the assay control');
 assert.match(core, /rawFineBreakup[\s\S]*smokeArtifactFineBreakupGain/, 'fine breakup force can be killed independently by the assay control');
 assert.match(core, /smokeMorphologyGain = tallPlumeScene \* clamp\(u\.smoke_artifact_assay_controls\.z/, 'smoke morphology force can be killed independently by the assay control');
 assert.match(core, /smokeRenderProceduralGain[\s\S]*filamentNoise[\s\S]*curtainNoise[\s\S]*verticalPuffBreak/, 'render procedural smoke breakup can be killed independently by the assay control');
 assert.match(core, /smokeArtifactAssayControls[\s\S]*SMOKE_ARTIFACT_ASSAY_IDENTITY[\s\S]*detailForce[\s\S]*renderProcedural/, 'debug state reports effective smoke artifact assay gains');
+assert.match(core, /explosionPlumeSmokeDynamics[\s\S]*stemFocus[\s\S]*entrainment[\s\S]*capRoll[\s\S]*ageContrast/, 'debug state reports effective explosion plume dynamics gains');
 assert.match(volumeWitness, /smokeArtifactAssayControls/, 'volume witness preserves smoke artifact assay receipts in reports');
+assert.match(volumeWitness, /explosionPlumeSmokeDynamics/, 'volume witness preserves explosion plume dynamics receipts in reports');
 assert.match(core, /microDetailDomainWarp\([^)]*detailCoherenceGain/, 'raymarch microdetail warp accepts a scene-gated detail coherence gain');
 assert.match(core, /bonfireRadialFireLickBreakup/, 'bonfire fire-lick breakup uses radial source-local texture rather than one-sided directional combs');
 assert.match(core, /bonfireDetailLateralDamping/, 'bonfire detail forces damp non-wind lateral breakup so Shred/Fire Licks do not impersonate wind');
@@ -1283,7 +1305,7 @@ assert.match(core, /uniforms\[203\]\s*=\s*pyroRadianceChroma/, 'CPU uploads Radi
 assert.match(core, /uniforms\[212\]\s*=\s*pyroFlamePaint/, 'CPU uploads flame paint gain into the Pyro luma uniform block');
 assert.match(core, /uniforms\[213\]\s*=\s*pyroFlameLuma/, 'CPU uploads flame luminance into the Pyro luma uniform block');
 assert.match(core, /writePyroPaletteUniform/, 'CPU uploads editable Pyro palette color endpoints');
-assert.match(core, /uniforms\.set\(previousViewProj\.elements,\s*332\)/, 'previous view-projection matrix shifts after Bite-stack, flow, palette, topology-shell lab, boundary-fire, boundary sidecar reconstruction, sidecar display, scalar activity receiver, activity-tier, and smoke artifact assay uniforms');
+assert.match(core, /uniforms\.set\(previousViewProj\.elements,\s*336\)/, 'previous view-projection matrix shifts after Bite-stack, flow, palette, topology-shell lab, boundary-fire, boundary sidecar reconstruction, sidecar display, scalar activity receiver, activity-tier, smoke artifact assay, and explosion-plume uniforms');
 assert.match(core, /paletteShape/, 'debug state exposes editable Pyro palette shape');
 assert.match(core, /lumaShape/, 'debug state exposes independent Pyro luma shape');
 assert.match(core, /radianceShape/, 'debug state exposes Pyro radiance gate/spill/warmth shape');

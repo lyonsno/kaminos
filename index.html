@@ -1031,6 +1031,29 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
         <span class="slider-val" id="volume-smoke-render-procedural-gain-val">0.00</span>
       </div>
     </div>
+    <div class="volume-control-section" data-volume-control-section="explosion-plume-dynamics">
+      <div class="volume-control-section-title">Explosion Plume Dynamics</div>
+      <div class="slider-row">
+        <span class="slider-label">Stem Focus</span>
+        <input type="range" id="volume-smoke-plume-stem-focus" min="0" max="1" step="0.05" value="0.55">
+        <span class="slider-val" id="volume-smoke-plume-stem-focus-val">0.55</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Rim Entrain</span>
+        <input type="range" id="volume-smoke-plume-entrainment" min="0" max="1" step="0.05" value="0.55">
+        <span class="slider-val" id="volume-smoke-plume-entrainment-val">0.55</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Cap Roll</span>
+        <input type="range" id="volume-smoke-plume-cap-roll" min="0" max="1" step="0.05" value="0.45">
+        <span class="slider-val" id="volume-smoke-plume-cap-roll-val">0.45</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Age Contrast</span>
+        <input type="range" id="volume-smoke-plume-age-contrast" min="0" max="1" step="0.05" value="0.35">
+        <span class="slider-val" id="volume-smoke-plume-age-contrast-val">0.35</span>
+      </div>
+    </div>
     <div class="slider-row">
       <span class="slider-label">Scene</span>
       <select id="volume-scene" class="select-input">
@@ -11824,6 +11847,12 @@ const SMOKE_ARTIFACT_ASSAY_CONTROL_FIELDS = [
   { key: 'smokeMorphologyForceGain', id: 'volume-smoke-morphology-force-gain', param: 'volume_smoke_morphology_force_gain', min: 0, max: 1, decimals: 2 },
   { key: 'smokeRenderProceduralGain', id: 'volume-smoke-render-procedural-gain', param: 'volume_smoke_render_procedural_gain', min: 0, max: 1, decimals: 2 },
 ];
+const EXPLOSION_PLUME_CONTROL_FIELDS = [
+  { key: 'smokePlumeStemFocus', id: 'volume-smoke-plume-stem-focus', param: 'volume_smoke_plume_stem_focus', min: 0, max: 1, decimals: 2 },
+  { key: 'smokePlumeEntrainment', id: 'volume-smoke-plume-entrainment', param: 'volume_smoke_plume_entrainment', min: 0, max: 1, decimals: 2 },
+  { key: 'smokePlumeCapRoll', id: 'volume-smoke-plume-cap-roll', param: 'volume_smoke_plume_cap_roll', min: 0, max: 1, decimals: 2 },
+  { key: 'smokePlumeAgeContrast', id: 'volume-smoke-plume-age-contrast', param: 'volume_smoke_plume_age_contrast', min: 0, max: 1, decimals: 2 },
+];
 
 function normalizeReactionFrontLiveView(value) {
   const mode = String(value || 'off').toLowerCase().replace(/-/g, '_');
@@ -11976,6 +12005,7 @@ const VOLUME_BASIN_ROUTE_FIELDS = [
   ['boundarySidecarSource', 'volume_boundary_sidecar_source'],
   ['boundarySidecarView', 'volume_boundary_sidecar_view'],
   ...SMOKE_ARTIFACT_ASSAY_CONTROL_FIELDS.map(field => [field.key, field.param]),
+  ...EXPLOSION_PLUME_CONTROL_FIELDS.map(field => [field.key, field.param]),
   ...REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS.map(field => [field.key, field.param]),
 ];
 
@@ -16608,6 +16638,10 @@ function readVolumeControls() {
     smokeFineBreakupGain: parseFloat(document.getElementById('volume-smoke-fine-breakup-gain').value),
     smokeMorphologyForceGain: parseFloat(document.getElementById('volume-smoke-morphology-force-gain').value),
     smokeRenderProceduralGain: parseFloat(document.getElementById('volume-smoke-render-procedural-gain').value),
+    smokePlumeStemFocus: parseFloat(document.getElementById('volume-smoke-plume-stem-focus').value),
+    smokePlumeEntrainment: parseFloat(document.getElementById('volume-smoke-plume-entrainment').value),
+    smokePlumeCapRoll: parseFloat(document.getElementById('volume-smoke-plume-cap-roll').value),
+    smokePlumeAgeContrast: parseFloat(document.getElementById('volume-smoke-plume-age-contrast').value),
     pressureMode: pressureConfig.pressureMode,
     pressureEffectiveLabel: pressureConfig.pressureEffectiveLabel,
     pressureTierOverlay: parseFloat(document.getElementById('volume-pressure-tier-overlay').value),
@@ -16775,6 +16809,10 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-smoke-fine-breakup-gain-val').textContent = c.smokeFineBreakupGain.toFixed(2);
   document.getElementById('volume-smoke-morphology-force-gain-val').textContent = c.smokeMorphologyForceGain.toFixed(2);
   document.getElementById('volume-smoke-render-procedural-gain-val').textContent = c.smokeRenderProceduralGain.toFixed(2);
+  document.getElementById('volume-smoke-plume-stem-focus-val').textContent = c.smokePlumeStemFocus.toFixed(2);
+  document.getElementById('volume-smoke-plume-entrainment-val').textContent = c.smokePlumeEntrainment.toFixed(2);
+  document.getElementById('volume-smoke-plume-cap-roll-val').textContent = c.smokePlumeCapRoll.toFixed(2);
+  document.getElementById('volume-smoke-plume-age-contrast-val').textContent = c.smokePlumeAgeContrast.toFixed(2);
   const pressureMode = normalizeVolumePressureMode(c.pressureMode);
   if (pressureMode !== document.getElementById('volume-pressure-mode').value) setVolumeControlValue('volume-pressure-mode', pressureMode);
   document.getElementById('volume-pressure-mode-val').textContent = c.pressureEffectiveLabel || effectivePressureModeLabel(pressureMode, c.pressureIterations ?? defaultVolumePressureIterationsForScene(c.volumeScene));
@@ -17232,6 +17270,12 @@ async function initKaminosVolumeRoute() {
       document.getElementById(field.id).value = String(Math.max(field.min, Math.min(field.max, routed)));
     }
   }
+  for (const field of EXPLOSION_PLUME_CONTROL_FIELDS) {
+    const routed = Number(params.get(field.param));
+    if (params.has(field.param) && Number.isFinite(routed)) {
+      document.getElementById(field.id).value = String(Math.max(field.min, Math.min(field.max, routed)));
+    }
+  }
   const routePyroDynamicDetail = Number(params.get('volume_pyro_detail'));
   if (params.has('volume_pyro_detail') && Number.isFinite(routePyroDynamicDetail)) {
     document.getElementById('volume-pyro-detail').value = String(Math.max(0, Math.min(1, Math.round(routePyroDynamicDetail))));
@@ -17644,6 +17688,10 @@ async function initKaminosVolumeRoute() {
     document.getElementById(id).addEventListener('change', syncControls);
   }
   for (const field of SMOKE_ARTIFACT_ASSAY_CONTROL_FIELDS) {
+    document.getElementById(field.id)?.addEventListener('input', syncControls);
+    document.getElementById(field.id)?.addEventListener('change', syncControls);
+  }
+  for (const field of EXPLOSION_PLUME_CONTROL_FIELDS) {
     document.getElementById(field.id)?.addEventListener('input', syncControls);
     document.getElementById(field.id)?.addEventListener('change', syncControls);
   }

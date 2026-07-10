@@ -2039,6 +2039,9 @@ async function main() {
     assert.equal(state.smokeArtifactAssayControls?.identity, 'smoke-artifact-assay-controls-v0', 'smoke artifact assay control identity did not reach debug state');
     assert.ok(Number.isFinite(state.smokeArtifactAssayControls?.detailForce), 'smoke artifact assay detail gain did not reach debug state');
     assert.ok(Number.isFinite(state.smokeArtifactAssayControls?.renderProcedural), 'smoke artifact assay render gain did not reach debug state');
+    assert.equal(state.explosionPlumeSmokeDynamics?.identity, 'explosion-plume-smoke-dynamics-v0', 'explosion plume smoke dynamics identity did not reach debug state');
+    assert.equal(state.explosionPlumeSmokeDynamics?.slotPolicy, 'existing-material-fire-micro-front-fields-no-new-channel-v0', 'explosion plume smoke dynamics must report the existing-field slot policy');
+    assert.ok(Number.isFinite(state.explosionPlumeSmokeDynamics?.entrainment), 'explosion plume entrainment gain did not reach debug state');
     assert.ok(Math.abs((state.controls?.gridOverlay || 0) - expectedGridOverlay) < 0.001, 'fluid grid overlay did not apply route/debug state');
     assert.ok(Math.abs((state.controls?.raySteps ?? 0) - expectedRaySteps) < 0.001, 'ray-step route/control did not apply');
     assert.ok(Math.abs((state.controls?.adaptiveRays ?? 0) - expectedAdaptiveRays) < 0.001, 'adaptive raymarch route/control did not apply');
@@ -3087,6 +3090,7 @@ async function main() {
       smokeLifecycleRenderer: sample.smokeLifecycleRenderer || state.smokeLifecycleRenderer || null,
       smokeMorphologyForces: sample.smokeMorphologyForces || state.smokeMorphologyForces || null,
       smokeArtifactAssayControls: sample.smokeArtifactAssayControls || state.smokeArtifactAssayControls || null,
+      explosionPlumeSmokeDynamics: sample.explosionPlumeSmokeDynamics || state.explosionPlumeSmokeDynamics || null,
       boundaryFireShellEvidence,
       runtimeQualityRequested: sample.runtimeQualityRequested,
       runtimeQualityEffective: sample.runtimeQualityEffective,
