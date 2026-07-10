@@ -15,6 +15,7 @@ from urllib.parse import urlparse, parse_qs, urlencode
 
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8090
 ROOT = Path(__file__).parent.resolve()
+VOLUME_CAPTURE_DIR = ROOT / "artifacts" / "volume-captures"
 
 # Directories the browse API can access
 SCENES_DIR = ROOT / "scenes"
@@ -946,6 +947,10 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_splat_correction_get(parse_qs(parsed.query))
         elif parsed.path == "/api/forge-host/registry":
             self.handle_forge_host_registry()
+        elif parsed.path == "/api/volume-capture":
+            self.handle_volume_capture_get(parse_qs(parsed.query))
+        elif parsed.path == "/api/volume-captures":
+            self.handle_volume_captures()
         elif parsed.path == "/api/roots":
             self.handle_roots()
         elif parsed.path.startswith("/api/read"):
@@ -971,6 +976,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_ingest_splat(parse_qs(parsed.query))
         elif parsed.path == "/api/splat-correction":
             self.handle_splat_correction_post(parse_qs(parsed.query))
+        elif parsed.path == "/api/volume-capture":
+            self.handle_volume_capture()
         else:
             self.send_json({"error": "Not found"}, 404)
 
@@ -987,6 +994,94 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.send_json({"error": str(error)}, 404)
         except Exception as error:
             self.send_json({"error": str(error)}, 500)
+
+    def volume_capture_slug(self, payload):
+        requested = str(payload.get("name") or payload.get("captureId") or payload.get("kind") or "volume-capture")
+        slug = re.sub(r"[^A-Za-z0-9_.-]+", "-", requested).strip(".-").lower()[:72] or "volume-capture"
+        stamp = time.strftime("%Y%m%d-%H%M%S")
+        return f"{stamp}-{slug}"
+
+    def volume_capture_path_for_id(self, capture_id):
+        safe = re.sub(r"[^A-Za-z0-9_.-]+", "-", str(capture_id or "")).strip(".-")
+        if not safe:
+            raise ValueError("capture id required")
+        if not safe.endswith(".json"):
+            safe = f"{safe}.json"
+        path = (VOLUME_CAPTURE_DIR / safe).resolve()
+        if VOLUME_CAPTURE_DIR.resolve() not in path.parents:
+            raise ValueError("capture path traversal")
+        return path
+
+    def handle_volume_captures(self):
+        VOLUME_CAPTURE_DIR.mkdir(parents=True, exist_ok=True)
+        entries = []
+        for path in sorted(VOLUME_CAPTURE_DIR.glob("*.json"), key=lambda item: item.stat().st_mtime, reverse=True):
+            stat = path.stat()
+            entries.append({
+                "id": path.stem,
+                "relativePath": str(path.relative_to(ROOT)),
+                "bytes": stat.st_size,
+                "mtimeMs": int(stat.st_mtime * 1000),
+            })
+        self.send_json({
+            "identity": "kaminos-volume-captures-index-v1",
+            "root": str(VOLUME_CAPTURE_DIR.relative_to(ROOT)),
+            "entries": entries,
+        })
+
+    def handle_volume_capture_get(self, query):
+        capture_id = (query.get("id") or query.get("capture") or [""])[0]
+        try:
+            path = self.volume_capture_path_for_id(capture_id)
+        except ValueError as error:
+            self.send_json({"error": str(error)}, 400)
+            return
+        if not path.exists():
+            self.send_json({"error": "capture not found", "id": capture_id}, 404)
+            return
+        try:
+            document = json.loads(path.read_text())
+        except Exception as error:
+            self.send_json({"error": f"failed to read capture: {error}"}, 500)
+            return
+        self.send_json(document)
+
+    def handle_volume_capture(self):
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+        except ValueError:
+            self.send_json({"error": "Invalid Content-Length"}, 400)
+            return
+        try:
+            payload = json.loads(self.rfile.read(length) or b"{}")
+        except json.JSONDecodeError:
+            self.send_json({"error": "Invalid JSON"}, 400)
+            return
+        if not isinstance(payload, dict):
+            self.send_json({"error": "capture payload must be a JSON object"}, 400)
+            return
+
+        VOLUME_CAPTURE_DIR.mkdir(parents=True, exist_ok=True)
+        capture_id = self.volume_capture_slug(payload)
+        path = self.volume_capture_path_for_id(capture_id)
+        relative_path = str(path.relative_to(ROOT))
+        document = {
+            "identity": "kaminos-volume-agent-capture-artifact-v1",
+            "captureId": capture_id,
+            "writtenAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "artifactRelativePath": relative_path,
+            "witnessCommand": f"node volume-witness.mjs --capture {relative_path}",
+            "capture": payload,
+        }
+        path.write_text(json.dumps(document, indent=2))
+        self.send_json({
+            "ok": True,
+            "captureId": capture_id,
+            "relativePath": relative_path,
+            "path": str(path),
+            "witnessCommand": document["witnessCommand"],
+            "document": document,
+        })
 
     def handle_run_pipeline(self):
         try:
@@ -1495,7 +1590,7 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
         body = json.dumps(data, indent=2).encode()
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
-        self.send_header("Content-Length", len(body))
+        self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
 

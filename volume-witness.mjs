@@ -11,7 +11,94 @@ for (let i = 2; i < process.argv.length; i += 2) {
   args.set(process.argv[i], process.argv[i + 1]);
 }
 
-const url = args.get('--url') || 'http://127.0.0.1:8095/?kaminos_volume_smoke=1';
+function readVolumeCaptureReplay(capturePath) {
+  if (!capturePath) return null;
+  const resolved = resolve(capturePath);
+  const document = JSON.parse(readFileSync(resolved, 'utf8'));
+  const capture = document.capture || document;
+  const route = capture.route || capture.href || document.route;
+  if (!route) {
+    throw new Error(`Volume capture ${resolved} has no replay route`);
+  }
+  return {
+    path: resolved,
+    documentIdentity: document.identity || null,
+    captureId: document.captureId || capture.captureId || null,
+    artifactRelativePath: document.artifactRelativePath || null,
+    witnessCommand: document.witnessCommand || null,
+    capture,
+    route,
+  };
+}
+
+function volumeParamNameFromControlKey(key) {
+  return `volume_${String(key).replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`)}`;
+}
+
+function captureControlValue(entry) {
+  return entry && typeof entry === 'object' && Object.prototype.hasOwnProperty.call(entry, 'value')
+    ? entry.value
+    : entry;
+}
+
+function buildRouteParamsForWitness(routeUrl, replay) {
+  const params = new URL(routeUrl).searchParams;
+  const controls = replay?.capture?.domControls || {};
+  for (const [key, value] of Object.entries(controls)) {
+    const capturedValue = captureControlValue(value);
+    if (capturedValue === undefined || capturedValue === null || typeof capturedValue === 'object') continue;
+    params.set(volumeParamNameFromControlKey(key), String(capturedValue));
+  }
+  return params;
+}
+
+function assertApprox(actual, expected, message, tolerance = 0.001) {
+  assert.ok(Math.abs((actual ?? 0) - expected) < tolerance, message);
+}
+
+function assertCaptureReplayControls({
+  captureReplay,
+  replayedCaptureControls,
+  state,
+  expectedVolumeScene,
+  expectedGrid,
+  expectedRaySteps,
+  expectedRenderScale,
+  expectedDensity,
+  expectedFire,
+  expectedSmoke,
+}) {
+  const controls = captureReplay?.capture?.domControls || {};
+  const keys = Object.keys(controls);
+  assert.ok(keys.length > 0, 'capture replay had no saved DOM controls to verify');
+  assert.equal(replayedCaptureControls?.total, keys.length, 'capture replay did not enumerate every saved DOM control');
+  assert.equal(replayedCaptureControls?.applied, keys.length, 'capture replay did not apply every saved DOM control');
+  assert.equal(replayedCaptureControls?.skipped ?? 0, 0, 'capture replay skipped saved DOM controls');
+
+  const has = (key) => Object.prototype.hasOwnProperty.call(controls, key);
+  const value = (key) => captureControlValue(controls[key]);
+  const numeric = (key) => Number(value(key));
+
+  if (has('scene')) {
+    assert.equal(state.volumeScene, expectedVolumeScene, 'captured volume scene did not apply');
+    assert.equal(state.controls?.volumeScene, expectedVolumeScene, 'captured volume scene did not reach debug controls');
+  }
+  if (has('resolution')) {
+    assert.equal(Number(state.simGrid), expectedGrid, `captured grid did not apply as ${expectedGrid}^3`);
+  }
+  if (has('steps')) assertApprox(Number(state.controls?.raySteps), expectedRaySteps, 'captured ray steps did not apply');
+  if (has('renderScale')) {
+    assertApprox(Number(state.controls?.renderScale), expectedRenderScale, 'captured render scale did not apply');
+    assertApprox(Number(state.renderScale), expectedRenderScale, 'captured effective render scale did not apply', 0.02);
+  }
+  if (has('density')) assertApprox(Number(state.controls?.density), numeric('density'), 'captured density did not apply');
+  if (has('fire')) assertApprox(Number(state.controls?.fire), numeric('fire'), 'captured fire did not apply');
+  if (has('smoke')) assertApprox(Number(state.controls?.smoke), numeric('smoke'), 'captured smoke did not apply');
+}
+
+const captureReplay = args.has('--capture') ? readVolumeCaptureReplay(args.get('--capture')) : null;
+const isCaptureReplay = Boolean(captureReplay);
+const url = captureReplay?.route || args.get('--url') || 'http://127.0.0.1:8095/?kaminos_volume_smoke=1';
 const out = resolve(args.get('--out') || '/tmp/kaminos-volume-witness.png');
 const reportPath = resolve(args.get('--report') || out.replace(/\.png$/i, '.json'));
 const port = Number(args.get('--debug-port') || randomInt(42000, 62000));
@@ -313,7 +400,7 @@ function expectedTallPlumePressureTierStrategy(volumeScene, pressureStrategy) {
     : TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY_INACTIVE;
 }
 
-const routeParams = new URL(url).searchParams;
+const routeParams = buildRouteParamsForWitness(url, captureReplay);
 const VOLUME_SCENE_PRESETS = {
   canonical_plume: {
     fireScale: 0.86,
@@ -580,9 +667,333 @@ const TALL_PLUME_OPERATOR_PRESETS = {
     canonicalCenterline: 1.00,
     canonicalBodyBalance: 0.00,
   },
+  pyro_flow_small_bonfire_gamut_0707: {
+    volumeScene: 'tall_plume',
+    density: 6.00,
+    fire: 0.00,
+    radiance: 3.00,
+    absorption: 2.00,
+    glow: 2.50,
+    smoke: 0.10,
+    curl: 1.15,
+    microdetail: 2.50,
+    interfaceShred: 4.50,
+    fireLicks: 5.00,
+    projection: 1.50,
+    speed: 3.95,
+    raySteps: 160,
+    adaptiveRays: 0.00,
+    occupancySkip: 0.20,
+    majorantSkip: 1.00,
+    majorantSmooth: 1.00,
+    majorantGuard: 1.00,
+    temporalAccum: 0.00,
+    temporalJitter: 0.00,
+    historyClamp: 1.00,
+    fireScale: 0.35,
+    detailScale: 0.45,
+    plumeHeight: 1.00,
+    windStrength: 0.00,
+    windAngle: -65,
+    windHeight: 0.20,
+    renderScale: 0.55,
+    inputRadius: 0.19,
+    flowRate: 0.85,
+    resolution: 160,
+    majorantGrid: 48,
+    pyroDynamicDetail: 1,
+    pyroMaterialGain: 0.20,
+    pyroInterfaceFocus: 0.00,
+    pyroEdgeBite: 0.00,
+    pyroBiteBorder: 0.00,
+    pyroBiteTeeth: 0.00,
+    pyroBiteWake: 0.00,
+    pyroBiteHeight: 0.00,
+    pyroBiteFireLock: 1.00,
+    pyroBiteCore: 0.00,
+    pyroBiteCoreCut: 1.00,
+    pyroBiteRim: 0.00,
+    pyroBiteRimCut: 1.00,
+    pyroBiteAfter: 0.00,
+    pyroBiteAfterCut: 1.00,
+    pyroFireMode: 'pyro-owned',
+    pyroFlamePaint: 0.00,
+    pyroStockMix: 1.00,
+    pyroFlameLuma: 0.95,
+    pyroFlameCoreColor: '#ffae00',
+    pyroFlameEdgeColor: '#ff4d00',
+    pyroBiteHeat: 0.00,
+    pyroBiteChroma: 0.00,
+    pyroBiteLuma: 0.00,
+    pyroBiteEmberColor: '#ff6600',
+    pyroBiteHotColor: '#ff4000',
+    pyroSmokeFold: 0.00,
+    pyroFoldBorder: 0.00,
+    pyroFoldWake: 0.00,
+    pyroWakeLift: 0.00,
+    pyroWakeWarmth: 0.00,
+    pyroWakeLuma: 0.00,
+    pyroWakeShadowColor: '#384c50',
+    pyroWakeEmberColor: '#b06a2a',
+    pyroFlowBite: 3.00,
+    pyroFlowBorder: 1.00,
+    pyroFlowTeeth: 0.00,
+    pyroFlowRise: 1.00,
+    pyroFlowFireLock: 1.00,
+    pyroFlowLuma: 3.00,
+    pyroFlowRadiance: 4.00,
+    pyroFlowSpikes: 1.00,
+    pyroFlowCoolColor: '#ff6400',
+    pyroFlowHotColor: '#ff320f',
+    pyroRadiance: 0.00,
+    pyroRadianceGate: 0.15,
+    pyroRadianceSpill: 0.00,
+    pyroRadianceWarmth: 0.00,
+    pyroRadianceHue: 0.00,
+    pyroRadianceChroma: 1.00,
+    pyroRadianceLuma: 3.00,
+    pyroRadianceCoolColor: '#eb0000',
+    pyroRadianceWarmColor: '#ffcd75',
+    pyroRadianceSource: 'fire',
+    pyroRadianceHeight: 0.00,
+    pyroRadianceBorder: 0.00,
+    pyroRadianceTeeth: 0.00,
+    pyroRadianceRise: 0.00,
+    pyroRadianceFireLock: 1.00,
+    pyroDiagnosticPaint: 0.00,
+    pyroCarrierView: 'normal',
+    pyroOverdrive: 8.00,
+    pressureMode: 'global-p3',
+    pressureTierOverlay: 0.00,
+    pressureTierLowerMax: 0.50,
+    pressureTierHeroMin: 0.05,
+    pressureTierHeroMax: 0.22,
+    canonicalSpread: 1.00,
+    canonicalCenterline: 1.00,
+    canonicalBodyBalance: 0.00,
+  },
+  boundary_fire_bonfire_a_la_ruffles_0709: {
+    volumeScene: 'tall_plume',
+    pyroCompareMode: 'live',
+    reactionLiveView: 'boundary_fire',
+    reactionBoundaryGradient: 0.20,
+    reactionBoundarySupportThermal: 0.86,
+    reactionBoundarySupportReaction: 1.80,
+    reactionBoundarySupportFront: 1.08,
+    reactionBoundarySupportInterface: 0.24,
+    reactionBoundaryCut: 0.00,
+    reactionBoundarySoftness: 0.29,
+    reactionBoundaryCoreReject: 1.00,
+    reactionBoundaryTopology: 2.50,
+    reactionBoundaryCurl: 2.00,
+    reactionBoundaryDivergence: 1.00,
+    reactionBoundaryContrast: 0.65,
+    reactionBoundaryGamma: 2.65,
+    reactionBoundaryOpacity: 3.00,
+    reactionBoundaryFireRidge: 2.00,
+    reactionBoundaryFireRidgeCut: 0.21,
+    reactionBoundaryFireTip: 2.00,
+    reactionBoundaryFireErosion: 0.12,
+    reactionBoundaryFireCleanBlue: 0.14,
+    reactionBoundaryFireSoot: 0.78,
+    reactionBoundaryFireYellow: 0.22,
+    reactionBoundaryFireWarmth: 0.68,
+    reactionBoundaryFireLuma: 5.00,
+    reactionHeatMin: 0.00,
+    reactionFuelMax: 0.067,
+    reactionFlameMin: 0.031,
+    reactionFrontMax: 0.076,
+    reactionShellGamma: 1.55,
+    density: 4.65,
+    fire: 3.50,
+    radiance: 0.00,
+    absorption: 0.00,
+    glow: 0.00,
+    curl: 1.40,
+    microdetail: 0.85,
+    interfaceShred: 3.10,
+    fireLicks: 4.30,
+    projection: 1.50,
+    speed: 2.35,
+    fireScale: 0.35,
+    detailScale: 2.70,
+    plumeHeight: 1.85,
+    windStrength: 1.50,
+    windAngle: -65,
+    windHeight: -0.80,
+    inputRadius: 0.08,
+    flowRate: 0.45,
+    raySteps: 160,
+    adaptiveRays: 0.30,
+    occupancySkip: 1.00,
+    majorantSkip: 0.95,
+    majorantSmooth: 1.00,
+    majorantGuard: 1.00,
+    temporalAccum: 0.00,
+    temporalJitter: 0.00,
+    historyClamp: 1.00,
+    renderScale: 0.50,
+    resolution: 128,
+    majorantGrid: 48,
+    fireRenderMode: 'shell',
+    shellInspectMode: 'shell',
+    shellAmount: 0.00,
+    shellWidth: 0.05,
+    shellSoftClip: 0.20,
+    shellSmoke: 2.00,
+    pyroDynamicDetail: 1,
+    pyroMaterialGain: 0.20,
+    pyroInterfaceFocus: 0.00,
+    pyroFireMode: 'pyro-owned',
+    pyroFlameLuma: 0.95,
+    pyroFlameCoreColor: '#ffae00',
+    pyroFlameEdgeColor: '#ff4d00',
+    pyroFlowBite: 3.00,
+    pyroFlowBorder: 1.00,
+    pyroFlowTeeth: 0.00,
+    pyroFlowRise: 1.00,
+    pyroFlowFireLock: 1.00,
+    pyroFlowLuma: 3.00,
+    pyroFlowRadiance: 4.00,
+    pyroFlowSpikes: 1.00,
+    pyroFlowCoolColor: '#ff6400',
+    pyroFlowHotColor: '#ff320f',
+    pyroRadianceGate: 0.15,
+    pyroRadianceSpill: 0.00,
+    pyroRadianceWarmth: 0.00,
+    pyroRadianceHue: 0.00,
+    pyroRadianceChroma: 1.00,
+    pyroRadianceLuma: 3.00,
+    pyroRadianceCoolColor: '#eb0000',
+    pyroRadianceWarmColor: '#ffcd75',
+    pyroRadianceSource: 'fire',
+    pyroRadianceHeight: 0.00,
+    pyroRadianceBorder: 0.00,
+    pyroRadianceTeeth: 0.00,
+    pyroRadianceRise: 0.00,
+    pyroRadianceFireLock: 1.00,
+    pyroEdgeBite: 0.00,
+    pyroBiteBorder: 0.00,
+    pyroBiteTeeth: 0.00,
+    pyroBiteWake: 0.00,
+    pyroBiteHeight: 0.00,
+    pyroBiteFireLock: 1.00,
+    pyroBiteCoreCut: 1.00,
+    pyroBiteRimCut: 1.00,
+    pyroBiteAfterCut: 1.00,
+    pyroBiteHeat: 0.00,
+    pyroBiteChroma: 0.00,
+    pyroBiteLuma: 0.00,
+    pyroBiteEmberColor: '#ff6600',
+    pyroBiteHotColor: '#ff4000',
+    pyroSmokeFold: 0.00,
+    pyroFoldBorder: 0.00,
+    pyroFoldWake: 0.00,
+    pyroWakeLift: 0.00,
+    pyroWakeWarmth: 0.00,
+    pyroWakeLuma: 0.00,
+    pyroCarrierView: 'normal',
+    pyroOverdrive: 8.00,
+    pressureMode: 'global-p3',
+  },
+  exploding_jellow_fireball_basin_0706: {
+    volumeScene: 'tall_plume',
+    density: 6.00,
+    fire: 0.00,
+    radiance: 3.00,
+    absorption: 1.05,
+    glow: 0.50,
+    smoke: 2.15,
+    curl: 4.00,
+    microdetail: 2.50,
+    interfaceShred: 5.00,
+    fireLicks: 5.00,
+    projection: 1.50,
+    speed: 3.70,
+    raySteps: 160,
+    adaptiveRays: 0.05,
+    occupancySkip: 0.05,
+    majorantSkip: 0.95,
+    majorantSmooth: 0.00,
+    majorantGuard: 1.00,
+    temporalAccum: 0.00,
+    temporalJitter: 0.00,
+    historyClamp: 1.00,
+    fireScale: 0.65,
+    detailScale: 0.45,
+    plumeHeight: 1.30,
+    windStrength: 1.50,
+    windAngle: -65,
+    windHeight: -0.80,
+    renderScale: 1.00,
+    inputRadius: 0.13,
+    flowRate: 0.30,
+    resolution: 96,
+    majorantGrid: 48,
+    pyroDynamicDetail: 1,
+    pyroMaterialGain: 1.50,
+    pyroInterfaceFocus: 0.00,
+    pyroEdgeBite: 0.55,
+    pyroBiteBorder: 1.00,
+    pyroBiteTeeth: 0.35,
+    pyroBiteWake: 0.35,
+    pyroBiteHeight: 0.60,
+    pyroBiteFireLock: 1.00,
+    pyroBiteCore: 0.15,
+    pyroBiteCoreCut: 0.90,
+    pyroBiteRim: 1.00,
+    pyroBiteRimCut: 1.00,
+    pyroBiteAfter: 1.00,
+    pyroBiteAfterCut: 0.00,
+    pyroFireMode: 'pyro-owned',
+    pyroFlamePaint: 0.00,
+    pyroStockMix: 1.00,
+    pyroFlameLuma: 3.00,
+    pyroFlameCoreColor: '#ff4d00',
+    pyroFlameEdgeColor: '#ff4d00',
+    pyroBiteHeat: 1.00,
+    pyroBiteChroma: 0.65,
+    pyroBiteLuma: 3.00,
+    pyroBiteEmberColor: '#ff6600',
+    pyroBiteHotColor: '#ff4000',
+    pyroSmokeFold: 0.05,
+    pyroFoldBorder: 0.00,
+    pyroFoldWake: 0.00,
+    pyroWakeLift: 0.00,
+    pyroWakeWarmth: 0.00,
+    pyroWakeLuma: 3.00,
+    pyroWakeShadowColor: '#384c50',
+    pyroWakeEmberColor: '#b06a2a',
+    pyroRadiance: 4.30,
+    pyroRadianceGate: 0.45,
+    pyroRadianceSpill: 0.00,
+    pyroRadianceWarmth: 1.00,
+    pyroRadianceHue: 1.00,
+    pyroRadianceChroma: 0.15,
+    pyroRadianceLuma: 2.50,
+    pyroRadianceCoolColor: '#ff6b6b',
+    pyroRadianceWarmColor: '#ff0000',
+    pyroRadianceSource: 'fire',
+    pyroRadianceHeight: 1.00,
+    pyroRadianceBorder: 0.70,
+    pyroRadianceTeeth: 0.55,
+    pyroRadianceRise: 1.00,
+    pyroRadianceFireLock: 0.00,
+    pyroDiagnosticPaint: 0.00,
+    pyroCarrierView: 'normal',
+    pyroOverdrive: 8.00,
+    pressureMode: 'global-p3',
+    pressureTierOverlay: 0.00,
+    pressureTierLowerMax: 0.50,
+    pressureTierHeroMin: 0.05,
+    pressureTierHeroMax: 0.22,
+    canonicalSpread: 1.00,
+    canonicalCenterline: 1.00,
+    canonicalBodyBalance: 0.00,
+  },
 };
 
-const DEFAULT_VOLUME_SMOKE_TALL_PRESET = 'pyro_material_bonfire_family_0702';
+const DEFAULT_VOLUME_SMOKE_TALL_PRESET = 'boundary_fire_bonfire_a_la_ruffles_0709';
 const CANONICAL_VOLUME_MACRO_PRESETS = {
   macro_foothold_0621: {
     density: 0.45,
@@ -1227,9 +1638,93 @@ async function captureViewportScreenshot(ws, path) {
   return path;
 }
 
+async function replayCaptureControls(ws, capture = {}) {
+  const controls = capture.domControls || {};
+  if (!controls || Object.keys(controls).length === 0) {
+    return {
+      identity: 'kaminos-volume-capture-control-replay-v0',
+      applied: 0,
+      skipped: 0,
+      total: 0,
+      reason: 'no-dom-controls',
+    };
+  }
+  const replayEval = await wsRequest(ws, 'Runtime.evaluate', {
+    expression: `(() => {
+      const controls = ${JSON.stringify(controls)};
+      const results = [];
+      const idForKey = (key) => 'volume-' + String(key).replace(/[A-Z]/g, (m) => '-' + m.toLowerCase());
+      const valueFor = (entry) => entry && typeof entry === 'object' && Object.prototype.hasOwnProperty.call(entry, 'value') ? entry.value : entry;
+      for (const [key, entry] of Object.entries(controls)) {
+        const id = entry && typeof entry === 'object' && entry.id ? entry.id : idForKey(key);
+        const el = document.getElementById(id);
+        if (!el) {
+          results.push({ key, id, applied: false, reason: 'missing-element' });
+          continue;
+        }
+        const value = valueFor(entry);
+        if (el.type === 'checkbox') {
+          el.checked = Boolean(value);
+        } else {
+          el.value = String(value);
+        }
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+        results.push({ key, id, applied: true, value });
+      }
+      if (typeof readVolumeControls === 'function') {
+        window.__kaminosVolumePrototype?.setControls?.(readVolumeControls());
+      }
+      return {
+        identity: 'kaminos-volume-capture-control-replay-v0',
+        total: results.length,
+        applied: results.filter((item) => item.applied).length,
+        skipped: results.filter((item) => !item.applied).length,
+        results,
+      };
+    })()`,
+    returnByValue: true,
+  });
+  return replayEval.result.value;
+}
+
+async function replayCaptureCamera(ws, capture = {}) {
+  const camera = capture.camera || null;
+  if (!camera) {
+    return {
+      identity: 'kaminos-volume-capture-camera-replay-v0',
+      applied: false,
+      reason: 'no-camera',
+    };
+  }
+  const cameraEval = await wsRequest(ws, 'Runtime.evaluate', {
+    expression: `(() => {
+      const camera = ${JSON.stringify(camera)};
+      if (typeof window.kaminosSetCameraDebugPose !== 'function') {
+        return {
+          identity: 'kaminos-volume-capture-camera-replay-v0',
+          applied: false,
+          reason: 'missing-kaminosSetCameraDebugPose',
+          camera,
+        };
+      }
+      return {
+        identity: 'kaminos-volume-capture-camera-replay-v0',
+        applied: true,
+        camera,
+        result: window.kaminosSetCameraDebugPose(camera),
+      };
+    })()`,
+    returnByValue: true,
+  });
+  return cameraEval.result.value;
+}
+
 async function main() {
   mkdirSync(dirname(out), { recursive: true });
   mkdirSync(dirname(reportPath), { recursive: true });
+  let replayedCaptureControls = null;
+  let replayedCaptureCamera = null;
 
   const browserSession = await attachOrLaunchSharedBrowser();
 
@@ -1248,6 +1743,12 @@ async function main() {
     await wsRequest(ws, 'Page.navigate', { url });
     if (!reuseBrowser) {
       await wsRequest(ws, 'Page.bringToFront');
+    }
+    if (isCaptureReplay) {
+      phase = 'capture-replay';
+      await delay(500);
+      replayedCaptureControls = await replayCaptureControls(ws, captureReplay.capture);
+      replayedCaptureCamera = await replayCaptureCamera(ws, captureReplay.capture);
     }
     await delay(settleMs);
     if (expectedExternalEmitterMode === 'synthetic_hand_trails') {
@@ -1289,10 +1790,79 @@ async function main() {
     const bridge = bridgeEval.result.value;
     assert.equal(bridge?.identity, 'volume-main-renderer-bridge-v0', 'wrong volume main-renderer bridge identity');
     assert.equal(bridge?.textureSource, 'kaminos-volume-canvas', 'volume bridge is not sourcing the native volume canvas');
+    if ((state.frameCount || 0) <= 5 || (state.displayWidth || 0) <= 0 || (state.displayHeight || 0) <= 0) {
+      await wsRequest(ws, 'Page.captureScreenshot', { format: 'png', fromSurface: true });
+      for (let i = 0; i < 40; i++) {
+        const stateEval = await wsRequest(ws, 'Runtime.evaluate', {
+          expression: 'window.__kaminosVolumePrototype?.debugState?.()',
+          returnByValue: true,
+        });
+        state = stateEval.result.value || state;
+        if ((state.frameCount || 0) > 5 && (state.displayWidth || 0) > 0 && (state.displayHeight || 0) > 0) break;
+        await delay(250);
+      }
+    }
     assert.ok(
       state.frameCount > 5,
       `volume route did not render enough frames (${state.frameCount || 0} frames at ${state.displayWidth || 0}x${state.displayHeight || 0})`,
     );
+    if (isCaptureReplay) {
+      assertCaptureReplayControls({
+        captureReplay,
+        replayedCaptureControls,
+        state,
+        expectedVolumeScene,
+        expectedGrid,
+        expectedRaySteps,
+        expectedRenderScale,
+        expectedDensity,
+        expectedFire,
+        expectedSmoke,
+      });
+      phase = 'capture-replay-evidence';
+      const screenshot = await wsRequest(ws, 'Page.captureScreenshot', {
+        format: 'png',
+        fromSurface: true,
+      });
+      const screenshotBuffer = Buffer.from(screenshot.data, 'base64');
+      writeFileSync(out, screenshotBuffer);
+      if (fullScreenshot) writeFileSync(fullScreenshot, screenshotBuffer);
+      const screenshotMetrics = measureScreenshot(screenshotBuffer);
+      if (screenshotMetrics.litPixels < 1000 || screenshotMetrics.meanLuma < 1.2) {
+        throw new Error(`capture replay screenshot missing visible volume: ${JSON.stringify(screenshotMetrics)}`);
+      }
+      const report = {
+        identity: 'kaminos-volume-witness-report-v0',
+        requestedRoute: url,
+        captureReplay: {
+          path: captureReplay.path,
+          documentIdentity: captureReplay.documentIdentity,
+          captureId: captureReplay.captureId,
+          artifactRelativePath: captureReplay.artifactRelativePath,
+          witnessCommand: captureReplay.witnessCommand,
+          kind: captureReplay.capture?.kind || null,
+          route: captureReplay.route,
+          controls: replayedCaptureControls,
+          camera: replayedCaptureCamera,
+        },
+        windowSize,
+        settleMs,
+        evidenceMode,
+        visualEvidenceMode,
+        phase,
+        effectiveRoute: state.effectiveRoute,
+        prototypeIdentity: state.prototypeIdentity,
+        active: state.active,
+        state,
+        screenshotMetrics,
+        screenshot: out,
+        fullScreenshot: fullScreenshot || null,
+      };
+      writeFileSync(reportPath, JSON.stringify(report, null, 2));
+      ws.close();
+      proc.kill('SIGTERM');
+      return;
+    }
     assert.equal(state.volumeScene, expectedVolumeScene, 'volume scene route/control did not apply');
     assert.equal(state.controls?.volumeScene, expectedVolumeScene, 'volume scene debug controls did not preserve route identity');
     assert.equal(state.simGrid, expectedGrid, `fluid sim is not running on the expected ${expectedGrid}^3 grid`);
@@ -2308,6 +2878,17 @@ async function main() {
     }
     const report = {
       requestedRoute: url,
+      captureReplay: isCaptureReplay ? {
+        path: captureReplay.path,
+        documentIdentity: captureReplay.documentIdentity,
+        captureId: captureReplay.captureId,
+        artifactRelativePath: captureReplay.artifactRelativePath,
+        witnessCommand: captureReplay.witnessCommand,
+        kind: captureReplay.capture?.kind || null,
+        route: captureReplay.route,
+        controls: replayedCaptureControls,
+        camera: replayedCaptureCamera,
+      } : null,
       settleMs,
       windowSize,
       evidenceMode,
@@ -2542,6 +3123,17 @@ async function main() {
     }
     const report = {
       requestedRoute: url,
+      captureReplay: isCaptureReplay ? {
+        path: captureReplay.path,
+        documentIdentity: captureReplay.documentIdentity,
+        captureId: captureReplay.captureId,
+        artifactRelativePath: captureReplay.artifactRelativePath,
+        witnessCommand: captureReplay.witnessCommand,
+        kind: captureReplay.capture?.kind || null,
+        route: captureReplay.route,
+        controls: replayedCaptureControls,
+        camera: replayedCaptureCamera,
+      } : null,
       windowSize,
       evidenceMode,
       visualEvidenceMode,

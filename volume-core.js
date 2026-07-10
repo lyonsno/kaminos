@@ -7,6 +7,14 @@ const FULL_FIELD_EXPORT_IDENTITY = 'kaminos.volume.full-field-export.v0';
 const DEBUG_FIELD_TILE_PATCH_IDENTITY = 'debug-field-tile-patch-render-override-v0';
 const FULL_FIELD_BUFFER_OVERRIDE_IDENTITY = 'debug-full-field-buffer-render-override-v0';
 const PYRO_FULL_FIELD_OVERRIDE_RENDER_STATE_REFRESH_STEPS = 4;
+const BOUNDARY_SIDECAR_IDENTITY = 'baked-boundary-sidecar-v0';
+const BOUNDARY_SIDECAR_BAKE_AUTHORITY = 'band-limited-support-coverage-ridge-proximity-footprint-v1';
+const TRUTH_ORACLE_ACTIVITY_RECEIVER_IDENTITY = 'truth-oracle-scalar-activity-receiver-v0';
+const TRUTH_ORACLE_ACTIVITY_CUE_AUTHORITY = 'truth-high-diagnostic-activity-projected-to-receiver-grid-v0';
+const PROCEDURAL_ACTIVITY_CUE_AUTHORITY = 'procedural-receiver-activity-proxy-no-truth-v0';
+const SCALAR_ACTIVITY_RECEIVER_HOOK_IDENTITY = 'scalar-activity-receiver-hook-controls-v0';
+const REACTION_FRONT_STAGE_IDENTITY = 'reaction-front-stage-fields-v0';
+const REACTION_FRONT_ATLAS_SCHEMA = 'kaminos.volume.reaction-front-atlas.v0';
 const DEFAULT_GRID_SIZE = 96;
 const SUPPORTED_GRID_SIZES = [32, 48, 64, 96, 128, 160, 192];
 const FLUID_SLOTS_PER_CELL = 4;
@@ -62,6 +70,12 @@ function normalizeGridSize(value) {
   return DEFAULT_GRID_SIZE;
 }
 
+function normalizeScalarActivityCueGridSize(value, fallback = DEFAULT_GRID_SIZE) {
+  const requested = Math.round(Number(value));
+  if (Number.isFinite(requested) && requested > 0) return requested;
+  return fallback;
+}
+
 function normalizeMajorantGridSize(value) {
   const requested = Number(value);
   if (SUPPORTED_MAJORANT_GRID_SIZES.includes(requested)) return requested;
@@ -108,6 +122,35 @@ function normalizeCanonicalContentMode(value) {
 
 function canonicalContentModeValue(value) {
   return CANONICAL_CONTENT_MODE_VALUES[normalizeCanonicalContentMode(value)] || 0;
+}
+
+function normalizeBoundarySidecarSource(value) {
+  const normalized = String(value || 'live').toLowerCase().replace(/-/g, '_');
+  if (normalized === 'baked' || normalized === 'mix') return normalized;
+  return 'live';
+}
+
+function boundarySidecarSourceValue(value) {
+  const normalized = normalizeBoundarySidecarSource(value);
+  if (normalized === 'baked') return 1;
+  if (normalized === 'mix') return 2;
+  return 0;
+}
+
+function normalizeBoundarySidecarView(value) {
+  const normalized = String(value || 'off').toLowerCase().replace(/-/g, '_');
+  if (normalized === 'support' || normalized === 'coverage' || normalized === 'ridge' || normalized === 'proximity' || normalized === 'footprint') return normalized;
+  return 'off';
+}
+
+function boundarySidecarViewValue(value) {
+  const normalized = normalizeBoundarySidecarView(value);
+  if (normalized === 'support') return 1;
+  if (normalized === 'coverage') return 2;
+  if (normalized === 'ridge') return 3;
+  if (normalized === 'proximity') return 4;
+  if (normalized === 'footprint') return 5;
+  return 0;
 }
 
 function normalizeWindStrength(value) {
@@ -303,6 +346,10 @@ function majorantBufferBytes(majorantGridSize = DEFAULT_MAJORANT_GRID_SIZE) {
   return majorantGridSize * majorantGridSize * majorantGridSize * 4 * Float32Array.BYTES_PER_ELEMENT;
 }
 
+function boundarySidecarBufferBytes(gridSize) {
+  return gridCellCount(gridSize) * 4 * Float32Array.BYTES_PER_ELEMENT;
+}
+
 function frontFieldBufferBytes(gridSize) {
   return gridCellCount(gridSize) * Float32Array.BYTES_PER_ELEMENT;
 }
@@ -364,10 +411,68 @@ function externalEmitterBufferBytes() {
   return MAX_EXTERNAL_EMITTERS * EXTERNAL_EMITTER_COMPONENTS * Float32Array.BYTES_PER_ELEMENT;
 }
 
+function scalarActivityCueBufferBytes(grid = DEFAULT_GRID_SIZE) {
+  return gridCellCount(normalizeGridSize(grid)) * Float32Array.BYTES_PER_ELEMENT;
+}
+
 function clampFinite(value, min, max, fallback) {
   const number = Number(value);
   if (!Number.isFinite(number)) return fallback;
   return Math.max(min, Math.min(max, number));
+}
+
+function normalizeScalarActivityReceiverControls(snapshot = {}) {
+  return {
+    enabled: clampFinite(snapshot.oracleActivityCue, 0, 1, 0),
+    display: clampFinite(snapshot.oracleActivityDisplay, 0, 1, 0),
+    curlNoiseGain: clampFinite(snapshot.oracleActivityCurlNoise, 0, 3, 0),
+    vorticityGain: clampFinite(snapshot.oracleActivityVorticity, 0, 3, 0),
+    materialGain: clampFinite(snapshot.oracleActivityMaterial, 0, 3, 0),
+  };
+}
+
+function smoothstep01(edge0, edge1, value) {
+  if (edge0 === edge1) return value >= edge1 ? 1 : 0;
+  const t = clampFinite((value - edge0) / (edge1 - edge0), 0, 1, 0);
+  return t * t * (3 - 2 * t);
+}
+
+function normalizeReactionFrontAtlasControls(controls = {}) {
+  const orderedPair = (minValue, maxValue, minFallback, maxFallback, lo, hi) => {
+    const a = clampFinite(minValue, lo, hi, minFallback);
+    const b = clampFinite(maxValue, lo, hi, maxFallback);
+    return a <= b ? [a, b] : [b, a];
+  };
+  const [heatMin, heatMax] = orderedPair(controls.reactionHeatMin, controls.reactionHeatMax, 0.026, 0.42, 0, 1.2);
+  const [fuelMin, fuelMax] = orderedPair(controls.reactionFuelMin, controls.reactionFuelMax, 0.0015, 0.055, 0, 0.18);
+  const [flameMin, flameMax] = orderedPair(controls.reactionFlameMin, controls.reactionFlameMax, 0.0035, 0.12, 0, 0.35);
+  const [frontMin, frontMax] = orderedPair(controls.reactionFrontMin, controls.reactionFrontMax, 0.0015, 0.075, 0, 0.25);
+  const [gradientMin, gradientMax] = orderedPair(controls.reactionGradientMin, controls.reactionGradientMax, 0.018, 0.18, 0, 0.6);
+  const [coreMin, coreMax] = orderedPair(controls.reactionCoreMin, controls.reactionCoreMax, 0.18, 0.95, 0, 1.6);
+  const [divergenceMin, divergenceMax] = orderedPair(controls.reactionDivergenceMin, controls.reactionDivergenceMax, 0.004, 0.07, 0, 0.2);
+  return {
+    heatMin,
+    heatMax,
+    fuelMin,
+    fuelMax,
+    flameMin,
+    flameMax,
+    frontMin,
+    frontMax,
+    gradientMin,
+    gradientMax,
+    coreMin,
+    coreMax,
+    coreReject: clampFinite(controls.reactionCoreReject, 0, 1, 0.82),
+    topologyGain: clampFinite(controls.reactionTopologyGain, 0, 2.5, 0.44),
+    stretchErode: clampFinite(controls.reactionStretchErode, 0, 1, 0),
+    divergenceMin,
+    divergenceMax,
+    divergenceGain: clampFinite(controls.reactionDivergenceGain, 0, 1, 0),
+    curlWarp: clampFinite(controls.reactionCurlWarp, 0, 3, 0),
+    shellGamma: clampFinite(controls.reactionShellGamma, 0.35, 3, 1),
+    shellContrast: clampFinite(controls.reactionShellContrast, 0.25, 5, 1),
+  };
 }
 
 function pyroHexColorToRgb(value, fallback) {
@@ -416,7 +521,8 @@ function pyroCarrierViewModeValue(value) {
   if (mode === 'fold') return 3;
   if (mode === 'wake') return 4;
   if (mode === 'radiance') return 5;
-  if (mode === 'all') return 6;
+  if (mode === 'flow') return 6;
+  if (mode === 'all') return 7;
   return 0;
 }
 
@@ -424,6 +530,42 @@ function pyroRadianceSourceValue(value) {
   const mode = String(value || 'fire').toLowerCase();
   if (mode === 'mixed') return 1;
   if (mode === 'wake') return 2;
+  return 0;
+}
+
+function normalizeFireRenderMode(value) {
+  const mode = String(value || 'shell').toLowerCase().replace(/-/g, '_');
+  if (mode === 'off') return 'off';
+  if (mode === 'inspect' || mode === 'carrier_inspect') return 'inspect';
+  if (mode === 'stock' || mode === 'legacy') return 'stock';
+  return 'shell';
+}
+
+function fireRenderModeValue(value) {
+  const mode = normalizeFireRenderMode(value);
+  if (mode === 'off') return 0;
+  if (mode === 'inspect') return 2;
+  if (mode === 'stock') return 3;
+  return 1;
+}
+
+function normalizeShellInspectMode(value) {
+  const mode = String(value || 'shell').toLowerCase().replace(/-/g, '_');
+  if (['thermal', 'reaction', 'front', 'edge', 'core', 'curl', 'divergence', 'boundary', 'boundary_fire'].includes(mode)) return mode;
+  return 'shell';
+}
+
+function shellInspectModeValue(value) {
+  const mode = normalizeShellInspectMode(value);
+  if (mode === 'thermal') return 1;
+  if (mode === 'reaction') return 2;
+  if (mode === 'front') return 3;
+  if (mode === 'edge') return 4;
+  if (mode === 'core') return 5;
+  if (mode === 'curl') return 6;
+  if (mode === 'divergence') return 7;
+  if (mode === 'boundary') return 8;
+  if (mode === 'boundary_fire') return 9;
   return 0;
 }
 
@@ -680,6 +822,8 @@ struct Uniforms {
   pyro_luma_controls2: vec4<f32>,
   pyro_bite_stack_controls: vec4<f32>,
   pyro_bite_stack_controls2: vec4<f32>,
+  pyro_flow_controls: vec4<f32>,
+  pyro_flow_controls2: vec4<f32>,
   pyro_palette_flame: vec4<f32>,
   pyro_palette_flame_edge: vec4<f32>,
   pyro_palette_bite: vec4<f32>,
@@ -688,6 +832,20 @@ struct Uniforms {
   pyro_palette_wake_ember: vec4<f32>,
   pyro_palette_radiance: vec4<f32>,
   pyro_palette_radiance_warm: vec4<f32>,
+  pyro_palette_flow: vec4<f32>,
+  pyro_palette_flow_hot: vec4<f32>,
+  topology_shell_controls: vec4<f32>,
+  topology_shell_carriers: vec4<f32>,
+  topology_shell_shape: vec4<f32>,
+  topology_shell_transport: vec4<f32>,
+  topology_shell_light: vec4<f32>,
+  boundary_fire_structure: vec4<f32>,
+  boundary_fire_color: vec4<f32>,
+  boundary_fire_display: vec4<f32>,
+  boundary_sidecar_controls: vec4<f32>,
+  boundary_sidecar_display: vec4<f32>,
+  oracle_activity_controls: vec4<f32>,
+  oracle_activity_controls2: vec4<f32>,
   previousViewProj: mat4x4<f32>,
 };
 
@@ -715,9 +873,12 @@ struct ExternalEmitterInfluence {
 @group(0) @binding(6) var<storage, read> externalEmitters: array<ExternalEmitter>;
 @group(0) @binding(7) var<storage, read> frontSrc: array<f32>;
 @group(0) @binding(8) var<storage, read_write> frontDst: array<f32>;
+@group(0) @binding(9) var<storage, read> oracleActivityCue: array<f32>;
+@group(0) @binding(10) var<storage, read> boundarySidecar: array<vec4<f32>>;
 @group(1) @binding(0) var<storage, read_write> majorantDst: array<vec4<f32>>;
 @group(2) @binding(0) var<storage, read> pressureSrc: array<vec4<f32>>;
 @group(2) @binding(1) var<storage, read_write> pressureDst: array<vec4<f32>>;
+@group(3) @binding(0) var<storage, read_write> boundarySidecarDst: array<vec4<f32>>;
 
 struct VSOut {
   @builtin(position) pos: vec4<f32>,
@@ -1004,6 +1165,31 @@ fn sampleWorldFrontField(p: vec3<f32>) -> f32 {
   return sampleFrontField(cell);
 }
 
+fn sampleBoundarySidecarCell(c: vec3<i32>) -> vec4<f32> {
+  return boundarySidecar[index3(clampCell(c))];
+}
+
+fn sampleWorldBoundarySidecar(p: vec3<f32>) -> vec4<f32> {
+  let q = clamp((p * 0.5 + vec3<f32>(0.5)) * f32(GRID) - vec3<f32>(0.5), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.001));
+  let i0 = vec3<i32>(floor(q));
+  let f = fract(q);
+  let c000 = sampleBoundarySidecarCell(i0 + vec3<i32>(0, 0, 0));
+  let c100 = sampleBoundarySidecarCell(i0 + vec3<i32>(1, 0, 0));
+  let c010 = sampleBoundarySidecarCell(i0 + vec3<i32>(0, 1, 0));
+  let c110 = sampleBoundarySidecarCell(i0 + vec3<i32>(1, 1, 0));
+  let c001 = sampleBoundarySidecarCell(i0 + vec3<i32>(0, 0, 1));
+  let c101 = sampleBoundarySidecarCell(i0 + vec3<i32>(1, 0, 1));
+  let c011 = sampleBoundarySidecarCell(i0 + vec3<i32>(0, 1, 1));
+  let c111 = sampleBoundarySidecarCell(i0 + vec3<i32>(1, 1, 1));
+  let x00 = mix(c000, c100, f.x);
+  let x10 = mix(c010, c110, f.x);
+  let x01 = mix(c001, c101, f.x);
+  let x11 = mix(c011, c111, f.x);
+  let y0 = mix(x00, x10, f.y);
+  let y1 = mix(x01, x11, f.y);
+  return mix(y0, y1, f.z);
+}
+
 fn majorantIndex(c: vec3<u32>) -> u32 {
   return c.x + c.y * MAJORANT_GRID + c.z * MAJORANT_GRID * MAJORANT_GRID;
 }
@@ -1122,6 +1308,44 @@ fn divergenceAtCell(c: vec3<i32>) -> f32 {
   let vz0 = readSlot(c + vec3<i32>(0, 0, -1), 0u).z;
   let vz1 = readSlot(c + vec3<i32>(0, 0,  1), 0u).z;
   return ((vx1 - vx0) + (vy1 - vy0) + (vz1 - vz0)) * 0.5;
+}
+
+fn proceduralReceiverActivityCue(c: vec3<i32>) -> f32 {
+  let flowEnergy = curlMagnitudeAtCell(c) + abs(divergenceAtCell(c));
+  let fireLayer = readSlot(c, 2u);
+  let microLayer = readSlot(c, 3u);
+  let front = readFrontField(c);
+  let materialEnergy = max(max(fireLayer.x, fireLayer.z), max(microLayer.y, front));
+  return clamp(max(smoothstep(0.010, 0.13, flowEnergy), smoothstep(0.025, 0.74, materialEnergy) * 0.72), 0.0, 1.0);
+}
+
+fn rawTruthOracleActivityCueAtCell(c: vec3<i32>) -> f32 {
+  let safe = clamp(c, vec3<i32>(0), vec3<i32>(i32(GRID) - 1));
+  let idx = u32(safe.x) + u32(safe.y) * GRID + u32(safe.z) * GRID * GRID;
+  let externalCue = clamp(oracleActivityCue[idx], 0.0, 1.0);
+  let proceduralCue = proceduralReceiverActivityCue(c);
+  let externalCueEnabled = step(0.5, u.oracle_activity_controls2.y);
+  return clamp(mix(proceduralCue, externalCue, externalCueEnabled), 0.0, 1.0);
+}
+
+fn truthOracleActivityCueAtCell(c: vec3<i32>) -> f32 {
+  return rawTruthOracleActivityCueAtCell(c) * clamp(u.oracle_activity_controls.x, 0.0, 1.0);
+}
+
+fn oracleActivityCurlNoiseForce(c: vec3<i32>, p: vec3<f32>, time: f32, cue: f32, gain: f32) -> vec3<f32> {
+  let amount = clamp(cue * gain, 0.0, 3.0);
+  let base = turbulentDetailForce(p * 2.05 + vec3<f32>(0.17, -0.23, 0.11), time * 1.37 + f32(c.x + c.y * 3 + c.z * 7) * 0.0009);
+  let crossA = cross(normalize(base + vec3<f32>(0.001)), normalize(vec3<f32>(p.z, -p.x, p.y) + vec3<f32>(0.001)));
+  return normalize(base + crossA * 0.55 + vec3<f32>(0.001)) * amount * 0.020;
+}
+
+fn oracleActivityVorticityConfinement(c: vec3<i32>, cue: f32, gain: f32) -> vec3<f32> {
+  return vorticityConfinement(c, clamp(cue * gain, 0.0, 3.0) * 0.085);
+}
+
+fn oracleActivityMaterialBirth(cue: f32, gain: f32, heat: f32, smoke: f32, flame: f32, source: f32) -> f32 {
+  let support = clamp(0.34 + heat * 0.22 + smoke * 0.10 + flame * 0.32 + source * 0.22, 0.0, 1.35);
+  return clamp(cue * gain, 0.0, 3.0) * support;
 }
 
 fn pressureProjectionCorrection(c: vec3<i32>, strength: f32) -> vec3<f32> {
@@ -1900,6 +2124,37 @@ fn emissiveTemperature(fireLayer: vec4<f32>, material: vec4<f32>, microLayer: ve
   );
 }
 
+fn boundarySupportFromSlots(velocityDensity: vec4<f32>, material: vec4<f32>, fireLayer: vec4<f32>, microLayer: vec4<f32>, frontTopology: f32, supportWeights: vec4<f32>) -> f32 {
+  let velMag = length(velocityDensity.xyz);
+  let rawTemp = emissiveTemperature(fireLayer, material, microLayer, velMag);
+  let heat = material.y;
+  let fuel = material.z;
+  let smoke = material.x;
+  let flame = fireLayer.x;
+  let ember = fireLayer.y;
+  let flameDetail = fireLayer.z;
+  let combustionFront = fireLayer.w;
+  let microSmoke = microLayer.x;
+  let interfaceShred = microLayer.y;
+  let fireLick = microLayer.z;
+  let materialDetail = microLayer.w;
+  let thermalSupport = smoothstep(0.018, 0.62, rawTemp + flame * 0.16 + heat * 0.24 + ember * 0.12);
+  let reactionSupport = smoothstep(0.004, 0.30, flameDetail * 0.72 + fireLick * 0.44 + combustionFront * 0.34 + fuel * heat * 0.28);
+  let frontSupport = smoothstep(0.001, 0.088, frontTopology * 1.08 + combustionFront * 0.54 + fireLick * 0.12);
+  let interfaceSupport = smoothstep(0.004, 0.24, interfaceShred * 0.58 + microSmoke * 0.18 + smoke * 0.08 + materialDetail * 0.06);
+  let weightSum = max(0.001, dot(supportWeights, vec4<f32>(1.0)));
+  return clamp(dot(vec4<f32>(thermalSupport, reactionSupport, frontSupport, interfaceSupport), supportWeights) / weightSum, 0.0, 1.35);
+}
+
+fn liveBoundarySupportAt(p: vec3<f32>, supportWeights: vec4<f32>) -> f32 {
+  let velocityDensity = sampleWorldVelocity(p);
+  let material = sampleWorldMaterial(p);
+  let fireLayer = sampleWorldFireLayer(p);
+  let microLayer = sampleWorldMicrodetail(p);
+  let frontTopology = sampleWorldFrontField(p);
+  return boundarySupportFromSlots(velocityDensity, material, fireLayer, microLayer, frontTopology, supportWeights);
+}
+
 fn fireRadianceEmission(temp: f32, flameDetail: f32, fireLick: f32, emberFleck: f32, radianceGain: f32, glowGain: f32) -> vec3<f32> {
   let core = smoothstep(0.16, 1.18, temp);
   let whiteCore = smoothstep(1.06, 2.10, temp);
@@ -1991,6 +2246,62 @@ fn microFilamentNoise(p: vec3<f32>, warp: vec3<f32>, carrier: f32, velocity: vec
   let phaseB = dot(q.zxy, vec3<f32>(-13.0, 37.0, 19.0)) + cos(dot(q, vec3<f32>(23.0, -7.0, 13.0)) - carrier * 1.9 - time * 3.1);
   let cellNoise = hash31(floor((q + vec3<f32>(1.0)) * 28.0) + vec3<f32>(floor(time * 2.0)));
   return clamp(0.50 + 0.25 * sin(phaseA) + 0.18 * sin(phaseB) + 0.14 * (cellNoise - 0.5), 0.12, 1.12);
+}
+
+fn boundarySupportAtCell(c: vec3<i32>, supportWeights: vec4<f32>) -> f32 {
+  return boundarySupportFromSlots(readSlot(c, 0u), readSlot(c, 1u), readSlot(c, 2u), readSlot(c, 3u), readFrontField(c), supportWeights);
+}
+
+@compute @workgroup_size(4, 4, 4)
+fn csBoundarySidecar(@builtin(global_invocation_id) gid: vec3<u32>) {
+  if (any(gid >= vec3<u32>(GRID))) {
+    return;
+  }
+  let c = vec3<i32>(gid);
+  let supportWeights = vec4<f32>(
+    clamp(u.topology_shell_carriers.x, 0.0, 2.0),
+    clamp(u.topology_shell_carriers.y, 0.0, 2.0),
+    clamp(u.topology_shell_carriers.z, 0.0, 2.0),
+    clamp(u.topology_shell_carriers.w, 0.0, 2.0)
+  );
+  let center = boundarySupportAtCell(c, supportWeights);
+  let px = boundarySupportAtCell(c + vec3<i32>(1, 0, 0), supportWeights);
+  let nx = boundarySupportAtCell(c + vec3<i32>(-1, 0, 0), supportWeights);
+  let py = boundarySupportAtCell(c + vec3<i32>(0, 1, 0), supportWeights);
+  let ny = boundarySupportAtCell(c + vec3<i32>(0, -1, 0), supportWeights);
+  let pz = boundarySupportAtCell(c + vec3<i32>(0, 0, 1), supportWeights);
+  let nz = boundarySupportAtCell(c + vec3<i32>(0, 0, -1), supportWeights);
+  let blur = clamp(u.boundary_sidecar_controls.y, 0.0, 1.0);
+  let neighborMean = (center * 2.0 + px + nx + py + ny + pz + nz) * 0.125;
+  let neighborMax = max(max(max(px, nx), max(py, ny)), max(pz, nz));
+  let boundarySidecarSupport = mix(center, neighborMean, blur * 0.45);
+  let boundarySidecarGradient = clamp(length(vec3<f32>(px - nx, py - ny, pz - nz)) * 0.5, 0.0, 1.5);
+  let laplacian = abs(px + nx + py + ny + pz + nz - 6.0 * center);
+  let ridgeGain = clamp(u.boundary_fire_structure.x, 0.0, 2.0) * clamp(u.boundary_sidecar_controls.w, 0.0, 2.0);
+  let ridgeCut = clamp(u.boundary_fire_structure.y, 0.0, 0.55);
+  let boundarySidecarRidge = smoothstep(ridgeCut, ridgeCut + 0.14, laplacian * ridgeGain);
+  let boundarySidecarCoverage = clamp(
+    max(boundarySidecarSupport, neighborMax * (0.34 + blur * 0.28))
+      + smoothstep(0.014, 0.30, boundarySidecarGradient) * 0.28
+      + boundarySidecarRidge * 0.18,
+    0.0,
+    1.8
+  );
+  let boundarySidecarFootprintWidth = clamp(
+    0.16
+      + blur * 0.34
+      + smoothstep(0.014, 0.34, boundarySidecarGradient) * 0.42
+      + boundarySidecarRidge * 0.26
+      + max(0.0, neighborMax - center) * 0.22,
+    0.06,
+    1.65
+  );
+  boundarySidecarDst[index3(gid)] = vec4<f32>(
+    boundarySidecarSupport,
+    boundarySidecarCoverage,
+    boundarySidecarRidge,
+    boundarySidecarFootprintWidth
+  );
 }
 
 @compute @workgroup_size(4, 4, 4)
@@ -2183,8 +2494,50 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   var bonfireDetailBreakup = breakup;
   let smokeSourceFalloff = 1.0 / max(0.0048, scaledSmokeSourceRadius * scaledSmokeSourceRadius);
   let fireSourceFalloff = 1.0 / max(0.0036, scaledSourceRadius * scaledSourceRadius);
-  let columnSource = exp(-sourceRadial * sourceRadial * smokeSourceFalloff) * sourceBand * breakup * inputFlow;
+  let tallPlumeSmokeDebandAngle = atan2(sourceCenter.z, sourceCenter.x);
+  let tallPlumeSmokeDebandWarp = sourceCenter.xz
+    + vec2<f32>(
+      sin(sourceCenter.z * 8.7 + sourceCenter.y * 4.9 + time * 0.23),
+      cos(sourceCenter.x * 7.9 - sourceCenter.y * 4.3 - time * 0.19)
+    ) * scaledSmokeSourceRadius * 0.28;
+  let tallPlumeSmokeDebandBasis = clamp(
+    0.78
+      + 0.11 * sin(length(tallPlumeSmokeDebandWarp) * 22.0 - sourceCenter.y * 6.4 + time * 0.42)
+      + 0.08 * cos(tallPlumeSmokeDebandAngle * 5.0 + sourceCenter.y * 7.2 - time * 0.31)
+      + 0.07 * (hash31(floor(vec3<f32>(
+        tallPlumeSmokeDebandWarp.x * 11.0,
+        sourceCenter.y * 9.0,
+        tallPlumeSmokeDebandWarp.y * 11.0
+      ))) - 0.5),
+    0.46,
+    1.16
+  );
+  let tallPlumeSmokeSourceBreakup = tallPlumeSmokeDebandBasis;
+  let columnSource = exp(-sourceRadial * sourceRadial * smokeSourceFalloff) * sourceBand * mix(breakup, tallPlumeSmokeSourceBreakup, tallPlumeScene) * inputFlow;
   let tallPlumeEmitterBand = smoothstep(-0.25, -0.10, sourceCenter.y) * (1.0 - smoothstep(0.12, 0.40, sourceCenter.y));
+  let tallPlumeSourceWidthGate = tallPlumeScene * smoothstep(0.095, 0.180, scaledSourceRadius);
+  let tallPlumeSourceRadial01 = clamp(sourceRadial / max(scaledSourceRadius, 0.001), 0.0, 3.0);
+  let tallPlumeFrontPacketDensity = mix(1.0, 2.25, tallPlumeSourceWidthGate);
+  let tallPlumeSourceAngle = tallPlumeSmokeDebandAngle;
+  let tallPlumeAnnularFrontRadius = mix(0.70, 0.86, tallPlumeSourceWidthGate);
+  let tallPlumeAnnularFrontWidth = 0.18 - tallPlumeSourceWidthGate * 0.035;
+  let tallPlumeAnnularFrontBand = exp(
+    -pow(abs(tallPlumeSourceRadial01 - tallPlumeAnnularFrontRadius), 2.0)
+      / max(0.0025, tallPlumeAnnularFrontWidth * tallPlumeAnnularFrontWidth)
+  );
+  let tallPlumeFrontPacketBreakup = clamp(
+    0.72
+      + (breakup - 0.64) * 0.38
+      + 0.16 * sin(tallPlumeSourceAngle * (4.0 + tallPlumeFrontPacketDensity * 2.0) + sourceRadial * (23.0 + tallPlumeFrontPacketDensity * 7.0) - time * 1.45)
+      + 0.12 * cos(tallPlumeSourceAngle * (7.0 + tallPlumeFrontPacketDensity) - p.y * 13.0 + time * 1.10),
+    0.36,
+    1.34
+  );
+  let tallPlumeInteriorFireRelief = mix(
+    1.0,
+    mix(0.62, 1.08, smoothstep(0.34, 0.94, tallPlumeSourceRadial01)),
+    tallPlumeSourceWidthGate
+  );
   let tallPlumeEmitterBreakup = clamp(
     0.70
       + (breakup - 0.64) * 0.62
@@ -2193,10 +2546,17 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     0.28,
     1.18
   );
+  let tallPlumeAnnularFrontBirth = tallPlumeSourceWidthGate
+    * tallPlumeEmitterBand
+    * tallPlumeAnnularFrontBand
+    * tallPlumeFrontPacketBreakup
+    * inputFlow;
   let tallPlumeCombustionSource = exp(-sourceRadial * sourceRadial * smokeSourceFalloff * 1.22)
     * tallPlumeEmitterBand
     * tallPlumeEmitterBreakup
-    * inputFlow;
+    * inputFlow
+    * tallPlumeInteriorFireRelief
+    + tallPlumeAnnularFrontBirth * 0.34;
   let canonicalSourceCell = vec2<f32>(
     sin(p.x * 8.1 + p.z * 2.7 + canonicalPhaseTime * 0.43),
     cos(p.z * 7.6 - p.x * 3.2 - canonicalPhaseTime * 0.39)
@@ -2334,7 +2694,9 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     * tallPlumeEmitterBand
     * inputFlow
     * sourceScaleCompensation
-    * (0.52 + 0.48 * tallPlumeEmitterBreakup);
+    * tallPlumeInteriorFireRelief
+    * (0.52 + 0.48 * tallPlumeEmitterBreakup)
+    + tallPlumeAnnularFrontBirth * sourceScaleCompensation * 0.22;
   let bonfireCoreHeat = clamp(
     bonfireReferenceSourceModel.x * 0.92
       + bonfireReactionProgress * 0.18
@@ -2585,14 +2947,18 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     bonfireLickBirth = bonfireRadialFireLickBreakup(cellI, p * detailDomain, time, fireLickOperatorGain, heat, fuel, flame, flameDetail, source);
   }
   let lickBirth = mix(columnLickBirth, bonfireLickBirth, bonfireScene);
+  let tallPlumeAnnularFrontContribution = tallPlumeAnnularFrontBirth * (0.34 + fireLickOperatorGain * 0.025);
   let columnCombustionFrontBirth = clamp(
-    (lickBirth.y * 0.34 + interfaceEnergy * source * 0.62 + fireBirth * 0.12) * (0.36 + fireLickOperatorGain * 0.07),
+    (lickBirth.y * 0.34 + interfaceEnergy * source * 0.62 + fireBirth * 0.12) * (0.36 + fireLickOperatorGain * 0.07)
+      + tallPlumeAnnularFrontContribution,
     0.0,
-    1.35
+    1.55
   );
   let combustionFrontBirth = mix(columnCombustionFrontBirth, bonfireCombustionFrontBirth, bonfireScene);
-  combustionFrontTopology = max(combustionFrontTopology, mix(columnCombustionFrontBirth * 0.32, bonfireFrontTopologyBirth + bonfireCombustionFrontBirth * 0.18, bonfireScene));
+  let columnFrontTopologyBirth = max(columnCombustionFrontBirth * 0.32, tallPlumeAnnularFrontBirth * 0.42);
+  combustionFrontTopology = max(combustionFrontTopology, mix(columnFrontTopologyBirth, bonfireFrontTopologyBirth + bonfireCombustionFrontBirth * 0.18, bonfireScene));
   let externalInjection = applyExternalEmitterInjection(externalEmitterInfluence(p, time));
+  let oracleActivityCue = truthOracleActivityCueAtCell(cellI);
   let confinement = vorticityConfinement(cellI, 0.034 + curl * 0.044);
   let bonfireReferenceFrontContact = clamp(
     bonfireFrontContactRadiance * 0.42
@@ -2621,6 +2987,8 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let tallPlumeDetailPhaseAnchor = transportedDetailPhaseAnchor(material, fireLayer, microLayer, combustionFrontTopology, prev.xyz, p) * tallPlumeScene;
   let tallPlumeDetailTime = mix(time, time * 0.72 + dot(tallPlumeDetailPhaseAnchor, vec3<f32>(1.7, -1.1, 1.3)), tallPlumeScene);
   let tallPlumeDetailP = p + tallPlumeDetailPhaseAnchor;
+  let oracleActivityCurlNoise = oracleActivityCurlNoiseForce(cellI, tallPlumeDetailP, tallPlumeDetailTime, oracleActivityCue, clamp(u.oracle_activity_controls.y, 0.0, 3.0));
+  let oracleActivityConfinement = oracleActivityVorticityConfinement(cellI, oracleActivityCue, clamp(u.oracle_activity_controls.z, 0.0, 3.0));
   let rawDetailForce = turbulentDetailForce(tallPlumeDetailP * (0.82 + physicalDetailScale * 0.30), tallPlumeDetailTime) * rawDetailCarrier * (0.018 + curl * 0.010) * detailForceArtifactGain;
   let rawMicroForce = turbulentDetailForce(tallPlumeDetailP * (2.85 * tallPlumeTransportedDetailFrequency) + vec3<f32>(0.13, -0.27, 0.31), tallPlumeDetailTime * 2.4) * rawMicroCarrier * 0.026;
   let rawShredForce = interfaceShreddingForce(cellI, (p + tallPlumeDetailPhaseAnchor * 0.35) * detailDomain, tallPlumeDetailTime, shredOperatorGain, heat, smoke, flame, interfaceShred);
@@ -2648,6 +3016,8 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let bonfireSwirlSymmetryGain = mix(1.0, max(explicitWindAuthority, 0.84), bonfireScene);
   vel = vel + (swirl * heat * (0.018 + 0.010 * curl) + swirl * source * 0.012) * bonfireSwirlSymmetryGain;
   vel = vel + confinement * (0.35 + smoke * 0.34 + heat * 0.52);
+  vel = vel + oracleActivityCurlNoise;
+  vel = vel + oracleActivityConfinement * (0.22 + smoke * 0.24 + heat * 0.32 + flame * 0.20);
   vel = vel + bonfireReferenceConfinement * bonfireScene * bonfireDetailForcesAblation;
   vel = vel + detailForce;
   vel = vel + microForce;
@@ -2856,14 +3226,18 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   );
   let columnMaterialDetailBirth = (source + emberRing + smokeFromHeat * 3.2) * (0.30 + 0.36 * bonfireDetailBreakup);
   let bonfireMaterialDetailBirth = (bonfireDetailBirthCarrier + emberRing * 0.04) * (0.10 + 0.10 * bonfireDetailBreakup + 0.06 * bonfireTongues + bonfireSmokeDetailCurlFold * 0.08);
+  let oracleMaterialBirth = oracleActivityMaterialBirth(oracleActivityCue, clamp(u.oracle_activity_controls.w, 0.0, 3.0), heat, smoke, flame, source);
   materialDetail = mix(max(materialDetail, columnMaterialDetailBirth), min(2.6, materialDetail + bonfireMaterialDetailBirth), bonfireScene);
+  materialDetail = max(materialDetail, oracleMaterialBirth * 0.34);
   materialDetail = max(materialDetail, externalInjection.material.w * 0.90);
   let columnMicroSmokeBirth = (source * 0.22 + smokeFromHeat * 0.64 + materialDetail * 0.18) * microAmount * (0.44 + 0.38 * bonfireDetailBreakup);
   let bonfireMicroSmokeBirth = (bonfireAdvectedSmokeBirth * 0.22 + smokeFromHeat * bonfireInterfaceSmokeBand * 0.08 + materialDetail * 0.054 + bonfireInterfaceBirth * 0.15 + smoke * 0.038) * microAmount * (0.10 + 0.08 * bonfireDetailBreakup + 0.06 * bonfireTongues + 0.05 * bonfireLayeredBreakup + bonfireSmokeDetailCurlFold * 0.09);
   microSmoke = mix(max(microSmoke, columnMicroSmokeBirth), min(2.4, microSmoke + bonfireMicroSmokeBirth), bonfireScene);
+  microSmoke = max(microSmoke, oracleMaterialBirth * 0.18);
   microSmoke = max(microSmoke, externalInjection.micro.x);
   let interfaceSourceTerm = mix(source * 0.30, source * 0.08 + bonfireInterfaceBirth * 0.54 + smokeFromHeat * 0.32, bonfireScene);
   interfaceShred = max(interfaceShred, interfaceEnergy * shredOperatorGain * (smoke * 0.54 + heat * 0.38 + flame * 0.32 + materialDetail * 0.28 + microSmoke * 0.13 + interfaceSourceTerm) * 1.72);
+  interfaceShred = max(interfaceShred, oracleMaterialBirth * 0.26);
   interfaceShred = max(interfaceShred, externalInjection.micro.y);
   let bonfirePacketLickBirth = bonfireScene * (
     bonfirePacketCombustion.y * (0.46 + fireLickOperatorGain * 0.22 + bonfireLayeredBreakup * 0.18)
@@ -2874,6 +3248,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let bonfireFireLickSourceBirth = clamp((bonfireFrontContactRadiance * 0.42 + bonfireRadianceBirth * 0.34 + bonfireCombustionFrontBirth * 0.14 + bonfireTopologyPacketTransfer * 0.62) * bonfireVisibleSourcePlugRelief, 0.0, 2.6);
   let fireLickSourceBirth = mix(fireBirth, bonfireFireLickSourceBirth, bonfireScene);
   fireLick = max(fireLick, lickBirth.x + fireLickSourceBirth * fireLickOperatorGain * (0.30 + 0.22 * bonfireTongues * bonfireScene) + bonfireRadianceBirth * bonfireScene * 0.28 + bonfireLiftedFireLobes * bonfireScene * 0.10 + bonfireBroadSupportSmokeSource * bonfireScene * 0.008 + bonfirePacketLickBirth);
+  fireLick = max(fireLick, oracleMaterialBirth * 0.16);
   let tallPlumeAboveSource = smoothstep(-0.72, 0.34, p.y);
   let tallPlumeRadialContour = smoothstep(scaledSourceRadius * 0.22, scaledSourceRadius * 1.10, sourceRadial)
     * (1.0 - smoothstep(scaledSmokeSourceRadius * 1.55, scaledSmokeSourceRadius * 3.00, sourceRadial));
@@ -3200,7 +3575,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
   let pyroEdgeBite = clamp(u.pyro_carrier_controls.y, 0.0, 1.0);
   let pyroSmokeFold = clamp(u.pyro_carrier_controls.z, 0.0, 1.0);
   let pyroDiagnosticPaint = clamp(u.pyro_carrier_controls.w, 0.0, 1.0);
-  let pyroCarrierViewMode = clamp(u.pyro_diagnostic_controls.x, 0.0, 6.0);
+  let pyroCarrierViewMode = clamp(u.pyro_diagnostic_controls.x, 0.0, 7.0);
   let pyroCarrierOverdrive = clamp(u.pyro_diagnostic_controls.y, 1.0, 8.0);
   let pyroBiteBorderFocus = clamp(u.pyro_diagnostic_controls.z, 0.0, 1.0);
   let pyroFoldBorderFocus = clamp(u.pyro_diagnostic_controls.w, 0.0, 1.0);
@@ -3238,6 +3613,14 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
   let pyroBiteRimCut = clamp(u.pyro_bite_stack_controls.w, 0.0, 1.0);
   let pyroBiteAfter = clamp(u.pyro_bite_stack_controls2.x, 0.0, 1.0);
   let pyroBiteAfterCut = clamp(u.pyro_bite_stack_controls2.y, 0.0, 1.0);
+  let pyroFlowBite = clamp(u.pyro_flow_controls.x, 0.0, 3.0);
+  let pyroFlowBorder = clamp(u.pyro_flow_controls.y, 0.0, 1.0);
+  let pyroFlowTeeth = clamp(u.pyro_flow_controls.z, 0.0, 1.0);
+  let pyroFlowRise = clamp(u.pyro_flow_controls.w, 0.0, 1.0);
+  let pyroFlowFireLock = clamp(u.pyro_flow_controls2.x, 0.0, 1.0);
+  let pyroFlowLuma = clamp(u.pyro_flow_controls2.y, 0.0, 3.0);
+  let pyroFlowRadiance = clamp(u.pyro_flow_controls2.z, 0.0, 4.0);
+  let pyroFlowSpikes = clamp(u.pyro_flow_controls2.w, 0.0, 1.0);
   let pyroFlameCoreColor = u.pyro_palette_flame.rgb;
   let pyroFlameEdgeColor = u.pyro_palette_flame_edge.rgb;
   let pyroBiteEmberEndpoint = u.pyro_palette_bite.rgb;
@@ -3246,6 +3629,40 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
   let pyroWakeEmberEndpoint = u.pyro_palette_wake_ember.rgb;
   let pyroRadianceCoolEndpoint = u.pyro_palette_radiance.rgb;
   let pyroRadianceWarmEndpoint = u.pyro_palette_radiance_warm.rgb;
+  let pyroFlowCoolEndpoint = u.pyro_palette_flow.rgb;
+  let pyroFlowHotEndpoint = u.pyro_palette_flow_hot.rgb;
+  let fireRenderMode = clamp(u.topology_shell_controls.x, 0.0, 3.0);
+  let shellInspectMode = clamp(u.topology_shell_controls.y, 0.0, 9.0);
+  let shellAmount = clamp(u.topology_shell_controls.z, 0.0, 2.0);
+  let shellWidth = clamp(u.topology_shell_controls.w, 0.05, 2.0);
+  let shellThermalGain = clamp(u.topology_shell_carriers.x, 0.0, 2.0);
+  let shellReactionGain = clamp(u.topology_shell_carriers.y, 0.0, 2.0);
+  let shellFrontGain = clamp(u.topology_shell_carriers.z, 0.0, 2.0);
+  let shellEdgeGain = clamp(u.topology_shell_carriers.w, 0.0, 2.0);
+  let shellCoreSuppress = clamp(u.topology_shell_shape.x, 0.0, 1.0);
+  let shellBiteGain = clamp(u.topology_shell_shape.y, 0.0, 2.0);
+  let shellCurlGain = clamp(u.topology_shell_shape.z, 0.0, 2.0);
+  let shellDivergenceGain = clamp(u.topology_shell_shape.w, 0.0, 1.0);
+  let shellSmokeCoupling = clamp(u.topology_shell_transport.x, 0.0, 2.0);
+  let boundaryGradientGain = clamp(u.topology_shell_transport.x, 0.0, 4.0);
+  let boundaryCut = clamp(u.topology_shell_transport.y, 0.0, 0.55);
+  let boundarySoftness = clamp(u.topology_shell_transport.z, 0.005, 0.45);
+  let boundaryOpacity = clamp(u.topology_shell_transport.w, 0.0, 3.0);
+  let shellLuma = clamp(u.topology_shell_light.x, 0.0, 5.0);
+  let shellExposure = clamp(u.topology_shell_light.y, 0.0, 4.0);
+  let shellSoftClip = clamp(u.topology_shell_light.z, 0.2, 4.0);
+  let shellHeatGain = clamp(u.topology_shell_light.w, 0.0, 4.0);
+  let boundaryContrast = clamp(u.topology_shell_light.x, 0.25, 5.0);
+  let boundaryGamma = clamp(u.topology_shell_light.y, 0.35, 3.0);
+  let boundaryFireRidgeGain = clamp(u.boundary_fire_structure.x, 0.0, 2.0);
+  let boundaryFireRidgeCut = clamp(u.boundary_fire_structure.y, 0.0, 0.55);
+  let boundaryFireTipBreakup = clamp(u.boundary_fire_structure.z, 0.0, 2.0);
+  let boundaryFireTopologyErosion = clamp(u.boundary_fire_structure.w, 0.0, 1.0);
+  let boundaryFireCleanBlue = clamp(u.boundary_fire_color.x, 0.0, 2.0);
+  let boundaryFireSootYield = clamp(u.boundary_fire_color.y, 0.0, 2.0);
+  let boundaryFireSootYellowing = clamp(u.boundary_fire_color.z, 0.0, 2.0);
+  let boundaryFireThermalWarmth = clamp(u.boundary_fire_color.w, 0.0, 2.0);
+  let boundaryFireLuma = clamp(u.boundary_fire_display.x, 0.0, 5.0);
   let canonicalSmokeContent = 1.0 - minimalPlumeRenderScene * step(0.5, canonicalContentMode) * (1.0 - step(1.5, canonicalContentMode));
   let canonicalFireContent = minimalPlumeRenderScene * step(0.5, canonicalContentMode);
   let canonicalFireRenderContent = mix(1.0, canonicalFireContent, minimalPlumeRenderScene);
@@ -3456,11 +3873,177 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     let vaporAlpha = clamp((vaporCarrier + quenchCoreCollapse * 0.52) * rayStepOpacity * (0.22 + absorptionGain * 0.070), 0.0, 0.22);
     smokeAlpha = clamp(smokeAlpha + vaporAlpha, 0.0, 0.28);
     let fireSnuffDamping = 1.0 - clamp(max(vaporCarrier * 1.18, quenchCoreCollapse * 0.92), 0.0, 0.985);
-    let fireAlpha = mix(
+    let stockFireAlpha = mix(
       clamp(visibleFlameAlphaCarrier * tallPlumeTransitionAlphaStagger * canonicalFireRenderContent * rayStepOpacity * fireGain * (0.58 + radianceGain * 0.18) * bonfireFireRenderBreakup * bonfireTransportedFireLumaShaper * fireSnuffDamping * flameBodyAuthority, 0.0, fireAlphaMax),
       0.0,
       canonicalSmokeOnlyRender
     );
+    let stockRenderMode = 1.0 - step(0.5, abs(fireRenderMode - 3.0));
+    let shellRenderMode = 1.0 - step(0.5, abs(fireRenderMode - 1.0));
+    let inspectRenderMode = 1.0 - step(0.5, abs(fireRenderMode - 2.0));
+    let fireVisualAuthority = shellAmount * canonicalFireRenderContent * flameBodyAuthority;
+    let curlActivity = smoothstep(0.006, 0.16, curlDebug);
+    let thermalSupport = smoothstep(0.018, 0.62, rawTemp + renderTemp * 0.20 + heat * 0.20 + ember * 0.12);
+    let reactionSupport = smoothstep(0.004, 0.30, flameDetail * 0.72 + quenchedFireLick * 0.44 + combustionFront * 0.34 + fuel * heat * 0.28);
+    let frontSupport = smoothstep(0.001, 0.088, combustionFrontTopology * 1.08 + combustionFront * 0.54 + quenchedFireLick * 0.12);
+    let edgeSupport = smoothstep(0.004, 0.24, interfaceShred * 0.58 + microSmoke * 0.18 + rawExtinction * 0.08 + curlDebug * 0.42);
+    let curlSupport = curlActivity * smoothstep(0.010, 0.52, rawTemp + heat * 0.16 + flameDetail * 0.28 + combustionFront * 0.16);
+    let divSupport = smoothstep(0.010, 0.18, divDebug)
+      * smoothstep(0.010, 0.46, rawTemp + heat * 0.18 + flameDetail * 0.32);
+    let shellCarrierRaw = shellThermalGain * thermalSupport
+      + shellReactionGain * reactionSupport
+      + shellFrontGain * frontSupport
+      + shellEdgeGain * edgeSupport
+      + shellCurlGain * curlSupport
+      + shellDivergenceGain * divSupport;
+    let shellCarrier = clamp(1.0 - exp(-max(0.0, shellCarrierRaw) * (0.52 + shellWidth * 0.62)), 0.0, 1.65);
+    let shellCoreBody = smoothstep(
+      0.26,
+      1.18,
+      rawTemp * 0.36 + renderTemp * 0.18 + flameDetail * 0.44 + heat * 0.12 + ember * 0.12
+    ) * (1.0 - clamp(frontSupport * 0.54 + edgeSupport * 0.30 + curlActivity * 0.12, 0.0, 0.86));
+    let shellMask = clamp(shellCarrier * mix(1.0, 1.0 - shellCoreBody * 0.82, shellCoreSuppress), 0.0, 1.35);
+    let shellWrinkle = clamp(1.0 + shellBiteGain * (frontSupport * 0.26 + edgeSupport * 0.24 + curlActivity * 0.20), 0.0, 2.4);
+    let shellAlpha = clamp(
+      shellMask
+        * fireVisualAuthority
+        * rayStepOpacity
+        * (0.050 + shellWidth * 0.070)
+        * shellWrinkle
+        * fireSnuffDamping,
+      0.0,
+      fireAlphaMax
+    );
+    let inspectShellMask = 1.0 - step(0.5, abs(shellInspectMode - 0.0));
+    let inspectThermalMask = 1.0 - step(0.5, abs(shellInspectMode - 1.0));
+    let inspectReactionMask = 1.0 - step(0.5, abs(shellInspectMode - 2.0));
+    let inspectFrontMask = 1.0 - step(0.5, abs(shellInspectMode - 3.0));
+    let inspectEdgeMask = 1.0 - step(0.5, abs(shellInspectMode - 4.0));
+    let inspectCoreMask = 1.0 - step(0.5, abs(shellInspectMode - 5.0));
+    let inspectCurlMask = 1.0 - step(0.5, abs(shellInspectMode - 6.0));
+    let inspectDivMask = 1.0 - step(0.5, abs(shellInspectMode - 7.0));
+    let inspectBoundaryMask = 1.0 - step(0.5, abs(shellInspectMode - 8.0));
+    let inspectBoundaryFireMask = 1.0 - step(0.5, abs(shellInspectMode - 9.0));
+    let boundarySurfaceMode = clamp(inspectBoundaryMask + inspectBoundaryFireMask, 0.0, 1.0);
+    var boundaryCandidate = 0.0;
+    var boundaryFireColor = vec3<f32>(0.0);
+    if (boundarySurfaceMode > 0.5) {
+      let boundarySupportWeights = vec4<f32>(shellThermalGain, shellReactionGain, shellFrontGain, shellEdgeGain);
+      let boundaryCellStep = 2.0 / f32(GRID);
+      let boundaryDx = vec3<f32>(boundaryCellStep, 0.0, 0.0);
+      let boundaryDy = vec3<f32>(0.0, boundaryCellStep, 0.0);
+      let boundaryDz = vec3<f32>(0.0, 0.0, boundaryCellStep);
+      let boundarySidecarSource = clamp(u.boundary_sidecar_controls.x, 0.0, 2.0);
+      let boundarySidecarView = clamp(u.boundary_sidecar_display.x, 0.0, 5.0);
+      var boundarySidecarDebugSample = vec4<f32>(0.0);
+      if (boundarySidecarView > 0.5) {
+        boundarySidecarDebugSample = sampleWorldBoundarySidecar(p);
+      }
+      var boundarySupportEffective = 0.0;
+      var boundaryGradientEffective = 0.0;
+      var boundaryFireRidgeEffective = 0.0;
+      var boundarySidecarStepFootprintWidth = 0.0;
+      if (boundarySidecarSource > 0.5 && boundarySidecarSource <= 1.5) {
+        let boundarySidecarSample = sampleWorldBoundarySidecar(p);
+        boundarySidecarDebugSample = boundarySidecarSample;
+        let boundarySidecarCoverage = boundarySidecarSample.y;
+        let boundarySidecarProximity = clamp(max(boundarySidecarSample.x, max(boundarySidecarCoverage * 0.74, boundarySidecarSample.z * 0.58)), 0.0, 1.8);
+        let boundarySidecarFootprintWidth = boundarySidecarSample.w;
+        boundarySupportEffective = max(boundarySidecarSample.x, boundarySidecarProximity * 0.36);
+        boundaryGradientEffective = max(boundarySidecarCoverage, boundarySidecarSample.z * 0.55) * (1.0 + boundarySidecarFootprintWidth * 0.18);
+        boundaryFireRidgeEffective = boundarySidecarSample.z;
+        boundarySidecarStepFootprintWidth = clamp(u.boundary_sidecar_controls.z, 0.0, 2.0) * max(dtBase * f32(GRID) * 0.046, boundarySidecarFootprintWidth * 0.036);
+      } else {
+        let boundarySupport = liveBoundarySupportAt(p, boundarySupportWeights);
+        let boundarySupportPx = liveBoundarySupportAt(p + boundaryDx, boundarySupportWeights);
+        let boundarySupportNx = liveBoundarySupportAt(p - boundaryDx, boundarySupportWeights);
+        let boundarySupportPy = liveBoundarySupportAt(p + boundaryDy, boundarySupportWeights);
+        let boundarySupportNy = liveBoundarySupportAt(p - boundaryDy, boundarySupportWeights);
+        let boundarySupportPz = liveBoundarySupportAt(p + boundaryDz, boundarySupportWeights);
+        let boundarySupportNz = liveBoundarySupportAt(p - boundaryDz, boundarySupportWeights);
+        let boundaryGradient = length(vec3<f32>(
+          boundarySupportPx - boundarySupportNx,
+          boundarySupportPy - boundarySupportNy,
+          boundarySupportPz - boundarySupportNz
+        )) * (0.5 / boundaryCellStep);
+        let boundaryLaplacian = abs(boundarySupportPx + boundarySupportNx + boundarySupportPy + boundarySupportNy + boundarySupportPz + boundarySupportNz - 6.0 * boundarySupport);
+        let boundaryFireRidge = smoothstep(boundaryFireRidgeCut, boundaryFireRidgeCut + 0.14, boundaryLaplacian * boundaryFireRidgeGain);
+        boundarySupportEffective = boundarySupport;
+        boundaryGradientEffective = boundaryGradient;
+        boundaryFireRidgeEffective = boundaryFireRidge;
+        if (boundarySidecarSource > 1.5) {
+          let boundarySidecarSample = sampleWorldBoundarySidecar(p);
+          boundarySidecarDebugSample = boundarySidecarSample;
+          let boundarySidecarCoverage = boundarySidecarSample.y;
+          let boundarySidecarProximity = clamp(max(boundarySidecarSample.x, max(boundarySidecarCoverage * 0.74, boundarySidecarSample.z * 0.58)), 0.0, 1.8);
+          let boundarySidecarFootprintWidth = boundarySidecarSample.w;
+          boundarySupportEffective = mix(boundarySupport, boundarySidecarSample.x, 0.5);
+          boundaryGradientEffective = mix(boundaryGradient, max(boundarySidecarCoverage, boundarySidecarProximity * 0.50), 0.5);
+          boundaryFireRidgeEffective = mix(boundaryFireRidge, boundarySidecarSample.z, 0.5);
+          boundarySidecarStepFootprintWidth = 0.5 * clamp(u.boundary_sidecar_controls.z, 0.0, 2.0) * max(dtBase * f32(GRID) * 0.046, boundarySidecarFootprintWidth * 0.036);
+        }
+      }
+      let boundaryGradientGate = smoothstep(boundaryCut, boundaryCut + boundarySoftness + boundarySidecarStepFootprintWidth, boundaryGradientEffective * boundaryGradientGain);
+      let boundaryCoreGate = clamp(mix(1.0, 1.0 - shellCoreBody, shellCoreSuppress), 0.0, 1.0);
+      let supportThinning = boundaryGradientGate * (1.0 - smoothstep(0.62, 1.12, boundarySupportEffective));
+      let upwardTransport = smoothstep(0.006, 0.085, max(0.0, state.y) + velMag * 0.12);
+      let sootSupport = smoothstep(0.012, 0.42, smoke + microSmoke * 0.50 + rawExtinction * 0.32 + materialDetail * 0.16);
+      let fuelDepletionProxy = smoothstep(0.020, 0.52, heat + flameDetail * 0.46 + combustionFront * 0.28) * (1.0 - smoothstep(0.018, 0.18, fuel));
+      let boundaryFireTipGate = clamp(supportThinning * (0.35 + boundaryFireRidgeEffective * 0.65) * (0.30 + upwardTransport * 0.70) * (0.45 + fuelDepletionProxy * 0.55), 0.0, 1.0);
+      let boundaryTopology = clamp(
+        1.0
+          + shellBiteGain * (edgeSupport * 0.50 + frontSupport * 0.24)
+          + shellCurlGain * curlActivity
+          + shellDivergenceGain * divSupport,
+        0.0,
+        3.5
+      );
+      let boundaryFireErosion = clamp(boundaryFireTopologyErosion * (curlActivity * 0.36 + edgeSupport * 0.34 + divSupport * 0.18 + boundaryFireTipGate * 0.48), 0.0, 0.92);
+      let boundaryRaw = clamp(boundarySupportEffective * boundaryGradientGate * boundaryCoreGate * boundaryTopology, 0.0, 2.0);
+      let boundaryScalar = clamp(pow(clamp(boundaryRaw * boundaryContrast, 0.0, 1.8), boundaryGamma) * boundaryOpacity, 0.0, 1.65);
+      boundaryCandidate = mix(boundaryScalar, boundaryScalar * mix(1.0, clamp(boundaryFireRidgeEffective + boundaryFireTipGate * boundaryFireTipBreakup, 0.0, 1.0), 0.62) * (1.0 - boundaryFireErosion), inspectBoundaryFireMask);
+      let cleanBurnGate = smoothstep(0.006, 0.34, reactionSupport + frontSupport * 0.38) * (1.0 - smoothstep(0.20, 0.86, sootSupport * boundaryFireSootYield));
+      let sootMaturity = clamp((sootSupport * 0.56 + fuelDepletionProxy * 0.30 + boundaryFireTipGate * 0.30) * boundaryFireSootYield, 0.0, 1.0);
+      let cleanFuelColor = vec3<f32>(0.12, 0.42, 1.75) * boundaryFireCleanBlue * cleanBurnGate;
+      let sootThermalBase = fireColor((rawTemp + heat * 0.28 + flameDetail * 0.42 + frontSupport * 0.28) * max(0.18, boundaryFireThermalWarmth));
+      let sootThermalColor = mix(sootThermalBase, vec3<f32>(1.55, 0.86, 0.18), clamp(sootMaturity * boundaryFireSootYellowing, 0.0, 1.0));
+      boundaryFireColor = mix(cleanFuelColor, sootThermalColor, sootMaturity) * boundaryFireLuma;
+      if (boundarySidecarView > 0.5) {
+        let boundarySidecarCoverage = boundarySidecarDebugSample.y;
+        let boundarySidecarProximity = clamp(max(boundarySidecarDebugSample.x, max(boundarySidecarCoverage * 0.74, boundarySidecarDebugSample.z * 0.58)), 0.0, 1.8);
+        let boundarySidecarFootprintWidth = boundarySidecarDebugSample.w;
+        var boundarySidecarDebugSignal = boundarySidecarDebugSample.x;
+        var boundarySidecarDebugColor = vec3<f32>(0.30, 0.62, 1.55);
+        if (boundarySidecarView > 1.5 && boundarySidecarView <= 2.5) {
+          boundarySidecarDebugSignal = boundarySidecarCoverage;
+          boundarySidecarDebugColor = vec3<f32>(0.22, 1.20, 0.55);
+        } else if (boundarySidecarView > 2.5 && boundarySidecarView <= 3.5) {
+          boundarySidecarDebugSignal = boundarySidecarDebugSample.z;
+          boundarySidecarDebugColor = vec3<f32>(1.65, 0.92, 0.22);
+        } else if (boundarySidecarView > 3.5 && boundarySidecarView <= 4.5) {
+          boundarySidecarDebugSignal = boundarySidecarProximity;
+          boundarySidecarDebugColor = vec3<f32>(0.28, 1.10, 1.42);
+        } else if (boundarySidecarView > 4.5) {
+          boundarySidecarDebugSignal = boundarySidecarFootprintWidth;
+          boundarySidecarDebugColor = vec3<f32>(1.36, 0.42, 1.44);
+        }
+        boundaryCandidate = clamp(pow(clamp(boundarySidecarDebugSignal * boundaryContrast, 0.0, 1.8), boundaryGamma) * boundaryOpacity, 0.0, 1.65);
+        boundaryFireColor = boundarySidecarDebugColor * (0.18 + boundaryCandidate * 1.08);
+      }
+    }
+    let inspectSignal =
+      shellMask * inspectShellMask
+      + thermalSupport * inspectThermalMask
+      + reactionSupport * inspectReactionMask
+      + frontSupport * inspectFrontMask
+      + edgeSupport * inspectEdgeMask
+      + shellCoreBody * inspectCoreMask
+      + curlSupport * inspectCurlMask
+      + divSupport * inspectDivMask
+      + boundaryCandidate * inspectBoundaryMask
+      + boundaryCandidate * inspectBoundaryFireMask;
+    let inspectAlpha = clamp(inspectSignal * rayStepOpacity * 0.55, 0.0, 0.28);
+    let fireAlpha = stockRenderMode * stockFireAlpha + shellRenderMode * shellAlpha + inspectRenderMode * inspectAlpha;
     var alpha = clamp(smokeAlpha + fireAlpha, 0.0, 0.18);
     let materialSignals = materialTemporalSignals(alpha, smokeAlpha, fireAlpha, temp, microTextureSignal, interfaceShred, fireLick, majorantEdge, interest, trans);
     let materialTemporal = materialTemporalClassificationFromSignals(materialSignals);
@@ -3500,12 +4083,14 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     let pyroFoldView = 1.0 - step(0.5, abs(pyroCarrierViewMode - 3.0));
     let pyroWakeView = 1.0 - step(0.5, abs(pyroCarrierViewMode - 4.0));
     let pyroRadianceView = 1.0 - step(0.5, abs(pyroCarrierViewMode - 5.0));
-    let pyroAllView = 1.0 - step(0.5, abs(pyroCarrierViewMode - 6.0));
+    let pyroFlowView = 1.0 - step(0.5, abs(pyroCarrierViewMode - 6.0));
+    let pyroAllView = 1.0 - step(0.5, abs(pyroCarrierViewMode - 7.0));
     let pyroBorderMask = clamp(pyroNormalView + pyroBorderView + pyroAllView, 0.0, 1.0);
     let pyroBiteMask = clamp(pyroNormalView + pyroBiteView + pyroAllView, 0.0, 1.0);
     let pyroFoldMask = clamp(pyroNormalView + pyroFoldView + pyroAllView, 0.0, 1.0);
     let pyroWakeMask = clamp(pyroNormalView + pyroWakeView + pyroAllView, 0.0, 1.0);
     let pyroRadianceMask = clamp(pyroNormalView + pyroRadianceView + pyroAllView, 0.0, 1.0);
+    let pyroFlowMask = clamp(pyroNormalView + pyroFlowView + pyroAllView, 0.0, 1.0);
     let pyroMemoryPattern = 0.5 + 0.5 * sin(
       p.y * 31.0
         + p.x * 17.0
@@ -3523,8 +4108,31 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
       canonicalSmokeOnlyRender
     );
     let flameCol = fireColor(renderTemp) * (0.22 + renderTemp * 0.82 + fireFilament * 0.82 * flameBodyAuthority + quenchedFireLick * 0.32 + shredFilament * 0.10) * bonfireTransportedFireLumaShaper;
-    let radianceEmission = fireRadianceEmission(renderTemp, quenchedFlameDetail, quenchedFireLick, quenchedEmberFleck, radianceGain, glowGain) * mix(1.0, bonfireFireRenderBreakup * bonfireTransportedFireLumaShaper, bonfireRenderScene) * flameBodyAuthority;
-    let smokeBacklight = fireColor(renderTemp * 0.72) * smokeAlpha * glowGain * smoothstep(0.16, 1.25, renderTemp) * (0.13 + fireFilament * 0.10 * flameBodyAuthority);
+    let baseRadianceEmission = fireRadianceEmission(renderTemp, quenchedFlameDetail, quenchedFireLick, quenchedEmberFleck, radianceGain, glowGain)
+      * mix(1.0, bonfireFireRenderBreakup * bonfireTransportedFireLumaShaper, bonfireRenderScene)
+      * flameBodyAuthority;
+    let shellTemperature = clamp((rawTemp + thermalSupport * 0.42 + reactionSupport * 0.28 + frontSupport * 0.18 + shellBiteGain * edgeSupport * 0.10) * shellHeatGain, 0.0, 2.4);
+    let shellWarmth = smoothstep(0.10, 1.85, shellTemperature);
+    let shellHotCore = mix(vec3<f32>(1.75, 0.16, 0.018), vec3<f32>(2.80, 0.68, 0.055), shellWarmth);
+    let shellRampColor = mix(shellHotCore, vec3<f32>(3.20, 0.92, 0.10), smoothstep(2.35, 3.80, shellHeatGain) * 0.18);
+    let shellBaseColor = shellRampColor * (0.24 + shellMask * 0.92 + frontSupport * 0.22 + edgeSupport * 0.12);
+    let shellLit = shellBaseColor * shellLuma * shellExposure;
+    let shellColor = shellLit / (vec3<f32>(1.0) + shellLit / shellSoftClip);
+    let inspectColor = (
+      vec3<f32>(1.0, 0.62, 0.14) * inspectShellMask
+      + vec3<f32>(1.0, 0.78, 0.20) * inspectThermalMask
+      + vec3<f32>(0.95, 0.22, 0.08) * inspectReactionMask
+      + vec3<f32>(1.0, 0.92, 0.22) * inspectFrontMask
+      + vec3<f32>(0.16, 0.82, 1.0) * inspectEdgeMask
+      + vec3<f32>(0.86, 0.28, 1.0) * inspectCoreMask
+      + vec3<f32>(0.10, 0.78, 1.0) * inspectCurlMask
+      + vec3<f32>(1.0, 0.18, 0.08) * inspectDivMask
+      + vec3<f32>(0.95, 0.86, 0.52) * inspectBoundaryMask
+      + boundaryFireColor * inspectBoundaryFireMask
+    ) * (0.24 + inspectSignal * 1.85);
+    let radianceEmission = baseRadianceEmission * stockRenderMode;
+    let smokeBacklight = fireColor(renderTemp * 0.72) * smokeAlpha * glowGain * stockRenderMode * smoothstep(0.16, 1.25, renderTemp) * (0.13 + fireFilament * 0.10 * flameBodyAuthority);
+    let shellSmokeBacklight = shellColor * shellRenderMode * smokeAlpha * shellSmokeCoupling * shellAlpha * 0.26;
     let fireMix = smoothstep(0.005, 0.052, fireAlpha) * smoothstep(0.08, 0.70, renderTemp);
     let pyroOwnedFireMode = step(1.5, pyroFireMode);
     let pyroHybridFireMode = step(0.5, pyroFireMode) * (1.0 - pyroOwnedFireMode);
@@ -3616,6 +4224,74 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
       * pyroCarrierOverdrive
       * (0.40 + pyroMemoryPattern * 0.60)
       * pyroStackedBiteEvent;
+    let pyroFlowTopology = smoothstep(
+      mix(0.0006, 0.006, pyroFlowTeeth),
+      mix(0.025, 0.16, pyroFlowTeeth),
+      combustionFrontTopology * (0.68 + pyroFlowTeeth * 0.62)
+        + fireLick * 0.34
+        + combustionFront * 0.24
+        + interfaceShred * 0.18
+        + curlDebug * (0.28 + pyroFlowTeeth * 0.34)
+        + divDebug * 0.18
+    );
+    let pyroFlowShear = smoothstep(
+      0.015,
+      0.17,
+      curlDebug * (0.78 + pyroFlowTeeth * 0.62) + divDebug * 0.48 + velMag * 0.025
+    );
+    let pyroFlowFront = mix(pyroRawCurrentFire, max(pyroRawCurrentFire * 0.28, pyroInterfaceSignal), pyroFlowBorder);
+    let pyroFlowLiveCarrier = pyroMaterialGain
+      * pyroMaterialEnergy
+      * pyroLiveAuthority
+      * (0.18 + pyroSpatialEnergy * 0.58 + pyroSmokeAuthority * 0.24)
+      * smoothstep(0.006, 0.22, density + smoke * 0.28 + rawExtinction * 0.24 + microSmoke * 0.28)
+      * smoothstep(0.001, 0.045, combustionFrontTopology * 0.58 + fireLick * 0.34 + interfaceShred * 0.22 + curlDebug * 0.72 + divDebug * 0.28);
+    let pyroFlowHeightGate = 1.0 - smoothstep(
+      mix(0.24, 0.92, pyroFlowRise),
+      mix(0.46, 1.16, pyroFlowRise),
+      y
+    );
+    let pyroFlowFireGate = mix(1.0, max(pyroRawCurrentFire, pyroFireEventCarrier), pyroFlowFireLock);
+    let pyroFlowCarrierShape = max(
+      mix(pyroFlowFront, max(pyroFlowFront, pyroFlowShear), pyroFlowTeeth),
+      pyroFlowLiveCarrier * pyroFlowShear * (0.22 + pyroFlowTeeth * 0.36)
+    );
+    let pyroFlowSignal = clamp(
+      max(pyroBaseCarrier, pyroFlowLiveCarrier)
+        * pyroFlowMask
+        * pyroFlowBite
+        * pyroCarrierOverdrive
+        * pyroFlowFireGate
+        * pyroFlowHeightGate
+        * pyroFlowCarrierShape
+        * max(pyroFlowTopology, pyroFlowShear * (0.18 + pyroFlowTeeth * 0.22))
+        * (0.22 + pyroMemoryPattern * 0.16 + pyroFlowShear * 0.30 + combustionFrontTopology * 0.06 + fireLick * 0.05),
+      0.0,
+      4.0
+    );
+    let pyroFlowSpikeMask = smoothstep(
+      mix(0.24, 0.10, pyroFlowSpikes),
+      mix(0.92, 0.52, pyroFlowSpikes),
+      pyroFlowTopology * (0.64 + pyroFlowSpikes * 0.52)
+        + pyroFlowShear * (0.18 + pyroFlowSpikes * 0.36)
+        + pyroMemoryPattern * (0.10 + pyroFlowSpikes * 0.28)
+        + fireLick * (0.10 + pyroFlowSpikes * 0.20)
+    );
+    let pyroFlowSpikeSignal = clamp(
+      pyroFlowSignal
+        * pyroFlowSpikes
+        * pyroFlowSpikeMask
+        * (0.22 + combustionFrontTopology * 0.28 + fireLick * 0.18 + pyroFlowShear * 0.14),
+      0.0,
+      3.0
+    );
+    let pyroFlowRadianceBoost = clamp(
+      pyroFlowSignal
+        * pyroFlowRadiance
+        * (0.055 + pyroFlowSpikeSignal * 0.13 + pyroFlowShear * 0.055 + combustionFrontTopology * 0.060 + fireLick * 0.035),
+      0.0,
+      3.5
+    );
     let pyroFoldWakeSignal = clamp(
       smoothstep(0.02, 0.62, smoke + rawExtinction + microSmoke * 0.24)
         * mix(
@@ -3759,6 +4435,12 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
       0.0,
       4.0
     );
+    let pyroFlowAlphaBoost = clamp(
+      pyroFlowSignal * (0.18 + pyroFlowShear * 0.32 + pyroRawFireMix * 0.14 + fireMix * 0.08)
+        + pyroFlowSpikeSignal * (0.10 + pyroFlowTeeth * 0.12),
+      0.0,
+      2.8
+    );
     let pyroBiteAlphaBoost = clamp(pyroEdgeBreakup * (0.40 + fireMix * 0.80), 0.0, 2.4);
     let pyroFoldExtinctionBoost = clamp(pyroSmokeFoldSignal * (0.34 + smoke * 0.85 + rawExtinction * 0.55), 0.0, 2.8);
     let pyroWakeAlphaBoost = clamp(pyroWakeSignal * (0.22 + smoke * 0.62 + rawExtinction * 0.36), 0.0, 2.1);
@@ -3774,11 +4456,16 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
         + pyroFoldExtinctionBoost * rayStepOpacity * 0.060
         + pyroWakeAlphaBoost * rayStepOpacity * 0.045
         + pyroOwnedFireAlphaBoost * rayStepOpacity * 0.070
-        + pyroRadianceAlphaBoost * rayStepOpacity * 0.130,
+        + pyroRadianceAlphaBoost * rayStepOpacity * 0.130
+        + pyroFlowAlphaBoost * rayStepOpacity * 0.075
+        + pyroFlowRadianceBoost * rayStepOpacity * 0.045,
       0.0,
       0.28
     );
-    var local = mix(smokeCol, flameCol * 0.30 + radianceEmission * 0.70, fireMix * pyroStockFireVisibility);
+    var local = smokeCol;
+    local = mix(local, flameCol * 0.30 + radianceEmission * 0.70, stockRenderMode * fireMix * pyroStockFireVisibility);
+    local = local + shellColor * shellRenderMode * smoothstep(0.002, 0.060, shellAlpha) * 0.92;
+    local = mix(local, inspectColor, inspectRenderMode * smoothstep(0.002, 0.060, inspectAlpha));
     let pyroFlamePaintSignal = clamp(
       pyroBaseCarrier
         * pyroLiveAuthority
@@ -3801,6 +4488,34 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
       local,
       pyroFlamePaintColor,
       clamp(pyroFlamePaintSignal * mix(0.28, 0.92, 1.0 - pyroStockMix), 0.0, 0.95)
+    );
+    let pyroFlowHeat = clamp(pyroFlowTopology + pyroRawFireMix * 0.28 + pyroFlowShear * 0.22, 0.0, 1.0);
+    let pyroFlowColor = mix(
+      pyroFlowCoolEndpoint * (0.44 + smoke * 0.18 + pyroFlowShear * 0.10),
+      pyroFlowHotEndpoint * (0.52 + pyroRawFireMix * 0.30 + fireLick * 0.14 + combustionFront * 0.10),
+      smoothstep(0.18, 0.88, pyroFlowHeat)
+    );
+    let pyroFlowColorLuma = max(dot(pyroFlowColor, vec3<f32>(0.2126, 0.7152, 0.0722)), 0.001);
+    let pyroFlowTargetLuma = max(
+      dot(local, vec3<f32>(0.2126, 0.7152, 0.0722)),
+      max(
+        pyroRawCurrentFire * (0.28 + rawTemp * 0.42 + fireLick * 0.18),
+        pyroFlowSignal * (0.10 + pyroFlowShear * 0.10 + combustionFrontTopology * 0.06)
+      )
+    );
+    let pyroFlowLumaColor = pyroFlowColor * (pyroFlowTargetLuma / pyroFlowColorLuma) * pyroFlowLuma;
+    let pyroFlowSpikeColor = mix(
+      pyroFlowLumaColor,
+      pyroFlowHotEndpoint * (0.84 + pyroFlowHeat * 0.32),
+      clamp(pyroFlowSpikes * 0.75 + pyroFlowSpikeSignal * 0.18, 0.0, 1.0)
+    );
+    local = mix(
+      local,
+      local
+        + pyroFlowLumaColor * pyroFlowAlphaBoost * (0.18 + pyroFlowShear * 0.10)
+        + pyroFlowSpikeColor * pyroFlowSpikeSignal * (0.13 + pyroFlowTeeth * 0.12)
+        + pyroFlowHotEndpoint * pyroFlowRadianceBoost * (0.16 + pyroFlowHeat * 0.10),
+      clamp(pyroFlowAlphaBoost * 0.22 + pyroFlowSpikeSignal * 0.11 + pyroFlowRadianceBoost * 0.12, 0.0, 0.74)
     );
     let pyroFoldColor = vec3<f32>(0.18, 0.28, 0.31);
     local = mix(
@@ -3844,8 +4559,9 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
       vec3<f32>(0.10, 0.78, 1.0) * clamp(pyroBorderDiagnostic, 0.0, 1.0)
       + vec3<f32>(1.0, 0.12, 0.03) * clamp(pyroBiteAlphaBoost, 0.0, 1.0)
       + vec3<f32>(0.28, 0.72, 1.05) * clamp(pyroFoldExtinctionBoost, 0.0, 1.0)
-      + vec3<f32>(1.0, 0.72, 0.18) * clamp(pyroRadianceBoost, 0.0, 1.0);
-    let pyroDiagnosticSignal = clamp(max(max(pyroBorderDiagnostic, pyroRadianceBoost), max(pyroBiteAlphaBoost, pyroFoldExtinctionBoost)), 0.0, 1.0);
+      + vec3<f32>(1.0, 0.72, 0.18) * clamp(pyroRadianceBoost, 0.0, 1.0)
+      + vec3<f32>(0.18, 0.95, 1.0) * clamp(max(max(pyroFlowAlphaBoost, pyroFlowRadianceBoost), pyroFlowSpikeSignal), 0.0, 1.0);
+    let pyroDiagnosticSignal = clamp(max(max(max(pyroBorderDiagnostic, max(pyroRadianceBoost, pyroFlowRadianceBoost)), max(pyroBiteAlphaBoost, pyroFoldExtinctionBoost)), max(pyroFlowAlphaBoost, pyroFlowSpikeSignal)), 0.0, 1.0);
     let pyroDiagnosticPaintAlpha = clamp(pyroDiagnosticPaint * pyroDiagnosticSignal * (0.72 + pyroCarrierOverdrive * 0.055), 0.0, 1.0);
     alpha = clamp(alpha + pyroDiagnosticPaintAlpha * rayStepOpacity * 0.16, 0.0, 0.42);
     local = mix(local, pyroDiagnosticColor * (0.96 + pyroCarrierOverdrive * 0.045), clamp(pyroDiagnosticPaintAlpha * 1.28, 0.0, 1.0));
@@ -3853,9 +4569,13 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     local = mix(local, vaporCol, clamp(max(vaporCarrier * 0.92, quenchCoreCollapse * 0.62), 0.0, 0.96));
     let diagnosticColor = mix(vec3<f32>(0.08, 0.72, 0.95), vec3<f32>(1.0, 0.18, 0.08), smoothstep(0.010, 0.085, divDebug)) * (0.35 + smoothstep(0.012, 0.18, curlDebug));
     local = mix(local, diagnosticColor, flowDebug * smoothstep(0.015, 0.12, curlDebug + divDebug));
+    let oracleDisplay = clamp(u.oracle_activity_controls2.x, 0.0, 1.0);
+    let oracleDisplayCue = rawTruthOracleActivityCueAtCell(sampleCell);
+    let oracleDisplayColor = mix(vec3<f32>(0.02, 0.08, 0.04), vec3<f32>(0.65, 1.0, 0.78), smoothstep(0.04, 0.72, oracleDisplayCue));
+    local = mix(local, oracleDisplayColor, oracleDisplay * smoothstep(0.015, 0.72, oracleDisplayCue));
     let pressureTierOverlay = pressureTierDebugOverlayColor(y);
     local = mix(local, pressureTierOverlay.rgb, pressureTierOverlay.a);
-    color = color + trans * (alpha * local + fireAlpha * pyroStockFireVisibility * radianceEmission * mix(0.82, 0.62, bonfireRenderScene) + smokeBacklight * pyroStockFireVisibility + pyroRadianceColor * pyroRadianceBoost * pyroRadianceLuma * rayStepOpacity * mix(mix(0.080, 0.030, pyroRadianceSpill), mix(0.012, 0.030, pyroRadianceSpill), 1.0 - pyroRadianceFireSourceWeight));
+    color = color + trans * (alpha * local + stockRenderMode * fireAlpha * pyroStockFireVisibility * radianceEmission * mix(0.82, 0.62, bonfireRenderScene) + smokeBacklight * pyroStockFireVisibility + shellSmokeBacklight + pyroRadianceColor * pyroRadianceBoost * pyroRadianceLuma * rayStepOpacity * mix(mix(0.080, 0.030, pyroRadianceSpill), mix(0.012, 0.030, pyroRadianceSpill), 1.0 - pyroRadianceFireSourceWeight));
     let extinctionStep = clamp(alpha * (0.46 + extinction * 0.16) + fireAlpha * 0.08, 0.0, 0.34);
     trans = trans * exp(-extinctionStep);
     t = t + localDt;
@@ -3887,10 +4607,22 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   const invViewProj = new THREE.Matrix4();
   const viewProj = new THREE.Matrix4();
   const previousViewProj = new THREE.Matrix4();
-  const uniforms = new Float32Array(276);
+  const uniforms = new Float32Array(340);
   let controlsSnapshot = applyRuntimeQualityControls(getControls());
   let gridSize = normalizeGridSize(controlsSnapshot.resolution);
   let majorantGridSize = normalizeMajorantGridSize(controlsSnapshot.majorantGrid);
+  let oracleActivityCueBuffer = null;
+  let oracleActivityCueSourceValues = null;
+  let oracleActivityCueSourceGrid = null;
+  let oracleActivityCueUpload = {
+    status: 'none',
+    requestedCueAuthority: TRUTH_ORACLE_ACTIVITY_CUE_AUTHORITY,
+    effectiveCueAuthority: PROCEDURAL_ACTIVITY_CUE_AUTHORITY,
+    grid: null,
+    externalCueCellCount: 0,
+    frameId: null,
+    uploadedAtMs: null,
+  };
   const state = {
     prototypeIdentity: PROTOTYPE_IDENTITY,
     routeIdentity: ROUTE_IDENTITY,
@@ -3902,6 +4634,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     height: 0,
     displayWidth: 0,
     displayHeight: 0,
+    viewportSizeFallback: false,
     renderWidth: 0,
     renderHeight: 0,
     renderScale: normalizeRenderScale(controlsSnapshot.renderScale),
@@ -3913,6 +4646,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     deterministicReplay: null,
     lookFreeze: normalizeLookFreeze(controlsSnapshot.lookFreeze),
     lookFreezeFrame: null,
+    lookFreezeTimeSeconds: null,
     lookFreezeSkippedFrames: 0,
     pyroCompareMode: normalizePyroCompareMode(controlsSnapshot.pyroCompareMode),
     pyroCompareMuted: false,
@@ -3964,6 +4698,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     externalEmitterCount: 0,
     externalEmitterAgeMs: null,
     externalEmitterFrameId: null,
+    scalarActivityReceiver: null,
     temporalAccumEffective: 0,
     temporalReprojectionConfidence: 0,
     temporalHistoryWeight: 0,
@@ -3985,6 +4720,17 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     majorantBuiltThisFrame: false,
     majorantLastBuiltFrame: -1,
     majorantSkippedFrameCount: 0,
+    boundarySidecarIdentity: BOUNDARY_SIDECAR_IDENTITY,
+    boundarySidecarAuthority: BOUNDARY_SIDECAR_BAKE_AUTHORITY,
+    boundarySidecarBytes: boundarySidecarBufferBytes(gridSize),
+    boundarySidecarSource: normalizeBoundarySidecarSource(controlsSnapshot.boundarySidecarSource),
+    boundarySidecarBuilt: false,
+    boundarySidecarBuiltThisFrame: false,
+    boundarySidecarFrameCount: 0,
+    boundarySidecarLastBuiltFrame: -1,
+    boundaryStructureSource: normalizeBoundarySidecarSource(controlsSnapshot.boundarySidecarSource),
+    boundarySidecarView: normalizeBoundarySidecarView(controlsSnapshot.boundarySidecarView ?? controlsSnapshot.boundarySidecarControls?.view),
+    boundarySidecarDebug: null,
     simProfile: normalizeSimProfileFlag(controlsSnapshot.simProfile),
     simCostLedger: null,
     pressureSourceStrategy: PRESSURE_SOURCE_STRATEGY_DISABLED,
@@ -4270,21 +5016,27 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let pressureProjectPipeline = null;
   let pressureProjectTieredPipeline = null;
   let majorantComputePipeline = null;
+  let boundarySidecarBuildPipeline = null;
   let bindGroups = [];
   let majorantFrontBindGroups = [];
+  let boundarySidecarReadBindGroups = [];
   let pressureWriteBindGroup = null;
   let pressureJacobiBindGroups = [];
   let pressureReadBindGroups = [];
   let majorantWriteBindGroup = null;
+  let boundarySidecarWriteBindGroup = null;
   let bindGroupLayout = null;
   let majorantFluidBindGroupLayout = null;
   let majorantWriteBindGroupLayout = null;
+  let boundarySidecarReadBindGroupLayout = null;
+  let boundarySidecarWriteBindGroupLayout = null;
   let pressureWriteBindGroupLayout = null;
   let pressureJacobiBindGroupLayout = null;
   let pressureReadBindGroupLayout = null;
   let emptyBindGroupLayout = null;
   let pipelineLayout = null;
   let majorantPipelineLayout = null;
+  let boundarySidecarPipelineLayout = null;
   let pressureWritePipelineLayout = null;
   let pressureJacobiPipelineLayout = null;
   let pressureJacobiTieredPipelineLayout = null;
@@ -4296,6 +5048,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let externalEmitterState = normalizeExternalEmitters();
   let volumePrimitives = [];
   let majorantBuffer = null;
+  let boundarySidecarBuffer = null;
   let fluidBuffers = [];
   let frontBuffers = [];
   let pressureBuffers = [];
@@ -4414,6 +5167,83 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.externalEmitterAgeMs = externalEmitterState.count > 0 ? Math.max(0, nowMs - externalEmitterState.timestampMs) : null;
   }
 
+  function resampleScalarActivityCue(values, sourceGrid, targetGrid) {
+    const srcGrid = normalizeScalarActivityCueGridSize(sourceGrid);
+    const dstGrid = normalizeGridSize(targetGrid);
+    const source = values instanceof Float32Array ? values : new Float32Array(values || []);
+    const sourceCells = srcGrid * srcGrid * srcGrid;
+    if (source.length < sourceCells) {
+      throw new Error(`truth oracle activity cue expected ${sourceCells} values for ${srcGrid}^3, got ${source.length}`);
+    }
+    const target = new Float32Array(dstGrid * dstGrid * dstGrid);
+    if (srcGrid === dstGrid) {
+      for (let index = 0; index < target.length; index += 1) {
+        target[index] = clampFinite(source[index], 0, 1, 0);
+      }
+      return target;
+    }
+    const ratio = srcGrid / dstGrid;
+    for (let z = 0; z < dstGrid; z += 1) {
+      const sz = Math.max(0, Math.min(srcGrid - 1, Math.floor((z + 0.5) * ratio)));
+      for (let y = 0; y < dstGrid; y += 1) {
+        const sy = Math.max(0, Math.min(srcGrid - 1, Math.floor((y + 0.5) * ratio)));
+        for (let x = 0; x < dstGrid; x += 1) {
+          const sx = Math.max(0, Math.min(srcGrid - 1, Math.floor((x + 0.5) * ratio)));
+          const srcIndex = sx + sy * srcGrid + sz * srcGrid * srcGrid;
+          const dstIndex = x + y * dstGrid + z * dstGrid * dstGrid;
+          target[dstIndex] = clampFinite(source[srcIndex], 0, 1, 0);
+        }
+      }
+    }
+    return target;
+  }
+
+  function scalarActivityReceiverDebug() {
+    const controls = normalizeScalarActivityReceiverControls(controlsSnapshot);
+    const externalCueActive = oracleActivityCueUpload.status === 'uploaded' && oracleActivityCueUpload.externalCueCellCount > 0;
+    return {
+      identity: TRUTH_ORACLE_ACTIVITY_RECEIVER_IDENTITY,
+      hookIdentity: SCALAR_ACTIVITY_RECEIVER_HOOK_IDENTITY,
+      requestedCueAuthority: TRUTH_ORACLE_ACTIVITY_CUE_AUTHORITY,
+      effectiveCueAuthority: externalCueActive ? TRUTH_ORACLE_ACTIVITY_CUE_AUTHORITY : PROCEDURAL_ACTIVITY_CUE_AUTHORITY,
+      enabled: controls.enabled,
+      display: controls.display,
+      curlNoiseGain: controls.curlNoiseGain,
+      vorticityGain: controls.vorticityGain,
+      materialGain: controls.materialGain,
+      externalCueStatus: oracleActivityCueUpload.status,
+      externalCueCellCount: oracleActivityCueUpload.externalCueCellCount,
+      externalCueSourceGrid: oracleActivityCueUpload.grid,
+      receiverGrid: gridSize,
+      frameId: oracleActivityCueUpload.frameId,
+      uploadedAtMs: oracleActivityCueUpload.uploadedAtMs,
+    };
+  }
+
+  function boundarySidecarDebug(boundarySidecarSourceName = normalizeBoundarySidecarSource(controlsSnapshot.boundarySidecarSource)) {
+    const controls = controlsSnapshot.boundarySidecarControls || {};
+    const view = normalizeBoundarySidecarView(controls.view ?? controlsSnapshot.boundarySidecarView);
+    return {
+      identity: BOUNDARY_SIDECAR_IDENTITY,
+      authority: BOUNDARY_SIDECAR_BAKE_AUTHORITY,
+      source: boundarySidecarSourceName,
+      view,
+      channels: ['support', 'coverage', 'ridge', 'proximity', 'footprint'],
+      boundaryStructureSource: boundarySidecarSourceName,
+      activeInRaymarch: boundarySidecarSourceName !== 'live',
+      activeAsDebugView: view !== 'off',
+      blur: clampFinite(controls.blur ?? controlsSnapshot.boundarySidecarBlur, 0, 1, 0.45),
+      stepWidth: clampFinite(controls.stepWidth ?? controlsSnapshot.boundarySidecarWidth, 0, 2, 0.75),
+      ridgeGain: clampFinite(controls.ridgeGain ?? controlsSnapshot.boundarySidecarRidge, 0, 2, 1),
+      grid: gridSize,
+      bytes: boundarySidecarBufferBytes(gridSize),
+      built: state.boundarySidecarBuilt,
+      builtThisFrame: state.boundarySidecarBuiltThisFrame,
+      frameCount: state.boundarySidecarFrameCount,
+      lastBuiltFrame: state.boundarySidecarLastBuiltFrame,
+    };
+  }
+
   function ensureExternalEmitterBuffer() {
     if (externalEmitterBuffer) return;
     externalEmitterBuffer = device.createBuffer({
@@ -4427,6 +5257,22 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   function writeExternalEmitterBuffer() {
     if (!device || !externalEmitterBuffer) return;
     device.queue.writeBuffer(externalEmitterBuffer, 0, externalEmitterState.data);
+  }
+
+  function ensureOracleActivityCueBuffer() {
+    if (oracleActivityCueBuffer) return;
+    oracleActivityCueBuffer = device.createBuffer({
+      label: `kaminos truth-oracle scalar activity cue ${gridSize}^3`,
+      size: scalarActivityCueBufferBytes(gridSize),
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    });
+    device.queue.writeBuffer(oracleActivityCueBuffer, 0, new Float32Array(gridCellCount(gridSize)));
+  }
+
+  function writeOracleActivityCueBuffer(values) {
+    if (!device) return;
+    ensureOracleActivityCueBuffer();
+    device.queue.writeBuffer(oracleActivityCueBuffer, 0, values);
   }
 
   function normalizePrimitiveRecord(primitive) {
@@ -4606,11 +5452,17 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     for (const buffer of fluidBuffers) buffer.destroy();
     for (const buffer of frontBuffers) buffer.destroy();
     for (const buffer of pressureBuffers) buffer.destroy();
+    boundarySidecarBuffer?.destroy();
+    oracleActivityCueBuffer?.destroy();
+    boundarySidecarBuffer = null;
+    oracleActivityCueBuffer = null;
     fluidBuffers = [];
     frontBuffers = [];
     pressureBuffers = [];
     bindGroups = [];
     majorantFrontBindGroups = [];
+    boundarySidecarReadBindGroups = [];
+    boundarySidecarWriteBindGroup = null;
     pressureWriteBindGroup = null;
     pressureJacobiBindGroups = [];
     pressureReadBindGroups = [];
@@ -4725,6 +5577,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       snapshot.majorantGrid,
       snapshot.gridOverlay,
       snapshot.flowDebug,
+      snapshot.oracleActivityCue,
+      snapshot.oracleActivityDisplay,
+      snapshot.oracleActivityCurlNoise,
+      snapshot.oracleActivityVorticity,
+      snapshot.oracleActivityMaterial,
       normalizeLookFreeze(snapshot.lookFreeze),
       normalizePyroCompareMode(snapshot.pyroCompareMode),
       snapshot.pressureStrategy,
@@ -4759,7 +5616,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   }
 
   function rebuildFluidBindGroups() {
-    if (!device || !bindGroupLayout || !uniformBuffer || !externalEmitterBuffer || fluidBuffers.length !== 2 || frontBuffers.length !== 2 || !majorantBuffer || !historyTexture || !historySampler) return;
+    if (!device || !bindGroupLayout || !uniformBuffer || !externalEmitterBuffer || !oracleActivityCueBuffer || fluidBuffers.length !== 2 || frontBuffers.length !== 2 || !majorantBuffer || !boundarySidecarBuffer || !historyTexture || !historySampler) return;
     bindGroups = [
       device.createBindGroup({
         label: `kaminos fluid bind group ${gridSize}^3 A to B`,
@@ -4774,6 +5631,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           { binding: 6, resource: { buffer: externalEmitterBuffer } },
           { binding: 7, resource: { buffer: frontBuffers[0] } },
           { binding: 8, resource: { buffer: frontBuffers[1] } },
+          { binding: 9, resource: { buffer: oracleActivityCueBuffer } },
+          { binding: 10, resource: { buffer: boundarySidecarBuffer } },
         ],
       }),
       device.createBindGroup({
@@ -4789,6 +5648,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           { binding: 6, resource: { buffer: externalEmitterBuffer } },
           { binding: 7, resource: { buffer: frontBuffers[1] } },
           { binding: 8, resource: { buffer: frontBuffers[0] } },
+          { binding: 9, resource: { buffer: oracleActivityCueBuffer } },
+          { binding: 10, resource: { buffer: boundarySidecarBuffer } },
         ],
       }),
     ];
@@ -4811,14 +5672,33 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     });
   }
 
+  function ensureBoundarySidecarBuffer() {
+    if (boundarySidecarBuffer) return;
+    boundarySidecarBuffer = device.createBuffer({
+      label: `kaminos ${BOUNDARY_SIDECAR_IDENTITY} ${gridSize}^3`,
+      size: boundarySidecarBufferBytes(gridSize),
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST,
+    });
+    device.queue.writeBuffer(boundarySidecarBuffer, 0, new Float32Array(gridCellCount(gridSize) * 4));
+    boundarySidecarWriteBindGroup = device.createBindGroup({
+      label: `kaminos ${BOUNDARY_SIDECAR_IDENTITY} write bind group ${gridSize}^3`,
+      layout: boundarySidecarWriteBindGroupLayout,
+      entries: [
+        { binding: 0, resource: { buffer: boundarySidecarBuffer } },
+      ],
+    });
+  }
+
   function rebuildFluidState(nextGridSize = gridSize, nextMajorantGridSize = majorantGridSize, reason = 'grid-rebuilt') {
     gridSize = normalizeGridSize(nextGridSize);
     majorantGridSize = normalizeMajorantGridSize(nextMajorantGridSize);
     destroyFluidState();
     destroyMajorantState();
     ensureMajorantBuffer();
+    ensureBoundarySidecarBuffer();
     const nextBufferBytes = fluidBufferBytes(gridSize);
     const nextFrontBufferBytes = frontFieldBufferBytes(gridSize);
+    const nextBoundarySidecarBufferBytes = boundarySidecarBufferBytes(gridSize);
     const nextPressureBufferBytes = pressureBufferBytes(gridSize);
     const initialFluid = makeInitialFluid(gridSize);
     fluidBuffers = [0, 1].map(i => {
@@ -4848,6 +5728,18 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       device.queue.writeBuffer(buffer, 0, new Float32Array(gridCellCount(gridSize) * 4));
       return buffer;
     });
+    ensureOracleActivityCueBuffer();
+    if (oracleActivityCueSourceValues && oracleActivityCueSourceGrid) {
+      const resampledCue = resampleScalarActivityCue(oracleActivityCueSourceValues, oracleActivityCueSourceGrid, gridSize);
+      writeOracleActivityCueBuffer(resampledCue);
+      oracleActivityCueUpload = {
+        ...oracleActivityCueUpload,
+        status: 'uploaded',
+        effectiveCueAuthority: TRUTH_ORACLE_ACTIVITY_CUE_AUTHORITY,
+        externalCueCellCount: resampledCue.length,
+        receiverGrid: gridSize,
+      };
+    }
     const renderPipelineConstants = { GRID: gridSize, MAJORANT_GRID: majorantGridSize };
     const computePipelineConstants = { GRID: gridSize };
     const majorantPipelineConstants = { GRID: gridSize, MAJORANT_GRID: majorantGridSize };
@@ -4900,6 +5792,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       layout: majorantPipelineLayout,
       compute: { module: shader, entryPoint: 'csMajorant', constants: majorantPipelineConstants },
     });
+    boundarySidecarBuildPipeline = device.createComputePipeline({
+      label: `kaminos ${BOUNDARY_SIDECAR_IDENTITY} compute pipeline ${gridSize}^3`,
+      layout: boundarySidecarPipelineLayout,
+      compute: { module: shader, entryPoint: 'csBoundarySidecar', constants: computePipelineConstants },
+    });
     ensureTemporalHistoryTexture();
     rebuildFluidBindGroups();
     majorantFrontBindGroups = [
@@ -4915,6 +5812,26 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         label: `kaminos majorant fluid-front read bind group ${gridSize}^3 B`,
         layout: majorantFluidBindGroupLayout,
         entries: [
+          { binding: 1, resource: { buffer: fluidBuffers[1] } },
+          { binding: 7, resource: { buffer: frontBuffers[1] } },
+        ],
+      }),
+    ];
+    boundarySidecarReadBindGroups = [
+      device.createBindGroup({
+        label: `kaminos ${BOUNDARY_SIDECAR_IDENTITY} read bind group ${gridSize}^3 A`,
+        layout: boundarySidecarReadBindGroupLayout,
+        entries: [
+          { binding: 0, resource: { buffer: uniformBuffer } },
+          { binding: 1, resource: { buffer: fluidBuffers[0] } },
+          { binding: 7, resource: { buffer: frontBuffers[0] } },
+        ],
+      }),
+      device.createBindGroup({
+        label: `kaminos ${BOUNDARY_SIDECAR_IDENTITY} read bind group ${gridSize}^3 B`,
+        layout: boundarySidecarReadBindGroupLayout,
+        entries: [
+          { binding: 0, resource: { buffer: uniformBuffer } },
           { binding: 1, resource: { buffer: fluidBuffers[1] } },
           { binding: 7, resource: { buffer: frontBuffers[1] } },
         ],
@@ -4979,6 +5896,17 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.majorantBuiltThisFrame = false;
     state.majorantLastBuiltFrame = -1;
     state.majorantSkippedFrameCount = 0;
+    state.boundarySidecarIdentity = BOUNDARY_SIDECAR_IDENTITY;
+    state.boundarySidecarAuthority = BOUNDARY_SIDECAR_BAKE_AUTHORITY;
+    state.boundarySidecarBytes = nextBoundarySidecarBufferBytes;
+    state.boundarySidecarSource = normalizeBoundarySidecarSource(controlsSnapshot.boundarySidecarSource);
+    state.boundarySidecarBuilt = false;
+    state.boundarySidecarBuiltThisFrame = false;
+    state.boundarySidecarFrameCount = 0;
+    state.boundarySidecarLastBuiltFrame = -1;
+    state.boundaryStructureSource = state.boundarySidecarSource;
+    state.boundarySidecarView = normalizeBoundarySidecarView(controlsSnapshot.boundarySidecarView ?? controlsSnapshot.boundarySidecarControls?.view);
+    state.boundarySidecarDebug = boundarySidecarDebug(state.boundarySidecarSource);
     state.pressureProjectionEnabled = false;
     state.pressureProjectionIterations = 0;
     state.pressureIterationDefault = defaultPressureIterationsForScene(controlsSnapshot.volumeScene);
@@ -5030,6 +5958,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
     ensureExternalEmitterBuffer();
+    ensureOracleActivityCueBuffer();
     historySampler = device.createSampler({
       label: 'kaminos temporal history sampler',
       magFilter: 'linear',
@@ -5094,6 +6023,36 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           visibility: GPUShaderStage.COMPUTE,
           buffer: { type: 'storage' },
         },
+        {
+          binding: 9,
+          visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE,
+          buffer: { type: 'read-only-storage' },
+        },
+        {
+          binding: 10,
+          visibility: GPUShaderStage.FRAGMENT,
+          buffer: { type: 'read-only-storage' },
+        },
+      ],
+    });
+    boundarySidecarReadBindGroupLayout = device.createBindGroupLayout({
+      label: `kaminos ${BOUNDARY_SIDECAR_IDENTITY} fluid-front read bind group layout`,
+      entries: [
+        {
+          binding: 0,
+          visibility: GPUShaderStage.COMPUTE,
+          buffer: { type: 'uniform' },
+        },
+        {
+          binding: 1,
+          visibility: GPUShaderStage.COMPUTE,
+          buffer: { type: 'read-only-storage' },
+        },
+        {
+          binding: 7,
+          visibility: GPUShaderStage.COMPUTE,
+          buffer: { type: 'read-only-storage' },
+        },
       ],
     });
     majorantFluidBindGroupLayout = device.createBindGroupLayout({
@@ -5113,6 +6072,16 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     });
     majorantWriteBindGroupLayout = device.createBindGroupLayout({
       label: 'kaminos majorant write bind group layout',
+      entries: [
+        {
+          binding: 0,
+          visibility: GPUShaderStage.COMPUTE,
+          buffer: { type: 'storage' },
+        },
+      ],
+    });
+    boundarySidecarWriteBindGroupLayout = device.createBindGroupLayout({
+      label: `kaminos ${BOUNDARY_SIDECAR_IDENTITY} write bind group layout`,
       entries: [
         {
           binding: 0,
@@ -5168,6 +6137,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       label: 'kaminos coarse majorant pipeline layout',
       bindGroupLayouts: [majorantFluidBindGroupLayout, majorantWriteBindGroupLayout],
     });
+    boundarySidecarPipelineLayout = device.createPipelineLayout({
+      label: `kaminos ${BOUNDARY_SIDECAR_IDENTITY} pipeline layout`,
+      bindGroupLayouts: [boundarySidecarReadBindGroupLayout, emptyBindGroupLayout, emptyBindGroupLayout, boundarySidecarWriteBindGroupLayout],
+    });
     pressureWritePipelineLayout = device.createPipelineLayout({
       label: 'kaminos divergence pressure pipeline layout',
       bindGroupLayouts: [majorantFluidBindGroupLayout, emptyBindGroupLayout, pressureWriteBindGroupLayout],
@@ -5200,9 +6173,15 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
 
   function resize() {
     const rect = viewport.getBoundingClientRect();
+    const win = viewport.ownerDocument?.defaultView || globalThis;
+    const fallbackWidth = Math.max(1, Math.floor((win?.innerWidth || 1280) - Math.max(0, rect.left || 0)));
+    const fallbackHeight = Math.max(1, Math.floor(win?.innerHeight || 720));
+    const useFallbackSize = !(rect.width > 0 && rect.height > 0);
+    const cssWidth = useFallbackSize ? fallbackWidth : rect.width;
+    const cssHeight = useFallbackSize ? fallbackHeight : rect.height;
     const dpr = 1;
-    const displayWidth = Math.max(1, Math.floor(rect.width * dpr));
-    const displayHeight = Math.max(1, Math.floor(rect.height * dpr));
+    const displayWidth = Math.max(1, Math.floor(cssWidth * dpr));
+    const displayHeight = Math.max(1, Math.floor(cssHeight * dpr));
     const renderScale = normalizeRenderScale(controlsSnapshot.renderScale);
     const renderWidth = Math.max(1, Math.floor(displayWidth * renderScale));
     const renderHeight = Math.max(1, Math.floor(displayHeight * renderScale));
@@ -5218,6 +6197,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       state.height = renderHeight;
       state.displayWidth = displayWidth;
       state.displayHeight = displayHeight;
+      state.viewportSizeFallback = useFallbackSize;
       state.renderWidth = renderWidth;
       state.renderHeight = renderHeight;
       state.renderScale = renderScale;
@@ -5246,6 +6226,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     camera.updateMatrixWorld();
     maybeResetTemporalHistoryForCamera();
     ensureTemporalHistoryTexture();
+    const lookFreeze = normalizeLookFreeze(controlsSnapshot.lookFreeze) && lookFreezeCanPin(state) ? 1 : 0;
+    if (lookFreeze) {
+      if (state.lookFreezeFrame === null) state.lookFreezeFrame = state.frameCount;
+      if (state.lookFreezeTimeSeconds === null) state.lookFreezeTimeSeconds = now * 0.001;
+    } else {
+      state.lookFreezeTimeSeconds = null;
+    }
     viewProj.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
     invViewProj.copy(viewProj).invert();
     if (!previousViewProjReady) {
@@ -5256,7 +6243,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     uniforms[16] = camera.position.x;
     uniforms[17] = camera.position.y;
     uniforms[18] = camera.position.z;
-    uniforms[19] = now * 0.001;
+    uniforms[19] = lookFreeze ? (state.lookFreezeTimeSeconds ?? now * 0.001) : now * 0.001;
     uniforms[20] = state.width;
     uniforms[21] = state.height;
     uniforms[22] = controlsSnapshot.raySteps;
@@ -5285,10 +6272,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const bonfireAblation = normalizeBonfireAblationControls(controlsSnapshot);
     const baseTemporalAccum = Math.max(0, Math.min(0.85, controlsSnapshot.temporalAccum ?? 0.25));
     const requestedTemporalAccum = Math.max(0, Math.min(0.85, baseTemporalAccum * bonfireAblation.temporal));
-    uniforms[44] = historyValid ? requestedTemporalAccum : 0;
-    uniforms[45] = controlsSnapshot.temporalJitter ?? 0.85;
+    uniforms[44] = lookFreeze ? 0 : (historyValid ? requestedTemporalAccum : 0);
+    uniforms[45] = lookFreeze ? 0 : (controlsSnapshot.temporalJitter ?? 0.85);
     uniforms[46] = controlsSnapshot.historyClamp ?? 0.70;
-    uniforms[47] = state.frameCount % 4096;
+    const temporalFrameIndex = lookFreeze ? (state.lookFreezeFrame ?? state.frameCount) : state.frameCount;
+    uniforms[47] = temporalFrameIndex % 4096;
     uniforms[48] = controlsSnapshot.fireScale ?? 0.86;
     uniforms[49] = controlsSnapshot.detailScale ?? 1.75;
     uniforms[50] = controlsSnapshot.plumeHeight ?? 1.45;
@@ -5328,7 +6316,6 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     uniforms[81] = sourcePrimitive.position[1];
     uniforms[82] = sourcePrimitive.position[2];
     uniforms[83] = volumePrimitives.length > 0 ? 1 : 0;
-    const lookFreeze = normalizeLookFreeze(controlsSnapshot.lookFreeze) && lookFreezeCanPin(state) ? 1 : 0;
     const pyroCompareMode = normalizePyroCompareMode(controlsSnapshot.pyroCompareMode);
     const frozenPyroDetail = lookFreeze && state.pyroDynamicDetail?.materialMemory ? state.pyroDynamicDetail : null;
     const overridePyroDetail = state.fullFieldBufferRenderOverride?.status === 'applied'
@@ -5409,6 +6396,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const pyroRadianceLuma = Math.max(0, Math.min(3, controlsSnapshot.pyroRadianceLuma ?? 1));
     const pyroRadianceRise = Math.max(0, Math.min(1, controlsSnapshot.pyroRadianceRise ?? 0.45));
     const pyroRadianceFireLock = Math.max(0, Math.min(1, controlsSnapshot.pyroRadianceFireLock ?? 0.65));
+    const pyroFlowBite = pyroCompareMuted ? 0 : Math.max(0, Math.min(3, controlsSnapshot.pyroFlowBite ?? 0));
+    const pyroFlowBorder = Math.max(0, Math.min(1, controlsSnapshot.pyroFlowBorder ?? 0.55));
+    const pyroFlowTeeth = Math.max(0, Math.min(1, controlsSnapshot.pyroFlowTeeth ?? 0.55));
+    const pyroFlowRise = Math.max(0, Math.min(1, controlsSnapshot.pyroFlowRise ?? 0.50));
+    const pyroFlowFireLock = Math.max(0, Math.min(1, controlsSnapshot.pyroFlowFireLock ?? 0.55));
+    const pyroFlowLuma = Math.max(0, Math.min(3, controlsSnapshot.pyroFlowLuma ?? 1));
+    const pyroFlowRadiance = Math.max(0, Math.min(4, controlsSnapshot.pyroFlowRadiance ?? 0));
+    const pyroFlowSpikes = Math.max(0, Math.min(1, controlsSnapshot.pyroFlowSpikes ?? 0.35));
     const pyroDiagnosticPaint = pyroCompareMuted ? 0 : Math.max(0, Math.min(1, controlsSnapshot.pyroDiagnosticPaint ?? 0));
     uniforms[184] = pyroInterfaceFocus;
     uniforms[185] = pyroEdgeBite;
@@ -5456,20 +6451,150 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     uniforms[225] = pyroBiteAfterCut;
     uniforms[226] = 0;
     uniforms[227] = 0;
-    writePyroPaletteUniform(uniforms, 228, controlsSnapshot.pyroFlameCoreColor, '#fff4b8');
-    writePyroPaletteUniform(uniforms, 232, controlsSnapshot.pyroFlameEdgeColor, '#ff8a24');
-    writePyroPaletteUniform(uniforms, 236, controlsSnapshot.pyroBiteEmberColor, '#e65a1a');
-    writePyroPaletteUniform(uniforms, 240, controlsSnapshot.pyroBiteHotColor, '#fff4b8');
-    writePyroPaletteUniform(uniforms, 244, controlsSnapshot.pyroWakeShadowColor, '#384c50');
-    writePyroPaletteUniform(uniforms, 248, controlsSnapshot.pyroWakeEmberColor, '#b06a2a');
-    writePyroPaletteUniform(uniforms, 252, controlsSnapshot.pyroRadianceCoolColor, '#7aa8b8');
-    writePyroPaletteUniform(uniforms, 256, controlsSnapshot.pyroRadianceWarmColor, '#d18438');
-    uniforms.set(previousViewProj.elements, 260);
+    uniforms[228] = pyroFlowBite;
+    uniforms[229] = pyroFlowBorder;
+    uniforms[230] = pyroFlowTeeth;
+    uniforms[231] = pyroFlowRise;
+    uniforms[232] = pyroFlowFireLock;
+    uniforms[233] = pyroFlowLuma;
+    uniforms[234] = pyroFlowRadiance;
+    uniforms[235] = pyroFlowSpikes;
+    writePyroPaletteUniform(uniforms, 236, controlsSnapshot.pyroFlameCoreColor, '#fff4b8');
+    writePyroPaletteUniform(uniforms, 240, controlsSnapshot.pyroFlameEdgeColor, '#ff8a24');
+    writePyroPaletteUniform(uniforms, 244, controlsSnapshot.pyroBiteEmberColor, '#e65a1a');
+    writePyroPaletteUniform(uniforms, 248, controlsSnapshot.pyroBiteHotColor, '#fff4b8');
+    writePyroPaletteUniform(uniforms, 252, controlsSnapshot.pyroWakeShadowColor, '#384c50');
+    writePyroPaletteUniform(uniforms, 256, controlsSnapshot.pyroWakeEmberColor, '#b06a2a');
+    writePyroPaletteUniform(uniforms, 260, controlsSnapshot.pyroRadianceCoolColor, '#7aa8b8');
+    writePyroPaletteUniform(uniforms, 264, controlsSnapshot.pyroRadianceWarmColor, '#d18438');
+    writePyroPaletteUniform(uniforms, 268, controlsSnapshot.pyroFlowCoolColor, '#2aa7b8');
+    writePyroPaletteUniform(uniforms, 272, controlsSnapshot.pyroFlowHotColor, '#ff7a36');
+    const fireRenderModeName = normalizeFireRenderMode(controlsSnapshot.fireRenderMode);
+    const shellInspectModeName = normalizeShellInspectMode(controlsSnapshot.shellInspectMode);
+    const boundarySidecarSourceName = normalizeBoundarySidecarSource(controlsSnapshot.boundarySidecarSource);
+    const boundarySidecarViewName = normalizeBoundarySidecarView(controlsSnapshot.boundarySidecarView ?? controlsSnapshot.boundarySidecarControls?.view);
+    const boundarySidecarControls = controlsSnapshot.boundarySidecarControls || {};
+    const boundaryFireInspectActive = shellInspectModeName === 'boundary_fire';
+    const boundaryInspectActive = shellInspectModeName === 'boundary' || boundaryFireInspectActive;
+    const boundaryControls = controlsSnapshot.reactionBoundaryControls || {};
+    const boundaryFireControls = controlsSnapshot.reactionBoundaryFireControls || {};
+    const boundaryUniforms = {
+      identity: boundaryControls.identity || 'reaction-boundary-live-controls-v0',
+      gradientGain: Math.max(0, Math.min(4, boundaryControls.gradientGain ?? controlsSnapshot.reactionBoundaryGradient ?? 2.60)),
+      supportThermal: Math.max(0, Math.min(2, boundaryControls.supportThermal ?? controlsSnapshot.reactionBoundarySupportThermal ?? 0.10)),
+      supportReaction: Math.max(0, Math.min(2, boundaryControls.supportReaction ?? controlsSnapshot.reactionBoundarySupportReaction ?? 0.26)),
+      supportFront: Math.max(0, Math.min(2, boundaryControls.supportFront ?? controlsSnapshot.reactionBoundarySupportFront ?? 1.60)),
+      supportInterface: Math.max(0, Math.min(2, boundaryControls.supportInterface ?? controlsSnapshot.reactionBoundarySupportInterface ?? 1.46)),
+      cut: Math.max(0, Math.min(0.55, boundaryControls.cut ?? controlsSnapshot.reactionBoundaryCut ?? 0.30)),
+      softness: Math.max(0.005, Math.min(0.45, boundaryControls.softness ?? controlsSnapshot.reactionBoundarySoftness ?? 0.08)),
+      coreReject: Math.max(0, Math.min(1, boundaryControls.coreReject ?? controlsSnapshot.reactionBoundaryCoreReject ?? 0.92)),
+      topologyGain: Math.max(0, Math.min(2.5, boundaryControls.topologyGain ?? controlsSnapshot.reactionBoundaryTopology ?? 0.90)),
+      curlGain: Math.max(0, Math.min(2, boundaryControls.curlGain ?? controlsSnapshot.reactionBoundaryCurl ?? 0.70)),
+      divergenceGain: Math.max(0, Math.min(1, boundaryControls.divergenceGain ?? controlsSnapshot.reactionBoundaryDivergence ?? 0.05)),
+      displayContrast: Math.max(0.25, Math.min(5, boundaryControls.displayContrast ?? controlsSnapshot.reactionBoundaryContrast ?? 1.35)),
+      displayGamma: Math.max(0.35, Math.min(3, boundaryControls.displayGamma ?? controlsSnapshot.reactionBoundaryGamma ?? 1.05)),
+      displayOpacity: Math.max(0, Math.min(3, boundaryControls.displayOpacity ?? controlsSnapshot.reactionBoundaryOpacity ?? 0.70)),
+    };
+    const boundaryFireUniforms = {
+      identity: boundaryFireControls.identity || 'reaction-boundary-fire-controls-v0',
+      ridgeGain: Math.max(0, Math.min(2, boundaryFireControls.ridgeGain ?? controlsSnapshot.reactionBoundaryFireRidge ?? 1.76)),
+      ridgeCut: Math.max(0, Math.min(0.55, boundaryFireControls.ridgeCut ?? controlsSnapshot.reactionBoundaryFireRidgeCut ?? 0.040)),
+      tipBreakup: Math.max(0, Math.min(2, boundaryFireControls.tipBreakup ?? controlsSnapshot.reactionBoundaryFireTip ?? 1.80)),
+      topologyErosion: Math.max(0, Math.min(1, boundaryFireControls.topologyErosion ?? controlsSnapshot.reactionBoundaryFireErosion ?? 0.55)),
+      cleanBlue: Math.max(0, Math.min(2, boundaryFireControls.cleanBlue ?? controlsSnapshot.reactionBoundaryFireCleanBlue ?? 0.90)),
+      sootYield: Math.max(0, Math.min(2, boundaryFireControls.sootYield ?? controlsSnapshot.reactionBoundaryFireSoot ?? 0.72)),
+      sootYellowing: Math.max(0, Math.min(2, boundaryFireControls.sootYellowing ?? controlsSnapshot.reactionBoundaryFireYellow ?? 0.86)),
+      thermalWarmth: Math.max(0, Math.min(2, boundaryFireControls.thermalWarmth ?? controlsSnapshot.reactionBoundaryFireWarmth ?? 0.92)),
+      fireLuma: Math.max(0, Math.min(5, boundaryFireControls.fireLuma ?? controlsSnapshot.reactionBoundaryFireLuma ?? 1.05)),
+    };
+    uniforms[276] = fireRenderModeValue(fireRenderModeName);
+    uniforms[277] = shellInspectModeValue(shellInspectModeName);
+    uniforms[278] = Math.max(0, Math.min(2, controlsSnapshot.shellAmount ?? 1.10));
+    uniforms[279] = Math.max(0.05, Math.min(2, controlsSnapshot.shellWidth ?? 0.90));
+    uniforms[280] = boundaryInspectActive ? boundaryUniforms.supportThermal : Math.max(0, Math.min(2, controlsSnapshot.shellThermal ?? 0.85));
+    uniforms[281] = boundaryInspectActive ? boundaryUniforms.supportReaction : Math.max(0, Math.min(2, controlsSnapshot.shellReaction ?? 1.10));
+    uniforms[282] = boundaryInspectActive ? boundaryUniforms.supportFront : Math.max(0, Math.min(2, controlsSnapshot.shellFront ?? 1.25));
+    uniforms[283] = boundaryInspectActive ? boundaryUniforms.supportInterface : Math.max(0, Math.min(2, controlsSnapshot.shellEdge ?? 0.85));
+    uniforms[284] = boundaryInspectActive ? boundaryUniforms.coreReject : Math.max(0, Math.min(1, controlsSnapshot.shellCoreSuppress ?? 0.55));
+    uniforms[285] = boundaryInspectActive ? boundaryUniforms.topologyGain : Math.max(0, Math.min(2, controlsSnapshot.shellBite ?? 0.80));
+    uniforms[286] = boundaryInspectActive ? boundaryUniforms.curlGain : Math.max(0, Math.min(2, controlsSnapshot.shellCurl ?? 0.25));
+    uniforms[287] = boundaryInspectActive ? boundaryUniforms.divergenceGain : Math.max(0, Math.min(1, controlsSnapshot.shellDivergence ?? 0.00));
+    uniforms[288] = boundaryInspectActive ? boundaryUniforms.gradientGain : Math.max(0, Math.min(2, controlsSnapshot.shellSmoke ?? 0.25));
+    uniforms[289] = boundaryInspectActive ? boundaryUniforms.cut : 0;
+    uniforms[290] = boundaryInspectActive ? boundaryUniforms.softness : 0;
+    uniforms[291] = boundaryInspectActive ? boundaryUniforms.displayOpacity : 0;
+    uniforms[292] = boundaryInspectActive ? boundaryUniforms.displayContrast : Math.max(0, Math.min(5, controlsSnapshot.shellLuma ?? 1.35));
+    uniforms[293] = boundaryInspectActive ? boundaryUniforms.displayGamma : Math.max(0, Math.min(4, controlsSnapshot.shellExposure ?? 1.15));
+    uniforms[294] = Math.max(0.2, Math.min(4, controlsSnapshot.shellSoftClip ?? 1.60));
+    uniforms[295] = Math.max(0, Math.min(4, controlsSnapshot.shellHeat ?? 1.65));
+    uniforms[296] = boundaryFireUniforms.ridgeGain;
+    uniforms[297] = boundaryFireUniforms.ridgeCut;
+    uniforms[298] = boundaryFireUniforms.tipBreakup;
+    uniforms[299] = boundaryFireUniforms.topologyErosion;
+    uniforms[300] = boundaryFireUniforms.cleanBlue;
+    uniforms[301] = boundaryFireUniforms.sootYield;
+    uniforms[302] = boundaryFireUniforms.sootYellowing;
+    uniforms[303] = boundaryFireUniforms.thermalWarmth;
+    uniforms[304] = boundaryFireUniforms.fireLuma;
+    uniforms[305] = 0;
+    uniforms[306] = 0;
+    uniforms[307] = 0;
+    uniforms[308] = boundarySidecarSourceValue(boundarySidecarSourceName);
+    uniforms[309] = clampFinite(boundarySidecarControls.blur ?? controlsSnapshot.boundarySidecarBlur, 0, 1, 0.45);
+    uniforms[310] = clampFinite(boundarySidecarControls.stepWidth ?? controlsSnapshot.boundarySidecarWidth, 0, 2, 0.75);
+    uniforms[311] = clampFinite(boundarySidecarControls.ridgeGain ?? controlsSnapshot.boundarySidecarRidge, 0, 2, 1);
+    uniforms[312] = boundarySidecarViewValue(boundarySidecarViewName);
+    uniforms[313] = 0;
+    uniforms[314] = 0;
+    uniforms[315] = 0;
+    const scalarActivityReceiver = normalizeScalarActivityReceiverControls(controlsSnapshot);
+    const externalCueActive = oracleActivityCueUpload.status === 'uploaded' && oracleActivityCueUpload.externalCueCellCount > 0;
+    uniforms[316] = scalarActivityReceiver.enabled;
+    uniforms[317] = scalarActivityReceiver.curlNoiseGain;
+    uniforms[318] = scalarActivityReceiver.vorticityGain;
+    uniforms[319] = scalarActivityReceiver.materialGain;
+    uniforms[320] = scalarActivityReceiver.display;
+    uniforms[321] = externalCueActive ? 1 : 0;
+    uniforms[322] = oracleActivityCueUpload.grid || 0;
+    uniforms[323] = oracleActivityCueUpload.externalCueCellCount || 0;
+    uniforms.set(previousViewProj.elements, 324);
     device.queue.writeBuffer(uniformBuffer, 0, uniforms);
     state.gridOverlay = controlsSnapshot.gridOverlay || 0;
     state.lookFreeze = lookFreeze;
     state.pyroCompareMode = pyroCompareMode;
     state.pyroCompareMuted = pyroCompareMuted;
+    state.legacyPyroBackedOff = controlsSnapshot.legacyPyroBackedOff === true;
+    state.fireRenderMode = fireRenderModeName;
+    state.shellInspectMode = shellInspectModeName;
+    state.topologyShellControls = {
+      amount: uniforms[278],
+      width: uniforms[279],
+      thermal: uniforms[280],
+      reaction: uniforms[281],
+      front: uniforms[282],
+      edge: uniforms[283],
+      coreSuppress: uniforms[284],
+      bite: uniforms[285],
+      curl: uniforms[286],
+      divergence: uniforms[287],
+      smoke: uniforms[288],
+      luma: uniforms[292],
+      exposure: uniforms[293],
+      softClip: uniforms[294],
+      heat: uniforms[295],
+    };
+    state.reactionBoundaryControls = {
+      ...boundaryUniforms,
+      active: boundaryInspectActive,
+    };
+    state.reactionBoundaryFireControls = {
+      ...boundaryFireUniforms,
+      active: boundaryFireInspectActive,
+    };
+    state.boundarySidecarSource = boundarySidecarSourceName;
+    state.boundaryStructureSource = boundarySidecarSourceName;
+    state.boundarySidecarView = boundarySidecarViewName;
+    state.boundarySidecarDebug = boundarySidecarDebug(boundarySidecarSourceName);
     state.volumeScene = normalizeVolumeScene(controlsSnapshot.volumeScene);
     state.bonfireReferenceConfinement = bonfireReferenceConfinementDebug(controlsSnapshot.volumeScene);
     state.minimalPlumeProof = minimalPlumeProofDebug(controlsSnapshot.volumeScene);
@@ -5546,6 +6671,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           wakeEmber: controlsSnapshot.pyroWakeEmberColor || '#b06a2a',
           radianceCool: controlsSnapshot.pyroRadianceCoolColor || '#7aa8b8',
           radianceWarm: controlsSnapshot.pyroRadianceWarmColor || '#d18438',
+          flowCool: controlsSnapshot.pyroFlowCoolColor || '#2aa7b8',
+          flowHot: controlsSnapshot.pyroFlowHotColor || '#ff7a36',
         },
         radianceHue: pyroRadianceHue,
         radianceChroma: pyroRadianceChroma,
@@ -5555,6 +6682,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         radianceTeeth: pyroRadianceTeeth,
         radianceRise: pyroRadianceRise,
         radianceFireLock: pyroRadianceFireLock,
+        flowBite: pyroFlowBite,
+        flowBorder: pyroFlowBorder,
+        flowTeeth: pyroFlowTeeth,
+        flowRise: pyroFlowRise,
+        flowFireLock: pyroFlowFireLock,
+        flowLuma: pyroFlowLuma,
+        flowRadiance: pyroFlowRadiance,
+        flowSpikes: pyroFlowSpikes,
         diagnosticPaint: pyroDiagnosticPaint,
       },
       carrierDebug: {
@@ -5566,14 +6701,26 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         biteSignalMax: pyroMaterialGain * pyroMaterialLiveAuthority * pyroEdgeBite * pyroCarrierOverdrive * Math.max(1, pyroBiteCore + pyroBiteRim + pyroBiteAfter),
         foldSignalMax: pyroMaterialGain * pyroMaterialSmokeAuthority * pyroSmokeFold * pyroCarrierOverdrive,
         radianceSignalMax: pyroMaterialGain * pyroMaterialLiveAuthority * pyroMaterialSmokeAuthority * pyroContrastRadiance * pyroCarrierOverdrive,
+        flowSignalMax: pyroMaterialGain * pyroMaterialLiveAuthority * pyroFlowBite * pyroCarrierOverdrive,
+        flowRadianceMax: pyroMaterialGain * pyroMaterialLiveAuthority * pyroFlowBite * pyroFlowRadiance * pyroCarrierOverdrive,
+        flowSpikeMax: pyroMaterialGain * pyroMaterialLiveAuthority * pyroFlowBite * pyroFlowSpikes * pyroCarrierOverdrive,
+        topologyShellIdentity: 'topology-lab-thin-reaction-shell-v0',
+        topologyShellMixIdentity: 'topology-lab-monotonic-carrier-mix-v0',
+        topologyShellMode: fireRenderModeName,
+        topologyShellInspectMode: shellInspectModeName,
+        topologyShellAuthority: 'shell-controls-visible-fire-render-authority-stock-fire-bypassed-in-shell-mode',
+        topologyShellInputs: ['thermalSupport', 'reactionSupport', 'frontSupport', 'edgeSupport', 'curlSupport', 'coreSuppression', 'divergenceStress'],
+        topologyShellControls: state.topologyShellControls,
+        legacyPyroBackedOff: controlsSnapshot.legacyPyroBackedOff === true,
         biteShape: `${pyroBiteTeeth.toFixed(2)}t/${pyroBiteWake.toFixed(2)}w/${pyroBiteHeight.toFixed(2)}h/${pyroBiteFireLock.toFixed(2)}f`,
         biteStack: `${pyroBiteCore.toFixed(2)}c/${pyroBiteRim.toFixed(2)}r/${pyroBiteAfter.toFixed(2)}a`,
         biteCuts: `${pyroBiteCoreCut.toFixed(2)}c/${pyroBiteRimCut.toFixed(2)}r/${pyroBiteAfterCut.toFixed(2)}a`,
         foldShape: `${pyroFoldWake.toFixed(2)}w/${pyroWakeLift.toFixed(2)}l/${pyroWakeWarmth.toFixed(2)}a`,
         radianceShape: `${pyroRadianceGate.toFixed(2)}g/${pyroRadianceSpill.toFixed(2)}s/${pyroRadianceBorder.toFixed(2)}b/${pyroRadianceTeeth.toFixed(2)}t/${pyroRadianceRise.toFixed(2)}r/${pyroRadianceFireLock.toFixed(2)}f/${controlsSnapshot.pyroRadianceSource || 'fire'}/${pyroRadianceHeight.toFixed(2)}h`,
+        flowShape: `${pyroFlowBorder.toFixed(2)}b/${pyroFlowTeeth.toFixed(2)}t/${pyroFlowRise.toFixed(2)}r/${pyroFlowFireLock.toFixed(2)}f/${pyroFlowLuma.toFixed(2)}l/${pyroFlowRadiance.toFixed(2)}rad/${pyroFlowSpikes.toFixed(2)}sp`,
         colorShape: `${pyroBiteHeat.toFixed(2)}bh/${pyroBiteChroma.toFixed(2)}bc/${pyroRadianceHue.toFixed(2)}rh/${pyroRadianceChroma.toFixed(2)}rc`,
-        lumaShape: `${pyroFlamePaint.toFixed(2)}fp/${pyroStockMix.toFixed(2)}sm/${pyroFlameLuma.toFixed(2)}fl/${pyroBiteLuma.toFixed(2)}bl/${pyroWakeLuma.toFixed(2)}wl/${pyroRadianceLuma.toFixed(2)}rl`,
-        paletteShape: `${controlsSnapshot.pyroFlameCoreColor || '#fff4b8'}/${controlsSnapshot.pyroFlameEdgeColor || '#ff8a24'}/${controlsSnapshot.pyroBiteEmberColor || '#e65a1a'}/${controlsSnapshot.pyroRadianceWarmColor || '#d18438'}`,
+        lumaShape: `${pyroFlamePaint.toFixed(2)}fp/${pyroStockMix.toFixed(2)}sm/${pyroFlameLuma.toFixed(2)}fl/${pyroBiteLuma.toFixed(2)}bl/${pyroWakeLuma.toFixed(2)}wl/${pyroRadianceLuma.toFixed(2)}rl/${pyroFlowLuma.toFixed(2)}flw/${pyroFlowRadiance.toFixed(2)}fr`,
+        paletteShape: `${controlsSnapshot.pyroFlameCoreColor || '#fff4b8'}/${controlsSnapshot.pyroFlameEdgeColor || '#ff8a24'}/${controlsSnapshot.pyroBiteEmberColor || '#e65a1a'}/${controlsSnapshot.pyroRadianceWarmColor || '#d18438'}/${controlsSnapshot.pyroFlowHotColor || '#ff7a36'}`,
       },
       spatialMemory: {
         identity: 'pyro-material-memory-spatial-coupling-v0',
@@ -5736,12 +6883,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const fullGridWorkgroupsPerPass = Math.ceil(gridSize / 4) ** 3;
     const majorantWorkgroupsPerPass = Math.ceil(majorantGridSize / 4) ** 3;
     const majorantBuiltThisFrame = options.majorantBuiltThisFrame ?? state.majorantBuiltThisFrame;
+    const boundarySidecarBuiltThisFrame = options.boundarySidecarBuiltThisFrame ?? state.boundarySidecarBuiltThisFrame;
     const fullGridCells = gridCellCount(gridSize);
     const majorantCells = majorantGridSize * majorantGridSize * majorantGridSize;
     const fluidBytes = fluidBufferBytes(gridSize);
     const frontBytes = frontFieldBufferBytes(gridSize);
     const pressureBytes = pressureBufferBytes(gridSize);
     const majorantBytes = majorantBufferBytes(majorantGridSize);
+    const boundarySidecarBytes = boundarySidecarBufferBytes(gridSize);
     state.majorantCadence = majorantBuildCadence;
     state.pressureIterationDefault = defaultPressureIterationsForScene(scene);
     state.pressureIterationRequested = pressureIterationRequested;
@@ -5845,6 +6994,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       majorantEstimatedCellVisitsPerFrame: majorantCells / majorantBuildCadence,
       majorantLastBuiltFrame: state.majorantLastBuiltFrame,
       majorantSkippedFrameCount: state.majorantSkippedFrameCount,
+      boundarySidecarIdentity: BOUNDARY_SIDECAR_IDENTITY,
+      boundarySidecarAuthority: BOUNDARY_SIDECAR_BAKE_AUTHORITY,
+      boundarySidecarSource: state.boundarySidecarSource,
+      boundarySidecarBuiltThisFrame,
+      boundarySidecarCellVisitsThisFrame: boundarySidecarBuiltThisFrame ? fullGridCells : 0,
+      boundarySidecarLastBuiltFrame: state.boundarySidecarLastBuiltFrame,
       pressureProjectionEnabled: pressureEnabled,
       pressureIterationDefault: state.pressureIterationDefault,
       pressureIterationRequested,
@@ -5853,8 +7008,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       frontFieldBufferBytes: frontBytes,
       pressureBufferBytes: pressureBytes,
       majorantBufferBytes: majorantBytes,
+      boundarySidecarBufferBytes: boundarySidecarBytes,
       externalEmitterBufferBytes: externalEmitterBufferBytes(),
-      estimatedResidentBytes: fluidBytes * 2 + frontBytes * 2 + pressureBytes * 2 + majorantBytes + externalEmitterBufferBytes(),
+      estimatedResidentBytes: fluidBytes * 2 + frontBytes * 2 + pressureBytes * 2 + majorantBytes + boundarySidecarBytes + externalEmitterBufferBytes(),
       timing: { ...state.timing },
     };
     return state.simCostLedger;
@@ -6005,6 +7161,39 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     updateSimCostLedger({ majorantBuiltThisFrame: true });
   }
 
+  function encodeBoundarySidecar(encoder) {
+    const sourceName = normalizeBoundarySidecarSource(controlsSnapshot.boundarySidecarSource);
+    const sidecarViewName = normalizeBoundarySidecarView(controlsSnapshot.boundarySidecarView ?? controlsSnapshot.boundarySidecarControls?.view);
+    state.boundarySidecarSource = sourceName;
+    state.boundarySidecarView = sidecarViewName;
+    state.boundaryStructureSource = sourceName;
+    const shouldBakeBoundarySidecar = sourceName !== 'live' || sidecarViewName !== 'off';
+    if (
+      !shouldBakeBoundarySidecar ||
+      !boundarySidecarBuildPipeline ||
+      !boundarySidecarWriteBindGroup ||
+      boundarySidecarReadBindGroups.length !== 2
+    ) {
+      state.boundarySidecarBuiltThisFrame = false;
+      state.boundarySidecarDebug = boundarySidecarDebug(sourceName);
+      updateSimCostLedger({ boundarySidecarBuiltThisFrame: false });
+      return;
+    }
+    const pass = encoder.beginComputePass({ label: `kaminos ${BOUNDARY_SIDECAR_IDENTITY} bake pass` });
+    pass.setPipeline(boundarySidecarBuildPipeline);
+    pass.setBindGroup(0, boundarySidecarReadBindGroups[currentFluid]);
+    pass.setBindGroup(3, boundarySidecarWriteBindGroup);
+    const workgroups = Math.ceil(gridSize / 4);
+    pass.dispatchWorkgroups(workgroups, workgroups, workgroups);
+    pass.end();
+    state.boundarySidecarBuilt = true;
+    state.boundarySidecarBuiltThisFrame = true;
+    state.boundarySidecarFrameCount += 1;
+    state.boundarySidecarLastBuiltFrame = state.frameCount;
+    state.boundarySidecarDebug = boundarySidecarDebug(sourceName);
+    updateSimCostLedger({ boundarySidecarBuiltThisFrame: true });
+  }
+
   function encodeDraw(encoder, view, label, targetPipeline = pipeline) {
     const pass = encoder.beginRenderPass({
       label,
@@ -6053,6 +7242,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         encodeSim(encoder);
         encodeMajorant(encoder);
       }
+      encodeBoundarySidecar(encoder);
       const currentTexture = context.getCurrentTexture();
       encodeDraw(encoder, currentTexture.createView(), 'kaminos volume canvas pass');
       encodeHistoryCopy(encoder, currentTexture);
@@ -6812,6 +8002,252 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         rgba: Array.from(rgba),
       };
     };
+    const buildReactionFrontAtlas = () => {
+      const cellCount = gridSize * gridSize * gridSize;
+      const heatSupport = new Float32Array(cellCount);
+      const fuelSupport = new Float32Array(cellCount);
+      const flameSupport = new Float32Array(cellCount);
+      const combustionFrontSupport = new Float32Array(cellCount);
+      const reactionPotential = new Float32Array(cellCount);
+      const gradientMagnitude = new Float32Array(cellCount);
+      const narrowFrontCandidate = new Float32Array(cellCount);
+      const coreReject = new Float32Array(cellCount);
+      const topologyWrinkle = new Float32Array(cellCount);
+      const shellCandidate = new Float32Array(cellCount);
+      const reactionFrontAtlasControls = normalizeReactionFrontAtlasControls(controlsSnapshot);
+      const colorMaps = {
+        heatSupport: [255, 122, 34],
+        fuelSupport: [84, 190, 108],
+        flameSupport: [255, 184, 70],
+        combustionFrontSupport: [255, 225, 96],
+        reactionPotential: [255, 151, 58],
+        gradientMagnitude: [78, 204, 220],
+        narrowFrontCandidate: [246, 112, 188],
+        coreReject: [104, 139, 230],
+        topologyWrinkle: [178, 134, 245],
+        shellCandidate: [255, 224, 158],
+      };
+      const indexAt = (x, y, z) => clampIndex(x) + clampIndex(y) * gridSize + clampIndex(z) * gridSize * gridSize;
+      const flowTopologyAt = (x, y, z) => {
+        const vx0 = velocityAt(x - 1, y, z);
+        const vx1 = velocityAt(x + 1, y, z);
+        const vy0 = velocityAt(x, y - 1, z);
+        const vy1 = velocityAt(x, y + 1, z);
+        const vz0 = velocityAt(x, y, z - 1);
+        const vz1 = velocityAt(x, y, z + 1);
+        const curlX = ((vy1[2] - vy0[2]) - (vz1[1] - vz0[1])) * 0.5;
+        const curlY = ((vz1[0] - vz0[0]) - (vx1[2] - vx0[2])) * 0.5;
+        const curlZ = ((vx1[1] - vx0[1]) - (vy1[0] - vy0[0])) * 0.5;
+        const div = Math.abs(((vx1[0] - vx0[0]) + (vy1[1] - vy0[1]) + (vz1[2] - vz0[2])) * 0.5);
+        return { curlX, curlY, curlZ, curlMag: Math.hypot(curlX, curlY, curlZ), div };
+      };
+      for (let cell = 0; cell < cellCount; cell += 1) {
+        const i = cell * FLUID_COMPONENTS;
+        const heat = Math.max(0, data[i + 5]);
+        const fuel = Math.max(0, data[i + 6]);
+        const flame = Math.max(0, data[i + 8]);
+        const ember = Math.max(0, data[i + 9]);
+        const visibleFireCarrier = Math.max(0, data[i + 10]);
+        const combustionFront = Math.max(0, data[i + 11]);
+        const interfaceShred = Math.max(0, data[i + 13]);
+        const fireLick = Math.max(0, data[i + 14]);
+        const frontTopology = Math.max(0, frontData[cell]);
+        const heatSupportValue = smoothstep01(reactionFrontAtlasControls.heatMin, reactionFrontAtlasControls.heatMax, heat + flame * 0.20 + visibleFireCarrier * 0.12 + ember * 0.08);
+        const fuelSupportValue = smoothstep01(reactionFrontAtlasControls.fuelMin, reactionFrontAtlasControls.fuelMax, fuel);
+        const flameSupportValue = smoothstep01(reactionFrontAtlasControls.flameMin, reactionFrontAtlasControls.flameMax, flame + visibleFireCarrier * 0.72 + fireLick * 0.36 + ember * 0.20);
+        const combustionFrontSupportValue = smoothstep01(reactionFrontAtlasControls.frontMin, reactionFrontAtlasControls.frontMax, combustionFront * 0.72 + frontTopology * 1.18);
+        const reactionPotentialValue = heatSupportValue * Math.max(flameSupportValue, combustionFrontSupportValue) * (0.18 + fuelSupportValue * 0.82);
+        const coreBody = smoothstep01(reactionFrontAtlasControls.coreMin, reactionFrontAtlasControls.coreMax, heat * 0.66 + visibleFireCarrier * 0.56 + flame * 0.44 + ember * 0.22);
+        const coreRejectValue = 1 - coreBody * reactionFrontAtlasControls.coreReject;
+        const topologyWrinkleValue = Math.max(0, Math.min(1, interfaceShred * 0.64 + fireLick * 0.58 + frontTopology * 0.86 + combustionFront * 0.22));
+        heatSupport[cell] = heatSupportValue;
+        fuelSupport[cell] = fuelSupportValue;
+        flameSupport[cell] = flameSupportValue;
+        combustionFrontSupport[cell] = combustionFrontSupportValue;
+        reactionPotential[cell] = reactionPotentialValue;
+        coreReject[cell] = coreRejectValue;
+        topologyWrinkle[cell] = topologyWrinkleValue;
+      }
+      for (let z = 0; z < gridSize; z += 1) {
+        for (let y = 0; y < gridSize; y += 1) {
+          for (let x = 0; x < gridSize; x += 1) {
+            const cell = indexAt(x, y, z);
+            const flowTopology = flowTopologyAt(x, y, z);
+            const curlWarpScale = reactionFrontAtlasControls.curlWarp * 24;
+            const warpX = Math.max(-2, Math.min(2, Math.round(flowTopology.curlX * curlWarpScale)));
+            const warpY = Math.max(-2, Math.min(2, Math.round(flowTopology.curlY * curlWarpScale)));
+            const warpZ = Math.max(-2, Math.min(2, Math.round(flowTopology.curlZ * curlWarpScale)));
+            const wx = x + warpX;
+            const wy = y + warpY;
+            const wz = z + warpZ;
+            const dx = (reactionPotential[indexAt(wx + 1, wy, wz)] - reactionPotential[indexAt(wx - 1, wy, wz)]) * 0.5;
+            const dy = (reactionPotential[indexAt(wx, wy + 1, wz)] - reactionPotential[indexAt(wx, wy - 1, wz)]) * 0.5;
+            const dz = (reactionPotential[indexAt(wx, wy, wz + 1)] - reactionPotential[indexAt(wx, wy, wz - 1)]) * 0.5;
+            const gradientMagnitudeValue = Math.max(0, Math.min(1, Math.hypot(dx, dy, dz) * 7.5));
+            const gradientGate = smoothstep01(reactionFrontAtlasControls.gradientMin, reactionFrontAtlasControls.gradientMax, gradientMagnitudeValue);
+            const stretchActivity = smoothstep01(0.006, 0.08, flowTopology.curlMag + flowTopology.div * 0.65);
+            const stretchGate = 1 - reactionFrontAtlasControls.stretchErode * stretchActivity;
+            const divergenceActivity = smoothstep01(reactionFrontAtlasControls.divergenceMin, reactionFrontAtlasControls.divergenceMax, flowTopology.div);
+            const divergenceGate = 1 - reactionFrontAtlasControls.divergenceGain + divergenceActivity * reactionFrontAtlasControls.divergenceGain;
+            const narrowFrontCandidateValue = reactionPotential[cell] * gradientGate * coreReject[cell] * stretchGate * divergenceGate;
+            const shellRaw = Math.max(0, Math.min(1, narrowFrontCandidateValue * (0.68 + topologyWrinkle[cell] * reactionFrontAtlasControls.topologyGain) * reactionFrontAtlasControls.shellContrast));
+            gradientMagnitude[cell] = gradientMagnitudeValue;
+            narrowFrontCandidate[cell] = narrowFrontCandidateValue;
+            shellCandidate[cell] = Math.pow(shellRaw, reactionFrontAtlasControls.shellGamma);
+          }
+        }
+      }
+      const stages = [
+        { key: 'heatSupport', label: 'Heat support', atlasLabel: 'HEAT', values: heatSupport },
+        { key: 'fuelSupport', label: 'Fuel support', atlasLabel: 'FUEL', values: fuelSupport },
+        { key: 'flameSupport', label: 'Flame carrier', atlasLabel: 'FLAME', values: flameSupport },
+        { key: 'combustionFrontSupport', label: 'Combustion front', atlasLabel: 'FRONT', values: combustionFrontSupport },
+        { key: 'reactionPotential', label: 'Reaction potential', atlasLabel: 'POT', values: reactionPotential },
+        { key: 'gradientMagnitude', label: 'Potential gradient', atlasLabel: 'GRAD', values: gradientMagnitude },
+        { key: 'narrowFrontCandidate', label: 'Narrow front candidate', atlasLabel: 'NARROW', values: narrowFrontCandidate },
+        { key: 'coreReject', label: 'Core/body reject', atlasLabel: 'CORE', values: coreReject },
+        { key: 'topologyWrinkle', label: 'Topology wrinkle', atlasLabel: 'WRINKLE', values: topologyWrinkle },
+        { key: 'shellCandidate', label: 'Shell candidate', atlasLabel: 'SHELL', values: shellCandidate },
+      ];
+      const panelSize = 128;
+      const columns = 5;
+      const rows = 2;
+      const width = panelSize * columns;
+      const height = panelSize * rows;
+      const rgba = new Uint8Array(width * height * 4);
+      const atlasFont = {
+        A: ['111', '101', '111', '101', '101'],
+        C: ['111', '100', '100', '100', '111'],
+        D: ['110', '101', '101', '101', '110'],
+        E: ['111', '100', '110', '100', '111'],
+        F: ['111', '100', '110', '100', '100'],
+        G: ['111', '100', '101', '101', '111'],
+        H: ['101', '101', '111', '101', '101'],
+        I: ['111', '010', '010', '010', '111'],
+        K: ['101', '101', '110', '101', '101'],
+        L: ['100', '100', '100', '100', '111'],
+        M: ['101', '111', '111', '101', '101'],
+        N: ['101', '111', '111', '111', '101'],
+        O: ['111', '101', '101', '101', '111'],
+        P: ['111', '101', '111', '100', '100'],
+        R: ['111', '101', '111', '110', '101'],
+        S: ['111', '100', '111', '001', '111'],
+        T: ['111', '010', '010', '010', '010'],
+        U: ['101', '101', '101', '101', '111'],
+        W: ['101', '101', '111', '111', '101'],
+      };
+      const stageStats = {};
+      const stageValueAt = (stage, x, y, z) => stage.values[indexAt(x, y, z)];
+      const setAtlasPixel = (x, y, r, g, b) => {
+        if (x < 0 || y < 0 || x >= width || y >= height) return;
+        const dst = (y * width + x) * 4;
+        rgba[dst] = r;
+        rgba[dst + 1] = g;
+        rgba[dst + 2] = b;
+        rgba[dst + 3] = 255;
+      };
+      const drawAtlasLabel = (panelX, panelY, text) => {
+        const scale = 2;
+        const bandHeight = 15;
+        for (let y = 1; y < bandHeight; y += 1) {
+          for (let x = 1; x < panelSize - 1; x += 1) {
+            setAtlasPixel(panelX + x, panelY + y, 4, 5, 6);
+          }
+        }
+        let cursorX = panelX + 5;
+        const cursorY = panelY + 4;
+        for (const char of text) {
+          if (char === ' ') {
+            cursorX += 4 * scale;
+            continue;
+          }
+          const glyph = atlasFont[char];
+          if (!glyph) continue;
+          for (let gy = 0; gy < glyph.length; gy += 1) {
+            for (let gx = 0; gx < glyph[gy].length; gx += 1) {
+              if (glyph[gy][gx] !== '1') continue;
+              for (let sy = 0; sy < scale; sy += 1) {
+                for (let sx = 0; sx < scale; sx += 1) {
+                  setAtlasPixel(cursorX + gx * scale + sx, cursorY + gy * scale + sy, 236, 240, 232);
+                }
+              }
+            }
+          }
+          cursorX += 4 * scale;
+        }
+      };
+      for (const stage of stages) {
+        let sum = 0;
+        let max = 0;
+        let active = 0;
+        for (let i = 0; i < stage.values.length; i += 1) {
+          const value = stage.values[i];
+          sum += value;
+          max = Math.max(max, value);
+          if (value > 0.08) active += 1;
+        }
+        stageStats[stage.key] = {
+          mean: sum / Math.max(1, stage.values.length),
+          max,
+          activeVoxelRatio: active / Math.max(1, stage.values.length),
+        };
+      }
+      for (let stageIndex = 0; stageIndex < stages.length; stageIndex += 1) {
+        const stage = stages[stageIndex];
+        const panelX = (stageIndex % columns) * panelSize;
+        const panelY = Math.floor(stageIndex / columns) * panelSize;
+        const color = colorMaps[stage.key] || [255, 255, 255];
+        for (let py = 0; py < panelSize; py += 1) {
+          const gy = clampIndex(Math.round((1 - py / Math.max(1, panelSize - 1)) * (gridSize - 1)));
+          for (let px = 0; px < panelSize; px += 1) {
+            const gx = clampIndex(Math.round(px / Math.max(1, panelSize - 1) * (gridSize - 1)));
+            let projected = 0;
+            for (let gz = 0; gz < gridSize; gz += 1) {
+              projected = Math.max(projected, stageValueAt(stage, gx, gy, gz));
+            }
+            const shaped = Math.sqrt(Math.max(0, Math.min(1, projected)));
+            const dst = ((panelY + py) * width + panelX + px) * 4;
+            rgba[dst] = Math.round(10 + color[0] * shaped);
+            rgba[dst + 1] = Math.round(12 + color[1] * shaped);
+            rgba[dst + 2] = Math.round(14 + color[2] * shaped);
+            rgba[dst + 3] = 255;
+          }
+        }
+        for (let borderX = 0; borderX < panelSize; borderX += 1) {
+          const dst = (panelY * width + panelX + borderX) * 4;
+          rgba[dst] = 54;
+          rgba[dst + 1] = 54;
+          rgba[dst + 2] = 54;
+        }
+        for (let borderY = 0; borderY < panelSize; borderY += 1) {
+          const dst = ((panelY + borderY) * width + panelX) * 4;
+          rgba[dst] = 54;
+          rgba[dst + 1] = 54;
+          rgba[dst + 2] = 54;
+        }
+        drawAtlasLabel(panelX, panelY, stage.atlasLabel);
+      }
+      return {
+        schema: REACTION_FRONT_ATLAS_SCHEMA,
+        identity: 'reaction-front-atlas-max-z-projection-v0',
+        stageIdentity: REACTION_FRONT_STAGE_IDENTITY,
+        frontFieldIdentity: state.frontFieldIdentity,
+        backend: 'cpu-fluid-buffer-readback',
+        mode: 'reaction-front-stage-max-z-projection',
+        coordinateSpace: 'simulation-grid',
+        width,
+        height,
+        panelSize,
+        labelOverlay: true,
+        columns,
+        rows,
+        controls: reactionFrontAtlasControls,
+        panels: stages.map(stage => ({ key: stage.key, label: stage.label, atlasLabel: stage.atlasLabel })),
+        stageStats,
+        sourceY,
+        rgba: Array.from(rgba),
+      };
+    };
     let samples = 0;
     for (const cell of sampleCells) {
       const i = cell * FLUID_COMPONENTS;
@@ -6989,6 +8425,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     }
     const canonicalSmokeFieldSlice = isCanonicalReadbackScene ? buildCanonicalSmokeFieldSlice() : null;
     const fieldTileExport = buildFieldTileExport(data, frontData, fieldTileExportOptions);
+    const reactionFrontAtlas = buildReactionFrontAtlas();
     readback.unmap();
     readback.destroy();
     frontReadback.unmap();
@@ -7278,6 +8715,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       plumeFieldBinCenterSpread: coherentBinCenterSpread,
       canonicalSmokeFieldSlice,
       fieldTileExport,
+      reactionFrontStageIdentity: REACTION_FRONT_STAGE_IDENTITY,
+      reactionFrontAtlas,
       emissionDetailCurlContact,
       emissionDetailVerticalCoherence,
       emissionDetailBodyBreadth,
@@ -7835,8 +9274,16 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     });
     device.pushErrorScope('validation');
     const encoder = device.createCommandEncoder({ label: 'kaminos volume witness readback encoder' });
-    if (sampleOptions.advanceSim !== false) encodeSim(encoder);
-    encodeMajorant(encoder, { force: true });
+    const sampleLookFreeze = normalizeLookFreeze(controlsSnapshot.lookFreeze) && lookFreezeCanPin(state) ? 1 : 0;
+    if (sampleOptions.advanceSim !== false && !sampleLookFreeze) {
+      encodeSim(encoder);
+      encodeMajorant(encoder, { force: true });
+    } else if (sampleLookFreeze) {
+      state.majorantBuiltThisFrame = false;
+    } else {
+      encodeMajorant(encoder, { force: true });
+    }
+    encodeBoundarySidecar(encoder);
     encodeDraw(encoder, frameTexture.createView(), 'kaminos volume one-off readback pass', readbackPipeline);
     encoder.copyTextureToBuffer(
       { texture: frameTexture },
@@ -8469,6 +9916,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       state.pressureStrategy = normalizePressureStrategy(controlsSnapshot.pressureStrategy, controlsSnapshot.volumeScene);
       state.pressureTierOverlayOpacity = normalizePressureTierControls(controlsSnapshot).overlay;
       state.simProfile = normalizeSimProfileFlag(controlsSnapshot.simProfile);
+      state.scalarActivityReceiver = scalarActivityReceiverDebug();
       updateSimCostLedger();
       pumpLookLabFrozenFrame();
     },
@@ -8490,6 +9938,49 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         ageMs: state.externalEmitterAgeMs,
         frameId: state.externalEmitterFrameId,
       };
+    },
+    setTruthOracleActivityCue(payload = {}) {
+      const source = payload && typeof payload === 'object' ? payload : {};
+      const sourceGrid = normalizeScalarActivityCueGridSize(source.grid || source.sourceGrid || gridSize, gridSize);
+      const values = source.values || source.data || source.activity || [];
+      if (!values || Number(values.length) <= 0) {
+        oracleActivityCueSourceValues = null;
+        oracleActivityCueSourceGrid = null;
+        oracleActivityCueUpload = {
+          status: 'cleared',
+          requestedCueAuthority: TRUTH_ORACLE_ACTIVITY_CUE_AUTHORITY,
+          effectiveCueAuthority: PROCEDURAL_ACTIVITY_CUE_AUTHORITY,
+          grid: null,
+          receiverGrid: gridSize,
+          externalCueCellCount: 0,
+          frameId: source.frameId ?? null,
+          uploadedAtMs: performance.now(),
+        };
+        if (device) {
+          ensureOracleActivityCueBuffer();
+          device.queue.writeBuffer(oracleActivityCueBuffer, 0, new Float32Array(gridCellCount(gridSize)));
+        }
+        state.scalarActivityReceiver = scalarActivityReceiverDebug();
+        emitStatus({ phase: 'truth-oracle-activity-cue-cleared' });
+        return { ...state.scalarActivityReceiver };
+      }
+      oracleActivityCueSourceValues = values instanceof Float32Array ? new Float32Array(values) : new Float32Array(values);
+      oracleActivityCueSourceGrid = sourceGrid;
+      const resampledCue = resampleScalarActivityCue(oracleActivityCueSourceValues, oracleActivityCueSourceGrid, gridSize);
+      writeOracleActivityCueBuffer(resampledCue);
+      oracleActivityCueUpload = {
+        status: 'uploaded',
+        requestedCueAuthority: TRUTH_ORACLE_ACTIVITY_CUE_AUTHORITY,
+        effectiveCueAuthority: TRUTH_ORACLE_ACTIVITY_CUE_AUTHORITY,
+        grid: sourceGrid,
+        receiverGrid: gridSize,
+        externalCueCellCount: resampledCue.length,
+        frameId: source.frameId ?? null,
+        uploadedAtMs: performance.now(),
+      };
+      state.scalarActivityReceiver = scalarActivityReceiverDebug();
+      emitStatus({ phase: 'truth-oracle-activity-cue-uploaded' });
+      return { ...state.scalarActivityReceiver };
     },
     syntheticHandTrailEmitters,
     async setActive(active) {
@@ -8522,6 +10013,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       return {
         ...state,
         controls: { ...controlsSnapshot },
+        scalarActivityReceiver: scalarActivityReceiverDebug(),
         pyroDynamicDetail: clonePyroDynamicDetail(),
         pyroMaterialRendererCoupling: state.pyroMaterialRendererCoupling ? { ...state.pyroMaterialRendererCoupling } : null,
       };
