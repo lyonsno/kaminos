@@ -1146,10 +1146,11 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
           <option value="ridge">ridge</option>
           <option value="proximity">proximity</option>
           <option value="footprint">footprint</option>
+          <option value="normal">normal</option>
         </select>
         <span class="slider-val" id="volume-boundary-sidecar-view-val">off</span>
       </div>
-      <span class="slider-help">baked-boundary-sidecar-v0: prefilters support/coverage/ridge/footprint before the raymarch. Sidecar views expose the reconstruction channels in the primary viewer.</span>
+      <span class="slider-help">baked-boundary-sidecar-v1: prefilters support/coverage/ridge/footprint plus proximity and normals before the raymarch. Sidecar views expose the reconstruction channels in the primary viewer.</span>
       <div class="slider-row">
         <span class="slider-label">Bake blur</span>
         <input type="range" id="volume-boundary-sidecar-blur" min="0" max="1" step="0.02" value="0.45">
@@ -11542,7 +11543,7 @@ const REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS = [
 
 const REACTION_FRONT_LIVE_VIEW_VALUES = new Set(['off', 'shell', 'thermal', 'reaction', 'front', 'edge', 'core', 'curl', 'divergence', 'boundary', 'boundary_fire']);
 const BOUNDARY_SIDECAR_SOURCE_VALUES = new Set(['live', 'baked', 'mix']);
-const BOUNDARY_SIDECAR_VIEW_VALUES = new Set(['off', 'support', 'coverage', 'ridge', 'proximity', 'footprint']);
+const BOUNDARY_SIDECAR_VIEW_VALUES = new Set(['off', 'support', 'coverage', 'ridge', 'proximity', 'footprint', 'normal']);
 
 function normalizeReactionFrontLiveView(value) {
   const mode = String(value || 'off').toLowerCase().replace(/-/g, '_');
