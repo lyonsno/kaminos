@@ -2255,6 +2255,9 @@ assert.match(sidecarMetaProbe, /support[\s\S]*coverage[\s\S]*ridge[\s\S]*footpri
 assert.match(sidecarMetaProbe, /block-upsample-copy-baseline-v0/, 'sidecar/meta probe reports the phase-aligned block upsample baseline');
 assert.match(sidecarMetaProbe, /local-linear-ridge-v0/, 'sidecar/meta probe reports a local linear ridge baseline');
 assert.match(sidecarMetaProbe, /local-context-mlp-v0/, 'sidecar/meta probe reports a local MLP probe');
+assert.match(sidecarMetaProbe, /--target-channel-list/, 'sidecar/meta probe can train an explicit subset of v1 sidecar/meta target channels');
+assert.match(sidecarMetaProbe, /sparse-structural-target-family-v0/, 'sidecar/meta probe names sparse structural target-family specialization');
+assert.match(sidecarMetaProbe, /selectedTargetChannels/, 'sidecar/meta probe reports the effective selected target channels');
 assert.match(sidecarMetaProbe, /nativeLowTransfer/, 'sidecar/meta probe separates native-low transfer from phase-aligned teacher learnability');
 assert.match(sidecarMetaProbe, /perChannelVerdicts/, 'sidecar/meta probe emits per-channel verdicts instead of only a global score');
 assert.match(sidecarMetaProbe, /failurePhase/, 'sidecar/meta probe writes failure-phase reports for missing or mismatched corpus data');

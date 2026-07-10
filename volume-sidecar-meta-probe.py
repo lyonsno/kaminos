@@ -27,6 +27,9 @@ CORPUS_SCHEMA = "kaminos.volume.phase-aligned-learned-probe-corpus.v0"
 SIDECAR_IDENTITY = "baked-boundary-sidecar-v1"
 SIDECAR_AUTHORITY = "band-limited-support-coverage-ridge-footprint-proximity-normal-v2"
 CHANNEL_ORDER = ["support", "coverage", "ridge", "footprint", "proximity", "normalX", "normalY", "normalZ"]
+SPARSE_STRUCTURAL_CHANNELS = ["support", "ridge", "proximity"]
+ALL_TARGET_FAMILY_IDENTITY = "all-v1-sidecar-meta-target-family-v0"
+SPARSE_STRUCTURAL_TARGET_FAMILY_IDENTITY = "sparse-structural-target-family-v0"
 BLOCK_BASELINE_IDENTITY = "block-upsample-copy-baseline-v0"
 RIDGE_IDENTITY = "local-linear-ridge-v0"
 MLP_IDENTITY = "local-context-mlp-v0"
@@ -47,6 +50,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--out", required=True, help="Path to write the probe report JSON.")
     parser.add_argument("--train-samples", type=int, default=70_000, help="Training high-grid voxel samples.")
     parser.add_argument("--test-samples", type=int, default=45_000, help="Held-out high-grid voxel samples.")
+    parser.add_argument(
+        "--target-channel-list",
+        default="all",
+        help="Comma-separated target channels to train/predict, or 'all'. Inputs remain the full v1 sidecar/meta state.",
+    )
     parser.add_argument("--support-sample-fraction", type=float, default=0.60, help="Fraction of samples drawn from truth support.")
     parser.add_argument("--context-radius", type=int, default=1, help="Low-grid local context radius; 1 gives a 3x3x3 stencil.")
     parser.add_argument("--ridge", type=float, default=1.0e-3, help="Ridge regularization for local-linear-ridge-v0.")
@@ -57,6 +65,25 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--weight-decay", type=float, default=1.0e-5, help="MLP L2 weight decay.")
     parser.add_argument("--seed", type=int, default=17010, help="Deterministic sample/model seed.")
     return parser.parse_args()
+
+
+def parse_target_channels(value: str) -> tuple[list[int], list[str], str]:
+    raw = value.strip()
+    if not raw or raw.lower() == "all":
+        return list(range(len(CHANNEL_ORDER))), list(CHANNEL_ORDER), ALL_TARGET_FAMILY_IDENTITY
+    names = [part.strip() for part in raw.split(",") if part.strip()]
+    unknown = [name for name in names if name not in CHANNEL_ORDER]
+    if unknown:
+        raise ProbeFailure("args", "Unknown target channel in --target-channel-list.", {
+            "unknownChannels": unknown,
+            "availableChannels": CHANNEL_ORDER,
+        })
+    indexes = [CHANNEL_ORDER.index(name) for name in names]
+    if names == SPARSE_STRUCTURAL_CHANNELS:
+        family = SPARSE_STRUCTURAL_TARGET_FAMILY_IDENTITY
+    else:
+        family = "custom-sidecar-meta-target-family-v0"
+    return indexes, names, family
 
 
 def now_iso() -> str:
@@ -353,9 +380,9 @@ def predict_mlp(model: dict[str, np.ndarray], x: np.ndarray) -> np.ndarray:
     return (np.tanh(x @ model["w1"] + model["b1"]) @ model["w2"] + model["b2"]).astype(np.float32)
 
 
-def channel_metrics(pred: np.ndarray, truth: np.ndarray) -> dict[str, dict[str, float]]:
+def channel_metrics(pred: np.ndarray, truth: np.ndarray, channel_names: list[str]) -> dict[str, dict[str, float]]:
     result: dict[str, dict[str, float]] = {}
-    for i, name in enumerate(CHANNEL_ORDER):
+    for i, name in enumerate(channel_names):
         err = np.asarray(pred[:, i] - truth[:, i], dtype=np.float64)
         t = np.asarray(truth[:, i], dtype=np.float64)
         p = np.asarray(pred[:, i], dtype=np.float64)
@@ -387,8 +414,8 @@ def global_metrics(per_channel: dict[str, dict[str, float]]) -> dict[str, float]
     }
 
 
-def support_metrics(pred: np.ndarray, truth: np.ndarray, channel_name: str, threshold: float) -> dict[str, float]:
-    idx = CHANNEL_ORDER.index(channel_name)
+def support_metrics(pred: np.ndarray, truth: np.ndarray, channel_names: list[str], channel_name: str, threshold: float) -> dict[str, float]:
+    idx = channel_names.index(channel_name)
     p = np.abs(pred[:, idx]) > threshold
     t = np.abs(truth[:, idx]) > threshold
     tp = int(np.count_nonzero(p & t))
@@ -413,9 +440,15 @@ def percent_reduction(baseline: float, value: float) -> float:
     return float((baseline - value) / baseline * 100.0)
 
 
-def verdicts(block: dict[str, dict[str, float]], ridge: dict[str, dict[str, float]], mlp: dict[str, dict[str, float]], native_mlp: dict[str, dict[str, float]]) -> dict[str, dict[str, Any]]:
+def verdicts(
+    block: dict[str, dict[str, float]],
+    ridge: dict[str, dict[str, float]],
+    mlp: dict[str, dict[str, float]],
+    native_mlp: dict[str, dict[str, float]],
+    channel_names: list[str],
+) -> dict[str, dict[str, Any]]:
     out: dict[str, dict[str, Any]] = {}
-    for name in CHANNEL_ORDER:
+    for name in channel_names:
         block_rmse = block[name]["rmse"]
         ridge_rmse = ridge[name]["rmse"]
         mlp_rmse = mlp[name]["rmse"]
@@ -467,6 +500,8 @@ def main() -> int:
     out_path = Path(args.out)
     evidence: dict[str, Any] = {"corpusManifest": args.corpus_manifest}
     try:
+        target_indexes, selected_target_channels, target_family = parse_target_channels(args.target_channel_list)
+        target_indexes_np = np.asarray(target_indexes, dtype=np.int64)
         corpus_path = Path(args.corpus_manifest).resolve()
         corpus = read_json(corpus_path)
         if corpus.get("schema") != CORPUS_SCHEMA or corpus.get("status") != "captured":
@@ -513,6 +548,8 @@ def main() -> int:
             "lowGrid": low_grid,
             "highGrid": high_grid,
             "channelOrder": CHANNEL_ORDER,
+            "selectedTargetChannels": selected_target_channels,
+            "targetFamily": target_family,
             "highSource": high_source,
             "nativeLowSource": native_source,
         })
@@ -522,13 +559,15 @@ def main() -> int:
         train_idx = mixed_sample_indexes(high_grid, args.train_samples, support_indexes, args.support_sample_fraction, rng)
         test_idx = mixed_sample_indexes(high_grid, args.test_samples, support_indexes, args.support_sample_fraction, rng, exclude=train_idx)
         x_train_raw = local_features(low, train_idx, high_grid, low_grid, int(args.context_radius))
-        y_train_raw = high_values(high_side, high_meta, train_idx)
+        y_train_full = high_values(high_side, high_meta, train_idx)
+        y_train_raw = y_train_full[:, target_indexes_np]
         x_test_raw = local_features(low, test_idx, high_grid, low_grid, int(args.context_radius))
-        y_test_raw = high_values(high_side, high_meta, test_idx)
+        y_test_full = high_values(high_side, high_meta, test_idx)
+        y_test_raw = y_test_full[:, target_indexes_np]
         x_train, x_mean, x_std = standardize(x_train_raw)
         y_train, y_mean, y_std = standardize(y_train_raw)
         x_test = apply_standardize(x_test_raw, x_mean, x_std)
-        block_test = low_block_values(low, test_idx, high_grid, low_grid)
+        block_test = low_block_values(low, test_idx, high_grid, low_grid)[:, target_indexes_np]
         ridge_model = fit_ridge(x_train, y_train, float(args.ridge))
         ridge_pred = predict_ridge(ridge_model, x_test) * y_std + y_mean
         mlp_model, history = train_mlp(
@@ -548,15 +587,15 @@ def main() -> int:
         if native_low is not None:
             native_x_raw = local_features(native_low, test_idx, high_grid, low_grid, int(args.context_radius))
             native_x = apply_standardize(native_x_raw, x_mean, x_std)
-            native_block = low_block_values(native_low, test_idx, high_grid, low_grid)
+            native_block = low_block_values(native_low, test_idx, high_grid, low_grid)[:, target_indexes_np]
             native_ridge = predict_ridge(ridge_model, native_x) * y_std + y_mean
             native_mlp = predict_mlp(mlp_model, native_x) * y_std + y_mean
-            native_block_metrics = channel_metrics(native_block, y_test_raw)
-            native_ridge_metrics = channel_metrics(native_ridge, y_test_raw)
-            native_mlp_metrics = channel_metrics(native_mlp, y_test_raw)
-        block_metrics = channel_metrics(block_test, y_test_raw)
-        ridge_metrics = channel_metrics(ridge_pred, y_test_raw)
-        mlp_metrics = channel_metrics(mlp_pred, y_test_raw)
+            native_block_metrics = channel_metrics(native_block, y_test_raw, selected_target_channels)
+            native_ridge_metrics = channel_metrics(native_ridge, y_test_raw, selected_target_channels)
+            native_mlp_metrics = channel_metrics(native_mlp, y_test_raw, selected_target_channels)
+        block_metrics = channel_metrics(block_test, y_test_raw, selected_target_channels)
+        ridge_metrics = channel_metrics(ridge_pred, y_test_raw, selected_target_channels)
+        mlp_metrics = channel_metrics(mlp_pred, y_test_raw, selected_target_channels)
         if native_mlp_metrics is None:
             native_mlp_metrics = mlp_metrics
         report = {
@@ -577,6 +616,9 @@ def main() -> int:
                 "sidecarIdentity": SIDECAR_IDENTITY,
                 "sidecarAuthority": SIDECAR_AUTHORITY,
                 "channelOrder": CHANNEL_ORDER,
+                "selectedTargetChannels": selected_target_channels,
+                "targetFamily": target_family,
+                "targetFamilyMeaning": "Sparse structural specialization narrows outputs/loss only; input features still include the full v1 sidecar/meta state.",
                 "lowGrid": low_grid,
                 "highGrid": high_grid,
                 "reduction": high_grid // low_grid,
@@ -599,12 +641,13 @@ def main() -> int:
                 "block": {
                     "identity": BLOCK_BASELINE_IDENTITY,
                     "description": "Copy each 64-grid boundary/meta value to its corresponding 2x2x2 high-grid block.",
+                    "selectedTargetChannels": selected_target_channels,
                 },
                 "ridge": {
                     "identity": RIDGE_IDENTITY,
                     "ridge": float(args.ridge),
                     "inputFeatureCount": int(x_train.shape[1]),
-                    "outputChannels": CHANNEL_ORDER,
+                    "outputChannels": selected_target_channels,
                 },
                 "mlp": {
                     "identity": MLP_IDENTITY,
@@ -615,7 +658,7 @@ def main() -> int:
                     "weightDecay": float(args.weight_decay),
                     "trainingHistory": history,
                     "inputFeatureCount": int(x_train.shape[1]),
-                    "outputChannels": CHANNEL_ORDER,
+                    "outputChannels": selected_target_channels,
                 },
             },
             "phaseAlignedTeacher": {
@@ -634,9 +677,9 @@ def main() -> int:
                     "perChannel": mlp_metrics,
                     "global": global_metrics(mlp_metrics),
                     "supportDiagnostics": [
-                        support_metrics(mlp_pred, y_test_raw, "support", 1.0e-3),
-                        support_metrics(mlp_pred, y_test_raw, "ridge", 1.0e-3),
-                        support_metrics(mlp_pred, y_test_raw, "proximity", 1.0e-3),
+                        support_metrics(mlp_pred, y_test_raw, selected_target_channels, name, 1.0e-3)
+                        for name in SPARSE_STRUCTURAL_CHANNELS
+                        if name in selected_target_channels
                     ],
                 },
             },
@@ -661,7 +704,7 @@ def main() -> int:
                     "global": global_metrics(native_mlp_metrics),
                 } if native_mlp_metrics else None,
             },
-            "perChannelVerdicts": verdicts(block_metrics, ridge_metrics, mlp_metrics, native_mlp_metrics),
+            "perChannelVerdicts": verdicts(block_metrics, ridge_metrics, mlp_metrics, native_mlp_metrics, selected_target_channels),
             "nonGoals": [
                 "not a browser/WebGPU export witness",
                 "not a live renderer integration proof",
