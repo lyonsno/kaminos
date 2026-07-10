@@ -3625,13 +3625,16 @@ function updateHybridSplatOverlayFrame() {
   const debugOverlayAssetWorldMatrix = assetFrame
     ? new THREE.Matrix4().multiplyMatrices(visualRoot.matrixWorld, assetFrame.matrix)
     : new THREE.Matrix4().copy(visualRoot.matrixWorld);
-  const rendererModelMatrix = sceneMode ? new THREE.Matrix4().identity() : debugOverlayAssetWorldMatrix;
+  const firstEntryCompatibility = sceneMode && handle.sceneIdentity?.compatibilityMode === 'first-entry';
+  const rendererModelMatrix = sceneMode && !firstEntryCompatibility
+    ? new THREE.Matrix4().identity()
+    : debugOverlayAssetWorldMatrix;
   const overlayViewMatrix = new THREE.Matrix4().copy(camera.matrixWorldInverse);
-  const effectiveViewMatrix = sceneMode
+  const effectiveViewMatrix = sceneMode && !firstEntryCompatibility
     ? new THREE.Matrix4().copy(overlayViewMatrix)
     : new THREE.Matrix4().multiplyMatrices(overlayViewMatrix, debugOverlayAssetWorldMatrix);
   const cameraWorld = camera.getWorldPosition(new THREE.Vector3());
-  const cameraLocal = sceneMode
+  const cameraLocal = sceneMode && !firstEntryCompatibility
     ? cameraWorld.clone()
     : cameraWorld.clone().applyMatrix4(new THREE.Matrix4().copy(debugOverlayAssetWorldMatrix).invert());
   const view = new Float32Array(overlayViewMatrix.elements);
@@ -3652,8 +3655,13 @@ function updateHybridSplatOverlayFrame() {
     source: record.source || null,
     canvasMode: 'dual-canvas-overlay',
     correctionAppliedMode: 'visual-root-world-matrix',
-    assetFrameMode: sceneMode ? 'scene-world-pretransformed' : (assetFrame ? 'raw-ply-to-normalized-preview' : 'preview-local'),
-    modelMatrixFrameMode: sceneMode ? 'kaminos-scene-world-pretransformed' : 'pbrnext-setModelMatrix-owned',
+    assetFrameMode: sceneMode
+      ? (firstEntryCompatibility ? 'first-entry-compat-asset-world-matrix' : 'scene-world-pretransformed')
+      : (assetFrame ? 'raw-ply-to-normalized-preview' : 'preview-local'),
+    modelMatrixFrameMode: sceneMode
+      ? (firstEntryCompatibility ? 'first-entry-compat-pbrnext-setModelMatrix-owned' : 'kaminos-scene-world-pretransformed')
+      : 'pbrnext-setModelMatrix-owned',
+    firstEntryCompatibility,
     cropAppliedByRenderer: hybridSplatOverlayCropAppliedByRenderer(),
     viewport,
     objectWorldMatrix: Array.from(record.object.matrixWorld.elements),

@@ -4203,17 +4203,34 @@ async function runRealHybridSplatOverlayScenario(ws) {
   }
   if (evidence.splatObject?.splat?.previewKind === 'point-cloud') {
     const frame = evidence.overlayDebug?.lastFrame || {};
-    if (frame.modelMatrixFrameMode !== 'kaminos-scene-world-pretransformed') {
-      throw new Error(`real hybrid splat overlay did not record scene-world-pretransformed matrix evidence: ${JSON.stringify(evidence)}`);
-    }
-    if (frame.assetFrameMode !== 'scene-world-pretransformed'
-      || !Array.isArray(frame.rendererModelMatrix)
-      || frame.rendererModelMatrix.length !== 16
-      || frame.rendererModelMatrix[0] !== 1
-      || frame.rendererModelMatrix[5] !== 1
-      || frame.rendererModelMatrix[10] !== 1
-      || frame.rendererModelMatrix[15] !== 1) {
-      throw new Error(`real hybrid splat overlay did not use scene-world-pretransformed renderer mode: ${JSON.stringify(evidence)}`);
+    const firstEntryCompatibility = evidence.overlayDebug?.sceneIdentity?.compatibilityMode === 'first-entry'
+      || frame.firstEntryCompatibility === true;
+    if (firstEntryCompatibility) {
+      if (frame.modelMatrixFrameMode !== 'first-entry-compat-pbrnext-setModelMatrix-owned'
+        || frame.assetFrameMode !== 'first-entry-compat-asset-world-matrix') {
+        throw new Error(`real hybrid splat overlay did not record first-entry compatibility matrix evidence: ${JSON.stringify(evidence)}`);
+      }
+      const rendererMatrix = Array.isArray(frame.rendererModelMatrix) ? frame.rendererModelMatrix : [];
+      const assetWorldMatrix = Array.isArray(frame.overlayAssetWorldMatrix) ? frame.overlayAssetWorldMatrix : [];
+      const matricesMatch = rendererMatrix.length === 16
+        && assetWorldMatrix.length === 16
+        && rendererMatrix.every((value, index) => Math.abs(value - assetWorldMatrix[index]) < 1e-6);
+      if (!matricesMatch) {
+        throw new Error(`real hybrid splat overlay first-entry compatibility dropped the preview transform: ${JSON.stringify(evidence)}`);
+      }
+    } else {
+      if (frame.modelMatrixFrameMode !== 'kaminos-scene-world-pretransformed') {
+        throw new Error(`real hybrid splat overlay did not record scene-world-pretransformed matrix evidence: ${JSON.stringify(evidence)}`);
+      }
+      if (frame.assetFrameMode !== 'scene-world-pretransformed'
+        || !Array.isArray(frame.rendererModelMatrix)
+        || frame.rendererModelMatrix.length !== 16
+        || frame.rendererModelMatrix[0] !== 1
+        || frame.rendererModelMatrix[5] !== 1
+        || frame.rendererModelMatrix[10] !== 1
+        || frame.rendererModelMatrix[15] !== 1) {
+        throw new Error(`real hybrid splat overlay did not use scene-world-pretransformed renderer mode: ${JSON.stringify(evidence)}`);
+      }
     }
   }
   const cameraCoherence = evidence.cameraCoherence || {};

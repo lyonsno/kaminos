@@ -368,8 +368,9 @@ assert.match(index, /function splatRawAssetToPreviewMatrix\(/, 'Hybrid Renderer 
 assert.match(index, /function hybridSplatOverlayProjectionMatrixForPbrnext\(/, 'Hybrid Renderer overlay compensates PBRnext camera projection into the Kaminos/Three screen frame');
 assert.match(index, /function hybridSplatOverlayProjectionProbe\(/, 'Hybrid Renderer overlay exposes a projection probe for camera-coherence witnesses');
 assert.match(index, /pbrnext-vertical-flip-precompensated/, 'Hybrid Renderer overlay records the PBRnext projection compensation mode');
-assert.match(index, /assetFrameMode:\s*sceneMode \? 'scene-world-pretransformed'/, 'Hybrid Renderer overlay records scene-world-pretransformed asset frames for scene rendering');
-assert.match(index, /modelMatrixFrameMode:\s*sceneMode \? 'kaminos-scene-world-pretransformed' : 'pbrnext-setModelMatrix-owned'/, 'Hybrid Renderer overlay records scene renderer matrix-frame ownership');
+assert.match(index, /firstEntryCompatibility/, 'Hybrid Renderer overlay distinguishes first-entry package compatibility from true scene-pretransformed rendering');
+assert.match(index, /assetFrameMode:[\s\S]*first-entry-compat-asset-world-matrix/, 'Hybrid Renderer overlay records first-entry compatibility asset/world matrix ownership');
+assert.match(index, /modelMatrixFrameMode:[\s\S]*first-entry-compat-pbrnext-setModelMatrix-owned/, 'Hybrid Renderer overlay preserves the point-cloud preview transform in first-entry package compatibility mode');
 assert.match(index, /const overlayViewMatrix = new THREE\.Matrix4\(\)\.copy\(camera\.matrixWorldInverse\)/, 'Hybrid Renderer overlay passes camera view without baking object matrix once PBRnext owns setModelMatrix');
 assert.match(index, /const cameraPosition = new Float32Array\(cameraWorld\.toArray\(\)\)/, 'Hybrid Renderer overlay passes world camera position for PBRnext model-local conversion');
 assert.match(index, /\.setModelMatrix\(/, 'Hybrid Renderer overlay receives the effective overlay asset-world matrix through the PBRnext frame contract');

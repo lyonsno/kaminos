@@ -253,8 +253,8 @@ assert.match(witness, /cropped hybrid overlay lost scene-context acceptance/, 'R
 assert.match(witness, /real hybrid splat overlay did not start as a renderer-owned scene/, 'Real Hybrid Renderer witness fails unless the live renderer owns the scene splat set');
 assert.match(witness, /startResult = await window\.startHybridSplatSceneRenderer\?\.\(\)/, 'Real Hybrid Renderer witness starts the scene renderer, not the selected-splat fallback path');
 assert.match(witness, /entry\.renderability\?\.status !== 'not-splat-like'/, 'Real Hybrid Renderer witness refuses point-cloud-only PLY fixtures for renderer smokes');
-assert.match(witness, /real hybrid splat overlay did not use scene-world-pretransformed renderer mode/, 'Real Hybrid Renderer witness fails unless Kaminos pretransforms scene splats before renderer load');
-assert.match(witness, /real hybrid splat overlay did not record scene-world-pretransformed matrix evidence/, 'Real Hybrid Renderer witness preserves scene renderer matrix-frame evidence');
+assert.match(witness, /real hybrid splat overlay first-entry compatibility dropped the preview transform/, 'Real Hybrid Renderer witness fails if first-entry package compatibility drops the point-cloud preview transform');
+assert.match(witness, /real hybrid splat overlay did not record first-entry compatibility matrix evidence/, 'Real Hybrid Renderer witness preserves first-entry compatibility matrix-frame evidence');
 assert.match(witness, /hybrid-two-splat-depth-order/, 'Host-depth compositor witness runs a deterministic peer-splat depth-order scenario');
 assert.match(witness, /two-splat depth witness did not reload both splats into the scene renderer/, 'Two-splat compositor witness proves both splats are renderer-owned before host-depth smoke');
 assert.match(witness, /two-splat depth witness did not exclude renderer-owned scene splats from the host depth pass/, 'Two-splat compositor witness rejects peer splat preview depth contribution under scene-level ownership');
