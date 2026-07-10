@@ -11,6 +11,9 @@ const reactionFrontAtlasWitness = readFileSync(reactionFrontAtlasWitnessPath, 'u
 const phaseAlignedProbeWitnessPath = join(root, 'volume-phase-aligned-probe-witness.mjs');
 assert.ok(existsSync(phaseAlignedProbeWitnessPath), 'phase-aligned learned-probe witness exists');
 const phaseAlignedProbeWitness = readFileSync(phaseAlignedProbeWitnessPath, 'utf8');
+const phaseAlignedFieldFlowProbePath = join(root, 'volume-phase-aligned-field-flow-probe.py');
+assert.ok(existsSync(phaseAlignedFieldFlowProbePath), 'phase-aligned field/flow probe exists');
+const phaseAlignedFieldFlowProbe = readFileSync(phaseAlignedFieldFlowProbePath, 'utf8');
 const corePath = join(root, 'volume-core.js');
 assert.ok(existsSync(corePath), 'volume-core.js exists');
 const core = readFileSync(corePath, 'utf8');
@@ -69,6 +72,18 @@ assert.match(phaseAlignedProbeWitness, /topologyShellIdentity/, 'phase-aligned w
 assert.match(phaseAlignedProbeWitness, /failure_phase/, 'phase-aligned witness writes failure phase reports');
 assert.match(phaseAlignedProbeWitness, /primary_output_written/, 'phase-aligned witness distinguishes missing/partial visual output from success');
 assert.match(phaseAlignedProbeWitness, /visualInspectionRequired/, 'phase-aligned witness marks visual inspection as a required follow-up contract');
+assert.match(phaseAlignedFieldFlowProbe, /kaminos\.volume\.phase-aligned-field-flow-probe\.v0/, 'phase-aligned field/flow probe writes a stable schema identity');
+assert.match(phaseAlignedFieldFlowProbe, /phase-aligned-low-from-high-field-flow-probe-v0/, 'phase-aligned field/flow probe names its experiment identity');
+assert.match(phaseAlignedFieldFlowProbe, /low-from-high-block-average-v0/, 'phase-aligned field/flow probe derives low inputs by downsampling high tensors');
+assert.match(phaseAlignedFieldFlowProbe, /derived-flow-debug-diagnostic-rgb-v0/, 'phase-aligned field/flow probe targets derived flow diagnostic RGB');
+assert.match(phaseAlignedFieldFlowProbe, /truthHigh/, 'phase-aligned field/flow probe consumes the high-truth role explicitly');
+assert.match(phaseAlignedFieldFlowProbe, /["']?nativeLowRuntimeInput["']?:\s*False/, 'phase-aligned field/flow probe declares native-low runtime input is not used');
+assert.match(phaseAlignedFieldFlowProbe, /blockAverageRgbBaseline/, 'phase-aligned field/flow probe reports the block-average diagnostic RGB baseline');
+assert.match(phaseAlignedFieldFlowProbe, /localNeighborhoodMlp/, 'phase-aligned field/flow probe reports a local-neighborhood MLP result');
+assert.match(phaseAlignedFieldFlowProbe, /heldOutPixelMetrics/, 'phase-aligned field/flow probe reports held-out metrics');
+assert.match(phaseAlignedFieldFlowProbe, /visibleRasterLabels/, 'phase-aligned field/flow probe burns labels into preview output');
+assert.match(phaseAlignedFieldFlowProbe, /sourceChecksums/, 'phase-aligned field/flow probe records source checksums');
+assert.match(phaseAlignedFieldFlowProbe, /failurePhase/, 'phase-aligned field/flow probe writes failure-phase reports');
 assert.match(index, /pyro_material_bonfire_family_0702:[\s\S]*resolution:\s*96/, 'Pyro material bonfire basin keeps a conservative default grid while preserving the look controls');
 assert.match(index, /pyro_material_bonfire_family_0702:[\s\S]*fire:\s*0\.00/, 'Pyro material bonfire basin lets Pyro own the visible flame instead of stacking old stock fire');
 assert.match(index, /pyro_material_bonfire_family_0702:[\s\S]*pyroMaterialGain:\s*0\.65/, 'Pyro material bonfire basin preserves the recovered material gain');
