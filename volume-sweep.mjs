@@ -232,6 +232,30 @@ const PERFORMANCE_MATRIX_SCENARIOS = [
     simGrid: 96,
   },
   {
+    id: 'activity-p4-low-res',
+    label: 'Activity P4 Low Res',
+    simGrid: 64,
+    majorantGrid: 32,
+    pressureStrategy: 'activity_tiers',
+    activityPressureP4Enabled: true,
+    activityVorticityGate: 1,
+    activityDetailGate: 1,
+    raySteps: 96,
+    renderScale: 0.75,
+  },
+  {
+    id: 'activity-p3-low-res',
+    label: 'Activity P3 Low Res',
+    simGrid: 64,
+    majorantGrid: 32,
+    pressureStrategy: 'activity_tiers',
+    activityPressureP4Enabled: false,
+    activityVorticityGate: 1,
+    activityDetailGate: 1,
+    raySteps: 96,
+    renderScale: 0.75,
+  },
+  {
     id: 'perf-128-baseline',
     label: 'Perf 128 Baseline',
     simGrid: 128,
@@ -292,6 +316,10 @@ function finiteOr(value, fallback) {
 function pressureEffectiveLabelForRun(run, effective) {
   const strategy = String(effective.pressureStrategy || run.pressureStrategy || 'global').toLowerCase();
   if (strategy === 'spatial_tiers') return 'Tiered P3';
+  if (strategy === 'activity_tiers') {
+    const p4Enabled = effective.activityPressureP4Enabled ?? effective.activityTierControls?.activityPressureP4Enabled ?? run.activityPressureP4Enabled;
+    return p4Enabled === false ? 'Activity P3' : 'Activity P4';
+  }
   const effectiveIterations = Number(
     effective.pressureIterationRequested
       ?? effective.pressureProjectionIterations
@@ -410,6 +438,9 @@ function routeFor(run) {
   applyNumberParam(url, 'volume_majorant_cadence', run.majorantCadence);
   applyNumberParam(url, 'volume_pressure_iterations', run.pressureIterations);
   applyStringParam(url, 'volume_pressure_strategy', run.pressureStrategy);
+  applyBooleanParam(url, 'volume_activity_pressure_p4', run.activityPressureP4Enabled);
+  applyNumberParam(url, 'volume_activity_vorticity_gate', run.activityVorticityGate);
+  applyNumberParam(url, 'volume_activity_detail_gate', run.activityDetailGate);
   applyBooleanParam(url, 'volume_sim_profile', run.simProfile);
   applyStringParam(url, 'volume_external_emitters', run.externalEmitterMode);
   return url.toString();
@@ -462,6 +493,9 @@ function requestedConfig(run) {
     majorantCadence: run.majorantCadence,
     pressureIterations: run.pressureIterations,
     pressureStrategy: run.pressureStrategy,
+    activityPressureP4Enabled: run.activityPressureP4Enabled,
+    activityVorticityGate: run.activityVorticityGate,
+    activityDetailGate: run.activityDetailGate,
     simProfile: run.simProfile,
     externalEmitterMode: run.externalEmitterMode || 'off',
   };
@@ -534,6 +568,8 @@ function effectiveConfig(witness) {
     pressureIterationRequested: witness.pressureIterationRequested ?? controls.pressureIterationRequested,
     pressureIterationDefault: witness.pressureIterationDefault ?? controls.pressureIterationDefault,
     pressureStrategy: witness.pressureStrategy ?? controls.pressureStrategy ?? witness.simCostLedger?.pressureStrategy,
+    activityPressureP4Enabled: witness.activityTierControls?.activityPressureP4Enabled ?? controls.activityPressureP4Enabled,
+    activityTierControls: witness.activityTierControls,
     tallPlumePressureIterationStrategy: witness.tallPlumePressureIterationStrategy ?? witness.simCostLedger?.tallPlumePressureIterationStrategy,
     tallPlumePressureIterationTarget: witness.tallPlumePressureIterationTarget ?? witness.simCostLedger?.tallPlumePressureIterationTarget,
     tallPlumePressureTierStrategy: witness.tallPlumePressureTierStrategy ?? witness.simCostLedger?.tallPlumePressureTierStrategy,
@@ -1172,6 +1208,8 @@ for (let i = 0; i < runs.length; i += 1) {
       pressureJacobiInlineDivergencePasses: simCostLedger?.pressureJacobiInlineDivergencePasses,
       pressureJacobiFullGridEquivalentPasses: simCostLedger?.pressureJacobiFullGridEquivalentPasses,
       pressureEffectiveLabel: witness.pressureEffectiveLabel,
+      activityPressureP4Enabled: effective.activityPressureP4Enabled,
+      activityTierControls: effective.activityTierControls,
       tallPlumePressureIterationStrategy: simCostLedger?.tallPlumePressureIterationStrategy,
       tallPlumePressureIterationTarget: simCostLedger?.tallPlumePressureIterationTarget,
       tallPlumePressureTierStrategy: simCostLedger?.tallPlumePressureTierStrategy,

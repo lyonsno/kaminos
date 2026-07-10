@@ -563,10 +563,12 @@ assert.match(index, /volume_pressure_tier_overlay/, 'URL route can seed the pres
 assert.match(index, /volume_pressure_tier_lower_max/, 'URL route can seed the pressure2 lower-slab max threshold');
 assert.match(index, /volume_pressure_tier_hero_min/, 'URL route can seed the pressure3 hero-band min threshold');
 assert.match(index, /volume_pressure_tier_hero_max/, 'URL route can seed the pressure3 hero-band max threshold');
+assert.match(index, /volume_activity_pressure_p4/, 'URL route can disable Activity P4 for paired P3/P4 pressure comparison');
 assert.match(index, /pressureTierOverlay/, 'Volume controls expose pressure-tier overlay opacity to the renderer');
 assert.match(index, /pressureTierLowerMax/, 'Volume controls expose pressure2 lower-slab max threshold to the renderer');
 assert.match(index, /pressureTierHeroMin/, 'Volume controls expose pressure3 hero-band min threshold to the renderer');
 assert.match(index, /pressureTierHeroMax/, 'Volume controls expose pressure3 hero-band max threshold to the renderer');
+assert.match(index, /activityPressureP4Enabled/, 'Volume controls expose the Activity P4 comparison switch to the renderer');
 assert.match(index, /volume_sim_profile/, 'URL route can request sim-cost profiling without changing the render contract');
 assert.match(index, /simProfile/, 'Volume controls carry sim profile request identity into the renderer');
 assert.match(index, /<option value="128">128\^3<\/option>/, 'Volume grid selector can test a 128^3 simulation volume');
@@ -1526,6 +1528,7 @@ assert.match(core, /ACTIVITY_PRESSURE_INACTIVE_SKIP_POLICY\s*=\s*'inactive-extra
 assert.match(core, /ACTIVE_PRESSURE_WORKGROUP_DISPATCH_STRATEGY\s*=\s*'gpu-built-active-pressure-workgroups-indirect-v0'/, 'activity pressure tiers name GPU-built indirect active workgroup dispatch');
 assert.match(core, /ACTIVE_PRESSURE_WORKGROUP_ACCOUNTING\s*=\s*'active-pressure-workgroup-counter-readback-v0'/, 'activity pressure tiers name active workgroup readback accounting');
 assert.match(core, /ACTIVITY_PRESSURE_P4_STRATEGY\s*=\s*'flame-lower-boundary-p4-active-workgroups-v0'/, 'activity pressure tiers name the tight flame/lower-boundary P4 strategy');
+assert.match(core, /ACTIVITY_PRESSURE_P4_DISABLED_STRATEGY\s*=\s*'activity-p4-disabled-comparison-p3-v0'/, 'activity pressure tiers name the P4-disabled comparison strategy');
 assert.match(core, /PRESSURE_PROJECTION_READ_STRATEGY_COMPOSITE\s*=\s*'composite-pressure-tier-read-v0'/, 'volume core names composite tier pressure projection reads');
 assert.match(core, /PRESSURE_PROJECTION_READ_STRATEGY_SINGLE_BUFFER\s*=\s*'single-pressure-buffer-read-v0'/, 'volume core names single-buffer pressure projection reads');
 assert.match(core, /normalizeVolumeScene\(value\) === 'tall_plume' \? 2/, 'tall-plume default pressure iterations use pressure2 before the general non-bonfire default');
@@ -1563,10 +1566,11 @@ assert.match(core, /p4ActiveWorkgroups/, 'debug state reports tight P4 active pr
 assert.match(core, /skippedExtraTierWorkgroups/, 'debug state reports skipped extra-tier pressure workgroups');
 assert.match(core, /gpu-built-active-pressure-workgroups-indirect-v0/, 'activity pressure dispatch efficiency says GPU-built indirect active workgroups');
 assert.match(core, /activity-flame-boundary-pressure4-indirect/, 'activity pressure dispatch plan names the P4 indirect refinement pass');
+assert.match(core, /activityPressureP4Enabled/, 'activity pressure dispatch plan accepts an explicit P4 enablement control');
 assert.match(core, /spendModel:\s*ACTIVITY_PRESSURE_SPEND_MODEL/, 'activity tier debug state exposes the effective spend model');
 assert.match(core, /inactiveCellPolicy:\s*ACTIVITY_PRESSURE_INACTIVE_SKIP_POLICY/, 'activity tier debug state exposes the inactive-cell policy');
 assert.match(core, /dispatchStrategy:\s*ACTIVE_PRESSURE_WORKGROUP_DISPATCH_STRATEGY/, 'activity tier debug state exposes active pressure workgroup dispatch strategy');
-assert.match(core, /p4Strategy:\s*ACTIVITY_PRESSURE_P4_STRATEGY/, 'activity tier debug state exposes the P4 refinement strategy');
+assert.match(core, /p4Strategy:[\s\S]*ACTIVITY_PRESSURE_P4_STRATEGY/, 'activity tier debug state exposes the P4 refinement strategy');
 assert.match(core, /skipAccounting:\s*ACTIVE_PRESSURE_WORKGROUP_ACCOUNTING/, 'activity tier debug state distinguishes active workgroup readback from fallback cell early-out accounting');
 assert.match(core, /pressureTierLowerMax/, 'volume core reads the operator-tuned lower pressure tier bound');
 assert.match(core, /pressureTierHeroMin/, 'volume core reads the operator-tuned hero pressure tier lower bound');
@@ -1997,6 +2001,9 @@ assert.match(sweep, /volume_input_radius/, 'performance sweep pins source input 
 assert.match(sweep, /volume_majorant_cadence/, 'performance sweep pins majorant rebuild cadence');
 assert.match(sweep, /volume_pressure_iterations/, 'performance sweep pins pressure iteration count');
 assert.match(sweep, /volume_pressure_strategy/, 'performance sweep can select spatial pressure strategy by route');
+assert.match(sweep, /volume_activity_pressure_p4/, 'performance sweep can run Activity P4 enabled and disabled comparison routes');
+assert.match(sweep, /activity-p4-low-res/, 'performance sweep includes a low-resolution Activity P4 comparison scenario');
+assert.match(sweep, /activity-p3-low-res/, 'performance sweep includes a low-resolution Activity P3 comparison scenario');
 assert.match(sweep, /volume_sim_profile/, 'performance sweep requests the simulation cost profile');
 assert.match(sweep, /pressureIterations: 2/, 'performance sweep tall-plume baseline defaults to pressure2');
 assert.match(sweep, /tallPlumePressureIterationStrategy/, 'sweep aggregate preserves tall-plume pressure iteration strategy');
