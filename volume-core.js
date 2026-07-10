@@ -323,6 +323,15 @@ function majorantBufferBytes(majorantGridSize = DEFAULT_MAJORANT_GRID_SIZE) {
   return majorantGridSize * majorantGridSize * majorantGridSize * 4 * Float32Array.BYTES_PER_ELEMENT;
 }
 
+function majorantRaymarchActive(controls = {}) {
+  const skip = Number(controls.majorantSkip);
+  return Number.isFinite(skip) && skip > 0.0005;
+}
+
+function majorantBuildRequested(controls = {}, options = {}) {
+  return options.force === true || majorantRaymarchActive(controls);
+}
+
 function boundarySidecarBufferBytes(gridSize) {
   return gridCellCount(gridSize) * 4 * Float32Array.BYTES_PER_ELEMENT;
 }
@@ -2196,6 +2205,40 @@ fn raymarchInterest(
   return clamp(body + fire + edge, 0.0, 1.6);
 }
 
+fn boundaryFireSamplingImportanceFromSignals(
+  sidecarSample: vec4<f32>,
+  sidecarMeta: vec4<f32>,
+  temp: f32,
+  heat: f32,
+  flame: f32,
+  flameDetail: f32,
+  fireLick: f32,
+  ember: f32,
+  combustionFront: f32,
+  combustionFrontTopology: f32,
+  boundaryFireActive: f32
+) -> f32 {
+  let sidecarStructure = clamp(
+    max(max(sidecarSample.x * 0.74, sidecarSample.y * 0.92), max(sidecarSample.z * 1.16, sidecarMeta.x * 0.52))
+      + sidecarSample.w * 0.20,
+    0.0,
+    1.6
+  );
+  let lowerFireBody = smoothstep(
+    0.010,
+    0.62,
+    temp * 0.22
+      + heat * 0.16
+      + flame * 0.28
+      + flameDetail * 0.52
+      + fireLick * 0.38
+      + ember * 0.18
+      + combustionFront * 0.20
+      + combustionFrontTopology * 0.16
+  );
+  return clamp(boundaryFireActive * max(sidecarStructure, lowerFireBody * 0.78 + sidecarStructure * 0.38), 0.0, 1.7);
+}
+
 fn adaptiveRayStepScale(interest: f32, adaptiveRays: f32) -> f32 {
   let fine = smoothstep(0.035, 0.92, interest);
   let adaptiveScale = mix(2.65, 0.68, fine);
@@ -3693,8 +3736,10 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
   let startT = max(hit.x, 0.0);
   let endT = hit.y;
   let dtBase = (endT - startT) / steps;
+  let boundaryFireRenderActive = (1.0 - step(0.5, abs(fireRenderMode - 2.0))) * (1.0 - step(0.5, abs(shellInspectMode - 9.0)));
+  let boundaryFireProceduralPhaseDamping = mix(1.0, 0.18, boundaryFireRenderActive);
   let jitter = temporalJitterOffset(in.uv, dtBase);
-  let bonfireSpatialRayDephase = (hash31(vec3<f32>(floor(in.uv * u.viewport_steps_density.xy), 37.0)) - 0.5) * dtBase * 0.90 * bonfireRenderScene;
+  let bonfireSpatialRayDephase = (hash31(vec3<f32>(floor(in.uv * u.viewport_steps_density.xy), 37.0)) - 0.5) * dtBase * 0.90 * bonfireRenderScene * mix(1.0, 0.14, boundaryFireRenderActive);
   var t = startT + jitter + bonfireSpatialRayDephase;
   var trans = 1.0;
   var color = vec3<f32>(0.004, 0.005, 0.006);
@@ -3714,25 +3759,44 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
   for (var i = 0; i < 192; i = i + 1) {
     if (f32(i) >= steps || raymarchEarlyTermination(trans) || t > endT) { break; }
     let p = ro + rd * t;
-    let majorantNearest = sampleWorldMajorant(p);
-    let majorantLinear = sampleWorldMajorantLinear(p);
-    let majorantDilated = sampleWorldMajorantDilated(p);
+    let boundarySidecarSourceForSampling = clamp(u.boundary_sidecar_controls.x, 0.0, 2.0);
+    var boundarySidecarSampleForSampling = vec4<f32>(0.0);
+    var boundarySidecarMetaForSampling = vec4<f32>(0.0);
+    var boundaryFirePreSkipImportance = 0.0;
+    if (boundaryFireRenderActive > 0.5 && boundarySidecarSourceForSampling > 0.5) {
+      boundarySidecarSampleForSampling = sampleWorldBoundarySidecar(p);
+      boundarySidecarMetaForSampling = sampleWorldBoundarySidecarMeta(p);
+      boundaryFirePreSkipImportance = clamp(
+        max(max(boundarySidecarSampleForSampling.x, boundarySidecarSampleForSampling.y), max(boundarySidecarSampleForSampling.z, boundarySidecarMetaForSampling.x * 0.72))
+          + boundarySidecarSampleForSampling.w * 0.18,
+        0.0,
+        1.5
+      );
+    }
     let majorantSkipStrength = clamp(u.occupancy_controls.y, 0.0, 1.0);
-    let majorantSmooth = clamp(u.occupancy_controls.z, 0.0, 1.0);
-    let majorantEdgeGuard = clamp(u.occupancy_controls.w, 0.0, 1.0);
-    let majorant = mix(majorantNearest, mix(majorantLinear, majorantDilated, 0.28 + majorantEdgeGuard * 0.42), majorantSmooth);
-    let majorantEdge = majorantGradientSignal(p);
-    let guardedImportance = max(majorant.w, majorantDilated.w * majorantEdgeGuard * (0.55 + majorantSmooth * 0.25));
-    let guardedThreshold = mix(0.050, 0.100, majorantEdgeGuard);
-    let majorantEmpty = 1.0 - smoothstep(0.004, guardedThreshold, guardedImportance + majorantEdge * majorantEdgeGuard * 0.24);
-    let edgeDamping = 1.0 - smoothstep(0.012, 0.16, majorantEdge * majorantEdgeGuard);
-    let majorantSkipGate = majorantEmpty * majorantSkipStrength * edgeDamping;
-    temporalMajorantEdge = max(temporalMajorantEdge, majorantEdge * (0.18 + majorantSkipGate));
-    if (majorantSkipGate > 0.42) {
-      let cellExit = majorantCellExitDistance(p, rd);
-      let skipDt = min(cellExit + dtBase * 0.20, dtBase * (1.0 + majorantSkipGate * 6.0));
-      t = t + min(skipDt, max(0.0001, endT - t));
-      continue;
+    let majorantRaymarchActive = step(0.0005, majorantSkipStrength);
+    var majorantEdge = 0.0;
+    if (majorantRaymarchActive > 0.5) {
+      let majorantNearest = sampleWorldMajorant(p);
+      let majorantLinear = sampleWorldMajorantLinear(p);
+      let majorantDilated = sampleWorldMajorantDilated(p);
+      let majorantSmooth = clamp(u.occupancy_controls.z, 0.0, 1.0);
+      let majorantEdgeGuard = clamp(u.occupancy_controls.w, 0.0, 1.0);
+      let majorant = mix(majorantNearest, mix(majorantLinear, majorantDilated, 0.28 + majorantEdgeGuard * 0.42), majorantSmooth);
+      majorantEdge = majorantGradientSignal(p);
+      let guardedImportance = max(max(majorant.w, majorantDilated.w * majorantEdgeGuard * (0.55 + majorantSmooth * 0.25)), boundaryFirePreSkipImportance * 0.82);
+      let guardedThreshold = mix(0.050, 0.100, majorantEdgeGuard);
+      let majorantEmpty = 1.0 - smoothstep(0.004, guardedThreshold, guardedImportance + majorantEdge * majorantEdgeGuard * 0.24);
+      let edgeDamping = 1.0 - smoothstep(0.012, 0.16, majorantEdge * majorantEdgeGuard);
+      let boundaryFireMajorantDamping = 1.0 - smoothstep(0.035, 0.42, boundaryFirePreSkipImportance);
+      let majorantSkipGate = majorantEmpty * majorantSkipStrength * edgeDamping * boundaryFireMajorantDamping;
+      temporalMajorantEdge = max(temporalMajorantEdge, majorantEdge * (0.18 + majorantSkipGate));
+      if (majorantSkipGate > 0.42) {
+        let cellExit = majorantCellExitDistance(p, rd);
+        let skipDt = min(cellExit + dtBase * 0.20, dtBase * (1.0 + majorantSkipGate * 6.0));
+        t = t + min(skipDt, max(0.0001, endT - t));
+        continue;
+      }
     }
     let state = sampleWorldVelocity(p);
     let material = sampleWorldMaterial(p);
@@ -3785,6 +3849,19 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
       2.4
     );
     let temp = mix(mix(rawTemp, bonfireEmissionTemperature, bonfireRenderScene) * fireGain, 0.0, canonicalSmokeOnlyRender);
+    let boundaryFireSamplingImportance = boundaryFireSamplingImportanceFromSignals(
+      boundarySidecarSampleForSampling,
+      boundarySidecarMetaForSampling,
+      temp,
+      heat,
+      flame,
+      flameDetail,
+      fireLick,
+      ember,
+      combustionFront,
+      combustionFrontTopology,
+      boundaryFireRenderActive
+    );
     let smoke = mix(
       (smokeDensity + microBodyContribution * 0.70) * smoothstep(0.03, 0.92, y) * u.fire_smoke_curl_speed.y,
       smokeDensity * canonicalSmokeContent * u.fire_smoke_curl_speed.y,
@@ -3802,7 +3879,8 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
       * (0.020 + flameDetail * 0.035 + interfaceShred * 0.025 + microSmoke * 0.016);
     let extinction = rawExtinction + tallPlumeTransitionWisps * absorptionGain * 0.34;
     let occupancy = raymarchOccupancySignal(density, smoke, heat, temp, flame, microTextureSignal, velMag, extinction) + tallPlumeTransitionWisps;
-    let emptySpanScale = occupancySkipStepScale(occupancy, occupancySkipStrength, adaptiveRays);
+    let boundaryProtectedOccupancy = max(occupancy, boundaryFireSamplingImportance * 0.96 + boundaryFirePreSkipImportance * 0.44);
+    let emptySpanScale = occupancySkipStepScale(boundaryProtectedOccupancy, occupancySkipStrength, adaptiveRays);
     if (emptySpanScale > 1.08) {
       t = t + min(dtBase * emptySpanScale, max(0.0001, endT - t));
       continue;
@@ -3813,7 +3891,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     let filamentNoise = microFilamentNoise(detailP, microWarp, detailCarrier, state.xyz, u.cameraPos_time.w);
     let shredNoise = microFilamentNoise(detailP.zxy + vec3<f32>(0.13, -0.21, 0.09), microWarp.yzx * 1.21, detailCarrier + interfaceShred * 1.7, state.zxy, u.cameraPos_time.w * 1.17 + 1.3);
     let fireNoise = microFilamentNoise(detailP.yzx + vec3<f32>(-0.18, 0.07, 0.24), microWarp.zxy * 1.38, detailCarrier + fireLick * 2.1, state.yzx, u.cameraPos_time.w * 1.31 + 2.1);
-    let interest = raymarchInterest(density, smoke, heat, temp, max(flame, combustionFrontTopology * 0.10), flameDetail, microTextureSignal, velMag, fireLick, interfaceShred);
+    let interest = raymarchInterest(density, smoke, heat, temp, max(flame, combustionFrontTopology * 0.10), flameDetail, microTextureSignal, velMag, fireLick, interfaceShred) + boundaryFireSamplingImportance;
     let localDt = min(dtBase * adaptiveRayStepScale(interest, adaptiveRays), max(0.0001, endT - t));
     let rayStepOpacity = localDt * 3.65;
     let curtainNoise = microFilamentNoise(
@@ -3823,8 +3901,8 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
       state.yzx,
       u.cameraPos_time.w * 0.73 + 2.9
     );
-    let verticalPhaseBreak = sin(p.y * 43.0 + (p.x * p.x - p.z * p.z) * 19.0 + u.cameraPos_time.w * 1.4);
-    let verticalPuffBreak = cos(p.y * 27.0 + length(p.xz) * 23.0 - p.x * p.z * 31.0 - u.cameraPos_time.w * 0.92);
+    let verticalPhaseBreak = sin(p.y * 43.0 + (p.x * p.x - p.z * p.z) * 19.0 + u.cameraPos_time.w * 1.4) * boundaryFireProceduralPhaseDamping;
+    let verticalPuffBreak = cos(p.y * 27.0 + length(p.xz) * 23.0 - p.x * p.z * 31.0 - u.cameraPos_time.w * 0.92) * boundaryFireProceduralPhaseDamping;
     let bonfireCurtainBreakup = mix(
       1.0,
       clamp(0.91 + curtainNoise * 0.10 + verticalPhaseBreak * 0.15 + verticalPuffBreak * 0.17, 0.64, 1.18),
@@ -4764,6 +4842,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     majorantFrameCount: 0,
     majorantCadence: normalizeMajorantBuildCadence(controlsSnapshot.majorantCadence),
     majorantBuiltThisFrame: false,
+    majorantRaymarchActive: majorantRaymarchActive(controlsSnapshot),
+    majorantBuildRequested: majorantBuildRequested(controlsSnapshot),
     majorantLastBuiltFrame: -1,
     majorantSkippedFrameCount: 0,
     boundarySidecarIdentity: BOUNDARY_SIDECAR_IDENTITY,
@@ -4779,6 +4859,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     boundaryStructureSource: normalizeBoundarySidecarSource(controlsSnapshot.boundarySidecarSource),
     boundarySidecarView: normalizeBoundarySidecarView(controlsSnapshot.boundarySidecarView ?? controlsSnapshot.boundarySidecarControls?.view),
     boundarySidecarDebug: null,
+    boundaryFireSamplingDebug: null,
     simProfile: normalizeSimProfileFlag(controlsSnapshot.simProfile),
     simCostLedger: null,
     pressureSourceStrategy: PRESSURE_SOURCE_STRATEGY_DISABLED,
@@ -5289,6 +5370,24 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       builtThisFrame: state.boundarySidecarBuiltThisFrame,
       frameCount: state.boundarySidecarFrameCount,
       lastBuiltFrame: state.boundarySidecarLastBuiltFrame,
+    };
+  }
+
+  function boundaryFireSamplingDebug() {
+    const fireMode = normalizeFireRenderMode(controlsSnapshot.fireRenderMode);
+    const inspectMode = normalizeShellInspectMode(controlsSnapshot.shellInspectMode);
+    const source = normalizeBoundarySidecarSource(controlsSnapshot.boundarySidecarSource);
+    const active = fireMode === 'inspect' && inspectMode === 'boundary_fire';
+    return {
+      identity: 'boundary-fire-sampling-importance-v0',
+      active,
+      source,
+      preSkipSupport: active && source !== 'live',
+      protectsMajorantSkip: active && source !== 'live',
+      protectsOccupancySkip: active,
+      protectsAdaptiveStep: active,
+      proceduralPhaseDamping: active ? 0.18 : 1,
+      rayDephaseDamping: active ? 0.14 : 1,
     };
   }
 
@@ -5953,6 +6052,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.majorantFrameCount = 0;
     state.majorantCadence = normalizeMajorantBuildCadence(controlsSnapshot.majorantCadence);
     state.majorantBuiltThisFrame = false;
+    state.majorantRaymarchActive = majorantRaymarchActive(controlsSnapshot);
+    state.majorantBuildRequested = majorantBuildRequested(controlsSnapshot);
     state.majorantLastBuiltFrame = -1;
     state.majorantSkippedFrameCount = 0;
     state.boundarySidecarIdentity = BOUNDARY_SIDECAR_IDENTITY;
@@ -5968,6 +6069,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.boundaryStructureSource = state.boundarySidecarSource;
     state.boundarySidecarView = normalizeBoundarySidecarView(controlsSnapshot.boundarySidecarView ?? controlsSnapshot.boundarySidecarControls?.view);
     state.boundarySidecarDebug = boundarySidecarDebug(state.boundarySidecarSource);
+    state.boundaryFireSamplingDebug = boundaryFireSamplingDebug();
     state.pressureProjectionEnabled = false;
     state.pressureProjectionIterations = 0;
     state.pressureIterationDefault = defaultPressureIterationsForScene(controlsSnapshot.volumeScene);
@@ -6652,6 +6754,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.boundaryStructureSource = boundarySidecarSourceName;
     state.boundarySidecarView = boundarySidecarViewName;
     state.boundarySidecarDebug = boundarySidecarDebug(boundarySidecarSourceName);
+    state.boundaryFireSamplingDebug = boundaryFireSamplingDebug();
     state.volumeScene = normalizeVolumeScene(controlsSnapshot.volumeScene);
     state.bonfireReferenceConfinement = bonfireReferenceConfinementDebug(controlsSnapshot.volumeScene);
     state.minimalPlumeProof = minimalPlumeProofDebug(controlsSnapshot.volumeScene);
@@ -6660,6 +6763,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.majorantSkip = uniforms[41];
     state.majorantSmooth = uniforms[42];
     state.majorantGuard = uniforms[43];
+    state.majorantRaymarchActive = majorantRaymarchActive(controlsSnapshot);
+    state.majorantBuildRequested = majorantBuildRequested(controlsSnapshot);
     state.temporalAccum = requestedTemporalAccum;
     state.temporalJitter = uniforms[45];
     state.historyClamp = uniforms[46];
@@ -6940,6 +7045,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const fullGridWorkgroupsPerPass = Math.ceil(gridSize / 4) ** 3;
     const majorantWorkgroupsPerPass = Math.ceil(majorantGridSize / 4) ** 3;
     const majorantBuiltThisFrame = options.majorantBuiltThisFrame ?? state.majorantBuiltThisFrame;
+    const majorantIsActive = options.majorantRaymarchActive ?? state.majorantRaymarchActive ?? majorantRaymarchActive(controlsSnapshot);
+    const majorantIsRequested = options.majorantBuildRequested ?? state.majorantBuildRequested ?? majorantBuildRequested(controlsSnapshot);
     const boundarySidecarBuiltThisFrame = options.boundarySidecarBuiltThisFrame ?? state.boundarySidecarBuiltThisFrame;
     const fullGridCells = gridCellCount(gridSize);
     const majorantCells = majorantGridSize * majorantGridSize * majorantGridSize;
@@ -6950,6 +7057,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const boundarySidecarBytes = boundarySidecarBufferBytes(gridSize);
     const boundarySidecarMetaBytes = boundarySidecarMetaBufferBytes(gridSize);
     state.majorantCadence = majorantBuildCadence;
+    state.majorantRaymarchActive = majorantIsActive;
+    state.majorantBuildRequested = majorantIsRequested;
     state.pressureIterationDefault = defaultPressureIterationsForScene(scene);
     state.pressureIterationRequested = pressureIterationRequested;
     state.pressureSourceStrategy = pressureSourceStrategy;
@@ -7048,8 +7157,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       fullGridCellVisitsPerFrame: fullGridCells * fullGridPassesPerFrame,
       majorantBuildCadence,
       majorantBuiltThisFrame,
-      majorantCellVisitsThisFrame: majorantBuiltThisFrame ? majorantCells : 0,
-      majorantEstimatedCellVisitsPerFrame: majorantCells / majorantBuildCadence,
+      majorantRaymarchActive: majorantIsActive,
+      majorantBuildRequested: majorantIsRequested,
+      majorantOutputBricks: majorantCells,
+      majorantOutputBricksThisFrame: majorantBuiltThisFrame ? majorantCells : 0,
+      majorantEstimatedSourceCellVisitsPerBuild: majorantIsRequested ? fullGridCells : 0,
+      majorantEstimatedSourceCellVisitsPerFrame: majorantIsRequested ? fullGridCells / majorantBuildCadence : 0,
+      majorantCellVisitsThisFrame: majorantBuiltThisFrame ? fullGridCells : 0,
+      majorantEstimatedCellVisitsPerFrame: majorantIsRequested ? fullGridCells / majorantBuildCadence : 0,
       majorantLastBuiltFrame: state.majorantLastBuiltFrame,
       majorantSkippedFrameCount: state.majorantSkippedFrameCount,
       boundarySidecarIdentity: BOUNDARY_SIDECAR_IDENTITY,
@@ -7199,11 +7314,28 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const majorantBuildCadence = normalizeMajorantBuildCadence(controlsSnapshot.majorantCadence);
     state.majorantCadence = majorantBuildCadence;
     const force = options.force === true;
+    const raymarchActive = majorantRaymarchActive(controlsSnapshot);
+    const buildRequested = majorantBuildRequested(controlsSnapshot, { force });
+    state.majorantRaymarchActive = raymarchActive;
+    state.majorantBuildRequested = buildRequested;
+    if (!buildRequested) {
+      state.majorantBuiltThisFrame = false;
+      updateSimCostLedger({
+        majorantBuiltThisFrame: false,
+        majorantRaymarchActive: raymarchActive,
+        majorantBuildRequested: buildRequested,
+      });
+      return;
+    }
     const shouldBuild = force || !state.majorantBuilt || majorantBuildCadence <= 1 || state.frameCount % majorantBuildCadence === 0;
     if (!shouldBuild) {
       state.majorantBuiltThisFrame = false;
       state.majorantSkippedFrameCount += 1;
-      updateSimCostLedger({ majorantBuiltThisFrame: false });
+      updateSimCostLedger({
+        majorantBuiltThisFrame: false,
+        majorantRaymarchActive: raymarchActive,
+        majorantBuildRequested: buildRequested,
+      });
       return;
     }
     const pass = encoder.beginComputePass({ label: 'kaminos coarse majorant build pass' });
@@ -7217,7 +7349,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.majorantBuiltThisFrame = true;
     state.majorantLastBuiltFrame = state.frameCount;
     state.majorantFrameCount += 1;
-    updateSimCostLedger({ majorantBuiltThisFrame: true });
+    updateSimCostLedger({
+      majorantBuiltThisFrame: true,
+      majorantRaymarchActive: raymarchActive,
+      majorantBuildRequested: buildRequested,
+    });
   }
 
   function encodeBoundarySidecar(encoder) {
