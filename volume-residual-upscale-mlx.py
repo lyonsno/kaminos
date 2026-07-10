@@ -237,6 +237,78 @@ class SmallUNetResidualUpscaler(nn.Module):
         return apply_limited_residual(base_image, residual, self.residualOutputLimit, residualApplicationMask, self.residualColorMode, self.chromaResidualScale, self.residualApplyScale)
 
 
+class TeacherUNetResidualUpscaler(nn.Module):
+    def __init__(self, hidden_channels, input_channels, residual_output_limit, residual_color_mode, chroma_residual_scale, residual_apply_scale):
+        super().__init__()
+        self.unetDepth = 3
+        self.receptiveField = "three-level-encoder-decoder-skip-teacher"
+        self.residualOutputLimit = float(residual_output_limit)
+        self.residualColorMode = residual_color_mode
+        self.chromaResidualScale = float(chroma_residual_scale)
+        self.residualApplyScale = float(residual_apply_scale)
+        base_channels = max(8, int(hidden_channels))
+        mid_channels = max(16, base_channels * 2)
+        deep_channels = max(32, base_channels * 4)
+        bottleneck_channels = max(64, base_channels * 8)
+        self.enc1_a = nn.Conv2d(input_channels, base_channels, kernel_size=3, padding=1)
+        self.enc1_b = nn.Conv2d(base_channels, base_channels, kernel_size=3, padding=1)
+        self.pool1 = nn.MaxPool2d(kernel_size=2, stride=2)
+        self.enc2_a = nn.Conv2d(base_channels, mid_channels, kernel_size=3, padding=1)
+        self.enc2_b = nn.Conv2d(mid_channels, mid_channels, kernel_size=3, padding=1)
+        self.pool2 = nn.MaxPool2d(kernel_size=2, stride=2)
+        self.enc3_a = nn.Conv2d(mid_channels, deep_channels, kernel_size=3, padding=1)
+        self.enc3_b = nn.Conv2d(deep_channels, deep_channels, kernel_size=3, padding=1)
+        self.pool3 = nn.MaxPool2d(kernel_size=2, stride=2)
+        self.bottleneck_a = nn.Conv2d(deep_channels, bottleneck_channels, kernel_size=3, padding=1)
+        self.bottleneck_b = nn.Conv2d(bottleneck_channels, bottleneck_channels, kernel_size=3, padding=1)
+        self.bottleneck_c = nn.Conv2d(bottleneck_channels, bottleneck_channels, kernel_size=3, padding=1)
+        self.up3 = nn.ConvTranspose2d(bottleneck_channels, deep_channels, kernel_size=2, stride=2)
+        self.dec3_a = nn.Conv2d(deep_channels + deep_channels, deep_channels, kernel_size=3, padding=1)
+        self.dec3_b = nn.Conv2d(deep_channels, deep_channels, kernel_size=3, padding=1)
+        self.up2 = nn.ConvTranspose2d(deep_channels, mid_channels, kernel_size=2, stride=2)
+        self.dec2_a = nn.Conv2d(mid_channels + mid_channels, mid_channels, kernel_size=3, padding=1)
+        self.dec2_b = nn.Conv2d(mid_channels, mid_channels, kernel_size=3, padding=1)
+        self.up1 = nn.ConvTranspose2d(mid_channels, base_channels, kernel_size=2, stride=2)
+        self.dec1_a = nn.Conv2d(base_channels + base_channels, base_channels, kernel_size=3, padding=1)
+        self.dec1_b = nn.Conv2d(base_channels, base_channels, kernel_size=3, padding=1)
+        self.output = nn.Conv2d(base_channels, 3, kernel_size=3, padding=1)
+        self.output.weight = mx.zeros_like(self.output.weight)
+        self.output.bias = mx.zeros_like(self.output.bias)
+
+    def __call__(self, image, residualApplicationMask=None):
+        base_image = image[..., :3]
+        skip1 = nn.relu(self.enc1_a(image))
+        skip1 = nn.relu(self.enc1_b(skip1))
+        hidden = self.pool1(skip1)
+        skip2 = nn.relu(self.enc2_a(hidden))
+        skip2 = nn.relu(self.enc2_b(skip2))
+        hidden = self.pool2(skip2)
+        skip3 = nn.relu(self.enc3_a(hidden))
+        skip3 = nn.relu(self.enc3_b(skip3))
+        hidden = self.pool3(skip3)
+        hidden = nn.relu(self.bottleneck_a(hidden))
+        hidden = nn.relu(self.bottleneck_b(hidden))
+        hidden = nn.relu(self.bottleneck_c(hidden))
+        hidden = self.up3(hidden)
+        hidden = match_spatial_shape(hidden, skip3)
+        hidden = mx.concatenate([hidden, skip3], axis=3)
+        hidden = nn.relu(self.dec3_a(hidden))
+        hidden = nn.relu(self.dec3_b(hidden))
+        hidden = self.up2(hidden)
+        hidden = match_spatial_shape(hidden, skip2)
+        hidden = mx.concatenate([hidden, skip2], axis=3)
+        hidden = nn.relu(self.dec2_a(hidden))
+        hidden = nn.relu(self.dec2_b(hidden))
+        hidden = self.up1(hidden)
+        hidden = match_spatial_shape(hidden, skip1)
+        hidden = mx.concatenate([hidden, skip1], axis=3)
+        hidden = nn.relu(self.dec1_a(hidden))
+        hidden = nn.relu(self.dec1_b(hidden))
+        residual = self.output(hidden)
+        residual = match_spatial_shape(residual, base_image)
+        return apply_limited_residual(base_image, residual, self.residualOutputLimit, residualApplicationMask, self.residualColorMode, self.chromaResidualScale, self.residualApplyScale)
+
+
 def parse_args():
     parser = argparse.ArgumentParser(description="Tiny MLX residual-upscale smoke for Kaminos frame-locked render pairs.")
     parser.add_argument("--corpus-manifest", required=True, help="Path to corpus-manifest.json from frame-locked render-pair captures.")
@@ -247,7 +319,7 @@ def parse_args():
     parser.add_argument("--patch-size", type=int, default=96)
     parser.add_argument("--eval-pair-count", dest="evalPairCount", type=int, default=0, help="Optional exact eval pair count for support-scaling experiments; 0 keeps the default split.")
     parser.add_argument("--eval-selection", dest="evalSelection", choices=["tail", "even"], default="tail", help="Eval holdout selection when --eval-pair-count is set.")
-    parser.add_argument("--model-arch", dest="modelArch", choices=["tiny-conv", "direct-residual", "hybrid-residual", "gated-detail-residual", "small-unet"], default="tiny-conv")
+    parser.add_argument("--model-arch", dest="modelArch", choices=["tiny-conv", "direct-residual", "hybrid-residual", "gated-detail-residual", "small-unet", "teacher-unet"], default="tiny-conv")
     parser.add_argument("--feature-input-mode", dest="featureInputMode", choices=["rgb", "feature-rgba", "aux-rgba", "aux-rgb", "aux-red-cyan-abs", "aux-opponent-gradient"], default="rgb", help="Model input source: low RGB only, low RGB plus shader/material residual feature RGBA, raw Flow Debug RGB/RGBA, or normalized Flow Debug derived carriers.")
     parser.add_argument("--coordinate-input-mode", dest="coordinateInputMode", choices=["off", "xy", "fourier"], default="off", help="Optional absolute screen-space coordinate conditioning for offline ceiling probes.")
     parser.add_argument("--fourier-coordinate-frequencies", dest="fourierCoordinateFrequencies", type=int, default=4, help="Number of powers-of-two xy Fourier coordinate frequencies when --coordinate-input-mode=fourier.")
@@ -322,6 +394,8 @@ def make_model(model_arch, hidden_channels, input_channels, detail_gate, residua
         return GatedDetailResidualUpscaler(hidden_channels, input_channels, detail_gate, residual_output_limit, residual_color_mode, chroma_residual_scale, residual_apply_scale)
     if model_arch == "small-unet":
         return SmallUNetResidualUpscaler(hidden_channels, input_channels, residual_output_limit, residual_color_mode, chroma_residual_scale, residual_apply_scale)
+    if model_arch == "teacher-unet":
+        return TeacherUNetResidualUpscaler(hidden_channels, input_channels, residual_output_limit, residual_color_mode, chroma_residual_scale, residual_apply_scale)
     raise ValueError(f"unsupported model architecture: {model_arch}")
 
 
@@ -340,8 +414,8 @@ def model_config(model_arch, hidden_channels, input_channels, condition_render_s
         "coordinateInputChannels": coordinate_input_channels(coordinate_input_mode, fourier_coordinate_frequencies),
         "fourierCoordinateFrequencies": fourier_coordinate_frequencies if coordinate_input_mode == "fourier" else 0,
         "detailGate": detail_gate if model_arch == "gated-detail-residual" else None,
-        "unetDepth": 2 if model_arch == "small-unet" else None,
-        "receptiveField": "two-level-encoder-decoder-skip" if model_arch == "small-unet" else "local-3x3-stack",
+        "unetDepth": 3 if model_arch == "teacher-unet" else 2 if model_arch == "small-unet" else None,
+        "receptiveField": "three-level-encoder-decoder-skip-teacher" if model_arch == "teacher-unet" else "two-level-encoder-decoder-skip" if model_arch == "small-unet" else "local-3x3-stack",
         "residualOutputLimit": residual_output_limit,
         "residualApplyScale": residual_apply_scale,
         "residualApplicationMaskMode": residual_application_mask_mode,

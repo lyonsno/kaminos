@@ -49,3 +49,33 @@ assert.match(
   /small-unet/,
   'GPU Greenroom residual route wrapper must allow small-unet probes through to the trainer',
 );
+
+assert.match(
+  trainer,
+  /class TeacherUNetResidualUpscaler\(nn\.Module\)/,
+  'residual trainer must expose a larger teacher U-Net for offline ceiling probes beyond browser-sized candidates',
+);
+
+assert.match(
+  trainer,
+  /"teacher-unet"/,
+  'residual trainer CLI must accept --model-arch=teacher-unet',
+);
+
+assert.match(
+  trainer,
+  /teacher-unet[\s\S]+unetDepth[\s\S]+3|unetDepth[\s\S]+teacher-unet[\s\S]+3/,
+  'saved model config/report must preserve teacher-U-Net depth as a distinct architecture identity',
+);
+
+assert.match(
+  trainer,
+  /teacher-unet[\s\S]+three-level-encoder-decoder-skip|three-level-encoder-decoder-skip[\s\S]+teacher-unet/,
+  'teacher U-Net must declare wider multiscale receptive-field authority, not masquerade as small-unet',
+);
+
+assert.match(
+  runner,
+  /teacher-unet/,
+  'GPU Greenroom residual route wrapper must allow teacher-unet probes through to the trainer',
+);

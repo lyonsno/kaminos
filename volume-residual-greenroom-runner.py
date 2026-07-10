@@ -9,7 +9,7 @@ from pathlib import Path
 
 
 SCHEMA = "kaminos.volume.residual-greenroom-runner.v0"
-MODEL_ARCHITECTURES = ["tiny-conv", "direct-residual", "hybrid-residual", "gated-detail-residual", "small-unet"]
+MODEL_ARCHITECTURES = ["tiny-conv", "direct-residual", "hybrid-residual", "gated-detail-residual", "small-unet", "teacher-unet"]
 
 
 def truthy(value):
