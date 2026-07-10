@@ -22,7 +22,7 @@ const windowSize = args.get('--window-size') || '1280,960';
 const fullScreenshot = args.has('--full-screenshot')
   ? resolve(args.get('--full-screenshot') || out.replace(/\.png$/i, '.full.png'))
   : '';
-const VALID_EVIDENCE_MODES = new Set(['fire-volume', 'performance', 'pyro-material', 'no-fire-volume']);
+const VALID_EVIDENCE_MODES = new Set(['fire-volume', 'performance', 'pyro-material', 'no-fire-volume', 'receiver-support']);
 const evidenceMode = args.get('--evidence-mode') || 'fire-volume';
 if (!VALID_EVIDENCE_MODES.has(evidenceMode)) {
   throw new Error(`Unknown witness evidence mode: ${evidenceMode}`);
@@ -30,9 +30,12 @@ if (!VALID_EVIDENCE_MODES.has(evidenceMode)) {
 const expectsPerformanceVolumeEvidence = evidenceMode === 'performance';
 const expectsPyroMaterialEvidence = evidenceMode === 'pyro-material';
 const expectsNoFireVolumeEvidence = evidenceMode === 'no-fire-volume';
+const expectsReceiverSupportEvidence = evidenceMode === 'receiver-support';
 const visualEvidenceMode = expectsNoFireVolumeEvidence
   ? 'no-fire-volume-signal'
-  : (expectsPyroMaterialEvidence ? 'pyro-material-coupled-volume-signal' : (expectsPerformanceVolumeEvidence ? 'performance-volume-signal' : 'fire-volume'));
+  : (expectsReceiverSupportEvidence
+      ? 'receiver-support-sim-readback'
+      : (expectsPyroMaterialEvidence ? 'pyro-material-coupled-volume-signal' : (expectsPerformanceVolumeEvidence ? 'performance-volume-signal' : 'fire-volume')));
 const TALL_PLUME_PRESSURE_ITERATION_STRATEGY_PRESSURE2 = 'tall-plume-pressure2-v0';
 const TALL_PLUME_PRESSURE_ITERATION_STRATEGY_INACTIVE = 'inactive';
 const TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY = 'tall-plume-spatial-pressure-tiers-v0';
@@ -1923,6 +1926,19 @@ async function main() {
     ) {
       throw new Error(`GPU sim readback does not expose live front topology sidecar evidence: ${JSON.stringify(sample.simReadback)}`);
     }
+    const receiverSupport = sample.simReadback.receiverSupport;
+    if (
+      !receiverSupport ||
+      receiverSupport.identity !== 'combustion-front-receiver-support-v0' ||
+      receiverSupport.authority !== 'combustion-front-topology-sidecar-v0+reaction-front-stage-fields-v0' ||
+      receiverSupport.intendedConsumer !== 'tier2-opt-in-receiver-buffer-light-pass-v0' ||
+      receiverSupport.supportRole !== 'lighting-input-not-rendered-receiver-light' ||
+      receiverSupport.receiverMaskAuthority !== 'opt-in-receiver-buffer-required-v0' ||
+      !Number.isFinite(receiverSupport.supportScalar) ||
+      !Number.isFinite(receiverSupport.activeVoxelRatio)
+    ) {
+      throw new Error(`GPU sim readback does not expose receiver-light support authority: ${JSON.stringify(receiverSupport)}`);
+    }
     if (!sample.majorantReadback || sample.majorantReadback.grid !== expectedMajorantGrid || sample.majorantReadback.occupiedBricks < 2 || sample.majorantReadback.importanceMax <= 0.01) {
       throw new Error(`GPU majorant readback does not show a live coarse occupancy field: ${JSON.stringify(sample.majorantReadback)}`);
     }
@@ -1945,13 +1961,13 @@ async function main() {
     const acceptsRawCarrierPyroPaint =
       expectsPyroMaterialEvidence &&
       pyroRawCarrierPaintEvidence.acceptsLowStockFireLayer;
-    if (!expectsCanonicalPlumeProof && !expectsFuelStarvedTallPlume && !expectsNoFireVolumeEvidence && (!Number.isFinite(sample.simReadback.fireLayerMean) || sample.simReadback.fireLayerMean <= 0.0005) && !acceptsRawCarrierPyroPaint) {
+    if (!expectsCanonicalPlumeProof && !expectsFuelStarvedTallPlume && !expectsNoFireVolumeEvidence && !expectsReceiverSupportEvidence && (!Number.isFinite(sample.simReadback.fireLayerMean) || sample.simReadback.fireLayerMean <= 0.0005) && !acceptsRawCarrierPyroPaint) {
       throw new Error(`GPU sim readback does not show a transported fire layer or raw-carrier Pyro paint evidence: ${JSON.stringify({
         simReadback: sample.simReadback,
         pyroRawCarrierPaintEvidence,
       })}`);
     }
-    if (!expectsCanonicalPlumeProof && !expectsFuelStarvedTallPlume && !expectsNoFireVolumeEvidence && (!Number.isFinite(sample.simReadback.radianceMean) || sample.simReadback.radianceMean <= 0.0005)) {
+    if (!expectsCanonicalPlumeProof && !expectsFuelStarvedTallPlume && !expectsNoFireVolumeEvidence && !expectsReceiverSupportEvidence && (!Number.isFinite(sample.simReadback.radianceMean) || sample.simReadback.radianceMean <= 0.0005)) {
       throw new Error(`GPU sim readback does not show fire radiance evidence: ${JSON.stringify(sample.simReadback)}`);
     }
     if (expectedVolumeScene === 'tall_plume') {
@@ -1979,12 +1995,12 @@ async function main() {
             extinctionMean: sample.simReadback.extinctionMean,
           })}`);
         }
-      } else if (
+      } else if (!expectsReceiverSupportEvidence && (
         sample.simReadback.fuelMean <= 0.0005 ||
         sample.simReadback.reactionMean <= 0.0005 ||
         sample.simReadback.fuelConsumptionMean <= 0.00001 ||
         sample.simReadback.fireFuelOverlapRatio <= 0.01
-      ) {
+      )) {
         throw new Error(`tall plume fire was not supported by live fuel/reaction evidence: ${JSON.stringify(sample.simReadback)}`);
       }
     }
@@ -2335,6 +2351,7 @@ async function main() {
       reactionMean: sample.simReadback?.reactionMean ?? 0,
       fuelConsumptionMean: sample.simReadback?.fuelConsumptionMean ?? 0,
       fireFuelOverlapRatio: sample.simReadback?.fireFuelOverlapRatio ?? 0,
+      receiverSupport: sample.simReadback?.receiverSupport ?? null,
       smokeVisualRiseDisplacement: sample.simReadback?.smokeVisualRiseDisplacement ?? 0,
       risingSmokeVisualRiseDisplacement: sample.simReadback?.risingSmokeVisualRiseDisplacement ?? 0,
       fireVisualRiseDisplacement: sample.simReadback?.fireVisualRiseDisplacement ?? 0,
@@ -2371,6 +2388,24 @@ async function main() {
       plumeFieldBinCenterSpread: sample.simReadback?.plumeFieldBinCenterSpread ?? 0,
       sourceRelativeVisualHeightBins: sample.simReadback?.sourceRelativeVisualHeightBins ?? [],
     };
+    const receiverSupportEvidence = {
+      identity: expectsReceiverSupportEvidence ? 'receiver-support-sim-readback' : null,
+      accepted: Boolean(
+        receiverSupport &&
+        receiverSupport.identity === 'combustion-front-receiver-support-v0' &&
+        receiverSupport.authority === 'combustion-front-topology-sidecar-v0+reaction-front-stage-fields-v0' &&
+        receiverSupport.intendedConsumer === 'tier2-opt-in-receiver-buffer-light-pass-v0' &&
+        receiverSupport.supportRole === 'lighting-input-not-rendered-receiver-light' &&
+        receiverSupport.receiverMaskAuthority === 'opt-in-receiver-buffer-required-v0' &&
+        Number.isFinite(receiverSupport.supportScalar) &&
+        Number.isFinite(receiverSupport.activeVoxelRatio)
+      ),
+      supportScalar: receiverSupport?.supportScalar ?? null,
+      activeVoxelRatio: receiverSupport?.activeVoxelRatio ?? null,
+      authority: receiverSupport?.authority ?? null,
+      intendedConsumer: receiverSupport?.intendedConsumer ?? null,
+      supportRole: receiverSupport?.supportRole ?? null,
+    };
     writeRgbaPng(out, sample.preview.width, sample.preview.height, sample.preview.rgba);
     const captureBackend = 'webgpu-copy-src-readback';
     const mainRendererScreenshot = out.replace(/\.png$/i, '.main-renderer.png');
@@ -2391,6 +2426,10 @@ async function main() {
     } else if (expectsNoFireMainRendererVolume) {
       if (mainRendererMetrics.litPixels < 650 || mainRendererMetrics.meanLuma < 1.5) {
         throw new Error(`main renderer screenshot missing bridged no-fire volume signal: ${JSON.stringify(mainRendererMetrics)}`);
+      }
+    } else if (expectsReceiverSupportEvidence) {
+      if (mainRendererMetrics.litPixels < 250 || mainRendererMetrics.meanLuma < 1.0) {
+        throw new Error(`main renderer screenshot missing receiver-support route output: ${JSON.stringify(mainRendererMetrics)}`);
       }
     } else if (expectsPyroMaterialEvidence) {
       if (mainRendererMetrics.litPixels < 1500 || mainRendererMetrics.meanLuma < 8) {
@@ -2447,6 +2486,21 @@ async function main() {
     } else if (expectsSnuffVisualEvidence) {
       if (metrics.litPixels < 350 || metrics.smokeLikePixels < 120 || metrics.meanLuma < 1.5) {
         throw new Error(`snuff route did not preserve vapor/smoke volume evidence: ${JSON.stringify(metrics)}`);
+      }
+    } else if (expectsReceiverSupportEvidence) {
+      const receiverSupportSignalPixels =
+        Number(metrics.litPixels || 0) +
+        Number(metrics.smokeLikePixels || 0) +
+        Number(metrics.fireLikePixels || 0) +
+        Number(metrics.emissiveLikePixels || 0);
+      if (!receiverSupportEvidence.accepted) {
+        throw new Error(`receiver-support evidence mode missing accepted receiver-support receipt: ${JSON.stringify(receiverSupportEvidence)}`);
+      }
+      if (metrics.litPixels < 220 || receiverSupportSignalPixels < 350 || metrics.meanLuma < 1.0) {
+        throw new Error(`blank frame or missing receiver-support volume signal: ${JSON.stringify({
+          ...metrics,
+          receiverSupportSignalPixels,
+        })}`);
       }
     } else if (expectsPyroMaterialEvidence) {
       const coupling = sample.pyroMaterialRendererCoupling || state.pyroMaterialRendererCoupling || {};
@@ -2508,6 +2562,14 @@ async function main() {
         path: fieldSliceOut || null,
       };
     }
+    if (simReadbackReport.reactionFrontAtlas?.rgba) {
+      const { rgba, ...atlasMetadata } = simReadbackReport.reactionFrontAtlas;
+      simReadbackReport.reactionFrontAtlas = {
+        ...atlasMetadata,
+        rgbaLength: rgba.length,
+        rgbaOmitted: true,
+      };
+    }
     const report = {
       requestedRoute: url,
       settleMs,
@@ -2515,6 +2577,7 @@ async function main() {
       evidenceMode,
       visualEvidenceMode,
       noFireEvidenceMode: expectsNoFireVolumeEvidence ? 'no-fire-volume-signal' : null,
+      receiverSupportEvidence,
       pyroMaterialEvidenceMode: expectsPyroMaterialEvidence ? 'pyro-material-coupled-volume-signal' : null,
       pyroRawCarrierPaintEvidence,
       performanceVisualWarnings,
