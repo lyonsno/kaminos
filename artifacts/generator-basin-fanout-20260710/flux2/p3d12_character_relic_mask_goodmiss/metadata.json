@@ -1,0 +1,24 @@
+{
+  "created_at": 1783667830.870375,
+  "duration_s": 71.9,
+  "input_name": "12_img.png",
+  "input_path": "Pixal3D/assets/images/12_img.png",
+  "job_id": "3764f6098004",
+  "job_type": "mflux_flux2_edit_promptfile",
+  "name": "12_img",
+  "output_files": [
+    "output.metadata.json",
+    "output.png"
+  ],
+  "params": {
+    "guidance": "1.0",
+    "height": "512",
+    "mlx_cache_limit_gb": "48",
+    "model": "flux2-klein-9b",
+    "prompt_file": "artifacts/generator-basin-fanout-20260710/prompts/p3d12_character_relic_mask_goodmiss.txt",
+    "quantize": "4",
+    "seed": "339",
+    "steps": "8",
+    "width": "512"
+  }
+}

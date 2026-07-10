@@ -1,24 +1,24 @@
 {
-  "name": "clay-implicit",
-  "job_type": "mflux_flux2_edit_promptfile",
-  "job_id": "dee58e8d6d26",
-  "input_path": "/private/tmp/kaminos-molten-lirm-speciation-armature-0707/artifacts/lirm-speciation-armature-implicit-bodies-v0/lirm-armature-16/clay-implicit.png",
+  "created_at": 1783667437.0338812,
+  "duration_s": 62.5,
   "input_name": "clay-implicit.png",
-  "params": {
-    "prompt_file": "/private/tmp/kaminos-molten-lirm-speciation-armature-0707/artifacts/generator-basin-fanout-20260710/prompts/lirm16_clay_neighbor_creature_03.txt",
-    "seed": "333",
-    "steps": "8",
-    "guidance": "1.0",
-    "height": "512",
-    "width": "512",
-    "model": "flux2-klein-9b",
-    "quantize": "4",
-    "mlx_cache_limit_gb": "48"
-  },
+  "input_path": "artifacts/lirm-speciation-armature-implicit-bodies-v0/lirm-armature-16/clay-implicit.png",
+  "job_id": "dee58e8d6d26",
+  "job_type": "mflux_flux2_edit_promptfile",
+  "name": "clay-implicit",
   "output_files": [
     "output.metadata.json",
     "output.png"
   ],
-  "created_at": 1783667437.0338812,
-  "duration_s": 62.5
+  "params": {
+    "guidance": "1.0",
+    "height": "512",
+    "mlx_cache_limit_gb": "48",
+    "model": "flux2-klein-9b",
+    "prompt_file": "artifacts/generator-basin-fanout-20260710/prompts/lirm16_clay_neighbor_creature_03.txt",
+    "quantize": "4",
+    "seed": "333",
+    "steps": "8",
+    "width": "512"
+  }
 }

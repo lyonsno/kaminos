@@ -669,7 +669,7 @@
         512
       ],
       "source_ref": "Pixal3D/assets/images/s_15_img.png",
-      "status": "running",
+      "status": "done",
       "steps": 8,
       "submit_returncode": 0,
       "submit_stderr": ""
@@ -691,7 +691,7 @@
         512
       ],
       "source_ref": "artifacts/lirm-speciation-armature-implicit-bodies-v0/lirm-armature-08/clay-implicit.png",
-      "status": "pending",
+      "status": "done",
       "steps": 8,
       "submit_returncode": 0,
       "submit_stderr": ""
@@ -713,7 +713,7 @@
         512
       ],
       "source_ref": "artifacts/lirm-speciation-armature-implicit-bodies-v0/lirm-armature-11/clay-implicit.png",
-      "status": "pending",
+      "status": "done",
       "steps": 8,
       "submit_returncode": 0,
       "submit_stderr": ""
@@ -735,7 +735,7 @@
         512
       ],
       "source_ref": "artifacts/lirm-speciation-armature-implicit-bodies-v0/lirm-armature-16/clay-implicit.png",
-      "status": "pending",
+      "status": "done",
       "steps": 8,
       "submit_returncode": 0,
       "submit_stderr": ""
@@ -757,7 +757,7 @@
         512
       ],
       "source_ref": "artifacts/lirm-speciation-armature-implicit-bodies-v0/lirm-armature-22/clay-implicit.png",
-      "status": "pending",
+      "status": "done",
       "steps": 8,
       "submit_returncode": 0,
       "submit_stderr": ""
@@ -779,7 +779,7 @@
         512
       ],
       "source_ref": "artifacts/lirm-speciation-armature-implicit-bodies-v0/lirm-armature-24/clay-implicit.png",
-      "status": "pending",
+      "status": "done",
       "steps": 8,
       "submit_returncode": 0,
       "submit_stderr": ""
@@ -801,7 +801,7 @@
         512
       ],
       "source_ref": "artifacts/lirm-speciation-armature-implicit-bodies-v0/lirm-armature-08/normal-implicit.png",
-      "status": "pending",
+      "status": "done",
       "steps": 8,
       "submit_returncode": 0,
       "submit_stderr": ""
@@ -823,7 +823,7 @@
         512
       ],
       "source_ref": "artifacts/lirm-speciation-armature-implicit-bodies-v0/lirm-armature-16/normal-implicit.png",
-      "status": "pending",
+      "status": "done",
       "steps": 8,
       "submit_returncode": 0,
       "submit_stderr": ""
@@ -845,7 +845,7 @@
         512
       ],
       "source_ref": "artifacts/lirm-speciation-armature-implicit-bodies-v0/lirm-armature-24/normal-implicit.png",
-      "status": "pending",
+      "status": "done",
       "steps": 8,
       "submit_returncode": 0,
       "submit_stderr": ""
@@ -867,7 +867,7 @@
         512
       ],
       "source_ref": "Pixal3D/assets/images/12_img.png",
-      "status": "pending",
+      "status": "done",
       "steps": 8,
       "submit_returncode": 0,
       "submit_stderr": ""
@@ -889,7 +889,7 @@
         512
       ],
       "source_ref": "Pixal3D/assets/images/4_img.png",
-      "status": "pending",
+      "status": "done",
       "steps": 8,
       "submit_returncode": 0,
       "submit_stderr": ""
@@ -925,7 +925,7 @@
           "texture_size": 1024
         },
         "route": "trellis2mlx_fast_checkpoint",
-        "status": "pending"
+        "status": "done"
       },
       {
         "greenroom_job": "1ca71a1756d8",
@@ -942,7 +942,7 @@
         "route": "trellis2mlx_fast_checkpoint",
         "selection_reason": "first-batch strongest mechanical object basin; high Trellis plausibility",
         "source_image_id": "p3d00_turtle_sacred_engine_variant",
-        "status": "pending"
+        "status": "failed"
       },
       {
         "greenroom_job": "5b93d808777a",
@@ -959,15 +959,49 @@
         "route": "trellis2mlx_fast_checkpoint",
         "selection_reason": "creature/posture analog; tests whether good-miss armature basin becomes meshable",
         "source_image_id": "p3d06_crab_orange_walker_relic",
-        "status": "pending"
+        "status": "failed"
+      },
+      {
+        "greenroom_job": "3bfdaf7d93ba",
+        "greenroom_submit_receipt": "submitted; local path redacted, see input_ref/output_ref/greenroom_job",
+        "id": "lirm16-clay-fast-seed366",
+        "input_ref": "artifacts/generator-basin-fanout-20260710/flux2/lirm16_clay_neighbor_creature_03/output.png",
+        "output_ref": "artifacts/generator-basin-fanout-20260710/trellis/lirm16-clay-fast-seed366",
+        "params": {
+          "seed": 366,
+          "steps": 8,
+          "target_faces": 250000,
+          "texture_size": 1024
+        },
+        "route": "trellis2mlx_fast_checkpoint",
+        "selection_reason": "strong clay-conditioned armature hit; axial curve, segmenting, contact posture, mouth direction preserved",
+        "source_image_id": "lirm16_clay_neighbor_creature_03",
+        "status": "failed"
+      },
+      {
+        "greenroom_job": "f87d3c139804",
+        "greenroom_submit_receipt": "submitted; local path redacted, see input_ref/output_ref/greenroom_job",
+        "id": "lirm24-normal-fast-seed367",
+        "input_ref": "artifacts/generator-basin-fanout-20260710/flux2/lirm24_normal_neighbor_creature_08/output.png",
+        "output_ref": "artifacts/generator-basin-fanout-20260710/trellis/lirm24-normal-fast-seed367",
+        "params": {
+          "seed": 367,
+          "steps": 8,
+          "target_faces": 250000,
+          "texture_size": 1024
+        },
+        "route": "trellis2mlx_fast_checkpoint",
+        "selection_reason": "strong normal-conditioned armature hit; tests whether normal-derived image basin improves meshability over clay",
+        "source_image_id": "lirm24_normal_neighbor_creature_08",
+        "status": "failed"
       }
     ],
     "first_queued_job": "785e25e4edb1",
     "first_queued_route": "trellis2mlx_source_native_combined_checkpoint",
     "max_runs": 5,
-    "remaining_nominal_runs": 2,
+    "remaining_nominal_runs": 0,
     "selection_policy": "visual inspection first; hold remaining Trellis slots for later image batches unless a current candidate is clearly superior",
-    "spent_or_queued_runs": 3
+    "spent_or_queued_runs": 5
   },
   "visual_observations": [
     {
@@ -989,6 +1023,39 @@
         "p3d06_crab_orange_walker_relic"
       ],
       "witness": "artifacts/generator-basin-fanout-20260710/witness/contact-batch-02/contact.png"
+    },
+    {
+      "completed_outputs": 8,
+      "id": "lirm-armature-basin-read",
+      "mapping": "artifacts/generator-basin-fanout-20260710/witness/lirm-batch-01/mapping.txt",
+      "takeaways": [
+        "The crude 3D armature conditioning is effective: axial curve, segmenting, head/mouth direction, contact posture, and orange semantic spots survive into imagegen outputs.",
+        "Clay inputs produce more toy/maquette creature bodies; normal inputs produce stranger but still posture-bound variants.",
+        "This is the desired good-miss regime: the generator fills surface structure while the armature controls body plan."
+      ],
+      "trellis_now": [
+        "lirm16_clay_neighbor_creature_03",
+        "lirm24_normal_neighbor_creature_08"
+      ],
+      "witness": "artifacts/generator-basin-fanout-20260710/witness/lirm-batch-01/contact.png"
+    },
+    {
+      "completed_outputs": 40,
+      "decision": "Final Trellis slots correctly assigned to lirm16 clay and lirm24 normal rather than additional Pixal3D style outputs.",
+      "id": "full-40-image-read",
+      "mapping": "artifacts/generator-basin-fanout-20260710/witness/contact-full-40/mapping.txt",
+      "strongest_basins": [
+        "LIRM armature good-miss: all eight crude 3D controls produce coherent segmented creature variants, with body-plan preservation visible.",
+        "Dark-orange miniature architecture: house/tower/oracle variants are aesthetically coherent and object/scene stable.",
+        "Bounded scene insertion: island shrine, underwater ruin, room reactor, and plant/tree object insertions add objects without destroying source composition.",
+        "Mechanical creature/object transforms: turtle and crab variants preserve posture/objectness while mutating material identity."
+      ],
+      "weak_or_secondary_basins": [
+        "Some style transfers become illustration-like rather than mesh-friendly assets.",
+        "Plant/metal hybrids are visually strong but may be hostile for Trellis because of thin leaves/ribs and mixed scene/object boundaries.",
+        "Mask/bust late outputs are isolated and interesting, but less relevant to current creature-control question."
+      ],
+      "witness": "artifacts/generator-basin-fanout-20260710/witness/contact-full-40/contact.png"
     }
   ],
   "witnesses": [
@@ -1005,6 +1072,20 @@
       "image": "artifacts/generator-basin-fanout-20260710/witness/contact-batch-02/contact.png",
       "mapping": "artifacts/generator-basin-fanout-20260710/witness/contact-batch-02/mapping.txt",
       "visual_read": "transform, insertion, and first style basins are coherent; remaining Trellis slots held for clay turtle or LIRM outputs"
+    },
+    {
+      "count": 8,
+      "id": "lirm-batch-01",
+      "image": "artifacts/generator-basin-fanout-20260710/witness/lirm-batch-01/contact.png",
+      "mapping": "artifacts/generator-basin-fanout-20260710/witness/lirm-batch-01/mapping.txt",
+      "visual_read": "crude implicit-body armatures drove coherent segmented worm-creature basins; clay and normal variants both preserve topology enough for Trellis probes"
+    },
+    {
+      "count": 40,
+      "id": "contact-full-40",
+      "image": "artifacts/generator-basin-fanout-20260710/witness/contact-full-40/contact.png",
+      "mapping": "artifacts/generator-basin-fanout-20260710/witness/contact-full-40/mapping.txt",
+      "visual_read": "complete image fanout shows reusable basins: LIRM armature creatures, dark-orange miniature architecture, bounded scene insertions, and mechanical relic transforms"
     }
   ]
 }

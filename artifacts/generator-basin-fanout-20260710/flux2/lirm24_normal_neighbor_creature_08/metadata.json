@@ -1,0 +1,24 @@
+{
+  "created_at": 1783667758.854908,
+  "duration_s": 67.2,
+  "input_name": "normal-implicit.png",
+  "input_path": "artifacts/lirm-speciation-armature-implicit-bodies-v0/lirm-armature-24/normal-implicit.png",
+  "job_id": "5a7ec7808a81",
+  "job_type": "mflux_flux2_edit_promptfile",
+  "name": "normal-implicit",
+  "output_files": [
+    "output.metadata.json",
+    "output.png"
+  ],
+  "params": {
+    "guidance": "1.0",
+    "height": "512",
+    "mlx_cache_limit_gb": "48",
+    "model": "flux2-klein-9b",
+    "prompt_file": "artifacts/generator-basin-fanout-20260710/prompts/lirm24_normal_neighbor_creature_08.txt",
+    "quantize": "4",
+    "seed": "338",
+    "steps": "8",
+    "width": "512"
+  }
+}

@@ -1,0 +1,8 @@
+001 lirm08_clay_neighbor_creature_01 group=lirm_good_miss intent=creature_good_miss seed=331 source=artifacts/lirm-speciation-armature-implicit-bodies-v0/lirm-armature-08/clay-implicit.png
+002 lirm11_clay_neighbor_creature_02 group=lirm_good_miss intent=creature_good_miss seed=332 source=artifacts/lirm-speciation-armature-implicit-bodies-v0/lirm-armature-11/clay-implicit.png
+003 lirm16_clay_neighbor_creature_03 group=lirm_good_miss intent=creature_good_miss seed=333 source=artifacts/lirm-speciation-armature-implicit-bodies-v0/lirm-armature-16/clay-implicit.png
+004 lirm22_clay_neighbor_creature_04 group=lirm_good_miss intent=creature_good_miss seed=334 source=artifacts/lirm-speciation-armature-implicit-bodies-v0/lirm-armature-22/clay-implicit.png
+005 lirm24_clay_neighbor_creature_05 group=lirm_good_miss intent=creature_good_miss seed=335 source=artifacts/lirm-speciation-armature-implicit-bodies-v0/lirm-armature-24/clay-implicit.png
+006 lirm08_normal_neighbor_creature_06 group=lirm_good_miss intent=creature_good_miss seed=336 source=artifacts/lirm-speciation-armature-implicit-bodies-v0/lirm-armature-08/normal-implicit.png
+007 lirm16_normal_neighbor_creature_07 group=lirm_good_miss intent=creature_good_miss seed=337 source=artifacts/lirm-speciation-armature-implicit-bodies-v0/lirm-armature-16/normal-implicit.png
+008 lirm24_normal_neighbor_creature_08 group=lirm_good_miss intent=creature_good_miss seed=338 source=artifacts/lirm-speciation-armature-implicit-bodies-v0/lirm-armature-24/normal-implicit.png

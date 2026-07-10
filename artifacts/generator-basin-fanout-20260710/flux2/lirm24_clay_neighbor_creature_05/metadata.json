@@ -1,9 +1,9 @@
 {
-  "created_at": 1783667309.977191,
-  "duration_s": 73.8,
+  "created_at": 1783667563.296575,
+  "duration_s": 62.9,
   "input_name": "clay-implicit.png",
-  "input_path": "artifacts/lirm-speciation-armature-implicit-bodies-v0/lirm-armature-08/clay-implicit.png",
-  "job_id": "851f4add870f",
+  "input_path": "artifacts/lirm-speciation-armature-implicit-bodies-v0/lirm-armature-24/clay-implicit.png",
+  "job_id": "b77b37231cc3",
   "job_type": "mflux_flux2_edit_promptfile",
   "name": "clay-implicit",
   "output_files": [
@@ -15,9 +15,9 @@
     "height": "512",
     "mlx_cache_limit_gb": "48",
     "model": "flux2-klein-9b",
-    "prompt_file": "artifacts/generator-basin-fanout-20260710/prompts/lirm08_clay_neighbor_creature_01.txt",
+    "prompt_file": "artifacts/generator-basin-fanout-20260710/prompts/lirm24_clay_neighbor_creature_05.txt",
     "quantize": "4",
-    "seed": "331",
+    "seed": "335",
     "steps": "8",
     "width": "512"
   }
