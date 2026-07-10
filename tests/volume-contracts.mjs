@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 
 const root = new URL('..', import.meta.url).pathname;
 const index = readFileSync(join(root, 'index.html'), 'utf8');
@@ -2029,6 +2031,108 @@ assert.match(fullGridFieldExport, /effectiveRoute/, 'full-grid export manifest p
 assert.match(fullGridFieldExport, /prototypeIdentity/, 'full-grid export manifest preserves prototype identity from the simulator');
 assert.match(fullGridFieldExport, /fluidChannelOrder/, 'full-grid export manifest records fluid channel order');
 assert.match(fullGridFieldExport, /frontChannelOrder/, 'full-grid export manifest records front channel order');
+
+const phaseAlignedCorpusPath = join(root, 'volume-phase-aligned-corpus-contract.py');
+assert.ok(existsSync(phaseAlignedCorpusPath), 'volume phase-aligned corpus contract packer exists');
+const phaseAlignedCorpus = existsSync(phaseAlignedCorpusPath) ? readFileSync(phaseAlignedCorpusPath, 'utf8') : '';
+assert.match(phaseAlignedCorpus, /kaminos\.volume\.phase-aligned-learned-probe-corpus\.v0/, 'phase-aligned corpus packer writes a stable corpus manifest schema');
+assert.match(phaseAlignedCorpus, /phase-aligned-high-history-downsample-corpus-v0/, 'phase-aligned corpus packer names the high-history downsample corpus identity');
+assert.match(phaseAlignedCorpus, /downsampledHighInput/, 'phase-aligned corpus manifest preserves downsampled-high teacher inputs');
+assert.match(phaseAlignedCorpus, /truthHighTarget/, 'phase-aligned corpus manifest preserves high-res truth targets');
+assert.match(phaseAlignedCorpus, /nativeLowDomainGap/, 'phase-aligned corpus manifest records native-low versus downsampled-high domain gap controls');
+assert.match(phaseAlignedCorpus, /shellDetailTargets/, 'phase-aligned corpus manifest records shell/detail target vocabulary');
+assert.match(phaseAlignedCorpus, /box-average-linear-field-v0/, 'phase-aligned corpus packer names the box-average downsample operator');
+assert.match(phaseAlignedCorpus, /max-pool-support-field-v0/, 'phase-aligned corpus packer names support-preserving max-pool operators');
+assert.match(phaseAlignedCorpus, /failurePhase/, 'phase-aligned corpus packer writes failure-phase reports for missing/corrupt sources');
+
+{
+  const fixtureDir = mkdtempSync(join(tmpdir(), 'kaminos-phase-aligned-corpus-fixture-'));
+  try {
+    const writeF32 = (path, values) => writeFileSync(path, Buffer.from(new Float32Array(values).buffer));
+    const highFluid = [];
+    const nativeFluid = [];
+    const highFront = [];
+    const nativeFront = [];
+    for (let z = 0; z < 4; z += 1) {
+      for (let y = 0; y < 4; y += 1) {
+        for (let x = 0; x < 4; x += 1) {
+          highFluid.push(x + y * 10 + z * 100, x + y + z);
+          highFront.push(x === 1 && y === 1 && z === 1 ? 6 : x + y + z);
+        }
+      }
+    }
+    for (let z = 0; z < 2; z += 1) {
+      for (let y = 0; y < 2; y += 1) {
+        for (let x = 0; x < 2; x += 1) {
+          nativeFluid.push(55.5 + x * 2 + y * 20 + z * 200 + 1, 1.5 + x * 2 + y * 2 + z * 2);
+          nativeFront.push(x === 0 && y === 0 && z === 0 ? 6 : 0);
+        }
+      }
+    }
+    writeF32(join(fixtureDir, 'high-fluid.f32'), highFluid);
+    writeF32(join(fixtureDir, 'high-front.f32'), highFront);
+    writeF32(join(fixtureDir, 'native-fluid.f32'), nativeFluid);
+    writeF32(join(fixtureDir, 'native-front.f32'), nativeFront);
+    const descriptor = (path, shape, channelOrder) => ({
+      path,
+      shape,
+      channelOrder,
+      dtype: 'float32',
+      byteOrder: 'little-endian',
+      floatCount: shape.reduce((a, b) => a * b, 1),
+      byteLength: shape.reduce((a, b) => a * b, 1) * 4,
+    });
+    const highManifest = {
+      schema: 'kaminos.volume.full-grid-field-export.v0',
+      identity: 'fixture-high-full-grid-v0',
+      status: 'captured',
+      failurePhase: null,
+      effectiveRoute: 'native-3d-compute-fluid-raymarch-v0',
+      routeIdentity: 'fixture-route',
+      prototypeIdentity: 'kaminos-volume-prototype-v0',
+      backend: 'fixture',
+      grid: 4,
+      deterministicReplay: { identity: 'fixture-replay', startTimeMs: 1000, steps: 1 },
+      fluidChannelOrder: ['density', 'heat'],
+      frontChannelOrder: ['frontTopology'],
+      sidecars: {
+        fluid: descriptor(join(fixtureDir, 'high-fluid.f32'), [4, 4, 4, 2], ['density', 'heat']),
+        front: descriptor(join(fixtureDir, 'high-front.f32'), [4, 4, 4, 1], ['frontTopology']),
+      },
+    };
+    const nativeManifest = {
+      ...highManifest,
+      identity: 'fixture-native-low-full-grid-v0',
+      grid: 2,
+      sidecars: {
+        fluid: descriptor(join(fixtureDir, 'native-fluid.f32'), [2, 2, 2, 2], ['density', 'heat']),
+        front: descriptor(join(fixtureDir, 'native-front.f32'), [2, 2, 2, 1], ['frontTopology']),
+      },
+    };
+    writeFileSync(join(fixtureDir, 'high-manifest.json'), `${JSON.stringify(highManifest, null, 2)}\n`);
+    writeFileSync(join(fixtureDir, 'native-manifest.json'), `${JSON.stringify(nativeManifest, null, 2)}\n`);
+    const outDir = join(fixtureDir, 'out');
+    execFileSync('python3', [
+      phaseAlignedCorpusPath,
+      '--high-manifest', join(fixtureDir, 'high-manifest.json'),
+      '--native-low-manifest', join(fixtureDir, 'native-manifest.json'),
+      '--target-grid', '2',
+      '--out-dir', outDir,
+    ], { stdio: 'pipe' });
+    const manifest = JSON.parse(readFileSync(join(outDir, 'manifest.json'), 'utf8'));
+    assert.equal(manifest.schema, 'kaminos.volume.phase-aligned-learned-probe-corpus.v0', 'phase-aligned corpus smoke writes expected schema');
+    assert.equal(manifest.status, 'captured', 'phase-aligned corpus smoke captures fixture data');
+    assert.equal(manifest.downsampledHighInput.grid, 2, 'phase-aligned corpus smoke records target grid');
+    assert.equal(manifest.nativeLowDomainGap.status, 'computed', 'phase-aligned corpus smoke computes native-low domain gap');
+    assert.deepEqual(manifest.shellDetailTargets.channelGroups.hotCore.channels, ['heat', 'flame', 'visibleFireCarrier'], 'phase-aligned corpus smoke preserves hot-core target vocabulary');
+    const readF32At = (path, index) => readFileSync(path).readFloatLE(index * 4);
+    assert.equal(readF32At(manifest.downsampledHighInput.sidecars.fluid.path, 0), 55.5, 'phase-aligned corpus smoke box-averages the first density block');
+    assert.equal(readF32At(manifest.downsampledHighInput.sidecars.fluid.path, 1), 1.5, 'phase-aligned corpus smoke box-averages the first heat block');
+    assert.equal(readF32At(manifest.downsampledHighInput.sidecars.front.path, 0), 6, 'phase-aligned corpus smoke max-pools front support instead of averaging it away');
+  } finally {
+    rmSync(fixtureDir, { recursive: true, force: true });
+  }
+}
 
 const fullGridResidualApplyPath = join(root, 'volume-full-grid-field-residual-apply.py');
 assert.ok(existsSync(fullGridResidualApplyPath), 'volume full-grid field residual application harness exists');
