@@ -2246,6 +2246,19 @@ assert.match(fullGridPerChannelProbe, /refinementLossMode/, 'full-grid per-chann
 assert.match(fullGridPerChannelProbe, /inSupportImprovementVsScalarHead/, 'full-grid per-channel refinement reports in-support improvement versus the scalar head');
 assert.match(fullGridPerChannelProbe, /failurePhase/, 'full-grid per-channel probe writes failure-phase reports for corrupt sidecars or training failures');
 
+const sidecarMetaProbePath = join(root, 'volume-sidecar-meta-probe.py');
+assert.ok(existsSync(sidecarMetaProbePath), 'volume v1 sidecar/meta learned probe harness exists');
+const sidecarMetaProbe = existsSync(sidecarMetaProbePath) ? readFileSync(sidecarMetaProbePath, 'utf8') : '';
+assert.match(sidecarMetaProbe, /kaminos\.volume\.sidecar-meta-probe\.v0/, 'sidecar/meta probe writes a stable report schema');
+assert.match(sidecarMetaProbe, /baked-boundary-sidecar-v1/, 'sidecar/meta probe requires the v1 baked boundary sidecar identity');
+assert.match(sidecarMetaProbe, /support[\s\S]*coverage[\s\S]*ridge[\s\S]*footprint[\s\S]*proximity[\s\S]*normalX[\s\S]*normalY[\s\S]*normalZ/, 'sidecar/meta probe preserves v1 support/coverage/ridge/footprint/proximity/normal channel order');
+assert.match(sidecarMetaProbe, /block-upsample-copy-baseline-v0/, 'sidecar/meta probe reports the phase-aligned block upsample baseline');
+assert.match(sidecarMetaProbe, /local-linear-ridge-v0/, 'sidecar/meta probe reports a local linear ridge baseline');
+assert.match(sidecarMetaProbe, /local-context-mlp-v0/, 'sidecar/meta probe reports a local MLP probe');
+assert.match(sidecarMetaProbe, /nativeLowTransfer/, 'sidecar/meta probe separates native-low transfer from phase-aligned teacher learnability');
+assert.match(sidecarMetaProbe, /perChannelVerdicts/, 'sidecar/meta probe emits per-channel verdicts instead of only a global score');
+assert.match(sidecarMetaProbe, /failurePhase/, 'sidecar/meta probe writes failure-phase reports for missing or mismatched corpus data');
+
 const rgbCarrierInputComplementPath = join(root, 'volume-rgb-carrier-input-complement.py');
 assert.ok(existsSync(rgbCarrierInputComplementPath), 'volume RGB carrier input complement packer exists');
 const rgbCarrierInputComplement = existsSync(rgbCarrierInputComplementPath) ? readFileSync(rgbCarrierInputComplementPath, 'utf8') : '';
