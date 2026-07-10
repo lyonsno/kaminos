@@ -1126,6 +1126,43 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
       <div class="volume-control-section-title">Boundary fire</div>
       <span class="slider-help">reaction-boundary-fire-controls-v0: shades the boundary sheet as clean-to-sooty hydrocarbon radiance. Smoke tint/extinction still comes from the raymarch.</span>
       <div class="slider-row">
+        <span class="slider-label">Structure source</span>
+        <select id="volume-boundary-sidecar-source" class="select-input">
+          <option value="live">live</option>
+          <option value="baked">baked</option>
+          <option value="mix">mix</option>
+        </select>
+        <span class="slider-val" id="volume-boundary-sidecar-source-val">live</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Sidecar view</span>
+        <select id="volume-boundary-sidecar-view" class="select-input">
+          <option value="off">off</option>
+          <option value="support">support</option>
+          <option value="coverage">coverage</option>
+          <option value="ridge">ridge</option>
+          <option value="proximity">proximity</option>
+          <option value="footprint">footprint</option>
+        </select>
+        <span class="slider-val" id="volume-boundary-sidecar-view-val">off</span>
+      </div>
+      <span class="slider-help">baked-boundary-sidecar-v0: prefilters support/coverage/ridge/footprint before the raymarch. Sidecar views expose the reconstruction channels in the primary viewer.</span>
+      <div class="slider-row">
+        <span class="slider-label">Bake blur</span>
+        <input type="range" id="volume-boundary-sidecar-blur" min="0" max="1" step="0.02" value="0.45">
+        <span class="slider-val" id="volume-boundary-sidecar-blur-val">0.45</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Step width</span>
+        <input type="range" id="volume-boundary-sidecar-width" min="0" max="2" step="0.02" value="0.75">
+        <span class="slider-val" id="volume-boundary-sidecar-width-val">0.75</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Baked ridge</span>
+        <input type="range" id="volume-boundary-sidecar-ridge" min="0" max="2" step="0.02" value="1.00">
+        <span class="slider-val" id="volume-boundary-sidecar-ridge-val">1.00</span>
+      </div>
+      <div class="slider-row">
         <span class="slider-label">Ridge select</span>
         <input type="range" id="volume-reaction-boundary-fire-ridge" min="0" max="2" step="0.02" value="1.76">
         <span class="slider-val" id="volume-reaction-boundary-fire-ridge-val">1.76</span>
@@ -11424,6 +11461,9 @@ const REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS = [
   { key: 'reactionBoundaryFireYellow', id: 'volume-reaction-boundary-fire-yellow', param: 'volume_reaction_boundary_fire_yellow', min: 0, max: 2, decimals: 2 },
   { key: 'reactionBoundaryFireWarmth', id: 'volume-reaction-boundary-fire-warmth', param: 'volume_reaction_boundary_fire_warmth', min: 0, max: 2, decimals: 2 },
   { key: 'reactionBoundaryFireLuma', id: 'volume-reaction-boundary-fire-luma', param: 'volume_reaction_boundary_fire_luma', min: 0, max: 5, decimals: 2 },
+  { key: 'boundarySidecarBlur', id: 'volume-boundary-sidecar-blur', param: 'volume_boundary_sidecar_blur', min: 0, max: 1, decimals: 2 },
+  { key: 'boundarySidecarWidth', id: 'volume-boundary-sidecar-width', param: 'volume_boundary_sidecar_width', min: 0, max: 2, decimals: 2 },
+  { key: 'boundarySidecarRidge', id: 'volume-boundary-sidecar-ridge', param: 'volume_boundary_sidecar_ridge', min: 0, max: 2, decimals: 2 },
   { key: 'reactionHeatMin', id: 'volume-reaction-heat-min', param: 'volume_reaction_heat_min', min: 0, max: 0.2, decimals: 3 },
   { key: 'reactionHeatMax', id: 'volume-reaction-heat-max', param: 'volume_reaction_heat_max', min: 0.04, max: 1.2, decimals: 2 },
   { key: 'reactionFuelMin', id: 'volume-reaction-fuel-min', param: 'volume_reaction_fuel_min', min: 0, max: 0.03, decimals: 4 },
@@ -11448,10 +11488,22 @@ const REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS = [
 ];
 
 const REACTION_FRONT_LIVE_VIEW_VALUES = new Set(['off', 'shell', 'thermal', 'reaction', 'front', 'edge', 'core', 'curl', 'divergence', 'boundary', 'boundary_fire']);
+const BOUNDARY_SIDECAR_SOURCE_VALUES = new Set(['live', 'baked', 'mix']);
+const BOUNDARY_SIDECAR_VIEW_VALUES = new Set(['off', 'support', 'coverage', 'ridge', 'proximity', 'footprint']);
 
 function normalizeReactionFrontLiveView(value) {
   const mode = String(value || 'off').toLowerCase().replace(/-/g, '_');
   return REACTION_FRONT_LIVE_VIEW_VALUES.has(mode) ? mode : 'off';
+}
+
+function normalizeBoundarySidecarSource(value) {
+  const mode = String(value || 'live').toLowerCase().replace(/-/g, '_');
+  return BOUNDARY_SIDECAR_SOURCE_VALUES.has(mode) ? mode : 'live';
+}
+
+function normalizeBoundarySidecarView(value) {
+  const mode = String(value || 'off').toLowerCase().replace(/-/g, '_');
+  return BOUNDARY_SIDECAR_VIEW_VALUES.has(mode) ? mode : 'off';
 }
 
 function clampVolumeControlValue(value, field) {
@@ -11585,6 +11637,8 @@ const VOLUME_BASIN_ROUTE_FIELDS = [
   ['pressureTierHeroMin', 'volume_pressure_tier_hero_min'],
   ['pressureTierHeroMax', 'volume_pressure_tier_hero_max'],
   ['reactionLiveView', 'volume_reaction_live_view'],
+  ['boundarySidecarSource', 'volume_boundary_sidecar_source'],
+  ['boundarySidecarView', 'volume_boundary_sidecar_view'],
   ...REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS.map(field => [field.key, field.param]),
 ];
 
@@ -11652,6 +11706,12 @@ function syncReactionFrontExtractorLabels(controlsSnapshot) {
   const liveView = normalizeReactionFrontLiveView(controlsSnapshot.reactionLiveView);
   const liveViewLabel = document.getElementById('volume-reaction-live-view-val');
   if (liveViewLabel) liveViewLabel.textContent = liveView;
+  const sidecarSource = normalizeBoundarySidecarSource(controlsSnapshot.boundarySidecarSource);
+  const sidecarSourceLabel = document.getElementById('volume-boundary-sidecar-source-val');
+  if (sidecarSourceLabel) sidecarSourceLabel.textContent = sidecarSource;
+  const sidecarView = normalizeBoundarySidecarView(controlsSnapshot.boundarySidecarView);
+  const sidecarViewLabel = document.getElementById('volume-boundary-sidecar-view-val');
+  if (sidecarViewLabel) sidecarViewLabel.textContent = sidecarView;
   for (const field of REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS) {
     const label = document.getElementById(`${field.id}-val`);
     const value = controlsSnapshot[field.key];
@@ -15840,6 +15900,8 @@ function readVolumeControls() {
   const volumeScene = document.getElementById('volume-scene').value;
   const pressureConfig = volumePressureConfigForMode(document.getElementById('volume-pressure-mode').value, volumeScene);
   const reactionLiveView = normalizeReactionFrontLiveView(document.getElementById('volume-reaction-live-view')?.value);
+  const boundarySidecarSource = normalizeBoundarySidecarSource(document.getElementById('volume-boundary-sidecar-source')?.value);
+  const boundarySidecarView = normalizeBoundarySidecarView(document.getElementById('volume-boundary-sidecar-view')?.value);
   const reactionBoundaryControls = {
     identity: 'reaction-boundary-live-controls-v0',
     gradientGain: parseFloat(document.getElementById('volume-reaction-boundary-gradient').value),
@@ -15903,6 +15965,17 @@ function readVolumeControls() {
     flowRate: parseFloat(document.getElementById('volume-flow-rate').value),
     reactionLiveView,
     reactionLiveViewIdentity: 'reaction-live-view-shader-inspect-v0',
+    boundarySidecarSource,
+    boundarySidecarView,
+    boundarySidecarControls: {
+      identity: 'baked-boundary-sidecar-v0',
+      authority: 'band-limited-support-coverage-ridge-proximity-footprint-v1',
+      source: boundarySidecarSource,
+      view: boundarySidecarView,
+      blur: parseFloat(document.getElementById('volume-boundary-sidecar-blur').value),
+      stepWidth: parseFloat(document.getElementById('volume-boundary-sidecar-width').value),
+      ridgeGain: parseFloat(document.getElementById('volume-boundary-sidecar-ridge').value),
+    },
     reactionBoundaryControls: {
       identity: reactionBoundaryControls.identity,
       gradientGain: reactionBoundaryControls.gradientGain,
@@ -15955,6 +16028,9 @@ function readVolumeControls() {
     reactionBoundaryFireYellow: reactionBoundaryFireControls.sootYellowing,
     reactionBoundaryFireWarmth: reactionBoundaryFireControls.thermalWarmth,
     reactionBoundaryFireLuma: reactionBoundaryFireControls.fireLuma,
+    boundarySidecarBlur: parseFloat(document.getElementById('volume-boundary-sidecar-blur').value),
+    boundarySidecarWidth: parseFloat(document.getElementById('volume-boundary-sidecar-width').value),
+    boundarySidecarRidge: parseFloat(document.getElementById('volume-boundary-sidecar-ridge').value),
     fireRenderMode: reactionLiveView !== 'off' ? 'inspect' : document.getElementById('volume-fire-render-mode').value,
     shellInspectMode: reactionLiveView !== 'off' ? reactionLiveView : document.getElementById('volume-shell-inspect-mode').value,
     shellAmount: parseFloat(document.getElementById('volume-shell-amount').value),
@@ -17013,6 +17089,12 @@ async function initKaminosVolumeRoute() {
   if (params.has('volume_reaction_live_view')) {
     document.getElementById('volume-reaction-live-view').value = normalizeReactionFrontLiveView(params.get('volume_reaction_live_view'));
   }
+  if (params.has('volume_boundary_sidecar_source')) {
+    document.getElementById('volume-boundary-sidecar-source').value = normalizeBoundarySidecarSource(params.get('volume_boundary_sidecar_source'));
+  }
+  if (params.has('volume_boundary_sidecar_view')) {
+    document.getElementById('volume-boundary-sidecar-view').value = normalizeBoundarySidecarView(params.get('volume_boundary_sidecar_view'));
+  }
   for (const field of REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS) {
     const routeValue = Number(params.get(field.param));
     if (!params.has(field.param) || !Number.isFinite(routeValue)) continue;
@@ -17079,6 +17161,10 @@ async function initKaminosVolumeRoute() {
   }
   document.getElementById('volume-reaction-live-view')?.addEventListener('input', syncControls);
   document.getElementById('volume-reaction-live-view')?.addEventListener('change', syncControls);
+  document.getElementById('volume-boundary-sidecar-source')?.addEventListener('input', syncControls);
+  document.getElementById('volume-boundary-sidecar-source')?.addEventListener('change', syncControls);
+  document.getElementById('volume-boundary-sidecar-view')?.addEventListener('input', syncControls);
+  document.getElementById('volume-boundary-sidecar-view')?.addEventListener('change', syncControls);
   for (const field of REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS) {
     document.getElementById(field.id)?.addEventListener('input', syncControls);
     document.getElementById(field.id)?.addEventListener('change', syncControls);
