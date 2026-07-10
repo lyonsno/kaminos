@@ -1325,7 +1325,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
       <div class="reaction-front-atlas-state" id="volume-reaction-atlas-state">atlas not captured</div>
     </div>
     <div class="volume-control-section" data-volume-control-section="visual-tuning">
-      <div class="volume-control-section-title">Visual Tuning</div>
+      <div class="volume-control-section-title">Physical Controls</div>
     <div class="slider-row" data-volume-visual-cost-knob="occupied-volume">
       <span class="slider-label">Density</span>
       <input type="range" id="volume-density" min="0.35" max="6" step="0.05" value="4.2">
@@ -2104,7 +2104,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
       <div class="field"><span class="field-key">Frame p95</span><span class="field-val" id="volume-frame-p95">-- ms</span></div>
       <div class="field"><span class="field-key">Queue done</span><span class="field-val" id="volume-queue-ms">-- ms</span></div>
       <div class="field"><span class="field-key">Queue p95</span><span class="field-val" id="volume-queue-p95">-- ms</span></div>
-      <div class="field"><span class="field-key">Look lab</span><span class="field-val" id="volume-look-lab-state">live / live pyro</span></div>
+      <div class="field"><span class="field-key">Look lab</span><span class="field-val" id="volume-look-lab-state">live / boundary fire</span></div>
       <div class="field"><span class="field-key">Pyro detail</span><span class="field-val" id="volume-pyro-detail-state">inactive</span></div>
       <div class="field"><span class="field-key">Pyro carriers</span><span class="field-val" id="volume-pyro-carrier-state">normal / 1.00x</span></div>
       <div class="field"><span class="field-key">Pyro confidence</span><span class="field-val" id="volume-pyro-detail-confidence">0.00</span></div>
@@ -10057,6 +10057,17 @@ const NON_CANONICAL_VOLUME_HIDDEN_CONTROLS = new Set([
   'volume-canonical-body-balance',
 ]);
 
+const VOLUME_PRUNED_ACTIVE_CONTROL_IDS = new Set([
+  'volume-radiance',
+  'volume-glow',
+  'volume-microdetail',
+  'volume-interface-shred',
+  'volume-fire-licks',
+  'volume-projection',
+  'volume-fire-scale',
+  'volume-detail-scale',
+]);
+
 const KAMINOS_VOLUME_BASIN_STORAGE_KEY = 'kaminos.volume.lastBasin.v1';
 const KAMINOS_VOLUME_BASIN_SLOT_STORAGE_PREFIX = 'kaminos.volume.basinSlot.v1.';
 const VOLUME_BASIN_SNAPSHOT_IDENTITY = 'kaminos-volume-basin-snapshot-v1';
@@ -11409,6 +11420,27 @@ function hideVolumeLegacyPyroSurfaceForTopologyBranch() {
   for (const id of legacyIds) {
     for (const node of volumeControlCluster(id)) node.style.display = 'none';
   }
+  for (const id of VOLUME_PRUNED_ACTIVE_CONTROL_IDS) {
+    for (const node of volumeControlCluster(id)) node.style.display = 'none';
+  }
+  for (const selector of [
+    '[data-volume-control-section="topology-shell"]',
+    '#volume-pyro-dynamic-atlas',
+    '.volume-pyro-atlas-wrap',
+  ]) {
+    document.querySelectorAll(selector).forEach(node => {
+      node.style.display = 'none';
+    });
+  }
+  for (const id of [
+    'volume-pyro-detail-state',
+    'volume-pyro-carrier-state',
+    'volume-pyro-detail-confidence',
+    'volume-pyro-detail-reset',
+  ]) {
+    const field = document.getElementById(id)?.closest?.('.field');
+    if (field) field.style.display = 'none';
+  }
   for (const id of ['volume-basin-warm-cap', 'volume-basin-bonfire-family']) {
     const element = document.getElementById(id);
     if (element) element.style.display = 'none';
@@ -11432,6 +11464,7 @@ function hideVolumeLegacyPyroSurfaceForTopologyBranch() {
 function syncCanonicalVolumeControlVisibility(volumeScene) {
   const canonical = volumeScene === 'canonical_plume';
   for (const id of CANONICAL_VOLUME_HIDDEN_CONTROLS) {
+    if (VOLUME_PRUNED_ACTIVE_CONTROL_IDS.has(id)) continue;
     const row = volumeControlRow(id);
     if (row) row.style.display = canonical ? 'none' : '';
   }
@@ -11442,6 +11475,9 @@ function syncCanonicalVolumeControlVisibility(volumeScene) {
   for (const id of CANONICAL_VOLUME_HIDDEN_SECTIONS) {
     const section = document.getElementById(id);
     if (section) section.style.display = canonical ? 'none' : '';
+  }
+  for (const id of VOLUME_PRUNED_ACTIVE_CONTROL_IDS) {
+    for (const node of volumeControlCluster(id)) node.style.display = 'none';
   }
 }
 
@@ -16575,8 +16611,7 @@ function refreshVolumeReadout() {
   document.getElementById('volume-queue-ms').textContent = Number.isFinite(timing.queueDoneMs) ? `${timing.queueDoneMs.toFixed(1)} ms` : (timing.queueProbePending ? 'pending' : '-- ms');
   document.getElementById('volume-queue-p95').textContent = Number.isFinite(timing.queueDoneP95Ms) ? `${timing.queueDoneP95Ms.toFixed(1)} ms` : '-- ms';
   const lookLabMode = s.lookFreeze >= 0.5 ? `frozen@${s.lookFreezeFrame ?? s.frameCount}` : 'live';
-  const compareMode = s.pyroCompareMode === 'base' || s.pyroCompareMuted ? 'base-only' : 'live-pyro';
-  document.getElementById('volume-look-lab-state').textContent = `${lookLabMode} / ${compareMode}`;
+  document.getElementById('volume-look-lab-state').textContent = `${lookLabMode} / boundary fire`;
   const pyroDetail = s.pyroDynamicDetail || {};
   const pyroState = pyroDetail.enabled
     ? (pyroDetail.resetGate ? 'reset' : (pyroDetail.liveFireAuthority > 0.015 ? 'live-coupled' : 'decay'))
@@ -17295,9 +17330,6 @@ async function initKaminosVolumeRoute() {
     refreshVolumeReadout();
     saveVolumeBasinSnapshot(event?.target?.id || 'control-change');
   };
-  moveVolumePyroFreezeIntoCarrierWorkbench();
-  moveVolumePyroRadianceControlsBelowFlow();
-  moveVolumePyroLegacyControlsBelowRadiance();
   hideVolumeLegacyPyroSurfaceForTopologyBranch();
   for (const id of ['volume-scene', 'volume-density', 'volume-fire', 'volume-radiance', 'volume-absorption', 'volume-glow', 'volume-smoke', 'volume-curl', 'volume-microdetail', 'volume-interface-shred', 'volume-fire-licks', 'volume-projection', 'volume-speed', 'volume-steps', 'volume-adaptive-rays', 'volume-occupancy-skip', 'volume-majorant-skip', 'volume-majorant-smooth', 'volume-majorant-guard', 'volume-temporal-accum', 'volume-temporal-jitter', 'volume-history-clamp', 'volume-fire-scale', 'volume-detail-scale', 'volume-plume-height', 'volume-wind-strength', 'volume-wind-angle', 'volume-wind-height', 'volume-render-scale', 'volume-input-radius', 'volume-flow-rate', 'volume-fire-render-mode', 'volume-shell-inspect-mode', 'volume-shell-amount', 'volume-shell-width', 'volume-shell-thermal', 'volume-shell-reaction', 'volume-shell-front', 'volume-shell-edge', 'volume-shell-core-suppress', 'volume-shell-bite', 'volume-shell-curl', 'volume-shell-heat', 'volume-shell-divergence', 'volume-shell-luma', 'volume-shell-exposure', 'volume-shell-soft-clip', 'volume-shell-smoke', 'volume-resolution', 'volume-majorant-grid', 'volume-grid-overlay', 'volume-flow-debug', 'volume-oracle-activity-cue', 'volume-oracle-activity-display', 'volume-oracle-activity-curl-noise', 'volume-oracle-activity-vorticity', 'volume-oracle-activity-material', 'volume-look-freeze', 'volume-pyro-compare', 'volume-pyro-detail', 'volume-pyro-material-gain', 'volume-pyro-interface-focus', 'volume-pyro-edge-bite', 'volume-pyro-bite-border', 'volume-pyro-bite-teeth', 'volume-pyro-bite-wake', 'volume-pyro-bite-height', 'volume-pyro-bite-fire-lock', 'volume-pyro-bite-core', 'volume-pyro-bite-core-cut', 'volume-pyro-bite-rim', 'volume-pyro-bite-rim-cut', 'volume-pyro-bite-after', 'volume-pyro-bite-after-cut', 'volume-pyro-fire-mode', 'volume-pyro-flame-paint', 'volume-pyro-stock-mix', 'volume-pyro-flame-luma', 'volume-pyro-flame-core-color', 'volume-pyro-flame-edge-color', 'volume-pyro-bite-heat', 'volume-pyro-bite-chroma', 'volume-pyro-bite-luma', 'volume-pyro-bite-ember-color', 'volume-pyro-bite-hot-color', 'volume-pyro-smoke-fold', 'volume-pyro-fold-border', 'volume-pyro-fold-wake', 'volume-pyro-wake-lift', 'volume-pyro-wake-warmth', 'volume-pyro-wake-luma', 'volume-pyro-wake-shadow-color', 'volume-pyro-wake-ember-color', 'volume-pyro-radiance', 'volume-pyro-radiance-gate', 'volume-pyro-radiance-spill', 'volume-pyro-radiance-warmth', 'volume-pyro-radiance-hue', 'volume-pyro-radiance-chroma', 'volume-pyro-radiance-luma', 'volume-pyro-radiance-cool-color', 'volume-pyro-radiance-warm-color', 'volume-pyro-radiance-source', 'volume-pyro-radiance-height', 'volume-pyro-radiance-border', 'volume-pyro-radiance-teeth', 'volume-pyro-radiance-rise', 'volume-pyro-radiance-fire-lock', 'volume-pyro-flow-bite', 'volume-pyro-flow-border', 'volume-pyro-flow-teeth', 'volume-pyro-flow-rise', 'volume-pyro-flow-fire-lock', 'volume-pyro-flow-luma', 'volume-pyro-flow-radiance', 'volume-pyro-flow-spikes', 'volume-pyro-flow-cool-color', 'volume-pyro-flow-hot-color', 'volume-pyro-diagnostic-paint', 'volume-pyro-carrier-view', 'volume-pyro-overdrive', 'volume-pressure-mode', 'volume-pressure-tier-overlay', 'volume-pressure-tier-lower-max', 'volume-pressure-tier-hero-min', 'volume-pressure-tier-hero-max', 'volume-canonical-spread', 'volume-canonical-centerline', 'volume-canonical-body-balance']) {
     document.getElementById(id).addEventListener('input', syncControls);
