@@ -334,7 +334,8 @@ def parse_args():
     parser.add_argument("--eval-patches", type=int, default=64)
     parser.add_argument("--preview-size", type=int, default=384)
     parser.add_argument("--preview-mode", choices=["center", "foreground", "edge-band", "full-frame"], default="center")
-    parser.add_argument("--preview-frame-count", dest="previewFrameCount", type=int, default=1, help="Number of eval-item preview frames to emit for product-view witnesses.")
+    parser.add_argument("--preview-scope", dest="previewScope", choices=["eval", "train"], default="eval", help="Select whether product-view previews sample eval holdout pairs or train pairs.")
+    parser.add_argument("--preview-frame-count", dest="previewFrameCount", type=int, default=1, help="Number of selected-scope preview frames to emit for product-view witnesses.")
     parser.add_argument("--seed", type=int, default=630)
     parser.add_argument("--sleep-ms", dest="sleepMs", type=float, default=0.0, help="Optional per-step sleep throttle for contention control.")
     parser.add_argument("--foreground-threshold", dest="foregroundThreshold", type=float, default=0.025)
@@ -2130,10 +2131,13 @@ def main():
     )
     preview_path = out_dir / "residual-preview-low-model-target-diff.png"
     diagnostic_preview_path = out_dir / "residual-preview-low-model-target-targetres-modelres-error-mask.png"
-    previewFocus = make_preview(model, eval_items[0], preview_path, diagnostic_preview_path, args.preview_size, args.preview_mode, conditionRenderScale, featureInputMode, coordinateInputMode, fourierCoordinateFrequencies, residualApplicationMaskMode, residualMaskFeatherRadius)
+    preview_items = train_items if args.previewScope == "train" else eval_items
+    if not preview_items:
+        raise ValueError(f"--preview-scope={args.previewScope} selected no preview pairs")
+    previewFocus = make_preview(model, preview_items[0], preview_path, diagnostic_preview_path, args.preview_size, args.preview_mode, conditionRenderScale, featureInputMode, coordinateInputMode, fourierCoordinateFrequencies, residualApplicationMaskMode, residualMaskFeatherRadius)
     previewFrames = make_preview_frames(
         model,
-        eval_items,
+        preview_items,
         out_dir,
         args.preview_size,
         args.preview_mode,
@@ -2290,6 +2294,8 @@ def main():
         "materialFirePixels": {item["id"]: item.get("materialFirePixels", 0) for item in loaded},
         "materialSmokePixels": {item["id"]: item.get("materialSmokePixels", 0) for item in loaded},
         "previewMode": args.preview_mode,
+        "previewScope": args.previewScope,
+        "previewPairCount": len(preview_items),
         "previewFrameCount": args.previewFrameCount,
         "fullFramePreview": args.preview_mode == "full-frame",
         "previewFocus": previewFocus,

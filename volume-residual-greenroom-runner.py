@@ -46,6 +46,7 @@ def parse_args():
     parser.add_argument("--eval-patches", default="8")
     parser.add_argument("--preview-size", default="384")
     parser.add_argument("--preview-mode", default="foreground")
+    parser.add_argument("--preview-scope", default="eval")
     parser.add_argument("--preview-frame-count", default="1")
     parser.add_argument("--seed", default="630")
     parser.add_argument("--sleep-ms", default="0")
@@ -162,6 +163,8 @@ def build_child_command(args):
         str(args.preview_size),
         "--preview-mode",
         str(args.preview_mode),
+        "--preview-scope",
+        str(args.preview_scope),
         "--preview-frame-count",
         str(args.preview_frame_count),
         "--seed",
