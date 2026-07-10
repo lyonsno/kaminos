@@ -212,6 +212,10 @@ assert.match(core, /majorantBuildRequested/, 'debug state reports whether majora
 assert.match(core, /boundarySidecarViewDir/, 'Boundary sidecar bake computes a camera-aware view direction');
 assert.match(core, /boundarySidecarSegmentCoverage/, 'Boundary sidecar bake pre-solves segment coverage into the footprint channel');
 assert.match(core, /boundarySidecarSegmentReconstruction/, 'Boundary-fire raymarch reconstructs sheet coverage across a segment');
+assert.match(core, /fn boundarySidecarIntervalCoverage/, 'Boundary-fire raymarch has a single-frame interval coverage reconstruction helper');
+assert.match(core, /boundarySidecarIntervalOpticalDepth/, 'Boundary-fire raymarch converts crossed sheet support into interval optical depth');
+assert.match(core, /boundaryCandidate\s*=\s*max\(\s*boundaryCandidate,\s*boundarySidecarIntervalCandidate/, 'Boundary-fire interval reconstruction contributes directly to visible fire opacity/luma, not only adaptive step softness');
+assert.match(core, /intervalReconstructionIdentity:\s*'single-frame-boundary-interval-reconstruction-v0'/, 'Debug state exposes the active single-frame interval reconstruction identity');
 assert.match(core, /boundaryFireAdaptiveClampScale/, 'Boundary-fire raymarch locally clamps adaptive step expansion near baked sheet crossings');
 assert.match(index, /id="volume-pyro-interface-focus"/, 'Pyro cockpit exposes an interface-focus slider');
 assert.match(index, /Border carrier/i, 'Pyro interface-focus slider describes the standalone border carrier');

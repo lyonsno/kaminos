@@ -1228,6 +1228,28 @@ fn boundarySidecarSegmentMetaMaxSample(p: vec3<f32>, rd: vec3<f32>, span: f32) -
   return best;
 }
 
+fn boundarySidecarIntervalCoverage(sidecarSample: vec4<f32>, sidecarMeta: vec4<f32>, localDt: f32, dtBase: f32, normalViewGain: f32, adaptiveRays: f32) -> vec2<f32> {
+  let support = clamp(sidecarSample.x, 0.0, 1.8);
+  let coverage = clamp(sidecarSample.y, 0.0, 1.8);
+  let ridge = clamp(sidecarSample.z, 0.0, 1.8);
+  let footprint = max(sidecarSample.w, 0.0);
+  let proximity = clamp(sidecarMeta.x, 0.0, 1.8);
+  let structure = clamp(
+    max(max(support * 0.70, coverage * 0.92), max(ridge * 0.74, proximity * 0.62)),
+    0.0,
+    1.8
+  );
+  let stepVoxels = max(localDt, dtBase) * f32(GRID);
+  let sheetWidth = max(footprint, 0.08);
+  let crossingWidth = sheetWidth * 0.16 + stepVoxels * mix(0.026, 0.052, clamp(adaptiveRays, 0.0, 1.0));
+  let boundarySidecarIntervalOpticalDepth = structure
+    * mix(0.82, normalViewGain, 0.58)
+    * (0.24 + crossingWidth)
+    * smoothstep(0.006, 0.62, max(max(coverage, proximity), support));
+  let intervalCoverage = clamp(1.0 - exp(-boundarySidecarIntervalOpticalDepth), 0.0, 1.35);
+  return vec2<f32>(intervalCoverage, boundarySidecarIntervalOpticalDepth);
+}
+
 fn majorantIndex(c: vec3<u32>) -> u32 {
   return c.x + c.y * MAJORANT_GRID + c.z * MAJORANT_GRID * MAJORANT_GRID;
 }
@@ -4102,6 +4124,8 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
       var boundaryGradientEffective = 0.0;
       var boundaryFireRidgeEffective = 0.0;
       var boundarySidecarStepFootprintWidth = 0.0;
+      var boundarySidecarIntervalCandidate = 0.0;
+      var boundarySidecarIntervalOpticalDepth = 0.0;
       if (boundarySidecarSource > 0.5 && boundarySidecarSource <= 1.5) {
         let boundaryFireSegmentProbeSpanForShading = max(localDt, dtBase)
           * mix(0.78, 1.46, adaptiveRays)
@@ -4124,14 +4148,24 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
         let boundarySidecarFootprintWidth = boundarySidecarSample.w;
         let boundarySidecarSegmentReconstruction = smoothstep(0.20, 1.85, boundarySidecarFootprintWidth)
           * smoothstep(0.012, 0.78, max(boundarySidecarCoverage, boundarySidecarProximity));
-        boundarySupportEffective = max(boundarySidecarSample.x, boundarySidecarProximity * 0.36);
-        boundaryGradientEffective = max(max(boundarySidecarCoverage, boundarySidecarSample.z * 0.55), boundarySidecarSegmentReconstruction * 0.52)
+        let boundarySidecarInterval = boundarySidecarIntervalCoverage(boundarySidecarSample, boundarySidecarMetaSample, localDt, dtBase, boundarySidecarNormalViewGain, adaptiveRays);
+        boundarySidecarIntervalOpticalDepth = boundarySidecarInterval.y;
+        let boundarySidecarIntervalSupport = boundarySidecarInterval.x;
+        boundarySupportEffective = max(max(boundarySidecarSample.x, boundarySidecarProximity * 0.36), boundarySidecarIntervalSupport * 0.24);
+        boundaryGradientEffective = max(max(max(boundarySidecarCoverage, boundarySidecarSample.z * 0.55), boundarySidecarSegmentReconstruction * 0.52), boundarySidecarIntervalSupport * 0.72)
           * (1.0 + boundarySidecarFootprintWidth * (0.18 + boundarySidecarSegmentReconstruction * 0.18))
           * boundarySidecarNormalViewGain;
         boundaryFireRidgeEffective = boundarySidecarSample.z;
         boundarySidecarStepFootprintWidth = boundarySidecarNormalViewGain
           * clamp(u.boundary_sidecar_controls.z, 0.0, 2.0)
           * max(dtBase * f32(GRID) * (0.046 + boundarySidecarSegmentReconstruction * 0.020), boundarySidecarFootprintWidth * (0.036 + boundarySidecarSegmentReconstruction * 0.014));
+        boundarySidecarIntervalCandidate = clamp(
+          pow(clamp(boundarySidecarIntervalSupport * boundaryContrast, 0.0, 1.8), max(0.58, boundaryGamma * 0.82))
+            * boundaryOpacity
+            * (0.38 + 0.62 * smoothstep(0.02, 0.76, boundarySidecarIntervalOpticalDepth)),
+          0.0,
+          1.45
+        );
       } else {
         let boundarySupport = liveBoundarySupportAt(p, boundarySupportWeights);
         let boundarySupportPx = liveBoundarySupportAt(p + boundaryDx, boundarySupportWeights);
@@ -4172,10 +4206,14 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
           let boundarySidecarFootprintWidth = boundarySidecarSample.w;
           let boundarySidecarSegmentReconstruction = smoothstep(0.20, 1.85, boundarySidecarFootprintWidth)
             * smoothstep(0.012, 0.78, max(boundarySidecarCoverage, boundarySidecarProximity));
+          let boundarySidecarInterval = boundarySidecarIntervalCoverage(boundarySidecarSample, boundarySidecarMetaSample, localDt, dtBase, boundarySidecarNormalViewGain, adaptiveRays);
+          boundarySidecarIntervalOpticalDepth = boundarySidecarInterval.y;
+          let boundarySidecarIntervalSupport = boundarySidecarInterval.x;
           boundarySupportEffective = mix(boundarySupport, boundarySidecarSample.x, 0.5);
+          boundarySupportEffective = max(boundarySupportEffective, boundarySidecarIntervalSupport * 0.18);
           boundaryGradientEffective = mix(
             boundaryGradient,
-            max(max(boundarySidecarCoverage, boundarySidecarProximity * 0.50), boundarySidecarSegmentReconstruction * 0.44) * boundarySidecarNormalViewGain,
+            max(max(max(boundarySidecarCoverage, boundarySidecarProximity * 0.50), boundarySidecarSegmentReconstruction * 0.44), boundarySidecarIntervalSupport * 0.56) * boundarySidecarNormalViewGain,
             0.5
           );
           boundaryFireRidgeEffective = mix(boundaryFireRidge, boundarySidecarSample.z, 0.5);
@@ -4183,6 +4221,13 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
             * boundarySidecarNormalViewGain
             * clamp(u.boundary_sidecar_controls.z, 0.0, 2.0)
             * max(dtBase * f32(GRID) * (0.046 + boundarySidecarSegmentReconstruction * 0.020), boundarySidecarFootprintWidth * (0.036 + boundarySidecarSegmentReconstruction * 0.014));
+          boundarySidecarIntervalCandidate = clamp(
+            pow(clamp(boundarySidecarIntervalSupport * boundaryContrast, 0.0, 1.8), max(0.58, boundaryGamma * 0.82))
+              * boundaryOpacity
+              * (0.32 + 0.54 * smoothstep(0.02, 0.76, boundarySidecarIntervalOpticalDepth)),
+            0.0,
+            1.25
+          );
         }
       }
       let boundaryGradientGate = smoothstep(boundaryCut, boundaryCut + boundarySoftness + boundarySidecarStepFootprintWidth, boundaryGradientEffective * boundaryGradientGain);
@@ -4204,6 +4249,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
       let boundaryRaw = clamp(boundarySupportEffective * boundaryGradientGate * boundaryCoreGate * boundaryTopology, 0.0, 2.0);
       let boundaryScalar = clamp(pow(clamp(boundaryRaw * boundaryContrast, 0.0, 1.8), boundaryGamma) * boundaryOpacity, 0.0, 1.65);
       boundaryCandidate = mix(boundaryScalar, boundaryScalar * mix(1.0, clamp(boundaryFireRidgeEffective + boundaryFireTipGate * boundaryFireTipBreakup, 0.0, 1.0), 0.62) * (1.0 - boundaryFireErosion), inspectBoundaryFireMask);
+      boundaryCandidate = max(boundaryCandidate, boundarySidecarIntervalCandidate * inspectBoundaryFireMask);
       let cleanBurnGate = smoothstep(0.006, 0.34, reactionSupport + frontSupport * 0.38) * (1.0 - smoothstep(0.20, 0.86, sootSupport * boundaryFireSootYield));
       let sootMaturity = clamp((sootSupport * 0.56 + fuelDepletionProxy * 0.30 + boundaryFireTipGate * 0.30) * boundaryFireSootYield, 0.0, 1.0);
       let cleanFuelColor = vec3<f32>(0.12, 0.42, 1.75) * boundaryFireCleanBlue * cleanBurnGate;
@@ -5450,6 +5496,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       bytes: boundarySidecarBufferBytes(gridSize),
       metaBytes: boundarySidecarMetaBufferBytes(gridSize),
       temporalSidecarIdentity: TEMPORAL_SIDECAR_IDENTITY,
+      intervalReconstructionIdentity: 'single-frame-boundary-interval-reconstruction-v0',
       built: state.boundarySidecarBuilt,
       builtThisFrame: state.boundarySidecarBuiltThisFrame,
       frameCount: state.boundarySidecarFrameCount,
