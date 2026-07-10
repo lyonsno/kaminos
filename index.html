@@ -1008,6 +1008,29 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
       </div>
       <textarea id="volume-look-library-json" class="gen-input" rows="4" spellcheck="false" placeholder='{"identity":"kaminos-volume-look-library-v1",...}'></textarea>
     </div>
+    <div class="volume-control-section" data-volume-control-section="smoke-artifact-assay">
+      <div class="volume-control-section-title">Smoke Artifact Assay</div>
+      <div class="slider-row">
+        <span class="slider-label">Sim Detail</span>
+        <input type="range" id="volume-smoke-detail-force-gain" min="0" max="1" step="0.05" value="1">
+        <span class="slider-val" id="volume-smoke-detail-force-gain-val">1.00</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Fine Breakup</span>
+        <input type="range" id="volume-smoke-fine-breakup-gain" min="0" max="1" step="0.05" value="1">
+        <span class="slider-val" id="volume-smoke-fine-breakup-gain-val">1.00</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Smoke Roll</span>
+        <input type="range" id="volume-smoke-morphology-force-gain" min="0" max="1" step="0.05" value="1">
+        <span class="slider-val" id="volume-smoke-morphology-force-gain-val">1.00</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Render Breakup</span>
+        <input type="range" id="volume-smoke-render-procedural-gain" min="0" max="1" step="0.05" value="1">
+        <span class="slider-val" id="volume-smoke-render-procedural-gain-val">1.00</span>
+      </div>
+    </div>
     <div class="slider-row">
       <span class="slider-label">Scene</span>
       <select id="volume-scene" class="select-input">
@@ -11795,6 +11818,12 @@ const REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS = [
 const REACTION_FRONT_LIVE_VIEW_VALUES = new Set(['off', 'shell', 'thermal', 'reaction', 'front', 'edge', 'core', 'curl', 'divergence', 'boundary', 'boundary_fire']);
 const BOUNDARY_SIDECAR_SOURCE_VALUES = new Set(['live', 'baked', 'mix']);
 const BOUNDARY_SIDECAR_VIEW_VALUES = new Set(['off', 'support', 'coverage', 'ridge', 'proximity', 'footprint']);
+const SMOKE_ARTIFACT_ASSAY_CONTROL_FIELDS = [
+  { key: 'smokeDetailForceGain', id: 'volume-smoke-detail-force-gain', param: 'volume_smoke_detail_force_gain', min: 0, max: 1, decimals: 2 },
+  { key: 'smokeFineBreakupGain', id: 'volume-smoke-fine-breakup-gain', param: 'volume_smoke_fine_breakup_gain', min: 0, max: 1, decimals: 2 },
+  { key: 'smokeMorphologyForceGain', id: 'volume-smoke-morphology-force-gain', param: 'volume_smoke_morphology_force_gain', min: 0, max: 1, decimals: 2 },
+  { key: 'smokeRenderProceduralGain', id: 'volume-smoke-render-procedural-gain', param: 'volume_smoke_render_procedural_gain', min: 0, max: 1, decimals: 2 },
+];
 
 function normalizeReactionFrontLiveView(value) {
   const mode = String(value || 'off').toLowerCase().replace(/-/g, '_');
@@ -11946,6 +11975,7 @@ const VOLUME_BASIN_ROUTE_FIELDS = [
   ['reactionLiveView', 'volume_reaction_live_view'],
   ['boundarySidecarSource', 'volume_boundary_sidecar_source'],
   ['boundarySidecarView', 'volume_boundary_sidecar_view'],
+  ...SMOKE_ARTIFACT_ASSAY_CONTROL_FIELDS.map(field => [field.key, field.param]),
   ...REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS.map(field => [field.key, field.param]),
 ];
 
@@ -16574,6 +16604,10 @@ function readVolumeControls() {
     pyroDiagnosticPaint: parseFloat(document.getElementById('volume-pyro-diagnostic-paint').value),
     pyroCarrierView: document.getElementById('volume-pyro-carrier-view').value,
     pyroOverdrive: parseFloat(document.getElementById('volume-pyro-overdrive').value),
+    smokeDetailForceGain: parseFloat(document.getElementById('volume-smoke-detail-force-gain').value),
+    smokeFineBreakupGain: parseFloat(document.getElementById('volume-smoke-fine-breakup-gain').value),
+    smokeMorphologyForceGain: parseFloat(document.getElementById('volume-smoke-morphology-force-gain').value),
+    smokeRenderProceduralGain: parseFloat(document.getElementById('volume-smoke-render-procedural-gain').value),
     pressureMode: pressureConfig.pressureMode,
     pressureEffectiveLabel: pressureConfig.pressureEffectiveLabel,
     pressureTierOverlay: parseFloat(document.getElementById('volume-pressure-tier-overlay').value),
@@ -16737,6 +16771,10 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-pyro-diagnostic-paint-val').textContent = c.pyroDiagnosticPaint.toFixed(2);
   document.getElementById('volume-pyro-carrier-view-val').textContent = c.pyroCarrierView;
   document.getElementById('volume-pyro-overdrive-val').textContent = c.pyroOverdrive.toFixed(2);
+  document.getElementById('volume-smoke-detail-force-gain-val').textContent = c.smokeDetailForceGain.toFixed(2);
+  document.getElementById('volume-smoke-fine-breakup-gain-val').textContent = c.smokeFineBreakupGain.toFixed(2);
+  document.getElementById('volume-smoke-morphology-force-gain-val').textContent = c.smokeMorphologyForceGain.toFixed(2);
+  document.getElementById('volume-smoke-render-procedural-gain-val').textContent = c.smokeRenderProceduralGain.toFixed(2);
   const pressureMode = normalizeVolumePressureMode(c.pressureMode);
   if (pressureMode !== document.getElementById('volume-pressure-mode').value) setVolumeControlValue('volume-pressure-mode', pressureMode);
   document.getElementById('volume-pressure-mode-val').textContent = c.pressureEffectiveLabel || effectivePressureModeLabel(pressureMode, c.pressureIterations ?? defaultVolumePressureIterationsForScene(c.volumeScene));
@@ -17188,6 +17226,12 @@ async function initKaminosVolumeRoute() {
   if (params.has('volume_oracle_activity_material') && Number.isFinite(routeOracleActivityMaterial)) {
     document.getElementById('volume-oracle-activity-material').value = String(Math.max(0, Math.min(3, routeOracleActivityMaterial)));
   }
+  for (const field of SMOKE_ARTIFACT_ASSAY_CONTROL_FIELDS) {
+    const routed = Number(params.get(field.param));
+    if (params.has(field.param) && Number.isFinite(routed)) {
+      document.getElementById(field.id).value = String(Math.max(field.min, Math.min(field.max, routed)));
+    }
+  }
   const routePyroDynamicDetail = Number(params.get('volume_pyro_detail'));
   if (params.has('volume_pyro_detail') && Number.isFinite(routePyroDynamicDetail)) {
     document.getElementById('volume-pyro-detail').value = String(Math.max(0, Math.min(1, Math.round(routePyroDynamicDetail))));
@@ -17598,6 +17642,10 @@ async function initKaminosVolumeRoute() {
   for (const id of ['volume-scene', 'volume-density', 'volume-fire', 'volume-radiance', 'volume-absorption', 'volume-glow', 'volume-smoke', 'volume-curl', 'volume-microdetail', 'volume-interface-shred', 'volume-fire-licks', 'volume-projection', 'volume-speed', 'volume-steps', 'volume-adaptive-rays', 'volume-occupancy-skip', 'volume-majorant-skip', 'volume-majorant-smooth', 'volume-majorant-guard', 'volume-temporal-accum', 'volume-temporal-jitter', 'volume-history-clamp', 'volume-fire-scale', 'volume-detail-scale', 'volume-plume-height', 'volume-wind-strength', 'volume-wind-angle', 'volume-wind-height', 'volume-render-scale', 'volume-input-radius', 'volume-flow-rate', 'volume-fire-render-mode', 'volume-shell-inspect-mode', 'volume-shell-amount', 'volume-shell-width', 'volume-shell-thermal', 'volume-shell-reaction', 'volume-shell-front', 'volume-shell-edge', 'volume-shell-core-suppress', 'volume-shell-bite', 'volume-shell-curl', 'volume-shell-heat', 'volume-shell-divergence', 'volume-shell-luma', 'volume-shell-exposure', 'volume-shell-soft-clip', 'volume-shell-smoke', 'volume-resolution', 'volume-majorant-grid', 'volume-grid-overlay', 'volume-flow-debug', 'volume-oracle-activity-cue', 'volume-oracle-activity-display', 'volume-oracle-activity-curl-noise', 'volume-oracle-activity-vorticity', 'volume-oracle-activity-material', 'volume-look-freeze', 'volume-pyro-compare', 'volume-pyro-detail', 'volume-pyro-material-gain', 'volume-pyro-interface-focus', 'volume-pyro-edge-bite', 'volume-pyro-bite-border', 'volume-pyro-bite-teeth', 'volume-pyro-bite-wake', 'volume-pyro-bite-height', 'volume-pyro-bite-fire-lock', 'volume-pyro-bite-core', 'volume-pyro-bite-core-cut', 'volume-pyro-bite-rim', 'volume-pyro-bite-rim-cut', 'volume-pyro-bite-after', 'volume-pyro-bite-after-cut', 'volume-pyro-fire-mode', 'volume-pyro-flame-paint', 'volume-pyro-stock-mix', 'volume-pyro-flame-luma', 'volume-pyro-flame-core-color', 'volume-pyro-flame-edge-color', 'volume-pyro-bite-heat', 'volume-pyro-bite-chroma', 'volume-pyro-bite-luma', 'volume-pyro-bite-ember-color', 'volume-pyro-bite-hot-color', 'volume-pyro-smoke-fold', 'volume-pyro-fold-border', 'volume-pyro-fold-wake', 'volume-pyro-wake-lift', 'volume-pyro-wake-warmth', 'volume-pyro-wake-luma', 'volume-pyro-wake-shadow-color', 'volume-pyro-wake-ember-color', 'volume-pyro-radiance', 'volume-pyro-radiance-gate', 'volume-pyro-radiance-spill', 'volume-pyro-radiance-warmth', 'volume-pyro-radiance-hue', 'volume-pyro-radiance-chroma', 'volume-pyro-radiance-luma', 'volume-pyro-radiance-cool-color', 'volume-pyro-radiance-warm-color', 'volume-pyro-radiance-source', 'volume-pyro-radiance-height', 'volume-pyro-radiance-border', 'volume-pyro-radiance-teeth', 'volume-pyro-radiance-rise', 'volume-pyro-radiance-fire-lock', 'volume-pyro-flow-bite', 'volume-pyro-flow-border', 'volume-pyro-flow-teeth', 'volume-pyro-flow-rise', 'volume-pyro-flow-fire-lock', 'volume-pyro-flow-luma', 'volume-pyro-flow-radiance', 'volume-pyro-flow-spikes', 'volume-pyro-flow-cool-color', 'volume-pyro-flow-hot-color', 'volume-pyro-diagnostic-paint', 'volume-pyro-carrier-view', 'volume-pyro-overdrive', 'volume-pressure-mode', 'volume-pressure-tier-overlay', 'volume-pressure-tier-lower-max', 'volume-pressure-tier-hero-min', 'volume-pressure-tier-hero-max', 'volume-canonical-spread', 'volume-canonical-centerline', 'volume-canonical-body-balance']) {
     document.getElementById(id).addEventListener('input', syncControls);
     document.getElementById(id).addEventListener('change', syncControls);
+  }
+  for (const field of SMOKE_ARTIFACT_ASSAY_CONTROL_FIELDS) {
+    document.getElementById(field.id)?.addEventListener('input', syncControls);
+    document.getElementById(field.id)?.addEventListener('change', syncControls);
   }
   document.getElementById('volume-reaction-live-view')?.addEventListener('input', syncControls);
   document.getElementById('volume-reaction-live-view')?.addEventListener('change', syncControls);

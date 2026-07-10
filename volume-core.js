@@ -5,6 +5,7 @@ const BOUNDARY_SIDECAR_IDENTITY = 'baked-boundary-sidecar-v0';
 const BOUNDARY_SIDECAR_BAKE_AUTHORITY = 'band-limited-support-coverage-ridge-proximity-footprint-v1';
 const SMOKE_LIFECYCLE_RENDER_IDENTITY = 'combustion-coupled-smoke-lifecycle-render-v0';
 const SMOKE_MORPHOLOGY_FORCE_IDENTITY = 'smoke-selective-vorticity-morphology-force-v0';
+const SMOKE_ARTIFACT_ASSAY_IDENTITY = 'smoke-artifact-assay-controls-v0';
 const TRUTH_ORACLE_ACTIVITY_RECEIVER_IDENTITY = 'truth-oracle-scalar-activity-receiver-v0';
 const TRUTH_ORACLE_ACTIVITY_CUE_AUTHORITY = 'truth-high-diagnostic-activity-projected-to-receiver-grid-v0';
 const PROCEDURAL_ACTIVITY_CUE_AUTHORITY = 'procedural-receiver-activity-proxy-no-truth-v0';
@@ -865,6 +866,7 @@ struct Uniforms {
   oracle_activity_controls: vec4<f32>,
   oracle_activity_controls2: vec4<f32>,
   activity_tier_controls: vec4<f32>,
+  smoke_artifact_assay_controls: vec4<f32>,
   previousViewProj: mat4x4<f32>,
 };
 
@@ -3221,12 +3223,14 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let activityForceMask = max(0.18, pressureActivityMaskAtCell(cellI, 0.0));
   let activityVorticityGate = mix(1.0, activityForceMask, clamp(u.activity_tier_controls.y, 0.0, 1.0));
   let activityDetailGate = mix(1.0, activityForceMask, clamp(u.activity_tier_controls.z, 0.0, 1.0));
-  let smokeMorphologyGain = tallPlumeScene * clamp(u.activity_tier_controls.w, 0.0, 1.5);
+  let smokeArtifactDetailForceGain = clamp(u.smoke_artifact_assay_controls.x, 0.0, 1.0);
+  let smokeArtifactFineBreakupGain = clamp(u.smoke_artifact_assay_controls.y, 0.0, 1.0);
+  let smokeMorphologyGain = tallPlumeScene * clamp(u.smoke_artifact_assay_controls.z, 0.0, 1.0) * clamp(u.activity_tier_controls.w, 0.0, 1.5);
   let smokeMorphologyForce = smokeMorphologyRollForce(cellI, p, tallPlumeDetailTime, material, fireLayer, microLayer, combustionFrontTopology, curl, smokeMorphologyGain);
-  let rawDetailForce = turbulentDetailForce(tallPlumeDetailP * (0.82 + physicalDetailScale * 0.30), tallPlumeDetailTime) * rawDetailCarrier * (0.018 + curl * 0.010) * detailForceArtifactGain;
-  let rawMicroForce = turbulentDetailForce(tallPlumeDetailP * (2.85 * tallPlumeTransportedDetailFrequency) + vec3<f32>(0.13, -0.27, 0.31), tallPlumeDetailTime * 2.4) * rawMicroCarrier * 0.026;
-  let rawShredForce = interfaceShreddingForce(cellI, (p + tallPlumeDetailPhaseAnchor * 0.35) * detailDomain, tallPlumeDetailTime, shredOperatorGain, heat, smoke, flame, interfaceShred);
-  let rawFineBreakup = fineScaleBreakup(cellI, tallPlumeDetailP, tallPlumeDetailTime, curl, heat, smoke, source);
+  let rawDetailForce = turbulentDetailForce(tallPlumeDetailP * (0.82 + physicalDetailScale * 0.30), tallPlumeDetailTime) * rawDetailCarrier * (0.018 + curl * 0.010) * detailForceArtifactGain * smokeArtifactDetailForceGain;
+  let rawMicroForce = turbulentDetailForce(tallPlumeDetailP * (2.85 * tallPlumeTransportedDetailFrequency) + vec3<f32>(0.13, -0.27, 0.31), tallPlumeDetailTime * 2.4) * rawMicroCarrier * 0.026 * smokeArtifactDetailForceGain;
+  let rawShredForce = interfaceShreddingForce(cellI, (p + tallPlumeDetailPhaseAnchor * 0.35) * detailDomain, tallPlumeDetailTime, shredOperatorGain, heat, smoke, flame, interfaceShred) * smokeArtifactDetailForceGain;
+  let rawFineBreakup = fineScaleBreakup(cellI, tallPlumeDetailP, tallPlumeDetailTime, curl, heat, smoke, source) * smokeArtifactFineBreakupGain;
   var symmetricDetailForce = vec2<f32>(0.0);
   var symmetricMicroForce = vec2<f32>(0.0);
   var symmetricShredForce = vec2<f32>(0.0);
@@ -4022,6 +4026,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     let detailP = p * scaleDomain;
     let microWarp = microDetailDomainWarp(detailP, microLayer, fireLayer, material, state.xyz, u.cameraPos_time.w, tallPlumeRenderScene);
     let detailCarrier = clamp(microTextureSignal + materialDetail * 0.22 + flameDetail * 0.18 + velMag * 0.36, 0.0, 2.8);
+    let smokeRenderProceduralGain = clamp(u.smoke_artifact_assay_controls.w, 0.0, 1.0);
     let filamentNoise = microFilamentNoise(detailP, microWarp, detailCarrier, state.xyz, u.cameraPos_time.w);
     let shredNoise = microFilamentNoise(detailP.zxy + vec3<f32>(0.13, -0.21, 0.09), microWarp.yzx * 1.21, detailCarrier + interfaceShred * 1.7, state.zxy, u.cameraPos_time.w * 1.17 + 1.3);
     let fireNoise = microFilamentNoise(detailP.yzx + vec3<f32>(-0.18, 0.07, 0.24), microWarp.zxy * 1.38, detailCarrier + fireLick * 2.1, state.yzx, u.cameraPos_time.w * 1.31 + 2.1);
@@ -4037,11 +4042,8 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     );
     let verticalPhaseBreak = sin(p.y * 43.0 + (p.x * p.x - p.z * p.z) * 19.0 + u.cameraPos_time.w * 1.4);
     let verticalPuffBreak = cos(p.y * 27.0 + length(p.xz) * 23.0 - p.x * p.z * 31.0 - u.cameraPos_time.w * 0.92);
-    let bonfireCurtainBreakup = mix(
-      1.0,
-      clamp(0.91 + curtainNoise * 0.10 + verticalPhaseBreak * 0.15 + verticalPuffBreak * 0.17, 0.64, 1.18),
-      bonfireRenderScene * smoothstep(0.05, 0.62, smoke)
-    );
+    let bonfireCurtainBreakupRaw = clamp(0.91 + curtainNoise * 0.10 + verticalPhaseBreak * 0.15 + verticalPuffBreak * 0.17, 0.64, 1.18);
+    let bonfireCurtainBreakup = mix(1.0, bonfireCurtainBreakupRaw, bonfireRenderScene * smoothstep(0.05, 0.62, smoke) * smokeRenderProceduralGain);
     let bonfireFireRenderBreakup = mix(
       1.0,
       clamp(0.78 + fireNoise * 0.22 + verticalPuffBreak * 0.14 + fireLick * 0.20 + flameDetail * 0.16 + interfaceShred * 0.10, 0.58, 1.32),
@@ -4162,7 +4164,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     );
     let vaporAlpha = clamp((vaporCarrier + quenchCoreCollapse * 0.52) * rayStepOpacity * (0.22 + absorptionGain * 0.070), 0.0, 0.22);
     smokeAlpha = clamp(smokeAlpha + vaporAlpha, 0.0, 0.28);
-    let smokeMorphologyCanopyBreakup = clamp(
+    let smokeMorphologyCanopyBreakupRaw = clamp(
       1.0
         - smokeLifecycleCoolingAuthority
           * smoothstep(0.20, 1.22, y)
@@ -4171,6 +4173,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
       0.68,
       1.06
     );
+    let smokeMorphologyCanopyBreakup = mix(1.0, smokeMorphologyCanopyBreakupRaw, smokeRenderProceduralGain);
     smokeAlpha = smokeAlpha * mix(smokeMorphologyCanopyBreakup, 1.0, canonicalSmokeOnlyRender);
     let fireSnuffDamping = 1.0 - clamp(max(vaporCarrier * 1.18, quenchCoreCollapse * 0.92), 0.0, 0.985);
     let stockFireAlpha = mix(
@@ -4348,8 +4351,8 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     temporalInterfaceHistoryProtectSum = temporalInterfaceHistoryProtectSum + materialTemporal.z * temporalSampleWeight;
     temporalDetailHistoryProtectSum = temporalDetailHistoryProtectSum + materialTemporal.w * temporalSampleWeight;
     temporalReactiveSignal = max(temporalReactiveSignal, clamp(fireAlpha * 5.2 + renderTemp * 0.075 + quenchedFlameDetail * 0.45 + quenchedFireLick * 0.38 + interfaceShred * 0.16 + materialSignals.reactiveBoost, 0.0, 2.2));
-    let filament = smoothstep(0.014, 0.34, max(materialDetail * 0.66, microTextureSignal)) * filamentNoise * visibleDetailOverlayGain;
-    let shredFilament = smoothstep(0.004, 0.22, interfaceShred * 3.10 + fireLick * 0.50 + microSmoke * 0.12) * shredNoise * visibleDetailOverlayGain;
+    let filament = smoothstep(0.014, 0.34, max(materialDetail * 0.66, microTextureSignal)) * filamentNoise * visibleDetailOverlayGain * smokeRenderProceduralGain;
+    let shredFilament = smoothstep(0.004, 0.22, interfaceShred * 3.10 + fireLick * 0.50 + microSmoke * 0.12) * shredNoise * visibleDetailOverlayGain * smokeRenderProceduralGain;
     let fireFilament = smoothstep(0.008, 0.34, max(flameDetail * 0.72, fireLick * 2.25 + emberFleck * 0.44)) * fireNoise * visibleDetailOverlayGain;
     let pyroMemoryCell = samplePyroMaterialMemoryCell(p);
     let pyroSpatialEnergy = clamp(pyroMemoryCell.x * pyroMemoryCell.y * pyroMemoryCell.z, 0.0, 1.0);
@@ -4915,7 +4918,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   const invViewProj = new THREE.Matrix4();
   const viewProj = new THREE.Matrix4();
   const previousViewProj = new THREE.Matrix4();
-  const uniforms = new Float32Array(344);
+  const uniforms = new Float32Array(348);
   let controlsSnapshot = applyRuntimeQualityControls(getControls());
   let gridSize = normalizeGridSize(controlsSnapshot.resolution);
   let majorantGridSize = normalizeMajorantGridSize(controlsSnapshot.majorantGrid);
@@ -5003,6 +5006,15 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       active: normalizeVolumeScene(controlsSnapshot.volumeScene) === 'tall_plume',
       gain: normalizeVolumeScene(controlsSnapshot.volumeScene) === 'tall_plume' ? 1 : 0,
       gate: clampFinite(controlsSnapshot.activityVorticityGate, 0, 1, 0),
+    },
+    smokeArtifactAssayControls: {
+      identity: SMOKE_ARTIFACT_ASSAY_IDENTITY,
+      detailForce: clampFinite(controlsSnapshot.smokeDetailForceGain, 0, 1, 1),
+      fineBreakup: clampFinite(controlsSnapshot.smokeFineBreakupGain, 0, 1, 1),
+      morphologyForce: clampFinite(controlsSnapshot.smokeMorphologyForceGain, 0, 1, 1),
+      renderProcedural: clampFinite(controlsSnapshot.smokeRenderProceduralGain, 0, 1, 1),
+      defaultPolicy: 'all-one-preserves-current-look-zero-is-operator-ablation-v0',
+      target: 'crawling-structured-smoke-noise-visual-isolation-v0',
     },
     plumeHeight: 1.45,
     windStrength: normalizeWindStrength(controlsSnapshot.windStrength),
@@ -6873,7 +6885,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     uniforms[325] = clampFinite(controlsSnapshot.activityVorticityGate, 0, 1, 0);
     uniforms[326] = clampFinite(controlsSnapshot.activityDetailGate, 0, 1, 0);
     uniforms[327] = normalizeVolumeScene(controlsSnapshot.volumeScene) === 'tall_plume' ? 0.45 : 0;
-    uniforms.set(previousViewProj.elements, 328);
+    uniforms[328] = clampFinite(controlsSnapshot.smokeDetailForceGain, 0, 1, 1);
+    uniforms[329] = clampFinite(controlsSnapshot.smokeFineBreakupGain, 0, 1, 1);
+    uniforms[330] = clampFinite(controlsSnapshot.smokeMorphologyForceGain, 0, 1, 1);
+    uniforms[331] = clampFinite(controlsSnapshot.smokeRenderProceduralGain, 0, 1, 1);
+    uniforms.set(previousViewProj.elements, 332);
     device.queue.writeBuffer(uniformBuffer, 0, uniforms);
     state.gridOverlay = controlsSnapshot.gridOverlay || 0;
     state.lookFreeze = lookFreeze;
@@ -6922,6 +6938,15 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       inactiveCellPolicy: ACTIVITY_PRESSURE_INACTIVE_SKIP_POLICY,
       skipAccounting: 'shader-early-out-no-compact-count-yet',
     };
+    state.smokeArtifactAssayControls = {
+      identity: SMOKE_ARTIFACT_ASSAY_IDENTITY,
+      detailForce: uniforms[328],
+      fineBreakup: uniforms[329],
+      morphologyForce: uniforms[330],
+      renderProcedural: uniforms[331],
+      defaultPolicy: 'all-one-preserves-current-look-zero-is-operator-ablation-v0',
+      target: 'crawling-structured-smoke-noise-visual-isolation-v0',
+    };
     state.volumeScene = normalizeVolumeScene(controlsSnapshot.volumeScene);
     state.smokeMorphologyForces = {
       identity: SMOKE_MORPHOLOGY_FORCE_IDENTITY,
@@ -6929,7 +6954,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       authoritySource: `${FRONT_FIELD_IDENTITY}+material-fire-micro-slots-v0`,
       forceSource: 'smoke-age-rim-vorticity-existing-fields-v0',
       active: state.volumeScene === 'tall_plume',
-      gain: uniforms[327],
+      gain: uniforms[327] * uniforms[330],
       gate: uniforms[325],
       coupledFields: [
         'material.x smoke density',
@@ -8872,6 +8897,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         tallPlumeFlameHeightLawContract: state.tallPlumeFlameHeightLawContract,
         smokeLifecycleRenderer: state.smokeLifecycleRenderer ? { ...state.smokeLifecycleRenderer } : null,
         smokeMorphologyForces: state.smokeMorphologyForces ? { ...state.smokeMorphologyForces } : null,
+        smokeArtifactAssayControls: state.smokeArtifactAssayControls ? { ...state.smokeArtifactAssayControls } : null,
         plumeHeight: state.plumeHeight,
         bonfireAblation: { ...state.bonfireAblation },
         externalEmitterMode: state.externalEmitterMode,
@@ -9193,6 +9219,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       tallPlumeFlameHeightLawContract: state.tallPlumeFlameHeightLawContract,
       smokeLifecycleRenderer: state.smokeLifecycleRenderer ? { ...state.smokeLifecycleRenderer } : null,
       smokeMorphologyForces: state.smokeMorphologyForces ? { ...state.smokeMorphologyForces } : null,
+      smokeArtifactAssayControls: state.smokeArtifactAssayControls ? { ...state.smokeArtifactAssayControls } : null,
       plumeHeight: state.plumeHeight,
       windStrength: state.windStrength,
       windAngle: state.windAngle,
