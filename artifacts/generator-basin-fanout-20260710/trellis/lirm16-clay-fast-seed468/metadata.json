@@ -1,0 +1,19 @@
+{
+  "created_at": 1783680791.9533381,
+  "duration_s": 172.1,
+  "input_name": "output.png",
+  "input_path": "artifacts/generator-basin-fanout-20260710/flux2/lirm16_clay_neighbor_creature_03/output.png",
+  "input_path_role": "repo_relative",
+  "job_id": "666c3008bcfe",
+  "job_type": "trellis2mlx_fast_checkpoint",
+  "name": "output",
+  "output_files": [
+    "output.glb"
+  ],
+  "params": {
+    "seed": "468",
+    "steps": "8",
+    "target_faces": "250000",
+    "texture_size": "1024"
+  }
+}

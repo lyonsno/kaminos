@@ -1,0 +1,19 @@
+{
+  "created_at": 1783670229.7395022,
+  "duration_s": 1101.3,
+  "input_name": "output.png",
+  "input_path": "artifacts/generator-basin-fanout-20260710/flux2/p3d06_crab_orange_walker_relic/output.png",
+  "input_path_role": "repo_relative",
+  "job_id": "ff5d8652003c",
+  "job_type": "trellis2mlx_fast_checkpoint",
+  "name": "output",
+  "output_files": [
+    "output.glb"
+  ],
+  "params": {
+    "seed": "365",
+    "steps": "8",
+    "target_faces": "250000",
+    "texture_size": "1024"
+  }
+}

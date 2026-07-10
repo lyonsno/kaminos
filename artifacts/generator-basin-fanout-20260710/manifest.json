@@ -928,6 +928,7 @@
         "status": "done"
       },
       {
+        "failure": "Greenroom route executed from Kaminos cwd, so trellis generate.py was not found; corrected requeue recorded separately.",
         "greenroom_job": "1ca71a1756d8",
         "greenroom_submit_receipt": "submitted; local path redacted, see input_ref/output_ref/greenroom_job",
         "id": "turtle-sacred-engine-fast-seed364",
@@ -942,9 +943,11 @@
         "route": "trellis2mlx_fast_checkpoint",
         "selection_reason": "first-batch strongest mechanical object basin; high Trellis plausibility",
         "source_image_id": "p3d00_turtle_sacred_engine_variant",
-        "status": "failed"
+        "status": "failed_bad_cwd_before_model_work",
+        "superseded_by_greenroom_job": "9b854af448a1"
       },
       {
+        "failure": "Greenroom route executed from Kaminos cwd, so trellis generate.py was not found; corrected requeue recorded separately.",
         "greenroom_job": "5b93d808777a",
         "greenroom_submit_receipt": "submitted; local path redacted, see input_ref/output_ref/greenroom_job",
         "id": "crab-orange-walker-fast-seed365",
@@ -959,9 +962,11 @@
         "route": "trellis2mlx_fast_checkpoint",
         "selection_reason": "creature/posture analog; tests whether good-miss armature basin becomes meshable",
         "source_image_id": "p3d06_crab_orange_walker_relic",
-        "status": "failed"
+        "status": "failed_bad_cwd_before_model_work",
+        "superseded_by_greenroom_job": "ff5d8652003c"
       },
       {
+        "failure": "Greenroom route executed from Kaminos cwd, so trellis generate.py was not found; corrected requeue recorded separately.",
         "greenroom_job": "3bfdaf7d93ba",
         "greenroom_submit_receipt": "submitted; local path redacted, see input_ref/output_ref/greenroom_job",
         "id": "lirm16-clay-fast-seed366",
@@ -976,9 +981,11 @@
         "route": "trellis2mlx_fast_checkpoint",
         "selection_reason": "strong clay-conditioned armature hit; axial curve, segmenting, contact posture, mouth direction preserved",
         "source_image_id": "lirm16_clay_neighbor_creature_03",
-        "status": "failed"
+        "status": "failed_bad_cwd_before_model_work",
+        "superseded_by_greenroom_job": "de498dfd9755"
       },
       {
+        "failure": "Greenroom route executed from Kaminos cwd, so trellis generate.py was not found; corrected requeue recorded separately.",
         "greenroom_job": "f87d3c139804",
         "greenroom_submit_receipt": "submitted; local path redacted, see input_ref/output_ref/greenroom_job",
         "id": "lirm24-normal-fast-seed367",
@@ -993,15 +1000,251 @@
         "route": "trellis2mlx_fast_checkpoint",
         "selection_reason": "strong normal-conditioned armature hit; tests whether normal-derived image basin improves meshability over clay",
         "source_image_id": "lirm24_normal_neighbor_creature_08",
-        "status": "failed"
+        "status": "failed_bad_cwd_before_model_work",
+        "superseded_by_greenroom_job": "42fabdb16897"
+      },
+      {
+        "greenroom_job": "9b854af448a1",
+        "greenroom_submit_receipt": "submitted with absolute input/output paths and no execution-cwd override",
+        "id": "turtle-sacred-engine-fast-seed364-requeue",
+        "input_ref": "artifacts/generator-basin-fanout-20260710/flux2/p3d00_turtle_sacred_engine_variant/output.png",
+        "note": "completed after bad-cwd requeue",
+        "output_ref": "artifacts/generator-basin-fanout-20260710/trellis/turtle-sacred-engine-fast-seed364",
+        "params": {
+          "seed": 364,
+          "steps": 8,
+          "target_faces": 250000,
+          "texture_size": 1024
+        },
+        "route": "trellis2mlx_fast_checkpoint",
+        "selection_reason": "corrected no-cwd requeue for strongest first-batch turtle mechanical basin",
+        "source_image_id": "p3d00_turtle_sacred_engine_variant",
+        "status": "done",
+        "updated_at": "2026-07-10T10:49:54Z"
+      },
+      {
+        "greenroom_job": "ff5d8652003c",
+        "greenroom_submit_receipt": "submitted with absolute input/output paths and no execution-cwd override",
+        "id": "crab-orange-walker-fast-seed365-requeue",
+        "input_ref": "artifacts/generator-basin-fanout-20260710/flux2/p3d06_crab_orange_walker_relic/output.png",
+        "note": "completed after bad-cwd requeue",
+        "output_ref": "artifacts/generator-basin-fanout-20260710/trellis/crab-orange-walker-fast-seed365",
+        "params": {
+          "seed": 365,
+          "steps": 8,
+          "target_faces": 250000,
+          "texture_size": 1024
+        },
+        "route": "trellis2mlx_fast_checkpoint",
+        "selection_reason": "corrected no-cwd requeue for creature/posture analog",
+        "source_image_id": "p3d06_crab_orange_walker_relic",
+        "status": "done",
+        "updated_at": "2026-07-10T10:49:54Z"
+      },
+      {
+        "greenroom_job": "de498dfd9755",
+        "greenroom_submit_receipt": "submitted with absolute input/output paths and no execution-cwd override",
+        "id": "lirm16-clay-fast-seed366-requeue",
+        "input_ref": "artifacts/generator-basin-fanout-20260710/flux2/lirm16_clay_neighbor_creature_03/output.png",
+        "note": "started shape decode during memory incident; Greenroom recover moved stale running row to failed",
+        "output_ref": "artifacts/generator-basin-fanout-20260710/trellis/lirm16-clay-fast-seed366",
+        "params": {
+          "seed": 366,
+          "steps": 8,
+          "target_faces": 250000,
+          "texture_size": 1024
+        },
+        "route": "trellis2mlx_fast_checkpoint",
+        "selection_reason": "corrected no-cwd requeue for clay-conditioned armature creature",
+        "source_image_id": "lirm16_clay_neighbor_creature_03",
+        "status": "failed_stale_recovered",
+        "updated_at": "2026-07-10T10:49:54Z"
+      },
+      {
+        "greenroom_job": "42fabdb16897",
+        "greenroom_submit_receipt": "submitted with absolute input/output paths and no execution-cwd override",
+        "id": "lirm24-normal-fast-seed367-requeue",
+        "input_ref": "artifacts/generator-basin-fanout-20260710/flux2/lirm24_normal_neighbor_creature_08/output.png",
+        "note": "cancelled after memory incident before start",
+        "output_ref": "artifacts/generator-basin-fanout-20260710/trellis/lirm24-normal-fast-seed367",
+        "params": {
+          "seed": 367,
+          "steps": 8,
+          "target_faces": 250000,
+          "texture_size": 1024
+        },
+        "route": "trellis2mlx_fast_checkpoint",
+        "selection_reason": "corrected no-cwd requeue for normal-conditioned armature creature",
+        "source_image_id": "lirm24_normal_neighbor_creature_08",
+        "status": "cancelled_safety_brake",
+        "updated_at": "2026-07-10T10:49:54Z"
+      },
+      {
+        "completed_at_note": "Greenroom row completed after retry; see trellis_casts for inspected verdict.",
+        "completed_duration_s": 172.1,
+        "greenroom_job": "666c3008bcfe",
+        "id": "lirm16-clay-fast-seed468-requeue2",
+        "note": "fresh relaunch after memory incident; absolute paths and no Kaminos cwd override",
+        "output_dir": "artifacts/generator-basin-fanout-20260710/trellis/lirm16-clay-fast-seed468",
+        "output_glb": "artifacts/generator-basin-fanout-20260710/trellis/lirm16-clay-fast-seed468/output.glb",
+        "params": {
+          "resolution": 512,
+          "seed": 468,
+          "steps": 8,
+          "target_faces": 250000,
+          "texture_size": 1024
+        },
+        "route": "trellis2mlx_fast_checkpoint",
+        "source_image": "artifacts/generator-basin-fanout-20260710/flux2/lirm16_clay_neighbor_creature_03/output.png",
+        "status": "done",
+        "submitted_at": "2026-07-10T10:49:54Z"
+      },
+      {
+        "completed_at_note": "Greenroom row completed after retry; see trellis_casts for inspected verdict.",
+        "completed_duration_s": 170.0,
+        "greenroom_job": "daea02b8e29b",
+        "id": "lirm24-normal-fast-seed469-requeue2",
+        "note": "fresh relaunch after memory incident; absolute paths and no Kaminos cwd override",
+        "output_dir": "artifacts/generator-basin-fanout-20260710/trellis/lirm24-normal-fast-seed469",
+        "output_glb": "artifacts/generator-basin-fanout-20260710/trellis/lirm24-normal-fast-seed469/output.glb",
+        "params": {
+          "resolution": 512,
+          "seed": 469,
+          "steps": 8,
+          "target_faces": 250000,
+          "texture_size": 1024
+        },
+        "route": "trellis2mlx_fast_checkpoint",
+        "source_image": "artifacts/generator-basin-fanout-20260710/flux2/lirm24_normal_neighbor_creature_08/output.png",
+        "status": "done",
+        "submitted_at": "2026-07-10T10:49:54Z"
       }
     ],
+    "failure_note": "Four selected probes were first submitted with wrong cwd and failed before model work; corrected no-cwd requeues preserve the intended five real Trellis spends.",
     "first_queued_job": "785e25e4edb1",
     "first_queued_route": "trellis2mlx_source_native_combined_checkpoint",
     "max_runs": 5,
     "remaining_nominal_runs": 0,
     "selection_policy": "visual inspection first; hold remaining Trellis slots for later image batches unless a current candidate is clearly superior",
-    "spent_or_queued_runs": 5
+    "spent_or_queued_runs": "5 selected candidates; 1 source-native route failed before work, 4 bad-cwd submissions failed before work, 1 memory-incident stale recovery, 1 safety cancellation, 5 completed Trellis casts preserved."
+  },
+  "trellis_casts": [
+    {
+      "duration_s": 350.6,
+      "id": "turtle-local-fast-checkpoint-seed263",
+      "input_image": "artifacts/pixal3d-source-basin-probes-v0/greenroom-flux2-edit-turtle-relic-seed62/output.png",
+      "job_id": "f9cbf5ecee5c",
+      "output_glb": "artifacts/generator-basin-fanout-20260710/trellis/turtle-local-fast-checkpoint-seed263/output.glb",
+      "params": {
+        "steps": 8,
+        "target_faces": 250000,
+        "texture_size": 1024
+      },
+      "route": "trellis2mlx_fast_checkpoint",
+      "status": "done",
+      "visual_verdict": "Coherent dark turtle/crab-like armored creature-object; preserves shell bulk, planted feet, green foot-moss, and orange internal glints, but lighting/style are too dark for final aesthetic judgment.",
+      "witness_frames": [
+        "artifacts/generator-basin-fanout-20260710/witness/blender-glb-screens/turtle-local-fast-checkpoint-seed263_yaw0.png",
+        "artifacts/generator-basin-fanout-20260710/witness/blender-glb-screens/turtle-local-fast-checkpoint-seed263_yaw0p85.png",
+        "artifacts/generator-basin-fanout-20260710/witness/blender-glb-screens/turtle-local-fast-checkpoint-seed263_yawm0p85.png"
+      ]
+    },
+    {
+      "duration_s": 201.7,
+      "id": "turtle-sacred-engine-fast-seed364",
+      "input_image": "artifacts/generator-basin-fanout-20260710/flux2/p3d00_turtle_sacred_engine_variant/output.png",
+      "job_id": "9b854af448a1",
+      "output_glb": "artifacts/generator-basin-fanout-20260710/trellis/turtle-sacred-engine-fast-seed364/output.glb",
+      "params": {
+        "steps": 8,
+        "target_faces": 250000,
+        "texture_size": 1024
+      },
+      "route": "trellis2mlx_fast_checkpoint",
+      "status": "done",
+      "visual_verdict": "Strong good-miss cast: turtle-shaped armored relic with citadel/tower dorsal forms, heavy feet, red-orange ports, and coherent 3D objectness.",
+      "witness_frames": [
+        "artifacts/generator-basin-fanout-20260710/witness/blender-glb-screens/turtle-sacred-engine-fast-seed364_yaw0.png",
+        "artifacts/generator-basin-fanout-20260710/witness/blender-glb-screens/turtle-sacred-engine-fast-seed364_yaw0p85.png",
+        "artifacts/generator-basin-fanout-20260710/witness/blender-glb-screens/turtle-sacred-engine-fast-seed364_yawm0p85.png"
+      ]
+    },
+    {
+      "duration_s": 1101.3,
+      "id": "crab-orange-walker-fast-seed365",
+      "input_image": "artifacts/generator-basin-fanout-20260710/flux2/p3d06_crab_orange_walker_relic/output.png",
+      "job_id": "ff5d8652003c",
+      "output_glb": "artifacts/generator-basin-fanout-20260710/trellis/crab-orange-walker-fast-seed365/output.glb",
+      "params": {
+        "steps": 8,
+        "target_faces": 250000,
+        "texture_size": 1024
+      },
+      "route": "trellis2mlx_fast_checkpoint",
+      "status": "done",
+      "visual_verdict": "Coherent quadruped walker with box carapace, orange ocular/emissive ports, mechanical legs, and green overgrowth; long runtime but basin survives into mesh strongly.",
+      "witness_frames": [
+        "artifacts/generator-basin-fanout-20260710/witness/blender-glb-screens/crab-orange-walker-fast-seed365_yaw0.png",
+        "artifacts/generator-basin-fanout-20260710/witness/blender-glb-screens/crab-orange-walker-fast-seed365_yaw0p85.png",
+        "artifacts/generator-basin-fanout-20260710/witness/blender-glb-screens/crab-orange-walker-fast-seed365_yawm0p85.png"
+      ]
+    },
+    {
+      "duration_s": 172.1,
+      "id": "lirm16-clay-fast-seed468",
+      "input_image": "artifacts/generator-basin-fanout-20260710/flux2/lirm16_clay_neighbor_creature_03/output.png",
+      "job_id": "666c3008bcfe",
+      "output_glb": "artifacts/generator-basin-fanout-20260710/trellis/lirm16-clay-fast-seed468/output.glb",
+      "params": {
+        "steps": 8,
+        "target_faces": 250000,
+        "texture_size": 1024
+      },
+      "route": "trellis2mlx_fast_checkpoint",
+      "status": "done",
+      "visual_verdict": "First scaffold-to-creature cast hit: coherent segmented grub/worm body with armor bands, spikes, small feet, orange semantic/sensory spots, and a tube-mouth structure; too toy-armored for final LIRMS but identity survives around the form.",
+      "witness_frames": [
+        "artifacts/generator-basin-fanout-20260710/witness/blender-glb-screens/lirm16-clay-fast-seed468_yaw0.png",
+        "artifacts/generator-basin-fanout-20260710/witness/blender-glb-screens/lirm16-clay-fast-seed468_yaw0p85.png",
+        "artifacts/generator-basin-fanout-20260710/witness/blender-glb-screens/lirm16-clay-fast-seed468_yawm0p85.png"
+      ]
+    },
+    {
+      "duration_s": 170.0,
+      "id": "lirm24-normal-fast-seed469",
+      "input_image": "artifacts/generator-basin-fanout-20260710/flux2/lirm24_normal_neighbor_creature_08/output.png",
+      "job_id": "daea02b8e29b",
+      "output_glb": "artifacts/generator-basin-fanout-20260710/trellis/lirm24-normal-fast-seed469/output.glb",
+      "params": {
+        "steps": 8,
+        "target_faces": 250000,
+        "texture_size": 1024
+      },
+      "route": "trellis2mlx_fast_checkpoint",
+      "status": "done",
+      "visual_verdict": "Strongest LIRM proof: continuous worm/grub body, mouth-at-front, segmented belly, stumpy limbs, armor plates, spines/bumps, and side-view identity survival from crude armature conditioning.",
+      "witness_frames": [
+        "artifacts/generator-basin-fanout-20260710/witness/blender-glb-screens/lirm24-normal-fast-seed469_yaw0.png",
+        "artifacts/generator-basin-fanout-20260710/witness/blender-glb-screens/lirm24-normal-fast-seed469_yaw0p85.png",
+        "artifacts/generator-basin-fanout-20260710/witness/blender-glb-screens/lirm24-normal-fast-seed469_yawm0p85.png"
+      ]
+    }
+  ],
+  "trellis_route_verdict": {
+    "inspected_frames": [
+      "artifacts/generator-basin-fanout-20260710/witness/blender-glb-screens/lirm16-clay-fast-seed468_yaw0.png",
+      "artifacts/generator-basin-fanout-20260710/witness/blender-glb-screens/lirm16-clay-fast-seed468_yaw0p85.png",
+      "artifacts/generator-basin-fanout-20260710/witness/blender-glb-screens/lirm24-normal-fast-seed469_yaw0.png",
+      "artifacts/generator-basin-fanout-20260710/witness/blender-glb-screens/lirm24-normal-fast-seed469_yaw0p85.png",
+      "artifacts/generator-basin-fanout-20260710/witness/blender-glb-screens/turtle-sacred-engine-fast-seed364_yaw0.png",
+      "artifacts/generator-basin-fanout-20260710/witness/blender-glb-screens/crab-orange-walker-fast-seed365_yaw0p85.png"
+    ],
+    "memory_incident_read": "One earlier LIRM decode job failed during the box memory incident, but both LIRM requeues completed cleanly in about 170s each through GPU Greenroom; current evidence points to contention/unified-memory pressure, not Trellis being intrinsically box-killing.",
+    "next_slice_default": "Improve morphology armature controls and prompts toward less toy-armored, more LIRMS-native grub/worm bodies, then rerun a small image/Trellis matrix with Blender witnesses.",
+    "status": "validated_for_next_slice",
+    "summary": "Flux2 basin outputs and crude LIRM armature controls survived Trellis into coherent mesh/texture casts. LIRM24 proves the scaffold-to-image-to-Trellis route can preserve creature identity strongly enough to justify a dedicated morphology-armature iteration slice.",
+    "witness_frame_count": 15,
+    "witness_renderer": "artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py"
   },
   "visual_observations": [
     {

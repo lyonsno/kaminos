@@ -1,0 +1,19 @@
+{
+  "created_at": 1783669128.473328,
+  "duration_s": 201.7,
+  "input_name": "output.png",
+  "input_path": "artifacts/generator-basin-fanout-20260710/flux2/p3d00_turtle_sacred_engine_variant/output.png",
+  "input_path_role": "repo_relative",
+  "job_id": "9b854af448a1",
+  "job_type": "trellis2mlx_fast_checkpoint",
+  "name": "output",
+  "output_files": [
+    "output.glb"
+  ],
+  "params": {
+    "seed": "364",
+    "steps": "8",
+    "target_faces": "250000",
+    "texture_size": "1024"
+  }
+}

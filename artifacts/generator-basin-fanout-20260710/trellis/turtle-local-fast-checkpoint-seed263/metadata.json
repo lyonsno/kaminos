@@ -1,0 +1,19 @@
+{
+  "created_at": 1783668238.4999309,
+  "duration_s": 350.6,
+  "input_name": "output.png",
+  "input_path": "artifacts/pixal3d-source-basin-probes-v0/greenroom-flux2-edit-turtle-relic-seed62/output.png",
+  "input_path_role": "repo_relative",
+  "job_id": "f9cbf5ecee5c",
+  "job_type": "trellis2mlx_fast_checkpoint",
+  "name": "output",
+  "output_files": [
+    "output.glb"
+  ],
+  "params": {
+    "seed": "263",
+    "steps": "8",
+    "target_faces": "250000",
+    "texture_size": "1024"
+  }
+}
