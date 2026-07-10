@@ -1,0 +1,41 @@
+export const LERMS_TERRARIUM_COMPOSITION_SCHEMA = 'kaminos.world-cartridge.composition.v0';
+
+export function createLermsTerrariumComposition(manifest) {
+  return {
+    schema: LERMS_TERRARIUM_COMPOSITION_SCHEMA,
+    cartridgeId: manifest.id,
+    title: manifest.title,
+    defaultScene: {
+      chamber: manifest.defaultChamber,
+      route: manifest.defaultRoute,
+      recipeId: 'underhill-preview',
+    },
+    mountedAffordances: manifest.affordanceBindings.map(binding => ({
+      id: binding.id,
+      kind: binding.kind,
+      owner: binding.owner,
+      route: binding.route,
+    })),
+    firstUseTrial: manifest.firstUseTrial,
+    crucibleSeeds: manifest.crucibles.map(crucible => ({
+      id: crucible.id,
+      title: crucible.title,
+      role: crucible.role,
+      status: crucible.status,
+      consumerCanStartBy: crucible.consumerCanStartBy,
+      graduationMode: crucible.graduationMode,
+      graduationQuestion: crucible.graduationQuestion,
+      stewardshipOwner: crucible.stewardship.owner,
+      sourceOwner: crucible.sourceOwnership.owner,
+      smokeApparitionRoute: crucible.smokeApparitions[0]?.route || '',
+      smokeOffers: crucible.smokeOffers || [],
+    })),
+    smokeOfferSeed: {
+      label: 'LERMS Terrarium',
+      route: manifest.witnesses[0]?.route || '',
+      captureSurface: 'world-cartridge',
+    },
+  };
+}
+
+export default createLermsTerrariumComposition;

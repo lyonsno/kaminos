@@ -79,6 +79,11 @@ FORGE_HOST_DIAULOS_REGISTRY_PATH = Path(os.environ.get(
     "KAMINOS_FORGE_HOST_DIAULOS_REGISTRY",
     os.path.expanduser("~/.local/state/epistaxis/directive-state/epistaxis/metadosis/diaulos-registry/diauloi.json"),
 )).expanduser()
+WORLD_CARTRIDGE_INDEX_SCHEMA = "kaminos.world-cartridges.index.v0"
+WORLD_CARTRIDGE_MANIFEST_SCHEMA = "kaminos.world-cartridge.manifest.v0"
+WORLD_CARTRIDGE_SMOKE_WORKBENCH_HELPER_SCHEMA = "kaminos.world-cartridge.smoke-workbench-helper.v0"
+WORLD_CARTRIDGE_DISCOVERY_ROUTE = "/api/world-cartridges"
+WORLD_CARTRIDGES_DIR = ROOT / "worlds"
 ASSET_ROOTS = [
     {
         "id": "splat-inbox",
@@ -218,6 +223,125 @@ def build_forge_host_registry_snapshot(
         "diaulosRegistry": diaulos_status,
         "endpoints": endpoints,
         "warnings": warnings,
+    }
+
+
+def _copy_jsonish(value):
+    return json.loads(json.dumps(value))
+
+
+def _world_smoke_workbench_helper(offer, cartridge, crucible):
+    if offer.get("routeKind") == "host-surface-smoke-offer-route" or offer.get("targetSurface") == "lerms-moving-timeline-host":
+        return {
+            "schema": WORLD_CARTRIDGE_SMOKE_WORKBENCH_HELPER_SCHEMA,
+            "routeKind": offer.get("routeKind") or "host-surface-smoke-offer-route",
+            "operatorRoute": offer.get("route"),
+            "operatorSteps": [
+                "open_operator_route",
+                "inspect_lerms_moving_timeline_host",
+                "capture_host_surface_witness",
+                "return_source_owned_firing_receipt_or_gap_report",
+            ],
+            "receiptSchema": offer.get("expectedReceipt") or "kaminos.host-surface.tools-report.v0",
+            "docs": [
+                "docs/smoke-workbench-for-agents.md",
+                "docs/world-cartridge-first-use-workflow.md",
+            ],
+        }
+
+    query = {
+        "kaminos_forge_host": "live",
+        "world_cartridge": cartridge.get("id"),
+        "world_crucible": crucible.get("id"),
+        "forge_host_smoke_offer": offer.get("id"),
+    }
+    chamber = cartridge.get("defaultChamber") or (cartridge.get("defaultRoute", {}).get("query") or {}).get("world_chamber")
+    if chamber:
+        query["world_chamber"] = chamber
+    return {
+        "schema": WORLD_CARTRIDGE_SMOKE_WORKBENCH_HELPER_SCHEMA,
+        "routeKind": "forge-host-smoke-offer-route",
+        "operatorRoute": f"?{urlencode(query)}",
+        "operatorSteps": [
+            "open_operator_route",
+            "inspect_inline_chamber",
+            "capture_smoke_receipt",
+            "return_source_owned_firing_or_gap_report",
+        ],
+        "receiptSchema": "kaminos.forge-host.smoke-receipt.v0",
+        "docs": [
+            "docs/smoke-workbench-for-agents.md",
+            "docs/world-cartridge-first-use-workflow.md",
+        ],
+    }
+
+
+def _world_crucibles_with_helpers(cartridge):
+    crucibles = []
+    for crucible in cartridge.get("crucibles") or []:
+        crucible_copy = _copy_jsonish(crucible)
+        offers = []
+        for offer in crucible_copy.get("smokeOffers") or []:
+            offer_copy = _copy_jsonish(offer)
+            offer_copy["smokeWorkbench"] = _world_smoke_workbench_helper(offer_copy, cartridge, crucible_copy)
+            offers.append(offer_copy)
+        crucible_copy["smokeOffers"] = offers
+        crucibles.append(crucible_copy)
+    return crucibles
+
+
+def _world_cartridge_summary(cartridge, root_dir, cartridge_dir):
+    default_route = _copy_jsonish(cartridge.get("defaultRoute") or {})
+    default_route.setdefault("query", {})
+    default_route["query"].setdefault("world_cartridge", cartridge.get("id"))
+    return {
+        "schema": WORLD_CARTRIDGE_MANIFEST_SCHEMA,
+        "id": cartridge.get("id"),
+        "slug": cartridge.get("slug") or cartridge.get("id"),
+        "title": cartridge.get("title"),
+        "summary": _copy_jsonish(cartridge.get("summary") or {}),
+        "authority": _copy_jsonish(cartridge.get("authority") or {}),
+        "defaultChamber": cartridge.get("defaultChamber") or default_route.get("query", {}).get("world_chamber"),
+        "defaultRoute": default_route,
+        "graduation": _copy_jsonish(cartridge.get("graduation") or {}),
+        "sourceBridges": _copy_jsonish(cartridge.get("sourceBridges") or []),
+        "affordanceBindings": _copy_jsonish(cartridge.get("affordanceBindings") or []),
+        "generationBasins": _copy_jsonish(cartridge.get("generationBasins") or []),
+        "firstUseTrial": _copy_jsonish(cartridge.get("firstUseTrial") or {}),
+        "crucibles": _world_crucibles_with_helpers(cartridge),
+        "crucibleCount": len(cartridge.get("crucibles") or []),
+        "witnessCount": len(cartridge.get("witnesses") or []),
+        "path": os.path.relpath(cartridge_dir, root_dir),
+    }
+
+
+def build_world_cartridge_index(root_dir=WORLD_CARTRIDGES_DIR):
+    errors = []
+    cartridges = []
+    if not root_dir.exists():
+        return {
+            "schema": WORLD_CARTRIDGE_INDEX_SCHEMA,
+            "discoveryRoute": WORLD_CARTRIDGE_DISCOVERY_ROUTE,
+            "rootDir": str(root_dir),
+            "cartridges": cartridges,
+            "errors": [{"path": str(root_dir), "error": "world cartridges root missing"}],
+        }
+    for cartridge_dir in sorted(path for path in root_dir.iterdir() if path.is_dir()):
+        manifest_path = cartridge_dir / "world.json"
+        if not manifest_path.exists():
+            continue
+        try:
+            cartridge = json.loads(manifest_path.read_text())
+            cartridges.append(_world_cartridge_summary(cartridge, root_dir, cartridge_dir))
+        except Exception as error:
+            errors.append({"path": str(cartridge_dir), "error": str(error)})
+    cartridges.sort(key=lambda cartridge: cartridge.get("id") or "")
+    return {
+        "schema": WORLD_CARTRIDGE_INDEX_SCHEMA,
+        "discoveryRoute": WORLD_CARTRIDGE_DISCOVERY_ROUTE,
+        "rootDir": str(root_dir),
+        "cartridges": cartridges,
+        "errors": errors,
     }
 
 
@@ -947,6 +1071,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_splat_correction_get(parse_qs(parsed.query))
         elif parsed.path == "/api/forge-host/registry":
             self.handle_forge_host_registry()
+        elif parsed.path == "/api/world-cartridges":
+            self.handle_world_cartridges()
         elif parsed.path == "/api/volume-capture":
             self.handle_volume_capture_get(parse_qs(parsed.query))
         elif parsed.path == "/api/volume-captures":
@@ -986,6 +1112,12 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
 
     def handle_forge_host_registry(self):
         self.send_json(build_forge_host_registry_snapshot())
+
+    def handle_world_cartridges(self):
+        try:
+            self.send_json(build_world_cartridge_index())
+        except Exception as error:
+            self.send_json({"error": str(error)}, 500)
 
     def handle_pipeline_manifest(self):
         try:

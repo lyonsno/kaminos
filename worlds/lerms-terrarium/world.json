@@ -1,0 +1,570 @@
+{
+  "schema": "kaminos.world-cartridge.manifest.v0",
+  "id": "lerms-terrarium",
+  "slug": "lerms-terrarium",
+  "title": "LERMS Terrarium",
+  "summary": {
+    "tagline": "A Kaminos-hosted little-world cartridge for terrain, bodies, hand surfaces, props, goins, motion, and creature interaction basins.",
+    "creatureFamilies": ["red-lerms", "goins"],
+    "surfaces": ["terrain-preview", "motion-agency", "hand-surface", "finger-fluid", "forge-host-smoke-offers"]
+  },
+  "audience": ["operator", "agent-smoke-builders", "taste-first-creature-makers", "technical-world-builders"],
+  "authority": {
+    "fixtureIdentity": "lerms-terrarium.fixture.v0",
+    "displayAuthority": "fixture_cartridge",
+    "statusColor": "#7fd9bd",
+    "provenance": "kaminos:lerms-world-cartridge-0705"
+  },
+  "lineage": {
+    "origin": "Kaminos world-cartridge scaffold slice",
+    "sourceDocs": [
+      "docs/world-cartridges.md",
+      "docs/smoke-workbench-for-agents.md",
+      "docs/world-cartridge-first-use-workflow.md"
+    ]
+  },
+  "defaultChamber": "lerms-underhill",
+  "defaultRoute": {
+    "tab": "worlds",
+    "query": {
+      "world_cartridge": "lerms-terrarium",
+      "world_chamber": "lerms-underhill",
+      "posture": "inspect",
+      "bench": "terrain-preview"
+    }
+  },
+  "sourceBridges": [
+    {
+      "id": "lerms-game-law",
+      "repo": "lerms",
+      "role": "game-law",
+      "surface": "domain-native runtime, gameplay loop, creature semantics, saves, and progression"
+    },
+    {
+      "id": "underhill-composer",
+      "repo": "lerms",
+      "role": "terrain-and-first-vertical",
+      "surface": "lerms-underhill chamber receipts and first vertical frame summaries"
+    },
+    {
+      "id": "hand-state-runtime",
+      "repo": "shared-runtime-candidate",
+      "role": "hand-state",
+      "surface": "WiLoR and hand-surface state stream once extracted"
+    }
+  ],
+  "affordanceBindings": [
+    {
+      "id": "world-chamber-lerms-underhill",
+      "kind": "world-chamber",
+      "owner": "kaminos",
+      "route": "world_chamber=lerms-underhill&posture=inspect&bench=terrain-preview"
+    },
+    {
+      "id": "actor-motion-agency",
+      "kind": "actor-motion",
+      "owner": "actor-motion-substrate",
+      "route": "kaminos_motion_agency=1&kaminos_generated_pose_temporal=1"
+    },
+    {
+      "id": "hand-surface-runtime",
+      "kind": "state-stream",
+      "owner": "hand-surface-runtime",
+      "route": "hand-state.frame.v0"
+    },
+    {
+      "id": "generated-asset-candidates",
+      "kind": "asset-generation",
+      "owner": "generated-asset-pipeline",
+      "route": "generated assets into Kaminos asset routes"
+    },
+    {
+      "id": "forge-host-smoke-offers",
+      "kind": "operator-smoke",
+      "owner": "forge-host-smoke-workbench",
+      "route": "forge-host smoke offers and capture"
+    }
+  ],
+  "generationBasins": [
+    {
+      "id": "little-body-variants",
+      "kind": "creature-visuals",
+      "inputs": ["orb bodies", "lamellar bands", "red lerm body language", "motion takes"]
+    },
+    {
+      "id": "underhill-terrain-props",
+      "kind": "terrain-and-props",
+      "inputs": ["Hill terrain", "goins", "little docks", "carrier props"]
+    },
+    {
+      "id": "finger-fluid-interactions",
+      "kind": "interaction-fluid",
+      "inputs": ["hand state", "finger-fluid emitters", "terrain collisions", "creature reactions"]
+    }
+  ],
+  "sceneRecipes": [
+    {
+      "id": "underhill-preview",
+      "label": "Underhill Preview",
+      "chamber": "lerms-underhill",
+      "posture": "inspect",
+      "bench": "terrain-preview"
+    },
+    {
+      "id": "motion-agency-creature-pass",
+      "label": "Motion Agency Creature Pass",
+      "chamber": "lerms-underhill",
+      "posture": "inhabit",
+      "affordances": ["actor-motion-agency", "world-chamber-lerms-underhill"]
+    }
+  ],
+  "firstUseTrial": {
+    "schema": "kaminos.world-cartridge.first-use-trial.v0",
+    "entryRoute": "/api/world-cartridges",
+    "firstMove": "choose_crucible",
+    "chooseCrucible": "Choose the crucible whose armature and handles match the part of the lerms terrarium work your lane can move. A valid first use begins by naming the cartridge, naming one crucible, naming one armature, naming one handle, and running one firing.",
+    "trialSteps": [
+      "enter_cartridge",
+      "choose_crucible",
+      "name_armature",
+      "name_handle",
+      "run_firing",
+      "emit_shard_or_cast",
+      "write_receipt",
+      "answer_graduation_question"
+    ],
+    "allowedOutputs": [
+      "firing_receipt",
+      "shard",
+      "cast",
+      "smoke_apparition_route",
+      "graduation_report",
+      "gap_report"
+    ],
+    "failureSignals": [
+      "no_crucible_chosen",
+      "no_armature_named",
+      "no_handle_used",
+      "no_firing_recorded",
+      "output_not_classified_as_shard_cast_or_receipt",
+      "graduation_question_absent",
+      "source_ownership_blurred_with_workbench_stewardship"
+    ],
+    "consumerCoverage": [
+      {
+        "consumer": "hill-terrain-source",
+        "crucibles": ["hill-of-hills"],
+        "firstUse": "Choose `hill-of-hills`, name the chamber or terrain-state armature, use one terrain handle, run one firing, and leave a terrain receipt."
+      },
+      {
+        "consumer": "lerm-species-source",
+        "crucibles": ["lerm-species"],
+        "firstUse": "Choose `lerm-species`, name the creature/body armature, use one motion or attention handle, run one firing, and leave a creature receipt."
+      },
+      {
+        "consumer": "hand-feel-live-compositing",
+        "crucibles": ["finger-fluid", "glove-emitter"],
+        "firstUse": "Choose `finger-fluid` when the firing is about emitted interaction or creature response; choose `glove-emitter` when the firing is about hand/glove route control or live compositing."
+      },
+      {
+        "consumer": "finger-fluid-source",
+        "crucibles": ["finger-fluid"],
+        "firstUse": "Choose `finger-fluid`, name the hand-state or fluid interaction armature, use one emitter handle, run one firing, and leave a fluid receipt."
+      },
+      {
+        "consumer": "glove-well-source",
+        "crucibles": ["glove-emitter"],
+        "firstUse": "Choose `glove-emitter`, name the native-host armature, use one source-route handle, run one firing, and leave a glove receipt."
+      }
+    ],
+    "graduationQuestion": "After this firing, should the result remain in the Kaminos terrarium, become a lerms domain-native patch, become a shared runtime candidate, ship as a Kaminos-backed shell, or archive as prototype memory?"
+  },
+  "crucibles": [
+    {
+      "schema": "kaminos.world-crucible.descriptor.v0",
+      "id": "hill-of-hills",
+      "title": "Hill of Hills",
+      "role": "Terrain phase-space crucible for semantic topological gradients, chamber placement, and future terrain hologram smokes.",
+      "status": "fixture_seed",
+      "makingIntent": "Let Kaminos host the Hill as a manipulable terrain world while lerms keeps the game-specific terrain law that survives the smoke.",
+      "consumerCanStartBy": "Run a firing that mounts one terrain or route behavior onto the lerms-underhill chamber armature, uses a terrain posture or semantic phase handle, and leaves a receipt classifying the output as a shard, cast, or gap.",
+      "armatures": [
+        {
+          "id": "lerms-underhill-chamber",
+          "kind": "world-chamber",
+          "route": "world_chamber=lerms-underhill&bench=terrain-preview"
+        },
+        {
+          "id": "hill-phase-space",
+          "kind": "terrain-state-space",
+          "source": "operator-provided phase-strip and lerms terrain experiments"
+        }
+      ],
+      "handles": [
+        {
+          "id": "terrain-posture",
+          "kind": "camera-posture",
+          "surface": "orbit and inspect"
+        },
+        {
+          "id": "semantic-phase",
+          "kind": "gradient-control",
+          "surface": "valley deepen, hill swell, epoch clock"
+        }
+      ],
+      "firings": [
+        {
+          "id": "phase-strip-25",
+          "kind": "operator-smoked-filmstrip",
+          "source": "hill-of-hills-phase-strip-25-1783305042523.png"
+        }
+      ],
+      "shards": [
+        {
+          "id": "continuous-terrain-gradient",
+          "kind": "visual-behavior",
+          "note": "Continuous regions should preserve semantic gradients across topological movement."
+        }
+      ],
+      "casts": [
+        {
+          "id": "underhill-terrain-fixture",
+          "kind": "world-surface",
+          "route": "world_cartridge=lerms-terrarium&world_chamber=lerms-underhill&bench=terrain-preview"
+        }
+      ],
+      "receipts": [
+        {
+          "id": "operator-hill-filmstrip-smoke",
+          "kind": "visual-observation",
+          "date": "2026-07-05"
+        }
+      ],
+      "smokeApparitions": [
+        {
+          "id": "hill-phase-strip-smoke-apparition",
+          "route": "future:moge-depth-smoke-apparition",
+          "authority": "planned_apparition",
+          "source": "hill-of-hills phase strip and screenshot"
+        }
+      ],
+      "graduationMode": "remain_in_kaminos_terrarium",
+      "graduationQuestion": "Does this terrain firing remain a Kaminos terrarium surface, become lerms domain-native terrain law, or expose a shared terrain/path runtime candidate?",
+      "stewardship": {
+        "owner": "cartridge-workbench-steward",
+        "role": "Kaminos cartridge and crucible workbench stewardship"
+      },
+      "sourceOwnership": {
+        "owner": "hill-terrain-source",
+        "role": "Hill terrain source packets and domain terrain behavior"
+      },
+      "custody": {
+        "owner": "cartridge-workbench-steward",
+        "sourceRepo": "kaminos",
+        "domainPartner": "lerms"
+      }
+    },
+    {
+      "schema": "kaminos.world-crucible.descriptor.v0",
+      "id": "lerm-species",
+      "title": "Lerm Species",
+      "role": "Creature body, posture, gait, and interaction crucible for taste-first creature making.",
+      "status": "fixture_seed",
+      "makingIntent": "Give agent lanes a Kaminos workbench for composing lerm bodies and behaviors from existing actor, station, and motion affordances.",
+      "consumerCanStartBy": "Run a firing that mounts one lerm body, posture, or behavior take onto a creature or actor armature, uses one motion or attention handle, and leaves a receipt classifying the output as a shard, cast, or gap.",
+      "armatures": [
+        {
+          "id": "little-body-variants",
+          "kind": "generation-basin"
+        },
+        {
+          "id": "actor-motion-agency",
+          "kind": "actor-motion"
+        }
+      ],
+      "handles": [
+        {
+          "id": "look-target",
+          "kind": "actor-attention"
+        },
+        {
+          "id": "motion-habit",
+          "kind": "animation-routine"
+        }
+      ],
+      "firings": [
+        {
+          "id": "schnoz-orb-station-smoke",
+          "kind": "forge-host-actor-fixture"
+        }
+      ],
+      "shards": [
+        {
+          "id": "orb-body-language",
+          "kind": "motion-memory"
+        }
+      ],
+      "casts": [
+        {
+          "id": "station-body-seed",
+          "kind": "actor-seed"
+        }
+      ],
+      "receipts": [
+        {
+          "id": "forge-host-orb-witness",
+          "kind": "operator-visible-smoke",
+          "date": "2026-06-29"
+        }
+      ],
+      "smokeApparitions": [
+        {
+          "id": "lerm-body-motion-smoke-apparition",
+          "route": "future:moge-depth-smoke-apparition",
+          "authority": "planned_apparition",
+          "source": "lerm body and motion captures"
+        }
+      ],
+      "smokeOffers": [
+        {
+          "id": "lerm-species-moving-timeline-smoke-offer",
+          "label": "Lerm Species Moving Timeline Firing",
+          "routeKind": "host-surface-smoke-offer-route",
+          "route": "index.html?kaminos_lerms_moving_timeline_host=1&world_chamber=lerms-underhill&posture=inspect&bench=terrain-preview&lerms_actor_motion_timeline_url=%2Ftests%2Ffixtures%2Flerms-moving-timeline-host-smoke.json",
+          "targetUrl": "index.html?kaminos_lerms_moving_timeline_host=1&world_chamber=lerms-underhill&posture=inspect&bench=terrain-preview&lerms_actor_motion_timeline_url=%2Ftests%2Ffixtures%2Flerms-moving-timeline-host-smoke.json",
+          "targetSurface": "lerms-moving-timeline-host",
+          "hostRoute": "kaminos/lerms-moving-timeline-host",
+          "packetSchema": "lerms.preview-bench-actor-motion-timeline.v0",
+          "packetRoute": "lerms/preview-bench/actor-motion-timeline-file",
+          "sourceRole": "lerm-species-source",
+          "sourceAuthority": "source-owned-timeline-packet",
+          "sourceTruthAuthority": "lerms.timelineBehaviorTruth",
+          "authority": "firing_receipt",
+          "freshness": "fixture",
+          "outputClass": "firing_receipt",
+          "expectedReceipt": "kaminos.host-surface.tools-report.v0",
+          "downgrades": [
+            "timeline_playback_not_behavior_engine",
+            "timevarying_payload_not_live_socket_stream"
+          ]
+        }
+      ],
+      "graduationMode": "remain_in_kaminos_terrarium",
+      "graduationQuestion": "Does this creature firing remain a Kaminos terrarium example, move into lerms species/gameplay implementation, or become shared motion/body vocabulary?",
+      "stewardship": {
+        "owner": "cartridge-workbench-steward",
+        "role": "Kaminos crucible workflow and consumer trial stewardship"
+      },
+      "sourceOwnership": {
+        "owner": "lerm-species-source",
+        "role": "Lerm species/body/gameplay source direction, with reusable motion substrate as a dependency"
+      },
+      "custody": {
+        "owner": "cartridge-workbench-steward",
+        "sourceRepo": "kaminos",
+        "domainPartner": "lerms"
+      }
+    },
+    {
+      "schema": "kaminos.world-crucible.descriptor.v0",
+      "id": "finger-fluid",
+      "title": "Finger Fluid",
+      "role": "Hand-emitted fluid, smoke, and creature-response crucible for direct operator interaction.",
+      "status": "fixture_seed",
+      "makingIntent": "Let hand-state experiments become visible Kaminos interactions before lerms chooses the domain-native gameplay shape.",
+      "consumerCanStartBy": "Run a firing that mounts one fluid emission or creature response onto the hand-state armature, uses one state-stream or emitter handle, and leaves a receipt classifying the output as a shard, cast, or gap.",
+      "armatures": [
+        {
+          "id": "finger-fluid-interactions",
+          "kind": "generation-basin"
+        },
+        {
+          "id": "hand-state-runtime",
+          "kind": "shared-runtime-candidate"
+        }
+      ],
+      "handles": [
+        {
+          "id": "hand-state-frame",
+          "kind": "state-stream",
+          "route": "hand-state.frame.v0"
+        },
+        {
+          "id": "fluid-emission-point",
+          "kind": "interaction-emitter"
+        }
+      ],
+      "firings": [
+        {
+          "id": "finger-fluid-first-pass",
+          "kind": "interaction-fixture"
+        }
+      ],
+      "shards": [
+        {
+          "id": "emission-response-loop",
+          "kind": "interaction-memory"
+        }
+      ],
+      "casts": [
+        {
+          "id": "finger-fluid-smoke-bench",
+          "kind": "smoke-route-candidate"
+        }
+      ],
+      "receipts": [
+        {
+          "id": "hand-surface-runtime-boundary",
+          "kind": "shared-runtime-routing"
+        }
+      ],
+      "smokeApparitions": [
+        {
+          "id": "finger-fluid-hand-smoke-apparition",
+          "route": "future:moge-depth-smoke-apparition",
+          "authority": "planned_apparition",
+          "source": "hand-state and finger-fluid captures"
+        }
+      ],
+      "graduationMode": "extract_shared_runtime",
+      "graduationQuestion": "Does this finger-fluid firing remain a Kaminos terrarium affordance, move into lerms gameplay, or become shared hand/fluid runtime?",
+      "stewardship": {
+        "owner": "hand-integration-workbench",
+        "role": "Workbench success and hand-surface integration stewardship"
+      },
+      "sourceOwnership": {
+        "owner": "finger-fluid-source",
+        "role": "Finger-fluid subsystem source payloads, solver direction, and smoke targets"
+      },
+      "custody": {
+        "owner": "hand-integration-workbench",
+        "sourceRepo": "shared-runtime-candidate",
+        "domainPartner": "lerms"
+      }
+    },
+    {
+      "schema": "kaminos.world-crucible.descriptor.v0",
+      "id": "glove-emitter",
+      "title": "Glove Emitter",
+      "role": "Glovewell native-host adapter crucible for proving that Kaminos can be the happy path for visual smokes.",
+      "status": "fixture_seed",
+      "makingIntent": "Keep the glove work inside the Kaminos bench while making the reusable hand/glove route obvious enough for consumer lanes to follow.",
+      "consumerCanStartBy": "Run a firing that mounts one glove or hand-surface source route onto a native-host armature, uses one smoke-offer or source-route handle, and leaves a receipt classifying the output as a shard, cast, or gap.",
+      "armatures": [
+        {
+          "id": "hand-surface-runtime",
+          "kind": "affordance-binding"
+        },
+        {
+          "id": "native-host-smoke-route",
+          "kind": "operator-smoke"
+        }
+      ],
+      "handles": [
+        {
+          "id": "glove-source-route",
+          "kind": "source-bridge"
+        },
+        {
+          "id": "smoke-offer-capture",
+          "kind": "capture-handle"
+        }
+      ],
+      "firings": [
+        {
+          "id": "glovewell-native-host-conformance",
+          "kind": "conformance-smoke"
+        }
+      ],
+      "shards": [
+        {
+          "id": "happy-path-miss-memory",
+          "kind": "process-learning"
+        }
+      ],
+      "casts": [
+        {
+          "id": "kaminos-native-host-adapter-template",
+          "kind": "adapter-shape"
+        }
+      ],
+      "receipts": [
+        {
+          "id": "greedy-conformance-reply",
+          "kind": "lane-receipt",
+          "date": "2026-07-04"
+        }
+      ],
+      "smokeApparitions": [
+        {
+          "id": "glove-emitter-smoke-apparition",
+          "route": "future:moge-depth-smoke-apparition",
+          "authority": "planned_apparition",
+          "source": "glovewell smoke capture"
+        }
+      ],
+      "smokeOffers": [
+        {
+          "id": "glove-emitter-native-host-smoke-offer",
+          "label": "Glove Emitter Native Host Gap Route",
+          "route": "index.html?kaminos_forge_host=live&world_chamber=lerms-underhill&world_cartridge=lerms-terrarium&world_crucible=glove-emitter&forge_host_smoke_offer=glove-emitter-native-host-smoke-offer",
+          "targetUrl": "index.html?kaminos_glove_well_host=1&kaminos_embed=glove-well-host&glove_well_host_url=http%3A%2F%2F127.0.0.1%3A5176%2F__lerms%2Fglove-well-host-packet%2Flive&glove_well_host_live=1&glove_well_host_poll_ms=750",
+          "targetSurface": "kaminos/glove-well-host",
+          "sourceRole": "glove-well-source",
+          "authority": "gap_report_route",
+          "freshness": "waiting",
+          "outputClass": "gap_report",
+          "expectedReceipt": "firing_receipt",
+          "downgrades": [
+            "kaminos_event_cache_empty_until_live_hand_packets",
+            "native_host_visual_smoke_not_yet_passing"
+          ]
+        }
+      ],
+      "graduationMode": "extract_shared_runtime",
+      "graduationQuestion": "Does this glove firing remain a Kaminos adapter recipe, move into lerms/glove implementation, or become shared hand-state/native-host runtime?",
+      "stewardship": {
+        "owner": "hand-integration-workbench",
+        "role": "Workbench success and hand/glove integration stewardship"
+      },
+      "sourceOwnership": {
+        "owner": "glove-well-source",
+        "role": "Glovewell source packets, glove gameplay semantics, and native-host target payloads"
+      },
+      "custody": {
+        "owner": "hand-integration-workbench",
+        "sourceRepo": "shared-runtime-candidate",
+        "domainPartner": "lerms"
+      }
+    }
+  ],
+  "graduation": {
+    "currentMode": "remain_in_kaminos_terrarium",
+    "modes": [
+      "remain_in_kaminos_terrarium",
+      "port_domain_native",
+      "extract_shared_runtime",
+      "ship_kaminos_backed_shell",
+      "archive_prototype"
+    ],
+    "notes": [
+      "Kaminos keeps the terrarium cartridge and smoke composition surface.",
+      "LERMS receives domain-native ports for gameplay systems that prove their shape.",
+      "Repeated cross-project needs become shared runtime candidates."
+    ]
+  },
+  "witnesses": [
+    {
+      "schema": "kaminos.world-cartridge.witness.v0",
+      "id": "lerms-terrarium-underhill-fixture",
+      "route": "world_cartridge=lerms-terrarium&world_chamber=lerms-underhill&posture=inspect&bench=terrain-preview",
+      "surface": "worlds tab / LERMS Underhill chamber",
+      "authority": "fixture_cartridge"
+    }
+  ],
+  "files": {
+    "composition": "composition.js",
+    "graduation": "graduation.md",
+    "witnesses": "witnesses/"
+  }
+}

@@ -25,6 +25,8 @@ The kiln is not only a status effect. Kaminos organizes spatial work into chambe
 
 This keeps the UI from collapsing into a pile of one-off tabs. A terrain route, splat correction, material bake, motion preview, or future world-state packet can all enter Kaminos with its own shape and lineage, then become inspectable in a shared spatial frame.
 
+World-cartridge scaffolds make this flow concrete for reusable chambers and worked examples; see [World Cartridges](docs/world-cartridges.md) and the [Smoke Workbench guide](docs/smoke-workbench-for-agents.md).
+
 ## Volumetric Fire
 
 The landed fire volume is the first backend substrate for that kiln language. It already renders high-fidelity dancing flame and smoke in-browser through WebGPU, with pressure-tier controls that can spend more solver work in the visually important flame bands and less in background smoke.
