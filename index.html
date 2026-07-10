@@ -1151,6 +1151,7 @@ let aoPass = null, aoIntensity = null, renderPipeline = null, scenePass = null;
 let backdropMesh = null;
 let currentMesh = null;
 let groundPlane = null;
+let motionPanelHillDefaultGroundPlaneSuppression = null;
 let loadedFiles = {};
 let receipt = null;
 let currentEnvName = 'studio';
@@ -3984,6 +3985,9 @@ function disposeMotionOutputMapScene() {
 }
 
 function disposeMotionTemporalScene() {
+  if (motionPanelHillDefaultGroundPlaneSuppression?.active) {
+    applyMotionPanelHillTerrainGroundPlaneSuppression(null, { reason: 'dispose-motion-temporal-scene' });
+  }
   if (!motionTemporalState?.root) return;
   scene.remove(motionTemporalState.root);
   motionTemporalState.root.traverse(object => {
@@ -3996,6 +4000,39 @@ function disposeMotionTemporalScene() {
     }
   });
   motionTemporalState.active = false;
+}
+
+function applyMotionPanelHillTerrainGroundPlaneSuppression(pathWorld = null, options = {}) {
+  const hillTerrainSurface = pathWorld?.hillTerrainSurface || null;
+  const shouldSuppress = !!hillTerrainSurface;
+  const previousVisible = groundPlane ? !!groundPlane.visible : null;
+  const backdropActive = !!backdropMesh;
+  if (groundPlane) {
+    groundPlane.visible = shouldSuppress ? false : !backdropActive;
+  }
+  const nextVisible = groundPlane ? !!groundPlane.visible : null;
+  const evidence = {
+    schema: 'kaminos.motion-panel-hill-default-ground-plane-suppression.v0',
+    mode: shouldSuppress ? 'hill-terrain-default-ground-suppressed-v0' : 'default-ground-plane-restored-v0',
+    active: shouldSuppress,
+    authority: shouldSuppress ? 'hill-terrain-surface' : (backdropActive ? 'backdrop' : 'default-scene-ground-plane'),
+    reason: options.reason || (shouldSuppress ? 'hill-terrain-surface-mounted' : 'hill-terrain-surface-not-mounted'),
+    groundPlaneFound: !!groundPlane,
+    backdropActive,
+    previousVisible,
+    groundPlaneVisible: nextVisible,
+    hillTerrainSurface: hillTerrainSurface
+      ? {
+        schema: hillTerrainSurface.schema || null,
+        route: hillTerrainSurface.route || null,
+        sourceRef: hillTerrainSurface.sourceRef || null,
+        routePlanId: hillTerrainSurface.routePlanId || null,
+        terrainOverlayMode: hillTerrainSurface.terrainOverlayMode || null,
+      }
+      : null,
+  };
+  motionPanelHillDefaultGroundPlaneSuppression = evidence;
+  return evidence;
 }
 
 function frameMotionAgencyCamera() {
@@ -8106,6 +8143,11 @@ async function createGeneratedPoseTemporalScene({ force = false, clipId = null, 
     terrainSource: motionPanelHillAffordanceSource,
   });
   root.add(pathWorld.group);
+  const defaultGroundPlaneSuppression = applyMotionPanelHillTerrainGroundPlaneSuppression(pathWorld, {
+    reason: pathWorld?.hillTerrainSurface
+      ? 'hill-terrain-surface-mounted'
+      : 'generated-pose-temporal-non-hill',
+  });
   const hillMultiActorConfigs = createMotionPanelHillMultiActorConfigs(params);
   const primaryActorConfig = hillMultiActorConfigs[0] || {
     id: `generated-pose-temporal-${harness.registryClipId || harness.track.id}`,
@@ -8192,6 +8234,7 @@ async function createGeneratedPoseTemporalScene({ force = false, clipId = null, 
     sourceOrientationRemap,
     sourceGhost,
     pathWorld,
+    defaultGroundPlaneSuppression,
     pathWorldInterruptRuntime: null,
     pathWorldSteeringMemoryRuntime: null,
     duration: harness.duration,
@@ -10542,6 +10585,8 @@ window.kaminosGeneratedPoseTemporalDebugState = function() {
     pathWorldActiveSource: state?.lastPathWorldInterrupt?.activeSource || state?.lastPathWorldRouteAuthority || (state?.lastPathWorld ? 'world-path' : null),
     hillTerrainSurface: state?.lastPathWorld?.hillTerrainSurface || state?.pathWorld?.hillTerrainSurface || null,
     hillTerrainFrame: state?.lastPathWorld?.hillTerrainFrame || state?.pathWorld?.hillTerrainFrame || null,
+    defaultGroundPlaneSuppression: state?.defaultGroundPlaneSuppression || motionPanelHillDefaultGroundPlaneSuppression || null,
+    groundPlaneVisible: groundPlane ? !!groundPlane.visible : null,
     hillTerrainCarrier: state?.lastHillTerrainCarrier || state?.lastActors?.[0]?.hillTerrainCarrier || null,
     carrierPathFollower: state?.lastCarrierPathFollower || state?.lastActors?.[0]?.carrierPathFollower || null,
     terrainContact: state?.lastCarrierPathFollower?.terrainContact || state?.lastActors?.[0]?.terrainContact || null,
@@ -12069,7 +12114,7 @@ function removeBackdrop() {
     backdropMesh.material.dispose();
   }
   backdropMesh = null;
-  if (groundPlane) groundPlane.visible = true;
+  if (groundPlane) groundPlane.visible = !motionPanelHillDefaultGroundPlaneSuppression?.active;
 }
 
 document.getElementById('backdrop-toggle').addEventListener('change', e => {

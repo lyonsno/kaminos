@@ -63,6 +63,10 @@ assert.match(index, /frozen-source-snapshot/, 'browser route evidence labels sta
 assert.match(index, /dynamicContinuity/, 'browser route evidence avoids silently claiming dynamic topology continuity');
 assert.match(index, /hillTerrainSurface/, 'Path World debug exposes the mounted Hill terrain surface evidence');
 assert.match(index, /hillTerrainFrame/, 'Path World debug preserves the Hill support-frame source identity');
+assert.match(index, /function applyMotionPanelHillTerrainGroundPlaneSuppression/, 'Hill terrain smoke explicitly suppresses the default scene ground plane instead of visually fighting it');
+assert.match(index, /hill-terrain-default-ground-suppressed-v0/, 'Hill terrain ground-plane suppression evidence names the visual cleanup slice');
+assert.match(index, /defaultGroundPlaneSuppression/, 'Path World debug exposes whether the default ground plane was suppressed by Hill terrain authority');
+assert.match(index, /groundPlaneVisible/, 'Path World debug records effective default ground-plane visibility instead of relying on visual guesswork');
 assert.match(index, /hill-native-route-world/, 'Hill route smoke names the Hill-native route world instead of only the flat display projection');
 assert.match(index, /routeMode:\s*'one-shot-hold'/, 'Hill-native route smoke defaults to forward traversal and hold instead of reverse patrol');
 assert.doesNotMatch(index, /routeMode:\s*'patrol-return'[\s\S]{0,600}reason:\s*'hill-native-route-world'/, 'Hill-native route smoke must not hardcode patrol-return as the default route conductor mode');
@@ -127,6 +131,8 @@ assert.match(liveWitness, /hillTerrainSurface/, 'live witness records Hill terra
 assert.match(liveWitness, /terrainOverlayLegend/, 'live witness records effective terrain overlay authority and normalization evidence');
 assert.match(liveWitness, /overlayColorFingerprint/, 'live witness records a terrain overlay color fingerprint so profile changes cannot silently look static');
 assert.match(liveWitness, /hillTerrainFrame/, 'live witness records Hill terrain frame evidence');
+assert.match(liveWitness, /defaultGroundPlaneSuppression/, 'live witness records Hill terrain default-ground suppression evidence');
+assert.match(liveWitness, /groundPlaneVisible/, 'live witness records effective default ground-plane visibility');
 assert.match(liveWitness, /pathWorldRouteFixture/, 'live witness records the effective Hill route fixture');
 assert.match(liveWitness, /terrainOverlayMode/, 'live witness records the effective Hill terrain overlay mode');
 assert.match(liveWitness, /hillTerrainCarrier/, 'live witness records Hill terrain carrier evidence');

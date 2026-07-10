@@ -722,6 +722,8 @@ async function captureFrame(ws, index) {
         || state?.pathWorld?.hillTerrainSurface?.overlayLegend?.overlayColorFingerprint
         || null,
       hillTerrainFrame: actor?.hillTerrainFrame || state?.hillTerrainFrame || state?.pathWorld?.hillTerrainFrame || null,
+      defaultGroundPlaneSuppression: state?.defaultGroundPlaneSuppression || null,
+      groundPlaneVisible: state?.groundPlaneVisible ?? null,
       hillTerrainCarrier: actor?.hillTerrainCarrier || state?.hillTerrainCarrier || null,
       carrierPathFollower: actor?.carrierPathFollower || state?.carrierPathFollower || null,
       carrierSmoothing: actor?.carrierSmoothing || state?.carrierSmoothing || state?.carrierPathFollower?.carrierSmoothing || state?.hillTerrainCarrier?.carrierSmoothing || null,
