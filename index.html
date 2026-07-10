@@ -3213,13 +3213,12 @@ function hybridSplatRendererControlsPayload() {
   const previewStrength = Number(candidateLayerPreview?.strength || 0);
   const roughnessContrast = hybridControlNumber('hybrid-control-roughness-contrast', 1);
   const albedoContrast = hybridControlNumber('hybrid-control-albedo-contrast', 1);
-  const albedoBrightness = Math.min(0.18, previewStrength * 0.18);
   return {
     schema: 'hybrid-render.splat-renderer-controls.v0',
     material: {
       roughness: {
-        contrast: roughnessContrast + previewStrength * 0.12,
-        brightness: -previewStrength * 0.08,
+        contrast: roughnessContrast,
+        brightness: 0,
         gamma: 1,
       },
       metalness: {
@@ -3228,8 +3227,8 @@ function hybridSplatRendererControlsPayload() {
         gamma: 1,
       },
       albedo: {
-        contrast: albedoContrast + previewStrength * 0.08,
-        brightness: albedoBrightness,
+        contrast: albedoContrast,
+        brightness: 0,
         gamma: 1,
       },
     },
@@ -3254,12 +3253,12 @@ function hybridSplatRendererControlsPayload() {
     },
     candidateLayerPreview: {
       ...candidateLayerPreview,
-      rendererControlScope: previewStrength > 0 ? 'renderer-global-preview-control-delta' : 'none',
+      rendererControlScope: previewStrength > 0 ? 'telemetry-only-no-bake-output' : 'none',
       materialCurveDeltas: {
-        roughnessContrast: previewStrength * 0.12,
-        roughnessBrightness: -previewStrength * 0.08,
-        albedoContrast: previewStrength * 0.08,
-        albedoBrightness,
+        roughnessContrast: 0,
+        roughnessBrightness: 0,
+        albedoContrast: 0,
+        albedoBrightness: 0,
       },
     },
   };
@@ -17519,6 +17518,13 @@ document.getElementById('gen-provider').addEventListener('change', e => {
 // --- GLB Transform & Export ---
 const HALF_PI = Math.PI / 2;
 
+function markToolbarTransformMutation() {
+  const entry = selectedSceneObjectEntry();
+  if (entry?.type === 'splat') syncSplatSceneTransformFromVisual(entry);
+  updateTransformInspector();
+  window._kaminosDirty?.();
+}
+
 window.flipAxis = function(axis) {
   if (splatCorrectionMode) {
     toggleSplatCorrectionAxisFlip(axis);
@@ -17529,6 +17535,7 @@ window.flipAxis = function(axis) {
   if (axis === 'x') s.x *= -1;
   else if (axis === 'y') s.y *= -1;
   else if (axis === 'z') s.z *= -1;
+  markToolbarTransformMutation();
 };
 
 window.rotateAxis = function(axis) {
@@ -17536,6 +17543,7 @@ window.rotateAxis = function(axis) {
   if (axis === 'x') currentMesh.rotateX(HALF_PI);
   else if (axis === 'y') currentMesh.rotateY(HALF_PI);
   else if (axis === 'z') currentMesh.rotateZ(HALF_PI);
+  markToolbarTransformMutation();
 };
 
 window.resetTransform = function() {
@@ -17550,6 +17558,7 @@ window.resetTransform = function() {
   currentMesh.position.sub(center);
   const scale = 2.0 / size;
   currentMesh.scale.setScalar(scale);
+  markToolbarTransformMutation();
 };
 
 window.reverseWinding = function() {

@@ -222,6 +222,8 @@ assert.match(witness, /selected splat bake layer did not preserve pipeline outpu
 assert.match(witness, /selected splat bake layer controls did not update/, 'selected-splat bake-layer witness proves enable and strength controls are reversible layer state');
 assert.match(witness, /selected splat bake layer did not couple to point-cloud material/, 'selected-splat bake-layer witness proves Bake View has a visible preview contribution');
 assert.match(witness, /selected splat bake layer did not expose preview contribution telemetry/, 'selected-splat bake-layer witness proves the preview contribution has inspectable route identity');
+assert.match(witness, /selected splat bake layer did not preserve source-radiance display mode/, 'selected-splat bake-layer witness proves Bake View keeps source-radiance display enabled for unbaked candidate layers');
+assert.match(witness, /selected splat bake layer faked backend coupling through renderer material curves/, 'selected-splat bake-layer witness rejects fake material-curve coupling without a real baked output');
 assert.match(witness, /kaminosSelectedSplatBakeLayerDebugState/, 'selected-splat bake-layer witness reads explicit debug state rather than inferring from DOM');
 assert.match(witness, /kaminosCreateSelectedSplatViewBakeLayer/, 'selected-splat bake-layer witness creates layers through the browser API');
 assert.match(witness, /kaminosSetSelectedSplatBakeLayerControls/, 'selected-splat bake-layer witness tunes layers through the browser API');

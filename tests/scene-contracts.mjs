@@ -291,6 +291,7 @@ assert.match(index, /window\.kaminosSetSplatCorrectionDraftTransform/, 'browser 
 assert.match(index, /axisFlips/, 'splat correction metadata includes asset-local axis flip state');
 assert.match(index, /function toggleSplatCorrectionAxisFlip\(/, 'splat correction mode can flip axes without mutating scene placement');
 assert.match(index, /window\.kaminosToggleSplatCorrectionAxisFlip/, 'browser witnesses can toggle correction-local axis flips without DOM inference');
+assert.match(index, /window\.flipAxis = function\(axis\)[\s\S]*window\._kaminosDirty\?\.\(\)/, 'top-toolbar Flip X/Y/Z must dirty the viewport immediately without waiting for camera motion');
 assert.match(index, /function setSplatCorrectionEditMode\(/, 'splat correction mode exposes explicit Pivot/Crop edit targets');
 assert.match(index, /splat-correction-crop-target/, 'splat correction crop mode has a named viewport crop-box target');
 assert.match(index, /window\.kaminosSetSplatCorrectionCropTransform/, 'browser witnesses can edit crop bounds through the viewport crop target');
@@ -331,6 +332,8 @@ assert.match(index, /window\.kaminosSetSelectedSplatBakeLayerControls/, 'browser
 assert.match(index, /window\.kaminosSelectedSplatBakeLayerDebugState/, 'browser witnesses can inspect selected-splat bake layers and receipts without DOM inference');
 assert.match(index, /window\.kaminosSelectedSplatBakeLayerPreviewDebugState/, 'browser witnesses can inspect selected-splat bake-layer preview coupling without DOM inference');
 assert.match(index, /candidateLayerPreview/, 'Hybrid Renderer controls carry selected-splat candidate layer preview telemetry');
+assert.match(index, /rendererControlScope:\s*previewStrength > 0 \? 'telemetry-only-no-bake-output' : 'none'/, 'candidate bake layers must not fake backend coupling by mutating global renderer material curves');
+assert.doesNotMatch(index, /roughnessContrast \+ previewStrength|albedoContrast \+ previewStrength|previewStrength \* 0\.12|previewStrength \* 0\.08/, 'candidate bake layer preview strength must not tint deferred material controls without a real baked output');
 assert.match(index, /function publishHybridSplatRendererControls\(/, 'Kaminos publishes renderer-control slider state through the overlay setRendererControls API');
 assert.match(index, /rendererControlsTelemetry/, 'Hybrid Renderer debug state exposes renderer-control telemetry for smoke evidence');
 assert.match(index, /id="hybrid-splat-overlay-host"/, 'Hybrid Renderer overlay has a named viewport host for dual-canvas composition');

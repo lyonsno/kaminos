@@ -3966,6 +3966,22 @@ async function runSelectedSplatBakeLayerScenario(ws) {
       || Number(telemetryPreview?.strength || 0) <= 0.99) {
     throw new Error(`selected splat bake layer did not expose preview contribution telemetry: ${JSON.stringify(lastEvidence.selectedSplatBakeLayer)}`);
   }
+  const afterCreateControls = lastEvidence.selectedSplatBakeLayer.afterCreateRendererControls?.controls || {};
+  const afterTuneControls = lastEvidence.selectedSplatBakeLayer.afterTuneRendererControls?.controls || {};
+  if (afterCreateControls.preview?.sourceColor !== true || afterTuneControls.preview?.sourceColor !== true) {
+    throw new Error(`selected splat bake layer did not preserve source-radiance display mode: ${JSON.stringify(lastEvidence.selectedSplatBakeLayer)}`);
+  }
+  if (telemetryPreview.rendererControlScope !== 'telemetry-only-no-bake-output'
+      || Number(afterCreateControls.material?.roughness?.contrast) !== 1
+      || Number(afterCreateControls.material?.roughness?.brightness) !== 0
+      || Number(afterCreateControls.material?.albedo?.contrast) !== 1
+      || Number(afterCreateControls.material?.albedo?.brightness) !== 0
+      || Number(afterTuneControls.material?.roughness?.contrast) !== 1
+      || Number(afterTuneControls.material?.roughness?.brightness) !== 0
+      || Number(afterTuneControls.material?.albedo?.contrast) !== 1
+      || Number(afterTuneControls.material?.albedo?.brightness) !== 0) {
+    throw new Error(`selected splat bake layer faked backend coupling through renderer material curves: ${JSON.stringify(lastEvidence.selectedSplatBakeLayer)}`);
+  }
 }
 
 async function runRealHybridSplatOverlayScenario(ws) {
