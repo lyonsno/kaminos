@@ -1527,6 +1527,7 @@ assert.match(core, /ACTIVITY_PRESSURE_SPEND_MODEL\s*=\s*'base-midbody-activity-p
 assert.match(core, /ACTIVITY_PRESSURE_INACTIVE_SKIP_POLICY\s*=\s*'inactive-extra-tier-cell-early-out-v0'/, 'activity pressure tiers name the inactive-cell early-out policy');
 assert.match(core, /ACTIVE_PRESSURE_WORKGROUP_DISPATCH_STRATEGY\s*=\s*'gpu-built-active-pressure-workgroups-indirect-v0'/, 'activity pressure tiers name GPU-built indirect active workgroup dispatch');
 assert.match(core, /ACTIVE_PRESSURE_WORKGROUP_ACCOUNTING\s*=\s*'active-pressure-workgroup-counter-readback-v0'/, 'activity pressure tiers name active workgroup readback accounting');
+assert.match(core, /ACTIVE_PRESSURE_WORKGROUP_READBACK_DEFAULT_CADENCE\s*=\s*30/, 'activity pressure workgroup readback is throttled in live mode so debug accounting does not dominate frame P95');
 assert.match(core, /ACTIVITY_PRESSURE_P4_STRATEGY\s*=\s*'core-replay-p4-active-workgroups-v0'/, 'activity pressure tiers name the P4-as-core-replay strategy');
 assert.match(core, /ACTIVITY_PRESSURE_P4_DISABLED_STRATEGY\s*=\s*'activity-p4-disabled-comparison-p3-v0'/, 'activity pressure tiers name the P4-disabled comparison strategy');
 assert.match(core, /PRESSURE_PROJECTION_READ_STRATEGY_COMPOSITE\s*=\s*'composite-pressure-tier-read-v0'/, 'volume core names composite tier pressure projection reads');
@@ -1564,6 +1565,10 @@ assert.match(core, /pressureActivityIndirectArgsBuffer/, 'volume core separates 
 assert.match(core, /copyBufferToBuffer\(pressureActivityWorkgroupBuffer,\s*0,\s*pressureActivityIndirectArgsBuffer/, 'activity pressure copies GPU-built counters into a separate indirect args buffer');
 assert.match(core, /GPUBufferUsage\.INDIRECT/, 'active pressure indirect args buffer can drive indirect dispatch');
 assert.match(core, /pressureTierWorkgroupAccounting/, 'debug state exposes active pressure workgroup accounting');
+assert.match(core, /normalizeActivityPressureReadbackCadence/, 'activity pressure readback cadence is normalized separately from sim cost accounting');
+assert.match(core, /shouldSchedulePressureActivityWorkgroupReadback/, 'activity pressure counter readback has an explicit cadence gate');
+assert.match(index, /volume_activity_pressure_readback_cadence/, 'URL route can request activity pressure workgroup readback cadence for evidence runs');
+assert.match(index, /activityPressureReadbackCadence/, 'Volume controls carry activity pressure readback cadence into the renderer');
 assert.match(core, /activeExtraTierWorkgroups/, 'debug state reports active extra-tier pressure workgroups');
 assert.match(core, /p4ActiveWorkgroups/, 'debug state reports tight P4 active pressure workgroups');
 assert.match(core, /skippedExtraTierWorkgroups/, 'debug state reports skipped extra-tier pressure workgroups');

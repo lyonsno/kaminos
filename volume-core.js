@@ -359,6 +359,7 @@ const ACTIVITY_PRESSURE_SPEND_MODEL = 'base-midbody-activity-pressure-spend-v0';
 const ACTIVITY_PRESSURE_INACTIVE_SKIP_POLICY = 'inactive-extra-tier-cell-early-out-v0';
 const ACTIVE_PRESSURE_WORKGROUP_DISPATCH_STRATEGY = 'gpu-built-active-pressure-workgroups-indirect-v0';
 const ACTIVE_PRESSURE_WORKGROUP_ACCOUNTING = 'active-pressure-workgroup-counter-readback-v0';
+const ACTIVE_PRESSURE_WORKGROUP_READBACK_DEFAULT_CADENCE = 30;
 const ACTIVITY_PRESSURE_P4_STRATEGY = 'core-replay-p4-active-workgroups-v0';
 const ACTIVITY_PRESSURE_P4_DISABLED_STRATEGY = 'activity-p4-disabled-comparison-p3-v0';
 const PRESSURE_PROJECTION_READ_STRATEGY_COMPOSITE = 'composite-pressure-tier-read-v0';
@@ -634,6 +635,13 @@ function normalizePressureTierControls(value = {}) {
     ? 0
     : 1;
   return { lowerMax, heroMin, heroMax, overlay, activityPressureP4Enabled };
+}
+
+function normalizeActivityPressureReadbackCadence(value, simProfile = false) {
+  const fallback = simProfile ? 1 : ACTIVE_PRESSURE_WORKGROUP_READBACK_DEFAULT_CADENCE;
+  const requested = Math.round(Number(value));
+  if (!Number.isFinite(requested)) return fallback;
+  return Math.max(1, Math.min(240, requested));
 }
 
 function pressureTierDispatchMaxY(gridSize, tierWorkgroupsY) {
@@ -5428,6 +5436,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   function pressureTierWorkgroupAccounting(tierPlan = null) {
     const fullWorkgroups = pressureWorkgroupCount(gridSize);
     const activityPressureP4Enabled = tierPlan?.activityPressureP4Enabled !== false;
+    const readbackCadence = normalizeActivityPressureReadbackCadence(controlsSnapshot.activityPressureReadbackCadence, normalizeSimProfileFlag(controlsSnapshot.simProfile));
     const candidatePasses = tierPlan?.activeWorkgroupCandidatePasses ?? (activityPressureP4Enabled ? 3 : 2);
     const candidateExtraTierWorkgroups = tierPlan?.activeWorkgroupCandidateWorkgroups ?? fullWorkgroups * candidatePasses;
     const previous = state.pressureTierWorkgroupAccounting;
@@ -5442,8 +5451,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       dispatchStrategy: ACTIVE_PRESSURE_WORKGROUP_DISPATCH_STRATEGY,
       p4Strategy: activityPressureP4Enabled ? ACTIVITY_PRESSURE_P4_STRATEGY : ACTIVITY_PRESSURE_P4_DISABLED_STRATEGY,
       activityPressureP4Enabled,
-      source: previous?.readbackAvailable ? 'gpu-indirect-args-readback' : 'pending-first-gpu-readback',
+      source: previous?.readbackAvailable ? 'gpu-indirect-args-readback-cadenced' : 'pending-first-gpu-readback',
       readbackAvailable: previous?.readbackAvailable === true,
+      readbackCadence,
       workgroupSize: '4x4x4',
       fullGridWorkgroupsPerPass: fullWorkgroups,
       candidateExtraTierWorkgroups,
@@ -5464,6 +5474,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const pressureStrategy = normalizePressureStrategy(controlsSnapshot.pressureStrategy, controlsSnapshot.volumeScene);
     const tierPlan = pressureTierDispatchPlan(gridSize, pressureStrategy, controlsSnapshot.volumeScene, normalizePressureTierControls(controlsSnapshot));
     const activityPressureP4Enabled = tierPlan.activityPressureP4Enabled !== false;
+    const readbackCadence = normalizeActivityPressureReadbackCadence(controlsSnapshot.activityPressureReadbackCadence, normalizeSimProfileFlag(controlsSnapshot.simProfile));
     const fullWorkgroups = pressureWorkgroupCount(gridSize);
     const broadActiveWorkgroups = Math.min(fullWorkgroups, Math.max(0, (Number(meta[0]) || 0) - 1));
     const coreActiveWorkgroups = Math.min(fullWorkgroups, Math.max(0, (Number(meta[3]) || 0) - 1));
@@ -5475,8 +5486,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       dispatchStrategy: ACTIVE_PRESSURE_WORKGROUP_DISPATCH_STRATEGY,
       p4Strategy: activityPressureP4Enabled ? ACTIVITY_PRESSURE_P4_STRATEGY : ACTIVITY_PRESSURE_P4_DISABLED_STRATEGY,
       activityPressureP4Enabled,
-      source: 'gpu-indirect-args-readback',
+      source: 'gpu-indirect-args-readback-cadenced',
       readbackAvailable: true,
+      readbackCadence,
       workgroupSize: '4x4x4',
       fullGridWorkgroupsPerPass: fullWorkgroups,
       candidateExtraTierWorkgroups,
@@ -5509,8 +5521,15 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     device.queue.writeBuffer(pressureActivityWorkgroupBuffer, 0, args);
   }
 
+  function shouldSchedulePressureActivityWorkgroupReadback() {
+    const cadence = normalizeActivityPressureReadbackCadence(controlsSnapshot.activityPressureReadbackCadence, normalizeSimProfileFlag(controlsSnapshot.simProfile));
+    const previousFrame = Number(state.pressureTierWorkgroupAccounting?.lastReadbackFrame);
+    if (!Number.isFinite(previousFrame)) return true;
+    return state.frameCount - previousFrame >= cadence;
+  }
+
   function schedulePressureActivityWorkgroupReadback(encoder) {
-    if (!pressureActivityWorkgroupBuffer || !pressureActivityWorkgroupReadbackBuffer || pressureActivityWorkgroupReadbackPending || pressureActivityWorkgroupReadbackMapping) return;
+    if (!pressureActivityWorkgroupBuffer || !pressureActivityWorkgroupReadbackBuffer || pressureActivityWorkgroupReadbackPending || pressureActivityWorkgroupReadbackMapping || !shouldSchedulePressureActivityWorkgroupReadback()) return;
     encoder.copyBufferToBuffer(
       pressureActivityWorkgroupBuffer,
       0,
@@ -7098,6 +7117,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       dispatchStrategy: ACTIVE_PRESSURE_WORKGROUP_DISPATCH_STRATEGY,
       p4Strategy: pressureTierControls.activityPressureP4Enabled > 0.5 ? ACTIVITY_PRESSURE_P4_STRATEGY : ACTIVITY_PRESSURE_P4_DISABLED_STRATEGY,
       activityPressureP4Enabled: pressureTierControls.activityPressureP4Enabled > 0.5,
+      readbackCadence: normalizeActivityPressureReadbackCadence(controlsSnapshot.activityPressureReadbackCadence, normalizeSimProfileFlag(controlsSnapshot.simProfile)),
       skipAccounting: ACTIVE_PRESSURE_WORKGROUP_ACCOUNTING,
     };
     state.volumeScene = normalizeVolumeScene(controlsSnapshot.volumeScene);

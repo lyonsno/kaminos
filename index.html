@@ -11028,6 +11028,7 @@ let routedVolumePressureIterations = undefined;
 let routedVolumePressureStrategy = 'global';
 let routedVolumePressureMode = 'auto';
 let routedVolumeActivityPressureP4Enabled = true;
+let routedVolumeActivityPressureReadbackCadence = undefined;
 let routedVolumeSimProfile = false;
 let routedVolumeLifecycleEffect = 'none';
 let routedVolumeLifecycleT = 0;
@@ -11706,6 +11707,7 @@ const VOLUME_BASIN_ROUTE_FIELDS = [
   ['pressureTierHeroMin', 'volume_pressure_tier_hero_min'],
   ['pressureTierHeroMax', 'volume_pressure_tier_hero_max'],
   ['activityPressureP4Enabled', 'volume_activity_pressure_p4'],
+  ['activityPressureReadbackCadence', 'volume_activity_pressure_readback_cadence'],
   ['activityVorticityGate', 'volume_activity_vorticity_gate'],
   ['activityDetailGate', 'volume_activity_detail_gate'],
   ['reactionLiveView', 'volume_reaction_live_view'],
@@ -16221,6 +16223,7 @@ function readVolumeControls() {
     pressureTierHeroMin: parseFloat(document.getElementById('volume-pressure-tier-hero-min').value),
     pressureTierHeroMax: parseFloat(document.getElementById('volume-pressure-tier-hero-max').value),
     activityPressureP4Enabled: routedVolumeActivityPressureP4Enabled,
+    activityPressureReadbackCadence: routedVolumeActivityPressureReadbackCadence,
     activityVorticityGate: parseFloat(document.getElementById('volume-activity-vorticity-gate').value),
     activityDetailGate: parseFloat(document.getElementById('volume-activity-detail-gate').value),
     canonicalSpread: parseFloat(document.getElementById('volume-canonical-spread').value),
@@ -17081,6 +17084,10 @@ async function initKaminosVolumeRoute() {
   } else {
     routedVolumeActivityPressureP4Enabled = true;
   }
+  const routeActivityPressureReadbackCadence = Number(params.get('volume_activity_pressure_readback_cadence'));
+  routedVolumeActivityPressureReadbackCadence = params.has('volume_activity_pressure_readback_cadence') && Number.isFinite(routeActivityPressureReadbackCadence)
+    ? Math.max(1, Math.min(240, Math.round(routeActivityPressureReadbackCadence)))
+    : undefined;
   const routeActivityVorticityGate = Number(params.get('volume_activity_vorticity_gate'));
   if (params.has('volume_activity_vorticity_gate') && Number.isFinite(routeActivityVorticityGate)) {
     setVolumeControlValue('volume-activity-vorticity-gate', String(Math.max(0, Math.min(1, routeActivityVorticityGate))));
