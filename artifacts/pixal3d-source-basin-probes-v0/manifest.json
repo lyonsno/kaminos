@@ -47,10 +47,17 @@
       "pipeline_type": 512,
       "shared_noise": ""
     },
-    "status": "running"
+    "status": "done_raw_mesh_only",
+    "duration_s": 493.9,
+    "final_glb_status": "not_emitted_known_mps_texture_bake_mismatch",
+    "last_trustworthy_phase": "raw_mesh_saved",
+    "raw_mesh_metrics": "artifacts/pixal3d-source-basin-probes-v0/greenroom-trellis-official512-turtle-relic-seed162/raw_mesh_metrics.json",
+    "preview_image": "artifacts/pixal3d-source-basin-probes-v0/greenroom-trellis-official512-turtle-relic-seed162/raw_mesh_point_preview.png",
+    "sanitized_receipt": "artifacts/pixal3d-source-basin-probes-v0/greenroom-trellis-official512-turtle-relic-seed162/trellis_receipt.sanitized.json"
   },
   "visual_read": {
     "mech_crab_overgrown_gunmetal": "Flux edit preserved hard-surface material language but collapsed the source identity into a handled device; useful negative basin evidence.",
-    "turtle_ancient_armored_relic": "Flux edit preserved objectness and produced a strong armored creature-relic candidate with sparse moss, orange lights, and coherent material detail."
+    "turtle_ancient_armored_relic": "Flux edit preserved objectness and produced a strong armored creature-relic candidate with sparse moss, orange lights, and coherent material detail.",
+    "trellis_turtle_raw_mesh": "Official Trellis/MPS raw mesh preserved the edited turtle-relic identity strongly enough to count as a basin-survival hit: shell dome, legs, head, spikes, top structure, and side mass all remain legible in the inspected point/depth preview. This is raw-geometry evidence only, not final textured GLB evidence."
   }
 }

@@ -1,0 +1,50 @@
+{
+  "schema": "kaminos.pixal3d_basin_probe.trellis_receipt.v1",
+  "job": {
+    "greenroom_job": "7e0759cb6a88",
+    "greenroom_job_type": "trellis2_official_512_seeded",
+    "status": "done",
+    "duration_s": 493.9
+  },
+  "route": {
+    "family": "local-reference/trellis-mac",
+    "backend": "pytorch-mps",
+    "pipeline_type": "512",
+    "seed": 162,
+    "steps": 8,
+    "target_faces_requested": 200000,
+    "texture_size_requested": 1024,
+    "attention_backend": "sdpa",
+    "sparse_attention_backend": "sdpa"
+  },
+  "input": {
+    "record": "turtle_ancient_armored_relic",
+    "image": "artifacts/pixal3d-source-basin-probes-v0/greenroom-flux2-edit-turtle-relic-seed62/output.png",
+    "image_sha256": "1fd2f89cf540d052e0d19708de93314fb5851b5244bf1fdcfef3910c59633385"
+  },
+  "outputs": {
+    "raw_mesh_metrics": "artifacts/pixal3d-source-basin-probes-v0/greenroom-trellis-official512-turtle-relic-seed162/raw_mesh_metrics.json",
+    "preview_image": "artifacts/pixal3d-source-basin-probes-v0/greenroom-trellis-official512-turtle-relic-seed162/raw_mesh_point_preview.png",
+    "raw_mesh_npz": "local-only: raw_mesh.npz was produced but not committed",
+    "decoder_output_npz": "local-only: decoder_output.npz was produced but not committed"
+  },
+  "metrics": {
+    "vertices": 1635653,
+    "faces": 3613928,
+    "boundary_edges": 219846,
+    "non_manifold_edges": 445037,
+    "same_direction_conflict_edges": 730982
+  },
+  "status_notes": {
+    "last_trustworthy_phase": "raw_mesh_saved",
+    "final_glb_status": "not_emitted_known_mps_texture_bake_mismatch",
+    "primary_output_status": "raw mesh and preview evidence preserved"
+  },
+  "visual_read": "The inspected point/depth preview preserved the edited turtle-relic identity: shell dome, legs, head, spikes, top structure, and side mass remain legible. This supports basin-survival for source-image edit -> Trellis raw geometry.",
+  "forbidden_inferences": [
+    "not Microsoft CUDA TRELLIS.2 evidence",
+    "not final textured GLB evidence",
+    "not texture or bake parity evidence",
+    "not a claim that the raw mesh is manifold or game-ready"
+  ]
+}
