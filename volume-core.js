@@ -3870,32 +3870,43 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
       let boundaryDx = vec3<f32>(boundaryCellStep, 0.0, 0.0);
       let boundaryDy = vec3<f32>(0.0, boundaryCellStep, 0.0);
       let boundaryDz = vec3<f32>(0.0, 0.0, boundaryCellStep);
-      let boundarySupport = liveBoundarySupportAt(p, boundarySupportWeights);
-      let boundarySupportPx = liveBoundarySupportAt(p + boundaryDx, boundarySupportWeights);
-      let boundarySupportNx = liveBoundarySupportAt(p - boundaryDx, boundarySupportWeights);
-      let boundarySupportPy = liveBoundarySupportAt(p + boundaryDy, boundarySupportWeights);
-      let boundarySupportNy = liveBoundarySupportAt(p - boundaryDy, boundarySupportWeights);
-      let boundarySupportPz = liveBoundarySupportAt(p + boundaryDz, boundarySupportWeights);
-      let boundarySupportNz = liveBoundarySupportAt(p - boundaryDz, boundarySupportWeights);
-      let boundaryGradient = length(vec3<f32>(
-        boundarySupportPx - boundarySupportNx,
-        boundarySupportPy - boundarySupportNy,
-        boundarySupportPz - boundarySupportNz
-      )) * (0.5 / boundaryCellStep);
-      let boundaryLaplacian = abs(boundarySupportPx + boundarySupportNx + boundarySupportPy + boundarySupportNy + boundarySupportPz + boundarySupportNz - 6.0 * boundarySupport);
-      let boundaryFireRidge = smoothstep(boundaryFireRidgeCut, boundaryFireRidgeCut + 0.14, boundaryLaplacian * boundaryFireRidgeGain);
-      let boundarySidecarSample = sampleWorldBoundarySidecar(p);
       let boundarySidecarSource = clamp(u.boundary_sidecar_controls.x, 0.0, 2.0);
-      var boundarySidecarBlend = 0.0;
-      if (boundarySidecarSource > 1.5) {
-        boundarySidecarBlend = 0.5;
-      } else if (boundarySidecarSource > 0.5) {
-        boundarySidecarBlend = 1.0;
+      var boundarySupportEffective = 0.0;
+      var boundaryGradientEffective = 0.0;
+      var boundaryFireRidgeEffective = 0.0;
+      var boundarySidecarStepFootprintWidth = 0.0;
+      if (boundarySidecarSource > 0.5 && boundarySidecarSource <= 1.5) {
+        let boundarySidecarSample = sampleWorldBoundarySidecar(p);
+        boundarySupportEffective = boundarySidecarSample.x;
+        boundaryGradientEffective = boundarySidecarSample.y * (0.5 / boundaryCellStep);
+        boundaryFireRidgeEffective = boundarySidecarSample.z;
+        boundarySidecarStepFootprintWidth = clamp(u.boundary_sidecar_controls.z, 0.0, 2.0) * max(dtBase * f32(GRID) * 0.055, boundarySidecarSample.w * 0.020);
+      } else {
+        let boundarySupport = liveBoundarySupportAt(p, boundarySupportWeights);
+        let boundarySupportPx = liveBoundarySupportAt(p + boundaryDx, boundarySupportWeights);
+        let boundarySupportNx = liveBoundarySupportAt(p - boundaryDx, boundarySupportWeights);
+        let boundarySupportPy = liveBoundarySupportAt(p + boundaryDy, boundarySupportWeights);
+        let boundarySupportNy = liveBoundarySupportAt(p - boundaryDy, boundarySupportWeights);
+        let boundarySupportPz = liveBoundarySupportAt(p + boundaryDz, boundarySupportWeights);
+        let boundarySupportNz = liveBoundarySupportAt(p - boundaryDz, boundarySupportWeights);
+        let boundaryGradient = length(vec3<f32>(
+          boundarySupportPx - boundarySupportNx,
+          boundarySupportPy - boundarySupportNy,
+          boundarySupportPz - boundarySupportNz
+        )) * (0.5 / boundaryCellStep);
+        let boundaryLaplacian = abs(boundarySupportPx + boundarySupportNx + boundarySupportPy + boundarySupportNy + boundarySupportPz + boundarySupportNz - 6.0 * boundarySupport);
+        let boundaryFireRidge = smoothstep(boundaryFireRidgeCut, boundaryFireRidgeCut + 0.14, boundaryLaplacian * boundaryFireRidgeGain);
+        boundarySupportEffective = boundarySupport;
+        boundaryGradientEffective = boundaryGradient;
+        boundaryFireRidgeEffective = boundaryFireRidge;
+        if (boundarySidecarSource > 1.5) {
+          let boundarySidecarSample = sampleWorldBoundarySidecar(p);
+          boundarySupportEffective = mix(boundarySupport, boundarySidecarSample.x, 0.5);
+          boundaryGradientEffective = mix(boundaryGradient, boundarySidecarSample.y * (0.5 / boundaryCellStep), 0.5);
+          boundaryFireRidgeEffective = mix(boundaryFireRidge, boundarySidecarSample.z, 0.5);
+          boundarySidecarStepFootprintWidth = 0.5 * clamp(u.boundary_sidecar_controls.z, 0.0, 2.0) * max(dtBase * f32(GRID) * 0.055, boundarySidecarSample.w * 0.020);
+        }
       }
-      let boundarySupportEffective = mix(boundarySupport, boundarySidecarSample.x, boundarySidecarBlend);
-      let boundaryGradientEffective = mix(boundaryGradient, boundarySidecarSample.y * (0.5 / boundaryCellStep), boundarySidecarBlend);
-      let boundaryFireRidgeEffective = mix(boundaryFireRidge, boundarySidecarSample.z, boundarySidecarBlend);
-      let boundarySidecarStepFootprintWidth = boundarySidecarBlend * clamp(u.boundary_sidecar_controls.z, 0.0, 2.0) * max(dtBase * f32(GRID) * 0.055, boundarySidecarSample.w * 0.020);
       let boundaryGradientGate = smoothstep(boundaryCut, boundaryCut + boundarySoftness + boundarySidecarStepFootprintWidth, boundaryGradientEffective * boundaryGradientGain);
       let boundaryCoreGate = clamp(mix(1.0, 1.0 - shellCoreBody, shellCoreSuppress), 0.0, 1.0);
       let supportThinning = boundaryGradientGate * (1.0 - smoothstep(0.62, 1.12, boundarySupportEffective));
