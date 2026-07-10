@@ -1,0 +1,1 @@
+Preserve the main object and camera angle from the input image. Convert the materials into dark enamel, oxidized bronze, worn steel, tiny orange indicator lights, dust, and subtle lichen in seams. Keep the object isolated and coherent. Do not add text, logos, people, or extra scene clutter.

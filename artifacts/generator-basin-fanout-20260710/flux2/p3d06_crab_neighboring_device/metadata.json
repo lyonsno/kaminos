@@ -1,0 +1,24 @@
+{
+  "created_at": 1783665207.793154,
+  "duration_s": 68.3,
+  "input_name": "6_img.png",
+  "input_path": "Pixal3D/assets/images/6_img.png",
+  "job_id": "9c2d74c84848",
+  "job_type": "mflux_flux2_edit_promptfile",
+  "name": "6_img",
+  "output_files": [
+    "output.metadata.json",
+    "output.png"
+  ],
+  "params": {
+    "guidance": "1.0",
+    "height": "512",
+    "mlx_cache_limit_gb": "48",
+    "model": "flux2-klein-9b",
+    "prompt_file": "artifacts/generator-basin-fanout-20260710/prompts/p3d06_crab_neighboring_device.txt",
+    "quantize": "4",
+    "seed": "307",
+    "steps": "8",
+    "width": "512"
+  }
+}

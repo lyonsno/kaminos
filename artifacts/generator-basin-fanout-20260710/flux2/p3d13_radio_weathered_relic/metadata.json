@@ -1,0 +1,24 @@
+{
+  "created_at": 1783665472.014304,
+  "duration_s": 84.3,
+  "input_name": "s_13_img.jpg",
+  "input_path": "Pixal3D/assets/images/s_13_img.jpg",
+  "job_id": "3c9372a0ffdc",
+  "job_type": "mflux_flux2_edit_promptfile",
+  "name": "s_13_img",
+  "output_files": [
+    "output.metadata.json",
+    "output.png"
+  ],
+  "params": {
+    "guidance": "1.0",
+    "height": "512",
+    "mlx_cache_limit_gb": "48",
+    "model": "flux2-klein-9b",
+    "prompt_file": "artifacts/generator-basin-fanout-20260710/prompts/p3d13_radio_weathered_relic.txt",
+    "quantize": "4",
+    "seed": "310",
+    "steps": "8",
+    "width": "512"
+  }
+}

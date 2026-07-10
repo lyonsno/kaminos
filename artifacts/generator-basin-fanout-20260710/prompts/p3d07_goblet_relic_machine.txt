@@ -1,0 +1,1 @@
+Preserve the exact object silhouette, camera angle, and major parts from the input image. Transform it into a dark antique mechanical reliquary made of worn steel, oxidized bronze, bone-like enamel panels, small orange lenses, and faint seam glow. Keep it isolated on a neutral studio background. Do not add text, characters, scenery, or extra handles.

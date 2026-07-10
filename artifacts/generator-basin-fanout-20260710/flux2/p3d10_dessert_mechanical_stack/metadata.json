@@ -1,0 +1,24 @@
+{
+  "created_at": 1783664921.108533,
+  "duration_s": 82.5,
+  "input_name": "10_img.webp",
+  "input_path": "Pixal3D/assets/images/10_img.webp",
+  "job_id": "2c58e9b45a9d",
+  "job_type": "mflux_flux2_edit_promptfile",
+  "name": "10_img",
+  "output_files": [
+    "output.metadata.json",
+    "output.png"
+  ],
+  "params": {
+    "guidance": "1.0",
+    "height": "512",
+    "mlx_cache_limit_gb": "48",
+    "model": "flux2-klein-9b",
+    "prompt_file": "artifacts/generator-basin-fanout-20260710/prompts/p3d10_dessert_mechanical_stack.txt",
+    "quantize": "4",
+    "seed": "303",
+    "steps": "8",
+    "width": "512"
+  }
+}

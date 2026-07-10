@@ -1,0 +1,24 @@
+{
+  "created_at": 1783664997.518871,
+  "duration_s": 76.4,
+  "input_name": "11_img.png",
+  "input_path": "Pixal3D/assets/images/11_img.png",
+  "job_id": "50535e36c00e",
+  "job_type": "mflux_flux2_edit_promptfile",
+  "name": "11_img",
+  "output_files": [
+    "output.metadata.json",
+    "output.png"
+  ],
+  "params": {
+    "guidance": "1.0",
+    "height": "512",
+    "mlx_cache_limit_gb": "48",
+    "model": "flux2-klein-9b",
+    "prompt_file": "artifacts/generator-basin-fanout-20260710/prompts/p3d11_cliff_house_volcanic_outpost.txt",
+    "quantize": "4",
+    "seed": "304",
+    "steps": "8",
+    "width": "512"
+  }
+}
