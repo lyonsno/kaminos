@@ -33,8 +33,11 @@ SPARSE_STRUCTURAL_TARGET_FAMILY_IDENTITY = "sparse-structural-target-family-v0"
 BLOCK_BASELINE_IDENTITY = "block-upsample-copy-baseline-v0"
 RIDGE_IDENTITY = "local-linear-ridge-v0"
 MLP_IDENTITY = "local-context-mlp-v0"
+STANDARD_MLP_LOSS_IDENTITY = "standard-mlp-mse-v0"
+SPARSE_POSITIVE_WEIGHTED_LOSS_IDENTITY = "sparse-positive-weighted-mse-v0"
 FEATURE_IDENTITY = "low-grid-3d-local-context-plus-high-subcell-v0"
 AUTHORITY = "offline-phase-aligned-sidecar-meta-probe-not-browser-witness-not-product-inference"
+DEFAULT_THRESHOLD_SWEEP = [1.0e-5, 3.0e-5, 1.0e-4, 3.0e-4, 1.0e-3, 3.0e-3, 1.0e-2, 3.0e-2, 1.0e-1]
 
 
 class ProbeFailure(Exception):
@@ -56,6 +59,20 @@ def parse_args() -> argparse.Namespace:
         help="Comma-separated target channels to train/predict, or 'all'. Inputs remain the full v1 sidecar/meta state.",
     )
     parser.add_argument("--support-sample-fraction", type=float, default=0.60, help="Fraction of samples drawn from truth support.")
+    parser.add_argument(
+        "--sparse-loss-mode",
+        choices=["standard", "positive-weighted"],
+        default="standard",
+        help="MLP loss mode. positive-weighted upweights sparse structural positives without changing input channels.",
+    )
+    parser.add_argument("--sparse-positive-threshold", type=float, default=1.0e-3, help="Truth threshold used to identify sparse positives for weighted loss.")
+    parser.add_argument("--sparse-positive-weight", type=float, default=6.0, help="Extra MSE weight for support/proximity positives in sparse-positive weighted loss.")
+    parser.add_argument("--sparse-ridge-positive-weight", type=float, default=14.0, help="Extra MSE weight for ridge positives in sparse-positive weighted loss.")
+    parser.add_argument(
+        "--threshold-sweep",
+        default=",".join(str(v) for v in DEFAULT_THRESHOLD_SWEEP),
+        help="Comma-separated positive thresholds for support/ridge/proximity precision-recall-Jaccard calibration.",
+    )
     parser.add_argument("--context-radius", type=int, default=1, help="Low-grid local context radius; 1 gives a 3x3x3 stencil.")
     parser.add_argument("--ridge", type=float, default=1.0e-3, help="Ridge regularization for local-linear-ridge-v0.")
     parser.add_argument("--hidden-width", type=int, default=64, help="Hidden width for local-context-mlp-v0.")
@@ -84,6 +101,22 @@ def parse_target_channels(value: str) -> tuple[list[int], list[str], str]:
     else:
         family = "custom-sidecar-meta-target-family-v0"
     return indexes, names, family
+
+
+def parse_threshold_sweep(value: str) -> list[float]:
+    raw_parts = [part.strip() for part in value.split(",") if part.strip()]
+    if not raw_parts:
+        raise ProbeFailure("args", "--threshold-sweep must name at least one positive threshold.", {})
+    thresholds: list[float] = []
+    for raw in raw_parts:
+        try:
+            threshold = float(raw)
+        except ValueError as err:
+            raise ProbeFailure("args", "Invalid numeric threshold in --threshold-sweep.", {"threshold": raw}) from err
+        if not math.isfinite(threshold) or threshold <= 0.0:
+            raise ProbeFailure("args", "--threshold-sweep thresholds must be finite and positive.", {"threshold": raw})
+        thresholds.append(threshold)
+    return sorted(set(thresholds))
 
 
 def now_iso() -> str:
@@ -320,6 +353,36 @@ def predict_ridge(model: dict[str, np.ndarray], x: np.ndarray) -> np.ndarray:
     return (xb @ model["weights"]).astype(np.float32)
 
 
+def sparse_loss_weights(
+    y_raw: np.ndarray,
+    channel_names: list[str],
+    mode: str,
+    positive_threshold: float,
+    positive_weight: float,
+    ridge_positive_weight: float,
+) -> np.ndarray | None:
+    if mode == "standard":
+        return None
+    if mode != "positive-weighted":
+        raise ProbeFailure("args", "Unknown sparse loss mode.", {"sparseLossMode": mode})
+    weights = np.ones_like(y_raw, dtype=np.float32)
+    threshold = float(positive_threshold)
+    if not math.isfinite(threshold) or threshold <= 0.0:
+        raise ProbeFailure("args", "--sparse-positive-threshold must be finite and positive.", {"threshold": positive_threshold})
+    for channel_index, name in enumerate(channel_names):
+        if name not in SPARSE_STRUCTURAL_CHANNELS:
+            continue
+        extra_weight = float(ridge_positive_weight if name == "ridge" else positive_weight)
+        if not math.isfinite(extra_weight) or extra_weight < 0.0:
+            raise ProbeFailure("args", "Sparse positive weights must be finite and non-negative.", {
+                "sparsePositiveWeight": positive_weight,
+                "sparseRidgePositiveWeight": ridge_positive_weight,
+            })
+        positives = (np.abs(y_raw[:, channel_index]) > threshold).astype(np.float32)
+        weights[:, channel_index] += positives * extra_weight
+    return weights
+
+
 def train_mlp(
     x: np.ndarray,
     y: np.ndarray,
@@ -329,6 +392,7 @@ def train_mlp(
     learning_rate: float,
     weight_decay: float,
     rng: np.random.Generator,
+    sample_weights: np.ndarray | None = None,
 ) -> tuple[dict[str, np.ndarray], list[dict[str, float]]]:
     in_dim = x.shape[1]
     out_dim = y.shape[1]
@@ -351,13 +415,19 @@ def train_mlp(
             idx = order[start:start + batch_size]
             xb = x[idx]
             yb = y[idx]
+            wb = sample_weights[idx] if sample_weights is not None else None
             h_pre = xb @ w1 + b1
             h = np.tanh(h_pre)
             pred = h @ w2 + b2
             err = pred - yb
-            loss = float(np.mean(err ** 2))
+            if wb is None:
+                loss = float(np.mean(err ** 2))
+                grad_pred = (2.0 / max(1, err.size)) * err
+            else:
+                denom = max(1.0, float(np.sum(wb)))
+                loss = float(np.sum(wb * err * err) / denom)
+                grad_pred = (2.0 / denom) * wb * err
             losses.append(loss)
-            grad_pred = (2.0 / max(1, err.size)) * err
             gw2 = h.T @ grad_pred + weight_decay * w2
             gb2 = grad_pred.sum(axis=0)
             gh = grad_pred @ w2.T
@@ -434,6 +504,30 @@ def support_metrics(pred: np.ndarray, truth: np.ndarray, channel_names: list[str
     }
 
 
+def threshold_sweep(
+    pred: np.ndarray,
+    truth: np.ndarray,
+    channel_names: list[str],
+    thresholds: list[float],
+) -> dict[str, dict[str, Any]]:
+    sweep: dict[str, dict[str, Any]] = {}
+    for name in SPARSE_STRUCTURAL_CHANNELS:
+        if name not in channel_names:
+            continue
+        rows = [support_metrics(pred, truth, channel_names, name, threshold) for threshold in thresholds]
+        best = max(rows, key=lambda row: row["jaccard"])
+        sweep[name] = {
+            "thresholds": rows,
+            "bestJaccardThreshold": float(best["threshold"]),
+            "bestJaccard": float(best["jaccard"]),
+            "bestPrecision": float(best["precision"]),
+            "bestRecall": float(best["recall"]),
+            "bestPredictedCount": int(best["predictedCount"]),
+            "truthCountAtBestThreshold": int(best["truthCount"]),
+        }
+    return sweep
+
+
 def percent_reduction(baseline: float, value: float) -> float:
     if not math.isfinite(baseline) or abs(baseline) < 1.0e-12:
         return 0.0
@@ -502,6 +596,12 @@ def main() -> int:
     try:
         target_indexes, selected_target_channels, target_family = parse_target_channels(args.target_channel_list)
         target_indexes_np = np.asarray(target_indexes, dtype=np.int64)
+        thresholds = parse_threshold_sweep(args.threshold_sweep)
+        loss_identity = (
+            SPARSE_POSITIVE_WEIGHTED_LOSS_IDENTITY
+            if args.sparse_loss_mode == "positive-weighted"
+            else STANDARD_MLP_LOSS_IDENTITY
+        )
         corpus_path = Path(args.corpus_manifest).resolve()
         corpus = read_json(corpus_path)
         if corpus.get("schema") != CORPUS_SCHEMA or corpus.get("status") != "captured":
@@ -566,6 +666,14 @@ def main() -> int:
         y_test_raw = y_test_full[:, target_indexes_np]
         x_train, x_mean, x_std = standardize(x_train_raw)
         y_train, y_mean, y_std = standardize(y_train_raw)
+        mlp_sample_weights = sparse_loss_weights(
+            y_train_raw,
+            selected_target_channels,
+            str(args.sparse_loss_mode),
+            float(args.sparse_positive_threshold),
+            float(args.sparse_positive_weight),
+            float(args.sparse_ridge_positive_weight),
+        )
         x_test = apply_standardize(x_test_raw, x_mean, x_std)
         block_test = low_block_values(low, test_idx, high_grid, low_grid)[:, target_indexes_np]
         ridge_model = fit_ridge(x_train, y_train, float(args.ridge))
@@ -579,6 +687,7 @@ def main() -> int:
             float(args.learning_rate),
             float(args.weight_decay),
             rng,
+            mlp_sample_weights,
         )
         mlp_pred = predict_mlp(mlp_model, x_test) * y_std + y_mean
         native_block_metrics = None
@@ -596,8 +705,12 @@ def main() -> int:
         block_metrics = channel_metrics(block_test, y_test_raw, selected_target_channels)
         ridge_metrics = channel_metrics(ridge_pred, y_test_raw, selected_target_channels)
         mlp_metrics = channel_metrics(mlp_pred, y_test_raw, selected_target_channels)
+        mlp_threshold_sweep = threshold_sweep(mlp_pred, y_test_raw, selected_target_channels, thresholds)
+        native_mlp_threshold_sweep = None
         if native_mlp_metrics is None:
             native_mlp_metrics = mlp_metrics
+        elif native_low is not None:
+            native_mlp_threshold_sweep = threshold_sweep(native_mlp, y_test_raw, selected_target_channels, thresholds)
         report = {
             "schema": REPORT_SCHEMA,
             "identity": REPORT_IDENTITY,
@@ -629,6 +742,7 @@ def main() -> int:
                 "testSamples": int(test_idx.size),
                 "supportSampleFraction": float(args.support_sample_fraction),
                 "truthSupportAvailable": int(support_indexes.size),
+                "thresholdSweep": thresholds,
             },
             "features": {
                 "identity": FEATURE_IDENTITY,
@@ -651,6 +765,14 @@ def main() -> int:
                 },
                 "mlp": {
                     "identity": MLP_IDENTITY,
+                    "loss": {
+                        "identity": loss_identity,
+                        "mode": str(args.sparse_loss_mode),
+                        "sparsePositiveThreshold": float(args.sparse_positive_threshold),
+                        "sparsePositiveWeight": float(args.sparse_positive_weight),
+                        "sparseRidgePositiveWeight": float(args.sparse_ridge_positive_weight),
+                        "meaning": "Weighted mode changes MLP loss pressure for sparse structural positive targets only; inputs and selected output channels are reported separately.",
+                    },
                     "hiddenWidth": int(args.hidden_width),
                     "epochs": int(args.epochs),
                     "batchSize": int(args.batch_size),
@@ -681,6 +803,7 @@ def main() -> int:
                         for name in SPARSE_STRUCTURAL_CHANNELS
                         if name in selected_target_channels
                     ],
+                    "thresholdSweep": mlp_threshold_sweep,
                 },
             },
             "nativeLowTransfer": {
@@ -702,6 +825,7 @@ def main() -> int:
                     "identity": MLP_IDENTITY,
                     "perChannel": native_mlp_metrics,
                     "global": global_metrics(native_mlp_metrics),
+                    "thresholdSweep": native_mlp_threshold_sweep,
                 } if native_mlp_metrics else None,
             },
             "perChannelVerdicts": verdicts(block_metrics, ridge_metrics, mlp_metrics, native_mlp_metrics, selected_target_channels),

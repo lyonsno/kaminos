@@ -2258,6 +2258,10 @@ assert.match(sidecarMetaProbe, /local-context-mlp-v0/, 'sidecar/meta probe repor
 assert.match(sidecarMetaProbe, /--target-channel-list/, 'sidecar/meta probe can train an explicit subset of v1 sidecar/meta target channels');
 assert.match(sidecarMetaProbe, /sparse-structural-target-family-v0/, 'sidecar/meta probe names sparse structural target-family specialization');
 assert.match(sidecarMetaProbe, /selectedTargetChannels/, 'sidecar/meta probe reports the effective selected target channels');
+assert.match(sidecarMetaProbe, /--sparse-loss-mode/, 'sidecar/meta probe can switch sparse structural loss pressure');
+assert.match(sidecarMetaProbe, /sparse-positive-weighted-mse-v0/, 'sidecar/meta probe names sparse-positive weighted loss identity');
+assert.match(sidecarMetaProbe, /thresholdSweep/, 'sidecar/meta probe reports threshold sweeps for calibrated support/ridge/proximity masks');
+assert.match(sidecarMetaProbe, /bestJaccardThreshold/, 'sidecar/meta threshold sweep reports the best Jaccard threshold per sparse channel');
 assert.match(sidecarMetaProbe, /nativeLowTransfer/, 'sidecar/meta probe separates native-low transfer from phase-aligned teacher learnability');
 assert.match(sidecarMetaProbe, /perChannelVerdicts/, 'sidecar/meta probe emits per-channel verdicts instead of only a global score');
 assert.match(sidecarMetaProbe, /failurePhase/, 'sidecar/meta probe writes failure-phase reports for missing or mismatched corpus data');
