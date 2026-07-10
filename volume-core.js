@@ -5010,10 +5010,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     smokeArtifactAssayControls: {
       identity: SMOKE_ARTIFACT_ASSAY_IDENTITY,
       detailForce: clampFinite(controlsSnapshot.smokeDetailForceGain, 0, 1, 1),
-      fineBreakup: clampFinite(controlsSnapshot.smokeFineBreakupGain, 0, 1, 1),
+      fineBreakup: clampFinite(controlsSnapshot.smokeFineBreakupGain, 0, 1, 0),
       morphologyForce: clampFinite(controlsSnapshot.smokeMorphologyForceGain, 0, 1, 1),
-      renderProcedural: clampFinite(controlsSnapshot.smokeRenderProceduralGain, 0, 1, 1),
-      defaultPolicy: 'all-one-preserves-current-look-zero-is-operator-ablation-v0',
+      renderProcedural: clampFinite(controlsSnapshot.smokeRenderProceduralGain, 0, 1, 0),
+      defaultPolicy: 'fine-and-render-breakup-default-zero-opt-in-reverse-assay-v0',
       target: 'crawling-structured-smoke-noise-visual-isolation-v0',
     },
     plumeHeight: 1.45,
@@ -6886,9 +6886,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     uniforms[326] = clampFinite(controlsSnapshot.activityDetailGate, 0, 1, 0);
     uniforms[327] = normalizeVolumeScene(controlsSnapshot.volumeScene) === 'tall_plume' ? 0.45 : 0;
     uniforms[328] = clampFinite(controlsSnapshot.smokeDetailForceGain, 0, 1, 1);
-    uniforms[329] = clampFinite(controlsSnapshot.smokeFineBreakupGain, 0, 1, 1);
+    uniforms[329] = clampFinite(controlsSnapshot.smokeFineBreakupGain, 0, 1, 0);
     uniforms[330] = clampFinite(controlsSnapshot.smokeMorphologyForceGain, 0, 1, 1);
-    uniforms[331] = clampFinite(controlsSnapshot.smokeRenderProceduralGain, 0, 1, 1);
+    uniforms[331] = clampFinite(controlsSnapshot.smokeRenderProceduralGain, 0, 1, 0);
     uniforms.set(previousViewProj.elements, 332);
     device.queue.writeBuffer(uniformBuffer, 0, uniforms);
     state.gridOverlay = controlsSnapshot.gridOverlay || 0;
@@ -6944,7 +6944,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       fineBreakup: uniforms[329],
       morphologyForce: uniforms[330],
       renderProcedural: uniforms[331],
-      defaultPolicy: 'all-one-preserves-current-look-zero-is-operator-ablation-v0',
+      defaultPolicy: 'fine-and-render-breakup-default-zero-opt-in-reverse-assay-v0',
       target: 'crawling-structured-smoke-noise-visual-isolation-v0',
     };
     state.volumeScene = normalizeVolumeScene(controlsSnapshot.volumeScene);

@@ -61,6 +61,8 @@ for (const assayControl of [
 assert.match(index, /data-volume-control-section="smoke-artifact-assay"[\s\S]*volume-smoke-detail-force-gain[\s\S]*volume-smoke-render-procedural-gain/, 'smoke artifact assay sliders sit in their own top-of-volume control section');
 assert.match(index, /SMOKE_ARTIFACT_ASSAY_CONTROL_FIELDS[\s\S]*volume_smoke_detail_force_gain[\s\S]*volume_smoke_render_procedural_gain/, 'smoke artifact assay sliders are registered as a compact field set');
 assert.match(index, /for \(const field of SMOKE_ARTIFACT_ASSAY_CONTROL_FIELDS\)/, 'smoke artifact assay routes and listeners are table-driven');
+assert.match(index, /id="volume-smoke-fine-breakup-gain"[^>]+value="0"/, 'Fine Breakup defaults off after the operator identified it as a smoke artifact culprit');
+assert.match(index, /id="volume-smoke-render-procedural-gain"[^>]+value="0"/, 'Render Breakup defaults off after the operator identified it as a smoke artifact culprit');
 assert.match(index, /boundary_fire_bonfire_a_la_ruffles_0709:[\s\S]*reactionLiveView:\s*'boundary_fire'/, 'Boundary Fire Bonfire_a_la_ruffles basin activates boundary-fire as the default live fire view');
 assert.match(index, /boundary_fire_bonfire_a_la_ruffles_0709:[\s\S]*boundarySidecarSource:\s*'baked'[\s\S]*boundarySidecarBlur:\s*1\.00[\s\S]*boundarySidecarWidth:\s*2\.00[\s\S]*boundarySidecarRidge:\s*2\.00/, 'Boundary Fire Bonfire_a_la_ruffles basin uses the promoted baked sidecar reconstruction path');
 assert.match(index, /boundary_fire_bonfire_a_la_ruffles_0709:[\s\S]*reactionBoundaryFireRidge:\s*1\.28[\s\S]*reactionBoundaryFireRidgeCut:\s*0\.10[\s\S]*reactionBoundaryFireLuma:\s*5\.00/, 'Boundary Fire Bonfire_a_la_ruffles basin preserves the promoted ridge and luma values');
@@ -1010,6 +1012,9 @@ assert.match(core, /SMOKE_ARTIFACT_ASSAY_IDENTITY\s*=\s*'smoke-artifact-assay-co
 assert.match(core, /smoke_artifact_assay_controls:\s*vec4<f32>/, 'fluid uniforms carry smoke artifact assay controls explicitly');
 assert.match(core, /const uniforms = new Float32Array\(348\)/, 'adding assay controls shifts the uniform buffer deliberately');
 assert.match(core, /uniforms\.set\(previousViewProj\.elements,\s*332\)/, 'previous view-projection matrix starts after the assay controls');
+assert.match(core, /clampFinite\(controlsSnapshot\.smokeFineBreakupGain,\s*0,\s*1,\s*0\)/, 'Fine Breakup uses a zero fallback so missing routes do not re-enable the culprit');
+assert.match(core, /clampFinite\(controlsSnapshot\.smokeRenderProceduralGain,\s*0,\s*1,\s*0\)/, 'Render Breakup uses a zero fallback so missing routes do not re-enable the culprit');
+assert.match(core, /defaultPolicy:\s*'fine-and-render-breakup-default-zero-opt-in-reverse-assay-v0'/, 'smoke artifact assay receipt names the default-killed culprit policy');
 assert.match(core, /rawDetailForce[\s\S]*smokeArtifactDetailForceGain/, 'sim detail force can be killed independently by the assay control');
 assert.match(core, /rawFineBreakup[\s\S]*smokeArtifactFineBreakupGain/, 'fine breakup force can be killed independently by the assay control');
 assert.match(core, /smokeMorphologyGain = tallPlumeScene \* clamp\(u\.smoke_artifact_assay_controls\.z/, 'smoke morphology force can be killed independently by the assay control');
