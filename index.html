@@ -1166,6 +1166,22 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
         <input type="range" id="volume-boundary-sidecar-ridge" min="0" max="2" step="0.02" value="1.00">
         <span class="slider-val" id="volume-boundary-sidecar-ridge-val">1.00</span>
       </div>
+      <span class="slider-help">calibrated-standard-mlp-sparse-cue-thresholds-v0: clamps low-amplitude standard MLP support/ridge/proximity cue spray before the renderer treats those cues as sheet structure.</span>
+      <div class="slider-row">
+        <span class="slider-label">Support thresh</span>
+        <input type="range" id="volume-boundary-sidecar-support-threshold" min="0" max="0.3" step="0.005" value="0.00">
+        <span class="slider-val" id="volume-boundary-sidecar-support-threshold-val">0.000</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Ridge thresh</span>
+        <input type="range" id="volume-boundary-sidecar-ridge-threshold" min="0" max="0.3" step="0.005" value="0.00">
+        <span class="slider-val" id="volume-boundary-sidecar-ridge-threshold-val">0.000</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Prox thresh</span>
+        <input type="range" id="volume-boundary-sidecar-proximity-threshold" min="0" max="0.3" step="0.005" value="0.00">
+        <span class="slider-val" id="volume-boundary-sidecar-proximity-threshold-val">0.000</span>
+      </div>
       <div class="slider-row">
         <span class="slider-label">Ridge select</span>
         <input type="range" id="volume-reaction-boundary-fire-ridge" min="0" max="2" step="0.02" value="1.76">
@@ -11517,6 +11533,9 @@ const REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS = [
   { key: 'boundarySidecarBlur', id: 'volume-boundary-sidecar-blur', param: 'volume_boundary_sidecar_blur', min: 0, max: 1, decimals: 2 },
   { key: 'boundarySidecarWidth', id: 'volume-boundary-sidecar-width', param: 'volume_boundary_sidecar_width', min: 0, max: 2, decimals: 2 },
   { key: 'boundarySidecarRidge', id: 'volume-boundary-sidecar-ridge', param: 'volume_boundary_sidecar_ridge', min: 0, max: 2, decimals: 2 },
+  { key: 'boundarySidecarSupportThreshold', id: 'volume-boundary-sidecar-support-threshold', param: 'volume_boundary_sidecar_support_threshold', min: 0, max: 0.3, decimals: 3 },
+  { key: 'boundarySidecarRidgeThreshold', id: 'volume-boundary-sidecar-ridge-threshold', param: 'volume_boundary_sidecar_ridge_threshold', min: 0, max: 0.3, decimals: 3 },
+  { key: 'boundarySidecarProximityThreshold', id: 'volume-boundary-sidecar-proximity-threshold', param: 'volume_boundary_sidecar_proximity_threshold', min: 0, max: 0.3, decimals: 3 },
   { key: 'reactionHeatMin', id: 'volume-reaction-heat-min', param: 'volume_reaction_heat_min', min: 0, max: 0.2, decimals: 3 },
   { key: 'reactionHeatMax', id: 'volume-reaction-heat-max', param: 'volume_reaction_heat_max', min: 0.04, max: 1.2, decimals: 2 },
   { key: 'reactionFuelMin', id: 'volume-reaction-fuel-min', param: 'volume_reaction_fuel_min', min: 0, max: 0.03, decimals: 4 },
@@ -16120,6 +16139,9 @@ function readVolumeControls() {
       blur: parseFloat(document.getElementById('volume-boundary-sidecar-blur').value),
       stepWidth: parseFloat(document.getElementById('volume-boundary-sidecar-width').value),
       ridgeGain: parseFloat(document.getElementById('volume-boundary-sidecar-ridge').value),
+      supportThreshold: parseFloat(document.getElementById('volume-boundary-sidecar-support-threshold').value),
+      ridgeThreshold: parseFloat(document.getElementById('volume-boundary-sidecar-ridge-threshold').value),
+      proximityThreshold: parseFloat(document.getElementById('volume-boundary-sidecar-proximity-threshold').value),
     },
     reactionBoundaryControls: {
       identity: reactionBoundaryControls.identity,
@@ -16176,6 +16198,9 @@ function readVolumeControls() {
     boundarySidecarBlur: parseFloat(document.getElementById('volume-boundary-sidecar-blur').value),
     boundarySidecarWidth: parseFloat(document.getElementById('volume-boundary-sidecar-width').value),
     boundarySidecarRidge: parseFloat(document.getElementById('volume-boundary-sidecar-ridge').value),
+    boundarySidecarSupportThreshold: parseFloat(document.getElementById('volume-boundary-sidecar-support-threshold').value),
+    boundarySidecarRidgeThreshold: parseFloat(document.getElementById('volume-boundary-sidecar-ridge-threshold').value),
+    boundarySidecarProximityThreshold: parseFloat(document.getElementById('volume-boundary-sidecar-proximity-threshold').value),
     fireRenderMode: reactionLiveView !== 'off' ? 'inspect' : document.getElementById('volume-fire-render-mode').value,
     shellInspectMode: reactionLiveView !== 'off' ? reactionLiveView : document.getElementById('volume-shell-inspect-mode').value,
     shellAmount: parseFloat(document.getElementById('volume-shell-amount').value),

@@ -89,6 +89,12 @@ assert.match(index, /BOUNDARY_SIDECAR_VIEW_VALUES\s*=\s*new Set\(\['off', 'suppo
 assert.match(index, /id="volume-boundary-sidecar-blur"/, 'Boundary Fire tuning exposes a sidecar blur/sample-efficiency control');
 assert.match(index, /id="volume-boundary-sidecar-width"/, 'Boundary Fire tuning exposes a sidecar step-footprint width control');
 assert.match(index, /id="volume-boundary-sidecar-ridge"/, 'Boundary Fire tuning exposes a baked ridge gain control');
+assert.match(index, /id="volume-boundary-sidecar-support-threshold"/, 'Boundary Fire tuning exposes calibrated support cue threshold control');
+assert.match(index, /id="volume-boundary-sidecar-ridge-threshold"/, 'Boundary Fire tuning exposes calibrated ridge cue threshold control');
+assert.match(index, /id="volume-boundary-sidecar-proximity-threshold"/, 'Boundary Fire tuning exposes calibrated proximity cue threshold control');
+assert.match(index, /volume_boundary_sidecar_support_threshold/, 'Basin URLs preserve calibrated support cue threshold');
+assert.match(index, /volume_boundary_sidecar_ridge_threshold/, 'Basin URLs preserve calibrated ridge cue threshold');
+assert.match(index, /volume_boundary_sidecar_proximity_threshold/, 'Basin URLs preserve calibrated proximity cue threshold');
 assert.match(index, /boundarySidecarSource/, 'Volume controls carry the boundary sidecar source into the renderer');
 assert.match(index, /boundarySidecarView/, 'Volume controls carry the sidecar channel debug view into the renderer');
 assert.match(index, /!routeVolumeScene\s*\|\|\s*routeVolumeScene === 'tall_plume'/, 'smoke routes with explicit tall_plume scene must still apply the Pyro basin instead of plain tall-plume mechanics');
@@ -239,6 +245,15 @@ assert.match(core, /async function beginDebugBoundarySidecarExport/, 'Renderer e
 assert.match(core, /function readDebugBoundarySidecarExportChunk/, 'Renderer exposes a chunked boundary sidecar export read hook');
 assert.match(core, /function releaseDebugBoundarySidecarExport/, 'Renderer exposes a boundary sidecar export release hook');
 assert.match(core, /boundarySidecarNormalViewGain/, 'Boundary-fire path uses the sidecar normal to compensate view-angle reconstruction width');
+assert.match(core, /BOUNDARY_SIDECAR_THRESHOLD_IDENTITY\s*=\s*'calibrated-standard-mlp-sparse-cue-thresholds-v0'/, 'Boundary sidecar thresholds carry calibrated standard-MLP sparse cue identity');
+assert.match(core, /function boundarySidecarThresholdControls/, 'Renderer normalizes calibrated sidecar threshold controls');
+assert.match(core, /boundarySidecarThresholds/, 'Debug state reports effective support/ridge/proximity thresholds');
+assert.match(core, /uniforms\[313\]\s*=\s*boundarySidecarThresholds\.support/, 'Uniform upload carries calibrated support threshold');
+assert.match(core, /uniforms\[314\]\s*=\s*boundarySidecarThresholds\.ridge/, 'Uniform upload carries calibrated ridge threshold');
+assert.match(core, /uniforms\[315\]\s*=\s*boundarySidecarThresholds\.proximity/, 'Uniform upload carries calibrated proximity threshold');
+assert.match(core, /thresholdedSparseCue\(boundarySidecarSample\.x,\s*u\.boundary_sidecar_display\.y\)/, 'Baked sidecar mode thresholds support before using it as a renderer cue');
+assert.match(core, /thresholdedSparseCue\(boundarySidecarSample\.z,\s*u\.boundary_sidecar_display\.z\)/, 'Baked sidecar mode thresholds ridge before using it as a renderer cue');
+assert.match(core, /thresholdedSparseCue\(boundarySidecarMetaSample\.x,\s*u\.boundary_sidecar_display\.w\)/, 'Baked sidecar mode thresholds proximity before using it as a renderer cue');
 const boundaryFireBranch = core.match(/if \(boundarySurfaceMode > 0\.5\) \{[\s\S]*?let boundaryGradientGate/);
 assert.ok(boundaryFireBranch, 'Boundary-fire shader branch is discoverable for sidecar source contracts');
 const bakedOnlyBranch = boundaryFireBranch[0].match(/if \(boundarySidecarSource > 0\.5 && boundarySidecarSource <= 1\.5\) \{([\s\S]*?)\} else \{/);
@@ -246,7 +261,7 @@ assert.ok(bakedOnlyBranch, 'Baked sidecar mode has a distinct branch from live/m
 assert.match(bakedOnlyBranch[1], /sampleWorldBoundarySidecar\(p\)/, 'Baked sidecar mode samples the baked structure field');
 assert.match(bakedOnlyBranch[1], /sampleWorldBoundarySidecarMeta\(p\)/, 'Baked sidecar mode samples the baked proximity/normal meta field');
 assert.doesNotMatch(bakedOnlyBranch[1], /liveBoundarySupportAt/, 'Baked sidecar mode must not pay the live seven-tap boundary support path per ray step');
-assert.match(boundaryFireBranch[0], /if \(boundarySidecarSource > 1\.5\) \{[\s\S]*mix\(boundarySupport, boundarySidecarSample\.x, 0\.5\)/, 'Mix sidecar mode is the explicit expensive live+baked comparison path');
+assert.match(boundaryFireBranch[0], /if \(boundarySidecarSource > 1\.5\) \{[\s\S]*mix\(boundarySupport, boundarySidecarSupportThresholded, 0\.5\)/, 'Mix sidecar mode is the explicit expensive live+baked comparison path with calibrated sparse cue thresholds');
 assert.match(core, /boundaryStructureSource:\s*boundarySidecarSourceName/, 'Debug state reports the effective boundary structure source');
 assert.match(core, /boundarySidecarDebug/, 'Debug state exposes boundary sidecar bake identity and controls');
 assert.match(core, /channels:\s*\['support', 'coverage', 'ridge', 'footprint', 'proximity', 'normal'\]/, 'Debug state reports sidecar channel semantics');
