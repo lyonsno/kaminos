@@ -1527,7 +1527,7 @@ assert.match(core, /ACTIVITY_PRESSURE_SPEND_MODEL\s*=\s*'base-midbody-activity-p
 assert.match(core, /ACTIVITY_PRESSURE_INACTIVE_SKIP_POLICY\s*=\s*'inactive-extra-tier-cell-early-out-v0'/, 'activity pressure tiers name the inactive-cell early-out policy');
 assert.match(core, /ACTIVE_PRESSURE_WORKGROUP_DISPATCH_STRATEGY\s*=\s*'gpu-built-active-pressure-workgroups-indirect-v0'/, 'activity pressure tiers name GPU-built indirect active workgroup dispatch');
 assert.match(core, /ACTIVE_PRESSURE_WORKGROUP_ACCOUNTING\s*=\s*'active-pressure-workgroup-counter-readback-v0'/, 'activity pressure tiers name active workgroup readback accounting');
-assert.match(core, /ACTIVITY_PRESSURE_P4_STRATEGY\s*=\s*'flame-lower-boundary-p4-active-workgroups-v0'/, 'activity pressure tiers name the tight flame/lower-boundary P4 strategy');
+assert.match(core, /ACTIVITY_PRESSURE_P4_STRATEGY\s*=\s*'core-replay-p4-active-workgroups-v0'/, 'activity pressure tiers name the P4-as-core-replay strategy');
 assert.match(core, /ACTIVITY_PRESSURE_P4_DISABLED_STRATEGY\s*=\s*'activity-p4-disabled-comparison-p3-v0'/, 'activity pressure tiers name the P4-disabled comparison strategy');
 assert.match(core, /PRESSURE_PROJECTION_READ_STRATEGY_COMPOSITE\s*=\s*'composite-pressure-tier-read-v0'/, 'volume core names composite tier pressure projection reads');
 assert.match(core, /PRESSURE_PROJECTION_READ_STRATEGY_SINGLE_BUFFER\s*=\s*'single-pressure-buffer-read-v0'/, 'volume core names single-buffer pressure projection reads');
@@ -1547,7 +1547,10 @@ const pressureActivityBlock = core.match(/fn pressureActivityCueAtCell[\s\S]*?fn
 assert.match(pressureActivityBlock, /readFrontField/, 'activity pressure mask consumes the sim-side front field');
 assert.match(pressureActivityBlock, /readSlot\(c,\s*0u\)/, 'activity pressure mask consumes broad density or velocity occupancy from the current sim buffer');
 assert.match(pressureActivityBlock, /pressureActivityBaseMidbodySpendAtCell/, 'activity pressure masks bias extra pressure toward base and midbody spend');
-assert.match(pressureActivityBlock, /pressureActivityP4MaskAtCell/, 'activity pressure path has a tight flame/lower-boundary P4 mask');
+assert.doesNotMatch(pressureActivityBlock, /pressureActivityP4MaskAtCell/, 'activity pressure path must not run a separate heavy P4 mask; P4 reuses the P3 core mask/list');
+assert.match(pressureActivityBlock, /if \(tier > 3\.5\) \{\s*return pressureActivityMaskAtCell\(c, 1\.0\);\s*\}/, 'activity P4 cell mask reuses the P3 core mask');
+assert.doesNotMatch(pressureActivityBlock, /pressureActivityWorkgroupMask\(gid, 4\.0\)/, 'activity workgroup builder must not evaluate a separate P4 mask');
+assert.match(pressureActivityBlock, /pressureActivityWorkgroupListBaseForTier\(4\.0\) \+ p4Slot/, 'activity workgroup builder populates the P4 replay list from core workgroups');
 assert.match(pressureActivityBlock, /tipDamp/, 'activity pressure spend damps tip-dominated support before extra pressure tiers');
 assert.match(pressureActivityBlock, /inactive-extra-tier-cell-early-out-v0/, 'activity pressure tier shader carries an explicit inactive-cell early-out policy');
 assert.match(pressureActivityBlock, /csBuildPressureActivityWorkgroups/, 'activity pressure path builds active pressure workgroups on the GPU before extra tier dispatch');
@@ -1565,7 +1568,7 @@ assert.match(core, /activeExtraTierWorkgroups/, 'debug state reports active extr
 assert.match(core, /p4ActiveWorkgroups/, 'debug state reports tight P4 active pressure workgroups');
 assert.match(core, /skippedExtraTierWorkgroups/, 'debug state reports skipped extra-tier pressure workgroups');
 assert.match(core, /gpu-built-active-pressure-workgroups-indirect-v0/, 'activity pressure dispatch efficiency says GPU-built indirect active workgroups');
-assert.match(core, /activity-flame-boundary-pressure4-indirect/, 'activity pressure dispatch plan names the P4 indirect refinement pass');
+assert.match(core, /activity-core-pressure4-replay-indirect/, 'activity pressure dispatch plan names the P4 core replay refinement pass');
 assert.match(core, /activityPressureP4Enabled/, 'activity pressure dispatch plan accepts an explicit P4 enablement control');
 assert.match(core, /spendModel:\s*ACTIVITY_PRESSURE_SPEND_MODEL/, 'activity tier debug state exposes the effective spend model');
 assert.match(core, /inactiveCellPolicy:\s*ACTIVITY_PRESSURE_INACTIVE_SKIP_POLICY/, 'activity tier debug state exposes the inactive-cell policy');

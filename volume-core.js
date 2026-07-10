@@ -359,7 +359,7 @@ const ACTIVITY_PRESSURE_SPEND_MODEL = 'base-midbody-activity-pressure-spend-v0';
 const ACTIVITY_PRESSURE_INACTIVE_SKIP_POLICY = 'inactive-extra-tier-cell-early-out-v0';
 const ACTIVE_PRESSURE_WORKGROUP_DISPATCH_STRATEGY = 'gpu-built-active-pressure-workgroups-indirect-v0';
 const ACTIVE_PRESSURE_WORKGROUP_ACCOUNTING = 'active-pressure-workgroup-counter-readback-v0';
-const ACTIVITY_PRESSURE_P4_STRATEGY = 'flame-lower-boundary-p4-active-workgroups-v0';
+const ACTIVITY_PRESSURE_P4_STRATEGY = 'core-replay-p4-active-workgroups-v0';
 const ACTIVITY_PRESSURE_P4_DISABLED_STRATEGY = 'activity-p4-disabled-comparison-p3-v0';
 const PRESSURE_PROJECTION_READ_STRATEGY_COMPOSITE = 'composite-pressure-tier-read-v0';
 const PRESSURE_PROJECTION_READ_STRATEGY_SINGLE_BUFFER = 'single-pressure-buffer-read-v0';
@@ -672,7 +672,7 @@ function pressureTierDispatchPlan(gridSize, pressureStrategy, scene, pressureTie
       { tier: 3, label: 'activity-core-pressure3-indirect', dispatch: 'indirect', indirectOffsetBytes: 12, candidateWorkgroups: fullWorkgroups, pressureBuffer: 'B', mask: 'current-sim-core-front-ridge' },
     ];
     if (activityPressureP4Enabled) {
-      activityDispatches.push({ tier: 4, label: 'activity-flame-boundary-pressure4-indirect', dispatch: 'indirect', indirectOffsetBytes: 24, candidateWorkgroups: fullWorkgroups, pressureBuffer: 'A', mask: 'current-sim-flame-lower-boundary-stress' });
+      activityDispatches.push({ tier: 4, label: 'activity-core-pressure4-replay-indirect', dispatch: 'indirect', indirectOffsetBytes: 24, candidateWorkgroups: fullWorkgroups, pressureBuffer: 'A', mask: 'current-sim-core-front-ridge-replay' });
     }
     return {
       strategy: TALL_PLUME_ACTIVITY_PRESSURE_TIER_STRATEGY,
@@ -688,13 +688,13 @@ function pressureTierDispatchPlan(gridSize, pressureStrategy, scene, pressureTie
       activityPressureP4Enabled,
       dispatches: activityDispatches,
       bounds: activityPressureP4Enabled
-        ? { pressure1: { mask: 'global-floor', buffer: 'B' }, pressure2: { mask: 'broad-activity', buffer: 'A' }, pressure3: { mask: 'core-activity', buffer: 'B' }, pressure4: { mask: 'flame-lower-boundary-activity', buffer: 'A' } }
+        ? { pressure1: { mask: 'global-floor', buffer: 'B' }, pressure2: { mask: 'broad-activity', buffer: 'A' }, pressure3: { mask: 'core-activity', buffer: 'B' }, pressure4: { mask: 'core-activity-replay', buffer: 'A' } }
         : { pressure1: { mask: 'global-floor', buffer: 'B' }, pressure2: { mask: 'broad-activity', buffer: 'A' }, pressure3: { mask: 'core-activity', buffer: 'B' } },
       requestedBounds: activityPressureP4Enabled
-        ? { pressure1: { mask: 'global-floor', buffer: 'B' }, pressure2: { mask: 'broad-activity', buffer: 'A' }, pressure3: { mask: 'core-activity', buffer: 'B' }, pressure4: { mask: 'flame-lower-boundary-activity', buffer: 'A' } }
+        ? { pressure1: { mask: 'global-floor', buffer: 'B' }, pressure2: { mask: 'broad-activity', buffer: 'A' }, pressure3: { mask: 'core-activity', buffer: 'B' }, pressure4: { mask: 'core-activity-replay', buffer: 'A' } }
         : { pressure1: { mask: 'global-floor', buffer: 'B' }, pressure2: { mask: 'broad-activity', buffer: 'A' }, pressure3: { mask: 'core-activity', buffer: 'B' } },
       effectiveBounds: activityPressureP4Enabled
-        ? { pressure1: { mask: 'global-floor', buffer: 'B' }, pressure2: { mask: 'gpu-built-active-base-midbody-broad-workgroups', buffer: 'A' }, pressure3: { mask: 'gpu-built-active-base-midbody-core-workgroups', buffer: 'B' }, pressure4: { mask: 'gpu-built-active-flame-lower-boundary-workgroups', buffer: 'A' } }
+        ? { pressure1: { mask: 'global-floor', buffer: 'B' }, pressure2: { mask: 'gpu-built-active-base-midbody-broad-workgroups', buffer: 'A' }, pressure3: { mask: 'gpu-built-active-base-midbody-core-workgroups', buffer: 'B' }, pressure4: { mask: 'gpu-built-active-base-midbody-core-workgroups-replay', buffer: 'A' } }
         : { pressure1: { mask: 'global-floor', buffer: 'B' }, pressure2: { mask: 'gpu-built-active-base-midbody-broad-workgroups', buffer: 'A' }, pressure3: { mask: 'gpu-built-active-base-midbody-core-workgroups', buffer: 'B' } },
       bufferOwnership: {
         pressure1: 'B',
@@ -1498,32 +1498,16 @@ fn pressureActivityMaskAtCell(c: vec3<i32>, core: f32) -> f32 {
   return mix(broad, focused, clamp(core, 0.0, 1.0));
 }
 
-fn pressureActivityP4MaskAtCell(c: vec3<i32>) -> f32 {
-  let velocityDensity = readSlot(c, 0u);
-  let material = readSlot(c, 1u);
-  let fireLayer = readSlot(c, 2u);
-  let microLayer = readSlot(c, 3u);
-  let front = readFrontField(c);
-  let y = pressureTierY(c);
-  let liftedFromFloor = smoothstep(0.030, 0.115, y);
-  let baseBand = liftedFromFloor * (1.0 - smoothstep(0.34, 0.56, y));
-  let midBoundaryBand = smoothstep(0.12, 0.30, y) * (1.0 - smoothstep(0.50, 0.72, y));
-  let lowerMidSpend = clamp(max(baseBand, midBoundaryBand), 0.0, 1.0);
-  let flameContact = smoothstep(0.030, 0.22, front * 0.90 + fireLayer.x * 0.38 + fireLayer.z * 0.34 + microLayer.z * 0.26);
-  let boundaryStress = smoothstep(0.018, 0.16, curlMagnitudeAtCell(c) * 0.72 + abs(divergenceAtCell(c)) * 0.86 + front * 0.34);
-  let carrierSupport = smoothstep(0.030, 0.42, material.x * 0.28 + material.y * 0.22 + velocityDensity.w * 0.24);
-  let contactCore = flameContact * (0.72 + boundaryStress * 0.36);
-  let lowerBoundary = lowerMidSpend * boundaryStress * (0.30 + flameContact * 0.56 + carrierSupport * 0.16);
-  let shaped = max(contactCore * lowerMidSpend, lowerBoundary);
-  return clamp(shaped * pressureActivityBaseMidbodySpendAtCell(c), 0.0, 1.0);
-}
-
 fn pressureTierCellMask(c: vec3<i32>, minY: f32, maxY: f32, tier: f32) -> f32 {
   let y = pressureTierY(c);
   let slabMask = step(minY, y) * step(y, maxY);
-  let p4Mask = pressureActivityP4MaskAtCell(c) * pressureActivityP4Enabled();
-  let activityMask = select(pressureActivityMaskAtCell(c, step(2.5, tier)), p4Mask, tier > 3.5);
-  return mix(slabMask, activityMask, pressureActivityTierMode());
+  if (pressureActivityTierMode() > 0.5) {
+    if (tier > 3.5) {
+      return pressureActivityMaskAtCell(c, 1.0);
+    }
+    return pressureActivityMaskAtCell(c, step(2.5, tier));
+  }
+  return slabMask;
 }
 
 const PRESSURE_ACTIVITY_WORKGROUP_META_U32_WGSL: u32 = 16u;
@@ -1588,11 +1572,10 @@ fn csBuildPressureActivityWorkgroups(@builtin(global_invocation_id) gid: vec3<u3
   if (core > 0.001) {
     let slot = atomicAdd(&pressureActivityWorkgroups[3], 1u);
     atomicStore(&pressureActivityWorkgroups[pressureActivityWorkgroupListBaseForTier(3.0) + slot], linear);
-  }
-  let p4 = pressureActivityWorkgroupMask(gid, 4.0);
-  if (p4 > 0.001) {
-    let slot = atomicAdd(&pressureActivityWorkgroups[6], 1u);
-    atomicStore(&pressureActivityWorkgroups[pressureActivityWorkgroupListBaseForTier(4.0) + slot], linear);
+    if (pressureActivityP4Enabled() > 0.5) {
+      let p4Slot = atomicAdd(&pressureActivityWorkgroups[6], 1u);
+      atomicStore(&pressureActivityWorkgroups[pressureActivityWorkgroupListBaseForTier(4.0) + p4Slot], linear);
+    }
   }
 }
 
@@ -1600,7 +1583,7 @@ fn pressureTierDebugOverlayColor(y: f32, c: vec3<i32>) -> vec4<f32> {
   if (pressureActivityTierMode() > 0.5) {
     let broad = pressureActivityMaskAtCell(c, 0.0);
     let core = pressureActivityMaskAtCell(c, 1.0);
-    let p4 = pressureActivityP4MaskAtCell(c) * pressureActivityP4Enabled();
+    let p4 = core * pressureActivityP4Enabled();
     let color = mix(vec3<f32>(0.05, 0.35, 0.52), vec3<f32>(0.04, 0.88, 0.90), broad);
     let hot = mix(color, vec3<f32>(1.0, 0.56, 0.08), core);
     let p4Hot = mix(hot, vec3<f32>(1.0, 0.92, 0.30), p4);
@@ -1645,10 +1628,11 @@ fn samplePyroMaterialMemoryCell(p: vec3<f32>) -> vec4<f32> {
 
 fn pressureReadComposite(c: vec3<i32>) -> vec4<f32> {
   if (pressureActivityTierMode() > 0.5) {
-    if (pressureActivityP4Enabled() > 0.5 && pressureActivityP4MaskAtCell(c) > 0.001) {
+    let core = pressureActivityMaskAtCell(c, 1.0);
+    if (pressureActivityP4Enabled() > 0.5 && core > 0.001) {
       return pressureReadAlt(c);
     }
-    if (pressureActivityMaskAtCell(c, 1.0) > 0.001) {
+    if (core > 0.001) {
       return pressureRead(c);
     }
     if (pressureActivityMaskAtCell(c, 0.0) > 0.001) {
