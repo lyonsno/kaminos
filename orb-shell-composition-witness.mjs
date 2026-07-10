@@ -651,6 +651,95 @@ async function composeDenseWitnessHeroSheet(ws, captures, strength) {
   };
 }
 
+function composeDenseWitnessPackIndexPage(pack) {
+  const denseWitnessPackIndexPath = /\.png$/i.test(pack.denseWitnessPackOut)
+    ? pack.denseWitnessPackOut.replace(/\.png$/i, '-index.html')
+    : `${pack.denseWitnessPackOut}-index.html`;
+  const sheetRows = [
+    ...pack.scoutSheets.map(sheet => ({
+      title: `Scout strength ${Number(sheet.strength).toFixed(2)}`,
+      role: 'Broad parallax grid for one law strength.',
+      imagePath: sheet.screenshot.path,
+      stats: sheet.screenshot.stats,
+      htmlPath: sheet.htmlPath,
+    })),
+    {
+      title: `Delta ${Number(pack.deltaSheet.baselineStrength).toFixed(2)} -> ${Number(pack.deltaSheet.activeStrength).toFixed(2)}`,
+      role: 'Paired cells: baseline on the left, active law on the right.',
+      imagePath: pack.deltaSheet.screenshot.path,
+      stats: pack.deltaSheet.screenshot.stats,
+      htmlPath: pack.deltaSheet.htmlPath,
+    },
+    {
+      title: `Hero detail strength ${Number(pack.heroSheet.strength).toFixed(2)}`,
+      role: 'Larger selected views for human inspection.',
+      imagePath: pack.heroSheet.screenshot.path,
+      stats: pack.heroSheet.screenshot.stats,
+      htmlPath: pack.heroSheet.htmlPath,
+    },
+  ];
+  const html = `<!doctype html>
+    <meta charset="utf-8">
+    <title>Dense Witness Pack</title>
+    <style>
+      :root { color-scheme: dark; }
+      body { margin: 0; background: #07090b; color: #dbe7eb; font: 15px system-ui, sans-serif; }
+      main { max-width: 1800px; margin: 0 auto; padding: 28px; }
+      h1 { margin: 0 0 8px; font-size: 22px; font-weight: 650; }
+      h2 { margin: 30px 0 8px; font-size: 16px; font-weight: 650; color: #f3c968; }
+      p { margin: 6px 0; color: #9eb1b8; line-height: 1.45; overflow-wrap: anywhere; }
+      code, .mono { font: 12px 'SF Mono', ui-monospace, monospace; color: #9ed9ff; }
+      .summary { border: 1px solid #26343a; background: #0c1114; padding: 14px 16px; margin: 18px 0 26px; }
+      .sheet { margin: 0 0 34px; border: 1px solid #26343a; background: #050708; }
+      .sheet-header { padding: 12px 14px; border-bottom: 1px solid #26343a; display: flex; gap: 16px; justify-content: space-between; align-items: baseline; }
+      .links { display: flex; gap: 12px; flex-wrap: wrap; }
+      a { color: #91d9ff; text-decoration: none; }
+      a:hover { text-decoration: underline; }
+      img { display: block; width: 100%; height: auto; background: #000; }
+      .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 8px 20px; }
+    </style>
+    <main>
+      <h1>DenseWitnessPackIndexPage</h1>
+      <p>One-page smoke surface for Lamellar curve-on-sphere law evidence.</p>
+      <section class="summary">
+        <div class="meta-grid">
+          <div><span class="mono">mode</span><br>${pack.mode}</div>
+          <div><span class="mono">focus</span><br>${pack.denseWitnessPackRouteIdentity.focus}</div>
+          <div><span class="mono">strengths</span><br>${pack.grid.strengths.join(', ')}</div>
+          <div><span class="mono">elevations</span><br>${pack.grid.scoutElevations.join(', ')}</div>
+          <div><span class="mono">azimuths</span><br>${pack.grid.scoutAzimuths.join(', ')}</div>
+          <div><span class="mono">target</span><br>${pack.grid.target.join(', ')}</div>
+        </div>
+        <p><span class="mono">route</span> ${pack.denseWitnessPackRouteIdentity.requestedUrl}</p>
+        <p><a href="${pathToFileURL(pack.reportPath).href}">Report JSON</a></p>
+      </section>
+      ${sheetRows.map(row => `
+        <section class="sheet">
+          <div class="sheet-header">
+            <div>
+              <h2>${row.title}</h2>
+              <p>${row.role}</p>
+              <p class="mono">${row.stats.width}x${row.stats.height} | ${row.stats.bytes} bytes</p>
+            </div>
+            <div class="links">
+              <a href="${pathToFileURL(row.imagePath).href}">open image</a>
+              <a href="${pathToFileURL(row.htmlPath).href}">open source sheet</a>
+            </div>
+          </div>
+          <a href="${pathToFileURL(row.imagePath).href}"><img src="${pathToFileURL(row.imagePath).href}" alt="${row.title}"></a>
+        </section>
+      `).join('')}
+    </main>`;
+  mkdirSync(dirname(denseWitnessPackIndexPath), { recursive: true });
+  writeFileSync(denseWitnessPackIndexPath, html);
+  return {
+    schema: 'DenseWitnessPackIndexPage',
+    denseWitnessPackIndexPath,
+    url: pathToFileURL(denseWitnessPackIndexPath).href,
+    sheetCount: sheetRows.length,
+  };
+}
+
 async function captureDenseWitnessPack(ws, captureOptions) {
   if (!denseWitnessPackOut) return null;
   assert.equal(focus, 'macro-morphology-inventory', '--dense-witness-pack-out is scoped to macro-morphology-inventory focus');
@@ -749,11 +838,38 @@ async function captureDenseWitnessPack(ws, captureOptions) {
   const baselineStrength = denseWitnessPackStrengths[0];
   const deltaSheet = await composeDenseWitnessDeltaPairSheet(ws, captures, baselineStrength, activeStrength);
   const heroSheet = await composeDenseWitnessHeroSheet(ws, heroCaptures, activeStrength);
+  const indexPage = composeDenseWitnessPackIndexPage({
+    schema: 'DenseWitnessPack',
+    mode: 'orbit-law-parallax-scout-delta-hero-pack-v0',
+    denseWitnessPackOut,
+    reportPath,
+    denseWitnessPackRouteIdentity: routeIdentity,
+    scoutSheets,
+    deltaSheet,
+    heroSheet,
+    grid: {
+      schema: 'DenseWitnessPackGrid',
+      strengths: denseWitnessPackStrengths,
+      scoutElevations: denseWitnessPackScoutElevations,
+      scoutAzimuths: denseWitnessPackScoutAzimuths,
+      heroPoses: denseWitnessPackHeroPoses,
+      distance: denseWitnessPackDistance,
+      target: denseWitnessPackTarget,
+      scoutCellWidth: denseWitnessPackScoutCellWidth,
+      deltaCellWidth: denseWitnessPackDeltaCellWidth,
+      heroCellWidth: denseWitnessPackHeroCellWidth,
+      scoutCellCount: cellCount,
+      heroCellCount: heroCaptures.length,
+      gridWarning,
+    },
+  });
   return {
     schema: 'DenseWitnessPack',
     mode: 'orbit-law-parallax-scout-delta-hero-pack-v0',
     denseWitnessPackOut,
     denseWitnessPackRouteIdentity: routeIdentity,
+    indexPage,
+    denseWitnessPackIndexPath: indexPage.denseWitnessPackIndexPath,
     scoutSheets,
     deltaSheet,
     heroSheet,

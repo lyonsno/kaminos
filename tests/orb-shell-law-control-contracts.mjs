@@ -96,6 +96,9 @@ assert.match(witness, /DenseWitnessDeltaPairSheet/, 'dense witness pack must inc
 assert.match(witness, /DenseWitnessHeroSheet/, 'dense witness pack must include larger hero/detail inspection sheets');
 assert.match(witness, /denseWitnessPackOut/, 'dense witness pack report must preserve the requested output root');
 assert.match(witness, /denseWitnessPackRouteIdentity/, 'dense witness pack report must preserve route/config identity separately from screenshots');
+assert.match(witness, /DenseWitnessPackIndexPage/, 'dense witness pack must generate one openable HTML index page');
+assert.match(witness, /denseWitnessPackIndexPath/, 'dense witness pack report must preserve the generated HTML index path');
+assert.match(witness, /composeDenseWitnessPackIndexPage/, 'dense witness pack index page must be produced by a named composer');
 assert.match(core, /frameMacroMorphologySurveyPose/, 'composition witness must expose macro-morphology survey camera framing');
 
 const {
