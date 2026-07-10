@@ -30,8 +30,9 @@ const PHASE_ALIGNED_LOW_HELD_AUTHORITY = 'downsampled-same-high-history-held-con
 const PHASE_ALIGNED_HELD_APPLICATION_IDENTITY = 'phase-aligned-held-render-application-v0';
 const CHECKSUM_ADDRESSED_LIVE_REPLAY_AUTHORITY = 'checksum-addressed-live-replay-resume-v0';
 const EXACT_FIELD_LIVE_REPLAY_APPLICATION_IDENTITY = 'exact-field-live-replay-application-v0';
-const BOUNDARY_SIDECAR_IDENTITY = 'baked-boundary-sidecar-v0';
-const BOUNDARY_SIDECAR_BAKE_AUTHORITY = 'band-limited-support-coverage-ridge-proximity-footprint-v1';
+const BOUNDARY_SIDECAR_IDENTITY = 'baked-boundary-sidecar-v1';
+const BOUNDARY_SIDECAR_BAKE_AUTHORITY = 'band-limited-support-coverage-ridge-footprint-proximity-normal-v2';
+const TEMPORAL_SIDECAR_IDENTITY = 'temporal-boundary-sidecar-history-v0';
 const BOUNDARY_SPLAT_RENDERER_IDENTITY = 'live-boundary-sidecar-analytic-splats-v0';
 const BOUNDARY_SPLAT_LEARNED_RENDERER_IDENTITY = 'live-boundary-sidecar-learned-attribute-splats-v0';
 const BOUNDARY_SPLAT_SOURCE_AUTHORITY = 'live-baked-sidecar-plus-fluid-material-v0';
@@ -309,7 +310,7 @@ function boundarySidecarSourceValue(value) {
 
 function normalizeBoundarySidecarView(value) {
   const normalized = String(value || 'off').toLowerCase().replace(/-/g, '_');
-  if (normalized === 'support' || normalized === 'coverage' || normalized === 'ridge' || normalized === 'proximity' || normalized === 'footprint') return normalized;
+  if (normalized === 'support' || normalized === 'coverage' || normalized === 'ridge' || normalized === 'proximity' || normalized === 'footprint' || normalized === 'normal') return normalized;
   return 'off';
 }
 
@@ -320,6 +321,7 @@ function boundarySidecarViewValue(value) {
   if (normalized === 'ridge') return 3;
   if (normalized === 'proximity') return 4;
   if (normalized === 'footprint') return 5;
+  if (normalized === 'normal') return 6;
   return 0;
 }
 
@@ -557,6 +559,10 @@ function majorantBufferBytes(majorantGridSize = DEFAULT_MAJORANT_GRID_SIZE) {
 }
 
 function boundarySidecarBufferBytes(gridSize) {
+  return gridCellCount(gridSize) * 4 * Float32Array.BYTES_PER_ELEMENT;
+}
+
+function boundarySidecarMetaBufferBytes(gridSize) {
   return gridCellCount(gridSize) * 4 * Float32Array.BYTES_PER_ELEMENT;
 }
 
@@ -1105,10 +1111,12 @@ struct ExternalEmitterInfluence {
 @group(0) @binding(8) var<storage, read_write> frontDst: array<f32>;
 @group(0) @binding(9) var<storage, read> oracleActivityCue: array<f32>;
 @group(0) @binding(10) var<storage, read> boundarySidecar: array<vec4<f32>>;
+@group(0) @binding(11) var<storage, read> boundarySidecarMeta: array<vec4<f32>>;
 @group(1) @binding(0) var<storage, read_write> majorantDst: array<vec4<f32>>;
 @group(2) @binding(0) var<storage, read> pressureSrc: array<vec4<f32>>;
 @group(2) @binding(1) var<storage, read_write> pressureDst: array<vec4<f32>>;
 @group(3) @binding(0) var<storage, read_write> boundarySidecarDst: array<vec4<f32>>;
+@group(3) @binding(1) var<storage, read_write> boundarySidecarMetaDst: array<vec4<f32>>;
 
 struct VSOut {
   @builtin(position) pos: vec4<f32>,
@@ -1399,6 +1407,10 @@ fn sampleBoundarySidecarCell(c: vec3<i32>) -> vec4<f32> {
   return boundarySidecar[index3(clampCell(c))];
 }
 
+fn sampleBoundarySidecarMetaCell(c: vec3<i32>) -> vec4<f32> {
+  return boundarySidecarMeta[index3(clampCell(c))];
+}
+
 fn sampleWorldBoundarySidecar(p: vec3<f32>) -> vec4<f32> {
   let q = clamp((p * 0.5 + vec3<f32>(0.5)) * f32(GRID) - vec3<f32>(0.5), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.001));
   let i0 = vec3<i32>(floor(q));
@@ -1411,6 +1423,27 @@ fn sampleWorldBoundarySidecar(p: vec3<f32>) -> vec4<f32> {
   let c101 = sampleBoundarySidecarCell(i0 + vec3<i32>(1, 0, 1));
   let c011 = sampleBoundarySidecarCell(i0 + vec3<i32>(0, 1, 1));
   let c111 = sampleBoundarySidecarCell(i0 + vec3<i32>(1, 1, 1));
+  let x00 = mix(c000, c100, f.x);
+  let x10 = mix(c010, c110, f.x);
+  let x01 = mix(c001, c101, f.x);
+  let x11 = mix(c011, c111, f.x);
+  let y0 = mix(x00, x10, f.y);
+  let y1 = mix(x01, x11, f.y);
+  return mix(y0, y1, f.z);
+}
+
+fn sampleWorldBoundarySidecarMeta(p: vec3<f32>) -> vec4<f32> {
+  let q = clamp((p * 0.5 + vec3<f32>(0.5)) * f32(GRID) - vec3<f32>(0.5), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.001));
+  let i0 = vec3<i32>(floor(q));
+  let f = fract(q);
+  let c000 = sampleBoundarySidecarMetaCell(i0 + vec3<i32>(0, 0, 0));
+  let c100 = sampleBoundarySidecarMetaCell(i0 + vec3<i32>(1, 0, 0));
+  let c010 = sampleBoundarySidecarMetaCell(i0 + vec3<i32>(0, 1, 0));
+  let c110 = sampleBoundarySidecarMetaCell(i0 + vec3<i32>(1, 1, 0));
+  let c001 = sampleBoundarySidecarMetaCell(i0 + vec3<i32>(0, 0, 1));
+  let c101 = sampleBoundarySidecarMetaCell(i0 + vec3<i32>(1, 0, 1));
+  let c011 = sampleBoundarySidecarMetaCell(i0 + vec3<i32>(0, 1, 1));
+  let c111 = sampleBoundarySidecarMetaCell(i0 + vec3<i32>(1, 1, 1));
   let x00 = mix(c000, c100, f.x);
   let x10 = mix(c010, c110, f.x);
   let x01 = mix(c001, c101, f.x);
@@ -2505,7 +2538,10 @@ fn csBoundarySidecar(@builtin(global_invocation_id) gid: vec3<u32>) {
   let neighborMean = (center * 2.0 + px + nx + py + ny + pz + nz) * 0.125;
   let neighborMax = max(max(max(px, nx), max(py, ny)), max(pz, nz));
   let boundarySidecarSupport = mix(center, neighborMean, blur * 0.45);
-  let boundarySidecarGradient = clamp(length(vec3<f32>(px - nx, py - ny, pz - nz)) * 0.5, 0.0, 1.5);
+  let boundarySidecarGradientVec = vec3<f32>(px - nx, py - ny, pz - nz);
+  let boundarySidecarGradientLen = length(boundarySidecarGradientVec);
+  let boundarySidecarGradient = clamp(boundarySidecarGradientLen * 0.5, 0.0, 1.5);
+  let boundarySidecarNormal = boundarySidecarGradientVec / max(boundarySidecarGradientLen, 0.0001);
   let laplacian = abs(px + nx + py + ny + pz + nz - 6.0 * center);
   let ridgeGain = clamp(u.boundary_fire_structure.x, 0.0, 2.0) * clamp(u.boundary_sidecar_controls.w, 0.0, 2.0);
   let ridgeCut = clamp(u.boundary_fire_structure.y, 0.0, 0.55);
@@ -2526,11 +2562,23 @@ fn csBoundarySidecar(@builtin(global_invocation_id) gid: vec3<u32>) {
     0.06,
     1.65
   );
+  let boundarySidecarProximity = clamp(
+    max(boundarySidecarSupport, max(boundarySidecarCoverage * 0.74, boundarySidecarRidge * 0.58))
+      + smoothstep(0.008, 0.22, neighborMax) * 0.10,
+    0.0,
+    1.8
+  );
   boundarySidecarDst[index3(gid)] = vec4<f32>(
     boundarySidecarSupport,
     boundarySidecarCoverage,
     boundarySidecarRidge,
     boundarySidecarFootprintWidth
+  );
+  boundarySidecarMetaDst[index3(gid)] = vec4<f32>(
+    boundarySidecarProximity,
+    boundarySidecarNormal.x,
+    boundarySidecarNormal.y,
+    boundarySidecarNormal.z
   );
 }
 
@@ -4188,10 +4236,12 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
       let boundaryDy = vec3<f32>(0.0, boundaryCellStep, 0.0);
       let boundaryDz = vec3<f32>(0.0, 0.0, boundaryCellStep);
       let boundarySidecarSource = clamp(u.boundary_sidecar_controls.x, 0.0, 2.0);
-      let boundarySidecarView = clamp(u.boundary_sidecar_display.x, 0.0, 5.0);
+      let boundarySidecarView = clamp(u.boundary_sidecar_display.x, 0.0, 6.0);
       var boundarySidecarDebugSample = vec4<f32>(0.0);
+      var boundarySidecarDebugMetaSample = vec4<f32>(0.0);
       if (boundarySidecarView > 0.5) {
         boundarySidecarDebugSample = sampleWorldBoundarySidecar(p);
+        boundarySidecarDebugMetaSample = sampleWorldBoundarySidecarMeta(p);
       }
       var boundarySupportEffective = 0.0;
       var boundaryGradientEffective = 0.0;
@@ -4199,14 +4249,23 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
       var boundarySidecarStepFootprintWidth = 0.0;
       if (boundarySidecarSource > 0.5 && boundarySidecarSource <= 1.5) {
         let boundarySidecarSample = sampleWorldBoundarySidecar(p);
+        let boundarySidecarMetaSample = sampleWorldBoundarySidecarMeta(p);
         boundarySidecarDebugSample = boundarySidecarSample;
+        boundarySidecarDebugMetaSample = boundarySidecarMetaSample;
         let boundarySidecarCoverage = boundarySidecarSample.y;
-        let boundarySidecarProximity = clamp(max(boundarySidecarSample.x, max(boundarySidecarCoverage * 0.74, boundarySidecarSample.z * 0.58)), 0.0, 1.8);
+        let boundarySidecarProximity = clamp(boundarySidecarMetaSample.x, 0.0, 1.8);
+        let boundarySidecarNormalLen = length(boundarySidecarMetaSample.yzw);
+        let boundarySidecarNormal = boundarySidecarMetaSample.yzw / max(boundarySidecarNormalLen, 0.0001);
+        let boundarySidecarNormalViewGain = mix(
+          1.0,
+          mix(1.0, 1.45, smoothstep(0.15, 0.95, 1.0 - abs(dot(boundarySidecarNormal, rd)))),
+          smoothstep(0.05, 0.25, boundarySidecarNormalLen)
+        );
         let boundarySidecarFootprintWidth = boundarySidecarSample.w;
         boundarySupportEffective = max(boundarySidecarSample.x, boundarySidecarProximity * 0.36);
-        boundaryGradientEffective = max(boundarySidecarCoverage, boundarySidecarSample.z * 0.55) * (1.0 + boundarySidecarFootprintWidth * 0.18);
+        boundaryGradientEffective = max(boundarySidecarCoverage, boundarySidecarSample.z * 0.55) * (1.0 + boundarySidecarFootprintWidth * 0.18) * boundarySidecarNormalViewGain;
         boundaryFireRidgeEffective = boundarySidecarSample.z;
-        boundarySidecarStepFootprintWidth = clamp(u.boundary_sidecar_controls.z, 0.0, 2.0) * max(dtBase * f32(GRID) * 0.046, boundarySidecarFootprintWidth * 0.036);
+        boundarySidecarStepFootprintWidth = boundarySidecarNormalViewGain * clamp(u.boundary_sidecar_controls.z, 0.0, 2.0) * max(dtBase * f32(GRID) * 0.046, boundarySidecarFootprintWidth * 0.036);
       } else {
         let boundarySupport = liveBoundarySupportAt(p, boundarySupportWeights);
         let boundarySupportPx = liveBoundarySupportAt(p + boundaryDx, boundarySupportWeights);
@@ -4227,14 +4286,23 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
         boundaryFireRidgeEffective = boundaryFireRidge;
         if (boundarySidecarSource > 1.5) {
           let boundarySidecarSample = sampleWorldBoundarySidecar(p);
+          let boundarySidecarMetaSample = sampleWorldBoundarySidecarMeta(p);
           boundarySidecarDebugSample = boundarySidecarSample;
+          boundarySidecarDebugMetaSample = boundarySidecarMetaSample;
           let boundarySidecarCoverage = boundarySidecarSample.y;
-          let boundarySidecarProximity = clamp(max(boundarySidecarSample.x, max(boundarySidecarCoverage * 0.74, boundarySidecarSample.z * 0.58)), 0.0, 1.8);
+          let boundarySidecarProximity = clamp(boundarySidecarMetaSample.x, 0.0, 1.8);
+          let boundarySidecarNormalLen = length(boundarySidecarMetaSample.yzw);
+          let boundarySidecarNormal = boundarySidecarMetaSample.yzw / max(boundarySidecarNormalLen, 0.0001);
+          let boundarySidecarNormalViewGain = mix(
+            1.0,
+            mix(1.0, 1.45, smoothstep(0.15, 0.95, 1.0 - abs(dot(boundarySidecarNormal, rd)))),
+            smoothstep(0.05, 0.25, boundarySidecarNormalLen)
+          );
           let boundarySidecarFootprintWidth = boundarySidecarSample.w;
           boundarySupportEffective = mix(boundarySupport, boundarySidecarSample.x, 0.5);
-          boundaryGradientEffective = mix(boundaryGradient, max(boundarySidecarCoverage, boundarySidecarProximity * 0.50), 0.5);
+          boundaryGradientEffective = mix(boundaryGradient, max(boundarySidecarCoverage, boundarySidecarProximity * 0.50) * boundarySidecarNormalViewGain, 0.5);
           boundaryFireRidgeEffective = mix(boundaryFireRidge, boundarySidecarSample.z, 0.5);
-          boundarySidecarStepFootprintWidth = 0.5 * clamp(u.boundary_sidecar_controls.z, 0.0, 2.0) * max(dtBase * f32(GRID) * 0.046, boundarySidecarFootprintWidth * 0.036);
+          boundarySidecarStepFootprintWidth = 0.5 * boundarySidecarNormalViewGain * clamp(u.boundary_sidecar_controls.z, 0.0, 2.0) * max(dtBase * f32(GRID) * 0.046, boundarySidecarFootprintWidth * 0.036);
         }
       }
       let boundaryGradientGate = smoothstep(boundaryCut, boundaryCut + boundarySoftness + boundarySidecarStepFootprintWidth, boundaryGradientEffective * boundaryGradientGain);
@@ -4264,8 +4332,9 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
       boundaryFireColor = mix(cleanFuelColor, sootThermalColor, sootMaturity) * boundaryFireLuma;
       if (boundarySidecarView > 0.5) {
         let boundarySidecarCoverage = boundarySidecarDebugSample.y;
-        let boundarySidecarProximity = clamp(max(boundarySidecarDebugSample.x, max(boundarySidecarCoverage * 0.74, boundarySidecarDebugSample.z * 0.58)), 0.0, 1.8);
+        let boundarySidecarProximity = clamp(boundarySidecarDebugMetaSample.x, 0.0, 1.8);
         let boundarySidecarFootprintWidth = boundarySidecarDebugSample.w;
+        let boundarySidecarNormal = boundarySidecarDebugMetaSample.yzw;
         var boundarySidecarDebugSignal = boundarySidecarDebugSample.x;
         var boundarySidecarDebugColor = vec3<f32>(0.30, 0.62, 1.55);
         if (boundarySidecarView > 1.5 && boundarySidecarView <= 2.5) {
@@ -4277,9 +4346,12 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
         } else if (boundarySidecarView > 3.5 && boundarySidecarView <= 4.5) {
           boundarySidecarDebugSignal = boundarySidecarProximity;
           boundarySidecarDebugColor = vec3<f32>(0.28, 1.10, 1.42);
-        } else if (boundarySidecarView > 4.5) {
+        } else if (boundarySidecarView > 4.5 && boundarySidecarView <= 5.5) {
           boundarySidecarDebugSignal = boundarySidecarFootprintWidth;
           boundarySidecarDebugColor = vec3<f32>(1.36, 0.42, 1.44);
+        } else if (boundarySidecarView > 5.5) {
+          boundarySidecarDebugSignal = clamp(length(boundarySidecarNormal), 0.0, 1.0);
+          boundarySidecarDebugColor = abs(boundarySidecarNormal) * 1.45 + vec3<f32>(0.06, 0.06, 0.08);
         }
         boundaryCandidate = clamp(pow(clamp(boundarySidecarDebugSignal * boundaryContrast, 0.0, 1.8), boundaryGamma) * boundaryOpacity, 0.0, 1.65);
         boundaryFireColor = boundarySidecarDebugColor * (0.18 + boundaryCandidate * 1.08);
@@ -5401,6 +5473,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     boundarySidecarIdentity: BOUNDARY_SIDECAR_IDENTITY,
     boundarySidecarAuthority: BOUNDARY_SIDECAR_BAKE_AUTHORITY,
     boundarySidecarBytes: boundarySidecarBufferBytes(gridSize),
+    boundarySidecarMetaBytes: boundarySidecarMetaBufferBytes(gridSize),
+    temporalSidecarIdentity: TEMPORAL_SIDECAR_IDENTITY,
     boundarySidecarSource: normalizeBoundarySidecarSource(controlsSnapshot.boundarySidecarSource),
     boundarySidecarBuilt: false,
     boundarySidecarBuiltThisFrame: false,
@@ -5783,6 +5857,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let boundarySidecarBuffer = null;
   let boundarySidecarOverrideUpload = null;
   let debugFullFieldImportUpload = null;
+  let boundarySidecarMetaBuffer = null;
   let boundarySplatBuffer = null;
   let boundarySplatDrawBuffer = null;
   let boundarySplatIndirectBuffer = null;
@@ -6030,7 +6105,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       authority: overrideReceipt?.status === 'applied' ? EXTERNAL_BOUNDARY_SIDECAR_AUTHORITY : BOUNDARY_SIDECAR_BAKE_AUTHORITY,
       source: boundarySidecarSourceName,
       view,
-      channels: ['support', 'coverage', 'ridge', 'proximity', 'footprint'],
+      channels: ['support', 'coverage', 'ridge', 'footprint', 'proximity', 'normal'],
       boundaryStructureSource: boundarySidecarSourceName,
       activeInRaymarch: boundarySidecarSourceName !== 'live',
       activeAsDebugView: view !== 'off',
@@ -6039,6 +6114,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       ridgeGain: clampFinite(controls.ridgeGain ?? controlsSnapshot.boundarySidecarRidge, 0, 2, 1),
       grid: gridSize,
       bytes: boundarySidecarBufferBytes(gridSize),
+      metaBytes: boundarySidecarMetaBufferBytes(gridSize),
+      temporalSidecarIdentity: TEMPORAL_SIDECAR_IDENTITY,
       built: state.boundarySidecarBuilt,
       builtThisFrame: state.boundarySidecarBuiltThisFrame,
       frameCount: state.boundarySidecarFrameCount,
@@ -6259,6 +6336,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     for (const buffer of frontBuffers) buffer.destroy();
     for (const buffer of pressureBuffers) buffer.destroy();
     boundarySidecarBuffer?.destroy();
+    boundarySidecarMetaBuffer?.destroy();
     boundarySplatBuffer?.destroy();
     boundarySplatDrawBuffer?.destroy();
     boundarySplatIndirectBuffer?.destroy();
@@ -6266,6 +6344,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     boundarySplatFeatureBuffer?.destroy();
     oracleActivityCueBuffer?.destroy();
     boundarySidecarBuffer = null;
+    boundarySidecarMetaBuffer = null;
     boundarySplatBuffer = null;
     boundarySplatDrawBuffer = null;
     boundarySplatIndirectBuffer = null;
@@ -6437,7 +6516,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   }
 
   function rebuildFluidBindGroups() {
-    if (!device || !bindGroupLayout || !uniformBuffer || !externalEmitterBuffer || !oracleActivityCueBuffer || fluidBuffers.length !== 2 || frontBuffers.length !== 2 || !majorantBuffer || !boundarySidecarBuffer || !historyTexture || !historySampler) return;
+    if (!device || !bindGroupLayout || !uniformBuffer || !externalEmitterBuffer || !oracleActivityCueBuffer || fluidBuffers.length !== 2 || frontBuffers.length !== 2 || !majorantBuffer || !boundarySidecarBuffer || !boundarySidecarMetaBuffer || !historyTexture || !historySampler) return;
     bindGroups = [
       device.createBindGroup({
         label: `kaminos fluid bind group ${gridSize}^3 A to B`,
@@ -6454,6 +6533,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           { binding: 8, resource: { buffer: frontBuffers[1] } },
           { binding: 9, resource: { buffer: oracleActivityCueBuffer } },
           { binding: 10, resource: { buffer: boundarySidecarBuffer } },
+          { binding: 11, resource: { buffer: boundarySidecarMetaBuffer } },
         ],
       }),
       device.createBindGroup({
@@ -6471,6 +6551,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           { binding: 8, resource: { buffer: frontBuffers[0] } },
           { binding: 9, resource: { buffer: oracleActivityCueBuffer } },
           { binding: 10, resource: { buffer: boundarySidecarBuffer } },
+          { binding: 11, resource: { buffer: boundarySidecarMetaBuffer } },
         ],
       }),
     ];
@@ -6691,18 +6772,25 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   }
 
   function ensureBoundarySidecarBuffer() {
-    if (boundarySidecarBuffer) return;
+    if (boundarySidecarBuffer && boundarySidecarMetaBuffer) return;
     boundarySidecarBuffer = device.createBuffer({
       label: `kaminos ${BOUNDARY_SIDECAR_IDENTITY} ${gridSize}^3`,
       size: boundarySidecarBufferBytes(gridSize),
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST,
     });
+    boundarySidecarMetaBuffer = device.createBuffer({
+      label: `kaminos ${BOUNDARY_SIDECAR_IDENTITY} meta ${gridSize}^3`,
+      size: boundarySidecarMetaBufferBytes(gridSize),
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST,
+    });
     device.queue.writeBuffer(boundarySidecarBuffer, 0, new Float32Array(gridCellCount(gridSize) * 4));
+    device.queue.writeBuffer(boundarySidecarMetaBuffer, 0, new Float32Array(gridCellCount(gridSize) * 4));
     boundarySidecarWriteBindGroup = device.createBindGroup({
       label: `kaminos ${BOUNDARY_SIDECAR_IDENTITY} write bind group ${gridSize}^3`,
       layout: boundarySidecarWriteBindGroupLayout,
       entries: [
         { binding: 0, resource: { buffer: boundarySidecarBuffer } },
+        { binding: 1, resource: { buffer: boundarySidecarMetaBuffer } },
       ],
     });
   }
@@ -6852,6 +6940,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const nextBufferBytes = fluidBufferBytes(gridSize);
     const nextFrontBufferBytes = frontFieldBufferBytes(gridSize);
     const nextBoundarySidecarBufferBytes = boundarySidecarBufferBytes(gridSize);
+    const nextBoundarySidecarMetaBufferBytes = boundarySidecarMetaBufferBytes(gridSize);
     const nextPressureBufferBytes = pressureBufferBytes(gridSize);
     const initialFluid = makeInitialFluid(gridSize);
     fluidBuffers = [0, 1].map(i => {
@@ -7101,6 +7190,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.boundarySidecarIdentity = BOUNDARY_SIDECAR_IDENTITY;
     state.boundarySidecarAuthority = BOUNDARY_SIDECAR_BAKE_AUTHORITY;
     state.boundarySidecarBytes = nextBoundarySidecarBufferBytes;
+    state.boundarySidecarMetaBytes = nextBoundarySidecarMetaBufferBytes;
+    state.temporalSidecarIdentity = TEMPORAL_SIDECAR_IDENTITY;
     state.boundarySidecarSource = normalizeBoundarySidecarSource(controlsSnapshot.boundarySidecarSource);
     state.boundarySidecarBuilt = false;
     state.boundarySidecarBuiltThisFrame = false;
@@ -7269,6 +7360,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           visibility: GPUShaderStage.FRAGMENT,
           buffer: { type: 'read-only-storage' },
         },
+        {
+          binding: 11,
+          visibility: GPUShaderStage.FRAGMENT,
+          buffer: { type: 'read-only-storage' },
+        },
       ],
     });
     boundarySidecarReadBindGroupLayout = device.createBindGroupLayout({
@@ -7321,6 +7417,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       entries: [
         {
           binding: 0,
+          visibility: GPUShaderStage.COMPUTE,
+          buffer: { type: 'storage' },
+        },
+        {
+          binding: 1,
           visibility: GPUShaderStage.COMPUTE,
           buffer: { type: 'storage' },
         },
@@ -8382,6 +8483,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const pressureBytes = pressureBufferBytes(gridSize);
     const majorantBytes = majorantBufferBytes(majorantGridSize);
     const boundarySidecarBytes = boundarySidecarBufferBytes(gridSize);
+    const boundarySidecarMetaBytes = boundarySidecarMetaBufferBytes(gridSize);
     state.majorantCadence = majorantBuildCadence;
     state.pressureIterationDefault = defaultPressureIterationsForScene(scene);
     state.pressureIterationRequested = pressureIterationRequested;
@@ -8500,8 +8602,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       pressureBufferBytes: pressureBytes,
       majorantBufferBytes: majorantBytes,
       boundarySidecarBufferBytes: boundarySidecarBytes,
+      boundarySidecarMetaBufferBytes: boundarySidecarMetaBytes,
       externalEmitterBufferBytes: externalEmitterBufferBytes(),
-      estimatedResidentBytes: fluidBytes * 2 + frontBytes * 2 + pressureBytes * 2 + majorantBytes + boundarySidecarBytes + externalEmitterBufferBytes(),
+      estimatedResidentBytes: fluidBytes * 2 + frontBytes * 2 + pressureBytes * 2 + majorantBytes + boundarySidecarBytes + boundarySidecarMetaBytes + externalEmitterBufferBytes(),
       timing: { ...state.timing },
     };
     return state.simCostLedger;
