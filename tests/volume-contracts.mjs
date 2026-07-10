@@ -1098,6 +1098,12 @@ assert.match(core, /sampleWorldFireLayer/, 'fragment shader samples fire separat
 assert.match(core, /radiance_controls/, 'fluid uniforms carry emissive radiance controls separately from smoke/fire transport');
 assert.match(core, /fireRadianceEmission/, 'fragment shader computes fire as radiance emission');
 assert.match(core, /smokeRadianceExtinction/, 'fragment shader computes smoke absorption against fire radiance');
+assert.match(core, /SMOKE_LIFECYCLE_RENDER_IDENTITY\s*=\s*'combustion-coupled-smoke-lifecycle-render-v0'/, 'smoke lifecycle render pass carries a stable identity');
+assert.match(core, /smokeLifecycleFromExistingFields/, 'fragment shader derives smoke lifecycle from existing material/fire/front fields');
+assert.match(core, /smokeLifecycleSootAuthority[\s\S]*fuelConsumptionProxy[\s\S]*combustionFrontTopology[\s\S]*frontSupport/, 'smoke soot authority is coupled to consumption/front evidence, not a standalone fog ramp');
+assert.match(core, /smokeLifecycleCoolingAuthority[\s\S]*heat[\s\S]*renderTemp[\s\S]*y/, 'smoke cooling authority uses existing heat/flame/height fields to separate fresh hot smoke from older plume smoke');
+assert.match(core, /smokeLifecycleExtinctionBoost[\s\S]*rawExtinction[\s\S]*smokeLifecycleSootAuthority/, 'smoke extinction is boosted through the lifecycle ramp instead of only recoloring final smoke');
+assert.match(core, /smokeLifecycleRenderer:\s*\{[\s\S]*slotPolicy:\s*'existing-material-fire-micro-front-fields-no-new-channel-v0'/, 'debug state reports that this first smoke pass uses existing sim channels, not a hidden new slot');
 assert.match(core, /fireLayerMean/, 'sim readback reports separate fire layer evidence');
 assert.match(core, /combustionFrontMean/, 'sim readback reports transported combustion-front evidence separately from generic fire layer');
 assert.match(core, /frontTopologyMean/, 'sim readback reports independent front topology sidecar evidence');

@@ -3,6 +3,7 @@ const PROTOTYPE_IDENTITY = 'kaminos-volume-prototype-v0';
 const FRONT_FIELD_IDENTITY = 'combustion-front-topology-sidecar-v0';
 const BOUNDARY_SIDECAR_IDENTITY = 'baked-boundary-sidecar-v0';
 const BOUNDARY_SIDECAR_BAKE_AUTHORITY = 'band-limited-support-coverage-ridge-proximity-footprint-v1';
+const SMOKE_LIFECYCLE_RENDER_IDENTITY = 'combustion-coupled-smoke-lifecycle-render-v0';
 const TRUTH_ORACLE_ACTIVITY_RECEIVER_IDENTITY = 'truth-oracle-scalar-activity-receiver-v0';
 const TRUTH_ORACLE_ACTIVITY_CUE_AUTHORITY = 'truth-high-diagnostic-activity-projected-to-receiver-grid-v0';
 const PROCEDURAL_ACTIVITY_CUE_AUTHORITY = 'procedural-receiver-activity-proxy-no-truth-v0';
@@ -2261,6 +2262,72 @@ fn smokeRadianceExtinction(smokeDensity: f32, microSmoke: f32, interfaceShred: f
   return clamp(body * (0.34 + absorptionGain * 0.46), 0.0, 2.3);
 }
 
+fn smokeLifecycleFromExistingFields(
+  smokeDensity: f32,
+  microSmoke: f32,
+  interfaceShred: f32,
+  materialDetail: f32,
+  heat: f32,
+  fuel: f32,
+  rawTemp: f32,
+  renderTemp: f32,
+  flame: f32,
+  flameDetail: f32,
+  fireLick: f32,
+  combustionFront: f32,
+  combustionFrontTopology: f32,
+  reactionSupport: f32,
+  frontSupport: f32,
+  curlDebug: f32,
+  divDebug: f32,
+  y: f32,
+  rawExtinction: f32,
+  boundaryFireSootYield: f32
+) -> vec4<f32> {
+  let fuelConsumptionProxy = clamp(
+    reactionSupport * (0.10 + heat * 0.38 + flameDetail * 0.24 + fireLick * 0.18)
+      * (1.0 - smoothstep(0.06, 0.42, fuel))
+      + combustionFront * 0.18
+      + combustionFrontTopology * 0.24
+      + frontSupport * 0.20,
+    0.0,
+    1.6
+  );
+  let smokeLifecycleSootAuthority = clamp(
+    boundaryFireSootYield
+      * smoothstep(0.010, 0.36, fuelConsumptionProxy + rawExtinction * 0.18 + microSmoke * 0.20)
+      * (0.45 + combustionFrontTopology * 0.18 + frontSupport * 0.38),
+    0.0,
+    1.4
+  );
+  let smokeLifecycleCoolingAuthority = clamp(
+    smoothstep(0.012, 0.62, smokeDensity + microSmoke * 0.48 + materialDetail * 0.22)
+      * (1.0 - smoothstep(0.34, 1.38, heat * 0.22 + renderTemp + rawTemp * 0.32 + flame * 0.18))
+      * smoothstep(0.08, 0.88, y),
+    0.0,
+    1.2
+  );
+  let smokeLifecycleMotionAuthority = clamp(
+    smoothstep(0.006, 0.13, curlDebug + divDebug * 0.42)
+      * smoothstep(0.008, 0.52, smokeDensity + interfaceShred * 0.42 + frontSupport * 0.18),
+    0.0,
+    1.0
+  );
+  let smokeLifecycleExtinctionBoost = clamp(
+    rawExtinction * (0.22 + smokeLifecycleSootAuthority * 0.46 + smokeLifecycleCoolingAuthority * 0.22)
+      + smokeLifecycleSootAuthority * (0.045 + smokeDensity * 0.10)
+      + smokeLifecycleMotionAuthority * interfaceShred * 0.08,
+    0.0,
+    1.35
+  );
+  return vec4<f32>(
+    smokeLifecycleSootAuthority,
+    smokeLifecycleCoolingAuthority,
+    smokeLifecycleExtinctionBoost,
+    smokeLifecycleMotionAuthority
+  );
+}
+
 fn raymarchInterest(
   density: f32,
   smoke: f32,
@@ -3871,8 +3938,8 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     let tallPlumeTransitionWisps = tallPlumeRenderTransitionBand
       * smoothstep(0.54, 1.18, tallPlumeRenderTransitionStagger)
       * (0.020 + flameDetail * 0.035 + interfaceShred * 0.025 + microSmoke * 0.016);
-    let extinction = rawExtinction + tallPlumeTransitionWisps * absorptionGain * 0.34;
-    let occupancy = raymarchOccupancySignal(density, smoke, heat, temp, flame, microTextureSignal, velMag, extinction) + tallPlumeTransitionWisps;
+    let baseExtinction = rawExtinction + tallPlumeTransitionWisps * absorptionGain * 0.34;
+    let occupancy = raymarchOccupancySignal(density, smoke, heat, temp, flame, microTextureSignal, velMag, baseExtinction) + tallPlumeTransitionWisps;
     let emptySpanScale = occupancySkipStepScale(occupancy, occupancySkipStrength, adaptiveRays);
     if (emptySpanScale > 1.08) {
       t = t + min(dtBase * emptySpanScale, max(0.0001, endT - t));
@@ -3911,28 +3978,6 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
       clamp(0.52 + bonfireFireRenderBreakup * 0.26 + flameDetail * 0.11 + fireLick * 0.09 + emberFleck * 0.06, 0.44, 1.04),
       bonfireRenderScene * smoothstep(0.030, 0.84, flame + flameDetail + fireLick)
     );
-    var smokeAlpha = mix(
-      clamp((density * 1.08 + smoke * 0.40 + heat * 0.13 + materialDetail * 0.28 + microBodyContribution * 0.54) * rayStepOpacity * (0.86 + absorptionGain * 0.12) * bonfireCurtainBreakup, 0.0, 0.16),
-      clamp(canonicalDebugSmokeDensity * rayStepOpacity * (0.86 + absorptionGain * 0.12), 0.0, 0.16),
-      canonicalSmokeOnlyRender
-    );
-    let fireAlphaMax = mix(0.20, 0.145, bonfireRenderScene);
-    let bonfireRenderedFireEdgeCarrier = fireLick * 1.18
-      + emberFleck * 0.50
-      + combustionFront * 0.14
-      + combustionFrontTopology * 0.08
-      + interfaceShred * 0.08;
-    let bonfireVisibleEmission = bonfireRenderedFireEdgeCarrier + flameDetail * 1.44 + ember * 0.48 + flame * 0.16;
-    let visibleFlameAlphaCarrier = mix(
-      flame * 2.15 + ember * 0.86 + flameDetail * 0.82 + fireLick * 2.60 + emberFleck * 0.76 + interfaceShred * 0.26,
-      bonfireVisibleEmission + interfaceShred * 0.16,
-      bonfireRenderScene
-    );
-    let tallPlumeTransitionAlphaStagger = mix(
-      1.0,
-      clamp(0.70 + tallPlumeRenderTransitionStagger * 0.36, 0.58, 1.18),
-      tallPlumeRenderTransitionBand
-    );
     let vaporCarrier = clamp(
       quenchVaporStrength
         * smoothstep(0.003, 0.24, flame + flameDetail * 0.74 + fireLick * 0.45 + heat * 0.55 + smokeDensity * 0.24 + microSmoke * 0.18)
@@ -3964,6 +4009,83 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     let quenchedFlameDetail = flameDetail * (1.0 - quenchCoreCollapse * 0.66);
     let quenchedFireLick = fireLick * (1.0 - quenchCoreCollapse * 0.54);
     let quenchedEmberFleck = emberFleck * (1.0 - quenchCoreCollapse * 0.32);
+    let curlActivity = smoothstep(0.006, 0.16, curlDebug);
+    let thermalSupport = smoothstep(0.018, 0.62, rawTemp + renderTemp * 0.20 + heat * 0.20 + ember * 0.12);
+    let reactionSupport = smoothstep(0.004, 0.30, flameDetail * 0.72 + quenchedFireLick * 0.44 + combustionFront * 0.34 + fuel * heat * 0.28);
+    let frontSupport = smoothstep(0.001, 0.088, combustionFrontTopology * 1.08 + combustionFront * 0.54 + quenchedFireLick * 0.12);
+    let edgeSupport = smoothstep(0.004, 0.24, interfaceShred * 0.58 + microSmoke * 0.18 + rawExtinction * 0.08 + curlDebug * 0.42);
+    let curlSupport = curlActivity * smoothstep(0.010, 0.52, rawTemp + heat * 0.16 + flameDetail * 0.28 + combustionFront * 0.16);
+    let divSupport = smoothstep(0.010, 0.18, divDebug)
+      * smoothstep(0.010, 0.46, rawTemp + heat * 0.18 + flameDetail * 0.32);
+    let smokeLifecycle = smokeLifecycleFromExistingFields(
+      smokeDensity,
+      microSmoke,
+      interfaceShred,
+      materialDetail,
+      heat,
+      fuel,
+      rawTemp,
+      renderTemp,
+      flame,
+      flameDetail,
+      fireLick,
+      combustionFront,
+      combustionFrontTopology,
+      reactionSupport,
+      frontSupport,
+      curlDebug,
+      divDebug,
+      y,
+      rawExtinction,
+      boundaryFireSootYield
+    );
+    let smokeLifecycleSootAuthority = smokeLifecycle.x;
+    let smokeLifecycleCoolingAuthority = smokeLifecycle.y;
+    let smokeLifecycleExtinctionBoost = smokeLifecycle.z;
+    let smokeLifecycleMotionAuthority = smokeLifecycle.w;
+    let extinction = baseExtinction + smokeLifecycleExtinctionBoost;
+    let smokeLifecycleAlphaGain = clamp(
+      0.86
+        + smokeLifecycleSootAuthority * 0.34
+        + smokeLifecycleCoolingAuthority * 0.18
+        + smokeLifecycleMotionAuthority * 0.16,
+      0.72,
+      1.62
+    );
+    var smokeAlpha = mix(
+      clamp(
+        (
+          density * 1.00
+            + smoke * 0.38
+            + heat * 0.09
+            + materialDetail * 0.22
+            + microBodyContribution * 0.46
+            + smokeLifecycleExtinctionBoost * 0.34
+            + smokeLifecycleSootAuthority * 0.060
+        ) * rayStepOpacity * (0.80 + absorptionGain * 0.13) * bonfireCurtainBreakup * smokeLifecycleAlphaGain,
+        0.0,
+        0.18
+      ),
+      clamp(canonicalDebugSmokeDensity * rayStepOpacity * (0.86 + absorptionGain * 0.12), 0.0, 0.16),
+      canonicalSmokeOnlyRender
+    );
+    let fireAlphaMax = mix(0.20, 0.145, bonfireRenderScene);
+    let bonfireRenderedFireEdgeCarrier = fireLick * 1.18
+      + emberFleck * 0.50
+      + combustionFront * 0.14
+      + combustionFrontTopology * 0.08
+      + interfaceShred * 0.08;
+    let bonfireVisibleEmission = bonfireRenderedFireEdgeCarrier + flameDetail * 1.44 + ember * 0.48 + flame * 0.16;
+    let visibleFlameAlphaCarrier = mix(
+      flame * 2.15 + ember * 0.86 + flameDetail * 0.82 + fireLick * 2.60 + emberFleck * 0.76 + interfaceShred * 0.26,
+      bonfireVisibleEmission + interfaceShred * 0.16,
+      bonfireRenderScene
+    );
+    let tallPlumeTransitionAlphaStagger = mix(
+      1.0,
+      clamp(0.70 + tallPlumeRenderTransitionStagger * 0.36, 0.58, 1.18),
+      tallPlumeRenderTransitionBand
+    );
     let vaporAlpha = clamp((vaporCarrier + quenchCoreCollapse * 0.52) * rayStepOpacity * (0.22 + absorptionGain * 0.070), 0.0, 0.22);
     smokeAlpha = clamp(smokeAlpha + vaporAlpha, 0.0, 0.28);
     let fireSnuffDamping = 1.0 - clamp(max(vaporCarrier * 1.18, quenchCoreCollapse * 0.92), 0.0, 0.985);
@@ -3976,14 +4098,6 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     let shellRenderMode = 1.0 - step(0.5, abs(fireRenderMode - 1.0));
     let inspectRenderMode = 1.0 - step(0.5, abs(fireRenderMode - 2.0));
     let fireVisualAuthority = shellAmount * canonicalFireRenderContent * flameBodyAuthority;
-    let curlActivity = smoothstep(0.006, 0.16, curlDebug);
-    let thermalSupport = smoothstep(0.018, 0.62, rawTemp + renderTemp * 0.20 + heat * 0.20 + ember * 0.12);
-    let reactionSupport = smoothstep(0.004, 0.30, flameDetail * 0.72 + quenchedFireLick * 0.44 + combustionFront * 0.34 + fuel * heat * 0.28);
-    let frontSupport = smoothstep(0.001, 0.088, combustionFrontTopology * 1.08 + combustionFront * 0.54 + quenchedFireLick * 0.12);
-    let edgeSupport = smoothstep(0.004, 0.24, interfaceShred * 0.58 + microSmoke * 0.18 + rawExtinction * 0.08 + curlDebug * 0.42);
-    let curlSupport = curlActivity * smoothstep(0.010, 0.52, rawTemp + heat * 0.16 + flameDetail * 0.28 + combustionFront * 0.16);
-    let divSupport = smoothstep(0.010, 0.18, divDebug)
-      * smoothstep(0.010, 0.46, rawTemp + heat * 0.18 + flameDetail * 0.32);
     let shellCarrierRaw = shellThermalGain * thermalSupport
       + shellReactionGain * reactionSupport
       + shellFrontGain * frontSupport
@@ -4195,9 +4309,25 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
         + filamentNoise * 1.2
         + fireNoise * 0.8
     );
-    let fineShadow = 0.48 + 0.64 * filament - 0.20 * shredFilament;
+    let lifecycleFineShadow = clamp(
+      0.54
+        + 0.54 * filament
+        - 0.26 * shredFilament * (0.42 + smokeLifecycleSootAuthority)
+        - 0.18 * smokeLifecycleExtinctionBoost
+        + 0.14 * smokeLifecycleMotionAuthority,
+      0.22,
+      1.18
+    );
+    let freshSmokeColor = vec3<f32>(0.40, 0.50, 0.53) * (0.72 + smokeLifecycleMotionAuthority * 0.18);
+    let cooledSmokeColor = vec3<f32>(0.24, 0.32, 0.34) * (0.70 + smokeLifecycleCoolingAuthority * 0.20);
+    let sootSmokeColor = vec3<f32>(0.13, 0.17, 0.16) * (0.86 + smokeLifecycleSootAuthority * 0.18);
+    let lifecycleSmokeColor = mix(
+      mix(freshSmokeColor, cooledSmokeColor, smokeLifecycleCoolingAuthority),
+      sootSmokeColor,
+      clamp(smokeLifecycleSootAuthority * 0.72 + smokeLifecycleExtinctionBoost * 0.20, 0.0, 1.0)
+    );
     let smokeCol = mix(
-      vec3<f32>(0.28, 0.38, 0.42) * fineShadow * (0.88 + bonfireRenderScene * (bonfireCurtainBreakup - 1.0) * 0.58) * (0.42 + min(0.78, velMag * 6.0) + shredFilament * 0.26),
+      lifecycleSmokeColor * lifecycleFineShadow * (0.88 + bonfireRenderScene * (bonfireCurtainBreakup - 1.0) * 0.58) * (0.42 + min(0.78, velMag * 6.0) + shredFilament * 0.22 + smokeLifecycleMotionAuthority * 0.12),
       vec3<f32>(0.28, 0.38, 0.42) * 0.62,
       canonicalSmokeOnlyRender
     );
@@ -4774,6 +4904,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     tallPlumeFlameCutoffContract: normalizeVolumeScene(controlsSnapshot.volumeScene) === 'tall_plume' ? 'tall-plume-speed-cutoff-decoupled-v0' : 'inactive',
     tallPlumeFlowShelfContract: normalizeVolumeScene(controlsSnapshot.volumeScene) === 'tall_plume' ? 'tall-plume-flow-shelf-mitigated-v0' : 'inactive',
     tallPlumeFlameHeightLawContract: normalizeVolumeScene(controlsSnapshot.volumeScene) === 'tall_plume' ? 'tall-plume-flame-height-law-v2' : 'inactive',
+    smokeLifecycleRenderer: {
+      identity: SMOKE_LIFECYCLE_RENDER_IDENTITY,
+      slotPolicy: 'existing-material-fire-micro-front-fields-no-new-channel-v0',
+      authoritySource: `${FRONT_FIELD_IDENTITY}+material-fire-micro-slots-v0`,
+      visualRole: 'smoke-opacity-color-extinction-ramp-not-new-sim-storage',
+      active: normalizeVolumeScene(controlsSnapshot.volumeScene) === 'tall_plume',
+    },
     plumeHeight: 1.45,
     windStrength: normalizeWindStrength(controlsSnapshot.windStrength),
     windAngle: normalizeWindAngle(controlsSnapshot.windAngle),
@@ -6693,6 +6830,22 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       skipAccounting: 'shader-early-out-no-compact-count-yet',
     };
     state.volumeScene = normalizeVolumeScene(controlsSnapshot.volumeScene);
+    state.smokeLifecycleRenderer = {
+      identity: SMOKE_LIFECYCLE_RENDER_IDENTITY,
+      slotPolicy: 'existing-material-fire-micro-front-fields-no-new-channel-v0',
+      authoritySource: `${FRONT_FIELD_IDENTITY}+material-fire-micro-slots-v0`,
+      visualRole: 'smoke-opacity-color-extinction-ramp-not-new-sim-storage',
+      active: state.volumeScene === 'tall_plume',
+      coupledFields: [
+        'material.x smoke density',
+        'material.y heat',
+        'material.z fuel',
+        'fireLayer.z flame detail',
+        'fireLayer.w combustion front',
+        'micro smoke/interface/fire lick',
+        FRONT_FIELD_IDENTITY,
+      ],
+    };
     state.bonfireReferenceConfinement = bonfireReferenceConfinementDebug(controlsSnapshot.volumeScene);
     state.minimalPlumeProof = minimalPlumeProofDebug(controlsSnapshot.volumeScene);
     state.adaptiveRaymarch = uniforms[39];
@@ -8605,6 +8758,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         tallPlumeFlameCutoffContract: state.tallPlumeFlameCutoffContract,
         tallPlumeFlowShelfContract: state.tallPlumeFlowShelfContract,
         tallPlumeFlameHeightLawContract: state.tallPlumeFlameHeightLawContract,
+        smokeLifecycleRenderer: state.smokeLifecycleRenderer ? { ...state.smokeLifecycleRenderer } : null,
         plumeHeight: state.plumeHeight,
         bonfireAblation: { ...state.bonfireAblation },
         externalEmitterMode: state.externalEmitterMode,
@@ -8924,6 +9078,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       tallPlumeFlameCutoffContract: state.tallPlumeFlameCutoffContract,
       tallPlumeFlowShelfContract: state.tallPlumeFlowShelfContract,
       tallPlumeFlameHeightLawContract: state.tallPlumeFlameHeightLawContract,
+      smokeLifecycleRenderer: state.smokeLifecycleRenderer ? { ...state.smokeLifecycleRenderer } : null,
       plumeHeight: state.plumeHeight,
       windStrength: state.windStrength,
       windAngle: state.windAngle,
