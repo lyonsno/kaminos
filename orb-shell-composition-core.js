@@ -8854,6 +8854,39 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
       controls.update();
       onDirty?.();
     },
+    frameMacroMorphologySurveyPose(options = {}) {
+      const target = Array.isArray(options.target) && options.target.length === 3
+        ? options.target.map(Number)
+        : [0, 0.02, 0.15];
+      const distance = Number.isFinite(Number(options.distance)) && Number(options.distance) > 0
+        ? Number(options.distance)
+        : 3.35;
+      const elevationDeg = Number.isFinite(Number(options.elevationDeg)) ? Number(options.elevationDeg) : 0;
+      const azimuthDeg = Number.isFinite(Number(options.azimuthDeg)) ? Number(options.azimuthDeg) : 0;
+      const elevationRad = elevationDeg * Math.PI / 180;
+      const azimuthRad = azimuthDeg * Math.PI / 180;
+      const horizontal = Math.cos(elevationRad) * distance;
+      const position = [
+        target[0] + Math.sin(azimuthRad) * horizontal,
+        target[1] + Math.sin(elevationRad) * distance,
+        target[2] + Math.cos(azimuthRad) * horizontal,
+      ];
+      camera.position.set(...position);
+      controls.target.set(...target);
+      controls.update();
+      onDirty?.();
+      return {
+        schema: 'MacroMorphologySurveyCellFrame',
+        mode: 'macro-morphology-elevation-azimuth-camera-pose-v0',
+        elevationDeg,
+        azimuthDeg,
+        cameraPose: {
+          position,
+          target,
+          distance,
+        },
+      };
+    },
     frameSpatialTruthView(viewId = spatialTruthViewSet.defaultViewId) {
       const view = spatialTruthViewSet.views.find(item => item.id === viewId)
         || spatialTruthViewSet.views.find(item => item.id === spatialTruthViewSet.defaultViewId)

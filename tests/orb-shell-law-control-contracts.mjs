@@ -70,6 +70,21 @@ assert.match(witness, /lawControls:\s*state\.lawControls/, 'visual witness repor
 assert.match(witness, /new URL\(url\)\.searchParams\.get\('orb_shell_focus'\)/, 'visual witness focus must default from the route URL when --focus is omitted');
 assert.match(witness, /disabled-by-law-controls/, 'visual witness must distinguish intentionally disabled laws from missing laws');
 assert.match(witness, /lawControls\?\.apertureOrbitCapture\?\.enabled === false/, 'visual witness must branch on effective aperture capture controls');
+assert.match(witness, /--orbit-strength-filmstrip-out/, 'headless witness must write an aperture-orbit strength sweep filmstrip artifact');
+assert.match(witness, /--orbit-strengths/, 'orbit-strength filmstrip must accept explicit strength rows');
+assert.match(witness, /--orbit-strength-filmstrip-elevations/, 'orbit-strength filmstrip must accept explicit elevation rows');
+assert.match(witness, /--orbit-strength-filmstrip-azimuths/, 'orbit-strength filmstrip must accept explicit azimuth columns');
+assert.match(witness, /OrbitStrengthSweepFilmstrip/, 'headless report must name orbit-strength sweep filmstrips distinctly from spatial-truth contact sheets');
+assert.match(witness, /OrbitStrengthSweepGrid/, 'orbit-strength sweep report must preserve effective strength and camera grid identity');
+assert.match(witness, /--cdp-timeout-ms/, 'visual witness must expose CDP timeout as an invocation-scoped argument');
+assert.match(witness, /cdpTimeoutMs/, 'visual witness report must preserve effective CDP timeout');
+assert.match(witness, /cellCount > 36/, 'large orbit-strength sweeps must split sheets instead of timing out on one giant screenshot');
+assert.match(witness, /splitByStrength/, 'orbit-strength sweep report must say whether it split the composed sheets');
+assert.match(witness, /OrbitStrengthSweepFilmstripSheet/, 'split orbit-strength sweep sheets must be named report artifacts');
+assert.match(witness, /requestedStrength/, 'orbit-strength sweep cells must preserve the requested strength, not only the row label');
+assert.match(witness, /effectiveStrength/, 'orbit-strength sweep cells must preserve the effective slider strength observed after UI coupling');
+assert.match(witness, /lawImpactDeltaSummary/, 'orbit-strength sweep cells must preserve curve-level law-impact deltas for all families');
+assert.match(core, /frameMacroMorphologySurveyPose/, 'composition witness must expose macro-morphology survey camera framing');
 
 const {
   createTargetOrbShellCompositionFixture,

@@ -11,6 +11,7 @@ const url = args.get('--url') || 'http://127.0.0.1:8097/?kaminos_orb_shell_groun
 const out = resolve(args.get('--out') || '/tmp/kaminos-orb-shell-composition-witness.png');
 const reportPath = resolve(args.get('--report') || '/tmp/kaminos-orb-shell-composition-witness.json');
 const port = Number(args.get('--debug-port') || 9230);
+const cdpTimeoutMs = Number(args.get('--cdp-timeout-ms') || 60000);
 const chrome = process.env.KAMINOS_CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const userDataDir = args.get('--user-data-dir') || `/tmp/kaminos-orb-shell-composition-witness-profile-${port}`;
 const settleMs = Number(args.get('--settle-ms') || 2500);
@@ -41,6 +42,26 @@ const spatialTruthSurveyTarget = (args.get('--survey-target') || '0.02,-0.05,0.6
   .map(item => Number(item.trim()))
   .filter(Number.isFinite);
 const spatialTruthSurveyCellWidth = Number(args.get('--survey-cell-width') || 480);
+const orbitStrengthFilmstripOut = args.has('--orbit-strength-filmstrip-out') ? resolve(args.get('--orbit-strength-filmstrip-out')) : null;
+const orbitStrengthSweepStrengths = (args.get('--orbit-strengths') || '0,0.5,1')
+  .split(',')
+  .map(item => Number(item.trim()))
+  .filter(Number.isFinite)
+  .map(value => Math.max(0, Math.min(1, value)));
+const orbitStrengthSweepElevations = (args.get('--orbit-strength-filmstrip-elevations') || '-25,15,45')
+  .split(',')
+  .map(item => Number(item.trim()))
+  .filter(Number.isFinite);
+const orbitStrengthSweepAzimuths = (args.get('--orbit-strength-filmstrip-azimuths') || '0,60,120,180,240,300')
+  .split(',')
+  .map(item => Number(item.trim()))
+  .filter(Number.isFinite);
+const orbitStrengthSweepDistance = Number(args.get('--orbit-strength-filmstrip-distance') || 3.35);
+const orbitStrengthSweepTarget = (args.get('--orbit-strength-filmstrip-target') || '0,0.02,0.15')
+  .split(',')
+  .map(item => Number(item.trim()))
+  .filter(Number.isFinite);
+const orbitStrengthSweepCellWidth = Number(args.get('--orbit-strength-filmstrip-cell-width') || 420);
 const clipCanvas = args.has('--clip-canvas');
 const forceAoRaw = args.get('--force-ao');
 const forceAo = forceAoRaw === undefined ? null : !['0', 'false', 'off', 'no'].includes(String(forceAoRaw).toLowerCase());
@@ -73,6 +94,7 @@ let spatialTruthWitness = null;
 let spatialTruthViewFrame = null;
 let spatialTruthContactSheet = null;
 let spatialTruthSurveyContactSheet = null;
+let orbitStrengthSweepFilmstrip = null;
 let materialTruthRoutePolicy = null;
 let materialTruthEnvPolicy = null;
 let preHdrWarmRoutePolicy = null;
@@ -119,14 +141,39 @@ function contactSheetViewPath(basePath, viewId) {
 async function canvasCaptureOptions(ws, label = 'witness') {
   const canvasRect = await evaluate(ws, `
     (() => {
-      const canvas = document.querySelector('canvas');
-      if (!canvas) return null;
-      const rect = canvas.getBoundingClientRect();
-      return { x: rect.x, y: rect.y, width: rect.width, height: rect.height, scale: 1 };
+      const candidates = Array.from(document.querySelectorAll('canvas'))
+        .map((canvas, index) => {
+          const rect = canvas.getBoundingClientRect();
+          return {
+            index,
+            x: rect.x,
+            y: rect.y,
+            width: rect.width,
+            height: rect.height,
+            area: rect.width * rect.height,
+            display: getComputedStyle(canvas).display,
+            visibility: getComputedStyle(canvas).visibility,
+          };
+        })
+        .filter(rect => rect.width > 0 && rect.height > 0 && rect.display !== 'none' && rect.visibility !== 'hidden')
+        .sort((a, b) => b.area - a.area);
+      const rect = candidates[0];
+      if (!rect) return null;
+      return { x: rect.x, y: rect.y, width: rect.width, height: rect.height, scale: 1, canvasIndex: rect.index, candidateCount: candidates.length };
     })()
   `);
   assert.ok(canvasRect?.width > 300 && canvasRect?.height > 300, `${label} could not find a captureable canvas`);
-  return { format: 'png', captureBeyondViewport: false, clip: canvasRect };
+  return {
+    format: 'png',
+    captureBeyondViewport: false,
+    clip: {
+      x: canvasRect.x,
+      y: canvasRect.y,
+      width: canvasRect.width,
+      height: canvasRect.height,
+      scale: canvasRect.scale,
+    },
+  };
 }
 
 async function capturePng(ws, path, captureOptions) {
@@ -313,6 +360,215 @@ async function captureSpatialTruthSurveyContactSheet(ws, captureOptions) {
   };
 }
 
+function assertOrbitStrengthSweepConfig() {
+  assert.ok(orbitStrengthSweepStrengths.length >= 1, '--orbit-strengths produced no numeric strength rows');
+  assert.ok(orbitStrengthSweepElevations.length >= 1, '--orbit-strength-filmstrip-elevations produced no numeric rows');
+  assert.ok(orbitStrengthSweepAzimuths.length >= 1, '--orbit-strength-filmstrip-azimuths produced no numeric columns');
+  assert.ok(Number.isFinite(orbitStrengthSweepDistance) && orbitStrengthSweepDistance > 0, '--orbit-strength-filmstrip-distance must be positive');
+  assert.ok(orbitStrengthSweepTarget.length === 3, '--orbit-strength-filmstrip-target must be three comma-separated numbers');
+  assert.ok(Number.isFinite(orbitStrengthSweepCellWidth) && orbitStrengthSweepCellWidth >= 240, '--orbit-strength-filmstrip-cell-width must be at least 240');
+  assert.ok(Number.isFinite(cdpTimeoutMs) && cdpTimeoutMs >= 12000, '--cdp-timeout-ms must be at least 12000');
+}
+
+function orbitStrengthCellPath(basePath, strength, elevation, azimuth) {
+  const safeStrength = String(strength).replace(/[^0-9.-]+/g, '-').replace(/\./g, 'p');
+  const safeElevation = String(elevation).replace(/[^0-9.-]+/g, '-').replace(/\./g, 'p');
+  const safeAzimuth = String(azimuth).replace(/[^0-9.-]+/g, '-').replace(/\./g, 'p');
+  if (/\.png$/i.test(basePath)) return basePath.replace(/\.png$/i, `-strength${safeStrength}-el${safeElevation}-az${safeAzimuth}.png`);
+  return `${basePath}-strength${safeStrength}-el${safeElevation}-az${safeAzimuth}.png`;
+}
+
+async function applyOrbitStrengthSweepControl(ws, requestedStrength) {
+  return evaluate(ws, `
+    (() => {
+      const requestedStrength = ${JSON.stringify(requestedStrength)};
+      const strength = Math.max(0, Math.min(1, Number(requestedStrength)));
+      const viewMode = document.getElementById('orb-shell-law-view-mode');
+      const debugMode = document.getElementById('orb-shell-law-debug-mode');
+      const orbitEnabled = document.getElementById('orb-shell-law-aperture-orbit-capture-enabled');
+      const orbitStrength = document.getElementById('orb-shell-law-aperture-orbit-capture-strength');
+      if (!viewMode || !debugMode || !orbitEnabled || !orbitStrength) {
+        return {
+          schema: 'OrbitStrengthSweepLawControlApplication',
+          applied: false,
+          reason: 'law-control-elements-missing',
+          requestedStrength,
+        };
+      }
+      viewMode.value = 'curve-on-sphere';
+      debugMode.value = 'all-law-impact';
+      orbitEnabled.checked = true;
+      orbitStrength.value = String(strength);
+      for (const element of [viewMode, debugMode, orbitEnabled, orbitStrength]) {
+        element.dispatchEvent(new Event('input', { bubbles: true }));
+        element.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+      const witness = window.__kaminosOrbShellCompositionWitness?.enableMacroMorphologyInventoryWitness?.({ frame: false });
+      const state = window.__kaminosOrbShellCompositionWitness?.debugState?.();
+      const lawImpactDeltaSummary = (witness?.visibleRecords || []).map(record => ({
+        parentAssemblage: record.parentAssemblage,
+        sourceCurveMaxTurn: record.sourceCurveMetrics?.maxTurn ?? null,
+        lawImpactMaxPointDelta: record.lawImpactCurveMetrics?.maxPointDelta ?? null,
+        lawImpactMeanPointDelta: record.lawImpactCurveMetrics?.meanPointDelta ?? null,
+        orbitDisplacementVectorCount: record.lawDebugSummary?.orbitDisplacementVectorCount ?? null,
+        capEnvelopeRailCount: record.lawDebugSummary?.capEnvelopeRailCount ?? null,
+        pathologyClasses: record.pathologyClasses || [],
+      }));
+      return {
+        schema: 'OrbitStrengthSweepLawControlApplication',
+        applied: true,
+        requestedStrength,
+        effectiveStrength: Number(orbitStrength.value),
+        lawControls: state?.lawControls || null,
+        lawImpactDeltaSummary,
+        witnessSummary: witness ? {
+          schema: witness.schema,
+          lawDebugMode: witness.lawDebugMode,
+          visibleCurveCount: witness.visibleCurveCount,
+          visibleLawImpactCurveCount: witness.visibleLawImpactCurveCount,
+          visibleOrbitDisplacementVectorCount: witness.visibleOrbitDisplacementVectorCount,
+          visibleCapEnvelopeRailCount: witness.visibleCapEnvelopeRailCount,
+        } : null,
+      };
+    })()
+  `);
+}
+
+async function frameMacroMorphologySurveyPose(ws, elevationDeg, azimuthDeg) {
+  return evaluate(ws, `
+    window.__kaminosOrbShellCompositionWitness?.frameMacroMorphologySurveyPose?.({
+      elevationDeg: ${JSON.stringify(elevationDeg)},
+      azimuthDeg: ${JSON.stringify(azimuthDeg)},
+      distance: ${JSON.stringify(orbitStrengthSweepDistance)},
+      target: ${JSON.stringify(orbitStrengthSweepTarget)}
+    })
+  `);
+}
+
+async function captureOrbitStrengthSweepFilmstrip(ws, captureOptions) {
+  if (!orbitStrengthFilmstripOut) return null;
+  assert.equal(focus, 'macro-morphology-inventory', '--orbit-strength-filmstrip-out is scoped to macro-morphology-inventory focus');
+  assertOrbitStrengthSweepConfig();
+  const captures = [];
+  const cellCount = orbitStrengthSweepStrengths.length * orbitStrengthSweepElevations.length * orbitStrengthSweepAzimuths.length;
+  const gridWarning = cellCount > 72
+    ? {
+        schema: 'MohelIndicator',
+        mode: 'uncapped-orbit-strength-sweep-large-output-warning',
+        cellCount,
+        reason: 'orbit-strength evidence grid is large; output was not capped because parallax coverage is evidence',
+      }
+    : null;
+  for (const requestedStrength of orbitStrengthSweepStrengths) {
+    const application = await applyOrbitStrengthSweepControl(ws, requestedStrength);
+    assert.equal(application?.schema, 'OrbitStrengthSweepLawControlApplication', 'orbit-strength sweep control application missing schema');
+    assert.equal(application?.applied, true, 'orbit-strength sweep control application failed');
+    await delay(240);
+    for (const elevationDeg of orbitStrengthSweepElevations) {
+      for (const azimuthDeg of orbitStrengthSweepAzimuths) {
+        const cell = await frameMacroMorphologySurveyPose(ws, elevationDeg, azimuthDeg);
+        assert.equal(cell?.schema, 'MacroMorphologySurveyCellFrame', 'macro morphology survey cell framing failed');
+        await delay(260);
+        const cellPath = orbitStrengthCellPath(orbitStrengthFilmstripOut, application.effectiveStrength, elevationDeg, azimuthDeg);
+        const capture = await capturePng(ws, cellPath, captureOptions);
+        captures.push({
+          schema: 'OrbitStrengthSweepCellCapture',
+          requestedStrength,
+          effectiveStrength: application.effectiveStrength,
+          elevationDeg,
+          azimuthDeg,
+          cameraPose: cell.cameraPose,
+          lawControls: application.lawControls,
+          lawImpactDeltaSummary: application.lawImpactDeltaSummary,
+          witnessSummary: application.witnessSummary,
+          path: capture.path,
+          stats: capture.stats,
+        });
+      }
+    }
+  }
+  const columns = orbitStrengthSweepAzimuths.length;
+  const gap = 12;
+  const padding = 24;
+  const sheetWidth = Math.round((columns * orbitStrengthSweepCellWidth) + ((columns - 1) * gap) + (padding * 2));
+  const splitByStrength = cellCount > 36;
+  const sheetGroups = splitByStrength
+    ? orbitStrengthSweepStrengths.map(strength => ({
+        strength,
+        captures: captures.filter(capture => Math.abs(capture.effectiveStrength - strength) < 1e-6),
+      }))
+    : [{ strength: null, captures }];
+  const sheets = [];
+  for (const sheetGroup of sheetGroups) {
+    const safeStrength = sheetGroup.strength === null
+      ? 'all'
+      : String(sheetGroup.strength).replace(/[^0-9.-]+/g, '-').replace(/\./g, 'p');
+    const sheetPath = splitByStrength && /\.png$/i.test(orbitStrengthFilmstripOut)
+      ? orbitStrengthFilmstripOut.replace(/\.png$/i, `-strength${safeStrength}.png`)
+      : orbitStrengthFilmstripOut;
+    const htmlPath = sheetPath.replace(/\.png$/i, '.html');
+    const html = `<!doctype html>
+      <meta charset="utf-8">
+      <style>
+        body { margin: 0; background: #070a0c; color: #dfe8ea; font: 14px system-ui, sans-serif; }
+        .sheet { width: ${sheetWidth}px; padding: ${padding}px; display: grid; grid-template-columns: repeat(${columns}, ${orbitStrengthSweepCellWidth}px); gap: ${gap}px; box-sizing: border-box; }
+        figure { margin: 0; background: #010304; border: 1px solid #273238; overflow: hidden; }
+        img { display: block; width: ${orbitStrengthSweepCellWidth}px; aspect-ratio: 16 / 11; object-fit: cover; background: #000; }
+        figcaption { padding: 7px 8px; font: 12px 'SF Mono', ui-monospace, monospace; color: #a5bac0; display: flex; justify-content: space-between; gap: 8px; }
+        .meta { grid-column: 1 / -1; font: 14px 'SF Mono', ui-monospace, monospace; color: #93aab0; line-height: 1.45; }
+        .strength { color: #ffb24a; }
+        .pose { color: #8fd3ff; }
+      </style>
+      <div class="sheet">
+        <div class="meta">
+          OrbitStrengthSweepFilmstrip | focus=${focus} | sheetStrength=${sheetGroup.strength ?? 'all'} | strengths=${orbitStrengthSweepStrengths.join(',')} | elevations=${orbitStrengthSweepElevations.join(',')} | azimuths=${orbitStrengthSweepAzimuths.join(',')} | distance=${orbitStrengthSweepDistance} | target=${orbitStrengthSweepTarget.join(',')}
+        </div>
+        ${sheetGroup.captures.map(capture => `
+          <figure>
+            <img src="${pathToFileURL(capture.path).href}">
+            <figcaption><span class="strength">orbit ${Number(capture.effectiveStrength).toFixed(2)} / el ${capture.elevationDeg}</span><span class="pose">az ${capture.azimuthDeg}</span></figcaption>
+          </figure>
+        `).join('')}
+      </div>`;
+    mkdirSync(dirname(htmlPath), { recursive: true });
+    writeFileSync(htmlPath, html);
+    await send(ws, 'Page.navigate', { url: pathToFileURL(htmlPath).href });
+    await delay(900);
+    const sheetCapture = await capturePng(ws, sheetPath, { format: 'png', captureBeyondViewport: true });
+    sheets.push({
+      schema: 'OrbitStrengthSweepFilmstripSheet',
+      strength: sheetGroup.strength,
+      htmlPath,
+      screenshot: { path: sheetCapture.path, stats: sheetCapture.stats },
+      captureCount: sheetGroup.captures.length,
+    });
+  }
+  return {
+    schema: 'OrbitStrengthSweepFilmstrip',
+    mode: 'browser-composed-orbit-strength-elevation-azimuth-filmstrip-v0',
+    orbitStrengthFilmstripOut,
+    splitByStrength,
+    sheets,
+    OrbitStrengthSweepGrid: {
+      schema: 'OrbitStrengthSweepGrid',
+      mode: 'orbit-strength-by-elevation-azimuth-grid-v0',
+      strengths: orbitStrengthSweepStrengths,
+      elevations: orbitStrengthSweepElevations,
+      azimuths: orbitStrengthSweepAzimuths,
+      distance: orbitStrengthSweepDistance,
+      target: orbitStrengthSweepTarget,
+      cellWidth: orbitStrengthSweepCellWidth,
+      cellCount,
+      columns,
+      rows: orbitStrengthSweepStrengths.length * orbitStrengthSweepElevations.length,
+      gridWarning,
+    },
+    viewCount: captures.length,
+    captures,
+    screenshot: sheets[0]?.screenshot || null,
+  };
+}
+
 async function send(ws, method, params = {}) {
   const id = ++counter;
   ws.send(JSON.stringify({ id, method, params }));
@@ -320,7 +576,7 @@ async function send(ws, method, params = {}) {
     const timeout = setTimeout(() => {
       ws.removeEventListener('message', onMessage);
       reject(new Error(`${method} timed out during ${phase}`));
-    }, 12000);
+    }, cdpTimeoutMs);
     const onMessage = message => {
       const payload = JSON.parse(message.data.toString());
       if (payload.id !== id) return;
@@ -447,10 +703,15 @@ async function main() {
     routeGate: 'kaminos_orb_shell_grounding=1',
     expectedIdentity: 'orb-shell-macro-grammar-grounding-v0',
     focus,
+    cdpTimeoutMs,
     diagnosticPass,
     viewSet,
     spatialTruthView,
     contactSheetOut,
+    orbitStrengthFilmstripOut,
+    orbitStrengthSweepStrengths,
+    orbitStrengthSweepElevations,
+    orbitStrengthSweepAzimuths,
     spatialTruthEnvMapIntensity,
     spatialTruthExposure,
     phase,
@@ -670,6 +931,7 @@ async function main() {
         || focus === 'material-truth'
         || focus === 'pre-hdr-warm'
         || focus === 'spatial-truth'
+        || orbitStrengthFilmstripOut
       ) {
         captureOptions = await canvasCaptureOptions(ws, focus);
       }
@@ -980,6 +1242,11 @@ async function main() {
     assert.ok(state?.forbiddenFailureClasses?.includes('strip-soup'), 'failure class evidence missing');
     }
     await assertCompositionStructuralInvariants();
+    if (orbitStrengthFilmstripOut) {
+      phase = 'orbit-strength-filmstrip';
+      const filmstripCaptureOptions = await canvasCaptureOptions(ws, 'orbit-strength-filmstrip');
+      orbitStrengthSweepFilmstrip = await captureOrbitStrengthSweepFilmstrip(ws, filmstripCaptureOptions);
+    }
     const stats = primaryCapture?.stats ?? null;
     ws.close();
 
@@ -1136,6 +1403,7 @@ async function main() {
       spatialTruthViewFrame,
       spatialTruthContactSheet,
       spatialTruthSurveyContactSheet,
+      orbitStrengthSweepFilmstrip,
       materialTruthRoutePolicy,
       materialTruthEnvPolicy,
       preHdrWarmRoutePolicy,
