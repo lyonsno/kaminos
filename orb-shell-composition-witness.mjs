@@ -410,6 +410,7 @@ async function applyOrbitStrengthSweepControl(ws, requestedStrength) {
         sourceCurveMaxTurn: record.sourceCurveMetrics?.maxTurn ?? null,
         lawImpactMaxPointDelta: record.lawImpactCurveMetrics?.maxPointDelta ?? null,
         lawImpactMeanPointDelta: record.lawImpactCurveMetrics?.meanPointDelta ?? null,
+        apertureOrbitAuthorityMetrics: record.apertureOrbitAuthorityMetrics || null,
         orbitDisplacementVectorCount: record.lawDebugSummary?.orbitDisplacementVectorCount ?? null,
         capEnvelopeRailCount: record.lawDebugSummary?.capEnvelopeRailCount ?? null,
         pathologyClasses: record.pathologyClasses || [],

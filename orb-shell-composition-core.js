@@ -2526,6 +2526,21 @@ function nearestApertureOrbitLaneSample(lane, point, steps = 180) {
   return nearest;
 }
 
+function createApertureAuthorityEligibilityGate() {
+  return {
+    schema: 'ApertureAuthorityEligibilityGate',
+    mode: 'distance-and-orbit-tangent-agreement-v0',
+    id: 'primary-front-aperture-authority-eligibility-gate',
+    distanceFullAuthority: 0.22,
+    distanceZeroAuthority: 0.76,
+    tangentZeroAuthority: 0.18,
+    tangentFullAuthority: 0.74,
+    tangentAgreementMode: 'parallel-first-pass-absolute-dot',
+    combination: 'terminal-span-times-proximity-times-tangent-parallel-agreement',
+    semanticContract: 'aperture authority only acts where the strip already approaches the aperture orbit and agrees with its tangent field',
+  };
+}
+
 function createApertureOrbitLanes(composition) {
   const primaryVoid = composition.AperturePressure?.primaryVoids?.[0] || {};
   const center = primaryVoid.center || [0.02, -0.02, 0.98];
@@ -2628,6 +2643,7 @@ function createApertureOrbitCaptureLaw(composition, controls = composition.lawCo
   const orbitLanes = createApertureOrbitLanes(composition);
   const laneById = new Map(orbitLanes.map(lane => [lane.id, lane]));
   const controlStrength = normalizedUnit(controls?.strength, 1);
+  const authorityGate = createApertureAuthorityEligibilityGate();
   const terminalRoles = composition.macroAssemblages.map(assemblage => {
     const spec = defaultApertureOrbitRoleSpec(assemblage);
     const lane = laneById.get(spec.targetLaneId) || orbitLanes[0];
@@ -2647,6 +2663,15 @@ function createApertureOrbitCaptureLaw(composition, controls = composition.lawCo
       targetPoint: target.point,
       targetTangent: target.tangent,
       targetNormal: normalizePoint(target.point),
+      authorityGateId: authorityGate.id,
+      authorityGate,
+      authorityLane: {
+        id: lane.id,
+        center: lane.center,
+        radius: lane.radius,
+        zLift: lane.zLift,
+        sourceApertureId: lane.sourceApertureId,
+      },
       pointBlend: spec.pointBlend * controlStrength,
       tangentBlend: spec.tangentBlend * controlStrength,
       radialDelta: (spec.radialDelta || 0) * controlStrength,
@@ -2666,15 +2691,17 @@ function createApertureOrbitCaptureLaw(composition, controls = composition.lawCo
     id: 'primary-front-aperture-orbit-capture-law',
     sourceApertureId,
     orbitLanes,
+    authorityGate,
     terminalRoles,
     terminalRoleCount: terminalRoles.length,
     controlStrength,
     semanticPrimitive: 'macro-terminal-destiny-around-aperture',
-    captureContract: 'each-live-macro-declares-a-positive-aperture-relative-terminal-role',
+    captureContract: 'each-live-macro-declares-a-positive-aperture-relative-terminal-role-but-local-authority-is-distance-and-tangent-gated',
     failureModes: [
       'floating-strip-without-aperture-destination',
       'constraint-only-avoidance-without-designed-terminal-intent',
       'orbit-looking-curve-without-target-lane-or-tangent-witness',
+      'distant-family-overpulled-by-global-aperture-authority',
     ],
   };
 }
@@ -2705,9 +2732,95 @@ function apertureOrbitCaptureLinearT(role, t) {
   return clamp((t - start) / (end - start), 0, 1);
 }
 
-function applyApertureOrbitCapturePoint(assemblage, t, point) {
+function apertureOrbitAuthorityAt(role, t, point, localTangent = null) {
+  if (!role) {
+    return {
+      schema: 'ApertureOrbitAuthoritySample',
+      authority: 0,
+      spanAuthority: 0,
+      proximityAuthority: 0,
+      tangentAuthority: 0,
+      distanceToOrbit: null,
+      tangentParallelAgreement: null,
+      signedTangentAlignment: null,
+    };
+  }
+  const gate = role.authorityGate || createApertureAuthorityEligibilityGate();
+  const lane = role.authorityLane || {
+    id: role.targetLaneId,
+    center: role.targetPoint,
+    radius: [0.01, 0.01],
+    zLift: 0,
+  };
+  const nearest = nearestApertureOrbitLaneSample(lane, point, 120);
+  const tangent = normalizePoint(localTangent || role.targetTangent || nearest.tangent || [1, 0, 0]);
+  const signedTangentAlignment = dotPoints(tangent, nearest.tangent);
+  const tangentParallelAgreement = Math.abs(signedTangentAlignment);
+  const proximityAuthority = 1 - smoothStep(
+    gate.distanceFullAuthority,
+    gate.distanceZeroAuthority,
+    nearest.distance,
+  );
+  const tangentAuthority = smoothStep(
+    gate.tangentZeroAuthority,
+    gate.tangentFullAuthority,
+    tangentParallelAgreement,
+  );
+  const spanAuthority = apertureOrbitCaptureBlendAt(role, t);
+  const authority = clamp(spanAuthority * proximityAuthority * tangentAuthority, 0, 1);
+  return {
+    schema: 'ApertureOrbitAuthoritySample',
+    mode: gate.mode,
+    authorityGateId: gate.id,
+    authorityLaneId: lane.id,
+    t,
+    sourcePoint: point,
+    localTangent: tangent,
+    authority,
+    spanAuthority,
+    proximityAuthority,
+    tangentAuthority,
+    distanceToOrbit: nearest.distance,
+    nearestOrbitPoint: nearest.point,
+    nearestOrbitTangent: nearest.tangent,
+    nearestOrbitAngleRadians: nearest.angle,
+    signedTangentAlignment,
+    tangentParallelAgreement,
+    thresholds: {
+      distanceFullAuthority: gate.distanceFullAuthority,
+      distanceZeroAuthority: gate.distanceZeroAuthority,
+      tangentZeroAuthority: gate.tangentZeroAuthority,
+      tangentFullAuthority: gate.tangentFullAuthority,
+    },
+  };
+}
+
+function summarizeApertureOrbitAuthoritySamples(samples) {
+  const authorities = samples.map(sample => sample.authority).filter(Number.isFinite);
+  const distances = samples.map(sample => sample.distanceToOrbit).filter(Number.isFinite);
+  const tangents = samples.map(sample => sample.tangentParallelAgreement).filter(Number.isFinite);
+  const mean = values => values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : 0;
+  return {
+    schema: 'ApertureOrbitAuthorityMetrics',
+    sampleCount: samples.length,
+    minAuthority: authorities.length ? Math.min(...authorities) : 0,
+    maxAuthority: authorities.length ? Math.max(...authorities) : 0,
+    meanAuthority: mean(authorities),
+    minDistanceToOrbit: distances.length ? Math.min(...distances) : null,
+    maxDistanceToOrbit: distances.length ? Math.max(...distances) : null,
+    meanDistanceToOrbit: distances.length ? mean(distances) : null,
+    minTangentParallelAgreement: tangents.length ? Math.min(...tangents) : null,
+    maxTangentParallelAgreement: tangents.length ? Math.max(...tangents) : null,
+    meanTangentParallelAgreement: tangents.length ? mean(tangents) : null,
+    suppressedSampleCount: samples.filter(sample => sample.authority < 0.25).length,
+    strongAuthoritySampleCount: samples.filter(sample => sample.authority > 0.65).length,
+  };
+}
+
+function applyApertureOrbitCapturePoint(assemblage, t, point, localTangent = null) {
   const role = assemblage.apertureOrbitCapture || assemblage.macroPromotedBody?.apertureOrbitCapture;
-  const blend = apertureOrbitCaptureBlendAt(role, t);
+  const authoritySample = apertureOrbitAuthorityAt(role, t, point, localTangent);
+  const blend = authoritySample.authority;
   if (blend <= 0) return point;
   const linearT = apertureOrbitCaptureLinearT(role, t);
   const targetTangent = normalizePoint(role.targetTangent || [1, 0, 0]);
@@ -2749,17 +2862,32 @@ function createApertureOrbitCaptureWitnessPlan(composition) {
   const laneById = new Map(law.orbitLanes.map(lane => [lane.id, lane]));
   const samples = law.terminalRoles.map(role => {
     const assemblage = composition.macroAssemblages.find(item => item.id === role.parentAssemblage);
-    const centerline = assemblage ? macroPromotedBodyCenterlinePoints(assemblage, 48, 1.045) : [];
+    const centerline = assemblage
+      ? macroPromotedBodyCenterlinePoints(assemblage, 48, 1.045, { apertureOrbitCapture: false })
+      : [];
     const terminalPoint = centerline.at(-1) || role.targetPoint;
     const previousPoint = centerline.at(-2) || terminalPoint;
     const terminalTangent = normalizePoint(subtractPoints(terminalPoint, previousPoint));
     const lane = laneById.get(role.targetLaneId) || law.orbitLanes[0];
-    const nearest = nearestApertureOrbitLaneSample(lane, terminalPoint);
-    const tangentOrbitAlignment = Math.abs(dotPoints(terminalTangent, nearest.tangent));
-    const captureRadiusError = nearest.distance;
+    const authoritySamples = centerline.map((point, index) => {
+      const t = index / (centerline.length - 1);
+      const localTangent = normalizePoint(subtractPoints(
+        centerline[Math.min(centerline.length - 1, index + 1)],
+        centerline[Math.max(0, index - 1)],
+      ));
+      return apertureOrbitAuthorityAt(role, t, point, localTangent);
+    });
+    const authorityMetrics = summarizeApertureOrbitAuthoritySamples(authoritySamples);
+    const strongestAuthoritySample = authoritySamples.reduce((best, sample) => (
+      !best || sample.authority > best.authority ? sample : best
+    ), null);
+    const nearest = strongestAuthoritySample || nearestApertureOrbitLaneSample(lane, terminalPoint);
+    const tangentOrbitAlignment = strongestAuthoritySample?.tangentParallelAgreement
+      ?? Math.abs(dotPoints(terminalTangent, nearest.tangent));
+    const captureRadiusError = strongestAuthoritySample?.distanceToOrbit ?? nearest.distance;
     const roleVerdict = role.terminalRole === 'orbit-tangent'
       ? (
-        tangentOrbitAlignment >= 0.6 && captureRadiusError <= 0.42
+        authorityMetrics.maxAuthority >= 0.5 && tangentOrbitAlignment >= 0.6 && captureRadiusError <= role.authorityGate.distanceZeroAuthority
           ? 'macro-orbit-tangent-coupling-visible'
           : 'macro-orbit-tangent-not-yet-proven'
       )
@@ -2780,13 +2908,17 @@ function createApertureOrbitCaptureWitnessPlan(composition) {
       targetLaneId: role.targetLaneId,
       terminalPoint,
       terminalTangent,
-      nearestLanePoint: nearest.point,
-      nearestLaneAngleRadians: nearest.angle,
-      nearestLaneTangent: nearest.tangent,
+      authorityWitnessPoint: strongestAuthoritySample?.sourcePoint || terminalPoint,
+      authorityWitnessTangent: strongestAuthoritySample?.localTangent || terminalTangent,
+      nearestLanePoint: strongestAuthoritySample?.nearestOrbitPoint || nearest.point,
+      nearestLaneAngleRadians: strongestAuthoritySample?.nearestOrbitAngleRadians ?? nearest.angle,
+      nearestLaneTangent: strongestAuthoritySample?.nearestOrbitTangent || nearest.tangent,
       targetPoint: role.targetPoint,
       targetTangent: role.targetTangent,
       tangentOrbitAlignment,
       captureRadiusError,
+      apertureOrbitAuthorityMetrics: authorityMetrics,
+      strongestAuthoritySample,
       roleVerdict,
       overlayGeometryIds: role.overlayGeometryIds,
     };
@@ -5311,6 +5443,16 @@ function createMacroLawImpactCurveDecomposition(assemblage, sampleCount = 48, ra
   const basePoints = macroPromotedBodyCenterlinePoints(assemblage, sampleCount, radius, {
     apertureOrbitCapture: false,
   });
+  const role = assemblage.apertureOrbitCapture || assemblage.macroPromotedBody?.apertureOrbitCapture || null;
+  const authoritySamples = basePoints.map((point, index) => {
+    const t = index / (basePoints.length - 1);
+    const localTangent = normalizePoint(subtractPoints(
+      basePoints[Math.min(basePoints.length - 1, index + 1)],
+      basePoints[Math.max(0, index - 1)],
+    ));
+    return apertureOrbitAuthorityAt(role, t, point, localTangent);
+  });
+  const authorityMetrics = summarizeApertureOrbitAuthoritySamples(authoritySamples);
   const affectedPoints = macroPromotedBodyCenterlinePoints(assemblage, sampleCount, radius, {
     apertureOrbitCapture: true,
   });
@@ -5323,8 +5465,9 @@ function createMacroLawImpactCurveDecomposition(assemblage, sampleCount = 48, ra
     point,
     basePoint: basePoints[index],
     pointDelta: pointDistance(basePoints[index], point),
+    apertureOrbitAuthority: authoritySamples[index]?.authority ?? 0,
+    apertureOrbitAuthoritySample: authoritySamples[index] || null,
   }));
-  const role = assemblage.apertureOrbitCapture || assemblage.macroPromotedBody?.apertureOrbitCapture || null;
   const deltaMetrics = lawImpactPointDeltaMetrics(basePoints, affectedPoints);
   return {
     schema: 'MacroLawImpactCurveDecomposition',
@@ -5349,6 +5492,8 @@ function createMacroLawImpactCurveDecomposition(assemblage, sampleCount = 48, ra
       samples: affectedSamples,
     },
     apertureOrbitCaptureDeltaMetrics: deltaMetrics,
+    apertureOrbitAuthorityMetrics: authorityMetrics,
+    apertureOrbitAuthoritySamples: authoritySamples,
     visualIntent: 'show whether aperture orbit capture bends the source curve into a crimp before mesh sidewalls are involved',
   };
 }
@@ -6663,7 +6808,7 @@ export function createTargetOrbShellCompositionFixture(options = {}) {
   return applyControlledOrbShellVariation(composition, controlledVariation);
 }
 
-function sampleSpinePoint(assemblage, bandMember, t, radius = 1.04, options = {}) {
+function rawSpinePoint(assemblage, bandMember, t, radius = 1.04) {
   const control = assemblage.spine.control;
   const torsion = assemblage.macroTorsionField;
   const anatomyT = lowerSocketAnatomyParametricT(assemblage, t);
@@ -6691,10 +6836,22 @@ function sampleSpinePoint(assemblage, bandMember, t, radius = 1.04, options = {}
   const interlock = macroInterlockEffectAt(assemblage, t);
   const lowerSocket = lowerSocketAnatomyEffectAt(assemblage, t);
   const sharedSeam = sharedSocketSeamEffectAt(assemblage, t);
-  const point = spherePoint(lat, lon, radius + layerBias - interlock.depthInset - lowerSocket.radialInset + sharedSeam.radialDelta + roleEffect.radialDelta);
+  return spherePoint(lat, lon, radius + layerBias - interlock.depthInset - lowerSocket.radialInset + sharedSeam.radialDelta + roleEffect.radialDelta);
+}
+
+function sampleSpinePoint(assemblage, bandMember, t, radius = 1.04, options = {}) {
+  const point = rawSpinePoint(assemblage, bandMember, t, radius);
   return options.apertureOrbitCapture === false
     ? point
-    : applyApertureOrbitCapturePoint(assemblage, t, point);
+    : applyApertureOrbitCapturePoint(
+      assemblage,
+      t,
+      point,
+      normalizePoint(subtractPoints(
+        rawSpinePoint(assemblage, bandMember, Math.min(1, t + 0.01), radius),
+        rawSpinePoint(assemblage, bandMember, Math.max(0, t - 0.01), radius),
+      )),
+    );
 }
 
 function sampleSpine(THREE, assemblage, bandMember, t, radius = 1.04) {
@@ -8248,6 +8405,7 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
         activeRuleId: curve.activeRuleId,
         apertureOrbitCaptureControlStrength: curve.apertureOrbitCaptureControlStrength,
         apertureOrbitCaptureDeltaMetrics: curve.apertureOrbitCaptureDeltaMetrics,
+        apertureOrbitAuthorityMetrics: curve.apertureOrbitAuthorityMetrics,
         visualOverlayId: curve.apertureOrbitCaptureCurve?.visualOverlayId || null,
       })),
       lawDebugSummaries: (inventory.lawDebugDecompositions || []).map(debug => ({
@@ -9212,6 +9370,7 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
               sourceCurveMetrics: record.sourceCurveMetrics,
               promotedCenterlineMetrics: record.promotedCenterlineMetrics,
               lawImpactCurveMetrics: record.lawImpactCurve?.apertureOrbitCaptureDeltaMetrics || null,
+              apertureOrbitAuthorityMetrics: record.lawImpactCurve?.apertureOrbitAuthorityMetrics || null,
             });
           }
         } else {

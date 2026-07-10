@@ -59,6 +59,10 @@ assert.match(core, /MacroLawImpactCurveDecomposition/, 'composition core must na
 assert.match(core, /MacroLawDebugDecomposition/, 'composition core must name law-specific debug decomposition records');
 assert.match(core, /MacroLawOrbitDisplacementVector/, 'orbit debug must expose displacement vectors instead of only a post-law curve');
 assert.match(core, /MacroLawCapEnvelopeRail/, 'cap debug must expose width-envelope rails instead of pretending cap moves the centerline');
+assert.match(core, /ApertureAuthorityEligibilityGate/, 'aperture orbit capture must name a local authority eligibility gate');
+assert.match(core, /apertureOrbitAuthorityAt/, 'aperture orbit capture must compute local authority before moving a curve point');
+assert.match(core, /distanceFullAuthority/, 'aperture authority gate must expose a full-authority distance threshold');
+assert.match(core, /tangentFullAuthority/, 'aperture authority gate must expose a full-authority tangent-agreement threshold');
 assert.match(core, /macroMorphologyLawImpactCurveMaterial/, 'curve witness must render law-affected curves with a distinct material');
 assert.match(core, /macroMorphologyOrbitDeltaVectorMaterial/, 'curve witness must render orbit displacement ticks with a distinct material');
 assert.match(core, /macroMorphologyCapEnvelopeMaterial/, 'curve witness must render cap envelope rails with a distinct material');
@@ -84,6 +88,7 @@ assert.match(witness, /OrbitStrengthSweepFilmstripSheet/, 'split orbit-strength 
 assert.match(witness, /requestedStrength/, 'orbit-strength sweep cells must preserve the requested strength, not only the row label');
 assert.match(witness, /effectiveStrength/, 'orbit-strength sweep cells must preserve the effective slider strength observed after UI coupling');
 assert.match(witness, /lawImpactDeltaSummary/, 'orbit-strength sweep cells must preserve curve-level law-impact deltas for all families');
+assert.match(witness, /apertureOrbitAuthorityMetrics/, 'orbit-strength sweep cells must preserve local aperture-authority metrics for all families');
 assert.match(core, /frameMacroMorphologySurveyPose/, 'composition witness must expose macro-morphology survey camera framing');
 
 const {
@@ -148,6 +153,21 @@ assert.equal(enabledFixture.lawControls.schema, 'OrbShellLawControls', 'fixture 
 assert.equal(enabledFixture.lawControls.debugMode, 'all-law-impact', 'fixture preserves requested law debug mode');
 assert.equal(disabledFixture.lawControls.viewMode, 'curve-on-sphere', 'fixture preserves requested law view mode');
 assert.ok(enabledFixture.apertureOrbitCaptureLaw, 'enabled fixture creates aperture orbit capture law');
+assert.equal(
+  enabledFixture.apertureOrbitCaptureLaw.authorityGate?.schema,
+  'ApertureAuthorityEligibilityGate',
+  'aperture orbit law exposes the local authority eligibility gate',
+);
+assert.ok(
+  enabledFixture.apertureOrbitCaptureLaw.authorityGate.distanceFullAuthority
+    < enabledFixture.apertureOrbitCaptureLaw.authorityGate.distanceZeroAuthority,
+  'aperture authority distance gate has a non-empty falloff band',
+);
+assert.ok(
+  enabledFixture.apertureOrbitCaptureLaw.authorityGate.tangentZeroAuthority
+    < enabledFixture.apertureOrbitCaptureLaw.authorityGate.tangentFullAuthority,
+  'aperture authority tangent gate has a non-empty falloff band',
+);
 assert.equal(disabledFixture.apertureOrbitCaptureLaw, null, 'disabled fixture does not create aperture orbit capture law');
 assert.equal(disabledFixture.apertureOrbitCaptureWitnessPlan?.status, 'disabled-by-law-controls', 'disabled fixture reports why orbit capture witness is absent');
 
@@ -165,6 +185,18 @@ assert.ok(
 assert.ok(
   lawImpactRecords.some(record => record.lawImpactCurve.apertureOrbitCaptureDeltaMetrics?.maxPointDelta > 0.02),
   'at least one law-impact curve shows visible aperture orbit displacement before meshing',
+);
+assert.ok(
+  lawImpactRecords.every(record => record.lawImpactCurve.apertureOrbitAuthorityMetrics?.schema === 'ApertureOrbitAuthorityMetrics'),
+  'law-impact curves expose local aperture-authority metrics for every macro family',
+);
+assert.ok(
+  lawImpactRecords.some(record => record.lawImpactCurve.apertureOrbitAuthorityMetrics?.minAuthority < 0.25),
+  'at least one macro family has local segments where aperture authority is mostly suppressed',
+);
+assert.ok(
+  lawImpactRecords.some(record => record.lawImpactCurve.apertureOrbitAuthorityMetrics?.maxAuthority > 0.65),
+  'at least one macro family still reaches strong aperture authority where close and tangent-compatible',
 );
 assert.ok(
   zeroOrbitFixture.macroMorphologyInventory.records.every(record => (
