@@ -184,7 +184,7 @@ assert.match(core, /boundarySidecarProximity/, 'Boundary sidecar raymarch derive
 assert.match(core, /boundarySidecarFootprintWidth/, 'Boundary sidecar raymarch derives a ray-footprint reconstruction width');
 assert.match(core, /boundarySidecarBuildPipeline/, 'Renderer owns a boundary sidecar compute pipeline');
 assert.match(core, /encodeBoundarySidecar/, 'Render loop encodes the boundary sidecar bake before drawing');
-assert.match(core, /async function sampleFrame\(\)[\s\S]*encodeBoundarySidecar\(encoder\)[\s\S]*encodeDraw\(encoder, frameTexture\.createView\(\), 'kaminos volume one-off readback pass'/, 'sampleFrame readback bakes the boundary sidecar before drawing evidence frames');
+assert.match(core, /async function sampleFrame\([^)]*\)[\s\S]*encodeBoundarySidecar\(encoder\)[\s\S]*encodeDraw\(encoder, frameTexture\.createView\(\), 'kaminos volume one-off readback pass'/, 'sampleFrame readback bakes the boundary sidecar before drawing evidence frames');
 assert.match(core, /sampleWorldBoundarySidecar/, 'Raymarch samples the baked boundary sidecar');
 assert.match(core, /boundarySidecarStepFootprintWidth/, 'Boundary-fire path compensates sheet width for ray step footprint');
 const boundaryFireBranch = core.match(/if \(boundarySurfaceMode > 0\.5\) \{[\s\S]*?let boundaryGradientGate/);
