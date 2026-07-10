@@ -22,7 +22,7 @@ const windowSize = args.get('--window-size') || '1280,960';
 const fullScreenshot = args.has('--full-screenshot')
   ? resolve(args.get('--full-screenshot') || out.replace(/\.png$/i, '.full.png'))
   : '';
-const VALID_EVIDENCE_MODES = new Set(['fire-volume', 'performance', 'pyro-material', 'no-fire-volume', 'receiver-support']);
+const VALID_EVIDENCE_MODES = new Set(['fire-volume', 'performance', 'pyro-material', 'no-fire-volume', 'receiver-support', 'receiver-light-isolate']);
 const evidenceMode = args.get('--evidence-mode') || 'fire-volume';
 if (!VALID_EVIDENCE_MODES.has(evidenceMode)) {
   throw new Error(`Unknown witness evidence mode: ${evidenceMode}`);
@@ -31,11 +31,14 @@ const expectsPerformanceVolumeEvidence = evidenceMode === 'performance';
 const expectsPyroMaterialEvidence = evidenceMode === 'pyro-material';
 const expectsNoFireVolumeEvidence = evidenceMode === 'no-fire-volume';
 const expectsReceiverSupportEvidence = evidenceMode === 'receiver-support';
+const expectsReceiverLightIsolateEvidence = evidenceMode === 'receiver-light-isolate';
 const visualEvidenceMode = expectsNoFireVolumeEvidence
   ? 'no-fire-volume-signal'
-  : (expectsReceiverSupportEvidence
+  : (expectsReceiverLightIsolateEvidence
+      ? 'tier2-receiver-light-isolate'
+      : (expectsReceiverSupportEvidence
       ? 'receiver-support-sim-readback'
-      : (expectsPyroMaterialEvidence ? 'pyro-material-coupled-volume-signal' : (expectsPerformanceVolumeEvidence ? 'performance-volume-signal' : 'fire-volume')));
+      : (expectsPyroMaterialEvidence ? 'pyro-material-coupled-volume-signal' : (expectsPerformanceVolumeEvidence ? 'performance-volume-signal' : 'fire-volume'))));
 const TALL_PLUME_PRESSURE_ITERATION_STRATEGY_PRESSURE2 = 'tall-plume-pressure2-v0';
 const TALL_PLUME_PRESSURE_ITERATION_STRATEGY_INACTIVE = 'inactive';
 const TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY = 'tall-plume-spatial-pressure-tiers-v0';
@@ -1509,6 +1512,8 @@ async function main() {
   ], { stdio: 'ignore' });
 
   let phase = 'launch';
+  let receiverLightDebug = null;
+  let receiverLightEvidence = null;
   try {
     await waitForCdp();
     phase = 'target';
@@ -1562,6 +1567,38 @@ async function main() {
     const bridge = bridgeEval.result.value;
     assert.equal(bridge?.identity, 'volume-main-renderer-bridge-v0', 'wrong volume main-renderer bridge identity');
     assert.equal(bridge?.textureSource, 'kaminos-volume-canvas', 'volume bridge is not sourcing the native volume canvas');
+    const receiverLightEval = await wsRequest(ws, 'Runtime.evaluate', {
+      expression: 'window.kaminosTier2ReceiverLightDebugState?.() ?? null',
+      returnByValue: true,
+    });
+    receiverLightDebug = receiverLightEval.result.value || null;
+    receiverLightEvidence = {
+      identity: expectsReceiverLightIsolateEvidence ? 'tier2-receiver-light-isolate' : null,
+      accepted: Boolean(
+        receiverLightDebug &&
+        receiverLightDebug.identity === 'tier2-opt-in-receiver-buffer-light-pass-v0' &&
+        receiverLightDebug.receiverMaskAuthority === 'opt-in-receiver-buffer-required-v0' &&
+        receiverLightDebug.supportIdentity === 'combustion-front-receiver-support-v0' &&
+        receiverLightDebug.supportAuthority === 'combustion-front-topology-sidecar-v0+reaction-front-stage-fields-v0' &&
+        receiverLightDebug.receiverBufferSource === 'explicit-opt-in-receiver-proxy-buffer-v0' &&
+        receiverLightDebug.cpuReadbackAuthority === false &&
+        receiverLightDebug.hiddenThreeLightAuthority === false &&
+        receiverLightDebug.canvasBridgeAuthority === false &&
+        Number(receiverLightDebug.receiverCount || 0) > 0 &&
+        Number(receiverLightDebug.receiverRenderFrameCount || 0) > 0 &&
+        Number(receiverLightDebug.lastRenderTargetSize?.width || 0) > 0 &&
+        Number(receiverLightDebug.lastRenderTargetSize?.height || 0) > 0
+      ),
+      debug: receiverLightDebug,
+    };
+    if (expectsReceiverLightIsolateEvidence) {
+      if (!receiverLightDebug || receiverLightDebug.identity !== 'tier2-opt-in-receiver-buffer-light-pass-v0') {
+        throw new Error(`wrong rendered Tier 2 receiver-light identity: ${JSON.stringify(receiverLightDebug)}`);
+      }
+      if (!receiverLightEvidence.accepted || receiverLightDebug.active !== true || receiverLightDebug.isolate !== true) {
+        throw new Error(`Tier 2 receiver-light isolate receipt not accepted: ${JSON.stringify(receiverLightEvidence)}`);
+      }
+    }
     assert.ok(
       state.frameCount > 5,
       `volume route did not render enough frames (${state.frameCount || 0} frames at ${state.displayWidth || 0}x${state.displayHeight || 0})`,
@@ -1961,13 +1998,13 @@ async function main() {
     const acceptsRawCarrierPyroPaint =
       expectsPyroMaterialEvidence &&
       pyroRawCarrierPaintEvidence.acceptsLowStockFireLayer;
-    if (!expectsCanonicalPlumeProof && !expectsFuelStarvedTallPlume && !expectsNoFireVolumeEvidence && !expectsReceiverSupportEvidence && (!Number.isFinite(sample.simReadback.fireLayerMean) || sample.simReadback.fireLayerMean <= 0.0005) && !acceptsRawCarrierPyroPaint) {
+    if (!expectsCanonicalPlumeProof && !expectsFuelStarvedTallPlume && !expectsNoFireVolumeEvidence && !expectsReceiverSupportEvidence && !expectsReceiverLightIsolateEvidence && (!Number.isFinite(sample.simReadback.fireLayerMean) || sample.simReadback.fireLayerMean <= 0.0005) && !acceptsRawCarrierPyroPaint) {
       throw new Error(`GPU sim readback does not show a transported fire layer or raw-carrier Pyro paint evidence: ${JSON.stringify({
         simReadback: sample.simReadback,
         pyroRawCarrierPaintEvidence,
       })}`);
     }
-    if (!expectsCanonicalPlumeProof && !expectsFuelStarvedTallPlume && !expectsNoFireVolumeEvidence && !expectsReceiverSupportEvidence && (!Number.isFinite(sample.simReadback.radianceMean) || sample.simReadback.radianceMean <= 0.0005)) {
+    if (!expectsCanonicalPlumeProof && !expectsFuelStarvedTallPlume && !expectsNoFireVolumeEvidence && !expectsReceiverSupportEvidence && !expectsReceiverLightIsolateEvidence && (!Number.isFinite(sample.simReadback.radianceMean) || sample.simReadback.radianceMean <= 0.0005)) {
       throw new Error(`GPU sim readback does not show fire radiance evidence: ${JSON.stringify(sample.simReadback)}`);
     }
     if (expectedVolumeScene === 'tall_plume') {
@@ -1995,7 +2032,7 @@ async function main() {
             extinctionMean: sample.simReadback.extinctionMean,
           })}`);
         }
-      } else if (!expectsReceiverSupportEvidence && (
+      } else if (!expectsReceiverSupportEvidence && !expectsReceiverLightIsolateEvidence && (
         sample.simReadback.fuelMean <= 0.0005 ||
         sample.simReadback.reactionMean <= 0.0005 ||
         sample.simReadback.fuelConsumptionMean <= 0.00001 ||
@@ -2431,6 +2468,13 @@ async function main() {
       if (mainRendererMetrics.litPixels < 250 || mainRendererMetrics.meanLuma < 1.0) {
         throw new Error(`main renderer screenshot missing receiver-support route output: ${JSON.stringify(mainRendererMetrics)}`);
       }
+    } else if (expectsReceiverLightIsolateEvidence) {
+      if (!receiverLightEvidence.accepted) {
+        throw new Error(`receiver-light isolate evidence mode missing accepted rendered receiver-light receipt: ${JSON.stringify(receiverLightEvidence)}`);
+      }
+      if (mainRendererMetrics.litPixels < 500 || mainRendererMetrics.meanLuma < 2.0) {
+        throw new Error(`main renderer screenshot missing rendered receiver-light isolate: ${JSON.stringify(mainRendererMetrics)}`);
+      }
     } else if (expectsPyroMaterialEvidence) {
       if (mainRendererMetrics.litPixels < 1500 || mainRendererMetrics.meanLuma < 8) {
         throw new Error(`main renderer screenshot missing bridged Pyro material volume: ${JSON.stringify(mainRendererMetrics)}`);
@@ -2501,6 +2545,10 @@ async function main() {
           ...metrics,
           receiverSupportSignalPixels,
         })}`);
+      }
+    } else if (expectsReceiverLightIsolateEvidence) {
+      if (!receiverLightEvidence.accepted) {
+        throw new Error(`receiver-light isolate missing accepted rendered receiver-light evidence: ${JSON.stringify(receiverLightEvidence)}`);
       }
     } else if (expectsPyroMaterialEvidence) {
       const coupling = sample.pyroMaterialRendererCoupling || state.pyroMaterialRendererCoupling || {};
@@ -2578,6 +2626,7 @@ async function main() {
       visualEvidenceMode,
       noFireEvidenceMode: expectsNoFireVolumeEvidence ? 'no-fire-volume-signal' : null,
       receiverSupportEvidence,
+      receiverLightEvidence,
       pyroMaterialEvidenceMode: expectsPyroMaterialEvidence ? 'pyro-material-coupled-volume-signal' : null,
       pyroRawCarrierPaintEvidence,
       performanceVisualWarnings,
@@ -2753,6 +2802,7 @@ async function main() {
       expectsCanonicalFireEvidence,
       expectsNoFireVolumeEvidence,
       expectsPyroMaterialEvidence,
+      expectsReceiverLightIsolateEvidence,
       timing: sample.timing || stateTiming,
       timingEvidenceSource: (sample.timing || stateTiming).timingEvidenceSource,
       timingDisclaimer: (sample.timing || stateTiming).timingDisclaimer,
@@ -2766,6 +2816,7 @@ async function main() {
       expectsBonfireZeroDrift,
       expectsBonfireConvectionProof,
       screenshot: out,
+      receiverLightEvidence,
       mainRendererScreenshot,
       mainRendererCaptureBackend: 'cdp-page-capture',
       fullScreenshot: fullScreenshotPath || null,
@@ -2792,6 +2843,29 @@ async function main() {
           returnByValue: true,
         });
         state = stateEval.result.value || null;
+        const receiverLightEval = await wsRequest(ws, 'Runtime.evaluate', {
+          expression: 'window.kaminosTier2ReceiverLightDebugState?.() ?? null',
+          returnByValue: true,
+        });
+        receiverLightDebug = receiverLightEval.result.value || receiverLightDebug;
+        receiverLightEvidence = receiverLightDebug ? {
+          identity: expectsReceiverLightIsolateEvidence ? 'tier2-receiver-light-isolate' : null,
+          accepted: Boolean(
+            receiverLightDebug.identity === 'tier2-opt-in-receiver-buffer-light-pass-v0' &&
+            receiverLightDebug.receiverMaskAuthority === 'opt-in-receiver-buffer-required-v0' &&
+            receiverLightDebug.supportIdentity === 'combustion-front-receiver-support-v0' &&
+            receiverLightDebug.supportAuthority === 'combustion-front-topology-sidecar-v0+reaction-front-stage-fields-v0' &&
+            receiverLightDebug.receiverBufferSource === 'explicit-opt-in-receiver-proxy-buffer-v0' &&
+            receiverLightDebug.cpuReadbackAuthority === false &&
+            receiverLightDebug.hiddenThreeLightAuthority === false &&
+            receiverLightDebug.canvasBridgeAuthority === false &&
+            Number(receiverLightDebug.receiverCount || 0) > 0 &&
+            Number(receiverLightDebug.receiverRenderFrameCount || 0) > 0 &&
+            Number(receiverLightDebug.lastRenderTargetSize?.width || 0) > 0 &&
+            Number(receiverLightDebug.lastRenderTargetSize?.height || 0) > 0
+          ),
+          debug: receiverLightDebug,
+        } : receiverLightEvidence;
         ws.close();
       }
     } catch {
@@ -2805,6 +2879,7 @@ async function main() {
       phase,
       error: err?.message || String(err),
       state,
+      receiverLightEvidence,
       screenshot: out,
       fullScreenshot: fullScreenshot || null,
     };
