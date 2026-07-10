@@ -666,6 +666,16 @@ async function captureFrame(ws, index) {
       actorIds: actors.map(actor => actor.id),
       actors,
       hillMultiActor: state?.hillMultiActor || null,
+      hillDynamicTargets: actors
+        .filter(actor => actor.dynamicTargetActorId || actor.dynamicTarget)
+        .map(actor => ({
+          actorId: actor.id,
+          dynamicTargetMode: actor.dynamicTargetMode || null,
+          dynamicTargetActorId: actor.dynamicTargetActorId || null,
+          routeSource: actor.dynamicTarget?.routeSource || actor.pathWorldActiveSource || null,
+          replannedThisFrame: actor.dynamicTarget?.replannedThisFrame ?? null,
+          routePointCount: actor.dynamicTarget?.routePointCount ?? actor.dynamicTargetRoutePlan?.routePoints?.length ?? null,
+        })),
       status: document.getElementById('motion-panel-temporal-status')?.textContent || null,
       info: document.getElementById('info')?.textContent || null,
       envLoadingDisplay: getComputedStyle(document.getElementById('env-loading')).display,

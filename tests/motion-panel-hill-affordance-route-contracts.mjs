@@ -67,9 +67,10 @@ assert.match(index, /function applyMotionPanelHillTerrainGroundPlaneSuppression/
 assert.match(index, /hill-terrain-default-ground-suppressed-v0/, 'Hill terrain ground-plane suppression evidence names the visual cleanup slice');
 assert.match(index, /defaultGroundPlaneSuppression/, 'Path World debug exposes whether the default ground plane was suppressed by Hill terrain authority');
 assert.match(index, /groundPlaneVisible/, 'Path World debug records effective default ground-plane visibility instead of relying on visual guesswork');
-assert.match(index, /function normalizeMotionPanelHillTerrainMaterialMode/, 'Hill terrain smoke normalizes material mode instead of hardcoding translucent debug glass');
-assert.match(index, /kaminos_hill_terrain_material/, 'Hill terrain smoke links can choose solid or xray material mode explicitly');
 assert.match(index, /solid-semantic-surface-v0/, 'Hill terrain defaults to a named solid semantic surface material');
+assert.doesNotMatch(index, /semantic-xray-v0/, 'Hill terrain must not retain the old translucent X-ray bug path as a selectable material');
+assert.doesNotMatch(index, /motion-panel-hill-terrain-material-control/, 'Hill terrain must not expose a material selector for the removed X-ray bug path');
+assert.doesNotMatch(index, /kaminos_hill_terrain_material/, 'Hill terrain smoke links must not retain URL control for the removed X-ray bug path');
 assert.match(index, /terrainMaterialMode/, 'Path World debug exposes the effective Hill terrain material mode');
 assert.match(index, /terrainMaterialEvidence/, 'Path World debug exposes Hill terrain material transparency and depth-write evidence');
 assert.match(index, /wireOverlayVisible/, 'Path World debug exposes whether the wire overlay is actually visible');
@@ -99,6 +100,12 @@ assert.match(index, /function motionPanelHillMultiActorEnabled/, 'Hill smoke has
 assert.match(index, /kaminos_hill_multi_actor/, 'Hill smoke links can explicitly request multiple terrain-carried actors');
 assert.match(index, /function createMotionPanelHillMultiActorConfigs/, 'Hill multi-actor smoke builds stable per-actor identities and offsets');
 assert.match(index, /hill-multi-actor-smoke-v0/, 'Hill multi-actor evidence names the smoke slice');
+assert.match(index, /function motionPanelHillDynamicTargetMode/, 'Hill multi-actor smoke has an explicit dynamic target mode gate');
+assert.match(index, /kaminos_hill_dynamic_targets/, 'Hill smoke links can explicitly request actor-to-actor dynamic targets');
+assert.match(index, /function createMotionPanelHillDynamicTargetRoutePlan/, 'Hill dynamic targets replan terrain routes from actor roots to live actor targets');
+assert.match(index, /hill-dynamic-actor-target-v0/, 'Hill dynamic target evidence names the actor-follow slice');
+assert.match(index, /dynamicTargetActorId/, 'actor evidence records which live actor, if any, supplied its route target');
+assert.match(index, /dynamicTargetRoutePlan/, 'actor evidence records the effective dynamic target route plan instead of hiding replans inside animation state');
 assert.match(index, /multiActorIndex/, 'actor evidence records per-actor multi-actor index');
 assert.match(index, /routePhaseOffset/, 'actor evidence records per-actor route phase offset');
 assert.match(index, /carrierPathFollower/, 'actor/debug evidence exposes carrier path follower state');
@@ -154,6 +161,7 @@ assert.match(liveWitness, /airborneSuppressed/, 'live witness records whether ge
 assert.match(liveWitness, /actorCount/, 'live witness records how many generated temporal actors were captured');
 assert.match(liveWitness, /actorIds/, 'live witness records unique actor ids for multi-actor smoke');
 assert.match(liveWitness, /actors\.length/, 'live witness derives actor-count evidence from captured actors, not a single-actor constant');
+assert.match(liveWitness, /hillDynamicTargets/, 'live witness reports compact actor-to-actor dynamic target evidence');
 assert.match(liveWitness, /actorDisplayScale/, 'live witness records the effective Hill actor display scale per frame');
 assert.match(liveWitness, /arrivalBehavior/, 'live witness records Hill arrival behavior evidence per frame');
 assert.match(liveWitness, /airborneGrant/, 'live witness records whether carrier following allowed airborne motion');

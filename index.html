@@ -559,13 +559,6 @@ input[type="range"]:disabled::-webkit-slider-thumb { background: #555; cursor: n
           </select>
         </div>
         <div class="slider-row">
-          <span class="slider-label">Material</span>
-          <select id="motion-panel-hill-terrain-material-control" class="select-input">
-            <option value="solid-semantic-surface-v0" selected>Solid</option>
-            <option value="semantic-xray-v0">Xray debug</option>
-          </select>
-        </div>
-        <div class="slider-row">
           <span class="slider-label">Route</span>
           <select id="motion-panel-route-mode" class="select-input">
             <option value="one-shot-hold" selected>One-shot hold</option>
@@ -5290,6 +5283,18 @@ function motionPanelHillDisplayPoint(frame, point) {
   ];
 }
 
+function motionPanelHillSourcePointFromDisplay(frame, point) {
+  const transform = frame?.displayTransform || {};
+  const center = transform.center || [0, 0, 0];
+  const horizontalScale = Number(transform.horizontalScale) || 1;
+  const verticalScale = Number(transform.verticalScale) || horizontalScale;
+  return [
+    Number((Number(point?.[0] || 0) / horizontalScale + Number(center[0] || 0)).toFixed(5)),
+    Number((Number(point?.[1] || 0) / verticalScale + Number(center[1] || 0)).toFixed(5)),
+    Number((Number(point?.[2] || 0) / horizontalScale + Number(center[2] || 0)).toFixed(5)),
+  ];
+}
+
 function motionPanelHillWorldFromGrid(source, column, row, height = 0) {
   const grid = source?.grid || {};
   const bounds = source?.worldBounds || {};
@@ -5324,35 +5329,7 @@ const MOTION_PANEL_HILL_TERRAIN_OVERLAY_MODES = new Set([
   'composite',
 ]);
 
-const MOTION_PANEL_HILL_TERRAIN_MATERIAL_MODES = new Set([
-  'solid-semantic-surface-v0',
-  'semantic-xray-v0',
-]);
-
-function normalizeMotionPanelHillTerrainMaterialMode(value, fallback = 'solid-semantic-surface-v0') {
-  const mode = String(value || '').trim().toLowerCase();
-  if (mode === 'solid' || mode === 'solid-semantic-surface') return 'solid-semantic-surface-v0';
-  if (mode === 'xray' || mode === 'x-ray' || mode === 'semantic-xray') return 'semantic-xray-v0';
-  return MOTION_PANEL_HILL_TERRAIN_MATERIAL_MODES.has(mode) ? mode : fallback;
-}
-
-function motionPanelHillTerrainMaterialConfig(modeInput = 'solid-semantic-surface-v0', options = {}) {
-  const mode = normalizeMotionPanelHillTerrainMaterialMode(modeInput);
-  if (mode === 'semantic-xray-v0') {
-    return {
-      schema: 'kaminos.motion-panel-hill-terrain-material-evidence.v0',
-      terrainMaterialMode: 'semantic-xray-v0',
-      materialAuthority: 'explicit-debug-xray',
-      transparent: true,
-      opacity: Number(options.opacity ?? 0.62),
-      depthWrite: false,
-      depthTest: true,
-      side: 'DoubleSide',
-      wireOverlayVisible: true,
-      wireOverlayOpacity: Number(options.wireOpacity ?? 0.09),
-      reason: 'explicit debug material keeps the old translucent/wire terrain view available',
-    };
-  }
+function motionPanelHillTerrainMaterialConfig() {
   return {
     schema: 'kaminos.motion-panel-hill-terrain-material-evidence.v0',
     terrainMaterialMode: 'solid-semantic-surface-v0',
@@ -5565,7 +5542,6 @@ function motionPanelHillRouteControlsFromInputs(fallback = {}) {
     costProfile: document.getElementById('motion-panel-hill-route-profile-control')?.value || fallback.costProfile || 'cautious-lerm',
     routeFixture: document.getElementById('motion-panel-hill-route-fixture-control')?.value || fallback.routeFixture || fallback.fixture || 'meadow-cross',
     terrainOverlayMode: document.getElementById('motion-panel-hill-terrain-overlay-control')?.value || fallback.terrainOverlayMode || fallback.overlayMode || 'semantic-styles',
-    terrainMaterialMode: document.getElementById('motion-panel-hill-terrain-material-control')?.value || fallback.terrainMaterialMode || fallback.materialMode || 'solid-semantic-surface-v0',
   };
 }
 
@@ -5678,7 +5654,6 @@ function syncMotionPanelHillRouteControls(options = {}) {
   motionPanelSetSelectValueIfPresent('motion-panel-hill-route-profile-control', profileId || 'cautious-lerm');
   motionPanelSetSelectValueIfPresent('motion-panel-hill-route-fixture-control', options.routeFixture || options.fixture || 'meadow-cross');
   motionPanelSetSelectValueIfPresent('motion-panel-hill-terrain-overlay-control', options.terrainOverlayMode || options.overlayMode || 'semantic-styles');
-  motionPanelSetSelectValueIfPresent('motion-panel-hill-terrain-material-control', options.terrainMaterialMode || options.materialMode || 'solid-semantic-surface-v0');
 }
 
 async function refreshMotionPanelHillRouteControlsFromInputs() {
@@ -5848,8 +5823,8 @@ function createMotionPanelHillTerrainSurface(source, routePlan = null, options =
     options.costWeights || {},
   );
   const overlayMode = normalizeMotionPanelHillTerrainOverlayMode(options.terrainOverlayMode || options.overlayMode || routePlan?.evidence?.terrainOverlayMode || 'semantic-styles');
-  const terrainMaterialMode = normalizeMotionPanelHillTerrainMaterialMode(options.terrainMaterialMode || options.materialMode || routePlan?.evidence?.terrainMaterialMode || 'solid-semantic-surface-v0');
-  const terrainMaterialEvidence = motionPanelHillTerrainMaterialConfig(terrainMaterialMode, options);
+  const terrainMaterialEvidence = motionPanelHillTerrainMaterialConfig();
+  const terrainMaterialMode = terrainMaterialEvidence.terrainMaterialMode;
   const overlayAuthority = motionPanelHillTerrainOverlayAuthority(overlayMode);
   const overlayNormalization = motionPanelHillTerrainOverlayNormalization(source, overlayMode, costProfile);
   const overlayLegend = {
@@ -6152,6 +6127,12 @@ function motionPanelHillMultiActorEnabled(params = new URLSearchParams(window.lo
   return ['1', 'true', 'on', 'yes'].includes(String(requested || '').toLowerCase());
 }
 
+function motionPanelHillDynamicTargetMode(params = new URLSearchParams(window.location.search)) {
+  const requested = String(params.get('kaminos_hill_dynamic_targets') || '').trim().toLowerCase();
+  if (['1', 'true', 'on', 'yes', 'follow', 'actor-follow'].includes(requested)) return 'actor-follow';
+  return 'off';
+}
+
 function createMotionPanelHillMultiActorConfigs(params = new URLSearchParams(window.location.search)) {
   if (!motionPanelHillMultiActorEnabled(params)) return [];
   return [
@@ -6162,6 +6143,7 @@ function createMotionPanelHillMultiActorConfigs(params = new URLSearchParams(win
       routePhaseOffset: 0,
       cadenceTimeOffset: 0,
       routeSpacingOffset: [0, 0, 0],
+      dynamicTargetActorId: null,
       scale: 1,
     },
     {
@@ -6171,6 +6153,7 @@ function createMotionPanelHillMultiActorConfigs(params = new URLSearchParams(win
       routePhaseOffset: 0.18,
       cadenceTimeOffset: 0.31,
       routeSpacingOffset: [-0.14, 0, 0.08],
+      dynamicTargetActorId: 'hill-orb-prime',
       scale: 0.88,
     },
     {
@@ -6180,6 +6163,7 @@ function createMotionPanelHillMultiActorConfigs(params = new URLSearchParams(win
       routePhaseOffset: 0.36,
       cadenceTimeOffset: 0.64,
       routeSpacingOffset: [0.13, 0, -0.07],
+      dynamicTargetActorId: 'hill-orb-meadow',
       scale: 0.8,
     },
   ].map((config, index) => ({
@@ -6187,6 +6171,149 @@ function createMotionPanelHillMultiActorConfigs(params = new URLSearchParams(win
     multiActorIndex: index,
     schema: 'kaminos.motion-panel-hill-multi-actor-config.v0',
   }));
+}
+
+function motionPanelActorTargetDisplayRoot(actor = null) {
+  return actor?.terrainContact
+    || actor?.terrainCarrierRoot
+    || actor?.root
+    || null;
+}
+
+function motionPanelHillDynamicTargetDistance(a = null, b = null) {
+  if (!Array.isArray(a) || !Array.isArray(b)) return Infinity;
+  return Math.hypot(
+    Number(a[0] || 0) - Number(b[0] || 0),
+    Number(a[1] || 0) - Number(b[1] || 0),
+    Number(a[2] || 0) - Number(b[2] || 0),
+  );
+}
+
+function createMotionPanelHillDynamicPathWorld(basePathWorld, routePlan, frame, evidence, options = {}) {
+  const routePoints = Array.isArray(routePlan?.routePoints)
+    ? routePlan.routePoints.map(point => motionPanelHillDisplayPoint(frame, point.world))
+    : [];
+  const safeRoutePoints = routePoints.length >= 2 ? routePoints : [
+    evidence.startDisplayRoot,
+    evidence.targetDisplayRoot,
+  ];
+  const goalPoint = safeRoutePoints[safeRoutePoints.length - 1] || evidence.targetDisplayRoot || [0, 0, 0];
+  const probePoint = safeRoutePoints[Math.min(safeRoutePoints.length - 1, Math.max(0, Math.floor(safeRoutePoints.length * 0.52)))] || goalPoint;
+  return {
+    ...basePathWorld,
+    schema: 'kaminos.generated-motion-path-world.v0',
+    id: `hill-dynamic-target-world-${evidence.actorId}-to-${evidence.targetActorId}`,
+    routeMode: 'one-shot-hold',
+    routeAuthority: 'terrain-affordance-route-plan',
+    routeSource: 'hill-dynamic-actor-target-v0',
+    reason: 'hill-dynamic-actor-target-v0',
+    routePoints: safeRoutePoints,
+    routePlan,
+    routePlanSample: routePlan ? sampleMotionRoutePlan(routePlan, 0.52) : null,
+    duration: Number(options.duration || 3.4),
+    goal: {
+      position: new THREE.Vector3(
+        Number(goalPoint[0] || 0),
+        Number(goalPoint[1] || 0) + 0.2,
+        Number(goalPoint[2] || 0),
+      ),
+    },
+    obstacle: {
+      ...(basePathWorld?.obstacle || {}),
+      id: `hill-dynamic-target-probe-${evidence.actorId}`,
+      kind: 'dynamic-target-route-probe',
+      triggerKind: 'sphere',
+      center: probePoint.map(value => Number(value.toFixed(5))),
+      radius: 0.012,
+      label: 'Dynamic target route probe',
+    },
+    dynamicTarget: evidence,
+    hillTerrainFrame: frame,
+    hillTerrainSurface: basePathWorld?.hillTerrainSurface || null,
+    displayProjection: {
+      ...(basePathWorld?.displayProjection || {}),
+      schema: 'kaminos.motion-route-plan-display-projection.v0',
+      source: 'hill-dynamic-actor-target-v0',
+      route: 'hill-native-route-world',
+      sourceRoutePointCount: routePlan?.routePoints?.length || 0,
+      displayRoutePointCount: safeRoutePoints.length,
+      displayTransform: frame.displayTransform,
+    },
+  };
+}
+
+function createMotionPanelHillDynamicTargetRoutePlan({
+  basePathWorld,
+  terrainSource,
+  actorConfig,
+  startDisplayRoot,
+  targetActor,
+  runtime = {},
+  elapsedTime = 0,
+  costProfile = null,
+} = {}) {
+  const frame = basePathWorld?.hillTerrainFrame || createMotionPanelHillTerrainFrame(terrainSource);
+  const targetDisplayRoot = motionPanelActorTargetDisplayRoot(targetActor);
+  if (!basePathWorld || !terrainSource || !actorConfig?.dynamicTargetActorId || !Array.isArray(startDisplayRoot) || !Array.isArray(targetDisplayRoot)) return null;
+  const now = Math.max(0, Number(elapsedTime || 0));
+  const targetMoved = motionPanelHillDynamicTargetDistance(targetDisplayRoot, runtime.lastTargetDisplayRoot) > 0.22;
+  const startMoved = motionPanelHillDynamicTargetDistance(startDisplayRoot, runtime.lastStartDisplayRoot) > 0.32;
+  const replanInterval = 1.1;
+  const stale = !Number.isFinite(runtime.lastPlanAt) || now - runtime.lastPlanAt >= replanInterval;
+  const shouldReplan = !runtime.pathWorld || stale || targetMoved || startMoved;
+  if (!shouldReplan) {
+    return {
+      pathWorld: runtime.pathWorld,
+      routePlan: runtime.routePlan || null,
+      evidence: {
+        ...(runtime.evidence || {}),
+        replannedThisFrame: false,
+        planElapsedTime: Number(Math.max(0, now - Number(runtime.planStartedAt || now)).toFixed(5)),
+      },
+    };
+  }
+  const start = motionPanelHillSourcePointFromDisplay(frame, startDisplayRoot);
+  const goal = motionPanelHillSourcePointFromDisplay(frame, targetDisplayRoot);
+  const profile = costProfile || basePathWorld?.routePlan?.cost?.profile?.id || 'cautious-lerm';
+  const routePlan = createMotionRoutePlanFromTerrainAffordance(terrainSource, {
+    id: `hill-dynamic-target-${actorConfig.id}-to-${targetActor.id}`,
+    start,
+    goal,
+    actorRadius: 0.15,
+    costProfile: profile,
+  });
+  const evidence = {
+    schema: 'kaminos.motion-panel-hill-dynamic-target-route.v0',
+    mode: 'hill-dynamic-actor-target-v0',
+    actorId: actorConfig.id,
+    targetActorId: targetActor.id,
+    dynamicTargetActorId: actorConfig.dynamicTargetActorId,
+    routeSource: 'hill-dynamic-actor-target-v0',
+    targetAuthority: 'live-actor-root',
+    startDisplayRoot: startDisplayRoot.map(value => Number(value.toFixed(5))),
+    targetDisplayRoot: targetDisplayRoot.map(value => Number(value.toFixed(5))),
+    startSourcePoint: start,
+    targetSourcePoint: goal,
+    routePointCount: routePlan.routePoints.length,
+    routeCost: routePlan.cost?.total ?? null,
+    costProfile: routePlan.cost?.profile?.id || profile,
+    replannedThisFrame: true,
+    replanInterval,
+    planStartedAt: Number(now.toFixed(5)),
+    planElapsedTime: 0,
+  };
+  routePlan.evidence.dynamicTarget = evidence;
+  routePlan.evidence.dynamicTargetActorId = actorConfig.dynamicTargetActorId;
+  routePlan.evidence.dynamicContinuity = 'dynamic-actor-target-static-hill';
+  const pathWorld = createMotionPanelHillDynamicPathWorld(basePathWorld, routePlan, frame, evidence);
+  runtime.pathWorld = pathWorld;
+  runtime.routePlan = routePlan;
+  runtime.evidence = evidence;
+  runtime.planStartedAt = now;
+  runtime.lastPlanAt = now;
+  runtime.lastTargetDisplayRoot = evidence.targetDisplayRoot;
+  runtime.lastStartDisplayRoot = evidence.startDisplayRoot;
+  return { pathWorld, routePlan, evidence };
 }
 
 function makeGeneratedPoseTemporalActorVisual({ id, label, color }) {
@@ -8220,6 +8347,7 @@ async function createGeneratedPoseTemporalScene({ force = false, clipId = null, 
       : 'generated-pose-temporal-non-hill',
   });
   const hillMultiActorConfigs = createMotionPanelHillMultiActorConfigs(params);
+  const hillDynamicTargetMode = motionPanelHillDynamicTargetMode(params);
   const primaryActorConfig = hillMultiActorConfigs[0] || {
     id: `generated-pose-temporal-${harness.registryClipId || harness.track.id}`,
     label: harness.track.label || 'Kimodo Temporal Clip',
@@ -8227,6 +8355,7 @@ async function createGeneratedPoseTemporalScene({ force = false, clipId = null, 
     routePhaseOffset: 0,
     cadenceTimeOffset: 0,
     routeSpacingOffset: [0, 0, 0],
+    dynamicTargetActorId: null,
     scale: 1,
     multiActorIndex: 0,
   };
@@ -8295,12 +8424,22 @@ async function createGeneratedPoseTemporalScene({ force = false, clipId = null, 
         mode: 'hill-multi-actor-smoke-v0',
         actorCount: hillMultiActorConfigs.length,
         actorIds: hillMultiActorConfigs.map(config => config.id),
+        dynamicTargetMode: hillDynamicTargetMode,
+        dynamicTargetLinks: hillMultiActorConfigs
+          .filter(config => config.dynamicTargetActorId)
+          .map(config => ({
+            actorId: config.id,
+            dynamicTargetActorId: config.dynamicTargetActorId,
+            routeSource: 'hill-dynamic-actor-target-v0',
+          })),
         routePhaseOffsets: hillMultiActorConfigs.map(config => Number(config.routePhaseOffset || 0)),
         cadenceTimeOffsets: hillMultiActorConfigs.map(config => Number(config.cadenceTimeOffset || 0)),
         routeSpacingAuthority: 'hill-multi-actor-smoke-spacing',
       }
       : null,
     hillMultiActorSmoothingRuntimes: {},
+    hillDynamicTargetMode,
+    hillDynamicTargetRuntimes: {},
     sourceResult,
     sourceOrientationRemap,
     sourceGhost,
@@ -8907,6 +9046,10 @@ function updateGeneratedPoseTemporalFrame(nowSeconds = performance.now() / 1000)
     routePhaseOffset: Number(primaryActorConfig.routePhaseOffset || 0),
     cadenceTimeOffset: Number(primaryActorConfig.cadenceTimeOffset || 0),
     routeSpacingOffset: primaryActorConfig.routeSpacingOffset || [0, 0, 0],
+    dynamicTargetMode: state.hillDynamicTargetMode || 'off',
+    dynamicTargetActorId: primaryActorConfig.dynamicTargetActorId || null,
+    dynamicTarget: null,
+    dynamicTargetRoutePlan: null,
     intent: state.track.intent,
     behaviorState,
     behaviorReadout,
@@ -8994,17 +9137,47 @@ function updateGeneratedPoseTemporalFrame(nowSeconds = performance.now() / 1000)
       const actorConfig = state.hillMultiActorConfigs[index] || {};
       const actorElapsedTime = elapsedTime + durationForRoute * Number(actorConfig.routePhaseOffset || 0);
       const actorLocalTime = (localTime + durationForRoute * Number(actorConfig.cadenceTimeOffset || 0)) % Math.max(0.1, state.duration || durationForRoute);
-      const actorRawPathWorldSample = sampleMotionPanelPathWorld(effectivePathWorld, actorElapsedTime, state.duration, {
+      const actorBaseRawPathWorldSample = sampleMotionPanelPathWorld(effectivePathWorld, actorElapsedTime, state.duration, {
         pathWorldSteeringMemoryRuntime: {},
         disableSteering: true,
       });
-      const actorOffsetPathWorldSample = offsetMotionPanelPathWorldSample(actorRawPathWorldSample, actorConfig.routeSpacingOffset || [0, 0, 0]);
+      const actorOffsetPathWorldSample = offsetMotionPanelPathWorldSample(actorBaseRawPathWorldSample, actorConfig.routeSpacingOffset || [0, 0, 0]);
+      const actorDynamicTargetRuntime = state.hillDynamicTargetRuntimes?.[actorConfig.id]
+        || (state.hillDynamicTargetRuntimes[actorConfig.id] = {});
+      const targetActor = state.hillDynamicTargetMode === 'actor-follow'
+        ? nextActors.find(candidate => candidate.id === actorConfig.dynamicTargetActorId)
+        : null;
+      const dynamicTargetRoute = targetActor
+        ? createMotionPanelHillDynamicTargetRoutePlan({
+          basePathWorld: effectivePathWorld,
+          terrainSource: motionPanelHillAffordanceSource,
+          actorConfig,
+          startDisplayRoot: actorOffsetPathWorldSample?.root,
+          targetActor,
+          runtime: actorDynamicTargetRuntime,
+          elapsedTime,
+          costProfile: effectivePathWorld?.routePlan?.cost?.profile?.id || motionPanelHillAffordanceRoutePlan?.cost?.profile?.id || 'cautious-lerm',
+        })
+        : null;
+      const actorEffectivePathWorld = dynamicTargetRoute?.pathWorld || effectivePathWorld;
+      const actorPathWorldElapsedTime = dynamicTargetRoute
+        ? dynamicTargetRoute.evidence.planElapsedTime
+        : actorElapsedTime;
+      const actorRawPathWorldSample = dynamicTargetRoute
+        ? sampleMotionPanelPathWorld(actorEffectivePathWorld, actorPathWorldElapsedTime, actorEffectivePathWorld.duration || state.duration, {
+          pathWorldSteeringMemoryRuntime: {},
+          disableSteering: true,
+        })
+        : actorBaseRawPathWorldSample;
+      const actorDynamicTarget = dynamicTargetRoute?.evidence || null;
+      const actorDynamicTargetRoutePlan = dynamicTargetRoute?.routePlan || null;
+      const actorPathWorldSeedSample = dynamicTargetRoute ? actorRawPathWorldSample : actorOffsetPathWorldSample;
       const actorSmoothingRuntime = state.hillMultiActorSmoothingRuntimes[actorConfig.id]
         || (state.hillMultiActorSmoothingRuntimes[actorConfig.id] = {});
-      const actorCarrierSmoothingResult = actorOffsetPathWorldSample
-        ? createMotionPanelHillCarrierSmoothing(actorOffsetPathWorldSample, actorSmoothingRuntime, { elapsedTime: actorElapsedTime })
+      const actorCarrierSmoothingResult = actorPathWorldSeedSample
+        ? createMotionPanelHillCarrierSmoothing(actorPathWorldSeedSample, actorSmoothingRuntime, { elapsedTime: actorElapsedTime })
         : null;
-      const actorPathWorldSample = actorCarrierSmoothingResult?.sample || actorOffsetPathWorldSample;
+      const actorPathWorldSample = actorCarrierSmoothingResult?.sample || actorPathWorldSeedSample;
       const actorSample = sampleGeneratedPoseTemporalMotion(state.track, actorLocalTime);
       const actorTemporalSample = actorSample.temporalSample || interpolateGeneratedPoseTemporalSample(state.track, actorLocalTime);
       const actorDisplayGrounding = mapGeneratedPoseTemporalGroundedDisplaySample(actorSample, displayGroundingOptions);
@@ -9029,7 +9202,7 @@ function updateGeneratedPoseTemporalFrame(nowSeconds = performance.now() / 1000)
           ? new THREE.Vector3(...actorPathWorldSample.root)
           : new THREE.Vector3(0, 0, 0));
       const actorArrivalBehavior = actorHillTerrainCarrier
-        ? motionPanelHillArrivalAttentionTarget(actorPathWorldSample, actorRootPosition, state.pathWorld)
+        ? motionPanelHillArrivalAttentionTarget(actorPathWorldSample, actorRootPosition, actorEffectivePathWorld)
         : null;
       const actorAttentionPosition = actorArrivalBehavior
         ? motionPanelVector3FromArray(actorArrivalBehavior.target)
@@ -9092,6 +9265,10 @@ function updateGeneratedPoseTemporalFrame(nowSeconds = performance.now() / 1000)
         routePhaseOffset: Number(actorConfig.routePhaseOffset || 0),
         cadenceTimeOffset: Number(actorConfig.cadenceTimeOffset || 0),
         routeSpacingOffset: actorConfig.routeSpacingOffset || [0, 0, 0],
+        dynamicTargetMode: state.hillDynamicTargetMode || 'off',
+        dynamicTargetActorId: actorConfig.dynamicTargetActorId || null,
+        dynamicTarget: actorDynamicTarget,
+        dynamicTargetRoutePlan: actorDynamicTargetRoutePlan,
         displayOffsetAuthority: actorPathWorldSample?.displayOffsetAuthority || null,
         intent: state.track.intent,
         behaviorState: actorBehaviorState,
@@ -9133,8 +9310,8 @@ function updateGeneratedPoseTemporalFrame(nowSeconds = performance.now() / 1000)
         groundingAuthority: actorCarrierPathFollower?.groundingAuthority || actorHillTerrainCarrier?.groundingAuthority || null,
         terrainCarrierRoot: actorHillTerrainCarrier?.terrainCarrierRoot || null,
         expressiveRootOffset: actorHillTerrainCarrier?.expressiveRootOffset || null,
-        pathWorldRoutePlan: actorPathWorldSample?.routePlan || state.pathWorld?.routePlan || null,
-        pathWorldActiveSource: actorPathWorldSample ? 'terrain-affordance-route-plan' : null,
+        pathWorldRoutePlan: actorPathWorldSample?.routePlan || actorEffectivePathWorld?.routePlan || state.pathWorld?.routePlan || null,
+        pathWorldActiveSource: actorPathWorldSample?.routeSource || (actorPathWorldSample ? 'terrain-affordance-route-plan' : null),
         sourceFrame: actorTemporalSample?.sourceFrame ?? null,
         sourceTime: actorTemporalSample?.time ?? null,
         sourceBracket: actorTemporalSample?.bracket ?? null,
@@ -9761,7 +9938,7 @@ window.kaminosPreviewHillMotionAffordanceRoutePlan = async function(packet, data
   const source = decodeHillMotionAffordancePacket({ packet, data });
   const costProfile = normalizeMotionTerrainRouteCostProfile(options.costProfile || 'cautious-lerm', options.costWeights || {});
   const terrainOverlayMode = normalizeMotionPanelHillTerrainOverlayMode(options.terrainOverlayMode || options.overlayMode || 'semantic-styles');
-  const terrainMaterialMode = normalizeMotionPanelHillTerrainMaterialMode(options.terrainMaterialMode || options.materialMode || 'solid-semantic-surface-v0');
+  const terrainMaterialMode = motionPanelHillTerrainMaterialConfig().terrainMaterialMode;
   const routeFixture = motionPanelHillRouteFixtureEndpoints(source, options.routeFixture || options.fixture || 'meadow-cross');
   motionPanelHillAffordanceLastPacket = packet;
   motionPanelHillAffordanceLastData = data;
@@ -10263,7 +10440,6 @@ async function previewHillMotionAffordanceRouteFromParams(params = new URLSearch
     id: params.get('kaminos_hill_affordance_id') || 'url-hill-motion-affordance-route',
     costProfile: params.get('kaminos_hill_route_profile') || 'cautious-lerm',
     terrainOverlayMode: params.get('kaminos_hill_terrain_overlay') || 'semantic-styles',
-    terrainMaterialMode: params.get('kaminos_hill_terrain_material') || 'solid-semantic-surface-v0',
     routeFixture: params.get('kaminos_hill_route_fixture') || 'meadow-cross',
   });
 }
@@ -10303,7 +10479,6 @@ function initKaminosMotionAgencyRoute() {
     'motion-panel-hill-route-profile-control',
     'motion-panel-hill-route-fixture-control',
     'motion-panel-hill-terrain-overlay-control',
-    'motion-panel-hill-terrain-material-control',
   ]) {
     document.getElementById(id)?.addEventListener('change', () => void refreshMotionPanelHillRouteControlsFromInputs());
   }
