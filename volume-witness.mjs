@@ -342,6 +342,59 @@ function buildPyroRawCarrierPaintEvidence(sample = {}, state = {}) {
   };
 }
 
+function buildBoundaryFireShellEvidence(sample = {}, state = {}) {
+  const sim = sample.simReadback || {};
+  const controls = state.controls || {};
+  const reactionLiveView = controls.reactionLiveView || state.reactionLiveView || '';
+  const fireRenderMode = state.fireRenderMode || controls.fireRenderMode || '';
+  const shellInspectMode = state.shellInspectMode || controls.shellInspectMode || '';
+  const reactionBoundaryControls = state.reactionBoundaryControls || controls.reactionBoundaryControls || {};
+  const reactionBoundaryFireControls = state.reactionBoundaryFireControls || controls.reactionBoundaryFireControls || {};
+  const fireLayerMean = finiteNumber(sim.fireLayerMean);
+  const heatMean = finiteNumber(sim.heatMean);
+  const reactionMean = finiteNumber(sim.reactionMean);
+  const fuelMean = finiteNumber(sim.fuelMean);
+  const fuelConsumptionMean = finiteNumber(sim.fuelConsumptionMean);
+  const combustionFrontMean = finiteNumber(sim.combustionFrontMean);
+  const frontTopologyMean = finiteNumber(sim.frontTopologyMean);
+  const reactionAtlas = sim.reactionFrontAtlas || {};
+  const shellCandidateMean = finiteNumber(reactionAtlas.stageStats?.shellCandidate?.mean);
+  const frontSupportMean = finiteNumber(reactionAtlas.stageStats?.combustionFrontSupport?.mean);
+  const active =
+    reactionLiveView === 'boundary_fire' &&
+    fireRenderMode === 'inspect' &&
+    shellInspectMode === 'boundary_fire' &&
+    reactionBoundaryControls.active !== false &&
+    reactionBoundaryFireControls.active !== false;
+  const hasLiveShellCarriers =
+    fireLayerMean > 0.0005 &&
+    heatMean > 0.001 &&
+    reactionMean > 0.001 &&
+    fuelMean > 0.001 &&
+    fuelConsumptionMean > 0.00001 &&
+    (combustionFrontMean > 0.00025 || frontTopologyMean > 0.00025 || shellCandidateMean > 0.00025 || frontSupportMean > 0.00025);
+  return {
+    identity: 'boundary-fire-shell-evidence-v0',
+    acceptsFireEvidence: active && hasLiveShellCarriers,
+    active,
+    hasLiveShellCarriers,
+    reactionLiveView,
+    fireRenderMode,
+    shellInspectMode,
+    carriers: {
+      fireLayerMean,
+      heatMean,
+      reactionMean,
+      fuelMean,
+      fuelConsumptionMean,
+      combustionFrontMean,
+      frontTopologyMean,
+      shellCandidateMean,
+      frontSupportMean,
+    },
+  };
+}
+
 function defaultPressureIterationsForScene(volumeScene) {
   if (volumeScene === 'tall_plume') return 2;
   return volumeScene === 'bonfire_plume' ? 8 : 4;
@@ -886,6 +939,150 @@ const TALL_PLUME_OPERATOR_PRESETS = {
     pyroOverdrive: 8.00,
     pressureMode: 'global-p3',
   },
+  boundary_fire_activity_tiers_fun_basin_0710: {
+    volumeScene: 'tall_plume',
+    pyroCompareMode: 'live',
+    reactionLiveView: 'boundary_fire',
+    boundarySidecarSource: 'baked',
+    boundarySidecarView: 'off',
+    reactionBoundaryGradient: 0.15,
+    reactionBoundarySupportThermal: 0.18,
+    reactionBoundarySupportReaction: 2.00,
+    reactionBoundarySupportFront: 2.00,
+    reactionBoundarySupportInterface: 0.00,
+    reactionBoundaryCut: 0.00,
+    reactionBoundarySoftness: 0.29,
+    reactionBoundaryCoreReject: 1.00,
+    reactionBoundaryTopology: 2.50,
+    reactionBoundaryCurl: 2.00,
+    reactionBoundaryDivergence: 1.00,
+    reactionBoundaryContrast: 1.60,
+    reactionBoundaryGamma: 1.35,
+    reactionBoundaryOpacity: 3.00,
+    boundarySidecarBlur: 0.00,
+    boundarySidecarWidth: 0.00,
+    boundarySidecarRidge: 2.00,
+    reactionBoundaryFireRidge: 2.00,
+    reactionBoundaryFireRidgeCut: 0.00,
+    reactionBoundaryFireTip: 2.00,
+    reactionBoundaryFireErosion: 0.20,
+    reactionBoundaryFireCleanBlue: 0.84,
+    reactionBoundaryFireSoot: 0.66,
+    reactionBoundaryFireYellow: 0.64,
+    reactionBoundaryFireWarmth: 0.00,
+    reactionBoundaryFireLuma: 5.00,
+    reactionHeatMin: 0.00,
+    reactionHeatMax: 0.42,
+    reactionFuelMin: 0.00,
+    reactionFuelMax: 0.071,
+    reactionFlameMin: 0.030,
+    reactionFlameMax: 0.120,
+    reactionFrontMin: 0.00,
+    reactionFrontMax: 0.080,
+    reactionGradientMin: 0.020,
+    reactionGradientMax: 0.180,
+    reactionCoreMin: 0.18,
+    reactionCoreMax: 0.95,
+    reactionCoreReject: 0.82,
+    reactionTopologyGain: 0.44,
+    reactionStretchErode: 0.00,
+    reactionDivergenceMin: 0.00,
+    reactionDivergenceMax: 0.070,
+    reactionDivergenceGain: 0.00,
+    reactionCurlWarp: 0.00,
+    reactionShellGamma: 1.55,
+    reactionShellContrast: 1.00,
+    density: 6.00,
+    fire: 3.50,
+    radiance: 0.00,
+    absorption: 0.30,
+    glow: 0.00,
+    smoke: 2.80,
+    curl: 3.15,
+    microdetail: 1.15,
+    interfaceShred: 5.00,
+    fireLicks: 2.40,
+    projection: 1.50,
+    speed: 4.15,
+    fireScale: 0.56,
+    detailScale: 1.00,
+    plumeHeight: 1.95,
+    windStrength: 1.50,
+    windAngle: -65,
+    windHeight: -0.80,
+    inputRadius: 0.08,
+    flowRate: 1.70,
+    raySteps: 116,
+    adaptiveRays: 1.00,
+    occupancySkip: 1.00,
+    majorantSkip: 1.00,
+    majorantSmooth: 1.00,
+    majorantGuard: 1.00,
+    temporalAccum: 0.00,
+    temporalJitter: 0.00,
+    historyClamp: 1.00,
+    renderScale: 0.60,
+    resolution: 160,
+    majorantGrid: 24,
+    fireRenderMode: 'shell',
+    shellInspectMode: 'shell',
+    shellAmount: 0.00,
+    shellWidth: 0.05,
+    shellThermal: 0.85,
+    shellReaction: 1.10,
+    shellFront: 1.25,
+    shellEdge: 0.85,
+    shellCoreSuppress: 0.55,
+    shellBite: 0.80,
+    shellCurl: 0.25,
+    shellHeat: 1.65,
+    shellDivergence: 0.00,
+    shellLuma: 1.35,
+    shellExposure: 1.15,
+    shellSoftClip: 0.20,
+    shellSmoke: 2.00,
+    oracleActivityCue: 0.00,
+    oracleActivityDisplay: 0.00,
+    oracleActivityCurlNoise: 0.00,
+    oracleActivityVorticity: 0.00,
+    oracleActivityMaterial: 1.00,
+    pyroDynamicDetail: 1,
+    pyroMaterialGain: 0.20,
+    pyroInterfaceFocus: 0.00,
+    pyroFireMode: 'pyro-owned',
+    pyroFlameLuma: 0.95,
+    pyroFlameCoreColor: '#ffae00',
+    pyroFlameEdgeColor: '#ff4d00',
+    pyroFlowBite: 3.00,
+    pyroFlowBorder: 1.00,
+    pyroFlowTeeth: 0.00,
+    pyroFlowRise: 1.00,
+    pyroFlowFireLock: 1.00,
+    pyroFlowLuma: 3.00,
+    pyroFlowRadiance: 4.00,
+    pyroFlowSpikes: 1.00,
+    pyroFlowCoolColor: '#ff6400',
+    pyroFlowHotColor: '#ff320f',
+    pyroRadianceGate: 0.15,
+    pyroRadianceSpill: 0.00,
+    pyroRadianceWarmth: 0.00,
+    pyroRadianceHue: 0.00,
+    pyroRadianceChroma: 1.00,
+    pyroRadianceLuma: 3.00,
+    pyroRadianceCoolColor: '#eb0000',
+    pyroRadianceWarmColor: '#ffcd75',
+    pyroRadianceSource: 'fire',
+    pyroRadianceFireLock: 1.00,
+    pyroCarrierView: 'normal',
+    pyroOverdrive: 8.00,
+    pressureMode: 'activity-tiers',
+    pressureTierOverlay: 0.00,
+    pressureTierLowerMax: 0.61,
+    pressureTierHeroMin: 0.00,
+    pressureTierHeroMax: 0.34,
+    activityVorticityGate: 1.00,
+    activityDetailGate: 1.00,
+  },
   exploding_jellow_fireball_motherfucker_0706: {
     volumeScene: 'tall_plume',
     density: 6.00,
@@ -1164,8 +1361,10 @@ const hasExplicitPressureRoute =
   routeParams.has('volume_pressure_iterations') ||
   routeParams.has('volume_pressure_strategy');
 let expectedPressureStrategy = normalizePressureStrategy(routeParams.get('volume_pressure_strategy') || scenePreset.pressureStrategy, expectedVolumeScene);
-let expectedSpatialPressureTiers = ['spatial_tiers', 'activity_tiers'].includes(expectedPressureStrategy);
-let expectedPressureIterations = expectedSpatialPressureTiers
+let expectedSpatialSlabPressureTiers = expectedPressureStrategy === 'spatial_tiers';
+let expectedActivityPressureTiers = expectedPressureStrategy === 'activity_tiers';
+let expectedTieredPressure = expectedSpatialSlabPressureTiers || expectedActivityPressureTiers;
+let expectedPressureIterations = expectedTieredPressure
   ? 3
   : routeParams.has('volume_pressure_iterations') && Number.isFinite(requestedPressureIterations)
     ? Math.max(0, Math.min(12, Math.round(requestedPressureIterations)))
@@ -1174,15 +1373,17 @@ if (routeParams.has('volume_pressure_mode') || (!hasExplicitPressureRoute && sce
   const pressureModeConfig = pressureConfigForMode(requestedPressureMode || scenePreset.pressureMode, expectedVolumeScene, expectedPressureStrategy, expectedPressureIterations);
   expectedPressureStrategy = pressureModeConfig.pressureStrategy;
   expectedPressureIterations = pressureModeConfig.pressureIterations;
-  expectedSpatialPressureTiers = ['spatial_tiers', 'activity_tiers'].includes(expectedPressureStrategy);
+  expectedSpatialSlabPressureTiers = expectedPressureStrategy === 'spatial_tiers';
+  expectedActivityPressureTiers = expectedPressureStrategy === 'activity_tiers';
+  expectedTieredPressure = expectedSpatialSlabPressureTiers || expectedActivityPressureTiers;
 }
-let expectedPressureProjectionIterations = expectedSpatialPressureTiers ? 3 : expectedPressureIterations;
-let expectedTallPlumePressureStrategy = expectedSpatialPressureTiers
+let expectedPressureProjectionIterations = expectedTieredPressure ? 3 : expectedPressureIterations;
+let expectedTallPlumePressureStrategy = expectedTieredPressure
   ? TALL_PLUME_PRESSURE_ITERATION_STRATEGY_INACTIVE
   : expectedTallPlumePressureIterationStrategy(expectedVolumeScene, expectedPressureIterations);
-let expectedTallPlumePressureTarget = expectedVolumeScene === 'tall_plume' && !expectedSpatialPressureTiers ? 2 : 0;
+let expectedTallPlumePressureTarget = expectedVolumeScene === 'tall_plume' && !expectedTieredPressure ? 2 : 0;
 let expectedTallPlumePressureTierStrategyValue = expectedTallPlumePressureTierStrategy(expectedVolumeScene, expectedPressureStrategy);
-let expectedPressureProjectionReadStrategy = expectedSpatialPressureTiers
+let expectedPressureProjectionReadStrategy = expectedTieredPressure
   ? PRESSURE_PROJECTION_READ_STRATEGY_COMPOSITE
   : PRESSURE_PROJECTION_READ_STRATEGY_SINGLE_BUFFER;
 const requestedSimProfile = (routeParams.get('volume_sim_profile') || '').toLowerCase();
@@ -1316,6 +1517,14 @@ const requestedFlowRate = Number(routeParams.get('volume_flow_rate'));
 const expectedFlowRate = routeParams.has('volume_flow_rate') && Number.isFinite(requestedFlowRate)
   ? Math.max(0, Math.min(2.5, requestedFlowRate))
   : canonicalMacroPreset.flowRate ?? scenePreset.flowRate ?? null;
+const requestedActivityVorticityGate = Number(routeParams.get('volume_activity_vorticity_gate'));
+const expectedActivityVorticityGate = routeParams.has('volume_activity_vorticity_gate') && Number.isFinite(requestedActivityVorticityGate)
+  ? Math.max(0, Math.min(1, requestedActivityVorticityGate))
+  : scenePreset.activityVorticityGate ?? 0;
+const requestedActivityDetailGate = Number(routeParams.get('volume_activity_detail_gate'));
+const expectedActivityDetailGate = routeParams.has('volume_activity_detail_gate') && Number.isFinite(requestedActivityDetailGate)
+  ? Math.max(0, Math.min(1, requestedActivityDetailGate))
+  : scenePreset.activityDetailGate ?? 0;
 const requestedReactionFuelScale = Number(routeParams.get('volume_reaction_fuel'));
 const expectedReactionFuelScale = routeParams.has('volume_reaction_fuel') && Number.isFinite(requestedReactionFuelScale)
   ? Math.max(0, Math.min(1.5, requestedReactionFuelScale))
@@ -1383,14 +1592,16 @@ if (expectedRuntimeQualityEffective === 'live_low') {
   expectedPressureStrategy = 'global';
   expectedPressureIterations = 0;
 }
-expectedSpatialPressureTiers = ['spatial_tiers', 'activity_tiers'].includes(expectedPressureStrategy);
-expectedPressureProjectionIterations = expectedSpatialPressureTiers ? 3 : expectedPressureIterations;
-expectedTallPlumePressureStrategy = expectedSpatialPressureTiers
+expectedSpatialSlabPressureTiers = expectedPressureStrategy === 'spatial_tiers';
+expectedActivityPressureTiers = expectedPressureStrategy === 'activity_tiers';
+expectedTieredPressure = expectedSpatialSlabPressureTiers || expectedActivityPressureTiers;
+expectedPressureProjectionIterations = expectedTieredPressure ? 3 : expectedPressureIterations;
+expectedTallPlumePressureStrategy = expectedTieredPressure
   ? TALL_PLUME_PRESSURE_ITERATION_STRATEGY_INACTIVE
   : expectedTallPlumePressureIterationStrategy(expectedVolumeScene, expectedPressureIterations);
-expectedTallPlumePressureTarget = expectedVolumeScene === 'tall_plume' && !expectedSpatialPressureTiers ? 2 : 0;
+expectedTallPlumePressureTarget = expectedVolumeScene === 'tall_plume' && !expectedTieredPressure ? 2 : 0;
 expectedTallPlumePressureTierStrategyValue = expectedTallPlumePressureTierStrategy(expectedVolumeScene, expectedPressureStrategy);
-expectedPressureProjectionReadStrategy = expectedSpatialPressureTiers
+expectedPressureProjectionReadStrategy = expectedTieredPressure
   ? PRESSURE_PROJECTION_READ_STRATEGY_COMPOSITE
   : PRESSURE_PROJECTION_READ_STRATEGY_SINGLE_BUFFER;
 const expectedEffectiveTemporalAccum = expectedVolumeScene === 'bonfire_plume'
@@ -1983,7 +2194,7 @@ async function main() {
     assert.equal(state.majorantGrid, expectedMajorantGrid, 'coarse majorant grid identity did not apply');
     assert.equal(state.controls?.majorantCadence, expectedMajorantCadence, 'majorant cadence route/control did not apply');
     assert.equal(state.majorantCadence, expectedMajorantCadence, 'effective majorant cadence did not reach debug state');
-    if (routeParams.has('volume_pressure_iterations') || expectedSpatialPressureTiers) {
+    if (routeParams.has('volume_pressure_iterations') || expectedTieredPressure) {
       assert.equal(state.controls?.pressureIterations, expectedPressureIterations, 'pressure iteration route/control did not apply');
     }
     assert.equal(state.controls?.pressureStrategy || 'global', expectedPressureStrategy, 'pressure strategy route/control did not apply');
@@ -2024,13 +2235,22 @@ async function main() {
     assert.equal(Number(stateLedger.tallPlumePressureIterationTarget), expectedTallPlumePressureTarget, 'sim cost ledger tall-plume pressure target does not match effective scene');
     assert.equal(stateLedger.tallPlumePressureTierStrategy, expectedTallPlumePressureTierStrategyValue, 'sim cost ledger spatial pressure tier strategy does not match effective route');
     assert.equal(stateLedger.pressureProjectionReadStrategy, expectedPressureProjectionReadStrategy, 'sim cost ledger pressure projection read strategy does not match effective route');
-    if (expectedSpatialPressureTiers) {
+    if (expectedSpatialSlabPressureTiers) {
       assert.equal(Number(stateLedger.pressureJacobiFullGridPasses), 1, 'spatial pressure tiers should keep only one full-grid Jacobi pass');
       assert.equal(Number(stateLedger.pressureJacobiPartialSlabPasses), 2, 'spatial pressure tiers should report two partial slab Jacobi passes');
       assert.ok(Number(stateLedger.pressureJacobiFullGridEquivalentPasses) > 1 && Number(stateLedger.pressureJacobiFullGridEquivalentPasses) < 3, 'spatial pressure tiers did not report bounded equivalent full-grid work');
       assert.ok(Array.isArray(stateLedger.pressureTierDispatches) && stateLedger.pressureTierDispatches.length === 3, 'spatial pressure tiers did not report three tier dispatches');
       assert.equal(stateLedger.pressureTierBufferOwnership?.pressure3, 'B', 'spatial pressure tier buffer ownership did not preserve pressure3 in B');
       assert.equal(stateLedger.pressureTierBufferOwnership?.pressure2, 'A', 'spatial pressure tier buffer ownership did not preserve pressure2 in A');
+    } else if (expectedActivityPressureTiers) {
+      assert.equal(Number(stateLedger.pressureJacobiFullGridPasses), 3, 'activity pressure tiers should report three full-grid masked Jacobi passes');
+      assert.equal(Number(stateLedger.pressureJacobiPartialSlabPasses), 0, 'activity pressure tiers should not report spatial partial slab passes');
+      assert.equal(Number(stateLedger.pressureJacobiFullGridEquivalentPasses), 3, 'activity pressure tiers should report three full-grid equivalent passes');
+      assert.equal(stateLedger.pressureTierMaskOrdering, 'current-sim-front-occupancy-before-pressure-projection-v0', 'activity pressure tiers lost current-sim mask ordering identity');
+      assert.equal(stateLedger.pressureTierDispatchEfficiency, 'full-grid-dispatch-with-base-midbody-cell-early-out-prototype', 'activity pressure tiers should report full-grid dispatch with cell early-out');
+      assert.ok(Array.isArray(stateLedger.pressureTierDispatches) && stateLedger.pressureTierDispatches.length === 3, 'activity pressure tiers did not report three masked tier dispatches');
+      assert.equal(stateLedger.activityForceGating?.vorticityGate, expectedActivityVorticityGate, 'activity pressure tiers did not preserve vorticity gate in ledger');
+      assert.equal(stateLedger.activityForceGating?.detailGate, expectedActivityDetailGate, 'activity pressure tiers did not preserve detail gate in ledger');
     }
     assert.equal(stateLedger.mainFluidKernelStrategy, expectedMainFluidStrategy, 'sim cost ledger main fluid kernel strategy does not match effective fire-lick state');
     assert.equal(stateLedger.mainFluidLocalProjectionStrategy, expectedMainFluidLocalProjectionStrategy, 'sim cost ledger main fluid local projection strategy does not match staged pressure-only contract');
@@ -2123,7 +2343,7 @@ async function main() {
       sampleLedger?.pressureProjectionReadStrategy !== expectedPressureProjectionReadStrategy ||
       sampleLedger?.pressureJacobiPasses !== (sample.pressureProjectionEnabled ? expectedPressureProjectionIterations : 0) ||
       sampleLedger?.pressureJacobiInlineDivergencePasses !== (sample.pressureProjectionEnabled ? expectedPressureProjectionIterations : 0) ||
-      (expectedSpatialPressureTiers && !Number.isFinite(Number(sampleLedger?.pressureJacobiFullGridEquivalentPasses))) ||
+      (expectedTieredPressure && !Number.isFinite(Number(sampleLedger?.pressureJacobiFullGridEquivalentPasses))) ||
       sampleLedger?.fullGridPassBreakdown?.total !== sampleLedger?.fullGridPassesPerFrame ||
       !Number.isFinite(sampleLedger?.fullGridCellVisitsPerFrame) ||
       typeof sampleLedger?.majorantBuiltThisFrame !== 'boolean'
@@ -2197,14 +2417,19 @@ async function main() {
     const acceptsRawCarrierPyroPaint =
       expectsPyroMaterialEvidence &&
       pyroRawCarrierPaintEvidence.acceptsLowStockFireLayer;
+    const boundaryFireShellEvidence = buildBoundaryFireShellEvidence(sample, state);
+    const acceptsBoundaryFireShellEvidence = boundaryFireShellEvidence.acceptsFireEvidence;
     if (!expectsCanonicalPlumeProof && !expectsFuelStarvedTallPlume && !expectsNoFireVolumeEvidence && (!Number.isFinite(sample.simReadback.fireLayerMean) || sample.simReadback.fireLayerMean <= 0.0005) && !acceptsRawCarrierPyroPaint) {
       throw new Error(`GPU sim readback does not show a transported fire layer or raw-carrier Pyro paint evidence: ${JSON.stringify({
         simReadback: sample.simReadback,
         pyroRawCarrierPaintEvidence,
       })}`);
     }
-    if (!expectsCanonicalPlumeProof && !expectsFuelStarvedTallPlume && !expectsNoFireVolumeEvidence && (!Number.isFinite(sample.simReadback.radianceMean) || sample.simReadback.radianceMean <= 0.0005)) {
-      throw new Error(`GPU sim readback does not show fire radiance evidence: ${JSON.stringify(sample.simReadback)}`);
+    if (!expectsCanonicalPlumeProof && !expectsFuelStarvedTallPlume && !expectsNoFireVolumeEvidence && !acceptsBoundaryFireShellEvidence && (!Number.isFinite(sample.simReadback.radianceMean) || sample.simReadback.radianceMean <= 0.0005)) {
+      throw new Error(`GPU sim readback does not show fire radiance or accepted boundary-fire shell evidence: ${JSON.stringify({
+        simReadback: sample.simReadback,
+        boundaryFireShellEvidence,
+      })}`);
     }
     if (expectedVolumeScene === 'tall_plume') {
       if (
@@ -2232,12 +2457,18 @@ async function main() {
           })}`);
         }
       } else if (
-        sample.simReadback.fuelMean <= 0.0005 ||
-        sample.simReadback.reactionMean <= 0.0005 ||
-        sample.simReadback.fuelConsumptionMean <= 0.00001 ||
-        sample.simReadback.fireFuelOverlapRatio <= 0.01
+        !acceptsBoundaryFireShellEvidence &&
+        (
+          sample.simReadback.fuelMean <= 0.0005 ||
+          sample.simReadback.reactionMean <= 0.0005 ||
+          sample.simReadback.fuelConsumptionMean <= 0.00001 ||
+          sample.simReadback.fireFuelOverlapRatio <= 0.01
+        )
       ) {
-        throw new Error(`tall plume fire was not supported by live fuel/reaction evidence: ${JSON.stringify(sample.simReadback)}`);
+        throw new Error(`tall plume fire was not supported by live fuel/reaction or boundary-fire shell evidence: ${JSON.stringify({
+          simReadback: sample.simReadback,
+          boundaryFireShellEvidence,
+        })}`);
       }
     }
     if (
@@ -2648,6 +2879,13 @@ async function main() {
       if (mainRendererMetrics.litPixels < 1500 || mainRendererMetrics.meanLuma < 8) {
         throw new Error(`main renderer screenshot missing bridged Pyro material volume: ${JSON.stringify(mainRendererMetrics)}`);
       }
+    } else if (acceptsBoundaryFireShellEvidence) {
+      if (mainRendererMetrics.litPixels < 1500 || mainRendererMetrics.smokeLikePixels < 1500 || mainRendererMetrics.meanLuma < 8) {
+        throw new Error(`main renderer screenshot missing bridged boundary-fire shell volume: ${JSON.stringify({
+          ...mainRendererMetrics,
+          boundaryFireShellEvidence,
+        })}`);
+      }
     } else if (mainRendererMetrics.litPixels < 1500 || mainRendererMetrics.fireLikePixels < 80 || mainRendererMetrics.meanLuma < 8) {
       throw new Error(`main renderer screenshot missing bridged fire volume: ${JSON.stringify(mainRendererMetrics)}`);
     }
@@ -2699,6 +2937,18 @@ async function main() {
     } else if (expectsSnuffVisualEvidence) {
       if (metrics.litPixels < 350 || metrics.smokeLikePixels < 120 || metrics.meanLuma < 1.5) {
         throw new Error(`snuff route did not preserve vapor/smoke volume evidence: ${JSON.stringify(metrics)}`);
+      }
+    } else if (acceptsBoundaryFireShellEvidence) {
+      const boundaryFireVolumeSignalPixels =
+        Number(metrics.litPixels || 0) +
+        Number(metrics.smokeLikePixels || 0) +
+        Number(metrics.volumeBounds?.pixelCount || 0);
+      if (metrics.litPixels < 350 || boundaryFireVolumeSignalPixels < 700 || metrics.meanLuma < 1.5) {
+        throw new Error(`blank frame or missing boundary-fire shell volume signal: ${JSON.stringify({
+          ...metrics,
+          boundaryFireVolumeSignalPixels,
+          boundaryFireShellEvidence,
+        })}`);
       }
     } else if (expectsPyroMaterialEvidence) {
       const coupling = sample.pyroMaterialRendererCoupling || state.pyroMaterialRendererCoupling || {};
@@ -2827,6 +3077,7 @@ async function main() {
       flameQuenchModel: sample.flameQuenchModel,
       pyroDynamicDetail: sample.pyroDynamicDetail || state.pyroDynamicDetail || null,
       pyroMaterialRendererCoupling: sample.pyroMaterialRendererCoupling || state.pyroMaterialRendererCoupling || null,
+      boundaryFireShellEvidence,
       runtimeQualityRequested: sample.runtimeQualityRequested,
       runtimeQualityEffective: sample.runtimeQualityEffective,
       gpuPressure: sample.gpuPressure,

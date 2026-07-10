@@ -42,6 +42,10 @@ assert.match(index, /pyro_material_bonfire_family_0702/, 'Volume tab pins the op
 assert.match(index, /exploding_jellow_fireball_motherfucker_0706/, 'Volume tab pins the operator-found exploding jellow fireball Pyro look by stable route identity');
 assert.match(index, /pyro_flow_small_bonfire_gamut_0707/, 'Volume tab pins the operator-found Pyro Flow small-bonfire gamut basin by stable route identity');
 assert.match(index, /DEFAULT_VOLUME_SMOKE_TALL_PRESET\s*=\s*'boundary_fire_bonfire_a_la_ruffles_0709'/, 'bare smoke routes default to the operator-found Boundary Fire Bonfire_a_la_ruffles basin');
+assert.doesNotMatch(index, /DEFAULT_VOLUME_SMOKE_TALL_PRESET\s*=\s*'boundary_fire_activity_tiers_fun_basin_0710'/, 'Boundary Fire activity-tier fun basin is durable but not the default smoke route');
+assert.match(index, /boundary_fire_activity_tiers_fun_basin_0710:[\s\S]*pressureMode:\s*'activity-tiers'[\s\S]*activityVorticityGate:\s*1\.00[\s\S]*activityDetailGate:\s*1\.00/, 'Boundary Fire activity-tier fun basin preserves activity-tier pressure and force gates');
+assert.match(index, /boundary_fire_activity_tiers_fun_basin_0710:[\s\S]*reactionBoundaryGradient:\s*0\.15[\s\S]*reactionBoundaryFireRidge:\s*2\.00[\s\S]*reactionBoundaryFireWarmth:\s*0\.00[\s\S]*reactionBoundaryFireLuma:\s*5\.00/, 'Boundary Fire activity-tier fun basin preserves the exported boundary-fire shape');
+assert.match(index, /boundary_fire_activity_tiers_fun_basin_0710:[\s\S]*speed:\s*4\.15[\s\S]*flowRate:\s*1\.70[\s\S]*raySteps:\s*116[\s\S]*resolution:\s*160/, 'Boundary Fire activity-tier fun basin preserves the exported fast-flow budget and resolution');
 assert.match(index, /boundary_fire_bonfire_a_la_ruffles_0709:[\s\S]*reactionLiveView:\s*'boundary_fire'/, 'Boundary Fire Bonfire_a_la_ruffles basin activates boundary-fire as the default live fire view');
 assert.match(index, /boundary_fire_bonfire_a_la_ruffles_0709:[\s\S]*boundarySidecarSource:\s*'baked'[\s\S]*boundarySidecarBlur:\s*1\.00[\s\S]*boundarySidecarWidth:\s*2\.00[\s\S]*boundarySidecarRidge:\s*2\.00/, 'Boundary Fire Bonfire_a_la_ruffles basin uses the promoted baked sidecar reconstruction path');
 assert.match(index, /boundary_fire_bonfire_a_la_ruffles_0709:[\s\S]*reactionBoundaryFireRidge:\s*1\.28[\s\S]*reactionBoundaryFireRidgeCut:\s*0\.10[\s\S]*reactionBoundaryFireLuma:\s*5\.00/, 'Boundary Fire Bonfire_a_la_ruffles basin preserves the promoted ridge and luma values');
@@ -128,6 +132,7 @@ assert.match(index, /exploding-jellow-fireball-motherfucker/, 'Source-backed loo
 assert.match(index, /Bonfire_a_la_ruffles/, 'Source-backed look library exposes the operator-saved Bonfire a la Ruffles Pyro look');
 const bonfireLookBlock = index.match(/name:\s*'Bonfire_a_la_ruffles'[\s\S]*?sourceBacked:\s*true,[\s\S]*?\},\n\s*\],\n\s*firesim:/)?.[0] || '';
 assert.match(bonfireLookBlock, /TALL_PLUME_OPERATOR_PRESETS\.boundary_fire_bonfire_a_la_ruffles_0709/, 'Bonfire a la Ruffles aliases the current Boundary Fire basin instead of the stale Pyro Flow controls');
+assert.match(index, /name:\s*'Boundary_Fire_activity_tiers_fun_basin_0710'[\s\S]*TALL_PLUME_OPERATOR_PRESETS\.boundary_fire_activity_tiers_fun_basin_0710/, 'Source-backed look library exposes the non-default Boundary Fire activity-tier fun basin');
 assert.match(bonfireLookBlock, /boundaryFireAuthored:\s*true/, 'Bonfire a la Ruffles is marked as a Boundary Fire-authored source-backed look');
 assert.doesNotMatch(bonfireLookBlock, /pyroFlowBite:\s*0\.95/, 'Bonfire a la Ruffles must not preserve the stale low Flow carrier gain');
 assert.doesNotMatch(bonfireLookBlock, /pyroRadiance:\s*1\.25/, 'Bonfire a la Ruffles must not preserve the stale old Radiance carrier gain');
@@ -1732,7 +1737,7 @@ assert.match(witness, /expectedHistoryClamp/, 'witness verifies temporal history
 assert.match(witness, /expectedMajorantGrid/, 'witness verifies coarse majorant grid route/control identity');
 assert.match(witness, /expectedMajorantCadence/, 'witness verifies coarse majorant cadence route/control identity');
 assert.match(witness, /expectedPressureIterations/, 'witness verifies pressure iteration route/control identity');
-assert.match(witness, /expectedPressureIterations = expectedSpatialPressureTiers[\s\S]{0,80}\? 3/, 'witness treats spatial pressure tiers as pressure3-by-construction');
+assert.match(witness, /expectedPressureIterations = expectedTieredPressure[\s\S]{0,80}\? 3/, 'witness treats tiered pressure modes as pressure3-by-construction');
 assert.match(witness, /expectedSimProfile/, 'witness verifies sim profile request identity');
 assert.match(witness, /adaptiveRaymarch/, 'witness records effective adaptive raymarch strength');
 assert.match(witness, /occupancySkip/, 'witness records effective occupancy skip strength');
@@ -1788,6 +1793,7 @@ assert.match(witness, /pyro_material_bonfire_family_0702/, 'witness recognizes t
 assert.match(witness, /exploding_jellow_fireball_motherfucker_0706/, 'witness recognizes the 2026-07-06 operator-found exploding jellow fireball Pyro basin');
 assert.match(witness, /pyro_flow_small_bonfire_gamut_0707/, 'witness recognizes the 2026-07-07 operator-found Pyro Flow small-bonfire gamut basin');
 assert.match(witness, /boundary_fire_bonfire_a_la_ruffles_0709/, 'witness recognizes the 2026-07-09 operator-found Boundary Fire Bonfire_a_la_ruffles basin');
+assert.match(witness, /boundary_fire_activity_tiers_fun_basin_0710/, 'witness recognizes the 2026-07-10 non-default Boundary Fire activity-tier fun basin');
 assert.match(witness, /DEFAULT_VOLUME_SMOKE_TALL_PRESET\s*=\s*'boundary_fire_bonfire_a_la_ruffles_0709'/, 'witness mirrors the bare smoke route default Boundary Fire Bonfire_a_la_ruffles basin');
 assert.match(witness, /kaminos_volume_smoke'\)\s*===\s*'1'[\s\S]*DEFAULT_VOLUME_SMOKE_TALL_PRESET/, 'witness expects bare smoke routes to boot into the default Pyro basin');
 assert.match(witness, /!routeParams\.has\('volume_scene'\)\s*\|\|\s*routeParams\.get\('volume_scene'\) === 'tall_plume'/, 'witness expects explicit tall_plume smoke routes to preserve the default Pyro basin');
@@ -1802,6 +1808,15 @@ assert.match(witness, /expectedQuenchVapor/, 'witness verifies quench-vapor rout
 assert.match(witness, /expectedRuntimeQualityRequested/, 'witness verifies requested runtime quality route identity');
 assert.match(witness, /expectedRuntimeQualityEffective/, 'witness verifies effective runtime quality identity');
 assert.match(witness, /runtimeQualityReceipt/, 'witness records the runtime quality ladder receipt');
+assert.match(witness, /expectedSpatialSlabPressureTiers/, 'witness distinguishes spatial slab pressure tiers from activity tiers');
+assert.match(witness, /expectedActivityPressureTiers/, 'witness distinguishes activity pressure tiers from spatial slab tiers');
+assert.match(witness, /activity pressure tiers should report three full-grid masked Jacobi passes/, 'witness accepts activity-tier full-grid masked passes instead of applying the spatial slab invariant');
+assert.match(witness, /expectedActivityVorticityGate/, 'witness verifies activity-tier vorticity gate route identity');
+assert.match(witness, /expectedActivityDetailGate/, 'witness verifies activity-tier detail gate route identity');
+assert.match(witness, /boundary-fire-shell-evidence-v0/, 'witness accepts boundary-fire shell evidence separately from fire radiance');
+assert.match(witness, /acceptsBoundaryFireShellEvidence/, 'witness uses accepted boundary-fire shell evidence for no-radiance boundary-fire looks');
+assert.match(witness, /bridged boundary-fire shell volume/, 'witness accepts main-renderer boundary-fire shell visuals without orange fire-like pixels');
+assert.match(witness, /boundaryFireVolumeSignalPixels/, 'witness accepts preview boundary-fire shell visuals through bright shell/smoke pixels');
 assert.match(witness, /volume-runtime-quality-ladder-v0/, 'witness recognizes the stable runtime quality ladder identity');
 assert.match(witness, /snuffVisualModel/, 'witness records the active snuff visual model identity');
 assert.match(witness, /quenchVaporStrength/, 'witness records effective quench-vapor strength');
