@@ -4,15 +4,20 @@ import { appendFileSync, mkdirSync, mkdtempSync, statSync, writeFileSync } from 
 import { dirname, join, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
 
-const MANIFEST_SCHEMA = 'kaminos.volume.boundary-sidecar-export.v0';
-const SIDECAR_IDENTITY = 'baked-boundary-sidecar-v0';
-const CHANNEL_ORDER = ['support', 'gradient', 'ridge', 'thickness'];
+const MANIFEST_SCHEMA = 'kaminos.volume.boundary-sidecar-export.v1';
+const SIDECAR_IDENTITY = 'baked-boundary-sidecar-v1';
+const CHANNEL_ORDER = ['support', 'coverage', 'ridge', 'footprint', 'proximity', 'normalX', 'normalY', 'normalZ'];
 const RENDERER_RAW_CHANNEL_ORDER = ['support', 'coverage', 'ridge', 'footprint'];
+const META_RAW_CHANNEL_ORDER = ['proximity', 'normalX', 'normalY', 'normalZ'];
 const channelMapping = {
   support: 'support',
-  gradient: 'coverage',
+  coverage: 'coverage',
   ridge: 'ridge',
-  thickness: 'footprint',
+  footprint: 'footprint',
+  proximity: 'proximity',
+  normalX: 'normalX',
+  normalY: 'normalY',
+  normalZ: 'normalZ',
 };
 
 const args = new Map();
@@ -152,11 +157,12 @@ async function evaluateByValue(ws, expression, phase) {
   return evaluated.result.value;
 }
 
-async function drainBoundarySidecar(ws, session, outputPath) {
-  const expectedFloats = Number(session.floatCount);
-  const expectedBytes = Number(session.byteLength);
+async function drainBoundarySidecar(ws, session, outputPath, bufferName = 'sidecar') {
+  const isMeta = bufferName === 'meta';
+  const expectedFloats = Number(isMeta ? session.metaFloatCount : session.sidecarFloatCount);
+  const expectedBytes = Number(isMeta ? session.metaByteLength : session.sidecarByteLength);
   if (!Number.isFinite(expectedFloats) || expectedFloats < 1 || !Number.isFinite(expectedBytes)) {
-    throw new Error(`invalid boundary descriptor: ${JSON.stringify(session)}`);
+    throw new Error(`invalid boundary ${bufferName} descriptor: ${JSON.stringify(session)}`);
   }
   writeFileSync(outputPath, Buffer.alloc(0));
   const sha = createHash('sha256');
@@ -167,17 +173,18 @@ async function drainBoundarySidecar(ws, session, outputPath) {
       ws,
       `window.__kaminosVolumePrototype.readDebugBoundarySidecarExportChunk(${JSON.stringify({
         sessionId: session.sessionId,
+        bufferName,
         startFloat,
         floatCount: Math.min(chunkFloats, expectedFloats - startFloat),
       })})`,
-      'chunk-boundary-sidecar',
+      `chunk-boundary-sidecar-${bufferName}`,
     );
-    if (chunk?.ok !== true || Number(chunk.startFloat) !== startFloat) {
-      throw new Error(`bad boundary chunk at ${startFloat}: ${JSON.stringify(chunk)}`);
+    if (chunk?.ok !== true || chunk.bufferName !== bufferName || Number(chunk.startFloat) !== startFloat) {
+      throw new Error(`bad boundary ${bufferName} chunk at ${startFloat}: ${JSON.stringify(chunk)}`);
     }
     const buffer = Buffer.from(chunk.base64 || '', 'base64');
     if (buffer.byteLength !== Number(chunk.byteLength)) {
-      throw new Error(`bad boundary chunk byte length at ${startFloat}: expected ${chunk.byteLength}, got ${buffer.byteLength}`);
+      throw new Error(`bad boundary ${bufferName} chunk byte length at ${startFloat}: expected ${chunk.byteLength}, got ${buffer.byteLength}`);
     }
     appendFileSync(outputPath, buffer);
     sha.update(buffer);
@@ -186,14 +193,16 @@ async function drainBoundarySidecar(ws, session, outputPath) {
   }
   const actualBytes = statSync(outputPath).size;
   if (actualBytes !== expectedBytes) {
-    throw new Error(`boundary sidecar byte mismatch: expected ${expectedBytes}, got ${actualBytes}`);
+    throw new Error(`boundary ${bufferName} byte mismatch: expected ${expectedBytes}, got ${actualBytes}`);
   }
   return {
     identity: SIDECAR_IDENTITY,
+    bufferName,
     path: outputPath,
     shape: [session.grid, session.grid, session.grid, 4],
-    channelOrder: CHANNEL_ORDER,
-    rendererRawChannelOrder: RENDERER_RAW_CHANNEL_ORDER,
+    channelOrder: isMeta ? META_RAW_CHANNEL_ORDER : RENDERER_RAW_CHANNEL_ORDER,
+    rendererRawChannelOrder: isMeta ? undefined : RENDERER_RAW_CHANNEL_ORDER,
+    metaRawChannelOrder: isMeta ? META_RAW_CHANNEL_ORDER : undefined,
     channelMapping,
     dtype: 'float32',
     byteOrder: 'little-endian',
@@ -255,7 +264,8 @@ async function main() {
     }
 
     phase = 'drain-boundary-sidecar';
-    const boundary = await drainBoundarySidecar(ws, begin, join(outDir, 'boundary-sidecar.f32'));
+    const boundary = await drainBoundarySidecar(ws, begin, join(outDir, 'boundary-sidecar.f32'), 'sidecar');
+    const meta = await drainBoundarySidecar(ws, begin, join(outDir, 'boundary-sidecar-meta.f32'), 'meta');
 
     phase = 'release';
     const release = await evaluateByValue(
@@ -284,10 +294,11 @@ async function main() {
       cellCount: begin.cellCount,
       channelOrder: CHANNEL_ORDER,
       rendererRawChannelOrder: RENDERER_RAW_CHANNEL_ORDER,
+      metaRawChannelOrder: META_RAW_CHANNEL_ORDER,
       channelMapping,
       boundarySidecarDebug: begin.boundarySidecarDebug,
       controls: begin.controls,
-      sidecars: { boundary },
+      sidecars: { boundary, meta },
       release,
     };
     writeManifest(manifest);
@@ -306,6 +317,7 @@ async function main() {
       begin,
       channelOrder: CHANNEL_ORDER,
       rendererRawChannelOrder: RENDERER_RAW_CHANNEL_ORDER,
+      metaRawChannelOrder: META_RAW_CHANNEL_ORDER,
       channelMapping,
       error: err?.message || String(err),
     });

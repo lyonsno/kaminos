@@ -24,17 +24,19 @@ import numpy as np
 SCHEMA = "kaminos.volume.phase-aligned-learned-probe-corpus.v0"
 IDENTITY = "phase-aligned-high-history-downsample-corpus-v0"
 FULL_GRID_EXPORT_SCHEMA = "kaminos.volume.full-grid-field-export.v0"
-BOUNDARY_SIDECAR_EXPORT_SCHEMA = "kaminos.volume.boundary-sidecar-export.v0"
-BOUNDARY_SIDECAR_IDENTITY = "baked-boundary-sidecar-v0"
-BOUNDARY_SIDECAR_AUTHORITY = "band-limited-support-coverage-ridge-thickness-v0"
+BOUNDARY_SIDECAR_EXPORT_SCHEMA = "kaminos.volume.boundary-sidecar-export.v1"
+BOUNDARY_SIDECAR_IDENTITY = "baked-boundary-sidecar-v1"
+BOUNDARY_SIDECAR_AUTHORITY = "band-limited-support-coverage-ridge-footprint-proximity-normal-v2"
 AUTHORITY = "offline-phase-aligned-field-corpus-contract-not-browser-witness-not-product-inference"
 BOX_AVERAGE_OPERATOR = "box-average-linear-field-v0"
 MAX_POOL_OPERATOR = "max-pool-support-field-v0"
 DOMAIN_GAP_IDENTITY = "native-low-vs-downsampled-high-domain-gap-v0"
 
 DEFAULT_TARGET_GRID = 128
-BOUNDARY_SIDECAR_CHANNEL_ORDER = ["support", "gradient", "ridge", "thickness"]
-BOUNDARY_MAX_POOL_CHANNELS = {"support", "ridge"}
+BOUNDARY_SIDECAR_CHANNEL_ORDER = ["support", "coverage", "ridge", "footprint", "proximity", "normalX", "normalY", "normalZ"]
+BOUNDARY_SIDECAR_RAW_CHANNEL_ORDER = ["support", "coverage", "ridge", "footprint"]
+BOUNDARY_SIDECAR_META_CHANNEL_ORDER = ["proximity", "normalX", "normalY", "normalZ"]
+BOUNDARY_MAX_POOL_CHANNELS = {"support", "ridge", "proximity"}
 SUPPORT_CHANNELS = {
     "frontTopology",
     "shellAlpha",
@@ -44,7 +46,7 @@ SUPPORT_CHANNELS = {
 }
 
 BOUNDARY_SIDECAR_TARGETS = {
-    "identity": "baked-boundary-sidecar-target-mapping-v0",
+    "identity": "baked-boundary-sidecar-target-mapping-v1",
     "sidecarIdentity": BOUNDARY_SIDECAR_IDENTITY,
     "sidecarAuthority": BOUNDARY_SIDECAR_AUTHORITY,
     "channelOrder": BOUNDARY_SIDECAR_CHANNEL_ORDER,
@@ -54,20 +56,40 @@ BOUNDARY_SIDECAR_TARGETS = {
             "teacherTarget": "shellAlpha",
             "reason": "Sparse support should survive block reduction instead of averaging away thin sheets.",
         },
-        "gradient": {
+        "coverage": {
             "downsampleOperator": BOX_AVERAGE_OPERATOR,
             "teacherTarget": "shellEdge",
-            "reason": "Gradient magnitude is a continuous local measurement; average preserves block-scale energy.",
+            "reason": "Coverage/opacity is a continuous local measurement; average preserves block-scale energy.",
         },
         "ridge": {
             "downsampleOperator": MAX_POOL_OPERATOR,
             "teacherTarget": "internalStreak",
             "reason": "Ridge/Laplacian peaks carry thin breakup authority and should be support-preserved.",
         },
-        "thickness": {
+        "footprint": {
             "downsampleOperator": BOX_AVERAGE_OPERATOR,
             "teacherTarget": "confidenceAlpha",
-            "reason": "Thickness is a local footprint/coverage measurement; average gives the teacher a block footprint prior.",
+            "reason": "Footprint is a local reconstruction-width measurement; average gives the teacher a block footprint prior.",
+        },
+        "proximity": {
+            "downsampleOperator": MAX_POOL_OPERATOR,
+            "teacherTarget": "shellAlpha",
+            "reason": "Proximity is support-like authority and should survive block reduction.",
+        },
+        "normalX": {
+            "downsampleOperator": BOX_AVERAGE_OPERATOR,
+            "teacherTarget": "normalProxyX",
+            "reason": "Normal proxy components are directional measurements; average preserves block-scale orientation.",
+        },
+        "normalY": {
+            "downsampleOperator": BOX_AVERAGE_OPERATOR,
+            "teacherTarget": "normalProxyY",
+            "reason": "Normal proxy components are directional measurements; average preserves block-scale orientation.",
+        },
+        "normalZ": {
+            "downsampleOperator": BOX_AVERAGE_OPERATOR,
+            "teacherTarget": "normalProxyZ",
+            "reason": "Normal proxy components are directional measurements; average preserves block-scale orientation.",
         },
     },
     "limitation": "Mapping is corpus-side target custody only; live/baked/mix renderer equivalence remains the browser witness lane's job.",
@@ -186,14 +208,25 @@ def verify_boundary_sidecar_manifest(manifest: dict[str, Any], path: Path, role:
             "status": manifest.get("status"),
             "failurePhase": manifest.get("failurePhase"),
         })
-    desc = (manifest.get("sidecars") or {}).get("boundary")
-    order = channel_order(manifest, desc if isinstance(desc, dict) else {}, "boundary") if isinstance(desc, dict) else manifest.get("channelOrder")
-    if [str(value) for value in (order or [])] != BOUNDARY_SIDECAR_CHANNEL_ORDER:
+    sidecars = manifest.get("sidecars") or {}
+    boundary_desc = sidecars.get("boundary")
+    meta_desc = sidecars.get("meta")
+    boundary_order = channel_order(manifest, boundary_desc if isinstance(boundary_desc, dict) else {}, "boundary") if isinstance(boundary_desc, dict) else []
+    meta_order = channel_order(manifest, meta_desc if isinstance(meta_desc, dict) else {}, "meta") if isinstance(meta_desc, dict) else []
+    combined_order = [*boundary_order, *meta_order]
+    if combined_order != BOUNDARY_SIDECAR_CHANNEL_ORDER:
         raise CorpusFailure("manifest-validate", f"{role} boundary sidecar channel order mismatch.", {
             "path": str(path),
-            "channelOrder": order,
+            "channelOrder": combined_order,
             "expectedChannelOrder": BOUNDARY_SIDECAR_CHANNEL_ORDER,
+            "boundaryOrder": boundary_order,
+            "metaOrder": meta_order,
         })
+
+
+def embedded_boundary_sidecar_manifest(manifest: dict[str, Any]) -> dict[str, Any] | None:
+    boundary = manifest.get("boundarySidecar")
+    return boundary if isinstance(boundary, dict) else None
 
 
 def sidecar_descriptor(manifest: dict[str, Any], manifest_path: Path, kind: str) -> dict[str, Any]:
@@ -286,6 +319,33 @@ def load_sidecar(manifest: dict[str, Any], manifest_path: Path, kind: str) -> tu
         "byteLength": int(expected_bytes),
     })
     return np.asarray(arr, dtype=np.float32), normalized_desc
+
+
+def load_boundary_sidecar(manifest: dict[str, Any], manifest_path: Path) -> tuple[np.ndarray, dict[str, Any]]:
+    boundary_arr, boundary_desc = load_sidecar(manifest, manifest_path, "boundary")
+    meta_arr, meta_desc = load_sidecar(manifest, manifest_path, "meta")
+    if list(boundary_arr.shape[:3]) != list(meta_arr.shape[:3]) or int(boundary_arr.shape[3]) != 4 or int(meta_arr.shape[3]) != 4:
+        raise CorpusFailure("source-verify", "Boundary sidecar and meta sidecar shapes are not compatible.", {
+            "boundaryShape": list(boundary_arr.shape),
+            "metaShape": list(meta_arr.shape),
+        })
+    combined = np.concatenate([boundary_arr, meta_arr], axis=3).astype(np.float32)
+    desc = {
+        "identity": BOUNDARY_SIDECAR_IDENTITY,
+        "authority": manifest.get("authority") or BOUNDARY_SIDECAR_AUTHORITY,
+        "shape": list(combined.shape),
+        "channelOrder": BOUNDARY_SIDECAR_CHANNEL_ORDER,
+        "dtype": "float32",
+        "byteOrder": "little-endian",
+        "floatCount": int(combined.size),
+        "byteLength": int(combined.size * 4),
+        "sourceManifest": str(manifest_path),
+        "sourceSidecars": {
+            "boundary": descriptor_ref(boundary_desc),
+            "meta": descriptor_ref(meta_desc),
+        },
+    }
+    return combined, desc
 
 
 def downsample_field(arr: np.ndarray, target_grid: int, operator: str) -> np.ndarray:
@@ -426,7 +486,7 @@ def write_boundary_sidecar_domain_gap(
     native_manifest_path: Path,
     downsampled_boundary_desc: dict[str, Any],
 ) -> dict[str, Any]:
-    native_boundary, native_desc = load_sidecar(native_manifest, native_manifest_path, "boundary")
+    native_boundary, native_desc = load_boundary_sidecar(native_manifest, native_manifest_path)
     ds_arr = np.memmap(downsampled_boundary_desc["path"], dtype="<f4", mode="r", shape=tuple(downsampled_boundary_desc["shape"]))
     if list(native_boundary.shape) != list(ds_arr.shape):
         raise CorpusFailure("domain-gap", "boundary native-low shape differs from downsampled-high.", {
@@ -544,11 +604,15 @@ def main() -> None:
         high_boundary_manifest_path = None
         high_boundary = None
         high_boundary_desc = None
-        if args.high_boundary_sidecar_manifest:
-            high_boundary_manifest_path = Path(args.high_boundary_sidecar_manifest).resolve()
-            high_boundary_manifest = read_json(high_boundary_manifest_path)
+        if args.high_boundary_sidecar_manifest or embedded_boundary_sidecar_manifest(high_manifest):
+            if args.high_boundary_sidecar_manifest:
+                high_boundary_manifest_path = Path(args.high_boundary_sidecar_manifest).resolve()
+                high_boundary_manifest = read_json(high_boundary_manifest_path)
+            else:
+                high_boundary_manifest_path = high_manifest_path
+                high_boundary_manifest = embedded_boundary_sidecar_manifest(high_manifest)
             verify_boundary_sidecar_manifest(high_boundary_manifest, high_boundary_manifest_path, "high")
-            high_boundary, high_boundary_desc = load_sidecar(high_boundary_manifest, high_boundary_manifest_path, "boundary")
+            high_boundary, high_boundary_desc = load_boundary_sidecar(high_boundary_manifest, high_boundary_manifest_path)
             if int(high_boundary_manifest.get("grid") or high_boundary.shape[0]) != high_grid:
                 raise CorpusFailure("manifest-validate", "High boundary sidecar grid differs from high field grid.", {
                     "highFieldGrid": high_grid,
@@ -637,14 +701,22 @@ def main() -> None:
             native_identity = source_identity(native_manifest, native_manifest_path)
             phase = "domain-gap"
             native_gap = write_domain_gap(out_dir, native_manifest, native_manifest_path, downsampled_high)
+        native_boundary_manifest = None
+        native_boundary_manifest_path = None
         if args.native_low_boundary_sidecar_manifest:
+            native_boundary_manifest_path = Path(args.native_low_boundary_sidecar_manifest).resolve()
+            native_boundary_manifest = read_json(native_boundary_manifest_path)
+        elif args.native_low_manifest:
+            embedded_native_boundary = embedded_boundary_sidecar_manifest(native_manifest)
+            if embedded_native_boundary is not None:
+                native_boundary_manifest_path = native_manifest_path
+                native_boundary_manifest = embedded_native_boundary
+        if native_boundary_manifest is not None and native_boundary_manifest_path is not None:
             if "boundary" not in downsampled_high["sidecars"]:
                 raise CorpusFailure("domain-gap", "Native-low boundary sidecar gap requested without a high boundary sidecar.", {
                     "nativeLowBoundarySidecarManifest": args.native_low_boundary_sidecar_manifest,
                 })
             phase = "native-low-boundary-manifest-read"
-            native_boundary_manifest_path = Path(args.native_low_boundary_sidecar_manifest).resolve()
-            native_boundary_manifest = read_json(native_boundary_manifest_path)
             verify_boundary_sidecar_manifest(native_boundary_manifest, native_boundary_manifest_path, "native-low")
             phase = "domain-gap"
             native_gap["boundarySidecar"] = write_boundary_sidecar_domain_gap(

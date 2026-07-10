@@ -84,7 +84,8 @@ assert.match(index, /id="volume-boundary-sidecar-source"/, 'Boundary Fire tuning
 assert.match(index, /volume_boundary_sidecar_source/, 'Basin URLs preserve the boundary sidecar source control');
 assert.match(index, /id="volume-boundary-sidecar-view"/, 'Boundary Fire tuning exposes a primary-view sidecar channel selector');
 assert.match(index, /volume_boundary_sidecar_view/, 'Basin URLs preserve the sidecar channel debug selector');
-assert.match(index, /value="coverage"[\s\S]*value="ridge"[\s\S]*value="proximity"[\s\S]*value="footprint"/, 'Sidecar channel selector exposes coverage, ridge, proximity, and footprint views');
+assert.match(index, /value="coverage"[\s\S]*value="ridge"[\s\S]*value="proximity"[\s\S]*value="footprint"[\s\S]*value="normal"/, 'Sidecar channel selector exposes coverage, ridge, proximity, footprint, and normal views');
+assert.match(index, /BOUNDARY_SIDECAR_VIEW_VALUES\s*=\s*new Set\(\['off', 'support', 'coverage', 'ridge', 'proximity', 'footprint', 'normal'\]\)/, 'Page-side route normalization preserves the normal sidecar debug view');
 assert.match(index, /id="volume-boundary-sidecar-blur"/, 'Boundary Fire tuning exposes a sidecar blur/sample-efficiency control');
 assert.match(index, /id="volume-boundary-sidecar-width"/, 'Boundary Fire tuning exposes a sidecar step-footprint width control');
 assert.match(index, /id="volume-boundary-sidecar-ridge"/, 'Boundary Fire tuning exposes a baked ridge gain control');
@@ -207,55 +208,85 @@ assert.match(index, /\.slider-row\s*\{[^}]*user-select:\s*none/, 'Slider rows pr
 assert.match(index, /\.slider-row input\[type="range"\]\s*\{[^}]*min-height:\s*24px/, 'Range sliders expose a taller grab lane than the visible rail');
 assert.match(core, /topology-lab-monotonic-carrier-mix-v0/, 'Topology shell lab declares monotonic additive carrier-mix identity');
 assert.doesNotMatch(topologyShellLabBlock, /shellCarrierGainSum|\/\s*max\(\s*0\.001[\s\S]*shellThermalGain/, 'Topology shell carrier gains must not be normalized through a shared hidden denominator');
-assert.match(core, /BOUNDARY_SIDECAR_IDENTITY\s*=\s*'baked-boundary-sidecar-v0'/, 'Boundary sidecar bake carries a stable identity');
-assert.match(core, /BOUNDARY_SIDECAR_BAKE_AUTHORITY\s*=\s*'band-limited-support-coverage-ridge-proximity-footprint-v1'/, 'Boundary sidecar bake names reconstructable sheet structure authority');
-assert.match(core, /BOUNDARY_SIDECAR_EXPORT_SCHEMA\s*=\s*'kaminos\.volume\.boundary-sidecar-export\.v0'/, 'Boundary sidecar export carries the corpus-ingest schema identity');
-assert.match(core, /BOUNDARY_SIDECAR_EXPORT_CHANNEL_ORDER\s*=\s*\['support', 'gradient', 'ridge', 'thickness'\]/, 'Boundary sidecar export names the corpus channel order');
+assert.match(core, /BOUNDARY_SIDECAR_IDENTITY\s*=\s*'baked-boundary-sidecar-v1'/, 'Boundary sidecar bake carries the distance/normal reconstruction identity');
+assert.match(core, /BOUNDARY_SIDECAR_BAKE_AUTHORITY\s*=\s*'band-limited-support-coverage-ridge-footprint-proximity-normal-v2'/, 'Boundary sidecar bake names reconstructable sheet distance and normal authority');
+assert.match(core, /TEMPORAL_SIDECAR_IDENTITY\s*=\s*'temporal-boundary-sidecar-history-v0'/, 'Boundary sidecar state names the temporal history identity');
+assert.match(core, /BOUNDARY_SIDECAR_EXPORT_SCHEMA\s*=\s*'kaminos\.volume\.boundary-sidecar-export\.v1'/, 'Boundary sidecar export carries the sidecar-plus-meta corpus-ingest schema identity');
+assert.match(core, /BOUNDARY_SIDECAR_EXPORT_CHANNEL_ORDER\s*=\s*\['support', 'coverage', 'ridge', 'footprint', 'proximity', 'normalX', 'normalY', 'normalZ'\]/, 'Boundary sidecar export names the combined sidecar plus meta channel order');
 assert.match(core, /BOUNDARY_SIDECAR_RENDERER_RAW_CHANNEL_ORDER\s*=\s*\['support', 'coverage', 'ridge', 'footprint'\]/, 'Boundary sidecar export preserves the raw renderer channel order');
-assert.match(core, /BOUNDARY_SIDECAR_EXPORT_CHANNEL_MAPPING[\s\S]*gradient:\s*'coverage'[\s\S]*thickness:\s*'footprint'/, 'Boundary sidecar export records coverage/footprint aliases into gradient/thickness targets');
+assert.match(core, /BOUNDARY_SIDECAR_META_RAW_CHANNEL_ORDER\s*=\s*\['proximity', 'normalX', 'normalY', 'normalZ'\]/, 'Boundary sidecar export preserves the raw meta channel order');
+assert.match(core, /BOUNDARY_SIDECAR_EXPORT_CHANNEL_MAPPING[\s\S]*proximity:\s*'proximity'[\s\S]*normalX:\s*'normalX'/, 'Boundary sidecar export records sidecar/meta channel mapping');
 assert.match(core, /function boundarySidecarBufferBytes/, 'Boundary sidecar buffer size is explicit and grid-scaled');
+assert.match(core, /function boundarySidecarMetaBufferBytes/, 'Boundary sidecar meta buffer size is explicit and grid-scaled');
 assert.match(core, /function normalizeBoundarySidecarView/, 'Renderer normalizes sidecar channel debug views');
 assert.match(core, /function boundarySidecarViewValue/, 'Renderer maps sidecar channel debug views into uniforms');
 assert.match(core, /@group\(3\) @binding\(0\) var<storage, read_write> boundarySidecarDst/, 'WGSL has a write-only boundary sidecar bake output binding');
+assert.match(core, /@group\(3\) @binding\(1\) var<storage, read_write> boundarySidecarMetaDst/, 'WGSL has a write-only boundary sidecar meta bake output binding');
 assert.match(core, /boundary_sidecar_display:\s*vec4<f32>/, 'Raymarch uniforms carry sidecar debug display controls separately from reconstruction controls');
 assert.match(core, /@compute @workgroup_size\(4, 4, 4\)\s*fn csBoundarySidecar/, 'WGSL includes a boundary sidecar compute bake pass');
 assert.match(core, /boundarySidecarCoverage/, 'Boundary sidecar bake records a coverage/opacity integral channel');
-assert.match(core, /boundarySidecarProximity/, 'Boundary sidecar raymarch derives a proximity support channel');
+assert.match(core, /boundarySidecarProximity/, 'Boundary sidecar bake records a proximity support channel');
+assert.match(core, /boundarySidecarNormal/, 'Boundary sidecar bake records a gradient normal proxy channel');
 assert.match(core, /boundarySidecarFootprintWidth/, 'Boundary sidecar raymarch derives a ray-footprint reconstruction width');
 assert.match(core, /boundarySidecarBuildPipeline/, 'Renderer owns a boundary sidecar compute pipeline');
 assert.match(core, /encodeBoundarySidecar/, 'Render loop encodes the boundary sidecar bake before drawing');
 assert.match(core, /async function sampleFrame\(\)[\s\S]*encodeBoundarySidecar\(encoder\)[\s\S]*encodeDraw\(encoder, frameTexture\.createView\(\), 'kaminos volume one-off readback pass'/, 'sampleFrame readback bakes the boundary sidecar before drawing evidence frames');
 assert.match(core, /sampleWorldBoundarySidecar/, 'Raymarch samples the baked boundary sidecar');
+assert.match(core, /sampleWorldBoundarySidecarMeta/, 'Raymarch samples the baked boundary sidecar meta field');
 assert.match(core, /boundarySidecarStepFootprintWidth/, 'Boundary-fire path compensates sheet width for ray step footprint');
 assert.match(core, /boundarySidecarExportSession/, 'Renderer keeps boundary sidecar export session state explicit');
 assert.match(core, /async function beginDebugBoundarySidecarExport/, 'Renderer exposes a boundary sidecar export begin hook');
 assert.match(core, /function readDebugBoundarySidecarExportChunk/, 'Renderer exposes a chunked boundary sidecar export read hook');
 assert.match(core, /function releaseDebugBoundarySidecarExport/, 'Renderer exposes a boundary sidecar export release hook');
+assert.match(core, /boundarySidecarNormalViewGain/, 'Boundary-fire path uses the sidecar normal to compensate view-angle reconstruction width');
 const boundaryFireBranch = core.match(/if \(boundarySurfaceMode > 0\.5\) \{[\s\S]*?let boundaryGradientGate/);
 assert.ok(boundaryFireBranch, 'Boundary-fire shader branch is discoverable for sidecar source contracts');
 const bakedOnlyBranch = boundaryFireBranch[0].match(/if \(boundarySidecarSource > 0\.5 && boundarySidecarSource <= 1\.5\) \{([\s\S]*?)\} else \{/);
 assert.ok(bakedOnlyBranch, 'Baked sidecar mode has a distinct branch from live/mix');
 assert.match(bakedOnlyBranch[1], /sampleWorldBoundarySidecar\(p\)/, 'Baked sidecar mode samples the baked structure field');
+assert.match(bakedOnlyBranch[1], /sampleWorldBoundarySidecarMeta\(p\)/, 'Baked sidecar mode samples the baked proximity/normal meta field');
 assert.doesNotMatch(bakedOnlyBranch[1], /liveBoundarySupportAt/, 'Baked sidecar mode must not pay the live seven-tap boundary support path per ray step');
 assert.match(boundaryFireBranch[0], /if \(boundarySidecarSource > 1\.5\) \{[\s\S]*mix\(boundarySupport, boundarySidecarSample\.x, 0\.5\)/, 'Mix sidecar mode is the explicit expensive live+baked comparison path');
 assert.match(core, /boundaryStructureSource:\s*boundarySidecarSourceName/, 'Debug state reports the effective boundary structure source');
 assert.match(core, /boundarySidecarDebug/, 'Debug state exposes boundary sidecar bake identity and controls');
-assert.match(core, /channels:\s*\['support', 'coverage', 'ridge', 'proximity', 'footprint'\]/, 'Debug state reports sidecar channel semantics');
+assert.match(core, /channels:\s*\['support', 'coverage', 'ridge', 'footprint', 'proximity', 'normal'\]/, 'Debug state reports sidecar channel semantics');
+assert.match(core, /boundarySidecarMetaBytes/, 'Debug state exposes boundary sidecar meta memory cost');
+assert.match(core, /temporalSidecarIdentity/, 'Debug state reserves temporal sidecar reconstruction identity');
 assert.match(core, /uniforms\[312\]\s*=\s*boundarySidecarViewValue/, 'Uniform upload carries the sidecar debug view selector');
 assert.match(core, /sidecarViewName !== 'off'/, 'Sidecar channel debug views force a bake even when the live source remains selected');
 const boundarySidecarExportPath = join(root, 'volume-boundary-sidecar-export.mjs');
 assert.ok(existsSync(boundarySidecarExportPath), 'boundary sidecar export harness exists');
 const boundarySidecarExport = readFileSync(boundarySidecarExportPath, 'utf8');
-assert.match(boundarySidecarExport, /kaminos\.volume\.boundary-sidecar-export\.v0/, 'boundary sidecar export harness writes the corpus-ingest manifest schema');
-assert.match(boundarySidecarExport, /baked-boundary-sidecar-v0/, 'boundary sidecar export harness preserves baked sidecar identity');
-assert.match(boundarySidecarExport, /support[\s\S]*gradient[\s\S]*ridge[\s\S]*thickness/, 'boundary sidecar export harness preserves corpus channel order');
+assert.match(boundarySidecarExport, /kaminos\.volume\.boundary-sidecar-export\.v1/, 'boundary sidecar export harness writes the sidecar-plus-meta manifest schema');
+assert.match(boundarySidecarExport, /baked-boundary-sidecar-v1/, 'boundary sidecar export harness preserves baked sidecar v1 identity');
+assert.match(boundarySidecarExport, /support[\s\S]*coverage[\s\S]*ridge[\s\S]*footprint[\s\S]*proximity[\s\S]*normalX[\s\S]*normalY[\s\S]*normalZ/, 'boundary sidecar export harness preserves combined sidecar/meta channel order');
 assert.match(boundarySidecarExport, /rendererRawChannelOrder/, 'boundary sidecar export harness records raw renderer channel order');
-assert.match(boundarySidecarExport, /channelMapping[\s\S]*gradient[\s\S]*coverage[\s\S]*thickness[\s\S]*footprint/, 'boundary sidecar export harness records coverage/footprint target aliases');
+assert.match(boundarySidecarExport, /metaRawChannelOrder/, 'boundary sidecar export harness records raw meta channel order');
+assert.match(boundarySidecarExport, /channelMapping[\s\S]*proximity[\s\S]*proximity[\s\S]*normalX[\s\S]*normalX/, 'boundary sidecar export harness records sidecar/meta target mapping');
 assert.match(boundarySidecarExport, /effectiveRoute/, 'boundary sidecar export harness records effective route identity');
 assert.match(boundarySidecarExport, /boundarySidecarDebug/, 'boundary sidecar export harness records effective sidecar debug identity');
 assert.match(boundarySidecarExport, /sha256/, 'boundary sidecar export harness records output checksums');
 assert.match(boundarySidecarExport, /failurePhase/, 'boundary sidecar export harness writes failure phase manifests');
 assert.match(boundarySidecarExport, /readDebugBoundarySidecarExportChunk/, 'boundary sidecar export harness drains renderer chunks through the sidecar readback hook');
+assert.match(core, /copyBufferToBuffer\(boundarySidecarMetaBuffer/, 'boundary sidecar export readback copies the meta buffer, not only the four-channel structure buffer');
+assert.match(core, /metaFloatCount/, 'boundary sidecar export descriptor exposes meta float count');
+assert.match(core, /FULL_FIELD_EXPORT_SCHEMA\s*=\s*'kaminos\.volume\.full-field-export\.v0'/, 'Full-field export carries the browser hook schema identity');
+assert.match(core, /FULL_FIELD_EXPORT_IDENTITY\s*=\s*'full-grid-fluid-front-buffer-sidecars-v0'/, 'Full-field export carries the fluid/front sidecar identity');
+assert.match(core, /FULL_FIELD_FLUID_CHANNEL_ORDER\s*=\s*\[[\s\S]*'velocityX', 'velocityY', 'velocityZ', 'density'/, 'Full-field export names the fluid storage channel order');
+assert.match(core, /FULL_FIELD_FRONT_CHANNEL_ORDER\s*=\s*\['frontTopology'\]/, 'Full-field export names the front topology channel order');
+assert.match(core, /fullFieldExportSession/, 'Renderer keeps full-field export session state explicit');
+assert.match(core, /async function beginDebugFullFieldExport/, 'Renderer exposes a full-field export begin hook');
+assert.match(core, /function readDebugFullFieldExportChunk/, 'Renderer exposes a chunked full-field export read hook');
+assert.match(core, /function releaseDebugFullFieldExport/, 'Renderer exposes a full-field export release hook');
+assert.match(core, /copyBufferToBuffer\(fluidBuffers\[currentFluid\]/, 'Full-field export copies the current fluid read buffer');
+assert.match(core, /copyBufferToBuffer\(frontBuffers\[currentFront\]/, 'Full-field export copies the current front read buffer');
+const fullGridFieldExportPath = join(root, 'volume-full-grid-field-export.mjs');
+assert.ok(existsSync(fullGridFieldExportPath), 'full-grid field export harness exists');
+const fullGridFieldExport = readFileSync(fullGridFieldExportPath, 'utf8');
+assert.match(fullGridFieldExport, /include-boundary-sidecar/, 'full-grid field export harness can include same-run boundary sidecar capture');
+assert.match(fullGridFieldExport, /beginDebugBoundarySidecarExport/, 'same-run full-grid export begins boundary sidecar capture from the same browser route');
+assert.match(fullGridFieldExport, /readDebugBoundarySidecarExportChunk/, 'same-run full-grid export drains boundary sidecar chunks from the same browser route');
+assert.match(fullGridFieldExport, /boundary-sidecar-meta\.f32/, 'same-run full-grid export writes the boundary sidecar meta buffer');
 assert.match(index, /id="volume-pyro-interface-focus"/, 'Pyro cockpit exposes an interface-focus slider');
 assert.match(index, /Border carrier/i, 'Pyro interface-focus slider describes the standalone border carrier');
 assert.match(index, /id="volume-pyro-edge-bite"/, 'Pyro cockpit exposes an edge-bite slider');
@@ -2207,9 +2238,9 @@ assert.match(phaseAlignedCorpus, /nativeLowDomainGap/, 'phase-aligned corpus man
 assert.match(phaseAlignedCorpus, /shellDetailTargets/, 'phase-aligned corpus manifest records shell/detail target vocabulary');
 assert.match(phaseAlignedCorpus, /box-average-linear-field-v0/, 'phase-aligned corpus packer names the box-average downsample operator');
 assert.match(phaseAlignedCorpus, /max-pool-support-field-v0/, 'phase-aligned corpus packer names support-preserving max-pool operators');
-assert.match(phaseAlignedCorpus, /kaminos\.volume\.boundary-sidecar-export\.v0/, 'phase-aligned corpus packer accepts exported boundary sidecar manifests');
-assert.match(phaseAlignedCorpus, /baked-boundary-sidecar-v0/, 'phase-aligned corpus packer preserves baked boundary sidecar identity');
-assert.match(phaseAlignedCorpus, /support[\s\S]*gradient[\s\S]*ridge[\s\S]*thickness/, 'phase-aligned corpus packer records boundary sidecar channel order support, gradient, ridge, thickness');
+assert.match(phaseAlignedCorpus, /kaminos\.volume\.boundary-sidecar-export\.v1/, 'phase-aligned corpus packer accepts exported boundary sidecar v1 manifests');
+assert.match(phaseAlignedCorpus, /baked-boundary-sidecar-v1/, 'phase-aligned corpus packer preserves baked boundary sidecar v1 identity');
+assert.match(phaseAlignedCorpus, /support[\s\S]*coverage[\s\S]*ridge[\s\S]*footprint[\s\S]*proximity[\s\S]*normalX[\s\S]*normalY[\s\S]*normalZ/, 'phase-aligned corpus packer records combined boundary sidecar plus meta channel order');
 assert.match(phaseAlignedCorpus, /boundarySidecarTargets/, 'phase-aligned corpus manifest maps boundary sidecar channels into teacher targets');
 assert.match(phaseAlignedCorpus, /resampling-kernel-with-recorded-filter-footprint-v0/, 'phase-aligned corpus packer refuses non-integer downsample pairs until a recorded-footprint resampler exists');
 assert.match(phaseAlignedCorpus, /failurePhase/, 'phase-aligned corpus packer writes failure-phase reports for missing/corrupt sources');
@@ -2224,6 +2255,8 @@ assert.match(phaseAlignedCorpus, /failurePhase/, 'phase-aligned corpus packer wr
     const nativeFront = [];
     const highBoundary = [];
     const nativeBoundary = [];
+    const highBoundaryMeta = [];
+    const nativeBoundaryMeta = [];
     for (let z = 0; z < 4; z += 1) {
       for (let y = 0; y < 4; y += 1) {
         for (let x = 0; x < 4; x += 1) {
@@ -2234,6 +2267,12 @@ assert.match(phaseAlignedCorpus, /failurePhase/, 'phase-aligned corpus packer wr
             x + y + z,
             x === 1 && y === 1 && z === 1 ? 7 : x + y + z,
             x + y + z,
+          );
+          highBoundaryMeta.push(
+            x === 1 && y === 1 && z === 1 ? 8 : x + y + z,
+            x - 1.5,
+            y - 1.5,
+            z - 1.5,
           );
         }
       }
@@ -2249,6 +2288,12 @@ assert.match(phaseAlignedCorpus, /failurePhase/, 'phase-aligned corpus packer wr
             x === 0 && y === 0 && z === 0 ? 7 : 0,
             3.5 + z,
           );
+          nativeBoundaryMeta.push(
+            x === 0 && y === 0 && z === 0 ? 8 : 0,
+            x - 0.5,
+            y - 0.5,
+            z - 0.5,
+          );
         }
       }
     }
@@ -2258,6 +2303,8 @@ assert.match(phaseAlignedCorpus, /failurePhase/, 'phase-aligned corpus packer wr
     writeF32(join(fixtureDir, 'native-front.f32'), nativeFront);
     writeF32(join(fixtureDir, 'high-boundary.f32'), highBoundary);
     writeF32(join(fixtureDir, 'native-boundary.f32'), nativeBoundary);
+    writeF32(join(fixtureDir, 'high-boundary-meta.f32'), highBoundaryMeta);
+    writeF32(join(fixtureDir, 'native-boundary-meta.f32'), nativeBoundaryMeta);
     const descriptor = (path, shape, channelOrder) => ({
       path,
       shape,
@@ -2297,23 +2344,25 @@ assert.match(phaseAlignedCorpus, /failurePhase/, 'phase-aligned corpus packer wr
     writeFileSync(join(fixtureDir, 'high-manifest.json'), `${JSON.stringify(highManifest, null, 2)}\n`);
     writeFileSync(join(fixtureDir, 'native-manifest.json'), `${JSON.stringify(nativeManifest, null, 2)}\n`);
     const highBoundaryManifest = {
-      schema: 'kaminos.volume.boundary-sidecar-export.v0',
-      identity: 'baked-boundary-sidecar-v0',
-      authority: 'band-limited-support-coverage-ridge-thickness-v0',
+      schema: 'kaminos.volume.boundary-sidecar-export.v1',
+      identity: 'baked-boundary-sidecar-v1',
+      authority: 'band-limited-support-coverage-ridge-footprint-proximity-normal-v2',
       status: 'captured',
       failurePhase: null,
       grid: 4,
-      channelOrder: ['support', 'gradient', 'ridge', 'thickness'],
+      channelOrder: ['support', 'coverage', 'ridge', 'footprint', 'proximity', 'normalX', 'normalY', 'normalZ'],
       sidecars: {
-        boundary: descriptor(join(fixtureDir, 'high-boundary.f32'), [4, 4, 4, 4], ['support', 'gradient', 'ridge', 'thickness']),
+        boundary: descriptor(join(fixtureDir, 'high-boundary.f32'), [4, 4, 4, 4], ['support', 'coverage', 'ridge', 'footprint']),
+        meta: descriptor(join(fixtureDir, 'high-boundary-meta.f32'), [4, 4, 4, 4], ['proximity', 'normalX', 'normalY', 'normalZ']),
       },
     };
     const nativeBoundaryManifest = {
       ...highBoundaryManifest,
-      identity: 'fixture-native-low-baked-boundary-sidecar-v0',
+      identity: 'fixture-native-low-baked-boundary-sidecar-v1',
       grid: 2,
       sidecars: {
-        boundary: descriptor(join(fixtureDir, 'native-boundary.f32'), [2, 2, 2, 4], ['support', 'gradient', 'ridge', 'thickness']),
+        boundary: descriptor(join(fixtureDir, 'native-boundary.f32'), [2, 2, 2, 4], ['support', 'coverage', 'ridge', 'footprint']),
+        meta: descriptor(join(fixtureDir, 'native-boundary-meta.f32'), [2, 2, 2, 4], ['proximity', 'normalX', 'normalY', 'normalZ']),
       },
     };
     writeFileSync(join(fixtureDir, 'high-boundary-manifest.json'), `${JSON.stringify(highBoundaryManifest, null, 2)}\n`);
@@ -2333,9 +2382,9 @@ assert.match(phaseAlignedCorpus, /failurePhase/, 'phase-aligned corpus packer wr
     assert.equal(manifest.status, 'captured', 'phase-aligned corpus smoke captures fixture data');
     assert.equal(manifest.downsampledHighInput.grid, 2, 'phase-aligned corpus smoke records target grid');
     assert.equal(manifest.nativeLowDomainGap.status, 'computed', 'phase-aligned corpus smoke computes native-low domain gap');
-    assert.equal(manifest.boundarySidecarTargets.identity, 'baked-boundary-sidecar-target-mapping-v0', 'phase-aligned corpus smoke maps baked boundary sidecar targets');
-    assert.deepEqual(manifest.boundarySidecarTargets.channelOrder, ['support', 'gradient', 'ridge', 'thickness'], 'phase-aligned corpus smoke preserves boundary sidecar channel order');
-    assert.equal(manifest.truthHighTarget.boundarySidecar.identity, 'baked-boundary-sidecar-v0', 'phase-aligned corpus smoke preserves truth boundary sidecar identity');
+    assert.equal(manifest.boundarySidecarTargets.identity, 'baked-boundary-sidecar-target-mapping-v1', 'phase-aligned corpus smoke maps baked boundary sidecar v1 targets');
+    assert.deepEqual(manifest.boundarySidecarTargets.channelOrder, ['support', 'coverage', 'ridge', 'footprint', 'proximity', 'normalX', 'normalY', 'normalZ'], 'phase-aligned corpus smoke preserves combined boundary sidecar/meta channel order');
+    assert.equal(manifest.truthHighTarget.boundarySidecar.identity, 'baked-boundary-sidecar-v1', 'phase-aligned corpus smoke preserves truth boundary sidecar identity');
     assert.equal(manifest.nativeLowDomainGap.boundarySidecar.status, 'computed', 'phase-aligned corpus smoke computes boundary sidecar native-low domain gap');
     assert.deepEqual(manifest.shellDetailTargets.channelGroups.hotCore.channels, ['heat', 'flame', 'visibleFireCarrier'], 'phase-aligned corpus smoke preserves hot-core target vocabulary');
     const readF32At = (path, index) => readFileSync(path).readFloatLE(index * 4);
@@ -2343,9 +2392,11 @@ assert.match(phaseAlignedCorpus, /failurePhase/, 'phase-aligned corpus packer wr
     assert.equal(readF32At(manifest.downsampledHighInput.sidecars.fluid.path, 1), 1.5, 'phase-aligned corpus smoke box-averages the first heat block');
     assert.equal(readF32At(manifest.downsampledHighInput.sidecars.front.path, 0), 6, 'phase-aligned corpus smoke max-pools front support instead of averaging it away');
     assert.equal(readF32At(manifest.downsampledHighInput.sidecars.boundary.path, 0), 6, 'phase-aligned corpus smoke max-pools boundary support');
-    assert.equal(readF32At(manifest.downsampledHighInput.sidecars.boundary.path, 1), 1.5, 'phase-aligned corpus smoke box-averages boundary gradient');
+    assert.equal(readF32At(manifest.downsampledHighInput.sidecars.boundary.path, 1), 1.5, 'phase-aligned corpus smoke box-averages boundary coverage');
     assert.equal(readF32At(manifest.downsampledHighInput.sidecars.boundary.path, 2), 7, 'phase-aligned corpus smoke max-pools boundary ridge');
-    assert.equal(readF32At(manifest.downsampledHighInput.sidecars.boundary.path, 3), 1.5, 'phase-aligned corpus smoke box-averages boundary thickness');
+    assert.equal(readF32At(manifest.downsampledHighInput.sidecars.boundary.path, 3), 1.5, 'phase-aligned corpus smoke box-averages boundary footprint');
+    assert.equal(readF32At(manifest.downsampledHighInput.sidecars.boundary.path, 4), 8, 'phase-aligned corpus smoke max-pools boundary proximity');
+    assert.equal(readF32At(manifest.downsampledHighInput.sidecars.boundary.path, 5), -1, 'phase-aligned corpus smoke box-averages boundary normalX');
     const nonIntegerOut = join(fixtureDir, 'non-integer-out');
     assert.throws(() => execFileSync('python3', [
       phaseAlignedCorpusPath,
