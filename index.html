@@ -967,9 +967,12 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
       <div class="field"><span class="field-key">Render</span><span class="field-val" id="volume-canonical-render-mode-state">default</span></div>
       <div class="field"><span class="field-key">Motion</span><span class="field-val" id="volume-canonical-motion-mode-state">animated</span></div>
       <div class="field"><span class="field-key">Content</span><span class="field-val" id="volume-canonical-content-mode-state">smoke</span></div>
+      <div class="field"><span class="field-key">Agent Capture</span><span class="field-val" id="volume-agent-capture-state">writes artifacts/volume-captures</span></div>
       <div class="volume-actions">
         <button class="btn" id="volume-toggle">Enable</button>
         <button class="btn" id="volume-fit-camera">Frame</button>
+        <button class="btn" id="volume-agent-camera-save">Save Agent Camera</button>
+        <button class="btn" id="volume-agent-view-save">Save Agent View + Settings</button>
         <button class="btn" id="volume-basin-copy">Copy Basin</button>
         <button class="btn" id="volume-basin-restore">Restore Last</button>
         <button class="btn" id="volume-basin-warm-cap">Warm Cap</button>
@@ -11708,6 +11711,98 @@ function buildVolumeBasinUrl(controlsSnapshot = readVolumeControls()) {
   return url.toString();
 }
 
+function volumeDomControlKeyFromId(id) {
+  return String(id || '').replace(/^volume-/, '').replace(/-([a-z])/g, (_, letter) => letter.toUpperCase());
+}
+
+function volumeDomControlParamFromId(id) {
+  return String(id || '').replaceAll('-', '_');
+}
+
+function readVolumeDomControlValue(el) {
+  if (!el) return null;
+  if (el.type === 'checkbox') return Boolean(el.checked);
+  if (el.type === 'color' || el.tagName === 'SELECT' || el.tagName === 'TEXTAREA') return el.value;
+  const numericValue = Number(el.value);
+  return Number.isFinite(numericValue) ? numericValue : el.value;
+}
+
+function readVolumeDomControls() {
+  const controls = {};
+  const fields = document.querySelectorAll('#sidebar input[id^="volume-"], #sidebar select[id^="volume-"], #sidebar textarea[id^="volume-"]');
+  for (const el of fields) {
+    const key = volumeDomControlKeyFromId(el.id);
+    controls[key] = {
+      id: el.id,
+      param: volumeDomControlParamFromId(el.id),
+      tagName: el.tagName,
+      type: el.type || el.tagName.toLowerCase(),
+      value: readVolumeDomControlValue(el),
+    };
+  }
+  return controls;
+}
+
+function buildVolumeAgentCaptureRoute(domControls = readVolumeDomControls()) {
+  const url = new URL(window.location.href);
+  url.search = '';
+  url.searchParams.set('kaminos_volume_smoke', '1');
+  for (const entry of Object.values(domControls)) {
+    if (!entry?.param || entry.tagName === 'TEXTAREA') continue;
+    if (entry.value === undefined || entry.value === null) continue;
+    url.searchParams.set(entry.param, formatVolumeBasinRouteValue(entry.value));
+  }
+  url.searchParams.set('volume_quality_reason', 'agent-view-capture');
+  return url.toString();
+}
+
+function buildVolumeAgentCapture(kind = 'view') {
+  const domControls = readVolumeDomControls();
+  const controlsSnapshot = kind === 'camera' ? null : readVolumeControls();
+  const debugState = window.__kaminosVolumePrototype?.debugState?.() || null;
+  return {
+    identity: 'kaminos-volume-agent-capture-v1',
+    kind,
+    savedAt: new Date().toISOString(),
+    href: window.location.href,
+    route: buildVolumeAgentCaptureRoute(domControls),
+    camera: window.kaminosCameraDebugState?.() || null,
+    domControls: kind === 'camera' ? {} : domControls,
+    controlCount: kind === 'camera' ? 0 : Object.keys(domControls).length,
+    controls: controlsSnapshot,
+    volumeDebugState: debugState,
+    viewport: {
+      innerWidth: window.innerWidth,
+      innerHeight: window.innerHeight,
+      devicePixelRatio: window.devicePixelRatio || 1,
+    },
+    note: 'Replay with node volume-witness.mjs --capture <artifact>; captures write under artifacts/volume-captures.',
+  };
+}
+
+async function saveVolumeAgentCapture(kind = 'view') {
+  const state = document.getElementById('volume-agent-capture-state');
+  const capture = buildVolumeAgentCapture(kind);
+  if (state) state.textContent = 'saving capture...';
+  try {
+    const response = await fetch('/api/volume-capture', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(capture),
+    });
+    const result = await response.json();
+    if (!response.ok || !result.ok) throw new Error(result.error || `capture save failed: ${response.status}`);
+    if (state) state.textContent = result.relativePath;
+    console.log(JSON.stringify(result, null, 2));
+    setInfo(`Volume capture saved: ${result.relativePath}`);
+    return result;
+  } catch (error) {
+    if (state) state.textContent = `capture failed: ${error.message || error}`;
+    setInfo(`Volume capture failed: ${error.message || error}`);
+    throw error;
+  }
+}
+
 function saveVolumeBasinSnapshot(reason = 'control-change') {
   const controlsSnapshot = readVolumeControls();
   const snapshot = {
@@ -17260,6 +17355,8 @@ async function initKaminosVolumeRoute() {
   });
   document.getElementById('volume-basin-copy')?.addEventListener('click', () => void copyVolumeBasinUrl());
   document.getElementById('volume-basin-restore')?.addEventListener('click', () => restoreVolumeBasinSnapshot());
+  document.getElementById('volume-agent-camera-save')?.addEventListener('click', () => void saveVolumeAgentCapture('camera'));
+  document.getElementById('volume-agent-view-save')?.addEventListener('click', () => void saveVolumeAgentCapture('view'));
   document.getElementById('volume-reaction-atlas-capture')?.addEventListener('click', () => void captureVolumeReactionAtlas());
   document.getElementById('volume-basin-slot-save')?.addEventListener('click', () => saveVolumeBasinSlot());
   document.getElementById('volume-basin-slot-load')?.addEventListener('click', () => restoreVolumeBasinSlot());
