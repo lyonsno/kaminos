@@ -100,7 +100,7 @@ h2 { font-size: 11px; font-weight: 600; margin: 18px 0 8px; color: #666; text-tr
     .crucible-bench-list .btn { width: 100%; text-align: left; margin: 0; }
     .crucible-bench-list .btn.active { background: #57421f; border-color: #8b6a2f; }
     .crucible-bench-note { color: #777; font-size: 10px; line-height: 1.35; margin-top: 7px; }
-    #crucible-viewport-workspace { position: absolute; inset: 0; z-index: 4; display: flex; align-items: center; justify-content: center; padding: clamp(18px, 4vw, 54px); background: radial-gradient(circle at 52% 36%, rgba(58,65,68,0.36), transparent 38%), linear-gradient(180deg, rgba(8,9,10,0.72), rgba(4,4,5,0.86)); pointer-events: none; perspective: 1200px; }
+    #crucible-viewport-workspace { position: absolute; inset: 0; z-index: 4; display: flex; align-items: center; justify-content: center; padding: clamp(18px, 4vw, 54px); background: radial-gradient(circle at 52% 36%, rgba(58,65,68,0.36), transparent 38%), linear-gradient(180deg, rgba(8,9,10,0.72), rgba(4,4,5,0.86)); pointer-events: auto; perspective: 1200px; }
     #crucible-viewport-workspace[hidden] { display: none; }
     .crucible-workroom-shell { width: min(1080px, 82vw); min-height: min(650px, 76vh); position: relative; transform: rotateX(5deg); transform-origin: center bottom; filter: drop-shadow(0 32px 70px rgba(0,0,0,0.56)); }
     .crucible-room-backwall { position: absolute; left: 5%; right: 5%; top: 0; height: 40%; border: 1px solid rgba(103,115,112,0.28); border-bottom: 0; background: linear-gradient(180deg, rgba(42,47,47,0.76), rgba(20,22,22,0.42)); box-shadow: inset 0 -24px 60px rgba(7,8,8,0.48); }
@@ -126,6 +126,18 @@ h2 { font-size: 11px; font-weight: 600; margin: 18px 0 8px; color: #666; text-tr
     .crucible-viewport-source-thumb { width: 100%; height: 100%; object-fit: contain; display: block; }
     .crucible-viewport-source-thumb[hidden] { display: none; }
     .crucible-viewport-plate-body { color: #d7ddcf; font-size: 13px; line-height: 1.4; overflow-wrap: anywhere; margin-top: 10px; }
+    .crucible-viewport-controls { position: relative; z-index: 2; display: grid; gap: 8px; margin-top: 14px; }
+    .crucible-viewport-control-label { color: #aaa38f; font-size: 10px; font-weight: 700; }
+    .crucible-viewport-select { width: 100%; min-height: 34px; border: 1px solid rgba(139,145,132,0.46); border-radius: 6px; background: rgba(7,9,9,0.82); color: #eee7d2; padding: 6px 28px 6px 9px; font-size: 11px; }
+    .crucible-viewport-select:focus-visible,
+    .crucible-viewport-action:focus-visible { outline: 2px solid #e4b95e; outline-offset: 2px; }
+    .crucible-viewport-action { min-height: 38px; border: 1px solid rgba(207,156,72,0.66); border-radius: 7px; background: linear-gradient(180deg, #8b5426, #573317); color: #fff0c5; font-size: 12px; font-weight: 800; cursor: pointer; box-shadow: 0 7px 18px rgba(0,0,0,0.28); }
+    .crucible-viewport-action:hover:not(:disabled) { border-color: #f3c66e; background: linear-gradient(180deg, #a7662d, #68401f); }
+    .crucible-viewport-action.secondary { border-color: rgba(128,158,151,0.5); background: linear-gradient(180deg, #344744, #24312f); color: #d7ebe2; }
+    .crucible-viewport-action:disabled { cursor: not-allowed; opacity: 0.42; box-shadow: none; }
+    .crucible-viewport-help { color: #a59f8d; font-size: 10px; line-height: 1.35; }
+    .crucible-viewport-firing-controls { margin-top: auto; }
+    .crucible-viewport-route-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
     .crucible-viewport-firing-mouth { min-height: 264px; display: flex; flex-direction: column; justify-content: space-between; padding: 15px; background: radial-gradient(circle at 50% 68%, rgba(110,46,24,0.48), transparent 38%), linear-gradient(180deg, rgba(21,19,18,0.96), rgba(9,8,8,0.9)); }
     .crucible-viewport-firing-mouth::before { content: ""; position: absolute; left: 50%; bottom: 28px; width: 118px; height: 118px; transform: translateX(-50%); border-radius: 50%; border: 1px solid rgba(227,160,74,0.28); background: radial-gradient(circle, rgba(255,204,108,0.46), rgba(139,55,23,0.34) 42%, rgba(7,7,7,0.92) 72%); box-shadow: 0 0 44px rgba(235,109,39,0.14), inset 0 0 34px rgba(0,0,0,0.72); opacity: 0.38; }
     #crucible-viewport-workspace[data-crucible-heat-state="firing"] .crucible-viewport-firing-mouth::before { opacity: 0.9; box-shadow: 0 0 54px rgba(255,133,45,0.42), inset 0 0 28px rgba(0,0,0,0.58); }
@@ -2471,6 +2483,13 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
             <div class="crucible-viewport-zone-label">Source Plate</div>
             <div class="crucible-viewport-plate-body" id="crucible-viewport-source">No source on the plate yet.</div>
             <div class="crucible-viewport-slot-body" id="crucible-viewport-armature">No armature pinned yet.</div>
+            <div class="crucible-viewport-controls">
+              <label class="crucible-viewport-control-label" for="crucible-viewport-source-select">Choose an image</label>
+              <select class="crucible-viewport-select" id="crucible-viewport-source-select">
+                <option value="">No images found</option>
+              </select>
+              <div class="crucible-viewport-help">The selected image stays on this crucible's plate.</div>
+            </div>
           </div>
         </div>
         <div class="crucible-viewport-zone crucible-viewport-firing-mouth" id="crucible-viewport-firing-mouth">
@@ -2478,11 +2497,26 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
             <div class="crucible-viewport-zone-label">Firing Mouth</div>
             <div class="crucible-viewport-slot-body" id="crucible-viewport-firing">No firing started.</div>
           </div>
+          <div class="crucible-viewport-controls crucible-viewport-firing-controls">
+            <div class="crucible-viewport-route-grid">
+              <label class="crucible-viewport-control-label">Make
+                <select class="crucible-viewport-select" id="crucible-viewport-route-select"></select>
+              </label>
+              <label class="crucible-viewport-control-label">Run
+                <select class="crucible-viewport-select" id="crucible-viewport-profile-select"></select>
+              </label>
+            </div>
+            <button type="button" class="crucible-viewport-action" id="crucible-viewport-fire-button">Fire image</button>
+            <div class="crucible-viewport-help" id="crucible-viewport-fire-help">Choose an image to begin.</div>
+          </div>
         </div>
         <div class="crucible-viewport-trays">
           <div class="crucible-viewport-zone crucible-viewport-tray crucible-viewport-cast-tray" id="crucible-viewport-cast-tray">
             <div class="crucible-viewport-zone-label">Cast Tray</div>
             <div class="crucible-viewport-slot-body" id="crucible-viewport-cast">No cast on the tray.</div>
+            <div class="crucible-viewport-controls">
+              <button type="button" class="crucible-viewport-action secondary" id="crucible-viewport-cast-button" disabled>View cast</button>
+            </div>
           </div>
           <div class="crucible-viewport-zone crucible-viewport-tray crucible-viewport-shard-rack" id="crucible-viewport-shard-rack">
             <div class="crucible-viewport-zone-label">Shard Rack</div>
@@ -12577,6 +12611,7 @@ let kilnRouteBenchState = {
 };
 
 let sharpBreathingRoomRunningProfileId = null;
+let crucibleViewportProfileId = 'cooperative-spn-gaussian';
 
 const CRUCIBLE_BENCH_STORAGE_KEY = 'kaminosCrucibleBenchState';
 const CRUCIBLE_BENCH_PROXY_ZONES = [
@@ -12798,6 +12833,144 @@ function crucibleViewportSourcePlateLabel(currentSource) {
   return `${crucibleBenchSourceLabel(currentSource)} - ${compactCrucibleBenchPath(currentSource.source)}`;
 }
 
+function crucibleViewportImageEntries() {
+  const entries = pipelineDockState.browserAssetsByKind?.image || [];
+  const seen = new Set();
+  return entries.filter(entry => {
+    if (!entry?.id || !entry?.source || entry.kind !== 'image' || seen.has(entry.id)) return false;
+    seen.add(entry.id);
+    return true;
+  });
+}
+
+function renderCrucibleViewportSourceOptions(select, currentSource) {
+  if (!select) return;
+  const entries = crucibleViewportImageEntries();
+  const selectedAssetId = currentSource?.assetId || '';
+  select.innerHTML = '';
+  if (!entries.length) {
+    const empty = document.createElement('option');
+    empty.value = '';
+    empty.textContent = 'No indexed images found';
+    select.appendChild(empty);
+    select.disabled = true;
+    return;
+  }
+  select.disabled = Boolean(sharpBreathingRoomRunningProfileId);
+  if (currentSource?.source && !entries.some(entry => entry.id === selectedAssetId)) {
+    const current = document.createElement('option');
+    current.value = '';
+    current.textContent = currentSource.label || 'Current pasted image';
+    current.selected = true;
+    select.appendChild(current);
+  }
+  for (const entry of entries) {
+    const option = document.createElement('option');
+    option.value = entry.id;
+    option.textContent = pipelineBrowserAssetLabel(entry);
+    option.selected = entry.id === selectedAssetId;
+    select.appendChild(option);
+  }
+}
+
+function renderCrucibleViewportRouteOptions(routeSelect, profileSelect, route) {
+  if (routeSelect) {
+    routeSelect.innerHTML = '';
+    for (const candidate of KILN_ROUTE_BENCH_ROUTES) {
+      const option = document.createElement('option');
+      option.value = candidate.id;
+      option.textContent = candidate.outputKind === 'splat' ? 'a splat' : (candidate.title || candidate.id);
+      option.selected = candidate.id === route.id;
+      routeSelect.appendChild(option);
+    }
+    routeSelect.disabled = Boolean(sharpBreathingRoomRunningProfileId);
+  }
+  if (profileSelect) {
+    profileSelect.innerHTML = '';
+    for (const action of route.actions || []) {
+      const option = document.createElement('option');
+      option.value = action.profileId;
+      option.textContent = action.label || route.profileLabels?.[action.profileId] || action.profileId;
+      option.selected = action.profileId === crucibleViewportProfileId;
+      profileSelect.appendChild(option);
+    }
+    if (!(route.actions || []).some(action => action.profileId === crucibleViewportProfileId)) {
+      crucibleViewportProfileId = route.actions?.[0]?.profileId || '';
+      profileSelect.value = crucibleViewportProfileId;
+    }
+    profileSelect.disabled = Boolean(sharpBreathingRoomRunningProfileId);
+  }
+}
+
+function selectCrucibleViewportSource(assetId) {
+  const entry = crucibleViewportImageEntries().find(candidate => candidate.id === assetId);
+  if (!entry) {
+    setKilnRouteBenchStatus('That image is no longer available. Refresh the image shelf and choose another.', 'error');
+    renderKilnRouteBench();
+    return null;
+  }
+  pipelineDockState.browserSelectedAssetIds.image = assetId;
+  const manualInput = document.getElementById('sharp-breathing-room-source-input');
+  if (manualInput) manualInput.value = '';
+  renderKilnRouteBench();
+  setInfo(`Image placed on the source plate: ${pipelineBrowserAssetLabel(entry)}`);
+  return pipelineBrowserAssetSource(entry);
+}
+
+function selectCrucibleViewportRoute(routeId) {
+  const route = selectedKilnRouteBenchRoute(routeId);
+  kilnRouteBenchState.selectedRouteId = route.id;
+  renderKilnRouteBench();
+  return route;
+}
+
+function selectCrucibleViewportProfile(profileId) {
+  const route = selectedKilnRouteBenchRoute();
+  if (!(route.actions || []).some(action => action.profileId === profileId)) return null;
+  crucibleViewportProfileId = profileId;
+  renderCrucibleViewportWorkspace();
+  return profileId;
+}
+
+function runCrucibleViewportFiring() {
+  const routeId = document.getElementById('crucible-viewport-route-select')?.value || kilnRouteBenchState.selectedRouteId;
+  const route = selectedKilnRouteBenchRoute(routeId);
+  const profileId = document.getElementById('crucible-viewport-profile-select')?.value || crucibleViewportProfileId;
+  return runKilnRouteBenchRoute(route.id, profileId);
+}
+
+function openCrucibleViewportCast() {
+  const lastCast = activeCrucibleBenchCrucible().casts[0] || null;
+  const castRecord = lastCast?.assetId ? sceneObjects.find(entry => entry.id === lastCast.assetId) : null;
+  if (!lastCast?.assetId || !castRecord) {
+    setKilnRouteBenchStatus('This crucible does not currently hold a cast that can be opened in the scene.', 'error');
+    renderCrucibleViewportWorkspace();
+    return null;
+  }
+  window.selectSceneObject(lastCast.assetId);
+  setActiveTab('assets');
+  return castRecord;
+}
+
+function crucibleViewportDebugState() {
+  const route = selectedKilnRouteBenchRoute();
+  const source = kilnRouteBenchSelectedSource(route);
+  const lastCast = activeCrucibleBenchCrucible().casts[0] || null;
+  const castRecord = lastCast?.assetId ? sceneObjects.find(entry => entry.id === lastCast.assetId) : null;
+  return {
+    schema: 'kaminos.crucible-viewport-debug.v0',
+    source: source ? { ...source } : null,
+    requestedRouteId: kilnRouteBenchState.selectedRouteId || null,
+    effectiveRouteId: route.id,
+    effectivePipelineId: route.pipelineId,
+    selectedProfileId: crucibleViewportProfileId,
+    runningProfileId: sharpBreathingRoomRunningProfileId,
+    routeStatus: kilnRouteBenchState.status || 'idle',
+    lastCast: lastCast ? { ...lastCast } : null,
+    castTargetSceneObjectId: castRecord?.id || null,
+  };
+}
+
 function renderCrucibleViewportWorkspace() {
   const workspace = document.getElementById('crucible-viewport-workspace');
   if (!workspace) return;
@@ -12809,6 +12982,7 @@ function renderCrucibleViewportWorkspace() {
   const lastArmature = crucible.armatures[0] || null;
   const heatState = crucibleViewportHeatState({ lastFiring, lastCast, lastReceipt });
   workspace.dataset.crucibleHeatState = heatState;
+  workspace.dataset.crucibleRouteStatus = kilnRouteBenchState.status || 'idle';
   const title = document.getElementById('crucible-viewport-title');
   const summary = document.getElementById('crucible-viewport-summary');
   const source = document.getElementById('crucible-viewport-source');
@@ -12820,11 +12994,37 @@ function renderCrucibleViewportWorkspace() {
   const armature = document.getElementById('crucible-viewport-armature');
   const shards = document.getElementById('crucible-viewport-shards');
   const heatLabel = document.getElementById('crucible-viewport-heat-label');
+  const sourceSelect = document.getElementById('crucible-viewport-source-select');
+  const routeSelect = document.getElementById('crucible-viewport-route-select');
+  const profileSelect = document.getElementById('crucible-viewport-profile-select');
+  const fireButton = document.getElementById('crucible-viewport-fire-button');
+  const fireHelp = document.getElementById('crucible-viewport-fire-help');
+  const castButton = document.getElementById('crucible-viewport-cast-button');
+  const route = selectedKilnRouteBenchRoute();
+  const running = Boolean(sharpBreathingRoomRunningProfileId);
+  const castRecord = lastCast?.assetId ? sceneObjects.find(entry => entry.id === lastCast.assetId) : null;
   if (title) title.textContent = crucible.name || 'Unnamed crucible';
   if (summary) {
     summary.textContent = `This crucible is holding ${currentSource ? 'one source' : 'no source yet'}, ${crucible.firings.length} firing${crucible.firings.length === 1 ? '' : 's'}, and ${crucible.casts.length} cast${crucible.casts.length === 1 ? '' : 's'}.`;
   }
   if (heatLabel) heatLabel.textContent = crucibleViewportHeatLabel(heatState);
+  renderCrucibleViewportSourceOptions(sourceSelect, currentSource);
+  renderCrucibleViewportRouteOptions(routeSelect, profileSelect, route);
+  if (fireButton) {
+    fireButton.disabled = running || !currentSource?.source;
+    fireButton.textContent = running ? 'Firing...' : 'Fire image';
+  }
+  if (fireHelp) {
+    fireHelp.textContent = running
+      ? (kilnRouteBenchState.message || 'The furnace is working on this image.')
+      : currentSource?.source
+        ? `${route.title}. ${route.profileLabels?.[crucibleViewportProfileId] || crucibleViewportProfileId} mode.`
+        : 'Choose an image to begin.';
+  }
+  if (castButton) {
+    castButton.disabled = !lastCast?.assetId || !castRecord;
+    castButton.textContent = castRecord ? 'View cast' : 'No cast to view';
+  }
   if (source) {
     source.classList.toggle('present', Boolean(currentSource?.source));
     source.textContent = crucibleViewportSourcePlateLabel(currentSource);
@@ -13004,6 +13204,7 @@ function setKilnRouteBenchStatus(message, kind = 'idle', extra = {}) {
     status.dataset.kilnRouteId = route.id;
   }
   refreshSharpBreathingRoomComparisonSummary(extra.comparisonState || window.__kaminosSharpBreathingRoomComparisonState || kilnRouteBenchState);
+  renderCrucibleViewportWorkspace();
   if (message) setInfo(message);
 }
 
@@ -17471,6 +17672,19 @@ function initPipelineDock() {
   document.getElementById('crucible-bench-name-input')?.addEventListener('input', event => {
     renameActiveCrucibleBenchCrucible(event.target.value);
   });
+  document.getElementById('crucible-viewport-source-select')?.addEventListener('change', event => {
+    selectCrucibleViewportSource(event.target.value);
+  });
+  document.getElementById('crucible-viewport-route-select')?.addEventListener('change', event => {
+    selectCrucibleViewportRoute(event.target.value);
+  });
+  document.getElementById('crucible-viewport-profile-select')?.addEventListener('change', event => {
+    selectCrucibleViewportProfile(event.target.value);
+  });
+  document.getElementById('crucible-viewport-fire-button')?.addEventListener('click', () => {
+    runCrucibleViewportFiring().catch(err => setInfo(err.message || String(err)));
+  });
+  document.getElementById('crucible-viewport-cast-button')?.addEventListener('click', openCrucibleViewportCast);
   document.getElementById('pipeline-refresh-button')?.addEventListener('click', () => loadPipelineManifest().catch(err => setInfo(err.message || String(err))));
   document.getElementById('pipeline-browser-refresh')?.addEventListener('click', () => loadPipelineAssetBrowser().catch(err => setInfo(err.message || String(err))));
   document.querySelectorAll('[data-pipeline-asset-palette]').forEach(button => {
@@ -17491,6 +17705,10 @@ window.runSelectedPipeline = runSelectedPipeline;
 window.runKilnRouteBenchRoute = runKilnRouteBenchRoute;
 window.renderKilnRouteBench = renderKilnRouteBench;
 window.renderCrucibleBench = renderCrucibleBench;
+window.selectCrucibleViewportSource = selectCrucibleViewportSource;
+window.runCrucibleViewportFiring = runCrucibleViewportFiring;
+window.openCrucibleViewportCast = openCrucibleViewportCast;
+window.kaminosCrucibleViewportDebugState = crucibleViewportDebugState;
 window.toggleCrucibleBenchSwitcher = toggleCrucibleBenchSwitcher;
 window.createNewCrucibleBenchCrucible = createNewCrucibleBenchCrucible;
 window.selectCrucibleBenchCrucible = selectCrucibleBenchCrucible;

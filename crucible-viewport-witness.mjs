@@ -167,19 +167,34 @@ try {
     const workspace = document.getElementById('crucible-viewport-workspace');
     const stage = document.getElementById('crucible-worktable-stage');
     const sourceThumb = document.getElementById('crucible-viewport-source-thumb');
+    const sourceSelect = document.getElementById('crucible-viewport-source-select');
+    const fireButton = document.getElementById('crucible-viewport-fire-button');
+    const castButton = document.getElementById('crucible-viewport-cast-button');
+    const debug = window.kaminosCrucibleViewportDebugState?.() || null;
     const stageRect = stage?.getBoundingClientRect();
     return {
       requestedSelectors: {
         workspace: { id: 'crucible-viewport-workspace', data: 'data-crucible-workroom' },
         heat: { attribute: 'data-crucible-heat-state' },
+        routeStatus: { attribute: 'data-crucible-route-status' },
         stage: { id: 'crucible-worktable-stage' },
       },
       activeTab: document.querySelector('.tab.active')?.dataset.tab || null,
       workspaceHidden: Boolean(workspace?.hidden),
       workroom: workspace?.dataset.crucibleWorkroom || null,
       heatState: workspace?.dataset.crucibleHeatState || null,
+      routeStatus: workspace?.dataset.crucibleRouteStatus || null,
+      pointerEvents: workspace ? getComputedStyle(workspace).pointerEvents : null,
       stageRect: stageRect ? { width: stageRect.width, height: stageRect.height } : null,
       sourceThumbHidden: Boolean(sourceThumb?.hidden),
+      sourceOptionCount: sourceSelect?.options?.length || 0,
+      selectedSourceId: sourceSelect?.value || null,
+      fireButtonDisabled: Boolean(fireButton?.disabled),
+      fireButtonLabel: fireButton?.textContent || null,
+      castButtonDisabled: Boolean(castButton?.disabled),
+      castButtonLabel: castButton?.textContent || null,
+      effectiveState: debug,
+      castHasTarget: Boolean(debug?.lastCast?.assetId && debug?.castTargetSceneObjectId),
       title: document.getElementById('crucible-viewport-title')?.textContent || null,
       source: document.getElementById('crucible-viewport-source')?.textContent || null,
       firing: document.getElementById('crucible-viewport-firing')?.textContent || null,
@@ -190,8 +205,36 @@ try {
   if (state.activeTab !== 'generate') throw new Error(`Generate tab did not activate: ${state.activeTab}`);
   if (state.workspaceHidden) throw new Error('Crucible viewport workspace is hidden');
   if (state.workroom !== 'active') throw new Error(`Crucible workroom identity missing: ${state.workroom}`);
+  if (state.pointerEvents === 'none') throw new Error('Crucible workroom controls are not hittable');
   if (!state.stageRect || state.stageRect.width < 300 || state.stageRect.height < 220) {
     throw new Error(`Crucible worktable stage is not visibly mounted: ${JSON.stringify(state.stageRect)}`);
+  }
+  if (state.sourceOptionCount < 1 || !state.selectedSourceId) {
+    throw new Error(`Crucible source plate has no selectable indexed source: ${JSON.stringify(state)}`);
+  }
+  if (state.fireButtonDisabled) throw new Error('Crucible primary firing action is disabled despite a selected source');
+  if (!state.castButtonDisabled && !state.castHasTarget) throw new Error('Crucible cast action is enabled without a scene target');
+  phase = 'exercising-source-selection';
+  state.sourceSelectionExercise = await evaluate(ws, `(async () => {
+    const select = document.getElementById('crucible-viewport-source-select');
+    const before = window.kaminosCrucibleViewportDebugState?.() || null;
+    const target = Array.from(select?.options || []).find(option => option.value && option.value !== before?.source?.assetId);
+    if (!target) return { attempted: false, reason: 'no alternate indexed source' };
+    select.value = target.value;
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    const after = window.kaminosCrucibleViewportDebugState?.() || null;
+    return {
+      attempted: true,
+      requestedAssetId: target.value,
+      beforeAssetId: before?.source?.assetId || null,
+      effectiveAssetId: after?.source?.assetId || null,
+      effectiveRouteId: after?.effectiveRouteId || null,
+      effectivePipelineId: after?.effectivePipelineId || null,
+    };
+  })()`);
+  if (state.sourceSelectionExercise.attempted && state.sourceSelectionExercise.effectiveAssetId !== state.sourceSelectionExercise.requestedAssetId) {
+    throw new Error(`Crucible source selection did not become effective: ${JSON.stringify(state.sourceSelectionExercise)}`);
   }
   if (runtimeExceptions.length) throw new Error(`browser runtime exceptions: ${runtimeExceptions.join('; ')}`);
 
