@@ -11561,34 +11561,7 @@ function normalizeVolumeActivityPressureDispatchStrategy(value, fallback = undef
 function applyTallPlumeOperatorPreset(name, options = {}) {
   const preset = resolveTallPlumeOperatorPreset(name);
   if (!preset) return false;
-  applyVolumeScenePreset(preset.volumeScene || 'tall_plume', { keepBudgetPreset: true });
-  for (const [key, value] of Object.entries(preset)) {
-    if (key === 'label' || key === 'volumeScene' || key === 'sourceCaptureHash') continue;
-    setVolumeControlValue(volumeSceneControlId(key), formatVolumePresetControlValue(key, value));
-  }
-  if (preset.activityPressureMaxTier !== undefined) {
-    routedVolumeActivityPressureMaxTier = normalizeVolumeActivityPressureMaxTier(preset.activityPressureMaxTier, routedVolumeActivityPressureMaxTier);
-    routedVolumeActivityPressureP4Enabled = routedVolumeActivityPressureMaxTier >= 4;
-  }
-  if (preset.activityPressureP4Enabled !== undefined && preset.activityPressureMaxTier === undefined) {
-    routedVolumeActivityPressureP4Enabled = !!preset.activityPressureP4Enabled;
-    routedVolumeActivityPressureMaxTier = routedVolumeActivityPressureP4Enabled ? 4 : 3;
-  }
-  if (preset.activityPressureReadbackCadence !== undefined) {
-    const cadence = Number(preset.activityPressureReadbackCadence);
-    routedVolumeActivityPressureReadbackCadence = Number.isFinite(cadence)
-      ? Math.max(1, Math.min(240, Math.round(cadence)))
-      : undefined;
-  }
-  if (preset.activityPressureDispatchStrategy !== undefined) {
-    routedVolumeActivityPressureDispatchStrategy = normalizeVolumeActivityPressureDispatchStrategy(preset.activityPressureDispatchStrategy, routedVolumeActivityPressureDispatchStrategy);
-  }
-  if (preset.activityPressureShadowOverhead !== undefined) {
-    routedVolumeActivityPressureShadowOverhead = !!preset.activityPressureShadowOverhead;
-  }
-  if (preset.gpuTiming !== undefined) {
-    routedVolumeGpuTiming = !!preset.gpuTiming;
-  }
+  applyVolumeControlsSnapshot(preset, { keepBudgetPreset: true });
   if (!options.keepBudgetPreset) {
     activeVolumeRayBudgetPreset = '';
     routedVolumeRayBudgetPreset = '';
@@ -11796,14 +11769,41 @@ const VOLUME_BASIN_ROUTE_FIELDS = [
   ['pressureTierLowerMax', 'volume_pressure_tier_lower_max'],
   ['pressureTierHeroMin', 'volume_pressure_tier_hero_min'],
   ['pressureTierHeroMax', 'volume_pressure_tier_hero_max'],
+  ['pressureIterations', 'volume_pressure_iterations'],
+  ['pressureStrategy', 'volume_pressure_strategy'],
   ['activityPressureP4Enabled', 'volume_activity_pressure_p4'],
   ['activityPressureMaxTier', 'volume_activity_pressure_max_tier'],
   ['activityPressureReadbackCadence', 'volume_activity_pressure_readback_cadence'],
   ['activityPressureDispatchStrategy', 'volume_activity_pressure_dispatch'],
   ['activityPressureShadowOverhead', 'volume_activity_pressure_shadow_overhead'],
   ['gpuTiming', 'volume_gpu_timing'],
+  ['simProfile', 'volume_sim_profile'],
   ['activityVorticityGate', 'volume_activity_vorticity_gate'],
   ['activityDetailGate', 'volume_activity_detail_gate'],
+  ['canonicalSourceMode', 'volume_canonical_source_mode'],
+  ['canonicalRenderMode', 'volume_canonical_render_mode'],
+  ['canonicalMotionMode', 'volume_canonical_motion_mode'],
+  ['canonicalContentMode', 'volume_canonical_content'],
+  ['canonicalSourceY', 'volume_canonical_source_y'],
+  ['canonicalSourceInjection', 'volume_canonical_injection'],
+  ['canonicalBuoyancy', 'volume_canonical_buoyancy'],
+  ['reactionFuelScale', 'volume_reaction_fuel'],
+  ['lifecycleEffect', 'volume_lifecycle_effect'],
+  ['lifecycleT', 'volume_lifecycle_t'],
+  ['quenchVapor', 'volume_quench_vapor'],
+  ['runtimeQualityRequested', 'volume_runtime_quality'],
+  ['gpuPressure', 'volume_gpu_pressure'],
+  ['runtimeQualityReason', 'volume_quality_reason'],
+  ['majorantCadence', 'volume_majorant_cadence'],
+  ['rayBudgetPreset', 'volume_ray_budget_preset'],
+  ['bonfireRecenter', 'volume_bonfire_recenter'],
+  ['bonfireLateralDamping', 'volume_bonfire_lateral_damping'],
+  ['bonfireShear', 'volume_bonfire_shear'],
+  ['bonfireDetailForces', 'volume_bonfire_detail_forces'],
+  ['bonfireDepinch', 'volume_bonfire_depinch'],
+  ['bonfireProjection', 'volume_bonfire_projection'],
+  ['bonfireTemporal', 'volume_bonfire_temporal'],
+  ['bonfireInstabilityProbe', 'volume_bonfire_instability_probe'],
   ['reactionLiveView', 'volume_reaction_live_view'],
   ['boundarySidecarSource', 'volume_boundary_sidecar_source'],
   ['boundarySidecarView', 'volume_boundary_sidecar_view'],
@@ -11827,6 +11827,130 @@ function buildVolumeBasinUrl(controlsSnapshot = readVolumeControls()) {
   return url.toString();
 }
 
+function volumeSnapshotBoolean(value, fallback = false) {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value !== 0;
+  const normalized = String(value ?? '').toLowerCase();
+  if (['1', 'true', 'yes', 'on', 'enabled'].includes(normalized)) return true;
+  if (['0', 'false', 'no', 'off', 'disabled'].includes(normalized)) return false;
+  return fallback;
+}
+
+function hydrateVolumeRouteOwnedControls(controlsSnapshot = {}) {
+  if (!controlsSnapshot || typeof controlsSnapshot !== 'object') return;
+  if (controlsSnapshot.pressureIterations !== undefined) {
+    const iterations = Number(controlsSnapshot.pressureIterations);
+    routedVolumePressureIterations = Number.isFinite(iterations)
+      ? Math.max(0, Math.min(12, Math.round(iterations)))
+      : undefined;
+  }
+  if (controlsSnapshot.pressureStrategy !== undefined) {
+    const strategy = String(controlsSnapshot.pressureStrategy || '').toLowerCase();
+    if (strategy === 'global' || strategy === 'spatial_tiers' || strategy === 'activity_tiers') {
+      routedVolumePressureStrategy = strategy;
+    }
+  }
+  if (controlsSnapshot.pressureMode !== undefined) {
+    routedVolumePressureMode = normalizeVolumePressureMode(controlsSnapshot.pressureMode);
+    setVolumeControlValue('volume-pressure-mode', routedVolumePressureMode);
+  } else if (controlsSnapshot.pressureStrategy !== undefined || controlsSnapshot.pressureIterations !== undefined) {
+    routedVolumePressureMode = volumePressureModeFromRoute(routedVolumePressureStrategy, routedVolumePressureIterations);
+    setVolumeControlValue('volume-pressure-mode', routedVolumePressureMode);
+  }
+  if (controlsSnapshot.activityPressureMaxTier !== undefined) {
+    routedVolumeActivityPressureMaxTier = normalizeVolumeActivityPressureMaxTier(controlsSnapshot.activityPressureMaxTier, routedVolumeActivityPressureMaxTier);
+    routedVolumeActivityPressureP4Enabled = routedVolumeActivityPressureMaxTier >= 4;
+  }
+  if (controlsSnapshot.activityPressureP4Enabled !== undefined && controlsSnapshot.activityPressureMaxTier === undefined) {
+    routedVolumeActivityPressureP4Enabled = volumeSnapshotBoolean(controlsSnapshot.activityPressureP4Enabled, routedVolumeActivityPressureP4Enabled);
+    routedVolumeActivityPressureMaxTier = routedVolumeActivityPressureP4Enabled ? 4 : Math.min(routedVolumeActivityPressureMaxTier, 3);
+  }
+  if (controlsSnapshot.activityPressureReadbackCadence !== undefined) {
+    const cadence = Number(controlsSnapshot.activityPressureReadbackCadence);
+    routedVolumeActivityPressureReadbackCadence = Number.isFinite(cadence)
+      ? Math.max(1, Math.min(240, Math.round(cadence)))
+      : undefined;
+  }
+  if (controlsSnapshot.activityPressureDispatchStrategy !== undefined) {
+    routedVolumeActivityPressureDispatchStrategy = normalizeVolumeActivityPressureDispatchStrategy(controlsSnapshot.activityPressureDispatchStrategy, routedVolumeActivityPressureDispatchStrategy);
+  }
+  if (controlsSnapshot.activityPressureShadowOverhead !== undefined) {
+    routedVolumeActivityPressureShadowOverhead = volumeSnapshotBoolean(controlsSnapshot.activityPressureShadowOverhead, routedVolumeActivityPressureShadowOverhead);
+  }
+  if (controlsSnapshot.gpuTiming !== undefined) {
+    routedVolumeGpuTiming = volumeSnapshotBoolean(controlsSnapshot.gpuTiming, routedVolumeGpuTiming);
+  }
+  if (controlsSnapshot.simProfile !== undefined) {
+    routedVolumeSimProfile = volumeSnapshotBoolean(controlsSnapshot.simProfile, routedVolumeSimProfile);
+  }
+  if (controlsSnapshot.canonicalSourceMode !== undefined) {
+    routedCanonicalSourceMode = normalizeCanonicalVolumeSourceMode(controlsSnapshot.canonicalSourceMode);
+  }
+  if (controlsSnapshot.canonicalRenderMode !== undefined) {
+    routedCanonicalRenderMode = normalizeCanonicalRenderMode(controlsSnapshot.canonicalRenderMode);
+  }
+  if (controlsSnapshot.canonicalMotionMode !== undefined) {
+    routedCanonicalMotionMode = normalizeCanonicalMotionMode(controlsSnapshot.canonicalMotionMode);
+  }
+  if (controlsSnapshot.canonicalContentMode !== undefined) {
+    routedCanonicalContentMode = normalizeCanonicalContentMode(controlsSnapshot.canonicalContentMode);
+  }
+  const canonicalDefaults = canonicalVolumeSourceDefaults(routedCanonicalSourceMode);
+  if (controlsSnapshot.canonicalSourceY !== undefined) {
+    const value = Number(controlsSnapshot.canonicalSourceY);
+    routedCanonicalSourceY = Number.isFinite(value) ? Math.max(-0.92, Math.min(-0.20, value)) : canonicalDefaults.sourceY;
+  }
+  if (controlsSnapshot.canonicalSourceInjection !== undefined) {
+    const value = Number(controlsSnapshot.canonicalSourceInjection);
+    routedCanonicalInjection = Number.isFinite(value) ? Math.max(0, Math.min(1.5, value)) : canonicalDefaults.injection;
+  }
+  if (controlsSnapshot.canonicalBuoyancy !== undefined) {
+    const value = Number(controlsSnapshot.canonicalBuoyancy);
+    routedCanonicalBuoyancy = Number.isFinite(value) ? Math.max(0, Math.min(1.5, value)) : canonicalDefaults.buoyancy;
+  }
+  if (controlsSnapshot.reactionFuelScale !== undefined) {
+    const value = Number(controlsSnapshot.reactionFuelScale);
+    if (Number.isFinite(value)) routedVolumeReactionFuelScale = Math.max(0, Math.min(1.5, value));
+  }
+  if (controlsSnapshot.lifecycleEffect !== undefined) {
+    routedVolumeLifecycleEffect = normalizeVolumeLifecycleEffect(controlsSnapshot.lifecycleEffect);
+  }
+  if (controlsSnapshot.lifecycleT !== undefined) {
+    const value = Number(controlsSnapshot.lifecycleT);
+    if (Number.isFinite(value)) routedVolumeLifecycleT = Math.max(0, Math.min(1, value));
+  }
+  if (controlsSnapshot.quenchVapor !== undefined) {
+    const value = Number(controlsSnapshot.quenchVapor);
+    if (Number.isFinite(value)) routedVolumeQuenchVapor = Math.max(0, Math.min(2, value));
+  }
+  if (controlsSnapshot.runtimeQualityRequested !== undefined) {
+    routedVolumeRuntimeQuality = normalizeVolumeRuntimeQuality(controlsSnapshot.runtimeQualityRequested);
+  }
+  if (controlsSnapshot.gpuPressure !== undefined) {
+    const value = Number(controlsSnapshot.gpuPressure);
+    if (Number.isFinite(value)) routedVolumeGpuPressure = clampVolumeValue(value, 0, 1);
+  }
+  if (controlsSnapshot.runtimeQualityReason !== undefined) {
+    routedVolumeQualityReason = normalizeVolumeQualityReason(controlsSnapshot.runtimeQualityReason);
+  }
+  if (controlsSnapshot.majorantCadence !== undefined) {
+    const value = Number(controlsSnapshot.majorantCadence);
+    if (Number.isFinite(value)) routedVolumeMajorantCadence = Math.max(1, Math.min(8, Math.round(value)));
+  }
+  if (controlsSnapshot.rayBudgetPreset !== undefined) {
+    activeVolumeRayBudgetPreset = String(controlsSnapshot.rayBudgetPreset || '');
+    routedVolumeRayBudgetPreset = activeVolumeRayBudgetPreset;
+  }
+  routedBonfireAblationControls = normalizeBonfireAblationControls({
+    ...routedBonfireAblationControls,
+    ...Object.fromEntries(
+      Object.keys(DEFAULT_BONFIRE_ABLATION_CONTROLS)
+        .filter(key => controlsSnapshot[key] !== undefined)
+        .map(key => [key, controlsSnapshot[key]])
+    ),
+  });
+}
+
 function saveVolumeBasinSnapshot(reason = 'control-change') {
   const controlsSnapshot = readVolumeControls();
   const snapshot = {
@@ -11842,15 +11966,21 @@ function saveVolumeBasinSnapshot(reason = 'control-change') {
   return snapshot;
 }
 
-function applyVolumeControlsSnapshot(controlsSnapshot = {}) {
+function applyVolumeControlsSnapshot(controlsSnapshot = {}, options = {}) {
+  if (controlsSnapshot.volumeScene) {
+    applyVolumeScenePreset(controlsSnapshot.volumeScene, { keepBudgetPreset: true });
+  }
   for (const [key] of VOLUME_BASIN_ROUTE_FIELDS) {
     if (controlsSnapshot[key] === undefined || controlsSnapshot[key] === null) continue;
     setVolumeControlValue(volumeSceneControlId(key), formatVolumePresetControlValue(key, controlsSnapshot[key]));
   }
   if (controlsSnapshot.pressureMode) setVolumeControlValue('volume-pressure-mode', controlsSnapshot.pressureMode);
+  hydrateVolumeRouteOwnedControls(controlsSnapshot);
   activeCanonicalVolumeMacroPreset = '';
-  activeVolumeRayBudgetPreset = '';
-  routedVolumeRayBudgetPreset = '';
+  if (!options.keepBudgetPreset) {
+    activeVolumeRayBudgetPreset = '';
+    routedVolumeRayBudgetPreset = '';
+  }
 }
 
 function restoreVolumeBasinSnapshot() {
@@ -16571,6 +16701,78 @@ async function captureVolumeReactionAtlas() {
   }
 }
 window.__kaminosCaptureVolumeReactionAtlas = captureVolumeReactionAtlas;
+
+function hashVolumeBasinCapture(text) {
+  let hash = 2166136261;
+  for (let i = 0; i < text.length; i += 1) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(16).padStart(8, '0');
+}
+
+function captureVolumeBasinCompact(label = '') {
+  const controlsSnapshot = readVolumeControls();
+  const replayUrl = buildVolumeBasinUrl(controlsSnapshot);
+  const routeParams = Object.fromEntries(new URL(window.location.href).searchParams.entries());
+  const replayQuery = new URL(replayUrl).search;
+  const effective = volumePrototype?.debugState?.() || null;
+  const payload = {
+    identity: 'kaminos-volume-basin-chat-compact-v2',
+    label: String(label || ''),
+    capturedAt: new Date().toISOString(),
+    href: window.location.href,
+    routeParams,
+    controls: controlsSnapshot,
+    replayUrl: buildVolumeBasinUrl(controlsSnapshot),
+    replayQuery,
+    effective: effective ? {
+      active: effective.active,
+      backend: effective.backend,
+      effectiveRoute: effective.effectiveRoute,
+      routeIdentity: effective.routeIdentity,
+      volumeScene: effective.volumeScene,
+      frameCount: effective.frameCount,
+      simStepCount: effective.simStepCount,
+      simGrid: effective.simGrid,
+      majorantGrid: effective.majorantGrid,
+      displayWidth: effective.displayWidth,
+      displayHeight: effective.displayHeight,
+      renderWidth: effective.renderWidth,
+      renderHeight: effective.renderHeight,
+      pressureMode: effective.pressureMode,
+      pressureEffectiveLabel: effective.pressureEffectiveLabel,
+      activityPressureMaxTier: effective.activityPressureMaxTier,
+      activityPressureDispatchStrategy: effective.activityPressureDispatchStrategy,
+      pressureTierDispatchEfficiency: effective.pressureTierDispatchEfficiency,
+      activityVorticityGate: effective.activityVorticityGate,
+      activityDetailGate: effective.activityDetailGate,
+      oracleActivityCurlNoise: effective.oracleActivityCurlNoise,
+      oracleActivityVorticity: effective.oracleActivityVorticity,
+      oracleActivityMaterial: effective.oracleActivityMaterial,
+      gpuTimingStatus: effective.gpuTimingStatus,
+      gpuTimingSupported: effective.gpuTimingSupported,
+      gpuTimingSampleCount: effective.gpuTimingSampleCount,
+      gpuPressureP95: effective.gpuPressureP95,
+      gpuFrameP95: effective.gpuFrameP95,
+      frameP95Ms: effective.frameP95Ms,
+      queueDoneP95Ms: effective.queueDoneP95Ms,
+      queueDoneMs: effective.queueDoneMs,
+      bridgeIdentity: window.__kaminosVolumeBridge?.debugState?.()?.identity || null,
+      bridgeVisible: window.__kaminosVolumeBridge?.debugState?.()?.visible ?? null,
+    } : null,
+    caveat: 'Compact capture v2: preserves readVolumeControls, replay URL, route params, and selected effective debug identity; does not preserve exact turbulent phase.',
+  };
+  payload.hash = hashVolumeBasinCapture(JSON.stringify({
+    identity: payload.identity,
+    label: payload.label,
+    controls: payload.controls,
+    replayQuery: payload.replayQuery,
+    effective: payload.effective,
+  }));
+  return payload;
+}
+window.__kaminosCaptureVolumeBasinCompact = captureVolumeBasinCompact;
 
 function refreshVolumeReadout() {
   if (!volumePrototype) return;
