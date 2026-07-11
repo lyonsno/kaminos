@@ -298,6 +298,20 @@ try {
           intervalEndMs: event.intervalEndMs,
           durationMs: event.durationMs,
         }));
+      const preGaussianSetupSteps = new Set(['ply-data-allocation', 'gaussian-activation-setup']);
+      const preGaussianSetupIntervals = routeTailEvents
+        .filter(event => preGaussianSetupSteps.has(event?.step) && event?.kind === 'duty-interval')
+        .map(event => ({
+          phase: event.phase,
+          boundary: event.boundary,
+          stage: event.stage,
+          step: event.step,
+          role: event.role,
+          intervalStartMs: event.intervalStartMs,
+          intervalEndMs: event.intervalEndMs,
+          durationMs: event.durationMs,
+          bytes: event.bytes,
+        }));
       const lateTailSteps = new Set(['ply-blob-assembly', 'object-url-create', 'output-bind']);
       const lateTailBlockingIntervals = routeTailEvents
         .filter(event => lateTailSteps.has(event?.step) && event?.kind === 'duty-interval')
@@ -332,6 +346,7 @@ try {
           prepSteps: [...new Set(prepEvents.map(event => event.step))].sort(),
           gaussianProcessedItems: [...new Set(gaussianEvents.map(event => event.processedItems).filter(Number.isFinite))].sort((a, b) => a - b),
         },
+        preGaussianSetupIntervals,
         gaussianCpuDutyIntervals,
         lateTailBlockingIntervals,
         inferenceWindowFinalizeInterval,
@@ -373,6 +388,14 @@ try {
       || !Number.isFinite(interval.intervalEndMs)
     )) {
       throw new Error(`Friendly firing is missing truthful row-batched Gaussian CPU intervals: ${JSON.stringify(state.fullRoute.gaussianCpuDutyIntervals)}`);
+    }
+    const allocation = state.fullRoute.preGaussianSetupIntervals?.find(interval => interval.step === 'ply-data-allocation');
+    const activationSetup = state.fullRoute.preGaussianSetupIntervals?.find(interval => interval.step === 'gaussian-activation-setup');
+    if (!allocation || !Number.isFinite(allocation.intervalStartMs) || !Number.isFinite(allocation.intervalEndMs) || !(allocation.bytes > 0)) {
+      throw new Error(`Friendly firing is missing measured PLY allocation bytes: ${JSON.stringify(allocation)}`);
+    }
+    if (!activationSetup || !Number.isFinite(activationSetup.intervalStartMs) || !Number.isFinite(activationSetup.intervalEndMs)) {
+      throw new Error(`Friendly firing is missing Gaussian activation setup interval: ${JSON.stringify(activationSetup)}`);
     }
     const finalizeInterval = state.fullRoute.inferenceWindowFinalizeInterval;
     if (!finalizeInterval || finalizeInterval.role !== 'localization-envelope'
