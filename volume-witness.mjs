@@ -2046,6 +2046,10 @@ async function main() {
     assert.equal(state.farSmokeReceiver?.slotPolicy, 'single-grid-render-continuation-no-second-pressure-volume-v0', 'far smoke receiver must report its first-slice single-grid policy');
     assert.ok(Number.isFinite(state.farSmokeReceiver?.range), 'far smoke receiver range gain did not reach debug state');
     assert.equal(state.farSmokeReceiver?.pressurePlan, 'p2-p3-first-p4-assay-later-v0', 'far smoke receiver did not preserve the P2/P3-first pressure plan');
+    assert.equal(state.farSmokeGrid?.identity, 'far-smoke-grid-overlap-solver-v0', 'far smoke grid identity did not reach debug state');
+    assert.equal(state.farSmokeGrid?.slotPolicy, 'separate-lowres-one-way-overlap-grid-v0', 'far smoke grid must report separate low-res storage');
+    assert.equal(state.farSmokeGrid?.pressureCeiling, 'sparse-p3-max-no-p4-v0', 'far smoke grid must preserve the P3 ceiling');
+    assert.equal(state.farSmokeGrid?.pressureStatus, 'p3-ceiling-pressure-deferred-first-slice-v0', 'far smoke grid must not imply pressure is already solved');
     assert.ok(Math.abs((state.controls?.gridOverlay || 0) - expectedGridOverlay) < 0.001, 'fluid grid overlay did not apply route/debug state');
     assert.ok(Math.abs((state.controls?.raySteps ?? 0) - expectedRaySteps) < 0.001, 'ray-step route/control did not apply');
     assert.ok(Math.abs((state.controls?.adaptiveRays ?? 0) - expectedAdaptiveRays) < 0.001, 'adaptive raymarch route/control did not apply');
@@ -3096,6 +3100,7 @@ async function main() {
       smokeArtifactAssayControls: sample.smokeArtifactAssayControls || state.smokeArtifactAssayControls || null,
       explosionPlumeSmokeDynamics: sample.explosionPlumeSmokeDynamics || state.explosionPlumeSmokeDynamics || null,
       farSmokeReceiver: sample.farSmokeReceiver || state.farSmokeReceiver || null,
+      farSmokeGrid: sample.farSmokeGrid || state.farSmokeGrid || null,
       boundaryFireShellEvidence,
       runtimeQualityRequested: sample.runtimeQualityRequested,
       runtimeQualityEffective: sample.runtimeQualityEffective,

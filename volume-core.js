@@ -8,6 +8,10 @@ const SMOKE_MORPHOLOGY_FORCE_IDENTITY = 'smoke-selective-vorticity-morphology-fo
 const SMOKE_ARTIFACT_ASSAY_IDENTITY = 'smoke-artifact-assay-controls-v0';
 const EXPLOSION_PLUME_SMOKE_DYNAMICS_IDENTITY = 'explosion-plume-smoke-dynamics-v0';
 const FAR_SMOKE_RECEIVER_IDENTITY = 'far-smoke-overlap-render-receiver-v0';
+const FAR_SMOKE_GRID_IDENTITY = 'far-smoke-grid-overlap-solver-v0';
+const FAR_SMOKE_GRID_PRESSURE_CEILING = 'sparse-p3-max-no-p4-v0';
+const FAR_SMOKE_GRID_SIZE = 64;
+const FAR_SMOKE_GRID_COMPONENTS = 4;
 const TRUTH_ORACLE_ACTIVITY_RECEIVER_IDENTITY = 'truth-oracle-scalar-activity-receiver-v0';
 const TRUTH_ORACLE_ACTIVITY_CUE_AUTHORITY = 'truth-high-diagnostic-activity-projected-to-receiver-grid-v0';
 const PROCEDURAL_ACTIVITY_CUE_AUTHORITY = 'procedural-receiver-activity-proxy-no-truth-v0';
@@ -336,6 +340,10 @@ function frontFieldBufferBytes(gridSize) {
 
 function pressureBufferBytes(gridSize) {
   return gridCellCount(gridSize) * 4 * Float32Array.BYTES_PER_ELEMENT;
+}
+
+function farSmokeGridBufferBytes() {
+  return FAR_SMOKE_GRID_SIZE * FAR_SMOKE_GRID_SIZE * FAR_SMOKE_GRID_SIZE * FAR_SMOKE_GRID_COMPONENTS * Float32Array.BYTES_PER_ELEMENT;
 }
 
 const SIM_COST_LEDGER_IDENTITY = 'tall-plume-sim-cost-ledger-v0';
@@ -808,6 +816,7 @@ function normalizeExternalEmitters(payload = {}, nowMs = externalEmitterNowMs())
 const WGSL = /* wgsl */`
 override GRID: u32 = 64u;
 override MAJORANT_GRID: u32 = 24u;
+override FAR_SMOKE_GRID: u32 = 64u;
 const SLOTS_PER_CELL: u32 = 4u;
 const MAX_EXTERNAL_EMITTERS_WGSL: u32 = 32u;
 
@@ -871,6 +880,7 @@ struct Uniforms {
   smoke_artifact_assay_controls: vec4<f32>,
   explosion_plume_controls: vec4<f32>,
   far_smoke_receiver_controls: vec4<f32>,
+  far_smoke_grid_controls: vec4<f32>,
   previousViewProj: mat4x4<f32>,
 };
 
@@ -900,6 +910,8 @@ struct ExternalEmitterInfluence {
 @group(0) @binding(8) var<storage, read_write> frontDst: array<f32>;
 @group(0) @binding(9) var<storage, read> oracleActivityCue: array<f32>;
 @group(0) @binding(10) var<storage, read> boundarySidecar: array<vec4<f32>>;
+@group(0) @binding(11) var<storage, read> farSmokeSrc: array<vec4<f32>>;
+@group(0) @binding(12) var<storage, read_write> farSmokeDst: array<vec4<f32>>;
 @group(1) @binding(0) var<storage, read_write> majorantDst: array<vec4<f32>>;
 @group(2) @binding(0) var<storage, read> pressureSrc: array<vec4<f32>>;
 @group(2) @binding(1) var<storage, read_write> pressureDst: array<vec4<f32>>;
@@ -2542,8 +2554,17 @@ fn raymarchEarlyTermination(transmittance: f32) -> bool {
 
 fn farSmokeRaymarchExtent() -> f32 {
   let receiverRange = clamp(u.far_smoke_receiver_controls.x, 0.0, 1.0);
+  let farGridControls = clamp(u.far_smoke_grid_controls, vec4<f32>(0.0), vec4<f32>(1.0));
   let tallPlumeRenderScene = step(0.5, clamp(u.scene_controls.x, 0.0, 3.0)) * (1.0 - step(1.5, clamp(u.scene_controls.x, 0.0, 3.0)));
-  return 1.0 + receiverRange * tallPlumeRenderScene * 1.15;
+  let receiverExtent = 1.0 + receiverRange * tallPlumeRenderScene * 1.15;
+  let farGridExtent = 1.0 + farGridControls.x * tallPlumeRenderScene * mix(0.65, 1.95, farGridControls.y);
+  return max(receiverExtent, farGridExtent);
+}
+
+fn farSmokeRaymarchHorizontalExtent() -> f32 {
+  let farGridControls = clamp(u.far_smoke_grid_controls, vec4<f32>(0.0), vec4<f32>(1.0));
+  let tallPlumeRenderScene = step(0.5, clamp(u.scene_controls.x, 0.0, 3.0)) * (1.0 - step(1.5, clamp(u.scene_controls.x, 0.0, 3.0)));
+  return max(1.0, 1.0 + farGridControls.x * tallPlumeRenderScene * mix(0.15, 1.65, farGridControls.z));
 }
 
 fn farSmokeReceiverProbe(p: vec3<f32>) -> f32 {
@@ -2598,6 +2619,145 @@ fn farSmokeReceiverSample(p: vec3<f32>, time: f32) -> vec4<f32> {
   let smoke = supportBody * (0.34 + material.x * 0.78 + microLayer.x * 0.34 + rimBand * rimCurl * (0.24 + curlNoise * 0.22));
   let heat = supportBody * (material.y * 0.18 + heatCue * 0.10) * (0.45 + overlapWeight * 0.55);
   return vec4<f32>(density, smoke, heat, receiverSupport);
+}
+
+fn farSmokeGridWorldMin() -> vec3<f32> {
+  let controls = clamp(u.far_smoke_grid_controls, vec4<f32>(0.0), vec4<f32>(1.0));
+  let width = 1.0 + mix(0.15, 1.65, controls.z);
+  let startY = mix(0.82, 0.42, controls.w);
+  return vec3<f32>(-width, startY, -width);
+}
+
+fn farSmokeGridWorldMax() -> vec3<f32> {
+  let controls = clamp(u.far_smoke_grid_controls, vec4<f32>(0.0), vec4<f32>(1.0));
+  let width = 1.0 + mix(0.15, 1.65, controls.z);
+  let topY = 1.0 + mix(0.65, 1.95, controls.y);
+  return vec3<f32>(width, topY, width);
+}
+
+fn farSmokeGridUv(p: vec3<f32>) -> vec3<f32> {
+  let gridMin = farSmokeGridWorldMin();
+  let gridMax = farSmokeGridWorldMax();
+  return clamp((p - gridMin) / max(gridMax - gridMin, vec3<f32>(0.001)), vec3<f32>(0.0), vec3<f32>(1.0));
+}
+
+fn farSmokeGridProbe(p: vec3<f32>) -> f32 {
+  let controls = clamp(u.far_smoke_grid_controls, vec4<f32>(0.0), vec4<f32>(1.0));
+  let gridMin = farSmokeGridWorldMin();
+  let gridMax = farSmokeGridWorldMax();
+  let insideMin = step(gridMin, p);
+  let insideMax = step(p, gridMax);
+  let inside = insideMin.x * insideMin.y * insideMin.z * insideMax.x * insideMax.y * insideMax.z;
+  let uv = farSmokeGridUv(p);
+  let edgeFade = smoothstep(0.0, 0.045, min(min(uv.x, 1.0 - uv.x), min(uv.z, 1.0 - uv.z)))
+    * smoothstep(0.0, 0.040, uv.y)
+    * smoothstep(0.0, 0.070, 1.0 - uv.y);
+  return inside * edgeFade * controls.x;
+}
+
+fn farSmokeGridIndex(c: vec3<u32>) -> u32 {
+  return c.x + c.y * FAR_SMOKE_GRID + c.z * FAR_SMOKE_GRID * FAR_SMOKE_GRID;
+}
+
+fn readFarSmokeGridCell(c: vec3<i32>) -> vec4<f32> {
+  let maxCell = i32(FAR_SMOKE_GRID) - 1;
+  let clamped = vec3<u32>(clamp(c, vec3<i32>(0), vec3<i32>(maxCell)));
+  return farSmokeSrc[farSmokeGridIndex(clamped)];
+}
+
+fn sampleFarSmokeGrid(p: vec3<f32>) -> vec4<f32> {
+  let probe = farSmokeGridProbe(p);
+  if (probe <= 0.0001) {
+    return vec4<f32>(0.0);
+  }
+  let uv = farSmokeGridUv(p) * f32(FAR_SMOKE_GRID - 1u);
+  let base = vec3<i32>(floor(uv));
+  let f = fract(uv);
+  let c000 = readFarSmokeGridCell(base + vec3<i32>(0, 0, 0));
+  let c100 = readFarSmokeGridCell(base + vec3<i32>(1, 0, 0));
+  let c010 = readFarSmokeGridCell(base + vec3<i32>(0, 1, 0));
+  let c110 = readFarSmokeGridCell(base + vec3<i32>(1, 1, 0));
+  let c001 = readFarSmokeGridCell(base + vec3<i32>(0, 0, 1));
+  let c101 = readFarSmokeGridCell(base + vec3<i32>(1, 0, 1));
+  let c011 = readFarSmokeGridCell(base + vec3<i32>(0, 1, 1));
+  let c111 = readFarSmokeGridCell(base + vec3<i32>(1, 1, 1));
+  let x00 = mix(c000, c100, f.x);
+  let x10 = mix(c010, c110, f.x);
+  let x01 = mix(c001, c101, f.x);
+  let x11 = mix(c011, c111, f.x);
+  let y0 = mix(x00, x10, f.y);
+  let y1 = mix(x01, x11, f.y);
+  return max(vec4<f32>(0.0), mix(y0, y1, f.z)) * probe;
+}
+
+fn farSmokeOverlapInjection(p: vec3<f32>) -> vec4<f32> {
+  let controls = clamp(u.far_smoke_grid_controls, vec4<f32>(0.0), vec4<f32>(1.0));
+  let receiverControls = clamp(u.far_smoke_receiver_controls, vec4<f32>(0.0), vec4<f32>(1.0));
+  let overlapBottom = mix(0.92, 0.48, controls.w);
+  let overlapTop = 1.02;
+  let overlapGate = smoothstep(overlapBottom, overlapBottom + 0.12, p.y) * (1.0 - smoothstep(overlapTop, overlapTop + 0.18, p.y));
+  let sourceP = vec3<f32>(clamp(p.x, -0.98, 0.98), clamp(p.y, -0.98, 0.98), clamp(p.z, -0.98, 0.98));
+  let material = sampleWorldMaterial(sourceP);
+  let fireLayer = sampleWorldFireLayer(sourceP);
+  let microLayer = sampleWorldMicrodetail(sourceP);
+  let front = sampleWorldFrontField(sourceP);
+  let sampleCell = vec3<i32>(floor(clamp((sourceP * 0.5 + vec3<f32>(0.5)) * f32(GRID), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.0))));
+  let flowCue = smoothstep(0.006, 0.16, curlMagnitudeAtCell(sampleCell) + abs(divergenceAtCell(sampleCell)) * 0.40);
+  let smokeCue = smoothstep(0.012, 0.62, material.x + microLayer.x * 0.62 + material.w * 0.16);
+  let heatCue = smoothstep(0.012, 0.55, material.y + fireLayer.z * 0.20 + fireLayer.x * 0.10);
+  let frontCue = smoothstep(0.002, 0.15, front + fireLayer.w * 0.56 + fireLayer.z * 0.16);
+  let carrier = clamp(max(smokeCue, max(heatCue * 0.54, max(frontCue * 0.58, flowCue * 0.45))) * (0.42 + receiverControls.z * 0.58), 0.0, 1.0);
+  let smoke = clamp((material.x * 0.82 + microLayer.x * 0.38 + material.w * 0.12 + heatCue * 0.10) * carrier, 0.0, 1.8);
+  let heat = clamp((material.y * 0.34 + fireLayer.z * 0.12 + frontCue * 0.08) * carrier, 0.0, 1.4);
+  let support = clamp(max(carrier, flowCue * 0.45) * controls.x * overlapGate, 0.0, 1.0);
+  return vec4<f32>(smoke, heat, carrier, 1.0) * support;
+}
+
+fn farSmokeGridVelocity(p: vec3<f32>, field: vec4<f32>) -> vec3<f32> {
+  let controls = clamp(u.far_smoke_grid_controls, vec4<f32>(0.0), vec4<f32>(1.0));
+  let windStrength = clamp(u.scene_controls.y, 0.0, 1.5);
+  let windAngle = u.scene_controls.z;
+  let wind = vec3<f32>(cos(windAngle), 0.0, sin(windAngle)) * windStrength * mix(0.018, 0.050, controls.z);
+  let gridUv = farSmokeGridUv(p);
+  let rise = vec3<f32>(0.0, mix(0.020, 0.064, controls.y) * (0.45 + field.y * 0.75 + field.z * 0.30), 0.0);
+  let rollAxis = vec2<f32>(p.z, -p.x);
+  let roll = vec3<f32>(rollAxis.x, 0.0, rollAxis.y) * (0.006 + field.z * 0.018) * smoothstep(0.08, 0.92, gridUv.y);
+  return wind + rise + roll;
+}
+
+@compute @workgroup_size(4, 4, 4)
+fn farSmokeGridStep(@builtin(global_invocation_id) gid: vec3<u32>) {
+  if (any(gid >= vec3<u32>(FAR_SMOKE_GRID))) {
+    return;
+  }
+  let idx = farSmokeGridIndex(gid);
+  let controls = clamp(u.far_smoke_grid_controls, vec4<f32>(0.0), vec4<f32>(1.0));
+  if (controls.x <= 0.0001) {
+    farSmokeDst[idx] = vec4<f32>(0.0);
+    return;
+  }
+  let uv = (vec3<f32>(gid) + vec3<f32>(0.5)) / f32(FAR_SMOKE_GRID);
+  let gridMin = farSmokeGridWorldMin();
+  let gridMax = farSmokeGridWorldMax();
+  let p = mix(gridMin, gridMax, uv);
+  let previous = farSmokeSrc[idx];
+  let velocity = farSmokeGridVelocity(p, previous);
+  let advected = sampleFarSmokeGrid(p - velocity);
+  let injected = farSmokeOverlapInjection(p);
+  let sideFade = smoothstep(0.0, 0.040, min(min(uv.x, 1.0 - uv.x), min(uv.z, 1.0 - uv.z)));
+  let topFade = 1.0 - smoothstep(0.94, 1.0, uv.y);
+  let bottomFade = smoothstep(0.0, 0.05, uv.y);
+  let containment = sideFade * topFade * bottomFade;
+  let carriedSmoke = advected.x * 0.989;
+  let carriedHeat = advected.y * 0.974;
+  let carriedSupport = advected.z * 0.982;
+  let age = clamp(max(advected.w + 0.012, injected.w), 0.0, 1.0);
+  farSmokeDst[idx] = vec4<f32>(
+    clamp(max(carriedSmoke, injected.x) * containment, 0.0, 2.4),
+    clamp(max(carriedHeat, injected.y) * containment, 0.0, 1.8),
+    clamp(max(carriedSupport, injected.z) * containment, 0.0, 1.4),
+    age * containment
+  );
 }
 
 fn microDetailDomainWarp(p: vec3<f32>, microLayer: vec4<f32>, fireLayer: vec4<f32>, material: vec4<f32>, velocity: vec3<f32>, time: f32, detailCoherenceGain: f32) -> vec3<f32> {
@@ -3941,7 +4101,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
   let farWorld = farWorldRaw.xyz / farWorldRaw.w;
   let ro = u.cameraPos_time.xyz;
   let rd = normalize(farWorld - nearWorld);
-  let hit = boxHit(ro, rd, vec3<f32>(1.0, farSmokeRaymarchExtent(), 1.0));
+  let hit = boxHit(ro, rd, vec3<f32>(farSmokeRaymarchHorizontalExtent(), farSmokeRaymarchExtent(), farSmokeRaymarchHorizontalExtent()));
   if (hit.y <= max(hit.x, 0.0)) {
     return vec4<f32>(0.004, 0.005, 0.006, 1.0);
   }
@@ -4100,7 +4260,8 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     let majorantEmpty = 1.0 - smoothstep(0.004, guardedThreshold, guardedImportance + majorantEdge * majorantEdgeGuard * 0.24);
     let edgeDamping = 1.0 - smoothstep(0.012, 0.16, majorantEdge * majorantEdgeGuard);
     let farReceiverProbe = farSmokeReceiverProbe(p);
-    let majorantSkipGate = majorantEmpty * majorantSkipStrength * edgeDamping * (1.0 - farReceiverProbe * 0.92);
+    let farGridProbe = farSmokeGridProbe(p);
+    let majorantSkipGate = majorantEmpty * majorantSkipStrength * edgeDamping * (1.0 - farReceiverProbe * 0.92) * (1.0 - farGridProbe * 0.96);
     temporalMajorantEdge = max(temporalMajorantEdge, majorantEdge * (0.18 + majorantSkipGate));
     if (majorantSkipGate > 0.42) {
       let cellExit = majorantCellExitDistance(p, rd);
@@ -4114,6 +4275,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     let microLayer = sampleWorldMicrodetail(p);
     let combustionFrontTopology = sampleWorldFrontField(p);
     let farReceiver = farSmokeReceiverSample(p, u.cameraPos_time.w);
+    let farGrid = sampleFarSmokeGrid(p);
     let velMag = length(state.xyz);
     let smokeDensity = material.x;
     let heat = material.y;
@@ -4143,7 +4305,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
       (smokeDensity * 0.84 + heat * 0.28 + materialDetail * 0.14 + microBodyContribution) * u.viewport_steps_density.w,
       canonicalDebugSmokeDensity,
       canonicalSmokeOnlyRender
-    ) + farReceiver.x * u.viewport_steps_density.w;
+    ) + (farReceiver.x + farGrid.x * 0.92) * u.viewport_steps_density.w;
     let y = clamp((p.y + 1.0) * 0.5, 0.0, 1.0);
     let fireGain = 0.42 + u.fire_smoke_curl_speed.x * 1.15;
     let rawTemp = emissiveTemperature(fireLayer, material, microLayer, velMag);
@@ -4164,9 +4326,10 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
       (smokeDensity + microBodyContribution * 0.70) * smoothstep(0.03, 0.92, y) * u.fire_smoke_curl_speed.y,
       smokeDensity * canonicalSmokeContent * u.fire_smoke_curl_speed.y,
       canonicalSmokeOnlyRender
-    ) + farReceiver.y * u.fire_smoke_curl_speed.y;
+    ) + (farReceiver.y + farGrid.x * 1.08 + farGrid.z * 0.16) * u.fire_smoke_curl_speed.y;
     let rawExtinction = smokeRadianceExtinction(smokeDensity, microSmoke, interfaceShred, materialDetail, absorptionGain)
-      + farReceiver.y * (0.22 + absorptionGain * 0.32);
+      + farReceiver.y * (0.22 + absorptionGain * 0.32)
+      + farGrid.x * (0.26 + absorptionGain * 0.36);
     let tallPlumeRenderTransitionContour = clamp(0.70 + microTextureSignal * 0.12 + velMag * 0.18 + materialDetail * 0.06, 0.44, 1.20);
     let tallPlumeRenderTransitionStagger = tallPlumeTransitionBandStagger(tallPlumeRenderTransitionContour, materialDetail, microSmoke, interfaceShred, flameDetail, combustionFrontTopology);
     let tallPlumeRenderTransitionBand = tallPlumeRenderScene
@@ -4177,7 +4340,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
       * smoothstep(0.54, 1.18, tallPlumeRenderTransitionStagger)
       * (0.020 + flameDetail * 0.035 + interfaceShred * 0.025 + microSmoke * 0.016);
     let baseExtinction = rawExtinction + tallPlumeTransitionWisps * absorptionGain * 0.34;
-    let occupancy = raymarchOccupancySignal(density, smoke, heat + farReceiver.z, temp, flame, microTextureSignal, velMag, baseExtinction) + tallPlumeTransitionWisps + farReceiver.w * 0.18;
+    let occupancy = raymarchOccupancySignal(density, smoke, heat + farReceiver.z + farGrid.y * 0.45, temp, flame, microTextureSignal, velMag, baseExtinction) + tallPlumeTransitionWisps + farReceiver.w * 0.18 + farGrid.z * 0.24;
     let emptySpanScale = occupancySkipStepScale(occupancy, occupancySkipStrength, adaptiveRays);
     if (emptySpanScale > 1.08) {
       t = t + min(dtBase * emptySpanScale, max(0.0001, endT - t));
@@ -5078,7 +5241,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   const invViewProj = new THREE.Matrix4();
   const viewProj = new THREE.Matrix4();
   const previousViewProj = new THREE.Matrix4();
-  const uniforms = new Float32Array(356);
+  const uniforms = new Float32Array(360);
   let controlsSnapshot = applyRuntimeQualityControls(getControls());
   let gridSize = normalizeGridSize(controlsSnapshot.resolution);
   let majorantGridSize = normalizeMajorantGridSize(controlsSnapshot.majorantGrid);
@@ -5200,6 +5363,24 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       carrier: clampFinite(controlsSnapshot.farSmokeReceiverCarrier, 0, 1, 0.70),
       rimCurl: clampFinite(controlsSnapshot.farSmokeReceiverRimCurl, 0, 1, 0.40),
       target: 'large-tall-smoke-continuation-before-second-volume-solver-v0',
+    },
+    farSmokeGrid: {
+      identity: FAR_SMOKE_GRID_IDENTITY,
+      slotPolicy: 'separate-lowres-one-way-overlap-grid-v0',
+      authoritySource: 'near-grid-material-fire-front-overlap-injection-v0',
+      grid: FAR_SMOKE_GRID_SIZE,
+      bufferBytes: farSmokeGridBufferBytes(),
+      pressureCeiling: FAR_SMOKE_GRID_PRESSURE_CEILING,
+      farSmokeGridPressureStatus: 'p3-ceiling-pressure-deferred-first-slice-v0',
+      pressureStatus: 'p3-ceiling-pressure-deferred-first-slice-v0',
+      active: normalizeVolumeScene(controlsSnapshot.volumeScene) === 'tall_plume',
+      strength: clampFinite(controlsSnapshot.farSmokeGridStrength, 0, 1, 0.65),
+      height: clampFinite(controlsSnapshot.farSmokeGridHeight, 0, 1, 0.75),
+      width: clampFinite(controlsSnapshot.farSmokeGridWidth, 0, 1, 0.70),
+      overlap: clampFinite(controlsSnapshot.farSmokeGridOverlap, 0, 1, 0.55),
+      passCount: 0,
+      target: 'large-explosion-plume-smoke-second-grid-first-slice-v0',
+      pressurePlan: 'defer-far-grid-pressure-until-p3-sparse-budget-clears-v0',
     },
     plumeHeight: 1.45,
     windStrength: normalizeWindStrength(controlsSnapshot.windStrength),
@@ -5540,9 +5721,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let pressureProjectTieredPipeline = null;
   let majorantComputePipeline = null;
   let boundarySidecarBuildPipeline = null;
+  let farSmokeGridPipeline = null;
   let bindGroups = [];
   let majorantFrontBindGroups = [];
   let boundarySidecarReadBindGroups = [];
+  let pressureTierFluidBindGroups = [];
   let pressureWriteBindGroup = null;
   let pressureJacobiBindGroups = [];
   let pressureReadBindGroups = [];
@@ -5552,6 +5735,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let majorantFluidBindGroupLayout = null;
   let majorantWriteBindGroupLayout = null;
   let boundarySidecarReadBindGroupLayout = null;
+  let pressureTierFluidBindGroupLayout = null;
   let boundarySidecarWriteBindGroupLayout = null;
   let pressureWriteBindGroupLayout = null;
   let pressureJacobiBindGroupLayout = null;
@@ -5575,8 +5759,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let fluidBuffers = [];
   let frontBuffers = [];
   let pressureBuffers = [];
+  let farSmokeBuffers = [];
   let currentFluid = 0;
   let currentFront = 0;
+  let currentFarSmoke = 0;
   let frameTexture = null;
   let frameTextureSize = '';
   let historyTexture = null;
@@ -5975,6 +6161,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     for (const buffer of fluidBuffers) buffer.destroy();
     for (const buffer of frontBuffers) buffer.destroy();
     for (const buffer of pressureBuffers) buffer.destroy();
+    for (const buffer of farSmokeBuffers) buffer.destroy();
     boundarySidecarBuffer?.destroy();
     oracleActivityCueBuffer?.destroy();
     boundarySidecarBuffer = null;
@@ -5982,9 +6169,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     fluidBuffers = [];
     frontBuffers = [];
     pressureBuffers = [];
+    farSmokeBuffers = [];
     bindGroups = [];
     majorantFrontBindGroups = [];
     boundarySidecarReadBindGroups = [];
+    pressureTierFluidBindGroups = [];
     boundarySidecarWriteBindGroup = null;
     pressureWriteBindGroup = null;
     pressureJacobiBindGroups = [];
@@ -6139,43 +6328,35 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   }
 
   function rebuildFluidBindGroups() {
-    if (!device || !bindGroupLayout || !uniformBuffer || !externalEmitterBuffer || !oracleActivityCueBuffer || fluidBuffers.length !== 2 || frontBuffers.length !== 2 || !majorantBuffer || !boundarySidecarBuffer || !historyTexture || !historySampler) return;
-    bindGroups = [
-      device.createBindGroup({
-        label: `kaminos fluid bind group ${gridSize}^3 A to B`,
-        layout: bindGroupLayout,
-        entries: [
-          { binding: 0, resource: { buffer: uniformBuffer } },
-          { binding: 1, resource: { buffer: fluidBuffers[0] } },
-          { binding: 2, resource: { buffer: fluidBuffers[1] } },
-          { binding: 3, resource: { buffer: majorantBuffer } },
-          { binding: 4, resource: historyTexture.createView() },
-          { binding: 5, resource: historySampler },
-          { binding: 6, resource: { buffer: externalEmitterBuffer } },
-          { binding: 7, resource: { buffer: frontBuffers[0] } },
-          { binding: 8, resource: { buffer: frontBuffers[1] } },
-          { binding: 9, resource: { buffer: oracleActivityCueBuffer } },
-          { binding: 10, resource: { buffer: boundarySidecarBuffer } },
-        ],
-      }),
-      device.createBindGroup({
-        label: `kaminos fluid bind group ${gridSize}^3 B to A`,
-        layout: bindGroupLayout,
-        entries: [
-          { binding: 0, resource: { buffer: uniformBuffer } },
-          { binding: 1, resource: { buffer: fluidBuffers[1] } },
-          { binding: 2, resource: { buffer: fluidBuffers[0] } },
-          { binding: 3, resource: { buffer: majorantBuffer } },
-          { binding: 4, resource: historyTexture.createView() },
-          { binding: 5, resource: historySampler },
-          { binding: 6, resource: { buffer: externalEmitterBuffer } },
-          { binding: 7, resource: { buffer: frontBuffers[1] } },
-          { binding: 8, resource: { buffer: frontBuffers[0] } },
-          { binding: 9, resource: { buffer: oracleActivityCueBuffer } },
-          { binding: 10, resource: { buffer: boundarySidecarBuffer } },
-        ],
-      }),
-    ];
+    if (!device || !bindGroupLayout || !uniformBuffer || !externalEmitterBuffer || !oracleActivityCueBuffer || fluidBuffers.length !== 2 || frontBuffers.length !== 2 || farSmokeBuffers.length !== 2 || !majorantBuffer || !boundarySidecarBuffer || !historyTexture || !historySampler) return;
+    bindGroups = [];
+    for (let fluidIndex = 0; fluidIndex < 2; fluidIndex += 1) {
+      for (let farIndex = 0; farIndex < 2; farIndex += 1) {
+        bindGroups.push(device.createBindGroup({
+          label: `kaminos fluid bind group ${gridSize}^3 fluid ${fluidIndex} far ${farIndex}`,
+          layout: bindGroupLayout,
+          entries: [
+            { binding: 0, resource: { buffer: uniformBuffer } },
+            { binding: 1, resource: { buffer: fluidBuffers[fluidIndex] } },
+            { binding: 2, resource: { buffer: fluidBuffers[1 - fluidIndex] } },
+            { binding: 3, resource: { buffer: majorantBuffer } },
+            { binding: 4, resource: historyTexture.createView() },
+            { binding: 5, resource: historySampler },
+            { binding: 6, resource: { buffer: externalEmitterBuffer } },
+            { binding: 7, resource: { buffer: frontBuffers[fluidIndex] } },
+            { binding: 8, resource: { buffer: frontBuffers[1 - fluidIndex] } },
+            { binding: 9, resource: { buffer: oracleActivityCueBuffer } },
+            { binding: 10, resource: { buffer: boundarySidecarBuffer } },
+            { binding: 11, resource: { buffer: farSmokeBuffers[farIndex] } },
+            { binding: 12, resource: { buffer: farSmokeBuffers[1 - farIndex] } },
+          ],
+        }));
+      }
+    }
+  }
+
+  function activeBindGroup(fluidIndex = currentFluid, farIndex = currentFarSmoke) {
+    return bindGroups[fluidIndex * 2 + farIndex] || bindGroups[0] || null;
   }
 
   function ensureMajorantBuffer() {
@@ -6223,6 +6404,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const nextFrontBufferBytes = frontFieldBufferBytes(gridSize);
     const nextBoundarySidecarBufferBytes = boundarySidecarBufferBytes(gridSize);
     const nextPressureBufferBytes = pressureBufferBytes(gridSize);
+    const nextFarSmokeBufferBytes = farSmokeGridBufferBytes();
     const initialFluid = makeInitialFluid(gridSize);
     fluidBuffers = [0, 1].map(i => {
       const buffer = device.createBuffer({
@@ -6251,6 +6433,15 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       device.queue.writeBuffer(buffer, 0, new Float32Array(gridCellCount(gridSize) * 4));
       return buffer;
     });
+    farSmokeBuffers = [0, 1].map(i => {
+      const buffer = device.createBuffer({
+        label: `kaminos ${FAR_SMOKE_GRID_IDENTITY} ${FAR_SMOKE_GRID_SIZE}^3 ${i}`,
+        size: nextFarSmokeBufferBytes,
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+      });
+      device.queue.writeBuffer(buffer, 0, new Float32Array(FAR_SMOKE_GRID_SIZE * FAR_SMOKE_GRID_SIZE * FAR_SMOKE_GRID_SIZE * FAR_SMOKE_GRID_COMPONENTS));
+      return buffer;
+    });
     ensureOracleActivityCueBuffer();
     if (oracleActivityCueSourceValues && oracleActivityCueSourceGrid) {
       const resampledCue = resampleScalarActivityCue(oracleActivityCueSourceValues, oracleActivityCueSourceGrid, gridSize);
@@ -6263,9 +6454,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         receiverGrid: gridSize,
       };
     }
-    const renderPipelineConstants = { GRID: gridSize, MAJORANT_GRID: majorantGridSize };
-    const computePipelineConstants = { GRID: gridSize };
-    const majorantPipelineConstants = { GRID: gridSize, MAJORANT_GRID: majorantGridSize };
+    const renderPipelineConstants = { GRID: gridSize, MAJORANT_GRID: majorantGridSize, FAR_SMOKE_GRID: FAR_SMOKE_GRID_SIZE };
+    const computePipelineConstants = { GRID: gridSize, FAR_SMOKE_GRID: FAR_SMOKE_GRID_SIZE };
+    const majorantPipelineConstants = { GRID: gridSize, MAJORANT_GRID: majorantGridSize, FAR_SMOKE_GRID: FAR_SMOKE_GRID_SIZE };
     const makePipeline = (targetFormat, label) => device.createRenderPipeline({
       label,
       layout: pipelineLayout,
@@ -6320,6 +6511,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       layout: boundarySidecarPipelineLayout,
       compute: { module: shader, entryPoint: 'csBoundarySidecar', constants: computePipelineConstants },
     });
+    farSmokeGridPipeline = device.createComputePipeline({
+      label: `kaminos ${FAR_SMOKE_GRID_IDENTITY} compute pipeline ${FAR_SMOKE_GRID_SIZE}^3`,
+      layout: pipelineLayout,
+      compute: { module: shader, entryPoint: 'farSmokeGridStep', constants: computePipelineConstants },
+    });
     ensureTemporalHistoryTexture();
     rebuildFluidBindGroups();
     majorantFrontBindGroups = [
@@ -6357,6 +6553,30 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           { binding: 0, resource: { buffer: uniformBuffer } },
           { binding: 1, resource: { buffer: fluidBuffers[1] } },
           { binding: 7, resource: { buffer: frontBuffers[1] } },
+        ],
+      }),
+    ];
+    pressureTierFluidBindGroups = [
+      device.createBindGroup({
+        label: `kaminos pressure tier fluid bind group ${gridSize}^3 A to B`,
+        layout: pressureTierFluidBindGroupLayout,
+        entries: [
+          { binding: 0, resource: { buffer: uniformBuffer } },
+          { binding: 1, resource: { buffer: fluidBuffers[0] } },
+          { binding: 2, resource: { buffer: fluidBuffers[1] } },
+          { binding: 7, resource: { buffer: frontBuffers[0] } },
+          { binding: 8, resource: { buffer: frontBuffers[1] } },
+        ],
+      }),
+      device.createBindGroup({
+        label: `kaminos pressure tier fluid bind group ${gridSize}^3 B to A`,
+        layout: pressureTierFluidBindGroupLayout,
+        entries: [
+          { binding: 0, resource: { buffer: uniformBuffer } },
+          { binding: 1, resource: { buffer: fluidBuffers[1] } },
+          { binding: 2, resource: { buffer: fluidBuffers[0] } },
+          { binding: 7, resource: { buffer: frontBuffers[1] } },
+          { binding: 8, resource: { buffer: frontBuffers[0] } },
         ],
       }),
     ];
@@ -6403,6 +6623,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     ];
     currentFluid = 0;
     currentFront = 0;
+    currentFarSmoke = 0;
     state.simStepCount = 0;
     state.simGrid = gridSize;
     state.simGridLabel = `${gridSize}^3 velocity-material-fire-microdetail-storage-buffer+${FRONT_FIELD_IDENTITY}`;
@@ -6411,6 +6632,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.frontFieldReadIndex = currentFront;
     state.frontFieldWriteIndex = 1 - currentFront;
     state.frontFieldProjectionPassthrough = false;
+    state.farSmokeGridBytes = nextFarSmokeBufferBytes;
     state.majorantGrid = majorantGridSize;
     state.majorantBuilt = false;
     state.majorantFrameCount = 0;
@@ -6546,6 +6768,16 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           visibility: GPUShaderStage.FRAGMENT,
           buffer: { type: 'read-only-storage' },
         },
+        {
+          binding: 11,
+          visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE,
+          buffer: { type: 'read-only-storage' },
+        },
+        {
+          binding: 12,
+          visibility: GPUShaderStage.COMPUTE,
+          buffer: { type: 'storage' },
+        },
       ],
     });
     boundarySidecarReadBindGroupLayout = device.createBindGroupLayout({
@@ -6565,6 +6797,36 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           binding: 7,
           visibility: GPUShaderStage.COMPUTE,
           buffer: { type: 'read-only-storage' },
+        },
+      ],
+    });
+    pressureTierFluidBindGroupLayout = device.createBindGroupLayout({
+      label: 'kaminos pressure tier fluid bind group layout',
+      entries: [
+        {
+          binding: 0,
+          visibility: GPUShaderStage.COMPUTE,
+          buffer: { type: 'uniform' },
+        },
+        {
+          binding: 1,
+          visibility: GPUShaderStage.COMPUTE,
+          buffer: { type: 'read-only-storage' },
+        },
+        {
+          binding: 2,
+          visibility: GPUShaderStage.COMPUTE,
+          buffer: { type: 'storage' },
+        },
+        {
+          binding: 7,
+          visibility: GPUShaderStage.COMPUTE,
+          buffer: { type: 'read-only-storage' },
+        },
+        {
+          binding: 8,
+          visibility: GPUShaderStage.COMPUTE,
+          buffer: { type: 'storage' },
         },
       ],
     });
@@ -6664,15 +6926,15 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     });
     pressureJacobiTieredPipelineLayout = device.createPipelineLayout({
       label: 'kaminos pressure tiered jacobi pipeline layout',
-      bindGroupLayouts: [bindGroupLayout, emptyBindGroupLayout, pressureJacobiBindGroupLayout],
+      bindGroupLayouts: [pressureTierFluidBindGroupLayout, emptyBindGroupLayout, pressureJacobiBindGroupLayout],
     });
     pressureProjectPipelineLayout = device.createPipelineLayout({
       label: 'kaminos pressure projection pipeline layout',
-      bindGroupLayouts: [bindGroupLayout, emptyBindGroupLayout, pressureReadBindGroupLayout],
+      bindGroupLayouts: [pressureTierFluidBindGroupLayout, emptyBindGroupLayout, pressureReadBindGroupLayout],
     });
     pressureProjectTieredPipelineLayout = device.createPipelineLayout({
       label: 'kaminos tiered pressure projection pipeline layout',
-      bindGroupLayouts: [bindGroupLayout, emptyBindGroupLayout, pressureJacobiBindGroupLayout],
+      bindGroupLayouts: [pressureTierFluidBindGroupLayout, emptyBindGroupLayout, pressureJacobiBindGroupLayout],
     });
     device.pushErrorScope('validation');
     rebuildFluidState(controlsSnapshot.resolution, controlsSnapshot.majorantGrid);
@@ -7082,7 +7344,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     uniforms[337] = clampFinite(controlsSnapshot.farSmokeReceiverOverlap, 0, 1, 0.45);
     uniforms[338] = clampFinite(controlsSnapshot.farSmokeReceiverCarrier, 0, 1, 0.70);
     uniforms[339] = clampFinite(controlsSnapshot.farSmokeReceiverRimCurl, 0, 1, 0.40);
-    uniforms.set(previousViewProj.elements, 340);
+    uniforms[340] = clampFinite(controlsSnapshot.farSmokeGridStrength, 0, 1, 0.65);
+    uniforms[341] = clampFinite(controlsSnapshot.farSmokeGridHeight, 0, 1, 0.75);
+    uniforms[342] = clampFinite(controlsSnapshot.farSmokeGridWidth, 0, 1, 0.70);
+    uniforms[343] = clampFinite(controlsSnapshot.farSmokeGridOverlap, 0, 1, 0.55);
+    uniforms.set(previousViewProj.elements, 344);
     device.queue.writeBuffer(uniformBuffer, 0, uniforms);
     state.gridOverlay = controlsSnapshot.gridOverlay || 0;
     state.lookFreeze = lookFreeze;
@@ -7184,6 +7450,28 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         FRONT_FIELD_IDENTITY,
         'curlAtCell',
       ],
+    };
+    state.farSmokeGrid = {
+      identity: FAR_SMOKE_GRID_IDENTITY,
+      slotPolicy: 'separate-lowres-one-way-overlap-grid-v0',
+      authoritySource: 'near-grid-material-fire-front-overlap-injection-v0',
+      grid: FAR_SMOKE_GRID_SIZE,
+      bufferBytes: farSmokeGridBufferBytes(),
+      pressureCeiling: FAR_SMOKE_GRID_PRESSURE_CEILING,
+      farSmokeGridPressureStatus: 'p3-ceiling-pressure-deferred-first-slice-v0',
+      pressureStatus: 'p3-ceiling-pressure-deferred-first-slice-v0',
+      active: normalizeVolumeScene(controlsSnapshot.volumeScene) === 'tall_plume' && uniforms[340] > 0.001,
+      strength: uniforms[340],
+      height: uniforms[341],
+      width: uniforms[342],
+      overlap: uniforms[343],
+      currentReadIndex: currentFarSmoke,
+      currentWriteIndex: 1 - currentFarSmoke,
+      raymarchExtentY: 1 + uniforms[340] * (0.65 + uniforms[341] * 1.30),
+      raymarchExtentXZ: 1 + uniforms[340] * (0.15 + uniforms[342] * 1.50),
+      passCount: state.farSmokeGrid?.passCount || 0,
+      target: 'large-explosion-plume-smoke-second-grid-first-slice-v0',
+      pressurePlan: 'defer-far-grid-pressure-until-p3-sparse-budget-clears-v0',
     };
     state.volumeScene = normalizeVolumeScene(controlsSnapshot.volumeScene);
     state.smokeMorphologyForces = {
@@ -7516,6 +7804,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const pressureBytes = pressureBufferBytes(gridSize);
     const majorantBytes = majorantBufferBytes(majorantGridSize);
     const boundarySidecarBytes = boundarySidecarBufferBytes(gridSize);
+    const farSmokeBytes = farSmokeGridBufferBytes();
     state.majorantCadence = majorantBuildCadence;
     state.pressureIterationDefault = defaultPressureIterationsForScene(scene);
     state.pressureIterationRequested = pressureIterationRequested;
@@ -7645,8 +7934,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       pressureBufferBytes: pressureBytes,
       majorantBufferBytes: majorantBytes,
       boundarySidecarBufferBytes: boundarySidecarBytes,
+      farSmokeGridIdentity: FAR_SMOKE_GRID_IDENTITY,
+      farSmokeGridBufferBytes: farSmokeBytes,
+      farSmokeGridPressureCeiling: FAR_SMOKE_GRID_PRESSURE_CEILING,
+      farSmokeGridPressureStatus: state.farSmokeGrid?.pressureStatus || 'p3-ceiling-pressure-deferred-first-slice-v0',
+      farSmokeGridPassesPerFrame: state.farSmokeGrid?.active ? 1 : 0,
       externalEmitterBufferBytes: externalEmitterBufferBytes(),
-      estimatedResidentBytes: fluidBytes * 2 + frontBytes * 2 + pressureBytes * 2 + majorantBytes + boundarySidecarBytes + externalEmitterBufferBytes(),
+      estimatedResidentBytes: fluidBytes * 2 + frontBytes * 2 + pressureBytes * 2 + farSmokeBytes * 2 + majorantBytes + boundarySidecarBytes + externalEmitterBufferBytes(),
       timing: { ...state.timing },
     };
     return state.simCostLedger;
@@ -7655,7 +7949,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   function encodeSim(encoder) {
     const pass = encoder.beginComputePass({ label: 'kaminos fluid sim pass' });
     pass.setPipeline(computePipeline);
-    pass.setBindGroup(0, bindGroups[currentFluid]);
+    pass.setBindGroup(0, activeBindGroup());
     const workgroups = Math.ceil(gridSize / 4);
     pass.dispatchWorkgroups(workgroups, workgroups, workgroups);
     pass.end();
@@ -7669,6 +7963,54 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     updateSimCostLedger();
   }
 
+  function encodeFarSmokeGrid(encoder) {
+    const controls = {
+      strength: clampFinite(controlsSnapshot.farSmokeGridStrength, 0, 1, 0.65),
+      height: clampFinite(controlsSnapshot.farSmokeGridHeight, 0, 1, 0.75),
+      width: clampFinite(controlsSnapshot.farSmokeGridWidth, 0, 1, 0.70),
+      overlap: clampFinite(controlsSnapshot.farSmokeGridOverlap, 0, 1, 0.55),
+    };
+    const active = normalizeVolumeScene(controlsSnapshot.volumeScene) === 'tall_plume' && controls.strength > 0.001;
+    if (!farSmokeGridPipeline || !activeBindGroup() || farSmokeBuffers.length !== 2 || !active) {
+      state.farSmokeGrid = {
+        ...(state.farSmokeGrid || {}),
+        identity: FAR_SMOKE_GRID_IDENTITY,
+        slotPolicy: 'separate-lowres-one-way-overlap-grid-v0',
+        pressureCeiling: FAR_SMOKE_GRID_PRESSURE_CEILING,
+        farSmokeGridPressureStatus: 'p3-ceiling-pressure-deferred-first-slice-v0',
+        pressureStatus: 'p3-ceiling-pressure-deferred-first-slice-v0',
+        active: false,
+        ...controls,
+      };
+      return;
+    }
+    const pass = encoder.beginComputePass({ label: `kaminos ${FAR_SMOKE_GRID_IDENTITY} pass` });
+    pass.setPipeline(farSmokeGridPipeline);
+    pass.setBindGroup(0, activeBindGroup());
+    const workgroups = Math.ceil(FAR_SMOKE_GRID_SIZE / 4);
+    pass.dispatchWorkgroups(workgroups, workgroups, workgroups);
+    pass.end();
+    currentFarSmoke = 1 - currentFarSmoke;
+    state.farSmokeGrid = {
+      identity: FAR_SMOKE_GRID_IDENTITY,
+      slotPolicy: 'separate-lowres-one-way-overlap-grid-v0',
+      authoritySource: 'near-grid-material-fire-front-overlap-injection-v0',
+      grid: FAR_SMOKE_GRID_SIZE,
+      bufferBytes: farSmokeGridBufferBytes(),
+      pressureCeiling: FAR_SMOKE_GRID_PRESSURE_CEILING,
+      farSmokeGridPressureStatus: 'p3-ceiling-pressure-deferred-first-slice-v0',
+      pressureStatus: 'p3-ceiling-pressure-deferred-first-slice-v0',
+      active,
+      ...controls,
+      currentReadIndex: currentFarSmoke,
+      currentWriteIndex: 1 - currentFarSmoke,
+      passCount: (state.farSmokeGrid?.passCount || 0) + 1,
+      target: 'large-explosion-plume-smoke-second-grid-first-slice-v0',
+      pressurePlan: 'defer-far-grid-pressure-until-p3-sparse-budget-clears-v0',
+    };
+    updateSimCostLedger();
+  }
+
   function encodePressureProjection(encoder) {
     const pressureIterationCount = normalizePressureIterationCount(controlsSnapshot.pressureIterations, controlsSnapshot.volumeScene);
     const pressureStrategy = normalizePressureStrategy(controlsSnapshot.pressureStrategy, controlsSnapshot.volumeScene);
@@ -7679,7 +8021,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       (tierPlan.strategy !== TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY_INACTIVE && (!pressureJacobiTieredLowerPipeline || !pressureJacobiTieredHeroPipeline || !pressureProjectTieredPipeline)) ||
       pressureJacobiBindGroups.length !== 2 ||
       pressureReadBindGroups.length !== 2 ||
-      majorantFrontBindGroups.length !== 2
+      majorantFrontBindGroups.length !== 2 ||
+      pressureTierFluidBindGroups.length !== 2
     ) {
       state.pressureProjectionEnabled = false;
       state.pressureProjectionIterations = 0;
@@ -7717,19 +8060,19 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         pressureJacobiBindGroups[1],
         tierPlan.dispatches[1].workgroupsY,
         `kaminos pressure tier pass 2 ${tierPlan.dispatches[1]?.label || 'pressure2'}`,
-        bindGroups[currentFluid]
+        pressureTierFluidBindGroups[currentFluid]
       );
       dispatchPressureTierPass(
         pressureJacobiTieredHeroPipeline,
         pressureJacobiBindGroups[0],
         tierPlan.dispatches[2].workgroupsY,
         `kaminos pressure tier pass 3 ${tierPlan.dispatches[2]?.label || 'pressure3'}`,
-        bindGroups[currentFluid]
+        pressureTierFluidBindGroups[currentFluid]
       );
       {
         const pass = encoder.beginComputePass({ label: 'kaminos tiered pressure projection pass' });
         pass.setPipeline(pressureProjectTieredPipeline);
-        pass.setBindGroup(0, bindGroups[currentFluid]);
+        pass.setBindGroup(0, pressureTierFluidBindGroups[currentFluid]);
         pass.setBindGroup(2, pressureJacobiBindGroups[1]);
         pass.dispatchWorkgroups(workgroups, workgroups, workgroups);
         pass.end();
@@ -7757,7 +8100,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     {
       const pass = encoder.beginComputePass({ label: 'kaminos pressure projection pass' });
       pass.setPipeline(pressureProjectPipeline);
-      pass.setBindGroup(0, bindGroups[currentFluid]);
+      pass.setBindGroup(0, pressureTierFluidBindGroups[currentFluid]);
       pass.setBindGroup(2, pressureReadBindGroups[pressureReadIndex]);
       pass.dispatchWorkgroups(workgroups, workgroups, workgroups);
       pass.end();
@@ -7841,7 +8184,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       }],
     });
     pass.setPipeline(targetPipeline);
-    pass.setBindGroup(0, bindGroups[currentFluid]);
+    pass.setBindGroup(0, activeBindGroup());
     pass.draw(3);
     pass.end();
   }
@@ -7876,6 +8219,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         state.lookFreezeFrame = null;
         state.lookFreezeSkippedFrames = 0;
         encodeSim(encoder);
+        encodeFarSmokeGrid(encoder);
         encodeMajorant(encoder);
       }
       encodeBoundarySidecar(encoder);
@@ -9138,6 +9482,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         smokeArtifactAssayControls: state.smokeArtifactAssayControls ? { ...state.smokeArtifactAssayControls } : null,
         explosionPlumeSmokeDynamics: state.explosionPlumeSmokeDynamics ? { ...state.explosionPlumeSmokeDynamics } : null,
         farSmokeReceiver: state.farSmokeReceiver ? { ...state.farSmokeReceiver } : null,
+        farSmokeGrid: state.farSmokeGrid ? { ...state.farSmokeGrid } : null,
         plumeHeight: state.plumeHeight,
         bonfireAblation: { ...state.bonfireAblation },
         externalEmitterMode: state.externalEmitterMode,
@@ -9462,6 +9807,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       smokeArtifactAssayControls: state.smokeArtifactAssayControls ? { ...state.smokeArtifactAssayControls } : null,
       explosionPlumeSmokeDynamics: state.explosionPlumeSmokeDynamics ? { ...state.explosionPlumeSmokeDynamics } : null,
       farSmokeReceiver: state.farSmokeReceiver ? { ...state.farSmokeReceiver } : null,
+      farSmokeGrid: state.farSmokeGrid ? { ...state.farSmokeGrid } : null,
       plumeHeight: state.plumeHeight,
       windStrength: state.windStrength,
       windAngle: state.windAngle,
