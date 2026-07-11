@@ -143,11 +143,16 @@ function boundarySidecarSourceValue(value) {
 function normalizeLearnedBoundarySidecarVariant(value) {
   const normalized = String(value || 'scalar').toLowerCase().replace(/-/g, '_');
   if (normalized === 'ridgeclassifierprobability' || normalized === 'ridge_classifier' || normalized === 'ridge_classifier_probability' || normalized === 'classifier') return 'ridgeClassifierProbability';
+  if (normalized === 'classifierprobabilitycues' || normalized === 'classifier_probability_cues' || normalized === 'multi_head_classifier' || normalized === 'sparse_classifiers') return 'classifierProbabilityCues';
   return 'scalar';
 }
 
 function normalizeLearnedBoundarySidecarClassifierThreshold(value) {
   return clampFinite(value, 0, 1, 0.97);
+}
+
+function normalizeLearnedBoundarySidecarProbabilityThreshold(value, fallback) {
+  return clampFinite(value, 0, 1, fallback);
 }
 
 function normalizeBoundarySidecarView(value) {
@@ -6243,6 +6248,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   function packLearnedBoundarySidecarCue(source = {}) {
     const variant = normalizeLearnedBoundarySidecarVariant(source.variant);
     const classifierThreshold = normalizeLearnedBoundarySidecarClassifierThreshold(source.classifierThreshold ?? source.ridgeClassifierThreshold);
+    const supportClassifierThreshold = normalizeLearnedBoundarySidecarProbabilityThreshold(source.supportClassifierThreshold, 0.95);
+    const coverageClassifierThreshold = normalizeLearnedBoundarySidecarProbabilityThreshold(source.coverageClassifierThreshold, 0.90);
+    const ridgeClassifierThreshold = normalizeLearnedBoundarySidecarProbabilityThreshold(source.ridgeClassifierThreshold ?? source.classifierThreshold, variant === 'classifierProbabilityCues' ? 0.90 : classifierThreshold);
+    const proximityClassifierThreshold = normalizeLearnedBoundarySidecarProbabilityThreshold(source.proximityClassifierThreshold, 0.95);
     const sourceGrid = normalizeScalarActivityCueGridSize(source.grid || source.sourceGrid || gridSize, gridSize);
     if (sourceGrid !== gridSize) {
       throw new Error(`learned boundary sidecar cue grid ${sourceGrid} does not match receiver grid ${gridSize}`);
@@ -6250,28 +6259,55 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const cellCount = gridCellCount(gridSize);
     const scalarValues = source.scalarMlpCue || source.scalarValues || source.values || null;
     const ridgeClassifierValues = source.ridgeClassifierProbability || source.ridgeProbability || null;
+    const classifierProbabilityCueValues = source.classifierProbabilityCues || source.classifierProbabilities || null;
     const scalar = scalarValues ? (scalarValues instanceof Float32Array ? scalarValues : new Float32Array(scalarValues)) : null;
     const ridgeClassifier = ridgeClassifierValues ? (ridgeClassifierValues instanceof Float32Array ? ridgeClassifierValues : new Float32Array(ridgeClassifierValues)) : null;
-    if (!scalar || scalar.length !== cellCount * 3) {
-      throw new Error(`learned boundary sidecar scalar cue expected ${cellCount * 3} floats, got ${scalar?.length || 0}`);
+    const classifierProbabilityCues = classifierProbabilityCueValues
+      ? (classifierProbabilityCueValues instanceof Float32Array ? classifierProbabilityCueValues : new Float32Array(classifierProbabilityCueValues))
+      : null;
+    const scalarChannelCount = scalar?.length === cellCount * 4 ? 4 : scalar?.length === cellCount * 3 ? 3 : 0;
+    if (!scalar || scalarChannelCount === 0) {
+      throw new Error(`learned boundary sidecar scalar cue expected ${cellCount * 3} or ${cellCount * 4} floats, got ${scalar?.length || 0}`);
     }
     if (variant === 'ridgeClassifierProbability' && (!ridgeClassifier || ridgeClassifier.length !== cellCount)) {
       throw new Error(`learned boundary sidecar ridge classifier expected ${cellCount} floats, got ${ridgeClassifier?.length || 0}`);
     }
+    if (variant === 'classifierProbabilityCues' && (!classifierProbabilityCues || classifierProbabilityCues.length !== cellCount * 4)) {
+      throw new Error(`learned boundary sidecar classifierProbabilityCues expected ${cellCount * 4} floats, got ${classifierProbabilityCues?.length || 0}`);
+    }
+    const probabilityGate = (probability, threshold) => {
+      const p = Math.max(0, Math.min(1, probability || 0));
+      return p * Math.max(0, Math.min(1, (p - threshold) / Math.max(0.015, 1 - threshold)));
+    };
     const sidecarData = new Float32Array(cellCount * 4);
     const metaData = new Float32Array(cellCount * 4);
     for (let i = 0; i < cellCount; i += 1) {
-      const support = Math.max(0, Math.min(1.8, scalar[i * 3] || 0));
-      const scalarRidge = Math.max(0, Math.min(1.8, scalar[i * 3 + 1] || 0));
-      const proximity = Math.max(0, Math.min(1.8, scalar[i * 3 + 2] || 0));
+      const scalarOffset = i * scalarChannelCount;
+      const support = Math.max(0, Math.min(1.8, scalar[scalarOffset] || 0));
+      const scalarCoverage = scalarChannelCount === 4 ? Math.max(0, Math.min(1.8, scalar[scalarOffset + 1] || 0)) : 0;
+      const scalarRidge = Math.max(0, Math.min(1.8, scalar[scalarOffset + (scalarChannelCount === 4 ? 2 : 1)] || 0));
+      const proximity = Math.max(0, Math.min(1.8, scalar[scalarOffset + (scalarChannelCount === 4 ? 3 : 2)] || 0));
       const classifierProbability = Math.max(0, Math.min(1, ridgeClassifier?.[i] || 0));
-      const classifierGate = classifierProbability * Math.max(0, Math.min(1, (classifierProbability - classifierThreshold) / Math.max(0.015, 1 - classifierThreshold)));
-      const ridge = variant === 'ridgeClassifierProbability'
+      const classifierGate = probabilityGate(classifierProbability, classifierThreshold);
+      const classifierOffset = i * 4;
+      const supportProbabilityGate = variant === 'classifierProbabilityCues' ? probabilityGate(classifierProbabilityCues[classifierOffset], supportClassifierThreshold) : 0;
+      const coverageProbabilityGate = variant === 'classifierProbabilityCues' ? probabilityGate(classifierProbabilityCues[classifierOffset + 1], coverageClassifierThreshold) : 0;
+      const ridgeProbabilityGate = variant === 'classifierProbabilityCues' ? probabilityGate(classifierProbabilityCues[classifierOffset + 2], ridgeClassifierThreshold) : 0;
+      const proximityProbabilityGate = variant === 'classifierProbabilityCues' ? probabilityGate(classifierProbabilityCues[classifierOffset + 3], proximityClassifierThreshold) : 0;
+      const ridge = variant === 'classifierProbabilityCues'
+        ? Math.max(0, Math.min(1.8, ridgeProbabilityGate))
+        : variant === 'ridgeClassifierProbability'
         ? Math.max(0, Math.min(1.8, classifierGate))
         : scalarRidge;
-      const rendererSupport = variant === 'ridgeClassifierProbability' ? Math.max(support, ridge * 0.72) : support;
-      const rendererProximity = variant === 'ridgeClassifierProbability' ? Math.max(proximity, ridge * 0.64) : proximity;
-      const coverage = Math.max(rendererSupport, rendererProximity * 0.74, ridge * 0.58);
+      const rendererSupport = variant === 'classifierProbabilityCues'
+        ? Math.max(supportProbabilityGate, ridge * 0.32, proximityProbabilityGate * 0.24)
+        : variant === 'ridgeClassifierProbability' ? Math.max(support, ridge * 0.72) : support;
+      const rendererProximity = variant === 'classifierProbabilityCues'
+        ? Math.max(proximityProbabilityGate, supportProbabilityGate * 0.28, ridge * 0.24)
+        : variant === 'ridgeClassifierProbability' ? Math.max(proximity, ridge * 0.64) : proximity;
+      const coverage = variant === 'classifierProbabilityCues'
+        ? Math.max(coverageProbabilityGate, rendererSupport * 0.82, rendererProximity * 0.68, ridge * 0.52)
+        : Math.max(scalarCoverage, rendererSupport, rendererProximity * 0.74, ridge * 0.58);
       const footprint = Math.max(0.06, Math.min(1.65, 0.16 + ridge * 0.30 + rendererProximity * 0.18));
       sidecarData[i * 4] = rendererSupport;
       sidecarData[i * 4 + 1] = coverage;
@@ -6282,7 +6318,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       metaData[i * 4 + 2] = 0;
       metaData[i * 4 + 3] = 0;
     }
-    return { variant, classifierThreshold, sourceGrid, cellCount, sidecarData, metaData };
+    return { variant, classifierThreshold, supportClassifierThreshold, coverageClassifierThreshold, ridgeClassifierThreshold, proximityClassifierThreshold, sourceGrid, cellCount, sidecarData, metaData };
   }
 
   function writeLearnedBoundarySidecarCueBuffers(source = {}) {
@@ -6296,12 +6332,17 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       status: 'uploaded',
       variant: packed.variant,
       classifierThreshold: packed.classifierThreshold,
+      supportClassifierThreshold: packed.supportClassifierThreshold,
+      coverageClassifierThreshold: packed.coverageClassifierThreshold,
+      ridgeClassifierThreshold: packed.ridgeClassifierThreshold,
+      proximityClassifierThreshold: packed.proximityClassifierThreshold,
       grid: packed.sourceGrid,
       receiverGrid: gridSize,
       cellCount: packed.cellCount,
       manifestUrl: source.manifestUrl || null,
       scalarCueSha256: source.scalarCueSha256 || null,
       ridgeClassifierSha256: source.ridgeClassifierSha256 || null,
+      classifierProbabilityCuesSha256: source.classifierProbabilityCuesSha256 || null,
       uploadedAtMs: performance.now(),
       failurePhase: null,
     };

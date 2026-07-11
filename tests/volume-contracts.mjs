@@ -259,6 +259,13 @@ assert.match(core, /normalizeLearnedBoundarySidecarClassifierThreshold/, 'Render
 assert.match(core, /classifierThreshold/, 'Debug state reports the effective learned ridge-classifier probability threshold');
 assert.match(core, /ridgeclassifierprobability/, 'Renderer preserves camel-case ridgeClassifierProbability route variants after lowercase normalization');
 assert.match(index, /ridgeclassifierprobability/, 'Page route preserves camel-case ridgeClassifierProbability learned cue variants after lowercase normalization');
+assert.match(core, /classifierprobabilitycues/, 'Renderer preserves multi-head classifierProbabilityCues route variants after lowercase normalization');
+assert.match(index, /classifierprobabilitycues/, 'Page route preserves multi-head classifierProbabilityCues route variants after lowercase normalization');
+assert.match(core, /classifierProbabilityCues/, 'Renderer can pack four-channel learned classifier probability cue arrays');
+assert.match(index, /classifierProbabilityCues/, 'Page route loads classifierProbabilityCues arrays from learned dense cue manifests');
+assert.match(core, /supportClassifierThreshold/, 'Debug state reports the effective learned support classifier probability threshold');
+assert.match(core, /coverageClassifierThreshold/, 'Debug state reports the effective learned coverage classifier probability threshold');
+assert.match(core, /proximityClassifierThreshold/, 'Debug state reports the effective learned proximity classifier probability threshold');
 assert.match(core, /setLearnedBoundarySidecarCue/, 'Volume prototype exposes a public API for route-loaded learned dense sidecar cues');
 assert.match(core, /learnedBoundarySidecarCue/, 'Debug state reports learned dense sidecar cue upload identity/source/variant');
 assert.match(core, /if \(normalized === 'learned'\) return 3/, 'Boundary sidecar source maps learned cue packs to a distinct renderer source value');

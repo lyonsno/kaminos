@@ -11585,6 +11585,7 @@ function normalizeBoundarySidecarView(value) {
 function normalizeLearnedBoundarySidecarVariant(value) {
   const mode = String(value || 'scalar').toLowerCase().replace(/-/g, '_');
   if (mode === 'ridgeclassifierprobability' || mode === 'ridge_classifier' || mode === 'ridge_classifier_probability' || mode === 'classifier') return 'ridgeClassifierProbability';
+  if (mode === 'classifierprobabilitycues' || mode === 'classifier_probability_cues' || mode === 'multi_head_classifier' || mode === 'sparse_classifiers') return 'classifierProbabilityCues';
   return 'scalar';
 }
 
@@ -11622,23 +11623,40 @@ async function loadLearnedBoundarySidecarCueFromRoute(params, prototype) {
   if (!manifestUrl || !prototype?.setLearnedBoundarySidecarCue) return null;
   const variant = normalizeLearnedBoundarySidecarVariant(params.get('volume_learned_boundary_sidecar_variant') || 'scalar');
   const classifierThreshold = normalizeLearnedBoundarySidecarClassifierThreshold(params.get('volume_learned_boundary_sidecar_classifier_threshold'));
+  const supportClassifierThreshold = normalizeLearnedBoundarySidecarClassifierThreshold(params.get('volume_learned_boundary_sidecar_support_classifier_threshold') || 0.95);
+  const coverageClassifierThreshold = normalizeLearnedBoundarySidecarClassifierThreshold(params.get('volume_learned_boundary_sidecar_coverage_classifier_threshold') || 0.90);
+  const ridgeClassifierThreshold = normalizeLearnedBoundarySidecarClassifierThreshold(params.get('volume_learned_boundary_sidecar_ridge_classifier_threshold') || (variant === 'classifierProbabilityCues' ? 0.90 : classifierThreshold));
+  const proximityClassifierThreshold = normalizeLearnedBoundarySidecarClassifierThreshold(params.get('volume_learned_boundary_sidecar_proximity_classifier_threshold') || 0.95);
   const manifest = await fetchLearnedBoundarySidecarJson(manifestUrl);
   const scalarRecord = manifest?.arrays?.scalarMlpCue;
   const ridgeRecord = manifest?.arrays?.ridgeClassifierProbability;
+  const classifierRecord = manifest?.arrays?.classifierProbabilityCues;
   if (!scalarRecord?.path) throw new Error('learned sidecar manifest missing scalarMlpCue.path');
   const scalarMlpCue = await fetchLearnedBoundarySidecarF32(scalarRecord.path);
   const ridgeClassifierProbability = variant === 'ridgeClassifierProbability' && ridgeRecord?.path
     ? await fetchLearnedBoundarySidecarF32(ridgeRecord.path)
     : null;
+  const classifierProbabilityCues = variant === 'classifierProbabilityCues' && classifierRecord?.path
+    ? await fetchLearnedBoundarySidecarF32(classifierRecord.path)
+    : null;
+  if (variant === 'classifierProbabilityCues' && !classifierProbabilityCues) {
+    throw new Error('learned sidecar manifest missing classifierProbabilityCues.path');
+  }
   return prototype.setLearnedBoundarySidecarCue({
     manifestUrl,
     variant,
     classifierThreshold,
+    supportClassifierThreshold,
+    coverageClassifierThreshold,
+    ridgeClassifierThreshold,
+    proximityClassifierThreshold,
     grid: manifest?.grid?.shape?.[0] || manifest?.grid?.highGrid || 0,
     scalarMlpCue,
     ridgeClassifierProbability,
+    classifierProbabilityCues,
     scalarCueSha256: scalarRecord.sha256 || null,
     ridgeClassifierSha256: ridgeRecord?.sha256 || null,
+    classifierProbabilityCuesSha256: classifierRecord?.sha256 || null,
   });
 }
 
