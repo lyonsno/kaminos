@@ -287,7 +287,9 @@ async function installSharpHeartbeatProbe(page) {
       },
       markInferenceEnd() {
         if (!probe.inferenceWindow) probe.inferenceWindow = { startMs: null, endMs: null };
+        if (Number.isFinite(probe.inferenceWindow.endMs)) return probe.inferenceWindow.endMs;
         probe.inferenceWindow.endMs = performance.now();
+        return probe.inferenceWindow.endMs;
       },
       stop() {
         probe.running = false;

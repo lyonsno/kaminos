@@ -73,6 +73,11 @@ assert.match(wrapperSource, /createSharpBackgroundHeartbeatReport/, 'wrapper mus
 assert.match(wrapperSource, /function installSharpHeartbeatProbe\(/, 'wrapper must install a RAF probe in the real browser route');
 assert.match(wrapperSource, /markInferenceStart[\s\S]*uploadFile\(input\)/, 'wrapper must open the heartbeat window immediately before inference actuation');
 assert.match(wrapperSource, /markInferenceEnd[\s\S]*backgroundHeartbeat/, 'wrapper must close the heartbeat window before constructing normal evidence');
+assert.match(
+  wrapperSource,
+  /markInferenceEnd\(\)\s*\{[\s\S]*Number\.isFinite\(probe\.inferenceWindow\.endMs\)[\s\S]*return probe\.inferenceWindow\.endMs/,
+  'heartbeat inference end must be first-write authoritative so adapter harvest cannot overwrite the source endpoint',
+);
 assert.match(wrapperSource, /backgroundHeartbeat\.inferenceWindow/, 'wrapper must fail loud when the scoped inference window is absent');
 assert.match(wrapperSource, /backgroundHeartbeat\.worstFrameGaps/, 'wrapper must fail loud when scoped worst-gap rows are absent');
 assert.match(wrapperSource, /sharpRepoRevision/, 'wrapper must record the effective SHARP source revision used by the route');
