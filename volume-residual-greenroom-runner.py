@@ -32,7 +32,7 @@ def parse_args():
     parser.add_argument("--eval-pair-count", default="0")
     parser.add_argument("--eval-selection", default="tail")
     parser.add_argument("--model-arch", default="tiny-conv", choices=MODEL_ARCHITECTURES)
-    parser.add_argument("--train-crop-mode", default="sampled", choices=["sampled", "fixed-material"])
+    parser.add_argument("--train-crop-mode", default="sampled", choices=["sampled", "fixed-material", "fixed-target-fire"])
     parser.add_argument("--feature-input-mode", default="rgb")
     parser.add_argument("--coordinate-input-mode", default="off")
     parser.add_argument("--fourier-coordinate-frequencies", default="4")

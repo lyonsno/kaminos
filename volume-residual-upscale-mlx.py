@@ -403,7 +403,7 @@ def parse_args():
     parser.add_argument("--eval-pair-count", dest="evalPairCount", type=int, default=0, help="Optional exact eval pair count for support-scaling experiments; 0 keeps the default split.")
     parser.add_argument("--eval-selection", dest="evalSelection", choices=["tail", "even"], default="tail", help="Eval holdout selection when --eval-pair-count is set.")
     parser.add_argument("--model-arch", dest="modelArch", choices=["tiny-conv", "direct-residual", "hybrid-residual", "gated-detail-residual", "small-unet", "teacher-unet", "teacher-unet-direct", "teacher-unet-linear-direct", "teacher-unet-absolute-rgb"], default="tiny-conv")
-    parser.add_argument("--train-crop-mode", dest="trainCropMode", choices=["sampled", "fixed-material"], default="sampled", help="Use ordinary sampled crops or a deterministic material-support crop for strict memorization probes.")
+    parser.add_argument("--train-crop-mode", dest="trainCropMode", choices=["sampled", "fixed-material", "fixed-target-fire"], default="sampled", help="Use ordinary sampled crops, a deterministic material-support crop, or a labeled target-derived bright-fire crop for strict offline memorization probes.")
     parser.add_argument("--feature-input-mode", dest="featureInputMode", choices=["rgb", "feature-rgba", "aux-rgba", "aux-rgb", "aux-red-cyan-abs", "aux-opponent-gradient", "sidecar-rgba", "feature-sidecar-rgba"], default="rgb", help="Model input source: low RGB plus optional shader/material, Flow Debug, baked sidecar, or combined material-plus-sidecar structural channels.")
     parser.add_argument("--coordinate-input-mode", dest="coordinateInputMode", choices=["off", "xy", "fourier"], default="off", help="Optional absolute screen-space coordinate conditioning for offline ceiling probes.")
     parser.add_argument("--fourier-coordinate-frequencies", dest="fourierCoordinateFrequencies", type=int, default=4, help="Number of powers-of-two xy Fourier coordinate frequencies when --coordinate-input-mode=fourier.")
@@ -420,7 +420,7 @@ def parse_args():
     parser.add_argument("--learning-rate", type=float, default=1e-3)
     parser.add_argument("--eval-patches", type=int, default=64)
     parser.add_argument("--preview-size", type=int, default=384)
-    parser.add_argument("--preview-mode", choices=["center", "foreground", "edge-band", "fixed-material", "full-frame"], default="center")
+    parser.add_argument("--preview-mode", choices=["center", "foreground", "edge-band", "fixed-material", "fixed-target-fire", "full-frame"], default="center")
     parser.add_argument("--preview-scope", dest="previewScope", choices=["eval", "train"], default="eval", help="Select whether product-view previews sample eval holdout pairs or train pairs.")
     parser.add_argument("--preview-frame-count", dest="previewFrameCount", type=int, default=1, help="Number of selected-scope preview frames to emit for product-view witnesses.")
     parser.add_argument("--seed", type=int, default=630)
@@ -1247,6 +1247,22 @@ def fixed_material_crop_origin(item, crop_height, crop_width, materialSamplingMo
     return top, left
 
 
+def fixed_target_fire_crop_origin(item, crop_height, crop_width):
+    height, width, _channels = item["high"].shape
+    target_luma = np.max(item["high"], axis=2)
+    bright_threshold = max(0.12, float(np.max(target_luma)) * 0.55)
+    pixels = np.argwhere(target_luma >= bright_threshold)
+    if not pixels.shape[0]:
+        return fixed_material_crop_origin(item, crop_height, crop_width, "fire-interface")
+    minimum_y, minimum_x = np.min(pixels, axis=0)
+    maximum_y, maximum_x = np.max(pixels, axis=0)
+    center_y = int((int(minimum_y) + int(maximum_y)) // 2)
+    center_x = int((int(minimum_x) + int(maximum_x)) // 2)
+    top = int(np.clip(center_y - crop_height // 2, 0, max(0, height - crop_height)))
+    left = int(np.clip(center_x - crop_width // 2, 0, max(0, width - crop_width)))
+    return top, left
+
+
 def sample_patch_batch(items, rng, batch_size, patch_size, foregroundProbability, edgeSamplingProbability, conditionRenderScale, featureInputMode, coordinateInputMode="off", fourierCoordinateFrequencies=4, materialSamplingMode="off", materialSamplingProbability=0.0, sidecarSamplingMode="off", sidecarSamplingProbability=0.0, trainCropMode="sampled"):
     lows = []
     highs = []
@@ -1261,7 +1277,9 @@ def sample_patch_batch(items, rng, batch_size, patch_size, foregroundProbability
         edge_band = item.get("edgeBand")
         sidecar_pixels = sidecar_sampling_pixels(item, sidecarSamplingMode) if rng.random() < sidecarSamplingProbability else None
         material_pixels = material_sampling_pixels(item, rng, materialSamplingMode) if rng.random() < materialSamplingProbability else None
-        if trainCropMode == "fixed-material":
+        if trainCropMode == "fixed-target-fire":
+            top, left = fixed_target_fire_crop_origin(item, crop_height, crop_width)
+        elif trainCropMode == "fixed-material":
             top, left = fixed_material_crop_origin(item, crop_height, crop_width, materialSamplingMode)
         elif sidecar_pixels is not None and sidecar_pixels.shape[0]:
             center_y, center_x = sidecar_pixels[int(rng.integers(0, sidecar_pixels.shape[0]))]
@@ -1506,6 +1524,20 @@ def crop_region(item, crop_size, previewMode):
             "centerX": left + crop_width / 2,
             "foregroundPixels": item.get("foregroundPixels", 0),
             "materialFirePixels": item.get("materialFirePixels", 0),
+            "fullFrame": False,
+            "top": top,
+            "left": left,
+            "height": crop_height,
+            "width": crop_width,
+        }
+    if previewMode == "fixed-target-fire":
+        top, left = fixed_target_fire_crop_origin(item, crop_height, crop_width)
+        return top, left, crop_height, crop_width, {
+            "mode": "fixed-target-fire",
+            "authority": "target-derived-bright-fire-crop-offline-ceiling-only",
+            "centerY": top + crop_height / 2,
+            "centerX": left + crop_width / 2,
+            "foregroundPixels": item.get("foregroundPixels", 0),
             "fullFrame": False,
             "top": top,
             "left": left,

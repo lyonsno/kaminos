@@ -41,7 +41,7 @@ assert.match(
 );
 assert.match(
   trainer,
-  /--train-crop-mode[\s\S]*choices=\["sampled", "fixed-material"\]/,
+  /--train-crop-mode[\s\S]*choices=\["sampled", "fixed-material", "fixed-target-fire"\]/,
   'trainer exposes an explicit deterministic fixed-material crop mode for honest one-pair memorization probes',
 );
 assert.match(
@@ -51,8 +51,18 @@ assert.match(
 );
 assert.match(
   trainer,
+  /def fixed_target_fire_crop_origin\(/,
+  'offline ceiling probe can select a labeled target-derived bright-flame crop without feeding target pixels to the model',
+);
+assert.match(
+  trainer,
   /previewMode\s*==\s*"fixed-material"[\s\S]*fixed_material_crop_origin/,
   'preview witness can render the exact deterministic material crop used for memorization training',
+);
+assert.match(
+  trainer,
+  /previewMode\s*==\s*"fixed-target-fire"[\s\S]*fixed_target_fire_crop_origin/,
+  'preview witness can render the exact target-derived fire crop used by the offline ceiling assay',
 );
 assert.match(
   trainer,
