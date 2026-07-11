@@ -412,6 +412,10 @@ const ACTIVITY_PRESSURE_P4_COARSE_MASK_STRATEGY = 'core-replay-p4-coarse-brick-m
 const ACTIVITY_PRESSURE_P4_DISABLED_STRATEGY = 'activity-p4-disabled-comparison-p3-v0';
 const PRESSURE_PROJECTION_READ_STRATEGY_COMPOSITE = 'composite-pressure-tier-read-v0';
 const PRESSURE_PROJECTION_READ_STRATEGY_SINGLE_BUFFER = 'single-pressure-buffer-read-v0';
+const SMOKE_DOMAIN_STRATEGY_SINGLE_UNIFORM = 'single-uniform-volume-v0';
+const SMOKE_DOMAIN_STRATEGY_CASCADED_UNIFORM_SCAFFOLD = 'cascaded-uniform-near-field-far-smoke-scaffold-v0';
+const SMOKE_DOMAIN_HANDOFF_POLICY_SCAFFOLD = 'no-physical-handoff-debug-scaffold-v0';
+const SMOKE_DOMAIN_PROOF_BOUNDARY_SCAFFOLD = 'route-control-debug-identity-only-no-far-smoke-solver-v0';
 const PRESSURE_STRATEGY_SPATIAL_TIERS = 'spatial_tiers';
 const PRESSURE_STRATEGY_ACTIVITY_TIERS = 'activity_tiers';
 const PRESSURE_STRATEGY_GLOBAL = 'global';
@@ -683,6 +687,32 @@ function normalizePressureTierControls(value = {}) {
   const activityPressureP4Enabled = activityPressureMaxTier >= 4 ? 1 : 0;
   const activityPressureDispatchStrategy = normalizeActivityPressureDispatchStrategy(value.activityPressureDispatchStrategy);
   return { lowerMax, heroMin, heroMax, overlay, activityPressureP4Enabled, activityPressureMaxTier, activityPressureDispatchStrategy };
+}
+
+function normalizeSmokeDomainControls(value = {}, gridSize = 96) {
+  const mode = String(value.smokeDomainMode || 'single').toLowerCase();
+  const cascaded = mode === 'cascaded' || mode === 'cascaded-uniform' || mode === 'cascaded-uniform-scaffold' || mode === 'near-far' || mode === 'near-field-far-smoke';
+  const nearGrid = Math.round(clampFinite(value.smokeDomainNearGrid, 32, 160, gridSize));
+  if (cascaded) {
+    return {
+      mode: 'cascaded-uniform-scaffold',
+      strategy: SMOKE_DOMAIN_STRATEGY_CASCADED_UNIFORM_SCAFFOLD,
+      nearGrid,
+      farGrid: Math.round(clampFinite(value.smokeDomainFarGrid, 24, 96, 48)),
+      handoffPolicy: SMOKE_DOMAIN_HANDOFF_POLICY_SCAFFOLD,
+      handoffStatus: 'scaffold-only',
+      proofBoundary: SMOKE_DOMAIN_PROOF_BOUNDARY_SCAFFOLD,
+    };
+  }
+  return {
+    mode: 'single',
+    strategy: SMOKE_DOMAIN_STRATEGY_SINGLE_UNIFORM,
+    nearGrid,
+    farGrid: 0,
+    handoffPolicy: 'none',
+    handoffStatus: 'inactive',
+    proofBoundary: 'single-volume-baseline-v0',
+  };
 }
 
 function normalizeActivityPressureMaxTier(value, legacyP4Enabled = undefined) {
@@ -7853,6 +7883,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       coarseMaskPolicy: pressureTierControls.activityPressureDispatchStrategy === ACTIVITY_PRESSURE_COARSE_MASK_DISPATCH_STRATEGY ? ACTIVITY_PRESSURE_COARSE_MASK_POLICY : null,
       coarseWorkgroupEarlyOutPolicy: pressureTierControls.activityPressureDispatchStrategy === ACTIVITY_PRESSURE_COARSE_MASK_DISPATCH_STRATEGY ? ACTIVITY_PRESSURE_COARSE_WORKGROUP_EARLY_OUT_POLICY : null,
     };
+    const smokeDomainControls = normalizeSmokeDomainControls(controlsSnapshot, gridSize);
+    state.smokeDomainMode = smokeDomainControls.mode;
+    state.smokeDomainStrategy = smokeDomainControls.strategy;
+    state.smokeDomainNearGrid = smokeDomainControls.nearGrid;
+    state.smokeDomainFarGrid = smokeDomainControls.farGrid;
+    state.smokeDomainHandoffPolicy = smokeDomainControls.handoffPolicy;
+    state.smokeDomainHandoffStatus = smokeDomainControls.handoffStatus;
+    state.smokeDomainProofBoundary = smokeDomainControls.proofBoundary;
     state.volumeScene = normalizeVolumeScene(controlsSnapshot.volumeScene);
     state.bonfireReferenceConfinement = bonfireReferenceConfinementDebug(controlsSnapshot.volumeScene);
     state.minimalPlumeProof = minimalPlumeProofDebug(controlsSnapshot.volumeScene);
@@ -10049,6 +10087,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         activityPressureShadowOverheadEnabled: state.activityPressureShadowOverheadEnabled,
         activityPressureShadowOverhead: state.activityPressureShadowOverhead ? { ...state.activityPressureShadowOverhead, dispatches: state.activityPressureShadowOverhead.dispatches.map(dispatch => ({ ...dispatch })) } : null,
         activityTierControls: state.activityTierControls ? { ...state.activityTierControls } : null,
+        smokeDomainMode: state.smokeDomainMode,
+        smokeDomainStrategy: state.smokeDomainStrategy,
+        smokeDomainNearGrid: state.smokeDomainNearGrid,
+        smokeDomainFarGrid: state.smokeDomainFarGrid,
+        smokeDomainHandoffPolicy: state.smokeDomainHandoffPolicy,
+        smokeDomainHandoffStatus: state.smokeDomainHandoffStatus,
+        smokeDomainProofBoundary: state.smokeDomainProofBoundary,
         mainFluidKernelStrategy: state.mainFluidKernelStrategy,
         mainFluidLocalProjectionStrategy: state.mainFluidLocalProjectionStrategy,
         mainFluidLocalProjectionDivergenceEvaluationsPerCell: state.mainFluidLocalProjectionDivergenceEvaluationsPerCell,
@@ -10390,6 +10435,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       activityPressureShadowOverheadEnabled: state.activityPressureShadowOverheadEnabled,
       activityPressureShadowOverhead: state.activityPressureShadowOverhead ? { ...state.activityPressureShadowOverhead, dispatches: state.activityPressureShadowOverhead.dispatches.map(dispatch => ({ ...dispatch })) } : null,
       activityTierControls: state.activityTierControls ? { ...state.activityTierControls } : null,
+      smokeDomainMode: state.smokeDomainMode,
+      smokeDomainStrategy: state.smokeDomainStrategy,
+      smokeDomainNearGrid: state.smokeDomainNearGrid,
+      smokeDomainFarGrid: state.smokeDomainFarGrid,
+      smokeDomainHandoffPolicy: state.smokeDomainHandoffPolicy,
+      smokeDomainHandoffStatus: state.smokeDomainHandoffStatus,
+      smokeDomainProofBoundary: state.smokeDomainProofBoundary,
       mainFluidKernelStrategy: state.mainFluidKernelStrategy,
       mainFluidLocalProjectionStrategy: state.mainFluidLocalProjectionStrategy,
       mainFluidLocalProjectionDivergenceEvaluationsPerCell: state.mainFluidLocalProjectionDivergenceEvaluationsPerCell,

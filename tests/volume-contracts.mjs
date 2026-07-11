@@ -600,6 +600,14 @@ assert.match(index, /activityPressureMaxTier/, 'Volume controls expose explicit 
 assert.match(index, /activityPressureDispatchStrategy/, 'Volume controls carry Activity pressure dispatch strategy to the renderer');
 assert.match(index, /volume_sim_profile/, 'URL route can request sim-cost profiling without changing the render contract');
 assert.match(index, /simProfile/, 'Volume controls carry sim profile request identity into the renderer');
+assert.match(index, /volume_smoke_domain_mode/, 'URL route can select the smoke domain strategy for near-field/far-smoke probes');
+assert.match(index, /volume-smoke-domain-mode/, 'Volume cockpit exposes the smoke domain mode selector');
+assert.match(index, /near-field \+ far smoke scaffold/, 'Volume cockpit names the cascaded domain scaffold without claiming solver handoff');
+assert.match(index, /smokeDomainMode/, 'Volume controls carry smoke domain mode identity into the renderer');
+assert.match(index, /smokeDomainNearGrid/, 'Volume controls carry near-field domain grid identity into the renderer');
+assert.match(index, /smokeDomainFarGrid/, 'Volume controls carry far-smoke domain grid identity into the renderer');
+assert.match(index, /smokeDomainHandoffPolicy/, 'Volume controls carry smoke domain handoff policy identity into the renderer');
+assert.match(index, /cascaded-uniform-near-field-far-smoke-scaffold-v0/, 'Domain-split scaffold has a stable route/debug identity');
 assert.match(index, /<option value="128">128\^3<\/option>/, 'Volume grid selector can test a 128^3 simulation volume');
 assert.match(index, /<option value="160">160\^3<\/option>/, 'Volume grid selector can test a 160^3 simulation volume');
 assert.match(index, /<option value="32">32\^3 majorant<\/option>/, 'Majorant grid selector can test a 32^3 coarse field');
@@ -1586,6 +1594,12 @@ assert.match(core, /ACTIVITY_PRESSURE_P4_DENSE_STRATEGY\s*=\s*'core-replay-p4-de
 assert.match(core, /ACTIVITY_PRESSURE_P4_DISABLED_STRATEGY\s*=\s*'activity-p4-disabled-comparison-p3-v0'/, 'activity pressure tiers name the P4-disabled comparison strategy');
 assert.match(core, /PRESSURE_PROJECTION_READ_STRATEGY_COMPOSITE\s*=\s*'composite-pressure-tier-read-v0'/, 'volume core names composite tier pressure projection reads');
 assert.match(core, /PRESSURE_PROJECTION_READ_STRATEGY_SINGLE_BUFFER\s*=\s*'single-pressure-buffer-read-v0'/, 'volume core names single-buffer pressure projection reads');
+assert.match(core, /SMOKE_DOMAIN_STRATEGY_CASCADED_UNIFORM_SCAFFOLD\s*=\s*'cascaded-uniform-near-field-far-smoke-scaffold-v0'/, 'volume core names the cascaded uniform near-field/far-smoke scaffold');
+assert.match(core, /SMOKE_DOMAIN_HANDOFF_POLICY_SCAFFOLD\s*=\s*'no-physical-handoff-debug-scaffold-v0'/, 'domain scaffold explicitly says it has no physical far-smoke handoff yet');
+assert.match(core, /normalizeSmokeDomainControls/, 'volume core normalizes smoke domain split controls');
+assert.match(core, /smokeDomainStrategy/, 'volume debug state exposes effective smoke domain strategy');
+assert.match(core, /smokeDomainHandoffStatus/, 'volume debug state exposes whether far-smoke handoff is real or scaffolded');
+assert.match(core, /smokeDomainProofBoundary/, 'volume debug state exposes the proof boundary for cascaded-domain probes');
 assert.match(core, /normalizeVolumeScene\(value\) === 'tall_plume' \? 2/, 'tall-plume default pressure iterations use pressure2 before the general non-bonfire default');
 assert.match(core, /normalizePressureStrategy/, 'volume core normalizes pressure strategy separately from raw iteration count');
 assert.match(core, /spatial_tiers/, 'volume core recognizes the spatial pressure tier route value');

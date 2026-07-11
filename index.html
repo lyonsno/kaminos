@@ -2087,6 +2087,15 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
     </div>
     <span class="slider-help">Activity tiered keeps a P1 global floor, then uses current sim front/occupancy masks for extra pressure passes. The vorticity/detail gates are opt-in and neutral at 0.</span>
     <div class="slider-row">
+      <span class="slider-label">Smoke Domain</span>
+      <select id="volume-smoke-domain-mode" class="select-input">
+        <option value="single" selected>Single volume</option>
+        <option value="cascaded-uniform-scaffold">near-field + far smoke scaffold</option>
+      </select>
+      <span class="slider-val" id="volume-smoke-domain-mode-val">Single volume</span>
+    </div>
+    <span class="slider-help">Domain split identity only: the scaffold records near-field/far-smoke handoff telemetry without claiming a physical far-smoke solve.</span>
+    <div class="slider-row">
       <span class="slider-label">Can Spread</span>
       <input type="range" id="volume-canonical-spread" min="0" max="1.6" step="0.05" value="1">
       <span class="slider-val" id="volume-canonical-spread-val">1.00</span>
@@ -11271,6 +11280,9 @@ let routedVolumeRuntimeQuality = 'live_high';
 let routedVolumeGpuPressure = 0;
 let routedVolumeQualityReason = 'route-default';
 let routedVolumeGpuTiming = false;
+let routedVolumeSmokeDomainMode = 'single';
+let routedVolumeSmokeDomainNearGrid = undefined;
+let routedVolumeSmokeDomainFarGrid = undefined;
 const DEFAULT_BONFIRE_ABLATION_CONTROLS = {
   bonfireRecenter: 1,
   bonfireLateralDamping: 1,
@@ -11439,6 +11451,39 @@ function normalizeVolumePressureTierControls(values = {}) {
 function normalizeVolumePressureMode(value) {
   const mode = String(value || 'auto').toLowerCase();
   return ['auto', 'spatial-tiers', 'activity-tiers', 'global-p3', 'global-p2', 'global-p1', 'routed-global'].includes(mode) ? mode : 'auto';
+}
+
+function normalizeVolumeSmokeDomainMode(value) {
+  const mode = String(value || 'single').toLowerCase();
+  if (mode === 'cascaded' || mode === 'cascaded-uniform' || mode === 'cascaded-uniform-scaffold' || mode === 'near-far' || mode === 'near-field-far-smoke') {
+    return 'cascaded-uniform-scaffold';
+  }
+  return 'single';
+}
+
+function volumeSmokeDomainControlsForMode(mode, values = {}) {
+  const smokeDomainMode = normalizeVolumeSmokeDomainMode(mode);
+  const nearGrid = Math.max(32, Math.min(160, Math.round(Number(values.smokeDomainNearGrid) || Number(values.resolution) || 96)));
+  if (smokeDomainMode === 'cascaded-uniform-scaffold') {
+    return {
+      smokeDomainMode,
+      smokeDomainStrategy: 'cascaded-uniform-near-field-far-smoke-scaffold-v0',
+      smokeDomainNearGrid: nearGrid,
+      smokeDomainFarGrid: Math.max(24, Math.min(96, Math.round(Number(values.smokeDomainFarGrid) || 48))),
+      smokeDomainHandoffPolicy: 'no-physical-handoff-debug-scaffold-v0',
+      smokeDomainHandoffStatus: 'scaffold-only',
+      smokeDomainProofBoundary: 'route-control-debug-identity-only-no-far-smoke-solver-v0',
+    };
+  }
+  return {
+    smokeDomainMode: 'single',
+    smokeDomainStrategy: 'single-uniform-volume-v0',
+    smokeDomainNearGrid: nearGrid,
+    smokeDomainFarGrid: 0,
+    smokeDomainHandoffPolicy: 'none',
+    smokeDomainHandoffStatus: 'inactive',
+    smokeDomainProofBoundary: 'single-volume-baseline-v0',
+  };
 }
 
 function defaultVolumePressureIterationsForScene(scene) {
@@ -11962,6 +12007,10 @@ const VOLUME_BASIN_ROUTE_FIELDS = [
   ['activityPressureShadowOverhead', 'volume_activity_pressure_shadow_overhead'],
   ['gpuTiming', 'volume_gpu_timing'],
   ['simProfile', 'volume_sim_profile'],
+  ['smokeDomainMode', 'volume_smoke_domain_mode'],
+  ['smokeDomainNearGrid', 'volume_smoke_domain_near_grid'],
+  ['smokeDomainFarGrid', 'volume_smoke_domain_far_grid'],
+  ['smokeDomainHandoffPolicy', 'volume_smoke_domain_handoff'],
   ['activityVorticityGate', 'volume_activity_vorticity_gate'],
   ['activityDetailGate', 'volume_activity_detail_gate'],
   ['canonicalSourceMode', 'volume_canonical_source_mode'],
@@ -12067,6 +12116,18 @@ function hydrateVolumeRouteOwnedControls(controlsSnapshot = {}) {
   if (controlsSnapshot.simProfile !== undefined) {
     routedVolumeSimProfile = volumeSnapshotBoolean(controlsSnapshot.simProfile, routedVolumeSimProfile);
   }
+  if (controlsSnapshot.smokeDomainMode !== undefined) {
+    routedVolumeSmokeDomainMode = normalizeVolumeSmokeDomainMode(controlsSnapshot.smokeDomainMode);
+    setVolumeControlValue('volume-smoke-domain-mode', routedVolumeSmokeDomainMode);
+  }
+  if (controlsSnapshot.smokeDomainNearGrid !== undefined) {
+    const nearGrid = Number(controlsSnapshot.smokeDomainNearGrid);
+    routedVolumeSmokeDomainNearGrid = Number.isFinite(nearGrid) ? Math.max(32, Math.min(160, Math.round(nearGrid))) : undefined;
+  }
+  if (controlsSnapshot.smokeDomainFarGrid !== undefined) {
+    const farGrid = Number(controlsSnapshot.smokeDomainFarGrid);
+    routedVolumeSmokeDomainFarGrid = Number.isFinite(farGrid) ? Math.max(24, Math.min(96, Math.round(farGrid))) : undefined;
+  }
   if (controlsSnapshot.canonicalSourceMode !== undefined) {
     routedCanonicalSourceMode = normalizeCanonicalVolumeSourceMode(controlsSnapshot.canonicalSourceMode);
   }
@@ -12159,6 +12220,7 @@ function applyVolumeControlsSnapshot(controlsSnapshot = {}, options = {}) {
     setVolumeControlValue(volumeSceneControlId(key), formatVolumePresetControlValue(key, controlsSnapshot[key]));
   }
   if (controlsSnapshot.pressureMode) setVolumeControlValue('volume-pressure-mode', controlsSnapshot.pressureMode);
+  if (controlsSnapshot.smokeDomainMode) setVolumeControlValue('volume-smoke-domain-mode', normalizeVolumeSmokeDomainMode(controlsSnapshot.smokeDomainMode));
   hydrateVolumeRouteOwnedControls(controlsSnapshot);
   activeCanonicalVolumeMacroPreset = '';
   if (!options.keepBudgetPreset) {
@@ -16665,6 +16727,11 @@ function readVolumeControls() {
     pressureStrategy: pressureConfig.pressureStrategy,
     simProfile: routedVolumeSimProfile,
     rayBudgetPreset: activeVolumeRayBudgetPreset || routedVolumeRayBudgetPreset,
+    ...volumeSmokeDomainControlsForMode(document.getElementById('volume-smoke-domain-mode').value || routedVolumeSmokeDomainMode, {
+      resolution: parseInt(document.getElementById('volume-resolution').value, 10),
+      smokeDomainNearGrid: routedVolumeSmokeDomainNearGrid,
+      smokeDomainFarGrid: routedVolumeSmokeDomainFarGrid,
+    }),
     ...routedBonfireAblationControls,
   }));
 }
@@ -16807,6 +16874,11 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-pressure-tier-hero-max-val').textContent = pressureTierControls.heroMax.toFixed(2);
   document.getElementById('volume-activity-vorticity-gate-val').textContent = c.activityVorticityGate.toFixed(2);
   document.getElementById('volume-activity-detail-gate-val').textContent = c.activityDetailGate.toFixed(2);
+  const smokeDomainControls = volumeSmokeDomainControlsForMode(c.smokeDomainMode, c);
+  if (smokeDomainControls.smokeDomainMode !== document.getElementById('volume-smoke-domain-mode').value) {
+    setVolumeControlValue('volume-smoke-domain-mode', smokeDomainControls.smokeDomainMode);
+  }
+  document.getElementById('volume-smoke-domain-mode-val').textContent = smokeDomainControls.smokeDomainMode === 'cascaded-uniform-scaffold' ? 'Near + far scaffold' : 'Single volume';
   document.getElementById('volume-canonical-spread-val').textContent = c.canonicalSpread.toFixed(2);
   document.getElementById('volume-canonical-centerline-val').textContent = c.canonicalCenterline.toFixed(2);
   document.getElementById('volume-canonical-body-balance-val').textContent = c.canonicalBodyBalance.toFixed(2);
@@ -16929,6 +17001,10 @@ function captureVolumeBasinCompact(label = '') {
       activityPressureMaxTier: effective.activityPressureMaxTier,
       activityPressureDispatchStrategy: effective.activityPressureDispatchStrategy,
       pressureTierDispatchEfficiency: effective.pressureTierDispatchEfficiency,
+      smokeDomainMode: effective.smokeDomainMode,
+      smokeDomainStrategy: effective.smokeDomainStrategy,
+      smokeDomainHandoffStatus: effective.smokeDomainHandoffStatus,
+      smokeDomainProofBoundary: effective.smokeDomainProofBoundary,
       activityVorticityGate: effective.activityVorticityGate,
       activityDetailGate: effective.activityDetailGate,
       oracleActivityCurlNoise: effective.oracleActivityCurlNoise,
@@ -17214,6 +17290,18 @@ async function initKaminosVolumeRoute() {
   }
   const routeSimProfile = (params.get('volume_sim_profile') || '').toLowerCase();
   routedVolumeSimProfile = routeSimProfile === '1' || routeSimProfile === 'true' || routeSimProfile === 'yes' || routeSimProfile === 'on';
+  if (params.has('volume_smoke_domain_mode')) {
+    routedVolumeSmokeDomainMode = normalizeVolumeSmokeDomainMode(params.get('volume_smoke_domain_mode'));
+    setVolumeControlValue('volume-smoke-domain-mode', routedVolumeSmokeDomainMode);
+  }
+  const routeSmokeDomainNearGrid = Number(params.get('volume_smoke_domain_near_grid'));
+  if (params.has('volume_smoke_domain_near_grid') && Number.isFinite(routeSmokeDomainNearGrid)) {
+    routedVolumeSmokeDomainNearGrid = Math.max(32, Math.min(160, Math.round(routeSmokeDomainNearGrid)));
+  }
+  const routeSmokeDomainFarGrid = Number(params.get('volume_smoke_domain_far_grid'));
+  if (params.has('volume_smoke_domain_far_grid') && Number.isFinite(routeSmokeDomainFarGrid)) {
+    routedVolumeSmokeDomainFarGrid = Math.max(24, Math.min(96, Math.round(routeSmokeDomainFarGrid)));
+  }
   const routeGrid = Number(params.get('volume_grid'));
   if (Number.isFinite(routeGrid)) {
     document.getElementById('volume-grid-overlay').value = String(Math.max(0, Math.min(1, routeGrid)));
