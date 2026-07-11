@@ -9,7 +9,7 @@ from pathlib import Path
 
 
 SCHEMA = "kaminos.volume.residual-greenroom-runner.v0"
-MODEL_ARCHITECTURES = ["tiny-conv", "direct-residual", "hybrid-residual", "gated-detail-residual", "small-unet", "teacher-unet", "teacher-unet-direct"]
+MODEL_ARCHITECTURES = ["tiny-conv", "direct-residual", "hybrid-residual", "gated-detail-residual", "small-unet", "teacher-unet", "teacher-unet-direct", "teacher-unet-linear-direct"]
 
 
 def truthy(value):
@@ -32,6 +32,7 @@ def parse_args():
     parser.add_argument("--eval-pair-count", default="0")
     parser.add_argument("--eval-selection", default="tail")
     parser.add_argument("--model-arch", default="tiny-conv", choices=MODEL_ARCHITECTURES)
+    parser.add_argument("--train-crop-mode", default="sampled", choices=["sampled", "fixed-material"])
     parser.add_argument("--feature-input-mode", default="rgb")
     parser.add_argument("--coordinate-input-mode", default="off")
     parser.add_argument("--fourier-coordinate-frequencies", default="4")
@@ -138,6 +139,8 @@ def build_child_command(args):
         str(args.eval_selection),
         "--model-arch",
         str(args.model_arch),
+        "--train-crop-mode",
+        str(args.train_crop_mode),
         "--feature-input-mode",
         str(args.feature_input_mode),
         "--coordinate-input-mode",

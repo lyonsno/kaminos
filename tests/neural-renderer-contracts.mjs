@@ -21,6 +21,31 @@ assert.match(
 );
 assert.match(
   trainer,
+  /class TeacherUNetLinearRenderer\(nn\.Module\)/,
+  'offline learnability probe exposes a zero-initialized linear RGB correction head without sigmoid saturation',
+);
+assert.match(
+  trainer,
+  /teacher-unet-linear-direct/,
+  'trainer CLI and model factory expose the linear direct-rendering architecture by stable identity',
+);
+assert.match(
+  trainer,
+  /--train-crop-mode[\s\S]*choices=\["sampled", "fixed-material"\]/,
+  'trainer exposes an explicit deterministic fixed-material crop mode for honest one-pair memorization probes',
+);
+assert.match(
+  trainer,
+  /def fixed_material_crop_origin\(/,
+  'fixed-material crop identity is calculated by a dedicated deterministic helper',
+);
+assert.match(
+  trainer,
+  /trainCropMode=args\.trainCropMode/,
+  'training sampler receives the requested crop mode instead of silently retaining random crop movement',
+);
+assert.match(
+  trainer,
   /mx\.log\(clipped_base\s*\/\s*\(1\.0\s*-\s*clipped_base\)\)/,
   'direct renderer starts from the low image in logit space rather than a gray or random frame',
 );
@@ -58,6 +83,16 @@ assert.match(
   runner,
   /MODEL_ARCHITECTURES\s*=\s*\[[^\]]*"teacher-unet-direct"[^\]]*\]/,
   'Greenroom runner accepts the direct-rendering architecture identity before forwarding it',
+);
+assert.match(
+  runner,
+  /MODEL_ARCHITECTURES\s*=\s*\[[^\]]*"teacher-unet-linear-direct"[^\]]*\]/,
+  'Greenroom runner accepts the linear direct-rendering architecture identity before forwarding it',
+);
+assert.match(
+  runner,
+  /--train-crop-mode/,
+  'Greenroom runner forwards deterministic training crop identity to the trainer',
 );
 
 console.log('neural renderer contracts passed');

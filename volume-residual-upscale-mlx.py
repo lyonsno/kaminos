@@ -58,6 +58,12 @@ def apply_direct_rgb_logits(base_image, direct_logits, residualApplicationMask=N
     return mx.sigmoid(base_logits + delta_logits)
 
 
+def apply_linear_rgb_correction(base_image, correction, residualApplicationMask=None):
+    if residualApplicationMask is not None:
+        correction = correction * mx.clip(residualApplicationMask, 0.0, 1.0)
+    return mx.clip(base_image + correction, 0.0, 1.0)
+
+
 def feather_residual_mask(mask, featherRadius):
     if mask is None:
         return None
@@ -344,6 +350,26 @@ class TeacherUNetDirectRenderer(nn.Module):
         return apply_direct_rgb_logits(base_image, direct_logits, residualApplicationMask)
 
 
+class TeacherUNetLinearRenderer(nn.Module):
+    def __init__(self, hidden_channels, input_channels, residual_output_limit, residual_color_mode, chroma_residual_scale, residual_apply_scale):
+        super().__init__()
+        self.unetDepth = 3
+        self.receptiveField = "three-level-encoder-decoder-skip-linear-rgb-correction"
+        self.backbone = TeacherUNetResidualUpscaler(
+            hidden_channels,
+            input_channels,
+            residual_output_limit,
+            residual_color_mode,
+            chroma_residual_scale,
+            residual_apply_scale,
+        )
+
+    def __call__(self, image, residualApplicationMask=None):
+        base_image = image[..., :3]
+        correction = self.backbone.decode_residual(image)
+        return apply_linear_rgb_correction(base_image, correction, residualApplicationMask)
+
+
 def parse_args():
     parser = argparse.ArgumentParser(description="Tiny MLX residual-upscale smoke for Kaminos frame-locked render pairs.")
     parser.add_argument("--corpus-manifest", required=True, help="Path to corpus-manifest.json from frame-locked render-pair captures.")
@@ -354,7 +380,8 @@ def parse_args():
     parser.add_argument("--patch-size", type=int, default=96)
     parser.add_argument("--eval-pair-count", dest="evalPairCount", type=int, default=0, help="Optional exact eval pair count for support-scaling experiments; 0 keeps the default split.")
     parser.add_argument("--eval-selection", dest="evalSelection", choices=["tail", "even"], default="tail", help="Eval holdout selection when --eval-pair-count is set.")
-    parser.add_argument("--model-arch", dest="modelArch", choices=["tiny-conv", "direct-residual", "hybrid-residual", "gated-detail-residual", "small-unet", "teacher-unet", "teacher-unet-direct"], default="tiny-conv")
+    parser.add_argument("--model-arch", dest="modelArch", choices=["tiny-conv", "direct-residual", "hybrid-residual", "gated-detail-residual", "small-unet", "teacher-unet", "teacher-unet-direct", "teacher-unet-linear-direct"], default="tiny-conv")
+    parser.add_argument("--train-crop-mode", dest="trainCropMode", choices=["sampled", "fixed-material"], default="sampled", help="Use ordinary sampled crops or a deterministic material-support crop for strict memorization probes.")
     parser.add_argument("--feature-input-mode", dest="featureInputMode", choices=["rgb", "feature-rgba", "aux-rgba", "aux-rgb", "aux-red-cyan-abs", "aux-opponent-gradient", "sidecar-rgba", "feature-sidecar-rgba"], default="rgb", help="Model input source: low RGB plus optional shader/material, Flow Debug, baked sidecar, or combined material-plus-sidecar structural channels.")
     parser.add_argument("--coordinate-input-mode", dest="coordinateInputMode", choices=["off", "xy", "fourier"], default="off", help="Optional absolute screen-space coordinate conditioning for offline ceiling probes.")
     parser.add_argument("--fourier-coordinate-frequencies", dest="fourierCoordinateFrequencies", type=int, default=4, help="Number of powers-of-two xy Fourier coordinate frequencies when --coordinate-input-mode=fourier.")
@@ -437,6 +464,8 @@ def make_model(model_arch, hidden_channels, input_channels, detail_gate, residua
         return TeacherUNetResidualUpscaler(hidden_channels, input_channels, residual_output_limit, residual_color_mode, chroma_residual_scale, residual_apply_scale)
     if model_arch == "teacher-unet-direct":
         return TeacherUNetDirectRenderer(hidden_channels, input_channels, residual_output_limit, residual_color_mode, chroma_residual_scale, residual_apply_scale)
+    if model_arch == "teacher-unet-linear-direct":
+        return TeacherUNetLinearRenderer(hidden_channels, input_channels, residual_output_limit, residual_color_mode, chroma_residual_scale, residual_apply_scale)
     raise ValueError(f"unsupported model architecture: {model_arch}")
 
 
@@ -455,9 +484,9 @@ def model_config(model_arch, hidden_channels, input_channels, condition_render_s
         "coordinateInputChannels": coordinate_input_channels(coordinate_input_mode, fourier_coordinate_frequencies),
         "fourierCoordinateFrequencies": fourier_coordinate_frequencies if coordinate_input_mode == "fourier" else 0,
         "detailGate": detail_gate if model_arch == "gated-detail-residual" else None,
-        "predictionMode": "direct-rgb-logit" if model_arch == "teacher-unet-direct" else "bounded-residual",
-        "unetDepth": 3 if model_arch in {"teacher-unet", "teacher-unet-direct"} else 2 if model_arch == "small-unet" else None,
-        "receptiveField": "three-level-encoder-decoder-skip-direct-rgb-logit" if model_arch == "teacher-unet-direct" else "three-level-encoder-decoder-skip-teacher" if model_arch == "teacher-unet" else "two-level-encoder-decoder-skip" if model_arch == "small-unet" else "local-3x3-stack",
+        "predictionMode": "linear-rgb-correction" if model_arch == "teacher-unet-linear-direct" else "direct-rgb-logit" if model_arch == "teacher-unet-direct" else "bounded-residual",
+        "unetDepth": 3 if model_arch in {"teacher-unet", "teacher-unet-direct", "teacher-unet-linear-direct"} else 2 if model_arch == "small-unet" else None,
+        "receptiveField": "three-level-encoder-decoder-skip-linear-rgb-correction" if model_arch == "teacher-unet-linear-direct" else "three-level-encoder-decoder-skip-direct-rgb-logit" if model_arch == "teacher-unet-direct" else "three-level-encoder-decoder-skip-teacher" if model_arch == "teacher-unet" else "two-level-encoder-decoder-skip" if model_arch == "small-unet" else "local-3x3-stack",
         "residualOutputLimit": residual_output_limit,
         "residualApplyScale": residual_apply_scale,
         "residualApplicationMaskMode": residual_application_mask_mode,
@@ -495,6 +524,7 @@ def save_model_artifact(model, model_dir, config, args, corpus, metrics, effecti
             "evalOnly": args.evalOnly,
             "batchSize": args.batch_size,
             "patchSize": args.patch_size,
+            "trainCropMode": args.trainCropMode,
             "learningRate": args.learning_rate,
             "lossMode": args.loss_mode,
             "modelConfigSource": model_config_source,
@@ -1175,7 +1205,25 @@ def material_sampling_pixels(item, rng, materialSamplingMode):
     raise ValueError(f"unsupported material sampling mode: {materialSamplingMode}")
 
 
-def sample_patch_batch(items, rng, batch_size, patch_size, foregroundProbability, edgeSamplingProbability, conditionRenderScale, featureInputMode, coordinateInputMode="off", fourierCoordinateFrequencies=4, materialSamplingMode="off", materialSamplingProbability=0.0, sidecarSamplingMode="off", sidecarSamplingProbability=0.0):
+def fixed_material_crop_origin(item, crop_height, crop_width, materialSamplingMode):
+    height, width, _channels = item["low"].shape
+    pixels = material_sampling_pixels(item, np.random.default_rng(0), materialSamplingMode)
+    if pixels is None or not pixels.shape[0]:
+        pixels = item.get("foreground")
+    if pixels is None or not pixels.shape[0]:
+        center_y = height // 2
+        center_x = width // 2
+    else:
+        minimum_y, minimum_x = np.min(pixels, axis=0)
+        maximum_y, maximum_x = np.max(pixels, axis=0)
+        center_y = int((int(minimum_y) + int(maximum_y)) // 2)
+        center_x = int((int(minimum_x) + int(maximum_x)) // 2)
+    top = int(np.clip(center_y - crop_height // 2, 0, max(0, height - crop_height)))
+    left = int(np.clip(center_x - crop_width // 2, 0, max(0, width - crop_width)))
+    return top, left
+
+
+def sample_patch_batch(items, rng, batch_size, patch_size, foregroundProbability, edgeSamplingProbability, conditionRenderScale, featureInputMode, coordinateInputMode="off", fourierCoordinateFrequencies=4, materialSamplingMode="off", materialSamplingProbability=0.0, sidecarSamplingMode="off", sidecarSamplingProbability=0.0, trainCropMode="sampled"):
     lows = []
     highs = []
     edge_masks = []
@@ -1189,7 +1237,9 @@ def sample_patch_batch(items, rng, batch_size, patch_size, foregroundProbability
         edge_band = item.get("edgeBand")
         sidecar_pixels = sidecar_sampling_pixels(item, sidecarSamplingMode) if rng.random() < sidecarSamplingProbability else None
         material_pixels = material_sampling_pixels(item, rng, materialSamplingMode) if rng.random() < materialSamplingProbability else None
-        if sidecar_pixels is not None and sidecar_pixels.shape[0]:
+        if trainCropMode == "fixed-material":
+            top, left = fixed_material_crop_origin(item, crop_height, crop_width, materialSamplingMode)
+        elif sidecar_pixels is not None and sidecar_pixels.shape[0]:
             center_y, center_x = sidecar_pixels[int(rng.integers(0, sidecar_pixels.shape[0]))]
             top = int(np.clip(center_y - crop_height // 2, 0, max(0, height - crop_height)))
             left = int(np.clip(center_x - crop_width // 2, 0, max(0, width - crop_width)))
@@ -2188,6 +2238,7 @@ def main():
             args.materialSamplingProbability,
             args.sidecarSamplingMode,
             args.sidecarSamplingProbability,
+            trainCropMode=args.trainCropMode,
         )
         if activeTemporalLossWeight > 0 or activeResidualTemporalLossWeight > 0:
             previous_low_batch, current_low_batch, previous_high_batch, current_high_batch, previous_mask_batch, current_mask_batch = sample_temporal_pair_batch(
@@ -2476,6 +2527,7 @@ def main():
         **sidecarSupportCoverage,
         "batchSize": args.batch_size,
         "patchSize": args.patch_size,
+        "trainCropMode": args.trainCropMode,
         "hiddenChannels": hiddenChannels,
         "detailGate": detailGate if modelArch == "gated-detail-residual" else None,
         "residualOutputLimit": residualOutputLimit,
