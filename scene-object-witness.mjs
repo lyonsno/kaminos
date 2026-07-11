@@ -4243,6 +4243,9 @@ async function runRealHybridSplatOverlayScenario(ws) {
       || !evidence.overlayDebug?.sceneSplatIds?.includes(evidence.splatObject.id)) {
     throw new Error(`real hybrid splat overlay did not start as a renderer-owned scene: ${JSON.stringify(evidence)}`);
   }
+  if (evidence.overlayDebug?.renderError) {
+    throw new Error(`real hybrid splat overlay reported a renderer frame error: ${JSON.stringify(evidence)}`);
+  }
   const presentationAB = evidence.presentationAB || {};
   if (presentationAB.deferredTelemetry?.presentation?.effectiveMode !== 'deferred-pbr'
       || presentationAB.deferredTelemetry?.presentation?.effectiveRoute !== 'deferred-pbr-lighting'
