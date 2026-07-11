@@ -48,12 +48,14 @@ CLASSIFIER_PROBABILITY_CHANNEL_NAME_EXAMPLES = [
 ALL_TARGET_FAMILY_IDENTITY = "all-v1-sidecar-meta-target-family-v0"
 SPARSE_STRUCTURAL_TARGET_FAMILY_IDENTITY = "sparse-structural-target-family-v0"
 BLOCK_BASELINE_IDENTITY = "block-upsample-copy-baseline-v0"
+CONTINUOUS_BLOCK_BASELINE_IDENTITY = "continuous-nearest-cell-copy-baseline-v0"
 RIDGE_IDENTITY = "local-linear-ridge-v0"
 MLP_IDENTITY = "local-context-mlp-v0"
 RIDGE_CLASSIFIER_IDENTITY = "ridge-calibrated-classifier-v0"
 STANDARD_MLP_LOSS_IDENTITY = "standard-mlp-mse-v0"
 SPARSE_POSITIVE_WEIGHTED_LOSS_IDENTITY = "sparse-positive-weighted-mse-v0"
 FEATURE_IDENTITY = "low-grid-3d-local-context-plus-high-subcell-v0"
+NON_INTEGER_COORDINATE_MAPPING_IDENTITY = "continuous-high-to-low-cell-center-map-v0"
 AUTHORITY = "offline-phase-aligned-sidecar-meta-probe-not-browser-witness-not-product-inference"
 DEFAULT_THRESHOLD_SWEEP = [1.0e-5, 3.0e-5, 1.0e-4, 3.0e-4, 1.0e-3, 3.0e-3, 1.0e-2, 3.0e-2, 1.0e-1]
 DEFAULT_CLASSIFIER_THRESHOLD_SWEEP = [0.05, 0.10, 0.15, 0.20, 0.25, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90, 0.95]
@@ -380,19 +382,69 @@ def high_values(side: np.ndarray, meta: np.ndarray, indexes: np.ndarray) -> np.n
     return np.concatenate([np.asarray(side[indexes], dtype=np.float32), np.asarray(meta[indexes], dtype=np.float32)], axis=1)
 
 
-def low_block_values(low: np.ndarray, high_indexes: np.ndarray, high_grid: int, low_grid: int) -> np.ndarray:
-    factor = high_grid // low_grid
+def integer_reduction_factor(high_grid: int, low_grid: int) -> int | None:
+    if low_grid > 0 and high_grid % low_grid == 0:
+        return high_grid // low_grid
+    return None
+
+
+def coordinate_mapping_identity(high_grid: int, low_grid: int) -> str:
+    return BLOCK_BASELINE_IDENTITY if integer_reduction_factor(high_grid, low_grid) else NON_INTEGER_COORDINATE_MAPPING_IDENTITY
+
+
+def map_high_indexes_to_low(
+    high_indexes: np.ndarray,
+    high_grid: int,
+    low_grid: int,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     z, y, x = np.unravel_index(high_indexes.astype(np.int64), (high_grid, high_grid, high_grid))
-    low_lin = ((z // factor) * low_grid + (y // factor)) * low_grid + (x // factor)
+    factor = integer_reduction_factor(high_grid, low_grid)
+    if factor is not None:
+        lz = z // factor
+        ly = y // factor
+        lx = x // factor
+        denom = max(1, factor - 1)
+        fx = (x % factor).astype(np.float32) / denom
+        fy = (y % factor).astype(np.float32) / denom
+        fz = (z % factor).astype(np.float32) / denom
+        return lz.astype(np.int64), ly.astype(np.int64), lx.astype(np.int64), fx, fy, fz
+    scale = float(low_grid) / max(1.0, float(high_grid))
+    px = (x.astype(np.float64) + 0.5) * scale
+    py = (y.astype(np.float64) + 0.5) * scale
+    pz = (z.astype(np.float64) + 0.5) * scale
+    lx = np.clip(np.floor(px).astype(np.int64), 0, low_grid - 1)
+    ly = np.clip(np.floor(py).astype(np.int64), 0, low_grid - 1)
+    lz = np.clip(np.floor(pz).astype(np.int64), 0, low_grid - 1)
+    fx = np.clip(px - lx.astype(np.float64), 0.0, 1.0).astype(np.float32)
+    fy = np.clip(py - ly.astype(np.float64), 0.0, 1.0).astype(np.float32)
+    fz = np.clip(pz - lz.astype(np.float64), 0.0, 1.0).astype(np.float32)
+    return lz, ly, lx, fx, fy, fz
+
+
+def coordinate_mapping_report(high_grid: int, low_grid: int) -> dict[str, Any]:
+    factor = integer_reduction_factor(high_grid, low_grid)
+    return {
+        "identity": coordinate_mapping_identity(high_grid, low_grid),
+        "highGrid": int(high_grid),
+        "lowGrid": int(low_grid),
+        "integerFactor": factor,
+        "reductionRatio": float(high_grid) / max(1.0, float(low_grid)),
+        "semantics": (
+            "Exact integer block ownership with subcell coordinates."
+            if factor is not None
+            else "High voxel centers are mapped into the nearest low-grid source cell; subcell coordinates are continuous within that low cell."
+        ),
+    }
+
+
+def low_block_values(low: np.ndarray, high_indexes: np.ndarray, high_grid: int, low_grid: int) -> np.ndarray:
+    lz, ly, lx, _fx, _fy, _fz = map_high_indexes_to_low(high_indexes, high_grid, low_grid)
+    low_lin = (lz * low_grid + ly) * low_grid + lx
     return np.asarray(low[low_lin], dtype=np.float32)
 
 
 def local_features(low: np.ndarray, high_indexes: np.ndarray, high_grid: int, low_grid: int, radius: int) -> np.ndarray:
-    factor = high_grid // low_grid
-    z, y, x = np.unravel_index(high_indexes.astype(np.int64), (high_grid, high_grid, high_grid))
-    lz = z // factor
-    ly = y // factor
-    lx = x // factor
+    lz, ly, lx, fx, fy, fz = map_high_indexes_to_low(high_indexes, high_grid, low_grid)
     chunks = []
     for dz in range(-radius, radius + 1):
         zz = np.clip(lz + dz, 0, low_grid - 1)
@@ -402,11 +454,7 @@ def local_features(low: np.ndarray, high_indexes: np.ndarray, high_grid: int, lo
                 xx = np.clip(lx + dx, 0, low_grid - 1)
                 lin = (zz * low_grid + yy) * low_grid + xx
                 chunks.append(np.asarray(low[lin], dtype=np.float32))
-    subcell = np.stack([
-        (x % factor).astype(np.float32) / max(1, factor - 1),
-        (y % factor).astype(np.float32) / max(1, factor - 1),
-        (z % factor).astype(np.float32) / max(1, factor - 1),
-    ], axis=1)
+    subcell = np.stack([fx, fy, fz], axis=1)
     return np.concatenate([*chunks, subcell], axis=1).astype(np.float32)
 
 
@@ -762,6 +810,7 @@ def export_dense_cue_pack(
             "outputGrid": int(high_grid),
             "includesHighSubcellCoordinates": True,
             "includesAbsoluteCoordinates": False,
+            "coordinateMapping": coordinate_mapping_report(high_grid, low_grid),
             "source": "downsampled-high boundary sidecar input from the phase-aligned corpus",
         },
         "trainingTargetIdentity": {
@@ -796,7 +845,9 @@ def export_dense_cue_pack(
         "grid": {
             "lowGrid": int(low_grid),
             "highGrid": int(high_grid),
-            "reduction": int(high_grid // low_grid),
+            "reduction": integer_reduction_factor(high_grid, low_grid),
+            "reductionRatio": float(high_grid) / max(1.0, float(low_grid)),
+            "coordinateMapping": coordinate_mapping_report(high_grid, low_grid),
             "shape": [int(high_grid), int(high_grid), int(high_grid)],
             "chunkSize": int(chunk_size),
         },
@@ -1053,12 +1104,7 @@ def main() -> int:
             raise ProbeFailure("manifest-validate", "Corpus truthHighTarget.boundarySidecar is missing source manifest.", {})
         high_side, high_meta, high_source = load_split_sidecar(resolve_path(str(high_manifest), base_dir), "truthHighTarget")
         high_grid = int(high_source["grid"])
-        if high_grid % low_grid != 0:
-            raise ProbeFailure("manifest-validate", "High grid must be an integer multiple of low grid for this probe.", {
-                "highGrid": high_grid,
-                "lowGrid": low_grid,
-                "neededHook": "recorded-footprint-resampling-probe-v0",
-            })
+        coordinate_mapping = coordinate_mapping_report(high_grid, low_grid)
         native_manifest = (((corpus.get("nativeLowDomainGap") or {}).get("boundarySidecar") or {}).get("nativeLowManifest")
                            or (corpus.get("nativeLowDomainGap") or {}).get("nativeLowManifest"))
         native_low = None
@@ -1077,6 +1123,7 @@ def main() -> int:
             "targetFamily": target_family,
             "highSource": high_source,
             "nativeLowSource": native_source,
+            "coordinateMapping": coordinate_mapping,
         })
         support_channel = np.asarray(high_side[:, 0], dtype=np.float32)
         support_indexes = np.flatnonzero(support_channel > 1.0e-4).astype(np.int64)
@@ -1276,7 +1323,9 @@ def main() -> int:
                 "targetFamilyMeaning": "Sparse structural specialization narrows outputs/loss only; input features still include the full v1 sidecar/meta state.",
                 "lowGrid": low_grid,
                 "highGrid": high_grid,
-                "reduction": high_grid // low_grid,
+                "reduction": integer_reduction_factor(high_grid, low_grid),
+                "reductionRatio": float(high_grid) / max(1.0, float(low_grid)),
+                "coordinateMapping": coordinate_mapping,
             },
             "sampling": {
                 "seed": int(args.seed),
@@ -1292,6 +1341,7 @@ def main() -> int:
                 "featureCount": int(x_train.shape[1]),
                 "includesHighSubcellCoordinates": True,
                 "includesAbsoluteCoordinates": False,
+                "coordinateMapping": coordinate_mapping,
             },
             "models": {
                 "block": {

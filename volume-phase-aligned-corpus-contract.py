@@ -25,16 +25,17 @@ SCHEMA = "kaminos.volume.phase-aligned-learned-probe-corpus.v0"
 IDENTITY = "phase-aligned-high-history-downsample-corpus-v0"
 FULL_GRID_EXPORT_SCHEMA = "kaminos.volume.full-grid-field-export.v0"
 BOUNDARY_SIDECAR_EXPORT_SCHEMA = "kaminos.volume.boundary-sidecar-export.v0"
-BOUNDARY_SIDECAR_IDENTITY = "baked-boundary-sidecar-v0"
-BOUNDARY_SIDECAR_AUTHORITY = "band-limited-support-coverage-ridge-thickness-v0"
+BOUNDARY_SIDECAR_EXPORT_SCHEMA_V1 = "kaminos.volume.boundary-sidecar-export.v1"
+BOUNDARY_SIDECAR_IDENTITY = "baked-boundary-sidecar-v1"
+BOUNDARY_SIDECAR_AUTHORITY = "band-limited-support-coverage-ridge-footprint-proximity-normal-v2"
 AUTHORITY = "offline-phase-aligned-field-corpus-contract-not-browser-witness-not-product-inference"
 BOX_AVERAGE_OPERATOR = "box-average-linear-field-v0"
 MAX_POOL_OPERATOR = "max-pool-support-field-v0"
 DOMAIN_GAP_IDENTITY = "native-low-vs-downsampled-high-domain-gap-v0"
 
 DEFAULT_TARGET_GRID = 128
-BOUNDARY_SIDECAR_CHANNEL_ORDER = ["support", "gradient", "ridge", "thickness"]
-BOUNDARY_MAX_POOL_CHANNELS = {"support", "ridge"}
+BOUNDARY_SIDECAR_CHANNEL_ORDER = ["support", "coverage", "ridge", "footprint", "proximity", "normalX", "normalY", "normalZ"]
+BOUNDARY_MAX_POOL_CHANNELS = {"support", "ridge", "proximity"}
 SUPPORT_CHANNELS = {
     "frontTopology",
     "shellAlpha",
@@ -44,7 +45,7 @@ SUPPORT_CHANNELS = {
 }
 
 BOUNDARY_SIDECAR_TARGETS = {
-    "identity": "baked-boundary-sidecar-target-mapping-v0",
+    "identity": "baked-boundary-sidecar-target-mapping-v1",
     "sidecarIdentity": BOUNDARY_SIDECAR_IDENTITY,
     "sidecarAuthority": BOUNDARY_SIDECAR_AUTHORITY,
     "channelOrder": BOUNDARY_SIDECAR_CHANNEL_ORDER,
@@ -54,20 +55,40 @@ BOUNDARY_SIDECAR_TARGETS = {
             "teacherTarget": "shellAlpha",
             "reason": "Sparse support should survive block reduction instead of averaging away thin sheets.",
         },
-        "gradient": {
+        "coverage": {
             "downsampleOperator": BOX_AVERAGE_OPERATOR,
             "teacherTarget": "shellEdge",
-            "reason": "Gradient magnitude is a continuous local measurement; average preserves block-scale energy.",
+            "reason": "Coverage/opacity is a continuous local measurement; average preserves block-scale energy.",
         },
         "ridge": {
             "downsampleOperator": MAX_POOL_OPERATOR,
             "teacherTarget": "internalStreak",
             "reason": "Ridge/Laplacian peaks carry thin breakup authority and should be support-preserved.",
         },
-        "thickness": {
+        "footprint": {
             "downsampleOperator": BOX_AVERAGE_OPERATOR,
             "teacherTarget": "confidenceAlpha",
-            "reason": "Thickness is a local footprint/coverage measurement; average gives the teacher a block footprint prior.",
+            "reason": "Footprint is a local reconstruction-width measurement; average gives the teacher a block footprint prior.",
+        },
+        "proximity": {
+            "downsampleOperator": MAX_POOL_OPERATOR,
+            "teacherTarget": "shellAlpha",
+            "reason": "Proximity is support-like authority and should survive block reduction.",
+        },
+        "normalX": {
+            "downsampleOperator": BOX_AVERAGE_OPERATOR,
+            "teacherTarget": "normalProxyX",
+            "reason": "Normal proxy components are directional measurements; average preserves block-scale orientation.",
+        },
+        "normalY": {
+            "downsampleOperator": BOX_AVERAGE_OPERATOR,
+            "teacherTarget": "normalProxyY",
+            "reason": "Normal proxy components are directional measurements; average preserves block-scale orientation.",
+        },
+        "normalZ": {
+            "downsampleOperator": BOX_AVERAGE_OPERATOR,
+            "teacherTarget": "normalProxyZ",
+            "reason": "Normal proxy components are directional measurements; average preserves block-scale orientation.",
         },
     },
     "limitation": "Mapping is corpus-side target custody only; live/baked/mix renderer equivalence remains the browser witness lane's job.",
@@ -118,8 +139,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--out-dir", required=True, help="Output directory for the corpus contract manifest and sidecars.")
     parser.add_argument("--target-grid", type=int, default=0, help="Production/source grid for downsampled-high inputs.")
     parser.add_argument("--native-low-manifest", help="Optional native-low full-grid export manifest for domain-gap controls.")
-    parser.add_argument("--high-boundary-sidecar-manifest", help="Optional exported high-resolution baked-boundary-sidecar-v0 manifest.")
-    parser.add_argument("--native-low-boundary-sidecar-manifest", help="Optional exported native-low baked-boundary-sidecar-v0 manifest for domain-gap controls.")
+    parser.add_argument("--high-boundary-sidecar-manifest", help="Optional exported high-resolution baked-boundary-sidecar-v1/full-grid manifest.")
+    parser.add_argument("--native-low-boundary-sidecar-manifest", help="Optional exported native-low baked-boundary-sidecar-v1/full-grid manifest for domain-gap controls.")
     parser.add_argument("--witness-manifest", help="Optional phase-aligned browser witness manifest to bind route/basin context.")
     parser.add_argument("--source-note", default="", help="Optional compact note for the manifest.")
     return parser.parse_args()
@@ -173,12 +194,23 @@ def verify_manifest(manifest: dict[str, Any], path: Path, role: str) -> None:
         })
 
 
+def boundary_manifest_block(manifest: dict[str, Any]) -> dict[str, Any]:
+    nested = manifest.get("boundarySidecar")
+    if isinstance(nested, dict):
+        return nested
+    return manifest
+
+
 def verify_boundary_sidecar_manifest(manifest: dict[str, Any], path: Path, role: str) -> None:
-    if manifest.get("schema") != BOUNDARY_SIDECAR_EXPORT_SCHEMA:
+    boundary = boundary_manifest_block(manifest)
+    manifest_schema = manifest.get("schema")
+    boundary_schema = boundary.get("schema")
+    if manifest_schema != FULL_GRID_EXPORT_SCHEMA and boundary_schema not in (BOUNDARY_SIDECAR_EXPORT_SCHEMA, BOUNDARY_SIDECAR_EXPORT_SCHEMA_V1):
         raise CorpusFailure("manifest-validate", f"{role} boundary sidecar manifest schema mismatch.", {
             "path": str(path),
-            "schema": manifest.get("schema"),
-            "expectedSchema": BOUNDARY_SIDECAR_EXPORT_SCHEMA,
+            "schema": manifest_schema,
+            "boundarySchema": boundary_schema,
+            "expectedSchema": [FULL_GRID_EXPORT_SCHEMA, BOUNDARY_SIDECAR_EXPORT_SCHEMA_V1, BOUNDARY_SIDECAR_EXPORT_SCHEMA],
         })
     if manifest.get("status") not in (None, "captured"):
         raise CorpusFailure("manifest-validate", f"{role} boundary sidecar manifest is not captured.", {
@@ -186,8 +218,13 @@ def verify_boundary_sidecar_manifest(manifest: dict[str, Any], path: Path, role:
             "status": manifest.get("status"),
             "failurePhase": manifest.get("failurePhase"),
         })
-    desc = (manifest.get("sidecars") or {}).get("boundary")
-    order = channel_order(manifest, desc if isinstance(desc, dict) else {}, "boundary") if isinstance(desc, dict) else manifest.get("channelOrder")
+    if boundary.get("identity") != BOUNDARY_SIDECAR_IDENTITY:
+        raise CorpusFailure("manifest-validate", f"{role} boundary sidecar identity mismatch.", {
+            "path": str(path),
+            "identity": boundary.get("identity"),
+            "expectedIdentity": BOUNDARY_SIDECAR_IDENTITY,
+        })
+    order = boundary.get("channelOrder")
     if [str(value) for value in (order or [])] != BOUNDARY_SIDECAR_CHANNEL_ORDER:
         raise CorpusFailure("manifest-validate", f"{role} boundary sidecar channel order mismatch.", {
             "path": str(path),
@@ -222,6 +259,42 @@ def sidecar_descriptor(manifest: dict[str, Any], manifest_path: Path, kind: str)
         actual_sha = sha256_file(path)
         if actual_sha != expected_sha:
             raise CorpusFailure("source-verify", f"{kind} sidecar checksum mismatch.", {
+                "path": str(path),
+                "expectedSha256": expected_sha,
+                "actualSha256": actual_sha,
+            })
+    out = dict(desc)
+    out["path"] = str(path)
+    return out
+
+
+def boundary_split_descriptor(manifest: dict[str, Any], manifest_path: Path, buffer_name: str) -> dict[str, Any]:
+    boundary = boundary_manifest_block(manifest)
+    desc = (boundary.get("sidecars") or {}).get(buffer_name)
+    if not isinstance(desc, dict):
+        raise CorpusFailure("source-verify", f"Missing v1 boundary {buffer_name} sidecar descriptor.", {
+            "manifest": str(manifest_path),
+            "sidecarKeys": sorted((boundary.get("sidecars") or {}).keys()),
+        })
+    raw_path = desc.get("path")
+    if not raw_path:
+        raise CorpusFailure("source-verify", f"v1 boundary {buffer_name} descriptor is missing path.", {"descriptor": desc})
+    path = resolve_path(str(raw_path), manifest_path.parent)
+    if not path.exists():
+        raise CorpusFailure("source-verify", f"v1 boundary {buffer_name} path does not exist.", {"path": str(path)})
+    expected_bytes = desc.get("byteLength")
+    actual_bytes = path.stat().st_size
+    if expected_bytes is not None and int(expected_bytes) != actual_bytes:
+        raise CorpusFailure("source-verify", f"v1 boundary {buffer_name} byte length mismatch.", {
+            "path": str(path),
+            "expectedByteLength": int(expected_bytes),
+            "actualByteLength": actual_bytes,
+        })
+    expected_sha = desc.get("sha256")
+    if expected_sha:
+        actual_sha = sha256_file(path)
+        if actual_sha != expected_sha:
+            raise CorpusFailure("source-verify", f"v1 boundary {buffer_name} checksum mismatch.", {
                 "path": str(path),
                 "expectedSha256": expected_sha,
                 "actualSha256": actual_sha,
@@ -288,6 +361,125 @@ def load_sidecar(manifest: dict[str, Any], manifest_path: Path, kind: str) -> tu
     return np.asarray(arr, dtype=np.float32), normalized_desc
 
 
+def load_boundary_sidecar(manifest: dict[str, Any], manifest_path: Path) -> tuple[np.ndarray, dict[str, Any]]:
+    boundary = boundary_manifest_block(manifest)
+    side_desc = boundary_split_descriptor(manifest, manifest_path, "boundary")
+    meta_desc = boundary_split_descriptor(manifest, manifest_path, "meta")
+    side_shape = [int(value) for value in (side_desc.get("shape") or [])]
+    meta_shape = [int(value) for value in (meta_desc.get("shape") or [])]
+    if len(side_shape) != 4 or len(meta_shape) != 4 or side_shape[:3] != meta_shape[:3] or side_shape[3] != 4 or meta_shape[3] != 4:
+        raise CorpusFailure("source-verify", "v1 boundary split sidecar/meta shapes are incompatible.", {
+            "boundaryShape": side_shape,
+            "metaShape": meta_shape,
+        })
+    if side_desc.get("channelOrder") != BOUNDARY_SIDECAR_CHANNEL_ORDER[:4] or meta_desc.get("channelOrder") != BOUNDARY_SIDECAR_CHANNEL_ORDER[4:]:
+        raise CorpusFailure("source-verify", "v1 boundary split channel order mismatch.", {
+            "boundaryChannelOrder": side_desc.get("channelOrder"),
+            "metaChannelOrder": meta_desc.get("channelOrder"),
+            "expectedBoundaryChannelOrder": BOUNDARY_SIDECAR_CHANNEL_ORDER[:4],
+            "expectedMetaChannelOrder": BOUNDARY_SIDECAR_CHANNEL_ORDER[4:],
+        })
+    side = np.memmap(Path(side_desc["path"]), dtype="<f4", mode="r", shape=tuple(side_shape))
+    meta = np.memmap(Path(meta_desc["path"]), dtype="<f4", mode="r", shape=tuple(meta_shape))
+    arr = np.concatenate([np.asarray(side, dtype=np.float32), np.asarray(meta, dtype=np.float32)], axis=3).astype(np.float32)
+    normalized_desc = {
+        "shape": [side_shape[0], side_shape[1], side_shape[2], len(BOUNDARY_SIDECAR_CHANNEL_ORDER)],
+        "channelOrder": BOUNDARY_SIDECAR_CHANNEL_ORDER,
+        "dtype": "float32",
+        "byteOrder": "little-endian",
+        "floatCount": int(arr.size),
+        "byteLength": int(arr.nbytes),
+        "identity": boundary.get("identity"),
+        "authority": boundary.get("authority"),
+        "boundary": descriptor_ref({
+            **side_desc,
+            "sha256": side_desc.get("sha256") or sha256_file(Path(side_desc["path"])),
+        }),
+        "meta": descriptor_ref({
+            **meta_desc,
+            "sha256": meta_desc.get("sha256") or sha256_file(Path(meta_desc["path"])),
+        }),
+    }
+    return arr, normalized_desc
+
+
+def reduction_ratio(source_grid: int, target_grid: int) -> float:
+    return float(source_grid) / max(1.0, float(target_grid))
+
+
+def integer_reduction_factor(source_grid: int, target_grid: int) -> int | None:
+    if target_grid > 0 and source_grid % target_grid == 0:
+        return source_grid // target_grid
+    return None
+
+
+def axis_overlap_weights(source_grid: int, target_grid: int) -> list[tuple[np.ndarray, np.ndarray]]:
+    scale = reduction_ratio(source_grid, target_grid)
+    weights: list[tuple[np.ndarray, np.ndarray]] = []
+    for target_index in range(target_grid):
+        start = target_index * scale
+        stop = (target_index + 1) * scale
+        first = max(0, int(math.floor(start)))
+        last = min(source_grid, int(math.ceil(stop)))
+        indexes = np.arange(first, last, dtype=np.int64)
+        overlap = np.minimum(stop, indexes.astype(np.float64) + 1.0) - np.maximum(start, indexes.astype(np.float64))
+        overlap = np.maximum(overlap, 0.0)
+        total = float(overlap.sum())
+        if indexes.size == 0 or total <= 0.0:
+            nearest = min(source_grid - 1, max(0, int(round((target_index + 0.5) * scale - 0.5))))
+            indexes = np.asarray([nearest], dtype=np.int64)
+            overlap = np.asarray([1.0], dtype=np.float64)
+            total = 1.0
+        weights.append((indexes, (overlap / total).astype(np.float32)))
+    return weights
+
+
+def footprint_summary(source_grid: int, target_grid: int) -> dict[str, Any]:
+    weights = axis_overlap_weights(source_grid, target_grid)
+    spans = [int(indexes.size) for indexes, _ in weights]
+    return {
+        "identity": "resampling-kernel-with-recorded-filter-footprint-v0",
+        "sourceGrid": int(source_grid),
+        "targetGrid": int(target_grid),
+        "reductionRatio": reduction_ratio(source_grid, target_grid),
+        "integerFactor": integer_reduction_factor(source_grid, target_grid),
+        "axisFootprintCells": {
+            "min": int(min(spans)) if spans else 0,
+            "max": int(max(spans)) if spans else 0,
+            "mean": float(np.mean(spans)) if spans else 0.0,
+        },
+        "semantics": "Target cells integrate source-cell overlap for mean operators and preserve overlapping maxima for max operators.",
+    }
+
+
+def resample_axis_mean(arr: np.ndarray, weights: list[tuple[np.ndarray, np.ndarray]], axis: int) -> np.ndarray:
+    moved = np.moveaxis(arr, axis, 0)
+    out = np.empty((len(weights), *moved.shape[1:]), dtype=np.float32)
+    for target_index, (indexes, weight) in enumerate(weights):
+        out[target_index] = np.tensordot(weight, moved[indexes], axes=(0, 0)).astype(np.float32)
+    return np.moveaxis(out, 0, axis)
+
+
+def resample_axis_max(arr: np.ndarray, weights: list[tuple[np.ndarray, np.ndarray]], axis: int) -> np.ndarray:
+    moved = np.moveaxis(arr, axis, 0)
+    out = np.empty((len(weights), *moved.shape[1:]), dtype=np.float32)
+    for target_index, (indexes, _weight) in enumerate(weights):
+        out[target_index] = moved[indexes].max(axis=0)
+    return np.moveaxis(out, 0, axis)
+
+
+def downsample_operator_metadata(operator: str, source_grid: int, target_grid: int, semantics: str) -> dict[str, Any]:
+    return {
+        "identity": operator,
+        "sourceGrid": int(source_grid),
+        "targetGrid": int(target_grid),
+        "factor": integer_reduction_factor(source_grid, target_grid),
+        "reductionRatio": reduction_ratio(source_grid, target_grid),
+        "resamplingKernel": footprint_summary(source_grid, target_grid),
+        "semantics": semantics,
+    }
+
+
 def downsample_field(arr: np.ndarray, target_grid: int, operator: str) -> np.ndarray:
     if arr.ndim != 4:
         raise CorpusFailure("downsample", "Sidecar array must be 4D.", {"shape": list(arr.shape)})
@@ -296,18 +488,26 @@ def downsample_field(arr: np.ndarray, target_grid: int, operator: str) -> np.nda
         raise CorpusFailure("downsample", "Only cubic sidecars are supported.", {"shape": list(arr.shape)})
     if target_grid <= 0:
         raise CorpusFailure("downsample", "Target grid must be positive.", {"targetGrid": target_grid})
-    if source_grid % target_grid != 0:
-        raise CorpusFailure("downsample", "Target grid must evenly divide high grid for this first contract.", {
-            "sourceGrid": source_grid,
-            "targetGrid": target_grid,
-            "neededHook": "resampling-kernel-with-recorded-filter-footprint-v0",
-        })
-    factor = source_grid // target_grid
-    view = arr.reshape(target_grid, factor, target_grid, factor, target_grid, factor, arr.shape[3])
     if operator == MAX_POOL_OPERATOR:
-        return view.max(axis=(1, 3, 5)).astype(np.float32)
+        if source_grid % target_grid == 0:
+            factor = source_grid // target_grid
+            view = arr.reshape(target_grid, factor, target_grid, factor, target_grid, factor, arr.shape[3])
+            return view.max(axis=(1, 3, 5)).astype(np.float32)
+        weights = axis_overlap_weights(source_grid, target_grid)
+        out = resample_axis_max(arr, weights, 0)
+        out = resample_axis_max(out, weights, 1)
+        out = resample_axis_max(out, weights, 2)
+        return out.astype(np.float32)
     if operator == BOX_AVERAGE_OPERATOR:
-        return view.mean(axis=(1, 3, 5)).astype(np.float32)
+        if source_grid % target_grid == 0:
+            factor = source_grid // target_grid
+            view = arr.reshape(target_grid, factor, target_grid, factor, target_grid, factor, arr.shape[3])
+            return view.mean(axis=(1, 3, 5)).astype(np.float32)
+        weights = axis_overlap_weights(source_grid, target_grid)
+        out = resample_axis_mean(arr, weights, 0)
+        out = resample_axis_mean(out, weights, 1)
+        out = resample_axis_mean(out, weights, 2)
+        return out.astype(np.float32)
     raise CorpusFailure("downsample", f"Unknown downsample operator {operator}", {"operator": operator})
 
 
@@ -318,17 +518,16 @@ def downsample_boundary_sidecar(arr: np.ndarray, target_grid: int, channel_order
         operator = MAX_POOL_OPERATOR if channel in BOUNDARY_MAX_POOL_CHANNELS else BOX_AVERAGE_OPERATOR
         channel_arr = arr[..., channel_index:channel_index + 1]
         channels.append(downsample_field(channel_arr, target_grid, operator))
-        operators[channel] = {
-            "identity": operator,
-            "sourceGrid": int(arr.shape[0]),
-            "targetGrid": int(target_grid),
-            "factor": int(arr.shape[0]) // int(target_grid) if int(target_grid) else None,
-            "semantics": (
+        operators[channel] = downsample_operator_metadata(
+            operator,
+            int(arr.shape[0]),
+            int(target_grid),
+            (
                 "max over each cubic source block to preserve sparse sheet/ridge authority"
                 if operator == MAX_POOL_OPERATOR
                 else "mean over each cubic source block for continuous gradient/thickness measurements"
             ),
-        }
+        )
     return np.concatenate(channels, axis=3).astype(np.float32), operators
 
 
@@ -426,7 +625,7 @@ def write_boundary_sidecar_domain_gap(
     native_manifest_path: Path,
     downsampled_boundary_desc: dict[str, Any],
 ) -> dict[str, Any]:
-    native_boundary, native_desc = load_sidecar(native_manifest, native_manifest_path, "boundary")
+    native_boundary, native_desc = load_boundary_sidecar(native_manifest, native_manifest_path)
     ds_arr = np.memmap(downsampled_boundary_desc["path"], dtype="<f4", mode="r", shape=tuple(downsampled_boundary_desc["shape"]))
     if list(native_boundary.shape) != list(ds_arr.shape):
         raise CorpusFailure("domain-gap", "boundary native-low shape differs from downsampled-high.", {
@@ -548,7 +747,7 @@ def main() -> None:
             high_boundary_manifest_path = Path(args.high_boundary_sidecar_manifest).resolve()
             high_boundary_manifest = read_json(high_boundary_manifest_path)
             verify_boundary_sidecar_manifest(high_boundary_manifest, high_boundary_manifest_path, "high")
-            high_boundary, high_boundary_desc = load_sidecar(high_boundary_manifest, high_boundary_manifest_path, "boundary")
+            high_boundary, high_boundary_desc = load_boundary_sidecar(high_boundary_manifest, high_boundary_manifest_path)
             if int(high_boundary_manifest.get("grid") or high_boundary.shape[0]) != high_grid:
                 raise CorpusFailure("manifest-validate", "High boundary sidecar grid differs from high field grid.", {
                     "highFieldGrid": high_grid,
@@ -589,20 +788,18 @@ def main() -> None:
                 ),
             },
             "downsampleOperators": {
-                "fluid": {
-                    "identity": fluid_operator,
-                    "sourceGrid": high_grid,
-                    "targetGrid": target_grid,
-                    "factor": high_grid // target_grid,
-                    "semantics": "mean over each cubic source block for linear-ish transported field channels",
-                },
-                "front": {
-                    "identity": front_operator,
-                    "sourceGrid": high_grid,
-                    "targetGrid": target_grid,
-                    "factor": high_grid // target_grid,
-                    "semantics": "max over each cubic source block to preserve thin shell/support occupancy",
-                },
+                "fluid": downsample_operator_metadata(
+                    fluid_operator,
+                    high_grid,
+                    target_grid,
+                    "mean over each source footprint for linear-ish transported field channels",
+                ),
+                "front": downsample_operator_metadata(
+                    front_operator,
+                    high_grid,
+                    target_grid,
+                    "max over each source footprint to preserve thin shell/support occupancy",
+                ),
             },
         }
         if high_boundary is not None and high_boundary_desc is not None and boundary_downsample_operators is not None:
@@ -618,9 +815,10 @@ def main() -> None:
                 "sidecarIdentity": BOUNDARY_SIDECAR_IDENTITY,
                 "sourceGrid": high_grid,
                 "targetGrid": target_grid,
-                "factor": high_grid // target_grid,
+                "factor": integer_reduction_factor(high_grid, target_grid),
+                "reductionRatio": reduction_ratio(high_grid, target_grid),
+                "resamplingKernel": footprint_summary(high_grid, target_grid),
                 "channels": boundary_downsample_operators,
-                "recordedFootprintHookForNonIntegerPairs": "resampling-kernel-with-recorded-filter-footprint-v0",
             }
 
         native_gap: dict[str, Any] = {

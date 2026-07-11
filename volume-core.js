@@ -7626,6 +7626,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   async function copyFullFieldBuffersForDebugExport() {
     const fluidBytes = fluidBufferBytes(gridSize);
     const frontBytes = frontFieldBufferBytes(gridSize);
+    const boundaryBytes = boundarySidecarBufferBytes(gridSize);
+    const boundaryMetaBytes = boundarySidecarMetaBufferBytes(gridSize);
     const readback = device.createBuffer({
       label: 'kaminos full-field fluid export readback',
       size: fluidBytes,
@@ -7636,24 +7638,46 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       size: frontBytes,
       usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
     });
+    const boundaryReadback = device.createBuffer({
+      label: `kaminos ${BOUNDARY_SIDECAR_IDENTITY} full-field export readback`,
+      size: boundaryBytes,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+    });
+    const boundaryMetaReadback = device.createBuffer({
+      label: `kaminos ${BOUNDARY_SIDECAR_IDENTITY} meta full-field export readback`,
+      size: boundaryMetaBytes,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+    });
     const encoder = device.createCommandEncoder({ label: 'kaminos full-field export readback encoder' });
     encoder.copyBufferToBuffer(fluidBuffers[currentFluid], 0, readback, 0, fluidBytes);
     encoder.copyBufferToBuffer(frontBuffers[currentFront], 0, frontReadback, 0, frontBytes);
+    encoder.copyBufferToBuffer(boundarySidecarBuffer, 0, boundaryReadback, 0, boundaryBytes);
+    encoder.copyBufferToBuffer(boundarySidecarMetaBuffer, 0, boundaryMetaReadback, 0, boundaryMetaBytes);
     device.queue.submit([encoder.finish()]);
     await Promise.all([
       readback.mapAsync(GPUMapMode.READ),
       frontReadback.mapAsync(GPUMapMode.READ),
+      boundaryReadback.mapAsync(GPUMapMode.READ),
+      boundaryMetaReadback.mapAsync(GPUMapMode.READ),
     ]);
     const fluid = new Float32Array(readback.getMappedRange()).slice();
     const front = new Float32Array(frontReadback.getMappedRange()).slice();
+    const boundary = new Float32Array(boundaryReadback.getMappedRange()).slice();
+    const boundaryMeta = new Float32Array(boundaryMetaReadback.getMappedRange()).slice();
     readback.unmap();
     readback.destroy();
     frontReadback.unmap();
     frontReadback.destroy();
-    return { fluid, front, fluidBytes, frontBytes };
+    boundaryReadback.unmap();
+    boundaryReadback.destroy();
+    boundaryMetaReadback.unmap();
+    boundaryMetaReadback.destroy();
+    return { fluid, front, boundary, boundaryMeta, fluidBytes, frontBytes, boundaryBytes, boundaryMetaBytes };
   }
 
   function fullFieldExportDescriptorFor(values, kind, byteLength) {
+    const isBoundary = kind === 'boundary';
+    const isBoundaryMeta = kind === 'boundaryMeta';
     return {
       kind,
       dtype: 'float32',
@@ -7662,8 +7686,16 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       byteLength,
       shape: kind === 'fluid'
         ? [gridSize, gridSize, gridSize, FLUID_COMPONENTS]
+        : isBoundary || isBoundaryMeta
+          ? [gridSize, gridSize, gridSize, 4]
         : [gridSize, gridSize, gridSize, 1],
-      channelOrder: kind === 'fluid' ? FIELD_TILE_CHANNELS.slice(0, FLUID_COMPONENTS) : ['frontTopology'],
+      channelOrder: kind === 'fluid'
+        ? FIELD_TILE_CHANNELS.slice(0, FLUID_COMPONENTS)
+        : isBoundary
+          ? ['support', 'coverage', 'ridge', 'footprint']
+          : isBoundaryMeta
+            ? ['proximity', 'normalX', 'normalY', 'normalZ']
+            : ['frontTopology'],
     };
   }
 
@@ -7691,6 +7723,25 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       frontChannelOrder: ['frontTopology'],
       fluid: session.fluidDescriptor,
       front: session.frontDescriptor,
+      boundarySidecar: {
+        schema: 'kaminos.volume.boundary-sidecar-export.v1',
+        identity: BOUNDARY_SIDECAR_IDENTITY,
+        authority: BOUNDARY_SIDECAR_BAKE_AUTHORITY,
+        routeIdentity: ROUTE_IDENTITY,
+        effectiveRoute: state.effectiveRoute,
+        prototypeIdentity: PROTOTYPE_IDENTITY,
+        backend: state.backend,
+        grid: session.grid,
+        cellCount: session.cellCount,
+        channelOrder: ['support', 'coverage', 'ridge', 'footprint', 'proximity', 'normalX', 'normalY', 'normalZ'],
+        rendererRawChannelOrder: ['support', 'coverage', 'ridge', 'footprint'],
+        metaRawChannelOrder: ['proximity', 'normalX', 'normalY', 'normalZ'],
+        boundarySidecarDebug: boundarySidecarDebug('baked'),
+        sidecars: {
+          boundary: session.boundaryDescriptor,
+          meta: session.boundaryMetaDescriptor,
+        },
+      },
     };
   }
 
@@ -7780,8 +7831,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       deterministicReplay: replaySample?.deterministicReplay || (state.deterministicReplay ? { ...state.deterministicReplay } : null),
       fluid: captured.fluid,
       front: captured.front,
+      boundary: captured.boundary,
+      boundaryMeta: captured.boundaryMeta,
       fluidDescriptor: fullFieldExportDescriptorFor(captured.fluid, 'fluid', captured.fluidBytes),
       frontDescriptor: fullFieldExportDescriptorFor(captured.front, 'front', captured.frontBytes),
+      boundaryDescriptor: fullFieldExportDescriptorFor(captured.boundary, 'boundary', captured.boundaryBytes),
+      boundaryMetaDescriptor: fullFieldExportDescriptorFor(captured.boundaryMeta, 'boundaryMeta', captured.boundaryMetaBytes),
     };
     debugFullFieldExportSession = session;
     state.fullFieldExportSession = fullFieldExportPublicSession(session);
@@ -7811,8 +7866,21 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         requestedSessionId,
       };
     }
-    const kind = String(options.kind || 'fluid') === 'front' ? 'front' : 'fluid';
-    const values = kind === 'front' ? session.front : session.fluid;
+    const requestedKind = String(options.kind || 'fluid');
+    const kind = requestedKind === 'front'
+      ? 'front'
+      : requestedKind === 'boundary'
+        ? 'boundary'
+        : requestedKind === 'boundaryMeta' || requestedKind === 'meta'
+          ? 'boundaryMeta'
+          : 'fluid';
+    const values = kind === 'front'
+      ? session.front
+      : kind === 'boundary'
+        ? session.boundary
+        : kind === 'boundaryMeta'
+          ? session.boundaryMeta
+          : session.fluid;
     const startFloat = Math.max(0, Math.min(values.length, Math.floor(Number(options.startFloat) || 0)));
     const requestedFloatCount = Math.floor(Number(options.floatCount) || Math.min(262144, values.length - startFloat));
     const floatCount = Math.max(0, Math.min(values.length - startFloat, requestedFloatCount));

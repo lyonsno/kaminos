@@ -143,8 +143,8 @@ async function evaluateByValue(ws, expression, phase) {
   return evaluated.result.value;
 }
 
-async function drainSidecar(ws, session, kind, outputPath) {
-  const descriptor = session[kind];
+async function drainSidecar(ws, session, kind, outputPath, descriptorOverride = null) {
+  const descriptor = descriptorOverride || session[kind];
   const expectedFloats = Number(descriptor?.floatCount);
   const expectedBytes = Number(descriptor?.byteLength);
   if (!Number.isFinite(expectedFloats) || expectedFloats < 1 || !Number.isFinite(expectedBytes)) {
@@ -247,6 +247,29 @@ async function main() {
     const fluid = await drainSidecar(ws, begin, 'fluid', join(outDir, 'fluid.f32'));
     phase = 'drain-front';
     const front = await drainSidecar(ws, begin, 'front', join(outDir, 'front.f32'));
+    let boundarySidecar = null;
+    if (begin.boundarySidecar?.sidecars?.boundary && begin.boundarySidecar?.sidecars?.meta) {
+      phase = 'drain-boundary-sidecar';
+      const boundary = await drainSidecar(
+        ws,
+        begin,
+        'boundary',
+        join(outDir, 'boundary-sidecar.f32'),
+        begin.boundarySidecar.sidecars.boundary,
+      );
+      phase = 'drain-boundary-sidecar-meta';
+      const meta = await drainSidecar(
+        ws,
+        begin,
+        'boundaryMeta',
+        join(outDir, 'boundary-sidecar-meta.f32'),
+        begin.boundarySidecar.sidecars.meta,
+      );
+      boundarySidecar = {
+        ...begin.boundarySidecar,
+        sidecars: { boundary, meta },
+      };
+    }
 
     phase = 'release';
     const release = await evaluateByValue(
@@ -277,6 +300,7 @@ async function main() {
       fluidChannelOrder: begin.fluidChannelOrder,
       frontChannelOrder: begin.frontChannelOrder,
       sidecars: { fluid, front },
+      boundarySidecar,
       release,
     };
     writeManifest(manifest);
