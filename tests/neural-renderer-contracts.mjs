@@ -26,8 +26,18 @@ assert.match(
 );
 assert.match(
   trainer,
+  /class TeacherUNetAbsoluteRenderer\(nn\.Module\)/,
+  'offline ceiling probe can predict absolute RGB through a normally initialized output head',
+);
+assert.match(
+  trainer,
   /teacher-unet-linear-direct/,
   'trainer CLI and model factory expose the linear direct-rendering architecture by stable identity',
+);
+assert.match(
+  trainer,
+  /teacher-unet-absolute-rgb/,
+  'trainer CLI and model factory expose the absolute RGB architecture by stable identity',
 );
 assert.match(
   trainer,
@@ -98,6 +108,11 @@ assert.match(
   runner,
   /MODEL_ARCHITECTURES\s*=\s*\[[^\]]*"teacher-unet-linear-direct"[^\]]*\]/,
   'Greenroom runner accepts the linear direct-rendering architecture identity before forwarding it',
+);
+assert.match(
+  runner,
+  /MODEL_ARCHITECTURES\s*=\s*\[[^\]]*"teacher-unet-absolute-rgb"[^\]]*\]/,
+  'Greenroom runner accepts the absolute RGB architecture identity before forwarding it',
 );
 assert.match(
   runner,

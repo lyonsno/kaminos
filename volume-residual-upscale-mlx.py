@@ -257,7 +257,7 @@ class SmallUNetResidualUpscaler(nn.Module):
 
 
 class TeacherUNetResidualUpscaler(nn.Module):
-    def __init__(self, hidden_channels, input_channels, residual_output_limit, residual_color_mode, chroma_residual_scale, residual_apply_scale):
+    def __init__(self, hidden_channels, input_channels, residual_output_limit, residual_color_mode, chroma_residual_scale, residual_apply_scale, zero_init_output=True):
         super().__init__()
         self.unetDepth = 3
         self.receptiveField = "three-level-encoder-decoder-skip-teacher"
@@ -291,8 +291,9 @@ class TeacherUNetResidualUpscaler(nn.Module):
         self.dec1_a = nn.Conv2d(base_channels + base_channels, base_channels, kernel_size=3, padding=1)
         self.dec1_b = nn.Conv2d(base_channels, base_channels, kernel_size=3, padding=1)
         self.output = nn.Conv2d(base_channels, 3, kernel_size=3, padding=1)
-        self.output.weight = mx.zeros_like(self.output.weight)
-        self.output.bias = mx.zeros_like(self.output.bias)
+        if zero_init_output:
+            self.output.weight = mx.zeros_like(self.output.weight)
+            self.output.bias = mx.zeros_like(self.output.bias)
 
     def decode_residual(self, image):
         skip1 = nn.relu(self.enc1_a(image))
@@ -371,6 +372,26 @@ class TeacherUNetLinearRenderer(nn.Module):
         return apply_linear_rgb_correction(base_image, correction, residualApplicationMask)
 
 
+class TeacherUNetAbsoluteRenderer(nn.Module):
+    def __init__(self, hidden_channels, input_channels, residual_output_limit, residual_color_mode, chroma_residual_scale, residual_apply_scale):
+        super().__init__()
+        self.unetDepth = 3
+        self.receptiveField = "three-level-encoder-decoder-skip-absolute-rgb"
+        self.backbone = TeacherUNetResidualUpscaler(
+            hidden_channels,
+            input_channels,
+            residual_output_limit,
+            residual_color_mode,
+            chroma_residual_scale,
+            residual_apply_scale,
+            zero_init_output=False,
+        )
+
+    def __call__(self, image, residualApplicationMask=None):
+        absolute_rgb_logits = self.backbone.decode_residual(image)
+        return mx.sigmoid(absolute_rgb_logits)
+
+
 def parse_args():
     parser = argparse.ArgumentParser(description="Tiny MLX residual-upscale smoke for Kaminos frame-locked render pairs.")
     parser.add_argument("--corpus-manifest", required=True, help="Path to corpus-manifest.json from frame-locked render-pair captures.")
@@ -381,7 +402,7 @@ def parse_args():
     parser.add_argument("--patch-size", type=int, default=96)
     parser.add_argument("--eval-pair-count", dest="evalPairCount", type=int, default=0, help="Optional exact eval pair count for support-scaling experiments; 0 keeps the default split.")
     parser.add_argument("--eval-selection", dest="evalSelection", choices=["tail", "even"], default="tail", help="Eval holdout selection when --eval-pair-count is set.")
-    parser.add_argument("--model-arch", dest="modelArch", choices=["tiny-conv", "direct-residual", "hybrid-residual", "gated-detail-residual", "small-unet", "teacher-unet", "teacher-unet-direct", "teacher-unet-linear-direct"], default="tiny-conv")
+    parser.add_argument("--model-arch", dest="modelArch", choices=["tiny-conv", "direct-residual", "hybrid-residual", "gated-detail-residual", "small-unet", "teacher-unet", "teacher-unet-direct", "teacher-unet-linear-direct", "teacher-unet-absolute-rgb"], default="tiny-conv")
     parser.add_argument("--train-crop-mode", dest="trainCropMode", choices=["sampled", "fixed-material"], default="sampled", help="Use ordinary sampled crops or a deterministic material-support crop for strict memorization probes.")
     parser.add_argument("--feature-input-mode", dest="featureInputMode", choices=["rgb", "feature-rgba", "aux-rgba", "aux-rgb", "aux-red-cyan-abs", "aux-opponent-gradient", "sidecar-rgba", "feature-sidecar-rgba"], default="rgb", help="Model input source: low RGB plus optional shader/material, Flow Debug, baked sidecar, or combined material-plus-sidecar structural channels.")
     parser.add_argument("--coordinate-input-mode", dest="coordinateInputMode", choices=["off", "xy", "fourier"], default="off", help="Optional absolute screen-space coordinate conditioning for offline ceiling probes.")
@@ -467,6 +488,8 @@ def make_model(model_arch, hidden_channels, input_channels, detail_gate, residua
         return TeacherUNetDirectRenderer(hidden_channels, input_channels, residual_output_limit, residual_color_mode, chroma_residual_scale, residual_apply_scale)
     if model_arch == "teacher-unet-linear-direct":
         return TeacherUNetLinearRenderer(hidden_channels, input_channels, residual_output_limit, residual_color_mode, chroma_residual_scale, residual_apply_scale)
+    if model_arch == "teacher-unet-absolute-rgb":
+        return TeacherUNetAbsoluteRenderer(hidden_channels, input_channels, residual_output_limit, residual_color_mode, chroma_residual_scale, residual_apply_scale)
     raise ValueError(f"unsupported model architecture: {model_arch}")
 
 
@@ -485,9 +508,9 @@ def model_config(model_arch, hidden_channels, input_channels, condition_render_s
         "coordinateInputChannels": coordinate_input_channels(coordinate_input_mode, fourier_coordinate_frequencies),
         "fourierCoordinateFrequencies": fourier_coordinate_frequencies if coordinate_input_mode == "fourier" else 0,
         "detailGate": detail_gate if model_arch == "gated-detail-residual" else None,
-        "predictionMode": "linear-rgb-correction" if model_arch == "teacher-unet-linear-direct" else "direct-rgb-logit" if model_arch == "teacher-unet-direct" else "bounded-residual",
-        "unetDepth": 3 if model_arch in {"teacher-unet", "teacher-unet-direct", "teacher-unet-linear-direct"} else 2 if model_arch == "small-unet" else None,
-        "receptiveField": "three-level-encoder-decoder-skip-linear-rgb-correction" if model_arch == "teacher-unet-linear-direct" else "three-level-encoder-decoder-skip-direct-rgb-logit" if model_arch == "teacher-unet-direct" else "three-level-encoder-decoder-skip-teacher" if model_arch == "teacher-unet" else "two-level-encoder-decoder-skip" if model_arch == "small-unet" else "local-3x3-stack",
+        "predictionMode": "absolute-rgb" if model_arch == "teacher-unet-absolute-rgb" else "linear-rgb-correction" if model_arch == "teacher-unet-linear-direct" else "direct-rgb-logit" if model_arch == "teacher-unet-direct" else "bounded-residual",
+        "unetDepth": 3 if model_arch in {"teacher-unet", "teacher-unet-direct", "teacher-unet-linear-direct", "teacher-unet-absolute-rgb"} else 2 if model_arch == "small-unet" else None,
+        "receptiveField": "three-level-encoder-decoder-skip-absolute-rgb" if model_arch == "teacher-unet-absolute-rgb" else "three-level-encoder-decoder-skip-linear-rgb-correction" if model_arch == "teacher-unet-linear-direct" else "three-level-encoder-decoder-skip-direct-rgb-logit" if model_arch == "teacher-unet-direct" else "three-level-encoder-decoder-skip-teacher" if model_arch == "teacher-unet" else "two-level-encoder-decoder-skip" if model_arch == "small-unet" else "local-3x3-stack",
         "residualOutputLimit": residual_output_limit,
         "residualApplyScale": residual_apply_scale,
         "residualApplicationMaskMode": residual_application_mask_mode,
