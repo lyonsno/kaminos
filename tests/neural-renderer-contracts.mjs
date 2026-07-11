@@ -45,6 +45,11 @@ assert.match(
   'reports name the combined structural input authority explicitly',
 );
 assert.match(
+  trainer,
+  /args\.featureInputMode\s+not in\s+\{"feature-rgba",\s*"feature-sidecar-rgba"\}/,
+  'material-focus supervision remains available when sidecar channels are appended after shader-material channels',
+);
+assert.match(
   runner,
   /--feature-input-mode/,
   'Greenroom runner forwards structural input mode to the trainer',

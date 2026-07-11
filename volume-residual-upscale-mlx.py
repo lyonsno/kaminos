@@ -727,7 +727,7 @@ def coordinate_feature_image(top, left, height, width, full_height, full_width, 
 def material_mask_authority(materialFocus, featureInputMode):
     if materialFocus == "off":
         return "off"
-    if featureInputMode == "feature-rgba":
+    if featureInputMode in {"feature-rgba", "feature-sidecar-rgba"}:
         return FEATURE_INPUT_AUTHORITY
     return "unavailable-without-feature-rgba"
 
@@ -1974,8 +1974,8 @@ def main():
     ]:
         if value < 0:
             raise ValueError(f"{label} must be non-negative")
-    if args.materialFocus != "off" and args.featureInputMode != "feature-rgba":
-        raise ValueError("--material-focus requires --feature-input-mode=feature-rgba")
+    if args.materialFocus != "off" and args.featureInputMode not in {"feature-rgba", "feature-sidecar-rgba"}:
+        raise ValueError("--material-focus requires shader/material channels via --feature-input-mode=feature-rgba or feature-sidecar-rgba")
     if args.materialSamplingMode != "off" and args.materialSamplingProbability > 0 and args.materialSamplingProbability > 1:
         raise ValueError("--material-sampling-probability must be between 0 and 1")
     if args.sidecarSamplingMode != "off" and args.sidecarSamplingProbability > 1:
