@@ -564,6 +564,7 @@ assert.match(index, /volume_pressure_tier_lower_max/, 'URL route can seed the pr
 assert.match(index, /volume_pressure_tier_hero_min/, 'URL route can seed the pressure3 hero-band min threshold');
 assert.match(index, /volume_pressure_tier_hero_max/, 'URL route can seed the pressure3 hero-band max threshold');
 assert.match(index, /volume_activity_pressure_p4/, 'URL route can disable Activity P4 for paired P3/P4 pressure comparison');
+assert.match(index, /volume_activity_pressure_max_tier/, 'URL route can select Activity P2/P3/P4 as an explicit max-tier comparison');
 assert.match(index, /volume_activity_pressure_dispatch/, 'URL route can compare indirect and dense-masked Activity pressure dispatch');
 assert.match(index, /coarse-brick-activity-pressure-mask-v0/, 'URL route can select coarse-brick Activity pressure dispatch');
 assert.match(index, /pressureTierOverlay/, 'Volume controls expose pressure-tier overlay opacity to the renderer');
@@ -571,6 +572,7 @@ assert.match(index, /pressureTierLowerMax/, 'Volume controls expose pressure2 lo
 assert.match(index, /pressureTierHeroMin/, 'Volume controls expose pressure3 hero-band min threshold to the renderer');
 assert.match(index, /pressureTierHeroMax/, 'Volume controls expose pressure3 hero-band max threshold to the renderer');
 assert.match(index, /activityPressureP4Enabled/, 'Volume controls expose the Activity P4 comparison switch to the renderer');
+assert.match(index, /activityPressureMaxTier/, 'Volume controls expose explicit Activity pressure max tier to the renderer');
 assert.match(index, /activityPressureDispatchStrategy/, 'Volume controls carry Activity pressure dispatch strategy to the renderer');
 assert.match(index, /volume_sim_profile/, 'URL route can request sim-cost profiling without changing the render contract');
 assert.match(index, /simProfile/, 'Volume controls carry sim profile request identity into the renderer');
@@ -1544,7 +1546,7 @@ assert.match(core, /normalizePressureStrategy/, 'volume core normalizes pressure
 assert.match(core, /spatial_tiers/, 'volume core recognizes the spatial pressure tier route value');
 assert.match(core, /activity_tiers/, 'volume core recognizes the activity pressure tier route value');
 assert.match(index, /value="activity-tiers">Activity tiered/, 'Volume pressure selector exposes the activity-tier experiment separately from slab tiers');
-assert.match(index, /pressureEffectiveLabel:\s*'Activity P4'/, 'activity-tier route advertises the fourth pressure refinement tier');
+assert.match(index, /pressureEffectiveLabel:\s*`Activity P\$\{routedVolumeActivityPressureMaxTier\}`/, 'activity-tier route advertises the selected Activity pressure max tier');
 assert.match(index, /id="volume-activity-vorticity-gate"/, 'Volume controls expose opt-in activity gating for vorticity');
 assert.match(index, /id="volume-activity-detail-gate"/, 'Volume controls expose opt-in activity gating for detail forces');
 assert.match(core, /normalizePressureTierControls/, 'volume core normalizes pressure tier threshold controls');
@@ -1592,6 +1594,11 @@ assert.match(core, /activityPressureCoarseMaskDispatch/, 'activity pressure runt
 assert.match(core, /pressureActivityCoarseMaskBuffer/, 'volume core allocates a coarse activity pressure mask buffer');
 assert.match(core, /pressureActivityCoarseMaskBufferBytes/, 'coarse activity pressure mask buffer size is explicit and grid-scaled');
 assert.match(core, /preparePressureActivityCoarseMaskBuffer/, 'coarse activity pressure clears the brick mask before the sim pass writes current-frame support');
+assert.match(core, /normalizeActivityPressureMaxTier/, 'activity pressure tiers normalize an explicit P2/P3/P4 max tier');
+assert.match(core, /activityPressureMaxTier/, 'activity pressure dispatch plan carries the explicit max-tier ceiling');
+assert.match(core, /pressureActivityMaxTierValue/, 'WGSL can distinguish Activity P2, P3, and P4 projection reads');
+assert.match(core, /coarse-brick-workgroup-uniform-early-out-v0/, 'coarse pressure tiers name the workgroup-uniform early-out before pressure reads');
+assert.match(core, /pressureActivityCoarseMaskAtWorkgroup/, 'coarse pressure tiers test the coarse mask at workgroup granularity');
 assert.match(core, /pressureTieredFluidBindGroupLayout\s*=\s*device\.createBindGroupLayout[\s\S]*binding:\s*11[\s\S]*pressureJacobiTieredPipelineLayout\s*=\s*device\.createPipelineLayout[\s\S]*bindGroupLayouts:\s*\[pressureTieredFluidBindGroupLayout,\s*emptyBindGroupLayout,\s*pressureJacobiBindGroupLayout\]/, 'tiered pressure uses a compact fluid/front/coarse-mask bind group instead of inheriting the full sim bind group');
 const pressureActivityReadLayoutBlock = core.match(/pressureActivityReadBindGroupLayout\s*=\s*device\.createBindGroupLayout[\s\S]*?majorantWriteBindGroupLayout/)?.[0] || '';
 const pressureActivityReadBindGroupBlock = core.match(/pressureActivityReadBindGroups\s*=\s*\[\s*device\.createBindGroup[\s\S]*?boundarySidecarReadBindGroups/)?.[0] || '';
@@ -1601,6 +1608,7 @@ assert.match(core, /activity-core-pressure4-replay-indirect/, 'activity pressure
 assert.match(core, /activity-core-pressure4-replay-dense-masked/, 'activity pressure dispatch plan names the dense P4 core replay refinement pass');
 assert.match(core, /activity-core-pressure4-replay-coarse-mask/, 'activity pressure dispatch plan names the coarse-mask P4 core replay refinement pass');
 assert.match(core, /activityPressureP4Enabled/, 'activity pressure dispatch plan accepts an explicit P4 enablement control');
+assert.match(core, /activityPressureMaxTier:\s*activityPressureMaxTier/, 'activity pressure debug state exposes the explicit Activity max tier');
 assert.match(core, /activityPressureDispatchStrategy/, 'activity pressure dispatch plan accepts an explicit dispatch strategy control');
 assert.match(core, /spendModel:\s*ACTIVITY_PRESSURE_SPEND_MODEL/, 'activity tier debug state exposes the effective spend model');
 assert.match(core, /inactiveCellPolicy:\s*ACTIVITY_PRESSURE_INACTIVE_SKIP_POLICY/, 'activity tier debug state exposes the inactive-cell policy');
