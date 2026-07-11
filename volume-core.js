@@ -3,6 +3,9 @@ const PROTOTYPE_IDENTITY = 'kaminos-volume-prototype-v0';
 const FRONT_FIELD_IDENTITY = 'combustion-front-topology-sidecar-v0';
 const BOUNDARY_SIDECAR_IDENTITY = 'baked-boundary-sidecar-v0';
 const BOUNDARY_SIDECAR_BAKE_AUTHORITY = 'band-limited-support-coverage-ridge-proximity-footprint-v1';
+const BOUNDARY_SPLAT_RENDERER_IDENTITY = 'live-boundary-sidecar-analytic-splats-v0';
+const BOUNDARY_SPLAT_SOURCE_AUTHORITY = 'live-baked-sidecar-plus-fluid-material-v0';
+const BOUNDARY_SPLAT_CAPACITY = 131072;
 const TRUTH_ORACLE_ACTIVITY_RECEIVER_IDENTITY = 'truth-oracle-scalar-activity-receiver-v0';
 const TRUTH_ORACLE_ACTIVITY_CUE_AUTHORITY = 'truth-high-diagnostic-activity-projected-to-receiver-grid-v0';
 const PROCEDURAL_ACTIVITY_CUE_AUTHORITY = 'procedural-receiver-activity-proxy-no-truth-v0';
@@ -144,6 +147,11 @@ function boundarySidecarViewValue(value) {
   if (normalized === 'proximity') return 4;
   if (normalized === 'footprint') return 5;
   return 0;
+}
+
+function normalizeBoundarySplatMode(value) {
+  const normalized = String(value || 'off').toLowerCase().replace(/-/g, '_');
+  return normalized === 'analytic' ? 'analytic' : 'off';
 }
 
 function normalizeWindStrength(value) {
@@ -4772,6 +4780,120 @@ fn fs(in: VertexOut) -> @location(0) vec4<f32> {
 }
 `;
 
+const BOUNDARY_SPLAT_WGSL = `
+override GRID: u32 = 64u;
+const SLOTS_PER_CELL: u32 = 4u;
+const BOUNDARY_SPLAT_CAPACITY: u32 = ${BOUNDARY_SPLAT_CAPACITY}u;
+
+struct BoundarySplat {
+  positionSupport: vec4<f32>,
+  colorOpacity: vec4<f32>,
+  shape: vec4<f32>,
+};
+
+struct BoundarySplatDraw {
+  vertexCount: u32,
+  instanceCount: atomic<u32>,
+  firstVertex: u32,
+  firstInstance: u32,
+  candidateCount: atomic<u32>,
+  overflowCount: atomic<u32>,
+  _pad0: u32,
+  _pad1: u32,
+};
+
+struct BoundarySplatCamera {
+  viewProj: mat4x4<f32>,
+  cameraRight: vec4<f32>,
+  cameraUp: vec4<f32>,
+  controls: vec4<f32>,
+};
+
+struct BoundarySplatVertexOut {
+  @builtin(position) position: vec4<f32>,
+  @location(0) colorOpacity: vec4<f32>,
+  @location(1) local: vec2<f32>,
+};
+
+@group(0) @binding(0) var<storage, read> boundarySidecar: array<vec4<f32>>;
+@group(0) @binding(1) var<storage, read> fluid: array<vec4<f32>>;
+@group(0) @binding(2) var<storage, read_write> boundarySplats: array<BoundarySplat>;
+@group(0) @binding(3) var<storage, read_write> boundarySplatDraw: BoundarySplatDraw;
+@group(0) @binding(4) var<uniform> boundarySplatCamera: BoundarySplatCamera;
+@group(0) @binding(5) var<storage, read> boundarySplatsForRender: array<BoundarySplat>;
+
+fn boundarySplatCellIndex(cell: vec3<u32>) -> u32 {
+  return cell.x + cell.y * GRID + cell.z * GRID * GRID;
+}
+
+@compute @workgroup_size(4, 4, 4)
+fn compactBoundarySplats(@builtin(global_invocation_id) gid: vec3<u32>) {
+  if (any(gid >= vec3<u32>(GRID))) { return; }
+  let cellIndex = boundarySplatCellIndex(gid);
+  let sidecar = boundarySidecar[cellIndex];
+  let material = fluid[cellIndex * SLOTS_PER_CELL + 1u];
+  let fire = fluid[cellIndex * SLOTS_PER_CELL + 2u];
+  let micro = fluid[cellIndex * SLOTS_PER_CELL + 3u];
+  let fireSignal = fire.x * 1.25 + fire.z * 0.52 + fire.w * 0.86 + micro.z * 0.72 + material.y * 0.24;
+  let structuralSignal = sidecar.z * smoothstep(0.055, 0.32, sidecar.y) * smoothstep(0.018, 0.16, fireSignal);
+  if (structuralSignal < 0.11) { return; }
+  let candidateIndex = atomicAdd(&boundarySplatDraw.candidateCount, 1u);
+  if (candidateIndex >= BOUNDARY_SPLAT_CAPACITY) {
+    atomicAdd(&boundarySplatDraw.overflowCount, 1u);
+    return;
+  }
+  let world = ((vec3<f32>(gid) + vec3<f32>(0.5)) / f32(GRID)) * 2.0 - vec3<f32>(1.0);
+  let thermal = smoothstep(0.025, 0.78, material.y + fire.x * 0.28);
+  let whiteHot = smoothstep(0.42, 1.25, fireSignal);
+  let cool = vec3<f32>(0.05, 0.16, 0.72);
+  let warm = vec3<f32>(0.86, 0.38, 0.07);
+  let color = mix(mix(cool, warm, thermal), vec3<f32>(0.82, 0.72, 0.48), whiteHot * 0.52);
+  let opacity = clamp(structuralSignal * (0.008 + fireSignal * 0.055), 0.002, 0.038);
+  let cellWidth = 2.0 / f32(GRID);
+  let radius = cellWidth * (0.60 + sidecar.w * 2.65 + sidecar.z * 0.48);
+  boundarySplats[candidateIndex].positionSupport = vec4<f32>(world, structuralSignal);
+  boundarySplats[candidateIndex].colorOpacity = vec4<f32>(color, opacity);
+  boundarySplats[candidateIndex].shape = vec4<f32>(radius * (0.72 + sidecar.z * 0.36), radius * (1.0 + sidecar.w * 0.42), sidecar.z, fireSignal);
+}
+
+@compute @workgroup_size(1)
+fn finalizeBoundarySplats() {
+  atomicStore(&boundarySplatDraw.instanceCount, min(atomicLoad(&boundarySplatDraw.candidateCount), BOUNDARY_SPLAT_CAPACITY));
+}
+
+fn boundarySplatQuadCorner(vertexIndex: u32) -> vec2<f32> {
+  let corner = vertexIndex % 6u;
+  if (corner == 0u) { return vec2<f32>(-1.0, -1.0); }
+  if (corner == 1u) { return vec2<f32>(1.0, -1.0); }
+  if (corner == 2u) { return vec2<f32>(-1.0, 1.0); }
+  if (corner == 3u) { return vec2<f32>(-1.0, 1.0); }
+  if (corner == 4u) { return vec2<f32>(1.0, -1.0); }
+  return vec2<f32>(1.0, 1.0);
+}
+
+@vertex
+fn boundarySplatVs(@builtin(vertex_index) vertexIndex: u32, @builtin(instance_index) instanceIndex: u32) -> BoundarySplatVertexOut {
+  let splat = boundarySplatsForRender[instanceIndex];
+  let corner = boundarySplatQuadCorner(vertexIndex);
+  let offset = boundarySplatCamera.cameraRight.xyz * corner.x * splat.shape.x
+    + boundarySplatCamera.cameraUp.xyz * corner.y * splat.shape.y;
+  var out: BoundarySplatVertexOut;
+  out.position = boundarySplatCamera.viewProj * vec4<f32>(splat.positionSupport.xyz + offset, 1.0);
+  out.colorOpacity = splat.colorOpacity;
+  out.local = corner;
+  return out;
+}
+
+@fragment
+fn boundarySplatFs(in: BoundarySplatVertexOut) -> @location(0) vec4<f32> {
+  let radius2 = dot(in.local, in.local);
+  if (radius2 > 1.0) { discard; }
+  let gaussian = exp(-radius2 * 3.4);
+  let alpha = in.colorOpacity.a * gaussian * boundarySplatCamera.controls.x;
+  return vec4<f32>(in.colorOpacity.rgb, alpha);
+}
+`;
+
 export function createKaminosVolumePrototype({ THREE, viewport, camera, controls, getControls, onStatus }) {
   const canvas = document.createElement('canvas');
   canvas.id = 'kaminos-volume-canvas';
@@ -4946,6 +5068,16 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     boundaryStructureSource: normalizeBoundarySidecarSource(controlsSnapshot.boundarySidecarSource),
     boundarySidecarView: normalizeBoundarySidecarView(controlsSnapshot.boundarySidecarView ?? controlsSnapshot.boundarySidecarControls?.view),
     boundarySidecarDebug: null,
+    boundarySplatMode: normalizeBoundarySplatMode(controlsSnapshot.boundarySplatMode),
+    boundarySplatRendererIdentity: BOUNDARY_SPLAT_RENDERER_IDENTITY,
+    boundarySplatSourceAuthority: BOUNDARY_SPLAT_SOURCE_AUTHORITY,
+    boundarySplatCapacity: BOUNDARY_SPLAT_CAPACITY,
+    boundarySplatCandidateCount: null,
+    boundarySplatOverflowCount: null,
+    boundarySplatCountAuthority: 'gpu-indirect-async-readback',
+    boundarySplatInstanceCount: null,
+    boundarySplatFallbackReason: null,
+    boundarySplatFrameCount: 0,
     simProfile: normalizeSimProfileFlag(controlsSnapshot.simProfile),
     simCostLedger: null,
     pressureSourceStrategy: PRESSURE_SOURCE_STRATEGY_DISABLED,
@@ -5242,6 +5374,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let pressureProjectTieredPipeline = null;
   let majorantComputePipeline = null;
   let boundarySidecarBuildPipeline = null;
+  let boundarySplatCompactPipeline = null;
+  let boundarySplatFinalizePipeline = null;
+  let boundarySplatRenderPipeline = null;
+  let boundarySplatReadbackPipeline = null;
   let bindGroups = [];
   let majorantFrontBindGroups = [];
   let boundarySidecarReadBindGroups = [];
@@ -5250,11 +5386,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let pressureReadBindGroups = [];
   let majorantWriteBindGroup = null;
   let boundarySidecarWriteBindGroup = null;
+  let boundarySplatBindGroups = [];
   let bindGroupLayout = null;
   let majorantFluidBindGroupLayout = null;
   let majorantWriteBindGroupLayout = null;
   let boundarySidecarReadBindGroupLayout = null;
   let boundarySidecarWriteBindGroupLayout = null;
+  let boundarySplatBindGroupLayout = null;
   let pressureWriteBindGroupLayout = null;
   let pressureJacobiBindGroupLayout = null;
   let pressureReadBindGroupLayout = null;
@@ -5262,18 +5400,28 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let pipelineLayout = null;
   let majorantPipelineLayout = null;
   let boundarySidecarPipelineLayout = null;
+  let boundarySplatPipelineLayout = null;
   let pressureWritePipelineLayout = null;
   let pressureJacobiPipelineLayout = null;
   let pressureJacobiTieredPipelineLayout = null;
   let pressureProjectPipelineLayout = null;
   let pressureProjectTieredPipelineLayout = null;
   let shader = null;
+  let boundarySplatShader = null;
   let uniformBuffer = null;
   let externalEmitterBuffer = null;
   let externalEmitterState = normalizeExternalEmitters();
   let volumePrimitives = [];
   let majorantBuffer = null;
   let boundarySidecarBuffer = null;
+  let boundarySplatBuffer = null;
+  let boundarySplatRenderBuffer = null;
+  let boundarySplatDrawBuffer = null;
+  let boundarySplatIndirectBuffer = null;
+  let boundarySplatCameraBuffer = null;
+  let boundarySplatReadbackBuffer = null;
+  let boundarySplatTelemetryCopyPending = false;
+  let boundarySplatTelemetryMapPending = false;
   let fluidBuffers = [];
   let frontBuffers = [];
   let pressureBuffers = [];
@@ -5733,8 +5881,19 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     for (const buffer of frontBuffers) buffer.destroy();
     for (const buffer of pressureBuffers) buffer.destroy();
     boundarySidecarBuffer?.destroy();
+    boundarySplatBuffer?.destroy();
+    boundarySplatRenderBuffer?.destroy();
+    boundarySplatDrawBuffer?.destroy();
+    boundarySplatIndirectBuffer?.destroy();
+    boundarySplatReadbackBuffer?.destroy();
     oracleActivityCueBuffer?.destroy();
     boundarySidecarBuffer = null;
+    boundarySplatBuffer = null;
+    boundarySplatRenderBuffer = null;
+    boundarySplatDrawBuffer = null;
+    boundarySplatIndirectBuffer = null;
+    boundarySplatReadbackBuffer = null;
+    boundarySplatTelemetryCopyPending = false;
     oracleActivityCueBuffer = null;
     fluidBuffers = [];
     frontBuffers = [];
@@ -5743,6 +5902,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     majorantFrontBindGroups = [];
     boundarySidecarReadBindGroups = [];
     boundarySidecarWriteBindGroup = null;
+    boundarySplatBindGroups = [];
     pressureWriteBindGroup = null;
     pressureJacobiBindGroups = [];
     pressureReadBindGroups = [];
@@ -5969,6 +6129,40 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     });
   }
 
+  function ensureBoundarySplatBuffers() {
+    if (boundarySplatBuffer && boundarySplatRenderBuffer && boundarySplatDrawBuffer && boundarySplatIndirectBuffer && boundarySplatCameraBuffer && boundarySplatReadbackBuffer) return;
+    boundarySplatBuffer = device.createBuffer({
+      label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} candidates`,
+      size: BOUNDARY_SPLAT_CAPACITY * 48,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
+    });
+    boundarySplatRenderBuffer = device.createBuffer({
+      label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} render candidates`,
+      size: BOUNDARY_SPLAT_CAPACITY * 48,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    });
+    boundarySplatDrawBuffer = device.createBuffer({
+      label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} indirect draw state`,
+      size: 32,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST,
+    });
+    boundarySplatIndirectBuffer = device.createBuffer({
+      label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} indirect arguments`,
+      size: 16,
+      usage: GPUBufferUsage.INDIRECT | GPUBufferUsage.COPY_DST,
+    });
+    boundarySplatCameraBuffer = device.createBuffer({
+      label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} camera`,
+      size: 112,
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    });
+    boundarySplatReadbackBuffer = device.createBuffer({
+      label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} asynchronous count readback`,
+      size: 32,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+    });
+  }
+
   function rebuildFluidState(nextGridSize = gridSize, nextMajorantGridSize = majorantGridSize, reason = 'grid-rebuilt') {
     gridSize = normalizeGridSize(nextGridSize);
     majorantGridSize = normalizeMajorantGridSize(nextMajorantGridSize);
@@ -6096,6 +6290,36 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       layout: boundarySidecarPipelineLayout,
       compute: { module: shader, entryPoint: 'csBoundarySidecar', constants: computePipelineConstants },
     });
+    boundarySplatCompactPipeline = device.createComputePipeline({
+      label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} compact ${gridSize}^3`,
+      layout: boundarySplatPipelineLayout,
+      compute: { module: boundarySplatShader, entryPoint: 'compactBoundarySplats', constants: computePipelineConstants },
+    });
+    boundarySplatFinalizePipeline = device.createComputePipeline({
+      label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} finalize ${gridSize}^3`,
+      layout: boundarySplatPipelineLayout,
+      compute: { module: boundarySplatShader, entryPoint: 'finalizeBoundarySplats', constants: computePipelineConstants },
+    });
+    const makeBoundarySplatRenderPipeline = (targetFormat, label) => device.createRenderPipeline({
+      label,
+      layout: boundarySplatPipelineLayout,
+      vertex: { module: boundarySplatShader, entryPoint: 'boundarySplatVs' },
+      fragment: {
+        module: boundarySplatShader,
+        entryPoint: 'boundarySplatFs',
+        targets: [{
+          format: targetFormat,
+          blend: {
+            color: { srcFactor: 'src-alpha', dstFactor: 'one', operation: 'add' },
+            alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha', operation: 'add' },
+          },
+        }],
+      },
+      primitive: { topology: 'triangle-list' },
+    });
+    boundarySplatRenderPipeline = makeBoundarySplatRenderPipeline(format, `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} raster ${gridSize}^3`);
+    boundarySplatReadbackPipeline = makeBoundarySplatRenderPipeline('rgba8unorm', `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} witness readback ${gridSize}^3`);
+    ensureBoundarySplatBuffers();
     ensureTemporalHistoryTexture();
     rebuildFluidBindGroups();
     majorantFrontBindGroups = [
@@ -6136,6 +6360,18 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         ],
       }),
     ];
+    boundarySplatBindGroups = fluidBuffers.map((fluidBuffer, index) => device.createBindGroup({
+      label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} bind group ${gridSize}^3 ${index}`,
+      layout: boundarySplatBindGroupLayout,
+      entries: [
+        { binding: 0, resource: { buffer: boundarySidecarBuffer } },
+        { binding: 1, resource: { buffer: fluidBuffer } },
+        { binding: 2, resource: { buffer: boundarySplatBuffer } },
+        { binding: 3, resource: { buffer: boundarySplatDrawBuffer } },
+        { binding: 4, resource: { buffer: boundarySplatCameraBuffer } },
+        { binding: 5, resource: { buffer: boundarySplatRenderBuffer } },
+      ],
+    }));
     pressureWriteBindGroup = device.createBindGroup({
       label: `kaminos pressure divergence write bind group ${gridSize}^3`,
       layout: pressureWriteBindGroupLayout,
@@ -6280,6 +6516,15 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         .join('\n');
       throw new Error(`Browser residual WGSL compilation failed:\n${detail}`);
     }
+    boundarySplatShader = device.createShaderModule({ label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} wgsl`, code: BOUNDARY_SPLAT_WGSL });
+    const boundarySplatCompilationInfo = await boundarySplatShader.getCompilationInfo();
+    const boundarySplatCompilationErrors = boundarySplatCompilationInfo.messages.filter(message => message.type === 'error');
+    if (boundarySplatCompilationErrors.length > 0) {
+      const detail = boundarySplatCompilationErrors
+        .map(message => `${message.lineNum}:${message.linePos} ${message.message}`)
+        .join('\n');
+      throw new Error(`Boundary splat WGSL compilation failed:\n${detail}`);
+    }
     bindGroupLayout = device.createBindGroupLayout({
       label: 'kaminos fluid bind group layout',
       entries: [
@@ -6395,6 +6640,17 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         },
       ],
     });
+    boundarySplatBindGroupLayout = device.createBindGroupLayout({
+      label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} bind group layout`,
+      entries: [
+        { binding: 0, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
+        { binding: 1, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
+        { binding: 2, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
+        { binding: 3, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
+        { binding: 4, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, buffer: { type: 'uniform' } },
+        { binding: 5, visibility: GPUShaderStage.VERTEX, buffer: { type: 'read-only-storage' } },
+      ],
+    });
     pressureWriteBindGroupLayout = device.createBindGroupLayout({
       label: 'kaminos pressure write bind group layout',
       entries: [
@@ -6474,6 +6730,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     boundarySidecarPipelineLayout = device.createPipelineLayout({
       label: `kaminos ${BOUNDARY_SIDECAR_IDENTITY} pipeline layout`,
       bindGroupLayouts: [boundarySidecarReadBindGroupLayout, emptyBindGroupLayout, emptyBindGroupLayout, boundarySidecarWriteBindGroupLayout],
+    });
+    boundarySplatPipelineLayout = device.createPipelineLayout({
+      label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} pipeline layout`,
+      bindGroupLayouts: [boundarySplatBindGroupLayout],
     });
     pressureWritePipelineLayout = device.createPipelineLayout({
       label: 'kaminos divergence pressure pipeline layout',
@@ -6747,6 +7007,15 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     if (!previousViewProjReady) {
       previousViewProj.copy(viewProj);
       previousViewProjReady = true;
+    }
+    if (boundarySplatCameraBuffer) {
+      const cameraMatrix = camera.matrixWorld.elements;
+      const splatCamera = new Float32Array(28);
+      splatCamera.set(viewProj.elements, 0);
+      splatCamera.set([cameraMatrix[0], cameraMatrix[1], cameraMatrix[2], 0], 16);
+      splatCamera.set([cameraMatrix[4], cameraMatrix[5], cameraMatrix[6], 0], 20);
+      splatCamera.set([1, state.width, state.height, gridSize], 24);
+      device.queue.writeBuffer(boundarySplatCameraBuffer, 0, splatCamera);
     }
     const { renderPhaseTimeMs, renderPhaseFrame } = updateRenderPhaseState(now, state, lookFreeze);
     uniforms.set(invViewProj.elements, 0);
@@ -7671,7 +7940,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.boundarySidecarSource = sourceName;
     state.boundarySidecarView = sidecarViewName;
     state.boundaryStructureSource = sourceName;
-    const shouldBakeBoundarySidecar = sourceName !== 'live' || sidecarViewName !== 'off';
+    const shouldBakeBoundarySidecar = sourceName !== 'live' || sidecarViewName !== 'off' || boundarySplatRequested();
     if (
       !shouldBakeBoundarySidecar ||
       !boundarySidecarBuildPipeline ||
@@ -7696,6 +7965,102 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.boundarySidecarLastBuiltFrame = state.frameCount;
     state.boundarySidecarDebug = boundarySidecarDebug(sourceName);
     updateSimCostLedger({ boundarySidecarBuiltThisFrame: true });
+  }
+
+  function boundarySplatRequested() {
+    return normalizeBoundarySplatMode(controlsSnapshot.boundarySplatMode) === 'analytic';
+  }
+
+  function encodeBoundarySplats(encoder) {
+    state.boundarySplatMode = normalizeBoundarySplatMode(controlsSnapshot.boundarySplatMode);
+    if (!boundarySplatRequested()) {
+      state.boundarySplatFallbackReason = null;
+      return false;
+    }
+    if (
+      !state.boundarySidecarBuiltThisFrame
+      || !boundarySplatCompactPipeline
+      || !boundarySplatFinalizePipeline
+      || !boundarySplatRenderPipeline
+      || !boundarySplatDrawBuffer
+      || !boundarySplatIndirectBuffer
+      || boundarySplatBindGroups.length !== 2
+    ) {
+      state.boundarySplatFallbackReason = !state.boundarySidecarBuiltThisFrame
+        ? 'sidecar-not-built-this-frame'
+        : 'boundary-splat-gpu-route-unavailable';
+      return false;
+    }
+    device.queue.writeBuffer(boundarySplatDrawBuffer, 0, new Uint32Array([6, 0, 0, 0, 0, 0, 0, 0]));
+    const compactPass = encoder.beginComputePass({ label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} compact pass` });
+    compactPass.setPipeline(boundarySplatCompactPipeline);
+    compactPass.setBindGroup(0, boundarySplatBindGroups[currentFluid]);
+    const workgroups = Math.ceil(gridSize / 4);
+    compactPass.dispatchWorkgroups(workgroups, workgroups, workgroups);
+    compactPass.end();
+    const finalizePass = encoder.beginComputePass({ label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} finalize pass` });
+    finalizePass.setPipeline(boundarySplatFinalizePipeline);
+    finalizePass.setBindGroup(0, boundarySplatBindGroups[currentFluid]);
+    finalizePass.dispatchWorkgroups(1);
+    finalizePass.end();
+    encoder.copyBufferToBuffer(boundarySplatBuffer, 0, boundarySplatRenderBuffer, 0, BOUNDARY_SPLAT_CAPACITY * 48);
+    encoder.copyBufferToBuffer(boundarySplatDrawBuffer, 0, boundarySplatIndirectBuffer, 0, 16);
+    state.boundarySplatFallbackReason = null;
+    return true;
+  }
+
+  function encodeBoundarySplatDraw(encoder, view, targetPipeline = boundarySplatRenderPipeline) {
+    if (!boundarySplatRequested() || state.boundarySplatFallbackReason || !targetPipeline) return false;
+    const pass = encoder.beginRenderPass({
+      label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} canvas pass`,
+      colorAttachments: [{
+        view,
+        clearValue: { r: 0.004, g: 0.005, b: 0.006, a: 1 },
+        loadOp: 'clear',
+        storeOp: 'store',
+      }],
+    });
+    pass.setPipeline(targetPipeline);
+    pass.setBindGroup(0, boundarySplatBindGroups[currentFluid]);
+    pass.drawIndirect(boundarySplatIndirectBuffer, 0);
+    pass.end();
+    state.boundarySplatFrameCount += 1;
+    state.volumeReconstructionStyle = BOUNDARY_SPLAT_RENDERER_IDENTITY;
+    return true;
+  }
+
+  function encodeBoundarySplatTelemetry(encoder, force = false) {
+    if (
+      !boundarySplatRequested()
+      || state.boundarySplatFallbackReason
+      || (!force && state.frameCount % 12 !== 0)
+      || boundarySplatTelemetryCopyPending
+      || boundarySplatTelemetryMapPending
+      || !boundarySplatDrawBuffer
+      || !boundarySplatReadbackBuffer
+    ) return;
+    encoder.copyBufferToBuffer(boundarySplatDrawBuffer, 0, boundarySplatReadbackBuffer, 0, 32);
+    boundarySplatTelemetryCopyPending = true;
+  }
+
+  async function resolveBoundarySplatTelemetry() {
+    if (!boundarySplatTelemetryCopyPending || boundarySplatTelemetryMapPending || !boundarySplatReadbackBuffer) return;
+    boundarySplatTelemetryCopyPending = false;
+    boundarySplatTelemetryMapPending = true;
+    try {
+      await boundarySplatReadbackBuffer.mapAsync(GPUMapMode.READ);
+      const drawState = new Uint32Array(boundarySplatReadbackBuffer.getMappedRange());
+      state.boundarySplatInstanceCount = drawState[1];
+      state.boundarySplatCandidateCount = drawState[4];
+      state.boundarySplatOverflowCount = drawState[5];
+      boundarySplatReadbackBuffer.unmap();
+    } catch (error) {
+      state.boundarySplatCandidateCount = null;
+      state.boundarySplatOverflowCount = null;
+      state.boundarySplatFallbackReason = `count-readback-failed:${error?.message || String(error)}`;
+    } finally {
+      boundarySplatTelemetryMapPending = false;
+    }
   }
 
   function encodeDraw(encoder, view, label, targetPipeline = pipeline) {
@@ -7791,8 +8156,17 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         encodeMajorant(encoder);
       }
       encodeBoundarySidecar(encoder);
+      encodeBoundarySplats(encoder);
       const currentTexture = context.getCurrentTexture();
-      if (browserResidualCanApply()) {
+      if (boundarySplatRequested()) {
+        const splatApplied = encodeBoundarySplatDraw(encoder, currentTexture.createView());
+        if (!splatApplied) {
+          encodeDraw(encoder, currentTexture.createView(), 'kaminos boundary splat explicit fallback raymarch');
+          state.volumeReconstructionStyle = 'boundary-splat-fallback-raymarch';
+          emitStatus({ phase: 'boundary-splat-fallback', reason: state.boundarySplatFallbackReason });
+        }
+        recordBrowserResidualCost({ applied: false });
+      } else if (browserResidualCanApply()) {
         const sourceEncodeStart = performance.now();
         ensureFrameTexture();
         ensureBrowserResidualFeatureTexture();
@@ -7808,7 +8182,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         recordBrowserResidualCost({ applied: false });
       }
       encodeHistoryCopy(encoder, currentTexture);
+      encodeBoundarySplatTelemetry(encoder);
       device.queue.submit([encoder.finish()]);
+      if (boundarySplatTelemetryCopyPending) void resolveBoundarySplatTelemetry();
       commitPreviousViewProjection();
       state.frameCount += 1;
       state.lastFrameEnergy = Math.min(9.999, state.simStepCount * 0.001 + 0.55 * controlsSnapshot.density + 0.35 * controlsSnapshot.fire + 0.18 * (controlsSnapshot.radiance ?? 1.65));
@@ -9044,13 +9420,32 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       state.majorantBuiltThisFrame = false;
     }
     encodeBoundarySidecar(encoder);
-    encodeDraw(encoder, frameTexture.createView(), 'kaminos volume one-off readback pass', readbackPipeline);
+    encodeBoundarySplats(encoder);
+    if (boundarySplatRequested()) {
+      const splatApplied = encodeBoundarySplatDraw(encoder, frameTexture.createView(), boundarySplatReadbackPipeline);
+      if (!splatApplied) {
+        buffer.destroy();
+        const validationError = await device.popErrorScope();
+        return {
+          ok: false,
+          reason: 'boundary-splat-readback-route-unavailable',
+          validationError: validationError?.message || null,
+          boundarySplatFallbackReason: state.boundarySplatFallbackReason,
+          boundarySplatRendererIdentity: state.boundarySplatRendererIdentity,
+          boundarySplatSourceAuthority: state.boundarySplatSourceAuthority,
+        };
+      }
+      encodeBoundarySplatTelemetry(encoder, true);
+    } else {
+      encodeDraw(encoder, frameTexture.createView(), 'kaminos volume one-off readback pass', readbackPipeline);
+    }
     encoder.copyTextureToBuffer(
       { texture: frameTexture },
       { buffer, bytesPerRow, rowsPerImage: state.height },
       { width: state.width, height: state.height, depthOrArrayLayers: 1 }
     );
     device.queue.submit([encoder.finish()]);
+    if (boundarySplatTelemetryCopyPending) await resolveBoundarySplatTelemetry();
     const validationError = await device.popErrorScope();
     if (validationError) {
       buffer.destroy();
@@ -9182,6 +9577,16 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         boundarySidecarIdentity: state.boundarySidecarIdentity,
         boundarySidecarAuthority: state.boundarySidecarAuthority,
         boundarySidecarSource: state.boundarySidecarSource,
+        boundarySplatMode: state.boundarySplatMode,
+        boundarySplatRendererIdentity: state.boundarySplatRendererIdentity,
+        boundarySplatSourceAuthority: state.boundarySplatSourceAuthority,
+        boundarySplatCapacity: state.boundarySplatCapacity,
+        boundarySplatInstanceCount: state.boundarySplatInstanceCount,
+        boundarySplatCandidateCount: state.boundarySplatCandidateCount,
+        boundarySplatOverflowCount: state.boundarySplatOverflowCount,
+        boundarySplatCountAuthority: state.boundarySplatCountAuthority,
+        boundarySplatFallbackReason: state.boundarySplatFallbackReason,
+        boundarySplatFrameCount: state.boundarySplatFrameCount,
       };
     }
     await buffer.mapAsync(GPUMapMode.READ);
@@ -9987,6 +10392,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       state.volumeResidualStrength = normalizeBrowserResidualStrength(controlsSnapshot.volumeResidualStrength);
       state.volumeResidualFeatureDebug = normalizeBrowserResidualFeatureDebug(controlsSnapshot.volumeResidualFeatureDebug);
       state.volumeResidualFeatureDebugMode = state.volumeResidualFeatureDebug ? 'residual-feature-debug-false-color-v0' : 'off';
+      state.boundarySplatMode = normalizeBoundarySplatMode(controlsSnapshot.boundarySplatMode);
       if (device) void ensureBrowserResidualModel();
       state.majorantGrid = majorantGridSize;
       state.majorantCadence = normalizeMajorantBuildCadence(controlsSnapshot.majorantCadence);
@@ -10110,6 +10516,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       frameTexture?.destroy();
       browserResidualFeatureTexture?.destroy();
       externalEmitterBuffer?.destroy();
+      boundarySplatCameraBuffer?.destroy();
+      boundarySplatCameraBuffer = null;
       destroyTemporalHistory();
       destroyFluidState();
       destroyMajorantState();
