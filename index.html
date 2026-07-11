@@ -100,19 +100,47 @@ h2 { font-size: 11px; font-weight: 600; margin: 18px 0 8px; color: #666; text-tr
     .crucible-bench-list .btn { width: 100%; text-align: left; margin: 0; }
     .crucible-bench-list .btn.active { background: #57421f; border-color: #8b6a2f; }
     .crucible-bench-note { color: #777; font-size: 10px; line-height: 1.35; margin-top: 7px; }
-    #crucible-viewport-workspace { position: absolute; inset: 0; z-index: 4; display: flex; align-items: center; justify-content: center; padding: clamp(24px, 5vw, 72px); background: rgba(10,9,8,0.72); pointer-events: none; }
+    #crucible-viewport-workspace { position: absolute; inset: 0; z-index: 4; display: flex; align-items: center; justify-content: center; padding: clamp(18px, 4vw, 54px); background: radial-gradient(circle at 52% 36%, rgba(58,65,68,0.36), transparent 38%), linear-gradient(180deg, rgba(8,9,10,0.72), rgba(4,4,5,0.86)); pointer-events: none; perspective: 1200px; }
     #crucible-viewport-workspace[hidden] { display: none; }
-    .crucible-viewport-mat { width: min(900px, 78vw); min-height: min(560px, 70vh); border: 1px solid rgba(171,137,76,0.42); border-radius: 8px; background: rgba(31,28,23,0.9); box-shadow: 0 26px 80px rgba(0,0,0,0.48); padding: clamp(18px, 3vw, 34px); display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 18px; }
-    .crucible-viewport-title { color: #f1dfae; font-size: 18px; font-weight: 800; margin-bottom: 6px; }
-    .crucible-viewport-subtitle { color: #a99d84; font-size: 12px; line-height: 1.45; max-width: 520px; }
-    .crucible-viewport-plate { margin-top: 22px; min-height: 180px; border: 1px solid rgba(171,137,76,0.28); border-radius: 8px; background: rgba(14,13,11,0.72); padding: 16px; display: flex; flex-direction: column; justify-content: space-between; }
-    .crucible-viewport-plate-title { color: #d9c88f; font-size: 11px; font-weight: 800; letter-spacing: 0.8px; text-transform: uppercase; }
-    .crucible-viewport-plate-body { color: #d0c3a5; font-size: 13px; line-height: 1.4; overflow-wrap: anywhere; margin-top: 10px; }
-    .crucible-viewport-stack { display: grid; gap: 10px; align-content: start; }
-    .crucible-viewport-slot { min-height: 96px; border: 1px solid rgba(124,107,76,0.34); border-radius: 7px; background: rgba(19,18,16,0.78); padding: 12px; }
-    .crucible-viewport-slot-title { color: #d8c27e; font-size: 10px; font-weight: 800; letter-spacing: 0.7px; text-transform: uppercase; }
-    .crucible-viewport-slot-body { color: #9d9481; font-size: 12px; line-height: 1.35; margin-top: 8px; overflow-wrap: anywhere; }
-    .crucible-viewport-slot-body.present { color: #e0d3b3; }
+    .crucible-workroom-shell { width: min(1080px, 82vw); min-height: min(650px, 76vh); position: relative; transform: rotateX(5deg); transform-origin: center bottom; filter: drop-shadow(0 32px 70px rgba(0,0,0,0.56)); }
+    .crucible-room-backwall { position: absolute; left: 5%; right: 5%; top: 0; height: 40%; border: 1px solid rgba(103,115,112,0.28); border-bottom: 0; background: linear-gradient(180deg, rgba(42,47,47,0.76), rgba(20,22,22,0.42)); box-shadow: inset 0 -24px 60px rgba(7,8,8,0.48); }
+    .crucible-room-shelf { position: absolute; left: 9%; right: 9%; top: 11%; height: 16px; border: 1px solid rgba(120,96,61,0.5); background: linear-gradient(90deg, #2e2620, #5b462f 34%, #312923 70%, #716040); box-shadow: 0 9px 22px rgba(0,0,0,0.42); }
+    .crucible-room-shelf::before,
+    .crucible-room-shelf::after { content: ""; position: absolute; top: 23px; width: 32%; height: 3px; background: rgba(144,126,88,0.38); }
+    .crucible-room-shelf::before { left: 8%; }
+    .crucible-room-shelf::after { right: 8%; }
+    .crucible-worktable-stage { position: absolute; left: 0; right: 0; bottom: 0; min-height: 68%; border: 1px solid rgba(150,124,80,0.54); border-radius: 8px; background: linear-gradient(135deg, rgba(104,83,55,0.96), rgba(58,46,35,0.96) 38%, rgba(116,99,65,0.94) 66%, rgba(50,43,36,0.97)), repeating-linear-gradient(92deg, rgba(255,246,202,0.08) 0 2px, transparent 2px 18px); box-shadow: inset 0 0 0 1px rgba(240,213,148,0.08), inset 0 34px 70px rgba(255,236,170,0.06), 0 22px 58px rgba(0,0,0,0.55); padding: clamp(18px, 2.8vw, 32px); display: grid; grid-template-columns: 1fr minmax(240px, 0.42fr); grid-template-rows: auto minmax(240px, 1fr) auto; gap: 16px; }
+    .crucible-worktable-stage::after { content: ""; position: absolute; inset: 14px; border: 1px solid rgba(26,23,19,0.44); border-radius: 6px; pointer-events: none; box-shadow: inset 0 0 26px rgba(0,0,0,0.24); }
+    .crucible-viewport-heading { position: relative; z-index: 1; grid-column: 1 / -1; display: flex; align-items: flex-end; justify-content: space-between; gap: 14px; }
+    .crucible-viewport-title { color: #ffe6a9; font-size: clamp(20px, 2.2vw, 30px); font-weight: 800; margin-bottom: 5px; text-shadow: 0 2px 12px rgba(0,0,0,0.52); }
+    .crucible-viewport-subtitle { color: #d8d1ba; font-size: 12px; line-height: 1.42; max-width: 560px; }
+    .crucible-heat-badge { border: 1px solid rgba(104,128,128,0.44); border-radius: 999px; background: rgba(20,27,28,0.72); color: #bfe6e2; font-size: 10px; font-weight: 800; letter-spacing: 0.6px; padding: 6px 10px; text-transform: uppercase; white-space: nowrap; }
+    #crucible-viewport-workspace[data-crucible-heat-state="firing"] .crucible-heat-badge { border-color: rgba(255,172,88,0.66); color: #ffd59a; background: rgba(82,42,18,0.74); }
+    #crucible-viewport-workspace[data-crucible-heat-state="failed"] .crucible-heat-badge { border-color: rgba(218,97,83,0.68); color: #ffc2b7; background: rgba(74,26,24,0.72); }
+    #crucible-viewport-workspace[data-crucible-heat-state="cast"] .crucible-heat-badge { border-color: rgba(130,190,148,0.62); color: #ccf2d2; background: rgba(24,58,36,0.68); }
+    .crucible-viewport-zone { position: relative; z-index: 1; border: 1px solid rgba(31,34,34,0.72); border-radius: 8px; background: rgba(18,20,20,0.74); box-shadow: inset 0 0 0 1px rgba(255,255,255,0.045), 0 12px 28px rgba(0,0,0,0.24); overflow: hidden; }
+    .crucible-viewport-zone-label { color: #d7c382; font-size: 10px; font-weight: 800; letter-spacing: 0.8px; text-transform: uppercase; }
+    .crucible-viewport-plate { display: grid; grid-template-columns: minmax(170px, 0.44fr) 1fr; min-height: 264px; padding: 13px; gap: 13px; border-color: rgba(108,132,126,0.58); background: linear-gradient(135deg, rgba(19,28,29,0.84), rgba(12,14,15,0.72)); }
+    .crucible-viewport-source-thumb-wrap { border: 1px solid rgba(131,151,141,0.42); border-radius: 7px; background: #070808; min-height: 178px; display: flex; align-items: center; justify-content: center; overflow: hidden; box-shadow: inset 0 0 28px rgba(0,0,0,0.68); }
+    .crucible-viewport-source-thumb-wrap.empty::before { content: ""; width: 54%; aspect-ratio: 1; border: 1px solid rgba(122,139,133,0.32); border-radius: 50%; background: radial-gradient(circle at 48% 38%, rgba(142,158,150,0.18), transparent 54%); }
+    .crucible-viewport-source-thumb { width: 100%; height: 100%; object-fit: contain; display: block; }
+    .crucible-viewport-source-thumb[hidden] { display: none; }
+    .crucible-viewport-plate-body { color: #d7ddcf; font-size: 13px; line-height: 1.4; overflow-wrap: anywhere; margin-top: 10px; }
+    .crucible-viewport-firing-mouth { min-height: 264px; display: flex; flex-direction: column; justify-content: space-between; padding: 15px; background: radial-gradient(circle at 50% 68%, rgba(110,46,24,0.48), transparent 38%), linear-gradient(180deg, rgba(21,19,18,0.96), rgba(9,8,8,0.9)); }
+    .crucible-viewport-firing-mouth::before { content: ""; position: absolute; left: 50%; bottom: 28px; width: 118px; height: 118px; transform: translateX(-50%); border-radius: 50%; border: 1px solid rgba(227,160,74,0.28); background: radial-gradient(circle, rgba(255,204,108,0.46), rgba(139,55,23,0.34) 42%, rgba(7,7,7,0.92) 72%); box-shadow: 0 0 44px rgba(235,109,39,0.14), inset 0 0 34px rgba(0,0,0,0.72); opacity: 0.38; }
+    #crucible-viewport-workspace[data-crucible-heat-state="firing"] .crucible-viewport-firing-mouth::before { opacity: 0.9; box-shadow: 0 0 54px rgba(255,133,45,0.42), inset 0 0 28px rgba(0,0,0,0.58); }
+    .crucible-viewport-slot-body { color: #b9b3a2; font-size: 12px; line-height: 1.35; margin-top: 8px; overflow-wrap: anywhere; position: relative; z-index: 1; }
+    .crucible-viewport-slot-body.present { color: #f0e7c9; }
+    .crucible-viewport-trays { position: relative; z-index: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .crucible-viewport-tray { min-height: 132px; padding: 13px; }
+    .crucible-viewport-cast-tray { background: linear-gradient(135deg, rgba(37,45,45,0.88), rgba(17,18,18,0.76)); }
+    .crucible-viewport-shard-rack { background: linear-gradient(135deg, rgba(39,34,49,0.78), rgba(19,18,24,0.78)); }
+    .crucible-viewport-receipt-tag { position: relative; z-index: 1; grid-column: 1 / -1; min-height: 78px; padding: 13px 16px; display: flex; align-items: center; justify-content: space-between; gap: 16px; background: linear-gradient(100deg, rgba(202,187,137,0.92), rgba(126,142,136,0.86)); color: #1d201f; border-color: rgba(242,229,183,0.48); }
+    .crucible-viewport-receipt-tag .crucible-viewport-zone-label { color: #30382f; }
+    .crucible-viewport-receipt-tag .crucible-viewport-slot-body { color: #262925; margin-top: 3px; }
+    .crucible-viewport-proxy-sockets { position: relative; z-index: 1; grid-column: 2; min-height: 92px; padding: 12px; display: grid; gap: 8px; background: rgba(16,22,24,0.66); }
+    .crucible-viewport-socket-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+    .crucible-viewport-socket { min-height: 38px; border: 1px solid rgba(117,148,149,0.32); border-radius: 6px; background: linear-gradient(135deg, rgba(35,49,51,0.72), rgba(13,15,16,0.88)); box-shadow: inset 0 0 18px rgba(0,0,0,0.42); }
 
 /* Viewport */
 #viewport { flex: 1; position: relative; background: #111; }
@@ -2423,31 +2451,57 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
 
 <div id="viewport">
   <div id="env-loading">Loading environment...</div>
-  <div id="crucible-viewport-workspace" data-crucible-viewport-workspace="generate" hidden>
-    <div class="crucible-viewport-mat">
-      <div>
-        <div class="crucible-viewport-title" id="crucible-viewport-title">Unnamed crucible</div>
-        <div class="crucible-viewport-subtitle" id="crucible-viewport-summary">This crucible is on the bench.</div>
-        <div class="crucible-viewport-plate">
+  <div id="crucible-viewport-workspace" data-crucible-viewport-workspace="generate" data-crucible-workroom="active" data-crucible-heat-state="idle" hidden>
+    <div class="crucible-workroom-shell">
+      <div class="crucible-room-backwall"></div>
+      <div class="crucible-room-shelf"></div>
+      <div class="crucible-worktable-stage" id="crucible-worktable-stage">
+        <div class="crucible-viewport-heading">
           <div>
-            <div class="crucible-viewport-plate-title">Source Plate</div>
-            <div class="crucible-viewport-plate-body" id="crucible-viewport-source">No source on the plate yet.</div>
+            <div class="crucible-viewport-title" id="crucible-viewport-title">Unnamed crucible</div>
+            <div class="crucible-viewport-subtitle" id="crucible-viewport-summary">This crucible is on the bench.</div>
           </div>
-          <div class="crucible-viewport-plate-body" id="crucible-viewport-receipt">No firing receipt yet.</div>
+          <div class="crucible-heat-badge" id="crucible-viewport-heat-label">Idle</div>
         </div>
-      </div>
-      <div class="crucible-viewport-stack">
-        <div class="crucible-viewport-slot">
-          <div class="crucible-viewport-slot-title">Firing</div>
-          <div class="crucible-viewport-slot-body" id="crucible-viewport-firing">No firing started.</div>
+        <div class="crucible-viewport-zone crucible-viewport-plate" id="crucible-viewport-source-plate">
+          <div class="crucible-viewport-source-thumb-wrap empty" id="crucible-viewport-source-thumb-wrap">
+            <img class="crucible-viewport-source-thumb" id="crucible-viewport-source-thumb" alt="" hidden>
+          </div>
+          <div>
+            <div class="crucible-viewport-zone-label">Source Plate</div>
+            <div class="crucible-viewport-plate-body" id="crucible-viewport-source">No source on the plate yet.</div>
+            <div class="crucible-viewport-slot-body" id="crucible-viewport-armature">No armature pinned yet.</div>
+          </div>
         </div>
-        <div class="crucible-viewport-slot">
-          <div class="crucible-viewport-slot-title">Cast</div>
-          <div class="crucible-viewport-slot-body" id="crucible-viewport-cast">No cast on the tray.</div>
+        <div class="crucible-viewport-zone crucible-viewport-firing-mouth" id="crucible-viewport-firing-mouth">
+          <div>
+            <div class="crucible-viewport-zone-label">Firing Mouth</div>
+            <div class="crucible-viewport-slot-body" id="crucible-viewport-firing">No firing started.</div>
+          </div>
         </div>
-        <div class="crucible-viewport-slot">
-          <div class="crucible-viewport-slot-title">Armature</div>
-          <div class="crucible-viewport-slot-body" id="crucible-viewport-armature">No armature pinned yet.</div>
+        <div class="crucible-viewport-trays">
+          <div class="crucible-viewport-zone crucible-viewport-tray crucible-viewport-cast-tray" id="crucible-viewport-cast-tray">
+            <div class="crucible-viewport-zone-label">Cast Tray</div>
+            <div class="crucible-viewport-slot-body" id="crucible-viewport-cast">No cast on the tray.</div>
+          </div>
+          <div class="crucible-viewport-zone crucible-viewport-tray crucible-viewport-shard-rack" id="crucible-viewport-shard-rack">
+            <div class="crucible-viewport-zone-label">Shard Rack</div>
+            <div class="crucible-viewport-slot-body" id="crucible-viewport-shards">No reusable shards yet.</div>
+          </div>
+        </div>
+        <div class="crucible-viewport-zone crucible-viewport-proxy-sockets" id="crucible-viewport-proxy-sockets">
+          <div class="crucible-viewport-zone-label">Proxy Sockets</div>
+          <div class="crucible-viewport-socket-row" aria-hidden="true">
+            <div class="crucible-viewport-socket"></div>
+            <div class="crucible-viewport-socket"></div>
+            <div class="crucible-viewport-socket"></div>
+          </div>
+        </div>
+        <div class="crucible-viewport-zone crucible-viewport-receipt-tag" id="crucible-viewport-receipt-tag">
+          <div>
+            <div class="crucible-viewport-zone-label">Receipt Tag</div>
+            <div class="crucible-viewport-slot-body" id="crucible-viewport-receipt">No firing receipt yet.</div>
+          </div>
         </div>
       </div>
     </div>
@@ -12723,6 +12777,27 @@ function renderCrucibleBench() {
   renderCrucibleViewportWorkspace();
 }
 
+function crucibleViewportHeatState({ lastFiring, lastCast, lastReceipt }) {
+  if (lastFiring?.status === 'running') return 'firing';
+  if (lastReceipt?.status === 'failed' || lastReceipt?.status === 'error') return 'failed';
+  if (lastCast) return 'cast';
+  if (lastReceipt) return 'cooling';
+  return 'idle';
+}
+
+function crucibleViewportHeatLabel(heatState) {
+  if (heatState === 'firing') return 'Firing';
+  if (heatState === 'failed') return 'Needs attention';
+  if (heatState === 'cast') return 'Cast held';
+  if (heatState === 'cooling') return 'Cooling';
+  return 'Idle';
+}
+
+function crucibleViewportSourcePlateLabel(currentSource) {
+  if (!currentSource?.source) return 'No source on the plate yet.';
+  return `${crucibleBenchSourceLabel(currentSource)} - ${compactCrucibleBenchPath(currentSource.source)}`;
+}
+
 function renderCrucibleViewportWorkspace() {
   const workspace = document.getElementById('crucible-viewport-workspace');
   if (!workspace) return;
@@ -12732,22 +12807,38 @@ function renderCrucibleViewportWorkspace() {
   const lastCast = crucible.casts[0] || null;
   const lastReceipt = crucible.receipts[0] || null;
   const lastArmature = crucible.armatures[0] || null;
+  const heatState = crucibleViewportHeatState({ lastFiring, lastCast, lastReceipt });
+  workspace.dataset.crucibleHeatState = heatState;
   const title = document.getElementById('crucible-viewport-title');
   const summary = document.getElementById('crucible-viewport-summary');
   const source = document.getElementById('crucible-viewport-source');
+  const sourceThumb = document.getElementById('crucible-viewport-source-thumb');
+  const sourceThumbWrap = document.getElementById('crucible-viewport-source-thumb-wrap');
   const firing = document.getElementById('crucible-viewport-firing');
   const cast = document.getElementById('crucible-viewport-cast');
   const receipt = document.getElementById('crucible-viewport-receipt');
   const armature = document.getElementById('crucible-viewport-armature');
+  const shards = document.getElementById('crucible-viewport-shards');
+  const heatLabel = document.getElementById('crucible-viewport-heat-label');
   if (title) title.textContent = crucible.name || 'Unnamed crucible';
   if (summary) {
     summary.textContent = `This crucible is holding ${currentSource ? 'one source' : 'no source yet'}, ${crucible.firings.length} firing${crucible.firings.length === 1 ? '' : 's'}, and ${crucible.casts.length} cast${crucible.casts.length === 1 ? '' : 's'}.`;
   }
+  if (heatLabel) heatLabel.textContent = crucibleViewportHeatLabel(heatState);
   if (source) {
     source.classList.toggle('present', Boolean(currentSource?.source));
-    source.textContent = currentSource?.source
-      ? `${crucibleBenchSourceLabel(currentSource)} - ${compactCrucibleBenchPath(currentSource.source)}`
-      : 'No source on the plate yet.';
+    source.textContent = crucibleViewportSourcePlateLabel(currentSource);
+  }
+  if (sourceThumb) {
+    sourceThumb.hidden = !currentSource?.source;
+    if (currentSource?.source) {
+      sourceThumb.src = currentSource.source;
+    } else {
+      sourceThumb.removeAttribute('src');
+    }
+  }
+  if (sourceThumbWrap) {
+    sourceThumbWrap.classList.toggle('empty', !currentSource?.source);
   }
   if (firing) {
     firing.classList.toggle('present', Boolean(lastFiring));
@@ -12772,6 +12863,12 @@ function renderCrucibleViewportWorkspace() {
     armature.textContent = lastArmature
       ? `${lastArmature.label || 'Proxy armature'} - ${lastArmature.kind || 'proxy'}`
       : 'No armature pinned yet.';
+  }
+  if (shards) {
+    shards.classList.toggle('present', crucible.shards.length > 0);
+    shards.textContent = crucible.shards.length
+      ? `${crucible.shards.length} shard${crucible.shards.length === 1 ? '' : 's'} kept for later casts.`
+      : 'No reusable shards yet.';
   }
 }
 
