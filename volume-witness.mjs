@@ -109,7 +109,7 @@ const windowSize = args.get('--window-size') || '1280,960';
 const fullScreenshot = args.has('--full-screenshot')
   ? resolve(args.get('--full-screenshot') || out.replace(/\.png$/i, '.full.png'))
   : '';
-const VALID_EVIDENCE_MODES = new Set(['fire-volume', 'performance', 'pyro-material', 'no-fire-volume']);
+const VALID_EVIDENCE_MODES = new Set(['fire-volume', 'performance', 'pyro-material', 'no-fire-volume', 'far-smoke-isolation']);
 const evidenceMode = args.get('--evidence-mode') || 'fire-volume';
 if (!VALID_EVIDENCE_MODES.has(evidenceMode)) {
   throw new Error(`Unknown witness evidence mode: ${evidenceMode}`);
@@ -117,7 +117,10 @@ if (!VALID_EVIDENCE_MODES.has(evidenceMode)) {
 const expectsPerformanceVolumeEvidence = evidenceMode === 'performance';
 const expectsPyroMaterialEvidence = evidenceMode === 'pyro-material';
 const expectsNoFireVolumeEvidence = evidenceMode === 'no-fire-volume';
-const visualEvidenceMode = expectsNoFireVolumeEvidence
+const expectsFarSmokeIsolationEvidence = evidenceMode === 'far-smoke-isolation';
+const visualEvidenceMode = expectsFarSmokeIsolationEvidence
+  ? 'far-smoke-channel-split-signal'
+  : expectsNoFireVolumeEvidence
   ? 'no-fire-volume-signal'
   : (expectsPyroMaterialEvidence ? 'pyro-material-coupled-volume-signal' : (expectsPerformanceVolumeEvidence ? 'performance-volume-signal' : 'fire-volume'));
 const TALL_PLUME_PRESSURE_ITERATION_STRATEGY_PRESSURE2 = 'tall-plume-pressure2-v0';
@@ -416,6 +419,20 @@ function normalizePressureStrategy(value, volumeScene) {
 function normalizeVolumePressureMode(value) {
   const mode = String(value || 'auto').toLowerCase();
   return ['auto', 'spatial-tiers', 'activity-tiers', 'global-p3', 'global-p2', 'global-p1', 'routed-global'].includes(mode) ? mode : 'auto';
+}
+
+function normalizeFarSmokeIsolationMode(value) {
+  const mode = String(value || 'composite').toLowerCase().replace(/_/g, '-');
+  return ['composite', 'near-only', 'far-grid-only', 'receiver-only'].includes(mode) ? mode : 'composite';
+}
+
+function expectedFarSmokeIsolationVisibility(mode) {
+  const normalized = normalizeFarSmokeIsolationMode(mode);
+  return {
+    near: normalized === 'composite' || normalized === 'near-only',
+    receiver: normalized === 'composite' || normalized === 'receiver-only',
+    farGrid: normalized === 'composite' || normalized === 'far-grid-only',
+  };
 }
 
 function pressureConfigForMode(mode, volumeScene, fallbackStrategy, fallbackIterations) {
@@ -1307,6 +1324,7 @@ const requestedVolumeScene = routeParams.get('volume_scene') || tallPlumePreset.
 const expectedVolumeScene = Object.hasOwn(VOLUME_SCENE_PRESETS, requestedVolumeScene)
   ? requestedVolumeScene
   : 'compact_plume';
+const expectedFarSmokeIsolationMode = normalizeFarSmokeIsolationMode(routeParams.get('volume_far_smoke_isolation'));
 const expectsCanonicalPlumeProof = expectedVolumeScene === 'canonical_plume';
 const fieldSliceOut = args.has('--field-slice')
   ? resolve(args.get('--field-slice') || out.replace(/\.png$/i, '.field-slice.png'))
@@ -2026,6 +2044,56 @@ async function main() {
       proc.kill('SIGTERM');
       return;
     }
+    if (expectsFarSmokeIsolationEvidence) {
+      const expectedVisibility = expectedFarSmokeIsolationVisibility(expectedFarSmokeIsolationMode);
+      assert.equal(state.farSmokeIsolation?.identity, 'far-smoke-evidence-isolation-v0', 'far smoke isolation identity did not reach debug state');
+      assert.equal(state.farSmokeIsolation?.requestedMode, expectedFarSmokeIsolationMode, 'far smoke isolation requested mode did not preserve route identity');
+      assert.equal(state.farSmokeIsolation?.effectiveMode, expectedFarSmokeIsolationMode, 'far smoke isolation effective mode did not reach shader controls');
+      assert.ok(Number.isFinite(state.farSmokeIsolation?.modeValue), 'far smoke isolation numeric mode did not reach debug state');
+      assert.deepEqual(state.farSmokeIsolation?.visibility, expectedVisibility, 'far smoke isolation visibility mask did not match requested split mode');
+      phase = 'far-smoke-isolation-evidence';
+      const screenshot = await wsRequest(ws, 'Page.captureScreenshot', {
+        format: 'png',
+        fromSurface: true,
+      });
+      const screenshotBuffer = Buffer.from(screenshot.data, 'base64');
+      writeFileSync(out, screenshotBuffer);
+      if (fullScreenshot) writeFileSync(fullScreenshot, screenshotBuffer);
+      const screenshotMetrics = measureScreenshot(screenshotBuffer);
+      const report = {
+        identity: 'kaminos-volume-witness-report-v0',
+        requestedRoute: url,
+        captureReplay: null,
+        settleMs,
+        windowSize,
+        evidenceMode,
+        visualEvidenceMode,
+        farSmokeIsolationEvidenceMode: expectsFarSmokeIsolationEvidence ? 'far-smoke-channel-split-signal' : null,
+        phase,
+        effectiveRoute: state.effectiveRoute,
+        prototypeIdentity: state.prototypeIdentity,
+        volumeBridge: bridge,
+        backend: state.backend,
+        frameCount: state.frameCount,
+        simStepCount: state.simStepCount,
+        simGrid: state.simGrid,
+        simGridLabel: state.simGridLabel,
+        farSmokeReceiver: state.farSmokeReceiver || null,
+        farSmokeGrid: state.farSmokeGrid || null,
+        farSmokeTransport: state.farSmokeTransport || null,
+        farSmokeIsolation: state.farSmokeIsolation,
+        expectedFarSmokeIsolationMode,
+        expectedFarSmokeIsolationVisibility: expectedVisibility,
+        screenshotMetrics,
+        screenshot: out,
+        fullScreenshot: fullScreenshot || null,
+        state,
+      };
+      writeFileSync(reportPath, JSON.stringify(report, null, 2));
+      ws.close();
+      proc.kill('SIGTERM');
+      return;
+    }
     assert.equal(state.volumeScene, expectedVolumeScene, 'volume scene route/control did not apply');
     assert.equal(state.controls?.volumeScene, expectedVolumeScene, 'volume scene debug controls did not preserve route identity');
     assert.equal(state.simGrid, expectedGrid, `fluid sim is not running on the expected ${expectedGrid}^3 grid`);
@@ -2053,6 +2121,10 @@ async function main() {
     assert.equal(state.farSmokeTransport?.identity, 'far-smoke-connected-transport-v0', 'far smoke transport identity did not reach debug state');
     assert.ok(Number.isFinite(state.farSmokeTransport?.lift), 'far smoke transport lift did not reach debug state');
     assert.ok(Number.isFinite(state.farSmokeTransport?.ghostKill), 'far smoke transport ghost kill did not reach debug state');
+    assert.equal(state.farSmokeIsolation?.identity, 'far-smoke-evidence-isolation-v0', 'far smoke isolation identity did not reach debug state');
+    assert.equal(state.farSmokeIsolation?.requestedMode, expectedFarSmokeIsolationMode, 'far smoke isolation requested mode did not preserve route identity');
+    assert.equal(state.farSmokeIsolation?.effectiveMode, expectedFarSmokeIsolationMode, 'far smoke isolation effective mode did not reach shader controls');
+    assert.ok(Number.isFinite(state.farSmokeIsolation?.modeValue), 'far smoke isolation numeric mode did not reach debug state');
     assert.ok(Math.abs((state.controls?.gridOverlay || 0) - expectedGridOverlay) < 0.001, 'fluid grid overlay did not apply route/debug state');
     assert.ok(Math.abs((state.controls?.raySteps ?? 0) - expectedRaySteps) < 0.001, 'ray-step route/control did not apply');
     assert.ok(Math.abs((state.controls?.adaptiveRays ?? 0) - expectedAdaptiveRays) < 0.001, 'adaptive raymarch route/control did not apply');
@@ -3105,6 +3177,7 @@ async function main() {
       farSmokeReceiver: sample.farSmokeReceiver || state.farSmokeReceiver || null,
       farSmokeGrid: sample.farSmokeGrid || state.farSmokeGrid || null,
       farSmokeTransport: sample.farSmokeTransport || state.farSmokeTransport || null,
+      farSmokeIsolation: sample.farSmokeIsolation || state.farSmokeIsolation || null,
       boundaryFireShellEvidence,
       runtimeQualityRequested: sample.runtimeQualityRequested,
       runtimeQualityEffective: sample.runtimeQualityEffective,

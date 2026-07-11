@@ -118,6 +118,11 @@ for (const transportControl of [
   assert.match(index, new RegExp(`${id}-val`), `${key} has a visible live value readout`);
 }
 assert.match(index, /FAR_SMOKE_TRANSPORT_CONTROL_FIELDS[\s\S]*volume_far_smoke_transport_lift[\s\S]*volume_far_smoke_transport_ghost_kill/, 'far smoke transport routes and listeners are table-driven');
+assert.match(index, /id="volume-far-smoke-isolation-mode"[\s\S]*value="composite"[\s\S]*value="near-only"[\s\S]*value="far-grid-only"[\s\S]*value="receiver-only"/, 'far-smoke isolation exposes composite, near-only, far-grid-only, and receiver-only smoke modes');
+assert.match(index, /FAR_SMOKE_ISOLATION_MODE_VALUES[\s\S]*composite[\s\S]*near-only[\s\S]*far-grid-only[\s\S]*receiver-only/, 'far-smoke isolation route values are normalized through an explicit allowlist');
+assert.match(index, /volume_far_smoke_isolation/, 'far-smoke isolation mode is routable for exact operator smoke replay');
+assert.match(index, /farSmokeIsolationMode:\s*normalizeFarSmokeIsolationMode\(document\.getElementById\('volume-far-smoke-isolation-mode'\)\.value\)/, 'far-smoke isolation reaches readVolumeControls as a normalized mode');
+assert.match(index, /volume-far-smoke-isolation-mode-val/, 'far-smoke isolation has a visible live value readout');
 assert.match(index, /boundary_fire_bonfire_a_la_ruffles_0709:[\s\S]*reactionLiveView:\s*'boundary_fire'/, 'Boundary Fire Bonfire_a_la_ruffles basin activates boundary-fire as the default live fire view');
 assert.match(index, /boundary_fire_bonfire_a_la_ruffles_0709:[\s\S]*boundarySidecarSource:\s*'baked'[\s\S]*boundarySidecarBlur:\s*1\.00[\s\S]*boundarySidecarWidth:\s*2\.00[\s\S]*boundarySidecarRidge:\s*2\.00/, 'Boundary Fire Bonfire_a_la_ruffles basin uses the promoted baked sidecar reconstruction path');
 assert.match(index, /boundary_fire_bonfire_a_la_ruffles_0709:[\s\S]*reactionBoundaryFireRidge:\s*1\.28[\s\S]*reactionBoundaryFireRidgeCut:\s*0\.10[\s\S]*reactionBoundaryFireLuma:\s*5\.00/, 'Boundary Fire Bonfire_a_la_ruffles basin preserves the promoted ridge and luma values');
@@ -1074,8 +1079,10 @@ assert.match(core, /FAR_SMOKE_GRID_PRESSURE_CEILING\s*=\s*'sparse-p3-max-no-p4-v
 assert.match(core, /far_smoke_grid_controls:\s*vec4<f32>/, 'fluid uniforms carry far-smoke grid controls explicitly');
 assert.match(core, /FAR_SMOKE_TRANSPORT_IDENTITY\s*=\s*'far-smoke-connected-transport-v0'/, 'volume core names the far-smoke connected transport receipt');
 assert.match(core, /far_smoke_transport_controls:\s*vec4<f32>/, 'fluid uniforms carry far-smoke transport controls explicitly');
-assert.match(core, /const uniforms = new Float32Array\(364\)/, 'adding far-smoke transport controls shifts the uniform buffer deliberately');
-assert.match(core, /uniforms\.set\(previousViewProj\.elements,\s*348\)/, 'previous view-projection matrix starts after the far-smoke transport controls');
+assert.match(core, /FAR_SMOKE_ISOLATION_IDENTITY\s*=\s*'far-smoke-evidence-isolation-v0'/, 'volume core names the far-smoke isolation evidence receipt');
+assert.match(core, /far_smoke_isolation_controls:\s*vec4<f32>/, 'fluid uniforms carry far-smoke isolation controls explicitly');
+assert.match(core, /const uniforms = new Float32Array\(368\)/, 'adding far-smoke isolation controls shifts the uniform buffer deliberately');
+assert.match(core, /uniforms\.set\(previousViewProj\.elements,\s*352\)/, 'previous view-projection matrix starts after the far-smoke isolation controls');
 assert.match(core, /function farSmokeGridBufferBytes/, 'far-smoke grid has separate low-resolution storage sizing');
 assert.match(core, /farSmokeBuffers/, 'far-smoke grid owns separate ping-pong buffers instead of reusing the render receiver');
 assert.match(core, /@group\(0\) @binding\(11\) var<storage, read> farSmokeSrc/, 'WGSL exposes read-only far-smoke grid storage to render/compute');
@@ -1094,6 +1101,12 @@ assert.match(core, /fn farSmokeGridConnectedSupport/, 'far-smoke grid has an exp
 assert.match(core, /farSmokeTransportCarry/, 'far-smoke grid transport names the near-grid carry term explicitly');
 assert.match(core, /farSmokeTransportGhostKill/, 'far-smoke grid transport names the disconnected ghost-kill term explicitly');
 assert.match(core, /farSmokeTransportSourceDepth/, 'far-smoke grid transport names the source-depth term explicitly');
+assert.match(core, /farSmokeIsolationNearVisibility[\s\S]*farSmokeIsolationReceiverVisibility[\s\S]*farSmokeIsolationGridVisibility/, 'raymarch shader splits near, receiver, and far-grid visibility for isolation smoke modes');
+assert.match(core, /farReceiverProbe = farSmokeReceiverProbe\(p\) \* farSmokeIsolationReceiverVisibility/, 'far-smoke receiver probe is hidden in non-receiver isolation modes');
+assert.match(core, /farGridProbe = farSmokeGridProbe\(p\) \* farSmokeIsolationGridVisibility/, 'far-smoke grid probe is hidden in non-grid isolation modes');
+assert.match(core, /farReceiver = farSmokeReceiverSample\(p,\s*u\.cameraPos_time\.w\) \* farSmokeIsolationReceiverVisibility/, 'far-smoke receiver contribution is hidden in near-only and far-grid-only smoke modes');
+assert.match(core, /farGridSmoke[\s\S]*\* farSmokeIsolationGridVisibility/, 'far-smoke grid contribution is hidden in near-only and receiver-only smoke modes');
+assert.match(core, /nearDensity[\s\S]*\* farSmokeIsolationNearVisibility/, 'native near volume density is hidden in far-grid-only and receiver-only smoke modes');
 assert.match(core, /farSmokeGridPressureStatus:\s*'p3-ceiling-pressure-deferred-first-slice-v0'/, 'far-smoke grid does not pretend the first slice solved far-grid pressure');
 assert.match(core, /receiverSupport/, 'far-smoke receiver names its support term explicitly');
 assert.match(core, /overlapWeight/, 'far-smoke receiver names its overlap term explicitly');
@@ -1105,6 +1118,7 @@ assert.match(core, /pressurePlan:\s*'p2-p3-first-p4-assay-later-v0'/, 'far-smoke
 assert.match(core, /farSmokeGrid:\s*\{[\s\S]*identity:\s*FAR_SMOKE_GRID_IDENTITY[\s\S]*slotPolicy:\s*'separate-lowres-one-way-overlap-grid-v0'/, 'debug state reports far-smoke grid separate storage authority');
 assert.match(core, /pressureCeiling:\s*FAR_SMOKE_GRID_PRESSURE_CEILING/, 'debug state reports the far-smoke grid P3 ceiling');
 assert.match(core, /farSmokeTransport:\s*\{[\s\S]*identity:\s*FAR_SMOKE_TRANSPORT_IDENTITY[\s\S]*lift[\s\S]*ghostKill/, 'debug state reports far-smoke connected transport controls');
+assert.match(core, /farSmokeIsolation:\s*\{[\s\S]*identity:\s*FAR_SMOKE_ISOLATION_IDENTITY[\s\S]*requestedMode[\s\S]*effectiveMode[\s\S]*modeValue/, 'debug state reports far-smoke isolation requested/effective mode and numeric uniform value');
 assert.match(core, /rawDetailForce[\s\S]*smokeArtifactDetailForceGain/, 'sim detail force can be killed independently by the assay control');
 assert.match(core, /rawFineBreakup[\s\S]*smokeArtifactFineBreakupGain/, 'fine breakup force can be killed independently by the assay control');
 assert.match(core, /smokeMorphologyGain = tallPlumeScene \* clamp\(u\.smoke_artifact_assay_controls\.z/, 'smoke morphology force can be killed independently by the assay control');
@@ -1117,6 +1131,11 @@ assert.match(volumeWitness, /explosionPlumeSmokeDynamics/, 'volume witness prese
 assert.match(volumeWitness, /farSmokeReceiver/, 'volume witness preserves far-smoke receiver receipts in reports');
 assert.match(volumeWitness, /farSmokeGrid/, 'volume witness preserves far-smoke grid receipts in reports');
 assert.match(volumeWitness, /farSmokeTransport/, 'volume witness preserves far-smoke transport receipts in reports');
+assert.match(volumeWitness, /farSmokeIsolation/, 'volume witness preserves far-smoke isolation receipts in reports');
+assert.match(volumeWitness, /'far-smoke-isolation'/, 'volume witness exposes a focused far-smoke isolation evidence mode');
+assert.match(volumeWitness, /expectsFarSmokeIsolationEvidence/, 'volume witness must name far-smoke isolation evidence mode explicitly');
+assert.match(volumeWitness, /expectedFarSmokeIsolationVisibility\(expectedFarSmokeIsolationMode\)/, 'far-smoke isolation witness validates expected channel visibility');
+assert.match(volumeWitness, /farSmokeIsolationEvidenceMode:\s*expectsFarSmokeIsolationEvidence \? 'far-smoke-channel-split-signal' : null/, 'far-smoke isolation witness report preserves the split evidence receipt');
 assert.match(core, /microDetailDomainWarp\([^)]*detailCoherenceGain/, 'raymarch microdetail warp accepts a scene-gated detail coherence gain');
 assert.match(core, /bonfireRadialFireLickBreakup/, 'bonfire fire-lick breakup uses radial source-local texture rather than one-sided directional combs');
 assert.match(core, /bonfireDetailLateralDamping/, 'bonfire detail forces damp non-wind lateral breakup so Shred/Fire Licks do not impersonate wind');
@@ -1379,7 +1398,7 @@ assert.match(core, /uniforms\[203\]\s*=\s*pyroRadianceChroma/, 'CPU uploads Radi
 assert.match(core, /uniforms\[212\]\s*=\s*pyroFlamePaint/, 'CPU uploads flame paint gain into the Pyro luma uniform block');
 assert.match(core, /uniforms\[213\]\s*=\s*pyroFlameLuma/, 'CPU uploads flame luminance into the Pyro luma uniform block');
 assert.match(core, /writePyroPaletteUniform/, 'CPU uploads editable Pyro palette color endpoints');
-assert.match(core, /uniforms\.set\(previousViewProj\.elements,\s*348\)/, 'previous view-projection matrix shifts after Bite-stack, flow, palette, topology-shell lab, boundary-fire, boundary sidecar reconstruction, sidecar display, scalar activity receiver, activity-tier, smoke artifact assay, explosion-plume, far-smoke receiver, far-smoke grid, and far-smoke transport uniforms');
+assert.match(core, /uniforms\.set\(previousViewProj\.elements,\s*352\)/, 'previous view-projection matrix shifts after Bite-stack, flow, palette, topology-shell lab, boundary-fire, boundary sidecar reconstruction, sidecar display, scalar activity receiver, activity-tier, smoke artifact assay, explosion-plume, far-smoke receiver, far-smoke grid, far-smoke transport, and far-smoke isolation uniforms');
 assert.match(core, /paletteShape/, 'debug state exposes editable Pyro palette shape');
 assert.match(core, /lumaShape/, 'debug state exposes independent Pyro luma shape');
 assert.match(core, /radianceShape/, 'debug state exposes Pyro radiance gate/spill/warmth shape');

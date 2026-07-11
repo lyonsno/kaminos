@@ -10,6 +10,7 @@ const EXPLOSION_PLUME_SMOKE_DYNAMICS_IDENTITY = 'explosion-plume-smoke-dynamics-
 const FAR_SMOKE_RECEIVER_IDENTITY = 'far-smoke-overlap-render-receiver-v0';
 const FAR_SMOKE_GRID_IDENTITY = 'far-smoke-grid-overlap-solver-v0';
 const FAR_SMOKE_TRANSPORT_IDENTITY = 'far-smoke-connected-transport-v0';
+const FAR_SMOKE_ISOLATION_IDENTITY = 'far-smoke-evidence-isolation-v0';
 const FAR_SMOKE_GRID_PRESSURE_CEILING = 'sparse-p3-max-no-p4-v0';
 const FAR_SMOKE_GRID_SIZE = 64;
 const FAR_SMOKE_GRID_COMPONENTS = 4;
@@ -48,6 +49,12 @@ const CANONICAL_CONTENT_MODE_VALUES = {
   smoke: 0,
   fire: 1,
   fire_smoke: 2,
+};
+const FAR_SMOKE_ISOLATION_MODE_VALUES = {
+  composite: 0,
+  'near-only': 1,
+  'far-grid-only': 2,
+  'receiver-only': 3,
 };
 
 function normalizeGridSize(value) {
@@ -506,6 +513,15 @@ function normalizePyroCompareMode(value) {
   return 'live';
 }
 
+function normalizeFarSmokeIsolationMode(value) {
+  const mode = String(value || 'composite').toLowerCase().replace(/_/g, '-');
+  return Object.hasOwn(FAR_SMOKE_ISOLATION_MODE_VALUES, mode) ? mode : 'composite';
+}
+
+function farSmokeIsolationModeValue(value) {
+  return FAR_SMOKE_ISOLATION_MODE_VALUES[normalizeFarSmokeIsolationMode(value)] || 0;
+}
+
 function lookFreezeCanPin(state) {
   return (state?.simStepCount || 0) > 0;
 }
@@ -884,6 +900,7 @@ struct Uniforms {
   far_smoke_receiver_controls: vec4<f32>,
   far_smoke_grid_controls: vec4<f32>,
   far_smoke_transport_controls: vec4<f32>,
+  far_smoke_isolation_controls: vec4<f32>,
   previousViewProj: mat4x4<f32>,
 };
 
@@ -4338,8 +4355,16 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     let guardedThreshold = mix(0.050, 0.100, majorantEdgeGuard);
     let majorantEmpty = 1.0 - smoothstep(0.004, guardedThreshold, guardedImportance + majorantEdge * majorantEdgeGuard * 0.24);
     let edgeDamping = 1.0 - smoothstep(0.012, 0.16, majorantEdge * majorantEdgeGuard);
-    let farReceiverProbe = farSmokeReceiverProbe(p);
-    let farGridProbe = farSmokeGridProbe(p);
+    let farSmokeIsolationMode = floor(clamp(u.far_smoke_isolation_controls.x + 0.5, 0.0, 3.0));
+    let farSmokeIsolationComposite = farSmokeIsolationMode < 0.5;
+    let farSmokeIsolationNearOnly = farSmokeIsolationMode >= 0.5 && farSmokeIsolationMode < 1.5;
+    let farSmokeIsolationGridOnly = farSmokeIsolationMode >= 1.5 && farSmokeIsolationMode < 2.5;
+    let farSmokeIsolationReceiverOnly = farSmokeIsolationMode >= 2.5;
+    let farSmokeIsolationNearVisibility = select(0.0, 1.0, farSmokeIsolationComposite || farSmokeIsolationNearOnly);
+    let farSmokeIsolationReceiverVisibility = select(0.0, 1.0, farSmokeIsolationComposite || farSmokeIsolationReceiverOnly);
+    let farSmokeIsolationGridVisibility = select(0.0, 1.0, farSmokeIsolationComposite || farSmokeIsolationGridOnly);
+    let farReceiverProbe = farSmokeReceiverProbe(p) * farSmokeIsolationReceiverVisibility;
+    let farGridProbe = farSmokeGridProbe(p) * farSmokeIsolationGridVisibility;
     let majorantSkipGate = majorantEmpty * majorantSkipStrength * edgeDamping * (1.0 - farReceiverProbe * 0.92) * (1.0 - farGridProbe * 0.96);
     temporalMajorantEdge = max(temporalMajorantEdge, majorantEdge * (0.18 + majorantSkipGate));
     if (majorantSkipGate > 0.42) {
@@ -4353,7 +4378,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     let fireLayer = sampleWorldFireLayer(p);
     let microLayer = sampleWorldMicrodetail(p);
     let combustionFrontTopology = sampleWorldFrontField(p);
-    let farReceiver = farSmokeReceiverSample(p, u.cameraPos_time.w);
+    let farReceiver = farSmokeReceiverSample(p, u.cameraPos_time.w) * farSmokeIsolationReceiverVisibility;
     let farGrid = sampleFarSmokeGrid(p);
     let velMag = length(state.xyz);
     let smokeDensity = material.x;
@@ -4380,14 +4405,15 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     let microTextureSignal = clamp(microSmoke * 1.55 + interfaceShred * 2.45 + fireLick * 1.30 + emberFleck * 0.55, 0.0, 2.4);
     let microBodyContribution = microSmoke * 0.10 + interfaceShred * 0.18 + fireLick * 0.06;
     let farGridConnectedVisibility = mix(0.24, 1.0, smoothstep(0.025, 0.34, farGrid.w));
-    let farGridSmoke = (farGrid.x + farGrid.z * 0.20 + farGrid.y * 0.08) * farGridConnectedVisibility;
-    let farGridSupport = farGrid.z * farGridConnectedVisibility;
+    let farGridSmoke = (farGrid.x + farGrid.z * 0.20 + farGrid.y * 0.08) * farGridConnectedVisibility * farSmokeIsolationGridVisibility;
+    let farGridSupport = farGrid.z * farGridConnectedVisibility * farSmokeIsolationGridVisibility;
     let canonicalDebugSmokeDensity = smokeDensity * canonicalSmokeContent * u.viewport_steps_density.w;
-    let density = mix(
+    let nearDensity = mix(
       (smokeDensity * 0.84 + heat * 0.28 + materialDetail * 0.14 + microBodyContribution) * u.viewport_steps_density.w,
       canonicalDebugSmokeDensity,
       canonicalSmokeOnlyRender
-    ) + (farReceiver.x + farGridSmoke * 1.42) * u.viewport_steps_density.w;
+    ) * farSmokeIsolationNearVisibility;
+    let density = nearDensity + (farReceiver.x + farGridSmoke * 1.42) * u.viewport_steps_density.w;
     let y = clamp((p.y + 1.0) * 0.5, 0.0, 1.0);
     let fireGain = 0.42 + u.fire_smoke_curl_speed.x * 1.15;
     let rawTemp = emissiveTemperature(fireLayer, material, microLayer, velMag);
@@ -4404,12 +4430,13 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
       2.4
     );
     let temp = mix(mix(rawTemp, bonfireEmissionTemperature, bonfireRenderScene) * fireGain, 0.0, canonicalSmokeOnlyRender);
-    let smoke = mix(
+    let nearSmoke = mix(
       (smokeDensity + microBodyContribution * 0.70) * smoothstep(0.03, 0.92, y) * u.fire_smoke_curl_speed.y,
       smokeDensity * canonicalSmokeContent * u.fire_smoke_curl_speed.y,
       canonicalSmokeOnlyRender
-    ) + (farReceiver.y + farGridSmoke * 1.08 + farGridSupport * 0.16) * u.fire_smoke_curl_speed.y;
-    let rawExtinction = smokeRadianceExtinction(smokeDensity, microSmoke, interfaceShred, materialDetail, absorptionGain)
+    ) * farSmokeIsolationNearVisibility;
+    let smoke = nearSmoke + (farReceiver.y + farGridSmoke * 1.08 + farGridSupport * 0.16) * u.fire_smoke_curl_speed.y;
+    let rawExtinction = smokeRadianceExtinction(smokeDensity, microSmoke, interfaceShred, materialDetail, absorptionGain) * farSmokeIsolationNearVisibility
       + farReceiver.y * (0.22 + absorptionGain * 0.32)
       + farGridSmoke * (0.26 + absorptionGain * 0.36);
     let tallPlumeRenderTransitionContour = clamp(0.70 + microTextureSignal * 0.12 + velMag * 0.18 + materialDetail * 0.06, 0.44, 1.20);
@@ -5323,7 +5350,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   const invViewProj = new THREE.Matrix4();
   const viewProj = new THREE.Matrix4();
   const previousViewProj = new THREE.Matrix4();
-  const uniforms = new Float32Array(364);
+  const uniforms = new Float32Array(368);
   let controlsSnapshot = applyRuntimeQualityControls(getControls());
   let gridSize = normalizeGridSize(controlsSnapshot.resolution);
   let majorantGridSize = normalizeMajorantGridSize(controlsSnapshot.majorantGrid);
@@ -5473,6 +5500,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       sourceDepth: clampFinite(controlsSnapshot.farSmokeTransportSourceDepth, 0, 1, 0.62),
       ghostKill: clampFinite(controlsSnapshot.farSmokeTransportGhostKill, 0, 1, 0.58),
       target: 'connected-rising-far-smoke-body-before-pressure-v0',
+    },
+    farSmokeIsolation: {
+      identity: FAR_SMOKE_ISOLATION_IDENTITY,
+      requestedMode: normalizeFarSmokeIsolationMode(controlsSnapshot.farSmokeIsolationMode),
+      effectiveMode: normalizeFarSmokeIsolationMode(controlsSnapshot.farSmokeIsolationMode),
+      modeValue: farSmokeIsolationModeValue(controlsSnapshot.farSmokeIsolationMode),
+      target: 'operator-visible-near-receiver-grid-composite-evidence-split-v0',
     },
     plumeHeight: 1.45,
     windStrength: normalizeWindStrength(controlsSnapshot.windStrength),
@@ -7444,7 +7478,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     uniforms[345] = clampFinite(controlsSnapshot.farSmokeTransportCarry, 0, 1, 0.68);
     uniforms[346] = clampFinite(controlsSnapshot.farSmokeTransportSourceDepth, 0, 1, 0.62);
     uniforms[347] = clampFinite(controlsSnapshot.farSmokeTransportGhostKill, 0, 1, 0.58);
-    uniforms.set(previousViewProj.elements, 348);
+    const farSmokeIsolationMode = normalizeFarSmokeIsolationMode(controlsSnapshot.farSmokeIsolationMode);
+    uniforms[348] = farSmokeIsolationModeValue(farSmokeIsolationMode);
+    uniforms[349] = 0;
+    uniforms[350] = 0;
+    uniforms[351] = 0;
+    uniforms.set(previousViewProj.elements, 352);
     device.queue.writeBuffer(uniformBuffer, 0, uniforms);
     state.gridOverlay = controlsSnapshot.gridOverlay || 0;
     state.lookFreeze = lookFreeze;
@@ -7579,6 +7618,18 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       sourceDepth: uniforms[346],
       ghostKill: uniforms[347],
       target: 'connected-rising-far-smoke-body-before-pressure-v0',
+    };
+    state.farSmokeIsolation = {
+      identity: FAR_SMOKE_ISOLATION_IDENTITY,
+      requestedMode: normalizeFarSmokeIsolationMode(controlsSnapshot.farSmokeIsolationMode),
+      effectiveMode: farSmokeIsolationMode,
+      modeValue: uniforms[348],
+      target: 'operator-visible-near-receiver-grid-composite-evidence-split-v0',
+      visibility: {
+        near: farSmokeIsolationMode === 'composite' || farSmokeIsolationMode === 'near-only',
+        receiver: farSmokeIsolationMode === 'composite' || farSmokeIsolationMode === 'receiver-only',
+        farGrid: farSmokeIsolationMode === 'composite' || farSmokeIsolationMode === 'far-grid-only',
+      },
     };
     state.volumeScene = normalizeVolumeScene(controlsSnapshot.volumeScene);
     state.smokeMorphologyForces = {
@@ -9617,6 +9668,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         farSmokeReceiver: state.farSmokeReceiver ? { ...state.farSmokeReceiver } : null,
         farSmokeGrid: state.farSmokeGrid ? { ...state.farSmokeGrid } : null,
         farSmokeTransport: state.farSmokeTransport ? { ...state.farSmokeTransport } : null,
+        farSmokeIsolation: state.farSmokeIsolation ? { ...state.farSmokeIsolation } : null,
         plumeHeight: state.plumeHeight,
         bonfireAblation: { ...state.bonfireAblation },
         externalEmitterMode: state.externalEmitterMode,
@@ -9943,6 +9995,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       farSmokeReceiver: state.farSmokeReceiver ? { ...state.farSmokeReceiver } : null,
       farSmokeGrid: state.farSmokeGrid ? { ...state.farSmokeGrid } : null,
       farSmokeTransport: state.farSmokeTransport ? { ...state.farSmokeTransport } : null,
+      farSmokeIsolation: state.farSmokeIsolation ? { ...state.farSmokeIsolation } : null,
       plumeHeight: state.plumeHeight,
       windStrength: state.windStrength,
       windAngle: state.windAngle,

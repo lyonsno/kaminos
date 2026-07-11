@@ -1057,6 +1057,16 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
     <div class="volume-control-section" data-volume-control-section="far-smoke-receiver">
       <div class="volume-control-section-title">Far Smoke Receiver</div>
       <div class="slider-row">
+        <span class="slider-label">Isolation</span>
+        <select id="volume-far-smoke-isolation-mode" class="select-input">
+          <option value="composite" selected>Composite</option>
+          <option value="near-only">Near only</option>
+          <option value="far-grid-only">Far grid only</option>
+          <option value="receiver-only">Receiver only</option>
+        </select>
+        <span class="slider-val" id="volume-far-smoke-isolation-mode-val">composite</span>
+      </div>
+      <div class="slider-row">
         <span class="slider-label">Range</span>
         <input type="range" id="volume-far-smoke-receiver-range" min="0" max="1" step="0.05" value="0.55">
         <span class="slider-val" id="volume-far-smoke-receiver-range-val">0.55</span>
@@ -11937,6 +11947,7 @@ const FAR_SMOKE_TRANSPORT_CONTROL_FIELDS = [
   { key: 'farSmokeTransportSourceDepth', id: 'volume-far-smoke-transport-source-depth', param: 'volume_far_smoke_transport_source_depth', min: 0, max: 1, decimals: 2 },
   { key: 'farSmokeTransportGhostKill', id: 'volume-far-smoke-transport-ghost-kill', param: 'volume_far_smoke_transport_ghost_kill', min: 0, max: 1, decimals: 2 },
 ];
+const FAR_SMOKE_ISOLATION_MODE_VALUES = new Set(['composite', 'near-only', 'far-grid-only', 'receiver-only']);
 
 function normalizeReactionFrontLiveView(value) {
   const mode = String(value || 'off').toLowerCase().replace(/-/g, '_');
@@ -11951,6 +11962,11 @@ function normalizeBoundarySidecarSource(value) {
 function normalizeBoundarySidecarView(value) {
   const mode = String(value || 'off').toLowerCase().replace(/-/g, '_');
   return BOUNDARY_SIDECAR_VIEW_VALUES.has(mode) ? mode : 'off';
+}
+
+function normalizeFarSmokeIsolationMode(value) {
+  const mode = String(value || 'composite').toLowerCase().replace(/_/g, '-');
+  return FAR_SMOKE_ISOLATION_MODE_VALUES.has(mode) ? mode : 'composite';
 }
 
 function clampVolumeControlValue(value, field) {
@@ -12093,6 +12109,7 @@ const VOLUME_BASIN_ROUTE_FIELDS = [
   ...FAR_SMOKE_RECEIVER_CONTROL_FIELDS.map(field => [field.key, field.param]),
   ...FAR_SMOKE_GRID_CONTROL_FIELDS.map(field => [field.key, field.param]),
   ...FAR_SMOKE_TRANSPORT_CONTROL_FIELDS.map(field => [field.key, field.param]),
+  ['farSmokeIsolationMode', 'volume_far_smoke_isolation'],
   ...REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS.map(field => [field.key, field.param]),
 ];
 
@@ -16741,6 +16758,7 @@ function readVolumeControls() {
     farSmokeTransportCarry: parseFloat(document.getElementById('volume-far-smoke-transport-carry').value),
     farSmokeTransportSourceDepth: parseFloat(document.getElementById('volume-far-smoke-transport-source-depth').value),
     farSmokeTransportGhostKill: parseFloat(document.getElementById('volume-far-smoke-transport-ghost-kill').value),
+    farSmokeIsolationMode: normalizeFarSmokeIsolationMode(document.getElementById('volume-far-smoke-isolation-mode').value),
     pressureMode: pressureConfig.pressureMode,
     pressureEffectiveLabel: pressureConfig.pressureEffectiveLabel,
     pressureTierOverlay: parseFloat(document.getElementById('volume-pressure-tier-overlay').value),
@@ -16924,6 +16942,9 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-far-smoke-transport-carry-val').textContent = c.farSmokeTransportCarry.toFixed(2);
   document.getElementById('volume-far-smoke-transport-source-depth-val').textContent = c.farSmokeTransportSourceDepth.toFixed(2);
   document.getElementById('volume-far-smoke-transport-ghost-kill-val').textContent = c.farSmokeTransportGhostKill.toFixed(2);
+  const farSmokeIsolationMode = normalizeFarSmokeIsolationMode(c.farSmokeIsolationMode);
+  if (farSmokeIsolationMode !== document.getElementById('volume-far-smoke-isolation-mode').value) setVolumeControlValue('volume-far-smoke-isolation-mode', farSmokeIsolationMode);
+  document.getElementById('volume-far-smoke-isolation-mode-val').textContent = farSmokeIsolationMode;
   const pressureMode = normalizeVolumePressureMode(c.pressureMode);
   if (pressureMode !== document.getElementById('volume-pressure-mode').value) setVolumeControlValue('volume-pressure-mode', pressureMode);
   document.getElementById('volume-pressure-mode-val').textContent = c.pressureEffectiveLabel || effectivePressureModeLabel(pressureMode, c.pressureIterations ?? defaultVolumePressureIterationsForScene(c.volumeScene));
@@ -17405,6 +17426,9 @@ async function initKaminosVolumeRoute() {
       document.getElementById(field.id).value = String(Math.max(field.min, Math.min(field.max, routed)));
     }
   }
+  if (params.has('volume_far_smoke_isolation')) {
+    document.getElementById('volume-far-smoke-isolation-mode').value = normalizeFarSmokeIsolationMode(params.get('volume_far_smoke_isolation'));
+  }
   const routePyroDynamicDetail = Number(params.get('volume_pyro_detail'));
   if (params.has('volume_pyro_detail') && Number.isFinite(routePyroDynamicDetail)) {
     document.getElementById('volume-pyro-detail').value = String(Math.max(0, Math.min(1, Math.round(routePyroDynamicDetail))));
@@ -17836,6 +17860,8 @@ async function initKaminosVolumeRoute() {
     document.getElementById(field.id)?.addEventListener('input', syncControls);
     document.getElementById(field.id)?.addEventListener('change', syncControls);
   }
+  document.getElementById('volume-far-smoke-isolation-mode')?.addEventListener('input', syncControls);
+  document.getElementById('volume-far-smoke-isolation-mode')?.addEventListener('change', syncControls);
   document.getElementById('volume-reaction-live-view')?.addEventListener('input', syncControls);
   document.getElementById('volume-reaction-live-view')?.addEventListener('change', syncControls);
   document.getElementById('volume-boundary-sidecar-source')?.addEventListener('input', syncControls);
