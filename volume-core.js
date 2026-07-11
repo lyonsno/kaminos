@@ -378,6 +378,33 @@ const ACTIVITY_PRESSURE_SHADOW_OVERHEAD_IDENTITY = 'full-p3-plus-shadow-activity
 const ACTIVITY_PRESSURE_SHADOW_OVERHEAD_SIDE_EFFECT = 'storage-buffer-shadow-counter-side-effect-v0';
 const ACTIVITY_PRESSURE_SHADOW_OVERHEAD_DISPATCH_EFFICIENCY = 'shadow-activity-pressure-overhead-no-jacobi-v0';
 const ACTIVE_PRESSURE_WORKGROUP_ACCOUNTING = 'active-pressure-workgroup-counter-readback-v0';
+const GPU_TIMING_IDENTITY = 'webgpu-timestamp-query-phase-timing-v0';
+const GPU_TIMING_UNSUPPORTED_REASON = 'timestamp-query-feature-unavailable';
+const GPU_TIMING_QUERY_LABELS = [
+  'fluidStart',
+  'fluidEnd',
+  'pressureStart',
+  'pressureEnd',
+  'shadowStart',
+  'shadowEnd',
+  'majorantStart',
+  'majorantEnd',
+  'boundaryStart',
+  'boundaryEnd',
+  'drawStart',
+  'drawEnd',
+];
+const GPU_TIMING_QUERY_COUNT = GPU_TIMING_QUERY_LABELS.length;
+const GPU_TIMING_PHASE_SAMPLE_KEYS = [
+  'frameGpuMs',
+  'fluidGpuMs',
+  'pressureGpuMs',
+  'simPressureGpuMs',
+  'shadowOverheadGpuMs',
+  'majorantGpuMs',
+  'boundaryGpuMs',
+  'drawGpuMs',
+];
 const ACTIVE_PRESSURE_WORKGROUP_READBACK_DEFAULT_CADENCE = 30;
 const ACTIVITY_PRESSURE_P4_STRATEGY = 'core-replay-p4-active-workgroups-v0';
 const ACTIVITY_PRESSURE_P4_DENSE_STRATEGY = 'core-replay-p4-dense-activity-mask-v0';
@@ -5347,6 +5374,22 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       queueSamples: 0,
       queueTimingAvailable: false,
     },
+    gpuTiming: {
+      identity: GPU_TIMING_IDENTITY,
+      requested: false,
+      supported: false,
+      enabled: false,
+      status: 'disabled',
+      unsupportedReason: null,
+      timestampPeriodNs: null,
+      lastFrame: -1,
+      readbackPending: false,
+      timingsMs: null,
+      stats: null,
+    },
+    gpuPhaseTimings: null,
+    gpuTimingStats: null,
+    gpuTimingReadbackPending: false,
     error: null,
   };
 
@@ -5604,6 +5647,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let historyTexture = null;
   let historyTextureSize = '';
   let historySampler = null;
+  let gpuTimingQuerySet = null;
+  let gpuTimingResolveBuffer = null;
+  let gpuTimingReadbackBuffer = null;
+  let gpuTimingReadbackPending = false;
+  let gpuTimingMapPending = false;
+  let gpuTimingCaptureThisFrame = false;
+  let gpuTimingWritesThisFrame = null;
   let historyValid = false;
   let previousViewProjReady = false;
   let lastTemporalCameraSignature = '';
@@ -5615,6 +5665,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     cpuFrame: [],
     queueDone: [],
   };
+  const gpuTimingSamples = Object.fromEntries(GPU_TIMING_PHASE_SAMPLE_KEYS.map(key => [key, []]));
   let lastRafNow = 0;
   let queueProbePending = false;
 
@@ -5630,6 +5681,47 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const sorted = [...samples].sort((a, b) => a - b);
     const index = Math.min(sorted.length - 1, Math.max(0, Math.ceil(percentile * sorted.length) - 1));
     return sorted[index];
+  }
+
+  function gpuTimingPhaseStats(samples) {
+    if (!samples.length) return null;
+    let min = Infinity;
+    let max = -Infinity;
+    let sum = 0;
+    for (const sample of samples) {
+      min = Math.min(min, sample);
+      max = Math.max(max, sample);
+      sum += sample;
+    }
+    return {
+      samples: samples.length,
+      last: samples.at(-1) ?? null,
+      min,
+      max,
+      mean: sum / samples.length,
+      p50: percentileTiming(samples, 0.5),
+      p95: percentileTiming(samples, 0.95),
+    };
+  }
+
+  function recordGpuTimingSamples(timingsMs) {
+    const phases = {};
+    for (const key of GPU_TIMING_PHASE_SAMPLE_KEYS) {
+      const value = timingsMs?.[key];
+      if (Number.isFinite(value)) {
+        gpuTimingSamples[key].push(value);
+        if (gpuTimingSamples[key].length > 120) gpuTimingSamples[key].shift();
+      }
+      phases[key] = gpuTimingPhaseStats(gpuTimingSamples[key]);
+    }
+    const sampleCount = Math.max(0, ...Object.values(gpuTimingSamples).map(samples => samples.length));
+    return {
+      identity: `${GPU_TIMING_IDENTITY}-rolling-stats`,
+      evidenceSource: 'webgpu-timestamp-query-rolling-samples',
+      sampleWindow: 120,
+      sampleCount,
+      phases,
+    };
   }
 
   function recordVolumeFrameTiming(now, cpuFrameMs) {
@@ -5697,6 +5789,169 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           timingDisclaimer: 'not-gpu-exclusive-or-present-latency',
           queueProbePending: false,
         };
+      });
+  }
+
+  function normalizeGpuTimingRequested(value) {
+    const normalized = String(value ?? '').toLowerCase();
+    return value === true || value === 1 || normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on' || normalized === 'timestamp' || normalized === 'timestamps';
+  }
+
+  function updateGpuTimingState(patch = {}) {
+    state.gpuTiming = {
+      identity: GPU_TIMING_IDENTITY,
+      requested: normalizeGpuTimingRequested(controlsSnapshot.gpuTiming),
+      supported: !!gpuTimingQuerySet,
+      enabled: normalizeGpuTimingRequested(controlsSnapshot.gpuTiming) && !!gpuTimingQuerySet,
+      status: normalizeGpuTimingRequested(controlsSnapshot.gpuTiming)
+        ? (gpuTimingQuerySet ? 'enabled' : 'unsupported')
+        : 'disabled',
+      unsupportedReason: normalizeGpuTimingRequested(controlsSnapshot.gpuTiming) && !gpuTimingQuerySet ? GPU_TIMING_UNSUPPORTED_REASON : null,
+      timestampPeriodNs: adapter?.limits?.timestampPeriod ?? null,
+      lastFrame: state.gpuTiming?.lastFrame ?? -1,
+      readbackPending: gpuTimingReadbackPending || gpuTimingMapPending,
+      timingsMs: state.gpuTiming?.timingsMs ?? null,
+      stats: state.gpuTiming?.stats ?? null,
+      ...patch,
+    };
+    state.gpuPhaseTimings = state.gpuTiming.timingsMs ? { ...state.gpuTiming.timingsMs } : null;
+    state.gpuTimingStats = state.gpuTiming.stats ? { ...state.gpuTiming.stats } : null;
+    state.gpuTimingReadbackPending = gpuTimingReadbackPending || gpuTimingMapPending;
+    return state.gpuTiming;
+  }
+
+  function recordGpuTimingError(status, error) {
+    const message = error?.message || String(error);
+    updateGpuTimingState({
+      status,
+      readbackPending: gpuTimingReadbackPending || gpuTimingMapPending,
+      error: message,
+    });
+    if (normalizeGpuTimingRequested(controlsSnapshot.gpuTiming)) {
+      state.error = state.error || message;
+    }
+  }
+
+  function gpuTimingEnabled() {
+    return normalizeGpuTimingRequested(controlsSnapshot.gpuTiming) && !!gpuTimingQuerySet;
+  }
+
+  function resetGpuTimingFrameWrites() {
+    gpuTimingCaptureThisFrame = gpuTimingEnabled() && !gpuTimingReadbackPending && !gpuTimingMapPending;
+    gpuTimingWritesThisFrame = gpuTimingCaptureThisFrame ? Array(GPU_TIMING_QUERY_COUNT).fill(false) : null;
+  }
+
+  function markGpuTimingWrite(index) {
+    if (!gpuTimingWritesThisFrame || !Number.isInteger(index) || index < 0 || index >= GPU_TIMING_QUERY_COUNT) return;
+    gpuTimingWritesThisFrame[index] = true;
+  }
+
+  function gpuTimingComputePassDescriptor(label, startIndex, endIndex) {
+    if (!gpuTimingCaptureThisFrame) return { label };
+    if (!Number.isInteger(startIndex) && !Number.isInteger(endIndex)) return { label };
+    const timestampWrites = { querySet: gpuTimingQuerySet };
+    if (Number.isInteger(startIndex)) {
+      timestampWrites.beginningOfPassWriteIndex = startIndex;
+      markGpuTimingWrite(startIndex);
+    }
+    if (Number.isInteger(endIndex)) {
+      timestampWrites.endOfPassWriteIndex = endIndex;
+      markGpuTimingWrite(endIndex);
+    }
+    return { label, timestampWrites };
+  }
+
+  function gpuTimingRenderPassTimestampWrites(startIndex, endIndex) {
+    if (!gpuTimingCaptureThisFrame) return null;
+    if (!Number.isInteger(startIndex) && !Number.isInteger(endIndex)) return null;
+    const timestampWrites = { querySet: gpuTimingQuerySet };
+    if (Number.isInteger(startIndex)) {
+      timestampWrites.beginningOfPassWriteIndex = startIndex;
+      markGpuTimingWrite(startIndex);
+    }
+    if (Number.isInteger(endIndex)) {
+      timestampWrites.endOfPassWriteIndex = endIndex;
+      markGpuTimingWrite(endIndex);
+    }
+    return timestampWrites;
+  }
+
+  function writeGpuTimingEmptyPhase(encoder, startIndex, endIndex, label) {
+    if (!gpuTimingCaptureThisFrame) return;
+    const pass = encoder.beginComputePass(gpuTimingComputePassDescriptor(label, startIndex, endIndex));
+    pass.end();
+  }
+
+  function ensureGpuTimingQueriesWritten(encoder) {
+    if (!gpuTimingCaptureThisFrame || !gpuTimingWritesThisFrame) return;
+    for (let i = 0; i < GPU_TIMING_QUERY_COUNT; i += 2) {
+      const startIndex = gpuTimingWritesThisFrame[i] ? null : i;
+      const endIndex = gpuTimingWritesThisFrame[i + 1] ? null : i + 1;
+      if (startIndex !== null || endIndex !== null) {
+        writeGpuTimingEmptyPhase(encoder, startIndex, endIndex, `kaminos gpu timing skipped phase ${GPU_TIMING_QUERY_LABELS[i]}-${GPU_TIMING_QUERY_LABELS[i + 1]}`);
+      }
+    }
+  }
+
+  function resolveGpuTimingQueries(encoder) {
+    updateGpuTimingState();
+    if (!state.gpuTiming.enabled || !gpuTimingCaptureThisFrame || gpuTimingReadbackPending || gpuTimingMapPending || !gpuTimingResolveBuffer || !gpuTimingReadbackBuffer) return;
+    ensureGpuTimingQueriesWritten(encoder);
+    encoder.resolveQuerySet(gpuTimingQuerySet, 0, GPU_TIMING_QUERY_COUNT, gpuTimingResolveBuffer, 0);
+    encoder.copyBufferToBuffer(gpuTimingResolveBuffer, 0, gpuTimingReadbackBuffer, 0, GPU_TIMING_QUERY_COUNT * BigUint64Array.BYTES_PER_ELEMENT);
+    gpuTimingReadbackPending = true;
+    updateGpuTimingState({ readbackPending: true });
+  }
+
+  function consumeGpuTimingReadback() {
+    if (!gpuTimingReadbackPending || gpuTimingMapPending || !gpuTimingReadbackBuffer) return;
+    gpuTimingMapPending = true;
+    updateGpuTimingState({ readbackPending: true });
+    gpuTimingReadbackBuffer.mapAsync(GPUMapMode.READ)
+      .then(() => {
+        const ticks = Array.from(new BigUint64Array(gpuTimingReadbackBuffer.getMappedRange()).slice(0, GPU_TIMING_QUERY_COUNT));
+        gpuTimingReadbackBuffer.unmap();
+        const tickDeltaMs = (from, to) => {
+          if (ticks[to] < ticks[from]) return null;
+          const delta = Number(ticks[to] - ticks[from]);
+          return Number.isFinite(delta) && delta >= 0 ? delta / 1000000 : null;
+        };
+        const timingsMs = {
+          identity: GPU_TIMING_IDENTITY,
+          evidenceSource: 'webgpu-timestamp-query',
+          rawTicks: ticks.map(value => value.toString()),
+          frameGpuMs: [tickDeltaMs(0, 1), tickDeltaMs(2, 3), tickDeltaMs(4, 5), tickDeltaMs(6, 7), tickDeltaMs(8, 9), tickDeltaMs(10, 11)]
+            .reduce((sum, value) => Number.isFinite(value) ? sum + value : sum, 0),
+          fluidGpuMs: tickDeltaMs(0, 1),
+          pressureGpuMs: tickDeltaMs(2, 3),
+          shadowOverheadGpuMs: tickDeltaMs(4, 5),
+          simPressureGpuMs: [tickDeltaMs(0, 1), tickDeltaMs(2, 3), tickDeltaMs(4, 5)]
+            .reduce((sum, value) => Number.isFinite(value) ? sum + value : sum, 0),
+          majorantGpuMs: tickDeltaMs(6, 7),
+          boundaryGpuMs: tickDeltaMs(8, 9),
+          drawGpuMs: tickDeltaMs(10, 11),
+          postDrawCopyGpuMs: null,
+          queryLabels: [...GPU_TIMING_QUERY_LABELS],
+        };
+        const stats = recordGpuTimingSamples(timingsMs);
+        gpuTimingReadbackPending = false;
+        gpuTimingMapPending = false;
+        updateGpuTimingState({
+          status: 'available',
+          readbackPending: false,
+          lastFrame: state.frameCount,
+          timingsMs,
+          stats,
+        });
+      })
+      .catch(error => {
+        gpuTimingReadbackPending = false;
+        gpuTimingMapPending = false;
+        updateGpuTimingState({
+          status: 'readback-error',
+          readbackPending: false,
+          error: error?.message || String(error),
+        });
       });
   }
 
@@ -6798,7 +7053,15 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     if ((adapter.limits?.maxStorageBufferBindingSize ?? 0) >= maxRequestedFluidBufferBytes) {
       requiredLimits.maxStorageBufferBindingSize = maxRequestedFluidBufferBytes;
     }
-    device = await adapter.requestDevice(Object.keys(requiredLimits).length ? { requiredLimits } : undefined);
+    const gpuTimingRequested = normalizeGpuTimingRequested(controlsSnapshot.gpuTiming);
+    const gpuTimingSupported = adapter.features?.has('timestamp-query') === true;
+    const deviceDescriptor = {};
+    if (Object.keys(requiredLimits).length) deviceDescriptor.requiredLimits = requiredLimits;
+    if (gpuTimingRequested && adapter.features?.has('timestamp-query')) deviceDescriptor.requiredFeatures = ['timestamp-query'];
+    device = await adapter.requestDevice(Object.keys(deviceDescriptor).length ? deviceDescriptor : undefined);
+    device.addEventListener?.('uncapturederror', event => {
+      recordGpuTimingError('validation-error', event?.error || event);
+    });
     context = canvas.getContext('webgpu');
     format = navigator.gpu.getPreferredCanvasFormat();
     context.configure({
@@ -6816,6 +7079,24 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       size: uniforms.byteLength,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
+    if (gpuTimingRequested && gpuTimingSupported && device.features?.has?.('timestamp-query')) {
+      gpuTimingQuerySet = device.createQuerySet({
+        label: 'kaminos gpu timing timestamp query set',
+        type: 'timestamp',
+        count: GPU_TIMING_QUERY_COUNT,
+      });
+      gpuTimingResolveBuffer = device.createBuffer({
+        label: 'kaminos gpu timing resolve buffer',
+        size: GPU_TIMING_QUERY_COUNT * BigUint64Array.BYTES_PER_ELEMENT,
+        usage: GPUBufferUsage.QUERY_RESOLVE | GPUBufferUsage.COPY_SRC,
+      });
+      gpuTimingReadbackBuffer = device.createBuffer({
+        label: 'kaminos gpu timing readback buffer',
+        size: GPU_TIMING_QUERY_COUNT * BigUint64Array.BYTES_PER_ELEMENT,
+        usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+      });
+    }
+    updateGpuTimingState();
     ensureExternalEmitterBuffer();
     ensureOracleActivityCueBuffer();
     historySampler = device.createSampler({
@@ -8042,6 +8323,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       externalEmitterBufferBytes: externalEmitterBufferBytes(),
       estimatedResidentBytes: fluidBytes * 2 + frontBytes * 2 + pressureBytes * 2 + pressureActivityCoarseMaskBytes + majorantBytes + boundarySidecarBytes + externalEmitterBufferBytes(),
       timing: { ...state.timing },
+      gpuTiming: state.gpuTiming ? { ...state.gpuTiming, timingsMs: state.gpuTiming.timingsMs ? { ...state.gpuTiming.timingsMs } : null } : null,
+      gpuPhaseTimings: state.gpuPhaseTimings ? { ...state.gpuPhaseTimings } : null,
+      gpuTimingStats: state.gpuTimingStats ? { ...state.gpuTimingStats } : null,
     };
     return state.simCostLedger;
   }
@@ -8056,7 +8340,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     if (tierPlan.dispatchStrategy === ACTIVITY_PRESSURE_COARSE_MASK_DISPATCH_STRATEGY || shadowTierPlan?.dispatchStrategy === ACTIVITY_PRESSURE_COARSE_MASK_DISPATCH_STRATEGY) {
       preparePressureActivityCoarseMaskBuffer();
     }
-    const pass = encoder.beginComputePass({ label: 'kaminos fluid sim pass' });
+    const pass = encoder.beginComputePass(gpuTimingComputePassDescriptor('kaminos fluid sim pass', 0, 1));
     pass.setPipeline(computePipeline);
     pass.setBindGroup(0, bindGroups[currentFluid]);
     const workgroups = Math.ceil(gridSize / 4);
@@ -8107,7 +8391,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     };
     if (!directDispatch) {
       {
-        const pass = encoder.beginComputePass({ label: 'kaminos shadow active pressure workgroup build overhead pass' });
+        const pass = encoder.beginComputePass(gpuTimingComputePassDescriptor('kaminos shadow active pressure workgroup build overhead pass', 4, null));
         pass.setPipeline(pressureActivityWorkgroupBuildPipeline);
         pass.setBindGroup(0, pressureActivityReadBindGroups[currentFluid]);
         pass.setBindGroup(2, pressureJacobiBindGroups[1]);
@@ -8118,8 +8402,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       }
       encoder.copyBufferToBuffer(pressureActivityWorkgroupBuffer, 0, pressureActivityIndirectArgsBuffer, 0, 9 * Uint32Array.BYTES_PER_ELEMENT);
     }
-    for (const dispatch of shadowDispatches) {
-      const pass = encoder.beginComputePass({ label: `kaminos shadow pressure overhead pass ${dispatch.tier} ${dispatch.label}` });
+    for (let i = 0; i < shadowDispatches.length; i += 1) {
+      const dispatch = shadowDispatches[i];
+      const pass = encoder.beginComputePass(gpuTimingComputePassDescriptor(
+        `kaminos shadow pressure overhead pass ${dispatch.tier} ${dispatch.label}`,
+        directDispatch && i === 0 ? 4 : null,
+        i === shadowDispatches.length - 1 ? 5 : null
+      ));
       pass.setPipeline(shadowPipelineForTier(dispatch.tier, !directDispatch));
       pass.setBindGroup(0, pressureActivityReadBindGroups[currentFluid]);
       pass.setBindGroup(2, pressureJacobiBindGroups[0]);
@@ -8172,8 +8461,16 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       return;
     }
     const workgroups = Math.ceil(gridSize / 4);
-    const dispatchPressureTierPass = (pipeline, bindGroup, tierWorkgroupsY, label, readBindGroup = majorantFrontBindGroups[currentFluid]) => {
-      const pass = encoder.beginComputePass({ label });
+    const dispatchPressureTierPass = (
+      pipeline,
+      bindGroup,
+      tierWorkgroupsY,
+      label,
+      readBindGroup = majorantFrontBindGroups[currentFluid],
+      timingStartIndex = null,
+      timingEndIndex = null
+    ) => {
+      const pass = encoder.beginComputePass(gpuTimingComputePassDescriptor(label, timingStartIndex, timingEndIndex));
       pass.setPipeline(pipeline);
       pass.setBindGroup(0, readBindGroup);
       pass.setBindGroup(2, bindGroup);
@@ -8185,7 +8482,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         pressureJacobiPipeline,
         pressureJacobiBindGroups[0],
         workgroups,
-        `kaminos pressure tier pass 1 ${tierPlan.dispatches[0]?.label || 'full-volume-pressure1'}`
+        `kaminos pressure tier pass 1 ${tierPlan.dispatches[0]?.label || 'full-volume-pressure1'}`,
+        majorantFrontBindGroups[currentFluid],
+        2,
+        null
       );
       if (activityPressureIndirectDispatch) {
         preparePressureActivityWorkgroupBuffer();
@@ -8259,7 +8559,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         }
       }
       {
-        const pass = encoder.beginComputePass({ label: 'kaminos tiered pressure projection pass' });
+        const pass = encoder.beginComputePass(gpuTimingComputePassDescriptor('kaminos tiered pressure projection pass', null, 3));
         pass.setPipeline(pressureProjectTieredPipeline);
         pass.setBindGroup(0, pressureTieredFluidBindGroups[currentFluid]);
         pass.setBindGroup(2, pressureJacobiBindGroups[1]);
@@ -8278,7 +8578,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     }
     let pressureReadIndex = 0;
     for (let i = 0; i < pressureIterationCount; i += 1) {
-      const pass = encoder.beginComputePass({ label: `kaminos pressure jacobi inline-divergence pass ${i + 1}` });
+      const pass = encoder.beginComputePass(gpuTimingComputePassDescriptor(
+        `kaminos pressure jacobi inline-divergence pass ${i + 1}`,
+        i === 0 ? 2 : null,
+        null
+      ));
       pass.setPipeline(pressureJacobiPipeline);
       pass.setBindGroup(0, majorantFrontBindGroups[currentFluid]);
       pass.setBindGroup(2, pressureJacobiBindGroups[pressureReadIndex]);
@@ -8287,7 +8591,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       pressureReadIndex = 1 - pressureReadIndex;
     }
     {
-      const pass = encoder.beginComputePass({ label: 'kaminos pressure projection pass' });
+      const pass = encoder.beginComputePass(gpuTimingComputePassDescriptor('kaminos pressure projection pass', null, 3));
       pass.setPipeline(pressureProjectPipeline);
       pass.setBindGroup(0, bindGroups[currentFluid]);
       pass.setBindGroup(2, pressureReadBindGroups[pressureReadIndex]);
@@ -8316,7 +8620,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       updateSimCostLedger({ majorantBuiltThisFrame: false });
       return;
     }
-    const pass = encoder.beginComputePass({ label: 'kaminos coarse majorant build pass' });
+    const pass = encoder.beginComputePass(gpuTimingComputePassDescriptor('kaminos coarse majorant build pass', 6, 7));
     pass.setPipeline(majorantComputePipeline);
     pass.setBindGroup(0, majorantFrontBindGroups[currentFluid]);
     pass.setBindGroup(1, majorantWriteBindGroup);
@@ -8348,7 +8652,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       updateSimCostLedger({ boundarySidecarBuiltThisFrame: false });
       return;
     }
-    const pass = encoder.beginComputePass({ label: `kaminos ${BOUNDARY_SIDECAR_IDENTITY} bake pass` });
+    const pass = encoder.beginComputePass(gpuTimingComputePassDescriptor(`kaminos ${BOUNDARY_SIDECAR_IDENTITY} bake pass`, 8, 9));
     pass.setPipeline(boundarySidecarBuildPipeline);
     pass.setBindGroup(0, boundarySidecarReadBindGroups[currentFluid]);
     pass.setBindGroup(3, boundarySidecarWriteBindGroup);
@@ -8364,7 +8668,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   }
 
   function encodeDraw(encoder, view, label, targetPipeline = pipeline) {
-    const pass = encoder.beginRenderPass({
+    const descriptor = {
       label,
       colorAttachments: [{
         view,
@@ -8372,7 +8676,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         loadOp: 'clear',
         storeOp: 'store',
       }],
-    });
+    };
+    const timestampWrites = gpuTimingRenderPassTimestampWrites(10, 11);
+    if (timestampWrites) descriptor.timestampWrites = timestampWrites;
+    const pass = encoder.beginRenderPass(descriptor);
     pass.setPipeline(targetPipeline);
     pass.setBindGroup(0, bindGroups[currentFluid]);
     pass.draw(3);
@@ -8398,7 +8705,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       const cpuStart = performance.now();
       controls?.update?.();
       updateUniforms(now);
+      let gpuTimingValidationScope = false;
+      if (normalizeGpuTimingRequested(controlsSnapshot.gpuTiming) && device?.pushErrorScope) {
+        device.pushErrorScope('validation');
+        gpuTimingValidationScope = true;
+      }
       const encoder = device.createCommandEncoder({ label: 'kaminos compute fluid frame' });
+      resetGpuTimingFrameWrites();
       const lookFreeze = normalizeLookFreeze(controlsSnapshot.lookFreeze) && lookFreezeCanPin(state) ? 1 : 0;
       state.lookFreeze = lookFreeze;
       if (lookFreeze) {
@@ -8415,7 +8728,16 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       const currentTexture = context.getCurrentTexture();
       encodeDraw(encoder, currentTexture.createView(), 'kaminos volume canvas pass');
       encodeHistoryCopy(encoder, currentTexture);
+      resolveGpuTimingQueries(encoder);
       device.queue.submit([encoder.finish()]);
+      if (gpuTimingValidationScope) {
+        device.popErrorScope()
+          .then(error => {
+            if (error) recordGpuTimingError('validation-error', error);
+          })
+          .catch(error => recordGpuTimingError('validation-scope-error', error));
+      }
+      consumeGpuTimingReadback();
       consumePressureActivityWorkgroupReadback();
       commitPreviousViewProjection();
       state.frameCount += 1;
@@ -8423,6 +8745,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       recordVolumeFrameTiming(now, performance.now() - cpuStart);
       if (state.frameCount % 12 === 0) probeVolumeQueueTiming();
     } catch (err) {
+      if (normalizeGpuTimingRequested(controlsSnapshot.gpuTiming) && device?.popErrorScope) {
+        device.popErrorScope()
+          .then(error => {
+            if (error) recordGpuTimingError('validation-error', error);
+          })
+          .catch(() => {});
+      }
       state.active = false;
       state.error = err?.message || String(err);
       canvas.classList.remove('active');
@@ -9752,6 +10081,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         simProfile: state.simProfile,
         simCostLedger: state.simCostLedger ? { ...state.simCostLedger } : null,
         timing: { ...state.timing },
+        gpuTiming: state.gpuTiming ? { ...state.gpuTiming, timingsMs: state.gpuTiming.timingsMs ? { ...state.gpuTiming.timingsMs } : null } : null,
+        gpuPhaseTimings: state.gpuPhaseTimings ? { ...state.gpuPhaseTimings } : null,
+        gpuTimingStats: state.gpuTimingStats ? { ...state.gpuTimingStats } : null,
+        gpuTimingReadbackPending: state.gpuTimingReadbackPending,
         effectiveRoute: state.effectiveRoute,
         prototypeIdentity: state.prototypeIdentity,
         backend: state.backend,
@@ -10089,6 +10422,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       simProfile: state.simProfile,
       simCostLedger: state.simCostLedger ? { ...state.simCostLedger } : null,
       timing: { ...state.timing },
+      gpuTiming: state.gpuTiming ? { ...state.gpuTiming, timingsMs: state.gpuTiming.timingsMs ? { ...state.gpuTiming.timingsMs } : null } : null,
+      gpuPhaseTimings: state.gpuPhaseTimings ? { ...state.gpuPhaseTimings } : null,
+      gpuTimingStats: state.gpuTimingStats ? { ...state.gpuTimingStats } : null,
+      gpuTimingReadbackPending: state.gpuTimingReadbackPending,
       simReadback,
       majorantReadback,
       effectiveRoute: state.effectiveRoute,

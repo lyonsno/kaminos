@@ -2113,6 +2113,12 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
       <div class="field"><span class="field-key">Frame p95</span><span class="field-val" id="volume-frame-p95">-- ms</span></div>
       <div class="field"><span class="field-key">Queue done</span><span class="field-val" id="volume-queue-ms">-- ms</span></div>
       <div class="field"><span class="field-key">Queue p95</span><span class="field-val" id="volume-queue-p95">-- ms</span></div>
+      <div class="field"><span class="field-key">GPU timing</span><span class="field-val" id="volume-gpu-timing-state">disabled</span></div>
+      <div class="field"><span class="field-key">GPU frame</span><span class="field-val" id="volume-gpu-frame-ms">-- ms</span></div>
+      <div class="field"><span class="field-key">GPU sim+pressure</span><span class="field-val" id="volume-gpu-pressure-ms">-- ms</span></div>
+      <div class="field"><span class="field-key">GPU pressure p95</span><span class="field-val" id="volume-gpu-pressure-p95">-- ms</span></div>
+      <div class="field"><span class="field-key">GPU draw</span><span class="field-val" id="volume-gpu-draw-ms">-- ms</span></div>
+      <div class="field"><span class="field-key">GPU samples</span><span class="field-val" id="volume-gpu-samples">0</span></div>
       <div class="field"><span class="field-key">Look lab</span><span class="field-val" id="volume-look-lab-state">live / live pyro</span></div>
       <div class="field"><span class="field-key">Pyro detail</span><span class="field-val" id="volume-pyro-detail-state">inactive</span></div>
       <div class="field"><span class="field-key">Pyro carriers</span><span class="field-val" id="volume-pyro-carrier-state">normal / 1.00x</span></div>
@@ -11039,6 +11045,7 @@ let routedVolumeQuenchVapor = 0;
 let routedVolumeRuntimeQuality = 'live_high';
 let routedVolumeGpuPressure = 0;
 let routedVolumeQualityReason = 'route-default';
+let routedVolumeGpuTiming = false;
 const DEFAULT_BONFIRE_ABLATION_CONTROLS = {
   bonfireRecenter: 1,
   bonfireLateralDamping: 1,
@@ -11712,6 +11719,7 @@ const VOLUME_BASIN_ROUTE_FIELDS = [
   ['activityPressureReadbackCadence', 'volume_activity_pressure_readback_cadence'],
   ['activityPressureDispatchStrategy', 'volume_activity_pressure_dispatch'],
   ['activityPressureShadowOverhead', 'volume_activity_pressure_shadow_overhead'],
+  ['gpuTiming', 'volume_gpu_timing'],
   ['activityVorticityGate', 'volume_activity_vorticity_gate'],
   ['activityDetailGate', 'volume_activity_detail_gate'],
   ['reactionLiveView', 'volume_reaction_live_view'],
@@ -16231,6 +16239,7 @@ function readVolumeControls() {
     activityPressureReadbackCadence: routedVolumeActivityPressureReadbackCadence,
     activityPressureDispatchStrategy: routedVolumeActivityPressureDispatchStrategy,
     activityPressureShadowOverhead: routedVolumeActivityPressureShadowOverhead,
+    gpuTiming: routedVolumeGpuTiming,
     activityVorticityGate: parseFloat(document.getElementById('volume-activity-vorticity-gate').value),
     activityDetailGate: parseFloat(document.getElementById('volume-activity-detail-gate').value),
     canonicalSpread: parseFloat(document.getElementById('volume-canonical-spread').value),
@@ -16517,6 +16526,17 @@ function refreshVolumeReadout() {
   document.getElementById('volume-frame-p95').textContent = Number.isFinite(timing.frameP95Ms) ? `${timing.frameP95Ms.toFixed(1)} ms` : '-- ms';
   document.getElementById('volume-queue-ms').textContent = Number.isFinite(timing.queueDoneMs) ? `${timing.queueDoneMs.toFixed(1)} ms` : (timing.queueProbePending ? 'pending' : '-- ms');
   document.getElementById('volume-queue-p95').textContent = Number.isFinite(timing.queueDoneP95Ms) ? `${timing.queueDoneP95Ms.toFixed(1)} ms` : '-- ms';
+  const gpuTiming = s.gpuTiming || {};
+  const gpuPhaseTimings = s.gpuPhaseTimings || gpuTiming.timingsMs || {};
+  const gpuTimingState = gpuTiming.status || (gpuTiming.requested ? (gpuTiming.supported ? 'pending' : 'unsupported') : 'disabled');
+  document.getElementById('volume-gpu-timing-state').textContent = gpuTiming.readbackPending ? `${gpuTimingState} / pending` : gpuTimingState;
+  document.getElementById('volume-gpu-frame-ms').textContent = Number.isFinite(gpuPhaseTimings.frameGpuMs) ? `${gpuPhaseTimings.frameGpuMs.toFixed(2)} ms` : '-- ms';
+  document.getElementById('volume-gpu-pressure-ms').textContent = Number.isFinite(gpuPhaseTimings.simPressureGpuMs) ? `${gpuPhaseTimings.simPressureGpuMs.toFixed(2)} ms` : '-- ms';
+  const gpuTimingStats = s.gpuTimingStats || gpuTiming.stats || {};
+  const gpuPressureStats = gpuTimingStats.phases?.simPressureGpuMs || {};
+  document.getElementById('volume-gpu-pressure-p95').textContent = Number.isFinite(gpuPressureStats.p95) ? `${gpuPressureStats.p95.toFixed(2)} ms` : '-- ms';
+  document.getElementById('volume-gpu-draw-ms').textContent = Number.isFinite(gpuPhaseTimings.drawGpuMs) ? `${gpuPhaseTimings.drawGpuMs.toFixed(2)} ms` : '-- ms';
+  document.getElementById('volume-gpu-samples').textContent = Number.isFinite(gpuTimingStats.sampleCount) ? String(gpuTimingStats.sampleCount) : '0';
   const lookLabMode = s.lookFreeze >= 0.5 ? `frozen@${s.lookFreezeFrame ?? s.frameCount}` : 'live';
   const compareMode = s.pyroCompareMode === 'base' || s.pyroCompareMuted ? 'base-only' : 'live-pyro';
   document.getElementById('volume-look-lab-state').textContent = `${lookLabMode} / ${compareMode}`;
@@ -17111,6 +17131,8 @@ async function initKaminosVolumeRoute() {
       : undefined);
   const routeActivityPressureShadowOverhead = String(params.get('volume_activity_pressure_shadow_overhead') || '').toLowerCase();
   routedVolumeActivityPressureShadowOverhead = routeActivityPressureShadowOverhead === '1' || routeActivityPressureShadowOverhead === 'true' || routeActivityPressureShadowOverhead === 'yes' || routeActivityPressureShadowOverhead === 'on' || routeActivityPressureShadowOverhead === 'shadow' || routeActivityPressureShadowOverhead === 'overhead';
+  const routeVolumeGpuTiming = String(params.get('volume_gpu_timing') || '').toLowerCase();
+  routedVolumeGpuTiming = routeVolumeGpuTiming === '1' || routeVolumeGpuTiming === 'true' || routeVolumeGpuTiming === 'yes' || routeVolumeGpuTiming === 'on' || routeVolumeGpuTiming === 'timestamp' || routeVolumeGpuTiming === 'timestamps';
   const routeActivityVorticityGate = Number(params.get('volume_activity_vorticity_gate'));
   if (params.has('volume_activity_vorticity_gate') && Number.isFinite(routeActivityVorticityGate)) {
     setVolumeControlValue('volume-activity-vorticity-gate', String(Math.max(0, Math.min(1, routeActivityVorticityGate))));
