@@ -11,6 +11,7 @@ const CONTROLLED_STEP_SEQUENCE_AUTHORITY = 'controlled-step-sequence-v0';
 const HARD_LOW_SCALE_PRESET = 'hard-low-scale-v0';
 const RESIDUAL_FEATURE_IMAGE_AUTHORITY = 'gpu-feature-texture-rgba8-readback-frozen-sim-state-source-pass';
 const FLOW_DEBUG_AUXILIARY_AUTHORITY = 'flow-debug-interface-canvas-capture-v0';
+const BOUNDARY_SIDECAR_SUPPORT_AUXILIARY_AUTHORITY = 'boundary-sidecar-support-canvas-capture-v0';
 const CAPTURE_LEASE_SCHEMA = 'kaminos.volume.browser-capture-lease.v0';
 const DEFAULT_CAPTURE_LEASE_PATH = '/tmp/kaminos-render-pair-corpus-browser-capture.lock.json';
 const DEFAULT_BASE_URL = 'http://127.0.0.1:8097/?kaminos_volume_smoke=1&volume_scene=tall_plume&volume_tall_preset=operator_fire_0622&volume_resolution=128&volume_majorant_grid=48&volume_steps=148&volume_adaptive_rays=0.75&volume_density=3.05&volume_fire=0.50&volume_radiance=3&volume_absorption=0&volume_glow=2.5&volume_smoke=2.8&volume_curl=3.5&volume_microdetail=2.5&volume_interface_shred=0&volume_fire_licks=0&volume_projection=1.5&volume_speed=5&volume_fire_scale=0.59&volume_detail_scale=0.45&volume_plume_height=2.2&volume_wind_strength=0&volume_wind_angle=180&volume_wind_height=-0.8&volume_input_radius=0.11&volume_flow_rate=0.35&volume_reaction_fuel=1&volume_majorant_cadence=1&volume_pressure_iterations=2&volume_pressure_strategy=global&volume_sim_profile=1&volume_temporal_accum=0&volume_temporal_jitter=0&volume_history_clamp=1&volume_occupancy_skip=0.1&volume_majorant_skip=0&volume_majorant_smooth=0.1&volume_majorant_guard=0.3';
@@ -993,6 +994,27 @@ const controlledStepDeltaMs = nonNegativeNumber(args.get('--controlled-step-delt
 const variants = loadVariants(args, settleMs);
 const featureCaptures = args.has('--feature-captures') || args.has('--render-scale-feature-captures');
 const auxiliaryCaptures = auxiliaryCaptureModes(args.get('--auxiliary-captures') || args.get('--render-scale-auxiliary-captures'));
+const auxiliaryCaptureDetails = {};
+if (auxiliaryCaptures.includes('flow-debug') || auxiliaryCaptures.includes('flow_debug')) {
+  auxiliaryCaptureDetails.flowDebug = {
+    requested: true,
+    key: 'flowDebug',
+    auxiliaryAuthority: FLOW_DEBUG_AUXILIARY_AUTHORITY,
+    inputChannels: 4,
+    channelLayout: 'flow-debug-interface-cyan-red-rgba',
+  };
+}
+if (auxiliaryCaptures.includes('boundary-sidecar-support') || auxiliaryCaptures.includes('boundary_sidecar_support')) {
+  auxiliaryCaptureDetails.boundarySidecarSupport = {
+    requested: true,
+    key: 'boundarySidecarSupport',
+    auxiliaryAuthority: BOUNDARY_SIDECAR_SUPPORT_AUXILIARY_AUTHORITY,
+    inputChannels: 4,
+    channelLayout: 'boundary-sidecar-support-rgba',
+    sidecarIdentity: 'baked-boundary-sidecar-v0',
+    sidecarView: 'support',
+  };
+}
 const reuseWitnessBrowser = args.has('--reuse-witness-browser') || !args.has('--no-reuse-witness-browser');
 const witnessBrowserSession = {
   identity: 'shared-headful-cdp-browser-v0',
@@ -1039,13 +1061,7 @@ const corpus = {
     channelLayout: 'radiance-fire-interface-smoke',
   } : null,
   auxiliaryCaptures,
-  auxiliaryCapture: auxiliaryCaptures.includes('flow-debug') ? {
-    requested: true,
-    key: 'flowDebug',
-    auxiliaryAuthority: FLOW_DEBUG_AUXILIARY_AUTHORITY,
-    inputChannels: 4,
-    channelLayout: 'flow-debug-interface-cyan-red-rgba',
-  } : null,
+  auxiliaryCapture: Object.keys(auxiliaryCaptureDetails).length ? auxiliaryCaptureDetails : null,
   imageAuthority: IMAGE_AUTHORITY,
   sequenceAuthority: activeSequenceAuthority,
   sequenceMode,

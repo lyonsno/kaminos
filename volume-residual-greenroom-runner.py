@@ -40,6 +40,9 @@ def parse_args():
     parser.add_argument("--material-sampling-mode", default="off")
     parser.add_argument("--material-sampling-probability", default="0")
     parser.add_argument("--material-sampling-threshold", default="0.05")
+    parser.add_argument("--sidecar-sampling-mode", default="off")
+    parser.add_argument("--sidecar-sampling-probability", default="0")
+    parser.add_argument("--sidecar-sampling-threshold", default="0.05")
     parser.add_argument("--hidden-channels", default="16")
     parser.add_argument("--detail-residual-gate", default="2.0")
     parser.add_argument("--learning-rate", default="0.001")
@@ -151,6 +154,12 @@ def build_child_command(args):
         str(args.material_sampling_probability),
         "--material-sampling-threshold",
         str(args.material_sampling_threshold),
+        "--sidecar-sampling-mode",
+        str(args.sidecar_sampling_mode),
+        "--sidecar-sampling-probability",
+        str(args.sidecar_sampling_probability),
+        "--sidecar-sampling-threshold",
+        str(args.sidecar_sampling_threshold),
         "--hidden-channels",
         str(args.hidden_channels),
         "--detail-residual-gate",

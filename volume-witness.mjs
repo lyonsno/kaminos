@@ -148,6 +148,7 @@ const renderScaleAuxiliaryCaptureModes = new Set(String(args.get('--render-scale
   .map(entry => entry.trim().toLowerCase())
   .filter(Boolean));
 const renderScaleFlowDebugCaptures = renderScaleAuxiliaryCaptureModes.has('flow-debug') || renderScaleAuxiliaryCaptureModes.has('flow_debug');
+const renderScaleBoundarySidecarSupportCaptures = renderScaleAuxiliaryCaptureModes.has('boundary-sidecar-support') || renderScaleAuxiliaryCaptureModes.has('boundary_sidecar_support');
 const controlledStepSequenceRequested = args.has('--controlled-step-sequence') && !['0', 'false', 'no'].includes(String(args.get('--controlled-step-sequence') || '1').toLowerCase());
 const controlledStepFrames = Math.max(1, Math.floor(Number(args.get('--controlled-step-frames') || 1)));
 const controlledStepDeltaMs = Math.max(0, Number(args.get('--controlled-step-delta-ms') || 220));
@@ -164,6 +165,7 @@ const expectsPerformanceVolumeEvidence = evidenceMode === 'performance';
 const expectsPyroMaterialEvidence = evidenceMode === 'pyro-material';
 const expectsNoFireVolumeEvidence = evidenceMode === 'no-fire-volume';
 const FLOW_DEBUG_AUXILIARY_CAPTURE_AUTHORITY = 'flow-debug-interface-canvas-capture-v0';
+const BOUNDARY_SIDECAR_SUPPORT_AUXILIARY_CAPTURE_AUTHORITY = 'boundary-sidecar-support-canvas-capture-v0';
 const visualEvidenceMode = expectsNoFireVolumeEvidence
   ? 'no-fire-volume-signal'
   : (expectsPyroMaterialEvidence ? 'pyro-material-coupled-volume-signal' : (expectsPerformanceVolumeEvidence ? 'performance-volume-signal' : 'fire-volume'));
@@ -1640,6 +1642,76 @@ async function captureFlowDebugAuxiliary({
     canvasCssRect,
     screenshotClip,
     devicePixelRatio: flowDebugCapture.devicePixelRatio,
+    hudSuppression,
+    metrics,
+  };
+}
+
+async function captureBoundarySidecarSupportAuxiliary({
+  ws,
+  renderScale,
+  scaleSet,
+  outputPath,
+  screenshotClip,
+  canvasCssRect,
+  hudSuppression,
+}) {
+  const controlOverrides = {
+    boundarySidecarSource: 'baked',
+    boundarySidecarView: 'support',
+  };
+  const sidecarEval = await wsRequest(ws, 'Runtime.evaluate', {
+    expression: `window.__kaminosVolumePrototype.renderFrozenScaleToCanvas(${JSON.stringify({
+      renderScale,
+      now: scaleSet.fixedNowMs,
+      sameStateCaptureId: scaleSet.sameStateCaptureId,
+      baseFrameCount: scaleSet.baseFrameCount,
+      baseSimStepCount: scaleSet.baseSimStepCount,
+      includeFeatureRgba: false,
+      controlOverrides,
+      restoreControls: true,
+      resumeRenderLoop: false,
+    })})`,
+    awaitPromise: true,
+    returnByValue: true,
+  });
+  const sidecarCapture = sidecarEval.result.value;
+  if (sidecarCapture?.ok !== true || sidecarCapture?.sampleAuthority !== 'render-only-frozen-sim-state') {
+    throw new Error(`Boundary sidecar support auxiliary capture failed: ${JSON.stringify({
+      renderScale,
+      ok: sidecarCapture?.ok,
+      reason: sidecarCapture?.reason,
+      sampleAuthority: sidecarCapture?.sampleAuthority,
+      sameStateCaptureId: sidecarCapture?.sameStateCaptureId,
+    })}`);
+  }
+  const sidecarShot = await wsRequest(ws, 'Page.captureScreenshot', {
+    format: 'png',
+    fromSurface: true,
+    clip: screenshotClip,
+  });
+  const imageBuffer = Buffer.from(sidecarShot.data, 'base64');
+  writeFileSync(outputPath, imageBuffer);
+  const metrics = measureScreenshot(imageBuffer);
+  return {
+    path: outputPath,
+    width: metrics.width,
+    height: metrics.height,
+    auxiliaryAuthority: BOUNDARY_SIDECAR_SUPPORT_AUXILIARY_CAPTURE_AUTHORITY,
+    imageAuthority: sidecarCapture.imageAuthority,
+    inputChannels: 4,
+    channelLayout: 'boundary-sidecar-support-rgba',
+    source: 'volume_boundary_sidecar_view',
+    sidecarIdentity: sidecarCapture.boundarySidecarIdentity || null,
+    sidecarAuthority: sidecarCapture.boundarySidecarAuthority || null,
+    controlOverrides,
+    sampleAuthority: sidecarCapture.sampleAuthority,
+    sameStateCaptureId: sidecarCapture.sameStateCaptureId,
+    frameCount: sidecarCapture.frameCount,
+    simStepCount: sidecarCapture.simStepCount,
+    canvasCssRect,
+    screenshotClip,
+    devicePixelRatio: sidecarCapture.devicePixelRatio,
     hudSuppression,
     metrics,
   };
@@ -3196,6 +3268,7 @@ async function main() {
         const previewPath = resolve(renderScaleSetDir, `${slug}.preview.png`);
         const featurePath = resolve(renderScaleSetDir, `${slug}.feature.png`);
         const flowDebugPath = resolve(renderScaleSetDir, `${slug}.flow-debug.png`);
+        const boundarySidecarSupportPath = resolve(renderScaleSetDir, `${slug}.boundary-sidecar-support.png`);
         const captureReportPath = resolve(renderScaleSetDir, `${slug}.json`);
         if (scaleSample.preview?.rgba && Number.isFinite(scaleSample.preview.width) && Number.isFinite(scaleSample.preview.height)) {
           writeRgbaPng(previewPath, scaleSample.preview.width, scaleSample.preview.height, scaleSample.preview.rgba);
@@ -3258,6 +3331,17 @@ async function main() {
             renderScale,
             scaleSet,
             outputPath: flowDebugPath,
+            screenshotClip,
+            canvasCssRect,
+            hudSuppression,
+          });
+        }
+        if (renderScaleBoundarySidecarSupportCaptures && scaleSample.role !== 'high') {
+          auxiliaryCaptures.boundarySidecarSupport = await captureBoundarySidecarSupportAuxiliary({
+            ws,
+            renderScale,
+            scaleSet,
+            outputPath: boundarySidecarSupportPath,
             screenshotClip,
             canvasCssRect,
             hudSuppression,
@@ -3462,6 +3546,7 @@ async function main() {
           const imagePath = resolve(frameDir, `${slug}.png`);
           const featurePath = resolve(frameDir, `${slug}.feature.png`);
           const flowDebugPath = resolve(frameDir, `${slug}.flow-debug.png`);
+          const boundarySidecarSupportPath = resolve(frameDir, `${slug}.boundary-sidecar-support.png`);
           const captureReportPath = resolve(frameDir, `${slug}.json`);
           const canvasEval = await wsRequest(ws, 'Runtime.evaluate', {
             expression: `window.__kaminosVolumePrototype.renderFrozenScaleToCanvas(${JSON.stringify({
@@ -3523,6 +3608,17 @@ async function main() {
               renderScale,
               scaleSet,
               outputPath: flowDebugPath,
+              screenshotClip,
+              canvasCssRect,
+              hudSuppression,
+            });
+          }
+          if (renderScaleBoundarySidecarSupportCaptures && scaleSample.role !== 'high') {
+            auxiliaryCaptures.boundarySidecarSupport = await captureBoundarySidecarSupportAuxiliary({
+              ws,
+              renderScale,
+              scaleSet,
+              outputPath: boundarySidecarSupportPath,
               screenshotClip,
               canvasCssRect,
               hudSuppression,

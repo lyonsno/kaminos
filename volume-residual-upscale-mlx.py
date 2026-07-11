@@ -20,6 +20,7 @@ PAIR_AUTHORITY = "frame-locked-render-scale-set-v0"
 IMAGE_AUTHORITY = "cdp-canvas-clip-capture-after-render-only-frozen-sim-state"
 FEATURE_INPUT_AUTHORITY = "shader-material-authority-residual-feature-v0"
 FLOW_DEBUG_AUXILIARY_INPUT_AUTHORITY = "flow-debug-interface-canvas-capture-v0"
+BOUNDARY_SIDECAR_SUPPORT_AUXILIARY_INPUT_AUTHORITY = "boundary-sidecar-support-canvas-capture-v0"
 FLOW_DEBUG_REDCYAN_ABS_INPUT_AUTHORITY = "flow-debug-derived-red-cyan-abs-v0"
 FLOW_DEBUG_OPPONENT_GRADIENT_INPUT_AUTHORITY = "flow-debug-derived-opponent-gradient-v0"
 IMAGE_FEATURE_INPUT_MODES = {"feature-rgba", "aux-rgba", "aux-rgb", "aux-red-cyan-abs", "aux-opponent-gradient"}
@@ -328,6 +329,9 @@ def parse_args():
     parser.add_argument("--material-sampling-mode", dest="materialSamplingMode", choices=["off", "fire-interface", "smoke", "balanced"], default="off", help="Optional crop sampler that centers patches on shader-material fire/interface, smoke, or alternating material support before generic edge/foreground fallback.")
     parser.add_argument("--material-sampling-probability", dest="materialSamplingProbability", type=float, default=0.0, help="Probability of using material-support crop sampling for each patch.")
     parser.add_argument("--material-sampling-threshold", dest="materialSamplingThreshold", type=float, default=0.05, help="Minimum shader-material feature value counted as fire/smoke crop support.")
+    parser.add_argument("--sidecar-sampling-mode", dest="sidecarSamplingMode", choices=["off", "support"], default="off", help="Optional crop sampler driven by boundary-sidecar support auxiliary captures.")
+    parser.add_argument("--sidecar-sampling-probability", dest="sidecarSamplingProbability", type=float, default=0.0, help="Probability of using boundary-sidecar support crop sampling before material/edge/foreground fallback.")
+    parser.add_argument("--sidecar-sampling-threshold", dest="sidecarSamplingThreshold", type=float, default=0.05, help="Minimum boundary-sidecar support auxiliary signal counted as crop support.")
     parser.add_argument("--hidden-channels", type=int, default=16)
     parser.add_argument("--detail-residual-gate", dest="detailResidualGate", type=float, default=2.0, help="Fixed multiplier for the hidden detail residual in gated-detail-residual probes.")
     parser.add_argument("--learning-rate", type=float, default=1e-3)
@@ -689,6 +693,12 @@ def material_sampling_authority(materialSamplingMode):
     return FEATURE_INPUT_AUTHORITY
 
 
+def sidecar_sampling_authority(sidecarSamplingMode):
+    if sidecarSamplingMode == "off":
+        return "off"
+    return BOUNDARY_SIDECAR_SUPPORT_AUXILIARY_INPUT_AUTHORITY
+
+
 def uses_feature_image(featureInputMode):
     return featureInputMode in IMAGE_FEATURE_INPUT_MODES
 
@@ -826,7 +836,7 @@ def edge_band_mask(low_image, high_image, edgeBandMode, edgeBandThreshold, edgeB
     return mask, signal
 
 
-def load_pair_arrays(pairs, foregroundThreshold, edgeBandMode, edgeBandThreshold, edgeBandDilate, featureInputMode, materialSamplingThreshold=0.05):
+def load_pair_arrays(pairs, foregroundThreshold, edgeBandMode, edgeBandThreshold, edgeBandDilate, featureInputMode, materialSamplingThreshold=0.05, sidecarSamplingThreshold=0.05):
     loaded = []
     for pair in pairs:
         low_path = Path(pair["low"]["path"])
@@ -864,12 +874,22 @@ def load_pair_arrays(pairs, foregroundThreshold, edgeBandMode, edgeBandThreshold
                 feature_image = load_flow_debug_derived_image(feature_path, low_image.shape[0], low_image.shape[1], featureInputMode)
             else:
                 feature_image = load_feature_image(feature_path, low_image.shape[0], low_image.shape[1], feature_input_channels(featureInputMode))
+        sidecar_support_image = None
+        sidecar_support_path = None
+        sidecar_support_capture = (pair.get("low", {}).get("auxiliaryCaptures") or {}).get("boundarySidecarSupport") or {}
+        if sidecar_support_capture:
+            sidecar_support_path = sidecar_support_capture.get("path")
+            sidecar_support_authority = sidecar_support_capture.get("auxiliaryAuthority")
+            if sidecar_support_path and sidecar_support_authority == BOUNDARY_SIDECAR_SUPPORT_AUXILIARY_INPUT_AUTHORITY:
+                sidecar_support_image = load_feature_image(sidecar_support_path, low_image.shape[0], low_image.shape[1], 4)
         foreground = foreground_pixels(low_image, high_image, foregroundThreshold)
         edge_mask, edge_signal = edge_band_mask(low_image, high_image, edgeBandMode, edgeBandThreshold, edgeBandDilate)
         target_edge_mask, target_edge_signal = edge_band_mask(low_image, high_image, "difference-gradient", edgeBandThreshold, edgeBandDilate)
         material_masks = np_material_focus_masks(material_feature_image)
+        sidecar_support_mask = np_sidecar_support_mask(sidecar_support_image)
         material_fire_pixels = np.argwhere(material_masks["fire"][..., 0] > float(materialSamplingThreshold))
         material_smoke_pixels = np.argwhere(material_masks["smoke"][..., 0] > float(materialSamplingThreshold))
+        sidecar_support_pixels = np.argwhere(sidecar_support_mask[..., 0] > float(sidecarSamplingThreshold))
         edge_pixels = np.argwhere(edge_mask)
         target_edge_pixels = np.argwhere(target_edge_mask)
         loaded.append({
@@ -889,6 +909,11 @@ def load_pair_arrays(pairs, foregroundThreshold, edgeBandMode, edgeBandThreshold
             "materialSmoke": material_smoke_pixels,
             "materialFirePixels": int(material_fire_pixels.shape[0]),
             "materialSmokePixels": int(material_smoke_pixels.shape[0]),
+            "sidecarSupportPath": str(sidecar_support_path) if sidecar_support_image is not None else None,
+            "sidecarSupportAuthority": sidecar_support_capture.get("auxiliaryAuthority") if sidecar_support_image is not None else None,
+            "sidecarSupportMask": sidecar_support_mask.astype(np.float32),
+            "sidecarSupport": sidecar_support_pixels,
+            "sidecarSupportPixels": int(sidecar_support_pixels.shape[0]),
             "foreground": foreground,
             "foregroundPixels": int(foreground.shape[0]),
             "edgeBandMask": edge_mask.astype(np.float32)[..., None],
@@ -1031,6 +1056,14 @@ def np_material_focus_masks(feature_image):
     return {"fire": fire_mask, "smoke": smoke_mask}
 
 
+def np_sidecar_support_mask(sidecar_image):
+    if sidecar_image is None or sidecar_image.shape[2] < 3:
+        shape = sidecar_image.shape[:2] if sidecar_image is not None else (0, 0)
+        return np.zeros((*shape, 1), dtype=np.float32)
+    signal = np.max(sidecar_image[..., :3], axis=2, keepdims=True)
+    return np.clip(signal, 0.0, 1.0).astype(np.float32)
+
+
 def material_coverage_summary(items):
     fire_coverages = {}
     smoke_coverages = {}
@@ -1042,6 +1075,25 @@ def material_coverage_summary(items):
         "materialFireCoverage": fire_coverages,
         "materialSmokeCoverage": smoke_coverages,
     }
+
+
+def sidecar_support_coverage_summary(items):
+    coverages = {}
+    for item in items:
+        mask = item.get("sidecarSupportMask")
+        coverages[item["id"]] = float(np.mean(mask)) if mask is not None and mask.size else 0.0
+    return {
+        "sidecarSupportCoverage": coverages,
+    }
+
+
+def sidecar_sampling_pixels(item, sidecarSamplingMode):
+    if sidecarSamplingMode == "off":
+        return None
+    support = item.get("sidecarSupport")
+    if sidecarSamplingMode == "support":
+        return support if support is not None and support.shape[0] else None
+    raise ValueError(f"unsupported sidecar sampling mode: {sidecarSamplingMode}")
 
 
 def material_sampling_pixels(item, rng, materialSamplingMode):
@@ -1066,7 +1118,7 @@ def material_sampling_pixels(item, rng, materialSamplingMode):
     raise ValueError(f"unsupported material sampling mode: {materialSamplingMode}")
 
 
-def sample_patch_batch(items, rng, batch_size, patch_size, foregroundProbability, edgeSamplingProbability, conditionRenderScale, featureInputMode, coordinateInputMode="off", fourierCoordinateFrequencies=4, materialSamplingMode="off", materialSamplingProbability=0.0):
+def sample_patch_batch(items, rng, batch_size, patch_size, foregroundProbability, edgeSamplingProbability, conditionRenderScale, featureInputMode, coordinateInputMode="off", fourierCoordinateFrequencies=4, materialSamplingMode="off", materialSamplingProbability=0.0, sidecarSamplingMode="off", sidecarSamplingProbability=0.0):
     lows = []
     highs = []
     edge_masks = []
@@ -1078,8 +1130,13 @@ def sample_patch_batch(items, rng, batch_size, patch_size, foregroundProbability
         crop_width = min(patch_size, width)
         foreground = item.get("foreground")
         edge_band = item.get("edgeBand")
+        sidecar_pixels = sidecar_sampling_pixels(item, sidecarSamplingMode) if rng.random() < sidecarSamplingProbability else None
         material_pixels = material_sampling_pixels(item, rng, materialSamplingMode) if rng.random() < materialSamplingProbability else None
-        if material_pixels is not None and material_pixels.shape[0]:
+        if sidecar_pixels is not None and sidecar_pixels.shape[0]:
+            center_y, center_x = sidecar_pixels[int(rng.integers(0, sidecar_pixels.shape[0]))]
+            top = int(np.clip(center_y - crop_height // 2, 0, max(0, height - crop_height)))
+            left = int(np.clip(center_x - crop_width // 2, 0, max(0, width - crop_width)))
+        elif material_pixels is not None and material_pixels.shape[0]:
             center_y, center_x = material_pixels[int(rng.integers(0, material_pixels.shape[0]))]
             top = int(np.clip(center_y - crop_height // 2, 0, max(0, height - crop_height)))
             left = int(np.clip(center_x - crop_width // 2, 0, max(0, width - crop_width)))
@@ -1629,7 +1686,7 @@ def temporal_sequence_metrics(model, loaded, train_items, eval_items, out_dir, c
     return metrics
 
 
-def evaluate_model(model, items, rng, batch_size, patch_size, eval_patches, foregroundProbability, edgeSamplingProbability, conditionRenderScale, featureInputMode, coordinateInputMode, fourierCoordinateFrequencies, materialSamplingMode, materialSamplingProbability, foregroundThreshold, foregroundLossWeight, differenceLossWeight, residualApplicationMaskMode, residualMaskFeatherRadius):
+def evaluate_model(model, items, rng, batch_size, patch_size, eval_patches, foregroundProbability, edgeSamplingProbability, conditionRenderScale, featureInputMode, coordinateInputMode, fourierCoordinateFrequencies, materialSamplingMode, materialSamplingProbability, sidecarSamplingMode, sidecarSamplingProbability, foregroundThreshold, foregroundLossWeight, differenceLossWeight, residualApplicationMaskMode, residualMaskFeatherRadius):
     baseline_losses = []
     model_losses = []
     weighted_baseline_losses = []
@@ -1645,7 +1702,7 @@ def evaluate_model(model, items, rng, batch_size, patch_size, eval_patches, fore
     compared_patches = 0
     batches = max(1, math.ceil(eval_patches / batch_size))
     for _ in range(batches):
-        low_batch, high_batch, edge_mask_batch, target_edge_mask_batch = sample_patch_batch(items, rng, batch_size, patch_size, foregroundProbability, edgeSamplingProbability, conditionRenderScale, featureInputMode, coordinateInputMode, fourierCoordinateFrequencies, materialSamplingMode, materialSamplingProbability)
+        low_batch, high_batch, edge_mask_batch, target_edge_mask_batch = sample_patch_batch(items, rng, batch_size, patch_size, foregroundProbability, edgeSamplingProbability, conditionRenderScale, featureInputMode, coordinateInputMode, fourierCoordinateFrequencies, materialSamplingMode, materialSamplingProbability, sidecarSamplingMode, sidecarSamplingProbability)
         low_rgb = rgb_channels(low_batch)
         prediction = model(low_batch, residual_application_mask(edge_mask_batch, residualApplicationMaskMode, residualMaskFeatherRadius))
         baseline_loss = mse_value(low_rgb, high_batch)
@@ -1855,6 +1912,8 @@ def main():
         ("--outside-material-residual-weight", args.outsideMaterialResidualWeight),
         ("--material-sampling-probability", args.materialSamplingProbability),
         ("--material-sampling-threshold", args.materialSamplingThreshold),
+        ("--sidecar-sampling-probability", args.sidecarSamplingProbability),
+        ("--sidecar-sampling-threshold", args.sidecarSamplingThreshold),
     ]:
         if value < 0:
             raise ValueError(f"{label} must be non-negative")
@@ -1862,6 +1921,8 @@ def main():
         raise ValueError("--material-focus requires --feature-input-mode=feature-rgba")
     if args.materialSamplingMode != "off" and args.materialSamplingProbability > 0 and args.materialSamplingProbability > 1:
         raise ValueError("--material-sampling-probability must be between 0 and 1")
+    if args.sidecarSamplingMode != "off" and args.sidecarSamplingProbability > 1:
+        raise ValueError("--sidecar-sampling-probability must be between 0 and 1")
     if args.edgeSamplingProbability > 1:
         raise ValueError("--edge-sampling-probability must be between 0 and 1")
     if args.residualContinuationAlpha < 0 or args.residualContinuationAlpha > 1:
@@ -1871,7 +1932,11 @@ def main():
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     corpus, pairs = load_pairs(args.corpus_manifest, args.low_render_scale)
-    loaded = load_pair_arrays(pairs, args.foregroundThreshold, args.edgeBandMode, args.edgeBandThreshold, args.edgeBandDilate, args.featureInputMode, args.materialSamplingThreshold)
+    loaded = load_pair_arrays(pairs, args.foregroundThreshold, args.edgeBandMode, args.edgeBandThreshold, args.edgeBandDilate, args.featureInputMode, args.materialSamplingThreshold, args.sidecarSamplingThreshold)
+    if args.sidecarSamplingMode != "off" and args.sidecarSamplingProbability > 0:
+        sidecar_pixels = sum(int(item.get("sidecarSupportPixels", 0)) for item in loaded)
+        if sidecar_pixels <= 0:
+            raise ValueError("--sidecar-sampling-mode requested but no boundarySidecarSupport auxiliary pixels passed threshold")
     train_items, eval_items = split_pairs(loaded, args.evalPairCount, args.evalSelection)
     rng = np.random.default_rng(args.seed)
     mx.random.seed(args.seed)
@@ -2064,6 +2129,8 @@ def main():
             fourierCoordinateFrequencies,
             args.materialSamplingMode,
             args.materialSamplingProbability,
+            args.sidecarSamplingMode,
+            args.sidecarSamplingProbability,
         )
         if activeTemporalLossWeight > 0 or activeResidualTemporalLossWeight > 0:
             previous_low_batch, current_low_batch, previous_high_batch, current_high_batch, previous_mask_batch, current_mask_batch = sample_temporal_pair_batch(
@@ -2123,6 +2190,8 @@ def main():
         fourierCoordinateFrequencies,
         args.materialSamplingMode,
         args.materialSamplingProbability,
+        args.sidecarSamplingMode,
+        args.sidecarSamplingProbability,
         args.foregroundThreshold,
         args.foregroundLossWeight,
         args.differenceLossWeight,
@@ -2189,6 +2258,7 @@ def main():
             modelConfigSource,
         )
     materialCoverage = material_coverage_summary(loaded)
+    sidecarSupportCoverage = sidecar_support_coverage_summary(loaded)
     report = {
         "schema": SCHEMA,
         "createdAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
@@ -2293,6 +2363,13 @@ def main():
         "materialFeatureAuthority": FEATURE_INPUT_AUTHORITY if any(item.get("materialFeatureAuthority") == FEATURE_INPUT_AUTHORITY for item in loaded) else None,
         "materialFirePixels": {item["id"]: item.get("materialFirePixels", 0) for item in loaded},
         "materialSmokePixels": {item["id"]: item.get("materialSmokePixels", 0) for item in loaded},
+        "sidecarSamplingMode": args.sidecarSamplingMode,
+        "sidecarSamplingProbability": args.sidecarSamplingProbability,
+        "sidecarSamplingThreshold": args.sidecarSamplingThreshold,
+        "sidecarSamplingAuthority": sidecar_sampling_authority(args.sidecarSamplingMode),
+        "sidecarSupportAuthority": BOUNDARY_SIDECAR_SUPPORT_AUXILIARY_INPUT_AUTHORITY if any(item.get("sidecarSupportAuthority") == BOUNDARY_SIDECAR_SUPPORT_AUXILIARY_INPUT_AUTHORITY for item in loaded) else None,
+        "sidecarSupportPaths": {item["id"]: item.get("sidecarSupportPath") for item in loaded},
+        "sidecarSupportPixels": {item["id"]: item.get("sidecarSupportPixels", 0) for item in loaded},
         "previewMode": args.preview_mode,
         "previewScope": args.previewScope,
         "previewPairCount": len(preview_items),
@@ -2339,6 +2416,7 @@ def main():
             for item in loaded
         },
         **materialCoverage,
+        **sidecarSupportCoverage,
         "batchSize": args.batch_size,
         "patchSize": args.patch_size,
         "hiddenChannels": hiddenChannels,
