@@ -30,8 +30,21 @@ SIDECAR_IDENTITY = "baked-boundary-sidecar-v1"
 SIDECAR_AUTHORITY = "band-limited-support-coverage-ridge-footprint-proximity-normal-v2"
 CHANNEL_ORDER = ["support", "coverage", "ridge", "footprint", "proximity", "normalX", "normalY", "normalZ"]
 SPARSE_STRUCTURAL_CHANNELS = ["support", "ridge", "proximity"]
+SPARSE_EVALUATION_CHANNELS = ["support", "coverage", "ridge", "proximity"]
 LEARNED_CUE_FAMILY_IDENTITY = "standard-radius2-mlp-support-ridge-proximity-v0"
 THRESHOLD_IDENTITY_COMPATIBILITY = "calibrated-standard-mlp-sparse-cue-thresholds-v0"
+SPARSE_CLASSIFIER_IDENTITY = "sparse-cue-classifier-heads-v0"
+DEFAULT_CLASSIFIER_TARGET_THRESHOLDS = {
+    "support": 0.03,
+    "coverage": 0.10,
+    "ridge": 0.10,
+    "proximity": 0.10,
+}
+CLASSIFIER_PROBABILITY_CHANNEL_NAME_EXAMPLES = [
+    "supportClassifierProbability",
+    "proximityClassifierProbability",
+    "coverageClassifierProbability",
+]
 ALL_TARGET_FAMILY_IDENTITY = "all-v1-sidecar-meta-target-family-v0"
 SPARSE_STRUCTURAL_TARGET_FAMILY_IDENTITY = "sparse-structural-target-family-v0"
 BLOCK_BASELINE_IDENTITY = "block-upsample-copy-baseline-v0"
@@ -93,6 +106,17 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--ridge-classifier-positive-weight", type=float, default=0.0, help="BCE positive class weight; 0 means use the train-set negative/positive ratio.")
     parser.add_argument(
+        "--classifier-channel-list",
+        default="",
+        help="Optional comma-separated v1 sidecar/meta channels for generalized sparse classifier heads. Empty preserves ridge-only compatibility when --ridge-classifier-mode binary is used.",
+    )
+    parser.add_argument(
+        "--classifier-target-thresholds",
+        default="",
+        help="Optional comma-separated per-channel thresholds like support:0.03,coverage:0.1,ridge:0.1,proximity:0.1.",
+    )
+    parser.add_argument("--classifier-positive-weight", type=float, default=0.0, help="BCE positive class weight for generalized classifier heads; 0 means use each train-set negative/positive ratio.")
+    parser.add_argument(
         "--export-dense-cue-pack",
         default="",
         help="Optional path to write a renderer-consumable dense learned cue pack manifest with .f32 arrays.",
@@ -126,6 +150,51 @@ def parse_target_channels(value: str) -> tuple[list[int], list[str], str]:
     else:
         family = "custom-sidecar-meta-target-family-v0"
     return indexes, names, family
+
+
+def parse_classifier_channels(value: str, ridge_classifier_enabled: bool) -> list[str]:
+    raw = value.strip()
+    if not raw:
+        return ["ridge"] if ridge_classifier_enabled else []
+    names = [part.strip() for part in raw.split(",") if part.strip()]
+    unknown = [name for name in names if name not in CHANNEL_ORDER]
+    if unknown:
+        raise ProbeFailure("args", "Unknown channel in --classifier-channel-list.", {
+            "unknownChannels": unknown,
+            "availableChannels": CHANNEL_ORDER,
+        })
+    out: list[str] = []
+    for name in names:
+        if name not in out:
+            out.append(name)
+    return out
+
+
+def parse_classifier_target_thresholds(value: str, classifier_channels: list[str], ridge_threshold: float) -> dict[str, float]:
+    thresholds = dict(DEFAULT_CLASSIFIER_TARGET_THRESHOLDS)
+    thresholds["ridge"] = float(ridge_threshold)
+    raw = value.strip()
+    if raw:
+        for item in raw.split(","):
+            part = item.strip()
+            if not part:
+                continue
+            if ":" not in part:
+                raise ProbeFailure("args", "--classifier-target-thresholds entries must use channel:threshold.", {"entry": part})
+            channel, raw_threshold = (piece.strip() for piece in part.split(":", 1))
+            if channel not in CHANNEL_ORDER:
+                raise ProbeFailure("args", "Unknown channel in --classifier-target-thresholds.", {
+                    "channel": channel,
+                    "availableChannels": CHANNEL_ORDER,
+                })
+            try:
+                threshold = float(raw_threshold)
+            except ValueError as err:
+                raise ProbeFailure("args", "Invalid classifier target threshold.", {"entry": part}) from err
+            if not math.isfinite(threshold) or threshold <= 0.0:
+                raise ProbeFailure("args", "Classifier target thresholds must be finite and positive.", {"entry": part})
+            thresholds[channel] = threshold
+    return {channel: float(thresholds.get(channel, 0.1)) for channel in classifier_channels}
 
 
 def parse_threshold_sweep(value: str) -> list[float]:
@@ -595,9 +664,9 @@ def export_dense_cue_pack(
     corpus: dict[str, Any],
     target_family: str,
     high_source: dict[str, Any],
-    ridge_classifier_model: dict[str, np.ndarray] | None,
-    ridge_classifier_positive_weight: float | None,
-    ridge_classifier_target_threshold: float,
+    classifier_models: dict[str, dict[str, np.ndarray]],
+    classifier_target_thresholds: dict[str, float],
+    classifier_positive_weights: dict[str, float],
     chunk_size: int,
 ) -> dict[str, Any]:
     missing_sparse = [name for name in SPARSE_STRUCTURAL_CHANNELS if name not in selected_target_channels]
@@ -615,8 +684,13 @@ def export_dense_cue_pack(
     scalar_shape = [high_grid, high_grid, high_grid, len(selected_target_channels)]
     scalar_out = np.memmap(scalar_path, dtype="<f4", mode="w+", shape=(cells, len(selected_target_channels)))
     ridge_probability_path = out_dir / "ridge-classifier-probability.f32"
+    classifier_probability_path = out_dir / "classifier-probability-cues.f32"
     ridge_probability_out = None
-    if ridge_classifier_model is not None:
+    classifier_channels = list(classifier_models.keys())
+    classifier_probability_out = None
+    if classifier_channels:
+        classifier_probability_out = np.memmap(classifier_probability_path, dtype="<f4", mode="w+", shape=(cells, len(classifier_channels)))
+    if "ridge" in classifier_models:
         ridge_probability_out = np.memmap(ridge_probability_path, dtype="<f4", mode="w+", shape=(cells, 1))
     for start in range(0, cells, chunk_size):
         stop = min(cells, start + chunk_size)
@@ -624,8 +698,12 @@ def export_dense_cue_pack(
         x_raw = local_features(low, indexes, high_grid, low_grid, context_radius)
         x = apply_standardize(x_raw, x_mean, x_std)
         scalar_out[start:stop] = (predict_mlp(mlp_model, x) * y_std + y_mean).astype("<f4")
-        if ridge_probability_out is not None and ridge_classifier_model is not None:
-            ridge_probability_out[start:stop, 0] = predict_binary_mlp_classifier(ridge_classifier_model, x).astype("<f4")
+        for classifier_index, channel in enumerate(classifier_channels):
+            prob = predict_binary_mlp_classifier(classifier_models[channel], x).astype("<f4")
+            if classifier_probability_out is not None:
+                classifier_probability_out[start:stop, classifier_index] = prob
+            if channel == "ridge" and ridge_probability_out is not None:
+                ridge_probability_out[start:stop, 0] = prob
     scalar_out.flush()
     arrays: dict[str, Any] = {
         "scalarMlpCue": {
@@ -634,13 +712,25 @@ def export_dense_cue_pack(
             "meaning": "Full high-grid scalar MLP predictions for selected v1 boundary/meta cue channels.",
         }
     }
+    if classifier_probability_out is not None:
+        classifier_probability_out.flush()
+        classifier_probability_names = [f"{channel}ClassifierProbability" for channel in classifier_channels]
+        arrays["classifierProbabilityCues"] = {
+            **file_descriptor(classifier_probability_path, [high_grid, high_grid, high_grid, len(classifier_channels)], "<f4"),
+            "channelOrder": classifier_probability_names,
+            "targetChannels": classifier_channels,
+            "targetTruthThresholds": {channel: float(classifier_target_thresholds[channel]) for channel in classifier_channels},
+            "meaning": "Full high-grid classifier probabilities for generalized sparse cue heads.",
+        }
+    else:
+        arrays["classifierProbabilityCues"] = None
     if ridge_probability_out is not None:
         ridge_probability_out.flush()
         arrays["ridgeClassifierProbability"] = {
             **file_descriptor(ridge_probability_path, [high_grid, high_grid, high_grid, 1], "<f4"),
             "channelOrder": ["ridgeClassifierProbability"],
             "targetChannel": "ridge",
-            "targetTruthThreshold": float(ridge_classifier_target_threshold),
+            "targetTruthThreshold": float(classifier_target_thresholds.get("ridge", DEFAULT_CLASSIFIER_TARGET_THRESHOLDS["ridge"])),
             "meaning": "Full high-grid probability that abs(truth ridge) exceeds the ridge classifier target threshold.",
         }
     else:
@@ -690,9 +780,18 @@ def export_dense_cue_pack(
             "ridgeClassifier": {
                 "identity": RIDGE_CLASSIFIER_IDENTITY,
                 "targetChannel": "ridge",
-                "targetTruthThreshold": float(ridge_classifier_target_threshold),
-                "positiveWeight": float(ridge_classifier_positive_weight) if ridge_classifier_positive_weight is not None else None,
-            } if ridge_classifier_model is not None else None,
+                "targetTruthThreshold": float(classifier_target_thresholds.get("ridge", DEFAULT_CLASSIFIER_TARGET_THRESHOLDS["ridge"])),
+                "positiveWeight": float(classifier_positive_weights["ridge"]) if "ridge" in classifier_positive_weights else None,
+            } if "ridge" in classifier_models else None,
+            "sparseClassifiers": {
+                channel: {
+                    "identity": SPARSE_CLASSIFIER_IDENTITY,
+                    "targetChannel": channel,
+                    "targetTruthThreshold": float(classifier_target_thresholds[channel]),
+                    "positiveWeight": float(classifier_positive_weights[channel]),
+                }
+                for channel in classifier_channels
+            } if classifier_channels else None,
         },
         "grid": {
             "lowGrid": int(low_grid),
@@ -724,6 +823,7 @@ def export_dense_cue_pack(
                 "byteLength": desc.get("byteLength"),
                 "sha256": desc.get("sha256"),
                 "channelOrder": desc.get("channelOrder"),
+                "targetChannels": desc.get("targetChannels"),
             } if isinstance(desc, dict) else None
             for name, desc in arrays.items()
         },
@@ -791,7 +891,7 @@ def threshold_sweep(
     thresholds: list[float],
 ) -> dict[str, dict[str, Any]]:
     sweep: dict[str, dict[str, Any]] = {}
-    for name in SPARSE_STRUCTURAL_CHANNELS:
+    for name in SPARSE_EVALUATION_CHANNELS:
         if name not in channel_names:
             continue
         rows = [support_metrics(pred, truth, channel_names, name, threshold) for threshold in thresholds]
@@ -911,15 +1011,17 @@ def main() -> int:
         thresholds = parse_threshold_sweep(args.threshold_sweep)
         classifier_thresholds = parse_classifier_threshold_sweep(args.ridge_classifier_threshold_sweep)
         ridge_classifier_enabled = args.ridge_classifier_mode == "binary"
-        if ridge_classifier_enabled and "ridge" not in selected_target_channels:
-            raise ProbeFailure("args", "--ridge-classifier-mode binary requires ridge in --target-channel-list for scalar baseline comparison.", {
-                "selectedTargetChannels": selected_target_channels,
-            })
         ridge_classifier_target_threshold = float(args.ridge_classifier_target_threshold)
         if ridge_classifier_enabled and (not math.isfinite(ridge_classifier_target_threshold) or ridge_classifier_target_threshold <= 0.0):
             raise ProbeFailure("args", "--ridge-classifier-target-threshold must be finite and positive.", {
                 "ridgeClassifierTargetThreshold": args.ridge_classifier_target_threshold,
             })
+        classifier_channels = parse_classifier_channels(str(args.classifier_channel_list), ridge_classifier_enabled)
+        classifier_target_thresholds = parse_classifier_target_thresholds(
+            str(args.classifier_target_thresholds),
+            classifier_channels,
+            ridge_classifier_target_threshold,
+        )
         loss_identity = (
             SPARSE_POSITIVE_WEIGHTED_LOSS_IDENTITY
             if args.sparse_loss_mode == "positive-weighted"
@@ -1001,13 +1103,13 @@ def main() -> int:
         block_test = low_block_values(low, test_idx, high_grid, low_grid)[:, target_indexes_np]
         ridge_model = fit_ridge(x_train, y_train, float(args.ridge))
         ridge_pred = predict_ridge(ridge_model, x_test) * y_std + y_mean
-        ridge_classifier_model = None
-        ridge_classifier_history: list[dict[str, float]] | None = None
-        ridge_classifier_train_labels = None
-        ridge_classifier_test_labels = None
-        ridge_classifier_positive_weight = None
-        ridge_classifier_pred = None
-        ridge_classifier_sweep = None
+        classifier_models: dict[str, dict[str, np.ndarray]] = {}
+        classifier_histories: dict[str, list[dict[str, float]]] = {}
+        classifier_train_labels: dict[str, np.ndarray] = {}
+        classifier_test_labels: dict[str, np.ndarray] = {}
+        classifier_positive_weights: dict[str, float] = {}
+        classifier_predictions: dict[str, np.ndarray] = {}
+        classifier_sweeps: dict[str, dict[str, Any]] = {}
         mlp_model, history = train_mlp(
             x_train,
             y_train,
@@ -1020,49 +1122,63 @@ def main() -> int:
             mlp_sample_weights,
         )
         mlp_pred = predict_mlp(mlp_model, x_test) * y_std + y_mean
-        if ridge_classifier_enabled:
-            ridge_channel_index = CHANNEL_ORDER.index("ridge")
-            ridge_classifier_train_labels = (np.abs(y_train_full[:, ridge_channel_index]) > ridge_classifier_target_threshold).astype(np.float32)
-            ridge_classifier_test_labels = (np.abs(y_test_full[:, ridge_channel_index]) > ridge_classifier_target_threshold).astype(np.float32)
-            train_positive_count = int(np.count_nonzero(ridge_classifier_train_labels))
-            train_negative_count = int(ridge_classifier_train_labels.size - train_positive_count)
+        for classifier_channel in classifier_channels:
+            full_channel_index = CHANNEL_ORDER.index(classifier_channel)
+            target_threshold = classifier_target_thresholds[classifier_channel]
+            train_labels = (np.abs(y_train_full[:, full_channel_index]) > target_threshold).astype(np.float32)
+            test_labels = (np.abs(y_test_full[:, full_channel_index]) > target_threshold).astype(np.float32)
+            train_positive_count = int(np.count_nonzero(train_labels))
+            train_negative_count = int(train_labels.size - train_positive_count)
             if train_positive_count <= 0:
-                raise ProbeFailure("ridge-classifier-train", "Ridge classifier target has no positive training samples.", {
-                    "ridgeClassifierTargetThreshold": ridge_classifier_target_threshold,
-                    "trainSamples": int(ridge_classifier_train_labels.size),
+                raise ProbeFailure("sparse-classifier-train", "Sparse classifier target has no positive training samples.", {
+                    "classifierChannel": classifier_channel,
+                    "classifierTargetThreshold": target_threshold,
+                    "trainSamples": int(train_labels.size),
                 })
-            requested_positive_weight = float(args.ridge_classifier_positive_weight)
-            ridge_classifier_positive_weight = (
+            requested_positive_weight = float(args.classifier_positive_weight)
+            if requested_positive_weight <= 0.0 and classifier_channel == "ridge":
+                requested_positive_weight = float(args.ridge_classifier_positive_weight)
+            positive_weight = (
                 requested_positive_weight
                 if requested_positive_weight > 0.0
                 else float(train_negative_count / max(1, train_positive_count))
             )
-            ridge_classifier_model, ridge_classifier_history = train_binary_mlp_classifier(
+            classifier_model, classifier_history = train_binary_mlp_classifier(
                 x_train,
-                ridge_classifier_train_labels,
+                train_labels,
                 int(args.hidden_width),
                 int(args.epochs),
                 int(args.batch_size),
                 float(args.learning_rate),
                 float(args.weight_decay),
-                ridge_classifier_positive_weight,
+                positive_weight,
                 rng,
             )
-            ridge_classifier_pred = predict_binary_mlp_classifier(ridge_classifier_model, x_test)
-            ridge_classifier_sweep = binary_threshold_sweep(ridge_classifier_pred, ridge_classifier_test_labels, classifier_thresholds)
+            classifier_pred = predict_binary_mlp_classifier(classifier_model, x_test)
+            classifier_models[classifier_channel] = classifier_model
+            classifier_histories[classifier_channel] = classifier_history
+            classifier_train_labels[classifier_channel] = train_labels
+            classifier_test_labels[classifier_channel] = test_labels
+            classifier_positive_weights[classifier_channel] = positive_weight
+            classifier_predictions[classifier_channel] = classifier_pred
+            classifier_sweeps[classifier_channel] = binary_threshold_sweep(classifier_pred, test_labels, classifier_thresholds)
         native_block_metrics = None
         native_ridge_metrics = None
         native_mlp_metrics = None
-        native_ridge_classifier_sweep = None
+        native_classifier_sweeps: dict[str, dict[str, Any]] = {}
         if native_low is not None:
             native_x_raw = local_features(native_low, test_idx, high_grid, low_grid, int(args.context_radius))
             native_x = apply_standardize(native_x_raw, x_mean, x_std)
             native_block = low_block_values(native_low, test_idx, high_grid, low_grid)[:, target_indexes_np]
             native_ridge = predict_ridge(ridge_model, native_x) * y_std + y_mean
             native_mlp = predict_mlp(mlp_model, native_x) * y_std + y_mean
-            if ridge_classifier_enabled and ridge_classifier_model is not None and ridge_classifier_test_labels is not None:
-                native_ridge_classifier_pred = predict_binary_mlp_classifier(ridge_classifier_model, native_x)
-                native_ridge_classifier_sweep = binary_threshold_sweep(native_ridge_classifier_pred, ridge_classifier_test_labels, classifier_thresholds)
+            for classifier_channel, classifier_model in classifier_models.items():
+                native_classifier_pred = predict_binary_mlp_classifier(classifier_model, native_x)
+                native_classifier_sweeps[classifier_channel] = binary_threshold_sweep(
+                    native_classifier_pred,
+                    classifier_test_labels[classifier_channel],
+                    classifier_thresholds,
+                )
             native_block_metrics = channel_metrics(native_block, y_test_raw, selected_target_channels)
             native_ridge_metrics = channel_metrics(native_ridge, y_test_raw, selected_target_channels)
             native_mlp_metrics = channel_metrics(native_mlp, y_test_raw, selected_target_channels)
@@ -1070,24 +1186,43 @@ def main() -> int:
         ridge_metrics = channel_metrics(ridge_pred, y_test_raw, selected_target_channels)
         mlp_metrics = channel_metrics(mlp_pred, y_test_raw, selected_target_channels)
         mlp_threshold_sweep = threshold_sweep(mlp_pred, y_test_raw, selected_target_channels, thresholds)
+        sparse_classifier_reports: dict[str, Any] = {}
+        for classifier_channel in classifier_channels:
+            classifier_sweep = classifier_sweeps[classifier_channel]
+            scalar_reference = mlp_threshold_sweep.get(classifier_channel)
+            sparse_classifier_reports[classifier_channel] = {
+                "identity": SPARSE_CLASSIFIER_IDENTITY,
+                "mode": "binary",
+                "targetChannel": classifier_channel,
+                "targetTruthThreshold": float(classifier_target_thresholds[classifier_channel]),
+                "probabilityThresholdSweep": classifier_sweep,
+                "scalarMlpReference": scalar_reference,
+                "bestJaccardImprovementVsScalarMlp": (
+                    float(classifier_sweep["bestJaccard"] - scalar_reference["bestJaccard"])
+                    if scalar_reference else None
+                ),
+                "bestPrecisionImprovementVsScalarMlp": (
+                    float(classifier_sweep["bestPrecision"] - scalar_reference["bestPrecision"])
+                    if scalar_reference else None
+                ),
+                "bestRecallDeltaVsScalarMlp": (
+                    float(classifier_sweep["bestRecall"] - scalar_reference["bestRecall"])
+                    if scalar_reference else None
+                ),
+                "trainPositiveCount": int(np.count_nonzero(classifier_train_labels[classifier_channel])),
+                "trainNegativeCount": int(classifier_train_labels[classifier_channel].size - np.count_nonzero(classifier_train_labels[classifier_channel])),
+                "testPositiveCount": int(np.count_nonzero(classifier_test_labels[classifier_channel])),
+                "testNegativeCount": int(classifier_test_labels[classifier_channel].size - np.count_nonzero(classifier_test_labels[classifier_channel])),
+                "positiveWeight": float(classifier_positive_weights[classifier_channel]),
+                "trainingHistory": classifier_histories[classifier_channel],
+            }
         ridge_classifier_report = None
-        if ridge_classifier_enabled and ridge_classifier_sweep is not None and ridge_classifier_train_labels is not None and ridge_classifier_test_labels is not None:
-            scalar_ridge_sweep = mlp_threshold_sweep["ridge"]
+        if "ridge" in sparse_classifier_reports:
             ridge_classifier_report = {
+                **sparse_classifier_reports["ridge"],
                 "identity": RIDGE_CLASSIFIER_IDENTITY,
                 "mode": str(args.ridge_classifier_mode),
-                "targetChannel": "ridge",
-                "targetTruthThreshold": ridge_classifier_target_threshold,
-                "probabilityThresholdSweep": ridge_classifier_sweep,
-                "scalarMlpRidgeReference": scalar_ridge_sweep,
-                "bestJaccardImprovementVsScalarMlp": float(ridge_classifier_sweep["bestJaccard"] - scalar_ridge_sweep["bestJaccard"]),
-                "bestPrecisionImprovementVsScalarMlp": float(ridge_classifier_sweep["bestPrecision"] - scalar_ridge_sweep["bestPrecision"]),
-                "bestRecallDeltaVsScalarMlp": float(ridge_classifier_sweep["bestRecall"] - scalar_ridge_sweep["bestRecall"]),
-                "trainPositiveCount": int(np.count_nonzero(ridge_classifier_train_labels)),
-                "trainNegativeCount": int(ridge_classifier_train_labels.size - np.count_nonzero(ridge_classifier_train_labels)),
-                "testPositiveCount": int(np.count_nonzero(ridge_classifier_test_labels)),
-                "testNegativeCount": int(ridge_classifier_test_labels.size - np.count_nonzero(ridge_classifier_test_labels)),
-                "positiveWeight": float(ridge_classifier_positive_weight) if ridge_classifier_positive_weight is not None else None,
+                "scalarMlpRidgeReference": sparse_classifier_reports["ridge"].get("scalarMlpReference"),
             }
         native_mlp_threshold_sweep = None
         if native_mlp_metrics is None:
@@ -1113,9 +1248,9 @@ def main() -> int:
                 corpus,
                 target_family,
                 high_source,
-                ridge_classifier_model,
-                ridge_classifier_positive_weight,
-                ridge_classifier_target_threshold,
+                classifier_models,
+                classifier_target_thresholds,
+                classifier_positive_weights,
                 int(args.dense_export_chunk_size),
             )
         report = {
@@ -1191,19 +1326,33 @@ def main() -> int:
                 },
                 "ridgeClassifier": {
                     "identity": RIDGE_CLASSIFIER_IDENTITY,
-                    "mode": str(args.ridge_classifier_mode),
+                    "mode": "binary",
                     "targetChannel": "ridge",
-                    "targetTruthThreshold": ridge_classifier_target_threshold,
+                    "targetTruthThreshold": float(classifier_target_thresholds.get("ridge", ridge_classifier_target_threshold)),
                     "probabilityThresholdSweep": classifier_thresholds,
-                    "positiveWeight": float(ridge_classifier_positive_weight) if ridge_classifier_positive_weight is not None else None,
+                    "positiveWeight": float(classifier_positive_weights["ridge"]) if "ridge" in classifier_positive_weights else None,
                     "hiddenWidth": int(args.hidden_width),
                     "epochs": int(args.epochs),
                     "batchSize": int(args.batch_size),
                     "learningRate": float(args.learning_rate),
                     "weightDecay": float(args.weight_decay),
-                    "trainingHistory": ridge_classifier_history,
+                    "trainingHistory": classifier_histories.get("ridge"),
                     "inputFeatureCount": int(x_train.shape[1]),
-                } if ridge_classifier_enabled else None,
+                } if "ridge" in classifier_models else None,
+                "sparseClassifiers": {
+                    "identity": SPARSE_CLASSIFIER_IDENTITY,
+                    "mode": "binary",
+                    "channels": classifier_channels,
+                    "targetTruthThresholds": classifier_target_thresholds,
+                    "probabilityThresholdSweep": classifier_thresholds,
+                    "positiveWeights": classifier_positive_weights,
+                    "hiddenWidth": int(args.hidden_width),
+                    "epochs": int(args.epochs),
+                    "batchSize": int(args.batch_size),
+                    "learningRate": float(args.learning_rate),
+                    "weightDecay": float(args.weight_decay),
+                    "inputFeatureCount": int(x_train.shape[1]),
+                } if classifier_channels else None,
             },
             "phaseAlignedTeacher": {
                 "blockUpsampleCopyBaseline": {
@@ -1228,6 +1377,7 @@ def main() -> int:
                     "thresholdSweep": mlp_threshold_sweep,
                 },
                 "ridgeClassifier": ridge_classifier_report,
+                "sparseClassifiers": sparse_classifier_reports,
             },
             "denseLearnedCuePack": dense_learned_cue_pack,
             "nativeLowTransfer": {
@@ -1254,8 +1404,18 @@ def main() -> int:
                 "ridgeClassifier": {
                     "identity": RIDGE_CLASSIFIER_IDENTITY,
                     "authority": "native-low-input-through-phase-aligned-trained-ridge-classifier-compared-to-same-high-ridge-label",
-                    "probabilityThresholdSweep": native_ridge_classifier_sweep,
-                } if native_ridge_classifier_sweep else None,
+                    "probabilityThresholdSweep": native_classifier_sweeps.get("ridge"),
+                } if "ridge" in native_classifier_sweeps else None,
+                "sparseClassifiers": {
+                    channel: {
+                        "identity": SPARSE_CLASSIFIER_IDENTITY,
+                        "authority": "native-low-input-through-phase-aligned-trained-sparse-classifier-compared-to-same-high-label",
+                        "targetChannel": channel,
+                        "targetTruthThreshold": float(classifier_target_thresholds[channel]),
+                        "probabilityThresholdSweep": sweep,
+                    }
+                    for channel, sweep in native_classifier_sweeps.items()
+                } if native_classifier_sweeps else None,
             },
             "perChannelVerdicts": verdicts(block_metrics, ridge_metrics, mlp_metrics, native_mlp_metrics, selected_target_channels),
             "nonGoals": [

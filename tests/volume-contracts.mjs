@@ -2575,6 +2575,11 @@ assert.match(sidecarMetaProbe, /--ridge-classifier-mode/, 'sidecar/meta probe ca
 assert.match(sidecarMetaProbe, /ridge-calibrated-classifier-v0/, 'sidecar/meta probe names a stable ridge calibrated classifier identity');
 assert.match(sidecarMetaProbe, /ridgeClassifier/, 'sidecar/meta probe reports ridge classifier metrics separately from scalar MLP metrics');
 assert.match(sidecarMetaProbe, /bestJaccardImprovementVsScalarMlp/, 'sidecar/meta ridge classifier reports calibrated Jaccard delta versus scalar MLP');
+assert.match(sidecarMetaProbe, /--classifier-channel-list/, 'sidecar/meta probe can broaden classifier heads beyond ridge');
+assert.match(sidecarMetaProbe, /sparse-cue-classifier-heads-v0/, 'sidecar/meta probe names generalized sparse cue classifier heads');
+assert.match(sidecarMetaProbe, /sparseClassifiers/, 'sidecar/meta probe reports generalized sparse classifier heads separately from ridge compatibility');
+assert.match(sidecarMetaProbe, /classifierProbabilityCues/, 'dense learned cue pack can export multi-channel classifier probability cues');
+assert.match(sidecarMetaProbe, /supportClassifierProbability[\s\S]*proximityClassifierProbability[\s\S]*coverageClassifierProbability/, 'dense learned cue pack supports support/proximity/coverage classifier probability channels');
 assert.match(sidecarMetaProbe, /--export-dense-cue-pack/, 'sidecar/meta probe can emit renderer-consumable dense learned cue packs, not only sampled metrics');
 assert.match(sidecarMetaProbe, /kaminos\.volume\.learned-sparse-cue-pack\.v0/, 'dense learned cue pack writes a stable manifest schema');
 assert.match(sidecarMetaProbe, /standard-radius2-mlp-support-ridge-proximity-v0/, 'dense learned cue pack names threshold-compatible learned cue family identity');
