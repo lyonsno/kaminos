@@ -282,6 +282,20 @@ try {
       const prepSteps = new Set(['depth-normalize', 'depth-min', 'depth-rescale', 'base-disparity', 'base-grid', 'base-color']);
       const prepEvents = routeTailEvents.filter(event => prepSteps.has(event?.step) && event?.role === 'cpu-materialization-chunk');
       const gaussianEvents = routeTailEvents.filter(event => event?.step === 'gaussian-compose' && event?.role === 'cpu-materialization-chunk');
+      const lateTailSteps = new Set(['ply-blob-assembly', 'object-url-create', 'output-bind']);
+      const lateTailBlockingIntervals = routeTailEvents
+        .filter(event => lateTailSteps.has(event?.step) && event?.kind === 'duty-interval')
+        .map(event => ({
+          phase: event.phase,
+          boundary: event.boundary,
+          stage: event.stage,
+          step: event.step,
+          role: event.role,
+          intervalStartMs: event.intervalStartMs,
+          intervalEndMs: event.intervalEndMs,
+          durationMs: event.durationMs,
+          bytes: event.bytes,
+        }));
       const splat = report.artifacts?.splat || null;
       const fire = window.kaminosSharpBreathingRoomKilnFireDebug?.state?.()?.fire || null;
       return {
@@ -299,6 +313,7 @@ try {
           prepSteps: [...new Set(prepEvents.map(event => event.step))].sort(),
           gaussianProcessedItems: [...new Set(gaussianEvents.map(event => event.processedItems).filter(Number.isFinite))].sort((a, b) => a - b),
         },
+        lateTailBlockingIntervals,
         output: splat ? { path: splat.path, bytes: splat.bytes, sha256: splat.sha256, status: splat.status } : null,
         backgroundHeartbeat,
         volumeReleased: Boolean(fire?.volumeReleased),
@@ -321,6 +336,22 @@ try {
     if (backgroundHeartbeat?.schema !== 'sharp-webgpu.background-heartbeat.v0') throw new Error('Friendly firing is missing the corrected backgroundHeartbeat schema');
     if (!backgroundHeartbeat.inferenceWindow || !Number.isFinite(backgroundHeartbeat.inferenceWindow.durationMs)) throw new Error('Friendly firing is missing its measured inferenceWindow');
     if (!Array.isArray(backgroundHeartbeat.worstFrameGaps) || !backgroundHeartbeat.worstFrameGaps.length) throw new Error('Friendly firing is missing scoped worstFrameGaps');
+    const expectedLateTailSteps = ['ply-blob-assembly', 'object-url-create', 'output-bind'];
+    for (const step of expectedLateTailSteps) {
+      const interval = state.fullRoute.lateTailBlockingIntervals?.find(candidate => candidate.step === step);
+      if (!interval || !Number.isFinite(interval.intervalStartMs) || !Number.isFinite(interval.intervalEndMs) || !Number.isFinite(interval.durationMs)) {
+        throw new Error(`Friendly firing is missing ${step} blocking interval evidence: ${JSON.stringify(state.fullRoute.lateTailBlockingIntervals)}`);
+      }
+    }
+    if (backgroundHeartbeat.worstFrameGaps[0]?.overlapClassification === 'uninstrumented-gap') {
+      throw new Error(`Friendly firing residual maximum gap remains unattributed: ${JSON.stringify(backgroundHeartbeat.worstFrameGaps[0])}`);
+    }
+    const topGapIntervalEvidence = backgroundHeartbeat.worstFrameGaps[0]?.overlappedEvents?.filter(event =>
+      Number.isFinite(event?.intervalStartMs) && Number.isFinite(event?.intervalEndMs)
+    ) || [];
+    if (!topGapIntervalEvidence.length) {
+      throw new Error(`Friendly firing residual maximum gap has no overlapping interval evidence: ${JSON.stringify(backgroundHeartbeat.worstFrameGaps[0])}`);
+    }
     if (!state.fullRoute.output?.sha256 || state.fullRoute.output.status !== 'real') throw new Error('Friendly firing did not preserve a real hashed output');
     if (!state.fullRoute.volumeReleased) throw new Error('Friendly firing completed without releasing the furnace volume');
     phase = 'returning-to-completed-crucible';
