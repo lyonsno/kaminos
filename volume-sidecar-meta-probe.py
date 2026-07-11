@@ -23,11 +23,15 @@ import numpy as np
 
 REPORT_SCHEMA = "kaminos.volume.sidecar-meta-probe.v0"
 REPORT_IDENTITY = "phase-aligned-v1-sidecar-meta-learned-probe-v0"
+CUE_PACK_SCHEMA = "kaminos.volume.learned-sparse-cue-pack.v0"
+CUE_PACK_IDENTITY = "dense-learned-sparse-cue-pack-v0"
 CORPUS_SCHEMA = "kaminos.volume.phase-aligned-learned-probe-corpus.v0"
 SIDECAR_IDENTITY = "baked-boundary-sidecar-v1"
 SIDECAR_AUTHORITY = "band-limited-support-coverage-ridge-footprint-proximity-normal-v2"
 CHANNEL_ORDER = ["support", "coverage", "ridge", "footprint", "proximity", "normalX", "normalY", "normalZ"]
 SPARSE_STRUCTURAL_CHANNELS = ["support", "ridge", "proximity"]
+LEARNED_CUE_FAMILY_IDENTITY = "standard-radius2-mlp-support-ridge-proximity-v0"
+THRESHOLD_IDENTITY_COMPATIBILITY = "calibrated-standard-mlp-sparse-cue-thresholds-v0"
 ALL_TARGET_FAMILY_IDENTITY = "all-v1-sidecar-meta-target-family-v0"
 SPARSE_STRUCTURAL_TARGET_FAMILY_IDENTITY = "sparse-structural-target-family-v0"
 BLOCK_BASELINE_IDENTITY = "block-upsample-copy-baseline-v0"
@@ -88,6 +92,12 @@ def parse_args() -> argparse.Namespace:
         help="Comma-separated probability thresholds for ridge classifier precision-recall-Jaccard calibration.",
     )
     parser.add_argument("--ridge-classifier-positive-weight", type=float, default=0.0, help="BCE positive class weight; 0 means use the train-set negative/positive ratio.")
+    parser.add_argument(
+        "--export-dense-cue-pack",
+        default="",
+        help="Optional path to write a renderer-consumable dense learned cue pack manifest with .f32 arrays.",
+    )
+    parser.add_argument("--dense-export-chunk-size", type=int, default=131_072, help="High-grid voxels predicted per dense export chunk.")
     parser.add_argument("--context-radius", type=int, default=1, help="Low-grid local context radius; 1 gives a 3x3x3 stencil.")
     parser.add_argument("--ridge", type=float, default=1.0e-3, help="Ridge regularization for local-linear-ridge-v0.")
     parser.add_argument("--hidden-width", type=int, default=64, help="Hidden width for local-context-mlp-v0.")
@@ -158,6 +168,23 @@ def read_json(path: Path) -> dict[str, Any]:
 def write_json(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2) + "\n")
+
+
+def write_f32_array(path: Path, values: np.ndarray) -> dict[str, Any]:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    arr = np.asarray(values, dtype="<f4")
+    arr.tofile(path)
+    return file_descriptor(path, list(arr.shape), "<f4")
+
+
+def file_descriptor(path: Path, shape: list[int], dtype: str) -> dict[str, Any]:
+    return {
+        "path": str(path),
+        "shape": shape,
+        "dtype": dtype,
+        "byteLength": int(path.stat().st_size),
+        "sha256": sha256_file(path),
+    }
 
 
 def sha256_file(path: Path) -> str:
@@ -544,6 +571,165 @@ def predict_binary_mlp_classifier(model: dict[str, np.ndarray], x: np.ndarray) -
     return sigmoid(np.tanh(x @ model["w1"] + model["b1"]) @ model["w2"] + model["b2"]).reshape((-1,)).astype(np.float32)
 
 
+def learned_cue_family_identity(context_radius: int, selected_channels: list[str], loss_identity: str) -> str:
+    if context_radius == 2 and selected_channels == SPARSE_STRUCTURAL_CHANNELS and loss_identity == STANDARD_MLP_LOSS_IDENTITY:
+        return LEARNED_CUE_FAMILY_IDENTITY
+    channel_part = "-".join(selected_channels)
+    return f"custom-radius{int(context_radius)}-mlp-{channel_part}-v0"
+
+
+def export_dense_cue_pack(
+    manifest_path: Path,
+    low: np.ndarray,
+    high_grid: int,
+    low_grid: int,
+    selected_target_channels: list[str],
+    mlp_model: dict[str, np.ndarray],
+    x_mean: np.ndarray,
+    x_std: np.ndarray,
+    y_mean: np.ndarray,
+    y_std: np.ndarray,
+    context_radius: int,
+    loss_identity: str,
+    corpus_path: Path,
+    corpus: dict[str, Any],
+    target_family: str,
+    high_source: dict[str, Any],
+    ridge_classifier_model: dict[str, np.ndarray] | None,
+    ridge_classifier_positive_weight: float | None,
+    ridge_classifier_target_threshold: float,
+    chunk_size: int,
+) -> dict[str, Any]:
+    missing_sparse = [name for name in SPARSE_STRUCTURAL_CHANNELS if name not in selected_target_channels]
+    if missing_sparse:
+        raise ProbeFailure("dense-export", "Dense cue pack export requires support,ridge,proximity target channels.", {
+            "selectedTargetChannels": selected_target_channels,
+            "missingChannels": missing_sparse,
+        })
+    if chunk_size <= 0:
+        raise ProbeFailure("dense-export", "--dense-export-chunk-size must be positive.", {"denseExportChunkSize": chunk_size})
+    cells = high_grid ** 3
+    out_dir = manifest_path.parent
+    out_dir.mkdir(parents=True, exist_ok=True)
+    scalar_path = out_dir / "scalar-mlp-cues.f32"
+    scalar_shape = [high_grid, high_grid, high_grid, len(selected_target_channels)]
+    scalar_out = np.memmap(scalar_path, dtype="<f4", mode="w+", shape=(cells, len(selected_target_channels)))
+    ridge_probability_path = out_dir / "ridge-classifier-probability.f32"
+    ridge_probability_out = None
+    if ridge_classifier_model is not None:
+        ridge_probability_out = np.memmap(ridge_probability_path, dtype="<f4", mode="w+", shape=(cells, 1))
+    for start in range(0, cells, chunk_size):
+        stop = min(cells, start + chunk_size)
+        indexes = np.arange(start, stop, dtype=np.int64)
+        x_raw = local_features(low, indexes, high_grid, low_grid, context_radius)
+        x = apply_standardize(x_raw, x_mean, x_std)
+        scalar_out[start:stop] = (predict_mlp(mlp_model, x) * y_std + y_mean).astype("<f4")
+        if ridge_probability_out is not None and ridge_classifier_model is not None:
+            ridge_probability_out[start:stop, 0] = predict_binary_mlp_classifier(ridge_classifier_model, x).astype("<f4")
+    scalar_out.flush()
+    arrays: dict[str, Any] = {
+        "scalarMlpCue": {
+            **file_descriptor(scalar_path, scalar_shape, "<f4"),
+            "channelOrder": selected_target_channels,
+            "meaning": "Full high-grid scalar MLP predictions for selected v1 boundary/meta cue channels.",
+        }
+    }
+    if ridge_probability_out is not None:
+        ridge_probability_out.flush()
+        arrays["ridgeClassifierProbability"] = {
+            **file_descriptor(ridge_probability_path, [high_grid, high_grid, high_grid, 1], "<f4"),
+            "channelOrder": ["ridgeClassifierProbability"],
+            "targetChannel": "ridge",
+            "targetTruthThreshold": float(ridge_classifier_target_threshold),
+            "meaning": "Full high-grid probability that abs(truth ridge) exceeds the ridge classifier target threshold.",
+        }
+    else:
+        arrays["ridgeClassifierProbability"] = None
+    pack = {
+        "schema": CUE_PACK_SCHEMA,
+        "identity": CUE_PACK_IDENTITY,
+        "status": "captured",
+        "failurePhase": None,
+        "capturedAt": now_iso(),
+        "authority": "offline-phase-aligned-learned-cue-pack-not-browser-witness-not-product-inference",
+        "learnedCueFamily": {
+            "identity": learned_cue_family_identity(context_radius, selected_target_channels, loss_identity),
+            "thresholdCompatibility": THRESHOLD_IDENTITY_COMPATIBILITY,
+            "thresholdCompatibilityMeaning": "Renderer-side calibrated thresholds were tuned against this scalar MLP sparse cue family; exact usefulness still requires receiver/witness smoke.",
+        },
+        "source": {
+            "corpusManifest": str(corpus_path),
+            "corpusSchema": corpus.get("schema"),
+            "corpusIdentity": corpus.get("identity"),
+            "route": corpus.get("route"),
+            "highSource": high_source,
+        },
+        "inputFeatureIdentity": {
+            "identity": FEATURE_IDENTITY,
+            "contextRadius": int(context_radius),
+            "featureCount": int(x_mean.shape[1]),
+            "inputGrid": int(low_grid),
+            "outputGrid": int(high_grid),
+            "includesHighSubcellCoordinates": True,
+            "includesAbsoluteCoordinates": False,
+            "source": "downsampled-high boundary sidecar input from the phase-aligned corpus",
+        },
+        "trainingTargetIdentity": {
+            "sidecarIdentity": SIDECAR_IDENTITY,
+            "sidecarAuthority": SIDECAR_AUTHORITY,
+            "targetFamily": target_family,
+            "selectedTargetChannels": selected_target_channels,
+            "channelOrder": CHANNEL_ORDER,
+        },
+        "models": {
+            "scalarMlp": {
+                "identity": MLP_IDENTITY,
+                "lossIdentity": loss_identity,
+                "outputChannels": selected_target_channels,
+            },
+            "ridgeClassifier": {
+                "identity": RIDGE_CLASSIFIER_IDENTITY,
+                "targetChannel": "ridge",
+                "targetTruthThreshold": float(ridge_classifier_target_threshold),
+                "positiveWeight": float(ridge_classifier_positive_weight) if ridge_classifier_positive_weight is not None else None,
+            } if ridge_classifier_model is not None else None,
+        },
+        "grid": {
+            "lowGrid": int(low_grid),
+            "highGrid": int(high_grid),
+            "reduction": int(high_grid // low_grid),
+            "shape": [int(high_grid), int(high_grid), int(high_grid)],
+            "chunkSize": int(chunk_size),
+        },
+        "arrays": arrays,
+        "failurePhaseMeaning": "If status is failure, failurePhase names the last trustworthy export phase; captured means arrays were written and checksummed.",
+        "nonGoals": [
+            "not a native-low deployment cue pack",
+            "not a browser/WebGPU receiver proof",
+            "not product-facing visual closure",
+        ],
+    }
+    write_json(manifest_path, pack)
+    return {
+        "schema": CUE_PACK_SCHEMA,
+        "identity": CUE_PACK_IDENTITY,
+        "status": "captured",
+        "manifest": str(manifest_path),
+        "learnedCueFamily": pack["learnedCueFamily"],
+        "arrays": {
+            name: {
+                "path": desc.get("path"),
+                "shape": desc.get("shape"),
+                "dtype": desc.get("dtype"),
+                "byteLength": desc.get("byteLength"),
+                "sha256": desc.get("sha256"),
+                "channelOrder": desc.get("channelOrder"),
+            } if isinstance(desc, dict) else None
+            for name, desc in arrays.items()
+        },
+    }
+
+
 def channel_metrics(pred: np.ndarray, truth: np.ndarray, channel_names: list[str]) -> dict[str, dict[str, float]]:
     result: dict[str, dict[str, float]] = {}
     for i, name in enumerate(channel_names):
@@ -908,6 +1094,30 @@ def main() -> int:
             native_mlp_metrics = mlp_metrics
         elif native_low is not None:
             native_mlp_threshold_sweep = threshold_sweep(native_mlp, y_test_raw, selected_target_channels, thresholds)
+        dense_learned_cue_pack = None
+        if str(args.export_dense_cue_pack).strip():
+            dense_learned_cue_pack = export_dense_cue_pack(
+                Path(str(args.export_dense_cue_pack)).resolve(),
+                low,
+                high_grid,
+                low_grid,
+                selected_target_channels,
+                mlp_model,
+                x_mean,
+                x_std,
+                y_mean,
+                y_std,
+                int(args.context_radius),
+                loss_identity,
+                corpus_path,
+                corpus,
+                target_family,
+                high_source,
+                ridge_classifier_model,
+                ridge_classifier_positive_weight,
+                ridge_classifier_target_threshold,
+                int(args.dense_export_chunk_size),
+            )
         report = {
             "schema": REPORT_SCHEMA,
             "identity": REPORT_IDENTITY,
@@ -1019,6 +1229,7 @@ def main() -> int:
                 },
                 "ridgeClassifier": ridge_classifier_report,
             },
+            "denseLearnedCuePack": dense_learned_cue_pack,
             "nativeLowTransfer": {
                 "status": "computed" if native_block_metrics is not None else "not-requested",
                 "authority": "native-low-input-through-phase-aligned-trained-probes-compared-to-same-high-target",

@@ -2575,6 +2575,15 @@ assert.match(sidecarMetaProbe, /--ridge-classifier-mode/, 'sidecar/meta probe ca
 assert.match(sidecarMetaProbe, /ridge-calibrated-classifier-v0/, 'sidecar/meta probe names a stable ridge calibrated classifier identity');
 assert.match(sidecarMetaProbe, /ridgeClassifier/, 'sidecar/meta probe reports ridge classifier metrics separately from scalar MLP metrics');
 assert.match(sidecarMetaProbe, /bestJaccardImprovementVsScalarMlp/, 'sidecar/meta ridge classifier reports calibrated Jaccard delta versus scalar MLP');
+assert.match(sidecarMetaProbe, /--export-dense-cue-pack/, 'sidecar/meta probe can emit renderer-consumable dense learned cue packs, not only sampled metrics');
+assert.match(sidecarMetaProbe, /kaminos\.volume\.learned-sparse-cue-pack\.v0/, 'dense learned cue pack writes a stable manifest schema');
+assert.match(sidecarMetaProbe, /standard-radius2-mlp-support-ridge-proximity-v0/, 'dense learned cue pack names threshold-compatible learned cue family identity');
+assert.match(sidecarMetaProbe, /denseLearnedCuePack/, 'sidecar/meta probe report points to the dense learned cue pack manifest');
+assert.match(sidecarMetaProbe, /ridgeClassifierProbability/, 'dense learned cue pack can include ridge classifier probability/logit-style support');
+assert.match(sidecarMetaProbe, /sha256/, 'dense learned cue pack records checksums for exported arrays');
+assert.match(sidecarMetaProbe, /byteLength/, 'dense learned cue pack records byte lengths for exported arrays');
+assert.match(sidecarMetaProbe, /shape/, 'dense learned cue pack records shapes for exported arrays');
+assert.match(sidecarMetaProbe, /dtype/, 'dense learned cue pack records dtype for exported arrays');
 assert.match(sidecarMetaProbe, /nativeLowTransfer/, 'sidecar/meta probe separates native-low transfer from phase-aligned teacher learnability');
 assert.match(sidecarMetaProbe, /perChannelVerdicts/, 'sidecar/meta probe emits per-channel verdicts instead of only a global score');
 assert.match(sidecarMetaProbe, /failurePhase/, 'sidecar/meta probe writes failure-phase reports for missing or mismatched corpus data');
