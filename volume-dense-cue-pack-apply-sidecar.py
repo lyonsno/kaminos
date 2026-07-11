@@ -170,7 +170,36 @@ def clip01(values: np.ndarray) -> np.ndarray:
     return np.clip(np.nan_to_num(values, nan=0.0, posinf=1.0, neginf=0.0), 0.0, 1.0).astype(np.float32, copy=False)
 
 
-def assemble_predicted_sidecar(low_high: np.ndarray, scalar: np.ndarray, classifier: np.ndarray) -> tuple[np.ndarray, np.ndarray, dict[str, Any]]:
+def parse_float_arg(value: str, name: str, minimum: float = 0.0, maximum: float = 4.0) -> float:
+    try:
+        parsed = float(value)
+    except ValueError as err:
+        raise argparse.ArgumentTypeError(f"{name} must be numeric") from err
+    if not math.isfinite(parsed) or parsed < minimum or parsed > maximum:
+        raise argparse.ArgumentTypeError(f"{name} must be in [{minimum}, {maximum}]")
+    return parsed
+
+
+def blend_parameters(args: argparse.Namespace) -> dict[str, float]:
+    return {
+        "learnedStrength": float(args.learned_strength),
+        "supportClassifierGain": float(args.support_classifier_gain),
+        "supportScalarGain": float(args.support_scalar_gain),
+        "coverageClassifierGain": float(args.coverage_classifier_gain),
+        "coverageScalarGain": float(args.coverage_scalar_gain),
+        "ridgeClassifierGain": float(args.ridge_classifier_gain),
+        "ridgeScalarGain": float(args.ridge_scalar_gain),
+        "proximityClassifierGain": float(args.proximity_classifier_gain),
+        "proximityScalarGain": float(args.proximity_scalar_gain),
+    }
+
+
+def assemble_predicted_sidecar(
+    low_high: np.ndarray,
+    scalar: np.ndarray,
+    classifier: np.ndarray,
+    params: dict[str, float],
+) -> tuple[np.ndarray, np.ndarray, dict[str, Any]]:
     support_prob = clip01(classifier[:, CLASSIFIER_CHANNELS.index("supportClassifierProbability")])
     coverage_prob = clip01(classifier[:, CLASSIFIER_CHANNELS.index("coverageClassifierProbability")])
     ridge_prob = clip01(classifier[:, CLASSIFIER_CHANNELS.index("ridgeClassifierProbability")])
@@ -179,23 +208,42 @@ def assemble_predicted_sidecar(low_high: np.ndarray, scalar: np.ndarray, classif
     scalar_coverage = clip01(scalar[:, SCALAR_CHANNELS.index("coverage")])
     scalar_ridge = clip01(np.abs(scalar[:, SCALAR_CHANNELS.index("ridge")]))
     scalar_proximity = clip01(scalar[:, SCALAR_CHANNELS.index("proximity")])
-    side = np.zeros((low_high.shape[0], 4), dtype=np.float32)
-    meta = np.zeros((low_high.shape[0], 4), dtype=np.float32)
-    side[:, 0] = np.maximum(support_prob, 0.35 * scalar_support)
-    side[:, 1] = np.maximum(0.35 * coverage_prob, scalar_coverage * np.maximum(support_prob, proximity_prob))
-    side[:, 2] = np.maximum(0.65 * ridge_prob, scalar_ridge * np.maximum(0.35, support_prob))
-    side[:, 3] = clip01(low_high[:, COMBINED_CHANNELS.index("footprint")])
-    meta[:, 0] = np.maximum(proximity_prob, 0.35 * scalar_proximity)
-    meta[:, 1] = low_high[:, COMBINED_CHANNELS.index("normalX")]
-    meta[:, 2] = low_high[:, COMBINED_CHANNELS.index("normalY")]
-    meta[:, 3] = low_high[:, COMBINED_CHANNELS.index("normalZ")]
+    low_side = low_high[:, :4].astype(np.float32, copy=False)
+    low_meta = low_high[:, 4:].astype(np.float32, copy=False)
+    hybrid_side = np.zeros((low_high.shape[0], 4), dtype=np.float32)
+    hybrid_meta = np.zeros((low_high.shape[0], 4), dtype=np.float32)
+    hybrid_side[:, 0] = np.maximum(
+        params["supportClassifierGain"] * support_prob,
+        params["supportScalarGain"] * scalar_support,
+    )
+    hybrid_side[:, 1] = np.maximum(
+        params["coverageClassifierGain"] * coverage_prob,
+        params["coverageScalarGain"] * scalar_coverage * np.maximum(support_prob, proximity_prob),
+    )
+    hybrid_side[:, 2] = np.maximum(
+        params["ridgeClassifierGain"] * ridge_prob,
+        params["ridgeScalarGain"] * scalar_ridge * np.maximum(0.35, support_prob),
+    )
+    hybrid_side[:, 3] = clip01(low_high[:, COMBINED_CHANNELS.index("footprint")])
+    hybrid_meta[:, 0] = np.maximum(
+        params["proximityClassifierGain"] * proximity_prob,
+        params["proximityScalarGain"] * scalar_proximity,
+    )
+    hybrid_meta[:, 1] = low_high[:, COMBINED_CHANNELS.index("normalX")]
+    hybrid_meta[:, 2] = low_high[:, COMBINED_CHANNELS.index("normalY")]
+    hybrid_meta[:, 3] = low_high[:, COMBINED_CHANNELS.index("normalZ")]
+    learned_strength = params["learnedStrength"]
+    side = clip01(low_side + learned_strength * (hybrid_side - low_side))
+    meta = clip01(low_meta + learned_strength * (hybrid_meta - low_meta))
     return side, meta, {
-        "identity": "classifier-gated-scalar-sidecar-hybrid-v0",
-        "support": "max(supportClassifierProbability, 0.35 * scalarSupport)",
-        "coverage": "max(0.35 * coverageClassifierProbability, scalarCoverage * max(supportProbability, proximityProbability))",
-        "ridge": "max(0.65 * ridgeClassifierProbability, abs(scalarRidge) * max(0.35, supportProbability))",
+        "identity": "classifier-gated-scalar-sidecar-hybrid-v1",
+        "blend": "low + learnedStrength * (hybrid - low)",
+        "blendParameters": params,
+        "support": "max(supportClassifierGain * supportClassifierProbability, supportScalarGain * scalarSupport)",
+        "coverage": "max(coverageClassifierGain * coverageClassifierProbability, coverageScalarGain * scalarCoverage * max(supportProbability, proximityProbability))",
+        "ridge": "max(ridgeClassifierGain * ridgeClassifierProbability, ridgeScalarGain * abs(scalarRidge) * max(0.35, supportProbability))",
         "footprint": "lowInputUpsampled footprint",
-        "proximity": "max(proximityClassifierProbability, 0.35 * scalarProximity)",
+        "proximity": "max(proximityClassifierGain * proximityClassifierProbability, proximityScalarGain * scalarProximity)",
         "normals": "lowInputUpsampled normal proxy components",
     }
 
@@ -218,6 +266,15 @@ def main() -> int:
     parser.add_argument("--dense-cue-pack-manifest", required=True)
     parser.add_argument("--out-dir", required=True)
     parser.add_argument("--out", default="")
+    parser.add_argument("--learned-strength", type=lambda value: parse_float_arg(value, "--learned-strength", 0.0, 2.0), default=1.0)
+    parser.add_argument("--support-classifier-gain", type=lambda value: parse_float_arg(value, "--support-classifier-gain"), default=1.0)
+    parser.add_argument("--support-scalar-gain", type=lambda value: parse_float_arg(value, "--support-scalar-gain"), default=0.35)
+    parser.add_argument("--coverage-classifier-gain", type=lambda value: parse_float_arg(value, "--coverage-classifier-gain"), default=0.35)
+    parser.add_argument("--coverage-scalar-gain", type=lambda value: parse_float_arg(value, "--coverage-scalar-gain"), default=1.0)
+    parser.add_argument("--ridge-classifier-gain", type=lambda value: parse_float_arg(value, "--ridge-classifier-gain"), default=0.65)
+    parser.add_argument("--ridge-scalar-gain", type=lambda value: parse_float_arg(value, "--ridge-scalar-gain"), default=1.0)
+    parser.add_argument("--proximity-classifier-gain", type=lambda value: parse_float_arg(value, "--proximity-classifier-gain"), default=1.0)
+    parser.add_argument("--proximity-scalar-gain", type=lambda value: parse_float_arg(value, "--proximity-scalar-gain"), default=0.35)
     args = parser.parse_args()
     out_dir = Path(args.out_dir).resolve()
     out_path = Path(args.out).resolve() if args.out else out_dir / "manifest.json"
@@ -261,7 +318,8 @@ def main() -> int:
         out_dir.mkdir(parents=True, exist_ok=True)
         low_side = low_high[:, :4].astype(np.float32, copy=False)
         low_meta = low_high[:, 4:].astype(np.float32, copy=False)
-        pred_side, pred_meta, assembly = assemble_predicted_sidecar(low_high, scalar, classifier)
+        params = blend_parameters(args)
+        pred_side, pred_meta, assembly = assemble_predicted_sidecar(low_high, scalar, classifier, params)
         truth_side_path = out_dir / "truthHigh-boundary-sidecar.f32"
         truth_meta_path = out_dir / "truthHigh-boundary-sidecar-meta.f32"
         low_side_path = out_dir / "lowUpsampled-boundary-sidecar.f32"
@@ -309,6 +367,7 @@ def main() -> int:
             "scalarMlpCue": arrays.get("scalarMlpCue"),
             "classifierProbabilityCues": arrays.get("classifierProbabilityCues"),
             "assembly": assembly,
+            "blendParameters": params,
             "roles": {
                 "truthHigh": role(
                     fluid_desc,

@@ -32,6 +32,9 @@ assert.match(apply, /scalarMlpCue/, 'sidecar application preserves scalar MLP cu
 assert.match(apply, /predictedHigh/, 'sidecar application emits a predictedHigh role for render still harnesses');
 assert.match(apply, /lowUpsampled/, 'sidecar application emits a lowUpsampled role for baseline comparison');
 assert.match(apply, /failurePhase/, 'sidecar application writes failure-phase reports for corrupt cue packs');
+assert.match(apply, /--learned-strength/, 'sidecar application exposes low-anchored learned strength for blend tuning');
+assert.match(apply, /blendParameters/, 'sidecar application records exact blend parameters in the manifest');
+assert.match(apply, /low \+ learnedStrength \* \(hybrid - low\)/, 'sidecar application documents low-anchored prediction blend');
 assert.match(render, /SIDECAR_APPLICATION_SCHEMA/, 'render still harness accepts sidecar application manifests');
 assert.match(render, /const sidecarApplication = application\.schema === SIDECAR_APPLICATION_SCHEMA;/, 'render still harness gates sidecar-specific behavior by schema');
 assert.match(render, /for \(const roleName of \['truthHigh', 'lowUpsampled', 'predictedHigh'\]\)/, 'sidecar application renders truth, low, and predicted roles through one override path');
