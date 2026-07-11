@@ -10724,6 +10724,36 @@ const TALL_PLUME_OPERATOR_PRESETS = {
     canonicalCenterline: 1.00,
     canonicalBodyBalance: 0.00,
   },
+  hostile_multiflame_pressure_force_0711: {
+    extends: 'boundary_fire_bonfire_a_la_ruffles_0709',
+    label: 'hostile multiflame pressure force 0711',
+    volumeScene: 'tall_plume',
+    density: 6.00,
+    fire: 3.50,
+    radiance: 0.00,
+    glow: 0.00,
+    detailScale: 1.00,
+    raySteps: 96,
+    adaptiveRays: 0.65,
+    majorantSkip: 0.00,
+    temporalAccum: 0.00,
+    temporalJitter: 0.00,
+    historyClamp: 0.00,
+    renderScale: 0.35,
+    resolution: 160,
+    majorantGrid: 48,
+    oracleActivityCurlNoise: 0.00,
+    oracleActivityVorticity: 3.00,
+    oracleActivityMaterial: 0.00,
+    pressureMode: 'activity-tiers',
+    activityPressureMaxTier: 4,
+    activityPressureDispatchStrategy: 'coarse',
+    activityPressureShadowOverhead: false,
+    gpuTiming: true,
+    activityVorticityGate: 0.00,
+    activityDetailGate: 0.00,
+    sourceCaptureHash: 'cae5b1e17bb7cccb',
+  },
   exploding_jellow_fireball_motherfucker_0706: {
     label: 'exploding jellow fireball motherfucker 0706',
     volumeScene: 'tall_plume',
@@ -10821,6 +10851,17 @@ const TALL_PLUME_OPERATOR_PRESETS = {
     canonicalBodyBalance: 0.00,
   },
 };
+
+function resolveTallPlumeOperatorPreset(name, seen = new Set()) {
+  const preset = TALL_PLUME_OPERATOR_PRESETS[name];
+  if (!preset || seen.has(name)) return preset || null;
+  if (!preset.extends) return preset;
+  seen.add(name);
+  const parent = resolveTallPlumeOperatorPreset(preset.extends, seen) || {};
+  const resolved = { ...parent, ...preset };
+  delete resolved.extends;
+  return resolved;
+}
 
 const DEFAULT_VOLUME_SMOKE_TALL_PRESET = 'boundary_fire_bonfire_a_la_ruffles_0709';
 
@@ -11499,13 +11540,54 @@ function applyVolumeScenePreset(scene, options = {}) {
   return normalizedScene;
 }
 
+function normalizeVolumeActivityPressureMaxTier(value, fallback = 4) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric)
+    ? Math.max(2, Math.min(4, Math.round(numeric)))
+    : fallback;
+}
+
+function normalizeVolumeActivityPressureDispatchStrategy(value, fallback = undefined) {
+  const mode = String(value || '').toLowerCase();
+  if (mode === 'dense' || mode === 'dense-masked' || mode === 'dense-full-grid-activity-pressure-masked-v0') {
+    return 'dense-full-grid-activity-pressure-masked-v0';
+  }
+  if (mode === 'coarse' || mode === 'coarse-mask' || mode === 'coarse-brick' || mode === 'coarse-brick-activity-pressure-mask-v0') {
+    return 'coarse-brick-activity-pressure-mask-v0';
+  }
+  return fallback;
+}
+
 function applyTallPlumeOperatorPreset(name, options = {}) {
-  const preset = TALL_PLUME_OPERATOR_PRESETS[name];
+  const preset = resolveTallPlumeOperatorPreset(name);
   if (!preset) return false;
   applyVolumeScenePreset(preset.volumeScene || 'tall_plume', { keepBudgetPreset: true });
   for (const [key, value] of Object.entries(preset)) {
-    if (key === 'label' || key === 'volumeScene') continue;
+    if (key === 'label' || key === 'volumeScene' || key === 'sourceCaptureHash') continue;
     setVolumeControlValue(volumeSceneControlId(key), formatVolumePresetControlValue(key, value));
+  }
+  if (preset.activityPressureMaxTier !== undefined) {
+    routedVolumeActivityPressureMaxTier = normalizeVolumeActivityPressureMaxTier(preset.activityPressureMaxTier, routedVolumeActivityPressureMaxTier);
+    routedVolumeActivityPressureP4Enabled = routedVolumeActivityPressureMaxTier >= 4;
+  }
+  if (preset.activityPressureP4Enabled !== undefined && preset.activityPressureMaxTier === undefined) {
+    routedVolumeActivityPressureP4Enabled = !!preset.activityPressureP4Enabled;
+    routedVolumeActivityPressureMaxTier = routedVolumeActivityPressureP4Enabled ? 4 : 3;
+  }
+  if (preset.activityPressureReadbackCadence !== undefined) {
+    const cadence = Number(preset.activityPressureReadbackCadence);
+    routedVolumeActivityPressureReadbackCadence = Number.isFinite(cadence)
+      ? Math.max(1, Math.min(240, Math.round(cadence)))
+      : undefined;
+  }
+  if (preset.activityPressureDispatchStrategy !== undefined) {
+    routedVolumeActivityPressureDispatchStrategy = normalizeVolumeActivityPressureDispatchStrategy(preset.activityPressureDispatchStrategy, routedVolumeActivityPressureDispatchStrategy);
+  }
+  if (preset.activityPressureShadowOverhead !== undefined) {
+    routedVolumeActivityPressureShadowOverhead = !!preset.activityPressureShadowOverhead;
+  }
+  if (preset.gpuTiming !== undefined) {
+    routedVolumeGpuTiming = !!preset.gpuTiming;
   }
   if (!options.keepBudgetPreset) {
     activeVolumeRayBudgetPreset = '';
@@ -17106,33 +17188,28 @@ async function initKaminosVolumeRoute() {
   setVolumeControlValue('volume-pressure-tier-hero-min', routedPressureTierControls.heroMin.toFixed(2));
   setVolumeControlValue('volume-pressure-tier-hero-max', routedPressureTierControls.heroMax.toFixed(2));
   if (params.has('volume_activity_pressure_max_tier')) {
-    const routeActivityPressureMaxTier = Number(params.get('volume_activity_pressure_max_tier'));
-    routedVolumeActivityPressureMaxTier = Number.isFinite(routeActivityPressureMaxTier)
-      ? Math.max(2, Math.min(4, Math.round(routeActivityPressureMaxTier)))
-      : 4;
+    routedVolumeActivityPressureMaxTier = normalizeVolumeActivityPressureMaxTier(params.get('volume_activity_pressure_max_tier'), routedVolumeActivityPressureMaxTier);
     routedVolumeActivityPressureP4Enabled = routedVolumeActivityPressureMaxTier >= 4;
   } else if (params.has('volume_activity_pressure_p4')) {
     const routeActivityPressureP4 = String(params.get('volume_activity_pressure_p4') || '').toLowerCase();
     routedVolumeActivityPressureP4Enabled = !(routeActivityPressureP4 === '0' || routeActivityPressureP4 === 'false' || routeActivityPressureP4 === 'off' || routeActivityPressureP4 === 'no');
     routedVolumeActivityPressureMaxTier = routedVolumeActivityPressureP4Enabled ? 4 : 3;
-  } else {
-    routedVolumeActivityPressureP4Enabled = true;
-    routedVolumeActivityPressureMaxTier = 4;
   }
   const routeActivityPressureReadbackCadence = Number(params.get('volume_activity_pressure_readback_cadence'));
   routedVolumeActivityPressureReadbackCadence = params.has('volume_activity_pressure_readback_cadence') && Number.isFinite(routeActivityPressureReadbackCadence)
     ? Math.max(1, Math.min(240, Math.round(routeActivityPressureReadbackCadence)))
-    : undefined;
-  const routeActivityPressureDispatch = String(params.get('volume_activity_pressure_dispatch') || '').toLowerCase();
-  routedVolumeActivityPressureDispatchStrategy = routeActivityPressureDispatch === 'dense' || routeActivityPressureDispatch === 'dense-masked' || routeActivityPressureDispatch === 'dense-full-grid-activity-pressure-masked-v0'
-    ? 'dense-full-grid-activity-pressure-masked-v0'
-    : (routeActivityPressureDispatch === 'coarse' || routeActivityPressureDispatch === 'coarse-mask' || routeActivityPressureDispatch === 'coarse-brick' || routeActivityPressureDispatch === 'coarse-brick-activity-pressure-mask-v0'
-      ? 'coarse-brick-activity-pressure-mask-v0'
-      : undefined);
-  const routeActivityPressureShadowOverhead = String(params.get('volume_activity_pressure_shadow_overhead') || '').toLowerCase();
-  routedVolumeActivityPressureShadowOverhead = routeActivityPressureShadowOverhead === '1' || routeActivityPressureShadowOverhead === 'true' || routeActivityPressureShadowOverhead === 'yes' || routeActivityPressureShadowOverhead === 'on' || routeActivityPressureShadowOverhead === 'shadow' || routeActivityPressureShadowOverhead === 'overhead';
-  const routeVolumeGpuTiming = String(params.get('volume_gpu_timing') || '').toLowerCase();
-  routedVolumeGpuTiming = routeVolumeGpuTiming === '1' || routeVolumeGpuTiming === 'true' || routeVolumeGpuTiming === 'yes' || routeVolumeGpuTiming === 'on' || routeVolumeGpuTiming === 'timestamp' || routeVolumeGpuTiming === 'timestamps';
+    : routedVolumeActivityPressureReadbackCadence;
+  if (params.has('volume_activity_pressure_dispatch')) {
+    routedVolumeActivityPressureDispatchStrategy = normalizeVolumeActivityPressureDispatchStrategy(params.get('volume_activity_pressure_dispatch'), undefined);
+  }
+  if (params.has('volume_activity_pressure_shadow_overhead')) {
+    const routeActivityPressureShadowOverhead = String(params.get('volume_activity_pressure_shadow_overhead') || '').toLowerCase();
+    routedVolumeActivityPressureShadowOverhead = routeActivityPressureShadowOverhead === '1' || routeActivityPressureShadowOverhead === 'true' || routeActivityPressureShadowOverhead === 'yes' || routeActivityPressureShadowOverhead === 'on' || routeActivityPressureShadowOverhead === 'shadow' || routeActivityPressureShadowOverhead === 'overhead';
+  }
+  if (params.has('volume_gpu_timing')) {
+    const routeVolumeGpuTiming = String(params.get('volume_gpu_timing') || '').toLowerCase();
+    routedVolumeGpuTiming = routeVolumeGpuTiming === '1' || routeVolumeGpuTiming === 'true' || routeVolumeGpuTiming === 'yes' || routeVolumeGpuTiming === 'on' || routeVolumeGpuTiming === 'timestamp' || routeVolumeGpuTiming === 'timestamps';
+  }
   const routeActivityVorticityGate = Number(params.get('volume_activity_vorticity_gate'));
   if (params.has('volume_activity_vorticity_gate') && Number.isFinite(routeActivityVorticityGate)) {
     setVolumeControlValue('volume-activity-vorticity-gate', String(Math.max(0, Math.min(1, routeActivityVorticityGate))));

@@ -799,6 +799,35 @@ const TALL_PLUME_OPERATOR_PRESETS = {
     pyroOverdrive: 8.00,
     pressureMode: 'global-p3',
   },
+  hostile_multiflame_pressure_force_0711: {
+    extends: 'boundary_fire_bonfire_a_la_ruffles_0709',
+    volumeScene: 'tall_plume',
+    density: 6.00,
+    fire: 3.50,
+    radiance: 0.00,
+    glow: 0.00,
+    detailScale: 1.00,
+    raySteps: 96,
+    adaptiveRays: 0.65,
+    majorantSkip: 0.00,
+    temporalAccum: 0.00,
+    temporalJitter: 0.00,
+    historyClamp: 0.00,
+    renderScale: 0.35,
+    resolution: 160,
+    majorantGrid: 48,
+    oracleActivityCurlNoise: 0.00,
+    oracleActivityVorticity: 3.00,
+    oracleActivityMaterial: 0.00,
+    pressureMode: 'activity-tiers',
+    activityPressureMaxTier: 4,
+    activityPressureDispatchStrategy: 'coarse',
+    activityPressureShadowOverhead: false,
+    gpuTiming: true,
+    activityVorticityGate: 0.00,
+    activityDetailGate: 0.00,
+    sourceCaptureHash: 'cae5b1e17bb7cccb',
+  },
   exploding_jellow_fireball_motherfucker_0706: {
     volumeScene: 'tall_plume',
     density: 6.00,
@@ -895,6 +924,17 @@ const TALL_PLUME_OPERATOR_PRESETS = {
     canonicalBodyBalance: 0.00,
   },
 };
+
+function resolveTallPlumeOperatorPreset(name, seen = new Set()) {
+  const preset = TALL_PLUME_OPERATOR_PRESETS[name];
+  if (!preset || seen.has(name)) return preset || null;
+  if (!preset.extends) return preset;
+  seen.add(name);
+  const parent = resolveTallPlumeOperatorPreset(preset.extends, seen) || {};
+  const resolved = { ...parent, ...preset };
+  delete resolved.extends;
+  return resolved;
+}
 
 const DEFAULT_VOLUME_SMOKE_TALL_PRESET = 'boundary_fire_bonfire_a_la_ruffles_0709';
 const CANONICAL_VOLUME_MACRO_PRESETS = {
@@ -1018,7 +1058,7 @@ const requestedTallPlumePreset = routeParams.get('volume_tall_preset') || (shoul
 const expectedTallPlumePreset = Object.hasOwn(TALL_PLUME_OPERATOR_PRESETS, requestedTallPlumePreset)
   ? requestedTallPlumePreset
   : '';
-const tallPlumePreset = TALL_PLUME_OPERATOR_PRESETS[expectedTallPlumePreset] || {};
+const tallPlumePreset = resolveTallPlumeOperatorPreset(expectedTallPlumePreset) || {};
 const requestedVolumeScene = routeParams.get('volume_scene') || tallPlumePreset.volumeScene || 'compact_plume';
 const expectedVolumeScene = Object.hasOwn(VOLUME_SCENE_PRESETS, requestedVolumeScene)
   ? requestedVolumeScene
