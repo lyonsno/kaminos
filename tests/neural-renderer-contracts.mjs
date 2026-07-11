@@ -101,6 +101,21 @@ assert.match(
 );
 assert.match(
   trainer,
+  /previous-rgb-feature-sidecar-rgba/,
+  'offline renderer can condition on truthful previous low RGB plus current material and sidecar channels',
+);
+assert.match(
+  trainer,
+  /def attach_previous_low_rgb_features\(/,
+  'temporal input attachment is explicit and sequence-index aware',
+);
+assert.match(
+  trainer,
+  /previous-low-rgb-plus-boundary-sidecar-plus-shader-material-v0/,
+  'reports name previous-low temporal conditioning authority explicitly',
+);
+assert.match(
+  trainer,
   /np\.concatenate\(\[material_feature_image, sidecar_support_image\], axis=2\)/,
   'combined structural mode preserves both material and sidecar channels instead of substituting one for the other',
 );
