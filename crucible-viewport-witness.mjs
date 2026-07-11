@@ -18,7 +18,7 @@ for (let i = 2; i < process.argv.length; i += 1) {
   }
 }
 
-const usage = 'crucible-viewport-witness.mjs --url <kaminos-url> --out <screenshot.png> --report <report.json> [--cdp-port <port>]';
+const usage = 'crucible-viewport-witness.mjs --url <kaminos-url> --out <screenshot.png> --report <report.json> [--cdp-port <port>] [--fire-friendly]';
 if (args.has('help')) {
   console.log(usage);
   process.exit(0);
@@ -29,6 +29,8 @@ const out = args.get('out') || '/tmp/kaminos-crucible-viewport-witness.png';
 const reportPath = args.get('report') || '/tmp/kaminos-crucible-viewport-witness.json';
 const chrome = args.get('chrome') || process.env.KAMINOS_CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const port = Number(args.get('cdp-port') || 9341);
+const fireFriendly = args.has('fire-friendly');
+const fireTimeoutMs = Number(args.get('fire-timeout-ms') || 420000);
 const userDataDir = mkdtempSync(path.join(tmpdir(), 'kaminos-crucible-viewport-'));
 const startedAt = new Date().toISOString();
 const openGenerateTabExpression = 'document.querySelector(\'[data-tab="generate"]\').click()';
@@ -37,6 +39,7 @@ let phase = 'starting';
 let browser = null;
 let primaryOutputWritten = false;
 let stderr = '';
+let lastTrustworthyEvidence = null;
 const runtimeExceptions = [];
 
 function sleep(ms) {
@@ -202,6 +205,7 @@ try {
       receipt: document.getElementById('crucible-viewport-receipt')?.textContent || null,
     };
   })()`);
+  lastTrustworthyEvidence = { workroom: state };
   if (state.activeTab !== 'generate') throw new Error(`Generate tab did not activate: ${state.activeTab}`);
   if (state.workspaceHidden) throw new Error('Crucible viewport workspace is hidden');
   if (state.workroom !== 'active') throw new Error(`Crucible workroom identity missing: ${state.workroom}`);
@@ -236,7 +240,83 @@ try {
   if (state.sourceSelectionExercise.attempted && state.sourceSelectionExercise.effectiveAssetId !== state.sourceSelectionExercise.requestedAssetId) {
     throw new Error(`Crucible source selection did not become effective: ${JSON.stringify(state.sourceSelectionExercise)}`);
   }
+  lastTrustworthyEvidence = { ...lastTrustworthyEvidence, sourceSelectionExercise: state.sourceSelectionExercise };
   if (runtimeExceptions.length) throw new Error(`browser runtime exceptions: ${runtimeExceptions.join('; ')}`);
+
+  if (fireFriendly) {
+    phase = 'starting-friendly-firing';
+    await evaluate(ws, `(() => {
+      const profile = document.getElementById('crucible-viewport-profile-select');
+      profile.value = 'cooperative-spn-gaussian';
+      profile.dispatchEvent(new Event('change', { bubbles: true }));
+      document.getElementById('crucible-viewport-fire-button').click();
+      return true;
+    })()`);
+    const deadline = Date.now() + fireTimeoutMs;
+    let observedRunning = false;
+    let routeState = null;
+    while (Date.now() < deadline) {
+      await sleep(1000);
+      routeState = await evaluate(ws, `(() => ({
+        status: window.__kaminosKilnRouteBenchState?.status || null,
+        message: window.__kaminosKilnRouteBenchState?.message || null,
+        runningProfileId: window.__kaminosKilnRouteBenchState?.runningProfileId || null,
+      }))()`);
+      if (routeState.runningProfileId || routeState.status === 'running') observedRunning = true;
+      if (observedRunning && !routeState.runningProfileId && ['complete', 'error', 'evidence-only'].includes(routeState.status)) break;
+    }
+    if (!observedRunning) throw new Error(`Friendly firing never entered running state: ${JSON.stringify(routeState)}`);
+    if (!routeState || routeState.runningProfileId || !['complete', 'error', 'evidence-only'].includes(routeState.status)) {
+      throw new Error(`Friendly firing did not finish within ${fireTimeoutMs}ms: ${JSON.stringify(routeState)}`);
+    }
+    phase = 'reading-friendly-firing-evidence';
+    state.fullRoute = await evaluate(ws, `(() => {
+      const routeState = window.__kaminosKilnRouteBenchState || {};
+      const report = routeState.result?.report?.document || {};
+      const stage = (report.stages || [])[0] || {};
+      const adapter = stage.effectiveRoute?.adapterReport || {};
+      const backgroundHeartbeat = adapter.backgroundHeartbeat || null;
+      const splat = report.artifacts?.splat || null;
+      const fire = window.kaminosSharpBreathingRoomKilnFireDebug?.state?.()?.fire || null;
+      return {
+        status: routeState.status || null,
+        message: routeState.message || null,
+        requestedPipelineId: report.requestedPipelineId || null,
+        effectiveRouteId: report.effectiveRouteConfig?.routeId || null,
+        effectiveSharpRevision: adapter.revision || adapter.backend?.revision || null,
+        requestedScheduler: adapter.breathingRoom?.requestedScheduler || null,
+        effectiveScheduler: adapter.breathingRoom?.effectiveScheduler || null,
+        output: splat ? { path: splat.path, bytes: splat.bytes, sha256: splat.sha256, status: splat.status } : null,
+        backgroundHeartbeat,
+        volumeReleased: Boolean(fire?.volumeReleased),
+        volumeReleaseConfirmed: Boolean(fire?.volumeReleaseConfirmed),
+        autoOpenedTab: document.querySelector('.tab.active')?.dataset.tab || null,
+      };
+    })()`);
+    lastTrustworthyEvidence = { ...lastTrustworthyEvidence, fullRoute: state.fullRoute };
+    if (state.fullRoute.status !== 'complete') throw new Error(`Friendly firing failed: ${state.fullRoute.message || state.fullRoute.status}`);
+    if (state.fullRoute.effectiveSharpRevision !== '7a69d0aa44bcb58556779f51702d2720ae69be3e') {
+      throw new Error(`Friendly firing used unexpected SHARP revision: ${state.fullRoute.effectiveSharpRevision}`);
+    }
+    const backgroundHeartbeat = state.fullRoute.backgroundHeartbeat;
+    if (backgroundHeartbeat?.schema !== 'sharp-webgpu.background-heartbeat.v0') throw new Error('Friendly firing is missing the corrected backgroundHeartbeat schema');
+    if (!backgroundHeartbeat.inferenceWindow || !Number.isFinite(backgroundHeartbeat.inferenceWindow.durationMs)) throw new Error('Friendly firing is missing its measured inferenceWindow');
+    if (!Array.isArray(backgroundHeartbeat.worstFrameGaps) || !backgroundHeartbeat.worstFrameGaps.length) throw new Error('Friendly firing is missing scoped worstFrameGaps');
+    if (!state.fullRoute.output?.sha256 || state.fullRoute.output.status !== 'real') throw new Error('Friendly firing did not preserve a real hashed output');
+    if (!state.fullRoute.volumeReleased) throw new Error('Friendly firing completed without releasing the furnace volume');
+    phase = 'returning-to-completed-crucible';
+    await evaluate(ws, openGenerateTabExpression);
+    await sleep(900);
+    state.fullRoute.completedWorkroom = await evaluate(ws, `(() => ({
+      heatState: document.getElementById('crucible-viewport-workspace')?.dataset.crucibleHeatState || null,
+      routeStatus: document.getElementById('crucible-viewport-workspace')?.dataset.crucibleRouteStatus || null,
+      castButtonDisabled: Boolean(document.getElementById('crucible-viewport-cast-button')?.disabled),
+      cast: document.getElementById('crucible-viewport-cast')?.textContent || null,
+      receipt: document.getElementById('crucible-viewport-receipt')?.textContent || null,
+    }))()`);
+    lastTrustworthyEvidence = { ...lastTrustworthyEvidence, completedWorkroom: state.fullRoute.completedWorkroom };
+    if (state.fullRoute.completedWorkroom.castButtonDisabled) throw new Error('Completed real cast is not actuatable from the Crucible tray');
+  }
 
   phase = 'capturing-screenshot';
   const screenshot = await wsRequest(ws, 'Page.captureScreenshot', {
@@ -265,6 +345,7 @@ try {
   writeReport({
     ok: false,
     error: error.message || String(error),
+    lastTrustworthyEvidence,
     runtimeExceptions,
     stderrTail: stderr.slice(-1000),
   });

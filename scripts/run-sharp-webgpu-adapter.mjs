@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { createHash } from 'node:crypto';
-import { spawn } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
 import {
   copyFileSync,
@@ -57,6 +57,7 @@ const autoCropEvidencePath = resolveArtifactPath(args.get('--autocrop-evidence')
 const downloadDir = outputDir ? join(outputDir, '.sharp-webgpu-download') : null;
 const url = `http://127.0.0.1:${port}/`;
 const progressStreamEnabled = process.env.KAMINOS_PIPELINE_PROGRESS_STREAM === '1';
+const SHARP_BACKGROUND_HEARTBEAT_SCHEMA = 'sharp-webgpu.background-heartbeat.v0';
 
 let phase = 'initializing';
 let server = null;
@@ -210,6 +211,113 @@ function phaseChunkSizeFromScheduler(scheduler = {}) {
 
 function cloneJson(value) {
   return value == null ? value : JSON.parse(JSON.stringify(value));
+}
+
+function sharpRepoRevision() {
+  try {
+    return execFileSync('git', ['-C', sharpRepo, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+  } catch {
+    return null;
+  }
+}
+
+async function loadSharpHeartbeatHelpers() {
+  const helperPath = join(sharpRepo, 'tools', 'contention_witness_report.mjs');
+  if (!existsSync(helperPath)) throw new Error(`SHARP heartbeat helper missing: ${helperPath}`);
+  const helpers = await import(`${pathToFileURL(helperPath).href}?revision=${encodeURIComponent(sharpRepoRevision() || 'unknown')}`);
+  if (typeof helpers.createSharpBackgroundHeartbeatReport !== 'function') {
+    throw new Error('SHARP heartbeat helper does not export createSharpBackgroundHeartbeatReport');
+  }
+  return helpers;
+}
+
+function validateKaminosSharpHeartbeat(backgroundHeartbeat) {
+  const errors = [];
+  if (backgroundHeartbeat?.schema !== SHARP_BACKGROUND_HEARTBEAT_SCHEMA) {
+    errors.push(`backgroundHeartbeat.schema must be ${SHARP_BACKGROUND_HEARTBEAT_SCHEMA}`);
+  }
+  if (!backgroundHeartbeat?.inferenceWindow
+    || !Number.isFinite(backgroundHeartbeat.inferenceWindow.startMs)
+    || !Number.isFinite(backgroundHeartbeat.inferenceWindow.endMs)
+    || backgroundHeartbeat.inferenceWindow.endMs <= backgroundHeartbeat.inferenceWindow.startMs) {
+    errors.push('backgroundHeartbeat.inferenceWindow must identify a positive measured inference window');
+  }
+  if (!Array.isArray(backgroundHeartbeat?.worstFrameGaps) || backgroundHeartbeat.worstFrameGaps.length === 0) {
+    errors.push('backgroundHeartbeat.worstFrameGaps must contain scoped frame-gap rows');
+  }
+  for (const [index, gap] of backgroundHeartbeat?.worstFrameGaps?.entries?.() || []) {
+    if (!['scheduler-event-overlap', 'uninstrumented-gap'].includes(gap?.overlapClassification)) {
+      errors.push(`backgroundHeartbeat.worstFrameGaps[${index}] has invalid overlap classification`);
+    }
+    if (!Number.isFinite(gap?.startMs) || !Number.isFinite(gap?.endMs) || !Number.isFinite(gap?.durationMs)) {
+      errors.push(`backgroundHeartbeat.worstFrameGaps[${index}] must carry finite timing`);
+    }
+  }
+  if (errors.length) throw new Error(`SHARP heartbeat evidence invalid: ${errors.join('; ')}`);
+  return { ok: true, errors: [] };
+}
+
+async function installSharpHeartbeatProbe(page) {
+  await page.evaluate(() => {
+    const probe = {
+      running: true,
+      startedAt: performance.now(),
+      rafFrames: 0,
+      frameGapIntervals: [],
+      lastFrameAt: performance.now(),
+      inferenceWindow: null,
+    };
+
+    function frame(now) {
+      if (!probe.running) return;
+      probe.rafFrames += 1;
+      probe.frameGapIntervals.push({
+        startMs: probe.lastFrameAt,
+        endMs: now,
+        durationMs: now - probe.lastFrameAt,
+      });
+      probe.lastFrameAt = now;
+      requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+
+    window.__sharpContentionProbe = {
+      markInferenceStart() {
+        probe.inferenceWindow = { startMs: performance.now(), endMs: null };
+      },
+      markInferenceEnd() {
+        if (!probe.inferenceWindow) probe.inferenceWindow = { startMs: null, endMs: null };
+        probe.inferenceWindow.endMs = performance.now();
+      },
+      stop() {
+        probe.running = false;
+      },
+      snapshot() {
+        const window = probe.inferenceWindow || { startMs: null, endMs: null };
+        const scopedGaps = Number.isFinite(window.startMs) && Number.isFinite(window.endMs)
+          ? probe.frameGapIntervals
+            .map(gap => {
+              const startMs = Math.max(gap.startMs, window.startMs);
+              const endMs = Math.min(gap.endMs, window.endMs);
+              return { startMs, endMs, durationMs: endMs - startMs };
+            })
+            .filter(gap => gap.durationMs > 0)
+          : [];
+        const sortedDurations = scopedGaps.map(gap => gap.durationMs).sort((a, b) => a - b);
+        const p95Index = sortedDurations.length
+          ? Math.min(sortedDurations.length - 1, Math.floor(sortedDurations.length * 0.95))
+          : 0;
+        return {
+          inferenceWindow: { startMs: window.startMs, endMs: window.endMs },
+          rafFrames: scopedGaps.length,
+          maxFrameGapMs: sortedDurations.at(-1) || 0,
+          p95FrameGapMs: sortedDurations[p95Index] || 0,
+          longFrameCount: sortedDurations.filter(gap => gap > 50).length,
+          worstFrameGaps: scopedGaps.slice().sort((a, b) => b.durationMs - a.durationMs).slice(0, 8),
+        };
+      },
+    };
+  });
 }
 
 function sharpRouteDefinition() {
@@ -633,6 +741,7 @@ function reportBase(extra = {}) {
       modelFamily: 'SHARP-WebGPU',
       runtime: 'browser-webgpu',
       repo: sharpRepo,
+      revision: sharpRepoRevision(),
       appUrl: url,
       chromePath,
       weightsPath: join(sharpRepo, 'public', 'weights.bin'),
@@ -690,6 +799,7 @@ function validateInputs() {
   mkdirSync(downloadDir, { recursive: true });
   lastTrustworthyEvidence.input = fileEvidence(input);
   lastTrustworthyEvidence.weights = fileEvidence(join(sharpRepo, 'public', 'weights.bin'));
+  lastTrustworthyEvidence.sharpRevision = sharpRepoRevision();
 }
 
 function appendLog(kind, data) {
@@ -1033,6 +1143,7 @@ async function runBrowserInference() {
       element.checked = true;
       element.dispatchEvent(new Event('change', { bubbles: true }));
     });
+    await installSharpHeartbeatProbe(page);
 
     phase = 'uploading-input-image';
     const fileInput = await page.$('#file-input');
@@ -1063,7 +1174,30 @@ async function runBrowserInference() {
       return false;
     }, { timeout: timeoutMs });
     const result = JSON.parse(await outcome.jsonValue());
+    const heartbeatProbe = await page.evaluate(() => {
+      window.__sharpContentionProbe?.markInferenceEnd?.();
+      window.__sharpContentionProbe?.stop?.();
+      return window.__sharpContentionProbe?.snapshot?.() || null;
+    });
+    lastTrustworthyEvidence.heartbeatProbe = heartbeatProbe;
     if (!result.ok) throw new Error(result.error || 'SHARP-WebGPU page reported failure');
+
+    phase = 'validating-background-heartbeat';
+    const { createSharpBackgroundHeartbeatReport } = await loadSharpHeartbeatHelpers();
+    const heartbeatResponsiveness = {
+      rafFrames: heartbeatProbe?.rafFrames || 0,
+      maxFrameGapMs: heartbeatProbe?.maxFrameGapMs || 0,
+      p95FrameGapMs: heartbeatProbe?.p95FrameGapMs || 0,
+      longFrameCount: heartbeatProbe?.longFrameCount || 0,
+    };
+    const backgroundHeartbeat = createSharpBackgroundHeartbeatReport({
+      scheduler: result.schedulerTelemetry || {},
+      probe: heartbeatProbe || {},
+      responsiveness: heartbeatResponsiveness,
+    });
+    validateKaminosSharpHeartbeat(backgroundHeartbeat);
+    result.backgroundHeartbeat = backgroundHeartbeat;
+    lastTrustworthyEvidence.backgroundHeartbeat = backgroundHeartbeat;
 
     phase = 'downloading-ply';
     await page.click('#download-ply');
@@ -1081,9 +1215,11 @@ async function runBrowserInference() {
         modelFamily: 'SHARP-WebGPU',
         runtime: 'browser-webgpu',
         repo: sharpRepo,
+        revision: sharpRepoRevision(),
         appUrl: url,
       },
       scheduler: schedulerEvidence(result.schedulerTelemetry || null),
+      backgroundHeartbeat: result.backgroundHeartbeat,
       result,
       input: fileEvidence(input),
       output: fileEvidence(output),
@@ -1135,6 +1271,7 @@ try {
       autoCropEvidence: sideArtifacts[2],
     },
     inference: browserResult.result,
+    backgroundHeartbeat: browserResult.result.backgroundHeartbeat,
     schedulerTelemetry: browserResult.result.schedulerTelemetry || null,
     schedulerStatus: browserResult.result.schedulerTelemetry ? null : 'scheduler-unverified',
     metadataPath,

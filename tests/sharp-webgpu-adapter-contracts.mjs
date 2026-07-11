@@ -68,10 +68,20 @@ assert.match(wrapperSource, /browserLifecycleEvents/, 'wrapper reports must pres
 assert.match(wrapperSource, /page\.on\('close'/, 'wrapper must record page close events');
 assert.match(wrapperSource, /page\.on\('error'/, 'wrapper must record page crash/error events');
 assert.match(wrapperSource, /requestfailed/, 'wrapper must record failed browser requests when the live page fails before output');
+assert.match(wrapperSource, /sharp-webgpu\.background-heartbeat\.v0/, 'wrapper must require the reviewed SHARP background heartbeat schema');
+assert.match(wrapperSource, /createSharpBackgroundHeartbeatReport/, 'wrapper must classify gaps with SHARP source-owned heartbeat logic');
+assert.match(wrapperSource, /function installSharpHeartbeatProbe\(/, 'wrapper must install a RAF probe in the real browser route');
+assert.match(wrapperSource, /markInferenceStart[\s\S]*uploadFile\(input\)/, 'wrapper must open the heartbeat window immediately before inference actuation');
+assert.match(wrapperSource, /markInferenceEnd[\s\S]*backgroundHeartbeat/, 'wrapper must close the heartbeat window before constructing normal evidence');
+assert.match(wrapperSource, /backgroundHeartbeat\.inferenceWindow/, 'wrapper must fail loud when the scoped inference window is absent');
+assert.match(wrapperSource, /backgroundHeartbeat\.worstFrameGaps/, 'wrapper must fail loud when scoped worst-gap rows are absent');
+assert.match(wrapperSource, /sharpRepoRevision/, 'wrapper must record the effective SHARP source revision used by the route');
 
 const witnessSource = readFileSync(witnessPath, 'utf8');
 assert.match(witnessSource, /recordAdapterSideArtifacts/, 'pipeline witness must ingest adapter side artifacts');
 assert.match(witnessSource, /adapterSideArtifactEntries/, 'pipeline witness must preserve adapter-reported side artifacts generically');
+assert.match(witnessSource, /backgroundHeartbeat:\s*report\?\.backgroundHeartbeat/, 'pipeline witness must preserve the validated heartbeat in its adapter summary');
+assert.match(witnessSource, /revision:\s*report\?\.backend\?\.revision/, 'pipeline witness must preserve the effective SHARP source revision in its adapter summary');
 
 const tempRoot = mkdtempSync(join(tmpdir(), 'kaminos-sharp-webgpu-contract-'));
 try {

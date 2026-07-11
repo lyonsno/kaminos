@@ -5,6 +5,22 @@ const index = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 
 assert.match(
   index,
+  /function kilnRouteBenchHeartbeatSummary\(/,
+  'Generate route completion must translate heartbeat evidence into operator-readable copy',
+);
+assert.match(
+  index,
+  /The longest pause while the model was working was/,
+  'Heartbeat copy must explain the observed pause instead of exposing only telemetry nouns',
+);
+assert.match(
+  index,
+  /backgroundHeartbeat/,
+  'Generate route completion must consume the validated heartbeat projected by the adapter report',
+);
+
+assert.match(
+  index,
   /id="kiln-route-bench-panel"/,
   'Generate panel must expose a route-generic kiln bench, not only a SHARP-specific smoke card',
 );

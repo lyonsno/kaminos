@@ -16698,7 +16698,7 @@ async function pipelineLoadRunSplatArtifact(result, artifact) {
   pipelineSetActionStatus('Loading generated splat output...');
   try {
     const fileName = artifact.path.split('/').pop() || 'pipeline-output.ply';
-    const record = await greenroomImportSplat(url, fileName, {
+    const importedObject = await greenroomImportSplat(url, fileName, {
       title: 'Pipeline Output',
       subtitle: artifact.role || 'Generated pipeline artifact',
       raw_name: artifact.path,
@@ -16717,6 +16717,8 @@ async function pipelineLoadRunSplatArtifact(result, artifact) {
         },
       },
     });
+    const record = sceneObjects.find(entry => entry.object === importedObject) || selectedSceneObjectEntry();
+    if (!record?.id) throw new Error('Generated splat loaded without a registered scene record');
     pipelineDockState.loadedPipelineArtifactPaths ||= {};
     pipelineDockState.loadedPipelineArtifactPaths[artifact.path] = {
       sceneObjectId: record?.id || null,
@@ -17373,6 +17375,31 @@ function pipelineRunFailureSummary(result) {
   ].filter(Boolean).join(' ');
 }
 
+function kilnRouteBenchBackgroundHeartbeat(result) {
+  const report = result?.report?.document || {};
+  for (const stage of report.stages || []) {
+    const heartbeat = stage?.effectiveRoute?.adapterReport?.backgroundHeartbeat || null;
+    if (heartbeat?.schema === 'sharp-webgpu.background-heartbeat.v0') return heartbeat;
+  }
+  return null;
+}
+
+function kilnRouteBenchHeartbeatSummary(result) {
+  const backgroundHeartbeat = kilnRouteBenchBackgroundHeartbeat(result);
+  const gap = backgroundHeartbeat?.worstFrameGaps?.[0] || null;
+  if (!gap || !Number.isFinite(gap.durationMs)) return '';
+  const roundedMs = Math.max(1, Math.round(gap.durationMs));
+  const event = gap.overlappedEvents?.[0] || null;
+  if (gap.overlapClassification === 'scheduler-event-overlap' && event) {
+    const place = [event.stage, event.step, event.boundary || event.phase].filter(Boolean).join(' / ');
+    return `The longest pause while the model was working was ${roundedMs} ms during ${place || 'a named model step'}.`;
+  }
+  const window = backgroundHeartbeat.inferenceWindow || {};
+  const nearEnd = Number.isFinite(window.startMs) && Number.isFinite(window.durationMs)
+    && gap.startMs >= window.startMs + window.durationMs * 0.8;
+  return `The longest pause while the model was working was ${roundedMs} ms${nearEnd ? ' near the end of model work' : ''}; no named scheduler event covered it.`;
+}
+
 async function runKilnRouteBenchRoute(routeId, profileId) {
   const route = selectedKilnRouteBenchRoute(routeId);
   const profileLabel = route.profileLabels?.[profileId] || profileId;
@@ -17428,6 +17455,8 @@ async function runKilnRouteBenchRoute(routeId, profileId) {
       },
     });
     const artifact = pipelinePrimaryRunArtifact(run);
+    const backgroundHeartbeat = kilnRouteBenchBackgroundHeartbeat(run);
+    const heartbeatSummary = kilnRouteBenchHeartbeatSummary(run);
     if (run?.ok) {
       if (pipelineArtifactIsLoadableSplat(artifact)) {
         try {
@@ -17441,13 +17470,13 @@ async function runKilnRouteBenchRoute(routeId, profileId) {
           crucibleBenchRecordReceipt({
             firingId: crucibleFiring.id,
             status: 'complete',
-            message: `${profileLabel} finished and loaded a cast into the scene.`,
+            message: `${profileLabel} finished and loaded a cast into the scene.${heartbeatSummary ? ` ${heartbeatSummary}` : ''}`,
             run,
           });
           setKilnRouteBenchStatus(
-            `${profileLabel} finished and loaded the generated splat into the scene: ${record?.label || artifact.path.split('/').pop() || 'pipeline output'}.`,
+            `${profileLabel} finished and loaded the generated splat into the scene: ${record?.label || artifact.path.split('/').pop() || 'pipeline output'}.${heartbeatSummary ? ` ${heartbeatSummary}` : ''}`,
             'complete',
-            { routeId: route.id, source, result: run, loadedRecord: record, runningProfileId: null },
+            { routeId: route.id, source, result: run, loadedRecord: record, backgroundHeartbeat, runningProfileId: null },
           );
         } catch (loadErr) {
           crucibleBenchRecordReceipt({

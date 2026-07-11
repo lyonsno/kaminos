@@ -65,6 +65,11 @@ assert.match(
 );
 assert.match(
   html,
+  /const importedObject = await greenroomImportSplat\([\s\S]*sceneObjects\.find\(entry => entry\.object === importedObject\)/,
+  'Generated splat loading must resolve the importer object back to its registered scene record before recording a cast',
+);
+assert.match(
+  html,
   /window\.kaminosCrucibleViewportDebugState\s*=\s*crucibleViewportDebugState/,
   'Browser witnesses must be able to read effective source, route, profile, running, and cast-target state',
 );
