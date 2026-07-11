@@ -1178,6 +1178,22 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
         <input type="range" id="volume-boundary-sidecar-adaptive-clamp" min="0" max="1" step="0.02" value="0.75">
         <span class="slider-val" id="volume-boundary-sidecar-adaptive-clamp-val">0.75</span>
       </div>
+      <span class="slider-help">boundary-sidecar-coarse-support-dda-v0: samples ahead through the baked support field to protect low-ray sampling. It does not directly add opacity or color.</span>
+      <div class="slider-row">
+        <span class="slider-label">DDA gate</span>
+        <input type="range" id="volume-boundary-sidecar-dda-gate" min="0" max="1" step="0.02" value="0.70">
+        <span class="slider-val" id="volume-boundary-sidecar-dda-gate-val">0.70</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">DDA span</span>
+        <input type="range" id="volume-boundary-sidecar-dda-span" min="0" max="2" step="0.01" value="1.15">
+        <span class="slider-val" id="volume-boundary-sidecar-dda-span-val">1.15</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">DDA threshold</span>
+        <input type="range" id="volume-boundary-sidecar-dda-threshold" min="0" max="1" step="0.01" value="0.16">
+        <span class="slider-val" id="volume-boundary-sidecar-dda-threshold-val">0.16</span>
+      </div>
       <div class="slider-row">
         <span class="slider-label">Ridge select</span>
         <input type="range" id="volume-reaction-boundary-fire-ridge" min="0" max="2" step="0.02" value="1.76">
@@ -10575,6 +10591,9 @@ const TALL_PLUME_OPERATOR_PRESETS = {
     boundarySidecarSegment: 1.00,
     boundarySidecarCrossing: 1.00,
     boundarySidecarAdaptiveClamp: 0.75,
+    boundarySidecarDdaGate: 0.70,
+    boundarySidecarDdaSpan: 1.15,
+    boundarySidecarDdaThreshold: 0.16,
     reactionBoundaryFireRidge: 1.28,
     reactionBoundaryFireRidgeCut: 0.10,
     reactionBoundaryFireTip: 2.00,
@@ -11535,6 +11554,9 @@ const REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS = [
   { key: 'boundarySidecarSegment', id: 'volume-boundary-sidecar-segment', param: 'volume_boundary_sidecar_segment', min: 0, max: 2, decimals: 2 },
   { key: 'boundarySidecarCrossing', id: 'volume-boundary-sidecar-crossing', param: 'volume_boundary_sidecar_crossing', min: 0, max: 2, decimals: 2 },
   { key: 'boundarySidecarAdaptiveClamp', id: 'volume-boundary-sidecar-adaptive-clamp', param: 'volume_boundary_sidecar_adaptive_clamp', min: 0, max: 1, decimals: 2 },
+  { key: 'boundarySidecarDdaGate', id: 'volume-boundary-sidecar-dda-gate', param: 'volume_boundary_sidecar_dda_gate', min: 0, max: 1, decimals: 2 },
+  { key: 'boundarySidecarDdaSpan', id: 'volume-boundary-sidecar-dda-span', param: 'volume_boundary_sidecar_dda_span', min: 0, max: 2, decimals: 2 },
+  { key: 'boundarySidecarDdaThreshold', id: 'volume-boundary-sidecar-dda-threshold', param: 'volume_boundary_sidecar_dda_threshold', min: 0, max: 1, decimals: 2 },
   { key: 'reactionHeatMin', id: 'volume-reaction-heat-min', param: 'volume_reaction_heat_min', min: 0, max: 0.2, decimals: 3 },
   { key: 'reactionHeatMax', id: 'volume-reaction-heat-max', param: 'volume_reaction_heat_max', min: 0.04, max: 1.2, decimals: 2 },
   { key: 'reactionFuelMin', id: 'volume-reaction-fuel-min', param: 'volume_reaction_fuel_min', min: 0, max: 0.03, decimals: 4 },
@@ -16039,7 +16061,7 @@ function readVolumeControls() {
     boundarySidecarSource,
     boundarySidecarView,
     boundarySidecarControls: {
-      identity: 'baked-boundary-sidecar-v0',
+      identity: 'baked-boundary-sidecar-v1',
       authority: 'band-limited-support-coverage-ridge-camera-footprint-proximity-normal-v3',
       source: boundarySidecarSource,
       view: boundarySidecarView,
@@ -16049,6 +16071,9 @@ function readVolumeControls() {
       segmentGain: parseFloat(document.getElementById('volume-boundary-sidecar-segment').value),
       crossingGain: parseFloat(document.getElementById('volume-boundary-sidecar-crossing').value),
       adaptiveClamp: parseFloat(document.getElementById('volume-boundary-sidecar-adaptive-clamp').value),
+      ddaGate: parseFloat(document.getElementById('volume-boundary-sidecar-dda-gate').value),
+      ddaSpan: parseFloat(document.getElementById('volume-boundary-sidecar-dda-span').value),
+      ddaThreshold: parseFloat(document.getElementById('volume-boundary-sidecar-dda-threshold').value),
     },
     reactionBoundaryControls: {
       identity: reactionBoundaryControls.identity,
@@ -16108,6 +16133,9 @@ function readVolumeControls() {
     boundarySidecarSegment: parseFloat(document.getElementById('volume-boundary-sidecar-segment').value),
     boundarySidecarCrossing: parseFloat(document.getElementById('volume-boundary-sidecar-crossing').value),
     boundarySidecarAdaptiveClamp: parseFloat(document.getElementById('volume-boundary-sidecar-adaptive-clamp').value),
+    boundarySidecarDdaGate: parseFloat(document.getElementById('volume-boundary-sidecar-dda-gate').value),
+    boundarySidecarDdaSpan: parseFloat(document.getElementById('volume-boundary-sidecar-dda-span').value),
+    boundarySidecarDdaThreshold: parseFloat(document.getElementById('volume-boundary-sidecar-dda-threshold').value),
     fireRenderMode: reactionLiveView !== 'off' ? 'inspect' : document.getElementById('volume-fire-render-mode').value,
     shellInspectMode: reactionLiveView !== 'off' ? reactionLiveView : document.getElementById('volume-shell-inspect-mode').value,
     shellAmount: parseFloat(document.getElementById('volume-shell-amount').value),
