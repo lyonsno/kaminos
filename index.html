@@ -11031,6 +11031,7 @@ let routedVolumeActivityPressureP4Enabled = true;
 let routedVolumeActivityPressureMaxTier = 4;
 let routedVolumeActivityPressureReadbackCadence = undefined;
 let routedVolumeActivityPressureDispatchStrategy = undefined;
+let routedVolumeActivityPressureShadowOverhead = false;
 let routedVolumeSimProfile = false;
 let routedVolumeLifecycleEffect = 'none';
 let routedVolumeLifecycleT = 0;
@@ -11710,6 +11711,7 @@ const VOLUME_BASIN_ROUTE_FIELDS = [
   ['activityPressureMaxTier', 'volume_activity_pressure_max_tier'],
   ['activityPressureReadbackCadence', 'volume_activity_pressure_readback_cadence'],
   ['activityPressureDispatchStrategy', 'volume_activity_pressure_dispatch'],
+  ['activityPressureShadowOverhead', 'volume_activity_pressure_shadow_overhead'],
   ['activityVorticityGate', 'volume_activity_vorticity_gate'],
   ['activityDetailGate', 'volume_activity_detail_gate'],
   ['reactionLiveView', 'volume_reaction_live_view'],
@@ -16228,6 +16230,7 @@ function readVolumeControls() {
     activityPressureMaxTier: routedVolumeActivityPressureMaxTier,
     activityPressureReadbackCadence: routedVolumeActivityPressureReadbackCadence,
     activityPressureDispatchStrategy: routedVolumeActivityPressureDispatchStrategy,
+    activityPressureShadowOverhead: routedVolumeActivityPressureShadowOverhead,
     activityVorticityGate: parseFloat(document.getElementById('volume-activity-vorticity-gate').value),
     activityDetailGate: parseFloat(document.getElementById('volume-activity-detail-gate').value),
     canonicalSpread: parseFloat(document.getElementById('volume-canonical-spread').value),
@@ -17106,6 +17109,8 @@ async function initKaminosVolumeRoute() {
     : (routeActivityPressureDispatch === 'coarse' || routeActivityPressureDispatch === 'coarse-mask' || routeActivityPressureDispatch === 'coarse-brick' || routeActivityPressureDispatch === 'coarse-brick-activity-pressure-mask-v0'
       ? 'coarse-brick-activity-pressure-mask-v0'
       : undefined);
+  const routeActivityPressureShadowOverhead = String(params.get('volume_activity_pressure_shadow_overhead') || '').toLowerCase();
+  routedVolumeActivityPressureShadowOverhead = routeActivityPressureShadowOverhead === '1' || routeActivityPressureShadowOverhead === 'true' || routeActivityPressureShadowOverhead === 'yes' || routeActivityPressureShadowOverhead === 'on' || routeActivityPressureShadowOverhead === 'shadow' || routeActivityPressureShadowOverhead === 'overhead';
   const routeActivityVorticityGate = Number(params.get('volume_activity_vorticity_gate'));
   if (params.has('volume_activity_vorticity_gate') && Number.isFinite(routeActivityVorticityGate)) {
     setVolumeControlValue('volume-activity-vorticity-gate', String(Math.max(0, Math.min(1, routeActivityVorticityGate))));

@@ -1594,6 +1594,16 @@ assert.match(core, /activityPressureCoarseMaskDispatch/, 'activity pressure runt
 assert.match(core, /pressureActivityCoarseMaskBuffer/, 'volume core allocates a coarse activity pressure mask buffer');
 assert.match(core, /pressureActivityCoarseMaskBufferBytes/, 'coarse activity pressure mask buffer size is explicit and grid-scaled');
 assert.match(core, /preparePressureActivityCoarseMaskBuffer/, 'coarse activity pressure clears the brick mask before the sim pass writes current-frame support');
+assert.match(index, /volume_activity_pressure_shadow_overhead/, 'URL route can request full-P3 plus shadow Activity pressure overhead without changing the real pressure solve');
+assert.match(index, /activityPressureShadowOverhead/, 'Volume controls carry the Activity pressure shadow-overhead diagnostic into the renderer');
+assert.match(core, /ACTIVITY_PRESSURE_SHADOW_OVERHEAD_IDENTITY\s*=\s*'full-p3-plus-shadow-activity-pressure-overhead-v0'/, 'volume core names the full-P3 plus shadow Activity overhead diagnostic');
+assert.match(core, /ACTIVITY_PRESSURE_SHADOW_OVERHEAD_SIDE_EFFECT\s*=\s*'storage-buffer-shadow-counter-side-effect-v0'/, 'shadow overhead pass records an explicit side-effect sink instead of pretending queue timing is pass timing');
+assert.match(core, /csPressureActivityShadowOverheadLower/, 'WGSL has a cheap broad-tier Activity pressure shadow-overhead entry point');
+assert.match(core, /csPressureActivityShadowOverheadHero/, 'WGSL has a cheap core-tier Activity pressure shadow-overhead entry point');
+assert.match(core, /csPressureActivityShadowOverheadP4/, 'WGSL has a cheap P4 replay Activity pressure shadow-overhead entry point');
+assert.match(core, /encodeActivityPressureShadowOverhead/, 'pressure encoder can run Activity orchestration as shadow overhead after the real full P3 solve');
+assert.match(core, /activityPressureShadowOverheadEnabled/, 'debug state exposes whether the shadow Activity pressure overhead package was enabled');
+assert.match(core, /shadow-activity-pressure-overhead-no-jacobi-v0/, 'debug state names the shadow overhead dispatch efficiency without claiming pressure refinement');
 assert.match(core, /normalizeActivityPressureMaxTier/, 'activity pressure tiers normalize an explicit P2/P3/P4 max tier');
 assert.match(core, /activityPressureMaxTier/, 'activity pressure dispatch plan carries the explicit max-tier ceiling');
 assert.match(core, /pressureActivityMaxTierValue/, 'WGSL can distinguish Activity P2, P3, and P4 projection reads');
