@@ -142,7 +142,7 @@ SHARP_SCHEDULER_PROFILES = {
             "waitForSubmittedWorkDone": True,
             "gaussianPhaseYieldMs": 4,
             "vitBlockChunkSize": 2,
-            "cpuChunkItems": 65536,
+            "cpuChunkItems": 16384,
             "routeTailYieldMs": 3,
         },
         "env": {
@@ -153,7 +153,7 @@ SHARP_SCHEDULER_PROFILES = {
                 "waitForSubmittedWorkDone": True,
                 "gaussianPhaseYieldMs": 4,
                 "vitBlockChunkSize": 2,
-                "cpuChunkItems": 65536,
+                "cpuChunkItems": 16384,
                 "routeTailYieldMs": 3,
             }, separators=(",", ":")),
         },

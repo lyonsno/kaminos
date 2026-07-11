@@ -281,6 +281,18 @@ try {
       const routeTailEvents = schedulerEvents.filter(event => event?.phase === 'route-tail');
       const prepSteps = new Set(['depth-normalize', 'depth-min', 'depth-rescale', 'base-disparity', 'base-grid', 'base-color']);
       const prepEvents = routeTailEvents.filter(event => prepSteps.has(event?.step) && event?.role === 'cpu-materialization-chunk');
+      const composePreparationIntervals = routeTailEvents
+        .filter(event => prepSteps.has(event?.step) && event?.kind === 'duty-interval')
+        .map(event => ({
+          phase: event.phase,
+          boundary: event.boundary,
+          stage: event.stage,
+          step: event.step,
+          role: event.role,
+          intervalStartMs: event.intervalStartMs,
+          intervalEndMs: event.intervalEndMs,
+          durationMs: event.durationMs,
+        }));
       const gaussianEvents = routeTailEvents.filter(event => event?.step === 'gaussian-compose' && event?.role === 'cpu-materialization-chunk');
       const gaussianCpuDutyIntervals = routeTailEvents
         .filter(event => event?.step === 'gaussian-compose' && event?.kind === 'duty-interval' && event?.granularity === 'row-batched')
@@ -298,6 +310,7 @@ try {
           intervalEndMs: event.intervalEndMs,
           durationMs: event.durationMs,
         }));
+      const maxGaussianDutyMs = Math.max(...gaussianCpuDutyIntervals.map(interval => interval.durationMs).filter(Number.isFinite), 0);
       const preGaussianSetupSteps = new Set(['ply-data-allocation', 'gaussian-activation-setup']);
       const preGaussianSetupIntervals = routeTailEvents
         .filter(event => preGaussianSetupSteps.has(event?.step) && event?.kind === 'duty-interval')
@@ -329,6 +342,9 @@ try {
       const inferenceWindowFinalizeInterval = routeTailEvents.find(event =>
         event?.step === 'inference-window-finalize' && event?.kind === 'duty-interval' && event?.role === 'localization-envelope'
       ) || null;
+      const uninstrumentedGapsAtOrAbove50Ms = (backgroundHeartbeat?.worstFrameGaps || []).filter(gap =>
+        gap?.overlapClassification === 'uninstrumented-gap' && gap?.durationMs >= 50
+      );
       const splat = report.artifacts?.splat || null;
       const fire = window.kaminosSharpBreathingRoomKilnFireDebug?.state?.()?.fire || null;
       return {
@@ -346,10 +362,13 @@ try {
           prepSteps: [...new Set(prepEvents.map(event => event.step))].sort(),
           gaussianProcessedItems: [...new Set(gaussianEvents.map(event => event.processedItems).filter(Number.isFinite))].sort((a, b) => a - b),
         },
+        composePreparationIntervals,
         preGaussianSetupIntervals,
         gaussianCpuDutyIntervals,
+        maxGaussianDutyMs,
         lateTailBlockingIntervals,
         inferenceWindowFinalizeInterval,
+        uninstrumentedGapsAtOrAbove50Ms,
         output: splat ? { path: splat.path, bytes: splat.bytes, sha256: splat.sha256, status: splat.status } : null,
         backgroundHeartbeat,
         volumeReleased: Boolean(fire?.volumeReleased),
@@ -362,7 +381,7 @@ try {
     if (expectedSharpRevision && state.fullRoute.effectiveSharpRevision !== expectedSharpRevision) {
       throw new Error(`Friendly firing used unexpected SHARP revision: ${state.fullRoute.effectiveSharpRevision}`);
     }
-    if (state.fullRoute.effectiveScheduler?.cpuChunkItems !== 65536 || state.fullRoute.effectiveScheduler?.routeTailYieldMs !== 3) {
+    if (state.fullRoute.effectiveScheduler?.cpuChunkItems !== 16384 || state.fullRoute.effectiveScheduler?.routeTailYieldMs !== 3) {
       throw new Error(`Friendly firing did not use cooperative compose/PLY settings: ${JSON.stringify(state.fullRoute.effectiveScheduler)}`);
     }
     if (state.fullRoute.routeTailCheckpointEvents?.prep < 6 || state.fullRoute.routeTailCheckpointEvents?.gaussian < 1) {
@@ -389,6 +408,13 @@ try {
     )) {
       throw new Error(`Friendly firing is missing truthful row-batched Gaussian CPU intervals: ${JSON.stringify(state.fullRoute.gaussianCpuDutyIntervals)}`);
     }
+    if (state.fullRoute.maxGaussianDutyMs >= 50) {
+      throw new Error(`Friendly firing Gaussian CPU duty missed the sub-50ms target: ${state.fullRoute.maxGaussianDutyMs}ms`);
+    }
+    const composePreparationSteps = new Set(state.fullRoute.composePreparationIntervals?.map(interval => interval.step) || []);
+    if (composePreparationSteps.size !== 6 || [...['depth-normalize', 'depth-min', 'depth-rescale', 'base-disparity', 'base-grid', 'base-color']].some(step => !composePreparationSteps.has(step))) {
+      throw new Error(`Friendly firing is missing bounded compose preparation intervals: ${JSON.stringify(state.fullRoute.composePreparationIntervals)}`);
+    }
     const allocation = state.fullRoute.preGaussianSetupIntervals?.find(interval => interval.step === 'ply-data-allocation');
     const activationSetup = state.fullRoute.preGaussianSetupIntervals?.find(interval => interval.step === 'gaussian-activation-setup');
     if (!allocation || !Number.isFinite(allocation.intervalStartMs) || !Number.isFinite(allocation.intervalEndMs) || !(allocation.bytes > 0)) {
@@ -402,16 +428,8 @@ try {
       || !Number.isFinite(finalizeInterval.intervalStartMs) || !Number.isFinite(finalizeInterval.intervalEndMs)) {
       throw new Error(`Friendly firing is missing its non-causal inference finalization envelope: ${JSON.stringify(finalizeInterval)}`);
     }
-    for (const [index, gap] of backgroundHeartbeat.worstFrameGaps.slice(0, 2).entries()) {
-      if (gap?.overlapClassification === 'uninstrumented-gap') {
-        throw new Error(`Friendly firing residual gap ${index + 1} remains unattributed: ${JSON.stringify(gap)}`);
-      }
-      const intervalEvidence = gap?.overlappedEvents?.filter(event =>
-        Number.isFinite(event?.intervalStartMs) && Number.isFinite(event?.intervalEndMs)
-      ) || [];
-      if (!intervalEvidence.length) {
-        throw new Error(`Friendly firing residual gap ${index + 1} has no overlapping interval evidence: ${JSON.stringify(gap)}`);
-      }
+    if (state.fullRoute.uninstrumentedGapsAtOrAbove50Ms?.length) {
+      throw new Error(`Friendly firing retains uninstrumented frame-starvation gaps: ${JSON.stringify(state.fullRoute.uninstrumentedGapsAtOrAbove50Ms)}`);
     }
     if (!state.fullRoute.output?.sha256 || state.fullRoute.output.status !== 'real') throw new Error('Friendly firing did not preserve a real hashed output');
     if (!state.fullRoute.volumeReleased) throw new Error('Friendly firing completed without releasing the furnace volume');

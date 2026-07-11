@@ -231,7 +231,7 @@ assert.equal(profiles.profiles[1].scheduler.mode, 'cooperative');
 assert.equal(profiles.profiles[1].scheduler.spnPatchChunkSize, 1);
 assert.equal(profiles.profiles[1].scheduler.waitForSubmittedWorkDone, true);
 assert.equal(profiles.profiles[1].scheduler.gaussianPhaseYieldMs > 0, true);
-assert.equal(profiles.profiles[1].scheduler.cpuChunkItems, 65536);
+assert.equal(profiles.profiles[1].scheduler.cpuChunkItems, 16384);
 assert.equal(profiles.profiles[1].scheduler.routeTailYieldMs, 3);
 assert.equal(profiles.profiles[1].unsupportedFields.includes('vitBlockChunkSize'), true);
 assert.equal(profiles.profiles[1].env.KAMINOS_SHARP_WEBGPU_SCHEDULER_MODE, 'friendly');
