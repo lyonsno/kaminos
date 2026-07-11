@@ -21,9 +21,11 @@ IMAGE_AUTHORITY = "cdp-canvas-clip-capture-after-render-only-frozen-sim-state"
 FEATURE_INPUT_AUTHORITY = "shader-material-authority-residual-feature-v0"
 FLOW_DEBUG_AUXILIARY_INPUT_AUTHORITY = "flow-debug-interface-canvas-capture-v0"
 BOUNDARY_SIDECAR_SUPPORT_AUXILIARY_INPUT_AUTHORITY = "boundary-sidecar-support-canvas-capture-v0"
+BOUNDARY_SIDECAR_MODEL_INPUT_AUTHORITY = "boundary-sidecar-support-model-input-v0"
+BOUNDARY_SIDECAR_MATERIAL_MODEL_INPUT_AUTHORITY = "boundary-sidecar-support-plus-shader-material-feature-v0"
 FLOW_DEBUG_REDCYAN_ABS_INPUT_AUTHORITY = "flow-debug-derived-red-cyan-abs-v0"
 FLOW_DEBUG_OPPONENT_GRADIENT_INPUT_AUTHORITY = "flow-debug-derived-opponent-gradient-v0"
-IMAGE_FEATURE_INPUT_MODES = {"feature-rgba", "aux-rgba", "aux-rgb", "aux-red-cyan-abs", "aux-opponent-gradient"}
+IMAGE_FEATURE_INPUT_MODES = {"feature-rgba", "aux-rgba", "aux-rgb", "aux-red-cyan-abs", "aux-opponent-gradient", "sidecar-rgba", "feature-sidecar-rgba"}
 FLOW_DEBUG_DERIVED_INPUT_MODES = {"aux-red-cyan-abs", "aux-opponent-gradient"}
 COORDINATE_INPUT_AUTHORITY = "offline-absolute-coordinate-conditioning-v0"
 FOURIER_COORDINATE_INPUT_AUTHORITY = "offline-fourier-coordinate-conditioning-v0"
@@ -45,6 +47,15 @@ def apply_limited_residual(base_image, residual, residualOutputLimit, residualAp
     if residualOutputLimit and residualOutputLimit > 0:
         scaled_residual = mx.clip(scaled_residual, -float(residualOutputLimit), float(residualOutputLimit))
     return mx.clip(base_image + scaled_residual, 0.0, 1.0)
+
+
+def apply_direct_rgb_logits(base_image, direct_logits, residualApplicationMask=None):
+    clipped_base = mx.clip(base_image, 1e-4, 1.0 - 1e-4)
+    base_logits = mx.log(clipped_base / (1.0 - clipped_base))
+    delta_logits = direct_logits
+    if residualApplicationMask is not None:
+        delta_logits = delta_logits * mx.clip(residualApplicationMask, 0.0, 1.0)
+    return mx.sigmoid(base_logits + delta_logits)
 
 
 def feather_residual_mask(mask, featherRadius):
@@ -276,8 +287,7 @@ class TeacherUNetResidualUpscaler(nn.Module):
         self.output.weight = mx.zeros_like(self.output.weight)
         self.output.bias = mx.zeros_like(self.output.bias)
 
-    def __call__(self, image, residualApplicationMask=None):
-        base_image = image[..., :3]
+    def decode_residual(self, image):
         skip1 = nn.relu(self.enc1_a(image))
         skip1 = nn.relu(self.enc1_b(skip1))
         hidden = self.pool1(skip1)
@@ -306,8 +316,32 @@ class TeacherUNetResidualUpscaler(nn.Module):
         hidden = nn.relu(self.dec1_a(hidden))
         hidden = nn.relu(self.dec1_b(hidden))
         residual = self.output(hidden)
-        residual = match_spatial_shape(residual, base_image)
+        return match_spatial_shape(residual, image[..., :3])
+
+    def __call__(self, image, residualApplicationMask=None):
+        base_image = image[..., :3]
+        residual = self.decode_residual(image)
         return apply_limited_residual(base_image, residual, self.residualOutputLimit, residualApplicationMask, self.residualColorMode, self.chromaResidualScale, self.residualApplyScale)
+
+
+class TeacherUNetDirectRenderer(nn.Module):
+    def __init__(self, hidden_channels, input_channels, residual_output_limit, residual_color_mode, chroma_residual_scale, residual_apply_scale):
+        super().__init__()
+        self.unetDepth = 3
+        self.receptiveField = "three-level-encoder-decoder-skip-direct-rgb-logit"
+        self.backbone = TeacherUNetResidualUpscaler(
+            hidden_channels,
+            input_channels,
+            residual_output_limit,
+            residual_color_mode,
+            chroma_residual_scale,
+            residual_apply_scale,
+        )
+
+    def __call__(self, image, residualApplicationMask=None):
+        base_image = image[..., :3]
+        direct_logits = self.backbone.decode_residual(image)
+        return apply_direct_rgb_logits(base_image, direct_logits, residualApplicationMask)
 
 
 def parse_args():
@@ -320,8 +354,8 @@ def parse_args():
     parser.add_argument("--patch-size", type=int, default=96)
     parser.add_argument("--eval-pair-count", dest="evalPairCount", type=int, default=0, help="Optional exact eval pair count for support-scaling experiments; 0 keeps the default split.")
     parser.add_argument("--eval-selection", dest="evalSelection", choices=["tail", "even"], default="tail", help="Eval holdout selection when --eval-pair-count is set.")
-    parser.add_argument("--model-arch", dest="modelArch", choices=["tiny-conv", "direct-residual", "hybrid-residual", "gated-detail-residual", "small-unet", "teacher-unet"], default="tiny-conv")
-    parser.add_argument("--feature-input-mode", dest="featureInputMode", choices=["rgb", "feature-rgba", "aux-rgba", "aux-rgb", "aux-red-cyan-abs", "aux-opponent-gradient"], default="rgb", help="Model input source: low RGB only, low RGB plus shader/material residual feature RGBA, raw Flow Debug RGB/RGBA, or normalized Flow Debug derived carriers.")
+    parser.add_argument("--model-arch", dest="modelArch", choices=["tiny-conv", "direct-residual", "hybrid-residual", "gated-detail-residual", "small-unet", "teacher-unet", "teacher-unet-direct"], default="tiny-conv")
+    parser.add_argument("--feature-input-mode", dest="featureInputMode", choices=["rgb", "feature-rgba", "aux-rgba", "aux-rgb", "aux-red-cyan-abs", "aux-opponent-gradient", "sidecar-rgba", "feature-sidecar-rgba"], default="rgb", help="Model input source: low RGB plus optional shader/material, Flow Debug, baked sidecar, or combined material-plus-sidecar structural channels.")
     parser.add_argument("--coordinate-input-mode", dest="coordinateInputMode", choices=["off", "xy", "fourier"], default="off", help="Optional absolute screen-space coordinate conditioning for offline ceiling probes.")
     parser.add_argument("--fourier-coordinate-frequencies", dest="fourierCoordinateFrequencies", type=int, default=4, help="Number of powers-of-two xy Fourier coordinate frequencies when --coordinate-input-mode=fourier.")
     parser.add_argument("--material-focus", dest="materialFocus", choices=["off", "fire-interface", "smoke"], default="off", help="Optional specialist supervision mask derived from shader/material feature RGBA: fire/interface or smoke.")
@@ -401,6 +435,8 @@ def make_model(model_arch, hidden_channels, input_channels, detail_gate, residua
         return SmallUNetResidualUpscaler(hidden_channels, input_channels, residual_output_limit, residual_color_mode, chroma_residual_scale, residual_apply_scale)
     if model_arch == "teacher-unet":
         return TeacherUNetResidualUpscaler(hidden_channels, input_channels, residual_output_limit, residual_color_mode, chroma_residual_scale, residual_apply_scale)
+    if model_arch == "teacher-unet-direct":
+        return TeacherUNetDirectRenderer(hidden_channels, input_channels, residual_output_limit, residual_color_mode, chroma_residual_scale, residual_apply_scale)
     raise ValueError(f"unsupported model architecture: {model_arch}")
 
 
@@ -419,8 +455,9 @@ def model_config(model_arch, hidden_channels, input_channels, condition_render_s
         "coordinateInputChannels": coordinate_input_channels(coordinate_input_mode, fourier_coordinate_frequencies),
         "fourierCoordinateFrequencies": fourier_coordinate_frequencies if coordinate_input_mode == "fourier" else 0,
         "detailGate": detail_gate if model_arch == "gated-detail-residual" else None,
-        "unetDepth": 3 if model_arch == "teacher-unet" else 2 if model_arch == "small-unet" else None,
-        "receptiveField": "three-level-encoder-decoder-skip-teacher" if model_arch == "teacher-unet" else "two-level-encoder-decoder-skip" if model_arch == "small-unet" else "local-3x3-stack",
+        "predictionMode": "direct-rgb-logit" if model_arch == "teacher-unet-direct" else "bounded-residual",
+        "unetDepth": 3 if model_arch in {"teacher-unet", "teacher-unet-direct"} else 2 if model_arch == "small-unet" else None,
+        "receptiveField": "three-level-encoder-decoder-skip-direct-rgb-logit" if model_arch == "teacher-unet-direct" else "three-level-encoder-decoder-skip-teacher" if model_arch == "teacher-unet" else "two-level-encoder-decoder-skip" if model_arch == "small-unet" else "local-3x3-stack",
         "residualOutputLimit": residual_output_limit,
         "residualApplyScale": residual_apply_scale,
         "residualApplicationMaskMode": residual_application_mask_mode,
@@ -621,6 +658,10 @@ def load_flow_debug_derived_image(path, target_height, target_width, featureInpu
 def feature_input_channels(featureInputMode):
     if featureInputMode in {"feature-rgba", "aux-rgba"}:
         return 4
+    if featureInputMode == "sidecar-rgba":
+        return 4
+    if featureInputMode == "feature-sidecar-rgba":
+        return 8
     if featureInputMode == "aux-rgb":
         return 3
     if featureInputMode in FLOW_DEBUG_DERIVED_INPUT_MODES:
@@ -633,6 +674,10 @@ def feature_input_authority(featureInputMode):
         return FEATURE_INPUT_AUTHORITY
     if featureInputMode in {"aux-rgba", "aux-rgb"}:
         return FLOW_DEBUG_AUXILIARY_INPUT_AUTHORITY
+    if featureInputMode == "sidecar-rgba":
+        return BOUNDARY_SIDECAR_MODEL_INPUT_AUTHORITY
+    if featureInputMode == "feature-sidecar-rgba":
+        return BOUNDARY_SIDECAR_MATERIAL_MODEL_INPUT_AUTHORITY
     if featureInputMode == "aux-red-cyan-abs":
         return FLOW_DEBUG_REDCYAN_ABS_INPUT_AUTHORITY
     if featureInputMode == "aux-opponent-gradient":
@@ -882,6 +927,18 @@ def load_pair_arrays(pairs, foregroundThreshold, edgeBandMode, edgeBandThreshold
             sidecar_support_authority = sidecar_support_capture.get("auxiliaryAuthority")
             if sidecar_support_path and sidecar_support_authority == BOUNDARY_SIDECAR_SUPPORT_AUXILIARY_INPUT_AUTHORITY:
                 sidecar_support_image = load_feature_image(sidecar_support_path, low_image.shape[0], low_image.shape[1], 4)
+        if featureInputMode == "sidecar-rgba":
+            if sidecar_support_image is None:
+                raise ValueError(f"pair lacks authoritative boundarySidecarSupport input for --feature-input-mode=sidecar-rgba: {pair.get('pairId')}")
+            feature_image = sidecar_support_image
+            feature_path = sidecar_support_path
+        elif featureInputMode == "feature-sidecar-rgba":
+            if material_feature_image is None:
+                raise ValueError(f"pair lacks authoritative shader/material feature input for --feature-input-mode=feature-sidecar-rgba: {pair.get('pairId')}")
+            if sidecar_support_image is None:
+                raise ValueError(f"pair lacks authoritative boundarySidecarSupport input for --feature-input-mode=feature-sidecar-rgba: {pair.get('pairId')}")
+            feature_image = np.concatenate([material_feature_image, sidecar_support_image], axis=2)
+            feature_path = f"{material_feature_path}|{sidecar_support_path}"
         foreground = foreground_pixels(low_image, high_image, foregroundThreshold)
         edge_mask, edge_signal = edge_band_mask(low_image, high_image, edgeBandMode, edgeBandThreshold, edgeBandDilate)
         target_edge_mask, target_edge_signal = edge_band_mask(low_image, high_image, "difference-gradient", edgeBandThreshold, edgeBandDilate)
