@@ -7,12 +7,14 @@ const corpusPath = `${root}/volume-render-pair-corpus.mjs`;
 const datasetPath = `${root}/volume-render-pair-dataset.mjs`;
 const trainerPath = `${root}/volume-residual-upscale-mlx.py`;
 const runnerPath = `${root}/volume-residual-greenroom-runner.py`;
+const volumeCorePath = `${root}/volume-core.js`;
 
 const witness = fs.readFileSync(witnessPath, 'utf8');
 const corpus = fs.readFileSync(corpusPath, 'utf8');
 const dataset = fs.readFileSync(datasetPath, 'utf8');
 const trainer = fs.readFileSync(trainerPath, 'utf8');
 const runner = fs.readFileSync(runnerPath, 'utf8');
+const volumeCore = fs.readFileSync(volumeCorePath, 'utf8');
 
 assert.match(
   witness,
@@ -30,6 +32,12 @@ assert.match(
   witness,
   /function captureBoundarySidecarSupportAuxiliary\(/,
   'witness must capture frozen-state boundary sidecar support as an auxiliary image',
+);
+
+assert.match(
+  volumeCore,
+  /renderFrozenScaleToCanvas[\s\S]*boundarySidecarIdentity:\s*state\.boundarySidecarIdentity[\s\S]*boundarySidecarAuthority:\s*state\.boundarySidecarAuthority[\s\S]*boundarySidecarSource:\s*state\.boundarySidecarSource/,
+  'frozen render receipts must preserve the effective baked sidecar identity used by auxiliary captures',
 );
 
 assert.match(

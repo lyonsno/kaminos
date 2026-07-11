@@ -9179,6 +9179,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         effectiveRoute: state.effectiveRoute,
         prototypeIdentity: state.prototypeIdentity,
         backend: state.backend,
+        boundarySidecarIdentity: state.boundarySidecarIdentity,
+        boundarySidecarAuthority: state.boundarySidecarAuthority,
+        boundarySidecarSource: state.boundarySidecarSource,
       };
     }
     await buffer.mapAsync(GPUMapMode.READ);
@@ -9876,6 +9879,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         effectiveRoute: state.effectiveRoute,
         prototypeIdentity: state.prototypeIdentity,
         backend: state.backend,
+        boundarySidecarIdentity: state.boundarySidecarIdentity,
+        boundarySidecarAuthority: state.boundarySidecarAuthority,
+        boundarySidecarSource: state.boundarySidecarSource,
       };
     } finally {
       if (options.restoreControls !== false) {
