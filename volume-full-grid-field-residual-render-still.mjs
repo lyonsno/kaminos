@@ -7,6 +7,7 @@ import { spawn } from 'node:child_process';
 
 const SCHEMA = 'kaminos.volume.full-grid-field-residual-render-still.v0';
 const APPLICATION_SCHEMA = 'kaminos.volume.full-grid-field-residual-application.v0';
+const SIDECAR_APPLICATION_SCHEMA = 'kaminos.volume.dense-cue-pack-sidecar-application.v0';
 const LIMITATION = 'full-grid-buffer-render-override-not-selected-tiles';
 const TEMPORAL_STRIP_IDENTITY = 'full-grid-field-residual-temporal-dynamics-strip-v0';
 
@@ -328,12 +329,19 @@ async function applyFullGridRole(ws, applicationManifest, roleName, role) {
       sourceFieldAuthority: applicationManifest.fieldAuthority,
       fluid: role.fluid,
       front: role.front,
+      boundarySidecar: role.boundarySidecar || null,
     })})`,
     `beginDebugFullFieldBufferOverride-${roleName}`,
   );
   if (begin?.ok !== true) throw new Error(`full buffer override begin failed: ${JSON.stringify(begin)}`);
   const fluid = await streamRoleSidecar(ws, begin.sessionId, roleName, 'fluid', role.fluid);
   const front = await streamRoleSidecar(ws, begin.sessionId, roleName, 'front', role.front);
+  let boundary = null;
+  let boundaryMeta = null;
+  if (role.boundarySidecar?.boundary && role.boundarySidecar?.meta) {
+    boundary = await streamRoleSidecar(ws, begin.sessionId, roleName, 'boundary', role.boundarySidecar.boundary);
+    boundaryMeta = await streamRoleSidecar(ws, begin.sessionId, roleName, 'boundaryMeta', role.boundarySidecar.meta);
+  }
   const finish = await evaluate(
     ws,
     `window.__kaminosVolumePrototype.finishDebugFullFieldBufferOverride(${JSON.stringify({ sessionId: begin.sessionId, role: roleName })})`,
@@ -342,7 +350,7 @@ async function applyFullGridRole(ws, applicationManifest, roleName, role) {
   if (finish?.ok !== true || finish.status !== 'applied') {
     throw new Error(`full buffer override finish failed: ${JSON.stringify(finish)}`);
   }
-  return { begin, fluid, front, finish };
+  return { begin, fluid, front, boundary, boundaryMeta, finish };
 }
 
 function routeForApplication(application) {
@@ -366,11 +374,28 @@ function replayForApplication(application) {
 function roleSidecarBytesMatchTruth(application, roleName) {
   const truth = application.roles?.truthHigh;
   const role = application.roles?.[roleName];
-  return Boolean(
+  const fluidFrontMatch = Boolean(
     truth?.fluid?.sha256 &&
     truth?.front?.sha256 &&
     role?.fluid?.sha256 === truth.fluid.sha256 &&
     role?.front?.sha256 === truth.front.sha256
+  );
+  if (!fluidFrontMatch) return false;
+
+  const truthHasBoundarySidecar = Boolean(
+    truth?.boundarySidecar?.boundary?.sha256 ||
+    truth?.boundarySidecar?.meta?.sha256
+  );
+  const roleHasBoundarySidecar = Boolean(
+    role?.boundarySidecar?.boundary?.sha256 ||
+    role?.boundarySidecar?.meta?.sha256
+  );
+  if (!truthHasBoundarySidecar && !roleHasBoundarySidecar) return true;
+  return Boolean(
+    truth?.boundarySidecar?.boundary?.sha256 &&
+    truth?.boundarySidecar?.meta?.sha256 &&
+    role?.boundarySidecar?.boundary?.sha256 === truth.boundarySidecar.boundary.sha256 &&
+    role?.boundarySidecar?.meta?.sha256 === truth.boundarySidecar.meta.sha256
   );
 }
 
@@ -513,7 +538,9 @@ async function main() {
     mkdirSync(outDir, { recursive: true });
     phase = 'application-read';
     const application = readJson(applicationManifestPath);
-    if (application.schema !== APPLICATION_SCHEMA) throw new Error(`application schema mismatch: ${application.schema}`);
+    if (application.schema !== APPLICATION_SCHEMA && application.schema !== SIDECAR_APPLICATION_SCHEMA) {
+      throw new Error(`application schema mismatch: ${application.schema}`);
+    }
     const route = routeForApplication(application);
     const replay = replayForApplication(application);
     evidence = { route, replay, highGrid: application.highGrid };
@@ -529,33 +556,9 @@ async function main() {
     const frames = [];
     const outputs = [];
     const temporalRows = [];
-    phase = 'truthHigh';
-    const truthReplay = await captureReplay(ws, replay);
-    const truthTemporalFrames = temporalStripFrameCount > 1
-      ? await captureTemporalDynamicsStrip(ws, replay, 'truthHigh', temporalStripFrameCount)
-      : [];
-    if (truthTemporalFrames.length) {
-      temporalRows.push({ role: 'truthHigh', label: 'true high-grid replay initialized state', frames: truthTemporalFrames });
-    }
-    const truthSample = truthTemporalFrames[0]?.sample || await captureNoAdvance(ws, replay);
-    const truthPng = resolve(outDir, 'truthHigh.full-grid-render.png');
-    writeRgbaPng(truthPng, truthSample.preview.width, truthSample.preview.height, truthSample.preview.rgba);
-    frames.push({ role: 'truthHigh', width: truthSample.preview.width, height: truthSample.preview.height, rgba: truthSample.preview.rgba });
-    outputs.push({
-      role: 'truthHigh',
-      path: truthPng,
-      sha256: sha256File(truthPng),
-      sample: {
-        simGrid: truthSample.simGrid,
-        simStepCount: truthSample.simStepCount,
-        fireLikePixels: truthSample.fireLikePixels,
-        smokeLikePixels: truthSample.smokeLikePixels,
-        fireEdgeEnergy: truthSample.fireEdgeEnergy,
-      },
-      replay: truthReplay.deterministicReplay,
-    });
+    const sidecarApplication = application.schema === SIDECAR_APPLICATION_SCHEMA;
 
-    for (const roleName of ['lowUpsampled', 'predictedHigh']) {
+    async function captureOverriddenRole(roleName) {
       phase = roleName;
       await captureReplay(ws, replay);
       const override = await applyFullGridRole(ws, application, roleName, application.roles[roleName]);
@@ -587,6 +590,42 @@ async function main() {
           fullFieldBufferRenderOverride: sample.fullFieldBufferRenderOverride,
         },
       });
+    }
+
+    if (sidecarApplication) {
+      for (const roleName of ['truthHigh', 'lowUpsampled', 'predictedHigh']) {
+        await captureOverriddenRole(roleName);
+      }
+    } else {
+      phase = 'truthHigh';
+      const truthReplay = await captureReplay(ws, replay);
+      const truthTemporalFrames = temporalStripFrameCount > 1
+        ? await captureTemporalDynamicsStrip(ws, replay, 'truthHigh', temporalStripFrameCount)
+        : [];
+      if (truthTemporalFrames.length) {
+        temporalRows.push({ role: 'truthHigh', label: 'true high-grid replay initialized state', frames: truthTemporalFrames });
+      }
+      const truthSample = truthTemporalFrames[0]?.sample || await captureNoAdvance(ws, replay);
+      const truthPng = resolve(outDir, 'truthHigh.full-grid-render.png');
+      writeRgbaPng(truthPng, truthSample.preview.width, truthSample.preview.height, truthSample.preview.rgba);
+      frames.push({ role: 'truthHigh', width: truthSample.preview.width, height: truthSample.preview.height, rgba: truthSample.preview.rgba });
+      outputs.push({
+        role: 'truthHigh',
+        path: truthPng,
+        sha256: sha256File(truthPng),
+        sample: {
+          simGrid: truthSample.simGrid,
+          simStepCount: truthSample.simStepCount,
+          fireLikePixels: truthSample.fireLikePixels,
+          smokeLikePixels: truthSample.smokeLikePixels,
+          fireEdgeEnergy: truthSample.fireEdgeEnergy,
+        },
+        replay: truthReplay.deterministicReplay,
+      });
+
+      for (const roleName of ['lowUpsampled', 'predictedHigh']) {
+        await captureOverriddenRole(roleName);
+      }
     }
 
     phase = 'contactSheet';

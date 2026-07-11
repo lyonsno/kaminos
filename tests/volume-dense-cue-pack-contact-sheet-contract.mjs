@@ -1,0 +1,41 @@
+import { readFileSync, existsSync } from 'node:fs';
+import { join } from 'node:path';
+import assert from 'node:assert/strict';
+
+const root = process.cwd();
+const scriptPath = join(root, 'volume-dense-cue-pack-contact-sheet.py');
+assert.ok(existsSync(scriptPath), 'dense cue-pack contact sheet harness exists');
+const applyPath = join(root, 'volume-dense-cue-pack-apply-sidecar.py');
+assert.ok(existsSync(applyPath), 'dense cue-pack sidecar application harness exists');
+
+const script = readFileSync(scriptPath, 'utf8');
+const apply = readFileSync(applyPath, 'utf8');
+const renderPath = join(root, 'volume-full-grid-field-residual-render-still.mjs');
+assert.ok(existsSync(renderPath), 'full-grid render still harness exists');
+const render = readFileSync(renderPath, 'utf8');
+assert.match(script, /kaminos\.volume\.dense-cue-pack-contact-sheet\.v0/, 'contact sheet writes a stable report schema');
+assert.match(script, /denseCuePackManifest/, 'contact sheet records dense cue-pack manifest authority');
+assert.match(script, /corpusManifest/, 'contact sheet records corpus manifest authority');
+assert.match(script, /truthHigh/, 'contact sheet compares against truth-high sidecar channels');
+assert.match(script, /lowInputUpsampled/, 'contact sheet includes the low input upsampled into high-grid space');
+assert.match(script, /scalarMlpCue/, 'contact sheet includes scalar MLP cue predictions');
+assert.match(script, /classifierProbabilityCues/, 'contact sheet includes sparse classifier probability cues');
+assert.match(script, /absoluteScalarError/, 'contact sheet exposes scalar prediction error instead of only pretty fields');
+assert.match(script, /absoluteLowError/, 'contact sheet exposes low-input baseline error');
+assert.match(script, /write_html_viewer/, 'contact sheet writes a labeled HTML viewer');
+assert.match(script, /failurePhase/, 'contact sheet writes failure-phase reports for corrupt or mismatched cue packs');
+assert.match(apply, /kaminos\.volume\.dense-cue-pack-sidecar-application\.v0/, 'sidecar application writes a stable report schema');
+assert.match(apply, /boundary-sidecar-override-source-v0/, 'sidecar application targets the explicit boundary override receiver');
+assert.match(apply, /truthFluidFrontSidecarOnlyDiagnostic/, 'sidecar application labels fixed fluid-front diagnostic scope');
+assert.match(apply, /classifierProbabilityCues/, 'sidecar application uses classifier probability cues for hybrid sidecar assembly');
+assert.match(apply, /scalarMlpCue/, 'sidecar application preserves scalar MLP cue source identity');
+assert.match(apply, /predictedHigh/, 'sidecar application emits a predictedHigh role for render still harnesses');
+assert.match(apply, /lowUpsampled/, 'sidecar application emits a lowUpsampled role for baseline comparison');
+assert.match(apply, /failurePhase/, 'sidecar application writes failure-phase reports for corrupt cue packs');
+assert.match(render, /SIDECAR_APPLICATION_SCHEMA/, 'render still harness accepts sidecar application manifests');
+assert.match(render, /const sidecarApplication = application\.schema === SIDECAR_APPLICATION_SCHEMA;/, 'render still harness gates sidecar-specific behavior by schema');
+assert.match(render, /for \(const roleName of \['truthHigh', 'lowUpsampled', 'predictedHigh'\]\)/, 'sidecar application renders truth, low, and predicted roles through one override path');
+assert.match(render, /boundarySidecar\?\.boundary\?\.sha256/, 'render sanity checks include boundary sidecar identity');
+assert.match(render, /boundarySidecar\?\.meta\?\.sha256/, 'render sanity checks include boundary metadata identity');
+
+console.log('volume dense cue-pack contact sheet contract passed');

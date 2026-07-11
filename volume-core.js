@@ -128,13 +128,13 @@ function canonicalContentModeValue(value) {
 
 function normalizeBoundarySidecarSource(value) {
   const normalized = String(value || 'live').toLowerCase().replace(/-/g, '_');
-  if (normalized === 'baked' || normalized === 'mix') return normalized;
+  if (normalized === 'baked' || normalized === 'mix' || normalized === 'override') return normalized;
   return 'live';
 }
 
 function boundarySidecarSourceValue(value) {
   const normalized = normalizeBoundarySidecarSource(value);
-  if (normalized === 'baked') return 1;
+  if (normalized === 'baked' || normalized === 'override') return 1;
   if (normalized === 'mix') return 2;
   return 0;
 }
@@ -5322,6 +5322,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   function boundarySidecarDebug(boundarySidecarSourceName = normalizeBoundarySidecarSource(controlsSnapshot.boundarySidecarSource)) {
     const controls = controlsSnapshot.boundarySidecarControls || {};
     const view = normalizeBoundarySidecarView(controls.view ?? controlsSnapshot.boundarySidecarView);
+    const overrideReceipt = boundarySidecarSourceName === 'override' && state.fullFieldBufferRenderOverride?.status === 'applied'
+      ? {
+          identity: 'boundary-sidecar-override-source-v0',
+          role: state.fullFieldBufferRenderOverride.role || null,
+          boundarySha256: state.fullFieldBufferRenderOverride.boundarySha256 || null,
+          boundaryMetaSha256: state.fullFieldBufferRenderOverride.boundaryMetaSha256 || null,
+        }
+      : null;
     return {
       identity: BOUNDARY_SIDECAR_IDENTITY,
       authority: BOUNDARY_SIDECAR_BAKE_AUTHORITY,
@@ -5331,6 +5339,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       boundaryStructureSource: boundarySidecarSourceName,
       activeInRaymarch: boundarySidecarSourceName !== 'live',
       activeAsDebugView: view !== 'off',
+      overrideReceipt,
       blur: clampFinite(controls.blur ?? controlsSnapshot.boundarySidecarBlur, 0, 1, 0.45),
       stepWidth: clampFinite(controls.stepWidth ?? controlsSnapshot.boundarySidecarWidth, 0, 2, 0.75),
       ridgeGain: clampFinite(controls.ridgeGain ?? controlsSnapshot.boundarySidecarRidge, 0, 2, 1),
@@ -7297,6 +7306,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.boundarySidecarSource = sourceName;
     state.boundarySidecarView = sidecarViewName;
     state.boundaryStructureSource = sourceName;
+    if (sourceName === 'override') {
+      state.boundarySidecarBuiltThisFrame = false;
+      state.boundarySidecarDebug = boundarySidecarDebug(sourceName);
+      updateSimCostLedger({ boundarySidecarBuiltThisFrame: false });
+      return;
+    }
     const shouldBakeBoundarySidecar = sourceName !== 'live' || sidecarViewName !== 'off';
     if (
       !shouldBakeBoundarySidecar ||
@@ -9132,8 +9147,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     }
     const fluid = payload.fluid || {};
     const front = payload.front || {};
+    const boundary = payload.boundarySidecar?.boundary || payload.boundary || null;
+    const boundaryMeta = payload.boundarySidecar?.meta || payload.boundaryMeta || null;
     const expectedFluidBytes = fluidBufferBytes(gridSize);
     const expectedFrontBytes = frontFieldBufferBytes(gridSize);
+    const expectedBoundaryBytes = boundary ? boundarySidecarBufferBytes(gridSize) : 0;
+    const expectedBoundaryMetaBytes = boundaryMeta ? boundarySidecarMetaBufferBytes(gridSize) : 0;
     if (Number(fluid.byteLength) !== expectedFluidBytes || Number(front.byteLength) !== expectedFrontBytes) {
       return fullFieldBufferOverrideFailure(resultBase, 'descriptor-validate', 'Override sidecar byte lengths do not match active grid buffers.', {
         expectedFluidBytes,
@@ -9142,6 +9161,16 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         frontByteLength: Number(front.byteLength),
       });
     }
+    if (boundary || boundaryMeta) {
+      if (!boundary || !boundaryMeta || Number(boundary.byteLength) !== expectedBoundaryBytes || Number(boundaryMeta.byteLength) !== expectedBoundaryMetaBytes) {
+        return fullFieldBufferOverrideFailure(resultBase, 'descriptor-validate', 'Override boundary sidecar byte lengths do not match active grid buffers.', {
+          expectedBoundaryBytes,
+          expectedBoundaryMetaBytes,
+          boundaryByteLength: Number(boundary?.byteLength),
+          boundaryMetaByteLength: Number(boundaryMeta?.byteLength),
+        });
+      }
+    }
     const session = {
       ...resultBase,
       status: 'receiving',
@@ -9149,16 +9178,27 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       grid: gridSize,
       fluidBytesExpected: expectedFluidBytes,
       frontBytesExpected: expectedFrontBytes,
+      boundaryBytesExpected: expectedBoundaryBytes,
+      boundaryMetaBytesExpected: expectedBoundaryMetaBytes,
       fluidBytesWritten: 0,
       frontBytesWritten: 0,
+      boundaryBytesWritten: 0,
+      boundaryMetaBytesWritten: 0,
       fluidChunks: 0,
       frontChunks: 0,
+      boundaryChunks: 0,
+      boundaryMetaChunks: 0,
       startedAtFrameCount: state.frameCount,
       startedAtSimStepCount: state.simStepCount,
       fluidSha256: fluid.sha256 || null,
       frontSha256: front.sha256 || null,
+      boundarySha256: boundary?.sha256 || null,
+      boundaryMetaSha256: boundaryMeta?.sha256 || null,
       fluidChannelOrder: Array.isArray(fluid.channelOrder) ? fluid.channelOrder.map(String) : FIELD_TILE_CHANNELS.slice(0, FLUID_COMPONENTS),
       frontChannelOrder: Array.isArray(front.channelOrder) ? front.channelOrder.map(String) : ['frontTopology'],
+      boundaryChannelOrder: Array.isArray(boundary?.channelOrder) ? boundary.channelOrder.map(String) : ['support', 'coverage', 'ridge', 'footprint'],
+      boundaryMetaChannelOrder: Array.isArray(boundaryMeta?.channelOrder) ? boundaryMeta.channelOrder.map(String) : ['proximity', 'normalX', 'normalY', 'normalZ'],
+      boundarySidecarOverrideIdentity: boundary || boundaryMeta ? 'boundary-sidecar-override-source-v0' : null,
     };
     debugFullFieldBufferOverrideSession = session;
     state.fullFieldBufferRenderOverride = { ...session };
@@ -9181,10 +9221,23 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         activeSessionId: session.sessionId,
       });
     }
-    const kind = String(payload.kind || 'fluid') === 'front' ? 'front' : 'fluid';
+    const requestedKind = String(payload.kind || 'fluid');
+    const kind = requestedKind === 'front'
+      ? 'front'
+      : requestedKind === 'boundary'
+        ? 'boundary'
+        : (requestedKind === 'boundaryMeta' || requestedKind === 'meta')
+          ? 'boundaryMeta'
+          : 'fluid';
     const bytes = decodeBase64Bytes(payload.base64 || '');
     const byteOffset = Math.max(0, Math.floor(Number(payload.byteOffset) || 0));
-    const expectedBytes = kind === 'front' ? session.frontBytesExpected : session.fluidBytesExpected;
+    const expectedBytes = kind === 'front'
+      ? session.frontBytesExpected
+      : kind === 'boundary'
+        ? session.boundaryBytesExpected
+        : kind === 'boundaryMeta'
+          ? session.boundaryMetaBytesExpected
+          : session.fluidBytesExpected;
     if (bytes.byteLength < 1 || byteOffset + bytes.byteLength > expectedBytes) {
       return fullFieldBufferOverrideFailure(resultBase, 'chunk-validate', 'Full-field override chunk has invalid byte range.', {
         kind,
@@ -9197,6 +9250,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       device.queue.writeBuffer(frontBuffers[currentFront], byteOffset, bytes);
       session.frontBytesWritten += bytes.byteLength;
       session.frontChunks += 1;
+    } else if (kind === 'boundary') {
+      device.queue.writeBuffer(boundarySidecarBuffer, byteOffset, bytes);
+      session.boundaryBytesWritten += bytes.byteLength;
+      session.boundaryChunks += 1;
+    } else if (kind === 'boundaryMeta') {
+      device.queue.writeBuffer(boundarySidecarMetaBuffer, byteOffset, bytes);
+      session.boundaryMetaBytesWritten += bytes.byteLength;
+      session.boundaryMetaChunks += 1;
     } else {
       device.queue.writeBuffer(fluidBuffers[currentFluid], byteOffset, bytes);
       session.fluidBytesWritten += bytes.byteLength;
@@ -9213,6 +9274,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       byteLength: bytes.byteLength,
       fluidBytesWritten: session.fluidBytesWritten,
       frontBytesWritten: session.frontBytesWritten,
+      boundaryBytesWritten: session.boundaryBytesWritten,
+      boundaryMetaBytesWritten: session.boundaryMetaBytesWritten,
     };
   }
 
@@ -9232,12 +9295,21 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         activeSessionId: session.sessionId,
       });
     }
-    if (session.fluidBytesWritten !== session.fluidBytesExpected || session.frontBytesWritten !== session.frontBytesExpected) {
+    if (
+      session.fluidBytesWritten !== session.fluidBytesExpected ||
+      session.frontBytesWritten !== session.frontBytesExpected ||
+      session.boundaryBytesWritten !== session.boundaryBytesExpected ||
+      session.boundaryMetaBytesWritten !== session.boundaryMetaBytesExpected
+    ) {
       return fullFieldBufferOverrideFailure(resultBase, 'finish-validate', 'Full-field override did not receive complete fluid/front buffers.', {
         fluidBytesWritten: session.fluidBytesWritten,
         fluidBytesExpected: session.fluidBytesExpected,
         frontBytesWritten: session.frontBytesWritten,
         frontBytesExpected: session.frontBytesExpected,
+        boundaryBytesWritten: session.boundaryBytesWritten,
+        boundaryBytesExpected: session.boundaryBytesExpected,
+        boundaryMetaBytesWritten: session.boundaryMetaBytesWritten,
+        boundaryMetaBytesExpected: session.boundaryMetaBytesExpected,
       });
     }
     await device.queue.onSubmittedWorkDone?.();

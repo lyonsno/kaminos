@@ -1133,6 +1133,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
         <select id="volume-boundary-sidecar-source" class="select-input">
           <option value="live">live</option>
           <option value="baked">baked</option>
+          <option value="override">override</option>
           <option value="mix">mix</option>
         </select>
         <span class="slider-val" id="volume-boundary-sidecar-source-val">live</span>
@@ -11561,7 +11562,7 @@ const REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS = [
 ];
 
 const REACTION_FRONT_LIVE_VIEW_VALUES = new Set(['off', 'shell', 'thermal', 'reaction', 'front', 'edge', 'core', 'curl', 'divergence', 'boundary', 'boundary_fire']);
-const BOUNDARY_SIDECAR_SOURCE_VALUES = new Set(['live', 'baked', 'mix']);
+const BOUNDARY_SIDECAR_SOURCE_VALUES = new Set(['live', 'baked', 'override', 'mix']);
 const BOUNDARY_SIDECAR_VIEW_VALUES = new Set(['off', 'support', 'coverage', 'ridge', 'proximity', 'footprint', 'normal']);
 
 function normalizeReactionFrontLiveView(value) {
