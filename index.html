@@ -17094,7 +17094,9 @@ async function initKaminosVolumeRoute() {
   const routeActivityPressureDispatch = String(params.get('volume_activity_pressure_dispatch') || '').toLowerCase();
   routedVolumeActivityPressureDispatchStrategy = routeActivityPressureDispatch === 'dense' || routeActivityPressureDispatch === 'dense-masked' || routeActivityPressureDispatch === 'dense-full-grid-activity-pressure-masked-v0'
     ? 'dense-full-grid-activity-pressure-masked-v0'
-    : undefined;
+    : (routeActivityPressureDispatch === 'coarse' || routeActivityPressureDispatch === 'coarse-mask' || routeActivityPressureDispatch === 'coarse-brick' || routeActivityPressureDispatch === 'coarse-brick-activity-pressure-mask-v0'
+      ? 'coarse-brick-activity-pressure-mask-v0'
+      : undefined);
   const routeActivityVorticityGate = Number(params.get('volume_activity_vorticity_gate'));
   if (params.has('volume_activity_vorticity_gate') && Number.isFinite(routeActivityVorticityGate)) {
     setVolumeControlValue('volume-activity-vorticity-gate', String(Math.max(0, Math.min(1, routeActivityVorticityGate))));

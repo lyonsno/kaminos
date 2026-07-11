@@ -565,6 +565,7 @@ assert.match(index, /volume_pressure_tier_hero_min/, 'URL route can seed the pre
 assert.match(index, /volume_pressure_tier_hero_max/, 'URL route can seed the pressure3 hero-band max threshold');
 assert.match(index, /volume_activity_pressure_p4/, 'URL route can disable Activity P4 for paired P3/P4 pressure comparison');
 assert.match(index, /volume_activity_pressure_dispatch/, 'URL route can compare indirect and dense-masked Activity pressure dispatch');
+assert.match(index, /coarse-brick-activity-pressure-mask-v0/, 'URL route can select coarse-brick Activity pressure dispatch');
 assert.match(index, /pressureTierOverlay/, 'Volume controls expose pressure-tier overlay opacity to the renderer');
 assert.match(index, /pressureTierLowerMax/, 'Volume controls expose pressure2 lower-slab max threshold to the renderer');
 assert.match(index, /pressureTierHeroMin/, 'Volume controls expose pressure3 hero-band min threshold to the renderer');
@@ -1213,7 +1214,7 @@ assert.match(core, /uniforms\[203\]\s*=\s*pyroRadianceChroma/, 'CPU uploads Radi
 assert.match(core, /uniforms\[212\]\s*=\s*pyroFlamePaint/, 'CPU uploads flame paint gain into the Pyro luma uniform block');
 assert.match(core, /uniforms\[213\]\s*=\s*pyroFlameLuma/, 'CPU uploads flame luminance into the Pyro luma uniform block');
 assert.match(core, /writePyroPaletteUniform/, 'CPU uploads editable Pyro palette color endpoints');
-assert.match(core, /uniforms\.set\(previousViewProj\.elements,\s*328\)/, 'previous view-projection matrix shifts after Bite-stack, flow, palette, topology-shell lab, boundary-fire, boundary sidecar reconstruction, sidecar display, scalar activity receiver, and activity-tier uniforms');
+assert.match(core, /uniforms\.set\(previousViewProj\.elements,\s*332\)/, 'previous view-projection matrix shifts after Bite-stack, flow, palette, topology-shell lab, boundary-fire, boundary sidecar reconstruction, sidecar display, scalar activity receiver, and activity-tier dispatch uniforms');
 assert.match(core, /paletteShape/, 'debug state exposes editable Pyro palette shape');
 assert.match(core, /lumaShape/, 'debug state exposes independent Pyro luma shape');
 assert.match(core, /radianceShape/, 'debug state exposes Pyro radiance gate/spill/warmth shape');
@@ -1529,6 +1530,8 @@ assert.match(core, /ACTIVITY_PRESSURE_SPEND_MODEL\s*=\s*'base-midbody-activity-p
 assert.match(core, /ACTIVITY_PRESSURE_INACTIVE_SKIP_POLICY\s*=\s*'inactive-extra-tier-cell-early-out-v0'/, 'activity pressure tiers name the inactive-cell early-out policy');
 assert.match(core, /ACTIVE_PRESSURE_WORKGROUP_DISPATCH_STRATEGY\s*=\s*'gpu-built-active-pressure-workgroups-indirect-v0'/, 'activity pressure tiers name GPU-built indirect active workgroup dispatch');
 assert.match(core, /ACTIVITY_PRESSURE_DENSE_DISPATCH_STRATEGY\s*=\s*'dense-full-grid-activity-pressure-masked-v0'/, 'activity pressure tiers name dense full-grid masked comparison dispatch');
+assert.match(core, /ACTIVITY_PRESSURE_COARSE_MASK_DISPATCH_STRATEGY\s*=\s*'coarse-brick-activity-pressure-mask-v0'/, 'activity pressure tiers name coarse current-sim brick mask dispatch');
+assert.match(core, /ACTIVITY_PRESSURE_COARSE_MASK_SOURCE\s*=\s*'current-sim-front-pass-coarse-brick-atomics-v0'/, 'coarse activity pressure mask names the current-sim/front-pass mask source');
 assert.match(core, /ACTIVE_PRESSURE_WORKGROUP_ACCOUNTING\s*=\s*'active-pressure-workgroup-counter-readback-v0'/, 'activity pressure tiers name active workgroup readback accounting');
 assert.match(core, /ACTIVE_PRESSURE_WORKGROUP_READBACK_DEFAULT_CADENCE\s*=\s*30/, 'activity pressure workgroup readback is throttled in live mode so debug accounting does not dominate frame P95');
 assert.match(core, /ACTIVITY_PRESSURE_P4_STRATEGY\s*=\s*'core-replay-p4-active-workgroups-v0'/, 'activity pressure tiers name the P4-as-core-replay strategy');
@@ -1552,6 +1555,10 @@ const pressureActivityBlock = core.match(/fn pressureActivityCueAtCell[\s\S]*?fn
 assert.match(pressureActivityBlock, /readFrontField/, 'activity pressure mask consumes the sim-side front field');
 assert.match(pressureActivityBlock, /readSlot\(c,\s*0u\)/, 'activity pressure mask consumes broad density or velocity occupancy from the current sim buffer');
 assert.match(pressureActivityBlock, /pressureActivityBaseMidbodySpendAtCell/, 'activity pressure masks bias extra pressure toward base and midbody spend');
+assert.match(pressureActivityBlock, /pressureActivityMarkCoarseMaskAtCell/, 'main sim pass can mark coarse pressure bricks from current activity support');
+assert.match(pressureActivityBlock, /atomicOr\(&pressureActivityCoarseMask/, 'coarse pressure mask is written as per-brick atomics during the current sim/front pass');
+assert.match(pressureActivityBlock, /pressureActivityCoarseMaskAtCell/, 'extra pressure tiers can consume the current-frame coarse brick activity mask');
+assert.match(pressureActivityBlock, /coarse-brick-current-sim-activity-early-out-v0/, 'coarse pressure tier shader carries an explicit coarse-brick early-out policy');
 assert.doesNotMatch(pressureActivityBlock, /pressureActivityP4MaskAtCell/, 'activity pressure path must not run a separate heavy P4 mask; P4 reuses the P3 core mask/list');
 assert.match(pressureActivityBlock, /if \(tier > 3\.5\) \{\s*return pressureActivityMaskAtCell\(c, 1\.0\);\s*\}/, 'activity P4 cell mask reuses the P3 core mask');
 assert.doesNotMatch(pressureActivityBlock, /pressureActivityWorkgroupMask\(gid, 4\.0\)/, 'activity workgroup builder must not evaluate a separate P4 mask');
@@ -1580,8 +1587,19 @@ assert.match(core, /skippedExtraTierWorkgroups/, 'debug state reports skipped ex
 assert.match(core, /gpu-built-active-pressure-workgroups-indirect-v0/, 'activity pressure dispatch efficiency says GPU-built indirect active workgroups');
 assert.match(core, /dense-full-grid-activity-pressure-masked-v0/, 'activity pressure dispatch efficiency can say dense full-grid masked comparison');
 assert.match(core, /activityPressureDenseDispatch/, 'activity pressure runtime has an explicit dense dispatch branch that bypasses active-list construction');
+assert.match(core, /coarse-brick-activity-pressure-mask-v0/, 'activity pressure dispatch efficiency can say coarse current-sim brick mask');
+assert.match(core, /activityPressureCoarseMaskDispatch/, 'activity pressure runtime has an explicit coarse mask dispatch branch');
+assert.match(core, /pressureActivityCoarseMaskBuffer/, 'volume core allocates a coarse activity pressure mask buffer');
+assert.match(core, /pressureActivityCoarseMaskBufferBytes/, 'coarse activity pressure mask buffer size is explicit and grid-scaled');
+assert.match(core, /preparePressureActivityCoarseMaskBuffer/, 'coarse activity pressure clears the brick mask before the sim pass writes current-frame support');
+assert.match(core, /pressureTieredFluidBindGroupLayout\s*=\s*device\.createBindGroupLayout[\s\S]*binding:\s*11[\s\S]*pressureJacobiTieredPipelineLayout\s*=\s*device\.createPipelineLayout[\s\S]*bindGroupLayouts:\s*\[pressureTieredFluidBindGroupLayout,\s*emptyBindGroupLayout,\s*pressureJacobiBindGroupLayout\]/, 'tiered pressure uses a compact fluid/front/coarse-mask bind group instead of inheriting the full sim bind group');
+const pressureActivityReadLayoutBlock = core.match(/pressureActivityReadBindGroupLayout\s*=\s*device\.createBindGroupLayout[\s\S]*?majorantWriteBindGroupLayout/)?.[0] || '';
+const pressureActivityReadBindGroupBlock = core.match(/pressureActivityReadBindGroups\s*=\s*\[\s*device\.createBindGroup[\s\S]*?boundarySidecarReadBindGroups/)?.[0] || '';
+assert.match(pressureActivityReadLayoutBlock, /binding:\s*11/, 'indirect activity pressure read layout exposes the coarse-mask buffer required by the shared shader interface');
+assert.match(pressureActivityReadBindGroupBlock, /binding:\s*11,\s*resource:\s*\{\s*buffer:\s*pressureActivityCoarseMaskBuffer\s*\}/, 'indirect activity pressure bind groups satisfy the shared coarse-mask shader interface');
 assert.match(core, /activity-core-pressure4-replay-indirect/, 'activity pressure dispatch plan names the P4 core replay refinement pass');
 assert.match(core, /activity-core-pressure4-replay-dense-masked/, 'activity pressure dispatch plan names the dense P4 core replay refinement pass');
+assert.match(core, /activity-core-pressure4-replay-coarse-mask/, 'activity pressure dispatch plan names the coarse-mask P4 core replay refinement pass');
 assert.match(core, /activityPressureP4Enabled/, 'activity pressure dispatch plan accepts an explicit P4 enablement control');
 assert.match(core, /activityPressureDispatchStrategy/, 'activity pressure dispatch plan accepts an explicit dispatch strategy control');
 assert.match(core, /spendModel:\s*ACTIVITY_PRESSURE_SPEND_MODEL/, 'activity tier debug state exposes the effective spend model');
@@ -1592,6 +1610,8 @@ assert.match(core, /ACTIVITY_PRESSURE_P4_STRATEGY/, 'activity tier debug state c
 assert.match(core, /ACTIVITY_PRESSURE_P4_DENSE_STRATEGY/, 'activity tier debug state can report the dense P4 refinement strategy');
 assert.match(core, /skipAccounting:[\s\S]*ACTIVE_PRESSURE_WORKGROUP_ACCOUNTING/, 'activity tier debug state preserves active workgroup readback accounting for indirect dispatch');
 assert.match(core, /dense-dispatch-cell-mask-no-active-workgroup-readback/, 'activity tier debug state identifies dense dispatch as cell-mask accounting without active readback');
+assert.match(core, /coarse-mask-no-active-workgroup-readback/, 'activity tier debug state identifies coarse mask dispatch without active workgroup readback');
+assert.match(core, /pressure1:\s*\{\s*mask:\s*'global-floor'/, 'coarse activity pressure keeps the global P1 floor in the tier bounds');
 assert.match(core, /pressureTierLowerMax/, 'volume core reads the operator-tuned lower pressure tier bound');
 assert.match(core, /pressureTierHeroMin/, 'volume core reads the operator-tuned hero pressure tier lower bound');
 assert.match(core, /pressureTierHeroMax/, 'volume core reads the operator-tuned hero pressure tier upper bound');
