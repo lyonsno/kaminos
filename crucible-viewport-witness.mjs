@@ -282,6 +282,22 @@ try {
       const prepSteps = new Set(['depth-normalize', 'depth-min', 'depth-rescale', 'base-disparity', 'base-grid', 'base-color']);
       const prepEvents = routeTailEvents.filter(event => prepSteps.has(event?.step) && event?.role === 'cpu-materialization-chunk');
       const gaussianEvents = routeTailEvents.filter(event => event?.step === 'gaussian-compose' && event?.role === 'cpu-materialization-chunk');
+      const gaussianCpuDutyIntervals = routeTailEvents
+        .filter(event => event?.step === 'gaussian-compose' && event?.kind === 'duty-interval' && event?.granularity === 'row-batched')
+        .map(event => ({
+          phase: event.phase,
+          boundary: event.boundary,
+          stage: event.stage,
+          step: event.step,
+          role: event.role,
+          granularity: event.granularity,
+          checkpointItems: event.checkpointItems,
+          segmentStartProcessedItems: event.segmentStartProcessedItems,
+          segmentEndProcessedItems: event.segmentEndProcessedItems,
+          intervalStartMs: event.intervalStartMs,
+          intervalEndMs: event.intervalEndMs,
+          durationMs: event.durationMs,
+        }));
       const lateTailSteps = new Set(['ply-blob-assembly', 'object-url-create', 'output-bind']);
       const lateTailBlockingIntervals = routeTailEvents
         .filter(event => lateTailSteps.has(event?.step) && event?.kind === 'duty-interval')
@@ -296,6 +312,9 @@ try {
           durationMs: event.durationMs,
           bytes: event.bytes,
         }));
+      const inferenceWindowFinalizeInterval = routeTailEvents.find(event =>
+        event?.step === 'inference-window-finalize' && event?.kind === 'duty-interval' && event?.role === 'localization-envelope'
+      ) || null;
       const splat = report.artifacts?.splat || null;
       const fire = window.kaminosSharpBreathingRoomKilnFireDebug?.state?.()?.fire || null;
       return {
@@ -313,7 +332,9 @@ try {
           prepSteps: [...new Set(prepEvents.map(event => event.step))].sort(),
           gaussianProcessedItems: [...new Set(gaussianEvents.map(event => event.processedItems).filter(Number.isFinite))].sort((a, b) => a - b),
         },
+        gaussianCpuDutyIntervals,
         lateTailBlockingIntervals,
+        inferenceWindowFinalizeInterval,
         output: splat ? { path: splat.path, bytes: splat.bytes, sha256: splat.sha256, status: splat.status } : null,
         backgroundHeartbeat,
         volumeReleased: Boolean(fire?.volumeReleased),
@@ -343,14 +364,31 @@ try {
         throw new Error(`Friendly firing is missing ${step} blocking interval evidence: ${JSON.stringify(state.fullRoute.lateTailBlockingIntervals)}`);
       }
     }
-    if (backgroundHeartbeat.worstFrameGaps[0]?.overlapClassification === 'uninstrumented-gap') {
-      throw new Error(`Friendly firing residual maximum gap remains unattributed: ${JSON.stringify(backgroundHeartbeat.worstFrameGaps[0])}`);
+    if (!state.fullRoute.gaussianCpuDutyIntervals?.length || state.fullRoute.gaussianCpuDutyIntervals.some(interval =>
+      interval.granularity !== 'row-batched'
+      || !Number.isFinite(interval.segmentStartProcessedItems)
+      || !Number.isFinite(interval.segmentEndProcessedItems)
+      || interval.segmentEndProcessedItems <= interval.segmentStartProcessedItems
+      || !Number.isFinite(interval.intervalStartMs)
+      || !Number.isFinite(interval.intervalEndMs)
+    )) {
+      throw new Error(`Friendly firing is missing truthful row-batched Gaussian CPU intervals: ${JSON.stringify(state.fullRoute.gaussianCpuDutyIntervals)}`);
     }
-    const topGapIntervalEvidence = backgroundHeartbeat.worstFrameGaps[0]?.overlappedEvents?.filter(event =>
-      Number.isFinite(event?.intervalStartMs) && Number.isFinite(event?.intervalEndMs)
-    ) || [];
-    if (!topGapIntervalEvidence.length) {
-      throw new Error(`Friendly firing residual maximum gap has no overlapping interval evidence: ${JSON.stringify(backgroundHeartbeat.worstFrameGaps[0])}`);
+    const finalizeInterval = state.fullRoute.inferenceWindowFinalizeInterval;
+    if (!finalizeInterval || finalizeInterval.role !== 'localization-envelope'
+      || !Number.isFinite(finalizeInterval.intervalStartMs) || !Number.isFinite(finalizeInterval.intervalEndMs)) {
+      throw new Error(`Friendly firing is missing its non-causal inference finalization envelope: ${JSON.stringify(finalizeInterval)}`);
+    }
+    for (const [index, gap] of backgroundHeartbeat.worstFrameGaps.slice(0, 2).entries()) {
+      if (gap?.overlapClassification === 'uninstrumented-gap') {
+        throw new Error(`Friendly firing residual gap ${index + 1} remains unattributed: ${JSON.stringify(gap)}`);
+      }
+      const intervalEvidence = gap?.overlappedEvents?.filter(event =>
+        Number.isFinite(event?.intervalStartMs) && Number.isFinite(event?.intervalEndMs)
+      ) || [];
+      if (!intervalEvidence.length) {
+        throw new Error(`Friendly firing residual gap ${index + 1} has no overlapping interval evidence: ${JSON.stringify(gap)}`);
+      }
     }
     if (!state.fullRoute.output?.sha256 || state.fullRoute.output.status !== 'real') throw new Error('Friendly firing did not preserve a real hashed output');
     if (!state.fullRoute.volumeReleased) throw new Error('Friendly firing completed without releasing the furnace volume');
