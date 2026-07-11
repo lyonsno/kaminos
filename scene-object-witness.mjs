@@ -133,6 +133,45 @@ function decodePng8(buffer) {
   return { width, height, channels, pixels };
 }
 
+function comparePresentationScreenshots(pathA, pathB, hostRect) {
+  const a = decodePng8(readFileSync(pathA));
+  const b = decodePng8(readFileSync(pathB));
+  if (a.width !== b.width || a.height !== b.height || a.channels !== b.channels) {
+    throw new Error(`presentation screenshots differ in format: ${pathA} vs ${pathB}`);
+  }
+  const rect = hostRect || { x: 0, y: 0, width: a.width, height: a.height };
+  const scaleX = a.width / Math.max(1, rect.x + rect.width);
+  const scaleY = a.height / Math.max(1, rect.y + rect.height);
+  const minX = Math.max(0, Math.floor(rect.x * scaleX));
+  const maxX = Math.min(a.width - 1, Math.ceil((rect.x + rect.width) * scaleX) - 1);
+  const minY = Math.max(0, Math.floor(rect.y * scaleY));
+  const maxY = Math.min(a.height - 1, Math.ceil((rect.y + rect.height) * scaleY) - 1);
+  let sampledPixels = 0;
+  let changedPixels = 0;
+  let absDiffSum = 0;
+  let maxDiff = 0;
+  for (let y = minY; y <= maxY; y += 1) {
+    for (let x = minX; x <= maxX; x += 1) {
+      const index = (y * a.width + x) * a.channels;
+      const diff = Math.abs(a.pixels[index] - b.pixels[index])
+        + Math.abs(a.pixels[index + 1] - b.pixels[index + 1])
+        + Math.abs(a.pixels[index + 2] - b.pixels[index + 2]);
+      sampledPixels += 1;
+      absDiffSum += diff;
+      maxDiff = Math.max(maxDiff, diff);
+      if (diff >= 12) changedPixels += 1;
+    }
+  }
+  return {
+    rect: { x: minX, y: minY, width: maxX - minX + 1, height: maxY - minY + 1 },
+    sampledPixels,
+    changedPixels,
+    changedFraction: sampledPixels > 0 ? changedPixels / sampledPixels : 0,
+    absDiffSum,
+    maxDiff,
+  };
+}
+
 function sampleRealHybridScreenshot(buffer, evidence) {
   const image = decodePng8(buffer);
   const hostRect = evidence?.overlayHost?.rect || { x: 0, y: 0, width: image.width, height: image.height };
@@ -4233,6 +4272,39 @@ async function runRealHybridSplatOverlayScenario(ws) {
   `, { timeoutMs: 90000 });
 
   const evidence = lastEvidence.realHybridSplatOverlay;
+  const deferredState = await evaluate(ws, `
+    (async () => {
+      const telemetry = window.kaminosSetHybridSourceColorPreviewEnabled?.(false) || null;
+      await new Promise(resolve => setTimeout(resolve, 800));
+      return { telemetry, overlayDebug: window.kaminosHybridSplatOverlayDebugState?.() || null };
+    })()
+  `, { timeoutMs: 10000 });
+  const deferredPath = siblingPngPath('-deferred-pbr');
+  const deferredShot = await capturePngScreenshot(ws, deferredPath);
+  const sourceRadianceState = await evaluate(ws, `
+    (async () => {
+      const telemetry = window.kaminosSetHybridSourceColorPreviewEnabled?.(true) || null;
+      await new Promise(resolve => setTimeout(resolve, 800));
+      return { telemetry, overlayDebug: window.kaminosHybridSplatOverlayDebugState?.() || null };
+    })()
+  `, { timeoutMs: 10000 });
+  const sourceRadiancePath = siblingPngPath('-source-radiance');
+  const sourceRadianceShot = await capturePngScreenshot(ws, sourceRadiancePath);
+  const screenshotDiff = comparePresentationScreenshots(
+    deferredPath,
+    sourceRadiancePath,
+    evidence.overlayHost?.rect || null,
+  );
+  evidence.presentationAB = {
+    deferredTelemetry: deferredState.telemetry,
+    deferredOverlayDebug: deferredState.overlayDebug,
+    deferredScreenshot: deferredShot,
+    sourceRadianceTelemetry: sourceRadianceState.telemetry,
+    sourceRadianceOverlayDebug: sourceRadianceState.overlayDebug,
+    sourceRadianceScreenshot: sourceRadianceShot,
+    screenshotDiff,
+  };
+  const presentationAB = evidence.presentationAB || {};
   if (!evidence.actionExposed || !evidence.splatObject) {
     throw new Error(`real hybrid splat overlay could not import a splat fixture: ${JSON.stringify(evidence)}`);
   }
@@ -4243,20 +4315,19 @@ async function runRealHybridSplatOverlayScenario(ws) {
       || !evidence.overlayDebug?.sceneSplatIds?.includes(evidence.splatObject.id)) {
     throw new Error(`real hybrid splat overlay did not start as a renderer-owned scene: ${JSON.stringify(evidence)}`);
   }
-  if (evidence.overlayDebug?.renderError) {
+  if (evidence.overlayDebug?.renderError
+      || presentationAB.deferredOverlayDebug?.renderError
+      || presentationAB.sourceRadianceOverlayDebug?.renderError) {
     throw new Error(`real hybrid splat overlay reported a renderer frame error: ${JSON.stringify(evidence)}`);
   }
-  const presentationAB = evidence.presentationAB || {};
   if (presentationAB.deferredTelemetry?.presentation?.effectiveMode !== 'deferred-pbr'
       || presentationAB.deferredTelemetry?.presentation?.effectiveRoute !== 'deferred-pbr-lighting'
       || presentationAB.sourceRadianceTelemetry?.presentation?.effectiveMode !== 'source-radiance'
       || presentationAB.sourceRadianceTelemetry?.presentation?.effectiveRoute !== 'source-radiance-copy') {
     throw new Error(`real hybrid overlay did not expose effectiveMode source-radiance and deferred-pbr route identity: ${JSON.stringify(evidence)}`);
   }
-  if (!presentationAB.deferredSample?.sampled
-      || !presentationAB.sourceRadianceSample?.sampled
-      || presentationAB.deferredSample.rgbChecksum === presentationAB.sourceRadianceSample.rgbChecksum
-      || !(presentationAB.sourceRadiancePixelDelta > 100)) {
+  if (!(presentationAB.screenshotDiff?.changedPixels > 1000)
+      || !(presentationAB.screenshotDiff?.absDiffSum > 100000)) {
     throw new Error(`source-radiance presentation route did not change live pixels: ${JSON.stringify(evidence)}`);
   }
   const correctionApplication = evidence.overlayDebug?.correctionApplication || {};

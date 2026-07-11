@@ -225,6 +225,9 @@ assert.match(witness, /selected splat bake layer did not expose preview contribu
 assert.match(witness, /selected splat bake layer did not preserve source-radiance display mode/, 'selected-splat bake-layer witness proves Bake View keeps source-radiance display enabled for unbaked candidate layers');
 assert.match(witness, /source-radiance presentation route did not change live pixels/, 'real hybrid witness rejects accepted controls without a same-scene visible A\/B delta');
 assert.match(witness, /real hybrid splat overlay reported a renderer frame error/, 'real hybrid witness rejects GPU validation failures before treating pixel comparison as route evidence');
+assert.match(witness, /-deferred-pbr/, 'real hybrid presentation witness captures a deferred-PBR screenshot instead of trusting WebGPU canvas drawImage readback');
+assert.match(witness, /-source-radiance/, 'real hybrid presentation witness captures a source-radiance screenshot');
+assert.match(witness, /comparePresentationScreenshots/, 'real hybrid presentation witness compares captured viewport pixels across effective routes');
 assert.match(witness, /effectiveMode.*source-radiance/s, 'real hybrid witness requires renderer-owned effective presentation identity');
 assert.match(witness, /selected splat bake layer faked backend coupling through renderer material curves/, 'selected-splat bake-layer witness rejects fake material-curve coupling without a real baked output');
 assert.match(witness, /kaminosSelectedSplatBakeLayerDebugState/, 'selected-splat bake-layer witness reads explicit debug state rather than inferring from DOM');
