@@ -9,6 +9,7 @@ from pathlib import Path
 import mlx.core as mx
 import mlx.nn as nn
 import mlx.optimizers as optim
+from mlx.utils import tree_flatten
 import numpy as np
 from PIL import Image
 
@@ -2264,7 +2265,24 @@ def main():
         mx.eval(model.parameters(), optimizer.state, loss)
         loss_float = float(loss)
         if step == 0 or step == effectiveMaxSteps - 1 or (step + 1) % max(1, effectiveMaxSteps // 10) == 0:
-            entry = {"step": step + 1, "loss": loss_float}
+            flattened_grads = [value for _path, value in tree_flatten(grads)]
+            gradient_l2_value = mx.sqrt(sum(mx.sum(mx.square(value)) for value in flattened_grads))
+            diagnostic_mask = residual_application_mask(edge_mask_batch, residualApplicationMaskMode, residualMaskFeatherRadius)
+            diagnostic_prediction = model(low_batch, diagnostic_mask)
+            diagnostic_correction = diagnostic_prediction - rgb_channels(low_batch)
+            correction_abs_max_value = mx.max(mx.abs(diagnostic_correction))
+            correction_abs_mean_value = mx.mean(mx.abs(diagnostic_correction))
+            mx.eval(gradient_l2_value, correction_abs_max_value, correction_abs_mean_value)
+            gradient_l2 = float(gradient_l2_value)
+            correction_abs_max = float(correction_abs_max_value)
+            correction_abs_mean = float(correction_abs_mean_value)
+            entry = {
+                "step": step + 1,
+                "loss": loss_float,
+                "gradientL2": gradient_l2,
+                "predictionCorrectionAbsMax": correction_abs_max,
+                "predictionCorrectionAbsMean": correction_abs_mean,
+            }
             if activeTemporalLossWeight > 0:
                 temporal_loss = temporal_loss_value(model, previous_low_batch, current_low_batch, previous_high_batch, current_high_batch, previous_mask_batch, current_mask_batch, residualApplicationMaskMode, residualMaskFeatherRadius)
                 mx.eval(temporal_loss)

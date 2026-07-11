@@ -46,6 +46,16 @@ assert.match(
 );
 assert.match(
   trainer,
+  /"gradientL2":\s*gradient_l2/,
+  'training checkpoints report gradient magnitude so a disconnected optimization path cannot masquerade as model incapacity',
+);
+assert.match(
+  trainer,
+  /"predictionCorrectionAbsMax":\s*correction_abs_max/,
+  'training checkpoints report produced correction magnitude so identity collapse is directly observable',
+);
+assert.match(
+  trainer,
   /mx\.log\(clipped_base\s*\/\s*\(1\.0\s*-\s*clipped_base\)\)/,
   'direct renderer starts from the low image in logit space rather than a gray or random frame',
 );
