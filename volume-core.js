@@ -9,9 +9,11 @@ const SMOKE_ARTIFACT_ASSAY_IDENTITY = 'smoke-artifact-assay-controls-v0';
 const EXPLOSION_PLUME_SMOKE_DYNAMICS_IDENTITY = 'explosion-plume-smoke-dynamics-v0';
 const FAR_SMOKE_RECEIVER_IDENTITY = 'far-smoke-overlap-render-receiver-v0';
 const FAR_SMOKE_GRID_IDENTITY = 'far-smoke-grid-overlap-solver-v0';
+const FAR_SMOKE_TRANSPORT_IDENTITY = 'far-smoke-connected-transport-v0';
 const FAR_SMOKE_GRID_PRESSURE_CEILING = 'sparse-p3-max-no-p4-v0';
 const FAR_SMOKE_GRID_SIZE = 64;
 const FAR_SMOKE_GRID_COMPONENTS = 4;
+const FAR_SMOKE_GRID_SUBSTEPS = 4;
 const TRUTH_ORACLE_ACTIVITY_RECEIVER_IDENTITY = 'truth-oracle-scalar-activity-receiver-v0';
 const TRUTH_ORACLE_ACTIVITY_CUE_AUTHORITY = 'truth-high-diagnostic-activity-projected-to-receiver-grid-v0';
 const PROCEDURAL_ACTIVITY_CUE_AUTHORITY = 'procedural-receiver-activity-proxy-no-truth-v0';
@@ -881,6 +883,7 @@ struct Uniforms {
   explosion_plume_controls: vec4<f32>,
   far_smoke_receiver_controls: vec4<f32>,
   far_smoke_grid_controls: vec4<f32>,
+  far_smoke_transport_controls: vec4<f32>,
   previousViewProj: mat4x4<f32>,
 };
 
@@ -2593,31 +2596,41 @@ fn farSmokeReceiverSample(p: vec3<f32>, time: f32) -> vec4<f32> {
   let windDir = vec2<f32>(cos(windAngle), sin(windAngle));
   let windDrift = windDir * windStrength * receiverRange * t * t * 0.42;
   let expansion = 0.10 + t * (0.26 + receiverRange * 0.52);
-  let sourceY = clamp(mix(p.y, mix(0.72, 0.94, overlap), smoothstep(0.12, 0.74, t)), -0.98, 0.98);
+  let sourceY = clamp(mix(p.y, mix(0.50, 0.76, overlap), smoothstep(0.08, 0.82, t)), -0.98, 0.98);
   let lateral = (p.xz - windDrift) / (1.0 + expansion);
   let sourceP = vec3<f32>(lateral.x, sourceY, lateral.y);
+  let rootPull = mix(0.62, 0.34, receiverRange);
+  let rootP = vec3<f32>(clamp(lateral.x * rootPull, -0.98, 0.98), mix(0.44, 0.70, overlap), clamp(lateral.y * rootPull, -0.98, 0.98));
   let velocityDensity = sampleWorldVelocity(sourceP);
   let material = sampleWorldMaterial(sourceP);
   let fireLayer = sampleWorldFireLayer(sourceP);
   let microLayer = sampleWorldMicrodetail(sourceP);
   let front = sampleWorldFrontField(sourceP);
+  let rootMaterial = sampleWorldMaterial(rootP);
+  let rootFireLayer = sampleWorldFireLayer(rootP);
+  let rootMicroLayer = sampleWorldMicrodetail(rootP);
+  let rootFront = sampleWorldFrontField(rootP);
   let sampleCell = vec3<i32>(floor(clamp((sourceP * 0.5 + vec3<f32>(0.5)) * f32(GRID), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.0))));
   let flowCue = smoothstep(0.006, 0.16, curlMagnitudeAtCell(sampleCell) + abs(divergenceAtCell(sampleCell)) * 0.52);
   let smokeCue = smoothstep(0.012, 0.62, material.x + microLayer.x * 0.42 + microLayer.y * 0.28 + material.w * 0.18);
   let heatCue = smoothstep(0.012, 0.44, material.y + fireLayer.z * 0.18 + fireLayer.x * 0.08);
   let reactionRemnant = smoothstep(0.002, 0.11, front + fireLayer.w * 0.48 + fireLayer.z * 0.22);
-  let receiverSupport = clamp(max(smokeCue, max(heatCue * 0.62, max(reactionRemnant * 0.50, flowCue * 0.46))) * receiverCarrier, 0.0, 1.0);
+  let rootSmokeCue = smoothstep(0.010, 0.52, rootMaterial.x + rootMicroLayer.x * 0.50 + rootMicroLayer.y * 0.30 + rootMaterial.w * 0.20);
+  let rootHeatCue = smoothstep(0.010, 0.42, rootMaterial.y + rootFireLayer.z * 0.20 + rootFireLayer.x * 0.12);
+  let rootReactionCue = smoothstep(0.0015, 0.12, rootFront + rootFireLayer.w * 0.52 + rootFireLayer.z * 0.24);
+  let rootSupport = max(rootSmokeCue, max(rootHeatCue * 0.54, rootReactionCue * 0.52)) * (1.0 - smoothstep(0.82, 1.0, t));
+  let receiverSupport = clamp(max(max(smokeCue, max(heatCue * 0.62, max(reactionRemnant * 0.50, flowCue * 0.46))), rootSupport * (0.58 + receiverRange * 0.42)) * receiverCarrier, 0.0, 1.0);
   let center = p.xz - windDrift;
   let radius = length(center);
-  let bodyWidth = 0.20 + expansion * 0.92 + material.x * 0.12 + overlapWeight * 0.10;
+  let bodyWidth = 0.24 + expansion * 1.08 + material.x * 0.10 + rootSupport * 0.18 + overlapWeight * 0.12;
   let bodyMask = 1.0 - smoothstep(bodyWidth, bodyWidth + 0.28 + t * 0.18, radius);
   let rimBand = smoothstep(bodyWidth * 0.54, bodyWidth + 0.08, radius) * (1.0 - smoothstep(bodyWidth + 0.08, bodyWidth + 0.34, radius));
   let curlNoise = 0.5 + 0.5 * sin(dot(center, vec2<f32>(17.0, -13.0)) + p.y * 9.0 + time * 0.72);
-  let verticalDecay = exp(-t * mix(0.72, 1.38, receiverRange));
+  let verticalDecay = exp(-t * mix(0.44, 0.92, receiverRange));
   let supportBody = receiverSupport * bodyMask * verticalDecay * farSmokeReceiverProbe(p);
-  let density = supportBody * (0.20 + material.x * 0.62 + overlapWeight * 0.18);
-  let smoke = supportBody * (0.34 + material.x * 0.78 + microLayer.x * 0.34 + rimBand * rimCurl * (0.24 + curlNoise * 0.22));
-  let heat = supportBody * (material.y * 0.18 + heatCue * 0.10) * (0.45 + overlapWeight * 0.55);
+  let density = supportBody * (0.22 + material.x * 0.52 + rootMaterial.x * 0.28 + overlapWeight * 0.18);
+  let smoke = supportBody * (0.38 + material.x * 0.62 + rootMaterial.x * 0.40 + microLayer.x * 0.30 + rootMicroLayer.x * 0.18 + rimBand * rimCurl * (0.24 + curlNoise * 0.22));
+  let heat = supportBody * (material.y * 0.14 + rootMaterial.y * 0.08 + heatCue * 0.08) * (0.45 + overlapWeight * 0.55);
   return vec4<f32>(density, smoke, heat, receiverSupport);
 }
 
@@ -2692,37 +2705,97 @@ fn sampleFarSmokeGrid(p: vec3<f32>) -> vec4<f32> {
 
 fn farSmokeOverlapInjection(p: vec3<f32>) -> vec4<f32> {
   let controls = clamp(u.far_smoke_grid_controls, vec4<f32>(0.0), vec4<f32>(1.0));
+  let transport = clamp(u.far_smoke_transport_controls, vec4<f32>(0.0), vec4<f32>(1.0));
   let receiverControls = clamp(u.far_smoke_receiver_controls, vec4<f32>(0.0), vec4<f32>(1.0));
-  let overlapBottom = mix(0.92, 0.48, controls.w);
-  let overlapTop = 1.02;
+  let farSmokeTransportSourceDepth = transport.z;
+  let overlapBottom = max(0.24, mix(0.92, 0.48, controls.w) - farSmokeTransportSourceDepth * 0.28);
+  let overlapTop = 1.02 + farSmokeTransportSourceDepth * 0.18;
   let overlapGate = smoothstep(overlapBottom, overlapBottom + 0.12, p.y) * (1.0 - smoothstep(overlapTop, overlapTop + 0.18, p.y));
   let sourceP = vec3<f32>(clamp(p.x, -0.98, 0.98), clamp(p.y, -0.98, 0.98), clamp(p.z, -0.98, 0.98));
   let material = sampleWorldMaterial(sourceP);
   let fireLayer = sampleWorldFireLayer(sourceP);
   let microLayer = sampleWorldMicrodetail(sourceP);
   let front = sampleWorldFrontField(sourceP);
+  let sourcePull = mix(0.88, 0.50, max(controls.z, farSmokeTransportSourceDepth));
+  let wideSourceP = vec3<f32>(clamp(p.x * sourcePull, -0.98, 0.98), sourceP.y, clamp(p.z * sourcePull, -0.98, 0.98));
+  let wideMaterial = sampleWorldMaterial(wideSourceP);
+  let wideFireLayer = sampleWorldFireLayer(wideSourceP);
+  let wideMicroLayer = sampleWorldMicrodetail(wideSourceP);
+  let wideFront = sampleWorldFrontField(wideSourceP);
   let sampleCell = vec3<i32>(floor(clamp((sourceP * 0.5 + vec3<f32>(0.5)) * f32(GRID), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.0))));
   let flowCue = smoothstep(0.006, 0.16, curlMagnitudeAtCell(sampleCell) + abs(divergenceAtCell(sampleCell)) * 0.40);
   let smokeCue = smoothstep(0.012, 0.62, material.x + microLayer.x * 0.62 + material.w * 0.16);
   let heatCue = smoothstep(0.012, 0.55, material.y + fireLayer.z * 0.20 + fireLayer.x * 0.10);
   let frontCue = smoothstep(0.002, 0.15, front + fireLayer.w * 0.56 + fireLayer.z * 0.16);
-  let carrier = clamp(max(smokeCue, max(heatCue * 0.54, max(frontCue * 0.58, flowCue * 0.45))) * (0.42 + receiverControls.z * 0.58), 0.0, 1.0);
-  let smoke = clamp((material.x * 0.82 + microLayer.x * 0.38 + material.w * 0.12 + heatCue * 0.10) * carrier, 0.0, 1.8);
-  let heat = clamp((material.y * 0.34 + fireLayer.z * 0.12 + frontCue * 0.08) * carrier, 0.0, 1.4);
-  let support = clamp(max(carrier, flowCue * 0.45) * controls.x * overlapGate, 0.0, 1.0);
+  let wideSmokeCue = smoothstep(0.010, 0.46, wideMaterial.x + wideMicroLayer.x * 0.72 + wideMaterial.w * 0.20);
+  let wideHeatCue = smoothstep(0.010, 0.46, wideMaterial.y + wideFireLayer.z * 0.24 + wideFireLayer.x * 0.12);
+  let wideFrontCue = smoothstep(0.0015, 0.12, wideFront + wideFireLayer.w * 0.62 + wideFireLayer.z * 0.18);
+  let sourceBreadth = 0.34 + controls.z * 0.74 + receiverControls.z * 0.22 + farSmokeTransportSourceDepth * 0.24;
+  let radialGate = 1.0 - smoothstep(sourceBreadth, sourceBreadth + 0.52, length(p.xz));
+  let sourceShoulder = smoothstep(overlapBottom - 0.16, overlapBottom + 0.10, p.y) * (1.0 - smoothstep(overlapTop + 0.05, overlapTop + 0.48, p.y));
+  let baseCarrier = max(smokeCue, max(heatCue * 0.54, max(frontCue * 0.58, flowCue * 0.45)));
+  let wideCarrier = max(wideSmokeCue, max(wideHeatCue * 0.48, wideFrontCue * 0.54)) * radialGate * sourceShoulder;
+  let carrier = clamp(max(baseCarrier, wideCarrier * (0.62 + farSmokeTransportSourceDepth * 0.42)) * (0.42 + receiverControls.z * 0.58), 0.0, 1.0);
+  let smoke = clamp(
+    (material.x * 0.82 + microLayer.x * 0.38 + material.w * 0.12 + heatCue * 0.10) * carrier
+      + (wideMaterial.x * 0.46 + wideMicroLayer.x * 0.30 + wideMaterial.w * 0.10) * wideCarrier * controls.x,
+    0.0,
+    2.2
+  );
+  let heat = clamp(
+    (material.y * 0.34 + fireLayer.z * 0.12 + frontCue * 0.08) * carrier
+      + (wideMaterial.y * 0.18 + wideFireLayer.z * 0.08 + wideFrontCue * 0.04) * wideCarrier,
+    0.0,
+    1.6
+  );
+  let support = clamp(max(carrier, max(wideCarrier, flowCue * 0.45)) * controls.x * max(overlapGate, sourceShoulder * radialGate * 0.72), 0.0, 1.0);
   return vec4<f32>(smoke, heat, carrier, 1.0) * support;
 }
 
 fn farSmokeGridVelocity(p: vec3<f32>, field: vec4<f32>) -> vec3<f32> {
   let controls = clamp(u.far_smoke_grid_controls, vec4<f32>(0.0), vec4<f32>(1.0));
+  let transport = clamp(u.far_smoke_transport_controls, vec4<f32>(0.0), vec4<f32>(1.0));
   let windStrength = clamp(u.scene_controls.y, 0.0, 1.5);
   let windAngle = u.scene_controls.z;
   let wind = vec3<f32>(cos(windAngle), 0.0, sin(windAngle)) * windStrength * mix(0.018, 0.050, controls.z);
   let gridUv = farSmokeGridUv(p);
-  let rise = vec3<f32>(0.0, mix(0.020, 0.064, controls.y) * (0.45 + field.y * 0.75 + field.z * 0.30), 0.0);
+  let farSmokeTransportLift = transport.x;
+  let farSmokeTransportCarry = transport.y;
+  let farSmokeTransportSourceDepth = transport.z;
+  let sourceP = vec3<f32>(clamp(p.x, -0.98, 0.98), clamp(p.y, -0.98, 0.98), clamp(p.z, -0.98, 0.98));
+  let nearVelocity = sampleWorldVelocity(sourceP).xyz;
+  let carryBand = (1.0 - smoothstep(1.02 + farSmokeTransportSourceDepth * 0.18, 1.36 + farSmokeTransportSourceDepth * 0.24, p.y))
+    * smoothstep(0.00, 0.18 + farSmokeTransportSourceDepth * 0.16, gridUv.y);
+  let nearCarry = vec3<f32>(
+    nearVelocity.x,
+    max(nearVelocity.y, 0.0) * 1.35,
+    nearVelocity.z
+  ) * carryBand * farSmokeTransportCarry * 0.56;
+  let continuity = clamp(field.z * 0.34 + field.w * 0.82 + field.y * 0.24, 0.0, 1.8);
+  let topDamping = mix(1.0, 0.72, smoothstep(0.74, 1.0, gridUv.y));
+  let rise = vec3<f32>(0.0, mix(0.045, 0.182, farSmokeTransportLift) * (0.56 + continuity) * topDamping, 0.0);
+  let radialLen = max(length(p.xz), 0.001);
+  let radialDir = p.xz / radialLen;
+  let sourceRadialFalloff = 1.0 - smoothstep(0.45 + controls.z * 0.55, 1.75 + controls.z * 1.15, radialLen);
+  let expansion = vec3<f32>(
+    radialDir.x,
+    0.0,
+    radialDir.y
+  ) * mix(0.010, 0.052, controls.z) * farSmokeTransportCarry * (0.22 + continuity) * sourceRadialFalloff * smoothstep(0.05, 0.94, gridUv.y);
   let rollAxis = vec2<f32>(p.z, -p.x);
-  let roll = vec3<f32>(rollAxis.x, 0.0, rollAxis.y) * (0.006 + field.z * 0.018) * smoothstep(0.08, 0.92, gridUv.y);
-  return wind + rise + roll;
+  let roll = vec3<f32>(rollAxis.x, 0.0, rollAxis.y) * (0.006 + field.z * 0.018 + field.w * 0.010) * smoothstep(0.08, 0.92, gridUv.y);
+  return wind + nearCarry + rise + expansion + roll;
+}
+
+fn farSmokeGridConnectedSupport(p: vec3<f32>, advected: vec4<f32>, injected: vec4<f32>) -> f32 {
+  let gridMin = farSmokeGridWorldMin();
+  let gridMax = farSmokeGridWorldMax();
+  let cellY = max((gridMax.y - gridMin.y) / f32(FAR_SMOKE_GRID), 0.001);
+  let below = sampleFarSmokeGrid(p - vec3<f32>(0.0, cellY * 1.65, 0.0));
+  let lower = sampleFarSmokeGrid(p - vec3<f32>(0.0, cellY * 3.10, 0.0));
+  let lowerConnection = max(max(below.z * 0.82, below.w * 0.98), max(lower.z * 0.52, lower.w * 0.78));
+  let localMemory = max(max(advected.z * 0.32, advected.w * 0.56), advected.x * 0.16);
+  return clamp(max(injected.w, max(lowerConnection, localMemory)), 0.0, 1.0);
 }
 
 @compute @workgroup_size(4, 4, 4)
@@ -2742,21 +2815,27 @@ fn farSmokeGridStep(@builtin(global_invocation_id) gid: vec3<u32>) {
   let p = mix(gridMin, gridMax, uv);
   let previous = farSmokeSrc[idx];
   let velocity = farSmokeGridVelocity(p, previous);
-  let advected = sampleFarSmokeGrid(p - velocity);
+  let advectedP = p - velocity;
+  let advected = sampleFarSmokeGrid(advectedP);
   let injected = farSmokeOverlapInjection(p);
+  let transport = clamp(u.far_smoke_transport_controls, vec4<f32>(0.0), vec4<f32>(1.0));
+  let connectedSupport = farSmokeGridConnectedSupport(p, advected, injected);
+  let farSmokeTransportGhostKill = transport.w;
   let sideFade = smoothstep(0.0, 0.040, min(min(uv.x, 1.0 - uv.x), min(uv.z, 1.0 - uv.z)));
-  let topFade = 1.0 - smoothstep(0.94, 1.0, uv.y);
+  let topFade = 1.0 - smoothstep(0.97, 1.0, uv.y);
   let bottomFade = smoothstep(0.0, 0.05, uv.y);
   let containment = sideFade * topFade * bottomFade;
-  let carriedSmoke = advected.x * 0.989;
-  let carriedHeat = advected.y * 0.974;
-  let carriedSupport = advected.z * 0.982;
-  let age = clamp(max(advected.w + 0.012, injected.w), 0.0, 1.0);
+  let disconnected = 1.0 - smoothstep(0.020, 0.28, connectedSupport + advected.x * 0.12);
+  let ghostDecay = 1.0 - disconnected * farSmokeTransportGhostKill * 0.20;
+  let carriedSmoke = advected.x * mix(0.986, 0.996, transport.x) * ghostDecay;
+  let carriedHeat = advected.y * mix(0.970, 0.988, transport.x) * ghostDecay;
+  let carriedSupport = advected.z * mix(0.976, 0.992, transport.y) * ghostDecay;
+  let connected = clamp(max(max(connectedSupport, injected.w), advected.w * mix(0.986, 0.998, transport.y)), 0.0, 1.0);
   farSmokeDst[idx] = vec4<f32>(
-    clamp(max(carriedSmoke, injected.x) * containment, 0.0, 2.4),
-    clamp(max(carriedHeat, injected.y) * containment, 0.0, 1.8),
-    clamp(max(carriedSupport, injected.z) * containment, 0.0, 1.4),
-    age * containment
+    clamp((max(carriedSmoke, injected.x) + injected.x * 0.12) * containment, 0.0, 2.8),
+    clamp((max(carriedHeat, injected.y) + injected.y * 0.06) * containment, 0.0, 1.9),
+    clamp(max(carriedSupport, injected.z) * containment, 0.0, 1.5),
+    connected * containment
   );
 }
 
@@ -4300,12 +4379,15 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     let divDebug = abs(divergenceAtCell(sampleCell));
     let microTextureSignal = clamp(microSmoke * 1.55 + interfaceShred * 2.45 + fireLick * 1.30 + emberFleck * 0.55, 0.0, 2.4);
     let microBodyContribution = microSmoke * 0.10 + interfaceShred * 0.18 + fireLick * 0.06;
+    let farGridConnectedVisibility = mix(0.24, 1.0, smoothstep(0.025, 0.34, farGrid.w));
+    let farGridSmoke = (farGrid.x + farGrid.z * 0.20 + farGrid.y * 0.08) * farGridConnectedVisibility;
+    let farGridSupport = farGrid.z * farGridConnectedVisibility;
     let canonicalDebugSmokeDensity = smokeDensity * canonicalSmokeContent * u.viewport_steps_density.w;
     let density = mix(
       (smokeDensity * 0.84 + heat * 0.28 + materialDetail * 0.14 + microBodyContribution) * u.viewport_steps_density.w,
       canonicalDebugSmokeDensity,
       canonicalSmokeOnlyRender
-    ) + (farReceiver.x + farGrid.x * 0.92) * u.viewport_steps_density.w;
+    ) + (farReceiver.x + farGridSmoke * 1.42) * u.viewport_steps_density.w;
     let y = clamp((p.y + 1.0) * 0.5, 0.0, 1.0);
     let fireGain = 0.42 + u.fire_smoke_curl_speed.x * 1.15;
     let rawTemp = emissiveTemperature(fireLayer, material, microLayer, velMag);
@@ -4326,10 +4408,10 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
       (smokeDensity + microBodyContribution * 0.70) * smoothstep(0.03, 0.92, y) * u.fire_smoke_curl_speed.y,
       smokeDensity * canonicalSmokeContent * u.fire_smoke_curl_speed.y,
       canonicalSmokeOnlyRender
-    ) + (farReceiver.y + farGrid.x * 1.08 + farGrid.z * 0.16) * u.fire_smoke_curl_speed.y;
+    ) + (farReceiver.y + farGridSmoke * 1.08 + farGridSupport * 0.16) * u.fire_smoke_curl_speed.y;
     let rawExtinction = smokeRadianceExtinction(smokeDensity, microSmoke, interfaceShred, materialDetail, absorptionGain)
       + farReceiver.y * (0.22 + absorptionGain * 0.32)
-      + farGrid.x * (0.26 + absorptionGain * 0.36);
+      + farGridSmoke * (0.26 + absorptionGain * 0.36);
     let tallPlumeRenderTransitionContour = clamp(0.70 + microTextureSignal * 0.12 + velMag * 0.18 + materialDetail * 0.06, 0.44, 1.20);
     let tallPlumeRenderTransitionStagger = tallPlumeTransitionBandStagger(tallPlumeRenderTransitionContour, materialDetail, microSmoke, interfaceShred, flameDetail, combustionFrontTopology);
     let tallPlumeRenderTransitionBand = tallPlumeRenderScene
@@ -4340,7 +4422,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
       * smoothstep(0.54, 1.18, tallPlumeRenderTransitionStagger)
       * (0.020 + flameDetail * 0.035 + interfaceShred * 0.025 + microSmoke * 0.016);
     let baseExtinction = rawExtinction + tallPlumeTransitionWisps * absorptionGain * 0.34;
-    let occupancy = raymarchOccupancySignal(density, smoke, heat + farReceiver.z + farGrid.y * 0.45, temp, flame, microTextureSignal, velMag, baseExtinction) + tallPlumeTransitionWisps + farReceiver.w * 0.18 + farGrid.z * 0.24;
+    let occupancy = raymarchOccupancySignal(density, smoke, heat + farReceiver.z + farGrid.y * 0.45, temp, flame, microTextureSignal, velMag, baseExtinction) + tallPlumeTransitionWisps + farReceiver.w * 0.18 + farGridSupport * 0.24;
     let emptySpanScale = occupancySkipStepScale(occupancy, occupancySkipStrength, adaptiveRays);
     if (emptySpanScale > 1.08) {
       t = t + min(dtBase * emptySpanScale, max(0.0001, endT - t));
@@ -5241,7 +5323,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   const invViewProj = new THREE.Matrix4();
   const viewProj = new THREE.Matrix4();
   const previousViewProj = new THREE.Matrix4();
-  const uniforms = new Float32Array(360);
+  const uniforms = new Float32Array(364);
   let controlsSnapshot = applyRuntimeQualityControls(getControls());
   let gridSize = normalizeGridSize(controlsSnapshot.resolution);
   let majorantGridSize = normalizeMajorantGridSize(controlsSnapshot.majorantGrid);
@@ -5381,6 +5463,16 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       passCount: 0,
       target: 'large-explosion-plume-smoke-second-grid-first-slice-v0',
       pressurePlan: 'defer-far-grid-pressure-until-p3-sparse-budget-clears-v0',
+    },
+    farSmokeTransport: {
+      identity: FAR_SMOKE_TRANSPORT_IDENTITY,
+      authoritySource: `${FAR_SMOKE_GRID_IDENTITY}+near-grid-carry-existing-fields-v0`,
+      active: normalizeVolumeScene(controlsSnapshot.volumeScene) === 'tall_plume',
+      lift: clampFinite(controlsSnapshot.farSmokeTransportLift, 0, 1, 0.72),
+      carry: clampFinite(controlsSnapshot.farSmokeTransportCarry, 0, 1, 0.68),
+      sourceDepth: clampFinite(controlsSnapshot.farSmokeTransportSourceDepth, 0, 1, 0.62),
+      ghostKill: clampFinite(controlsSnapshot.farSmokeTransportGhostKill, 0, 1, 0.58),
+      target: 'connected-rising-far-smoke-body-before-pressure-v0',
     },
     plumeHeight: 1.45,
     windStrength: normalizeWindStrength(controlsSnapshot.windStrength),
@@ -7348,7 +7440,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     uniforms[341] = clampFinite(controlsSnapshot.farSmokeGridHeight, 0, 1, 0.75);
     uniforms[342] = clampFinite(controlsSnapshot.farSmokeGridWidth, 0, 1, 0.70);
     uniforms[343] = clampFinite(controlsSnapshot.farSmokeGridOverlap, 0, 1, 0.55);
-    uniforms.set(previousViewProj.elements, 344);
+    uniforms[344] = clampFinite(controlsSnapshot.farSmokeTransportLift, 0, 1, 0.72);
+    uniforms[345] = clampFinite(controlsSnapshot.farSmokeTransportCarry, 0, 1, 0.68);
+    uniforms[346] = clampFinite(controlsSnapshot.farSmokeTransportSourceDepth, 0, 1, 0.62);
+    uniforms[347] = clampFinite(controlsSnapshot.farSmokeTransportGhostKill, 0, 1, 0.58);
+    uniforms.set(previousViewProj.elements, 348);
     device.queue.writeBuffer(uniformBuffer, 0, uniforms);
     state.gridOverlay = controlsSnapshot.gridOverlay || 0;
     state.lookFreeze = lookFreeze;
@@ -7467,11 +7563,22 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       overlap: uniforms[343],
       currentReadIndex: currentFarSmoke,
       currentWriteIndex: 1 - currentFarSmoke,
+      substepsPerFrame: FAR_SMOKE_GRID_SUBSTEPS,
       raymarchExtentY: 1 + uniforms[340] * (0.65 + uniforms[341] * 1.30),
       raymarchExtentXZ: 1 + uniforms[340] * (0.15 + uniforms[342] * 1.50),
       passCount: state.farSmokeGrid?.passCount || 0,
       target: 'large-explosion-plume-smoke-second-grid-first-slice-v0',
       pressurePlan: 'defer-far-grid-pressure-until-p3-sparse-budget-clears-v0',
+    };
+    state.farSmokeTransport = {
+      identity: FAR_SMOKE_TRANSPORT_IDENTITY,
+      authoritySource: `${FAR_SMOKE_GRID_IDENTITY}+near-grid-carry-existing-fields-v0`,
+      active: state.farSmokeGrid.active,
+      lift: uniforms[344],
+      carry: uniforms[345],
+      sourceDepth: uniforms[346],
+      ghostKill: uniforms[347],
+      target: 'connected-rising-far-smoke-body-before-pressure-v0',
     };
     state.volumeScene = normalizeVolumeScene(controlsSnapshot.volumeScene);
     state.smokeMorphologyForces = {
@@ -7938,7 +8045,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       farSmokeGridBufferBytes: farSmokeBytes,
       farSmokeGridPressureCeiling: FAR_SMOKE_GRID_PRESSURE_CEILING,
       farSmokeGridPressureStatus: state.farSmokeGrid?.pressureStatus || 'p3-ceiling-pressure-deferred-first-slice-v0',
-      farSmokeGridPassesPerFrame: state.farSmokeGrid?.active ? 1 : 0,
+      farSmokeGridPassesPerFrame: state.farSmokeGrid?.active ? FAR_SMOKE_GRID_SUBSTEPS : 0,
+      farSmokeGridSubstepsPerFrame: FAR_SMOKE_GRID_SUBSTEPS,
       externalEmitterBufferBytes: externalEmitterBufferBytes(),
       estimatedResidentBytes: fluidBytes * 2 + frontBytes * 2 + pressureBytes * 2 + farSmokeBytes * 2 + majorantBytes + boundarySidecarBytes + externalEmitterBufferBytes(),
       timing: { ...state.timing },
@@ -7970,6 +8078,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       width: clampFinite(controlsSnapshot.farSmokeGridWidth, 0, 1, 0.70),
       overlap: clampFinite(controlsSnapshot.farSmokeGridOverlap, 0, 1, 0.55),
     };
+    const transport = {
+      lift: clampFinite(controlsSnapshot.farSmokeTransportLift, 0, 1, 0.72),
+      carry: clampFinite(controlsSnapshot.farSmokeTransportCarry, 0, 1, 0.68),
+      sourceDepth: clampFinite(controlsSnapshot.farSmokeTransportSourceDepth, 0, 1, 0.62),
+      ghostKill: clampFinite(controlsSnapshot.farSmokeTransportGhostKill, 0, 1, 0.58),
+    };
     const active = normalizeVolumeScene(controlsSnapshot.volumeScene) === 'tall_plume' && controls.strength > 0.001;
     if (!farSmokeGridPipeline || !activeBindGroup() || farSmokeBuffers.length !== 2 || !active) {
       state.farSmokeGrid = {
@@ -7981,16 +8095,27 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         pressureStatus: 'p3-ceiling-pressure-deferred-first-slice-v0',
         active: false,
         ...controls,
+        substepsPerFrame: FAR_SMOKE_GRID_SUBSTEPS,
+      };
+      state.farSmokeTransport = {
+        ...(state.farSmokeTransport || {}),
+        identity: FAR_SMOKE_TRANSPORT_IDENTITY,
+        authoritySource: `${FAR_SMOKE_GRID_IDENTITY}+near-grid-carry-existing-fields-v0`,
+        active: false,
+        ...transport,
+        target: 'connected-rising-far-smoke-body-before-pressure-v0',
       };
       return;
     }
-    const pass = encoder.beginComputePass({ label: `kaminos ${FAR_SMOKE_GRID_IDENTITY} pass` });
-    pass.setPipeline(farSmokeGridPipeline);
-    pass.setBindGroup(0, activeBindGroup());
     const workgroups = Math.ceil(FAR_SMOKE_GRID_SIZE / 4);
-    pass.dispatchWorkgroups(workgroups, workgroups, workgroups);
-    pass.end();
-    currentFarSmoke = 1 - currentFarSmoke;
+    for (let substep = 0; substep < FAR_SMOKE_GRID_SUBSTEPS; substep += 1) {
+      const pass = encoder.beginComputePass({ label: `kaminos ${FAR_SMOKE_GRID_IDENTITY} substep ${substep + 1}/${FAR_SMOKE_GRID_SUBSTEPS}` });
+      pass.setPipeline(farSmokeGridPipeline);
+      pass.setBindGroup(0, activeBindGroup(currentFluid, currentFarSmoke));
+      pass.dispatchWorkgroups(workgroups, workgroups, workgroups);
+      pass.end();
+      currentFarSmoke = 1 - currentFarSmoke;
+    }
     state.farSmokeGrid = {
       identity: FAR_SMOKE_GRID_IDENTITY,
       slotPolicy: 'separate-lowres-one-way-overlap-grid-v0',
@@ -8002,11 +8127,19 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       pressureStatus: 'p3-ceiling-pressure-deferred-first-slice-v0',
       active,
       ...controls,
+      substepsPerFrame: FAR_SMOKE_GRID_SUBSTEPS,
       currentReadIndex: currentFarSmoke,
       currentWriteIndex: 1 - currentFarSmoke,
-      passCount: (state.farSmokeGrid?.passCount || 0) + 1,
+      passCount: (state.farSmokeGrid?.passCount || 0) + FAR_SMOKE_GRID_SUBSTEPS,
       target: 'large-explosion-plume-smoke-second-grid-first-slice-v0',
       pressurePlan: 'defer-far-grid-pressure-until-p3-sparse-budget-clears-v0',
+    };
+    state.farSmokeTransport = {
+      identity: FAR_SMOKE_TRANSPORT_IDENTITY,
+      authoritySource: `${FAR_SMOKE_GRID_IDENTITY}+near-grid-carry-existing-fields-v0`,
+      active,
+      ...transport,
+      target: 'connected-rising-far-smoke-body-before-pressure-v0',
     };
     updateSimCostLedger();
   }
@@ -9483,6 +9616,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         explosionPlumeSmokeDynamics: state.explosionPlumeSmokeDynamics ? { ...state.explosionPlumeSmokeDynamics } : null,
         farSmokeReceiver: state.farSmokeReceiver ? { ...state.farSmokeReceiver } : null,
         farSmokeGrid: state.farSmokeGrid ? { ...state.farSmokeGrid } : null,
+        farSmokeTransport: state.farSmokeTransport ? { ...state.farSmokeTransport } : null,
         plumeHeight: state.plumeHeight,
         bonfireAblation: { ...state.bonfireAblation },
         externalEmitterMode: state.externalEmitterMode,
@@ -9808,6 +9942,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       explosionPlumeSmokeDynamics: state.explosionPlumeSmokeDynamics ? { ...state.explosionPlumeSmokeDynamics } : null,
       farSmokeReceiver: state.farSmokeReceiver ? { ...state.farSmokeReceiver } : null,
       farSmokeGrid: state.farSmokeGrid ? { ...state.farSmokeGrid } : null,
+      farSmokeTransport: state.farSmokeTransport ? { ...state.farSmokeTransport } : null,
       plumeHeight: state.plumeHeight,
       windStrength: state.windStrength,
       windAngle: state.windAngle,
