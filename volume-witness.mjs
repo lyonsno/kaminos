@@ -3244,6 +3244,7 @@ async function main() {
           renderScales: renderScaleSet,
           includeRgba: false,
           includeFeatureRgba: renderScaleFeatureCaptures,
+          compactSamples: true,
           resumeRenderLoop: false,
         })})`,
         awaitPromise: true,

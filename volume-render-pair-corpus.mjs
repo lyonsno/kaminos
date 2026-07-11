@@ -15,6 +15,12 @@ const BOUNDARY_SIDECAR_SUPPORT_AUXILIARY_AUTHORITY = 'boundary-sidecar-support-c
 const CAPTURE_LEASE_SCHEMA = 'kaminos.volume.browser-capture-lease.v0';
 const DEFAULT_CAPTURE_LEASE_PATH = '/tmp/kaminos-render-pair-corpus-browser-capture.lock.json';
 const DEFAULT_BASE_URL = 'http://127.0.0.1:8097/?kaminos_volume_smoke=1&volume_scene=tall_plume&volume_tall_preset=operator_fire_0622&volume_resolution=128&volume_majorant_grid=48&volume_steps=148&volume_adaptive_rays=0.75&volume_density=3.05&volume_fire=0.50&volume_radiance=3&volume_absorption=0&volume_glow=2.5&volume_smoke=2.8&volume_curl=3.5&volume_microdetail=2.5&volume_interface_shred=0&volume_fire_licks=0&volume_projection=1.5&volume_speed=5&volume_fire_scale=0.59&volume_detail_scale=0.45&volume_plume_height=2.2&volume_wind_strength=0&volume_wind_angle=180&volume_wind_height=-0.8&volume_input_radius=0.11&volume_flow_rate=0.35&volume_reaction_fuel=1&volume_majorant_cadence=1&volume_pressure_iterations=2&volume_pressure_strategy=global&volume_sim_profile=1&volume_temporal_accum=0&volume_temporal_jitter=0&volume_history_clamp=1&volume_occupancy_skip=0.1&volume_majorant_skip=0&volume_majorant_smooth=0.1&volume_majorant_guard=0.3';
+const BASE_ROUTE_IDENTITY_DEFAULTS = {
+  volume_fire_scale: '0.35',
+  volume_detail_scale: '1.00',
+  volume_plume_height: '1.30',
+  volume_reaction_fuel: '1',
+};
 
 function parseArgs(argv) {
   const parsed = new Map();
@@ -408,6 +414,11 @@ function loadVariants(args, defaultSettleMs) {
 function routeWithOverrides(baseUrl, overrides) {
   const url = new URL(baseUrl);
   url.searchParams.set('kaminos_volume_smoke', '1');
+  for (const [key, value] of Object.entries(BASE_ROUTE_IDENTITY_DEFAULTS)) {
+    if (!url.searchParams.has(key)) {
+      url.searchParams.set(key, String(value));
+    }
+  }
   for (const [key, value] of Object.entries(overrides || {})) {
     if (value === null || value === undefined) continue;
     url.searchParams.set(key, String(value));
@@ -991,7 +1002,11 @@ const activeSequenceAuthority = sequenceMode === 'controlled-step'
   ? CONTROLLED_STEP_SEQUENCE_AUTHORITY
   : (temporalSequenceMode ? SEQUENCE_AUTHORITY : null);
 const controlledStepDeltaMs = nonNegativeNumber(args.get('--controlled-step-delta-ms'), frameStrideMs);
-const variants = loadVariants(args, settleMs);
+const maxVariants = positiveInteger(args.get('--max-variants'), 0);
+const requestedVariants = loadVariants(args, settleMs);
+const variants = maxVariants > 0
+  ? requestedVariants.slice(0, maxVariants)
+  : requestedVariants;
 const featureCaptures = args.has('--feature-captures') || args.has('--render-scale-feature-captures');
 const auxiliaryCaptures = auxiliaryCaptureModes(args.get('--auxiliary-captures') || args.get('--render-scale-auxiliary-captures'));
 const auxiliaryCaptureDetails = {};
@@ -1083,7 +1098,9 @@ const corpus = {
   controlledStepDeltaMs,
   windowSize: String(args.get('--window-size') || '1280,960'),
   evidenceMode: String(args.get('--evidence-mode') || 'performance'),
-  requestedVariantCount: variants.length,
+  requestedVariantCount: requestedVariants.length,
+  selectedVariantCount: variants.length,
+  maxVariants,
   pairCount: 0,
   temporalAdjacentPairCount: 0,
   temporalAdjacentPairs: [],

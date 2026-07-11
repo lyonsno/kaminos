@@ -160,7 +160,8 @@ async function startWitnessBrowserSession(session) {
     '--disable-renderer-backgrounding',
     `--window-size=${session.windowSize}`,
     session.initialUrl,
-  ], { stdio: 'ignore' });
+  ], { stdio: 'ignore', detached: session.keepOpen });
+  if (session.keepOpen) proc.unref();
   const startedAt = new Date().toISOString();
   try {
     const version = await waitForCdpPort(session.port);
