@@ -116,6 +116,7 @@ function boundarySidecarSourceValue(value) {
 function normalizeBoundarySidecarRole(value) {
   const normalized = String(value || 'full').toLowerCase().replace(/-/g, '_');
   if (normalized === 'sampling' || normalized === 'reconstruct') return normalized;
+  if (normalized === 'support' || normalized === 'support_owned') return 'support';
   return 'full';
 }
 
@@ -123,6 +124,7 @@ function boundarySidecarRoleValue(value) {
   const normalized = normalizeBoundarySidecarRole(value);
   if (normalized === 'sampling') return 0;
   if (normalized === 'reconstruct') return 1;
+  if (normalized === 'support') return 3;
   return 2;
 }
 
@@ -4175,8 +4177,10 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
       let boundaryDz = vec3<f32>(0.0, 0.0, boundaryCellStep);
       let boundarySidecarSource = clamp(u.boundary_sidecar_controls.x, 0.0, 2.0);
       let boundarySidecarView = clamp(u.boundary_sidecar_display.x, 0.0, 6.0);
-      let boundarySidecarRole = clamp(u.boundary_sidecar_role.x, 0.0, 2.0);
-      let boundarySidecarVisualAuthority = step(1.5, boundarySidecarRole);
+      let boundarySidecarRole = clamp(u.boundary_sidecar_role.x, 0.0, 3.0);
+      let boundarySidecarFullMode = 1.0 - step(0.5, abs(boundarySidecarRole - 2.0));
+      let boundarySidecarSupportOwnedMode = 1.0 - step(0.5, abs(boundarySidecarRole - 3.0));
+      let boundarySidecarVisualAuthority = clamp(boundarySidecarFullMode + boundarySidecarSupportOwnedMode, 0.0, 1.0);
       let boundarySidecarReconstructionAuthority = step(0.5, boundarySidecarRole);
       var boundarySidecarDebugSample = vec4<f32>(0.0);
       var boundarySidecarDebugMetaSample = vec4<f32>(0.0);
@@ -4215,22 +4219,46 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
         let boundarySidecarInterval = boundarySidecarIntervalCoverage(boundarySidecarSample, boundarySidecarMetaSample, localDt, dtBase, boundarySidecarNormalViewGain, adaptiveRays);
         boundarySidecarIntervalOpticalDepth = boundarySidecarInterval.y;
         let boundarySidecarIntervalSupport = boundarySidecarInterval.x;
-        boundarySupportEffective = max(max(boundarySidecarSample.x, boundarySidecarProximity * 0.36), boundarySidecarIntervalSupport * 0.24) * boundarySidecarVisualAuthority;
-        boundaryGradientEffective = max(max(max(boundarySidecarCoverage, boundarySidecarSample.z * 0.55), boundarySidecarSegmentReconstruction * 0.52), boundarySidecarIntervalSupport * 0.72)
+        let boundarySidecarSupportShape = max(boundarySidecarSample.x, boundarySidecarProximity * 0.18);
+        let boundarySidecarRidgeInSupport = boundarySidecarSample.z * smoothstep(0.045, 0.82, boundarySidecarSupportShape);
+        let boundarySidecarSupportOwnedGradient = max(
+          max(boundarySidecarSupportShape * 0.34, boundarySidecarRidgeInSupport * 0.42),
+          max(boundarySidecarSegmentReconstruction * 0.24, boundarySidecarIntervalSupport * 0.30)
+        ) * (0.82 + boundarySidecarCoverage * 0.18);
+        let boundarySidecarFullSupportEffective = max(max(boundarySidecarSample.x, boundarySidecarProximity * 0.36), boundarySidecarIntervalSupport * 0.24) * boundarySidecarVisualAuthority;
+        let boundarySidecarSupportOwnedSupportEffective = boundarySidecarSupportShape * boundarySidecarVisualAuthority;
+        boundarySupportEffective = mix(boundarySidecarFullSupportEffective, boundarySidecarSupportOwnedSupportEffective, boundarySidecarSupportOwnedMode);
+        let boundarySidecarFullGradientEffective = max(max(max(boundarySidecarCoverage, boundarySidecarSample.z * 0.55), boundarySidecarSegmentReconstruction * 0.52), boundarySidecarIntervalSupport * 0.72)
           * (1.0 + boundarySidecarFootprintWidth * (0.18 + boundarySidecarSegmentReconstruction * 0.18))
           * boundarySidecarNormalViewGain
           * boundarySidecarVisualAuthority;
-        boundaryFireRidgeEffective = boundarySidecarSample.z * boundarySidecarVisualAuthority;
-        boundarySidecarStepFootprintWidth = boundarySidecarNormalViewGain
+        let boundarySidecarSupportOwnedGradientEffective = boundarySidecarSupportOwnedGradient
+          * boundarySidecarNormalViewGain
+          * boundarySidecarVisualAuthority;
+        boundaryGradientEffective = mix(boundarySidecarFullGradientEffective, boundarySidecarSupportOwnedGradientEffective, boundarySidecarSupportOwnedMode);
+        boundaryFireRidgeEffective = mix(boundarySidecarSample.z, boundarySidecarRidgeInSupport, boundarySidecarSupportOwnedMode) * boundarySidecarVisualAuthority;
+        let boundarySidecarFullStepFootprintWidth = boundarySidecarNormalViewGain
           * clamp(u.boundary_sidecar_controls.z, 0.0, 2.0)
           * max(dtBase * f32(GRID) * (0.046 + boundarySidecarSegmentReconstruction * 0.020), boundarySidecarFootprintWidth * (0.036 + boundarySidecarSegmentReconstruction * 0.014))
           * boundarySidecarVisualAuthority;
-        boundarySidecarIntervalCandidate = clamp(
+        let boundarySidecarSupportOwnedStepFootprintWidth = boundarySidecarNormalViewGain
+          * clamp(u.boundary_sidecar_controls.z, 0.0, 2.0)
+          * max(dtBase * f32(GRID) * (0.026 + boundarySidecarSegmentReconstruction * 0.010), boundarySidecarFootprintWidth * (0.020 + boundarySidecarSegmentReconstruction * 0.008))
+          * boundarySidecarVisualAuthority;
+        boundarySidecarStepFootprintWidth = mix(boundarySidecarFullStepFootprintWidth, boundarySidecarSupportOwnedStepFootprintWidth, boundarySidecarSupportOwnedMode);
+        let boundarySidecarIntervalCandidateRaw = clamp(
           pow(clamp(boundarySidecarIntervalSupport * boundaryContrast, 0.0, 1.8), max(0.58, boundaryGamma * 0.82))
             * boundaryOpacity
             * (0.38 + 0.62 * smoothstep(0.02, 0.76, boundarySidecarIntervalOpticalDepth)),
           0.0,
           1.45
+        );
+        let boundarySidecarSupportOwnedRepairGate = smoothstep(0.045, 0.92, boundarySidecarSupportShape)
+          * (0.24 + boundarySidecarRidgeInSupport * 0.28 + boundarySidecarCoverage * 0.20);
+        boundarySidecarIntervalCandidate = mix(
+          boundarySidecarIntervalCandidateRaw,
+          boundarySidecarIntervalCandidateRaw * boundarySidecarSupportOwnedRepairGate * 0.62,
+          boundarySidecarSupportOwnedMode
         ) * boundarySidecarReconstructionAuthority;
       } else {
         let boundarySupport = liveBoundarySupportAt(p, boundarySupportWeights);
@@ -5551,8 +5579,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const controls = controlsSnapshot.boundarySidecarControls || {};
     const view = normalizeBoundarySidecarView(controls.view ?? controlsSnapshot.boundarySidecarView);
     const role = normalizeBoundarySidecarRole(boundarySidecarRoleName);
-    const boundarySidecarVisualAuthority = role === 'full';
-    const boundarySidecarReconstructionAuthority = role === 'reconstruct' || role === 'full';
+    const boundarySidecarVisualAuthority = role === 'full' || role === 'support';
+    const boundarySidecarReconstructionAuthority = role === 'reconstruct' || role === 'full' || role === 'support';
     return {
       identity: BOUNDARY_SIDECAR_IDENTITY,
       authority: BOUNDARY_SIDECAR_BAKE_AUTHORITY,

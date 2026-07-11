@@ -75,7 +75,8 @@ assert.match(index, /function applyVolumeModeSnapshotToDom/, 'Mode cockpit can s
 assert.match(index, /function recordVolumeModeFrameTiming/, 'Mode cockpit records frame timing per active mode');
 assert.match(index, /id="volume-boundary-sidecar-role"/, 'Boundary Fire tuning exposes sidecar role separately from source and debug view');
 assert.match(index, /volume_boundary_sidecar_role/, 'Basin URLs preserve sidecar role so sampling-only/full-visual regimes are durable');
-assert.match(index, /BOUNDARY_SIDECAR_ROLE_VALUES\s*=\s*new Set\(\['sampling', 'reconstruct', 'full'\]\)/, 'Page-side route normalization preserves sidecar role semantics');
+assert.match(index, /BOUNDARY_SIDECAR_ROLE_VALUES\s*=\s*new Set\(\['sampling', 'reconstruct', 'full', 'support'\]\)/, 'Page-side route normalization preserves sidecar role semantics');
+assert.match(index, /value="support"[\s\S]*support owned/, 'Sidecar role selector exposes support-owned visual mode');
 assert.match(index, /value="coverage"[\s\S]*value="ridge"[\s\S]*value="proximity"[\s\S]*value="footprint"[\s\S]*value="normal"/, 'Sidecar channel selector exposes coverage, ridge, proximity, footprint, and normal views');
 assert.match(index, /BOUNDARY_SIDECAR_VIEW_VALUES\s*=\s*new Set\(\['off', 'support', 'coverage', 'ridge', 'proximity', 'footprint', 'normal'\]\)/, 'Page-side route normalization preserves the normal sidecar debug view');
 assert.match(index, /id="volume-boundary-sidecar-blur"/, 'Boundary Fire tuning exposes a sidecar blur/sample-efficiency control');

@@ -1181,6 +1181,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
           <option value="sampling">sampling guard</option>
           <option value="reconstruct">miss reconstruct</option>
           <option value="full" selected>full visual</option>
+          <option value="support">support owned</option>
         </select>
         <span class="slider-val" id="volume-boundary-sidecar-role-val">full</span>
       </div>
@@ -11633,7 +11634,7 @@ const REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS = [
 
 const REACTION_FRONT_LIVE_VIEW_VALUES = new Set(['off', 'shell', 'thermal', 'reaction', 'front', 'edge', 'core', 'curl', 'divergence', 'boundary', 'boundary_fire']);
 const BOUNDARY_SIDECAR_SOURCE_VALUES = new Set(['live', 'baked', 'mix']);
-const BOUNDARY_SIDECAR_ROLE_VALUES = new Set(['sampling', 'reconstruct', 'full']);
+const BOUNDARY_SIDECAR_ROLE_VALUES = new Set(['sampling', 'reconstruct', 'full', 'support']);
 const BOUNDARY_SIDECAR_VIEW_VALUES = new Set(['off', 'support', 'coverage', 'ridge', 'proximity', 'footprint', 'normal']);
 
 function normalizeReactionFrontLiveView(value) {
@@ -11648,6 +11649,7 @@ function normalizeBoundarySidecarSource(value) {
 
 function normalizeBoundarySidecarRole(value) {
   const mode = String(value || 'full').toLowerCase().replace(/-/g, '_');
+  if (mode === 'support_owned') return 'support';
   return BOUNDARY_SIDECAR_ROLE_VALUES.has(mode) ? mode : 'full';
 }
 
