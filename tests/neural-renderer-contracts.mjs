@@ -51,8 +51,18 @@ assert.match(
 );
 assert.match(
   trainer,
+  /previewMode\s*==\s*"fixed-material"[\s\S]*fixed_material_crop_origin/,
+  'preview witness can render the exact deterministic material crop used for memorization training',
+);
+assert.match(
+  trainer,
   /trainCropMode=args\.trainCropMode/,
   'training sampler receives the requested crop mode instead of silently retaining random crop movement',
+);
+assert.match(
+  trainer,
+  /evaluationCropMode=args\.trainCropMode/,
+  'evaluation samples use the same crop identity as a fixed-crop training assay',
 );
 assert.match(
   trainer,

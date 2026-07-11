@@ -420,7 +420,7 @@ def parse_args():
     parser.add_argument("--learning-rate", type=float, default=1e-3)
     parser.add_argument("--eval-patches", type=int, default=64)
     parser.add_argument("--preview-size", type=int, default=384)
-    parser.add_argument("--preview-mode", choices=["center", "foreground", "edge-band", "full-frame"], default="center")
+    parser.add_argument("--preview-mode", choices=["center", "foreground", "edge-band", "fixed-material", "full-frame"], default="center")
     parser.add_argument("--preview-scope", dest="previewScope", choices=["eval", "train"], default="eval", help="Select whether product-view previews sample eval holdout pairs or train pairs.")
     parser.add_argument("--preview-frame-count", dest="previewFrameCount", type=int, default=1, help="Number of selected-scope preview frames to emit for product-view witnesses.")
     parser.add_argument("--seed", type=int, default=630)
@@ -1498,6 +1498,20 @@ def crop_region(item, crop_size, previewMode):
         }
     crop_height = min(crop_size, height)
     crop_width = min(crop_size, width)
+    if previewMode == "fixed-material":
+        top, left = fixed_material_crop_origin(item, crop_height, crop_width, "fire-interface")
+        return top, left, crop_height, crop_width, {
+            "mode": "fixed-material",
+            "centerY": top + crop_height / 2,
+            "centerX": left + crop_width / 2,
+            "foregroundPixels": item.get("foregroundPixels", 0),
+            "materialFirePixels": item.get("materialFirePixels", 0),
+            "fullFrame": False,
+            "top": top,
+            "left": left,
+            "height": crop_height,
+            "width": crop_width,
+        }
     focus = {
         "mode": "center",
         "centerY": height / 2,
@@ -1817,7 +1831,7 @@ def temporal_sequence_metrics(model, loaded, train_items, eval_items, out_dir, c
     return metrics
 
 
-def evaluate_model(model, items, rng, batch_size, patch_size, eval_patches, foregroundProbability, edgeSamplingProbability, conditionRenderScale, featureInputMode, coordinateInputMode, fourierCoordinateFrequencies, materialSamplingMode, materialSamplingProbability, sidecarSamplingMode, sidecarSamplingProbability, foregroundThreshold, foregroundLossWeight, differenceLossWeight, residualApplicationMaskMode, residualMaskFeatherRadius):
+def evaluate_model(model, items, rng, batch_size, patch_size, eval_patches, foregroundProbability, edgeSamplingProbability, conditionRenderScale, featureInputMode, coordinateInputMode, fourierCoordinateFrequencies, materialSamplingMode, materialSamplingProbability, sidecarSamplingMode, sidecarSamplingProbability, foregroundThreshold, foregroundLossWeight, differenceLossWeight, residualApplicationMaskMode, residualMaskFeatherRadius, evaluationCropMode="sampled"):
     baseline_losses = []
     model_losses = []
     weighted_baseline_losses = []
@@ -1833,7 +1847,7 @@ def evaluate_model(model, items, rng, batch_size, patch_size, eval_patches, fore
     compared_patches = 0
     batches = max(1, math.ceil(eval_patches / batch_size))
     for _ in range(batches):
-        low_batch, high_batch, edge_mask_batch, target_edge_mask_batch = sample_patch_batch(items, rng, batch_size, patch_size, foregroundProbability, edgeSamplingProbability, conditionRenderScale, featureInputMode, coordinateInputMode, fourierCoordinateFrequencies, materialSamplingMode, materialSamplingProbability, sidecarSamplingMode, sidecarSamplingProbability)
+        low_batch, high_batch, edge_mask_batch, target_edge_mask_batch = sample_patch_batch(items, rng, batch_size, patch_size, foregroundProbability, edgeSamplingProbability, conditionRenderScale, featureInputMode, coordinateInputMode, fourierCoordinateFrequencies, materialSamplingMode, materialSamplingProbability, sidecarSamplingMode, sidecarSamplingProbability, trainCropMode=evaluationCropMode)
         low_rgb = rgb_channels(low_batch)
         prediction = model(low_batch, residual_application_mask(edge_mask_batch, residualApplicationMaskMode, residualMaskFeatherRadius))
         baseline_loss = mse_value(low_rgb, high_batch)
@@ -2346,6 +2360,7 @@ def main():
         args.differenceLossWeight,
         residualApplicationMaskMode,
         residualMaskFeatherRadius,
+        evaluationCropMode=args.trainCropMode,
     )
     preview_path = out_dir / "residual-preview-low-model-target-diff.png"
     diagnostic_preview_path = out_dir / "residual-preview-low-model-target-targetres-modelres-error-mask.png"
