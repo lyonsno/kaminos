@@ -18,7 +18,7 @@ for (let i = 2; i < process.argv.length; i += 1) {
   }
 }
 
-const usage = 'crucible-viewport-witness.mjs --url <kaminos-url> --out <screenshot.png> --report <report.json> [--cdp-port <port>] [--fire-friendly]';
+const usage = 'crucible-viewport-witness.mjs --url <kaminos-url> --out <screenshot.png> --report <report.json> [--cdp-port <port>] [--fire-friendly] [--expected-sharp-revision <sha>]';
 if (args.has('help')) {
   console.log(usage);
   process.exit(0);
@@ -31,6 +31,7 @@ const chrome = args.get('chrome') || process.env.KAMINOS_CHROME || '/Application
 const port = Number(args.get('cdp-port') || 9341);
 const fireFriendly = args.has('fire-friendly');
 const fireTimeoutMs = Number(args.get('fire-timeout-ms') || 420000);
+const expectedSharpRevision = args.get('expected-sharp-revision') || null;
 const userDataDir = mkdtempSync(path.join(tmpdir(), 'kaminos-crucible-viewport-'));
 const startedAt = new Date().toISOString();
 const openGenerateTabExpression = 'document.querySelector(\'[data-tab="generate"]\').click()';
@@ -276,6 +277,11 @@ try {
       const stage = (report.stages || [])[0] || {};
       const adapter = stage.effectiveRoute?.adapterReport || {};
       const backgroundHeartbeat = adapter.backgroundHeartbeat || null;
+      const schedulerEvents = adapter.breathingRoom?.telemetry?.events || [];
+      const routeTailEvents = schedulerEvents.filter(event => event?.phase === 'route-tail');
+      const prepSteps = new Set(['depth-normalize', 'depth-min', 'depth-rescale', 'base-disparity', 'base-grid', 'base-color']);
+      const prepEvents = routeTailEvents.filter(event => prepSteps.has(event?.step) && event?.role === 'cpu-materialization-chunk');
+      const gaussianEvents = routeTailEvents.filter(event => event?.step === 'gaussian-compose' && event?.role === 'cpu-materialization-chunk');
       const splat = report.artifacts?.splat || null;
       const fire = window.kaminosSharpBreathingRoomKilnFireDebug?.state?.()?.fire || null;
       return {
@@ -286,6 +292,13 @@ try {
         effectiveSharpRevision: adapter.revision || adapter.backend?.revision || null,
         requestedScheduler: adapter.breathingRoom?.requestedScheduler || null,
         effectiveScheduler: adapter.breathingRoom?.effectiveScheduler || null,
+        routeTailCheckpointEvents: {
+          total: routeTailEvents.length,
+          prep: prepEvents.length,
+          gaussian: gaussianEvents.length,
+          prepSteps: [...new Set(prepEvents.map(event => event.step))].sort(),
+          gaussianProcessedItems: [...new Set(gaussianEvents.map(event => event.processedItems).filter(Number.isFinite))].sort((a, b) => a - b),
+        },
         output: splat ? { path: splat.path, bytes: splat.bytes, sha256: splat.sha256, status: splat.status } : null,
         backgroundHeartbeat,
         volumeReleased: Boolean(fire?.volumeReleased),
@@ -295,8 +308,14 @@ try {
     })()`);
     lastTrustworthyEvidence = { ...lastTrustworthyEvidence, fullRoute: state.fullRoute };
     if (state.fullRoute.status !== 'complete') throw new Error(`Friendly firing failed: ${state.fullRoute.message || state.fullRoute.status}`);
-    if (state.fullRoute.effectiveSharpRevision !== '7a69d0aa44bcb58556779f51702d2720ae69be3e') {
+    if (expectedSharpRevision && state.fullRoute.effectiveSharpRevision !== expectedSharpRevision) {
       throw new Error(`Friendly firing used unexpected SHARP revision: ${state.fullRoute.effectiveSharpRevision}`);
+    }
+    if (state.fullRoute.effectiveScheduler?.cpuChunkItems !== 65536 || state.fullRoute.effectiveScheduler?.routeTailYieldMs !== 3) {
+      throw new Error(`Friendly firing did not use cooperative compose/PLY settings: ${JSON.stringify(state.fullRoute.effectiveScheduler)}`);
+    }
+    if (state.fullRoute.routeTailCheckpointEvents?.prep < 6 || state.fullRoute.routeTailCheckpointEvents?.gaussian < 1) {
+      throw new Error(`Friendly firing is missing prep or Gaussian route-tail checkpoints: ${JSON.stringify(state.fullRoute.routeTailCheckpointEvents)}`);
     }
     const backgroundHeartbeat = state.fullRoute.backgroundHeartbeat;
     if (backgroundHeartbeat?.schema !== 'sharp-webgpu.background-heartbeat.v0') throw new Error('Friendly firing is missing the corrected backgroundHeartbeat schema');

@@ -142,6 +142,8 @@ SHARP_SCHEDULER_PROFILES = {
             "waitForSubmittedWorkDone": True,
             "gaussianPhaseYieldMs": 4,
             "vitBlockChunkSize": 2,
+            "cpuChunkItems": 65536,
+            "routeTailYieldMs": 3,
         },
         "env": {
             "KAMINOS_SHARP_WEBGPU_SCHEDULER": json.dumps({
@@ -151,6 +153,8 @@ SHARP_SCHEDULER_PROFILES = {
                 "waitForSubmittedWorkDone": True,
                 "gaussianPhaseYieldMs": 4,
                 "vitBlockChunkSize": 2,
+                "cpuChunkItems": 65536,
+                "routeTailYieldMs": 3,
             }, separators=(",", ":")),
         },
         "unsupportedFields": ["vitBlockChunkSize"],

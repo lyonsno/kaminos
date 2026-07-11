@@ -115,6 +115,8 @@ def test_sharp_breathing_room_profiles_are_named_operator_routes_with_explicit_e
     assert friendly_scheduler["waitForSubmittedWorkDone"] is True
     assert friendly_scheduler["gaussianPhaseYieldMs"] == 4
     assert friendly_scheduler["vitBlockChunkSize"] == 2
+    assert friendly_scheduler["cpuChunkItems"] == 65536
+    assert friendly_scheduler["routeTailYieldMs"] == 3
 
 
 def test_sharp_breathing_room_unknown_profile_fails_instead_of_falling_back():
