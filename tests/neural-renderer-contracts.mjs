@@ -106,6 +106,11 @@ assert.match(
 );
 assert.match(
   trainer,
+  /previous-teacher-high-feature-sidecar-rgba/,
+  'offline continuation ceiling can condition on the previous teacher frame before an autoregressive rollout implementation',
+);
+assert.match(
+  trainer,
   /def attach_previous_low_rgb_features\(/,
   'temporal input attachment is explicit and sequence-index aware',
 );
@@ -113,6 +118,11 @@ assert.match(
   trainer,
   /previous-low-rgb-plus-boundary-sidecar-plus-shader-material-v0/,
   'reports name previous-low temporal conditioning authority explicitly',
+);
+assert.match(
+  trainer,
+  /teacher-forced-previous-high-plus-boundary-sidecar-plus-shader-material-offline-v0/,
+  'reports label previous-high conditioning as teacher-forced offline ceiling evidence',
 );
 assert.match(
   trainer,

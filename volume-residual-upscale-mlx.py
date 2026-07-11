@@ -25,9 +25,10 @@ BOUNDARY_SIDECAR_SUPPORT_AUXILIARY_INPUT_AUTHORITY = "boundary-sidecar-support-c
 BOUNDARY_SIDECAR_MODEL_INPUT_AUTHORITY = "boundary-sidecar-support-model-input-v0"
 BOUNDARY_SIDECAR_MATERIAL_MODEL_INPUT_AUTHORITY = "boundary-sidecar-support-plus-shader-material-feature-v0"
 PREVIOUS_LOW_SIDECAR_MATERIAL_MODEL_INPUT_AUTHORITY = "previous-low-rgb-plus-boundary-sidecar-plus-shader-material-v0"
+PREVIOUS_TEACHER_HIGH_SIDECAR_MATERIAL_MODEL_INPUT_AUTHORITY = "teacher-forced-previous-high-plus-boundary-sidecar-plus-shader-material-offline-v0"
 FLOW_DEBUG_REDCYAN_ABS_INPUT_AUTHORITY = "flow-debug-derived-red-cyan-abs-v0"
 FLOW_DEBUG_OPPONENT_GRADIENT_INPUT_AUTHORITY = "flow-debug-derived-opponent-gradient-v0"
-IMAGE_FEATURE_INPUT_MODES = {"feature-rgba", "aux-rgba", "aux-rgb", "aux-red-cyan-abs", "aux-opponent-gradient", "sidecar-rgba", "feature-sidecar-rgba", "previous-rgb-feature-sidecar-rgba"}
+IMAGE_FEATURE_INPUT_MODES = {"feature-rgba", "aux-rgba", "aux-rgb", "aux-red-cyan-abs", "aux-opponent-gradient", "sidecar-rgba", "feature-sidecar-rgba", "previous-rgb-feature-sidecar-rgba", "previous-teacher-high-feature-sidecar-rgba"}
 FLOW_DEBUG_DERIVED_INPUT_MODES = {"aux-red-cyan-abs", "aux-opponent-gradient"}
 COORDINATE_INPUT_AUTHORITY = "offline-absolute-coordinate-conditioning-v0"
 FOURIER_COORDINATE_INPUT_AUTHORITY = "offline-fourier-coordinate-conditioning-v0"
@@ -405,7 +406,7 @@ def parse_args():
     parser.add_argument("--eval-selection", dest="evalSelection", choices=["tail", "even"], default="tail", help="Eval holdout selection when --eval-pair-count is set.")
     parser.add_argument("--model-arch", dest="modelArch", choices=["tiny-conv", "direct-residual", "hybrid-residual", "gated-detail-residual", "small-unet", "teacher-unet", "teacher-unet-direct", "teacher-unet-linear-direct", "teacher-unet-absolute-rgb"], default="tiny-conv")
     parser.add_argument("--train-crop-mode", dest="trainCropMode", choices=["sampled", "fixed-material", "fixed-target-fire"], default="sampled", help="Use ordinary sampled crops, a deterministic material-support crop, or a labeled target-derived bright-fire crop for strict offline memorization probes.")
-    parser.add_argument("--feature-input-mode", dest="featureInputMode", choices=["rgb", "feature-rgba", "aux-rgba", "aux-rgb", "aux-red-cyan-abs", "aux-opponent-gradient", "sidecar-rgba", "feature-sidecar-rgba", "previous-rgb-feature-sidecar-rgba"], default="rgb", help="Model input source: low RGB plus optional shader/material, Flow Debug, baked sidecar, combined structural channels, or truthful previous low RGB temporal context.")
+    parser.add_argument("--feature-input-mode", dest="featureInputMode", choices=["rgb", "feature-rgba", "aux-rgba", "aux-rgb", "aux-red-cyan-abs", "aux-opponent-gradient", "sidecar-rgba", "feature-sidecar-rgba", "previous-rgb-feature-sidecar-rgba", "previous-teacher-high-feature-sidecar-rgba"], default="rgb", help="Model input source: low RGB plus optional shader/material, Flow Debug, baked sidecar, combined structural channels, truthful previous low RGB, or an explicitly offline teacher-forced previous high frame.")
     parser.add_argument("--coordinate-input-mode", dest="coordinateInputMode", choices=["off", "xy", "fourier"], default="off", help="Optional absolute screen-space coordinate conditioning for offline ceiling probes.")
     parser.add_argument("--fourier-coordinate-frequencies", dest="fourierCoordinateFrequencies", type=int, default=4, help="Number of powers-of-two xy Fourier coordinate frequencies when --coordinate-input-mode=fourier.")
     parser.add_argument("--material-focus", dest="materialFocus", choices=["off", "fire-interface", "smoke"], default="off", help="Optional specialist supervision mask derived from shader/material feature RGBA: fire/interface or smoke.")
@@ -717,7 +718,7 @@ def feature_input_channels(featureInputMode):
         return 4
     if featureInputMode == "feature-sidecar-rgba":
         return 8
-    if featureInputMode == "previous-rgb-feature-sidecar-rgba":
+    if featureInputMode in {"previous-rgb-feature-sidecar-rgba", "previous-teacher-high-feature-sidecar-rgba"}:
         return 11
     if featureInputMode == "aux-rgb":
         return 3
@@ -737,6 +738,8 @@ def feature_input_authority(featureInputMode):
         return BOUNDARY_SIDECAR_MATERIAL_MODEL_INPUT_AUTHORITY
     if featureInputMode == "previous-rgb-feature-sidecar-rgba":
         return PREVIOUS_LOW_SIDECAR_MATERIAL_MODEL_INPUT_AUTHORITY
+    if featureInputMode == "previous-teacher-high-feature-sidecar-rgba":
+        return PREVIOUS_TEACHER_HIGH_SIDECAR_MATERIAL_MODEL_INPUT_AUTHORITY
     if featureInputMode == "aux-red-cyan-abs":
         return FLOW_DEBUG_REDCYAN_ABS_INPUT_AUTHORITY
     if featureInputMode == "aux-opponent-gradient":
@@ -786,7 +789,7 @@ def coordinate_feature_image(top, left, height, width, full_height, full_width, 
 def material_mask_authority(materialFocus, featureInputMode):
     if materialFocus == "off":
         return "off"
-    if featureInputMode in {"feature-rgba", "feature-sidecar-rgba", "previous-rgb-feature-sidecar-rgba"}:
+    if featureInputMode in {"feature-rgba", "feature-sidecar-rgba", "previous-rgb-feature-sidecar-rgba", "previous-teacher-high-feature-sidecar-rgba"}:
         return FEATURE_INPUT_AUTHORITY
     return "unavailable-without-feature-rgba"
 
@@ -991,7 +994,7 @@ def load_pair_arrays(pairs, foregroundThreshold, edgeBandMode, edgeBandThreshold
                 raise ValueError(f"pair lacks authoritative boundarySidecarSupport input for --feature-input-mode=sidecar-rgba: {pair.get('pairId')}")
             feature_image = sidecar_support_image
             feature_path = sidecar_support_path
-        elif featureInputMode in {"feature-sidecar-rgba", "previous-rgb-feature-sidecar-rgba"}:
+        elif featureInputMode in {"feature-sidecar-rgba", "previous-rgb-feature-sidecar-rgba", "previous-teacher-high-feature-sidecar-rgba"}:
             if material_feature_image is None:
                 raise ValueError(f"pair lacks authoritative shader/material feature input for --feature-input-mode={featureInputMode}: {pair.get('pairId')}")
             if sidecar_support_image is None:
@@ -1074,6 +1077,27 @@ def attach_previous_low_rgb_features(items, featureInputMode):
             item["feature"] = np.concatenate([item["feature"], previous_low], axis=2)
             item["previousLowFrameId"] = previous_item.get("sequenceFrameId") if adjacent else item.get("sequenceFrameId")
             item["previousLowTemporalFallback"] = not adjacent
+            previous_item = item
+    return items
+
+
+def attach_previous_teacher_high_features(items, featureInputMode):
+    if featureInputMode != "previous-teacher-high-feature-sidecar-rgba":
+        return items
+    groups = {}
+    for item in items:
+        groups.setdefault((item.get("temporalSequenceId"), item.get("lowRenderScale")), []).append(item)
+    for group in groups.values():
+        group.sort(key=lambda item: item.get("temporalFrameIndex") if item.get("temporalFrameIndex") is not None else -1)
+        previous_item = None
+        for item in group:
+            current_index = item.get("temporalFrameIndex")
+            previous_index = previous_item.get("temporalFrameIndex") if previous_item is not None else None
+            adjacent = previous_item is not None and current_index is not None and previous_index is not None and current_index == previous_index + 1
+            previous_context = previous_item["high"] if adjacent else item["low"]
+            item["feature"] = np.concatenate([item["feature"], previous_context], axis=2)
+            item["previousTeacherHighFrameId"] = previous_item.get("sequenceFrameId") if adjacent else None
+            item["previousTeacherHighFallback"] = not adjacent
             previous_item = item
     return items
 
@@ -2137,6 +2161,7 @@ def main():
     corpus, pairs = load_pairs(args.corpus_manifest, args.low_render_scale)
     loaded = load_pair_arrays(pairs, args.foregroundThreshold, args.edgeBandMode, args.edgeBandThreshold, args.edgeBandDilate, args.featureInputMode, args.materialSamplingThreshold, args.sidecarSamplingThreshold)
     loaded = attach_previous_low_rgb_features(loaded, args.featureInputMode)
+    loaded = attach_previous_teacher_high_features(loaded, args.featureInputMode)
     if args.sidecarSamplingMode != "off" and args.sidecarSamplingProbability > 0:
         sidecar_pixels = sum(int(item.get("sidecarSupportPixels", 0)) for item in loaded)
         if sidecar_pixels <= 0:
