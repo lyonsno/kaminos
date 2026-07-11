@@ -1134,6 +1134,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
           <option value="live">live</option>
           <option value="baked">baked</option>
           <option value="mix">mix</option>
+          <option value="learned">learned</option>
         </select>
         <span class="slider-val" id="volume-boundary-sidecar-source-val">live</span>
       </div>
@@ -11042,6 +11043,9 @@ let routedVolumeQuenchVapor = 0;
 let routedVolumeRuntimeQuality = 'live_high';
 let routedVolumeGpuPressure = 0;
 let routedVolumeQualityReason = 'route-default';
+let routedLearnedBoundarySidecarManifestUrl = '';
+let routedLearnedBoundarySidecarVariant = 'scalar';
+let routedLearnedBoundarySidecarClassifierThreshold = 0.97;
 const DEFAULT_BONFIRE_ABLATION_CONTROLS = {
   bonfireRecenter: 1,
   bonfireLateralDamping: 1,
@@ -11560,7 +11564,7 @@ const REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS = [
 ];
 
 const REACTION_FRONT_LIVE_VIEW_VALUES = new Set(['off', 'shell', 'thermal', 'reaction', 'front', 'edge', 'core', 'curl', 'divergence', 'boundary', 'boundary_fire']);
-const BOUNDARY_SIDECAR_SOURCE_VALUES = new Set(['live', 'baked', 'mix']);
+const BOUNDARY_SIDECAR_SOURCE_VALUES = new Set(['live', 'baked', 'mix', 'learned']);
 const BOUNDARY_SIDECAR_VIEW_VALUES = new Set(['off', 'support', 'coverage', 'ridge', 'proximity', 'footprint', 'normal']);
 
 function normalizeReactionFrontLiveView(value) {
@@ -11576,6 +11580,66 @@ function normalizeBoundarySidecarSource(value) {
 function normalizeBoundarySidecarView(value) {
   const mode = String(value || 'off').toLowerCase().replace(/-/g, '_');
   return BOUNDARY_SIDECAR_VIEW_VALUES.has(mode) ? mode : 'off';
+}
+
+function normalizeLearnedBoundarySidecarVariant(value) {
+  const mode = String(value || 'scalar').toLowerCase().replace(/-/g, '_');
+  if (mode === 'ridgeclassifierprobability' || mode === 'ridge_classifier' || mode === 'ridge_classifier_probability' || mode === 'classifier') return 'ridgeClassifierProbability';
+  return 'scalar';
+}
+
+function normalizeLearnedBoundarySidecarClassifierThreshold(value) {
+  const threshold = Number(value);
+  return Number.isFinite(threshold) ? Math.max(0, Math.min(1, threshold)) : 0.97;
+}
+
+function apiReadUrlForLocalPath(path) {
+  const source = String(path || '').trim();
+  if (!source) return '';
+  if (source.startsWith('/api/read?') || /^https?:\/\//.test(source)) return source;
+  if (source.startsWith('/private/tmp/')) {
+    return `/api/read?${new URLSearchParams({ root: 'lerms-preview', path: source.slice('/private/tmp/'.length) })}`;
+  }
+  return source;
+}
+
+async function fetchLearnedBoundarySidecarJson(source) {
+  const response = await fetch(apiReadUrlForLocalPath(source), { cache: 'no-store' });
+  if (!response.ok) throw new Error(`learned sidecar manifest fetch failed: ${response.status}`);
+  const payload = await response.json();
+  if (payload && typeof payload.content === 'string') return JSON.parse(payload.content);
+  return payload;
+}
+
+async function fetchLearnedBoundarySidecarF32(source) {
+  const response = await fetch(apiReadUrlForLocalPath(source), { cache: 'no-store' });
+  if (!response.ok) throw new Error(`learned sidecar f32 fetch failed: ${response.status}`);
+  return new Float32Array(await response.arrayBuffer());
+}
+
+async function loadLearnedBoundarySidecarCueFromRoute(params, prototype) {
+  const manifestUrl = params.get('volume_learned_boundary_sidecar_manifest_url') || '';
+  if (!manifestUrl || !prototype?.setLearnedBoundarySidecarCue) return null;
+  const variant = normalizeLearnedBoundarySidecarVariant(params.get('volume_learned_boundary_sidecar_variant') || 'scalar');
+  const classifierThreshold = normalizeLearnedBoundarySidecarClassifierThreshold(params.get('volume_learned_boundary_sidecar_classifier_threshold'));
+  const manifest = await fetchLearnedBoundarySidecarJson(manifestUrl);
+  const scalarRecord = manifest?.arrays?.scalarMlpCue;
+  const ridgeRecord = manifest?.arrays?.ridgeClassifierProbability;
+  if (!scalarRecord?.path) throw new Error('learned sidecar manifest missing scalarMlpCue.path');
+  const scalarMlpCue = await fetchLearnedBoundarySidecarF32(scalarRecord.path);
+  const ridgeClassifierProbability = variant === 'ridgeClassifierProbability' && ridgeRecord?.path
+    ? await fetchLearnedBoundarySidecarF32(ridgeRecord.path)
+    : null;
+  return prototype.setLearnedBoundarySidecarCue({
+    manifestUrl,
+    variant,
+    classifierThreshold,
+    grid: manifest?.grid?.shape?.[0] || manifest?.grid?.highGrid || 0,
+    scalarMlpCue,
+    ridgeClassifierProbability,
+    scalarCueSha256: scalarRecord.sha256 || null,
+    ridgeClassifierSha256: ridgeRecord?.sha256 || null,
+  });
 }
 
 function clampVolumeControlValue(value, field) {
@@ -11726,6 +11790,11 @@ function buildVolumeBasinUrl(controlsSnapshot = readVolumeControls()) {
   for (const [key, param] of VOLUME_BASIN_ROUTE_FIELDS) {
     if (controlsSnapshot[key] === undefined || controlsSnapshot[key] === null) continue;
     url.searchParams.set(param, formatVolumeBasinRouteValue(controlsSnapshot[key]));
+  }
+  if (routedLearnedBoundarySidecarManifestUrl) {
+    url.searchParams.set('volume_learned_boundary_sidecar_manifest_url', routedLearnedBoundarySidecarManifestUrl);
+    url.searchParams.set('volume_learned_boundary_sidecar_variant', routedLearnedBoundarySidecarVariant || 'scalar');
+    url.searchParams.set('volume_learned_boundary_sidecar_classifier_threshold', formatVolumeBasinRouteValue(routedLearnedBoundarySidecarClassifierThreshold));
   }
   url.searchParams.set('volume_quality_reason', 'pyro-contrast-basin-copied-0702');
   return url.toString();
@@ -16775,6 +16844,9 @@ async function initKaminosVolumeRoute() {
   if (params.has('volume_quality_reason')) {
     routedVolumeQualityReason = normalizeVolumeQualityReason(params.get('volume_quality_reason'));
   }
+  routedLearnedBoundarySidecarManifestUrl = params.get('volume_learned_boundary_sidecar_manifest_url') || '';
+  routedLearnedBoundarySidecarVariant = normalizeLearnedBoundarySidecarVariant(params.get('volume_learned_boundary_sidecar_variant') || routedLearnedBoundarySidecarVariant);
+  routedLearnedBoundarySidecarClassifierThreshold = normalizeLearnedBoundarySidecarClassifierThreshold(params.get('volume_learned_boundary_sidecar_classifier_threshold') || routedLearnedBoundarySidecarClassifierThreshold);
   const routeResolution = parseInt(params.get('volume_resolution') || '', 10);
   if ([32, 48, 64, 96, 128, 160].includes(routeResolution)) {
     document.getElementById('volume-resolution').value = String(routeResolution);
@@ -17441,6 +17513,7 @@ async function initKaminosVolumeRoute() {
     if (camera && controls) frameVolumeCamera();
     try {
       await volumePrototype.setActive(true);
+      await loadLearnedBoundarySidecarCueFromRoute(params, volumePrototype);
       refreshSyntheticExternalEmitters();
       if (routeExternalEmitters === 'synthetic_hand_trails') {
         syntheticEmitterTimer = window.setInterval(refreshSyntheticExternalEmitters, 100);

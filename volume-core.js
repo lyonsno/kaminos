@@ -4,6 +4,8 @@ const FRONT_FIELD_IDENTITY = 'combustion-front-topology-sidecar-v0';
 const BOUNDARY_SIDECAR_IDENTITY = 'baked-boundary-sidecar-v1';
 const BOUNDARY_SIDECAR_BAKE_AUTHORITY = 'band-limited-support-coverage-ridge-footprint-proximity-normal-v2';
 const BOUNDARY_SIDECAR_THRESHOLD_IDENTITY = 'calibrated-standard-mlp-sparse-cue-thresholds-v0';
+const LEARNED_BOUNDARY_SIDECAR_CUE_IDENTITY = 'dense-learned-sparse-cue-pack-v0';
+const LEARNED_BOUNDARY_SIDECAR_UPLOAD_AUTHORITY = 'teacher-domain-phase-aligned-learned-sidecar-cue-upload-v0';
 const TEMPORAL_SIDECAR_IDENTITY = 'temporal-boundary-sidecar-history-v0';
 const BOUNDARY_SIDECAR_EXPORT_SCHEMA = 'kaminos.volume.boundary-sidecar-export.v1';
 const BOUNDARY_SIDECAR_EXPORT_CHANNEL_ORDER = ['support', 'coverage', 'ridge', 'footprint', 'proximity', 'normalX', 'normalY', 'normalZ'];
@@ -126,7 +128,7 @@ function canonicalContentModeValue(value) {
 
 function normalizeBoundarySidecarSource(value) {
   const normalized = String(value || 'live').toLowerCase().replace(/-/g, '_');
-  if (normalized === 'baked' || normalized === 'mix') return normalized;
+  if (normalized === 'baked' || normalized === 'mix' || normalized === 'learned') return normalized;
   return 'live';
 }
 
@@ -134,7 +136,18 @@ function boundarySidecarSourceValue(value) {
   const normalized = normalizeBoundarySidecarSource(value);
   if (normalized === 'baked') return 1;
   if (normalized === 'mix') return 2;
+  if (normalized === 'learned') return 3;
   return 0;
+}
+
+function normalizeLearnedBoundarySidecarVariant(value) {
+  const normalized = String(value || 'scalar').toLowerCase().replace(/-/g, '_');
+  if (normalized === 'ridgeclassifierprobability' || normalized === 'ridge_classifier' || normalized === 'ridge_classifier_probability' || normalized === 'classifier') return 'ridgeClassifierProbability';
+  return 'scalar';
+}
+
+function normalizeLearnedBoundarySidecarClassifierThreshold(value) {
+  return clampFinite(value, 0, 1, 0.97);
 }
 
 function normalizeBoundarySidecarView(value) {
@@ -3999,7 +4012,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
       let boundaryDx = vec3<f32>(boundaryCellStep, 0.0, 0.0);
       let boundaryDy = vec3<f32>(0.0, boundaryCellStep, 0.0);
       let boundaryDz = vec3<f32>(0.0, 0.0, boundaryCellStep);
-      let boundarySidecarSource = clamp(u.boundary_sidecar_controls.x, 0.0, 2.0);
+      let boundarySidecarSource = clamp(u.boundary_sidecar_controls.x, 0.0, 3.0);
       let boundarySidecarView = clamp(u.boundary_sidecar_display.x, 0.0, 6.0);
       var boundarySidecarDebugSample = vec4<f32>(0.0);
       var boundarySidecarDebugMetaSample = vec4<f32>(0.0);
@@ -4011,7 +4024,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
       var boundaryGradientEffective = 0.0;
       var boundaryFireRidgeEffective = 0.0;
       var boundarySidecarStepFootprintWidth = 0.0;
-      if (boundarySidecarSource > 0.5 && boundarySidecarSource <= 1.5) {
+      if ((boundarySidecarSource > 0.5 && boundarySidecarSource <= 1.5) || boundarySidecarSource > 2.5) {
         let boundarySidecarSample = sampleWorldBoundarySidecar(p);
         let boundarySidecarMetaSample = sampleWorldBoundarySidecarMeta(p);
         boundarySidecarDebugSample = boundarySidecarSample;
@@ -4050,7 +4063,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
         boundarySupportEffective = boundarySupport;
         boundaryGradientEffective = boundaryGradient;
         boundaryFireRidgeEffective = boundaryFireRidge;
-        if (boundarySidecarSource > 1.5) {
+        if (boundarySidecarSource > 1.5 && boundarySidecarSource <= 2.5) {
           let boundarySidecarSample = sampleWorldBoundarySidecar(p);
           let boundarySidecarMetaSample = sampleWorldBoundarySidecarMeta(p);
           boundarySidecarDebugSample = boundarySidecarSample;
@@ -4717,6 +4730,21 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     frameId: null,
     uploadedAtMs: null,
   };
+  let learnedBoundarySidecarCueUpload = {
+    identity: LEARNED_BOUNDARY_SIDECAR_CUE_IDENTITY,
+    authority: LEARNED_BOUNDARY_SIDECAR_UPLOAD_AUTHORITY,
+    status: 'none',
+    variant: null,
+    classifierThreshold: null,
+    grid: null,
+    receiverGrid: gridSize,
+    cellCount: 0,
+    manifestUrl: null,
+    scalarCueSha256: null,
+    ridgeClassifierSha256: null,
+    uploadedAtMs: null,
+    failurePhase: null,
+  };
   const state = {
     prototypeIdentity: PROTOTYPE_IDENTITY,
     routeIdentity: ROUTE_IDENTITY,
@@ -4816,8 +4844,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     boundarySidecarIdentity: BOUNDARY_SIDECAR_IDENTITY,
     boundarySidecarAuthority: BOUNDARY_SIDECAR_BAKE_AUTHORITY,
     boundarySidecarBytes: boundarySidecarBufferBytes(gridSize),
-    boundarySidecarMetaBytes: boundarySidecarMetaBufferBytes(gridSize),
-    temporalSidecarIdentity: TEMPORAL_SIDECAR_IDENTITY,
+      boundarySidecarMetaBytes: boundarySidecarMetaBufferBytes(gridSize),
+      learnedBoundarySidecarCue: { ...learnedBoundarySidecarCueUpload },
+      temporalSidecarIdentity: TEMPORAL_SIDECAR_IDENTITY,
     boundarySidecarSource: normalizeBoundarySidecarSource(controlsSnapshot.boundarySidecarSource),
     boundarySidecarBuilt: false,
     boundarySidecarBuiltThisFrame: false,
@@ -5315,6 +5344,16 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     };
   }
 
+  function learnedBoundarySidecarCueDebug() {
+    return {
+      ...learnedBoundarySidecarCueUpload,
+      identity: LEARNED_BOUNDARY_SIDECAR_CUE_IDENTITY,
+      authority: LEARNED_BOUNDARY_SIDECAR_UPLOAD_AUTHORITY,
+      receiverGrid: gridSize,
+      source: normalizeBoundarySidecarSource(controlsSnapshot.boundarySidecarSource),
+    };
+  }
+
   function boundarySidecarDebug(boundarySidecarSourceName = normalizeBoundarySidecarSource(controlsSnapshot.boundarySidecarSource)) {
     const controls = controlsSnapshot.boundarySidecarControls || {};
     const view = normalizeBoundarySidecarView(controls.view ?? controlsSnapshot.boundarySidecarView);
@@ -5337,6 +5376,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       ridgeGain: clampFinite(controls.ridgeGain ?? controlsSnapshot.boundarySidecarRidge, 0, 2, 1),
       thresholdIdentity: BOUNDARY_SIDECAR_THRESHOLD_IDENTITY,
       boundarySidecarThresholds: boundarySidecarThresholdControls(controlsSnapshot.boundarySidecarControls || controlsSnapshot),
+      learnedBoundarySidecarCue: learnedBoundarySidecarCueDebug(),
       grid: gridSize,
       bytes: boundarySidecarBufferBytes(gridSize),
       metaBytes: boundarySidecarMetaBufferBytes(gridSize),
@@ -6200,6 +6240,81 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     });
   }
 
+  function packLearnedBoundarySidecarCue(source = {}) {
+    const variant = normalizeLearnedBoundarySidecarVariant(source.variant);
+    const classifierThreshold = normalizeLearnedBoundarySidecarClassifierThreshold(source.classifierThreshold ?? source.ridgeClassifierThreshold);
+    const sourceGrid = normalizeScalarActivityCueGridSize(source.grid || source.sourceGrid || gridSize, gridSize);
+    if (sourceGrid !== gridSize) {
+      throw new Error(`learned boundary sidecar cue grid ${sourceGrid} does not match receiver grid ${gridSize}`);
+    }
+    const cellCount = gridCellCount(gridSize);
+    const scalarValues = source.scalarMlpCue || source.scalarValues || source.values || null;
+    const ridgeClassifierValues = source.ridgeClassifierProbability || source.ridgeProbability || null;
+    const scalar = scalarValues ? (scalarValues instanceof Float32Array ? scalarValues : new Float32Array(scalarValues)) : null;
+    const ridgeClassifier = ridgeClassifierValues ? (ridgeClassifierValues instanceof Float32Array ? ridgeClassifierValues : new Float32Array(ridgeClassifierValues)) : null;
+    if (!scalar || scalar.length !== cellCount * 3) {
+      throw new Error(`learned boundary sidecar scalar cue expected ${cellCount * 3} floats, got ${scalar?.length || 0}`);
+    }
+    if (variant === 'ridgeClassifierProbability' && (!ridgeClassifier || ridgeClassifier.length !== cellCount)) {
+      throw new Error(`learned boundary sidecar ridge classifier expected ${cellCount} floats, got ${ridgeClassifier?.length || 0}`);
+    }
+    const sidecarData = new Float32Array(cellCount * 4);
+    const metaData = new Float32Array(cellCount * 4);
+    for (let i = 0; i < cellCount; i += 1) {
+      const support = Math.max(0, Math.min(1.8, scalar[i * 3] || 0));
+      const scalarRidge = Math.max(0, Math.min(1.8, scalar[i * 3 + 1] || 0));
+      const proximity = Math.max(0, Math.min(1.8, scalar[i * 3 + 2] || 0));
+      const classifierProbability = Math.max(0, Math.min(1, ridgeClassifier?.[i] || 0));
+      const classifierGate = classifierProbability * Math.max(0, Math.min(1, (classifierProbability - classifierThreshold) / Math.max(0.015, 1 - classifierThreshold)));
+      const ridge = variant === 'ridgeClassifierProbability'
+        ? Math.max(0, Math.min(1.8, classifierGate))
+        : scalarRidge;
+      const rendererSupport = variant === 'ridgeClassifierProbability' ? Math.max(support, ridge * 0.72) : support;
+      const rendererProximity = variant === 'ridgeClassifierProbability' ? Math.max(proximity, ridge * 0.64) : proximity;
+      const coverage = Math.max(rendererSupport, rendererProximity * 0.74, ridge * 0.58);
+      const footprint = Math.max(0.06, Math.min(1.65, 0.16 + ridge * 0.30 + rendererProximity * 0.18));
+      sidecarData[i * 4] = rendererSupport;
+      sidecarData[i * 4 + 1] = coverage;
+      sidecarData[i * 4 + 2] = ridge;
+      sidecarData[i * 4 + 3] = footprint;
+      metaData[i * 4] = rendererProximity;
+      metaData[i * 4 + 1] = 0;
+      metaData[i * 4 + 2] = 0;
+      metaData[i * 4 + 3] = 0;
+    }
+    return { variant, classifierThreshold, sourceGrid, cellCount, sidecarData, metaData };
+  }
+
+  function writeLearnedBoundarySidecarCueBuffers(source = {}) {
+    const packed = packLearnedBoundarySidecarCue(source);
+    ensureBoundarySidecarBuffer();
+    device.queue.writeBuffer(boundarySidecarBuffer, 0, packed.sidecarData);
+    device.queue.writeBuffer(boundarySidecarMetaBuffer, 0, packed.metaData);
+    learnedBoundarySidecarCueUpload = {
+      identity: LEARNED_BOUNDARY_SIDECAR_CUE_IDENTITY,
+      authority: LEARNED_BOUNDARY_SIDECAR_UPLOAD_AUTHORITY,
+      status: 'uploaded',
+      variant: packed.variant,
+      classifierThreshold: packed.classifierThreshold,
+      grid: packed.sourceGrid,
+      receiverGrid: gridSize,
+      cellCount: packed.cellCount,
+      manifestUrl: source.manifestUrl || null,
+      scalarCueSha256: source.scalarCueSha256 || null,
+      ridgeClassifierSha256: source.ridgeClassifierSha256 || null,
+      uploadedAtMs: performance.now(),
+      failurePhase: null,
+    };
+    state.boundarySidecarBuilt = true;
+    state.boundarySidecarBuiltThisFrame = false;
+    state.boundaryStructureSource = 'learned';
+    state.boundarySidecarDebug = boundarySidecarDebug('learned');
+    state.learnedBoundarySidecarCue = learnedBoundarySidecarCueDebug();
+    updateSimCostLedger({ boundarySidecarBuiltThisFrame: false });
+    emitStatus({ phase: 'learned-boundary-sidecar-cue-uploaded' });
+    return { ...state.learnedBoundarySidecarCue };
+  }
+
   function rebuildFluidState(nextGridSize = gridSize, nextMajorantGridSize = majorantGridSize, reason = 'grid-rebuilt') {
     gridSize = normalizeGridSize(nextGridSize);
     majorantGridSize = normalizeMajorantGridSize(nextMajorantGridSize);
@@ -6417,6 +6532,15 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.boundarySidecarBuiltThisFrame = false;
     state.boundarySidecarFrameCount = 0;
     state.boundarySidecarLastBuiltFrame = -1;
+    learnedBoundarySidecarCueUpload = {
+      ...learnedBoundarySidecarCueUpload,
+      status: 'cleared-grid-rebuild',
+      receiverGrid: gridSize,
+      cellCount: 0,
+      uploadedAtMs: null,
+      failurePhase: 'grid-rebuild',
+    };
+    state.learnedBoundarySidecarCue = learnedBoundarySidecarCueDebug();
     state.boundaryStructureSource = state.boundarySidecarSource;
     state.boundarySidecarView = normalizeBoundarySidecarView(controlsSnapshot.boundarySidecarView ?? controlsSnapshot.boundarySidecarControls?.view);
     state.boundarySidecarDebug = boundarySidecarDebug(state.boundarySidecarSource);
@@ -7105,6 +7229,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.boundaryStructureSource = boundarySidecarSourceName;
     state.boundarySidecarView = boundarySidecarViewName;
     state.boundarySidecarDebug = boundarySidecarDebug(boundarySidecarSourceName);
+    state.learnedBoundarySidecarCue = learnedBoundarySidecarCueDebug();
     state.volumeScene = normalizeVolumeScene(controlsSnapshot.volumeScene);
     state.bonfireReferenceConfinement = bonfireReferenceConfinementDebug(controlsSnapshot.volumeScene);
     state.minimalPlumeProof = minimalPlumeProofDebug(controlsSnapshot.volumeScene);
@@ -7679,6 +7804,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.boundarySidecarSource = sourceName;
     state.boundarySidecarView = sidecarViewName;
     state.boundaryStructureSource = sourceName;
+    if (sourceName === 'learned') {
+      state.boundarySidecarBuiltThisFrame = false;
+      state.boundarySidecarDebug = boundarySidecarDebug(sourceName);
+      state.learnedBoundarySidecarCue = learnedBoundarySidecarCueDebug();
+      updateSimCostLedger({ boundarySidecarBuiltThisFrame: false });
+      return;
+    }
     const shouldBakeBoundarySidecar = options.forceBake === true || sourceName !== 'live' || sidecarViewName !== 'off';
     if (
       !shouldBakeBoundarySidecar ||
@@ -9573,6 +9705,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       emitStatus({ phase: 'truth-oracle-activity-cue-uploaded' });
       return { ...state.scalarActivityReceiver };
     },
+    setLearnedBoundarySidecarCue(payload = {}) {
+      if (!device) {
+        throw new Error('learned boundary sidecar cue upload requires active WebGPU device');
+      }
+      return writeLearnedBoundarySidecarCueBuffers(payload);
+    },
     syntheticHandTrailEmitters,
     async setActive(active) {
       if (active) {
@@ -9604,6 +9742,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         ...state,
         controls: { ...controlsSnapshot },
         scalarActivityReceiver: scalarActivityReceiverDebug(),
+        learnedBoundarySidecarCue: learnedBoundarySidecarCueDebug(),
         pyroDynamicDetail: clonePyroDynamicDetail(),
         pyroMaterialRendererCoupling: state.pyroMaterialRendererCoupling ? { ...state.pyroMaterialRendererCoupling } : null,
       };

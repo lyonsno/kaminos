@@ -355,6 +355,16 @@ function buildBoundaryFireEvidence(sample = {}, state = {}) {
   const structureSource = state.boundaryStructureSource || null;
   const thresholdIdentity = sidecar.thresholdIdentity || null;
   const thresholds = sidecar.boundarySidecarThresholds || null;
+  const learnedBoundarySidecarCue = state.learnedBoundarySidecarCue || sidecar.learnedBoundarySidecarCue || null;
+  const learnedSourceActive = sidecarSource === 'learned' || structureSource === 'learned';
+  const hasLearnedCueAuthority =
+    !learnedSourceActive ||
+    (
+      learnedBoundarySidecarCue?.identity === 'dense-learned-sparse-cue-pack-v0' &&
+      learnedBoundarySidecarCue?.authority === 'teacher-domain-phase-aligned-learned-sidecar-cue-upload-v0' &&
+      learnedBoundarySidecarCue?.status === 'uploaded' &&
+      finiteNumber(learnedBoundarySidecarCue?.cellCount) > 0
+    );
   const isBoundaryFireInspectRoute =
     controls.reactionLiveView === 'boundary_fire' ||
     controls.shellInspectMode === 'boundary_fire' ||
@@ -363,6 +373,7 @@ function buildBoundaryFireEvidence(sample = {}, state = {}) {
     sidecarIdentity === 'baked-boundary-sidecar-v1' &&
     sidecar.activeInRaymarch === true &&
     sidecar.built === true &&
+    hasLearnedCueAuthority &&
     finiteNumber(sidecar.bytes) > 0 &&
     finiteNumber(sidecar.metaBytes) > 0;
   const hasCombustionFrontAuthority =
@@ -388,9 +399,11 @@ function buildBoundaryFireEvidence(sample = {}, state = {}) {
     hasActiveSidecar,
     hasCombustionFrontAuthority,
     hasThresholdAuthority,
+    hasLearnedCueAuthority,
     sidecarIdentity,
     sidecarSource,
     structureSource,
+    learnedBoundarySidecarCue,
     thresholdIdentity,
     thresholds,
     activeInRaymarch: sidecar.activeInRaymarch ?? null,
