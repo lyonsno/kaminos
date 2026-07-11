@@ -26,14 +26,17 @@ assert.doesNotMatch(splatDrawFunction, /mapAsync|await/, 'live splat drawing mus
 assert.match(core, /encodeBoundarySidecar\(encoder\)[\s\S]*encodeBoundarySplats\(encoder\)/, 'splat compaction runs after the current frame sidecar bake');
 assert.match(core, /boundarySplatRequested[\s\S]*encodeBoundarySplatDraw/, 'the opt-in route selects splat rasterization instead of silently falling back');
 assert.match(core, /sampleFrame[\s\S]*encodeBoundarySidecar\(encoder\)[\s\S]*encodeBoundarySplats\(encoder\)[\s\S]*encodeBoundarySplatDraw\(encoder,\s*frameTexture\.createView\(\),\s*boundarySplatReadbackPipeline\)/, 'frozen witness renders the requested splat route instead of substituting raymarch');
+assert.match(core, /renderFrozenScaleToCanvas[\s\S]*encodeBoundarySidecar\(encoder\)[\s\S]*encodeBoundarySplats\(encoder\)[\s\S]*encodeBoundarySplatDraw\(encoder,\s*currentTexture\.createView\(\)\)/, 'controlled canvas capture renders the requested splat route instead of substituting raymarch');
 assert.match(core, /boundarySplatRendererIdentity:\s*BOUNDARY_SPLAT_RENDERER_IDENTITY/, 'runtime state reports effective splat renderer identity');
 assert.match(core, /boundarySplatSourceAuthority:\s*BOUNDARY_SPLAT_SOURCE_AUTHORITY/, 'runtime state reports splat source authority');
 assert.match(core, /boundarySplatCapacity:\s*BOUNDARY_SPLAT_CAPACITY/, 'runtime state reports the hard primitive capacity');
 assert.match(core, /boundarySplatCandidateCount/, 'runtime state exposes candidate-count evidence');
 assert.match(core, /boundarySplatOverflowCount/, 'runtime state exposes overflow evidence');
 assert.match(core, /boundarySplatFallbackReason/, 'runtime state fails loud when the requested splat route cannot execute');
+assert.match(core, /return \{\s*ok:\s*true,[\s\S]*boundarySplatCandidateCount:\s*boundarySplatSample\?\.candidateCount\s*\?\?\s*state\.boundarySplatCandidateCount[\s\S]*boundarySplatOverflowCount:\s*boundarySplatSample\?\.overflowCount\s*\?\?\s*state\.boundarySplatOverflowCount[\s\S]*boundarySplatCountAuthority:\s*boundarySplatSample\?\.authority/, 'successful frame samples prefer post-submit GPU splat counts over stale asynchronous telemetry');
 assert.match(core, /boundarySplatCountAuthority:\s*'gpu-indirect-async-readback'/, 'candidate count authority identifies asynchronous GPU indirect readback');
 assert.match(core, /copyBufferToBuffer\(boundarySplatDrawBuffer[\s\S]*boundarySplatReadbackBuffer/, 'telemetry copies the GPU indirect state without blocking rendering');
+assert.match(core, /async function sampleBoundarySplatDrawState[\s\S]*copyBufferToBuffer\(boundarySplatDrawBuffer[\s\S]*mapAsync\(GPUMapMode\.READ\)/, 'frame witness samples draw state after the render submission completes');
 assert.match(witness, /boundarySplatRendererIdentity:\s*sample\.boundarySplatRendererIdentity\s*\?\?\s*state\.boundarySplatRendererIdentity/, 'witness preserves effective splat renderer identity');
 assert.match(witness, /boundarySplatSourceAuthority:\s*sample\.boundarySplatSourceAuthority\s*\?\?\s*state\.boundarySplatSourceAuthority/, 'witness preserves live splat source authority');
 assert.match(witness, /boundarySplatCandidateCount:\s*sample\.boundarySplatCandidateCount\s*\?\?\s*state\.boundarySplatCandidateCount/, 'witness preserves candidate-count evidence');
