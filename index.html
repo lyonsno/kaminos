@@ -11047,6 +11047,8 @@ let routedLearnedBoundarySidecarManifestUrl = '';
 let routedLearnedBoundarySidecarVariant = 'scalar';
 let routedLearnedBoundarySidecarClassifierThreshold = 0.97;
 let routedLearnedBoundarySidecarRole = 'both';
+let routedLearnedBoundarySidecarFlameMask = 'full';
+let routedLearnedBoundarySidecarSmokeMask = 'upper_plume_fire_reject';
 const DEFAULT_BONFIRE_ABLATION_CONTROLS = {
   bonfireRecenter: 1,
   bonfireLateralDamping: 1,
@@ -11568,6 +11570,8 @@ const REACTION_FRONT_LIVE_VIEW_VALUES = new Set(['off', 'shell', 'thermal', 'rea
 const BOUNDARY_SIDECAR_SOURCE_VALUES = new Set(['live', 'baked', 'mix', 'learned']);
 const BOUNDARY_SIDECAR_VIEW_VALUES = new Set(['off', 'support', 'coverage', 'ridge', 'proximity', 'footprint', 'normal']);
 const LEARNED_BOUNDARY_SIDECAR_ROLE_VALUES = new Set(['both', 'smoke', 'flame', 'off']);
+const LEARNED_BOUNDARY_SIDECAR_FLAME_MASK_VALUES = new Set(['full', 'live_boundary', 'fire_authority', 'off']);
+const LEARNED_BOUNDARY_SIDECAR_SMOKE_MASK_VALUES = new Set(['full', 'smoke_authority', 'upper_plume_fire_reject', 'off']);
 
 function normalizeReactionFrontLiveView(value) {
   const mode = String(value || 'off').toLowerCase().replace(/-/g, '_');
@@ -11597,6 +11601,23 @@ function normalizeLearnedBoundarySidecarRole(value) {
   if (mode === 'flame_only' || mode === 'fire' || mode === 'body') return 'flame';
   if (mode === 'none' || mode === 'disabled') return 'off';
   return LEARNED_BOUNDARY_SIDECAR_ROLE_VALUES.has(mode) ? mode : 'both';
+}
+
+function normalizeLearnedBoundarySidecarFlameMask(value) {
+  const mode = String(value || 'full').toLowerCase().replace(/-/g, '_');
+  if (mode === 'boundary' || mode === 'low_boundary' || mode === 'live_boundary_band') return 'live_boundary';
+  if (mode === 'fire' || mode === 'reaction' || mode === 'hot_body') return 'fire_authority';
+  if (mode === 'none' || mode === 'disabled') return 'off';
+  return LEARNED_BOUNDARY_SIDECAR_FLAME_MASK_VALUES.has(mode) ? mode : 'full';
+}
+
+function normalizeLearnedBoundarySidecarSmokeMask(value) {
+  const mode = String(value || 'upper_plume_fire_reject').toLowerCase().replace(/-/g, '_');
+  if (mode === 'all') return 'full';
+  if (mode === 'smoke' || mode === 'plume_authority') return 'smoke_authority';
+  if (mode === 'upper_plume' || mode === 'fire_reject' || mode === 'plume_fire_reject') return 'upper_plume_fire_reject';
+  if (mode === 'none' || mode === 'disabled') return 'off';
+  return LEARNED_BOUNDARY_SIDECAR_SMOKE_MASK_VALUES.has(mode) ? mode : 'upper_plume_fire_reject';
 }
 
 function normalizeLearnedBoundarySidecarClassifierThreshold(value) {
@@ -11633,6 +11654,8 @@ async function loadLearnedBoundarySidecarCueFromRoute(params, prototype) {
   if (!manifestUrl || !prototype?.setLearnedBoundarySidecarCue) return null;
   const variant = normalizeLearnedBoundarySidecarVariant(params.get('volume_learned_boundary_sidecar_variant') || 'scalar');
   const role = normalizeLearnedBoundarySidecarRole(params.get('volume_learned_boundary_sidecar_role') || 'both');
+  const flameMask = normalizeLearnedBoundarySidecarFlameMask(params.get('volume_learned_boundary_sidecar_flame_mask') || routedLearnedBoundarySidecarFlameMask);
+  const smokeMask = normalizeLearnedBoundarySidecarSmokeMask(params.get('volume_learned_boundary_sidecar_smoke_mask') || routedLearnedBoundarySidecarSmokeMask);
   const classifierThreshold = normalizeLearnedBoundarySidecarClassifierThreshold(params.get('volume_learned_boundary_sidecar_classifier_threshold'));
   const supportClassifierThreshold = normalizeLearnedBoundarySidecarClassifierThreshold(params.get('volume_learned_boundary_sidecar_support_classifier_threshold') || 0.95);
   const coverageClassifierThreshold = normalizeLearnedBoundarySidecarClassifierThreshold(params.get('volume_learned_boundary_sidecar_coverage_classifier_threshold') || 0.90);
@@ -11657,6 +11680,8 @@ async function loadLearnedBoundarySidecarCueFromRoute(params, prototype) {
     manifestUrl,
     variant,
     role,
+    flameMask,
+    smokeMask,
     classifierThreshold,
     supportClassifierThreshold,
     coverageClassifierThreshold,
@@ -11806,6 +11831,8 @@ const VOLUME_BASIN_ROUTE_FIELDS = [
   ['boundarySidecarSource', 'volume_boundary_sidecar_source'],
   ['boundarySidecarView', 'volume_boundary_sidecar_view'],
   ['learnedBoundarySidecarRole', 'volume_learned_boundary_sidecar_role'],
+  ['learnedBoundarySidecarFlameMask', 'volume_learned_boundary_sidecar_flame_mask'],
+  ['learnedBoundarySidecarSmokeMask', 'volume_learned_boundary_sidecar_smoke_mask'],
   ...REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS.map(field => [field.key, field.param]),
 ];
 
@@ -11826,6 +11853,8 @@ function buildVolumeBasinUrl(controlsSnapshot = readVolumeControls()) {
     url.searchParams.set('volume_learned_boundary_sidecar_manifest_url', routedLearnedBoundarySidecarManifestUrl);
     url.searchParams.set('volume_learned_boundary_sidecar_variant', routedLearnedBoundarySidecarVariant || 'scalar');
     url.searchParams.set('volume_learned_boundary_sidecar_role', normalizeLearnedBoundarySidecarRole(routedLearnedBoundarySidecarRole));
+    url.searchParams.set('volume_learned_boundary_sidecar_flame_mask', normalizeLearnedBoundarySidecarFlameMask(routedLearnedBoundarySidecarFlameMask));
+    url.searchParams.set('volume_learned_boundary_sidecar_smoke_mask', normalizeLearnedBoundarySidecarSmokeMask(routedLearnedBoundarySidecarSmokeMask));
     url.searchParams.set('volume_learned_boundary_sidecar_classifier_threshold', formatVolumeBasinRouteValue(routedLearnedBoundarySidecarClassifierThreshold));
   }
   url.searchParams.set('volume_quality_reason', 'pyro-contrast-basin-copied-0702');
@@ -16168,6 +16197,8 @@ function readVolumeControls() {
   const boundarySidecarSource = normalizeBoundarySidecarSource(document.getElementById('volume-boundary-sidecar-source')?.value);
   const boundarySidecarView = normalizeBoundarySidecarView(document.getElementById('volume-boundary-sidecar-view')?.value);
   const learnedBoundarySidecarRole = normalizeLearnedBoundarySidecarRole(routedLearnedBoundarySidecarRole);
+  const learnedBoundarySidecarFlameMask = normalizeLearnedBoundarySidecarFlameMask(routedLearnedBoundarySidecarFlameMask);
+  const learnedBoundarySidecarSmokeMask = normalizeLearnedBoundarySidecarSmokeMask(routedLearnedBoundarySidecarSmokeMask);
   const reactionBoundaryControls = {
     identity: 'reaction-boundary-live-controls-v0',
     gradientGain: parseFloat(document.getElementById('volume-reaction-boundary-gradient').value),
@@ -16234,12 +16265,16 @@ function readVolumeControls() {
     boundarySidecarSource,
     boundarySidecarView,
     learnedBoundarySidecarRole,
+    learnedBoundarySidecarFlameMask,
+    learnedBoundarySidecarSmokeMask,
     boundarySidecarControls: {
       identity: 'baked-boundary-sidecar-v0',
       authority: 'band-limited-support-coverage-ridge-proximity-footprint-v1',
       source: boundarySidecarSource,
       view: boundarySidecarView,
       learnedRole: learnedBoundarySidecarRole,
+      learnedFlameMask: learnedBoundarySidecarFlameMask,
+      learnedSmokeMask: learnedBoundarySidecarSmokeMask,
       blur: parseFloat(document.getElementById('volume-boundary-sidecar-blur').value),
       stepWidth: parseFloat(document.getElementById('volume-boundary-sidecar-width').value),
       ridgeGain: parseFloat(document.getElementById('volume-boundary-sidecar-ridge').value),
@@ -16882,6 +16917,8 @@ async function initKaminosVolumeRoute() {
   routedLearnedBoundarySidecarManifestUrl = params.get('volume_learned_boundary_sidecar_manifest_url') || '';
   routedLearnedBoundarySidecarVariant = normalizeLearnedBoundarySidecarVariant(params.get('volume_learned_boundary_sidecar_variant') || routedLearnedBoundarySidecarVariant);
   routedLearnedBoundarySidecarRole = normalizeLearnedBoundarySidecarRole(params.get('volume_learned_boundary_sidecar_role') || routedLearnedBoundarySidecarRole);
+  routedLearnedBoundarySidecarFlameMask = normalizeLearnedBoundarySidecarFlameMask(params.get('volume_learned_boundary_sidecar_flame_mask') || routedLearnedBoundarySidecarFlameMask);
+  routedLearnedBoundarySidecarSmokeMask = normalizeLearnedBoundarySidecarSmokeMask(params.get('volume_learned_boundary_sidecar_smoke_mask') || routedLearnedBoundarySidecarSmokeMask);
   routedLearnedBoundarySidecarClassifierThreshold = normalizeLearnedBoundarySidecarClassifierThreshold(params.get('volume_learned_boundary_sidecar_classifier_threshold') || routedLearnedBoundarySidecarClassifierThreshold);
   const routeResolution = parseInt(params.get('volume_resolution') || '', 10);
   if ([32, 48, 64, 96, 128, 160].includes(routeResolution)) {
