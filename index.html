@@ -100,6 +100,19 @@ h2 { font-size: 11px; font-weight: 600; margin: 18px 0 8px; color: #666; text-tr
     .crucible-bench-list .btn { width: 100%; text-align: left; margin: 0; }
     .crucible-bench-list .btn.active { background: #57421f; border-color: #8b6a2f; }
     .crucible-bench-note { color: #777; font-size: 10px; line-height: 1.35; margin-top: 7px; }
+    #crucible-viewport-workspace { position: absolute; inset: 0; z-index: 4; display: flex; align-items: center; justify-content: center; padding: clamp(24px, 5vw, 72px); background: rgba(10,9,8,0.72); pointer-events: none; }
+    #crucible-viewport-workspace[hidden] { display: none; }
+    .crucible-viewport-mat { width: min(900px, 78vw); min-height: min(560px, 70vh); border: 1px solid rgba(171,137,76,0.42); border-radius: 8px; background: rgba(31,28,23,0.9); box-shadow: 0 26px 80px rgba(0,0,0,0.48); padding: clamp(18px, 3vw, 34px); display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 18px; }
+    .crucible-viewport-title { color: #f1dfae; font-size: 18px; font-weight: 800; margin-bottom: 6px; }
+    .crucible-viewport-subtitle { color: #a99d84; font-size: 12px; line-height: 1.45; max-width: 520px; }
+    .crucible-viewport-plate { margin-top: 22px; min-height: 180px; border: 1px solid rgba(171,137,76,0.28); border-radius: 8px; background: rgba(14,13,11,0.72); padding: 16px; display: flex; flex-direction: column; justify-content: space-between; }
+    .crucible-viewport-plate-title { color: #d9c88f; font-size: 11px; font-weight: 800; letter-spacing: 0.8px; text-transform: uppercase; }
+    .crucible-viewport-plate-body { color: #d0c3a5; font-size: 13px; line-height: 1.4; overflow-wrap: anywhere; margin-top: 10px; }
+    .crucible-viewport-stack { display: grid; gap: 10px; align-content: start; }
+    .crucible-viewport-slot { min-height: 96px; border: 1px solid rgba(124,107,76,0.34); border-radius: 7px; background: rgba(19,18,16,0.78); padding: 12px; }
+    .crucible-viewport-slot-title { color: #d8c27e; font-size: 10px; font-weight: 800; letter-spacing: 0.7px; text-transform: uppercase; }
+    .crucible-viewport-slot-body { color: #9d9481; font-size: 12px; line-height: 1.35; margin-top: 8px; overflow-wrap: anywhere; }
+    .crucible-viewport-slot-body.present { color: #e0d3b3; }
 
 /* Viewport */
 #viewport { flex: 1; position: relative; background: #111; }
@@ -2410,6 +2423,35 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
 
 <div id="viewport">
   <div id="env-loading">Loading environment...</div>
+  <div id="crucible-viewport-workspace" data-crucible-viewport-workspace="generate" hidden>
+    <div class="crucible-viewport-mat">
+      <div>
+        <div class="crucible-viewport-title" id="crucible-viewport-title">Unnamed crucible</div>
+        <div class="crucible-viewport-subtitle" id="crucible-viewport-summary">This crucible is on the bench.</div>
+        <div class="crucible-viewport-plate">
+          <div>
+            <div class="crucible-viewport-plate-title">Source Plate</div>
+            <div class="crucible-viewport-plate-body" id="crucible-viewport-source">No source on the plate yet.</div>
+          </div>
+          <div class="crucible-viewport-plate-body" id="crucible-viewport-receipt">No firing receipt yet.</div>
+        </div>
+      </div>
+      <div class="crucible-viewport-stack">
+        <div class="crucible-viewport-slot">
+          <div class="crucible-viewport-slot-title">Firing</div>
+          <div class="crucible-viewport-slot-body" id="crucible-viewport-firing">No firing started.</div>
+        </div>
+        <div class="crucible-viewport-slot">
+          <div class="crucible-viewport-slot-title">Cast</div>
+          <div class="crucible-viewport-slot-body" id="crucible-viewport-cast">No cast on the tray.</div>
+        </div>
+        <div class="crucible-viewport-slot">
+          <div class="crucible-viewport-slot-title">Armature</div>
+          <div class="crucible-viewport-slot-body" id="crucible-viewport-armature">No armature pinned yet.</div>
+        </div>
+      </div>
+    </div>
+  </div>
   <div id="pipeline-main-browser" hidden>
     <div class="pipeline-browser-shell">
       <div class="pipeline-browser-head">
@@ -9312,6 +9354,11 @@ function setActiveTab(tabName) {
   }
   const pipelineBrowser = document.getElementById('pipeline-main-browser');
   if (pipelineBrowser) pipelineBrowser.hidden = tabName !== 'pipeline';
+  const crucibleViewportWorkspace = document.getElementById('crucible-viewport-workspace');
+  if (crucibleViewportWorkspace) {
+    crucibleViewportWorkspace.hidden = tabName !== 'generate';
+    if (tabName === 'generate') renderCrucibleViewportWorkspace();
+  }
   if (tabName === 'pipeline') loadPipelineAssetBrowser().catch(err => setInfo(err.message || String(err)));
 }
 
@@ -12673,6 +12720,59 @@ function renderCrucibleBench() {
       : 'No firing receipt yet.';
   }
   renderCrucibleBenchList();
+  renderCrucibleViewportWorkspace();
+}
+
+function renderCrucibleViewportWorkspace() {
+  const workspace = document.getElementById('crucible-viewport-workspace');
+  if (!workspace) return;
+  const crucible = activeCrucibleBenchCrucible();
+  const currentSource = kilnRouteBenchSelectedSource(selectedKilnRouteBenchRoute()) || crucible.source || null;
+  const lastFiring = crucible.firings[0] || null;
+  const lastCast = crucible.casts[0] || null;
+  const lastReceipt = crucible.receipts[0] || null;
+  const lastArmature = crucible.armatures[0] || null;
+  const title = document.getElementById('crucible-viewport-title');
+  const summary = document.getElementById('crucible-viewport-summary');
+  const source = document.getElementById('crucible-viewport-source');
+  const firing = document.getElementById('crucible-viewport-firing');
+  const cast = document.getElementById('crucible-viewport-cast');
+  const receipt = document.getElementById('crucible-viewport-receipt');
+  const armature = document.getElementById('crucible-viewport-armature');
+  if (title) title.textContent = crucible.name || 'Unnamed crucible';
+  if (summary) {
+    summary.textContent = `This crucible is holding ${currentSource ? 'one source' : 'no source yet'}, ${crucible.firings.length} firing${crucible.firings.length === 1 ? '' : 's'}, and ${crucible.casts.length} cast${crucible.casts.length === 1 ? '' : 's'}.`;
+  }
+  if (source) {
+    source.classList.toggle('present', Boolean(currentSource?.source));
+    source.textContent = currentSource?.source
+      ? `${crucibleBenchSourceLabel(currentSource)} - ${compactCrucibleBenchPath(currentSource.source)}`
+      : 'No source on the plate yet.';
+  }
+  if (firing) {
+    firing.classList.toggle('present', Boolean(lastFiring));
+    firing.textContent = lastFiring
+      ? `${lastFiring.profileLabel || lastFiring.profileId || 'Route'} - ${lastFiring.status || 'running'}`
+      : 'No firing started.';
+  }
+  if (cast) {
+    cast.classList.toggle('present', Boolean(lastCast));
+    cast.textContent = lastCast
+      ? `${lastCast.label || 'Generated cast'} - ${compactCrucibleBenchPath(lastCast.path || lastCast.assetId || '')}`
+      : 'No cast on the tray.';
+  }
+  if (receipt) {
+    receipt.classList.toggle('present', Boolean(lastReceipt));
+    receipt.textContent = lastReceipt
+      ? `${lastReceipt.status || 'receipt'} - ${lastReceipt.message || lastReceipt.phase || 'last firing recorded'}`
+      : 'No firing receipt yet.';
+  }
+  if (armature) {
+    armature.classList.toggle('present', Boolean(lastArmature));
+    armature.textContent = lastArmature
+      ? `${lastArmature.label || 'Proxy armature'} - ${lastArmature.kind || 'proxy'}`
+      : 'No armature pinned yet.';
+  }
 }
 
 function renderCrucibleBenchList() {
@@ -13464,6 +13564,23 @@ function finiteKilnEvidenceNumber(value) {
   return Number.isFinite(number) ? number : null;
 }
 
+function uniqueKilnEvidenceLabels(values = [], required = []) {
+  const unique = [];
+  for (const value of values || []) {
+    if (!value) continue;
+    if (required.length && !required.includes(value)) continue;
+    if (!unique.includes(value)) unique.push(value);
+  }
+  return unique;
+}
+
+function sharpBreathingRoomCoverageProgressText(label, observed = [], required = [], missing = []) {
+  const uniqueObserved = uniqueKilnEvidenceLabels(observed, required);
+  const requiredCount = required.length;
+  const missingText = missing?.length ? ` missing ${missing.join(', ')}` : '';
+  return `${label}: ${uniqueObserved.length}/${requiredCount}${missingText}`;
+}
+
 function sharpBreathingRoomRunStage(result) {
   const stages = result?.report?.document?.stages || [];
   return stages.find(stage => stage?.id === 'run-sharp-image-to-splat')
@@ -13481,10 +13598,19 @@ function sharpBreathingRoomRunDurationMs(result) {
   return finiteKilnEvidenceNumber(
     stage?.durationMs
     ?? stage?.effectiveRoute?.durationMs
+    ?? sharpBreathingRoomSchedulerEventDurationMs(result)
     ?? result?.report?.document?.durationMs
     ?? result?.durationMs
     ?? null,
   );
+}
+
+function sharpBreathingRoomSchedulerEventDurationMs(result) {
+  const times = sharpBreathingRoomSchedulerEvents(result)
+    .map(event => finiteKilnEvidenceNumber(event?.tMs))
+    .filter(value => value !== null);
+  if (times.length < 2) return null;
+  return Math.round(Math.max(...times) - Math.min(...times));
 }
 
 function sharpBreathingRoomSchedulerEvents(result) {
@@ -13659,17 +13785,23 @@ function sharpBreathingRoomComparisonSummaryText(state = null) {
     || runs.find(run => run.profileId === 'cooperative-spn-gaussian')?.spnFusionCoverage
     || null;
   if (coverage) {
-    const observedCount = coverage.observedBlocks?.length || 0;
-    const requiredCount = coverage.requiredBlocks?.length || SHARP_SPN_LOWRES_BLOCK_LABELS.length;
-    parts.push(`SPN lowres labels: ${observedCount}/${requiredCount}${coverage.missingSpnFusionBlocks?.length ? ` missing ${coverage.missingSpnFusionBlocks.join(', ')}` : ''}`);
+    parts.push(sharpBreathingRoomCoverageProgressText(
+      'SPN lowres labels',
+      coverage.observedBlocks || [],
+      coverage.requiredBlocks || SHARP_SPN_LOWRES_BLOCK_LABELS,
+      coverage.missingSpnFusionBlocks || [],
+    ));
   }
   const monodepthCoverage = state?.monodepthPhaseCoverage
     || runs.find(run => run.profileId === 'cooperative-spn-gaussian')?.monodepthPhaseCoverage
     || null;
   if (monodepthCoverage) {
-    const observedCount = monodepthCoverage.observedLabels?.length || 0;
-    const requiredCount = monodepthCoverage.requiredLabels?.length || SHARP_MONODEPTH_PHASE_LABELS.length;
-    parts.push(`monodepth labels: ${observedCount}/${requiredCount}${monodepthCoverage.missingMonodepthPhaseLabels?.length ? ` missing ${monodepthCoverage.missingMonodepthPhaseLabels.join(', ')}` : ''}`);
+    parts.push(sharpBreathingRoomCoverageProgressText(
+      'monodepth labels',
+      monodepthCoverage.observedLabels || [],
+      monodepthCoverage.requiredLabels || SHARP_MONODEPTH_PHASE_LABELS,
+      monodepthCoverage.missingMonodepthPhaseLabels || [],
+    ));
   }
   return parts.join(' | ');
 }
@@ -16974,6 +17106,7 @@ async function runKilnRouteBenchRoute(routeId, profileId) {
     source,
     runningProfileId: profileId,
     result: null,
+    progressEvent: null,
   });
   const crucibleFiring = crucibleBenchRecordFiring({ routeId: route.id, profileId, source, profileLabel });
   await beginSharpBreathingRoomKilnFire({ profileId, source, pipelineId });
@@ -17121,6 +17254,9 @@ async function runSharpBreathingRoomComparison() {
     routeId: route.id,
     source,
     comparisonRuns: comparisonState.comparisonRuns,
+    comparisonState,
+    progressEvent: null,
+    result: null,
   });
   const steps = [
     { profileId: 'baseline-default', label: 'Default' },
@@ -17157,9 +17293,11 @@ async function runSharpBreathingRoomComparison() {
         comparisonRuns: comparisonState.comparisonRuns,
         comparisonState,
       });
+      await endSharpBreathingRoomKilnFire('comparison-failed', { forceInactive: true });
       return comparisonState;
     }
   }
+  await endSharpBreathingRoomKilnFire('comparison-complete', { forceInactive: true });
   comparisonState.status = 'complete';
   comparisonState.finishedAt = new Date().toISOString();
   comparisonState.outputEquivalence = sharpBreathingRoomOutputEquivalence(comparisonState.comparisonRuns);
@@ -17172,11 +17310,11 @@ async function runSharpBreathingRoomComparison() {
   window.__kaminosSharpBreathingRoomComparisonState = comparisonState;
   const coverage = comparisonState.lowresFusionCoverage;
   const labelSummary = coverage
-    ? ` SPN lowres labels: ${coverage.observedBlocks.length}/${coverage.requiredBlocks.length}${coverage.missingSpnFusionBlocks.length ? ` missing ${coverage.missingSpnFusionBlocks.join(', ')}` : ''}.`
+    ? ` ${sharpBreathingRoomCoverageProgressText('SPN lowres labels', coverage.observedBlocks || [], coverage.requiredBlocks || SHARP_SPN_LOWRES_BLOCK_LABELS, coverage.missingSpnFusionBlocks || [])}.`
     : ' SPN lowres labels were not found in friendly telemetry.';
   const monodepthCoverage = comparisonState.monodepthPhaseCoverage;
   const monodepthLabelSummary = monodepthCoverage
-    ? ` Monodepth labels: ${monodepthCoverage.observedLabels.length}/${monodepthCoverage.requiredLabels.length}${monodepthCoverage.missingMonodepthPhaseLabels.length ? ` missing ${monodepthCoverage.missingMonodepthPhaseLabels.join(', ')}` : ''}.`
+    ? ` ${sharpBreathingRoomCoverageProgressText('Monodepth labels', monodepthCoverage.observedLabels || [], monodepthCoverage.requiredLabels || SHARP_MONODEPTH_PHASE_LABELS, monodepthCoverage.missingMonodepthPhaseLabels || [])}.`
     : ' Monodepth labels were not found in friendly telemetry.';
   setKilnRouteBenchStatus(`Default then friendly comparison finished. Hashes, durations, scheduler configs, SPN lowres labels, and monodepth labels are captured below.${labelSummary}${monodepthLabelSummary}`, 'complete', {
     routeId: route.id,

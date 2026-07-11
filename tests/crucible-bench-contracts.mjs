@@ -15,6 +15,36 @@ assert.match(
 );
 assert.match(
   index,
+  /id="crucible-viewport-workspace"/,
+  'Generate mode must expose a main-viewport Crucible workspace, not only a sidebar card',
+);
+assert.match(
+  index,
+  /data-crucible-viewport-workspace="generate"/,
+  'Main-viewport Crucible workspace must carry a stable smoke selector',
+);
+assert.match(
+  index,
+  /function renderCrucibleViewportWorkspace\(/,
+  'Main-viewport Crucible workspace must render from the same crucible state as the sidebar controls',
+);
+assert.match(
+  index,
+  /crucibleViewportWorkspace\.hidden = tabName !== 'generate'/,
+  'Generate tab activation must reveal the Crucible workspace in the main viewport',
+);
+assert.match(
+  index,
+  /id="crucible-viewport-source"/,
+  'Main-viewport Crucible workspace must show the current source plate state',
+);
+assert.match(
+  index,
+  /id="crucible-viewport-cast"/,
+  'Main-viewport Crucible workspace must show cast state so generated outputs feel present in the bench',
+);
+assert.match(
+  index,
   /id="crucible-bench-name-input"/,
   'Crucible Bench must let the operator rename the current crucible without leaving the workspace',
 );
