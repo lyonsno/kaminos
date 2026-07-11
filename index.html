@@ -418,6 +418,17 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
 .volume-pyro-atlas-wrap { margin-top: 8px; border-top: 1px solid #282828; padding-top: 8px; }
 #volume-pyro-dynamic-atlas { width: 100%; height: 54px; border: 1px solid #333; border-radius: 6px; background: #080808; }
 .volume-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.volume-mode-cockpit { margin-top: 9px; padding-top: 8px; border-top: 1px solid #282828; display: flex; flex-direction: column; gap: 7px; }
+.volume-mode-cockpit-head { display: flex; justify-content: space-between; gap: 8px; align-items: center; min-width: 0; }
+.volume-mode-kicker { color: #71848a; font: 9px 'SF Mono', monospace; text-transform: uppercase; letter-spacing: 0.7px; }
+.volume-mode-identity { color: #555; font: 9px 'SF Mono', monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.volume-mode-buttons, .volume-mode-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; }
+.volume-mode-button, .volume-mode-tab { min-width: 0; border: 1px solid #303030; border-radius: 5px; background: #202020; color: #9a9a9a; padding: 5px 4px; cursor: pointer; text-align: left; }
+.volume-mode-button.active, .volume-mode-tab.active { border-color: #2f67c7; background: #172235; color: #fff; }
+.volume-mode-tab.active { border-color: #4c3c1b; background: #211b0e; color: #f0d28a; }
+.volume-mode-name { display: block; font-size: 10px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.volume-mode-stats { display: flex; gap: 5px; margin-top: 3px; color: #666; font: 8px 'SF Mono', monospace; white-space: nowrap; }
+.volume-mode-stat { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .ray-budget-wrap { margin: 8px 0 10px; }
 .ray-budget-grid { display: grid; grid-template-columns: 34px 1fr; grid-template-rows: 1fr 18px; gap: 4px 6px; align-items: center; }
 .ray-budget-axis-y { writing-mode: vertical-rl; transform: rotate(180deg); color: #666; font: 9px 'SF Mono', monospace; letter-spacing: 0; justify-self: center; }
@@ -1004,6 +1015,36 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
         <button class="btn" id="volume-look-library-import">Import JSON</button>
       </div>
       <textarea id="volume-look-library-json" class="gen-input" rows="4" spellcheck="false" placeholder='{"identity":"kaminos-volume-look-library-v1",...}'></textarea>
+      <div class="volume-mode-cockpit" id="volume-mode-cockpit" data-volume-mode-cockpit="volume-mode-local-cockpit-v0">
+        <div class="volume-mode-cockpit-head">
+          <span class="volume-mode-kicker">Mode cockpit</span>
+          <span class="volume-mode-identity">volume-mode-local-cockpit-v0</span>
+        </div>
+        <div class="volume-mode-buttons" id="volume-mode-active-buttons" aria-label="Rendered volume mode">
+          <button type="button" class="volume-mode-button" data-volume-active-mode="draft">
+            <span class="volume-mode-name">Draft</span>
+            <span class="volume-mode-stats"><span class="volume-mode-stat" id="volume-mode-stat-draft-mean">--</span><span class="volume-mode-stat" id="volume-mode-stat-draft-p95">--</span></span>
+          </button>
+          <button type="button" class="volume-mode-button" data-volume-active-mode="live">
+            <span class="volume-mode-name">Live</span>
+            <span class="volume-mode-stats"><span class="volume-mode-stat" id="volume-mode-stat-live-mean">--</span><span class="volume-mode-stat" id="volume-mode-stat-live-p95">--</span></span>
+          </button>
+          <button type="button" class="volume-mode-button" data-volume-active-mode="rich">
+            <span class="volume-mode-name">Rich</span>
+            <span class="volume-mode-stats"><span class="volume-mode-stat" id="volume-mode-stat-rich-mean">--</span><span class="volume-mode-stat" id="volume-mode-stat-rich-p95">--</span></span>
+          </button>
+          <button type="button" class="volume-mode-button" data-volume-active-mode="hero">
+            <span class="volume-mode-name">Hero</span>
+            <span class="volume-mode-stats"><span class="volume-mode-stat" id="volume-mode-stat-hero-mean">--</span><span class="volume-mode-stat" id="volume-mode-stat-hero-p95">--</span></span>
+          </button>
+        </div>
+        <div class="volume-mode-tabs" id="volume-mode-edit-tabs" aria-label="Edited volume mode">
+          <button type="button" class="volume-mode-tab" data-volume-edit-mode="draft"><span class="volume-mode-name">Edit Draft</span></button>
+          <button type="button" class="volume-mode-tab" data-volume-edit-mode="live"><span class="volume-mode-name">Edit Live</span></button>
+          <button type="button" class="volume-mode-tab" data-volume-edit-mode="rich"><span class="volume-mode-name">Edit Rich</span></button>
+          <button type="button" class="volume-mode-tab" data-volume-edit-mode="hero"><span class="volume-mode-name">Edit Hero</span></button>
+        </div>
+      </div>
     </div>
     <div class="slider-row">
       <span class="slider-label">Scene</span>
@@ -1135,6 +1176,15 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
         <span class="slider-val" id="volume-boundary-sidecar-source-val">live</span>
       </div>
       <div class="slider-row">
+        <span class="slider-label">Sidecar role</span>
+        <select id="volume-boundary-sidecar-role" class="select-input">
+          <option value="sampling">sampling guard</option>
+          <option value="reconstruct">miss reconstruct</option>
+          <option value="full" selected>full visual</option>
+        </select>
+        <span class="slider-val" id="volume-boundary-sidecar-role-val">full</span>
+      </div>
+      <div class="slider-row">
         <span class="slider-label">Sidecar view</span>
         <select id="volume-boundary-sidecar-view" class="select-input">
           <option value="off">off</option>
@@ -1147,6 +1197,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
         </select>
         <span class="slider-val" id="volume-boundary-sidecar-view-val">off</span>
       </div>
+      <span class="slider-help">Sidecar role separates coarse support used for sampling from baked support allowed to reconstruct visible fire.</span>
       <span class="slider-help">baked-boundary-sidecar-v1: prefilters support/coverage/ridge/footprint plus proximity and normals before the raymarch. Sidecar views expose the reconstruction channels in the primary viewer.</span>
       <div class="slider-row">
         <span class="slider-label">Bake blur</span>
@@ -11582,6 +11633,7 @@ const REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS = [
 
 const REACTION_FRONT_LIVE_VIEW_VALUES = new Set(['off', 'shell', 'thermal', 'reaction', 'front', 'edge', 'core', 'curl', 'divergence', 'boundary', 'boundary_fire']);
 const BOUNDARY_SIDECAR_SOURCE_VALUES = new Set(['live', 'baked', 'mix']);
+const BOUNDARY_SIDECAR_ROLE_VALUES = new Set(['sampling', 'reconstruct', 'full']);
 const BOUNDARY_SIDECAR_VIEW_VALUES = new Set(['off', 'support', 'coverage', 'ridge', 'proximity', 'footprint', 'normal']);
 
 function normalizeReactionFrontLiveView(value) {
@@ -11592,6 +11644,11 @@ function normalizeReactionFrontLiveView(value) {
 function normalizeBoundarySidecarSource(value) {
   const mode = String(value || 'live').toLowerCase().replace(/-/g, '_');
   return BOUNDARY_SIDECAR_SOURCE_VALUES.has(mode) ? mode : 'live';
+}
+
+function normalizeBoundarySidecarRole(value) {
+  const mode = String(value || 'full').toLowerCase().replace(/-/g, '_');
+  return BOUNDARY_SIDECAR_ROLE_VALUES.has(mode) ? mode : 'full';
 }
 
 function normalizeBoundarySidecarView(value) {
@@ -11731,6 +11788,7 @@ const VOLUME_BASIN_ROUTE_FIELDS = [
   ['pressureTierHeroMax', 'volume_pressure_tier_hero_max'],
   ['reactionLiveView', 'volume_reaction_live_view'],
   ['boundarySidecarSource', 'volume_boundary_sidecar_source'],
+  ['boundarySidecarRole', 'volume_boundary_sidecar_role'],
   ['boundarySidecarView', 'volume_boundary_sidecar_view'],
   ...REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS.map(field => [field.key, field.param]),
 ];
@@ -11788,9 +11846,7 @@ function restoreVolumeBasinSnapshot() {
     return false;
   }
   applyVolumeControlsSnapshot(snapshot.controls);
-  updateVolumeControlLabels();
-  volumePrototype?.setControls(readVolumeControls());
-  refreshVolumeReadout();
+  syncVolumeControlsAfterDomApply('restore-basin', { resetTiming: true });
   setInfo(`Restored volume basin from ${snapshot.savedAt || 'local storage'}`);
   return true;
 }
@@ -11802,6 +11858,9 @@ function syncReactionFrontExtractorLabels(controlsSnapshot) {
   const sidecarSource = normalizeBoundarySidecarSource(controlsSnapshot.boundarySidecarSource);
   const sidecarSourceLabel = document.getElementById('volume-boundary-sidecar-source-val');
   if (sidecarSourceLabel) sidecarSourceLabel.textContent = sidecarSource;
+  const sidecarRole = normalizeBoundarySidecarRole(controlsSnapshot.boundarySidecarRole ?? controlsSnapshot.boundarySidecarControls?.role);
+  const sidecarRoleLabel = document.getElementById('volume-boundary-sidecar-role-val');
+  if (sidecarRoleLabel) sidecarRoleLabel.textContent = sidecarRole;
   const sidecarView = normalizeBoundarySidecarView(controlsSnapshot.boundarySidecarView);
   const sidecarViewLabel = document.getElementById('volume-boundary-sidecar-view-val');
   if (sidecarViewLabel) sidecarViewLabel.textContent = sidecarView;
@@ -11839,9 +11898,7 @@ function restoreVolumeBasinSlot(slot = selectedVolumeBasinSlot()) {
     return false;
   }
   applyVolumeControlsSnapshot(snapshot.controls);
-  updateVolumeControlLabels();
-  volumePrototype?.setControls(readVolumeControls());
-  refreshVolumeReadout();
+  syncVolumeControlsAfterDomApply('restore-basin-slot', { resetTiming: true });
   setInfo(`Loaded volume basin slot ${slot.toUpperCase()}`);
   return true;
 }
@@ -11997,9 +12054,7 @@ function loadVolumeLookLibraryEntry() {
     return false;
   }
   applyVolumeControlsSnapshot(entry.controls || {});
-  updateVolumeControlLabels();
-  volumePrototype?.setControls(readVolumeControls());
-  refreshVolumeReadout();
+  syncVolumeControlsAfterDomApply(`look-library-load-${kind}-${entry.name}`, { resetTiming: true });
   document.getElementById('volume-look-library-name').value = entry.name;
   saveVolumeBasinSnapshot(`look-library-load-${kind}-${entry.name}`);
   setInfo(`Loaded ${kind} look: ${entry.name}`);
@@ -12092,7 +12147,7 @@ function syncRayBudgetGamutFromControls() {
   const readout = document.getElementById('volume-ray-budget-readout');
   if (!handle || !readout) return;
   const p = rayBudgetGamutPointFromControls();
-  const c = readVolumeControls();
+  const c = readVolumeControlsFromDom();
   handle.style.left = `${p.x * 100}%`;
   handle.style.top = `${p.y * 100}%`;
   readout.textContent = `${c.raySteps | 0} steps / ${c.adaptiveRays.toFixed(2)} adaptive`;
@@ -15989,11 +16044,37 @@ function backOffVolumeLegacyPyroControls(controls) {
   };
 }
 
-function readVolumeControls() {
+const VOLUME_MODE_COCKPIT_IDENTITY = 'volume-mode-local-cockpit-v0';
+const VOLUME_RENDER_MODES = ['draft', 'live', 'rich', 'hero'];
+let volumeActiveMode = 'live';
+let volumeEditingMode = 'live';
+const volumeModeSnapshots = Object.fromEntries(VOLUME_RENDER_MODES.map(mode => [mode, null]));
+const volumeModeFrameTimings = Object.fromEntries(VOLUME_RENDER_MODES.map(mode => [mode, []]));
+let volumeModeCockpitInitialized = false;
+
+function normalizeVolumeRenderMode(mode) {
+  const normalized = String(mode || 'live').toLowerCase();
+  return VOLUME_RENDER_MODES.includes(normalized) ? normalized : 'live';
+}
+
+function cloneVolumeControlsSnapshot(snapshot) {
+  return snapshot && typeof snapshot === 'object' ? JSON.parse(JSON.stringify(snapshot)) : {};
+}
+
+function decorateVolumeModeSnapshot(snapshot, mode) {
+  return {
+    ...cloneVolumeControlsSnapshot(snapshot),
+    volumeModeCockpitIdentity: VOLUME_MODE_COCKPIT_IDENTITY,
+    volumeMode: normalizeVolumeRenderMode(mode),
+  };
+}
+
+function readVolumeControlsFromDom() {
   const volumeScene = document.getElementById('volume-scene').value;
   const pressureConfig = volumePressureConfigForMode(document.getElementById('volume-pressure-mode').value, volumeScene);
   const reactionLiveView = normalizeReactionFrontLiveView(document.getElementById('volume-reaction-live-view')?.value);
   const boundarySidecarSource = normalizeBoundarySidecarSource(document.getElementById('volume-boundary-sidecar-source')?.value);
+  const boundarySidecarRole = normalizeBoundarySidecarRole(document.getElementById('volume-boundary-sidecar-role')?.value);
   const boundarySidecarView = normalizeBoundarySidecarView(document.getElementById('volume-boundary-sidecar-view')?.value);
   const reactionBoundaryControls = {
     identity: 'reaction-boundary-live-controls-v0',
@@ -16059,11 +16140,13 @@ function readVolumeControls() {
     reactionLiveView,
     reactionLiveViewIdentity: 'reaction-live-view-shader-inspect-v0',
     boundarySidecarSource,
+    boundarySidecarRole,
     boundarySidecarView,
     boundarySidecarControls: {
       identity: 'baked-boundary-sidecar-v1',
       authority: 'band-limited-support-coverage-ridge-camera-footprint-proximity-normal-v3',
       source: boundarySidecarSource,
+      role: boundarySidecarRole,
       view: boundarySidecarView,
       blur: parseFloat(document.getElementById('volume-boundary-sidecar-blur').value),
       stepWidth: parseFloat(document.getElementById('volume-boundary-sidecar-width').value),
@@ -16127,6 +16210,7 @@ function readVolumeControls() {
     reactionBoundaryFireYellow: reactionBoundaryFireControls.sootYellowing,
     reactionBoundaryFireWarmth: reactionBoundaryFireControls.thermalWarmth,
     reactionBoundaryFireLuma: reactionBoundaryFireControls.fireLuma,
+    boundarySidecarRole,
     boundarySidecarBlur: parseFloat(document.getElementById('volume-boundary-sidecar-blur').value),
     boundarySidecarWidth: parseFloat(document.getElementById('volume-boundary-sidecar-width').value),
     boundarySidecarRidge: parseFloat(document.getElementById('volume-boundary-sidecar-ridge').value),
@@ -16284,8 +16368,124 @@ function readVolumeControls() {
   }));
 }
 
+function syncVolumeEditingSnapshotFromDom(reason = 'edit', options = {}) {
+  const mode = normalizeVolumeRenderMode(volumeEditingMode);
+  const snapshot = decorateVolumeModeSnapshot(readVolumeControlsFromDom(), mode);
+  snapshot.volumeModeEditReason = reason;
+  volumeModeSnapshots[mode] = cloneVolumeControlsSnapshot(snapshot);
+  if (options.resetTiming) volumeModeFrameTimings[mode] = [];
+  updateVolumeModeCockpitUi();
+  return snapshot;
+}
+
+function readVolumeControlsForActiveMode() {
+  const mode = normalizeVolumeRenderMode(volumeActiveMode);
+  if (!volumeModeSnapshots[mode]) {
+    volumeModeSnapshots[mode] = decorateVolumeModeSnapshot(readVolumeControlsFromDom(), mode);
+  }
+  return cloneVolumeControlsSnapshot(volumeModeSnapshots[mode]);
+}
+
+function readVolumeControls() {
+  if (!volumeModeCockpitInitialized) return readVolumeControlsFromDom();
+  syncVolumeEditingSnapshotFromDom('read');
+  return readVolumeControlsForActiveMode();
+}
+
+function volumeModeTimingStats(mode) {
+  const samples = volumeModeFrameTimings[normalizeVolumeRenderMode(mode)] || [];
+  if (!samples.length) return { mean: null, p95: null };
+  const sorted = [...samples].sort((a, b) => a - b);
+  const mean = samples.reduce((sum, value) => sum + value, 0) / samples.length;
+  const p95 = sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.95))];
+  return { mean, p95 };
+}
+
+function updateVolumeModeCockpitUi() {
+  const root = document.getElementById('volume-mode-cockpit');
+  if (!root) return;
+  root.dataset.volumeActiveMode = normalizeVolumeRenderMode(volumeActiveMode);
+  root.dataset.volumeEditingMode = normalizeVolumeRenderMode(volumeEditingMode);
+  for (const mode of VOLUME_RENDER_MODES) {
+    const activeButton = document.querySelector(`[data-volume-active-mode="${mode}"]`);
+    const editButton = document.querySelector(`[data-volume-edit-mode="${mode}"]`);
+    activeButton?.classList.toggle('active', normalizeVolumeRenderMode(volumeActiveMode) === mode);
+    activeButton?.setAttribute('aria-pressed', normalizeVolumeRenderMode(volumeActiveMode) === mode ? 'true' : 'false');
+    editButton?.classList.toggle('active', normalizeVolumeRenderMode(volumeEditingMode) === mode);
+    editButton?.setAttribute('aria-pressed', normalizeVolumeRenderMode(volumeEditingMode) === mode ? 'true' : 'false');
+    const stats = volumeModeTimingStats(mode);
+    const meanEl = document.getElementById(`volume-mode-stat-${mode}-mean`);
+    const p95El = document.getElementById(`volume-mode-stat-${mode}-p95`);
+    if (meanEl) meanEl.textContent = Number.isFinite(stats.mean) ? `${stats.mean.toFixed(1)}ms` : '--';
+    if (p95El) p95El.textContent = Number.isFinite(stats.p95) ? `p95 ${stats.p95.toFixed(1)}ms` : '--';
+  }
+}
+
+function applyVolumeModeSnapshotToDom(mode) {
+  const normalized = normalizeVolumeRenderMode(mode);
+  if (!volumeModeSnapshots[normalized]) {
+    volumeModeSnapshots[normalized] = decorateVolumeModeSnapshot(readVolumeControlsFromDom(), normalized);
+  }
+  applyVolumeControlsSnapshot(volumeModeSnapshots[normalized]);
+  updateVolumeControlLabels();
+  syncRayBudgetGamutFromControls();
+  return cloneVolumeControlsSnapshot(volumeModeSnapshots[normalized]);
+}
+
+function setVolumeActiveMode(mode) {
+  if (volumeModeCockpitInitialized) syncVolumeEditingSnapshotFromDom('active-switch', { resetTiming: true });
+  volumeActiveMode = normalizeVolumeRenderMode(mode);
+  volumePrototype?.setControls(readVolumeControlsForActiveMode());
+  refreshVolumeReadout();
+  updateVolumeModeCockpitUi();
+  saveVolumeBasinSnapshot(`mode-active-${volumeActiveMode}`);
+}
+
+function setVolumeEditingMode(mode) {
+  if (volumeModeCockpitInitialized) syncVolumeEditingSnapshotFromDom('edit-switch');
+  volumeEditingMode = normalizeVolumeRenderMode(mode);
+  applyVolumeModeSnapshotToDom(volumeEditingMode);
+  updateVolumeModeCockpitUi();
+}
+
+function initializeVolumeModeCockpit() {
+  const root = document.getElementById('volume-mode-cockpit');
+  if (!root || volumeModeCockpitInitialized) return false;
+  const current = decorateVolumeModeSnapshot(readVolumeControlsFromDom(), 'live');
+  for (const mode of VOLUME_RENDER_MODES) {
+    volumeModeSnapshots[mode] = decorateVolumeModeSnapshot(current, mode);
+  }
+  volumeActiveMode = 'live';
+  volumeEditingMode = 'live';
+  volumeModeCockpitInitialized = true;
+  document.querySelectorAll('[data-volume-active-mode]').forEach(button => {
+    button.addEventListener('click', () => setVolumeActiveMode(button.dataset.volumeActiveMode));
+  });
+  document.querySelectorAll('[data-volume-edit-mode]').forEach(button => {
+    button.addEventListener('click', () => setVolumeEditingMode(button.dataset.volumeEditMode));
+  });
+  updateVolumeModeCockpitUi();
+  return true;
+}
+
+function recordVolumeModeFrameTiming(frameMs) {
+  if (!volumeModeCockpitInitialized || !Number.isFinite(frameMs)) return;
+  const samples = volumeModeFrameTimings[normalizeVolumeRenderMode(volumeActiveMode)];
+  samples.push(frameMs);
+  if (samples.length > 120) samples.splice(0, samples.length - 120);
+  updateVolumeModeCockpitUi();
+}
+
+function syncVolumeControlsAfterDomApply(reason, options = {}) {
+  updateVolumeControlLabels();
+  if (volumeModeCockpitInitialized) syncVolumeEditingSnapshotFromDom(reason, options);
+  const activeControls = volumeModeCockpitInitialized ? readVolumeControlsForActiveMode() : readVolumeControlsFromDom();
+  volumePrototype?.setControls(activeControls);
+  refreshVolumeReadout();
+}
+
 function updateVolumeControlLabels() {
-  const c = readVolumeControls();
+  const c = readVolumeControlsFromDom();
   document.getElementById('volume-scene-val').textContent = (VOLUME_SCENE_PRESETS[c.volumeScene] || VOLUME_SCENE_PRESETS.compact_plume).label;
   document.getElementById('volume-density-val').textContent = c.density.toFixed(2);
   document.getElementById('volume-fire-val').textContent = c.fire.toFixed(2);
@@ -16503,6 +16703,12 @@ function refreshVolumeReadout() {
   if (!volumePrototype) return;
   const s = volumePrototype.debugState();
   const timing = s.timing || {};
+  const cockpitFrameMs = Number.isFinite(timing.queueDoneMs) && timing.queueDoneMs > 0
+    ? timing.queueDoneMs
+    : (Number.isFinite(timing.frameDeltaMs) && timing.frameDeltaMs > 0
+      ? timing.frameDeltaMs
+      : timing.cpuFrameMs);
+  recordVolumeModeFrameTiming(cockpitFrameMs);
   const canonicalPlumeReadoutActive = s.volumeScene === 'canonical_plume';
   const sceneContentLabel = (() => {
     const fireActive = (s.controls?.fire ?? 0) > 0.001 || (s.controls?.radiance ?? 0) > 0.001 || (s.controls?.glow ?? 0) > 0.001;
@@ -17197,6 +17403,9 @@ async function initKaminosVolumeRoute() {
   if (params.has('volume_boundary_sidecar_source')) {
     document.getElementById('volume-boundary-sidecar-source').value = normalizeBoundarySidecarSource(params.get('volume_boundary_sidecar_source'));
   }
+  if (params.has('volume_boundary_sidecar_role')) {
+    document.getElementById('volume-boundary-sidecar-role').value = normalizeBoundarySidecarRole(params.get('volume_boundary_sidecar_role'));
+  }
   if (params.has('volume_boundary_sidecar_view')) {
     document.getElementById('volume-boundary-sidecar-view').value = normalizeBoundarySidecarView(params.get('volume_boundary_sidecar_view'));
   }
@@ -17210,6 +17419,7 @@ async function initKaminosVolumeRoute() {
     document.getElementById('volume-pyro-compare').value = routePyroCompare;
   }
   const routeExternalEmitters = params.get('volume_external_emitters') || '';
+  initializeVolumeModeCockpit();
   updateVolumeControlLabels();
   volumePrototype = createKaminosVolumePrototype({
     THREE,
@@ -17251,9 +17461,7 @@ async function initKaminosVolumeRoute() {
       activeVolumeRayBudgetPreset = '';
       routedVolumeRayBudgetPreset = '';
     }
-    updateVolumeControlLabels();
-    volumePrototype.setControls(readVolumeControls());
-    refreshVolumeReadout();
+    syncVolumeControlsAfterDomApply(event?.target?.id || 'control-change', { resetTiming: true });
     saveVolumeBasinSnapshot(event?.target?.id || 'control-change');
   };
   moveVolumePyroFreezeIntoCarrierWorkbench();
@@ -17268,6 +17476,8 @@ async function initKaminosVolumeRoute() {
   document.getElementById('volume-reaction-live-view')?.addEventListener('change', syncControls);
   document.getElementById('volume-boundary-sidecar-source')?.addEventListener('input', syncControls);
   document.getElementById('volume-boundary-sidecar-source')?.addEventListener('change', syncControls);
+  document.getElementById('volume-boundary-sidecar-role')?.addEventListener('input', syncControls);
+  document.getElementById('volume-boundary-sidecar-role')?.addEventListener('change', syncControls);
   document.getElementById('volume-boundary-sidecar-view')?.addEventListener('input', syncControls);
   document.getElementById('volume-boundary-sidecar-view')?.addEventListener('change', syncControls);
   for (const field of REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS) {
@@ -17275,9 +17485,7 @@ async function initKaminosVolumeRoute() {
     document.getElementById(field.id)?.addEventListener('change', syncControls);
   }
   const applyBudgetControls = () => {
-    updateVolumeControlLabels();
-    volumePrototype.setControls(readVolumeControls());
-    refreshVolumeReadout();
+    syncVolumeControlsAfterDomApply('budget-controls', { resetTiming: true });
     saveVolumeBasinSnapshot('budget-controls');
   };
   const gamut = document.getElementById('volume-ray-budget-gamut');
@@ -17294,7 +17502,7 @@ async function initKaminosVolumeRoute() {
     if (event.buttons) updateGamutFromPointer(event);
   });
   gamut.addEventListener('keydown', event => {
-    const c = readVolumeControls();
+    const c = readVolumeControlsFromDom();
     let handled = true;
     if (event.key === 'ArrowLeft') setVolumeControlValue('volume-steps', snapVolumeRaySteps(c.raySteps - 4));
     else if (event.key === 'ArrowRight') setVolumeControlValue('volume-steps', snapVolumeRaySteps(c.raySteps + 4));
@@ -17330,16 +17538,12 @@ async function initKaminosVolumeRoute() {
   document.getElementById('volume-look-library-import')?.addEventListener('click', () => importVolumeLookLibraryJson());
   document.getElementById('volume-basin-warm-cap')?.addEventListener('click', () => {
     applyTallPlumeOperatorPreset('pyro_contrast_warm_cap_small_flame_0702');
-    updateVolumeControlLabels();
-    volumePrototype.setControls(readVolumeControls());
-    refreshVolumeReadout();
+    syncVolumeControlsAfterDomApply('warm-cap-preset', { resetTiming: true });
     saveVolumeBasinSnapshot('warm-cap-preset');
   });
   document.getElementById('volume-basin-bonfire-family')?.addEventListener('click', () => {
     applyTallPlumeOperatorPreset('pyro_material_bonfire_family_0702');
-    updateVolumeControlLabels();
-    volumePrototype.setControls(readVolumeControls());
-    refreshVolumeReadout();
+    syncVolumeControlsAfterDomApply('bonfire-family-preset', { resetTiming: true });
     saveVolumeBasinSnapshot('bonfire-family-preset');
   });
   saveVolumeBasinSnapshot('route-init');

@@ -113,6 +113,19 @@ function boundarySidecarSourceValue(value) {
   return 0;
 }
 
+function normalizeBoundarySidecarRole(value) {
+  const normalized = String(value || 'full').toLowerCase().replace(/-/g, '_');
+  if (normalized === 'sampling' || normalized === 'reconstruct') return normalized;
+  return 'full';
+}
+
+function boundarySidecarRoleValue(value) {
+  const normalized = normalizeBoundarySidecarRole(value);
+  if (normalized === 'sampling') return 0;
+  if (normalized === 'reconstruct') return 1;
+  return 2;
+}
+
 function normalizeBoundarySidecarView(value) {
   const normalized = String(value || 'off').toLowerCase().replace(/-/g, '_');
   if (normalized === 'support' || normalized === 'coverage' || normalized === 'ridge' || normalized === 'proximity' || normalized === 'footprint' || normalized === 'normal') return normalized;
@@ -835,6 +848,7 @@ struct Uniforms {
   boundary_sidecar_controls: vec4<f32>,
   boundary_sidecar_display: vec4<f32>,
   oracle_activity_controls: vec4<f32>,
+  boundary_sidecar_role: vec4<f32>,
   oracle_activity_controls2: vec4<f32>,
   previousViewProj: mat4x4<f32>,
 };
@@ -4161,6 +4175,9 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
       let boundaryDz = vec3<f32>(0.0, 0.0, boundaryCellStep);
       let boundarySidecarSource = clamp(u.boundary_sidecar_controls.x, 0.0, 2.0);
       let boundarySidecarView = clamp(u.boundary_sidecar_display.x, 0.0, 6.0);
+      let boundarySidecarRole = clamp(u.boundary_sidecar_role.x, 0.0, 2.0);
+      let boundarySidecarVisualAuthority = step(1.5, boundarySidecarRole);
+      let boundarySidecarReconstructionAuthority = step(0.5, boundarySidecarRole);
       var boundarySidecarDebugSample = vec4<f32>(0.0);
       var boundarySidecarDebugMetaSample = vec4<f32>(0.0);
       if (boundarySidecarView > 0.5) {
@@ -4198,21 +4215,23 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
         let boundarySidecarInterval = boundarySidecarIntervalCoverage(boundarySidecarSample, boundarySidecarMetaSample, localDt, dtBase, boundarySidecarNormalViewGain, adaptiveRays);
         boundarySidecarIntervalOpticalDepth = boundarySidecarInterval.y;
         let boundarySidecarIntervalSupport = boundarySidecarInterval.x;
-        boundarySupportEffective = max(max(boundarySidecarSample.x, boundarySidecarProximity * 0.36), boundarySidecarIntervalSupport * 0.24);
+        boundarySupportEffective = max(max(boundarySidecarSample.x, boundarySidecarProximity * 0.36), boundarySidecarIntervalSupport * 0.24) * boundarySidecarVisualAuthority;
         boundaryGradientEffective = max(max(max(boundarySidecarCoverage, boundarySidecarSample.z * 0.55), boundarySidecarSegmentReconstruction * 0.52), boundarySidecarIntervalSupport * 0.72)
           * (1.0 + boundarySidecarFootprintWidth * (0.18 + boundarySidecarSegmentReconstruction * 0.18))
-          * boundarySidecarNormalViewGain;
-        boundaryFireRidgeEffective = boundarySidecarSample.z;
+          * boundarySidecarNormalViewGain
+          * boundarySidecarVisualAuthority;
+        boundaryFireRidgeEffective = boundarySidecarSample.z * boundarySidecarVisualAuthority;
         boundarySidecarStepFootprintWidth = boundarySidecarNormalViewGain
           * clamp(u.boundary_sidecar_controls.z, 0.0, 2.0)
-          * max(dtBase * f32(GRID) * (0.046 + boundarySidecarSegmentReconstruction * 0.020), boundarySidecarFootprintWidth * (0.036 + boundarySidecarSegmentReconstruction * 0.014));
+          * max(dtBase * f32(GRID) * (0.046 + boundarySidecarSegmentReconstruction * 0.020), boundarySidecarFootprintWidth * (0.036 + boundarySidecarSegmentReconstruction * 0.014))
+          * boundarySidecarVisualAuthority;
         boundarySidecarIntervalCandidate = clamp(
           pow(clamp(boundarySidecarIntervalSupport * boundaryContrast, 0.0, 1.8), max(0.58, boundaryGamma * 0.82))
             * boundaryOpacity
             * (0.38 + 0.62 * smoothstep(0.02, 0.76, boundarySidecarIntervalOpticalDepth)),
           0.0,
           1.45
-        );
+        ) * boundarySidecarReconstructionAuthority;
       } else {
         let boundarySupport = liveBoundarySupportAt(p, boundarySupportWeights);
         let boundarySupportPx = liveBoundarySupportAt(p + boundaryDx, boundarySupportWeights);
@@ -4256,25 +4275,28 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
           let boundarySidecarInterval = boundarySidecarIntervalCoverage(boundarySidecarSample, boundarySidecarMetaSample, localDt, dtBase, boundarySidecarNormalViewGain, adaptiveRays);
           boundarySidecarIntervalOpticalDepth = boundarySidecarInterval.y;
           let boundarySidecarIntervalSupport = boundarySidecarInterval.x;
-          boundarySupportEffective = mix(boundarySupport, boundarySidecarSample.x, 0.5);
-          boundarySupportEffective = max(boundarySupportEffective, boundarySidecarIntervalSupport * 0.18);
+          let boundarySidecarVisualMix = 0.5 * boundarySidecarVisualAuthority;
+          let boundarySidecarVisualSupport = mix(boundarySupport, boundarySidecarSample.x, 0.5);
+          boundarySupportEffective = mix(boundarySupport, boundarySidecarVisualSupport, boundarySidecarVisualAuthority);
+          boundarySupportEffective = max(boundarySupportEffective, boundarySidecarIntervalSupport * 0.18 * boundarySidecarReconstructionAuthority);
           boundaryGradientEffective = mix(
             boundaryGradient,
             max(max(max(boundarySidecarCoverage, boundarySidecarProximity * 0.50), boundarySidecarSegmentReconstruction * 0.44), boundarySidecarIntervalSupport * 0.56) * boundarySidecarNormalViewGain,
-            0.5
+            boundarySidecarVisualMix
           );
-          boundaryFireRidgeEffective = mix(boundaryFireRidge, boundarySidecarSample.z, 0.5);
+          boundaryFireRidgeEffective = mix(boundaryFireRidge, boundarySidecarSample.z, boundarySidecarVisualMix);
           boundarySidecarStepFootprintWidth = 0.5
             * boundarySidecarNormalViewGain
             * clamp(u.boundary_sidecar_controls.z, 0.0, 2.0)
-            * max(dtBase * f32(GRID) * (0.046 + boundarySidecarSegmentReconstruction * 0.020), boundarySidecarFootprintWidth * (0.036 + boundarySidecarSegmentReconstruction * 0.014));
+            * max(dtBase * f32(GRID) * (0.046 + boundarySidecarSegmentReconstruction * 0.020), boundarySidecarFootprintWidth * (0.036 + boundarySidecarSegmentReconstruction * 0.014))
+            * boundarySidecarVisualAuthority;
           boundarySidecarIntervalCandidate = clamp(
             pow(clamp(boundarySidecarIntervalSupport * boundaryContrast, 0.0, 1.8), max(0.58, boundaryGamma * 0.82))
               * boundaryOpacity
               * (0.32 + 0.54 * smoothstep(0.02, 0.76, boundarySidecarIntervalOpticalDepth)),
             0.0,
             1.25
-          );
+          ) * boundarySidecarReconstructionAuthority;
         }
       }
       let boundaryGradientGate = smoothstep(boundaryCut, boundaryCut + boundarySoftness + boundarySidecarStepFootprintWidth, boundaryGradientEffective * boundaryGradientGain);
@@ -4906,7 +4928,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   const invViewProj = new THREE.Matrix4();
   const viewProj = new THREE.Matrix4();
   const previousViewProj = new THREE.Matrix4();
-  const uniforms = new Float32Array(340);
+  const uniforms = new Float32Array(348);
   let controlsSnapshot = applyRuntimeQualityControls(getControls());
   let gridSize = normalizeGridSize(controlsSnapshot.resolution);
   let majorantGridSize = normalizeMajorantGridSize(controlsSnapshot.majorantGrid);
@@ -5026,6 +5048,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     boundarySidecarMetaBytes: boundarySidecarMetaBufferBytes(gridSize),
     temporalSidecarIdentity: TEMPORAL_SIDECAR_IDENTITY,
     boundarySidecarSource: normalizeBoundarySidecarSource(controlsSnapshot.boundarySidecarSource),
+    boundarySidecarRole: normalizeBoundarySidecarRole(controlsSnapshot.boundarySidecarRole ?? controlsSnapshot.boundarySidecarControls?.role),
     boundarySidecarBuilt: false,
     boundarySidecarBuiltThisFrame: false,
     boundarySidecarFrameCount: 0,
@@ -5521,13 +5544,22 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     };
   }
 
-  function boundarySidecarDebug(boundarySidecarSourceName = normalizeBoundarySidecarSource(controlsSnapshot.boundarySidecarSource)) {
+  function boundarySidecarDebug(
+    boundarySidecarSourceName = normalizeBoundarySidecarSource(controlsSnapshot.boundarySidecarSource),
+    boundarySidecarRoleName = normalizeBoundarySidecarRole(controlsSnapshot.boundarySidecarRole ?? controlsSnapshot.boundarySidecarControls?.role),
+  ) {
     const controls = controlsSnapshot.boundarySidecarControls || {};
     const view = normalizeBoundarySidecarView(controls.view ?? controlsSnapshot.boundarySidecarView);
+    const role = normalizeBoundarySidecarRole(boundarySidecarRoleName);
+    const boundarySidecarVisualAuthority = role === 'full';
+    const boundarySidecarReconstructionAuthority = role === 'reconstruct' || role === 'full';
     return {
       identity: BOUNDARY_SIDECAR_IDENTITY,
       authority: BOUNDARY_SIDECAR_BAKE_AUTHORITY,
       source: boundarySidecarSourceName,
+      role,
+      visualAuthority: boundarySidecarVisualAuthority,
+      reconstructionAuthority: boundarySidecarReconstructionAuthority,
       view,
       channels: ['support', 'coverage', 'ridge', 'footprint', 'proximity', 'normal'],
       boundaryStructureSource: boundarySidecarSourceName,
@@ -6248,13 +6280,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.boundarySidecarMetaBytes = nextBoundarySidecarMetaBufferBytes;
     state.temporalSidecarIdentity = TEMPORAL_SIDECAR_IDENTITY;
     state.boundarySidecarSource = normalizeBoundarySidecarSource(controlsSnapshot.boundarySidecarSource);
+    state.boundarySidecarRole = normalizeBoundarySidecarRole(controlsSnapshot.boundarySidecarRole ?? controlsSnapshot.boundarySidecarControls?.role);
     state.boundarySidecarBuilt = false;
     state.boundarySidecarBuiltThisFrame = false;
     state.boundarySidecarFrameCount = 0;
     state.boundarySidecarLastBuiltFrame = -1;
     state.boundaryStructureSource = state.boundarySidecarSource;
     state.boundarySidecarView = normalizeBoundarySidecarView(controlsSnapshot.boundarySidecarView ?? controlsSnapshot.boundarySidecarControls?.view);
-    state.boundarySidecarDebug = boundarySidecarDebug(state.boundarySidecarSource);
+    state.boundarySidecarDebug = boundarySidecarDebug(state.boundarySidecarSource, state.boundarySidecarRole);
     state.boundaryFireSamplingDebug = boundaryFireSamplingDebug();
     state.pressureProjectionEnabled = false;
     state.pressureProjectionIterations = 0;
@@ -6819,6 +6852,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const boundarySidecarSourceName = normalizeBoundarySidecarSource(controlsSnapshot.boundarySidecarSource);
     const boundarySidecarViewName = normalizeBoundarySidecarView(controlsSnapshot.boundarySidecarView ?? controlsSnapshot.boundarySidecarControls?.view);
     const boundarySidecarControls = controlsSnapshot.boundarySidecarControls || {};
+    const boundarySidecarRoleName = normalizeBoundarySidecarRole(controlsSnapshot.boundarySidecarRole ?? boundarySidecarControls.role);
     const boundaryFireInspectActive = shellInspectModeName === 'boundary_fire';
     const boundaryInspectActive = shellInspectModeName === 'boundary' || boundaryFireInspectActive;
     const boundaryControls = controlsSnapshot.reactionBoundaryControls || {};
@@ -6898,11 +6932,15 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     uniforms[317] = scalarActivityReceiver.curlNoiseGain;
     uniforms[318] = scalarActivityReceiver.vorticityGain;
     uniforms[319] = scalarActivityReceiver.materialGain;
-    uniforms[320] = scalarActivityReceiver.display;
-    uniforms[321] = externalCueActive ? 1 : 0;
-    uniforms[322] = oracleActivityCueUpload.grid || 0;
-    uniforms[323] = oracleActivityCueUpload.externalCueCellCount || 0;
-    uniforms.set(previousViewProj.elements, 324);
+    uniforms[320] = boundarySidecarRoleValue(boundarySidecarRoleName);
+    uniforms[321] = 0;
+    uniforms[322] = 0;
+    uniforms[323] = 0;
+    uniforms[324] = scalarActivityReceiver.display;
+    uniforms[325] = externalCueActive ? 1 : 0;
+    uniforms[326] = oracleActivityCueUpload.grid || 0;
+    uniforms[327] = oracleActivityCueUpload.externalCueCellCount || 0;
+    uniforms.set(previousViewProj.elements, 328);
     device.queue.writeBuffer(uniformBuffer, 0, uniforms);
     state.gridOverlay = controlsSnapshot.gridOverlay || 0;
     state.lookFreeze = lookFreeze;
@@ -6937,9 +6975,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       active: boundaryFireInspectActive,
     };
     state.boundarySidecarSource = boundarySidecarSourceName;
+    state.boundarySidecarRole = boundarySidecarRoleName;
     state.boundaryStructureSource = boundarySidecarSourceName;
     state.boundarySidecarView = boundarySidecarViewName;
-    state.boundarySidecarDebug = boundarySidecarDebug(boundarySidecarSourceName);
+    state.boundarySidecarDebug = boundarySidecarDebug(boundarySidecarSourceName, boundarySidecarRoleName);
     state.boundaryFireSamplingDebug = boundaryFireSamplingDebug();
     state.volumeScene = normalizeVolumeScene(controlsSnapshot.volumeScene);
     state.bonfireReferenceConfinement = bonfireReferenceConfinementDebug(controlsSnapshot.volumeScene);
@@ -7356,6 +7395,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       boundarySidecarIdentity: BOUNDARY_SIDECAR_IDENTITY,
       boundarySidecarAuthority: BOUNDARY_SIDECAR_BAKE_AUTHORITY,
       boundarySidecarSource: state.boundarySidecarSource,
+      boundarySidecarRole: state.boundarySidecarRole,
       boundarySidecarBuiltThisFrame,
       boundarySidecarCellVisitsThisFrame: boundarySidecarBuiltThisFrame ? fullGridCells : 0,
       boundarySidecarLastBuiltFrame: state.boundarySidecarLastBuiltFrame,
@@ -7544,8 +7584,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
 
   function encodeBoundarySidecar(encoder) {
     const sourceName = normalizeBoundarySidecarSource(controlsSnapshot.boundarySidecarSource);
+    const sidecarRoleName = normalizeBoundarySidecarRole(controlsSnapshot.boundarySidecarRole ?? controlsSnapshot.boundarySidecarControls?.role);
     const sidecarViewName = normalizeBoundarySidecarView(controlsSnapshot.boundarySidecarView ?? controlsSnapshot.boundarySidecarControls?.view);
     state.boundarySidecarSource = sourceName;
+    state.boundarySidecarRole = sidecarRoleName;
     state.boundarySidecarView = sidecarViewName;
     state.boundaryStructureSource = sourceName;
     const shouldBakeBoundarySidecar = sourceName !== 'live' || sidecarViewName !== 'off';
@@ -7556,7 +7598,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       boundarySidecarReadBindGroups.length !== 2
     ) {
       state.boundarySidecarBuiltThisFrame = false;
-      state.boundarySidecarDebug = boundarySidecarDebug(sourceName);
+      state.boundarySidecarDebug = boundarySidecarDebug(sourceName, sidecarRoleName);
       updateSimCostLedger({ boundarySidecarBuiltThisFrame: false });
       return;
     }
@@ -7571,7 +7613,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.boundarySidecarBuiltThisFrame = true;
     state.boundarySidecarFrameCount += 1;
     state.boundarySidecarLastBuiltFrame = state.frameCount;
-    state.boundarySidecarDebug = boundarySidecarDebug(sourceName);
+    state.boundarySidecarDebug = boundarySidecarDebug(sourceName, sidecarRoleName);
     updateSimCostLedger({ boundarySidecarBuiltThisFrame: true });
   }
 
@@ -9371,6 +9413,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       state.renderPixelRatio = state.renderWidth / Math.max(1, state.displayWidth || state.renderWidth || 1);
       state.majorantGrid = majorantGridSize;
       state.majorantCadence = normalizeMajorantBuildCadence(controlsSnapshot.majorantCadence);
+      state.boundarySidecarSource = normalizeBoundarySidecarSource(controlsSnapshot.boundarySidecarSource);
+      state.boundarySidecarRole = normalizeBoundarySidecarRole(controlsSnapshot.boundarySidecarRole ?? controlsSnapshot.boundarySidecarControls?.role);
+      state.boundarySidecarView = normalizeBoundarySidecarView(controlsSnapshot.boundarySidecarView ?? controlsSnapshot.boundarySidecarControls?.view);
+      state.boundaryStructureSource = state.boundarySidecarSource;
+      state.boundarySidecarDebug = boundarySidecarDebug(state.boundarySidecarSource, state.boundarySidecarRole);
       state.pressureIterationDefault = defaultPressureIterationsForScene(controlsSnapshot.volumeScene);
       state.pressureIterationRequested = normalizePressureIterationCount(controlsSnapshot.pressureIterations, controlsSnapshot.volumeScene);
       state.pressureStrategy = normalizePressureStrategy(controlsSnapshot.pressureStrategy, controlsSnapshot.volumeScene);
@@ -9473,6 +9520,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         ...state,
         controls: { ...controlsSnapshot },
         scalarActivityReceiver: scalarActivityReceiverDebug(),
+        boundarySidecarDebug: boundarySidecarDebug(state.boundarySidecarSource, state.boundarySidecarRole),
         pyroDynamicDetail: clonePyroDynamicDetail(),
         pyroMaterialRendererCoupling: state.pyroMaterialRendererCoupling ? { ...state.pyroMaterialRendererCoupling } : null,
       };

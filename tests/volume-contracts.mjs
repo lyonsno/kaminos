@@ -53,6 +53,29 @@ assert.match(index, /id="volume-boundary-sidecar-source"/, 'Boundary Fire tuning
 assert.match(index, /volume_boundary_sidecar_source/, 'Basin URLs preserve the boundary sidecar source control');
 assert.match(index, /id="volume-boundary-sidecar-view"/, 'Boundary Fire tuning exposes a primary-view sidecar channel selector');
 assert.match(index, /volume_boundary_sidecar_view/, 'Basin URLs preserve the sidecar channel debug selector');
+assert.match(index, /id="volume-mode-cockpit"/, 'Volume cockpit exposes a mode-local tuning control surface');
+assert.match(index, /VOLUME_MODE_COCKPIT_IDENTITY\s*=\s*'volume-mode-local-cockpit-v0'/, 'Mode cockpit carries a stable local-control identity');
+assert.match(index, /const VOLUME_RENDER_MODES\s*=\s*\['draft', 'live', 'rich', 'hero'\]/, 'Mode cockpit has Draft, Live, Rich, and Hero mode slots');
+assert.match(index, /id="volume-mode-active-buttons"/, 'Mode cockpit separates active renderer mode buttons from edit tabs');
+assert.match(index, /id="volume-mode-edit-tabs"/, 'Mode cockpit exposes independent edit tabs for per-mode settings');
+for (const mode of ['draft', 'live', 'rich', 'hero']) {
+  assert.match(index, new RegExp(`data-volume-active-mode="${mode}"`), `Mode cockpit can make ${mode} feed the renderer`);
+  assert.match(index, new RegExp(`data-volume-edit-mode="${mode}"`), `Mode cockpit can edit ${mode} without changing the active renderer mode`);
+  assert.match(index, new RegExp(`id="volume-mode-stat-${mode}-mean"`), `Mode cockpit reports ${mode} mean timing`);
+  assert.match(index, new RegExp(`id="volume-mode-stat-${mode}-p95"`), `Mode cockpit reports ${mode} p95 timing`);
+}
+assert.match(index, /let volumeActiveMode\s*=\s*'live'/, 'Mode cockpit defaults the active renderer to Live');
+assert.match(index, /let volumeEditingMode\s*=\s*'live'/, 'Mode cockpit defaults the edited mode to Live');
+assert.match(index, /const volumeModeSnapshots/, 'Mode cockpit stores independent full-control snapshots per mode');
+assert.match(index, /function readVolumeControlsFromDom\(\)/, 'Mode cockpit keeps a DOM reader for the mode currently being edited');
+assert.match(index, /function syncVolumeEditingSnapshotFromDom/, 'Mode cockpit persists edits into the editing mode before renderer reads');
+assert.match(index, /function readVolumeControlsForActiveMode/, 'Mode cockpit has an explicit active-mode renderer snapshot reader');
+assert.match(index, /function readVolumeControls\(\)\s*\{[\s\S]*readVolumeControlsForActiveMode/, 'Renderer control reads are routed through the active mode, not blindly through the edited DOM');
+assert.match(index, /function applyVolumeModeSnapshotToDom/, 'Mode cockpit can swap the visible controls to any edited mode snapshot');
+assert.match(index, /function recordVolumeModeFrameTiming/, 'Mode cockpit records frame timing per active mode');
+assert.match(index, /id="volume-boundary-sidecar-role"/, 'Boundary Fire tuning exposes sidecar role separately from source and debug view');
+assert.match(index, /volume_boundary_sidecar_role/, 'Basin URLs preserve sidecar role so sampling-only/full-visual regimes are durable');
+assert.match(index, /BOUNDARY_SIDECAR_ROLE_VALUES\s*=\s*new Set\(\['sampling', 'reconstruct', 'full'\]\)/, 'Page-side route normalization preserves sidecar role semantics');
 assert.match(index, /value="coverage"[\s\S]*value="ridge"[\s\S]*value="proximity"[\s\S]*value="footprint"[\s\S]*value="normal"/, 'Sidecar channel selector exposes coverage, ridge, proximity, footprint, and normal views');
 assert.match(index, /BOUNDARY_SIDECAR_VIEW_VALUES\s*=\s*new Set\(\['off', 'support', 'coverage', 'ridge', 'proximity', 'footprint', 'normal'\]\)/, 'Page-side route normalization preserves the normal sidecar debug view');
 assert.match(index, /id="volume-boundary-sidecar-blur"/, 'Boundary Fire tuning exposes a sidecar blur/sample-efficiency control');
@@ -158,6 +181,8 @@ assert.match(core, /function boundarySidecarBufferBytes/, 'Boundary sidecar buff
 assert.match(core, /function boundarySidecarMetaBufferBytes/, 'Boundary sidecar meta buffer size is explicit and grid-scaled');
 assert.match(core, /function normalizeBoundarySidecarView/, 'Renderer normalizes sidecar channel debug views');
 assert.match(core, /function boundarySidecarViewValue/, 'Renderer maps sidecar channel debug views into uniforms');
+assert.match(core, /function normalizeBoundarySidecarRole/, 'Renderer normalizes boundary sidecar role values');
+assert.match(core, /function boundarySidecarRoleValue/, 'Renderer maps sidecar role values into uniforms');
 assert.match(core, /@group\(3\) @binding\(0\) var<storage, read_write> boundarySidecarDst/, 'WGSL has a write-only boundary sidecar bake output binding');
 assert.match(core, /@group\(3\) @binding\(1\) var<storage, read_write> boundarySidecarMetaDst/, 'WGSL has a write-only boundary sidecar meta bake output binding');
 assert.match(core, /boundary_sidecar_display:\s*vec4<f32>/, 'Raymarch uniforms carry sidecar debug display controls separately from reconstruction controls');
@@ -201,6 +226,9 @@ assert.match(core, /adaptiveClamp/, 'Debug state exposes the boundary-fire local
 assert.match(core, /boundaryFireSamplingDebug/, 'Debug state reports boundary-fire sampling guard identity and active state');
 assert.match(core, /temporalSidecarIdentity/, 'Debug state reserves temporal sidecar reconstruction identity');
 assert.match(core, /uniforms\[312\]\s*=\s*boundarySidecarViewValue/, 'Uniform upload carries the sidecar debug view selector');
+assert.match(core, /uniforms\[320\]\s*=\s*boundarySidecarRoleValue/, 'Uniform upload carries the sidecar role selector');
+assert.match(core, /boundarySidecarVisualAuthority/, 'Boundary-fire raymarch gates baked sidecar visual authority separately from sampling support');
+assert.match(core, /boundarySidecarReconstructionAuthority/, 'Boundary-fire raymarch gates interval reconstruction separately from source sampling');
 assert.match(core, /sidecarViewName !== 'off'/, 'Sidecar channel debug views force a bake even when the live source remains selected');
 assert.match(core, /function majorantRaymarchActive/, 'Renderer computes whether majorant traversal is actually active');
 assert.match(core, /function majorantBuildRequested/, 'Renderer computes whether a majorant bake is actually requested');
@@ -1265,7 +1293,7 @@ assert.match(core, /uniforms\[203\]\s*=\s*pyroRadianceChroma/, 'CPU uploads Radi
 assert.match(core, /uniforms\[212\]\s*=\s*pyroFlamePaint/, 'CPU uploads flame paint gain into the Pyro luma uniform block');
 assert.match(core, /uniforms\[213\]\s*=\s*pyroFlameLuma/, 'CPU uploads flame luminance into the Pyro luma uniform block');
 assert.match(core, /writePyroPaletteUniform/, 'CPU uploads editable Pyro palette color endpoints');
-assert.match(core, /uniforms\.set\(previousViewProj\.elements,\s*324\)/, 'previous view-projection matrix shifts after Bite-stack, flow, palette, topology-shell lab, boundary-fire, boundary sidecar reconstruction, sidecar display, and scalar activity receiver uniforms');
+assert.match(core, /uniforms\.set\(previousViewProj\.elements,\s*328\)/, 'previous view-projection matrix shifts after Bite-stack, flow, palette, topology-shell lab, boundary-fire, boundary sidecar reconstruction, sidecar display, sidecar role, and scalar activity receiver uniforms');
 assert.match(core, /paletteShape/, 'debug state exposes editable Pyro palette shape');
 assert.match(core, /lumaShape/, 'debug state exposes independent Pyro luma shape');
 assert.match(core, /radianceShape/, 'debug state exposes Pyro radiance gate/spill/warmth shape');
