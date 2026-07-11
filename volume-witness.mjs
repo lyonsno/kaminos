@@ -109,7 +109,7 @@ const windowSize = args.get('--window-size') || '1280,960';
 const fullScreenshot = args.has('--full-screenshot')
   ? resolve(args.get('--full-screenshot') || out.replace(/\.png$/i, '.full.png'))
   : '';
-const VALID_EVIDENCE_MODES = new Set(['fire-volume', 'performance', 'pyro-material', 'no-fire-volume', 'far-smoke-isolation']);
+const VALID_EVIDENCE_MODES = new Set(['fire-volume', 'performance', 'pyro-material', 'no-fire-volume', 'far-smoke-isolation', 'far-smoke-readback']);
 const evidenceMode = args.get('--evidence-mode') || 'fire-volume';
 if (!VALID_EVIDENCE_MODES.has(evidenceMode)) {
   throw new Error(`Unknown witness evidence mode: ${evidenceMode}`);
@@ -118,7 +118,10 @@ const expectsPerformanceVolumeEvidence = evidenceMode === 'performance';
 const expectsPyroMaterialEvidence = evidenceMode === 'pyro-material';
 const expectsNoFireVolumeEvidence = evidenceMode === 'no-fire-volume';
 const expectsFarSmokeIsolationEvidence = evidenceMode === 'far-smoke-isolation';
-const visualEvidenceMode = expectsFarSmokeIsolationEvidence
+const expectsFarSmokeReadbackEvidence = evidenceMode === 'far-smoke-readback';
+const visualEvidenceMode = expectsFarSmokeReadbackEvidence
+  ? 'far-smoke-grid-buffer-signal'
+  : expectsFarSmokeIsolationEvidence
   ? 'far-smoke-channel-split-signal'
   : expectsNoFireVolumeEvidence
   ? 'no-fire-volume-signal'
@@ -2082,6 +2085,91 @@ async function main() {
         farSmokeGrid: state.farSmokeGrid || null,
         farSmokeTransport: state.farSmokeTransport || null,
         farSmokeIsolation: state.farSmokeIsolation,
+        expectedFarSmokeIsolationMode,
+        expectedFarSmokeIsolationVisibility: expectedVisibility,
+        screenshotMetrics,
+        screenshot: out,
+        fullScreenshot: fullScreenshot || null,
+        state,
+      };
+      writeFileSync(reportPath, JSON.stringify(report, null, 2));
+      ws.close();
+      proc.kill('SIGTERM');
+      return;
+    }
+    if (expectsFarSmokeReadbackEvidence) {
+      const expectedVisibility = expectedFarSmokeIsolationVisibility(expectedFarSmokeIsolationMode);
+      assert.equal(state.farSmokeGrid?.identity, 'far-smoke-grid-overlap-solver-v0', 'far smoke grid identity did not reach debug state');
+      assert.equal(state.farSmokeGrid?.slotPolicy, 'separate-lowres-one-way-overlap-grid-v0', 'far smoke grid must report separate low-res storage');
+      assert.equal(state.farSmokeGrid?.pressureCeiling, 'sparse-p3-max-no-p4-v0', 'far smoke grid must preserve the P3 ceiling');
+      assert.equal(state.farSmokeGrid?.pressureStatus, 'p3-ceiling-pressure-deferred-first-slice-v0', 'far smoke grid must not imply pressure is already solved');
+      assert.equal(state.farSmokeTransport?.identity, 'far-smoke-connected-transport-v0', 'far smoke transport identity did not reach debug state');
+      assert.equal(state.farSmokeTransport?.carryIdentity, 'far-smoke-buoyant-entrainment-carry-v0', 'far smoke transport did not report the buoyant carry receipt');
+      assert.ok(Number.isFinite(state.farSmokeTransport?.lift), 'far smoke transport lift did not reach debug state');
+      assert.ok(Number.isFinite(state.farSmokeTransport?.ghostKill), 'far smoke transport ghost kill did not reach debug state');
+      assert.equal(state.farSmokeIsolation?.identity, 'far-smoke-evidence-isolation-v0', 'far smoke isolation identity did not reach debug state');
+      assert.equal(state.farSmokeIsolation?.requestedMode, expectedFarSmokeIsolationMode, 'far smoke isolation requested mode did not preserve route identity');
+      assert.equal(state.farSmokeIsolation?.effectiveMode, expectedFarSmokeIsolationMode, 'far smoke isolation effective mode did not reach shader controls');
+      assert.deepEqual(state.farSmokeIsolation?.visibility, expectedVisibility, 'far smoke isolation visibility mask did not match requested split mode');
+      phase = 'far-smoke-readback-evidence';
+      const screenshot = await wsRequest(ws, 'Page.captureScreenshot', {
+        format: 'png',
+        fromSurface: true,
+      });
+      const screenshotBuffer = Buffer.from(screenshot.data, 'base64');
+      writeFileSync(out, screenshotBuffer);
+      if (fullScreenshot) writeFileSync(fullScreenshot, screenshotBuffer);
+      const screenshotMetrics = measureScreenshot(screenshotBuffer);
+      const sampleEval = await wsRequest(ws, 'Runtime.evaluate', {
+        expression: 'window.__kaminosVolumePrototype.sampleFrame()',
+        awaitPromise: true,
+        returnByValue: true,
+      });
+      const sample = sampleEval.result.value;
+      if (sample?.ok !== true) {
+        throw new Error(`Far-smoke readback sampleFrame failed: ${JSON.stringify(sample)}`);
+      }
+      const farSmokeGridReadback = sample.simReadback?.farSmokeGridReadback || null;
+      assert.equal(farSmokeGridReadback?.identity, 'far-smoke-grid-readback-v0', 'far smoke grid readback identity did not reach sampleFrame output');
+      assert.equal(farSmokeGridReadback?.backend, 'cpu-far-smoke-buffer-readback', 'far smoke grid readback did not come from the CPU buffer readback');
+      assert.ok(Number.isFinite(farSmokeGridReadback?.smokeMax), 'far smoke grid readback missing finite smoke max');
+      assert.ok(Number.isFinite(farSmokeGridReadback?.supportMax), 'far smoke grid readback missing finite support max');
+      assert.ok(Number.isFinite(farSmokeGridReadback?.connectedMax), 'far smoke grid readback missing finite connected max');
+      assert.ok(Array.isArray(farSmokeGridReadback?.bufferReadbacks) && farSmokeGridReadback.bufferReadbacks.length === 2, 'far smoke grid readback must expose both ping-pong buffers');
+      const farSmokeSignalBuffers = farSmokeGridReadback.bufferReadbacks.filter(buffer =>
+        Number.isFinite(buffer?.smokeMax) &&
+        Number.isFinite(buffer?.supportMax) &&
+        Number.isFinite(buffer?.activeVoxelRatio) &&
+        (buffer.smokeMax > 0.002 || buffer.supportMax > 0.004 || buffer.activeVoxelRatio > 0.0005)
+      );
+      assert.ok(farSmokeSignalBuffers.length > 0, 'far smoke grid readback found no nonzero storage-buffer signal');
+      assert.ok(farSmokeGridReadback.smokeMax > 0.002, 'far smoke grid active readback smoke signal was zero');
+      assert.ok(farSmokeGridReadback.activeVoxelRatio > 0.0005, 'far smoke grid active readback had no active voxel support');
+      const report = {
+        identity: 'kaminos-volume-witness-report-v0',
+        requestedRoute: url,
+        captureReplay: null,
+        settleMs,
+        windowSize,
+        evidenceMode,
+        visualEvidenceMode,
+        farSmokeReadbackEvidenceMode: 'far-smoke-grid-buffer-signal',
+        phase,
+        effectiveRoute: state.effectiveRoute,
+        prototypeIdentity: state.prototypeIdentity,
+        volumeBridge: bridge,
+        backend: state.backend,
+        frameCount: state.frameCount,
+        simStepCount: state.simStepCount,
+        sampleFrameCount: sample.frameCount,
+        sampleSimStepCount: sample.simStepCount,
+        simGrid: state.simGrid,
+        simGridLabel: state.simGridLabel,
+        farSmokeReceiver: sample.farSmokeReceiver || state.farSmokeReceiver || null,
+        farSmokeGrid: sample.farSmokeGrid || state.farSmokeGrid || null,
+        farSmokeTransport: sample.farSmokeTransport || state.farSmokeTransport || null,
+        farSmokeIsolation: sample.farSmokeIsolation || state.farSmokeIsolation || null,
+        farSmokeGridReadback,
         expectedFarSmokeIsolationMode,
         expectedFarSmokeIsolationVisibility: expectedVisibility,
         screenshotMetrics,
