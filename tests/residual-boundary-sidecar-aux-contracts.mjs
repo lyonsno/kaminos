@@ -8,6 +8,7 @@ const datasetPath = `${root}/volume-render-pair-dataset.mjs`;
 const trainerPath = `${root}/volume-residual-upscale-mlx.py`;
 const runnerPath = `${root}/volume-residual-greenroom-runner.py`;
 const volumeCorePath = `${root}/volume-core.js`;
+const indexPath = `${root}/index.html`;
 
 const witness = fs.readFileSync(witnessPath, 'utf8');
 const corpus = fs.readFileSync(corpusPath, 'utf8');
@@ -15,11 +16,18 @@ const dataset = fs.readFileSync(datasetPath, 'utf8');
 const trainer = fs.readFileSync(trainerPath, 'utf8');
 const runner = fs.readFileSync(runnerPath, 'utf8');
 const volumeCore = fs.readFileSync(volumeCorePath, 'utf8');
+const index = fs.readFileSync(indexPath, 'utf8');
 
 assert.match(
   witness,
   /BOUNDARY_SIDECAR_SUPPORT_AUXILIARY_CAPTURE_AUTHORITY\s*=\s*'boundary-sidecar-support-canvas-capture-v0'/,
   'witness must name boundary-sidecar support auxiliary capture authority separately from Flow Debug',
+);
+
+assert.match(
+  index,
+  /rgb_upscale_basin_0711:\s*\{[\s\S]*sourceCaptureIdentity:\s*'kaminos-rgb-upscale-basin-live-capture-v1'[\s\S]*sourceCaptureHash:\s*'c4d3f040'[\s\S]*sourceCaptureSha256:\s*'cc5cf502cf3720c8b9d31555f66770d3febb48e279d1c2f12cc194c3b21790d1'[\s\S]*raySteps:\s*88[\s\S]*resolution:\s*128[\s\S]*majorantGrid:\s*24/,
+  'instrumented runtime must carry the source-owned RGB-upscale replay preset before paired capture',
 );
 
 assert.match(
