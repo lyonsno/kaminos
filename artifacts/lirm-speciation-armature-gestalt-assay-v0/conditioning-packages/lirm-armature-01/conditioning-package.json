@@ -155,7 +155,7 @@
     "sourceImplicitPath": "lirm-armature-01/trellis-source.svg"
   },
   "prompt": {
-    "positive": "small crawling hoard-thief creature, thread centipede, long-many-legged-thread, invertebrate body plan, wet clay and keratin material, anxious semi-cute gross creature design; model-prior hooks: centipede, thin segmented body, many tiny legs, threadlike crawler; primary motion affordance: scuttle; preserve the axial body curve, the belly contact patch, the terminal front mouth, the head orientation, the crawl contact points, the dorsal shell or plate rhythm, the small brace-drag limb nubs; source candidate lirm-armature-01, lineage gestalt:lirm-thread-centipede / silhouette:long-many-legged-thread / segments:13 / axis:low-crawl / limbs:5 / contact:narrow-belly / armor:6-plates / asymmetry:visible; three-quarter studio render, isolated body, readable silhouette, sculptural volume, no text",
+    "positive": "small crawling hoard-thief creature, thread centipede, long-many-legged-thread, invertebrate body plan, wet clay and keratin material, anxious semi-cute gross creature design; model-prior hooks: centipede, thin segmented body, many tiny legs, threadlike crawler; control pressure: basin-elaboration, semantic adherence 0.685, silhouette fall-forward 0.6, prior invitation 0.81; fall-forward hooks: invent plausible anatomy around the scaffold, keep the body plan readable, organic creature detail, centipede, thin segmented body, many tiny legs; primary motion affordance: scuttle; preserve the axial body curve, the belly contact patch, the terminal front mouth, the head orientation, the crawl contact points, the dorsal shell or plate rhythm, the small brace-drag limb nubs; source candidate lirm-armature-01, lineage gestalt:lirm-thread-centipede / silhouette:long-many-legged-thread / fall-forward:basin-elaboration / segments:13 / axis:low-crawl / limbs:5 / contact:narrow-belly / armor:6-plates / asymmetry:visible; three-quarter studio render, isolated body, readable silhouette, sculptural volume, no text",
     "negative": "centered eye, humanoid face, two-legged mascot, flat icon, logo, text labels, finished glossy toy, background scenery, extra disconnected bodies",
     "preserve": [
       "whole silhouette gestalt",
@@ -169,7 +169,13 @@
       "surface material",
       "micro anatomy",
       "gross-cute balance",
-      "skin/shell texture"
+      "skin/shell texture",
+      "silhouette elaboration"
+    ],
+    "hallucinateBeyond": [
+      "invent plausible anatomy in under-specified regions",
+      "let the generator complete missing creature detail without losing the body plan",
+      "wake adjacent creature priors while preserving the selected silhouette family"
     ]
   },
   "routeCandidates": [

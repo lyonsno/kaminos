@@ -155,7 +155,7 @@
     "sourceImplicitPath": "lirm-armature-22/trellis-source.svg"
   },
   "prompt": {
-    "positive": "small crawling hoard-thief creature, slug loaf, broad-belly-loaf, invertebrate body plan, wet clay and keratin material, anxious semi-cute gross creature design; model-prior hooks: slug, soft loaf body, low crawling belly, wet clay; primary motion affordance: crawl; preserve the axial body curve, the belly contact patch, the terminal front mouth, the head orientation, the crawl contact points, the small brace-drag limb nubs; source candidate lirm-armature-22, lineage gestalt:lirm-slug-loaf / silhouette:broad-belly-loaf / segments:9 / axis:low-crawl / limbs:3 / contact:broad-belly / mouth:hungry / temper:gross-cute; three-quarter studio render, isolated body, readable silhouette, sculptural volume, no text",
+    "positive": "small crawling hoard-thief creature, slug loaf, broad-belly-loaf, invertebrate body plan, wet clay and keratin material, anxious semi-cute gross creature design; model-prior hooks: slug, soft loaf body, low crawling belly, wet clay; control pressure: gestalt-leap, semantic adherence 0.768, silhouette fall-forward 0.836, prior invitation 0.92; fall-forward hooks: push the creature family farther, let model priors complete missing anatomy, strong silhouette reinterpretation, slug, soft loaf body, low crawling belly; primary motion affordance: crawl; preserve the axial body curve, the belly contact patch, the terminal front mouth, the head orientation, the crawl contact points, the small brace-drag limb nubs; source candidate lirm-armature-22, lineage gestalt:lirm-slug-loaf / silhouette:broad-belly-loaf / fall-forward:gestalt-leap / segments:9 / axis:low-crawl / limbs:3 / contact:broad-belly / mouth:hungry / temper:gross-cute; three-quarter studio render, isolated body, readable silhouette, sculptural volume, no text",
     "negative": "centered eye, humanoid face, two-legged mascot, flat icon, logo, text labels, finished glossy toy, background scenery, extra disconnected bodies",
     "preserve": [
       "whole silhouette gestalt",
@@ -169,7 +169,13 @@
       "surface material",
       "micro anatomy",
       "gross-cute balance",
-      "skin/shell texture"
+      "skin/shell texture",
+      "silhouette elaboration"
+    ],
+    "hallucinateBeyond": [
+      "invent plausible anatomy in under-specified regions",
+      "let the generator complete missing creature detail without losing the body plan",
+      "wake adjacent creature priors while preserving the selected silhouette family"
     ]
   },
   "routeCandidates": [

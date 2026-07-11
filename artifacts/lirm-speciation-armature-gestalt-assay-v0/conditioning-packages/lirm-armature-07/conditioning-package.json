@@ -155,7 +155,7 @@
     "sourceImplicitPath": "lirm-armature-07/trellis-source.svg"
   },
   "prompt": {
-    "positive": "small crawling hoard-thief creature, tadpole pouch, big-head-taper-tail, invertebrate body plan, wet clay and keratin material, anxious semi-cute gross creature design; model-prior hooks: tadpole, pouch body, front-heavy larva, thin tail; primary motion affordance: flop; preserve the axial body curve, the belly contact patch, the terminal front mouth, the head orientation, the crawl contact points, the small brace-drag limb nubs; source candidate lirm-armature-07, lineage gestalt:lirm-tadpole-pouch / silhouette:big-head-taper-tail / segments:5 / axis:arched / limbs:2 / contact:broad-belly / asymmetry:visible / mouth:hungry; three-quarter studio render, isolated body, readable silhouette, sculptural volume, no text",
+    "positive": "small crawling hoard-thief creature, tadpole pouch, big-head-taper-tail, invertebrate body plan, wet clay and keratin material, anxious semi-cute gross creature design; model-prior hooks: tadpole, pouch body, front-heavy larva, thin tail; control pressure: match-scaffold, semantic adherence 0.798, silhouette fall-forward 0.463, prior invitation 0.52; fall-forward hooks: preserve the scaffold silhouette, tight anatomical match, low mutation, tadpole, pouch body, front-heavy larva; primary motion affordance: flop; preserve the axial body curve, the belly contact patch, the terminal front mouth, the head orientation, the crawl contact points, the small brace-drag limb nubs; source candidate lirm-armature-07, lineage gestalt:lirm-tadpole-pouch / silhouette:big-head-taper-tail / fall-forward:match-scaffold / segments:5 / axis:arched / limbs:2 / contact:broad-belly / asymmetry:visible / mouth:hungry; three-quarter studio render, isolated body, readable silhouette, sculptural volume, no text",
     "negative": "centered eye, humanoid face, two-legged mascot, flat icon, logo, text labels, finished glossy toy, background scenery, extra disconnected bodies",
     "preserve": [
       "whole silhouette gestalt",
@@ -169,7 +169,13 @@
       "surface material",
       "micro anatomy",
       "gross-cute balance",
-      "skin/shell texture"
+      "skin/shell texture",
+      "silhouette elaboration"
+    ],
+    "hallucinateBeyond": [
+      "invent plausible anatomy in under-specified regions",
+      "let the generator complete missing creature detail without losing the body plan",
+      "wake adjacent creature priors while preserving the selected silhouette family"
     ]
   },
   "routeCandidates": [

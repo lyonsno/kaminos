@@ -26,6 +26,7 @@ const ROOT_PARENT_ID = 'root-soft-crawling-hoard-thief';
 const DEFAULT_SEED = 'molten-lirm-speciation-armature-v0';
 const DEFAULT_CANDIDATE_COUNT = 25;
 const DEFAULT_COLUMNS = 5;
+const CONTROL_PRESSURE_KIND = 'semantic-adherence-silhouette-fall-forward-v0';
 
 const GESTALT_ARCHETYPES = [
   {
@@ -91,6 +92,33 @@ const GESTALT_ARCHETYPES = [
     priorHooks: ['wide shell', 'diamond silhouette', 'raylike crawler', 'thin underbody'],
     mods: { segments: -2, limbs: 0, armor: 0.16, curve: -0.035, head: -0.04, contact: 0.12, belly: -0.08, bulk: -0.02, length: -0.12 },
     silhouette: { headScale: 0.72, bellyScale: 1.55, tailScale: 0.72, widthScale: 1.72, heightScale: 0.5, dorsalLift: -0.03, mouthOffset: 0.05 },
+  },
+];
+
+const FALL_FORWARD_MODES = [
+  {
+    kind: 'match-scaffold',
+    silhouetteLatitude: 0.38,
+    priorInvitation: 0.42,
+    hooks: ['preserve the scaffold silhouette', 'tight anatomical match', 'low mutation'],
+  },
+  {
+    kind: 'basin-elaboration',
+    silhouetteLatitude: 0.56,
+    priorInvitation: 0.62,
+    hooks: ['invent plausible anatomy around the scaffold', 'keep the body plan readable', 'organic creature detail'],
+  },
+  {
+    kind: 'gestalt-leap',
+    silhouetteLatitude: 0.76,
+    priorInvitation: 0.82,
+    hooks: ['push the creature family farther', 'let model priors complete missing anatomy', 'strong silhouette reinterpretation'],
+  },
+  {
+    kind: 'material-creature-fusion',
+    silhouetteLatitude: 0.64,
+    priorInvitation: 0.72,
+    hooks: ['merge shell and flesh into one body', 'add natural growth seams', 'surprising but coherent creature design'],
   },
 ];
 
@@ -189,6 +217,7 @@ function buildMutationPath(params) {
   const path = [
     `gestalt:${params.gestalt.kind}`,
     `silhouette:${params.silhouette.class}`,
+    `fall-forward:${params.controlPressures.mode}`,
     `segments:${params.segmentCount}`,
     `axis:${params.curveAmplitude > 0.09 ? 'arched' : 'low-crawl'}`,
     `limbs:${params.limbPairCount}`,
@@ -199,6 +228,70 @@ function buildMutationPath(params) {
   if (params.mouthIntensity > 0.62) path.push('mouth:hungry');
   if (params.cuteGrossBlend > 0.58) path.push('temper:gross-cute');
   return path;
+}
+
+function createControlPressures({ archetype, rng, index, params }) {
+  const mode = FALL_FORWARD_MODES[(index + Math.floor(rng() * FALL_FORWARD_MODES.length)) % FALL_FORWARD_MODES.length];
+  const semanticAdherence = round(clamp(
+    0.64
+      + params.silhouette.gestaltPressure * 0.14
+      + (params.mouthIntensity > 0.58 ? 0.06 : 0)
+      + (params.contactWidth > 0.58 ? 0.04 : 0)
+      - mode.silhouetteLatitude * 0.12,
+    0.55,
+    0.94,
+  ));
+  const silhouetteFallForward = round(clamp(
+    mode.silhouetteLatitude
+      + Math.abs(params.silhouette.widthScale - params.silhouette.heightScale) * 0.08
+      + params.asymmetry * 0.22
+      + (params.curveAmplitude > 0.095 ? 0.05 : 0),
+    0.35,
+    0.96,
+  ));
+  const priorInvitation = round(clamp(
+    mode.priorInvitation
+      + params.gestalt.priorHooks.length * 0.025
+      + (params.shellPlateCount > 3 ? 0.05 : 0)
+      + (params.limbPairCount > 3 ? 0.04 : 0),
+    0.35,
+    0.98,
+  ));
+  return {
+    kind: CONTROL_PRESSURE_KIND,
+    mode: mode.kind,
+    archetype: archetype.kind,
+    semanticAdherence,
+    silhouetteFallForward,
+    priorInvitation,
+    rigidAnchors: [
+      'whole_body_axis',
+      'terminal_front_mouth',
+      'head_orientation',
+      'belly_contact_patch',
+      'primary_contact_points',
+    ],
+    elasticZones: [
+      'micro_anatomy',
+      'surface_material',
+      'shell_plate_detail',
+      'limb_nub_detail',
+      'skin_fold_texture',
+    ],
+    fallForwardPrompts: [...mode.hooks, ...params.gestalt.priorHooks.slice(0, 3)],
+    routeStance: {
+      matchScaffold: [
+        'preserve the procedural body axis and silhouette class',
+        'keep the terminal mouth on the front cap',
+        'keep belly contact and motion affordance readable',
+      ],
+      hallucinateBeyond: [
+        'invent plausible anatomy in under-specified regions',
+        'let the generator complete missing creature detail without losing the body plan',
+        'wake adjacent creature priors while preserving the selected silhouette family',
+      ],
+    },
+  };
 }
 
 function createSemanticHandles(candidateId, params, axisSamples) {
@@ -265,6 +358,19 @@ function createSemanticHandles(candidateId, params, axisSamples) {
       strength: round((params.limbPairCount / 5) * 0.45 + params.contactWidth * 0.55),
       region: { contactCount: Math.max(3, params.limbPairCount + 2), primary: guessMotionAffordance(params).primary },
       futureUse: ['motion_transposition', 'swarm_readability'],
+    },
+    {
+      id: `${candidateId}:control-pressures`,
+      kind: 'control_pressure',
+      label: 'semantic adherence / silhouette fall-forward controls',
+      strength: round((params.controlPressures.semanticAdherence + params.controlPressures.silhouetteFallForward) / 2),
+      region: {
+        mode: params.controlPressures.mode,
+        semanticAdherence: params.controlPressures.semanticAdherence,
+        silhouetteFallForward: params.controlPressures.silhouetteFallForward,
+        priorInvitation: params.controlPressures.priorInvitation,
+      },
+      futureUse: ['imagegen_prompt_stance', 'trellis_prior_assay', 'basin_failure_attribution'],
     },
   ];
 
@@ -411,6 +517,7 @@ function createCandidate(seed, index, candidateCount) {
     postureLift,
     bulkScale,
   };
+  params.controlPressures = createControlPressures({ archetype, rng, index, params });
   const axisSamples = makeAxisSamples(params);
   const semanticHandles = createSemanticHandles(candidateId, params, axisSamples);
   const contactPoints = createContactPoints(params, axisSamples);
@@ -455,6 +562,7 @@ function createCandidate(seed, index, candidateCount) {
       bodyCenter,
       postureLift,
       bulkScale,
+      controlPressures: params.controlPressures,
     },
     semanticHandles,
     contactPoints,
@@ -468,7 +576,8 @@ function createCandidate(seed, index, candidateCount) {
       promptPacket: {
         subject: `small crawling hoard thief creature, ${gestalt.label}`,
         preserve: ['whole silhouette gestalt', 'body axis', 'belly contact patch', 'head orientation', 'terminal front mouth', 'limb bud count'],
-        mutate: ['surface material', 'gross-cute balance', 'shell/soft tissue texture'],
+        mutate: ['surface material', 'gross-cute balance', 'shell/soft tissue texture', 'silhouette elaboration'],
+        hallucinateBeyond: params.controlPressures.routeStance.hallucinateBeyond,
       },
     },
   };
@@ -737,6 +846,7 @@ export function createLirmSpeciationArmatureControlPacket({ witness, candidate, 
     seed: selectedCandidate.seed,
     gestalt: selectedCandidate.bodyPlan.gestalt,
     silhouette: selectedCandidate.bodyPlan.silhouette,
+    controlPressures: selectedCandidate.bodyPlan.controlPressures,
     lineage: selectedCandidate.lineage,
     motionAffordance: selectedCandidate.motionAffordance,
     semanticHandles: selectedCandidate.semanticHandles,
@@ -750,7 +860,9 @@ export function createLirmSpeciationArmatureControlPacket({ witness, candidate, 
     promptContract: {
       subject: 'small crawling hoard thief creature',
       preserve: ['whole silhouette gestalt', 'axis curve', 'belly contact', 'terminal front mouth', 'head orientation', 'contact points'],
-      allowMutation: ['surface material', 'micro anatomy', 'gross-cute balance', 'skin/shell texture'],
+      allowMutation: ['surface material', 'micro anatomy', 'gross-cute balance', 'skin/shell texture', 'silhouette elaboration'],
+      hallucinateBeyond: selectedCandidate.bodyPlan.controlPressures.routeStance.hallucinateBeyond,
+      fallForwardPrompts: selectedCandidate.bodyPlan.controlPressures.fallForwardPrompts,
     },
     falseClosureGuards: {
       finishedCreatureClaim: 'forbidden',
@@ -1424,6 +1536,8 @@ function createConditioningPrompt(candidate, packet) {
     positive: [
       `small crawling hoard-thief creature, ${candidate.bodyPlan.gestalt.label}, ${candidate.bodyPlan.silhouette.class}, invertebrate body plan, wet clay and keratin material, anxious semi-cute gross creature design`,
       `model-prior hooks: ${candidate.bodyPlan.gestalt.priorHooks.join(', ')}`,
+      `control pressure: ${candidate.bodyPlan.controlPressures.mode}, semantic adherence ${candidate.bodyPlan.controlPressures.semanticAdherence}, silhouette fall-forward ${candidate.bodyPlan.controlPressures.silhouetteFallForward}, prior invitation ${candidate.bodyPlan.controlPressures.priorInvitation}`,
+      `fall-forward hooks: ${candidate.bodyPlan.controlPressures.fallForwardPrompts.join(', ')}`,
       `primary motion affordance: ${motion}`,
       `preserve ${preserve.join(', ')}`,
       `source candidate ${candidate.id}, lineage ${candidate.lineage.mutationPath.join(' / ')}`,
@@ -1442,6 +1556,14 @@ function createConditioningPrompt(candidate, packet) {
     ].join(', '),
     preserve: packet.promptContract.preserve,
     allowMutation: packet.promptContract.allowMutation,
+    hallucinateBeyond: packet.promptContract.hallucinateBeyond,
+  };
+}
+
+function valueRange(values) {
+  return {
+    min: round(Math.min(...values)),
+    max: round(Math.max(...values)),
   };
 }
 
@@ -1693,6 +1815,15 @@ export function createLirmSpeciationArmatureWitness(options = {}) {
     silhouetteClasses,
     candidateCount,
   };
+  const controlPressureAssay = {
+    kind: 'semantic_adherence_silhouette_fall_forward_v0',
+    semanticAdherenceRange: valueRange(candidates.map(candidate => candidate.bodyPlan.controlPressures.semanticAdherence)),
+    silhouetteFallForwardRange: valueRange(candidates.map(candidate => candidate.bodyPlan.controlPressures.silhouetteFallForward)),
+    priorInvitationRange: valueRange(candidates.map(candidate => candidate.bodyPlan.controlPressures.priorInvitation)),
+    modes: [...new Set(candidates.map(candidate => candidate.bodyPlan.controlPressures.mode))],
+    rigidAnchors: candidates[0]?.bodyPlan.controlPressures.rigidAnchors || [],
+    elasticZones: candidates[0]?.bodyPlan.controlPressures.elasticZones || [],
+  };
   const baseWitness = {
     schema: LIRM_SPECIATION_ARMATURE_WITNESS_SCHEMA,
     route: LIRM_SPECIATION_ARMATURE_ROUTE,
@@ -1703,6 +1834,7 @@ export function createLirmSpeciationArmatureWitness(options = {}) {
       rootParentId: ROOT_PARENT_ID,
       family: 'small-ground-hoard-thief',
       gestaltAssay,
+      controlPressureAssay,
       intendedUse: ['lirms_body_plan_selection', 'imagegen_conditioning', 'sam3_isolation', 'trellis_probe', 'motion_affordance_preview'],
     },
     candidates,
@@ -1730,6 +1862,7 @@ export function createLirmSpeciationArmatureWitness(options = {}) {
       requestedCandidateCount: candidateCount,
       effectiveCandidateCount: candidateCount,
       gestaltAssay,
+      controlPressureAssay,
       controlMaps: ['silhouette', 'gestalt-silhouette', 'semantic-map', 'axis-depth-cue', 'contact-points'],
       falseClosureGuards: {
         promptOnlyLirmAttempt: 'not_used',

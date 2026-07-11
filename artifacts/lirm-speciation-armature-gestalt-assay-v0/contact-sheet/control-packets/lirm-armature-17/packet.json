@@ -33,6 +33,48 @@
       "threadlike crawler"
     ]
   },
+  "controlPressures": {
+    "kind": "semantic-adherence-silhouette-fall-forward-v0",
+    "mode": "match-scaffold",
+    "archetype": "lirm-thread-centipede",
+    "semanticAdherence": 0.816,
+    "silhouetteFallForward": 0.468,
+    "priorInvitation": 0.56,
+    "rigidAnchors": [
+      "whole_body_axis",
+      "terminal_front_mouth",
+      "head_orientation",
+      "belly_contact_patch",
+      "primary_contact_points"
+    ],
+    "elasticZones": [
+      "micro_anatomy",
+      "surface_material",
+      "shell_plate_detail",
+      "limb_nub_detail",
+      "skin_fold_texture"
+    ],
+    "fallForwardPrompts": [
+      "preserve the scaffold silhouette",
+      "tight anatomical match",
+      "low mutation",
+      "centipede",
+      "thin segmented body",
+      "many tiny legs"
+    ],
+    "routeStance": {
+      "matchScaffold": [
+        "preserve the procedural body axis and silhouette class",
+        "keep the terminal mouth on the front cap",
+        "keep belly contact and motion affordance readable"
+      ],
+      "hallucinateBeyond": [
+        "invent plausible anatomy in under-specified regions",
+        "let the generator complete missing creature detail without losing the body plan",
+        "wake adjacent creature priors while preserving the selected silhouette family"
+      ]
+    }
+  },
   "lineage": {
     "rootSeed": "molten-lirm-seed-0707",
     "parentId": "root-soft-crawling-hoard-thief",
@@ -42,6 +84,7 @@
     "mutationPath": [
       "gestalt:lirm-thread-centipede",
       "silhouette:long-many-legged-thread",
+      "fall-forward:match-scaffold",
       "segments:10",
       "axis:arched",
       "limbs:8",
@@ -203,6 +246,23 @@
       "futureUse": [
         "motion_transposition",
         "swarm_readability"
+      ]
+    },
+    {
+      "id": "lirm-armature-17:control-pressures",
+      "kind": "control_pressure",
+      "label": "semantic adherence / silhouette fall-forward controls",
+      "strength": 0.642,
+      "region": {
+        "mode": "match-scaffold",
+        "semanticAdherence": 0.816,
+        "silhouetteFallForward": 0.468,
+        "priorInvitation": 0.56
+      },
+      "futureUse": [
+        "imagegen_prompt_stance",
+        "trellis_prior_assay",
+        "basin_failure_attribution"
       ]
     },
     {
@@ -920,7 +980,21 @@
       "surface material",
       "micro anatomy",
       "gross-cute balance",
-      "skin/shell texture"
+      "skin/shell texture",
+      "silhouette elaboration"
+    ],
+    "hallucinateBeyond": [
+      "invent plausible anatomy in under-specified regions",
+      "let the generator complete missing creature detail without losing the body plan",
+      "wake adjacent creature priors while preserving the selected silhouette family"
+    ],
+    "fallForwardPrompts": [
+      "preserve the scaffold silhouette",
+      "tight anatomical match",
+      "low mutation",
+      "centipede",
+      "thin segmented body",
+      "many tiny legs"
     ]
   },
   "falseClosureGuards": {

@@ -94,3 +94,59 @@ Decision boundary:
 - If at least two new gestalts preserve identity at fast4, continue treating silhouette/gestalt as the main control layer and queue a small imagegen stylization pass before Trellis.
 - If only larval/slug-style bodies survive, bias the armature generator toward rounded continuous mass and add detail as semantic texture rather than topology.
 - If shell/flat gestalts survive, this route can start issuing useful creature family candidates immediately.
+
+## Diverse Gestalt Fanout
+
+The next fanout ran the recommended diverse set through the same clean-source `trellis2mlx_fast` 4-step/no-cascade route. The first submission used repo-relative source paths and failed loud with `FileNotFoundError` under the Greenroom runner cwd. The batch was resubmitted with absolute source paths; those five jobs completed and rendered through the Blender GLB witness route.
+
+| Job | Candidate | Input | Route | Knobs | Duration | Visual verdict |
+| --- | --- | --- | --- | --- | --- | --- |
+| `15e22efa4e04` | `lirm-armature-00` pillbug dome | `trellis-source.png` | `trellis2mlx_fast` | seed 71000, steps 4, no cascade, 200k target faces, 1024 texture | 68.7s | Miss, but informative: Trellis built a squat terrain/object slab with partial bilateral lobing. Creature identity weak; broad armored mass survived more than living body plan. |
+| `aa52e746a72e` | `lirm-armature-02` comma grub | `trellis-source.png` | `trellis2mlx_fast` | seed 71002, steps 4, no cascade, 200k target faces, 1024 texture | 57.3s | Strong preserve. Curled comma gesture, head/tail asymmetry, underside nubs, and terminal red/mouth marker all survived. Reads crude and rough, but clearly creature-shaped. |
+| `e970314279bf` | `lirm-armature-03` trilobite flatback | `trellis-source.png` | `trellis2mlx_fast` | seed 71003, steps 4, no cascade, 200k target faces, 1024 texture | 72.8s | Strong preserve. Flatback shell mass, segmented top rhythm, underside contact nubs, and elongated crawl body survived. One of the best current basins for scaffold adherence. |
+| `46acf087954e` | `lirm-armature-05` shell kite | `trellis-source.png` | `trellis2mlx_fast` | seed 71005, steps 4, no cascade, 200k target faces, 1024 texture | 114.3s | Negative control. Front view hints at broad shell, but side view reveals a near-flat card. Current wide/diamond shell source lacks enough volumetric commitment for Trellis. |
+| `c671abff6205` | `lirm-armature-07` tadpole pouch | `trellis-source.png` | `trellis2mlx_fast` | seed 71007, steps 4, no cascade, 200k target faces, 1024 texture | 107.4s | Strong preserve with extra prior completion. Large head/body lobes, trailing rhythm, contact nubs, and a separate pale/orb-like appendage survived. Useful evidence for basin hallucination beyond the scaffold. |
+
+Rendered witnesses:
+
+- `render-review/lirm00-pillbug-clean-fast4-nocascade-front_iso.png`
+- `render-review/lirm02-comma-clean-fast4-nocascade-front_iso.png`
+- `render-review/lirm03-trilobite-clean-fast4-nocascade-front_iso.png`
+- `render-review/lirm05-shellkite-clean-fast4-nocascade-front_iso.png`
+- `render-review/lirm07-tadpole-clean-fast4-nocascade-front_iso.png`
+
+Fanout verdict:
+
+- The decision boundary cleared: at least three new gestalts preserve identity at fast4.
+- Source-side silhouette/gestalt is the main current lever. The route responds differently to comma, flatback, tadpole, shell-kite, and pillbug sources instead of collapsing every input into one generic blob-creature basin.
+- The failures are useful. Shell-kite shows that a visually broad proxy can still be too flat in 3D; pillbug shows a slab/object basin where armored dome mass survives but creature grammar weakens.
+- The best next basin map should split prompts into two explicit tracks: match-scaffold prompts for `lirm02`/`lirm03`, and hallucinate-beyond prompts for `lirm07`, where the model already added structure beyond the scaffold.
+
+## Control-Pressure Contract
+
+The armature generator now records a control-pressure packet per candidate:
+
+- `semanticAdherence`: how strongly the source should preserve named semantic handles.
+- `silhouetteFallForward`: how much silhouette/proportion latitude the generator route may take.
+- `priorInvitation`: how strongly downstream generators are invited to complete missing plausible anatomy.
+- `rigidAnchors`: current hard anchors are `whole_body_axis`, `terminal_front_mouth`, `head_orientation`, `belly_contact_patch`, and `primary_contact_points`.
+- `elasticZones`: current mutation zones are `micro_anatomy`, `surface_material`, `shell_plate_detail`, `limb_nub_detail`, and `skin_fold_texture`.
+
+The regenerated contact receipt reports:
+
+- semantic adherence range: 0.685 to 0.823
+- silhouette fall-forward range: 0.419 to 0.921
+- prior invitation range: 0.520 to 0.980
+- modes observed: `match-scaffold`, `basin-elaboration`, `gestalt-leap`, `material-creature-fusion`
+
+This gives the next imagegen/Trellis slice a clean contract: preserve semantic anchors and body axis, but let the route hallucinate micro-anatomy, material, skin/shell seams, and plausible creature detail. In short, the next probe should ask the model to respect the scaffold while becoming a creature.
+
+## Next Basin Map
+
+Recommended next slice:
+
+- Run imagegen source edits for `lirm02`, `lirm03`, and `lirm07`.
+- For each, run one match-scaffold prompt and one hallucinate-beyond prompt.
+- Keep `lirm05` as a flatness negative control until the source geometry gains real side thickness.
+- Queue cheap Trellis fast4 only for imagegen outputs that visibly preserve body axis and improve gestalt.
+- Promote any imagegen output that is visually creature-like, even if it mutates material or micro-anatomy aggressively; this route is meant to discover usable basins, not enforce exact reconstruction.

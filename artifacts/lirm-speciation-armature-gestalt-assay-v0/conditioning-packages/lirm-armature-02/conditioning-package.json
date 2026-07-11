@@ -155,7 +155,7 @@
     "sourceImplicitPath": "lirm-armature-02/trellis-source.svg"
   },
   "prompt": {
-    "positive": "small crawling hoard-thief creature, comma grub, curled-comma-grub, invertebrate body plan, wet clay and keratin material, anxious semi-cute gross creature design; model-prior hooks: curled grub, comma body, asymmetric larva, fat bend; primary motion affordance: flop; preserve the axial body curve, the belly contact patch, the terminal front mouth, the head orientation, the crawl contact points, the small brace-drag limb nubs; source candidate lirm-armature-02, lineage gestalt:lirm-comma-grub / silhouette:curled-comma-grub / segments:8 / axis:arched / limbs:1 / contact:broad-belly / asymmetry:visible / mouth:hungry / temper:gross-cute; three-quarter studio render, isolated body, readable silhouette, sculptural volume, no text",
+    "positive": "small crawling hoard-thief creature, comma grub, curled-comma-grub, invertebrate body plan, wet clay and keratin material, anxious semi-cute gross creature design; model-prior hooks: curled grub, comma body, asymmetric larva, fat bend; control pressure: material-creature-fusion, semantic adherence 0.78, silhouette fall-forward 0.743, prior invitation 0.82; fall-forward hooks: merge shell and flesh into one body, add natural growth seams, surprising but coherent creature design, curled grub, comma body, asymmetric larva; primary motion affordance: flop; preserve the axial body curve, the belly contact patch, the terminal front mouth, the head orientation, the crawl contact points, the small brace-drag limb nubs; source candidate lirm-armature-02, lineage gestalt:lirm-comma-grub / silhouette:curled-comma-grub / fall-forward:material-creature-fusion / segments:8 / axis:arched / limbs:1 / contact:broad-belly / asymmetry:visible / mouth:hungry / temper:gross-cute; three-quarter studio render, isolated body, readable silhouette, sculptural volume, no text",
     "negative": "centered eye, humanoid face, two-legged mascot, flat icon, logo, text labels, finished glossy toy, background scenery, extra disconnected bodies",
     "preserve": [
       "whole silhouette gestalt",
@@ -169,7 +169,13 @@
       "surface material",
       "micro anatomy",
       "gross-cute balance",
-      "skin/shell texture"
+      "skin/shell texture",
+      "silhouette elaboration"
+    ],
+    "hallucinateBeyond": [
+      "invent plausible anatomy in under-specified regions",
+      "let the generator complete missing creature detail without losing the body plan",
+      "wake adjacent creature priors while preserving the selected silhouette family"
     ]
   },
   "routeCandidates": [

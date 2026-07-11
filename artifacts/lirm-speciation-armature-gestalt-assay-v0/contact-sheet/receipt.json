@@ -32,6 +32,41 @@
       ],
       "candidateCount": 25
     },
+    "controlPressureAssay": {
+      "kind": "semantic_adherence_silhouette_fall_forward_v0",
+      "semanticAdherenceRange": {
+        "min": 0.685,
+        "max": 0.823
+      },
+      "silhouetteFallForwardRange": {
+        "min": 0.419,
+        "max": 0.921
+      },
+      "priorInvitationRange": {
+        "min": 0.52,
+        "max": 0.98
+      },
+      "modes": [
+        "basin-elaboration",
+        "material-creature-fusion",
+        "gestalt-leap",
+        "match-scaffold"
+      ],
+      "rigidAnchors": [
+        "whole_body_axis",
+        "terminal_front_mouth",
+        "head_orientation",
+        "belly_contact_patch",
+        "primary_contact_points"
+      ],
+      "elasticZones": [
+        "micro_anatomy",
+        "surface_material",
+        "shell_plate_detail",
+        "limb_nub_detail",
+        "skin_fold_texture"
+      ]
+    },
     "intendedUse": [
       "lirms_body_plan_selection",
       "imagegen_conditioning",
@@ -55,6 +90,7 @@
         "mutationPath": [
           "gestalt:lirm-pillbug-dome",
           "silhouette:armored-oval-dome",
+          "fall-forward:basin-elaboration",
           "segments:8",
           "axis:low-crawl",
           "limbs:3",
@@ -164,7 +200,49 @@
         "bodyLength": 0.815,
         "bodyCenter": 0.471,
         "postureLift": -0.058,
-        "bulkScale": 1.612
+        "bulkScale": 1.612,
+        "controlPressures": {
+          "kind": "semantic-adherence-silhouette-fall-forward-v0",
+          "mode": "basin-elaboration",
+          "archetype": "lirm-pillbug-dome",
+          "semanticAdherence": 0.786,
+          "silhouetteFallForward": 0.586,
+          "priorInvitation": 0.77,
+          "rigidAnchors": [
+            "whole_body_axis",
+            "terminal_front_mouth",
+            "head_orientation",
+            "belly_contact_patch",
+            "primary_contact_points"
+          ],
+          "elasticZones": [
+            "micro_anatomy",
+            "surface_material",
+            "shell_plate_detail",
+            "limb_nub_detail",
+            "skin_fold_texture"
+          ],
+          "fallForwardPrompts": [
+            "invent plausible anatomy around the scaffold",
+            "keep the body plan readable",
+            "organic creature detail",
+            "pillbug",
+            "armored larva",
+            "domed shell"
+          ],
+          "routeStance": {
+            "matchScaffold": [
+              "preserve the procedural body axis and silhouette class",
+              "keep the terminal mouth on the front cap",
+              "keep belly contact and motion affordance readable"
+            ],
+            "hallucinateBeyond": [
+              "invent plausible anatomy in under-specified regions",
+              "let the generator complete missing creature detail without losing the body plan",
+              "wake adjacent creature priors while preserving the selected silhouette family"
+            ]
+          }
+        }
       },
       "semanticHandles": [
         {
@@ -302,6 +380,23 @@
           "futureUse": [
             "motion_transposition",
             "swarm_readability"
+          ]
+        },
+        {
+          "id": "lirm-armature-00:control-pressures",
+          "kind": "control_pressure",
+          "label": "semantic adherence / silhouette fall-forward controls",
+          "strength": 0.686,
+          "region": {
+            "mode": "basin-elaboration",
+            "semanticAdherence": 0.786,
+            "silhouetteFallForward": 0.586,
+            "priorInvitation": 0.77
+          },
+          "futureUse": [
+            "imagegen_prompt_stance",
+            "trellis_prior_assay",
+            "basin_failure_attribution"
           ]
         },
         {
@@ -522,7 +617,13 @@
           "mutate": [
             "surface material",
             "gross-cute balance",
-            "shell/soft tissue texture"
+            "shell/soft tissue texture",
+            "silhouette elaboration"
+          ],
+          "hallucinateBeyond": [
+            "invent plausible anatomy in under-specified regions",
+            "let the generator complete missing creature detail without losing the body plan",
+            "wake adjacent creature priors while preserving the selected silhouette family"
           ]
         }
       }
@@ -541,6 +642,7 @@
         "mutationPath": [
           "gestalt:lirm-thread-centipede",
           "silhouette:long-many-legged-thread",
+          "fall-forward:basin-elaboration",
           "segments:13",
           "axis:low-crawl",
           "limbs:5",
@@ -665,7 +767,49 @@
         "bodyLength": 0.97,
         "bodyCenter": 0.54,
         "postureLift": 0.021,
-        "bulkScale": 0.739
+        "bulkScale": 0.739,
+        "controlPressures": {
+          "kind": "semantic-adherence-silhouette-fall-forward-v0",
+          "mode": "basin-elaboration",
+          "archetype": "lirm-thread-centipede",
+          "semanticAdherence": 0.685,
+          "silhouetteFallForward": 0.6,
+          "priorInvitation": 0.81,
+          "rigidAnchors": [
+            "whole_body_axis",
+            "terminal_front_mouth",
+            "head_orientation",
+            "belly_contact_patch",
+            "primary_contact_points"
+          ],
+          "elasticZones": [
+            "micro_anatomy",
+            "surface_material",
+            "shell_plate_detail",
+            "limb_nub_detail",
+            "skin_fold_texture"
+          ],
+          "fallForwardPrompts": [
+            "invent plausible anatomy around the scaffold",
+            "keep the body plan readable",
+            "organic creature detail",
+            "centipede",
+            "thin segmented body",
+            "many tiny legs"
+          ],
+          "routeStance": {
+            "matchScaffold": [
+              "preserve the procedural body axis and silhouette class",
+              "keep the terminal mouth on the front cap",
+              "keep belly contact and motion affordance readable"
+            ],
+            "hallucinateBeyond": [
+              "invent plausible anatomy in under-specified regions",
+              "let the generator complete missing creature detail without losing the body plan",
+              "wake adjacent creature priors while preserving the selected silhouette family"
+            ]
+          }
+        }
       },
       "semanticHandles": [
         {
@@ -815,6 +959,23 @@
           "futureUse": [
             "motion_transposition",
             "swarm_readability"
+          ]
+        },
+        {
+          "id": "lirm-armature-01:control-pressures",
+          "kind": "control_pressure",
+          "label": "semantic adherence / silhouette fall-forward controls",
+          "strength": 0.643,
+          "region": {
+            "mode": "basin-elaboration",
+            "semanticAdherence": 0.685,
+            "silhouetteFallForward": 0.6,
+            "priorInvitation": 0.81
+          },
+          "futureUse": [
+            "imagegen_prompt_stance",
+            "trellis_prior_assay",
+            "basin_failure_attribution"
           ]
         },
         {
@@ -1168,7 +1329,13 @@
           "mutate": [
             "surface material",
             "gross-cute balance",
-            "shell/soft tissue texture"
+            "shell/soft tissue texture",
+            "silhouette elaboration"
+          ],
+          "hallucinateBeyond": [
+            "invent plausible anatomy in under-specified regions",
+            "let the generator complete missing creature detail without losing the body plan",
+            "wake adjacent creature priors while preserving the selected silhouette family"
           ]
         }
       }
@@ -1187,6 +1354,7 @@
         "mutationPath": [
           "gestalt:lirm-comma-grub",
           "silhouette:curled-comma-grub",
+          "fall-forward:material-creature-fusion",
           "segments:8",
           "axis:arched",
           "limbs:1",
@@ -1297,7 +1465,49 @@
         "bodyLength": 0.617,
         "bodyCenter": 0.514,
         "postureLift": 0.027,
-        "bulkScale": 1.084
+        "bulkScale": 1.084,
+        "controlPressures": {
+          "kind": "semantic-adherence-silhouette-fall-forward-v0",
+          "mode": "material-creature-fusion",
+          "archetype": "lirm-comma-grub",
+          "semanticAdherence": 0.78,
+          "silhouetteFallForward": 0.743,
+          "priorInvitation": 0.82,
+          "rigidAnchors": [
+            "whole_body_axis",
+            "terminal_front_mouth",
+            "head_orientation",
+            "belly_contact_patch",
+            "primary_contact_points"
+          ],
+          "elasticZones": [
+            "micro_anatomy",
+            "surface_material",
+            "shell_plate_detail",
+            "limb_nub_detail",
+            "skin_fold_texture"
+          ],
+          "fallForwardPrompts": [
+            "merge shell and flesh into one body",
+            "add natural growth seams",
+            "surprising but coherent creature design",
+            "curled grub",
+            "comma body",
+            "asymmetric larva"
+          ],
+          "routeStance": {
+            "matchScaffold": [
+              "preserve the procedural body axis and silhouette class",
+              "keep the terminal mouth on the front cap",
+              "keep belly contact and motion affordance readable"
+            ],
+            "hallucinateBeyond": [
+              "invent plausible anatomy in under-specified regions",
+              "let the generator complete missing creature detail without losing the body plan",
+              "wake adjacent creature priors while preserving the selected silhouette family"
+            ]
+          }
+        }
       },
       "semanticHandles": [
         {
@@ -1438,6 +1648,23 @@
           ]
         },
         {
+          "id": "lirm-armature-02:control-pressures",
+          "kind": "control_pressure",
+          "label": "semantic adherence / silhouette fall-forward controls",
+          "strength": 0.762,
+          "region": {
+            "mode": "material-creature-fusion",
+            "semanticAdherence": 0.78,
+            "silhouetteFallForward": 0.743,
+            "priorInvitation": 0.82
+          },
+          "futureUse": [
+            "imagegen_prompt_stance",
+            "trellis_prior_assay",
+            "basin_failure_attribution"
+          ]
+        },
+        {
           "id": "lirm-armature-02:limb-bud-0",
           "kind": "limb_bud",
           "label": "paired limb bud 1",
@@ -1548,7 +1775,13 @@
           "mutate": [
             "surface material",
             "gross-cute balance",
-            "shell/soft tissue texture"
+            "shell/soft tissue texture",
+            "silhouette elaboration"
+          ],
+          "hallucinateBeyond": [
+            "invent plausible anatomy in under-specified regions",
+            "let the generator complete missing creature detail without losing the body plan",
+            "wake adjacent creature priors while preserving the selected silhouette family"
           ]
         }
       }
@@ -1567,6 +1800,7 @@
         "mutationPath": [
           "gestalt:lirm-trilobite-flat",
           "silhouette:flat-wide-side-plates",
+          "fall-forward:gestalt-leap",
           "segments:13",
           "axis:arched",
           "limbs:5",
@@ -1692,7 +1926,49 @@
         "bodyLength": 0.94,
         "bodyCenter": 0.552,
         "postureLift": -0.051,
-        "bulkScale": 0.962
+        "bulkScale": 0.962,
+        "controlPressures": {
+          "kind": "semantic-adherence-silhouette-fall-forward-v0",
+          "mode": "gestalt-leap",
+          "archetype": "lirm-trilobite-flat",
+          "semanticAdherence": 0.779,
+          "silhouetteFallForward": 0.905,
+          "priorInvitation": 0.98,
+          "rigidAnchors": [
+            "whole_body_axis",
+            "terminal_front_mouth",
+            "head_orientation",
+            "belly_contact_patch",
+            "primary_contact_points"
+          ],
+          "elasticZones": [
+            "micro_anatomy",
+            "surface_material",
+            "shell_plate_detail",
+            "limb_nub_detail",
+            "skin_fold_texture"
+          ],
+          "fallForwardPrompts": [
+            "push the creature family farther",
+            "let model priors complete missing anatomy",
+            "strong silhouette reinterpretation",
+            "trilobite",
+            "flat armored back",
+            "side plates"
+          ],
+          "routeStance": {
+            "matchScaffold": [
+              "preserve the procedural body axis and silhouette class",
+              "keep the terminal mouth on the front cap",
+              "keep belly contact and motion affordance readable"
+            ],
+            "hallucinateBeyond": [
+              "invent plausible anatomy in under-specified regions",
+              "let the generator complete missing creature detail without losing the body plan",
+              "wake adjacent creature priors while preserving the selected silhouette family"
+            ]
+          }
+        }
       },
       "semanticHandles": [
         {
@@ -1842,6 +2118,23 @@
           "futureUse": [
             "motion_transposition",
             "swarm_readability"
+          ]
+        },
+        {
+          "id": "lirm-armature-03:control-pressures",
+          "kind": "control_pressure",
+          "label": "semantic adherence / silhouette fall-forward controls",
+          "strength": 0.842,
+          "region": {
+            "mode": "gestalt-leap",
+            "semanticAdherence": 0.779,
+            "silhouetteFallForward": 0.905,
+            "priorInvitation": 0.98
+          },
+          "futureUse": [
+            "imagegen_prompt_stance",
+            "trellis_prior_assay",
+            "basin_failure_attribution"
           ]
         },
         {
@@ -2197,7 +2490,13 @@
           "mutate": [
             "surface material",
             "gross-cute balance",
-            "shell/soft tissue texture"
+            "shell/soft tissue texture",
+            "silhouette elaboration"
+          ],
+          "hallucinateBeyond": [
+            "invent plausible anatomy in under-specified regions",
+            "let the generator complete missing creature detail without losing the body plan",
+            "wake adjacent creature priors while preserving the selected silhouette family"
           ]
         }
       }
@@ -2216,6 +2515,7 @@
         "mutationPath": [
           "gestalt:lirm-larval-quad",
           "silhouette:stub-legged-ground-beast",
+          "fall-forward:gestalt-leap",
           "segments:9",
           "axis:arched",
           "limbs:4",
@@ -2329,7 +2629,49 @@
         "bodyLength": 0.747,
         "bodyCenter": 0.481,
         "postureLift": 0.074,
-        "bulkScale": 1.397
+        "bulkScale": 1.397,
+        "controlPressures": {
+          "kind": "semantic-adherence-silhouette-fall-forward-v0",
+          "mode": "gestalt-leap",
+          "archetype": "lirm-larval-quad",
+          "semanticAdherence": 0.749,
+          "silhouetteFallForward": 0.841,
+          "priorInvitation": 0.96,
+          "rigidAnchors": [
+            "whole_body_axis",
+            "terminal_front_mouth",
+            "head_orientation",
+            "belly_contact_patch",
+            "primary_contact_points"
+          ],
+          "elasticZones": [
+            "micro_anatomy",
+            "surface_material",
+            "shell_plate_detail",
+            "limb_nub_detail",
+            "skin_fold_texture"
+          ],
+          "fallForwardPrompts": [
+            "push the creature family farther",
+            "let model priors complete missing anatomy",
+            "strong silhouette reinterpretation",
+            "stub-legged larva",
+            "small quadruped",
+            "ground beast"
+          ],
+          "routeStance": {
+            "matchScaffold": [
+              "preserve the procedural body axis and silhouette class",
+              "keep the terminal mouth on the front cap",
+              "keep belly contact and motion affordance readable"
+            ],
+            "hallucinateBeyond": [
+              "invent plausible anatomy in under-specified regions",
+              "let the generator complete missing creature detail without losing the body plan",
+              "wake adjacent creature priors while preserving the selected silhouette family"
+            ]
+          }
+        }
       },
       "semanticHandles": [
         {
@@ -2471,6 +2813,23 @@
           "futureUse": [
             "motion_transposition",
             "swarm_readability"
+          ]
+        },
+        {
+          "id": "lirm-armature-04:control-pressures",
+          "kind": "control_pressure",
+          "label": "semantic adherence / silhouette fall-forward controls",
+          "strength": 0.795,
+          "region": {
+            "mode": "gestalt-leap",
+            "semanticAdherence": 0.749,
+            "silhouetteFallForward": 0.841,
+            "priorInvitation": 0.96
+          },
+          "futureUse": [
+            "imagegen_prompt_stance",
+            "trellis_prior_assay",
+            "basin_failure_attribution"
           ]
         },
         {
@@ -2695,7 +3054,13 @@
           "mutate": [
             "surface material",
             "gross-cute balance",
-            "shell/soft tissue texture"
+            "shell/soft tissue texture",
+            "silhouette elaboration"
+          ],
+          "hallucinateBeyond": [
+            "invent plausible anatomy in under-specified regions",
+            "let the generator complete missing creature detail without losing the body plan",
+            "wake adjacent creature priors while preserving the selected silhouette family"
           ]
         }
       }
@@ -2714,6 +3079,7 @@
         "mutationPath": [
           "gestalt:lirm-shell-kite",
           "silhouette:wide-diamond-shell",
+          "fall-forward:material-creature-fusion",
           "segments:5",
           "axis:low-crawl",
           "limbs:1",
@@ -2808,7 +3174,49 @@
         "bodyLength": 0.38,
         "bodyCenter": 0.521,
         "postureLift": -0.023,
-        "bulkScale": 1.378
+        "bulkScale": 1.378,
+        "controlPressures": {
+          "kind": "semantic-adherence-silhouette-fall-forward-v0",
+          "mode": "material-creature-fusion",
+          "archetype": "lirm-shell-kite",
+          "semanticAdherence": 0.714,
+          "silhouetteFallForward": 0.774,
+          "priorInvitation": 0.87,
+          "rigidAnchors": [
+            "whole_body_axis",
+            "terminal_front_mouth",
+            "head_orientation",
+            "belly_contact_patch",
+            "primary_contact_points"
+          ],
+          "elasticZones": [
+            "micro_anatomy",
+            "surface_material",
+            "shell_plate_detail",
+            "limb_nub_detail",
+            "skin_fold_texture"
+          ],
+          "fallForwardPrompts": [
+            "merge shell and flesh into one body",
+            "add natural growth seams",
+            "surprising but coherent creature design",
+            "wide shell",
+            "diamond silhouette",
+            "raylike crawler"
+          ],
+          "routeStance": {
+            "matchScaffold": [
+              "preserve the procedural body axis and silhouette class",
+              "keep the terminal mouth on the front cap",
+              "keep belly contact and motion affordance readable"
+            ],
+            "hallucinateBeyond": [
+              "invent plausible anatomy in under-specified regions",
+              "let the generator complete missing creature detail without losing the body plan",
+              "wake adjacent creature priors while preserving the selected silhouette family"
+            ]
+          }
+        }
       },
       "semanticHandles": [
         {
@@ -2934,6 +3342,23 @@
           "futureUse": [
             "motion_transposition",
             "swarm_readability"
+          ]
+        },
+        {
+          "id": "lirm-armature-05:control-pressures",
+          "kind": "control_pressure",
+          "label": "semantic adherence / silhouette fall-forward controls",
+          "strength": 0.744,
+          "region": {
+            "mode": "material-creature-fusion",
+            "semanticAdherence": 0.714,
+            "silhouetteFallForward": 0.774,
+            "priorInvitation": 0.87
+          },
+          "futureUse": [
+            "imagegen_prompt_stance",
+            "trellis_prior_assay",
+            "basin_failure_attribution"
           ]
         },
         {
@@ -3151,7 +3576,13 @@
           "mutate": [
             "surface material",
             "gross-cute balance",
-            "shell/soft tissue texture"
+            "shell/soft tissue texture",
+            "silhouette elaboration"
+          ],
+          "hallucinateBeyond": [
+            "invent plausible anatomy in under-specified regions",
+            "let the generator complete missing creature detail without losing the body plan",
+            "wake adjacent creature priors while preserving the selected silhouette family"
           ]
         }
       }
@@ -3170,6 +3601,7 @@
         "mutationPath": [
           "gestalt:lirm-slug-loaf",
           "silhouette:broad-belly-loaf",
+          "fall-forward:basin-elaboration",
           "segments:9",
           "axis:low-crawl",
           "limbs:0",
@@ -3283,7 +3715,49 @@
         "bodyLength": 0.876,
         "bodyCenter": 0.516,
         "postureLift": 0.016,
-        "bulkScale": 1.482
+        "bulkScale": 1.482,
+        "controlPressures": {
+          "kind": "semantic-adherence-silhouette-fall-forward-v0",
+          "mode": "basin-elaboration",
+          "archetype": "lirm-slug-loaf",
+          "semanticAdherence": 0.794,
+          "silhouetteFallForward": 0.631,
+          "priorInvitation": 0.72,
+          "rigidAnchors": [
+            "whole_body_axis",
+            "terminal_front_mouth",
+            "head_orientation",
+            "belly_contact_patch",
+            "primary_contact_points"
+          ],
+          "elasticZones": [
+            "micro_anatomy",
+            "surface_material",
+            "shell_plate_detail",
+            "limb_nub_detail",
+            "skin_fold_texture"
+          ],
+          "fallForwardPrompts": [
+            "invent plausible anatomy around the scaffold",
+            "keep the body plan readable",
+            "organic creature detail",
+            "slug",
+            "soft loaf body",
+            "low crawling belly"
+          ],
+          "routeStance": {
+            "matchScaffold": [
+              "preserve the procedural body axis and silhouette class",
+              "keep the terminal mouth on the front cap",
+              "keep belly contact and motion affordance readable"
+            ],
+            "hallucinateBeyond": [
+              "invent plausible anatomy in under-specified regions",
+              "let the generator complete missing creature detail without losing the body plan",
+              "wake adjacent creature priors while preserving the selected silhouette family"
+            ]
+          }
+        }
       },
       "semanticHandles": [
         {
@@ -3428,6 +3902,23 @@
           ]
         },
         {
+          "id": "lirm-armature-06:control-pressures",
+          "kind": "control_pressure",
+          "label": "semantic adherence / silhouette fall-forward controls",
+          "strength": 0.713,
+          "region": {
+            "mode": "basin-elaboration",
+            "semanticAdherence": 0.794,
+            "silhouetteFallForward": 0.631,
+            "priorInvitation": 0.72
+          },
+          "futureUse": [
+            "imagegen_prompt_stance",
+            "trellis_prior_assay",
+            "basin_failure_attribution"
+          ]
+        },
+        {
           "id": "lirm-armature-06:tail-drag",
           "kind": "tail_drag",
           "label": "tail drag memory",
@@ -3504,7 +3995,13 @@
           "mutate": [
             "surface material",
             "gross-cute balance",
-            "shell/soft tissue texture"
+            "shell/soft tissue texture",
+            "silhouette elaboration"
+          ],
+          "hallucinateBeyond": [
+            "invent plausible anatomy in under-specified regions",
+            "let the generator complete missing creature detail without losing the body plan",
+            "wake adjacent creature priors while preserving the selected silhouette family"
           ]
         }
       }
@@ -3523,6 +4020,7 @@
         "mutationPath": [
           "gestalt:lirm-tadpole-pouch",
           "silhouette:big-head-taper-tail",
+          "fall-forward:match-scaffold",
           "segments:5",
           "axis:arched",
           "limbs:2",
@@ -3617,7 +4115,49 @@
         "bodyLength": 0.654,
         "bodyCenter": 0.515,
         "postureLift": 0.023,
-        "bulkScale": 1.412
+        "bulkScale": 1.412,
+        "controlPressures": {
+          "kind": "semantic-adherence-silhouette-fall-forward-v0",
+          "mode": "match-scaffold",
+          "archetype": "lirm-tadpole-pouch",
+          "semanticAdherence": 0.798,
+          "silhouetteFallForward": 0.463,
+          "priorInvitation": 0.52,
+          "rigidAnchors": [
+            "whole_body_axis",
+            "terminal_front_mouth",
+            "head_orientation",
+            "belly_contact_patch",
+            "primary_contact_points"
+          ],
+          "elasticZones": [
+            "micro_anatomy",
+            "surface_material",
+            "shell_plate_detail",
+            "limb_nub_detail",
+            "skin_fold_texture"
+          ],
+          "fallForwardPrompts": [
+            "preserve the scaffold silhouette",
+            "tight anatomical match",
+            "low mutation",
+            "tadpole",
+            "pouch body",
+            "front-heavy larva"
+          ],
+          "routeStance": {
+            "matchScaffold": [
+              "preserve the procedural body axis and silhouette class",
+              "keep the terminal mouth on the front cap",
+              "keep belly contact and motion affordance readable"
+            ],
+            "hallucinateBeyond": [
+              "invent plausible anatomy in under-specified regions",
+              "let the generator complete missing creature detail without losing the body plan",
+              "wake adjacent creature priors while preserving the selected silhouette family"
+            ]
+          }
+        }
       },
       "semanticHandles": [
         {
@@ -3746,6 +4286,23 @@
           ]
         },
         {
+          "id": "lirm-armature-07:control-pressures",
+          "kind": "control_pressure",
+          "label": "semantic adherence / silhouette fall-forward controls",
+          "strength": 0.631,
+          "region": {
+            "mode": "match-scaffold",
+            "semanticAdherence": 0.798,
+            "silhouetteFallForward": 0.463,
+            "priorInvitation": 0.52
+          },
+          "futureUse": [
+            "imagegen_prompt_stance",
+            "trellis_prior_assay",
+            "basin_failure_attribution"
+          ]
+        },
+        {
           "id": "lirm-armature-07:limb-bud-0",
           "kind": "limb_bud",
           "label": "paired limb bud 1",
@@ -3868,7 +4425,13 @@
           "mutate": [
             "surface material",
             "gross-cute balance",
-            "shell/soft tissue texture"
+            "shell/soft tissue texture",
+            "silhouette elaboration"
+          ],
+          "hallucinateBeyond": [
+            "invent plausible anatomy in under-specified regions",
+            "let the generator complete missing creature detail without losing the body plan",
+            "wake adjacent creature priors while preserving the selected silhouette family"
           ]
         }
       }
@@ -3887,6 +4450,7 @@
         "mutationPath": [
           "gestalt:lirm-pillbug-dome",
           "silhouette:armored-oval-dome",
+          "fall-forward:gestalt-leap",
           "segments:9",
           "axis:low-crawl",
           "limbs:0",
@@ -4001,7 +4565,49 @@
         "bodyLength": 0.599,
         "bodyCenter": 0.489,
         "postureLift": -0.125,
-        "bulkScale": 1.211
+        "bulkScale": 1.211,
+        "controlPressures": {
+          "kind": "semantic-adherence-silhouette-fall-forward-v0",
+          "mode": "gestalt-leap",
+          "archetype": "lirm-pillbug-dome",
+          "semanticAdherence": 0.688,
+          "silhouetteFallForward": 0.778,
+          "priorInvitation": 0.97,
+          "rigidAnchors": [
+            "whole_body_axis",
+            "terminal_front_mouth",
+            "head_orientation",
+            "belly_contact_patch",
+            "primary_contact_points"
+          ],
+          "elasticZones": [
+            "micro_anatomy",
+            "surface_material",
+            "shell_plate_detail",
+            "limb_nub_detail",
+            "skin_fold_texture"
+          ],
+          "fallForwardPrompts": [
+            "push the creature family farther",
+            "let model priors complete missing anatomy",
+            "strong silhouette reinterpretation",
+            "pillbug",
+            "armored larva",
+            "domed shell"
+          ],
+          "routeStance": {
+            "matchScaffold": [
+              "preserve the procedural body axis and silhouette class",
+              "keep the terminal mouth on the front cap",
+              "keep belly contact and motion affordance readable"
+            ],
+            "hallucinateBeyond": [
+              "invent plausible anatomy in under-specified regions",
+              "let the generator complete missing creature detail without losing the body plan",
+              "wake adjacent creature priors while preserving the selected silhouette family"
+            ]
+          }
+        }
       },
       "semanticHandles": [
         {
@@ -4143,6 +4749,23 @@
           "futureUse": [
             "motion_transposition",
             "swarm_readability"
+          ]
+        },
+        {
+          "id": "lirm-armature-08:control-pressures",
+          "kind": "control_pressure",
+          "label": "semantic adherence / silhouette fall-forward controls",
+          "strength": 0.733,
+          "region": {
+            "mode": "gestalt-leap",
+            "semanticAdherence": 0.688,
+            "silhouetteFallForward": 0.778,
+            "priorInvitation": 0.97
+          },
+          "futureUse": [
+            "imagegen_prompt_stance",
+            "trellis_prior_assay",
+            "basin_failure_attribution"
           ]
         },
         {
@@ -4335,7 +4958,13 @@
           "mutate": [
             "surface material",
             "gross-cute balance",
-            "shell/soft tissue texture"
+            "shell/soft tissue texture",
+            "silhouette elaboration"
+          ],
+          "hallucinateBeyond": [
+            "invent plausible anatomy in under-specified regions",
+            "let the generator complete missing creature detail without losing the body plan",
+            "wake adjacent creature priors while preserving the selected silhouette family"
           ]
         }
       }
@@ -4354,6 +4983,7 @@
         "mutationPath": [
           "gestalt:lirm-thread-centipede",
           "silhouette:long-many-legged-thread",
+          "fall-forward:match-scaffold",
           "segments:9",
           "axis:arched",
           "limbs:8",
@@ -4469,7 +5099,49 @@
         "bodyLength": 0.97,
         "bodyCenter": 0.537,
         "postureLift": 0.024,
-        "bulkScale": 1.292
+        "bulkScale": 1.292,
+        "controlPressures": {
+          "kind": "semantic-adherence-silhouette-fall-forward-v0",
+          "mode": "match-scaffold",
+          "archetype": "lirm-thread-centipede",
+          "semanticAdherence": 0.698,
+          "silhouetteFallForward": 0.49,
+          "priorInvitation": 0.61,
+          "rigidAnchors": [
+            "whole_body_axis",
+            "terminal_front_mouth",
+            "head_orientation",
+            "belly_contact_patch",
+            "primary_contact_points"
+          ],
+          "elasticZones": [
+            "micro_anatomy",
+            "surface_material",
+            "shell_plate_detail",
+            "limb_nub_detail",
+            "skin_fold_texture"
+          ],
+          "fallForwardPrompts": [
+            "preserve the scaffold silhouette",
+            "tight anatomical match",
+            "low mutation",
+            "centipede",
+            "thin segmented body",
+            "many tiny legs"
+          ],
+          "routeStance": {
+            "matchScaffold": [
+              "preserve the procedural body axis and silhouette class",
+              "keep the terminal mouth on the front cap",
+              "keep belly contact and motion affordance readable"
+            ],
+            "hallucinateBeyond": [
+              "invent plausible anatomy in under-specified regions",
+              "let the generator complete missing creature detail without losing the body plan",
+              "wake adjacent creature priors while preserving the selected silhouette family"
+            ]
+          }
+        }
       },
       "semanticHandles": [
         {
@@ -4611,6 +5283,23 @@
           "futureUse": [
             "motion_transposition",
             "swarm_readability"
+          ]
+        },
+        {
+          "id": "lirm-armature-09:control-pressures",
+          "kind": "control_pressure",
+          "label": "semantic adherence / silhouette fall-forward controls",
+          "strength": 0.594,
+          "region": {
+            "mode": "match-scaffold",
+            "semanticAdherence": 0.698,
+            "silhouetteFallForward": 0.49,
+            "priorInvitation": 0.61
+          },
+          "futureUse": [
+            "imagegen_prompt_stance",
+            "trellis_prior_assay",
+            "basin_failure_attribution"
           ]
         },
         {
@@ -4981,7 +5670,13 @@
           "mutate": [
             "surface material",
             "gross-cute balance",
-            "shell/soft tissue texture"
+            "shell/soft tissue texture",
+            "silhouette elaboration"
+          ],
+          "hallucinateBeyond": [
+            "invent plausible anatomy in under-specified regions",
+            "let the generator complete missing creature detail without losing the body plan",
+            "wake adjacent creature priors while preserving the selected silhouette family"
           ]
         }
       }
@@ -5000,6 +5695,7 @@
         "mutationPath": [
           "gestalt:lirm-comma-grub",
           "silhouette:curled-comma-grub",
+          "fall-forward:match-scaffold",
           "segments:12",
           "axis:arched",
           "limbs:3",
@@ -5125,7 +5821,49 @@
         "bodyLength": 0.96,
         "bodyCenter": 0.534,
         "postureLift": 0.066,
-        "bulkScale": 1.501
+        "bulkScale": 1.501,
+        "controlPressures": {
+          "kind": "semantic-adherence-silhouette-fall-forward-v0",
+          "mode": "match-scaffold",
+          "archetype": "lirm-comma-grub",
+          "semanticAdherence": 0.795,
+          "silhouetteFallForward": 0.482,
+          "priorInvitation": 0.52,
+          "rigidAnchors": [
+            "whole_body_axis",
+            "terminal_front_mouth",
+            "head_orientation",
+            "belly_contact_patch",
+            "primary_contact_points"
+          ],
+          "elasticZones": [
+            "micro_anatomy",
+            "surface_material",
+            "shell_plate_detail",
+            "limb_nub_detail",
+            "skin_fold_texture"
+          ],
+          "fallForwardPrompts": [
+            "preserve the scaffold silhouette",
+            "tight anatomical match",
+            "low mutation",
+            "curled grub",
+            "comma body",
+            "asymmetric larva"
+          ],
+          "routeStance": {
+            "matchScaffold": [
+              "preserve the procedural body axis and silhouette class",
+              "keep the terminal mouth on the front cap",
+              "keep belly contact and motion affordance readable"
+            ],
+            "hallucinateBeyond": [
+              "invent plausible anatomy in under-specified regions",
+              "let the generator complete missing creature detail without losing the body plan",
+              "wake adjacent creature priors while preserving the selected silhouette family"
+            ]
+          }
+        }
       },
       "semanticHandles": [
         {
@@ -5275,6 +6013,23 @@
           "futureUse": [
             "motion_transposition",
             "swarm_readability"
+          ]
+        },
+        {
+          "id": "lirm-armature-10:control-pressures",
+          "kind": "control_pressure",
+          "label": "semantic adherence / silhouette fall-forward controls",
+          "strength": 0.639,
+          "region": {
+            "mode": "match-scaffold",
+            "semanticAdherence": 0.795,
+            "silhouetteFallForward": 0.482,
+            "priorInvitation": 0.52
+          },
+          "futureUse": [
+            "imagegen_prompt_stance",
+            "trellis_prior_assay",
+            "basin_failure_attribution"
           ]
         },
         {
@@ -5457,7 +6212,13 @@
           "mutate": [
             "surface material",
             "gross-cute balance",
-            "shell/soft tissue texture"
+            "shell/soft tissue texture",
+            "silhouette elaboration"
+          ],
+          "hallucinateBeyond": [
+            "invent plausible anatomy in under-specified regions",
+            "let the generator complete missing creature detail without losing the body plan",
+            "wake adjacent creature priors while preserving the selected silhouette family"
           ]
         }
       }
@@ -5476,6 +6237,7 @@
         "mutationPath": [
           "gestalt:lirm-trilobite-flat",
           "silhouette:flat-wide-side-plates",
+          "fall-forward:gestalt-leap",
           "segments:12",
           "axis:arched",
           "limbs:5",
@@ -5601,7 +6363,49 @@
         "bodyLength": 0.718,
         "bodyCenter": 0.532,
         "postureLift": 0.022,
-        "bulkScale": 1.514
+        "bulkScale": 1.514,
+        "controlPressures": {
+          "kind": "semantic-adherence-silhouette-fall-forward-v0",
+          "mode": "gestalt-leap",
+          "archetype": "lirm-trilobite-flat",
+          "semanticAdherence": 0.772,
+          "silhouetteFallForward": 0.921,
+          "priorInvitation": 0.98,
+          "rigidAnchors": [
+            "whole_body_axis",
+            "terminal_front_mouth",
+            "head_orientation",
+            "belly_contact_patch",
+            "primary_contact_points"
+          ],
+          "elasticZones": [
+            "micro_anatomy",
+            "surface_material",
+            "shell_plate_detail",
+            "limb_nub_detail",
+            "skin_fold_texture"
+          ],
+          "fallForwardPrompts": [
+            "push the creature family farther",
+            "let model priors complete missing anatomy",
+            "strong silhouette reinterpretation",
+            "trilobite",
+            "flat armored back",
+            "side plates"
+          ],
+          "routeStance": {
+            "matchScaffold": [
+              "preserve the procedural body axis and silhouette class",
+              "keep the terminal mouth on the front cap",
+              "keep belly contact and motion affordance readable"
+            ],
+            "hallucinateBeyond": [
+              "invent plausible anatomy in under-specified regions",
+              "let the generator complete missing creature detail without losing the body plan",
+              "wake adjacent creature priors while preserving the selected silhouette family"
+            ]
+          }
+        }
       },
       "semanticHandles": [
         {
@@ -5751,6 +6555,23 @@
           "futureUse": [
             "motion_transposition",
             "swarm_readability"
+          ]
+        },
+        {
+          "id": "lirm-armature-11:control-pressures",
+          "kind": "control_pressure",
+          "label": "semantic adherence / silhouette fall-forward controls",
+          "strength": 0.847,
+          "region": {
+            "mode": "gestalt-leap",
+            "semanticAdherence": 0.772,
+            "silhouetteFallForward": 0.921,
+            "priorInvitation": 0.98
+          },
+          "futureUse": [
+            "imagegen_prompt_stance",
+            "trellis_prior_assay",
+            "basin_failure_attribution"
           ]
         },
         {
@@ -6042,7 +6863,13 @@
           "mutate": [
             "surface material",
             "gross-cute balance",
-            "shell/soft tissue texture"
+            "shell/soft tissue texture",
+            "silhouette elaboration"
+          ],
+          "hallucinateBeyond": [
+            "invent plausible anatomy in under-specified regions",
+            "let the generator complete missing creature detail without losing the body plan",
+            "wake adjacent creature priors while preserving the selected silhouette family"
           ]
         }
       }
@@ -6061,6 +6888,7 @@
         "mutationPath": [
           "gestalt:lirm-larval-quad",
           "silhouette:stub-legged-ground-beast",
+          "fall-forward:material-creature-fusion",
           "segments:5",
           "axis:arched",
           "limbs:6",
@@ -6155,7 +6983,49 @@
         "bodyLength": 0.75,
         "bodyCenter": 0.505,
         "postureLift": 0.087,
-        "bulkScale": 1.419
+        "bulkScale": 1.419,
+        "controlPressures": {
+          "kind": "semantic-adherence-silhouette-fall-forward-v0",
+          "mode": "material-creature-fusion",
+          "archetype": "lirm-larval-quad",
+          "semanticAdherence": 0.739,
+          "silhouetteFallForward": 0.73,
+          "priorInvitation": 0.91,
+          "rigidAnchors": [
+            "whole_body_axis",
+            "terminal_front_mouth",
+            "head_orientation",
+            "belly_contact_patch",
+            "primary_contact_points"
+          ],
+          "elasticZones": [
+            "micro_anatomy",
+            "surface_material",
+            "shell_plate_detail",
+            "limb_nub_detail",
+            "skin_fold_texture"
+          ],
+          "fallForwardPrompts": [
+            "merge shell and flesh into one body",
+            "add natural growth seams",
+            "surprising but coherent creature design",
+            "stub-legged larva",
+            "small quadruped",
+            "ground beast"
+          ],
+          "routeStance": {
+            "matchScaffold": [
+              "preserve the procedural body axis and silhouette class",
+              "keep the terminal mouth on the front cap",
+              "keep belly contact and motion affordance readable"
+            ],
+            "hallucinateBeyond": [
+              "invent plausible anatomy in under-specified regions",
+              "let the generator complete missing creature detail without losing the body plan",
+              "wake adjacent creature priors while preserving the selected silhouette family"
+            ]
+          }
+        }
       },
       "semanticHandles": [
         {
@@ -6281,6 +7151,23 @@
           "futureUse": [
             "motion_transposition",
             "swarm_readability"
+          ]
+        },
+        {
+          "id": "lirm-armature-12:control-pressures",
+          "kind": "control_pressure",
+          "label": "semantic adherence / silhouette fall-forward controls",
+          "strength": 0.734,
+          "region": {
+            "mode": "material-creature-fusion",
+            "semanticAdherence": 0.739,
+            "silhouetteFallForward": 0.73,
+            "priorInvitation": 0.91
+          },
+          "futureUse": [
+            "imagegen_prompt_stance",
+            "trellis_prior_assay",
+            "basin_failure_attribution"
           ]
         },
         {
@@ -6614,7 +7501,13 @@
           "mutate": [
             "surface material",
             "gross-cute balance",
-            "shell/soft tissue texture"
+            "shell/soft tissue texture",
+            "silhouette elaboration"
+          ],
+          "hallucinateBeyond": [
+            "invent plausible anatomy in under-specified regions",
+            "let the generator complete missing creature detail without losing the body plan",
+            "wake adjacent creature priors while preserving the selected silhouette family"
           ]
         }
       }
@@ -6633,6 +7526,7 @@
         "mutationPath": [
           "gestalt:lirm-shell-kite",
           "silhouette:wide-diamond-shell",
+          "fall-forward:match-scaffold",
           "segments:7",
           "axis:low-crawl",
           "limbs:4",
@@ -6739,7 +7633,49 @@
         "bodyLength": 0.748,
         "bodyCenter": 0.5,
         "postureLift": -0.092,
-        "bulkScale": 0.86
+        "bulkScale": 0.86,
+        "controlPressures": {
+          "kind": "semantic-adherence-silhouette-fall-forward-v0",
+          "mode": "match-scaffold",
+          "archetype": "lirm-shell-kite",
+          "semanticAdherence": 0.81,
+          "silhouetteFallForward": 0.506,
+          "priorInvitation": 0.61,
+          "rigidAnchors": [
+            "whole_body_axis",
+            "terminal_front_mouth",
+            "head_orientation",
+            "belly_contact_patch",
+            "primary_contact_points"
+          ],
+          "elasticZones": [
+            "micro_anatomy",
+            "surface_material",
+            "shell_plate_detail",
+            "limb_nub_detail",
+            "skin_fold_texture"
+          ],
+          "fallForwardPrompts": [
+            "preserve the scaffold silhouette",
+            "tight anatomical match",
+            "low mutation",
+            "wide shell",
+            "diamond silhouette",
+            "raylike crawler"
+          ],
+          "routeStance": {
+            "matchScaffold": [
+              "preserve the procedural body axis and silhouette class",
+              "keep the terminal mouth on the front cap",
+              "keep belly contact and motion affordance readable"
+            ],
+            "hallucinateBeyond": [
+              "invent plausible anatomy in under-specified regions",
+              "let the generator complete missing creature detail without losing the body plan",
+              "wake adjacent creature priors while preserving the selected silhouette family"
+            ]
+          }
+        }
       },
       "semanticHandles": [
         {
@@ -6873,6 +7809,23 @@
           "futureUse": [
             "motion_transposition",
             "swarm_readability"
+          ]
+        },
+        {
+          "id": "lirm-armature-13:control-pressures",
+          "kind": "control_pressure",
+          "label": "semantic adherence / silhouette fall-forward controls",
+          "strength": 0.658,
+          "region": {
+            "mode": "match-scaffold",
+            "semanticAdherence": 0.81,
+            "silhouetteFallForward": 0.506,
+            "priorInvitation": 0.61
+          },
+          "futureUse": [
+            "imagegen_prompt_stance",
+            "trellis_prior_assay",
+            "basin_failure_attribution"
           ]
         },
         {
@@ -7152,7 +8105,13 @@
           "mutate": [
             "surface material",
             "gross-cute balance",
-            "shell/soft tissue texture"
+            "shell/soft tissue texture",
+            "silhouette elaboration"
+          ],
+          "hallucinateBeyond": [
+            "invent plausible anatomy in under-specified regions",
+            "let the generator complete missing creature detail without losing the body plan",
+            "wake adjacent creature priors while preserving the selected silhouette family"
           ]
         }
       }
@@ -7171,6 +8130,7 @@
         "mutationPath": [
           "gestalt:lirm-slug-loaf",
           "silhouette:broad-belly-loaf",
+          "fall-forward:material-creature-fusion",
           "segments:5",
           "axis:low-crawl",
           "limbs:2",
@@ -7264,7 +8224,49 @@
         "bodyLength": 0.806,
         "bodyCenter": 0.471,
         "postureLift": -0.028,
-        "bulkScale": 1.391
+        "bulkScale": 1.391,
+        "controlPressures": {
+          "kind": "semantic-adherence-silhouette-fall-forward-v0",
+          "mode": "material-creature-fusion",
+          "archetype": "lirm-slug-loaf",
+          "semanticAdherence": 0.708,
+          "silhouetteFallForward": 0.711,
+          "priorInvitation": 0.82,
+          "rigidAnchors": [
+            "whole_body_axis",
+            "terminal_front_mouth",
+            "head_orientation",
+            "belly_contact_patch",
+            "primary_contact_points"
+          ],
+          "elasticZones": [
+            "micro_anatomy",
+            "surface_material",
+            "shell_plate_detail",
+            "limb_nub_detail",
+            "skin_fold_texture"
+          ],
+          "fallForwardPrompts": [
+            "merge shell and flesh into one body",
+            "add natural growth seams",
+            "surprising but coherent creature design",
+            "slug",
+            "soft loaf body",
+            "low crawling belly"
+          ],
+          "routeStance": {
+            "matchScaffold": [
+              "preserve the procedural body axis and silhouette class",
+              "keep the terminal mouth on the front cap",
+              "keep belly contact and motion affordance readable"
+            ],
+            "hallucinateBeyond": [
+              "invent plausible anatomy in under-specified regions",
+              "let the generator complete missing creature detail without losing the body plan",
+              "wake adjacent creature priors while preserving the selected silhouette family"
+            ]
+          }
+        }
       },
       "semanticHandles": [
         {
@@ -7390,6 +8392,23 @@
           "futureUse": [
             "motion_transposition",
             "swarm_readability"
+          ]
+        },
+        {
+          "id": "lirm-armature-14:control-pressures",
+          "kind": "control_pressure",
+          "label": "semantic adherence / silhouette fall-forward controls",
+          "strength": 0.71,
+          "region": {
+            "mode": "material-creature-fusion",
+            "semanticAdherence": 0.708,
+            "silhouetteFallForward": 0.711,
+            "priorInvitation": 0.82
+          },
+          "futureUse": [
+            "imagegen_prompt_stance",
+            "trellis_prior_assay",
+            "basin_failure_attribution"
           ]
         },
         {
@@ -7530,7 +8549,13 @@
           "mutate": [
             "surface material",
             "gross-cute balance",
-            "shell/soft tissue texture"
+            "shell/soft tissue texture",
+            "silhouette elaboration"
+          ],
+          "hallucinateBeyond": [
+            "invent plausible anatomy in under-specified regions",
+            "let the generator complete missing creature detail without losing the body plan",
+            "wake adjacent creature priors while preserving the selected silhouette family"
           ]
         }
       }
@@ -7549,6 +8574,7 @@
         "mutationPath": [
           "gestalt:lirm-tadpole-pouch",
           "silhouette:big-head-taper-tail",
+          "fall-forward:basin-elaboration",
           "segments:9",
           "axis:low-crawl",
           "limbs:3",
@@ -7663,7 +8689,49 @@
         "bodyLength": 0.723,
         "bodyCenter": 0.457,
         "postureLift": 0.032,
-        "bulkScale": 1.519
+        "bulkScale": 1.519,
+        "controlPressures": {
+          "kind": "semantic-adherence-silhouette-fall-forward-v0",
+          "mode": "basin-elaboration",
+          "archetype": "lirm-tadpole-pouch",
+          "semanticAdherence": 0.7,
+          "silhouetteFallForward": 0.598,
+          "priorInvitation": 0.72,
+          "rigidAnchors": [
+            "whole_body_axis",
+            "terminal_front_mouth",
+            "head_orientation",
+            "belly_contact_patch",
+            "primary_contact_points"
+          ],
+          "elasticZones": [
+            "micro_anatomy",
+            "surface_material",
+            "shell_plate_detail",
+            "limb_nub_detail",
+            "skin_fold_texture"
+          ],
+          "fallForwardPrompts": [
+            "invent plausible anatomy around the scaffold",
+            "keep the body plan readable",
+            "organic creature detail",
+            "tadpole",
+            "pouch body",
+            "front-heavy larva"
+          ],
+          "routeStance": {
+            "matchScaffold": [
+              "preserve the procedural body axis and silhouette class",
+              "keep the terminal mouth on the front cap",
+              "keep belly contact and motion affordance readable"
+            ],
+            "hallucinateBeyond": [
+              "invent plausible anatomy in under-specified regions",
+              "let the generator complete missing creature detail without losing the body plan",
+              "wake adjacent creature priors while preserving the selected silhouette family"
+            ]
+          }
+        }
       },
       "semanticHandles": [
         {
@@ -7805,6 +8873,23 @@
           "futureUse": [
             "motion_transposition",
             "swarm_readability"
+          ]
+        },
+        {
+          "id": "lirm-armature-15:control-pressures",
+          "kind": "control_pressure",
+          "label": "semantic adherence / silhouette fall-forward controls",
+          "strength": 0.649,
+          "region": {
+            "mode": "basin-elaboration",
+            "semanticAdherence": 0.7,
+            "silhouetteFallForward": 0.598,
+            "priorInvitation": 0.72
+          },
+          "futureUse": [
+            "imagegen_prompt_stance",
+            "trellis_prior_assay",
+            "basin_failure_attribution"
           ]
         },
         {
@@ -7991,7 +9076,13 @@
           "mutate": [
             "surface material",
             "gross-cute balance",
-            "shell/soft tissue texture"
+            "shell/soft tissue texture",
+            "silhouette elaboration"
+          ],
+          "hallucinateBeyond": [
+            "invent plausible anatomy in under-specified regions",
+            "let the generator complete missing creature detail without losing the body plan",
+            "wake adjacent creature priors while preserving the selected silhouette family"
           ]
         }
       }
@@ -8010,6 +9101,7 @@
         "mutationPath": [
           "gestalt:lirm-pillbug-dome",
           "silhouette:armored-oval-dome",
+          "fall-forward:gestalt-leap",
           "segments:6",
           "axis:arched",
           "limbs:0",
@@ -8109,7 +9201,49 @@
         "bodyLength": 0.453,
         "bodyCenter": 0.484,
         "postureLift": -0.031,
-        "bulkScale": 1.435
+        "bulkScale": 1.435,
+        "controlPressures": {
+          "kind": "semantic-adherence-silhouette-fall-forward-v0",
+          "mode": "gestalt-leap",
+          "archetype": "lirm-pillbug-dome",
+          "semanticAdherence": 0.709,
+          "silhouetteFallForward": 0.833,
+          "priorInvitation": 0.97,
+          "rigidAnchors": [
+            "whole_body_axis",
+            "terminal_front_mouth",
+            "head_orientation",
+            "belly_contact_patch",
+            "primary_contact_points"
+          ],
+          "elasticZones": [
+            "micro_anatomy",
+            "surface_material",
+            "shell_plate_detail",
+            "limb_nub_detail",
+            "skin_fold_texture"
+          ],
+          "fallForwardPrompts": [
+            "push the creature family farther",
+            "let model priors complete missing anatomy",
+            "strong silhouette reinterpretation",
+            "pillbug",
+            "armored larva",
+            "domed shell"
+          ],
+          "routeStance": {
+            "matchScaffold": [
+              "preserve the procedural body axis and silhouette class",
+              "keep the terminal mouth on the front cap",
+              "keep belly contact and motion affordance readable"
+            ],
+            "hallucinateBeyond": [
+              "invent plausible anatomy in under-specified regions",
+              "let the generator complete missing creature detail without losing the body plan",
+              "wake adjacent creature priors while preserving the selected silhouette family"
+            ]
+          }
+        }
       },
       "semanticHandles": [
         {
@@ -8239,6 +9373,23 @@
           "futureUse": [
             "motion_transposition",
             "swarm_readability"
+          ]
+        },
+        {
+          "id": "lirm-armature-16:control-pressures",
+          "kind": "control_pressure",
+          "label": "semantic adherence / silhouette fall-forward controls",
+          "strength": 0.771,
+          "region": {
+            "mode": "gestalt-leap",
+            "semanticAdherence": 0.709,
+            "silhouetteFallForward": 0.833,
+            "priorInvitation": 0.97
+          },
+          "futureUse": [
+            "imagegen_prompt_stance",
+            "trellis_prior_assay",
+            "basin_failure_attribution"
           ]
         },
         {
@@ -8437,7 +9588,13 @@
           "mutate": [
             "surface material",
             "gross-cute balance",
-            "shell/soft tissue texture"
+            "shell/soft tissue texture",
+            "silhouette elaboration"
+          ],
+          "hallucinateBeyond": [
+            "invent plausible anatomy in under-specified regions",
+            "let the generator complete missing creature detail without losing the body plan",
+            "wake adjacent creature priors while preserving the selected silhouette family"
           ]
         }
       }
@@ -8456,6 +9613,7 @@
         "mutationPath": [
           "gestalt:lirm-thread-centipede",
           "silhouette:long-many-legged-thread",
+          "fall-forward:match-scaffold",
           "segments:10",
           "axis:arched",
           "limbs:8",
@@ -8576,7 +9734,49 @@
         "bodyLength": 0.957,
         "bodyCenter": 0.512,
         "postureLift": -0.026,
-        "bulkScale": 0.589
+        "bulkScale": 0.589,
+        "controlPressures": {
+          "kind": "semantic-adherence-silhouette-fall-forward-v0",
+          "mode": "match-scaffold",
+          "archetype": "lirm-thread-centipede",
+          "semanticAdherence": 0.816,
+          "silhouetteFallForward": 0.468,
+          "priorInvitation": 0.56,
+          "rigidAnchors": [
+            "whole_body_axis",
+            "terminal_front_mouth",
+            "head_orientation",
+            "belly_contact_patch",
+            "primary_contact_points"
+          ],
+          "elasticZones": [
+            "micro_anatomy",
+            "surface_material",
+            "shell_plate_detail",
+            "limb_nub_detail",
+            "skin_fold_texture"
+          ],
+          "fallForwardPrompts": [
+            "preserve the scaffold silhouette",
+            "tight anatomical match",
+            "low mutation",
+            "centipede",
+            "thin segmented body",
+            "many tiny legs"
+          ],
+          "routeStance": {
+            "matchScaffold": [
+              "preserve the procedural body axis and silhouette class",
+              "keep the terminal mouth on the front cap",
+              "keep belly contact and motion affordance readable"
+            ],
+            "hallucinateBeyond": [
+              "invent plausible anatomy in under-specified regions",
+              "let the generator complete missing creature detail without losing the body plan",
+              "wake adjacent creature priors while preserving the selected silhouette family"
+            ]
+          }
+        }
       },
       "semanticHandles": [
         {
@@ -8722,6 +9922,23 @@
           "futureUse": [
             "motion_transposition",
             "swarm_readability"
+          ]
+        },
+        {
+          "id": "lirm-armature-17:control-pressures",
+          "kind": "control_pressure",
+          "label": "semantic adherence / silhouette fall-forward controls",
+          "strength": 0.642,
+          "region": {
+            "mode": "match-scaffold",
+            "semanticAdherence": 0.816,
+            "silhouetteFallForward": 0.468,
+            "priorInvitation": 0.56
+          },
+          "futureUse": [
+            "imagegen_prompt_stance",
+            "trellis_prior_assay",
+            "basin_failure_attribution"
           ]
         },
         {
@@ -9054,7 +10271,13 @@
           "mutate": [
             "surface material",
             "gross-cute balance",
-            "shell/soft tissue texture"
+            "shell/soft tissue texture",
+            "silhouette elaboration"
+          ],
+          "hallucinateBeyond": [
+            "invent plausible anatomy in under-specified regions",
+            "let the generator complete missing creature detail without losing the body plan",
+            "wake adjacent creature priors while preserving the selected silhouette family"
           ]
         }
       }
@@ -9073,6 +10296,7 @@
         "mutationPath": [
           "gestalt:lirm-comma-grub",
           "silhouette:curled-comma-grub",
+          "fall-forward:material-creature-fusion",
           "segments:8",
           "axis:arched",
           "limbs:3",
@@ -9184,7 +10408,49 @@
         "bodyLength": 0.821,
         "bodyCenter": 0.536,
         "postureLift": -0.031,
-        "bulkScale": 1.579
+        "bulkScale": 1.579,
+        "controlPressures": {
+          "kind": "semantic-adherence-silhouette-fall-forward-v0",
+          "mode": "material-creature-fusion",
+          "archetype": "lirm-comma-grub",
+          "semanticAdherence": 0.768,
+          "silhouetteFallForward": 0.746,
+          "priorInvitation": 0.87,
+          "rigidAnchors": [
+            "whole_body_axis",
+            "terminal_front_mouth",
+            "head_orientation",
+            "belly_contact_patch",
+            "primary_contact_points"
+          ],
+          "elasticZones": [
+            "micro_anatomy",
+            "surface_material",
+            "shell_plate_detail",
+            "limb_nub_detail",
+            "skin_fold_texture"
+          ],
+          "fallForwardPrompts": [
+            "merge shell and flesh into one body",
+            "add natural growth seams",
+            "surprising but coherent creature design",
+            "curled grub",
+            "comma body",
+            "asymmetric larva"
+          ],
+          "routeStance": {
+            "matchScaffold": [
+              "preserve the procedural body axis and silhouette class",
+              "keep the terminal mouth on the front cap",
+              "keep belly contact and motion affordance readable"
+            ],
+            "hallucinateBeyond": [
+              "invent plausible anatomy in under-specified regions",
+              "let the generator complete missing creature detail without losing the body plan",
+              "wake adjacent creature priors while preserving the selected silhouette family"
+            ]
+          }
+        }
       },
       "semanticHandles": [
         {
@@ -9322,6 +10588,23 @@
           "futureUse": [
             "motion_transposition",
             "swarm_readability"
+          ]
+        },
+        {
+          "id": "lirm-armature-18:control-pressures",
+          "kind": "control_pressure",
+          "label": "semantic adherence / silhouette fall-forward controls",
+          "strength": 0.757,
+          "region": {
+            "mode": "material-creature-fusion",
+            "semanticAdherence": 0.768,
+            "silhouetteFallForward": 0.746,
+            "priorInvitation": 0.87
+          },
+          "futureUse": [
+            "imagegen_prompt_stance",
+            "trellis_prior_assay",
+            "basin_failure_attribution"
           ]
         },
         {
@@ -9591,7 +10874,13 @@
           "mutate": [
             "surface material",
             "gross-cute balance",
-            "shell/soft tissue texture"
+            "shell/soft tissue texture",
+            "silhouette elaboration"
+          ],
+          "hallucinateBeyond": [
+            "invent plausible anatomy in under-specified regions",
+            "let the generator complete missing creature detail without losing the body plan",
+            "wake adjacent creature priors while preserving the selected silhouette family"
           ]
         }
       }
@@ -9610,6 +10899,7 @@
         "mutationPath": [
           "gestalt:lirm-trilobite-flat",
           "silhouette:flat-wide-side-plates",
+          "fall-forward:gestalt-leap",
           "segments:11",
           "axis:low-crawl",
           "limbs:6",
@@ -9735,7 +11025,49 @@
         "bodyLength": 0.838,
         "bodyCenter": 0.514,
         "postureLift": 0.006,
-        "bulkScale": 1.474
+        "bulkScale": 1.474,
+        "controlPressures": {
+          "kind": "semantic-adherence-silhouette-fall-forward-v0",
+          "mode": "gestalt-leap",
+          "archetype": "lirm-trilobite-flat",
+          "semanticAdherence": 0.756,
+          "silhouetteFallForward": 0.874,
+          "priorInvitation": 0.98,
+          "rigidAnchors": [
+            "whole_body_axis",
+            "terminal_front_mouth",
+            "head_orientation",
+            "belly_contact_patch",
+            "primary_contact_points"
+          ],
+          "elasticZones": [
+            "micro_anatomy",
+            "surface_material",
+            "shell_plate_detail",
+            "limb_nub_detail",
+            "skin_fold_texture"
+          ],
+          "fallForwardPrompts": [
+            "push the creature family farther",
+            "let model priors complete missing anatomy",
+            "strong silhouette reinterpretation",
+            "trilobite",
+            "flat armored back",
+            "side plates"
+          ],
+          "routeStance": {
+            "matchScaffold": [
+              "preserve the procedural body axis and silhouette class",
+              "keep the terminal mouth on the front cap",
+              "keep belly contact and motion affordance readable"
+            ],
+            "hallucinateBeyond": [
+              "invent plausible anatomy in under-specified regions",
+              "let the generator complete missing creature detail without losing the body plan",
+              "wake adjacent creature priors while preserving the selected silhouette family"
+            ]
+          }
+        }
       },
       "semanticHandles": [
         {
@@ -9885,6 +11217,23 @@
           "futureUse": [
             "motion_transposition",
             "swarm_readability"
+          ]
+        },
+        {
+          "id": "lirm-armature-19:control-pressures",
+          "kind": "control_pressure",
+          "label": "semantic adherence / silhouette fall-forward controls",
+          "strength": 0.815,
+          "region": {
+            "mode": "gestalt-leap",
+            "semanticAdherence": 0.756,
+            "silhouetteFallForward": 0.874,
+            "priorInvitation": 0.98
+          },
+          "futureUse": [
+            "imagegen_prompt_stance",
+            "trellis_prior_assay",
+            "basin_failure_attribution"
           ]
         },
         {
@@ -10248,7 +11597,13 @@
           "mutate": [
             "surface material",
             "gross-cute balance",
-            "shell/soft tissue texture"
+            "shell/soft tissue texture",
+            "silhouette elaboration"
+          ],
+          "hallucinateBeyond": [
+            "invent plausible anatomy in under-specified regions",
+            "let the generator complete missing creature detail without losing the body plan",
+            "wake adjacent creature priors while preserving the selected silhouette family"
           ]
         }
       }
@@ -10267,6 +11622,7 @@
         "mutationPath": [
           "gestalt:lirm-larval-quad",
           "silhouette:stub-legged-ground-beast",
+          "fall-forward:match-scaffold",
           "segments:5",
           "axis:low-crawl",
           "limbs:6",
@@ -10360,7 +11716,49 @@
         "bodyLength": 0.702,
         "bodyCenter": 0.548,
         "postureLift": 0.079,
-        "bulkScale": 0.912
+        "bulkScale": 0.912,
+        "controlPressures": {
+          "kind": "semantic-adherence-silhouette-fall-forward-v0",
+          "mode": "match-scaffold",
+          "archetype": "lirm-larval-quad",
+          "semanticAdherence": 0.812,
+          "silhouetteFallForward": 0.419,
+          "priorInvitation": 0.56,
+          "rigidAnchors": [
+            "whole_body_axis",
+            "terminal_front_mouth",
+            "head_orientation",
+            "belly_contact_patch",
+            "primary_contact_points"
+          ],
+          "elasticZones": [
+            "micro_anatomy",
+            "surface_material",
+            "shell_plate_detail",
+            "limb_nub_detail",
+            "skin_fold_texture"
+          ],
+          "fallForwardPrompts": [
+            "preserve the scaffold silhouette",
+            "tight anatomical match",
+            "low mutation",
+            "stub-legged larva",
+            "small quadruped",
+            "ground beast"
+          ],
+          "routeStance": {
+            "matchScaffold": [
+              "preserve the procedural body axis and silhouette class",
+              "keep the terminal mouth on the front cap",
+              "keep belly contact and motion affordance readable"
+            ],
+            "hallucinateBeyond": [
+              "invent plausible anatomy in under-specified regions",
+              "let the generator complete missing creature detail without losing the body plan",
+              "wake adjacent creature priors while preserving the selected silhouette family"
+            ]
+          }
+        }
       },
       "semanticHandles": [
         {
@@ -10486,6 +11884,23 @@
           "futureUse": [
             "motion_transposition",
             "swarm_readability"
+          ]
+        },
+        {
+          "id": "lirm-armature-20:control-pressures",
+          "kind": "control_pressure",
+          "label": "semantic adherence / silhouette fall-forward controls",
+          "strength": 0.616,
+          "region": {
+            "mode": "match-scaffold",
+            "semanticAdherence": 0.812,
+            "silhouetteFallForward": 0.419,
+            "priorInvitation": 0.56
+          },
+          "futureUse": [
+            "imagegen_prompt_stance",
+            "trellis_prior_assay",
+            "basin_failure_attribution"
           ]
         },
         {
@@ -10764,7 +12179,13 @@
           "mutate": [
             "surface material",
             "gross-cute balance",
-            "shell/soft tissue texture"
+            "shell/soft tissue texture",
+            "silhouette elaboration"
+          ],
+          "hallucinateBeyond": [
+            "invent plausible anatomy in under-specified regions",
+            "let the generator complete missing creature detail without losing the body plan",
+            "wake adjacent creature priors while preserving the selected silhouette family"
           ]
         }
       }
@@ -10783,6 +12204,7 @@
         "mutationPath": [
           "gestalt:lirm-shell-kite",
           "silhouette:wide-diamond-shell",
+          "fall-forward:match-scaffold",
           "segments:5",
           "axis:low-crawl",
           "limbs:1",
@@ -10879,7 +12301,49 @@
         "bodyLength": 0.579,
         "bodyCenter": 0.555,
         "postureLift": -0.009,
-        "bulkScale": 1.081
+        "bulkScale": 1.081,
+        "controlPressures": {
+          "kind": "semantic-adherence-silhouette-fall-forward-v0",
+          "mode": "match-scaffold",
+          "archetype": "lirm-shell-kite",
+          "semanticAdherence": 0.823,
+          "silhouetteFallForward": 0.521,
+          "priorInvitation": 0.57,
+          "rigidAnchors": [
+            "whole_body_axis",
+            "terminal_front_mouth",
+            "head_orientation",
+            "belly_contact_patch",
+            "primary_contact_points"
+          ],
+          "elasticZones": [
+            "micro_anatomy",
+            "surface_material",
+            "shell_plate_detail",
+            "limb_nub_detail",
+            "skin_fold_texture"
+          ],
+          "fallForwardPrompts": [
+            "preserve the scaffold silhouette",
+            "tight anatomical match",
+            "low mutation",
+            "wide shell",
+            "diamond silhouette",
+            "raylike crawler"
+          ],
+          "routeStance": {
+            "matchScaffold": [
+              "preserve the procedural body axis and silhouette class",
+              "keep the terminal mouth on the front cap",
+              "keep belly contact and motion affordance readable"
+            ],
+            "hallucinateBeyond": [
+              "invent plausible anatomy in under-specified regions",
+              "let the generator complete missing creature detail without losing the body plan",
+              "wake adjacent creature priors while preserving the selected silhouette family"
+            ]
+          }
+        }
       },
       "semanticHandles": [
         {
@@ -11005,6 +12469,23 @@
           "futureUse": [
             "motion_transposition",
             "swarm_readability"
+          ]
+        },
+        {
+          "id": "lirm-armature-21:control-pressures",
+          "kind": "control_pressure",
+          "label": "semantic adherence / silhouette fall-forward controls",
+          "strength": 0.672,
+          "region": {
+            "mode": "match-scaffold",
+            "semanticAdherence": 0.823,
+            "silhouetteFallForward": 0.521,
+            "priorInvitation": 0.57
+          },
+          "futureUse": [
+            "imagegen_prompt_stance",
+            "trellis_prior_assay",
+            "basin_failure_attribution"
           ]
         },
         {
@@ -11218,7 +12699,13 @@
           "mutate": [
             "surface material",
             "gross-cute balance",
-            "shell/soft tissue texture"
+            "shell/soft tissue texture",
+            "silhouette elaboration"
+          ],
+          "hallucinateBeyond": [
+            "invent plausible anatomy in under-specified regions",
+            "let the generator complete missing creature detail without losing the body plan",
+            "wake adjacent creature priors while preserving the selected silhouette family"
           ]
         }
       }
@@ -11237,6 +12724,7 @@
         "mutationPath": [
           "gestalt:lirm-slug-loaf",
           "silhouette:broad-belly-loaf",
+          "fall-forward:gestalt-leap",
           "segments:9",
           "axis:low-crawl",
           "limbs:3",
@@ -11351,7 +12839,49 @@
         "bodyLength": 0.728,
         "bodyCenter": 0.549,
         "postureLift": -0.066,
-        "bulkScale": 1.128
+        "bulkScale": 1.128,
+        "controlPressures": {
+          "kind": "semantic-adherence-silhouette-fall-forward-v0",
+          "mode": "gestalt-leap",
+          "archetype": "lirm-slug-loaf",
+          "semanticAdherence": 0.768,
+          "silhouetteFallForward": 0.836,
+          "priorInvitation": 0.92,
+          "rigidAnchors": [
+            "whole_body_axis",
+            "terminal_front_mouth",
+            "head_orientation",
+            "belly_contact_patch",
+            "primary_contact_points"
+          ],
+          "elasticZones": [
+            "micro_anatomy",
+            "surface_material",
+            "shell_plate_detail",
+            "limb_nub_detail",
+            "skin_fold_texture"
+          ],
+          "fallForwardPrompts": [
+            "push the creature family farther",
+            "let model priors complete missing anatomy",
+            "strong silhouette reinterpretation",
+            "slug",
+            "soft loaf body",
+            "low crawling belly"
+          ],
+          "routeStance": {
+            "matchScaffold": [
+              "preserve the procedural body axis and silhouette class",
+              "keep the terminal mouth on the front cap",
+              "keep belly contact and motion affordance readable"
+            ],
+            "hallucinateBeyond": [
+              "invent plausible anatomy in under-specified regions",
+              "let the generator complete missing creature detail without losing the body plan",
+              "wake adjacent creature priors while preserving the selected silhouette family"
+            ]
+          }
+        }
       },
       "semanticHandles": [
         {
@@ -11493,6 +13023,23 @@
           "futureUse": [
             "motion_transposition",
             "swarm_readability"
+          ]
+        },
+        {
+          "id": "lirm-armature-22:control-pressures",
+          "kind": "control_pressure",
+          "label": "semantic adherence / silhouette fall-forward controls",
+          "strength": 0.802,
+          "region": {
+            "mode": "gestalt-leap",
+            "semanticAdherence": 0.768,
+            "silhouetteFallForward": 0.836,
+            "priorInvitation": 0.92
+          },
+          "futureUse": [
+            "imagegen_prompt_stance",
+            "trellis_prior_assay",
+            "basin_failure_attribution"
           ]
         },
         {
@@ -11690,7 +13237,13 @@
           "mutate": [
             "surface material",
             "gross-cute balance",
-            "shell/soft tissue texture"
+            "shell/soft tissue texture",
+            "silhouette elaboration"
+          ],
+          "hallucinateBeyond": [
+            "invent plausible anatomy in under-specified regions",
+            "let the generator complete missing creature detail without losing the body plan",
+            "wake adjacent creature priors while preserving the selected silhouette family"
           ]
         }
       }
@@ -11709,6 +13262,7 @@
         "mutationPath": [
           "gestalt:lirm-tadpole-pouch",
           "silhouette:big-head-taper-tail",
+          "fall-forward:material-creature-fusion",
           "segments:5",
           "axis:arched",
           "limbs:2",
@@ -11804,7 +13358,49 @@
         "bodyLength": 0.706,
         "bodyCenter": 0.465,
         "postureLift": -0.028,
-        "bulkScale": 0.972
+        "bulkScale": 0.972,
+        "controlPressures": {
+          "kind": "semantic-adherence-silhouette-fall-forward-v0",
+          "mode": "material-creature-fusion",
+          "archetype": "lirm-tadpole-pouch",
+          "semanticAdherence": 0.77,
+          "silhouetteFallForward": 0.746,
+          "priorInvitation": 0.82,
+          "rigidAnchors": [
+            "whole_body_axis",
+            "terminal_front_mouth",
+            "head_orientation",
+            "belly_contact_patch",
+            "primary_contact_points"
+          ],
+          "elasticZones": [
+            "micro_anatomy",
+            "surface_material",
+            "shell_plate_detail",
+            "limb_nub_detail",
+            "skin_fold_texture"
+          ],
+          "fallForwardPrompts": [
+            "merge shell and flesh into one body",
+            "add natural growth seams",
+            "surprising but coherent creature design",
+            "tadpole",
+            "pouch body",
+            "front-heavy larva"
+          ],
+          "routeStance": {
+            "matchScaffold": [
+              "preserve the procedural body axis and silhouette class",
+              "keep the terminal mouth on the front cap",
+              "keep belly contact and motion affordance readable"
+            ],
+            "hallucinateBeyond": [
+              "invent plausible anatomy in under-specified regions",
+              "let the generator complete missing creature detail without losing the body plan",
+              "wake adjacent creature priors while preserving the selected silhouette family"
+            ]
+          }
+        }
       },
       "semanticHandles": [
         {
@@ -11930,6 +13526,23 @@
           "futureUse": [
             "motion_transposition",
             "swarm_readability"
+          ]
+        },
+        {
+          "id": "lirm-armature-23:control-pressures",
+          "kind": "control_pressure",
+          "label": "semantic adherence / silhouette fall-forward controls",
+          "strength": 0.758,
+          "region": {
+            "mode": "material-creature-fusion",
+            "semanticAdherence": 0.77,
+            "silhouetteFallForward": 0.746,
+            "priorInvitation": 0.82
+          },
+          "futureUse": [
+            "imagegen_prompt_stance",
+            "trellis_prior_assay",
+            "basin_failure_attribution"
           ]
         },
         {
@@ -12100,7 +13713,13 @@
           "mutate": [
             "surface material",
             "gross-cute balance",
-            "shell/soft tissue texture"
+            "shell/soft tissue texture",
+            "silhouette elaboration"
+          ],
+          "hallucinateBeyond": [
+            "invent plausible anatomy in under-specified regions",
+            "let the generator complete missing creature detail without losing the body plan",
+            "wake adjacent creature priors while preserving the selected silhouette family"
           ]
         }
       }
@@ -12119,6 +13738,7 @@
         "mutationPath": [
           "gestalt:lirm-pillbug-dome",
           "silhouette:armored-oval-dome",
+          "fall-forward:basin-elaboration",
           "segments:11",
           "axis:low-crawl",
           "limbs:2",
@@ -12243,7 +13863,49 @@
         "bodyLength": 0.722,
         "bodyCenter": 0.51,
         "postureLift": -0.091,
-        "bulkScale": 1.315
+        "bulkScale": 1.315,
+        "controlPressures": {
+          "kind": "semantic-adherence-silhouette-fall-forward-v0",
+          "mode": "basin-elaboration",
+          "archetype": "lirm-pillbug-dome",
+          "semanticAdherence": 0.725,
+          "silhouetteFallForward": 0.596,
+          "priorInvitation": 0.77,
+          "rigidAnchors": [
+            "whole_body_axis",
+            "terminal_front_mouth",
+            "head_orientation",
+            "belly_contact_patch",
+            "primary_contact_points"
+          ],
+          "elasticZones": [
+            "micro_anatomy",
+            "surface_material",
+            "shell_plate_detail",
+            "limb_nub_detail",
+            "skin_fold_texture"
+          ],
+          "fallForwardPrompts": [
+            "invent plausible anatomy around the scaffold",
+            "keep the body plan readable",
+            "organic creature detail",
+            "pillbug",
+            "armored larva",
+            "domed shell"
+          ],
+          "routeStance": {
+            "matchScaffold": [
+              "preserve the procedural body axis and silhouette class",
+              "keep the terminal mouth on the front cap",
+              "keep belly contact and motion affordance readable"
+            ],
+            "hallucinateBeyond": [
+              "invent plausible anatomy in under-specified regions",
+              "let the generator complete missing creature detail without losing the body plan",
+              "wake adjacent creature priors while preserving the selected silhouette family"
+            ]
+          }
+        }
       },
       "semanticHandles": [
         {
@@ -12393,6 +14055,23 @@
           "futureUse": [
             "motion_transposition",
             "swarm_readability"
+          ]
+        },
+        {
+          "id": "lirm-armature-24:control-pressures",
+          "kind": "control_pressure",
+          "label": "semantic adherence / silhouette fall-forward controls",
+          "strength": 0.66,
+          "region": {
+            "mode": "basin-elaboration",
+            "semanticAdherence": 0.725,
+            "silhouetteFallForward": 0.596,
+            "priorInvitation": 0.77
+          },
+          "futureUse": [
+            "imagegen_prompt_stance",
+            "trellis_prior_assay",
+            "basin_failure_attribution"
           ]
         },
         {
@@ -12699,7 +14378,13 @@
           "mutate": [
             "surface material",
             "gross-cute balance",
-            "shell/soft tissue texture"
+            "shell/soft tissue texture",
+            "silhouette elaboration"
+          ],
+          "hallucinateBeyond": [
+            "invent plausible anatomy in under-specified regions",
+            "let the generator complete missing creature detail without losing the body plan",
+            "wake adjacent creature priors while preserving the selected silhouette family"
           ]
         }
       }
@@ -12752,6 +14437,41 @@
         "big-head-taper-tail"
       ],
       "candidateCount": 25
+    },
+    "controlPressureAssay": {
+      "kind": "semantic_adherence_silhouette_fall_forward_v0",
+      "semanticAdherenceRange": {
+        "min": 0.685,
+        "max": 0.823
+      },
+      "silhouetteFallForwardRange": {
+        "min": 0.419,
+        "max": 0.921
+      },
+      "priorInvitationRange": {
+        "min": 0.52,
+        "max": 0.98
+      },
+      "modes": [
+        "basin-elaboration",
+        "material-creature-fusion",
+        "gestalt-leap",
+        "match-scaffold"
+      ],
+      "rigidAnchors": [
+        "whole_body_axis",
+        "terminal_front_mouth",
+        "head_orientation",
+        "belly_contact_patch",
+        "primary_contact_points"
+      ],
+      "elasticZones": [
+        "micro_anatomy",
+        "surface_material",
+        "shell_plate_detail",
+        "limb_nub_detail",
+        "skin_fold_texture"
+      ]
     },
     "controlMaps": [
       "silhouette",

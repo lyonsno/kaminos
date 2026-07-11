@@ -182,6 +182,23 @@
       ]
     },
     {
+      "id": "lirm-armature-07:control-pressures",
+      "kind": "control_pressure",
+      "label": "semantic adherence / silhouette fall-forward controls",
+      "strength": 0.631,
+      "region": {
+        "mode": "match-scaffold",
+        "semanticAdherence": 0.798,
+        "silhouetteFallForward": 0.463,
+        "priorInvitation": 0.52
+      },
+      "futureUse": [
+        "imagegen_prompt_stance",
+        "trellis_prior_assay",
+        "basin_failure_attribution"
+      ]
+    },
+    {
       "id": "lirm-armature-07:limb-bud-0",
       "kind": "limb_bud",
       "label": "paired limb bud 1",

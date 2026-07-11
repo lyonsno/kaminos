@@ -79,6 +79,16 @@ for (const candidate of witness.candidates) {
   assert.ok(candidate.bodyPlan.gestalt.priorHooks.length >= 3, 'gestalt needs model-prior hooks for imagegen/Trellis routing');
   assert.ok(candidate.bodyPlan.silhouette.class.length > 4, 'candidate needs a named silhouette class');
   assert.ok(candidate.bodyPlan.silhouette.gestaltPressure > 0, 'silhouette must record nonzero gestalt pressure');
+  assert.equal(candidate.bodyPlan.controlPressures.kind, 'semantic-adherence-silhouette-fall-forward-v0');
+  assert.ok(candidate.bodyPlan.controlPressures.semanticAdherence >= 0.55, 'candidate should record enough semantic adherence to preserve body identity');
+  assert.ok(candidate.bodyPlan.controlPressures.silhouetteFallForward >= 0.35, 'candidate should record silhouette latitude for generator elaboration');
+  assert.ok(candidate.bodyPlan.controlPressures.priorInvitation >= 0.35, 'candidate should record model-prior invitation pressure');
+  assert.ok(candidate.bodyPlan.controlPressures.rigidAnchors.includes('terminal_front_mouth'), 'control pressures must keep the mouth as a rigid semantic anchor');
+  assert.ok(candidate.bodyPlan.controlPressures.rigidAnchors.includes('belly_contact_patch'), 'control pressures must keep belly contact as a rigid semantic anchor');
+  assert.ok(candidate.bodyPlan.controlPressures.elasticZones.includes('micro_anatomy'), 'control pressures should identify micro anatomy as an elastic zone');
+  assert.ok(candidate.bodyPlan.controlPressures.fallForwardPrompts.length >= 3, 'control pressures need prompt hooks for basin exploration');
+  assert.ok(candidate.bodyPlan.controlPressures.routeStance.matchScaffold.length >= 2, 'control pressures need match-scaffold route stance');
+  assert.ok(candidate.bodyPlan.controlPressures.routeStance.hallucinateBeyond.length >= 2, 'control pressures need hallucinate-beyond route stance');
   gestaltKinds.add(candidate.bodyPlan.gestalt.kind);
   silhouetteClasses.add(candidate.bodyPlan.silhouette.class);
   assert.ok(candidate.bodyPlan.axisSamples.length >= 7, 'candidate needs axial curve samples');
@@ -109,10 +119,14 @@ for (const candidate of witness.candidates) {
   assert.equal(packet.falseClosureGuards.proxyGeometryClaim, 'control_primitives_only');
   assert.equal(packet.gestalt.kind, candidate.bodyPlan.gestalt.kind, 'packet should preserve selected gestalt identity');
   assert.equal(packet.silhouette.class, candidate.bodyPlan.silhouette.class, 'packet should preserve selected silhouette class');
+  assert.equal(packet.controlPressures.kind, 'semantic-adherence-silhouette-fall-forward-v0', 'packet should preserve semantic/fall-forward controls');
   assert.ok(packet.proxyPrimitives.some(primitive => primitive.kind === 'metaball' && primitive.role === 'body_mass'), 'packet missing body metaball primitives');
   assert.ok(packet.proxyPrimitives.some(primitive => primitive.kind === 'sphere' && primitive.role === 'terminal_mouth'), 'packet missing terminal mouth proxy primitive');
   assert.ok(packet.conditioningMaps.some(map => map.kind === 'semantic-svg'), 'packet missing semantic SVG control map');
   assert.ok(packet.conditioningMaps.some(map => map.kind === 'silhouette-svg'), 'packet missing silhouette SVG control map');
+  assert.ok(packet.promptContract.preserve.includes('terminal front mouth'), 'prompt contract should preserve terminal mouth');
+  assert.ok(packet.promptContract.allowMutation.includes('silhouette elaboration'), 'prompt contract should invite silhouette elaboration');
+  assert.ok(packet.promptContract.hallucinateBeyond.some(item => item.includes('plausible anatomy')), 'prompt contract should name the beyond-scaffold hallucination target');
   if (candidate.semanticHandles.some(handle => handle.kind === 'shell_plate')) shellPlateCandidateCount += 1;
   if (candidate.semanticHandles.some(handle => handle.kind === 'limb_bud')) limbBudCandidateCount += 1;
   if (candidate.bodyPlan.asymmetry > 0.08) asymmetryCandidateCount += 1;
@@ -126,6 +140,10 @@ assert.ok(silhouetteClasses.size >= 5, `lineage should expose at least five silh
 assert.equal(witness.receipt.gestaltAssay.kind, 'silhouette_gestalt_v0');
 assert.ok(witness.receipt.gestaltAssay.gestaltKinds.length >= 6, 'receipt should summarize gestalt basin diversity');
 assert.ok(witness.receipt.gestaltAssay.silhouetteClasses.length >= 5, 'receipt should summarize silhouette class diversity');
+assert.equal(witness.receipt.controlPressureAssay.kind, 'semantic_adherence_silhouette_fall_forward_v0');
+assert.ok(witness.receipt.controlPressureAssay.semanticAdherenceRange.min >= 0.55, 'receipt should summarize semantic adherence floor');
+assert.ok(witness.receipt.controlPressureAssay.silhouetteFallForwardRange.max > witness.receipt.controlPressureAssay.silhouetteFallForwardRange.min, 'receipt should summarize fall-forward variation');
+assert.ok(witness.receipt.controlPressureAssay.priorInvitationRange.max > witness.receipt.controlPressureAssay.priorInvitationRange.min, 'receipt should summarize model-prior invitation variation');
 
 const outDir = await mkdtemp(join(tmpdir(), 'kaminos-lirm-speciation-contract-'));
 const writeResult = await writeLirmSpeciationArmatureWitness({

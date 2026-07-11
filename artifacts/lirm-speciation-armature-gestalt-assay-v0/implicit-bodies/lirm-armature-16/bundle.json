@@ -186,6 +186,23 @@
       ]
     },
     {
+      "id": "lirm-armature-16:control-pressures",
+      "kind": "control_pressure",
+      "label": "semantic adherence / silhouette fall-forward controls",
+      "strength": 0.771,
+      "region": {
+        "mode": "gestalt-leap",
+        "semanticAdherence": 0.709,
+        "silhouetteFallForward": 0.833,
+        "priorInvitation": 0.97
+      },
+      "futureUse": [
+        "imagegen_prompt_stance",
+        "trellis_prior_assay",
+        "basin_failure_attribution"
+      ]
+    },
+    {
       "id": "lirm-armature-16:shell-plate-0",
       "kind": "shell_plate",
       "label": "dorsal shell plate 1",

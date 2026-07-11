@@ -33,6 +33,48 @@
       "ancient arthropod"
     ]
   },
+  "controlPressures": {
+    "kind": "semantic-adherence-silhouette-fall-forward-v0",
+    "mode": "gestalt-leap",
+    "archetype": "lirm-trilobite-flat",
+    "semanticAdherence": 0.772,
+    "silhouetteFallForward": 0.921,
+    "priorInvitation": 0.98,
+    "rigidAnchors": [
+      "whole_body_axis",
+      "terminal_front_mouth",
+      "head_orientation",
+      "belly_contact_patch",
+      "primary_contact_points"
+    ],
+    "elasticZones": [
+      "micro_anatomy",
+      "surface_material",
+      "shell_plate_detail",
+      "limb_nub_detail",
+      "skin_fold_texture"
+    ],
+    "fallForwardPrompts": [
+      "push the creature family farther",
+      "let model priors complete missing anatomy",
+      "strong silhouette reinterpretation",
+      "trilobite",
+      "flat armored back",
+      "side plates"
+    ],
+    "routeStance": {
+      "matchScaffold": [
+        "preserve the procedural body axis and silhouette class",
+        "keep the terminal mouth on the front cap",
+        "keep belly contact and motion affordance readable"
+      ],
+      "hallucinateBeyond": [
+        "invent plausible anatomy in under-specified regions",
+        "let the generator complete missing creature detail without losing the body plan",
+        "wake adjacent creature priors while preserving the selected silhouette family"
+      ]
+    }
+  },
   "lineage": {
     "rootSeed": "molten-lirm-seed-0707",
     "parentId": "root-soft-crawling-hoard-thief",
@@ -42,6 +84,7 @@
     "mutationPath": [
       "gestalt:lirm-trilobite-flat",
       "silhouette:flat-wide-side-plates",
+      "fall-forward:gestalt-leap",
       "segments:12",
       "axis:arched",
       "limbs:5",
@@ -207,6 +250,23 @@
       "futureUse": [
         "motion_transposition",
         "swarm_readability"
+      ]
+    },
+    {
+      "id": "lirm-armature-11:control-pressures",
+      "kind": "control_pressure",
+      "label": "semantic adherence / silhouette fall-forward controls",
+      "strength": 0.847,
+      "region": {
+        "mode": "gestalt-leap",
+        "semanticAdherence": 0.772,
+        "silhouetteFallForward": 0.921,
+        "priorInvitation": 0.98
+      },
+      "futureUse": [
+        "imagegen_prompt_stance",
+        "trellis_prior_assay",
+        "basin_failure_attribution"
       ]
     },
     {
@@ -896,7 +956,21 @@
       "surface material",
       "micro anatomy",
       "gross-cute balance",
-      "skin/shell texture"
+      "skin/shell texture",
+      "silhouette elaboration"
+    ],
+    "hallucinateBeyond": [
+      "invent plausible anatomy in under-specified regions",
+      "let the generator complete missing creature detail without losing the body plan",
+      "wake adjacent creature priors while preserving the selected silhouette family"
+    ],
+    "fallForwardPrompts": [
+      "push the creature family farther",
+      "let model priors complete missing anatomy",
+      "strong silhouette reinterpretation",
+      "trilobite",
+      "flat armored back",
+      "side plates"
     ]
   },
   "falseClosureGuards": {

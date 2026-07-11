@@ -32,7 +32,7 @@
     <rect x="24" y="420" width="672" height="112" rx="8" fill="rgba(238,246,214,0.08)" stroke="rgba(238,246,214,0.2)"/>
     <text x="38" y="444" fill="rgba(238,246,214,0.84)" font-size="12" font-family="Menlo, Monaco, monospace">prompt</text>
     <foreignObject x="38" y="456" width="642" height="58">
-      <div xmlns="http://www.w3.org/1999/xhtml" style="color:rgba(238,246,214,0.78);font:11px Menlo, Monaco, monospace;line-height:1.35;">small crawling hoard-thief creature, slug loaf, broad-belly-loaf, invertebrate body plan, wet clay and keratin material, anxious semi-cute gross creature design; model-prior hooks: slug, soft loaf body, low crawling belly, wet clay; primary motion affordance: flop; preserve the axial body curve, the belly contact pa...</div>
+      <div xmlns="http://www.w3.org/1999/xhtml" style="color:rgba(238,246,214,0.78);font:11px Menlo, Monaco, monospace;line-height:1.35;">small crawling hoard-thief creature, slug loaf, broad-belly-loaf, invertebrate body plan, wet clay and keratin material, anxious semi-cute gross creature design; model-prior hooks: slug, soft loaf body, low crawling belly, wet clay; control pressure: basin-elaboration, semantic adherence 0.794, silhouette fall-forwa...</div>
     </foreignObject>
     <text x="38" y="520" fill="rgba(238,246,214,0.52)" font-size="10" font-family="Menlo, Monaco, monospace">source package only; no generator firing has occurred</text>
   </g>

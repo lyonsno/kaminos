@@ -198,6 +198,23 @@
       ]
     },
     {
+      "id": "lirm-armature-06:control-pressures",
+      "kind": "control_pressure",
+      "label": "semantic adherence / silhouette fall-forward controls",
+      "strength": 0.713,
+      "region": {
+        "mode": "basin-elaboration",
+        "semanticAdherence": 0.794,
+        "silhouetteFallForward": 0.631,
+        "priorInvitation": 0.72
+      },
+      "futureUse": [
+        "imagegen_prompt_stance",
+        "trellis_prior_assay",
+        "basin_failure_attribution"
+      ]
+    },
+    {
       "id": "lirm-armature-06:tail-drag",
       "kind": "tail_drag",
       "label": "tail drag memory",
