@@ -51,8 +51,8 @@ assert.match(
 );
 assert.match(
   runner,
-  /--model-arch/,
-  'Greenroom runner forwards the direct-rendering architecture identity',
+  /MODEL_ARCHITECTURES\s*=\s*\[[^\]]*"teacher-unet-direct"[^\]]*\]/,
+  'Greenroom runner accepts the direct-rendering architecture identity before forwarding it',
 );
 
 console.log('neural renderer contracts passed');
