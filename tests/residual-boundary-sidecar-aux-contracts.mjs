@@ -78,6 +78,24 @@ assert.match(
 
 assert.match(
   corpus,
+  /const preserveBaseRoute = args\.has\('--preserve-base-route'\)/,
+  'render pair corpus must expose an explicit replay-preservation mode',
+);
+
+assert.match(
+  corpus,
+  /function routeWithOverrides\(baseUrl, overrides, injectBaseRouteIdentityDefaults = true\)[\s\S]*if \(injectBaseRouteIdentityDefaults\)[\s\S]*BASE_ROUTE_IDENTITY_DEFAULTS/,
+  'replay-preservation mode must bypass canonical identity-default injection before applying variant overrides',
+);
+
+assert.match(
+  corpus,
+  /preserveBaseRoute,[\s\S]*baseRouteIdentityDefaultsInjected:\s*!preserveBaseRoute/,
+  'corpus manifests must record whether caller routes were preserved or canonical identity defaults were injected',
+);
+
+assert.match(
+  corpus,
   /const maxVariants = positiveInteger\(args\.get\('--max-variants'\), 0\)[\s\S]*loadVariants\(args, settleMs\)[\s\S]*\.slice\(0, maxVariants\)/,
   'render pair corpus must honor --max-variants before launching browser captures',
 );

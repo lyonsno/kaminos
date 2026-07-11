@@ -411,12 +411,14 @@ function loadVariants(args, defaultSettleMs) {
   return builtInVariants(preset, defaultSettleMs).map((variant, index) => normalizeVariant(variant, index, defaultSettleMs));
 }
 
-function routeWithOverrides(baseUrl, overrides) {
+function routeWithOverrides(baseUrl, overrides, injectBaseRouteIdentityDefaults = true) {
   const url = new URL(baseUrl);
   url.searchParams.set('kaminos_volume_smoke', '1');
-  for (const [key, value] of Object.entries(BASE_ROUTE_IDENTITY_DEFAULTS)) {
-    if (!url.searchParams.has(key)) {
-      url.searchParams.set(key, String(value));
+  if (injectBaseRouteIdentityDefaults) {
+    for (const [key, value] of Object.entries(BASE_ROUTE_IDENTITY_DEFAULTS)) {
+      if (!url.searchParams.has(key)) {
+        url.searchParams.set(key, String(value));
+      }
     }
   }
   for (const [key, value] of Object.entries(overrides || {})) {
@@ -566,7 +568,7 @@ function captureToPairEndpoint(capture) {
 
 function runControlledStepVariant({ variant, index, corpus, cwd }) {
   const variantDir = resolve(corpus.outRoot, variant.id);
-  const route = routeWithOverrides(corpus.baseUrl, variant.overrides);
+  const route = routeWithOverrides(corpus.baseUrl, variant.overrides, corpus.baseRouteIdentityDefaultsInjected);
   const manifestPath = resolve(variantDir, 'controlled-step-witness.json');
   const stdout = resolve(variantDir, 'controlled-step-witness.stdout.log');
   const stderr = resolve(variantDir, 'controlled-step-witness.stderr.log');
@@ -815,7 +817,7 @@ function runVariant({ variant, index, args, corpus, cwd }) {
     return runControlledStepVariant({ variant, index, corpus, cwd });
   }
   const variantDir = resolve(corpus.outRoot, variant.id);
-  const route = routeWithOverrides(corpus.baseUrl, variant.overrides);
+  const route = routeWithOverrides(corpus.baseUrl, variant.overrides, corpus.baseRouteIdentityDefaultsInjected);
 
   const summary = {
     id: variant.id,
@@ -1003,6 +1005,7 @@ const activeSequenceAuthority = sequenceMode === 'controlled-step'
   : (temporalSequenceMode ? SEQUENCE_AUTHORITY : null);
 const controlledStepDeltaMs = nonNegativeNumber(args.get('--controlled-step-delta-ms'), frameStrideMs);
 const maxVariants = positiveInteger(args.get('--max-variants'), 0);
+const preserveBaseRoute = args.has('--preserve-base-route');
 const requestedVariants = loadVariants(args, settleMs);
 const variants = maxVariants > 0
   ? requestedVariants.slice(0, maxVariants)
@@ -1062,6 +1065,8 @@ const corpus = {
   outRoot,
   manifestPath,
   baseUrl: String(args.get('--base-url') || DEFAULT_BASE_URL),
+  preserveBaseRoute,
+  baseRouteIdentityDefaultsInjected: !preserveBaseRoute,
   variantPreset: args.get('--variant-file') ? null : String(args.get('--variant-preset') || HARD_LOW_SCALE_PRESET),
   variantFile: args.get('--variant-file') ? resolve(String(args.get('--variant-file'))) : null,
   dryRun: args.has('--dry-run'),
