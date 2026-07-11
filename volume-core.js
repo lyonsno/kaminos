@@ -6,6 +6,7 @@ const BOUNDARY_SIDECAR_BAKE_AUTHORITY = 'band-limited-support-coverage-ridge-foo
 const BOUNDARY_SIDECAR_THRESHOLD_IDENTITY = 'calibrated-standard-mlp-sparse-cue-thresholds-v0';
 const LEARNED_BOUNDARY_SIDECAR_CUE_IDENTITY = 'dense-learned-sparse-cue-pack-v0';
 const LEARNED_BOUNDARY_SIDECAR_UPLOAD_AUTHORITY = 'teacher-domain-phase-aligned-learned-sidecar-cue-upload-v0';
+const LEARNED_BOUNDARY_SIDECAR_ROLE_IDENTITY = 'learned-boundary-sidecar-smoke-flame-role-v0';
 const TEMPORAL_SIDECAR_IDENTITY = 'temporal-boundary-sidecar-history-v0';
 const BOUNDARY_SIDECAR_EXPORT_SCHEMA = 'kaminos.volume.boundary-sidecar-export.v1';
 const BOUNDARY_SIDECAR_EXPORT_CHANNEL_ORDER = ['support', 'coverage', 'ridge', 'footprint', 'proximity', 'normalX', 'normalY', 'normalZ'];
@@ -145,6 +146,22 @@ function normalizeLearnedBoundarySidecarVariant(value) {
   if (normalized === 'ridgeclassifierprobability' || normalized === 'ridge_classifier' || normalized === 'ridge_classifier_probability' || normalized === 'classifier') return 'ridgeClassifierProbability';
   if (normalized === 'classifierprobabilitycues' || normalized === 'classifier_probability_cues' || normalized === 'multi_head_classifier' || normalized === 'sparse_classifiers') return 'classifierProbabilityCues';
   return 'scalar';
+}
+
+function normalizeLearnedBoundarySidecarRole(value) {
+  const normalized = String(value || 'both').toLowerCase().replace(/-/g, '_');
+  if (normalized === 'smoke' || normalized === 'smoke_only' || normalized === 'plume' || normalized === 'smoke_plume') return 'smoke';
+  if (normalized === 'flame' || normalized === 'flame_only' || normalized === 'fire' || normalized === 'body') return 'flame';
+  if (normalized === 'off' || normalized === 'none' || normalized === 'disabled') return 'off';
+  return 'both';
+}
+
+function learnedBoundarySidecarRoleValue(value) {
+  const normalized = normalizeLearnedBoundarySidecarRole(value);
+  if (normalized === 'smoke') return 1;
+  if (normalized === 'flame') return 2;
+  if (normalized === 'off') return 3;
+  return 0;
 }
 
 function normalizeLearnedBoundarySidecarClassifierThreshold(value) {
@@ -4018,18 +4035,37 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
       let boundaryDy = vec3<f32>(0.0, boundaryCellStep, 0.0);
       let boundaryDz = vec3<f32>(0.0, 0.0, boundaryCellStep);
       let boundarySidecarSource = clamp(u.boundary_sidecar_controls.x, 0.0, 3.0);
+      let learnedBoundarySidecarRole = clamp(u.boundary_fire_display.y, 0.0, 3.0);
+      let learnedSidecarSourceActive = boundarySidecarSource > 2.5;
+      let learnedSmokeRoleActive = learnedSidecarSourceActive && learnedBoundarySidecarRole < 1.5;
+      let learnedFlameRoleActive = learnedSidecarSourceActive && (learnedBoundarySidecarRole < 0.5 || (learnedBoundarySidecarRole > 1.5 && learnedBoundarySidecarRole <= 2.5));
       let boundarySidecarView = clamp(u.boundary_sidecar_display.x, 0.0, 6.0);
       var boundarySidecarDebugSample = vec4<f32>(0.0);
       var boundarySidecarDebugMetaSample = vec4<f32>(0.0);
+      var learnedSmokeCueAlpha = 0.0;
       if (boundarySidecarView > 0.5) {
         boundarySidecarDebugSample = sampleWorldBoundarySidecar(p);
         boundarySidecarDebugMetaSample = sampleWorldBoundarySidecarMeta(p);
+      }
+      if (learnedSmokeRoleActive) {
+        let learnedSmokeSidecarSample = sampleWorldBoundarySidecar(p);
+        let learnedSmokeSidecarMetaSample = sampleWorldBoundarySidecarMeta(p);
+        boundarySidecarDebugSample = learnedSmokeSidecarSample;
+        boundarySidecarDebugMetaSample = learnedSmokeSidecarMetaSample;
+        let learnedSmokeSupport = thresholdedSparseCue(learnedSmokeSidecarSample.x, u.boundary_sidecar_display.y);
+        let learnedSmokeRidge = thresholdedSparseCue(learnedSmokeSidecarSample.z, u.boundary_sidecar_display.z);
+        let learnedSmokeProximity = thresholdedSparseCue(learnedSmokeSidecarMetaSample.x, u.boundary_sidecar_display.w);
+        let learnedSmokeCue = clamp(max(learnedSmokeSidecarSample.y * 0.58, max(learnedSmokeSupport * 0.46, max(learnedSmokeProximity * 0.42, learnedSmokeRidge * 0.20))), 0.0, 1.4);
+        let learnedSmokeHeightGate = smoothstep(0.05, 0.76, p.y);
+        let learnedSmokeFireReject = 1.0 - smoothstep(0.012, 0.28, flame + flameDetail * 0.55 + heat * 0.30);
+        learnedSmokeCueAlpha = clamp(learnedSmokeCue * learnedSmokeHeightGate * (0.35 + learnedSmokeFireReject * 0.65) * rayStepOpacity * (0.025 + absorptionGain * 0.020), 0.0, 0.055);
+        smokeAlpha = clamp(smokeAlpha + learnedSmokeCueAlpha, 0.0, 0.28);
       }
       var boundarySupportEffective = 0.0;
       var boundaryGradientEffective = 0.0;
       var boundaryFireRidgeEffective = 0.0;
       var boundarySidecarStepFootprintWidth = 0.0;
-      if ((boundarySidecarSource > 0.5 && boundarySidecarSource <= 1.5) || boundarySidecarSource > 2.5) {
+      if ((boundarySidecarSource > 0.5 && boundarySidecarSource <= 1.5) || (boundarySidecarSource > 2.5 && learnedFlameRoleActive)) {
         let boundarySidecarSample = sampleWorldBoundarySidecar(p);
         let boundarySidecarMetaSample = sampleWorldBoundarySidecarMeta(p);
         boundarySidecarDebugSample = boundarySidecarSample;
@@ -4738,7 +4774,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let learnedBoundarySidecarCueUpload = {
     identity: LEARNED_BOUNDARY_SIDECAR_CUE_IDENTITY,
     authority: LEARNED_BOUNDARY_SIDECAR_UPLOAD_AUTHORITY,
+    roleIdentity: LEARNED_BOUNDARY_SIDECAR_ROLE_IDENTITY,
     status: 'none',
+    role: 'both',
     variant: null,
     classifierThreshold: null,
     grid: null,
@@ -5354,6 +5392,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       ...learnedBoundarySidecarCueUpload,
       identity: LEARNED_BOUNDARY_SIDECAR_CUE_IDENTITY,
       authority: LEARNED_BOUNDARY_SIDECAR_UPLOAD_AUTHORITY,
+      roleIdentity: LEARNED_BOUNDARY_SIDECAR_ROLE_IDENTITY,
+      learnedBoundarySidecarRole: normalizeLearnedBoundarySidecarRole(controlsSnapshot.learnedBoundarySidecarRole ?? controlsSnapshot.boundarySidecarControls?.learnedRole),
       receiverGrid: gridSize,
       source: normalizeBoundarySidecarSource(controlsSnapshot.boundarySidecarSource),
     };
@@ -5362,9 +5402,16 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   function boundarySidecarDebug(boundarySidecarSourceName = normalizeBoundarySidecarSource(controlsSnapshot.boundarySidecarSource)) {
     const controls = controlsSnapshot.boundarySidecarControls || {};
     const view = normalizeBoundarySidecarView(controls.view ?? controlsSnapshot.boundarySidecarView);
+    const learnedRole = normalizeLearnedBoundarySidecarRole(controls.learnedRole ?? controlsSnapshot.learnedBoundarySidecarRole);
+    const learnedSmokeRoleActive = boundarySidecarSourceName === 'learned' && (learnedRole === 'both' || learnedRole === 'smoke');
+    const learnedFlameRoleActive = boundarySidecarSourceName === 'learned' && (learnedRole === 'both' || learnedRole === 'flame');
     return {
       identity: BOUNDARY_SIDECAR_IDENTITY,
       authority: BOUNDARY_SIDECAR_BAKE_AUTHORITY,
+      learnedBoundarySidecarRoleIdentity: LEARNED_BOUNDARY_SIDECAR_ROLE_IDENTITY,
+      learnedBoundarySidecarRole: learnedRole,
+      learnedSmokeRoleActive,
+      learnedFlameRoleActive,
       exportSchema: BOUNDARY_SIDECAR_EXPORT_SCHEMA,
       exportChannelOrder: [...BOUNDARY_SIDECAR_EXPORT_CHANNEL_ORDER],
       rendererRawChannelOrder: [...BOUNDARY_SIDECAR_RENDERER_RAW_CHANNEL_ORDER],
@@ -5374,7 +5421,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       view,
       channels: ['support', 'coverage', 'ridge', 'footprint', 'proximity', 'normal'],
       boundaryStructureSource: boundarySidecarSourceName,
-      activeInRaymarch: boundarySidecarSourceName !== 'live',
+      activeInRaymarch: boundarySidecarSourceName !== 'live' && (boundarySidecarSourceName !== 'learned' || learnedSmokeRoleActive || learnedFlameRoleActive),
       activeAsDebugView: view !== 'off',
       blur: clampFinite(controls.blur ?? controlsSnapshot.boundarySidecarBlur, 0, 1, 0.45),
       stepWidth: clampFinite(controls.stepWidth ?? controlsSnapshot.boundarySidecarWidth, 0, 2, 0.75),
@@ -6329,7 +6376,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     learnedBoundarySidecarCueUpload = {
       identity: LEARNED_BOUNDARY_SIDECAR_CUE_IDENTITY,
       authority: LEARNED_BOUNDARY_SIDECAR_UPLOAD_AUTHORITY,
+      roleIdentity: LEARNED_BOUNDARY_SIDECAR_ROLE_IDENTITY,
       status: 'uploaded',
+      role: normalizeLearnedBoundarySidecarRole(source.role),
       variant: packed.variant,
       classifierThreshold: packed.classifierThreshold,
       supportClassifierThreshold: packed.supportClassifierThreshold,
@@ -7148,6 +7197,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const boundarySidecarSourceName = normalizeBoundarySidecarSource(controlsSnapshot.boundarySidecarSource);
     const boundarySidecarViewName = normalizeBoundarySidecarView(controlsSnapshot.boundarySidecarView ?? controlsSnapshot.boundarySidecarControls?.view);
     const boundarySidecarControls = controlsSnapshot.boundarySidecarControls || {};
+    const learnedBoundarySidecarRoleName = normalizeLearnedBoundarySidecarRole(boundarySidecarControls.learnedRole ?? controlsSnapshot.learnedBoundarySidecarRole);
     const boundaryFireInspectActive = shellInspectModeName === 'boundary_fire';
     const boundaryInspectActive = shellInspectModeName === 'boundary' || boundaryFireInspectActive;
     const boundaryControls = controlsSnapshot.reactionBoundaryControls || {};
@@ -7210,7 +7260,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     uniforms[302] = boundaryFireUniforms.sootYellowing;
     uniforms[303] = boundaryFireUniforms.thermalWarmth;
     uniforms[304] = boundaryFireUniforms.fireLuma;
-    uniforms[305] = 0;
+    uniforms[305] = learnedBoundarySidecarRoleValue(learnedBoundarySidecarRoleName);
     uniforms[306] = 0;
     uniforms[307] = 0;
     uniforms[308] = boundarySidecarSourceValue(boundarySidecarSourceName);
@@ -7269,6 +7319,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.boundarySidecarSource = boundarySidecarSourceName;
     state.boundaryStructureSource = boundarySidecarSourceName;
     state.boundarySidecarView = boundarySidecarViewName;
+    state.learnedBoundarySidecarRoleIdentity = LEARNED_BOUNDARY_SIDECAR_ROLE_IDENTITY;
+    state.learnedBoundarySidecarRole = learnedBoundarySidecarRoleName;
     state.boundarySidecarDebug = boundarySidecarDebug(boundarySidecarSourceName);
     state.learnedBoundarySidecarCue = learnedBoundarySidecarCueDebug();
     state.volumeScene = normalizeVolumeScene(controlsSnapshot.volumeScene);
