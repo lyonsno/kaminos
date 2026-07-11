@@ -4026,11 +4026,30 @@ async function runRealHybridSplatOverlayScenario(ws) {
           const data = ctx.getImageData(0, 0, width, height).data;
           let visiblePixels = 0;
           let alphaPixels = 0;
+          let redSum = 0;
+          let greenSum = 0;
+          let blueSum = 0;
+          let rgbChecksum = 2166136261;
           for (let i = 0; i < data.length; i += 4) {
             if (data[i + 3] > 8) alphaPixels += 1;
             if (data[i + 3] > 8 && data[i] + data[i + 1] + data[i + 2] > 24) visiblePixels += 1;
+            redSum += data[i];
+            greenSum += data[i + 1];
+            blueSum += data[i + 2];
+            rgbChecksum = Math.imul(rgbChecksum ^ data[i], 16777619);
+            rgbChecksum = Math.imul(rgbChecksum ^ data[i + 1], 16777619);
+            rgbChecksum = Math.imul(rgbChecksum ^ data[i + 2], 16777619);
           }
-          return { sampled: true, width, height, rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height }, visiblePixels, alphaPixels };
+          return {
+            sampled: true,
+            width,
+            height,
+            rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
+            visiblePixels,
+            alphaPixels,
+            channelSums: { red: redSum, green: greenSum, blue: blueSum },
+            rgbChecksum: rgbChecksum >>> 0,
+          };
         } catch (error) {
           return { sampled: false, width, height, rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height }, error: String(error?.message || error), visiblePixels: 0, alphaPixels: 0 };
         }
@@ -4150,6 +4169,18 @@ async function runRealHybridSplatOverlayScenario(ws) {
       const host = document.getElementById('hybrid-splat-overlay-host');
       const hostStyle = host ? getComputedStyle(host) : null;
       const afterSample = sampleCanvas(overlayCanvas);
+      const deferredTelemetry = window.kaminosSetHybridSourceColorPreviewEnabled?.(false) || null;
+      await wait(700);
+      const deferredSample = sampleCanvas(overlayCanvas);
+      const sourceRadianceTelemetry = window.kaminosSetHybridSourceColorPreviewEnabled?.(true) || null;
+      await wait(700);
+      const sourceRadianceSample = sampleCanvas(overlayCanvas);
+      const sourceRadiancePixelDelta = ['red', 'green', 'blue'].reduce((sum, channel) => (
+        sum + Math.abs(
+          Number(sourceRadianceSample.channelSums?.[channel] || 0)
+          - Number(deferredSample.channelSums?.[channel] || 0)
+        )
+      ), 0);
       const overlayDebug = window.kaminosHybridSplatOverlayDebugState?.() || null;
       const handoffDebug = window.kaminosRenderHandoffDebugState?.(splatObject?.id) || null;
       const previewDebug = window.kaminosSplatPreviewDebugState?.(splatObject?.id) || null;
@@ -4168,6 +4199,13 @@ async function runRealHybridSplatOverlayScenario(ws) {
         statusText,
         beforeSample,
         afterSample,
+        presentationAB: {
+          deferredTelemetry,
+          deferredSample,
+          sourceRadianceTelemetry,
+          sourceRadianceSample,
+          sourceRadiancePixelDelta,
+        },
         overlayCanvas: overlayCanvas ? {
           width: overlayCanvas.width,
           height: overlayCanvas.height,
@@ -4204,6 +4242,19 @@ async function runRealHybridSplatOverlayScenario(ws) {
   if (evidence.overlayDebug?.rendererMode !== 'scene'
       || !evidence.overlayDebug?.sceneSplatIds?.includes(evidence.splatObject.id)) {
     throw new Error(`real hybrid splat overlay did not start as a renderer-owned scene: ${JSON.stringify(evidence)}`);
+  }
+  const presentationAB = evidence.presentationAB || {};
+  if (presentationAB.deferredTelemetry?.presentation?.effectiveMode !== 'deferred-pbr'
+      || presentationAB.deferredTelemetry?.presentation?.effectiveRoute !== 'deferred-pbr-lighting'
+      || presentationAB.sourceRadianceTelemetry?.presentation?.effectiveMode !== 'source-radiance'
+      || presentationAB.sourceRadianceTelemetry?.presentation?.effectiveRoute !== 'source-radiance-copy') {
+    throw new Error(`real hybrid overlay did not expose effectiveMode source-radiance and deferred-pbr route identity: ${JSON.stringify(evidence)}`);
+  }
+  if (!presentationAB.deferredSample?.sampled
+      || !presentationAB.sourceRadianceSample?.sampled
+      || presentationAB.deferredSample.rgbChecksum === presentationAB.sourceRadianceSample.rgbChecksum
+      || !(presentationAB.sourceRadiancePixelDelta > 100)) {
+    throw new Error(`source-radiance presentation route did not change live pixels: ${JSON.stringify(evidence)}`);
   }
   const correctionApplication = evidence.overlayDebug?.correctionApplication || {};
   if (evidence.previewDebug?.includedPointCount > 0

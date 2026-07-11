@@ -1915,7 +1915,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
         <div class="hybrid-control-section-title">Preview</div>
         <div class="hybrid-control-row binary">
           <input type="checkbox" id="hybrid-control-preview-source-color" data-hybrid-renderer-control checked>
-          <label for="hybrid-control-preview-source-color">Source colors</label>
+          <label for="hybrid-control-preview-source-color">Source Radiance</label>
         </div>
       </div>
       <div class="hybrid-control-section">
@@ -3211,6 +3211,7 @@ function hybridControlCheckbox(id, fallback) {
 function hybridSplatRendererControlsPayload() {
   const candidateLayerPreview = selectedSplatBakeLayerPreviewContribution();
   const previewStrength = Number(candidateLayerPreview?.strength || 0);
+  const sourceRadiance = hybridControlCheckbox('hybrid-control-preview-source-color', true);
   const roughnessContrast = hybridControlNumber('hybrid-control-roughness-contrast', 1);
   const albedoContrast = hybridControlNumber('hybrid-control-albedo-contrast', 1);
   return {
@@ -3239,8 +3240,11 @@ function hybridSplatRendererControlsPayload() {
     normal: {
       forceScreenSpace: hybridControlCheckbox('hybrid-control-normal-force-screen', false),
     },
+    presentation: {
+      mode: sourceRadiance ? 'source-radiance' : 'deferred-pbr',
+    },
     preview: {
-      sourceColor: hybridControlCheckbox('hybrid-control-preview-source-color', true),
+      sourceColor: sourceRadiance,
     },
     ao: {
       enabled: hybridControlCheckbox('hybrid-control-ao-enabled', true),
@@ -3320,6 +3324,7 @@ function setHybridSourceColorPreviewEnabled(enabled) {
   if (input instanceof HTMLInputElement) {
     input.checked = !!enabled;
   }
+  window._kaminosDirty?.();
   return publishHybridSplatRendererControls();
 }
 
