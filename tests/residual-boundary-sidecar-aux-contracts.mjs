@@ -24,6 +24,12 @@ assert.match(
 
 assert.match(
   witness,
+  /rgb_upscale_basin_0711:\s*\{[\s\S]*sourceCaptureIdentity:\s*'kaminos-rgb-upscale-basin-live-capture-v1'[\s\S]*sourceCaptureHash:\s*'c4d3f040'[\s\S]*sourceCaptureSha256:\s*'cc5cf502cf3720c8b9d31555f66770d3febb48e279d1c2f12cc194c3b21790d1'[\s\S]*raySteps:\s*88[\s\S]*resolution:\s*128[\s\S]*majorantGrid:\s*24/,
+  'current witness must carry the source-owned RGB-upscale replay preset identity and effective control expectations',
+);
+
+assert.match(
+  witness,
   /renderScaleBoundarySidecarSupportCaptures/,
   'witness must parse boundary-sidecar-support auxiliary captures from render-scale auxiliary modes',
 );
