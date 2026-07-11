@@ -1572,6 +1572,7 @@ async function main() {
       returnByValue: true,
     });
     receiverLightDebug = receiverLightEval.result.value || null;
+    let receiverLightDebugLater = null;
     receiverLightEvidence = {
       identity: expectsReceiverLightIsolateEvidence ? 'tier2-receiver-light-isolate' : null,
       accepted: Boolean(
@@ -1581,6 +1582,8 @@ async function main() {
         receiverLightDebug.supportIdentity === 'combustion-front-receiver-support-v0' &&
         receiverLightDebug.supportAuthority === 'combustion-front-topology-sidecar-v0+reaction-front-stage-fields-v0' &&
         receiverLightDebug.receiverBufferSource === 'explicit-opt-in-receiver-proxy-buffer-v0' &&
+        receiverLightDebug.dynamicEnvelopeIdentity === 'tier2-live-debug-receiver-envelope-v1' &&
+        receiverLightDebug.dynamicEnvelopeSource === 'volume-debug-frame-energy-procedural-envelope-no-readback-v1' &&
         receiverLightDebug.cpuReadbackAuthority === false &&
         receiverLightDebug.hiddenThreeLightAuthority === false &&
         receiverLightDebug.canvasBridgeAuthority === false &&
@@ -1589,7 +1592,9 @@ async function main() {
         Number(receiverLightDebug.lastRenderTargetSize?.width || 0) > 0 &&
         Number(receiverLightDebug.lastRenderTargetSize?.height || 0) > 0
       ),
+      dynamicEnvelopeAccepted: false,
       debug: receiverLightDebug,
+      debugLater: null,
     };
     if (expectsReceiverLightIsolateEvidence) {
       if (!receiverLightDebug || receiverLightDebug.identity !== 'tier2-opt-in-receiver-buffer-light-pass-v0') {
@@ -1597,6 +1602,29 @@ async function main() {
       }
       if (!receiverLightEvidence.accepted || receiverLightDebug.active !== true || receiverLightDebug.isolate !== true) {
         throw new Error(`Tier 2 receiver-light isolate receipt not accepted: ${JSON.stringify(receiverLightEvidence)}`);
+      }
+      await delay(420);
+      const receiverLightLaterEval = await wsRequest(ws, 'Runtime.evaluate', {
+        expression: 'window.kaminosTier2ReceiverLightDebugState?.() ?? null',
+        returnByValue: true,
+      });
+      receiverLightDebugLater = receiverLightLaterEval.result.value || null;
+      const startCenter = receiverLightDebug.lastEnvelopeCenter || {};
+      const laterCenter = receiverLightDebugLater?.lastEnvelopeCenter || {};
+      const centerDelta = Math.hypot(
+        Number(laterCenter.x || 0) - Number(startCenter.x || 0),
+        Number(laterCenter.y || 0) - Number(startCenter.y || 0)
+      );
+      receiverLightEvidence.dynamicEnvelopeAccepted = Boolean(
+        receiverLightDebugLater &&
+        Number(receiverLightDebugLater.lastEnvelopeRevision || 0) > Number(receiverLightDebug.lastEnvelopeRevision || 0) &&
+        Number(receiverLightDebugLater.dynamicEnvelopeFrameCount || 0) >= Number(receiverLightDebug.dynamicEnvelopeFrameCount || 0) &&
+        (centerDelta > 0.0005 || Number(receiverLightDebugLater.lastEnvelopeMotionMagnitude || 0) > 0.0005)
+      );
+      receiverLightEvidence.debugLater = receiverLightDebugLater;
+      receiverLightEvidence.envelopeCenterDelta = centerDelta;
+      if (!receiverLightEvidence.dynamicEnvelopeAccepted) {
+        throw new Error(`stale receiver-light envelope: ${JSON.stringify(receiverLightEvidence)}`);
       }
     }
     assert.ok(
@@ -2856,6 +2884,8 @@ async function main() {
             receiverLightDebug.supportIdentity === 'combustion-front-receiver-support-v0' &&
             receiverLightDebug.supportAuthority === 'combustion-front-topology-sidecar-v0+reaction-front-stage-fields-v0' &&
             receiverLightDebug.receiverBufferSource === 'explicit-opt-in-receiver-proxy-buffer-v0' &&
+            receiverLightDebug.dynamicEnvelopeIdentity === 'tier2-live-debug-receiver-envelope-v1' &&
+            receiverLightDebug.dynamicEnvelopeSource === 'volume-debug-frame-energy-procedural-envelope-no-readback-v1' &&
             receiverLightDebug.cpuReadbackAuthority === false &&
             receiverLightDebug.hiddenThreeLightAuthority === false &&
             receiverLightDebug.canvasBridgeAuthority === false &&
@@ -2864,6 +2894,9 @@ async function main() {
             Number(receiverLightDebug.lastRenderTargetSize?.width || 0) > 0 &&
             Number(receiverLightDebug.lastRenderTargetSize?.height || 0) > 0
           ),
+          dynamicEnvelopeAccepted: receiverLightEvidence?.dynamicEnvelopeAccepted ?? false,
+          debugLater: receiverLightEvidence?.debugLater ?? null,
+          envelopeCenterDelta: receiverLightEvidence?.envelopeCenterDelta ?? null,
           debug: receiverLightDebug,
         } : receiverLightEvidence;
         ws.close();

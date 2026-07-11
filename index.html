@@ -9176,6 +9176,8 @@ const TIER2_RECEIVER_MASK_AUTHORITY = 'opt-in-receiver-buffer-required-v0';
 const TIER2_RECEIVER_BUFFER_SOURCE = 'explicit-opt-in-receiver-proxy-buffer-v0';
 const TIER2_RECEIVER_SUPPORT_IDENTITY = 'combustion-front-receiver-support-v0';
 const TIER2_RECEIVER_SUPPORT_AUTHORITY = 'combustion-front-topology-sidecar-v0+reaction-front-stage-fields-v0';
+const TIER2_RECEIVER_DYNAMIC_ENVELOPE_IDENTITY = 'tier2-live-debug-receiver-envelope-v1';
+const TIER2_RECEIVER_DYNAMIC_ENVELOPE_SOURCE = 'volume-debug-frame-energy-procedural-envelope-no-readback-v1';
 
 function isTier2ReceiverLightRoute(params = new URLSearchParams(window.location.search)) {
   return params.get('volume_receiver_light') === 'tier2' || params.get('volume_receiver_light_isolate') === '1';
@@ -16499,22 +16501,72 @@ function createTier2ReceiverBufferLightPass(baseOutputNode) {
   receiverLightMaskCanvas.width = 256;
   receiverLightMaskCanvas.height = 256;
   const receiverLightMaskContext = receiverLightMaskCanvas.getContext('2d');
-  const receiverGradient = receiverLightMaskContext.createRadialGradient(92, 158, 10, 104, 150, 168);
-  receiverGradient.addColorStop(0.0, 'rgb(255, 255, 255)');
-  receiverGradient.addColorStop(0.26, 'rgb(210, 210, 210)');
-  receiverGradient.addColorStop(0.55, 'rgb(82, 82, 82)');
-  receiverGradient.addColorStop(1.0, 'rgb(0, 0, 0)');
-  receiverLightMaskContext.fillStyle = 'black';
-  receiverLightMaskContext.fillRect(0, 0, receiverLightMaskCanvas.width, receiverLightMaskCanvas.height);
-  receiverLightMaskContext.fillStyle = receiverGradient;
-  receiverLightMaskContext.fillRect(0, 0, receiverLightMaskCanvas.width, receiverLightMaskCanvas.height);
-  receiverLightMaskContext.globalAlpha = 0.36;
-  receiverLightMaskContext.fillStyle = 'rgb(255, 255, 255)';
-  receiverLightMaskContext.beginPath();
-  receiverLightMaskContext.ellipse(92, 158, 34, 116, -0.08, 0, Math.PI * 2);
-  receiverLightMaskContext.fill();
-  receiverLightMaskContext.globalAlpha = 1;
-  const receiverLightMaskTexture = new THREE.CanvasTexture(receiverLightMaskCanvas);
+  let receiverLightMaskTexture = null;
+  const dynamicEnvelope = {
+    revision: 0,
+    frameCount: 0,
+    center: { x: 0.40, y: 0.61 },
+    previousCenter: { x: 0.40, y: 0.61 },
+    motionMagnitude: 0,
+    energy: 0,
+  };
+  const drawReceiverEnvelope = (volumeState = {}, fallbackFrame = 0) => {
+    const frameEnergy = Number(volumeState.lastFrameEnergy || 0);
+    const supportScalar = Math.max(0, Math.min(1, frameEnergy * 0.15));
+    const frameIndex = Number(volumeState.frameCount || 0) + fallbackFrame * 0.173;
+    const phase = frameIndex * 0.211;
+    const pulse = 0.5 + 0.5 * Math.sin(phase * 1.37 + Math.sin(phase * 0.19));
+    const drift = Math.sin(phase * 0.47) * 0.035 + Math.sin(phase * 0.83 + 1.7) * 0.018;
+    const lift = Math.sin(phase * 0.39 + 0.6) * 0.030 + pulse * 0.025;
+    const centerX = Math.max(0.22, Math.min(0.62, 0.40 + drift + (supportScalar - 0.45) * 0.045));
+    const centerY = Math.max(0.36, Math.min(0.78, 0.62 - lift - supportScalar * 0.10));
+    const width = 48 + supportScalar * 70 + pulse * 14;
+    const height = 126 + supportScalar * 78 + Math.sin(phase * 0.31) * 16;
+    const x = centerX * receiverLightMaskCanvas.width;
+    const y = centerY * receiverLightMaskCanvas.height;
+    dynamicEnvelope.previousCenter = dynamicEnvelope.center;
+    dynamicEnvelope.center = { x: centerX, y: centerY };
+    dynamicEnvelope.motionMagnitude = Math.hypot(
+      dynamicEnvelope.center.x - dynamicEnvelope.previousCenter.x,
+      dynamicEnvelope.center.y - dynamicEnvelope.previousCenter.y
+    );
+    dynamicEnvelope.energy = supportScalar;
+    dynamicEnvelope.frameCount = frameIndex;
+    dynamicEnvelope.revision += 1;
+
+    receiverLightMaskContext.setTransform(1, 0, 0, 1, 0, 0);
+    receiverLightMaskContext.globalAlpha = 1;
+    receiverLightMaskContext.globalCompositeOperation = 'source-over';
+    receiverLightMaskContext.fillStyle = 'black';
+    receiverLightMaskContext.fillRect(0, 0, receiverLightMaskCanvas.width, receiverLightMaskCanvas.height);
+
+    const receiverGradient = receiverLightMaskContext.createRadialGradient(x - width * 0.12, y + height * 0.04, 7, x, y, height);
+    receiverGradient.addColorStop(0.0, 'rgb(255, 255, 255)');
+    receiverGradient.addColorStop(0.24, 'rgb(220, 220, 220)');
+    receiverGradient.addColorStop(0.56, 'rgb(92, 92, 92)');
+    receiverGradient.addColorStop(1.0, 'rgb(0, 0, 0)');
+    receiverLightMaskContext.fillStyle = receiverGradient;
+    receiverLightMaskContext.fillRect(0, 0, receiverLightMaskCanvas.width, receiverLightMaskCanvas.height);
+
+    receiverLightMaskContext.globalAlpha = 0.25 + supportScalar * 0.26;
+    receiverLightMaskContext.fillStyle = 'rgb(255, 255, 255)';
+    receiverLightMaskContext.beginPath();
+    receiverLightMaskContext.ellipse(x - width * 0.12, y + height * 0.02, width * 0.32, height * 0.48, -0.10 + Math.sin(phase * 0.29) * 0.08, 0, Math.PI * 2);
+    receiverLightMaskContext.fill();
+    receiverLightMaskContext.globalAlpha = 0.16 + supportScalar * 0.20;
+    receiverLightMaskContext.beginPath();
+    receiverLightMaskContext.ellipse(x + width * 0.18, y + height * 0.17, width * 0.26, height * 0.34, 0.20 + Math.sin(phase * 0.41) * 0.12, 0, Math.PI * 2);
+    receiverLightMaskContext.fill();
+    receiverLightMaskContext.globalAlpha = 0.11 + supportScalar * 0.12;
+    receiverLightMaskContext.beginPath();
+    receiverLightMaskContext.ellipse(x + Math.sin(phase * 0.33) * 26, 222, 92 + supportScalar * 50, 34 + pulse * 12, 0, 0, Math.PI * 2);
+    receiverLightMaskContext.fill();
+    receiverLightMaskContext.globalAlpha = 1;
+    receiverLightMaskContext.globalCompositeOperation = 'source-over';
+    if (receiverLightMaskTexture) receiverLightMaskTexture.needsUpdate = true;
+  };
+  drawReceiverEnvelope({ lastFrameEnergy: 3.0, frameCount: 0 }, 0);
+  receiverLightMaskTexture = new THREE.CanvasTexture(receiverLightMaskCanvas);
   receiverLightMaskTexture.name = 'tier2-receiver-light-envelope-texture-v0';
   receiverLightMaskTexture.colorSpace = THREE.NoColorSpace;
   const receiverMaskMaterial = new THREE.MeshBasicMaterial({
@@ -16575,6 +16627,8 @@ function createTier2ReceiverBufferLightPass(baseOutputNode) {
     supportIdentity: TIER2_RECEIVER_SUPPORT_IDENTITY,
     supportAuthority: TIER2_RECEIVER_SUPPORT_AUTHORITY,
     receiverBufferSource: TIER2_RECEIVER_BUFFER_SOURCE,
+    dynamicEnvelopeIdentity: TIER2_RECEIVER_DYNAMIC_ENVELOPE_IDENTITY,
+    dynamicEnvelopeSource: TIER2_RECEIVER_DYNAMIC_ENVELOPE_SOURCE,
     supportScalarSource: 'live-volume-debug-frame-energy-envelope-v0',
     cpuReadbackAuthority: false,
     hiddenThreeLightAuthority: false,
@@ -16584,6 +16638,11 @@ function createTier2ReceiverBufferLightPass(baseOutputNode) {
     receiverCount: receiverProxies.length,
     lastSupportScalar: 0,
     lastFrameCount: 0,
+    dynamicEnvelopeFrameCount: 0,
+    lastEnvelopeRevision: 0,
+    lastEnvelopeCenter: { x: 0, y: 0 },
+    lastEnvelopeMotionMagnitude: 0,
+    lastEnvelopeEnergy: 0,
     receiverRenderFrameCount: 0,
     lastRenderTargetSize: { width: receiverMaskRenderTarget.width, height: receiverMaskRenderTarget.height },
   };
@@ -16600,9 +16659,15 @@ function createTier2ReceiverBufferLightPass(baseOutputNode) {
     const volumeState = volumePrototype?.debugState?.() || {};
     const frameEnergy = Number(volumeState.lastFrameEnergy || 0);
     const supportScalar = Math.max(0, Math.min(1, frameEnergy * 0.15));
+    drawReceiverEnvelope(volumeState, state.receiverRenderFrameCount + 1);
     receiverStrength.value = supportScalar * (state.isolate ? 1.35 : 1.8);
     state.lastSupportScalar = supportScalar;
     state.lastFrameCount = Number(volumeState.frameCount || 0);
+    state.dynamicEnvelopeFrameCount = dynamicEnvelope.frameCount;
+    state.lastEnvelopeRevision = dynamicEnvelope.revision;
+    state.lastEnvelopeCenter = dynamicEnvelope.center;
+    state.lastEnvelopeMotionMagnitude = dynamicEnvelope.motionMagnitude;
+    state.lastEnvelopeEnergy = dynamicEnvelope.energy;
   };
 
   return {

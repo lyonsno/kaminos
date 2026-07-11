@@ -734,6 +734,8 @@ assert.match(core, /const receiverSupport = buildCombustionFrontReceiverSupport/
 assert.match(core, /reactionFrontAtlas,\s*\n\s*receiverSupport,/, 'sim readback carries the combustion-front receiver support receipt beside the reaction-front atlas');
 assert.match(index, /TIER2_RECEIVER_LIGHT_PASS_IDENTITY\s*=\s*'tier2-opt-in-receiver-buffer-light-pass-v0'/, 'main renderer names the Tier 2 opt-in receiver-buffer light pass');
 assert.match(index, /TIER2_RECEIVER_MASK_AUTHORITY\s*=\s*'opt-in-receiver-buffer-required-v0'/, 'Tier 2 receiver light preserves explicit opt-in receiver-mask authority');
+assert.match(index, /TIER2_RECEIVER_DYNAMIC_ENVELOPE_IDENTITY\s*=\s*'tier2-live-debug-receiver-envelope-v1'/, 'Tier 2 receiver light names its live dynamic envelope separately from the receiver-buffer pass');
+assert.match(index, /TIER2_RECEIVER_DYNAMIC_ENVELOPE_SOURCE\s*=\s*'volume-debug-frame-energy-procedural-envelope-no-readback-v1'/, 'Tier 2 receiver light honestly names the procedural no-readback envelope source');
 assert.match(index, /createTier2ReceiverBufferLightPass/, 'main renderer builds a separate receiver-buffer light pass');
 assert.match(index, /receiverMaskRenderTarget/, 'Tier 2 receiver light renders opted-in receivers into a receiver mask render target');
 assert.match(index, /volume_receiver_light/, 'URL route can opt into the Tier 2 receiver light without lighting arbitrary scene geometry');
@@ -742,6 +744,8 @@ assert.match(index, /window\.kaminosTier2ReceiverLightDebugState/, 'Tier 2 recei
 assert.match(index, /supportIdentity:\s*TIER2_RECEIVER_SUPPORT_IDENTITY/, 'Tier 2 receiver light records the combustion-front receiver-support identity it consumes');
 assert.match(index, /supportAuthority:\s*TIER2_RECEIVER_SUPPORT_AUTHORITY/, 'Tier 2 receiver light records the combustion-front receiver-support authority');
 assert.match(index, /receiverBufferSource:\s*TIER2_RECEIVER_BUFFER_SOURCE/, 'Tier 2 receiver light starts from an explicit receiver buffer, not arbitrary Three scene geometry');
+assert.match(index, /dynamicEnvelopeIdentity:\s*TIER2_RECEIVER_DYNAMIC_ENVELOPE_IDENTITY/, 'Tier 2 receiver light debug exposes the live envelope identity');
+assert.match(index, /receiverLightMaskTexture\.needsUpdate\s*=\s*true/, 'Tier 2 receiver light uploads a refreshed receiver envelope instead of freezing the first canvas texture');
 assert.match(index, /cpuReadbackAuthority:\s*false/, 'Tier 2 receiver light must not use CPU readback as lighting authority');
 assert.match(index, /hiddenThreeLightAuthority:\s*false/, 'Tier 2 receiver light must not hide a Three light as the lighting authority');
 assert.match(index, /canvasBridgeAuthority:\s*false/, 'Tier 2 receiver light must not use the stale volume canvas bridge as lighting authority');
@@ -1838,6 +1842,8 @@ assert.match(witness, /receiver-light-isolate/, 'witness accepts an isolate evid
 assert.match(witness, /tier2-receiver-light-isolate/, 'witness reports the rendered Tier 2 receiver-light isolate visual evidence identity');
 assert.match(witness, /kaminosTier2ReceiverLightDebugState/, 'witness reads Tier 2 receiver-light debug state from the page');
 assert.match(witness, /receiverLightEvidence/, 'witness report preserves the rendered Tier 2 receiver-light evidence receipt');
+assert.match(witness, /dynamicEnvelopeAccepted/, 'witness reports whether the Tier 2 receiver envelope is live rather than static');
+assert.match(witness, /stale receiver-light envelope/, 'witness fails loudly when the Tier 2 receiver envelope does not advance between reads');
 assert.match(witness, /receiverLightDebug\.identity !== 'tier2-opt-in-receiver-buffer-light-pass-v0'/, 'witness fails loudly when the rendered Tier 2 receiver-light identity is missing or wrong');
 assert.match(witness, /if \(\s*!expectsCanonicalPlumeProof\s*&&\s*!expectsFuelStarvedTallPlume\s*&&\s*!expectsNoFireVolumeEvidence\s*&&\s*!expectsReceiverSupportEvidence\s*&&\s*!expectsReceiverLightIsolateEvidence\s*&&\s*\(!Number\.isFinite\(sample\.simReadback\.fireLayerMean\) \|\| sample\.simReadback\.fireLayerMean <= 0\.0005\)\s*&&\s*!acceptsRawCarrierPyroPaint\s*\)/, 'no-fire, receiver-support, and receiver-light isolate evidence routes do not require positive transported fire-layer readback');
 assert.match(witness, /!expectsFuelStarvedTallPlume\s*&&\s*!expectsNoFireVolumeEvidence\s*&&\s*!expectsReceiverSupportEvidence\s*&&\s*!expectsReceiverLightIsolateEvidence[\s\S]*radianceMean/, 'no-fire, receiver-support, and receiver-light isolate evidence routes do not require positive fire radiance readback');
