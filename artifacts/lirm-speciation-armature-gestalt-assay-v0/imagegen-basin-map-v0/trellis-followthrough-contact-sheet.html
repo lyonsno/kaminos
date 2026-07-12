@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LIRM Trellis Followthrough Contact Sheet</title>
+  <style>
+    :root { color-scheme: dark; }
+    body {
+      margin: 0;
+      background: #10100f;
+      color: #eee8dc;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    header {
+      padding: 14px 18px 10px;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      background: #151412;
+    }
+    h1 {
+      margin: 0 0 4px;
+      font-size: 18px;
+      letter-spacing: 0;
+    }
+    .meta {
+      color: #a69d91;
+      font: 11px ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      padding: 12px;
+      height: calc(100vh - 62px);
+    }
+    .panel {
+      min-width: 0;
+      border: 1px solid rgba(255,255,255,0.10);
+      background: #191816;
+      display: grid;
+      grid-template-rows: 32px minmax(0, 1fr) 48px;
+    }
+    .label {
+      display: flex;
+      align-items: center;
+      padding: 0 10px;
+      font-size: 12px;
+      font-weight: 700;
+      color: #f0d49a;
+      background: rgba(255,255,255,0.035);
+      border-bottom: 1px solid rgba(255,255,255,0.07);
+    }
+    canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+      background: radial-gradient(circle at 50% 40%, #34312d 0%, #171614 70%);
+    }
+    .status {
+      padding: 8px 10px;
+      color: #b6afa4;
+      font: 10px ui-monospace, SFMono-Regular, Menlo, monospace;
+      overflow: hidden;
+      border-top: 1px solid rgba(255,255,255,0.07);
+      background: rgba(0,0,0,0.16);
+    }
+    .error { color: #ff9a9a; }
+  </style>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.171.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.171.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <header>
+    <h1>LIRM Trellis followthrough, fast4 / 200k / 1024 texture</h1>
+    <div class="meta">same camera, same light, same normalization; source images are Flux2 hallucinate-beyond outputs</div>
+  </header>
+  <main class="grid" id="grid"></main>
+  <script type="module">
+    import * as THREE from 'three';
+    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+    const cases = [
+      {
+        label: 'lirm02 hallucinate-beyond',
+        url: '/artifacts/lirm-speciation-armature-gestalt-assay-v0/imagegen-basin-map-v0/trellis-followthrough/lirm02-hallucinate-beyond-trellis-fast4/output.glb'
+      },
+      {
+        label: 'lirm03 hallucinate-beyond',
+        url: '/artifacts/lirm-speciation-armature-gestalt-assay-v0/imagegen-basin-map-v0/trellis-followthrough/lirm03-hallucinate-beyond-trellis-fast4/output.glb'
+      },
+      {
+        label: 'lirm07 hallucinate-beyond',
+        url: '/artifacts/lirm-speciation-armature-gestalt-assay-v0/imagegen-basin-map-v0/trellis-followthrough/lirm07-hallucinate-beyond-trellis-fast4/output.glb'
+      }
+    ];
+
+    const grid = document.getElementById('grid');
+    const loader = new GLTFLoader();
+    const ready = [];
+    window.__kaminosTrellisWitness = { cases: [], loaded: false };
+
+    function addLights(scene) {
+      scene.add(new THREE.HemisphereLight(0xfff3dc, 0x202126, 1.35));
+      const key = new THREE.DirectionalLight(0xffe4b8, 2.0);
+      key.position.set(3.0, 4.0, 2.5);
+      scene.add(key);
+      const rim = new THREE.DirectionalLight(0x9bbcff, 1.0);
+      rim.position.set(-2.5, 2.5, -2.0);
+      scene.add(rim);
+    }
+
+    function normalizeObject(object) {
+      const box = new THREE.Box3().setFromObject(object);
+      const center = box.getCenter(new THREE.Vector3());
+      const size = box.getSize(new THREE.Vector3());
+      object.position.sub(center);
+      object.scale.setScalar(2.55 / Math.max(size.x, size.y, size.z, 0.001));
+      object.rotation.set(-0.08, -0.62, 0.0);
+      return { size: size.toArray(), center: center.toArray() };
+    }
+
+    function fitRenderer(renderer, canvas) {
+      const rect = canvas.getBoundingClientRect();
+      const width = Math.max(1, Math.floor(rect.width * window.devicePixelRatio));
+      const height = Math.max(1, Math.floor(rect.height * window.devicePixelRatio));
+      if (canvas.width !== width || canvas.height !== height) renderer.setSize(width, height, false);
+      return { width, height, aspect: width / height };
+    }
+
+    function makePanel(entry) {
+      const panel = document.createElement('section');
+      panel.className = 'panel';
+      const label = document.createElement('div');
+      label.className = 'label';
+      label.textContent = entry.label;
+      const canvas = document.createElement('canvas');
+      const status = document.createElement('div');
+      status.className = 'status';
+      status.textContent = 'loading';
+      panel.append(label, canvas, status);
+      grid.appendChild(panel);
+
+      const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, preserveDrawingBuffer: true });
+      renderer.outputColorSpace = THREE.SRGBColorSpace;
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.04;
+
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x151412);
+      addLights(scene);
+      const camera = new THREE.PerspectiveCamera(33, 1, 0.01, 100);
+      camera.position.set(1.8, 1.15, 4.4);
+      camera.lookAt(0, 0, 0);
+
+      const ground = new THREE.Mesh(
+        new THREE.CircleGeometry(2.2, 80),
+        new THREE.MeshStandardMaterial({ color: 0x6f695e, roughness: 0.82, metalness: 0.0 })
+      );
+      ground.rotation.x = -Math.PI / 2;
+      ground.position.y = -1.32;
+      scene.add(ground);
+
+      function render() {
+        const fit = fitRenderer(renderer, canvas);
+        camera.aspect = fit.aspect;
+        camera.updateProjectionMatrix();
+        renderer.render(scene, camera);
+      }
+      window.addEventListener('resize', render);
+
+      const loaded = new Promise((resolve) => {
+        loader.load(entry.url, (gltf) => {
+          const stats = normalizeObject(gltf.scene);
+          scene.add(gltf.scene);
+          render();
+          status.textContent = `loaded ${entry.url.split('/').slice(-2).join('/')}`;
+          window.__kaminosTrellisWitness.cases.push({ label: entry.label, url: entry.url, stats });
+          resolve({ label: entry.label, ok: true, stats });
+        }, undefined, (error) => {
+          status.classList.add('error');
+          status.textContent = `failed: ${error?.message || error}`;
+          render();
+          resolve({ label: entry.label, ok: false, error: String(error?.message || error) });
+        });
+      });
+      ready.push(loaded);
+    }
+
+    for (const entry of cases) makePanel(entry);
+    Promise.all(ready).then((results) => {
+      window.__kaminosTrellisWitness.loaded = true;
+      window.__kaminosTrellisWitness.results = results;
+      window.dispatchEvent(new Event('kaminos-trellis-witness-loaded'));
+    });
+  </script>
+</body>
+</html>

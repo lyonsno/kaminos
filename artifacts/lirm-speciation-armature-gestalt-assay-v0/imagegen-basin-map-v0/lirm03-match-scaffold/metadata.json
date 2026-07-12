@@ -1,0 +1,25 @@
+{
+  "name": "trellis-source",
+  "job_type": "mflux_flux2_edit_promptfile",
+  "job_id": "969838ec7803",
+  "input_path": "/private/tmp/kaminos-molten-lirm-speciation-armature-0707/artifacts/lirm-speciation-armature-gestalt-assay-v0/conditioning-packages/lirm-armature-03/trellis-source.png",
+  "input_name": "trellis-source.png",
+  "params": {
+    "prompt_file": "/private/tmp/kaminos-molten-lirm-speciation-armature-0707/artifacts/lirm-speciation-armature-gestalt-assay-v0/imagegen-basin-map-v0/lirm03-match-scaffold/prompt.txt",
+    "seed": "4203",
+    "width": "512",
+    "height": "512",
+    "steps": "8",
+    "guidance": "1.0",
+    "model": "flux2-klein-9b",
+    "quantize": "4",
+    "mlx_cache_limit_gb": "48"
+  },
+  "output_files": [
+    "output.metadata.json",
+    "output.png",
+    "prompt.txt"
+  ],
+  "created_at": 1783896663.977204,
+  "duration_s": 93.3
+}
