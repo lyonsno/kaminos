@@ -10274,6 +10274,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         recordBrowserResidualCost({ applied: residualApplied, sourcePassEncodeMs, residualPassEncodeMs });
       } else {
         encodeDraw(encoder, currentTexture.createView(), 'kaminos frozen render-scale canvas pass');
+        state.volumeReconstructionStyle = state.renderScale < 0.999 ? 'linear-css-upscale' : 'native-resolution';
         recordBrowserResidualCost({ applied: false });
       }
       if (options.includeFeatureRgba === true && !featureCaptureSourcePassApplied) {
