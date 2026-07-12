@@ -29,6 +29,8 @@ import {
   createSam3ImageVitBlockStackPhaseProgramRouteDefinition,
   createSam3ImageFpnNeckPhaseProgramCpuOracle,
   createSam3ImageFpnNeckPhaseProgramRouteDefinition,
+  createSam3ClipTokenizer,
+  parseSam3ClipMerges,
   createSam3MaskTailPhaseProgramCpuOracle,
   createSam3MaskTailPhaseProgramRouteDefinition,
   createSam3PixelDecoderPhaseProgramCpuOracle,
@@ -105,6 +107,7 @@ const state = {
   imageVitBlockStackEvidence: null,
   imageFpnNeckEvidence: null,
   browserPromptTextEvidence: null,
+  browserPromptTokenizerEvidence: null,
   browserFpnDetrIngressEvidence: null,
   parity: null,
   debugReadbackSamples: null,
@@ -149,6 +152,12 @@ async function fetchArray(url, Type) {
   const response = await fetch(url);
   if (!response.ok) throw new Error(`fetch ${url} failed ${response.status}`);
   return new Type(await response.arrayBuffer());
+}
+
+async function fetchText(url) {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`fetch ${url} failed ${response.status}`);
+  return response.text();
 }
 
 function resolveManifestFile(file) {
@@ -516,6 +525,11 @@ async function sha256TypedArray(values) {
   const bytes = new Uint8Array(values.buffer, values.byteOffset, values.byteLength);
   const copy = bytes.slice();
   const digest = await crypto.subtle.digest('SHA-256', copy);
+  return `sha256:${Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('')}`;
+}
+
+async function sha256Text(text) {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
   return `sha256:${Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('')}`;
 }
 
@@ -1207,8 +1221,8 @@ async function loadDetrStackPayload(manifest) {
   const expectedFpnNeckFeature1 = expectedFpnNeckFeature1Tensor ? await fetchArray(resolveManifestFile(expectedFpnNeckFeature1Tensor.file), Float32Array) : null;
   const expectedFpnNeckFeature2 = expectedFpnNeckFeature2Tensor ? await fetchArray(resolveManifestFile(expectedFpnNeckFeature2Tensor.file), Float32Array) : null;
   const expectedFpnNeckFeature3 = expectedFpnNeckFeature3Tensor ? await fetchArray(resolveManifestFile(expectedFpnNeckFeature3Tensor.file), Float32Array) : null;
-  const promptInputIds = promptInputIdsTensor ? await fetchArray(resolveManifestFile(promptInputIdsTensor.file), Uint32Array) : null;
-  const promptAttentionMask = promptAttentionMaskTensor ? await fetchArray(resolveManifestFile(promptAttentionMaskTensor.file), Float32Array) : null;
+  const referencePromptInputIds = promptInputIdsTensor ? await fetchArray(resolveManifestFile(promptInputIdsTensor.file), Uint32Array) : null;
+  const referencePromptAttentionMask = promptAttentionMaskTensor ? await fetchArray(resolveManifestFile(promptAttentionMaskTensor.file), Float32Array) : null;
   const expectedPromptFeatures = expectedPromptFeaturesTensor ? await fetchArray(resolveManifestFile(expectedPromptFeaturesTensor.file), Float32Array) : promptFeatures;
   const expectedPromptMask = expectedPromptMaskTensor ? await fetchArray(resolveManifestFile(expectedPromptMaskTensor.file), Float32Array) : promptMask;
   const expectedPromptFpnFeature = expectedPromptFpnTensor ? await fetchArray(resolveManifestFile(expectedPromptFpnTensor.file), Float32Array) : null;
@@ -1336,13 +1350,71 @@ async function loadDetrStackPayload(manifest) {
   const promptShape = includeImageFpnNeck ? { batch: manifest.shape.batch, spatialTokens: manifest.shape.spatialTokens, promptTokens: manifest.shape.promptTokens, channels: manifest.shape.channels, heads: manifest.shape.heads, height: manifest.shape.height, width: manifest.shape.width } : null;
   const pixelShape = includeImageFpnNeck ? { batch: manifest.shape.batch, channels: manifest.shape.channels, groups: manifest.shape.groups || 8, levels: manifest.shape.levels || manifest.shape.fpnNeckLevels } : null;
   const effectiveExpectedPixelEmbed = expectedBrowserPixelEmbed || pixelEmbed;
+  let browserPromptInputIds = null;
+  let browserPromptAttentionMask = null;
+  let browserPromptTokenizerEvidence = null;
+  if (includeImageFpnNeck) {
+    const tokenizerContract = manifest.promptTokenizer;
+    if (!tokenizerContract || tokenizerContract.runtimeOwner !== 'browser') {
+      throw new Error('manifest missing browser-owned SAM3 prompt tokenizer contract');
+    }
+    const [tokenizerVocabText, tokenizerMergesText] = await Promise.all([
+      fetchText(resolveManifestFile(tokenizerContract.vocab.file)),
+      fetchText(resolveManifestFile(tokenizerContract.merges.file)),
+    ]);
+    const [effectiveVocabSha256, effectiveMergesSha256] = await Promise.all([
+      sha256Text(tokenizerVocabText),
+      sha256Text(tokenizerMergesText),
+    ]);
+    if (effectiveVocabSha256 !== tokenizerContract.vocab.sha256 || effectiveMergesSha256 !== tokenizerContract.merges.sha256) {
+      throw new Error(`SAM3 tokenizer asset hash mismatch: vocab ${effectiveVocabSha256} != ${tokenizerContract.vocab.sha256}; merges ${effectiveMergesSha256} != ${tokenizerContract.merges.sha256}`);
+    }
+    const tokenizerVocab = JSON.parse(tokenizerVocabText);
+    const tokenizer = createSam3ClipTokenizer({
+      vocab: tokenizerVocab,
+      merges: parseSam3ClipMerges(tokenizerMergesText),
+      contextLength: tokenizerContract.contextLength,
+      bosTokenId: tokenizerContract.bosTokenId,
+      eosTokenId: tokenizerContract.eosTokenId,
+      padTokenId: tokenizerContract.padTokenId,
+    });
+    const prompts = manifest.prompt?.texts || [manifest.prompt?.text];
+    const browserTokens = tokenizer.tokenizeBatch(prompts);
+    browserPromptInputIds = browserTokens.inputIds;
+    browserPromptAttentionMask = browserTokens.attentionMask;
+    const promptTokenIdMismatchCount = mismatchCount(referencePromptInputIds, browserPromptInputIds);
+    const promptAttentionMaskMismatchCount = mismatchCount(referencePromptAttentionMask, browserPromptAttentionMask);
+    browserPromptTokenizerEvidence = {
+      schema: 'kaminos.sam3-browser-prompt-tokenizer-evidence.v0',
+      runtimeOwner: 'browser',
+      boundary: 'prompt-text-to-browser-owned-clip-token-tensors',
+      promptSha256: manifest.prompt?.sha256 || null,
+      normalizedPrompts: browserTokens.normalizedPrompts,
+      validLengths: browserTokens.validLengths,
+      shape: browserTokens.shape,
+      contextLength: tokenizer.contextLength,
+      bosTokenId: tokenizer.bosTokenId,
+      eosTokenId: tokenizer.eosTokenId,
+      padTokenId: tokenizer.padTokenId,
+      vocab: tokenizerContract.vocab,
+      merges: tokenizerContract.merges,
+      effectiveVocabSha256,
+      effectiveMergesSha256,
+      inputIdsSha256: await sha256TypedArray(browserPromptInputIds),
+      attentionMaskSha256: await sha256TypedArray(browserPromptAttentionMask),
+      referenceInputIdsSha256: promptInputIdsTensor.sha256,
+      referenceAttentionMaskSha256: promptAttentionMaskTensor.sha256,
+      promptTokenIdMismatchCount,
+      promptAttentionMaskMismatchCount,
+    };
+  }
   const maskOracle = createSam3MaskTailPhaseProgramCpuOracle({ lastHs: expectedLastHs, pixelEmbed: effectiveExpectedPixelEmbed, weights: tailWeights, shape: maskTailShape });
   const patchEmbedOracle = includeImagePatchEmbed ? createSam3ImagePatchEmbedPhaseProgramCpuOracle({ pixelValues: expectedPixelValues, weights: { projection: patchProjectionWeight }, shape: patchEmbedShape }) : null;
   const vitPrefixOracle = includeImageVitPrefix ? createSam3ImageVitPrefixPhaseProgramCpuOracle({ patchEmbeddings: expectedPatchEmbeddings, weights: vitPrefixWeights, shape: vitPrefixShape }) : null;
   const vitFirstBlockOracle = includeImageVitFirstBlock ? createSam3ImageVitFirstBlockPhaseProgramCpuOracle({ hiddenStates: expectedVitPrefixHiddenStates, weights: vitFirstBlockWeights, shape: vitFirstBlockShape }) : null;
   const vitBlockStackOracle = includeImageVitBlockStack ? createSam3ImageVitBlockStackPhaseProgramCpuOracle({ hiddenStates: expectedVitPrefixHiddenStates, weights: vitBlockStackWeights, shape: vitBlockStackShape }) : null;
   const fpnNeckOracle = includeImageFpnNeck ? createSam3ImageFpnNeckPhaseProgramCpuOracle({ backboneHiddenStates: expectedVitBackboneHiddenStates, weights: fpnNeckWeights, shape: fpnNeckShape }) : null;
-  const promptTextOracle = includeImageFpnNeck ? createSam3PromptTextIngressPhaseProgramCpuOracle({ inputIds: promptInputIds, attentionMask: promptAttentionMask, weights: promptTextWeights, shape: promptTextShape }) : null;
+  const promptTextOracle = includeImageFpnNeck ? createSam3PromptTextIngressPhaseProgramCpuOracle({ inputIds: browserPromptInputIds, attentionMask: browserPromptAttentionMask, weights: promptTextWeights, shape: promptTextShape }) : null;
   const promptFpnOracle = includeImageFpnNeck ? createSam3PromptFpnPhaseProgramCpuOracle({ encoderHiddenStates: expectedEncoderHiddenStates, promptFeatures: expectedPromptFeatures, promptMask: expectedPromptMask, weights: promptWeights, shape: promptShape }) : null;
   const pixelDecoderOracle = includeImageFpnNeck ? createSam3PixelDecoderPhaseProgramCpuOracle({ features: [expectedFpnNeckFeature0, expectedFpnNeckFeature1, expectedPromptFpnFeature], weights: pixelWeights, shape: pixelShape }) : null;
   const scoringOracle = includeStackScoring ? createSam3ScoringPhaseProgramCpuOracle({ hiddenStates: expectedDecoderHiddenStates, promptFeatures, promptMask, weights: scoringWeights, shape: scoringShape }) : null;
@@ -1472,22 +1544,23 @@ async function loadDetrStackPayload(manifest) {
       encoderPosSource: 'browser-position-embedding-sine',
       textTensorOwner: 'browser-local-prompt-text-ingress',
       nonClaims: {
-        browserTokenizer: true,
+        browserTokenizer: false,
         level3DetectorConsumption: true,
         fullSam3BrowserExecution: true,
       },
     } : null,
+    browserPromptTokenizerEvidence,
     browserPromptTextEvidence: includeImageFpnNeck ? {
       packetMode: manifest.mode,
       schema: manifest.schema,
       boundary: manifest.promptTextIngress?.boundary || 'sam3-prompt-input-ids-to-projected-text-features-phase-program',
       routeKind: manifest.promptTextIngress?.routeKind || 'prompt-text-ingress-detector-stack-composition',
-      source: manifest.promptTextIngress?.source || 'exported-sam3-processor-input-ids-attention-mask',
+      source: manifest.promptTextIngress?.source || 'browser-owned-sam3-clip-tokenizer-tensors',
       textEncoder: manifest.promptTextIngress?.textEncoder || null,
       promptFeaturesOwner: 'browser-local-prompt-text-ingress',
       promptMaskOwner: 'browser-local-prompt-text-ingress',
       nonClaims: {
-        browserTokenizer: true,
+        browserTokenizer: false,
         level3DetectorConsumption: true,
         fullSam3BrowserExecution: true,
       },
@@ -1501,7 +1574,7 @@ async function loadDetrStackPayload(manifest) {
       fpnTensorOwner: 'browser-local-image-fpn-neck',
       pixelEmbedOwner: 'browser-local-pixel-decoder',
       nonClaims: {
-        browserTokenizer: true,
+        browserTokenizer: false,
         level3DetectorConsumption: true,
         fullSam3BrowserExecution: true,
       },
@@ -1517,6 +1590,8 @@ async function loadDetrStackPayload(manifest) {
     expectedFpnNeckFeature1,
     expectedFpnNeckFeature2,
     expectedFpnNeckFeature3,
+    browserPromptInputIds,
+    browserPromptAttentionMask,
     expectedPromptFeatures,
     expectedPromptMask,
     expectedPromptFpnFeature,
@@ -1896,8 +1971,10 @@ async function loadDetrStackPayload(manifest) {
         effectiveEncoderPosSha256 = await sha256TypedArray(effectiveEncoderPos);
         promptTextWeightsSha256 = await aggregateTensorBundleSha256('sam3-prompt-text-weights', promptTextWeightRoles.map(role => ({ role, sha256: weightsByRole[role].sha256 })));
         promptTextTensorSha256 = await aggregateTensorBundleSha256('sam3-prompt-text-tensors:browser-image-fpn-detector-stack', [
-          { role: 'prompt-input-ids', sha256: promptInputIdsTensor.sha256, shape: promptInputIdsTensor.shape },
-          { role: 'prompt-attention-mask', sha256: promptAttentionMaskTensor.sha256, shape: promptAttentionMaskTensor.shape },
+          { role: 'browser-prompt-input-ids', sha256: browserPromptTokenizerEvidence.inputIdsSha256, shape: promptInputIdsTensor.shape },
+          { role: 'browser-prompt-attention-mask', sha256: browserPromptTokenizerEvidence.attentionMaskSha256, shape: promptAttentionMaskTensor.shape },
+          { role: 'prompt-tokenizer-vocab', sha256: browserPromptTokenizerEvidence.vocab.sha256 },
+          { role: 'prompt-tokenizer-merges', sha256: browserPromptTokenizerEvidence.merges.sha256 },
         ]);
         const promptTextRoute = createSam3PromptTextIngressPhaseProgramRouteDefinition({
           model: { revision: manifest.model?.id || 'mlx-reference-prompt-text-ingress', dtype: 'fp32' },
@@ -1917,7 +1994,7 @@ async function loadDetrStackPayload(manifest) {
           },
           routeConfig: { upstream: manifest.claims?.upstream || 'mlx-reference-detr-stack', promptHash: manifest.prompt?.sha256, promptTextIngress: manifest.promptTextIngress || null },
         });
-        promptTextResult = await runSam3PromptTextIngressPhaseProgramRoute({ request: promptTextRequest, route: promptTextRoute, device, queue: device.queue, adapterName: adapter.info?.description || adapter.info?.device || 'browser-webgpu-adapter', browser: navigator.userAgent, kernel: promptTextRoute.kernel, model: { revision: promptTextRoute.model.revision, weightsHash: promptTextWeightsSha256, dtype: 'fp32' }, tensors: { inputIds: promptInputIds, attentionMask: promptAttentionMask, weights: promptTextWeights, shape: promptTextShape }, includeReadback: true });
+        promptTextResult = await runSam3PromptTextIngressPhaseProgramRoute({ request: promptTextRequest, route: promptTextRoute, device, queue: device.queue, adapterName: adapter.info?.description || adapter.info?.device || 'browser-webgpu-adapter', browser: navigator.userAgent, kernel: promptTextRoute.kernel, model: { revision: promptTextRoute.model.revision, weightsHash: promptTextWeightsSha256, dtype: 'fp32' }, tensors: { inputIds: browserPromptInputIds, attentionMask: browserPromptAttentionMask, weights: promptTextWeights, shape: promptTextShape }, includeReadback: true });
         gpuPromptFeatures = new Float32Array(promptTextResult.debugReadback.promptFeatures);
         gpuPromptMask = new Float32Array(promptTextResult.debugReadback.promptMask);
         promptFeaturesOutput = promptTextResult.receipt.outputs.find(output => output.role === 'prompt-features');
@@ -3382,6 +3459,8 @@ async function main() {
     const gpuBinary = result.debugReadback.binaryMask ? new Uint32Array(result.debugReadback.binaryMask) : null;
     const gpuPredLogits = result.debugReadback.predLogits ? new Float32Array(result.debugReadback.predLogits) : null;
     const parity = {
+      promptTokenIdMismatchCount: payload.browserPromptTokenizerEvidence?.promptTokenIdMismatchCount,
+      promptAttentionMaskMismatchCount: payload.browserPromptTokenizerEvidence?.promptAttentionMaskMismatchCount,
       encoderHiddenStatesMaxAbsDiff: result.debugReadback.encoderHiddenStates ? maxAbsDiff(payload.expectedEncoderHiddenStates || [], new Float32Array(result.debugReadback.encoderHiddenStates)) : undefined,
       decoderHiddenStatesMaxAbsDiff: result.debugReadback.decoderHiddenStates ? maxAbsDiff(payload.expectedDecoderHiddenStates || [], new Float32Array(result.debugReadback.decoderHiddenStates)) : undefined,
       lastHsMaxAbsDiff: result.debugReadback.lastHs ? maxAbsDiff(payload.expectedLastHs || [], new Float32Array(result.debugReadback.lastHs)) : undefined,
@@ -3627,6 +3706,13 @@ async function main() {
         encoderPos: debugReadbackSamples.encoderPos,
       },
     } : null;
+    state.browserPromptTokenizerEvidence = payload.browserPromptTokenizerEvidence ? {
+      ...payload.browserPromptTokenizerEvidence,
+      parity: {
+        promptTokenIdMismatchCount: parity.promptTokenIdMismatchCount,
+        promptAttentionMaskMismatchCount: parity.promptAttentionMaskMismatchCount,
+      },
+    } : null;
     state.browserPromptTextEvidence = payload.browserPromptTextEvidence ? {
       ...payload.browserPromptTextEvidence,
       receiptChain: (result.compositionRouteReceipts || []).map(receipt => receipt.effectiveRouteId),
@@ -3691,6 +3777,8 @@ async function main() {
       || (parity.encoderPosMaxAbsDiff ?? 0) > gpuEncoderPosTolerance
       || (parity.promptTextMaxAbsDiff ?? 0) > gpuPromptTextTolerance
       || (parity.promptMaskMaxAbsDiff ?? 0) > gpuPromptMaskTolerance
+      || (parity.promptTokenIdMismatchCount ?? 0) > 0
+      || (parity.promptAttentionMaskMismatchCount ?? 0) > 0
       || (parity.promptFpnMaxAbsDiff ?? 0) > gpuPromptFpnTolerance
       || (parity.pixelEmbedMaxAbsDiff ?? 0) > gpuPixelTolerance
       || (parity.maskLogitsMaxAbsDiff ?? 0) > gpuTolerance

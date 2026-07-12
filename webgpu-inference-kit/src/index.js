@@ -210,6 +210,12 @@ export {
 } from './sam-prompt-text-ingress-phase-program.js';
 
 export {
+  createSam3ClipTokenizer,
+  normalizeSam3ClipPrompt,
+  parseSam3ClipMerges,
+} from './sam-prompt-tokenizer.js';
+
+export {
   SAM3_DETR_ENCODER_PHASE_PROGRAM_ROUTE_ID,
   createSam3DetrEncoderPhaseProgramCpuOracle,
   createSam3DetrEncoderPhaseProgramRouteDefinition,

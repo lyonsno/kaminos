@@ -3,6 +3,7 @@ import argparse
 import importlib.util
 import json
 import os
+import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -229,6 +230,31 @@ def add_prompt_text_weights(weight_entries, out_dir, params, layer_count):
     encoder_tool.add_weight(weight_entries, out_dir, params, "prompt-text-projection-bias", "detector_model.text_projection.bias", "prompt-text-projection-bias.f32.bin", "out")
 
 
+def export_prompt_tokenizer_assets(out_dir, context_length):
+    tokenizer = encoder_tool.Sam3Processor().tokenizer
+    vocab_source = Path(tokenizer.init_kwargs["vocab_file"])
+    merges_source = Path(tokenizer.init_kwargs["merges_file"])
+    vocab_path = out_dir / "prompt-tokenizer-vocab.json"
+    merges_path = out_dir / "prompt-tokenizer-merges.txt"
+    shutil.copyfile(vocab_source, vocab_path)
+    shutil.copyfile(merges_source, merges_path)
+    return {
+        "schema": "kaminos.sam3-clip-prompt-tokenizer.v0",
+        "kind": "openai-clip-bpe",
+        "runtimeOwner": "browser",
+        "normalization": "nfc-whitespace-lowercase",
+        "contextLength": int(context_length),
+        "bosTokenId": int(tokenizer.bos_token_id),
+        "eosTokenId": int(tokenizer.eos_token_id),
+        "padTokenId": int(tokenizer.pad_token_id),
+        "vocabSize": int(tokenizer.vocab_size),
+        "vocab": {"file": vocab_path.name, "sha256": encoder_tool.sha256_file(vocab_path)},
+        "merges": {"file": merges_path.name, "sha256": encoder_tool.sha256_file(merges_path)},
+        "referenceInputIdsRole": "prompt-input-ids",
+        "referenceAttentionMaskRole": "prompt-attention-mask",
+    }
+
+
 def main():
     args = parse_args()
     out_dir = Path(args.out_dir)
@@ -452,6 +478,7 @@ def main():
     }
     detector_stack_tolerances = gate_n_image_fpn_tolerances if include_image_fpn_neck else legacy_detector_stack_tolerances
     tolerance_budget_source = "browser-fpn-prompt-text-pixel-detector-stack" if include_image_fpn_neck else "legacy-mlx-image-ingress"
+    prompt_tokenizer = export_prompt_tokenizer_assets(out_dir, shape["promptTokens"]) if include_image_fpn_neck else None
     manifest = {
         "schema": DETECTOR_STACK_IMAGE_FPN_NECK_SCHEMA if include_image_fpn_neck else DETECTOR_STACK_VIT_BACKBONE_SCHEMA if include_image_vit_full_backbone else DETECTOR_STACK_VIT_BLOCK_STACK_SCHEMA if include_image_vit_block_stack else DETECTOR_STACK_VIT_FIRST_BLOCK_SCHEMA if include_image_vit_first_block else DETECTOR_STACK_VIT_PREFIX_SCHEMA if include_image_vit_prefix else DETECTOR_STACK_PATCH_EMBED_SCHEMA if include_image_patch_embed else DETECTOR_STACK_PREPROCESS_SCHEMA if args.image_preprocess_ingress else DETECTOR_STACK_SCHEMA if args.detector_stack else SELECTION_SCHEMA if include_selection else SCORING_SCHEMA if include_scoring else SCHEMA,
         "routeId": ROUTE_ID,
@@ -461,6 +488,7 @@ def main():
         "reference": reference,
         "model": {"id": args.model, "role": "mlx-reference-upstream"},
         "prompt": {"text": args.prompt, "sha256": encoder_tool.sha256_bytes(args.prompt.encode("utf-8"))},
+        "promptTokenizer": prompt_tokenizer,
         "sourceImage": {"artifactId": f"image:{image_path.name}:sam3-reference-source", "file": "source-image.png", "path": str(source_path), "sha256": encoder_tool.sha256_file(source_path), "originalPath": str(image_path), "resolution": [args.resolution, args.resolution]},
         "staticWeights": {"artifactId": f"sam3-weights:{args.model}:detr-stack-reference-upstream", "sha256": weights_sha, "role": "reference-upstream", "reason": "weights exported for browser prompt/text ingress, image ViT full-backbone plus detector-consumed FPN-neck ingress, DETR encoder, prompt-FPN, pixel-decoder, DETR decoder, dot-product scoring, selection postprocess, and downstream mask-tail phase-program execution" if include_image_fpn_neck else "weights exported for browser image ViT full-backbone ingress through the final transformer layer, DETR encoder, DETR decoder, dot-product scoring, selection postprocess, and downstream mask-tail phase-program execution" if include_image_vit_full_backbone else "weights exported for browser image ViT block-stack ingress through first global-attention layer, DETR encoder, DETR decoder, dot-product scoring, selection postprocess, and downstream mask-tail phase-program execution" if include_image_vit_block_stack else "weights exported for browser image ViT first-block ingress, DETR encoder, DETR decoder, dot-product scoring, selection postprocess, and downstream mask-tail phase-program execution" if include_image_vit_first_block else "weights exported for browser image ViT-prefix ingress, DETR encoder, DETR decoder, dot-product scoring, selection postprocess, and downstream mask-tail phase-program execution" if include_image_vit_prefix else "weights exported for browser DETR encoder, DETR decoder, dot-product scoring, selection postprocess, and downstream mask-tail phase-program execution" if include_selection else "weights exported for browser DETR encoder, DETR decoder, dot-product scoring, and downstream mask-tail phase-program execution" if include_scoring else "weights exported for browser DETR encoder, DETR decoder, and downstream mask-tail phase-program execution"},
         "shape": shape,
@@ -537,12 +565,12 @@ def main():
             "claim": "browser-local SAM3 FPN neck for levels 0, 1, 2, and 3 from browser-local full ViT backbone; the browser smoke derives DETR encoder source/position from reference-trimmed level 2 while level 3 is produced but not detector-consumed",
         } if include_image_fpn_neck else None,
         "promptTextIngress": {
-            "boundary": "sam3-prompt-input-ids-to-projected-text-features-phase-program",
-            "source": "exported-sam3-processor-input-ids-attention-mask",
+            "boundary": "sam3-browser-prompt-text-to-projected-text-features-phase-program",
+            "source": "browser-sam3-clip-tokenizer",
             "routeKind": "prompt-text-ingress-detector-stack-composition",
             "textEncoder": {"type": "CLIP causal text encoder", "layers": shape["textLayerCount"], "hiddenSize": shape["textHiddenSize"], "heads": shape["textHeads"], "intermediateSize": shape["textIntermediateSize"], "projection": "detector_model.text_projection"},
             "browserExecuted": bool(include_image_fpn_neck),
-            "claim": "browser-local SAM3 prompt/text ingress from exported processor input ids through CLIP text encoder and detector text projection; tokenizer/string normalization remains packet-preprocessed and full SAM3 tracking remains outside this boundary",
+            "claim": "browser-local SAM3 prompt normalization and CLIP BPE tokenization produce runtime input ids and attention mask, which feed the browser CLIP text encoder and detector text projection; exported processor ids/mask remain reference-only parity evidence and full SAM3 tracking remains outside this boundary",
         } if include_image_fpn_neck else None,
         "tolerances": detector_stack_tolerances,
         "visualization": {"selectedMaskIndex": int(ref["selected"]), "selectedMaskScore": float(ref["scores"][ref["selected"]]), "presenceLogits": [float(x) for x in ref["presence"]]},

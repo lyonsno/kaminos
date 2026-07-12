@@ -99,9 +99,9 @@ assert.match(browserSmokeSource, /runSam3PromptTextIngressPhaseProgramRoute/, 'b
 assert.match(browserSmokeSource, /browserPromptTextEvidence/, 'browser smoke must expose browser prompt/text evidence');
 assert.match(browserSmokeSource, /promptTextMaxAbsDiff/, 'browser smoke must report prompt feature parity from prompt/text ingress');
 assert.match(browserSmokeSource, /promptMaskMaxAbsDiff/, 'browser smoke must report prompt mask parity from prompt/text ingress');
-assert.match(browserSmokeSource, /textTensorOwner: 'browser-local-prompt-text-ingress',\s*nonClaims:\s*\{\s*browserTokenizer: true/, 'browser smoke FPN->DETR evidence must not non-claim browser-local text encoder after prompt/text ingress owns text tensors');
+assert.match(browserSmokeSource, /textTensorOwner: 'browser-local-prompt-text-ingress',\s*nonClaims:\s*\{\s*browserTokenizer: false/, 'browser smoke FPN->DETR evidence must affirm browser tokenization after Gate S owns runtime prompt tensors');
 assert.match(browserSmokeSource, /promptTensorOwner: 'browser-local-prompt-text-ingress'/, 'browser smoke prompt-FPN evidence must name browser prompt/text ingress as the prompt tensor owner');
-assert.match(browserSmokeSource, /promptTensorOwner: 'browser-local-prompt-text-ingress',[\s\S]*?nonClaims:\s*\{\s*browserTokenizer: true/, 'browser smoke prompt-FPN evidence must not non-claim browser-local text encoder after prompt/text ingress owns prompt tensors');
+assert.match(browserSmokeSource, /promptTensorOwner: 'browser-local-prompt-text-ingress',[\s\S]*?nonClaims:\s*\{\s*browserTokenizer: false/, 'browser smoke prompt-FPN evidence must carry browser tokenizer ownership downstream');
 assert.match(browserSmokeSource, /sam3-prompt-text-tensors:browser-image-fpn-detector-stack-composition/, 'browser smoke must give prompt/text tensors a composition artifact id');
 assert.match(browserSmokeSource, /sam3-prompt-features:browser-image-fpn-detector-stack-composition/, 'browser smoke must give browser prompt-features a composition artifact id');
 assert.match(browserSmokeSource, /sam3-prompt-mask:browser-image-fpn-detector-stack-composition/, 'browser smoke must give browser prompt-mask a composition artifact id');

@@ -453,10 +453,13 @@ function assertImageFpnNeckEvidence(state) {
   if (report.projection?.weightLayout !== 'out,kH,kW,in' || report.projection?.proj1 !== '1x1 Conv2d' || report.projection?.proj2 !== '3x3 Conv2d padding=1') throw new Error('imageFpnNeck reference boundary metadata missing');
   if (report.parity?.fpnNeckFeature0MaxAbsDiff > 0.02 || report.parity?.fpnNeckFeature1MaxAbsDiff > 0.02 || report.parity?.fpnNeckFeature2MaxAbsDiff > 0.02 || report.parity?.fpnNeckFeature3MaxAbsDiff > 0.02 || report.parity?.imageFpnNeckCpuMaxAbsDiff > 0.02) throw new Error('imageFpnNeck parity mismatch');
   const ingress = state?.browserFpnDetrIngressEvidence;
+  const tokenizer = state?.browserPromptTokenizerEvidence;
   if (report.nonClaims?.level3DetectorConsumption !== true || report.nonClaims?.fullSam3BrowserExecution !== true) throw new Error('imageFpnNeck bounded non-claims missing');
   if (ingress?.edge?.encoderSrcSource !== 'browser-fpn-neck-feature-2' || !ingress.detrImageIngressTensorSha256 || !ingress.effectiveEncoderSrcSha256 || !ingress.effectiveEncoderPosSha256) throw new Error('imageFpnNeck browser DETR ingress evidence missing');
   if ((ingress?.textTensorOwner === 'browser-local-prompt-text-ingress' && ingress.nonClaims?.browserLocalTextEncoder === true) || (ingress?.edge?.textTensorOwner === 'browser-local-prompt-text-ingress' && ingress.edge?.nonClaims?.browserLocalTextEncoder === true)) throw new Error('imageFpnNeck text ingress evidence still non-claims browser-local text encoder');
-  if (ingress?.textTensorOwner === 'browser-local-prompt-text-ingress' && ingress.nonClaims?.browserTokenizer !== true) throw new Error('imageFpnNeck text ingress evidence missing tokenizer non-claim');
+  if (!tokenizer || tokenizer.runtimeOwner !== 'browser' || !tokenizer.inputIdsSha256 || !tokenizer.attentionMaskSha256 || !tokenizer.vocab?.sha256 || !tokenizer.merges?.sha256 || tokenizer.effectiveVocabSha256 !== tokenizer.vocab.sha256 || tokenizer.effectiveMergesSha256 !== tokenizer.merges.sha256) throw new Error('imageFpnNeck browser prompt tokenizer evidence missing or asset identity mismatched');
+  if (tokenizer.promptTokenIdMismatchCount !== 0 || tokenizer.promptAttentionMaskMismatchCount !== 0) throw new Error('imageFpnNeck browser prompt tokenizer parity mismatch');
+  if (ingress?.nonClaims?.browserTokenizer === true || ingress?.edge?.nonClaims?.browserTokenizer === true) throw new Error('imageFpnNeck text ingress evidence still non-claims browser tokenizer');
   if (effectiveToleranceBudgetSource() !== 'browser-fpn-prompt-text-pixel-detector-stack') throw new Error('imageFpnNeck tolerance budget source mismatch');
   const promptText = browserPromptTextReport(state);
   if (!promptText?.promptTextTensorSha256 || !promptText.promptTextWeightsSha256 || !promptText.promptFeaturesOutput?.sha256 || !promptText.promptMaskOutput?.sha256) throw new Error('imageFpnNeck browser prompt/text evidence missing');
@@ -470,7 +473,7 @@ function assertImageFpnNeckEvidence(state) {
   const promptPixel = state?.browserPromptFpnPixelEvidence;
   if (!promptPixel?.promptFpnTensorSha256 || !promptPixel.promptFpnOutput?.sha256 || !promptPixel.pixelTensorSha256 || !promptPixel.pixelEmbedOutput?.sha256 || !promptPixel.downstreamTensorSha256) throw new Error('imageFpnNeck browser prompt-FPN/pixel evidence missing');
   if (promptPixel.promptTensorOwner === 'browser-local-prompt-text-ingress' && promptPixel.nonClaims?.browserLocalTextEncoder === true) throw new Error('imageFpnNeck prompt-FPN/pixel evidence still non-claims browser-local text encoder');
-  if (promptPixel.promptTensorOwner === 'browser-local-prompt-text-ingress' && promptPixel.nonClaims?.browserTokenizer !== true) throw new Error('imageFpnNeck prompt-FPN/pixel evidence missing tokenizer non-claim');
+  if (promptPixel.nonClaims?.browserTokenizer === true) throw new Error('imageFpnNeck prompt-FPN/pixel evidence still non-claims browser tokenizer');
   if (promptPixel.promptReceipt?.effectiveRouteId !== PROMPT_FPN_PHASE_PROGRAM_ROUTE_ID) throw new Error('imageFpnNeck prompt-FPN route receipt identity mismatch');
   if (promptPixel.pixelReceipt?.effectiveRouteId !== PIXEL_DECODER_PHASE_PROGRAM_ROUTE_ID) throw new Error('imageFpnNeck pixel-decoder route receipt identity mismatch');
   const pixelReceiptOutput = promptPixel.pixelReceipt?.outputs?.find(output => output.role === 'pixel-embed');
@@ -522,6 +525,7 @@ function writeReport(extra = {}) {
     compositionRouteReceipts: lastState?.compositionRouteReceipts || null,
     compositionEdge: lastState?.compositionEdge || null,
     browserFpnDetrIngressEvidence: lastState?.browserFpnDetrIngressEvidence || null,
+    browserPromptTokenizerEvidence: lastState?.browserPromptTokenizerEvidence || null,
     browserPromptTextEvidence: lastState?.browserPromptTextEvidence || null,
     browserPromptFpnPixelEvidence: lastState?.browserPromptFpnPixelEvidence || null,
     parity: lastState?.parity || null,
