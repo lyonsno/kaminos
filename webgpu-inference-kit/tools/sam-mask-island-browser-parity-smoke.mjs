@@ -363,6 +363,12 @@ function assertDetectorStackEvidence(state) {
   return report;
 }
 
+function assertBrowserOriginalImageIngress(state) {
+  const sourceIngress = state?.browserOriginalImageIngressEvidence;
+  if (!sourceIngress || sourceIngress.runtimeOwner !== 'browser' || sourceIngress.effectiveSourceImageSha256 !== sourceIngress.requestedSourceImageSha256 || !Array.isArray(sourceIngress.decodedResolution) || !Array.isArray(sourceIngress.targetResolution) || sourceIngress.resizeAlgorithm !== state?.sourceImage?.resize?.algorithm) throw new Error('imagePreprocess browser original-image ingress evidence missing or mismatched');
+  return sourceIngress;
+}
+
 function assertImagePreprocessEvidence(state) {
   const report = imagePreprocessReport(state);
   if (!report) throw new Error('imagePreprocess report missing');
@@ -373,7 +379,8 @@ function assertImagePreprocessEvidence(state) {
   if (!Array.isArray(report.receiptChain) || report.receiptChain.length !== 6 || report.receiptChain[0] !== IMAGE_PREPROCESS_PHASE_PROGRAM_ROUTE_ID) throw new Error('imagePreprocess composition receipt chain mismatch');
   if (!report.pixelValuesTensorSha256 || !report.pixelValuesOutput?.sha256 || !report.pixelValuesOutput?.artifactId) throw new Error('imagePreprocess pixel-values edge identity missing');
   if (report.parity?.pixelValuesMaxAbsDiff > 0.000001 || report.parity?.imagePreprocessCpuMaxAbsDiff > 0.000001) throw new Error('imagePreprocess pixel-values parity mismatch');
-  if (report.nonClaims?.originalImageResize !== true || report.nonClaims?.browserLocalVisionEncoder !== true || report.nonClaims?.browserLocalTextEncoder !== true || report.nonClaims?.fullSam3BrowserExecution !== true) throw new Error('imagePreprocess bounded non-claims missing');
+  assertBrowserOriginalImageIngress(state);
+  if (report.nonClaims?.originalImageResize !== false || report.nonClaims?.browserLocalVisionEncoder !== true || report.nonClaims?.browserLocalTextEncoder !== true || report.nonClaims?.fullSam3BrowserExecution !== true) throw new Error('imagePreprocess bounded non-claims missing');
   return report;
 }
 
@@ -453,6 +460,7 @@ function assertImageFpnNeckEvidence(state) {
   if (report.projection?.weightLayout !== 'out,kH,kW,in' || report.projection?.proj1 !== '1x1 Conv2d' || report.projection?.proj2 !== '3x3 Conv2d padding=1') throw new Error('imageFpnNeck reference boundary metadata missing');
   if (report.parity?.fpnNeckFeature0MaxAbsDiff > 0.02 || report.parity?.fpnNeckFeature1MaxAbsDiff > 0.02 || report.parity?.fpnNeckFeature2MaxAbsDiff > 0.02 || report.parity?.fpnNeckFeature3MaxAbsDiff > 0.02 || report.parity?.imageFpnNeckCpuMaxAbsDiff > 0.02) throw new Error('imageFpnNeck parity mismatch');
   const ingress = state?.browserFpnDetrIngressEvidence;
+  assertBrowserOriginalImageIngress(state);
   const tokenizer = state?.browserPromptTokenizerEvidence;
   if (report.nonClaims?.level3DetectorConsumption !== true || report.nonClaims?.fullSam3BrowserExecution !== true) throw new Error('imageFpnNeck bounded non-claims missing');
   if (ingress?.edge?.encoderSrcSource !== 'browser-fpn-neck-feature-2' || !ingress.detrImageIngressTensorSha256 || !ingress.effectiveEncoderSrcSha256 || !ingress.effectiveEncoderPosSha256) throw new Error('imageFpnNeck browser DETR ingress evidence missing');
@@ -525,6 +533,7 @@ function writeReport(extra = {}) {
     compositionRouteReceipts: lastState?.compositionRouteReceipts || null,
     compositionEdge: lastState?.compositionEdge || null,
     browserFpnDetrIngressEvidence: lastState?.browserFpnDetrIngressEvidence || null,
+    browserOriginalImageIngressEvidence: lastState?.browserOriginalImageIngressEvidence || null,
     browserPromptTokenizerEvidence: lastState?.browserPromptTokenizerEvidence || null,
     browserPromptTextEvidence: lastState?.browserPromptTextEvidence || null,
     browserPromptFpnPixelEvidence: lastState?.browserPromptFpnPixelEvidence || null,

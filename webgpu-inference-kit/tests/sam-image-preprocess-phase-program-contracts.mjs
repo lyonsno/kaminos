@@ -19,16 +19,28 @@ assert.match(routeSource, /readback-pixel-values/, 'image-preprocess route must 
 
 assert.match(stackExporter, /expected-pixel-values/, 'detector-stack packet must export expected normalized image pixel values');
 assert.match(stackExporter, /imagePreprocess/, 'detector-stack packet must identify the image-preprocess ingress boundary');
+assert.match(stackExporter, /source-image-original/, 'detector-stack packet must preserve original encoded image bytes for browser runtime ingress');
+assert.match(stackExporter, /"encodedResolution"/, 'source-image manifest must record original decoded dimensions separately from model input resolution');
+assert.match(stackExporter, /"referenceResized"/, 'packet must retain the PIL-resized image as reference-only evidence');
+assert.match(stackExporter, /pillow-12-fixed-point-bilinear-v0/, 'exporter reference must use the same explicit resize algorithm as the browser');
 
 assert.match(witness, /mlx-detector-stack-preprocess-export/, 'witness must allow detector-stack packet mode with browser-local image preprocess ingress');
 assert.match(witness, /IMAGE_PREPROCESS_PHASE_PROGRAM_ROUTE_ID/, 'witness must preserve SAM3 image-preprocess route identity');
 assert.match(witness, /imagePreprocessReport/, 'witness must emit compact imagePreprocess report evidence');
 assert.match(witness, /pixelValuesMaxAbsDiff/, 'witness must assert normalized pixel-values parity');
+assert.match(witness, /browserOriginalImageIngressEvidence/, 'witness must preserve original encoded image browser-ingress evidence');
+assert.match(witness, /effectiveSourceImageSha256/, 'witness must require effective browser-fetched source identity');
+assert.match(witness, /resizeAlgorithm/, 'witness must bind the effective browser resize algorithm to the manifest');
 
 assert.match(smokeJs, /runSam3ImagePreprocessPhaseProgramRoute/, 'browser smoke must execute image-preprocess ingress route');
 assert.match(smokeJs, /image-preprocess-detector-stack-composition/, 'browser smoke must expose detector-stack composition with browser-local image preprocess ingress');
 assert.match(smokeJs, /imagePreprocessEvidence/, 'browser smoke state must preserve image-preprocess evidence');
 assert.match(smokeJs, /pixelValuesOutput/, 'browser smoke must preserve normalized pixel-values output identity as an ingress edge');
+assert.match(smokeJs, /browserOriginalImageIngressEvidence/, 'browser smoke must expose original image decode and resize evidence');
+assert.match(smokeJs, /source image asset hash mismatch/, 'browser smoke must fail when fetched original image bytes do not match the manifest');
+assert.match(smokeJs, /decodedResolution/, 'browser smoke must record decoded source dimensions before resize');
+assert.match(smokeJs, /resizeAlgorithm/, 'browser smoke must record the effective original-image resize algorithm');
+assert.match(smokeJs, /resizeRgbaPillowCompatibleBilinear/, 'browser smoke must use an explicit deterministic resizer rather than canvas interpolation');
 
 const {
   SAM3_IMAGE_PREPROCESS_PHASE_PROGRAM_ROUTE_ID,

@@ -255,18 +255,57 @@ def export_prompt_tokenizer_assets(out_dir, context_length):
     }
 
 
+def resize_pillow_compatible_bilinear(image, width, height):
+    source = np.asarray(image, dtype=np.uint8)
+    precision_bits = 22
+    precision_scale = 1 << precision_bits
+    rounding = 1 << (precision_bits - 1)
+
+    def coefficients(input_size, output_size):
+        scale = input_size / output_size
+        filter_scale = max(scale, 1.0)
+        support = filter_scale
+        result = []
+        for output_index in range(output_size):
+            center = (output_index + 0.5) * scale
+            start = max(0, int(np.floor(center - support + 0.5)))
+            end = min(input_size, int(np.floor(center + support + 0.5)))
+            indexes = np.arange(start, end, dtype=np.float64)
+            weights = np.maximum(0.0, 1.0 - np.abs((indexes - center + 0.5) / filter_scale))
+            weights /= weights.sum()
+            fixed_weights = np.floor(weights * precision_scale + 0.5).astype(np.int64)
+            result.append((start, end, fixed_weights))
+        return result
+
+    horizontal = np.empty((source.shape[0], width, source.shape[2]), dtype=np.uint8)
+    for x, (start, end, weights) in enumerate(coefficients(source.shape[1], width)):
+        values = rounding + np.sum(source[:, start:end, :].astype(np.int64) * weights[None, :, None], axis=1)
+        horizontal[:, x, :] = np.clip(values // precision_scale, 0, 255).astype(np.uint8)
+    resized = np.empty((height, width, source.shape[2]), dtype=np.uint8)
+    for y, (start, end, weights) in enumerate(coefficients(source.shape[0], height)):
+        values = rounding + np.sum(horizontal[start:end, :, :].astype(np.int64) * weights[:, None, None], axis=0)
+        resized[y, :, :] = np.clip(values // precision_scale, 0, 255).astype(np.uint8)
+    return resized
+
+
 def main():
     args = parse_args()
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     model, model_path, weights_path, weights_sha = encoder_tool.load_model(args.model)
     image_path = Path(args.image).resolve()
-    image = Image.open(image_path).convert("RGB")
+    encoded_image = Image.open(image_path)
+    encoded_resolution = [int(encoded_image.width), int(encoded_image.height)]
+    image = encoded_image.convert("RGB")
+    original_suffix = image_path.suffix.lower() or ".bin"
+    original_source_path = out_dir / f"source-image-original{original_suffix}"
+    shutil.copyfile(image_path, original_source_path)
     source_path = out_dir / "source-image.png"
-    source_image = image.resize((args.resolution, args.resolution), Image.BILINEAR)
+    source_pixels = resize_pillow_compatible_bilinear(image, args.resolution, args.resolution)
+    source_image = Image.fromarray(source_pixels, mode="RGB")
     source_image.save(source_path)
-    expected_pixel_values = (np.array(source_image).astype(np.float32) / 255.0 - 0.5) / 0.5
-    ref = encoder_tool.run_reference(model, image, args.prompt, args.resolution)
+    expected_pixel_values = (source_pixels.astype(np.float32) / 255.0 - 0.5) / 0.5
+    ref = encoder_tool.run_reference(model, source_image, args.prompt, args.resolution)
     include_selection = args.include_selection or args.detector_stack or args.image_preprocess_ingress or args.image_patch_embed_ingress or args.image_vit_prefix_ingress or args.image_vit_first_block_ingress or args.image_vit_block_stack_ingress or args.image_vit_full_backbone_ingress or args.image_fpn_neck_ingress
     include_scoring = args.include_scoring or include_selection
     include_image_preprocess = args.image_preprocess_ingress or args.image_patch_embed_ingress or args.image_vit_prefix_ingress or args.image_vit_first_block_ingress or args.image_vit_block_stack_ingress or args.image_vit_full_backbone_ingress or args.image_fpn_neck_ingress
@@ -489,12 +528,22 @@ def main():
         "model": {"id": args.model, "role": "mlx-reference-upstream"},
         "prompt": {"text": args.prompt, "sha256": encoder_tool.sha256_bytes(args.prompt.encode("utf-8"))},
         "promptTokenizer": prompt_tokenizer,
-        "sourceImage": {"artifactId": f"image:{image_path.name}:sam3-reference-source", "file": "source-image.png", "path": str(source_path), "sha256": encoder_tool.sha256_file(source_path), "originalPath": str(image_path), "resolution": [args.resolution, args.resolution]},
+        "sourceImage": {
+            "artifactId": f"image:{image_path.name}:sam3-original-browser-source",
+            "file": original_source_path.name,
+            "path": str(original_source_path),
+            "sha256": encoder_tool.sha256_file(original_source_path),
+            "originalPath": str(image_path),
+            "encodedResolution": encoded_resolution,
+            "resolution": [args.resolution, args.resolution],
+            "resize": {"owner": "browser", "targetResolution": [args.resolution, args.resolution], "algorithm": "pillow-12-fixed-point-bilinear-v0"},
+            "referenceResized": {"file": source_path.name, "sha256": encoder_tool.sha256_file(source_path), "resolution": [args.resolution, args.resolution], "owner": "python-reference-only", "algorithm": "pillow-12-fixed-point-bilinear-v0"},
+        },
         "staticWeights": {"artifactId": f"sam3-weights:{args.model}:detr-stack-reference-upstream", "sha256": weights_sha, "role": "reference-upstream", "reason": "weights exported for browser prompt/text ingress, image ViT full-backbone plus detector-consumed FPN-neck ingress, DETR encoder, prompt-FPN, pixel-decoder, DETR decoder, dot-product scoring, selection postprocess, and downstream mask-tail phase-program execution" if include_image_fpn_neck else "weights exported for browser image ViT full-backbone ingress through the final transformer layer, DETR encoder, DETR decoder, dot-product scoring, selection postprocess, and downstream mask-tail phase-program execution" if include_image_vit_full_backbone else "weights exported for browser image ViT block-stack ingress through first global-attention layer, DETR encoder, DETR decoder, dot-product scoring, selection postprocess, and downstream mask-tail phase-program execution" if include_image_vit_block_stack else "weights exported for browser image ViT first-block ingress, DETR encoder, DETR decoder, dot-product scoring, selection postprocess, and downstream mask-tail phase-program execution" if include_image_vit_first_block else "weights exported for browser image ViT-prefix ingress, DETR encoder, DETR decoder, dot-product scoring, selection postprocess, and downstream mask-tail phase-program execution" if include_image_vit_prefix else "weights exported for browser DETR encoder, DETR decoder, dot-product scoring, selection postprocess, and downstream mask-tail phase-program execution" if include_selection else "weights exported for browser DETR encoder, DETR decoder, dot-product scoring, and downstream mask-tail phase-program execution" if include_scoring else "weights exported for browser DETR encoder, DETR decoder, and downstream mask-tail phase-program execution"},
         "shape": shape,
         "claims": {"fullSam3BrowserExecution": False, "upstream": "mlx-vlm-sam3-detector-reference", "browserExecutedStages": [*(["image-preprocess"] if include_image_preprocess else []), *(["image-patch-embed"] if include_image_patch_embed else []), *(["image-vit-prefix"] if include_image_vit_prefix else []), *(["image-vit-first-block"] if include_image_vit_first_block and not include_image_vit_block_stack else []), *(["image-vit-backbone"] if include_image_vit_full_backbone else ["image-vit-block-stack"] if include_image_vit_block_stack else []), *(["image-fpn-neck"] if include_image_fpn_neck else []), *(["prompt-text-ingress"] if include_image_fpn_neck else []), "detr-encoder", *(["prompt-cross-attention-fpn", "pixel-decoder"] if include_image_fpn_neck else []), "detr-decoder", *(['dot-product-scoring'] if include_scoring else []), *(['selection-score-threshold', 'selection-box-cxcywh-to-xyxy', 'selection-box-nms', 'selection-argmax'] if include_selection else []), "mask-embedder", "instance-projection", "decode-mask", "threshold-mask"]},
         "upstreamBoundaries": [
-            {"role": "source-image", "owner": "browser-served-source-image" if include_image_preprocess else "mlx-vlm-reference", "status": "browser-local-ingress" if include_image_preprocess else "mlx-owned", "nextBrowserIsland": "image-preprocess-and-vision-encoder"},
+            {"role": "source-image", "owner": "browser-original-image-ingress" if include_image_preprocess else "mlx-vlm-reference", "status": "browser-decode-resize-ingress" if include_image_preprocess else "mlx-owned", "nextBrowserIsland": "image-preprocess-and-vision-encoder"},
             {"role": "patch-embeddings", "owner": "browser-local-route" if include_image_patch_embed else "mlx-vlm-reference", "status": "browser-local-ingress" if include_image_patch_embed else "mlx-owned", "nextBrowserIsland": "sam3-vit-prefix" if include_image_vit_prefix else "sam3-vit-backbone"},
             {"role": "vit-prefix-hidden-states", "owner": "browser-local-route" if include_image_vit_prefix else "mlx-vlm-reference", "status": "browser-local-ingress" if include_image_vit_prefix else "mlx-owned", "nextBrowserIsland": "sam3-vit-block-0"},
             {"role": "vit-first-block-hidden-states", "owner": "browser-local-route" if include_image_vit_first_block else "mlx-vlm-reference", "status": "browser-local-ingress" if include_image_vit_first_block else "mlx-owned", "nextBrowserIsland": "sam3-vit-block-1"},
@@ -510,10 +559,10 @@ def main():
         "toleranceBudgetSource": tolerance_budget_source,
         "imagePreprocess": {
             "boundary": "sam3-source-image-to-normalized-pixel-values-phase-program",
-            "source": "browser-served-source-image",
+            "source": "browser-original-encoded-image-decode-resize",
             "normalization": {"mean": [0.5, 0.5, 0.5], "std": [0.5, 0.5, 0.5], "layout": "B,H,W,C"},
             "browserExecuted": bool(include_image_preprocess),
-            "claim": "browser-local image byte to normalized pixel-values ingress only; resize/original-image ownership and ViT/FPN execution remain outside this boundary",
+            "claim": "browser-local original encoded image fetch, decode, resize, and normalized pixel-values ingress; ViT/FPN execution remains separately bounded",
         },
         "imagePatchEmbed": {
             "boundary": "sam3-normalized-pixel-values-to-patch-embeddings-phase-program",

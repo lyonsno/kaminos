@@ -108,6 +108,7 @@ const state = {
   imageFpnNeckEvidence: null,
   browserPromptTextEvidence: null,
   browserPromptTokenizerEvidence: null,
+  browserOriginalImageIngressEvidence: null,
   browserFpnDetrIngressEvidence: null,
   parity: null,
   debugReadbackSamples: null,
@@ -209,8 +210,36 @@ function loadImage(url) {
   });
 }
 
+async function loadSourceImageAsset(url, identity) {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`fetch ${url} failed ${response.status}`);
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  const effectiveSourceImageSha256 = await sha256TypedArray(bytes);
+  if (identity?.sha256 && effectiveSourceImageSha256 !== identity.sha256) {
+    throw new Error(`SAM3 source image asset hash mismatch: ${effectiveSourceImageSha256} != ${identity.sha256}`);
+  }
+  const objectUrl = URL.createObjectURL(new Blob([bytes], { type: response.headers.get('content-type') || 'application/octet-stream' }));
+  const image = await loadImage(objectUrl);
+  return {
+    image,
+    objectUrl,
+    evidence: {
+      schema: 'kaminos.sam3-browser-original-image-ingress-evidence.v0',
+      runtimeOwner: 'browser',
+      sourceFile: identity?.file || null,
+      requestedSourceImageSha256: identity?.sha256 || null,
+      effectiveSourceImageSha256,
+      encodedByteLength: bytes.byteLength,
+      decodedResolution: [image.naturalWidth, image.naturalHeight],
+      targetResolution: identity?.resize?.targetResolution || identity?.resolution || null,
+      resizeOwner: identity?.resize?.owner || 'browser',
+      resizeAlgorithm: identity?.resize?.algorithm || null,
+    },
+  };
+}
+
 function sourceImageShape(manifest) {
-  const resolution = manifest.sourceImage?.resolution;
+  const resolution = manifest.sourceImage?.encodedResolution || manifest.sourceImage?.resolution;
   if (!Array.isArray(resolution) || resolution.length !== 2) return undefined;
   const [width, height] = resolution;
   if (!Number.isInteger(width) || !Number.isInteger(height) || width <= 0 || height <= 0) return undefined;
@@ -499,11 +528,68 @@ async function loadImageVitBlockStackWeights(manifest, weightsByRole, shape) {
 function rgbaFromSourceImage(sourceImage, shape) {
   if (!sourceImage) throw new Error('source image is required for SAM3 image-preprocess ingress');
   const scratch = document.createElement('canvas');
-  scratch.width = shape.width;
-  scratch.height = shape.height;
+  scratch.width = sourceImage.naturalWidth;
+  scratch.height = sourceImage.naturalHeight;
   const ctx = scratch.getContext('2d', { willReadFrequently: true });
-  ctx.drawImage(sourceImage, 0, 0, shape.width, shape.height);
-  return ctx.getImageData(0, 0, shape.width, shape.height).data;
+  ctx.drawImage(sourceImage, 0, 0);
+  const source = ctx.getImageData(0, 0, scratch.width, scratch.height).data;
+  return resizeRgbaPillowCompatibleBilinear(source, scratch.width, scratch.height, shape.width, shape.height);
+}
+
+function resizeRgbaPillowCompatibleBilinear(source, sourceWidth, sourceHeight, targetWidth, targetHeight) {
+  const precisionBits = 22;
+  const precisionScale = 2 ** precisionBits;
+  const rounding = 2 ** (precisionBits - 1);
+  const coefficients = (inputSize, outputSize) => {
+    const scale = inputSize / outputSize;
+    const filterScale = Math.max(scale, 1);
+    const support = filterScale;
+    return Array.from({ length: outputSize }, (_, outputIndex) => {
+      const center = (outputIndex + 0.5) * scale;
+      const start = Math.max(0, Math.floor(center - support + 0.5));
+      const end = Math.min(inputSize, Math.floor(center + support + 0.5));
+      const weights = new Float64Array(end - start);
+      let total = 0;
+      for (let index = start; index < end; index += 1) {
+        const weight = Math.max(0, 1 - Math.abs((index - center + 0.5) / filterScale));
+        weights[index - start] = weight;
+        total += weight;
+      }
+      for (let index = 0; index < weights.length; index += 1) weights[index] /= total;
+      const fixedWeights = Int32Array.from(weights, weight => Math.floor(weight * precisionScale + 0.5));
+      return { start, end, weights: fixedWeights };
+    });
+  };
+  const horizontal = new Uint8Array(sourceHeight * targetWidth * 3);
+  const horizontalCoefficients = coefficients(sourceWidth, targetWidth);
+  for (let y = 0; y < sourceHeight; y += 1) {
+    for (let x = 0; x < targetWidth; x += 1) {
+      const { start, end, weights } = horizontalCoefficients[x];
+      for (let channel = 0; channel < 3; channel += 1) {
+        let value = rounding;
+        for (let sourceX = start; sourceX < end; sourceX += 1) {
+          value += source[(y * sourceWidth + sourceX) * 4 + channel] * weights[sourceX - start];
+        }
+        horizontal[(y * targetWidth + x) * 3 + channel] = Math.min(255, Math.max(0, Math.floor(value / precisionScale)));
+      }
+    }
+  }
+  const output = new Uint8ClampedArray(targetHeight * targetWidth * 4);
+  const verticalCoefficients = coefficients(sourceHeight, targetHeight);
+  for (let y = 0; y < targetHeight; y += 1) {
+    const { start, end, weights } = verticalCoefficients[y];
+    for (let x = 0; x < targetWidth; x += 1) {
+      for (let channel = 0; channel < 3; channel += 1) {
+        let value = rounding;
+        for (let sourceY = start; sourceY < end; sourceY += 1) {
+          value += horizontal[(sourceY * targetWidth + x) * 3 + channel] * weights[sourceY - start];
+        }
+        output[(y * targetWidth + x) * 4 + channel] = Math.min(255, Math.max(0, Math.floor(value / precisionScale)));
+      }
+      output[(y * targetWidth + x) * 4 + 3] = 255;
+    }
+  }
+  return output;
 }
 
 async function aggregateTensorBundleSha256(kind, entries) {
@@ -1431,7 +1517,7 @@ async function loadDetrStackPayload(manifest) {
         fullSam3BrowserExecution: true,
         browserLocalVisionEncoder: true,
         browserLocalTextEncoder: true,
-        originalImageResize: true,
+        originalImageResize: includeImagePreprocess ? false : true,
         nms: manifest.postprocess?.nms === false,
       },
     } : null,
@@ -1440,10 +1526,10 @@ async function loadDetrStackPayload(manifest) {
       schema: manifest.schema,
       boundary: manifest.imagePreprocess?.boundary || manifest.boundary,
       routeKind: 'image-preprocess-detector-stack-composition',
-      source: manifest.imagePreprocess?.source || 'browser-served-source-image',
+      source: manifest.imagePreprocess?.source || 'browser-original-encoded-image-decode-resize',
       normalization: manifest.imagePreprocess?.normalization || null,
       nonClaims: {
-        originalImageResize: true,
+        originalImageResize: false,
         browserLocalVisionEncoder: true,
         browserLocalTextEncoder: true,
         fullSam3BrowserExecution: true,
@@ -3189,8 +3275,12 @@ async function main() {
     const visualShape = payload.maskShape || manifest.shape;
     const hasMaskOutput = Boolean(expectedBinary);
     const sourceImageUrl = manifest.sourceImage?.file ? resolveManifestFile(manifest.sourceImage.file) : null;
-    const sourceImage = sourceImageUrl ? await loadImage(sourceImageUrl) : null;
-    if (sourceImageUrl) sourceImageEl.src = sourceImageUrl;
+    const sourceImageAsset = sourceImageUrl ? await loadSourceImageAsset(sourceImageUrl, manifest.sourceImage) : null;
+    const sourceImage = sourceImageAsset?.image || null;
+    if (sourceImageAsset) {
+      sourceImageEl.src = sourceImageAsset.objectUrl;
+      state.browserOriginalImageIngressEvidence = sourceImageAsset.evidence;
+    }
     const legacySelectedMaskIndex = Number.isInteger(manifest.visualization?.selectedMaskIndex)
       ? manifest.visualization.selectedMaskIndex
       : 0;
