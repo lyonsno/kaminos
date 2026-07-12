@@ -43,22 +43,13 @@ def smoothstep(lower, upper, value):
     return t * t * (3.0 - 2.0 * t)
 
 
-def sample_teacher(sample_count, seed):
-    rng = np.random.default_rng(seed)
-    features = rng.random((sample_count, len(FEATURES)), dtype=np.float32)
+def evaluate_teacher(features):
     sidecar = features[:, 0:4]
     material = features[:, 4:8]
     fire = features[:, 8:12]
     micro = features[:, 12:16]
     fire_signal = fire[:, 0] * 1.25 + fire[:, 2] * 0.52 + fire[:, 3] * 0.86 + micro[:, 2] * 0.72 + material[:, 1] * 0.24
     structural_signal = sidecar[:, 2] * smoothstep(0.055, 0.32, sidecar[:, 1]) * smoothstep(0.018, 0.16, fire_signal)
-    selected = structural_signal >= 0.11
-    features = features[selected]
-    sidecar = sidecar[selected]
-    material = material[selected]
-    fire_signal = fire_signal[selected]
-    structural_signal = structural_signal[selected]
-
     thermal = smoothstep(0.025, 0.78, material[:, 1] + features[:, 8] * 0.28)
     white_hot = smoothstep(0.42, 1.25, fire_signal)
     cool = np.asarray([0.05, 0.16, 0.72], dtype=np.float32)
@@ -75,7 +66,29 @@ def sample_teacher(sample_count, seed):
         [color, opacity[:, None], radius_x[:, None], radius_y[:, None]],
         axis=1,
     ).astype(np.float32)
+    return targets
+
+
+def sample_teacher(sample_count, seed):
+    rng = np.random.default_rng(seed)
+    features = rng.random((sample_count, len(FEATURES)), dtype=np.float32)
+    sidecar = features[:, 0:4]
+    material = features[:, 4:8]
+    fire = features[:, 8:12]
+    micro = features[:, 12:16]
+    fire_signal = fire[:, 0] * 1.25 + fire[:, 2] * 0.52 + fire[:, 3] * 0.86 + micro[:, 2] * 0.72 + material[:, 1] * 0.24
+    structural_signal = sidecar[:, 2] * smoothstep(0.055, 0.32, sidecar[:, 1]) * smoothstep(0.018, 0.16, fire_signal)
+    features = features[structural_signal >= 0.11]
+    targets = evaluate_teacher(features)
     return features.astype(np.float32), targets
+
+
+def output_ranges_for_targets(targets, live_support):
+    ranges = [list(entry) for entry in OUTPUT_RANGES]
+    if live_support:
+        for index in (4, 5):
+            ranges[index][1] = max(ranges[index][1], float(np.max(targets[:, index])) * 1.05)
+    return ranges
 
 
 class AttributeMlp(nn.Module):
@@ -100,6 +113,7 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--out-dir", required=True)
     parser.add_argument("--job-input")
+    parser.add_argument("--feature-input")
     parser.add_argument("--sample-count", type=int, default=65536)
     parser.add_argument("--hidden-size", type=int, default=32)
     parser.add_argument("--steps", type=int, default=1200)
@@ -118,32 +132,94 @@ def main():
     output_dir.mkdir(parents=True, exist_ok=True)
     started_at = time.time()
     job_input = None
+    job_document = None
+    job_input_path = None
     if args.job_input:
         job_input_path = Path(args.job_input).resolve()
         job_input_bytes = job_input_path.read_bytes()
+        job_document = json.loads(job_input_bytes)
         job_input = {
             "path": str(job_input_path),
             "bytes": len(job_input_bytes),
             "sha256": hashlib.sha256(job_input_bytes).hexdigest(),
         }
-    features, targets = sample_teacher(args.sample_count, args.seed)
+    effective_route_identity = (
+        job_document.get("routeIdentity")
+        if isinstance(job_document, dict) and isinstance(job_document.get("routeIdentity"), str)
+        else ROUTE_IDENTITY
+    )
+    feature_input_value = args.feature_input
+    if not feature_input_value and isinstance(job_document, dict):
+        feature_entry = job_document.get("featureInput")
+        if isinstance(feature_entry, dict):
+            feature_input_value = feature_entry.get("path")
+        elif isinstance(feature_entry, str):
+            feature_input_value = feature_entry
+    feature_source = None
+    try:
+        if feature_input_value:
+            feature_input_path = Path(feature_input_value)
+            if not feature_input_path.is_absolute() and job_input_path:
+                feature_input_path = job_input_path.parent / feature_input_path
+            feature_input_path = feature_input_path.resolve()
+            feature_bytes = feature_input_path.read_bytes()
+            row_bytes = len(FEATURES) * np.dtype(np.float32).itemsize
+            if not feature_bytes or len(feature_bytes) % row_bytes != 0:
+                raise ValueError(f"feature input byte length must encode a positive multiple of {len(FEATURES)} float32 values")
+            feature_sha256 = hashlib.sha256(feature_bytes).hexdigest()
+            feature_entry = job_document.get("featureInput") if isinstance(job_document, dict) else None
+            if isinstance(feature_entry, dict) and feature_entry.get("sha256") and feature_entry["sha256"] != feature_sha256:
+                raise ValueError(f"feature input sha256 mismatch: expected {feature_entry['sha256']}, received {feature_sha256}")
+            features = np.frombuffer(feature_bytes, dtype=np.float32).reshape(-1, len(FEATURES)).copy()
+            if not np.all(np.isfinite(features)):
+                raise ValueError("feature input contains non-finite values")
+            targets = evaluate_teacher(features)
+            feature_source = {
+                "authority": "captured-live-selected-candidates-v0",
+                "path": str(feature_input_path),
+                "bytes": len(feature_bytes),
+                "sha256": feature_sha256,
+                "rowCount": int(features.shape[0]),
+                "strideFloats": len(FEATURES),
+            }
+            selection = "preselected-live-candidates"
+        else:
+            features, targets = sample_teacher(args.sample_count, args.seed)
+            selection = "structuralSignal >= 0.11"
+    except Exception as error:
+        failure_report = {
+            "schema": SCHEMA,
+            "status": "failed",
+            "failurePhase": "feature-input",
+            "error": str(error),
+            "routeIdentity": effective_route_identity,
+            "jobInput": job_input,
+            "backend": "mlx",
+            "device": str(mx.default_device()),
+            "finishedAt": time.time(),
+        }
+        failure_report["elapsedSeconds"] = failure_report["finishedAt"] - started_at
+        write_json(output_dir / "training-report.json", failure_report)
+        raise
+    output_ranges = output_ranges_for_targets(targets, feature_source is not None)
     report = {
         "schema": SCHEMA,
         "status": "probe-only" if args.probe_only else "training",
-        "routeIdentity": ROUTE_IDENTITY,
+        "routeIdentity": effective_route_identity,
         "jobInput": job_input,
+        "featureSource": feature_source,
         "backend": "mlx",
         "device": str(mx.default_device()),
         "features": FEATURES,
         "outputs": OUTPUTS,
-        "requestedSampleCount": args.sample_count,
+        "requestedSampleCount": int(features.shape[0]) if feature_source else args.sample_count,
         "selectedSampleCount": int(features.shape[0]),
         "seed": args.seed,
         "hiddenSize": args.hidden_size,
         "teacher": {
             "authority": "exact-analytic-boundary-splat-wgsl-formulas-v0",
-            "selection": "structuralSignal >= 0.11",
-            "outputRanges": OUTPUT_RANGES,
+            "selection": selection,
+            "outputRanges": output_ranges,
             "observedRanges": observed_ranges(targets),
         },
         "modelArtifact": None,
@@ -163,8 +239,8 @@ def main():
     eval_count = max(1, features.shape[0] // 10)
     eval_indices = permutation[:eval_count]
     train_indices = permutation[eval_count:]
-    lower = np.asarray([entry[0] for entry in OUTPUT_RANGES], dtype=np.float32)
-    upper = np.asarray([entry[1] for entry in OUTPUT_RANGES], dtype=np.float32)
+    lower = np.asarray([entry[0] for entry in output_ranges], dtype=np.float32)
+    upper = np.asarray([entry[1] for entry in output_ranges], dtype=np.float32)
     target_normalized = np.clip((targets - lower) / (upper - lower), 0.0, 1.0).astype(np.float32)
     model = AttributeMlp(args.hidden_size)
     optimizer = optim.Adam(learning_rate=args.learning_rate)
@@ -201,7 +277,7 @@ def main():
         "features": FEATURES,
         "outputs": OUTPUTS,
         "hiddenSize": args.hidden_size,
-        "outputRanges": OUTPUT_RANGES,
+        "outputRanges": output_ranges,
         "layers": [
             {
                 "inputSize": len(FEATURES),
