@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import {
   FOREGROUND_KILN_HEARTBEAT_SCHEMA,
   createForegroundKilnHeartbeatEpisode,
+  foregroundKilnStartAllowsPipeline,
 } from '../lib/foreground-kiln-heartbeat.mjs';
 
 const budget = {
@@ -90,6 +91,27 @@ const wrongBudgetReport = wrongBudget.episode.finish({ phase: 'complete' });
 assert.equal(wrongBudgetReport.status, 'invalid');
 assert.ok(wrongBudgetReport.failures.includes('effective-fire-budget-mismatch'));
 
+const transientBudgetDrift = episodeHarness();
+transientBudgetDrift.setVolume({ resolution: 160, renderScale: 1, adaptiveRaymarch: 0.3 });
+transientBudgetDrift.episode.start();
+transientBudgetDrift.advance({
+  nextVolume: {
+    active: true,
+    routeIdentity: 'native-3d-compute-fluid-raymarch-v0',
+    frameCount: 11,
+    simStepCount: 21,
+    resolution: 90,
+    renderScale: 0.4,
+    adaptiveRaymarch: 1,
+  },
+});
+const transientBudgetReport = transientBudgetDrift.episode.finish({ phase: 'complete' });
+assert.equal(transientBudgetReport.status, 'invalid');
+assert.ok(transientBudgetReport.failures.includes('effective-fire-budget-mismatch'));
+assert.equal(transientBudgetReport.budgetMismatchSamples.length, 1);
+assert.equal(transientBudgetReport.budgetMismatchSamples[0].sampleIndex, 0);
+assert.equal(transientBudgetReport.budgetMismatchSamples[0].fireBudget.resolution, 160);
+
 const wrongRoute = episodeHarness({ routeIdentity: 'fixture-volume-v0' });
 wrongRoute.episode.start();
 wrongRoute.advance();
@@ -122,6 +144,10 @@ const noForegroundReport = noForeground.episode.finish({
 assert.equal(noForegroundReport.status, 'invalid');
 assert.ok(noForegroundReport.failures.includes('foreground-heartbeat-not-started'));
 assert.equal(noForegroundReport.sharpHeartbeat.status, 'verified');
+
+assert.equal(foregroundKilnStartAllowsPipeline({ phase: 'burning', foregroundHeartbeat: { status: 'recording' } }), true);
+assert.equal(foregroundKilnStartAllowsPipeline({ phase: 'failed', foregroundHeartbeat: null }), false);
+assert.equal(foregroundKilnStartAllowsPipeline({ phase: 'burning', foregroundHeartbeat: { status: 'invalid' } }), false);
 
 const root = new URL('..', import.meta.url).pathname;
 const witnessSource = readFileSync(join(root, 'scripts', 'foreground-kiln-heartbeat-witness.mjs'), 'utf8');

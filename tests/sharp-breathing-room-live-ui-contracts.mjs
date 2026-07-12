@@ -351,6 +351,11 @@ assert.match(
 );
 assert.match(
   index,
+  /const kilnFire = await beginSharpBreathingRoomKilnFire\([\s\S]*foregroundKilnStartAllowsPipeline\(kilnFire\)[\s\S]*kiln-fire-startup-failed/,
+  'A failed or invalid kiln start must stop before SHARP can turn a cast into a complete firing receipt',
+);
+assert.match(
+  index,
   /foregroundHeartbeat\?\.finish\([\s\S]*sharpHeartbeat/,
   'Kiln-fire completion closes foreground evidence while preserving the separate SHARP heartbeat',
 );

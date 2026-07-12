@@ -2747,7 +2747,7 @@ import { pass, mrt, normalView, vec3, vec4, mix, float, uniform, texture, packNo
 import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
 import { createKaminosVolumePrototype } from './volume-core.js?v=pyro-palette-flame-paint-0703';
-import { createForegroundKilnHeartbeatEpisode } from './lib/foreground-kiln-heartbeat.mjs';
+import { createForegroundKilnHeartbeatEpisode, foregroundKilnStartAllowsPipeline } from './lib/foreground-kiln-heartbeat.mjs';
 import {
   DEFAULT_DECISION_MOTION_PLAN,
   DEFAULT_MOTION_PHRASE_CONTROLS,
@@ -17503,7 +17503,36 @@ async function runKilnRouteBenchRoute(routeId, profileId) {
     progressEvent: null,
   });
   const crucibleFiring = crucibleBenchRecordFiring({ routeId: route.id, profileId, source, profileLabel });
-  await beginSharpBreathingRoomKilnFire({ profileId, source, pipelineId });
+  const kilnFire = await beginSharpBreathingRoomKilnFire({ profileId, source, pipelineId });
+  if (!foregroundKilnStartAllowsPipeline(kilnFire)) {
+    const failedRun = {
+      ok: false,
+      pipelineId,
+      phase: 'kiln-fire-startup-failed',
+      error: kilnFire?.error || kilnFire?.foregroundHeartbeat?.failures?.join(', ') || 'foreground kiln evidence did not start',
+    };
+    await endSharpBreathingRoomKilnFire('kiln-fire-startup-failed', {
+      forceInactive: true,
+      runResult: failedRun,
+    });
+    crucibleBenchRecordReceipt({
+      firingId: crucibleFiring.id,
+      status: 'failed',
+      message: 'The kiln could not start a verified foreground firing, so SHARP was not run.',
+      run: failedRun,
+      phase: failedRun.phase,
+      error: failedRun.error,
+    });
+    setKilnRouteBenchStatus(`The kiln could not start this firing, so the model was not run. ${failedRun.error}`, 'error', {
+      routeId: route.id,
+      source,
+      result: failedRun,
+      runningProfileId: null,
+    });
+    sharpBreathingRoomRunningProfileId = null;
+    renderKilnRouteBench();
+    return failedRun;
+  }
   let run = null;
   let kilnFireEnded = false;
   try {
