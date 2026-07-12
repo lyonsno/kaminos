@@ -4149,6 +4149,7 @@ async function main() {
       volumeReconstructionStyle: sample.volumeReconstructionStyle,
       boundarySplatMode: sample.boundarySplatMode ?? state.boundarySplatMode,
       boundarySplatRendererIdentity: sample.boundarySplatRendererIdentity ?? state.boundarySplatRendererIdentity,
+      boundarySplatAttributeModelIdentity: sample.boundarySplatAttributeModelIdentity ?? state.boundarySplatAttributeModelIdentity,
       boundarySplatSourceAuthority: sample.boundarySplatSourceAuthority ?? state.boundarySplatSourceAuthority,
       boundarySplatCapacity: sample.boundarySplatCapacity ?? state.boundarySplatCapacity,
       boundarySplatInstanceCount: sample.boundarySplatInstanceCount ?? state.boundarySplatInstanceCount,

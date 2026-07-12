@@ -1,9 +1,15 @@
+import {
+  BOUNDARY_SPLAT_ATTRIBUTE_MODEL_IDENTITY,
+  BOUNDARY_SPLAT_ATTRIBUTE_MODEL_WGSL,
+} from './models/boundary-splat-attribute/analytic-teacher-h64-v0/boundary-splat-attribute-model.generated.js';
+
 const ROUTE_IDENTITY = 'native-3d-compute-fluid-raymarch-v0';
 const PROTOTYPE_IDENTITY = 'kaminos-volume-prototype-v0';
 const FRONT_FIELD_IDENTITY = 'combustion-front-topology-sidecar-v0';
 const BOUNDARY_SIDECAR_IDENTITY = 'baked-boundary-sidecar-v0';
 const BOUNDARY_SIDECAR_BAKE_AUTHORITY = 'band-limited-support-coverage-ridge-proximity-footprint-v1';
 const BOUNDARY_SPLAT_RENDERER_IDENTITY = 'live-boundary-sidecar-analytic-splats-v0';
+const BOUNDARY_SPLAT_LEARNED_RENDERER_IDENTITY = 'live-boundary-sidecar-learned-attribute-splats-v0';
 const BOUNDARY_SPLAT_SOURCE_AUTHORITY = 'live-baked-sidecar-plus-fluid-material-v0';
 const BOUNDARY_SPLAT_GPU_PROFILE_IDENTITY = 'boundary-splat-stage-gpu-timestamp-profile-v0';
 const BOUNDARY_SPLAT_ATTRIBUTE_HOOK_IDENTITY = 'boundary-splat-learned-attribute-hook-v0';
@@ -180,7 +186,19 @@ function boundarySidecarViewValue(value) {
 
 function normalizeBoundarySplatMode(value) {
   const normalized = String(value || 'off').toLowerCase().replace(/-/g, '_');
-  return normalized === 'analytic' ? 'analytic' : 'off';
+  return normalized === 'analytic' || normalized === 'learned' ? normalized : 'off';
+}
+
+function boundarySplatEffectiveRendererIdentity(mode) {
+  return normalizeBoundarySplatMode(mode) === 'learned'
+    ? BOUNDARY_SPLAT_LEARNED_RENDERER_IDENTITY
+    : BOUNDARY_SPLAT_RENDERER_IDENTITY;
+}
+
+function boundarySplatEffectiveAttributeModelIdentity(mode) {
+  return normalizeBoundarySplatMode(mode) === 'learned'
+    ? BOUNDARY_SPLAT_ATTRIBUTE_MODEL_IDENTITY
+    : null;
 }
 
 function normalizeWindStrength(value) {
@@ -4849,6 +4867,8 @@ struct BoundarySplatAttributeHookOutput {
   radiusScale: vec2<f32>,
 };
 
+${BOUNDARY_SPLAT_ATTRIBUTE_MODEL_WGSL}
+
 @group(0) @binding(0) var<storage, read> boundarySidecar: array<vec4<f32>>;
 @group(0) @binding(1) var<storage, read> fluid: array<vec4<f32>>;
 @group(0) @binding(2) var<storage, read_write> boundarySplats: array<BoundarySplat>;
@@ -4891,8 +4911,13 @@ fn applyBoundarySplatAttributeHook(
   analyticRadiusScale: vec2<f32>,
   features: array<f32, 16>,
 ) -> BoundarySplatAttributeHookOutput {
-  _ = features;
   var result: BoundarySplatAttributeHookOutput;
+  if (boundarySplatCamera.controls.y > 0.5) {
+    let learned = inferBoundarySplatAttributes(features);
+    result.colorOpacity = learned.colorOpacity;
+    result.radiusScale = learned.radiusScale;
+    return result;
+  }
   result.colorOpacity = analyticColorOpacity;
   result.radiusScale = analyticRadiusScale;
   return result;
@@ -5147,7 +5172,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     boundarySidecarView: normalizeBoundarySidecarView(controlsSnapshot.boundarySidecarView ?? controlsSnapshot.boundarySidecarControls?.view),
     boundarySidecarDebug: null,
     boundarySplatMode: normalizeBoundarySplatMode(controlsSnapshot.boundarySplatMode),
-    boundarySplatRendererIdentity: BOUNDARY_SPLAT_RENDERER_IDENTITY,
+    boundarySplatRendererIdentity: boundarySplatEffectiveRendererIdentity(controlsSnapshot.boundarySplatMode),
+    boundarySplatAttributeModelIdentity: boundarySplatEffectiveAttributeModelIdentity(controlsSnapshot.boundarySplatMode),
     boundarySplatSourceAuthority: BOUNDARY_SPLAT_SOURCE_AUTHORITY,
     boundarySplatCapacity: BOUNDARY_SPLAT_CAPACITY,
     boundarySplatCandidateCount: null,
@@ -5161,9 +5187,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       timestampStatus: 'unsupported',
       reason: 'timestamp-query-not-requested-yet',
       candidateCopyBytes: 0,
+      rendererIdentity: boundarySplatEffectiveRendererIdentity(controlsSnapshot.boundarySplatMode),
     }),
     boundarySplatCopyBytesThisFrame: 0,
-    boundarySplatCopyDisposition: makeBoundarySplatCopyDisposition(0),
+    boundarySplatCopyDisposition: makeBoundarySplatCopyDisposition(0, boundarySplatEffectiveRendererIdentity(controlsSnapshot.boundarySplatMode)),
     simProfile: normalizeSimProfileFlag(controlsSnapshot.simProfile),
     simCostLedger: null,
     pressureSourceStrategy: PRESSURE_SOURCE_STRATEGY_DISABLED,
@@ -6450,6 +6477,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         { binding: 1, resource: { buffer: fluidBuffer } },
         { binding: 2, resource: { buffer: boundarySplatBuffer } },
         { binding: 3, resource: { buffer: boundarySplatDrawBuffer } },
+        { binding: 4, resource: { buffer: boundarySplatCameraBuffer } },
       ],
     }));
     boundarySplatRenderBindGroup = device.createBindGroup({
@@ -6564,6 +6592,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       timestampStatus: device.features?.has?.('timestamp-query') ? 'available' : 'unsupported',
       reason: device.features?.has?.('timestamp-query') ? 'not-sampled-yet' : 'timestamp-query-not-supported',
       candidateCopyBytes: 0,
+      rendererIdentity: state.boundarySplatRendererIdentity,
     }));
     context = canvas.getContext('webgpu');
     format = navigator.gpu.getPreferredCanvasFormat();
@@ -6747,6 +6776,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         { binding: 1, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
         { binding: 2, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
         { binding: 3, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
+        { binding: 4, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'uniform' } },
       ],
     });
     boundarySplatRenderBindGroupLayout = device.createBindGroupLayout({
@@ -7123,7 +7153,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       splatCamera.set(viewProj.elements, 0);
       splatCamera.set([cameraMatrix[0], cameraMatrix[1], cameraMatrix[2], 0], 16);
       splatCamera.set([cameraMatrix[4], cameraMatrix[5], cameraMatrix[6], 0], 20);
-      splatCamera.set([1, state.width, state.height, gridSize], 24);
+      splatCamera.set([1, boundarySplatLearnedAttributesRequested() ? 1 : 0, state.width, state.height], 24);
       device.queue.writeBuffer(boundarySplatCameraBuffer, 0, splatCamera);
     }
     const { renderPhaseTimeMs, renderPhaseFrame } = updateRenderPhaseState(now, state, lookFreeze);
@@ -8077,14 +8107,18 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   }
 
   function boundarySplatRequested() {
-    return normalizeBoundarySplatMode(controlsSnapshot.boundarySplatMode) === 'analytic';
+    return normalizeBoundarySplatMode(controlsSnapshot.boundarySplatMode) !== 'off';
   }
 
-  function makeBoundarySplatCopyDisposition(candidateCopyBytes = 0) {
+  function boundarySplatLearnedAttributesRequested() {
+    return normalizeBoundarySplatMode(controlsSnapshot.boundarySplatMode) === 'learned';
+  }
+
+  function makeBoundarySplatCopyDisposition(candidateCopyBytes = 0, rendererIdentity = BOUNDARY_SPLAT_RENDERER_IDENTITY) {
     return {
       identity: 'boundary-splat-candidate-copy-disposition-v0',
       status: 'removed-full-capacity-copy',
-      rendererIdentity: BOUNDARY_SPLAT_RENDERER_IDENTITY,
+      rendererIdentity,
       sourceAuthority: BOUNDARY_SPLAT_SOURCE_AUTHORITY,
       candidateStrideBytes: BOUNDARY_SPLAT_CANDIDATE_STRIDE_BYTES,
       priorFullCapacityCopyBytes: BOUNDARY_SPLAT_CAPACITY * BOUNDARY_SPLAT_CANDIDATE_STRIDE_BYTES,
@@ -8101,7 +8135,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     timestampStatus = 'unsupported',
     reason = null,
     stages = null,
-    candidateCopyBytes = state?.boundarySplatCopyBytesThisFrame ?? 0,
+    candidateCopyBytes = 0,
+    rendererIdentity = BOUNDARY_SPLAT_RENDERER_IDENTITY,
   } = {}) {
     const stageStatus = timestampStatus === 'available' ? 'not-sampled' : timestampStatus;
     const stageMap = stages ?? {
@@ -8119,7 +8154,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     };
     return {
       identity: BOUNDARY_SPLAT_GPU_PROFILE_IDENTITY,
-      rendererIdentity: BOUNDARY_SPLAT_RENDERER_IDENTITY,
+      rendererIdentity,
       sourceAuthority: BOUNDARY_SPLAT_SOURCE_AUTHORITY,
       timestampFeature: 'timestamp-query',
       timestampStatus,
@@ -8135,12 +8170,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.boundarySplatTimestampStatus = profile.timestampStatus;
     state.boundarySplatGpuProfile = profile;
     state.boundarySplatCopyBytesThisFrame = profile.candidateCopyBytes ?? state.boundarySplatCopyBytesThisFrame ?? 0;
-    state.boundarySplatCopyDisposition = makeBoundarySplatCopyDisposition(state.boundarySplatCopyBytesThisFrame);
+    state.boundarySplatCopyDisposition = makeBoundarySplatCopyDisposition(state.boundarySplatCopyBytesThisFrame, state.boundarySplatRendererIdentity);
     return profile;
   }
 
   function encodeBoundarySplats(encoder, hooks = {}) {
     state.boundarySplatMode = normalizeBoundarySplatMode(controlsSnapshot.boundarySplatMode);
+    state.boundarySplatRendererIdentity = boundarySplatEffectiveRendererIdentity(state.boundarySplatMode);
+    state.boundarySplatAttributeModelIdentity = boundarySplatEffectiveAttributeModelIdentity(state.boundarySplatMode);
     if (!boundarySplatRequested()) {
       state.boundarySplatFallbackReason = null;
       return false;
@@ -8174,7 +8211,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     finalizePass.end();
     hooks.afterCompaction?.();
     state.boundarySplatCopyBytesThisFrame = 0;
-    state.boundarySplatCopyDisposition = makeBoundarySplatCopyDisposition(0);
+    state.boundarySplatCopyDisposition = makeBoundarySplatCopyDisposition(0, state.boundarySplatRendererIdentity);
     hooks.afterCandidateCopy?.();
     encoder.copyBufferToBuffer(boundarySplatDrawBuffer, 0, boundarySplatIndirectBuffer, 0, 16);
     hooks.afterIndirectSetup?.();
@@ -8198,7 +8235,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     pass.drawIndirect(boundarySplatIndirectBuffer, 0);
     pass.end();
     state.boundarySplatFrameCount += 1;
-    state.volumeReconstructionStyle = BOUNDARY_SPLAT_RENDERER_IDENTITY;
+    state.volumeReconstructionStyle = state.boundarySplatRendererIdentity;
     return true;
   }
 
@@ -8229,6 +8266,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         timestampStatus: 'unsupported',
         reason: 'boundary-splat-route-not-requested',
         candidateCopyBytes: 0,
+        rendererIdentity: state.boundarySplatRendererIdentity,
       }));
     }
     if (!timestampQueriesAvailable()) {
@@ -8236,6 +8274,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         timestampStatus: 'unsupported',
         reason: device?.features?.has?.('timestamp-query') ? 'timestamp-query-write-api-unavailable' : 'timestamp-query-not-supported',
         candidateCopyBytes: state.boundarySplatCopyBytesThisFrame ?? 0,
+        rendererIdentity: state.boundarySplatRendererIdentity,
       }));
     }
 
@@ -8296,6 +8335,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         timestampStatus: 'available',
         reason: 'timestamp-query-sampled',
         candidateCopyBytes,
+        rendererIdentity: state.boundarySplatRendererIdentity,
         stages: {
           simulation: makeBoundarySplatStage('sampled', nsToMs(1, 0)),
           sidecar: makeBoundarySplatStage('sampled', nsToMs(2, 1)),
@@ -8323,6 +8363,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         timestampStatus: 'unsupported',
         reason: `timestamp-query-profile-failed:${error?.message || String(error)}`,
         candidateCopyBytes: state.boundarySplatCopyBytesThisFrame ?? 0,
+        rendererIdentity: state.boundarySplatRendererIdentity,
       }));
     } finally {
       resolveBuffer.destroy();
@@ -9747,6 +9788,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           validationError: validationError?.message || null,
           boundarySplatFallbackReason: state.boundarySplatFallbackReason,
           boundarySplatRendererIdentity: state.boundarySplatRendererIdentity,
+          boundarySplatAttributeModelIdentity: state.boundarySplatAttributeModelIdentity,
           boundarySplatSourceAuthority: state.boundarySplatSourceAuthority,
           boundarySplatTimestampStatus: state.boundarySplatTimestampStatus,
           boundarySplatGpuProfile: state.boundarySplatGpuProfile,
@@ -9898,6 +9940,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         boundarySidecarSource: state.boundarySidecarSource,
         boundarySplatMode: state.boundarySplatMode,
         boundarySplatRendererIdentity: state.boundarySplatRendererIdentity,
+        boundarySplatAttributeModelIdentity: state.boundarySplatAttributeModelIdentity,
         boundarySplatSourceAuthority: state.boundarySplatSourceAuthority,
         boundarySplatCapacity: state.boundarySplatCapacity,
         boundarySplatInstanceCount: state.boundarySplatInstanceCount,
@@ -10250,6 +10293,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       timing: { ...state.timing },
       boundarySplatMode: state.boundarySplatMode,
       boundarySplatRendererIdentity: state.boundarySplatRendererIdentity,
+      boundarySplatAttributeModelIdentity: state.boundarySplatAttributeModelIdentity,
       boundarySplatSourceAuthority: state.boundarySplatSourceAuthority,
       boundarySplatCapacity: state.boundarySplatCapacity,
       boundarySplatInstanceCount: boundarySplatSample?.instanceCount ?? state.boundarySplatInstanceCount,
@@ -10557,6 +10601,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
             reason: 'boundary-splat-frozen-canvas-route-unavailable',
             boundarySplatFallbackReason: state.boundarySplatFallbackReason,
             boundarySplatRendererIdentity: state.boundarySplatRendererIdentity,
+            boundarySplatAttributeModelIdentity: state.boundarySplatAttributeModelIdentity,
             boundarySplatSourceAuthority: state.boundarySplatSourceAuthority,
           };
         }

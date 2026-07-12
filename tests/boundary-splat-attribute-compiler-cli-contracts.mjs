@@ -53,11 +53,18 @@ try {
   assert.equal(receipt.outputSize, 6);
   assert.equal(receipt.parity.sampleCount, 1);
   assert.ok(receipt.parity.maxAbsoluteError < 1e-6);
-  assert.equal(receipt.wgsl.path, join(outputDir, 'boundary-splat-attribute-model.wgsl'));
-  assert.equal(receipt.weights.path, join(outputDir, 'boundary-splat-attribute-weights.f32'));
-  assert.ok((await stat(receipt.wgsl.path)).size > 0);
-  assert.equal((await stat(receipt.weights.path)).size, receipt.weights.floatCount * 4);
-  assert.match(await readFile(receipt.wgsl.path, 'utf8'), /inferBoundarySplatAttributes/);
+  assert.equal(receipt.wgsl.path, 'boundary-splat-attribute-model.wgsl');
+  assert.equal(receipt.module.path, 'boundary-splat-attribute-model.generated.js');
+  assert.equal(receipt.weights.path, 'boundary-splat-attribute-weights.f32');
+  assert.equal(receipt.model.path, 'model-artifact.json');
+  assert.ok((await stat(join(outputDir, receipt.wgsl.path))).size > 0);
+  assert.ok((await stat(join(outputDir, receipt.module.path))).size > 0);
+  assert.equal((await stat(join(outputDir, receipt.weights.path))).size, receipt.weights.floatCount * 4);
+  assert.ok((await stat(join(outputDir, receipt.model.path))).size > 0);
+  assert.match(await readFile(join(outputDir, receipt.wgsl.path), 'utf8'), /inferBoundarySplatAttributes/);
+  const generated = await import(`file://${join(outputDir, receipt.module.path)}?test=${Date.now()}`);
+  assert.equal(generated.BOUNDARY_SPLAT_ATTRIBUTE_MODEL_IDENTITY, receipt.identity);
+  assert.match(generated.BOUNDARY_SPLAT_ATTRIBUTE_MODEL_WGSL, /inferBoundarySplatAttributes/);
 } finally {
   await rm(root, { recursive: true, force: true });
 }

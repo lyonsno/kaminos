@@ -80,16 +80,29 @@ async function main() {
   await mkdir(outDir, { recursive: true });
 
   const wgslPath = resolve(outDir, 'boundary-splat-attribute-model.wgsl');
+  const modulePath = resolve(outDir, 'boundary-splat-attribute-model.generated.js');
   const weightsPath = resolve(outDir, 'boundary-splat-attribute-weights.f32');
+  const modelPath = resolve(outDir, 'model-artifact.json');
   const receiptPath = resolve(outDir, 'compiled-model.json');
   const wgslBytes = Buffer.from(`${compiled.wgsl}\n`, 'utf8');
+  const moduleBytes = Buffer.from([
+    `export const BOUNDARY_SPLAT_ATTRIBUTE_MODEL_IDENTITY = ${JSON.stringify(compiled.identity)};`,
+    `export const BOUNDARY_SPLAT_ATTRIBUTE_MODEL_INPUT_SIZE = ${compiled.inputSize};`,
+    `export const BOUNDARY_SPLAT_ATTRIBUTE_MODEL_HIDDEN_SIZE = ${compiled.hiddenSize};`,
+    `export const BOUNDARY_SPLAT_ATTRIBUTE_MODEL_OUTPUT_SIZE = ${compiled.outputSize};`,
+    `export const BOUNDARY_SPLAT_ATTRIBUTE_MODEL_WGSL = ${JSON.stringify(compiled.wgsl)};`,
+    '',
+  ].join('\n'), 'utf8');
+  const modelBytes = Buffer.from(`${JSON.stringify(model, null, 2)}\n`, 'utf8');
   const weightBytes = Buffer.from(
     compiled.packedWeights.buffer,
     compiled.packedWeights.byteOffset,
     compiled.packedWeights.byteLength,
   );
   await writeFile(wgslPath, wgslBytes);
+  await writeFile(modulePath, moduleBytes);
   await writeFile(weightsPath, weightBytes);
+  await writeFile(modelPath, modelBytes);
   const receipt = {
     schema: 'kaminos-boundary-splat-attribute-compiled-v0',
     identity: compiled.identity,
@@ -99,9 +112,11 @@ async function main() {
     hiddenSize: compiled.hiddenSize,
     outputSize: compiled.outputSize,
     parity,
-    wgsl: { path: wgslPath, bytes: wgslBytes.length, sha256: sha256(wgslBytes) },
+    model: { path: 'model-artifact.json', bytes: modelBytes.length, sha256: sha256(modelBytes) },
+    wgsl: { path: 'boundary-splat-attribute-model.wgsl', bytes: wgslBytes.length, sha256: sha256(wgslBytes) },
+    module: { path: 'boundary-splat-attribute-model.generated.js', bytes: moduleBytes.length, sha256: sha256(moduleBytes) },
     weights: {
-      path: weightsPath,
+      path: 'boundary-splat-attribute-weights.f32',
       bytes: weightBytes.length,
       floatCount: compiled.packedWeights.length,
       dtype: 'float32-native-little-endian',
