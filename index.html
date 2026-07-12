@@ -1591,6 +1591,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
         <option value="32">32^3</option>
         <option value="48">48^3</option>
         <option value="64">64^3</option>
+        <option value="90">90^3</option>
         <option value="96" selected>96^3</option>
         <option value="128">128^3</option>
         <option value="160">160^3</option>
@@ -2746,6 +2747,7 @@ import { pass, mrt, normalView, vec3, vec4, mix, float, uniform, texture, packNo
 import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
 import { createKaminosVolumePrototype } from './volume-core.js?v=pyro-palette-flame-paint-0703';
+import { createForegroundKilnHeartbeatEpisode } from './lib/foreground-kiln-heartbeat.mjs';
 import {
   DEFAULT_DECISION_MOTION_PLAN,
   DEFAULT_MOTION_PHRASE_CONTROLS,
@@ -13283,6 +13285,39 @@ async function ensureKaminosVolumeRouteInitialized() {
   return volumePrototype;
 }
 
+const KILN_CONTENTION_FIRE_BUDGET = Object.freeze({
+  identity: 'kaminos.kiln-contention-fire-budget.v0',
+  resolution: 90,
+  renderScale: 0.4,
+  adaptiveRays: 1,
+});
+
+let activeForegroundKilnHeartbeat = null;
+
+function fireBudgetFromVolumeState(state = {}) {
+  return {
+    identity: KILN_CONTENTION_FIRE_BUDGET.identity,
+    resolution: Number(state.simGrid ?? state.resolution),
+    renderScale: Number(state.renderScale),
+    adaptiveRays: Number(state.adaptiveRaymarch ?? state.adaptiveRays),
+  };
+}
+
+function applyKilnContentionFireBudget() {
+  const requestedFireBudget = { ...KILN_CONTENTION_FIRE_BUDGET };
+  setVolumeControlValue('volume-resolution', requestedFireBudget.resolution);
+  setVolumeControlValue('volume-render-scale', requestedFireBudget.renderScale);
+  setVolumeControlValue('volume-adaptive-rays', requestedFireBudget.adaptiveRays);
+  const controls = readVolumeControls();
+  const effectiveFireBudget = {
+    identity: requestedFireBudget.identity,
+    resolution: controls.resolution,
+    renderScale: controls.renderScale,
+    adaptiveRays: controls.adaptiveRays,
+  };
+  return { requestedFireBudget, effectiveFireBudget };
+}
+
 async function beginSharpBreathingRoomKilnFire({ profileId, source, pipelineId }) {
   const previousState = volumePrototype?.debugState?.() || null;
   const fireState = {
@@ -13301,7 +13336,8 @@ async function beginSharpBreathingRoomKilnFire({ profileId, source, pipelineId }
   try {
     await ensureKaminosVolumeRouteInitialized();
     const wasActive = volumePrototype?.debugState?.().active === true;
-    applyTallPlumeOperatorPreset('pyro_material_bonfire_family_0702', { keepBudgetPreset: true });
+    applyTallPlumeOperatorPreset(DEFAULT_VOLUME_SMOKE_TALL_PRESET, { keepBudgetPreset: true });
+    const fireBudget = applyKilnContentionFireBudget();
     updateVolumeControlLabels();
     volumePrototype.setControls(readVolumeControls());
     frameVolumeCamera();
@@ -13310,6 +13346,18 @@ async function beginSharpBreathingRoomKilnFire({ profileId, source, pipelineId }
     fireState.activatedByRun = !wasActive;
     fireState.previousActive = wasActive;
     fireState.volumeDebugState = volumePrototype.debugState();
+    fireState.requestedFireBudget = fireBudget.requestedFireBudget;
+    fireState.effectiveFireBudget = fireBudgetFromVolumeState(fireState.volumeDebugState);
+    activeForegroundKilnHeartbeat = createForegroundKilnHeartbeatEpisode({
+      routeId: 'sharp-image-to-splat-live-v0',
+      profileId,
+      pipelineId,
+      expectedVolumeRouteIdentity: 'native-3d-compute-fluid-raymarch-v0',
+      requestedFireBudget: fireState.requestedFireBudget,
+      readVolumeState: () => volumePrototype?.debugState?.() || null,
+    });
+    activeForegroundKilnHeartbeat.start();
+    fireState.foregroundHeartbeat = activeForegroundKilnHeartbeat.report({ phase: 'burning' });
     window.__kaminosSharpBreathingRoomKilnFireState = fireState;
     refreshVolumeReadout();
     return fireState;
@@ -13366,6 +13414,15 @@ async function endSharpBreathingRoomKilnFire(phase = 'complete', options = {}) {
   const forceInactive = options.forceInactive === true;
   fireState.phase = phase;
   fireState.finishedAt = new Date().toISOString();
+  const foregroundHeartbeat = activeForegroundKilnHeartbeat;
+  fireState.foregroundHeartbeat = foregroundHeartbeat?.finish({
+    phase,
+    sharpHeartbeat: options.sharpHeartbeat || null,
+  }) || fireState.foregroundHeartbeat || null;
+  activeForegroundKilnHeartbeat = null;
+  if (options.runResult && typeof options.runResult === 'object') {
+    options.runResult.foregroundKilnHeartbeat = fireState.foregroundHeartbeat;
+  }
   if ((fireState.activatedByRun || forceInactive) && volumePrototype) {
     volumeBridge?.forceHidden?.('sharp-breathing-room-release');
     const releaseConfirmation = await confirmSharpBreathingRoomKilnFireReleased('sharp-breathing-room-release');
@@ -13390,6 +13447,7 @@ window.kaminosSharpBreathingRoomKilnFireDebug = {
   end: endSharpBreathingRoomKilnFire,
   state: () => ({
     fire: window.__kaminosSharpBreathingRoomKilnFireState || null,
+    foregroundHeartbeat: window.__kaminosSharpBreathingRoomKilnFireState?.foregroundHeartbeat || null,
     volume: volumePrototype?.debugState?.() || null,
     bridge: volumeBridge?.debugState?.() || null,
   }),
@@ -17400,6 +17458,17 @@ function kilnRouteBenchHeartbeatSummary(result) {
   return `The longest pause while the model was working was ${roundedMs} ms${nearEnd ? ' near the end of model work' : ''}; no named scheduler event covered it.`;
 }
 
+function kilnRouteBenchForegroundHeartbeatSummary(result) {
+  const heartbeat = result?.foregroundKilnHeartbeat || null;
+  if (!heartbeat) return 'Foreground kiln timing was not recorded for this firing.';
+  if (heartbeat.status !== 'verified') {
+    const failures = heartbeat.failures?.length ? ` (${heartbeat.failures.join(', ')})` : '';
+    return `The cast finished, but foreground kiln timing could not verify the firing${failures}.`;
+  }
+  const maxGap = Number.isFinite(heartbeat.maxFrameGapMs) ? `${Math.round(heartbeat.maxFrameGapMs)} ms maximum frame gap` : 'frame gaps recorded';
+  return `Foreground kiln timing verified ${maxGap} across ${heartbeat.sampleCount} main-page samples.`;
+}
+
 async function runKilnRouteBenchRoute(routeId, profileId) {
   const route = selectedKilnRouteBenchRoute(routeId);
   const profileLabel = route.profileLabels?.[profileId] || profileId;
@@ -17435,8 +17504,10 @@ async function runKilnRouteBenchRoute(routeId, profileId) {
   });
   const crucibleFiring = crucibleBenchRecordFiring({ routeId: route.id, profileId, source, profileLabel });
   await beginSharpBreathingRoomKilnFire({ profileId, source, pipelineId });
+  let run = null;
+  let kilnFireEnded = false;
   try {
-    const run = await runSelectedPipeline({
+    run = await runSelectedPipeline({
       sourceOverride: source,
       pipelineId,
       pipeline,
@@ -17454,9 +17525,18 @@ async function runKilnRouteBenchRoute(routeId, profileId) {
         }
       },
     });
+    await endSharpBreathingRoomKilnFire(run?.ok ? 'complete' : 'failed', {
+      forceInactive: true,
+      sharpHeartbeat: kilnRouteBenchBackgroundHeartbeat(run),
+      runResult: run,
+    });
+    kilnFireEnded = true;
     const artifact = pipelinePrimaryRunArtifact(run);
     const backgroundHeartbeat = kilnRouteBenchBackgroundHeartbeat(run);
-    const heartbeatSummary = kilnRouteBenchHeartbeatSummary(run);
+    const heartbeatSummary = [
+      kilnRouteBenchHeartbeatSummary(run),
+      kilnRouteBenchForegroundHeartbeatSummary(run),
+    ].filter(Boolean).join(' ');
     if (run?.ok) {
       if (pipelineArtifactIsLoadableSplat(artifact)) {
         try {
@@ -17541,7 +17621,13 @@ async function runKilnRouteBenchRoute(routeId, profileId) {
     });
     throw err;
   } finally {
-    await endSharpBreathingRoomKilnFire('complete', { forceInactive: true });
+    if (!kilnFireEnded) {
+      await endSharpBreathingRoomKilnFire(run?.ok ? 'complete' : 'failed', {
+        forceInactive: true,
+        sharpHeartbeat: kilnRouteBenchBackgroundHeartbeat(run),
+        runResult: run,
+      });
+    }
     sharpBreathingRoomRunningProfileId = null;
     renderKilnRouteBench();
   }

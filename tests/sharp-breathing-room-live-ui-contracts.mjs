@@ -331,6 +331,31 @@ assert.match(
 );
 assert.match(
   index,
+  /KILN_CONTENTION_FIRE_BUDGET[\s\S]*resolution:\s*90[\s\S]*renderScale:\s*0\.4[\s\S]*adaptiveRays:\s*1/,
+  'Live SHARP firing uses the explicit 90-grid, 0.4 render-scale, fully adaptive contention budget',
+);
+assert.match(
+  index,
+  /applyKilnContentionFireBudget\([\s\S]*requestedFireBudget[\s\S]*effectiveFireBudget/,
+  'Kiln-fire activation records requested and effective budget truth instead of silently inheriting the hero preset',
+);
+assert.match(
+  index,
+  /applyTallPlumeOperatorPreset\(DEFAULT_VOLUME_SMOKE_TALL_PRESET,\s*\{\s*keepBudgetPreset:\s*true\s*\}\)/,
+  'Live SHARP firing inherits the promoted current-main fire basin before applying its cheaper contention budget',
+);
+assert.match(
+  index,
+  /createForegroundKilnHeartbeatEpisode\(/,
+  'Kiln-fire activation starts a main-page foreground heartbeat distinct from the SHARP adapter page heartbeat',
+);
+assert.match(
+  index,
+  /foregroundHeartbeat\?\.finish\([\s\S]*sharpHeartbeat/,
+  'Kiln-fire completion closes foreground evidence while preserving the separate SHARP heartbeat',
+);
+assert.match(
+  index,
   /window\.kaminosSharpBreathingRoomKilnFireDebug/,
   'Kiln-fire activation must expose a narrow debug handle so witnesses can prove release without running SHARP inference',
 );
@@ -381,6 +406,6 @@ assert.match(
 );
 assert.match(
   index,
-  /await endSharpBreathingRoomKilnFire\('complete',\s*\{\s*forceInactive:\s*true\s*\}\)/,
+  /await endSharpBreathingRoomKilnFire\(run\?\.ok \? 'complete' : 'failed',[\s\S]*forceInactive:\s*true[\s\S]*runResult:\s*run/,
   'A finished SHARP smoke must release the furnace even when the volume renderer was already active before the run',
 );

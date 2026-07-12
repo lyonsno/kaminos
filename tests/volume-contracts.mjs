@@ -790,6 +790,7 @@ assert.match(core, /kaminos-volume-prototype-v0/, 'volume module exposes stable 
 assert.match(core, /native-3d-compute-fluid-raymarch-v0/, 'volume module records compute-backed fluid route identity');
 assert.match(core, /DEFAULT_GRID_SIZE\s*=\s*96/, 'smoke route defaults to the operator-found 96^3 grid size');
 assert.match(core, /SUPPORTED_GRID_SIZES/, 'fluid sim declares supported resolution choices');
+assert.match(core, /SUPPORTED_GRID_SIZES\s*=\s*\[[^\]]*90[^\]]*\]/s, 'fluid sim accepts the 90^3 kiln contention grid without silently substituting 96^3');
 assert.match(core, /'canonical_plume'/, 'fluid sim supports a minimal canonical plume proof scene');
 assert.match(core, /canonicalPlumeScene/, 'fluid shader names the canonical plume branch separately from bonfire complexity');
 assert.match(core, /minimalPlumeProof/, 'debug state exposes the minimal plume proof contract identity');
