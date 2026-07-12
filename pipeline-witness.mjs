@@ -879,7 +879,7 @@ function adapterReportSummary(report, effectiveRoute = null) {
     revision: report?.backend?.revision || null,
     breathingRoom: report.breathingRoom || null,
     schedulerVerification: report.schedulerVerification || pipelineScheduler.schedulerVerification || null,
-    backgroundHeartbeat: report.backgroundHeartbeat || null,
+    backgroundHeartbeat: report?.backgroundHeartbeat || null,
     pipelineScheduler,
     inputSha256: report.inputSha256 || report.input?.sha256 || null,
     outputBytes: report.outputBytes || report.output?.bytes || null,
