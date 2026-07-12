@@ -490,6 +490,18 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
 #finger-juice-host-overlay { position: absolute; top: 16px; left: 16px; min-width: 360px; max-width: min(560px, calc(100% - 32px)); background: rgba(4,7,10,0.78); border: 1px solid #31485a; border-radius: 8px; padding: 10px 12px; color: #b7d4dc; box-shadow: 0 10px 30px rgba(0,0,0,0.35); }
 #finger-juice-host-overlay-title { font: 11px 'SF Mono', monospace; color: #8fc7d6; text-transform: uppercase; letter-spacing: 0.8px; }
 #finger-juice-host-overlay-body { margin-top: 5px; font: 10px 'SF Mono', monospace; color: #d4ecf3; overflow-wrap: anywhere; }
+
+/* Native finger fluid bench */
+.finger-fluid-bench-readout { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 8px; margin-top: 8px; }
+.finger-fluid-bench-readout .field { margin: 0; padding: 0; }
+.finger-fluid-bench-downgrades { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+.finger-fluid-bench-chip { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border: 1px solid #3f3b66; color: #d8c4ff; background: #17152b; border-radius: 5px; padding: 3px 6px; font: 9px 'SF Mono', monospace; }
+#finger-fluid-bench-operator-panel { position: absolute; inset: 0; z-index: 4; background: #03070a; }
+#finger-fluid-bench-operator-panel[hidden] { display: none; }
+#finger-fluid-bench-canvas { width: 100%; height: 100%; display: block; background: #03070a; }
+#finger-fluid-bench-overlay { position: absolute; right: 16px; bottom: 16px; width: min(520px, calc(100% - 32px)); background: rgba(3,7,10,0.76); border: 1px solid #2d5065; border-radius: 8px; padding: 10px 12px; color: #c7e7ef; box-shadow: 0 10px 30px rgba(0,0,0,0.36); }
+#finger-fluid-bench-overlay-title { font: 11px 'SF Mono', monospace; color: #7fd7e0; text-transform: uppercase; letter-spacing: 0.8px; }
+#finger-fluid-bench-overlay-body { margin-top: 5px; font: 10px 'SF Mono', monospace; color: #efe5c0; overflow-wrap: anywhere; }
 </style>
 </head>
 <body>
@@ -504,6 +516,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
     <div class="tab" data-tab="motion">Motion</div>
     <div class="tab" data-tab="volume">Volume</div>
     <div class="tab" data-tab="worlds">Worlds</div>
+    <div class="tab" data-tab="finger-fluid-bench">Fluid</div>
     <div class="tab" data-tab="finger-juice-host">Host</div>
     <div class="tab" data-tab="finger-juice">Juice</div>
     <div class="tab" data-tab="greenroom">Greenroom</div>
@@ -2176,6 +2189,29 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
     </div>
   </div>
 
+  <!-- Finger Fluid Bench Tab -->
+  <div class="tab-content" id="tab-finger-fluid-bench">
+    <h2>Finger Fluid Bench</h2>
+    <div class="panel">
+      <div class="field"><span class="field-key">Route</span><span class="route-chip">kaminos_finger_fluid_bench=1</span></div>
+      <div class="field"><span class="field-key">Bench</span><span class="field-val">kaminos/finger-fluid-bench</span></div>
+      <div class="field"><span class="field-key">Source</span><span class="field-val" id="finger-fluid-bench-source-schema">big-papa.finger-fluid.synthetic-source.v0</span></div>
+      <div class="field"><span class="field-key">Status</span><span class="field-val" id="finger-fluid-bench-status">pending</span></div>
+    </div>
+    <div class="panel finger-fluid-bench-readout">
+      <div class="field"><span class="field-key">Solver</span><span class="field-val" id="finger-fluid-bench-solver">pending</span></div>
+      <div class="field"><span class="field-key">Render</span><span class="field-val" id="finger-fluid-bench-renderer">pending</span></div>
+      <div class="field"><span class="field-key">Active</span><span class="field-val" id="finger-fluid-bench-active">0.00</span></div>
+      <div class="field"><span class="field-key">Basin</span><span class="field-val" id="finger-fluid-bench-basin">0.00</span></div>
+      <div class="field"><span class="field-key">Frame</span><span class="field-val" id="finger-fluid-bench-frame-ms">0 ms</span></div>
+      <div class="field"><span class="field-key">Exports</span><span class="field-val" id="finger-fluid-bench-exports">lerms.juice-hit-event.v0</span></div>
+    </div>
+    <div class="panel">
+      <div class="field"><span class="field-key">Downgrades</span></div>
+      <div class="finger-fluid-bench-downgrades" id="finger-fluid-bench-downgrades"></div>
+    </div>
+  </div>
+
   <!-- Finger Juice Tab -->
   <div class="tab-content" id="tab-finger-juice">
     <h2>Finger Juice</h2>
@@ -2443,6 +2479,13 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
       <div id="finger-juice-host-overlay-body">kaminos/finger-juice-host · packet pending</div>
     </div>
   </div>
+  <div id="finger-fluid-bench-operator-panel" hidden>
+    <canvas id="finger-fluid-bench-canvas"></canvas>
+    <div id="finger-fluid-bench-overlay">
+      <div id="finger-fluid-bench-overlay-title">Finger Fluid Bench</div>
+      <div id="finger-fluid-bench-overlay-body">kaminos/finger-fluid-bench · synthetic Kaminos fluid source</div>
+    </div>
+  </div>
   <div id="finger-juice-operator-panel" hidden>
     <iframe
       id="finger-juice-viewport-frame"
@@ -2591,6 +2634,12 @@ import {
   KAMINOS_FINGER_JUICE_HOST_STATE_SCHEMA,
   createFingerJuiceHostState,
 } from './finger-juice-host-core.js';
+import {
+  BIG_PAPA_FLUID_SOURCE_SCHEMA,
+  KAMINOS_FINGER_FLUID_BENCH_ROUTE,
+  KAMINOS_FINGER_FLUID_BENCH_STATE_SCHEMA,
+  createFingerFluidBenchState,
+} from './finger-fluid-bench-core.js';
 
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -2699,6 +2748,19 @@ let fingerJuiceHostState = {
   error: null,
 };
 let fingerJuiceHostRouteInitialized = false;
+let fingerFluidBenchRouteInitialized = false;
+let fingerFluidBenchAnimationFrame = null;
+let fingerFluidBenchFrameStartedAt = performance.now();
+let fingerFluidBenchLastFrameMs = 26.5;
+let fingerFluidBenchScratchCanvas = null;
+let fingerFluidBenchState = createFingerFluidBenchState({
+  status: 'idle',
+  viewport: { width: 0, height: 0 },
+  basinFillRatio: 0.48,
+  activeRatio: 0.42,
+  frameTimeMsEstimate: fingerFluidBenchLastFrameMs,
+});
+window.__kaminosFingerFluidBenchDebugState = () => fingerFluidBenchState;
 let volumePrimitives = [];
 let sceneObjects = [];
 let sceneImportStatus = null;
@@ -9208,6 +9270,12 @@ function setActiveTab(tabName) {
     fingerJuiceHostPanel.hidden = tabName !== 'finger-juice-host';
     if (tabName === 'finger-juice-host') requestAnimationFrame(drawFingerJuiceHostPreview);
   }
+  const fingerFluidBenchPanel = document.getElementById('finger-fluid-bench-operator-panel');
+  if (fingerFluidBenchPanel) {
+    fingerFluidBenchPanel.hidden = tabName !== 'finger-fluid-bench';
+    if (tabName === 'finger-fluid-bench') startFingerFluidBench();
+    else stopFingerFluidBench();
+  }
   const fingerJuicePanel = document.getElementById('finger-juice-operator-panel');
   if (fingerJuicePanel) {
     fingerJuicePanel.hidden = tabName !== 'finger-juice';
@@ -9639,6 +9707,204 @@ function reloadFingerJuiceTabFrame() {
   fingerJuiceFrame.dataset.src = FINGER_JUICE_STANDALONE_ROUTE;
   fingerJuiceFrame.src = FINGER_JUICE_STANDALONE_ROUTE;
   setInfo('Finger Juice primitive reloaded');
+}
+
+function updateFingerFluidBenchReadout() {
+  const state = fingerFluidBenchState;
+  const sourceEl = document.getElementById('finger-fluid-bench-source-schema');
+  if (!sourceEl) return;
+  sourceEl.textContent = state.source?.schema || BIG_PAPA_FLUID_SOURCE_SCHEMA;
+  document.getElementById('finger-fluid-bench-status').textContent = state.status || 'pending';
+  document.getElementById('finger-fluid-bench-solver').textContent = state.solver?.identity ? 'research-bench-v0' : 'pending';
+  document.getElementById('finger-fluid-bench-renderer').textContent = state.renderer?.identity ? 'native-canvas-v0' : 'pending';
+  document.getElementById('finger-fluid-bench-active').textContent = (state.visual?.activeRatio ?? 0).toFixed(2);
+  document.getElementById('finger-fluid-bench-basin').textContent = (state.visual?.basinFillRatio ?? 0).toFixed(2);
+  document.getElementById('finger-fluid-bench-frame-ms').textContent = `${(state.solver?.frameTimeMsEstimate ?? 0).toFixed(1)} ms`;
+  document.getElementById('finger-fluid-bench-exports').textContent = state.compatibility?.lermsEventSchemas?.length ? 'juice-hit-event.v0' : 'pending';
+  const downgradeList = document.getElementById('finger-fluid-bench-downgrades');
+  downgradeList.innerHTML = '';
+  for (const downgrade of state.downgrades || []) {
+    const chip = document.createElement('span');
+    chip.className = 'finger-fluid-bench-chip';
+    chip.textContent = downgrade;
+    downgradeList.appendChild(chip);
+  }
+  document.getElementById('finger-fluid-bench-overlay-body').textContent = [
+    KAMINOS_FINGER_FLUID_BENCH_ROUTE,
+    state.source?.sourceTruthAuthority || 'synthetic source',
+    `active ${(state.visual?.activeRatio ?? 0).toFixed(2)}`,
+    `basin ${(state.visual?.basinFillRatio ?? 0).toFixed(2)}`,
+    state.downgrades?.[0] || 'no downgrade recorded',
+  ].join(' · ');
+}
+
+function ensureFingerFluidBenchCanvasSize(canvas) {
+  const rect = canvas.getBoundingClientRect();
+  const width = Math.max(1, Math.floor(rect.width * window.devicePixelRatio));
+  const height = Math.max(1, Math.floor(rect.height * window.devicePixelRatio));
+  if (canvas.width !== width || canvas.height !== height) {
+    canvas.width = width;
+    canvas.height = height;
+  }
+  return { width, height };
+}
+
+function smoothFluidNoise(x, y, t) {
+  return (
+    Math.sin(x * 18.0 + y * 6.5 + t * 1.35) * 0.23
+    + Math.sin(x * 7.0 - y * 15.0 + t * 0.82) * 0.19
+    + Math.cos((x + y) * 21.0 - t * 1.1) * 0.14
+    + Math.sin(Math.hypot(x - 0.5, y - 0.52) * 34.0 - t * 1.8) * 0.13
+  );
+}
+
+function drawFingerFluidBenchFrame(now = performance.now()) {
+  const canvas = document.getElementById('finger-fluid-bench-canvas');
+  const panel = document.getElementById('finger-fluid-bench-operator-panel');
+  if (!canvas || !panel || panel.hidden) {
+    fingerFluidBenchAnimationFrame = null;
+    return;
+  }
+
+  const frameStart = performance.now();
+  const { width, height } = ensureFingerFluidBenchCanvasSize(canvas);
+  const ctx = canvas.getContext('2d');
+  const renderWidth = Math.max(240, Math.min(560, Math.floor(width / 2.4)));
+  const renderHeight = Math.max(160, Math.min(360, Math.floor(height / 2.4)));
+  if (!fingerFluidBenchScratchCanvas) fingerFluidBenchScratchCanvas = document.createElement('canvas');
+  if (fingerFluidBenchScratchCanvas.width !== renderWidth || fingerFluidBenchScratchCanvas.height !== renderHeight) {
+    fingerFluidBenchScratchCanvas.width = renderWidth;
+    fingerFluidBenchScratchCanvas.height = renderHeight;
+  }
+
+  const scratch = fingerFluidBenchScratchCanvas;
+  const scratchCtx = scratch.getContext('2d', { willReadFrequently: true });
+  const image = scratchCtx.createImageData(renderWidth, renderHeight);
+  const pixels = image.data;
+  const t = (now - fingerFluidBenchFrameStartedAt) * 0.001;
+  let activePixels = 0;
+  let basinPixels = 0;
+
+  for (let py = 0; py < renderHeight; py += 1) {
+    const y = py / Math.max(1, renderHeight - 1);
+    for (let px = 0; px < renderWidth; px += 1) {
+      const x = px / Math.max(1, renderWidth - 1);
+      const dx = (x - 0.5) / 0.47;
+      const dy = (y - 0.55) / 0.39;
+      const basin = Math.max(0, 1 - (dx * dx + dy * dy));
+      const leftRoll = Math.max(0, 1 - (((x - 0.30) / 0.23) ** 2 + ((y - 0.63) / 0.26) ** 2));
+      const rightRoll = Math.max(0, 1 - (((x - 0.72) / 0.28) ** 2 + ((y - 0.46) / 0.32) ** 2));
+      const lowerPool = Math.max(0, 1 - (((x - 0.53) / 0.42) ** 2 + ((y - 0.78) / 0.20) ** 2));
+      const plume = Math.max(0, 1 - (((x - (0.48 + Math.sin(t * 0.55) * 0.05)) / 0.20) ** 2 + ((y - 0.35) / 0.42) ** 2));
+      const streamA = Math.exp(-Math.abs(y - (0.68 - 0.24 * Math.sin((x + t * 0.09) * 4.2))) * 18) * Math.max(0, 1 - Math.abs(x - 0.38) * 1.9);
+      const streamB = Math.exp(-Math.abs(y - (0.52 - 0.20 * Math.cos((x - t * 0.07) * 5.1))) * 20) * Math.max(0, 1 - Math.abs(x - 0.64) * 2.0);
+      const noise = smoothFluidNoise(x, y, t);
+      const density = Math.max(0, basin * 0.86 + leftRoll * 0.55 + rightRoll * 0.62 + lowerPool * 0.75 + plume * 0.58 + streamA * 0.35 + streamB * 0.32 + noise - 0.20);
+      const edge = Math.max(0, Math.min(1, density));
+      const channel = 0.5 + 0.5 * Math.sin((x * 4.8 - y * 3.2) + t * 0.9 + noise * 2.1);
+      const heat = Math.max(0, plume * 0.8 + streamB * 0.36 + noise * 0.45);
+      const foam = Math.max(0, Math.sin((x * 57 + y * 44) + t * 4.1) * 0.5 + 0.5) * Math.max(0, density - 0.56);
+      const visible = edge > 0.05;
+      const i = (py * renderWidth + px) * 4;
+      if (visible) activePixels += 1;
+      if (basin > 0.18 || lowerPool > 0.18) basinPixels += 1;
+      const alpha = visible ? Math.min(255, Math.floor(34 + edge * 218)) : 255;
+      pixels[i] = Math.floor(4 + edge * (34 + heat * 92) + foam * 45);
+      pixels[i + 1] = Math.floor(8 + edge * (104 + channel * 100) + foam * 35);
+      pixels[i + 2] = Math.floor(12 + edge * (128 + (1 - channel) * 88 + heat * 24) + foam * 48);
+      pixels[i + 3] = alpha;
+    }
+  }
+
+  scratchCtx.putImageData(image, 0, 0);
+  ctx.imageSmoothingEnabled = true;
+  const bg = ctx.createRadialGradient(width * 0.5, height * 0.56, width * 0.08, width * 0.5, height * 0.56, width * 0.72);
+  bg.addColorStop(0, '#0a1720');
+  bg.addColorStop(0.58, '#03080c');
+  bg.addColorStop(1, '#010203');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, width, height);
+  ctx.globalAlpha = 0.98;
+  ctx.drawImage(scratch, 0, 0, width, height);
+
+  ctx.save();
+  ctx.globalCompositeOperation = 'screen';
+  ctx.globalAlpha = 0.48;
+  const highlight = ctx.createLinearGradient(width * 0.20, height * 0.82, width * 0.82, height * 0.22);
+  highlight.addColorStop(0, 'rgba(104, 146, 255, 0.16)');
+  highlight.addColorStop(0.42, 'rgba(71, 232, 211, 0.28)');
+  highlight.addColorStop(0.78, 'rgba(255, 210, 116, 0.22)');
+  highlight.addColorStop(1, 'rgba(209, 133, 255, 0.18)');
+  ctx.fillStyle = highlight;
+  ctx.fillRect(0, 0, width, height);
+  ctx.restore();
+
+  ctx.save();
+  ctx.globalAlpha = 0.26;
+  ctx.strokeStyle = '#6bb7c8';
+  ctx.lineWidth = Math.max(1, window.devicePixelRatio);
+  for (let i = 0; i < 13; i += 1) {
+    const y = height * (0.25 + i * 0.048);
+    ctx.beginPath();
+    for (let x = 0; x <= width; x += width / 80) {
+      const nx = x / width;
+      const wave = Math.sin(nx * 8.8 + t * 0.8 + i * 0.47) * height * 0.012;
+      const settle = Math.sin(nx * 2.1 - t * 0.33) * height * 0.018;
+      if (x === 0) ctx.moveTo(x, y + wave + settle);
+      else ctx.lineTo(x, y + wave + settle);
+    }
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  fingerFluidBenchLastFrameMs = performance.now() - frameStart;
+  const activeRatio = activePixels / Math.max(1, renderWidth * renderHeight);
+  const basinFillRatio = basinPixels / Math.max(1, renderWidth * renderHeight);
+  fingerFluidBenchState = createFingerFluidBenchState({
+    status: 'running',
+    viewport: { width, height },
+    timeSeconds: t,
+    fieldColumns: renderWidth,
+    fieldRows: renderHeight,
+    basinFillRatio,
+    activeRatio,
+    frameTimeMsEstimate: fingerFluidBenchLastFrameMs,
+  });
+  updateFingerFluidBenchReadout();
+  fingerFluidBenchAnimationFrame = requestAnimationFrame(drawFingerFluidBenchFrame);
+}
+
+function startFingerFluidBench() {
+  if (!fingerFluidBenchAnimationFrame) {
+    fingerFluidBenchFrameStartedAt = performance.now() - (fingerFluidBenchState.visual?.timeSeconds || 0) * 1000;
+    fingerFluidBenchAnimationFrame = requestAnimationFrame(drawFingerFluidBenchFrame);
+  }
+}
+
+function stopFingerFluidBench() {
+  if (!fingerFluidBenchAnimationFrame) return;
+  cancelAnimationFrame(fingerFluidBenchAnimationFrame);
+  fingerFluidBenchAnimationFrame = null;
+}
+
+function kaminosFingerFluidBenchDebugState() {
+  return fingerFluidBenchState;
+}
+
+function initKaminosFingerFluidBenchRoute() {
+  if (fingerFluidBenchRouteInitialized) return;
+  fingerFluidBenchRouteInitialized = true;
+  window.kaminosFingerFluidBenchDebugState = kaminosFingerFluidBenchDebugState;
+  window.__kaminosFingerFluidBenchDebugState = kaminosFingerFluidBenchDebugState;
+  window.addEventListener('resize', () => {
+    if (!document.getElementById('finger-fluid-bench-operator-panel')?.hidden) drawFingerFluidBenchFrame();
+  });
+  updateFingerFluidBenchReadout();
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('kaminos_finger_fluid_bench') === '1') {
+    setActiveTab('finger-fluid-bench');
+    setInfo('Finger Fluid bench route active: native Kaminos synthetic fluid field');
+  }
 }
 
 function initKaminosFingerJuiceHostRoute() {
@@ -20264,6 +20530,7 @@ window.addEventListener('keydown', e => {
 
 // --- Init ---
 grInit();
+initKaminosFingerFluidBenchRoute();
 initKaminosFingerJuiceHostRoute();
 initScene().then(() => {
   initEnvButtons();
@@ -20308,6 +20575,7 @@ initScene().then(() => {
   initKaminosVolumeRoute();
   initKaminosMotionAgencyRoute();
   initWorldChambersRoute();
+  initKaminosFingerFluidBenchRoute();
   initKaminosFingerJuiceHostRoute();
   initKaminosFingerJuiceTabRoute();
 }).catch(err => {
@@ -20320,6 +20588,7 @@ initScene().then(() => {
     console.error('volume route init failed after scene init failure:', err);
   });
   initWorldChambersRoute();
+  initKaminosFingerFluidBenchRoute();
   initKaminosFingerJuiceHostRoute();
   initKaminosFingerJuiceTabRoute();
 });
