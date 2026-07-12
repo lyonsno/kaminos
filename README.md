@@ -12,7 +12,7 @@ The repository is where that method becomes software: local-first WebGPU
 material systems, generated spatial assets, motion and world substrates,
 inspectable inference routes, and the workbench that lets them meet.
 
-## Current Proof: Live Browser Combustion
+##  Live Browser Combustion
 
 Kaminos currently carries a multi-field volumetric fire and smoke simulation
 that runs directly in the browser through WebGPU. Its current boundary-fire
