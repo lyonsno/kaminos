@@ -4,12 +4,14 @@ import { readFile } from 'node:fs/promises';
 const core = await readFile(new URL('../volume-core.js', import.meta.url), 'utf8');
 const page = await readFile(new URL('../index.html', import.meta.url), 'utf8');
 const witness = await readFile(new URL('../volume-witness.mjs', import.meta.url), 'utf8');
+const featureCapture = await import('../boundary-splat-feature-capture.mjs');
+const modelArtifact = JSON.parse(await readFile(new URL('../models/boundary-splat-attribute/analytic-teacher-h64-v0/model-artifact.json', import.meta.url), 'utf8'));
 
 assert.match(core, /BOUNDARY_SPLAT_RENDERER_IDENTITY\s*=\s*'live-boundary-sidecar-analytic-splats-v0'/, 'splat renderer route identity is explicit');
 assert.match(core, /BOUNDARY_SPLAT_SOURCE_AUTHORITY\s*=\s*'live-baked-sidecar-plus-fluid-material-v0'/, 'splat source authority names live sidecar and material fields');
 assert.match(core, /BOUNDARY_SPLAT_ATTRIBUTE_HOOK_IDENTITY\s*=\s*'boundary-splat-learned-attribute-hook-v0'/, 'splat renderer exposes a stable learned-attribute hook identity');
-assert.match(core, /BOUNDARY_SPLAT_ATTRIBUTE_FEATURE_ORDER[\s\S]*'sidecar\.support'[\s\S]*'sidecar\.coverage'[\s\S]*'sidecar\.ridge'[\s\S]*'sidecar\.footprint'[\s\S]*'material\.density'[\s\S]*'material\.heat'[\s\S]*'material\.fuel'[\s\S]*'material\.detail'[\s\S]*'fire\.energy'[\s\S]*'fire\.temperature'[\s\S]*'fire\.emission'[\s\S]*'fire\.detail'[\s\S]*'micro\.x'[\s\S]*'micro\.y'[\s\S]*'micro\.z'[\s\S]*'micro\.w'/, 'splat learned-attribute hook preserves the compiler feature order');
-assert.match(core, /BOUNDARY_SPLAT_ATTRIBUTE_OUTPUT_ORDER[\s\S]*'color\.r'[\s\S]*'color\.g'[\s\S]*'color\.b'[\s\S]*'opacity'[\s\S]*'radius\.x'[\s\S]*'radius\.y'/, 'splat learned-attribute hook preserves the compiler output order');
+assert.deepEqual(featureCapture.BOUNDARY_SPLAT_FEATURE_ORDER, modelArtifact.features, 'live feature capture and compiled model preserve one exact feature order');
+assert.deepEqual(modelArtifact.outputs, ['color.r', 'color.g', 'color.b', 'opacity', 'radius.x', 'radius.y'], 'compiled live model preserves the declared output order');
 assert.match(core, /function normalizeBoundarySplatMode/, 'splat mode normalization is explicit');
 assert.match(page, /volume_boundary_splat_mode/, 'splat mode is routable from the browser URL');
 assert.match(page, /boundarySplatMode/, 'browser controls carry the splat mode into the renderer');

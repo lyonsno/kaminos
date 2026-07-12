@@ -11973,6 +11973,7 @@ const VOLUME_BASIN_ROUTE_FIELDS = [
   ['boundarySidecarSource', 'volume_boundary_sidecar_source'],
   ['boundarySidecarView', 'volume_boundary_sidecar_view'],
   ['boundarySplatMode', 'volume_boundary_splat_mode'],
+  ['boundarySplatFeatureCapture', 'volume_boundary_splat_feature_capture'],
   ...REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS.map(field => [field.key, field.param]),
 ];
 
@@ -16337,6 +16338,7 @@ function readVolumeControls() {
   const boundarySidecarSource = normalizeBoundarySidecarSource(document.getElementById('volume-boundary-sidecar-source')?.value);
   const boundarySidecarView = normalizeBoundarySidecarView(document.getElementById('volume-boundary-sidecar-view')?.value);
   const boundarySplatMode = normalizeBoundarySplatMode(document.getElementById('volume-boundary-splat-mode')?.value);
+  const boundarySplatFeatureCapture = ['1', 'true', 'on'].includes(String(params.get('volume_boundary_splat_feature_capture') || '').toLowerCase());
   const reactionBoundaryControls = {
     identity: 'reaction-boundary-live-controls-v0',
     gradientGain: parseFloat(document.getElementById('volume-reaction-boundary-gradient').value),
@@ -16403,6 +16405,7 @@ function readVolumeControls() {
     boundarySidecarSource,
     boundarySidecarView,
     boundarySplatMode,
+    boundarySplatFeatureCapture,
     boundarySidecarControls: {
       identity: 'baked-boundary-sidecar-v0',
       authority: 'band-limited-support-coverage-ridge-proximity-footprint-v1',
