@@ -35,7 +35,7 @@ assert.match(core, /encodeBoundarySidecar\(encoder\)[\s\S]*encodeBoundarySplats\
 assert.match(core, /boundarySplatRequested[\s\S]*encodeBoundarySplatDraw/, 'the opt-in route selects splat rasterization instead of silently falling back');
 assert.match(core, /sampleFrame[\s\S]*encodeBoundarySidecar\(encoder\)[\s\S]*encodeBoundarySplats\(encoder\)[\s\S]*encodeBoundarySplatDraw\(encoder,\s*frameTexture\.createView\(\),\s*boundarySplatReadbackPipeline\)/, 'frozen witness renders the requested splat route instead of substituting raymarch');
 assert.match(core, /renderFrozenScaleToCanvas[\s\S]*encodeBoundarySidecar\(encoder\)[\s\S]*encodeBoundarySplats\(encoder\)[\s\S]*encodeBoundarySplatDraw\(encoder,\s*currentTexture\.createView\(\)\)/, 'controlled canvas capture renders the requested splat route instead of substituting raymarch');
-assert.match(core, /boundarySplatRendererIdentity:\s*BOUNDARY_SPLAT_RENDERER_IDENTITY/, 'runtime state reports effective splat renderer identity');
+assert.match(core, /boundarySplatRendererIdentity:\s*boundarySplatEffectiveRendererIdentity\(/, 'runtime state reports the effective analytic or learned splat renderer identity');
 assert.match(core, /boundarySplatSourceAuthority:\s*BOUNDARY_SPLAT_SOURCE_AUTHORITY/, 'runtime state reports splat source authority');
 assert.match(core, /boundarySplatCapacity:\s*BOUNDARY_SPLAT_CAPACITY/, 'runtime state reports the hard primitive capacity');
 assert.match(core, /boundarySplatCandidateCount/, 'runtime state exposes candidate-count evidence');
