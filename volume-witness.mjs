@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
 import { deflateSync, inflateSync as zlibInflateSync } from 'node:zlib';
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { execFileSync, spawn } from 'node:child_process';
 import { randomInt } from 'node:crypto';
@@ -22,7 +22,7 @@ const windowSize = args.get('--window-size') || '1280,960';
 const fullScreenshot = args.has('--full-screenshot')
   ? resolve(args.get('--full-screenshot') || out.replace(/\.png$/i, '.full.png'))
   : '';
-const VALID_EVIDENCE_MODES = new Set(['fire-volume', 'performance', 'pyro-material', 'no-fire-volume', 'receiver-support', 'receiver-light-isolate']);
+const VALID_EVIDENCE_MODES = new Set(['fire-volume', 'performance', 'pyro-material', 'no-fire-volume', 'receiver-support', 'receiver-light-isolate', 'receiver-light-brick-wall']);
 const evidenceMode = args.get('--evidence-mode') || 'fire-volume';
 if (!VALID_EVIDENCE_MODES.has(evidenceMode)) {
   throw new Error(`Unknown witness evidence mode: ${evidenceMode}`);
@@ -32,10 +32,12 @@ const expectsPyroMaterialEvidence = evidenceMode === 'pyro-material';
 const expectsNoFireVolumeEvidence = evidenceMode === 'no-fire-volume';
 const expectsReceiverSupportEvidence = evidenceMode === 'receiver-support';
 const expectsReceiverLightIsolateEvidence = evidenceMode === 'receiver-light-isolate';
+const expectsReceiverLightBrickWallEvidence = evidenceMode === 'receiver-light-brick-wall';
+const expectsRenderedReceiverLightEvidence = expectsReceiverLightIsolateEvidence || expectsReceiverLightBrickWallEvidence;
 const visualEvidenceMode = expectsNoFireVolumeEvidence
   ? 'no-fire-volume-signal'
-  : (expectsReceiverLightIsolateEvidence
-      ? 'tier2-receiver-light-isolate'
+  : (expectsRenderedReceiverLightEvidence
+      ? (expectsReceiverLightBrickWallEvidence ? 'tier2-receiver-light-brick-wall' : 'tier2-receiver-light-isolate')
       : (expectsReceiverSupportEvidence
       ? 'receiver-support-sim-readback'
       : (expectsPyroMaterialEvidence ? 'pyro-material-coupled-volume-signal' : (expectsPerformanceVolumeEvidence ? 'performance-volume-signal' : 'fire-volume'))));
@@ -77,6 +79,11 @@ function normalizeRuntimeQuality(value) {
   if (['impostor', 'imposter', 'emergency', 'fallback', 'prerender'].includes(normalized)) return 'impostor';
   if (normalized === 'auto') return 'auto';
   return 'live_high';
+}
+
+function normalizeVolumeSceneContext(value) {
+  const normalized = String(value || 'none').trim().toLowerCase().replace(/-/g, '_');
+  return normalized === 'brick_wall' ? 'brick_wall' : 'none';
 }
 
 function runtimeQualityFromPressure(requested, gpuPressure) {
@@ -304,6 +311,43 @@ function expectedTallPlumePressureTierStrategy(volumeScene, pressureStrategy) {
 }
 
 const routeParams = new URL(url).searchParams;
+const expectedVolumeSceneContext = normalizeVolumeSceneContext(routeParams.get('volume_scene_context'));
+const expectsVolumeBrickWallSceneContext = expectedVolumeSceneContext === 'brick_wall';
+const BRICK_WALL_GREENROOM_SOURCE_PATH = '/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-trellis-crumbled-brick-wall-fast8-350k-4k-20260701Tasset-probe/output.glb';
+const BRICK_WALL_STATIC_ROUTE_PATH = 'local-assets/greenroom/kaminos-trellis-crumbled-brick-wall-fast8-350k-4k-20260701Tasset-probe/output.glb';
+const BRICK_WALL_STATIC_ROUTE_URL = '/local-assets/greenroom/kaminos-trellis-crumbled-brick-wall-fast8-350k-4k-20260701Tasset-probe/output.glb';
+
+function ensureBrickWallLocalAssetMount() {
+  const mountPath = resolve(BRICK_WALL_STATIC_ROUTE_PATH);
+  if (!existsSync(BRICK_WALL_GREENROOM_SOURCE_PATH)) {
+    throw new Error(`brick-wall Greenroom GLB source is missing: ${BRICK_WALL_GREENROOM_SOURCE_PATH}`);
+  }
+  mkdirSync(dirname(mountPath), { recursive: true });
+  if (existsSync(mountPath)) {
+    const stat = lstatSync(mountPath);
+    if (stat.isSymbolicLink()) {
+      const target = readlinkSync(mountPath);
+      if (target !== BRICK_WALL_GREENROOM_SOURCE_PATH) {
+        unlinkSync(mountPath);
+        symlinkSync(BRICK_WALL_GREENROOM_SOURCE_PATH, mountPath);
+      }
+    } else if (!stat.isFile() || stat.size <= 0) {
+      throw new Error(`brick-wall local static mount is not a usable file or symlink: ${mountPath}`);
+    }
+  } else {
+    symlinkSync(BRICK_WALL_GREENROOM_SOURCE_PATH, mountPath);
+  }
+  const mountedStat = lstatSync(mountPath);
+  return {
+    identity: 'brick-wall-greenroom-local-static-mount-v0',
+    accepted: true,
+    sourcePath: BRICK_WALL_GREENROOM_SOURCE_PATH,
+    mountPath,
+    routeUrl: BRICK_WALL_STATIC_ROUTE_URL,
+    mountKind: mountedStat.isSymbolicLink() ? 'symlink' : 'file',
+    sourceSizeBytes: lstatSync(BRICK_WALL_GREENROOM_SOURCE_PATH).size,
+  };
+}
 const VOLUME_SCENE_PRESETS = {
   canonical_plume: {
     fireScale: 0.86,
@@ -1501,6 +1545,12 @@ async function main() {
   mkdirSync(dirname(out), { recursive: true });
   mkdirSync(dirname(reportPath), { recursive: true });
 
+  let phase = 'setup';
+  let receiverLightDebug = null;
+  let receiverLightEvidence = null;
+  let sceneContextDebug = null;
+  let sceneContextEvidence = null;
+  let sceneContextLocalAssetMount = null;
   const proc = spawn(chrome, [
     `--remote-debugging-port=${port}`,
     `--user-data-dir=${userDataDir}`,
@@ -1511,10 +1561,12 @@ async function main() {
     url,
   ], { stdio: 'ignore' });
 
-  let phase = 'launch';
-  let receiverLightDebug = null;
-  let receiverLightEvidence = null;
   try {
+    if (expectsVolumeBrickWallSceneContext) {
+      phase = 'brick-wall-local-asset-mount';
+      sceneContextLocalAssetMount = ensureBrickWallLocalAssetMount();
+    }
+    phase = 'launch';
     await waitForCdp();
     phase = 'target';
     const targets = await cdpFetch('/json/list');
@@ -1567,6 +1619,56 @@ async function main() {
     const bridge = bridgeEval.result.value;
     assert.equal(bridge?.identity, 'volume-main-renderer-bridge-v0', 'wrong volume main-renderer bridge identity');
     assert.equal(bridge?.textureSource, 'kaminos-volume-canvas', 'volume bridge is not sourcing the native volume canvas');
+    if (expectsVolumeBrickWallSceneContext) {
+      for (let i = 0; i < 80; i++) {
+        const sceneContextEval = await wsRequest(ws, 'Runtime.evaluate', {
+          expression: 'window.__kaminosVolumeSceneContext?.debugState?.() ?? null',
+          returnByValue: true,
+        });
+        sceneContextDebug = sceneContextEval.result.value || null;
+        if (sceneContextDebug?.loadState === 'loaded' || sceneContextDebug?.loadState === 'failed') break;
+        await delay(250);
+      }
+    } else {
+      const sceneContextEval = await wsRequest(ws, 'Runtime.evaluate', {
+        expression: 'window.__kaminosVolumeSceneContext?.debugState?.() ?? null',
+        returnByValue: true,
+      });
+      sceneContextDebug = sceneContextEval.result.value || null;
+    }
+    sceneContextEvidence = {
+      identity: expectsVolumeBrickWallSceneContext ? 'volume-scene-context-brick-wall-v0' : null,
+      accepted: Boolean(
+        sceneContextDebug &&
+        sceneContextDebug.identity === 'volume-scene-context-brick-wall-v0' &&
+        sceneContextDebug.effectiveContext === 'brick_wall' &&
+        sceneContextDebug.visible === true &&
+        sceneContextDebug.assetIdentity === 'trellis-fast8-350k-4k-brick-wall-glb-v0' &&
+        sceneContextDebug.backgroundTruth === 'greenroom-glb-three-meshes-not-image-plate-v0' &&
+        sceneContextDebug.ambientOcclusion === false &&
+        sceneContextDebug.globalGroundPlaneSuppressed === true &&
+        sceneContextDebug.loadState === 'loaded' &&
+        sceneContextDebug.assetEffectiveServedUrl === BRICK_WALL_STATIC_ROUTE_URL &&
+        Number(sceneContextDebug.meshCount || 0) >= 2
+      ),
+      expectedContext: expectedVolumeSceneContext,
+      localAssetMount: sceneContextLocalAssetMount,
+      debug: sceneContextDebug,
+      bridgeSceneContext: bridge?.sceneContext || null,
+    };
+    if (expectsVolumeBrickWallSceneContext) {
+      if (!sceneContextEvidence.accepted) {
+        throw new Error(`brick-wall scene context receipt not accepted: ${JSON.stringify(sceneContextEvidence)}`);
+      }
+      if (
+        bridge?.sceneContextCssComposite !== true ||
+        bridge?.nativeCanvasMixBlendMode !== 'screen' ||
+        bridge?.nativeCanvasOpacity === '0' ||
+        bridge?.sceneContext?.effectiveContext !== 'brick_wall'
+      ) {
+        throw new Error(`volume bridge did not truthfully report brick-wall scene-context CSS screen composition: ${JSON.stringify(bridge)}`);
+      }
+    }
     const receiverLightEval = await wsRequest(ws, 'Runtime.evaluate', {
       expression: 'window.kaminosTier2ReceiverLightDebugState?.() ?? null',
       returnByValue: true,
@@ -1574,7 +1676,7 @@ async function main() {
     receiverLightDebug = receiverLightEval.result.value || null;
     let receiverLightDebugLater = null;
     receiverLightEvidence = {
-      identity: expectsReceiverLightIsolateEvidence ? 'tier2-receiver-light-isolate' : null,
+      identity: expectsRenderedReceiverLightEvidence ? (expectsReceiverLightBrickWallEvidence ? 'tier2-receiver-light-brick-wall' : 'tier2-receiver-light-isolate') : null,
       accepted: Boolean(
         receiverLightDebug &&
         receiverLightDebug.identity === 'tier2-opt-in-receiver-buffer-light-pass-v0' &&
@@ -1596,12 +1698,13 @@ async function main() {
       debug: receiverLightDebug,
       debugLater: null,
     };
-    if (expectsReceiverLightIsolateEvidence) {
+    if (expectsRenderedReceiverLightEvidence) {
       if (!receiverLightDebug || receiverLightDebug.identity !== 'tier2-opt-in-receiver-buffer-light-pass-v0') {
         throw new Error(`wrong rendered Tier 2 receiver-light identity: ${JSON.stringify(receiverLightDebug)}`);
       }
-      if (!receiverLightEvidence.accepted || receiverLightDebug.active !== true || receiverLightDebug.isolate !== true) {
-        throw new Error(`Tier 2 receiver-light isolate receipt not accepted: ${JSON.stringify(receiverLightEvidence)}`);
+      const expectedIsolate = expectsReceiverLightIsolateEvidence;
+      if (!receiverLightEvidence.accepted || receiverLightDebug.active !== true || receiverLightDebug.isolate !== expectedIsolate) {
+        throw new Error(`Tier 2 receiver-light receipt not accepted: ${JSON.stringify(receiverLightEvidence)}`);
       }
       await delay(420);
       const receiverLightLaterEval = await wsRequest(ws, 'Runtime.evaluate', {
@@ -2026,13 +2129,13 @@ async function main() {
     const acceptsRawCarrierPyroPaint =
       expectsPyroMaterialEvidence &&
       pyroRawCarrierPaintEvidence.acceptsLowStockFireLayer;
-    if (!expectsCanonicalPlumeProof && !expectsFuelStarvedTallPlume && !expectsNoFireVolumeEvidence && !expectsReceiverSupportEvidence && !expectsReceiverLightIsolateEvidence && (!Number.isFinite(sample.simReadback.fireLayerMean) || sample.simReadback.fireLayerMean <= 0.0005) && !acceptsRawCarrierPyroPaint) {
+    if (!expectsCanonicalPlumeProof && !expectsFuelStarvedTallPlume && !expectsNoFireVolumeEvidence && !expectsReceiverSupportEvidence && !expectsReceiverLightIsolateEvidence && !expectsReceiverLightBrickWallEvidence && (!Number.isFinite(sample.simReadback.fireLayerMean) || sample.simReadback.fireLayerMean <= 0.0005) && !acceptsRawCarrierPyroPaint) {
       throw new Error(`GPU sim readback does not show a transported fire layer or raw-carrier Pyro paint evidence: ${JSON.stringify({
         simReadback: sample.simReadback,
         pyroRawCarrierPaintEvidence,
       })}`);
     }
-    if (!expectsCanonicalPlumeProof && !expectsFuelStarvedTallPlume && !expectsNoFireVolumeEvidence && !expectsReceiverSupportEvidence && !expectsReceiverLightIsolateEvidence && (!Number.isFinite(sample.simReadback.radianceMean) || sample.simReadback.radianceMean <= 0.0005)) {
+    if (!expectsCanonicalPlumeProof && !expectsFuelStarvedTallPlume && !expectsNoFireVolumeEvidence && !expectsReceiverSupportEvidence && !expectsReceiverLightIsolateEvidence && !expectsReceiverLightBrickWallEvidence && (!Number.isFinite(sample.simReadback.radianceMean) || sample.simReadback.radianceMean <= 0.0005)) {
       throw new Error(`GPU sim readback does not show fire radiance evidence: ${JSON.stringify(sample.simReadback)}`);
     }
     if (expectedVolumeScene === 'tall_plume') {
@@ -2060,7 +2163,7 @@ async function main() {
             extinctionMean: sample.simReadback.extinctionMean,
           })}`);
         }
-      } else if (!expectsReceiverSupportEvidence && !expectsReceiverLightIsolateEvidence && (
+      } else if (!expectsReceiverSupportEvidence && !expectsReceiverLightIsolateEvidence && !expectsReceiverLightBrickWallEvidence && (
         sample.simReadback.fuelMean <= 0.0005 ||
         sample.simReadback.reactionMean <= 0.0005 ||
         sample.simReadback.fuelConsumptionMean <= 0.00001 ||
@@ -2496,12 +2599,12 @@ async function main() {
       if (mainRendererMetrics.litPixels < 250 || mainRendererMetrics.meanLuma < 1.0) {
         throw new Error(`main renderer screenshot missing receiver-support route output: ${JSON.stringify(mainRendererMetrics)}`);
       }
-    } else if (expectsReceiverLightIsolateEvidence) {
+    } else if (expectsRenderedReceiverLightEvidence) {
       if (!receiverLightEvidence.accepted) {
-        throw new Error(`receiver-light isolate evidence mode missing accepted rendered receiver-light receipt: ${JSON.stringify(receiverLightEvidence)}`);
+        throw new Error(`receiver-light evidence mode missing accepted rendered receiver-light receipt: ${JSON.stringify(receiverLightEvidence)}`);
       }
       if (mainRendererMetrics.litPixels < 500 || mainRendererMetrics.meanLuma < 2.0) {
-        throw new Error(`main renderer screenshot missing rendered receiver-light isolate: ${JSON.stringify(mainRendererMetrics)}`);
+        throw new Error(`main renderer screenshot missing rendered receiver-light signal: ${JSON.stringify(mainRendererMetrics)}`);
       }
     } else if (expectsPyroMaterialEvidence) {
       if (mainRendererMetrics.litPixels < 1500 || mainRendererMetrics.meanLuma < 8) {
@@ -2574,9 +2677,9 @@ async function main() {
           receiverSupportSignalPixels,
         })}`);
       }
-    } else if (expectsReceiverLightIsolateEvidence) {
+    } else if (expectsRenderedReceiverLightEvidence) {
       if (!receiverLightEvidence.accepted) {
-        throw new Error(`receiver-light isolate missing accepted rendered receiver-light evidence: ${JSON.stringify(receiverLightEvidence)}`);
+        throw new Error(`receiver-light evidence missing accepted rendered receiver-light receipt: ${JSON.stringify(receiverLightEvidence)}`);
       }
     } else if (expectsPyroMaterialEvidence) {
       const coupling = sample.pyroMaterialRendererCoupling || state.pyroMaterialRendererCoupling || {};
@@ -2655,6 +2758,8 @@ async function main() {
       noFireEvidenceMode: expectsNoFireVolumeEvidence ? 'no-fire-volume-signal' : null,
       receiverSupportEvidence,
       receiverLightEvidence,
+      sceneContextEvidence,
+      sceneContextLocalAssetMount,
       pyroMaterialEvidenceMode: expectsPyroMaterialEvidence ? 'pyro-material-coupled-volume-signal' : null,
       pyroRawCarrierPaintEvidence,
       performanceVisualWarnings,
@@ -2831,6 +2936,10 @@ async function main() {
       expectsNoFireVolumeEvidence,
       expectsPyroMaterialEvidence,
       expectsReceiverLightIsolateEvidence,
+      expectsReceiverLightBrickWallEvidence,
+      expectsRenderedReceiverLightEvidence,
+      expectedVolumeSceneContext,
+      sceneContextEvidence,
       timing: sample.timing || stateTiming,
       timingEvidenceSource: (sample.timing || stateTiming).timingEvidenceSource,
       timingDisclaimer: (sample.timing || stateTiming).timingDisclaimer,
@@ -2875,9 +2984,29 @@ async function main() {
           expression: 'window.kaminosTier2ReceiverLightDebugState?.() ?? null',
           returnByValue: true,
         });
+        const sceneContextEval = await wsRequest(ws, 'Runtime.evaluate', {
+          expression: 'window.__kaminosVolumeSceneContext?.debugState?.() ?? null',
+          returnByValue: true,
+        });
+        sceneContextDebug = sceneContextEval.result.value || sceneContextDebug;
+        sceneContextEvidence = sceneContextDebug ? {
+          identity: expectsVolumeBrickWallSceneContext ? 'volume-scene-context-brick-wall-v0' : null,
+          accepted: Boolean(
+            sceneContextDebug.identity === 'volume-scene-context-brick-wall-v0' &&
+            sceneContextDebug.effectiveContext === 'brick_wall' &&
+            sceneContextDebug.visible === true &&
+            sceneContextDebug.assetIdentity === 'trellis-fast8-350k-4k-brick-wall-glb-v0' &&
+            sceneContextDebug.backgroundTruth === 'greenroom-glb-three-meshes-not-image-plate-v0' &&
+            sceneContextDebug.loadState === 'loaded' &&
+            sceneContextDebug.assetEffectiveServedUrl === BRICK_WALL_STATIC_ROUTE_URL
+          ),
+          expectedContext: expectedVolumeSceneContext,
+          localAssetMount: sceneContextLocalAssetMount,
+          debug: sceneContextDebug,
+        } : sceneContextEvidence;
         receiverLightDebug = receiverLightEval.result.value || receiverLightDebug;
         receiverLightEvidence = receiverLightDebug ? {
-          identity: expectsReceiverLightIsolateEvidence ? 'tier2-receiver-light-isolate' : null,
+          identity: expectsRenderedReceiverLightEvidence ? (expectsReceiverLightBrickWallEvidence ? 'tier2-receiver-light-brick-wall' : 'tier2-receiver-light-isolate') : null,
           accepted: Boolean(
             receiverLightDebug.identity === 'tier2-opt-in-receiver-buffer-light-pass-v0' &&
             receiverLightDebug.receiverMaskAuthority === 'opt-in-receiver-buffer-required-v0' &&
@@ -2913,6 +3042,8 @@ async function main() {
       error: err?.message || String(err),
       state,
       receiverLightEvidence,
+      sceneContextEvidence,
+      sceneContextLocalAssetMount,
       screenshot: out,
       fullScreenshot: fullScreenshot || null,
     };
