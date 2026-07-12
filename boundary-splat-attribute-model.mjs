@@ -203,3 +203,31 @@ export function compileBoundarySplatAttributeModel(model) {
     wgsl: generateWgsl({ identity, hiddenSize: model.hiddenSize, outputRanges: model.outputRanges, packedWeights }),
   };
 }
+
+export function evaluateBoundarySplatAttributeModel(model, featureRows) {
+  compileBoundarySplatAttributeModel(model);
+  if (!Array.isArray(featureRows)) throw new Error('feature rows must be an array');
+  const inputSize = BOUNDARY_SPLAT_ATTRIBUTE_FEATURES.length;
+  const outputSize = BOUNDARY_SPLAT_ATTRIBUTE_OUTPUTS.length;
+  const first = model.layers[0];
+  const second = model.layers[1];
+  return featureRows.map((features, rowIndex) => {
+    assertFiniteArray(features, inputSize, `feature row ${rowIndex}`);
+    const hidden = Array.from({ length: model.hiddenSize }, (_, hiddenIndex) => {
+      let value = first.bias[hiddenIndex];
+      for (let inputIndex = 0; inputIndex < inputSize; inputIndex += 1) {
+        value += features[inputIndex] * first.weights[hiddenIndex * inputSize + inputIndex];
+      }
+      return Math.max(0, value);
+    });
+    return Array.from({ length: outputSize }, (_, outputIndex) => {
+      let value = second.bias[outputIndex];
+      for (let hiddenIndex = 0; hiddenIndex < model.hiddenSize; hiddenIndex += 1) {
+        value += hidden[hiddenIndex] * second.weights[outputIndex * model.hiddenSize + hiddenIndex];
+      }
+      const sigmoid = 1 / (1 + Math.exp(-Math.max(-16, Math.min(16, value))));
+      const [lower, upper] = model.outputRanges[outputIndex];
+      return Math.max(lower, Math.min(upper, lower + (upper - lower) * sigmoid));
+    });
+  });
+}

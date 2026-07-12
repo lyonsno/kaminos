@@ -11,6 +11,7 @@ assert.match(source, /compileBoundarySplatAttributeModel/, 'compiler CLI must co
 const root = await mkdtemp(join(tmpdir(), 'kaminos-splat-attribute-compile-'));
 try {
   const inputPath = join(root, 'model.json');
+  const parityPath = join(root, 'parity.json');
   const outputDir = join(root, 'compiled');
   const features = [
     'sidecar.support', 'sidecar.coverage', 'sidecar.ridge', 'sidecar.footprint',
@@ -31,7 +32,17 @@ try {
       { inputSize: 1, outputSize: 6, activation: 'linear', weights: Array(6).fill(0), bias: Array(6).fill(0) },
     ],
   }));
-  const result = spawnSync(process.execPath, [cliUrl.pathname, '--input', inputPath, '--out-dir', outputDir], { encoding: 'utf8' });
+  await writeFile(parityPath, JSON.stringify({
+    schema: 'kaminos-boundary-splat-attribute-parity-v0',
+    features: [Array(16).fill(0)],
+    outputs: [[0.5, 0.5, 0.5, 0.0405, 3.1, 3.1]],
+  }));
+  const result = spawnSync(process.execPath, [
+    cliUrl.pathname,
+    '--input', inputPath,
+    '--out-dir', outputDir,
+    '--parity-samples', parityPath,
+  ], { encoding: 'utf8' });
   assert.equal(result.status, 0, `compiler CLI passes: ${result.stderr || result.stdout}`);
   const receipt = JSON.parse(await readFile(join(outputDir, 'compiled-model.json'), 'utf8'));
   assert.equal(receipt.schema, 'kaminos-boundary-splat-attribute-compiled-v0');
@@ -40,6 +51,8 @@ try {
   assert.equal(receipt.inputSize, 16);
   assert.equal(receipt.hiddenSize, 1);
   assert.equal(receipt.outputSize, 6);
+  assert.equal(receipt.parity.sampleCount, 1);
+  assert.ok(receipt.parity.maxAbsoluteError < 1e-6);
   assert.equal(receipt.wgsl.path, join(outputDir, 'boundary-splat-attribute-model.wgsl'));
   assert.equal(receipt.weights.path, join(outputDir, 'boundary-splat-attribute-weights.f32'));
   assert.ok((await stat(receipt.wgsl.path)).size > 0);

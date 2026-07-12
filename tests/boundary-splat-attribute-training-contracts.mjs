@@ -8,6 +8,7 @@ const scriptUrl = new URL('../boundary-splat-attribute-mlx.py', import.meta.url)
 const source = await readFile(scriptUrl, 'utf8').catch(() => '');
 assert.match(source, /SCHEMA\s*=\s*["']kaminos\.boundary-splat-attribute-training\.v0/, 'training script declares a durable report schema');
 assert.match(source, /compile-boundary-splat-attribute-model\.mjs/, 'successful training automatically compiles browser-consumable WGSL and packed weights');
+assert.match(source, /parity-samples\.json/, 'training preserves MLX predictions for compiler-side export parity');
 
 const outputDir = await mkdtemp(join(tmpdir(), 'kaminos-splat-attribute-probe-'));
 try {

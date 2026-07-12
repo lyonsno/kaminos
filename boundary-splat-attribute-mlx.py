@@ -221,6 +221,17 @@ def main():
     }
     model_path = output_dir / "model-artifact.json"
     write_json(model_path, model_artifact)
+    parity_count = min(64, eval_count)
+    parity_path = output_dir / "parity-samples.json"
+    write_json(
+        parity_path,
+        {
+            "schema": "kaminos-boundary-splat-attribute-parity-v0",
+            "features": features[eval_indices[:parity_count]].astype(float).tolist(),
+            "outputs": eval_prediction[:parity_count].astype(float).tolist(),
+            "authority": "mlx-eval-prediction-before-json-export-v0",
+        },
+    )
     compiler_path = Path(__file__).with_name("compile-boundary-splat-attribute-model.mjs")
     compiled_dir = output_dir / "compiled"
     node_path = shutil.which("node")
@@ -233,7 +244,16 @@ def main():
         write_json(output_dir / "training-report.json", report)
         raise RuntimeError(report["error"])
     compile_result = subprocess.run(
-        [node_path, str(compiler_path), "--input", str(model_path), "--out-dir", str(compiled_dir)],
+        [
+            node_path,
+            str(compiler_path),
+            "--input",
+            str(model_path),
+            "--out-dir",
+            str(compiled_dir),
+            "--parity-samples",
+            str(parity_path),
+        ],
         capture_output=True,
         text=True,
         check=False,

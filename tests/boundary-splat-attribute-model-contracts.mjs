@@ -11,6 +11,7 @@ const {
   BOUNDARY_SPLAT_ATTRIBUTE_OUTPUTS,
   BOUNDARY_SPLAT_ATTRIBUTE_SCHEMA,
   compileBoundarySplatAttributeModel,
+  evaluateBoundarySplatAttributeModel,
 } = await import(moduleUrl);
 
 const features = [
@@ -86,6 +87,15 @@ assert.match(compiled.wgsl, /const BOUNDARY_SPLAT_ATTRIBUTE_HIDDEN_SIZE: u32 = 3
 assert.match(compiled.wgsl, /const BOUNDARY_SPLAT_ATTRIBUTE_OUTPUT_SIZE: u32 = 6u;/);
 assert.match(compiled.wgsl, /fn inferBoundarySplatAttributes\(/, 'WGSL exposes one named inference function');
 assert.match(compiled.wgsl, /clamp\(/, 'generated outputs are bounded by declared ranges');
+const evaluated = evaluateBoundarySplatAttributeModel(model, [Array(features.length).fill(0.25)]);
+assert.equal(evaluated.length, 1);
+assert.equal(evaluated[0].length, outputs.length);
+assert.ok(evaluated[0].every(Number.isFinite), 'CPU artifact evaluator produces finite parity outputs');
+assert.throws(
+  () => evaluateBoundarySplatAttributeModel(model, [[Number.NaN, ...Array(features.length - 1).fill(0)]]),
+  /finite/i,
+  'parity evaluator rejects non-finite features',
+);
 
 const reordered = structuredClone(model);
 reordered.features = [...features].reverse();
