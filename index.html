@@ -2091,6 +2091,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
       <select id="volume-smoke-domain-mode" class="select-input">
         <option value="single" selected>Single volume</option>
         <option value="cascaded-uniform-scaffold">near-field + far smoke scaffold</option>
+        <option value="coupled-near-fire-far-smoke-v0">coupled near-fire + far-smoke input</option>
       </select>
       <span class="slider-val" id="volume-smoke-domain-mode-val">Single volume</span>
     </div>
@@ -11689,6 +11690,9 @@ function normalizeVolumePressureMode(value) {
 
 function normalizeVolumeSmokeDomainMode(value) {
   const mode = String(value || 'single').toLowerCase();
+  if (mode === 'coupled-near-fire-far-smoke-v0' || mode === 'coupled' || mode === 'one-way') {
+    return 'coupled-near-fire-far-smoke-v0';
+  }
   if (mode === 'cascaded' || mode === 'cascaded-uniform' || mode === 'cascaded-uniform-scaffold' || mode === 'near-far' || mode === 'near-field-far-smoke') {
     return 'cascaded-uniform-scaffold';
   }
@@ -11698,12 +11702,24 @@ function normalizeVolumeSmokeDomainMode(value) {
 function volumeSmokeDomainControlsForMode(mode, values = {}) {
   const smokeDomainMode = normalizeVolumeSmokeDomainMode(mode);
   const nearGrid = Math.max(32, Math.min(160, Math.round(Number(values.smokeDomainNearGrid) || Number(values.resolution) || 96)));
+  const farGrid = Math.max(24, Math.min(96, Math.round(Number(values.smokeDomainFarGrid) || 48)));
+  if (smokeDomainMode === 'coupled-near-fire-far-smoke-v0') {
+    return {
+      smokeDomainMode,
+      smokeDomainStrategy: 'coupled-near-fire-far-smoke-v0',
+      smokeDomainNearGrid: nearGrid,
+      smokeDomainFarGrid: farGrid,
+      smokeDomainHandoffPolicy: 'near-fire-to-far-smoke-one-way-v0',
+      smokeDomainHandoffStatus: 'gpu-transfer-live-far-input-staging',
+      smokeDomainProofBoundary: 'gpu-outlet-and-persistent-far-input-no-independent-far-solver-v0',
+    };
+  }
   if (smokeDomainMode === 'cascaded-uniform-scaffold') {
     return {
       smokeDomainMode,
       smokeDomainStrategy: 'cascaded-uniform-near-field-far-smoke-scaffold-v0',
       smokeDomainNearGrid: nearGrid,
-      smokeDomainFarGrid: Math.max(24, Math.min(96, Math.round(Number(values.smokeDomainFarGrid) || 48))),
+      smokeDomainFarGrid: farGrid,
       smokeDomainHandoffPolicy: 'no-physical-handoff-debug-scaffold-v0',
       smokeDomainHandoffStatus: 'scaffold-only',
       smokeDomainProofBoundary: 'route-control-debug-identity-only-no-far-smoke-solver-v0',
@@ -17112,7 +17128,9 @@ function updateVolumeControlLabels() {
   if (smokeDomainControls.smokeDomainMode !== document.getElementById('volume-smoke-domain-mode').value) {
     setVolumeControlValue('volume-smoke-domain-mode', smokeDomainControls.smokeDomainMode);
   }
-  document.getElementById('volume-smoke-domain-mode-val').textContent = smokeDomainControls.smokeDomainMode === 'cascaded-uniform-scaffold' ? 'Near + far scaffold' : 'Single volume';
+  document.getElementById('volume-smoke-domain-mode-val').textContent = smokeDomainControls.smokeDomainMode === 'coupled-near-fire-far-smoke-v0'
+    ? 'One-way coupled'
+    : (smokeDomainControls.smokeDomainMode === 'cascaded-uniform-scaffold' ? 'Near + far scaffold' : 'Single volume');
   document.getElementById('volume-canonical-spread-val').textContent = c.canonicalSpread.toFixed(2);
   document.getElementById('volume-canonical-centerline-val').textContent = c.canonicalCenterline.toFixed(2);
   document.getElementById('volume-canonical-body-balance-val').textContent = c.canonicalBodyBalance.toFixed(2);
@@ -18093,6 +18111,8 @@ async function initKaminosVolumeRoute() {
   document.getElementById('volume-boundary-sidecar-source')?.addEventListener('change', syncControls);
   document.getElementById('volume-boundary-sidecar-view')?.addEventListener('input', syncControls);
   document.getElementById('volume-boundary-sidecar-view')?.addEventListener('change', syncControls);
+  document.getElementById('volume-smoke-domain-mode')?.addEventListener('input', syncControls);
+  document.getElementById('volume-smoke-domain-mode')?.addEventListener('change', syncControls);
   for (const field of REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS) {
     document.getElementById(field.id)?.addEventListener('input', syncControls);
     document.getElementById(field.id)?.addEventListener('change', syncControls);

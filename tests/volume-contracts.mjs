@@ -623,6 +623,9 @@ assert.match(index, /simProfile/, 'Volume controls carry sim profile request ide
 assert.match(index, /volume_smoke_domain_mode/, 'URL route can select the smoke domain strategy for near-field/far-smoke probes');
 assert.match(index, /volume-smoke-domain-mode/, 'Volume cockpit exposes the smoke domain mode selector');
 assert.match(index, /near-field \+ far smoke scaffold/, 'Volume cockpit names the cascaded domain scaffold without claiming solver handoff');
+assert.match(index, /coupled near-fire \+ far-smoke input/, 'Volume cockpit exposes the real one-way coupled-domain experiment separately from the scaffold');
+assert.match(index, /coupled-near-fire-far-smoke-v0/, 'URL route can select the one-way coupled near-fire/far-smoke experiment');
+assert.match(index, /getElementById\('volume-smoke-domain-mode'\)\?\.addEventListener\('change', syncControls\)/, 'Smoke domain selector applies live changes through the shared volume control loop');
 assert.match(index, /smokeDomainMode/, 'Volume controls carry smoke domain mode identity into the renderer');
 assert.match(index, /smokeDomainNearGrid/, 'Volume controls carry near-field domain grid identity into the renderer');
 assert.match(index, /smokeDomainFarGrid/, 'Volume controls carry far-smoke domain grid identity into the renderer');
@@ -1616,6 +1619,18 @@ assert.match(core, /PRESSURE_PROJECTION_READ_STRATEGY_COMPOSITE\s*=\s*'composite
 assert.match(core, /PRESSURE_PROJECTION_READ_STRATEGY_SINGLE_BUFFER\s*=\s*'single-pressure-buffer-read-v0'/, 'volume core names single-buffer pressure projection reads');
 assert.match(core, /SMOKE_DOMAIN_STRATEGY_CASCADED_UNIFORM_SCAFFOLD\s*=\s*'cascaded-uniform-near-field-far-smoke-scaffold-v0'/, 'volume core names the cascaded uniform near-field/far-smoke scaffold');
 assert.match(core, /SMOKE_DOMAIN_HANDOFF_POLICY_SCAFFOLD\s*=\s*'no-physical-handoff-debug-scaffold-v0'/, 'domain scaffold explicitly says it has no physical far-smoke handoff yet');
+assert.match(core, /SMOKE_DOMAIN_STRATEGY_COUPLED_ONE_WAY\s*=\s*'coupled-near-fire-far-smoke-v0'/, 'volume core names the coupled near-fire/far-smoke strategy');
+assert.match(core, /SMOKE_DOMAIN_HANDOFF_POLICY_ONE_WAY\s*=\s*'near-fire-to-far-smoke-one-way-v0'/, 'coupled domains name their one-way transfer authority');
+assert.match(core, /smokeDomainTransferBuffer/, 'coupled domains allocate a distinct near-fire outlet transfer buffer');
+assert.match(core, /smokeDomainFarStateBuffers/, 'coupled domains allocate persistent far-smoke input state separately from the outlet transfer');
+assert.match(core, /fn csSmokeDomainOutlet/, 'coupled domains have a GPU producer that samples the near-domain outlet');
+assert.match(core, /fn csSmokeDomainFarInput/, 'coupled domains have a GPU consumer that persists transfer into far-smoke input state');
+assert.match(core, /encodeSmokeDomainTransfer/, 'the frame encoder runs the coupled-domain producer and consumer');
+assert.match(core, /smokeDomainTransferActiveCells/, 'debug state exposes measured nonzero near-to-far transfer activity');
+assert.match(core, /smokeDomainFarInputActiveCells/, 'debug state independently proves the far-input consumer persisted nonzero smoke');
+assert.match(core, /const readbackGeneration = smokeDomainTransferGeneration/, 'far-input counter readback captures its resource generation before async mapping');
+assert.match(core, /const readbackBuffer = smokeDomainTransferCounterReadbackBuffer/, 'far-input counter readback holds the exact mapped buffer instead of dereferencing a replacement global');
+assert.match(core, /gpu-outlet-and-persistent-far-input-no-independent-far-solver-v0/, 'coupled-domain proof boundary does not claim a far-smoke solver');
 assert.match(core, /normalizeSmokeDomainControls/, 'volume core normalizes smoke domain split controls');
 assert.match(core, /smokeDomainStrategy/, 'volume debug state exposes effective smoke domain strategy');
 assert.match(core, /smokeDomainHandoffStatus/, 'volume debug state exposes whether far-smoke handoff is real or scaffolded');

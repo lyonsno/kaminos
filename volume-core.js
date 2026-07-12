@@ -414,8 +414,12 @@ const PRESSURE_PROJECTION_READ_STRATEGY_COMPOSITE = 'composite-pressure-tier-rea
 const PRESSURE_PROJECTION_READ_STRATEGY_SINGLE_BUFFER = 'single-pressure-buffer-read-v0';
 const SMOKE_DOMAIN_STRATEGY_SINGLE_UNIFORM = 'single-uniform-volume-v0';
 const SMOKE_DOMAIN_STRATEGY_CASCADED_UNIFORM_SCAFFOLD = 'cascaded-uniform-near-field-far-smoke-scaffold-v0';
+const SMOKE_DOMAIN_STRATEGY_COUPLED_ONE_WAY = 'coupled-near-fire-far-smoke-v0';
 const SMOKE_DOMAIN_HANDOFF_POLICY_SCAFFOLD = 'no-physical-handoff-debug-scaffold-v0';
+const SMOKE_DOMAIN_HANDOFF_POLICY_ONE_WAY = 'near-fire-to-far-smoke-one-way-v0';
 const SMOKE_DOMAIN_PROOF_BOUNDARY_SCAFFOLD = 'route-control-debug-identity-only-no-far-smoke-solver-v0';
+const SMOKE_DOMAIN_PROOF_BOUNDARY_COUPLED = 'gpu-outlet-and-persistent-far-input-no-independent-far-solver-v0';
+const SMOKE_DOMAIN_TRANSFER_READBACK_CADENCE = 30;
 const PRESSURE_STRATEGY_SPATIAL_TIERS = 'spatial_tiers';
 const PRESSURE_STRATEGY_ACTIVITY_TIERS = 'activity_tiers';
 const PRESSURE_STRATEGY_GLOBAL = 'global';
@@ -462,6 +466,66 @@ function externalEmitterBufferBytes() {
 
 function scalarActivityCueBufferBytes(grid = DEFAULT_GRID_SIZE) {
   return gridCellCount(normalizeGridSize(grid)) * Float32Array.BYTES_PER_ELEMENT;
+}
+
+function smokeDomainFieldBufferBytes(grid) {
+  return gridCellCount(grid) * 4 * Float32Array.BYTES_PER_ELEMENT;
+}
+
+function smokeDomainTransferShaderWGSL(nearGrid, farGrid) {
+  return `
+const NEAR_GRID: u32 = ${nearGrid}u;
+const FAR_GRID: u32 = ${farGrid}u;
+const FLUID_STRIDE: u32 = ${FLUID_COMPONENTS / 4}u;
+
+@group(0) @binding(0) var<storage, read> nearFluid: array<vec4<f32>>;
+@group(0) @binding(1) var<storage, read_write> smokeDomainTransferBuffer: array<vec4<f32>>;
+@group(0) @binding(2) var<storage, read> farStateSrc: array<vec4<f32>>;
+@group(0) @binding(3) var<storage, read_write> farStateDst: array<vec4<f32>>;
+@group(0) @binding(4) var<storage, read_write> transferCounters: array<atomic<u32>>;
+
+fn farIndex(c: vec3<u32>) -> u32 {
+  return c.x + c.y * FAR_GRID + c.z * FAR_GRID * FAR_GRID;
+}
+
+fn nearIndex(c: vec3<u32>) -> u32 {
+  return (c.x + c.y * NEAR_GRID + c.z * NEAR_GRID * NEAR_GRID) * FLUID_STRIDE;
+}
+
+@compute @workgroup_size(4, 4, 4)
+fn csSmokeDomainOutlet(@builtin(global_invocation_id) gid: vec3<u32>) {
+  if (any(gid >= vec3<u32>(FAR_GRID))) { return; }
+  let dst = farIndex(gid);
+  let injectionDepth = max(2u, FAR_GRID / 8u);
+  if (gid.y >= injectionDepth) {
+    smokeDomainTransferBuffer[dst] = vec4<f32>(0.0);
+    return;
+  }
+  let x = min(NEAR_GRID - 1u, (gid.x * NEAR_GRID + FAR_GRID / 2u) / FAR_GRID);
+  let z = min(NEAR_GRID - 1u, (gid.z * NEAR_GRID + FAR_GRID / 2u) / FAR_GRID);
+  let outletBase = (NEAR_GRID * 3u) / 4u;
+  let outletSpan = max(1u, NEAR_GRID - outletBase - 1u);
+  let y = min(NEAR_GRID - 1u, outletBase + (gid.y * outletSpan) / max(1u, injectionDepth - 1u));
+  let base = nearIndex(vec3<u32>(x, y, z));
+  let velocityDensity = nearFluid[base];
+  let material = nearFluid[base + 1u];
+  let smoke = max(velocityDensity.w * 0.72, material.x);
+  smokeDomainTransferBuffer[dst] = vec4<f32>(velocityDensity.xyz, smoke);
+  if (smoke > 0.01) { atomicAdd(&transferCounters[0], 1u); }
+}
+
+@compute @workgroup_size(4, 4, 4)
+fn csSmokeDomainFarInput(@builtin(global_invocation_id) gid: vec3<u32>) {
+  if (any(gid >= vec3<u32>(FAR_GRID))) { return; }
+  let index = farIndex(gid);
+  let previous = farStateSrc[index];
+  let injection = smokeDomainTransferBuffer[index];
+  let smoke = max(previous.w * 0.992, injection.w);
+  let velocity = mix(previous.xyz * 0.997, injection.xyz, clamp(injection.w * 0.65, 0.0, 0.72));
+  farStateDst[index] = vec4<f32>(velocity, smoke);
+  if (smoke > 0.01) { atomicAdd(&transferCounters[1], 1u); }
+}
+`;
 }
 
 function clampFinite(value, min, max, fallback) {
@@ -691,14 +755,27 @@ function normalizePressureTierControls(value = {}) {
 
 function normalizeSmokeDomainControls(value = {}, gridSize = 96) {
   const mode = String(value.smokeDomainMode || 'single').toLowerCase();
+  const coupled = mode === 'coupled-near-fire-far-smoke-v0' || mode === 'coupled' || mode === 'one-way';
   const cascaded = mode === 'cascaded' || mode === 'cascaded-uniform' || mode === 'cascaded-uniform-scaffold' || mode === 'near-far' || mode === 'near-field-far-smoke';
   const nearGrid = Math.round(clampFinite(value.smokeDomainNearGrid, 32, 160, gridSize));
+  const farGrid = Math.round(clampFinite(value.smokeDomainFarGrid, 24, 96, 48));
+  if (coupled) {
+    return {
+      mode: 'coupled-near-fire-far-smoke-v0',
+      strategy: SMOKE_DOMAIN_STRATEGY_COUPLED_ONE_WAY,
+      nearGrid,
+      farGrid,
+      handoffPolicy: SMOKE_DOMAIN_HANDOFF_POLICY_ONE_WAY,
+      handoffStatus: 'gpu-transfer-live-far-input-staging',
+      proofBoundary: SMOKE_DOMAIN_PROOF_BOUNDARY_COUPLED,
+    };
+  }
   if (cascaded) {
     return {
       mode: 'cascaded-uniform-scaffold',
       strategy: SMOKE_DOMAIN_STRATEGY_CASCADED_UNIFORM_SCAFFOLD,
       nearGrid,
-      farGrid: Math.round(clampFinite(value.smokeDomainFarGrid, 24, 96, 48)),
+      farGrid,
       handoffPolicy: SMOKE_DOMAIN_HANDOFF_POLICY_SCAFFOLD,
       handoffStatus: 'scaffold-only',
       proofBoundary: SMOKE_DOMAIN_PROOF_BOUNDARY_SCAFFOLD,
@@ -5344,6 +5421,22 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     activityPressureShadowOverheadLastFrame: null,
     activityPressureShadowOverhead: null,
     activityTierControls: null,
+    smokeDomainMode: 'single',
+    smokeDomainStrategy: SMOKE_DOMAIN_STRATEGY_SINGLE_UNIFORM,
+    smokeDomainNearGrid: gridSize,
+    smokeDomainFarGrid: 0,
+    smokeDomainHandoffPolicy: 'none',
+    smokeDomainHandoffStatus: 'inactive',
+    smokeDomainProofBoundary: 'single-volume-baseline-v0',
+    smokeDomainTransferEncoded: false,
+    smokeDomainTransferFrameCount: 0,
+    smokeDomainTransferActiveCells: 0,
+    smokeDomainFarInputActiveCells: 0,
+    smokeDomainTransferLastReadbackFrame: -1,
+    smokeDomainTransferReadbackPending: false,
+    smokeDomainTransferBufferBytes: 0,
+    smokeDomainFarStateBufferBytes: 0,
+    smokeDomainFarSolverStatus: 'absent',
     volumePrimitiveCount: 0,
     volumePrimitiveIds: [],
     volumePrimitives: [],
@@ -5621,6 +5714,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let pressureProjectTieredPipeline = null;
   let majorantComputePipeline = null;
   let boundarySidecarBuildPipeline = null;
+  let smokeDomainOutletPipeline = null;
+  let smokeDomainFarInputPipeline = null;
   let bindGroups = [];
   let pressureTieredFluidBindGroups = [];
   let majorantFrontBindGroups = [];
@@ -5632,6 +5727,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let pressureActivityWorkgroupBindGroup = null;
   let majorantWriteBindGroup = null;
   let boundarySidecarWriteBindGroup = null;
+  let smokeDomainTransferBindGroups = [];
   let bindGroupLayout = null;
   let pressureTieredFluidBindGroupLayout = null;
   let majorantFluidBindGroupLayout = null;
@@ -5647,6 +5743,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let pipelineLayout = null;
   let majorantPipelineLayout = null;
   let boundarySidecarPipelineLayout = null;
+  let smokeDomainTransferBindGroupLayout = null;
+  let smokeDomainTransferPipelineLayout = null;
   let pressureWritePipelineLayout = null;
   let pressureJacobiPipelineLayout = null;
   let pressureJacobiTieredPipelineLayout = null;
@@ -5667,6 +5765,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let pressureActivityIndirectArgsBuffer = null;
   let pressureActivityWorkgroupReadbackBuffer = null;
   let pressureActivityCoarseMaskBuffer = null;
+  let smokeDomainTransferBuffer = null;
+  let smokeDomainFarStateBuffers = [];
+  let smokeDomainTransferCounterBuffer = null;
+  let smokeDomainTransferCounterReadbackBuffer = null;
+  let smokeDomainTransferReadbackPending = false;
+  let smokeDomainTransferReadbackMapping = false;
+  let smokeDomainTransferGeneration = 0;
+  let currentSmokeDomainFarState = 0;
   let pressureActivityCoarseMaskZero = new Uint32Array(0);
   let pressureActivityWorkgroupReadbackPending = false;
   let pressureActivityWorkgroupReadbackMapping = false;
@@ -6448,6 +6554,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   }
 
   function destroyFluidState() {
+    smokeDomainTransferGeneration += 1;
     for (const buffer of fluidBuffers) buffer.destroy();
     for (const buffer of frontBuffers) buffer.destroy();
     for (const buffer of pressureBuffers) buffer.destroy();
@@ -6455,6 +6562,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     pressureActivityIndirectArgsBuffer?.destroy();
     pressureActivityWorkgroupReadbackBuffer?.destroy();
     pressureActivityCoarseMaskBuffer?.destroy();
+    smokeDomainTransferBuffer?.destroy();
+    for (const buffer of smokeDomainFarStateBuffers) buffer.destroy();
+    smokeDomainTransferCounterBuffer?.destroy();
+    smokeDomainTransferCounterReadbackBuffer?.destroy();
     boundarySidecarBuffer?.destroy();
     oracleActivityCueBuffer?.destroy();
     boundarySidecarBuffer = null;
@@ -6466,6 +6577,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     pressureActivityIndirectArgsBuffer = null;
     pressureActivityWorkgroupReadbackBuffer = null;
     pressureActivityCoarseMaskBuffer = null;
+    smokeDomainTransferBuffer = null;
+    smokeDomainFarStateBuffers = [];
+    smokeDomainTransferCounterBuffer = null;
+    smokeDomainTransferCounterReadbackBuffer = null;
+    smokeDomainTransferReadbackPending = false;
+    smokeDomainTransferReadbackMapping = false;
+    currentSmokeDomainFarState = 0;
     pressureActivityCoarseMaskZero = new Uint32Array(0);
     pressureActivityWorkgroupReadbackPending = false;
     pressureActivityWorkgroupReadbackMapping = false;
@@ -6476,6 +6594,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     pressureActivityReadBindGroups = [];
     boundarySidecarReadBindGroups = [];
     boundarySidecarWriteBindGroup = null;
+    smokeDomainTransferBindGroups = [];
     pressureWriteBindGroup = null;
     pressureJacobiBindGroups = [];
     pressureReadBindGroups = [];
@@ -6796,6 +6915,72 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     });
     pressureActivityCoarseMaskZero = new Uint32Array(nextPressureActivityCoarseMaskBufferBytes / Uint32Array.BYTES_PER_ELEMENT);
     device.queue.writeBuffer(pressureActivityCoarseMaskBuffer, 0, pressureActivityCoarseMaskZero);
+    const smokeDomainControls = normalizeSmokeDomainControls(controlsSnapshot, gridSize);
+    if (smokeDomainControls.mode === 'coupled-near-fire-far-smoke-v0') {
+      const farFieldBytes = smokeDomainFieldBufferBytes(smokeDomainControls.farGrid);
+      smokeDomainTransferBuffer = device.createBuffer({
+        label: `kaminos near-fire outlet transfer ${gridSize}^3 to ${smokeDomainControls.farGrid}^3`,
+        size: farFieldBytes,
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+      });
+      smokeDomainFarStateBuffers = [0, 1].map(index => device.createBuffer({
+        label: `kaminos persistent far-smoke input ${smokeDomainControls.farGrid}^3 ${index}`,
+        size: farFieldBytes,
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
+      }));
+      smokeDomainTransferCounterBuffer = device.createBuffer({
+        label: 'kaminos near-to-far smoke transfer active-cell counter',
+        size: 2 * Uint32Array.BYTES_PER_ELEMENT,
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
+      });
+      smokeDomainTransferCounterReadbackBuffer = device.createBuffer({
+        label: 'kaminos near-to-far smoke transfer counter readback',
+        size: 2 * Uint32Array.BYTES_PER_ELEMENT,
+        usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+      });
+      const zeroFarField = new Float32Array(farFieldBytes / Float32Array.BYTES_PER_ELEMENT);
+      device.queue.writeBuffer(smokeDomainTransferBuffer, 0, zeroFarField);
+      for (const buffer of smokeDomainFarStateBuffers) device.queue.writeBuffer(buffer, 0, zeroFarField);
+      device.queue.writeBuffer(smokeDomainTransferCounterBuffer, 0, new Uint32Array([0, 0]));
+      const transferShader = device.createShaderModule({
+        label: `kaminos one-way smoke domain transfer ${gridSize}^3 to ${smokeDomainControls.farGrid}^3`,
+        code: smokeDomainTransferShaderWGSL(gridSize, smokeDomainControls.farGrid),
+      });
+      smokeDomainOutletPipeline = device.createComputePipeline({
+        label: 'kaminos near-fire outlet producer pipeline',
+        layout: smokeDomainTransferPipelineLayout,
+        compute: { module: transferShader, entryPoint: 'csSmokeDomainOutlet' },
+      });
+      smokeDomainFarInputPipeline = device.createComputePipeline({
+        label: 'kaminos far-smoke input consumer pipeline',
+        layout: smokeDomainTransferPipelineLayout,
+        compute: { module: transferShader, entryPoint: 'csSmokeDomainFarInput' },
+      });
+      smokeDomainTransferBindGroups = [];
+      for (let fluidIndex = 0; fluidIndex < 2; fluidIndex += 1) {
+        smokeDomainTransferBindGroups[fluidIndex] = [];
+        for (let farIndex = 0; farIndex < 2; farIndex += 1) {
+          smokeDomainTransferBindGroups[fluidIndex][farIndex] = device.createBindGroup({
+            label: `kaminos one-way smoke transfer fluid ${fluidIndex} far ${farIndex}`,
+            layout: smokeDomainTransferBindGroupLayout,
+            entries: [
+              { binding: 0, resource: { buffer: fluidBuffers[fluidIndex] } },
+              { binding: 1, resource: { buffer: smokeDomainTransferBuffer } },
+              { binding: 2, resource: { buffer: smokeDomainFarStateBuffers[farIndex] } },
+              { binding: 3, resource: { buffer: smokeDomainFarStateBuffers[1 - farIndex] } },
+              { binding: 4, resource: { buffer: smokeDomainTransferCounterBuffer } },
+            ],
+          });
+        }
+      }
+      state.smokeDomainTransferBufferBytes = farFieldBytes;
+      state.smokeDomainFarStateBufferBytes = farFieldBytes;
+    } else {
+      smokeDomainOutletPipeline = null;
+      smokeDomainFarInputPipeline = null;
+      state.smokeDomainTransferBufferBytes = 0;
+      state.smokeDomainFarStateBufferBytes = 0;
+    }
     ensureOracleActivityCueBuffer();
     if (oracleActivityCueSourceValues && oracleActivityCueSourceGrid) {
       const resampledCue = resampleScalarActivityCue(oracleActivityCueSourceValues, oracleActivityCueSourceGrid, gridSize);
@@ -7060,6 +7245,20 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.boundaryStructureSource = state.boundarySidecarSource;
     state.boundarySidecarView = normalizeBoundarySidecarView(controlsSnapshot.boundarySidecarView ?? controlsSnapshot.boundarySidecarControls?.view);
     state.boundarySidecarDebug = boundarySidecarDebug(state.boundarySidecarSource);
+    state.smokeDomainMode = smokeDomainControls.mode;
+    state.smokeDomainStrategy = smokeDomainControls.strategy;
+    state.smokeDomainNearGrid = smokeDomainControls.nearGrid;
+    state.smokeDomainFarGrid = smokeDomainControls.farGrid;
+    state.smokeDomainHandoffPolicy = smokeDomainControls.handoffPolicy;
+    state.smokeDomainHandoffStatus = smokeDomainControls.handoffStatus;
+    state.smokeDomainProofBoundary = smokeDomainControls.proofBoundary;
+    state.smokeDomainTransferEncoded = false;
+    state.smokeDomainTransferFrameCount = 0;
+    state.smokeDomainTransferActiveCells = 0;
+    state.smokeDomainFarInputActiveCells = 0;
+    state.smokeDomainTransferLastReadbackFrame = -1;
+    state.smokeDomainTransferReadbackPending = false;
+    state.smokeDomainFarSolverStatus = 'absent';
     state.pressureProjectionEnabled = false;
     state.pressureProjectionIterations = 0;
     state.pressureIterationDefault = defaultPressureIterationsForScene(controlsSnapshot.volumeScene);
@@ -7325,6 +7524,16 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         },
       ],
     });
+    smokeDomainTransferBindGroupLayout = device.createBindGroupLayout({
+      label: 'kaminos one-way smoke domain transfer bind group layout',
+      entries: [
+        { binding: 0, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
+        { binding: 1, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
+        { binding: 2, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
+        { binding: 3, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
+        { binding: 4, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
+      ],
+    });
     pressureWriteBindGroupLayout = device.createBindGroupLayout({
       label: 'kaminos pressure write bind group layout',
       entries: [
@@ -7390,6 +7599,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     boundarySidecarPipelineLayout = device.createPipelineLayout({
       label: `kaminos ${BOUNDARY_SIDECAR_IDENTITY} pipeline layout`,
       bindGroupLayouts: [boundarySidecarReadBindGroupLayout, emptyBindGroupLayout, emptyBindGroupLayout, boundarySidecarWriteBindGroupLayout],
+    });
+    smokeDomainTransferPipelineLayout = device.createPipelineLayout({
+      label: 'kaminos one-way smoke domain transfer pipeline layout',
+      bindGroupLayouts: [smokeDomainTransferBindGroupLayout],
     });
     pressureWritePipelineLayout = device.createPipelineLayout({
       label: 'kaminos divergence pressure pipeline layout',
@@ -7891,6 +8104,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.smokeDomainHandoffPolicy = smokeDomainControls.handoffPolicy;
     state.smokeDomainHandoffStatus = smokeDomainControls.handoffStatus;
     state.smokeDomainProofBoundary = smokeDomainControls.proofBoundary;
+    state.smokeDomainFarSolverStatus = 'absent';
+    if (smokeDomainControls.mode !== 'coupled-near-fire-far-smoke-v0') {
+      state.smokeDomainTransferEncoded = false;
+      state.smokeDomainTransferReadbackPending = false;
+    }
     state.volumeScene = normalizeVolumeScene(controlsSnapshot.volumeScene);
     state.bonfireReferenceConfinement = bonfireReferenceConfinementDebug(controlsSnapshot.volumeScene);
     state.minimalPlumeProof = minimalPlumeProofDebug(controlsSnapshot.volumeScene);
@@ -8199,6 +8417,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const pressureActivityCoarseMaskBytes = pressureActivityCoarseMaskBufferBytes(gridSize);
     const majorantBytes = majorantBufferBytes(majorantGridSize);
     const boundarySidecarBytes = boundarySidecarBufferBytes(gridSize);
+    const smokeDomainTransferBytes = state.smokeDomainTransferBufferBytes || 0;
+    const smokeDomainFarStateBytes = state.smokeDomainFarStateBufferBytes || 0;
     state.majorantCadence = majorantBuildCadence;
     state.pressureIterationDefault = defaultPressureIterationsForScene(scene);
     state.pressureIterationRequested = pressureIterationRequested;
@@ -8358,8 +8578,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       pressureActivityCoarseMaskBufferBytes: pressureActivityCoarseMaskBytes,
       majorantBufferBytes: majorantBytes,
       boundarySidecarBufferBytes: boundarySidecarBytes,
+      smokeDomainTransferBufferBytes: smokeDomainTransferBytes,
+      smokeDomainFarStateBufferBytesEach: smokeDomainFarStateBytes,
+      smokeDomainFarStateBufferCount: smokeDomainFarStateBytes > 0 ? 2 : 0,
+      smokeDomainTransferCellVisitsThisFrame: state.smokeDomainTransferEncoded ? state.smokeDomainFarGrid ** 3 * 2 : 0,
       externalEmitterBufferBytes: externalEmitterBufferBytes(),
-      estimatedResidentBytes: fluidBytes * 2 + frontBytes * 2 + pressureBytes * 2 + pressureActivityCoarseMaskBytes + majorantBytes + boundarySidecarBytes + externalEmitterBufferBytes(),
+      estimatedResidentBytes: fluidBytes * 2 + frontBytes * 2 + pressureBytes * 2 + pressureActivityCoarseMaskBytes + majorantBytes + boundarySidecarBytes + smokeDomainTransferBytes + smokeDomainFarStateBytes * 2 + externalEmitterBufferBytes(),
       timing: { ...state.timing },
       gpuTiming: state.gpuTiming ? { ...state.gpuTiming, timingsMs: state.gpuTiming.timingsMs ? { ...state.gpuTiming.timingsMs } : null } : null,
       gpuPhaseTimings: state.gpuPhaseTimings ? { ...state.gpuPhaseTimings } : null,
@@ -8392,6 +8616,81 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     encodePressureProjection(encoder);
     state.simStepCount += 1;
     updateSimCostLedger();
+  }
+
+  function encodeSmokeDomainTransfer(encoder) {
+    const domain = normalizeSmokeDomainControls(controlsSnapshot, gridSize);
+    if (
+      domain.mode !== 'coupled-near-fire-far-smoke-v0' ||
+      !smokeDomainOutletPipeline ||
+      !smokeDomainFarInputPipeline ||
+      !smokeDomainTransferCounterBuffer ||
+      !smokeDomainTransferBindGroups[currentFluid]?.[currentSmokeDomainFarState]
+    ) {
+      state.smokeDomainTransferEncoded = false;
+      return false;
+    }
+    const shouldReadback = !smokeDomainTransferReadbackPending
+      && !smokeDomainTransferReadbackMapping
+      && (state.frameCount % SMOKE_DOMAIN_TRANSFER_READBACK_CADENCE === 0);
+    encoder.clearBuffer(smokeDomainTransferCounterBuffer);
+    const pass = encoder.beginComputePass({ label: 'kaminos one-way near-fire to far-smoke transfer pass' });
+    const bindGroup = smokeDomainTransferBindGroups[currentFluid][currentSmokeDomainFarState];
+    const workgroups = Math.ceil(domain.farGrid / 4);
+    pass.setBindGroup(0, bindGroup);
+    pass.setPipeline(smokeDomainOutletPipeline);
+    pass.dispatchWorkgroups(workgroups, workgroups, workgroups);
+    pass.setPipeline(smokeDomainFarInputPipeline);
+    pass.dispatchWorkgroups(workgroups, workgroups, workgroups);
+    pass.end();
+    currentSmokeDomainFarState = 1 - currentSmokeDomainFarState;
+    if (shouldReadback && smokeDomainTransferCounterReadbackBuffer) {
+      encoder.copyBufferToBuffer(
+        smokeDomainTransferCounterBuffer,
+        0,
+        smokeDomainTransferCounterReadbackBuffer,
+        0,
+        2 * Uint32Array.BYTES_PER_ELEMENT,
+      );
+      smokeDomainTransferReadbackPending = true;
+    }
+    state.smokeDomainTransferEncoded = true;
+    state.smokeDomainTransferFrameCount += 1;
+    state.smokeDomainHandoffStatus = 'gpu-transfer-live-far-input-staging';
+    state.smokeDomainFarSolverStatus = 'absent';
+    state.smokeDomainTransferReadbackPending = smokeDomainTransferReadbackPending || smokeDomainTransferReadbackMapping;
+    return true;
+  }
+
+  function consumeSmokeDomainTransferReadback() {
+    if (
+      !smokeDomainTransferReadbackPending ||
+      smokeDomainTransferReadbackMapping ||
+      !smokeDomainTransferCounterReadbackBuffer
+    ) return;
+    smokeDomainTransferReadbackMapping = true;
+    const readbackGeneration = smokeDomainTransferGeneration;
+    const readbackBuffer = smokeDomainTransferCounterReadbackBuffer;
+    readbackBuffer.mapAsync(GPUMapMode.READ)
+      .then(() => {
+        const counts = new Uint32Array(readbackBuffer.getMappedRange()).slice();
+        readbackBuffer.unmap();
+        if (readbackGeneration !== smokeDomainTransferGeneration) return;
+        state.smokeDomainTransferActiveCells = Number(counts[0] || 0);
+        state.smokeDomainFarInputActiveCells = Number(counts[1] || 0);
+        state.smokeDomainTransferLastReadbackFrame = state.frameCount;
+      })
+      .catch(error => {
+        if (readbackGeneration !== smokeDomainTransferGeneration) return;
+        state.smokeDomainHandoffStatus = 'gpu-transfer-readback-error';
+        state.smokeDomainTransferReadbackError = error?.message || String(error);
+      })
+      .finally(() => {
+        if (readbackGeneration !== smokeDomainTransferGeneration) return;
+        smokeDomainTransferReadbackPending = false;
+        smokeDomainTransferReadbackMapping = false;
+        state.smokeDomainTransferReadbackPending = false;
+      });
   }
 
   function encodeActivityPressureShadowOverhead(encoder, workgroups) {
@@ -8760,6 +9059,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         state.lookFreezeFrame = null;
         state.lookFreezeSkippedFrames = 0;
         encodeSim(encoder);
+        encodeSmokeDomainTransfer(encoder);
         encodeMajorant(encoder);
       }
       encodeBoundarySidecar(encoder);
@@ -8777,6 +9077,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       }
       consumeGpuTimingReadback();
       consumePressureActivityWorkgroupReadback();
+      consumeSmokeDomainTransferReadback();
       commitPreviousViewProjection();
       state.frameCount += 1;
       state.lastFrameEnergy = Math.min(9.999, state.simStepCount * 0.001 + 0.55 * controlsSnapshot.density + 0.35 * controlsSnapshot.fire + 0.18 * (controlsSnapshot.radiance ?? 1.65));
@@ -10094,6 +10395,15 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         smokeDomainHandoffPolicy: state.smokeDomainHandoffPolicy,
         smokeDomainHandoffStatus: state.smokeDomainHandoffStatus,
         smokeDomainProofBoundary: state.smokeDomainProofBoundary,
+        smokeDomainTransferEncoded: state.smokeDomainTransferEncoded,
+        smokeDomainTransferFrameCount: state.smokeDomainTransferFrameCount,
+        smokeDomainTransferActiveCells: state.smokeDomainTransferActiveCells,
+        smokeDomainFarInputActiveCells: state.smokeDomainFarInputActiveCells,
+        smokeDomainTransferLastReadbackFrame: state.smokeDomainTransferLastReadbackFrame,
+        smokeDomainTransferReadbackPending: state.smokeDomainTransferReadbackPending,
+        smokeDomainTransferBufferBytes: state.smokeDomainTransferBufferBytes,
+        smokeDomainFarStateBufferBytes: state.smokeDomainFarStateBufferBytes,
+        smokeDomainFarSolverStatus: state.smokeDomainFarSolverStatus,
         mainFluidKernelStrategy: state.mainFluidKernelStrategy,
         mainFluidLocalProjectionStrategy: state.mainFluidLocalProjectionStrategy,
         mainFluidLocalProjectionDivergenceEvaluationsPerCell: state.mainFluidLocalProjectionDivergenceEvaluationsPerCell,
@@ -10442,6 +10752,15 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       smokeDomainHandoffPolicy: state.smokeDomainHandoffPolicy,
       smokeDomainHandoffStatus: state.smokeDomainHandoffStatus,
       smokeDomainProofBoundary: state.smokeDomainProofBoundary,
+      smokeDomainTransferEncoded: state.smokeDomainTransferEncoded,
+      smokeDomainTransferFrameCount: state.smokeDomainTransferFrameCount,
+      smokeDomainTransferActiveCells: state.smokeDomainTransferActiveCells,
+      smokeDomainFarInputActiveCells: state.smokeDomainFarInputActiveCells,
+      smokeDomainTransferLastReadbackFrame: state.smokeDomainTransferLastReadbackFrame,
+      smokeDomainTransferReadbackPending: state.smokeDomainTransferReadbackPending,
+      smokeDomainTransferBufferBytes: state.smokeDomainTransferBufferBytes,
+      smokeDomainFarStateBufferBytes: state.smokeDomainFarStateBufferBytes,
+      smokeDomainFarSolverStatus: state.smokeDomainFarSolverStatus,
       mainFluidKernelStrategy: state.mainFluidKernelStrategy,
       mainFluidLocalProjectionStrategy: state.mainFluidLocalProjectionStrategy,
       mainFluidLocalProjectionDivergenceEvaluationsPerCell: state.mainFluidLocalProjectionDivergenceEvaluationsPerCell,
@@ -10495,6 +10814,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     setControls(next) {
       const previousGrid = gridSize;
       const previousMajorantGrid = majorantGridSize;
+      const previousSmokeDomain = normalizeSmokeDomainControls(controlsSnapshot, gridSize);
       const previousControlSignature = lastTemporalControlSignature || temporalControlSignature(controlsSnapshot);
       const previousCanonicalSourceControlSignature = canonicalSourceControlSignature(controlsSnapshot);
       controlsSnapshot = applyRuntimeQualityControls({ ...controlsSnapshot, ...next });
@@ -10506,13 +10826,18 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       lastTemporalControlSignature = nextControlSignature;
       const requestedGrid = normalizeGridSize(controlsSnapshot.resolution);
       const requestedMajorantGrid = normalizeMajorantGridSize(controlsSnapshot.majorantGrid);
+      const requestedSmokeDomain = normalizeSmokeDomainControls(controlsSnapshot, requestedGrid);
+      const smokeDomainStateResetNeeded = device && (
+        requestedSmokeDomain.mode !== previousSmokeDomain.mode ||
+        requestedSmokeDomain.farGrid !== previousSmokeDomain.farGrid
+      );
       const sourceStateResetNeeded = device
         && requestedGrid === previousGrid
         && requestedMajorantGrid === previousMajorantGrid
         && normalizeVolumeScene(controlsSnapshot.volumeScene) === 'canonical_plume'
         && previousCanonicalSourceControlSignature !== nextCanonicalSourceControlSignature;
-      if (device && (requestedGrid !== previousGrid || requestedMajorantGrid !== previousMajorantGrid)) {
-        rebuildFluidState(requestedGrid, requestedMajorantGrid);
+      if (device && (requestedGrid !== previousGrid || requestedMajorantGrid !== previousMajorantGrid || smokeDomainStateResetNeeded)) {
+        rebuildFluidState(requestedGrid, requestedMajorantGrid, smokeDomainStateResetNeeded ? 'smoke-domain-control-change' : 'grid-rebuilt');
       } else if (sourceStateResetNeeded) {
         rebuildFluidState(requestedGrid, requestedMajorantGrid, 'canonical-source-control-change');
       } else {
