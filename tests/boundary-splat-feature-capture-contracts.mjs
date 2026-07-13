@@ -62,7 +62,7 @@ assert.match(core, /boundarySplatFeatureCaptureRequested/, 'runtime distinguishe
 assert.match(core, /boundarySplatFeatureCaptureEffective/, 'runtime reports effective feature capture');
 assert.match(core, /boundarySplatFeatureBuffer/, 'runtime owns a dedicated feature buffer');
 assert.match(core, /boundarySplatFeatureRows\[candidateIndex\]/, 'compaction writes exact selected-candidate rows at the accepted candidate slot');
-assert.match(core, /sampleBoundarySplatFeatureCapture\(boundarySplatSample\.instanceCount\)/, 'witness readback uses the exact accepted instance count without a hidden row cap');
+assert.match(core, /sampleBoundarySplatFeatureCapture\(boundarySplatSample\.sourceCandidateCount\s*\|\|\s*boundarySplatSample\.candidateCount\)/, 'witness readback uses exact source candidate count under instancing without a hidden row cap');
 assert.match(witness, /const boundarySplatFeatureCapture\s*=\s*sample\.boundarySplatFeatureCaptureRequested[\s\S]*materializeBoundarySplatFeatureCapture/, 'witness materializes the full requested feature capture object');
 assert.match(witness, /--boundary-splat-feature-out/, 'witness exposes a direct feature artifact output path');
 assert.match(witness, /packedFloat32Base64[\s\S]*writeFileSync/, 'witness materializes every packed feature row without terminal transcription');

@@ -1167,6 +1167,36 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
         <span class="slider-val" id="volume-boundary-splat-composition-val">splat only</span>
       </div>
       <div class="slider-row">
+        <span class="slider-label">Splat fires</span>
+        <input type="range" id="volume-boundary-splat-instances" min="1" max="128" step="1" value="1">
+        <span class="slider-val" id="volume-boundary-splat-instances-val">1</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Splat phase</span>
+        <select id="volume-boundary-splat-phase-mode" class="select-input">
+          <option value="shared-current">shared current</option>
+          <option value="same-history-slot">same history slot</option>
+          <option value="offset-history" selected>offset history</option>
+          <option value="age-sweep">age sweep</option>
+        </select>
+        <span class="slider-val" id="volume-boundary-splat-phase-mode-val">offset history</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Phase stride</span>
+        <input type="range" id="volume-boundary-splat-phase-stride" min="1" max="15" step="1" value="1">
+        <span class="slider-val" id="volume-boundary-splat-phase-stride-val">1</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">History depth</span>
+        <input type="range" id="volume-boundary-splat-history-depth" min="4" max="16" step="1" value="4">
+        <span class="slider-val" id="volume-boundary-splat-history-depth-val">4</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">History frame stride</span>
+        <input type="range" id="volume-boundary-splat-history-frame-stride" min="1" max="16" step="1" value="1">
+        <span class="slider-val" id="volume-boundary-splat-history-frame-stride-val">1</span>
+      </div>
+      <div class="slider-row">
         <span class="slider-label">Splat radius</span>
         <input type="range" id="volume-boundary-splat-radius" min="0.35" max="1.5" step="0.01" value="1.00">
         <span class="slider-val" id="volume-boundary-splat-radius-val">1.00</span>
@@ -5015,6 +5045,54 @@ window.kaminosSetCameraDebugPose = function(pose = {}) {
   updateHybridSplatOverlayFrame();
   return window.kaminosCameraDebugState();
 };
+
+function boundarySplatFieldLayoutRouteValue(params = new URLSearchParams(window.location.search)) {
+  const explicitLayout = params.get('volume_boundary_splat_layout');
+  if (explicitLayout !== null) return normalizeBoundarySplatFieldLayout(explicitLayout);
+  // Legacy volume_boundary_splat_composition=field routes select layout only.
+  const legacyComposition = String(params.get('volume_boundary_splat_composition') || '').toLowerCase().replace(/_/g, '-');
+  return ['field', 'composed-field', 'field-100'].includes(legacyComposition) ? 'field' : 'proof';
+}
+
+function boundarySplatFieldLayoutCameraPose(params = new URLSearchParams(window.location.search)) {
+  const requested = boundarySplatFieldLayoutRouteValue(params);
+  if (requested !== 'field') return null;
+  return {
+    identity: 'boundary-splat-composed-field-camera-v1',
+    requestedLayout: requested,
+    effectiveLayout: 'field',
+    position: [0, 10.5, 13.5],
+    target: [0, 0, 0],
+  };
+}
+
+function applyBoundarySplatFieldLayoutCamera(params = new URLSearchParams(window.location.search)) {
+  const pose = boundarySplatFieldLayoutCameraPose(params);
+  if (!pose || !camera || !controls) return null;
+  controls.maxDistance = Math.max(Number(controls.maxDistance) || 0, 30);
+  camera.position.fromArray(pose.position);
+  controls.target.fromArray(pose.target);
+  controls.update();
+  camera.updateMatrixWorld?.();
+  const effectivePosition = camera.position.toArray();
+  const effectiveTarget = controls.target.toArray();
+  const requestedEffectiveAgreement = pose.position.every((value, index) => Math.abs(value - effectivePosition[index]) < 1e-6)
+    && pose.target.every((value, index) => Math.abs(value - effectiveTarget[index]) < 1e-6);
+  window.__kaminosBoundarySplatFieldLayoutCamera = {
+    ...pose,
+    requestedPosition: [...pose.position],
+    requestedTarget: [...pose.target],
+    position: effectivePosition,
+    target: effectiveTarget,
+    requestedEffectiveAgreement,
+    authority: 'url-owned-effective-camera-pose',
+  };
+  window.__kaminosBoundarySplatCompositionCamera = window.__kaminosBoundarySplatFieldLayoutCamera;
+  return window.__kaminosBoundarySplatFieldLayoutCamera;
+}
+
+window.kaminosBoundarySplatFieldLayoutDebugState = () => window.__kaminosBoundarySplatFieldLayoutCamera || null;
+window.kaminosBoundarySplatCompositionDebugState = window.kaminosBoundarySplatFieldLayoutDebugState;
 
 function renderSceneObjectRow(record, options = {}) {
   const active = record.id === activeSceneObjectId;
@@ -11803,6 +11881,10 @@ const REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS = [
   { key: 'reactionBoundaryFireYellow', id: 'volume-reaction-boundary-fire-yellow', param: 'volume_reaction_boundary_fire_yellow', min: 0, max: 2, decimals: 2 },
   { key: 'reactionBoundaryFireWarmth', id: 'volume-reaction-boundary-fire-warmth', param: 'volume_reaction_boundary_fire_warmth', min: 0, max: 2, decimals: 2 },
   { key: 'reactionBoundaryFireLuma', id: 'volume-reaction-boundary-fire-luma', param: 'volume_reaction_boundary_fire_luma', min: 0, max: 5, decimals: 2 },
+  { key: 'boundarySplatInstances', id: 'volume-boundary-splat-instances', param: 'volume_boundary_splat_instances', min: 1, max: 128, decimals: 0 },
+  { key: 'boundarySplatPhaseStride', id: 'volume-boundary-splat-phase-stride', param: 'volume_boundary_splat_phase_stride', min: 1, max: 15, decimals: 0 },
+  { key: 'boundarySplatHistoryDepth', id: 'volume-boundary-splat-history-depth', param: 'volume_boundary_splat_history_depth', min: 4, max: 16, decimals: 0 },
+  { key: 'boundarySplatHistoryFrameStride', id: 'volume-boundary-splat-history-frame-stride', param: 'volume_boundary_splat_history_frame_stride', min: 1, max: 16, decimals: 0 },
   { key: 'boundarySidecarBlur', id: 'volume-boundary-sidecar-blur', param: 'volume_boundary_sidecar_blur', min: 0, max: 1, decimals: 2 },
   { key: 'boundarySidecarWidth', id: 'volume-boundary-sidecar-width', param: 'volume_boundary_sidecar_width', min: 0, max: 2, decimals: 2 },
   { key: 'boundarySidecarRidge', id: 'volume-boundary-sidecar-ridge', param: 'volume_boundary_sidecar_ridge', min: 0, max: 2, decimals: 2 },
@@ -11836,6 +11918,8 @@ const BOUNDARY_SIDECAR_SOURCE_VALUES = new Set(['live', 'baked', 'mix']);
 const BOUNDARY_SIDECAR_VIEW_VALUES = new Set(['off', 'support', 'coverage', 'ridge', 'proximity', 'footprint']);
 const BOUNDARY_SPLAT_MODE_VALUES = new Set(['off', 'analytic', 'learned']);
 const BOUNDARY_SPLAT_COMPOSITION_VALUES = new Set(['splat-only', 'hybrid-smoke']);
+const BOUNDARY_SPLAT_PHASE_MODE_VALUES = new Set(['shared-current', 'same-history-slot', 'offset-history', 'age-sweep']);
+const BOUNDARY_SPLAT_FIELD_LAYOUT_VALUES = new Set(['proof', 'field']);
 
 function normalizeReactionFrontLiveView(value) {
   const mode = String(value || 'off').toLowerCase().replace(/-/g, '_');
@@ -11860,6 +11944,16 @@ function normalizeBoundarySplatMode(value) {
 function normalizeBoundarySplatComposition(value) {
   const mode = String(value || 'splat-only').toLowerCase().replace(/_/g, '-');
   return BOUNDARY_SPLAT_COMPOSITION_VALUES.has(mode) ? mode : 'splat-only';
+}
+
+function normalizeBoundarySplatPhaseMode(value) {
+  const mode = String(value || 'offset-history').toLowerCase().replace(/_/g, '-');
+  return BOUNDARY_SPLAT_PHASE_MODE_VALUES.has(mode) ? mode : 'offset-history';
+}
+
+function normalizeBoundarySplatFieldLayout(value) {
+  const mode = String(value || 'proof').toLowerCase().replace(/_/g, '-');
+  return ['field', 'composed-field', 'field-100'].includes(mode) ? 'field' : 'proof';
 }
 
 function clampVolumeControlValue(value, field) {
@@ -12001,6 +12095,8 @@ const VOLUME_BASIN_ROUTE_FIELDS = [
   ['boundarySidecarView', 'volume_boundary_sidecar_view'],
   ['boundarySplatMode', 'volume_boundary_splat_mode'],
   ['boundarySplatComposition', 'volume_boundary_splat_composition'],
+  ['boundarySplatFieldLayout', 'volume_boundary_splat_layout'],
+  ['boundarySplatPhaseMode', 'volume_boundary_splat_phase_mode'],
   ['boundarySplatFeatureCapture', 'volume_boundary_splat_feature_capture'],
   ...REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS.map(field => [field.key, field.param]),
 ];
@@ -12179,6 +12275,9 @@ function syncReactionFrontExtractorLabels(controlsSnapshot) {
   if (boundarySplatCompositionLabel) boundarySplatCompositionLabel.textContent = boundarySplatComposition === 'hybrid-smoke'
     ? 'splat + smoke'
     : 'splat only';
+  const boundarySplatPhaseMode = normalizeBoundarySplatPhaseMode(controlsSnapshot.boundarySplatPhaseMode);
+  const boundarySplatPhaseModeLabel = document.getElementById('volume-boundary-splat-phase-mode-val');
+  if (boundarySplatPhaseModeLabel) boundarySplatPhaseModeLabel.textContent = boundarySplatPhaseMode.replace(/-/g, ' ');
   for (const field of REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS) {
     const label = document.getElementById(`${field.id}-val`);
     const value = controlsSnapshot[field.key];
@@ -16372,6 +16471,8 @@ function readVolumeControls() {
   const boundarySidecarView = normalizeBoundarySidecarView(document.getElementById('volume-boundary-sidecar-view')?.value);
   const boundarySplatMode = normalizeBoundarySplatMode(document.getElementById('volume-boundary-splat-mode')?.value);
   const boundarySplatComposition = normalizeBoundarySplatComposition(document.getElementById('volume-boundary-splat-composition')?.value);
+  const boundarySplatPhaseMode = normalizeBoundarySplatPhaseMode(document.getElementById('volume-boundary-splat-phase-mode')?.value);
+  const boundarySplatFieldLayout = normalizeBoundarySplatFieldLayout(boundarySplatFieldLayoutRouteValue(params));
   const boundarySplatFeatureCapture = ['1', 'true', 'on'].includes(String(params.get('volume_boundary_splat_feature_capture') || '').toLowerCase());
   const reactionBoundaryControls = {
     identity: 'reaction-boundary-live-controls-v0',
@@ -16439,8 +16540,14 @@ function readVolumeControls() {
     boundarySidecarSource,
     boundarySidecarView,
     boundarySplatMode,
+    boundarySplatPhaseMode,
     boundarySplatComposition,
+    boundarySplatFieldLayout,
     boundarySplatFeatureCapture,
+    boundarySplatInstances: parseFloat(document.getElementById('volume-boundary-splat-instances').value),
+    boundarySplatPhaseStride: parseFloat(document.getElementById('volume-boundary-splat-phase-stride').value),
+    boundarySplatHistoryDepth: parseFloat(document.getElementById('volume-boundary-splat-history-depth').value),
+    boundarySplatHistoryFrameStride: parseFloat(document.getElementById('volume-boundary-splat-history-frame-stride').value),
     boundarySplatRadius: parseFloat(document.getElementById('volume-boundary-splat-radius').value),
     boundarySplatSharpness: parseFloat(document.getElementById('volume-boundary-splat-sharpness').value),
     boundarySidecarControls: {
@@ -16942,6 +17049,8 @@ function refreshVolumeReadout() {
 window.__kaminosRefreshVolumeReadout = refreshVolumeReadout;
 
 function frameVolumeCamera() {
+  const composedCamera = applyBoundarySplatFieldLayoutCamera();
+  if (composedCamera) return;
   const sceneName = document.getElementById('volume-scene')?.value || 'compact_plume';
   const frame = sceneName === 'bonfire_plume' ? BONFIRE_VOLUME_CAMERA_FRAME : DEFAULT_VOLUME_CAMERA_FRAME;
   camera.position.set(...frame.position);
@@ -17597,8 +17706,11 @@ async function initKaminosVolumeRoute() {
   if (params.has('volume_boundary_splat_mode')) {
     document.getElementById('volume-boundary-splat-mode').value = normalizeBoundarySplatMode(params.get('volume_boundary_splat_mode'));
   }
-  if (params.has('volume_boundary_splat_composition')) {
+  if (params.has('volume_boundary_splat_composition') && boundarySplatFieldLayoutRouteValue(params) === 'proof') {
     document.getElementById('volume-boundary-splat-composition').value = normalizeBoundarySplatComposition(params.get('volume_boundary_splat_composition'));
+  }
+  if (params.has('volume_boundary_splat_phase_mode')) {
+    document.getElementById('volume-boundary-splat-phase-mode').value = normalizeBoundarySplatPhaseMode(params.get('volume_boundary_splat_phase_mode'));
   }
   for (const field of REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS) {
     const routeValue = Number(params.get(field.param));
@@ -17633,6 +17745,7 @@ async function initKaminosVolumeRoute() {
   }
 
   volumePrototype.setControls(readVolumeControls());
+  applyBoundarySplatFieldLayoutCamera(params);
 
   const rayBudgetPresetOwnedControls = new Set([
     'volume-steps',
@@ -17674,6 +17787,8 @@ async function initKaminosVolumeRoute() {
   document.getElementById('volume-boundary-splat-mode')?.addEventListener('change', syncControls);
   document.getElementById('volume-boundary-splat-composition')?.addEventListener('input', syncControls);
   document.getElementById('volume-boundary-splat-composition')?.addEventListener('change', syncControls);
+  document.getElementById('volume-boundary-splat-phase-mode')?.addEventListener('input', syncControls);
+  document.getElementById('volume-boundary-splat-phase-mode')?.addEventListener('change', syncControls);
   for (const field of REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS) {
     document.getElementById(field.id)?.addEventListener('input', syncControls);
     document.getElementById(field.id)?.addEventListener('change', syncControls);
