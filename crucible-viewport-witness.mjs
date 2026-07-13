@@ -47,7 +47,7 @@ const inFlightSettleMs = Number(args.get('in-flight-settle-ms') ?? 3000);
 const inFlightMaxObservationGapMs = Number(args.get('in-flight-max-observation-gap-ms') ?? 50);
 const fireTimeoutMs = Number(args.get('fire-timeout-ms') || 420000);
 const expectedSharpRevision = args.get('expected-sharp-revision') || null;
-const userDataDir = mkdtempSync(path.join(tmpdir(), 'kaminos-crucible-viewport-'));
+let userDataDir = null;
 const startedAt = new Date().toISOString();
 const openGenerateTabExpression = 'document.querySelector(\'[data-tab="generate"]\').click()';
 
@@ -68,25 +68,6 @@ let inFlightCapture = {
     : null,
 };
 const runtimeExceptions = [];
-
-if (!['full-volume', 'hybrid-smoke-preview'].includes(requestedFirePresentation)) {
-  throw new Error(`Unsupported --fire-presentation ${requestedFirePresentation}`);
-}
-if (captureInFlight && (!fireFriendly || requestedFirePresentation !== 'hybrid-smoke-preview')) {
-  throw new Error('--capture-in-flight requires --fire-friendly with --fire-presentation hybrid-smoke-preview');
-}
-if (args.has('scheduler-profile') && !fireFriendly) {
-  throw new Error('--scheduler-profile requires --fire-friendly');
-}
-if (replayCastReportPath && fireFriendly) {
-  throw new Error('--replay-cast-report cannot be combined with --fire-friendly');
-}
-if (!Number.isFinite(inFlightSettleMs) || inFlightSettleMs < 0) {
-  throw new Error('--in-flight-settle-ms must be a finite nonnegative number');
-}
-if (!Number.isFinite(inFlightMaxObservationGapMs) || inFlightMaxObservationGapMs <= 0) {
-  throw new Error('--in-flight-max-observation-gap-ms must be a finite positive number');
-}
 
 function expectedSchedulerForProfile(profileId) {
   const common = {
@@ -655,6 +636,26 @@ function projectFriendlyFiringEvidence({ browserFiringEvidence, pipelineReport }
 }
 
 try {
+  phase = 'validating-arguments';
+  if (!['full-volume', 'hybrid-smoke-preview'].includes(requestedFirePresentation)) {
+    throw new Error(`Unsupported --fire-presentation ${requestedFirePresentation}`);
+  }
+  if (captureInFlight && (!fireFriendly || requestedFirePresentation !== 'hybrid-smoke-preview')) {
+    throw new Error('--capture-in-flight requires --fire-friendly with --fire-presentation hybrid-smoke-preview');
+  }
+  if (args.has('scheduler-profile') && !fireFriendly) {
+    throw new Error('--scheduler-profile requires --fire-friendly');
+  }
+  if (replayCastReportPath && fireFriendly) {
+    throw new Error('--replay-cast-report cannot be combined with --fire-friendly');
+  }
+  if (!Number.isFinite(inFlightSettleMs) || inFlightSettleMs < 0) {
+    throw new Error('--in-flight-settle-ms must be a finite nonnegative number');
+  }
+  if (!Number.isFinite(inFlightMaxObservationGapMs) || inFlightMaxObservationGapMs <= 0) {
+    throw new Error('--in-flight-max-observation-gap-ms must be a finite positive number');
+  }
+  userDataDir = mkdtempSync(path.join(tmpdir(), 'kaminos-crucible-viewport-'));
   if (replayCastReportPath) {
     phase = 'validating-replay-cast-report';
     replayCastEvidence = validatedReplayCastReport(
@@ -809,6 +810,7 @@ try {
       const artifact = { id: 'splat', ...replay.artifact };
       const replayResult = await window.kaminosCrucibleViewportReplayRealCast({ replay, run, artifact });
       document.querySelector('[data-tab="generate"]').click();
+      await new Promise(resolve => setTimeout(resolve, 240));
       await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
       const workspace = document.getElementById('crucible-viewport-workspace');
       const stage = document.getElementById('crucible-worktable-stage');
@@ -822,6 +824,7 @@ try {
         effectiveRouteId: replay.effectiveRouteId,
         artifact: replay.artifact,
         castTargetSceneObjectId: replayResult.record?.id || null,
+        receiptReportPath: replayResult.receipt?.reportPath || null,
         completedWorkroom: {
           heatState: workspace?.dataset.crucibleHeatState || null,
           routeStatus: workspace?.dataset.crucibleRouteStatus || null,
@@ -834,6 +837,7 @@ try {
     })()`, fireTimeoutMs);
     lastTrustworthyEvidence = { ...lastTrustworthyEvidence, replayedCast: state.replayedCast };
     if (state.replayedCast.status !== 'real-output-replay-not-inference') throw new Error(`Replay authority changed: ${JSON.stringify(state.replayedCast)}`);
+    if (state.replayedCast.receiptReportPath !== state.replayedCast.reportPath) throw new Error(`Replayed Crucible receipt lost source report identity: ${JSON.stringify(state.replayedCast)}`);
     if (!state.replayedCast.castTargetSceneObjectId || state.replayedCast.completedWorkroom.castButtonDisabled) throw new Error(`Replayed real cast is not actuatable: ${JSON.stringify(state.replayedCast)}`);
     if (state.replayedCast.completedWorkroom.roomPosture !== 'cast-held') throw new Error(`Replayed real cast did not open the room around the asset: ${JSON.stringify(state.replayedCast)}`);
     if (state.replayedCast.completedWorkroom.stageTop < state.replayedCast.completedWorkroom.transformBarBottom + 8) throw new Error(`Replayed Crucible console overlaps the scene toolbar: ${JSON.stringify(state.replayedCast.completedWorkroom)}`);

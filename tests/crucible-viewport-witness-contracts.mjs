@@ -1,8 +1,33 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import vm from 'node:vm';
 
 const witness = readFileSync(new URL('../crucible-viewport-witness.mjs', import.meta.url), 'utf8');
+const witnessPath = new URL('../crucible-viewport-witness.mjs', import.meta.url);
+const argumentFailureRoot = mkdtempSync(join(tmpdir(), 'kaminos-crucible-replay-args-'));
+try {
+  const argumentFailureReport = join(argumentFailureRoot, 'witness.json');
+  const argumentFailure = spawnSync(process.execPath, [
+    witnessPath.pathname,
+    '--replay-cast-report', join(argumentFailureRoot, 'completed-pipeline-witness.json'),
+    '--fire-friendly',
+    '--report', argumentFailureReport,
+    '--out', join(argumentFailureRoot, 'should-not-exist.png'),
+  ], { encoding: 'utf8' });
+  assert.notEqual(argumentFailure.status, 0, 'replay and live inference flags must conflict');
+  assert.equal(existsSync(argumentFailureReport), true, 'replay argument rejection must still write the requested durable witness report');
+  const argumentFailureDocument = JSON.parse(readFileSync(argumentFailureReport, 'utf8'));
+  assert.equal(argumentFailureDocument.ok, false);
+  assert.equal(argumentFailureDocument.phase, 'validating-arguments');
+  assert.equal(argumentFailureDocument.primaryOutputWritten, false);
+  assert.match(argumentFailureDocument.error, /cannot be combined/);
+  assert.equal(existsSync(join(argumentFailureRoot, 'should-not-exist.png')), false, 'argument rejection must happen before browser capture');
+} finally {
+  rmSync(argumentFailureRoot, { recursive: true, force: true });
+}
 const schedulerExpectationSource = witness.match(
   /function expectedSchedulerForProfile\([\s\S]*?\n}\n(?=\nfunction )/,
 );
@@ -403,6 +428,8 @@ for (const [pattern, message] of [
   [/--fire-presentation/, 'Witness must accept an explicit central fire presentation instead of inheriting a UI default'],
   [/--capture-in-flight/, 'Transient visual capture must be explicit so ordinary cadence witnesses remain unperturbed'],
   [/--replay-cast-report/, 'Witness must expose an explicit real-output replay path for terminal layout verification'],
+  [/receiptReportPath:\s*replayResult\.receipt\?\.reportPath[\s\S]*receiptReportPath !== state\.replayedCast\.reportPath/, 'Replay witness must verify the persisted Crucible receipt retained the source pipeline report path'],
+  [/kaminosCrucibleViewportReplayRealCast[\s\S]*setTimeout\(resolve,\s*240\)[\s\S]*completedWorkroom/, 'Replay geometry must settle past the workroom posture transition before toolbar clearance is judged'],
   [/--in-flight-out/, 'Witness must let callers choose the transient hybrid screenshot path'],
   [/--in-flight-max-observation-gap-ms/, 'Witness must expose the RAF continuity threshold instead of burying it'],
   [/--expected-sharp-revision/, 'Full-route witness must accept the exact expected SHARP source revision'],

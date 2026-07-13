@@ -13450,6 +13450,20 @@ function crucibleReplayArtifactWithinOutputRoot(artifactPath, outputRoot) {
   return Boolean(root && candidate.startsWith(`${root}/`));
 }
 
+function replayRunWithSourceReport({ replay, run }) {
+  const reportPath = String(replay?.reportPath || '').trim();
+  if (!reportPath) {
+    throw new Error('Completed-cast replay requires its source pipeline witness path.');
+  }
+  return {
+    ...(run || {}),
+    report: {
+      ...(run?.report || {}),
+      path: reportPath,
+    },
+  };
+}
+
 async function replayRealPipelineCastInCrucible({ replay, run, artifact }) {
   const outputRoot = run?.bundle?.document?.outputRoot || replay?.outputRoot || '';
   const artifactBytes = Number(artifact?.bytes);
@@ -13465,6 +13479,7 @@ async function replayRealPipelineCastInCrucible({ replay, run, artifact }) {
   if (!crucibleReplayArtifactWithinOutputRoot(artifact.path, outputRoot)) {
     throw new Error('Completed-cast replay artifact is outside its recorded output root.');
   }
+  const replayRun = replayRunWithSourceReport({ replay, run });
 
   const firing = crucibleBenchRecordFiring({
     routeId: replay.effectiveRouteId,
@@ -13473,21 +13488,21 @@ async function replayRealPipelineCastInCrucible({ replay, run, artifact }) {
     source: crucibleViewportDebugState().source,
   });
   try {
-    const record = await pipelineLoadRunSplatArtifact(run, artifact);
-    crucibleBenchRecordCast({ firingId: firing.id, run, artifact, record });
-    crucibleBenchRecordReceipt({
+    const record = await pipelineLoadRunSplatArtifact(replayRun, artifact);
+    crucibleBenchRecordCast({ firingId: firing.id, run: replayRun, artifact, record });
+    const receipt = crucibleBenchRecordReceipt({
       firingId: firing.id,
       status: 'complete',
       message: 'Loaded a previously completed real cast for visual layout verification.',
-      run,
+      run: replayRun,
     });
-    return { firing, record };
+    return { firing, record, receipt };
   } catch (error) {
     crucibleBenchRecordReceipt({
       firingId: firing.id,
       status: 'failed',
       message: 'Kaminos could not replay the completed real cast.',
-      run,
+      run: replayRun,
       error: error?.message || String(error),
     });
     throw error;

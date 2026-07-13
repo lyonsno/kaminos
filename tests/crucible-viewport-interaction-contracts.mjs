@@ -3,6 +3,24 @@ import { readFileSync } from 'node:fs';
 
 const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 
+const replayRunSource = html.match(
+  /function replayRunWithSourceReport\([\s\S]*?\n}/,
+);
+assert.ok(replayRunSource, 'Crucible replay must expose a testable source-report preservation helper');
+const replayRunWithSourceReport = Function(`return (${replayRunSource[0]})`)();
+const sourceReportPath = '/tmp/pipeline-runs/completed/pipeline-witness.json';
+const receiptBearingReplayRun = replayRunWithSourceReport({
+  replay: { reportPath: sourceReportPath },
+  run: { runId: 'visual-replay:abc', report: { document: { ok: true } } },
+});
+assert.equal(receiptBearingReplayRun.report.path, sourceReportPath);
+assert.equal(receiptBearingReplayRun.report.document.ok, true, 'adding replay report identity must not discard existing report content');
+assert.throws(
+  () => replayRunWithSourceReport({ replay: {}, run: {} }),
+  /source pipeline witness path/,
+  'an under-sourced replay must fail before importing or recording a cast',
+);
+
 assert.doesNotMatch(
   html,
   /cooperative-fixed-16ms-donation/,
@@ -82,8 +100,13 @@ assert.match(
 );
 assert.match(
   html,
-  /async function replayRealPipelineCastInCrucible\(\{ replay, run, artifact \}\)[\s\S]*pipelineLoadRunSplatArtifact\(run, artifact\)[\s\S]*crucibleBenchRecordCast\([\s\S]*crucibleBenchRecordReceipt\([\s\S]*status:\s*'complete'/,
+  /async function replayRealPipelineCastInCrucible\(\{ replay, run, artifact \}\)[\s\S]*replayRunWithSourceReport\([\s\S]*pipelineLoadRunSplatArtifact\(replayRun, artifact\)[\s\S]*crucibleBenchRecordCast\([\s\S]*crucibleBenchRecordReceipt\([\s\S]*status:\s*'complete'/,
   'Real-output replay must use the actual pipeline importer and Crucible firing/cast/receipt state machine',
+);
+assert.match(
+  html,
+  /const receipt = crucibleBenchRecordReceipt\([\s\S]*return \{ firing, record, receipt \}/,
+  'The replay bridge must return its persisted receipt so the browser witness can verify source-report custody',
 );
 assert.match(
   html,
