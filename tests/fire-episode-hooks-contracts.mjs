@@ -114,12 +114,22 @@ assert.equal(firingARecorded.routeIdentity.flameRendererIdentity, 'live-boundary
 const repeatedBegin = hooks.begin({ firingId: 'firing-a' });
 assert.equal(repeatedBegin.generation, 1, 'repeating begin for the active firing is idempotent');
 assert.equal(repeatedBegin.sampleCount, 2, 'idempotent begin does not discard current firing evidence');
+hooks.recordQueueProxy({
+  available: true,
+  pending: false,
+  samples: 4,
+  lastDoneMs: 1.25,
+  p95DoneMs: 1.75,
+});
+assert.equal(hooks.snapshot().queueCompletionProxy.samples, 4);
 
 nowMs = 200;
 const firingB = hooks.begin({ firingId: 'firing-b' });
 assert.equal(firingB.generation, 2, 'a distinct firing gets a fresh generation');
 assert.equal(firingB.sampleCount, 0, 'a distinct firing cannot inherit prototype-lifetime samples');
 assert.deepEqual(firingB.rawRafGapSamplesMs, []);
+assert.equal(firingB.queueCompletionProxy.samples, 0, 'a distinct firing cannot inherit queue evidence');
+assert.equal(firingB.queueCompletionProxy.lastDoneMs, null);
 assert.equal(firingB.frameStartCount, 13);
 assert.equal(firingB.simStepStartCount, 24);
 
@@ -145,6 +155,16 @@ const repeatedEnd = hooks.end({ firingId: 'firing-b', status: 'complete' });
 assert.deepEqual(repeatedEnd, firingBComplete, 'repeating end for the completed firing is idempotent');
 hooks.recordFrame({ rafGapMs: 90, cpuFrameMs: 4 });
 assert.deepEqual(hooks.snapshot(), firingBComplete, 'completed episodes reject later prototype-lifetime samples');
+assert.throws(
+  () => hooks.begin({ firingId: 'firing-b' }),
+  /already used/i,
+  'a completed firing id cannot be rebound to a newer generation that the consumer did not request',
+);
+assert.throws(
+  () => hooks.begin({ firingId: 'firing-a' }),
+  /already used/i,
+  'a superseded firing id cannot be rebound after another firing owns the tracker',
+);
 
 const mutableSnapshot = hooks.snapshot();
 mutableSnapshot.rawRafGapSamplesMs.push(999);

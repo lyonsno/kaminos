@@ -2875,6 +2875,9 @@ async function main() {
     assert.ok(Number.isFinite(stateTiming.rafFps) && stateTiming.rafFps > 0, 'route-local RAF timing did not report a positive cadence');
     assert.ok(Number.isFinite(stateTiming.frameP95Ms) && stateTiming.frameP95Ms > 0, 'route-local frame p95 timing is missing');
     assert.ok(Number.isFinite(stateTiming.cpuFrameMs) && stateTiming.cpuFrameMs >= 0, 'route-local CPU frame timing is missing');
+    const stateFireEpisodeHooks = state.fireEpisodeHooks || {};
+    assert.equal(stateFireEpisodeHooks.identity, 'foreground-kiln-fire-episode-hooks-v0', 'fire episode lifecycle did not reach debug state');
+    assert.ok(Array.isArray(stateFireEpisodeHooks.rawRafGapSamplesMs), 'fire episode lifecycle did not preserve its exact-window samples');
 
     phase = 'gpu-readback';
     const fullScreenshotPath = await captureViewportScreenshot(ws, fullScreenshot);
@@ -3001,6 +3004,10 @@ async function main() {
       if (!Number.isFinite(sampleTiming.queueDoneMs) || !Number.isFinite(sampleTiming.queueDoneP95Ms)) {
         throw new Error(`GPU queue completion timing was sampled but did not report finite latency: ${JSON.stringify(sampleTiming)}`);
       }
+    }
+    const sampleFireEpisodeHooks = sample.fireEpisodeHooks || stateFireEpisodeHooks;
+    if (sampleFireEpisodeHooks.identity !== 'foreground-kiln-fire-episode-hooks-v0') {
+      throw new Error(`Fire episode lifecycle did not survive GPU readback: ${JSON.stringify(sampleFireEpisodeHooks)}`);
     }
     if (sample.simReadback.densityMax <= 0.01 || sample.simReadback.velocityMean <= 0.001 || sample.simReadback.liveVoxels < 8) {
       throw new Error(`GPU sim readback does not show live fluid state: ${JSON.stringify(sample.simReadback)}`);
@@ -4382,6 +4389,7 @@ async function main() {
       expectsNoFireVolumeEvidence,
       expectsPyroMaterialEvidence,
       timing: sample.timing || stateTiming,
+      fireEpisodeHooks: sample.fireEpisodeHooks || stateFireEpisodeHooks,
       timingEvidenceSource: (sample.timing || stateTiming).timingEvidenceSource,
       timingDisclaimer: (sample.timing || stateTiming).timingDisclaimer,
       controls: reportControls,
