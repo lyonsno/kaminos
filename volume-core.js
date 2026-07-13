@@ -9105,6 +9105,77 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     return result;
   }
 
+  async function primeBoundarySplatLiveHistory(options = {}) {
+    if (!state.active || !device) return { ok: false, reason: 'inactive' };
+    const controlsBefore = { ...controlsSnapshot };
+    const configuredHistoryFrames = (
+      normalizeBoundarySplatHistoryDepth(controlsSnapshot.boundarySplatHistoryDepth) - 1
+    ) * normalizeBoundarySplatHistoryFrameStride(controlsSnapshot.boundarySplatHistoryFrameStride) + 1;
+    const minimumHistoryFrames = Math.max(
+      1,
+      Math.floor(Number(options.minimumHistoryFrames) || configuredHistoryFrames),
+    );
+    const frameCountBefore = state.frameCount;
+    const simStepCountBefore = state.simStepCount;
+    const framesToAdvance = Math.max(0, minimumHistoryFrames - frameCountBefore);
+    let draw = null;
+    let frozenProfile = null;
+    cancelAnimationFrame(raf);
+    if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
+    try {
+      controlsSnapshot = applyRuntimeQualityControls({ ...controlsSnapshot, boundarySplatInstances: 1 });
+      for (let index = 0; index < framesToAdvance; index += 1) {
+        updateUniforms(performance.now() + index * (1000 / 60));
+        const encoder = device.createCommandEncoder({ label: 'kaminos boundary-splat live-history prime frame' });
+        encodeSim(encoder);
+        encodeBoundarySidecar(encoder);
+        if (!encodeBoundarySplats(encoder)) {
+          throw new Error(state.boundarySplatFallbackReason || 'boundary-splat-live-history-prime-route-unavailable');
+        }
+        device.queue.submit([encoder.finish()]);
+        state.frameCount += 1;
+      }
+      if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
+      controlsSnapshot = controlsBefore;
+      updateUniforms(performance.now());
+      frozenProfile = await sampleBoundarySplatGpuProfile({ advanceSimulation: false });
+      draw = await sampleBoundarySplatDrawState();
+    } finally {
+      controlsSnapshot = controlsBefore;
+      updateUniforms(performance.now());
+      if (state.active) raf = requestAnimationFrame(render);
+    }
+    const result = {
+      identity: 'boundary-splat-live-history-prime-v0',
+      ok: Number(draw?.sourceCandidateCount) > 0
+        && Number(draw?.requestedInstanceCount) === normalizeBoundarySplatInstanceCount(controlsBefore.boundarySplatInstances)
+        && !state.boundarySplatFallbackReason,
+      authority: 'bounded-continuation-from-one-live-simulator-v0',
+      simulatorCount: 1,
+      minimumHistoryFrames,
+      framesToAdvance,
+      framesAdvanced: state.frameCount - frameCountBefore,
+      frameCountBefore,
+      frameCountAfter: state.frameCount,
+      simStepCountBefore,
+      simStepCountAfter: state.simStepCount,
+      simStepsAdvanced: state.simStepCount - simStepCountBefore,
+      sourceCandidateCount: draw?.sourceCandidateCount ?? null,
+      renderedInstanceCount: draw?.instanceCount ?? null,
+      requestedInstanceCount: draw?.requestedInstanceCount ?? null,
+      phaseSourceCount: draw?.phaseSourceCount ?? null,
+      historyDepth: state.boundarySplatHistoryDepth,
+      historyFrameStride: state.boundarySplatHistoryFrameStride,
+      historyWriteSlot: draw?.historyWriteSlot ?? state.boundarySplatHistoryWriteSlot,
+      timestampStatus: frozenProfile?.timestampStatus ?? null,
+      fallbackReason: state.boundarySplatFallbackReason,
+      candidateCopyBytes: state.boundarySplatCopyBytesThisFrame,
+      sourceAuthority: state.boundarySplatSourceAuthority,
+    };
+    state.boundarySplatHistoryPrime = result;
+    return result;
+  }
+
   async function sampleBoundarySplatFeatureCapture(instanceCount) {
     if (!state.boundarySplatFeatureCaptureRequested) return null;
     if (!state.boundarySplatFeatureCaptureEffective || !boundarySplatFeatureBuffer) {
@@ -11711,6 +11782,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       return canvas;
     },
     sampleFrame,
+    primeBoundarySplatLiveHistory,
     sampleBoundarySplatInstanceCostLadder,
     sampleRenderScaleSet,
     controlledStepFrame,

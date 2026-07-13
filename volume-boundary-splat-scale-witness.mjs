@@ -68,6 +68,13 @@ try {
   lastTrustworthyEvidence.initialState = compactState(initialState);
   lastTrustworthyEvidence.cameraState = cameraState;
 
+  failurePhase = 'live-history-prime';
+  const historyPrime = await evaluate(`window.__kaminosVolumePrototype.primeBoundarySplatLiveHistory(${JSON.stringify({
+    minimumHistoryFrames: Number(initialState.boundarySplatEffectiveHistoryWindowFrames) + 1,
+  })})`, true);
+  validateHistoryPrime(historyPrime, initialState);
+  lastTrustworthyEvidence.historyPrime = historyPrime;
+
   failurePhase = 'gpu-cost-ladder';
   const ladder = await evaluate(`window.__kaminosVolumePrototype.sampleBoundarySplatInstanceCostLadder(${JSON.stringify({
     counts: COUNTS,
@@ -140,6 +147,7 @@ try {
       camera: CAMERA,
       capture: capture.imageAuthority,
     },
+    historyPrime,
     ladder,
     composedCapture: {
       path: imagePath,
@@ -349,6 +357,24 @@ function validateLadder(ladder) {
     assert.ok(Number.isFinite(row.splatRaster?.medianMs), 'missing splat raster median');
   }
   assert.equal(ladder.ok, true, 'runtime rejected cost ladder evidence');
+}
+
+function validateHistoryPrime(historyPrime, initialState) {
+  assert.equal(historyPrime?.identity, 'boundary-splat-live-history-prime-v0', 'wrong history prime identity');
+  assert.equal(historyPrime?.ok, true, 'live history prime rejected its result');
+  assert.equal(historyPrime?.simulatorCount, 1, 'history prime duplicated the simulator');
+  assert.equal(historyPrime?.authority, 'bounded-continuation-from-one-live-simulator-v0', 'wrong history prime authority');
+  assert.equal(
+    historyPrime?.minimumHistoryFrames,
+    Number(initialState?.boundarySplatEffectiveHistoryWindowFrames) + 1,
+    'history prime did not cover the configured ring window',
+  );
+  assert.equal(historyPrime?.framesAdvanced, historyPrime?.simStepsAdvanced, 'history prime frame/sim accounting diverged');
+  assert.ok(historyPrime?.sourceCandidateCount > 0, 'history prime produced no live candidates');
+  assert.equal(historyPrime?.requestedInstanceCount, 100, 'history prime did not restore the requested instance count');
+  assert.equal(historyPrime?.phaseSourceCount, Number(initialState?.boundarySplatHistoryDepth), 'history prime did not expose every configured history slot');
+  assert.equal(historyPrime?.fallbackReason, null, 'history prime entered fallback');
+  assert.equal(historyPrime?.candidateCopyBytes, 0, 'history prime copied candidate buffers');
 }
 
 function clipFromCanvas(rect = {}) {

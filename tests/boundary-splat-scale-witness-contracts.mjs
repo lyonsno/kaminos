@@ -8,6 +8,8 @@ const page = await readFile(new URL('../index.html', import.meta.url), 'utf8');
 assert.match(witness, /kaminos\.volume\.boundary-splat-scale-witness\.v0/, 'scale witness must publish a stable report schema');
 assert.match(witness, /\[1, 4, 16, 25, 64, 100\]/, 'scale witness must run the steward-specified count ladder in order');
 assert.match(witness, /sampleBoundarySplatInstanceCostLadder/, 'scale witness must use the runtime GPU ladder rather than infer cost from draw counts');
+assert.match(witness, /primeBoundarySplatLiveHistory/, 'scale witness must explicitly prime a throttled browser to a positive live candidate source before timing');
+assert.match(witness, /historyPrime/, 'scale witness must preserve live-history priming evidence in its report');
 assert.match(witness, /connected-existing/, 'scale witness must record reuse of the persistent browser');
 assert.match(witness, /browserContinuity/, 'scale witness must state whether its browser existed continuously or was explicitly reseated before measurement');
 assert.match(witness, /reseated-after-original-process-disappeared/, 'scale witness must preserve the actual pre-witness browser recovery boundary');
@@ -19,6 +21,8 @@ assert.match(witness, /stale-or-default-config/, 'scale witness must fail loud w
 assert.match(witness, /blank-or-partial-native-capture/, 'scale witness must reject missing or blank visual output');
 
 assert.match(core, /advanceSimulation:\s*false/, 'GPU ladder must label frozen-simulator timing authority explicitly');
+assert.match(core, /boundary-splat-live-history-prime-v0/, 'runtime must identify the bounded one-simulator history prime');
+assert.match(core, /minimumHistoryFrames/, 'history prime must derive a falsifiable bounded frame target from the configured ring');
 assert.match(core, /simStepCountBefore/, 'GPU ladder must record simulator state before serial measurements');
 assert.match(core, /simStepCountAfter/, 'GPU ladder must record simulator state after serial measurements');
 assert.match(core, /timestampStatus:\s*'available'/, 'GPU ladder must require timestamp-backed stage evidence');
