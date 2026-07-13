@@ -158,10 +158,10 @@ function packSplats(splats) {
 
 async function writeProductArtifact(outDir, label, product) {
   const bytes = packSplats(product.splats);
-  const path = join(outDir, `${label}.splats.f32`);
-  await writeFile(path, bytes);
+  const artifactPath = `${label}.splats.f32`;
+  await writeFile(join(outDir, artifactPath), bytes);
   return {
-    path,
+    path: artifactPath,
     sha256: hash(bytes),
     byteLength: bytes.length,
     dtype: 'float32',
@@ -286,7 +286,8 @@ try {
     });
   }
   const learnedArtifact = await writeProductArtifact(options.outDir, `sim-step-${evaluationFrame.step}-learned`, learnedEvaluation);
-  const modelPath = join(options.outDir, 'sparse-fine-selector.json');
+  const modelArtifactPath = 'sparse-fine-selector.json';
+  const modelPath = join(options.outDir, modelArtifactPath);
   await writeFile(modelPath, `${JSON.stringify(training.model, null, 2)}\n`, 'utf8');
   const modelBytes = await readFile(modelPath);
   const firstTarget = targets[0];
@@ -329,7 +330,7 @@ try {
     learnedSelector: {
       authority: training.authority,
       model: {
-        path: modelPath,
+        path: modelArtifactPath,
         identity: training.model.identity,
         sha256: hash(modelBytes),
         byteLength: modelBytes.length,

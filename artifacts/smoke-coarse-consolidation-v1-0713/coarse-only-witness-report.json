@@ -2,9 +2,9 @@
   "schema": "kaminos.smoke-splat-motion-witness.v0",
   "status": "passed",
   "failurePhase": null,
-  "startedAt": "2026-07-13T22:03:08.015Z",
-  "completedAt": "2026-07-13T22:03:19.673Z",
-  "requestedUrl": "http://127.0.0.1:8237/smoke-splat-motion.html?route=webgpu-real-field-hierarchical-smoke-motion-v0&manifest=./scratch/smoke-coarse-consolidation-080-v1/motion-source.json&instances=1&fine_lod=0&motion_rate=0.16",
+  "startedAt": "2026-07-13T22:24:35.800Z",
+  "completedAt": "2026-07-13T22:24:46.552Z",
+  "requestedUrl": "http://127.0.0.1:8237/smoke-splat-motion.html?route=webgpu-real-field-hierarchical-smoke-motion-v0&manifest=./artifacts/smoke-coarse-consolidation-v1-0713/motion-source.json&instances=1&fine_lod=0&motion_rate=0.16",
   "requestedRoute": "webgpu-real-field-hierarchical-smoke-motion-v0",
   "effectiveRoute": "webgpu-real-field-hierarchical-smoke-motion-v0",
   "fallbackReason": null,
@@ -14,8 +14,8 @@
     "identity": "kaminos-smoke-motion-single-cdp-browser-v0",
     "mode": "launched-owned",
     "chromePath": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-    "chromePort": 19423,
-    "userDataDir": "/var/folders/lm/2d0ldrgn52jd5h6rtghxs2s40000gn/T/kaminos-smoke-motion-chrome-e3hhX1",
+    "chromePort": 19430,
+    "userDataDir": "/var/folders/lm/2d0ldrgn52jd5h6rtghxs2s40000gn/T/kaminos-smoke-motion-chrome-RTFzO1",
     "keepBrowserOpen": false,
     "windowSize": "1280,960"
   },
@@ -116,12 +116,12 @@
       "fallbackReason": null,
       "backend": "WebGPU:apple",
       "temporalAuthority": "velocity-carried-short-horizon-extrapolation-v0",
-      "manifestPath": "./scratch/smoke-coarse-consolidation-080-v1/motion-source.json",
+      "manifestPath": "./artifacts/smoke-coarse-consolidation-v1-0713/motion-source.json",
       "instanceCount": 1,
       "fineLodFraction": 0,
       "motionRate": 0.16,
-      "frameCount": 15,
-      "elapsedMs": 120.20000002384185,
+      "frameCount": 3,
+      "elapsedMs": 21.79999990463257,
       "products": [
         {
           "phaseIndex": 0,
@@ -203,9 +203,9 @@
       },
       "timing": {
         "authority": "browser-request-animation-frame-cpu-submit-v0",
-        "sampleCount": 14,
-        "p50Ms": 8.300000000000011,
-        "p95Ms": 9.099999999999994
+        "sampleCount": 2,
+        "p50Ms": 7.400000000000006,
+        "p95Ms": 8.799999999999997
       },
       "error": null
     },
@@ -217,12 +217,12 @@
       "fallbackReason": null,
       "backend": "WebGPU:apple",
       "temporalAuthority": "velocity-carried-short-horizon-extrapolation-v0",
-      "manifestPath": "./scratch/smoke-coarse-consolidation-080-v1/motion-source.json",
+      "manifestPath": "./artifacts/smoke-coarse-consolidation-v1-0713/motion-source.json",
       "instanceCount": 1,
       "fineLodFraction": 0,
       "motionRate": 0.16,
-      "frameCount": 1105,
-      "elapsedMs": 9203.500000023841,
+      "frameCount": 960,
+      "elapsedMs": 8479.699999904633,
       "products": [
         {
           "phaseIndex": 0,
@@ -306,53 +306,53 @@
         "authority": "browser-request-animation-frame-cpu-submit-v0",
         "sampleCount": 240,
         "p50Ms": 8.300000000000182,
-        "p95Ms": 9.199999999999818
+        "p95Ms": 9.300000000000182
       },
       "error": null
     },
-    "frameCountDelta": 1090,
+    "frameCountDelta": 957,
     "runtimeExceptionCount": 0
   },
   "motionEvidence": {
     "frameDigestAuthority": "sha256-of-live-cdp-page-capture-v0",
     "uniqueFrameDigestCount": 8,
     "frameDigests": [
-      "47c997d0dd882f7bb863e722ce64b3d14578497cfd5a4526ebfea27b023ae68b",
-      "bd3bbfe6fda6880710a7bcdcb696fe4908d79632203ba9b6c3763006d17f3d59",
-      "8de4c43c000f89506252c7cf0057782dec94d0fc153bd21a0fd22ca8df84bfd3",
-      "260f214496cb2ced403e0ad0593d4933841db71ab738c9d138ee1c7767a5bef1",
-      "c0451dc2139721d9bb3bd5cc5b91cc35bf6c14fd9e91fb2c019f9744d964a232",
-      "6b4fbf338ab591ed47cc8de175095a694a2e31e55a27473d96a15825c2a101cb",
-      "1cdd1117a2d34754e29f39d85a3fb88f7accecb6bad814dd6bc2a07ffe9d48ca",
-      "f2a882e603ff4c3fba569d1c40f5690c127e317e121548c1d6e2c0cfc5d9a3f2"
+      "2c8839c4089f1733524759ae240dc98fa6966adcd64d97530d451e07d2163eda",
+      "3a68e5b96b1537a782b8af64579335ac978d4d20076c19f4f54a6e9116296261",
+      "7d47a56223301568c0372721ec356c9d19abd76baaa97a4de262a9b2027d26a5",
+      "cadc0403d7c0c862172ce5133804867d6254ebb7db4710d676be5f49a6279716",
+      "283eceb5dfd723cbc9724794b6c2f4a6cd4863d225ddc8cc94e0bbbb69f3e741",
+      "4e39e5a472139c7a8434e4bca13c2eddacd8c8528ab4ab769508410d95a378a7",
+      "cc557ad5d4622a4bb5904cdfd818bd9bed2b69aa2ed9305dc4aff0e6f3f2a637",
+      "7ba577fbcd35592aa0d7d52195cb08cd31bd57fa8da57b6409c432f470a4f1b2"
     ],
     "runtimeFrameCounts": [
-      212,
-      353,
-      459,
-      590,
-      700,
-      813,
-      976,
-      1105
+      141,
+      260,
+      376,
+      469,
+      580,
+      722,
+      842,
+      960
     ],
     "staticOrCached": false
   },
   "frames": [
     {
       "index": 0,
-      "capturedAt": "2026-07-13T22:03:12.581Z",
+      "capturedAt": "2026-07-13T22:24:39.775Z",
       "image": {
-        "path": "/private/tmp/kaminos-handy-live-splat-smoke-0713/scratch/smoke-coarse-consolidation-080-v1-coarse-only/frame-000.png",
-        "byteLength": 88827,
-        "sha256": "47c997d0dd882f7bb863e722ce64b3d14578497cfd5a4526ebfea27b023ae68b",
+        "path": "/private/tmp/kaminos-handy-live-splat-smoke-0713/artifacts/smoke-coarse-consolidation-v1-0713/coarse-only-frames/frame-000.png",
+        "byteLength": 88396,
+        "sha256": "2c8839c4089f1733524759ae240dc98fa6966adcd64d97530d451e07d2163eda",
         "width": 2560,
         "height": 1746,
-        "luminanceMean": 163.56311318507358,
-        "luminanceStdDev": 27.943423431164895,
-        "nonUniformPixelCount": 4039629
+        "luminanceMean": 163.56375428132924,
+        "luminanceStdDev": 27.944258889518125,
+        "nonUniformPixelCount": 4039571
       },
-      "frameDigest": "47c997d0dd882f7bb863e722ce64b3d14578497cfd5a4526ebfea27b023ae68b",
+      "frameDigest": "2c8839c4089f1733524759ae240dc98fa6966adcd64d97530d451e07d2163eda",
       "runtime": {
         "schema": "kaminos.smoke-splat-motion-runtime.v0",
         "status": "running",
@@ -361,12 +361,12 @@
         "fallbackReason": null,
         "backend": "WebGPU:apple",
         "temporalAuthority": "velocity-carried-short-horizon-extrapolation-v0",
-        "manifestPath": "./scratch/smoke-coarse-consolidation-080-v1/motion-source.json",
+        "manifestPath": "./artifacts/smoke-coarse-consolidation-v1-0713/motion-source.json",
         "instanceCount": 1,
         "fineLodFraction": 0,
         "motionRate": 0.16,
-        "frameCount": 212,
-        "elapsedMs": 1762.7000000238418,
+        "frameCount": 141,
+        "elapsedMs": 1654.9999999046327,
         "products": [
           {
             "phaseIndex": 0,
@@ -448,27 +448,27 @@
         },
         "timing": {
           "authority": "browser-request-animation-frame-cpu-submit-v0",
-          "sampleCount": 211,
-          "p50Ms": 8.300000000000011,
-          "p95Ms": 9.200000000000045
+          "sampleCount": 140,
+          "p50Ms": 8.300000000000068,
+          "p95Ms": 9.299999999999955
         },
         "error": null
       }
     },
     {
       "index": 1,
-      "capturedAt": "2026-07-13T22:03:13.451Z",
+      "capturedAt": "2026-07-13T22:24:40.744Z",
       "image": {
-        "path": "/private/tmp/kaminos-handy-live-splat-smoke-0713/scratch/smoke-coarse-consolidation-080-v1-coarse-only/frame-001.png",
-        "byteLength": 89689,
-        "sha256": "bd3bbfe6fda6880710a7bcdcb696fe4908d79632203ba9b6c3763006d17f3d59",
+        "path": "/private/tmp/kaminos-handy-live-splat-smoke-0713/artifacts/smoke-coarse-consolidation-v1-0713/coarse-only-frames/frame-001.png",
+        "byteLength": 89575,
+        "sha256": "3a68e5b96b1537a782b8af64579335ac978d4d20076c19f4f54a6e9116296261",
         "width": 2560,
         "height": 1746,
-        "luminanceMean": 163.55583694871993,
-        "luminanceStdDev": 27.935769382143032,
-        "nonUniformPixelCount": 4040226
+        "luminanceMean": 163.55749727956564,
+        "luminanceStdDev": 27.937384129722698,
+        "nonUniformPixelCount": 4040126
       },
-      "frameDigest": "bd3bbfe6fda6880710a7bcdcb696fe4908d79632203ba9b6c3763006d17f3d59",
+      "frameDigest": "3a68e5b96b1537a782b8af64579335ac978d4d20076c19f4f54a6e9116296261",
       "runtime": {
         "schema": "kaminos.smoke-splat-motion-runtime.v0",
         "status": "running",
@@ -477,12 +477,12 @@
         "fallbackReason": null,
         "backend": "WebGPU:apple",
         "temporalAuthority": "velocity-carried-short-horizon-extrapolation-v0",
-        "manifestPath": "./scratch/smoke-coarse-consolidation-080-v1/motion-source.json",
+        "manifestPath": "./artifacts/smoke-coarse-consolidation-v1-0713/motion-source.json",
         "instanceCount": 1,
         "fineLodFraction": 0,
         "motionRate": 0.16,
-        "frameCount": 353,
-        "elapsedMs": 2937.7000000238418,
+        "frameCount": 260,
+        "elapsedMs": 2646.9999999046327,
         "products": [
           {
             "phaseIndex": 0,
@@ -565,7 +565,7 @@
         "timing": {
           "authority": "browser-request-animation-frame-cpu-submit-v0",
           "sampleCount": 240,
-          "p50Ms": 8.300000000000182,
+          "p50Ms": 8.300000000000068,
           "p95Ms": 9.299999999999955
         },
         "error": null
@@ -573,18 +573,18 @@
     },
     {
       "index": 2,
-      "capturedAt": "2026-07-13T22:03:14.574Z",
+      "capturedAt": "2026-07-13T22:24:41.525Z",
       "image": {
-        "path": "/private/tmp/kaminos-handy-live-splat-smoke-0713/scratch/smoke-coarse-consolidation-080-v1-coarse-only/frame-002.png",
-        "byteLength": 90589,
-        "sha256": "8de4c43c000f89506252c7cf0057782dec94d0fc153bd21a0fd22ca8df84bfd3",
+        "path": "/private/tmp/kaminos-handy-live-splat-smoke-0713/artifacts/smoke-coarse-consolidation-v1-0713/coarse-only-frames/frame-002.png",
+        "byteLength": 90474,
+        "sha256": "7d47a56223301568c0372721ec356c9d19abd76baaa97a4de262a9b2027d26a5",
         "width": 2560,
         "height": 1746,
-        "luminanceMean": 163.54934597958433,
-        "luminanceStdDev": 27.92827230677668,
-        "nonUniformPixelCount": 4040343
+        "luminanceMean": 163.5516079579459,
+        "luminanceStdDev": 27.930767503121018,
+        "nonUniformPixelCount": 4040375
       },
-      "frameDigest": "8de4c43c000f89506252c7cf0057782dec94d0fc153bd21a0fd22ca8df84bfd3",
+      "frameDigest": "7d47a56223301568c0372721ec356c9d19abd76baaa97a4de262a9b2027d26a5",
       "runtime": {
         "schema": "kaminos.smoke-splat-motion-runtime.v0",
         "status": "running",
@@ -593,12 +593,12 @@
         "fallbackReason": null,
         "backend": "WebGPU:apple",
         "temporalAuthority": "velocity-carried-short-horizon-extrapolation-v0",
-        "manifestPath": "./scratch/smoke-coarse-consolidation-080-v1/motion-source.json",
+        "manifestPath": "./artifacts/smoke-coarse-consolidation-v1-0713/motion-source.json",
         "instanceCount": 1,
         "fineLodFraction": 0,
         "motionRate": 0.16,
-        "frameCount": 459,
-        "elapsedMs": 3821.000000023842,
+        "frameCount": 376,
+        "elapsedMs": 3613.7999999046324,
         "products": [
           {
             "phaseIndex": 0,
@@ -682,25 +682,25 @@
           "authority": "browser-request-animation-frame-cpu-submit-v0",
           "sampleCount": 240,
           "p50Ms": 8.300000000000182,
-          "p95Ms": 9.300000000000182
+          "p95Ms": 9.299999999999727
         },
         "error": null
       }
     },
     {
       "index": 3,
-      "capturedAt": "2026-07-13T22:03:15.478Z",
+      "capturedAt": "2026-07-13T22:24:42.452Z",
       "image": {
-        "path": "/private/tmp/kaminos-handy-live-splat-smoke-0713/scratch/smoke-coarse-consolidation-080-v1-coarse-only/frame-003.png",
-        "byteLength": 91665,
-        "sha256": "260f214496cb2ced403e0ad0593d4933841db71ab738c9d138ee1c7767a5bef1",
+        "path": "/private/tmp/kaminos-handy-live-splat-smoke-0713/artifacts/smoke-coarse-consolidation-v1-0713/coarse-only-frames/frame-003.png",
+        "byteLength": 91119,
+        "sha256": "cadc0403d7c0c862172ce5133804867d6254ebb7db4710d676be5f49a6279716",
         "width": 2560,
         "height": 1746,
-        "luminanceMean": 163.54280481433068,
-        "luminanceStdDev": 27.920848044736093,
-        "nonUniformPixelCount": 4040206
+        "luminanceMean": 163.54641759591235,
+        "luminanceStdDev": 27.924987630749023,
+        "nonUniformPixelCount": 4040289
       },
-      "frameDigest": "260f214496cb2ced403e0ad0593d4933841db71ab738c9d138ee1c7767a5bef1",
+      "frameDigest": "cadc0403d7c0c862172ce5133804867d6254ebb7db4710d676be5f49a6279716",
       "runtime": {
         "schema": "kaminos.smoke-splat-motion-runtime.v0",
         "status": "running",
@@ -709,12 +709,12 @@
         "fallbackReason": null,
         "backend": "WebGPU:apple",
         "temporalAuthority": "velocity-carried-short-horizon-extrapolation-v0",
-        "manifestPath": "./scratch/smoke-coarse-consolidation-080-v1/motion-source.json",
+        "manifestPath": "./artifacts/smoke-coarse-consolidation-v1-0713/motion-source.json",
         "instanceCount": 1,
         "fineLodFraction": 0,
         "motionRate": 0.16,
-        "frameCount": 590,
-        "elapsedMs": 4911.900000023842,
+        "frameCount": 469,
+        "elapsedMs": 4388.799999904632,
         "products": [
           {
             "phaseIndex": 0,
@@ -805,18 +805,18 @@
     },
     {
       "index": 4,
-      "capturedAt": "2026-07-13T22:03:16.404Z",
+      "capturedAt": "2026-07-13T22:24:43.611Z",
       "image": {
-        "path": "/private/tmp/kaminos-handy-live-splat-smoke-0713/scratch/smoke-coarse-consolidation-080-v1-coarse-only/frame-004.png",
-        "byteLength": 92130,
-        "sha256": "c0451dc2139721d9bb3bd5cc5b91cc35bf6c14fd9e91fb2c019f9744d964a232",
+        "path": "/private/tmp/kaminos-handy-live-splat-smoke-0713/artifacts/smoke-coarse-consolidation-v1-0713/coarse-only-frames/frame-004.png",
+        "byteLength": 91929,
+        "sha256": "283eceb5dfd723cbc9724794b6c2f4a6cd4863d225ddc8cc94e0bbbb69f3e741",
         "width": 2560,
         "height": 1746,
-        "luminanceMean": 163.53604140331854,
-        "luminanceStdDev": 27.912790815414333,
-        "nonUniformPixelCount": 4040155
+        "luminanceMean": 163.5399673260086,
+        "luminanceStdDev": 27.917613045539262,
+        "nonUniformPixelCount": 4040224
       },
-      "frameDigest": "c0451dc2139721d9bb3bd5cc5b91cc35bf6c14fd9e91fb2c019f9744d964a232",
+      "frameDigest": "283eceb5dfd723cbc9724794b6c2f4a6cd4863d225ddc8cc94e0bbbb69f3e741",
       "runtime": {
         "schema": "kaminos.smoke-splat-motion-runtime.v0",
         "status": "running",
@@ -825,12 +825,12 @@
         "fallbackReason": null,
         "backend": "WebGPU:apple",
         "temporalAuthority": "velocity-carried-short-horizon-extrapolation-v0",
-        "manifestPath": "./scratch/smoke-coarse-consolidation-080-v1/motion-source.json",
+        "manifestPath": "./artifacts/smoke-coarse-consolidation-v1-0713/motion-source.json",
         "instanceCount": 1,
         "fineLodFraction": 0,
         "motionRate": 0.16,
-        "frameCount": 700,
-        "elapsedMs": 5829.400000023842,
+        "frameCount": 580,
+        "elapsedMs": 5313.899999904633,
         "products": [
           {
             "phaseIndex": 0,
@@ -914,25 +914,25 @@
           "authority": "browser-request-animation-frame-cpu-submit-v0",
           "sampleCount": 240,
           "p50Ms": 8.300000000000182,
-          "p95Ms": 9.199999999999818
+          "p95Ms": 9.299999999999727
         },
         "error": null
       }
     },
     {
       "index": 5,
-      "capturedAt": "2026-07-13T22:03:17.787Z",
+      "capturedAt": "2026-07-13T22:24:44.636Z",
       "image": {
-        "path": "/private/tmp/kaminos-handy-live-splat-smoke-0713/scratch/smoke-coarse-consolidation-080-v1-coarse-only/frame-005.png",
-        "byteLength": 87765,
-        "sha256": "6b4fbf338ab591ed47cc8de175095a694a2e31e55a27473d96a15825c2a101cb",
+        "path": "/private/tmp/kaminos-handy-live-splat-smoke-0713/artifacts/smoke-coarse-consolidation-v1-0713/coarse-only-frames/frame-005.png",
+        "byteLength": 87611,
+        "sha256": "4e39e5a472139c7a8434e4bca13c2eddacd8c8528ab4ab769508410d95a378a7",
         "width": 2560,
         "height": 1746,
-        "luminanceMean": 163.57059547593556,
-        "luminanceStdDev": 27.95102320903979,
-        "nonUniformPixelCount": 4039785
+        "luminanceMean": 163.57288745389445,
+        "luminanceStdDev": 27.953133339152192,
+        "nonUniformPixelCount": 4039874
       },
-      "frameDigest": "6b4fbf338ab591ed47cc8de175095a694a2e31e55a27473d96a15825c2a101cb",
+      "frameDigest": "4e39e5a472139c7a8434e4bca13c2eddacd8c8528ab4ab769508410d95a378a7",
       "runtime": {
         "schema": "kaminos.smoke-splat-motion-runtime.v0",
         "status": "running",
@@ -941,12 +941,12 @@
         "fallbackReason": null,
         "backend": "WebGPU:apple",
         "temporalAuthority": "velocity-carried-short-horizon-extrapolation-v0",
-        "manifestPath": "./scratch/smoke-coarse-consolidation-080-v1/motion-source.json",
+        "manifestPath": "./artifacts/smoke-coarse-consolidation-v1-0713/motion-source.json",
         "instanceCount": 1,
         "fineLodFraction": 0,
         "motionRate": 0.16,
-        "frameCount": 813,
-        "elapsedMs": 6770.800000023842,
+        "frameCount": 722,
+        "elapsedMs": 6496.799999904632,
         "products": [
           {
             "phaseIndex": 0,
@@ -1030,25 +1030,25 @@
           "authority": "browser-request-animation-frame-cpu-submit-v0",
           "sampleCount": 240,
           "p50Ms": 8.300000000000182,
-          "p95Ms": 9.199999999999818
+          "p95Ms": 9.300000000000182
         },
         "error": null
       }
     },
     {
       "index": 6,
-      "capturedAt": "2026-07-13T22:03:18.859Z",
+      "capturedAt": "2026-07-13T22:24:45.614Z",
       "image": {
-        "path": "/private/tmp/kaminos-handy-live-splat-smoke-0713/scratch/smoke-coarse-consolidation-080-v1-coarse-only/frame-006.png",
-        "byteLength": 88878,
-        "sha256": "1cdd1117a2d34754e29f39d85a3fb88f7accecb6bad814dd6bc2a07ffe9d48ca",
+        "path": "/private/tmp/kaminos-handy-live-splat-smoke-0713/artifacts/smoke-coarse-consolidation-v1-0713/coarse-only-frames/frame-006.png",
+        "byteLength": 88928,
+        "sha256": "cc557ad5d4622a4bb5904cdfd818bd9bed2b69aa2ed9305dc4aff0e6f3f2a637",
         "width": 2560,
         "height": 1746,
-        "luminanceMean": 163.56249254673943,
-        "luminanceStdDev": 27.942793054556336,
-        "nonUniformPixelCount": 4039631
+        "luminanceMean": 163.56643090665168,
+        "luminanceStdDev": 27.946795323693397,
+        "nonUniformPixelCount": 4039616
       },
-      "frameDigest": "1cdd1117a2d34754e29f39d85a3fb88f7accecb6bad814dd6bc2a07ffe9d48ca",
+      "frameDigest": "cc557ad5d4622a4bb5904cdfd818bd9bed2b69aa2ed9305dc4aff0e6f3f2a637",
       "runtime": {
         "schema": "kaminos.smoke-splat-motion-runtime.v0",
         "status": "running",
@@ -1057,12 +1057,12 @@
         "fallbackReason": null,
         "backend": "WebGPU:apple",
         "temporalAuthority": "velocity-carried-short-horizon-extrapolation-v0",
-        "manifestPath": "./scratch/smoke-coarse-consolidation-080-v1/motion-source.json",
+        "manifestPath": "./artifacts/smoke-coarse-consolidation-v1-0713/motion-source.json",
         "instanceCount": 1,
         "fineLodFraction": 0,
         "motionRate": 0.16,
-        "frameCount": 976,
-        "elapsedMs": 8129.200000023842,
+        "frameCount": 842,
+        "elapsedMs": 7497.299999904632,
         "products": [
           {
             "phaseIndex": 0,
@@ -1146,25 +1146,25 @@
           "authority": "browser-request-animation-frame-cpu-submit-v0",
           "sampleCount": 240,
           "p50Ms": 8.300000000000182,
-          "p95Ms": 9.199999999999818
+          "p95Ms": 9.300000000000182
         },
         "error": null
       }
     },
     {
       "index": 7,
-      "capturedAt": "2026-07-13T22:03:19.673Z",
+      "capturedAt": "2026-07-13T22:24:46.550Z",
       "image": {
-        "path": "/private/tmp/kaminos-handy-live-splat-smoke-0713/scratch/smoke-coarse-consolidation-080-v1-coarse-only/frame-007.png",
-        "byteLength": 89785,
-        "sha256": "f2a882e603ff4c3fba569d1c40f5690c127e317e121548c1d6e2c0cfc5d9a3f2",
+        "path": "/private/tmp/kaminos-handy-live-splat-smoke-0713/artifacts/smoke-coarse-consolidation-v1-0713/coarse-only-frames/frame-007.png",
+        "byteLength": 89393,
+        "sha256": "7ba577fbcd35592aa0d7d52195cb08cd31bd57fa8da57b6409c432f470a4f1b2",
         "width": 2560,
         "height": 1746,
-        "luminanceMean": 163.55569879602265,
-        "luminanceStdDev": 27.935648794649396,
-        "nonUniformPixelCount": 4040240
+        "luminanceMean": 163.56023807298664,
+        "luminanceStdDev": 27.94024407304893,
+        "nonUniformPixelCount": 4039868
       },
-      "frameDigest": "f2a882e603ff4c3fba569d1c40f5690c127e317e121548c1d6e2c0cfc5d9a3f2",
+      "frameDigest": "7ba577fbcd35592aa0d7d52195cb08cd31bd57fa8da57b6409c432f470a4f1b2",
       "runtime": {
         "schema": "kaminos.smoke-splat-motion-runtime.v0",
         "status": "running",
@@ -1173,12 +1173,12 @@
         "fallbackReason": null,
         "backend": "WebGPU:apple",
         "temporalAuthority": "velocity-carried-short-horizon-extrapolation-v0",
-        "manifestPath": "./scratch/smoke-coarse-consolidation-080-v1/motion-source.json",
+        "manifestPath": "./artifacts/smoke-coarse-consolidation-v1-0713/motion-source.json",
         "instanceCount": 1,
         "fineLodFraction": 0,
         "motionRate": 0.16,
-        "frameCount": 1105,
-        "elapsedMs": 9203.500000023841,
+        "frameCount": 960,
+        "elapsedMs": 8479.699999904633,
         "products": [
           {
             "phaseIndex": 0,
@@ -1262,7 +1262,7 @@
           "authority": "browser-request-animation-frame-cpu-submit-v0",
           "sampleCount": 240,
           "p50Ms": 8.300000000000182,
-          "p95Ms": 9.199999999999818
+          "p95Ms": 9.300000000000182
         },
         "error": null
       }

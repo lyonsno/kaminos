@@ -9,7 +9,7 @@ Result: Yes for the coarse hierarchy, but not yet for the complete smoke product
 - Repo: `/Users/noahlyons/dev/kaminos`
 - Worktree: `/private/tmp/kaminos-handy-live-splat-smoke-0713`
 - Branch: `cc/handy-live-splat-smoke-0713`
-- Capture base: `585c5095d3626b9ed3ad79fc007b779b77f9987e` plus the coarse v1 working-tree implementation preserved by the commit containing this bundle
+- Initial capture base: `585c5095d3626b9ed3ad79fc007b779b77f9987e`; the durable-route recapture uses the revision-one commit containing this bundle
 - Source frames: `/private/tmp/kaminos-splat-good-basin-full-grid-160-replay96-v1/manifest.json` and `/private/tmp/kaminos-splat-good-basin-full-grid-160-replay97-v1/manifest.json`
 - Source route: `native-3d-compute-fluid-raymarch-v0`, deterministic simulator steps 96 and 97, grid 160
 - Product route: `authoritative-full-grid-real-smoke-hierarchy-corpus-v0`
@@ -24,7 +24,7 @@ Corpus command:
 node scripts/compile-real-smoke-splat-corpus.mjs \
   --frame /private/tmp/kaminos-splat-good-basin-full-grid-160-replay96-v1/manifest.json \
   --frame /private/tmp/kaminos-splat-good-basin-full-grid-160-replay97-v1/manifest.json \
-  --out-dir scratch/smoke-coarse-consolidation-080-v1 \
+  --out-dir artifacts/smoke-coarse-consolidation-v1-0713 \
   --coarse-block-size 8 \
   --fine-block-size 4 \
   --articulation-threshold 0.5 \
@@ -46,7 +46,7 @@ Durable coarse-only diagnostic URL:
 http://127.0.0.1:8237/smoke-splat-motion.html?route=webgpu-real-field-hierarchical-smoke-motion-v0&manifest=./artifacts/smoke-coarse-consolidation-v1-0713/motion-source.json&instances=1&fine_lod=0&motion_rate=0.16
 ```
 
-The original witness commands used the equivalent scratch manifest paths. `coarse-only-witness-report.json` and `full-route-witness-report.json` retain their requested and effective routes, fallback state, browser identity, frame timing, and all eight frame hashes.
+`coarse-only-witness-report.json` and `full-route-witness-report.json` were regenerated directly against the durable artifact manifest on 2026-07-13. Both reports retain the artifact-relative manifest path in `requestedUrl` and live runtime state, along with requested/effective route, fallback state, browser identity, frame timing, and all eight frame hashes. Their PNG sequences live in `coarse-only-frames/` and `full-route-frames/`. `report.json` is the portable corpus report hashed by `motion-source.json`.
 
 ## Images
 
@@ -55,6 +55,8 @@ The original witness commands used the equivalent scratch manifest paths. `coars
 - `v0-full-moment-full-route.png`: the same failed geometry with fine articulation enabled.
 - `v1-anchor-geometry-coarse-only.png`: corrected coarse result; anchor bins own geometry while tail bins transfer only optical/material mass. The cuboid is gone, though the transport support remains visibly lumpy.
 - `v1-anchor-geometry-full-route.png`: complete four-instance route. A faint tall cuboid remains and is attributable to the fine layer because it is absent from the coarse-only frame.
+- `coarse-only-frames/frame-003.png`: directly inspected frame from the durable-manifest coarse-only recapture.
+- `full-route-frames/frame-003.png`: directly inspected frame from the durable-manifest four-instance recapture.
 
 ## Important hashes
 
@@ -65,6 +67,12 @@ The original witness commands used the equivalent scratch manifest paths. `coars
 - `v1-anchor-geometry-full-route.png`: `98beb5cb4e15eb6e70d47f4f7847cd4c3026a7931fb14b517f8cf37b25355e91`
 - `sim-step-96-target.splats.f32`: `c4c0ca096868c54dd5e0eebc9aed51e4968d4aa1b5280fda3457a8ab2d56bc26`
 - `sim-step-97-learned.splats.f32`: `3b38ac7725e6329343230f53fc6460b59c6a601fe25a9f2e370c6d6ab743840d`
+- `report.json`: `75ae920b74d1da5ca4af225c9cca8c3dfe92d5e8c5df43ea65e64c0bda23756b`
+- `motion-source.json`: `e1b20940c6bfa25606a7c0d8bcec9270b6207453892d6561102d0a0a390fd2d4`
+- `coarse-only-witness-report.json`: `da471ccbadb5499a130e8bac2b4565ee9b6ba84dc61896578d89cd79bf28bfcb`
+- `full-route-witness-report.json`: `a4a1cc488685aec8c79f50b7689a8c4b18453138864025dbec84ed52112c1f7f`
+- `coarse-only-frames/frame-003.png`: `cadc0403d7c0c862172ce5133804867d6254ebb7db4710d676be5f49a6279716`
+- `full-route-frames/frame-003.png`: `f413d5fa26e521c5ff33260dedabdc2c63eb1e97ec20a9069e2f2ca79c9ab250`
 
 ## Claim boundary
 
