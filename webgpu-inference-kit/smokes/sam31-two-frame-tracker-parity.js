@@ -4,6 +4,7 @@ import {
   createSam31TrackerState,
   createSam31MemoryAttentionPhaseProgramRouteDefinition,
   createSam31MaskConditioningPhaseProgramRouteDefinition,
+  createSam31InteractivePointerPhaseProgramRouteDefinition,
   createSam31MemoryEncoderPhaseProgramRouteDefinition,
   createSam31MultiplexMaskDecoderPhaseProgramRouteDefinition,
   createSam31TemporalMemoryBankPhaseProgramRouteDefinition,
@@ -12,6 +13,7 @@ import {
   prepareSam31TrackerTemporalInputs,
   runSam31MemoryAttentionPhaseProgramRoute,
   runSam31MaskConditioningPhaseProgramRoute,
+  runSam31InteractivePointerPhaseProgramRoute,
   runSam31MemoryEncoderPhaseProgramRoute,
   runSam31MultiplexMaskDecoderPhaseProgramRoute,
   runSam31TemporalMemoryBankPhaseProgramRoute,
@@ -22,9 +24,11 @@ import {
 const statusElement = document.querySelector('#status');
 const params = new URLSearchParams(location.search);
 const NO_OBJ_SCORE = -1024.0;
-const PACKET_NAMES = ['decoder', 'memory', 'temporal', 'episode'];
 const episodeMode = params.get('episodeMode') || 'propagation-decoder';
 if (!['propagation-decoder', 'mask-conditioning'].includes(episodeMode)) throw new Error(`unsupported episodeMode ${episodeMode}`);
+const PACKET_NAMES = episodeMode === 'mask-conditioning'
+  ? ['decoder', 'memory', 'temporal', 'episode', 'pointer']
+  : ['decoder', 'memory', 'temporal', 'episode'];
 const episodeAuthorityName = episodeMode === 'mask-conditioning' ? 'conditionedEpisode' : 'episode';
 document.querySelector('h1').textContent = episodeMode === 'mask-conditioning'
   ? 'SAM3.1 mask conditioning → memory → attention → decoder'
@@ -131,6 +135,14 @@ async function loadDecoderWeights(manifest) {
   return weights;
 }
 
+async function loadInteractivePointerWeights(manifest) {
+  const weights = {};
+  for (const entry of manifest.weights) {
+    weights[`${entry.group}.${entry.localKey}`] = await fetchTensor('/oracle/pointer', entry);
+  }
+  return weights;
+}
+
 async function loadMemoryWeights(manifest) {
   const byRole = entryMap(manifest.weights);
   const weight = role => fetchTensor('/oracle/memory', byRole[role]);
@@ -224,7 +236,7 @@ async function maskConditioningInvocation({ inputs, expected, manifest, adapter,
     queue: device.queue,
     adapterName: adapterInfo.description || 'browser-webgpu-adapter',
     browser: navigator.userAgent,
-    model: { revision: manifest.reference.model.revision, weightsHash: binaryHash },
+    model: { revision: manifest.reference.model.revision },
     kernel: route.kernel,
     tensors: { binaryMasks: inputs.binaryMasks, shape: { multiplexCount: manifest.shape.multiplexCount, maskHeight: manifest.shape.maskHeight, maskWidth: manifest.shape.maskWidth } },
     includeReadback: true,
@@ -237,10 +249,37 @@ async function maskConditioningInvocation({ inputs, expected, manifest, adapter,
   return { result, route, parity, maximum: Math.max(...Object.values(parity)) };
 }
 
+async function interactivePointerInvocation({ inputs, expected, manifest, weights, adapter, device, adapterInfo, errors }) {
+  const route = createSam31InteractivePointerPhaseProgramRouteDefinition({ model: { revision: manifest.reference.model.revision }, kernel: { profile: 'sam31-interactive-pointer-phase-program-v0', commit: params.get('commit') || null } });
+  const sourceHash = await sha256Bytes(inputs.imageEmbedding);
+  const binaryHash = await sha256Bytes(inputs.binaryMasks);
+  const weightsHash = await sha256Text(manifest.weights.map(entry => `${entry.officialKey}:${entry.sha256}`).join('\n'));
+  const request = createRouteInvocationRequest(route, {
+    requestId: `sam31-two-frame-interactive-pointer-${Date.now()}`,
+    inputs: {
+      'source-frame': { artifactId: 'sam31-two-frame:0', sha256: sourceHash, shape: [1] },
+      'sam31-binary-mask-inputs': { artifactId: 'sam31-frame-0-binary-mask-inputs', sha256: binaryHash, shape: [16, 1, 8, 8] },
+      'sam31-interactive-image-embedding': { artifactId: 'sam31-frame-0-interactive-image-embedding', sha256: sourceHash, shape: [1, 2, 2, 256] },
+      'sam31-interactive-pointer-weights': { artifactId: 'sam31-interactive-pointer-weights:official', sha256: weightsHash, shape: [manifest.weights.length] },
+    },
+    outputs: { 'sam31-interactive-object-pointers': { artifactId: 'sam31-frame-0-interactive-object-pointers', shape: [16, 256] } },
+  });
+  const result = await runSam31InteractivePointerPhaseProgramRoute({
+    request, route, adapter, device, queue: device.queue,
+    adapterName: adapterInfo.description || 'browser-webgpu-adapter', browser: navigator.userAgent,
+    model: { revision: manifest.reference.model.revision, weightsHash }, kernel: route.kernel,
+    tensors: { shape: manifest.shape, tensors: { binaryMasks: inputs.binaryMasks, imageEmbedding: inputs.imageEmbedding }, weights },
+    includeReadback: true,
+  });
+  const parity = { objectPointers: maxAbs(result.debugReadback.objectPointers, expected.objectPointers) };
+  if (errors.length) throw new Error(`interactive pointer uncaptured WebGPU errors: ${errors.join('; ')}`);
+  return { result, route, parity, maximum: parity.objectPointers };
+}
+
 async function run() {
   const verifiedPackets = await verifyPacketAuthority();
   const packetAuthority = verifiedPackets.authority;
-  const { episode, decoder: decoderManifest, memory: memoryManifest, temporal: temporalManifest } = verifiedPackets.manifests;
+  const { episode, decoder: decoderManifest, memory: memoryManifest, temporal: temporalManifest, pointer: pointerManifest } = verifiedPackets.manifests;
   const expectedEpisodeSchema = episodeMode === 'mask-conditioning'
     ? 'kaminos.sam31-mask-conditioned-two-frame-tracker-meta-packet.v0'
     : 'kaminos.sam31-two-frame-tracker-meta-packet.v0';
@@ -252,6 +291,15 @@ async function run() {
   const attentionWeights = await loadAttentionWeights(temporalManifest);
   const temporalEntries = entryMap(temporalManifest.tensors);
   const temporalTensor = role => fetchTensor('/oracle/temporal', temporalEntries[role]);
+  const pointerEntries = pointerManifest ? entryMap(pointerManifest.tensors) : null;
+  const pointerWeights = pointerManifest ? await loadInteractivePointerWeights(pointerManifest) : null;
+  const pointerPacketInputDigestPassed = episodeMode !== 'mask-conditioning' || (
+    pointerEntries['binary-mask-inputs'].sha256 === episodeEntries['frame-0-binary-mask-inputs'].sha256
+    && pointerEntries['image-embedding'].sha256 === episodeEntries['frame-0-image-embedding'].sha256
+  );
+  const pointerPacketOutputDigestPassed = episodeMode !== 'mask-conditioning'
+    || pointerEntries['expected-final-object-pointers'].sha256 === episodeEntries['frame-0-object-pointers'].sha256;
+  if (!pointerPacketInputDigestPassed || !pointerPacketOutputDigestPassed) throw new Error('interactive pointer packet does not bind to the conditioned episode inputs and output');
 
   update('running', 'request-adapter', { episodeMode, packetAuthority, manifest: { reference: episode.reference, shape: episode.shape, plan: episode.plan, stateTransition: episode.stateTransition } });
   if (!navigator.gpu) throw new Error('navigator.gpu unavailable');
@@ -271,6 +319,8 @@ async function run() {
   let frame0DecoderResult = null;
   let frame0MaskConditioning = null;
   let frame0MaskConditioningResult = null;
+  let frame0InteractivePointer = null;
+  let frame0InteractivePointerResult = null;
   let frame0Producer;
   let suppression;
   let suppressionParity;
@@ -279,17 +329,21 @@ async function run() {
     update('running', 'frame-0-mask-conditioning', { adapterInfo });
     frame0MaskConditioning = await maskConditioningInvocation({ inputs: frame0Inputs, expected: frame0Expected, manifest: episode, adapter, device, adapterInfo, errors });
     frame0MaskConditioningResult = frame0MaskConditioning.result;
+    update('running', 'frame-0-interactive-pointer', { adapterInfo, frame0MaskConditioningReceipt: frame0MaskConditioningResult.receipt });
+    frame0InteractivePointer = await interactivePointerInvocation({ inputs: frame0Inputs, expected: frame0Expected, manifest: pointerManifest, weights: pointerWeights, adapter, device, adapterInfo, errors });
+    frame0InteractivePointerResult = frame0InteractivePointer.result;
+    const pointerOutput = frame0InteractivePointerResult.receipt.outputs.find(output => output.role === 'sam31-interactive-object-pointers');
     frame0Producer = {
       memoryInputMasks: new Float32Array(frame0MaskConditioningResult.debugReadback.maskLogits),
       objectScores: new Float32Array(frame0MaskConditioningResult.debugReadback.objectScores),
-      pointers: frame0Expected.objectPointers,
+      pointers: new Float32Array(frame0InteractivePointerResult.debugReadback.objectPointers),
       receipt: frame0MaskConditioningResult.receipt,
       route: frame0MaskConditioning.route,
-      maximum: frame0MaskConditioning.maximum,
-      parity: frame0MaskConditioning.parity,
+      maximum: Math.max(frame0MaskConditioning.maximum, frame0InteractivePointer.maximum),
+      parity: { ...frame0MaskConditioning.parity, objectPointers: frame0InteractivePointer.maximum },
       scoreOutputRole: 'sam31-mask-conditioning-object-scores',
-      pointerOutput: null,
-      origin: { kind: 'mask-conditioning', maskOwner: 'browser-webgpu', pointerOwner: 'official-reference-bridge', maskReceipt: frame0MaskConditioningResult.receipt },
+      pointerOutput,
+      origin: { kind: 'mask-conditioning', maskOwner: 'browser-webgpu', pointerOwner: 'browser-webgpu', pointerOutputRole: 'sam31-interactive-object-pointers', maskReceipt: frame0MaskConditioningResult.receipt, pointerReceipt: frame0InteractivePointerResult.receipt },
     };
     suppression = { memoryInputMasks: frame0Producer.memoryInputMasks, suppressedAbsentMaskCount: 0, semanticsPassed: true };
     suppressionParity = frame0MaskConditioning.parity.maskLogits;
@@ -396,30 +450,50 @@ async function run() {
   const frame1Decoder = await decoderInvocation({ frame: 1, inputs: frame1Inputs, expected: frame1Expected, manifest: decoderManifest, weights: decoderWeights, weightsHash: decoderWeightsHash, adapter, device, adapterInfo, errors });
   const frame1DecoderResult = frame1Decoder.result;
 
-  const receipts = [frame0Producer.receipt, frame0MemoryResult.receipt, temporalResult.receipt, frame1AttentionResult.receipt, frame1DecoderResult.receipt];
-  const requestedRouteIds = [frame0Producer.route.routeId, memoryRoute.routeId, temporalRoute.routeId, attentionRoute.routeId, frame1Decoder.route.routeId];
+  const frame0Receipts = episodeMode === 'mask-conditioning'
+    ? [frame0MaskConditioningResult.receipt, frame0InteractivePointerResult.receipt]
+    : [frame0DecoderResult.receipt];
+  const frame0Routes = episodeMode === 'mask-conditioning'
+    ? [frame0MaskConditioning.route, frame0InteractivePointer.route]
+    : [frame0Decoder.route];
+  const receipts = [...frame0Receipts, frame0MemoryResult.receipt, temporalResult.receipt, frame1AttentionResult.receipt, frame1DecoderResult.receipt];
+  const requestedRouteIds = [...frame0Routes.map(route => route.routeId), memoryRoute.routeId, temporalRoute.routeId, attentionRoute.routeId, frame1Decoder.route.routeId];
   const effectiveRouteIds = receipts.map(receipt => receipt.effectiveRouteId);
-  const maximums = { frame0Producer: frame0Producer.maximum, frame0Decoder: frame0Decoder?.maximum ?? null, frame0MaskConditioning: frame0MaskConditioning?.maximum ?? null, frame0Memory: Math.max(...Object.values(memoryParity)), temporalBank: Math.max(...Object.values(bankParity)), frame1Attention: conditionedParity, frame1Decoder: frame1Decoder.maximum };
+  const maximums = { frame0Producer: frame0Producer.maximum, frame0Decoder: frame0Decoder?.maximum ?? null, frame0MaskConditioning: frame0MaskConditioning?.maximum ?? null, frame0InteractivePointer: frame0InteractivePointer?.maximum ?? null, frame0Memory: Math.max(...Object.values(memoryParity)), temporalBank: Math.max(...Object.values(bankParity)), frame1Attention: conditionedParity, frame1Decoder: frame1Decoder.maximum };
   const routeChainPassed = receipts.every((receipt, index) => receipt.status === 'real' && receipt.fallbackReason == null && receipt.effectiveRouteId === requestedRouteIds[index]);
   const suppressionPassed = episodeMode === 'mask-conditioning'
     ? episode.stateTransition.noObjectMaskScore === null && episode.stateTransition.frame0SuppressedAbsentMaskCount === 0 && suppression.suppressedAbsentMaskCount === 0
     : episode.stateTransition.noObjectMaskScore === NO_OBJ_SCORE && suppression.suppressedAbsentMaskCount === episode.stateTransition.frame0SuppressedAbsentMaskCount && suppression.suppressedAbsentMaskCount === episode.stateTransition.frame0AbsentObjectCount && suppression.semanticsPassed;
-  const expectedBridgeDebt = episodeMode === 'mask-conditioning' ? ['interactive-mask-conditioning-object-pointer'] : [];
-  const pointerDigestPassed = episodeMode !== 'mask-conditioning' || trackerStateSnapshot.frames[0].tensorDigests.pointers === pointerPacketEntry.sha256;
+  const expectedBridgeDebt = [];
+  const pointerDigestPassed = episodeMode !== 'mask-conditioning'
+    || trackerStateSnapshot.frames[0].tensorDigests.pointers === frame0Producer.pointerOutput.sha256;
   const persistentStatePassed = preparedTrackerState.stateVersion === 1
     && trackerStateSnapshot.conditioningFrameIndices.length === 1
     && trackerStateSnapshot.conditioningFrameIndices[0] === 0
     && trackerStateSnapshot.nonConditioningFrameIndices.length === 0
     && JSON.stringify(trackerStateSnapshot.bridgeDebt) === JSON.stringify(expectedBridgeDebt)
-    && trackerStateSnapshot.claims.browserNativeMaskConditioning === false
+    && trackerStateSnapshot.claims.browserNativeMaskConditioning === (episodeMode === 'mask-conditioning')
     && pointerDigestPassed;
   const stateTransitionPassed = episode.stateTransition.frame0AppearingObjectCount > 0 && episode.stateTransition.frame0AbsentObjectCount > 0 && suppressionPassed && persistentStatePassed && plan.spatialFrames.length === 1 && plan.pointerFrames.length === 1 && bank.memory.length === 20 * 256;
   const frame0Tolerance = episodeMode === 'mask-conditioning' ? episode.tolerances.maskConditioningMaxAbsDiff : episode.tolerances.decoderMaxAbsDiff;
-  const parityPassed = suppressionParity <= frame0Tolerance && maximums.frame0Producer <= frame0Tolerance && maximums.frame0Memory <= episode.tolerances.memoryMaxAbsDiff && maximums.temporalBank <= episode.tolerances.bankMaxAbsDiff && maximums.frame1Attention <= episode.tolerances.conditionedMaxAbsDiff && maximums.frame1Decoder <= episode.tolerances.decoderMaxAbsDiff;
-  const packetAuthorityPassed = packetAuthority.passed === true && packetAuthority.verifiedPackets.length === 4;
-  const evidence = { packetAuthorityPassed, adapterPassed: adapterInfo.isFallbackAdapter === false, routeChainPassed, persistentStatePassed, stateTransitionPassed, parityPassed, errorsPassed: errors.length === 0 };
+  const pointerParityPassed = episodeMode !== 'mask-conditioning' || maximums.frame0InteractivePointer <= pointerManifest.tolerances.webGpuFinalMaxAbsDiff;
+  const frame0ProducerParityPassed = episodeMode === 'mask-conditioning'
+    ? maximums.frame0MaskConditioning <= frame0Tolerance && pointerParityPassed
+    : maximums.frame0Decoder <= frame0Tolerance;
+  const parityPassed = suppressionParity <= frame0Tolerance && frame0ProducerParityPassed && maximums.frame0Memory <= episode.tolerances.memoryMaxAbsDiff && maximums.temporalBank <= episode.tolerances.bankMaxAbsDiff && maximums.frame1Attention <= episode.tolerances.conditionedMaxAbsDiff && maximums.frame1Decoder <= episode.tolerances.decoderMaxAbsDiff;
+  const packetAuthorityPassed = packetAuthority.passed === true && packetAuthority.verifiedPackets.length === (episodeMode === 'mask-conditioning' ? 5 : 4);
+  const evidence = { packetAuthorityPassed, pointerPacketInputDigestPassed, pointerPacketOutputDigestPassed, adapterPassed: adapterInfo.isFallbackAdapter === false, routeChainPassed, persistentStatePassed, stateTransitionPassed, parityPassed, errorsPassed: errors.length === 0 };
   evidence.passed = Object.values(evidence).every(Boolean);
-  const final = { episodeMode, packetAuthority, trackerState: trackerStateSnapshot, adapterInfo, requestedRouteIds, effectiveRouteIds, receipts, parity: { maximums, frame0Decoder: frame0Decoder?.parity ?? null, frame0MaskConditioning: frame0MaskConditioning?.parity ?? null, frame0MaskSuppression: { maxAbsDiff: suppressionParity, suppressedAbsentMaskCount: suppression.suppressedAbsentMaskCount, semanticsPassed: suppression.semanticsPassed, memoryInputMaskSha256: memoryInputMaskHash }, frame0Memory: memoryParity, temporalBank: bankParity, frame1Attention: conditionedParity, frame1Decoder: frame1Decoder.parity }, stateTransition: episode.stateTransition, pointerDigestPassed, evidence, uncapturedErrors: errors, manifest: { reference: episode.reference, shape: episode.shape, plan: episode.plan } };
+  const referenceStateTransition = episode.stateTransition;
+  const effectiveStateTransition = {
+    ...referenceStateTransition,
+    frame0OriginKind: trackerStateSnapshot.frames[0].origin.kind,
+    maskOwner: trackerStateSnapshot.frames[0].origin.maskOwner,
+    pointerOwner: trackerStateSnapshot.frames[0].origin.pointerOwner,
+    browserNativeMaskConditioning: trackerStateSnapshot.claims.browserNativeMaskConditioning,
+    bridgeDebt: trackerStateSnapshot.bridgeDebt,
+  };
+  const final = { episodeMode, packetAuthority, trackerState: trackerStateSnapshot, adapterInfo, requestedRouteIds, effectiveRouteIds, receipts, parity: { maximums, frame0Decoder: frame0Decoder?.parity ?? null, frame0MaskConditioning: frame0MaskConditioning?.parity ?? null, frame0InteractivePointer: frame0InteractivePointer?.parity ?? null, frame0MaskSuppression: { maxAbsDiff: suppressionParity, suppressedAbsentMaskCount: suppression.suppressedAbsentMaskCount, semanticsPassed: suppression.semanticsPassed, memoryInputMaskSha256: memoryInputMaskHash }, frame0Memory: memoryParity, temporalBank: bankParity, frame1Attention: conditionedParity, frame1Decoder: frame1Decoder.parity }, stateTransition: effectiveStateTransition, referenceStateTransition, effectiveStateTransition, pointerDigestPassed, pointerPacketInputDigestPassed, pointerPacketOutputDigestPassed, evidence, uncapturedErrors: errors, manifest: { reference: episode.reference, shape: episode.shape, plan: episode.plan } };
   if (!evidence.passed) throw Object.assign(new Error(`two-frame tracker evidence failed: ${JSON.stringify(evidence)}`), { evidenceState: final });
   update('passed', 'complete', final);
 }

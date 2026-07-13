@@ -20,6 +20,13 @@ const specs = {
   decoder: { manifestSchema: 'kaminos.sam31-multiplex-mask-decoder-meta-packet.v0', receiptSchema: 'kaminos.sam31-multiplex-mask-decoder-meta-reference-receipt.v0', boundary: 'sam31-propagation-features-to-multiplex-masks-scores-and-object-pointers', manifestExtra: { routeId: 'sam3.1.multiplex-mask-decoder.phase-program.webgpu-local.v0', shape: SAM31_TWO_FRAME_PACKET_AUTHORITIES.decoder.shape }, receiptExtra: { routeId: 'sam3.1.multiplex-mask-decoder.phase-program.webgpu-local.v0', shape: SAM31_TWO_FRAME_PACKET_AUTHORITIES.decoder.shape } },
   memory: { manifestSchema: 'kaminos.sam31-propagation-memory-meta-packet.v0', receiptSchema: 'kaminos.sam31-propagation-memory-meta-reference-receipt.v0', boundary: 'sam31-official-tri-neck-to-multiplex-memory-encoder', manifestExtra: { routeIds: ['sam3.1.propagation-neck.phase-program.webgpu-local.v0', 'sam3.1.memory-encoder.phase-program.webgpu-local.v0'], shape: SAM31_TWO_FRAME_PACKET_AUTHORITIES.memory.shape }, receiptExtra: { routeIds: ['sam3.1.propagation-neck.phase-program.webgpu-local.v0', 'sam3.1.memory-encoder.phase-program.webgpu-local.v0'], shape: SAM31_TWO_FRAME_PACKET_AUTHORITIES.memory.shape } },
   temporal: { manifestSchema: 'kaminos.sam31-temporal-memory-bank-meta-packet.v0', receiptSchema: 'kaminos.sam31-temporal-memory-bank-meta-reference-receipt.v0', boundary: 'sam31-video-output-dictionary-to-temporal-bank-to-four-layer-memory-attention', manifestExtra: { routeId: 'sam3.1.temporal-memory-bank.phase-program.webgpu-local.v0', shape: SAM31_TWO_FRAME_PACKET_AUTHORITIES.temporal.shape, plan: SAM31_TWO_FRAME_PACKET_AUTHORITIES.temporal.plan }, receiptExtra: { routeId: 'sam3.1.temporal-memory-bank.phase-program.webgpu-local.v0', shape: SAM31_TWO_FRAME_PACKET_AUTHORITIES.temporal.shape, plan: SAM31_TWO_FRAME_PACKET_AUTHORITIES.temporal.plan } },
+  pointer: {
+    manifestSchema: 'kaminos.sam31-interactive-pointer-meta-packet.v0',
+    receiptSchema: 'kaminos.sam31-interactive-pointer-meta-reference-receipt.v0',
+    boundary: 'binary-mask-to-interactive-prompt-decoder-to-final-object-pointer',
+    manifestExtra: { routeId: 'sam3.1.interactive-pointer.phase-program.webgpu-local.v0', shape: SAM31_TWO_FRAME_PACKET_AUTHORITIES.pointer.shape, checkpointAudit: { mappedTensorCount: 158, allMappedOfficialKeysPresent: true } },
+    receiptExtra: { routeId: 'sam3.1.interactive-pointer.phase-program.webgpu-local.v0', shape: SAM31_TWO_FRAME_PACKET_AUTHORITIES.pointer.shape, checkpointAudit: { mappedTensorCount: 158, allMappedOfficialKeysPresent: true } },
+  },
   episode: { manifestSchema: 'kaminos.sam31-two-frame-tracker-meta-packet.v0', receiptSchema: 'kaminos.sam31-two-frame-tracker-meta-reference-receipt.v0', boundary: 'frame-0-decoder-to-memory-state-to-frame-1-conditioned-decoder', manifestExtra: { shape: episodeShape, plan: episodePlan }, receiptExtra: { shape: episodeShape, plan: episodePlan } },
   conditionedEpisode: {
     manifestSchema: 'kaminos.sam31-mask-conditioned-two-frame-tracker-meta-packet.v0',
@@ -51,7 +58,7 @@ const digests = {};
 for (const name of ['decoder', 'memory', 'temporal', 'episode']) digests[name] = await writePacket(name);
 
 function verifyOnly(report, expected = digests, episodeMode = 'propagation-decoder') {
-  return spawnSync(process.execPath, [driver.pathname,
+  const command = [driver.pathname,
     '--packet-dir', packetDir,
     '--report', report,
     '--reuse-packet', '1',
@@ -63,8 +70,9 @@ function verifyOnly(report, expected = digests, episodeMode = 'propagation-decod
     '--expected-episode-manifest-sha256', expected.episode,
     '--debug-port', String(20000 + process.pid % 10000),
     '--server-port', String(30000 + process.pid % 10000),
-    '--timeout-ms', '1000',
-  ], { cwd: root.pathname, encoding: 'utf8', timeout: 10000 });
+    '--timeout-ms', '1000'];
+  if (episodeMode === 'mask-conditioning') command.push('--expected-pointer-manifest-sha256', expected.pointer);
+  return spawnSync(process.execPath, command, { cwd: root.pathname, encoding: 'utf8', timeout: 10000 });
 }
 
 const valid = verifyOnly(reportPath);
@@ -76,15 +84,17 @@ assert.deepEqual(validReport.packetAuthority.verifiedPackets, ['decoder', 'memor
 assert.equal(validReport.primary_output_written, false, 'authority-only verification must not pretend to write browser evidence');
 
 const conditionedDigest = await writePacket('episode', { authorityName: 'conditionedEpisode' });
+const pointerDigest = await writePacket('pointer');
 const conditionedAsPropagationReportPath = join(packetDir, 'conditioned-as-propagation-report.json');
 const conditionedAsPropagation = verifyOnly(conditionedAsPropagationReportPath, { ...digests, episode: conditionedDigest });
 assert.notEqual(conditionedAsPropagation.status, 0, 'a conditioned packet must not select conditioned authority when propagation was requested');
 assert.match(JSON.parse(await readFile(conditionedAsPropagationReportPath, 'utf8')).error, /episode.*manifest\.schema/);
 const conditionedReportPath = join(packetDir, 'conditioned-report.json');
-const conditioned = verifyOnly(conditionedReportPath, { ...digests, episode: conditionedDigest }, 'mask-conditioning');
+const conditioned = verifyOnly(conditionedReportPath, { ...digests, episode: conditionedDigest, pointer: pointerDigest }, 'mask-conditioning');
 assert.equal(conditioned.status, 0, conditioned.stderr || conditioned.stdout);
 const conditionedReport = JSON.parse(await readFile(conditionedReportPath, 'utf8'));
 assert.equal(conditionedReport.packetAuthority.packets.episode.name, 'conditionedEpisode');
+assert.deepEqual(conditionedReport.packetAuthority.verifiedPackets, ['decoder', 'memory', 'temporal', 'episode', 'pointer']);
 assert.equal(conditionedReport.episodeMode, 'mask-conditioning');
 digests.episode = await writePacket('episode');
 const propagationAsConditionedReportPath = join(packetDir, 'propagation-as-conditioned-report.json');

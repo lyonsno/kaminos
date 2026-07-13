@@ -21,6 +21,7 @@ const verifyOnly = args.get('--verify-only') === '1';
 const episodeMode = args.get('--episode-mode') || 'propagation-decoder';
 if (!['propagation-decoder', 'mask-conditioning'].includes(episodeMode)) throw new Error(`unsupported --episode-mode ${episodeMode}`);
 const episodeAuthorityName = episodeMode === 'mask-conditioning' ? 'conditionedEpisode' : 'episode';
+const POINTER_EXPECTED_MANIFEST_ARG = '--expected-pointer-manifest-sha256';
 const chrome = process.env.KAMINOS_CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const python = process.env.SAM31_TORCH_PYTHON || '/Users/noahlyons/dev/sf3d/.venv/bin/python';
 const userDataDir = mkdtempSync(join(tmpdir(), `kaminos-sam31-two-frame-chrome-${process.pid}-`));
@@ -32,9 +33,10 @@ const packetTools = {
   temporal: 'sam31-temporal-memory-bank-meta-packet.py',
   episode: 'sam31-two-frame-tracker-meta-packet.py',
 };
+if (episodeMode === 'mask-conditioning') packetTools.pointer = 'sam31-interactive-pointer-meta-packet.py';
 const expectedManifestSha256 = Object.fromEntries(Object.keys(packetTools).map(name => [
   name,
-  args.get(`--expected-${name}-manifest-sha256`) || null,
+  args.get(name === 'pointer' ? POINTER_EXPECTED_MANIFEST_ARG : `--expected-${name}-manifest-sha256`) || null,
 ]));
 
 let phase = 'initializing';
@@ -75,6 +77,8 @@ function writeReport(extra = {}) {
     receipts: lastState?.receipts || null,
     parity: lastState?.parity || null,
     stateTransition: lastState?.stateTransition || null,
+    referenceStateTransition: lastState?.referenceStateTransition || null,
+    effectiveStateTransition: lastState?.effectiveStateTransition || null,
     routeChainPassed: lastState?.evidence?.routeChainPassed || false,
     stateTransitionPassed: lastState?.evidence?.stateTransitionPassed || false,
     parityPassed: lastState?.evidence?.parityPassed || false,
@@ -137,7 +141,7 @@ function startServer() {
   server = createServer((request, response) => {
     try {
       const parsed = new URL(request.url, url);
-      const match = parsed.pathname.match(/^\/oracle\/(decoder|memory|temporal|episode)\/(.+)$/);
+      const match = parsed.pathname.match(/^\/oracle\/(decoder|memory|temporal|episode|pointer)\/(.+)$/);
       const base = match ? join(packetDir, match[1]) : root;
       const relative = match ? match[2] : parsed.pathname.slice(1);
       const path = resolve(base, relative || 'smokes/sam31-two-frame-tracker-parity.html');

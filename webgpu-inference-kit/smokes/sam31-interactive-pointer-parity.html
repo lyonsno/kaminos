@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SAM3.1 Interactive Pointer WebGPU</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 24px 42px; color: #edf3f5; background: #111517; font: 14px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; }
+    h1 { margin: 0 0 14px; font-size: 20px; letter-spacing: 0; }
+    pre { margin: 0; padding: 18px; min-height: 280px; overflow-wrap: anywhere; white-space: pre-wrap; background: #171d20; border-left: 4px solid #d9a441; }
+    body[data-status="passed"] pre { border-color: #61dc91; }
+    body[data-status="failed"] pre { border-color: #ff6868; }
+  </style>
+</head>
+<body data-status="loading">
+  <h1>SAM3.1 binary mask to interactive object pointers</h1>
+  <pre id="status">Loading official packet...</pre>
+  <script type="module" src="./sam31-interactive-pointer-parity.js"></script>
+</body>
+</html>

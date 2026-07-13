@@ -54,6 +54,25 @@ const TWO_FRAME_DECODER_SHAPE = Object.freeze({
   layerCount: 2,
 });
 
+const INTERACTIVE_POINTER_SHAPE = Object.freeze({
+  batch: 16,
+  queryTokens: 8,
+  sparsePromptTokens: 2,
+  imageHeight: 2,
+  imageWidth: 2,
+  imageTokens: 4,
+  channels: 256,
+  heads: 8,
+  attentionChannels: 128,
+  mlpHidden: 2048,
+  inputMaskHeight: 8,
+  inputMaskWidth: 8,
+  decoderMaskHeight: 8,
+  decoderMaskWidth: 8,
+  maskOutputs: 4,
+  layerCount: 2,
+});
+
 const TWO_FRAME_MEMORY_SHAPE = Object.freeze({
   batch: 1,
   backboneHeight: 2,
@@ -155,6 +174,13 @@ export const SAM31_TWO_FRAME_PACKET_AUTHORITIES = Object.freeze({
     routeId: 'sam3.1.temporal-memory-bank.phase-program.webgpu-local.v0',
     shape: TWO_FRAME_TEMPORAL_SHAPE,
     plan: TWO_FRAME_TEMPORAL_PLAN,
+  }),
+  pointer: Object.freeze({
+    manifestSchema: 'kaminos.sam31-interactive-pointer-meta-packet.v0',
+    receiptSchema: 'kaminos.sam31-interactive-pointer-meta-reference-receipt.v0',
+    boundary: 'binary-mask-to-interactive-prompt-decoder-to-final-object-pointer',
+    routeId: 'sam3.1.interactive-pointer.phase-program.webgpu-local.v0',
+    shape: INTERACTIVE_POINTER_SHAPE,
   }),
   episode: Object.freeze({
     manifestSchema: 'kaminos.sam31-two-frame-tracker-meta-packet.v0',

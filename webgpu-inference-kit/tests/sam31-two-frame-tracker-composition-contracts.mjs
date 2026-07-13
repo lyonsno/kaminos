@@ -33,16 +33,22 @@ for (const token of [
 }
 
 const browser = readFileSync(new URL('smokes/sam31-two-frame-tracker-parity.js', root), 'utf8');
+assert.doesNotMatch(
+  browser,
+  /frame0Producer\.pointerOutput\.sha256 === pointerPacketEntry\.sha256/,
+  'floating-point pointer parity must not be laundered into bit-identical reference digest equality',
+);
 for (const token of [
   'runSam31MultiplexMaskDecoderPhaseProgramRoute',
   'runSam31MemoryEncoderPhaseProgramRoute',
   'runSam31MaskConditioningPhaseProgramRoute',
+  'runSam31InteractivePointerPhaseProgramRoute',
   "params.get('episodeMode')",
   'SAM3.1 mask conditioning → memory → attention → decoder',
   'conditionedEpisode',
   'frame0MaskConditioningResult.receipt',
   'maskReceipt:',
-  "'interactive-mask-conditioning-object-pointer'",
+  "'sam31-interactive-object-pointers'",
   'browserNativeMaskConditioning',
   'pointerDigestPassed',
   'runSam31TemporalMemoryBankPhaseProgramRoute',
@@ -51,7 +57,15 @@ for (const token of [
   'insertSam31TrackerFrame',
   'prepareSam31TrackerTemporalInputs',
   "kind: 'mask-conditioning'",
-  "pointerOwner: 'official-reference-bridge'",
+  "pointerOwner: 'browser-webgpu'",
+  'pointerReceipt: frame0InteractivePointerResult.receipt',
+  'pointerPacketInputDigestPassed',
+  'pointerPacketOutputDigestPassed',
+  'const referenceStateTransition = episode.stateTransition',
+  'effectiveStateTransition',
+  'stateTransition: effectiveStateTransition',
+  'maximums.frame0MaskConditioning <= frame0Tolerance',
+  'maximums.frame0Decoder <= frame0Tolerance',
   'frame0DecoderResult.receipt',
   'frame0MemoryResult.receipt',
   'suppressAbsentMasks',
@@ -62,8 +76,11 @@ for (const token of [
   'memoryTokens: 20',
   'routeChainPassed',
   'stateTransitionPassed',
+  'referenceStateTransition',
+  'effectiveStateTransition',
   'parityPassed',
   'packetAuthorityPassed',
+  'verifiedPackets.length === (episodeMode === \'mask-conditioning\' ? 5 : 4)',
 ]) {
   assert.match(browser, new RegExp(token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), `browser episode must make ${token} load-bearing`);
 }
@@ -76,6 +93,8 @@ for (const token of [
   'packetAuthority',
   'verifyPacketAuthority',
   'tensorManifestSha256',
+  'sam31-interactive-pointer-meta-packet.py',
+  'expected-pointer-manifest-sha256',
   'effectiveRouteIds',
   'routeChainPassed',
   'stateTransitionPassed',

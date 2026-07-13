@@ -3,15 +3,21 @@ import { existsSync, readFileSync } from 'node:fs';
 
 const packageJson = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
 const routeSourceUrl = new URL('../src/sam31-mask-conditioning-phase-program.js', import.meta.url);
+const trackerSourceUrl = new URL('../smokes/sam31-two-frame-tracker-parity.js', import.meta.url);
 
 assert.match(packageJson.scripts.test, /sam31-mask-conditioning-phase-program-contracts\.mjs/, 'default tests must cover the native SAM3.1 mask-conditioning route');
 assert.equal(existsSync(routeSourceUrl), true, 'the SAM3.1 mask-conditioning phase-program source must exist');
 
 const routeSource = readFileSync(routeSourceUrl, 'utf8');
+const trackerSource = readFileSync(trackerSourceUrl, 'utf8');
 assert.match(routeSource, /defineProgram/, 'mask conditioning must use the shared phase-program runtime');
 assert.match(routeSource, /runProgram/, 'mask conditioning must execute through the shared phase-program runtime');
 assert.match(routeSource, /mask-conditioning-logits-and-appearance/, 'the route must execute binary-mask logits and appearance scoring together');
 assert.match(routeSource, /sam31-mask-conditioning-phase-program-v0/, 'the route must stamp kernel profile identity');
+assert.match(routeSource, /weightsHash: 'none:direct-mask-conditioning-kernel'/, 'the direct mask kernel must identify itself as weightless');
+assert.match(routeSource, /weightSource: 'none-direct-mask-conditioning-kernel'/, 'the direct mask kernel must expose why no checkpoint weights are present');
+assert.doesNotMatch(routeSource, /weightsHash: input\.model\?\.weightsHash \|\| binaryMaskArtifact\.sha256/, 'the route must not default model weights identity to invocation mask bytes');
+assert.doesNotMatch(trackerSource, /weightsHash: binaryHash/, 'the tracker composition must not pass binary mask bytes as model weights identity');
 
 const {
   SAM31_MASK_CONDITIONING_PHASE_PROGRAM_ROUTE_ID,

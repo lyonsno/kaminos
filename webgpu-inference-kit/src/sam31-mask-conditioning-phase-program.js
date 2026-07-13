@@ -153,7 +153,13 @@ export function createSam31MaskConditioningPhaseProgramRouteReceipt(input = {}) 
     status: input.status || 'real',
     fallbackReason: null,
     backend: input.backend,
-    model: { id: MODEL_ID, revision: input.model?.revision, weightsHash: input.model?.weightsHash, dtype: input.model?.dtype || 'fp32' },
+    model: {
+      id: MODEL_ID,
+      revision: input.model?.revision,
+      weightsHash: 'none:direct-mask-conditioning-kernel',
+      weightSource: 'none-direct-mask-conditioning-kernel',
+      dtype: input.model?.dtype || 'fp32',
+    },
     kernel: createKernelProfileMetadata(input.kernel, { requireProfile: true }),
     inputs: [
       createRouteReceiptInputArtifact('source-frame', input.sourceFrame),
@@ -265,7 +271,7 @@ export async function runSam31MaskConditioningPhaseProgramRoute(input = {}) {
     binaryMasks: binaryMaskArtifact,
     outputs,
     backend: runtime.backendIdentity,
-    model: { revision: input.model?.revision || route.model?.revision, weightsHash: input.model?.weightsHash || binaryMaskArtifact.sha256, dtype: input.model?.dtype || 'fp32' },
+    model: { revision: input.model?.revision || route.model?.revision, dtype: input.model?.dtype || 'fp32' },
     kernel: input.kernel || runtime.kernel,
     profile: runtime.profile,
   });

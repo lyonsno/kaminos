@@ -327,6 +327,14 @@ export {
 } from './sam31-mask-conditioning-phase-program.js';
 
 export {
+  SAM31_INTERACTIVE_POINTER_PHASE_PROGRAM_ROUTE_ID,
+  createSam31InteractivePointerPhaseProgramCpuOracle,
+  createSam31InteractivePointerPhaseProgramRouteDefinition,
+  createSam31InteractivePointerPhaseProgramRouteReceipt,
+  runSam31InteractivePointerPhaseProgramRoute,
+} from './sam31-interactive-pointer-phase-program.js';
+
+export {
   SAM31_MULTIPLEX_MASK_DECODER_PHASE_PROGRAM_ROUTE_ID,
   createSam31MultiplexMaskDecoderPhaseProgramCpuOracle,
   createSam31MultiplexMaskDecoderPhaseProgramRouteDefinition,
