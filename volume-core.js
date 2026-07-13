@@ -8,6 +8,15 @@ import {
   packBoundarySplatFeatureCapture,
 } from './boundary-splat-feature-capture.mjs';
 import { createFireEpisodeHooks } from './fire-episode-hooks.mjs';
+import {
+  HYBRID_SPLAT_LAYER_IDENTITY,
+  HYBRID_SMOKE_LAYER_IDENTITY,
+  HYBRID_SPLAT_SMOKE_APPROXIMATION,
+  HYBRID_SPLAT_SMOKE_COMPOSITOR_IDENTITY,
+  HYBRID_SMOKE_FRONT_OPACITY_CEILING,
+} from './hybrid-splat-smoke-compositor.mjs';
+
+// V0 orders whole layers by one representative depth: single-representative-depth-no-interpenetration-split.
 
 const ROUTE_IDENTITY = 'native-3d-compute-fluid-raymarch-v0';
 const PROTOTYPE_IDENTITY = 'kaminos-volume-prototype-v0';
@@ -19,6 +28,7 @@ const BOUNDARY_SPLAT_LEARNED_RENDERER_IDENTITY = 'live-boundary-sidecar-learned-
 const BOUNDARY_SPLAT_SOURCE_AUTHORITY = 'live-baked-sidecar-plus-fluid-material-v0';
 const BOUNDARY_SPLAT_GPU_PROFILE_IDENTITY = 'boundary-splat-stage-gpu-timestamp-profile-v0';
 const BOUNDARY_SPLAT_ATTRIBUTE_HOOK_IDENTITY = 'boundary-splat-learned-attribute-hook-v0';
+const HYBRID_SMOKE_RENDERER_IDENTITY = 'native-3d-compute-fluid-raymarch-smoke-only-v0';
 const BOUNDARY_SPLAT_INITIAL_CAPACITY = 131072;
 const BOUNDARY_SPLAT_CANDIDATE_STRIDE_BYTES = 48;
 const BOUNDARY_SPLAT_FEATURE_STRIDE_BYTES = BOUNDARY_SPLAT_FEATURE_STRIDE_FLOATS * Float32Array.BYTES_PER_ELEMENT;
@@ -168,6 +178,11 @@ function boundarySidecarViewValue(value) {
 function normalizeBoundarySplatMode(value) {
   const normalized = String(value || 'off').toLowerCase().replace(/-/g, '_');
   return normalized === 'analytic' || normalized === 'learned' ? normalized : 'off';
+}
+
+function normalizeBoundarySplatComposition(value) {
+  const normalized = String(value || 'splat-only').toLowerCase().replace(/_/g, '-');
+  return normalized === 'hybrid-smoke' ? 'hybrid-smoke' : 'splat-only';
 }
 
 function normalizeBoundarySplatFeatureCapture(value) {
@@ -3608,6 +3623,8 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
 struct RaymarchResult {
   color: vec4<f32>,
   residualFeature: vec4<f32>,
+  hybridSmokeColorOpacity: vec4<f32>,
+  hybridSmokeMoments: vec4<f32>,
 };
 
 struct ResidualSourceOutput {
@@ -3615,10 +3632,22 @@ struct ResidualSourceOutput {
   @location(1) residualFeature: vec4<f32>,
 };
 
-fn makeRaymarchResult(color: vec4<f32>, residualFeature: vec4<f32>) -> RaymarchResult {
+struct HybridSmokeOutput {
+  @location(0) colorOpacity: vec4<f32>,
+  @location(1) moments: vec4<f32>,
+};
+
+fn makeRaymarchResult(
+  color: vec4<f32>,
+  residualFeature: vec4<f32>,
+  hybridSmokeColorOpacity: vec4<f32>,
+  hybridSmokeMoments: vec4<f32>,
+) -> RaymarchResult {
   var result: RaymarchResult;
   result.color = color;
   result.residualFeature = residualFeature;
+  result.hybridSmokeColorOpacity = hybridSmokeColorOpacity;
+  result.hybridSmokeMoments = hybridSmokeMoments;
   return result;
 }
 
@@ -3634,7 +3663,12 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
   let rd = normalize(farWorld - nearWorld);
   let hit = boxHit(ro, rd, vec3<f32>(1.0, 1.0, 1.0));
   if (hit.y <= max(hit.x, 0.0)) {
-    return makeRaymarchResult(vec4<f32>(0.004, 0.005, 0.006, 1.0), vec4<f32>(0.0));
+    return makeRaymarchResult(
+      vec4<f32>(0.004, 0.005, 0.006, 1.0),
+      vec4<f32>(0.0),
+      vec4<f32>(0.0),
+      vec4<f32>(0.0),
+    );
   }
 
   let steps = clamp(u.viewport_steps_density.z, 24.0, 192.0);
@@ -3762,6 +3796,11 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
   var t = startT + jitter + bonfireSpatialRayDephase;
   var trans = 1.0;
   var color = vec3<f32>(0.004, 0.005, 0.006);
+  var hybridSmokeColor = vec3<f32>(0.0);
+  var hybridSmokeTrans = 1.0;
+  var hybridSmokeDepthMoment = 0.0;
+  var hybridSmokeDepthWeight = 0.0;
+  var hybridSmokeDepthSquaredMoment = 0.0;
   var residualRadianceAuthority = 0.0;
   var residualFireAuthority = 0.0;
   var residualInterfaceAuthority = 0.0;
@@ -4666,6 +4705,15 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
     local = mix(local, oracleDisplayColor, oracleDisplay * smoothstep(0.015, 0.72, oracleDisplayCue));
     let pressureTierOverlay = pressureTierDebugOverlayColor(y);
     local = mix(local, pressureTierOverlay.rgb, pressureTierOverlay.a);
+    let hybridSmokeExtinctionStep = clamp(smokeAlpha * (0.46 + extinction * 0.16), 0.0, 0.34);
+    let hybridSmokeStepOpacity = 1.0 - exp(-hybridSmokeExtinctionStep);
+    let hybridSmokeWeight = hybridSmokeTrans * hybridSmokeStepOpacity;
+    let hybridSmokeDepth = length(p - ro);
+    hybridSmokeColor = hybridSmokeColor + hybridSmokeWeight * smokeCol;
+    hybridSmokeDepthMoment = hybridSmokeDepthMoment + hybridSmokeWeight * hybridSmokeDepth;
+    hybridSmokeDepthWeight = hybridSmokeDepthWeight + hybridSmokeWeight;
+    hybridSmokeDepthSquaredMoment = hybridSmokeDepthSquaredMoment + hybridSmokeWeight * hybridSmokeDepth * hybridSmokeDepth;
+    hybridSmokeTrans = hybridSmokeTrans * exp(-hybridSmokeExtinctionStep);
     color = color + trans * (alpha * local + stockRenderMode * fireAlpha * pyroStockFireVisibility * radianceEmission * mix(0.82, 0.62, bonfireRenderScene) + smokeBacklight * pyroStockFireVisibility + shellSmokeBacklight + pyroRadianceColor * pyroRadianceBoost * pyroRadianceLuma * rayStepOpacity * mix(mix(0.080, 0.030, pyroRadianceSpill), mix(0.012, 0.030, pyroRadianceSpill), 1.0 - pyroRadianceFireSourceWeight));
     let residualFeatureWeight = trans * rayStepOpacity;
     let residualRadianceLuma = max(dot(radianceEmission + pyroRadianceColor * pyroRadianceBoost * pyroRadianceLuma, vec3<f32>(0.2126, 0.7152, 0.0722)), 0.0);
@@ -4697,7 +4745,12 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
     clamp(1.0 - exp(-residualInterfaceAuthority * 0.90), 0.0, 1.0),
     clamp(1.0 - exp(-residualSmokeAuthority * 0.56), 0.0, 1.0)
   );
-  return makeRaymarchResult(vec4<f32>(resolvedColor, 1.0), residualFeature);
+  return makeRaymarchResult(
+    vec4<f32>(resolvedColor, 1.0),
+    residualFeature,
+    vec4<f32>(hybridSmokeColor, clamp(1.0 - hybridSmokeTrans, 0.0, 1.0)),
+    vec4<f32>(hybridSmokeDepthMoment, hybridSmokeDepthWeight, hybridSmokeDepthSquaredMoment, 0.0),
+  );
 }
 
 @fragment
@@ -4712,6 +4765,15 @@ fn fsResidualSource(in: VSOut) -> ResidualSourceOutput {
   var out: ResidualSourceOutput;
   out.color = result.color;
   out.residualFeature = result.residualFeature;
+  return out;
+}
+
+@fragment
+fn fsHybridSmoke(in: VSOut) -> HybridSmokeOutput {
+  let result = raymarchVolume(in);
+  var out: HybridSmokeOutput;
+  out.colorOpacity = result.hybridSmokeColorOpacity;
+  out.moments = result.hybridSmokeMoments;
   return out;
 }
 `;
@@ -4857,12 +4919,19 @@ struct BoundarySplatCamera {
   cameraRight: vec4<f32>,
   cameraUp: vec4<f32>,
   controls: vec4<f32>,
+  cameraPosition: vec4<f32>,
 };
 
 struct BoundarySplatVertexOut {
   @builtin(position) position: vec4<f32>,
   @location(0) colorOpacity: vec4<f32>,
   @location(1) local: vec2<f32>,
+  @location(2) linearDepth: f32,
+};
+
+struct BoundarySplatHybridOutput {
+  @location(0) colorOpacity: vec4<f32>,
+  @location(1) moments: vec4<f32>,
 };
 
 struct BoundarySplatAttributeHookOutput {
@@ -5001,20 +5070,92 @@ fn boundarySplatVs(@builtin(vertex_index) vertexIndex: u32, @builtin(instance_in
   out.position = boundarySplatCamera.viewProj * vec4<f32>(splat.positionSupport.xyz + offset, 1.0);
   out.colorOpacity = splat.colorOpacity;
   out.local = corner;
+  out.linearDepth = length(splat.positionSupport.xyz - boundarySplatCamera.cameraPosition.xyz);
   return out;
+}
+
+fn boundarySplatFragmentAlpha(in: BoundarySplatVertexOut) -> f32 {
+  let radius2 = dot(in.local, in.local);
+  let footprintRadius = clamp(boundarySplatCamera.controls.x, 0.35, 1.5);
+  let kernelSharpness = clamp(boundarySplatCamera.controls.w, 1.0, 12.0);
+  let gaussian = exp(-radius2 * kernelSharpness);
+  let energyRatio = (kernelSharpness / 3.4) / max(footprintRadius * footprintRadius, 0.1225);
+  let energyCompensation = clamp(sqrt(energyRatio), 0.5, 2.5);
+  return in.colorOpacity.a * gaussian * energyCompensation;
 }
 
 @fragment
 fn boundarySplatFs(in: BoundarySplatVertexOut) -> @location(0) vec4<f32> {
   let radius2 = dot(in.local, in.local);
   if (radius2 > 1.0) { discard; }
-  let footprintRadius = clamp(boundarySplatCamera.controls.x, 0.35, 1.5);
-  let kernelSharpness = clamp(boundarySplatCamera.controls.w, 1.0, 12.0);
-  let gaussian = exp(-radius2 * kernelSharpness);
-  let energyRatio = (kernelSharpness / 3.4) / max(footprintRadius * footprintRadius, 0.1225);
-  let energyCompensation = clamp(sqrt(energyRatio), 0.5, 2.5);
-  let alpha = in.colorOpacity.a * gaussian * energyCompensation;
+  let alpha = boundarySplatFragmentAlpha(in);
   return vec4<f32>(in.colorOpacity.rgb, alpha);
+}
+
+
+@fragment
+fn boundarySplatHybridFs(in: BoundarySplatVertexOut) -> BoundarySplatHybridOutput {
+  let radius2 = dot(in.local, in.local);
+  if (radius2 > 1.0) { discard; }
+  let alpha = boundarySplatFragmentAlpha(in);
+  var out: BoundarySplatHybridOutput;
+  out.colorOpacity = vec4<f32>(in.colorOpacity.rgb, alpha);
+  out.moments = vec4<f32>(in.linearDepth, 1.0, in.linearDepth * in.linearDepth, alpha);
+  return out;
+}
+`;
+
+const HYBRID_SPLAT_SMOKE_COMPOSITOR_WGSL = `
+struct VertexOut {
+  @builtin(position) position: vec4<f32>,
+  @location(0) uv: vec2<f32>,
+};
+
+@vertex
+fn vs(@builtin(vertex_index) vertexIndex: u32) -> VertexOut {
+  var positions = array<vec2<f32>, 3>(
+    vec2<f32>(-1.0, -1.0),
+    vec2<f32>(3.0, -1.0),
+    vec2<f32>(-1.0, 3.0)
+  );
+  let position = positions[vertexIndex];
+  var out: VertexOut;
+  out.position = vec4<f32>(position, 0.0, 1.0);
+  out.uv = position * 0.5 + vec2<f32>(0.5, 0.5);
+  return out;
+}
+
+@group(0) @binding(0) var splatColorOpacity: texture_2d<f32>;
+@group(0) @binding(1) var splatMoments: texture_2d<f32>;
+@group(0) @binding(2) var smokeColorOpacity: texture_2d<f32>;
+@group(0) @binding(3) var smokeMoments: texture_2d<f32>;
+@group(0) @binding(4) var layerSampler: sampler;
+
+fn compositePremultiplied(front: vec4<f32>, back: vec4<f32>) -> vec4<f32> {
+  let visibility = 1.0 - clamp(front.a, 0.0, 1.0);
+  return vec4<f32>(front.rgb + visibility * back.rgb, front.a + visibility * back.a);
+}
+
+@fragment
+fn fs(in: VertexOut) -> @location(0) vec4<f32> {
+  let splat = textureSampleLevel(splatColorOpacity, layerSampler, in.uv, 0.0);
+  let splatDepthMoments = textureSampleLevel(splatMoments, layerSampler, in.uv, 0.0);
+  var smoke = textureSampleLevel(smokeColorOpacity, layerSampler, in.uv, 0.0);
+  let smokeDepthMoments = textureSampleLevel(smokeMoments, layerSampler, in.uv, 0.0);
+  let splatPresent = splat.a > 0.000001 && splatDepthMoments.y > 0.000001;
+  let smokePresent = smoke.a > 0.000001 && smokeDepthMoments.y > 0.000001;
+  let splatDepth = splatDepthMoments.x / max(splatDepthMoments.y, 0.000001);
+  let smokeDepth = smokeDepthMoments.x / max(smokeDepthMoments.y, 0.000001);
+  let splatFront = splatPresent && (!smokePresent || splatDepth <= smokeDepth);
+  if (splatPresent && smokePresent && !splatFront && smoke.a > ${HYBRID_SMOKE_FRONT_OPACITY_CEILING.toFixed(6)}) {
+    let opacityScale = ${HYBRID_SMOKE_FRONT_OPACITY_CEILING.toFixed(6)} / smoke.a;
+    smoke = vec4<f32>(smoke.rgb * opacityScale, ${HYBRID_SMOKE_FRONT_OPACITY_CEILING.toFixed(6)});
+  }
+  var composed = select(compositePremultiplied(smoke, splat), compositePremultiplied(splat, smoke), splatFront);
+  if (!splatPresent && !smokePresent) { composed = vec4<f32>(0.0); }
+  let background = vec3<f32>(0.004, 0.005, 0.006);
+  let hdr = composed.rgb + background * (1.0 - clamp(composed.a, 0.0, 1.0));
+  return vec4<f32>(hdr, 1.0);
 }
 `;
 
@@ -5198,6 +5339,28 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     boundarySidecarView: normalizeBoundarySidecarView(controlsSnapshot.boundarySidecarView ?? controlsSnapshot.boundarySidecarControls?.view),
     boundarySidecarDebug: null,
     boundarySplatMode: normalizeBoundarySplatMode(controlsSnapshot.boundarySplatMode),
+    boundarySplatCompositionRequested: normalizeBoundarySplatComposition(controlsSnapshot.boundarySplatComposition),
+    boundarySplatCompositionEffective: 'inactive',
+    boundarySplatCompositionFallbackReason: null,
+    hybridSplatSmokeCompositorIdentity: HYBRID_SPLAT_SMOKE_COMPOSITOR_IDENTITY,
+    hybridSplatSmokeApproximation: HYBRID_SPLAT_SMOKE_APPROXIMATION,
+    hybridSmokeFrontOpacityCeiling: HYBRID_SMOKE_FRONT_OPACITY_CEILING,
+    hybridSplatLayer: {
+      identity: HYBRID_SPLAT_LAYER_IDENTITY,
+      format: 'rgba16float',
+      radiance: 'premultiplied-hdr',
+      opacity: 'accumulated-coverage',
+      depth: 'linear-camera-distance-first-second-moments',
+    },
+    hybridSmokeLayer: {
+      identity: HYBRID_SMOKE_LAYER_IDENTITY,
+      rendererIdentity: HYBRID_SMOKE_RENDERER_IDENTITY,
+      format: 'rgba16float',
+      radiance: 'premultiplied-smoke-only',
+      opacity: 'one-minus-smoke-transmittance',
+      depth: 'linear-camera-distance-first-second-moments',
+      excludedAuthority: 'raymarched-flame-interface-emission',
+    },
     boundarySplatRadius: normalizeBoundarySplatRadius(controlsSnapshot.boundarySplatRadius),
     boundarySplatSharpness: normalizeBoundarySplatSharpness(controlsSnapshot.boundarySplatSharpness),
     boundarySplatRendererIdentity: boundarySplatEffectiveRendererIdentity(controlsSnapshot.boundarySplatMode),
@@ -5335,6 +5498,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       flameRendererIdentity: state.boundarySplatRendererIdentity,
       learnedModelIdentity: state.boundarySplatAttributeModelIdentity,
       fallbackReason: state.boundarySplatFallbackReason,
+      compositionRequested: state.boundarySplatCompositionRequested,
+      compositionEffective: state.boundarySplatCompositionEffective,
+      compositionFallbackReason: state.boundarySplatCompositionFallbackReason,
     }),
   });
 
@@ -5542,6 +5708,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let boundarySplatFinalizePipeline = null;
   let boundarySplatRenderPipeline = null;
   let boundarySplatReadbackPipeline = null;
+  let boundarySplatHybridPipeline = null;
+  let hybridSmokePipeline = null;
+  let hybridCompositorPipeline = null;
+  let hybridCompositorReadbackPipeline = null;
   let bindGroups = [];
   let majorantFrontBindGroups = [];
   let boundarySidecarReadBindGroups = [];
@@ -5552,6 +5722,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let boundarySidecarWriteBindGroup = null;
   let boundarySplatComputeBindGroups = [];
   let boundarySplatRenderBindGroup = null;
+  let hybridCompositorBindGroup = null;
   let bindGroupLayout = null;
   let majorantFluidBindGroupLayout = null;
   let majorantWriteBindGroupLayout = null;
@@ -5559,6 +5730,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let boundarySidecarWriteBindGroupLayout = null;
   let boundarySplatComputeBindGroupLayout = null;
   let boundarySplatRenderBindGroupLayout = null;
+  let hybridCompositorBindGroupLayout = null;
   let pressureWriteBindGroupLayout = null;
   let pressureJacobiBindGroupLayout = null;
   let pressureReadBindGroupLayout = null;
@@ -5568,6 +5740,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let boundarySidecarPipelineLayout = null;
   let boundarySplatComputePipelineLayout = null;
   let boundarySplatRenderPipelineLayout = null;
+  let hybridCompositorPipelineLayout = null;
   let pressureWritePipelineLayout = null;
   let pressureJacobiPipelineLayout = null;
   let pressureJacobiTieredPipelineLayout = null;
@@ -5575,6 +5748,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let pressureProjectTieredPipelineLayout = null;
   let shader = null;
   let boundarySplatShader = null;
+  let hybridCompositorShader = null;
   let uniformBuffer = null;
   let externalEmitterBuffer = null;
   let externalEmitterState = normalizeExternalEmitters();
@@ -5597,6 +5771,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let currentFront = 0;
   let frameTexture = null;
   let frameTextureSize = '';
+  let hybridSplatColorTexture = null;
+  let hybridSplatMomentsTexture = null;
+  let hybridSmokeColorTexture = null;
+  let hybridSmokeMomentsTexture = null;
+  let hybridLayerTextureSize = '';
+  let hybridCompositorSampler = null;
   let browserResidualFeatureTexture = null;
   let browserResidualFeatureTextureSize = '';
   let historyTexture = null;
@@ -6348,7 +6528,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     });
     boundarySplatCameraBuffer = device.createBuffer({
       label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} camera`,
-      size: 112,
+      size: 128,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
     boundarySplatReadbackBuffer = device.createBuffer({
@@ -6516,6 +6696,18 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       },
       primitive: { topology: 'triangle-list' },
     });
+    hybridSmokePipeline = device.createRenderPipeline({
+      label: `kaminos ${HYBRID_SMOKE_RENDERER_IDENTITY} ${gridSize}^3`,
+      layout: pipelineLayout,
+      vertex: { module: shader, entryPoint: 'vs' },
+      fragment: {
+        module: shader,
+        entryPoint: 'fsHybridSmoke',
+        constants: renderPipelineConstants,
+        targets: [{ format: 'rgba16float' }, { format: 'rgba16float' }],
+      },
+      primitive: { topology: 'triangle-list' },
+    });
     browserResidualPipeline = device.createRenderPipeline({
       label: `kaminos volume browser webgpu-direct-residual postprocess ${gridSize}^3`,
       layout: browserResidualPipelineLayout,
@@ -6597,6 +6789,39 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     });
     boundarySplatRenderPipeline = makeBoundarySplatRenderPipeline(format, `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} raster ${gridSize}^3`);
     boundarySplatReadbackPipeline = makeBoundarySplatRenderPipeline('rgba8unorm', `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} witness readback ${gridSize}^3`);
+    const hybridSplatBlend = {
+      color: { srcFactor: 'src-alpha', dstFactor: 'one', operation: 'add' },
+      alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha', operation: 'add' },
+    };
+    boundarySplatHybridPipeline = device.createRenderPipeline({
+      label: `kaminos ${HYBRID_SPLAT_LAYER_IDENTITY} ${gridSize}^3`,
+      layout: boundarySplatRenderPipelineLayout,
+      vertex: { module: boundarySplatShader, entryPoint: 'boundarySplatVs' },
+      fragment: {
+        module: boundarySplatShader,
+        entryPoint: 'boundarySplatHybridFs',
+        targets: [
+          { format: 'rgba16float', blend: hybridSplatBlend },
+          { format: 'rgba16float', blend: hybridSplatBlend },
+        ],
+      },
+      primitive: { topology: 'triangle-list' },
+    });
+    const makeHybridCompositorPipeline = (targetFormat, label) => device.createRenderPipeline({
+      label,
+      layout: hybridCompositorPipelineLayout,
+      vertex: { module: hybridCompositorShader, entryPoint: 'vs' },
+      fragment: { module: hybridCompositorShader, entryPoint: 'fs', targets: [{ format: targetFormat }] },
+      primitive: { topology: 'triangle-list' },
+    });
+    hybridCompositorPipeline = makeHybridCompositorPipeline(
+      format,
+      `kaminos ${HYBRID_SPLAT_SMOKE_COMPOSITOR_IDENTITY} canvas ${gridSize}^3`,
+    );
+    hybridCompositorReadbackPipeline = makeHybridCompositorPipeline(
+      'rgba8unorm',
+      `kaminos ${HYBRID_SPLAT_SMOKE_COMPOSITOR_IDENTITY} witness ${gridSize}^3`,
+    );
     ensureBoundarySplatBuffers();
     ensureTemporalHistoryTexture();
     rebuildFluidBindGroups();
@@ -6778,6 +7003,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       addressModeU: 'clamp-to-edge',
       addressModeV: 'clamp-to-edge',
     });
+    hybridCompositorSampler = device.createSampler({
+      label: `kaminos ${HYBRID_SPLAT_SMOKE_COMPOSITOR_IDENTITY} layer sampler`,
+      magFilter: 'linear',
+      minFilter: 'linear',
+      addressModeU: 'clamp-to-edge',
+      addressModeV: 'clamp-to-edge',
+    });
     shader = device.createShaderModule({ label: 'kaminos compute fluid raymarch wgsl', code: WGSL });
     const compilationInfo = await shader.getCompilationInfo();
     const compilationErrors = compilationInfo.messages.filter(message => message.type === 'error');
@@ -6804,6 +7036,18 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         .map(message => `${message.lineNum}:${message.linePos} ${message.message}`)
         .join('\n');
       throw new Error(`Boundary splat WGSL compilation failed:\n${detail}`);
+    }
+    hybridCompositorShader = device.createShaderModule({
+      label: `kaminos ${HYBRID_SPLAT_SMOKE_COMPOSITOR_IDENTITY} wgsl`,
+      code: HYBRID_SPLAT_SMOKE_COMPOSITOR_WGSL,
+    });
+    const hybridCompositorCompilationInfo = await hybridCompositorShader.getCompilationInfo();
+    const hybridCompositorCompilationErrors = hybridCompositorCompilationInfo.messages.filter(message => message.type === 'error');
+    if (hybridCompositorCompilationErrors.length > 0) {
+      const detail = hybridCompositorCompilationErrors
+        .map(message => `${message.lineNum}:${message.linePos} ${message.message}`)
+        .join('\n');
+      throw new Error(`Hybrid splat-smoke compositor WGSL compilation failed:\n${detail}`);
     }
     bindGroupLayout = device.createBindGroupLayout({
       label: 'kaminos fluid bind group layout',
@@ -7002,6 +7246,18 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         },
       ],
     });
+    hybridCompositorBindGroupLayout = device.createBindGroupLayout({
+      label: `kaminos ${HYBRID_SPLAT_SMOKE_COMPOSITOR_IDENTITY} bind group layout`,
+      entries: [0, 1, 2, 3].map(binding => ({
+        binding,
+        visibility: GPUShaderStage.FRAGMENT,
+        texture: { sampleType: 'float' },
+      })).concat([{
+        binding: 4,
+        visibility: GPUShaderStage.FRAGMENT,
+        sampler: { type: 'filtering' },
+      }]),
+    });
     pipelineLayout = device.createPipelineLayout({
       label: 'kaminos fluid pipeline layout',
       bindGroupLayouts: [bindGroupLayout],
@@ -7009,6 +7265,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     browserResidualPipelineLayout = device.createPipelineLayout({
       label: 'kaminos browser direct residual pipeline layout',
       bindGroupLayouts: [browserResidualBindGroupLayout],
+    });
+    hybridCompositorPipelineLayout = device.createPipelineLayout({
+      label: `kaminos ${HYBRID_SPLAT_SMOKE_COMPOSITOR_IDENTITY} pipeline layout`,
+      bindGroupLayouts: [hybridCompositorBindGroupLayout],
     });
     majorantPipelineLayout = device.createPipelineLayout({
       label: 'kaminos coarse majorant pipeline layout',
@@ -7099,6 +7359,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       canvas.style.imageRendering = 'auto';
       frameTextureSize = '';
       browserResidualFeatureTextureSize = '';
+      hybridLayerTextureSize = '';
     }
   }
 
@@ -7115,6 +7376,49 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     frameTextureSize = key;
     browserResidualBindGroup = null;
     browserResidualTextureKey = '';
+  }
+
+  function destroyHybridLayerTextures() {
+    hybridSplatColorTexture?.destroy();
+    hybridSplatMomentsTexture?.destroy();
+    hybridSmokeColorTexture?.destroy();
+    hybridSmokeMomentsTexture?.destroy();
+    hybridSplatColorTexture = null;
+    hybridSplatMomentsTexture = null;
+    hybridSmokeColorTexture = null;
+    hybridSmokeMomentsTexture = null;
+    hybridLayerTextureSize = '';
+    hybridCompositorBindGroup = null;
+  }
+
+  function ensureHybridLayerTextures() {
+    const key = `${state.width}x${state.height}`;
+    if (hybridCompositorBindGroup && hybridLayerTextureSize === key) return true;
+    if (!hybridCompositorBindGroupLayout || !hybridCompositorSampler) return false;
+    destroyHybridLayerTextures();
+    const makeLayerTexture = label => device.createTexture({
+      label,
+      size: { width: state.width, height: state.height, depthOrArrayLayers: 1 },
+      format: 'rgba16float',
+      usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+    });
+    hybridSplatColorTexture = makeLayerTexture(`kaminos ${HYBRID_SPLAT_LAYER_IDENTITY} color-opacity`);
+    hybridSplatMomentsTexture = makeLayerTexture(`kaminos ${HYBRID_SPLAT_LAYER_IDENTITY} moments`);
+    hybridSmokeColorTexture = makeLayerTexture(`kaminos ${HYBRID_SMOKE_LAYER_IDENTITY} color-opacity`);
+    hybridSmokeMomentsTexture = makeLayerTexture(`kaminos ${HYBRID_SMOKE_LAYER_IDENTITY} moments`);
+    hybridCompositorBindGroup = device.createBindGroup({
+      label: `kaminos ${HYBRID_SPLAT_SMOKE_COMPOSITOR_IDENTITY} bind group`,
+      layout: hybridCompositorBindGroupLayout,
+      entries: [
+        { binding: 0, resource: hybridSplatColorTexture.createView() },
+        { binding: 1, resource: hybridSplatMomentsTexture.createView() },
+        { binding: 2, resource: hybridSmokeColorTexture.createView() },
+        { binding: 3, resource: hybridSmokeMomentsTexture.createView() },
+        { binding: 4, resource: hybridCompositorSampler },
+      ],
+    });
+    hybridLayerTextureSize = key;
+    return true;
   }
 
   function ensureBrowserResidualFeatureTexture() {
@@ -7307,11 +7611,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     }
     if (boundarySplatCameraBuffer) {
       const cameraMatrix = camera.matrixWorld.elements;
-      const splatCamera = new Float32Array(28);
+      const splatCamera = new Float32Array(32);
       splatCamera.set(viewProj.elements, 0);
       splatCamera.set([cameraMatrix[0], cameraMatrix[1], cameraMatrix[2], 0], 16);
       splatCamera.set([cameraMatrix[4], cameraMatrix[5], cameraMatrix[6], 0], 20);
       splatCamera.set([normalizeBoundarySplatRadius(controlsSnapshot.boundarySplatRadius), boundarySplatLearnedAttributesRequested() ? 1 : 0, state.boundarySplatFeatureCaptureEffective ? 1 : 0, normalizeBoundarySplatSharpness(controlsSnapshot.boundarySplatSharpness)], 24);
+      splatCamera.set([camera.position.x, camera.position.y, camera.position.z, 1], 28);
       device.queue.writeBuffer(boundarySplatCameraBuffer, 0, splatCamera);
     }
     const { renderPhaseTimeMs, renderPhaseFrame } = updateRenderPhaseState(now, state, lookFreeze);
@@ -8274,6 +8579,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     return normalizeBoundarySplatMode(controlsSnapshot.boundarySplatMode) !== 'off';
   }
 
+  function boundarySplatHybridRequested() {
+    return boundarySplatRequested()
+      && normalizeBoundarySplatComposition(controlsSnapshot.boundarySplatComposition) === 'hybrid-smoke';
+  }
+
   function boundarySplatLearnedAttributesRequested() {
     return normalizeBoundarySplatMode(controlsSnapshot.boundarySplatMode) === 'learned';
   }
@@ -8344,6 +8654,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
 
   function encodeBoundarySplats(encoder, hooks = {}) {
     state.boundarySplatMode = normalizeBoundarySplatMode(controlsSnapshot.boundarySplatMode);
+    state.boundarySplatCompositionRequested = normalizeBoundarySplatComposition(controlsSnapshot.boundarySplatComposition);
     state.boundarySplatRendererIdentity = boundarySplatEffectiveRendererIdentity(state.boundarySplatMode);
     state.boundarySplatAttributeModelIdentity = boundarySplatEffectiveAttributeModelIdentity(state.boundarySplatMode);
     state.boundarySplatFeatureCaptureRequested = boundarySplatFeatureCaptureRequested();
@@ -8351,6 +8662,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       && boundarySplatFeatureBufferCapacity === boundarySplatCapacity;
     if (!boundarySplatRequested()) {
       state.boundarySplatFallbackReason = null;
+      state.boundarySplatCompositionEffective = 'inactive';
+      state.boundarySplatCompositionFallbackReason = null;
       return false;
     }
     if (
@@ -8366,6 +8679,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       state.boundarySplatFallbackReason = !state.boundarySidecarBuiltThisFrame
         ? 'sidecar-not-built-this-frame'
         : 'boundary-splat-gpu-route-unavailable';
+      state.boundarySplatCompositionEffective = 'raymarch-fallback';
+      state.boundarySplatCompositionFallbackReason = state.boundarySplatFallbackReason;
       return false;
     }
     device.queue.writeBuffer(boundarySplatDrawBuffer, 0, new Uint32Array([6, 0, 0, 0, 0, 0, boundarySplatCapacity, 0]));
@@ -8411,6 +8726,76 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     pass.end();
     state.boundarySplatFrameCount += 1;
     state.volumeReconstructionStyle = state.boundarySplatRendererIdentity;
+    state.boundarySplatCompositionRequested = normalizeBoundarySplatComposition(controlsSnapshot.boundarySplatComposition);
+    state.boundarySplatCompositionEffective = 'splat-only';
+    state.boundarySplatCompositionFallbackReason = null;
+    return true;
+  }
+
+  function encodeBoundarySplatSmokeHybrid(encoder, view, targetPipeline = hybridCompositorPipeline) {
+    state.boundarySplatCompositionRequested = normalizeBoundarySplatComposition(controlsSnapshot.boundarySplatComposition);
+    if (!boundarySplatHybridRequested()) return false;
+    if (
+      state.boundarySplatFallbackReason
+      || !boundarySplatHybridPipeline
+      || !hybridSmokePipeline
+      || !targetPipeline
+      || !boundarySplatRenderBindGroup
+      || bindGroups.length !== 2
+      || !ensureHybridLayerTextures()
+    ) {
+      state.boundarySplatCompositionEffective = 'raymarch-fallback';
+      state.boundarySplatCompositionFallbackReason = state.boundarySplatFallbackReason
+        || 'hybrid-compositor-gpu-route-unavailable';
+      return false;
+    }
+
+    const splatPass = encoder.beginRenderPass({
+      label: `kaminos ${HYBRID_SPLAT_LAYER_IDENTITY} pass`,
+      colorAttachments: [hybridSplatColorTexture, hybridSplatMomentsTexture].map(texture => ({
+        view: texture.createView(),
+        clearValue: { r: 0, g: 0, b: 0, a: 0 },
+        loadOp: 'clear',
+        storeOp: 'store',
+      })),
+    });
+    splatPass.setPipeline(boundarySplatHybridPipeline);
+    splatPass.setBindGroup(0, boundarySplatRenderBindGroup);
+    splatPass.drawIndirect(boundarySplatIndirectBuffer, 0);
+    splatPass.end();
+
+    const smokePass = encoder.beginRenderPass({
+      label: `kaminos ${HYBRID_SMOKE_RENDERER_IDENTITY} pass`,
+      colorAttachments: [hybridSmokeColorTexture, hybridSmokeMomentsTexture].map(texture => ({
+        view: texture.createView(),
+        clearValue: { r: 0, g: 0, b: 0, a: 0 },
+        loadOp: 'clear',
+        storeOp: 'store',
+      })),
+    });
+    smokePass.setPipeline(hybridSmokePipeline);
+    smokePass.setBindGroup(0, bindGroups[currentFluid]);
+    smokePass.draw(3);
+    smokePass.end();
+
+    const compositePass = encoder.beginRenderPass({
+      label: `kaminos ${HYBRID_SPLAT_SMOKE_COMPOSITOR_IDENTITY} resolve pass`,
+      colorAttachments: [{
+        view,
+        clearValue: { r: 0.004, g: 0.005, b: 0.006, a: 1 },
+        loadOp: 'clear',
+        storeOp: 'store',
+      }],
+    });
+    compositePass.setPipeline(targetPipeline);
+    compositePass.setBindGroup(0, hybridCompositorBindGroup);
+    compositePass.draw(3);
+    compositePass.end();
+
+    state.boundarySplatFrameCount += 1;
+    state.boundarySplatCompositionEffective = 'hybrid-smoke';
+    state.boundarySplatCompositionFallbackReason = null;
+    state.volumeReconstructionStyle = HYBRID_SPLAT_SMOKE_COMPOSITOR_IDENTITY;
     return true;
   }
 
@@ -8769,11 +9154,20 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       encodeBoundarySplats(encoder);
       const currentTexture = context.getCurrentTexture();
       if (boundarySplatRequested()) {
-        const splatApplied = encodeBoundarySplatDraw(encoder, currentTexture.createView());
+        const splatApplied = boundarySplatHybridRequested()
+          ? encodeBoundarySplatSmokeHybrid(encoder, currentTexture.createView())
+          : encodeBoundarySplatDraw(encoder, currentTexture.createView());
         if (!splatApplied) {
           encodeDraw(encoder, currentTexture.createView(), 'kaminos boundary splat explicit fallback raymarch');
           state.volumeReconstructionStyle = 'boundary-splat-fallback-raymarch';
-          emitStatus({ phase: 'boundary-splat-fallback', reason: state.boundarySplatFallbackReason });
+          state.boundarySplatCompositionEffective = 'raymarch-fallback';
+          state.boundarySplatCompositionFallbackReason = state.boundarySplatCompositionFallbackReason
+            || state.boundarySplatFallbackReason
+            || 'requested-splat-route-unavailable';
+          emitStatus({
+            phase: 'boundary-splat-fallback',
+            reason: state.boundarySplatCompositionFallbackReason,
+          });
         }
         recordBrowserResidualCost({ applied: false });
       } else if (browserResidualCanApply()) {
@@ -10032,7 +10426,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     encodeBoundarySidecar(encoder);
     encodeBoundarySplats(encoder);
     if (boundarySplatRequested()) {
-      const splatApplied = encodeBoundarySplatDraw(encoder, frameTexture.createView(), boundarySplatReadbackPipeline);
+      const splatApplied = boundarySplatHybridRequested()
+        ? encodeBoundarySplatSmokeHybrid(encoder, frameTexture.createView(), hybridCompositorReadbackPipeline)
+        : encodeBoundarySplatDraw(encoder, frameTexture.createView(), boundarySplatReadbackPipeline);
       if (!splatApplied) {
         buffer.destroy();
         const validationError = await device.popErrorScope();
@@ -10041,6 +10437,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           reason: 'boundary-splat-readback-route-unavailable',
           validationError: validationError?.message || null,
           boundarySplatFallbackReason: state.boundarySplatFallbackReason,
+          boundarySplatCompositionRequested: state.boundarySplatCompositionRequested,
+          boundarySplatCompositionEffective: state.boundarySplatCompositionEffective,
+          boundarySplatCompositionFallbackReason: state.boundarySplatCompositionFallbackReason,
           boundarySplatRendererIdentity: state.boundarySplatRendererIdentity,
           boundarySplatAttributeModelIdentity: state.boundarySplatAttributeModelIdentity,
           boundarySplatSourceAuthority: state.boundarySplatSourceAuthority,
@@ -10193,6 +10592,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         boundarySidecarAuthority: state.boundarySidecarAuthority,
         boundarySidecarSource: state.boundarySidecarSource,
         boundarySplatMode: state.boundarySplatMode,
+        boundarySplatCompositionRequested: state.boundarySplatCompositionRequested,
+        boundarySplatCompositionEffective: state.boundarySplatCompositionEffective,
+        boundarySplatCompositionFallbackReason: state.boundarySplatCompositionFallbackReason,
+        hybridSplatSmokeCompositorIdentity: state.hybridSplatSmokeCompositorIdentity,
+        hybridSplatSmokeApproximation: state.hybridSplatSmokeApproximation,
+        hybridSmokeFrontOpacityCeiling: state.hybridSmokeFrontOpacityCeiling,
+        hybridSplatLayer: { ...state.hybridSplatLayer },
+        hybridSmokeLayer: { ...state.hybridSmokeLayer },
         boundarySplatRendererIdentity: state.boundarySplatRendererIdentity,
         boundarySplatAttributeModelIdentity: state.boundarySplatAttributeModelIdentity,
         boundarySplatFeatureCaptureRequested: state.boundarySplatFeatureCaptureRequested,
@@ -10558,6 +10965,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       timing: { ...state.timing },
       fireEpisodeHooks: fireEpisodeHooks.snapshot(),
       boundarySplatMode: state.boundarySplatMode,
+      boundarySplatCompositionRequested: state.boundarySplatCompositionRequested,
+      boundarySplatCompositionEffective: state.boundarySplatCompositionEffective,
+      boundarySplatCompositionFallbackReason: state.boundarySplatCompositionFallbackReason,
+      hybridSplatSmokeCompositorIdentity: state.hybridSplatSmokeCompositorIdentity,
+      hybridSplatSmokeApproximation: state.hybridSplatSmokeApproximation,
+      hybridSmokeFrontOpacityCeiling: state.hybridSmokeFrontOpacityCeiling,
+      hybridSplatLayer: { ...state.hybridSplatLayer },
+      hybridSmokeLayer: { ...state.hybridSmokeLayer },
       boundarySplatRendererIdentity: state.boundarySplatRendererIdentity,
       boundarySplatAttributeModelIdentity: state.boundarySplatAttributeModelIdentity,
       boundarySplatFeatureCaptureRequested: state.boundarySplatFeatureCaptureRequested,
@@ -10863,12 +11278,17 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       let sourcePassEncodeMs = null;
       let residualPassEncodeMs = null;
       if (boundarySplatRequested()) {
-        const splatApplied = encodeBoundarySplatDraw(encoder, currentTexture.createView());
+        const splatApplied = boundarySplatHybridRequested()
+          ? encodeBoundarySplatSmokeHybrid(encoder, currentTexture.createView())
+          : encodeBoundarySplatDraw(encoder, currentTexture.createView());
         if (!splatApplied) {
           return {
             ok: false,
             reason: 'boundary-splat-frozen-canvas-route-unavailable',
             boundarySplatFallbackReason: state.boundarySplatFallbackReason,
+            boundarySplatCompositionRequested: state.boundarySplatCompositionRequested,
+            boundarySplatCompositionEffective: state.boundarySplatCompositionEffective,
+            boundarySplatCompositionFallbackReason: state.boundarySplatCompositionFallbackReason,
             boundarySplatRendererIdentity: state.boundarySplatRendererIdentity,
             boundarySplatAttributeModelIdentity: state.boundarySplatAttributeModelIdentity,
             boundarySplatSourceAuthority: state.boundarySplatSourceAuthority,
@@ -11063,6 +11483,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       state.volumeResidualFeatureDebug = normalizeBrowserResidualFeatureDebug(controlsSnapshot.volumeResidualFeatureDebug);
       state.volumeResidualFeatureDebugMode = state.volumeResidualFeatureDebug ? 'residual-feature-debug-false-color-v0' : 'off';
       state.boundarySplatMode = normalizeBoundarySplatMode(controlsSnapshot.boundarySplatMode);
+      state.boundarySplatCompositionRequested = normalizeBoundarySplatComposition(controlsSnapshot.boundarySplatComposition);
       state.boundarySplatRadius = normalizeBoundarySplatRadius(controlsSnapshot.boundarySplatRadius);
       state.boundarySplatSharpness = normalizeBoundarySplatSharpness(controlsSnapshot.boundarySplatSharpness);
       if (device) void ensureBrowserResidualModel();
@@ -11194,6 +11615,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       this.setActive(false);
       frameTexture?.destroy();
       browserResidualFeatureTexture?.destroy();
+      destroyHybridLayerTextures();
       externalEmitterBuffer?.destroy();
       boundarySplatCameraBuffer?.destroy();
       boundarySplatCameraBuffer = null;
