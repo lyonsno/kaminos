@@ -2,6 +2,7 @@ import {
   createRouteInvocationRequest,
   createSam31MemoryEncoderPhaseProgramRouteDefinition,
   createSam31PropagationNeckPhaseProgramRouteDefinition,
+  evaluateSam31PropagationMemoryEvidence,
   runSam31MemoryEncoderPhaseProgramRoute,
   runSam31PropagationNeckPhaseProgramRoute,
 } from '../src/index.js';
@@ -168,6 +169,7 @@ async function run() {
       'source-image': sourceArtifact,
       'sam31-propagation-feature-2': { artifactId: propagationOutput2.artifactId, sha256: propagationOutput2.sha256, shape: propagationOutput2.shape },
       'sam31-multiplex-mask-logits': { artifactId: 'sam31-multiplex-mask-logits:official-packet', sha256: tensorsByRole['multiplex-mask-logits'].sha256, shape: tensorsByRole['multiplex-mask-logits'].shape },
+      'sam31-multiplex-conditioning': { artifactId: 'sam31-multiplex-conditioning:official-packet', sha256: tensorsByRole['multiplex-conditioning'].sha256, shape: tensorsByRole['multiplex-conditioning'].shape },
       'sam31-memory-encoder-weights': { artifactId: 'sam31-memory-encoder-weights:official-packet', sha256: memoryWeightsSha },
     },
     outputs: {
@@ -218,16 +220,23 @@ async function run() {
     positionMaxAbsDiff: positionDiff,
     tolerances: manifest.tolerances,
   };
-  const passed = parity.propagationMaxAbsDiff <= manifest.tolerances.webGpuPropagationMaxAbsDiff
-    && parity.memoryMaxAbsDiff <= manifest.tolerances.webGpuMemoryMaxAbsDiff
-    && parity.positionMaxAbsDiff <= manifest.tolerances.webGpuPositionMaxAbsDiff
-    && uncapturedErrors.length === 0;
+  const receipts = [propagationResult.receipt, memoryResult.receipt];
+  const routeIdentity = evaluateSam31PropagationMemoryEvidence({
+    adapterInfo,
+    receipts,
+    requestedRouteIds: manifest.routeIds,
+    parity,
+    tolerances: manifest.tolerances,
+    uncapturedErrors,
+  });
+  const { passed, effectiveRouteIds } = routeIdentity;
   const completed = {
     adapterInfo,
     browser: navigator.userAgent,
     manifest: { schema: manifest.schema, boundary: manifest.boundary, reference: manifest.reference, checkpointAudit: manifest.checkpointAudit },
     requestedRouteIds: manifest.routeIds,
-    effectiveRouteIds: [propagationResult.receipt.effectiveRouteId, memoryResult.receipt.effectiveRouteId],
+    effectiveRouteIds,
+    routeIdentity,
     propagationReceipt: propagationResult.receipt,
     memoryReceipt: memoryResult.receipt,
     parity,

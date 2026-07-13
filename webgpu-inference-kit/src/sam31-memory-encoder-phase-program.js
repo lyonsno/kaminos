@@ -57,6 +57,7 @@ const INPUT_ROLES = [
   'source-image',
   'sam31-propagation-feature-2',
   'sam31-multiplex-mask-logits',
+  'sam31-multiplex-conditioning',
   'sam31-memory-encoder-weights',
 ];
 const OUTPUT_ROLES = [
@@ -431,6 +432,9 @@ function normalizeShape(shape = {}) {
     resampledMaskWidth: positiveInteger(shape.resampledMaskWidth ?? 1152, 'shape.resampledMaskWidth'),
   };
   if (out.featureChannels % 4 !== 0) throw new Error('shape.featureChannels must be a positive multiple of 4 for PositionEmbeddingSine');
+  if (out.resampledMaskHeight < out.maskHeight || out.resampledMaskWidth < out.maskWidth) {
+    throw new Error('SAM3.1 memory mask resampling is upsample-only because the native route does not implement the official antialias downsample kernel');
+  }
   const conditionCount = out.batch * out.multiplexCount;
   if (out.conditionChannels) {
     if (!Array.isArray(shape.conditioning) && !(shape.conditioning instanceof Float32Array)) {
@@ -816,6 +820,7 @@ export function createSam31MemoryEncoderPhaseProgramRouteReceipt(input = {}) {
       createRouteReceiptInputArtifact('source-image', input.sourceImage),
       createRouteReceiptInputArtifact('sam31-propagation-feature-2', input.propagationFeature),
       createRouteReceiptInputArtifact('sam31-multiplex-mask-logits', input.maskLogits),
+      createRouteReceiptInputArtifact('sam31-multiplex-conditioning', input.conditioning),
       createRouteReceiptInputArtifact('sam31-memory-encoder-weights', input.weights),
     ],
     outputs: createRouteReceiptArtifacts({ artifacts: input.outputs, roles: OUTPUT_ROLES }),
@@ -866,6 +871,14 @@ export async function runSam31MemoryEncoderPhaseProgramRoute(input = {}) {
     throw new Error('authoritative SAM3.1 memory route requires exactly four mask downsample layers and two CXBlock fuser layers');
   }
   if (!shape.conditionChannels) throw new Error('authoritative SAM3.1 memory route requires multiplex conditioning channels');
+  const conditioning = roleArtifact(input.request.inputs, 'sam31-multiplex-conditioning');
+  if (JSON.stringify(conditioning.shape) !== JSON.stringify([shape.batch, shape.multiplexCount])) {
+    throw new Error(`sam31-multiplex-conditioning artifact shape must be [${shape.batch},${shape.multiplexCount}]`);
+  }
+  const conditioningSha256 = await sha256Hex(shape.conditioning);
+  if (conditioning.sha256 !== conditioningSha256) {
+    throw new Error(`sam31-multiplex-conditioning artifact hash mismatch: expected ${conditioning.sha256}, got ${conditioningSha256}`);
+  }
   const runtime = await createWebGpuInferenceRuntime({
     routeId: SAM31_MEMORY_ENCODER_PHASE_PROGRAM_ROUTE_ID,
     runtimeLabel: input.runtimeLabel || 'sam31-memory-encoder-phase-program',
@@ -1136,6 +1149,7 @@ export async function runSam31MemoryEncoderPhaseProgramRoute(input = {}) {
     sourceImage,
     propagationFeature,
     maskLogits,
+    conditioning,
     weights,
     outputs,
     backend: runtime.backendIdentity,

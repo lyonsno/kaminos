@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 import argparse
 import hashlib
+import importlib
 import json
 import subprocess
+import sys
+import types
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -17,8 +20,12 @@ MEMORY_ROUTE_ID = "sam3.1.memory-encoder.phase-program.webgpu-local.v0"
 SCHEMA = "kaminos.sam31-propagation-memory-meta-packet.v0"
 BOUNDARY = "sam31-official-tri-neck-to-multiplex-memory-encoder"
 HF_REVISION = "daa63191845a41281374e725f4c9e51c7a824460"
+SOURCE_COMMIT = "5dd401d1c5c1d5c3eedff06d41b77af824517619"
+CHECKPOINT_SHA256 = "sha256:0567debeec80ba4ac6369540c6c248025283cb3ff2b92827509e57e2b3541cb6"
+CONVERTED_SHA256 = "sha256:a1b1c19dcc9bdd68438bcd74433fadc90740e73c37a1f386872672d134879c42"
 DEFAULT_CHECKPOINT = Path.home() / ".cache/huggingface/hub/models--facebook--sam3.1/snapshots" / HF_REVISION / "sam3.1_multiplex.pt"
 DEFAULT_CONVERTED = Path.home() / ".cache/huggingface/hub/models--mlx-community--sam3.1-bf16/snapshots/a992e302ea9b0f03f41dfd93414a4fd0e818f65b/model.safetensors"
+FAILURE_PHASE = "argument-resolution"
 
 
 def parse_args():
@@ -57,6 +64,34 @@ def write_array(path: Path, array: np.ndarray) -> dict:
 
 def source_revision(source_root: Path) -> str:
     return subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=source_root, text=True).strip()
+
+
+def load_official_classes(source_root: Path):
+    sam3_root = source_root / "sam3"
+    model_root = sam3_root / "model"
+    if not model_root.is_dir():
+        raise FileNotFoundError(f"official SAM3 model source not found: {model_root}")
+
+    # Import the pinned model modules without executing sam3/__init__.py, whose
+    # application-level dependencies are irrelevant to this component packet.
+    sam3_package = types.ModuleType("sam3")
+    sam3_package.__path__ = [str(sam3_root)]
+    model_package = types.ModuleType("sam3.model")
+    model_package.__path__ = [str(model_root)]
+    sys.modules["sam3"] = sam3_package
+    sys.modules["sam3.model"] = model_package
+
+    necks = importlib.import_module("sam3.model.necks")
+    memory = importlib.import_module("sam3.model.memory")
+    position_encoding = importlib.import_module("sam3.model.position_encoding")
+    return {
+        "Sam3TriViTDetNeck": necks.Sam3TriViTDetNeck,
+        "SimpleMaskDownSampler": memory.SimpleMaskDownSampler,
+        "CXBlock": memory.CXBlock,
+        "SimpleFuser": memory.SimpleFuser,
+        "SimpleMaskEncoder": memory.SimpleMaskEncoder,
+        "PositionEmbeddingSine": position_encoding.PositionEmbeddingSine,
+    }
 
 
 def transform_tensor(tensor: torch.Tensor, transform: str) -> np.ndarray:
@@ -150,7 +185,7 @@ def position_embedding_sine(value: torch.Tensor, temperature: float = 10000.0) -
     return torch.cat((pos_y, pos_x), dim=3).permute(0, 3, 1, 2)
 
 
-def run_propagation_reference(state: dict, backbone: torch.Tensor):
+def run_propagation_transcription(state: dict, backbone: torch.Tensor):
     prefix = "detector.backbone.vision_backbone.propagation_convs"
     outputs = []
     for level in range(3):
@@ -167,7 +202,7 @@ def run_propagation_reference(state: dict, backbone: torch.Tensor):
     return outputs
 
 
-def run_memory_reference(state: dict, propagation_feature: torch.Tensor, mask_logits: torch.Tensor, conditioning: torch.Tensor):
+def run_memory_transcription(state: dict, propagation_feature: torch.Tensor, mask_logits: torch.Tensor, conditioning: torch.Tensor):
     prefix = "tracker.model.maskmem_backbone"
     mask = torch.sigmoid(mask_logits) * 2.0 - 1.0
     condition_planes = conditioning[:, :, None, None].expand_as(mask)
@@ -195,21 +230,147 @@ def run_memory_reference(state: dict, propagation_feature: torch.Tensor, mask_lo
     return feature, position_embedding_sine(feature)
 
 
-def main():
-    args = parse_args()
+def run_official_reference(classes: dict, state: dict, backbone: torch.Tensor, mask_logits: torch.Tensor, conditioning: torch.Tensor):
+    class PacketTrunk(torch.nn.Module):
+        channel_list = [1024]
+
+        def forward(self, tensor):
+            return [tensor]
+
+    position_encoding = classes["PositionEmbeddingSine"](
+        num_pos_feats=256,
+        temperature=10000,
+        normalize=True,
+        scale=None,
+        precompute_resolution=None,
+    )
+    neck = classes["Sam3TriViTDetNeck"](
+        trunk=PacketTrunk(),
+        position_encoding=position_encoding,
+        d_model=256,
+        scale_factors=(4.0, 2.0, 1.0),
+    )
+    propagation_prefix = "detector.backbone.vision_backbone.propagation_convs."
+    propagation_state = {
+        key.removeprefix(propagation_prefix): value
+        for key, value in state.items()
+        if key.startswith(propagation_prefix)
+    }
+    neck.propagation_convs.load_state_dict(propagation_state, strict=True)
+    neck.eval()
+    *_, propagation_nested, _ = neck(
+        backbone,
+        need_sam3_out=False,
+        need_interactive_out=False,
+        need_propagation_out=True,
+    )
+    propagation = [value.tensors for value in propagation_nested]
+
+    mask_downsampler = classes["SimpleMaskDownSampler"](
+        embed_dim=256,
+        kernel_size=3,
+        stride=2,
+        padding=1,
+        total_stride=16,
+        interpol_size=[32, 32],
+        multiplex_count=16,
+        starting_out_chan=4,
+        input_channel_multiplier=2,
+    )
+    fuser = classes["SimpleFuser"](
+        layer=classes["CXBlock"](
+            dim=256,
+            kernel_size=7,
+            padding=3,
+            layer_scale_init_value=1e-6,
+            use_dwconv=True,
+        ),
+        num_layers=2,
+    )
+    encoder = classes["SimpleMaskEncoder"](
+        out_dim=256,
+        mask_downsampler=mask_downsampler,
+        fuser=fuser,
+        position_encoding=position_encoding,
+        in_dim=256,
+    )
+    memory_prefix = "tracker.model.maskmem_backbone."
+    memory_state = {
+        key.removeprefix(memory_prefix): value
+        for key, value in state.items()
+        if key.startswith(memory_prefix)
+    }
+    encoder.load_state_dict(memory_state, strict=True)
+    encoder.eval()
+    mask = torch.sigmoid(mask_logits) * 2.0 - 1.0
+    condition_planes = conditioning[:, :, None, None].expand_as(mask)
+    encoded = encoder(
+        propagation[2],
+        torch.cat([mask, condition_planes], dim=1),
+        skip_mask_sigmoid=True,
+    )
+    return propagation, encoded["vision_features"], encoded["vision_pos_enc"][-1]
+
+
+def max_abs_diff(actual: torch.Tensor, expected: torch.Tensor) -> float:
+    return float(torch.max(torch.abs(actual - expected)).item()) if actual.numel() else 0.0
+
+
+def write_failure_receipt(args, error: Exception):
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
+    receipt = {
+        "ok": False,
+        "schema": "kaminos.sam31-propagation-memory-meta-reference-receipt.v0",
+        "failurePhase": FAILURE_PHASE,
+        "error": f"{type(error).__name__}: {error}",
+        "requested": {
+            "checkpoint": str(Path(args.checkpoint).resolve()),
+            "convertedWeights": str(Path(args.converted_weights).resolve()),
+            "sourceRoot": str(Path(args.source_root).resolve()),
+            "seed": args.seed,
+        },
+        "expected": {
+            "modelRevision": HF_REVISION,
+            "checkpointSha256": CHECKPOINT_SHA256,
+            "convertedSha256": CONVERTED_SHA256,
+            "sourceCommit": SOURCE_COMMIT,
+        },
+        "lastTrustworthyEvidence": "No primary tensor packet was published.",
+    }
+    (out_dir / "reference-receipt.json").write_text(json.dumps(receipt, indent=2), encoding="utf-8")
+
+
+def main():
+    global FAILURE_PHASE
+    args = parse_args()
     checkpoint_path = Path(args.checkpoint).resolve()
     converted_path = Path(args.converted_weights).resolve()
     source_root = Path(args.source_root).resolve()
+    FAILURE_PHASE = "identity-validation"
     if not checkpoint_path.is_file():
         raise FileNotFoundError(f"official checkpoint not found: {checkpoint_path}")
     if not converted_path.is_file():
         raise FileNotFoundError(f"converted checkpoint not found: {converted_path}")
+    checkpoint_sha = sha256_file(checkpoint_path)
+    if checkpoint_sha != CHECKPOINT_SHA256:
+        raise ValueError(f"checkpoint digest mismatch: expected {CHECKPOINT_SHA256}, got {checkpoint_sha}")
+    converted_sha = sha256_file(converted_path)
+    if converted_sha != CONVERTED_SHA256:
+        raise ValueError(f"converted checkpoint digest mismatch: expected {CONVERTED_SHA256}, got {converted_sha}")
+    source_commit = source_revision(source_root)
+    if source_commit != SOURCE_COMMIT:
+        raise ValueError(f"source commit mismatch: expected {SOURCE_COMMIT}, got {source_commit}")
+    classes = load_official_classes(source_root)
+
+    out_dir = Path(args.out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    FAILURE_PHASE = "checkpoint-load"
     state = torch.load(checkpoint_path, map_location="cpu", weights_only=True)
     if not isinstance(state, dict):
         raise TypeError("official checkpoint must be a state dictionary")
 
+    FAILURE_PHASE = "checkpoint-audit"
     specs = browser_weight_specs()
     weight_entries = []
     converted_matches = 0
@@ -227,10 +388,10 @@ def main():
                 converted_array = converted_array[..., 0]
             if browser_array.shape != converted_array.shape:
                 raise ValueError(f"converted shape mismatch for {role}: {browser_array.shape} != {converted_array.shape}")
-            max_abs_diff = float(np.max(np.abs(browser_array - converted_array))) if browser_array.size else 0.0
-            converted_max_abs_diff = max(converted_max_abs_diff, max_abs_diff)
+            converted_abs_diff = float(np.max(np.abs(browser_array - converted_array))) if browser_array.size else 0.0
+            converted_max_abs_diff = max(converted_max_abs_diff, converted_abs_diff)
             if not np.array_equal(browser_array, converted_array):
-                raise ValueError(f"converted value mismatch for {role}: max abs diff {max_abs_diff}")
+                raise ValueError(f"converted value mismatch for {role}: max abs diff {converted_abs_diff}")
             converted_matches += 1
             file_name = f"{role}.f32.bin"
             written = write_array(out_dir / file_name, browser_array.astype(np.float32, copy=False))
@@ -251,10 +412,28 @@ def main():
     backbone = torch.randn((1, 1024, 2, 2), generator=generator, dtype=torch.float32) * 0.05
     mask_logits = torch.randn((1, 16, 8, 8), generator=generator, dtype=torch.float32)
     conditioning = torch.tensor([[1.0 if index % 3 == 0 else 0.0 for index in range(16)]], dtype=torch.float32)
+    FAILURE_PHASE = "official-reference-execution"
     with torch.inference_mode():
-        propagation = run_propagation_reference(state, backbone)
-        memory_features, memory_position = run_memory_reference(state, propagation[2], mask_logits, conditioning)
+        propagation, memory_features, memory_position = run_official_reference(classes, state, backbone, mask_logits, conditioning)
+        transcription_propagation = run_propagation_transcription(state, backbone)
+        transcription_memory, transcription_position = run_memory_transcription(
+            state,
+            transcription_propagation[2],
+            mask_logits,
+            conditioning,
+        )
+    transcription_diffs = {
+        "propagationMaxAbsDiff": max(
+            max_abs_diff(official, transcription)
+            for official, transcription in zip(propagation, transcription_propagation)
+        ),
+        "memoryMaxAbsDiff": max_abs_diff(memory_features, transcription_memory),
+        "positionMaxAbsDiff": max_abs_diff(memory_position, transcription_position),
+    }
+    if max(transcription_diffs.values()) > 1e-6:
+        raise ValueError(f"official module/transcription mismatch: {transcription_diffs}")
 
+    FAILURE_PHASE = "artifact-write"
     tensor_specs = [
         ("vit-backbone-hidden-states", "vit-backbone-hidden-states.f32.bin", backbone.permute(0, 2, 3, 1), "B,H,W,C"),
         ("multiplex-mask-logits", "multiplex-mask-logits.f32.bin", mask_logits, "B,M,H,W"),
@@ -279,9 +458,6 @@ def main():
             "layout": layout,
         })
 
-    checkpoint_sha = sha256_file(checkpoint_path)
-    converted_sha = sha256_file(converted_path)
-    source_commit = source_revision(source_root)
     shape = {
         "batch": 1,
         "backboneHeight": 2,
@@ -309,7 +485,16 @@ def main():
         "model": {"id": "facebook/sam3.1", "revision": HF_REVISION, "checkpointFile": checkpoint_path.name, "sha256": checkpoint_sha},
         "source": {"repository": "facebookresearch/sam3", "root": str(source_root), "commit": source_commit},
         "converted": {"model": "mlx-community/sam3.1-bf16", "weightsPath": str(converted_path), "sha256": converted_sha},
-        "framework": {"name": "torch", "version": torch.__version__, "device": "cpu", "execution": "functional official-source boundary"},
+        "execution": {
+            "kind": "pinned-official-module-classes",
+            "classes": [
+                "sam3.model.necks.Sam3TriViTDetNeck",
+                "sam3.model.memory.SimpleMaskEncoder",
+                "sam3.model.position_encoding.PositionEmbeddingSine",
+            ],
+            "functionalTranscriptionCrossCheck": transcription_diffs,
+        },
+        "framework": {"name": "torch", "version": torch.__version__, "device": "cpu", "execution": "pinned official module classes"},
     }
     manifest = {
         "schema": SCHEMA,
@@ -361,8 +546,13 @@ def main():
     }
     manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
     receipt_path.write_text(json.dumps(receipt, indent=2), encoding="utf-8")
+    FAILURE_PHASE = "complete"
     print(json.dumps(receipt, indent=2))
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as error:
+        write_failure_receipt(parse_args(), error)
+        raise

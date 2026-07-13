@@ -9,11 +9,13 @@ import {
   createSam31PropagationNeckPhaseProgramCpuOracle,
   createSam31PropagationNeckPhaseProgramRouteDefinition,
   createSam31PropagationNeckPhaseProgramRouteReceipt,
+  evaluateSam31PropagationMemoryEvidence,
   runSam31PropagationNeckPhaseProgramRoute,
   validateRouteDefinition,
 } from '../src/index.js';
 
 const memoryRouteSource = readFileSync(new URL('../src/sam31-memory-encoder-phase-program.js', import.meta.url), 'utf8');
+const evidenceSource = readFileSync(new URL('../src/sam31-propagation-memory-evidence.js', import.meta.url), 'utf8');
 const browserSmokeSource = readFileSync(new URL('../smokes/sam31-propagation-memory-parity.js', import.meta.url), 'utf8');
 const browserRunnerSource = readFileSync(new URL('../tools/sam31-propagation-memory-browser-parity-smoke.mjs', import.meta.url), 'utf8');
 const packageJson = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
@@ -27,6 +29,10 @@ assert.doesNotMatch(packageJson.scripts.test, /sam31-propagation-memory-meta-pac
 assert.doesNotMatch(memoryRouteSource, /gpuExecutor/, 'memory route must own its WebGPU implementation without an injected executor escape hatch');
 assert.match(browserSmokeSource, /function serializeAdapterInfo\(/, 'browser evidence must serialize adapter identity through explicit fields');
 assert.doesNotMatch(browserSmokeSource, /\{ \.\.\.adapter\.info \}/, 'browser evidence must not trust non-enumerable GPUAdapterInfo fields');
+assert.match(evidenceSource, /adapterInfo\.isFallbackAdapter === false/, 'browser passage must require a non-fallback adapter');
+assert.match(evidenceSource, /receipt\.status === 'real'/, 'browser passage must require real route receipts');
+assert.match(evidenceSource, /receipt\.fallbackReason === null/, 'browser passage must reject receipt fallback reasons');
+assert.match(evidenceSource, /requestedRouteIdsMatch/, 'browser passage must bind ordered requested and effective route identity');
 assert.match(browserRunnerSource, /function terminalSummary\(/, 'browser runner must render a compact terminal summary');
 assert.doesNotMatch(browserRunnerSource, /process\.stdout\.write\(`\$\{JSON\.stringify\(report, null, 2\)\}/, 'successful browser runner output must not duplicate the full durable report');
 for (const kernel of [
@@ -45,6 +51,23 @@ assert.equal(SAM31_PROPAGATION_NECK_PHASE_PROGRAM_ROUTE_ID, 'sam3.1.propagation-
 assert.equal(SAM31_MEMORY_ENCODER_PHASE_PROGRAM_ROUTE_ID, 'sam3.1.memory-encoder.phase-program.webgpu-local.v0');
 assert.equal(typeof createSam31PropagationNeckPhaseProgramRouteReceipt, 'function');
 assert.equal(typeof runSam31PropagationNeckPhaseProgramRoute, 'function');
+
+const validBrowserEvidence = {
+  adapterInfo: { isFallbackAdapter: false },
+  receipts: [
+    { requestedRouteId: SAM31_PROPAGATION_NECK_PHASE_PROGRAM_ROUTE_ID, effectiveRouteId: SAM31_PROPAGATION_NECK_PHASE_PROGRAM_ROUTE_ID, status: 'real', fallbackReason: null },
+    { requestedRouteId: SAM31_MEMORY_ENCODER_PHASE_PROGRAM_ROUTE_ID, effectiveRouteId: SAM31_MEMORY_ENCODER_PHASE_PROGRAM_ROUTE_ID, status: 'real', fallbackReason: null },
+  ],
+  requestedRouteIds: [SAM31_PROPAGATION_NECK_PHASE_PROGRAM_ROUTE_ID, SAM31_MEMORY_ENCODER_PHASE_PROGRAM_ROUTE_ID],
+  parity: { propagationMaxAbsDiff: 1e-7, memoryMaxAbsDiff: 1e-7, positionMaxAbsDiff: 1e-8 },
+  tolerances: { webGpuPropagationMaxAbsDiff: 1e-5, webGpuMemoryMaxAbsDiff: 1e-5, webGpuPositionMaxAbsDiff: 1e-6 },
+  uncapturedErrors: [],
+};
+assert.equal(evaluateSam31PropagationMemoryEvidence(validBrowserEvidence).passed, true);
+assert.equal(evaluateSam31PropagationMemoryEvidence({ ...validBrowserEvidence, adapterInfo: { isFallbackAdapter: true } }).passed, false, 'fallback adapter must fail passage');
+assert.equal(evaluateSam31PropagationMemoryEvidence({ ...validBrowserEvidence, receipts: validBrowserEvidence.receipts.map((receipt, index) => index === 0 ? { ...receipt, status: 'fallback' } : receipt) }).passed, false, 'fallback receipt status must fail passage');
+assert.equal(evaluateSam31PropagationMemoryEvidence({ ...validBrowserEvidence, receipts: validBrowserEvidence.receipts.map((receipt, index) => index === 1 ? { ...receipt, fallbackReason: 'runtime substitution' } : receipt) }).passed, false, 'fallback reason must fail passage');
+assert.equal(evaluateSam31PropagationMemoryEvidence({ ...validBrowserEvidence, requestedRouteIds: [...validBrowserEvidence.requestedRouteIds].reverse() }).passed, false, 'ordered route mismatch must fail passage');
 
 const propagationRoute = createSam31PropagationNeckPhaseProgramRouteDefinition();
 assert.deepEqual(propagationRoute.requiredInputRoles, [
@@ -105,6 +128,7 @@ assert.deepEqual(memoryRoute.requiredInputRoles, [
   'source-image',
   'sam31-propagation-feature-2',
   'sam31-multiplex-mask-logits',
+  'sam31-multiplex-conditioning',
   'sam31-memory-encoder-weights',
 ]);
 assert.deepEqual(memoryRoute.requiredOutputRoles, [
@@ -209,5 +233,13 @@ assert.throws(() => createSam31MemoryEncoderPhaseProgramCpuOracle({
   config: { sigmoidScale: 2, sigmoidBias: -1, positionTemperature: 10000 },
   weights: { downsampleLayers: [], fuserLayers: [] },
 }), /maskLogits length/, 'multiplex mask ownership must fail when object-channel evidence is partial');
+
+assert.throws(() => createSam31MemoryEncoderPhaseProgramCpuOracle({
+  propagationFeature: new Float32Array(4),
+  maskLogits: new Float32Array(4),
+  shape: { batch: 1, featureHeight: 1, featureWidth: 1, featureChannels: 4, maskHeight: 2, maskWidth: 2, multiplexCount: 1, conditionChannels: true, conditioning: [1], resampledMaskHeight: 1, resampledMaskWidth: 1 },
+  config: { sigmoidScale: 2, sigmoidBias: -1, positionTemperature: 10000 },
+  weights: { downsampleLayers: [], fuserLayers: [] },
+}), /upsample-only/, 'plain bilinear route must reject shapes where official antialias semantics would be load-bearing');
 
 console.log('sam3.1 propagation and memory phase-program contracts passed');

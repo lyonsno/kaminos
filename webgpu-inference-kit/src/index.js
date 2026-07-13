@@ -204,6 +204,10 @@ export {
 } from './sam31-memory-encoder-phase-program.js';
 
 export {
+  evaluateSam31PropagationMemoryEvidence,
+} from './sam31-propagation-memory-evidence.js';
+
+export {
   SAM3_PIXEL_DECODER_PHASE_PROGRAM_ROUTE_ID,
   createSam3PixelDecoderPhaseProgramCpuOracle,
   createSam3PixelDecoderPhaseProgramRouteDefinition,
