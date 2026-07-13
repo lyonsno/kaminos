@@ -14,6 +14,9 @@ import {
 } from '../smoke-splat-residual-selector.mjs';
 
 const ROUTE = 'authoritative-full-grid-real-smoke-hierarchy-corpus-v0';
+const EXPECTED_SOURCE_ROUTE = 'native-3d-compute-fluid-raymarch-v0';
+const EXPECTED_PROTOTYPE = 'kaminos-volume-prototype-v0';
+const EXPECTED_BACKEND_PREFIX = 'WebGPU:';
 const PACKED_SPLAT_CHANNELS = [
   'positionX', 'positionY', 'positionZ',
   'principalAxisX', 'principalAxisY', 'principalAxisZ',
@@ -102,6 +105,20 @@ async function loadFrame(manifestPath, index) {
     || replay?.authority !== 'same-route-controls-fixed-step-replay'
     || !Number.isInteger(step)) {
     throw new Error(`frame ${index} lacks deterministic simulator-step authority`);
+  }
+  if (manifest.effectiveRoute !== EXPECTED_SOURCE_ROUTE) {
+    throw new Error(`frame ${index} has wrong effective route: ${manifest.effectiveRoute || '(missing)'}`);
+  }
+  if (manifest.prototypeIdentity !== EXPECTED_PROTOTYPE) {
+    throw new Error(`frame ${index} has wrong prototype identity: ${manifest.prototypeIdentity || '(missing)'}`);
+  }
+  if (typeof manifest.backend !== 'string' || !manifest.backend.startsWith(EXPECTED_BACKEND_PREFIX)) {
+    throw new Error(`frame ${index} has wrong backend: ${manifest.backend || '(missing)'}`);
+  }
+  for (const field of ['effectiveRoute', 'prototypeIdentity', 'backend', 'grid']) {
+    if (replay[field] !== manifest[field]) {
+      throw new Error(`frame ${index} replay ${field} ${JSON.stringify(replay[field])} does not match manifest ${JSON.stringify(manifest[field])}`);
+    }
   }
   const field = new Float32Array(bytes.buffer, bytes.byteOffset, bytes.byteLength / 4);
   return {
@@ -202,8 +219,26 @@ try {
   const reportPath = join(options.outDir, 'report.json');
   phase = 'source-artifact-validation';
   const frames = [];
-  for (let index = 0; index < options.frames.length; index += 1) frames.push(await loadFrame(options.frames[index], index));
   lastTrustworthyEvidence = {
+    requestedFrameManifests: [...options.frames],
+    validatedFrames: [],
+  };
+  for (let index = 0; index < options.frames.length; index += 1) {
+    const frame = await loadFrame(options.frames[index], index);
+    frames.push(frame);
+    lastTrustworthyEvidence.validatedFrames.push({
+      manifestPath: frame.manifestPath,
+      manifestIdentity: frame.manifestIdentity,
+      fluidIdentity: frame.fluidIdentity,
+      step: frame.step,
+      effectiveRoute: frame.effectiveRoute,
+      prototypeIdentity: frame.prototypeIdentity,
+      backend: frame.backend,
+      grid: frame.grid,
+    });
+  }
+  lastTrustworthyEvidence = {
+    ...lastTrustworthyEvidence,
     validatedFrameCount: frames.length,
     fluidIdentities: frames.map(frame => frame.fluidIdentity),
   };

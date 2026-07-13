@@ -74,6 +74,13 @@ function makeFrame(directory, step, mutate = {}) {
   return manifestPath;
 }
 
+function editManifest(path, edit) {
+  const manifest = JSON.parse(readFileSync(path, 'utf8'));
+  edit(manifest);
+  writeFileSync(path, `${JSON.stringify(manifest, null, 2)}\n`);
+  return path;
+}
+
 const directory = mkdtempSync(join(tmpdir(), 'kaminos-real-smoke-corpus-'));
 const first = makeFrame(directory, 96);
 const second = makeFrame(directory, 97);
@@ -141,5 +148,46 @@ assert.notEqual(nonAdjacent.status, 0);
 const adjacencyReport = JSON.parse(readFileSync(join(nonAdjacentDir, 'report.json'), 'utf8'));
 assert.equal(adjacencyReport.failurePhase, 'sequence-validation');
 assert.match(adjacencyReport.message, /adjacent/i);
+
+const wrongRoute = editManifest(makeFrame(directory, 100), manifest => {
+  manifest.effectiveRoute = 'cached-demo-smoke-route-v0';
+  manifest.deterministicReplay.effectiveRoute = 'cached-demo-smoke-route-v0';
+});
+const wrongRouteDir = join(directory, 'failed-wrong-route');
+const wrongRouteRun = spawnSync(process.execPath, [
+  compiler.pathname, '--frame', wrongRoute, '--out-dir', wrongRouteDir,
+], { cwd: root.pathname, encoding: 'utf8' });
+assert.notEqual(wrongRouteRun.status, 0);
+const wrongRouteReport = JSON.parse(readFileSync(join(wrongRouteDir, 'report.json'), 'utf8'));
+assert.equal(wrongRouteReport.failurePhase, 'source-artifact-validation');
+assert.equal(wrongRouteReport.effectiveRoute, null);
+assert.match(wrongRouteReport.message, /wrong effective route/i);
+assert.deepEqual(wrongRouteReport.lastTrustworthyEvidence.validatedFrames, []);
+assert.deepEqual(wrongRouteReport.lastTrustworthyEvidence.requestedFrameManifests, [wrongRoute]);
+
+const routeDrift = editManifest(makeFrame(directory, 101), manifest => {
+  manifest.deterministicReplay.effectiveRoute = 'stale-replay-route-v0';
+});
+const routeDriftDir = join(directory, 'failed-route-drift');
+const routeDriftRun = spawnSync(process.execPath, [
+  compiler.pathname, '--frame', routeDrift, '--out-dir', routeDriftDir,
+], { cwd: root.pathname, encoding: 'utf8' });
+assert.notEqual(routeDriftRun.status, 0);
+const routeDriftReport = JSON.parse(readFileSync(join(routeDriftDir, 'report.json'), 'utf8'));
+assert.equal(routeDriftReport.failurePhase, 'source-artifact-validation');
+assert.match(routeDriftReport.message, /replay effectiveRoute.*does not match/i);
+
+const backendDrift = editManifest(makeFrame(directory, 102), manifest => {
+  manifest.deterministicReplay.backend = 'WebGPU:fallback-adapter';
+  manifest.deterministicReplay.grid = manifest.grid + 4;
+});
+const backendDriftDir = join(directory, 'failed-backend-grid-drift');
+const backendDriftRun = spawnSync(process.execPath, [
+  compiler.pathname, '--frame', backendDrift, '--out-dir', backendDriftDir,
+], { cwd: root.pathname, encoding: 'utf8' });
+assert.notEqual(backendDriftRun.status, 0);
+const backendDriftReport = JSON.parse(readFileSync(join(backendDriftDir, 'report.json'), 'utf8'));
+assert.equal(backendDriftReport.failurePhase, 'source-artifact-validation');
+assert.match(backendDriftReport.message, /replay (backend|grid).*does not match/i);
 
 console.log('real smoke splat corpus contracts passed');
