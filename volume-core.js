@@ -1,7 +1,7 @@
 import {
   BOUNDARY_SPLAT_ATTRIBUTE_MODEL_IDENTITY,
   BOUNDARY_SPLAT_ATTRIBUTE_MODEL_WGSL,
-} from './models/boundary-splat-attribute/analytic-teacher-h64-v0/boundary-splat-attribute-model.generated.js';
+} from './models/boundary-splat-attribute/live-support-h64-v0/boundary-splat-attribute-model.generated.js';
 import {
   BOUNDARY_SPLAT_FEATURE_CAPTURE_IDENTITY,
   BOUNDARY_SPLAT_FEATURE_STRIDE_FLOATS,
