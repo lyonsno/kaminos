@@ -11,7 +11,7 @@ assert.match(liveModel, /sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f1400215
 assert.match(core, /BOUNDARY_SPLAT_LEARNED_RENDERER_IDENTITY\s*=\s*'live-boundary-sidecar-learned-attribute-splats-v0'/, 'learned route has a distinct effective renderer identity');
 assert.match(core, /\$\{BOUNDARY_SPLAT_ATTRIBUTE_MODEL_WGSL\}/, 'generated inference WGSL is compiled into the live splat shader');
 assert.match(core, /applyBoundarySplatAttributeHook[\s\S]*boundarySplatCamera\.controls\.y[\s\S]*inferBoundarySplatAttributes\(features\)/, 'hook selects generated inference only when learned mode is effective');
-assert.match(core, /splatCamera\.set\(\[1,\s*boundarySplatLearnedAttributesRequested\(\)\s*\?\s*1\s*:\s*0/, 'live control uniform carries learned mode into compaction');
+assert.match(core, /splatCamera\.set\(\[normalizeBoundarySplatRadius\([^)]*\),\s*boundarySplatLearnedAttributesRequested\(\)\s*\?\s*1\s*:\s*0/, 'live control uniform carries learned mode into compaction alongside the raster radius');
 assert.match(core, /boundarySplatComputeBindGroupLayout\s*=\s*device\.createBindGroupLayout[\s\S]*binding:\s*4,\s*visibility:\s*GPUShaderStage\.COMPUTE/, 'compute layout exposes the learned-mode camera controls');
 assert.match(core, /boundarySplatComputeBindGroups\s*=\s*fluidBuffers\.map[\s\S]*binding:\s*4,\s*resource:\s*\{\s*buffer:\s*boundarySplatCameraBuffer/, 'compute bind groups attach the existing camera uniform without restoring the candidate copy');
 assert.match(core, /normalizeBoundarySplatMode[\s\S]*'learned'/, 'renderer accepts learned mode without collapsing to off');

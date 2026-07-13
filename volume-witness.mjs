@@ -2359,17 +2359,111 @@ async function main() {
         expectedSmoke,
       });
       phase = 'capture-replay-evidence';
-      const screenshot = await wsRequest(ws, 'Page.captureScreenshot', {
-        format: 'png',
-        fromSurface: true,
+      const nativeFrameEval = await wsRequest(ws, 'Runtime.evaluate', {
+        expression: `(async () => {
+          const sample = await window.__kaminosVolumePrototype?.sampleFrame?.({ advanceSim: false, includeRgba: true });
+          if (!sample?.ok) {
+            throw new Error('native GPU frame readback failed: ' + JSON.stringify({
+              reason: sample?.reason || 'missing-sample',
+              effectiveRoute: sample?.effectiveRoute || null,
+              prototypeIdentity: sample?.prototypeIdentity || null,
+              backend: sample?.backend || null,
+            }));
+          }
+          if (!sample.image || !Array.isArray(sample.image.rgba)) {
+            throw new Error('native GPU frame readback omitted full RGBA image');
+          }
+          const expectedLength = sample.image.width * sample.image.height * 4;
+          if (sample.image.rgba.length !== expectedLength) {
+            throw new Error('native GPU frame readback was partial: ' + sample.image.rgba.length + '/' + expectedLength);
+          }
+          window.__kaminosCaptureReplayNativeFrame = Uint8Array.from(sample.image.rgba);
+          return {
+            authority: 'gpu-frame-texture-rgba8-readback',
+            width: sample.image.width,
+            height: sample.image.height,
+            expectedLength,
+            sampleAuthority: sample.sampleAuthority,
+            simAdvanced: sample.simAdvanced,
+            effectiveRoute: sample.effectiveRoute,
+            prototypeIdentity: sample.prototypeIdentity,
+            backend: sample.backend,
+            volumeReconstructionStyle: sample.volumeReconstructionStyle,
+            boundarySplatMode: sample.boundarySplatMode,
+            boundarySplatRendererIdentity: sample.boundarySplatRendererIdentity,
+            boundarySplatAttributeModelIdentity: sample.boundarySplatAttributeModelIdentity,
+            boundarySplatSourceAuthority: sample.boundarySplatSourceAuthority,
+            boundarySplatCapacity: sample.boundarySplatCapacity,
+            boundarySplatInstanceCount: sample.boundarySplatInstanceCount,
+            boundarySplatCandidateCount: sample.boundarySplatCandidateCount,
+            boundarySplatOverflowCount: sample.boundarySplatOverflowCount,
+            boundarySplatCountAuthority: sample.boundarySplatCountAuthority,
+            boundarySplatFallbackReason: sample.boundarySplatFallbackReason,
+            boundarySplatCopyBytesThisFrame: sample.boundarySplatCopyBytesThisFrame,
+            frameCount: sample.frameCount,
+            simStepCount: sample.simStepCount,
+            meanLuma: sample.meanLuma,
+            litPixels: sample.litPixels,
+          };
+        })()`,
+        awaitPromise: true,
+        returnByValue: true,
       });
-      const screenshotBuffer = Buffer.from(screenshot.data, 'base64');
-      writeFileSync(out, screenshotBuffer);
+      if (nativeFrameEval.exceptionDetails) {
+        throw new Error(`capture replay native GPU readback failed: ${nativeFrameEval.exceptionDetails.text || 'runtime exception'}`);
+      }
+      const nativeFrame = nativeFrameEval.result.value;
+      assert.equal(nativeFrame?.authority, 'gpu-frame-texture-rgba8-readback', 'capture replay received wrong pixel authority');
+      assert.equal(nativeFrame?.effectiveRoute, state.effectiveRoute, 'capture replay native pixels came from the wrong route');
+      assert.equal(nativeFrame?.prototypeIdentity, state.prototypeIdentity, 'capture replay native pixels came from the wrong prototype');
+      assert.equal(nativeFrame?.sampleAuthority, 'render-only-frozen-sim-state', 'capture replay native readback advanced simulation');
+      assert.equal(nativeFrame?.simAdvanced, false, 'capture replay native readback reported simulation advancement');
+      const nativeFrameTransportChunkBytes = 256 * 1024;
+      const nativeRgbaChunks = [];
+      for (let offset = 0; offset < nativeFrame.expectedLength; offset += nativeFrameTransportChunkBytes) {
+        const length = Math.min(nativeFrameTransportChunkBytes, nativeFrame.expectedLength - offset);
+        const chunkEval = await wsRequest(ws, 'Runtime.evaluate', {
+          expression: `(() => {
+            const bytes = window.__kaminosCaptureReplayNativeFrame;
+            if (!(bytes instanceof Uint8Array) || bytes.length !== ${nativeFrame.expectedLength}) {
+              throw new Error('native frame transport cache missing or partial');
+            }
+            let binary = '';
+            const end = ${offset + length};
+            for (let index = ${offset}; index < end; index += 1) binary += String.fromCharCode(bytes[index]);
+            return btoa(binary);
+          })()`,
+          returnByValue: true,
+        });
+        if (chunkEval.exceptionDetails || typeof chunkEval.result.value !== 'string') {
+          throw new Error(`capture replay native RGBA chunk failed at ${offset}/${nativeFrame.expectedLength}`);
+        }
+        const chunk = Buffer.from(chunkEval.result.value, 'base64');
+        if (chunk.length !== length) {
+          throw new Error(`capture replay native RGBA chunk was partial at ${offset}: ${chunk.length}/${length}`);
+        }
+        nativeRgbaChunks.push(chunk);
+      }
+      const nativeRgba = Buffer.concat(nativeRgbaChunks);
+      if (nativeRgba.length !== nativeFrame.expectedLength) {
+        throw new Error(`capture replay native RGBA transport was partial: ${nativeRgba.length}/${nativeFrame.expectedLength}`);
+      }
+      await wsRequest(ws, 'Runtime.evaluate', {
+        expression: 'delete window.__kaminosCaptureReplayNativeFrame',
+        returnByValue: true,
+      });
+      writeRgbaPng(out, nativeFrame.width, nativeFrame.height, nativeRgba);
+      const screenshotBuffer = readFileSync(out);
       if (fullScreenshot) writeFileSync(fullScreenshot, screenshotBuffer);
       const screenshotMetrics = measureScreenshot(screenshotBuffer);
       if (screenshotMetrics.litPixels < 1000 || screenshotMetrics.meanLuma < 1.2) {
-        throw new Error(`capture replay screenshot missing visible volume: ${JSON.stringify(screenshotMetrics)}`);
+        throw new Error(`capture replay native GPU frame missing visible volume: ${JSON.stringify(screenshotMetrics)}`);
       }
+      const refreshedStateEval = await wsRequest(ws, 'Runtime.evaluate', {
+        expression: 'window.__kaminosVolumePrototype?.debugState?.()',
+        returnByValue: true,
+      });
+      state = refreshedStateEval.result.value || state;
       const report = {
         identity: 'kaminos-volume-witness-report-v0',
         requestedRoute: url,
@@ -2393,13 +2487,19 @@ async function main() {
         prototypeIdentity: state.prototypeIdentity,
         active: state.active,
         state,
+        nativeFrameReadback: {
+          ...nativeFrame,
+          transportedBytes: nativeRgba.length,
+          transportChunkBytes: nativeFrameTransportChunkBytes,
+          transportChunkCount: nativeRgbaChunks.length,
+        },
         screenshotMetrics,
         screenshot: out,
         fullScreenshot: fullScreenshot || null,
       };
       writeFileSync(reportPath, JSON.stringify(report, null, 2));
       ws.close();
-      proc.kill('SIGTERM');
+      closeBrowserSession(browserSession);
       return;
     }
     assert.equal(state.volumeScene, expectedVolumeScene, 'volume scene route/control did not apply');
