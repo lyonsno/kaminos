@@ -1300,7 +1300,9 @@ async function runLocalGridOccupancyRenderWitness(context) {
   } = context;
   const requestedFamily = String(options.phaseModelFamily || options.modelFamily || 'local-grid-occupancy-classifier-v0');
   const budgetedSupport = requestedFamily === 'dense-negative-budgeted-local-grid-occupancy-v0';
-  const splitSupportHeads = requestedFamily === 'split-survival-birth-death-local-grid-v0';
+  const quotaRankedSupport = requestedFamily === 'quota-ranked-survival-birth-death-local-grid-v0';
+  const splitSupportHeads = requestedFamily === 'split-survival-birth-death-local-grid-v0'
+    || quotaRankedSupport;
   const usesSupportBudget = budgetedSupport || splitSupportHeads;
   const classifierOptions = usesSupportBudget
     ? { ...options, includePredictionSiteNegatives: true }
@@ -1388,15 +1390,30 @@ async function runLocalGridOccupancyRenderWitness(context) {
     : null;
   const occupancyThreshold = calibratedThreshold?.threshold ?? null;
   if (supportBudget) {
-    const birthPrecision = splitSupportHeads
-      ? conditionalHeads.birth.calibration.precision
-      : calibratedThreshold.birth.precision;
-    supportBudget.birthPrecisionBudgetScale = Math.max(0.05, Math.min(1, birthPrecision));
-    supportBudget.effectiveBirthSupportBudget = Math.max(0, Math.round(supportBudget.birthSupportBudget * supportBudget.birthPrecisionBudgetScale));
-    supportBudget.effectiveSourceSurvivalBudget = Math.max(
-      0,
-      Math.min(sourceRows.size, supportBudget.targetSupportBudget - supportBudget.effectiveBirthSupportBudget),
-    );
+    if (quotaRankedSupport) {
+      supportBudget.birthPrecisionBudgetScale = 1;
+      supportBudget.effectiveSourceSurvivalBudget = Math.max(
+        0,
+        Math.min(sourceRows.size, supportBudget.sourceSurvivalBudget, supportBudget.targetSupportBudget),
+      );
+      supportBudget.effectiveBirthSupportBudget = Math.max(
+        0,
+        Math.min(
+          supportBudget.birthSupportBudget,
+          supportBudget.targetSupportBudget - supportBudget.effectiveSourceSurvivalBudget,
+        ),
+      );
+    } else {
+      const birthPrecision = splitSupportHeads
+        ? conditionalHeads.birth.calibration.precision
+        : calibratedThreshold.birth.precision;
+      supportBudget.birthPrecisionBudgetScale = Math.max(0.05, Math.min(1, birthPrecision));
+      supportBudget.effectiveBirthSupportBudget = Math.max(0, Math.round(supportBudget.birthSupportBudget * supportBudget.birthPrecisionBudgetScale));
+      supportBudget.effectiveSourceSurvivalBudget = Math.max(
+        0,
+        Math.min(sourceRows.size, supportBudget.targetSupportBudget - supportBudget.effectiveBirthSupportBudget),
+      );
+    }
   }
   const probabilityByKey = new Map();
   const supportHeadProbabilityByKey = new Map();
@@ -1413,15 +1430,21 @@ async function runLocalGridOccupancyRenderWitness(context) {
           const survival = conditionalHeads.survival.head.predict(input);
           const death = conditionalHeads.death.head.predict(input);
           supportHeadProbabilityByKey.set(key, { survival, birth: null, death });
-          probability = survival * (1 - death);
           const survivalMargin = survival - conditionalHeads.survival.calibration.threshold;
           const deathMargin = death - conditionalHeads.death.calibration.threshold;
-          decisionEligible = survivalMargin >= 0 && survivalMargin >= deathMargin;
+          probability = quotaRankedSupport
+            ? survivalMargin - deathMargin
+            : survival * (1 - death);
+          decisionEligible = quotaRankedSupport
+            || (survivalMargin >= 0 && survivalMargin >= deathMargin);
         } else {
           const birth = conditionalHeads.birth.head.predict(input);
           supportHeadProbabilityByKey.set(key, { survival: null, birth, death: null });
-          probability = birth;
-          decisionEligible = birth >= conditionalHeads.birth.calibration.threshold;
+          probability = quotaRankedSupport
+            ? birth - conditionalHeads.birth.calibration.threshold
+            : birth;
+          decisionEligible = quotaRankedSupport
+            || birth >= conditionalHeads.birth.calibration.threshold;
         }
       } else {
         probability = classifier.predict(input);
@@ -1752,9 +1775,22 @@ async function runLocalGridOccupancyRenderWitness(context) {
           ...supportHeadReport,
         },
         supportDecision: {
-          authority: 'split-head-threshold-gated-support-budget-v0',
-          sourceRule: 'survival-positive-and-calibrated-margin-not-weaker-than-death-then-budget-ranked',
-          birthRule: 'birth-positive-then-budget-ranked',
+          authority: quotaRankedSupport
+            ? 'quota-ranked-split-head-support-budget-v0'
+            : 'split-head-threshold-gated-support-budget-v0',
+          thresholdRole: quotaRankedSupport ? 'diagnostic-only' : 'eligibility-gate',
+          sourceScore: quotaRankedSupport
+            ? 'calibrated-survival-margin-minus-calibrated-death-margin'
+            : 'survival-probability-times-one-minus-death-probability',
+          birthScore: quotaRankedSupport ? 'calibrated-birth-margin' : 'birth-probability',
+          sourceRule: quotaRankedSupport
+            ? 'rank-all-source-sites-and-fill-learned-source-survival-quota'
+            : 'survival-positive-and-calibrated-margin-not-weaker-than-death-then-budget-ranked',
+          birthRule: quotaRankedSupport
+            ? 'rank-all-birth-sites-and-fill-learned-birth-quota-within-target-budget'
+            : 'birth-positive-then-budget-ranked',
+          sourceCandidateCount: Array.from(predictionSites.values()).filter(site => site.sourceOccupied).length,
+          birthCandidateCount: Array.from(predictionSites.values()).filter(site => !site.sourceOccupied).length,
           selectedSourceSupport: Array.from(selectedKeys).filter(key => sourceRows.has(key)).length,
           selectedBirthSupport: Array.from(selectedKeys).filter(key => !sourceRows.has(key)).length,
           predictedDeaths,
@@ -1775,7 +1811,9 @@ async function runLocalGridOccupancyRenderWitness(context) {
       birthSynthesis: 'local-grid-classifier-training-site-synthesis-v0',
       synthesizedBirths: synthesizedBirthKeys.length,
       deathHandling: splitSupportHeads
-        ? 'split-calibrated-survival-versus-death-margin-v0'
+        ? (quotaRankedSupport
+          ? 'quota-ranked-calibrated-survival-versus-death-margin-v0'
+          : 'split-calibrated-survival-versus-death-margin-v0')
         : 'local-grid-classifier-occupancy-threshold',
       predictedDeaths,
     },
@@ -2062,7 +2100,8 @@ export async function writeBoundarySplatPhaseRenderWitness(manifestFile, options
     }
     if (phaseModelFamily === 'local-grid-occupancy-classifier-v0'
       || phaseModelFamily === 'dense-negative-budgeted-local-grid-occupancy-v0'
-      || phaseModelFamily === 'split-survival-birth-death-local-grid-v0') {
+      || phaseModelFamily === 'split-survival-birth-death-local-grid-v0'
+      || phaseModelFamily === 'quota-ranked-survival-birth-death-local-grid-v0') {
       return runLocalGridOccupancyRenderWitness({
         manifestBytes,
         manifestPath,
@@ -2249,7 +2288,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
   const args = parseArgs(process.argv.slice(2));
   const manifest = args.get('--manifest');
   if (!manifest) {
-    console.error('Usage: node boundary-splat-phase-render-witness.mjs --manifest <phase-corpus.json> [--model <model-artifact.json>] [--offset 3] [--phase-model-family ridge-linear-offset-conditioned-v0|spatial-occupancy-ridge-v0|local-grid-occupancy-classifier-v0|dense-negative-budgeted-local-grid-occupancy-v0|split-survival-birth-death-local-grid-v0] [--out-dir <dir>] [--report <json>]');
+    console.error('Usage: node boundary-splat-phase-render-witness.mjs --manifest <phase-corpus.json> [--model <model-artifact.json>] [--offset 3] [--phase-model-family ridge-linear-offset-conditioned-v0|spatial-occupancy-ridge-v0|local-grid-occupancy-classifier-v0|dense-negative-budgeted-local-grid-occupancy-v0|split-survival-birth-death-local-grid-v0|quota-ranked-survival-birth-death-local-grid-v0] [--out-dir <dir>] [--report <json>]');
     process.exitCode = 2;
   } else {
     try {

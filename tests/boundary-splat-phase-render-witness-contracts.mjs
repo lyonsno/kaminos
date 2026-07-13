@@ -389,6 +389,74 @@ try {
   );
   assert.equal(splitHeadReport.route.effective, spatialManifest.frames[0].effectiveRoute);
   assert.ok(splitHeadReport.renders.inputSplats.phasePrediction > 0, 'split-head prediction must render nonempty support');
+
+  const quotaRankedReportPath = join(root, 'quota-ranked-support-heads-render-report.json');
+  const quotaRankedReport = await writeBoundarySplatPhaseRenderWitness(manifestPath, {
+    model: modelPath,
+    offset: 3,
+    outDir: root,
+    report: quotaRankedReportPath,
+    width: 96,
+    height: 96,
+    phaseModelFamily: 'quota-ranked-survival-birth-death-local-grid-v0',
+  });
+  assert.equal(quotaRankedReport.phaseModel.family, 'quota-ranked-survival-birth-death-local-grid-v0');
+  assert.equal(
+    quotaRankedReport.phaseModel.supportDecision.authority,
+    'quota-ranked-split-head-support-budget-v0',
+  );
+  assert.equal(quotaRankedReport.phaseModel.supportDecision.thresholdRole, 'diagnostic-only');
+  assert.equal(
+    quotaRankedReport.phaseModel.supportDecision.sourceScore,
+    'calibrated-survival-margin-minus-calibrated-death-margin',
+  );
+  assert.equal(quotaRankedReport.phaseModel.supportDecision.birthScore, 'calibrated-birth-margin');
+  assert.equal(
+    quotaRankedReport.phaseModel.supportDecision.selectedSourceSupport,
+    Math.min(
+      quotaRankedReport.phaseModel.supportDecision.sourceCandidateCount,
+      quotaRankedReport.phaseModel.supportBudget.effectiveSourceSurvivalBudget,
+    ),
+    'quota-ranked source selection must fill the learned survival quota without threshold starvation',
+  );
+  assert.equal(
+    quotaRankedReport.phaseModel.supportDecision.selectedBirthSupport,
+    Math.min(
+      quotaRankedReport.phaseModel.supportDecision.birthCandidateCount,
+      quotaRankedReport.phaseModel.supportBudget.effectiveBirthSupportBudget,
+      quotaRankedReport.phaseModel.supportBudget.targetSupportBudget
+        - quotaRankedReport.phaseModel.supportDecision.selectedSourceSupport,
+    ),
+    'quota-ranked birth selection must fill the learned birth quota within the target support budget',
+  );
+  assert.equal(
+    quotaRankedReport.phaseModel.supportBudget.effectiveSourceSurvivalBudget,
+    Math.min(
+      quotaRankedReport.baselines.currentCopy.inputSplats,
+      quotaRankedReport.phaseModel.supportBudget.sourceSurvivalBudget,
+      quotaRankedReport.phaseModel.supportBudget.targetSupportBudget,
+    ),
+    'quota-ranked source budget must use the raw corpus-learned survival quota',
+  );
+  assert.equal(
+    quotaRankedReport.phaseModel.supportBudget.effectiveBirthSupportBudget,
+    Math.min(
+      quotaRankedReport.phaseModel.supportBudget.birthSupportBudget,
+      quotaRankedReport.phaseModel.supportBudget.targetSupportBudget
+        - quotaRankedReport.phaseModel.supportBudget.effectiveSourceSurvivalBudget,
+    ),
+    'quota-ranked birth budget must use the raw corpus-learned birth quota after source allocation',
+  );
+  assert.equal(
+    quotaRankedReport.renders.inputSplats.phasePrediction,
+    quotaRankedReport.phaseModel.supportDecision.selectedSourceSupport
+      + quotaRankedReport.phaseModel.supportDecision.selectedBirthSupport,
+  );
+  assert.ok(
+    quotaRankedReport.renders.inputSplats.phasePrediction
+      <= quotaRankedReport.phaseModel.supportBudget.targetSupportBudget,
+    'quota-ranked prediction must remain inside the learned target support budget',
+  );
   assert.equal(
     budgetedReport.diagnostics.residuals.authority,
     'phase-render-raster-residual-maps-v0',
