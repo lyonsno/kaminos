@@ -296,8 +296,10 @@ export {
 
 export {
   SAM31_TEMPORAL_PACKET_AUTHORITY,
+  SAM31_TWO_FRAME_PACKET_AUTHORITIES,
   verifySam31PacketFloat32Bytes,
   verifySam31TemporalPacketAuthority,
+  verifySam31TwoFramePacketAuthority,
 } from './sam31-packet-artifact.js';
 
 export {

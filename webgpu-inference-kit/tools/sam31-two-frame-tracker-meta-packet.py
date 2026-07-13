@@ -20,6 +20,7 @@ HF_REVISION = "daa63191845a41281374e725f4c9e51c7a824460"
 SOURCE_COMMIT = "5dd401d1c5c1d5c3eedff06d41b77af824517619"
 CHECKPOINT_SHA256 = "sha256:0567debeec80ba4ac6369540c6c248025283cb3ff2b92827509e57e2b3541cb6"
 DEFAULT_CHECKPOINT = Path.home() / ".cache/huggingface/hub/models--facebook--sam3.1/snapshots" / HF_REVISION / "sam3.1_multiplex.pt"
+NO_OBJ_SCORE = -1024.0
 FAILURE_PHASE = "argument-resolution"
 
 
@@ -264,13 +265,18 @@ def main():
     }
     with torch.inference_mode():
         frame0 = decode_frame(decoder, pointer_projection, no_object_projection, **frame0_inputs)
+        frame0_memory_input_masks = torch.where(
+            frame0["appearing"][:, None, None, None],
+            frame0["selected_masks"],
+            NO_OBJ_SCORE,
+        )
         frame0_tokens = frame0_inputs["image"].flatten(2).permute(2, 0, 1)
         frame0_memory, frame0_memory_pos = video_module.VideoTrackingMultiplex._encode_new_memory(
             memory_proxy,
             image=torch.zeros((1, 3, 8, 8), dtype=torch.float32),
             current_vision_feats=[frame0_tokens],
             feat_sizes=[(2, 2)],
-            pred_masks_high_res=frame0["selected_masks"],
+            pred_masks_high_res=frame0_memory_input_masks,
             object_score_logits=frame0["scores"],
             is_mask_from_pts=True,
             conditioning_objects=range(16),
@@ -328,6 +334,7 @@ def main():
         "frame-0-high-resolution-s1": frame0_inputs["high1"],
         "frame-0-extra-per-object-embedding": frame0_inputs["extra"],
         "frame-0-selected-masks": frame0["selected_masks"],
+        "frame-0-memory-input-masks": frame0_memory_input_masks,
         "frame-0-object-scores": frame0["scores"],
         "frame-0-object-pointers": frame0["pointers"],
         "frame-0-memory-features": frame0_memory.permute(0, 2, 3, 1),
@@ -375,7 +382,17 @@ def main():
         "componentManifests": {"decoder": "/oracle/decoder/tensor-manifest.json", "memory": "/oracle/memory/tensor-manifest.json", "temporal": "/oracle/temporal/tensor-manifest.json"},
         "shape": {"batch": 1, "multiplexCount": 16, "queryHeight": 2, "queryWidth": 2, "queryTokens": 4, "memorySpatialTokens": 4, "numObjPtrTokens": 16, "memoryTokens": 20, "channels": 256, "maskHeight": 8, "maskWidth": 8},
         "plan": {"frameIndex": 1, "numFrames": 2, "conditioningFrameIndices": [0], "nonConditioningFrameIndices": [], "selectedConditioningFrameIndices": [0], "spatialFrameIndices": [0], "spatialTemporalPositionIndices": [5], "pointerFrameIndices": [0], "pointerRelativePositions": [1], "numMaskmem": 7, "maxConditioningFrames": 4, "maxObjectPointerFrames": 2, "memoryTemporalStride": 1, "useMaskmemTemporalPositionV2": True, "trackInReverse": False},
-        "stateTransition": {"frame0Kind": "conditioning", "frame1Kind": "non-conditioning", "conditioningObjects": list(range(16)), "frame0AppearingObjectCount": appearing0, "frame0AbsentObjectCount": 16 - appearing0, "frame1AppearingObjectCount": appearing1, "frame1AbsentObjectCount": 16 - appearing1},
+        "stateTransition": {
+            "frame0Kind": "conditioning",
+            "frame1Kind": "non-conditioning",
+            "conditioningObjects": list(range(16)),
+            "frame0AppearingObjectCount": appearing0,
+            "frame0AbsentObjectCount": 16 - appearing0,
+            "frame0SuppressedAbsentMaskCount": 16 - appearing0,
+            "noObjectMaskScore": NO_OBJ_SCORE,
+            "frame1AppearingObjectCount": appearing1,
+            "frame1AbsentObjectCount": 16 - appearing1,
+        },
         "claims": {"officialFrame0DecoderExecuted": True, "officialMemoryMethodExecuted": True, "officialTemporalMethodExecuted": True, "officialMemoryAttentionExecuted": True, "officialFrame1DecoderExecuted": True, "fullImageBackboneExecuted": False},
         "tolerances": {"decoderMaxAbsDiff": 0.0015, "memoryMaxAbsDiff": 0.0008, "bankMaxAbsDiff": 0.0001, "conditionedMaxAbsDiff": 0.0001},
         "tensors": entries,

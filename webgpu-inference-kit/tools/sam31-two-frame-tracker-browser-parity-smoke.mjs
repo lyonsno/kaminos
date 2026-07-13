@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 import { createServer } from 'node:http';
-import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, extname, join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { spawn, spawnSync } from 'node:child_process';
+import { verifySam31TwoFramePacketAuthority } from '../src/sam31-packet-artifact.js';
 
 const REPORT_SCHEMA = 'kaminos.sam31-two-frame-tracker.browser-parity-smoke.v0';
 const args = new Map();
@@ -21,13 +21,18 @@ const verifyOnly = args.get('--verify-only') === '1';
 const chrome = process.env.KAMINOS_CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const python = process.env.SAM31_TORCH_PYTHON || '/Users/noahlyons/dev/sf3d/.venv/bin/python';
 const userDataDir = mkdtempSync(join(tmpdir(), `kaminos-sam31-two-frame-chrome-${process.pid}-`));
-const url = `http://127.0.0.1:${serverPort}/smokes/sam31-two-frame-tracker-parity.html`;
+const baseUrl = `http://127.0.0.1:${serverPort}/smokes/sam31-two-frame-tracker-parity.html`;
+let url = baseUrl;
 const packetTools = {
   decoder: 'sam31-multiplex-mask-decoder-meta-packet.py',
   memory: 'sam31-propagation-memory-meta-packet.py',
   temporal: 'sam31-temporal-memory-bank-meta-packet.py',
   episode: 'sam31-two-frame-tracker-meta-packet.py',
 };
+const expectedManifestSha256 = Object.fromEntries(Object.keys(packetTools).map(name => [
+  name,
+  args.get(`--expected-${name}-manifest-sha256`) || null,
+]));
 
 let phase = 'initializing';
 let server;
@@ -53,6 +58,7 @@ function writeReport(extra = {}) {
     packetSource: reusePacket ? 'caller-provided-existing' : 'generated',
     packetTools,
     packetAuthority,
+    browserPacketAuthority: lastState?.packetAuthority || null,
     reportPath,
     screenshot: screenshotWritten ? screenshotPath : null,
     primary_output_written: screenshotWritten,
@@ -79,11 +85,7 @@ function writeReport(extra = {}) {
   return value;
 }
 
-function digestBytes(bytes) {
-  return `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
-}
-
-function verifyPacketAuthority() {
+async function verifyPacketAuthority() {
   const verifiedPackets = [];
   const packets = {};
   for (const name of Object.keys(packetTools)) {
@@ -92,26 +94,13 @@ function verifyPacketAuthority() {
     const receiptPath = join(outDir, 'reference-receipt.json');
     if (!existsSync(manifestPath)) throw new Error(`${name} manifest missing: ${manifestPath}`);
     if (!existsSync(receiptPath)) throw new Error(`${name} reference receipt missing: ${receiptPath}`);
-    const manifestBytes = readFileSync(manifestPath);
-    const manifest = JSON.parse(manifestBytes.toString('utf8'));
+    const manifestText = readFileSync(manifestPath, 'utf8');
+    const manifest = JSON.parse(manifestText);
     const receipt = JSON.parse(readFileSync(receiptPath, 'utf8'));
-    if (receipt.ok !== true) throw new Error(`${name} reference receipt is not successful`);
-    const actualDigest = digestBytes(manifestBytes);
-    const expectedDigest = receipt.outputs?.tensorManifestSha256;
-    if (typeof expectedDigest !== 'string') throw new Error(`${name} reference receipt does not bind tensorManifestSha256`);
-    if (actualDigest !== expectedDigest) throw new Error(`${name} manifest digest mismatch: receipt ${expectedDigest}, actual ${actualDigest}`);
-    if (JSON.stringify(receipt.reference) !== JSON.stringify(manifest.reference)) throw new Error(`${name} receipt/reference manifest identity mismatch`);
-    if (receipt.boundary && manifest.boundary && receipt.boundary !== manifest.boundary) throw new Error(`${name} receipt/manifest boundary mismatch`);
-    packets[name] = {
-      manifestSchema: manifest.schema,
-      receiptSchema: receipt.schema,
-      boundary: manifest.boundary || receipt.boundary || null,
-      tensorManifestSha256: actualDigest,
-      modelRevision: manifest.reference?.model?.revision || null,
-      checkpointSha256: manifest.reference?.model?.sha256 || null,
-      sourceCommit: manifest.reference?.source?.commit || null,
-      sourceWorkingTreeClean: manifest.reference?.source?.workingTreeClean ?? null,
-    };
+    const expectedDigest = expectedManifestSha256[name] || (!reusePacket ? receipt.outputs?.tensorManifestSha256 : null);
+    if (reusePacket && !expectedDigest) throw new Error(`${name} reused packet requires --expected-${name}-manifest-sha256`);
+    packets[name] = await verifySam31TwoFramePacketAuthority({ name, manifestText, manifest, referenceReceipt: receipt, expectedManifestSha256: expectedDigest });
+    expectedManifestSha256[name] = packets[name].manifestSha256;
     verifiedPackets.push(name);
   }
   return { passed: true, verifiedPackets, packets };
@@ -182,7 +171,7 @@ async function main() {
     phase = 'generate_official_packets'; generatePackets();
     phase = 'verify_packet_authority';
     try {
-      packetAuthority = verifyPacketAuthority();
+      packetAuthority = await verifyPacketAuthority();
     } catch (error) {
       packetAuthority = { passed: false, error: String(error?.message || error) };
       throw error;
@@ -193,6 +182,9 @@ async function main() {
       process.stdout.write(`${JSON.stringify({ ok: true, reportPath, packetAuthority: value.packetAuthority }, null, 2)}\n`);
       return;
     }
+    const browserParams = new URLSearchParams({ packetSource: reusePacket ? 'caller-provided-existing' : 'generated' });
+    for (const name of Object.keys(packetTools)) browserParams.set(`expected-${name}-manifest-sha256`, expectedManifestSha256[name]);
+    url = `${baseUrl}?${browserParams}`;
     phase = 'start_server'; await startServer();
     phase = 'launch_chrome';
     chromeProcess = spawn(chrome, [`--remote-debugging-port=${debugPort}`, `--user-data-dir=${userDataDir}`, '--no-first-run', '--no-default-browser-check', '--disable-extensions', '--enable-unsafe-webgpu', '--enable-features=Vulkan,WebGPU,WebGPUDeveloperFeatures', '--window-size=1000,560', '--headless=new', url], { stdio: ['ignore', 'ignore', 'pipe'] });

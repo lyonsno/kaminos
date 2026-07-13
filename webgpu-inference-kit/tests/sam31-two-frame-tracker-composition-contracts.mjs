@@ -15,12 +15,14 @@ for (const token of [
   'VideoTrackingMultiplex._encode_new_memory',
   'VideoTrackingMultiplex._prepare_memory_conditioned_features',
   'MultiplexMaskDecoder',
+  'frame-0-memory-input-masks',
   'frame-0-object-scores',
   'frame-0-object-pointers',
   'frame-0-memory-features',
   'frame-1-memory-conditioned-features',
   'frame-1-selected-masks',
   'frame-1-object-pointers',
+  'NO_OBJ_SCORE',
 ]) {
   assert.match(exporter, new RegExp(token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), `official two-frame packet must bind ${token}`);
 }
@@ -33,6 +35,8 @@ for (const token of [
   'runSam31MemoryAttentionPhaseProgramRoute',
   'frame0DecoderResult.receipt',
   'frame0MemoryResult.receipt',
+  'suppressAbsentMasks',
+  'suppressedAbsentMaskCount',
   'frame1AttentionResult.receipt',
   'frame1DecoderResult.receipt',
   'numObjPtrTokens: 16',
@@ -40,6 +44,7 @@ for (const token of [
   'routeChainPassed',
   'stateTransitionPassed',
   'parityPassed',
+  'packetAuthorityPassed',
 ]) {
   assert.match(browser, new RegExp(token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), `browser episode must make ${token} load-bearing`);
 }
