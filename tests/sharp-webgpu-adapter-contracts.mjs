@@ -28,6 +28,20 @@ assert.equal(sharpRoute.stages[0].route.effectiveBackend, 'browser-webgpu');
 assert.deepEqual(sharpRoute.stages[0].requiredSideArtifacts, ['depthMap', 'metadata', 'autoCropEvidence']);
 
 const wrapperSource = readFileSync(wrapperPath, 'utf8');
+const timeoutParserSource = wrapperSource.match(
+  /function parsePositiveTimeoutMs\([\s\S]*?\n}\n/,
+);
+assert.ok(timeoutParserSource, 'adapter must expose a testable finite-positive timeout parser');
+const parsePositiveTimeoutMs = vm.runInNewContext(`(${timeoutParserSource[0]})`);
+assert.equal(parsePositiveTimeoutMs(undefined, 420000), 420000);
+assert.equal(parsePositiveTimeoutMs('420000', 1), 420000);
+for (const invalid of ['0', '-1', 'NaN', 'Infinity', '12.5']) {
+  assert.throws(
+    () => parsePositiveTimeoutMs(invalid, 420000),
+    /finite positive integer/,
+    `adapter must reject unbounded or malformed timeout ${invalid}`,
+  );
+}
 const probeIntegrationValidatorSource = wrapperSource.match(
   /function validateSharpProbeIntegrationSource\([\s\S]*?\n}\n(?=\nfunction preserveInvalidSharpHeartbeatEvidence)/,
 );
@@ -164,6 +178,7 @@ assert.match(wrapperSource, /Failed to resolve import/, 'wrapper must preserve V
 assert.match(wrapperSource, /does not provide an export/, 'wrapper must treat stale module export page errors as page-load failures before waiting for model output');
 assert.match(wrapperSource, /browserLogs[\s\S]*pageerror/, 'wrapper page-load failure detection must inspect browser page errors, not only Vite stderr');
 assert.match(wrapperSource, /timed out\|ms exceeded/, 'wrapper timeout classifier must match ProtocolError timeout wording from Puppeteer');
+assert.match(wrapperSource, /puppeteer\.launch\(\{[\s\S]*protocolTimeout:\s*timeoutMs/, 'Puppeteer protocol calls must honor the explicit SHARP route timeout instead of dying at the hidden 180-second default');
 assert.match(wrapperSource, /browserLifecycleEvents/, 'wrapper reports must preserve browser lifecycle events alongside console logs');
 assert.match(wrapperSource, /page\.on\('close'/, 'wrapper must record page close events');
 assert.match(wrapperSource, /page\.on\('error'/, 'wrapper must record page crash/error events');
@@ -203,6 +218,30 @@ try {
   const output = join(tempRoot, 'out', 'sharp-output.ply');
   const report = join(tempRoot, 'out', 'adapter-report.json');
   writeFileSync(input, 'fake image bytes\n');
+
+  const invalidTimeoutOutput = join(tempRoot, 'out', 'invalid-timeout-output.ply');
+  const invalidTimeoutReport = join(tempRoot, 'out', 'invalid-timeout-report.json');
+  const invalidTimeout = spawnSync(process.execPath, [
+    wrapperPath,
+    '--input', input,
+    '--output', invalidTimeoutOutput,
+    '--report', invalidTimeoutReport,
+  ], {
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      KAMINOS_SHARP_WEBGPU_REPO: join(tempRoot, 'missing-sharp-webgpu'),
+      KAMINOS_SHARP_WEBGPU_TIMEOUT_MS: '0',
+    },
+  });
+
+  assert.notEqual(invalidTimeout.status, 0, 'unbounded SHARP timeout must fail loud');
+  assert.ok(existsSync(invalidTimeoutReport), 'invalid timeout failure must still write a durable report');
+  assert.equal(existsSync(invalidTimeoutOutput), false, 'invalid timeout failure must not write a placeholder PLY');
+  const invalidTimeoutEvidence = JSON.parse(readFileSync(invalidTimeoutReport, 'utf8'));
+  assert.equal(invalidTimeoutEvidence.ok, false);
+  assert.equal(invalidTimeoutEvidence.phase, 'validating-timeout');
+  assert.match(invalidTimeoutEvidence.error, /finite positive integer/);
 
   const proc = spawnSync(process.execPath, [
     wrapperPath,

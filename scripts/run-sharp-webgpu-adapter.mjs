@@ -45,7 +45,7 @@ const sharpRepo = resolve(process.env.KAMINOS_SHARP_WEBGPU_REPO || '/Users/noahl
 const chromePath = process.env.KAMINOS_SHARP_WEBGPU_CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const requestedPort = Number(process.env.KAMINOS_SHARP_WEBGPU_PORT || 0);
 const port = requestedPort || (54000 + Math.floor(Math.random() * 1000));
-const timeoutMs = Number(process.env.KAMINOS_SHARP_WEBGPU_TIMEOUT_MS || 420000);
+let timeoutMs = 420000;
 const parsedSchedulerRequest = parseRequestedSchedulerRequest();
 const requestedScheduler = parsedSchedulerRequest.scheduler;
 const schedulerModeIdentity = parsedSchedulerRequest.schedulerMode;
@@ -68,6 +68,14 @@ const browserLogs = [];
 const browserLifecycleEvents = [];
 const emittedBrowserProgressKeys = new Set();
 const lastTrustworthyEvidence = {};
+
+function parsePositiveTimeoutMs(value, fallback) {
+  const timeout = value === undefined || value === null || value === '' ? fallback : Number(value);
+  if (!Number.isFinite(timeout) || !Number.isInteger(timeout) || timeout <= 0) {
+    throw new Error('KAMINOS_SHARP_WEBGPU_TIMEOUT_MS must be a finite positive integer');
+  }
+  return timeout;
+}
 
 function sha256File(path) {
   return createHash('sha256').update(readFileSync(path)).digest('hex');
@@ -1173,6 +1181,7 @@ async function runBrowserInference() {
   const { default: puppeteer } = await loadPuppeteer();
   const browser = await puppeteer.launch({
     executablePath: chromePath,
+    protocolTimeout: timeoutMs,
     headless: process.env.KAMINOS_SHARP_WEBGPU_HEADED === '1' ? false : 'new',
     args: [
       '--enable-unsafe-webgpu',
@@ -1350,6 +1359,8 @@ function stopServer() {
 }
 
 try {
+  phase = 'validating-timeout';
+  timeoutMs = parsePositiveTimeoutMs(process.env.KAMINOS_SHARP_WEBGPU_TIMEOUT_MS, timeoutMs);
   phase = 'validating-native-substrate';
   validateInputs();
   phase = 'starting-sharp-webgpu-server';
