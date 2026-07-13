@@ -28,12 +28,18 @@ assert.match(
 
 assert.match(exporter, /--source-capture/, 'exporter accepts an operator exact-tab source capture');
 assert.match(exporter, /--target-origin/, 'exporter can rebind the captured route to a caller-owned server origin');
+assert.match(exporter, /--render-composition/, 'exporter accepts an invocation-scoped frozen render composition');
+assert.match(exporter, /--render-control-overrides-json/, 'exporter accepts structured invocation-scoped render controls');
+assert.match(exporter, /JSON\.parse\(String\(args\.get\('--render-control-overrides-json'\)/, 'render control overrides use structured JSON parsing instead of ad hoc text splitting');
 assert.match(exporter, /sourceCapture/, 'export manifest records source-capture custody');
 assert.match(exporter, /payloadSha256/, 'exporter validates and records the exact capture payload hash');
 assert.match(exporter, /deterministicReplay/, 'exporter preserves deterministic replay identity');
 assert.match(exporter, /boundarySidecar/, 'exporter drains the active boundary-sidecar field authority');
 assert.match(exporter, /boundary-splats\.f32/, 'exporter drains the effective compact learned-splat output');
 assert.match(exporter, /failurePhase/, 'exporter writes a durable failure phase');
+assert.match(exporter, /boundarySplatComposition:\s*renderComposition/, 'imported render invocation passes the requested composition to the frozen renderer');
+assert.match(exporter, /controlOverrides:\s*renderControlOverrides/, 'imported render invocation passes structured control overrides to the frozen renderer');
+assert.match(exporter, /renderCompositionExplicit[\s\S]*boundarySplatCompositionEffective\s*!==\s*renderComposition/, 'an explicitly requested hybrid composition fails loud when the renderer reports another effective composition');
 
 const fixtureRoot = mkdtempSync(join(tmpdir(), 'kaminos-exact-basin-export-contract-'));
 const capturePath = join(fixtureRoot, 'corrupt-capture.json');

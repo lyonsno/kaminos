@@ -45,6 +45,8 @@ assert.doesNotMatch(core, /boundarySplatRenderBuffer/, 'renderer no longer alloc
 assert.match(core, /pass\.drawIndirect\(boundarySplatIndirectBuffer,\s*0\)/, 'splat raster count comes from the GPU indirect buffer');
 const splatDrawFunction = core.match(/function encodeBoundarySplatDraw\([\s\S]*?\n  \}/)?.[0] || '';
 assert.doesNotMatch(splatDrawFunction, /mapAsync|await/, 'live splat drawing must not depend on CPU readback');
+assert.match(splatDrawFunction, /const loadOp\s*=\s*options\.loadOp\s*===\s*'load'\s*\?\s*'load'\s*:\s*'clear'/, 'splat drawing explicitly normalizes clear versus composite attachment loading');
+assert.match(splatDrawFunction, /loadOp,/, 'splat drawing applies the normalized attachment load operation');
 
 assert.match(core, /encodeBoundarySidecar\(encoder\)[\s\S]*encodeBoundarySplats\(encoder\)/, 'splat compaction runs after the current frame sidecar bake');
 assert.match(core, /boundarySplatRequested[\s\S]*encodeBoundarySplatDraw/, 'the opt-in route selects splat rasterization instead of silently falling back');
@@ -54,6 +56,14 @@ assert.match(core, /state\.canvasDevicePixelRatio\s*=\s*canvasDevicePixelRatio/,
 assert.match(core, /return \{\s*ok:\s*true,[\s\S]*cssWidth:\s*state\.cssWidth[\s\S]*nativeDevicePixelRatio:\s*state\.nativeDevicePixelRatio[\s\S]*canvasDevicePixelRatio:\s*state\.canvasDevicePixelRatio/, 'successful frame samples preserve CSS size and requested/effective device pixel ratios');
 assert.match(core, /sampleFrame[\s\S]*encodeBoundarySidecar\(encoder\)[\s\S]*encodeBoundarySplats\(encoder\)[\s\S]*encodeBoundarySplatDraw\(encoder,\s*frameTexture\.createView\(\),\s*boundarySplatReadbackPipeline\)/, 'frozen witness renders the requested splat route instead of substituting raymarch');
 assert.match(core, /renderFrozenScaleToCanvas[\s\S]*encodeBoundarySidecar\(encoder\)[\s\S]*encodeBoundarySplats\(encoder\)[\s\S]*encodeBoundarySplatDraw\(encoder,\s*currentTexture\.createView\(\)\)/, 'controlled canvas capture renders the requested splat route instead of substituting raymarch');
+const frozenRenderFunction = core.match(/async function renderFrozenScaleToCanvas\(options = \{\}\) \{[\s\S]*?\n  \}\n\n  return \{/)?.[0] || '';
+assert.match(frozenRenderFunction, /boundarySplatCompositionRequested/, 'frozen splat capture records the requested composition independently from splat mode');
+assert.match(frozenRenderFunction, /boundarySplatCompositionRequestedRaw[\s\S]*unsupported-boundary-splat-composition/, 'direct frozen-render callers fail loud on unsupported raw composition values instead of silently becoming splat-only');
+assert.match(frozenRenderFunction, /raymarch-under-splats-v0/, 'frozen splat capture exposes an explicit hybrid composition identity');
+assert.match(frozenRenderFunction, /if \(boundarySplatCompositionRequested === 'raymarch-under-splats-v0'\)[\s\S]*encodeDraw\(encoder,\s*currentTexture\.createView\(\),[\s\S]*encodeBoundarySplatDraw\(encoder,\s*currentTexture\.createView\(\),\s*boundarySplatRenderPipeline,\s*\{\s*loadOp:\s*'load'\s*\}\)/, 'hybrid frozen capture encodes raymarch first and loads it beneath splats instead of clearing it');
+assert.match(frozenRenderFunction, /boundarySplatCompositionRequested[\s\S]*boundarySplatCompositionEffective[\s\S]*raymarchApplied[\s\S]*splatApplied/, 'frozen capture receipt distinguishes requested and effective composition plus both applied render passes');
+assert.match(frozenRenderFunction, /raymarchEncoded[\s\S]*splatEncoded[\s\S]*device\.queue\.submit\(\[encoder\.finish\(\)\]\)[\s\S]*raymarchApplied\s*=\s*raymarchEncoded[\s\S]*splatApplied\s*=\s*splatEncoded/, 'applied pass flags become true only after the encoded command buffer is submitted');
+assert.match(frozenRenderFunction, /reason:\s*'boundary-splat-frozen-canvas-route-unavailable'[\s\S]*raymarchEncoded[\s\S]*splatEncoded[\s\S]*raymarchApplied:\s*false[\s\S]*splatApplied:\s*false/, 'failed hybrid receipts distinguish discarded encoded work from submitted applied work');
 assert.match(core, /boundarySplatRendererIdentity:\s*boundarySplatEffectiveRendererIdentity\(/, 'runtime state reports the effective analytic or learned splat renderer identity');
 assert.match(core, /boundarySplatSourceAuthority:\s*BOUNDARY_SPLAT_SOURCE_AUTHORITY/, 'runtime state reports splat source authority');
 assert.match(core, /boundarySplatCapacity:\s*boundarySplatCapacity/, 'runtime state reports the currently allocated primitive capacity');
