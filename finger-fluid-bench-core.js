@@ -1,12 +1,12 @@
 export const KAMINOS_FINGER_FLUID_BENCH_STATE_SCHEMA = 'kaminos.finger-fluid-bench.state.v0';
 export const KAMINOS_FINGER_FLUID_BENCH_ROUTE = 'kaminos/finger-fluid-bench';
 export const BIG_PAPA_FLUID_SOURCE_SCHEMA = 'big-papa.finger-fluid.synthetic-source.v0';
-export const KAMINOS_FINGER_FLUID_SOLVER_IDENTITY = 'browser-fluid-research-bench-v0';
-export const KAMINOS_FINGER_FLUID_RENDERER_IDENTITY = 'kaminos-native-fluid-field-canvas-v0';
+export const KAMINOS_FINGER_FLUID_SOLVER_IDENTITY = 'webgpu-pbf-linked-cell-fluid-v0';
+export const KAMINOS_FINGER_FLUID_RENDERER_IDENTITY = 'webgpu-particle-sphere-renderer-v0';
 
 export const KAMINOS_FINGER_FLUID_DOWGRADES = [
   'kaminos_native_synthetic_fluid_not_lerms_source_truth',
-  'fluid_field_render_not_final_finger_juice',
+  'particle_render_not_final_surface_reconstruction',
 ];
 
 function finite(value, fallback = 0) {
@@ -49,16 +49,23 @@ export function createFingerFluidBenchState(options = {}) {
     },
     solver: {
       identity: KAMINOS_FINGER_FLUID_SOLVER_IDENTITY,
-      mode: 'synthetic_density_velocity_field',
-      fieldColumns: nonNegativeInteger(options.fieldColumns, 192),
-      fieldRows: nonNegativeInteger(options.fieldRows, 120),
-      densityContinuity: 'research_bench_proxy_field',
-      pressureProjection: 'not_yet_real_pressure_solve',
+      backend: options.solverBackend || 'loading',
+      mode: 'gpu_3d_linked_cell_position_based_fluid',
+      particleCount: nonNegativeInteger(options.particleCount, 0),
+      gridDimensions: options.gridDimensions || [24, 20, 24],
+      neighborGridContract: options.neighborGridContract || 'wgsl-linked-cell-neighbor-grid-v0',
+      densityContinuity: options.densityContract || 'wgsl-pbf-density-constraint-v0',
+      pressureProjection: 'iterative_position_density_projection',
+      stepCount: nonNegativeInteger(options.stepCount, 0),
+      linkedCellGridBuildCount: nonNegativeInteger(options.linkedCellGridBuildCount, 0),
+      densityIterationCount: nonNegativeInteger(options.densityIterationCount, 0),
       frameTimeMsEstimate: finite(options.frameTimeMsEstimate, 26.5),
     },
     renderer: {
       identity: KAMINOS_FINGER_FLUID_RENDERER_IDENTITY,
-      surface: 'native_canvas_in_kaminos_viewport',
+      backend: options.renderBackend || 'loading',
+      surface: 'direct_webgpu_particle_sphere_billboards_in_kaminos_viewport',
+      directRenderFrameCount: nonNegativeInteger(options.directRenderFrameCount, 0),
       finalFingerJuiceRenderer: false,
     },
     visual: {
@@ -67,6 +74,7 @@ export function createFingerFluidBenchState(options = {}) {
       basinFillRatio: ratio(options.basinFillRatio, 0.48),
       activeRatio: ratio(options.activeRatio, 0.42),
       colorModel: 'teal_blue_lilac_gold_source_channels',
+      activeExtent3d: options.activeExtent3d || null,
     },
     downgrades,
     compatibility: {

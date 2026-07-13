@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 
 const args = new Map();
 for (let i = 2; i < process.argv.length; i += 2) args.set(process.argv[i], process.argv[i + 1]);
@@ -9,6 +9,7 @@ for (let i = 2; i < process.argv.length; i += 2) args.set(process.argv[i], proce
 const url = args.get('--url') || 'http://127.0.0.1:8100/index.html?kaminos_finger_fluid_bench=1';
 const out = resolve(args.get('--out') || '/tmp/kaminos-finger-fluid-bench.png');
 const reportPath = resolve(args.get('--report') || out.replace(/\.png$/i, '.json'));
+const canvasOut = resolve(args.get('--canvas-out') || out.replace(/\.png$/i, '.canvas.png'));
 const port = Number(args.get('--debug-port') || 9493);
 const chrome = process.env.KAMINOS_CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const userDataDir = args.get('--user-data-dir') || `/tmp/kaminos-finger-fluid-bench-profile-${port}-${process.pid}`;
@@ -16,6 +17,7 @@ const viewportWidth = Number(args.get('--viewport-width') || 1800);
 const viewportHeight = Number(args.get('--viewport-height') || 1120);
 const settleMs = Number(args.get('--settle-ms') || 3200);
 const hookWaitMs = Number(args.get('--hook-wait-ms') || Math.max(settleMs, 15000));
+const cadenceMs = Number(args.get('--cadence-ms') || 1500);
 
 let phase = 'initializing';
 let stderr = '';
@@ -23,6 +25,7 @@ let browserVersion = null;
 let primaryOutputWritten = false;
 let lastDebugState = null;
 let canvasActivity = null;
+let cadenceProbe = null;
 const consoleEvents = [];
 
 function delay(ms) {
@@ -40,6 +43,7 @@ function writeReport(report = {}) {
     viewport: { width: viewportWidth, height: viewportHeight },
     settleMs,
     hookWaitMs,
+    cadenceWindowMs: cadenceMs,
     failure_phase: phase,
     primary_output_written: primaryOutputWritten,
     browserVersion,
@@ -47,6 +51,8 @@ function writeReport(report = {}) {
     consoleEvents,
     lastDebugState,
     canvasActivity,
+    cadenceProbe,
+    canvasOut,
     ...report,
   }, null, 2));
 }
@@ -194,6 +200,11 @@ async function main() {
 
     await delay(settleMs);
 
+    lastDebugState = await evaluate(ws, `(() => {
+      const read = window.kaminosFingerFluidBenchDebugState || window.__kaminosFingerFluidBenchDebugState;
+      return typeof read === 'function' ? read() : null;
+    })()`);
+
     phase = 'read_debug_state';
     if (!lastDebugState) throw new Error('missing kaminosFingerFluidBenchDebugState');
     if (lastDebugState.diagnostic === 'missing_debug_hook') throw new Error('missing kaminosFingerFluidBenchDebugState');
@@ -203,34 +214,89 @@ async function main() {
     if (!lastDebugState.downgrades?.includes('kaminos_native_synthetic_fluid_not_lerms_source_truth')) throw new Error('missing synthetic source downgrade');
     if (lastDebugState.acceptance?.iframeAcceptance !== false) throw new Error('iframe acceptance was not rejected');
     if (lastDebugState.acceptance?.openDirectAcceptance !== false) throw new Error('open-direct acceptance was not rejected');
+    if (lastDebugState.status !== 'running') throw new Error(`fluid bench did not reach running state: ${lastDebugState.status}`);
+    if (lastDebugState.solver?.backend !== 'webgpu_compute') throw new Error(`fallback solver backend rejected: ${lastDebugState.solver?.backend}`);
+    if (lastDebugState.renderer?.backend !== 'webgpu_direct_render') throw new Error(`fallback render backend rejected: ${lastDebugState.renderer?.backend}`);
+    if (lastDebugState.runtime?.available !== true) throw new Error(`WebGPU runtime unavailable or fallback: ${JSON.stringify(lastDebugState.runtime)}`);
+    if (lastDebugState.runtime?.solverRoute !== 'webgpu-pbf-linked-cell-fluid-v0') throw new Error(`solver route mismatch: ${lastDebugState.runtime?.solverRoute}`);
+    if (lastDebugState.runtime?.neighborGridContract !== 'wgsl-linked-cell-neighbor-grid-v0') throw new Error(`neighbor grid contract mismatch: ${lastDebugState.runtime?.neighborGridContract}`);
+    if (lastDebugState.runtime?.densityContract !== 'wgsl-pbf-density-constraint-v0') throw new Error(`density contract mismatch: ${lastDebugState.runtime?.densityContract}`);
+    if (lastDebugState.runtime?.stepCount < 20) throw new Error(`insufficient real compute steps: ${lastDebugState.runtime?.stepCount}`);
+    if (lastDebugState.runtime?.linkedCellGridBuildCount < 20) throw new Error(`missing linked-cell grid builds: ${lastDebugState.runtime?.linkedCellGridBuildCount}`);
+    if (lastDebugState.runtime?.densityIterationCount < 60) throw new Error(`missing density iterations: ${lastDebugState.runtime?.densityIterationCount}`);
+    if (lastDebugState.runtime?.directRenderFrameCount < 20) throw new Error(`missing direct GPU render frames: ${lastDebugState.runtime?.directRenderFrameCount}`);
+    const activeExtent3d = lastDebugState.runtime?.diagnostics?.activeExtent3d;
+    if (!activeExtent3d || activeExtent3d.size?.length !== 3) throw new Error('missing activeExtent3d diagnostics');
+    if (activeExtent3d.size.some(value => !Number.isFinite(value) || value < 0.35)) throw new Error(`fluid state is not materially 3D: ${JSON.stringify(activeExtent3d)}`);
+    if (lastDebugState.runtime?.diagnostics?.maxSpeed > 3.35) throw new Error(`bounded-energy stability failure: maxSpeed ${lastDebugState.runtime.diagnostics.maxSpeed}`);
+    const restDensity = lastDebugState.runtime?.restDensity;
+    const averageDensity = lastDebugState.runtime?.diagnostics?.averageDensity;
+    const relativeDensityError = Math.abs(averageDensity - restDensity) / Math.max(0.001, restDensity);
+    if (!Number.isFinite(relativeDensityError) || relativeDensityError > 0.35) throw new Error(`density basin mismatch: ${JSON.stringify({ averageDensity, restDensity, relativeDensityError })}`);
+    if (activeExtent3d.size[0] > 4.66 && activeExtent3d.size[2] > 4.66 && lastDebugState.runtime.diagnostics.averageSpeed > 1.2) {
+      throw new Error(`energetic fluid saturated the full horizontal domain: ${JSON.stringify(activeExtent3d)}`);
+    }
+
+    phase = 'cadence_probe';
+    const cadenceBefore = {
+      stepCount: lastDebugState.runtime.stepCount,
+      directRenderFrameCount: lastDebugState.runtime.directRenderFrameCount,
+    };
+    const cadenceStartedAt = performance.now();
+    await delay(cadenceMs);
+    const cadenceState = await evaluate(ws, `(() => {
+      const read = window.kaminosFingerFluidBenchDebugState || window.__kaminosFingerFluidBenchDebugState;
+      return typeof read === 'function' ? read() : null;
+    })()`);
+    const cadenceElapsedMs = performance.now() - cadenceStartedAt;
+    cadenceProbe = {
+      elapsedMs: Number(cadenceElapsedMs.toFixed(1)),
+      deltaSteps: cadenceState.runtime.stepCount - cadenceBefore.stepCount,
+      deltaRenderFrames: cadenceState.runtime.directRenderFrameCount - cadenceBefore.directRenderFrameCount,
+      framesPerSecond: Number(((cadenceState.runtime.directRenderFrameCount - cadenceBefore.directRenderFrameCount) * 1000 / cadenceElapsedMs).toFixed(2)),
+    };
+    if (cadenceProbe.framesPerSecond < 18) throw new Error(`settled GPU fluid cadence below floor: ${JSON.stringify(cadenceProbe)}`);
+    lastDebugState = cadenceState;
 
     phase = 'measure_canvas';
-    canvasActivity = await evaluate(ws, `(() => {
+    const canvasRect = await evaluate(ws, `(() => {
       const canvas = document.getElementById('finger-fluid-bench-canvas');
-      if (!canvas || !canvas.width || !canvas.height) return { ok: false, reason: 'missing_canvas' };
-      const ctx = canvas.getContext('2d');
-      const width = canvas.width;
-      const height = canvas.height;
-      const sample = ctx.getImageData(0, 0, width, height).data;
-      let activePixels = 0;
-      for (let i = 0; i < sample.length; i += 4) {
-        const r = sample[i];
-        const g = sample[i + 1];
-        const b = sample[i + 2];
-        const max = Math.max(r, g, b);
-        const min = Math.min(r, g, b);
-        if (max > 74 && max - min > 18) activePixels += 1;
-      }
-      return {
-        ok: true,
-        width,
-        height,
-        activePixels,
-        activeRatio: Number((activePixels / Math.max(1, width * height)).toFixed(5)),
-      };
+      if (!canvas || !canvas.width || !canvas.height) return null;
+      const rect = canvas.getBoundingClientRect();
+      return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
     })()`);
-    if (!canvasActivity?.ok) throw new Error(`canvas unavailable: ${canvasActivity?.reason || 'unknown'}`);
-    if (canvasActivity.activeRatio < 0.30) throw new Error(`native fluid bench too sparse: ${JSON.stringify(canvasActivity)}`);
+    if (!canvasRect || canvasRect.width < 100 || canvasRect.height < 100) throw new Error(`canvas unavailable: ${JSON.stringify(canvasRect)}`);
+    const canvasScreenshot = await wsRequest(ws, 'Page.captureScreenshot', {
+      format: 'png',
+      captureBeyondViewport: false,
+      clip: { ...canvasRect, scale: 1 },
+    });
+    mkdirSync(dirname(canvasOut), { recursive: true });
+    writeFileSync(canvasOut, Buffer.from(canvasScreenshot.data, 'base64'));
+    const decoded = spawnSync('ffmpeg', ['-v', 'error', '-i', canvasOut, '-f', 'rawvideo', '-pix_fmt', 'rgb24', 'pipe:1'], {
+      encoding: null,
+      maxBuffer: 128 * 1024 * 1024,
+    });
+    if (decoded.status !== 0 || !decoded.stdout?.length) throw new Error(`ffmpeg canvas decode failed: ${decoded.stderr?.toString() || decoded.status}`);
+    let activePixels = 0;
+    for (let i = 0; i < decoded.stdout.length; i += 3) {
+      const r = decoded.stdout[i];
+      const g = decoded.stdout[i + 1];
+      const b = decoded.stdout[i + 2];
+      const max = Math.max(r, g, b);
+      const min = Math.min(r, g, b);
+      if (max > 66 && max - min > 18) activePixels += 1;
+    }
+    const pixelCount = Math.floor(decoded.stdout.length / 3);
+    canvasActivity = {
+      ok: true,
+      width: Math.round(canvasRect.width),
+      height: Math.round(canvasRect.height),
+      activePixels,
+      activeRatio: Number((activePixels / Math.max(1, pixelCount)).toFixed(5)),
+      measurement: 'captured_webgpu_canvas_ffmpeg_rgb24_v0',
+    };
+    if (canvasActivity.activeRatio < 0.09) throw new Error(`native GPU fluid bench too sparse: ${JSON.stringify(canvasActivity)}`);
 
     phase = 'capture_screenshot';
     const screenshot = await wsRequest(ws, 'Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
