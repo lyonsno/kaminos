@@ -1,0 +1,143 @@
+import assert from 'node:assert/strict';
+
+import {
+  REAL_FIELD_SMOKE_SPLAT_PRODUCER_AUTHORITY,
+  compileSmokeFieldHierarchy,
+} from '../smoke-splat-field-hierarchy.mjs';
+import {
+  createSmokeSplatSlotCache,
+} from '../smoke-splat-slot-cache.mjs';
+
+const CHANNELS = [
+  'velocityX', 'velocityY', 'velocityZ', 'densityCarrier',
+  'smokeDensity', 'heat', 'fuel', 'detail',
+  'flame', 'ember', 'visibleFireCarrier', 'combustionFront',
+  'microdetail', 'interfaceShred', 'fireLick', 'emberFleck',
+];
+
+function makeField(grid, phase = 0) {
+  const values = new Float32Array(grid ** 3 * CHANNELS.length);
+  for (let z = 0; z < grid; z += 1) {
+    for (let y = 0; y < grid; y += 1) {
+      for (let x = 0; x < grid; x += 1) {
+        const index = x + y * grid + z * grid * grid;
+        const offset = index * CHANNELS.length;
+        const plume = Math.max(0, 1 - Math.hypot(x - (2.2 + phase * 0.15), z - 2.5) / 3);
+        const smoke = plume * (0.08 + y * 0.035) * (x % 2 === 0 ? 1.45 : 0.72);
+        values[offset] = 0.03 * x;
+        values[offset + 1] = 0.4 + smoke;
+        values[offset + 2] = 0.02 * z;
+        values[offset + 4] = smoke;
+        values[offset + 5] = Math.max(0, 0.8 - y * 0.08);
+        values[offset + 7] = x % 2 === 0 ? 0.8 : 0.1;
+        values[offset + 12] = z % 2 === 0 ? 0.7 : 0.05;
+        values[offset + 13] = (x + z) % 3 === 0 ? 0.9 : 0.05;
+      }
+    }
+  }
+  return values;
+}
+
+const baseRequest = {
+  grid: 8,
+  channelOrder: CHANNELS,
+  field: makeField(8),
+  sourceIdentity: 'sha256:frame-96',
+  slotIdentity: {
+    historySlot: 0,
+    slotWriteTick: 96,
+    simulatorGeneration: 4,
+    modelIdentity: 'smoke-residual-selector:test',
+  },
+  coarseBlockSize: 4,
+  fineBlockSize: 2,
+  extinctionCoefficient: 1.35,
+  fineMassFraction: 0.6,
+  articulationThreshold: 0.4,
+};
+
+const first = compileSmokeFieldHierarchy(baseRequest);
+assert.equal(first.schema, 'kaminos-hierarchical-smoke-splats-v0');
+assert.equal(first.producerAuthority, REAL_FIELD_SMOKE_SPLAT_PRODUCER_AUTHORITY);
+assert.equal(first.producerKind, 'real-field-hierarchical-target');
+assert.ok(first.coarseSplats.length > 0, 'real smoke always retains coarse transport support');
+assert.ok(first.fineSplats.length > 0, 'articulated fixture emits sparse fine residuals');
+assert.ok(first.fineSplats.length < first.sourceStatistics.occupiedFineBinCount, 'fine articulation is sparse rather than one splat per occupied fine bin');
+assert.ok(first.coarseSplats.every(splat => splat.hierarchyRole === 'transport-coarse'));
+assert.ok(first.fineSplats.every(splat => splat.hierarchyRole === 'articulation-fine'));
+assert.ok(Math.abs(first.accounting.sourceExtinctionMass - first.accounting.representedExtinctionMass) < 1e-8);
+assert.equal(first.accounting.rejectedExtinctionMass, 0, 'unselected fine mass rolls into coarse transport');
+assert.equal(first.capacity.outputWasTruncated, false);
+assert.equal(first.temporalKeys.coarse.length, first.coarseSplats.length);
+assert.equal(first.temporalKeys.fine.length, first.fineSplats.length);
+
+const next = compileSmokeFieldHierarchy({
+  ...baseRequest,
+  field: makeField(8, 1),
+  sourceIdentity: 'sha256:frame-97',
+  slotIdentity: { ...baseRequest.slotIdentity, historySlot: 1, slotWriteTick: 97 },
+});
+assert.ok(
+  first.temporalKeys.coarse.some(key => next.temporalKeys.coarse.includes(key)),
+  'stable spatial hierarchy keys survive adjacent phase slots even though product identities change',
+);
+assert.notEqual(first.identity, next.identity);
+
+const changedModel = compileSmokeFieldHierarchy({
+  ...baseRequest,
+  slotIdentity: { ...baseRequest.slotIdentity, modelIdentity: 'smoke-residual-selector:changed' },
+});
+assert.notEqual(
+  first.identity,
+  changedModel.identity,
+  'public hierarchy identity includes the learned selector/model identity',
+);
+
+const noFine = compileSmokeFieldHierarchy({ ...baseRequest, fineSelector: () => false });
+assert.equal(noFine.fineSplats.length, 0);
+assert.ok(Math.abs(noFine.accounting.sourceExtinctionMass - noFine.accounting.representedExtinctionMass) < 1e-8);
+assert.equal(noFine.accounting.rejectedExtinctionMass, 0, 'a maximally sparse selector cannot erase smoke mass');
+
+const overflow = compileSmokeFieldHierarchy({ ...baseRequest, capacity: 2 });
+assert.equal(overflow.capacity.status, 'capacity-overflow-untruncated');
+assert.equal(overflow.capacity.outputWasTruncated, false);
+assert.equal(overflow.splats.length, overflow.requiredSplatCount);
+assert.equal(overflow.capacity.overflowCount, overflow.requiredSplatCount - 2);
+
+const cache = createSmokeSplatSlotCache({
+  producerAuthority: REAL_FIELD_SMOKE_SPLAT_PRODUCER_AUTHORITY,
+  decodeSlot(request) {
+    return compileSmokeFieldHierarchy({
+      ...baseRequest,
+      field: request.payload.field,
+      sourceIdentity: request.payload.identity,
+      slotIdentity: request.slotIdentity,
+    });
+  },
+});
+const cacheReport = cache.resolve({
+  instances: [{ phaseHistorySlot: 0, slotWriteTick: 96 }],
+  payloadForSlot: () => ({ identity: 'sha256:frame-96', field: makeField(8) }),
+  simulatorGeneration: 4,
+  modelIdentity: 'smoke-residual-selector:test',
+  requestedProducerAuthority: REAL_FIELD_SMOKE_SPLAT_PRODUCER_AUTHORITY,
+});
+assert.equal(cacheReport.effectiveProducerAuthority, REAL_FIELD_SMOKE_SPLAT_PRODUCER_AUTHORITY);
+assert.equal(cacheReport.slotProducts[0].producerAuthority, REAL_FIELD_SMOKE_SPLAT_PRODUCER_AUTHORITY);
+assert.match(cacheReport.cacheIdentity, /real-field-hierarchical-smoke-splat-producer-v0/);
+assert.notEqual(cacheReport.cacheIdentity, 'kaminos-smoke-splat-slot-cache-v0');
+
+assert.throws(
+  () => compileSmokeFieldHierarchy({ ...baseRequest, channelOrder: [...CHANNELS].reverse() }),
+  /fluid channel order/i,
+);
+assert.throws(
+  () => compileSmokeFieldHierarchy({ ...baseRequest, field: new Float32Array(baseRequest.field.length - 1) }),
+  /field length/i,
+);
+assert.throws(
+  () => compileSmokeFieldHierarchy({ ...baseRequest, field: new Float32Array(baseRequest.field.length) }),
+  /blank smoke/i,
+);
+
+console.log('smoke splat field hierarchy contracts passed');

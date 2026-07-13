@@ -1,0 +1,182 @@
+{
+  "subsetManifest": "/tmp/kaminos-support-scaling-corpus-070-from165-sameeval-rs010-0709/corpus-manifest.json",
+  "sourceManifest": "/tmp/kaminos-support-scaling-corpus-165-combined-rs010-0709/corpus-manifest.json",
+  "sourceReport": "artifacts/residual-latest-fire-0709/support-scaling-greenroom/support-165-fire-rs010/residual-report.json",
+  "pairCount": 70,
+  "trainPairCount": 50,
+  "evalPairCount": 20,
+  "trainerEvalSelection": "tail",
+  "trainerTailEvalSubsetLoadedIds": [
+    "zz-subset-sameeval-000::zz-subset-sameeval-000-rs010-to-rs100",
+    "zz-subset-sameeval-001::zz-subset-sameeval-001-rs010-to-rs100",
+    "zz-subset-sameeval-002::zz-subset-sameeval-002-rs010-to-rs100",
+    "zz-subset-sameeval-003::zz-subset-sameeval-003-rs010-to-rs100",
+    "zz-subset-sameeval-004::zz-subset-sameeval-004-rs010-to-rs100",
+    "zz-subset-sameeval-005::zz-subset-sameeval-005-rs010-to-rs100",
+    "zz-subset-sameeval-006::zz-subset-sameeval-006-rs010-to-rs100",
+    "zz-subset-sameeval-007::zz-subset-sameeval-007-rs010-to-rs100",
+    "zz-subset-sameeval-008::zz-subset-sameeval-008-rs010-to-rs100",
+    "zz-subset-sameeval-009::zz-subset-sameeval-009-rs010-to-rs100",
+    "zz-subset-sameeval-010::zz-subset-sameeval-010-rs010-to-rs100",
+    "zz-subset-sameeval-011::zz-subset-sameeval-011-rs010-to-rs100",
+    "zz-subset-sameeval-012::zz-subset-sameeval-012-rs010-to-rs100",
+    "zz-subset-sameeval-013::zz-subset-sameeval-013-rs010-to-rs100",
+    "zz-subset-sameeval-014::zz-subset-sameeval-014-rs010-to-rs100",
+    "zz-subset-sameeval-015::zz-subset-sameeval-015-rs010-to-rs100",
+    "zz-subset-sameeval-016::zz-subset-sameeval-016-rs010-to-rs100",
+    "zz-subset-sameeval-017::zz-subset-sameeval-017-rs010-to-rs100",
+    "zz-subset-sameeval-018::zz-subset-sameeval-018-rs010-to-rs100",
+    "zz-subset-sameeval-019::zz-subset-sameeval-019-rs010-to-rs100"
+  ],
+  "sourceEvalLoadedIds": [
+    "support-220-default-late::support-220-default-late-frame-009-pair-001-rs010-to-rs100",
+    "support-220-default-mid::support-220-default-mid-frame-006-pair-001-rs010-to-rs100",
+    "support-220-thin-fast::support-220-thin-fast-frame-002-pair-001-rs010-to-rs100",
+    "support-220-thin-fast::support-220-thin-fast-frame-010-pair-001-rs010-to-rs100",
+    "support-220-topup-fat-fast-mid::support-220-topup-fat-fast-mid-frame-007-pair-001-rs010-to-rs100",
+    "support-220-topup-fat-mid-soft::support-220-topup-fat-mid-soft-frame-004-pair-001-rs010-to-rs100",
+    "support-220-topup-fat-slow-hard::support-220-topup-fat-slow-hard-frame-001-pair-001-rs010-to-rs100",
+    "support-220-topup-fat-slow-hard::support-220-topup-fat-slow-hard-frame-008-pair-001-rs010-to-rs100",
+    "support-220-topup-mid-fast-soft::support-220-topup-mid-fast-soft-frame-005-pair-001-rs010-to-rs100",
+    "support-220-topup-mid-mid-hard::support-220-topup-mid-mid-hard-frame-002-pair-001-rs010-to-rs100",
+    "support-220-topup-mid-mid-hard::support-220-topup-mid-mid-hard-frame-010-pair-001-rs010-to-rs100",
+    "support-220-topup-thin-mid-soft::support-220-topup-thin-mid-soft-frame-007-pair-001-rs010-to-rs100",
+    "support-220-topup-tight-fast-hard::support-220-topup-tight-fast-hard-frame-004-pair-001-rs010-to-rs100",
+    "support-220-topup-tight-fast-hard::support-220-topup-tight-fast-hard-frame-011-pair-001-rs010-to-rs100",
+    "support-220-topup-wide-fast-hard::support-220-topup-wide-fast-hard-frame-008-pair-001-rs010-to-rs100",
+    "support-220-topup-wide-mid-mid::support-220-topup-wide-mid-mid-frame-005-pair-001-rs010-to-rs100",
+    "support-220-topup-wide-slow-soft::support-220-topup-wide-slow-soft-frame-002-pair-001-rs010-to-rs100",
+    "support-220-topup-wide-slow-soft::support-220-topup-wide-slow-soft-frame-010-pair-001-rs010-to-rs100",
+    "support-220-wide-smoky::support-220-wide-smoky-frame-006-pair-001-rs010-to-rs100",
+    "support-220-wide-soft::support-220-wide-soft-frame-003-pair-001-rs010-to-rs100"
+  ],
+  "evalMapping": [
+    {
+      "role": "eval",
+      "subsetLoadedId": "zz-subset-sameeval-000::zz-subset-sameeval-000-rs010-to-rs100",
+      "sourceLoadedId": "support-220-default-late::support-220-default-late-frame-009-pair-001-rs010-to-rs100"
+    },
+    {
+      "role": "eval",
+      "subsetLoadedId": "zz-subset-sameeval-001::zz-subset-sameeval-001-rs010-to-rs100",
+      "sourceLoadedId": "support-220-default-mid::support-220-default-mid-frame-006-pair-001-rs010-to-rs100"
+    },
+    {
+      "role": "eval",
+      "subsetLoadedId": "zz-subset-sameeval-002::zz-subset-sameeval-002-rs010-to-rs100",
+      "sourceLoadedId": "support-220-thin-fast::support-220-thin-fast-frame-002-pair-001-rs010-to-rs100"
+    },
+    {
+      "role": "eval",
+      "subsetLoadedId": "zz-subset-sameeval-003::zz-subset-sameeval-003-rs010-to-rs100",
+      "sourceLoadedId": "support-220-thin-fast::support-220-thin-fast-frame-010-pair-001-rs010-to-rs100"
+    },
+    {
+      "role": "eval",
+      "subsetLoadedId": "zz-subset-sameeval-004::zz-subset-sameeval-004-rs010-to-rs100",
+      "sourceLoadedId": "support-220-topup-fat-fast-mid::support-220-topup-fat-fast-mid-frame-007-pair-001-rs010-to-rs100"
+    },
+    {
+      "role": "eval",
+      "subsetLoadedId": "zz-subset-sameeval-005::zz-subset-sameeval-005-rs010-to-rs100",
+      "sourceLoadedId": "support-220-topup-fat-mid-soft::support-220-topup-fat-mid-soft-frame-004-pair-001-rs010-to-rs100"
+    },
+    {
+      "role": "eval",
+      "subsetLoadedId": "zz-subset-sameeval-006::zz-subset-sameeval-006-rs010-to-rs100",
+      "sourceLoadedId": "support-220-topup-fat-slow-hard::support-220-topup-fat-slow-hard-frame-001-pair-001-rs010-to-rs100"
+    },
+    {
+      "role": "eval",
+      "subsetLoadedId": "zz-subset-sameeval-007::zz-subset-sameeval-007-rs010-to-rs100",
+      "sourceLoadedId": "support-220-topup-fat-slow-hard::support-220-topup-fat-slow-hard-frame-008-pair-001-rs010-to-rs100"
+    },
+    {
+      "role": "eval",
+      "subsetLoadedId": "zz-subset-sameeval-008::zz-subset-sameeval-008-rs010-to-rs100",
+      "sourceLoadedId": "support-220-topup-mid-fast-soft::support-220-topup-mid-fast-soft-frame-005-pair-001-rs010-to-rs100"
+    },
+    {
+      "role": "eval",
+      "subsetLoadedId": "zz-subset-sameeval-009::zz-subset-sameeval-009-rs010-to-rs100",
+      "sourceLoadedId": "support-220-topup-mid-mid-hard::support-220-topup-mid-mid-hard-frame-002-pair-001-rs010-to-rs100"
+    },
+    {
+      "role": "eval",
+      "subsetLoadedId": "zz-subset-sameeval-010::zz-subset-sameeval-010-rs010-to-rs100",
+      "sourceLoadedId": "support-220-topup-mid-mid-hard::support-220-topup-mid-mid-hard-frame-010-pair-001-rs010-to-rs100"
+    },
+    {
+      "role": "eval",
+      "subsetLoadedId": "zz-subset-sameeval-011::zz-subset-sameeval-011-rs010-to-rs100",
+      "sourceLoadedId": "support-220-topup-thin-mid-soft::support-220-topup-thin-mid-soft-frame-007-pair-001-rs010-to-rs100"
+    },
+    {
+      "role": "eval",
+      "subsetLoadedId": "zz-subset-sameeval-012::zz-subset-sameeval-012-rs010-to-rs100",
+      "sourceLoadedId": "support-220-topup-tight-fast-hard::support-220-topup-tight-fast-hard-frame-004-pair-001-rs010-to-rs100"
+    },
+    {
+      "role": "eval",
+      "subsetLoadedId": "zz-subset-sameeval-013::zz-subset-sameeval-013-rs010-to-rs100",
+      "sourceLoadedId": "support-220-topup-tight-fast-hard::support-220-topup-tight-fast-hard-frame-011-pair-001-rs010-to-rs100"
+    },
+    {
+      "role": "eval",
+      "subsetLoadedId": "zz-subset-sameeval-014::zz-subset-sameeval-014-rs010-to-rs100",
+      "sourceLoadedId": "support-220-topup-wide-fast-hard::support-220-topup-wide-fast-hard-frame-008-pair-001-rs010-to-rs100"
+    },
+    {
+      "role": "eval",
+      "subsetLoadedId": "zz-subset-sameeval-015::zz-subset-sameeval-015-rs010-to-rs100",
+      "sourceLoadedId": "support-220-topup-wide-mid-mid::support-220-topup-wide-mid-mid-frame-005-pair-001-rs010-to-rs100"
+    },
+    {
+      "role": "eval",
+      "subsetLoadedId": "zz-subset-sameeval-016::zz-subset-sameeval-016-rs010-to-rs100",
+      "sourceLoadedId": "support-220-topup-wide-slow-soft::support-220-topup-wide-slow-soft-frame-002-pair-001-rs010-to-rs100"
+    },
+    {
+      "role": "eval",
+      "subsetLoadedId": "zz-subset-sameeval-017::zz-subset-sameeval-017-rs010-to-rs100",
+      "sourceLoadedId": "support-220-topup-wide-slow-soft::support-220-topup-wide-slow-soft-frame-010-pair-001-rs010-to-rs100"
+    },
+    {
+      "role": "eval",
+      "subsetLoadedId": "zz-subset-sameeval-018::zz-subset-sameeval-018-rs010-to-rs100",
+      "sourceLoadedId": "support-220-wide-smoky::support-220-wide-smoky-frame-006-pair-001-rs010-to-rs100"
+    },
+    {
+      "role": "eval",
+      "subsetLoadedId": "zz-subset-sameeval-019::zz-subset-sameeval-019-rs010-to-rs100",
+      "sourceLoadedId": "support-220-wide-soft::support-220-wide-soft-frame-003-pair-001-rs010-to-rs100"
+    }
+  ],
+  "trainMappingFirst5": [
+    {
+      "role": "train",
+      "subsetLoadedId": "subset-control-train-000::subset-control-train-000-rs010-to-rs100",
+      "sourceLoadedId": "support-220-default-late::support-220-default-late-frame-001-pair-001-rs010-to-rs100"
+    },
+    {
+      "role": "train",
+      "subsetLoadedId": "subset-control-train-001::subset-control-train-001-rs010-to-rs100",
+      "sourceLoadedId": "support-220-default-late::support-220-default-late-frame-002-pair-001-rs010-to-rs100"
+    },
+    {
+      "role": "train",
+      "subsetLoadedId": "subset-control-train-002::subset-control-train-002-rs010-to-rs100",
+      "sourceLoadedId": "support-220-default-late::support-220-default-late-frame-003-pair-001-rs010-to-rs100"
+    },
+    {
+      "role": "train",
+      "subsetLoadedId": "subset-control-train-003::subset-control-train-003-rs010-to-rs100",
+      "sourceLoadedId": "support-220-default-late::support-220-default-late-frame-004-pair-001-rs010-to-rs100"
+    },
+    {
+      "role": "train",
+      "subsetLoadedId": "subset-control-train-004::subset-control-train-004-rs010-to-rs100",
+      "sourceLoadedId": "support-220-default-late::support-220-default-late-frame-005-pair-001-rs010-to-rs100"
+    }
+  ]
+}

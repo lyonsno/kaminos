@@ -1,0 +1,794 @@
+{
+  "identity": "kaminos-smoke-splat-slot-witness-report-v0",
+  "status": "passed",
+  "requestedRoute": "pure-module-reference-smoke-slot-witness-v0",
+  "effectiveRoute": "pure-module-reference-smoke-slot-witness-v0",
+  "evidenceScope": "scheduling-cache-hierarchy-accounting-no-gpu-render",
+  "producerAuthority": "deterministic-reference-smoke-splat-producer-v0",
+  "requestedConfig": {
+    "instanceCount": 100,
+    "historySlots": [
+      1,
+      2,
+      3,
+      0
+    ],
+    "historyWriteTick": 20,
+    "capacity": 2,
+    "omittedHistorySlot": null
+  },
+  "firstResolve": {
+    "identity": "smoke-splat-slot-resolve-report-v0",
+    "status": "resolved",
+    "cacheIdentity": "kaminos-smoke-splat-slot-cache-v0",
+    "requestedProducerAuthority": "deterministic-reference-smoke-splat-producer-v0",
+    "effectiveProducerAuthority": "deterministic-reference-smoke-splat-producer-v0",
+    "simulatorGeneration": 1,
+    "modelIdentity": "reference-smoke-model:witness-v0",
+    "decoderConfigIdentities": [
+      "0.0200000000000|1.00000000000|0.500000000000|2"
+    ],
+    "instanceCount": 100,
+    "uniqueSlotCount": 4,
+    "decodeCount": 4,
+    "cacheHitCount": 0,
+    "cachedProductCount": 4,
+    "hierarchyCounts": {
+      "coarse": 12,
+      "fine": 12,
+      "total": 24
+    },
+    "accounting": {
+      "sourceExtinctionMass": 2.6479999999999997,
+      "representedExtinctionMass": 2.6479999999999997,
+      "rejectedExtinctionMass": 0
+    },
+    "invalidation": {
+      "identityChanged": false,
+      "identity": "reference-smoke-model:witness-v0|1.00000000000"
+    },
+    "diagnostics": [
+      {
+        "code": "smoke-splat-capacity-overflow",
+        "severity": "warning",
+        "requestedCapacity": 2,
+        "requiredSplatCount": 6,
+        "overflowCount": 4,
+        "behavior": "untruncated"
+      },
+      {
+        "code": "smoke-splat-capacity-overflow",
+        "severity": "warning",
+        "requestedCapacity": 2,
+        "requiredSplatCount": 6,
+        "overflowCount": 4,
+        "behavior": "untruncated"
+      },
+      {
+        "code": "smoke-splat-capacity-overflow",
+        "severity": "warning",
+        "requestedCapacity": 2,
+        "requiredSplatCount": 6,
+        "overflowCount": 4,
+        "behavior": "untruncated"
+      },
+      {
+        "code": "smoke-splat-capacity-overflow",
+        "severity": "warning",
+        "requestedCapacity": 2,
+        "requiredSplatCount": 6,
+        "overflowCount": 4,
+        "behavior": "untruncated"
+      }
+    ],
+    "instanceBindingSummary": {
+      "count": 100,
+      "uniqueProductCount": 4
+    },
+    "slotProducts": [
+      {
+        "identity": "smoke-splat-product:reference-smoke-model%3Awitness-v0%7C1%7C1%7C17:synthetic-smoke-payload%3A1%3A17:0.0200000000000%7C1.00000000000%7C0.500000000000%7C2",
+        "schema": "kaminos-hierarchical-smoke-splats-v0",
+        "producerAuthority": "deterministic-reference-smoke-splat-producer-v0",
+        "producerKind": "deterministic-reference",
+        "slotIdentity": {
+          "historySlot": 1,
+          "slotWriteTick": 17,
+          "simulatorGeneration": 1,
+          "modelIdentity": "reference-smoke-model:witness-v0"
+        },
+        "payloadIdentity": "synthetic-smoke-payload:1:17",
+        "requiredSplatCount": 6,
+        "hierarchyCounts": {
+          "coarse": 3,
+          "fine": 3,
+          "total": 6
+        },
+        "accounting": {
+          "identity": "smoke-splat-extinction-accounting-v0",
+          "sourceExtinctionMass": 0.6619999999999999,
+          "representedExtinctionMass": 0.6619999999999999,
+          "rejectedExtinctionMass": 0,
+          "retentionRatio": 1
+        },
+        "capacity": {
+          "requested": 2,
+          "status": "capacity-overflow-untruncated",
+          "overflowCount": 4,
+          "outputWasTruncated": false
+        },
+        "diagnostics": [
+          {
+            "code": "smoke-splat-capacity-overflow",
+            "severity": "warning",
+            "requestedCapacity": 2,
+            "requiredSplatCount": 6,
+            "overflowCount": 4,
+            "behavior": "untruncated"
+          }
+        ]
+      },
+      {
+        "identity": "smoke-splat-product:reference-smoke-model%3Awitness-v0%7C1%7C2%7C18:synthetic-smoke-payload%3A2%3A18:0.0200000000000%7C1.00000000000%7C0.500000000000%7C2",
+        "schema": "kaminos-hierarchical-smoke-splats-v0",
+        "producerAuthority": "deterministic-reference-smoke-splat-producer-v0",
+        "producerKind": "deterministic-reference",
+        "slotIdentity": {
+          "historySlot": 2,
+          "slotWriteTick": 18,
+          "simulatorGeneration": 1,
+          "modelIdentity": "reference-smoke-model:witness-v0"
+        },
+        "payloadIdentity": "synthetic-smoke-payload:2:18",
+        "requiredSplatCount": 6,
+        "hierarchyCounts": {
+          "coarse": 3,
+          "fine": 3,
+          "total": 6
+        },
+        "accounting": {
+          "identity": "smoke-splat-extinction-accounting-v0",
+          "sourceExtinctionMass": 0.6619999999999999,
+          "representedExtinctionMass": 0.6619999999999999,
+          "rejectedExtinctionMass": 0,
+          "retentionRatio": 1
+        },
+        "capacity": {
+          "requested": 2,
+          "status": "capacity-overflow-untruncated",
+          "overflowCount": 4,
+          "outputWasTruncated": false
+        },
+        "diagnostics": [
+          {
+            "code": "smoke-splat-capacity-overflow",
+            "severity": "warning",
+            "requestedCapacity": 2,
+            "requiredSplatCount": 6,
+            "overflowCount": 4,
+            "behavior": "untruncated"
+          }
+        ]
+      },
+      {
+        "identity": "smoke-splat-product:reference-smoke-model%3Awitness-v0%7C1%7C3%7C19:synthetic-smoke-payload%3A3%3A19:0.0200000000000%7C1.00000000000%7C0.500000000000%7C2",
+        "schema": "kaminos-hierarchical-smoke-splats-v0",
+        "producerAuthority": "deterministic-reference-smoke-splat-producer-v0",
+        "producerKind": "deterministic-reference",
+        "slotIdentity": {
+          "historySlot": 3,
+          "slotWriteTick": 19,
+          "simulatorGeneration": 1,
+          "modelIdentity": "reference-smoke-model:witness-v0"
+        },
+        "payloadIdentity": "synthetic-smoke-payload:3:19",
+        "requiredSplatCount": 6,
+        "hierarchyCounts": {
+          "coarse": 3,
+          "fine": 3,
+          "total": 6
+        },
+        "accounting": {
+          "identity": "smoke-splat-extinction-accounting-v0",
+          "sourceExtinctionMass": 0.6619999999999999,
+          "representedExtinctionMass": 0.6619999999999999,
+          "rejectedExtinctionMass": 0,
+          "retentionRatio": 1
+        },
+        "capacity": {
+          "requested": 2,
+          "status": "capacity-overflow-untruncated",
+          "overflowCount": 4,
+          "outputWasTruncated": false
+        },
+        "diagnostics": [
+          {
+            "code": "smoke-splat-capacity-overflow",
+            "severity": "warning",
+            "requestedCapacity": 2,
+            "requiredSplatCount": 6,
+            "overflowCount": 4,
+            "behavior": "untruncated"
+          }
+        ]
+      },
+      {
+        "identity": "smoke-splat-product:reference-smoke-model%3Awitness-v0%7C1%7C0%7C20:synthetic-smoke-payload%3A0%3A20:0.0200000000000%7C1.00000000000%7C0.500000000000%7C2",
+        "schema": "kaminos-hierarchical-smoke-splats-v0",
+        "producerAuthority": "deterministic-reference-smoke-splat-producer-v0",
+        "producerKind": "deterministic-reference",
+        "slotIdentity": {
+          "historySlot": 0,
+          "slotWriteTick": 20,
+          "simulatorGeneration": 1,
+          "modelIdentity": "reference-smoke-model:witness-v0"
+        },
+        "payloadIdentity": "synthetic-smoke-payload:0:20",
+        "requiredSplatCount": 6,
+        "hierarchyCounts": {
+          "coarse": 3,
+          "fine": 3,
+          "total": 6
+        },
+        "accounting": {
+          "identity": "smoke-splat-extinction-accounting-v0",
+          "sourceExtinctionMass": 0.6619999999999999,
+          "representedExtinctionMass": 0.6619999999999999,
+          "rejectedExtinctionMass": 0,
+          "retentionRatio": 1
+        },
+        "capacity": {
+          "requested": 2,
+          "status": "capacity-overflow-untruncated",
+          "overflowCount": 4,
+          "outputWasTruncated": false
+        },
+        "diagnostics": [
+          {
+            "code": "smoke-splat-capacity-overflow",
+            "severity": "warning",
+            "requestedCapacity": 2,
+            "requiredSplatCount": 6,
+            "overflowCount": 4,
+            "behavior": "untruncated"
+          }
+        ]
+      }
+    ]
+  },
+  "warmResolve": {
+    "identity": "smoke-splat-slot-resolve-report-v0",
+    "status": "resolved",
+    "cacheIdentity": "kaminos-smoke-splat-slot-cache-v0",
+    "requestedProducerAuthority": "deterministic-reference-smoke-splat-producer-v0",
+    "effectiveProducerAuthority": "deterministic-reference-smoke-splat-producer-v0",
+    "simulatorGeneration": 1,
+    "modelIdentity": "reference-smoke-model:witness-v0",
+    "decoderConfigIdentities": [
+      "0.0200000000000|1.00000000000|0.500000000000|2"
+    ],
+    "instanceCount": 100,
+    "uniqueSlotCount": 4,
+    "decodeCount": 0,
+    "cacheHitCount": 4,
+    "cachedProductCount": 4,
+    "hierarchyCounts": {
+      "coarse": 12,
+      "fine": 12,
+      "total": 24
+    },
+    "accounting": {
+      "sourceExtinctionMass": 2.6479999999999997,
+      "representedExtinctionMass": 2.6479999999999997,
+      "rejectedExtinctionMass": 0
+    },
+    "invalidation": {
+      "identityChanged": false,
+      "identity": "reference-smoke-model:witness-v0|1.00000000000"
+    },
+    "diagnostics": [
+      {
+        "code": "smoke-splat-capacity-overflow",
+        "severity": "warning",
+        "requestedCapacity": 2,
+        "requiredSplatCount": 6,
+        "overflowCount": 4,
+        "behavior": "untruncated"
+      },
+      {
+        "code": "smoke-splat-capacity-overflow",
+        "severity": "warning",
+        "requestedCapacity": 2,
+        "requiredSplatCount": 6,
+        "overflowCount": 4,
+        "behavior": "untruncated"
+      },
+      {
+        "code": "smoke-splat-capacity-overflow",
+        "severity": "warning",
+        "requestedCapacity": 2,
+        "requiredSplatCount": 6,
+        "overflowCount": 4,
+        "behavior": "untruncated"
+      },
+      {
+        "code": "smoke-splat-capacity-overflow",
+        "severity": "warning",
+        "requestedCapacity": 2,
+        "requiredSplatCount": 6,
+        "overflowCount": 4,
+        "behavior": "untruncated"
+      }
+    ],
+    "instanceBindingSummary": {
+      "count": 100,
+      "uniqueProductCount": 4
+    },
+    "slotProducts": [
+      {
+        "identity": "smoke-splat-product:reference-smoke-model%3Awitness-v0%7C1%7C1%7C17:synthetic-smoke-payload%3A1%3A17:0.0200000000000%7C1.00000000000%7C0.500000000000%7C2",
+        "schema": "kaminos-hierarchical-smoke-splats-v0",
+        "producerAuthority": "deterministic-reference-smoke-splat-producer-v0",
+        "producerKind": "deterministic-reference",
+        "slotIdentity": {
+          "historySlot": 1,
+          "slotWriteTick": 17,
+          "simulatorGeneration": 1,
+          "modelIdentity": "reference-smoke-model:witness-v0"
+        },
+        "payloadIdentity": "synthetic-smoke-payload:1:17",
+        "requiredSplatCount": 6,
+        "hierarchyCounts": {
+          "coarse": 3,
+          "fine": 3,
+          "total": 6
+        },
+        "accounting": {
+          "identity": "smoke-splat-extinction-accounting-v0",
+          "sourceExtinctionMass": 0.6619999999999999,
+          "representedExtinctionMass": 0.6619999999999999,
+          "rejectedExtinctionMass": 0,
+          "retentionRatio": 1
+        },
+        "capacity": {
+          "requested": 2,
+          "status": "capacity-overflow-untruncated",
+          "overflowCount": 4,
+          "outputWasTruncated": false
+        },
+        "diagnostics": [
+          {
+            "code": "smoke-splat-capacity-overflow",
+            "severity": "warning",
+            "requestedCapacity": 2,
+            "requiredSplatCount": 6,
+            "overflowCount": 4,
+            "behavior": "untruncated"
+          }
+        ]
+      },
+      {
+        "identity": "smoke-splat-product:reference-smoke-model%3Awitness-v0%7C1%7C2%7C18:synthetic-smoke-payload%3A2%3A18:0.0200000000000%7C1.00000000000%7C0.500000000000%7C2",
+        "schema": "kaminos-hierarchical-smoke-splats-v0",
+        "producerAuthority": "deterministic-reference-smoke-splat-producer-v0",
+        "producerKind": "deterministic-reference",
+        "slotIdentity": {
+          "historySlot": 2,
+          "slotWriteTick": 18,
+          "simulatorGeneration": 1,
+          "modelIdentity": "reference-smoke-model:witness-v0"
+        },
+        "payloadIdentity": "synthetic-smoke-payload:2:18",
+        "requiredSplatCount": 6,
+        "hierarchyCounts": {
+          "coarse": 3,
+          "fine": 3,
+          "total": 6
+        },
+        "accounting": {
+          "identity": "smoke-splat-extinction-accounting-v0",
+          "sourceExtinctionMass": 0.6619999999999999,
+          "representedExtinctionMass": 0.6619999999999999,
+          "rejectedExtinctionMass": 0,
+          "retentionRatio": 1
+        },
+        "capacity": {
+          "requested": 2,
+          "status": "capacity-overflow-untruncated",
+          "overflowCount": 4,
+          "outputWasTruncated": false
+        },
+        "diagnostics": [
+          {
+            "code": "smoke-splat-capacity-overflow",
+            "severity": "warning",
+            "requestedCapacity": 2,
+            "requiredSplatCount": 6,
+            "overflowCount": 4,
+            "behavior": "untruncated"
+          }
+        ]
+      },
+      {
+        "identity": "smoke-splat-product:reference-smoke-model%3Awitness-v0%7C1%7C3%7C19:synthetic-smoke-payload%3A3%3A19:0.0200000000000%7C1.00000000000%7C0.500000000000%7C2",
+        "schema": "kaminos-hierarchical-smoke-splats-v0",
+        "producerAuthority": "deterministic-reference-smoke-splat-producer-v0",
+        "producerKind": "deterministic-reference",
+        "slotIdentity": {
+          "historySlot": 3,
+          "slotWriteTick": 19,
+          "simulatorGeneration": 1,
+          "modelIdentity": "reference-smoke-model:witness-v0"
+        },
+        "payloadIdentity": "synthetic-smoke-payload:3:19",
+        "requiredSplatCount": 6,
+        "hierarchyCounts": {
+          "coarse": 3,
+          "fine": 3,
+          "total": 6
+        },
+        "accounting": {
+          "identity": "smoke-splat-extinction-accounting-v0",
+          "sourceExtinctionMass": 0.6619999999999999,
+          "representedExtinctionMass": 0.6619999999999999,
+          "rejectedExtinctionMass": 0,
+          "retentionRatio": 1
+        },
+        "capacity": {
+          "requested": 2,
+          "status": "capacity-overflow-untruncated",
+          "overflowCount": 4,
+          "outputWasTruncated": false
+        },
+        "diagnostics": [
+          {
+            "code": "smoke-splat-capacity-overflow",
+            "severity": "warning",
+            "requestedCapacity": 2,
+            "requiredSplatCount": 6,
+            "overflowCount": 4,
+            "behavior": "untruncated"
+          }
+        ]
+      },
+      {
+        "identity": "smoke-splat-product:reference-smoke-model%3Awitness-v0%7C1%7C0%7C20:synthetic-smoke-payload%3A0%3A20:0.0200000000000%7C1.00000000000%7C0.500000000000%7C2",
+        "schema": "kaminos-hierarchical-smoke-splats-v0",
+        "producerAuthority": "deterministic-reference-smoke-splat-producer-v0",
+        "producerKind": "deterministic-reference",
+        "slotIdentity": {
+          "historySlot": 0,
+          "slotWriteTick": 20,
+          "simulatorGeneration": 1,
+          "modelIdentity": "reference-smoke-model:witness-v0"
+        },
+        "payloadIdentity": "synthetic-smoke-payload:0:20",
+        "requiredSplatCount": 6,
+        "hierarchyCounts": {
+          "coarse": 3,
+          "fine": 3,
+          "total": 6
+        },
+        "accounting": {
+          "identity": "smoke-splat-extinction-accounting-v0",
+          "sourceExtinctionMass": 0.6619999999999999,
+          "representedExtinctionMass": 0.6619999999999999,
+          "rejectedExtinctionMass": 0,
+          "retentionRatio": 1
+        },
+        "capacity": {
+          "requested": 2,
+          "status": "capacity-overflow-untruncated",
+          "overflowCount": 4,
+          "outputWasTruncated": false
+        },
+        "diagnostics": [
+          {
+            "code": "smoke-splat-capacity-overflow",
+            "severity": "warning",
+            "requestedCapacity": 2,
+            "requiredSplatCount": 6,
+            "overflowCount": 4,
+            "behavior": "untruncated"
+          }
+        ]
+      }
+    ]
+  },
+  "slotReuseResolve": {
+    "identity": "smoke-splat-slot-resolve-report-v0",
+    "status": "resolved",
+    "cacheIdentity": "kaminos-smoke-splat-slot-cache-v0",
+    "requestedProducerAuthority": "deterministic-reference-smoke-splat-producer-v0",
+    "effectiveProducerAuthority": "deterministic-reference-smoke-splat-producer-v0",
+    "simulatorGeneration": 1,
+    "modelIdentity": "reference-smoke-model:witness-v0",
+    "decoderConfigIdentities": [
+      "0.0200000000000|1.00000000000|0.500000000000|2"
+    ],
+    "instanceCount": 100,
+    "uniqueSlotCount": 4,
+    "decodeCount": 1,
+    "cacheHitCount": 3,
+    "cachedProductCount": 5,
+    "hierarchyCounts": {
+      "coarse": 12,
+      "fine": 12,
+      "total": 24
+    },
+    "accounting": {
+      "sourceExtinctionMass": 2.6479999999999997,
+      "representedExtinctionMass": 2.6479999999999997,
+      "rejectedExtinctionMass": 0
+    },
+    "invalidation": {
+      "identityChanged": false,
+      "identity": "reference-smoke-model:witness-v0|1.00000000000"
+    },
+    "diagnostics": [
+      {
+        "code": "smoke-splat-capacity-overflow",
+        "severity": "warning",
+        "requestedCapacity": 2,
+        "requiredSplatCount": 6,
+        "overflowCount": 4,
+        "behavior": "untruncated"
+      },
+      {
+        "code": "smoke-splat-capacity-overflow",
+        "severity": "warning",
+        "requestedCapacity": 2,
+        "requiredSplatCount": 6,
+        "overflowCount": 4,
+        "behavior": "untruncated"
+      },
+      {
+        "code": "smoke-splat-capacity-overflow",
+        "severity": "warning",
+        "requestedCapacity": 2,
+        "requiredSplatCount": 6,
+        "overflowCount": 4,
+        "behavior": "untruncated"
+      },
+      {
+        "code": "smoke-splat-capacity-overflow",
+        "severity": "warning",
+        "requestedCapacity": 2,
+        "requiredSplatCount": 6,
+        "overflowCount": 4,
+        "behavior": "untruncated"
+      }
+    ],
+    "instanceBindingSummary": {
+      "count": 100,
+      "uniqueProductCount": 4
+    },
+    "slotProducts": [
+      {
+        "identity": "smoke-splat-product:reference-smoke-model%3Awitness-v0%7C1%7C1%7C17:synthetic-smoke-payload%3A1%3A17:0.0200000000000%7C1.00000000000%7C0.500000000000%7C2",
+        "schema": "kaminos-hierarchical-smoke-splats-v0",
+        "producerAuthority": "deterministic-reference-smoke-splat-producer-v0",
+        "producerKind": "deterministic-reference",
+        "slotIdentity": {
+          "historySlot": 1,
+          "slotWriteTick": 17,
+          "simulatorGeneration": 1,
+          "modelIdentity": "reference-smoke-model:witness-v0"
+        },
+        "payloadIdentity": "synthetic-smoke-payload:1:17",
+        "requiredSplatCount": 6,
+        "hierarchyCounts": {
+          "coarse": 3,
+          "fine": 3,
+          "total": 6
+        },
+        "accounting": {
+          "identity": "smoke-splat-extinction-accounting-v0",
+          "sourceExtinctionMass": 0.6619999999999999,
+          "representedExtinctionMass": 0.6619999999999999,
+          "rejectedExtinctionMass": 0,
+          "retentionRatio": 1
+        },
+        "capacity": {
+          "requested": 2,
+          "status": "capacity-overflow-untruncated",
+          "overflowCount": 4,
+          "outputWasTruncated": false
+        },
+        "diagnostics": [
+          {
+            "code": "smoke-splat-capacity-overflow",
+            "severity": "warning",
+            "requestedCapacity": 2,
+            "requiredSplatCount": 6,
+            "overflowCount": 4,
+            "behavior": "untruncated"
+          }
+        ]
+      },
+      {
+        "identity": "smoke-splat-product:reference-smoke-model%3Awitness-v0%7C1%7C2%7C22:synthetic-smoke-payload%3A2%3A22:0.0200000000000%7C1.00000000000%7C0.500000000000%7C2",
+        "schema": "kaminos-hierarchical-smoke-splats-v0",
+        "producerAuthority": "deterministic-reference-smoke-splat-producer-v0",
+        "producerKind": "deterministic-reference",
+        "slotIdentity": {
+          "historySlot": 2,
+          "slotWriteTick": 22,
+          "simulatorGeneration": 1,
+          "modelIdentity": "reference-smoke-model:witness-v0"
+        },
+        "payloadIdentity": "synthetic-smoke-payload:2:22",
+        "requiredSplatCount": 6,
+        "hierarchyCounts": {
+          "coarse": 3,
+          "fine": 3,
+          "total": 6
+        },
+        "accounting": {
+          "identity": "smoke-splat-extinction-accounting-v0",
+          "sourceExtinctionMass": 0.6619999999999999,
+          "representedExtinctionMass": 0.6619999999999999,
+          "rejectedExtinctionMass": 0,
+          "retentionRatio": 1
+        },
+        "capacity": {
+          "requested": 2,
+          "status": "capacity-overflow-untruncated",
+          "overflowCount": 4,
+          "outputWasTruncated": false
+        },
+        "diagnostics": [
+          {
+            "code": "smoke-splat-capacity-overflow",
+            "severity": "warning",
+            "requestedCapacity": 2,
+            "requiredSplatCount": 6,
+            "overflowCount": 4,
+            "behavior": "untruncated"
+          }
+        ]
+      },
+      {
+        "identity": "smoke-splat-product:reference-smoke-model%3Awitness-v0%7C1%7C3%7C19:synthetic-smoke-payload%3A3%3A19:0.0200000000000%7C1.00000000000%7C0.500000000000%7C2",
+        "schema": "kaminos-hierarchical-smoke-splats-v0",
+        "producerAuthority": "deterministic-reference-smoke-splat-producer-v0",
+        "producerKind": "deterministic-reference",
+        "slotIdentity": {
+          "historySlot": 3,
+          "slotWriteTick": 19,
+          "simulatorGeneration": 1,
+          "modelIdentity": "reference-smoke-model:witness-v0"
+        },
+        "payloadIdentity": "synthetic-smoke-payload:3:19",
+        "requiredSplatCount": 6,
+        "hierarchyCounts": {
+          "coarse": 3,
+          "fine": 3,
+          "total": 6
+        },
+        "accounting": {
+          "identity": "smoke-splat-extinction-accounting-v0",
+          "sourceExtinctionMass": 0.6619999999999999,
+          "representedExtinctionMass": 0.6619999999999999,
+          "rejectedExtinctionMass": 0,
+          "retentionRatio": 1
+        },
+        "capacity": {
+          "requested": 2,
+          "status": "capacity-overflow-untruncated",
+          "overflowCount": 4,
+          "outputWasTruncated": false
+        },
+        "diagnostics": [
+          {
+            "code": "smoke-splat-capacity-overflow",
+            "severity": "warning",
+            "requestedCapacity": 2,
+            "requiredSplatCount": 6,
+            "overflowCount": 4,
+            "behavior": "untruncated"
+          }
+        ]
+      },
+      {
+        "identity": "smoke-splat-product:reference-smoke-model%3Awitness-v0%7C1%7C0%7C20:synthetic-smoke-payload%3A0%3A20:0.0200000000000%7C1.00000000000%7C0.500000000000%7C2",
+        "schema": "kaminos-hierarchical-smoke-splats-v0",
+        "producerAuthority": "deterministic-reference-smoke-splat-producer-v0",
+        "producerKind": "deterministic-reference",
+        "slotIdentity": {
+          "historySlot": 0,
+          "slotWriteTick": 20,
+          "simulatorGeneration": 1,
+          "modelIdentity": "reference-smoke-model:witness-v0"
+        },
+        "payloadIdentity": "synthetic-smoke-payload:0:20",
+        "requiredSplatCount": 6,
+        "hierarchyCounts": {
+          "coarse": 3,
+          "fine": 3,
+          "total": 6
+        },
+        "accounting": {
+          "identity": "smoke-splat-extinction-accounting-v0",
+          "sourceExtinctionMass": 0.6619999999999999,
+          "representedExtinctionMass": 0.6619999999999999,
+          "rejectedExtinctionMass": 0,
+          "retentionRatio": 1
+        },
+        "capacity": {
+          "requested": 2,
+          "status": "capacity-overflow-untruncated",
+          "overflowCount": 4,
+          "outputWasTruncated": false
+        },
+        "diagnostics": [
+          {
+            "code": "smoke-splat-capacity-overflow",
+            "severity": "warning",
+            "requestedCapacity": 2,
+            "requiredSplatCount": 6,
+            "overflowCount": 4,
+            "behavior": "untruncated"
+          }
+        ]
+      }
+    ]
+  },
+  "assertions": [
+    {
+      "name": "decode-count-follows-unique-slots",
+      "passed": true,
+      "evidence": {
+        "instanceCount": 100,
+        "uniqueSlotCount": 4,
+        "decodeCount": 4
+      }
+    },
+    {
+      "name": "warm-cache-does-no-decode-work",
+      "passed": true,
+      "evidence": {
+        "decodeCount": 0,
+        "cacheHitCount": 4
+      }
+    },
+    {
+      "name": "slot-epoch-reuse-decodes-one-product",
+      "passed": true,
+      "evidence": {
+        "decodeCount": 1,
+        "cacheHitCount": 3
+      }
+    },
+    {
+      "name": "extinction-mass-is-conserved",
+      "passed": true,
+      "evidence": {
+        "sourceExtinctionMass": 2.6479999999999997,
+        "representedExtinctionMass": 2.6479999999999997,
+        "rejectedExtinctionMass": 0
+      }
+    },
+    {
+      "name": "producer-authority-is-explicit",
+      "passed": true,
+      "evidence": {
+        "requested": "deterministic-reference-smoke-splat-producer-v0",
+        "effective": "deterministic-reference-smoke-splat-producer-v0"
+      }
+    },
+    {
+      "name": "capacity-pressure-never-truncates",
+      "passed": true,
+      "evidence": {
+        "capacity": 2,
+        "statuses": [
+          "capacity-overflow-untruncated",
+          "capacity-overflow-untruncated",
+          "capacity-overflow-untruncated",
+          "capacity-overflow-untruncated"
+        ]
+      }
+    }
+  ]
+}
