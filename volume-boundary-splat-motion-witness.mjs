@@ -21,6 +21,15 @@ const RAYMARCH_RENDERER = 'matched-raymarch';
 const INSTANCE_DESCRIPTOR_IDENTITY = 'boundary-splat-instance-descriptor-v0';
 const SHARED_CURRENT_PHASE_SOURCE = 'shared-current-control';
 const LIVE_HISTORY_PHASE_SOURCE = 'live-history-offset';
+const SAME_HISTORY_SLOT_PHASE_SOURCE = 'same-history-slot-control';
+const AGE_SWEEP_PHASE_SOURCE = 'age-sweep-history';
+const PHASE_LAB_MODES = ['shared-current', 'same-history-slot', 'offset-history', 'age-sweep'];
+const PHASE_SOURCE_IDENTITIES = new Set([
+  SHARED_CURRENT_PHASE_SOURCE,
+  LIVE_HISTORY_PHASE_SOURCE,
+  SAME_HISTORY_SLOT_PHASE_SOURCE,
+  AGE_SWEEP_PHASE_SOURCE,
+]);
 
 const args = parseArgs(process.argv.slice(2));
 const requestedRoute = String(args.get('--url') || '');
@@ -35,6 +44,9 @@ const stepMs = Math.max(1, Number(args.get('--step-ms') || 2000));
 const wallStepMs = Math.max(0, Number(args.get('--wall-step-ms') || 0));
 const keepBrowserOpen = args.has('--keep-browser-open');
 const userDataDir = resolve(String(args.get('--user-data-dir') || mkdtempSync(`${tmpdir()}/kaminos-splat-motion-chrome-`)));
+const operatorPrettySubstratePath = args.get('--operator-pretty-substrate')
+  ? resolve(String(args.get('--operator-pretty-substrate')))
+  : null;
 
 const runStartedAt = new Date().toISOString();
 const lastTrustworthyEvidence = {};
@@ -126,6 +138,8 @@ try {
     candidateChurn: summarizeCandidateChurn([...staticSequence.frames, ...grazingSequence.frames]),
     birthDeathTelemetry: summarizeBirthDeath([...staticSequence.frames, ...grazingSequence.frames]),
     duplicateMotionWitness: summarizeDuplicateMotionWitness([...staticSequence.frames, ...grazingSequence.frames]),
+    phaseLabWitness: summarizePhaseLabWitness([...staticSequence.frames, ...grazingSequence.frames]),
+    operatorPrettySubstrate: loadOperatorPrettySubstrate(operatorPrettySubstratePath),
     inspectedArtifacts: [
       staticSequence.contactSheet || null,
       grazingSequence.contactSheet || null,
@@ -388,6 +402,29 @@ async function captureSequence(config) {
       requestedRenderer: RAYMARCH_RENDERER,
       boundarySplatMode: 'off',
     });
+    const phaseLabCaptures = [];
+    if (config.label === 'staticCamera' && frameIndex === 0) {
+      for (const phaseMode of PHASE_LAB_MODES) {
+        phaseLabCaptures.push(await captureRenderer({
+          frameDir,
+          frameIndex,
+          scaleSet,
+          camera,
+          requestedRenderer: `analytic-splat-phase-${phaseMode}`,
+          boundarySplatMode: 'analytic',
+          boundarySplatPhaseMode: phaseMode,
+        }));
+        phaseLabCaptures.push(await captureRenderer({
+          frameDir,
+          frameIndex,
+          scaleSet,
+          camera,
+          requestedRenderer: `learned-splat-phase-${phaseMode}`,
+          boundarySplatMode: 'learned',
+          boundarySplatPhaseMode: phaseMode,
+        }));
+      }
+    }
     let determinismRepeat = null;
     if (config.label === 'staticCamera' && frameIndex === 0) {
       determinismRepeat = await captureRenderer({
@@ -410,7 +447,7 @@ async function captureSequence(config) {
       baseFrameCount: scaleSet.baseFrameCount,
       baseSimStepCount: scaleSet.baseSimStepCount,
       camera,
-      captures: [analytic, learned, raymarch, determinismRepeat].filter(Boolean),
+      captures: [analytic, learned, raymarch, ...phaseLabCaptures, determinismRepeat].filter(Boolean),
     });
   }
   const effectiveRoute = frames[0]?.captures[0]?.effectiveRoute || null;
@@ -429,7 +466,7 @@ async function captureSequence(config) {
   return sequence;
 }
 
-async function captureRenderer({ frameDir, frameIndex, scaleSet, camera, requestedRenderer, boundarySplatMode }) {
+async function captureRenderer({ frameDir, frameIndex, scaleSet, camera, requestedRenderer, boundarySplatMode, boundarySplatPhaseMode = null }) {
   const canvasEval = await wsRequest('Runtime.evaluate', {
     expression: `window.__kaminosVolumePrototype.renderFrozenScaleToCanvas(${JSON.stringify({
       renderScale: 1,
@@ -437,7 +474,7 @@ async function captureRenderer({ frameDir, frameIndex, scaleSet, camera, request
       sameStateCaptureId: scaleSet.sameStateCaptureId,
       baseFrameCount: scaleSet.baseFrameCount,
       baseSimStepCount: scaleSet.baseSimStepCount,
-      controlOverrides: { boundarySplatMode },
+      controlOverrides: boundarySplatPhaseMode ? { boundarySplatMode, boundarySplatPhaseMode } : { boundarySplatMode },
       restoreControls: true,
       resumeRenderLoop: false,
     })})`,
@@ -469,17 +506,19 @@ async function captureRenderer({ frameDir, frameIndex, scaleSet, camera, request
     fallbackReason,
     requestedRoute,
     effectiveRoute: canvasCapture.effectiveRoute,
-    rendererIdentity: postState?.boundarySplatRendererIdentity || SPLAT_RENDERER,
-    appliedModelIdentity: postState?.boundarySplatAttributeModelIdentity ?? canvasCapture.boundarySplatAttributeModelIdentity ?? null,
+    rendererIdentity: canvasCapture.boundarySplatRendererIdentity || postState?.boundarySplatRendererIdentity || SPLAT_RENDERER,
+    appliedModelIdentity: canvasCapture.boundarySplatAttributeModelIdentity ?? postState?.boundarySplatAttributeModelIdentity ?? null,
     sourceAuthority: postState?.boundarySplatSourceAuthority || SOURCE_AUTHORITY,
-    boundarySplatInstanceDescriptorIdentity: isSplat ? postState?.boundarySplatInstanceDescriptorIdentity ?? null : null,
-    boundarySplatRequestedInstanceCount: isSplat ? postState?.boundarySplatRequestedInstanceCount ?? null : null,
-    boundarySplatSourceCandidateCount: isSplat ? postState?.boundarySplatSourceCandidateCount ?? null : null,
-    boundarySplatPhaseSourceCount: isSplat ? postState?.boundarySplatPhaseSourceCount ?? null : null,
-    phaseSourceIdentity: isSplat ? postState?.boundarySplatPhaseSourceIdentity ?? null : null,
-    phaseSources: isSplat ? postState?.boundarySplatPhaseSources ?? null : null,
-    instanceDescriptors: isSplat ? postState?.boundarySplatInstanceDescriptors ?? null : null,
-    incrementalInstanceCost: isSplat ? postState?.boundarySplatIncrementalInstanceCost ?? null : null,
+    boundarySplatInstanceDescriptorIdentity: isSplat ? canvasCapture.boundarySplatInstanceDescriptorIdentity ?? postState?.boundarySplatInstanceDescriptorIdentity ?? null : null,
+    boundarySplatRequestedInstanceCount: isSplat ? canvasCapture.boundarySplatRequestedInstanceCount ?? postState?.boundarySplatRequestedInstanceCount ?? null : null,
+    boundarySplatSourceCandidateCount: isSplat ? canvasCapture.boundarySplatSourceCandidateCount ?? postState?.boundarySplatSourceCandidateCount ?? null : null,
+    boundarySplatPhaseSourceCount: isSplat ? canvasCapture.boundarySplatPhaseSourceCount ?? postState?.boundarySplatPhaseSourceCount ?? null : null,
+    phaseMode: isSplat ? canvasCapture.boundarySplatPhaseMode ?? postState?.boundarySplatPhaseMode ?? null : null,
+    phaseModeIdentity: isSplat ? canvasCapture.boundarySplatPhaseModeIdentity ?? postState?.boundarySplatPhaseModeIdentity ?? null : null,
+    phaseSourceIdentity: isSplat ? canvasCapture.boundarySplatPhaseSourceIdentity ?? postState?.boundarySplatPhaseSourceIdentity ?? null : null,
+    phaseSources: isSplat ? canvasCapture.boundarySplatPhaseSources ?? postState?.boundarySplatPhaseSources ?? null : null,
+    instanceDescriptors: isSplat ? canvasCapture.boundarySplatInstanceDescriptors ?? postState?.boundarySplatInstanceDescriptors ?? null : null,
+    incrementalInstanceCost: isSplat ? canvasCapture.boundarySplatIncrementalInstanceCost ?? postState?.boundarySplatIncrementalInstanceCost ?? null : null,
     boundarySplatCandidateCount: isSplat ? postState?.boundarySplatCandidateCount ?? null : null,
     boundarySplatInstanceCount: isSplat ? postState?.boundarySplatInstanceCount ?? null : null,
     boundarySplatOverflowCount: isSplat ? postState?.boundarySplatOverflowCount ?? null : null,
@@ -518,6 +557,8 @@ async function captureRenderer({ frameDir, frameIndex, scaleSet, camera, request
       boundarySplatRequestedInstanceCount: canvasCapture.boundarySplatRequestedInstanceCount,
       boundarySplatSourceCandidateCount: canvasCapture.boundarySplatSourceCandidateCount,
       boundarySplatPhaseSourceCount: canvasCapture.boundarySplatPhaseSourceCount,
+      phaseMode: canvasCapture.boundarySplatPhaseMode,
+      phaseModeIdentity: canvasCapture.boundarySplatPhaseModeIdentity,
       phaseSourceIdentity: canvasCapture.boundarySplatPhaseSourceIdentity,
       incrementalInstanceCost: canvasCapture.boundarySplatIncrementalInstanceCost,
     },
@@ -582,7 +623,7 @@ function validateCapture(capture) {
     if (!Number.isFinite(capture.boundarySplatRequestedInstanceCount) || capture.boundarySplatRequestedInstanceCount < 1) {
       throw new Error(`instance-count route missing for ${capture.requestedRenderer}: ${JSON.stringify(capture)}`);
     }
-    if (capture.phaseSourceIdentity !== SHARED_CURRENT_PHASE_SOURCE && capture.phaseSourceIdentity !== LIVE_HISTORY_PHASE_SOURCE) {
+    if (!PHASE_SOURCE_IDENTITIES.has(capture.phaseSourceIdentity)) {
       throw new Error(`phase-source identity missing for ${capture.requestedRenderer}: ${capture.phaseSourceIdentity}`);
     }
     if (capture.boundarySplatCandidateCopyBytes !== 0) {
@@ -701,6 +742,65 @@ function summarizeDuplicateMotionWitness(frames) {
       ? 'Motion diversity comes from the reported live-history phase source.'
       : 'Four transformed fires are spatially distinct but intentionally share current candidate phase; this is a synchronization control, not phase diversity.',
   };
+}
+
+function summarizePhaseLabWitness(frames) {
+  const captures = frames
+    .flatMap(frame => frame.captures.filter(capture => capture.requestedRenderer?.includes('splat')))
+    .filter(Boolean);
+  const phaseModeComparisons = PHASE_LAB_MODES.map(mode => {
+    const modeCaptures = captures.filter(capture => capture.phaseMode === mode);
+    const latest = modeCaptures.at(-1) || null;
+    return {
+      phaseMode: mode,
+      observed: modeCaptures.length > 0,
+      captureCount: modeCaptures.length,
+      phaseModeIdentity: latest?.phaseModeIdentity ?? null,
+      phaseSourceIdentity: latest?.phaseSourceIdentity ?? null,
+      phaseSources: latest?.phaseSources ?? null,
+      requestedInstanceCount: latest?.boundarySplatRequestedInstanceCount ?? null,
+      sourceCandidateCount: latest?.boundarySplatSourceCandidateCount ?? null,
+      instanceCount: latest?.boundarySplatInstanceCount ?? null,
+      overflowCount: latest?.boundarySplatOverflowCount ?? null,
+      incrementalInstanceCost: latest?.incrementalInstanceCost ?? null,
+    };
+  });
+  return {
+    identity: 'phaseLabWitness',
+    authority: 'same-live-route-explicit-phase-mode-telemetry-v0',
+    phaseModeComparisons,
+    observedPhaseModes: [...new Set(captures.map(capture => capture.phaseMode).filter(Boolean))],
+    claimBoundary: 'This summary proves routed phase-source identity and cost/candidate telemetry; visual convergence or manifold claims require inspecting the captured frames/contact sheets.',
+  };
+}
+
+function loadOperatorPrettySubstrate(path) {
+  if (!path) return null;
+  try {
+    const raw = readFileSync(path, 'utf8');
+    const parsed = JSON.parse(raw);
+    return {
+      identity: parsed.identity || 'operator-pretty-four-flame-substrate-v0',
+      path,
+      sha256: sha256(Buffer.from(raw)),
+      capturedAt: parsed.capturedAt || null,
+      href: parsed.href || null,
+      routeParams: parsed.routeParams || null,
+      model: parsed.kaminosDebugState?.boundarySplatAttributeModelIdentity ?? null,
+      phaseMode: parsed.kaminosDebugState?.boundarySplatPhaseMode ?? null,
+      phaseSourceIdentity: parsed.kaminosDebugState?.boundarySplatPhaseSourceIdentity ?? null,
+      requestedInstanceCount: parsed.kaminosDebugState?.boundarySplatRequestedInstanceCount ?? null,
+      sourceCandidateCount: parsed.kaminosDebugState?.boundarySplatSourceCandidateCount ?? null,
+      claimBoundary: 'Operator visual substrate pointer; paired screenshot carries the visual claim when canvas capture is hidden or 1x1.',
+    };
+  } catch (error) {
+    return {
+      identity: 'operatorPrettySubstrate',
+      path,
+      status: 'unreadable',
+      error: error?.message || String(error),
+    };
+  }
 }
 
 function computeFrozenDeterminism(frame) {
@@ -913,6 +1013,8 @@ function compactState(state) {
     boundarySplatRequestedInstanceCount: state.boundarySplatRequestedInstanceCount,
     boundarySplatSourceCandidateCount: state.boundarySplatSourceCandidateCount,
     boundarySplatPhaseSourceCount: state.boundarySplatPhaseSourceCount,
+    phaseMode: state.boundarySplatPhaseMode,
+    phaseModeIdentity: state.boundarySplatPhaseModeIdentity,
     phaseSourceIdentity: state.boundarySplatPhaseSourceIdentity,
     phaseSources: state.boundarySplatPhaseSources,
     incrementalInstanceCost: state.boundarySplatIncrementalInstanceCost,

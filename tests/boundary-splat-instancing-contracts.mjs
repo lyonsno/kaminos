@@ -13,7 +13,7 @@ assert.match(page, /id="volume-boundary-splat-instances"/, 'operator UI must exp
 assert.match(core, /boundarySplatInstanceDescriptorBuffer/, 'renderer must own an explicit per-instance descriptor buffer');
 assert.match(core, /boundarySplatInstanceDescriptors/, 'WGSL must bind per-instance descriptors rather than hardcoding clone offsets');
 assert.match(core, /boundarySplatDraw\.sourceCandidateCount/, 'draw telemetry must preserve source candidate count separately from rendered instance count');
-assert.match(core, /boundarySplatDraw\.phaseSourceCount/, 'draw telemetry must preserve effective phase-source count');
+assert.match(core, /const phaseSourceCount = Math\.max\(1, Math\.min\(BOUNDARY_SPLAT_HISTORY_SLOTS, state\.boundarySplatPhaseSourceCount \|\| 1\)\)/, 'draw telemetry must preserve descriptor-derived effective phase-source count');
 assert.match(core, /candidateCount\s*\*\s*boundarySplatDraw\.requestedInstanceCount/, 'finalize pass must multiply one source candidate count into many rendered instances');
 assert.match(core, /sourceCandidateIndex\s*=\s*instanceIndex\s*\/\s*max\(1u,\s*u32\(boundarySplatCamera\.instanceInfo\.y\)\)/, 'vertex shader must reuse one compacted source candidate buffer without CPU readback');
 assert.match(core, /fireInstanceIndex\s*=\s*instanceIndex\s*%\s*max\(1u,\s*u32\(boundarySplatCamera\.instanceInfo\.y\)\)/, 'vertex shader must derive the transformed fire index from the indirect instance id');

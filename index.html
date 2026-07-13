@@ -1164,6 +1164,16 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
         <span class="slider-val" id="volume-boundary-splat-instances-val">1</span>
       </div>
       <div class="slider-row">
+        <span class="slider-label">Splat phase</span>
+        <select id="volume-boundary-splat-phase-mode" class="select-input">
+          <option value="shared-current">shared current</option>
+          <option value="same-history-slot">same history slot</option>
+          <option value="offset-history" selected>offset history</option>
+          <option value="age-sweep">age sweep</option>
+        </select>
+        <span class="slider-val" id="volume-boundary-splat-phase-mode-val">offset history</span>
+      </div>
+      <div class="slider-row">
         <span class="slider-label">Splat radius</span>
         <input type="range" id="volume-boundary-splat-radius" min="0.35" max="1.5" step="0.01" value="1.00">
         <span class="slider-val" id="volume-boundary-splat-radius-val">1.00</span>
@@ -11833,6 +11843,7 @@ const REACTION_FRONT_LIVE_VIEW_VALUES = new Set(['off', 'shell', 'thermal', 'rea
 const BOUNDARY_SIDECAR_SOURCE_VALUES = new Set(['live', 'baked', 'mix']);
 const BOUNDARY_SIDECAR_VIEW_VALUES = new Set(['off', 'support', 'coverage', 'ridge', 'proximity', 'footprint']);
 const BOUNDARY_SPLAT_MODE_VALUES = new Set(['off', 'analytic', 'learned']);
+const BOUNDARY_SPLAT_PHASE_MODE_VALUES = new Set(['shared-current', 'same-history-slot', 'offset-history', 'age-sweep']);
 
 function normalizeReactionFrontLiveView(value) {
   const mode = String(value || 'off').toLowerCase().replace(/-/g, '_');
@@ -11852,6 +11863,11 @@ function normalizeBoundarySidecarView(value) {
 function normalizeBoundarySplatMode(value) {
   const mode = String(value || 'off').toLowerCase().replace(/-/g, '_');
   return BOUNDARY_SPLAT_MODE_VALUES.has(mode) ? mode : 'off';
+}
+
+function normalizeBoundarySplatPhaseMode(value) {
+  const mode = String(value || 'offset-history').toLowerCase().replace(/_/g, '-');
+  return BOUNDARY_SPLAT_PHASE_MODE_VALUES.has(mode) ? mode : 'offset-history';
 }
 
 function clampVolumeControlValue(value, field) {
@@ -11992,6 +12008,7 @@ const VOLUME_BASIN_ROUTE_FIELDS = [
   ['boundarySidecarSource', 'volume_boundary_sidecar_source'],
   ['boundarySidecarView', 'volume_boundary_sidecar_view'],
   ['boundarySplatMode', 'volume_boundary_splat_mode'],
+  ['boundarySplatPhaseMode', 'volume_boundary_splat_phase_mode'],
   ['boundarySplatFeatureCapture', 'volume_boundary_splat_feature_capture'],
   ...REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS.map(field => [field.key, field.param]),
 ];
@@ -12165,6 +12182,9 @@ function syncReactionFrontExtractorLabels(controlsSnapshot) {
     : boundarySplatMode === 'analytic'
       ? 'analytic splats'
       : 'raymarch';
+  const boundarySplatPhaseMode = normalizeBoundarySplatPhaseMode(controlsSnapshot.boundarySplatPhaseMode);
+  const boundarySplatPhaseModeLabel = document.getElementById('volume-boundary-splat-phase-mode-val');
+  if (boundarySplatPhaseModeLabel) boundarySplatPhaseModeLabel.textContent = boundarySplatPhaseMode.replace(/-/g, ' ');
   for (const field of REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS) {
     const label = document.getElementById(`${field.id}-val`);
     const value = controlsSnapshot[field.key];
@@ -16357,6 +16377,7 @@ function readVolumeControls() {
   const boundarySidecarSource = normalizeBoundarySidecarSource(document.getElementById('volume-boundary-sidecar-source')?.value);
   const boundarySidecarView = normalizeBoundarySidecarView(document.getElementById('volume-boundary-sidecar-view')?.value);
   const boundarySplatMode = normalizeBoundarySplatMode(document.getElementById('volume-boundary-splat-mode')?.value);
+  const boundarySplatPhaseMode = normalizeBoundarySplatPhaseMode(document.getElementById('volume-boundary-splat-phase-mode')?.value);
   const boundarySplatFeatureCapture = ['1', 'true', 'on'].includes(String(params.get('volume_boundary_splat_feature_capture') || '').toLowerCase());
   const reactionBoundaryControls = {
     identity: 'reaction-boundary-live-controls-v0',
@@ -16424,6 +16445,7 @@ function readVolumeControls() {
     boundarySidecarSource,
     boundarySidecarView,
     boundarySplatMode,
+    boundarySplatPhaseMode,
     boundarySplatFeatureCapture,
     boundarySplatInstances: parseFloat(document.getElementById('volume-boundary-splat-instances').value),
     boundarySplatRadius: parseFloat(document.getElementById('volume-boundary-splat-radius').value),
@@ -17582,6 +17604,9 @@ async function initKaminosVolumeRoute() {
   if (params.has('volume_boundary_splat_mode')) {
     document.getElementById('volume-boundary-splat-mode').value = normalizeBoundarySplatMode(params.get('volume_boundary_splat_mode'));
   }
+  if (params.has('volume_boundary_splat_phase_mode')) {
+    document.getElementById('volume-boundary-splat-phase-mode').value = normalizeBoundarySplatPhaseMode(params.get('volume_boundary_splat_phase_mode'));
+  }
   for (const field of REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS) {
     const routeValue = Number(params.get(field.param));
     if (!params.has(field.param) || !Number.isFinite(routeValue)) continue;
@@ -17654,6 +17679,8 @@ async function initKaminosVolumeRoute() {
   document.getElementById('volume-boundary-sidecar-view')?.addEventListener('change', syncControls);
   document.getElementById('volume-boundary-splat-mode')?.addEventListener('input', syncControls);
   document.getElementById('volume-boundary-splat-mode')?.addEventListener('change', syncControls);
+  document.getElementById('volume-boundary-splat-phase-mode')?.addEventListener('input', syncControls);
+  document.getElementById('volume-boundary-splat-phase-mode')?.addEventListener('change', syncControls);
   for (const field of REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS) {
     document.getElementById(field.id)?.addEventListener('input', syncControls);
     document.getElementById(field.id)?.addEventListener('change', syncControls);

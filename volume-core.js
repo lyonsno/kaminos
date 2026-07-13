@@ -24,6 +24,12 @@ const BOUNDARY_SPLAT_CANDIDATE_STRIDE_BYTES = 48;
 const BOUNDARY_SPLAT_INSTANCE_DESCRIPTOR_STRIDE_BYTES = 32;
 const BOUNDARY_SPLAT_MAX_INSTANCES = 4;
 const BOUNDARY_SPLAT_HISTORY_SLOTS = 4;
+const BOUNDARY_SPLAT_PHASE_LAB_MODES = new Set([
+  'shared-current',
+  'same-history-slot',
+  'offset-history',
+  'age-sweep',
+]);
 const BOUNDARY_SPLAT_FEATURE_STRIDE_BYTES = BOUNDARY_SPLAT_FEATURE_STRIDE_FLOATS * Float32Array.BYTES_PER_ELEMENT;
 const TRUTH_ORACLE_ACTIVITY_RECEIVER_IDENTITY = 'truth-oracle-scalar-activity-receiver-v0';
 const TRUTH_ORACLE_ACTIVITY_CUE_AUTHORITY = 'truth-high-diagnostic-activity-projected-to-receiver-grid-v0';
@@ -190,6 +196,19 @@ function normalizeBoundarySplatInstanceCount(value) {
   const requested = Math.round(Number(value));
   if (!Number.isFinite(requested)) return 1;
   return Math.max(1, Math.min(BOUNDARY_SPLAT_MAX_INSTANCES, requested));
+}
+
+function normalizeBoundarySplatPhaseMode(value) {
+  const normalized = String(value || 'offset-history').toLowerCase().replace(/_/g, '-');
+  return BOUNDARY_SPLAT_PHASE_LAB_MODES.has(normalized) ? normalized : 'offset-history';
+}
+
+function boundarySplatPhaseModeIdentity(mode) {
+  const normalized = normalizeBoundarySplatPhaseMode(mode);
+  if (normalized === 'shared-current') return 'shared-current-control';
+  if (normalized === 'same-history-slot') return 'same-history-slot-control';
+  if (normalized === 'age-sweep') return 'age-sweep-history';
+  return 'live-history-offset';
 }
 
 function boundarySplatEffectiveRendererIdentity(mode) {
@@ -5002,7 +5021,6 @@ fn compactBoundarySplats(@builtin(global_invocation_id) gid: vec3<u32>) {
 fn finalizeBoundarySplats() {
   let candidateCount = min(atomicLoad(&boundarySplatDraw.candidateCount), boundarySplatDraw.capacity);
   boundarySplatDraw.sourceCandidateCount = candidateCount;
-  boundarySplatDraw.phaseSourceCount = min(boundarySplatDraw.requestedInstanceCount, boundarySplatDraw.historySlotCount);
   atomicStore(&boundarySplatDraw.instanceCount, candidateCount * boundarySplatDraw.requestedInstanceCount);
 }
 
@@ -5248,11 +5266,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     boundarySplatMode: normalizeBoundarySplatMode(controlsSnapshot.boundarySplatMode),
     boundarySplatRadius: normalizeBoundarySplatRadius(controlsSnapshot.boundarySplatRadius),
     boundarySplatSharpness: normalizeBoundarySplatSharpness(controlsSnapshot.boundarySplatSharpness),
+    boundarySplatPhaseMode: normalizeBoundarySplatPhaseMode(controlsSnapshot.boundarySplatPhaseMode),
+    boundarySplatPhaseModeIdentity: boundarySplatPhaseModeIdentity(controlsSnapshot.boundarySplatPhaseMode),
     boundarySplatInstanceDescriptorIdentity: BOUNDARY_SPLAT_INSTANCE_DESCRIPTOR_IDENTITY,
     boundarySplatRequestedInstanceCount: normalizeBoundarySplatInstanceCount(controlsSnapshot.boundarySplatInstances),
     boundarySplatSourceCandidateCount: null,
     boundarySplatPhaseSourceCount: 1,
-    boundarySplatPhaseSourceIdentity: 'shared-current-control',
+    boundarySplatPhaseSourceIdentity: boundarySplatPhaseModeIdentity(controlsSnapshot.boundarySplatPhaseMode),
     boundarySplatHistoryRingIdentity: 'boundary-splat-live-history-ring-v0',
     boundarySplatHistorySlots: BOUNDARY_SPLAT_HISTORY_SLOTS,
     boundarySplatHistoryWriteSlot: 0,
@@ -8379,6 +8399,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
 
   function makeBoundarySplatInstanceDescriptors(count = normalizeBoundarySplatInstanceCount(controlsSnapshot.boundarySplatInstances)) {
     const requestedInstanceCount = normalizeBoundarySplatInstanceCount(count);
+    const phaseMode = normalizeBoundarySplatPhaseMode(controlsSnapshot.boundarySplatPhaseMode);
     const historyWriteSlot = state.frameCount % BOUNDARY_SPLAT_HISTORY_SLOTS;
     const layouts = [
       [-1.35, 0, -0.18, 0.72],
@@ -8387,18 +8408,24 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       [1.35, 0, 0.18, 0.72],
     ];
     const active = layouts.slice(0, requestedInstanceCount).map((entry, index) => {
-      const historyOffsetFrames = requestedInstanceCount > 1 ? index : 0;
+      let historyOffsetFrames = 0;
+      if (phaseMode === 'same-history-slot') historyOffsetFrames = requestedInstanceCount > 1 ? 1 : 0;
+      else if (phaseMode === 'offset-history' || phaseMode === 'age-sweep') historyOffsetFrames = requestedInstanceCount > 1 ? index : 0;
       const historySlot = (historyWriteSlot - historyOffsetFrames + BOUNDARY_SPLAT_HISTORY_SLOTS) % BOUNDARY_SPLAT_HISTORY_SLOTS;
-      const phaseSourceIdentity = historyOffsetFrames > 0 ? 'live-history-offset' : 'shared-current-control';
+      const phaseSourceIdentity = historyOffsetFrames > 0
+        ? boundarySplatPhaseModeIdentity(phaseMode)
+        : 'shared-current-control';
       return {
-      identity: BOUNDARY_SPLAT_INSTANCE_DESCRIPTOR_IDENTITY,
-      index,
-      transform: { translate: entry.slice(0, 3), scale: entry[3] },
-      phaseSourceIdentity,
-      phaseHistoryOffsetFrames: historyOffsetFrames,
-      phaseHistorySlot: historySlot,
-      phaseSourceAuthority: historyOffsetFrames > 0 ? 'live-gpu-candidate-history-ring' : 'current-live-candidate-buffer',
-    };
+        identity: BOUNDARY_SPLAT_INSTANCE_DESCRIPTOR_IDENTITY,
+        index,
+        phaseMode,
+        phaseModeIdentity: boundarySplatPhaseModeIdentity(phaseMode),
+        transform: { translate: entry.slice(0, 3), scale: entry[3] },
+        phaseSourceIdentity,
+        phaseHistoryOffsetFrames: historyOffsetFrames,
+        phaseHistorySlot: historySlot,
+        phaseSourceAuthority: historyOffsetFrames > 0 ? 'live-gpu-candidate-history-ring' : 'current-live-candidate-buffer',
+      };
     });
     return active;
   }
@@ -8421,22 +8448,23 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     }
     device.queue.writeBuffer(boundarySplatInstanceDescriptorBuffer, 0, packed);
     state.boundarySplatRequestedInstanceCount = requestedInstanceCount;
+    state.boundarySplatPhaseMode = normalizeBoundarySplatPhaseMode(controlsSnapshot.boundarySplatPhaseMode);
+    state.boundarySplatPhaseModeIdentity = boundarySplatPhaseModeIdentity(state.boundarySplatPhaseMode);
     state.boundarySplatInstanceDescriptorIdentity = BOUNDARY_SPLAT_INSTANCE_DESCRIPTOR_IDENTITY;
     state.boundarySplatInstanceDescriptors = descriptors;
     state.boundarySplatHistorySlots = BOUNDARY_SPLAT_HISTORY_SLOTS;
     state.boundarySplatHistoryWriteSlot = state.frameCount % BOUNDARY_SPLAT_HISTORY_SLOTS;
-    state.boundarySplatPhaseSourceCount = Math.min(requestedInstanceCount, BOUNDARY_SPLAT_HISTORY_SLOTS);
-    state.boundarySplatPhaseSourceIdentity = requestedInstanceCount > 1 ? 'live-history-offset' : 'shared-current-control';
-    state.boundarySplatPhaseSources = [
-      { index: 0, phaseSourceIdentity: 'shared-current-control', historyOffsetFrames: 0, authority: 'current-live-candidate-buffer' },
-      ...descriptors.slice(1).map(descriptor => ({
+    state.boundarySplatPhaseSourceCount = new Set(descriptors.map(descriptor => descriptor.phaseHistorySlot)).size;
+    state.boundarySplatPhaseSourceIdentity = state.boundarySplatPhaseModeIdentity;
+    state.boundarySplatPhaseSources = descriptors.map(descriptor => ({
         index: descriptor.index,
-        phaseSourceIdentity: 'live-history-offset',
+        phaseMode: descriptor.phaseMode,
+        phaseModeIdentity: descriptor.phaseModeIdentity,
+        phaseSourceIdentity: descriptor.phaseSourceIdentity,
         historyOffsetFrames: descriptor.phaseHistoryOffsetFrames,
         historySlot: descriptor.phaseHistorySlot,
-        authority: 'live-gpu-candidate-history-ring',
-      })),
-    ];
+        authority: descriptor.phaseSourceAuthority,
+      }));
     state.boundarySplatIncrementalInstanceCost = {
       identity: 'boundary-splat-incremental-instance-cost-v0',
       evidenceSource: 'gpu-archive-pass-plus-deterministic-raster-work-proxy',
@@ -8447,6 +8475,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       addedCompactionPasses: 0,
       addedHistoryArchivePasses: 1,
       addedRasterMultiplier: requestedInstanceCount,
+      phaseMode: state.boundarySplatPhaseMode,
+      phaseModeIdentity: state.boundarySplatPhaseModeIdentity,
       phaseSourceIdentity: state.boundarySplatPhaseSourceIdentity,
     };
     return descriptors;
@@ -8526,10 +8556,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     }
     const requestedInstanceCount = normalizeBoundarySplatInstanceCount(controlsSnapshot.boundarySplatInstances);
     const historyWriteSlot = state.frameCount % BOUNDARY_SPLAT_HISTORY_SLOTS;
+    const phaseSourceCount = Math.max(1, Math.min(BOUNDARY_SPLAT_HISTORY_SLOTS, state.boundarySplatPhaseSourceCount || 1));
     device.queue.writeBuffer(boundarySplatDrawBuffer, 0, new Uint32Array([
       6, 0, 0, 0,
       0, 0, boundarySplatCapacity, requestedInstanceCount,
-      0, Math.min(requestedInstanceCount, BOUNDARY_SPLAT_HISTORY_SLOTS), historyWriteSlot, BOUNDARY_SPLAT_HISTORY_SLOTS,
+      0, phaseSourceCount, historyWriteSlot, BOUNDARY_SPLAT_HISTORY_SLOTS,
     ]));
     const compactPass = encoder.beginComputePass({ label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} compact pass` });
     compactPass.setPipeline(boundarySplatCompactPipeline);
@@ -8768,7 +8799,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       state.boundarySplatPhaseSourceCount = drawState[9];
       state.boundarySplatHistoryWriteSlot = drawState[10];
       state.boundarySplatHistorySlots = drawState[11];
-      state.boundarySplatPhaseSourceIdentity = drawState[7] > 1 ? 'live-history-offset' : 'shared-current-control';
+      state.boundarySplatPhaseMode = normalizeBoundarySplatPhaseMode(controlsSnapshot.boundarySplatPhaseMode);
+      state.boundarySplatPhaseModeIdentity = boundarySplatPhaseModeIdentity(state.boundarySplatPhaseMode);
+      state.boundarySplatPhaseSourceIdentity = state.boundarySplatPhaseModeIdentity;
       boundarySplatReadbackBuffer.unmap();
       if (overflowCount > 0) growBoundarySplatCapacity(candidateCount);
     } catch (error) {
@@ -8802,7 +8835,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       phaseSourceCount: drawState[9],
       historyWriteSlot: drawState[10],
       historySlots: drawState[11],
-      phaseSourceIdentity: drawState[7] > 1 ? 'live-history-offset' : 'shared-current-control',
+      phaseMode: normalizeBoundarySplatPhaseMode(controlsSnapshot.boundarySplatPhaseMode),
+      phaseModeIdentity: boundarySplatPhaseModeIdentity(controlsSnapshot.boundarySplatPhaseMode),
+      phaseSourceIdentity: boundarySplatPhaseModeIdentity(controlsSnapshot.boundarySplatPhaseMode),
       authority: 'gpu-indirect-post-submit-witness-readback',
     };
     readback.unmap();
@@ -8815,6 +8850,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.boundarySplatPhaseSourceCount = result.phaseSourceCount;
     state.boundarySplatHistoryWriteSlot = result.historyWriteSlot;
     state.boundarySplatHistorySlots = result.historySlots;
+    state.boundarySplatPhaseMode = result.phaseMode;
+    state.boundarySplatPhaseModeIdentity = result.phaseModeIdentity;
     state.boundarySplatPhaseSourceIdentity = result.phaseSourceIdentity;
     return result;
   }
@@ -11163,6 +11200,19 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         boundarySidecarIdentity: state.boundarySidecarIdentity,
         boundarySidecarAuthority: state.boundarySidecarAuthority,
         boundarySidecarSource: state.boundarySidecarSource,
+        boundarySplatPhaseMode: state.boundarySplatPhaseMode,
+        boundarySplatPhaseModeIdentity: state.boundarySplatPhaseModeIdentity,
+        boundarySplatMode: state.boundarySplatMode,
+        boundarySplatRendererIdentity: state.boundarySplatRendererIdentity,
+        boundarySplatAttributeModelIdentity: state.boundarySplatAttributeModelIdentity,
+        boundarySplatInstanceDescriptorIdentity: state.boundarySplatInstanceDescriptorIdentity,
+        boundarySplatRequestedInstanceCount: state.boundarySplatRequestedInstanceCount,
+        boundarySplatSourceCandidateCount: state.boundarySplatSourceCandidateCount,
+        boundarySplatPhaseSourceCount: state.boundarySplatPhaseSourceCount,
+        boundarySplatPhaseSourceIdentity: state.boundarySplatPhaseSourceIdentity,
+        boundarySplatPhaseSources: state.boundarySplatPhaseSources,
+        boundarySplatInstanceDescriptors: state.boundarySplatInstanceDescriptors,
+        boundarySplatIncrementalInstanceCost: state.boundarySplatIncrementalInstanceCost,
       };
     } finally {
       if (options.restoreControls !== false) {
