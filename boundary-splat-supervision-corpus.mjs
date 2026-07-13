@@ -103,11 +103,23 @@ export async function validateBoundarySplatSupervisionCorpus(manifestFile) {
     if (frame.target.authority !== 'gpu-rgba8-raymarch-readback-frozen-sim-state') throw new Error(`${label} target authority is not frozen GPU raymarch readback`);
     if (frame.target.rendererIdentity !== 'native-3d-compute-fluid-raymarch-v0') throw new Error(`${label} target renderer identity is not the native raymarch`);
     if (frame.target.decomposition !== 'candidate-support-gated-unit-gain-direct-flame-native-raymarch-v0') throw new Error(`${label} target decomposition is not exact candidate-support-gated intrinsic unit-gain native raymarch emission`);
+    let flowDebugArtifact = null;
+    if (frame.flowDebug != null) {
+      flowDebugArtifact = await validateArtifact(manifestPath, frame.flowDebug, `${label} flow debug`);
+      if (frame.flowDebug.authority !== 'flow-debug-interface-canvas-capture-v0') throw new Error(`${label} flow-debug authority is not the established shader diagnostic`);
+      if (frame.flowDebug.source !== 'volume_flow_debug') throw new Error(`${label} flow-debug source is not volume_flow_debug`);
+      if (frame.flowDebug.sampleAuthority !== 'render-only-frozen-sim-state') throw new Error(`${label} flow-debug sample is not a frozen render-only state`);
+      if (frame.flowDebug.sameStateCaptureId !== frame.sameStateCaptureId) throw new Error(`${label} flow-debug state identity does not match candidates and target`);
+      if (frame.flowDebug.simStepCount !== frame.simStepCount) throw new Error(`${label} flow-debug simulator step does not match candidates and target`);
+      if (frame.flowDebug.controlOverrides?.flowDebug !== 1) throw new Error(`${label} flow-debug control override is not exact`);
+    }
     candidateCount += frame.candidates.count;
     frames.push({
       id: frame.id,
       candidatePath: candidateArtifact.path,
       targetPath: targetArtifact.path,
+      flowDebugPath: flowDebugArtifact?.path || null,
+      flowDebugAuthority: frame.flowDebug?.authority || null,
       candidateCount: frame.candidates.count,
     });
   }

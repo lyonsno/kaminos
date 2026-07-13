@@ -12174,6 +12174,30 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       if (candidateSample.simStepCount !== targetSample.simStepCount) {
         throw new Error(`fixed-candidate-supervision-state-drift:${baseSimStepCount}:${candidateSample.simStepCount}:${targetSample.simStepCount}`);
       }
+
+      boundarySplatSupervisionFireOnlyTargetActive = false;
+      controlsSnapshot = applyRuntimeQualityControls({
+        ...controlsSnapshot,
+        flowDebug: 1,
+        renderScale,
+      });
+      resetTemporalHistory('fixed-candidate-supervision-flow-debug');
+      const flowDebugSample = await sampleFrame({
+        advanceSim: false,
+        includeRgba: true,
+        now: fixedNow,
+        sameStateCaptureId,
+        baseFrameCount,
+        baseSimStepCount,
+      });
+      if (!flowDebugSample.ok) throw new Error(`fixed-candidate-supervision-flow-debug-failed:${flowDebugSample.reason || 'unknown'}`);
+      if (flowDebugSample.sampleAuthority !== 'render-only-frozen-sim-state') {
+        throw new Error(`fixed-candidate-supervision-flow-debug-authority:${flowDebugSample.sampleAuthority || 'missing'}`);
+      }
+      if (!flowDebugSample.image?.rgba?.length) throw new Error('fixed-candidate-supervision-flow-debug-image-missing');
+      if (candidateSample.simStepCount !== flowDebugSample.simStepCount) {
+        throw new Error(`fixed-candidate-supervision-flow-debug-state-drift:${candidateSample.simStepCount}:${flowDebugSample.simStepCount}`);
+      }
       const capturedBaseFrameCount = candidateSample.frameCount;
       const capturedBaseSimStepCount = candidateSample.simStepCount;
 
@@ -12215,6 +12239,18 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           rendererIdentity: ROUTE_IDENTITY,
           decomposition: 'candidate-support-gated-unit-gain-direct-flame-native-raymarch-v0',
           image: targetSample.image,
+        },
+        flowDebug: {
+          authority: 'flow-debug-interface-canvas-capture-v0',
+          imageAuthority: 'gpu-rgba8-flow-debug-readback-frozen-sim-state',
+          source: 'volume_flow_debug',
+          channelLayout: 'flow-debug-interface-cyan-red-rgba',
+          controlOverrides: { flowDebug: 1 },
+          sampleAuthority: flowDebugSample.sampleAuthority,
+          sameStateCaptureId,
+          frameCount: flowDebugSample.frameCount,
+          simStepCount: flowDebugSample.simStepCount,
+          image: flowDebugSample.image,
         },
       };
     } finally {

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
 const witness = await readFile(new URL('../volume-witness.mjs', import.meta.url), 'utf8');
+const core = await readFile(new URL('../volume-core.js', import.meta.url), 'utf8');
 
 assert.match(witness, /--boundary-splat-supervision-dir/, 'witness exposes a direct fixed-candidate supervision output directory');
 assert.match(witness, /--boundary-splat-supervision-frames/, 'witness exposes a requested truthful supervision frame count');
@@ -14,9 +15,16 @@ assert.match(witness, /sameBrowserSequenceSuitable/, 'supervision report states 
 assert.match(witness, /captureReplay\?\.capture\?\.camera[\s\S]*replayedCaptureCamera\?\.applied\s*!==\s*true/, 'saved-camera supervision fails loud when the camera pose was not applied');
 assert.match(witness, /window\.__kaminosBoundarySplatSupervisionCandidates\s*=\s*Uint8Array/, 'candidate payload remains in browser memory for bounded transport chunks');
 assert.match(witness, /window\.__kaminosBoundarySplatSupervisionTarget\s*=\s*Uint8Array/, 'raymarch target remains in browser memory for bounded transport chunks');
+assert.match(witness, /window\.__kaminosBoundarySplatSupervisionFlowDebug\s*=\s*Uint8Array/, 'same-state flow-debug pixels remain in browser memory for bounded transport chunks');
 assert.match(witness, /for \(let offset = 0; offset < expectedLength; offset \+= transportChunkBytes\)/, 'transport loops over the complete payload without a hidden row cap');
 assert.match(witness, /frame-\$\{String\(frameIndex\)\.padStart\(3, '0'\)\}\.candidates\.f32/, 'witness materializes exact candidate float rows with stable multi-frame names');
 assert.match(witness, /frame-\$\{String\(frameIndex\)\.padStart\(3, '0'\)\}\.raymarch\.png/, 'witness materializes native raymarch targets with stable multi-frame names');
+assert.match(witness, /frame-\$\{String\(frameIndex\)\.padStart\(3, '0'\)\}\.flow-debug\.png/, 'witness materializes same-state flow-debug auxiliaries with stable multi-frame names');
+assert.match(witness, /flow-debug-interface-canvas-capture-v0/, 'flow-debug auxiliary preserves the established shader-debug authority');
+assert.match(witness, /controlOverrides:\s*\{\s*flowDebug:\s*1\s*\}/, 'flow-debug auxiliary records the exact diagnostic control override');
+assert.match(witness, /hash\(targetBytes\)\s*===\s*hash\(flowDebugBytes\)[\s\S]*pixel-identical to target/, 'witness rejects a mislabeled flow-debug artifact that is byte-identical to the target');
+assert.match(witness, /sameStateCaptureId:\s*capture\.sameStateCaptureId/, 'flow-debug corpus custody is tied to the candidate and target same-state identity');
+assert.match(core, /boundarySplatSupervisionFireOnlyTargetActive\s*=\s*false;[\s\S]*flowDebug:\s*1,[\s\S]*fixed-candidate-supervision-flow-debug/, 'flow-debug capture disables the direct-flame supervision bypass before rendering the diagnostic');
 assert.match(witness, /candidate-support-gated-unit-gain-direct-flame-native-raymarch-v0/, 'witness labels the exact candidate-support-gated intrinsic unit-gain native raymarch target instead of implying stock-body or full-volume authority');
 assert.match(witness, /schema:\s*BOUNDARY_SPLAT_SUPERVISION_SCHEMA/, 'witness writes the validated corpus schema');
 assert.match(witness, /splatControls:\s*capture\.splatControls/, 'corpus preserves the exact live splat footprint controls for differentiable replay');

@@ -21,6 +21,10 @@ TARGET_DECOMPOSITION = "candidate-support-gated-unit-gain-direct-flame-native-ra
 MODEL_SCHEMA = "kaminos-boundary-splat-attribute-mlp-v0"
 SPATIAL_MODEL_SCHEMA = "kaminos-boundary-splat-spatial-attribute-mlp-v0"
 GRID_MESSAGE_MODEL_SCHEMA = "kaminos-boundary-splat-grid-message-attribute-mlp-v0"
+OPTICAL_DECODER_SCHEMA = "kaminos-boundary-splat-screen-residual-unet-v0"
+OPTICAL_INPUT_AUTHORITY = "screen-rgb-luma-gradient-v0"
+FLOW_DEBUG_AUTHORITY = "flow-debug-interface-canvas-capture-v0"
+PARTIAL_FLOW_DEBUG_AUTHORITY = "display-only-linear-mix-v0"
 BOUNDARY_SPLAT_SUPERVISION_CANDIDATE_ORDER = [
     "position.x", "position.y", "position.z",
     "sidecar.support", "sidecar.coverage", "sidecar.ridge", "sidecar.footprint",
@@ -142,6 +146,20 @@ def load_corpus(manifest_value):
         target_path, _ = read_verified_artifact(manifest_path, frame["target"], f"{label} target")
         if frame["target"].get("decomposition") != TARGET_DECOMPOSITION:
             raise ValueError(f"{label} target decomposition must be {TARGET_DECOMPOSITION}")
+        flow_debug = frame.get("flowDebug")
+        flow_debug_path = None
+        if flow_debug is not None:
+            flow_debug_path, _ = read_verified_artifact(manifest_path, flow_debug, f"{label} flow debug")
+            if flow_debug.get("authority") != FLOW_DEBUG_AUTHORITY:
+                raise ValueError(f"{label} flow-debug authority must be {FLOW_DEBUG_AUTHORITY}")
+            if flow_debug.get("source") != "volume_flow_debug":
+                raise ValueError(f"{label} flow-debug source must be volume_flow_debug")
+            if flow_debug.get("sampleAuthority") != "render-only-frozen-sim-state":
+                raise ValueError(f"{label} flow-debug sample must preserve frozen render-only authority")
+            if flow_debug.get("sameStateCaptureId") != frame.get("sameStateCaptureId"):
+                raise ValueError(f"{label} flow-debug state identity does not match candidates and target")
+            if flow_debug.get("controlOverrides") != {"flowDebug": 1}:
+                raise ValueError(f"{label} flow-debug control override must be exact")
         camera = frame.get("camera") or {}
         view_projection = finite_vector(camera.get("viewProjection"), 16, f"{label} viewProjection")
         camera_right = finite_vector(camera.get("cameraRight"), 3, f"{label} cameraRight")
@@ -159,6 +177,15 @@ def load_corpus(manifest_value):
             "candidates": candidates,
             "candidatePath": str(candidate_path),
             "targetPath": str(target_path),
+            "flowDebugPath": str(flow_debug_path) if flow_debug_path is not None else None,
+            "flowDebugAuthority": flow_debug.get("authority") if flow_debug is not None else None,
+            "flowDebugSource": flow_debug.get("source") if flow_debug is not None else None,
+            "flowDebugSampleAuthority": flow_debug.get("sampleAuthority") if flow_debug is not None else None,
+            "requestedRoute": frame.get("requestedRoute"),
+            "effectiveRoute": frame.get("effectiveRoute"),
+            "rendererIdentity": frame.get("rendererIdentity"),
+            "sourceAuthority": frame.get("sourceAuthority"),
+            "fallbackReason": frame.get("fallbackReason"),
             "viewProjection": view_projection,
             "cameraRight": camera_right,
             "cameraUp": camera_up,
@@ -228,6 +255,64 @@ class GridMessageAttributeMlp(nn.Module):
         message_inputs = mx.concatenate([hidden, neighbor_hidden.reshape(hidden.shape[0], -1)], axis=1)
         message_logits = self.message_output(nn.relu(self.message_hidden(message_inputs)))
         return mx.sigmoid(self.output(hidden) + message_logits)
+
+
+class ScreenConvBlock(nn.Module):
+    def __init__(self, input_channels, output_channels):
+        super().__init__()
+        self.first = nn.Conv2d(input_channels, output_channels, kernel_size=3, padding=1)
+        self.second = nn.Conv2d(output_channels, output_channels, kernel_size=3, padding=1)
+
+    def __call__(self, inputs):
+        return nn.gelu(self.second(nn.gelu(self.first(inputs))))
+
+
+class ScreenResidualUnet(nn.Module):
+    def __init__(self, base_channels=8, residual_scale=1.0):
+        super().__init__()
+        if base_channels <= 0 or residual_scale <= 0:
+            raise ValueError("screen residual U-Net channels and residual scale must be positive")
+        widths = [base_channels, base_channels * 2, base_channels * 3, base_channels * 4, base_channels * 6]
+        self.residual_scale = float(residual_scale)
+        self.encoder0 = ScreenConvBlock(5, widths[0])
+        self.down1 = nn.Conv2d(widths[0], widths[1], kernel_size=3, stride=2, padding=1)
+        self.encoder1 = ScreenConvBlock(widths[1], widths[1])
+        self.down2 = nn.Conv2d(widths[1], widths[2], kernel_size=3, stride=2, padding=1)
+        self.encoder2 = ScreenConvBlock(widths[2], widths[2])
+        self.down3 = nn.Conv2d(widths[2], widths[3], kernel_size=3, stride=2, padding=1)
+        self.encoder3 = ScreenConvBlock(widths[3], widths[3])
+        self.down4 = nn.Conv2d(widths[3], widths[4], kernel_size=3, stride=2, padding=1)
+        self.bottleneck = ScreenConvBlock(widths[4], widths[4])
+        self.global_context = nn.Conv2d(widths[4], widths[4], kernel_size=1)
+        self.upsample = nn.Upsample(scale_factor=2, mode="linear")
+        self.decoder3 = ScreenConvBlock(widths[4] + widths[3], widths[3])
+        self.decoder2 = ScreenConvBlock(widths[3] + widths[2], widths[2])
+        self.decoder1 = ScreenConvBlock(widths[2] + widths[1], widths[1])
+        self.decoder0 = ScreenConvBlock(widths[1] + widths[0], widths[0])
+        self.output = nn.Conv2d(widths[0], 3, kernel_size=1)
+        self.output.weight = mx.zeros_like(self.output.weight)
+        self.output.bias = mx.zeros_like(self.output.bias)
+
+    def decode_level(self, inputs, skip, decoder):
+        upsampled = self.upsample(inputs)
+        upsampled = upsampled[:, :skip.shape[1], :skip.shape[2], :]
+        return decoder(mx.concatenate([upsampled, skip], axis=-1))
+
+    def __call__(self, base_prediction):
+        inputs = screen_decoder_inputs(base_prediction)[None, :, :, :]
+        encoded0 = self.encoder0(inputs)
+        encoded1 = self.encoder1(nn.gelu(self.down1(encoded0)))
+        encoded2 = self.encoder2(nn.gelu(self.down2(encoded1)))
+        encoded3 = self.encoder3(nn.gelu(self.down3(encoded2)))
+        bottleneck = self.bottleneck(nn.gelu(self.down4(encoded3)))
+        global_context = mx.mean(bottleneck, axis=(1, 2), keepdims=True)
+        bottleneck = bottleneck + self.global_context(global_context)
+        decoded3 = self.decode_level(bottleneck, encoded3, self.decoder3)
+        decoded2 = self.decode_level(decoded3, encoded2, self.decoder2)
+        decoded1 = self.decode_level(decoded2, encoded1, self.decoder1)
+        decoded0 = self.decode_level(decoded1, encoded0, self.decoder0)
+        residual = mx.tanh(self.output(decoded0))[0] * self.residual_scale
+        return mx.clip(base_prediction + residual, 0.0, 1.0)
 
 
 def freeze_grid_message_base(model):
@@ -680,6 +765,16 @@ def render_frame(model, geometry, lower, span, depth_bins):
     return mx.clip(flat.reshape(geometry["height"], geometry["width"], 3), 0.0, 1.0), attributes
 
 
+def screen_decoder_inputs(base_prediction):
+    luma = base_prediction[:, :, 0] * 0.2126 + base_prediction[:, :, 1] * 0.7152 + base_prediction[:, :, 2] * 0.0722
+    horizontal = mx.abs(luma[:, 1:] - luma[:, :-1])
+    vertical = mx.abs(luma[1:, :] - luma[:-1, :])
+    horizontal = mx.concatenate([mx.zeros((luma.shape[0], 1), dtype=luma.dtype), horizontal], axis=1)
+    vertical = mx.concatenate([mx.zeros((1, luma.shape[1]), dtype=luma.dtype), vertical], axis=0)
+    gradient = mx.sqrt(mx.square(horizontal) + mx.square(vertical) + 1e-8)
+    return mx.concatenate([base_prediction, luma[:, :, None], gradient[:, :, None]], axis=2)
+
+
 def pixel_loss(prediction, target):
     target_luma = target[:, :, 0] * 0.2126 + target[:, :, 1] * 0.7152 + target[:, :, 2] * 0.0722
     weights = 1.0 + target_luma[:, :, None] * 5.0
@@ -703,6 +798,65 @@ def save_preview(path, image):
     Image.fromarray(pixels, mode="RGB").save(path)
 
 
+def save_partial_flow_debug_witness(output_dir, frame_index, frame, reference_path, control, predicted_path, requested_gain):
+    if frame.get("flowDebugPath") is None:
+        raise ValueError("partial flow-debug witness requires a verified same-state flow-debug artifact")
+    control_pixels = np.clip(np.asarray(control), 0.0, 1.0)
+    height, width = control_pixels.shape[:2]
+    reference_pixels = np.asarray(
+        Image.open(reference_path).convert("RGB").resize((width, height), Image.Resampling.LANCZOS),
+        dtype=np.float32,
+    ) / 255.0
+    predicted_pixels = np.asarray(
+        Image.open(predicted_path).convert("RGB").resize((width, height), Image.Resampling.LANCZOS),
+        dtype=np.float32,
+    ) / 255.0
+    flow_debug_pixels = np.asarray(
+        Image.open(frame["flowDebugPath"]).convert("RGB").resize((width, height), Image.Resampling.LANCZOS),
+        dtype=np.float32,
+    ) / 255.0
+    control_path = output_dir / f"preview-control-frame-{frame_index:03d}.png"
+    save_preview(control_path, control_pixels)
+    role_images = {
+        "reference": (reference_path, reference_pixels),
+        "control": (control_path, control_pixels),
+        "predicted": (predicted_path, predicted_pixels),
+    }
+    semantic_roles = {}
+    for role, (normal_path, pixels) in role_images.items():
+        partial_path = output_dir / f"preview-partial-flow-debug-{role}-frame-{frame_index:03d}.png"
+        partial_pixels = pixels * (1.0 - requested_gain) + flow_debug_pixels * requested_gain
+        save_preview(partial_path, partial_pixels)
+        semantic_roles[role] = {
+            "normal": str(normal_path),
+            "partialFlowDebug": str(partial_path),
+        }
+    return {
+        "authority": PARTIAL_FLOW_DEBUG_AUTHORITY,
+        "diagnosticOnly": True,
+        "requestedGain": requested_gain,
+        "effectiveGain": requested_gain,
+        "frameIndex": frame_index,
+        "frameId": frame["id"],
+        "sameStateCaptureId": frame["sameStateCaptureId"],
+        "requestedRoute": frame["requestedRoute"],
+        "effectiveRoute": frame["effectiveRoute"],
+        "backend": "mlx",
+        "rendererIdentity": frame["rendererIdentity"],
+        "sourceAuthority": frame["sourceAuthority"],
+        "fallbackReason": frame["fallbackReason"],
+        "flowDebug": {
+            "path": frame["flowDebugPath"],
+            "authority": frame["flowDebugAuthority"],
+            "source": frame["flowDebugSource"],
+            "sampleAuthority": frame["flowDebugSampleAuthority"],
+            "sameStateCaptureId": frame["sameStateCaptureId"],
+            "controlOverrides": {"flowDebug": 1},
+        },
+        "semanticRoles": semantic_roles,
+    }
+
+
 def evaluate_frame_set(model, geometries, frames, indices, lower, span, depth_bins, edge_weight, output_dir, stage):
     rows = []
     for frame_index in indices:
@@ -716,6 +870,31 @@ def evaluate_frame_set(model, geometries, frames, indices, lower, span, depth_bi
             save_preview(target_path, geometry["target"])
         pixel_value = float(pixel_loss(prediction, geometry["target"]).item())
         edge_value = float(edge_loss(prediction, geometry["target"]).item())
+        rows.append({
+            "frameIndex": frame_index,
+            "frameId": frames[frame_index]["id"],
+            "sameStateCaptureId": frames[frame_index]["sameStateCaptureId"],
+            "preview": str(preview_path),
+            "targetPreview": str(target_path),
+            "pixelLoss": pixel_value,
+            "edgeLoss": edge_value,
+            "loss": pixel_value + edge_value * edge_weight,
+        })
+    return rows
+
+
+def evaluate_optical_frame_set(decoder, base_predictions, geometries, frames, indices, edge_weight, output_dir, stage):
+    rows = []
+    for frame_index in indices:
+        prediction = decoder(base_predictions[frame_index])
+        mx.eval(prediction)
+        preview_path = output_dir / f"preview-{stage}-frame-{frame_index:03d}.png"
+        target_path = output_dir / f"preview-target-frame-{frame_index:03d}.png"
+        save_preview(preview_path, prediction)
+        if not target_path.exists():
+            save_preview(target_path, geometries[frame_index]["target"])
+        pixel_value = float(pixel_loss(prediction, geometries[frame_index]["target"]).item())
+        edge_value = float(edge_loss(prediction, geometries[frame_index]["target"]).item())
         rows.append({
             "frameIndex": frame_index,
             "frameId": frames[frame_index]["id"],
@@ -865,6 +1044,10 @@ def parse_args():
     parser.add_argument("--spatial-mixing", choices=["none", "six-neighbor-hidden-residual"], default="none")
     parser.add_argument("--message-size", type=int, default=0)
     parser.add_argument("--freeze-base", type=int, choices=[0, 1], default=0)
+    parser.add_argument("--optical-decoder", choices=["none", "screen-unet"], default="none")
+    parser.add_argument("--optical-channels", type=int, default=8)
+    parser.add_argument("--optical-residual-scale", type=float, default=1.0)
+    parser.add_argument("--partial-flow-debug-gain", type=float, default=0.0)
     parser.add_argument("--train-frame-indices")
     parser.add_argument("--eval-frame-indices")
     parser.add_argument("--candidate-table-oracle", action="store_true")
@@ -881,8 +1064,10 @@ def main():
     report = {"schema": SCHEMA, "status": "running", "failurePhase": None, "startedAt": started_at}
     phase = "arguments"
     try:
-        if args.steps < 0 or args.hidden_size < 0 or args.message_size < 0 or args.render_width <= 0 or args.learning_rate <= 0 or args.depth_bins <= 0 or args.edge_weight < 0:
-            raise ValueError("steps, hidden-size, message-size, and edge-weight must be non-negative; render-width, learning-rate, and depth-bins must be positive")
+        if args.steps < 0 or args.hidden_size < 0 or args.message_size < 0 or args.render_width <= 0 or args.learning_rate <= 0 or args.depth_bins <= 0 or args.edge_weight < 0 or args.optical_channels <= 0 or args.optical_residual_scale <= 0:
+            raise ValueError("steps, hidden-size, message-size, and edge-weight must be non-negative; render-width, learning-rate, depth-bins, optical-channels, and optical-residual-scale must be positive")
+        if args.partial_flow_debug_gain != 0.0 and not (0.5 <= args.partial_flow_debug_gain <= 0.75):
+            raise ValueError("partial-flow-debug-gain must be zero or within the witnessed range 0.5..0.75")
         frequencies = parse_fourier_frequencies(args.fourier_frequencies)
         if args.candidate_table_oracle and args.context_mode != "none":
             raise ValueError("candidate table oracle cannot be combined with spatial conditioning")
@@ -898,6 +1083,23 @@ def main():
             args.train_frame_indices,
             args.eval_frame_indices,
         )
+        if args.optical_decoder == "screen-unet" and frame_split["authority"] != "explicit-disjoint-frame-holdout-v0":
+            raise ValueError("screen-unet requires an explicit disjoint frame holdout")
+        if args.optical_decoder != "none" and args.candidate_table_oracle:
+            raise ValueError("optical decoding cannot be combined with the candidate table oracle")
+        if args.partial_flow_debug_gain != 0.0 and args.optical_decoder != "screen-unet":
+            raise ValueError("partial flow-debug witness requires the screen-unet optical decoder")
+        if args.partial_flow_debug_gain != 0.0:
+            missing_flow_debug = [
+                frame["id"]
+                for index, frame in enumerate(corpus["frames"])
+                if index in frame_split["evaluationIndices"] and frame.get("flowDebugPath") is None
+            ]
+            if missing_flow_debug:
+                raise ValueError(
+                    "partial flow-debug witness requires a verified same-state flow-debug artifact: "
+                    + ",".join(missing_flow_debug)
+                )
         phase = "warm-start"
         base_model, warm_artifact, output_ranges, warm_receipt, warm_schema, warm_context_mode, warm_frequencies, warm_spatial_mixing = load_warm_start(
             args.warm_start,
@@ -949,22 +1151,45 @@ def main():
             build_sparse_geometry(frame, args.render_width, args.depth_bins, output_ranges[4:6, 1], args.context_mode, frequencies)
             for frame in corpus["frames"]
         ]
+        optical_decoder = None
+        base_predictions = None
+        if args.optical_decoder == "screen-unet":
+            base_predictions = []
+            for geometry in geometries:
+                base_prediction, _ = render_frame(model, geometry, lower, span, args.depth_bins)
+                base_prediction = mx.stop_gradient(base_prediction)
+                mx.eval(base_prediction)
+                base_predictions.append(base_prediction)
+            optical_decoder = ScreenResidualUnet(args.optical_channels, args.optical_residual_scale)
+            mx.eval(optical_decoder.parameters())
         initial_radius = [mx.array(attributes[:, 4:6]) for attributes in initial_attributes]
         training_geometries = [geometries[index] for index in frame_split["trainIndices"]]
         training_initial_radius = [initial_radius[index] for index in frame_split["trainIndices"]]
         phase = "initial-preview"
-        initial_evaluation_rows = evaluate_frame_set(
-            model,
-            geometries,
-            corpus["frames"],
-            frame_split["evaluationIndices"],
-            lower,
-            span,
-            args.depth_bins,
-            args.edge_weight,
-            output_dir,
-            "initial",
-        )
+        if optical_decoder is None:
+            initial_evaluation_rows = evaluate_frame_set(
+                model,
+                geometries,
+                corpus["frames"],
+                frame_split["evaluationIndices"],
+                lower,
+                span,
+                args.depth_bins,
+                args.edge_weight,
+                output_dir,
+                "initial",
+            )
+        else:
+            initial_evaluation_rows = evaluate_optical_frame_set(
+                optical_decoder,
+                base_predictions,
+                geometries,
+                corpus["frames"],
+                frame_split["evaluationIndices"],
+                args.edge_weight,
+                output_dir,
+                "initial",
+            )
         initial_preview_path = output_dir / "preview-initial.png"
         target_preview_path = output_dir / "preview-target.png"
         shutil.copyfile(initial_evaluation_rows[0]["preview"], initial_preview_path)
@@ -973,43 +1198,80 @@ def main():
         initial_edge_loss = mean_metric(initial_evaluation_rows, "edgeLoss")
         initial_loss = mean_metric(initial_evaluation_rows, "loss")
 
-        def loss_fn(active_model):
-            total = mx.array(0.0)
-            for geometry, initial_radius_values in zip(training_geometries, training_initial_radius):
-                prediction, attributes = render_frame(active_model, geometry, lower, span, args.depth_bins)
-                total = total + image_loss(prediction, geometry["target"], args.edge_weight)
-                total = total + mx.mean(mx.square(attributes[:, 4:6] - initial_radius_values)) * args.radius_preservation
-            return total / len(training_geometries)
+        if optical_decoder is None:
+            def loss_fn(active_model):
+                total = mx.array(0.0)
+                for geometry, initial_radius_values in zip(training_geometries, training_initial_radius):
+                    prediction, attributes = render_frame(active_model, geometry, lower, span, args.depth_bins)
+                    total = total + image_loss(prediction, geometry["target"], args.edge_weight)
+                    total = total + mx.mean(mx.square(attributes[:, 4:6] - initial_radius_values)) * args.radius_preservation
+                return total / len(training_geometries)
 
-        initial_training_loss_value = loss_fn(model)
+            trainable_model = model
+        else:
+            def loss_fn(active_decoder):
+                total = mx.array(0.0)
+                for frame_index in frame_split["trainIndices"]:
+                    prediction = active_decoder(base_predictions[frame_index])
+                    total = total + image_loss(prediction, geometries[frame_index]["target"], args.edge_weight)
+                return total / len(frame_split["trainIndices"])
+
+            trainable_model = optical_decoder
+
+        initial_training_loss_value = loss_fn(trainable_model)
         mx.eval(initial_training_loss_value)
         training_losses = [{"step": 0, "loss": float(initial_training_loss_value.item())}]
         if not args.probe_only and args.steps > 0:
             phase = "training"
             optimizer = optim.Adam(learning_rate=args.learning_rate)
 
-            loss_and_grad = nn.value_and_grad(model, loss_fn)
+            loss_and_grad = nn.value_and_grad(trainable_model, loss_fn)
             for step in range(args.steps):
-                loss, gradients = loss_and_grad(model)
-                optimizer.update(model, gradients)
-                mx.eval(model.parameters(), optimizer.state, loss)
+                loss, gradients = loss_and_grad(trainable_model)
+                optimizer.update(trainable_model, gradients)
+                mx.eval(trainable_model.parameters(), optimizer.state, loss)
                 if step == 0 or (step + 1) % 20 == 0 or step + 1 == args.steps:
                     training_losses.append({"step": step + 1, "loss": float(loss.item())})
         phase = "trained-preview"
-        trained_evaluation_rows = evaluate_frame_set(
-            model,
-            geometries,
-            corpus["frames"],
-            frame_split["evaluationIndices"],
-            lower,
-            span,
-            args.depth_bins,
-            args.edge_weight,
-            output_dir,
-            "trained",
-        )
+        if optical_decoder is None:
+            trained_evaluation_rows = evaluate_frame_set(
+                model,
+                geometries,
+                corpus["frames"],
+                frame_split["evaluationIndices"],
+                lower,
+                span,
+                args.depth_bins,
+                args.edge_weight,
+                output_dir,
+                "trained",
+            )
+        else:
+            trained_evaluation_rows = evaluate_optical_frame_set(
+                optical_decoder,
+                base_predictions,
+                geometries,
+                corpus["frames"],
+                frame_split["evaluationIndices"],
+                args.edge_weight,
+                output_dir,
+                "trained",
+            )
         trained_preview_path = output_dir / "preview-trained.png"
         shutil.copyfile(trained_evaluation_rows[0]["preview"], trained_preview_path)
+        partial_flow_debug_witnesses = []
+        if args.partial_flow_debug_gain != 0.0:
+            for row in trained_evaluation_rows:
+                frame_index = row["frameIndex"]
+                partial_flow_debug_witnesses.append(save_partial_flow_debug_witness(
+                    output_dir,
+                    frame_index,
+                    corpus["frames"][frame_index],
+                    row["targetPreview"],
+                    base_predictions[frame_index],
+                    row["preview"],
+                    args.partial_flow_debug_gain,
+                ))
         trained_pixel_loss = mean_metric(trained_evaluation_rows, "pixelLoss")
         trained_edge_loss = mean_metric(trained_evaluation_rows, "edgeLoss")
         trained_loss = mean_metric(trained_evaluation_rows, "loss")
@@ -1030,7 +1292,21 @@ def main():
                 "trainedEdgeLoss": trained_row["edgeLoss"],
             })
         phase = "model-artifact"
-        if args.candidate_table_oracle:
+        if optical_decoder is not None:
+            model_path = output_dir / "screen-residual-unet.safetensors"
+            optical_decoder.save_weights(str(model_path))
+            model_bytes = model_path.read_bytes()
+            model_receipt = {
+                "path": str(model_path),
+                "schema": OPTICAL_DECODER_SCHEMA,
+                "identity": f"sha256:{sha256_bytes(model_bytes)}",
+                "authority": "screen-global-multiscale-residual-unet-v0",
+                "inputAuthority": OPTICAL_INPUT_AUTHORITY,
+                "baseChannels": args.optical_channels,
+                "residualScale": args.optical_residual_scale,
+                "deployable": False,
+            }
+        elif args.candidate_table_oracle:
             model_path = output_dir / "candidate-attributes.f32"
             candidate_attributes = np.asarray(lower + model_attributes(model, geometries[0]["inputs"], geometries[0]["neighborRows"]) * span).astype("<f4")
             model_bytes = candidate_attributes.tobytes()
@@ -1087,6 +1363,9 @@ def main():
                 "authority": "shared-six-neighbor-hidden-residual-attribute-mlp-v0",
                 "deployable": False,
             }
+        for witness in partial_flow_debug_witnesses:
+            witness["modelIdentity"] = model_receipt["identity"]
+            witness["modelAuthority"] = model_receipt["authority"]
         report.update({
             "status": "probe-only" if args.probe_only else "trained",
             "failurePhase": None,
@@ -1109,6 +1388,13 @@ def main():
                 "modelAuthority": model_receipt["authority"],
                 "contextMode": args.context_mode,
                 "spatialMixing": args.spatial_mixing,
+                "opticalDecoder": args.optical_decoder,
+                "opticalInputAuthority": OPTICAL_INPUT_AUTHORITY if optical_decoder is not None else None,
+                "opticalBaseFrozen": optical_decoder is not None,
+                "opticalChannels": args.optical_channels if optical_decoder is not None else None,
+                "opticalResidualScale": args.optical_residual_scale if optical_decoder is not None else None,
+                "partialFlowDebugRequestedGain": args.partial_flow_debug_gain,
+                "partialFlowDebugEffectiveGain": args.partial_flow_debug_gain if partial_flow_debug_witnesses else 0.0,
                 "messageSize": message_size,
                 "basePathFrozen": bool(args.freeze_base),
                 "frameSplitAuthority": frame_split["authority"],
@@ -1136,6 +1422,14 @@ def main():
                 "lossTrace": training_losses,
             },
             "evaluationFrames": evaluation_frames,
+            "partialFlowDebugWitness": {
+                "authority": PARTIAL_FLOW_DEBUG_AUTHORITY,
+                "requestedGain": args.partial_flow_debug_gain,
+                "effectiveGain": args.partial_flow_debug_gain if partial_flow_debug_witnesses else 0.0,
+                "diagnosticOnly": True,
+                "semanticRoles": ["reference", "control", "predicted"],
+                "frames": partial_flow_debug_witnesses,
+            },
             "previews": {
                 "initial": str(initial_preview_path),
                 "target": str(target_preview_path),

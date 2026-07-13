@@ -2383,8 +2383,12 @@ async function captureBoundarySplatSupervisionArtifacts(ws, outputDir, replayedC
           const targetRgba = capture.target?.image?.rgba;
           if (!Array.isArray(targetRgba)) throw new Error('fixed-candidate supervision capture omitted target RGBA');
           window.__kaminosBoundarySplatSupervisionTarget = Uint8Array.from(targetRgba);
+          const flowDebugRgba = capture.flowDebug?.image?.rgba;
+          if (!Array.isArray(flowDebugRgba)) throw new Error('fixed-candidate supervision capture omitted flow-debug RGBA');
+          window.__kaminosBoundarySplatSupervisionFlowDebug = Uint8Array.from(flowDebugRgba);
           const { packedFloat32Base64, ...candidateMetadata } = capture.candidates;
           const { image, ...targetMetadata } = capture.target;
+          const { image: flowDebugImage, ...flowDebugMetadata } = capture.flowDebug;
           return {
             ...capture,
             candidates: {
@@ -2396,6 +2400,12 @@ async function captureBoundarySplatSupervisionArtifacts(ws, outputDir, replayedC
               width: image.width,
               height: image.height,
               expectedLength: window.__kaminosBoundarySplatSupervisionTarget.length,
+            },
+            flowDebug: {
+              ...flowDebugMetadata,
+              width: flowDebugImage.width,
+              height: flowDebugImage.height,
+              expectedLength: window.__kaminosBoundarySplatSupervisionFlowDebug.length,
             },
           };
         })()`,
@@ -2424,12 +2434,26 @@ async function captureBoundarySplatSupervisionArtifacts(ws, outputDir, replayedC
         Number(capture.target.expectedLength),
         `fixed-candidate supervision target ${frameId}`,
       );
+      supervisionPhase = `transport-flow-debug-${frameId}`;
+      const flowDebugTransport = await readCachedBrowserBytes(
+        ws,
+        '__kaminosBoundarySplatSupervisionFlowDebug',
+        Number(capture.flowDebug.expectedLength),
+        `fixed-candidate supervision flow debug ${frameId}`,
+      );
 
       const candidatePath = join(outputDir, `frame-${String(frameIndex).padStart(3, '0')}.candidates.f32`);
       const targetPath = join(outputDir, `frame-${String(frameIndex).padStart(3, '0')}.raymarch.png`);
+      const flowDebugPath = join(outputDir, `frame-${String(frameIndex).padStart(3, '0')}.flow-debug.png`);
       writeFileSync(candidatePath, candidateTransport.bytes);
       writeRgbaPng(targetPath, capture.target.width, capture.target.height, targetTransport.bytes);
+      writeRgbaPng(flowDebugPath, capture.flowDebug.width, capture.flowDebug.height, flowDebugTransport.bytes);
       const targetBytes = readFileSync(targetPath);
+      const flowDebugBytes = readFileSync(flowDebugPath);
+      supervisionPhase = `validate-flow-debug-visual-${frameId}`;
+      if (hash(targetBytes) === hash(flowDebugBytes)) {
+        throw new Error('fixed-candidate supervision flow-debug is pixel-identical to target');
+      }
       supervisionPhase = `validate-target-visual-${frameId}`;
       const targetVisualMetrics = measureScreenshot(targetBytes);
       if (capture.target.decomposition !== BOUNDARY_SPLAT_SUPERVISION_TARGET_DECOMPOSITION) {
@@ -2484,6 +2508,24 @@ async function captureBoundarySplatSupervisionArtifacts(ws, outputDir, replayedC
           transportChunkBytes: targetTransport.chunkBytes,
           transportChunkCount: targetTransport.chunkCount,
         },
+        flowDebug: {
+          path: flowDebugPath,
+          bytes: flowDebugBytes.length,
+          sha256: hash(flowDebugBytes),
+          authority: capture.flowDebug.authority,
+          imageAuthority: capture.flowDebug.imageAuthority,
+          source: capture.flowDebug.source,
+          channelLayout: capture.flowDebug.channelLayout,
+          controlOverrides: { flowDebug: 1 },
+          sampleAuthority: capture.flowDebug.sampleAuthority,
+          sameStateCaptureId: capture.sameStateCaptureId,
+          frameCount: capture.flowDebug.frameCount,
+          simStepCount: capture.flowDebug.simStepCount,
+          width: capture.flowDebug.width,
+          height: capture.flowDebug.height,
+          transportChunkBytes: flowDebugTransport.chunkBytes,
+          transportChunkCount: flowDebugTransport.chunkCount,
+        },
       });
       capturedFrameCount = frames.length;
     }
@@ -2533,6 +2575,7 @@ async function captureBoundarySplatSupervisionArtifacts(ws, outputDir, replayedC
       sameStateCaptureIds: frames.map(frame => frame.sameStateCaptureId),
       simStepCounts: frames.map(frame => frame.simStepCount),
       targetVisualMetrics: frames.map(frame => frame.target.visualMetrics),
+      flowDebugAuthorities: frames.map(frame => frame.flowDebug.authority),
       manifestPath,
       validation,
     };
