@@ -4,8 +4,10 @@ import { readFile } from 'node:fs/promises';
 const core = await readFile(new URL('../volume-core.js', import.meta.url), 'utf8');
 const page = await readFile(new URL('../index.html', import.meta.url), 'utf8');
 const witness = await readFile(new URL('../volume-witness.mjs', import.meta.url), 'utf8');
+const liveModel = await readFile(new URL('../models/boundary-splat-attribute/live-support-h64-v0/boundary-splat-attribute-model.generated.js', import.meta.url), 'utf8').catch(() => '');
 
-assert.match(core, /import\s*\{[\s\S]*BOUNDARY_SPLAT_ATTRIBUTE_MODEL_IDENTITY[\s\S]*BOUNDARY_SPLAT_ATTRIBUTE_MODEL_WGSL[\s\S]*\}\s*from\s*['"]\.\/models\/boundary-splat-attribute\/analytic-teacher-h64-v0\/boundary-splat-attribute-model\.generated\.js['"]/, 'live renderer imports the compiler-generated model module');
+assert.match(core, /import\s*\{[\s\S]*BOUNDARY_SPLAT_ATTRIBUTE_MODEL_IDENTITY[\s\S]*BOUNDARY_SPLAT_ATTRIBUTE_MODEL_WGSL[\s\S]*\}\s*from\s*['"]\.\/models\/boundary-splat-attribute\/live-support-h64-v0\/boundary-splat-attribute-model\.generated\.js['"]/, 'live renderer imports the real-support compiler-generated model module');
+assert.match(liveModel, /sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472/, 'live route contract pins the corrected radius-multiplier model identity');
 assert.match(core, /BOUNDARY_SPLAT_LEARNED_RENDERER_IDENTITY\s*=\s*'live-boundary-sidecar-learned-attribute-splats-v0'/, 'learned route has a distinct effective renderer identity');
 assert.match(core, /\$\{BOUNDARY_SPLAT_ATTRIBUTE_MODEL_WGSL\}/, 'generated inference WGSL is compiled into the live splat shader');
 assert.match(core, /applyBoundarySplatAttributeHook[\s\S]*boundarySplatCamera\.controls\.y[\s\S]*inferBoundarySplatAttributes\(features\)/, 'hook selects generated inference only when learned mode is effective');
