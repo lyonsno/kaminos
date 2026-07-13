@@ -23,8 +23,8 @@ assert.throws(
 
 assert.doesNotMatch(
   html,
-  /cooperative-fixed-16ms-donation/,
-  'The fixed-donation diagnostic profile must not become another operator-facing Crucible mode',
+  /cooperative-(?:fixed-16ms-donation|spn-fusion-tiles-524288)/,
+  'Invocation-only scheduler experiments must not become operator-facing Crucible modes',
 );
 
 assert.doesNotMatch(

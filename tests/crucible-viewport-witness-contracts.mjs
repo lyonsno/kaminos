@@ -47,11 +47,68 @@ assert.deepEqual(
   },
   'fixed-boundary experiment must not change chunk granularity or silently inherit ordinary Friendly donations',
 );
+assert.deepEqual(
+  JSON.parse(JSON.stringify(expectedSchedulerForProfile('cooperative-spn-fusion-tiles-524288'))),
+  {
+    mode: 'cooperative',
+    spnPatchChunkSize: 1,
+    yieldMs: 3,
+    waitForSubmittedWorkDone: true,
+    gaussianPhaseYieldMs: 4,
+    vitBlockChunkSize: 2,
+    cpuChunkItems: 16384,
+    routeTailYieldMs: 3,
+    spnFusionChunkItems: 524288,
+  },
+  'SPN fusion tiling experiment must add only the reviewed output tile size to ordinary Friendly',
+);
 assert.throws(
   () => expectedSchedulerForProfile('cooperative-typo'),
   /Unsupported --scheduler-profile/,
   'unknown scheduler profiles must fail before a GPU run instead of falling back',
 );
+
+const spnFusionValidationSource = witness.match(
+  /function validateSpnFusionTileEvidence\([\s\S]*?\n}/,
+);
+assert.ok(spnFusionValidationSource, 'witness must expose a testable SPN fusion tile authority gate');
+const validateSpnFusionTileEvidence = vm.runInNewContext(`(${spnFusionValidationSource[0]})`);
+const validSpnFusionEvidence = {
+  schedulerBoundaryAssertions: [{
+    field: 'phaseChunkSize.spnFusionOutputItems',
+    requested: 524288,
+    effective: 524288,
+    status: 'verified',
+    observedCount: 2,
+  }],
+  spnFusionTileEvents: [
+    { block: 'upsample0.layer-1.output-chunk-0', parentBlock: 'upsample0.layer-1', outputChunkIndex: 0, outputChunkCount: 2, outputStart: 0, outputEnd: 524288, outputCount: 524288, totalOutputItems: 1048576 },
+    { block: 'upsample0.layer-1', parentBlock: 'upsample0', outputChunkIndex: 1, outputChunkCount: 2, outputStart: 524288, outputEnd: 1048576, outputCount: 524288, totalOutputItems: 1048576 },
+  ],
+};
+assert.deepEqual(
+  JSON.parse(JSON.stringify(validateSpnFusionTileEvidence({
+    profileId: 'cooperative-spn-fusion-tiles-524288',
+    expectedChunkItems: 524288,
+    fullRoute: validSpnFusionEvidence,
+  }))),
+  [],
+  'verified requested/effective config and contiguous multi-range events must admit the experiment',
+);
+for (const [mutate, expectedFailure] of [
+  [evidence => { evidence.schedulerBoundaryAssertions = []; }, 'boundary-assertion-missing'],
+  [evidence => { evidence.schedulerBoundaryAssertions[0].status = 'unverified'; }, 'boundary-assertion-unverified'],
+  [evidence => { evidence.spnFusionTileEvents = evidence.spnFusionTileEvents.slice(0, 1); }, 'multi-range-events-missing'],
+  [evidence => { evidence.spnFusionTileEvents[1].outputStart = 500000; }, 'range-coverage-invalid'],
+]) {
+  const evidence = JSON.parse(JSON.stringify(validSpnFusionEvidence));
+  mutate(evidence);
+  assert.ok(validateSpnFusionTileEvidence({
+    profileId: 'cooperative-spn-fusion-tiles-524288',
+    expectedChunkItems: 524288,
+    fullRoute: evidence,
+  }).includes(expectedFailure), expectedFailure);
+}
 
 const replayValidationSource = witness.match(
   /function validatedReplayCastReport\([\s\S]*?\n}\n(?=\nfunction )/,

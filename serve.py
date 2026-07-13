@@ -200,6 +200,44 @@ SHARP_SCHEDULER_PROFILES = {
             "unsupported": ["phaseChunkSize.vitBlock"],
         },
     },
+    "cooperative-spn-fusion-tiles-524288": {
+        "id": "cooperative-spn-fusion-tiles-524288",
+        "operatorVisible": False,
+        "operatorLabel": "SPN fusion tile experiment",
+        "label": "Cooperative SHARP with 524288-item SPN fusion output tiles",
+        "scheduler": {
+            "mode": "cooperative",
+            "spnPatchChunkSize": 1,
+            "yieldMs": 3,
+            "waitForSubmittedWorkDone": True,
+            "gaussianPhaseYieldMs": 4,
+            "vitBlockChunkSize": 2,
+            "cpuChunkItems": 16384,
+            "routeTailYieldMs": 3,
+            "spnFusionChunkItems": 524288,
+        },
+        "env": {
+            "KAMINOS_SHARP_WEBGPU_SCHEDULER": json.dumps({
+                "mode": "cooperative",
+                "spnPatchChunkSize": 1,
+                "yieldMs": 3,
+                "waitForSubmittedWorkDone": True,
+                "gaussianPhaseYieldMs": 4,
+                "vitBlockChunkSize": 2,
+                "cpuChunkItems": 16384,
+                "routeTailYieldMs": 3,
+                "spnFusionChunkItems": 524288,
+            }, separators=(",", ":")),
+        },
+        "unsupportedFields": ["vitBlockChunkSize"],
+        "proofExpectation": {
+            "schedulerVerification": "observed-events-plus-boundary-assertions",
+            "comparisonRole": "spn-fusion-output-tile-experiment",
+            "requiredBoundary": "phaseChunkSize.spnFusionOutputItems",
+            "minimumRangeEvents": 2,
+            "unsupported": ["phaseChunkSize.vitBlock"],
+        },
+    },
 }
 
 

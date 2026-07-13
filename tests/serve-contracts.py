@@ -140,6 +140,22 @@ def test_fixed_16ms_donation_profile_changes_only_post_drain_donation():
     assert fixed_scheduler["cpuChunkItems"] == 16384
 
 
+def test_spn_fusion_tile_profile_changes_only_fusion_output_granularity():
+    baseline = resolve_sharp_scheduler_profile("cooperative-spn-gaussian")
+    tiled = resolve_sharp_scheduler_profile("cooperative-spn-fusion-tiles-524288")
+
+    assert tiled["id"] == "cooperative-spn-fusion-tiles-524288"
+    assert tiled["operatorVisible"] is False
+    baseline_scheduler = json.loads(baseline["env"]["KAMINOS_SHARP_WEBGPU_SCHEDULER"])
+    tiled_scheduler = json.loads(tiled["env"]["KAMINOS_SHARP_WEBGPU_SCHEDULER"])
+    assert tiled_scheduler == {
+        **baseline_scheduler,
+        "spnFusionChunkItems": 524288,
+    }
+    assert tiled["proofExpectation"]["requiredBoundary"] == "phaseChunkSize.spnFusionOutputItems"
+    assert tiled["proofExpectation"]["minimumRangeEvents"] == 2
+
+
 def test_sharp_breathing_room_unknown_profile_fails_instead_of_falling_back():
     try:
         resolve_sharp_scheduler_profile("friendly-but-typo")
@@ -808,6 +824,7 @@ if __name__ == "__main__":
     test_forge_host_registry_snapshot_fallback_is_not_live()
     test_sharp_breathing_room_profiles_are_named_operator_routes_with_explicit_env()
     test_fixed_16ms_donation_profile_changes_only_post_drain_donation()
+    test_spn_fusion_tile_profile_changes_only_fusion_output_granularity()
     test_sharp_breathing_room_unknown_profile_fails_instead_of_falling_back()
     test_pipeline_witness_env_for_payload_preserves_requested_scheduler_profile()
     test_image_inbox_webp_read_serves_bytes_without_json_fallback()

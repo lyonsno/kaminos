@@ -20,7 +20,7 @@ for (let i = 2; i < process.argv.length; i += 1) {
   }
 }
 
-const usage = 'crucible-viewport-witness.mjs --url <kaminos-url> --out <screenshot.png> --report <report.json> [--cdp-port <port>] [--fire-friendly] [--replay-cast-report <completed-pipeline-witness.json>] [--scheduler-profile <cooperative-spn-gaussian|cooperative-fixed-16ms-donation>] [--source-asset-id <indexed-asset-id>] [--fire-presentation <full-volume|hybrid-smoke-preview>] [--capture-in-flight] [--in-flight-out <screenshot.png>] [--in-flight-settle-ms <milliseconds>] [--in-flight-max-observation-gap-ms <milliseconds>] [--expected-sharp-revision <sha>]';
+const usage = 'crucible-viewport-witness.mjs --url <kaminos-url> --out <screenshot.png> --report <report.json> [--cdp-port <port>] [--fire-friendly] [--replay-cast-report <completed-pipeline-witness.json>] [--scheduler-profile <cooperative-spn-gaussian|cooperative-fixed-16ms-donation|cooperative-spn-fusion-tiles-524288>] [--source-asset-id <indexed-asset-id>] [--fire-presentation <full-volume|hybrid-smoke-preview>] [--capture-in-flight] [--in-flight-out <screenshot.png>] [--in-flight-settle-ms <milliseconds>] [--in-flight-max-observation-gap-ms <milliseconds>] [--expected-sharp-revision <sha>]';
 if (args.has('help')) {
   console.log(usage);
   process.exit(0);
@@ -36,7 +36,9 @@ const replayCastReportPath = args.get('replay-cast-report') || null;
 const schedulerProfileId = args.get('scheduler-profile') || 'cooperative-spn-gaussian';
 const schedulerProfileLabel = schedulerProfileId === 'cooperative-fixed-16ms-donation'
   ? 'Fixed 16 ms donation test'
-  : 'Friendly';
+  : schedulerProfileId === 'cooperative-spn-fusion-tiles-524288'
+    ? 'SPN fusion tile experiment'
+    : 'Friendly';
 const requestedSourceAssetId = args.get('source-asset-id') || null;
 const requestedFirePresentation = args.get('fire-presentation') || 'full-volume';
 const captureInFlight = args.has('capture-in-flight');
@@ -83,7 +85,70 @@ function expectedSchedulerForProfile(profileId) {
   if (profileId === 'cooperative-fixed-16ms-donation') {
     return { ...common, yieldMs: 16, gaussianPhaseYieldMs: 16, routeTailYieldMs: 16 };
   }
+  if (profileId === 'cooperative-spn-fusion-tiles-524288') {
+    return { ...common, yieldMs: 3, gaussianPhaseYieldMs: 4, routeTailYieldMs: 3, spnFusionChunkItems: 524288 };
+  }
   throw new Error(`Unsupported --scheduler-profile ${profileId}`);
+}
+
+function validateSpnFusionTileEvidence({ profileId, expectedChunkItems, fullRoute }) {
+  if (profileId !== 'cooperative-spn-fusion-tiles-524288') return [];
+  const failures = [];
+  const assertion = (fullRoute?.schedulerBoundaryAssertions || []).find(candidate =>
+    candidate?.field === 'phaseChunkSize.spnFusionOutputItems'
+  );
+  if (!assertion) {
+    failures.push('boundary-assertion-missing');
+  } else {
+    if (assertion.status !== 'verified') failures.push('boundary-assertion-unverified');
+    if (assertion.requested !== expectedChunkItems || assertion.effective !== expectedChunkItems) {
+      failures.push('boundary-assertion-config-mismatch');
+    }
+    if (!Number.isInteger(assertion.observedCount) || assertion.observedCount < 2) {
+      failures.push('boundary-assertion-multi-range-count-missing');
+    }
+  }
+
+  const events = (fullRoute?.spnFusionTileEvents || []).filter(event =>
+    Number.isInteger(event?.outputChunkIndex)
+    && Number.isInteger(event?.outputChunkCount)
+    && event.outputChunkCount > 1
+    && Number.isInteger(event?.outputStart)
+    && Number.isInteger(event?.outputEnd)
+    && Number.isInteger(event?.outputCount)
+    && Number.isInteger(event?.totalOutputItems)
+  );
+  if (events.length < 2) {
+    failures.push('multi-range-events-missing');
+    return [...new Set(failures)];
+  }
+
+  const groups = new Map();
+  for (const event of events) {
+    const block = String(event.block || '').replace(/\.output-chunk-\d+$/, '');
+    if (!groups.has(block)) groups.set(block, []);
+    groups.get(block).push(event);
+  }
+  const completeGroup = [...groups.values()].some(group => {
+    const ordered = [...group].sort((a, b) => a.outputChunkIndex - b.outputChunkIndex);
+    const expectedCount = ordered[0]?.outputChunkCount;
+    const totalOutputItems = ordered[0]?.totalOutputItems;
+    if (ordered.length !== expectedCount || expectedCount < 2) return false;
+    let cursor = 0;
+    for (let index = 0; index < ordered.length; index += 1) {
+      const event = ordered[index];
+      if (event.outputChunkIndex !== index
+        || event.outputChunkCount !== expectedCount
+        || event.totalOutputItems !== totalOutputItems
+        || event.outputStart !== cursor
+        || event.outputEnd - event.outputStart !== event.outputCount
+        || event.outputCount > expectedChunkItems) return false;
+      cursor = event.outputEnd;
+    }
+    return cursor === totalOutputItems;
+  });
+  if (!completeGroup) failures.push('range-coverage-invalid');
+  return [...new Set(failures)];
 }
 
 function validatedReplayCastReport(document, reportPath) {
@@ -520,6 +585,29 @@ function projectFriendlyFiringEvidence({ browserFiringEvidence, pipelineReport }
   const adapter = stage.effectiveRoute?.adapterReport || {};
   const backgroundHeartbeat = adapter.backgroundHeartbeat || null;
   const schedulerEvents = adapter.breathingRoom?.telemetry?.events || [];
+  const schedulerBoundaryAssertions = adapter.schedulerVerification?.boundaryAssertions
+    || adapter.breathingRoom?.boundaryAssertions
+    || adapter.breathingRoom?.telemetry?.boundaryAssertions
+    || [];
+  const spnFusionTileEvents = schedulerEvents
+    .filter(event => event?.phase === 'spn-fusion'
+      && event?.kind === 'chunk-start'
+      && (event?.role === 'spn-fusion-output-chunk' || event?.chunkRole === 'spn-fusion-output-chunk')
+      && Number(event?.outputChunkCount || 0) > 1)
+    .map(event => ({
+      phase: event.phase,
+      boundary: event.boundary,
+      block: event.block,
+      parentBlock: event.parentBlock,
+      role: event.role,
+      chunkRole: event.chunkRole,
+      outputChunkIndex: event.outputChunkIndex,
+      outputChunkCount: event.outputChunkCount,
+      outputStart: event.outputStart,
+      outputEnd: event.outputEnd,
+      outputCount: event.outputCount,
+      totalOutputItems: event.totalOutputItems,
+    }));
   const routeTailEvents = schedulerEvents.filter(event => event?.phase === 'route-tail');
   const prepSteps = new Set(['depth-normalize', 'depth-min', 'depth-rescale', 'base-disparity', 'base-grid', 'base-color']);
   const prepEvents = routeTailEvents.filter(event => prepSteps.has(event?.step) && event?.role === 'cpu-materialization-chunk');
@@ -597,6 +685,8 @@ function projectFriendlyFiringEvidence({ browserFiringEvidence, pipelineReport }
     effectiveSharpRevision: adapter.revision || adapter.backend?.revision || null,
     requestedScheduler: adapter.breathingRoom?.requestedScheduler || null,
     effectiveScheduler: adapter.breathingRoom?.effectiveScheduler || null,
+    schedulerBoundaryAssertions,
+    spnFusionTileEvents,
     routeTailCheckpointEvents: {
       total: routeTailEvents.length,
       prep: prepEvents.length,
@@ -1136,6 +1226,16 @@ try {
           effectiveScheduler: state.fullRoute.effectiveScheduler,
         })}`);
       }
+    }
+    const spnFusionTileFailures = validateSpnFusionTileEvidence({
+      profileId: schedulerProfileId,
+      expectedChunkItems: expectedScheduler.spnFusionChunkItems,
+      fullRoute: state.fullRoute,
+    });
+    state.fullRoute.spnFusionTileFailures = spnFusionTileFailures;
+    lastTrustworthyEvidence = { ...lastTrustworthyEvidence, fullRoute: state.fullRoute };
+    if (spnFusionTileFailures.length) {
+      throw new Error(`Friendly firing did not prove SPN fusion output tiling: ${spnFusionTileFailures.join(', ')}`);
     }
     if (state.fullRoute.routeTailCheckpointEvents?.prep < 6 || state.fullRoute.routeTailCheckpointEvents?.gaussian < 1) {
       throw new Error(`Friendly firing is missing prep or Gaussian route-tail checkpoints: ${JSON.stringify(state.fullRoute.routeTailCheckpointEvents)}`);

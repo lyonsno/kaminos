@@ -213,6 +213,9 @@ function phaseChunkSizeFromScheduler(scheduler = {}) {
   if (Number.isInteger(scheduler.spnPatchChunkSize) && scheduler.spnPatchChunkSize > 0) {
     phaseChunkSize.spnPatch = scheduler.spnPatchChunkSize;
   }
+  if (Number.isInteger(scheduler.spnFusionChunkItems) && scheduler.spnFusionChunkItems > 0) {
+    phaseChunkSize.spnFusionOutputItems = scheduler.spnFusionChunkItems;
+  }
   if (Number.isInteger(scheduler.vitBlockChunkSize) && scheduler.vitBlockChunkSize > 0) {
     phaseChunkSize.vitBlock = scheduler.vitBlockChunkSize;
   }

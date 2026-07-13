@@ -153,6 +153,11 @@ assert.match(wrapperSource, /computePlyBounds/, 'wrapper must derive autocrop ev
 assert.match(wrapperSource, /KAMINOS_PIPELINE_AUTOCROP_EVIDENCE/, 'wrapper must accept a caller-owned autocrop evidence path');
 assert.match(wrapperSource, /Browser\.setDownloadBehavior|setDownloadBehavior/, 'wrapper must write PLY through browser download behavior instead of stdout copy-paste');
 assert.match(wrapperSource, /KAMINOS_SHARP_WEBGPU_SCHEDULER/, 'wrapper must accept explicit SHARP-WebGPU scheduler config');
+assert.match(
+  wrapperSource,
+  /phaseChunkSize\.spnFusionOutputItems\s*=\s*scheduler\.spnFusionChunkItems/,
+  'adapter scheduler composition must preserve SPN fusion output tile size under its phase-specific evidence field',
+);
 assert.match(wrapperSource, /KAMINOS_SHARP_WEBGPU_SCHEDULER_MODE/, 'wrapper must accept Wake-friendly named scheduler modes');
 assert.match(wrapperSource, /--scheduler-mode/, 'wrapper must expose named scheduler modes through CLI as well as env');
 assert.match(wrapperSource, /sharpScheduler/, 'wrapper must pass scheduler config into the SHARP-WebGPU browser route');
