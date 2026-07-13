@@ -64,6 +64,74 @@ assert.deepEqual(
 assert.equal(captureReceipts[0].firingId, 'firing-capture-failure');
 assert.equal(captureReceipts[0].effectiveFirePresentation.candidateCount, 512);
 assert.equal(captureReceipts[1].error, 'simulated CDP screenshot failure');
+
+const captureReadinessSource = witness.match(
+  /function advanceInFlightCaptureReadiness\([\s\S]*?\n}\n(?=\nasync function attemptInFlightHybridCapture)/,
+);
+assert.ok(captureReadinessSource, 'witness must expose a testable settled-capture readiness state machine');
+const advanceInFlightCaptureReadiness = vm.runInNewContext(`(${captureReadinessSource[0]})`);
+const settlingReadiness = advanceInFlightCaptureReadiness({
+  admissible: true,
+  nowMs: 1000,
+  eligibleSinceMs: null,
+  settleMs: 3000,
+});
+assert.equal(settlingReadiness.status, 'settling-effective-hybrid');
+assert.equal(settlingReadiness.ready, false);
+assert.equal(settlingReadiness.eligibleSinceMs, 1000);
+assert.equal(
+  advanceInFlightCaptureReadiness({
+    admissible: true,
+    nowMs: 3999,
+    eligibleSinceMs: settlingReadiness.eligibleSinceMs,
+    settleMs: 3000,
+  }).ready,
+  false,
+  'transient capture must not occur before the full settle window',
+);
+assert.equal(
+  advanceInFlightCaptureReadiness({
+    admissible: true,
+    nowMs: 4000,
+    eligibleSinceMs: settlingReadiness.eligibleSinceMs,
+    settleMs: 3000,
+  }).ready,
+  true,
+);
+assert.equal(
+  advanceInFlightCaptureReadiness({
+    admissible: false,
+    nowMs: 2500,
+    eligibleSinceMs: settlingReadiness.eligibleSinceMs,
+    settleMs: 3000,
+  }).eligibleSinceMs,
+  null,
+  'losing admissible hybrid evidence must reset the settle window',
+);
+
+const cadenceAcceptanceSource = witness.match(
+  /function classifyCadenceAcceptance\([\s\S]*?\n}\n(?=\nfunction advanceInFlightCaptureReadiness)/,
+);
+assert.ok(cadenceAcceptanceSource, 'witness must expose a testable visual-versus-performance acceptance split');
+const classifyCadenceAcceptance = vm.runInNewContext(`(${cadenceAcceptanceSource[0]})`);
+const cadenceFailures = [{ kind: 'uninstrumented-frame-gap', durationMs: 91.9 }];
+const visualCadence = classifyCadenceAcceptance({
+  captureInFlight: true,
+  failures: cadenceFailures,
+});
+assert.equal(visualCadence.status, 'excluded-observer-effect');
+assert.equal(visualCadence.blocking, false);
+assert.equal(visualCadence.failures.length, 1, 'visual runs must retain cadence failures even when they do not block visual acceptance');
+const strictCadence = classifyCadenceAcceptance({
+  captureInFlight: false,
+  failures: cadenceFailures,
+});
+assert.equal(strictCadence.status, 'failed');
+assert.equal(strictCadence.blocking, true, 'uncaptured runs must retain strict cadence acceptance');
+assert.equal(
+  classifyCadenceAcceptance({ captureInFlight: false, failures: [] }).status,
+  'accepted',
+);
 const releaseValidatorSource = witness.match(
   /function validateVolumeReleaseEvidence\([\s\S]*?\n}\n(?=\nfunction validateRequestedFirePresentation)/,
 );
@@ -244,8 +312,8 @@ for (const [pattern, message] of [
   [/castButtonDisabled/, 'Witness must record whether the cast action truthfully has a target'],
   [/pointerEvents/, 'Witness must prove the workroom is hittable instead of visually clickable only'],
   [/Page\.captureScreenshot/, 'Witness must capture the actual browser viewport'],
-  [/routeState\.effectiveFirePresentation[\s\S]*validateRequestedFirePresentation[\s\S]*attemptInFlightHybridCapture\(\{[\s\S]*authorization:[\s\S]*effectiveFirePresentation/, 'Transient capture must wait for executable effective hybrid presentation validation'],
-  [/candidateCount > 0/, 'Transient hybrid capture must require a nonempty live candidate set'],
+  [/validateRequestedFirePresentation\(\{[\s\S]*effective: routeState\.effectiveFirePresentation[\s\S]*advanceInFlightCaptureReadiness[\s\S]*attemptInFlightHybridCapture\(\{[\s\S]*authorization:[\s\S]*effectiveFirePresentation/, 'Transient capture must wait for executable effective hybrid presentation validation'],
+  [/candidateCount <= 0/, 'Transient hybrid capture must require a nonempty live candidate set'],
   [/inFlightCapture[\s\S]*requestedFirePresentation[\s\S]*effectiveFirePresentation/, 'Transient capture evidence must preserve requested/effective presentation identity'],
   [/observerEffect[\s\S]*CDP viewport capture may perturb foreground cadence/, 'Transient visual evidence must disclose its cadence observer effect'],
   [/compactWitnessSummary\([\s\S]*console\.log\(JSON\.stringify\(terminalSummary/, 'Successful stdout must emit only the compact locator summary'],

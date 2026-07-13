@@ -20,7 +20,7 @@ for (let i = 2; i < process.argv.length; i += 1) {
   }
 }
 
-const usage = 'crucible-viewport-witness.mjs --url <kaminos-url> --out <screenshot.png> --report <report.json> [--cdp-port <port>] [--fire-friendly] [--fire-presentation <full-volume|hybrid-smoke-preview>] [--capture-in-flight] [--in-flight-out <screenshot.png>] [--expected-sharp-revision <sha>]';
+const usage = 'crucible-viewport-witness.mjs --url <kaminos-url> --out <screenshot.png> --report <report.json> [--cdp-port <port>] [--fire-friendly] [--fire-presentation <full-volume|hybrid-smoke-preview>] [--capture-in-flight] [--in-flight-out <screenshot.png>] [--in-flight-settle-ms <milliseconds>] [--expected-sharp-revision <sha>]';
 if (args.has('help')) {
   console.log(usage);
   process.exit(0);
@@ -37,6 +37,7 @@ const captureInFlight = args.has('capture-in-flight');
 const outParts = path.parse(out);
 const inFlightOut = args.get('in-flight-out')
   || path.join(outParts.dir, `${outParts.name}-in-flight${outParts.ext || '.png'}`);
+const inFlightSettleMs = Number(args.get('in-flight-settle-ms') ?? 3000);
 const fireTimeoutMs = Number(args.get('fire-timeout-ms') || 420000);
 const expectedSharpRevision = args.get('expected-sharp-revision') || null;
 const userDataDir = mkdtempSync(path.join(tmpdir(), 'kaminos-crucible-viewport-'));
@@ -52,6 +53,7 @@ let inFlightCapture = {
   requested: captureInFlight,
   status: captureInFlight ? 'awaiting-effective-hybrid' : 'not-requested',
   path: captureInFlight ? inFlightOut : null,
+  settleMs: captureInFlight ? inFlightSettleMs : null,
   observerEffect: captureInFlight
     ? 'CDP viewport capture may perturb foreground cadence; this visual run must not close performance acceptance.'
     : null,
@@ -63,6 +65,9 @@ if (!['full-volume', 'hybrid-smoke-preview'].includes(requestedFirePresentation)
 }
 if (captureInFlight && (!fireFriendly || requestedFirePresentation !== 'hybrid-smoke-preview')) {
   throw new Error('--capture-in-flight requires --fire-friendly with --fire-presentation hybrid-smoke-preview');
+}
+if (!Number.isFinite(inFlightSettleMs) || inFlightSettleMs < 0) {
+  throw new Error('--in-flight-settle-ms must be a finite nonnegative number');
 }
 
 function sleep(ms) {
@@ -159,6 +164,50 @@ async function captureViewportPng(ws, outputPath) {
   return png;
 }
 
+function classifyCadenceAcceptance({ captureInFlight, failures }) {
+  const retainedFailures = Array.isArray(failures) ? failures : [];
+  if (captureInFlight) {
+    return {
+      status: 'excluded-observer-effect',
+      blocking: false,
+      failures: retainedFailures,
+      reason: 'CDP visual capture may perturb foreground cadence; use an uncaptured run for performance acceptance.',
+    };
+  }
+  return {
+    status: retainedFailures.length ? 'failed' : 'accepted',
+    blocking: retainedFailures.length > 0,
+    failures: retainedFailures,
+    reason: retainedFailures.length ? 'Strict uncaptured cadence acceptance failed.' : null,
+  };
+}
+
+function advanceInFlightCaptureReadiness({
+  admissible,
+  nowMs,
+  eligibleSinceMs,
+  settleMs,
+}) {
+  if (!admissible) {
+    return {
+      status: 'awaiting-effective-hybrid',
+      ready: false,
+      eligibleSinceMs: null,
+      settledForMs: 0,
+      settleMs,
+    };
+  }
+  const effectiveEligibleSinceMs = Number.isFinite(eligibleSinceMs) ? eligibleSinceMs : nowMs;
+  const settledForMs = Math.max(0, nowMs - effectiveEligibleSinceMs);
+  return {
+    status: settledForMs >= settleMs ? 'capture-authorized' : 'settling-effective-hybrid',
+    ready: settledForMs >= settleMs,
+    eligibleSinceMs: effectiveEligibleSinceMs,
+    settledForMs,
+    settleMs,
+  };
+}
+
 async function attemptInFlightHybridCapture({
   ws,
   outputPath,
@@ -228,6 +277,7 @@ function compactWitnessSummary({ state, out, inFlightCapture, reportPath }) {
           maxFrameGapMs: foreground.maxFrameGapMs,
         }
       : null,
+    cadenceAcceptance: route?.cadenceAcceptance || null,
     inFlightCapture,
   };
 }
@@ -539,6 +589,7 @@ try {
     const deadline = Date.now() + fireTimeoutMs;
     let observedRunning = false;
     let routeState = null;
+    let inFlightHybridEligibleSinceMs = null;
     while (Date.now() < deadline) {
       await sleep(1000);
       routeState = await evaluate(ws, `(() => ({
@@ -551,17 +602,28 @@ try {
         effectiveFirePresentation: window.__kaminosSharpBreathingRoomKilnFireState?.volumeDebugState?.firePresentation || null,
       }))()`);
       if (routeState.runningProfileId || routeState.status === 'running') observedRunning = true;
-      if (captureInFlight
-        && inFlightCapture.status === 'awaiting-effective-hybrid'
-        && routeState.firePhase === 'burning'
-        && routeState.effectiveFirePresentation?.candidateCount > 0) {
+      if (captureInFlight && !['captured', 'capture-attempting', 'capture-failed'].includes(inFlightCapture.status)) {
         const presentationFailures = validateRequestedFirePresentation({
           requestedPresentation: requestedFirePresentation,
           firingId: routeState.firingId,
           expected: routeState.expectedFirePresentation,
           effective: routeState.effectiveFirePresentation,
         });
-        if (!presentationFailures.length) {
+        const readiness = advanceInFlightCaptureReadiness({
+          admissible: routeState.firePhase === 'burning' && presentationFailures.length === 0,
+          nowMs: Date.now(),
+          eligibleSinceMs: inFlightHybridEligibleSinceMs,
+          settleMs: inFlightSettleMs,
+        });
+        inFlightHybridEligibleSinceMs = readiness.eligibleSinceMs;
+        inFlightCapture = {
+          ...inFlightCapture,
+          ...readiness,
+          presentationFailures,
+          lastRouteState: routeState,
+        };
+        lastTrustworthyEvidence = { ...lastTrustworthyEvidence, inFlightCapture };
+        if (readiness.ready) {
           phase = 'capturing-in-flight-hybrid';
           inFlightCapture = await attemptInFlightHybridCapture({
             ws,
@@ -777,9 +839,6 @@ try {
     )) {
       throw new Error(`Friendly firing is missing truthful row-batched Gaussian CPU intervals: ${JSON.stringify(state.fullRoute.gaussianCpuDutyIntervals)}`);
     }
-    if (state.fullRoute.maxGaussianDutyMs >= 50) {
-      throw new Error(`Friendly firing Gaussian CPU duty missed the sub-50ms target: ${state.fullRoute.maxGaussianDutyMs}ms`);
-    }
     const composePreparationSteps = new Set(state.fullRoute.composePreparationIntervals?.map(interval => interval.step) || []);
     if (composePreparationSteps.size !== 6 || [...['depth-normalize', 'depth-min', 'depth-rescale', 'base-disparity', 'base-grid', 'base-color']].some(step => !composePreparationSteps.has(step))) {
       throw new Error(`Friendly firing is missing bounded compose preparation intervals: ${JSON.stringify(state.fullRoute.composePreparationIntervals)}`);
@@ -797,8 +856,23 @@ try {
       || !Number.isFinite(finalizeInterval.intervalStartMs) || !Number.isFinite(finalizeInterval.intervalEndMs)) {
       throw new Error(`Friendly firing is missing its non-causal inference finalization envelope: ${JSON.stringify(finalizeInterval)}`);
     }
-    if (state.fullRoute.uninstrumentedGapsAtOrAbove50Ms?.length) {
-      throw new Error(`Friendly firing retains uninstrumented frame-starvation gaps: ${JSON.stringify(state.fullRoute.uninstrumentedGapsAtOrAbove50Ms)}`);
+    const cadenceFailures = [];
+    if (state.fullRoute.maxGaussianDutyMs >= 50) {
+      cadenceFailures.push({
+        kind: 'gaussian-cpu-duty-at-or-above-50ms',
+        durationMs: state.fullRoute.maxGaussianDutyMs,
+      });
+    }
+    for (const gap of state.fullRoute.uninstrumentedGapsAtOrAbove50Ms || []) {
+      cadenceFailures.push({ kind: 'uninstrumented-frame-gap', ...gap });
+    }
+    state.fullRoute.cadenceAcceptance = classifyCadenceAcceptance({
+      captureInFlight,
+      failures: cadenceFailures,
+    });
+    lastTrustworthyEvidence = { ...lastTrustworthyEvidence, fullRoute: state.fullRoute };
+    if (state.fullRoute.cadenceAcceptance.blocking) {
+      throw new Error(`Friendly firing failed strict cadence acceptance: ${JSON.stringify(state.fullRoute.cadenceAcceptance.failures)}`);
     }
     if (!state.fullRoute.output?.sha256 || state.fullRoute.output.status !== 'real') throw new Error('Friendly firing did not preserve a real hashed output');
     const volumeReleaseFailures = validateVolumeReleaseEvidence(state.fullRoute);
