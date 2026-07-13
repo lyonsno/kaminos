@@ -8,10 +8,15 @@ import { compileBoundarySplatAttributeModel } from '../boundary-splat-attribute-
 
 import {
   alignBoundarySplatRowsByWorldPosition,
+  quotaRankedBirthOpacityScale,
   renderBoundarySplatRowsPng,
   validateBoundarySplatPhaseRenderFrame,
   writeBoundarySplatPhaseRenderWitness,
 } from '../boundary-splat-phase-render-witness.mjs';
+
+assert.equal(quotaRankedBirthOpacityScale(0.82, 0.45), 0.45);
+assert.equal(quotaRankedBirthOpacityScale(0.23, 0.45), 0.23);
+assert.equal(quotaRankedBirthOpacityScale(0.01, 0.45), 0.05);
 
 function splat(position, color, opacity = 0.75, radius = 0.18) {
   return [
@@ -411,6 +416,25 @@ try {
     'calibrated-survival-margin-minus-calibrated-death-margin',
   );
   assert.equal(quotaRankedReport.phaseModel.supportDecision.birthScore, 'calibrated-birth-margin');
+  assert.equal(
+    quotaRankedReport.phaseModel.supportDecision.birthOpacity.authority,
+    'raw-birth-head-probability-capped-by-calibrated-precision-v0',
+  );
+  assert.equal(
+    quotaRankedReport.phaseModel.supportDecision.birthOpacity.maxAbsAppliedScaleError,
+    0,
+    'quota-selected birth opacity must follow the named raw-probability rule exactly',
+  );
+  if (quotaRankedReport.phaseModel.supportDecision.birthOpacity.selectedBirthCount > 0) {
+    assert.equal(
+      quotaRankedReport.phaseModel.supportDecision.birthOpacity.minimumAppliedScale,
+      quotaRankedBirthOpacityScale(
+        quotaRankedReport.phaseModel.supportDecision.birthOpacity.minimumRawProbability,
+        quotaRankedReport.phaseModel.supportDecision.birthOpacity.calibratedPrecisionCap,
+      ),
+      'quota-selected birth opacity must be derived from raw probability rather than ranking margin',
+    );
+  }
   assert.equal(
     quotaRankedReport.phaseModel.supportDecision.selectedSourceSupport,
     Math.min(

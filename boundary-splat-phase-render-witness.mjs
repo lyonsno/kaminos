@@ -15,6 +15,13 @@ export const BOUNDARY_SPLAT_CAPTURE_AUTHORITY = 'intercepted-live-boundary-splat
 const SPLAT_STRIDE_FLOATS = 12;
 const BACKGROUND = [0.004, 0.005, 0.006];
 
+export function quotaRankedBirthOpacityScale(rawBirthProbability, calibratedPrecision) {
+  if (!Number.isFinite(rawBirthProbability) || !Number.isFinite(calibratedPrecision)) {
+    throw new Error('quota-ranked birth opacity requires finite probability and precision');
+  }
+  return Math.max(0.05, Math.min(rawBirthProbability, calibratedPrecision));
+}
+
 function finiteArray(values, length, label) {
   if (!Array.isArray(values) || values.length !== length || values.some(value => !Number.isFinite(value))) {
     throw new Error(`${label} must contain ${length} finite numbers`);
@@ -1472,6 +1479,7 @@ async function runLocalGridOccupancyRenderWitness(context) {
   }
   const predictedRows = [];
   const predictedFeatureByKey = new Map();
+  const birthOpacityByKey = new Map();
   let predictedDeaths = 0;
   for (const [key, site] of predictionSites) {
     const input = makeLocalGridOccupancyInput(site.position, sourceRows, siteStats, offset, maxAbsOffset, gridStep);
@@ -1497,7 +1505,14 @@ async function runLocalGridOccupancyRenderWitness(context) {
     const birthPrecision = splitSupportHeads
       ? conditionalHeads.birth.calibration.precision
       : calibratedThreshold.birth.precision;
-    if (!sourceRow) row[7] *= Math.max(0.05, Math.min(probability, birthPrecision));
+    if (!sourceRow) {
+      const rawBirthProbability = quotaRankedSupport
+        ? supportHeadProbabilityByKey.get(key).birth
+        : probability;
+      const appliedScale = quotaRankedBirthOpacityScale(rawBirthProbability, birthPrecision);
+      birthOpacityByKey.set(key, { rawBirthProbability, appliedScale });
+      row[7] *= appliedScale;
+    }
     predictedRows.push(row);
   }
   if (!predictedRows.length) {
@@ -1681,6 +1696,37 @@ async function runLocalGridOccupancyRenderWitness(context) {
   const priorPixelMse = imageMse(priorRender.rgba, exactRender.rgba);
   const advectionPixelMse = imageMse(advectionRender.rgba, exactRender.rgba);
   const predictionPixelMse = imageMse(predictionRender.rgba, exactRender.rgba);
+  const quotaBirthOpacity = quotaRankedSupport
+    ? (() => {
+      const selectedBirthOpacity = Array.from(selectedKeys)
+        .filter(key => !sourceRows.has(key))
+        .map(key => birthOpacityByKey.get(key))
+        .filter(Boolean);
+      const birthPrecision = conditionalHeads.birth.calibration.precision;
+      const birthThreshold = conditionalHeads.birth.calibration.threshold;
+      return {
+        authority: 'raw-birth-head-probability-capped-by-calibrated-precision-v0',
+        selectedBirthCount: selectedBirthOpacity.length,
+        calibratedPrecisionCap: birthPrecision,
+        belowDiagnosticThresholdCount: selectedBirthOpacity
+          .filter(row => row.rawBirthProbability < birthThreshold).length,
+        minimumRawProbability: selectedBirthOpacity.length
+          ? Math.min(...selectedBirthOpacity.map(row => row.rawBirthProbability))
+          : null,
+        minimumAppliedScale: selectedBirthOpacity.length
+          ? Math.min(...selectedBirthOpacity.map(row => row.appliedScale))
+          : null,
+        maximumAppliedScale: selectedBirthOpacity.length
+          ? Math.max(...selectedBirthOpacity.map(row => row.appliedScale))
+          : null,
+        maxAbsAppliedScaleError: selectedBirthOpacity.length
+          ? Math.max(...selectedBirthOpacity.map(row => Math.abs(
+            row.appliedScale - quotaRankedBirthOpacityScale(row.rawBirthProbability, birthPrecision)
+          )))
+          : 0,
+      };
+    })()
+    : null;
   const splitSupportHeadMetrics = splitSupportHeads
     ? {
       authority: 'held-out-conditional-support-head-pr-v0',
@@ -1783,6 +1829,7 @@ async function runLocalGridOccupancyRenderWitness(context) {
             ? 'calibrated-survival-margin-minus-calibrated-death-margin'
             : 'survival-probability-times-one-minus-death-probability',
           birthScore: quotaRankedSupport ? 'calibrated-birth-margin' : 'birth-probability',
+          ...(quotaRankedSupport ? { birthOpacity: quotaBirthOpacity } : {}),
           sourceRule: quotaRankedSupport
             ? 'rank-all-source-sites-and-fill-learned-source-survival-quota'
             : 'survival-positive-and-calibrated-margin-not-weaker-than-death-then-budget-ranked',
