@@ -9,6 +9,10 @@ assert.match(core, /BOUNDARY_SPLAT_INSTANCE_DESCRIPTOR_IDENTITY\s*=\s*'boundary-
 assert.match(core, /normalizeBoundarySplatInstanceCount/, 'runtime must normalize requested splat instance count explicitly');
 assert.match(page, /volume_boundary_splat_instances/, 'operator route must expose boundary splat instance count');
 assert.match(page, /id="volume-boundary-splat-instances"/, 'operator UI must expose a splat instance control');
+assert.match(page, /id="volume-boundary-splat-instances"[^>]*max="128"/, 'operator UI must expose a measured scale-demo range beyond the original four-flame proof');
+assert.match(core, /const BOUNDARY_SPLAT_MAX_INSTANCES = 128/, 'runtime must lift the product cap to the measured 128-instance scale-demo ceiling');
+assert.match(core, /function boundarySplatInstanceLayout/, 'runtime must generate instance layouts instead of hardcoding four clone positions');
+assert.match(core, /Array\.from\(\{ length: requestedInstanceCount \}/, 'descriptor generation must cover all requested instances up to the measured scale ceiling');
 
 assert.match(core, /boundarySplatInstanceDescriptorBuffer/, 'renderer must own an explicit per-instance descriptor buffer');
 assert.match(core, /boundarySplatInstanceDescriptors/, 'WGSL must bind per-instance descriptors rather than hardcoding clone offsets');

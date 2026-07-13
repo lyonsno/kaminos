@@ -22,7 +22,7 @@ const BOUNDARY_SPLAT_INSTANCE_DESCRIPTOR_IDENTITY = 'boundary-splat-instance-des
 const BOUNDARY_SPLAT_INITIAL_CAPACITY = 131072;
 const BOUNDARY_SPLAT_CANDIDATE_STRIDE_BYTES = 48;
 const BOUNDARY_SPLAT_INSTANCE_DESCRIPTOR_STRIDE_BYTES = 32;
-const BOUNDARY_SPLAT_MAX_INSTANCES = 4;
+const BOUNDARY_SPLAT_MAX_INSTANCES = 128;
 const BOUNDARY_SPLAT_HISTORY_SLOTS = 16;
 const BOUNDARY_SPLAT_DEFAULT_HISTORY_DEPTH = 4;
 const BOUNDARY_SPLAT_MAX_HISTORY_FRAME_STRIDE = 16;
@@ -8423,6 +8423,37 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     return { status, ms, ...extra };
   }
 
+  function boundarySplatInstanceLayout(requestedInstanceCount) {
+    const fourFlameProofLayout = [
+      [-1.35, 0, -0.18, 0.72],
+      [-0.45, 0, 0.16, 0.72],
+      [0.45, 0, -0.12, 0.72],
+      [1.35, 0, 0.18, 0.72],
+    ];
+    if (requestedInstanceCount <= fourFlameProofLayout.length) {
+      return fourFlameProofLayout.slice(0, requestedInstanceCount);
+    }
+    const columns = Math.ceil(Math.sqrt(requestedInstanceCount * 1.35));
+    const rows = Math.ceil(requestedInstanceCount / columns);
+    const spacingX = requestedInstanceCount > 64 ? 0.36 : requestedInstanceCount > 25 ? 0.48 : 0.68;
+    const spacingZ = requestedInstanceCount > 64 ? 0.30 : requestedInstanceCount > 25 ? 0.40 : 0.52;
+    const scale = requestedInstanceCount > 96 ? 0.24 : requestedInstanceCount > 49 ? 0.30 : requestedInstanceCount > 16 ? 0.42 : 0.56;
+    return Array.from({ length: requestedInstanceCount }, (_, index) => {
+      const column = index % columns;
+      const row = Math.floor(index / columns);
+      const centeredColumn = column - (columns - 1) * 0.5;
+      const centeredRow = row - (rows - 1) * 0.5;
+      const stagger = row % 2 ? 0.5 : 0;
+      const wave = Math.sin(index * 12.9898) * 0.08;
+      return [
+        (centeredColumn + stagger) * spacingX,
+        0,
+        centeredRow * spacingZ + wave,
+        scale,
+      ];
+    });
+  }
+
   function makeBoundarySplatInstanceDescriptors(count = normalizeBoundarySplatInstanceCount(controlsSnapshot.boundarySplatInstances)) {
     const requestedInstanceCount = normalizeBoundarySplatInstanceCount(count);
     const phaseMode = normalizeBoundarySplatPhaseMode(controlsSnapshot.boundarySplatPhaseMode);
@@ -8431,13 +8462,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const historyFrameStride = normalizeBoundarySplatHistoryFrameStride(controlsSnapshot.boundarySplatHistoryFrameStride);
     const historyWriteTick = Math.floor(state.frameCount / historyFrameStride);
     const historyWriteSlot = historyWriteTick % historyDepth;
-    const layouts = [
-      [-1.35, 0, -0.18, 0.72],
-      [-0.45, 0, 0.16, 0.72],
-      [0.45, 0, -0.12, 0.72],
-      [1.35, 0, 0.18, 0.72],
-    ];
-    const active = layouts.slice(0, requestedInstanceCount).map((entry, index) => {
+    const active = boundarySplatInstanceLayout(requestedInstanceCount).map((entry, index) => {
       let historyOffsetSlots = 0;
       let historyOffsetFrames = 0;
       if (phaseMode === 'same-history-slot') historyOffsetSlots = requestedInstanceCount > 1 ? Math.min(phaseStride, historyDepth - 1) : 0;
