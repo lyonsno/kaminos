@@ -46,8 +46,13 @@ function slotKey(slotIdentity) {
   ].join('|');
 }
 
-function productIdentity(slotIdentity, payloadIdentity) {
-  return `smoke-splat-product:${encodeURIComponent(slotKey(slotIdentity))}:${encodeURIComponent(payloadIdentity)}`;
+function productIdentity(slotIdentity, payloadIdentity, decoderConfigIdentity) {
+  return [
+    'smoke-splat-product',
+    encodeURIComponent(slotKey(slotIdentity)),
+    encodeURIComponent(payloadIdentity),
+    encodeURIComponent(decoderConfigIdentity),
+  ].join(':');
 }
 
 function normalizeDecodeConfig(request, capacity) {
@@ -274,7 +279,7 @@ export function decodeReferenceSmokeHierarchy(request = {}) {
     : [];
 
   return {
-    identity: productIdentity(slotIdentity, payloadIdentity),
+    identity: productIdentity(slotIdentity, payloadIdentity, decodeConfig.identity),
     schema: 'kaminos-hierarchical-smoke-splats-v0',
     producerAuthority: SMOKE_SPLAT_PRODUCER_AUTHORITY,
     producerKind: 'deterministic-reference',

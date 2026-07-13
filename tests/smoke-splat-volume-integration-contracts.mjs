@@ -10,6 +10,29 @@ assert.match(
 );
 assert.match(
   core,
+  /export function applySmokeSplatPhaseResolutionState/,
+  'runtime phase-authority transitions are an executable reusable contract',
+);
+
+const { applySmokeSplatPhaseResolutionState } = await import(new URL('../volume-core.js', import.meta.url));
+const phaseState = {
+  hybridSmokePhaseAuthority: 'shared-current-single-simulator-no-instance-smoke-history',
+  smokeSplatSlotResolveReport: null,
+};
+const resolvedReport = { identity: 'resolve:ok', status: 'resolved' };
+applySmokeSplatPhaseResolutionState(phaseState, resolvedReport);
+assert.equal(phaseState.smokeSplatSlotResolveReport, resolvedReport);
+assert.equal(phaseState.hybridSmokePhaseAuthority, 'phase-matched-hierarchical-smoke-splat-slot-products-v0');
+const failedReport = { identity: 'resolve:failed', status: 'failed', failurePhase: 'phase-payload-resolution' };
+applySmokeSplatPhaseResolutionState(phaseState, failedReport);
+assert.equal(phaseState.smokeSplatSlotResolveReport, failedReport);
+assert.equal(
+  phaseState.hybridSmokePhaseAuthority,
+  'smoke-splat-slot-resolution-failed',
+  'a later failure demotes previously successful phase authority',
+);
+assert.match(
+  core,
   /const smokeSplatSlotCache = createSmokeSplatSlotCache\(/,
   'each volume prototype owns an isolated smoke decode cache',
 );
@@ -40,7 +63,7 @@ assert.match(
 );
 assert.match(
   core,
-  /state\.smokeSplatSlotResolveReport = report/,
+  /applySmokeSplatPhaseResolutionState\(state, report\)/,
   'effective smoke slot resolution remains visible in runtime debug state',
 );
 assert.match(

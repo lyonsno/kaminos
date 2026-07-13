@@ -87,7 +87,7 @@
     },
     "slotProducts": [
       {
-        "identity": "smoke-splat-product:reference-smoke-model%3Awitness-v0%7C1%7C1%7C17:synthetic-smoke-payload%3A1%3A17",
+        "identity": "smoke-splat-product:reference-smoke-model%3Awitness-v0%7C1%7C1%7C17:synthetic-smoke-payload%3A1%3A17:0.0200000000000%7C1.00000000000%7C0.500000000000%7C2",
         "schema": "kaminos-hierarchical-smoke-splats-v0",
         "producerAuthority": "deterministic-reference-smoke-splat-producer-v0",
         "producerKind": "deterministic-reference",
@@ -129,7 +129,7 @@
         ]
       },
       {
-        "identity": "smoke-splat-product:reference-smoke-model%3Awitness-v0%7C1%7C2%7C18:synthetic-smoke-payload%3A2%3A18",
+        "identity": "smoke-splat-product:reference-smoke-model%3Awitness-v0%7C1%7C2%7C18:synthetic-smoke-payload%3A2%3A18:0.0200000000000%7C1.00000000000%7C0.500000000000%7C2",
         "schema": "kaminos-hierarchical-smoke-splats-v0",
         "producerAuthority": "deterministic-reference-smoke-splat-producer-v0",
         "producerKind": "deterministic-reference",
@@ -171,7 +171,7 @@
         ]
       },
       {
-        "identity": "smoke-splat-product:reference-smoke-model%3Awitness-v0%7C1%7C3%7C19:synthetic-smoke-payload%3A3%3A19",
+        "identity": "smoke-splat-product:reference-smoke-model%3Awitness-v0%7C1%7C3%7C19:synthetic-smoke-payload%3A3%3A19:0.0200000000000%7C1.00000000000%7C0.500000000000%7C2",
         "schema": "kaminos-hierarchical-smoke-splats-v0",
         "producerAuthority": "deterministic-reference-smoke-splat-producer-v0",
         "producerKind": "deterministic-reference",
@@ -213,7 +213,7 @@
         ]
       },
       {
-        "identity": "smoke-splat-product:reference-smoke-model%3Awitness-v0%7C1%7C0%7C20:synthetic-smoke-payload%3A0%3A20",
+        "identity": "smoke-splat-product:reference-smoke-model%3Awitness-v0%7C1%7C0%7C20:synthetic-smoke-payload%3A0%3A20:0.0200000000000%7C1.00000000000%7C0.500000000000%7C2",
         "schema": "kaminos-hierarchical-smoke-splats-v0",
         "producerAuthority": "deterministic-reference-smoke-splat-producer-v0",
         "producerKind": "deterministic-reference",
@@ -326,7 +326,7 @@
     },
     "slotProducts": [
       {
-        "identity": "smoke-splat-product:reference-smoke-model%3Awitness-v0%7C1%7C1%7C17:synthetic-smoke-payload%3A1%3A17",
+        "identity": "smoke-splat-product:reference-smoke-model%3Awitness-v0%7C1%7C1%7C17:synthetic-smoke-payload%3A1%3A17:0.0200000000000%7C1.00000000000%7C0.500000000000%7C2",
         "schema": "kaminos-hierarchical-smoke-splats-v0",
         "producerAuthority": "deterministic-reference-smoke-splat-producer-v0",
         "producerKind": "deterministic-reference",
@@ -368,7 +368,7 @@
         ]
       },
       {
-        "identity": "smoke-splat-product:reference-smoke-model%3Awitness-v0%7C1%7C2%7C18:synthetic-smoke-payload%3A2%3A18",
+        "identity": "smoke-splat-product:reference-smoke-model%3Awitness-v0%7C1%7C2%7C18:synthetic-smoke-payload%3A2%3A18:0.0200000000000%7C1.00000000000%7C0.500000000000%7C2",
         "schema": "kaminos-hierarchical-smoke-splats-v0",
         "producerAuthority": "deterministic-reference-smoke-splat-producer-v0",
         "producerKind": "deterministic-reference",
@@ -410,7 +410,7 @@
         ]
       },
       {
-        "identity": "smoke-splat-product:reference-smoke-model%3Awitness-v0%7C1%7C3%7C19:synthetic-smoke-payload%3A3%3A19",
+        "identity": "smoke-splat-product:reference-smoke-model%3Awitness-v0%7C1%7C3%7C19:synthetic-smoke-payload%3A3%3A19:0.0200000000000%7C1.00000000000%7C0.500000000000%7C2",
         "schema": "kaminos-hierarchical-smoke-splats-v0",
         "producerAuthority": "deterministic-reference-smoke-splat-producer-v0",
         "producerKind": "deterministic-reference",
@@ -452,7 +452,7 @@
         ]
       },
       {
-        "identity": "smoke-splat-product:reference-smoke-model%3Awitness-v0%7C1%7C0%7C20:synthetic-smoke-payload%3A0%3A20",
+        "identity": "smoke-splat-product:reference-smoke-model%3Awitness-v0%7C1%7C0%7C20:synthetic-smoke-payload%3A0%3A20:0.0200000000000%7C1.00000000000%7C0.500000000000%7C2",
         "schema": "kaminos-hierarchical-smoke-splats-v0",
         "producerAuthority": "deterministic-reference-smoke-splat-producer-v0",
         "producerKind": "deterministic-reference",
@@ -565,7 +565,7 @@
     },
     "slotProducts": [
       {
-        "identity": "smoke-splat-product:reference-smoke-model%3Awitness-v0%7C1%7C1%7C17:synthetic-smoke-payload%3A1%3A17",
+        "identity": "smoke-splat-product:reference-smoke-model%3Awitness-v0%7C1%7C1%7C17:synthetic-smoke-payload%3A1%3A17:0.0200000000000%7C1.00000000000%7C0.500000000000%7C2",
         "schema": "kaminos-hierarchical-smoke-splats-v0",
         "producerAuthority": "deterministic-reference-smoke-splat-producer-v0",
         "producerKind": "deterministic-reference",
@@ -607,7 +607,7 @@
         ]
       },
       {
-        "identity": "smoke-splat-product:reference-smoke-model%3Awitness-v0%7C1%7C2%7C22:synthetic-smoke-payload%3A2%3A22",
+        "identity": "smoke-splat-product:reference-smoke-model%3Awitness-v0%7C1%7C2%7C22:synthetic-smoke-payload%3A2%3A22:0.0200000000000%7C1.00000000000%7C0.500000000000%7C2",
         "schema": "kaminos-hierarchical-smoke-splats-v0",
         "producerAuthority": "deterministic-reference-smoke-splat-producer-v0",
         "producerKind": "deterministic-reference",
@@ -649,7 +649,7 @@
         ]
       },
       {
-        "identity": "smoke-splat-product:reference-smoke-model%3Awitness-v0%7C1%7C3%7C19:synthetic-smoke-payload%3A3%3A19",
+        "identity": "smoke-splat-product:reference-smoke-model%3Awitness-v0%7C1%7C3%7C19:synthetic-smoke-payload%3A3%3A19:0.0200000000000%7C1.00000000000%7C0.500000000000%7C2",
         "schema": "kaminos-hierarchical-smoke-splats-v0",
         "producerAuthority": "deterministic-reference-smoke-splat-producer-v0",
         "producerKind": "deterministic-reference",
@@ -691,7 +691,7 @@
         ]
       },
       {
-        "identity": "smoke-splat-product:reference-smoke-model%3Awitness-v0%7C1%7C0%7C20:synthetic-smoke-payload%3A0%3A20",
+        "identity": "smoke-splat-product:reference-smoke-model%3Awitness-v0%7C1%7C0%7C20:synthetic-smoke-payload%3A0%3A20:0.0200000000000%7C1.00000000000%7C0.500000000000%7C2",
         "schema": "kaminos-hierarchical-smoke-splats-v0",
         "producerAuthority": "deterministic-reference-smoke-splat-producer-v0",
         "producerKind": "deterministic-reference",

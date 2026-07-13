@@ -183,6 +183,23 @@ assert.equal(hierarchy.capacity.status, 'capacity-overflow-untruncated');
 assert.equal(hierarchy.capacity.overflowCount, hierarchy.requiredSplatCount - 2);
 assert.equal(hierarchy.diagnostics.some(item => item.code === 'smoke-splat-capacity-overflow'), true);
 
+const identityProbeRequest = {
+  slotIdentity: {
+    historySlot: 2,
+    slotWriteTick: 12,
+    simulatorGeneration: 9,
+    modelIdentity: 'smoke-model:identity-test',
+  },
+  payload: makePayload(2, 12),
+};
+const lowFineFraction = decodeReferenceSmokeHierarchy({ ...identityProbeRequest, fineMassFraction: 0.1 });
+const highFineFraction = decodeReferenceSmokeHierarchy({ ...identityProbeRequest, fineMassFraction: 0.9 });
+assert.notEqual(
+  lowFineFraction.identity,
+  highFineFraction.identity,
+  'public product identity includes normalized decoder configuration, not only slot and payload identity',
+);
+
 assert.throws(
   () => cache.resolve({ ...request, payloadForSlot: slot => (slot === 7 ? null : payloads.get(slot)) }),
   /missing smoke payload.*slot 7/i,

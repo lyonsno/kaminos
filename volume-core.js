@@ -87,6 +87,18 @@ const CANONICAL_CONTENT_MODE_VALUES = {
   fire_smoke: 2,
 };
 
+export function applySmokeSplatPhaseResolutionState(state, report) {
+  if (!state || typeof state !== 'object') throw new TypeError('smoke splat runtime state must be an object');
+  if (!report || (report.status !== 'resolved' && report.status !== 'failed')) {
+    throw new TypeError('smoke splat resolve report must have resolved or failed status');
+  }
+  state.smokeSplatSlotResolveReport = report;
+  state.hybridSmokePhaseAuthority = report.status === 'resolved'
+    ? 'phase-matched-hierarchical-smoke-splat-slot-products-v0'
+    : 'smoke-splat-slot-resolution-failed';
+  return state;
+}
+
 function normalizeGridSize(value) {
   const requested = Number(value);
   if (SUPPORTED_GRID_SIZES.includes(requested)) return requested;
@@ -9027,12 +9039,15 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         capacity: options.capacity,
         capacityForSlot: options.capacityForSlot,
       });
-      state.smokeSplatSlotResolveReport = report;
-      state.hybridSmokePhaseAuthority = 'phase-matched-hierarchical-smoke-splat-slot-products-v0';
-      emitStatus({ phase: 'smoke-splat-phase-slots-resolved', smokeSplatSlotResolveReport: report });
+      applySmokeSplatPhaseResolutionState(state, report);
+      emitStatus({
+        phase: 'smoke-splat-phase-slots-resolved',
+        smokeSplatSlotResolveReport: report,
+        hybridSmokePhaseAuthority: state.hybridSmokePhaseAuthority,
+      });
       return report;
     } catch (error) {
-      state.smokeSplatSlotResolveReport = error?.report ?? {
+      const failureReport = error?.report ?? {
         identity: 'smoke-splat-slot-failure-report-v0',
         status: 'failed',
         failurePhase: 'volume-runtime-slot-resolution',
@@ -9040,7 +9055,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         effectiveProducerAuthority: null,
         message: error?.message ?? String(error),
       };
-      emitStatus({ phase: 'smoke-splat-phase-slots-failed', smokeSplatSlotResolveReport: state.smokeSplatSlotResolveReport });
+      applySmokeSplatPhaseResolutionState(state, failureReport);
+      emitStatus({
+        phase: 'smoke-splat-phase-slots-failed',
+        smokeSplatSlotResolveReport: failureReport,
+        hybridSmokePhaseAuthority: state.hybridSmokePhaseAuthority,
+      });
       throw error;
     }
   }
