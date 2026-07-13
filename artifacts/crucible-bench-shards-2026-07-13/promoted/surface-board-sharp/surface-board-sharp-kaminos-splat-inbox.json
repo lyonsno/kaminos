@@ -1,0 +1,434 @@
+{
+  "requestedUrl": "http://127.0.0.1:8096/",
+  "effectiveUrl": "http://127.0.0.1:8096/",
+  "effectiveServerRoots": {
+    "scratch": {
+      "path": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/scratch",
+      "exists": true
+    },
+    "scenes": {
+      "path": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/scenes",
+      "exists": true
+    },
+    "splat-inbox": {
+      "path": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/view-firings/surface-board-sharp",
+      "exists": true
+    },
+    "splat-production": {
+      "path": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/kaminos-assets/splats/production",
+      "exists": true
+    },
+    "image-inbox": {
+      "path": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/kaminos-assets/images/inbox",
+      "exists": false
+    },
+    "pipeline-runs": {
+      "path": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/kaminos-assets/pipeline-runs",
+      "exists": false
+    },
+    "greenroom": {
+      "path": "/Users/noahlyons/.local/state/gpu-greenroom",
+      "exists": true
+    },
+    "lerms-preview": {
+      "path": "/private/tmp",
+      "exists": true
+    },
+    "pixal3d": {
+      "path": "/Users/noahlyons/dev/pixal3d-mlx/outputs",
+      "exists": true
+    },
+    "trellis2mlx": {
+      "path": "/Users/noahlyons/dev/trellis2mlx/assets/outputs",
+      "exists": true
+    }
+  },
+  "expectedServerRoot": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713",
+  "scenario": "splat-asset-inbox",
+  "debugPort": 9463,
+  "chrome": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+  "userDataDir": "/tmp/kaminos-scene-object-witness-profile-9463-92777",
+  "settleMs": 3500,
+  "phase": "writing-report",
+  "browserVersion": {
+    "Browser": "Chrome/150.0.7871.114",
+    "Protocol-Version": "1.3",
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/150.0.0.0 Safari/537.36",
+    "V8-Version": "15.0.245.15",
+    "WebKit-Version": "537.36 (@f405107495a07cb1bfcf687d4af8d91117098db6)",
+    "webSocketDebuggerUrl": "ws://127.0.0.1:9463/devtools/browser/4f16bc48-b28b-446d-b3f5-91bb02822147"
+  },
+  "stderrTail": "\nDevTools listening on ws://127.0.0.1:9463/devtools/browser/4f16bc48-b28b-446d-b3f5-91bb02822147\nTrying to load the allocator multiple times. This is *not* supported.\n[92788:53965070:0713/161114.792483:ERROR:google_apis/gcm/engine/registration_request.cc:291] Registration response error message: PHONE_REGISTRATION_ERROR\n[92788:53965070:0713/161114.793996:ERROR:google_apis/gcm/engine/registration_request.cc:291] Registration response error message: PHONE_REGISTRATION_ERROR\n[92788:53965070:0713/161114.800396:ERROR:google_apis/gcm/engine/registration_request.cc:291] Registration response error message: PHONE_REGISTRATION_ERROR\n",
+  "ok": true,
+  "screenshot": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/witnesses/surface-board-sharp-kaminos-splat-inbox.png",
+  "screenshotBytes": 268314,
+  "evidence": {
+    "splatAssetInbox": {
+      "beforeRows": [],
+      "afterRows": [
+        {
+          "id": "splat-aa52ba79-4f26-49a4-b32e-e0686a94627c",
+          "active": true,
+          "pressed": "true",
+          "label": "05 Surface Board",
+          "source": "splat / /api/read?root=splat-inbox&path=05-surface-board.ply"
+        }
+      ],
+      "assetRowCount": 1,
+      "assetData": {
+        "schema": "kaminos.asset-index.v0",
+        "kind": "splat",
+        "roots": [
+          {
+            "id": "splat-inbox",
+            "label": "Experimental Splat Inbox",
+            "kind": "splat",
+            "stage": "experimental",
+            "path": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/view-firings/surface-board-sharp",
+            "exists": true
+          },
+          {
+            "id": "splat-production",
+            "label": "Production Splats",
+            "kind": "splat",
+            "stage": "production",
+            "path": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/kaminos-assets/splats/production",
+            "exists": true
+          }
+        ],
+        "entries": [
+          {
+            "id": "splat-inbox:05-surface-board.ply",
+            "kind": "splat",
+            "stage": "experimental",
+            "root_id": "splat-inbox",
+            "root_label": "Experimental Splat Inbox",
+            "name": "05-surface-board.ply",
+            "path": "05-surface-board.ply",
+            "size": 66061086,
+            "mtime": 1783972777.8073106,
+            "source": "/api/read?root=splat-inbox&path=05-surface-board.ply",
+            "correction": null,
+            "display": {
+              "title": "05 Surface Board",
+              "subtitle": "PLY / experimental / Experimental Splat Inbox / 63.0 MB",
+              "meta": "raw 05-surface-board.ply",
+              "raw_name": "05-surface-board.ply",
+              "load_label": "Import Splat",
+              "stage": "experimental",
+              "root_label": "Experimental Splat Inbox"
+            },
+            "renderability": {
+              "schema": "kaminos.splat-renderability.v0",
+              "status": "splat-header-like",
+              "previewState": "not-rendered",
+              "reason": "PLY header contains common gaussian splat properties; this is not a verified render and no thumbnail preview has been rendered."
+            }
+          }
+        ]
+      },
+      "actionExposed": true,
+      "stageText": "experimental",
+      "title": "05 Surface Board",
+      "raw": "05-surface-board.ply",
+      "assetEntry": {
+        "id": "splat-inbox:05-surface-board.ply",
+        "kind": "splat",
+        "stage": "experimental",
+        "root_id": "splat-inbox",
+        "root_label": "Experimental Splat Inbox",
+        "name": "05-surface-board.ply",
+        "path": "05-surface-board.ply",
+        "size": 66061086,
+        "mtime": 1783972777.8073106,
+        "source": "/api/read?root=splat-inbox&path=05-surface-board.ply",
+        "correction": null,
+        "display": {
+          "title": "05 Surface Board",
+          "subtitle": "PLY / experimental / Experimental Splat Inbox / 63.0 MB",
+          "meta": "raw 05-surface-board.ply",
+          "raw_name": "05-surface-board.ply",
+          "load_label": "Import Splat",
+          "stage": "experimental",
+          "root_label": "Experimental Splat Inbox"
+        },
+        "renderability": {
+          "schema": "kaminos.splat-renderability.v0",
+          "status": "splat-header-like",
+          "previewState": "not-rendered",
+          "reason": "PLY header contains common gaussian splat properties; this is not a verified render and no thumbnail preview has been rendered."
+        }
+      },
+      "sourceProbe": {
+        "ok": true,
+        "status": 200,
+        "route": "/api/read?root=splat-inbox&path=05-surface-board.ply",
+        "bytes": 66061086
+      },
+      "sceneDebug": [
+        {
+          "id": "splat-aa52ba79-4f26-49a4-b32e-e0686a94627c",
+          "label": "05 Surface Board",
+          "source": "/api/read?root=splat-inbox&path=05-surface-board.ply",
+          "type": "splat",
+          "groupId": null,
+          "active": true,
+          "transform": {
+            "position": [
+              0,
+              0,
+              0
+            ],
+            "rotation": [
+              0,
+              0,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          },
+          "sceneTransform": {
+            "position": [
+              0,
+              0,
+              0
+            ],
+            "rotation": [
+              0,
+              0,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          },
+          "splat": {
+            "schema": "kaminos.splat-asset.v0",
+            "assetSource": "/api/read?root=splat-inbox&path=05-surface-board.ply",
+            "fileName": "05-surface-board.ply",
+            "format": "ply",
+            "bounds": {
+              "min": [
+                -3.8762710094451904,
+                -2.502244234085083,
+                1.3516082763671875
+              ],
+              "max": [
+                4.602284908294678,
+                1.8254672288894653,
+                6.658710956573486
+              ],
+              "center": [
+                0.36300694942474365,
+                -0.33838850259780884,
+                4.005159616470337
+              ],
+              "size": [
+                8.478555917739868,
+                4.327711462974548,
+                5.307102680206299
+              ]
+            },
+            "splatCount": null,
+            "sidecars": [],
+            "correction": {
+              "orientation": {
+                "rotation": [
+                  0,
+                  0,
+                  0
+                ]
+              },
+              "axisFlips": [
+                1,
+                1,
+                1
+              ],
+              "centroidOffset": [
+                0,
+                0,
+                0
+              ],
+              "crop": {
+                "enabled": false,
+                "min": [
+                  -0.5,
+                  -0.5,
+                  -0.5
+                ],
+                "max": [
+                  0.5,
+                  0.5,
+                  0.5
+                ]
+              }
+            },
+            "provenance": {
+              "source_group": "splat-inbox",
+              "source_url": "/api/read?root=splat-inbox&path=05-surface-board.ply",
+              "root_id": "splat-inbox",
+              "root_label": "Experimental Splat Inbox",
+              "asset_stage": "experimental",
+              "asset_path": "05-surface-board.ply"
+            },
+            "previewKind": "point-cloud",
+            "pointCount": 1179648,
+            "colorSource": "sh-dc",
+            "parser": "ply-point-cloud-v0",
+            "previewDepthTest": false
+          },
+          "image": null,
+          "renderRoute": "hybrid-mesh-splat-route-stub",
+          "renderCapabilities": {
+            "meshDepthOcclusion": false,
+            "sharedCanvasComposite": false,
+            "activeAO": false,
+            "realSplatRendering": false,
+            "canvasMode": "three-point-cloud-preview",
+            "sharedCommandEncoder": false,
+            "correctionAppliedMode": null,
+            "cropAppliedByRenderer": false,
+            "sceneContextAccepted": false
+          },
+          "renderHandoffSchema": "kaminos.render-handoff.v0"
+        }
+      ],
+      "splatObject": {
+        "id": "splat-aa52ba79-4f26-49a4-b32e-e0686a94627c",
+        "label": "05 Surface Board",
+        "source": "/api/read?root=splat-inbox&path=05-surface-board.ply",
+        "type": "splat",
+        "groupId": null,
+        "active": true,
+        "transform": {
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        },
+        "sceneTransform": {
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        },
+        "splat": {
+          "schema": "kaminos.splat-asset.v0",
+          "assetSource": "/api/read?root=splat-inbox&path=05-surface-board.ply",
+          "fileName": "05-surface-board.ply",
+          "format": "ply",
+          "bounds": {
+            "min": [
+              -3.8762710094451904,
+              -2.502244234085083,
+              1.3516082763671875
+            ],
+            "max": [
+              4.602284908294678,
+              1.8254672288894653,
+              6.658710956573486
+            ],
+            "center": [
+              0.36300694942474365,
+              -0.33838850259780884,
+              4.005159616470337
+            ],
+            "size": [
+              8.478555917739868,
+              4.327711462974548,
+              5.307102680206299
+            ]
+          },
+          "splatCount": null,
+          "sidecars": [],
+          "correction": {
+            "orientation": {
+              "rotation": [
+                0,
+                0,
+                0
+              ]
+            },
+            "axisFlips": [
+              1,
+              1,
+              1
+            ],
+            "centroidOffset": [
+              0,
+              0,
+              0
+            ],
+            "crop": {
+              "enabled": false,
+              "min": [
+                -0.5,
+                -0.5,
+                -0.5
+              ],
+              "max": [
+                0.5,
+                0.5,
+                0.5
+              ]
+            }
+          },
+          "provenance": {
+            "source_group": "splat-inbox",
+            "source_url": "/api/read?root=splat-inbox&path=05-surface-board.ply",
+            "root_id": "splat-inbox",
+            "root_label": "Experimental Splat Inbox",
+            "asset_stage": "experimental",
+            "asset_path": "05-surface-board.ply"
+          },
+          "previewKind": "point-cloud",
+          "pointCount": 1179648,
+          "colorSource": "sh-dc",
+          "parser": "ply-point-cloud-v0",
+          "previewDepthTest": false
+        },
+        "image": null,
+        "renderRoute": "hybrid-mesh-splat-route-stub",
+        "renderCapabilities": {
+          "meshDepthOcclusion": false,
+          "sharedCanvasComposite": false,
+          "activeAO": false,
+          "realSplatRendering": false,
+          "canvasMode": "three-point-cloud-preview",
+          "sharedCommandEncoder": false,
+          "correctionAppliedMode": null,
+          "cropAppliedByRenderer": false,
+          "sceneContextAccepted": false
+        },
+        "renderHandoffSchema": "kaminos.render-handoff.v0"
+      }
+    }
+  }
+}

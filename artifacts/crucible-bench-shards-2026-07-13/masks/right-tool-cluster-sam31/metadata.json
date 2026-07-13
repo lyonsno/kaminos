@@ -1,0 +1,39 @@
+{
+  "name": "observed-bench-splat",
+  "job_type": "sam3_isolate_handy_candyman_0713",
+  "job_id": "34f851c11d47",
+  "input_path": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/source/observed-bench-splat.png",
+  "input_name": "observed-bench-splat.png",
+  "params": {
+    "prompt": "pen soldering tool dark holder",
+    "boxes": "1380,650,1680,1130",
+    "threshold": "0.08",
+    "max_results": "64",
+    "feather": "1.25",
+    "model": "mlx-community/sam3.1-bf16"
+  },
+  "output_files": [
+    "cutout-00.png",
+    "cutout-01.png",
+    "cutout-02.png",
+    "cutout-03.png",
+    "cutout-04.png",
+    "cutout-05.png",
+    "cutout-06.png",
+    "cutout-07.png",
+    "cutout-08.png",
+    "mask-00.png",
+    "mask-01.png",
+    "mask-02.png",
+    "mask-03.png",
+    "mask-04.png",
+    "mask-05.png",
+    "mask-06.png",
+    "mask-07.png",
+    "mask-08.png",
+    "overlay.png",
+    "receipt.json"
+  ],
+  "created_at": 1783972610.669947,
+  "duration_s": 71.9
+}

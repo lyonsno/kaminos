@@ -1,0 +1,13 @@
+{
+  "name": "05-surface-board",
+  "job_type": "sharp",
+  "job_id": "d325a3df1aaa",
+  "input_path": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/crops/05-surface-board.png",
+  "input_name": "05-surface-board.png",
+  "params": {},
+  "output_files": [
+    "05-surface-board.ply"
+  ],
+  "created_at": 1783972778.349568,
+  "duration_s": 15.7
+}

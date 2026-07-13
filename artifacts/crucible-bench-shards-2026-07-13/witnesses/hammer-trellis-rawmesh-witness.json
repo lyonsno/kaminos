@@ -1,0 +1,23 @@
+{
+  "schema": "kaminos.local-trellis-rawmesh-witness.v0",
+  "asset": "ball-peen-hammer-trellis",
+  "source_mesh": "artifacts/crucible-bench-shards-2026-07-13/mesh-firings/hammer-trellis-official-512-seed42/raw_mesh_geometry_only.ply",
+  "source_npz": "artifacts/crucible-bench-shards-2026-07-13/mesh-firings/hammer-trellis-official-512-seed42/raw_mesh.npz",
+  "witness": "artifacts/crucible-bench-shards-2026-07-13/witnesses/hammer-trellis-rawmesh-multiangle.png",
+  "views": [
+    "front",
+    "left",
+    "right",
+    "top"
+  ],
+  "vertices": 86249,
+  "faces": 172980,
+  "topology_flags": {
+    "boundary_edges": 5069,
+    "non_manifold_edges": 4712,
+    "same_direction_conflict_edges": 30732
+  },
+  "visual_inspection": "Recognizable ball-peen hammer silhouette survives four local rendered views; texture is absent and mesh scars/topology defects are visible.",
+  "truth_boundary": "Local software multi-angle mesh witness only. This is geometry-only Trellis raw output, not GLB parity, not a textured asset, not collision-approved, and not a Kaminos viewer registration receipt.",
+  "created_at": "2026-07-13T20:11:58Z"
+}

@@ -1,0 +1,22 @@
+{
+  "boxes": "140,185,1665,1225",
+  "duration_s": 0.7995262145996094,
+  "effective_model_path": "/Users/noahlyons/.cache/huggingface/hub/models--mlx-community--sam3-image/snapshots/b72a14d8127e17e6f2a3d2e075bbbf4307ba146e",
+  "error": "FileNotFoundError: Config not found at /Users/noahlyons/.cache/huggingface/hub/models--mlx-community--sam3-image/snapshots/b72a14d8127e17e6f2a3d2e075bbbf4307ba146e",
+  "finished_at": 1783972281.5269032,
+  "image": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/source/observed-bench-splat.png",
+  "image_size": [
+    1796,
+    1594
+  ],
+  "max_results": 64,
+  "model": "mlx-community/sam3-image",
+  "ok": false,
+  "outputs": {},
+  "phase": "load_model",
+  "prompt": [
+    "wooden surface board tabletop"
+  ],
+  "started_at": 1783972280.727377,
+  "threshold": 0.08
+}

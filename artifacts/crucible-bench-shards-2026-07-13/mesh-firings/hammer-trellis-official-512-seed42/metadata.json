@@ -1,0 +1,24 @@
+{
+  "name": "cutout-00",
+  "job_type": "trellis2_official_512_seeded",
+  "job_id": "88a279fccd92",
+  "input_path": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/ball-peen-hammer-sam31/cutout-00.png",
+  "input_name": "cutout-00.png",
+  "params": {
+    "seed": "42",
+    "steps": "12",
+    "target_faces": "200000",
+    "texture_size": "1024",
+    "pipeline_type": "512",
+    "shared_noise": ""
+  },
+  "output_files": [
+    "decoder_output.npz",
+    "raw_mesh.npz",
+    "raw_mesh_metrics.json",
+    "route_identity.json",
+    "run_report.json"
+  ],
+  "created_at": 1783972948.2836428,
+  "duration_s": 169.9
+}

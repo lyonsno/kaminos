@@ -1,0 +1,25 @@
+{
+  "name": "observed-bench-splat",
+  "job_type": "sam3_isolate_handy_candyman_0713",
+  "job_id": "d860c0fec84d",
+  "input_path": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/source/observed-bench-splat.png",
+  "input_name": "observed-bench-splat.png",
+  "params": {
+    "prompt": "specimen tray with square slots",
+    "boxes": "460,420,1220,1065",
+    "threshold": "0.08",
+    "max_results": "64",
+    "feather": "1.25",
+    "model": "mlx-community/sam3.1-bf16"
+  },
+  "output_files": [
+    "cutout-00.png",
+    "cutout-01.png",
+    "mask-00.png",
+    "mask-01.png",
+    "overlay.png",
+    "receipt.json"
+  ],
+  "created_at": 1783972404.10287,
+  "duration_s": 7.4
+}

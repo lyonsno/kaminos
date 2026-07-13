@@ -1,0 +1,11 @@
+{
+  "schema": "kaminos.trellis-raw-mesh-ply-conversion.v0",
+  "source_npz": "artifacts/crucible-bench-shards-2026-07-13/mesh-firings/hammer-trellis-official-512-seed42/raw_mesh.npz",
+  "output_ply": "artifacts/crucible-bench-shards-2026-07-13/mesh-firings/hammer-trellis-official-512-seed42/raw_mesh_geometry_only.ply",
+  "vertices": 86249,
+  "faces": 172980,
+  "source_sha256": "d5432e5cf69a6a1ab4c470dd035b1251c947bc2f92eaeab1c56ade9ccd8f9bc4",
+  "output_sha256": "ea90a02695f829d4a4f934655532188fb0cc5f558ed0a29fb9783e2c8d4ce637",
+  "truth_boundary": "geometry-only conversion from Trellis raw_mesh.npz; no texture, no GLB parity, no orbitability claim until visual witness",
+  "created_at": "2026-07-13T20:02:00Z"
+}

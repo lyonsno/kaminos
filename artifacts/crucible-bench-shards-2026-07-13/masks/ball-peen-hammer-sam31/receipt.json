@@ -1,0 +1,167 @@
+{
+  "boxes": "310,325,620,1135",
+  "detections": [
+    {
+      "box": [
+        310.70904541015625,
+        308.1549072265625,
+        622.8755493164062,
+        1166.1854248046875
+      ],
+      "index": 4,
+      "label": "ball peen hammer",
+      "mask_pixels": 61676,
+      "score": 0.9284480810165405
+    },
+    {
+      "box": [
+        1441.939453125,
+        553.9525146484375,
+        1707.18359375,
+        981.1569213867188
+      ],
+      "index": 1,
+      "label": "ball peen hammer",
+      "mask_pixels": 21862,
+      "score": 0.22707118093967438
+    },
+    {
+      "box": [
+        1236.550537109375,
+        909.8052368164062,
+        1362.98193359375,
+        1087.441650390625
+      ],
+      "index": 8,
+      "label": "ball peen hammer",
+      "mask_pixels": 8909,
+      "score": 0.164698526263237
+    },
+    {
+      "box": [
+        307.2944641113281,
+        305.60174560546875,
+        626.7890625,
+        1167.18798828125
+      ],
+      "index": 2,
+      "label": "ball peen hammer",
+      "mask_pixels": 61503,
+      "score": 0.15687811374664307
+    },
+    {
+      "box": [
+        851.7970581054688,
+        1082.22412109375,
+        1184.463134765625,
+        1534.7845458984375
+      ],
+      "index": 7,
+      "label": "ball peen hammer",
+      "mask_pixels": 62110,
+      "score": 0.12187431007623672
+    },
+    {
+      "box": [
+        1215.8402099609375,
+        903.7750854492188,
+        1407.1903076171875,
+        1276.129150390625
+      ],
+      "index": 5,
+      "label": "ball peen hammer",
+      "mask_pixels": 25796,
+      "score": 0.10772604495286942
+    },
+    {
+      "box": [
+        1257.1761474609375,
+        908.3001098632812,
+        1323.24609375,
+        1026.132568359375
+      ],
+      "index": 9,
+      "label": "ball peen hammer",
+      "mask_pixels": 4357,
+      "score": 0.10281598567962646
+    },
+    {
+      "box": [
+        1170.3885498046875,
+        904.1864624023438,
+        1405.6260986328125,
+        1235.960693359375
+      ],
+      "index": 6,
+      "label": "ball peen hammer",
+      "mask_pixels": 26715,
+      "score": 0.08593357354402542
+    },
+    {
+      "box": [
+        234.54647827148438,
+        342.3382873535156,
+        1307.825927734375,
+        1179.508056640625
+      ],
+      "index": 0,
+      "label": "ball peen hammer",
+      "mask_pixels": 58884,
+      "score": 0.08238152414560318
+    },
+    {
+      "box": [
+        328.7178955078125,
+        330.7009582519531,
+        624.7730712890625,
+        437.9002380371094
+      ],
+      "index": 3,
+      "label": "ball peen hammer",
+      "mask_pixels": 18951,
+      "score": 0.08202407509088516
+    }
+  ],
+  "duration_s": 42.83110332489014,
+  "effective_model_path": "/Users/noahlyons/.cache/huggingface/hub/models--mlx-community--sam3.1-bf16/snapshots/a992e302ea9b0f03f41dfd93414a4fd0e818f65b",
+  "effective_predict_multi": "sam3_1.generate.predict_multi",
+  "effective_processor": "sam3_1.Sam31Processor",
+  "finished_at": 1783972537.9509492,
+  "image": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/source/observed-bench-splat.png",
+  "image_size": [
+    1796,
+    1594
+  ],
+  "max_results": 64,
+  "model": "mlx-community/sam3.1-bf16",
+  "ok": true,
+  "outputs": {
+    "cutout_00": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/ball-peen-hammer-sam31/cutout-00.png",
+    "cutout_01": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/ball-peen-hammer-sam31/cutout-01.png",
+    "cutout_02": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/ball-peen-hammer-sam31/cutout-02.png",
+    "cutout_03": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/ball-peen-hammer-sam31/cutout-03.png",
+    "cutout_04": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/ball-peen-hammer-sam31/cutout-04.png",
+    "cutout_05": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/ball-peen-hammer-sam31/cutout-05.png",
+    "cutout_06": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/ball-peen-hammer-sam31/cutout-06.png",
+    "cutout_07": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/ball-peen-hammer-sam31/cutout-07.png",
+    "cutout_08": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/ball-peen-hammer-sam31/cutout-08.png",
+    "cutout_09": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/ball-peen-hammer-sam31/cutout-09.png",
+    "mask_00": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/ball-peen-hammer-sam31/mask-00.png",
+    "mask_01": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/ball-peen-hammer-sam31/mask-01.png",
+    "mask_02": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/ball-peen-hammer-sam31/mask-02.png",
+    "mask_03": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/ball-peen-hammer-sam31/mask-03.png",
+    "mask_04": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/ball-peen-hammer-sam31/mask-04.png",
+    "mask_05": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/ball-peen-hammer-sam31/mask-05.png",
+    "mask_06": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/ball-peen-hammer-sam31/mask-06.png",
+    "mask_07": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/ball-peen-hammer-sam31/mask-07.png",
+    "mask_08": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/ball-peen-hammer-sam31/mask-08.png",
+    "mask_09": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/ball-peen-hammer-sam31/mask-09.png",
+    "overlay": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/ball-peen-hammer-sam31/overlay.png"
+  },
+  "phase": "complete",
+  "prompt": [
+    "ball peen hammer"
+  ],
+  "started_at": 1783972495.1198459,
+  "threshold": 0.08
+}

@@ -1,0 +1,21 @@
+{
+  "name": "observed-bench-splat",
+  "job_type": "sam3_isolate_handy_candyman_0713",
+  "job_id": "ffedd8e026fa",
+  "input_path": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/source/observed-bench-splat.png",
+  "input_name": "observed-bench-splat.png",
+  "params": {
+    "prompt": "dark blurred scan capture edge around bench",
+    "boxes": "0,0,360,220;0,1310,1796,1594;1640,0,1796,1594",
+    "threshold": "0.08",
+    "max_results": "64",
+    "feather": "1.25",
+    "model": "mlx-community/sam3.1-bf16"
+  },
+  "output_files": [
+    "overlay.png",
+    "receipt.json"
+  ],
+  "created_at": 1783972762.693335,
+  "duration_s": 2.8
+}

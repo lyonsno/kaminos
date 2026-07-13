@@ -1,0 +1,214 @@
+{
+  "schema": "kaminos.crucible-bench-shard-manifest.v0",
+  "created_at": "2026-07-13T19:55:00Z",
+  "operator_lane": "handy-candyman",
+  "source_image": "artifacts/crucible-bench-shards-2026-07-13/source/observed-bench-splat.png",
+  "source_sha256": "805f495e3aa8a660579467c643700af1a5074185fd3fb612b2c2245affed43d7",
+  "authoritative_source_ref": "Wake Crucible Bench observed source image mirrored into this artifact folder; full private coordination envelope remains outside this public repo.",
+  "candidate_count": 6,
+  "candidate_count_diagnostic": "No candidates were dropped after first visual inspection; six are ranked for first episode firing.",
+  "sam3_jobs": {
+    "specimen-tray": "6bc877a84569",
+    "ball-peen-hammer": "7b2c9c61c459",
+    "right-tool-cluster": "e312525cd3b6",
+    "vice-anvil-block": "f863db55c37a",
+    "surface-board": "d2892ad82a3d",
+    "capture-edge": "016ae3fe70ad"
+  },
+  "candidates": [
+    {
+      "rank": 1,
+      "slug": "specimen-tray",
+      "label": "Specimen tray + slots",
+      "box": [
+        460,
+        420,
+        1220,
+        1065
+      ],
+      "role": "source plate / shard tray vocabulary",
+      "route": "SAM3 isolate, then preserve tray/slots as bounded shard; mesh only for frame/slot geometry if needed",
+      "crop_path": "artifacts/crucible-bench-shards-2026-07-13/crops/01-specimen-tray.png",
+      "source_sha256": "805f495e3aa8a660579467c643700af1a5074185fd3fb612b2c2245affed43d7",
+      "crop_sha256": "de10cc4ec4ca202fbc03d76b40a7baa57d43ea09397c9ab131e3e44b9c2cd0ed"
+    },
+    {
+      "rank": 2,
+      "slug": "ball-peen-hammer",
+      "label": "Ball-peen hammer",
+      "box": [
+        310,
+        325,
+        620,
+        1135
+      ],
+      "role": "bench tool / scale prop / graspable cast candidate",
+      "route": "SAM3 isolate then Trellis/SF3D orbitability-seeking mesh",
+      "crop_path": "artifacts/crucible-bench-shards-2026-07-13/crops/02-ball-peen-hammer.png",
+      "source_sha256": "805f495e3aa8a660579467c643700af1a5074185fd3fb612b2c2245affed43d7",
+      "crop_sha256": "9afecbe34ef81d27ea3668216956dfaa9206440022637e776eb991721df1bc3e"
+    },
+    {
+      "rank": 3,
+      "slug": "right-tool-cluster",
+      "label": "Pen/soldering tool cluster",
+      "box": [
+        1380,
+        650,
+        1680,
+        1130
+      ],
+      "role": "firing-station tool clutter / bench affordance vocabulary",
+      "route": "SAM3 isolate; likely shard-only or mesh after cleanup due occlusion",
+      "crop_path": "artifacts/crucible-bench-shards-2026-07-13/crops/03-right-tool-cluster.png",
+      "source_sha256": "805f495e3aa8a660579467c643700af1a5074185fd3fb612b2c2245affed43d7",
+      "crop_sha256": "2cfc6e507c96a11cc6d50f7fe51658c8322e30f54c411c63553318439f60cda0"
+    },
+    {
+      "rank": 4,
+      "slug": "vice-anvil-block",
+      "label": "Vice/anvil-like block",
+      "box": [
+        1310,
+        1035,
+        1590,
+        1385
+      ],
+      "role": "cast pedestal / clamp block / collision prop",
+      "route": "SAM3 isolate then mesh route; validate with rotating witness",
+      "crop_path": "artifacts/crucible-bench-shards-2026-07-13/crops/04-vice-anvil-block.png",
+      "source_sha256": "805f495e3aa8a660579467c643700af1a5074185fd3fb612b2c2245affed43d7",
+      "crop_sha256": "633bc1664024fdd642ae7bf420b85a2abc499d66ed6a897e9d5d945a78e9d88f"
+    },
+    {
+      "rank": 5,
+      "slug": "surface-board",
+      "label": "Worn wooden surface board",
+      "box": [
+        140,
+        185,
+        1665,
+        1225
+      ],
+      "role": "material substrate / source plate surface dressing",
+      "route": "image repair or Sharp/splat partial-view fidelity; not free orbit",
+      "crop_path": "artifacts/crucible-bench-shards-2026-07-13/crops/05-surface-board.png",
+      "source_sha256": "805f495e3aa8a660579467c643700af1a5074185fd3fb612b2c2245affed43d7",
+      "crop_sha256": "2d6b11e5430c38f3a00071e9ba77630b3a2c4bc8656e05de40cda968bd1d4b50"
+    },
+    {
+      "rank": 6,
+      "slug": "capture-edge",
+      "label": "Dreamy capture-edge treatment",
+      "box": [
+        0,
+        0,
+        1796,
+        1594
+      ],
+      "role": "bounded visual grammar for scanned matter entering Kaminos",
+      "route": "shard preservation / image-space cleanup; explicit non-geometry view-cone contract",
+      "crop_path": "artifacts/crucible-bench-shards-2026-07-13/crops/06-capture-edge.png",
+      "source_sha256": "805f495e3aa8a660579467c643700af1a5074185fd3fb612b2c2245affed43d7",
+      "crop_sha256": "fd2f3f15e33c96450c955fd9b16bb21b034a0bcb69f2fbeaef957441e91a5ae1"
+    }
+  ],
+  "contact_sheets": [
+    "artifacts/crucible-bench-shards-2026-07-13/contact-sheets/observed-bench-candidate-boxes.png",
+    "artifacts/crucible-bench-shards-2026-07-13/contact-sheets/pre-sam-ranked-candidates.png"
+  ],
+  "route_identity_note": "SAM3, Sharp, and Trellis jobs were submitted through GPU Greenroom routes after reading /Users/noahlyons/dev/gpu-greenroom/README.md. Requested and effective routes are recorded below; no backend fallback is treated as success without route evidence.",
+  "sam3_route_correction": {
+    "initial_model": "mlx-community/sam3-image",
+    "initial_failure_phase": "load_model",
+    "initial_error": "Config not found in local mlx-community/sam3-image snapshot",
+    "corrected_model": "mlx-community/sam3.1-bf16",
+    "corrected_probe_job": "d860c0fec84d",
+    "corrected_probe_result": "done; broad-but-useful tray armature mask after visual inspection"
+  },
+  "sam3_jobs_corrected": {
+    "specimen-tray": "d860c0fec84d",
+    "ball-peen-hammer": "bf4d43f20558",
+    "right-tool-cluster": "34f851c11d47",
+    "vice-anvil-block": "cf25522ece1d",
+    "surface-board": "5e77fae5a496",
+    "capture-edge": "ffedd8e026fa"
+  },
+  "view_firings": {
+    "surface-board-sharp": {
+      "job_id": "d325a3df1aaa",
+      "route": "sharp",
+      "effective_route": "/Users/noahlyons/dev/ml-sharp/.venv/bin/sharp predict -i crops/05-surface-board.png -o view-firings/surface-board-sharp --device mps --no-render",
+      "duration_s": 15.7,
+      "source": "artifacts/crucible-bench-shards-2026-07-13/crops/05-surface-board.png",
+      "output": "artifacts/crucible-bench-shards-2026-07-13/view-firings/surface-board-sharp/05-surface-board.ply",
+      "point_count": 1179648,
+      "local_witness": "artifacts/crucible-bench-shards-2026-07-13/witnesses/surface-board-sharp-pointcloud-multiangle.png",
+      "kaminos_viewer_witness": "artifacts/crucible-bench-shards-2026-07-13/witnesses/surface-board-sharp-kaminos-splat-inbox.png",
+      "kaminos_viewer_report": "artifacts/crucible-bench-shards-2026-07-13/witnesses/surface-board-sharp-kaminos-splat-inbox.json",
+      "kaminos_requested_route": "http://127.0.0.1:8096/ scenario=splat-asset-inbox; KAMINOS_SPLAT_INBOX_DIR=view-firings/surface-board-sharp",
+      "kaminos_effective_route": "/api/read?root=splat-inbox&path=05-surface-board.ply",
+      "kaminos_mount_state": "splat-inbox mounted to artifacts/crucible-bench-shards-2026-07-13/view-firings/surface-board-sharp; asset imported as experimental point-cloud preview",
+      "contract": "partial-view fidelity only; not freely orbitable; Kaminos preview is three-point-cloud-preview, not final real Gaussian rendering"
+    }
+  },
+  "mesh_firings": {
+    "hammer-trellis-official-512-seed42": {
+      "job_id": "88a279fccd92",
+      "route": "trellis2_official_512_seeded",
+      "effective_backend": "local-reference/trellis-mac pytorch-mps with ATTN_BACKEND=sdpa and SPARSE_ATTN_BACKEND=sdpa",
+      "pipeline_load_s": 90.50842850003392,
+      "pipeline_run_s": 74.6058450830169,
+      "source": "artifacts/crucible-bench-shards-2026-07-13/masks/ball-peen-hammer-sam31/cutout-00.png",
+      "raw_mesh": "artifacts/crucible-bench-shards-2026-07-13/mesh-firings/hammer-trellis-official-512-seed42/raw_mesh.npz",
+      "geometry_only_ply": "artifacts/crucible-bench-shards-2026-07-13/mesh-firings/hammer-trellis-official-512-seed42/raw_mesh_geometry_only.ply",
+      "local_witness": "artifacts/crucible-bench-shards-2026-07-13/witnesses/hammer-trellis-rawmesh-multiangle.png",
+      "local_witness_receipt": "artifacts/crucible-bench-shards-2026-07-13/witnesses/hammer-trellis-rawmesh-witness.json",
+      "final_glb_status": "not_emitted_known_mps_texture_bake_mismatch",
+      "metrics": {
+        "vertices": 86249,
+        "faces": 172980,
+        "boundary_edges": 5069,
+        "non_manifold_edges": 4712,
+        "same_direction_conflict_edges": 30732
+      },
+      "contract": "orbitability-seeking mesh firing produced a visually hammer-like geometry-only raw mesh; not a textured GLB, not collision-approved, and not freely integrated until topology/GLB export are repaired",
+      "effective_env_required": "ATTN_BACKEND=sdpa; SPARSE_ATTN_BACKEND=sdpa; PYTORCH_ENABLE_MPS_FALLBACK=1"
+    }
+  },
+  "viewer_routes": {
+    "surface-board-sharp": {
+      "status": "witnessed",
+      "requested_url": "http://127.0.0.1:8096/",
+      "effective_url": "http://127.0.0.1:8096/",
+      "scenario": "splat-asset-inbox",
+      "server_root": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713",
+      "splat_inbox_mount": "artifacts/crucible-bench-shards-2026-07-13/view-firings/surface-board-sharp",
+      "asset_source": "/api/read?root=splat-inbox&path=05-surface-board.ply",
+      "preview_kind": "point-cloud",
+      "point_count": 1179648,
+      "render_capabilities": {
+        "realSplatRendering": false,
+        "canvasMode": "three-point-cloud-preview",
+        "meshDepthOcclusion": false,
+        "sharedCanvasComposite": false
+      }
+    },
+    "hammer-trellis-geometry-only-ply": {
+      "status": "not_registered_as_kaminos_single_asset_route",
+      "reason": "Kaminos supported handoff for this episode is the Sharp PLY as splat/point-cloud. The Trellis mesh is a geometry-only PLY converted from raw_mesh.npz with no GLB, no texture, and topology defects; local multi-angle render is preserved as reconstruction evidence only."
+    }
+  },
+  "visual_inspection_notes": [
+    "Authoritative observed bench image inspected directly.",
+    "Pre-SAM candidate sheet inspected; tray and hammer are strongest, vice/anvil crop is mostly occlusion/blur and demoted.",
+    "SAM3.1 tray overlay inspected: useful broad tray-armature mask, not slot-level decomposition.",
+    "SAM3.1 hammer overlay inspected: top detection captures the hammer silhouette, with additional false positives preserved.",
+    "SAM3.1 right-tool and vice/anvil overlays inspected as useful misses: both retain visual vocabulary but are too broad/noisy for honest cast promotion.",
+    "SAM3.1 surface-board overlay inspected: broad tabletop/material shard supports partial-view Sharp preservation.",
+    "SAM3.1 capture-edge overlay inspected: no detections; capture-edge remains image-space shard vocabulary, not reconstruction input.",
+    "Trellis hammer witness inspected: front/left/right/top views preserve a recognizable ball-peen hammer silhouette, but geometry scars and topology metrics keep it provisional.",
+    "Sharp surface-board witness inspected: dense colored point cloud preserves partial bench material and tray/edge matter inside a bounded view cone.",
+    "Kaminos splat inbox witness inspected: imported 05 Surface Board through indexed /api/read route and rendered a point-cloud preview; report explicitly says realSplatRendering=false."
+  ]
+}

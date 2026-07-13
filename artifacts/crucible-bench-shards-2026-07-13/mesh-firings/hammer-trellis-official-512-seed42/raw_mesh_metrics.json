@@ -1,0 +1,15 @@
+{
+  "boundary_edges": 5069,
+  "decoder_coords_shape": [
+    86249,
+    4
+  ],
+  "decoder_feats_shape": [
+    86249,
+    7
+  ],
+  "faces": 172980,
+  "non_manifold_edges": 4712,
+  "same_direction_conflict_edges": 30732,
+  "vertices": 86249
+}

@@ -1,0 +1,26 @@
+{
+  "boxes": "0,0,360,220;0,1310,1796,1594;1640,0,1796,1594",
+  "detections": [],
+  "duration_s": 2.505584955215454,
+  "effective_model_path": "/Users/noahlyons/.cache/huggingface/hub/models--mlx-community--sam3.1-bf16/snapshots/a992e302ea9b0f03f41dfd93414a4fd0e818f65b",
+  "effective_predict_multi": "sam3_1.generate.predict_multi",
+  "effective_processor": "sam3_1.Sam31Processor",
+  "finished_at": 1783972762.51714,
+  "image": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/source/observed-bench-splat.png",
+  "image_size": [
+    1796,
+    1594
+  ],
+  "max_results": 64,
+  "model": "mlx-community/sam3.1-bf16",
+  "ok": true,
+  "outputs": {
+    "overlay": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/capture-edge-sam31/overlay.png"
+  },
+  "phase": "complete",
+  "prompt": [
+    "dark blurred scan capture edge around bench"
+  ],
+  "started_at": 1783972760.011555,
+  "threshold": 0.08
+}

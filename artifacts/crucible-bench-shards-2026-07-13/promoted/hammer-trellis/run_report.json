@@ -1,0 +1,105 @@
+{
+  "artifacts": {
+    "decoder_output": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/mesh-firings/hammer-trellis-official-512-seed42/decoder_output.npz",
+    "raw_mesh": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/mesh-firings/hammer-trellis-official-512-seed42/raw_mesh.npz",
+    "raw_mesh_metrics": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/mesh-firings/hammer-trellis-official-512-seed42/raw_mesh_metrics.json"
+  },
+  "elapsed_seconds": {
+    "pipeline_load": 90.50842850003392,
+    "pipeline_run": 74.6058450830169
+  },
+  "final_glb_status": "not_emitted_known_mps_texture_bake_mismatch",
+  "last_trustworthy_phase": "raw_mesh_saved",
+  "primary_output_status": "written",
+  "route_identity": {
+    "command": [
+      "/private/tmp/trellis2mlx-winding-metal-0704/scripts/run_official_trellis2.py",
+      "--image",
+      "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/ball-peen-hammer-sam31/cutout-00.png",
+      "--output-dir",
+      "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/mesh-firings/hammer-trellis-official-512-seed42",
+      "--save-raw-mesh",
+      "--seed",
+      "42",
+      "--target-faces",
+      "200000",
+      "--texture-size",
+      "1024",
+      "--pipeline-type",
+      "512",
+      "--shared-noise",
+      "",
+      "--steps",
+      "12"
+    ],
+    "effective_backend": {
+      "attention_backend": "sdpa",
+      "sparse_attention_backend": "sdpa"
+    },
+    "env": {
+      "ATTN_BACKEND": "sdpa",
+      "PYTHONPATH": ".",
+      "PYTORCH_ENABLE_MPS_FALLBACK": "1",
+      "SPARSE_ATTN_BACKEND": "sdpa"
+    },
+    "forbidden_inferences": [
+      "not Microsoft CUDA TRELLIS.2 evidence",
+      "not final-GLB parity evidence",
+      "not texture/bake parity evidence"
+    ],
+    "output_dir": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/mesh-firings/hammer-trellis-official-512-seed42",
+    "requested_outputs": {
+      "conditioning": false,
+      "decoder_output": true,
+      "final_glb": false,
+      "raw_mesh": true,
+      "shape_flow_block_trace": false,
+      "shape_flow_step": false,
+      "shape_slat": false,
+      "sparse_coords": false,
+      "sparse_flow_block_trace": false,
+      "sparse_flow_step": false,
+      "sparse_flow_steps": false,
+      "sparse_internals": false
+    },
+    "requested_stops": {
+      "conditioning": false,
+      "raw_mesh": false,
+      "shape_flow_block_trace": false,
+      "shape_flow_step": false,
+      "shape_slat": false,
+      "sparse": false,
+      "sparse_flow_block_trace": false,
+      "sparse_flow_step": false,
+      "sparse_flow_steps": false,
+      "sparse_internals": false
+    },
+    "route": {
+      "backend": "pytorch-mps",
+      "family": "local-reference/trellis-mac",
+      "pipeline_type": "512",
+      "preprocess_image": true,
+      "seed": 42,
+      "shape_flow_trace_block_index": 0,
+      "shape_flow_trace_step_index": 0,
+      "shared_noise_mode": null,
+      "shared_noise_path": null,
+      "shared_noise_sha256": null,
+      "sparse_flow_trace_block_index": 0,
+      "sparse_flow_trace_step_index": 0,
+      "steps": 12,
+      "target_faces": 200000,
+      "texture_size": 1024,
+      "trellis_dir": "/Users/noahlyons/dev/trellis-mac/TRELLIS.2"
+    },
+    "schema": "trellis2mlx.official_trellis2_route.v1",
+    "script_path": "/private/tmp/trellis2mlx-winding-metal-0704/scripts/run_official_trellis2.py",
+    "script_sha256": "3e15eee2756996fa7a7d07d1ff7a3d1c54bcfbda1f0dd02690b4561d5806f437",
+    "source": {
+      "image_path": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/ball-peen-hammer-sam31/cutout-00.png",
+      "image_sha256": "9e09c06ff813f1ec7d295d0ebca730f41c4f0ebe5547febafb70e659b460cd13"
+    }
+  },
+  "schema": "trellis2mlx.official_trellis2_run_report.v1",
+  "status": "done"
+}

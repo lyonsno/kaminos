@@ -1,0 +1,55 @@
+{
+  "boxes": "460,420,1220,1065",
+  "detections": [
+    {
+      "box": [
+        405.4552001953125,
+        408.9276123046875,
+        1294.9346923828125,
+        1073.2540283203125
+      ],
+      "index": 1,
+      "label": "specimen tray with square slots",
+      "mask_pixels": 417234,
+      "score": 0.5805899500846863
+    },
+    {
+      "box": [
+        404.59417724609375,
+        411.48614501953125,
+        1298.1536865234375,
+        1072.889404296875
+      ],
+      "index": 0,
+      "label": "specimen tray with square slots",
+      "mask_pixels": 417540,
+      "score": 0.5726964473724365
+    }
+  ],
+  "duration_s": 6.993000745773315,
+  "effective_model_path": "/Users/noahlyons/.cache/huggingface/hub/models--mlx-community--sam3.1-bf16/snapshots/a992e302ea9b0f03f41dfd93414a4fd0e818f65b",
+  "effective_predict_multi": "sam3_1.generate.predict_multi",
+  "effective_processor": "sam3_1.Sam31Processor",
+  "finished_at": 1783972403.856268,
+  "image": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/source/observed-bench-splat.png",
+  "image_size": [
+    1796,
+    1594
+  ],
+  "max_results": 64,
+  "model": "mlx-community/sam3.1-bf16",
+  "ok": true,
+  "outputs": {
+    "cutout_00": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/specimen-tray-sam31-probe/cutout-00.png",
+    "cutout_01": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/specimen-tray-sam31-probe/cutout-01.png",
+    "mask_00": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/specimen-tray-sam31-probe/mask-00.png",
+    "mask_01": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/specimen-tray-sam31-probe/mask-01.png",
+    "overlay": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/specimen-tray-sam31-probe/overlay.png"
+  },
+  "phase": "complete",
+  "prompt": [
+    "specimen tray with square slots"
+  ],
+  "started_at": 1783972396.8632672,
+  "threshold": 0.08
+}

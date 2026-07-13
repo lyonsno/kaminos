@@ -1,0 +1,22 @@
+{
+  "boxes": "0,0,360,220;0,1310,1796,1594;1640,0,1796,1594",
+  "duration_s": 0.7665600776672363,
+  "effective_model_path": "/Users/noahlyons/.cache/huggingface/hub/models--mlx-community--sam3-image/snapshots/b72a14d8127e17e6f2a3d2e075bbbf4307ba146e",
+  "error": "FileNotFoundError: Config not found at /Users/noahlyons/.cache/huggingface/hub/models--mlx-community--sam3-image/snapshots/b72a14d8127e17e6f2a3d2e075bbbf4307ba146e",
+  "finished_at": 1783972282.426649,
+  "image": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/source/observed-bench-splat.png",
+  "image_size": [
+    1796,
+    1594
+  ],
+  "max_results": 64,
+  "model": "mlx-community/sam3-image",
+  "ok": false,
+  "outputs": {},
+  "phase": "load_model",
+  "prompt": [
+    "dark blurred scan capture edge around bench"
+  ],
+  "started_at": 1783972281.660089,
+  "threshold": 0.08
+}

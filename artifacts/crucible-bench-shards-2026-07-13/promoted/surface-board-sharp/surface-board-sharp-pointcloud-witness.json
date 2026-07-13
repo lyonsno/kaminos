@@ -1,0 +1,10 @@
+{
+  "schema": "kaminos.local-ply-pointcloud-witness.v0",
+  "asset": "surface-board-sharp",
+  "source_ply": "artifacts/crucible-bench-shards-2026-07-13/view-firings/surface-board-sharp/05-surface-board.ply",
+  "witness": "artifacts/crucible-bench-shards-2026-07-13/witnesses/surface-board-sharp-pointcloud-multiangle.png",
+  "point_count": 1179648,
+  "render_policy": "all points projected per view; no sampling cap",
+  "truth_boundary": "software point-cloud projection for visual inspection; not a Kaminos runtime import proof by itself",
+  "sha256": "3312a2b5ff87eba6cb3f30160ba281bde343b9838b9227c618f69e58f0e26af1"
+}

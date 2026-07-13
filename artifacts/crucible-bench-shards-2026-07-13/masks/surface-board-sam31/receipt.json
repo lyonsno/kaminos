@@ -1,0 +1,195 @@
+{
+  "boxes": "140,185,1665,1225",
+  "detections": [
+    {
+      "box": [
+        0.0,
+        117.3291244506836,
+        1739.2564697265625,
+        1244.701171875
+      ],
+      "index": 0,
+      "label": "wooden surface board tabletop",
+      "mask_pixels": 538585,
+      "score": 0.7702672481536865
+    },
+    {
+      "box": [
+        0.0,
+        120.20954132080078,
+        1739.07421875,
+        1243.7227783203125
+      ],
+      "index": 9,
+      "label": "wooden surface board tabletop",
+      "mask_pixels": 537322,
+      "score": 0.7689367532730103
+    },
+    {
+      "box": [
+        924.267822265625,
+        1194.175048828125,
+        1174.8350830078125,
+        1533.904052734375
+      ],
+      "index": 5,
+      "label": "wooden surface board tabletop",
+      "mask_pixels": 43035,
+      "score": 0.16442203521728516
+    },
+    {
+      "box": [
+        17.608430862426758,
+        2.5318331718444824,
+        1630.25244140625,
+        211.8716278076172
+      ],
+      "index": 6,
+      "label": "wooden surface board tabletop",
+      "mask_pixels": 145277,
+      "score": 0.15767239034175873
+    },
+    {
+      "box": [
+        1398.6724853515625,
+        3.366856575012207,
+        1617.0596923828125,
+        151.1373748779297
+      ],
+      "index": 2,
+      "label": "wooden surface board tabletop",
+      "mask_pixels": 6395,
+      "score": 0.1463056206703186
+    },
+    {
+      "box": [
+        336.8376159667969,
+        8.623231887817383,
+        1642.6351318359375,
+        363.52020263671875
+      ],
+      "index": 10,
+      "label": "wooden surface board tabletop",
+      "mask_pixels": 150960,
+      "score": 0.12314387410879135
+    },
+    {
+      "box": [
+        276.1482238769531,
+        184.69520568847656,
+        506.3370056152344,
+        1192.0775146484375
+      ],
+      "index": 7,
+      "label": "wooden surface board tabletop",
+      "mask_pixels": 61004,
+      "score": 0.12310295552015305
+    },
+    {
+      "box": [
+        0.0,
+        117.7447509765625,
+        1737.571533203125,
+        1243.973388671875
+      ],
+      "index": 11,
+      "label": "wooden surface board tabletop",
+      "mask_pixels": 532256,
+      "score": 0.11650378257036209
+    },
+    {
+      "box": [
+        0.0,
+        177.98638916015625,
+        531.7279663085938,
+        414.9679870605469
+      ],
+      "index": 4,
+      "label": "wooden surface board tabletop",
+      "mask_pixels": 52665,
+      "score": 0.10042358934879303
+    },
+    {
+      "box": [
+        1541.7493896484375,
+        0.0,
+        1796.0,
+        594.1824951171875
+      ],
+      "index": 1,
+      "label": "wooden surface board tabletop",
+      "mask_pixels": 51281,
+      "score": 0.09150050580501556
+    },
+    {
+      "box": [
+        1523.188720703125,
+        449.5632629394531,
+        1713.7493896484375,
+        618.348388671875
+      ],
+      "index": 8,
+      "label": "wooden surface board tabletop",
+      "mask_pixels": 12962,
+      "score": 0.08650084584951401
+    },
+    {
+      "box": [
+        332.6201171875,
+        174.94808959960938,
+        473.3930358886719,
+        328.37176513671875
+      ],
+      "index": 3,
+      "label": "wooden surface board tabletop",
+      "mask_pixels": 8809,
+      "score": 0.0855017751455307
+    }
+  ],
+  "duration_s": 9.23878812789917,
+  "effective_model_path": "/Users/noahlyons/.cache/huggingface/hub/models--mlx-community--sam3.1-bf16/snapshots/a992e302ea9b0f03f41dfd93414a4fd0e818f65b",
+  "effective_predict_multi": "sam3_1.generate.predict_multi",
+  "effective_processor": "sam3_1.Sam31Processor",
+  "finished_at": 1783972759.789925,
+  "image": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/source/observed-bench-splat.png",
+  "image_size": [
+    1796,
+    1594
+  ],
+  "max_results": 64,
+  "model": "mlx-community/sam3.1-bf16",
+  "ok": true,
+  "outputs": {
+    "cutout_00": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/surface-board-sam31/cutout-00.png",
+    "cutout_01": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/surface-board-sam31/cutout-01.png",
+    "cutout_02": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/surface-board-sam31/cutout-02.png",
+    "cutout_03": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/surface-board-sam31/cutout-03.png",
+    "cutout_04": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/surface-board-sam31/cutout-04.png",
+    "cutout_05": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/surface-board-sam31/cutout-05.png",
+    "cutout_06": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/surface-board-sam31/cutout-06.png",
+    "cutout_07": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/surface-board-sam31/cutout-07.png",
+    "cutout_08": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/surface-board-sam31/cutout-08.png",
+    "cutout_09": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/surface-board-sam31/cutout-09.png",
+    "cutout_10": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/surface-board-sam31/cutout-10.png",
+    "cutout_11": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/surface-board-sam31/cutout-11.png",
+    "mask_00": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/surface-board-sam31/mask-00.png",
+    "mask_01": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/surface-board-sam31/mask-01.png",
+    "mask_02": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/surface-board-sam31/mask-02.png",
+    "mask_03": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/surface-board-sam31/mask-03.png",
+    "mask_04": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/surface-board-sam31/mask-04.png",
+    "mask_05": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/surface-board-sam31/mask-05.png",
+    "mask_06": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/surface-board-sam31/mask-06.png",
+    "mask_07": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/surface-board-sam31/mask-07.png",
+    "mask_08": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/surface-board-sam31/mask-08.png",
+    "mask_09": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/surface-board-sam31/mask-09.png",
+    "mask_10": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/surface-board-sam31/mask-10.png",
+    "mask_11": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/surface-board-sam31/mask-11.png",
+    "overlay": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/surface-board-sam31/overlay.png"
+  },
+  "phase": "complete",
+  "prompt": [
+    "wooden surface board tabletop"
+  ],
+  "started_at": 1783972750.551137,
+  "threshold": 0.08
+}

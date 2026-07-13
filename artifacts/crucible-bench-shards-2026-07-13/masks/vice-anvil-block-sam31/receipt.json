@@ -1,0 +1,447 @@
+{
+  "boxes": "1310,1035,1590,1385",
+  "detections": [
+    {
+      "box": [
+        861.9698486328125,
+        1088.2205810546875,
+        1175.946044921875,
+        1544.50537109375
+      ],
+      "index": 21,
+      "label": "small vise anvil block",
+      "mask_pixels": 64146,
+      "score": 0.7918410897254944
+    },
+    {
+      "box": [
+        845.498291015625,
+        1090.8404541015625,
+        1166.4554443359375,
+        1235.7294921875
+      ],
+      "index": 4,
+      "label": "small vise anvil block",
+      "mask_pixels": 20857,
+      "score": 0.6371651291847229
+    },
+    {
+      "box": [
+        1236.9359130859375,
+        1091.450927734375,
+        1406.7325439453125,
+        1182.52392578125
+      ],
+      "index": 3,
+      "label": "small vise anvil block",
+      "mask_pixels": 8682,
+      "score": 0.5562615394592285
+    },
+    {
+      "box": [
+        1423.297607421875,
+        621.6685791015625,
+        1651.4732666015625,
+        945.8723754882812
+      ],
+      "index": 0,
+      "label": "small vise anvil block",
+      "mask_pixels": 21779,
+      "score": 0.441913366317749
+    },
+    {
+      "box": [
+        1244.607421875,
+        1206.3416748046875,
+        1419.337890625,
+        1250.7977294921875
+      ],
+      "index": 20,
+      "label": "small vise anvil block",
+      "mask_pixels": 4604,
+      "score": 0.4236656427383423
+    },
+    {
+      "box": [
+        1265.9422607421875,
+        1011.3345336914062,
+        1356.4012451171875,
+        1080.4007568359375
+      ],
+      "index": 25,
+      "label": "small vise anvil block",
+      "mask_pixels": 4541,
+      "score": 0.407440185546875
+    },
+    {
+      "box": [
+        1203.3536376953125,
+        903.2801513671875,
+        1419.0968017578125,
+        1278.6827392578125
+      ],
+      "index": 27,
+      "label": "small vise anvil block",
+      "mask_pixels": 24717,
+      "score": 0.3264991044998169
+    },
+    {
+      "box": [
+        1239.87939453125,
+        901.60986328125,
+        1373.2259521484375,
+        1095.7174072265625
+      ],
+      "index": 19,
+      "label": "small vise anvil block",
+      "mask_pixels": 10295,
+      "score": 0.24863356351852417
+    },
+    {
+      "box": [
+        905.4149169921875,
+        1207.1094970703125,
+        1165.3690185546875,
+        1542.8466796875
+      ],
+      "index": 26,
+      "label": "small vise anvil block",
+      "mask_pixels": 43839,
+      "score": 0.24663567543029785
+    },
+    {
+      "box": [
+        294.23199462890625,
+        309.3221740722656,
+        628.3075561523438,
+        1169.1329345703125
+      ],
+      "index": 12,
+      "label": "small vise anvil block",
+      "mask_pixels": 62556,
+      "score": 0.2185719907283783
+    },
+    {
+      "box": [
+        850.4490356445312,
+        1128.0631103515625,
+        1132.4293212890625,
+        1233.181396484375
+      ],
+      "index": 7,
+      "label": "small vise anvil block",
+      "mask_pixels": 14723,
+      "score": 0.20111174881458282
+    },
+    {
+      "box": [
+        860.6404418945312,
+        1099.9609375,
+        1170.970947265625,
+        1260.468994140625
+      ],
+      "index": 23,
+      "label": "small vise anvil block",
+      "mask_pixels": 21048,
+      "score": 0.18726696074008942
+    },
+    {
+      "box": [
+        1423.1907958984375,
+        691.337890625,
+        1609.4227294921875,
+        936.0535278320312
+      ],
+      "index": 18,
+      "label": "small vise anvil block",
+      "mask_pixels": 14988,
+      "score": 0.1828395277261734
+    },
+    {
+      "box": [
+        1209.5802001953125,
+        905.4429321289062,
+        1399.0162353515625,
+        1199.1636962890625
+      ],
+      "index": 15,
+      "label": "small vise anvil block",
+      "mask_pixels": 18102,
+      "score": 0.1626100391149521
+    },
+    {
+      "box": [
+        909.3997192382812,
+        1132.3221435546875,
+        1126.6729736328125,
+        1229.7149658203125
+      ],
+      "index": 22,
+      "label": "small vise anvil block",
+      "mask_pixels": 14453,
+      "score": 0.16016791760921478
+    },
+    {
+      "box": [
+        1059.6302490234375,
+        521.1483154296875,
+        1103.69287109375,
+        593.2179565429688
+      ],
+      "index": 8,
+      "label": "small vise anvil block",
+      "mask_pixels": 2572,
+      "score": 0.13696405291557312
+    },
+    {
+      "box": [
+        0.0,
+        701.791748046875,
+        134.27891540527344,
+        1049.82958984375
+      ],
+      "index": 5,
+      "label": "small vise anvil block",
+      "mask_pixels": 21953,
+      "score": 0.13496257364749908
+    },
+    {
+      "box": [
+        323.1373596191406,
+        330.8596496582031,
+        621.76611328125,
+        437.32965087890625
+      ],
+      "index": 6,
+      "label": "small vise anvil block",
+      "mask_pixels": 18377,
+      "score": 0.13421307504177094
+    },
+    {
+      "box": [
+        1238.9522705078125,
+        1206.2879638671875,
+        1414.353759765625,
+        1272.9052734375
+      ],
+      "index": 13,
+      "label": "small vise anvil block",
+      "mask_pixels": 6844,
+      "score": 0.1329781711101532
+    },
+    {
+      "box": [
+        1377.527587890625,
+        562.5471801757812,
+        1714.7716064453125,
+        987.8220825195312
+      ],
+      "index": 17,
+      "label": "small vise anvil block",
+      "mask_pixels": 31026,
+      "score": 0.12941324710845947
+    },
+    {
+      "box": [
+        860.2129516601562,
+        1092.2711181640625,
+        1177.168212890625,
+        1546.42578125
+      ],
+      "index": 11,
+      "label": "small vise anvil block",
+      "mask_pixels": 64217,
+      "score": 0.12598398327827454
+    },
+    {
+      "box": [
+        1237.7034912109375,
+        1168.148193359375,
+        1420.7271728515625,
+        1266.16943359375
+      ],
+      "index": 28,
+      "label": "small vise anvil block",
+      "mask_pixels": 9196,
+      "score": 0.12257558107376099
+    },
+    {
+      "box": [
+        352.0067443847656,
+        569.6458740234375,
+        401.10601806640625,
+        644.5252685546875
+      ],
+      "index": 2,
+      "label": "small vise anvil block",
+      "mask_pixels": 2423,
+      "score": 0.1172010600566864
+    },
+    {
+      "box": [
+        1540.3955078125,
+        549.5409545898438,
+        1796.0,
+        966.6436157226562
+      ],
+      "index": 29,
+      "label": "small vise anvil block",
+      "mask_pixels": 44697,
+      "score": 0.09741859883069992
+    },
+    {
+      "box": [
+        519.9468383789062,
+        1186.9329833984375,
+        590.1192016601562,
+        1318.69921875
+      ],
+      "index": 14,
+      "label": "small vise anvil block",
+      "mask_pixels": 3997,
+      "score": 0.09373465925455093
+    },
+    {
+      "box": [
+        1236.93994140625,
+        1092.1871337890625,
+        1407.113525390625,
+        1182.22119140625
+      ],
+      "index": 1,
+      "label": "small vise anvil block",
+      "mask_pixels": 8622,
+      "score": 0.0917484387755394
+    },
+    {
+      "box": [
+        252.89724731445312,
+        395.0599365234375,
+        1327.42041015625,
+        1169.7130126953125
+      ],
+      "index": 16,
+      "label": "small vise anvil block",
+      "mask_pixels": 274870,
+      "score": 0.08954182267189026
+    },
+    {
+      "box": [
+        1421.5904541015625,
+        661.001953125,
+        1622.411865234375,
+        739.1813354492188
+      ],
+      "index": 10,
+      "label": "small vise anvil block",
+      "mask_pixels": 7249,
+      "score": 0.08681392669677734
+    },
+    {
+      "box": [
+        1197.8868408203125,
+        1001.1040649414062,
+        1304.809814453125,
+        1121.715576171875
+      ],
+      "index": 9,
+      "label": "small vise anvil block",
+      "mask_pixels": 5694,
+      "score": 0.08350787311792374
+    },
+    {
+      "box": [
+        1256.26904296875,
+        907.0592651367188,
+        1338.00830078125,
+        1019.0315551757812
+      ],
+      "index": 24,
+      "label": "small vise anvil block",
+      "mask_pixels": 5480,
+      "score": 0.08339100331068039
+    }
+  ],
+  "duration_s": 136.92890977859497,
+  "effective_model_path": "/Users/noahlyons/.cache/huggingface/hub/models--mlx-community--sam3.1-bf16/snapshots/a992e302ea9b0f03f41dfd93414a4fd0e818f65b",
+  "effective_predict_multi": "sam3_1.generate.predict_multi",
+  "effective_processor": "sam3_1.Sam31Processor",
+  "finished_at": 1783972748.9662259,
+  "image": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/source/observed-bench-splat.png",
+  "image_size": [
+    1796,
+    1594
+  ],
+  "max_results": 64,
+  "model": "mlx-community/sam3.1-bf16",
+  "ok": true,
+  "outputs": {
+    "cutout_00": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/vice-anvil-block-sam31/cutout-00.png",
+    "cutout_01": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/vice-anvil-block-sam31/cutout-01.png",
+    "cutout_02": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/vice-anvil-block-sam31/cutout-02.png",
+    "cutout_03": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/vice-anvil-block-sam31/cutout-03.png",
+    "cutout_04": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/vice-anvil-block-sam31/cutout-04.png",
+    "cutout_05": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/vice-anvil-block-sam31/cutout-05.png",
+    "cutout_06": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/vice-anvil-block-sam31/cutout-06.png",
+    "cutout_07": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/vice-anvil-block-sam31/cutout-07.png",
+    "cutout_08": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/vice-anvil-block-sam31/cutout-08.png",
+    "cutout_09": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/vice-anvil-block-sam31/cutout-09.png",
+    "cutout_10": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/vice-anvil-block-sam31/cutout-10.png",
+    "cutout_11": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/vice-anvil-block-sam31/cutout-11.png",
+    "cutout_12": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/vice-anvil-block-sam31/cutout-12.png",
+    "cutout_13": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/vice-anvil-block-sam31/cutout-13.png",
+    "cutout_14": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/vice-anvil-block-sam31/cutout-14.png",
+    "cutout_15": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/vice-anvil-block-sam31/cutout-15.png",
+    "cutout_16": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/vice-anvil-block-sam31/cutout-16.png",
+    "cutout_17": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/vice-anvil-block-sam31/cutout-17.png",
+    "cutout_18": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/vice-anvil-block-sam31/cutout-18.png",
+    "cutout_19": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/vice-anvil-block-sam31/cutout-19.png",
+    "cutout_20": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/vice-anvil-block-sam31/cutout-20.png",
+    "cutout_21": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/vice-anvil-block-sam31/cutout-21.png",
+    "cutout_22": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/vice-anvil-block-sam31/cutout-22.png",
+    "cutout_23": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/vice-anvil-block-sam31/cutout-23.png",
+    "cutout_24": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/vice-anvil-block-sam31/cutout-24.png",
+    "cutout_25": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/vice-anvil-block-sam31/cutout-25.png",
+    "cutout_26": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/vice-anvil-block-sam31/cutout-26.png",
+    "cutout_27": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/vice-anvil-block-sam31/cutout-27.png",
+    "cutout_28": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/vice-anvil-block-sam31/cutout-28.png",
+    "cutout_29": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/vice-anvil-block-sam31/cutout-29.png",
+    "mask_00": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/vice-anvil-block-sam31/mask-00.png",
+    "mask_01": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/vice-anvil-block-sam31/mask-01.png",
+    "mask_02": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/vice-anvil-block-sam31/mask-02.png",
+    "mask_03": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/vice-anvil-block-sam31/mask-03.png",
+    "mask_04": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/vice-anvil-block-sam31/mask-04.png",
+    "mask_05": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/vice-anvil-block-sam31/mask-05.png",
+    "mask_06": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/vice-anvil-block-sam31/mask-06.png",
+    "mask_07": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/vice-anvil-block-sam31/mask-07.png",
+    "mask_08": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/vice-anvil-block-sam31/mask-08.png",
+    "mask_09": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/vice-anvil-block-sam31/mask-09.png",
+    "mask_10": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/vice-anvil-block-sam31/mask-10.png",
+    "mask_11": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/vice-anvil-block-sam31/mask-11.png",
+    "mask_12": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/vice-anvil-block-sam31/mask-12.png",
+    "mask_13": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/vice-anvil-block-sam31/mask-13.png",
+    "mask_14": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/vice-anvil-block-sam31/mask-14.png",
+    "mask_15": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/vice-anvil-block-sam31/mask-15.png",
+    "mask_16": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/vice-anvil-block-sam31/mask-16.png",
+    "mask_17": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/vice-anvil-block-sam31/mask-17.png",
+    "mask_18": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/vice-anvil-block-sam31/mask-18.png",
+    "mask_19": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/vice-anvil-block-sam31/mask-19.png",
+    "mask_20": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/vice-anvil-block-sam31/mask-20.png",
+    "mask_21": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/vice-anvil-block-sam31/mask-21.png",
+    "mask_22": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/vice-anvil-block-sam31/mask-22.png",
+    "mask_23": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/vice-anvil-block-sam31/mask-23.png",
+    "mask_24": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/vice-anvil-block-sam31/mask-24.png",
+    "mask_25": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/vice-anvil-block-sam31/mask-25.png",
+    "mask_26": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/vice-anvil-block-sam31/mask-26.png",
+    "mask_27": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/vice-anvil-block-sam31/mask-27.png",
+    "mask_28": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/vice-anvil-block-sam31/mask-28.png",
+    "mask_29": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/vice-anvil-block-sam31/mask-29.png",
+    "overlay": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/vice-anvil-block-sam31/overlay.png"
+  },
+  "phase": "complete",
+  "prompt": [
+    "small vise anvil block"
+  ],
+  "started_at": 1783972612.037316,
+  "threshold": 0.08
+}

@@ -1,0 +1,153 @@
+{
+  "boxes": "1380,650,1680,1130",
+  "detections": [
+    {
+      "box": [
+        1423.4742431640625,
+        640.2122192382812,
+        1679.0107421875,
+        951.3372802734375
+      ],
+      "index": 4,
+      "label": "pen soldering tool dark holder",
+      "mask_pixels": 22682,
+      "score": 0.6792728304862976
+    },
+    {
+      "box": [
+        378.37994384765625,
+        408.5908508300781,
+        1309.208740234375,
+        1074.9722900390625
+      ],
+      "index": 3,
+      "label": "pen soldering tool dark holder",
+      "mask_pixels": 312430,
+      "score": 0.2294091284275055
+    },
+    {
+      "box": [
+        0.0,
+        731.0777587890625,
+        133.2425079345703,
+        1042.6383056640625
+      ],
+      "index": 5,
+      "label": "pen soldering tool dark holder",
+      "mask_pixels": 23223,
+      "score": 0.21159598231315613
+    },
+    {
+      "box": [
+        1167.30078125,
+        524.371337890625,
+        1513.1328125,
+        667.121337890625
+      ],
+      "index": 1,
+      "label": "pen soldering tool dark holder",
+      "mask_pixels": 25194,
+      "score": 0.09381461888551712
+    },
+    {
+      "box": [
+        1396.7100830078125,
+        554.9417724609375,
+        1717.522216796875,
+        981.4520263671875
+      ],
+      "index": 0,
+      "label": "pen soldering tool dark holder",
+      "mask_pixels": 30074,
+      "score": 0.09069349616765976
+    },
+    {
+      "box": [
+        1168.4776611328125,
+        898.986572265625,
+        1412.8292236328125,
+        1258.9393310546875
+      ],
+      "index": 6,
+      "label": "pen soldering tool dark holder",
+      "mask_pixels": 26009,
+      "score": 0.08716859668493271
+    },
+    {
+      "box": [
+        273.5978088378906,
+        303.5496826171875,
+        623.1693725585938,
+        1170.1087646484375
+      ],
+      "index": 8,
+      "label": "pen soldering tool dark holder",
+      "mask_pixels": 63040,
+      "score": 0.0848119705915451
+    },
+    {
+      "box": [
+        838.0556640625,
+        1088.4368896484375,
+        1184.5157470703125,
+        1539.2901611328125
+      ],
+      "index": 2,
+      "label": "pen soldering tool dark holder",
+      "mask_pixels": 60248,
+      "score": 0.08473192900419235
+    },
+    {
+      "box": [
+        1176.4820556640625,
+        371.7383117675781,
+        1518.744873046875,
+        672.316162109375
+      ],
+      "index": 7,
+      "label": "pen soldering tool dark holder",
+      "mask_pixels": 62135,
+      "score": 0.08291612565517426
+    }
+  ],
+  "duration_s": 67.84737706184387,
+  "effective_model_path": "/Users/noahlyons/.cache/huggingface/hub/models--mlx-community--sam3.1-bf16/snapshots/a992e302ea9b0f03f41dfd93414a4fd0e818f65b",
+  "effective_predict_multi": "sam3_1.generate.predict_multi",
+  "effective_processor": "sam3_1.Sam31Processor",
+  "finished_at": 1783972608.377553,
+  "image": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/source/observed-bench-splat.png",
+  "image_size": [
+    1796,
+    1594
+  ],
+  "max_results": 64,
+  "model": "mlx-community/sam3.1-bf16",
+  "ok": true,
+  "outputs": {
+    "cutout_00": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/right-tool-cluster-sam31/cutout-00.png",
+    "cutout_01": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/right-tool-cluster-sam31/cutout-01.png",
+    "cutout_02": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/right-tool-cluster-sam31/cutout-02.png",
+    "cutout_03": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/right-tool-cluster-sam31/cutout-03.png",
+    "cutout_04": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/right-tool-cluster-sam31/cutout-04.png",
+    "cutout_05": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/right-tool-cluster-sam31/cutout-05.png",
+    "cutout_06": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/right-tool-cluster-sam31/cutout-06.png",
+    "cutout_07": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/right-tool-cluster-sam31/cutout-07.png",
+    "cutout_08": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/right-tool-cluster-sam31/cutout-08.png",
+    "mask_00": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/right-tool-cluster-sam31/mask-00.png",
+    "mask_01": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/right-tool-cluster-sam31/mask-01.png",
+    "mask_02": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/right-tool-cluster-sam31/mask-02.png",
+    "mask_03": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/right-tool-cluster-sam31/mask-03.png",
+    "mask_04": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/right-tool-cluster-sam31/mask-04.png",
+    "mask_05": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/right-tool-cluster-sam31/mask-05.png",
+    "mask_06": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/right-tool-cluster-sam31/mask-06.png",
+    "mask_07": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/right-tool-cluster-sam31/mask-07.png",
+    "mask_08": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/right-tool-cluster-sam31/mask-08.png",
+    "overlay": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/masks/right-tool-cluster-sam31/overlay.png"
+  },
+  "phase": "complete",
+  "prompt": [
+    "pen soldering tool dark holder"
+  ],
+  "started_at": 1783972540.530176,
+  "threshold": 0.08
+}
