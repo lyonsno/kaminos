@@ -20,6 +20,8 @@ const BOUNDARY_SPLAT_GPU_PROFILE_IDENTITY = 'boundary-splat-stage-gpu-timestamp-
 const BOUNDARY_SPLAT_ATTRIBUTE_HOOK_IDENTITY = 'boundary-splat-learned-attribute-hook-v0';
 const BOUNDARY_SPLAT_INSTANCE_DESCRIPTOR_IDENTITY = 'boundary-splat-instance-descriptor-v0';
 const BOUNDARY_SPLAT_FIELD_COMPOSITION_IDENTITY = 'boundary-splat-composed-field-v0';
+const BOUNDARY_SPLAT_PBR_FIRE_FIELD_IDENTITY = 'boundary-splat-pbr-fire-field-v0';
+const BOUNDARY_SPLAT_PBR_FIXED_SUBSTRATE_IDENTITY = 'operator-pretty-four-flame-substrate-v0';
 const BOUNDARY_SPLAT_INITIAL_CAPACITY = 131072;
 const BOUNDARY_SPLAT_CANDIDATE_STRIDE_BYTES = 48;
 const BOUNDARY_SPLAT_INSTANCE_DESCRIPTOR_STRIDE_BYTES = 32;
@@ -204,6 +206,11 @@ function normalizeBoundarySplatInstanceCount(value) {
 function normalizeBoundarySplatComposition(value) {
   const normalized = String(value || 'proof').toLowerCase().replace(/_/g, '-');
   return ['field', 'composed-field', 'field-100'].includes(normalized) ? 'field' : 'proof';
+}
+
+function normalizeBoundarySplatPbrScene(value) {
+  const normalized = String(value || 'off').toLowerCase().replace(/_/g, '-');
+  return ['fire-field', 'pbr-fire-field', 'court'].includes(normalized) ? 'fire-field' : 'off';
 }
 
 function normalizeBoundarySplatPhaseMode(value) {
@@ -4885,6 +4892,154 @@ fn fs(in: VertexOut) -> @location(0) vec4<f32> {
 }
 `;
 
+const BOUNDARY_SPLAT_PBR_WGSL = `
+struct BoundarySplatCamera {
+  viewProj: mat4x4<f32>,
+  cameraRight: vec4<f32>,
+  cameraUp: vec4<f32>,
+  controls: vec4<f32>,
+  instanceInfo: vec4<f32>,
+  invViewProj: mat4x4<f32>,
+};
+
+struct PbrVertexOut {
+  @builtin(position) position: vec4<f32>,
+  @location(0) uv: vec2<f32>,
+};
+
+struct PbrFragmentOut {
+  @location(0) color: vec4<f32>,
+  @builtin(frag_depth) depth: f32,
+};
+
+@group(0) @binding(0) var<uniform> pbrCamera: BoundarySplatCamera;
+
+@vertex
+fn pbrVs(@builtin(vertex_index) vertexIndex: u32) -> PbrVertexOut {
+  var positions = array<vec2<f32>, 3>(
+    vec2<f32>(-1.0, -1.0),
+    vec2<f32>(3.0, -1.0),
+    vec2<f32>(-1.0, 3.0)
+  );
+  let position = positions[vertexIndex];
+  var out: PbrVertexOut;
+  out.position = vec4<f32>(position, 0.0, 1.0);
+  out.uv = position * 0.5 + vec2<f32>(0.5);
+  return out;
+}
+
+fn cameraRay(uv: vec2<f32>) -> array<vec3<f32>, 2> {
+  let ndc = vec2<f32>(uv.x * 2.0 - 1.0, 1.0 - uv.y * 2.0);
+  let nearH = pbrCamera.invViewProj * vec4<f32>(ndc, 0.0, 1.0);
+  let farH = pbrCamera.invViewProj * vec4<f32>(ndc, 1.0, 1.0);
+  let nearP = nearH.xyz / max(abs(nearH.w), 0.00001);
+  let farP = farH.xyz / max(abs(farH.w), 0.00001);
+  return array<vec3<f32>, 2>(nearP, normalize(farP - nearP));
+}
+
+fn hitBox(ro: vec3<f32>, rd: vec3<f32>, center: vec3<f32>, halfSize: vec3<f32>) -> vec4<f32> {
+  let invRd = 1.0 / max(abs(rd), vec3<f32>(0.00001)) * sign(rd);
+  let t0 = (center - halfSize - ro) * invRd;
+  let t1 = (center + halfSize - ro) * invRd;
+  let nearAxis = min(t0, t1);
+  let farAxis = max(t0, t1);
+  let tNear = max(nearAxis.x, max(nearAxis.y, nearAxis.z));
+  let tFar = min(farAxis.x, min(farAxis.y, farAxis.z));
+  if (tFar < max(tNear, 0.0)) { return vec4<f32>(-1.0); }
+  let t = select(tFar, tNear, tNear > 0.0);
+  let local = (ro + rd * t - center) / halfSize;
+  let axis = abs(local);
+  var normal = vec3<f32>(0.0, 0.0, sign(local.z));
+  if (axis.x >= axis.y && axis.x >= axis.z) { normal = vec3<f32>(sign(local.x), 0.0, 0.0); }
+  else if (axis.y >= axis.z) { normal = vec3<f32>(0.0, sign(local.y), 0.0); }
+  return vec4<f32>(t, normal);
+}
+
+fn fresnelSchlick(cosTheta: f32, f0: vec3<f32>) -> vec3<f32> {
+  return f0 + (vec3<f32>(1.0) - f0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
+}
+
+fn pbrShade(position: vec3<f32>, normal: vec3<f32>, albedo: vec3<f32>, roughness: f32, metalness: f32, eye: vec3<f32>) -> vec3<f32> {
+  let n = normalize(normal);
+  let v = normalize(eye - position);
+  let l = normalize(vec3<f32>(-0.38, 0.82, 0.43));
+  let h = normalize(v + l);
+  let ndl = max(dot(n, l), 0.0);
+  let ndv = max(dot(n, v), 0.001);
+  let ndh = max(dot(n, h), 0.001);
+  let vdh = max(dot(v, h), 0.001);
+  let alpha = max(roughness * roughness, 0.025);
+  let alpha2 = alpha * alpha;
+  let denom = ndh * ndh * (alpha2 - 1.0) + 1.0;
+  let distribution = alpha2 / max(3.14159265 * denom * denom, 0.0001);
+  let k = (roughness + 1.0) * (roughness + 1.0) * 0.125;
+  let geometryV = ndv / max(ndv * (1.0 - k) + k, 0.0001);
+  let geometryL = ndl / max(ndl * (1.0 - k) + k, 0.0001);
+  let f0 = mix(vec3<f32>(0.04), albedo, metalness);
+  let fresnel = fresnelSchlick(vdh, f0);
+  let specular = distribution * geometryV * geometryL * fresnel / max(4.0 * ndv * ndl, 0.001);
+  let diffuse = (vec3<f32>(1.0) - fresnel) * (1.0 - metalness) * albedo / 3.14159265;
+  let key = (diffuse + specular) * vec3<f32>(1.02, 0.96, 0.88) * ndl * 3.1;
+  let horizon = mix(vec3<f32>(0.012, 0.017, 0.022), vec3<f32>(0.055, 0.072, 0.085), clamp(n.y * 0.5 + 0.5, 0.0, 1.0));
+  return key + horizon * (albedo * (1.0 - metalness) + fresnel * 1.8);
+}
+
+@fragment
+fn pbrFs(in: PbrVertexOut) -> PbrFragmentOut {
+  let ray = cameraRay(in.uv);
+  let ro = ray[0];
+  let rd = ray[1];
+  var bestT = 100000.0;
+  var normal = vec3<f32>(0.0, 1.0, 0.0);
+  var albedo = vec3<f32>(0.052, 0.058, 0.062);
+  var roughness = 0.72;
+  var metalness = 0.02;
+
+  let floorT = (-0.86 - ro.y) / rd.y;
+  if (floorT > 0.0 && floorT < bestT) { bestT = floorT; }
+
+  let plinth = hitBox(ro, rd, vec3<f32>(0.0, -0.79, 0.15), vec3<f32>(2.75, 0.07, 2.15));
+  if (plinth.x > 0.0 && plinth.x < bestT) {
+    bestT = plinth.x; normal = plinth.yzw; albedo = vec3<f32>(0.075, 0.080, 0.083); roughness = 0.58; metalness = 0.08;
+  }
+  let leftStele = hitBox(ro, rd, vec3<f32>(-2.30, -0.25, 0.15), vec3<f32>(0.16, 0.61, 0.34));
+  if (leftStele.x > 0.0 && leftStele.x < bestT) {
+    bestT = leftStele.x; normal = leftStele.yzw; albedo = vec3<f32>(0.20, 0.145, 0.09); roughness = 0.30; metalness = 0.82;
+  }
+  let rightStele = hitBox(ro, rd, vec3<f32>(2.30, -0.25, 0.15), vec3<f32>(0.16, 0.61, 0.34));
+  if (rightStele.x > 0.0 && rightStele.x < bestT) {
+    bestT = rightStele.x; normal = rightStele.yzw; albedo = vec3<f32>(0.20, 0.145, 0.09); roughness = 0.30; metalness = 0.82;
+  }
+  let nearStele = hitBox(ro, rd, vec3<f32>(0.72, -0.39, 1.28), vec3<f32>(0.20, 0.47, 0.20));
+  if (nearStele.x > 0.0 && nearStele.x < bestT) {
+    bestT = nearStele.x; normal = nearStele.yzw; albedo = vec3<f32>(0.13, 0.14, 0.145); roughness = 0.24; metalness = 0.88;
+  }
+  let farStele = hitBox(ro, rd, vec3<f32>(-0.62, -0.48, -1.35), vec3<f32>(0.22, 0.38, 0.22));
+  if (farStele.x > 0.0 && farStele.x < bestT) {
+    bestT = farStele.x; normal = farStele.yzw; albedo = vec3<f32>(0.12, 0.13, 0.135); roughness = 0.36; metalness = 0.74;
+  }
+
+  var out: PbrFragmentOut;
+  if (bestT >= 99999.0) {
+    let sky = mix(vec3<f32>(0.004, 0.006, 0.008), vec3<f32>(0.018, 0.025, 0.032), clamp(1.0 - in.uv.y, 0.0, 1.0));
+    out.color = vec4<f32>(sky, 1.0);
+    out.depth = 0.999999;
+    return out;
+  }
+  let position = ro + rd * bestT;
+  if (abs(position.y + 0.86) < 0.002) {
+    let seams = smoothstep(0.475, 0.5, max(abs(fract(position.x * 0.5) - 0.5), abs(fract(position.z * 0.5) - 0.5)));
+    albedo *= mix(0.78, 1.0, seams);
+  }
+  let linear = pbrShade(position, normal, albedo, roughness, metalness, ro);
+  let mapped = linear / (linear + vec3<f32>(1.0));
+  out.color = vec4<f32>(pow(max(mapped, vec3<f32>(0.0)), vec3<f32>(1.0 / 2.2)), 1.0);
+  let clip = pbrCamera.viewProj * vec4<f32>(position, 1.0);
+  out.depth = clamp(clip.z / clip.w, 0.0, 0.999999);
+  return out;
+}
+`;
+
 const BOUNDARY_SPLAT_WGSL = `
 override GRID: u32 = 64u;
 const SLOTS_PER_CELL: u32 = 4u;
@@ -4916,6 +5071,7 @@ struct BoundarySplatCamera {
   cameraUp: vec4<f32>,
   controls: vec4<f32>,
   instanceInfo: vec4<f32>,
+  invViewProj: mat4x4<f32>,
 };
 
 struct BoundarySplatVertexOut {
@@ -5303,6 +5459,18 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     boundarySplatCompositionIdentity: normalizeBoundarySplatComposition(controlsSnapshot.boundarySplatComposition) === 'field'
       ? BOUNDARY_SPLAT_FIELD_COMPOSITION_IDENTITY
       : 'boundary-splat-proof-layout-v0',
+    boundarySplatPbrScene: normalizeBoundarySplatPbrScene(controlsSnapshot.boundarySplatPbrScene),
+    boundarySplatPbrSceneIdentity: normalizeBoundarySplatPbrScene(controlsSnapshot.boundarySplatPbrScene) === 'fire-field'
+      ? BOUNDARY_SPLAT_PBR_FIRE_FIELD_IDENTITY
+      : 'off',
+    boundarySplatPbrDepthAuthority: normalizeBoundarySplatPbrScene(controlsSnapshot.boundarySplatPbrScene) === 'fire-field'
+      ? 'same-device-depth24plus-less-equal-v0'
+      : 'off',
+    boundarySplatPbrCameraAuthority: normalizeBoundarySplatPbrScene(controlsSnapshot.boundarySplatPbrScene) === 'fire-field'
+      ? 'three-camera-matrices-native-webgpu-v0'
+      : 'off',
+    boundarySplatPbrFixedSubstrateIdentity: BOUNDARY_SPLAT_PBR_FIXED_SUBSTRATE_IDENTITY,
+    boundarySplatPbrAddedSimulationPasses: 0,
     boundarySplatLayoutBounds: null,
     boundarySplatRequestedInstanceCount: normalizeBoundarySplatInstanceCount(controlsSnapshot.boundarySplatInstances),
     boundarySplatSourceCandidateCount: null,
@@ -5645,6 +5813,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let boundarySplatArchivePipeline = null;
   let boundarySplatRenderPipeline = null;
   let boundarySplatReadbackPipeline = null;
+  let boundarySplatPbrScenePipeline = null;
   let bindGroups = [];
   let majorantFrontBindGroups = [];
   let boundarySidecarReadBindGroups = [];
@@ -5655,6 +5824,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let boundarySidecarWriteBindGroup = null;
   let boundarySplatComputeBindGroups = [];
   let boundarySplatRenderBindGroup = null;
+  let boundarySplatPbrSceneBindGroup = null;
   let bindGroupLayout = null;
   let majorantFluidBindGroupLayout = null;
   let majorantWriteBindGroupLayout = null;
@@ -5662,6 +5832,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let boundarySidecarWriteBindGroupLayout = null;
   let boundarySplatComputeBindGroupLayout = null;
   let boundarySplatRenderBindGroupLayout = null;
+  let boundarySplatPbrSceneBindGroupLayout = null;
   let pressureWriteBindGroupLayout = null;
   let pressureJacobiBindGroupLayout = null;
   let pressureReadBindGroupLayout = null;
@@ -5671,6 +5842,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let boundarySidecarPipelineLayout = null;
   let boundarySplatComputePipelineLayout = null;
   let boundarySplatRenderPipelineLayout = null;
+  let boundarySplatPbrScenePipelineLayout = null;
   let pressureWritePipelineLayout = null;
   let pressureJacobiPipelineLayout = null;
   let pressureJacobiTieredPipelineLayout = null;
@@ -5679,6 +5851,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let shader = null;
   let boundarySplatComputeShader = null;
   let boundarySplatRenderShader = null;
+  let boundarySplatPbrSceneShader = null;
   let uniformBuffer = null;
   let externalEmitterBuffer = null;
   let externalEmitterState = normalizeExternalEmitters();
@@ -5696,6 +5869,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let boundarySplatFeatureBufferCapacity = 0;
   let boundarySplatTelemetryCopyPending = false;
   let boundarySplatTelemetryMapPending = false;
+  let boundarySplatPbrDepthTexture = null;
+  let boundarySplatPbrDepthTextureSize = '';
   let fluidBuffers = [];
   let frontBuffers = [];
   let pressureBuffers = [];
@@ -6428,7 +6603,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     });
     boundarySplatCameraBuffer = device.createBuffer({
       label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} camera`,
-      size: 128,
+      size: 192,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
     boundarySplatInstanceDescriptorBuffer = device.createBuffer({
@@ -6462,6 +6637,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     if (
       !boundarySplatComputeBindGroupLayout
       || !boundarySplatRenderBindGroupLayout
+      || !boundarySplatPbrSceneBindGroupLayout
       || !boundarySidecarBuffer
       || !boundarySplatBuffer
       || !boundarySplatDrawBuffer
@@ -6492,6 +6668,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         { binding: 5, resource: { buffer: boundarySplatBuffer } },
         { binding: 7, resource: { buffer: boundarySplatInstanceDescriptorBuffer } },
         { binding: 9, resource: { buffer: boundarySplatHistoryBuffer } },
+      ],
+    });
+    boundarySplatPbrSceneBindGroup = device.createBindGroup({
+      label: `kaminos ${BOUNDARY_SPLAT_PBR_FIRE_FIELD_IDENTITY} bind group`,
+      layout: boundarySplatPbrSceneBindGroupLayout,
+      entries: [
+        { binding: 0, resource: { buffer: boundarySplatCameraBuffer } },
       ],
     });
   }
@@ -6701,9 +6884,30 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         }],
       },
       primitive: { topology: 'triangle-list' },
+      depthStencil: {
+        format: 'depth24plus',
+        depthWriteEnabled: false,
+        depthCompare: 'less-equal',
+      },
     });
     boundarySplatRenderPipeline = makeBoundarySplatRenderPipeline(format, `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} raster ${gridSize}^3`);
     boundarySplatReadbackPipeline = makeBoundarySplatRenderPipeline('rgba8unorm', `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} witness readback ${gridSize}^3`);
+    boundarySplatPbrScenePipeline = device.createRenderPipeline({
+      label: `kaminos ${BOUNDARY_SPLAT_PBR_FIRE_FIELD_IDENTITY} raster`,
+      layout: boundarySplatPbrScenePipelineLayout,
+      vertex: { module: boundarySplatPbrSceneShader, entryPoint: 'pbrVs' },
+      fragment: {
+        module: boundarySplatPbrSceneShader,
+        entryPoint: 'pbrFs',
+        targets: [{ format }],
+      },
+      primitive: { topology: 'triangle-list' },
+      depthStencil: {
+        format: 'depth24plus',
+        depthWriteEnabled: true,
+        depthCompare: 'less',
+      },
+    });
     ensureBoundarySplatBuffers();
     ensureTemporalHistoryTexture();
     rebuildFluidBindGroups();
@@ -6922,11 +7126,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       : BOUNDARY_SPLAT_WGSL;
     boundarySplatComputeShader = device.createShaderModule({ label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} compute wgsl`, code: boundarySplatComputeWgsl });
     boundarySplatRenderShader = device.createShaderModule({ label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} render wgsl`, code: boundarySplatRenderWgsl });
+    boundarySplatPbrSceneShader = device.createShaderModule({ label: `kaminos ${BOUNDARY_SPLAT_PBR_FIRE_FIELD_IDENTITY} wgsl`, code: BOUNDARY_SPLAT_PBR_WGSL });
     const boundarySplatComputeCompilationInfo = await boundarySplatComputeShader.getCompilationInfo();
     const boundarySplatRenderCompilationInfo = await boundarySplatRenderShader.getCompilationInfo();
+    const boundarySplatPbrCompilationInfo = await boundarySplatPbrSceneShader.getCompilationInfo();
     const boundarySplatCompilationErrors = [
       ...boundarySplatComputeCompilationInfo.messages.map(message => ({ ...message, moduleLabel: 'compute' })),
       ...boundarySplatRenderCompilationInfo.messages.map(message => ({ ...message, moduleLabel: 'render' })),
+      ...boundarySplatPbrCompilationInfo.messages.map(message => ({ ...message, moduleLabel: 'pbr-scene' })),
     ].filter(message => message.type === 'error');
     if (boundarySplatCompilationErrors.length > 0) {
       const detail = boundarySplatCompilationErrors
@@ -7070,6 +7277,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         { binding: 9, visibility: GPUShaderStage.VERTEX, buffer: { type: 'read-only-storage' } },
       ],
     });
+    boundarySplatPbrSceneBindGroupLayout = device.createBindGroupLayout({
+      label: `kaminos ${BOUNDARY_SPLAT_PBR_FIRE_FIELD_IDENTITY} bind group layout`,
+      entries: [
+        { binding: 0, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, buffer: { type: 'uniform' } },
+      ],
+    });
     pressureWriteBindGroupLayout = device.createBindGroupLayout({
       label: 'kaminos pressure write bind group layout',
       entries: [
@@ -7158,6 +7371,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} render pipeline layout`,
       bindGroupLayouts: [boundarySplatRenderBindGroupLayout],
     });
+    boundarySplatPbrScenePipelineLayout = device.createPipelineLayout({
+      label: `kaminos ${BOUNDARY_SPLAT_PBR_FIRE_FIELD_IDENTITY} pipeline layout`,
+      bindGroupLayouts: [boundarySplatPbrSceneBindGroupLayout],
+    });
     pressureWritePipelineLayout = device.createPipelineLayout({
       label: 'kaminos divergence pressure pipeline layout',
       bindGroupLayouts: [majorantFluidBindGroupLayout, emptyBindGroupLayout, pressureWriteBindGroupLayout],
@@ -7231,6 +7448,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       canvas.style.imageRendering = 'auto';
       frameTextureSize = '';
       browserResidualFeatureTextureSize = '';
+      boundarySplatPbrDepthTextureSize = '';
     }
   }
 
@@ -7247,6 +7465,19 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     frameTextureSize = key;
     browserResidualBindGroup = null;
     browserResidualTextureKey = '';
+  }
+
+  function ensureBoundarySplatPbrDepthTexture() {
+    const key = `${state.width}x${state.height}`;
+    if (boundarySplatPbrDepthTexture && boundarySplatPbrDepthTextureSize === key) return;
+    boundarySplatPbrDepthTexture?.destroy();
+    boundarySplatPbrDepthTexture = device.createTexture({
+      label: `kaminos ${BOUNDARY_SPLAT_PBR_FIRE_FIELD_IDENTITY} shared depth`,
+      size: { width: state.width, height: state.height, depthOrArrayLayers: 1 },
+      format: 'depth24plus',
+      usage: GPUTextureUsage.RENDER_ATTACHMENT,
+    });
+    boundarySplatPbrDepthTextureSize = key;
   }
 
   function ensureBrowserResidualFeatureTexture() {
@@ -7442,12 +7673,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       const cameraMatrix = camera.matrixWorld.elements;
       const requestedInstanceCount = normalizeBoundarySplatInstanceCount(controlsSnapshot.boundarySplatInstances);
       const historyDepth = normalizeBoundarySplatHistoryDepth(controlsSnapshot.boundarySplatHistoryDepth);
-      const splatCamera = new Float32Array(32);
+      const splatCamera = new Float32Array(48);
       splatCamera.set(viewProj.elements, 0);
       splatCamera.set([cameraMatrix[0], cameraMatrix[1], cameraMatrix[2], 0], 16);
       splatCamera.set([cameraMatrix[4], cameraMatrix[5], cameraMatrix[6], 0], 20);
       splatCamera.set([normalizeBoundarySplatRadius(controlsSnapshot.boundarySplatRadius), boundarySplatLearnedAttributesRequested() ? 1 : 0, state.boundarySplatFeatureCaptureEffective ? 1 : 0, normalizeBoundarySplatSharpness(controlsSnapshot.boundarySplatSharpness)], 24);
       splatCamera.set([boundarySplatCapacity, requestedInstanceCount, historyDepth, 0], 28);
+      splatCamera.set(invViewProj.elements, 32);
       device.queue.writeBuffer(boundarySplatCameraBuffer, 0, splatCamera);
     }
     const { renderPhaseTimeMs, renderPhaseFrame } = updateRenderPhaseState(now, state, lookFreeze);
@@ -8410,6 +8642,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     return normalizeBoundarySplatMode(controlsSnapshot.boundarySplatMode) !== 'off';
   }
 
+  function boundarySplatPbrSceneRequested() {
+    return boundarySplatRequested() && normalizeBoundarySplatPbrScene(controlsSnapshot.boundarySplatPbrScene) === 'fire-field';
+  }
+
   function boundarySplatLearnedAttributesRequested() {
     return normalizeBoundarySplatMode(controlsSnapshot.boundarySplatMode) === 'learned';
   }
@@ -8635,6 +8871,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         candidateCopyBytes,
       }),
       indirectSetup: makeBoundarySplatStage(stageStatus),
+      pbrSceneRaster: makeBoundarySplatStage(stageStatus),
       splatRaster: makeBoundarySplatStage(stageStatus),
       matchedRaymarchRaster: makeBoundarySplatStage(stageStatus),
       total: makeBoundarySplatStage(stageStatus),
@@ -8732,17 +8969,57 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     return true;
   }
 
+  function encodeBoundarySplatPbrScene(encoder, colorView, depthView, options = {}) {
+    const targetPipeline = options.targetPipeline || boundarySplatPbrScenePipeline;
+    if (!boundarySplatPbrSceneRequested() || !targetPipeline || !boundarySplatPbrSceneBindGroup) return false;
+    const pass = encoder.beginRenderPass({
+      label: `kaminos ${BOUNDARY_SPLAT_PBR_FIRE_FIELD_IDENTITY} canvas pass`,
+      ...(options.timestampWrites ? { timestampWrites: options.timestampWrites } : {}),
+      colorAttachments: [{
+        view: colorView,
+        clearValue: { r: 0.004, g: 0.006, b: 0.008, a: 1 },
+        loadOp: 'clear',
+        storeOp: 'store',
+      }],
+      depthStencilAttachment: {
+        view: depthView,
+        depthClearValue: 1,
+        depthLoadOp: 'clear',
+        depthStoreOp: 'store',
+      },
+    });
+    pass.setPipeline(targetPipeline);
+    pass.setBindGroup(0, boundarySplatPbrSceneBindGroup);
+    pass.draw(3);
+    pass.end();
+    state.boundarySplatPbrScene = 'fire-field';
+    state.boundarySplatPbrSceneIdentity = BOUNDARY_SPLAT_PBR_FIRE_FIELD_IDENTITY;
+    state.boundarySplatPbrDepthAuthority = 'same-device-depth24plus-less-equal-v0';
+    state.boundarySplatPbrCameraAuthority = 'three-camera-matrices-native-webgpu-v0';
+    state.boundarySplatPbrFixedSubstrateIdentity = BOUNDARY_SPLAT_PBR_FIXED_SUBSTRATE_IDENTITY;
+    state.boundarySplatPbrAddedSimulationPasses = 0;
+    return true;
+  }
+
   function encodeBoundarySplatDraw(encoder, view, targetPipeline = boundarySplatRenderPipeline, options = {}) {
     if (!boundarySplatRequested() || state.boundarySplatFallbackReason || !targetPipeline) return false;
+    ensureBoundarySplatPbrDepthTexture();
+    const depthView = options.depthView || boundarySplatPbrDepthTexture.createView();
     const pass = encoder.beginRenderPass({
       label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} canvas pass`,
       ...(options.timestampWrites ? { timestampWrites: options.timestampWrites } : {}),
       colorAttachments: [{
         view,
         clearValue: { r: 0.004, g: 0.005, b: 0.006, a: 1 },
-        loadOp: 'clear',
+        loadOp: options.loadColor === true ? 'load' : 'clear',
         storeOp: 'store',
       }],
+      depthStencilAttachment: {
+        view: depthView,
+        depthClearValue: 1,
+        depthLoadOp: options.loadDepth === true ? 'load' : 'clear',
+        depthStoreOp: 'store',
+      },
     });
     pass.setPipeline(targetPipeline);
     pass.setBindGroup(0, boundarySplatRenderBindGroup);
@@ -8804,7 +9081,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       }));
     }
 
-    const queryCount = 9;
+    const queryCount = 11;
     const querySet = device.createQuerySet({
       type: 'timestamp',
       count: queryCount,
@@ -8853,11 +9130,29 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       if (!splatsEncoded) {
         throw new Error(state.boundarySplatFallbackReason || 'boundary-splat-profile-route-unavailable');
       }
-      const splatApplied = encodeBoundarySplatDraw(encoder, frameTexture.createView(), boundarySplatReadbackPipeline, {
+      ensureBoundarySplatPbrDepthTexture();
+      const profileTexture = context.getCurrentTexture();
+      let pbrSceneApplied = false;
+      if (boundarySplatPbrSceneRequested()) {
+        pbrSceneApplied = encodeBoundarySplatPbrScene(encoder, profileTexture.createView(), boundarySplatPbrDepthTexture.createView(), {
+          timestampWrites: {
+            querySet,
+            beginningOfPassWriteIndex: 6,
+            endOfPassWriteIndex: 7,
+          },
+        });
+      } else {
+        encodeBoundarySplatTimestampMarker(encoder, querySet, 6, 'kaminos PBR scene disabled timestamp marker start');
+        encodeBoundarySplatTimestampMarker(encoder, querySet, 7, 'kaminos PBR scene disabled timestamp marker end');
+      }
+      const splatApplied = encodeBoundarySplatDraw(encoder, profileTexture.createView(), boundarySplatRenderPipeline, {
+        depthView: boundarySplatPbrDepthTexture.createView(),
+        loadColor: pbrSceneApplied,
+        loadDepth: pbrSceneApplied,
         timestampWrites: {
           querySet,
-          beginningOfPassWriteIndex: 6,
-          endOfPassWriteIndex: 7,
+          beginningOfPassWriteIndex: 8,
+          endOfPassWriteIndex: 9,
         },
       });
       if (!splatApplied) {
@@ -8866,7 +9161,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       encodeDraw(encoder, frameTexture.createView(), 'kaminos boundary splat matched raymarch timestamp pass', readbackPipeline, {
         timestampWrites: {
           querySet,
-          endOfPassWriteIndex: 8,
+          endOfPassWriteIndex: 10,
         },
       });
       encoder.resolveQuerySet(querySet, 0, queryCount, resolveBuffer, 0);
@@ -8880,18 +9175,23 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         throw new Error(validationError.message || String(validationError));
       }
       const requiredTimestampIndices = advanceSimulation
-        ? [0, 1, 2, 3, 4, 5, 6, 7, 8]
-        : [4, 5, 6, 7, 8];
+        ? [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+        : [4, 5, 6, 7, 8, 9, 10];
       const requiredTimestamps = requiredTimestampIndices.map(index => timestamps[index]);
       if (requiredTimestamps.some(value => value === 0n)) {
         throw new Error(`timestamp-query-incomplete:${requiredTimestampIndices.map(index => `${index}:${timestamps[index]}`).join(',')}`);
       }
-      for (let index = 1; index < requiredTimestamps.length; index += 1) {
-        if (requiredTimestamps[index] < requiredTimestamps[index - 1]) {
-          throw new Error(`timestamp-query-nonmonotonic:${requiredTimestampIndices.map(queryIndex => `${queryIndex}:${timestamps[queryIndex]}`).join(',')}`);
+      const requiredTimestampPairs = advanceSimulation
+        ? [[0, 1], [2, 3], [4, 5], [6, 7], [8, 9], [9, 10]]
+        : [[4, 5], [6, 7], [8, 9], [9, 10]];
+      for (const [startIndex, endIndex] of requiredTimestampPairs) {
+        if (timestamps[endIndex] < timestamps[startIndex]) {
+          throw new Error(`timestamp-query-stage-nonmonotonic:${startIndex}-${endIndex}:${timestamps[startIndex]}-${timestamps[endIndex]}`);
         }
       }
       const nsToMs = (endIndex, startIndex) => Number(timestamps[endIndex] - timestamps[startIndex]) / 1_000_000;
+      const timestampEnvelopeStart = requiredTimestamps.reduce((minimum, value) => value < minimum ? value : minimum);
+      const timestampEnvelopeEnd = requiredTimestamps.reduce((maximum, value) => value > maximum ? value : maximum);
       const candidateCopyBytes = state.boundarySplatCopyBytesThisFrame ?? 0;
       return setBoundarySplatGpuProfile(makeBoundarySplatGpuProfile({
         timestampStatus: 'available',
@@ -8910,10 +9210,15 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
             disposition: 'removed-full-capacity-copy',
             candidateCopyBytes,
           }),
-          indirectSetup: makeBoundarySplatStage('sampled', nsToMs(6, 5)),
-          splatRaster: makeBoundarySplatStage('sampled', nsToMs(7, 6)),
-          matchedRaymarchRaster: makeBoundarySplatStage('sampled', nsToMs(8, 7)),
-          total: makeBoundarySplatStage('sampled', nsToMs(8, advanceSimulation ? 0 : 4)),
+          indirectSetup: makeBoundarySplatStage('not-isolated-cross-pass-overlap', null, {
+            disposition: 'buffer-copy-remains-in-total-envelope',
+          }),
+          pbrSceneRaster: boundarySplatPbrSceneRequested()
+            ? makeBoundarySplatStage('sampled', nsToMs(7, 6))
+            : makeBoundarySplatStage('disabled', 0),
+          splatRaster: makeBoundarySplatStage('sampled', nsToMs(9, 8)),
+          matchedRaymarchRaster: makeBoundarySplatStage('sampled', nsToMs(10, 9)),
+          total: makeBoundarySplatStage('sampled-overlap-envelope', Number(timestampEnvelopeEnd - timestampEnvelopeStart) / 1_000_000),
         },
       }));
     } catch (error) {
@@ -9110,6 +9415,135 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       compositionIdentity: state.boundarySplatCompositionIdentity,
     };
     state.boundarySplatInstanceCostLadder = result;
+    return result;
+  }
+
+  async function sampleBoundarySplatPbrSceneGpuProfile() {
+    if (!boundarySplatPbrSceneRequested() || !timestampQueriesAvailable()) {
+      return { timestampStatus: 'unsupported', reason: 'pbr-scene-or-timestamps-unavailable', pbrSceneRasterMs: null };
+    }
+    const querySet = device.createQuerySet({ type: 'timestamp', count: 2 });
+    const resolveBuffer = device.createBuffer({
+      label: `kaminos ${BOUNDARY_SPLAT_PBR_FIRE_FIELD_IDENTITY} timestamp resolve`,
+      size: 16,
+      usage: GPUBufferUsage.QUERY_RESOLVE | GPUBufferUsage.COPY_SRC,
+    });
+    const readbackBuffer = device.createBuffer({
+      label: `kaminos ${BOUNDARY_SPLAT_PBR_FIRE_FIELD_IDENTITY} timestamp readback`,
+      size: 16,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+    });
+    try {
+      updateUniforms(performance.now());
+      ensureBoundarySplatPbrDepthTexture();
+      const encoder = device.createCommandEncoder({ label: `kaminos ${BOUNDARY_SPLAT_PBR_FIRE_FIELD_IDENTITY} profile encoder` });
+      const applied = encodeBoundarySplatPbrScene(encoder, context.getCurrentTexture().createView(), boundarySplatPbrDepthTexture.createView(), {
+        timestampWrites: { querySet, beginningOfPassWriteIndex: 0, endOfPassWriteIndex: 1 },
+      });
+      if (!applied) throw new Error('pbr-scene-profile-route-unavailable');
+      encoder.resolveQuerySet(querySet, 0, 2, resolveBuffer, 0);
+      encoder.copyBufferToBuffer(resolveBuffer, 0, readbackBuffer, 0, 16);
+      device.queue.submit([encoder.finish()]);
+      await readbackBuffer.mapAsync(GPUMapMode.READ);
+      const timestamps = new BigUint64Array(readbackBuffer.getMappedRange().slice(0));
+      readbackBuffer.unmap();
+      if (timestamps[0] === 0n || timestamps[1] < timestamps[0]) throw new Error('pbr-scene-timestamp-query-invalid');
+      return {
+        timestampStatus: 'available',
+        reason: 'timestamp-query-sampled',
+        pbrSceneRasterMs: Number(timestamps[1] - timestamps[0]) / 1_000_000,
+      };
+    } catch (error) {
+      return { timestampStatus: 'unsupported', reason: error?.message || String(error), pbrSceneRasterMs: null };
+    } finally {
+      resolveBuffer.destroy();
+      readbackBuffer.destroy();
+      querySet.destroy?.();
+    }
+  }
+
+  async function sampleBoundarySplatPbrCostLadder(options = {}) {
+    if (!state.active || !device) return { ok: false, reason: 'inactive' };
+    const counts = (Array.isArray(options.counts) ? options.counts : [0, 1, 4, 16, 100])
+      .map(value => Math.max(0, Math.min(BOUNDARY_SPLAT_MAX_INSTANCES, Math.round(Number(value) || 0))));
+    const warmupSamples = Math.max(0, Math.floor(Number(options.warmupSamples ?? 2)));
+    const steadySamples = Math.max(1, Math.floor(Number(options.steadySamples ?? 8)));
+    const controlsBefore = { ...controlsSnapshot };
+    const simStepCountBefore = state.simStepCount;
+    const frameCountBefore = state.frameCount;
+    const rows = [];
+    cancelAnimationFrame(raf);
+    if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
+    try {
+      controlsSnapshot = applyRuntimeQualityControls({ ...controlsSnapshot, boundarySplatPbrScene: 'fire-field' });
+      for (const count of counts) {
+        if (count === 0) {
+          for (let index = 0; index < warmupSamples; index += 1) await sampleBoundarySplatPbrSceneGpuProfile();
+          const profiles = [];
+          for (let index = 0; index < steadySamples; index += 1) profiles.push(await sampleBoundarySplatPbrSceneGpuProfile());
+          rows.push({
+            requestedInstanceCount: 0,
+            effectiveInstanceCount: 0,
+            renderedInstanceCount: 0,
+            timestampStatus: profiles.every(profile => profile.timestampStatus === 'available') ? 'available' : 'unsupported',
+            pbrSceneRaster: summarizeBoundarySplatTimingSamples(profiles.map(profile => profile.pbrSceneRasterMs)),
+            splatRaster: summarizeBoundarySplatTimingSamples([]),
+            fallbackReason: null,
+          });
+          continue;
+        }
+        controlsSnapshot = applyRuntimeQualityControls({ ...controlsSnapshot, boundarySplatInstances: count, boundarySplatPbrScene: 'fire-field' });
+        updateUniforms(performance.now());
+        for (let index = 0; index < warmupSamples; index += 1) await sampleBoundarySplatGpuProfile({ advanceSimulation: false });
+        const profiles = [];
+        for (let index = 0; index < steadySamples; index += 1) profiles.push(await sampleBoundarySplatGpuProfile({ advanceSimulation: false }));
+        const draw = await sampleBoundarySplatDrawState();
+        rows.push({
+          requestedInstanceCount: count,
+          effectiveInstanceCount: draw?.requestedInstanceCount ?? null,
+          sourceCandidateCount: draw?.sourceCandidateCount ?? null,
+          renderedInstanceCount: draw?.instanceCount ?? null,
+          overflowCount: draw?.overflowCount ?? null,
+          phaseSourceCount: draw?.phaseSourceCount ?? null,
+          timestampStatus: profiles.every(profile => profile.timestampStatus === 'available') ? 'available' : 'unsupported',
+          pbrSceneRaster: summarizeBoundarySplatTimingSamples(profiles.map(profile => profile.stages?.pbrSceneRaster?.ms)),
+          splatRaster: summarizeBoundarySplatTimingSamples(profiles.map(profile => profile.stages?.splatRaster?.ms)),
+          totalWithoutSimulation: summarizeBoundarySplatTimingSamples(profiles.map(profile => profile.stages?.total?.ms)),
+          candidateCopyBytes: profiles.at(-1)?.candidateCopyBytes ?? null,
+          fallbackReason: state.boundarySplatFallbackReason,
+        });
+      }
+    } finally {
+      controlsSnapshot = controlsBefore;
+      updateUniforms(performance.now());
+      if (state.active) raf = requestAnimationFrame(render);
+    }
+    const result = {
+      identity: 'boundary-splat-pbr-cost-ladder-v0',
+      ok: rows.length === counts.length && rows.every(row => row.timestampStatus === 'available' && row.fallbackReason == null),
+      authority: 'serial-same-browser-gpu-timestamp-query-frozen-live-simulator-v0',
+      counts,
+      warmupSamples,
+      steadySamples,
+      simStepCountBefore,
+      simStepCountAfter: state.simStepCount,
+      frameCountBefore,
+      frameCountAfter: state.frameCount,
+      simulatorPreserved: state.simStepCount === simStepCountBefore,
+      addedSimulationPasses: 0,
+      pbrSceneIdentity: BOUNDARY_SPLAT_PBR_FIRE_FIELD_IDENTITY,
+      depthAuthority: 'same-device-depth24plus-less-equal-v0',
+      cameraAuthority: 'three-camera-matrices-native-webgpu-v0',
+      fixedSubstrateIdentity: BOUNDARY_SPLAT_PBR_FIXED_SUBSTRATE_IDENTITY,
+      rows,
+      effectiveRoute: state.effectiveRoute,
+      backend: state.backend,
+      sourceAuthority: state.boundarySplatSourceAuthority,
+      rendererIdentity: state.boundarySplatRendererIdentity,
+      modelIdentity: state.boundarySplatAttributeModelIdentity,
+      phaseSourceIdentity: state.boundarySplatPhaseSourceIdentity,
+    };
+    state.boundarySplatPbrCostLadder = result;
     return result;
   }
 
@@ -9319,7 +9753,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       encodeBoundarySplats(encoder);
       const currentTexture = context.getCurrentTexture();
       if (boundarySplatRequested()) {
-        const splatApplied = encodeBoundarySplatDraw(encoder, currentTexture.createView());
+        ensureBoundarySplatPbrDepthTexture();
+        const pbrSceneApplied = encodeBoundarySplatPbrScene(encoder, currentTexture.createView(), boundarySplatPbrDepthTexture.createView());
+        const splatApplied = encodeBoundarySplatDraw(encoder, currentTexture.createView(), boundarySplatRenderPipeline, {
+          depthView: boundarySplatPbrDepthTexture.createView(),
+          loadColor: pbrSceneApplied,
+          loadDepth: pbrSceneApplied,
+        });
         if (!splatApplied) {
           encodeDraw(encoder, currentTexture.createView(), 'kaminos boundary splat explicit fallback raymarch');
           state.volumeReconstructionStyle = 'boundary-splat-fallback-raymarch';
@@ -11453,7 +11893,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       let sourcePassEncodeMs = null;
       let residualPassEncodeMs = null;
       if (boundarySplatRequested()) {
-        const splatApplied = encodeBoundarySplatDraw(encoder, currentTexture.createView());
+        ensureBoundarySplatPbrDepthTexture();
+        const pbrSceneApplied = encodeBoundarySplatPbrScene(encoder, currentTexture.createView(), boundarySplatPbrDepthTexture.createView());
+        const splatApplied = encodeBoundarySplatDraw(encoder, currentTexture.createView(), boundarySplatRenderPipeline, {
+          depthView: boundarySplatPbrDepthTexture.createView(),
+          loadColor: pbrSceneApplied,
+          loadDepth: pbrSceneApplied,
+        });
         if (!splatApplied) {
           return {
             ok: false,
@@ -11674,6 +12120,17 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       state.boundarySplatCompositionIdentity = state.boundarySplatComposition === 'field'
         ? BOUNDARY_SPLAT_FIELD_COMPOSITION_IDENTITY
         : 'boundary-splat-proof-layout-v0';
+      state.boundarySplatPbrScene = normalizeBoundarySplatPbrScene(controlsSnapshot.boundarySplatPbrScene);
+      state.boundarySplatPbrSceneIdentity = state.boundarySplatPbrScene === 'fire-field'
+        ? BOUNDARY_SPLAT_PBR_FIRE_FIELD_IDENTITY
+        : 'off';
+      state.boundarySplatPbrDepthAuthority = state.boundarySplatPbrScene === 'fire-field'
+        ? 'same-device-depth24plus-less-equal-v0'
+        : 'off';
+      state.boundarySplatPbrCameraAuthority = state.boundarySplatPbrScene === 'fire-field'
+        ? 'three-camera-matrices-native-webgpu-v0'
+        : 'off';
+      state.boundarySplatPbrFixedSubstrateIdentity = BOUNDARY_SPLAT_PBR_FIXED_SUBSTRATE_IDENTITY;
       state.boundarySplatRadius = normalizeBoundarySplatRadius(controlsSnapshot.boundarySplatRadius);
       state.boundarySplatSharpness = normalizeBoundarySplatSharpness(controlsSnapshot.boundarySplatSharpness);
       if (device) void ensureBrowserResidualModel();
@@ -11792,6 +12249,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     sampleFrame,
     primeBoundarySplatLiveHistory,
     sampleBoundarySplatInstanceCostLadder,
+    sampleBoundarySplatPbrCostLadder,
     sampleRenderScaleSet,
     controlledStepFrame,
     controlledStepSequence,
@@ -11800,6 +12258,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       this.setActive(false);
       frameTexture?.destroy();
       browserResidualFeatureTexture?.destroy();
+      boundarySplatPbrDepthTexture?.destroy();
+      boundarySplatPbrDepthTexture = null;
       externalEmitterBuffer?.destroy();
       boundarySplatCameraBuffer?.destroy();
       boundarySplatCameraBuffer = null;
