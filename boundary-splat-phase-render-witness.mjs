@@ -399,21 +399,26 @@ function dot(weights, input) {
   return total;
 }
 
-function forEachLocalGridTrainingSample(trainingPairs, loadedFrames, heldOutFrameIds, siteStats, maxAbsOffset, gridStep, callback) {
+function forEachLocalGridTrainingSample(trainingPairs, loadedFrames, heldOutFrameIds, siteStats, maxAbsOffset, gridStep, callback, options = {}) {
   for (const pair of trainingPairs) {
     if (heldOutFrameIds.has(pair.sourceFrameId) || heldOutFrameIds.has(pair.targetFrameId)) continue;
     const trainingSource = loadedFrames.get(pair.sourceFrameId);
     const trainingTarget = loadedFrames.get(pair.targetFrameId);
     const sourceRows = makeWorldFrameState(trainingSource);
     const targetRows = makeWorldFrameState(trainingTarget);
-    const keys = new Set([...sourceRows.keys(), ...targetRows.keys()]);
+    const keys = options.includePredictionSiteNegatives
+      ? new Set([...makeSpatialPredictionSites(sourceRows, siteStats, { offset: pair.offsetSteps }).keys(), ...targetRows.keys()])
+      : new Set([...sourceRows.keys(), ...targetRows.keys()]);
     for (const key of keys) {
+      const sourceOccupied = sourceRows.has(key);
+      const targetOccupied = targetRows.has(key);
       callback({
         key,
         input: makeLocalGridOccupancyInput(keyToWorldPosition(key), sourceRows, siteStats, pair.offsetSteps, maxAbsOffset, gridStep),
-        label: targetRows.has(key) ? 1 : 0,
-        sourceOccupied: sourceRows.has(key),
-        targetOccupied: targetRows.has(key),
+        label: targetOccupied ? 1 : 0,
+        sourceOccupied,
+        targetOccupied,
+        sourceAbsentTargetAbsentNegative: !sourceOccupied && !targetOccupied,
         offsetSteps: pair.offsetSteps,
       });
     }
@@ -428,6 +433,7 @@ function trainLocalGridLogisticClassifier(trainingPairs, loadedFrames, heldOutFr
   const l2 = Math.max(0, Number(options.localGridL2 ?? 0.0005));
   let sampleCount = 0;
   let positiveCount = 0;
+  let sourceAbsentTargetAbsentNegativeCount = 0;
   for (let epoch = 0; epoch < epochs; epoch += 1) {
     let epochSamples = 0;
     forEachLocalGridTrainingSample(trainingPairs, loadedFrames, heldOutFrameIds, siteStats, maxAbsOffset, gridStep, sample => {
@@ -441,8 +447,9 @@ function trainLocalGridLogisticClassifier(trainingPairs, loadedFrames, heldOutFr
       if (epoch === 0) {
         sampleCount += 1;
         positiveCount += sample.label;
+        if (sample.sourceAbsentTargetAbsentNegative) sourceAbsentTargetAbsentNegativeCount += 1;
       }
-    });
+    }, options);
     if (epochSamples === 0) throw new Error('local-grid occupancy classifier has no training samples');
   }
   return {
@@ -453,6 +460,7 @@ function trainLocalGridLogisticClassifier(trainingPairs, loadedFrames, heldOutFr
     l2,
     sampleCount,
     positiveCount,
+    sourceAbsentTargetAbsentNegativeCount,
     predict(input) {
       return sigmoid(dot(weights, input));
     },
@@ -463,7 +471,7 @@ function thresholdGrid() {
   return Array.from({ length: 19 }, (_, index) => 0.05 + index * 0.05);
 }
 
-function chooseLocalGridThreshold(classifier, trainingPairs, loadedFrames, heldOutFrameIds, siteStats, maxAbsOffset, gridStep) {
+function chooseLocalGridThreshold(classifier, trainingPairs, loadedFrames, heldOutFrameIds, siteStats, maxAbsOffset, gridStep, options = {}) {
   const thresholds = thresholdGrid();
   const stats = thresholds.map(threshold => ({
     threshold,
@@ -495,7 +503,7 @@ function chooseLocalGridThreshold(classifier, trainingPairs, loadedFrames, heldO
       else if (predictedDeath && !trueDeath) row.deathFp += 1;
       else if (!predictedDeath && trueDeath) row.deathFn += 1;
     }
-  });
+  }, options);
   const countsToMetrics = (tp, fp, fn) => ({
     truePositive: tp,
     falsePositive: fp,
@@ -518,6 +526,67 @@ function chooseLocalGridThreshold(classifier, trainingPairs, loadedFrames, heldO
     };
   });
   return withMetrics.reduce((best, row) => (row.fScore > best.fScore ? row : best), withMetrics[0]);
+}
+
+function median(values) {
+  if (!values.length) return null;
+  const sorted = values.slice().sort((left, right) => left - right);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
+}
+
+function computeSupportBudget(trainingPairs, loadedFrames, heldOutFrameIds, sourceRows, targetRows, offset) {
+  const offsetSign = Math.sign(offset) || 1;
+  const ratios = [];
+  const targetCounts = [];
+  const sourceSurvivalRatios = [];
+  const birthRatios = [];
+  for (const pair of trainingPairs) {
+    if (heldOutFrameIds.has(pair.sourceFrameId) || heldOutFrameIds.has(pair.targetFrameId)) continue;
+    if ((Math.sign(pair.offsetSteps) || 1) !== offsetSign) continue;
+    const trainingSource = loadedFrames.get(pair.sourceFrameId);
+    const trainingTarget = loadedFrames.get(pair.targetFrameId);
+    const sourceCount = trainingSource.splats.count;
+    const targetCount = trainingTarget.splats.count;
+    const alignment = alignBoundarySplatRowsByWorldPosition(trainingSource.splats.values, trainingTarget.splats.values, { countsOnly: true });
+    ratios.push(targetCount / Math.max(1, sourceCount));
+    targetCounts.push(targetCount);
+    sourceSurvivalRatios.push(alignment.matchedCount / Math.max(1, sourceCount));
+    birthRatios.push(alignment.birthCount / Math.max(1, sourceCount));
+  }
+  if (!ratios.length) {
+    for (const pair of trainingPairs) {
+      if (heldOutFrameIds.has(pair.sourceFrameId) || heldOutFrameIds.has(pair.targetFrameId)) continue;
+      const trainingSource = loadedFrames.get(pair.sourceFrameId);
+      const trainingTarget = loadedFrames.get(pair.targetFrameId);
+      const sourceCount = trainingSource.splats.count;
+      const targetCount = trainingTarget.splats.count;
+      const alignment = alignBoundarySplatRowsByWorldPosition(trainingSource.splats.values, trainingTarget.splats.values, { countsOnly: true });
+      ratios.push(targetCount / Math.max(1, sourceCount));
+      targetCounts.push(targetCount);
+      sourceSurvivalRatios.push(alignment.matchedCount / Math.max(1, sourceCount));
+      birthRatios.push(alignment.birthCount / Math.max(1, sourceCount));
+    }
+  }
+  const medianTargetToSourceRatio = median(ratios) ?? 1;
+  const targetSupportBudget = Math.max(1, Math.round(sourceRows.size * medianTargetToSourceRatio));
+  const medianSourceSurvivalRatio = median(sourceSurvivalRatios) ?? Math.min(1, medianTargetToSourceRatio);
+  const medianBirthRatio = median(birthRatios) ?? Math.max(0, medianTargetToSourceRatio - medianSourceSurvivalRatio);
+  const sourceSurvivalBudget = Math.max(0, Math.min(sourceRows.size, Math.round(sourceRows.size * medianSourceSurvivalRatio)));
+  const birthSupportBudget = Math.max(0, Math.min(targetSupportBudget - sourceSurvivalBudget, Math.round(sourceRows.size * medianBirthRatio)));
+  return {
+    authority: 'training-offset-target-count-support-budget-v0',
+    trainingPairCount: ratios.length,
+    sourceSupportCount: sourceRows.size,
+    exactTargetSupportCount: targetRows.size,
+    medianTargetToSourceRatio,
+    medianSourceSurvivalRatio,
+    medianBirthRatio,
+    medianTrainingTargetCount: median(targetCounts),
+    targetSupportBudget,
+    sourceSurvivalBudget,
+    birthSupportBudget,
+  };
 }
 
 function emptyPr() {
@@ -958,6 +1027,11 @@ async function runLocalGridOccupancyRenderWitness(context) {
     ridgeLambda,
     options,
   } = context;
+  const requestedFamily = String(options.phaseModelFamily || options.modelFamily || 'local-grid-occupancy-classifier-v0');
+  const budgetedSupport = requestedFamily === 'dense-negative-budgeted-local-grid-occupancy-v0';
+  const classifierOptions = budgetedSupport
+    ? { ...options, includePredictionSiteNegatives: true }
+    : options;
   const heldOutFrameIds = new Set([heldOutPair.targetFrameId]);
   const siteStats = new Map();
   for (const pair of trainingPairs) {
@@ -980,8 +1054,8 @@ async function runLocalGridOccupancyRenderWitness(context) {
     }
   }
   const gridStep = Number(options.gridStep ?? (2 / gridSize));
-  const classifier = trainLocalGridLogisticClassifier(trainingPairs, loadedFrames, heldOutFrameIds, siteStats, maxAbsOffset, gridStep, options);
-  const calibratedThreshold = chooseLocalGridThreshold(classifier, trainingPairs, loadedFrames, heldOutFrameIds, siteStats, maxAbsOffset, gridStep);
+  const classifier = trainLocalGridLogisticClassifier(trainingPairs, loadedFrames, heldOutFrameIds, siteStats, maxAbsOffset, gridStep, classifierOptions);
+  const calibratedThreshold = chooseLocalGridThreshold(classifier, trainingPairs, loadedFrames, heldOutFrameIds, siteStats, maxAbsOffset, gridStep, classifierOptions);
   const featureInputSize = makeSpatialOccupancyInput([0, 0, 0], new Map([[
     '0.000000,0.000000,0.000000',
     { position: [0, 0, 0], candidate: new Float32Array(16) },
@@ -1007,16 +1081,54 @@ async function runLocalGridOccupancyRenderWitness(context) {
   const sourceRows = makeWorldFrameState(source);
   const targetRows = makeWorldFrameState(target);
   const predictionSites = makeSpatialPredictionSites(sourceRows, siteStats, { offset });
+  const supportBudget = budgetedSupport
+    ? computeSupportBudget(trainingPairs, loadedFrames, heldOutFrameIds, sourceRows, targetRows, offset)
+    : null;
   const occupancyThreshold = calibratedThreshold.threshold;
+  if (supportBudget) {
+    supportBudget.birthPrecisionBudgetScale = Math.max(0.05, Math.min(1, calibratedThreshold.birth.precision));
+    supportBudget.effectiveBirthSupportBudget = Math.max(0, Math.round(supportBudget.birthSupportBudget * supportBudget.birthPrecisionBudgetScale));
+    supportBudget.effectiveSourceSurvivalBudget = Math.max(
+      0,
+      Math.min(sourceRows.size, supportBudget.targetSupportBudget - supportBudget.effectiveBirthSupportBudget),
+    );
+  }
+  const probabilityByKey = new Map();
+  const selectedKeys = new Set();
+  if (budgetedSupport) {
+    const rankedSourceSites = [];
+    const rankedBirthSites = [];
+    for (const [key, site] of predictionSites) {
+      const input = makeLocalGridOccupancyInput(site.position, sourceRows, siteStats, offset, maxAbsOffset, gridStep);
+      const probability = classifier.predict(input);
+      probabilityByKey.set(key, probability);
+      const row = { key, site, probability };
+      if (site.sourceOccupied) rankedSourceSites.push(row);
+      else rankedBirthSites.push(row);
+    }
+    const byProbability = (left, right) => (
+      right.probability !== left.probability
+        ? right.probability - left.probability
+        : left.key.localeCompare(right.key)
+    );
+    rankedSourceSites
+      .sort(byProbability)
+      .slice(0, supportBudget.effectiveSourceSurvivalBudget)
+      .forEach(row => selectedKeys.add(row.key));
+    rankedBirthSites
+      .sort(byProbability)
+      .slice(0, Math.max(0, Math.min(supportBudget.effectiveBirthSupportBudget, supportBudget.targetSupportBudget - selectedKeys.size)))
+      .forEach(row => selectedKeys.add(row.key));
+  }
   const predictedRows = [];
   const predictedFeatureByKey = new Map();
-  const probabilityByKey = new Map();
   let predictedDeaths = 0;
   for (const [key, site] of predictionSites) {
     const input = makeLocalGridOccupancyInput(site.position, sourceRows, siteStats, offset, maxAbsOffset, gridStep);
-    const probability = classifier.predict(input);
+    const probability = probabilityByKey.get(key) ?? classifier.predict(input);
     probabilityByKey.set(key, probability);
-    if (probability < occupancyThreshold) {
+    const predictedOccupied = budgetedSupport ? selectedKeys.has(key) : probability >= occupancyThreshold;
+    if (!predictedOccupied) {
       if (site.sourceOccupied) predictedDeaths += 1;
       continue;
     }
@@ -1064,18 +1176,19 @@ async function runLocalGridOccupancyRenderWitness(context) {
     const sourceOccupied = sourceRows.has(key);
     const targetOccupied = targetRows.has(key);
     const predictedOccupied = (probabilityByKey.get(key) ?? 0) >= occupancyThreshold;
-    if (predictedOccupied && targetOccupied) occupancyPr.truePositive += 1;
-    else if (predictedOccupied && !targetOccupied) occupancyPr.falsePositive += 1;
-    else if (!predictedOccupied && targetOccupied) occupancyPr.falseNegative += 1;
+    const budgetedPredictedOccupied = budgetedSupport ? selectedKeys.has(key) : predictedOccupied;
+    if (budgetedPredictedOccupied && targetOccupied) occupancyPr.truePositive += 1;
+    else if (budgetedPredictedOccupied && !targetOccupied) occupancyPr.falsePositive += 1;
+    else if (!budgetedPredictedOccupied && targetOccupied) occupancyPr.falseNegative += 1;
     const trueBirth = !sourceOccupied && targetOccupied;
-    const predictedBirth = !sourceOccupied && predictedOccupied;
+    const predictedBirth = !sourceOccupied && budgetedPredictedOccupied;
     if (predictedBirth && trueBirth) {
       birthPr.truePositive += 1;
       synthesizedBirthKeys.push(key);
     } else if (predictedBirth && !trueBirth) birthPr.falsePositive += 1;
     else if (!predictedBirth && trueBirth) birthPr.falseNegative += 1;
     const trueDeath = sourceOccupied && !targetOccupied;
-    const predictedDeath = sourceOccupied && !predictedOccupied;
+    const predictedDeath = sourceOccupied && !budgetedPredictedOccupied;
     if (predictedDeath && trueDeath) deathPr.truePositive += 1;
     else if (predictedDeath && !trueDeath) deathPr.falsePositive += 1;
     else if (!predictedDeath && trueDeath) deathPr.falseNegative += 1;
@@ -1127,7 +1240,7 @@ async function runLocalGridOccupancyRenderWitness(context) {
     },
     attributeModel: { path: modelPath, sha256: sha256(modelBytes), identity: compiledAttributeModel.identity },
     phaseModel: {
-      family: 'local-grid-occupancy-classifier-v0',
+      family: budgetedSupport ? 'dense-negative-budgeted-local-grid-occupancy-v0' : 'local-grid-occupancy-classifier-v0',
       holdoutAuthority: 'entire-offset-pair-plus-target-frame-held-out-v0',
       heldOutOffset: offset,
       heldOutFrameIds: Array.from(heldOutFrameIds),
@@ -1142,6 +1255,12 @@ async function runLocalGridOccupancyRenderWitness(context) {
         authority: 'calibrated-local-grid-logistic-occupancy-classifier-v0',
         trainSampleCount: classifier.sampleCount,
         positiveTrainSampleCount: classifier.positiveCount,
+        trainingUniverse: {
+          authority: budgetedSupport
+            ? 'prediction-site-source-absent-target-absent-negatives-v0'
+            : 'source-target-union-occupancy-samples-v0',
+          sourceAbsentTargetAbsentNegativeCount: classifier.sourceAbsentTargetAbsentNegativeCount,
+        },
         epochs: classifier.epochs,
         learningRate: classifier.learningRate,
         l2: classifier.l2,
@@ -1162,6 +1281,7 @@ async function runLocalGridOccupancyRenderWitness(context) {
         trainSampleCount: featureTrainingSampleCount,
         ridgeLambda,
       },
+      ...(supportBudget ? { supportBudget } : {}),
     },
     alignment: {
       identityKey: 'world-position-stable-key',
@@ -1407,7 +1527,8 @@ export async function writeBoundarySplatPhaseRenderWitness(manifestFile, options
         options,
       });
     }
-    if (phaseModelFamily === 'local-grid-occupancy-classifier-v0') {
+    if (phaseModelFamily === 'local-grid-occupancy-classifier-v0'
+      || phaseModelFamily === 'dense-negative-budgeted-local-grid-occupancy-v0') {
       return runLocalGridOccupancyRenderWitness({
         manifestBytes,
         manifestPath,
@@ -1594,7 +1715,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
   const args = parseArgs(process.argv.slice(2));
   const manifest = args.get('--manifest');
   if (!manifest) {
-    console.error('Usage: node boundary-splat-phase-render-witness.mjs --manifest <phase-corpus.json> [--model <model-artifact.json>] [--offset 3] [--phase-model-family ridge-linear-offset-conditioned-v0|spatial-occupancy-ridge-v0|local-grid-occupancy-classifier-v0] [--out-dir <dir>] [--report <json>]');
+    console.error('Usage: node boundary-splat-phase-render-witness.mjs --manifest <phase-corpus.json> [--model <model-artifact.json>] [--offset 3] [--phase-model-family ridge-linear-offset-conditioned-v0|spatial-occupancy-ridge-v0|local-grid-occupancy-classifier-v0|dense-negative-budgeted-local-grid-occupancy-v0] [--out-dir <dir>] [--report <json>]');
     process.exitCode = 2;
   } else {
     try {

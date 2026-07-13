@@ -300,6 +300,53 @@ try {
     localGridReport.pixelMetrics.phasePredictionToExactMse <= localGridReport.baselines.spatialPriorInterpolation.pixelMse,
     'local-grid classifier should beat the spatial-prior baseline on the birth fixture',
   );
+
+  const budgetedReportPath = join(root, 'dense-negative-budgeted-render-report.json');
+  const budgetedReport = await writeBoundarySplatPhaseRenderWitness(manifestPath, {
+    model: modelPath,
+    offset: 3,
+    outDir: root,
+    report: budgetedReportPath,
+    width: 96,
+    height: 96,
+    phaseModelFamily: 'dense-negative-budgeted-local-grid-occupancy-v0',
+  });
+  assert.equal(budgetedReport.phaseModel.family, 'dense-negative-budgeted-local-grid-occupancy-v0');
+  assert.equal(
+    budgetedReport.phaseModel.occupancy.trainingUniverse.authority,
+    'prediction-site-source-absent-target-absent-negatives-v0',
+  );
+  assert.ok(
+    budgetedReport.phaseModel.occupancy.trainingUniverse.sourceAbsentTargetAbsentNegativeCount > 0,
+    'budgeted classifier must train on source-absent target-absent prediction-site negatives',
+  );
+  assert.equal(budgetedReport.phaseModel.supportBudget.authority, 'training-offset-target-count-support-budget-v0');
+  assert.ok(budgetedReport.phaseModel.supportBudget.targetSupportBudget > 0, 'support budget must be learned from training target counts');
+  assert.ok(budgetedReport.phaseModel.supportBudget.sourceSurvivalBudget > 0, 'support budget must reserve source-site survivors');
+  assert.ok(
+    budgetedReport.phaseModel.supportBudget.birthPrecisionBudgetScale > 0,
+    'support budget must expose the calibrated birth precision scale used to cap risky births',
+  );
+  assert.ok(
+    budgetedReport.phaseModel.supportBudget.effectiveBirthSupportBudget <= budgetedReport.phaseModel.supportBudget.birthSupportBudget,
+    'effective birth budget must not exceed the learned raw birth budget',
+  );
+  assert.ok(
+    budgetedReport.renders.inputSplats.phasePrediction <= budgetedReport.phaseModel.supportBudget.targetSupportBudget,
+    'budgeted prediction must not exceed its learned support budget',
+  );
+  assert.ok(
+    budgetedReport.alignment.predictedDeaths < budgetedReport.baselines.currentCopy.inputSplats,
+    'budgeted prediction must not spend the whole support budget on births',
+  );
+  assert.ok(
+    budgetedReport.renders.inputSplats.phasePrediction < budgetedReport.baselines.spatialPriorInterpolation.inputSplats,
+    'support budget must reduce the overfull spatial-prior site universe',
+  );
+  assert.ok(
+    budgetedReport.pixelMetrics.phasePredictionToExactMse <= budgetedReport.baselines.currentCopy.pixelMse,
+    'budgeted dense-negative fixture should beat current-copy identity on rendered pixels',
+  );
 } finally {
   await rm(root, { recursive: true, force: true });
 }
