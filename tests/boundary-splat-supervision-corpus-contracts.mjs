@@ -64,6 +64,59 @@ try {
   wrongStride.frames[0].candidates.count = 3;
   await writeFile(manifestPath, JSON.stringify(wrongStride));
   await assert.rejects(() => validateBoundarySplatSupervisionCorpus(manifestPath), /candidate.*bytes/i);
+
+  const temporal = structuredClone(manifest);
+  temporal.frames = Array.from({ length: 7 }, (_, index) => ({
+    ...structuredClone(manifest.frames[0]),
+    id: `frame-${index}`,
+    sameStateCaptureId: `same-state-${index}`,
+    simStepCount: 200 + index,
+    candidates: {
+      ...manifest.frames[0].candidates,
+      path: candidatePath,
+    },
+    target: {
+      ...manifest.frames[0].target,
+      path: targetPath,
+    },
+  }));
+  temporal.temporalAlignment = {
+    schema: 'kaminos-boundary-splat-temporal-alignment-v0',
+    identityKey: 'grid-cell-slot',
+    alignmentMethod: 'grid-cell-slot',
+    offsetSteps: [-6, -2, -1, 1, 2, 6],
+    supportSemantics: {
+      matched: 'same grid-cell slot is occupied in source and target',
+      birth: 'target grid-cell slot is newly occupied relative to source',
+      death: 'source grid-cell slot is absent from target',
+    },
+    pairs: [
+      { sourceFrameId: 'frame-6', targetFrameId: 'frame-0', offsetSteps: -6, sourceCount: 2, targetCount: 2, matchedSlots: 1, births: 1, deaths: 1, stableSupportCount: 1 },
+      { sourceFrameId: 'frame-2', targetFrameId: 'frame-0', offsetSteps: -2, sourceCount: 2, targetCount: 2, matchedSlots: 2, births: 0, deaths: 0, stableSupportCount: 2 },
+      { sourceFrameId: 'frame-1', targetFrameId: 'frame-0', offsetSteps: -1, sourceCount: 2, targetCount: 2, matchedSlots: 2, births: 0, deaths: 0, stableSupportCount: 2 },
+      { sourceFrameId: 'frame-0', targetFrameId: 'frame-1', offsetSteps: 1, sourceCount: 2, targetCount: 2, matchedSlots: 2, births: 0, deaths: 0, stableSupportCount: 2 },
+      { sourceFrameId: 'frame-0', targetFrameId: 'frame-2', offsetSteps: 2, sourceCount: 2, targetCount: 2, matchedSlots: 2, births: 0, deaths: 0, stableSupportCount: 2 },
+      { sourceFrameId: 'frame-0', targetFrameId: 'frame-6', offsetSteps: 6, sourceCount: 2, targetCount: 2, matchedSlots: 1, births: 1, deaths: 1, stableSupportCount: 1 },
+    ],
+  };
+  await writeFile(manifestPath, JSON.stringify(temporal));
+  const temporalValid = await validateBoundarySplatSupervisionCorpus(manifestPath);
+  assert.equal(temporalValid.temporalAlignment.positiveOffsetCount, 3);
+  assert.equal(temporalValid.temporalAlignment.negativeOffsetCount, 3);
+  assert.equal(temporalValid.temporalAlignment.hardOffsetCount, 2);
+  assert.equal(temporalValid.temporalAlignment.totalBirths, 2);
+  assert.equal(temporalValid.temporalAlignment.totalDeaths, 2);
+
+  const nearestNeighborTemporal = structuredClone(temporal);
+  nearestNeighborTemporal.temporalAlignment.alignmentMethod = 'nearest-neighbor';
+  await writeFile(manifestPath, JSON.stringify(nearestNeighborTemporal));
+  await assert.rejects(() => validateBoundarySplatSupervisionCorpus(manifestPath), /nearest-neighbor|grid-cell/i);
+
+  const oneSidedOffsets = structuredClone(temporal);
+  oneSidedOffsets.temporalAlignment.offsetSteps = [1, 2, 6];
+  oneSidedOffsets.temporalAlignment.pairs = oneSidedOffsets.temporalAlignment.pairs.filter(pair => pair.offsetSteps > 0);
+  await writeFile(manifestPath, JSON.stringify(oneSidedOffsets));
+  await assert.rejects(() => validateBoundarySplatSupervisionCorpus(manifestPath), /positive.*negative.*offset/i);
 } finally {
   await rm(root, { recursive: true, force: true });
 }
