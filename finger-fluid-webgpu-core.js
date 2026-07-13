@@ -2,6 +2,7 @@ export const KAMINOS_FINGER_FLUID_GPU_SOLVER_ROUTE = 'webgpu-pbf-linked-cell-flu
 export const KAMINOS_FINGER_FLUID_NEIGHBOR_GRID_CONTRACT = 'wgsl-linked-cell-neighbor-grid-v0';
 export const KAMINOS_FINGER_FLUID_DENSITY_CONTRACT = 'wgsl-pbf-density-constraint-v0';
 export const KAMINOS_FINGER_FLUID_VORTICITY_CONTRACT = 'wgsl-neighbor-vorticity-confinement-v0';
+export const KAMINOS_FINGER_FLUID_FREE_SURFACE_CONTRACT = 'wgsl-neighbor-free-surface-cohesion-v0';
 export const KAMINOS_FINGER_FLUID_OBSTACLE_CONTRACT = 'shared-solver-render-obstacle-v0';
 export const KAMINOS_FINGER_FLUID_GPU_RENDERER_ROUTE = 'webgpu-particle-sphere-renderer-v0';
 export const KAMINOS_FINGER_FLUID_GPU_SHADER_ROUTE = 'wgsl-pbf-linked-cell-fluid-v0';
@@ -218,6 +219,47 @@ fn apply_position_delta(@builtin(global_invocation_id) gid: vec3<u32>) {
 }
 
 @compute @workgroup_size(${WORKGROUP_SIZE})
+fn classify_free_surface(@builtin(global_invocation_id) gid: vec3<u32>) {
+  let index = gid.x;
+  if (index >= params.particleCount) { return; }
+  let particle = particles[index];
+  let position = particle.predicted.xyz;
+  let baseCell = gridCoord(position);
+  var supportWeight = 0.0;
+  var directionalSupport = vec3<f32>(0.0);
+
+  for (var z = -1; z <= 1; z = z + 1) {
+    for (var y = -1; y <= 1; y = y + 1) {
+      for (var x = -1; x <= 1; x = x + 1) {
+        let neighborCell = baseCell + vec3<i32>(x, y, z);
+        if (any(neighborCell < vec3<i32>(0)) || any(neighborCell >= vec3<i32>(params.gridDims.xyz))) { continue; }
+        var current = atomicLoad(&cellHeads[cellIndex(neighborCell)]);
+        while (current >= 0) {
+          let neighborIndex = u32(current);
+          if (neighborIndex != index) {
+            let offset = position - particles[neighborIndex].predicted.xyz;
+            let distance = length(offset);
+            let weight = kernelWeight(distance);
+            if (distance > 0.00001 && weight > 0.0) {
+              supportWeight = supportWeight + weight;
+              directionalSupport = directionalSupport + (offset / distance) * weight;
+            }
+          }
+          current = particleNext[neighborIndex];
+        }
+      }
+    }
+  }
+
+  let supportAnisotropy = length(directionalSupport) / max(supportWeight, 0.0001);
+  let densityRatio = particle.delta.w / max(params.fluid.y, 0.0001);
+  let densityDeficit = 1.0 - smoothstep(0.72, 0.98, densityRatio);
+  let anisotropicSurface = smoothstep(0.14, 0.46, supportAnisotropy);
+  let surfaceFactor = clamp(max(anisotropicSurface, densityDeficit * 0.55), 0.0, 1.0);
+  particles[index].predicted = vec4<f32>(position, surfaceFactor);
+}
+
+@compute @workgroup_size(${WORKGROUP_SIZE})
 fn compute_velocity_viscosity(@builtin(global_invocation_id) gid: vec3<u32>) {
   let index = gid.x;
   if (index >= params.particleCount) { return; }
@@ -344,6 +386,65 @@ fn apply_vorticity_confinement(@builtin(global_invocation_id) gid: vec3<u32>) {
   if (speed > ${MAX_FLUID_SPEED}) { velocity = velocity * (${MAX_FLUID_SPEED} / speed); }
   particles[index].delta = vec4<f32>(velocity, particle.delta.w);
   particles[index].position.w = min(omegaMagnitude, 4096.0);
+}
+
+@compute @workgroup_size(${WORKGROUP_SIZE})
+fn apply_surface_cohesion(@builtin(global_invocation_id) gid: vec3<u32>) {
+  let index = gid.x;
+  if (index >= params.particleCount) { return; }
+  let particle = particles[index];
+  let position = particle.predicted.xyz;
+  let surfaceFactor = particle.predicted.w;
+  let baseCell = gridCoord(position);
+  var attraction = vec3<f32>(0.0);
+  var attractionWeight = 0.0;
+
+  for (var z = -1; z <= 1; z = z + 1) {
+    for (var y = -1; y <= 1; y = y + 1) {
+      for (var x = -1; x <= 1; x = x + 1) {
+        let neighborCell = baseCell + vec3<i32>(x, y, z);
+        if (any(neighborCell < vec3<i32>(0)) || any(neighborCell >= vec3<i32>(params.gridDims.xyz))) { continue; }
+        var current = atomicLoad(&cellHeads[cellIndex(neighborCell)]);
+        while (current >= 0) {
+          let neighborIndex = u32(current);
+          if (neighborIndex != index) {
+            let offset = particles[neighborIndex].predicted.xyz - position;
+            let distance = length(offset);
+            if (distance > 0.00001 && distance < params.fluid.x) {
+              let q = distance / params.fluid.x;
+              let cohesionBand = smoothstep(0.28, 0.58, q) * (1.0 - smoothstep(0.82, 1.0, q));
+              let neighborSurface = particles[neighborIndex].predicted.w;
+              let weight = cohesionBand * (0.30 + 0.70 * neighborSurface);
+              attraction = attraction + (offset / distance) * weight;
+              attractionWeight = attractionWeight + weight;
+            }
+          }
+          current = particleNext[neighborIndex];
+        }
+      }
+    }
+  }
+
+  var cohesionAcceleration = attraction / max(attractionWeight, 0.0001) * surfaceFactor * 0.72;
+  let cohesionLength = length(cohesionAcceleration);
+  if (cohesionLength > 0.58) { cohesionAcceleration = cohesionAcceleration * (0.58 / cohesionLength); }
+  var velocity = particle.delta.xyz + cohesionAcceleration * params.dt;
+  let radius = params.fluid.x * 0.22;
+  if (position.y <= floorHeight(position) + radius + 0.01) {
+    let normal = floorNormal(position);
+    let normalSpeed = dot(velocity, normal);
+    if (normalSpeed < 0.0) { velocity = velocity - normal * normalSpeed; }
+  }
+  let sphereCenter = vec3<f32>(${OBSTACLE_CENTER[0]}, ${OBSTACLE_CENTER[1]}, ${OBSTACLE_CENTER[2]});
+  let fromSphere = position - sphereCenter;
+  if (length(fromSphere) <= ${OBSTACLE_RADIUS} + radius + 0.01) {
+    let sphereNormal = normalize(fromSphere + vec3<f32>(0.00001, 0.00002, 0.00003));
+    let sphereNormalSpeed = dot(velocity, sphereNormal);
+    if (sphereNormalSpeed < 0.0) { velocity = velocity - sphereNormal * sphereNormalSpeed; }
+  }
+  let speed = length(velocity);
+  if (speed > ${MAX_FLUID_SPEED}) { velocity = velocity * (${MAX_FLUID_SPEED} / speed); }
+  particles[index].delta = vec4<f32>(velocity, particle.delta.w);
 }
 
 @compute @workgroup_size(${WORKGROUP_SIZE})
@@ -611,9 +712,11 @@ export async function createWebGPUFingerFluidSolver({
       lambda: await pipelineFor('compute_density_lambda'),
       delta: await pipelineFor('solve_position_delta'),
       applyDelta: await pipelineFor('apply_position_delta'),
+      classifySurface: await pipelineFor('classify_free_surface'),
       velocity: await pipelineFor('compute_velocity_viscosity'),
       vorticity: await pipelineFor('compute_vorticity'),
       confinement: await pipelineFor('apply_vorticity_confinement'),
+      cohesion: await pipelineFor('apply_surface_cohesion'),
       applyVelocity: await pipelineFor('apply_velocity_position'),
     };
   } catch (error) {
@@ -677,6 +780,9 @@ export async function createWebGPUFingerFluidSolver({
   let linkedCellGridBuildCount = 0;
   let densityIterationCount = 0;
   let vorticityPassCount = 0;
+  let postProjectionGridRefreshCount = 0;
+  let freeSurfaceClassificationPassCount = 0;
+  let surfaceCohesionPassCount = 0;
   let directRenderFrameCount = 0;
   let lastFrameCpuMs = 0;
   let diagnosticsPending = false;
@@ -751,12 +857,20 @@ export async function createWebGPUFingerFluidSolver({
         linkedCellGridBuildCount += 1;
         densityIterationCount += 1;
       }
+      dispatch(pass, pipelines.clear, GRID_CELL_COUNT);
+      dispatch(pass, pipelines.build, safeParticleCount);
+      linkedCellGridBuildCount += 1;
+      postProjectionGridRefreshCount += 1;
+      dispatch(pass, pipelines.classifySurface, safeParticleCount);
+      freeSurfaceClassificationPassCount += 1;
       dispatch(pass, pipelines.velocity, safeParticleCount);
       if (frameIndex % VORTICITY_UPDATE_INTERVAL === 0) {
         dispatch(pass, pipelines.vorticity, safeParticleCount);
         dispatch(pass, pipelines.confinement, safeParticleCount);
         vorticityPassCount += 2;
       }
+      dispatch(pass, pipelines.cohesion, safeParticleCount);
+      surfaceCohesionPassCount += 1;
       dispatch(pass, pipelines.applyVelocity, safeParticleCount);
       pass.end();
       device.queue.submit([encoder.finish()]);
@@ -838,6 +952,9 @@ export async function createWebGPUFingerFluidSolver({
       let densitySum = 0;
       let vorticitySum = 0;
       let maxVorticity = 0;
+      let surfaceFactorSum = 0;
+      let maxSurfaceFactor = 0;
+      let surfaceParticleCount = 0;
       for (let index = 0; index < safeParticleCount; index += 1) {
         const offset = index * PARTICLE_FLOATS;
         for (let axis = 0; axis < 3; axis += 1) {
@@ -851,6 +968,10 @@ export async function createWebGPUFingerFluidSolver({
         const vorticity = values[offset + 3];
         vorticitySum += vorticity;
         maxVorticity = Math.max(maxVorticity, vorticity);
+        const surfaceFactor = values[offset + 7];
+        surfaceFactorSum += surfaceFactor;
+        maxSurfaceFactor = Math.max(maxSurfaceFactor, surfaceFactor);
+        if (surfaceFactor >= 0.5) surfaceParticleCount += 1;
       }
       diagnostics = {
         readbackMode: 'explicit_sparse_gpu_diagnostics_v0',
@@ -866,6 +987,10 @@ export async function createWebGPUFingerFluidSolver({
         averageDensity: Number((densitySum / safeParticleCount).toFixed(4)),
         averageVorticity: Number((vorticitySum / safeParticleCount).toFixed(4)),
         maxVorticity: Number(maxVorticity.toFixed(4)),
+        surfaceParticleCount,
+        surfaceParticleRatio: Number((surfaceParticleCount / safeParticleCount).toFixed(4)),
+        averageSurfaceFactor: Number((surfaceFactorSum / safeParticleCount).toFixed(4)),
+        maxSurfaceFactor: Number(maxSurfaceFactor.toFixed(4)),
       };
       diagnosticsBuffer.unmap();
       return diagnostics;
@@ -884,6 +1009,7 @@ export async function createWebGPUFingerFluidSolver({
       neighborGridContract: KAMINOS_FINGER_FLUID_NEIGHBOR_GRID_CONTRACT,
       densityContract: KAMINOS_FINGER_FLUID_DENSITY_CONTRACT,
       vorticityConfinementContract: KAMINOS_FINGER_FLUID_VORTICITY_CONTRACT,
+      freeSurfaceContract: KAMINOS_FINGER_FLUID_FREE_SURFACE_CONTRACT,
       obstacleContract: KAMINOS_FINGER_FLUID_OBSTACLE_CONTRACT,
       obstacle: { center: [...OBSTACLE_CENTER], radius: OBSTACLE_RADIUS, rendered: directRenderFrameCount > 0 },
       stabilityContract: KAMINOS_FINGER_FLUID_STABILITY_CONTRACT,
@@ -901,6 +1027,9 @@ export async function createWebGPUFingerFluidSolver({
       densityIterationCount,
       vorticityPassCount,
       vorticityUpdateInterval: VORTICITY_UPDATE_INTERVAL,
+      postProjectionGridRefreshCount,
+      freeSurfaceClassificationPassCount,
+      surfaceCohesionPassCount,
       directRenderFrameCount,
       lastFrameCpuMs: Number(lastFrameCpuMs.toFixed(3)),
       diagnostics: diagnostics ? {

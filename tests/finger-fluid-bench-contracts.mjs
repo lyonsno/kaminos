@@ -44,6 +44,7 @@ assert.match(webgpuCoreSource, /velocity = velocity - normal \* normalSpeed/, 't
 assert.match(webgpuCoreSource, /const OBSTACLE_CENTER = \[0\.85, -0\.43, 0\.02\]/, 'obstacle center has one JavaScript source of truth');
 assert.match(webgpuCoreSource, /const OBSTACLE_RADIUS = 0\.52/, 'obstacle radius has one JavaScript source of truth');
 assert.match(webgpuCoreSource, /const VORTICITY_UPDATE_INTERVAL = 3/, 'vorticity cadence is explicit rather than silently omitted under load');
+assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_FREE_SURFACE_CONTRACT\s*=\s*'wgsl-neighbor-free-surface-cohesion-v0'/, 'free-surface classification and cohesion contract is explicit');
 assert.match(webgpuCoreSource, /let sphereCenter = vec3<f32>\(\$\{OBSTACLE_CENTER\[0\]\}, \$\{OBSTACLE_CENTER\[1\]\}, \$\{OBSTACLE_CENTER\[2\]\}\)/, 'collision shader consumes the shared obstacle center');
 assert.match(webgpuCoreSource, /let sphereRadius = \$\{OBSTACLE_RADIUS\} \+ radius/, 'collision shader consumes the shared obstacle radius');
 assert.match(webgpuCoreSource, /const y = -0\.45 \+ yIndex \* spacing/, 'packed source volume begins above terrain support');
@@ -57,7 +58,10 @@ assert.match(webgpuCoreSource, /pipelineFor\('solve_position_delta'\)/, 'solver 
 assert.match(webgpuCoreSource, /pipelineFor\('apply_position_delta'\)/, 'solver applies density position corrections');
 assert.match(webgpuCoreSource, /pipelineFor\('compute_vorticity'\)/, 'solver computes neighbor-derived curl after projection');
 assert.match(webgpuCoreSource, /pipelineFor\('apply_vorticity_confinement'\)/, 'solver applies a separate vorticity confinement pass');
+assert.match(webgpuCoreSource, /pipelineFor\('classify_free_surface'\)/, 'solver classifies the neighbor-derived free surface');
+assert.match(webgpuCoreSource, /pipelineFor\('apply_surface_cohesion'\)/, 'solver applies bounded cohesion to classified interface particles');
 assert.match(webgpuCoreSource, /dispatch\(pass, pipelines\.vorticity, safeParticleCount\);[\s\S]*?dispatch\(pass, pipelines\.confinement, safeParticleCount\);/, 'vorticity passes execute across separate GPU dispatch barriers');
+assert.match(webgpuCoreSource, /dispatch\(pass, pipelines\.clear, GRID_CELL_COUNT\);\s*dispatch\(pass, pipelines\.build, safeParticleCount\);\s*linkedCellGridBuildCount \+= 1;\s*postProjectionGridRefreshCount \+= 1;\s*dispatch\(pass, pipelines\.classifySurface, safeParticleCount\);[\s\S]*?dispatch\(pass, pipelines\.cohesion, safeParticleCount\);[\s\S]*?dispatch\(pass, pipelines\.applyVelocity, safeParticleCount\);/, 'free-surface forces consume a linked grid rebuilt after the final density correction');
 assert.doesNotMatch(webgpuCoreSource, /let swirl = vec3<f32>/, 'neighbor-derived vorticity replaces synthetic global swirl forcing');
 assert.match(webgpuCoreSource, /dispatchWorkgroups/, 'solver dispatches GPU compute work');
 assert.match(webgpuCoreSource, /createRenderPipeline/, 'solver state is rendered directly on GPU');
@@ -68,6 +72,11 @@ assert.match(webgpuCoreSource, /capturedAtMs:\s*Number\(diagnosticsCapturedAtMs\
 assert.match(webgpuCoreSource, /averageVorticity/, 'GPU diagnostics quantify settled curl rather than only counting passes');
 assert.match(webgpuCoreSource, /vorticityPassCount/, 'runtime evidence reports executed vorticity passes');
 assert.match(webgpuCoreSource, /vorticityUpdateInterval/, 'runtime evidence reports the effective vorticity cadence');
+assert.match(webgpuCoreSource, /surfaceParticleCount/, 'GPU diagnostics quantify classified interface population');
+assert.match(webgpuCoreSource, /averageSurfaceFactor/, 'GPU diagnostics quantify interface confidence rather than only counting passes');
+assert.match(webgpuCoreSource, /freeSurfaceClassificationPassCount/, 'runtime evidence reports executed free-surface classification passes');
+assert.match(webgpuCoreSource, /surfaceCohesionPassCount/, 'runtime evidence reports executed cohesion passes');
+assert.match(webgpuCoreSource, /postProjectionGridRefreshCount/, 'runtime evidence reports exact post-projection support refreshes');
 assert.match(webgpuCoreSource, /isObstacle/, 'the direct renderer distinguishes shared obstacle support geometry');
 assert.match(webgpuCoreSource, /pass\.draw\(6, safeParticleCount \+ 1\)/, 'the exact solver obstacle is rendered as one additional instance');
 assert.match(webgpuCoreSource, /obstacle:\s*\{[^}]*rendered:\s*directRenderFrameCount\s*>\s*0[^}]*\}/, 'obstacle render evidence derives from an actual submitted render frame');
@@ -101,6 +110,11 @@ assert.match(benchWitnessSource, /densityIterationCount/, 'bench witness require
 assert.match(benchWitnessSource, /vorticityPassCount/, 'bench witness requires vorticity execution evidence');
 assert.match(benchWitnessSource, /Number\.isSafeInteger\(lastDebugState\.runtime\?\.vorticityPassCount\)/, 'bench witness rejects missing or malformed vorticity pass counts before comparing them');
 assert.match(benchWitnessSource, /averageVorticity/, 'bench witness requires quantitative curl evidence');
+assert.match(benchWitnessSource, /wgsl-neighbor-free-surface-cohesion-v0/, 'bench witness requires the free-surface/cohesion contract');
+assert.match(benchWitnessSource, /Number\.isSafeInteger\(lastDebugState\.runtime\?\.freeSurfaceClassificationPassCount\)/, 'bench witness rejects missing free-surface pass evidence');
+assert.match(benchWitnessSource, /Number\.isSafeInteger\(lastDebugState\.runtime\?\.surfaceCohesionPassCount\)/, 'bench witness rejects missing cohesion pass evidence');
+assert.match(benchWitnessSource, /surfaceParticleRatio/, 'bench witness rejects empty or whole-volume surface classifications');
+assert.match(benchWitnessSource, /averageSurfaceFactor/, 'bench witness requires quantitative interface confidence');
 assert.match(benchWitnessSource, /shared-solver-render-obstacle-v0/, 'bench witness requires attributable obstacle geometry');
 assert.match(benchWitnessSource, /activeExtent3d/, 'bench witness requires non-flat 3D extent evidence');
 assert.match(benchWitnessSource, /maxSpeed\s*>\s*3\.35/, 'bench witness rejects energetic solver blow-up');

@@ -224,6 +224,7 @@ async function main() {
     if (lastDebugState.runtime?.neighborGridContract !== 'wgsl-linked-cell-neighbor-grid-v0') throw new Error(`neighbor grid contract mismatch: ${lastDebugState.runtime?.neighborGridContract}`);
     if (lastDebugState.runtime?.densityContract !== 'wgsl-pbf-density-constraint-v0') throw new Error(`density contract mismatch: ${lastDebugState.runtime?.densityContract}`);
     if (lastDebugState.runtime?.vorticityConfinementContract !== 'wgsl-neighbor-vorticity-confinement-v0') throw new Error(`vorticity contract mismatch: ${lastDebugState.runtime?.vorticityConfinementContract}`);
+    if (lastDebugState.runtime?.freeSurfaceContract !== 'wgsl-neighbor-free-surface-cohesion-v0') throw new Error(`free-surface contract mismatch: ${lastDebugState.runtime?.freeSurfaceContract}`);
     if (lastDebugState.runtime?.obstacleContract !== 'shared-solver-render-obstacle-v0' || lastDebugState.runtime?.obstacle?.rendered !== true) throw new Error(`solver obstacle is not attributable in the renderer: ${JSON.stringify(lastDebugState.runtime?.obstacle)}`);
     if (lastDebugState.runtime?.stepCount < 20) throw new Error(`insufficient real compute steps: ${lastDebugState.runtime?.stepCount}`);
     if (lastDebugState.runtime?.linkedCellGridBuildCount < 20) throw new Error(`missing linked-cell grid builds: ${lastDebugState.runtime?.linkedCellGridBuildCount}`);
@@ -232,6 +233,9 @@ async function main() {
     if (!Number.isSafeInteger(lastDebugState.runtime?.vorticityPassCount)) throw new Error(`missing or malformed vorticity pass count: ${lastDebugState.runtime?.vorticityPassCount}`);
     const minimumVorticityPassCount = Math.floor(lastDebugState.runtime.stepCount / lastDebugState.runtime.vorticityUpdateInterval) * 2;
     if (lastDebugState.runtime?.vorticityPassCount < minimumVorticityPassCount) throw new Error(`missing temporally scheduled two-stage vorticity passes: ${JSON.stringify({ actual: lastDebugState.runtime?.vorticityPassCount, minimum: minimumVorticityPassCount })}`);
+    if (!Number.isSafeInteger(lastDebugState.runtime?.postProjectionGridRefreshCount) || lastDebugState.runtime.postProjectionGridRefreshCount < lastDebugState.runtime.stepCount) throw new Error(`missing post-projection neighbor refreshes: ${lastDebugState.runtime?.postProjectionGridRefreshCount}`);
+    if (!Number.isSafeInteger(lastDebugState.runtime?.freeSurfaceClassificationPassCount) || lastDebugState.runtime.freeSurfaceClassificationPassCount < lastDebugState.runtime.stepCount) throw new Error(`missing free-surface classification passes: ${lastDebugState.runtime?.freeSurfaceClassificationPassCount}`);
+    if (!Number.isSafeInteger(lastDebugState.runtime?.surfaceCohesionPassCount) || lastDebugState.runtime.surfaceCohesionPassCount < lastDebugState.runtime.stepCount) throw new Error(`missing surface cohesion passes: ${lastDebugState.runtime?.surfaceCohesionPassCount}`);
     if (lastDebugState.runtime?.directRenderFrameCount < 20) throw new Error(`missing direct GPU render frames: ${lastDebugState.runtime?.directRenderFrameCount}`);
     const activeExtent3d = lastDebugState.runtime?.diagnostics?.activeExtent3d;
     if (!activeExtent3d || activeExtent3d.size?.length !== 3) throw new Error('missing activeExtent3d diagnostics');
@@ -246,6 +250,15 @@ async function main() {
     const maxVorticity = lastDebugState.runtime?.diagnostics?.maxVorticity;
     if (!Number.isFinite(averageVorticity) || averageVorticity <= 0.001 || !Number.isFinite(maxVorticity) || maxVorticity <= averageVorticity || maxVorticity >= 4095) {
       throw new Error(`neighbor-derived vorticity evidence is absent or saturated: ${JSON.stringify({ averageVorticity, maxVorticity })}`);
+    }
+    const surfaceParticleRatio = lastDebugState.runtime?.diagnostics?.surfaceParticleRatio;
+    const averageSurfaceFactor = lastDebugState.runtime?.diagnostics?.averageSurfaceFactor;
+    const maxSurfaceFactor = lastDebugState.runtime?.diagnostics?.maxSurfaceFactor;
+    if (!Number.isFinite(surfaceParticleRatio) || surfaceParticleRatio < 0.02 || surfaceParticleRatio > 0.78) {
+      throw new Error(`free-surface classification is empty or swallowed the volume: ${JSON.stringify({ surfaceParticleRatio, surfaceParticleCount: lastDebugState.runtime?.diagnostics?.surfaceParticleCount })}`);
+    }
+    if (!Number.isFinite(averageSurfaceFactor) || averageSurfaceFactor < 0.01 || averageSurfaceFactor > 0.85 || !Number.isFinite(maxSurfaceFactor) || maxSurfaceFactor < 0.5 || maxSurfaceFactor > 1.001) {
+      throw new Error(`free-surface confidence is absent or saturated: ${JSON.stringify({ averageSurfaceFactor, maxSurfaceFactor })}`);
     }
     const restDensity = lastDebugState.runtime?.restDensity;
     const averageDensity = lastDebugState.runtime?.diagnostics?.averageDensity;
