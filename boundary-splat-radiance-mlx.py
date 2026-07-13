@@ -163,11 +163,12 @@ def load_warm_start(path_value, requested_context_mode, requested_frequencies):
     elif artifact.get("schema") == SPATIAL_MODEL_SCHEMA:
         warm_context_mode = artifact.get("contextMode")
         warm_frequencies = [float(value) for value in artifact.get("fourierFrequencies", [])]
-        if warm_context_mode != requested_context_mode:
+        context_expansion = warm_context_mode == "world-fourier" and requested_context_mode == "world-grid-neighborhood"
+        if warm_context_mode != requested_context_mode and not context_expansion:
             raise ValueError(
                 f"warm start context mode {warm_context_mode!r} does not match requested context mode {requested_context_mode!r}"
             )
-        if warm_context_mode == "world-fourier" and warm_frequencies != requested_frequencies:
+        if warm_context_mode in ("world-fourier", "world-grid-neighborhood") and warm_frequencies != requested_frequencies:
             raise ValueError(
                 f"warm start Fourier frequencies {warm_frequencies!r} do not match requested Fourier frequencies {requested_frequencies!r}"
             )
@@ -199,6 +200,7 @@ def load_warm_start(path_value, requested_context_mode, requested_frequencies):
         "contextMode": warm_context_mode,
         "fourierFrequencies": warm_frequencies,
         "continuation": schema == SPATIAL_MODEL_SCHEMA,
+        "contextExpansionAuthority": "zero-delta-local-grid-context-expansion-v0" if warm_context_mode == "world-fourier" and requested_context_mode == "world-grid-neighborhood" else None,
     }, schema, warm_context_mode, warm_frequencies
 
 
@@ -211,35 +213,91 @@ def parse_fourier_frequencies(value):
 
 def context_feature_names(context_mode, frequencies):
     names = list(FEATURES)
-    if context_mode in ("world-xyz", "world-fourier"):
+    if context_mode in ("world-xyz", "world-fourier", "world-grid-neighborhood"):
         names.extend(["position.x", "position.y", "position.z"])
-    if context_mode == "world-fourier":
+    if context_mode in ("world-fourier", "world-grid-neighborhood"):
         for frequency in frequencies:
             label = format(frequency, "g")
             names.extend([f"position.sin.{axis}.{label}" for axis in "xyz"])
             names.extend([f"position.cos.{axis}.{label}" for axis in "xyz"])
+    if context_mode == "world-grid-neighborhood":
+        names.extend([
+            "neighbor.occupancy.x-", "neighbor.occupancy.x+",
+            "neighbor.occupancy.y-", "neighbor.occupancy.y+",
+            "neighbor.occupancy.z-", "neighbor.occupancy.z+",
+        ])
+        for statistic in ("mean", "max", "laplacian", "gradient.x", "gradient.y", "gradient.z"):
+            names.extend([f"neighbor.{statistic}.{feature}" for feature in FEATURES])
     return names
 
 
-def encode_candidate_inputs(candidates, context_mode, frequencies):
+def local_grid_neighborhood_channels(candidates, grid):
+    if not isinstance(grid, int) or grid <= 0:
+        raise ValueError("local-grid context requires a positive integer source grid")
+    positions = candidates[:, :3].astype(np.float32)
+    indices = np.rint((positions + 1.0) * 0.5 * grid - 0.5).astype(np.int32)
+    if np.any(indices < 0) or np.any(indices >= grid):
+        raise ValueError("candidate position falls outside the declared source grid")
+    reconstructed = (indices.astype(np.float32) + 0.5) * (2.0 / grid) - 1.0
+    if np.max(np.abs(reconstructed - positions)) > 1e-5:
+        raise ValueError("candidate positions are not exact source-grid cell centers")
+    linear = indices[:, 0] + grid * (indices[:, 1] + grid * indices[:, 2])
+    if np.unique(linear).size != linear.size:
+        raise ValueError("candidate positions contain duplicate source-grid cells")
+    lookup = np.full(grid ** 3, -1, dtype=np.int32)
+    lookup[linear] = np.arange(linear.size, dtype=np.int32)
+    offsets = np.asarray([
+        [-1, 0, 0], [1, 0, 0],
+        [0, -1, 0], [0, 1, 0],
+        [0, 0, -1], [0, 0, 1],
+    ], dtype=np.int32)
+    features = candidates[:, 3:].astype(np.float32)
+    neighbor_values = np.zeros((len(candidates), len(offsets), len(FEATURES)), dtype=np.float32)
+    occupancy = np.zeros((len(candidates), len(offsets)), dtype=np.float32)
+    for neighbor_index, offset in enumerate(offsets):
+        neighbor_cells = indices + offset
+        in_bounds = np.all((neighbor_cells >= 0) & (neighbor_cells < grid), axis=1)
+        neighbor_linear = neighbor_cells[:, 0] + grid * (neighbor_cells[:, 1] + grid * neighbor_cells[:, 2])
+        rows = np.full(len(candidates), -1, dtype=np.int32)
+        rows[in_bounds] = lookup[neighbor_linear[in_bounds]]
+        present = rows >= 0
+        occupancy[present, neighbor_index] = 1.0
+        neighbor_values[present, neighbor_index] = features[rows[present]]
+    neighbor_mean = np.mean(neighbor_values, axis=1)
+    neighbor_max = np.max(neighbor_values, axis=1)
+    laplacian = neighbor_mean - features
+    gradients = [
+        (neighbor_values[:, 1] - neighbor_values[:, 0]) * 0.5,
+        (neighbor_values[:, 3] - neighbor_values[:, 2]) * 0.5,
+        (neighbor_values[:, 5] - neighbor_values[:, 4]) * 0.5,
+    ]
+    return np.concatenate([occupancy, neighbor_mean, neighbor_max, laplacian, *gradients], axis=1)
+
+
+def encode_candidate_inputs(candidates, context_mode, frequencies, grid=None):
     features = mx.array(candidates[:, 3:].astype(np.float32))
     if context_mode == "none":
         return features
     positions = mx.array(candidates[:, :3].astype(np.float32))
     channels = [features, positions]
-    if context_mode == "world-fourier":
+    if context_mode in ("world-fourier", "world-grid-neighborhood"):
         for frequency in frequencies:
             channels.append(mx.sin(positions * frequency * 2.0 * np.pi))
             channels.append(mx.cos(positions * frequency * 2.0 * np.pi))
+    if context_mode == "world-grid-neighborhood":
+        channels.append(mx.array(local_grid_neighborhood_channels(candidates, grid)))
     return mx.concatenate(channels, axis=1)
 
 
 def expand_warm_start_with_context(base_model, input_size):
     hidden_size = int(base_model.hidden.weight.shape[0])
+    base_input_size = int(base_model.hidden.weight.shape[1])
+    if input_size <= base_input_size:
+        raise ValueError("context expansion must add at least one new model input")
     model = AttributeMlp(hidden_size, input_size)
     expanded_weight = np.zeros((hidden_size, input_size), dtype=np.float32)
-    expanded_weight[:, :len(FEATURES)] = np.asarray(base_model.hidden.weight)
-    expanded_weight[:, len(FEATURES):] = 0.0
+    expanded_weight[:, :base_input_size] = np.asarray(base_model.hidden.weight)
+    expanded_weight[:, base_input_size:] = 0.0
     model.load_weights([
         ("hidden.weight", mx.array(expanded_weight)),
         ("hidden.bias", mx.array(np.asarray(base_model.hidden.bias))),
@@ -333,7 +391,7 @@ def build_sparse_geometry(frame, render_width, depth_bins, max_radius, context_m
         "width": render_width,
         "height": render_height,
         "features": mx.array(features.astype(np.float32)),
-        "inputs": encode_candidate_inputs(frame["candidates"], context_mode, frequencies),
+        "inputs": encode_candidate_inputs(frame["candidates"], context_mode, frequencies, frame["grid"]),
         "pixelIndices": mx.array(np.concatenate(pixel_parts)),
         "splatIndices": mx.array(np.concatenate(splat_parts)),
         "depthBinIndices": mx.array(np.concatenate(depth_bin_parts)),
@@ -485,7 +543,7 @@ def parse_args():
     parser.add_argument("--radius-preservation", type=float, default=0.18)
     parser.add_argument("--depth-bins", type=int, default=1)
     parser.add_argument("--edge-weight", type=float, default=0.0)
-    parser.add_argument("--context-mode", choices=["none", "world-xyz", "world-fourier"], default="none")
+    parser.add_argument("--context-mode", choices=["none", "world-xyz", "world-fourier", "world-grid-neighborhood"], default="none")
     parser.add_argument("--fourier-frequencies", default="1,2,4,8")
     parser.add_argument("--candidate-table-oracle", action="store_true")
     parser.add_argument("--probe-only", action="store_true")
@@ -522,12 +580,13 @@ def main():
         initial_attributes = [
             predict_numpy(
                 base_model,
-                np.asarray(encode_candidate_inputs(frame["candidates"], warm_context_mode, warm_frequencies)),
+                np.asarray(encode_candidate_inputs(frame["candidates"], warm_context_mode, warm_frequencies, frame["grid"])),
                 output_ranges,
             )
             for frame in corpus["frames"]
         ]
-        model = base_model if warm_schema == SPATIAL_MODEL_SCHEMA or args.context_mode == "none" else expand_warm_start_with_context(base_model, len(feature_names))
+        exact_spatial_continuation = warm_schema == SPATIAL_MODEL_SCHEMA and warm_context_mode == args.context_mode
+        model = base_model if exact_spatial_continuation or args.context_mode == "none" else expand_warm_start_with_context(base_model, len(feature_names))
         if args.candidate_table_oracle:
             if len(corpus["frames"]) != 1:
                 raise ValueError("candidate oracle requires exactly one corpus frame")
@@ -613,7 +672,11 @@ def main():
                 "path": str(model_path),
                 "schema": SPATIAL_MODEL_SCHEMA,
                 "identity": f"sha256:{sha256_bytes(model_bytes)}",
-                "authority": "shared-position-conditioned-feature-mlp-v0",
+                "authority": (
+                    "shared-local-grid-conditioned-feature-mlp-v0"
+                    if args.context_mode == "world-grid-neighborhood"
+                    else "shared-position-conditioned-feature-mlp-v0"
+                ),
                 "deployable": False,
             }
         report.update({
@@ -637,7 +700,7 @@ def main():
                 "edgeWeight": args.edge_weight,
                 "modelAuthority": model_receipt["authority"],
                 "contextMode": args.context_mode,
-                "fourierFrequencies": frequencies if args.context_mode == "world-fourier" else [],
+                "fourierFrequencies": frequencies if args.context_mode in ("world-fourier", "world-grid-neighborhood") else [],
                 "inputChannels": len(feature_names),
                 "initialLoss": initial_loss,
                 "trainedLoss": trained_loss,
@@ -650,8 +713,15 @@ def main():
             "previews": {"initial": str(initial_preview_path), "target": str(target_preview_path), "trained": str(trained_preview_path)},
             "modelArtifact": model_receipt,
         })
-    except Exception as error:
-        report.update({"status": "failed", "failurePhase": phase, "error": str(error), "backend": "mlx", "device": str(mx.default_device())})
+    except BaseException as error:
+        report.update({
+            "status": "failed",
+            "failurePhase": phase,
+            "error": str(error),
+            "errorType": type(error).__name__,
+            "backend": "mlx",
+            "device": str(mx.default_device()),
+        })
         raise
     finally:
         report["finishedAt"] = time.time()

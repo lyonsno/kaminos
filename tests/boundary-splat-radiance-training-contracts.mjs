@@ -17,6 +17,8 @@ assert.match(script, /cameraUp/, 'radiance trainer preserves the captured vertic
 assert.match(script, /preview-initial\.png/, 'radiance trainer emits an inspectable warm-start preview');
 assert.match(script, /preview-trained\.png/, 'radiance trainer emits an inspectable trained preview');
 assert.match(script, /failurePhase/, 'radiance trainer writes phase-specific failures');
+assert.match(script, /except\s+BaseException\s+as\s+error/, 'radiance trainer durably records interruption and cancellation before propagating them');
+assert.match(script, /"errorType"\s*:\s*type\(error\)\.__name__/, 'interrupted reports preserve the exact terminating exception class');
 assert.match(script, /compile-boundary-splat-attribute-model\.mjs/, 'radiance trainer compiles a browser-consumable artifact');
 assert.match(
   script,
@@ -41,13 +43,14 @@ assert.match(script, /class\s+CandidateAttributeTable\(nn\.Module\)/, 'candidate
 assert.match(script, /per-candidate-free-attribute-oracle-v0/, 'candidate oracle receipts distinguish diagnostic authority from deployable MLP authority');
 assert.match(script, /candidate oracle requires exactly one corpus frame/, 'candidate oracle rejects ambiguous cross-frame candidate identity');
 assert.match(script, /--context-mode/, 'radiance trainer exposes explicit spatial conditioning rather than silently changing the live feature contract');
-assert.match(script, /choices=\["none", "world-xyz", "world-fourier"\]/, 'spatial conditioning distinguishes the baseline, raw world position, and Fourier position');
+assert.match(script, /choices=\["none", "world-xyz", "world-fourier", "world-grid-neighborhood"\]/, 'spatial conditioning distinguishes pointwise position from explicit local-grid neighborhood context');
 assert.match(script, /--fourier-frequencies/, 'Fourier conditioning exposes its exact frequency ladder');
 assert.match(script, /mx\.sin\(positions[^\n]+frequency[^\n]+2\.0[^\n]+np\.pi\)/, 'Fourier conditioning includes signed sine phase channels');
 assert.match(script, /mx\.cos\(positions[^\n]+frequency[^\n]+2\.0[^\n]+np\.pi\)/, 'Fourier conditioning includes cosine phase channels');
-assert.match(script, /expanded_weight\[:,\s*:len\(FEATURES\)\]\s*=\s*np\.asarray\(base_model\.hidden\.weight\)/, 'spatial model preserves every proven live-feature weight exactly');
-assert.match(script, /expanded_weight\[:,\s*len\(FEATURES\):\]\s*=\s*0\.0/, 'new spatial channels begin as an exact zero-delta extension of the live head');
+assert.match(script, /expanded_weight\[:,\s*:base_input_size\]\s*=\s*np\.asarray\(base_model\.hidden\.weight\)/, 'spatial model preserves every proven input weight exactly across successive context expansions');
+assert.match(script, /expanded_weight\[:,\s*base_input_size:\]\s*=\s*0\.0/, 'new spatial channels begin as an exact zero-delta extension of the warm head');
 assert.match(script, /shared-position-conditioned-feature-mlp-v0/, 'spatial receipts distinguish the experimental model authority');
+assert.match(script, /shared-local-grid-conditioned-feature-mlp-v0/, 'local-grid receipts distinguish neighborhood-conditioned authority from position-only authority');
 assert.match(script, /"deployable":\s*False/, 'spatial artifacts cannot masquerade as browser-deployable models');
 assert.match(script, /"contextMode"/, 'training receipts preserve the effective context mode');
 assert.match(
@@ -75,5 +78,9 @@ assert.match(
   /"continuation"\s*:\s*schema\s*==\s*SPATIAL_MODEL_SCHEMA/,
   'training receipts say explicitly when optimization continued from an experimental spatial checkpoint',
 );
+assert.match(script, /world-grid-neighborhood/, 'radiance trainer exposes local-grid optical context as a distinct experimental family');
+assert.match(script, /neighbor\.occupancy\.x-/, 'local-grid context records missing and present six-neighbor support explicitly');
+assert.match(script, /zero-delta-local-grid-context-expansion-v0/, 'local-grid context starts as an exact zero-delta extension of the proven Fourier head');
+assert.match(script, /args\.context_mode in \("world-fourier", "world-grid-neighborhood"\)/, 'local-grid receipts preserve the Fourier frequency contract used by their encoder');
 
 console.log('boundary splat radiance training contracts passed');
