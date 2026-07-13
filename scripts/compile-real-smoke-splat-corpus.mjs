@@ -14,6 +14,8 @@ import {
 } from '../smoke-splat-residual-selector.mjs';
 
 const ROUTE = 'authoritative-full-grid-real-smoke-hierarchy-corpus-v0';
+const MOTION_ROUTE = 'webgpu-real-field-hierarchical-smoke-motion-v0';
+const MOTION_TEMPORAL_AUTHORITY = 'velocity-carried-short-horizon-extrapolation-v0';
 const EXPECTED_SOURCE_ROUTE = 'native-3d-compute-fluid-raymarch-v0';
 const EXPECTED_PROTOTYPE = 'kaminos-volume-prototype-v0';
 const EXPECTED_BACKEND_PREFIX = 'WebGPU:';
@@ -38,7 +40,7 @@ function parseArgs(argv) {
       if (!value) throw new Error('--out-dir requires a path');
       options.outDir = resolve(value);
       index += 1;
-    } else if (['--coarse-block-size', '--fine-block-size', '--articulation-threshold', '--fine-mass-fraction', '--coarse-anchor-mass-ratio', '--fine-occupancy-mass-ratio', '--capacity', '--steps', '--instance-count', '--phase-slot-count'].includes(key)) {
+    } else if (['--coarse-block-size', '--fine-block-size', '--articulation-threshold', '--fine-mass-fraction', '--coarse-anchor-mass-ratio', '--coarse-stratum-size', '--fine-occupancy-mass-ratio', '--capacity', '--steps', '--instance-count', '--phase-slot-count'].includes(key)) {
       if (!value) throw new Error(`${key} requires a value`);
       options[key.slice(2).replaceAll('-', '_')] = Number(value);
       index += 1;
@@ -209,7 +211,9 @@ function intersectionSize(left, right) {
 
 async function writeReport(path, report) {
   await mkdir(dirname(path), { recursive: true });
-  await writeFile(path, `${JSON.stringify(report, null, 2)}\n`, 'utf8');
+  const bytes = Buffer.from(`${JSON.stringify(report, null, 2)}\n`, 'utf8');
+  await writeFile(path, bytes);
+  return bytes;
 }
 
 let options;
@@ -252,6 +256,7 @@ try {
     articulationThreshold: options.articulation_threshold ?? 0.5,
     fineMassFraction: options.fine_mass_fraction ?? 0.5,
     coarseAnchorMassRatio: options.coarse_anchor_mass_ratio ?? 0,
+    coarseStratumSize: options.coarse_stratum_size ?? 0,
     fineOccupancyMassRatio: options.fine_occupancy_mass_ratio ?? 0,
     capacity: options.capacity ?? null,
   };
@@ -385,7 +390,43 @@ try {
       'offline full-field evidence does not prove GPU history-ring integration or rendered visual quality',
     ],
   };
-  await writeReport(reportPath, report);
+  const reportBytes = await writeReport(reportPath, report);
+  const firstMotionProduct = {
+    ...frameReports[0],
+    sourceProducerKind: frameReports[0].producerKind,
+    producerKind: 'authoritative-articulation-target',
+    phaseIndex: 0,
+  };
+  const learnedMotionProduct = {
+    ...compactProduct(learnedEvaluation),
+    artifact: learnedArtifact,
+    sourceProducerKind: learnedEvaluation.producerKind,
+    producerKind: 'learned-heldout-residual-selector',
+    phaseIndex: 1,
+    frameId: `sim-step-${evaluationFrame.step}`,
+    step: evaluationFrame.step,
+  };
+  await writeReport(join(options.outDir, 'motion-source.json'), {
+    schema: 'kaminos.smoke-splat-motion-source.v0',
+    status: 'passed',
+    requestedRoute: MOTION_ROUTE,
+    effectiveRoute: MOTION_ROUTE,
+    fallbackReason: null,
+    temporalAuthority: MOTION_TEMPORAL_AUTHORITY,
+    producerAuthority: REAL_FIELD_SMOKE_SPLAT_PRODUCER_AUTHORITY,
+    sourceReport: {
+      path: 'report.json',
+      sha256: hash(reportBytes),
+      schema: report.schema,
+    },
+    sourceRoute: report.sourceRoute,
+    products: [firstMotionProduct, learnedMotionProduct],
+    limitations: [
+      'The authoritative target and held-out learned selector are adjacent phase products, not a recurrent neural smoke decode.',
+      'Motion is short-horizon velocity extrapolation from exact compiled products.',
+      'This manifest is standalone smoke representation evidence and does not prove final flame-smoke depth composition.',
+    ],
+  });
 } catch (error) {
   const outDir = options?.outDir;
   const failureReport = {

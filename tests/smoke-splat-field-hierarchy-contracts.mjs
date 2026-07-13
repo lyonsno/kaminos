@@ -65,6 +65,25 @@ function makeDenseTailField(grid, phase = 0) {
   return values;
 }
 
+function makeDisconnectedSupportField(grid) {
+  const values = new Float32Array(grid ** 3 * CHANNELS.length);
+  const writeRegion = (minimum, maximum, smoke) => {
+    for (let z = minimum; z < maximum; z += 1) {
+      for (let y = minimum; y < maximum; y += 1) {
+        for (let x = minimum; x < maximum; x += 1) {
+          const offset = (x + y * grid + z * grid * grid) * CHANNELS.length;
+          values[offset + 1] = 0.35 + smoke;
+          values[offset + 4] = smoke;
+          values[offset + 5] = 0.2;
+        }
+      }
+    }
+  };
+  writeRegion(0, 2, 0.08);
+  writeRegion(grid - 2, grid, 1);
+  return values;
+}
+
 const baseRequest = {
   grid: 8,
   channelOrder: CHANNELS,
@@ -190,6 +209,64 @@ assert.notEqual(
   changedConsolidation.identity,
   consolidated.identity,
   'public product identity includes the effective coarse consolidation configuration',
+);
+
+const disconnectedRequest = {
+  ...baseRequest,
+  field: makeDisconnectedSupportField(8),
+  fineSelector: () => false,
+  fineMassFraction: 0.5,
+  coarseBlockSize: 2,
+  fineBlockSize: 1,
+  coarseAnchorMassRatio: 0.8,
+};
+const globallyConsolidatedDisconnected = compileSmokeFieldHierarchy(disconnectedRequest);
+assert.equal(
+  globallyConsolidatedDisconnected.coarseSplats.length,
+  1,
+  'control reproduces global high-mass anchor selection erasing disconnected weak support',
+);
+const stratifiedDisconnected = compileSmokeFieldHierarchy({
+  ...disconnectedRequest,
+  coarseStratumSize: 2,
+});
+assert.equal(stratifiedDisconnected.coarseConsolidation.identity, 'mass-preserving-spatial-strata-v2');
+assert.equal(stratifiedDisconnected.coarseConsolidation.stratumAuthority, 'fixed-coarse-bin-cubes-local-anchor-transfer-v0');
+assert.equal(stratifiedDisconnected.coarseConsolidation.coarseStratumSize, 2);
+assert.equal(stratifiedDisconnected.coarseConsolidation.occupiedStratumCount, 2);
+assert.equal(stratifiedDisconnected.coarseConsolidation.minimumAnchorsPerOccupiedStratum, 1);
+assert.ok(
+  stratifiedDisconnected.coarseSplats.length >= stratifiedDisconnected.coarseConsolidation.occupiedStratumCount,
+  'every occupied stratum retains at least one local transport anchor without a global output cap',
+);
+assert.ok(
+  stratifiedDisconnected.coarseConsolidation.representedSupport.bounds.minimum[1] < 0
+    && stratifiedDisconnected.coarseConsolidation.representedSupport.bounds.maximum[1] > 0,
+  'local-only transfer preserves disconnected low and high spatial support',
+);
+assert.ok(
+  globallyConsolidatedDisconnected.coarseConsolidation.representedSupport.bounds.minimum[1] > 0,
+  'global control collapses represented support into the high-mass region',
+);
+assert.ok(Math.abs(
+  stratifiedDisconnected.accounting.sourceExtinctionMass
+    - stratifiedDisconnected.accounting.representedExtinctionMass,
+) < 1e-8, 'spatial stratification preserves exact extinction');
+assert.equal(stratifiedDisconnected.accounting.rejectedExtinctionMass, 0);
+assert.deepEqual(
+  compileSmokeFieldHierarchy({ ...disconnectedRequest, coarseStratumSize: 2 }).coarseSplats,
+  stratifiedDisconnected.coarseSplats,
+  'stratum selection, local ownership, and output order are deterministic',
+);
+assert.notEqual(
+  stratifiedDisconnected.identity,
+  globallyConsolidatedDisconnected.identity,
+  'public product identity includes the effective coarse stratum size',
+);
+assert.throws(
+  () => compileSmokeFieldHierarchy({ ...disconnectedRequest, coarseStratumSize: 3 }),
+  /coarseStratumSize/i,
+  'coarse stratum size must tile the coarse lattice exactly',
 );
 
 const broadFineRequest = {

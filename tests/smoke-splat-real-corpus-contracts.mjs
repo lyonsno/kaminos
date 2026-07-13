@@ -97,12 +97,14 @@ execFileSync(process.execPath, [
   '--fine-block-size', '1',
   '--articulation-threshold', '0.05',
   '--coarse-anchor-mass-ratio', '0.08',
+  '--coarse-stratum-size', '2',
   '--fine-occupancy-mass-ratio', '0.2',
   '--instance-count', '100',
   '--phase-slot-count', '4',
 ], { cwd: root.pathname, stdio: 'pipe' });
 
 const report = JSON.parse(readFileSync(join(output, 'report.json'), 'utf8'));
+const motionSource = JSON.parse(readFileSync(join(output, 'motion-source.json'), 'utf8'));
 assert.equal(report.status, 'passed');
 assert.equal(report.requestedRoute, 'authoritative-full-grid-real-smoke-hierarchy-corpus-v0');
 assert.equal(report.effectiveRoute, 'authoritative-full-grid-real-smoke-hierarchy-corpus-v0');
@@ -124,11 +126,14 @@ assert.equal(
   'bundle-owned learned artifacts use portable output-directory-relative paths',
 );
 assert.equal(report.requestedConfig.coarseAnchorMassRatio, 0.08);
+assert.equal(report.requestedConfig.coarseStratumSize, 2);
 assert.equal(report.requestedConfig.fineOccupancyMassRatio, 0.2);
 assert.equal(report.frames.every(frame => frame.fineOccupancy.identity === 'mass-relative-fine-occupancy-v0'), true);
 assert.equal(report.frames.every(frame => frame.fineOccupancy.enabled === true), true);
 assert.equal(report.learnedSelector.heldOutProduct.fineOccupancy.massRatio, 0.2);
-assert.equal(report.frames.every(frame => frame.coarseConsolidation.identity === 'mass-preserving-anchor-voronoi-v1'), true);
+assert.equal(report.frames.every(frame => frame.coarseConsolidation.identity === 'mass-preserving-spatial-strata-v2'), true);
+assert.equal(report.frames.every(frame => frame.coarseConsolidation.coarseStratumSize === 2), true);
+assert.equal(report.frames.every(frame => frame.coarseConsolidation.occupiedStratumCount === 1), true);
 assert.equal(report.frames.every(frame => frame.coarseConsolidation.enabled === true), true);
 assert.equal(report.frames.every(frame => frame.coarseConsolidation.mergedSourceBinCount > 0), true);
 assert.equal(
@@ -151,6 +156,23 @@ assert.equal(
   report.learnedSelector.heldOutProduct.hierarchyCounts.total * 4,
 );
 assert.equal(report.runtimeBudgetEstimate.hiddenCapApplied, false);
+assert.equal(motionSource.schema, 'kaminos.smoke-splat-motion-source.v0');
+assert.equal(motionSource.status, 'passed');
+assert.equal(motionSource.requestedRoute, 'webgpu-real-field-hierarchical-smoke-motion-v0');
+assert.equal(motionSource.effectiveRoute, motionSource.requestedRoute);
+assert.equal(motionSource.fallbackReason, null);
+assert.equal(motionSource.sourceReport.path, 'report.json');
+assert.equal(motionSource.sourceReport.sha256, sha256(readFileSync(join(output, 'report.json'))));
+assert.deepEqual(motionSource.products.map(product => product.phaseIndex), [0, 1]);
+assert.deepEqual(
+  motionSource.products.map(product => product.producerKind),
+  ['authoritative-articulation-target', 'learned-heldout-residual-selector'],
+);
+assert.deepEqual(
+  motionSource.products.map(product => product.artifact.path),
+  ['sim-step-96-target.splats.f32', 'sim-step-97-learned.splats.f32'],
+  'compiler emits a directly consumable relative-path motion manifest without a transcription step',
+);
 
 const corrupt = makeFrame(directory, 98);
 const corruptManifest = JSON.parse(readFileSync(corrupt, 'utf8'));
