@@ -409,7 +409,7 @@ export function createSam31MemoryAttentionPhaseProgramRouteReceipt(input = {}) {
   });
 }
 
-const MEMORY_ATTENTION_LAYERNORM_WGSL = `
+export const MEMORY_ATTENTION_LAYERNORM_WGSL = `
 struct LayerNormDims { total_tokens: u32, channels: u32, };
 @group(0) @binding(0) var<storage, read> input_values: array<f32>;
 @group(0) @binding(1) var<storage, read> norm_weight: array<f32>;
@@ -437,7 +437,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
 }
 `;
 
-const MEMORY_ATTENTION_ADD_WGSL = `
+export const MEMORY_ATTENTION_ADD_WGSL = `
 struct AddDims { total: u32, scale: f32, };
 @group(0) @binding(0) var<storage, read> left_values: array<f32>;
 @group(0) @binding(1) var<storage, read> right_values: array<f32>;
@@ -451,7 +451,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
 }
 `;
 
-const MEMORY_ATTENTION_LINEAR_WGSL = `
+export const MEMORY_ATTENTION_LINEAR_WGSL = `
 struct LinearDims { input_channels: u32, output_channels: u32, total_output: u32, };
 @group(0) @binding(0) var<storage, read> input_values: array<f32>;
 @group(0) @binding(1) var<storage, read> weight: array<f32>;
@@ -571,6 +571,7 @@ fn main(
   let head_offset = head * dims.head_dim;
   let query_base = (batch * dims.query_tokens + query) * dims.channels + head_offset;
   let scale = inverseSqrt(f32(dims.head_dim));
+  let active_dimension = dimension < dims.head_dim;
   var accumulator = 0.0;
   if (dimension == 0u) {
     state[0] = -3.402823466e+38;
@@ -579,7 +580,10 @@ fn main(
   workgroupBarrier();
   for (var token = 0u; token < dims.key_tokens; token = token + 1u) {
     let key_base = (batch * dims.key_tokens + token) * dims.channels + head_offset;
-    products[dimension] = q_values[query_base + dimension] * k_values[key_base + dimension];
+    products[dimension] = 0.0;
+    if (active_dimension) {
+      products[dimension] = q_values[query_base + dimension] * k_values[key_base + dimension];
+    }
     workgroupBarrier();
     var stride = 16u;
     loop {
@@ -597,10 +601,14 @@ fn main(
       state[0] = next_max;
     }
     workgroupBarrier();
-    accumulator = accumulator * state[2] + state[3] * v_values[key_base + dimension];
+    if (active_dimension) {
+      accumulator = accumulator * state[2] + state[3] * v_values[key_base + dimension];
+    }
     workgroupBarrier();
   }
-  output_values[query_base + dimension] = accumulator / state[1];
+  if (active_dimension) {
+    output_values[query_base + dimension] = accumulator / state[1];
+  }
 }
 `;
 

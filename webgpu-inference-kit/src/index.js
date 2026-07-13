@@ -310,6 +310,13 @@ export {
 } from './sam31-temporal-memory-bank-phase-program.js';
 
 export {
+  SAM31_MULTIPLEX_MASK_DECODER_PHASE_PROGRAM_ROUTE_ID,
+  createSam31MultiplexMaskDecoderPhaseProgramCpuOracle,
+  createSam31MultiplexMaskDecoderPhaseProgramRouteDefinition,
+  runSam31MultiplexMaskDecoderPhaseProgramRoute,
+} from './sam31-multiplex-mask-decoder-phase-program.js';
+
+export {
   SAM3_BROWSER_INVOCATION_SCHEMA,
   SAM3_BROWSER_MODEL_PACKAGE_SCHEMA,
   SAM3_BROWSER_VERIFICATION_SCHEMA,
