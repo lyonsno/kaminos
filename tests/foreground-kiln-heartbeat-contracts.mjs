@@ -17,6 +17,7 @@ const budget = {
 
 const learnedHybridPresentation = {
   schema: 'kaminos.kiln-fire-presentation.v0',
+  firingId: 'firing-0713-a',
   requestedMode: 'auto',
   effectiveMode: 'learned-splat-flame-raymarched-smoke',
   simulatorAuthority: 'live-fluid-simulation-v0',
@@ -45,6 +46,15 @@ const learnedHybridPresentation = {
     identity: 'foreground-kiln-fire-episode-hooks-v0',
     disclaimer: 'not-gpu-exclusive-or-present-latency',
     firingId: 'firing-0713-a',
+    generation: 7,
+    phase: 'recording',
+    status: 'recording',
+    evidenceSource: 'foreground-volume-render-loop-raf-sim-step-and-queue-proxy-v0',
+    authority: 'renderer-simulator-hooks-for-wake-foreground-heartbeat',
+    sampleCount: 3,
+    frameAdvanceCount: 2,
+    simStepAdvanceCount: 2,
+    startedAtMs: 90,
     rawRafGapSamplesMs: [16, 17, 52],
   },
 };
@@ -108,6 +118,7 @@ function episodeHarness({
 const hybrid = episodeHarness({
   firePresentation: learnedHybridPresentation,
   expectedFirePresentation: {
+    firingId: learnedHybridPresentation.firingId,
     effectiveMode: 'learned-splat-flame-raymarched-smoke',
     flameRendererIdentity: 'live-boundary-sidecar-learned-attribute-splats-v0',
     smokeRendererIdentity: 'native-3d-compute-fluid-raymarch-v0',
@@ -140,6 +151,7 @@ const hiddenFallback = episodeHarness({
     fallbackReason: null,
   },
   expectedFirePresentation: {
+    firingId: learnedHybridPresentation.firingId,
     effectiveMode: 'learned-splat-flame-raymarched-smoke',
     flameRendererIdentity: 'live-boundary-sidecar-learned-attribute-splats-v0',
     smokeRendererIdentity: 'native-3d-compute-fluid-raymarch-v0',
@@ -162,6 +174,7 @@ assert.equal(hiddenFallbackReport.firePresentationMismatchSamples[0].reasons.inc
 const transientRendererSubstitution = episodeHarness({
   firePresentation: learnedHybridPresentation,
   expectedFirePresentation: {
+    firingId: learnedHybridPresentation.firingId,
     effectiveMode: 'learned-splat-flame-raymarched-smoke',
     flameRendererIdentity: 'live-boundary-sidecar-learned-attribute-splats-v0',
     smokeRendererIdentity: 'native-3d-compute-fluid-raymarch-v0',
@@ -199,6 +212,7 @@ const partialCandidateEvidence = episodeHarness({
     candidateCapacity: null,
   },
   expectedFirePresentation: {
+    firingId: learnedHybridPresentation.firingId,
     effectiveMode: 'learned-splat-flame-raymarched-smoke',
     flameRendererIdentity: 'live-boundary-sidecar-learned-attribute-splats-v0',
     smokeRendererIdentity: 'native-3d-compute-fluid-raymarch-v0',
@@ -216,6 +230,85 @@ const partialCandidateReport = partialCandidateEvidence.episode.finish({ phase: 
 assert.equal(partialCandidateReport.status, 'invalid');
 assert.ok(partialCandidateReport.failures.includes('effective-fire-presentation-mismatch'));
 assert.equal(partialCandidateReport.firePresentationMismatchSamples[0].reasons.includes('candidate-evidence-missing'), true);
+
+const identityOnlyHooks = episodeHarness({
+  firePresentation: {
+    ...learnedHybridPresentation,
+    fireEpisodeHooks: { identity: 'foreground-kiln-fire-episode-hooks-v0' },
+  },
+  expectedFirePresentation: {
+    firingId: learnedHybridPresentation.firingId,
+    effectiveMode: 'learned-splat-flame-raymarched-smoke',
+    flameRendererIdentity: 'live-boundary-sidecar-learned-attribute-splats-v0',
+    smokeRendererIdentity: 'native-3d-compute-fluid-raymarch-v0',
+    learnedModelIdentity: learnedHybridPresentation.learnedModelIdentity,
+    requireNoFallback: true,
+    requireZeroOverflow: true,
+    requireCandidateEvidence: true,
+    requireTimingAuthority: true,
+    requireFireEpisodeHooks: true,
+  },
+});
+identityOnlyHooks.episode.start();
+identityOnlyHooks.advance();
+const identityOnlyHooksReport = identityOnlyHooks.episode.finish({ phase: 'complete' });
+assert.equal(identityOnlyHooksReport.status, 'invalid');
+assert.equal(identityOnlyHooksReport.firePresentationMismatchSamples[0].reasons.includes('fire-episode-window-missing'), true);
+
+const crossFiringHooks = episodeHarness({
+  firePresentation: {
+    ...learnedHybridPresentation,
+    fireEpisodeHooks: {
+      ...learnedHybridPresentation.fireEpisodeHooks,
+      firingId: 'firing-from-another-run',
+    },
+  },
+  expectedFirePresentation: {
+    firingId: learnedHybridPresentation.firingId,
+    effectiveMode: 'learned-splat-flame-raymarched-smoke',
+    flameRendererIdentity: 'live-boundary-sidecar-learned-attribute-splats-v0',
+    smokeRendererIdentity: 'native-3d-compute-fluid-raymarch-v0',
+    learnedModelIdentity: learnedHybridPresentation.learnedModelIdentity,
+    requireNoFallback: true,
+    requireZeroOverflow: true,
+    requireCandidateEvidence: true,
+    requireTimingAuthority: true,
+    requireFireEpisodeHooks: true,
+  },
+});
+crossFiringHooks.episode.start();
+crossFiringHooks.advance();
+const crossFiringHooksReport = crossFiringHooks.episode.finish({ phase: 'complete' });
+assert.equal(crossFiringHooksReport.status, 'invalid');
+assert.equal(crossFiringHooksReport.firePresentationMismatchSamples[0].reasons.includes('fire-episode-firing-id-mismatch'), true);
+
+const staleHookCounters = episodeHarness({
+  firePresentation: {
+    ...learnedHybridPresentation,
+    fireEpisodeHooks: {
+      ...learnedHybridPresentation.fireEpisodeHooks,
+      frameAdvanceCount: 0,
+      simStepAdvanceCount: 0,
+    },
+  },
+  expectedFirePresentation: {
+    firingId: learnedHybridPresentation.firingId,
+    effectiveMode: 'learned-splat-flame-raymarched-smoke',
+    flameRendererIdentity: 'live-boundary-sidecar-learned-attribute-splats-v0',
+    smokeRendererIdentity: 'native-3d-compute-fluid-raymarch-v0',
+    learnedModelIdentity: learnedHybridPresentation.learnedModelIdentity,
+    requireNoFallback: true,
+    requireZeroOverflow: true,
+    requireCandidateEvidence: true,
+    requireTimingAuthority: true,
+    requireFireEpisodeHooks: true,
+  },
+});
+staleHookCounters.episode.start();
+staleHookCounters.advance();
+const staleHookCountersReport = staleHookCounters.episode.finish({ phase: 'complete' });
+assert.equal(staleHookCountersReport.status, 'invalid');
+assert.ok(staleHookCountersReport.failures.includes('fire-episode-did-not-advance'));
 
 const live = episodeHarness();
 live.episode.start();
