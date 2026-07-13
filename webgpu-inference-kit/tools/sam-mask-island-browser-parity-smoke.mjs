@@ -524,7 +524,15 @@ function delay(ms) {
   return new Promise(resolveDelay => setTimeout(resolveDelay, ms));
 }
 
+function reportSourceImageIdentity() {
+  if (lastState?.sourceImage) return { sourceImage: lastState.sourceImage, sourceImageIdentitySource: 'browser-state' };
+  if (lastState?.tensorPacket?.sourceImage) return { sourceImage: lastState.tensorPacket.sourceImage, sourceImageIdentitySource: 'tensor-packet' };
+  if (packetManifest?.sourceImage) return { sourceImage: packetManifest.sourceImage, sourceImageIdentitySource: 'packet-manifest' };
+  return { sourceImage: null, sourceImageIdentitySource: null };
+}
+
 function writeReport(extra = {}) {
+  const { sourceImage: reportSourceImage, sourceImageIdentitySource } = reportSourceImageIdentity();
   mkdirSync(dirname(reportPath), { recursive: true });
   writeFileSync(reportPath, JSON.stringify({
     schema: REPORT_SCHEMA,
@@ -536,7 +544,8 @@ function writeReport(extra = {}) {
     packetMode,
     packetTool,
     mlxVlmRoot,
-    sourceImage: lastState?.sourceImage || lastState?.tensorPacket?.sourceImage || null,
+    sourceImage: reportSourceImage,
+    sourceImageIdentitySource,
     requestedSourceImage: sourceImage,
     prompt,
     model,

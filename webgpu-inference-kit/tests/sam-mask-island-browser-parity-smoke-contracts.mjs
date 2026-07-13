@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -136,10 +136,34 @@ const invalidChromeDir = await mkdtemp(join(tmpdir(), 'sam-mask-invalid-chrome-'
 const invalidChromeReport = join(invalidChromeDir, 'report.json');
 const invalidChromeScreenshot = join(invalidChromeDir, 'screenshot.png');
 const invalidChromePath = join(invalidChromeDir, 'definitely-not-chrome');
+const invalidChromeOracleDir = join(invalidChromeDir, 'oracle');
+const invalidChromePacketTool = join(invalidChromeDir, 'full-source-identity-packet.mjs');
+writeFileSync(invalidChromePacketTool, `
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+const args = new Map();
+for (let index = 2; index < process.argv.length; index += 2) args.set(process.argv[index], process.argv[index + 1]);
+const outDir = args.get('--out-dir');
+mkdirSync(outDir, { recursive: true });
+writeFileSync(join(outDir, 'tensor-manifest.json'), JSON.stringify({
+  schema: 'kaminos.sam3-test-packet.v0',
+  routeId: 'sam3.mask-decoder-island.webgpu-local.v0',
+  sourceImage: {
+    artifactId: 'image:test-original',
+    file: 'source-image-original.jpg',
+    sha256: 'sha256:test-original',
+    encodedResolution: [1800, 1200],
+    resolution: [224, 224],
+    resize: { owner: 'browser', targetResolution: [224, 224], algorithm: 'pillow-12-fixed-point-bilinear-v0' },
+  },
+}));
+`);
 const invalidChromeRun = spawnSync(process.execPath, [
   'tools/sam-mask-island-browser-parity-smoke.mjs',
   '--out', invalidChromeScreenshot,
   '--report', invalidChromeReport,
+  '--oracle-dir', invalidChromeOracleDir,
+  '--packet-tool', invalidChromePacketTool,
   '--debug-port', String(19527 + (process.pid % 1000)),
   '--server-port', String(20527 + (process.pid % 1000)),
 ], {
@@ -158,6 +182,11 @@ assert.equal(invalidChromeFailure.failure_phase, 'launch_chrome');
 assert.equal(invalidChromeFailure.primary_output_written, false);
 assert.equal(invalidChromeFailure.screenshot, null);
 assert.equal(invalidChromeFailure.chrome, invalidChromePath);
+assert.equal(invalidChromeFailure.requestedSourceImage, '/Users/noahlyons/dev/sam3/assets/images/truck.jpg');
+assert.equal(invalidChromeFailure.sourceImageIdentitySource, 'packet-manifest');
+assert.equal(invalidChromeFailure.sourceImage.sha256, 'sha256:test-original');
+assert.deepEqual(invalidChromeFailure.sourceImage.encodedResolution, [1800, 1200]);
+assert.deepEqual(invalidChromeFailure.sourceImage.resize, { owner: 'browser', targetResolution: [224, 224], algorithm: 'pillow-12-fixed-point-bilinear-v0' });
 assert.match(invalidChromeFailure.error, /ENOENT|spawn/i);
 
 console.log('sam mask island browser parity smoke contracts passed');
