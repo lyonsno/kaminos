@@ -8,6 +8,7 @@ import { basename, resolve } from 'node:path';
 import { inflateSync as zlibInflateSync } from 'node:zlib';
 
 const SCHEMA = 'kaminos.volume.boundary-splat-motion-witness.v0';
+const ALIGNED_BUDGET_PAIR_SCHEMA = 'kaminos.volume.boundary-splat-aligned-budget-pair.v0';
 const SPLAT_RENDERER = 'live-boundary-sidecar-analytic-splats-v0';
 const LEARNED_SPLAT_RENDERER = 'live-boundary-sidecar-learned-attribute-splats-v0';
 const EXPECTED_LEARNED_MODEL = 'sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472';
@@ -19,6 +20,9 @@ const SPLAT_SOURCE_AUTHORITY = 'live-baked-sidecar-plus-fluid-material-v0';
 const SOURCE_AUTHORITY = SPLAT_SOURCE_AUTHORITY;
 const RAYMARCH_RENDERER = 'matched-raymarch';
 const INSTANCE_DESCRIPTOR_IDENTITY = 'boundary-splat-instance-descriptor-v0';
+const BOUNDARY_SPLAT_SELECTOR_POLICY_IDENTITY = 'boundary-splat-deterministic-gpu-hash-thinning-v0';
+const ALIGNED_BUDGET_PAIR = [6400, 1600];
+const ALIGNED_BUDGET_INSTANCE_COUNT = 100;
 const SHARED_CURRENT_PHASE_SOURCE = 'shared-current-control';
 const LIVE_HISTORY_PHASE_SOURCE = 'live-history-offset';
 const SAME_HISTORY_SLOT_PHASE_SOURCE = 'same-history-slot-control';
@@ -49,6 +53,9 @@ const requestedHistoryDepth = Math.max(4, Math.floor(Number(args.get('--history-
 const requestedHistoryFrameStride = Math.max(1, Math.floor(Number(args.get('--history-frame-stride') || 1)));
 const operatorPrettySubstratePath = args.get('--operator-pretty-substrate')
   ? resolve(String(args.get('--operator-pretty-substrate')))
+  : null;
+const alignedBudgetPair = requestedRoute
+  ? parseAlignedBudgetPair(new URL(requestedRoute).searchParams.get('volume_boundary_splat_aligned_budget_pair') || args.get('--aligned-budget-pair') || '')
   : null;
 
 const runStartedAt = new Date().toISOString();
@@ -82,7 +89,7 @@ try {
     requestedRoute,
     rendererIdentity: SPLAT_RENDERER,
     sourceAuthority: SOURCE_AUTHORITY,
-    routeMode: 'boundary-splat-motion-falsification',
+    routeMode: alignedBudgetPair ? 'boundary-splat-aligned-budget-pair' : 'boundary-splat-motion-falsification',
   };
   const staticCamera = {
     label: 'staticCamera',
@@ -105,6 +112,64 @@ try {
     },
   };
 
+  if (alignedBudgetPair) {
+    failurePhase = 'aligned-budget-capture';
+    const alignedBudgetPairReport = await captureAlignedBudgetPair([staticCamera, grazingCamera]);
+    failurePhase = 'aligned-budget-false-closure-validation';
+    const report = {
+      schema: ALIGNED_BUDGET_PAIR_SCHEMA,
+      status: 'completed',
+      runStartedAt,
+      runCompletedAt: new Date().toISOString(),
+      requestedRoute,
+      requestedRouteIdentity,
+      effectiveRoute: alignedBudgetPairReport.effectiveRoute,
+      sourceAuthority: SOURCE_AUTHORITY,
+      rendererIdentities: [LEARNED_SPLAT_RENDERER, RAYMARCH_RENDERER],
+      expectedLearnedModelIdentity: EXPECTED_LEARNED_MODEL,
+      browser: {
+        identity: browserSession.identity,
+        mode: browserSession.mode,
+        port,
+        userDataDir,
+        keepBrowserOpen,
+        windowSize,
+        pageUrl: effectivePageUrl,
+      },
+      captureConfig: {
+        frameCount,
+        stepMs,
+        wallStepMs,
+        requestedPhaseStride,
+        requestedHistoryDepth,
+        requestedHistoryFrameStride,
+        staticCameraDurationMs: (frameCount - 1) * stepMs,
+        grazingCameraDurationMs: (frameCount - 1) * stepMs,
+      },
+      alignedBudgetPair: alignedBudgetPairReport,
+      budgetQualityComparisons: summarizeAlignedBudgetQuality(alignedBudgetPairReport.sequences),
+      inspectedArtifacts: alignedBudgetPairReport.sequences
+        .flatMap(sequence => sequence.frames)
+        .flatMap(frame => [
+          frame.raymarch?.image?.path,
+          ...frame.budgetCaptures.map(capture => capture.image.path),
+        ])
+        .filter(Boolean),
+      falseClosureChecks: {
+        rejectsFallbackRoutes: true,
+        rejectsStaleDefaultConfig: true,
+        rejectsMissingOrBlankCapture: true,
+        rejectsWrongBudgetPair: true,
+        rejectsWrongInstanceCount: true,
+        rejectsSelectorPolicyDisagreement: true,
+        rejectsCopyOverflow: true,
+      },
+    };
+    rejectAlignedBudgetFalseClosure(report);
+    lastTrustworthyEvidence.alignedBudgetPair = compactAlignedBudgetPair(report.alignedBudgetPair);
+    writeFileSync(reportPath, JSON.stringify(report, null, 2));
+    console.log(JSON.stringify(report, null, 2));
+  } else {
   failurePhase = 'static-camera-capture';
   const staticSequence = await captureSequence(staticCamera);
   failurePhase = 'grazing-camera-capture';
@@ -167,6 +232,7 @@ try {
   rejectFalseClosure(report);
   writeFileSync(reportPath, JSON.stringify(report, null, 2));
   console.log(JSON.stringify(report, null, 2));
+  }
 } catch (error) {
   const failureReport = {
     schema: SCHEMA,
@@ -210,6 +276,15 @@ function parseArgs(argv) {
     }
   }
   return map;
+}
+
+function parseAlignedBudgetPair(value) {
+  if (!value) return null;
+  const budgets = String(value).split(/[,/]/).map(part => Number(part.trim())).filter(Number.isFinite);
+  if (budgets.length !== 2 || budgets[0] !== ALIGNED_BUDGET_PAIR[0] || budgets[1] !== ALIGNED_BUDGET_PAIR[1]) {
+    throw new Error('aligned-budget-pair requires exact 6400/1600 budgets');
+  }
+  return budgets;
 }
 
 function defaultChromePath() {
@@ -361,6 +436,18 @@ function validateRequestedEffectiveConfig(state) {
       mismatches,
     };
     throw new Error(`stale/default config mismatch: ${JSON.stringify(mismatches)}`);
+  }
+  if (alignedBudgetPair) {
+    const requestedInstances = Number(params.get('volume_boundary_splat_instances') || state?.boundarySplatRequestedInstanceCount);
+    const effectiveInstances = Number(state?.boundarySplatRequestedInstanceCount);
+    if (requestedInstances !== ALIGNED_BUDGET_INSTANCE_COUNT || effectiveInstances !== ALIGNED_BUDGET_INSTANCE_COUNT) {
+      lastTrustworthyEvidence.staleConfigMismatch = {
+        requestedRoute,
+        effectiveState: compactState(state || {}),
+        mismatches: [{ key: 'boundarySplatInstances', requested: ALIGNED_BUDGET_INSTANCE_COUNT, effective: effectiveInstances }],
+      };
+      throw new Error('aligned-budget-pair requires exact 100 instances');
+    }
   }
 }
 
@@ -541,6 +628,125 @@ async function captureSequence(config) {
   return sequence;
 }
 
+async function captureAlignedBudgetPair(sequenceConfigs) {
+  const sequences = [];
+  for (const config of sequenceConfigs) {
+    sequences.push(await captureAlignedBudgetSequence(config));
+  }
+  return {
+    identity: 'alignedBudgetPair',
+    authority: 'same-browser-same-frozen-state-learned-budget-pair-v0',
+    baselineBudget: alignedBudgetPair[0],
+    testBudget: alignedBudgetPair[1],
+    requestedInstanceCount: ALIGNED_BUDGET_INSTANCE_COUNT,
+    budgetPair: alignedBudgetPair,
+    effectiveRoute: sequences[0]?.effectiveRoute || null,
+    sequences,
+    claimBoundary: 'This paired witness measures deterministic hash budget loss and charged selector+raster cost on the same controlled live sequence; it does not certify smarter selectors or aesthetic closure.',
+  };
+}
+
+async function captureAlignedBudgetSequence(config) {
+  const sequenceDir = resolve(outDir, `aligned-budget-${config.label}`);
+  mkdirSync(sequenceDir, { recursive: true });
+  const frames = [];
+  let sameBrowserSessionId = null;
+  let sequenceStartNowMs = null;
+  for (let frameIndex = 0; frameIndex < frameCount; frameIndex += 1) {
+    const pose = config.sequenceKind === 'static-camera'
+      ? config.pose
+      : interpolatePose(config.from, config.to, frameIndex / Math.max(1, frameCount - 1));
+    const camera = await setCameraPose(pose);
+    if (wallStepMs > 0 && frameIndex > 0) await delay(wallStepMs);
+    const frameEval = await wsRequest('Runtime.evaluate', {
+      expression: `window.__kaminosVolumePrototype.controlledStepFrame(${JSON.stringify({
+        controlledStepFrameIndex: frameIndex,
+        advanceSim: frameIndex > 0,
+        sameBrowserSessionId,
+        startNow: sequenceStartNowMs,
+        stepDeltaMs: stepMs,
+        renderScales: [1],
+        includeRgba: false,
+        compactSamples: true,
+        resumeRenderLoop: false,
+      })})`,
+      awaitPromise: true,
+      returnByValue: true,
+    });
+    const frame = frameEval.result.value;
+    if (frame?.ok !== true || frame.sequenceAuthority !== 'controlled-step-sequence-v0') {
+      throw new Error(`aligned-budget controlled step failed for ${config.label} frame ${frameIndex}: ${JSON.stringify(frame)}`);
+    }
+    sameBrowserSessionId = frame.sameBrowserSessionId;
+    sequenceStartNowMs = frame.sequenceStartNowMs;
+    const scaleSet = frame.scaleSet;
+    const frameDir = resolve(sequenceDir, `frame-${String(frameIndex + 1).padStart(3, '0')}`);
+    mkdirSync(frameDir, { recursive: true });
+    const budgetCaptures = [];
+    for (const budget of alignedBudgetPair) {
+      budgetCaptures.push(await captureRenderer({
+        frameDir,
+        frameIndex,
+        scaleSet,
+        camera,
+        requestedRenderer: `learned-splat-budget-${budget}`,
+        boundarySplatMode: 'learned',
+        boundarySplatCandidateBudget: budget,
+      }));
+    }
+    const raymarch = await captureRenderer({
+      frameDir,
+      frameIndex,
+      scaleSet,
+      camera,
+      requestedRenderer: RAYMARCH_RENDERER,
+      boundarySplatMode: 'off',
+    });
+    const frameReport = {
+      sequenceAuthority: frame.sequenceAuthority,
+      sameBrowserSessionId: frame.sameBrowserSessionId,
+      controlledStepFrameIndex: frameIndex,
+      controlledStepDeltaMs: frame.controlledStepDeltaMs,
+      controlledStepNowMs: frame.controlledStepNowMs,
+      controlledStepCapture: frame.controlledStepCapture,
+      sameStateCaptureId: scaleSet.sameStateCaptureId,
+      baseFrameCount: scaleSet.baseFrameCount,
+      baseSimStepCount: scaleSet.baseSimStepCount,
+      camera,
+      budgetCaptures,
+      raymarch,
+      comparison: compareAlignedBudgetCaptures(budgetCaptures[0], budgetCaptures[1]),
+    };
+    lastTrustworthyEvidence.alignedBudgetPair = {
+      sequenceLabel: config.label,
+      controlledStepFrameIndex: frameIndex,
+      sameStateCaptureId: frameReport.sameStateCaptureId,
+      budgets: budgetCaptures.map(capture => ({
+        requested: capture.boundarySplatRequestedCandidateBudget,
+        effective: capture.boundarySplatEffectiveCandidateBudget,
+        selected: capture.boundarySplatSelectedCandidateCount,
+        selectorPlusRasterMs: capture.selectorPlusRasterMs,
+        image: capture.image.path,
+      })),
+    };
+    frames.push(frameReport);
+  }
+  const effectiveRoute = frames[0]?.budgetCaptures[0]?.effectiveRoute || null;
+  const sequence = {
+    label: config.label,
+    sequenceKind: config.sequenceKind,
+    sampleAuthority: 'controlled-step-sim-advance',
+    sameBrowserSessionId,
+    frameCount,
+    stepMs,
+    sequenceDurationMs: (frameCount - 1) * stepMs,
+    effectiveRoute,
+    frames,
+  };
+  addAlignedBudgetMotionEnergy(sequence);
+  return sequence;
+}
+
 async function captureRenderer({
   frameDir,
   frameIndex,
@@ -548,12 +754,14 @@ async function captureRenderer({
   camera,
   requestedRenderer,
   boundarySplatMode,
+  boundarySplatCandidateBudget = null,
   boundarySplatPhaseMode = null,
   boundarySplatPhaseStride = null,
   boundarySplatHistoryDepth = null,
   boundarySplatHistoryFrameStride = null,
 }) {
   const controlOverrides = { boundarySplatMode };
+  if (boundarySplatCandidateBudget) controlOverrides.boundarySplatCandidateBudget = boundarySplatCandidateBudget;
   if (boundarySplatPhaseMode) controlOverrides.boundarySplatPhaseMode = boundarySplatPhaseMode;
   if (boundarySplatPhaseStride) controlOverrides.boundarySplatPhaseStride = boundarySplatPhaseStride;
   if (boundarySplatHistoryDepth) controlOverrides.boundarySplatHistoryDepth = boundarySplatHistoryDepth;
@@ -591,6 +799,10 @@ async function captureRenderer({
   const effectiveRenderer = canvasCapture.volumeReconstructionStyle;
   const fallbackReason = postState?.boundarySplatFallbackReason ?? canvasCapture.boundarySplatFallbackReason ?? null;
   const isSplat = boundarySplatMode !== 'off';
+  const gpuProfile = isSplat ? canvasCapture.boundarySplatGpuProfile ?? postState?.boundarySplatGpuProfile ?? null : null;
+  const selectorCostProfile = isSplat ? canvasCapture.boundarySplatSelectorCostProfile ?? postState?.boundarySplatSelectorCostProfile ?? null : null;
+  const selectorGpuMs = Number(selectorCostProfile?.selectorGpuMs ?? 0);
+  const splatRasterMs = Number(gpuProfile?.stages?.splatRaster?.ms ?? 0);
   const capture = {
     requestedRenderer,
     effectiveRenderer,
@@ -607,7 +819,11 @@ async function captureRenderer({
     boundarySplatRequestedCandidateBudget: isSplat ? canvasCapture.boundarySplatRequestedCandidateBudget ?? postState?.boundarySplatRequestedCandidateBudget ?? null : null,
     boundarySplatEffectiveCandidateBudget: isSplat ? canvasCapture.boundarySplatEffectiveCandidateBudget ?? postState?.boundarySplatEffectiveCandidateBudget ?? null : null,
     boundarySplatSelectedCandidateCount: isSplat ? canvasCapture.boundarySplatSelectedCandidateCount ?? postState?.boundarySplatSelectedCandidateCount ?? null : null,
-    boundarySplatSelectorCostProfile: isSplat ? canvasCapture.boundarySplatSelectorCostProfile ?? postState?.boundarySplatSelectorCostProfile ?? null : null,
+    boundarySplatSelectorCostProfile: selectorCostProfile,
+    boundarySplatGpuProfile: gpuProfile,
+    selectorGpuMs: isSplat && Number.isFinite(selectorGpuMs) ? selectorGpuMs : null,
+    splatRasterMs: isSplat && Number.isFinite(splatRasterMs) ? splatRasterMs : null,
+    selectorPlusRasterMs: isSplat && Number.isFinite(selectorGpuMs) && Number.isFinite(splatRasterMs) ? selectorGpuMs + splatRasterMs : null,
     boundarySplatPhaseSourceCount: isSplat ? canvasCapture.boundarySplatPhaseSourceCount ?? postState?.boundarySplatPhaseSourceCount ?? null : null,
     phaseMode: isSplat ? canvasCapture.boundarySplatPhaseMode ?? postState?.boundarySplatPhaseMode ?? null : null,
     phaseModeIdentity: isSplat ? canvasCapture.boundarySplatPhaseModeIdentity ?? postState?.boundarySplatPhaseModeIdentity ?? null : null,
@@ -655,6 +871,12 @@ async function captureRenderer({
       boundarySplatAttributeModelIdentity: canvasCapture.boundarySplatAttributeModelIdentity,
       boundarySplatInstanceDescriptorIdentity: canvasCapture.boundarySplatInstanceDescriptorIdentity,
       boundarySplatRequestedInstanceCount: canvasCapture.boundarySplatRequestedInstanceCount,
+      boundarySplatRequestedCandidateBudget: canvasCapture.boundarySplatRequestedCandidateBudget,
+      boundarySplatEffectiveCandidateBudget: canvasCapture.boundarySplatEffectiveCandidateBudget,
+      boundarySplatSelectedCandidateCount: canvasCapture.boundarySplatSelectedCandidateCount,
+      boundarySplatSelectorPolicyIdentity: canvasCapture.boundarySplatSelectorPolicyIdentity,
+      boundarySplatSelectorCostProfile: canvasCapture.boundarySplatSelectorCostProfile,
+      boundarySplatGpuProfile: canvasCapture.boundarySplatGpuProfile,
       boundarySplatSourceCandidateCount: canvasCapture.boundarySplatSourceCandidateCount,
       boundarySplatPhaseSourceCount: canvasCapture.boundarySplatPhaseSourceCount,
       phaseMode: canvasCapture.boundarySplatPhaseMode,
@@ -705,7 +927,7 @@ function validateCapture(capture) {
       })}`);
     }
   }
-  if (capture.requestedRenderer === 'learned-splat') {
+  if (capture.requestedRenderer.startsWith('learned-splat')) {
     if (capture.effectiveRenderer !== LEARNED_SPLAT_RENDERER || capture.rendererIdentity !== LEARNED_SPLAT_RENDERER) {
       throw new Error(`renderer disagreement: requested learned splat but effective renderer was ${capture.effectiveRenderer}/${capture.rendererIdentity}`);
     }
@@ -776,6 +998,135 @@ function rejectFalseClosure(report) {
   if (report.candidateChurn.maxAbsDelta <= 0 && report.staticCamera.motionEnergy.maxMeanAbsDiff <= 0.1) {
     throw new Error('cached or static output rejected: sequence did not move in candidates or pixels');
   }
+}
+
+function rejectAlignedBudgetFalseClosure(report) {
+  const pair = report.alignedBudgetPair;
+  if (!pair?.sequences?.length) throw new Error('aligned-budget blank/partial evidence rejected: missing sequences');
+  if (pair.baselineBudget !== ALIGNED_BUDGET_PAIR[0] || pair.testBudget !== ALIGNED_BUDGET_PAIR[1]) {
+    throw new Error('aligned-budget-pair requires exact 6400/1600 budgets');
+  }
+  for (const sequence of pair.sequences) {
+    if (sequence.sameBrowserSessionId !== sequence.frames[0]?.sameBrowserSessionId) {
+      throw new Error(`aligned-budget same-browser identity missing for ${sequence.label}`);
+    }
+    for (const frame of sequence.frames) {
+      if (!frame.budgetCaptures || frame.budgetCaptures.length !== 2 || !frame.raymarch) {
+        throw new Error(`aligned-budget blank/partial evidence rejected for ${sequence.label} frame ${frame.controlledStepFrameIndex}`);
+      }
+      const baseline = frame.budgetCaptures.find(capture => capture.boundarySplatRequestedCandidateBudget === ALIGNED_BUDGET_PAIR[0]);
+      const test = frame.budgetCaptures.find(capture => capture.boundarySplatRequestedCandidateBudget === ALIGNED_BUDGET_PAIR[1]);
+      if (!baseline || !test) {
+        throw new Error(`aligned-budget stale requested/effective budget for ${sequence.label} frame ${frame.controlledStepFrameIndex}`);
+      }
+      for (const capture of [baseline, test]) {
+        validateCapture(capture);
+        validateAlignedBudgetCapture(capture);
+      }
+      validateCapture(frame.raymarch);
+      if (baseline.canvasCapture.sameStateCaptureId !== test.canvasCapture.sameStateCaptureId
+        || baseline.canvasCapture.sameStateCaptureId !== frame.sameStateCaptureId) {
+        throw new Error(`aligned-budget same-state disagreement for ${sequence.label} frame ${frame.controlledStepFrameIndex}`);
+      }
+      if (!frame.comparison || !Number.isFinite(frame.comparison.structuralMeanAbsDiff)) {
+        throw new Error(`aligned-budget blank/partial evidence rejected: missing quality comparison for ${sequence.label} frame ${frame.controlledStepFrameIndex}`);
+      }
+    }
+  }
+}
+
+function validateAlignedBudgetCapture(capture) {
+  const requested = Number(capture.boundarySplatRequestedCandidateBudget);
+  const effective = Number(capture.boundarySplatEffectiveCandidateBudget);
+  const selected = Number(capture.boundarySplatSelectedCandidateCount);
+  const sourceCount = Number(capture.boundarySplatSourceCandidateCount ?? capture.boundarySplatCandidateCount);
+  const expectedEffective = Math.min(sourceCount, requested);
+  if (!ALIGNED_BUDGET_PAIR.includes(requested)
+    || effective !== expectedEffective
+    || selected !== effective) {
+    throw new Error(`aligned-budget stale requested/effective budget: ${JSON.stringify({
+      requested,
+      effective,
+      selected,
+      sourceCount,
+      expectedEffective,
+    })}`);
+  }
+  if (Number(capture.boundarySplatRequestedInstanceCount) !== ALIGNED_BUDGET_INSTANCE_COUNT) {
+    throw new Error('aligned-budget-pair requires exact 100 instances');
+  }
+  if (capture.boundarySplatSelectorPolicyIdentity !== BOUNDARY_SPLAT_SELECTOR_POLICY_IDENTITY) {
+    throw new Error(`aligned-budget selector policy disagreement: ${capture.boundarySplatSelectorPolicyIdentity}`);
+  }
+  if (capture.fallbackReason) {
+    throw new Error(`aligned-budget fallback rejected: ${capture.fallbackReason}`);
+  }
+  if (capture.boundarySplatCandidateCopyBytes !== 0 || Number(capture.boundarySplatOverflowCount || 0) !== 0) {
+    throw new Error(`aligned-budget copy/overflow rejected: ${JSON.stringify({
+      copyBytes: capture.boundarySplatCandidateCopyBytes,
+      overflowCount: capture.boundarySplatOverflowCount,
+    })}`);
+  }
+  if (capture.image.metrics.litPixels <= 20 || capture.image.metrics.meanLuma <= 1) {
+    throw new Error(`aligned-budget blank/partial evidence rejected: ${JSON.stringify(capture.image.metrics)}`);
+  }
+  if (!Number.isFinite(Number(capture.selectorGpuMs)) || !Number.isFinite(Number(capture.splatRasterMs)) || !Number.isFinite(Number(capture.selectorPlusRasterMs))) {
+    throw new Error(`aligned-budget selector/raster cost missing: ${JSON.stringify({
+      selectorGpuMs: capture.selectorGpuMs,
+      splatRasterMs: capture.splatRasterMs,
+      selectorPlusRasterMs: capture.selectorPlusRasterMs,
+    })}`);
+  }
+}
+
+function compareAlignedBudgetCaptures(baseline, test) {
+  const baselineMetrics = baseline.image.metrics;
+  const testMetrics = test.image.metrics;
+  const diff = imageDiff(baseline.image.path, test.image.path);
+  const baselineCost = Number(baseline.selectorPlusRasterMs ?? 0);
+  const testCost = Number(test.selectorPlusRasterMs ?? 0);
+  return {
+    authority: 'same-state-cdp-png-budget-quality-delta-v0',
+    sameStateCaptureId: baseline.canvasCapture.sameStateCaptureId,
+    baselineBudget: baseline.boundarySplatRequestedCandidateBudget,
+    testBudget: test.boundarySplatRequestedCandidateBudget,
+    baselineImage: baseline.image.path,
+    testImage: test.image.path,
+    retainedLightRatio: ratio(testMetrics.meanLuma, baselineMetrics.meanLuma),
+    coverageRetainedRatio: ratio(testMetrics.litPixels, baselineMetrics.litPixels),
+    structuralMeanAbsDiff: diff.meanAbsDiff,
+    changedFraction: diff.changedFraction,
+    meanLumaDelta: testMetrics.meanLuma - baselineMetrics.meanLuma,
+    litPixelsDelta: testMetrics.litPixels - baselineMetrics.litPixels,
+    baselineSelectorGpuMs: baseline.selectorGpuMs,
+    baselineSplatRasterMs: baseline.splatRasterMs,
+    baselineSelectorPlusRasterMs: baseline.selectorPlusRasterMs,
+    testSelectorGpuMs: test.selectorGpuMs,
+    testSplatRasterMs: test.splatRasterMs,
+    testSelectorPlusRasterMs: test.selectorPlusRasterMs,
+    costRatio: ratio(testCost, baselineCost),
+  };
+}
+
+function summarizeAlignedBudgetQuality(sequences) {
+  const comparisons = sequences.flatMap(sequence => sequence.frames.map(frame => ({
+    sequenceLabel: sequence.label,
+    controlledStepFrameIndex: frame.controlledStepFrameIndex,
+    ...frame.comparison,
+  })));
+  const finite = field => comparisons.map(comparison => Number(comparison[field])).filter(Number.isFinite);
+  const average = values => values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null;
+  return {
+    authority: 'aligned-budget-paired-sequence-quality-summary-v0',
+    comparisonCount: comparisons.length,
+    baselineBudget: ALIGNED_BUDGET_PAIR[0],
+    testBudget: ALIGNED_BUDGET_PAIR[1],
+    retainedLightRatioMean: average(finite('retainedLightRatio')),
+    coverageRetainedRatioMean: average(finite('coverageRetainedRatio')),
+    structuralMeanAbsDiffMean: average(finite('structuralMeanAbsDiff')),
+    costRatioMean: average(finite('costRatio')),
+    comparisons,
+  };
 }
 
 function summarizeAnalyticLearnedComparison(frames) {
@@ -979,6 +1330,34 @@ function addMotionEnergy(sequence) {
   };
 }
 
+function addAlignedBudgetMotionEnergy(sequence) {
+  const baselineCaptures = sequence.frames
+    .map(frame => frame.budgetCaptures.find(capture => capture.boundarySplatRequestedCandidateBudget === ALIGNED_BUDGET_PAIR[0]))
+    .filter(Boolean);
+  const testCaptures = sequence.frames
+    .map(frame => frame.budgetCaptures.find(capture => capture.boundarySplatRequestedCandidateBudget === ALIGNED_BUDGET_PAIR[1]))
+    .filter(Boolean);
+  sequence.motionEnergy = {
+    authority: 'adjacent-frame-cdp-png-diff-aligned-budget-v0',
+    baselineBudget: ALIGNED_BUDGET_PAIR[0],
+    testBudget: ALIGNED_BUDGET_PAIR[1],
+    baselineDiffs: adjacentImageDiffs(baselineCaptures),
+    testDiffs: adjacentImageDiffs(testCaptures),
+  };
+}
+
+function adjacentImageDiffs(captures) {
+  const diffs = [];
+  for (let index = 1; index < captures.length; index += 1) {
+    diffs.push(imageDiff(captures[index - 1].image.path, captures[index].image.path));
+  }
+  return {
+    diffs,
+    maxMeanAbsDiff: diffs.reduce((max, diff) => Math.max(max, diff.meanAbsDiff), 0),
+    meanMeanAbsDiff: diffs.length ? diffs.reduce((sum, diff) => sum + diff.meanAbsDiff, 0) / diffs.length : 0,
+  };
+}
+
 function interpolatePose(from, to, t) {
   return {
     position: from.position.map((value, index) => value + (to.position[index] - value) * t),
@@ -1103,6 +1482,13 @@ function imageDiff(pathA, pathB) {
   };
 }
 
+function ratio(numerator, denominator) {
+  const top = Number(numerator);
+  const bottom = Number(denominator);
+  if (!Number.isFinite(top) || !Number.isFinite(bottom) || Math.abs(bottom) < 1e-9) return null;
+  return top / bottom;
+}
+
 function readBuffer(path) {
   return readFileSync(path);
 }
@@ -1142,10 +1528,38 @@ function compactState(state) {
     boundarySplatCandidateCount: state.boundarySplatCandidateCount,
     boundarySplatOverflowCount: state.boundarySplatOverflowCount,
     boundarySplatFallbackReason: state.boundarySplatFallbackReason,
+    boundarySplatRequestedCandidateBudget: state.boundarySplatRequestedCandidateBudget,
+    boundarySplatEffectiveCandidateBudget: state.boundarySplatEffectiveCandidateBudget,
+    boundarySplatSelectedCandidateCount: state.boundarySplatSelectedCandidateCount,
+    boundarySplatSelectorPolicyIdentity: state.boundarySplatSelectorPolicyIdentity,
     boundarySplatCopyBytesThisFrame: state.boundarySplatCopyBytesThisFrame,
     boundarySplatCopyDisposition: state.boundarySplatCopyDisposition,
     frameCount: state.frameCount,
     simStepCount: state.simStepCount,
+  };
+}
+
+function compactAlignedBudgetPair(pair) {
+  if (!pair) return null;
+  return {
+    identity: pair.identity,
+    authority: pair.authority,
+    baselineBudget: pair.baselineBudget,
+    testBudget: pair.testBudget,
+    requestedInstanceCount: pair.requestedInstanceCount,
+    sequenceCount: pair.sequences?.length ?? 0,
+    frames: pair.sequences?.flatMap(sequence => sequence.frames.map(frame => ({
+      sequenceLabel: sequence.label,
+      controlledStepFrameIndex: frame.controlledStepFrameIndex,
+      sameStateCaptureId: frame.sameStateCaptureId,
+      budgets: frame.budgetCaptures.map(capture => ({
+        requested: capture.boundarySplatRequestedCandidateBudget,
+        effective: capture.boundarySplatEffectiveCandidateBudget,
+        selected: capture.boundarySplatSelectedCandidateCount,
+        selectorPlusRasterMs: capture.selectorPlusRasterMs,
+      })),
+      comparison: frame.comparison,
+    }))) ?? [],
   };
 }
 
