@@ -92,6 +92,7 @@ function baseEpisode(longGapThresholdMs) {
     queueCompletionProxy: {
       evidenceSource: 'webgpu-queue-onSubmittedWorkDone-proxy',
       disclaimer: 'queue-completion-proxy-not-present-latency',
+      prototypeSampleBaseline: 0,
       available: false,
       pending: false,
       samples: 0,
@@ -111,12 +112,15 @@ function baseEpisode(longGapThresholdMs) {
 export function createFireEpisodeHooks({
   now = () => performance.now(),
   readCounters = () => ({ frameCount: 0, simStepCount: 0 }),
+  readQueueProxy = () => ({ completionSequence: 0 }),
   readRouteIdentity = () => null,
   longGapThresholdMs = DEFAULT_LONG_GAP_THRESHOLD_MS,
 } = {}) {
   const threshold = finite(longGapThresholdMs, DEFAULT_LONG_GAP_THRESHOLD_MS);
   let episode = baseEpisode(threshold);
   const usedFiringIds = new Set();
+  let queueSampleBaseline = 0;
+  let episodeQueueDoneSamples = [];
 
   function snapshot() {
     return cloneEpisode(episode);
@@ -139,7 +143,10 @@ export function createFireEpisodeHooks({
       throw new Error(`fire episode firingId ${nextFiringId} was already used by this tracker`);
     }
     const counters = readCounters?.() || {};
+    const queueProxy = readQueueProxy?.() || {};
     const startedAtMs = finite(now(), 0);
+    queueSampleBaseline = Math.max(0, finite(queueProxy.completionSequence, 0));
+    episodeQueueDoneSamples = [];
     usedFiringIds.add(nextFiringId);
     episode = {
       ...baseEpisode(threshold),
@@ -154,6 +161,10 @@ export function createFireEpisodeHooks({
       frameEndCount: finite(counters.frameCount, 0),
       simStepStartCount: finite(counters.simStepCount, 0),
       simStepEndCount: finite(counters.simStepCount, 0),
+      queueCompletionProxy: {
+        ...baseEpisode(threshold).queueCompletionProxy,
+        prototypeSampleBaseline: queueSampleBaseline,
+      },
     };
     return snapshot();
   }
@@ -197,13 +208,22 @@ export function createFireEpisodeHooks({
 
   function recordQueueProxy(value = {}) {
     if (episode.status !== 'recording') return snapshot();
+    const completionSequence = Math.max(
+      queueSampleBaseline,
+      finite(value.completionSequence, queueSampleBaseline),
+    );
+    const episodeSamples = Math.max(0, completionSequence - queueSampleBaseline);
+    const lastDoneMs = finite(value.lastDoneMs);
+    if (episodeSamples > episodeQueueDoneSamples.length && lastDoneMs !== null) {
+      episodeQueueDoneSamples.push(lastDoneMs);
+    }
     episode.queueCompletionProxy = {
       ...episode.queueCompletionProxy,
       available: value.available === true,
       pending: value.pending === true,
-      samples: Math.max(0, finite(value.samples, episode.queueCompletionProxy.samples)),
-      lastDoneMs: finite(value.lastDoneMs),
-      p95DoneMs: finite(value.p95DoneMs),
+      samples: episodeSamples,
+      lastDoneMs: episodeSamples > 0 ? episodeQueueDoneSamples.at(-1) ?? null : null,
+      p95DoneMs: episodeQueueDoneSamples.length ? percentile(episodeQueueDoneSamples, 0.95) : null,
       error: value.error ? String(value.error) : null,
     };
     episode.updatedAtMs = finite(now(), episode.updatedAtMs);

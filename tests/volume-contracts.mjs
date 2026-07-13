@@ -19,7 +19,8 @@ assert.match(index, /id="tab-volume"/, 'Volume tab content is present');
 assert.match(index, /kaminos_volume_smoke/, 'URL route gate names the volume smoke prototype');
 assert.match(index, /volume_primitive_fixture/, 'URL route can seed a saved volume primitive fixture');
 assert.match(index, /createVolumeMainRendererBridge/, 'volume route composes into the main Three.js renderer');
-assert.match(index, /CanvasTexture\(volumePrototype\.canvasElement\(\)\)/, 'main renderer consumes the native volume canvas as a Three.js texture');
+assert.match(index, /composition:\s*'dom-webgpu-canvas-no-copy'/, 'main renderer bridge identifies the direct native WebGPU canvas path');
+assert.doesNotMatch(index, /CanvasTexture\(volumePrototype\.canvasElement\(\)\)/, 'live volume presentation does not copy the WebGPU canvas through a Three.js texture');
 assert.match(index, /volume-main-renderer-bridge-v0/, 'volume main-renderer bridge carries stable route identity');
 assert.match(index, /volumeBridge\.update/, 'render loop refreshes the volume bridge before main renderer draw');
 assert.doesNotMatch(index, /#kaminos-volume-canvas\.active \{ display: block; \}/, 'volume canvas active route must not rely on the stale display-block overlay rule');
@@ -808,6 +809,7 @@ assert.match(core, /kaminos-volume-prototype-v0/, 'volume module exposes stable 
 assert.match(core, /native-3d-compute-fluid-raymarch-v0/, 'volume module records compute-backed fluid route identity');
 assert.match(core, /DEFAULT_GRID_SIZE\s*=\s*96/, 'smoke route defaults to the operator-found 96^3 grid size');
 assert.match(core, /SUPPORTED_GRID_SIZES/, 'fluid sim declares supported resolution choices');
+assert.match(core, /SUPPORTED_GRID_SIZES\s*=\s*\[[^\]]*90[^\]]*\]/s, 'fluid sim accepts the 90^3 kiln contention grid without silently substituting 96^3');
 assert.match(core, /'canonical_plume'/, 'fluid sim supports a minimal canonical plume proof scene');
 assert.match(core, /canonicalPlumeScene/, 'fluid shader names the canonical plume branch separately from bonfire complexity');
 assert.match(core, /minimalPlumeProof/, 'debug state exposes the minimal plume proof contract identity');

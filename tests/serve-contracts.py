@@ -1,4 +1,5 @@
 from http import HTTPStatus
+from io import BytesIO
 import json
 import os
 from pathlib import Path
@@ -12,6 +13,7 @@ from serve import KaminosHandler
 from serve import build_display_metadata, build_output_display_metadata
 from serve import list_greenroom_output_files, resolve_greenroom_output_dir
 from serve import list_asset_entries
+from serve import resolve_sharp_scheduler_profile, pipeline_witness_env_for_payload
 
 
 def test_http_status_404_log_does_not_crash():
@@ -95,6 +97,73 @@ def test_forge_host_registry_snapshot_fallback_is_not_live():
     assert snapshot["endpointRegistry"]["loaded"] is False
     assert snapshot["endpoints"] == []
     assert snapshot["warnings"], "missing registry should be visible to the browser instead of silently falling back"
+
+
+def test_sharp_breathing_room_profiles_are_named_operator_routes_with_explicit_env():
+    default = resolve_sharp_scheduler_profile("baseline-default")
+    friendly = resolve_sharp_scheduler_profile("cooperative-spn-gaussian")
+
+    assert default["id"] == "baseline-default"
+    assert default["operatorLabel"] == "Default"
+    assert json.loads(default["env"]["KAMINOS_SHARP_WEBGPU_SCHEDULER"]) == {"mode": "default"}
+    assert friendly["id"] == "cooperative-spn-gaussian"
+    assert friendly["operatorLabel"] == "Friendly"
+    friendly_scheduler = json.loads(friendly["env"]["KAMINOS_SHARP_WEBGPU_SCHEDULER"])
+    assert friendly_scheduler["mode"] == "cooperative"
+    assert friendly_scheduler["spnPatchChunkSize"] == 1
+    assert friendly_scheduler["yieldMs"] == 3
+    assert friendly_scheduler["waitForSubmittedWorkDone"] is True
+    assert friendly_scheduler["gaussianPhaseYieldMs"] == 4
+    assert friendly_scheduler["vitBlockChunkSize"] == 2
+    assert friendly_scheduler["cpuChunkItems"] == 16384
+    assert friendly_scheduler["routeTailYieldMs"] == 3
+
+
+def test_sharp_breathing_room_unknown_profile_fails_instead_of_falling_back():
+    try:
+        resolve_sharp_scheduler_profile("friendly-but-typo")
+    except ValueError as error:
+        assert "Unknown SHARP scheduler profile" in str(error)
+    else:
+        raise AssertionError("unknown scheduler profile must not silently fall back to default")
+
+
+def test_pipeline_witness_env_for_payload_preserves_requested_scheduler_profile():
+    env, profile = pipeline_witness_env_for_payload({
+        "pipelineId": "sharp-image-to-splat-live-v0",
+        "schedulerProfileId": "cooperative-spn-gaussian",
+    })
+
+    assert profile["id"] == "cooperative-spn-gaussian"
+    assert profile["operatorLabel"] == "Friendly"
+    assert json.loads(env["KAMINOS_SHARP_WEBGPU_SCHEDULER"])["mode"] == "cooperative"
+    assert json.loads(env["KAMINOS_SHARP_WEBGPU_SCHEDULER"])["gaussianPhaseYieldMs"] == 4
+
+
+def test_image_inbox_webp_read_serves_bytes_without_json_fallback():
+    with TemporaryDirectory(dir="/tmp") as tmp:
+        root = Path(tmp)
+        webp_bytes = b"RIFF\x10\x00\x00\x00WEBPVP8Xfixture"
+        (root / "sample.webp").write_bytes(webp_bytes)
+
+        previous = BROWSE_ROOTS["image-inbox"]
+        BROWSE_ROOTS["image-inbox"] = root
+        try:
+            handler = KaminosHandler.__new__(KaminosHandler)
+            handler.wfile = BytesIO()
+            responses = []
+            headers = []
+            handler.send_response = lambda status: responses.append(status)
+            handler.send_header = lambda name, value: headers.append((name, value))
+            handler.end_headers = lambda: None
+
+            handler.handle_read({"root": ["image-inbox"], "path": ["sample.webp"]})
+        finally:
+            BROWSE_ROOTS["image-inbox"] = previous
+
+    assert responses == [200]
+    assert ("Content-Type", "image/webp") in headers
+    assert handler.wfile.getvalue() == webp_bytes
 
 
 def test_volume_only_scene_save_name_uses_scene_fallback():
@@ -555,6 +624,53 @@ def test_pipeline_run_resolves_api_read_source_and_returns_bundle():
         assert result["report"]["document"]["effectivePipelineId"] == "prepared-splat-import-sidecar-v0"
         assert result["bundle"]["document"]["registryScope"] == "run-local"
         assert any(artifact["id"] == "sidecar" for artifact in result["bundle"]["document"]["artifacts"])
+
+
+def test_pipeline_run_writes_failure_report_when_child_exits_before_report():
+    with TemporaryDirectory(dir="/tmp") as tmp:
+        root = Path(tmp)
+        source_root = root / "images"
+        source_root.mkdir()
+        source = source_root / "source.png"
+        source.write_bytes(b"\x89PNG\r\n\x1a\n")
+        out_dir = root / "pipeline-run"
+        fake_node = root / "fake-node"
+        fake_node.write_text(
+            "#!/bin/sh\n"
+            "echo 'synthetic child import failure before report' >&2\n"
+            "exit 37\n"
+        )
+        fake_node.chmod(0o755)
+
+        previous_browse = dict(BROWSE_ROOTS)
+        previous_node = os.environ.get("KAMINOS_NODE")
+        BROWSE_ROOTS["pipeline-test-images"] = source_root
+        os.environ["KAMINOS_NODE"] = str(fake_node)
+        try:
+            result = serve.run_pipeline_witness({
+                "pipelineId": "sharp-image-to-splat-live-v0",
+                "source": "/api/read?root=pipeline-test-images&path=source.png",
+                "outDir": str(out_dir),
+            })
+        finally:
+            BROWSE_ROOTS.clear()
+            BROWSE_ROOTS.update(previous_browse)
+            if previous_node is None:
+                os.environ.pop("KAMINOS_NODE", None)
+            else:
+                os.environ["KAMINOS_NODE"] = previous_node
+
+        report_path = out_dir / "pipeline-witness.json"
+        assert result["ok"] is False
+        assert result["exitCode"] == 37
+        assert result["report"]["path"] == str(report_path)
+        assert report_path.exists(), "server wrapper must not point at a missing report"
+        assert result["report"]["document"]["schema"] == "kaminos.pipeline-witness.v0"
+        assert result["report"]["document"]["ok"] is False
+        assert result["report"]["document"]["phase"] == "subprocess-exit-before-report"
+        assert result["report"]["document"]["effectiveRouteConfig"]["routeId"] == "sharp-image-to-splat-live-v0"
+        assert result["report"]["document"]["exitCode"] == 37
+        assert "synthetic child import failure before report" in result["report"]["document"]["stderrTail"]
 
 
 def test_pipeline_run_rejects_sources_outside_declared_roots():

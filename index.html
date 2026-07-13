@@ -59,13 +59,100 @@ h2 { font-size: 11px; font-weight: 600; margin: 18px 0 8px; color: #666; text-tr
 .search-loading { text-align: center; color: #555; font-size: 11px; padding: 20px; }
 .search-hint { font-size: 10px; color: #444; margin-top: 4px; }
 
-/* Generate panel */
-.gen-input { width: 100%; padding: 8px 12px; background: #1f1f1f; border: 1px solid #333; border-radius: 6px; color: #ccc; font-size: 12px; outline: none; margin-bottom: 6px; }
-.gen-input:focus { border-color: #1976d2; }
-.gen-input::placeholder { color: #555; }
-.gen-preview { width: 100%; border-radius: 6px; margin-top: 8px; display: none; }
-.api-key-input { width: 100%; padding: 6px 10px; background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 4px; color: #888; font-size: 10px; font-family: 'SF Mono', monospace; outline: none; margin-bottom: 6px; }
-.api-key-input:focus { border-color: #444; }
+    /* Generate panel */
+    .gen-input { width: 100%; padding: 8px 12px; background: #1f1f1f; border: 1px solid #333; border-radius: 6px; color: #ccc; font-size: 12px; outline: none; margin-bottom: 6px; }
+    .gen-input:focus { border-color: #1976d2; }
+    .gen-input::placeholder { color: #555; }
+    .gen-preview { width: 100%; border-radius: 6px; margin-top: 8px; display: none; }
+    .api-key-input { width: 100%; padding: 6px 10px; background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 4px; color: #888; font-size: 10px; font-family: 'SF Mono', monospace; outline: none; margin-bottom: 6px; }
+    .api-key-input:focus { border-color: #444; }
+    .kiln-route-bench-summary { color: #cfcfcf; font-size: 12px; line-height: 1.45; margin-bottom: 10px; }
+    .kiln-route-bench-actions,
+    .sharp-breathing-room-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 9px 0; }
+    .kiln-route-bench-actions .btn,
+    .sharp-breathing-room-actions .btn { width: 100%; margin: 0; }
+    .kiln-route-bench-actions .comparison { grid-column: 1 / -1; }
+    .sharp-breathing-room-status { min-height: 30px; color: #d8c37a; font-size: 11px; line-height: 1.35; margin-top: 7px; }
+    .sharp-breathing-room-source { color: #888; font: 10px 'SF Mono', monospace; overflow-wrap: anywhere; margin-top: 5px; }
+    .sharp-breathing-room-comparison-summary { color: #9fb9c5; font: 10px 'SF Mono', monospace; line-height: 1.35; overflow-wrap: anywhere; margin-top: 7px; }
+    .sharp-breathing-room-comparison-summary[data-status="complete"] { color: #9fc58f; }
+    .sharp-breathing-room-comparison-summary[data-status="missing-labels"],
+    .sharp-breathing-room-comparison-summary[data-status="hash-missing"],
+    .sharp-breathing-room-comparison-summary[data-status="hash-mismatch"] { color: #d89a77; }
+    .sharp-breathing-room-source-preview { border: 1px solid #2d2d2d; border-radius: 7px; background: #141414; min-height: 150px; margin: 8px 0; overflow: hidden; display: flex; align-items: center; justify-content: center; }
+    .sharp-breathing-room-source-preview img { display: block; width: 100%; max-height: 240px; object-fit: contain; background: #101010; }
+    .sharp-breathing-room-source-preview.empty { color: #666; font-size: 11px; padding: 14px; text-align: center; }
+    .crucible-bench-panel { border-color: #34302a; background: #211f1b; }
+    .crucible-bench-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+    .crucible-bench-title { color: #f0e1b8; font-size: 13px; font-weight: 700; }
+    .crucible-bench-summary { color: #c8baa0; font-size: 11px; line-height: 1.4; margin-top: 3px; }
+    .crucible-bench-actions { display: flex; gap: 5px; flex-shrink: 0; }
+    .crucible-bench-name-row { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; margin-bottom: 9px; }
+    .crucible-bench-workspace { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+    .crucible-zone { min-height: 74px; border: 1px solid #36322b; border-radius: 7px; background: #191816; padding: 8px; overflow: hidden; }
+    .crucible-zone.primary { grid-column: 1 / -1; min-height: 92px; }
+    .crucible-zone-title { color: #d4c18d; font-size: 10px; font-weight: 700; letter-spacing: 0.7px; text-transform: uppercase; }
+    .crucible-zone-body { color: #8d8679; font-size: 10px; line-height: 1.35; margin-top: 5px; overflow-wrap: anywhere; }
+    .crucible-zone-body.present { color: #cbbf9c; }
+    .crucible-bench-switcher { border-top: 1px solid #34302a; margin-top: 10px; padding-top: 8px; }
+    .crucible-bench-switcher[hidden] { display: none; }
+    .crucible-bench-list { display: grid; gap: 5px; }
+    .crucible-bench-list .btn { width: 100%; text-align: left; margin: 0; }
+    .crucible-bench-list .btn.active { background: #57421f; border-color: #8b6a2f; }
+    .crucible-bench-note { color: #777; font-size: 10px; line-height: 1.35; margin-top: 7px; }
+    #crucible-viewport-workspace { position: absolute; inset: 0; z-index: 4; display: flex; align-items: center; justify-content: center; padding: clamp(18px, 4vw, 54px); background: radial-gradient(circle at 52% 36%, rgba(58,65,68,0.36), transparent 38%), linear-gradient(180deg, rgba(8,9,10,0.72), rgba(4,4,5,0.86)); pointer-events: auto; perspective: 1200px; }
+    #crucible-viewport-workspace[hidden] { display: none; }
+    .crucible-workroom-shell { width: min(1080px, 82vw); min-height: min(650px, 76vh); position: relative; transform: rotateX(5deg); transform-origin: center bottom; filter: drop-shadow(0 32px 70px rgba(0,0,0,0.56)); }
+    .crucible-room-backwall { position: absolute; left: 5%; right: 5%; top: 0; height: 40%; border: 1px solid rgba(103,115,112,0.28); border-bottom: 0; background: linear-gradient(180deg, rgba(42,47,47,0.76), rgba(20,22,22,0.42)); box-shadow: inset 0 -24px 60px rgba(7,8,8,0.48); }
+    .crucible-room-shelf { position: absolute; left: 9%; right: 9%; top: 11%; height: 16px; border: 1px solid rgba(120,96,61,0.5); background: linear-gradient(90deg, #2e2620, #5b462f 34%, #312923 70%, #716040); box-shadow: 0 9px 22px rgba(0,0,0,0.42); }
+    .crucible-room-shelf::before,
+    .crucible-room-shelf::after { content: ""; position: absolute; top: 23px; width: 32%; height: 3px; background: rgba(144,126,88,0.38); }
+    .crucible-room-shelf::before { left: 8%; }
+    .crucible-room-shelf::after { right: 8%; }
+    .crucible-worktable-stage { position: absolute; left: 0; right: 0; bottom: 0; min-height: 68%; border: 1px solid rgba(150,124,80,0.54); border-radius: 8px; background: linear-gradient(135deg, rgba(104,83,55,0.96), rgba(58,46,35,0.96) 38%, rgba(116,99,65,0.94) 66%, rgba(50,43,36,0.97)), repeating-linear-gradient(92deg, rgba(255,246,202,0.08) 0 2px, transparent 2px 18px); box-shadow: inset 0 0 0 1px rgba(240,213,148,0.08), inset 0 34px 70px rgba(255,236,170,0.06), 0 22px 58px rgba(0,0,0,0.55); padding: clamp(18px, 2.8vw, 32px); display: grid; grid-template-columns: 1fr minmax(240px, 0.42fr); grid-template-rows: auto minmax(240px, 1fr) auto; gap: 16px; }
+    .crucible-worktable-stage::after { content: ""; position: absolute; inset: 14px; border: 1px solid rgba(26,23,19,0.44); border-radius: 6px; pointer-events: none; box-shadow: inset 0 0 26px rgba(0,0,0,0.24); }
+    .crucible-viewport-heading { position: relative; z-index: 1; grid-column: 1 / -1; display: flex; align-items: flex-end; justify-content: space-between; gap: 14px; }
+    .crucible-viewport-title { color: #ffe6a9; font-size: clamp(20px, 2.2vw, 30px); font-weight: 800; margin-bottom: 5px; text-shadow: 0 2px 12px rgba(0,0,0,0.52); }
+    .crucible-viewport-subtitle { color: #d8d1ba; font-size: 12px; line-height: 1.42; max-width: 560px; }
+    .crucible-heat-badge { border: 1px solid rgba(104,128,128,0.44); border-radius: 999px; background: rgba(20,27,28,0.72); color: #bfe6e2; font-size: 10px; font-weight: 800; letter-spacing: 0.6px; padding: 6px 10px; text-transform: uppercase; white-space: nowrap; }
+    #crucible-viewport-workspace[data-crucible-heat-state="firing"] .crucible-heat-badge { border-color: rgba(255,172,88,0.66); color: #ffd59a; background: rgba(82,42,18,0.74); }
+    #crucible-viewport-workspace[data-crucible-heat-state="failed"] .crucible-heat-badge { border-color: rgba(218,97,83,0.68); color: #ffc2b7; background: rgba(74,26,24,0.72); }
+    #crucible-viewport-workspace[data-crucible-heat-state="cast"] .crucible-heat-badge { border-color: rgba(130,190,148,0.62); color: #ccf2d2; background: rgba(24,58,36,0.68); }
+    .crucible-viewport-zone { position: relative; z-index: 1; border: 1px solid rgba(31,34,34,0.72); border-radius: 8px; background: rgba(18,20,20,0.74); box-shadow: inset 0 0 0 1px rgba(255,255,255,0.045), 0 12px 28px rgba(0,0,0,0.24); overflow: hidden; }
+    .crucible-viewport-zone-label { color: #d7c382; font-size: 10px; font-weight: 800; letter-spacing: 0.8px; text-transform: uppercase; }
+    .crucible-viewport-plate { display: grid; grid-template-columns: minmax(170px, 0.44fr) 1fr; min-height: 264px; padding: 13px; gap: 13px; border-color: rgba(108,132,126,0.58); background: linear-gradient(135deg, rgba(19,28,29,0.84), rgba(12,14,15,0.72)); }
+    .crucible-viewport-source-thumb-wrap { border: 1px solid rgba(131,151,141,0.42); border-radius: 7px; background: #070808; min-height: 178px; display: flex; align-items: center; justify-content: center; overflow: hidden; box-shadow: inset 0 0 28px rgba(0,0,0,0.68); }
+    .crucible-viewport-source-thumb-wrap.empty::before { content: ""; width: 54%; aspect-ratio: 1; border: 1px solid rgba(122,139,133,0.32); border-radius: 50%; background: radial-gradient(circle at 48% 38%, rgba(142,158,150,0.18), transparent 54%); }
+    .crucible-viewport-source-thumb { width: 100%; height: 100%; object-fit: contain; display: block; }
+    .crucible-viewport-source-thumb[hidden] { display: none; }
+    .crucible-viewport-plate-body { color: #d7ddcf; font-size: 13px; line-height: 1.4; overflow-wrap: anywhere; margin-top: 10px; }
+    .crucible-viewport-controls { position: relative; z-index: 2; display: grid; gap: 8px; margin-top: 14px; }
+    .crucible-viewport-control-label { color: #aaa38f; font-size: 10px; font-weight: 700; }
+    .crucible-viewport-select { width: 100%; min-height: 34px; border: 1px solid rgba(139,145,132,0.46); border-radius: 6px; background: rgba(7,9,9,0.82); color: #eee7d2; padding: 6px 28px 6px 9px; font-size: 11px; }
+    .crucible-viewport-select:focus-visible,
+    .crucible-viewport-action:focus-visible { outline: 2px solid #e4b95e; outline-offset: 2px; }
+    .crucible-viewport-action { min-height: 38px; border: 1px solid rgba(207,156,72,0.66); border-radius: 7px; background: linear-gradient(180deg, #8b5426, #573317); color: #fff0c5; font-size: 12px; font-weight: 800; cursor: pointer; box-shadow: 0 7px 18px rgba(0,0,0,0.28); }
+    .crucible-viewport-action:hover:not(:disabled) { border-color: #f3c66e; background: linear-gradient(180deg, #a7662d, #68401f); }
+    .crucible-viewport-action.secondary { border-color: rgba(128,158,151,0.5); background: linear-gradient(180deg, #344744, #24312f); color: #d7ebe2; }
+    .crucible-viewport-action:disabled { cursor: not-allowed; opacity: 0.42; box-shadow: none; }
+    .crucible-viewport-help { color: #a59f8d; font-size: 10px; line-height: 1.35; }
+    .crucible-viewport-firing-controls { margin-top: auto; }
+    .crucible-viewport-route-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .crucible-viewport-firing-mouth { min-height: 264px; display: flex; flex-direction: column; justify-content: space-between; padding: 15px; background: radial-gradient(circle at 50% 68%, rgba(110,46,24,0.48), transparent 38%), linear-gradient(180deg, rgba(21,19,18,0.96), rgba(9,8,8,0.9)); }
+    .crucible-viewport-firing-mouth::before { content: ""; position: absolute; left: 50%; bottom: 28px; width: 118px; height: 118px; transform: translateX(-50%); border-radius: 50%; border: 1px solid rgba(227,160,74,0.28); background: radial-gradient(circle, rgba(255,204,108,0.46), rgba(139,55,23,0.34) 42%, rgba(7,7,7,0.92) 72%); box-shadow: 0 0 44px rgba(235,109,39,0.14), inset 0 0 34px rgba(0,0,0,0.72); opacity: 0.38; }
+    #crucible-viewport-workspace[data-crucible-heat-state="firing"] .crucible-viewport-firing-mouth::before { opacity: 0.9; box-shadow: 0 0 54px rgba(255,133,45,0.42), inset 0 0 28px rgba(0,0,0,0.58); }
+    .crucible-viewport-slot-body { color: #b9b3a2; font-size: 12px; line-height: 1.35; margin-top: 8px; overflow-wrap: anywhere; position: relative; z-index: 1; }
+    .crucible-viewport-slot-body.present { color: #f0e7c9; }
+    .crucible-viewport-trays { position: relative; z-index: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .crucible-viewport-tray { min-height: 132px; padding: 13px; }
+    .crucible-viewport-cast-tray { background: linear-gradient(135deg, rgba(37,45,45,0.88), rgba(17,18,18,0.76)); }
+    .crucible-viewport-shard-rack { background: linear-gradient(135deg, rgba(39,34,49,0.78), rgba(19,18,24,0.78)); }
+    .crucible-viewport-receipt-tag { position: relative; z-index: 1; grid-column: 1 / -1; min-height: 78px; padding: 13px 16px; display: flex; align-items: center; justify-content: space-between; gap: 16px; background: linear-gradient(100deg, rgba(202,187,137,0.92), rgba(126,142,136,0.86)); color: #1d201f; border-color: rgba(242,229,183,0.48); }
+    .crucible-viewport-receipt-tag .crucible-viewport-zone-label { color: #30382f; }
+    .crucible-viewport-receipt-tag .crucible-viewport-slot-body { color: #262925; margin-top: 3px; }
+    .crucible-viewport-proxy-sockets { position: relative; z-index: 1; grid-column: 2; min-height: 92px; padding: 12px; display: grid; gap: 8px; background: rgba(16,22,24,0.66); }
+    .crucible-viewport-socket-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+    .crucible-viewport-socket { min-height: 38px; border: 1px solid rgba(117,148,149,0.32); border-radius: 6px; background: linear-gradient(135deg, rgba(35,49,51,0.72), rgba(13,15,16,0.88)); box-shadow: inset 0 0 18px rgba(0,0,0,0.42); }
 
 /* Viewport */
 #viewport { flex: 1; position: relative; background: #111; }
@@ -1556,6 +1643,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
         <option value="32">32^3</option>
         <option value="48">48^3</option>
         <option value="64">64^3</option>
+        <option value="90">90^3</option>
         <option value="96" selected>96^3</option>
         <option value="128">128^3</option>
         <option value="160">160^3</option>
@@ -2345,6 +2433,68 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
 
   <!-- Generate Tab -->
   <div class="tab-content" id="tab-generate">
+    <h2>Crucible Bench</h2>
+    <div class="panel crucible-bench-panel" id="crucible-bench-panel" data-crucible-bench="active">
+      <div class="crucible-bench-head">
+        <div>
+          <div class="crucible-bench-title" id="crucible-bench-title">Current crucible</div>
+          <div class="crucible-bench-summary" id="crucible-bench-summary">This crucible is holding the current source, firing, cast, and receipt while you work.</div>
+        </div>
+        <div class="crucible-bench-actions">
+          <button type="button" class="btn" id="crucible-bench-switch-button" onclick="toggleCrucibleBenchSwitcher()">Switch</button>
+          <button type="button" class="btn" id="crucible-bench-new-button" onclick="createNewCrucibleBenchCrucible()">New</button>
+        </div>
+      </div>
+      <div class="crucible-bench-name-row">
+        <input class="gen-input" id="crucible-bench-name-input" spellcheck="false" autocomplete="off" placeholder="Name this crucible when it earns one">
+      </div>
+      <div class="crucible-bench-workspace" id="crucible-bench-workspace">
+        <div class="crucible-zone primary" data-crucible-proxy-zone="source-plate">
+          <div class="crucible-zone-title">Source Plate</div>
+          <div class="crucible-zone-body" id="crucible-zone-source-plate">Choose an image below or paste one into the firing station.</div>
+        </div>
+        <div class="crucible-zone" data-crucible-proxy-zone="armature-bay">
+          <div class="crucible-zone-title">Armature Bay</div>
+          <div class="crucible-zone-body" id="crucible-zone-armature-bay">No armature pinned yet.</div>
+        </div>
+        <div class="crucible-zone" data-crucible-proxy-zone="firing-station">
+          <div class="crucible-zone-title">Firing Station</div>
+          <div class="crucible-zone-body" id="crucible-zone-firing-station">SHARP is the active firing route for this crucible.</div>
+        </div>
+        <div class="crucible-zone" data-crucible-proxy-zone="shard-tray">
+          <div class="crucible-zone-title">Shard Tray</div>
+          <div class="crucible-zone-body" id="crucible-zone-shard-tray">No reusable shards yet.</div>
+        </div>
+        <div class="crucible-zone" data-crucible-proxy-zone="cast-tray">
+          <div class="crucible-zone-title">Cast Tray</div>
+          <div class="crucible-zone-body" id="crucible-zone-cast-tray">No casts yet.</div>
+        </div>
+        <div class="crucible-zone" data-crucible-proxy-zone="receipt-tag">
+          <div class="crucible-zone-title">Receipt Tag</div>
+          <div class="crucible-zone-body" id="crucible-zone-receipt-tag">No firing receipt yet.</div>
+        </div>
+      </div>
+      <div class="crucible-bench-switcher" id="crucible-bench-switcher" hidden>
+        <div class="crucible-bench-list" id="crucible-bench-list"></div>
+        <div class="crucible-bench-note">Keep moving; unnamed crucibles stay here while you work.</div>
+      </div>
+    </div>
+    <h2>Firing Station</h2>
+    <div class="panel" id="kiln-route-bench-panel" data-kiln-route-bench="generate">
+      <div class="kiln-route-bench-summary" id="kiln-route-bench-primary-copy">Choose an image, pick a route, and cook it into an asset.</div>
+      <div class="field"><span class="field-key">Route</span><span class="field-val" id="kiln-route-bench-route-label">SHARP image to splat</span></div>
+      <div class="field"><span class="field-key">Image</span><span class="field-val" id="sharp-breathing-room-source-label">No image selected</span></div>
+      <input class="gen-input" id="sharp-breathing-room-source-input" spellcheck="false" autocomplete="off" placeholder="Paste a different image source">
+      <div class="sharp-breathing-room-source-preview empty" id="sharp-breathing-room-source-preview">No image loaded yet.</div>
+      <div class="kiln-route-bench-actions sharp-breathing-room-actions">
+        <button type="button" class="btn" id="sharp-breathing-room-default-button" onclick="runSharpBreathingRoomProfile('baseline-default')">Run default</button>
+        <button type="button" class="btn" id="sharp-breathing-room-friendly-button" onclick="runSharpBreathingRoomProfile('cooperative-spn-gaussian')">Run friendly</button>
+        <button type="button" class="btn comparison" id="sharp-breathing-room-comparison-button" onclick="runSharpBreathingRoomComparison()">Run comparison</button>
+      </div>
+      <div class="sharp-breathing-room-source" id="sharp-breathing-room-source-summary">Select an image asset below or paste an image source.</div>
+      <div class="sharp-breathing-room-status" id="sharp-breathing-room-status">Choose an image, pick a route, and cook it into an asset. Friendly gives SHARP more room when the box is busy; default is the comparison path.</div>
+      <div class="sharp-breathing-room-comparison-summary" id="sharp-breathing-room-comparison-summary" hidden></div>
+    </div>
     <h2>Image Generation</h2>
     <p style="font-size: 11px; color: #666; margin-bottom: 12px;">Generate test images to feed through the MoGe + SuperMat pipeline.</p>
     <div class="panel">
@@ -2366,6 +2516,83 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
 
 <div id="viewport">
   <div id="env-loading">Loading environment...</div>
+  <div id="crucible-viewport-workspace" data-crucible-viewport-workspace="generate" data-crucible-workroom="active" data-crucible-heat-state="idle" hidden>
+    <div class="crucible-workroom-shell">
+      <div class="crucible-room-backwall"></div>
+      <div class="crucible-room-shelf"></div>
+      <div class="crucible-worktable-stage" id="crucible-worktable-stage">
+        <div class="crucible-viewport-heading">
+          <div>
+            <div class="crucible-viewport-title" id="crucible-viewport-title">Unnamed crucible</div>
+            <div class="crucible-viewport-subtitle" id="crucible-viewport-summary">This crucible is on the bench.</div>
+          </div>
+          <div class="crucible-heat-badge" id="crucible-viewport-heat-label">Idle</div>
+        </div>
+        <div class="crucible-viewport-zone crucible-viewport-plate" id="crucible-viewport-source-plate">
+          <div class="crucible-viewport-source-thumb-wrap empty" id="crucible-viewport-source-thumb-wrap">
+            <img class="crucible-viewport-source-thumb" id="crucible-viewport-source-thumb" alt="" hidden>
+          </div>
+          <div>
+            <div class="crucible-viewport-zone-label">Source Plate</div>
+            <div class="crucible-viewport-plate-body" id="crucible-viewport-source">No source on the plate yet.</div>
+            <div class="crucible-viewport-slot-body" id="crucible-viewport-armature">No armature pinned yet.</div>
+            <div class="crucible-viewport-controls">
+              <label class="crucible-viewport-control-label" for="crucible-viewport-source-select">Choose an image</label>
+              <select class="crucible-viewport-select" id="crucible-viewport-source-select">
+                <option value="">No images found</option>
+              </select>
+              <div class="crucible-viewport-help">The selected image stays on this crucible's plate.</div>
+            </div>
+          </div>
+        </div>
+        <div class="crucible-viewport-zone crucible-viewport-firing-mouth" id="crucible-viewport-firing-mouth">
+          <div>
+            <div class="crucible-viewport-zone-label">Firing Mouth</div>
+            <div class="crucible-viewport-slot-body" id="crucible-viewport-firing">No firing started.</div>
+          </div>
+          <div class="crucible-viewport-controls crucible-viewport-firing-controls">
+            <div class="crucible-viewport-route-grid">
+              <label class="crucible-viewport-control-label">Make
+                <select class="crucible-viewport-select" id="crucible-viewport-route-select"></select>
+              </label>
+              <label class="crucible-viewport-control-label">Run
+                <select class="crucible-viewport-select" id="crucible-viewport-profile-select"></select>
+              </label>
+            </div>
+            <button type="button" class="crucible-viewport-action" id="crucible-viewport-fire-button">Fire image</button>
+            <div class="crucible-viewport-help" id="crucible-viewport-fire-help">Choose an image to begin.</div>
+          </div>
+        </div>
+        <div class="crucible-viewport-trays">
+          <div class="crucible-viewport-zone crucible-viewport-tray crucible-viewport-cast-tray" id="crucible-viewport-cast-tray">
+            <div class="crucible-viewport-zone-label">Cast Tray</div>
+            <div class="crucible-viewport-slot-body" id="crucible-viewport-cast">No cast on the tray.</div>
+            <div class="crucible-viewport-controls">
+              <button type="button" class="crucible-viewport-action secondary" id="crucible-viewport-cast-button" disabled>View cast</button>
+            </div>
+          </div>
+          <div class="crucible-viewport-zone crucible-viewport-tray crucible-viewport-shard-rack" id="crucible-viewport-shard-rack">
+            <div class="crucible-viewport-zone-label">Shard Rack</div>
+            <div class="crucible-viewport-slot-body" id="crucible-viewport-shards">No reusable shards yet.</div>
+          </div>
+        </div>
+        <div class="crucible-viewport-zone crucible-viewport-proxy-sockets" id="crucible-viewport-proxy-sockets">
+          <div class="crucible-viewport-zone-label">Proxy Sockets</div>
+          <div class="crucible-viewport-socket-row" aria-hidden="true">
+            <div class="crucible-viewport-socket"></div>
+            <div class="crucible-viewport-socket"></div>
+            <div class="crucible-viewport-socket"></div>
+          </div>
+        </div>
+        <div class="crucible-viewport-zone crucible-viewport-receipt-tag" id="crucible-viewport-receipt-tag">
+          <div>
+            <div class="crucible-viewport-zone-label">Receipt Tag</div>
+            <div class="crucible-viewport-slot-body" id="crucible-viewport-receipt">No firing receipt yet.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
   <div id="pipeline-main-browser" hidden>
     <div class="pipeline-browser-shell">
       <div class="pipeline-browser-head">
@@ -2572,6 +2799,7 @@ import { pass, mrt, normalView, vec3, vec4, mix, float, uniform, texture, packNo
 import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
 import { createKaminosVolumePrototype } from './volume-core.js?v=residual-source-uv-flip-0706';
+import { createForegroundKilnHeartbeatEpisode, foregroundKilnStartAllowsPipeline } from './lib/foreground-kiln-heartbeat.mjs';
 import {
   DEFAULT_DECISION_MOTION_PLAN,
   DEFAULT_MOTION_PHRASE_CONTROLS,
@@ -2680,6 +2908,7 @@ let modelSourceType = null; // 'glb', 'obj', 'pbr', 'demo'
 let currentSceneFile = null; // filename of last saved/loaded scene (for overwrite)
 let volumePrototype = null;
 let volumeBridge = null;
+let kaminosVolumeRouteInitPromise = null;
 let motionAgencyState = null;
 let motionDecisionState = null;
 let motionPhraseControlState = null;
@@ -9267,6 +9496,11 @@ function setActiveTab(tabName) {
   }
   const pipelineBrowser = document.getElementById('pipeline-main-browser');
   if (pipelineBrowser) pipelineBrowser.hidden = tabName !== 'pipeline';
+  const crucibleViewportWorkspace = document.getElementById('crucible-viewport-workspace');
+  if (crucibleViewportWorkspace) {
+    crucibleViewportWorkspace.hidden = tabName !== 'generate';
+    if (tabName === 'generate') renderCrucibleViewportWorkspace();
+  }
   if (tabName === 'pipeline') loadPipelineAssetBrowser().catch(err => setInfo(err.message || String(err)));
 }
 
@@ -12573,6 +12807,15 @@ function selectedPipelineBrowserAsset() {
   return (pipelineDockState.browserAssets || []).find(entry => entry.id === selectedId) || null;
 }
 
+function selectedPipelineBrowserAssetForKind(kind) {
+  const selectedId = pipelineDockState.browserSelectedAssetIds?.[kind] || null;
+  if (!selectedId) return null;
+  return [
+    ...(pipelineDockState.browserAssets || []),
+    ...Object.values(pipelineDockState.browserAssetsByKind || {}).flat(),
+  ].find(entry => entry?.id === selectedId && entry.kind === kind) || null;
+}
+
 function pipelinePaletteLabel(kind = pipelineDockState.activeAssetPalette) {
   if (kind === 'image') return 'Image';
   return 'Splat';
@@ -12620,6 +12863,1015 @@ function pipelineSelectedSource() {
     source,
     objectId: entry.id,
   };
+}
+
+const sharpBreathingRoomProfileLabels = {
+  'baseline-default': 'Default',
+  'cooperative-spn-gaussian': 'Friendly',
+};
+
+const SHARP_SPN_LOWRES_BLOCK_LABELS = [
+  'upsample-lowres',
+  'readback-x2-upsampled',
+  'readback-lowres',
+  'cpu-concat-lowres',
+  'concat-upload',
+  'fuse-lowres',
+];
+window.__kaminosSharpSpnLowresBlockLabels = SHARP_SPN_LOWRES_BLOCK_LABELS;
+const SHARP_MONODEPTH_PHASE_LABELS = [
+  'project-feature',
+  'fusion-resnet1',
+  'fusion-skip-add',
+  'fusion-resnet2',
+  'fusion-out-conv',
+  'head-conv0',
+  'head-final',
+];
+window.__kaminosSharpMonodepthPhaseLabels = SHARP_MONODEPTH_PHASE_LABELS;
+
+const KILN_ROUTE_BENCH_ROUTES = [
+  {
+    id: 'sharp-image-to-splat-live-v0',
+    pipelineId: 'sharp-image-to-splat-live-v0',
+    title: 'SHARP image to splat',
+    actionTitle: 'SHARP',
+    sourceKind: 'image',
+    outputKind: 'splat',
+    primaryCopy: 'Choose an image, pick a route, and cook it into an asset.',
+    idleCopy: 'Choose an image, pick a route, and cook it into an asset. Friendly gives SHARP more room when the box is busy; default is the comparison path.',
+    missingSourceCopy: 'Select an image or paste an image source before running SHARP.',
+    sourceHint: 'Select an image asset below or paste an image source.',
+    profileLabels: sharpBreathingRoomProfileLabels,
+    actions: [
+      {
+        profileId: 'baseline-default',
+        buttonId: 'sharp-breathing-room-default-button',
+        label: 'Default',
+        buttonLabel: 'Run default',
+        runningLabel: 'Running default',
+      },
+      {
+        profileId: 'cooperative-spn-gaussian',
+        buttonId: 'sharp-breathing-room-friendly-button',
+        label: 'Friendly',
+        buttonLabel: 'Run friendly',
+        runningLabel: 'Running friendly',
+      },
+    ],
+  },
+];
+
+let kilnRouteBenchState = {
+  schema: 'kaminos.kiln-route-bench-state.v0',
+  selectedRouteId: 'sharp-image-to-splat-live-v0',
+  sourceKind: 'image',
+  status: 'idle',
+  message: 'Choose an image, pick a route, and cook it into an asset.',
+  runningProfileId: null,
+  comparisonRuns: [],
+  source: null,
+  result: null,
+  updatedAt: null,
+};
+
+let sharpBreathingRoomRunningProfileId = null;
+let crucibleViewportProfileId = 'cooperative-spn-gaussian';
+
+const CRUCIBLE_BENCH_STORAGE_KEY = 'kaminosCrucibleBenchState';
+const CRUCIBLE_BENCH_PROXY_ZONES = [
+  { id: 'source-plate', title: 'Source Plate', accepts: ['image', 'splat', 'proxy-image'] },
+  { id: 'armature-bay', title: 'Armature Bay', accepts: ['geometry-proxy', 'generated-proxy-image'] },
+  { id: 'firing-station', title: 'Firing Station', accepts: ['pipeline-route'] },
+  { id: 'shard-tray', title: 'Shard Tray', accepts: ['segmented-shard', 'reusable-piece'] },
+  { id: 'cast-tray', title: 'Cast Tray', accepts: ['splat', 'mesh', 'material'] },
+  { id: 'receipt-tag', title: 'Receipt Tag', accepts: ['run-report', 'failure-report'] },
+];
+
+function crucibleBenchId(prefix = 'crucible') {
+  return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function createCrucibleBenchCrucible(options = {}) {
+  const now = new Date().toISOString();
+  const name = options.name || '';
+  return {
+    id: options.id || crucibleBenchId(),
+    name,
+    unnamed: !name,
+    createdAt: options.createdAt || now,
+    updatedAt: now,
+    source: null,
+    armatures: [],
+    firings: [],
+    shards: [],
+    casts: [],
+    receipts: [],
+  };
+}
+
+function createDefaultCrucibleBenchState() {
+  const crucible = createCrucibleBenchCrucible();
+  return {
+    schema: 'kaminos.crucible-bench-state.v0',
+    activeCrucibleId: crucible.id,
+    switcherOpen: false,
+    proxyZones: CRUCIBLE_BENCH_PROXY_ZONES,
+    crucibles: [crucible],
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+function crucibleBenchStorage() {
+  try {
+    return window.localStorage || null;
+  } catch (_err) {
+    return null;
+  }
+}
+
+function normalizeCrucibleBenchState(value) {
+  const fallback = createDefaultCrucibleBenchState();
+  if (!value || typeof value !== 'object') return fallback;
+  const crucibles = Array.isArray(value.crucibles) && value.crucibles.length
+    ? value.crucibles.map(entry => ({
+      ...createCrucibleBenchCrucible({
+        id: entry.id || crucibleBenchId(),
+        name: entry.name || '',
+        createdAt: entry.createdAt,
+      }),
+      ...entry,
+      unnamed: !entry.name,
+      firings: Array.isArray(entry.firings) ? entry.firings.slice(0, 12) : [],
+      shards: Array.isArray(entry.shards) ? entry.shards.slice(0, 12) : [],
+      casts: Array.isArray(entry.casts) ? entry.casts.slice(0, 12) : [],
+      receipts: Array.isArray(entry.receipts) ? entry.receipts.slice(0, 12) : [],
+    }))
+    : fallback.crucibles;
+  const activeCrucibleId = crucibles.some(entry => entry.id === value.activeCrucibleId)
+    ? value.activeCrucibleId
+    : crucibles[0].id;
+  return {
+    schema: 'kaminos.crucible-bench-state.v0',
+    activeCrucibleId,
+    switcherOpen: Boolean(value.switcherOpen),
+    proxyZones: CRUCIBLE_BENCH_PROXY_ZONES,
+    crucibles,
+    updatedAt: value.updatedAt || new Date().toISOString(),
+  };
+}
+
+function loadCrucibleBenchState() {
+  const storage = crucibleBenchStorage();
+  if (!storage) return createDefaultCrucibleBenchState();
+  try {
+    const raw = storage.getItem(CRUCIBLE_BENCH_STORAGE_KEY);
+    return normalizeCrucibleBenchState(raw ? JSON.parse(raw) : null);
+  } catch (_err) {
+    return createDefaultCrucibleBenchState();
+  }
+}
+
+let crucibleBenchState = loadCrucibleBenchState();
+window.__kaminosCrucibleBenchState = crucibleBenchState;
+
+function activeCrucibleBenchCrucible() {
+  let crucible = crucibleBenchState.crucibles.find(entry => entry.id === crucibleBenchState.activeCrucibleId);
+  if (!crucible) {
+    crucible = createCrucibleBenchCrucible();
+    crucibleBenchState.crucibles.unshift(crucible);
+    crucibleBenchState.activeCrucibleId = crucible.id;
+  }
+  return crucible;
+}
+
+function persistCrucibleBenchState() {
+  crucibleBenchState.updatedAt = new Date().toISOString();
+  window.__kaminosCrucibleBenchState = crucibleBenchState;
+  const storage = crucibleBenchStorage();
+  if (storage) {
+    try {
+      storage.setItem(CRUCIBLE_BENCH_STORAGE_KEY, JSON.stringify(crucibleBenchState));
+    } catch (_err) {
+      // Local persistence is a convenience; the visible bench state remains authoritative for this session.
+    }
+  }
+}
+
+function compactCrucibleBenchPath(value) {
+  if (!value) return '';
+  const text = String(value);
+  return text.length > 74 ? `...${text.slice(-71)}` : text;
+}
+
+function crucibleBenchSourceLabel(source) {
+  return source?.label || source?.name || source?.source?.split?.('/').pop?.() || source?.source || 'Selected source';
+}
+
+function renderCrucibleBench() {
+  const crucible = activeCrucibleBenchCrucible();
+  const currentSource = kilnRouteBenchSelectedSource(selectedKilnRouteBenchRoute());
+  crucible.source = currentSource || crucible.source || null;
+  persistCrucibleBenchState();
+  const title = document.getElementById('crucible-bench-title');
+  const summary = document.getElementById('crucible-bench-summary');
+  const nameInput = document.getElementById('crucible-bench-name-input');
+  const switcher = document.getElementById('crucible-bench-switcher');
+  const sourcePlate = document.getElementById('crucible-zone-source-plate');
+  const armatureBay = document.getElementById('crucible-zone-armature-bay');
+  const firingStation = document.getElementById('crucible-zone-firing-station');
+  const shardTray = document.getElementById('crucible-zone-shard-tray');
+  const castTray = document.getElementById('crucible-zone-cast-tray');
+  const receiptTag = document.getElementById('crucible-zone-receipt-tag');
+  if (title) title.textContent = crucible.name || 'Unnamed crucible';
+  if (summary) {
+    const castCount = crucible.casts.length;
+    const firingCount = crucible.firings.length;
+    summary.textContent = `This crucible is holding ${currentSource ? 'one source' : 'no source yet'}, ${firingCount} firing${firingCount === 1 ? '' : 's'}, and ${castCount} cast${castCount === 1 ? '' : 's'}.`;
+  }
+  if (nameInput && document.activeElement !== nameInput) {
+    nameInput.value = crucible.name || '';
+  }
+  if (switcher) switcher.hidden = !crucibleBenchState.switcherOpen;
+  if (sourcePlate) {
+    sourcePlate.classList.toggle('present', Boolean(currentSource?.source));
+    sourcePlate.textContent = currentSource?.source
+      ? `${crucibleBenchSourceLabel(currentSource)} - ${compactCrucibleBenchPath(currentSource.source)}`
+      : 'Choose an image below or paste one into the firing station.';
+  }
+  if (armatureBay) {
+    const lastArmature = crucible.armatures[0];
+    armatureBay.classList.toggle('present', Boolean(lastArmature));
+    armatureBay.textContent = lastArmature
+      ? `${lastArmature.label || 'Proxy armature'} - ${lastArmature.kind || 'proxy'}`
+      : 'No armature pinned yet.';
+  }
+  if (firingStation) {
+    const lastFiring = crucible.firings[0];
+    firingStation.classList.toggle('present', Boolean(lastFiring));
+    firingStation.textContent = lastFiring
+      ? `${lastFiring.profileLabel || lastFiring.profileId || 'Route'} - ${lastFiring.status || 'running'}`
+      : 'SHARP is the active firing route for this crucible.';
+  }
+  if (shardTray) {
+    shardTray.classList.toggle('present', crucible.shards.length > 0);
+    shardTray.textContent = crucible.shards.length
+      ? `${crucible.shards.length} shard${crucible.shards.length === 1 ? '' : 's'} kept for later casts.`
+      : 'No reusable shards yet.';
+  }
+  if (castTray) {
+    const lastCast = crucible.casts[0];
+    castTray.classList.toggle('present', Boolean(lastCast));
+    castTray.textContent = lastCast
+      ? `${lastCast.label || 'Generated cast'} - ${compactCrucibleBenchPath(lastCast.path || lastCast.assetId || '')}`
+      : 'No casts yet.';
+  }
+  if (receiptTag) {
+    const lastReceipt = crucible.receipts[0];
+    receiptTag.classList.toggle('present', Boolean(lastReceipt));
+    receiptTag.textContent = lastReceipt
+      ? `${lastReceipt.status || 'receipt'} - ${lastReceipt.message || lastReceipt.phase || 'last firing recorded'}`
+      : 'No firing receipt yet.';
+  }
+  renderCrucibleBenchList();
+  renderCrucibleViewportWorkspace();
+}
+
+function crucibleViewportHeatState({ lastFiring, lastCast, lastReceipt }) {
+  if (lastFiring?.status === 'running') return 'firing';
+  if (lastReceipt?.status === 'failed' || lastReceipt?.status === 'error') return 'failed';
+  if (lastCast) return 'cast';
+  if (lastReceipt) return 'cooling';
+  return 'idle';
+}
+
+function crucibleViewportHeatLabel(heatState) {
+  if (heatState === 'firing') return 'Firing';
+  if (heatState === 'failed') return 'Needs attention';
+  if (heatState === 'cast') return 'Cast held';
+  if (heatState === 'cooling') return 'Cooling';
+  return 'Idle';
+}
+
+function crucibleViewportSourcePlateLabel(currentSource) {
+  if (!currentSource?.source) return 'No source on the plate yet.';
+  return `${crucibleBenchSourceLabel(currentSource)} - ${compactCrucibleBenchPath(currentSource.source)}`;
+}
+
+function crucibleViewportImageEntries() {
+  const entries = pipelineDockState.browserAssetsByKind?.image || [];
+  const seen = new Set();
+  return entries.filter(entry => {
+    if (!entry?.id || !entry?.source || entry.kind !== 'image' || seen.has(entry.id)) return false;
+    seen.add(entry.id);
+    return true;
+  });
+}
+
+function renderCrucibleViewportSourceOptions(select, currentSource) {
+  if (!select) return;
+  const entries = crucibleViewportImageEntries();
+  const selectedAssetId = currentSource?.assetId || '';
+  select.innerHTML = '';
+  if (!entries.length) {
+    const empty = document.createElement('option');
+    empty.value = '';
+    empty.textContent = 'No indexed images found';
+    select.appendChild(empty);
+    select.disabled = true;
+    return;
+  }
+  select.disabled = Boolean(sharpBreathingRoomRunningProfileId);
+  if (currentSource?.source && !entries.some(entry => entry.id === selectedAssetId)) {
+    const current = document.createElement('option');
+    current.value = '';
+    current.textContent = currentSource.label || 'Current pasted image';
+    current.selected = true;
+    select.appendChild(current);
+  }
+  for (const entry of entries) {
+    const option = document.createElement('option');
+    option.value = entry.id;
+    option.textContent = pipelineBrowserAssetLabel(entry);
+    option.selected = entry.id === selectedAssetId;
+    select.appendChild(option);
+  }
+}
+
+function renderCrucibleViewportRouteOptions(routeSelect, profileSelect, route) {
+  if (routeSelect) {
+    routeSelect.innerHTML = '';
+    for (const candidate of KILN_ROUTE_BENCH_ROUTES) {
+      const option = document.createElement('option');
+      option.value = candidate.id;
+      option.textContent = candidate.outputKind === 'splat' ? 'a splat' : (candidate.title || candidate.id);
+      option.selected = candidate.id === route.id;
+      routeSelect.appendChild(option);
+    }
+    routeSelect.disabled = Boolean(sharpBreathingRoomRunningProfileId);
+  }
+  if (profileSelect) {
+    profileSelect.innerHTML = '';
+    for (const action of route.actions || []) {
+      const option = document.createElement('option');
+      option.value = action.profileId;
+      option.textContent = action.label || route.profileLabels?.[action.profileId] || action.profileId;
+      option.selected = action.profileId === crucibleViewportProfileId;
+      profileSelect.appendChild(option);
+    }
+    if (!(route.actions || []).some(action => action.profileId === crucibleViewportProfileId)) {
+      crucibleViewportProfileId = route.actions?.[0]?.profileId || '';
+      profileSelect.value = crucibleViewportProfileId;
+    }
+    profileSelect.disabled = Boolean(sharpBreathingRoomRunningProfileId);
+  }
+}
+
+function selectCrucibleViewportSource(assetId) {
+  const entry = crucibleViewportImageEntries().find(candidate => candidate.id === assetId);
+  if (!entry) {
+    setKilnRouteBenchStatus('That image is no longer available. Refresh the image shelf and choose another.', 'error');
+    renderKilnRouteBench();
+    return null;
+  }
+  pipelineDockState.browserSelectedAssetIds.image = assetId;
+  const manualInput = document.getElementById('sharp-breathing-room-source-input');
+  if (manualInput) manualInput.value = '';
+  renderKilnRouteBench();
+  setInfo(`Image placed on the source plate: ${pipelineBrowserAssetLabel(entry)}`);
+  return pipelineBrowserAssetSource(entry);
+}
+
+function selectCrucibleViewportRoute(routeId) {
+  const route = selectedKilnRouteBenchRoute(routeId);
+  kilnRouteBenchState.selectedRouteId = route.id;
+  renderKilnRouteBench();
+  return route;
+}
+
+function selectCrucibleViewportProfile(profileId) {
+  const route = selectedKilnRouteBenchRoute();
+  if (!(route.actions || []).some(action => action.profileId === profileId)) return null;
+  crucibleViewportProfileId = profileId;
+  renderCrucibleViewportWorkspace();
+  return profileId;
+}
+
+function runCrucibleViewportFiring() {
+  const routeId = document.getElementById('crucible-viewport-route-select')?.value || kilnRouteBenchState.selectedRouteId;
+  const route = selectedKilnRouteBenchRoute(routeId);
+  const profileId = document.getElementById('crucible-viewport-profile-select')?.value || crucibleViewportProfileId;
+  return runKilnRouteBenchRoute(route.id, profileId);
+}
+
+function openCrucibleViewportCast() {
+  const lastCast = activeCrucibleBenchCrucible().casts[0] || null;
+  const castRecord = lastCast?.assetId ? sceneObjects.find(entry => entry.id === lastCast.assetId) : null;
+  if (!lastCast?.assetId || !castRecord) {
+    setKilnRouteBenchStatus('This crucible does not currently hold a cast that can be opened in the scene.', 'error');
+    renderCrucibleViewportWorkspace();
+    return null;
+  }
+  window.selectSceneObject(lastCast.assetId);
+  setActiveTab('assets');
+  return castRecord;
+}
+
+function crucibleViewportDebugState() {
+  const route = selectedKilnRouteBenchRoute();
+  const source = kilnRouteBenchSelectedSource(route);
+  const lastCast = activeCrucibleBenchCrucible().casts[0] || null;
+  const castRecord = lastCast?.assetId ? sceneObjects.find(entry => entry.id === lastCast.assetId) : null;
+  return {
+    schema: 'kaminos.crucible-viewport-debug.v0',
+    source: source ? { ...source } : null,
+    requestedRouteId: kilnRouteBenchState.selectedRouteId || null,
+    effectiveRouteId: route.id,
+    effectivePipelineId: route.pipelineId,
+    selectedProfileId: crucibleViewportProfileId,
+    runningProfileId: sharpBreathingRoomRunningProfileId,
+    routeStatus: kilnRouteBenchState.status || 'idle',
+    lastCast: lastCast ? { ...lastCast } : null,
+    castTargetSceneObjectId: castRecord?.id || null,
+  };
+}
+
+function renderCrucibleViewportWorkspace() {
+  const workspace = document.getElementById('crucible-viewport-workspace');
+  if (!workspace) return;
+  const crucible = activeCrucibleBenchCrucible();
+  const currentSource = kilnRouteBenchSelectedSource(selectedKilnRouteBenchRoute()) || crucible.source || null;
+  const lastFiring = crucible.firings[0] || null;
+  const lastCast = crucible.casts[0] || null;
+  const lastReceipt = crucible.receipts[0] || null;
+  const lastArmature = crucible.armatures[0] || null;
+  const heatState = crucibleViewportHeatState({ lastFiring, lastCast, lastReceipt });
+  workspace.dataset.crucibleHeatState = heatState;
+  workspace.dataset.crucibleRouteStatus = kilnRouteBenchState.status || 'idle';
+  const title = document.getElementById('crucible-viewport-title');
+  const summary = document.getElementById('crucible-viewport-summary');
+  const source = document.getElementById('crucible-viewport-source');
+  const sourceThumb = document.getElementById('crucible-viewport-source-thumb');
+  const sourceThumbWrap = document.getElementById('crucible-viewport-source-thumb-wrap');
+  const firing = document.getElementById('crucible-viewport-firing');
+  const cast = document.getElementById('crucible-viewport-cast');
+  const receipt = document.getElementById('crucible-viewport-receipt');
+  const armature = document.getElementById('crucible-viewport-armature');
+  const shards = document.getElementById('crucible-viewport-shards');
+  const heatLabel = document.getElementById('crucible-viewport-heat-label');
+  const sourceSelect = document.getElementById('crucible-viewport-source-select');
+  const routeSelect = document.getElementById('crucible-viewport-route-select');
+  const profileSelect = document.getElementById('crucible-viewport-profile-select');
+  const fireButton = document.getElementById('crucible-viewport-fire-button');
+  const fireHelp = document.getElementById('crucible-viewport-fire-help');
+  const castButton = document.getElementById('crucible-viewport-cast-button');
+  const route = selectedKilnRouteBenchRoute();
+  const running = Boolean(sharpBreathingRoomRunningProfileId);
+  const castRecord = lastCast?.assetId ? sceneObjects.find(entry => entry.id === lastCast.assetId) : null;
+  if (title) title.textContent = crucible.name || 'Unnamed crucible';
+  if (summary) {
+    summary.textContent = `This crucible is holding ${currentSource ? 'one source' : 'no source yet'}, ${crucible.firings.length} firing${crucible.firings.length === 1 ? '' : 's'}, and ${crucible.casts.length} cast${crucible.casts.length === 1 ? '' : 's'}.`;
+  }
+  if (heatLabel) heatLabel.textContent = crucibleViewportHeatLabel(heatState);
+  renderCrucibleViewportSourceOptions(sourceSelect, currentSource);
+  renderCrucibleViewportRouteOptions(routeSelect, profileSelect, route);
+  if (fireButton) {
+    fireButton.disabled = running || !currentSource?.source;
+    fireButton.textContent = running ? 'Firing...' : 'Fire image';
+  }
+  if (fireHelp) {
+    fireHelp.textContent = running
+      ? (kilnRouteBenchState.message || 'The furnace is working on this image.')
+      : currentSource?.source
+        ? `${route.title}. ${route.profileLabels?.[crucibleViewportProfileId] || crucibleViewportProfileId} mode.`
+        : 'Choose an image to begin.';
+  }
+  if (castButton) {
+    castButton.disabled = !lastCast?.assetId || !castRecord;
+    castButton.textContent = castRecord ? 'View cast' : 'No cast to view';
+  }
+  if (source) {
+    source.classList.toggle('present', Boolean(currentSource?.source));
+    source.textContent = crucibleViewportSourcePlateLabel(currentSource);
+  }
+  if (sourceThumb) {
+    sourceThumb.hidden = !currentSource?.source;
+    if (currentSource?.source) {
+      sourceThumb.src = currentSource.source;
+    } else {
+      sourceThumb.removeAttribute('src');
+    }
+  }
+  if (sourceThumbWrap) {
+    sourceThumbWrap.classList.toggle('empty', !currentSource?.source);
+  }
+  if (firing) {
+    firing.classList.toggle('present', Boolean(lastFiring));
+    firing.textContent = lastFiring
+      ? `${lastFiring.profileLabel || lastFiring.profileId || 'Route'} - ${lastFiring.status || 'running'}`
+      : 'No firing started.';
+  }
+  if (cast) {
+    cast.classList.toggle('present', Boolean(lastCast));
+    cast.textContent = lastCast
+      ? `${lastCast.label || 'Generated cast'} - ${compactCrucibleBenchPath(lastCast.path || lastCast.assetId || '')}`
+      : 'No cast on the tray.';
+  }
+  if (receipt) {
+    receipt.classList.toggle('present', Boolean(lastReceipt));
+    receipt.textContent = lastReceipt
+      ? `${lastReceipt.status || 'receipt'} - ${lastReceipt.message || lastReceipt.phase || 'last firing recorded'}`
+      : 'No firing receipt yet.';
+  }
+  if (armature) {
+    armature.classList.toggle('present', Boolean(lastArmature));
+    armature.textContent = lastArmature
+      ? `${lastArmature.label || 'Proxy armature'} - ${lastArmature.kind || 'proxy'}`
+      : 'No armature pinned yet.';
+  }
+  if (shards) {
+    shards.classList.toggle('present', crucible.shards.length > 0);
+    shards.textContent = crucible.shards.length
+      ? `${crucible.shards.length} shard${crucible.shards.length === 1 ? '' : 's'} kept for later casts.`
+      : 'No reusable shards yet.';
+  }
+}
+
+function renderCrucibleBenchList() {
+  const list = document.getElementById('crucible-bench-list');
+  if (!list) return;
+  list.innerHTML = '';
+  for (const crucible of crucibleBenchState.crucibles) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = `btn${crucible.id === crucibleBenchState.activeCrucibleId ? ' active' : ''}`;
+    button.textContent = `${crucible.name || 'Unnamed crucible'} - ${crucible.casts.length} cast${crucible.casts.length === 1 ? '' : 's'}`;
+    button.onclick = () => selectCrucibleBenchCrucible(crucible.id);
+    list.appendChild(button);
+  }
+}
+
+function selectCrucibleBenchCrucible(id) {
+  if (!crucibleBenchState.crucibles.some(entry => entry.id === id)) return null;
+  crucibleBenchState.activeCrucibleId = id;
+  crucibleBenchState.switcherOpen = false;
+  persistCrucibleBenchState();
+  renderCrucibleBench();
+  return activeCrucibleBenchCrucible();
+}
+
+function toggleCrucibleBenchSwitcher() {
+  crucibleBenchState.switcherOpen = !crucibleBenchState.switcherOpen;
+  persistCrucibleBenchState();
+  renderCrucibleBench();
+}
+
+function createNewCrucibleBenchCrucible() {
+  const crucible = createCrucibleBenchCrucible();
+  crucibleBenchState.crucibles.unshift(crucible);
+  crucibleBenchState.activeCrucibleId = crucible.id;
+  crucibleBenchState.switcherOpen = false;
+  persistCrucibleBenchState();
+  renderCrucibleBench();
+  return crucible;
+}
+
+function renameActiveCrucibleBenchCrucible(name) {
+  const crucible = activeCrucibleBenchCrucible();
+  crucible.name = String(name || '').trim();
+  crucible.unnamed = !crucible.name;
+  crucible.updatedAt = new Date().toISOString();
+  persistCrucibleBenchState();
+  renderCrucibleBench();
+}
+
+function crucibleBenchRecordFiring({ routeId, profileId, source, profileLabel }) {
+  const crucible = activeCrucibleBenchCrucible();
+  const firing = {
+    id: crucibleBenchId('firing'),
+    routeId,
+    profileId,
+    profileLabel,
+    source: source ? { ...source } : null,
+    status: 'running',
+    startedAt: new Date().toISOString(),
+  };
+  crucible.source = source || crucible.source || null;
+  crucible.firings.unshift(firing);
+  crucible.firings = crucible.firings.slice(0, 12);
+  persistCrucibleBenchState();
+  renderCrucibleBench();
+  return firing;
+}
+
+function crucibleBenchRecordCast({ firingId, run, artifact, record }) {
+  const crucible = activeCrucibleBenchCrucible();
+  const cast = {
+    id: crucibleBenchId('cast'),
+    firingId,
+    status: 'loaded',
+    label: record?.label || artifact?.path?.split?.('/').pop?.() || 'Generated splat',
+    path: artifact?.path || null,
+    assetId: record?.id || null,
+    runId: run?.runId || run?.clientRunId || null,
+    createdAt: new Date().toISOString(),
+  };
+  crucible.casts.unshift(cast);
+  crucible.casts = crucible.casts.slice(0, 12);
+  persistCrucibleBenchState();
+  renderCrucibleBench();
+  return cast;
+}
+
+function crucibleBenchRecordReceipt({ firingId, status, message, run, phase, error }) {
+  const crucible = activeCrucibleBenchCrucible();
+  const receipt = {
+    id: crucibleBenchId('receipt'),
+    firingId,
+    status,
+    message: compactErrorLine(message || error || ''),
+    phase: phase || run?.phase || run?.report?.document?.phase || null,
+    reportPath: run?.report?.path || null,
+    createdAt: new Date().toISOString(),
+  };
+  const firing = crucible.firings.find(entry => entry.id === firingId);
+  if (firing) {
+    firing.status = status;
+    firing.finishedAt = receipt.createdAt;
+  }
+  crucible.receipts.unshift(receipt);
+  crucible.receipts = crucible.receipts.slice(0, 12);
+  persistCrucibleBenchState();
+  renderCrucibleBench();
+  return receipt;
+}
+
+function selectedKilnRouteBenchRoute(routeId = kilnRouteBenchState.selectedRouteId) {
+  return KILN_ROUTE_BENCH_ROUTES.find(route => route.id === routeId || route.pipelineId === routeId) || KILN_ROUTE_BENCH_ROUTES[0];
+}
+
+function setKilnRouteBenchStatus(message, kind = 'idle', extra = {}) {
+  const route = selectedKilnRouteBenchRoute(extra.routeId);
+  kilnRouteBenchState = {
+    ...kilnRouteBenchState,
+    selectedRouteId: route.id,
+    sourceKind: route.sourceKind,
+    status: kind,
+    message: message || '',
+    ...extra,
+    updatedAt: new Date().toISOString(),
+  };
+  window.__kaminosKilnRouteBenchState = kilnRouteBenchState;
+  const status = document.getElementById('sharp-breathing-room-status');
+  if (status) {
+    status.textContent = message || '';
+    status.dataset.status = kind;
+    status.dataset.kilnRouteId = route.id;
+  }
+  refreshSharpBreathingRoomComparisonSummary(extra.comparisonState || window.__kaminosSharpBreathingRoomComparisonState || kilnRouteBenchState);
+  renderCrucibleViewportWorkspace();
+  if (message) setInfo(message);
+}
+
+function sharpBreathingRoomManualSource() {
+  const manual = document.getElementById('sharp-breathing-room-source-input')?.value?.trim();
+  if (!manual) return null;
+  return {
+    kind: 'manual-image',
+    label: manual.split('/').pop() || 'Manual image',
+    source: manual,
+  };
+}
+
+function pipelineBestSharpSourceImage(entries = []) {
+  const useful = entries.filter(entry => {
+    if (!entry?.source || entry.kind !== 'image') return false;
+    const name = `${entry.name || ''} ${entry.path || ''}`.toLowerCase();
+    if (name.includes('pipeline-test-image')) return false;
+    return Number(entry.size || 0) > 4096;
+  });
+  return useful[0] || entries.find(entry => entry?.source && entry.kind === 'image') || null;
+}
+
+async function loadPipelineAssetKind(kind) {
+  const response = await fetch(`/api/assets?kind=${encodeURIComponent(kind)}`);
+  if (!response.ok) throw new Error(`Pipeline assets load failed: ${response.status}`);
+  const data = await response.json();
+  if (data.error) throw new Error(data.error);
+  const entries = data.entries || [];
+  pipelineDockState.browserAssetsByKind[kind] = entries;
+  if (
+    pipelineDockState.browserSelectedAssetIds?.[kind] &&
+    !entries.some(entry => entry.id === pipelineDockState.browserSelectedAssetIds[kind])
+  ) {
+    pipelineDockState.browserSelectedAssetIds[kind] = null;
+  }
+  if (pipelineDockState.activeAssetPalette === kind) {
+    pipelineDockState.browserAssets = entries;
+    pipelineDockState.browserStatus = 'loaded';
+    renderPipelineAssetBrowser();
+  }
+  renderPipelineDock();
+  return entries;
+}
+
+async function ensureSharpBreathingRoomImageAssets() {
+  const cached = pipelineDockState.browserAssetsByKind?.image || [];
+  const entries = cached.length ? cached : await loadPipelineAssetKind('image');
+  const selectedId = pipelineDockState.browserSelectedAssetIds?.image || null;
+  const selected = entries.find(entry => entry.id === selectedId);
+  if (!selected) {
+    const next = pipelineBestSharpSourceImage(entries);
+    if (next) pipelineDockState.browserSelectedAssetIds.image = next.id;
+  }
+  renderSharpBreathingRoomHarness();
+  return entries;
+}
+
+function kilnRouteBenchSelectedSource(route = selectedKilnRouteBenchRoute()) {
+  if (route.sourceKind !== 'image') return pipelineSelectedSource();
+  const manual = sharpBreathingRoomManualSource();
+  if (manual) return manual;
+  const imageAsset = selectedPipelineBrowserAssetForKind('image');
+  if (imageAsset) return pipelineBrowserAssetSource(imageAsset);
+  const selected = pipelineSelectedSource();
+  if (selected?.kind?.includes?.('image') || /\.(png|jpe?g|webp|gif)(?:$|[?#])/i.test(selected?.source || selected?.path || '')) {
+    return selected;
+  }
+  return selected || null;
+}
+
+async function ensureKaminosVolumeRouteInitialized() {
+  if (volumePrototype) return volumePrototype;
+  kaminosVolumeRouteInitPromise ||= initKaminosVolumeRoute();
+  await kaminosVolumeRouteInitPromise;
+  return volumePrototype;
+}
+
+const KILN_CONTENTION_FIRE_BUDGET = Object.freeze({
+  identity: 'kaminos.kiln-contention-fire-budget.v0',
+  resolution: 90,
+  renderScale: 0.4,
+  adaptiveRays: 1,
+});
+
+let activeForegroundKilnHeartbeat = null;
+
+function fireBudgetFromVolumeState(state = {}) {
+  return {
+    identity: KILN_CONTENTION_FIRE_BUDGET.identity,
+    resolution: Number(state.simGrid ?? state.resolution),
+    renderScale: Number(state.renderScale),
+    adaptiveRays: Number(state.adaptiveRaymarch ?? state.adaptiveRays),
+  };
+}
+
+function applyKilnContentionFireBudget() {
+  const requestedFireBudget = { ...KILN_CONTENTION_FIRE_BUDGET };
+  setVolumeControlValue('volume-resolution', requestedFireBudget.resolution);
+  setVolumeControlValue('volume-render-scale', requestedFireBudget.renderScale);
+  setVolumeControlValue('volume-adaptive-rays', requestedFireBudget.adaptiveRays);
+  const controls = readVolumeControls();
+  const effectiveFireBudget = {
+    identity: requestedFireBudget.identity,
+    resolution: controls.resolution,
+    renderScale: controls.renderScale,
+    adaptiveRays: controls.adaptiveRays,
+  };
+  return { requestedFireBudget, effectiveFireBudget };
+}
+
+async function beginSharpBreathingRoomKilnFire({
+  profileId,
+  source,
+  pipelineId,
+  firingId,
+  requireSharpDutyCorrelation = profileId === 'cooperative-spn-gaussian',
+}) {
+  const previousState = volumePrototype?.debugState?.() || null;
+  const fireState = {
+    schema: 'kaminos.sharp-breathing-room.kiln-fire-state.v0',
+    phase: 'starting',
+    profileId,
+    pipelineId,
+    source: source?.source || null,
+    sourceLabel: source?.label || null,
+    firingId: firingId || null,
+    startedAt: new Date().toISOString(),
+    activatedByRun: false,
+    previousActive: previousState?.active === true,
+    error: null,
+  };
+  window.__kaminosSharpBreathingRoomKilnFireState = fireState;
+  try {
+    await ensureKaminosVolumeRouteInitialized();
+    const wasActive = volumePrototype?.debugState?.().active === true;
+    applyTallPlumeOperatorPreset(DEFAULT_VOLUME_SMOKE_TALL_PRESET, { keepBudgetPreset: true });
+    const fireBudget = applyKilnContentionFireBudget();
+    updateVolumeControlLabels();
+    volumePrototype.setControls(readVolumeControls());
+    frameVolumeCamera();
+    await volumePrototype.setActive(true);
+    const fireEpisodeHooks = volumePrototype.beginFireEpisode({ firingId });
+    if (fireEpisodeHooks?.identity !== 'foreground-kiln-fire-episode-hooks-v0'
+      || fireEpisodeHooks?.firingId !== firingId
+      || fireEpisodeHooks?.status !== 'recording') {
+      throw new Error(`The renderer did not open the requested fire episode ${firingId || '<missing>'}.`);
+    }
+    fireState.phase = 'burning';
+    fireState.activatedByRun = !wasActive;
+    fireState.previousActive = wasActive;
+    fireState.volumeDebugState = volumePrototype.debugState();
+    fireState.fireEpisodeHooks = fireEpisodeHooks;
+    fireState.requestedFireBudget = fireBudget.requestedFireBudget;
+    fireState.effectiveFireBudget = fireBudgetFromVolumeState(fireState.volumeDebugState);
+    activeForegroundKilnHeartbeat = createForegroundKilnHeartbeatEpisode({
+      routeId: 'sharp-image-to-splat-live-v0',
+      profileId,
+      pipelineId,
+      firingId,
+      requireSharpDutyCorrelation,
+      expectedVolumeRouteIdentity: 'native-3d-compute-fluid-raymarch-v0',
+      requestedFireBudget: fireState.requestedFireBudget,
+      readVolumeState: () => volumePrototype?.debugState?.() || null,
+      requireExactFireEpisode: true,
+    });
+    activeForegroundKilnHeartbeat.start();
+    fireState.foregroundHeartbeat = activeForegroundKilnHeartbeat.report({ phase: 'burning' });
+    window.__kaminosSharpBreathingRoomKilnFireState = fireState;
+    refreshVolumeReadout();
+    return fireState;
+  } catch (err) {
+    fireState.phase = 'failed';
+    fireState.error = err?.message || String(err);
+    window.__kaminosSharpBreathingRoomKilnFireState = fireState;
+    setSharpBreathingRoomStatus(`The route is running, but the kiln fire could not start: ${fireState.error}`, 'error');
+    return fireState;
+  }
+}
+
+async function confirmSharpBreathingRoomKilnFireReleased(reason = 'sharp-breathing-room-release') {
+  const canvas = volumePrototype?.canvasElement?.() || null;
+  const releaseEvidence = {
+    schema: 'kaminos.sharp-breathing-room.kiln-fire-release-confirmation.v0',
+    reason,
+    attempts: [],
+    confirmed: false,
+    forcedCanvasClassRemoval: false,
+  };
+  const settleFrame = () => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    if (volumePrototype?.debugState?.().active === true || volumePrototype.canvasElement()?.classList?.contains('active')) {
+      await volumePrototype.setActive(false);
+    }
+    volumeBridge?.forceHidden?.(reason);
+    window._kaminosDirty?.();
+    await settleFrame();
+    const volumeActive = volumePrototype?.debugState?.().active === true;
+    const canvasActive = volumePrototype.canvasElement()?.classList?.contains('active') === true;
+    releaseEvidence.attempts.push({ attempt: attempt + 1, volumeActive, canvasActive });
+    if (!volumeActive && !canvasActive) {
+      releaseEvidence.confirmed = true;
+      return releaseEvidence;
+    }
+  }
+  if (canvas?.classList?.contains('active')) {
+    canvas.classList.remove('active');
+    releaseEvidence.forcedCanvasClassRemoval = true;
+    window._kaminosDirty?.();
+    await settleFrame();
+  }
+  const finalVolumeActive = volumePrototype?.debugState?.().active === true;
+  const finalCanvasActive = canvas?.classList?.contains('active') === true;
+  releaseEvidence.final = { volumeActive: finalVolumeActive, canvasActive: finalCanvasActive };
+  releaseEvidence.confirmed = !finalVolumeActive && !finalCanvasActive;
+  return releaseEvidence;
+}
+
+async function endSharpBreathingRoomKilnFire(phase = 'complete', options = {}) {
+  const fireState = window.__kaminosSharpBreathingRoomKilnFireState || null;
+  if (!fireState) return null;
+  const forceInactive = options.forceInactive === true;
+  fireState.phase = phase;
+  fireState.finishedAt = new Date().toISOString();
+  const foregroundHeartbeat = activeForegroundKilnHeartbeat;
+  try {
+    fireState.fireEpisodeHooks = volumePrototype.endFireEpisode({
+      firingId: fireState.firingId,
+      status: phase,
+    });
+  } catch (err) {
+    fireState.fireEpisodeCloseError = err?.message || String(err);
+  }
+  fireState.foregroundHeartbeat = foregroundHeartbeat?.finish({
+    phase,
+    sharpHeartbeat: options.sharpHeartbeat || null,
+  }) || fireState.foregroundHeartbeat || null;
+  activeForegroundKilnHeartbeat = null;
+  if (options.runResult && typeof options.runResult === 'object') {
+    options.runResult.foregroundKilnHeartbeat = fireState.foregroundHeartbeat;
+    options.runResult.fireEpisodeHooks = fireState.fireEpisodeHooks || null;
+    if (fireState.fireEpisodeCloseError) {
+      options.runResult.fireEpisodeCloseError = fireState.fireEpisodeCloseError;
+    }
+  }
+  if ((fireState.activatedByRun || forceInactive) && volumePrototype) {
+    volumeBridge?.forceHidden?.('sharp-breathing-room-release');
+    const releaseConfirmation = await confirmSharpBreathingRoomKilnFireReleased('sharp-breathing-room-release');
+    fireState.volumeReleased = true;
+    fireState.volumeReleaseConfirmed = releaseConfirmation.confirmed;
+    fireState.volumeReleaseConfirmation = releaseConfirmation;
+    fireState.forcedRelease = forceInactive && !fireState.activatedByRun;
+  } else {
+    fireState.volumeReleased = false;
+    fireState.volumeReleaseConfirmed = false;
+    fireState.forcedRelease = false;
+  }
+  fireState.volumeDebugState = volumePrototype?.debugState?.() || null;
+  fireState.volumeBridgeDebugState = volumeBridge?.debugState?.() || null;
+  window.__kaminosSharpBreathingRoomKilnFireState = fireState;
+  refreshVolumeReadout();
+  return fireState;
+}
+
+window.kaminosSharpBreathingRoomKilnFireDebug = {
+  begin: beginSharpBreathingRoomKilnFire,
+  end: endSharpBreathingRoomKilnFire,
+  state: () => ({
+    fire: window.__kaminosSharpBreathingRoomKilnFireState || null,
+    foregroundHeartbeat: window.__kaminosSharpBreathingRoomKilnFireState?.foregroundHeartbeat || null,
+    volume: volumePrototype?.debugState?.() || null,
+    bridge: volumeBridge?.debugState?.() || null,
+  }),
+};
+
+function sharpBreathingRoomSelectedSource() {
+  return kilnRouteBenchSelectedSource(selectedKilnRouteBenchRoute('sharp-image-to-splat-live-v0'));
+}
+
+function setSharpBreathingRoomStatus(message, kind = 'idle') {
+  setKilnRouteBenchStatus(message, kind, { routeId: 'sharp-image-to-splat-live-v0' });
+}
+
+function renderKilnRouteBench() {
+  const route = selectedKilnRouteBenchRoute();
+  const source = kilnRouteBenchSelectedSource(route);
+  kilnRouteBenchState = {
+    ...kilnRouteBenchState,
+    selectedRouteId: route.id,
+    sourceKind: route.sourceKind,
+    source,
+    runningProfileId: sharpBreathingRoomRunningProfileId,
+  };
+  window.__kaminosKilnRouteBenchState = kilnRouteBenchState;
+  const routeLabel = document.getElementById('kiln-route-bench-route-label');
+  const primaryCopy = document.getElementById('kiln-route-bench-primary-copy');
+  const label = document.getElementById('sharp-breathing-room-source-label');
+  const summary = document.getElementById('sharp-breathing-room-source-summary');
+  const preview = document.getElementById('sharp-breathing-room-source-preview');
+  if (routeLabel) {
+    routeLabel.textContent = route.title || route.id;
+    routeLabel.title = route.pipelineId || route.id;
+  }
+  if (primaryCopy) primaryCopy.textContent = route.primaryCopy || 'Choose a source and run a route.';
+  if (label) label.textContent = source?.label || 'No image selected';
+  if (summary) summary.textContent = source?.source || route.sourceHint || 'Select a source.';
+  if (preview) {
+    preview.innerHTML = '';
+    preview.classList.toggle('empty', !source?.source);
+    if (source?.source) {
+      const img = document.createElement('img');
+      img.id = 'sharp-breathing-room-source-preview-image';
+      img.src = source.source;
+      img.alt = source.label || 'Selected source image';
+      preview.appendChild(img);
+    } else {
+      preview.textContent = 'No image loaded yet.';
+    }
+  }
+  const running = Boolean(sharpBreathingRoomRunningProfileId);
+  for (const action of route.actions || []) {
+    const button = document.getElementById(action.buttonId);
+    if (!button) continue;
+    const labelText = action.label || route.profileLabels?.[action.profileId] || action.profileId;
+    button.disabled = running;
+    button.dataset.kilnRouteId = route.id;
+    button.dataset.kilnRouteProfileId = action.profileId;
+    button.textContent = sharpBreathingRoomRunningProfileId === action.profileId
+      ? (action.runningLabel || `Running ${labelText.toLowerCase()}`)
+      : (action.buttonLabel || `Run ${labelText.toLowerCase()}`);
+  }
+  const comparisonButton = document.getElementById('sharp-breathing-room-comparison-button');
+  if (comparisonButton) {
+    comparisonButton.disabled = running;
+    comparisonButton.textContent = running ? 'Running comparison' : 'Run comparison';
+  }
+  refreshSharpBreathingRoomComparisonSummary(window.__kaminosSharpBreathingRoomComparisonState || kilnRouteBenchState);
+  if (document.getElementById('crucible-bench-panel')) renderCrucibleBench();
+}
+
+function renderSharpBreathingRoomHarness() {
+  renderKilnRouteBench();
 }
 
 function renderPipelineAssetCard(entry) {
@@ -13012,6 +14264,271 @@ function pipelineRunSchedulerEvidence(result) {
   const reportEvidence = result.report?.document?.pipelineScheduler;
   if (reportEvidence?.schema === 'kaminos.pipeline-scheduler-composition.v0') return reportEvidence;
   return null;
+}
+
+function finiteKilnEvidenceNumber(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function uniqueKilnEvidenceLabels(values = [], required = []) {
+  const unique = [];
+  for (const value of values || []) {
+    if (!value) continue;
+    if (required.length && !required.includes(value)) continue;
+    if (!unique.includes(value)) unique.push(value);
+  }
+  return unique;
+}
+
+function sharpBreathingRoomCoverageProgressText(label, observed = [], required = [], missing = []) {
+  const uniqueObserved = uniqueKilnEvidenceLabels(observed, required);
+  const requiredCount = required.length;
+  const missingText = missing?.length ? ` missing ${missing.join(', ')}` : '';
+  return `${label}: ${uniqueObserved.length}/${requiredCount}${missingText}`;
+}
+
+function sharpBreathingRoomRunStage(result) {
+  const stages = result?.report?.document?.stages || [];
+  return stages.find(stage => stage?.id === 'run-sharp-image-to-splat')
+    || stages.find(stage => stage?.effectiveRoute?.adapterReport || stage?.effectiveRoute?.pipelineScheduler)
+    || stages[0]
+    || null;
+}
+
+function sharpBreathingRoomAdapterReport(result) {
+  return sharpBreathingRoomRunStage(result)?.effectiveRoute?.adapterReport || null;
+}
+
+function sharpBreathingRoomRunDurationMs(result) {
+  const stage = sharpBreathingRoomRunStage(result);
+  return finiteKilnEvidenceNumber(
+    stage?.durationMs
+    ?? stage?.effectiveRoute?.durationMs
+    ?? sharpBreathingRoomSchedulerEventDurationMs(result)
+    ?? result?.report?.document?.durationMs
+    ?? result?.durationMs
+    ?? null,
+  );
+}
+
+function sharpBreathingRoomSchedulerEventDurationMs(result) {
+  const times = sharpBreathingRoomSchedulerEvents(result)
+    .map(event => finiteKilnEvidenceNumber(event?.tMs))
+    .filter(value => value !== null);
+  if (times.length < 2) return null;
+  return Math.round(Math.max(...times) - Math.min(...times));
+}
+
+function sharpBreathingRoomSchedulerEvents(result) {
+  const evidence = pipelineRunSchedulerEvidence(result);
+  const adapterReport = sharpBreathingRoomAdapterReport(result);
+  const candidates = [
+    evidence?.schedulerVerification?.eventTrace?.events,
+    evidence?.eventTrace?.events,
+    evidence?.scheduler?.schedulerVerification?.eventTrace?.events,
+    adapterReport?.pipelineScheduler?.schedulerVerification?.eventTrace?.events,
+    adapterReport?.breathingRoom?.schedulerVerification?.eventTrace?.events,
+    adapterReport?.breathingRoom?.telemetry?.events,
+  ];
+  const events = [];
+  for (const candidate of candidates) {
+    if (!Array.isArray(candidate)) continue;
+    for (const event of candidate) if (event && typeof event === 'object') events.push(event);
+  }
+  return events;
+}
+
+function sharpBreathingRoomSpnFusionBlocks(result) {
+  const blocks = [];
+  for (const event of sharpBreathingRoomSchedulerEvents(result)) {
+    const block = event.details?.block || event.block || event.label || event.name || null;
+    const phaseText = [
+      event.phase,
+      event.boundary,
+      event.stage,
+      event.routePhase,
+      event.kind,
+    ].filter(Boolean).join(' ').toLowerCase();
+    if (!block) continue;
+    if (!phaseText.includes('spn-fusion') && !SHARP_SPN_LOWRES_BLOCK_LABELS.includes(block)) continue;
+    if (!blocks.includes(block)) blocks.push(block);
+  }
+  return blocks;
+}
+
+function sharpBreathingRoomSpnFusionCoverage(result) {
+  const observed = sharpBreathingRoomSpnFusionBlocks(result);
+  const missing = SHARP_SPN_LOWRES_BLOCK_LABELS.filter(block => !observed.includes(block));
+  return {
+    schema: 'kaminos.sharp-spn-lowres-fusion-coverage.v0',
+    requiredBlocks: [...SHARP_SPN_LOWRES_BLOCK_LABELS],
+    observedBlocks: observed,
+    missingSpnFusionBlocks: missing,
+    status: missing.length ? 'missing-labels' : 'complete',
+  };
+}
+
+function sharpBreathingRoomMonodepthPhaseLabels(result) {
+  const labels = [];
+  for (const event of sharpBreathingRoomSchedulerEvents(result)) {
+    const boundary = event.boundary || event.phase || null;
+    const label = (boundary === 'monodepth-phase' && SHARP_MONODEPTH_PHASE_LABELS.includes(event.phase)
+      ? event.phase
+      : event.details?.phase)
+      || event.details?.label
+      || event.phaseLabel
+      || event.label
+      || event.name
+      || null;
+    const phaseText = [
+      event.phase,
+      event.boundary,
+      event.stage,
+      event.routePhase,
+      event.kind,
+    ].filter(Boolean).join(' ').toLowerCase();
+    if (!label) continue;
+    if (!phaseText.includes('monodepth-phase') && !SHARP_MONODEPTH_PHASE_LABELS.includes(label)) continue;
+    if (!labels.includes(label)) labels.push(label);
+  }
+  return labels;
+}
+
+function sharpBreathingRoomMonodepthPhaseCoverage(result) {
+  const observed = sharpBreathingRoomMonodepthPhaseLabels(result);
+  const missing = SHARP_MONODEPTH_PHASE_LABELS.filter(label => !observed.includes(label));
+  return {
+    schema: 'kaminos.sharp-monodepth-phase-coverage.v0',
+    requiredLabels: [...SHARP_MONODEPTH_PHASE_LABELS],
+    observedLabels: observed,
+    missingMonodepthPhaseLabels: missing,
+    status: missing.length ? 'missing-labels' : 'complete',
+  };
+}
+
+function sharpBreathingRoomArtifactSha256(result, artifact = pipelinePrimaryRunArtifact(result)) {
+  const adapterReport = sharpBreathingRoomAdapterReport(result);
+  return artifact?.sha256
+    || result?.report?.document?.artifacts?.splat?.sha256
+    || adapterReport?.output?.sha256
+    || adapterReport?.outputs?.splat?.sha256
+    || null;
+}
+
+function sharpBreathingRoomComparisonRunEvidence(run, step = {}) {
+  const artifact = pipelinePrimaryRunArtifact(run);
+  const schedulerEvidence = pipelineRunSchedulerEvidence(run);
+  const adapterReport = sharpBreathingRoomAdapterReport(run);
+  const coverage = sharpBreathingRoomSpnFusionCoverage(run);
+  const monodepthCoverage = sharpBreathingRoomMonodepthPhaseCoverage(run);
+  return {
+    schema: 'kaminos.sharp-breathing-room-comparison-run-evidence.v0',
+    profileId: step.profileId || run?.profileId || null,
+    label: step.label || sharpBreathingRoomProfileLabels[step.profileId || run?.profileId] || null,
+    ok: run?.ok === true,
+    runId: run ? pipelineRunDisplayId(run) : null,
+    report: run?.report?.path || null,
+    artifact: artifact?.path || null,
+    artifactSha256: sharpBreathingRoomArtifactSha256(run, artifact),
+    artifactBytes: finiteKilnEvidenceNumber(artifact?.bytes ?? adapterReport?.outputBytes ?? adapterReport?.output?.bytes ?? null),
+    durationMs: sharpBreathingRoomRunDurationMs(run),
+    requestedScheduler: schedulerEvidence?.requestedScheduler
+      || schedulerEvidence?.scheduler?.requestedScheduler
+      || adapterReport?.breathingRoom?.requestedScheduler
+      || null,
+    effectiveScheduler: schedulerEvidence?.effectiveScheduler
+      || schedulerEvidence?.scheduler?.effectiveScheduler
+      || adapterReport?.breathingRoom?.effectiveScheduler
+      || null,
+    schedulerVerificationStatus: schedulerEvidence?.schedulerVerification?.status
+      || schedulerEvidence?.verificationState
+      || adapterReport?.breathingRoom?.status
+      || null,
+    schedulerEventCount: sharpBreathingRoomSchedulerEvents(run).length,
+    spnFusionBlocks: coverage.observedBlocks,
+    requiredSpnFusionBlocks: coverage.requiredBlocks,
+    missingSpnFusionBlocks: coverage.missingSpnFusionBlocks,
+    spnFusionCoverage: coverage,
+    monodepthPhaseLabels: monodepthCoverage.observedLabels,
+    requiredMonodepthPhaseLabels: monodepthCoverage.requiredLabels,
+    missingMonodepthPhaseLabels: monodepthCoverage.missingMonodepthPhaseLabels,
+    monodepthPhaseCoverage: monodepthCoverage,
+    error: run?.ok === false ? pipelineRunFailureSummary(run) : null,
+  };
+}
+
+function sharpBreathingRoomOutputEquivalence(comparisonRuns = []) {
+  const baseline = comparisonRuns.find(run => run.profileId === 'baseline-default') || comparisonRuns[0] || null;
+  const friendly = comparisonRuns.find(run => run.profileId === 'cooperative-spn-gaussian') || comparisonRuns[1] || null;
+  const baselineHash = baseline?.artifactSha256 || null;
+  const friendlyHash = friendly?.artifactSha256 || null;
+  if (!baselineHash || !friendlyHash) {
+    return {
+      status: 'hash-missing',
+      baselineSha256: baselineHash,
+      friendlySha256: friendlyHash,
+    };
+  }
+  return {
+    status: baselineHash === friendlyHash ? 'same-output' : 'hash-mismatch',
+    baselineSha256: baselineHash,
+    friendlySha256: friendlyHash,
+  };
+}
+
+function sharpBreathingRoomComparisonSummaryText(state = null) {
+  const runs = state?.comparisonRuns || kilnRouteBenchState.comparisonRuns || [];
+  if (!runs.length) return '';
+  const parts = runs.map(run => {
+    const duration = Number.isFinite(run.durationMs) ? `${Math.round(run.durationMs / 1000)}s` : 'duration unknown';
+    const hash = run.artifactSha256 ? run.artifactSha256.slice(0, 12) : 'no hash';
+    const status = run.ok ? 'finished' : 'failed';
+    return `${run.label || run.profileId}: ${status}, ${duration}, ${hash}`;
+  });
+  const equivalence = state?.outputEquivalence || sharpBreathingRoomOutputEquivalence(runs);
+  if (equivalence?.status) parts.push(`outputs: ${equivalence.status}`);
+  const coverage = state?.lowresFusionCoverage
+    || runs.find(run => run.profileId === 'cooperative-spn-gaussian')?.spnFusionCoverage
+    || null;
+  if (coverage) {
+    parts.push(sharpBreathingRoomCoverageProgressText(
+      'SPN lowres labels',
+      coverage.observedBlocks || [],
+      coverage.requiredBlocks || SHARP_SPN_LOWRES_BLOCK_LABELS,
+      coverage.missingSpnFusionBlocks || [],
+    ));
+  }
+  const monodepthCoverage = state?.monodepthPhaseCoverage
+    || runs.find(run => run.profileId === 'cooperative-spn-gaussian')?.monodepthPhaseCoverage
+    || null;
+  if (monodepthCoverage) {
+    parts.push(sharpBreathingRoomCoverageProgressText(
+      'monodepth labels',
+      monodepthCoverage.observedLabels || [],
+      monodepthCoverage.requiredLabels || SHARP_MONODEPTH_PHASE_LABELS,
+      monodepthCoverage.missingMonodepthPhaseLabels || [],
+    ));
+  }
+  return parts.join(' | ');
+}
+
+function refreshSharpBreathingRoomComparisonSummary(state = null) {
+  const summary = document.getElementById('sharp-breathing-room-comparison-summary');
+  if (!summary) return;
+  const currentState = state || window.__kaminosSharpBreathingRoomComparisonState || kilnRouteBenchState;
+  const text = sharpBreathingRoomComparisonSummaryText(currentState);
+  summary.hidden = !text;
+  summary.textContent = text;
+  const outputStatus = currentState?.outputEquivalence?.status || null;
+  const coverageStatus = currentState?.lowresFusionCoverage?.status || null;
+  const monodepthCoverageStatus = currentState?.monodepthPhaseCoverage?.status || null;
+  summary.dataset.status = outputStatus === 'hash-missing' || outputStatus === 'hash-mismatch'
+    ? outputStatus
+    : (coverageStatus === 'missing-labels' || monodepthCoverageStatus === 'missing-labels'
+      ? 'missing-labels'
+      : (monodepthCoverageStatus || coverageStatus || currentState?.status || 'idle'));
 }
 
 function pipelineGraphSchedulerEvidenceState(evidence) {
@@ -15497,6 +17014,7 @@ function pipelineRunResultRows(result) {
     { key: 'effect', value: primaryArtifact ? `${artifactRole || 'output'} artifact written${loadable ? '; preview still must be loaded explicitly.' : '; open artifact evidence or route into a later preview/baking node.'}` : 'Run evidence written without a primary output artifact.' },
     ...(adapterFixture ? [{ key: 'truth', value: 'mock adapter fixture output; not real model inference' }] : fixtureBacked ? [{ key: 'truth', value: 'input provenance only; output fixed fixture' }] : []),
     { key: 'scheduler', value: pipelineGraphSchedulerEvidenceLabel(schedulerEvidence) },
+    { key: 'requested route', value: result.schedulerProfile?.operatorLabel || result.schedulerProfile?.label || 'ordinary route' },
     { key: 'scheduler verification', value: pipelineGraphSchedulerVerificationLabel(schedulerEvidence) },
     { key: 'scheduler profile', value: schedulerEvidence?.scheduler?.schema || 'missing' },
     { key: 'backpressure profile', value: schedulerEvidence?.backpressure?.schema || 'missing' },
@@ -15590,7 +17108,7 @@ async function pipelineLoadRunSplatArtifact(result, artifact) {
   pipelineSetActionStatus('Loading generated splat output...');
   try {
     const fileName = artifact.path.split('/').pop() || 'pipeline-output.ply';
-    const record = await greenroomImportSplat(url, fileName, {
+    const importedObject = await greenroomImportSplat(url, fileName, {
       title: 'Pipeline Output',
       subtitle: artifact.role || 'Generated pipeline artifact',
       raw_name: artifact.path,
@@ -15609,6 +17127,8 @@ async function pipelineLoadRunSplatArtifact(result, artifact) {
         },
       },
     });
+    const record = sceneObjects.find(entry => entry.object === importedObject) || selectedSceneObjectEntry();
+    if (!record?.id) throw new Error('Generated splat loaded without a registered scene record');
     pipelineDockState.loadedPipelineArtifactPaths ||= {};
     pipelineDockState.loadedPipelineArtifactPaths[artifact.path] = {
       sceneObjectId: record?.id || null,
@@ -16175,6 +17695,7 @@ function renderPipelineDock() {
 	    `).join('');
 	  }
 	  pipelineRenderGraphWorkspaceSummary();
+  renderSharpBreathingRoomHarness();
 	  renderPipelineGraphWorkbench();
 	  renderPipelineRunShelf();
 	  renderPipelineRunResultPanel();
@@ -16227,6 +17748,455 @@ async function readPipelineRunStream(response, onProgress) {
   return finalResult;
 }
 
+function compactErrorLine(text) {
+  const line = String(text || '')
+    .split(/\r?\n/)
+    .map(part => part.trim())
+    .find(Boolean) || '';
+  return line.replace(/^Error:\s*/, '').slice(0, 240);
+}
+
+function pipelineRunFailureSummary(result) {
+  const report = result?.report?.document || {};
+  const failedStage = (report.stages || []).find(stage => stage?.status === 'failed') || (report.stages || [])[0] || null;
+  const effectiveRoute = failedStage?.effectiveRoute || {};
+  const adapterReport = effectiveRoute.adapterReport || null;
+  const phase = adapterReport?.phase || failedStage?.failurePhase || report.phase || result?.phase || 'failed';
+  const browserMilestone = adapterReport?.lastTrustworthyEvidence?.browserLastMilestone?.text
+    || adapterReport?.failure?.lastBrowserMilestone?.text
+    || null;
+  const detail = compactErrorLine(
+    adapterReport?.failure?.operatorMessage
+    || result?.error
+    || report.error
+    || failedStage?.error
+    || adapterReport?.error
+    || effectiveRoute.stderrTail
+    || result?.stderrTail
+    || result?.stdoutTail
+  );
+  const reportPath = result?.report?.path || effectiveRoute.adapterReportPath || null;
+  return [
+    detail || 'The backend failed before producing a splat.',
+    browserMilestone ? `Last model step: ${compactErrorLine(browserMilestone)}.` : '',
+    adapterReport?.failure?.operatorHint ? compactErrorLine(adapterReport.failure.operatorHint) : '',
+    phase ? `Phase: ${phase}.` : '',
+    reportPath ? `Report: ${reportPath}` : '',
+  ].filter(Boolean).join(' ');
+}
+
+function kilnRouteBenchBackgroundHeartbeat(result) {
+  const report = result?.report?.document || {};
+  for (const stage of report.stages || []) {
+    const heartbeat = stage?.effectiveRoute?.adapterReport?.backgroundHeartbeat || null;
+    if (heartbeat?.schema === 'sharp-webgpu.background-heartbeat.v0') return heartbeat;
+  }
+  return null;
+}
+
+function kilnRouteBenchHeartbeatSummary(result) {
+  const backgroundHeartbeat = kilnRouteBenchBackgroundHeartbeat(result);
+  const gap = backgroundHeartbeat?.worstFrameGaps?.[0] || null;
+  if (!gap || !Number.isFinite(gap.durationMs)) return '';
+  const roundedMs = Math.max(1, Math.round(gap.durationMs));
+  const event = gap.overlappedEvents?.[0] || null;
+  if (gap.overlapClassification === 'scheduler-event-overlap' && event) {
+    const place = [event.stage, event.step, event.boundary || event.phase].filter(Boolean).join(' / ');
+    return `The longest pause while the model was working was ${roundedMs} ms during ${place || 'a named model step'}.`;
+  }
+  const window = backgroundHeartbeat.inferenceWindow || {};
+  const nearEnd = Number.isFinite(window.startMs) && Number.isFinite(window.durationMs)
+    && gap.startMs >= window.startMs + window.durationMs * 0.8;
+  return `The longest pause while the model was working was ${roundedMs} ms${nearEnd ? ' near the end of model work' : ''}; no named scheduler event covered it.`;
+}
+
+function classifyKilnFiringEvidence({ required = false, firingId = null, heartbeat = null } = {}) {
+  const failures = [];
+  if (!heartbeat) {
+    failures.push('foreground-heartbeat-missing');
+  } else {
+    if (heartbeat.status !== 'verified') {
+      failures.push(...(heartbeat.failures?.length ? heartbeat.failures : ['foreground-heartbeat-invalid']));
+    }
+    if (!firingId || heartbeat.firingId !== firingId) failures.push('foreground-firing-id-mismatch');
+    if (required) {
+      const correlation = heartbeat.sharpDutyCorrelation;
+      if (correlation?.status !== 'verified') failures.push('sharp-duty-correlation-invalid');
+      if (!firingId || correlation?.firingId !== firingId) failures.push('sharp-duty-correlation-firing-id-mismatch');
+    }
+  }
+  const uniqueFailures = [...new Set(failures)];
+  return {
+    ok: uniqueFailures.length === 0,
+    status: uniqueFailures.length ? 'invalid' : 'verified',
+    receiptStatus: uniqueFailures.length ? 'evidence-invalid' : 'complete',
+    failures: uniqueFailures,
+  };
+}
+
+function kilnRouteBenchForegroundHeartbeatSummary(result) {
+  const heartbeat = result?.foregroundKilnHeartbeat || null;
+  if (!heartbeat) return 'Foreground kiln timing was not recorded for this firing.';
+  if (heartbeat.status !== 'verified') {
+    const failures = heartbeat.failures?.length ? ` (${heartbeat.failures.join(', ')})` : '';
+    return `The cast finished, but foreground kiln timing could not verify the firing${failures}.`;
+  }
+  const correlation = heartbeat.sharpDutyCorrelation;
+  if (correlation?.status === 'verified') {
+    const total = Math.round(correlation.totals?.foregroundGapDurationMs || 0);
+    const attributed = Math.round(correlation.totals?.attributedDurationMs || 0);
+    const unattributed = Math.round(correlation.totals?.unattributedDurationMs || 0);
+    const leading = correlation.phaseRankings?.[0];
+    const leadingCopy = leading
+      ? ` The largest named overlap was ${leading.phase} at ${Math.round(leading.overlapDurationMs)} ms.`
+      : '';
+    return `While this cast was cooking, ${attributed} of ${total} ms between foreground frames overlapped named model queue waits; ${unattributed} ms happened elsewhere.${leadingCopy}`;
+  }
+  const maxGap = Number.isFinite(heartbeat.maxFrameGapMs) ? `${Math.round(heartbeat.maxFrameGapMs)} ms maximum frame gap` : 'frame gaps recorded';
+  return `Foreground kiln timing verified ${maxGap} across ${heartbeat.sampleCount} main-page samples.`;
+}
+
+function classifyKilnNonLoadableResult({ firingEvidence = null, artifactPath = null } = {}) {
+  if (firingEvidence?.ok !== true) {
+    return {
+      receiptStatus: firingEvidence?.receiptStatus || 'evidence-invalid',
+      tone: 'error',
+      message: 'The model wrote an output, but Kaminos could not verify that the live evidence belonged to this firing.',
+    };
+  }
+  return {
+    receiptStatus: 'evidence-only',
+    tone: 'evidence-only',
+    message: artifactPath
+      ? 'The model wrote an output, but it is not a splat that Kaminos can place in the room.'
+      : 'The model finished without producing a splat that Kaminos can place in the room.',
+  };
+}
+
+async function runKilnRouteBenchRoute(routeId, profileId) {
+  const route = selectedKilnRouteBenchRoute(routeId);
+  const profileLabel = route.profileLabels?.[profileId] || profileId;
+  const source = kilnRouteBenchSelectedSource(route);
+  const pipelineId = route.pipelineId;
+  if (!source?.source) {
+    setKilnRouteBenchStatus(route.missingSourceCopy || 'Select a source before running this route.', 'error', {
+      routeId: route.id,
+      source,
+      runningProfileId: null,
+    });
+    return null;
+  }
+  if (!pipelineManifest) await loadPipelineManifest();
+  const pipeline = pipelineManifest?.pipelines?.find(route => route.id === pipelineId);
+  const inputCheck = pipelineSourceSatisfiesRouteInput(source, pipelineRouteInputRequirement(pipeline));
+  if (!inputCheck.ok) {
+    setKilnRouteBenchStatus(`${route.actionTitle || route.title} needs an image source. ${inputCheck.hint || ''}`.trim(), 'error', {
+      routeId: route.id,
+      source,
+      runningProfileId: null,
+    });
+    return null;
+  }
+  sharpBreathingRoomRunningProfileId = profileId;
+  renderKilnRouteBench();
+  setKilnRouteBenchStatus(`${route.actionTitle || route.title} is running the ${profileLabel.toLowerCase()} route on this image.`, 'running', {
+    routeId: route.id,
+    source,
+    runningProfileId: profileId,
+    result: null,
+    progressEvent: null,
+  });
+  const crucibleFiring = crucibleBenchRecordFiring({ routeId: route.id, profileId, source, profileLabel });
+  const kilnFire = await beginSharpBreathingRoomKilnFire({
+    profileId,
+    source,
+    pipelineId,
+    firingId: crucibleFiring.id,
+    requireSharpDutyCorrelation: profileId === 'cooperative-spn-gaussian',
+  });
+  if (!foregroundKilnStartAllowsPipeline(kilnFire)) {
+    const failedRun = {
+      ok: false,
+      pipelineId,
+      phase: 'kiln-fire-startup-failed',
+      error: kilnFire?.error || kilnFire?.foregroundHeartbeat?.failures?.join(', ') || 'foreground kiln evidence did not start',
+    };
+    await endSharpBreathingRoomKilnFire('kiln-fire-startup-failed', {
+      forceInactive: true,
+      runResult: failedRun,
+    });
+    crucibleBenchRecordReceipt({
+      firingId: crucibleFiring.id,
+      status: 'failed',
+      message: 'The kiln could not start a verified foreground firing, so SHARP was not run.',
+      run: failedRun,
+      phase: failedRun.phase,
+      error: failedRun.error,
+    });
+    setKilnRouteBenchStatus(`The kiln could not start this firing, so the model was not run. ${failedRun.error}`, 'error', {
+      routeId: route.id,
+      source,
+      result: failedRun,
+      runningProfileId: null,
+    });
+    sharpBreathingRoomRunningProfileId = null;
+    renderKilnRouteBench();
+    return failedRun;
+  }
+  let run = null;
+  let kilnFireEnded = false;
+  try {
+    run = await runSelectedPipeline({
+      sourceOverride: source,
+      pipelineId,
+      pipeline,
+      generator: pipelineGeneratorForPipelineId(pipelineId),
+      schedulerProfileId: profileId,
+      onProgress: event => {
+        if (event?.message) {
+          const progress = Number.isFinite(event.progress) ? ` ${Math.round(event.progress * 100)}%` : '';
+          setKilnRouteBenchStatus(`${profileLabel}: ${event.message}${progress}`, 'running', {
+            routeId: route.id,
+            source,
+            runningProfileId: profileId,
+            progressEvent: event,
+          });
+        }
+      },
+    });
+    await endSharpBreathingRoomKilnFire(run?.ok ? 'complete' : 'failed', {
+      forceInactive: true,
+      sharpHeartbeat: kilnRouteBenchBackgroundHeartbeat(run),
+      runResult: run,
+    });
+    kilnFireEnded = true;
+    const firingEvidence = classifyKilnFiringEvidence({
+      required: profileId === 'cooperative-spn-gaussian',
+      firingId: crucibleFiring.id,
+      heartbeat: run?.foregroundKilnHeartbeat || null,
+    });
+    if (run && typeof run === 'object') run.kilnFiringEvidence = firingEvidence;
+    const artifact = pipelinePrimaryRunArtifact(run);
+    const backgroundHeartbeat = kilnRouteBenchBackgroundHeartbeat(run);
+    const heartbeatSummary = [
+      kilnRouteBenchHeartbeatSummary(run),
+      kilnRouteBenchForegroundHeartbeatSummary(run),
+    ].filter(Boolean).join(' ');
+    if (run?.ok) {
+      if (pipelineArtifactIsLoadableSplat(artifact)) {
+        try {
+          const record = await pipelineLoadRunSplatArtifact(run, artifact);
+          crucibleBenchRecordCast({
+            firingId: crucibleFiring.id,
+            run,
+            artifact,
+            record,
+          });
+          crucibleBenchRecordReceipt({
+            firingId: crucibleFiring.id,
+            status: firingEvidence.receiptStatus,
+            message: firingEvidence.ok
+              ? `${profileLabel} finished and loaded a cast into the scene.${heartbeatSummary ? ` ${heartbeatSummary}` : ''}`
+              : `${profileLabel} produced and loaded a cast, but Kaminos could not verify that the live firing evidence belonged to this firing. ${firingEvidence.failures.join(', ')}.`,
+            run,
+          });
+          if (firingEvidence.ok) {
+            setKilnRouteBenchStatus(
+              `${profileLabel} finished and loaded the generated splat into the scene: ${record?.label || artifact.path.split('/').pop() || 'pipeline output'}.${heartbeatSummary ? ` ${heartbeatSummary}` : ''}`,
+              'complete',
+              { routeId: route.id, source, result: run, loadedRecord: record, backgroundHeartbeat, runningProfileId: null },
+            );
+          } else {
+            setKilnRouteBenchStatus(
+              `${profileLabel} produced and loaded a cast, but Kaminos could not verify that the live firing evidence belonged to this firing. The cast remains available; this firing is not marked complete.`,
+              'error',
+              { routeId: route.id, source, result: run, loadedRecord: record, backgroundHeartbeat, runningProfileId: null },
+            );
+          }
+        } catch (loadErr) {
+          crucibleBenchRecordReceipt({
+            firingId: crucibleFiring.id,
+            status: 'load-failed',
+            message: `The firing finished, but Kaminos could not load the cast: ${loadErr.message || loadErr}`,
+            run,
+            error: loadErr?.message || String(loadErr),
+          });
+          setKilnRouteBenchStatus(
+            `${profileLabel} finished, but Kaminos could not load the generated splat into the scene. ${loadErr.message || loadErr}`,
+            'error',
+            { routeId: route.id, source, result: run, runningProfileId: null },
+          );
+        }
+      } else {
+        const nonLoadableResult = classifyKilnNonLoadableResult({
+          firingEvidence,
+          artifactPath: artifact?.path || null,
+        });
+        crucibleBenchRecordReceipt({
+          firingId: crucibleFiring.id,
+          status: nonLoadableResult.receiptStatus,
+          message: nonLoadableResult.message,
+          run,
+        });
+        setKilnRouteBenchStatus(
+          `${profileLabel}: ${nonLoadableResult.message}`,
+          nonLoadableResult.tone,
+          { routeId: route.id, source, result: run, runningProfileId: null },
+        );
+      }
+    } else {
+      crucibleBenchRecordReceipt({
+        firingId: crucibleFiring.id,
+        status: 'failed',
+        message: `${profileLabel} failed before producing a splat.`,
+        run,
+        phase: run?.phase,
+        error: pipelineRunFailureSummary(run),
+      });
+      setKilnRouteBenchStatus(`${profileLabel} failed before producing a splat. ${pipelineRunFailureSummary(run)}`.trim(), 'error', {
+        routeId: route.id,
+        source,
+        result: run,
+        runningProfileId: null,
+      });
+    }
+    return run;
+  } catch (err) {
+    crucibleBenchRecordReceipt({
+      firingId: crucibleFiring.id,
+      status: 'failed',
+      message: `${profileLabel} failed before producing a splat.`,
+      error: err?.message || String(err),
+    });
+    setKilnRouteBenchStatus(`${profileLabel} failed before producing a splat. ${err.message || err}`, 'error', {
+      routeId: route.id,
+      source,
+      error: err?.message || String(err),
+      runningProfileId: null,
+    });
+    throw err;
+  } finally {
+    if (!kilnFireEnded) {
+      await endSharpBreathingRoomKilnFire(run?.ok ? 'complete' : 'failed', {
+        forceInactive: true,
+        sharpHeartbeat: kilnRouteBenchBackgroundHeartbeat(run),
+        runResult: run,
+      });
+    }
+    sharpBreathingRoomRunningProfileId = null;
+    renderKilnRouteBench();
+  }
+}
+
+async function runSharpBreathingRoomProfile(profileId) {
+  return runKilnRouteBenchRoute('sharp-image-to-splat-live-v0', profileId);
+}
+
+async function runSharpBreathingRoomComparison() {
+  const route = selectedKilnRouteBenchRoute('sharp-image-to-splat-live-v0');
+  const source = kilnRouteBenchSelectedSource(route);
+  const startedAt = new Date().toISOString();
+  const comparisonState = {
+    schema: 'kaminos.sharp-breathing-room-comparison-state.v0',
+    routeId: route.id,
+    source,
+    startedAt,
+    status: 'running',
+    mode: 'sequential-default-then-friendly',
+    comparisonRuns: [],
+  };
+  window.__kaminosSharpBreathingRoomComparisonState = comparisonState;
+  if (!source?.source) {
+    comparisonState.status = 'failed';
+    comparisonState.finishedAt = new Date().toISOString();
+    comparisonState.error = route.missingSourceCopy || 'Select a source before running this route.';
+    window.__kaminosSharpBreathingRoomComparisonState = comparisonState;
+    setKilnRouteBenchStatus(comparisonState.error, 'error', {
+      routeId: route.id,
+      source,
+      comparisonRuns: comparisonState.comparisonRuns,
+    });
+    return comparisonState;
+  }
+  setKilnRouteBenchStatus('Default then friendly: Kaminos will run the two SHARP routes one after the other on this image.', 'running', {
+    routeId: route.id,
+    source,
+    comparisonRuns: comparisonState.comparisonRuns,
+    comparisonState,
+    progressEvent: null,
+    result: null,
+  });
+  const steps = [
+    { profileId: 'baseline-default', label: 'Default' },
+    { profileId: 'cooperative-spn-gaussian', label: 'Friendly' },
+  ];
+  for (const step of steps) {
+    let run = null;
+    try {
+      run = await runKilnRouteBenchRoute('sharp-image-to-splat-live-v0', step.profileId);
+    } catch (err) {
+      run = {
+        ok: false,
+        pipelineId: route.pipelineId,
+        error: err?.message || String(err),
+      };
+    }
+    comparisonState.comparisonRuns.push(sharpBreathingRoomComparisonRunEvidence(run, step));
+    comparisonState.outputEquivalence = sharpBreathingRoomOutputEquivalence(comparisonState.comparisonRuns);
+    comparisonState.lowresFusionCoverage = comparisonState.comparisonRuns
+      .find(entry => entry.profileId === 'cooperative-spn-gaussian')?.spnFusionCoverage
+      || null;
+    comparisonState.monodepthPhaseCoverage = comparisonState.comparisonRuns
+      .find(entry => entry.profileId === 'cooperative-spn-gaussian')?.monodepthPhaseCoverage
+      || null;
+    window.__kaminosSharpBreathingRoomComparisonState = comparisonState;
+    renderKilnRouteBench();
+    if (!run?.ok || run?.kilnFiringEvidence?.ok === false) {
+      comparisonState.status = 'failed';
+      comparisonState.finishedAt = new Date().toISOString();
+      const comparisonFailure = run?.kilnFiringEvidence?.ok === false
+        ? `Kaminos could not verify that the live firing evidence belonged to this firing: ${run.kilnFiringEvidence.failures.join(', ')}.`
+        : pipelineRunFailureSummary(run);
+      setKilnRouteBenchStatus(`${step.label} failed during the default-then-friendly comparison. ${comparisonFailure}`.trim(), 'error', {
+        routeId: route.id,
+        source,
+        result: run,
+        comparisonRuns: comparisonState.comparisonRuns,
+        comparisonState,
+      });
+      await endSharpBreathingRoomKilnFire('comparison-failed', { forceInactive: true });
+      return comparisonState;
+    }
+  }
+  await endSharpBreathingRoomKilnFire('comparison-complete', { forceInactive: true });
+  comparisonState.status = 'complete';
+  comparisonState.finishedAt = new Date().toISOString();
+  comparisonState.outputEquivalence = sharpBreathingRoomOutputEquivalence(comparisonState.comparisonRuns);
+  comparisonState.lowresFusionCoverage = comparisonState.comparisonRuns
+    .find(entry => entry.profileId === 'cooperative-spn-gaussian')?.spnFusionCoverage
+    || null;
+  comparisonState.monodepthPhaseCoverage = comparisonState.comparisonRuns
+    .find(entry => entry.profileId === 'cooperative-spn-gaussian')?.monodepthPhaseCoverage
+    || null;
+  window.__kaminosSharpBreathingRoomComparisonState = comparisonState;
+  const coverage = comparisonState.lowresFusionCoverage;
+  const labelSummary = coverage
+    ? ` ${sharpBreathingRoomCoverageProgressText('SPN lowres labels', coverage.observedBlocks || [], coverage.requiredBlocks || SHARP_SPN_LOWRES_BLOCK_LABELS, coverage.missingSpnFusionBlocks || [])}.`
+    : ' SPN lowres labels were not found in friendly telemetry.';
+  const monodepthCoverage = comparisonState.monodepthPhaseCoverage;
+  const monodepthLabelSummary = monodepthCoverage
+    ? ` ${sharpBreathingRoomCoverageProgressText('Monodepth labels', monodepthCoverage.observedLabels || [], monodepthCoverage.requiredLabels || SHARP_MONODEPTH_PHASE_LABELS, monodepthCoverage.missingMonodepthPhaseLabels || [])}.`
+    : ' Monodepth labels were not found in friendly telemetry.';
+  setKilnRouteBenchStatus(`Default then friendly comparison finished. Hashes, durations, scheduler configs, SPN lowres labels, and monodepth labels are captured below.${labelSummary}${monodepthLabelSummary}`, 'complete', {
+    routeId: route.id,
+    source,
+    comparisonRuns: comparisonState.comparisonRuns,
+    comparisonState,
+    result: comparisonState.comparisonRuns.at(-1) || null,
+  });
+  return comparisonState;
+}
+
 async function runSelectedPipeline(options = {}) {
   const source = options.sourceOverride || pipelineSelectedSource();
   if (!source?.source) {
@@ -16245,6 +18215,7 @@ async function runSelectedPipeline(options = {}) {
       pipelineId: requestedPipelineId,
       source: source.source,
       clientRunId: options.clientRunId || null,
+      schedulerProfileId: options.schedulerProfileId || null,
       streamProgress: true,
     }),
   });
@@ -16268,6 +18239,25 @@ function initPipelineDock() {
   document.getElementById('pipeline-source-input')?.addEventListener('input', () => {
     renderPipelineDock();
   });
+  document.getElementById('sharp-breathing-room-source-input')?.addEventListener('input', () => {
+    renderSharpBreathingRoomHarness();
+  });
+  document.getElementById('crucible-bench-name-input')?.addEventListener('input', event => {
+    renameActiveCrucibleBenchCrucible(event.target.value);
+  });
+  document.getElementById('crucible-viewport-source-select')?.addEventListener('change', event => {
+    selectCrucibleViewportSource(event.target.value);
+  });
+  document.getElementById('crucible-viewport-route-select')?.addEventListener('change', event => {
+    selectCrucibleViewportRoute(event.target.value);
+  });
+  document.getElementById('crucible-viewport-profile-select')?.addEventListener('change', event => {
+    selectCrucibleViewportProfile(event.target.value);
+  });
+  document.getElementById('crucible-viewport-fire-button')?.addEventListener('click', () => {
+    runCrucibleViewportFiring().catch(err => setInfo(err.message || String(err)));
+  });
+  document.getElementById('crucible-viewport-cast-button')?.addEventListener('click', openCrucibleViewportCast);
   document.getElementById('pipeline-refresh-button')?.addEventListener('click', () => loadPipelineManifest().catch(err => setInfo(err.message || String(err))));
   document.getElementById('pipeline-browser-refresh')?.addEventListener('click', () => loadPipelineAssetBrowser().catch(err => setInfo(err.message || String(err))));
   document.querySelectorAll('[data-pipeline-asset-palette]').forEach(button => {
@@ -16277,12 +18267,26 @@ function initPipelineDock() {
     setInfo(err.message || String(err));
     renderPipelineDock();
   });
+  ensureSharpBreathingRoomImageAssets().catch(err => setSharpBreathingRoomStatus(`Image assets could not be loaded for SHARP: ${err.message || err}`, 'error'));
+  renderCrucibleBench();
   renderPipelineAssetBrowser();
 }
 
 window.loadPipelineManifest = loadPipelineManifest;
 window.loadPipelineAssetBrowser = loadPipelineAssetBrowser;
 window.runSelectedPipeline = runSelectedPipeline;
+window.runKilnRouteBenchRoute = runKilnRouteBenchRoute;
+window.renderKilnRouteBench = renderKilnRouteBench;
+window.renderCrucibleBench = renderCrucibleBench;
+window.selectCrucibleViewportSource = selectCrucibleViewportSource;
+window.runCrucibleViewportFiring = runCrucibleViewportFiring;
+window.openCrucibleViewportCast = openCrucibleViewportCast;
+window.kaminosCrucibleViewportDebugState = crucibleViewportDebugState;
+window.toggleCrucibleBenchSwitcher = toggleCrucibleBenchSwitcher;
+window.createNewCrucibleBenchCrucible = createNewCrucibleBenchCrucible;
+window.selectCrucibleBenchCrucible = selectCrucibleBenchCrucible;
+window.runSharpBreathingRoomProfile = runSharpBreathingRoomProfile;
+window.runSharpBreathingRoomComparison = runSharpBreathingRoomComparison;
 window.selectPipelineGenerator = selectPipelineGenerator;
 window.pipelineLoadSelectedSource = pipelineLoadSelectedSource;
 window.pipelineLoadRunSplatArtifact = pipelineLoadRunSplatArtifact;
@@ -16951,19 +18955,11 @@ function frameVolumeCamera() {
 }
 
 function createVolumeMainRendererBridge() {
-  const sourceTexture = new THREE.CanvasTexture(volumePrototype.canvasElement());
-  sourceTexture.colorSpace = THREE.SRGBColorSpace;
-  sourceTexture.generateMipmaps = false;
-  sourceTexture.minFilter = THREE.LinearFilter;
-  sourceTexture.magFilter = THREE.LinearFilter;
-
   const material = new THREE.MeshBasicMaterial({
-    map: sourceTexture,
     transparent: true,
-    opacity: 1,
+    opacity: 0,
     depthTest: false,
     depthWrite: false,
-    blending: THREE.AdditiveBlending,
     toneMapped: false,
     side: THREE.DoubleSide,
   });
@@ -16974,33 +18970,35 @@ function createVolumeMainRendererBridge() {
   mesh.userData.kaminosVolumeBridge = {
     identity: 'volume-main-renderer-bridge-v0',
     source: 'native-webgpu-volume-canvas',
-    composition: 'three-canvas-texture-additive-plane',
+    composition: 'dom-webgpu-canvas-no-copy',
+    lastSuppressedReason: 'inactive',
   };
   scene.add(mesh);
 
-  const direction = new THREE.Vector3();
   return {
     identity: 'volume-main-renderer-bridge-v0',
     mesh,
-    texture: sourceTexture,
     update() {
       const state = volumePrototype.debugState();
       const active = !!state.active;
-      mesh.visible = active;
-      if (!active) return false;
-      sourceTexture.needsUpdate = true;
-      const distance = Math.max(0.2, (camera.near || 0.1) * 2.5);
-      camera.getWorldDirection(direction);
-      mesh.position.copy(camera.position).addScaledVector(direction, distance);
-      mesh.quaternion.copy(camera.quaternion);
-      const height = 2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) * 0.5) * distance;
-      mesh.scale.set(height * camera.aspect, height, 1);
+      mesh.visible = false;
+      mesh.userData.kaminosVolumeBridge.lastSuppressedReason = active
+        ? 'dom-webgpu-canvas-direct-overlay'
+        : 'inactive';
+      return false;
+    },
+    forceHidden(reason = 'manual-release') {
+      mesh.visible = false;
+      mesh.userData.kaminosVolumeBridge.lastForceHiddenReason = reason;
+      mesh.userData.kaminosVolumeBridge.lastSuppressedReason = reason;
       return true;
     },
     debugState() {
       return {
         identity: 'volume-main-renderer-bridge-v0',
         visible: mesh.visible,
+        lastForceHiddenReason: mesh.userData.kaminosVolumeBridge.lastForceHiddenReason || null,
+        lastSuppressedReason: mesh.userData.kaminosVolumeBridge.lastSuppressedReason || null,
         textureSource: volumePrototype?.canvasElement?.()?.id || null,
         meshName: mesh.name,
         renderOrder: mesh.renderOrder,
@@ -17009,7 +19007,6 @@ function createVolumeMainRendererBridge() {
     },
     dispose() {
       scene.remove(mesh);
-      sourceTexture.dispose();
       material.dispose();
       mesh.geometry.dispose();
     },
@@ -20670,7 +22667,7 @@ initScene().then(() => {
       }
     }
   });
-  initKaminosVolumeRoute();
+  kaminosVolumeRouteInitPromise = initKaminosVolumeRoute();
   initKaminosMotionAgencyRoute();
   initWorldChambersRoute();
   initKaminosFingerJuiceHostRoute();

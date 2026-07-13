@@ -13,7 +13,7 @@ import time
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs, urlencode
 
-PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8090
+PORT = int(sys.argv[1]) if len(sys.argv) > 1 and str(sys.argv[1]).isdigit() else 8090
 ROOT = Path(__file__).parent.resolve()
 VOLUME_CAPTURE_DIR = ROOT / "artifacts" / "volume-captures"
 
@@ -117,6 +117,54 @@ JOB_OUTPUT_EVENTS = []
 JOB_OUTPUT_EVENTS_LOCK = threading.Lock()
 PIPELINE_MANIFEST_PATH = ROOT / "pipelines" / "asset-pipelines.json"
 PIPELINE_WITNESS_PATH = ROOT / "pipeline-witness.mjs"
+SHARP_SCHEDULER_PROFILES = {
+    "baseline-default": {
+        "id": "baseline-default",
+        "operatorLabel": "Default",
+        "label": "Baseline default SHARP route",
+        "scheduler": {"mode": "default"},
+        "env": {
+            "KAMINOS_SHARP_WEBGPU_SCHEDULER": json.dumps({"mode": "default"}, separators=(",", ":")),
+        },
+        "proofExpectation": {
+            "schedulerVerification": "not-verified-without-observed-events",
+            "comparisonRole": "baseline-throughput-and-frame-tail-only",
+        },
+    },
+    "cooperative-spn-gaussian": {
+        "id": "cooperative-spn-gaussian",
+        "operatorLabel": "Friendly",
+        "label": "Cooperative SHARP SPN plus Gaussian phase",
+        "scheduler": {
+            "mode": "cooperative",
+            "spnPatchChunkSize": 1,
+            "yieldMs": 3,
+            "waitForSubmittedWorkDone": True,
+            "gaussianPhaseYieldMs": 4,
+            "vitBlockChunkSize": 2,
+            "cpuChunkItems": 16384,
+            "routeTailYieldMs": 3,
+        },
+        "env": {
+            "KAMINOS_SHARP_WEBGPU_SCHEDULER": json.dumps({
+                "mode": "cooperative",
+                "spnPatchChunkSize": 1,
+                "yieldMs": 3,
+                "waitForSubmittedWorkDone": True,
+                "gaussianPhaseYieldMs": 4,
+                "vitBlockChunkSize": 2,
+                "cpuChunkItems": 16384,
+                "routeTailYieldMs": 3,
+            }, separators=(",", ":")),
+        },
+        "unsupportedFields": ["vitBlockChunkSize"],
+        "proofExpectation": {
+            "schedulerVerification": "observed-events-plus-boundary-assertions",
+            "comparisonRole": "field-level-spn-gaussian-proof-only",
+            "unsupported": ["phaseChunkSize.vitBlock"],
+        },
+    },
+}
 
 
 def runtime_config():
@@ -319,11 +367,92 @@ def _default_pipeline_out_dir(pipeline_id):
     return (KAMINOS_PIPELINE_RUNS_DIR / f"{stamp}-{os.getpid()}-{safe}").resolve()
 
 
+def write_pipeline_subprocess_failure_report(
+    *,
+    report_path,
+    pipeline_id,
+    source,
+    command,
+    exit_code,
+    stdout_tail="",
+    stderr_tail="",
+    scheduler_profile=None,
+    phase="subprocess-exit-before-report",
+):
+    report_path = Path(report_path)
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    source_path = source.get("path") if isinstance(source, dict) else None
+    source_document = {
+        "source": source.get("source") if isinstance(source, dict) else None,
+        "path": source_path,
+    }
+    try:
+        source_stat = Path(source_path).stat() if source_path else None
+    except OSError:
+        source_stat = None
+    if source_stat:
+        source_document["bytes"] = source_stat.st_size
+    report = {
+        "schema": "kaminos.pipeline-witness.v0",
+        "ok": False,
+        "requestedPipelineId": pipeline_id,
+        "effectivePipelineId": None,
+        "phase": phase,
+        "error": (stderr_tail or stdout_tail or f"pipeline witness exited {exit_code} before writing a report").strip().splitlines()[0],
+        "failureAuthority": "kaminos.serve.py-subprocess-wrapper.v0",
+        "effectiveRouteConfig": {
+            "routeId": pipeline_id,
+            "manifestPath": str(PIPELINE_MANIFEST_PATH),
+            "manifestSha256": None,
+            "outputRoot": str(report_path.parent),
+            "stageCount": 0,
+        },
+        "artifacts": {
+            "input": {
+                "role": "source-image",
+                "status": "requested",
+                **source_document,
+            },
+        },
+        "stages": [],
+        "lastTrustworthyEvidence": {
+            "source": source_document,
+            "command": command,
+            "exitCode": exit_code,
+            "schedulerProfileId": scheduler_profile.get("id") if isinstance(scheduler_profile, dict) else None,
+        },
+        "command": command,
+        "exitCode": exit_code,
+        "stdoutTail": stdout_tail,
+        "stderrTail": stderr_tail,
+    }
+    report_path.write_text(json.dumps(report, indent=2))
+    return report
+
+
+def resolve_sharp_scheduler_profile(profile_id):
+    requested = str(profile_id or "").strip()
+    if not requested:
+        return None
+    profile = SHARP_SCHEDULER_PROFILES.get(requested)
+    if not profile:
+        raise ValueError(f"Unknown SHARP scheduler profile: {requested}")
+    return json.loads(json.dumps(profile))
+
+
+def pipeline_witness_env_for_payload(payload):
+    profile = resolve_sharp_scheduler_profile(payload.get("schedulerProfileId") or payload.get("scheduler_profile_id"))
+    if not profile:
+        return {}, None
+    return dict(profile.get("env") or {}), profile
+
+
 def run_pipeline_witness(payload):
     pipeline_id = str(payload.get("pipelineId") or payload.get("pipeline_id") or "").strip()
     if not pipeline_id:
         raise ValueError("pipelineId required")
     source = resolve_pipeline_source(payload)
+    env_patch, scheduler_profile = pipeline_witness_env_for_payload(payload)
     out_dir_raw = str(payload.get("outDir") or payload.get("out_dir") or "").strip()
     out_dir = Path(out_dir_raw).expanduser() if out_dir_raw else _default_pipeline_out_dir(pipeline_id)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -338,14 +467,26 @@ def run_pipeline_witness(payload):
         "--report", str(report_path),
     ]
     timeout = int(os.environ.get("KAMINOS_PIPELINE_WITNESS_TIMEOUT", "360"))
-    proc = subprocess.run(command, cwd=ROOT, capture_output=True, text=True, timeout=timeout)
+    proc = subprocess.run(command, cwd=ROOT, capture_output=True, text=True, timeout=timeout, env={**os.environ, **env_patch})
     report = json.loads(report_path.read_text()) if report_path.exists() else None
+    if report is None and proc.returncode != 0:
+        report = write_pipeline_subprocess_failure_report(
+            report_path=report_path,
+            pipeline_id=pipeline_id,
+            source=source,
+            command=command,
+            exit_code=proc.returncode,
+            stdout_tail=proc.stdout[-4000:],
+            stderr_tail=proc.stderr[-4000:],
+            scheduler_profile=scheduler_profile,
+        )
     bundle_path = Path(report["bundleIndex"]["path"]) if report and report.get("bundleIndex") else None
     bundle = json.loads(bundle_path.read_text()) if bundle_path and bundle_path.exists() else None
     return {
         "schema": "kaminos.pipeline-run-result.v0",
         "ok": proc.returncode == 0 and bool(report and report.get("ok")),
         "pipelineId": pipeline_id,
+        "schedulerProfile": scheduler_profile,
         "source": source,
         "command": command,
         "exitCode": proc.returncode,
@@ -391,6 +532,7 @@ def run_pipeline_witness_stream(handler, payload):
     if not pipeline_id:
         raise ValueError("pipelineId required")
     source = resolve_pipeline_source(payload)
+    env_patch, scheduler_profile = pipeline_witness_env_for_payload(payload)
     out_dir_raw = str(payload.get("outDir") or payload.get("out_dir") or "").strip()
     out_dir = Path(out_dir_raw).expanduser() if out_dir_raw else _default_pipeline_out_dir(pipeline_id)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -412,7 +554,7 @@ def run_pipeline_witness_stream(handler, payload):
         stderr=subprocess.PIPE,
         text=True,
         bufsize=1,
-        env={**os.environ, "KAMINOS_PIPELINE_PROGRESS_STREAM": "1"},
+        env={**os.environ, **env_patch, "KAMINOS_PIPELINE_PROGRESS_STREAM": "1"},
     )
     events = queue.Queue()
     stdout_chunks = []
@@ -452,6 +594,17 @@ def run_pipeline_witness_stream(handler, payload):
             break
 
     report = json.loads(report_path.read_text()) if report_path.exists() else None
+    if report is None and proc.returncode != 0:
+        report = write_pipeline_subprocess_failure_report(
+            report_path=report_path,
+            pipeline_id=pipeline_id,
+            source=source,
+            command=command,
+            exit_code=proc.returncode,
+            stdout_tail="".join(stdout_chunks)[-4000:],
+            stderr_tail="".join(stderr_chunks)[-4000:],
+            scheduler_profile=scheduler_profile,
+        )
     bundle_path = Path(report["bundleIndex"]["path"]) if report and report.get("bundleIndex") else None
     bundle = json.loads(bundle_path.read_text()) if bundle_path and bundle_path.exists() else None
     result = {
@@ -459,6 +612,7 @@ def run_pipeline_witness_stream(handler, payload):
         "kind": "pipeline-result",
         "ok": proc.returncode == 0 and bool(report and report.get("ok")),
         "pipelineId": pipeline_id,
+        "schedulerProfile": scheduler_profile,
         "source": source,
         "command": command,
         "exitCode": proc.returncode,
@@ -1433,10 +1587,11 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
 
         # For images, serve directly
         ext = target.suffix.lower()
-        if ext in (".png", ".jpg", ".jpeg", ".exr", ".glb", ".gltf", ".ply", ".spz"):
+        if ext in (".png", ".jpg", ".jpeg", ".webp", ".exr", ".glb", ".gltf", ".ply", ".spz"):
             self.send_response(200)
             content_types = {
                 ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+                ".webp": "image/webp",
                 ".glb": "model/gltf-binary", ".gltf": "model/gltf+json",
                 ".exr": "application/octet-stream", ".ply": "application/octet-stream", ".spz": "application/octet-stream",
             }

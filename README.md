@@ -1,48 +1,116 @@
 # Kaminos
 
-Kaminos is a browser-native WebGPU scene, material, and spatial asset kiln lab. It gives generated assets, route outputs, and world-state fragments a place to take shape with lineage, spatial context, and visible process.
+> Kaminos builds the live experience that reveals what the product is, who
+> needs to own it, and where its value lives before it meets the world.
 
-The current prototype includes realtime volumetric fire and smoke running directly in the browser. The fire volume supports a tunable tall-plume scene, spatial pressure tiers, live route controls, and debug overlays that expose backend identity, effective parameters, and route receipts. That fire is not decoration: it is the first substrate for making compute, cache, fixture, fallback, and failure states visible as different material phases.
+Kaminos is a browser-native spatial workbench and world kiln, and the working
+surface of a technical invention studio. It turns difficult product bets across AI, graphics,
+simulation, spatial computing, and creative tooling into live experiences that
+people can see, steer, and decide around.
 
-The broader architecture is documented in [Spatial Asset Kiln](docs/spatial-asset-kiln.md). The short version: Kaminos is becoming a place where generated artifacts can enter World Chambers, sit on Workbench/Kiln surfaces, expose Preview Benches for smoke, and advertise Smoke Offers that an operator can open, inspect, capture, and route back into the work.
+The repository is where that method becomes software: local-first WebGPU
+material systems, generated spatial assets, motion and world substrates,
+inspectable inference routes, and the workbench that lets them meet.
 
-## Asset Kiln
+##  Live Browser Combustion
 
-Creative inference has an awkward rhythm: the operator forms a hypothesis about a generator, commits an experiment, then waits during the exact moment when curiosity is sharpest. Kaminos turns that wait into visible material transformation.
+Kaminos currently carries a multi-field volumetric fire and smoke simulation
+that runs directly in the browser through WebGPU. Its current boundary-fire
+renderer derives compact structural fields around the combustion front, then
+uses those fields to guide where the volumetric renderer spends work.
 
-Route work should feel like an artifact entering a kiln. A source tile can preheat while inputs and backends prepare, burn while live compute spends, bank while outputs settle, cool once artifacts are linked, glow when cached work is recalled, and snuff when a route fails. The visual state carries the work: source artifacts, requested and effective routes, backend identity, output slots, failure phase, cache status, fixture status, and fallback status stay inspectable beside the flame.
+The result is a live material process with:
 
-This kiln language is a product target as well as an interface contract. Live compute earns full burn. Cached work earns residual warmth. Fixture and fallback routes carry weaker heat. Failure has its own collapse. The goal is a creative loop where inference latency has texture, route truth has a body, and every visible phase says something real about the work being done.
+- dynamic fire and smoke at interactive cadence;
+- a `128^3` simulation route developed on Apple Silicon;
+- combustion-front topology and baked boundary-sidecar fields;
+- support, coverage, ridge, proximity, and footprint guidance;
+- adaptive raymarch and explicit quality controls;
+- route, backend, effective-control, and performance receipts;
+- durable state capture and replay for visual investigation.
 
-## World Chambers And Benches
+The fire began as an answer to a product question: how can a local AI
+experience remain alive while expensive inference occupies the machine? It is
+now becoming a material and rendering research program of its own.
 
-The kiln is not only a status effect. Kaminos organizes spatial work into chambers and benches:
+## The World Kiln
 
-- **World Chambers** frame a coherent world, route, or generated space with its own identity.
-- **Workbench/Kiln surfaces** are where artifacts are staged, conditioned, inspected, and promoted.
-- **Preview Benches** are smoke surfaces for lane-owned payloads before they become part of a chamber or scene.
-- **Smoke Offers** are the operator-facing handoff from a producing lane or station: "I have something you can smoke; here is the route, authority, freshness, downgrade state, and target bench."
+Kaminos treats generated outputs as world matter with lineage and behavior.
+Images, meshes, splats, motion, material fields, simulation state, and route
+outputs enter a shared browser workbench where they can be inspected,
+conditioned, transformed, staged, and handed onward.
 
-This keeps the UI from collapsing into a pile of one-off tabs. A terrain route, splat correction, material bake, motion preview, or future world-state packet can all enter Kaminos with its own shape and lineage, then become inspectable in a shared spatial frame.
+Current substrate includes:
 
-## Volumetric Fire
+- Three.js/WebGPU scene editing and persistence;
+- source-aware splat import, correction, crop, orientation, and sidecars;
+- mesh/splat hybrid rendering and scene-context integration;
+- motion-generation and motion-transposition experiments;
+- browser-native fluid, particle, and material processes;
+- world/chamber contracts for generated environments and inhabitants;
+- route receipts that distinguish requested and effective execution;
+- smoke and witness harnesses for visual and technical evidence.
 
-The landed fire volume is the first backend substrate for that kiln language. It already renders high-fidelity dancing flame and smoke in-browser through WebGPU, with pressure-tier controls that can spend more solver work in the visually important flame bands and less in background smoke.
+The architecture is documented in [Spatial Asset Kiln](docs/spatial-asset-kiln.md).
+Splat lineage and correction contracts are documented in
+[Splat Assets](docs/splat-assets.md).
 
-The current fire volume is an internal prototype substrate. The roadmap turns it into scene-placeable primitives, route-activity adapters, transparent tile compositing, cached/fixture/fallback visual authority classes, banking/coals, failure snuff, and heat/color envelopes that can be driven by real Kaminos route lifecycle state.
+## From Source To Cast
 
-## Asset Lineage
+The product direction is a complete visible loop:
 
-Kaminos keeps generated work inspectable after it leaves the model call. Corrected splat assets already follow this pattern: Kaminos stores editor-side correction sidecars beside original assets instead of mutating source splats. See [Splat Assets](docs/splat-assets.md).
+```text
+source -> route -> live work -> generated matter -> inspectable cast
+```
 
-## Local Smoke
+A team should be able to choose a source, fire a real local route, remain
+inside a living workroom while compute runs, and inspect the resulting object
+without crossing into a disconnected tool or dead waiting screen.
 
-Serve the checkout and open the volume smoke route:
+This loop is being assembled from the same browser-native systems already used
+for volumetric fire, splats, generated assets, motion, route scheduling, and
+scene inspection.
+
+## Decision Artifacts
+
+Kaminos projects are organized around one expensive uncertainty. The goal is a
+live artifact that makes the next product decision obvious enough to fund,
+staff, transfer, continue, or kill.
+
+The recurring engineering move is to find the missing representation that
+makes the system tractable. In the current fire route, combustion-front and
+boundary fields turn an expensive volumetric search into guided rendering. In
+generated-world routes, the corresponding representation may be a depth or
+normal field, splat, mesh, semantic substrate, motion packet, route receipt, or
+world-state contract.
+
+The visible experience carries the idea. The accompanying implementation,
+tests, route identity, performance evidence, and handoff notes make it usable
+after the demonstration ends.
+
+## Run Locally
+
+Kaminos is developed as a local browser application. Serve the checkout:
 
 ```sh
 python3 serve.py 8095
 ```
 
+Open the current volume route in a WebGPU-capable Chromium browser:
+
 ```text
 http://127.0.0.1:8095/?kaminos_volume_smoke=1&volume_scene=tall_plume
 ```
+
+The strongest current route is developed and witnessed on Apple Silicon. Other
+WebGPU devices may expose different performance and feature boundaries.
+
+## Status
+
+Kaminos is an active research and product prototype. Internal contracts,
+control surfaces, and route integrations are evolving quickly. Publicly useful
+subsystems are being separated into focused packages and upstream contributions
+as their interfaces settle.
+
+For technical or collaboration inquiries, contact
+[Noah Lyons](https://github.com/lyonsno).

@@ -20,9 +20,11 @@ const {
 let nowMs = 100;
 let frameCount = 10;
 let simStepCount = 20;
+let prototypeQueueSamples = 0;
 const hooks = createFireEpisodeHooks({
   now: () => nowMs,
   readCounters: () => ({ frameCount, simStepCount }),
+  readQueueProxy: () => ({ completionSequence: prototypeQueueSamples }),
   readRouteIdentity: () => ({
     effectiveRoute: 'native-3d-compute-fluid-raymarch-v0',
     flameRendererIdentity: 'live-boundary-sidecar-learned-attribute-splats-v0',
@@ -68,6 +70,7 @@ assert.deepEqual(hooks.snapshot(), {
   queueCompletionProxy: {
     evidenceSource: 'webgpu-queue-onSubmittedWorkDone-proxy',
     disclaimer: 'queue-completion-proxy-not-present-latency',
+    prototypeSampleBaseline: 0,
     available: false,
     pending: false,
     samples: 0,
@@ -117,10 +120,12 @@ assert.equal(repeatedBegin.sampleCount, 2, 'idempotent begin does not discard cu
 hooks.recordQueueProxy({
   available: true,
   pending: false,
+  completionSequence: 4,
   samples: 4,
   lastDoneMs: 1.25,
   p95DoneMs: 1.75,
 });
+prototypeQueueSamples = 4;
 assert.equal(hooks.snapshot().queueCompletionProxy.samples, 4);
 
 nowMs = 200;
@@ -130,8 +135,53 @@ assert.equal(firingB.sampleCount, 0, 'a distinct firing cannot inherit prototype
 assert.deepEqual(firingB.rawRafGapSamplesMs, []);
 assert.equal(firingB.queueCompletionProxy.samples, 0, 'a distinct firing cannot inherit queue evidence');
 assert.equal(firingB.queueCompletionProxy.lastDoneMs, null);
+hooks.recordQueueProxy({
+  available: true,
+  pending: true,
+  completionSequence: 4,
+  samples: 4,
+  lastDoneMs: 1.25,
+  p95DoneMs: 1.75,
+});
+assert.equal(hooks.snapshot().queueCompletionProxy.samples, 0, 'prototype-lifetime queue samples cannot repopulate a fresh episode');
+assert.equal(hooks.snapshot().queueCompletionProxy.lastDoneMs, null, 'a prior firing completion cannot become this firing last-done evidence');
+prototypeQueueSamples = 5;
+hooks.recordQueueProxy({
+  available: true,
+  pending: false,
+  completionSequence: 5,
+  samples: 5,
+  lastDoneMs: 2.25,
+  p95DoneMs: 2.25,
+});
+assert.equal(hooks.snapshot().queueCompletionProxy.samples, 1, 'a new in-window queue completion is episode-local evidence');
+assert.equal(hooks.snapshot().queueCompletionProxy.lastDoneMs, 2.25);
 assert.equal(firingB.frameStartCount, 13);
 assert.equal(firingB.simStepStartCount, 24);
+
+let saturatedCompletionSequence = 80;
+const saturatedQueueHooks = createFireEpisodeHooks({
+  now: () => nowMs,
+  readQueueProxy: () => ({
+    completionSequence: saturatedCompletionSequence,
+    samples: 80,
+  }),
+});
+saturatedQueueHooks.begin({ firingId: 'saturated-queue-firing' });
+saturatedCompletionSequence += 1;
+saturatedQueueHooks.recordQueueProxy({
+  available: true,
+  pending: false,
+  completionSequence: saturatedCompletionSequence,
+  samples: 80,
+  lastDoneMs: 3.5,
+});
+assert.equal(
+  saturatedQueueHooks.snapshot().queueCompletionProxy.samples,
+  1,
+  'a completion after the capped diagnostic buffer fills must remain episode-local evidence',
+);
+assert.equal(saturatedQueueHooks.snapshot().queueCompletionProxy.lastDoneMs, 3.5);
 
 assert.throws(
   () => hooks.end({ firingId: 'firing-a', status: 'complete' }),
@@ -174,6 +224,11 @@ assert.deepEqual(hooks.snapshot(), firingBComplete, 'snapshots do not expose mut
 assert.match(core, /beginFireEpisode/, 'volume prototype exposes the begin socket to the firing owner');
 assert.match(core, /endFireEpisode/, 'volume prototype exposes the end socket to the firing owner');
 assert.match(core, /fireEpisodeHooks\.recordFrame/, 'route-local frame timing records only through the episode lifecycle');
+assert.match(
+  core,
+  /volumeQueueCompletionSequence/,
+  'the volume route must own an uncapped queue completion sequence instead of treating capped buffer length as a counter',
+);
 assert.match(core, /fireEpisodeHooks:\s*fireEpisodeHooks\.snapshot\(\)/, 'debug and sample state expose an exact episode snapshot');
 assert.match(witness, /fireEpisodeHooks/, 'volume witness preserves exact fire episode evidence');
 
