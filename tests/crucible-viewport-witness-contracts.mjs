@@ -22,7 +22,11 @@ const compactSummary = compactWitnessSummary({
     },
   },
   out: '/tmp/final.png',
-  inFlightCapture: { status: 'captured', path: '/tmp/in-flight.png' },
+  inFlightCapture: {
+    status: 'captured',
+    path: '/tmp/in-flight.png',
+    settleEvidence: { sampleCount: 1, samples: [{ huge: 'do-not-print' }] },
+  },
   reportPath: '/tmp/report.json',
 });
 assert.equal(compactSummary.status, 'complete');
@@ -66,7 +70,7 @@ assert.equal(captureReceipts[0].effectiveFirePresentation.candidateCount, 512);
 assert.equal(captureReceipts[1].error, 'simulated CDP screenshot failure');
 
 const captureReadinessSource = witness.match(
-  /function advanceInFlightCaptureReadiness\([\s\S]*?\n}\n(?=\nasync function attemptInFlightHybridCapture)/,
+  /function advanceInFlightCaptureReadiness\([\s\S]*?\n}\n(?=\nfunction buildInFlightHybridSettleMonitorExpression)/,
 );
 assert.ok(captureReadinessSource, 'witness must expose a testable settled-capture readiness state machine');
 const advanceInFlightCaptureReadiness = vm.runInNewContext(`(${captureReadinessSource[0]})`);
@@ -108,6 +112,16 @@ assert.equal(
   null,
   'losing admissible hybrid evidence must reset the settle window',
 );
+const observationGapReset = advanceInFlightCaptureReadiness({
+  admissible: true,
+  nowMs: 2500,
+  eligibleSinceMs: settlingReadiness.eligibleSinceMs,
+  settleMs: 3000,
+  observationGapMs: 75,
+  maxObservationGapMs: 50,
+});
+assert.equal(observationGapReset.eligibleSinceMs, null, 'an unobserved frame interval must reset settle eligibility');
+assert.equal(observationGapReset.resetReason, 'observation-gap-exceeded');
 
 const cadenceAcceptanceSource = witness.match(
   /function classifyCadenceAcceptance\([\s\S]*?\n}\n(?=\nfunction advanceInFlightCaptureReadiness)/,
@@ -217,6 +231,52 @@ for (const [effective, expectedFailure] of [
   );
 }
 
+const settleMonitorBuilderSource = witness.match(
+  /function buildInFlightHybridSettleMonitorExpression\([\s\S]*?\n}\n(?=\nasync function attemptInFlightHybridCapture)/,
+);
+assert.ok(settleMonitorBuilderSource, 'witness must expose an executable browser RAF settle monitor');
+const buildInFlightHybridSettleMonitorExpression = vm.runInNewContext(`(() => {
+  const validateRequestedFirePresentation = (${presentationValidatorSource[0]});
+  const advanceInFlightCaptureReadiness = (${captureReadinessSource[0]});
+  return (${settleMonitorBuilderSource[0]});
+})()`);
+let browserNowMs = 0;
+const rafCallbacks = [];
+const browserWindow = {
+  __kaminosSharpBreathingRoomKilnFireState: {
+    phase: 'burning',
+    firingId: 'firing-hybrid-witness',
+    expectedFirePresentation: { effectiveMode: hybridPresentation.effectiveMode },
+    volumeDebugState: { firePresentation: hybridPresentation },
+  },
+};
+vm.runInNewContext(
+  buildInFlightHybridSettleMonitorExpression({ settleMs: 30, maxObservationGapMs: 20 }),
+  {
+    window: browserWindow,
+    performance: { now: () => browserNowMs },
+    requestAnimationFrame: callback => rafCallbacks.push(callback),
+  },
+);
+const runRafAt = nowMs => {
+  browserNowMs = nowMs;
+  const callback = rafCallbacks.shift();
+  assert.ok(callback, `RAF monitor must schedule a callback for ${nowMs}ms`);
+  callback();
+};
+for (const nowMs of [0, 10, 20, 30]) runRafAt(nowMs);
+assert.equal(browserWindow.__kaminosInFlightHybridSettleMonitor.ready, true);
+assert.equal(browserWindow.__kaminosInFlightHybridSettleMonitor.sampleRetention, 'uncapped');
+assert.equal(browserWindow.__kaminosInFlightHybridSettleMonitor.samples.length, 4);
+browserWindow.__kaminosSharpBreathingRoomKilnFireState.volumeDebugState.firePresentation = {
+  ...hybridPresentation,
+  fallbackReason: 'simulated-between-frame-fallback',
+};
+runRafAt(40);
+assert.equal(browserWindow.__kaminosInFlightHybridSettleMonitor.ready, false);
+assert.equal(browserWindow.__kaminosInFlightHybridSettleMonitor.eligibleSinceMs, null);
+assert.equal(browserWindow.__kaminosInFlightHybridSettleMonitor.resetCount, 1);
+
 const projectedEvidence = projectFriendlyFiringEvidence({
   browserFiringEvidence: {
     status: 'complete',
@@ -254,6 +314,7 @@ for (const [pattern, message] of [
   [/--fire-presentation/, 'Witness must accept an explicit central fire presentation instead of inheriting a UI default'],
   [/--capture-in-flight/, 'Transient visual capture must be explicit so ordinary cadence witnesses remain unperturbed'],
   [/--in-flight-out/, 'Witness must let callers choose the transient hybrid screenshot path'],
+  [/--in-flight-max-observation-gap-ms/, 'Witness must expose the RAF continuity threshold instead of burying it'],
   [/--expected-sharp-revision/, 'Full-route witness must accept the exact expected SHARP source revision'],
   [/openGenerateTabExpression[\s\S]*data-tab="generate"[\s\S]*evaluate\(ws, openGenerateTabExpression\)/, 'Witness must open the real Generate tab path'],
   [/id: 'crucible-viewport-workspace'/, 'Witness report must include the requested workspace selector'],
@@ -312,10 +373,13 @@ for (const [pattern, message] of [
   [/castButtonDisabled/, 'Witness must record whether the cast action truthfully has a target'],
   [/pointerEvents/, 'Witness must prove the workroom is hittable instead of visually clickable only'],
   [/Page\.captureScreenshot/, 'Witness must capture the actual browser viewport'],
-  [/validateRequestedFirePresentation\(\{[\s\S]*effective: routeState\.effectiveFirePresentation[\s\S]*advanceInFlightCaptureReadiness[\s\S]*attemptInFlightHybridCapture\(\{[\s\S]*authorization:[\s\S]*effectiveFirePresentation/, 'Transient capture must wait for executable effective hybrid presentation validation'],
+  [/buildInFlightHybridSettleMonitorExpression\(\{[\s\S]*routeState\.settleMonitor\?\.ready[\s\S]*sampleNow\('pre-capture'\)[\s\S]*attemptInFlightHybridCapture\(\{[\s\S]*authorization:[\s\S]*effectiveFirePresentation/, 'Transient capture must wait for executable effective hybrid presentation validation'],
   [/candidateCount <= 0/, 'Transient hybrid capture must require a nonempty live candidate set'],
   [/inFlightCapture[\s\S]*requestedFirePresentation[\s\S]*effectiveFirePresentation/, 'Transient capture evidence must preserve requested/effective presentation identity'],
   [/observerEffect[\s\S]*CDP viewport capture may perturb foreground cadence/, 'Transient visual evidence must disclose its cadence observer effect'],
+  [/requestAnimationFrame[\s\S]*__kaminosInFlightHybridSettleMonitor/, 'Transient settle authority must be sampled on the browser RAF loop'],
+  [/sampleRetention:\s*'uncapped'/, 'Transient settle evidence must retain every RAF sample without a hidden cap'],
+  [/sampleNow\('pre-capture'\)[\s\S]*attemptInFlightHybridCapture[\s\S]*sampleNow\('post-capture'\)/, 'Transient capture must verify the same settle epoch immediately before and after screenshot I/O'],
   [/compactWitnessSummary\([\s\S]*console\.log\(JSON\.stringify\(terminalSummary/, 'Successful stdout must emit only the compact locator summary'],
   [/Runtime\.exceptionThrown/, 'Witness must fail loud on browser runtime exceptions'],
   [/primaryOutputWritten/, 'Witness must report whether primary screenshot evidence was written'],

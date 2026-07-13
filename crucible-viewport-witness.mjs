@@ -20,7 +20,7 @@ for (let i = 2; i < process.argv.length; i += 1) {
   }
 }
 
-const usage = 'crucible-viewport-witness.mjs --url <kaminos-url> --out <screenshot.png> --report <report.json> [--cdp-port <port>] [--fire-friendly] [--fire-presentation <full-volume|hybrid-smoke-preview>] [--capture-in-flight] [--in-flight-out <screenshot.png>] [--in-flight-settle-ms <milliseconds>] [--expected-sharp-revision <sha>]';
+const usage = 'crucible-viewport-witness.mjs --url <kaminos-url> --out <screenshot.png> --report <report.json> [--cdp-port <port>] [--fire-friendly] [--fire-presentation <full-volume|hybrid-smoke-preview>] [--capture-in-flight] [--in-flight-out <screenshot.png>] [--in-flight-settle-ms <milliseconds>] [--in-flight-max-observation-gap-ms <milliseconds>] [--expected-sharp-revision <sha>]';
 if (args.has('help')) {
   console.log(usage);
   process.exit(0);
@@ -38,6 +38,7 @@ const outParts = path.parse(out);
 const inFlightOut = args.get('in-flight-out')
   || path.join(outParts.dir, `${outParts.name}-in-flight${outParts.ext || '.png'}`);
 const inFlightSettleMs = Number(args.get('in-flight-settle-ms') ?? 3000);
+const inFlightMaxObservationGapMs = Number(args.get('in-flight-max-observation-gap-ms') ?? 50);
 const fireTimeoutMs = Number(args.get('fire-timeout-ms') || 420000);
 const expectedSharpRevision = args.get('expected-sharp-revision') || null;
 const userDataDir = mkdtempSync(path.join(tmpdir(), 'kaminos-crucible-viewport-'));
@@ -54,6 +55,7 @@ let inFlightCapture = {
   status: captureInFlight ? 'awaiting-effective-hybrid' : 'not-requested',
   path: captureInFlight ? inFlightOut : null,
   settleMs: captureInFlight ? inFlightSettleMs : null,
+  maxObservationGapMs: captureInFlight ? inFlightMaxObservationGapMs : null,
   observerEffect: captureInFlight
     ? 'CDP viewport capture may perturb foreground cadence; this visual run must not close performance acceptance.'
     : null,
@@ -68,6 +70,9 @@ if (captureInFlight && (!fireFriendly || requestedFirePresentation !== 'hybrid-s
 }
 if (!Number.isFinite(inFlightSettleMs) || inFlightSettleMs < 0) {
   throw new Error('--in-flight-settle-ms must be a finite nonnegative number');
+}
+if (!Number.isFinite(inFlightMaxObservationGapMs) || inFlightMaxObservationGapMs <= 0) {
+  throw new Error('--in-flight-max-observation-gap-ms must be a finite positive number');
 }
 
 function sleep(ms) {
@@ -187,14 +192,22 @@ function advanceInFlightCaptureReadiness({
   nowMs,
   eligibleSinceMs,
   settleMs,
+  observationGapMs = 0,
+  maxObservationGapMs = Number.POSITIVE_INFINITY,
 }) {
-  if (!admissible) {
+  const observationGapExceeded = Number.isFinite(observationGapMs)
+    && Number.isFinite(maxObservationGapMs)
+    && observationGapMs > maxObservationGapMs;
+  if (!admissible || observationGapExceeded) {
     return {
       status: 'awaiting-effective-hybrid',
       ready: false,
       eligibleSinceMs: null,
       settledForMs: 0,
       settleMs,
+      observationGapMs,
+      maxObservationGapMs,
+      resetReason: observationGapExceeded ? 'observation-gap-exceeded' : 'presentation-inadmissible',
     };
   }
   const effectiveEligibleSinceMs = Number.isFinite(eligibleSinceMs) ? eligibleSinceMs : nowMs;
@@ -205,7 +218,108 @@ function advanceInFlightCaptureReadiness({
     eligibleSinceMs: effectiveEligibleSinceMs,
     settledForMs,
     settleMs,
+    observationGapMs,
+    maxObservationGapMs,
+    resetReason: null,
   };
+}
+
+function buildInFlightHybridSettleMonitorExpression({ settleMs, maxObservationGapMs }) {
+  const validateSource = validateRequestedFirePresentation.toString();
+  const advanceSource = advanceInFlightCaptureReadiness.toString();
+  return `(() => {
+    const validatePresentation = (${validateSource});
+    const advanceReadiness = (${advanceSource});
+    const monitor = {
+      schema: 'kaminos.in-flight-hybrid-settle-monitor.v0',
+      sampleRetention: 'uncapped',
+      active: true,
+      settleMs: ${JSON.stringify(settleMs)},
+      maxObservationGapMs: ${JSON.stringify(maxObservationGapMs)},
+      eligibleSinceMs: null,
+      settledForMs: 0,
+      ready: false,
+      resetCount: 0,
+      lastObservedAtMs: null,
+      latest: null,
+      samples: [],
+    };
+    monitor.snapshot = () => ({
+      schema: monitor.schema,
+      sampleRetention: monitor.sampleRetention,
+      active: monitor.active,
+      settleMs: monitor.settleMs,
+      maxObservationGapMs: monitor.maxObservationGapMs,
+      eligibleSinceMs: monitor.eligibleSinceMs,
+      settledForMs: monitor.settledForMs,
+      ready: monitor.ready,
+      resetCount: monitor.resetCount,
+      lastObservedAtMs: monitor.lastObservedAtMs,
+      latest: monitor.latest,
+      sampleCount: monitor.samples.length,
+      samples: [...monitor.samples],
+      mohelIndicator: {
+        uncappedSettleSamples: true,
+        sampleCount: monitor.samples.length,
+        note: 'RAF settle samples are intentionally uncapped until visual capture finishes.',
+      },
+    });
+    monitor.sampleNow = trigger => {
+      const nowMs = performance.now();
+      const fireState = window.__kaminosSharpBreathingRoomKilnFireState || {};
+      const firingId = fireState.firingId || null;
+      const expected = fireState.expectedFirePresentation || null;
+      const effective = fireState.volumeDebugState?.firePresentation || null;
+      const presentationFailures = validatePresentation({
+        requestedPresentation: 'hybrid-smoke-preview',
+        firingId,
+        expected,
+        effective,
+      });
+      const observationGapMs = Number.isFinite(monitor.lastObservedAtMs)
+        ? Math.max(0, nowMs - monitor.lastObservedAtMs)
+        : 0;
+      const readiness = advanceReadiness({
+        admissible: fireState.phase === 'burning' && presentationFailures.length === 0,
+        nowMs,
+        eligibleSinceMs: monitor.eligibleSinceMs,
+        settleMs: monitor.settleMs,
+        observationGapMs,
+        maxObservationGapMs: monitor.maxObservationGapMs,
+      });
+      if (readiness.resetReason && monitor.eligibleSinceMs !== null) monitor.resetCount += 1;
+      monitor.eligibleSinceMs = readiness.eligibleSinceMs;
+      monitor.settledForMs = readiness.settledForMs;
+      monitor.ready = readiness.ready;
+      monitor.lastObservedAtMs = nowMs;
+      monitor.latest = {
+        trigger,
+        atMs: nowMs,
+        firingId,
+        firePhase: fireState.phase || null,
+        admissible: fireState.phase === 'burning' && presentationFailures.length === 0,
+        status: readiness.status,
+        observationGapMs,
+        resetReason: readiness.resetReason,
+        presentationFailures,
+        candidateCount: effective?.candidateCount ?? null,
+        candidateCapacity: effective?.candidateCapacity ?? null,
+        candidateOverflow: effective?.candidateOverflow ?? null,
+        candidateCopyBytes: effective?.candidateCopyBytes ?? null,
+        fallbackReason: effective?.fallbackReason ?? null,
+      };
+      monitor.samples.push(monitor.latest);
+      return monitor.latest;
+    };
+    window.__kaminosInFlightHybridSettleMonitor = monitor;
+    const tick = () => {
+      if (!monitor.active) return;
+      monitor.sampleNow('raf');
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+    return monitor.snapshot();
+  })()`;
 }
 
 async function attemptInFlightHybridCapture({
@@ -278,7 +392,22 @@ function compactWitnessSummary({ state, out, inFlightCapture, reportPath }) {
         }
       : null,
     cadenceAcceptance: route?.cadenceAcceptance || null,
-    inFlightCapture,
+    inFlightCapture: inFlightCapture
+      ? {
+          requested: inFlightCapture.requested,
+          status: inFlightCapture.status,
+          path: inFlightCapture.path,
+          firingId: inFlightCapture.firingId || null,
+          settleMs: inFlightCapture.settleMs,
+          settledForMs: inFlightCapture.settledForMs ?? null,
+          settleSampleCount: inFlightCapture.settleEvidence?.sampleCount ?? null,
+          settleResetCount: inFlightCapture.settleEvidence?.resetCount ?? null,
+          postCaptureVerified: inFlightCapture.postCaptureSettleEvidence?.verified ?? null,
+          bytes: inFlightCapture.bytes ?? null,
+          observerEffect: inFlightCapture.observerEffect,
+          error: inFlightCapture.error || null,
+        }
+      : null,
   };
 }
 
@@ -586,10 +715,18 @@ try {
       document.getElementById('crucible-viewport-fire-button').click();
       return { profile: profile.value, presentation: presentation.value };
     })()`);
+    if (captureInFlight) {
+      phase = 'installing-in-flight-hybrid-settle-monitor';
+      const installedMonitor = await evaluate(ws, buildInFlightHybridSettleMonitorExpression({
+        settleMs: inFlightSettleMs,
+        maxObservationGapMs: inFlightMaxObservationGapMs,
+      }));
+      inFlightCapture = { ...inFlightCapture, settleMonitor: installedMonitor };
+      lastTrustworthyEvidence = { ...lastTrustworthyEvidence, inFlightCapture };
+    }
     const deadline = Date.now() + fireTimeoutMs;
     let observedRunning = false;
     let routeState = null;
-    let inFlightHybridEligibleSinceMs = null;
     while (Date.now() < deadline) {
       await sleep(1000);
       routeState = await evaluate(ws, `(() => ({
@@ -600,31 +737,60 @@ try {
         firingId: window.__kaminosSharpBreathingRoomKilnFireState?.firingId || null,
         expectedFirePresentation: window.__kaminosSharpBreathingRoomKilnFireState?.expectedFirePresentation || null,
         effectiveFirePresentation: window.__kaminosSharpBreathingRoomKilnFireState?.volumeDebugState?.firePresentation || null,
+        settleMonitor: (() => {
+          const monitor = window.__kaminosInFlightHybridSettleMonitor;
+          return monitor ? {
+            schema: monitor.schema,
+            sampleRetention: monitor.sampleRetention,
+            active: monitor.active,
+            settleMs: monitor.settleMs,
+            maxObservationGapMs: monitor.maxObservationGapMs,
+            eligibleSinceMs: monitor.eligibleSinceMs,
+            settledForMs: monitor.settledForMs,
+            ready: monitor.ready,
+            resetCount: monitor.resetCount,
+            lastObservedAtMs: monitor.lastObservedAtMs,
+            latest: monitor.latest,
+            sampleCount: monitor.samples.length,
+          } : null;
+        })(),
       }))()`);
       if (routeState.runningProfileId || routeState.status === 'running') observedRunning = true;
       if (captureInFlight && !['captured', 'capture-attempting', 'capture-failed'].includes(inFlightCapture.status)) {
-        const presentationFailures = validateRequestedFirePresentation({
-          requestedPresentation: requestedFirePresentation,
-          firingId: routeState.firingId,
-          expected: routeState.expectedFirePresentation,
-          effective: routeState.effectiveFirePresentation,
-        });
-        const readiness = advanceInFlightCaptureReadiness({
-          admissible: routeState.firePhase === 'burning' && presentationFailures.length === 0,
-          nowMs: Date.now(),
-          eligibleSinceMs: inFlightHybridEligibleSinceMs,
-          settleMs: inFlightSettleMs,
-        });
-        inFlightHybridEligibleSinceMs = readiness.eligibleSinceMs;
         inFlightCapture = {
           ...inFlightCapture,
-          ...readiness,
-          presentationFailures,
+          status: routeState.settleMonitor?.ready ? 'capture-authorized' : (routeState.settleMonitor?.latest?.status || 'awaiting-effective-hybrid'),
+          settledForMs: routeState.settleMonitor?.settledForMs ?? 0,
+          settleSampleCount: routeState.settleMonitor?.sampleCount ?? 0,
+          settleResetCount: routeState.settleMonitor?.resetCount ?? 0,
           lastRouteState: routeState,
         };
         lastTrustworthyEvidence = { ...lastTrustworthyEvidence, inFlightCapture };
-        if (readiness.ready) {
+        if (routeState.settleMonitor?.ready) {
+          const preCaptureSettleEvidence = await evaluate(ws, `(() => {
+            const monitor = window.__kaminosInFlightHybridSettleMonitor;
+            if (!monitor) return null;
+            monitor.sampleNow('pre-capture');
+            return monitor.snapshot();
+          })()`);
+          if (!preCaptureSettleEvidence?.ready
+            || preCaptureSettleEvidence.latest?.admissible !== true
+            || preCaptureSettleEvidence.latest?.firingId !== routeState.firingId) {
+            inFlightCapture = {
+              ...inFlightCapture,
+              status: 'settle-invalidated-before-capture',
+              settleEvidence: preCaptureSettleEvidence,
+            };
+            lastTrustworthyEvidence = { ...lastTrustworthyEvidence, inFlightCapture };
+            continue;
+          }
           phase = 'capturing-in-flight-hybrid';
+          const presentationFailures = validateRequestedFirePresentation({
+            requestedPresentation: requestedFirePresentation,
+            firingId: routeState.firingId,
+            expected: routeState.expectedFirePresentation,
+            effective: routeState.effectiveFirePresentation,
+          });
           inFlightCapture = await attemptInFlightHybridCapture({
             ws,
             outputPath: inFlightOut,
@@ -636,12 +802,42 @@ try {
               expectedFirePresentation: routeState.expectedFirePresentation,
               effectiveFirePresentation: routeState.effectiveFirePresentation,
               presentationFailures,
+              settleEvidence: preCaptureSettleEvidence,
             },
             persistEvidence: receipt => {
               inFlightCapture = receipt;
               lastTrustworthyEvidence = { ...lastTrustworthyEvidence, inFlightCapture: receipt };
             },
           });
+          const postCaptureSettleEvidence = await evaluate(ws, `(() => {
+            const monitor = window.__kaminosInFlightHybridSettleMonitor;
+            if (!monitor) return null;
+            monitor.sampleNow('post-capture');
+            monitor.active = false;
+            return monitor.snapshot();
+          })()`);
+          const postCaptureVerified = Boolean(
+            postCaptureSettleEvidence?.ready
+            && postCaptureSettleEvidence.latest?.admissible === true
+            && postCaptureSettleEvidence.latest?.firingId === routeState.firingId
+            && postCaptureSettleEvidence.eligibleSinceMs === preCaptureSettleEvidence.eligibleSinceMs
+            && postCaptureSettleEvidence.resetCount === preCaptureSettleEvidence.resetCount
+          );
+          inFlightCapture = {
+            ...inFlightCapture,
+            status: postCaptureVerified ? 'captured' : 'capture-invalidated',
+            postCaptureSettleEvidence: postCaptureSettleEvidence
+              ? {
+                  ...postCaptureSettleEvidence,
+                  samples: undefined,
+                  verified: postCaptureVerified,
+                }
+              : { verified: false },
+          };
+          lastTrustworthyEvidence = { ...lastTrustworthyEvidence, inFlightCapture };
+          if (!postCaptureVerified) {
+            throw new Error(`Hybrid presentation lost its settled same-firing authority during visual capture: ${JSON.stringify(inFlightCapture.postCaptureSettleEvidence)}`);
+          }
           phase = 'waiting-for-friendly-firing';
         }
       }
