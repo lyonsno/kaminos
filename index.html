@@ -5038,6 +5038,34 @@ window.kaminosSetCameraDebugPose = function(pose = {}) {
   return window.kaminosCameraDebugState();
 };
 
+function boundarySplatCompositionCameraPose(params = new URLSearchParams(window.location.search)) {
+  const requested = String(params.get('volume_boundary_splat_composition') || '').toLowerCase().replace(/_/g, '-');
+  if (!['field', 'composed-field', 'field-100'].includes(requested)) return null;
+  return {
+    identity: 'boundary-splat-composed-field-camera-v0',
+    requestedComposition: requested,
+    effectiveComposition: 'field',
+    position: [0, 7.4, 9.2],
+    target: [0, -0.3, 0],
+  };
+}
+
+function applyBoundarySplatCompositionCamera(params = new URLSearchParams(window.location.search)) {
+  const pose = boundarySplatCompositionCameraPose(params);
+  if (!pose || !camera || !controls) return null;
+  camera.position.fromArray(pose.position);
+  controls.target.fromArray(pose.target);
+  controls.update();
+  camera.updateMatrixWorld?.();
+  window.__kaminosBoundarySplatCompositionCamera = {
+    ...pose,
+    authority: 'url-owned-camera-pose',
+  };
+  return window.__kaminosBoundarySplatCompositionCamera;
+}
+
+window.kaminosBoundarySplatCompositionDebugState = () => window.__kaminosBoundarySplatCompositionCamera || null;
+
 function renderSceneObjectRow(record, options = {}) {
   const active = record.id === activeSceneObjectId;
   const grouped = options.grouped ? ' grouped' : '';
@@ -16396,6 +16424,7 @@ function readVolumeControls() {
   const boundarySidecarView = normalizeBoundarySidecarView(document.getElementById('volume-boundary-sidecar-view')?.value);
   const boundarySplatMode = normalizeBoundarySplatMode(document.getElementById('volume-boundary-splat-mode')?.value);
   const boundarySplatPhaseMode = normalizeBoundarySplatPhaseMode(document.getElementById('volume-boundary-splat-phase-mode')?.value);
+  const boundarySplatComposition = String(params.get('volume_boundary_splat_composition') || 'proof');
   const boundarySplatFeatureCapture = ['1', 'true', 'on'].includes(String(params.get('volume_boundary_splat_feature_capture') || '').toLowerCase());
   const reactionBoundaryControls = {
     identity: 'reaction-boundary-live-controls-v0',
@@ -16464,6 +16493,7 @@ function readVolumeControls() {
     boundarySidecarView,
     boundarySplatMode,
     boundarySplatPhaseMode,
+    boundarySplatComposition,
     boundarySplatFeatureCapture,
     boundarySplatInstances: parseFloat(document.getElementById('volume-boundary-splat-instances').value),
     boundarySplatPhaseStride: parseFloat(document.getElementById('volume-boundary-splat-phase-stride').value),
@@ -17661,6 +17691,7 @@ async function initKaminosVolumeRoute() {
   }
 
   volumePrototype.setControls(readVolumeControls());
+  applyBoundarySplatCompositionCamera(params);
 
   const rayBudgetPresetOwnedControls = new Set([
     'volume-steps',

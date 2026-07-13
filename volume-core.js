@@ -19,6 +19,7 @@ const BOUNDARY_SPLAT_SOURCE_AUTHORITY = 'live-baked-sidecar-plus-fluid-material-
 const BOUNDARY_SPLAT_GPU_PROFILE_IDENTITY = 'boundary-splat-stage-gpu-timestamp-profile-v0';
 const BOUNDARY_SPLAT_ATTRIBUTE_HOOK_IDENTITY = 'boundary-splat-learned-attribute-hook-v0';
 const BOUNDARY_SPLAT_INSTANCE_DESCRIPTOR_IDENTITY = 'boundary-splat-instance-descriptor-v0';
+const BOUNDARY_SPLAT_FIELD_COMPOSITION_IDENTITY = 'boundary-splat-composed-field-v0';
 const BOUNDARY_SPLAT_INITIAL_CAPACITY = 131072;
 const BOUNDARY_SPLAT_CANDIDATE_STRIDE_BYTES = 48;
 const BOUNDARY_SPLAT_INSTANCE_DESCRIPTOR_STRIDE_BYTES = 32;
@@ -198,6 +199,11 @@ function normalizeBoundarySplatInstanceCount(value) {
   const requested = Math.round(Number(value));
   if (!Number.isFinite(requested)) return 1;
   return Math.max(1, Math.min(BOUNDARY_SPLAT_MAX_INSTANCES, requested));
+}
+
+function normalizeBoundarySplatComposition(value) {
+  const normalized = String(value || 'proof').toLowerCase().replace(/_/g, '-');
+  return ['field', 'composed-field', 'field-100'].includes(normalized) ? 'field' : 'proof';
 }
 
 function normalizeBoundarySplatPhaseMode(value) {
@@ -5292,6 +5298,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     boundarySplatHistoryDepth: normalizeBoundarySplatHistoryDepth(controlsSnapshot.boundarySplatHistoryDepth),
     boundarySplatHistoryFrameStride: normalizeBoundarySplatHistoryFrameStride(controlsSnapshot.boundarySplatHistoryFrameStride),
     boundarySplatInstanceDescriptorIdentity: BOUNDARY_SPLAT_INSTANCE_DESCRIPTOR_IDENTITY,
+    boundarySplatComposition: normalizeBoundarySplatComposition(controlsSnapshot.boundarySplatComposition),
+    boundarySplatCompositionIdentity: normalizeBoundarySplatComposition(controlsSnapshot.boundarySplatComposition) === 'field'
+      ? BOUNDARY_SPLAT_FIELD_COMPOSITION_IDENTITY
+      : 'boundary-splat-proof-layout-v0',
+    boundarySplatLayoutBounds: null,
     boundarySplatRequestedInstanceCount: normalizeBoundarySplatInstanceCount(controlsSnapshot.boundarySplatInstances),
     boundarySplatSourceCandidateCount: null,
     boundarySplatPhaseSourceCount: 1,
@@ -8423,15 +8434,48 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     return { status, ms, ...extra };
   }
 
-  function boundarySplatInstanceLayout(requestedInstanceCount) {
+  function boundarySplatLayoutBounds(layout) {
+    if (!layout.length) return null;
+    const xs = layout.map(entry => entry[0]);
+    const ys = layout.map(entry => entry[1]);
+    const zs = layout.map(entry => entry[2]);
+    const scales = layout.map(entry => entry[3]);
+    return {
+      min: [Math.min(...xs), Math.min(...ys), Math.min(...zs)],
+      max: [Math.max(...xs), Math.max(...ys), Math.max(...zs)],
+      uniformScaleMin: Math.min(...scales),
+      uniformScaleMax: Math.max(...scales),
+      instanceCount: layout.length,
+    };
+  }
+
+  function boundarySplatInstanceLayout(requestedInstanceCount, composition = normalizeBoundarySplatComposition(controlsSnapshot.boundarySplatComposition)) {
     const fourFlameProofLayout = [
       [-1.35, 0, -0.18, 0.72],
       [-0.45, 0, 0.16, 0.72],
       [0.45, 0, -0.12, 0.72],
       [1.35, 0, 0.18, 0.72],
     ];
-    if (requestedInstanceCount <= fourFlameProofLayout.length) {
+    if (composition !== 'field' && requestedInstanceCount <= fourFlameProofLayout.length) {
       return fourFlameProofLayout.slice(0, requestedInstanceCount);
+    }
+    if (composition === 'field') {
+      const columns = Math.ceil(Math.sqrt(requestedInstanceCount * 1.35));
+      const rows = Math.ceil(requestedInstanceCount / columns);
+      return Array.from({ length: requestedInstanceCount }, (_, index) => {
+        const column = index % columns;
+        const row = Math.floor(index / columns);
+        const centeredColumn = column - (columns - 1) * 0.5;
+        const centeredRow = row - (rows - 1) * 0.5;
+        const stagger = row % 2 ? 0.5 : 0;
+        const depthJitter = Math.sin(index * 12.9898) * 0.09;
+        return [
+          (centeredColumn + stagger) * 0.68,
+          0,
+          centeredRow * 0.62 + depthJitter,
+          0.34,
+        ];
+      });
     }
     const columns = Math.ceil(Math.sqrt(requestedInstanceCount * 1.35));
     const rows = Math.ceil(requestedInstanceCount / columns);
@@ -8462,12 +8506,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const historyFrameStride = normalizeBoundarySplatHistoryFrameStride(controlsSnapshot.boundarySplatHistoryFrameStride);
     const historyWriteTick = Math.floor(state.frameCount / historyFrameStride);
     const historyWriteSlot = historyWriteTick % historyDepth;
-    const active = boundarySplatInstanceLayout(requestedInstanceCount).map((entry, index) => {
+    const composition = normalizeBoundarySplatComposition(controlsSnapshot.boundarySplatComposition);
+    const layout = boundarySplatInstanceLayout(requestedInstanceCount, composition);
+    const active = layout.map((entry, index) => {
       let historyOffsetSlots = 0;
       let historyOffsetFrames = 0;
       if (phaseMode === 'same-history-slot') historyOffsetSlots = requestedInstanceCount > 1 ? Math.min(phaseStride, historyDepth - 1) : 0;
       else if (phaseMode === 'offset-history') historyOffsetFrames = requestedInstanceCount > 1 ? index : 0;
-      else if (phaseMode === 'age-sweep') historyOffsetSlots = requestedInstanceCount > 1 ? Math.min(index * phaseStride, historyDepth - 1) : 0;
+      else if (phaseMode === 'age-sweep') historyOffsetSlots = requestedInstanceCount > 1 ? (index * phaseStride) % historyDepth : 0;
       if (phaseMode === 'offset-history') historyOffsetSlots = historyOffsetFrames;
       const effectiveHistoryOffsetFrames = historyOffsetSlots * historyFrameStride;
       const historySlot = (historyWriteSlot - historyOffsetSlots + historyDepth) % historyDepth;
@@ -8518,6 +8564,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.boundarySplatHistoryDepth = normalizeBoundarySplatHistoryDepth(controlsSnapshot.boundarySplatHistoryDepth);
     state.boundarySplatHistoryFrameStride = normalizeBoundarySplatHistoryFrameStride(controlsSnapshot.boundarySplatHistoryFrameStride);
     state.boundarySplatInstanceDescriptorIdentity = BOUNDARY_SPLAT_INSTANCE_DESCRIPTOR_IDENTITY;
+    state.boundarySplatComposition = normalizeBoundarySplatComposition(controlsSnapshot.boundarySplatComposition);
+    state.boundarySplatCompositionIdentity = state.boundarySplatComposition === 'field'
+      ? BOUNDARY_SPLAT_FIELD_COMPOSITION_IDENTITY
+      : 'boundary-splat-proof-layout-v0';
+    state.boundarySplatLayoutBounds = boundarySplatLayoutBounds(descriptors.map(descriptor => [
+      ...descriptor.transform.translate,
+      descriptor.transform.scale,
+    ]));
     state.boundarySplatInstanceDescriptors = descriptors;
     state.boundarySplatHistorySlots = state.boundarySplatHistoryDepth;
     state.boundarySplatHistoryWriteTick = Math.floor(state.frameCount / state.boundarySplatHistoryFrameStride);
@@ -8557,6 +8611,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       maxEffectiveHistoryOffsetFrames: Math.max(...descriptors.map(descriptor => descriptor.effectiveHistoryOffsetFrames), 0),
       phaseModeIdentity: state.boundarySplatPhaseModeIdentity,
       phaseSourceIdentity: state.boundarySplatPhaseSourceIdentity,
+      compositionIdentity: state.boundarySplatCompositionIdentity,
+      layoutBounds: state.boundarySplatLayoutBounds,
     };
     return descriptors;
   }
@@ -8725,7 +8781,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     pass.end();
   }
 
-  async function sampleBoundarySplatGpuProfile() {
+  async function sampleBoundarySplatGpuProfile(options = {}) {
+    const advanceSimulation = options.advanceSimulation !== false;
     if (!boundarySplatRequested()) {
       return setBoundarySplatGpuProfile(makeBoundarySplatGpuProfile({
         timestampStatus: 'unsupported',
@@ -8764,19 +8821,25 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       device.pushErrorScope('validation');
       const encoder = device.createCommandEncoder({ label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} timestamp profile encoder` });
       const writeTimestamp = (index, label) => encodeBoundarySplatTimestampMarker(encoder, querySet, index, label);
-      encodeSim(encoder, {
-        timestampWrites: {
-          querySet,
-          beginningOfPassWriteIndex: 0,
-        },
-      });
-      writeTimestamp(1, 'kaminos boundary splat timestamp after simulation');
-      encodeBoundarySidecar(encoder, {
-        timestampWrites: {
-          querySet,
-          endOfPassWriteIndex: 2,
-        },
-      });
+      if (advanceSimulation) {
+        encodeSim(encoder, {
+          timestampWrites: {
+            querySet,
+            beginningOfPassWriteIndex: 0,
+          },
+        });
+        writeTimestamp(1, 'kaminos boundary splat timestamp after simulation');
+        encodeBoundarySidecar(encoder, {
+          timestampWrites: {
+            querySet,
+            endOfPassWriteIndex: 2,
+          },
+        });
+      } else {
+        writeTimestamp(0, 'kaminos boundary splat frozen profile start');
+        writeTimestamp(1, 'kaminos boundary splat frozen simulation marker');
+        writeTimestamp(2, 'kaminos boundary splat reused sidecar marker');
+      }
       const splatsEncoded = encodeBoundarySplats(encoder, {
         finalizeTimestampWrites: {
           querySet,
@@ -8828,8 +8891,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         candidateCopyBytes,
         rendererIdentity: state.boundarySplatRendererIdentity,
         stages: {
-          simulation: makeBoundarySplatStage('sampled', nsToMs(1, 0)),
-          sidecar: makeBoundarySplatStage('sampled', nsToMs(2, 1)),
+          simulation: advanceSimulation
+            ? makeBoundarySplatStage('sampled', nsToMs(1, 0))
+            : makeBoundarySplatStage('frozen-not-run', 0),
+          sidecar: advanceSimulation
+            ? makeBoundarySplatStage('sampled', nsToMs(2, 1))
+            : makeBoundarySplatStage('reused-live-current-state', 0),
           compaction: makeBoundarySplatStage('sampled', nsToMs(3, 2)),
           candidateCopy: makeBoundarySplatStage('sampled', 0, {
             disposition: 'removed-full-capacity-copy',
@@ -8838,7 +8905,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           indirectSetup: makeBoundarySplatStage('sampled', nsToMs(4, 3)),
           splatRaster: makeBoundarySplatStage('sampled', nsToMs(5, 4)),
           matchedRaymarchRaster: makeBoundarySplatStage('sampled', nsToMs(6, 5)),
-          total: makeBoundarySplatStage('sampled', nsToMs(6, 0)),
+          total: makeBoundarySplatStage('sampled', nsToMs(6, advanceSimulation ? 0 : 2)),
         },
       }));
     } catch (error) {
@@ -8946,6 +9013,95 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.boundarySplatEffectiveHistoryWindowFrames = result.effectiveHistoryWindowFrames;
     state.boundarySplatPhaseModeIdentity = result.phaseModeIdentity;
     state.boundarySplatPhaseSourceIdentity = result.phaseSourceIdentity;
+    return result;
+  }
+
+  function summarizeBoundarySplatTimingSamples(values) {
+    const sorted = values.filter(Number.isFinite).sort((a, b) => a - b);
+    if (!sorted.length) return { samples: [], medianMs: null, p95Ms: null, minMs: null, maxMs: null };
+    const percentile = fraction => sorted[Math.min(sorted.length - 1, Math.floor((sorted.length - 1) * fraction))];
+    return {
+      samples: sorted,
+      medianMs: percentile(0.5),
+      p95Ms: percentile(0.95),
+      minMs: sorted[0],
+      maxMs: sorted.at(-1),
+    };
+  }
+
+  async function sampleBoundarySplatInstanceCostLadder(options = {}) {
+    if (!state.active || !device) return { ok: false, reason: 'inactive' };
+    const counts = (Array.isArray(options.counts) ? options.counts : [1, 4, 16, 25, 64, 100])
+      .map(normalizeBoundarySplatInstanceCount);
+    const warmupSamples = Math.max(0, Math.floor(Number(options.warmupSamples ?? 3)));
+    const steadySamples = Math.max(1, Math.floor(Number(options.steadySamples ?? 12)));
+    const controlsBefore = { ...controlsSnapshot };
+    const simStepCountBefore = state.simStepCount;
+    const frameCountBefore = state.frameCount;
+    const rows = [];
+    cancelAnimationFrame(raf);
+    if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
+    try {
+      for (const count of counts) {
+        controlsSnapshot = applyRuntimeQualityControls({ ...controlsSnapshot, boundarySplatInstances: count });
+        updateUniforms(performance.now());
+        for (let index = 0; index < warmupSamples; index += 1) {
+          await sampleBoundarySplatGpuProfile({ advanceSimulation: false });
+        }
+        const profiles = [];
+        for (let index = 0; index < steadySamples; index += 1) {
+          profiles.push(await sampleBoundarySplatGpuProfile({ advanceSimulation: false }));
+        }
+        const draw = await sampleBoundarySplatDrawState();
+        const timestampStatus = profiles.every(profile => profile.timestampStatus === 'available') ? 'available' : 'unsupported';
+        rows.push({
+          requestedInstanceCount: count,
+          effectiveInstanceCount: draw?.requestedInstanceCount ?? null,
+          sourceCandidateCount: draw?.sourceCandidateCount ?? null,
+          renderedInstanceCount: draw?.instanceCount ?? null,
+          overflowCount: draw?.overflowCount ?? null,
+          phaseSourceCount: draw?.phaseSourceCount ?? null,
+          timestampStatus,
+          splatRaster: summarizeBoundarySplatTimingSamples(profiles.map(profile => profile.stages?.splatRaster?.ms)),
+          compaction: summarizeBoundarySplatTimingSamples(profiles.map(profile => profile.stages?.compaction?.ms)),
+          totalWithoutSimulation: summarizeBoundarySplatTimingSamples(profiles.map(profile => profile.stages?.total?.ms)),
+          candidateCopyBytes: profiles.at(-1)?.candidateCopyBytes ?? null,
+          fallbackReason: state.boundarySplatFallbackReason,
+          rendererIdentity: state.boundarySplatRendererIdentity,
+          modelIdentity: state.boundarySplatAttributeModelIdentity,
+          phaseModeIdentity: state.boundarySplatPhaseModeIdentity,
+          compositionIdentity: state.boundarySplatCompositionIdentity,
+        });
+      }
+    } finally {
+      controlsSnapshot = controlsBefore;
+      updateUniforms(performance.now());
+      if (state.active) raf = requestAnimationFrame(render);
+    }
+    const simStepCountAfter = state.simStepCount;
+    const frameCountAfter = state.frameCount;
+    const result = {
+      identity: 'boundary-splat-instance-cost-ladder-v0',
+      ok: rows.length === counts.length && rows.every(row => row.timestampStatus === 'available' && row.fallbackReason == null),
+      authority: 'serial-same-browser-gpu-timestamp-query-frozen-live-simulator-v0',
+      advanceSimulation: false,
+      counts,
+      warmupSamples,
+      steadySamples,
+      simStepCountBefore,
+      simStepCountAfter,
+      frameCountBefore,
+      frameCountAfter,
+      simulatorPreserved: simStepCountAfter === simStepCountBefore,
+      rows,
+      effectiveRoute: state.effectiveRoute,
+      backend: state.backend,
+      sourceAuthority: state.boundarySplatSourceAuthority,
+      rendererIdentity: state.boundarySplatRendererIdentity,
+      modelIdentity: state.boundarySplatAttributeModelIdentity,
+      compositionIdentity: state.boundarySplatCompositionIdentity,
+    };
+    state.boundarySplatInstanceCostLadder = result;
     return result;
   }
 
@@ -10516,6 +10672,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         boundarySplatSourceAuthority: state.boundarySplatSourceAuthority,
         boundarySplatCapacity: state.boundarySplatCapacity,
         boundarySplatInstanceDescriptorIdentity: state.boundarySplatInstanceDescriptorIdentity,
+        boundarySplatComposition: state.boundarySplatComposition,
+        boundarySplatCompositionIdentity: state.boundarySplatCompositionIdentity,
+        boundarySplatLayoutBounds: state.boundarySplatLayoutBounds,
         boundarySplatRequestedInstanceCount: state.boundarySplatRequestedInstanceCount,
         boundarySplatSourceCandidateCount: state.boundarySplatSourceCandidateCount,
         boundarySplatPhaseMode: state.boundarySplatPhaseMode,
@@ -10550,7 +10709,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       ? await sampleBoundarySplatFeatureCapture(boundarySplatSample.sourceCandidateCount || boundarySplatSample.candidateCount)
       : null;
     state.boundarySplatFeatureCapture = boundarySplatFeatureCapture;
-    const boundarySplatGpuProfile = boundarySplatRequested() ? await sampleBoundarySplatGpuProfile() : state.boundarySplatGpuProfile;
+    const boundarySplatGpuProfile = boundarySplatRequested()
+      ? await sampleBoundarySplatGpuProfile({ advanceSimulation: advanceSim })
+      : state.boundarySplatGpuProfile;
     await buffer.mapAsync(GPUMapMode.READ);
     const data = new Uint8Array(buffer.getMappedRange());
     let litPixels = 0;
@@ -11430,6 +11591,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       state.volumeResidualFeatureDebug = normalizeBrowserResidualFeatureDebug(controlsSnapshot.volumeResidualFeatureDebug);
       state.volumeResidualFeatureDebugMode = state.volumeResidualFeatureDebug ? 'residual-feature-debug-false-color-v0' : 'off';
       state.boundarySplatMode = normalizeBoundarySplatMode(controlsSnapshot.boundarySplatMode);
+      state.boundarySplatComposition = normalizeBoundarySplatComposition(controlsSnapshot.boundarySplatComposition);
+      state.boundarySplatCompositionIdentity = state.boundarySplatComposition === 'field'
+        ? BOUNDARY_SPLAT_FIELD_COMPOSITION_IDENTITY
+        : 'boundary-splat-proof-layout-v0';
       state.boundarySplatRadius = normalizeBoundarySplatRadius(controlsSnapshot.boundarySplatRadius);
       state.boundarySplatSharpness = normalizeBoundarySplatSharpness(controlsSnapshot.boundarySplatSharpness);
       if (device) void ensureBrowserResidualModel();
@@ -11546,6 +11711,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       return canvas;
     },
     sampleFrame,
+    sampleBoundarySplatInstanceCostLadder,
     sampleRenderScaleSet,
     controlledStepFrame,
     controlledStepSequence,
