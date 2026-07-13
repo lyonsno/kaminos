@@ -20,7 +20,7 @@ for (let i = 2; i < process.argv.length; i += 1) {
   }
 }
 
-const usage = 'crucible-viewport-witness.mjs --url <kaminos-url> --out <screenshot.png> --report <report.json> [--cdp-port <port>] [--fire-friendly] [--scheduler-profile <cooperative-spn-gaussian|cooperative-fixed-16ms-donation>] [--source-asset-id <indexed-asset-id>] [--fire-presentation <full-volume|hybrid-smoke-preview>] [--capture-in-flight] [--in-flight-out <screenshot.png>] [--in-flight-settle-ms <milliseconds>] [--in-flight-max-observation-gap-ms <milliseconds>] [--expected-sharp-revision <sha>]';
+const usage = 'crucible-viewport-witness.mjs --url <kaminos-url> --out <screenshot.png> --report <report.json> [--cdp-port <port>] [--fire-friendly] [--replay-cast-report <completed-pipeline-witness.json>] [--scheduler-profile <cooperative-spn-gaussian|cooperative-fixed-16ms-donation>] [--source-asset-id <indexed-asset-id>] [--fire-presentation <full-volume|hybrid-smoke-preview>] [--capture-in-flight] [--in-flight-out <screenshot.png>] [--in-flight-settle-ms <milliseconds>] [--in-flight-max-observation-gap-ms <milliseconds>] [--expected-sharp-revision <sha>]';
 if (args.has('help')) {
   console.log(usage);
   process.exit(0);
@@ -32,6 +32,7 @@ const reportPath = args.get('report') || '/tmp/kaminos-crucible-viewport-witness
 const chrome = args.get('chrome') || process.env.KAMINOS_CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const port = Number(args.get('cdp-port') || 9341);
 const fireFriendly = args.has('fire-friendly');
+const replayCastReportPath = args.get('replay-cast-report') || null;
 const schedulerProfileId = args.get('scheduler-profile') || 'cooperative-spn-gaussian';
 const schedulerProfileLabel = schedulerProfileId === 'cooperative-fixed-16ms-donation'
   ? 'Fixed 16 ms donation test'
@@ -55,6 +56,7 @@ let browser = null;
 let primaryOutputWritten = false;
 let stderr = '';
 let lastTrustworthyEvidence = null;
+let replayCastEvidence = null;
 let inFlightCapture = {
   requested: captureInFlight,
   status: captureInFlight ? 'awaiting-effective-hybrid' : 'not-requested',
@@ -75,6 +77,9 @@ if (captureInFlight && (!fireFriendly || requestedFirePresentation !== 'hybrid-s
 }
 if (args.has('scheduler-profile') && !fireFriendly) {
   throw new Error('--scheduler-profile requires --fire-friendly');
+}
+if (replayCastReportPath && fireFriendly) {
+  throw new Error('--replay-cast-report cannot be combined with --fire-friendly');
 }
 if (!Number.isFinite(inFlightSettleMs) || inFlightSettleMs < 0) {
   throw new Error('--in-flight-settle-ms must be a finite nonnegative number');
@@ -98,6 +103,44 @@ function expectedSchedulerForProfile(profileId) {
     return { ...common, yieldMs: 16, gaussianPhaseYieldMs: 16, routeTailYieldMs: 16 };
   }
   throw new Error(`Unsupported --scheduler-profile ${profileId}`);
+}
+
+function validatedReplayCastReport(document, reportPath) {
+  if (document?.schema !== 'kaminos.pipeline-witness.v0') {
+    throw new Error('Replay cast report must use kaminos.pipeline-witness.v0');
+  }
+  const outputRoot = document.effectiveRouteConfig?.outputRoot;
+  const artifact = document.artifacts?.splat;
+  if (!outputRoot || !outputRoot.startsWith('/')) throw new Error('Replay cast report is missing an absolute output root');
+  if (!artifact?.path || !artifact.path.startsWith('/')) throw new Error('Replay cast report is missing an absolute splat path');
+  if (artifact.status !== 'real') throw new Error('Replay cast artifact must carry status real');
+  if (!artifact.sha256) throw new Error('Replay cast artifact is missing SHA-256 identity');
+  if (!Number.isFinite(artifact.bytes) || artifact.bytes <= 0) throw new Error('Replay cast artifact must be nonempty');
+  const normalize = value => {
+    const segments = [];
+    for (const segment of value.split('/')) {
+      if (!segment || segment === '.') continue;
+      if (segment === '..') segments.pop();
+      else segments.push(segment);
+    }
+    return `/${segments.join('/')}`;
+  };
+  const normalizedRoot = normalize(outputRoot);
+  const normalizedArtifactPath = normalize(artifact.path);
+  if (!normalizedArtifactPath.startsWith(`${normalizedRoot}/`)) {
+    throw new Error('Replay cast artifact is outside recorded output root');
+  }
+  if (!document.requestedPipelineId || !document.effectiveRouteConfig?.routeId) {
+    throw new Error('Replay cast report is missing requested/effective route identity');
+  }
+  return {
+    authority: 'real-output-replay-not-inference',
+    reportPath,
+    requestedPipelineId: document.requestedPipelineId,
+    effectiveRouteId: document.effectiveRouteConfig.routeId,
+    outputRoot: normalizedRoot,
+    artifact: { ...artifact, path: normalizedArtifactPath },
+  };
 }
 
 function sleep(ms) {
@@ -390,20 +433,21 @@ async function attemptInFlightHybridCapture({
 
 function compactWitnessSummary({ state, out, inFlightCapture, reportPath }) {
   const route = state?.fullRoute || null;
+  const replay = state?.replayedCast || null;
   const foreground = route?.foregroundKilnHeartbeat || null;
   return {
     ok: true,
     out,
     report: reportPath,
-    status: route?.status || 'non-firing-witness-complete',
+    status: route?.status || replay?.status || 'non-firing-witness-complete',
     requestedFirePresentation: route?.requestedFirePresentation || null,
     selectedFirePresentation: route?.selectedFirePresentation || state?.selectedFirePresentation || null,
-    output: route?.output
+    output: (route?.output || replay?.artifact)
       ? {
-          path: route.output.path,
-          bytes: route.output.bytes,
-          sha256: route.output.sha256,
-          status: route.output.status,
+          path: (route?.output || replay.artifact).path,
+          bytes: (route?.output || replay.artifact).bytes,
+          sha256: (route?.output || replay.artifact).sha256,
+          status: (route?.output || replay.artifact).status,
         }
       : null,
     furnace: route
@@ -611,6 +655,14 @@ function projectFriendlyFiringEvidence({ browserFiringEvidence, pipelineReport }
 }
 
 try {
+  if (replayCastReportPath) {
+    phase = 'validating-replay-cast-report';
+    replayCastEvidence = validatedReplayCastReport(
+      JSON.parse(readFileSync(replayCastReportPath, 'utf8')),
+      replayCastReportPath,
+    );
+    lastTrustworthyEvidence = { replayCastSource: replayCastEvidence };
+  }
   phase = 'launching-chrome';
   browser = spawn(chrome, [
     '--headless=new',
@@ -669,6 +721,7 @@ try {
         workspace: { id: 'crucible-viewport-workspace', data: 'data-crucible-workroom' },
         heat: { attribute: 'data-crucible-heat-state' },
         routeStatus: { attribute: 'data-crucible-route-status' },
+        roomPosture: { attribute: 'data-crucible-room-posture' },
         stage: { id: 'crucible-worktable-stage' },
       },
       activeTab: document.querySelector('.tab.active')?.dataset.tab || null,
@@ -676,6 +729,7 @@ try {
       workroom: workspace?.dataset.crucibleWorkroom || null,
       heatState: workspace?.dataset.crucibleHeatState || null,
       routeStatus: workspace?.dataset.crucibleRouteStatus || null,
+      roomPosture: workspace?.dataset.crucibleRoomPosture || null,
       pointerEvents: workspace ? getComputedStyle(workspace).pointerEvents : null,
       stageRect: stageRect ? { width: stageRect.width, height: stageRect.height } : null,
       sourceThumbHidden: Boolean(sourceThumb?.hidden),
@@ -699,6 +753,7 @@ try {
   if (state.activeTab !== 'generate') throw new Error(`Generate tab did not activate: ${state.activeTab}`);
   if (state.workspaceHidden) throw new Error('Crucible viewport workspace is hidden');
   if (state.workroom !== 'active') throw new Error(`Crucible workroom identity missing: ${state.workroom}`);
+  if (state.roomPosture !== 'bench') throw new Error(`Crucible did not begin in its full bench posture: ${state.roomPosture}`);
   if (state.pointerEvents === 'none') throw new Error('Crucible workroom controls are not hittable');
   if (!state.stageRect || state.stageRect.width < 300 || state.stageRect.height < 220) {
     throw new Error(`Crucible worktable stage is not visibly mounted: ${JSON.stringify(state.stageRect)}`);
@@ -743,6 +798,47 @@ try {
   lastTrustworthyEvidence = { ...lastTrustworthyEvidence, sourceSelectionExercise: state.sourceSelectionExercise };
   if (runtimeExceptions.length) throw new Error(`browser runtime exceptions: ${runtimeExceptions.join('; ')}`);
 
+  if (replayCastEvidence) {
+    phase = 'replaying-completed-real-cast';
+    state.replayedCast = await evaluate(ws, `(async () => {
+      const replay = ${JSON.stringify(replayCastEvidence)};
+      const run = {
+        runId: 'visual-replay:' + replay.artifact.sha256,
+        bundle: { document: { outputRoot: replay.outputRoot } },
+      };
+      const artifact = { id: 'splat', ...replay.artifact };
+      const replayResult = await window.kaminosCrucibleViewportReplayRealCast({ replay, run, artifact });
+      document.querySelector('[data-tab="generate"]').click();
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      const workspace = document.getElementById('crucible-viewport-workspace');
+      const stage = document.getElementById('crucible-worktable-stage');
+      const transformBar = document.getElementById('transform-bar');
+      const stageRect = stage?.getBoundingClientRect();
+      const transformBarRect = transformBar?.getBoundingClientRect();
+      return {
+        status: replay.authority,
+        reportPath: replay.reportPath,
+        requestedPipelineId: replay.requestedPipelineId,
+        effectiveRouteId: replay.effectiveRouteId,
+        artifact: replay.artifact,
+        castTargetSceneObjectId: replayResult.record?.id || null,
+        completedWorkroom: {
+          heatState: workspace?.dataset.crucibleHeatState || null,
+          routeStatus: workspace?.dataset.crucibleRouteStatus || null,
+          roomPosture: workspace?.dataset.crucibleRoomPosture || null,
+          stageTop: stageRect?.top ?? null,
+          transformBarBottom: transformBar?.classList.contains('visible') ? (transformBarRect?.bottom ?? null) : 0,
+          castButtonDisabled: Boolean(document.getElementById('crucible-viewport-cast-button')?.disabled),
+        },
+      };
+    })()`, fireTimeoutMs);
+    lastTrustworthyEvidence = { ...lastTrustworthyEvidence, replayedCast: state.replayedCast };
+    if (state.replayedCast.status !== 'real-output-replay-not-inference') throw new Error(`Replay authority changed: ${JSON.stringify(state.replayedCast)}`);
+    if (!state.replayedCast.castTargetSceneObjectId || state.replayedCast.completedWorkroom.castButtonDisabled) throw new Error(`Replayed real cast is not actuatable: ${JSON.stringify(state.replayedCast)}`);
+    if (state.replayedCast.completedWorkroom.roomPosture !== 'cast-held') throw new Error(`Replayed real cast did not open the room around the asset: ${JSON.stringify(state.replayedCast)}`);
+    if (state.replayedCast.completedWorkroom.stageTop < state.replayedCast.completedWorkroom.transformBarBottom + 8) throw new Error(`Replayed Crucible console overlaps the scene toolbar: ${JSON.stringify(state.replayedCast.completedWorkroom)}`);
+  }
+
   if (fireFriendly) {
     const expectedScheduler = expectedSchedulerForProfile(schedulerProfileId);
     phase = 'starting-friendly-firing';
@@ -782,6 +878,7 @@ try {
         firingId: window.__kaminosSharpBreathingRoomKilnFireState?.firingId || null,
         expectedFirePresentation: window.__kaminosSharpBreathingRoomKilnFireState?.expectedFirePresentation || null,
         effectiveFirePresentation: window.__kaminosSharpBreathingRoomKilnFireState?.volumeDebugState?.firePresentation || null,
+        roomPosture: document.getElementById('crucible-viewport-workspace')?.dataset.crucibleRoomPosture || null,
         settleMonitor: (() => {
           const monitor = window.__kaminosInFlightHybridSettleMonitor;
           return monitor ? {
@@ -801,6 +898,9 @@ try {
         })(),
       }))()`);
       if (routeState.runningProfileId || routeState.status === 'running') observedRunning = true;
+      if ((routeState.runningProfileId || routeState.status === 'running') && routeState.roomPosture !== 'firing') {
+        throw new Error(`Live firing did not fold the Crucible into its furnace-visible posture: ${JSON.stringify(routeState)}`);
+      }
       if (captureInFlight && !['captured', 'capture-attempting', 'capture-failed'].includes(inFlightCapture.status)) {
         inFlightCapture = {
           ...inFlightCapture,
@@ -1130,15 +1230,27 @@ try {
     phase = 'returning-to-completed-crucible';
     await evaluate(ws, openGenerateTabExpression);
     await sleep(900);
-    state.fullRoute.completedWorkroom = await evaluate(ws, `(() => ({
-      heatState: document.getElementById('crucible-viewport-workspace')?.dataset.crucibleHeatState || null,
-      routeStatus: document.getElementById('crucible-viewport-workspace')?.dataset.crucibleRouteStatus || null,
-      castButtonDisabled: Boolean(document.getElementById('crucible-viewport-cast-button')?.disabled),
-      cast: document.getElementById('crucible-viewport-cast')?.textContent || null,
-      receipt: document.getElementById('crucible-viewport-receipt')?.textContent || null,
-    }))()`);
+    state.fullRoute.completedWorkroom = await evaluate(ws, `(() => {
+      const workspace = document.getElementById('crucible-viewport-workspace');
+      const stage = document.getElementById('crucible-worktable-stage');
+      const transformBar = document.getElementById('transform-bar');
+      const stageRect = stage?.getBoundingClientRect();
+      const transformBarRect = transformBar?.getBoundingClientRect();
+      return {
+        heatState: workspace?.dataset.crucibleHeatState || null,
+        routeStatus: workspace?.dataset.crucibleRouteStatus || null,
+        roomPosture: workspace?.dataset.crucibleRoomPosture || null,
+        stageTop: stageRect?.top ?? null,
+        transformBarBottom: transformBar?.classList.contains('visible') ? (transformBarRect?.bottom ?? null) : 0,
+        castButtonDisabled: Boolean(document.getElementById('crucible-viewport-cast-button')?.disabled),
+        cast: document.getElementById('crucible-viewport-cast')?.textContent || null,
+        receipt: document.getElementById('crucible-viewport-receipt')?.textContent || null,
+      };
+    })()`);
     lastTrustworthyEvidence = { ...lastTrustworthyEvidence, completedWorkroom: state.fullRoute.completedWorkroom };
     if (state.fullRoute.completedWorkroom.castButtonDisabled) throw new Error('Completed real cast is not actuatable from the Crucible tray');
+    if (state.fullRoute.completedWorkroom.roomPosture !== 'cast-held') throw new Error(`Completed real cast did not open the room around the asset: ${JSON.stringify(state.fullRoute.completedWorkroom)}`);
+    if (state.fullRoute.completedWorkroom.stageTop < state.fullRoute.completedWorkroom.transformBarBottom + 8) throw new Error(`Completed Crucible console overlaps the scene toolbar: ${JSON.stringify(state.fullRoute.completedWorkroom)}`);
   }
 
   phase = 'capturing-screenshot';

@@ -100,7 +100,7 @@ h2 { font-size: 11px; font-weight: 600; margin: 18px 0 8px; color: #666; text-tr
     .crucible-bench-list .btn { width: 100%; text-align: left; margin: 0; }
     .crucible-bench-list .btn.active { background: #57421f; border-color: #8b6a2f; }
     .crucible-bench-note { color: #777; font-size: 10px; line-height: 1.35; margin-top: 7px; }
-    #crucible-viewport-workspace { position: absolute; inset: 0; z-index: 4; display: flex; align-items: center; justify-content: center; padding: clamp(18px, 4vw, 54px); background: radial-gradient(circle at 52% 36%, rgba(58,65,68,0.36), transparent 38%), linear-gradient(180deg, rgba(8,9,10,0.72), rgba(4,4,5,0.86)); pointer-events: auto; perspective: 1200px; }
+    #crucible-viewport-workspace { position: absolute; inset: 0; z-index: 4; display: flex; align-items: center; justify-content: center; padding: clamp(18px, 4vw, 54px); background: radial-gradient(circle at 52% 36%, rgba(58,65,68,0.36), transparent 38%), linear-gradient(180deg, rgba(8,9,10,0.72), rgba(4,4,5,0.86)); pointer-events: auto; perspective: 1200px; transition: background 180ms ease, padding 180ms ease; }
     #crucible-viewport-workspace[hidden] { display: none; }
     .crucible-workroom-shell { width: min(1080px, 82vw); min-height: min(650px, 76vh); position: relative; transform: rotateX(5deg); transform-origin: center bottom; filter: drop-shadow(0 32px 70px rgba(0,0,0,0.56)); }
     .crucible-room-backwall { position: absolute; left: 5%; right: 5%; top: 0; height: 40%; border: 1px solid rgba(103,115,112,0.28); border-bottom: 0; background: linear-gradient(180deg, rgba(42,47,47,0.76), rgba(20,22,22,0.42)); box-shadow: inset 0 -24px 60px rgba(7,8,8,0.48); }
@@ -153,6 +153,41 @@ h2 { font-size: 11px; font-weight: 600; margin: 18px 0 8px; color: #666; text-tr
     .crucible-viewport-proxy-sockets { position: relative; z-index: 1; grid-column: 2; min-height: 92px; padding: 12px; display: grid; gap: 8px; background: rgba(16,22,24,0.66); }
     .crucible-viewport-socket-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
     .crucible-viewport-socket { min-height: 38px; border: 1px solid rgba(117,148,149,0.32); border-radius: 6px; background: linear-gradient(135deg, rgba(35,49,51,0.72), rgba(13,15,16,0.88)); box-shadow: inset 0 0 18px rgba(0,0,0,0.42); }
+    #crucible-viewport-workspace[data-crucible-room-posture="firing"] { align-items: flex-start; justify-content: flex-start; padding: 18px; background: linear-gradient(90deg, rgba(4,5,5,0.74) 0, rgba(4,5,5,0.58) 34%, rgba(4,5,5,0.1) 58%, transparent 76%); pointer-events: none; perspective: none; }
+    #crucible-viewport-workspace[data-crucible-room-posture="cast-held"] { align-items: flex-start; justify-content: flex-start; padding: 58px 18px 18px; background: linear-gradient(90deg, rgba(4,5,5,0.7) 0, rgba(4,5,5,0.52) 34%, rgba(4,5,5,0.08) 58%, transparent 76%); pointer-events: none; perspective: none; }
+    #crucible-viewport-workspace[data-crucible-room-posture="firing"] .crucible-workroom-shell { width: min(520px, calc(100% - 36px)); min-height: 0; transform: none; filter: drop-shadow(0 22px 48px rgba(0,0,0,0.52)); pointer-events: auto; }
+    #crucible-viewport-workspace[data-crucible-room-posture="cast-held"] .crucible-workroom-shell { width: min(520px, calc(100% - 36px)); min-height: 0; transform: none; filter: drop-shadow(0 22px 48px rgba(0,0,0,0.52)); pointer-events: auto; }
+    #crucible-viewport-workspace[data-crucible-room-posture="firing"] .crucible-viewport-proxy-sockets { display: none; }
+    #crucible-viewport-workspace[data-crucible-room-posture="cast-held"] .crucible-viewport-shard-rack { display: none; }
+    #crucible-viewport-workspace[data-crucible-room-posture="firing"] .crucible-viewport-shard-rack { display: none; }
+    #crucible-viewport-workspace[data-crucible-room-posture="cast-held"] .crucible-viewport-proxy-sockets { display: none; }
+    #crucible-viewport-workspace[data-crucible-room-posture="firing"] .crucible-room-backwall,
+    #crucible-viewport-workspace[data-crucible-room-posture="firing"] .crucible-room-shelf,
+    #crucible-viewport-workspace[data-crucible-room-posture="cast-held"] .crucible-room-backwall,
+    #crucible-viewport-workspace[data-crucible-room-posture="cast-held"] .crucible-room-shelf { display: none; }
+    #crucible-viewport-workspace[data-crucible-room-posture="firing"] .crucible-worktable-stage,
+    #crucible-viewport-workspace[data-crucible-room-posture="cast-held"] .crucible-worktable-stage { position: relative; left: auto; right: auto; bottom: auto; width: 100%; min-height: 0; max-height: calc(100vh - 36px); overflow-y: auto; padding: 14px; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto; gap: 10px; background: linear-gradient(145deg, rgba(87,69,48,0.96), rgba(38,34,30,0.94)); backdrop-filter: blur(9px); }
+    #crucible-viewport-workspace[data-crucible-room-posture="cast-held"] .crucible-worktable-stage { max-height: calc(100vh - 76px); }
+    #crucible-viewport-workspace[data-crucible-room-posture="firing"] .crucible-viewport-heading,
+    #crucible-viewport-workspace[data-crucible-room-posture="cast-held"] .crucible-viewport-heading,
+    #crucible-viewport-workspace[data-crucible-room-posture="firing"] .crucible-viewport-receipt-tag,
+    #crucible-viewport-workspace[data-crucible-room-posture="cast-held"] .crucible-viewport-receipt-tag { grid-column: 1; }
+    #crucible-viewport-workspace[data-crucible-room-posture="firing"] .crucible-viewport-title,
+    #crucible-viewport-workspace[data-crucible-room-posture="cast-held"] .crucible-viewport-title { font-size: 18px; }
+    #crucible-viewport-workspace[data-crucible-room-posture="firing"] .crucible-viewport-subtitle,
+    #crucible-viewport-workspace[data-crucible-room-posture="cast-held"] .crucible-viewport-subtitle { font-size: 10px; }
+    #crucible-viewport-workspace[data-crucible-room-posture="firing"] .crucible-viewport-plate,
+    #crucible-viewport-workspace[data-crucible-room-posture="cast-held"] .crucible-viewport-plate { grid-template-columns: 112px minmax(0, 1fr); min-height: 0; padding: 10px; gap: 10px; }
+    #crucible-viewport-workspace[data-crucible-room-posture="firing"] .crucible-viewport-source-thumb-wrap,
+    #crucible-viewport-workspace[data-crucible-room-posture="cast-held"] .crucible-viewport-source-thumb-wrap { min-height: 112px; max-height: 156px; }
+    #crucible-viewport-workspace[data-crucible-room-posture="firing"] .crucible-viewport-firing-mouth,
+    #crucible-viewport-workspace[data-crucible-room-posture="cast-held"] .crucible-viewport-firing-mouth { min-height: 224px; }
+    #crucible-viewport-workspace[data-crucible-room-posture="firing"] .crucible-viewport-trays,
+    #crucible-viewport-workspace[data-crucible-room-posture="cast-held"] .crucible-viewport-trays { grid-template-columns: minmax(0, 1fr); gap: 0; }
+    #crucible-viewport-workspace[data-crucible-room-posture="firing"] .crucible-viewport-tray,
+    #crucible-viewport-workspace[data-crucible-room-posture="cast-held"] .crucible-viewport-tray { min-height: 92px; }
+    #crucible-viewport-workspace[data-crucible-room-posture="firing"] .crucible-viewport-receipt-tag,
+    #crucible-viewport-workspace[data-crucible-room-posture="cast-held"] .crucible-viewport-receipt-tag { min-height: 58px; padding: 10px 12px; }
 
 /* Viewport */
 #viewport { flex: 1; position: relative; background: #111; }
@@ -2546,7 +2581,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
 
 <div id="viewport">
   <div id="env-loading">Loading environment...</div>
-  <div id="crucible-viewport-workspace" data-crucible-viewport-workspace="generate" data-crucible-workroom="active" data-crucible-heat-state="idle" hidden>
+  <div id="crucible-viewport-workspace" data-crucible-viewport-workspace="generate" data-crucible-workroom="active" data-crucible-heat-state="idle" data-crucible-room-posture="bench" hidden>
     <div class="crucible-workroom-shell">
       <div class="crucible-room-backwall"></div>
       <div class="crucible-room-shelf"></div>
@@ -13264,6 +13299,12 @@ function crucibleViewportHeatLabel(heatState) {
   return 'Idle';
 }
 
+function crucibleViewportRoomPosture({ heatState, routeStatus }) {
+  if (routeStatus === 'running' || heatState === 'firing') return 'firing';
+  if (heatState === 'cast') return 'cast-held';
+  return 'bench';
+}
+
 function crucibleViewportSourcePlateLabel(currentSource) {
   if (!currentSource?.source) return 'No source on the plate yet.';
   return `${crucibleBenchSourceLabel(currentSource)} - ${compactCrucibleBenchPath(currentSource.source)}`;
@@ -13390,11 +13431,79 @@ function openCrucibleViewportCast() {
   return castRecord;
 }
 
+function crucibleReplayArtifactWithinOutputRoot(artifactPath, outputRoot) {
+  const normalize = value => {
+    const parts = String(value || '').replaceAll('\\', '/').split('/');
+    const normalized = [];
+    for (const part of parts) {
+      if (!part || part === '.') continue;
+      if (part === '..') {
+        normalized.pop();
+      } else {
+        normalized.push(part);
+      }
+    }
+    return `/${normalized.join('/')}`;
+  };
+  const root = normalize(outputRoot).replace(/\/$/, '');
+  const candidate = normalize(artifactPath);
+  return Boolean(root && candidate.startsWith(`${root}/`));
+}
+
+async function replayRealPipelineCastInCrucible({ replay, run, artifact }) {
+  const outputRoot = run?.bundle?.document?.outputRoot || replay?.outputRoot || '';
+  const artifactBytes = Number(artifact?.bytes);
+  if (replay?.authority !== 'real-output-replay-not-inference') {
+    throw new Error('Completed-cast replay requires explicit replay-not-inference authority.');
+  }
+  if (!replay?.requestedPipelineId || !replay?.effectiveRouteId) {
+    throw new Error('Completed-cast replay requires requested and effective route identity.');
+  }
+  if (artifact?.status !== 'real' || !artifact?.sha256 || !Number.isFinite(artifactBytes) || artifactBytes <= 0) {
+    throw new Error('Completed-cast replay requires a hashed, non-empty real artifact.');
+  }
+  if (!crucibleReplayArtifactWithinOutputRoot(artifact.path, outputRoot)) {
+    throw new Error('Completed-cast replay artifact is outside its recorded output root.');
+  }
+
+  const firing = crucibleBenchRecordFiring({
+    routeId: replay.effectiveRouteId,
+    profileId: 'real-output-replay',
+    profileLabel: 'Completed output replay',
+    source: crucibleViewportDebugState().source,
+  });
+  try {
+    const record = await pipelineLoadRunSplatArtifact(run, artifact);
+    crucibleBenchRecordCast({ firingId: firing.id, run, artifact, record });
+    crucibleBenchRecordReceipt({
+      firingId: firing.id,
+      status: 'complete',
+      message: 'Loaded a previously completed real cast for visual layout verification.',
+      run,
+    });
+    return { firing, record };
+  } catch (error) {
+    crucibleBenchRecordReceipt({
+      firingId: firing.id,
+      status: 'failed',
+      message: 'Kaminos could not replay the completed real cast.',
+      run,
+      error: error?.message || String(error),
+    });
+    throw error;
+  }
+}
+
 function crucibleViewportDebugState() {
   const route = selectedKilnRouteBenchRoute();
   const source = kilnRouteBenchSelectedSource(route);
-  const lastCast = activeCrucibleBenchCrucible().casts[0] || null;
+  const crucible = activeCrucibleBenchCrucible();
+  const lastFiring = crucible.firings[0] || null;
+  const lastCast = crucible.casts[0] || null;
+  const lastReceipt = crucible.receipts[0] || null;
   const castRecord = lastCast?.assetId ? sceneObjects.find(entry => entry.id === lastCast.assetId) : null;
+  const heatState = crucibleViewportHeatState({ lastFiring, lastCast, lastReceipt });
+  const routeStatus = kilnRouteBenchState.status || 'idle';
   return {
     schema: 'kaminos.crucible-viewport-debug.v0',
     source: source ? { ...source } : null,
@@ -13403,7 +13512,9 @@ function crucibleViewportDebugState() {
     effectivePipelineId: route.pipelineId,
     selectedProfileId: crucibleViewportProfileId,
     runningProfileId: sharpBreathingRoomRunningProfileId,
-    routeStatus: kilnRouteBenchState.status || 'idle',
+    routeStatus,
+    heatState,
+    roomPosture: crucibleViewportRoomPosture({ heatState, routeStatus }),
     lastCast: lastCast ? { ...lastCast } : null,
     castTargetSceneObjectId: castRecord?.id || null,
   };
@@ -13419,8 +13530,11 @@ function renderCrucibleViewportWorkspace() {
   const lastReceipt = crucible.receipts[0] || null;
   const lastArmature = crucible.armatures[0] || null;
   const heatState = crucibleViewportHeatState({ lastFiring, lastCast, lastReceipt });
+  const routeStatus = kilnRouteBenchState.status || 'idle';
+  const roomPosture = crucibleViewportRoomPosture({ heatState, routeStatus });
   workspace.dataset.crucibleHeatState = heatState;
   workspace.dataset.crucibleRouteStatus = kilnRouteBenchState.status || 'idle';
+  workspace.dataset.crucibleRoomPosture = roomPosture;
   const title = document.getElementById('crucible-viewport-title');
   const summary = document.getElementById('crucible-viewport-summary');
   const source = document.getElementById('crucible-viewport-source');
@@ -18444,6 +18558,7 @@ window.renderCrucibleBench = renderCrucibleBench;
 window.selectCrucibleViewportSource = selectCrucibleViewportSource;
 window.runCrucibleViewportFiring = runCrucibleViewportFiring;
 window.openCrucibleViewportCast = openCrucibleViewportCast;
+window.kaminosCrucibleViewportReplayRealCast = replayRealPipelineCastInCrucible;
 window.kaminosCrucibleViewportDebugState = crucibleViewportDebugState;
 window.toggleCrucibleBenchSwitcher = toggleCrucibleBenchSwitcher;
 window.createNewCrucibleBenchCrucible = createNewCrucibleBenchCrucible;

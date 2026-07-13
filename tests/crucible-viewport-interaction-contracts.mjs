@@ -80,5 +80,15 @@ assert.match(
   /window\.kaminosCrucibleViewportDebugState\s*=\s*crucibleViewportDebugState/,
   'Browser witnesses must be able to read effective source, route, profile, running, and cast-target state',
 );
+assert.match(
+  html,
+  /async function replayRealPipelineCastInCrucible\(\{ replay, run, artifact \}\)[\s\S]*pipelineLoadRunSplatArtifact\(run, artifact\)[\s\S]*crucibleBenchRecordCast\([\s\S]*crucibleBenchRecordReceipt\([\s\S]*status:\s*'complete'/,
+  'Real-output replay must use the actual pipeline importer and Crucible firing/cast/receipt state machine',
+);
+assert.match(
+  html,
+  /window\.kaminosCrucibleViewportReplayRealCast\s*=\s*replayRealPipelineCastInCrucible/,
+  'The visual witness must use one application-owned replay bridge instead of reaching into lexical internals',
+);
 
 console.log('Crucible viewport interaction contracts passed.');

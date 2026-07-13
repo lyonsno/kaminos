@@ -27,6 +27,51 @@ assert.throws(
   /Unsupported --scheduler-profile/,
   'unknown scheduler profiles must fail before a GPU run instead of falling back',
 );
+
+const replayValidationSource = witness.match(
+  /function validatedReplayCastReport\([\s\S]*?\n}\n(?=\nfunction )/,
+);
+assert.ok(replayValidationSource, 'witness must expose a testable authority gate for replayed real casts');
+const validatedReplayCastReport = vm.runInNewContext(`(${replayValidationSource[0]})`);
+const replayReport = {
+  schema: 'kaminos.pipeline-witness.v0',
+  requestedPipelineId: 'sharp-image-to-splat-live-v0',
+  effectiveRouteConfig: {
+    routeId: 'adapter.sharp-image-to-splat-live.v0',
+    outputRoot: '/tmp/pipeline-runs/run-real',
+  },
+  artifacts: {
+    splat: {
+      role: 'splat-candidate',
+      status: 'real',
+      path: '/tmp/pipeline-runs/run-real/artifacts/output.ply',
+      bytes: 66060836,
+      sha256: 'cd699930',
+    },
+  },
+};
+assert.deepEqual(
+  JSON.parse(JSON.stringify(validatedReplayCastReport(replayReport, '/tmp/pipeline-runs/run-real/pipeline-witness.json'))),
+  {
+    authority: 'real-output-replay-not-inference',
+    reportPath: '/tmp/pipeline-runs/run-real/pipeline-witness.json',
+    requestedPipelineId: 'sharp-image-to-splat-live-v0',
+    effectiveRouteId: 'adapter.sharp-image-to-splat-live.v0',
+    outputRoot: '/tmp/pipeline-runs/run-real',
+    artifact: replayReport.artifacts.splat,
+  },
+  'a replay must preserve the exact source report, route, containment root, hash, byte count, and real status',
+);
+for (const [mutate, expected] of [
+  [report => { report.artifacts.splat.status = 'fixture'; }, /status real/],
+  [report => { delete report.artifacts.splat.sha256; }, /SHA-256/],
+  [report => { report.artifacts.splat.bytes = 0; }, /nonempty/],
+  [report => { report.artifacts.splat.path = '/tmp/elsewhere/output.ply'; }, /outside recorded output root/],
+]) {
+  const invalid = JSON.parse(JSON.stringify(replayReport));
+  mutate(invalid);
+  assert.throws(() => validatedReplayCastReport(invalid, '/tmp/report.json'), expected);
+}
 const compactSummarySource = witness.match(
   /function compactWitnessSummary\([\s\S]*?\n}\n(?=\nfunction validateVolumeReleaseEvidence)/,
 );
@@ -57,6 +102,20 @@ assert.equal(compactSummary.status, 'complete');
 assert.equal(compactSummary.output.sha256, 'abc');
 assert.equal(compactSummary.inFlightCapture.status, 'captured');
 assert.ok(!JSON.stringify(compactSummary).includes('do-not-print'), 'terminal summary must not replay uncapped sample arrays');
+const replaySummary = compactWitnessSummary({
+  state: {
+    replayedCast: {
+      status: 'real-output-replay-not-inference',
+      artifact: replayReport.artifacts.splat,
+    },
+  },
+  out: '/tmp/replay.png',
+  inFlightCapture: { requested: false, status: 'not-requested' },
+  reportPath: '/tmp/replay-report.json',
+});
+assert.equal(replaySummary.status, 'real-output-replay-not-inference');
+assert.equal(replaySummary.output.sha256, 'cd699930');
+assert.equal(replaySummary.cadenceAcceptance, null, 'replaying a real cast must never project cadence evidence');
 
 const captureAttemptSource = witness.match(
   /async function attemptInFlightHybridCapture\([\s\S]*?\n}\n(?=\nfunction compactWitnessSummary)/,
@@ -343,6 +402,7 @@ for (const [pattern, message] of [
   [/--source-asset-id/, 'Witness must accept an exact indexed source identity for adjacent route experiments'],
   [/--fire-presentation/, 'Witness must accept an explicit central fire presentation instead of inheriting a UI default'],
   [/--capture-in-flight/, 'Transient visual capture must be explicit so ordinary cadence witnesses remain unperturbed'],
+  [/--replay-cast-report/, 'Witness must expose an explicit real-output replay path for terminal layout verification'],
   [/--in-flight-out/, 'Witness must let callers choose the transient hybrid screenshot path'],
   [/--in-flight-max-observation-gap-ms/, 'Witness must expose the RAF continuity threshold instead of burying it'],
   [/--expected-sharp-revision/, 'Full-route witness must accept the exact expected SHARP source revision'],
@@ -351,6 +411,7 @@ for (const [pattern, message] of [
   [/data-crucible-workroom/, 'Witness must verify workroom identity, not just screenshot nonblankness'],
   [/data-crucible-heat-state/, 'Witness must record heat state from the visible surface'],
   [/data-crucible-route-status/, 'Witness must record the effective route status shown by the workroom'],
+  [/data-crucible-room-posture/, 'Witness must record the room posture that determines whether the furnace or cast can be seen'],
   [/crucible-worktable-stage/, 'Witness must verify the worktable stage is actually mounted'],
   [/sourceOptionCount/, 'Witness must prove the plate has real source choices'],
   [/sourceSelectionExercise/, 'Witness must prove changing the plate selector changes the effective shared source'],
@@ -405,6 +466,11 @@ for (const [pattern, message] of [
   [/fireButtonDisabled/, 'Witness must record whether the primary firing action can actually run'],
   [/castButtonDisabled/, 'Witness must record whether the cast action truthfully has a target'],
   [/pointerEvents/, 'Witness must prove the workroom is hittable instead of visually clickable only'],
+  [/roomPosture[\s\S]*firing/, 'Transient route evidence must prove the room actually entered its compact firing posture'],
+  [/completedWorkroom\.roomPosture[\s\S]*cast-held/, 'Completed route evidence must prove the room opened around the loaded cast'],
+  [/completedWorkroom\.stageTop[\s\S]*completedWorkroom\.transformBarBottom/, 'Completed route evidence must reject a compact console that sits underneath the scene toolbar'],
+  [/real-output-replay-not-inference/, 'Replayed cast evidence must fail loud that it is not a new inference result'],
+  [/replayCastReportPath[\s\S]*fireFriendly[\s\S]*cannot be combined/, 'Real-output replay must not masquerade as a live Friendly firing'],
   [/Page\.captureScreenshot/, 'Witness must capture the actual browser viewport'],
   [/buildInFlightHybridSettleMonitorExpression\(\{[\s\S]*routeState\.settleMonitor\?\.ready[\s\S]*sampleNow\('pre-capture'\)[\s\S]*attemptInFlightHybridCapture\(\{[\s\S]*authorization:[\s\S]*effectiveFirePresentation/, 'Transient capture must wait for executable effective hybrid presentation validation'],
   [/candidateCount <= 0/, 'Transient hybrid capture must require a nonempty live candidate set'],
