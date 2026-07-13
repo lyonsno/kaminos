@@ -82,7 +82,7 @@ assert.match(
 assert.match(script, /world-grid-neighborhood/, 'radiance trainer exposes local-grid optical context as a distinct experimental family');
 assert.match(script, /neighbor\.occupancy\.x-/, 'local-grid context records missing and present six-neighbor support explicitly');
 assert.match(script, /zero-delta-local-grid-context-expansion-v0/, 'local-grid context starts as an exact zero-delta extension of the proven Fourier head');
-assert.match(script, /zero-delta-hidden-width-expansion-v0/, 'wider spatial heads begin as exact zero-delta extensions of their warm checkpoint');
+assert.match(script, /zero-delta-active-hidden-width-expansion-v0/, 'wider spatial heads begin as exact zero-output-delta extensions with active new hidden features');
 assert.match(script, /args\.context_mode in \("world-fourier", "world-grid-neighborhood"\)/, 'local-grid receipts preserve the Fourier frequency contract used by their encoder');
 
 console.log('boundary splat radiance training contracts passed');

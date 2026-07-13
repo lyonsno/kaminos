@@ -343,8 +343,15 @@ def expand_hidden_size(base_model, hidden_size):
     model = AttributeMlp(hidden_size, input_size)
     hidden_weight = np.zeros((hidden_size, input_size), dtype=np.float32)
     hidden_weight[:base_hidden_size] = np.asarray(base_model.hidden.weight)
+    random = np.random.default_rng(0)
+    hidden_weight[base_hidden_size:] = random.normal(
+        0.0,
+        np.sqrt(2.0 / input_size) * 0.1,
+        size=(hidden_size - base_hidden_size, input_size),
+    ).astype(np.float32)
     hidden_bias = np.zeros(hidden_size, dtype=np.float32)
     hidden_bias[:base_hidden_size] = np.asarray(base_model.hidden.bias)
+    hidden_bias[base_hidden_size:] = 0.01
     output_weight = np.zeros((len(OUTPUTS), hidden_size), dtype=np.float32)
     output_weight[:, :base_hidden_size] = np.asarray(base_model.output.weight)
     model.load_weights([
@@ -761,7 +768,7 @@ def main():
                 "inputChannels": len(feature_names),
                 "warmHiddenSize": warm_hidden_size,
                 "hiddenSize": requested_hidden_size,
-                "hiddenWidthExpansionAuthority": "zero-delta-hidden-width-expansion-v0" if hidden_width_expansion else None,
+                "hiddenWidthExpansionAuthority": "zero-delta-active-hidden-width-expansion-v0" if hidden_width_expansion else None,
                 "initialLoss": initial_loss,
                 "trainedLoss": trained_loss,
                 "initialPixelLoss": initial_pixel_loss,

@@ -61,6 +61,10 @@ wide_model = MODULE.expand_hidden_size(base_model, 4)
 np.testing.assert_allclose(np.asarray(wide_model(sample_inputs)), base_predictions, rtol=0, atol=1e-7)
 assert wide_model.hidden.weight.shape == (4, 3)
 assert wide_model.output.weight.shape == (len(MODULE.OUTPUTS), 4)
+assert np.any(np.asarray(wide_model.hidden.weight)[2:] != 0), "new hidden units must be active enough to receive output-weight gradients"
+np.testing.assert_array_equal(np.asarray(wide_model.output.weight)[:, 2:], 0)
+second_wide_model = MODULE.expand_hidden_size(base_model, 4)
+np.testing.assert_array_equal(np.asarray(second_wide_model.hidden.weight), np.asarray(wide_model.hidden.weight))
 
 with tempfile.TemporaryDirectory() as temporary_directory:
     artifact_path = Path(temporary_directory) / "spatial-model-artifact.json"
