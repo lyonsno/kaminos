@@ -23,6 +23,8 @@ const INSTANCE_DESCRIPTOR_IDENTITY = 'boundary-splat-instance-descriptor-v0';
 const BOUNDARY_SPLAT_SELECTOR_POLICY_IDENTITY = 'boundary-splat-deterministic-gpu-hash-thinning-v0';
 const ALIGNED_BUDGET_PAIR = [6400, 1600];
 const ALIGNED_BUDGET_INSTANCE_COUNT = 100;
+const MIN_ALIGNED_BUDGET_MOTION_MEAN_ABS_DIFF = 0.5;
+const MIN_ALIGNED_BUDGET_MOTION_CHANGED_FRACTION = 0.02;
 const SHARED_CURRENT_PHASE_SOURCE = 'shared-current-control';
 const LIVE_HISTORY_PHASE_SOURCE = 'live-history-offset';
 const SAME_HISTORY_SLOT_PHASE_SOURCE = 'same-history-slot-control';
@@ -117,6 +119,8 @@ try {
   if (alignedBudgetPair) {
     failurePhase = 'aligned-budget-capture';
     const alignedBudgetPairReport = await captureAlignedBudgetPair([staticCamera, grazingCamera]);
+    const budgetQualityComparisons = summarizeAlignedBudgetQuality(alignedBudgetPairReport.sequences);
+    const sequenceCertification = certifyAlignedBudgetSequence(alignedBudgetPairReport, budgetQualityComparisons);
     failurePhase = 'aligned-budget-false-closure-validation';
     const report = {
       schema: ALIGNED_BUDGET_PAIR_SCHEMA,
@@ -149,7 +153,8 @@ try {
         grazingCameraDurationMs: (frameCount - 1) * stepMs,
       },
       alignedBudgetPair: alignedBudgetPairReport,
-      budgetQualityComparisons: summarizeAlignedBudgetQuality(alignedBudgetPairReport.sequences),
+      budgetQualityComparisons,
+      sequenceCertification,
       inspectedArtifacts: alignedBudgetPairReport.sequences
         .flatMap(sequence => sequence.frames)
         .flatMap(frame => [
@@ -1225,6 +1230,9 @@ function rejectAlignedBudgetFalseClosure(report) {
   if (pair.baselineBudget !== ALIGNED_BUDGET_PAIR[0] || pair.testBudget !== ALIGNED_BUDGET_PAIR[1]) {
     throw new Error('aligned-budget-pair requires exact 6400/1600 budgets');
   }
+  if (!report.budgetQualityComparisons || Number(report.budgetQualityComparisons.comparisonCount) <= 0) {
+    throw new Error('aligned-budget quality summary missing');
+  }
   for (const sequence of pair.sequences) {
     if (sequence.sameBrowserSessionId !== sequence.frames[0]?.sameBrowserSessionId) {
       throw new Error(`aligned-budget same-browser identity missing for ${sequence.label}`);
@@ -1251,6 +1259,10 @@ function rejectAlignedBudgetFalseClosure(report) {
         throw new Error(`aligned-budget blank/partial evidence rejected: missing quality comparison for ${sequence.label} frame ${frame.controlledStepFrameIndex}`);
       }
     }
+  }
+  const sequenceCertification = report.sequenceCertification || certifyAlignedBudgetSequence(pair, report.budgetQualityComparisons);
+  if (sequenceCertification.ok !== true) {
+    throw new Error(`aligned-budget live motion rejected: ${JSON.stringify(sequenceCertification)}`);
   }
 }
 
@@ -1346,6 +1358,72 @@ function summarizeAlignedBudgetQuality(sequences) {
     costRatioMean: average(finite('costRatio')),
     comparisons,
   };
+}
+
+function certifyAlignedBudgetSequence(pair, qualitySummary) {
+  if (!qualitySummary || Number(qualitySummary.comparisonCount) <= 0) {
+    return {
+      ok: false,
+      authority: 'aligned-budget-learned-sequence-certification-v0',
+      reason: 'aligned-budget quality summary missing',
+      certifiedMotionSequenceCount: 0,
+      certifiedFramePairCount: 0,
+    };
+  }
+  const sequences = Array.isArray(pair?.sequences) ? pair.sequences : [];
+  const sequenceCertifications = sequences.map(sequence => {
+    const baselineDiffs = sequence.motionEnergy?.baselineDiffs || {};
+    const testDiffs = sequence.motionEnergy?.testDiffs || {};
+    const baselineMotionMeanAbsDiff = Number(baselineDiffs.maxMeanAbsDiff || 0);
+    const testMotionMeanAbsDiff = Number(testDiffs.maxMeanAbsDiff || 0);
+    const baselineChangedFraction = maxChangedFraction(baselineDiffs.diffs);
+    const testChangedFraction = maxChangedFraction(testDiffs.diffs);
+    const liveMotionCertified = baselineMotionMeanAbsDiff >= MIN_ALIGNED_BUDGET_MOTION_MEAN_ABS_DIFF
+      && testMotionMeanAbsDiff >= MIN_ALIGNED_BUDGET_MOTION_MEAN_ABS_DIFF
+      && baselineChangedFraction >= MIN_ALIGNED_BUDGET_MOTION_CHANGED_FRACTION
+      && testChangedFraction >= MIN_ALIGNED_BUDGET_MOTION_CHANGED_FRACTION;
+    return {
+      label: sequence.label,
+      frameCount: sequence.frameCount,
+      baselineMotionMeanAbsDiff,
+      testMotionMeanAbsDiff,
+      baselineChangedFraction,
+      testChangedFraction,
+      liveMotionCertified,
+    };
+  });
+  const expectedFramePairCount = sequences.reduce((sum, sequence) => sum + (Array.isArray(sequence.frames) ? sequence.frames.length : 0), 0);
+  const certifiedFramePairCount = qualitySummary.comparisons.filter(comparison => (
+    Number.isFinite(Number(comparison.structuralMeanAbsDiff))
+    && Number.isFinite(Number(comparison.costRatio))
+    && comparison.baselineBudget === ALIGNED_BUDGET_PAIR[0]
+    && comparison.testBudget === ALIGNED_BUDGET_PAIR[1]
+  )).length;
+  const certifiedMotionSequenceCount = sequenceCertifications.filter(certification => certification.liveMotionCertified).length;
+  const ok = certifiedMotionSequenceCount > 0
+    && certifiedFramePairCount === expectedFramePairCount
+    && expectedFramePairCount > 0;
+  return {
+    ok,
+    authority: 'aligned-budget-learned-sequence-certification-v0',
+    baselineBudget: ALIGNED_BUDGET_PAIR[0],
+    testBudget: ALIGNED_BUDGET_PAIR[1],
+    requestedInstanceCount: pair?.requestedInstanceCount ?? null,
+    minMotionMeanAbsDiff: MIN_ALIGNED_BUDGET_MOTION_MEAN_ABS_DIFF,
+    minMotionChangedFraction: MIN_ALIGNED_BUDGET_MOTION_CHANGED_FRACTION,
+    certifiedMotionSequenceCount,
+    certifiedFramePairCount,
+    expectedFramePairCount,
+    qualityComparisonCount: qualitySummary.comparisonCount,
+    sequenceCertifications,
+    claimBoundary: 'Certifies that the aligned learned-budget witness contains live sequence motion and complete same-state budget quality/cost pairs; it does not certify perceptual equivalence.',
+  };
+}
+
+function maxChangedFraction(diffs) {
+  return Array.isArray(diffs)
+    ? diffs.reduce((max, diff) => Math.max(max, Number(diff.changedFraction || 0)), 0)
+    : 0;
 }
 
 function summarizeAnalyticLearnedComparison(frames) {

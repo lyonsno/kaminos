@@ -71,6 +71,22 @@ class BoundarySplatAlignedBudgetWitnessContracts < Minitest::Test
     assert_match(/aligned-budget blank\/partial evidence rejected/, @witness)
   end
 
+  def test_aligned_pair_certifies_its_own_sequence_motion_not_analytic_repeat_noise
+    assert_match(/sequenceCertification/, @witness)
+    assert_match(/certifyAlignedBudgetSequence/, @witness)
+    assert_match(/aligned-budget-learned-sequence-certification-v0/, @witness)
+    assert_match(/certifiedMotionSequenceCount/, @witness)
+    assert_match(/certifiedFramePairCount/, @witness)
+    assert_match(/minMotionMeanAbsDiff/, @witness)
+    assert_match(/aligned-budget live motion rejected/, @witness)
+    assert_match(/aligned-budget quality summary missing/, @witness)
+    aligned_false_closure = @witness[/function rejectAlignedBudgetFalseClosure[\s\S]*?\n}\n\nfunction validateAlignedBudgetCapture/, 0]
+    refute_nil aligned_false_closure
+    assert_match(/certifyAlignedBudgetSequence/, aligned_false_closure)
+    refute_match(/frozenDeterminism/, aligned_false_closure)
+    refute_match(/analytic-splat-determinism-repeat/, aligned_false_closure)
+  end
+
   def test_failure_reports_keep_last_trustworthy_pair_evidence
     assert_match(/lastTrustworthyEvidence\.alignedBudgetPair/, @witness)
     assert_match(/failurePhase\s*=\s*'aligned-budget-capture'/, @witness)
