@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { mkdir, mkdtemp, readFile, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -44,6 +45,7 @@ assert.equal(run.status, 0, run.stderr || run.stdout);
 
 const manifest = JSON.parse(await readFile(join(outDir, 'tensor-manifest.json'), 'utf8'));
 const receipt = JSON.parse(await readFile(join(outDir, 'reference-receipt.json'), 'utf8'));
+const manifestSha256 = `sha256:${createHash('sha256').update(await readFile(join(outDir, 'tensor-manifest.json'))).digest('hex')}`;
 assert.equal(manifest.schema, 'kaminos.sam31-propagation-memory-meta-packet.v0');
 assert.deepEqual(manifest.routeIds, [SAM31_PROPAGATION_NECK_PHASE_PROGRAM_ROUTE_ID, SAM31_MEMORY_ENCODER_PHASE_PROGRAM_ROUTE_ID]);
 assert.equal(manifest.mode, 'official-meta-checkpoint-export');
@@ -250,6 +252,7 @@ assert.deepEqual(receipt.reference, manifest.reference);
 assert.deepEqual(receipt.checkpointAudit, manifest.checkpointAudit);
 assert.deepEqual(receipt.shape, manifest.shape);
 assert.equal(receipt.outputs.tensorManifest, join(outDir, 'tensor-manifest.json'));
+assert.equal(receipt.outputs.tensorManifestSha256, manifestSha256, 'the successful reference receipt must bind the exact manifest bytes');
 
 console.log(JSON.stringify({
   ok: true,

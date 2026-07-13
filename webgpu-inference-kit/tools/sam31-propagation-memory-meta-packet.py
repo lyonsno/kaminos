@@ -589,6 +589,7 @@ def main():
     }
     manifest_path = out_dir / "tensor-manifest.json"
     receipt_path = out_dir / "reference-receipt.json"
+    manifest_text = json.dumps(manifest, indent=2)
     receipt = {
         "ok": True,
         "schema": "kaminos.sam31-propagation-memory-meta-reference-receipt.v0",
@@ -598,9 +599,13 @@ def main():
         "reference": reference,
         "checkpointAudit": manifest["checkpointAudit"],
         "shape": shape,
-        "outputs": {"tensorManifest": str(manifest_path), "referenceReceipt": str(receipt_path)},
+        "outputs": {
+            "tensorManifest": str(manifest_path),
+            "tensorManifestSha256": sha256_bytes(manifest_text.encode("utf-8")),
+            "referenceReceipt": str(receipt_path),
+        },
     }
-    manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+    manifest_path.write_text(manifest_text, encoding="utf-8")
     receipt_path.write_text(json.dumps(receipt, indent=2), encoding="utf-8")
     FAILURE_PHASE = "complete"
     print(json.dumps(receipt, indent=2))
