@@ -45,6 +45,12 @@ assert.match(
 assert.match(exporter, /advanceDebugImportedFieldSteps/, 'exporter uses the atomic imported-state step API');
 assert.match(exporter, /--render-png/, 'exporter can preserve an operator-facing imported-state render');
 assert.match(exporter, /--render-only/, 'held visual assays can skip redundant full-field export');
+assert.match(exporter, /--render-warmup-count/, 'held visual assays can settle renderer capacity without stepping the simulation');
+assert.match(
+  exporter,
+  /frozen-same-state-capacity-settle-v0[\s\S]*renderWarmups/,
+  'capacity-settle warmups remain explicit receipt-bearing same-state renders',
+);
 assert.match(
   exporter,
   /kaminos\.volume\.held-field-render\.v0[\s\S]*fieldExportSkipped[\s\S]*caller-requested-render-only-v0/,

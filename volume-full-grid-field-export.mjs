@@ -33,6 +33,7 @@ const sourceCapturePath = args.has('--source-capture') ? resolve(String(args.get
 const initialFieldManifestPath = args.has('--initial-field-manifest') ? resolve(String(args.get('--initial-field-manifest'))) : null;
 const renderPngPath = args.has('--render-png') ? resolve(String(args.get('--render-png'))) : null;
 const renderOnly = args.has('--render-only');
+const renderWarmupCount = Math.max(0, Math.floor(Number(args.get('--render-warmup-count') || 0)));
 const targetOrigin = args.has('--target-origin') ? String(args.get('--target-origin')) : null;
 const port = Number(args.get('--debug-port') || randomInt(42000, 62000));
 const chrome = process.env.KAMINOS_CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
@@ -374,6 +375,7 @@ async function main() {
   let initialFieldImport = null;
   let importedAdvance = null;
   let importedRender = null;
+  const renderWarmups = [];
   let browserSession = null;
   let ws = null;
   let begin = null;
@@ -548,6 +550,35 @@ async function main() {
           || mountedRect.y + mountedRect.height > canvasMount.viewportHeight + 0.5) {
           throw new Error(`canvas-clip-offscreen: ${JSON.stringify(canvasMount)}`);
         }
+        for (let warmupIndex = 0; warmupIndex < renderWarmupCount; warmupIndex += 1) {
+          phase = `render-imported-field-warmup-${warmupIndex + 1}`;
+          const warmupReceipt = await evaluateByValue(
+            ws,
+            `window.__kaminosVolumePrototype.renderFrozenScaleToCanvas(${JSON.stringify({
+              fullFieldImportSessionId: importFinish.sessionId,
+              renderScale: 1,
+              now: deterministicReplayStartTimeMs + advanceImportedSteps * deterministicReplayTimeStepMs,
+              sameStateCaptureId: `imported-receiver-render-capacity-warmup-${warmupIndex + 1}`,
+            })})`,
+            phase,
+          );
+          if (warmupReceipt?.ok !== true || warmupReceipt?.imageAuthority !== 'cdp-canvas-clip-capture-after-render-only-frozen-sim-state') {
+            throw new Error(`imported receiver warmup render failed: ${JSON.stringify(warmupReceipt)}`);
+          }
+          renderWarmups.push({
+            identity: 'frozen-same-state-capacity-settle-v0',
+            index: warmupIndex + 1,
+            sameStateCaptureId: warmupReceipt.sameStateCaptureId,
+            baseFrameCount: warmupReceipt.baseFrameCount,
+            baseSimStepCount: warmupReceipt.baseSimStepCount,
+            frameCount: warmupReceipt.frameCount,
+            simStepCount: warmupReceipt.simStepCount,
+            boundarySplatInstanceCount: warmupReceipt.boundarySplatInstanceCount,
+            boundarySplatCandidateCount: warmupReceipt.boundarySplatCandidateCount,
+            boundarySplatOverflowCount: warmupReceipt.boundarySplatOverflowCount,
+          });
+          await delay(100);
+        }
         phase = 'render-imported-field';
         const renderReceipt = await evaluateByValue(
           ws,
@@ -610,6 +641,7 @@ async function main() {
         runtimeEvents,
         initialFieldImport,
         importedAdvance,
+        renderWarmups,
         importedRender,
         routeIdentity: importedRender?.routeIdentity || initialFieldImport?.effective?.routeIdentity || null,
         effectiveRoute: importedRender?.effectiveRoute || initialFieldImport?.effective?.effectiveRoute || null,
@@ -704,6 +736,7 @@ async function main() {
       deterministicReplay: begin.deterministicReplay,
       initialFieldImport,
       importedAdvance,
+      renderWarmups,
       importedRender,
       fluidComponents: begin.fluidComponents,
       fluidChannelOrder: begin.fluidChannelOrder,
@@ -739,6 +772,7 @@ async function main() {
       requestedInitialFieldManifest: initialFieldManifestPath,
       initialFieldImport,
       importedAdvance,
+      renderWarmups,
       importedRender,
       targetOrigin,
       browserSession: browserReceipt(browserSession),
