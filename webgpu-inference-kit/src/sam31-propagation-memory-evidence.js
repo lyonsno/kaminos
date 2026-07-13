@@ -1,3 +1,19 @@
+export function classifySam31PropagationMemoryAdapter(input = {}) {
+  if (typeof input.explicitFallback === 'boolean') {
+    return { isFallbackAdapter: input.explicitFallback, fallbackEvidenceSource: 'adapter-fallback-boolean' };
+  }
+  const vendor = String(input.vendor || '').trim().toLowerCase();
+  const architecture = String(input.architecture || '').trim().toLowerCase();
+  const identity = `${vendor} ${architecture}`;
+  if (/swiftshader|llvmpipe|software|basic render|warp/.test(identity)) {
+    return { isFallbackAdapter: true, fallbackEvidenceSource: 'software-adapter-info' };
+  }
+  if (/^(apple|amd|nvidia|intel|qualcomm)$/.test(vendor) && architecture) {
+    return { isFallbackAdapter: false, fallbackEvidenceSource: 'recognized-hardware-adapter-info' };
+  }
+  return { isFallbackAdapter: null, fallbackEvidenceSource: null };
+}
+
 export function evaluateSam31PropagationMemoryEvidence(input = {}) {
   const adapterInfo = input.adapterInfo || {};
   const receipts = Array.isArray(input.receipts) ? input.receipts : [];

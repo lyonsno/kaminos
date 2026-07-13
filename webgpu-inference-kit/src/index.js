@@ -204,8 +204,24 @@ export {
 } from './sam31-memory-encoder-phase-program.js';
 
 export {
+  classifySam31PropagationMemoryAdapter,
   evaluateSam31PropagationMemoryEvidence,
 } from './sam31-propagation-memory-evidence.js';
+
+export {
+  MEMORY_ATTENTION_ONLINE_SOFTMAX_WGSL,
+  SAM31_MEMORY_ATTENTION_PHASE_PROGRAM_ROUTE_ID,
+  applySam31AxialRope,
+  createSam31MemoryAttentionPhaseProgramCpuOracle,
+  createSam31MemoryAttentionPhaseProgramRouteDefinition,
+  createSam31MemoryAttentionPhaseProgramRouteReceipt,
+  runSam31MemoryAttentionPhaseProgramRoute,
+} from './sam31-memory-attention-phase-program.js';
+
+export {
+  classifySam31MemoryAttentionAdapter,
+  evaluateSam31MemoryAttentionEvidence,
+} from './sam31-memory-attention-evidence.js';
 
 export {
   SAM3_PIXEL_DECODER_PHASE_PROGRAM_ROUTE_ID,

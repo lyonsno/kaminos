@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, stat } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -55,9 +55,13 @@ assert.equal(manifest.reference.model.revision, 'daa63191845a41281374e725f4c9e51
 assert.equal(manifest.reference.model.sha256, 'sha256:0567debeec80ba4ac6369540c6c248025283cb3ff2b92827509e57e2b3541cb6');
 assert.equal(manifest.reference.source.repository, 'facebookresearch/sam3');
 assert.equal(manifest.reference.source.commit, '5dd401d1c5c1d5c3eedff06d41b77af824517619');
+assert.equal(manifest.reference.source.workingTreeClean, true);
 assert.equal(manifest.reference.execution.kind, 'pinned-official-module-classes');
 assert.deepEqual(manifest.reference.execution.classes, [
   'sam3.model.necks.Sam3TriViTDetNeck',
+  'sam3.model.memory.SimpleMaskDownSampler',
+  'sam3.model.memory.CXBlock',
+  'sam3.model.memory.SimpleFuser',
   'sam3.model.memory.SimpleMaskEncoder',
   'sam3.model.position_encoding.PositionEmbeddingSine',
 ]);
@@ -80,16 +84,36 @@ assert.equal(wrongSourceReceipt.ok, false);
 assert.equal(wrongSourceReceipt.failurePhase, 'identity-validation');
 assert.match(wrongSourceReceipt.error, /source commit mismatch/);
 
+const effectiveSourceRoot = sourceRoot || '/Users/noahlyons/dev/sam3';
+const dirtySourceRoot = join(outDir, 'dirty-source-checkout');
+const cloneDirtySource = spawnSync('git', ['clone', '--shared', '--no-hardlinks', effectiveSourceRoot, dirtySourceRoot], { encoding: 'utf8', timeout: 120000 });
+assert.equal(cloneDirtySource.status, 0, cloneDirtySource.stderr || cloneDirtySource.stdout);
+await writeFile(join(dirtySourceRoot, 'sam3/model/position_encoding.py'), '\n# fail-first same-commit source drift\n', { flag: 'a' });
+const dirtySourceOut = join(outDir, 'dirty-source-out');
+const dirtySource = spawnSync(python, [exporter.pathname, '--out-dir', dirtySourceOut, '--source-root', dirtySourceRoot], { cwd: root.pathname, encoding: 'utf8', timeout: 120000 });
+assert.notEqual(dirtySource.status, 0, 'exporter must reject same-commit dirty official source before reference execution');
+assert.match(dirtySource.stderr, /source working tree is dirty/, 'dirty source failure must name the load-bearing source drift');
+const dirtySourceReceipt = JSON.parse(await readFile(join(dirtySourceOut, 'reference-receipt.json'), 'utf8'));
+assert.equal(dirtySourceReceipt.ok, false);
+assert.equal(dirtySourceReceipt.failurePhase, 'identity-validation');
+assert.match(dirtySourceReceipt.error, /source working tree is dirty/);
+
 const wrongCheckpoint = join(outDir, 'wrong-checkpoint.pt');
 const createWrongCheckpoint = spawnSync(python, ['-c', 'import sys, torch; torch.save({}, sys.argv[1])', wrongCheckpoint], { encoding: 'utf8', timeout: 30000 });
 assert.equal(createWrongCheckpoint.status, 0, createWrongCheckpoint.stderr);
-const wrongCheckpointRun = spawnSync(python, [exporter.pathname, '--out-dir', join(outDir, 'wrong-checkpoint-out'), '--checkpoint', wrongCheckpoint], { cwd: root.pathname, encoding: 'utf8', timeout: 120000 });
+const wrongCheckpointOut = join(outDir, 'wrong-checkpoint-out');
+await mkdir(wrongCheckpointOut, { recursive: true });
+await writeFile(join(wrongCheckpointOut, 'tensor-manifest.json'), '{"stale":true}\n');
+await writeFile(join(wrongCheckpointOut, 'stale-primary.bin'), 'stale primary evidence');
+const wrongCheckpointRun = spawnSync(python, [exporter.pathname, '--out-dir', wrongCheckpointOut, '--checkpoint', wrongCheckpoint], { cwd: root.pathname, encoding: 'utf8', timeout: 120000 });
 assert.notEqual(wrongCheckpointRun.status, 0, 'exporter must reject a checkpoint that is not the pinned SAM 3.1 artifact');
 assert.match(wrongCheckpointRun.stderr, /checkpoint digest mismatch/, 'wrong checkpoint failure must name the identity mismatch before state-dict use');
-const wrongCheckpointReceipt = JSON.parse(await readFile(join(outDir, 'wrong-checkpoint-out', 'reference-receipt.json'), 'utf8'));
+const wrongCheckpointReceipt = JSON.parse(await readFile(join(wrongCheckpointOut, 'reference-receipt.json'), 'utf8'));
 assert.equal(wrongCheckpointReceipt.ok, false);
 assert.equal(wrongCheckpointReceipt.failurePhase, 'identity-validation');
 assert.match(wrongCheckpointReceipt.error, /checkpoint digest mismatch/);
+await assert.rejects(stat(join(wrongCheckpointOut, 'tensor-manifest.json')), { code: 'ENOENT' }, 'failed rerun must invalidate a stale primary manifest');
+await assert.rejects(stat(join(wrongCheckpointOut, 'stale-primary.bin')), { code: 'ENOENT' }, 'failed rerun must invalidate stale primary tensor artifacts');
 
 for (const entry of [...manifest.tensors, ...manifest.weights]) {
   assert.match(entry.sha256, /^sha256:[0-9a-f]{64}$/);

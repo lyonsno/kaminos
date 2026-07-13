@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SAM3.1 Memory Attention WebGPU Parity</title>
+  <style>
+    :root { color-scheme: dark; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; background: #101214; color: #e7ecef; }
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; }
+    main { width: min(900px, calc(100vw - 48px)); }
+    h1 { font-size: 20px; font-weight: 650; letter-spacing: 0; }
+    #status { border-left: 3px solid #5f6a72; padding: 12px 16px; background: #181c1f; white-space: pre-wrap; font-size: 13px; line-height: 1.5; }
+    body[data-status="passed"] #status { border-color: #49b675; }
+    body[data-status="failed"] #status { border-color: #e85d67; }
+  </style>
+</head>
+<body data-status="loading">
+  <main>
+    <h1>SAM3.1 four-layer memory attention</h1>
+    <div id="status">Loading pinned official packet...</div>
+  </main>
+  <script type="module" src="./sam31-memory-attention-parity.js"></script>
+</body>
+</html>

@@ -66,6 +66,25 @@ def source_revision(source_root: Path) -> str:
     return subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=source_root, text=True).strip()
 
 
+def require_clean_source_tree(source_root: Path) -> None:
+    status = subprocess.run(
+        ["git", "status", "--porcelain=v1", "--untracked-files=all", "--", "sam3/model", "sam3/sam"],
+        cwd=source_root,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    if status:
+        changed = ", ".join(line[3:] for line in status.splitlines()[:8])
+        raise RuntimeError(f"source working tree is dirty under load-bearing paths: {changed}")
+
+
+def invalidate_primary_outputs(out_dir: Path) -> None:
+    (out_dir / "tensor-manifest.json").unlink(missing_ok=True)
+    for path in out_dir.glob("*.bin"):
+        path.unlink()
+
+
 def load_official_classes(source_root: Path):
     sam3_root = source_root / "sam3"
     model_root = sam3_root / "model"
@@ -319,6 +338,7 @@ def max_abs_diff(actual: torch.Tensor, expected: torch.Tensor) -> float:
 def write_failure_receipt(args, error: Exception):
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
+    invalidate_primary_outputs(out_dir)
     receipt = {
         "ok": False,
         "schema": "kaminos.sam31-propagation-memory-meta-reference-receipt.v0",
@@ -347,6 +367,9 @@ def main():
     checkpoint_path = Path(args.checkpoint).resolve()
     converted_path = Path(args.converted_weights).resolve()
     source_root = Path(args.source_root).resolve()
+    out_dir = Path(args.out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    invalidate_primary_outputs(out_dir)
     FAILURE_PHASE = "identity-validation"
     if not checkpoint_path.is_file():
         raise FileNotFoundError(f"official checkpoint not found: {checkpoint_path}")
@@ -361,10 +384,9 @@ def main():
     source_commit = source_revision(source_root)
     if source_commit != SOURCE_COMMIT:
         raise ValueError(f"source commit mismatch: expected {SOURCE_COMMIT}, got {source_commit}")
+    require_clean_source_tree(source_root)
     classes = load_official_classes(source_root)
 
-    out_dir = Path(args.out_dir)
-    out_dir.mkdir(parents=True, exist_ok=True)
     FAILURE_PHASE = "checkpoint-load"
     state = torch.load(checkpoint_path, map_location="cpu", weights_only=True)
     if not isinstance(state, dict):
@@ -483,12 +505,15 @@ def main():
     }
     reference = {
         "model": {"id": "facebook/sam3.1", "revision": HF_REVISION, "checkpointFile": checkpoint_path.name, "sha256": checkpoint_sha},
-        "source": {"repository": "facebookresearch/sam3", "root": str(source_root), "commit": source_commit},
+        "source": {"repository": "facebookresearch/sam3", "root": str(source_root), "commit": source_commit, "workingTreeClean": True},
         "converted": {"model": "mlx-community/sam3.1-bf16", "weightsPath": str(converted_path), "sha256": converted_sha},
         "execution": {
             "kind": "pinned-official-module-classes",
             "classes": [
                 "sam3.model.necks.Sam3TriViTDetNeck",
+                "sam3.model.memory.SimpleMaskDownSampler",
+                "sam3.model.memory.CXBlock",
+                "sam3.model.memory.SimpleFuser",
                 "sam3.model.memory.SimpleMaskEncoder",
                 "sam3.model.position_encoding.PositionEmbeddingSine",
             ],

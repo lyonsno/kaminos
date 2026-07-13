@@ -263,6 +263,8 @@ fn gelu_exact_approx(x: f32) -> f32 {
 }
 `;
 
+export const SAM31_EXACT_GELU_FUNCTIONS_WGSL = MEMORY_EXACT_GELU_FUNCTIONS_WGSL;
+
 const MEMORY_GELU_WGSL = `
 @group(0) @binding(0) var<storage, read> input_values: array<f32>;
 @group(0) @binding(1) var<storage, read_write> output_values: array<f32>;

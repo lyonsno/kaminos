@@ -4,6 +4,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import {
   SAM31_MEMORY_ENCODER_PHASE_PROGRAM_ROUTE_ID,
   SAM31_PROPAGATION_NECK_PHASE_PROGRAM_ROUTE_ID,
+  classifySam31PropagationMemoryAdapter,
   createSam31MemoryEncoderPhaseProgramCpuOracle,
   createSam31MemoryEncoderPhaseProgramRouteDefinition,
   createSam31PropagationNeckPhaseProgramCpuOracle,
@@ -29,6 +30,8 @@ assert.doesNotMatch(packageJson.scripts.test, /sam31-propagation-memory-meta-pac
 assert.doesNotMatch(memoryRouteSource, /gpuExecutor/, 'memory route must own its WebGPU implementation without an injected executor escape hatch');
 assert.match(browserSmokeSource, /function serializeAdapterInfo\(/, 'browser evidence must serialize adapter identity through explicit fields');
 assert.doesNotMatch(browserSmokeSource, /\{ \.\.\.adapter\.info \}/, 'browser evidence must not trust non-enumerable GPUAdapterInfo fields');
+assert.doesNotMatch(browserSmokeSource, /Boolean\(adapter\.isFallbackAdapter\)/, 'browser evidence must not coerce missing fallback state into authoritative false');
+assert.match(browserSmokeSource, /typeof adapter\.isFallbackAdapter === 'boolean'/, 'browser evidence must preserve only explicit boolean fallback state');
 assert.match(evidenceSource, /adapterInfo\.isFallbackAdapter === false/, 'browser passage must require a non-fallback adapter');
 assert.match(evidenceSource, /receipt\.status === 'real'/, 'browser passage must require real route receipts');
 assert.match(evidenceSource, /receipt\.fallbackReason === null/, 'browser passage must reject receipt fallback reasons');
@@ -63,7 +66,16 @@ const validBrowserEvidence = {
   tolerances: { webGpuPropagationMaxAbsDiff: 1e-5, webGpuMemoryMaxAbsDiff: 1e-5, webGpuPositionMaxAbsDiff: 1e-6 },
   uncapturedErrors: [],
 };
+assert.deepEqual(classifySam31PropagationMemoryAdapter({ vendor: 'apple', architecture: 'metal-3' }), {
+  isFallbackAdapter: false,
+  fallbackEvidenceSource: 'recognized-hardware-adapter-info',
+});
+assert.deepEqual(classifySam31PropagationMemoryAdapter({ vendor: '', architecture: '' }), {
+  isFallbackAdapter: null,
+  fallbackEvidenceSource: null,
+});
 assert.equal(evaluateSam31PropagationMemoryEvidence(validBrowserEvidence).passed, true);
+assert.equal(evaluateSam31PropagationMemoryEvidence({ ...validBrowserEvidence, adapterInfo: {} }).passed, false, 'missing fallback-adapter evidence must fail passage');
 assert.equal(evaluateSam31PropagationMemoryEvidence({ ...validBrowserEvidence, adapterInfo: { isFallbackAdapter: true } }).passed, false, 'fallback adapter must fail passage');
 assert.equal(evaluateSam31PropagationMemoryEvidence({ ...validBrowserEvidence, receipts: validBrowserEvidence.receipts.map((receipt, index) => index === 0 ? { ...receipt, status: 'fallback' } : receipt) }).passed, false, 'fallback receipt status must fail passage');
 assert.equal(evaluateSam31PropagationMemoryEvidence({ ...validBrowserEvidence, receipts: validBrowserEvidence.receipts.map((receipt, index) => index === 1 ? { ...receipt, fallbackReason: 'runtime substitution' } : receipt) }).passed, false, 'fallback reason must fail passage');

@@ -1,5 +1,6 @@
 import {
   createRouteInvocationRequest,
+  classifySam31PropagationMemoryAdapter,
   createSam31MemoryEncoderPhaseProgramRouteDefinition,
   createSam31PropagationNeckPhaseProgramRouteDefinition,
   evaluateSam31PropagationMemoryEvidence,
@@ -48,12 +49,17 @@ async function sha256Text(text) {
 
 function serializeAdapterInfo(adapter) {
   const info = adapter.info;
+  const fallback = classifySam31PropagationMemoryAdapter({
+    explicitFallback: typeof adapter.isFallbackAdapter === 'boolean' ? adapter.isFallbackAdapter : undefined,
+    vendor: info?.vendor,
+    architecture: info?.architecture,
+  });
   const serialized = {
     description: String(info?.description || ''),
     vendor: String(info?.vendor || ''),
     architecture: String(info?.architecture || ''),
     device: String(info?.device || ''),
-    isFallbackAdapter: Boolean(adapter.isFallbackAdapter),
+    ...fallback,
   };
   if (!serialized.description && !serialized.vendor && !serialized.architecture && !serialized.device) {
     serialized.description = 'browser-webgpu-adapter';
