@@ -91,7 +91,7 @@
       },
       "diagnostics": [],
       "artifact": {
-        "path": "/private/tmp/kaminos-handy-live-splat-smoke-0713/scratch/smoke-coarse-consolidation-080-v1/sim-step-96-target.splats.f32",
+        "path": "sim-step-96-target.splats.f32",
         "sha256": "c4c0ca096868c54dd5e0eebc9aed51e4968d4aa1b5280fda3457a8ab2d56bc26",
         "byteLength": 244160,
         "dtype": "float32",
@@ -181,7 +181,7 @@
       },
       "diagnostics": [],
       "artifact": {
-        "path": "/private/tmp/kaminos-handy-live-splat-smoke-0713/scratch/smoke-coarse-consolidation-080-v1/sim-step-97-target.splats.f32",
+        "path": "sim-step-97-target.splats.f32",
         "sha256": "10986af92ae24638b47a27605d56246841c015f6c9d077be16622a5d6dfe6770",
         "byteLength": 242240,
         "dtype": "float32",
@@ -236,7 +236,7 @@
   "learnedSelector": {
     "authority": "held-out-adjacent-phase-sparse-residual-learning-v0",
     "model": {
-      "path": "/private/tmp/kaminos-handy-live-splat-smoke-0713/scratch/smoke-coarse-consolidation-080-v1/sparse-fine-selector.json",
+      "path": "sparse-fine-selector.json",
       "identity": "sha256:818a33b5e272cae4782eeafb3123094a4b84e79cd14963180b3933c600ae0dd3",
       "sha256": "fd53aa640ab92681477981ee2ab880b7682a61a8221b4c897db70f3b5fb47971",
       "byteLength": 1244
@@ -392,7 +392,7 @@
       },
       "diagnostics": [],
       "artifact": {
-        "path": "/private/tmp/kaminos-handy-live-splat-smoke-0713/scratch/smoke-coarse-consolidation-080-v1/sim-step-97-learned.splats.f32",
+        "path": "sim-step-97-learned.splats.f32",
         "sha256": "3b38ac7725e6329343230f53fc6460b59c6a601fe25a9f2e370c6d6ab743840d",
         "byteLength": 239872,
         "dtype": "float32",

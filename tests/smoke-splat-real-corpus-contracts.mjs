@@ -111,6 +111,17 @@ assert.deepEqual(report.frameSplit.evaluationFrameIds, ['sim-step-97']);
 assert.equal(report.frameSplit.authority, 'explicit-adjacent-step-holdout-v0');
 assert.equal(report.frames.every(frame => frame.accounting.rejectedExtinctionMass === 0), true);
 assert.equal(report.frames.every(frame => frame.capacity.outputWasTruncated === false), true);
+assert.deepEqual(
+  report.frames.map(frame => frame.artifact.path),
+  ['sim-step-96-target.splats.f32', 'sim-step-97-target.splats.f32'],
+  'bundle-owned target artifacts use portable output-directory-relative paths',
+);
+assert.equal(report.learnedSelector.model.path, 'sparse-fine-selector.json');
+assert.equal(
+  report.learnedSelector.heldOutProduct.artifact.path,
+  'sim-step-97-learned.splats.f32',
+  'bundle-owned learned artifacts use portable output-directory-relative paths',
+);
 assert.equal(report.requestedConfig.coarseAnchorMassRatio, 0.08);
 assert.equal(report.frames.every(frame => frame.coarseConsolidation.identity === 'mass-preserving-anchor-voronoi-v1'), true);
 assert.equal(report.frames.every(frame => frame.coarseConsolidation.enabled === true), true);
