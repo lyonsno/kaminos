@@ -7,7 +7,7 @@ const pbrWitness = await readFile(new URL('../volume-boundary-splat-pbr-witness.
 
 assert.match(
   core,
-  /BOUNDARY_SPLAT_SELECTOR_BUDGETS\s*=\s*\[0,\s*6400,\s*3200,\s*1600,\s*800\]/,
+  /BOUNDARY_SPLAT_SELECTOR_BUDGETS\s*=\s*\[0,\s*12800,\s*6400,\s*3200,\s*1600,\s*800\]/,
   'candidate-budget contract includes an explicit uncapped source-preserving mode',
 );
 assert.match(
@@ -17,8 +17,8 @@ assert.match(
 );
 assert.match(
   core,
-  /let effectiveBudget = select\(candidateCount,\s*min\(candidateCount,\s*boundarySplatDraw\.requestedCandidateBudget\),\s*boundarySplatDraw\.requestedCandidateBudget > 0u\)/,
-  'the GPU selector preserves every candidate unless a positive budget is explicit',
+  /let requestedBudget = boundarySplatDrawGroups\[groupIndex\]\.requestedCandidateBudget;\s*let effectiveBudget = select\(candidateCount,\s*min\(candidateCount,\s*requestedBudget\),\s*requestedBudget > 0u\)/,
+  'each GPU tier preserves every candidate unless a positive budget is explicit',
 );
 assert.match(
   page,

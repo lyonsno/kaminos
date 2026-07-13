@@ -6,7 +6,7 @@ import { spawnSync } from 'node:child_process';
 const BOUNDARY_SPLAT_BENCHMARK_SCHEMA = 'kaminos.boundary-splat.serial-benchmark.v0';
 const BOUNDARY_SPLAT_RENDERER_IDENTITY = 'live-boundary-sidecar-learned-attribute-splats-v0';
 const BOUNDARY_SPLAT_SOURCE_AUTHORITY = 'live-baked-sidecar-plus-fluid-material-v0';
-const BOUNDARY_SPLAT_SELECTOR_POLICY_IDENTITY = 'boundary-splat-deterministic-gpu-hash-thinning-v0';
+const BOUNDARY_SPLAT_SELECTOR_POLICY_IDENTITY = 'boundary-splat-nested-permutation-prefix-v0';
 const BUDGETS = [6400, 3200, 1600, 800];
 const INSTANCE_COUNTS = [1, 16, 64, 100];
 

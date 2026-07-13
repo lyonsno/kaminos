@@ -3466,7 +3466,7 @@ async function main() {
       mainRendererMetrics.meanLuma >= 8;
     const boundarySplatBudgetVisualEvidence =
       state.boundarySplatRendererIdentity === 'live-boundary-sidecar-learned-attribute-splats-v0' &&
-      state.boundarySplatSelectorPolicyIdentity === 'boundary-splat-deterministic-gpu-hash-thinning-v0' &&
+      state.boundarySplatSelectorPolicyIdentity === 'boundary-splat-nested-permutation-prefix-v0' &&
       Number.isFinite(Number(state.boundarySplatRequestedCandidateBudget));
     const boundarySplatBudgetSignalPixels = Number(metrics.litPixels || 0) +
       Number(metrics.smokeLikePixels || 0) +

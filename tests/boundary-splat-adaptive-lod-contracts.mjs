@@ -69,6 +69,7 @@ assert.deepEqual(order.slice(0, 1600), order.slice(0, 3200).slice(0, 1600), '160
 assert.deepEqual(order.slice(0, 3200), order.slice(0, 6400).slice(0, 3200), '3200 tier must be an exact prefix of 6400');
 
 assert.match(coreSource, /BOUNDARY_SPLAT_ADAPTIVE_LOD_IDENTITY\s*=\s*'boundary-splat-projected-area-nested-tiers-v0'/, 'runtime must publish the adaptive allocator identity');
+assert.match(coreSource, /BOUNDARY_SPLAT_SELECTOR_POLICY_IDENTITY\s*=\s*'boundary-splat-nested-permutation-prefix-v0'/, 'selector telemetry must name the budget-independent nested source order');
 assert.match(coreSource, /struct BoundarySplatDrawGroup[\s\S]*descriptorStart:\s*u32[\s\S]*descriptorCount:\s*u32[\s\S]*requestedCandidateBudget:\s*u32[\s\S]*effectiveCandidateBudget:\s*u32/, 'GPU draw groups must preserve descriptor and budget authority');
 assert.match(coreSource, /fn boundarySplatNestedSourceIndex\(rank:\s*u32,\s*sourceCount:\s*u32\)/, 'WGSL must use a budget-independent nested source order');
 assert.match(coreSource, /archiveBoundarySplatHistory[\s\S]*boundarySplatNestedSourceIndex\(candidateIndex,\s*boundarySplatDraw\.sourceCandidateCount\)/, 'history archive must store one nested prefix for every tier');

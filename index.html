@@ -1175,12 +1175,21 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
         <span class="slider-label">Splat budget</span>
         <select id="volume-boundary-splat-candidate-budget" class="select-input">
           <option value="0" selected>Full source</option>
+          <option value="12800">12800</option>
           <option value="6400">6400</option>
           <option value="3200">3200</option>
           <option value="1600">1600</option>
           <option value="800">800</option>
         </select>
         <span class="slider-val" id="volume-boundary-splat-candidate-budget-val">full source</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Splat allocation</span>
+        <select id="volume-boundary-splat-lod-mode" class="select-input">
+          <option value="fixed" selected>fixed budget</option>
+          <option value="projected-area">projected area</option>
+        </select>
+        <span class="slider-val" id="volume-boundary-splat-lod-mode-val">fixed budget</span>
       </div>
       <div class="slider-row">
         <span class="slider-label">Splat phase</span>
@@ -11895,7 +11904,7 @@ const REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS = [
   { key: 'reactionBoundaryFireWarmth', id: 'volume-reaction-boundary-fire-warmth', param: 'volume_reaction_boundary_fire_warmth', min: 0, max: 2, decimals: 2 },
   { key: 'reactionBoundaryFireLuma', id: 'volume-reaction-boundary-fire-luma', param: 'volume_reaction_boundary_fire_luma', min: 0, max: 5, decimals: 2 },
   { key: 'boundarySplatInstances', id: 'volume-boundary-splat-instances', param: 'volume_boundary_splat_instances', min: 1, max: 128, decimals: 0 },
-  { key: 'boundarySplatCandidateBudget', id: 'volume-boundary-splat-candidate-budget', param: 'volume_boundary_splat_candidate_budget', min: 0, max: 6400, decimals: 0 },
+  { key: 'boundarySplatCandidateBudget', id: 'volume-boundary-splat-candidate-budget', param: 'volume_boundary_splat_candidate_budget', min: 0, max: 12800, decimals: 0 },
   { key: 'boundarySplatPhaseStride', id: 'volume-boundary-splat-phase-stride', param: 'volume_boundary_splat_phase_stride', min: 1, max: 15, decimals: 0 },
   { key: 'boundarySplatHistoryDepth', id: 'volume-boundary-splat-history-depth', param: 'volume_boundary_splat_history_depth', min: 4, max: 16, decimals: 0 },
   { key: 'boundarySplatHistoryFrameStride', id: 'volume-boundary-splat-history-frame-stride', param: 'volume_boundary_splat_history_frame_stride', min: 1, max: 16, decimals: 0 },
@@ -11932,7 +11941,7 @@ const BOUNDARY_SIDECAR_SOURCE_VALUES = new Set(['live', 'baked', 'mix']);
 const BOUNDARY_SIDECAR_VIEW_VALUES = new Set(['off', 'support', 'coverage', 'ridge', 'proximity', 'footprint']);
 const BOUNDARY_SPLAT_MODE_VALUES = new Set(['off', 'analytic', 'learned']);
 const BOUNDARY_SPLAT_PHASE_MODE_VALUES = new Set(['shared-current', 'same-history-slot', 'offset-history', 'age-sweep']);
-const BOUNDARY_SPLAT_SELECTOR_BUDGETS = [0, 6400, 3200, 1600, 800];
+const BOUNDARY_SPLAT_SELECTOR_BUDGETS = [0, 12800, 6400, 3200, 1600, 800];
 
 function normalizeReactionFrontLiveView(value) {
   const mode = String(value || 'off').toLowerCase().replace(/-/g, '_');
@@ -11967,6 +11976,11 @@ function normalizeBoundarySplatPbrScene(value) {
 function normalizeBoundarySplatCandidateBudget(value) {
   const requested = Math.round(Number(value));
   return BOUNDARY_SPLAT_SELECTOR_BUDGETS.includes(requested) ? requested : 0;
+}
+
+function normalizeBoundarySplatLodMode(value) {
+  const normalized = String(value || 'fixed').toLowerCase().replace(/_/g, '-');
+  return normalized === 'projected-area' ? normalized : 'fixed';
 }
 
 function clampVolumeControlValue(value, field) {
@@ -12284,6 +12298,11 @@ function syncReactionFrontExtractorLabels(controlsSnapshot) {
   const boundarySplatPhaseMode = normalizeBoundarySplatPhaseMode(controlsSnapshot.boundarySplatPhaseMode);
   const boundarySplatPhaseModeLabel = document.getElementById('volume-boundary-splat-phase-mode-val');
   if (boundarySplatPhaseModeLabel) boundarySplatPhaseModeLabel.textContent = boundarySplatPhaseMode.replace(/-/g, ' ');
+  const boundarySplatLodMode = normalizeBoundarySplatLodMode(controlsSnapshot.boundarySplatLodMode);
+  const boundarySplatLodModeLabel = document.getElementById('volume-boundary-splat-lod-mode-val');
+  if (boundarySplatLodModeLabel) boundarySplatLodModeLabel.textContent = boundarySplatLodMode === 'projected-area'
+    ? 'projected area'
+    : 'fixed budget';
   const boundarySplatPbrScene = normalizeBoundarySplatPbrScene(controlsSnapshot.boundarySplatPbrScene);
   const boundarySplatPbrSceneLabel = document.getElementById('volume-boundary-splat-pbr-scene-val');
   if (boundarySplatPbrSceneLabel) boundarySplatPbrSceneLabel.textContent = boundarySplatPbrScene === 'fire-field' ? 'fire court' : 'black field';
@@ -16482,6 +16501,7 @@ function readVolumeControls() {
   const boundarySidecarView = normalizeBoundarySidecarView(document.getElementById('volume-boundary-sidecar-view')?.value);
   const boundarySplatMode = normalizeBoundarySplatMode(document.getElementById('volume-boundary-splat-mode')?.value);
   const boundarySplatPhaseMode = normalizeBoundarySplatPhaseMode(document.getElementById('volume-boundary-splat-phase-mode')?.value);
+  const boundarySplatLodMode = normalizeBoundarySplatLodMode(document.getElementById('volume-boundary-splat-lod-mode')?.value);
   const boundarySplatPbrScene = normalizeBoundarySplatPbrScene(document.getElementById('volume-boundary-splat-pbr-scene')?.value);
   const boundarySplatComposition = String(params.get('volume_boundary_splat_composition') || 'proof');
   const boundarySplatFeatureCapture = ['1', 'true', 'on'].includes(String(params.get('volume_boundary_splat_feature_capture') || '').toLowerCase());
@@ -16552,6 +16572,7 @@ function readVolumeControls() {
     boundarySidecarView,
     boundarySplatMode,
     boundarySplatPhaseMode,
+    boundarySplatLodMode,
     boundarySplatComposition,
     boundarySplatPbrScene,
     boundarySplatFeatureCapture,
@@ -17721,6 +17742,9 @@ async function initKaminosVolumeRoute() {
   if (params.has('volume_boundary_splat_phase_mode')) {
     document.getElementById('volume-boundary-splat-phase-mode').value = normalizeBoundarySplatPhaseMode(params.get('volume_boundary_splat_phase_mode'));
   }
+  if (params.has('volume_boundary_splat_lod_mode')) {
+    document.getElementById('volume-boundary-splat-lod-mode').value = normalizeBoundarySplatLodMode(params.get('volume_boundary_splat_lod_mode'));
+  }
   if (params.has('volume_boundary_splat_pbr_scene')) {
     document.getElementById('volume-boundary-splat-pbr-scene').value = normalizeBoundarySplatPbrScene(params.get('volume_boundary_splat_pbr_scene'));
   }
@@ -17799,6 +17823,8 @@ async function initKaminosVolumeRoute() {
   document.getElementById('volume-boundary-splat-mode')?.addEventListener('change', syncControls);
   document.getElementById('volume-boundary-splat-phase-mode')?.addEventListener('input', syncControls);
   document.getElementById('volume-boundary-splat-phase-mode')?.addEventListener('change', syncControls);
+  document.getElementById('volume-boundary-splat-lod-mode')?.addEventListener('input', syncControls);
+  document.getElementById('volume-boundary-splat-lod-mode')?.addEventListener('change', syncControls);
   document.getElementById('volume-boundary-splat-pbr-scene')?.addEventListener('input', syncControls);
   document.getElementById('volume-boundary-splat-pbr-scene')?.addEventListener('change', syncControls);
   for (const field of REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS) {

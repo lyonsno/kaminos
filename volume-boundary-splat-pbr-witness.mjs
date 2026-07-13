@@ -18,6 +18,8 @@ const CAMERA = 'boundary-splat-pbr-fire-field-camera-v0';
 const PBR_SCENE = 'boundary-splat-pbr-fire-field-v0';
 const DEPTH_AUTHORITY = 'same-device-depth24plus-less-equal-v0';
 const FIXED_SUBSTRATE = 'operator-pretty-four-flame-substrate-v0';
+const ADAPTIVE_LOD = 'boundary-splat-projected-area-nested-tiers-v0';
+const ADAPTIVE_TIER_BUDGETS = new Set([0, 800, 1600, 3200, 6400, 12800]);
 const CAMERA_SWEEP_POSES = [
   { identity: 'left-arc', position: [-5.15, 1.85, 7.65], target: [0.12, -0.48, 0.05] },
   { identity: 'right-grazing', position: [7.10, 0.95, 3.25], target: [0.15, -0.50, 0.02] },
@@ -404,6 +406,8 @@ function classifyFalseClosure(phase, error) {
     'blank-or-partial-native-capture',
     'incomplete-cadence-duration',
     'stale-or-default-cadence-budget',
+    'stale-or-default-adaptive-lod',
+    'adaptive-lod-allocation-mismatch',
     'cadence-selected-count-mismatch',
     'cadence-fallback-or-overflow',
     'background-cadence-page',
@@ -513,6 +517,9 @@ async function waitForBoundarySplatTelemetry() {
       && state?.boundarySplatSelectedCandidateCount != null
       && Number.isFinite(Number(state?.boundarySplatInstanceCount))
       && state?.boundarySplatInstanceCount != null
+      && typeof state?.boundarySplatLodMode === 'string'
+      && Array.isArray(state?.boundarySplatTierGroups)
+      && Number.isFinite(Number(state?.boundarySplatGlobalRenderedInstanceCount))
       && Number(state?.boundarySplatTelemetryRequestedCandidateBudget) === Number(state?.boundarySplatRequestedCandidateBudget)
     ) return state;
     await delay(125);
@@ -535,9 +542,7 @@ async function hideHud() {
 function validateEffectiveState(state, cameraState, pageUrl) {
   const params = new URL(pageUrl).searchParams;
   const requestedCandidateBudget = Number(params.get('volume_boundary_splat_candidate_budget') || 0);
-  const expectedSelectedCandidateCount = requestedCandidateBudget > 0
-    ? Math.min(Number(state?.boundarySplatSourceCandidateCount), requestedCandidateBudget)
-    : Number(state?.boundarySplatSourceCandidateCount);
+  const requestedLodMode = normalizeRequestedLodMode(params.get('volume_boundary_splat_lod_mode'));
   const mismatches = [];
   if (state?.boundarySplatFallbackReason != null) {
     throw new Error(`fallback-route: ${JSON.stringify(state.boundarySplatFallbackReason)}`);
@@ -554,8 +559,6 @@ function validateEffectiveState(state, cameraState, pageUrl) {
   if (Number(state?.boundarySplatOverflowCount || 0) !== 0) mismatches.push(['overflow', 0, state?.boundarySplatOverflowCount]);
   if (Number(state?.boundarySplatCopyBytesThisFrame) !== 0) mismatches.push(['copyBytes', 0, state?.boundarySplatCopyBytesThisFrame]);
   if (Number(state?.boundarySplatRequestedCandidateBudget) !== requestedCandidateBudget) mismatches.push(['requestedCandidateBudget', requestedCandidateBudget, state?.boundarySplatRequestedCandidateBudget]);
-  if (Number(state?.boundarySplatEffectiveCandidateBudget) !== expectedSelectedCandidateCount) mismatches.push(['effectiveCandidateBudget', expectedSelectedCandidateCount, state?.boundarySplatEffectiveCandidateBudget]);
-  if (Number(state?.boundarySplatSelectedCandidateCount) !== expectedSelectedCandidateCount) mismatches.push(['selectedCandidateCount', expectedSelectedCandidateCount, state?.boundarySplatSelectedCandidateCount]);
   if (cameraState?.identity !== CAMERA) mismatches.push(['camera', CAMERA, cameraState?.identity]);
   if (cameraState?.authority !== 'url-owned-effective-camera-pose') mismatches.push(['cameraAuthority', 'url-owned-effective-camera-pose', cameraState?.authority]);
   if (cameraState?.requestedEffectiveAgreement !== true) mismatches.push(['cameraAgreement', true, cameraState?.requestedEffectiveAgreement]);
@@ -563,6 +566,7 @@ function validateEffectiveState(state, cameraState, pageUrl) {
   if (params.get('volume_boundary_splat_pbr_scene') !== 'fire-field') mismatches.push(['routePbrScene', 'fire-field', params.get('volume_boundary_splat_pbr_scene')]);
   if (params.get('volume_boundary_splat_instances') !== '100') mismatches.push(['routeInstances', '100', params.get('volume_boundary_splat_instances')]);
   if (mismatches.length) throw new Error(`stale-or-default-config: ${JSON.stringify(mismatches)}`);
+  validateAllocationEvidence(state, requestedLodMode, 'initial-state');
   if (state?.boundarySplatPbrDepthAuthority !== DEPTH_AUTHORITY) {
     throw new Error(`depth-occlusion-authority-missing: ${JSON.stringify(state?.boundarySplatPbrDepthAuthority)}`);
   }
@@ -593,6 +597,7 @@ function validateCadence(cadence, initialState, requestedDurationMs) {
     })}`);
   }
   const requestedCandidateBudget = Number(initialState?.boundarySplatRequestedCandidateBudget);
+  const requestedLodMode = String(initialState?.boundarySplatLodMode || 'fixed');
   if (
     cadence?.effectiveRoute !== EFFECTIVE_ROUTE
     || cadence?.rendererIdentity !== RENDERER
@@ -600,6 +605,7 @@ function validateCadence(cadence, initialState, requestedDurationMs) {
     || cadence?.sourceAuthority !== SOURCE_AUTHORITY
     || cadence?.compositionIdentity !== COMPOSITION
     || Number(cadence?.requestedCandidateBudget) !== requestedCandidateBudget
+    || cadence?.lodMode !== requestedLodMode
     || cadence.samples.some(sample => Number(sample?.requestedCandidateBudget) !== requestedCandidateBudget)
   ) {
     throw new Error(`stale-or-default-cadence-budget:${JSON.stringify({
@@ -613,18 +619,10 @@ function validateCadence(cadence, initialState, requestedDurationMs) {
     })}`);
   }
   for (const sample of cadence.samples) {
-    const sourceCandidateCount = Number(sample?.sourceCandidateCount);
-    const expectedSelectedCandidateCount = requestedCandidateBudget > 0
-      ? Math.min(sourceCandidateCount, requestedCandidateBudget)
-      : sourceCandidateCount;
-    if (
-      !Number.isFinite(sourceCandidateCount)
-      || sourceCandidateCount <= 0
-      || Number(sample?.effectiveCandidateBudget) !== expectedSelectedCandidateCount
-      || Number(sample?.selectedCandidateCount) !== expectedSelectedCandidateCount
-      || Number(sample?.renderedInstanceCount) !== expectedSelectedCandidateCount * Number(sample?.requestedInstanceCount)
-    ) {
-      throw new Error(`cadence-selected-count-mismatch:${JSON.stringify(sample)}`);
+    try {
+      validateAllocationEvidence(sample, requestedLodMode, 'cadence-sample');
+    } catch (error) {
+      throw new Error(`cadence-selected-count-mismatch:${error.message}:${JSON.stringify(sample)}`);
     }
   }
   if (cadence.samples.some(sample => sample?.fallbackReason != null || Number(sample?.overflowCount || 0) !== 0)) {
@@ -639,7 +637,8 @@ function validateLadder(ladder) {
   assert.equal(ladder?.simulatorPreserved, true, 'cost ladder changed simulator state');
   assert.equal(ladder?.simStepCountBefore, ladder?.simStepCountAfter, 'sim step count changed during ladder');
   assert.equal(ladder?.rows?.length, COUNTS.length, 'partial cost ladder');
-  assert.ok([0, 6400, 3200, 1600, 800].includes(ladder?.requestedCandidateBudget), 'unsupported or missing ladder budget');
+  assert.ok([0, 12800, 6400, 3200, 1600, 800].includes(ladder?.requestedCandidateBudget), 'unsupported or missing ladder budget');
+  assert.ok(['fixed', 'projected-area'].includes(ladder?.lodMode), 'missing cost ladder LOD mode');
   for (const [index, row] of ladder.rows.entries()) {
     assert.equal(row.requestedInstanceCount, COUNTS[index], 'cost ladder order changed');
     assert.equal(row.effectiveInstanceCount, COUNTS[index], 'hidden instance cap or stale count');
@@ -650,13 +649,8 @@ function validateLadder(ladder) {
       continue;
     }
     assert.ok(row.sourceCandidateCount > 0, 'missing source candidate count');
-    const expectedSelectedCandidateCount = row.requestedCandidateBudget > 0
-      ? Math.min(row.sourceCandidateCount, row.requestedCandidateBudget)
-      : row.sourceCandidateCount;
-    assert.equal(row.selectorPolicyIdentity, 'boundary-splat-deterministic-gpu-hash-thinning-v0', 'selector identity changed');
-    assert.equal(row.effectiveCandidateBudget, expectedSelectedCandidateCount, 'effective candidate budget mismatch');
-    assert.equal(row.selectedCandidateCount, expectedSelectedCandidateCount, 'selected candidate count mismatch');
-    assert.equal(row.renderedInstanceCount, row.selectedCandidateCount * COUNTS[index], 'rendered instance accounting mismatch');
+    assert.equal(row.selectorPolicyIdentity, 'boundary-splat-nested-permutation-prefix-v0', 'selector identity changed');
+    validateAllocationEvidence(row, ladder.lodMode, `cost-ladder-${COUNTS[index]}`);
     assert.equal(row.overflowCount, 0, 'candidate overflow in cost ladder');
     assert.equal(row.candidateCopyBytes, 0, 'candidate copy returned in cost ladder');
     assert.equal(row.fallbackReason, null, 'fallback route in cost ladder');
@@ -668,6 +662,99 @@ function validateLadder(ladder) {
   assert.equal(ladder?.depthAuthority, DEPTH_AUTHORITY, 'depth authority changed in cost ladder');
   assert.equal(ladder?.fixedSubstrateIdentity, FIXED_SUBSTRATE, 'fixed substrate changed in cost ladder');
   assert.equal(ladder.ok, true, 'runtime rejected cost ladder evidence');
+}
+
+function normalizeRequestedLodMode(value) {
+  return String(value || 'fixed').trim().toLowerCase().replaceAll('_', '-') === 'projected-area'
+    ? 'projected-area'
+    : 'fixed';
+}
+
+function validateAllocationEvidence(evidence, requestedLodMode, context) {
+  const lodMode = evidence?.boundarySplatLodMode ?? evidence?.lodMode;
+  const adaptiveLodIdentity = evidence?.boundarySplatAdaptiveLodIdentity ?? evidence?.adaptiveLodIdentity;
+  const groups = evidence?.boundarySplatTierGroups ?? evidence?.tierGroups;
+  const sourceCandidateCount = Number(evidence?.boundarySplatSourceCandidateCount ?? evidence?.sourceCandidateCount);
+  const requestedInstanceCount = Number(evidence?.boundarySplatRequestedInstanceCount ?? evidence?.requestedInstanceCount);
+  const effectiveCandidateBudget = Number(evidence?.boundarySplatEffectiveCandidateBudget ?? evidence?.effectiveCandidateBudget);
+  const selectedCandidateCount = Number(evidence?.boundarySplatSelectedCandidateCount ?? evidence?.selectedCandidateCount);
+  const renderedInstanceCount = Number(evidence?.boundarySplatInstanceCount ?? evidence?.renderedInstanceCount);
+  const globalRenderedInstanceCount = Number(
+    evidence?.boundarySplatGlobalRenderedInstanceCount ?? evidence?.globalRenderedInstanceCount,
+  );
+  if (lodMode !== requestedLodMode) {
+    throw new Error(`stale-or-default-adaptive-lod:${context}:${JSON.stringify({ requestedLodMode, lodMode })}`);
+  }
+  if (!Number.isFinite(sourceCandidateCount) || sourceCandidateCount <= 0) {
+    throw new Error(`adaptive-lod-allocation-mismatch:${context}:missing-source-count`);
+  }
+  if (requestedLodMode === 'fixed') {
+    const requestedBudget = Number(evidence?.boundarySplatRequestedCandidateBudget ?? evidence?.requestedCandidateBudget);
+    const expectedSelected = requestedBudget > 0 ? Math.min(sourceCandidateCount, requestedBudget) : sourceCandidateCount;
+    if (
+      effectiveCandidateBudget !== expectedSelected
+      || selectedCandidateCount !== expectedSelected
+      || renderedInstanceCount !== expectedSelected * requestedInstanceCount
+      || globalRenderedInstanceCount !== renderedInstanceCount
+    ) {
+      throw new Error(`adaptive-lod-allocation-mismatch:${context}:${JSON.stringify({
+        expectedSelected,
+        effectiveCandidateBudget,
+        selectedCandidateCount,
+        renderedInstanceCount,
+        globalRenderedInstanceCount,
+        requestedInstanceCount,
+      })}`);
+    }
+    return;
+  }
+  if (adaptiveLodIdentity !== ADAPTIVE_LOD || !Array.isArray(groups) || groups.length === 0) {
+    throw new Error(`stale-or-default-adaptive-lod:${context}:${JSON.stringify({ adaptiveLodIdentity, groups })}`);
+  }
+  let descriptorCount = 0;
+  let accountedRenderedInstanceCount = 0;
+  let maxEffectiveCandidateBudget = 0;
+  let expectedDescriptorStart = 0;
+  for (const group of groups) {
+    const requestedBudget = Number(group?.requestedBudget);
+    const groupDescriptorCount = Number(group?.descriptorCount);
+    const groupEffectiveBudget = Number(group?.effectiveCandidateBudget);
+    const groupRenderedInstanceCount = Number(group?.renderedInstanceCount);
+    const expectedEffectiveBudget = requestedBudget > 0
+      ? Math.min(sourceCandidateCount, requestedBudget)
+      : sourceCandidateCount;
+    if (
+      !ADAPTIVE_TIER_BUDGETS.has(requestedBudget)
+      || groupDescriptorCount <= 0
+      || Number(group?.descriptorStart) !== expectedDescriptorStart
+      || groupEffectiveBudget !== expectedEffectiveBudget
+      || groupRenderedInstanceCount !== groupEffectiveBudget * groupDescriptorCount
+    ) {
+      throw new Error(`adaptive-lod-allocation-mismatch:${context}:${JSON.stringify(group)}`);
+    }
+    descriptorCount += groupDescriptorCount;
+    expectedDescriptorStart += groupDescriptorCount;
+    accountedRenderedInstanceCount += groupRenderedInstanceCount;
+    maxEffectiveCandidateBudget = Math.max(maxEffectiveCandidateBudget, groupEffectiveBudget);
+  }
+  if (
+    descriptorCount !== requestedInstanceCount
+    || accountedRenderedInstanceCount !== globalRenderedInstanceCount
+    || renderedInstanceCount !== globalRenderedInstanceCount
+    || effectiveCandidateBudget !== maxEffectiveCandidateBudget
+    || selectedCandidateCount !== maxEffectiveCandidateBudget
+  ) {
+    throw new Error(`adaptive-lod-allocation-mismatch:${context}:${JSON.stringify({
+      descriptorCount,
+      requestedInstanceCount,
+      accountedRenderedInstanceCount,
+      globalRenderedInstanceCount,
+      renderedInstanceCount,
+      maxEffectiveCandidateBudget,
+      effectiveCandidateBudget,
+      selectedCandidateCount,
+    })}`);
+  }
 }
 
 function validateHistoryPrime(historyPrime, initialState) {
@@ -794,6 +881,10 @@ function compactState(state) {
     selectedCandidateCount: state?.boundarySplatSelectedCandidateCount,
     sourceCandidateCount: state?.boundarySplatSourceCandidateCount,
     renderedInstanceCount: state?.boundarySplatInstanceCount,
+    lodMode: state?.boundarySplatLodMode,
+    adaptiveLodIdentity: state?.boundarySplatAdaptiveLodIdentity,
+    tierGroups: state?.boundarySplatTierGroups,
+    globalRenderedInstanceCount: state?.boundarySplatGlobalRenderedInstanceCount,
     phaseModeIdentity: state?.boundarySplatPhaseModeIdentity,
     phaseSourceCount: state?.boundarySplatPhaseSourceCount,
     historyDepth: state?.boundarySplatHistoryDepth,
