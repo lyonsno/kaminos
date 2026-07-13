@@ -47,6 +47,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--out-dir", required=True)
     parser.add_argument("--manifest")
     parser.add_argument("--batch-cells", type=int, default=32768)
+    parser.add_argument("--support-threshold", type=float)
     return parser.parse_args()
 
 
@@ -252,7 +253,15 @@ def main() -> int:
                 raise CompositionFailure(phase, "support classifier omitted feature standardization or threshold")
             feature_mean = np.asarray(classifier_archive["featureMean"], dtype=np.float32)
             feature_std = np.asarray(classifier_archive["featureStd"], dtype=np.float32)
-            threshold = float(np.asarray(classifier_archive["threshold"]).reshape(-1)[0])
+            checkpoint_threshold = float(np.asarray(classifier_archive["threshold"]).reshape(-1)[0])
+            threshold = checkpoint_threshold if args.support_threshold is None else float(args.support_threshold)
+            if not np.isfinite(threshold) or threshold <= 0.0 or threshold > 1.0:
+                raise CompositionFailure(phase, f"support threshold must be finite in (0, 1], got {threshold}")
+            threshold_authority = (
+                "checkpoint-validation-selected-f1-v0"
+                if args.support_threshold is None
+                else "caller-specified-calibration-assay-v0"
+            )
         with np.load(heads_path, allow_pickle=False) as heads_archive:
             channel_states = {channel: model_state(heads_archive, channel) for channel in requested_channels}
         if classifier["w1"].shape[0] != feature_mean.size or feature_mean.shape != feature_std.shape:
@@ -339,6 +348,8 @@ def main() -> int:
             "support": {
                 "identity": probe_report.get("classifier", {}).get("identity"),
                 "threshold": threshold,
+                "checkpointThreshold": checkpoint_threshold,
+                "thresholdAuthority": threshold_authority,
                 "thresholdSelection": probe_report.get("classifier", {}).get("thresholdSelection"),
                 "predictedPositiveCount": positive_count,
                 "predictedPrevalence": float(positive_count / high_cells),
