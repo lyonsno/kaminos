@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os';
 
 const root = resolve(import.meta.dirname, '..');
 const probePath = join(root, 'volume-exact-basin-support-probe.py');
+const composerPath = join(root, 'volume-exact-basin-selective-compose.py');
 
 assert.ok(existsSync(probePath), 'exact-basin support classifier probe exists');
 const source = readFileSync(probePath, 'utf8');
@@ -17,6 +18,12 @@ assert.match(source, /spatial-block-hash-holdout-v0/, 'probe uses spatial blocks
 assert.match(source, /validation-selected-f1-threshold-v0/, 'probe selects its gate threshold on validation data');
 assert.match(source, /offSupport/, 'probe reports off-support pollution explicitly');
 assert.match(source, /failurePhase/, 'probe writes durable failure-phase reports');
+assert.ok(existsSync(composerPath), 'exact-basin selective-head composer exists');
+const composerSource = readFileSync(composerPath, 'utf8');
+assert.match(composerSource, /kaminos\.volume\.exact-basin-selective-composition\.v0/, 'composer emits a stable manifest schema');
+assert.match(composerSource, /dense-ungated-residual-v0/, 'composer names the dense topology policy');
+assert.match(composerSource, /sparse-hard-support-gated-residual-v0/, 'composer names the sparse carrier policy');
+assert.match(composerSource, /failurePhase/, 'composer writes durable failure-phase reports');
 
 const fixtureRoot = mkdtempSync(join(tmpdir(), 'kaminos-exact-basin-support-probe-'));
 const highGrid = 12;
@@ -211,6 +218,74 @@ for (const channel of report.gatedChannels) {
 assert.ok(existsSync(join(outDir, 'previews', 'fuel.support-gate-preview.png')), 'probe writes labeled fuel gate preview');
 const preview = JSON.parse(readFileSync(join(outDir, 'previews', 'fuel.support-gate-preview.json'), 'utf8'));
 assert.deepEqual(preview.rowOrder, ['truthHigh', 'lowUpsampled', 'ungatedPrediction', 'gatedPrediction', 'truthSupport', 'predictedSupport', 'gatedSignedError']);
+
+const compositionDir = join(fixtureRoot, 'composition-out');
+execFileSync('python3', [
+  composerPath,
+  '--pair-manifest', pairPath,
+  '--support-probe-manifest', join(outDir, 'manifest.json'),
+  '--out-dir', compositionDir,
+  '--batch-cells', '256',
+], { stdio: 'pipe' });
+const composition = JSON.parse(readFileSync(join(compositionDir, 'manifest.json'), 'utf8'));
+assert.equal(composition.schema, 'kaminos.volume.exact-basin-selective-composition.v0');
+assert.equal(composition.status, 'captured');
+assert.equal(composition.failurePhase, null);
+assert.equal(composition.source.pairManifestSha256, sha256(readFileSync(pairPath)));
+assert.equal(composition.source.supportProbeManifestSha256, sha256(readFileSync(join(outDir, 'manifest.json'))));
+assert.equal(composition.channelPolicies.frontTopology, 'dense-ungated-residual-v0');
+assert.equal(composition.channelPolicies.fuel, 'sparse-hard-support-gated-residual-v0');
+assert.deepEqual(composition.receiver.fluid.shape, [highGrid, highGrid, highGrid, 16]);
+assert.deepEqual(composition.receiver.front.shape, [highGrid, highGrid, highGrid, 1]);
+assert.deepEqual(composition.support.probability.shape, [highGrid, highGrid, highGrid, 1]);
+assert.deepEqual(composition.support.hardMask.shape, [highGrid, highGrid, highGrid, 1]);
+assert.ok(composition.support.predictedPositiveCount > 0, 'composition retains predicted sparse support');
+
+function readF32(path) {
+  const bytes = readFileSync(path);
+  return new Float32Array(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength));
+}
+
+const composedFluid = readF32(composition.receiver.fluid.path);
+const composedFront = readF32(composition.receiver.front.path);
+let selectedFuelChanged = false;
+let denseFrontChanged = false;
+for (let z = 0; z < highGrid; z += 1) {
+  for (let y = 0; y < highGrid; y += 1) {
+    for (let x = 0; x < highGrid; x += 1) {
+      const highCell = highIndex(x, y, z);
+      const lowCell = Math.floor(x / 2) + Math.floor(y / 2) * lowGrid + Math.floor(z / 2) * lowGrid * lowGrid;
+      assert.equal(
+        composedFluid[highCell * 16 + 3],
+        lowFluid[lowCell * 16 + 3],
+        'unselected densityCarrier remains byte-value identical to the low baseline',
+      );
+      if (composedFluid[highCell * 16 + 6] !== lowFluid[lowCell * 16 + 6]) selectedFuelChanged = true;
+      if (composedFront[highCell] !== lowFront[lowCell]) denseFrontChanged = true;
+    }
+  }
+}
+assert.equal(selectedFuelChanged, true, 'sparse selected fuel head changes at least one high-grid cell');
+assert.equal(denseFrontChanged, true, 'dense topology head changes at least one high-grid cell');
+
+const corruptedClassifierPath = join(fixtureRoot, 'support-classifier-corrupt.npz');
+const classifierBytes = readFileSync(report.classifier.artifact.path);
+writeFileSync(corruptedClassifierPath, Buffer.concat([classifierBytes, Buffer.from([0x7f])]));
+const corruptProbeManifest = structuredClone(report);
+corruptProbeManifest.classifier.artifact.path = corruptedClassifierPath;
+const corruptProbeManifestPath = join(fixtureRoot, 'support-probe-corrupt-model.json');
+writeFileSync(corruptProbeManifestPath, `${JSON.stringify(corruptProbeManifest, null, 2)}\n`);
+const corruptCompositionDir = join(fixtureRoot, 'composition-corrupt-model');
+const corruptComposition = spawnSync('python3', [
+  composerPath,
+  '--pair-manifest', pairPath,
+  '--support-probe-manifest', corruptProbeManifestPath,
+  '--out-dir', corruptCompositionDir,
+], { encoding: 'utf8' });
+assert.notEqual(corruptComposition.status, 0, 'composer rejects a checkpoint whose bytes disagree with manifest authority');
+const corruptCompositionReport = JSON.parse(readFileSync(join(corruptCompositionDir, 'manifest.json'), 'utf8'));
+assert.equal(corruptCompositionReport.status, 'failed');
+assert.equal(corruptCompositionReport.failurePhase, 'model-validation');
 
 const corruptSplatDesc = writeF32('boundary-splats-corrupt.f32', makeSplats(true));
 const corruptFullGridPath = join(fixtureRoot, 'full-grid-corrupt.json');
