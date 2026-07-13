@@ -46,6 +46,9 @@ assert.match(script, /--context-mode/, 'radiance trainer exposes explicit spatia
 assert.match(script, /choices=\["none", "world-xyz", "world-fourier", "world-grid-neighborhood"\]/, 'spatial conditioning distinguishes pointwise position from explicit local-grid neighborhood context');
 assert.match(script, /--fourier-frequencies/, 'Fourier conditioning exposes its exact frequency ladder');
 assert.match(script, /--hidden-size/, 'spatial trainer exposes an explicit hidden-width experiment control');
+assert.match(script, /--spatial-mixing/, 'spatial trainer exposes an explicit learned mixing family instead of conflating it with handcrafted context');
+assert.match(script, /six-neighbor-hidden-residual/, 'learned spatial mixing has a stable model-family identity');
+assert.match(script, /zero-delta-active-six-neighbor-hidden-residual-v0/, 'learned mixing starts as an exact no-op while retaining trainable internal features');
 assert.match(script, /mx\.sin\(positions[^\n]+frequency[^\n]+2\.0[^\n]+np\.pi\)/, 'Fourier conditioning includes signed sine phase channels');
 assert.match(script, /mx\.cos\(positions[^\n]+frequency[^\n]+2\.0[^\n]+np\.pi\)/, 'Fourier conditioning includes cosine phase channels');
 assert.match(script, /expanded_weight\[:,\s*:base_input_size\]\s*=\s*np\.asarray\(base_model\.hidden\.weight\)/, 'spatial model preserves every proven input weight exactly across successive context expansions');
@@ -76,8 +79,8 @@ assert.match(
 );
 assert.match(
   script,
-  /"continuation"\s*:\s*schema\s*==\s*SPATIAL_MODEL_SCHEMA/,
-  'training receipts say explicitly when optimization continued from an experimental spatial checkpoint',
+  /"continuation"\s*:\s*schema\s*in\s*\(SPATIAL_MODEL_SCHEMA,\s*GRID_MESSAGE_MODEL_SCHEMA\)/,
+  'training receipts say explicitly when optimization continued from either experimental spatial checkpoint family',
 );
 assert.match(script, /world-grid-neighborhood/, 'radiance trainer exposes local-grid optical context as a distinct experimental family');
 assert.match(script, /neighbor\.occupancy\.x-/, 'local-grid context records missing and present six-neighbor support explicitly');

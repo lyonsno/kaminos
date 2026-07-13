@@ -20,6 +20,7 @@ CORPUS_AUTHORITY = "live-simulator-frozen-state-candidate-raymarch-v0"
 TARGET_DECOMPOSITION = "candidate-support-gated-unit-gain-direct-flame-native-raymarch-v0"
 MODEL_SCHEMA = "kaminos-boundary-splat-attribute-mlp-v0"
 SPATIAL_MODEL_SCHEMA = "kaminos-boundary-splat-spatial-attribute-mlp-v0"
+GRID_MESSAGE_MODEL_SCHEMA = "kaminos-boundary-splat-grid-message-attribute-mlp-v0"
 BOUNDARY_SPLAT_SUPERVISION_CANDIDATE_ORDER = [
     "position.x", "position.y", "position.z",
     "sidecar.support", "sidecar.coverage", "sidecar.ridge", "sidecar.footprint",
@@ -138,6 +139,50 @@ class AttributeMlp(nn.Module):
         return mx.sigmoid(self.output(nn.relu(self.hidden(inputs))))
 
 
+class GridMessageAttributeMlp(nn.Module):
+    def __init__(self, input_size, hidden_size, message_size):
+        super().__init__()
+        self.hidden = nn.Linear(input_size, hidden_size)
+        self.output = nn.Linear(hidden_size, len(OUTPUTS))
+        self.message_hidden = nn.Linear(hidden_size * 7, message_size)
+        self.message_output = nn.Linear(message_size, len(OUTPUTS))
+
+    @classmethod
+    def from_base(cls, base_model, message_size):
+        hidden_size = int(base_model.hidden.weight.shape[0])
+        input_size = int(base_model.hidden.weight.shape[1])
+        if message_size <= 0:
+            raise ValueError("message size must be positive")
+        model = cls(input_size, hidden_size, message_size)
+        random = np.random.default_rng(1)
+        message_weight = random.normal(
+            0.0,
+            np.sqrt(2.0 / (hidden_size * 7)) * 0.1,
+            size=(message_size, hidden_size * 7),
+        ).astype(np.float32)
+        model.load_weights([
+            ("hidden.weight", base_model.hidden.weight),
+            ("hidden.bias", base_model.hidden.bias),
+            ("output.weight", base_model.output.weight),
+            ("output.bias", base_model.output.bias),
+            ("message_hidden.weight", mx.array(message_weight)),
+            ("message_hidden.bias", mx.array(np.full(message_size, 0.01, dtype=np.float32))),
+            ("message_output.weight", mx.zeros((len(OUTPUTS), message_size), dtype=mx.float32)),
+            ("message_output.bias", mx.zeros((len(OUTPUTS),), dtype=mx.float32)),
+        ])
+        mx.eval(model.parameters())
+        return model
+
+    def __call__(self, inputs, neighbor_rows):
+        hidden = nn.relu(self.hidden(inputs))
+        safe_rows = mx.maximum(neighbor_rows, mx.array(0, dtype=neighbor_rows.dtype))
+        neighbor_hidden = hidden[safe_rows]
+        neighbor_hidden = neighbor_hidden * (neighbor_rows >= 0)[:, :, None]
+        message_inputs = mx.concatenate([hidden, neighbor_hidden.reshape(hidden.shape[0], -1)], axis=1)
+        message_logits = self.message_output(nn.relu(self.message_hidden(message_inputs)))
+        return mx.sigmoid(self.output(hidden) + message_logits)
+
+
 class CandidateAttributeTable(nn.Module):
     def __init__(self, normalized_attributes):
         super().__init__()
@@ -171,21 +216,25 @@ def infer_fourier_frequencies(feature_names):
     return frequency_order
 
 
-def load_warm_start(path_value, requested_context_mode, requested_frequencies):
+def load_warm_start(path_value, requested_context_mode, requested_frequencies, requested_spatial_mixing="none"):
     path = Path(path_value).resolve()
     artifact_bytes = path.read_bytes()
     artifact = json.loads(artifact_bytes)
     schema = artifact.get("schema")
     recovered_frequencies = []
-    if artifact.get("architecture") != "dense-relu-dense":
-        raise ValueError("warm start architecture must be dense-relu-dense")
     if schema == MODEL_SCHEMA:
+        if artifact.get("architecture") != "dense-relu-dense":
+            raise ValueError("warm start architecture must be dense-relu-dense")
         warm_context_mode = "none"
         warm_frequencies = []
+        warm_spatial_mixing = "none"
         expected_features = FEATURES
     elif artifact.get("schema") == SPATIAL_MODEL_SCHEMA:
+        if artifact.get("architecture") != "dense-relu-dense":
+            raise ValueError("warm start architecture must be dense-relu-dense")
         warm_context_mode = artifact.get("contextMode")
         warm_frequencies = [float(value) for value in artifact.get("fourierFrequencies", [])]
+        warm_spatial_mixing = "none"
         if warm_context_mode in ("world-fourier", "world-grid-neighborhood") and not warm_frequencies:
             recovered_frequencies = infer_fourier_frequencies(artifact.get("features") or [])
             warm_frequencies = recovered_frequencies
@@ -199,12 +248,42 @@ def load_warm_start(path_value, requested_context_mode, requested_frequencies):
                 f"warm start Fourier frequencies {warm_frequencies!r} do not match requested Fourier frequencies {requested_frequencies!r}"
             )
         expected_features = context_feature_names(warm_context_mode, warm_frequencies)
+    elif artifact.get("schema") == GRID_MESSAGE_MODEL_SCHEMA:
+        if artifact.get("architecture") != "dense-relu-dense-plus-six-neighbor-residual":
+            raise ValueError("grid-message warm start architecture is not recognized")
+        warm_context_mode = artifact.get("contextMode")
+        warm_frequencies = [float(value) for value in artifact.get("fourierFrequencies", [])]
+        warm_spatial_mixing = "six-neighbor-hidden-residual"
+        if warm_context_mode != "world-grid-neighborhood":
+            raise ValueError("grid-message warm start requires world-grid-neighborhood context")
+        if not warm_frequencies:
+            recovered_frequencies = infer_fourier_frequencies(artifact.get("features") or [])
+            warm_frequencies = recovered_frequencies
+        expected_features = context_feature_names(warm_context_mode, warm_frequencies)
     else:
         raise ValueError("warm start is not a recognized boundary splat attribute MLP")
+    context_expansion = (
+        warm_context_mode == "none" and requested_context_mode != "none"
+    ) or (
+        warm_context_mode == "world-fourier" and requested_context_mode == "world-grid-neighborhood"
+    )
+    if warm_context_mode != requested_context_mode and not context_expansion:
+        raise ValueError(
+            f"warm start context mode {warm_context_mode!r} does not match requested context mode {requested_context_mode!r}"
+        )
+    if warm_context_mode in ("world-fourier", "world-grid-neighborhood") and warm_frequencies != requested_frequencies:
+        raise ValueError(
+            f"warm start Fourier frequencies {warm_frequencies!r} do not match requested Fourier frequencies {requested_frequencies!r}"
+        )
+    mixing_expansion = warm_spatial_mixing == "none" and requested_spatial_mixing == "six-neighbor-hidden-residual"
+    if warm_spatial_mixing != requested_spatial_mixing and not mixing_expansion:
+        raise ValueError(
+            f"warm start spatial mixing {warm_spatial_mixing!r} does not match requested spatial mixing {requested_spatial_mixing!r}"
+        )
     if artifact.get("features") != expected_features or artifact.get("outputs") != OUTPUTS:
         raise ValueError("warm start feature/output order does not match its declared context contract")
     hidden_size = int(artifact["hiddenSize"])
-    model = AttributeMlp(hidden_size, len(expected_features))
+    base_model = AttributeMlp(hidden_size, len(expected_features))
     layers = artifact.get("layers") or []
     if len(layers) != 2:
         raise ValueError("warm start must contain exactly two dense layers")
@@ -213,7 +292,22 @@ def load_warm_start(path_value, requested_context_mode, requested_frequencies):
         matrix = mx.array(layer["weights"]).reshape(layer["outputSize"], layer["inputSize"])
         bias = mx.array(layer["bias"])
         weights.extend([(f"{name}.weight", matrix), (f"{name}.bias", bias)])
-    model.load_weights(weights)
+    base_model.load_weights(weights)
+    model = base_model
+    if warm_spatial_mixing == "six-neighbor-hidden-residual":
+        message_size = int(artifact.get("messageSize", 0))
+        if message_size <= 0:
+            raise ValueError("grid-message warm start must declare a positive message size")
+        model = GridMessageAttributeMlp.from_base(base_model, message_size)
+        message_layers = artifact.get("messageLayers") or []
+        if len(message_layers) != 2:
+            raise ValueError("grid-message warm start must contain exactly two message layers")
+        message_weights = []
+        for name, layer in zip(("message_hidden", "message_output"), message_layers):
+            matrix = mx.array(layer["weights"]).reshape(layer["outputSize"], layer["inputSize"])
+            bias = mx.array(layer["bias"])
+            message_weights.extend([(f"{name}.weight", matrix), (f"{name}.bias", bias)])
+        model.load_weights(message_weights, strict=False)
     mx.eval(model.parameters())
     output_ranges = np.asarray(artifact["outputRanges"], dtype=np.float32)
     if output_ranges.shape != (len(OUTPUTS), 2) or not np.all(np.isfinite(output_ranges)) or np.any(output_ranges[:, 1] <= output_ranges[:, 0]):
@@ -225,10 +319,12 @@ def load_warm_start(path_value, requested_context_mode, requested_frequencies):
         "schema": schema,
         "contextMode": warm_context_mode,
         "fourierFrequencies": warm_frequencies,
-        "continuation": schema == SPATIAL_MODEL_SCHEMA,
+        "continuation": schema in (SPATIAL_MODEL_SCHEMA, GRID_MESSAGE_MODEL_SCHEMA),
+        "spatialMixing": warm_spatial_mixing,
         "legacyFrequencyRecoveryAuthority": "exact-complete-feature-name-groups-v0" if recovered_frequencies else None,
         "contextExpansionAuthority": "zero-delta-local-grid-context-expansion-v0" if warm_context_mode == "world-fourier" and requested_context_mode == "world-grid-neighborhood" else None,
-    }, schema, warm_context_mode, warm_frequencies
+        "spatialMixingExpansionAuthority": "zero-delta-active-six-neighbor-hidden-residual-v0" if mixing_expansion else None,
+    }, schema, warm_context_mode, warm_frequencies, warm_spatial_mixing
 
 
 def parse_fourier_frequencies(value):
@@ -258,7 +354,7 @@ def context_feature_names(context_mode, frequencies):
     return names
 
 
-def local_grid_neighborhood_channels(candidates, grid):
+def local_grid_neighbor_rows(candidates, grid):
     if not isinstance(grid, int) or grid <= 0:
         raise ValueError("local-grid context requires a positive integer source grid")
     positions = candidates[:, :3].astype(np.float32)
@@ -278,18 +374,22 @@ def local_grid_neighborhood_channels(candidates, grid):
         [0, -1, 0], [0, 1, 0],
         [0, 0, -1], [0, 0, 1],
     ], dtype=np.int32)
-    features = candidates[:, 3:].astype(np.float32)
-    neighbor_values = np.zeros((len(candidates), len(offsets), len(FEATURES)), dtype=np.float32)
-    occupancy = np.zeros((len(candidates), len(offsets)), dtype=np.float32)
+    neighbor_rows = np.full((len(candidates), len(offsets)), -1, dtype=np.int32)
     for neighbor_index, offset in enumerate(offsets):
         neighbor_cells = indices + offset
         in_bounds = np.all((neighbor_cells >= 0) & (neighbor_cells < grid), axis=1)
         neighbor_linear = neighbor_cells[:, 0] + grid * (neighbor_cells[:, 1] + grid * neighbor_cells[:, 2])
-        rows = np.full(len(candidates), -1, dtype=np.int32)
-        rows[in_bounds] = lookup[neighbor_linear[in_bounds]]
-        present = rows >= 0
-        occupancy[present, neighbor_index] = 1.0
-        neighbor_values[present, neighbor_index] = features[rows[present]]
+        neighbor_rows[in_bounds, neighbor_index] = lookup[neighbor_linear[in_bounds]]
+    return neighbor_rows
+
+
+def local_grid_neighborhood_channels(candidates, grid):
+    neighbor_rows = local_grid_neighbor_rows(candidates, grid)
+    features = candidates[:, 3:].astype(np.float32)
+    neighbor_values = np.zeros((len(candidates), 6, len(FEATURES)), dtype=np.float32)
+    occupancy = (neighbor_rows >= 0).astype(np.float32)
+    present_rows, present_directions = np.nonzero(neighbor_rows >= 0)
+    neighbor_values[present_rows, present_directions] = features[neighbor_rows[present_rows, present_directions]]
     neighbor_mean = np.mean(neighbor_values, axis=1)
     neighbor_max = np.max(neighbor_values, axis=1)
     laplacian = neighbor_mean - features
@@ -364,8 +464,20 @@ def expand_hidden_size(base_model, hidden_size):
     return model
 
 
-def predict_numpy(model, features, output_ranges):
-    normalized = np.asarray(model(mx.array(features.astype(np.float32))))
+def model_attributes(model, inputs, neighbor_rows=None):
+    if isinstance(model, GridMessageAttributeMlp):
+        if neighbor_rows is None:
+            raise ValueError("grid-message model requires exact six-neighbor row indices")
+        return model(inputs, neighbor_rows)
+    return model(inputs)
+
+
+def predict_numpy(model, features, output_ranges, neighbor_rows=None):
+    normalized = np.asarray(model_attributes(
+        model,
+        mx.array(features.astype(np.float32)),
+        None if neighbor_rows is None else mx.array(neighbor_rows),
+    ))
     return output_ranges[:, 0] + normalized * (output_ranges[:, 1] - output_ranges[:, 0])
 
 
@@ -448,6 +560,11 @@ def build_sparse_geometry(frame, render_width, depth_bins, max_radius, context_m
         "height": render_height,
         "features": mx.array(features.astype(np.float32)),
         "inputs": encode_candidate_inputs(frame["candidates"], context_mode, frequencies, frame["grid"]),
+        "neighborRows": (
+            mx.array(local_grid_neighbor_rows(frame["candidates"], frame["grid"]))
+            if context_mode == "world-grid-neighborhood"
+            else None
+        ),
         "pixelIndices": mx.array(np.concatenate(pixel_parts)),
         "splatIndices": mx.array(np.concatenate(splat_parts)),
         "depthBinIndices": mx.array(np.concatenate(depth_bin_parts)),
@@ -461,7 +578,7 @@ def build_sparse_geometry(frame, render_width, depth_bins, max_radius, context_m
 
 
 def render_frame(model, geometry, lower, span, depth_bins):
-    normalized = model(geometry["inputs"])
+    normalized = model_attributes(model, geometry["inputs"], geometry["neighborRows"])
     attributes = lower + normalized * span
     splat_indices = geometry["splatIndices"]
     pixel_indices = geometry["pixelIndices"]
@@ -567,6 +684,45 @@ def serialize_spatial_model(model, output_ranges, feature_names, context_mode, f
     return payload
 
 
+def serialize_grid_message_model(model, output_ranges, feature_names, frequencies, output_path):
+    payload = {
+        "schema": GRID_MESSAGE_MODEL_SCHEMA,
+        "architecture": "dense-relu-dense-plus-six-neighbor-residual",
+        "features": feature_names,
+        "outputs": OUTPUTS,
+        "hiddenSize": int(model.hidden.weight.shape[0]),
+        "messageSize": int(model.message_hidden.weight.shape[0]),
+        "outputRanges": output_ranges.astype(float).tolist(),
+        "contextMode": "world-grid-neighborhood",
+        "fourierFrequencies": frequencies,
+        "spatialMixing": "six-neighbor-hidden-residual",
+        "messageAuthority": "zero-delta-active-six-neighbor-hidden-residual-v0",
+        "deployable": False,
+        "layers": [],
+        "messageLayers": [],
+    }
+    for name, activation in (("hidden", "relu"), ("output", "sigmoid")):
+        layer = getattr(model, name)
+        payload["layers"].append({
+            "inputSize": int(layer.weight.shape[1]),
+            "outputSize": int(layer.weight.shape[0]),
+            "activation": activation,
+            "weights": np.asarray(layer.weight).reshape(-1).astype(float).tolist(),
+            "bias": np.asarray(layer.bias).reshape(-1).astype(float).tolist(),
+        })
+    for name, activation in (("message_hidden", "relu"), ("message_output", "linear-residual-logit")):
+        layer = getattr(model, name)
+        payload["messageLayers"].append({
+            "inputSize": int(layer.weight.shape[1]),
+            "outputSize": int(layer.weight.shape[0]),
+            "activation": activation,
+            "weights": np.asarray(layer.weight).reshape(-1).astype(float).tolist(),
+            "bias": np.asarray(layer.bias).reshape(-1).astype(float).tolist(),
+        })
+    write_json(output_path, payload)
+    return payload
+
+
 def compile_model(output_dir, model_path, model, frame, lower, span):
     parity_features = frame["candidates"][:64, 3:].astype(np.float32)
     parity_outputs = lower + np.asarray(model(mx.array(parity_features))) * span
@@ -602,6 +758,8 @@ def parse_args():
     parser.add_argument("--context-mode", choices=["none", "world-xyz", "world-fourier", "world-grid-neighborhood"], default="none")
     parser.add_argument("--fourier-frequencies", default="1,2,4,8")
     parser.add_argument("--hidden-size", type=int, default=0)
+    parser.add_argument("--spatial-mixing", choices=["none", "six-neighbor-hidden-residual"], default="none")
+    parser.add_argument("--message-size", type=int, default=0)
     parser.add_argument("--candidate-table-oracle", action="store_true")
     parser.add_argument("--probe-only", action="store_true")
     return parser.parse_args()
@@ -616,19 +774,22 @@ def main():
     report = {"schema": SCHEMA, "status": "running", "failurePhase": None, "startedAt": started_at}
     phase = "arguments"
     try:
-        if args.steps < 0 or args.hidden_size < 0 or args.render_width <= 0 or args.learning_rate <= 0 or args.depth_bins <= 0 or args.edge_weight < 0:
-            raise ValueError("steps, hidden-size, and edge-weight must be non-negative; render-width, learning-rate, and depth-bins must be positive")
+        if args.steps < 0 or args.hidden_size < 0 or args.message_size < 0 or args.render_width <= 0 or args.learning_rate <= 0 or args.depth_bins <= 0 or args.edge_weight < 0:
+            raise ValueError("steps, hidden-size, message-size, and edge-weight must be non-negative; render-width, learning-rate, and depth-bins must be positive")
         frequencies = parse_fourier_frequencies(args.fourier_frequencies)
         if args.candidate_table_oracle and args.context_mode != "none":
             raise ValueError("candidate table oracle cannot be combined with spatial conditioning")
+        if args.spatial_mixing != "none" and args.context_mode != "world-grid-neighborhood":
+            raise ValueError("learned spatial mixing requires world-grid-neighborhood context")
         feature_names = context_feature_names(args.context_mode, frequencies)
         phase = "corpus"
         corpus = load_corpus(args.corpus)
         phase = "warm-start"
-        base_model, warm_artifact, output_ranges, warm_receipt, warm_schema, warm_context_mode, warm_frequencies = load_warm_start(
+        base_model, warm_artifact, output_ranges, warm_receipt, warm_schema, warm_context_mode, warm_frequencies, warm_spatial_mixing = load_warm_start(
             args.warm_start,
             args.context_mode,
             frequencies,
+            args.spatial_mixing,
         )
         lower_np = output_ranges[:, 0]
         span_np = output_ranges[:, 1] - output_ranges[:, 0]
@@ -639,18 +800,29 @@ def main():
                 base_model,
                 np.asarray(encode_candidate_inputs(frame["candidates"], warm_context_mode, warm_frequencies, frame["grid"])),
                 output_ranges,
+                local_grid_neighbor_rows(frame["candidates"], frame["grid"])
+                if warm_spatial_mixing == "six-neighbor-hidden-residual"
+                else None,
             )
             for frame in corpus["frames"]
         ]
-        exact_spatial_continuation = warm_schema == SPATIAL_MODEL_SCHEMA and warm_context_mode == args.context_mode
-        model = base_model if exact_spatial_continuation or args.context_mode == "none" else expand_warm_start_with_context(base_model, len(feature_names))
+        exact_context_continuation = warm_schema in (SPATIAL_MODEL_SCHEMA, GRID_MESSAGE_MODEL_SCHEMA) and warm_context_mode == args.context_mode
+        model = base_model if exact_context_continuation or args.context_mode == "none" else expand_warm_start_with_context(base_model, len(feature_names))
         warm_hidden_size = int(model.hidden.weight.shape[0])
         requested_hidden_size = args.hidden_size or warm_hidden_size
         if requested_hidden_size < warm_hidden_size:
             raise ValueError(f"requested hidden size {requested_hidden_size} cannot shrink warm hidden size {warm_hidden_size}")
         hidden_width_expansion = requested_hidden_size > warm_hidden_size
         if hidden_width_expansion:
+            if isinstance(model, GridMessageAttributeMlp):
+                raise ValueError("hidden-size expansion of an existing grid-message model is not supported")
             model = expand_hidden_size(model, requested_hidden_size)
+        message_size = int(model.message_hidden.weight.shape[0]) if isinstance(model, GridMessageAttributeMlp) else 0
+        if args.spatial_mixing == "six-neighbor-hidden-residual" and not isinstance(model, GridMessageAttributeMlp):
+            message_size = args.message_size or requested_hidden_size
+            model = GridMessageAttributeMlp.from_base(model, message_size)
+        elif isinstance(model, GridMessageAttributeMlp) and args.message_size not in (0, message_size):
+            raise ValueError(f"requested message size {args.message_size} does not match warm message size {message_size}")
         if args.candidate_table_oracle:
             if len(corpus["frames"]) != 1:
                 raise ValueError("candidate oracle requires exactly one corpus frame")
@@ -703,7 +875,7 @@ def main():
         phase = "model-artifact"
         if args.candidate_table_oracle:
             model_path = output_dir / "candidate-attributes.f32"
-            candidate_attributes = np.asarray(lower + model(geometries[0]["inputs"]) * span).astype("<f4")
+            candidate_attributes = np.asarray(lower + model_attributes(model, geometries[0]["inputs"], geometries[0]["neighborRows"]) * span).astype("<f4")
             model_bytes = candidate_attributes.tobytes()
             model_path.write_bytes(model_bytes)
             model_receipt = {
@@ -728,7 +900,7 @@ def main():
                 "authority": "shared-pointwise-feature-mlp-v0",
                 "deployable": True,
             }
-        else:
+        elif args.spatial_mixing == "none":
             model_path = output_dir / "spatial-model-artifact.json"
             serialize_spatial_model(model, output_ranges, feature_names, args.context_mode, frequencies, model_path)
             model_bytes = model_path.read_bytes()
@@ -741,6 +913,17 @@ def main():
                     if args.context_mode == "world-grid-neighborhood"
                     else "shared-position-conditioned-feature-mlp-v0"
                 ),
+                "deployable": False,
+            }
+        else:
+            model_path = output_dir / "grid-message-model-artifact.json"
+            serialize_grid_message_model(model, output_ranges, feature_names, frequencies, model_path)
+            model_bytes = model_path.read_bytes()
+            model_receipt = {
+                "path": str(model_path),
+                "schema": GRID_MESSAGE_MODEL_SCHEMA,
+                "identity": f"sha256:{sha256_bytes(model_bytes)}",
+                "authority": "shared-six-neighbor-hidden-residual-attribute-mlp-v0",
                 "deployable": False,
             }
         report.update({
@@ -764,6 +947,9 @@ def main():
                 "edgeWeight": args.edge_weight,
                 "modelAuthority": model_receipt["authority"],
                 "contextMode": args.context_mode,
+                "spatialMixing": args.spatial_mixing,
+                "messageSize": message_size,
+                "spatialMixingExpansionAuthority": "zero-delta-active-six-neighbor-hidden-residual-v0" if warm_spatial_mixing == "none" and args.spatial_mixing == "six-neighbor-hidden-residual" else None,
                 "fourierFrequencies": frequencies if args.context_mode in ("world-fourier", "world-grid-neighborhood") else [],
                 "inputChannels": len(feature_names),
                 "warmHiddenSize": warm_hidden_size,
