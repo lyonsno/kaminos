@@ -182,12 +182,26 @@ export {
 } from './sam-image-vit-block-stack-phase-program.js';
 
 export {
+  SAM31_PROPAGATION_NECK_PHASE_PROGRAM_ROUTE_ID,
   SAM3_IMAGE_FPN_NECK_PHASE_PROGRAM_ROUTE_ID,
+  createSam31PropagationNeckPhaseProgramCpuOracle,
+  createSam31PropagationNeckPhaseProgramRouteDefinition,
+  createSam31PropagationNeckPhaseProgramRouteReceipt,
   createSam3ImageFpnNeckPhaseProgramCpuOracle,
   createSam3ImageFpnNeckPhaseProgramRouteDefinition,
   createSam3ImageFpnNeckPhaseProgramRouteReceipt,
+  runSam31PropagationNeckPhaseProgramRoute,
   runSam3ImageFpnNeckPhaseProgramRoute,
 } from './sam-image-fpn-neck-phase-program.js';
+
+export {
+  SAM31_MEMORY_ENCODER_PHASE_PROGRAM_ROUTE_ID,
+  SAM31_MEMORY_ENCODER_WEBGPU_CONTRACT,
+  createSam31MemoryEncoderPhaseProgramCpuOracle,
+  createSam31MemoryEncoderPhaseProgramRouteDefinition,
+  createSam31MemoryEncoderPhaseProgramRouteReceipt,
+  runSam31MemoryEncoderPhaseProgramRoute,
+} from './sam31-memory-encoder-phase-program.js';
 
 export {
   SAM3_PIXEL_DECODER_PHASE_PROGRAM_ROUTE_ID,
