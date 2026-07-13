@@ -3911,6 +3911,21 @@ async function runSelectedSplatBakeLayerScenario(ws) {
       const afterCreatePreview = window.kaminosSelectedSplatBakeLayerPreviewDebugState?.(splatObject?.id) || null;
       const afterCreateRendererControls = window.kaminosPublishHybridSplatRendererControls?.() || null;
       const createdLayer = afterCreateDebug?.layers?.[0] || null;
+      let unlayeredSplat = (window.kaminosSceneObjectDebugState?.() || [])
+        .find(record => record.type === 'splat' && record.id !== splatObject?.id) || null;
+      if (!unlayeredSplat && actionButton) {
+        actionButton.click();
+        await waitForSceneRows(beforeRows.length + 2);
+        await wait(250);
+        unlayeredSplat = (window.kaminosSceneObjectDebugState?.() || [])
+          .find(record => record.type === 'splat' && record.id !== splatObject?.id) || null;
+      }
+      if (unlayeredSplat?.id) window.selectSceneObject?.(unlayeredSplat.id);
+      await wait(100);
+      const afterSelectUnlayeredRendererControls = window.kaminosHybridSplatRendererControlsDebugState?.() || null;
+      if (splatObject?.id) window.selectSceneObject?.(splatObject.id);
+      await wait(100);
+      const afterReselectLayeredRendererControls = window.kaminosHybridSplatRendererControlsDebugState?.() || null;
       const tunedLayer = createdLayer
         ? window.kaminosSetSelectedSplatBakeLayerControls?.(createdLayer.id, { enabled: false, strength: 0.37 })
         : null;
@@ -3938,6 +3953,9 @@ async function runSelectedSplatBakeLayerScenario(ws) {
         afterCreateDebug,
         afterCreatePreview,
         afterCreateRendererControls,
+        unlayeredSplat,
+        afterSelectUnlayeredRendererControls,
+        afterReselectLayeredRendererControls,
         afterTuneDebug,
         afterTunePreview,
         afterTuneRendererControls,
@@ -4023,11 +4041,30 @@ async function runSelectedSplatBakeLayerScenario(ws) {
       || afterTuneControls.presentation?.mode !== 'source-radiance') {
     throw new Error(`selected splat bake layer did not restore source-radiance presentation: ${JSON.stringify(lastEvidence.selectedSplatBakeLayer)}`);
   }
+  const afterSelectUnlayeredControls = lastEvidence.selectedSplatBakeLayer.afterSelectUnlayeredRendererControls?.controls || {};
+  const afterReselectLayeredControls = lastEvidence.selectedSplatBakeLayer.afterReselectLayeredRendererControls?.controls || {};
+  if (!lastEvidence.selectedSplatBakeLayer.unlayeredSplat
+      || afterSelectUnlayeredControls.preview?.sourceColor !== true
+      || afterSelectUnlayeredControls.presentation?.mode !== 'source-radiance') {
+    throw new Error(`selecting an unlayered splat did not restore source-radiance presentation: ${JSON.stringify(lastEvidence.selectedSplatBakeLayer)}`);
+  }
+  if (afterReselectLayeredControls.preview?.sourceColor !== false
+      || afterReselectLayeredControls.presentation?.mode !== 'deferred-pbr') {
+    throw new Error(`reselecting a layered splat did not restore deferred-PBR presentation: ${JSON.stringify(lastEvidence.selectedSplatBakeLayer)}`);
+  }
   const afterCreatePresentation = lastEvidence.selectedSplatBakeLayer.afterCreateRendererControls?.presentation || {};
+  const afterSelectUnlayeredPresentation = lastEvidence.selectedSplatBakeLayer.afterSelectUnlayeredRendererControls?.presentation || {};
+  const afterReselectLayeredPresentation = lastEvidence.selectedSplatBakeLayer.afterReselectLayeredRendererControls?.presentation || {};
   const afterTunePresentation = lastEvidence.selectedSplatBakeLayer.afterTuneRendererControls?.presentation || {};
   if (lastEvidence.selectedSplatBakeLayer.afterCreateRendererControls?.accepted !== true
       || afterCreatePresentation.effectiveMode !== 'deferred-pbr'
       || afterCreatePresentation.effectiveRoute !== 'deferred-pbr-lighting'
+      || lastEvidence.selectedSplatBakeLayer.afterSelectUnlayeredRendererControls?.accepted !== true
+      || afterSelectUnlayeredPresentation.effectiveMode !== 'source-radiance'
+      || afterSelectUnlayeredPresentation.effectiveRoute !== 'source-radiance-copy'
+      || lastEvidence.selectedSplatBakeLayer.afterReselectLayeredRendererControls?.accepted !== true
+      || afterReselectLayeredPresentation.effectiveMode !== 'deferred-pbr'
+      || afterReselectLayeredPresentation.effectiveRoute !== 'deferred-pbr-lighting'
       || lastEvidence.selectedSplatBakeLayer.afterTuneRendererControls?.accepted !== true
       || afterTunePresentation.effectiveMode !== 'source-radiance'
       || afterTunePresentation.effectiveRoute !== 'source-radiance-copy') {

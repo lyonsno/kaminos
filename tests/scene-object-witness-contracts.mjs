@@ -224,6 +224,8 @@ assert.match(witness, /selected splat bake layer did not couple to point-cloud m
 assert.match(witness, /selected splat bake layer did not expose preview contribution telemetry/, 'selected-splat bake-layer witness proves the preview contribution has inspectable route identity');
 assert.match(witness, /selected splat bake layer did not select deferred-PBR presentation/, 'selected-splat bake-layer witness proves an enabled candidate selects deferred-PBR evaluation');
 assert.match(witness, /selected splat bake layer did not restore source-radiance presentation/, 'selected-splat bake-layer witness proves disabling candidate contribution restores source radiance');
+assert.match(witness, /selecting an unlayered splat did not restore source-radiance presentation/, 'selected-splat bake-layer witness rejects stale deferred presentation after selecting an unlayered splat');
+assert.match(witness, /reselecting a layered splat did not restore deferred-PBR presentation/, 'selected-splat bake-layer witness rejects stale source-radiance presentation after reselecting a layered splat');
 assert.match(witness, /selected splat bake layer did not start live hybrid renderer/, 'selected-splat bake-layer witness starts the real packaged renderer before judging presentation coupling');
 assert.match(witness, /selected splat bake layer presentation was not accepted by live renderer/, 'selected-splat bake-layer witness requires renderer-owned effective route acceptance');
 assert.match(witness, /source-radiance presentation route did not change live pixels/, 'real hybrid witness rejects accepted controls without a same-scene visible A\/B delta');

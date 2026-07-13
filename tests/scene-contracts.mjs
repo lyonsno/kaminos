@@ -324,6 +324,9 @@ assert.match(index, /function setSelectedSplatBakeLayerControls\(/, 'candidate b
 assert.match(index, /function syncSelectedSplatBakeLayerPresentation\(/, 'candidate bake layers explicitly synchronize reversible renderer presentation');
 assert.match(index, /syncSelectedSplatBakeLayerPresentation\(record\)/, 'creating a candidate bake layer selects its evaluation presentation');
 assert.match(index, /syncSelectedSplatBakeLayerPresentation\(found\.record\)/, 'tuning a candidate bake layer restores presentation when its contribution is removed');
+const hybridViewportControlsBlock = index.match(/function updateHybridSplatViewportControls\(entry\) \{[\s\S]*?\n\}/)?.[0] || '';
+assert.match(hybridViewportControlsBlock, /syncSelectedSplatBakeLayerPresentation\(entry\?\.type === 'splat' \? entry : null\)/, 'selecting or clearing a splat re-derives presentation from the selected candidate contribution');
+assert.match(hybridViewportControlsBlock, /if \(presentationSync\.changed\) publishHybridSplatRendererControls\(/, 'selection transitions republish renderer controls only when presentation actually changes');
 const createBakeLayerBlock = index.match(/async function createSelectedSplatViewBakeLayer\(options = \{\}\) \{[\s\S]*?\n\}/)?.[0] || '';
 assert.doesNotMatch(createBakeLayerBlock, /setHybridSourceColorPreviewEnabled\(true\)/, 'Bake View must not unconditionally force Source Radiance on');
 assert.match(index, /SELECTED_SPLAT_VIEW_BAKE_LAYER_PIPELINE_ID\s*=\s*'selected-splat-view-bake-layer-v0'/, 'selected-splat Bake View must name the backend pipeline route it fires');

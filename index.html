@@ -3355,6 +3355,8 @@ async function toggleHybridSplatViewportRenderer() {
 function updateHybridSplatViewportControls(entry) {
   const controls = document.getElementById('hybrid-splat-viewport-controls');
   if (!controls) return;
+  const presentationSync = syncSelectedSplatBakeLayerPresentation(entry?.type === 'splat' ? entry : null);
+  if (presentationSync.changed) publishHybridSplatRendererControls();
   renderSelectedSplatBakeLayerPanel(entry?.type === 'splat' ? entry : null);
   const isSplat = entry?.type === 'splat';
   const sceneSplats = sceneSplatRecords();
@@ -4464,11 +4466,13 @@ function syncSelectedSplatBakeLayerPresentation(record = selectedSplatRecord()) 
   const contribution = selectedSplatBakeLayerPreviewContribution(record);
   const sourceRadiance = contribution.strength <= 0;
   const input = document.getElementById('hybrid-control-preview-source-color');
+  const changed = input instanceof HTMLInputElement && input.checked !== sourceRadiance;
   if (input instanceof HTMLInputElement) input.checked = sourceRadiance;
-  window._kaminosDirty?.();
+  if (changed) window._kaminosDirty?.();
   return {
     mode: sourceRadiance ? 'source-radiance' : 'deferred-pbr',
     sourceRadiance,
+    changed,
     contribution,
   };
 }
