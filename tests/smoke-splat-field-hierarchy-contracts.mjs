@@ -35,6 +35,33 @@ function makeField(grid, phase = 0) {
   return values;
 }
 
+function makeDenseTailField(grid, phase = 0) {
+  const values = new Float32Array(grid ** 3 * CHANNELS.length);
+  const centerX = grid * 0.48 + phase * 0.08;
+  const centerZ = grid * 0.52;
+  for (let z = 0; z < grid; z += 1) {
+    for (let y = 0; y < grid; y += 1) {
+      for (let x = 0; x < grid; x += 1) {
+        const index = x + y * grid + z * grid * grid;
+        const offset = index * CHANNELS.length;
+        const radial = Math.hypot(x - centerX, z - centerZ);
+        const plume = Math.exp(-(radial * radial) / (grid * 0.11) ** 2)
+          * (0.35 + 0.65 * y / (grid - 1));
+        const smoke = 0.00025 + plume;
+        values[offset] = (x - centerX) * 0.015;
+        values[offset + 1] = 0.28 + smoke * 0.35;
+        values[offset + 2] = (z - centerZ) * 0.012;
+        values[offset + 4] = smoke;
+        values[offset + 5] = Math.max(0, 0.75 - y / grid * 0.5);
+        values[offset + 7] = plume;
+        values[offset + 12] = plume * 0.7;
+        values[offset + 13] = plume * 0.5;
+      }
+    }
+  }
+  return values;
+}
+
 const baseRequest = {
   grid: 8,
   channelOrder: CHANNELS,
@@ -94,6 +121,55 @@ const noFine = compileSmokeFieldHierarchy({ ...baseRequest, fineSelector: () => 
 assert.equal(noFine.fineSplats.length, 0);
 assert.ok(Math.abs(noFine.accounting.sourceExtinctionMass - noFine.accounting.representedExtinctionMass) < 1e-8);
 assert.equal(noFine.accounting.rejectedExtinctionMass, 0, 'a maximally sparse selector cannot erase smoke mass');
+
+const denseTailRequest = {
+  ...baseRequest,
+  grid: 16,
+  field: makeDenseTailField(16),
+  coarseBlockSize: 2,
+  fineBlockSize: 1,
+  fineSelector: () => false,
+  coarseAnchorMassRatio: 0.08,
+};
+const consolidated = compileSmokeFieldHierarchy(denseTailRequest);
+assert.ok(consolidated.coarseConsolidation, 'coarse transport publishes its effective consolidation contract');
+assert.equal(consolidated.coarseConsolidation.identity, 'mass-weighted-anchor-voronoi-v0');
+assert.equal(consolidated.coarseConsolidation.sourceCoarseBinCount, 8 ** 3);
+assert.ok(
+  consolidated.coarseSplats.length < consolidated.coarseConsolidation.sourceCoarseBinCount * 0.25,
+  'dense low-mass tails consolidate into materially fewer uncapped transport anchors',
+);
+assert.equal(
+  consolidated.coarseSplats.reduce((sum, splat) => sum + splat.consolidatedSourceBinCount, 0),
+  consolidated.coarseConsolidation.sourceCoarseBinCount,
+  'every source coarse bin is assigned to exactly one emitted transport anchor',
+);
+assert.ok(Math.abs(consolidated.accounting.sourceExtinctionMass - consolidated.accounting.representedExtinctionMass) < 1e-8);
+assert.equal(consolidated.accounting.rejectedExtinctionMass, 0, 'consolidation transfers tail mass instead of thresholding it away');
+assert.deepEqual(
+  compileSmokeFieldHierarchy(denseTailRequest).coarseSplats,
+  consolidated.coarseSplats,
+  'coarse anchor choice, assignment, moments, and output order are deterministic',
+);
+
+const consolidatedNext = compileSmokeFieldHierarchy({
+  ...denseTailRequest,
+  field: makeDenseTailField(16, 1),
+  sourceIdentity: 'sha256:dense-tail-frame-97',
+  slotIdentity: { ...denseTailRequest.slotIdentity, historySlot: 1, slotWriteTick: 97 },
+});
+const sharedConsolidatedKeys = consolidated.temporalKeys.coarse.filter(key => consolidatedNext.temporalKeys.coarse.includes(key));
+assert.ok(
+  sharedConsolidatedKeys.length >= consolidated.temporalKeys.coarse.length * 0.8,
+  'fixed spatial anchor keys remain stable across a small adjacent-phase perturbation',
+);
+
+const changedConsolidation = compileSmokeFieldHierarchy({ ...denseTailRequest, coarseAnchorMassRatio: 0.16 });
+assert.notEqual(
+  changedConsolidation.identity,
+  consolidated.identity,
+  'public product identity includes the effective coarse consolidation configuration',
+);
 
 const overflow = compileSmokeFieldHierarchy({ ...baseRequest, capacity: 2 });
 assert.equal(overflow.capacity.status, 'capacity-overflow-untruncated');
