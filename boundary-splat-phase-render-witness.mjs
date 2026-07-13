@@ -257,6 +257,73 @@ function featureRow(values, index) {
   return values.subarray(index * 16, (index + 1) * 16);
 }
 
+function flatRow(values, index, stride) {
+  return values.subarray(index * stride, (index + 1) * stride);
+}
+
+function keyToWorldPosition(key) {
+  return key.split(',').map(value => Number(value));
+}
+
+function makeWorldFrameState(loadedFrame, precision = 6) {
+  const rows = new Map();
+  for (let index = 0; index < loadedFrame.splats.count; index += 1) {
+    const splat = flatRow(loadedFrame.splats.values, index, SPLAT_STRIDE_FLOATS);
+    const key = worldPositionStableKey(splat, precision);
+    if (rows.has(key)) throw new Error(`duplicate world-position key ${key} in ${loadedFrame.frame.id}`);
+    rows.set(key, {
+      key,
+      index,
+      position: Array.from(splat.slice(0, 3)),
+      candidate: featureRow(loadedFrame.candidates.values, index),
+      splat,
+    });
+  }
+  return rows;
+}
+
+function makeSpatialOccupancyInput(sitePosition, sourceRows, offset, maxAbsOffset) {
+  const key = sitePosition.map(value => value.toFixed(6)).join(',');
+  const direct = sourceRows.get(key);
+  const input = [1, offset / maxAbsOffset, sitePosition[0], sitePosition[1], sitePosition[2], direct ? 1 : 0];
+  const sourceFeatures = direct ? Array.from(direct.candidate) : Array(16).fill(0);
+  const nearestDistance = direct ? 0 : 4;
+  const neighborFeatures = direct ? sourceFeatures : Array(16).fill(0);
+  input.push(Math.min(4, nearestDistance), ...sourceFeatures, ...neighborFeatures);
+  return input;
+}
+
+function makeSpatialPredictionSites(sourceRows, siteStats, options = {}) {
+  const offsetSign = Math.sign(Number(options.offset ?? 1)) || 1;
+  const sites = new Map();
+  for (const [key, row] of sourceRows) sites.set(key, { key, position: row.position, sourceOccupied: true });
+  for (const [key, stats] of siteStats) {
+    if (sites.has(key) || !stats.prototypeSplat) continue;
+    const signedTargetCount = offsetSign >= 0 ? stats.targetPositive : stats.targetNegative;
+    if (signedTargetCount <= 0) continue;
+    sites.set(key, { key, position: keyToWorldPosition(key), sourceOccupied: false });
+  }
+  return sites;
+}
+
+function addSiteStat(siteStats, key, field, row = null) {
+  let stat = siteStats.get(key);
+  if (!stat) {
+    stat = {
+      targetOccupancy: 0,
+      sourceOccupancy: 0,
+      sampleCount: 0,
+      targetPositive: 0,
+      targetNegative: 0,
+      prototypeSplat: null,
+    };
+    siteStats.set(key, stat);
+  }
+  stat[field] += 1;
+  stat.sampleCount += 1;
+  if (row && !stat.prototypeSplat) stat.prototypeSplat = Array.from(row);
+}
+
 function solveLinearSystem(matrix, vector) {
   const size = vector.length;
   const augmented = Array.from({ length: size }, (_, row) => [...matrix[row], vector[row]]);
@@ -405,6 +472,258 @@ async function writeRenderArtifact(path, rendered) {
   };
 }
 
+async function runSpatialOccupancyRenderWitness(context) {
+  const {
+    manifestBytes,
+    manifestPath,
+    outDir,
+    reportPath,
+    source,
+    target,
+    heldOutPair,
+    trainingPairs,
+    trainingOffsets,
+    loadedFrames,
+    attributeModel,
+    compiledAttributeModel,
+    modelPath,
+    modelBytes,
+    offset,
+    maxAbsOffset,
+    holdoutAlignment,
+    gridSize,
+    renderOptions,
+    ridgeLambda,
+    options,
+  } = context;
+  const inputSize = makeSpatialOccupancyInput([0, 0, 0], new Map([[
+    '0.000000,0.000000,0.000000',
+    { position: [0, 0, 0], candidate: new Float32Array(16) },
+  ]]), 1, 1).length;
+  const occupancyAccumulator = makeStreamingRidge(inputSize, 1);
+  const featureAccumulator = makeStreamingRidge(inputSize, 16);
+  const siteStats = new Map();
+  const heldOutFrameIds = new Set([heldOutPair.targetFrameId]);
+  let featureTrainingSampleCount = 0;
+  for (const pair of trainingPairs) {
+    if (heldOutFrameIds.has(pair.sourceFrameId) || heldOutFrameIds.has(pair.targetFrameId)) continue;
+    const trainingSource = loadedFrames.get(pair.sourceFrameId);
+    const trainingTarget = loadedFrames.get(pair.targetFrameId);
+    const sourceRows = makeWorldFrameState(trainingSource);
+    const targetRows = makeWorldFrameState(trainingTarget);
+    const keys = new Set([...sourceRows.keys(), ...targetRows.keys()]);
+    for (const key of keys) {
+      const position = keyToWorldPosition(key);
+      const sourceRow = sourceRows.get(key);
+      const targetRow = targetRows.get(key);
+      if (sourceRow) addSiteStat(siteStats, key, 'sourceOccupancy', sourceRow.splat);
+      if (targetRow) {
+        addSiteStat(siteStats, key, 'targetOccupancy', targetRow.splat);
+        const stat = siteStats.get(key);
+        if (pair.offsetSteps >= 0) stat.targetPositive += 1;
+        else stat.targetNegative += 1;
+      }
+      const input = makeSpatialOccupancyInput(position, sourceRows, pair.offsetSteps, maxAbsOffset);
+      addStreamingRidgeSample(occupancyAccumulator, input, [targetRow ? 1 : 0]);
+      if (targetRow) {
+        addStreamingRidgeSample(featureAccumulator, input, Array.from(targetRow.candidate));
+        featureTrainingSampleCount += 1;
+      }
+    }
+  }
+  const occupancyModel = finishStreamingRidge(occupancyAccumulator, ridgeLambda);
+  const featureModel = finishStreamingRidge(featureAccumulator, ridgeLambda);
+  const sourceRows = makeWorldFrameState(source);
+  const targetRows = makeWorldFrameState(target);
+  const predictionSites = makeSpatialPredictionSites(sourceRows, siteStats, { offset });
+  const occupancyThreshold = Math.max(0, Math.min(1, Number(options.occupancyThreshold ?? 0.5)));
+  const predictedRows = [];
+  const predictedBirthRows = [];
+  let predictedDeaths = 0;
+  const predictedFeatureByKey = new Map();
+  const occupancyByKey = new Map();
+  for (const [key, site] of predictionSites) {
+    const stat = siteStats.get(key);
+    const signedTargetCount = stat ? (offset >= 0 ? stat.targetPositive : stat.targetNegative) : 0;
+    const sitePrior = stat ? Math.max(stat.targetOccupancy / Math.max(1, stat.sampleCount), signedTargetCount > 0 ? 1 : 0) : 0;
+    const input = makeSpatialOccupancyInput(site.position, sourceRows, offset, maxAbsOffset);
+    const ridgeOccupancy = occupancyModel.predict(input)[0];
+    const occupancy = Math.max(0, Math.min(1, Math.max(ridgeOccupancy, sitePrior)));
+    occupancyByKey.set(key, { ridge: ridgeOccupancy, prior: sitePrior, final: occupancy });
+    if (occupancy < occupancyThreshold) {
+      if (site.sourceOccupied) predictedDeaths += 1;
+      continue;
+    }
+    const predictedFeatures = featureModel.predict(input).map(value => Math.max(0, value));
+    predictedFeatureByKey.set(key, predictedFeatures);
+    const prototypeSplat = sourceRows.get(key)?.splat || stat?.prototypeSplat;
+    if (!prototypeSplat) continue;
+    const attributes = evaluateBoundarySplatAttributeModel(attributeModel, [predictedFeatures])[0];
+    const row = !site.sourceOccupied && stat?.prototypeSplat && sitePrior >= occupancyThreshold
+      ? Array.from(stat.prototypeSplat)
+      : predictedSplatRow(prototypeSplat, predictedFeatures, attributes, gridSize, false);
+    row[0] = site.position[0];
+    row[1] = site.position[1];
+    row[2] = site.position[2];
+    row[7] *= occupancy;
+    predictedRows.push(row);
+    if (!site.sourceOccupied && targetRows.has(key)) predictedBirthRows.push(row);
+  }
+  if (!predictedRows.length) throw new Error('spatial occupancy phase model predicted no visible candidate sites');
+  const predictedSplats = new Float32Array(predictedRows.length * SPLAT_STRIDE_FLOATS);
+  predictedRows.forEach((row, index) => predictedSplats.set(row, index * SPLAT_STRIDE_FLOATS));
+  const priorRows = [];
+  for (const [key, site] of predictionSites) {
+    const sourceRow = sourceRows.get(key);
+    if (sourceRow) {
+      priorRows.push(Array.from(sourceRow.splat));
+      continue;
+    }
+    const stat = siteStats.get(key);
+    if (!stat?.prototypeSplat) continue;
+    const prior = stat.targetOccupancy / Math.max(1, stat.sampleCount);
+    if (prior < occupancyThreshold) continue;
+    const row = Array.from(stat.prototypeSplat);
+    row[7] *= Math.min(0.35, prior);
+    priorRows.push(row);
+  }
+  const priorSplats = new Float32Array(priorRows.length * SPLAT_STRIDE_FLOATS);
+  priorRows.forEach((row, index) => priorSplats.set(row, index * SPLAT_STRIDE_FLOATS));
+  let identityFeatureSquaredError = 0;
+  let predictionFeatureSquaredError = 0;
+  let predictedFeatureCount = 0;
+  for (const match of holdoutAlignment.matched) {
+    const sourceFeatures = featureRow(source.candidates.values, match.sourceIndex);
+    const exactFeatures = featureRow(target.candidates.values, match.targetIndex);
+    const key = worldPositionStableKey(flatRow(source.splats.values, match.sourceIndex, SPLAT_STRIDE_FLOATS));
+    const prediction = predictedFeatureByKey.get(key);
+    if (!prediction) continue;
+    for (let feature = 0; feature < 16; feature += 1) {
+      identityFeatureSquaredError += (sourceFeatures[feature] - exactFeatures[feature]) ** 2;
+      predictionFeatureSquaredError += (prediction[feature] - exactFeatures[feature]) ** 2;
+      predictedFeatureCount += 1;
+    }
+  }
+  const identityRender = renderBoundarySplatRowsPng(source.splats.values, source.frame.camera, renderOptions);
+  const predictionRender = renderBoundarySplatRowsPng(predictedSplats, source.frame.camera, renderOptions);
+  const priorRender = renderBoundarySplatRowsPng(priorSplats, source.frame.camera, renderOptions);
+  const exactRender = renderBoundarySplatRowsPng(target.splats.values, target.frame.camera, renderOptions);
+  const comparisonRender = composeHorizontal([identityRender, priorRender, predictionRender, exactRender]);
+  const offsetLabel = offset > 0 ? `p${offset}` : `m${Math.abs(offset)}`;
+  const artifacts = {
+    identity: await writeRenderArtifact(resolve(outDir, `phase-render-identity-${offsetLabel}.png`), identityRender),
+    spatialPriorInterpolation: await writeRenderArtifact(resolve(outDir, `phase-render-spatial-prior-${offsetLabel}.png`), priorRender),
+    phasePrediction: await writeRenderArtifact(resolve(outDir, `phase-render-spatial-occupancy-prediction-${offsetLabel}.png`), predictionRender),
+    exactTarget: await writeRenderArtifact(resolve(outDir, `phase-render-exact-${offsetLabel}.png`), exactRender),
+    comparison: await writeRenderArtifact(resolve(outDir, `phase-render-spatial-occupancy-comparison-${offsetLabel}.png`), comparisonRender),
+  };
+  const identityPixelMse = imageMse(identityRender.rgba, exactRender.rgba);
+  const priorPixelMse = imageMse(priorRender.rgba, exactRender.rgba);
+  const predictionPixelMse = imageMse(predictionRender.rgba, exactRender.rgba);
+  const synthesizedBirthKeys = Array.from(predictionSites.values())
+    .filter(site => !site.sourceOccupied && targetRows.has(site.key) && occupancyByKey.get(site.key)?.final >= occupancyThreshold)
+    .map(site => site.key);
+  const report = {
+    schema: BOUNDARY_SPLAT_PHASE_RENDER_SCHEMA,
+    status: 'completed',
+    manifest: { path: manifestPath, bytes: manifestBytes.byteLength, sha256: sha256(manifestBytes) },
+    route: {
+      requested: source.frame.requestedRoute,
+      effective: source.frame.effectiveRoute,
+      rendererIdentity: source.frame.rendererIdentity,
+      sourceAuthority: source.frame.sourceAuthority,
+      fallbackReason: source.frame.fallbackReason,
+    },
+    attributeModel: { path: modelPath, sha256: sha256(modelBytes), identity: compiledAttributeModel.identity },
+    phaseModel: {
+      family: 'spatial-occupancy-ridge-v0',
+      holdoutAuthority: 'entire-offset-pair-plus-target-frame-held-out-v0',
+      heldOutOffset: offset,
+      heldOutFrameIds: Array.from(heldOutFrameIds),
+      trainingOffsets: trainingOffsets.sort((a, b) => a - b),
+      ridgeLambda,
+      siteUniverse: {
+        authority: 'training-frame-world-position-site-universe-v0',
+        siteCount: siteStats.size,
+        predictionSiteCount: predictionSites.size,
+        sourceAbsentSiteFilter: 'same-sign-training-target-observed-v0',
+      },
+      occupancy: {
+        authority: 'offset-conditioned-spatial-occupancy-ridge-v0',
+        threshold: occupancyThreshold,
+        trainSampleCount: occupancyModel.sampleCount,
+        synthesizedBirthKeys,
+        predictedDeaths,
+      },
+      featureHead: {
+        authority: 'offset-conditioned-spatial-feature-ridge-v0',
+        trainSampleCount: featureTrainingSampleCount,
+      },
+    },
+    alignment: {
+      identityKey: 'world-position-stable-key',
+      matched: holdoutAlignment.matchedCount,
+      births: holdoutAlignment.birthCount,
+      deaths: holdoutAlignment.deathCount,
+      birthSynthesis: 'training-site-spatial-occupancy-synthesis-v0',
+      synthesizedBirths: synthesizedBirthKeys.length,
+      deathHandling: 'spatial-occupancy-threshold',
+      predictedDeaths,
+    },
+    featureMetrics: {
+      identityMse: identityFeatureSquaredError / Math.max(1, predictedFeatureCount),
+      phasePredictionMse: predictionFeatureSquaredError / Math.max(1, predictedFeatureCount),
+      beatsIdentity: predictionFeatureSquaredError < identityFeatureSquaredError,
+      modelToIdentityRatio: predictionFeatureSquaredError / Math.max(1e-12, identityFeatureSquaredError),
+      matchedFeatureValuesCompared: predictedFeatureCount,
+    },
+    pixelMetrics: {
+      identityToExactMse: identityPixelMse,
+      spatialPriorInterpolationToExactMse: priorPixelMse,
+      phasePredictionToExactMse: predictionPixelMse,
+      beatsIdentity: predictionPixelMse < identityPixelMse,
+      beatsSpatialPriorInterpolation: predictionPixelMse <= priorPixelMse,
+      modelToIdentityRatio: predictionPixelMse / Math.max(1e-12, identityPixelMse),
+    },
+    baselines: {
+      currentCopy: {
+        authority: 'current-source-splat-copy-baseline-v0',
+        pixelMse: identityPixelMse,
+        inputSplats: source.splats.count,
+      },
+      spatialPriorInterpolation: {
+        authority: 'nearest-offset-site-prior-interpolation-baseline-v0',
+        pixelMse: priorPixelMse,
+        inputSplats: priorRows.length,
+      },
+    },
+    renders: {
+      authority: 'isolated-cpu-projected-boundary-splat-raster-v0',
+      blocks: ['identity', 'spatialPriorInterpolation', 'phasePrediction', 'exactTarget'],
+      width: renderOptions.width,
+      height: renderOptions.height,
+      radiusMultiplier: renderOptions.radiusMultiplier,
+      kernelSharpness: renderOptions.kernelSharpness,
+      artifacts,
+      inputSplats: {
+        identity: source.splats.count,
+        spatialPriorInterpolation: priorRows.length,
+        phasePrediction: predictedRows.length,
+        exactTarget: target.splats.count,
+      },
+      visibleSupport: {
+        identity: identityRender.nonBackgroundPixelCount,
+        spatialPriorInterpolation: priorRender.nonBackgroundPixelCount,
+        phasePrediction: predictionRender.nonBackgroundPixelCount,
+        exactTarget: exactRender.nonBackgroundPixelCount,
+      },
+    },
+    claimBoundary: 'isolated captured-splat raster; spatial occupancy can synthesize births only at training-observed world sites and live runtime instancing is unchanged',
+  };
+  await writeFile(reportPath, JSON.stringify(report, null, 2));
+  return report;
+}
+
 export async function writeBoundarySplatPhaseRenderWitness(manifestFile, options = {}) {
   const manifestPath = resolve(String(manifestFile));
   const outDir = resolve(String(options.outDir || dirname(manifestPath)));
@@ -539,6 +858,35 @@ export async function writeBoundarySplatPhaseRenderWitness(manifestFile, options
     const radiusMultiplier = Number(options.radiusMultiplier ?? source.frame.camera.controls?.[0] ?? 1);
     const kernelSharpness = Number(options.kernelSharpness ?? source.frame.camera.controls?.[3] ?? 6.5);
     const renderOptions = { width, height, radiusMultiplier, kernelSharpness };
+    const phaseModelFamily = String(options.phaseModelFamily || options.modelFamily || 'ridge-linear-offset-conditioned-v0');
+    if (phaseModelFamily === 'spatial-occupancy-ridge-v0') {
+      return runSpatialOccupancyRenderWitness({
+        manifestBytes,
+        manifestPath,
+        outDir,
+        reportPath,
+        source,
+        target,
+        heldOutPair,
+        trainingPairs,
+        trainingOffsets,
+        loadedFrames,
+        attributeModel,
+        compiledAttributeModel,
+        modelPath,
+        modelBytes,
+        offset,
+        maxAbsOffset,
+        holdoutAlignment,
+        gridSize,
+        renderOptions,
+        ridgeLambda,
+        options,
+      });
+    }
+    if (phaseModelFamily !== 'ridge-linear-offset-conditioned-v0') {
+      throw new Error(`unsupported phase render model family ${phaseModelFamily}`);
+    }
     const identityRender = renderBoundarySplatRowsPng(source.splats.values, source.frame.camera, renderOptions);
     const predictionRender = renderBoundarySplatRowsPng(predictedSplats, source.frame.camera, renderOptions);
     const exactRender = renderBoundarySplatRowsPng(target.splats.values, target.frame.camera, renderOptions);
@@ -698,7 +1046,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
   const args = parseArgs(process.argv.slice(2));
   const manifest = args.get('--manifest');
   if (!manifest) {
-    console.error('Usage: node boundary-splat-phase-render-witness.mjs --manifest <phase-corpus.json> [--model <model-artifact.json>] [--offset 3] [--out-dir <dir>] [--report <json>]');
+    console.error('Usage: node boundary-splat-phase-render-witness.mjs --manifest <phase-corpus.json> [--model <model-artifact.json>] [--offset 3] [--phase-model-family ridge-linear-offset-conditioned-v0|spatial-occupancy-ridge-v0] [--out-dir <dir>] [--report <json>]');
     process.exitCode = 2;
   } else {
     try {
@@ -711,6 +1059,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
         height: args.get('--height'),
         gridSize: args.get('--grid-size'),
         ridgeLambda: args.get('--ridge-lambda'),
+        phaseModelFamily: args.get('--phase-model-family'),
+        occupancyThreshold: args.get('--occupancy-threshold'),
       });
       console.log(JSON.stringify(report, null, 2));
     } catch (error) {

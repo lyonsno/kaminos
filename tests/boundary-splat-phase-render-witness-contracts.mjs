@@ -191,6 +191,87 @@ try {
     assert.equal(hash(bytes), artifact.sha256);
   }
   assert.equal(JSON.parse(await readFile(reportPath, 'utf8')).status, 'completed');
+
+  const spatialFrames = [];
+  const stablePositions = [
+    [-0.45, -0.2, 0],
+    [0.0, 0.02, 0],
+    [0.45, 0.24, 0],
+  ];
+  const birthPosition = [0.9, 0.55, 0];
+  for (let frameIndex = 0; frameIndex < 7; frameIndex += 1) {
+    const features = new Float32Array(3 * 16);
+    const splats = new Float32Array(3 * 12);
+    const positions = stablePositions.map(position => [...position]);
+    if (frameIndex === 0 || frameIndex === 6) positions[2] = birthPosition;
+    for (let row = 0; row < 3; row += 1) {
+      const occupancyBias = positions[row][0] === birthPosition[0] ? 0.45 : 0;
+      for (let feature = 0; feature < 16; feature += 1) {
+        features[row * 16 + feature] = row * 0.04 + feature * 0.003 + frameIndex * (0.025 + feature * 0.0005) + occupancyBias;
+      }
+      splats.set(splat(positions[row], [0.36 + frameIndex * 0.05 + occupancyBias, 0.15 + row * 0.13, 0.04]), row * 12);
+    }
+    const featureBytes = Buffer.from(features.buffer);
+    const splatBytes = Buffer.from(splats.buffer);
+    const featurePath = join(root, `spatial-frame-${frameIndex}.features.f32`);
+    const splatPath = join(root, `spatial-frame-${frameIndex}.splats.f32`);
+    await writeFile(featurePath, featureBytes);
+    await writeFile(splatPath, splatBytes);
+    spatialFrames.push({
+      ...frame,
+      id: `spatial-frame-${frameIndex}`,
+      sameBrowserSessionId: 'render-contract-session',
+      sameStateCaptureId: `same-state-spatial-${frameIndex}`,
+      candidates: { path: featurePath, bytes: featureBytes.length, sha256: hash(featureBytes), count: 3, strideFloats: 16, dtype: 'float32-le' },
+      splats: { path: splatPath, bytes: splatBytes.length, sha256: hash(splatBytes), count: 3, strideFloats: 12, dtype: 'float32-le', authority: 'intercepted-live-boundary-splat-buffer-post-compaction-v0' },
+    });
+  }
+  for (const manifestFrame of spatialFrames) manifestFrame.modelIdentity = compiledModel.identity;
+  const spatialManifest = {
+    ...manifest,
+    frames: spatialFrames,
+    temporalAlignment: {
+      ...manifest.temporalAlignment,
+      pairs: offsets.map(offset => {
+        const churn = Math.abs(offset) === 3;
+        return {
+          sourceFrameId: 'spatial-frame-3',
+          targetFrameId: `spatial-frame-${3 + offset}`,
+          offsetSteps: offset,
+          sourceCount: 3,
+          targetCount: 3,
+          matchedSlots: churn ? 2 : 3,
+          births: churn ? 1 : 0,
+          deaths: churn ? 1 : 0,
+          stableSupportCount: churn ? 2 : 3,
+        };
+      }),
+    },
+  };
+  await writeFile(manifestPath, JSON.stringify(spatialManifest));
+  const spatialReportPath = join(root, 'spatial-render-report.json');
+  const spatialReport = await writeBoundarySplatPhaseRenderWitness(manifestPath, {
+    model: modelPath,
+    offset: 3,
+    outDir: root,
+    report: spatialReportPath,
+    width: 96,
+    height: 96,
+    phaseModelFamily: 'spatial-occupancy-ridge-v0',
+    occupancyThreshold: 0.35,
+  });
+  assert.equal(spatialReport.phaseModel.family, 'spatial-occupancy-ridge-v0');
+  assert.equal(spatialReport.phaseModel.siteUniverse.authority, 'training-frame-world-position-site-universe-v0');
+  assert.equal(spatialReport.phaseModel.occupancy.authority, 'offset-conditioned-spatial-occupancy-ridge-v0');
+  assert.equal(spatialReport.alignment.birthSynthesis, 'training-site-spatial-occupancy-synthesis-v0');
+  assert.equal(spatialReport.alignment.synthesizedBirths, 1, 'spatial model must synthesize a target-only held-out site from training evidence');
+  assert.ok(spatialReport.renders.inputSplats.phasePrediction > spatialReport.renders.inputSplats.identity, 'phase prediction splat count must include synthesized births');
+  assert.equal(spatialReport.baselines.currentCopy.pixelMse, spatialReport.pixelMetrics.identityToExactMse);
+  assert.equal(spatialReport.baselines.spatialPriorInterpolation.authority, 'nearest-offset-site-prior-interpolation-baseline-v0');
+  assert.ok(
+    spatialReport.pixelMetrics.phasePredictionToExactMse <= spatialReport.baselines.spatialPriorInterpolation.pixelMse,
+    'spatial occupancy model should beat the interpolation/prior baseline on the birth fixture',
+  );
 } finally {
   await rm(root, { recursive: true, force: true });
 }
