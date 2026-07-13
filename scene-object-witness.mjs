@@ -3923,6 +3923,13 @@ async function runSelectedSplatBakeLayerScenario(ws) {
       if (unlayeredSplat?.id) window.selectSceneObject?.(unlayeredSplat.id);
       await wait(100);
       const afterSelectUnlayeredRendererControls = window.kaminosHybridSplatRendererControlsDebugState?.() || null;
+      const manualDeferredOverride = window.kaminosSetHybridSourceColorPreviewEnabled?.(false) || null;
+      window.kaminosSetHybridSplatOverlayModuleUrl?.(startResult?.moduleUrl);
+      await wait(100);
+      const afterStatusRefreshManualOverride = window.kaminosHybridSplatRendererControlsDebugState?.() || null;
+      window.selectSceneObject?.('__selected-splat-bake-layer-clear-witness__');
+      await wait(100);
+      const afterClearSelectionRendererControls = window.kaminosHybridSplatRendererControlsDebugState?.() || null;
       if (splatObject?.id) window.selectSceneObject?.(splatObject.id);
       await wait(100);
       const afterReselectLayeredRendererControls = window.kaminosHybridSplatRendererControlsDebugState?.() || null;
@@ -3955,6 +3962,9 @@ async function runSelectedSplatBakeLayerScenario(ws) {
         afterCreateRendererControls,
         unlayeredSplat,
         afterSelectUnlayeredRendererControls,
+        manualDeferredOverride,
+        afterStatusRefreshManualOverride,
+        afterClearSelectionRendererControls,
         afterReselectLayeredRendererControls,
         afterTuneDebug,
         afterTunePreview,
@@ -4047,6 +4057,21 @@ async function runSelectedSplatBakeLayerScenario(ws) {
       || afterSelectUnlayeredControls.preview?.sourceColor !== true
       || afterSelectUnlayeredControls.presentation?.mode !== 'source-radiance') {
     throw new Error(`selecting an unlayered splat did not restore source-radiance presentation: ${JSON.stringify(lastEvidence.selectedSplatBakeLayer)}`);
+  }
+  const afterStatusRefreshManualControls = lastEvidence.selectedSplatBakeLayer.afterStatusRefreshManualOverride?.controls || {};
+  const afterStatusRefreshManualPresentation = lastEvidence.selectedSplatBakeLayer.afterStatusRefreshManualOverride?.presentation || {};
+  if (afterStatusRefreshManualControls.preview?.sourceColor !== false
+      || afterStatusRefreshManualControls.presentation?.mode !== 'deferred-pbr'
+      || afterStatusRefreshManualPresentation.effectiveRoute !== 'deferred-pbr-lighting') {
+    throw new Error(`renderer status refresh overwrote the operator presentation override: ${JSON.stringify(lastEvidence.selectedSplatBakeLayer)}`);
+  }
+  const afterClearSelectionControls = lastEvidence.selectedSplatBakeLayer.afterClearSelectionRendererControls?.controls || {};
+  const afterClearSelectionPresentation = lastEvidence.selectedSplatBakeLayer.afterClearSelectionRendererControls?.presentation || {};
+  if (lastEvidence.selectedSplatBakeLayer.afterClearSelectionRendererControls?.requestedControls?.candidateLayerPreview?.targetObjectId !== null
+      || afterClearSelectionControls.preview?.sourceColor !== true
+      || afterClearSelectionControls.presentation?.mode !== 'source-radiance'
+      || afterClearSelectionPresentation.effectiveRoute !== 'source-radiance-copy') {
+    throw new Error(`clearing splat selection did not publish null candidate identity: ${JSON.stringify(lastEvidence.selectedSplatBakeLayer)}`);
   }
   if (afterReselectLayeredControls.preview?.sourceColor !== false
       || afterReselectLayeredControls.presentation?.mode !== 'deferred-pbr') {

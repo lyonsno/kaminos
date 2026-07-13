@@ -225,6 +225,8 @@ assert.match(witness, /selected splat bake layer did not expose preview contribu
 assert.match(witness, /selected splat bake layer did not select deferred-PBR presentation/, 'selected-splat bake-layer witness proves an enabled candidate selects deferred-PBR evaluation');
 assert.match(witness, /selected splat bake layer did not restore source-radiance presentation/, 'selected-splat bake-layer witness proves disabling candidate contribution restores source radiance');
 assert.match(witness, /selecting an unlayered splat did not restore source-radiance presentation/, 'selected-splat bake-layer witness rejects stale deferred presentation after selecting an unlayered splat');
+assert.match(witness, /renderer status refresh overwrote the operator presentation override/, 'selected-splat bake-layer witness preserves an explicit operator presentation choice across ordinary renderer refreshes');
+assert.match(witness, /clearing splat selection did not publish null candidate identity/, 'selected-splat bake-layer witness rejects stale candidate identity after clearing selection');
 assert.match(witness, /reselecting a layered splat did not restore deferred-PBR presentation/, 'selected-splat bake-layer witness rejects stale source-radiance presentation after reselecting a layered splat');
 assert.match(witness, /selected splat bake layer did not start live hybrid renderer/, 'selected-splat bake-layer witness starts the real packaged renderer before judging presentation coupling');
 assert.match(witness, /selected splat bake layer presentation was not accepted by live renderer/, 'selected-splat bake-layer witness requires renderer-owned effective route acceptance');

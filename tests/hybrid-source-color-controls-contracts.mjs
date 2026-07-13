@@ -13,3 +13,4 @@ assert.match(index, /preview:\s*\{\s*sourceColor:\s*sourceRadiance,\s*\}/s, 'ren
 assert.match(index, /window\._kaminosDirty\?\.\(\);[\s\S]*return publishHybridSplatRendererControls\(\);/, 'source-radiance mode changes invalidate the live viewport before publishing');
 assert.match(index, /function setHybridSourceColorPreviewEnabled\(enabled\)/, 'Kaminos exposes a helper for route/tooling to flip source-color preview');
 assert.match(index, /window\.kaminosSetHybridSourceColorPreviewEnabled = setHybridSourceColorPreviewEnabled;/, 'debug bridge exposes source-color preview helper');
+assert.match(index, /requestedControls:\s*controls/, 'renderer-control telemetry preserves host-requested candidate identity separately from renderer-effective controls');

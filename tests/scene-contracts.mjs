@@ -325,8 +325,13 @@ assert.match(index, /function syncSelectedSplatBakeLayerPresentation\(/, 'candid
 assert.match(index, /syncSelectedSplatBakeLayerPresentation\(record\)/, 'creating a candidate bake layer selects its evaluation presentation');
 assert.match(index, /syncSelectedSplatBakeLayerPresentation\(found\.record\)/, 'tuning a candidate bake layer restores presentation when its contribution is removed');
 const hybridViewportControlsBlock = index.match(/function updateHybridSplatViewportControls\(entry\) \{[\s\S]*?\n\}/)?.[0] || '';
-assert.match(hybridViewportControlsBlock, /syncSelectedSplatBakeLayerPresentation\(entry\?\.type === 'splat' \? entry : null\)/, 'selecting or clearing a splat re-derives presentation from the selected candidate contribution');
-assert.match(hybridViewportControlsBlock, /if \(presentationSync\.changed\) publishHybridSplatRendererControls\(/, 'selection transitions republish renderer controls only when presentation actually changes');
+assert.doesNotMatch(hybridViewportControlsBlock, /syncSelectedSplatBakeLayerPresentation/, 'ordinary renderer status refreshes must preserve the operator presentation override');
+const clearSelectionBlock = index.slice(index.indexOf('function clearActiveSceneObjectSelection()'), index.indexOf('function setActiveSceneObject(id)'));
+const selectObjectBlock = index.slice(index.indexOf('function setActiveSceneObject(id)'), index.indexOf('function setActiveSceneGroup(id)'));
+const selectGroupBlock = index.slice(index.indexOf('function setActiveSceneGroup(id)'), index.indexOf('function sceneObjectRecordForDescendant(object)'));
+assert.match(clearSelectionBlock, /publishSelectedSplatBakeLayerPresentation\(null\)/, 'clearing object selection publishes null candidate identity even when presentation mode is unchanged');
+assert.match(selectObjectBlock, /publishSelectedSplatBakeLayerPresentation\(entry\.type === 'splat' \? entry : null\)/, 'object selection re-derives presentation and candidate identity from the selected splat');
+assert.match(selectGroupBlock, /publishSelectedSplatBakeLayerPresentation\(null\)/, 'group selection clears selected-splat candidate identity');
 const createBakeLayerBlock = index.match(/async function createSelectedSplatViewBakeLayer\(options = \{\}\) \{[\s\S]*?\n\}/)?.[0] || '';
 assert.doesNotMatch(createBakeLayerBlock, /setHybridSourceColorPreviewEnabled\(true\)/, 'Bake View must not unconditionally force Source Radiance on');
 assert.match(index, /SELECTED_SPLAT_VIEW_BAKE_LAYER_PIPELINE_ID\s*=\s*'selected-splat-view-bake-layer-v0'/, 'selected-splat Bake View must name the backend pipeline route it fires');
