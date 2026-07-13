@@ -38,8 +38,13 @@ class BoundarySplatAlignedBudgetWitnessContracts < Minitest::Test
   def test_aligned_pair_uses_native_gpu_readback_not_cdp_screenshot
     aligned_sequence = @witness[/async function captureAlignedBudgetSequence[\s\S]*?\n}\n\nasync function captureAlignedBudgetRendererReadback/, 0]
     refute_nil aligned_sequence
+    native_readback = @witness[/async function captureAlignedBudgetRendererReadback[\s\S]*?\n}\n\nasync function captureRenderer/, 0]
+    refute_nil native_readback
     assert_match(/captureAlignedBudgetRendererReadback/, @witness)
     assert_match(/sampleFrame\(\{[\s\S]*advanceSim:\s*false[\s\S]*includeRgba:\s*true/, @witness)
+    assert_match(/readAlignedBudgetRgbaChunks/, @witness)
+    assert_match(/aligned-budget-native-gpu-readback-chunked-v0/, @witness)
+    assert_match(/sample\.image\.rgba\s*=\s*null/, @witness)
     assert_match(/gpu-frame-texture-rgba8-readback/, @witness)
     assert_match(/writeRgbaPng/, @witness)
     assert_match(/nativeReadbackAuthority/, @witness)
@@ -47,6 +52,7 @@ class BoundarySplatAlignedBudgetWitnessContracts < Minitest::Test
     assert_match(/captureAuthority:\s*'native-gpu-readback'/, @witness)
     refute_match(/captureRenderer/, aligned_sequence)
     refute_match(/Page\.captureScreenshot/, aligned_sequence)
+    refute_match(/writeRgbaPng\([^)]*sample\.image\.rgba/, native_readback)
   end
 
   def test_pair_reports_quality_loss_and_rejects_false_closure

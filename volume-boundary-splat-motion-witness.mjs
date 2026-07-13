@@ -760,10 +760,12 @@ async function captureAlignedBudgetRendererReadback({
 }) {
   const controlOverrides = { boundarySplatMode };
   if (boundarySplatCandidateBudget) controlOverrides.boundarySplatCandidateBudget = boundarySplatCandidateBudget;
+  const readbackKey = `__kaminosAlignedBudgetReadback_${frameIndex}_${slug(requestedRenderer)}`;
   const readbackEval = await wsRequest('Runtime.evaluate', {
     expression: `(() => {
       const proto = window.__kaminosVolumePrototype;
       const before = proto?.debugState?.().controls || {};
+      const key = ${JSON.stringify(readbackKey)};
       proto.setControls({ ...before, ...${JSON.stringify(controlOverrides)}, renderScale: 1 });
       return proto.sampleFrame({
         advanceSim: false,
@@ -772,6 +774,19 @@ async function captureAlignedBudgetRendererReadback({
         sameStateCaptureId: ${JSON.stringify(scaleSet.sameStateCaptureId)},
         baseFrameCount: ${JSON.stringify(scaleSet.baseFrameCount)},
         baseSimStepCount: ${JSON.stringify(scaleSet.baseSimStepCount)}
+      }).then(sample => {
+        const rgba = sample?.image?.rgba || null;
+        if (rgba) {
+          window[key] = {
+            authority: 'aligned-budget-native-gpu-readback-chunked-v0',
+            width: sample.image.width,
+            height: sample.image.height,
+            byteLength: rgba.length,
+            rgba,
+          };
+          sample.image.rgba = null;
+        }
+        return sample;
       }).finally(() => proto.setControls(before));
     })()`,
     awaitPromise: true,
@@ -781,15 +796,13 @@ async function captureAlignedBudgetRendererReadback({
   if (sample?.ok !== true || sample.sampleAuthority !== 'render-only-frozen-sim-state') {
     throw new Error(`aligned-budget native readback failed for ${requestedRenderer}: ${JSON.stringify(sample)}`);
   }
-  if (!sample.image || !Array.isArray(sample.image.rgba) || sample.image.rgba.length !== sample.image.width * sample.image.height * 4) {
-    throw new Error(`aligned-budget native readback missing rgba image for ${requestedRenderer}: ${JSON.stringify({
-      width: sample.image?.width,
-      height: sample.image?.height,
-      rgbaLength: sample.image?.rgba?.length,
-    })}`);
+  const expectedRgbaLength = sample.image?.width * sample.image?.height * 4;
+  if (!sample.image || !Number.isFinite(expectedRgbaLength) || expectedRgbaLength <= 0) {
+    throw new Error(`aligned-budget native readback missing image metadata for ${requestedRenderer}: ${JSON.stringify(sample.image || null)}`);
   }
+  const rgbaReadback = await readAlignedBudgetRgbaChunks(readbackKey, expectedRgbaLength);
   const imagePath = resolve(frameDir, `${String(frameIndex + 1).padStart(3, '0')}-${slug(requestedRenderer)}.native-readback.png`);
-  writeRgbaPng(imagePath, sample.image.width, sample.image.height, sample.image.rgba);
+  writeRgbaPng(imagePath, sample.image.width, sample.image.height, rgbaReadback.rgba);
   const imageBuffer = readFileSync(imagePath);
   const isSplat = boundarySplatMode !== 'off';
   const selectorCostProfile = isSplat ? sample.boundarySplatSelectorCostProfile ?? null : null;
@@ -849,6 +862,9 @@ async function captureAlignedBudgetRendererReadback({
     canvasCapture: {
       sampleAuthority: sample.sampleAuthority,
       imageAuthority: 'gpu-frame-texture-rgba8-readback',
+      nativeReadbackTransferAuthority: rgbaReadback.authority,
+      nativeReadbackByteLength: rgbaReadback.byteLength,
+      nativeReadbackChunkCount: rgbaReadback.chunkCount,
       sameStateCaptureId: sample.sameStateCaptureId,
       baseFrameCount: sample.baseFrameCount,
       baseSimStepCount: sample.baseSimStepCount,
@@ -886,6 +902,68 @@ async function captureAlignedBudgetRendererReadback({
   };
   validateCapture(capture);
   return capture;
+}
+
+async function readAlignedBudgetRgbaChunks(readbackKey, expectedLength) {
+  const chunks = [];
+  const chunkSize = 49152;
+  let offset = 0;
+  let finalMeta = null;
+  try {
+    while (offset < expectedLength) {
+      const chunkEval = await wsRequest('Runtime.evaluate', {
+        expression: `(() => {
+          const store = window[${JSON.stringify(readbackKey)}];
+          if (!store || store.authority !== 'aligned-budget-native-gpu-readback-chunked-v0') {
+            return { ok: false, reason: 'missing-native-readback-store' };
+          }
+          const start = ${offset};
+          const end = Math.min(start + ${chunkSize}, store.rgba.length);
+          const slice = store.rgba.slice(start, end);
+          let binary = '';
+          for (let index = 0; index < slice.length; index += 8192) {
+            binary += String.fromCharCode(...slice.slice(index, index + 8192));
+          }
+          return {
+            ok: true,
+            authority: store.authority,
+            width: store.width,
+            height: store.height,
+            byteLength: store.byteLength,
+            start,
+            end,
+            done: end >= store.rgba.length,
+            base64: btoa(binary),
+          };
+        })()`,
+        returnByValue: true,
+      });
+      const value = chunkEval.result.value;
+      if (value?.ok !== true) throw new Error(`aligned-budget native readback chunk failed: ${JSON.stringify(value)}`);
+      chunks.push(Buffer.from(value.base64, 'base64'));
+      offset = value.end;
+      finalMeta = value;
+    }
+  } finally {
+    await wsRequest('Runtime.evaluate', {
+      expression: `delete window[${JSON.stringify(readbackKey)}]`,
+      returnByValue: true,
+    }).catch(() => null);
+  }
+  const rgba = Buffer.concat(chunks);
+  if (rgba.length !== expectedLength || finalMeta?.byteLength !== expectedLength) {
+    throw new Error(`aligned-budget native readback partial chunk payload: ${JSON.stringify({
+      expectedLength,
+      receivedLength: rgba.length,
+      reportedLength: finalMeta?.byteLength ?? null,
+    })}`);
+  }
+  return {
+    authority: 'aligned-budget-native-gpu-readback-chunked-v0',
+    rgba,
+    byteLength: rgba.length,
+    chunkCount: chunks.length,
+  };
 }
 
 async function captureRenderer({
