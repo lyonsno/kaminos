@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import vm from 'node:vm';
 
-import { createSchedulerVerificationReceipt } from '../webgpu-inference-kit/src/index.js';
+import { createSchedulerVerificationReceipt } from '../lib/scheduler-verification-receipt.mjs';
 
 const witness = readFileSync(new URL('../crucible-viewport-witness.mjs', import.meta.url), 'utf8');
 const witnessPath = new URL('../crucible-viewport-witness.mjs', import.meta.url);

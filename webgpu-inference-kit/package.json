@@ -1,6 +1,6 @@
 {
   "name": "@kaminos/webgpu-inference-kit",
-  "version": "0.1.9",
+  "version": "0.1.11",
   "private": false,
   "type": "module",
   "description": "Runtime helpers for browser WebGPU inference ports, with route receipts and scheduler profiles.",
