@@ -28,9 +28,12 @@ const settleMs = Math.max(0, Number(args.get('--settle-ms') || 2500));
 const warmupSamples = Math.max(0, Math.floor(Number(args.get('--warmup-samples') || 3)));
 const steadySamples = Math.max(1, Math.floor(Number(args.get('--steady-samples') || 12)));
 const browserContinuity = String(args.get('--browser-continuity') || 'unverified-existing');
+const browserProfilePath = String(args.get('--browser-profile') || '');
 const runStartedAt = new Date().toISOString();
 
 let ws = null;
+let browserPageId = null;
+let finalTargetReachable = false;
 let failurePhase = 'startup';
 const lastTrustworthyEvidence = {};
 
@@ -39,11 +42,13 @@ try {
   if (!BROWSER_CONTINUITY_MODES.has(browserContinuity)) {
     throw new Error(`invalid --browser-continuity ${JSON.stringify(browserContinuity)}`);
   }
+  if (!browserProfilePath) throw new Error('missing --browser-profile');
   mkdirSync(outDir, { recursive: true });
   failurePhase = 'connect-existing-browser';
   const version = await cdpFetch('/json/version');
   lastTrustworthyEvidence.browserVersion = version.Browser;
   const page = await findPage();
+  browserPageId = page.id;
   ws = new WebSocket(page.webSocketDebuggerUrl);
   await waitForWebSocketOpen(ws);
   await wsRequest('Page.enable');
@@ -100,6 +105,8 @@ try {
   writeFileSync(imagePath, imageBuffer);
   const finalState = await debugState();
   validateEffectiveState(finalState, await evaluate('window.kaminosBoundarySplatCompositionDebugState?.()'), await evaluate('location.href'));
+  finalTargetReachable = await targetIsReachable(browserPageId);
+  if (!finalTargetReachable) throw new Error('browser-target-unreachable-after-witness');
 
   const report = {
     schema: SCHEMA,
@@ -117,8 +124,10 @@ try {
       pageId: page.id,
       pageUrl: effectivePageUrl,
       browserContinuity,
+      browserProfilePath,
       sameBrowserAuthority: 'measurement-run-only',
-      disposition: 'preserved-open',
+      finalTargetReachable,
+      disposition: finalTargetReachable ? 'preserved-open' : 'target-unreachable',
     },
     authority: {
       simulator: 'one-live-simulator-frozen-during-serial-instance-ladder-v0',
@@ -162,13 +171,14 @@ try {
       overflow: false,
       candidateCopy: false,
       blankOrPartialNativeCapture: false,
-      browserClosedDuringWitness: false,
+      browserClosedDuringWitness: !finalTargetReachable,
     },
     claimBoundary: 'GPU-exclusive serial scaling and one native composed frame from one live simulator. This does not claim independent per-instance simulation, learned prediction, PBR integration, or 1000-instance feasibility.',
   };
   writeReport(report);
   console.log(JSON.stringify(report, null, 2));
 } catch (error) {
+  finalTargetReachable = await targetIsReachable(browserPageId).catch(() => false);
   const failure = {
     schema: SCHEMA,
     status: 'failed-before-primary-output',
@@ -181,8 +191,10 @@ try {
       mode: 'connected-existing',
       port,
       browserContinuity,
+      browserProfilePath,
       sameBrowserAuthority: 'measurement-run-only',
-      disposition: 'preserved-open',
+      finalTargetReachable,
+      disposition: finalTargetReachable ? 'preserved-open' : 'target-unreachable-or-unobserved',
     },
     error: error?.stack || error?.message || String(error),
     lastTrustworthyEvidence,
@@ -231,6 +243,12 @@ async function findPage() {
     || pages.find(target => target.type === 'page');
   if (!page?.webSocketDebuggerUrl) throw new Error('existing Chrome has no targetable page');
   return page;
+}
+
+async function targetIsReachable(pageId) {
+  if (!pageId) return false;
+  const pages = await cdpFetch('/json/list');
+  return pages.some(target => target.id === pageId && target.type === 'page' && target.webSocketDebuggerUrl);
 }
 
 function waitForWebSocketOpen(socket) {

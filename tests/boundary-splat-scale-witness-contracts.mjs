@@ -11,6 +11,8 @@ assert.match(witness, /sampleBoundarySplatInstanceCostLadder/, 'scale witness mu
 assert.match(witness, /connected-existing/, 'scale witness must record reuse of the persistent browser');
 assert.match(witness, /browserContinuity/, 'scale witness must state whether its browser existed continuously or was explicitly reseated before measurement');
 assert.match(witness, /reseated-after-original-process-disappeared/, 'scale witness must preserve the actual pre-witness browser recovery boundary');
+assert.match(witness, /browserProfilePath/, 'scale witness must identify the replacement browser profile carrying measurement authority');
+assert.match(witness, /finalTargetReachable/, 'scale witness must observe final CDP target reachability rather than hard-code browser survival');
 assert.match(witness, /preserved-open/, 'scale witness must leave the existing browser session open');
 assert.match(witness, /failed-before-primary-output/, 'scale witness must write a durable failure report before primary output exists');
 assert.match(witness, /stale-or-default-config/, 'scale witness must fail loud when requested composition or instance controls do not become effective');
