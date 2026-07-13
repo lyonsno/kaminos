@@ -2228,3 +2228,49 @@ assert.match(residualGreenroomRunner, /--edge-sampling-probability/, 'Greenroom 
 assert.match(residualGreenroomRunner, /--edge-gradient-loss-weight/, 'Greenroom residual wrapper forwards edge gradient loss weight');
 assert.match(residualGreenroomRunner, /--residual-output-limit/, 'Greenroom residual wrapper forwards residual output limit for bounded proxy-mask runs');
 assert.match(residualGreenroomRunner, /--residual-application-mask-mode/, 'Greenroom residual wrapper forwards residual application mask mode for inference-authority gate probes');
+
+const lowGridOracleMatrixPath = join(root, 'volume-low-grid-oracle-matrix.html');
+assert.ok(existsSync(lowGridOracleMatrixPath), 'continuous low-grid oracle splat matrix workbench exists');
+const lowGridOracleMatrix = existsSync(lowGridOracleMatrixPath) ? readFileSync(lowGridOracleMatrixPath, 'utf8') : '';
+assert.match(lowGridOracleMatrix, /continuous-low-grid-oracle-splat-matrix-v0/, 'oracle matrix carries a stable effective route identity');
+assert.match(lowGridOracleMatrix, /lowGridOptions\s*=\s*\[48,\s*64,\s*96\]/, 'oracle matrix exposes the intended small receiver grids');
+assert.match(lowGridOracleMatrix, /highGridOptions\s*=\s*\[128,\s*160\]/, 'oracle matrix exposes bounded high-grid oracle sources');
+assert.match(lowGridOracleMatrix, /sourceModes\s*=\s*\['none',\s*'lowSelf',\s*'highProjected'\]/, 'oracle matrix distinguishes untouched, low-self, and high-projected forcing');
+assert.match(lowGridOracleMatrix, /exportCurrentScalarActivityCue/, 'oracle matrix exports current live fields instead of replaying a frozen cue');
+assert.match(lowGridOracleMatrix, /setTruthOracleActivityCue/, 'oracle matrix injects each fresh cue through the scalar receiver API');
+assert.match(lowGridOracleMatrix, /boundarySplatMode:\s*'learned'/, 'oracle matrix renders both source and receiver through the corrected learned-splat route');
+assert.match(lowGridOracleMatrix, /live-boundary-sidecar-learned-attribute-splats-v0/, 'oracle matrix requires the effective corrected learned-splat renderer identity');
+assert.match(lowGridOracleMatrix, /consecutive-sim-steps-fixed-playback-v0/, 'oracle matrix names consecutive simulation-step playback authority');
+assert.match(lowGridOracleMatrix, /includeBoundarySplatGpuProfile:\s*false/, 'oracle matrix suppresses mutating splat cost profiles during controlled causal capture');
+assert.match(lowGridOracleMatrix, /high\.prototype\.renderFrozenScaleToCanvas/, 'oracle matrix explicitly presents each controlled high-grid state to the visible canvas');
+assert.match(lowGridOracleMatrix, /low\.prototype\.renderFrozenScaleToCanvas/, 'oracle matrix explicitly presents each controlled receiver state to the visible canvas');
+assert.match(lowGridOracleMatrix, /cueUpdateCount/, 'oracle matrix reports live cue update count');
+assert.match(lowGridOracleMatrix, /sourceSimStepAdvance/, 'oracle matrix reports source simulation-step advancement across live cue exports');
+assert.match(lowGridOracleMatrix, /receiverSimStepAdvance/, 'oracle matrix reports receiver simulation-step advancement across live cue uploads');
+assert.match(lowGridOracleMatrix, /maxCueAgeFrames/, 'oracle matrix reports cue freshness in simulation frames');
+assert.match(lowGridOracleMatrix, /failurePhase/, 'oracle matrix exposes failure phase before presenting visual evidence');
+
+const lowGridOracleWitnessPath = join(root, 'volume-low-grid-oracle-matrix-witness.mjs');
+assert.ok(existsSync(lowGridOracleWitnessPath), 'continuous low-grid oracle splat matrix witness exists');
+const lowGridOracleWitness = existsSync(lowGridOracleWitnessPath) ? readFileSync(lowGridOracleWitnessPath, 'utf8') : '';
+assert.match(lowGridOracleWitness, /kaminos\.volume\.low-grid-oracle-matrix-witness\.v0/, 'oracle matrix witness writes a stable manifest schema');
+for (const route of ['untouched_low', 'low_self', 'high_projected_oracle', 'high_reference']) {
+  assert.match(lowGridOracleWitness, new RegExp(route), `oracle matrix witness preserves ${route} control identity`);
+}
+assert.match(lowGridOracleWitness, /effectiveBoundarySplatRendererIdentity/, 'oracle matrix witness records the effective learned-splat renderer identity');
+assert.match(lowGridOracleWitness, /boundarySplatAttributeModelIdentity/, 'oracle matrix witness records the effective learned splat model identity');
+assert.match(lowGridOracleWitness, /cueUpdateCount/, 'oracle matrix witness rejects missing live cue updates');
+assert.match(lowGridOracleWitness, /maxCueAgeFrames/, 'oracle matrix witness rejects stale held cues');
+assert.match(lowGridOracleWitness, /sourceSimStepAdvance/, 'oracle matrix witness rejects a source sim that did not advance');
+assert.match(lowGridOracleWitness, /receiverSimStepAdvance/, 'oracle matrix witness rejects a receiver sim that did not advance');
+assert.match(lowGridOracleWitness, /lastObservedState/, 'oracle matrix witness preserves the last trustworthy live state on partial failure');
+assert.match(lowGridOracleWitness, /partialRoute/, 'oracle matrix witness preserves partial route progress instead of erasing it on failure');
+assert.match(lowGridOracleWitness, /failurePhase/, 'oracle matrix witness writes a durable report when failure precedes visual output');
+assert.match(lowGridOracleWitness, /operator-index\.html/, 'oracle matrix witness writes an operator-clickable comparison surface');
+
+assert.match(core, /SCALAR_ACTIVITY_CUE_EXPORT_IDENTITY\s*=\s*'current-field-scalar-activity-cue-export-v0'/, 'volume core names the live current-field scalar cue export contract');
+assert.match(core, /exportCurrentScalarActivityCue/, 'volume prototype exposes current-field scalar activity for oracle experiments');
+assert.match(core, /projectionIdentity:\s*'max-source-cell-to-target-grid-v0'/, 'scalar cue export records its conservative high-to-low projection identity');
+assert.match(core, /cueTemporalMode:\s*'consecutive-live-source-export-v0'/, 'scalar cue export distinguishes consecutive live source data from frozen or sampled cues');
+assert.match(core, /includeBoundarySplatGpuProfile\s*!==\s*false/, 'volume readback can suppress splat cost profiling when profiling would mutate controlled simulation state');
+assert.match(core, /includeBoundarySplatGpuProfile:\s*options\.includeBoundarySplatGpuProfile/, 'controlled-step plumbing propagates the no-profile evidence setting through nested render-scale reads');

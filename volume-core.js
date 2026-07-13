@@ -23,8 +23,11 @@ const BOUNDARY_SPLAT_CANDIDATE_STRIDE_BYTES = 48;
 const BOUNDARY_SPLAT_FEATURE_STRIDE_BYTES = BOUNDARY_SPLAT_FEATURE_STRIDE_FLOATS * Float32Array.BYTES_PER_ELEMENT;
 const TRUTH_ORACLE_ACTIVITY_RECEIVER_IDENTITY = 'truth-oracle-scalar-activity-receiver-v0';
 const TRUTH_ORACLE_ACTIVITY_CUE_AUTHORITY = 'truth-high-diagnostic-activity-projected-to-receiver-grid-v0';
+const LIVE_LOW_SELF_ACTIVITY_CUE_AUTHORITY = 'live-low-self-current-field-scalar-activity-cue-v0';
+const LIVE_HIGH_PROJECTED_ACTIVITY_CUE_AUTHORITY = 'live-high-projected-current-field-scalar-activity-cue-v0';
 const PROCEDURAL_ACTIVITY_CUE_AUTHORITY = 'procedural-receiver-activity-proxy-no-truth-v0';
 const SCALAR_ACTIVITY_RECEIVER_HOOK_IDENTITY = 'scalar-activity-receiver-hook-controls-v0';
+const SCALAR_ACTIVITY_CUE_EXPORT_IDENTITY = 'current-field-scalar-activity-cue-export-v0';
 const REACTION_FRONT_STAGE_IDENTITY = 'reaction-front-stage-fields-v0';
 const REACTION_FRONT_ATLAS_SCHEMA = 'kaminos.volume.reaction-front-atlas.v0';
 const BROWSER_RESIDUAL_FEATURE_AUTHORITY = 'shader-material-authority-residual-feature-v0';
@@ -67,6 +70,14 @@ function normalizeGridSize(value) {
 function normalizeScalarActivityCueGridSize(value, fallback = DEFAULT_GRID_SIZE) {
   const requested = Math.round(Number(value));
   if (Number.isFinite(requested) && requested > 0) return requested;
+  return fallback;
+}
+
+function normalizeScalarActivityCueAuthority(value, fallback = TRUTH_ORACLE_ACTIVITY_CUE_AUTHORITY) {
+  const candidate = String(value || '').trim();
+  if (candidate === LIVE_LOW_SELF_ACTIVITY_CUE_AUTHORITY) return LIVE_LOW_SELF_ACTIVITY_CUE_AUTHORITY;
+  if (candidate === LIVE_HIGH_PROJECTED_ACTIVITY_CUE_AUTHORITY) return LIVE_HIGH_PROJECTED_ACTIVITY_CUE_AUTHORITY;
+  if (candidate === TRUTH_ORACLE_ACTIVITY_CUE_AUTHORITY) return TRUTH_ORACLE_ACTIVITY_CUE_AUTHORITY;
   return fallback;
 }
 
@@ -5072,6 +5083,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     volumeResidualFeatureAuthority: 'off',
     volumeResidualFeatureDebug: normalizeBrowserResidualFeatureDebug(controlsSnapshot.volumeResidualFeatureDebug),
     volumeResidualFeatureDebugMode: normalizeBrowserResidualFeatureDebug(controlsSnapshot.volumeResidualFeatureDebug) ? 'residual-feature-debug-false-color-v0' : 'off',
+    scalarActivityCueExport: null,
     volumeResidualModelSchema: null,
     volumeResidualModelError: null,
     volumeResidualStrength: normalizeBrowserResidualStrength(controlsSnapshot.volumeResidualStrength),
@@ -5782,8 +5794,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     return {
       identity: TRUTH_ORACLE_ACTIVITY_RECEIVER_IDENTITY,
       hookIdentity: SCALAR_ACTIVITY_RECEIVER_HOOK_IDENTITY,
-      requestedCueAuthority: TRUTH_ORACLE_ACTIVITY_CUE_AUTHORITY,
-      effectiveCueAuthority: externalCueActive ? TRUTH_ORACLE_ACTIVITY_CUE_AUTHORITY : PROCEDURAL_ACTIVITY_CUE_AUTHORITY,
+      requestedCueAuthority: oracleActivityCueUpload.requestedCueAuthority,
+      effectiveCueAuthority: externalCueActive ? oracleActivityCueUpload.effectiveCueAuthority : PROCEDURAL_ACTIVITY_CUE_AUTHORITY,
       enabled: controls.enabled,
       display: controls.display,
       curlNoiseGain: controls.curlNoiseGain,
@@ -10169,7 +10181,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       ? await sampleBoundarySplatFeatureCapture(boundarySplatSample.instanceCount)
       : null;
     state.boundarySplatFeatureCapture = boundarySplatFeatureCapture;
-    const boundarySplatGpuProfile = boundarySplatRequested() ? await sampleBoundarySplatGpuProfile() : state.boundarySplatGpuProfile;
+    const includeBoundarySplatGpuProfile = options.includeBoundarySplatGpuProfile !== false;
+    const boundarySplatGpuProfile = boundarySplatRequested() && includeBoundarySplatGpuProfile
+      ? await sampleBoundarySplatGpuProfile()
+      : state.boundarySplatGpuProfile;
     await buffer.mapAsync(GPUMapMode.READ);
     const data = new Uint8Array(buffer.getMappedRange());
     let litPixels = 0;
@@ -10609,6 +10624,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         const sample = await sampleFrame({
           advanceSim: false,
           includeRgba: options.includeRgba === true,
+          includeBoundarySplatGpuProfile: options.includeBoundarySplatGpuProfile,
           now: fixedNow,
           sameStateCaptureId,
           baseFrameCount,
@@ -10675,6 +10691,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       const stepSample = await sampleFrame({
         advanceSim: true,
         includeRgba: false,
+        includeBoundarySplatGpuProfile: options.includeBoundarySplatGpuProfile,
         now: controlledStepNowMs,
         sameStateCaptureId: `${sameBrowserSessionId}-advance-${controlledStepFrameIndex}`,
         baseFrameCount: beforeFrameCount,
@@ -10707,6 +10724,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       includeRgba: options.includeRgba === true,
       includeFeatureRgba: options.includeFeatureRgba === true,
       compactSamples: options.compactSamples === true,
+      includeBoundarySplatGpuProfile: options.includeBoundarySplatGpuProfile,
       now: controlledStepNowMs,
       sameStateCaptureId,
       resumeRenderLoop: false,
@@ -10921,6 +10939,189 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     }
   }
 
+  async function copyCurrentFluidBufferForScalarActivityCueExport() {
+    const fluidBytes = fluidBufferBytes(gridSize);
+    const readback = device.createBuffer({
+      label: 'kaminos current-field scalar activity cue export readback',
+      size: fluidBytes,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+    });
+    const encoder = device.createCommandEncoder({ label: 'kaminos scalar activity cue export readback encoder' });
+    encoder.copyBufferToBuffer(fluidBuffers[currentFluid], 0, readback, 0, fluidBytes);
+    device.queue.submit([encoder.finish()]);
+    await readback.mapAsync(GPUMapMode.READ);
+    return { readback, values: new Float32Array(readback.getMappedRange()) };
+  }
+
+  function buildScalarActivityCueFromFluid(values, options = {}) {
+    const sourceGrid = gridSize;
+    const targetGrid = normalizeScalarActivityCueGridSize(options.targetGrid || sourceGrid, sourceGrid);
+    const sourceCells = gridCellCount(sourceGrid);
+    const targetCells = gridCellCount(targetGrid);
+    const cue = new Float32Array(targetCells);
+    const cueFloor = clampFinite(options.floor ?? options.cueFloor, 0, 0.95, 0.10);
+    const cueGamma = clampFinite(options.gamma ?? options.cueGamma, 0.1, 6, 1.25);
+    const velocityAt = (x, y, z) => {
+      const cx = Math.max(0, Math.min(sourceGrid - 1, x));
+      const cy = Math.max(0, Math.min(sourceGrid - 1, y));
+      const cz = Math.max(0, Math.min(sourceGrid - 1, z));
+      const base = (cx + cy * sourceGrid + cz * sourceGrid * sourceGrid) * FLUID_COMPONENTS;
+      return [values[base] || 0, values[base + 1] || 0, values[base + 2] || 0];
+    };
+    let rawMax = 0;
+    let rawSum = 0;
+    let normalizedSum = 0;
+    let activeSourceCells = 0;
+    for (let z = 0; z < sourceGrid; z += 1) {
+      const tz = Math.max(0, Math.min(targetGrid - 1, Math.floor((z + 0.5) * targetGrid / sourceGrid)));
+      for (let y = 0; y < sourceGrid; y += 1) {
+        const ty = Math.max(0, Math.min(targetGrid - 1, Math.floor((y + 0.5) * targetGrid / sourceGrid)));
+        for (let x = 0; x < sourceGrid; x += 1) {
+          const tx = Math.max(0, Math.min(targetGrid - 1, Math.floor((x + 0.5) * targetGrid / sourceGrid)));
+          const vx0 = velocityAt(x - 1, y, z);
+          const vx1 = velocityAt(x + 1, y, z);
+          const vy0 = velocityAt(x, y - 1, z);
+          const vy1 = velocityAt(x, y + 1, z);
+          const vz0 = velocityAt(x, y, z - 1);
+          const vz1 = velocityAt(x, y, z + 1);
+          const curlX = ((vy1[2] - vy0[2]) - (vz1[1] - vz0[1])) * 0.5;
+          const curlY = ((vz1[0] - vz0[0]) - (vx1[2] - vx0[2])) * 0.5;
+          const curlZ = ((vx1[1] - vx0[1]) - (vy1[0] - vy0[0])) * 0.5;
+          const curlMagnitude = Math.hypot(curlX, curlY, curlZ);
+          const divergenceMagnitude = Math.abs(((vx1[0] - vx0[0]) + (vy1[1] - vy0[1]) + (vz1[2] - vz0[2])) * 0.5);
+          const rawActivity = Math.max(
+            smoothstep01(0.0005, 0.035, curlMagnitude),
+            smoothstep01(0.010, 0.085, divergenceMagnitude)
+          );
+          const normalized = Math.pow(
+            clampFinite((rawActivity - cueFloor) / Math.max(0.0001, 1 - cueFloor), 0, 1, 0),
+            cueGamma
+          );
+          const targetIndex = tx + ty * targetGrid + tz * targetGrid * targetGrid;
+          cue[targetIndex] = Math.max(cue[targetIndex], normalized);
+          rawMax = Math.max(rawMax, rawActivity);
+          rawSum += rawActivity;
+          normalizedSum += normalized;
+          if (normalized > 0.001) activeSourceCells += 1;
+        }
+      }
+    }
+    let cueMax = 0;
+    let cueSum = 0;
+    let activeTargetCells = 0;
+    for (const value of cue) {
+      cueMax = Math.max(cueMax, value);
+      cueSum += value;
+      if (value > 0.001) activeTargetCells += 1;
+    }
+    return {
+      values: cue,
+      sourceGrid,
+      targetGrid,
+      sourceCells,
+      targetCells,
+      projectionIdentity: 'max-source-cell-to-target-grid-v0',
+      cueTemporalMode: 'consecutive-live-source-export-v0',
+      cueNormalizationIdentity: 'curl-divergence-smoothstep-maxpool-floor-gamma-v0',
+      diagnosticBasis: 'max(smoothstep(curlMagnitude), smoothstep(absDivergence)) from current velocity field',
+      cueFloor,
+      cueGamma,
+      rawActivityMax: rawMax,
+      rawActivityMean: sourceCells > 0 ? rawSum / sourceCells : 0,
+      normalizedSourceMean: sourceCells > 0 ? normalizedSum / sourceCells : 0,
+      cueMax,
+      cueMean: targetCells > 0 ? cueSum / targetCells : 0,
+      activeSourceCells,
+      activeTargetCells,
+    };
+  }
+
+  async function exportCurrentScalarActivityCue(options = {}) {
+    const startedAtMs = performance.now();
+    const targetGrid = normalizeScalarActivityCueGridSize(options.targetGrid || gridSize, gridSize);
+    if (!device || !fluidBuffers[currentFluid]) {
+      const failed = {
+        ok: false,
+        schema: SCALAR_ACTIVITY_CUE_EXPORT_IDENTITY,
+        identity: SCALAR_ACTIVITY_CUE_EXPORT_IDENTITY,
+        status: 'failed',
+        failurePhase: 'inactive',
+        reason: 'inactive',
+        sourceGrid: gridSize,
+        targetGrid,
+        routeIdentity: ROUTE_IDENTITY,
+        prototypeIdentity: PROTOTYPE_IDENTITY,
+        effectiveRoute: state.effectiveRoute,
+      };
+      state.scalarActivityCueExport = failed;
+      return failed;
+    }
+    let captured = null;
+    try {
+      captured = await copyCurrentFluidBufferForScalarActivityCueExport();
+      const cue = buildScalarActivityCueFromFluid(captured.values, options);
+      const receipt = {
+        ok: true,
+        schema: SCALAR_ACTIVITY_CUE_EXPORT_IDENTITY,
+        identity: SCALAR_ACTIVITY_CUE_EXPORT_IDENTITY,
+        status: 'captured',
+        authority: 'current-field-webgpu-copy-buffer-readback',
+        sourceGrid: cue.sourceGrid,
+        targetGrid: cue.targetGrid,
+        sourceCells: cue.sourceCells,
+        targetCells: cue.targetCells,
+        dtype: 'float32',
+        byteLength: cue.values.byteLength,
+        routeIdentity: ROUTE_IDENTITY,
+        prototypeIdentity: PROTOTYPE_IDENTITY,
+        effectiveRoute: state.effectiveRoute,
+        backend: state.backend,
+        simGridLabel: state.simGridLabel,
+        frameId: `current-field-${state.frameCount}`,
+        frameCount: state.frameCount,
+        simStepCount: state.simStepCount,
+        projectionIdentity: cue.projectionIdentity,
+        cueTemporalMode: cue.cueTemporalMode,
+        cueNormalizationIdentity: cue.cueNormalizationIdentity,
+        diagnosticBasis: cue.diagnosticBasis,
+        cueFloor: cue.cueFloor,
+        cueGamma: cue.cueGamma,
+        rawActivityMax: cue.rawActivityMax,
+        rawActivityMean: cue.rawActivityMean,
+        normalizedSourceMean: cue.normalizedSourceMean,
+        cueMax: cue.cueMax,
+        cueMean: cue.cueMean,
+        activeSourceCells: cue.activeSourceCells,
+        activeTargetCells: cue.activeTargetCells,
+        durationMs: performance.now() - startedAtMs,
+      };
+      state.scalarActivityCueExport = receipt;
+      return { ...receipt, values: cue.values };
+    } catch (error) {
+      const failed = {
+        ok: false,
+        schema: SCALAR_ACTIVITY_CUE_EXPORT_IDENTITY,
+        identity: SCALAR_ACTIVITY_CUE_EXPORT_IDENTITY,
+        status: 'failed',
+        failurePhase: 'current-field-readback-or-projection',
+        reason: error?.message || String(error),
+        sourceGrid: gridSize,
+        targetGrid,
+        routeIdentity: ROUTE_IDENTITY,
+        prototypeIdentity: PROTOTYPE_IDENTITY,
+        effectiveRoute: state.effectiveRoute,
+        durationMs: performance.now() - startedAtMs,
+      };
+      state.scalarActivityCueExport = failed;
+      return failed;
+    } finally {
+      if (captured?.readback) {
+        captured.readback.unmap();
+        captured.readback.destroy();
+      }
+    }
+  }
+
   return {
     setControls(next) {
       const previousGrid = gridSize;
@@ -11050,13 +11251,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     setTruthOracleActivityCue(payload = {}) {
       const source = payload && typeof payload === 'object' ? payload : {};
       const sourceGrid = normalizeScalarActivityCueGridSize(source.grid || source.sourceGrid || gridSize, gridSize);
+      const cueAuthority = normalizeScalarActivityCueAuthority(source.cueAuthority, TRUTH_ORACLE_ACTIVITY_CUE_AUTHORITY);
       const values = source.values || source.data || source.activity || [];
       if (!values || Number(values.length) <= 0) {
         oracleActivityCueSourceValues = null;
         oracleActivityCueSourceGrid = null;
         oracleActivityCueUpload = {
           status: 'cleared',
-          requestedCueAuthority: TRUTH_ORACLE_ACTIVITY_CUE_AUTHORITY,
+          requestedCueAuthority: cueAuthority,
           effectiveCueAuthority: PROCEDURAL_ACTIVITY_CUE_AUTHORITY,
           grid: null,
           receiverGrid: gridSize,
@@ -11078,8 +11280,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       writeOracleActivityCueBuffer(resampledCue);
       oracleActivityCueUpload = {
         status: 'uploaded',
-        requestedCueAuthority: TRUTH_ORACLE_ACTIVITY_CUE_AUTHORITY,
-        effectiveCueAuthority: TRUTH_ORACLE_ACTIVITY_CUE_AUTHORITY,
+        requestedCueAuthority: cueAuthority,
+        effectiveCueAuthority: cueAuthority,
         grid: sourceGrid,
         receiverGrid: gridSize,
         externalCueCellCount: resampledCue.length,
@@ -11122,6 +11324,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         ...state,
         controls: { ...controlsSnapshot },
         scalarActivityReceiver: scalarActivityReceiverDebug(),
+        scalarActivityCueExport: state.scalarActivityCueExport ? { ...state.scalarActivityCueExport } : null,
         pyroDynamicDetail: clonePyroDynamicDetail(),
         pyroMaterialRendererCoupling: state.pyroMaterialRendererCoupling ? { ...state.pyroMaterialRendererCoupling } : null,
       };
@@ -11129,6 +11332,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     canvasElement() {
       return canvas;
     },
+    exportCurrentScalarActivityCue,
     sampleFrame,
     sampleRenderScaleSet,
     controlledStepFrame,
